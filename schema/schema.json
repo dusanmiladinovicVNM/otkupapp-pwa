@@ -36,7 +36,13 @@
         "CreatedBy",
         "ModifiedAt",
         "ModifiedBy",
-        "ReversID"
+        "ReversID",
+        "OdNalogTip",
+        "OdNalogID",
+        "NaNalogTip",
+        "NaNalogID",
+        "VrstaKretanja",
+        "StornoOd"
       ]
     },
     {

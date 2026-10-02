@@ -23,6 +23,18 @@ Option Explicit
 Private Const AMB_SMER_ULAZ As String = "Ulaz"
 Private Const AMB_SMER_IZLAZ As String = "Izlaz"
 
+' --- KNJIGA (AMB-10b): greske koje POZIVALAC mora da razlikuje ---
+'
+' Potvrda deficita nije kvar nego PITANJE operateru (AMB-10, 6.5). Ekran je mora
+' razlikovati od svake druge greske PO BROJU, ne po tekstu poruke: tekst je
+' prevodiv i menja se, broj je ugovor.
+Public Const AMB_ERR_POTVRDA_DEFICITA As Long = vbObjectError + 4470
+Public Const AMB_ERR_DEFICIT_NEPOKRIV As Long = vbObjectError + 4471
+Public Const AMB_ERR_IDENTITET As Long = vbObjectError + 4472
+Public Const AMB_ERR_JEDAN_PARTNER As Long = vbObjectError + 4475
+Private Const AMB_ERR_KNJIGA_KVAR As Long = vbObjectError + 4473
+Private Const AMB_ERR_KNJIGA_ULAZ As Long = vbObjectError + 4474
+
 ' ============================================================
 ' Helpers
 ' ============================================================
@@ -677,3 +689,1089 @@ EH:
     GetKulturaTipAmbalaze = ""
 End Function
 
+
+
+' ============================================================
+' KNJIGA AMBALAZE -- PISAC (AMB-10b)
+' ============================================================
+'
+' Dogadjaj je PRENOS: jedan red imenuje OBE strane (OdNalog -> NaNalog), kolicina
+' je UVEK pozitivna, smera kao podatka nema. Knjiga je APPEND-ONLY -- pogresan
+' unos se ne popravlja UPDATE-om nego stornom i novim dogadjajem. Pun model:
+' docs/DOMEN/AMBALAZA.md 6.1-6.9.
+'
+' Ugovor (zatvorene liste, matrica strana, razresavanje naloga, doprinos obavezi,
+' veza dokument <-> kretanje) je modAmbalazaUgovor. Ovde je UPIS i ono sto se MORA
+' procitati da bi upis bio zakonit -- nista vise.
+'
+' OVAJ REZ NE DIRA NIJEDNO POZIVNO MESTO. TrackAmbalaza i dalje pise stari oblik;
+' devet mesta knjizenja, razlaganje SaveOMUlaz_TX / SaveKupciIzlaz_TX i citaoci su
+' 10b-2. Zato tblAmbalaza tokom prelaza nosi DVA oblika reda i svaki citalac mora
+' da kaze koji cita -- to radi KnjigaZaCitanje, i radi to FAIL-CLOSED.
+'
+' ZASTO PISAC CITA STANJE: AMB-INV-07 (nijedan realan nalog ispod nule) i
+' AMB-INV-09 (obaveza >= 0) su granice koje se bez stanja ne mogu proveriti. UI
+' sme da ih prikaze unapred, ali racun koji vazi je ovaj, u trenutku upisa --
+' izmedju pitanja i odgovora stanje se moglo promeniti drugim unosom (6.5). Isti
+' obrazac koji repo vec drzi kod ApplyAvansToOtkup / IsplataBlokProblem.
+'
+' ZASTO OVDE NEMA "On Error GoTo EH / LogErr" BLOKA, kao u TrackAmbalaza:
+' odbijanje pisca je najcesce POSLOVNI ishod, ne kvar. Potvrda deficita je
+' pitanje operateru, a ne greska -- da svaki upit zavrsi u logu gresaka, log bi
+' prestao da bude signal. Greske se zato ne gutaju i ne prepakuju nego dizu dalje,
+' sa svojim brojem.
+'
+' STA PISAC NE RADI:
+'   STORNO       -- kontra-stav sa StornoOd; svoj ulaz dobija u 10d. PrenesiAmbalazu
+'                   upisuje samo ORIGINALE, pa StornoOd ostaje prazan.
+'   AMB-INV-08   -- "upis u istoj transakciji sa izvornim dokumentom" se ne moze
+'                   dokazati iznutra: clsTransaction nema globalan registar aktivne
+'                   transakcije. To je STATICKA kapija nad pozivnim mestima, a njih
+'                   u ovom rezu nema -- ide uz njih, u 10b-2.
+'   BROJ          -- numericki niz ambalaznog dokumenta (koji modBrojevi kind, koji
+'                   kontekst, i prozor jedinstvenosti) vezan je za pozivna mesta:
+'                   stari revers broji po (stanica, dan), a revers kupca stanicu
+'                   nema. Odluka ide uz cutover; ovde se broj samo zahteva kao
+'                   neprazan, uz vlasnika niza (AMB-10-DOK).
+
+Private Sub RequireKnjigaSchema(ByVal sourceName As String)
+    modSchema.SchemaReadyOrFail sourceName, TBL_AMBALAZA
+
+    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_OD_TIP, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_OD_ID, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_NA_TIP, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_NA_ID, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, sourceName)
+End Sub
+
+Private Sub RequireAmbDokSchema(ByVal sourceName As String)
+    modSchema.SchemaReadyOrFail sourceName, TBL_AMBALAZA_DOKUMENT
+
+    Call RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_VRSTA, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_DATUM, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_TIP, sourceName)
+    Call RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_ID, sourceName)
+End Sub
+
+' Indeksi kolona knjige, JEDNOM po citaocu: ime -> indeks. Svaki citalac je ranije
+' nosio svoj blok RequireColumnIndex poziva, a ugovor zapisanog reda trazi SVE
+' kolone -- jedanaest parametara po pozivu bilo bi necitljivo i lako se razilazi.
+Private Function KnjigaIndeksi(ByVal sourceName As String) As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+
+    Dim imena As Variant, j As Long
+    ' Kolone STAROG modela su ovde jer citalac mora da proveri i NJEGOV ugovor:
+    ' "nije nov red" nije isto sto i "valjan star red". Odlaze zajedno sa njima u
+    ' 10e, kad stari model nestane iz kanona.
+    imena = Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, _
+                  COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _
+                  COL_AMB_DOK_TIP, COL_AMB_DOK_ID, COL_AMB_VRSTA_KRETANJA, _
+                  COL_AMB_STORNO_OD, _
+                  COL_AMB_SMER, COL_AMB_ENTITET, COL_AMB_ENTITET_TIP)
+
+    For j = LBound(imena) To UBound(imena)
+        d.Add CStr(imena(j)), RequireColumnIndex(TBL_AMBALAZA, CStr(imena(j)), sourceName)
+    Next j
+
+    Set KnjigaIndeksi = d
+End Function
+
+' TRI STANJA REDA, NE DVA (review #400, P2).
+'
+' Red DOTICE knjigu kad je BILO KOJA nova kolona popunjena. Prva verzija je gledala
+' samo OdNalogTip, pa je red sa praznim izvorom a popunjenim odredistem prolazio kao
+' "stari oblik" -- tiho, i van svakog salda.
+Private Function RedDoticeKnjigu(ByRef data As Variant, ByVal i As Long, _
+                                 ByRef kol As Object) As Boolean
+    Dim imena As Variant, j As Long
+    imena = Array(COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _
+                  COL_AMB_VRSTA_KRETANJA, COL_AMB_STORNO_OD)
+
+    For j = LBound(imena) To UBound(imena)
+        If Len(AmbText(data(i, kol(CStr(imena(j)))))) > 0 Then
+            RedDoticeKnjigu = True
+            Exit Function
+        End If
+    Next j
+End Function
+
+' PRAZAN RED NIJE RED. Prazna Excel tabela ima jedan prazan red u DataBodyRange,
+' pa bi ga svaka kapija inace prijavila kao kvar na praznoj knjizi. Meri se po SVIM
+' kolonama koje knjiga uopste cita -- ni jedno polje, ni staro ni novo.
+Private Function RedPrazan(ByRef data As Variant, ByVal i As Long, _
+                           ByRef kol As Object) As Boolean
+    Dim k As Variant
+    For Each k In kol.Keys
+        If Len(AmbText(data(i, kol(CStr(k))))) > 0 Then Exit Function
+    Next k
+
+    RedPrazan = True
+End Function
+
+' UGOVOR STAROG REDA -- jer "nije nov" nije isto sto i "valjan star".
+'
+' Red koji ne dotice knjigu preskace se kao legacy. Ako mu pritom ne vazi ni stari
+' ugovor, on ne pripada NIJEDNOM modelu: stari citalac ga ne vidi (entitet se ne
+' poklapa), novi ga preskace -- a kolicina koju nosi nestaje iz svakog salda bez
+' ijedne poruke (review #400, treci krug).
+'
+' Ugovor je onaj koji stari pisac vec drzi (ValidateAmbalazaInput): smer je Ulaz ili
+' Izlaz, entitet ima tip i ID, tip ambalaze postoji, kolicina je broj veci od nule.
+' Odlazi zajedno sa starim modelom u 10e.
+Private Function LegacyRedProblem(ByRef data As Variant, ByVal i As Long, _
+                                  ByRef kol As Object) As String
+    If Len(AmbText(data(i, kol(COL_AMB_ID)))) = 0 Then
+        LegacyRedProblem = "nema AmbID"
+        Exit Function
+    End If
+
+    If Not IsValidAmbSmer(AmbText(data(i, kol(COL_AMB_SMER)))) Then
+        LegacyRedProblem = "nije ni red knjige ni valjan stari red -- nema Smer"
+        Exit Function
+    End If
+
+    If Len(AmbText(data(i, kol(COL_AMB_ENTITET_TIP)))) = 0 Or _
+       Len(AmbText(data(i, kol(COL_AMB_ENTITET)))) = 0 Then
+        LegacyRedProblem = "stari red bez entiteta"
+        Exit Function
+    End If
+
+    If Len(AmbText(data(i, kol(COL_AMB_TIP)))) = 0 Then
+        LegacyRedProblem = "stari red bez tipa ambalaze"
+        Exit Function
+    End If
+
+    If Not IsNumeric(data(i, kol(COL_AMB_KOLICINA))) Then
+        LegacyRedProblem = "stari red sa nenumerickom kolicinom"
+        Exit Function
+    End If
+
+    If CDbl(data(i, kol(COL_AMB_KOLICINA))) <= 0 Then
+        LegacyRedProblem = "stari red sa kolicinom <= 0"
+    End If
+End Function
+
+' UGOVOR ZAPISANOG REDA -- jedno mesto za SVE citaoce (saldo, obaveza,
+' idempotencija, identitet, i storno u 10d).
+'
+' Zasto nad svakim citanjem a ne samo pri upisu: saldo ulazi u kapiju deficita, pa
+' pokvaren ZAPISAN red menja odluku SLEDECEG upisa. Red uracunat pola-pola (izvor
+' bez ID-a) razbija ocuvanje kolicine bez ijedne poruke -- partner dobije +20, a
+' nijedan stvarni nalog ne dobije -20.
+'
+' Postojanje naloga u maticnoj tabeli se OVDE NE proverava: to je kapija UPISA
+' (AmbNalogProblem u RequireAmbPrenos). Da citalac to radi, obrisan maticni red bi
+' retroaktivno oborio svako citanje, a saldo bi postao kvadratan nad tabelom.
+'
+' STORNO SE MERI INVERZNO. Kontra-stav ima zamenjene strane, pa bi matrica za
+' njegovu vrstu pala na ISPRAVNOM redu (inverz ULAZ_TUDJE je PARTNER -> GRANICA).
+' Zamena argumenata JE provera inverza -- bez druge matrice i bez izuzetka.
+Private Function KnjigaRedProblem(ByRef data As Variant, ByVal i As Long, _
+                                  ByRef kol As Object) As String
+    If Len(AmbText(data(i, kol(COL_AMB_ID)))) = 0 Then
+        KnjigaRedProblem = "nema AmbID"
+        Exit Function
+    End If
+
+    If Not IsDate(data(i, kol(COL_AMB_DATUM))) Then
+        KnjigaRedProblem = "nema datum"
+        Exit Function
+    End If
+
+    If Len(AmbText(data(i, kol(COL_AMB_DOK_TIP)))) = 0 Or _
+       Len(AmbText(data(i, kol(COL_AMB_DOK_ID)))) = 0 Then
+        KnjigaRedProblem = "nema identitet dokumenta"
+        Exit Function
+    End If
+
+    If Not IsNumeric(data(i, kol(COL_AMB_KOLICINA))) Then
+        KnjigaRedProblem = "kolicina nije broj"
+        Exit Function
+    End If
+
+    Dim odTip As String, odID As String, naTip As String, naID As String
+    Dim kolicina As Double, tipAmb As String, vrsta As String, p As String
+
+    odTip = AmbText(data(i, kol(COL_AMB_OD_TIP)))
+    odID = AmbText(data(i, kol(COL_AMB_OD_ID)))
+    naTip = AmbText(data(i, kol(COL_AMB_NA_TIP)))
+    naID = AmbText(data(i, kol(COL_AMB_NA_ID)))
+    kolicina = CDbl(data(i, kol(COL_AMB_KOLICINA)))
+    tipAmb = AmbText(data(i, kol(COL_AMB_TIP)))
+    vrsta = AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA)))
+
+    If Len(AmbText(data(i, kol(COL_AMB_STORNO_OD)))) > 0 Then
+        p = modAmbalazaUgovor.AmbPrenosStrukturaProblem(naTip, naID, odTip, odID, _
+                                                        kolicina, tipAmb, vrsta)
+        If Len(p) > 0 Then KnjigaRedProblem = "storno: " & p
+        Exit Function
+    End If
+
+    KnjigaRedProblem = modAmbalazaUgovor.AmbPrenosStrukturaProblem(odTip, odID, naTip, naID, _
+                                                                  kolicina, tipAmb, vrsta)
+End Function
+
+' INTEGRITET KNJIGE -- jedan prolaz, pa SVAKI citalac dobija isti odgovor.
+'
+' Vraca mapu AmbID -> VrstaKretanja; ta mapa je i sama dokaz jedinstvenosti
+' identiteta, a citaocu obaveze treba za vrstu ORIGINALA kad naidje na kontra-stav.
+'
+' JEDINSTVENOST AmbID-a NIJE SVOJSTVO REDA NEGO KNJIGE, pa je KnjigaRedProblem ne
+' moze proveriti. Ranije je stajala samo u citaocu obaveze (review #400, drugi
+' krug), pa je AmbSaldoNaloga sabirao dva reda sa istim stabilnim identitetom:
+'
+'   AMB-X  SpoljniSvet -> Stanica  100  NABAVKA
+'   AMB-X  SpoljniSvet -> Stanica  100  NABAVKA       -> Stanica = 200
+'
+' Taj saldo ulazi u kapiju deficita, pa korumpiran identitet otvara izlaz BEZ
+' pokrica. Za 10d je gore: StornoOd = AMB-X vise ne pokazuje na jedan original.
+' Pravilo je isto kao za nalog (AmbNalogProblem): 0 pada, 1 prolazi, 2+ pada.
+Private Function KnjigaIntegritet(ByRef data As Variant, ByRef kol As Object, _
+                                  ByVal sourceName As String) As Object
+    Dim vrste As Object
+    Set vrste = CreateObject("Scripting.Dictionary")
+    Set KnjigaIntegritet = vrste
+
+    If IsEmpty(data) Then Exit Function
+
+    Dim i As Long, p As String, ambID As String
+    For i = 1 To UBound(data, 1)
+        If RedPrazan(data, i, kol) Then
+            ' artefakt prazne tabele -- nije red
+        ElseIf Not RedDoticeKnjigu(data, i, kol) Then
+            ' Ne dotice knjigu: sme da bude samo VALJAN stari red. Sve ostalo ne
+            ' pripada nijednom modelu i tiho bi nestalo iz svakog salda.
+            p = LegacyRedProblem(data, i, kol)
+            If Len(p) > 0 Then
+                Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
+                          "Red " & CStr(i) & ": " & p
+            End If
+        Else
+            p = KnjigaRedProblem(data, i, kol)
+            If Len(p) > 0 Then
+                Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
+                          "Red knjige " & CStr(i) & ": " & p
+            End If
+
+            ambID = AmbText(data(i, kol(COL_AMB_ID)))
+            If vrste.Exists(ambID) Then
+                Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
+                          "Dva reda knjige nose AmbID '" & ambID & "'."
+            End If
+            ' DODELA, ne .Add: Add bi na postojecem kljucu pukao sam od sebe i time
+            ' bio SLUCAJNA druga brana ispred imenovane provere iznad. Dvosmerni
+            ' dokaz je to i pokazao -- sa ugasenom imenovanom kapijom test je i
+            ' dalje padao, samo sa tudjom porukom. Kapija sme biti samo jedna.
+            vrste(ambID) = AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA)))
+        End If
+    Next i
+
+    ' StornoOd mora da pokazuje na postojeci red -- DRUGI prolaz, jer original sme
+    ' da stoji posle svog kontra-stava (knjiga je append-only, ne sortirana).
+    Dim st As String
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kol) Then
+            st = AmbText(data(i, kol(COL_AMB_STORNO_OD)))
+            If Len(st) > 0 Then
+                If Not vrste.Exists(st) Then
+                    Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
+                              "StornoOd '" & st & "' ne pokazuje na red knjige."
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' JEDAN ULAZ ZA CITANJE KNJIGE: indeksi I dokazan integritet, nikad odvojeno.
+'
+' Spojeni su namerno. Da `KnjigaIndeksi` ostane javno dostupan, nov citalac bi uzeo
+' indekse i preskocio proveru -- a tacno taj oblik propusta je i bio P2: citalac
+' obaveze je proveravao identitet, citalac salda nije.
+'
+' CENA JE JEDAN PROLAZ PO POZIVU CITAOCA, i to je svesno. Nad fixture-om se ne meri;
+' nad pravom knjigom ce 10c morati da izmeri, a ako zaboli, odgovor je kes po
+' transakciji -- ne slabije citanje.
+Private Function KnjigaZaCitanje(ByRef data As Variant, ByVal sourceName As String, _
+                                 ByRef outVrste As Object) As Object
+    Dim kol As Object
+    Set kol = KnjigaIndeksi(sourceName)
+    Set outVrste = KnjigaIntegritet(data, kol, sourceName)
+    Set KnjigaZaCitanje = kol
+End Function
+
+' Nalog kao kljuc, i neuredjen PAR naloga kao kljuc.
+'
+' Par je NEUREDJEN jer jedan revers sme da nosi i izdavanje i povrat prema istom
+' partneru: Stanica -> K1 i K1 -> Stanica su isti poslovni par.
+Private Function NalogKljuc(ByVal tip As String, ByVal id As String) As String
+    NalogKljuc = Trim$(tip) & ":" & Trim$(id)
+End Function
+
+Private Function ParKljuc(ByVal tipA As String, ByVal idA As String, _
+                          ByVal tipB As String, ByVal idB As String) As String
+    Dim a As String, b As String
+    a = NalogKljuc(tipA, idA)
+    b = NalogKljuc(tipB, idB)
+
+    If StrComp(a, b, vbTextCompare) <= 0 Then
+        ParKljuc = a & " <-> " & b
+    Else
+        ParKljuc = b & " <-> " & a
+    End If
+End Function
+
+Private Function IstiNalog(ByVal tipA As String, ByVal idA As String, _
+                           ByVal tipB As String, ByVal idB As String) As Boolean
+    IstiNalog = (StrComp(Trim$(tipA), Trim$(tipB), vbTextCompare) = 0) And _
+                (StrComp(Trim$(idA), Trim$(idB), vbTextCompare) = 0)
+End Function
+
+' DAN, ne trenutak: knjiga ambalaze je dnevna (broj reversa je niz po danu), a
+' celija moze da nosi i vreme. Poredjenje po trenutku bi isti dogadjaj unet dva
+' puta istog dana prijavilo kao dva.
+Private Function IstiDan(ByVal a As Variant, ByVal b As Date) As Boolean
+    If Not IsDate(a) Then Exit Function
+    IstiDan = (Int(CDate(a)) = Int(b))
+End Function
+
+' SALDO NALOGA IZ KNJIGE: +kolicina kad je nalog ODREDISTE, -kolicina kad je
+' IZVOR. Storno je kontra-stav sa zamenjenim stranama, pa se gasi istim pravilom
+' -- bez posebnog slucaja i bez kolone Stornirano.
+'
+' NEMA "On Error -> vrati 0". Zatecen GetStanicaAmbSaldo tako radi i to je
+' fail-open koji ovde ne sme da postoji: na ovaj broj se oslanja kapija deficita,
+' pa bi progutana greska proizvela upis BEZ pokrica -- tj. negativan saldo.
+Public Function AmbSaldoNaloga(ByVal tip As String, ByVal id As String, _
+                               ByVal tipAmb As String) As Double
+    Const SRC As String = "modAmbalaza.AmbSaldoNaloga"
+
+    Dim p As String
+    p = modAmbalazaUgovor.AmbNalogProblem(tip, id)
+    If Len(p) > 0 Then Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, p
+
+    If Len(Trim$(tipAmb)) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Saldo se vodi PO TIPU ambalaze -- tip je obavezan."
+    End If
+
+    RequireKnjigaSchema SRC
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
+    Dim cVK As Long, cTipA As Long, cKol As Long
+    Dim kol As Object, vrste As Object
+    Set kol = KnjigaZaCitanje(data, SRC, vrste)
+
+    cOdTip = kol(COL_AMB_OD_TIP)
+    cOdID = kol(COL_AMB_OD_ID)
+    cNaTip = kol(COL_AMB_NA_TIP)
+    cNaID = kol(COL_AMB_NA_ID)
+    cVK = kol(COL_AMB_VRSTA_KRETANJA)
+    cTipA = kol(COL_AMB_TIP)
+    cKol = kol(COL_AMB_KOLICINA)
+
+    Dim i As Long, saldo As Double
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kol) Then
+            If StrComp(AmbText(data(i, cTipA)), Trim$(tipAmb), vbTextCompare) = 0 Then
+                If IstiNalog(AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), tip, id) Then
+                    saldo = saldo + CDbl(data(i, cKol))
+                ElseIf IstiNalog(AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), tip, id) Then
+                    saldo = saldo - CDbl(data(i, cKol))
+                End If
+            End If
+        End If
+    Next i
+
+    AmbSaldoNaloga = saldo
+End Function
+
+' OBAVEZA FIRME PREMA PARTNERU -- izvedena iz iste knjige, bez ijedne mutabilne
+' kolone, preko DOPRINOSA po dogadjaju (AMB-INV-09).
+'
+' Prosta razlika dve sume NIJE dovoljna: storno ULAZA upisuje kontra-stav koji
+' anulira fizicko stanje, a razlika dve sume ostavila bi obavezu da visi.
+'
+' Vrsta ORIGINALA se cita iz reda na koji StornoOd pokazuje, a ne iz samog
+' kontra-stava. Razlika je bitna: inace bi 10d mogao da ugasi obavezu upisujuci
+' storno sa drugom vrstom, i nijedna provera to ne bi videla. StornoOd koji ne
+' pokazuje nigde je kvar, ne nula.
+Public Function AmbObavezaPartneru(ByVal tip As String, ByVal id As String, _
+                                   ByVal tipAmb As String) As Double
+    Const SRC As String = "modAmbalaza.AmbObavezaPartneru"
+
+    Dim p As String
+    p = modAmbalazaUgovor.AmbNalogProblem(tip, id)
+    If Len(p) > 0 Then Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, p
+
+    If Len(Trim$(tipAmb)) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Obaveza se vodi PO TIPU ambalaze -- tip je obavezan."
+    End If
+
+    ' OBAVEZA POSTOJI SAMO PREMA NALOGU KOJI MOZE DA PRIMI TUDJU AMBALAZU.
+    '
+    ' Bez ove kapije funkcija vraca broj i za stanicu: njeni VRACANJE_TUDJE redovi
+    ' daju -N, pa bi "firma duguje stanici -70" izgledalo kao podatak. Klasa se
+    ' CITA iz iste matrice koja definise pokrice (ULAZ_TUDJE: GRANICA -> PARTNER)
+    ' -- dug nastaje tacno tim dogadjajem, pa mu je klasa ista po konstrukciji.
+    Dim klasaDuga As String
+    klasaDuga = modAmbalazaUgovor.AmbPokriceKlasa()
+    If Len(klasaDuga) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, "Klasa duga nije definisana u matrici."
+    End If
+
+    If Not modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, tip) Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Obaveza se ne vodi prema nalogu " & Trim$(tip) & ": dug nastaje " & _
+                  "ulazom tudje ambalaze, a on ide samo na " & klasaDuga & "."
+    End If
+
+    RequireKnjigaSchema SRC
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cID As Long, cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
+    Dim cVK As Long, cTipA As Long, cKol As Long, cSt As Long
+    Dim kol As Object, vrste As Object
+    Set kol = KnjigaZaCitanje(data, SRC, vrste)
+
+    cID = kol(COL_AMB_ID)
+    cOdTip = kol(COL_AMB_OD_TIP)
+    cOdID = kol(COL_AMB_OD_ID)
+    cNaTip = kol(COL_AMB_NA_TIP)
+    cNaID = kol(COL_AMB_NA_ID)
+    cVK = kol(COL_AMB_VRSTA_KRETANJA)
+    cTipA = kol(COL_AMB_TIP)
+    cKol = kol(COL_AMB_KOLICINA)
+    cSt = kol(COL_AMB_STORNO_OD)
+
+    ' Mapa AmbID -> vrsta dolazi iz KAPIJE INTEGRITETA, ne iz prolaza ovog citaoca:
+    ' jedinstvenost identiteta je svojstvo KNJIGE, pa mora vaziti i za citaoca salda
+    ' (review #400, drugi krug).
+    Dim i As Long
+    Dim obaveza As Double, stornoOd As String, vrstaOrig As String
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kol) Then
+            If StrComp(AmbText(data(i, cTipA)), Trim$(tipAmb), vbTextCompare) = 0 Then
+                If IstiNalog(AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), tip, id) Or _
+                   IstiNalog(AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), tip, id) Then
+
+                    stornoOd = AmbText(data(i, cSt))
+                    vrstaOrig = ""
+                    If Len(stornoOd) > 0 Then
+                        If Not vrste.Exists(stornoOd) Then
+                            Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                                      "StornoOd '" & stornoOd & "' ne pokazuje na red knjige."
+                        End If
+                        vrstaOrig = CStr(vrste(stornoOd))
+                    End If
+
+                    obaveza = obaveza + modAmbalazaUgovor.AmbDoprinosObavezi( _
+                                            AmbText(data(i, cVK)), _
+                                            CDbl(data(i, cKol)), _
+                                            vrstaOrig)
+                End If
+            End If
+        End If
+    Next i
+
+    AmbObavezaPartneru = obaveza
+End Function
+
+' DEFICIT: koliko bi IZVORNOM nalogu falilo da se prenos upise bez pokrica.
+'
+' GRANICA (SpoljniSvet) nema fizicko stanje -- ona je izvor i ponor opticaja
+' (6.3) -- pa prenos IZ nje nikad nije u manjku. Za svaki realan nalog deficit je
+' obican racun, i javan je zato sto UI sme da ga PRIKAZE pre upisa.
+Public Function AmbDeficitZaPrenos(ByVal odTip As String, ByVal odID As String, _
+                                   ByVal tipAmb As String, _
+                                   ByVal kolicina As Double) As Double
+    If Not modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_REALAN, odTip) Then Exit Function
+
+    Dim saldo As Double
+    saldo = AmbSaldoNaloga(odTip, odID, tipAmb)
+    If kolicina > saldo Then AmbDeficitZaPrenos = kolicina - saldo
+End Function
+
+' ============================================================
+' AMBALAZNI DOKUMENT -- zaglavlje (AMB-10-DOK)
+' ============================================================
+
+Public Function NoviAmbDokID() As String
+    Const SRC As String = "modAmbalaza.NoviAmbDokID"
+
+    NoviAmbDokID = NewEntityID("ADK-")
+
+    If Len(Trim$(NoviAmbDokID)) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, "NewEntityID nije vratio AmbDokID."
+    End If
+End Function
+
+' Zaglavlje dokumenta koji nosi dogadjaje bez sopstvenog poslovnog dokumenta
+' (revers, nabavka, otpis). Vraca AmbDokID -- on ide u tblAmbalaza.DokumentID,
+' uz DokumentTIP = DOK_TIP_AMBALAZA_DOKUMENT.
+'
+' Red se gradi PO IMENU KOLONE (SetRowValueByColumn), ne golim Array(...):
+' AppendRow pise poziciono, pa bi kolona ubacena u sredinu tiho poslala sve iza
+' sebe u pogresna polja.
+Public Function UpisiAmbDokument(ByVal vrsta As String, ByVal broj As String, _
+                                 ByVal datum As Date, _
+                                 ByVal brojOwnerTip As String, _
+                                 ByVal brojOwnerID As String, _
+                                 Optional ByVal napomena As String = "") As String
+    Const SRC As String = "modAmbalaza.UpisiAmbDokument"
+
+    RequireAmbDokSchema SRC
+    modAmbalazaUgovor.RequireAmbDok vrsta, broj, datum, brojOwnerTip, brojOwnerID, SRC
+
+    Dim vrstaK As String, ownerK As String
+    vrstaK = modAmbalazaUgovor.AmbDokVrstaKanon(vrsta)
+    ownerK = modAmbalazaUgovor.AmbNalogTipKanon(brojOwnerTip)
+    If Len(vrstaK) = 0 Or Len(ownerK) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                  "Kanonski zapis nije nadjen posle prosle kapije -- kvar ugovora."
+    End If
+
+    Dim colCount As Long
+    colCount = TabelaBrojKolona(TBL_AMBALAZA_DOKUMENT)
+    If colCount <= 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, "Ne mogu da odredim broj kolona za tblAmbalazaDokument."
+    End If
+
+    Dim novID As String
+    novID = NoviAmbDokID()
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, novID, SRC
+    SetRowValueByColumn rowData, TBL_AMBALAZA_DOKUMENT, COL_AMBD_VRSTA, vrstaK, SRC
+    SetRowValueByColumn rowData, TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, Trim$(broj), SRC
+    SetRowValueByColumn rowData, TBL_AMBALAZA_DOKUMENT, COL_AMBD_DATUM, datum, SRC
+    SetRowValueByColumn rowData, TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_TIP, ownerK, SRC
+    SetRowValueByColumn rowData, TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_ID, Trim$(brojOwnerID), SRC
+    SetRowValueByColumn rowData, TBL_AMBALAZA_DOKUMENT, COL_AMBD_NAPOMENA, Trim$(napomena), SRC
+    SetRowValueByColumn rowData, TBL_AMBALAZA_DOKUMENT, COL_STORNIRANO, "", SRC
+
+    Dim rowIdx As Long
+    rowIdx = AppendRow(TBL_AMBALAZA_DOKUMENT, rowData)
+    If rowIdx <= 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, "AppendRow nije uspeo za tblAmbalazaDokument."
+    End If
+
+    UpisiAmbDokument = novID
+End Function
+
+' Vrsta posla sa zaglavlja, za kapiju AmbDokDozvoljavaKretanje.
+'
+' STORNIRAN DOKUMENT NE PRIMA NOVA KRETANJA: zaglavlje sme da nosi Stornirano
+' (ono nije knjiga), a dopisivanje na ponisten dokument bilo bi kretanje bez
+' ziveg povoda.
+Public Function AmbDokVrstaZaID(ByVal ambDokID As String) As String
+    Const SRC As String = "modAmbalaza.AmbDokVrstaZaID"
+
+    RequireAmbDokSchema SRC
+    RequireTacnoJedan TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, Trim$(ambDokID), _
+                      "Ambalazni dokument", SRC
+
+    Dim st As Variant
+    st = LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, Trim$(ambDokID), COL_STORNIRANO)
+    If Len(AmbText(st)) > 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Ambalazni dokument '" & Trim$(ambDokID) & "' je storniran."
+    End If
+
+    Dim v As Variant
+    v = LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, Trim$(ambDokID), COL_AMBD_VRSTA)
+    AmbDokVrstaZaID = AmbText(v)
+
+    If Len(AmbDokVrstaZaID) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                  "Ambalazni dokument '" & Trim$(ambDokID) & "' nema vrstu."
+    End If
+End Function
+
+' ============================================================
+' UPIS JEDNOG REDA KNJIGE -- jedini put do tblAmbalaza u novom modelu
+' ============================================================
+'
+' AMB-INV-04 se proverava OVDE, nad svakim upisanim redom, a ne samo u
+' PrenesiAmbalazu: pokrice deficita i ostatak podele pisac generise SAM, pa bi ih
+' provera na ulazu promasila.
+'
+' Kljuc je (DokumentTIP, DokumentID, VrstaKretanja, TipAmbalaze) i vazi za
+' ORIGINALE. Kontra-stav (StornoOd <> "") ima isti kljuc kao original po
+' konstrukciji, pa se na njega ne primenjuje -- njegovu jedinstvenost drzi
+' AMB-INV-06, u 10d.
+Private Function UpisiRedKnjige(ByVal datum As Date, ByVal tipAmb As String, _
+                                ByVal kolicina As Double, _
+                                ByVal odTip As String, ByVal odID As String, _
+                                ByVal naTip As String, ByVal naID As String, _
+                                ByVal dokTip As String, ByVal dokID As String, _
+                                ByVal vrsta As String, ByVal stornoOd As String, _
+                                ByVal sourceName As String) As String
+    RequireKnjigaSchema sourceName
+    modAmbalazaUgovor.RequireAmbPrenos odTip, odID, naTip, naID, kolicina, tipAmb, vrsta, sourceName
+
+    Dim vrstaK As String, odTipK As String, naTipK As String
+    vrstaK = modAmbalazaUgovor.AmbVrstaKanon(vrsta)
+    odTipK = modAmbalazaUgovor.AmbNalogTipKanon(odTip)
+    naTipK = modAmbalazaUgovor.AmbNalogTipKanon(naTip)
+    If Len(vrstaK) = 0 Or Len(odTipK) = 0 Or Len(naTipK) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
+                  "Kanonski zapis nije nadjen posle prosle kapije -- kvar ugovora."
+    End If
+
+    If Len(Trim$(dokTip)) = 0 Or Len(Trim$(dokID)) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, sourceName, _
+                  "Red knjige nema identitet dokumenta (AMB-INV-04 i -08)."
+    End If
+
+    If Len(Trim$(stornoOd)) = 0 Then
+        ' AMB-INV-10 (sprovodjenje AMB-10-ODL-3): dokument ZAKLJUCAVA svoj poslovni
+        ' par naloga. AMB-INV-04 to ne pokriva -- njegov kljuc nosi vrstu i tip, pa
+        ' dva protivpartnera prolaze cim se razlikuje bilo koje od toga dvoga:
+        '
+        '   ADK-1  Stanica -> K1  IZDATA_PRAZNA  GAJBA_A
+        '   ADK-1  K2 -> Stanica  POVRAT_PRAZNE  GAJBA_A    <- druga vrsta
+        '   ADK-1  Stanica -> K2  IZDATA_PRAZNA  GAJBA_B    <- drugi tip
+        Dim par As String
+        par = DokumentParProblem(dokTip, dokID, odTipK, odID, naTipK, naID, vrstaK, sourceName)
+        If Len(par) > 0 Then
+            Err.Raise AMB_ERR_JEDAN_PARTNER, sourceName, par
+        End If
+
+        Dim sudar As String
+        sudar = IdentitetZauzeo(dokTip, dokID, vrstaK, tipAmb, sourceName)
+        If Len(sudar) > 0 Then
+            Err.Raise AMB_ERR_IDENTITET, sourceName, _
+                      "AMB-INV-04: " & Trim$(dokTip) & " '" & Trim$(dokID) & "' je vec knjizio " & _
+                      vrstaK & " za '" & Trim$(tipAmb) & "' (red " & sudar & ")."
+        End If
+    End If
+
+    Dim colCount As Long
+    colCount = TabelaBrojKolona(TBL_AMBALAZA)
+    If colCount <= 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, "Ne mogu da odredim broj kolona za tblAmbalaza."
+    End If
+
+    ' Transakcioni identitet, ne max+1: StornoOd pokazuje na AmbID, pa on mora biti
+    ' stabilan i neprotumaciv (ista odluka kao ReversID, DOCUMENT_HEADER_LINES par. 2).
+    Dim novID As String
+    novID = NewEntityID("AMB-")
+    If Len(Trim$(novID)) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, "NewEntityID nije vratio AmbID."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_AMBALAZA, COL_AMB_ID, novID, sourceName
+    SetRowValueByColumn rowData, TBL_AMBALAZA, COL_AMB_DATUM, datum, sourceName
+    SetRowValueByColumn rowData, TBL_AMBALAZA, COL_AMB_TIP, Trim$(tipAmb), sourceName
+    SetRowValueByColumn rowData, TBL_AMBALAZA, COL_AMB_KOLICINA, kolicina, sourceName
+    SetRowValueByColumn rowData, TBL_AMBALAZA, COL_AMB_OD_TIP, odTipK, sourceName
+    SetRowValueByColumn rowData, TBL_AMBALAZA, COL_AMB_OD_ID, Trim$(odID), sourceName
+    SetRowValueByColumn rowData, TBL_AMBALAZA, COL_AMB_NA_TIP, naTipK, sourceName
+    SetRowValueByColumn rowData, TBL_AMBALAZA, COL_AMB_NA_ID, Trim$(naID), sourceName
+    SetRowValueByColumn rowData, TBL_AMBALAZA, COL_AMB_DOK_TIP, Trim$(dokTip), sourceName
+    SetRowValueByColumn rowData, TBL_AMBALAZA, COL_AMB_DOK_ID, Trim$(dokID), sourceName
+    SetRowValueByColumn rowData, TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, vrstaK, sourceName
+    SetRowValueByColumn rowData, TBL_AMBALAZA, COL_AMB_STORNO_OD, Trim$(stornoOd), sourceName
+
+    Dim rowIdx As Long
+    rowIdx = AppendRow(TBL_AMBALAZA, rowData)
+    If rowIdx <= 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, "AppendRow nije uspeo za tblAmbalaza."
+    End If
+
+    UpisiRedKnjige = novID
+End Function
+
+' AMB-INV-10: dokument ZAKLJUCAVA svoj poslovni par naloga.
+'
+' Prva verzija je BROJALA naloge van granice i trazila "najvise dva". To pada tacno
+' tamo gde je jedna strana granica (review #400, drugi krug):
+'
+'   ADK-NAB-1  SpoljniSvet -> Stanica1  NABAVKA  GAJBA_A
+'   ADK-NAB-1  SpoljniSvet -> Stanica2  NABAVKA  GAJBA_B
+'
+' dva realna naloga, broj = 2, PROSLO BI -- a to je jedan nabavni dokument preko DVE
+' stanice, tacno ono zbog cega AMB-10-ODL-3 postoji. Ogledalno vazi za OTPIS.
+'
+' Zato se ne broji nego POREDI: svi ORIGINALNI redovi dokumenta, izuzev generisanog
+' pokrica, imaju JEDAN I ISTI neuredjen par {Od, Na}.
+'
+' POKRICE JE IZUZETO jer ga pisac generise sam (ULAZ_TUDJE nikad nije zahtev), pa
+' njegov par ({SpoljniSvet, izvor}) nije poslovni par dokumenta. Ali ne sme da uvede
+' trecu stranu, pa njegovo ODREDISTE mora biti clan zakljucanog para.
+'
+' Vazi za SVE dokumente, ne samo ambalazne: merenje svih devet mesta knjizenja daje
+' po dokumentu tacno jedan par (otkup K1<->Stanica, otpremnica Stanica<->Vozac,
+' prijemnica Kupac<->Vozac, revers dve strane). Ogranicenje je time na KNJIZI, ne na
+' vrsti dokumenta -- isti razlog zbog kog AMB-INV-04 nosi DokumentTIP.
+Private Function DokumentParProblem(ByVal dokTip As String, ByVal dokID As String, _
+                                    ByVal odTipK As String, ByVal odID As String, _
+                                    ByVal naTipK As String, ByVal naID As String, _
+                                    ByVal vrstaK As String, _
+                                    ByVal sourceName As String) As String
+    Dim parovi As Object, clanovi As Object, pokrica As Object
+    Set parovi = CreateObject("Scripting.Dictionary")
+    Set clanovi = CreateObject("Scripting.Dictionary")
+    Set pokrica = CreateObject("Scripting.Dictionary")
+
+    DodajStranu parovi, clanovi, pokrica, odTipK, odID, naTipK, naID, vrstaK
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+
+    If Not IsEmpty(data) Then
+        Dim kol As Object, vrste As Object
+        Set kol = KnjigaZaCitanje(data, sourceName, vrste)
+
+        Dim i As Long
+        For i = 1 To UBound(data, 1)
+            If RedDoticeKnjigu(data, i, kol) Then
+                If Len(AmbText(data(i, kol(COL_AMB_STORNO_OD)))) = 0 Then
+                    If StrComp(AmbText(data(i, kol(COL_AMB_DOK_TIP))), Trim$(dokTip), vbTextCompare) = 0 And _
+                       StrComp(AmbText(data(i, kol(COL_AMB_DOK_ID))), Trim$(dokID), vbTextCompare) = 0 Then
+                        DodajStranu parovi, clanovi, pokrica, _
+                                    AmbText(data(i, kol(COL_AMB_OD_TIP))), AmbText(data(i, kol(COL_AMB_OD_ID))), _
+                                    AmbText(data(i, kol(COL_AMB_NA_TIP))), AmbText(data(i, kol(COL_AMB_NA_ID))), _
+                                    AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA)))
+                    End If
+                End If
+            End If
+        Next i
+    End If
+
+    If parovi.count > 1 Then
+        DokumentParProblem = "AMB-INV-10: " & Trim$(dokTip) & " '" & Trim$(dokID) & _
+                             "' bi nosio " & CStr(parovi.count) & " razlicita para naloga (" & _
+                             Join(parovi.Keys, " | ") & ") -- jedan dokument, jedan poslovni par."
+        Exit Function
+    End If
+
+    ' Pokrice bez zakljucanog para nema sa cim da se poredi. Pisac ga ne proizvodi
+    ' sam: trazeni prenos se upisuje PRE pokrica, pa par uvek postoji. Ostaje kao
+    ' izgovorena granica, ne kao tiha.
+    If parovi.count = 0 Then Exit Function
+
+    Dim k As Variant
+    For Each k In pokrica.Keys
+        If Not clanovi.Exists(CStr(k)) Then
+            DokumentParProblem = "AMB-INV-10: pokrice deficita ide na '" & CStr(k) & _
+                                 "', a par dokumenta je " & Join(parovi.Keys, "") & "."
+            Exit Function
+        End If
+    Next k
+End Function
+
+' Jedan red doprinosi ILI paru dokumenta ILI spisku pokrica -- nikad oboma.
+Private Sub DodajStranu(ByRef parovi As Object, ByRef clanovi As Object, _
+                        ByRef pokrica As Object, _
+                        ByVal odTip As String, ByVal odID As String, _
+                        ByVal naTip As String, ByVal naID As String, _
+                        ByVal vrsta As String)
+    If StrComp(Trim$(vrsta), AMB_VK_ULAZ_TUDJE, vbTextCompare) = 0 Then
+        Dim p As String
+        p = NalogKljuc(naTip, naID)
+        If Not pokrica.Exists(p) Then pokrica.Add p, True
+        Exit Sub
+    End If
+
+    Dim par As String
+    par = ParKljuc(odTip, odID, naTip, naID)
+    If Not parovi.Exists(par) Then parovi.Add par, True
+
+    Dim a As String, b As String
+    a = NalogKljuc(odTip, odID)
+    b = NalogKljuc(naTip, naID)
+    If Not clanovi.Exists(a) Then clanovi.Add a, True
+    If Not clanovi.Exists(b) Then clanovi.Add b, True
+End Sub
+
+' Vraca AmbID reda koji je vec zauzeo isti identitet efekta, inace "".
+Private Function IdentitetZauzeo(ByVal dokTip As String, ByVal dokID As String, _
+                                 ByVal vrstaK As String, ByVal tipAmb As String, _
+                                 ByVal sourceName As String) As String
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cID As Long, cOdTip As Long, cNaTip As Long, cVK As Long
+    Dim cTipA As Long, cDokT As Long, cDokI As Long, cSt As Long
+    Dim kol As Object, vrste As Object
+    Set kol = KnjigaZaCitanje(data, sourceName, vrste)
+
+    cID = kol(COL_AMB_ID)
+    cOdTip = kol(COL_AMB_OD_TIP)
+    cNaTip = kol(COL_AMB_NA_TIP)
+    cVK = kol(COL_AMB_VRSTA_KRETANJA)
+    cTipA = kol(COL_AMB_TIP)
+    cDokT = kol(COL_AMB_DOK_TIP)
+    cDokI = kol(COL_AMB_DOK_ID)
+    cSt = kol(COL_AMB_STORNO_OD)
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kol) Then
+            If Len(AmbText(data(i, cSt))) = 0 Then
+                If StrComp(AmbText(data(i, cDokT)), Trim$(dokTip), vbTextCompare) = 0 And _
+                   StrComp(AmbText(data(i, cDokI)), Trim$(dokID), vbTextCompare) = 0 And _
+                   StrComp(AmbText(data(i, cVK)), Trim$(vrstaK), vbTextCompare) = 0 And _
+                   StrComp(AmbText(data(i, cTipA)), Trim$(tipAmb), vbTextCompare) = 0 Then
+                    IdentitetZauzeo = AmbText(data(i, cID))
+                    Exit Function
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' ZBIR VEC UPISANOG ZA ISTI ZAHTEV -- osnova idempotencije.
+'
+' Meri se po PARU NALOGA i po SKUPU vrsta koje taj zahtev sme da proizvede
+' (AmbVrsteZahteva), a ne po trazenoj vrsti i kolicini jednog reda: podela
+' obaveze razbija zahtev od 20 na 12 + 8, pa bi poredjenje sa jednim redom
+' prijavilo sudar nad ispravnim ponavljanjem.
+Private Function ZbirZahteva(ByVal dokTip As String, ByVal dokID As String, _
+                             ByVal datum As Date, ByVal tipAmb As String, _
+                             ByVal odTip As String, ByVal odID As String, _
+                             ByVal naTip As String, ByVal naID As String, _
+                             ByVal vrstaK As String, _
+                             ByRef outAmbID As String, _
+                             ByVal sourceName As String) As Double
+    outAmbID = ""
+
+    Dim dozvoljene As Variant
+    dozvoljene = modAmbalazaUgovor.AmbVrsteZahteva(vrstaK)
+    If UBound(dozvoljene) < LBound(dozvoljene) Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cID As Long, cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
+    Dim cVK As Long, cTipA As Long, cKol As Long, cDokT As Long, cDokI As Long
+    Dim cSt As Long, cDat As Long
+    Dim kol As Object, vrste As Object
+    Set kol = KnjigaZaCitanje(data, sourceName, vrste)
+
+    cID = kol(COL_AMB_ID)
+    cOdTip = kol(COL_AMB_OD_TIP)
+    cOdID = kol(COL_AMB_OD_ID)
+    cNaTip = kol(COL_AMB_NA_TIP)
+    cNaID = kol(COL_AMB_NA_ID)
+    cVK = kol(COL_AMB_VRSTA_KRETANJA)
+    cTipA = kol(COL_AMB_TIP)
+    cKol = kol(COL_AMB_KOLICINA)
+    cDokT = kol(COL_AMB_DOK_TIP)
+    cDokI = kol(COL_AMB_DOK_ID)
+    cSt = kol(COL_AMB_STORNO_OD)
+    cDat = kol(COL_AMB_DATUM)
+
+    Dim i As Long, j As Long, vr As String, zbir As Double
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kol) Then
+            If Len(AmbText(data(i, cSt))) = 0 Then
+                If StrComp(AmbText(data(i, cDokT)), Trim$(dokTip), vbTextCompare) = 0 And _
+                   StrComp(AmbText(data(i, cDokI)), Trim$(dokID), vbTextCompare) = 0 And _
+                   StrComp(AmbText(data(i, cTipA)), Trim$(tipAmb), vbTextCompare) = 0 And _
+                   IstiDan(data(i, cDat), datum) Then
+                    If IstiNalog(AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), odTip, odID) And _
+                       IstiNalog(AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), naTip, naID) Then
+
+                        vr = AmbText(data(i, cVK))
+                        For j = LBound(dozvoljene) To UBound(dozvoljene)
+                            If StrComp(vr, CStr(dozvoljene(j)), vbTextCompare) = 0 Then
+                                zbir = zbir + CDbl(data(i, cKol))
+                                If Len(outAmbID) = 0 Or _
+                                   StrComp(vr, Trim$(vrstaK), vbTextCompare) = 0 Then
+                                    outAmbID = AmbText(data(i, cID))
+                                End If
+                                Exit For
+                            End If
+                        Next j
+                    End If
+                End If
+            End If
+        End If
+    Next i
+
+    ZbirZahteva = zbir
+End Function
+
+' ============================================================
+' PRENESI AMBALAZU -- javni ulaz u knjigu
+' ============================================================
+'
+' Vraca AmbID glavnog reda. Jedan poziv moze da upise do TRI reda, i svaki je
+' posledica imenovane invarijante:
+'
+'   pokrice deficita   SpoljniSvet -> izvor   ULAZ_TUDJE_AMBALAZE   (AMB-INV-07)
+'   trazeni prenos     od -> na               trazena vrsta
+'   ostatak podele     od -> na               IZDATA_PRAZNA         (AMB-INV-09)
+'
+' potvrdaDeficita: -1 znaci "nije data". Nula NIJE sentinela -- deficit nula ne
+' trazi potvrdu, pa bi 0 bila dvosmislena vrednost.
+Public Function PrenesiAmbalazu(ByVal datum As Date, ByVal tipAmb As String, _
+                                ByVal kolicina As Double, _
+                                ByVal odTip As String, ByVal odID As String, _
+                                ByVal naTip As String, ByVal naID As String, _
+                                ByVal vrsta As String, _
+                                ByVal dokTip As String, ByVal dokID As String, _
+                                Optional ByVal potvrdaDeficita As Double = -1) As String
+    Const SRC As String = "modAmbalaza.PrenesiAmbalazu"
+
+    RequireKnjigaSchema SRC
+    modAmbalazaUgovor.RequireAmbPrenos odTip, odID, naTip, naID, kolicina, tipAmb, vrsta, SRC
+
+    ' ULAZ_TUDJE_AMBALAZE nije zahtev nego POSLEDICA -- generise je ovaj pisac kao
+    ' pokrice deficita. Da je i zahtev, pokrice i eksplicitan zahtev nad istim
+    ' dokumentom delili bi par i vrstu, pa bi jedan progutao drugi.
+    If Not modAmbalazaUgovor.AmbVrstaJeZahtev(vrsta) Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "'" & Trim$(vrsta) & "' nije zahtev nego posledica -- pisac je generise sam."
+    End If
+
+    ' IDENTITET DOKUMENTA SE NE PROVERAVA OVDE. Ista provera stoji u
+    ' UpisiRedKnjige, kroz koji prolazi SVAKI red -- i pokrice deficita i ostatak
+    ' podele. Kopija na ulazu bila bi placebo: nijedna sabotaza je ne bi mogla
+    ' oboriti, jer bi jezgro odgovorilo isto. Invarijanta zivi u jezgru.
+    Dim vrstaK As String
+    vrstaK = modAmbalazaUgovor.AmbVrstaKanon(vrsta)
+
+    ' VEZA DOKUMENT <-> KRETANJE. Vazi samo za tblAmbalazaDokument: za robne
+    ' dokumente (otkup, otpremnica, prijemnica) tipovi nisu zatvoren skup, pa
+    ' ugovor o njima namerno ne tvrdi nista.
+    If StrComp(Trim$(dokTip), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) = 0 Then
+        Dim dokVrsta As String
+        dokVrsta = AmbDokVrstaZaID(dokID)
+        If Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje(dokVrsta, vrstaK) Then
+            Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                      "Dokument vrste " & dokVrsta & " ne nosi kretanje " & vrstaK & "."
+        End If
+    End If
+
+    ' AMB-INV-04, idempotencija: isti zahtev nad istim dokumentom i parem naloga.
+    Dim vecUpisano As Double, vecID As String
+    vecUpisano = ZbirZahteva(dokTip, dokID, datum, tipAmb, odTip, odID, naTip, naID, _
+                             vrstaK, vecID, SRC)
+    If Len(vecID) > 0 Then
+        If vecUpisano = kolicina Then
+            PrenesiAmbalazu = vecID
+            Exit Function
+        End If
+
+        Err.Raise AMB_ERR_IDENTITET, SRC, _
+                  "AMB-INV-04: isti dogadjaj je vec knjizen sa " & CStr(vecUpisano) & _
+                  ", a trazi se " & CStr(kolicina) & " (" & Trim$(dokTip) & " '" & _
+                  Trim$(dokID) & "', " & vrstaK & ")."
+    End If
+
+    ' AMB-INV-07: nijedan realan nalog ne sme posle commit-a biti ispod nule.
+    Dim deficit As Double, pokriceZaUpis As Double
+    deficit = AmbDeficitZaPrenos(odTip, odID, tipAmb, kolicina)
+
+    If deficit > 0 Then
+        Dim pokrice As String
+        pokrice = modAmbalazaUgovor.AmbPokriceProblem(odTip, odID)
+        If Len(pokrice) > 0 Then
+            Err.Raise AMB_ERR_DEFICIT_NEPOKRIV, SRC, _
+                      pokrice & " Manjak: " & CStr(deficit) & " '" & Trim$(tipAmb) & "'."
+        End If
+
+        If potvrdaDeficita < 0 Then
+            Err.Raise AMB_ERR_POTVRDA_DEFICITA, SRC, _
+                      "Nalog " & Trim$(odTip) & " '" & Trim$(odID) & "' nema " & CStr(kolicina) & _
+                      " '" & Trim$(tipAmb) & "'. Manjak " & CStr(deficit) & " ulazi u opticaj kao " & _
+                      "tudja ambalaza -- potvrdi tacno taj broj."
+        End If
+
+        ' Potvrda se meri prema SVEZE izracunatom deficitu: izmedju pitanja i
+        ' odgovora stanje se moglo promeniti drugim unosom, pa stara potvrda ne vazi.
+        If potvrdaDeficita <> deficit Then
+            Err.Raise AMB_ERR_POTVRDA_DEFICITA, SRC, _
+                      "Potvrda " & CStr(potvrdaDeficita) & " se ne slaze sa manjkom " & _
+                      CStr(deficit) & " -- stanje se promenilo, potvrdi ponovo."
+        End If
+
+        ' POKRICE SE UPISUJE POSLE TRAZENOG PRENOSA, i to je sada deo ugovora:
+        ' AMB-INV-10 poredi odredisten pokrica sa ZAKLJUCANIM parom dokumenta, pa par
+        ' mora postojati pre njega. Redosled unutar transakcije je slobodan --
+        ' AMB-INV-07 govori o stanju POSLE commit-a, ne o putu do njega.
+        pokriceZaUpis = deficit
+    End If
+
+    ' AMB-INV-09: ne moze se vratiti vise tudje ambalaze nego sto je uzeto. Visak
+    ' nije vracanje nego NOVO zaduzenje partnera -- podelu radi pisac, jer samo on
+    ' cita obavezu pouzdano u trenutku upisa.
+    Dim glavna As Double, ostatak As Double
+    glavna = kolicina
+    ostatak = 0
+
+    If StrComp(vrstaK, AMB_VK_VRACANJE_TUDJE, vbTextCompare) = 0 Then
+        Dim obaveza As Double
+        obaveza = AmbObavezaPartneru(naTip, naID, tipAmb)
+
+        ' NEGATIVNA OBAVEZA SE NE SPUSTA NA NULU, NEGO PADA. Ona znaci da je
+        ' AMB-INV-09 prekrsena PRE ovog poziva, a tisina bi je pretvorila u
+        ' normalno stanje. Do njega 10d MOZE da dodje: storno ULAZA tudje
+        ' ambalaze cija je obaveza vec zatvorena vracanjem daje -N. Odgovor na to
+        ' je da se takav storno odbije, i to je zahtev koji 10d nasledjuje -- ne
+        ' da ga ovaj pisac prekrije.
+        If obaveza < 0 Then
+            Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                      "Obaveza prema " & Trim$(naTip) & " '" & Trim$(naID) & "' je " & _
+                      CStr(obaveza) & " -- AMB-INV-09 je prekrsena pre ovog poziva."
+        End If
+
+        If kolicina > obaveza Then
+            glavna = obaveza
+            ostatak = kolicina - obaveza
+        End If
+    End If
+
+    Dim glavniID As String
+    If glavna > 0 Then
+        glavniID = UpisiRedKnjige(datum, tipAmb, glavna, odTip, odID, naTip, naID, _
+                                  dokTip, dokID, vrstaK, "", SRC)
+    End If
+
+    If ostatak > 0 Then
+        Dim ostatakID As String
+        ostatakID = UpisiRedKnjige(datum, tipAmb, ostatak, odTip, odID, naTip, naID, _
+                                   dokTip, dokID, AMB_VK_IZDATA_PRAZNA, "", SRC)
+        If Len(glavniID) = 0 Then glavniID = ostatakID
+    End If
+
+    If Len(glavniID) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, "Prenos nije upisao ni jedan red."
+    End If
+
+    If pokriceZaUpis > 0 Then
+        UpisiRedKnjige datum, tipAmb, pokriceZaUpis, _
+                       AMB_NALOG_SPOLJNI, "", odTip, odID, _
+                       dokTip, dokID, AMB_VK_ULAZ_TUDJE, "", SRC
+    End If
+
+    PrenesiAmbalazu = glavniID
+End Function

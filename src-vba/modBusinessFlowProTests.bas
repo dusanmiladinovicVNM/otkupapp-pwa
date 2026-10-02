@@ -300,6 +300,10 @@ Public Sub RunBusinessFlowProSuite()
     Test_Amb_DoprinosObavezi
     Test_Amb_NalogDvosmislenPada
     Test_Amb_DokumentUgovor
+    Test_Amb_PisacKnjige
+    Test_Amb_DeficitIObaveza
+    Test_Amb_ZaglavljeDokumentaPisac
+    Test_Amb_JedanProtivpartnerPoDokumentu
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
@@ -517,10 +521,22 @@ Private Sub Test_CoreTablesAndColumnsExist()
         "TipAmbalaze", "KolAmbalaze", "KolAmbVracena", "Klasa", _
         "Fakturisano", "FakturaID")
 
+    ' AMB-10b: knjiga nosi OBE strane dogadjaja, vrstu kretanja i vezu na storno.
+    '
+    ' Kolone su dopisane NA KRAJ (CLAUDE.md 3): AppendRow pise poziciono, pa bi
+    ' kolona u sredini tiho poslala sve iza sebe u pogresna polja. Stare kolone
+    ' (Smer, EntitetID, VozacID, ReversID) su jos tu i brisu se u 10e.
+    RequireColumnsExist TBL_AMBALAZA, Array( _
+        COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, _
+        COL_AMB_DOK_ID, COL_AMB_DOK_TIP, _
+        COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _
+        COL_AMB_VRSTA_KRETANJA, COL_AMB_STORNO_OD)
+
     ' AMB-10-DOK: ambalazni dokument postoji u svesci, ne samo u kanonu.
     '
     ' Strane dogadjaja NISU ovde -- njih nosi svaki red knjige (Od/Na). Zaglavlje
-    ' nosi identitet, broj, datum i storno; StanicaID je opseg jedinstvenosti broja.
+    ' nosi identitet, broj, datum, storno i VLASNIKA NUMERICKOG NIZA; stanica tu
+    ' ne stoji, jer revers kupca stanicu nema (review #399).
     RequireColumnsExist TBL_AMBALAZA_DOKUMENT, Array( _
         COL_AMBD_ID, COL_AMBD_VRSTA, COL_AMBD_BROJ, COL_AMBD_DATUM, _
         COL_AMBD_BROJ_OWNER_TIP, COL_AMBD_BROJ_OWNER_ID, _
@@ -16828,6 +16844,758 @@ Private Sub Test_Amb_DokumentUgovor()
 
 EH:
     LogFatal "Test_Amb_DokumentUgovor", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' PISAC KNJIGE (AMB-10b-1)
+' ============================================================
+'
+' Knjiga dobija pisca, ali NIJEDNO pozivno mesto se ne menja -- devet mesta
+' knjizenja, razlaganje slozenih pisaca i citaoci su 10b-2. Meri se zato sam
+' pisac: sta upisuje, sta ODBIJA, i sta radi kad se isti zahtev ponovi.
+'
+' PREDUSLOV SVAKOG SCENARIJA JE NULA. Fixture nema redova novog oblika, pa je
+' saldo svakog naloga 0 i stanje se gradi u testu. Prvi upis zato mora biti
+' NABAVKA (GRANICA -> SOPSTVENI): jedini prenos koji ne trazi postojeci saldo.
+Private Sub Test_Amb_PisacKnjige()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, errNum As Long, errDesc As String
+    scenario = NewScenarioCode("AMBPIS")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+
+    ' KAPIJE POTPUNOSTI idu PRE scenarija: vrsta bez odgovora prolazi tiho.
+    AssertEquals "", modAmbalazaUgovor.AmbProizvodnjaNepotpuna(), _
+                 "Amb pisac: svaka vrsta ima definisanu proizvodnju"
+    AssertEquals AMB_KLASA_PARTNER, modAmbalazaUgovor.AmbPokriceKlasa(), _
+                 "Amb pisac: klasa pokrica se CITA iz matrice, ne pise posebno"
+
+    ' OBAVEZA POSTOJI SAMO PREMA NALOGU KOJI MOZE DA PRIMI TUDJU AMBALAZU.
+    ' Bez te kapije stanica dobija broj iz svojih VRACANJE redova, pa bi "firma
+    ' duguje stanici -70" izgledalo kao podatak a ne kao besmislica.
+    On Error Resume Next
+    modAmbalaza.AmbObavezaPartneru AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb pisac: obaveza se ne racuna prema SOPSTVENOM nalogu"
+
+    ' --- A) NABAVKA: knjiga pocinje na granici opticaja --------------------
+    Dim dokNab As String, nabID As String
+    dokNab = modAmbalaza.UpisiAmbDokument(AMB_DOK_NABAVKA, "NAB-" & scenario, Date, _
+                                          AMB_NALOG_FIRMA, "")
+    AssertTrue Len(dokNab) > 0, "Amb pisac: nabavka ima zaglavlje"
+    AssertEquals AMB_DOK_NABAVKA, modAmbalaza.AmbDokVrstaZaID(dokNab), _
+                 "Amb pisac: vrsta posla se cita sa zaglavlja"
+
+    nabID = modAmbalaza.PrenesiAmbalazu(Date, TEST_TIP_AMB, 100#, _
+                AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab)
+    AssertTrue Len(nabID) > 0, "Amb pisac: nabavka je upisana"
+    AssertEquals "100", CStr(modAmbalaza.AmbSaldoNaloga( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)), _
+                 "Amb pisac: nabavka podize saldo stanice"
+    ' Granica nema fizicko znacenje, ali je knjiga simetricna -- njen saldo pada.
+    AssertEquals "-100", CStr(modAmbalaza.AmbSaldoNaloga( _
+                      AMB_NALOG_SPOLJNI, "", TEST_TIP_AMB)), _
+                 "Amb pisac: SpoljniSvet je izvor, ne nosilac salda"
+
+    ' --- B) IDEMPOTENCIJA I HARD CONFLICT ---------------------------------
+    Dim pre As Long, ponovo As String
+    pre = CountRows(TBL_AMBALAZA)
+    ponovo = modAmbalaza.PrenesiAmbalazu(Date, TEST_TIP_AMB, 100#, _
+                 AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                 AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab)
+    AssertEquals nabID, ponovo, "Amb pisac: isti zahtev vraca ISTI AmbID"
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb pisac: ponovljen zahtev ne dopisuje red"
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 101#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_IDENTITET), CStr(errNum), _
+                 "Amb pisac: isti identitet sa DRUGOM kolicinom je HARD CONFLICT"
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb pisac: sudar identiteta ne upisuje nista"
+
+    ' DATUM JE SADRZAJ, pa je i on sudar. Nad append-only knjigom je ispravka
+    ' datuma storno + nov dogadjaj -- tiho preuzimanje starog reda bi ispravku
+    ' pojelo bez poruke.
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu DateAdd("d", 1, Date), TEST_TIP_AMB, 100#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_IDENTITET), CStr(errNum), _
+                 "Amb pisac: isti identitet sa DRUGIM datumom je HARD CONFLICT"
+    ' DVE KAPIJE, DVA ISHODA. Bez datuma u filteru ponavljanja zahtev postaje
+    ' idempotentan (nema novog reda); bez kapije jedinstvenosti se red DOPISE. Zato
+    ' broj redova razlikuje te dve sabotaze -- inace bi delile jednu tvrdnju.
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb pisac: odbijen datum ne dopisuje red"
+
+    ' --- C) RED STAROG OBLIKA NIJE KNJIGA ---------------------------------
+    ' Tokom 10b tblAmbalaza nosi DVA oblika reda. Da novi citalac sabira i stare,
+    ' saldo bi bio zbir dva modela -- a iz toga nastaje bas negativan saldo koji
+    ' AMB-INV-07 zabranjuje.
+    modAmbalaza.TrackAmbalaza Date, TEST_TIP_AMB, 999, "Ulaz", TEST_ST_ID, "Stanica", _
+                              "", "OTK-" & scenario, DOK_TIP_OTKUP
+    AssertEquals "100", CStr(modAmbalaza.AmbSaldoNaloga( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)), _
+                 "Amb pisac: red STAROG oblika ne ulazi u saldo knjige"
+
+    ' --- D) IZDAVANJE PARTNERU: fizicko stanje nije dug -------------------
+    Dim dokRev As String, izdID As String
+    dokRev = modAmbalaza.UpisiAmbDokument(AMB_DOK_REVERS, "REV-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID)
+    izdID = modAmbalaza.PrenesiAmbalazu(Date, TEST_TIP_AMB, 30#, _
+                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev)
+    AssertTrue Len(izdID) > 0, "Amb pisac: izdavanje praznih je upisano"
+    AssertEquals "70", CStr(modAmbalaza.AmbSaldoNaloga( _
+                    AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)), _
+                 "Amb pisac: izdavanje razduzuje stanicu"
+    AssertEquals "30", CStr(modAmbalaza.AmbSaldoNaloga( _
+                    AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)), _
+                 "Amb pisac: izdavanje zaduzuje partnera"
+    AssertEquals "0", CStr(modAmbalaza.AmbObavezaPartneru( _
+                   AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)), _
+                 "Amb pisac: izdate NASE gajbe ne stvaraju obavezu prema partneru"
+
+    ' --- E) JEDAN DOKUMENT, JEDAN PROTIVPARTNER (AMB-INV-10) --------------
+    ' Isti revers ne sme da izda prazne i kooperantu i kupcu. Ovaj slucaj bi
+    ' uhvatio i AMB-INV-04 (ista vrsta, isti tip), pa ga mora uhvatiti kapija koja
+    ' je za to -- zaobilaznice preko druge vrste i drugog tipa meri
+    ' Test_Amb_JedanProtivpartnerPoDokumentu.
+    Dim preE As Long
+    preE = CountRows(TBL_AMBALAZA)
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 10#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_JEDAN_PARTNER), CStr(errNum), _
+                 "Amb pisac: isti dokument NE sme drugog protivpartnera (AMB-INV-10)"
+    AssertEquals CStr(preE), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb pisac: odbijen drugi protivpartner ne upisuje red"
+
+    ' --- F) POLUPISAN RED KNJIGE PADA, NE PRESKACE SE ---------------------
+    ' Citalac preskace STARI oblik reda (sve nove kolone prazne) i to je legitimno
+    ' tokom 10b. Ali red koji DOTICE knjigu a ne prolazi ugovor je KVAR.
+    '
+    ' TRI OBLIKA, ne jedan (review #400, P2): prva verzija je merila samo "ima Od,
+    ' nema vrstu", pa su dva opasnija oblika prolazila -- red sa praznim IZVOROM
+    ' (tiho preskocen kao legacy) i red sa izvorom BEZ ID-a (ulazi u saldo pola-pola:
+    ' partner dobije +20, a nijedan stvarni nalog ne dobije -20). Taj saldo ulazi u
+    ' kapiju deficita, pa pokvaren ZAPISAN red menja odluku SLEDECEG upisa.
+    '
+    ' Svaki oblik se posle tvrdnje BRISE -- inace obara svako sledece citanje.
+    errNum = KvarUKnjizi(scenario & "-A", AMB_NALOG_STANICA, TEST_ST_ID, _
+                         AMB_NALOG_KOOPERANT, TEST_KOOP_ID, "", errDesc)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: red sa stranama a bez vrste PADA, ne preskace se"
+    AssertTrue InStr(1, errDesc, "vrsta kretanja", vbTextCompare) > 0, _
+               "Amb pisac: kvar reda bez vrste imenuje polje"
+
+    errNum = KvarUKnjizi(scenario & "-B", "", "", _
+                         AMB_NALOG_STANICA, TEST_ST_ID, AMB_VK_NABAVKA, errDesc)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: red bez IZVORA nije legacy nego KVAR"
+    AssertTrue InStr(1, errDesc, "Nalog OD", vbTextCompare) > 0, _
+               "Amb pisac: kvar reda bez izvora imenuje polje"
+
+    errNum = KvarUKnjizi(scenario & "-C", AMB_NALOG_STANICA, "", _
+                         AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_VK_IZDATA_PRAZNA, errDesc)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: red sa izvorom BEZ ID-a ne ulazi u saldo"
+    AssertTrue InStr(1, errDesc, "trazi ID", vbTextCompare) > 0, _
+               "Amb pisac: kvar reda bez ID-a naloga imenuje polje"
+
+    ' --- F2) RED KOJI NE PRIPADA NIJEDNOM MODELU --------------------------
+    ' "Sve nove kolone prazne" dokazuje samo da red NIJE nov -- ne i da je VALJAN
+    ' star (review #400, treci krug). Red sa kolicinom i dokumentom, a bez ijedne
+    ' kolone oba modela, stari citalac ne vidi (entitet se ne poklapa) a novi ga
+    ' preskace -- pa kolicina nestaje iz svakog salda bez poruke.
+    '
+    ' Granicu u drugom smeru meri sekcija C: VALJAN stari red se i dalje preskace.
+    errNum = KvarUKnjizi(scenario & "-F", "", "", "", "", "", errDesc)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: red bez OBA modela nije legacy nego KVAR"
+    AssertTrue InStr(1, errDesc, "nema Smer", vbTextCompare) > 0, _
+               "Amb pisac: red bez oba modela imenuje sta fali"
+
+    ' --- G) IDENTITET REDA JE SVOJSTVO KNJIGE, NE REDA ---------------------
+    ' Dva reda sa istim AmbID-em su, red po red, besprekorna -- pa ih KnjigaRedProblem
+    ' ne moze videti. Ranije je tu proveru nosio SAMO citalac obaveze, pa je saldo
+    ' sabirao oba i naduvao stanje (review #400, drugi krug). A stanje je ulaz u
+    ' kapiju deficita, dakle u odluku o SLEDECEM upisu.
+    errNum = KvarUKnjizi(scenario & "-D", AMB_NALOG_STANICA, TEST_ST_ID, _
+                         AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_VK_IZDATA_PRAZNA, _
+                         errDesc, nabID)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: dva reda sa istim AmbID-em obaraju citaoca SALDA"
+    AssertTrue InStr(1, errDesc, "nose AmbID", vbTextCompare) > 0, _
+               "Amb pisac: duplikat identiteta imenuje AmbID"
+
+    ' --- H) STORNO MORA DA POKAZUJE NA POSTOJECI RED ----------------------
+    ' Isti razlog: bez jednoznacnog originala StornoOd nije veza nego niz znakova, a
+    ' 10d na njemu racuna inverz. Provera je bila u citaocu obaveze; sada je u knjizi.
+    errNum = KvarUKnjizi(scenario & "-E", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                         AMB_NALOG_SPOLJNI, "", AMB_VK_ULAZ_TUDJE, _
+                         errDesc, "", "AMB-NEMA-" & scenario)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: StornoOd koji ne pokazuje nigde obara citaoca SALDA"
+    AssertTrue InStr(1, errDesc, "ne pokazuje na red knjige", vbTextCompare) > 0, _
+               "Amb pisac: slomljena storno veza imenuje AmbID originala"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_Amb_PisacKnjige", errNum, errDesc
+End Sub
+
+' Seje JEDAN malformed red knjige, tvrdi da citalac na njemu PADA i imenuje polje,
+' pa ga brise. Postoji kao pomocnik jer se tri oblika razlikuju samo po polju koje
+' fali -- tri kopije istog bloka bile bi tri stvari koje mogu da se razidju.
+'
+' Red se seje ALATOM TESTA (BlankRow + SetRequiredField), ne kroz pisca: pisac bas
+' ovakav red ne bi ni upisao, a meri se sta citalac radi kad ga NADJE.
+Private Function KvarUKnjizi(ByVal oznaka As String, _
+                             ByVal odTip As String, ByVal odID As String, _
+                             ByVal naTip As String, ByVal naID As String, _
+                             ByVal vrsta As String, _
+                             ByRef outDesc As String, _
+                             Optional ByVal ambIDOverride As String = "", _
+                             Optional ByVal stornoOd As String = "") As Long
+    Const SRC As String = "KvarUKnjizi"
+
+    Dim ambID As String
+    ambID = "AMB-KVAR-" & oznaka
+    If Len(ambIDOverride) > 0 Then ambID = ambIDOverride
+
+    Dim kvar As Variant
+    kvar = BlankRow(TBL_AMBALAZA)
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_ID, ambID
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_DATUM, Date
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_TIP, TEST_TIP_AMB
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_KOLICINA, 7
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_DOK_TIP, DOK_TIP_AMBALAZA_DOKUMENT
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_DOK_ID, "ADK-KVAR-" & oznaka
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_OD_TIP, odTip
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_OD_ID, odID
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_NA_TIP, naTip
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_NA_ID, naID
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, vrsta
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_STORNO_OD, stornoOd
+    RequireAppend TBL_AMBALAZA, kvar, SRC
+
+    Dim errNum As Long, errDesc As String
+    On Error Resume Next
+    modAmbalaza.AmbSaldoNaloga AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    ' POMOCNIK NE TVRDI. Tvrdnja mora stajati uz Assert U IMENOVANOM TESTU --
+    ' sabotaza se vezuje za tekst tvrdnje, a tekst predat kao argument je za
+    ' dokaz.py nevidljiv. Pomocnik zato samo seje, meri i cisti.
+    ' Brise se POSLEDNJI red sa tim ID-em -- zasejani je dopisan na kraj. Kod
+    ' duplikata identiteta postoje dva, pa "samo ako je jedan" ne bi ocistilo nista.
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_AMBALAZA, COL_AMB_ID, ambID)
+    If redovi.count >= 1 Then DeleteRow TBL_AMBALAZA, CLng(redovi(redovi.count))
+
+    outDesc = errDesc
+    KvarUKnjizi = errNum
+End Function
+
+' JEDAN DOKUMENT, JEDAN PROTIVPARTNER -- AMB-INV-10, sprovodjenje AMB-10-ODL-3.
+'
+' Review #400 je pokazao da AMB-INV-04 ovo NE pokriva: njegov kljuc nosi vrstu i tip
+' ambalaze, pa dva protivpartnera prolaze cim se razlikuje bilo koje od toga dvoga.
+' Ovde se mere BAS te dve zaobilaznice, plus dve granice kapije:
+'
+'   drugi partner, DRUGA VRSTA        -> odbijen
+'   drugi partner, DRUGI TIP          -> odbijen
+'   ISTI partner, drugi tip           -> prolazi (granica je NALOG, ne tip)
+'   pokrice deficita (SpoljniSvet)    -> prolazi (granica se ne racuna kao nalog)
+'
+' Bez poslednje dve tvrdnje kapija moze biti i obicno "jedan red po dokumentu", a to
+' bi obaralo ispravan upis.
+Private Sub Test_Amb_JedanProtivpartnerPoDokumentu()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, errNum As Long, errDesc As String
+    scenario = NewScenarioCode("AMB1PR")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_KOOPERANTI
+
+    SeedKooperant2
+
+    ' Zaliha na stanici za OBA tipa, na ISTOM dokumentu: jedan dokument sme dva tipa
+    ' ambalaze, jer granica je nalog a ne tip.
+    Dim dokNab As String
+    dokNab = modAmbalaza.UpisiAmbDokument(AMB_DOK_NABAVKA, "N1P-" & scenario, Date, _
+                                          AMB_NALOG_FIRMA, "")
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 100#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB_B, 100#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab
+    AssertEquals "100", CStr(modAmbalaza.AmbSaldoNaloga( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB_B)), _
+                 "Amb jedan partner: jedan dokument sme DVA tipa ambalaze"
+
+    ' Dva reversa, po jedan partner -- oba legitimna.
+    Dim dokIzd As String, dokIzd2 As String
+    dokIzd = modAmbalaza.UpisiAmbDokument(AMB_DOK_REVERS, "I1P-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID)
+    dokIzd2 = modAmbalaza.UpisiAmbDokument(AMB_DOK_REVERS, "I2P-" & scenario, Date, _
+                                           AMB_NALOG_STANICA, TEST_ST_ID)
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 30#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 20#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP2_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd2
+
+    Dim pre As Long
+    pre = CountRows(TBL_AMBALAZA)
+
+    ' --- ZAOBILAZNICA 1: drugi partner, DRUGA VRSTA ------------------------
+    ' K2 ima 20, pa deficit ne moze da obori upis umesto kapije.
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 5#, _
+        AMB_NALOG_KOOPERANT, TEST_KOOP2_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_JEDAN_PARTNER), CStr(errNum), _
+                 "Amb jedan partner: drugi partner kroz DRUGU VRSTU je odbijen"
+    AssertTrue InStr(1, errDesc, "AMB-INV-10", vbTextCompare) > 0, _
+               "Amb jedan partner: odbijanje imenuje invarijantu"
+
+    ' --- ZAOBILAZNICA 2: drugi partner, DRUGI TIP AMBALAZE ----------------
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB_B, 10#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP2_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_JEDAN_PARTNER), CStr(errNum), _
+                 "Amb jedan partner: drugi partner kroz DRUGI TIP je odbijen"
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb jedan partner: nijedna zaobilaznica ne upisuje red"
+
+    ' --- GRANICA 1: ISTI partner, drugi tip -- PROLAZI --------------------
+    ' IDE KROZ ZAMKU ZA GRESKE IAKO SE OCEKUJE DA PRODJE. Sa ugasenom kapijom para
+    ' zaobilazni upisi iznad prolaze, pa ovaj padne na AMB-INV-04 -- i bez zamke
+    ' ubije test PRE tvrdnji ispod, koje sabotaza treba da obori.
+    Dim istiID As String
+    On Error Resume Next
+    istiID = modAmbalaza.PrenesiAmbalazu(Date, TEST_TIP_AMB_B, 10#, _
+                 AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                 AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd)
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), _
+                 "Amb jedan partner: ISTI partner sa drugim tipom NE pada"
+    AssertTrue Len(istiID) > 0, _
+               "Amb jedan partner: ISTI partner sa drugim tipom prolazi -- granica je nalog"
+
+    ' --- ZAOBILAZNICA 3: jedna strana je GRANICA ---------------------------
+    ' Ovo je prolazilo dok je kapija BROJALA naloge van granice: dve stanice daju
+    ' broj 2 (review #400, drugi krug). Dokument ima SVOJ dokument i SVOJ tip, pa
+    ' AMB-INV-04 ovde ne pomaze -- samo par moze da odbije.
+    Dim dokNab2 As String
+    dokNab2 = modAmbalaza.UpisiAmbDokument(AMB_DOK_NABAVKA, "N2P-" & scenario, Date, _
+                                           AMB_NALOG_FIRMA, "")
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 40#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab2
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB_B, 40#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_HLAD_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab2
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_JEDAN_PARTNER), CStr(errNum), _
+                 "Amb jedan partner: NABAVKA na DRUGU stanicu istim dokumentom je odbijena"
+    AssertTrue InStr(1, errDesc, "jedan poslovni par", vbTextCompare) > 0, _
+               "Amb jedan partner: odbijanje imenuje PAR, ne broj naloga"
+
+    ' --- ZAOBILAZNICA 4: ogledalno, OTPIS ka granici -----------------------
+    Dim dokOtp As String
+    dokOtp = modAmbalaza.UpisiAmbDokument(AMB_DOK_OTPIS, "O1P-" & scenario, Date, _
+                                          AMB_NALOG_FIRMA, "")
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 5#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_SPOLJNI, "", _
+        AMB_VK_OTPIS, DOK_TIP_AMBALAZA_DOKUMENT, dokOtp
+
+    ' Druga stanica dobija zalihu na SVOM dokumentu, da deficit ne obori upis umesto
+    ' kapije -- isti razlog kao kod storniranog dokumenta.
+    Dim dokNab3 As String
+    dokNab3 = modAmbalaza.UpisiAmbDokument(AMB_DOK_NABAVKA, "N3P-" & scenario, Date, _
+                                           AMB_NALOG_FIRMA, "")
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB_B, 30#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_HLAD_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab3
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB_B, 5#, _
+        AMB_NALOG_STANICA, TEST_HLAD_ST_ID, AMB_NALOG_SPOLJNI, "", _
+        AMB_VK_OTPIS, DOK_TIP_AMBALAZA_DOKUMENT, dokOtp
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_JEDAN_PARTNER), CStr(errNum), _
+                 "Amb jedan partner: OTPIS sa DRUGE stanice istim dokumentom je odbijen"
+
+    ' --- GRANICA 2: pokrice deficita se ne racuna kao treci nalog --------
+    ' K1 ima 30 u TEST_TIP_AMB, vraca 50 -> manjak 20 ulazi iz SpoljniSvet.
+    Dim dokPov As String, povID As String
+    dokPov = modAmbalaza.UpisiAmbDokument(AMB_DOK_REVERS, "P1P-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID)
+    On Error Resume Next
+    povID = modAmbalaza.PrenesiAmbalazu(Date, TEST_TIP_AMB, 50#, _
+                AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokPov, 20#)
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), _
+                 "Amb jedan partner: prenos sa pokricem NE pada"
+    AssertTrue Len(povID) > 0, _
+               "Amb jedan partner: pokrice deficita NE racuna se kao treci nalog"
+    AssertEquals "20", CStr(modAmbalaza.AmbObavezaPartneru( _
+                    AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)), _
+                 "Amb jedan partner: pokrice je i dalje stvorilo dug prema partneru"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_Amb_JedanProtivpartnerPoDokumentu", errNum, errDesc
+End Sub
+
+' DEFICIT I OBAVEZA -- dve granice koje pisac postavlja SAM (AMB-INV-07, -09).
+'
+' Oba scenarija su primeri iz modela (AMBALAZA.md 6.4 i 6.9), brojevi su isti:
+' partner vraca vise nego sto ima, i firma vraca vise nego sto duguje.
+'
+' SVAKI CIN IDE NA SVOJ DOKUMENT, i to nije kozmetika testa: AMB-INV-04 drzi
+' (dokument, vrsta, tip) jedinstvenim, a ostatak podele je takodje IZDATA_PRAZNA
+' -- pa bi na istom dokumentu sudario sa eksplicitnim izdavanjem.
+Private Sub Test_Amb_DeficitIObaveza()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, errNum As Long, errDesc As String
+    scenario = NewScenarioCode("AMBDEF")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+
+    Dim dokNab As String, dokIzd As String, dokPov As String
+    Dim dokVra As String, dokVra2 As String
+    dokNab = modAmbalaza.UpisiAmbDokument(AMB_DOK_NABAVKA, "NAB-" & scenario, Date, _
+                                          AMB_NALOG_FIRMA, "")
+    dokIzd = modAmbalaza.UpisiAmbDokument(AMB_DOK_REVERS, "IZD-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID)
+    dokPov = modAmbalaza.UpisiAmbDokument(AMB_DOK_REVERS, "POV-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID)
+    dokVra = modAmbalaza.UpisiAmbDokument(AMB_DOK_REVERS, "VRA-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID)
+    dokVra2 = modAmbalaza.UpisiAmbDokument(AMB_DOK_REVERS, "VR2-" & scenario, Date, _
+                                           AMB_NALOG_STANICA, TEST_ST_ID)
+
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 100#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 30#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd
+
+    ' --- A) POKRICE NIJE ZAHTEV -------------------------------------------
+    AssertTrue Not modAmbalazaUgovor.AmbVrstaJeZahtev(AMB_VK_ULAZ_TUDJE), _
+               "Amb deficit: ulaz tudje ambalaze nije zahtev nego posledica"
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 5#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+        AMB_VK_ULAZ_TUDJE, DOK_TIP_AMBALAZA_DOKUMENT, dokPov
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb deficit: pokrice se NE moze poruciti izvana -- pisac ga generise"
+
+    ' --- B) DEFICIT SOPSTVENOG NALOGA SE NE POKRIVA (AMB-10-ODL-8) --------
+    ' Matrica kaze ULAZ_TUDJE: GRANICA -> PARTNER. Stanica nije partner, pa njen
+    ' manjak nije "tudje gajbe" nego skriven manjak -- put je NABAVKA.
+    Dim preB As Long
+    preB = CountRows(TBL_AMBALAZA)
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 500#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokPov
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_DEFICIT_NEPOKRIV), CStr(errNum), _
+                 "Amb deficit: manjak SOPSTVENOG naloga se odbija, ne pokriva"
+    AssertTrue InStr(1, errDesc, "NABAVKA", vbTextCompare) > 0, _
+               "Amb deficit: odbijanje imenuje put -- NABAVKA"
+    AssertEquals CStr(preB), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb deficit: odbijeni prenos ne upisuje nista"
+
+    ' --- C) DEFICIT PARTNERA: PROTOKOL POTVRDE ----------------------------
+    ' Kooperant ima 30, vraca 100 praznih -> manjak 70 ulazi u opticaj kao tudja
+    ' ambalaza, i firma mu posle toga duguje 70.
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 100#, _
+        AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokPov
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_POTVRDA_DEFICITA), CStr(errNum), _
+                 "Amb deficit: bez potvrde pisac PITA, ne upisuje"
+    AssertTrue InStr(1, errDesc, "Manjak 70 ulazi", vbTextCompare) > 0, _
+               "Amb deficit: pitanje nosi TACAN manjak"
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 100#, _
+        AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokPov, 69#
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_POTVRDA_DEFICITA), CStr(errNum), _
+                 "Amb deficit: potvrda koja se ne slaze se ODBIJA, ne zaokruzuje"
+
+    Dim povID As String
+    povID = modAmbalaza.PrenesiAmbalazu(Date, TEST_TIP_AMB, 100#, _
+                AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokPov, 70#)
+    AssertTrue Len(povID) > 0, "Amb deficit: sa tacnom potvrdom prenos prolazi"
+    AssertEquals "0", CStr(modAmbalaza.AmbSaldoNaloga( _
+                   AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)), _
+                 "Amb deficit: partner posle pokrica NE pada ispod nule (AMB-INV-07)"
+    AssertEquals "170", CStr(modAmbalaza.AmbSaldoNaloga( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)), _
+                 "Amb deficit: stanica je primila svih 100"
+    AssertEquals "70", CStr(modAmbalaza.AmbObavezaPartneru( _
+                    AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)), _
+                 "Amb deficit: pokrice stvara dug firme prema partneru"
+
+    ' --- D) OBAVEZA SE NE MOZE PREVRATITI (AMB-INV-09) -------------------
+    ' Firma duguje 70, vraca 100: 70 gasi dug, 30 je NOVO zaduzenje partnera.
+    ' Bez podele bi obaveza bila -30 -- matematicki tacna, poslovno nemoguca.
+    Dim preD As Long, vraID As String
+    preD = CountRows(TBL_AMBALAZA)
+    vraID = modAmbalaza.PrenesiAmbalazu(Date, TEST_TIP_AMB, 100#, _
+                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_VRACANJE_TUDJE, DOK_TIP_AMBALAZA_DOKUMENT, dokVra)
+    AssertTrue Len(vraID) > 0, "Amb obaveza: vracanje preko duga je upisano"
+    AssertEquals CStr(preD + 2), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb obaveza: podela daje DVA reda, ne jedan sa dva znacenja"
+    AssertEquals "0", CStr(modAmbalaza.AmbObavezaPartneru( _
+                   AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)), _
+                 "Amb obaveza: dug je ugasen na nulu, ne u minus"
+    AssertEquals "100", CStr(modAmbalaza.AmbSaldoNaloga( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)), _
+                 "Amb obaveza: partner je fizicki primio svih 100"
+
+    ' IDEMPOTENCIJA PREKO PODELE -- ovde naivno poredjenje puca: zahtev je 100, a
+    ' red koji ga nosi je 70. Zbir nad parem naloga je 100, pa je ponavljanje
+    ' ponavljanje -- ne sudar.
+    ' IDE KROZ On Error Resume Next, iako se OCEKUJE da prodje. Bez toga sudar ne
+    ' postaje pad tvrdnje nego pad celog testa, pa imenovana tvrdnja nikad ne
+    ' pukne -- a tvrdnja koja ne moze da pukne po imenu ne dokazuje nista.
+    Dim vraPonovo As String, errPon As Long
+    On Error Resume Next
+    vraPonovo = modAmbalaza.PrenesiAmbalazu(Date, TEST_TIP_AMB, 100#, _
+                    AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                    AMB_VK_VRACANJE_TUDJE, DOK_TIP_AMBALAZA_DOKUMENT, dokVra)
+    errPon = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errPon), _
+                 "Amb obaveza: ponovljen PODELJEN zahtev NE pada na sudar"
+    AssertEquals vraID, vraPonovo, _
+                 "Amb obaveza: ponovljen PODELJEN zahtev vraca isti AmbID"
+    AssertEquals CStr(preD + 2), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb obaveza: ponavljanje podeljenog zahteva ne dopisuje red"
+
+    ' --- E) VRACANJE BEZ DUGA JE CISTO IZDAVANJE -------------------------
+    Dim preE As Long, vra2 As String
+    preE = CountRows(TBL_AMBALAZA)
+    vra2 = modAmbalaza.PrenesiAmbalazu(Date, TEST_TIP_AMB, 10#, _
+               AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+               AMB_VK_VRACANJE_TUDJE, DOK_TIP_AMBALAZA_DOKUMENT, dokVra2)
+    AssertTrue Len(vra2) > 0, "Amb obaveza: vracanje bez duga ima AmbID"
+    AssertEquals CStr(preE + 1), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb obaveza: bez duga nema reda od nula kolicine (AMB-INV-01)"
+    AssertEquals "0", CStr(modAmbalaza.AmbObavezaPartneru( _
+                   AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)), _
+                 "Amb obaveza: izdavanje nasih gajbi ne pravi dug prema partneru"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_Amb_DeficitIObaveza", errNum, errDesc
+End Sub
+
+' ZAGLAVLJE KAO POVOD -- sta pisac trazi od dokumenta pre nego sto knjizi.
+'
+' Ugovor zaglavlja (vrsta, broj, datum, vlasnik niza) meri Test_Amb_DokumentUgovor
+' bez pisca. Ovde se meri ono sto se bez pisca NE MOZE: da kretanje bez identiteta
+' dokumenta ne postoji, da vrsta posla ogranicava vrstu kretanja, i da storniran
+' dokument ne prima nova kretanja.
+Private Sub Test_Amb_ZaglavljeDokumentaPisac()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, errNum As Long, errDesc As String
+    scenario = NewScenarioCode("AMBZAG")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+
+    Dim dokRev As String
+    dokRev = modAmbalaza.UpisiAmbDokument(AMB_DOK_REVERS, "ZAG-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID, "napomena")
+    AssertTrue Len(dokRev) > 0, "Amb zaglavlje: revers je upisan"
+    AssertEquals AMB_DOK_REVERS, CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                      dokRev, COL_AMBD_VRSTA)), _
+                 "Amb zaglavlje: vrsta je upisana KANONSKI"
+    AssertEquals AMB_NALOG_STANICA, CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                         dokRev, COL_AMBD_BROJ_OWNER_TIP)), _
+                 "Amb zaglavlje: vlasnik numerickog niza je upisan"
+
+    ' --- A) KRETANJE BEZ DOKUMENTA NE POSTOJI ----------------------------
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 5#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, "", ""
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb zaglavlje: kretanje bez identiteta dokumenta se odbija (AMB-INV-04)"
+
+    ' --- B) NEPOSTOJEC DOKUMENT ------------------------------------------
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 5#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, "ADK-NEMA-" & scenario
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb zaglavlje: knjizenje na nepostojec dokument se odbija"
+
+    ' --- C) VRSTA POSLA OGRANICAVA VRSTU KRETANJA ------------------------
+    ' NABAVKA na reversu izgledala bi kao uredan zapis -- zato kapija, ne komentar.
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 5#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb zaglavlje: nabavka se NE knjizi na revers"
+
+    ' --- D) STORNIRAN DOKUMENT NE PRIMA NOVA KRETANJA --------------------
+    ' STANICA PRVO DOBIJA ZALIHU, i to nije kozmetika scenarija. Bez nje je saldo
+    ' stanice nula, pa IZDATA_PRAZNA pada zbog DEFICITA -- i tvrdnja o storniranom
+    ' dokumentu prolazi iz pogresnog razloga. Prvi dvosmerni dokaz je bas to nasao:
+    ' sabotaza je obarala drugu tvrdnju, jer je ovu stitio drugi uzrok.
+    Dim dokNab As String
+    dokNab = modAmbalaza.UpisiAmbDokument(AMB_DOK_NABAVKA, "ZNB-" & scenario, Date, _
+                                          AMB_NALOG_FIRMA, "")
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 50#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab
+    AssertEquals "50", CStr(modAmbalaza.AmbSaldoNaloga( _
+                    AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)), _
+                 "Amb zaglavlje: preduslov -- stanica ima zalihu, pa deficit ne moze da padne"
+
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokRev)
+    AssertEquals "1", CStr(redovi.count), "Amb zaglavlje: dokument je jednoznacan"
+    RequireUpdateCell TBL_AMBALAZA_DOKUMENT, CLng(redovi(1)), COL_STORNIRANO, "Da", _
+                      "Test_Amb_ZaglavljeDokumentaPisac"
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Date, TEST_TIP_AMB, 5#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb zaglavlje: storniran dokument ne prima nova kretanja"
+    AssertTrue InStr(1, errDesc, "storniran", vbTextCompare) > 0, _
+               "Amb zaglavlje: odbijanje imenuje RAZLOG, ne samo da je palo"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_Amb_ZaglavljeDokumentaPisac", errNum, errDesc
 End Sub
 
 ' ZALUTALA KOLONA SE VRACA NA KANONSKO MESTO -- ali NE preko tudjeg drifta.
