@@ -4,8 +4,9 @@
 **Model:** `ops@agrix.rs` + Google Drive/Sheets/GAS/PWA + lokalni Excel/VBA + SEF + bankarski import  
 **Primena:** C001, C002, C003...  
 **Status:** Operativni vodič zasnovan na uspešno stabilizovanom C001 putu  
-**Ažurirano:** 2026-05-13
-**Revizija:** v2 — dodati digitalni potpis, certifikat, Trusted Location, PS1 install pravila, release manifest
+**Ažurirano:** 2026-10-02
+**Revizija:** v2 — dodati digitalni potpis, certifikat, Trusted Location, PS1 install pravila, release manifest  
+**Revizija:** v2.1 — usklađeno sa kodom na `main`: Google/PWA ključevi u `tblSEFConfig` (ne `tblConfig`), makro `SyncPWAFullCycle` (ne `RunFullPWAGoogleSyncCycle`), PS1 folder lista (`Backups`/`Journal`/`Temp`/`Secrets`), 32 folder ID-ja, poppler `Library\bin`, verzija iz build-a (`modBuildInfo`)
 
 ---
 
@@ -272,7 +273,7 @@ AgriX_C00X_PROD/
 > skupljanje folder ID-jeva (§8) + upis u Script Properties (§11) možeš zameniti jednom
 > GAS funkcijom. Napravi **samo root** `AgriX_C00X_PROD` (i podeli ga sa backup nalogom, §6),
 > pa kad postaviš GAS projekat (§10) pokreni `bootstrapAgriXFolderTree` iz `DriveFolder.gs` —
-> on napravi celo stablo i upiše svih 33 folder ID-ja odjednom. Ručni postupak ispod
+> on napravi celo stablo i upiše svih 32 folder ID-ja odjednom. Ručni postupak ispod
 > (§8, §11) ostaje kao referenca/fallback.
 
 ---
@@ -450,7 +451,7 @@ GOOGLE_CLIENT_SECRET
 
 u password manager.
 
-U Excel `tblConfig` će ići:
+U Excel `tblSEFConfig` će ići:
 
 ```text
 GOOGLE_CLIENT_ID
@@ -496,7 +497,7 @@ bootstrapAgriXFolderTree
 ```
 
 `bootstrapAgriXFolderTree` je one-time bootstrap za novog klijenta: napravi celo Drive
-stablo (§5) i upiše svih 33 folder ID-ja u Script Properties (§8 + §11) u jednom run-u.
+stablo (§5) i upiše svih 32 folder ID-ja u Script Properties (§8 + §11) u jednom run-u.
 Pokreni ga u GAS projektu **tog** klijenta (Script Properties su per-projekat); idempotentan je.
 
 Obavezno dodati `getLoginLogSpreadsheet_()`:
@@ -518,7 +519,7 @@ Bez ove funkcije login može raditi, ali se `LoginLog` neće napraviti, jer logi
 ## 11. Script Properties u Apps Script
 
 > **Brži put:** umesto ručnog upisa folder ID-jeva ispod, pokreni `bootstrapAgriXFolderTree`
-> (`DriveFolder.gs`, §10) — napravi stablo i upiše svih 33 `AGRIX_*_FOLDER_ID` propsa odjednom.
+> (`DriveFolder.gs`, §10) — napravi stablo i upiše svih 32 `AGRIX_*_FOLDER_ID` propsa odjednom.
 > Posle njega idi pravo na §13 (`debugAgriXFolders`) za proveru. Lista ispod je referenca šta
 > mora da postoji (i za ručni upis). `MONITORING_*` tajne (§12) se i dalje upisuju ručno.
 
@@ -697,12 +698,22 @@ Ako ping radi u jednom browser profilu, a ne radi u drugom, problem je Google mu
 
 ---
 
-## 15. Excel `tblConfig`
+## 15. Excel `tblSEFConfig` — Google / PWA ključevi
 
-U `OtkupApp.xlsm`, u `tblConfig`, postavi:
+> **Jedna tabela:** i Google/PWA ključevi (ovde) i SEF/monitoring ključevi (§16) žive u
+> istoj tabeli `tblSEFConfig`. Legacy tabela `tblConfig` i dalje mora da postoji, ali se
+> Google/PWA ključevi **ne** upisuju u nju — kod ih čita isključivo iz `tblSEFConfig`
+> (`GetConfigValue` → `LookupValue("tblSEFConfig", …)`).
+>
+> **Gde se unosi (v2.8.6+):** vrednosti se normalno upisuju kroz UI
+> **Matični podaci → Podešavanja**, ne direktno u ćelije. Čim je `SetupNewPC` zelen,
+> `tblSEFConfig` se sakriva (VeryHidden) kao anti-tamper; ručni uvid u nuždi: Alt+F8 →
+> `ShowConfigSheet`.
+
+U `OtkupApp.xlsm`, u `tblSEFConfig`, postavi:
 
 ```text
-Kljuc                         Vrednost
+ConfigKey                         ConfigValue
 
 GOOGLE_CLIENT_ID              <OAuth client id>
 GOOGLE_CLIENT_SECRET          <OAuth client secret>
@@ -735,7 +746,7 @@ Ako je `GOOGLE_PWA_FOLDER_ID` pogrešan, `Stammdaten` će nastati na pogrešnom 
 
 ---
 
-## 16. Excel `tblSEFConfig`
+## 16. Excel `tblSEFConfig` — SEF / monitoring ključevi
 
 U `tblSEFConfig` postavi:
 
@@ -753,6 +764,11 @@ MONITORING_ENV        PROD
 APP_VERSION           1.0.0-C00X
 CLIENT_ID             C00X
 ```
+
+> **Verzija:** živu verziju šalje telemetrija iz **compiled build-a** (`modBuildInfo` /
+> `APP_VERSION`, trenutno `2.28.4`) — red `APP_VERSION` u `tblSEFConfig` se u kodu **ne čita**
+> (`GetConfigValue("APP_VERSION")` nema potrošača) i služi samo kao informativna oznaka
+> paketa po klijentu.
 
 ---
 
@@ -847,7 +863,7 @@ Pravila:
 Pokreni:
 
 ```vb
-RunFullPWAGoogleSyncCycle
+SyncPWAFullCycle
 ```
 
 Očekivanje:
@@ -1051,7 +1067,7 @@ TEST C00X - OBRISATI
 Posle PWA test unosa ponovo pokreni:
 
 ```vb
-RunFullPWAGoogleSyncCycle
+SyncPWAFullCycle
 ```
 
 Proveri:
@@ -1328,32 +1344,41 @@ PS1 potpisivanje može biti uvedeno kasnije. Za prve rollout-e je dovoljno:
 
 ---
 
-### 24A.10 Šta `Setup-OtkupApp.ps1` mora da radi
+### 24A.10 Šta `Setup-OtkupApp.ps1` radi
 
-Minimalni installer mora da uradi sledeće:
+Trenutni installer (`install/Setup-OtkupApp.ps1`) radi sledeće:
 
 ```text
-[ ] Detektuje package root.
+[ ] Detektuje package root (folder u kome je PS1 -- $ScriptRoot).
 [ ] Kreira C:\OtkupApp.
-[ ] Kreira lokalne foldere:
+[ ] Kreira lokalne foldere (isti set koji pravi i SetupNewPC/EnsureAppFolders):
     C:\OtkupApp\Bank_Izvodi\Inbox
     C:\OtkupApp\Bank_Izvodi\Processed
     C:\OtkupApp\Bank_Izvodi\Error
+    C:\OtkupApp\Backups
     C:\OtkupApp\Logs
-    C:\OtkupApp\Backup
+    C:\OtkupApp\Journal
     C:\OtkupApp\Export
+    C:\OtkupApp\Temp
+    C:\OtkupApp\Secrets
 
-[ ] Kopira app/OtkupApp.xlsm u C:\OtkupApp.
-[ ] Kopira Tools\poppler u C:\OtkupApp\Tools\poppler (pored OtkupApp.xlsm).
-[ ] Kopira docs u C:\OtkupApp\docs.
-[ ] Unblock svih fajlova.
-[ ] Instalira OtkupApp-VBA-Publisher.cer ako postoji.
+[ ] Verifikuje da OtkupApp.xlsm postoji u paketu (throw ako fali).
+[ ] Kopira OtkupApp.xlsm u C:\OtkupApp.
+[ ] Unblock radne sveske (Unblock-File nad OtkupApp.xlsm).
+[ ] Kopira Tools\poppler u C:\OtkupApp\Tools\poppler (pored OtkupApp.xlsm);
+    upozori ako pdftotext.exe nije na Tools\poppler\Library\bin\.
+[ ] Instalira OtkupApp-VBA-Publisher.cer ako postoji (CurrentUser Root + TrustedPublisher).
 [ ] Dodaje C:\OtkupApp kao Excel Trusted Location.
-[ ] Kreira Desktop shortcut.
-[ ] Verifikuje pdftotext.exe.
-[ ] Verifikuje da OtkupApp.xlsm postoji.
-[ ] Piše install log u C:\OtkupApp\Logs\install-log.txt.
-[ ] Na kraju ispisuje PASS/FAIL summary.
+[ ] Kreira Desktop shortcut i ispisuje "Next" korake + Pause.
+```
+
+Još NIJE u PS1 (planirano / radi se ručno) -- ne oslanjaj se na to:
+
+```text
+[ ] Rekurzivni Unblock celog paketa (sada se unblock-uje samo radna sveska).
+[ ] Kopiranje docs u C:\OtkupApp\docs.
+[ ] Install log u C:\OtkupApp\Logs\install-log.txt.
+[ ] PASS/FAIL summary na kraju (sada ispisuje samo korake + Pause).
 ```
 
 ---
@@ -1468,12 +1493,13 @@ AgriX_C00X_Install_v1.0.0/
   install/
     Setup-OtkupApp.ps1
 
-  tools/
+  Tools/
     poppler/
-      bin/
-        pdftotext.exe
-        pdfinfo.exe
-        ...
+      Library/
+        bin/
+          pdftotext.exe
+          pdfinfo.exe
+          ...
 
   cert/
     OtkupApp-VBA-Publisher.cer
@@ -1778,7 +1804,7 @@ otvori setup log i reši prijavljene stavke.
 Pokreni:
 
 ```vb
-RunFullPWAGoogleSyncCycle
+SyncPWAFullCycle
 ```
 
 Očekivanje:
