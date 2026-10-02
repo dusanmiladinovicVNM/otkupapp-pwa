@@ -167,6 +167,20 @@ jobs:
       - name: run_vba self-test
         run: python3 tools/run_vba.py --self-test
 
+      # Suite koju nijedna kapija ne pokrece je nevidljiva: katalog `SUITES` ne
+      # zna da procedura postoji, pa je ne pominje ni kao preskocenu. Cetiri
+      # takve su nadjene pri prvom pokretanju ovog popisa -- napisane, zelene kad
+      # ih neko rucno pozove iz Immediate prozora, i nikad pokrenute inace.
+      #
+      # `--require-green` NIJE ovde i ne sme da bude: marker zelenog je masinsko
+      # stanje (tests/last_green.json, gitignored), a CI ne pokrece Excel pa ga
+      # nikad ne bi ni imao.
+      - name: popis test suita (nijedna napisana suite nije van kapije bez zapisa)
+        run: python3 tools/vba_gate.py --popis
+
+      - name: vba_gate self-test
+        run: python3 tools/vba_gate.py --self-test
+
       # ----------------------------------------------------------------
       # PWA / GAS sloj
       # ----------------------------------------------------------------

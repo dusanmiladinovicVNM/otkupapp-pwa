@@ -389,6 +389,7 @@
 | `OTKUP_CONFLICT` lifecycle | deterministički konflikt ostaje retryable pending — vidljivo i bezbedno, ali traži svoj rez |
 | `DEGRADIRANO` grana ciklusa | `modGoogleSyncOrchestrator:384` — poslednji OTK razlog je nestao, sama grana nije |
 | `BuildOTKFixtureData` (smoke) | gradi pre-S5-5b oblik žice; suite je zatečeno crven i van FULL prolaza, a izmena se **ne može izmeriti** bez živog Google-a |
+| **četiri test suite-a koja nijedna kapija ne pokreće** | `RunHttpUtilsSmokeSuite`, `RunSEFDocumentIdShapeSuite`, `RunSEFStateTransitionSuite`, `RunSEFClientParserSmokeSuite`. Nađene `vba_gate.py --popis`-om; do tada nisu bile zapisane nigde. Nijedna nema `Err.Raise` u telu, pa bi i priključena bila `BLIND` — zato unos u `SUITES` nije dovoljan posao. Razlog i šta ga zatvara stoje u `SUITE_VAN_KAPIJA` |
 | `.claude/rules/testovi.md` ne zna za JS kapiju | **samo process PR**, nikad uz feature izmenu |
 | Node 20 deprecation u tri GitHub akcije | process PR |
 | `popis_citalaca` javlja UPOZORENJE za `IzvedeniLanacIzPwaDostupan` | kapija ne postoji od #388 — očekivanje alata je zastarelo |
@@ -407,7 +408,15 @@
   **zajedno**: u rezu se pušta grupno, **pred release pojedinačno** (isti poziv bez `--grupe`). Član koji
   u grupi ne obori **svoju** tvrdnju ne dobija priznanje nego se ponavlja sam. Pravila i cena svakog od
   njih: `docs/EXCEL_TEST_HARNESS.md` → „Grupni dokaz".
-- `vba_check` kapije nad **alatima** (katalog sabotaža, pravila grupisanja) idu **ispred** izlaza
+- **Popis test suita: `python tools/vba_gate.py --popis`** — suite u kodu vs katalog `SUITES` vs registar
+  `SUITE_VAN_KAPIJA`. Ide i kroz `vba_check` (dakle kroz hook) i kroz CI. Hvata napisanu suite koju
+  nijedna kapija ne pokreće, fantom u katalogu, i zastareo unos u registru.
+- **Marker zelenog: `python tools/vba_gate.py --require-green`** — kanonski otisak `src-vba` + rezultat
+  **po suite-u** iz poslednjeg run-a (`tests/last_green.json`, gitignored; piše ga `run_vba.py`).
+  Odgovara na „da li je **baš ovaj** izvor dokazan", što je do sada bila rečenica uz PR. `--mark-compile`
+  vezuje operaterovu potvrdu `Debug > Compile` za otisak. Ne upisuje: pao run, `--no-import` run, ni
+  `BLIND` suite kao dokazanu.
+- `vba_check` kapije nad **alatima** (katalog sabotaža, pravila grupisanja, popis suita) idu **ispred** izlaza
   `if not files: return 0` — hook sa putanjom koja nije VBA fajl ih je dotad preskakao, uključujući
   baš `tools/sabotaza.py`, gde se greška u katalogu i pravi.
 - Poznati živi kvarovi van refaktora: `docs/KNOWN_ISSUES.md` AUD-055..057.

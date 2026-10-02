@@ -37,6 +37,8 @@ Zasto ovaj skript NE zove `ImportAllVBA`:
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import io
 import json
 import os
 import shutil
@@ -425,12 +427,36 @@ def self_test() -> int:
                 leaks.append(f"{name}: header procureo u kod -> {s!r}")
                 break
 
+    # MARKER JE WIRE-UP, NE SAMO FUNKCIJA. zabelezi_prolaz je dokazan u
+    # `vba_gate.py --self-test`; ovde se tvrdi da ga OVAJ alat zove, i da
+    # mu prenosi `--no-import` (bez toga bi marker tvrdio da je izvrsen
+    # src-vba, a izvrsen je kod zatecen u svesci). Pozivno mesto je u main()
+    # posle Excela, pa se bez Excela ne moze IZVRSITI -- tvrdi se nad izvorom.
+    with io.open(os.path.abspath(__file__), encoding="utf-8",
+                 newline="") as fh:
+        sopstveni = fh.read()
+    # IGLA NE SME DA POGODI SEBE. Tekstovi koji se traze stoje i ovde, kao
+    # string literali, pa je pretraga nad CELIM fajlom zadovoljena sopstvenim
+    # navodnikom: obrisi pravi poziv i provera ostane zelena. Dvosmerni dokaz
+    # je to i pokazao, pa se telo ovog self-testa izbacuje iz pretrage.
+    poc = sopstveni.find("def self_test(")
+    kraj = sopstveni.find("\ndef ", poc + 1)
+    tudje = sopstveni[:poc] + sopstveni[kraj if kraj > 0 else len(sopstveni):]
+    for tekst, opis in (
+            ('_gate.zabelezi_prolaz(report, rc, args.no_import)',
+             "main() ne zove vba_gate.zabelezi_prolaz sa args.no_import"),
+            ('lines.append(f"GREEN   {report[\'green\']}")',
+             "izvestaj ne ispisuje red GREEN -- upis markera bi bio nevidljiv"),
+    ):
+        if tekst not in tudje:
+            leaks.append("WIRE-UP: " + opis)
+
     for line in leaks:
         print(line, file=sys.stderr)
     if leaks:
         print(f"\nself-test: {len(leaks)} nalaza od {checked} .doccls fajlova.", file=sys.stderr)
         return 2
-    print(f"self-test: cisto ({checked} .doccls fajlova).")
+    print(f"self-test: cisto ({checked} .doccls fajlova + wire-up markera).")
     return 0
 
 
@@ -972,6 +998,26 @@ def main(argv: list[str]) -> int:
         else:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    # MARKER ZELENOG: "suite su bile zelene" je tvrdnja o NEKOM izvoru, i do sada
+    # se znalo samo iz recenice uz PR o kom. Ovde se vezuje za otisak src-vba, pa
+    # `vba_gate.py --require-green` ume da razlikuje "dokazano" od "dokazano nesto
+    # drugo". Pravila -- sta se NE sme upisati (pao run, --no-import, BLIND suite
+    # kao dokazana) -- zive u vba_gate, zajedno sa svojim dokazom.
+    #
+    # Compile se ovde NE upisuje ni kad headless javi OK: compile je rucna kapija
+    # operatera (`--mark-compile`), a headless verdikt je cesto NEJASNO. Sirovo
+    # stanje i dalje ide u izvestaj, kao i do sada.
+    #
+    # Nalaz alata ne sme da obori run: greska u markeru nije greska u VBA kodu.
+    try:
+        _gate_spec = importlib.util.spec_from_file_location(
+            "_vba_gate_za_run", os.path.join(ROOT, "tools", "vba_gate.py"))
+        _gate = importlib.util.module_from_spec(_gate_spec)
+        _gate_spec.loader.exec_module(_gate)
+        report["green"] = _gate.zabelezi_prolaz(report, rc, args.no_import)
+    except Exception as exc:                # noqa: BLE001
+        report["green"] = "marker nije upisan: %s" % exc
+
     _write_report(report, rc)
     return rc
 
@@ -1023,6 +1069,9 @@ def _write_report(report: dict, rc: int) -> None:
 
     if "fatal" in report:
         lines.append(f"FATAL   {report['fatal']}")
+
+    if report.get("green"):
+        lines.append(f"GREEN   {report['green']}")
 
     lines.append("")
     lines.append("REZULTAT: " + ("ZELENO" if rc == 0 else "PALO"))

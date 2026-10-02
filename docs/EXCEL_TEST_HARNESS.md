@@ -182,6 +182,60 @@ Radi svuda (i u Claude Code sesiji na Linuxu). Proverava da strip VBA header-a n
 propušta header u kod — greška koja je jednom već prošla neopaženo i videla se
 tek kao `[break]` u naslovu VBE prozora na Windows mašini.
 
+### `tools/vba_gate.py` — popis suita i marker zelenog
+
+Dve stvari koje `run_vba.py` ne može da pita samo sebe. Oba rade bez Excela i idu
+kroz CI; `--popis` ide i kroz `vba_check`, dakle kroz `PostToolUse` hook.
+
+**1) Postoji li suite koju nijedna kapija ne pokreće?**
+
+```bash
+python tools/vba_gate.py --popis
+```
+
+Takva suite je **nevidljiva**: katalog `SUITES` ne zna da procedura postoji, pa je
+ne pominje ni kao preskočenu. Pri prvom pokretanju su nađene **četiri** —
+`RunHttpUtilsSmokeSuite`, `RunSEFDocumentIdShapeSuite`, `RunSEFStateTransitionSuite`,
+`RunSEFClientParserSmokeSuite` — i njihova zaglavlja to i kažu naglas
+(„Pozivaj sa: `?RunHttpUtilsSmokeSuite` / Ocekivano: PASS=18"), dakle i verdikt i
+očekivan broj žive u komentaru. Nijedna nema `Err.Raise` u telu, pa bi i
+priključena bila `BLIND` — to je posao koji svaki unos zatvara.
+
+`SUITE_VAN_KAPIJA` je zato **registar, ne izuzetak**: prazan ili prekratak razlog
+je nalaz, i zastareo unos je nalaz (suite obrisana, ili je u međuvremenu u
+`SUITES`). Isti oblik i isti razlog kao `MRTAV_UNOS` u `vba_hard_census`.
+
+Ulazna tačka se traži **samo u `.bas` i samo bez argumenata** — makro se po imenu
+poziva jedino iz standardnog modula, pa `Public Sub RunFooSuite()` u klasi nije
+suite koju bi kapija mogla da pokrene.
+
+**2) Da li je baš OVAJ izvor prošao testove?**
+
+```bash
+python tools/vba_gate.py --status           # izvor vs marker, po suite-u
+python tools/vba_gate.py --require-green    # exit 0 samo ako je ovaj izvor dokazan
+python tools/vba_gate.py --mark-compile     # posle Debug > Compile VBAProject
+```
+
+„Suite su bile zelene" je tvrdnja o **nekom** izvoru. Posle rebase-a, amend-a ili
+jedne usputne izmene ta rečenica i dalje stoji a više ne važi. `run_vba.py` zato na
+kraju run-a piše marker (`tests/last_green.json`, **gitignored**) sa kanonskim
+otiskom `src-vba` i rezultatom **po suite-u**, pa `--require-green` ume da
+razlikuje „dokazano" od „dokazano nešto drugo" i da imenuje koja suite nedostaje.
+
+Šta marker **ne** upisuje: pao run; `--no-import` run (kod u svesci tada nije
+`src-vba`, pa bi otisak lagao o tome šta je izvršeno); i **`BLIND` suite kao
+dokazanu** — `gate: False` znači „prošla bez greške", što nije „sve provere
+prošle". Compile ima svoj upis, jer je ručna kapija operatera: `--mark-compile`
+vezuje tu potvrdu za otisak, pa potvrda data nad jednim izvorom prestaje da važi
+za sledeći (to se već desilo, kao P3 u review-u #400).
+
+Otisak normalizuje prelome i **izuzima `modBuildInfo.bas`** — `stamp-build` ga
+prepisuje pred svaki `ImportAllVBA`, pa bi inače stamp obarao marker baš u
+trenutku release-a. Nije isti otisak kao `dokaz.py._otisak`, i ne treba da bude:
+tamo se porede dva stanja u istom procesu (pa je sirov bajt tačno ono što se
+traži), ovde dva procesa i dve mašine.
+
 ## Ako zapne
 
 - Skripta ima **tvrdi prekid** (`--timeout`, default 600 s): ako Excel prestane da

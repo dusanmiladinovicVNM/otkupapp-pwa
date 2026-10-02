@@ -3460,6 +3460,35 @@ def check_dokaz_grupe(tiho: bool = False) -> int:
     return 2 if modul._self_test(tiho) else 0
 
 
+# --- popis test suita -------------------------------------------------------
+#
+# Suite koju nijedna kapija ne pokrece je nevidljiva: `SUITES` u run_vba.py ne zna
+# da procedura postoji, pa je ne pominje ni kao preskocenu. Zato provera ide ovde,
+# uz katalog sabotaza: oba nalaza nastaju BAS VBA izmenom (nova suite, obrisana
+# suite, suite prikljucena kapiji), i oba se vide bez Excela.
+#
+# Pravila i registar `SUITE_VAN_KAPIJA` su u tools/vba_gate.py, zajedno sa svojim
+# dvosmernim dokazom.
+def check_popis_suita(tiho: bool = False) -> int:
+    put = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vba_gate.py")
+    if not os.path.exists(put):
+        return 0
+    spec = importlib.util.spec_from_file_location("_gate_za_check", put)
+    modul = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(modul)
+        nalazi = modul.popis_problemi()
+    except Exception as e:                       # pokvaren alat je isto nalaz
+        print(f"POPIS: tools/vba_gate.py se ne ucitava -- {e}", file=sys.stderr)
+        return 2
+    for n in nalazi:
+        print(f"POPIS-SUITA: {n}", file=sys.stderr)
+    if not nalazi and not tiho:
+        print(f"popis suita: {len(modul.katalog_suita())} u SUITES, "
+              f"{len(modul.SUITE_VAN_KAPIJA)} van kapija sa zapisanim razlogom")
+    return 2 if nalazi else 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Staticke provere nad src-vba")
     ap.add_argument("paths", nargs="*", help="konkretni fajlovi (podrazumevano ceo src-vba/)")
@@ -3485,7 +3514,8 @@ def main(argv: list[str]) -> int:
     # ijedne od ovih provera. Ovde se to vise ne moze zaobici.
     rc_kat = check_katalog_sabotaza(args.hook)
     rc_grupe = check_dokaz_grupe(args.hook)
-    rc_alata = rc_kat or rc_grupe
+    rc_popis = check_popis_suita(args.hook)
+    rc_alata = rc_kat or rc_grupe or rc_popis
 
     if not files:
         return rc_alata
@@ -3537,7 +3567,8 @@ def main(argv: list[str]) -> int:
                 # da pravila nad fajlovima nisu nasla nista.
                 krivci = " i ".join(ime for ime, rc in (
                     ("KATALOG SABOTAZA", rc_kat),
-                    ("PRAVILA GRUPISANJA DOKAZA", rc_grupe)) if rc)
+                    ("PRAVILA GRUPISANJA DOKAZA", rc_grupe),
+                    ("POPIS TEST SUITA", rc_popis)) if rc)
                 print(f"vba_check: pravila nad fajlovima cista "
                       f"({len(files)} fajlova), ali {krivci} ne prolazi.",
                       file=sys.stderr)
