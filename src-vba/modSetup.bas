@@ -906,8 +906,16 @@ Private Sub EnsureLocalConfigTable()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "EnsureLocalConfigTable failed: " & Err.description
-    Err.Raise Err.Number, "EnsureLocalConfigTable", Err.description
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "EnsureLocalConfigTable failed: " & errDesc
+    Err.Raise errNum, "EnsureLocalConfigTable", errDesc
 End Sub
 
 ' ============================================================
@@ -1007,8 +1015,16 @@ Public Sub EnsureCenovnikSchema()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "EnsureCenovnikSchema failed: " & Err.description
-    Err.Raise Err.Number, "EnsureCenovnikSchema", Err.description
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "EnsureCenovnikSchema failed: " & errDesc
+    Err.Raise errNum, "EnsureCenovnikSchema", errDesc
 End Sub
 
 ' ============================================================
@@ -1136,8 +1152,16 @@ Public Sub EnsurePoruke()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "EnsurePoruke failed: " & Err.description
-    Err.Raise Err.Number, "EnsurePoruke", Err.description
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "EnsurePoruke failed: " & errDesc
+    Err.Raise errNum, "EnsurePoruke", errDesc
 End Sub
 
 ' ============================================================
@@ -1916,8 +1940,16 @@ Public Sub EnsureKorisniciSchema()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "EnsureKorisniciSchema failed: " & Err.description
-    Err.Raise Err.Number, "EnsureKorisniciSchema", Err.description
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "EnsureKorisniciSchema failed: " & errDesc
+    Err.Raise errNum, "EnsureKorisniciSchema", errDesc
 End Sub
 
 ' Kreira prvog ADMINA (sa svim pravima). Bezbedan bootstrap protiv lockout-a:

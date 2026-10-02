@@ -68,8 +68,16 @@ Private Function CreateGoogleHttpRequest(ByVal sourceName As String) As Object
     Exit Function
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr sourceName & ".CreateGoogleHttpRequest"
-    Err.Raise Err.Number, sourceName, Err.description
+    Err.Raise errNum, sourceName, errDesc
 End Function
 
 Private Function SendGoogleHttpWithRetry(ByVal http As Object, _

@@ -330,8 +330,16 @@ NextStavka:
     Exit Function
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 ' GP SEF kapija (revizija #6 t.2): utovar mora postojati TACNO jednom,
@@ -503,8 +511,16 @@ Public Function SerializeSEFRequest(ByVal dto As clsSEFInvoiceSnapshot) As Strin
     Exit Function
     
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr "SerializeSEFRequest"
-    Err.Raise Err.Number, "SerializeSEFRequest", Err.description
+    Err.Raise errNum, "SerializeSEFRequest", errDesc
 
 End Function
 
@@ -998,8 +1014,16 @@ Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String) As Date
     Exit Function
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 Private Function GetFakturaDateForSEF(ByVal fakturaID As String) As Date
@@ -1026,8 +1050,16 @@ Private Function GetFakturaDateForSEF(ByVal fakturaID As String) As Date
     Exit Function
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 Public Function ComputePayloadHash(ByVal payload As String) As String
@@ -1083,8 +1115,16 @@ Private Function GetSEFPaymentDueDays() As Long
     Exit Function
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 Private Function GetFakturaIssueDate(ByVal fakturaID As String, _
@@ -1110,8 +1150,16 @@ Private Function GetFakturaIssueDate(ByVal fakturaID As String, _
     Exit Function
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr sourceName
-    Err.Raise Err.Number, sourceName, Err.description
+    Err.Raise errNum, sourceName, errDesc
 End Function
 
 
@@ -1242,8 +1290,16 @@ Private Function GetRequiredSEFConfig(ByVal keyName As String, _
     Exit Function
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr "modSEFMapper.GetRequiredSEFConfig"
-    Err.Raise Err.Number, "modSEFMapper.GetRequiredSEFConfig", Err.description
+    Err.Raise errNum, "modSEFMapper.GetRequiredSEFConfig", errDesc
 End Function
 
 Private Sub ValidateGeneratedUBL(ByVal xml As String, ByVal sourceName As String)

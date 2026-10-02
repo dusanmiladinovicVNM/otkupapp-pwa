@@ -494,6 +494,7 @@ Public Sub RunAllTests()
     RunOne 198
     RunOne 199
     RunOne 38
+    RunOne 200
 
     SetTestMode prevMode
     WriteResultFile
@@ -778,6 +779,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 35: TestName = "T_IspravkaPrijemnice_PodKolizijomBroja"
         Case 34: TestName = "T_Preflight_KoristiIdentitet"
         Case 33: TestName = "T_F8_IzabranRedOstajeIzabran"
+        Case 200: TestName = "T_ReRaisePosleLogera_NosiOriginalnuGresku"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -985,6 +987,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 35: T_IspravkaPrijemnice_PodKolizijomBroja
         Case 34: T_Preflight_KoristiIdentitet
         Case 33: T_F8_IzabranRedOstajeIzabran
+        Case 200: T_ReRaisePosleLogera_NosiOriginalnuGresku
     End Select
 End Sub
 
@@ -7564,6 +7567,41 @@ EH:
     On Error GoTo 0
     Err.Raise ERR_ASSERT, "T_Sema_PrefiksNijeString", _
               "greska u toku testa (ime vraceno): " & Err.description
+End Sub
+
+
+' Re-raise POSLE logera mora da nosi ORIGINALNU gresku.
+'
+' LogErr zove LogError, koji pocinje sa "On Error Resume Next" -- a svaki oblik
+' On Error naredbe resetuje Err. EH koji prvo loguje pa onda radi
+' "Err.Raise Err.Number, ..., Err.description" zato raise-uje Err.Raise 0 sa
+' praznim opisom: pozivalac ne vidi gresku koja se stvarno desila. Resenje je
+' snapshot errNum/errDesc PRE logera (21 mesto u src-vba/).
+'
+' Meri se na pravoj produkcionoj putanji, ne na test duplikatu obrasca:
+' BuildSEFInvoiceDto("") puca na prvoj validaciji ("FakturaID is required")
+' PRE citanja tabela, config-a i mreze, pa kroz EH prolazi tacno jedna greska.
+'
+' Pada ako se iz modSEFMapper.BuildSEFInvoiceDto ukloni errNum/errDesc snapshot.
+Private Sub T_ReRaisePosleLogera_NosiOriginalnuGresku()
+    Dim gotNum As Long
+    Dim gotDesc As String
+    Dim dto As clsSEFInvoiceSnapshot
+
+    On Error Resume Next
+    Set dto = modSEFMapper.BuildSEFInvoiceDto("")
+    gotNum = Err.Number
+    gotDesc = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    ' JEDAN assert, ne dva: AssertEq puca na prvom padu, pa bi sa dve tvrdnje
+    ' dokaz.py mogao da prijavi "PALA DRUGA TVRDNJA" zavisno od toga da li
+    ' Err.Raise 0 uopste raise-uje. Ovako je poruka jedna i nedvosmislena, a
+    ' nosi obe izmerene vrednosti.
+    AssertEq (gotNum <> 0 And Len(gotDesc) > 0), True, _
+             "re-raise posle logera nosi originalnu gresku (broj=" & gotNum & _
+             ", opis=[" & gotDesc & "])"
 End Sub
 
 

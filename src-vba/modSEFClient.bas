@@ -303,8 +303,16 @@ Private Sub GetSEFClientConfig(ByRef baseUrl As String, _
     Exit Sub
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr "modSEFClient.GetSEFClientConfig"
-    Err.Raise Err.Number, sourceName, Err.description
+    Err.Raise errNum, sourceName, errDesc
 End Sub
 
 Private Function CreateSEFHttpRequest() As Object
@@ -322,8 +330,16 @@ Private Function CreateSEFHttpRequest() As Object
     Exit Function
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr "modSEFClient.CreateSEFHttpRequest"
-    Err.Raise Err.Number, "modSEFClient.CreateSEFHttpRequest", Err.description
+    Err.Raise errNum, "modSEFClient.CreateSEFHttpRequest", errDesc
 End Function
 
 Private Sub ApplySEFHeaders(ByVal http As Object, _
@@ -352,8 +368,16 @@ Private Sub ApplySEFHeaders(ByVal http As Object, _
     Exit Sub
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr "modSEFClient.ApplySEFHeaders"
-    Err.Raise Err.Number, "modSEFClient.ApplySEFHeaders", Err.description
+    Err.Raise errNum, "modSEFClient.ApplySEFHeaders", errDesc
 End Sub
 
 Private Function IsSEFDebugEnabled() As Boolean
@@ -841,8 +865,16 @@ Private Function GetJsonNumericIdLiteral(ByVal rawID As String, _
     Exit Function
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr "modSEFClient.GetJsonNumericIdLiteral"
-    Err.Raise Err.Number, sourceName, Err.description
+    Err.Raise errNum, sourceName, errDesc
 End Function
 
 Private Function IsAllDigits(ByVal s As String) As Boolean

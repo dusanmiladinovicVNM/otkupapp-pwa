@@ -6620,6 +6620,21 @@ SABOTAZE = {
         "T_ZbirnaKapija_AktivanBrojNeSmeDvaput",
         "I1: aktivna prijemnica daje oznaku izvora P",
     ),
+    # Vraca EH na stanje pre ispravke: bez errNum/errDesc snapshot-a. LogErr zove
+    # LogError, koji pocinje sa "On Error Resume Next", a svaki oblik On Error
+    # naredbe resetuje Err -- pa re-raise ide kao Err.Raise 0 sa praznim opisom i
+    # pozivalac ne vidi gresku koja se stvarno desila.
+    #
+    # Sidro pocinje od "Set BuildSEFInvoiceDto = dto" jer je EH blok u modSEFMapper
+    # identican na sedam mesta -- samo ta linija nosi ime funkcije, pa je replace
+    # jednoznacan.
+    "reraise-bez-snapshota-err": (
+        "modSEFMapper.bas",
+        "    Set BuildSEFInvoiceDto = dto\n    Exit Function\n\nEH:\n    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa \"On Error Resume Next\", a\n    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao\n    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.\n    Dim errNum As Long\n    Dim errDesc As String\n    errNum = Err.Number\n    errDesc = Err.description\n\n    LogErr SRC\n    Err.Raise errNum, SRC, errDesc\n",
+        "    Set BuildSEFInvoiceDto = dto\n    Exit Function\n\nEH:\n    LogErr SRC\n    Err.Raise Err.Number, SRC, Err.description   ' SABOTAZA: bez snapshota Err je resetovan\n",
+        "T_ReRaisePosleLogera_NosiOriginalnuGresku",
+        "re-raise posle logera nosi originalnu gresku",
+    ),
 }
 
 

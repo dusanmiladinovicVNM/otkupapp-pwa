@@ -1051,9 +1051,17 @@ Private Function FillPaletaSablon(ByVal palID As String, _
     Exit Function
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     Application.ScreenUpdating = oldScreen
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 ' Kreira/obnavlja PaletaSablon u zajednickom stilu (logo, naslov, polja, sazetak).
@@ -3077,9 +3085,17 @@ Private Function FillPreradaSablon(ByVal preID As String, _
     Exit Function
 
 EH:
+    ' Snapshot PRE logera: LogErr/LogSetup pocinju sa "On Error Resume Next", a
+    ' svaki oblik On Error naredbe resetuje Err -- bez ovoga re-raise ide kao
+    ' Err.Raise 0 sa praznim opisom, pa pozivalac uopste ne vidi gresku.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     Application.ScreenUpdating = oldScreen
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 ' Kreira/obnavlja PreradaSablon u zajednickom stilu. Verzija layouta je u H1 i
