@@ -239,17 +239,25 @@ nad *ovim* test sistemom:
 | otisak | šta pokriva | koristi ga |
 |---|---|---|
 `izvor` | `src-vba` (bez `modBuildInfo.bas`) | compile evidence |
-`ugovor` | `izvor` + `tools/run_vba.py` + `tools/make_fixture.py` + `tests/golden/*` + verzija markera | dokaz suita |
+`ugovor` | `izvor` + `runner` + `fixture` + `kapija` + `golden` + verzija markera | dokaz suita |
 
-`RunGoldenSuite` meri ishod protiv `tests/golden/*.txt`; `run_vba.py` odlučuje koja
-suite postoji, da li je `gate` i kako se čita rezultat; `make_fixture.py` određuje
-podatke nad kojima testovi rade (i potpis koji `run_vba` proverava **pre** Excela,
-čime sam priznaje da je stanje fixture-a deo preduslova). Promeni golden fajl, ne
-pusti nijedan test — marker vezan samo za izvor bi i dalje tvrdio „dokazano".
+Delovi ugovora su **imenovani**, pa nalaz kaže *koji* se promenio:
 
-Razdvojeni su zato što **compile pripada samo izvoru**: `Debug > Compile` ne zna za
-golden fajlove, pa potvrda ne sme da propadne zato što se jedan promenio. Ugovor se
-računa iz **delova**, pa nalaz kaže *koji* se deo promenio, a ne samo „nešto".
+| deo | fajl | zašto je u ugovoru |
+|---|---|---|
+`runner` | `tools/run_vba.py` | odlučuje koja suite postoji, da li je `gate` i kako se čita rezultat |
+`fixture` | `tools/make_fixture.py` | određuje podatke nad kojima testovi rade |
+`kapija` | `tools/vba_gate.py` | odlučuje **šta se priznaje kao dokaz** |
+`golden` | `tests/golden/*` | `RunGoldenSuite` meri ishod protiv njih |
+
+`kapija` je tu zbog asimetrije koja je inače ostala: alat je automatski hvatao
+promenu test **runnera**, a ne i promenu **verifikatora** koji odlučuje da li
+runnerov rezultat važi. `MARKER_VERZIJA` to pokriva samo ako se čovek seti da je
+bumpuje — a to je baš ona ručna disciplina koju alat zamenjuje. Verzija ostaje, kao
+izričita oznaka namere, ne kao jedina brana.
+
+Razdvojeni su od `izvor`-a zato što **compile pripada samo izvoru**: `Debug > Compile`
+ne zna za golden fajlove, pa potvrda ne sme da propadne zato što se jedan promenio.
 
 Šta marker **ne** upisuje: pao run; `--no-import` run (kod u svesci tada nije
 `src-vba`, pa bi otisak lagao o tome šta je izvršeno); i **`BLIND` suite kao
@@ -258,9 +266,15 @@ prošle". Potvrda compile-a (`--mark-compile`) vezana je za **otisak izvora**, p
 potvrda data nad jednim izvorom prestaje da važi za sledeći (to se već desilo, kao
 P3 u review-u #400).
 
-**Kontekst sveske** se pamti uz svaki rezultat: `run_vba --workbook X.xlsm` dokazuje
-drugi kontekst, pa ne zadovoljava podrazumevani zahtev bez izričitog
-`--sveska X.xlsm`.
+**Kontekst sveske je identitet, ne ime.** Uz svaki rezultat se pamte putanja i
+**heš sadržaja** izvorne sveske (ne temp kopije — `run_vba` je prvo kopira, pa je
+izvor stabilan). Basename ne razlikuje `C:\A\test.xlsm` od `D:\B\test.xlsm`, a
+podrazumevani fixture je **gitignored i regeneriše se**: bez heša sadržaja zamena
+sveske bi ostavila prethodni GREEN na nogama. `make_fixture.signature()` to ne
+pokriva i nije mu namena — on opisuje deklarativni seed/config, a sveska je izvedena
+iz donora, pa dve različite sveske mogu imati isti potpis generatora. Zato
+`run_vba --workbook X.xlsm` ne zadovoljava podrazumevani zahtev (traži se
+`--sveska <putanja>`), a ni zamenjen fixture ne prolazi pod starim dokazom.
 
 Otisak izvora normalizuje prelome i **izuzima `modBuildInfo.bas`** — `stamp-build`
 ga prepisuje pred svaki `ImportAllVBA`, pa bi inače stamp obarao marker baš u

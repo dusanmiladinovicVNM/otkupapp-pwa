@@ -445,10 +445,9 @@ def self_test() -> int:
     tudje = sopstveni[:poc] + sopstveni[kraj if kraj > 0 else len(sopstveni):]
     for tekst, opis in (
             ('_gate.zabelezi_prolaz(\n'
-             '            report, rc, args.no_import, sveska=fixture,\n'
-             '            podrazumevana=not bool(args.workbook))',
+             '            report, rc, args.no_import, sveska=fixture)',
              "main() ne zove vba_gate.zabelezi_prolaz sa args.no_import i "
-             "kontekstom sveske"),
+             "IZVORNOM svescom (ne temp kopijom)"),
             ('lines.append(f"GREEN   {report[\'green\']}")',
              "izvestaj ne ispisuje red GREEN -- upis markera bi bio nevidljiv"),
     ):
@@ -1019,8 +1018,7 @@ def main(argv: list[str]) -> int:
         _gate = importlib.util.module_from_spec(_gate_spec)
         _gate_spec.loader.exec_module(_gate)
         report["green"] = _gate.zabelezi_prolaz(
-            report, rc, args.no_import, sveska=fixture,
-            podrazumevana=not bool(args.workbook))
+            report, rc, args.no_import, sveska=fixture)
     except Exception as exc:                # noqa: BLE001
         report["green"] = "marker nije upisan: %s" % exc
 

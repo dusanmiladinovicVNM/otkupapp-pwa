@@ -65,9 +65,13 @@ golden fajlove, pa potvrda ne sme da propadne zato sto se jedan promenio. Ugovor
 se pritom racuna iz DELOVA, pa nalaz ume da kaze KOJI se deo promenio, a ne samo
 "nesto".
 
-KONTEKST SVESKE se pamti uz svaki rezultat: `run_vba --workbook X.xlsm` dokazuje
-drugi kontekst, pa ne zadovoljava podrazumevani zahtev bez izricitog
-`--sveska X.xlsm`.
+KONTEKST SVESKE se pamti uz svaki rezultat, i to kao IDENTITET -- putanja plus
+hes sadrzaja, ne ime. Basename ne razlikuje `C:\\A\\test.xlsm` od
+`D:\\B\\test.xlsm`, a podrazumevani fixture je gitignored i regenerise se: bez
+hesa sadrzaja bi zamena sveske ostavila prethodni GREEN na nogama, iako
+`make_fixture.signature()` pokriva samo deklarativni seed, ne celu svesku
+izvedenu iz donora. Zato `run_vba --workbook X.xlsm` ne zadovoljava podrazumevani
+zahtev, a ni zamenjen fixture ne prolazi pod starim dokazom.
 
 STO MARKER NE SME DA UPISE:
   - run koji je pao (rc != 0);
@@ -121,12 +125,24 @@ MARKER = os.path.join(ROOT, "tests", "last_green.json")
 # VERZIJA MARKERA. Ako se znacenje polja promeni, stari upis NE SME da zadovolji
 # nova pravila -- inace bi prelazak na strozija pravila tiho priznao dokaze
 # napravljene pod slabijim. Zato verzija ulazi i u otisak ugovora.
-MARKER_VERZIJA = 2
+MARKER_VERZIJA = 3
 
-# Delovi TEST-UGOVORA koji zive van src-vba (v. `ugovor_delovi`).
-UGOVOR_FAJLOVI = ("tools/run_vba.py", "tools/make_fixture.py")
+# Delovi TEST-UGOVORA koji zive van src-vba, IMENOVANI -- da nalaz kaze koji se
+# deo promenio, a ne samo "nesto".
+#
+# `kapija` je ovaj fajl. Bez njega alat hvata promenu test RUNNERA, a ne i
+# promenu VERIFIKATORA: `vba_gate.py` odlucuje sta znaci `--require-green`, koje
+# se suite traze, kako se porede otisci i sta se priznaje kao OK. Promeni
+# acceptance logiku, zaboravi da bumpujes MARKER_VERZIJA, i stari dokaz ostaje
+# "vazeci" pod novim pravilima. MARKER_VERZIJA ostaje -- ali kao izricita
+# oznaka namere, ne kao jedina brana koja zavisi od toga da se covek seti.
+UGOVOR_FAJLOVI = {
+    "runner": ("tools/run_vba.py",),
+    "fixture": ("tools/make_fixture.py",),
+    "kapija": ("tools/vba_gate.py",),
+}
 GOLDEN_PODFOLDER = "tests/golden"
-PODRAZUMEVANA_SVESKA = "otkup_test.xlsm"
+PODRAZUMEVANA_SVESKA = "tests/fixtures/otkup_test.xlsm"
 
 # Modul koji stamp-build prepisuje pred svaki import -- v. docstring.
 IZUZET_IZ_OTISKA = ("modBuildInfo.bas",)
@@ -314,6 +330,59 @@ def _hash_fajlova(putanje: list) -> str:
     return h.hexdigest()
 
 
+def _hash_sirov(put: str) -> str:
+    """SHA256 sirovog sadrzaja, BEZ normalizacije preloma.
+
+    Za `.xlsm` (zip) normalizacija CRLF->LF nije samo nepotrebna nego i stetna:
+    sazimala bi bajt-par koji u komprimovanom sadrzaju nema nikakvo znacenje
+    kraja reda, i time bez razloga smanjivala otpornost na sudar.
+    """
+    h = hashlib.sha256()
+    try:
+        with open(put, "rb") as fh:
+            for blok in iter(lambda: fh.read(1 << 20), b""):
+                h.update(blok)
+    except OSError:
+        return ""
+    return h.hexdigest()
+
+
+def podrazumevana_sveska(koren: str = ROOT) -> str:
+    return os.path.join(koren, *PODRAZUMEVANA_SVESKA.split("/"))
+
+
+def kontekst_sveske(put: str) -> dict:
+    """Identitet sveske nad kojom je dokaz nastao: PUTANJA i SADRZAJ.
+
+    Basename nije identitet. `C:\\A\\test.xlsm` i `D:\\B\\test.xlsm` se po
+    njemu ne razlikuju; gore od toga, podrazumevani fixture je gitignored i
+    regenerise se, pa je zamena sveske bez ijedne izmene u izvoru, runneru,
+    generatoru ili golden-u ostavljala prethodni GREEN na nogama.
+
+    `make_fixture.signature()` to ne pokriva i nije mu namena: on opisuje
+    DEKLARATIVNI seed/config, a sveska je izvedena iz donora -- pa dve razlicite
+    sveske mogu imati isti potpis generatora. Zato ide hes sadrzaja.
+
+    Hesira se IZVORNA sveska, ne temp kopija koju Excel menja: `run_vba` je prvo
+    kopira u temp, pa je izvor stabilan i posle run-a.
+    """
+    return {"ime": os.path.basename(put),
+            "putanja": os.path.realpath(put),
+            "otisak": _hash_sirov(put)}
+
+
+def _razlika_sveske(zapisan: dict, trazen: dict) -> str:
+    """Zasto zapisana sveska nije ona koja se trazi -- prazno ako jeste."""
+    zapisan = zapisan or {}
+    if zapisan.get("otisak") != trazen.get("otisak"):
+        return ("sadrzaj sveske je drugi (zapisan %s, sada %s)"
+                % ((zapisan.get("otisak") or "?")[:12],
+                   (trazen.get("otisak") or "?")[:12]))
+    if zapisan.get("putanja") != trazen.get("putanja"):
+        return "sveska je sa druge putanje (%s)" % zapisan.get("putanja")
+    return ""
+
+
 def ugovor_delovi(src_dir: str = SRC_VBA, koren: str = ROOT) -> dict:
     """Delovi TEST-UGOVORA: sve od cega zavisi sta "zeleno" znaci.
 
@@ -339,13 +408,15 @@ def ugovor_delovi(src_dir: str = SRC_VBA, koren: str = ROOT) -> dict:
         fajlovi = [os.path.join(golden, f) for f in sorted(os.listdir(golden))]
     except OSError:
         fajlovi = []
-    return {
+    delovi = {
         "verzija": MARKER_VERZIJA,
         "izvor": otisak_izvora(src_dir),
-        "alati": _hash_fajlova([os.path.join(koren, *p.split("/"))
-                                for p in UGOVOR_FAJLOVI]),
         "golden": _hash_fajlova(fajlovi),
     }
+    for deo, putanje in UGOVOR_FAJLOVI.items():
+        delovi[deo] = _hash_fajlova(
+            [os.path.join(koren, *p.split("/")) for p in putanje])
+    return delovi
 
 
 def otisak_ugovora(delovi: dict = None, src_dir: str = SRC_VBA,
@@ -399,9 +470,8 @@ def potrebne_suite(suites: dict = None) -> list:
 
 
 def zabelezi_prolaz(report: dict, rc: int, no_import: bool = False,
-                    sveska: str = None, podrazumevana: bool = True,
-                    put: str = MARKER, src_dir: str = SRC_VBA,
-                    koren: str = ROOT) -> str:
+                    sveska: str = None, put: str = MARKER,
+                    src_dir: str = SRC_VBA, koren: str = ROOT) -> str:
     """Zapisi rezultat run-a u marker. Vraca poruku (sta je upisano ili zasto nije).
 
     Zove je `run_vba.py` na kraju run-a. Pravila su u docstring-u modula; ovde su
@@ -426,7 +496,7 @@ def zabelezi_prolaz(report: dict, rc: int, no_import: bool = False,
     podaci.setdefault("suites", {})
 
     kada = time.strftime("%Y-%m-%dT%H:%M:%S")
-    ime_sveske = os.path.basename(sveska) if sveska else PODRAZUMEVANA_SVESKA
+    ks = kontekst_sveske(sveska or podrazumevana_sveska(koren))
     rezultati = report.get("suite_results", {}) or {}
     for s in report.get("suites", []):
         r = rezultati.get(s["name"]) or {}
@@ -437,17 +507,16 @@ def zabelezi_prolaz(report: dict, rc: int, no_import: bool = False,
             "izvor": delovi["izvor"],
             "ugovor": ugovor,
             "ugovor_delovi": delovi,
-            "sveska": ime_sveske,
-            "podrazumevana": bool(podrazumevana),
+            "sveska": ks,
             "kada": kada,
             "git": _git_glava(),
             "platforma": platform.platform(),
         }
     upisi_marker(podaci, put)
     imena = sorted(s["name"] for s in report.get("suites", []))
-    return "marker upisan (izvor %s, ugovor %s, sveska %s): %d suita (%s)" % (
-        delovi["izvor"][:12], ugovor[:12], ime_sveske, len(imena),
-        ", ".join(imena) or "nijedna")
+    return ("marker upisan (izvor %s, ugovor %s, sveska %s/%s): %d suita (%s)"
+            % (delovi["izvor"][:12], ugovor[:12], ks["ime"],
+               ks["otisak"][:8], len(imena), ", ".join(imena) or "nijedna"))
 
 
 def zabelezi_compile(put: str = MARKER, src_dir: str = SRC_VBA) -> str:
@@ -478,15 +547,16 @@ def zahtevaj_zeleno(trazene: list = None, suites: dict = None,
     (runner + fixture generator + golden + verzija markera). Otisak izvora sam
     ne bi razlikovao "dokazano" od "dokazano pod drugim test sistemom".
 
-    `sveska` je ime sveske nad kojom se dokaz PRIZNAJE; podrazumevano samo
-    fixture. Run nad tudjom svescom (`run_vba --workbook X.xlsm`) ne zadovoljava
-    podrazumevani zahtev, jer nije dokazan isti kontekst -- mora se traziti
-    izricito.
+    `sveska` je PUTANJA sveske nad kojom se dokaz priznaje; podrazumevano je to
+    fixture. Poredi se identitet, ne ime: putanja i hes sadrzaja. Run nad tudjom
+    svescom (`run_vba --workbook X.xlsm`) zato ne zadovoljava podrazumevani
+    zahtev, a ni zamenjen fixture ne prolazi pod starim dokazom.
     """
     suites = katalog_suita() if suites is None else suites
     trazene = potrebne_suite(suites) if trazene is None else list(trazene)
     delovi = ugovor_delovi(src_dir, koren)
     ugovor = otisak_ugovora(delovi)
+    trazena = kontekst_sveske(sveska or podrazumevana_sveska(koren))
     marker = procitaj_marker(put)
 
     if not marker:
@@ -516,13 +586,11 @@ def zahtevaj_zeleno(trazene: list = None, suites: dict = None,
                           "%s) -- suite nije pustena nad ovim test sistemom"
                           % (ime, ", ".join(_razlika_ugovora(
                               z.get("ugovor_delovi"), delovi)) or "?"))
-        elif sveska is None and not z.get("podrazumevana"):
-            nalazi.append("%s: dokaz je napravljen nad svescom %s, ne nad "
-                          "fixture-om -- trazi ga izricito (`--sveska %s`)"
-                          % (ime, z.get("sveska"), z.get("sveska")))
-        elif sveska is not None and z.get("sveska") != sveska:
-            nalazi.append("%s: dokaz je napravljen nad svescom %s, a trazi se %s"
-                          % (ime, z.get("sveska"), sveska))
+        elif _razlika_sveske(z.get("sveska"), trazena):
+            nalazi.append("%s: %s -- dokaz nije napravljen nad svescom koja se "
+                          "trazi (%s)"
+                          % (ime, _razlika_sveske(z.get("sveska"), trazena),
+                             trazena["ime"]))
     if trazi_compile:
         c = marker.get("compile") or {}
         if not c:
@@ -541,10 +609,15 @@ def stanje_redovi(suites: dict = None, put: str = MARKER,
     delovi = ugovor_delovi(src_dir, koren)
     ugovor = otisak_ugovora(delovi)
     marker = procitaj_marker(put)
+    sveska_sada = kontekst_sveske(podrazumevana_sveska(koren))
     redovi = ["izvor:   %s" % delovi["izvor"][:16],
-              "ugovor:  %s  (alati %s, golden %s, verzija %s)"
-              % (ugovor[:16], delovi["alati"][:8], delovi["golden"][:8],
-                 delovi["verzija"])]
+              "ugovor:  %s  (%s, verzija %s)"
+              % (ugovor[:16],
+                 ", ".join("%s %s" % (k, (delovi[k] or "?")[:8])
+                           for k in sorted(UGOVOR_FAJLOVI) + ["golden"]),
+                 delovi["verzija"]),
+              "sveska:  %s  %s" % (sveska_sada["ime"],
+                                   sveska_sada["otisak"][:16] or "NEMA JE")]
     if not marker:
         redovi.append("marker:  nema ga -- nijedan prolaz nije zapisan")
         return redovi
@@ -572,8 +645,8 @@ def stanje_redovi(suites: dict = None, put: str = MARKER,
         elif z.get("ugovor") != ugovor:
             beleska = "UGOVOR: " + ", ".join(
                 _razlika_ugovora(z.get("ugovor_delovi"), delovi))
-        elif not z.get("podrazumevana"):
-            beleska = "sveska " + str(z.get("sveska"))
+        elif _razlika_sveske(z.get("sveska"), sveska_sada):
+            beleska = "SVESKA: " + _razlika_sveske(z.get("sveska"), sveska_sada)
         redovi.append(" %s %-28s %-6s %s/%s  %s"
                       % (oznaka, ime, z.get("status"), z.get("palo"),
                          z.get("ukupno"), beleska))
@@ -724,11 +797,16 @@ def _self_test(tiho: bool = False) -> int:
         put = os.path.join(tmp, "tests", "last_green.json")
         os.makedirs(os.path.join(tmp, "tools"), exist_ok=True)
         os.makedirs(os.path.join(tmp, "tests", "golden"), exist_ok=True)
+        os.makedirs(os.path.join(tmp, "tests", "fixtures"), exist_ok=True)
         for rel in ("tools/run_vba.py", "tools/make_fixture.py",
-                    "tests/golden/G1.txt"):
+                    "tools/vba_gate.py", "tests/golden/G1.txt"):
             with io.open(os.path.join(tmp, *rel.split("/")), "w",
                          newline="") as fh:
                 fh.write("prvo stanje " + rel + "\n")
+        # Podrazumevani fixture mora da POSTOJI: bez njega bi hes bio prazan sa
+        # obe strane, pa bi poredjenje sveske prolazilo ne merivsi nista.
+        with open(podrazumevana_sveska(tmp), "wb") as fh:
+            fh.write(b"fixture A")
 
         ZELEN = {"suites": [{"name": "RunAllTests", "status": "OK"}],
                  "suite_results": {"RunAllTests": {"total": 199, "failed": 0}}}
@@ -800,20 +878,51 @@ def _self_test(tiho: bool = False) -> int:
         with io.open(os.path.join(tmp, "tools", "run_vba.py"), "w",
                      newline="") as fh:
             fh.write("drugo stanje runnera\n")
-        tvrdi(any("TEST-UGOVOR" in n and "alati" in n for n in zahtevaj()),
+        tvrdi(any("TEST-UGOVOR" in n and "runner" in n for n in zahtevaj()),
               "MARKER: promenjen RUNNER ostavlja stari dokaz vazecim")
         upisi()
         tvrdi(not zahtevaj(), "MARKER: nov run pod novim runnerom nije dokaz")
 
-        # TUDJA SVESKA. `run_vba --workbook X.xlsm` dokazuje drugi kontekst, pa ne
-        # sme da zadovolji podrazumevani zahtev bez izricitog izbora.
-        upisi(sveska="druga.xlsm", podrazumevana=False)
-        tvrdi(any("druga.xlsm" in n for n in zahtevaj()),
+        # PROMENJENA KAPIJA. `vba_gate.py` odlucuje sta se priznaje kao dokaz --
+        # koje suite se traze, kako se porede otisci, sta je OK. Njegova izmena
+        # mora da obori stare dokaze SAMA, bez rucnog bumpa MARKER_VERZIJA: ta
+        # rucna disciplina je bas ono sto alat zamenjuje.
+        with io.open(os.path.join(tmp, "tools", "vba_gate.py"), "w",
+                     newline="") as fh:
+            fh.write("druga semantika kapije\n")
+        tvrdi(any("TEST-UGOVOR" in n and "kapija" in n for n in zahtevaj()),
+              "MARKER: promenjena KAPIJA ostavlja stari dokaz vazecim")
+        upisi()
+        tvrdi(not zahtevaj(), "MARKER: nov run pod novom kapijom nije dokaz")
+
+        # TUDJA SVESKA, i to sa ISTIM BASENAME-om -- bas bypass iz review-a.
+        # Identitet je putanja + sadrzaj, pa ime nije dovoljno.
+        druga = os.path.join(tmp, "druga", "otkup_test.xlsm")
+        treca = os.path.join(tmp, "treca", "otkup_test.xlsm")
+        for p in (druga, treca):
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "wb") as fh:
+                fh.write(b"tudja sveska")
+        upisi(sveska=druga)
+        tvrdi(any("sadrzaj sveske" in n for n in zahtevaj()),
               "MARKER: dokaz nad tudjom svescom zadovoljava podrazumevani zahtev")
-        tvrdi(not zahtevaj(sveska="druga.xlsm"),
+        tvrdi(not zahtevaj(sveska=druga),
               "MARKER: izricito trazena sveska se ne priznaje")
-        tvrdi(any("druga.xlsm" in n for n in zahtevaj(sveska="treca.xlsm")),
-              "MARKER: trazi se jedna sveska a priznaje se druga")
+        # Isti sadrzaj, druga putanja: `C:\\A\\test.xlsm` vs `D:\\B\\test.xlsm`.
+        tvrdi(any("druge putanje" in n for n in zahtevaj(sveska=treca)),
+              "MARKER: ista sveska sa DRUGE putanje se priznaje")
+        upisi()
+        tvrdi(not zahtevaj(),
+              "MARKER: vracanje na fixture nije priznato")
+
+        # ZAMENJEN FIXTURE. Podrazumevani fixture je gitignored i regenerise se;
+        # `make_fixture.signature()` pokriva deklarativni seed, ne celu svesku
+        # izvedenu iz donora -- pa dve razlicite sveske mogu imati isti potpis
+        # generatora. Bez hesa sadrzaja zamena bi prosla neopazeno.
+        with open(podrazumevana_sveska(tmp), "wb") as fh:
+            fh.write(b"fixture B")
+        tvrdi(any("sadrzaj sveske" in n for n in zahtevaj()),
+              "MARKER: zamenjen fixture ostavlja stari dokaz vazecim")
         upisi()
 
         # IZMENA IZVORA obara dokaz suita, i potvrdu compile-a -- compile je vezan
@@ -866,9 +975,9 @@ def main(argv: list) -> int:
                     help="uz --require-green: trazi i potvrdu Debug > Compile")
     ap.add_argument("--suite", action="append", default=[],
                     help="uz --require-green: trazi bas ovu suite (moze vise puta)")
-    ap.add_argument("--sveska", metavar="IME",
+    ap.add_argument("--sveska", metavar="PUTANJA",
                     help="uz --require-green: priznaj dokaz napravljen nad TOM "
-                         "svescom (podrazumevano samo fixture)")
+                         "svescom (putanja, ne ime; podrazumevano fixture)")
     ap.add_argument("--mark-compile", action="store_true",
                     help="zapisi da je Debug > Compile prosao nad ovim izvorom")
     ap.add_argument("--clear", action="store_true", help="obrisi marker")

@@ -413,11 +413,13 @@
   nijedna kapija ne pokreće, fantom u katalogu, i zastareo unos u registru.
 - **Marker zelenog: `python tools/vba_gate.py --require-green`** — rezultat **po suite-u** iz poslednjeg
   run-a (`tests/last_green.json`, gitignored; piše ga `run_vba.py`), uz **dva otiska**: `izvor` (`src-vba`)
-  i `ugovor` (`izvor` + `run_vba.py` + `make_fixture.py` + `tests/golden/*` + verzija markera). Odgovara na
-  „da li je **baš ovaj** izvor dokazan **pod ovim test sistemom**" — što je do sada bila rečenica uz PR.
-  Compile je vezan **samo za izvor** (`--mark-compile`), pa promena golden fajla ne obara potvrdu. Ne
-  upisuje: pao run, `--no-import` run, ni `BLIND` suite kao dokazanu; run nad tuđom sveskom se pamti i ne
-  zadovoljava podrazumevani zahtev bez `--sveska`.
+  i `ugovor` (`izvor` + imenovani delovi `runner` / `fixture` / `kapija` / `golden` + verzija markera).
+  Odgovara na „da li je **baš ovaj** izvor dokazan **pod ovim test sistemom**" — što je do sada bila
+  rečenica uz PR. `kapija` je sam `vba_gate.py`: promena onoga što odlučuje **šta se priznaje kao dokaz**
+  mora da obori stare dokaze bez ručnog bumpa verzije. Compile je vezan **samo za izvor**
+  (`--mark-compile`), pa promena golden fajla ne obara potvrdu. Kontekst sveske je **identitet** (putanja
+  + heš sadržaja izvorne sveske), ne ime — fixture je gitignored, pa bi zamena sveske inače prošla pod
+  starim dokazom. Ne upisuje: pao run, `--no-import` run, ni `BLIND` suite kao dokazanu.
 - `vba_check` kapije nad **alatima** (katalog sabotaža, pravila grupisanja, popis suita) idu **ispred** izlaza
   `if not files: return 0` — hook sa putanjom koja nije VBA fajl ih je dotad preskakao, uključujući
   baš `tools/sabotaza.py`, gde se greška u katalogu i pravi.
