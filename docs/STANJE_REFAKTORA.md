@@ -410,10 +410,13 @@
   njih: `docs/EXCEL_TEST_HARNESS.md` → „Grupni dokaz".
 - **Popis test suita: `python tools/vba_gate.py --popis`** — suite u kodu vs katalog `SUITES` vs registar
   `SUITE_VAN_KAPIJA`. Ide i kroz `vba_check` (dakle kroz hook) i kroz CI. Hvata napisanu suite koju
-  nijedna kapija ne pokreće, fantom u katalogu, i zastareo unos u registru. Deklaracije čita **jedan
-  razlagač** (`vba_check.deklaracija_procedure`), deljen sa kapijom `DUPLIKAT`: modifikator i zagrade su
-  u VBA opcioni, a opcioni argument nije obavezan, pa je uslov „javna + `.bas` + nula **obaveznih**
-  argumenata + ime po konvenciji" — ne sve širi izraz.
+  nijedna kapija ne pokreće, fantom u katalogu, zastareo unos u registru, i unos koji **postoji ali se
+  ne može pozvati** bez argumenata (`run_vba` zove `xl.Run("<ime>")` bez njih). Deklaracije idu kroz
+  **dva deljena sloja** u `vba_check` — `logicke_izjave` (spaja nastavke ` _`, skida komentar van string
+  literala, trpi uvlačenje) pa `deklaracija_procedure` (vidljivost / vrsta / ime / argumenti / broj
+  **obaveznih**). Oba deli i kapija `DUPLIKAT`; prelazak je izmeren, skup javnih imena je identičan.
+  Uslov za kandidata je „javna + `.bas` + nula obaveznih argumenata + ime po konvenciji" — ne sve širi
+  izraz, jer je tri kruga review-a pokazalo da je problem bio **sloj**, ne izraz.
 - **Marker zelenog: `python tools/vba_gate.py --require-green`** — rezultat **po suite-u** iz poslednjeg
   run-a (`tests/last_green.json`, gitignored; piše ga `run_vba.py`), uz **dva otiska**: `izvor` (`src-vba`)
   i `ugovor` (`izvor` + imenovani delovi `runner` / `fixture` / `kapija` / `golden` + verzija markera).

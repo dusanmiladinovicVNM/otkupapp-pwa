@@ -205,38 +205,65 @@ priključena bila `BLIND` — to je posao koji svaki unos zatvara.
 je nalaz, i zastareo unos je nalaz (suite obrisana, ili je u međuvremenu u
 `SUITES`). Isti oblik i isti razlog kao `MRTAV_UNOS` u `vba_hard_census`.
 
-### Jedan razlagač deklaracije, ne sve širi izraz
+### Deklaracija je izjava, ne fizički red
 
-VBA deklaracija je `[Public|Private|Friend] [Static] Sub|Function name [ ( arglist ) ]`,
-i izraz koji je čita lako vidi **manje** od toga. Tri promašaja koji su se ovde
-platili, svaki kao nevidljiva suite:
+Census je tri kruga review-a dobijao po jedan „nedostajući slučaj" u izraz. To nije
+bio niz izuzetaka nego **pogrešan sloj**: VBA deklaracija je izjava, a izjava se
+proteže preko redova, nosi komentar na kraju, sme biti uvučena, i u podrazumevanoj
+vrednosti sme imati zapetu ili apostrof unutar string literala.
 
-| što izraz promaši | zašto je važno |
-|---|---|
-modifikator je **opcion** | `Sub RunFooSuite()` je javna, default je Public |
-zagrade su **opcione** | `Sub RunFooSuite` je validna javna suite bez argumenata |
-**opcioni** argument nije obavezan | `Sub RunFooSuite(Optional x)` se zove po imenu bez argumenta |
+```
+fizički redovi  ->  LOGIČKE IZJAVE  ->  razlagač deklaracije
+```
 
-Treći je našao `RunSEFOfflineSuite` — deklarisanu kao
-`Public Sub RunSEFOfflineSuite(Optional ByVal fakturaID As String = "")`. Izraz koji
-je tražio **praznu** listu argumenata ju je preskakao.
-
-Zato `vba_check.deklaracija_procedure` vraća **polja** (vidljivost, vrsta, ime,
-`ima_zagrade`, argumenti, broj **obaveznih** argumenata), a odluka stoji kao uslov
-nad njima:
+`vba_check.logicke_izjave` spaja nastavke (` _`), skida komentar **van** string
+literala i normalizuje razmak. `vba_check.deklaracija_procedure` onda vraća **polja**
+— vidljivost, vrsta, ime, `ima_zagrade`, argumenti, broj **obaveznih** argumenata —
+a odluka stoji kao uslov nad njima:
 
 ```
 javna  +  .bas  +  nula OBAVEZNIH argumenata  +  ime po konvenciji
 ```
 
+Šta je izraz promašivao, i svaki je bio nevidljiva suite:
+
+| oblik | zašto je validan |
+|---|---|
+`Sub RunFooSuite()` | modifikator je **opcion**, default je Public |
+`Sub RunFooSuite` | zagrade su **opcione** |
+`Sub RunFooSuite(Optional x)` | **opcioni** argument nije obavezan |
+`    Public Sub RunFooSuite()` | uvučena deklaracija je validna |
+`Sub RunFooSuite ' test` | komentar na kraju izjave |
+`Sub RunFooSuite( _` + sledeći red | prelom reda u listi argumenata |
+`Sub RunFooSuite(Optional s = "a,b")` | zapeta u **string literalu** nije separator |
+
+Treći red je našao `RunSEFOfflineSuite` — deklarisanu kao
+`Public Sub RunSEFOfflineSuite(Optional ByVal fakturaID As String = "")`. Izraz koji
+je tražio **praznu** listu argumenata ju je preskakao.
+
 `.bas` jer se makro po imenu poziva jedino iz standardnog modula; `Function` se
 prihvata uz `Sub`, jer je i nju `Application.Run` zove po imenu.
 
-Razlagač je **jedan za ceo tooling sloj** — dele ga `DUPLIKAT` („Ambiguous name
-detected") i ovaj popis. `Const` ne ide kroz njega: modul-level `Const X = 1` bez
-modifikatora je **Private**, obrnuto od procedure. Ta asimetrija je u kodu, ne u
-glavi: široki izraz bez nje prijavi 609 „javnih imena", sve lokalni `Const SRC` po
-procedurama.
+Oba sloja su **jedna za ceo tooling sloj** — dele ih `DUPLIKAT` („Ambiguous name
+detected") i ovaj popis. Prelazak `collect_public` na logičke izjave je izmeren:
+skup javnih imena nad svim `.bas` fajlovima je **identičan** (0 dodato, 0
+izgubljeno), pa `DUPLIKAT` nije promenjen. `Const` ne ide kroz razlagač: modul-level
+`Const X = 1` bez modifikatora je **Private**, obrnuto od procedure — široki izraz
+bez te asimetrije prijavi 609 „javnih imena", sve lokalni `Const SRC`.
+
+### Postojanje nije pozivljivost
+
+`run_vba` zove `xl.Run("<ime>")` **bez argumenata**. Unos u `SUITES` za proceduru
+koja postoji ali ima **obavezan** argument zato nije fantom nego **nepozivljiva
+ulazna tačka** — run bi pao na `Run()`. Popis to razlikuje:
+
+```
+nema procedure                     -> FANTOM
+postoji, ali ima obavezne args     -> NEPOZIVLJIVA
+```
+
+Isto važi za `SUITE_VAN_KAPIJA`: unos koji se više ne može pozvati bez argumenata ne
+opisuje samostalnu suite, pa je i to nalaz.
 
 **2) Da li je baš OVAJ izvor prošao testove?**
 

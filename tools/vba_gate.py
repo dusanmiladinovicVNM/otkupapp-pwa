@@ -143,6 +143,11 @@ UGOVOR_FAJLOVI = {
     "fixture": ("tools/make_fixture.py",),
     "kapija": ("tools/vba_gate.py",),
 }
+#
+# `tools/vba_check.py` NIJE u ugovoru, iako nosi deljeni razlagac deklaracije:
+# on odlucuje sta `--popis` vidi, a ne sta je rezultat suite-a. Ugovor pokriva
+# ono od cega zavisi ISHOD run-a i njegovo priznanje; staticka kapija nad
+# imenima procedura nije u tom lancu.
 GOLDEN_PODFOLDER = "tests/golden"
 PODRAZUMEVANA_SVESKA = "tests/fixtures/otkup_test.xlsm"
 
@@ -220,7 +225,12 @@ def katalog_suita() -> dict:
 
 
 def _razlagac():
-    """`vba_check.deklaracija_procedure` -- jedan razlagac za ceo tooling sloj.
+    """(deklaracija_procedure, logicke_izjave) iz vba_check -- jedan sloj za ceo
+    tooling sloj.
+
+    Dva dela iste odluke: izjava se prvo sastavi (nastavci reda, komentar van
+    string literala, uvlacenje), pa se razlozi. Razdvojeni su jer `collect_public`
+    koristi oba, a popis suita ih prima predate.
 
     Uvozi se LENJO, iz funkcije: `vba_check` sa svoje strane uvozi ovaj modul
     zbog kapije popisa, pa bi uvoz na nivou modula bio kruzan. Na toj (hook)
@@ -231,7 +241,7 @@ def _razlagac():
     spec = importlib.util.spec_from_file_location("_vba_check_za_gate", put)
     modul = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(modul)
-    return modul.deklaracija_procedure
+    return modul.deklaracija_procedure, modul.logicke_izjave
 
 
 def skeniraj(src_dir: str = SRC_VBA, razlagac=None) -> tuple:
@@ -240,9 +250,13 @@ def skeniraj(src_dir: str = SRC_VBA, razlagac=None) -> tuple:
     Jedan prolaz, ne dva: provera ide kroz `vba_check`, dakle kroz PostToolUse
     hook, pa se citanje 190 fajlova ne placa dvaput.
 
-    `javne` su sve javne procedure modula (ime -> fajl) i sluze da se proveri
-    POSTOJANJE imena iz kataloga -- ukljucujuci implicitno javne, bez
-    modifikatora.
+    Ide preko LOGICKIH IZJAVA, ne fizickih redova: uvucena deklaracija, komentar
+    na kraju reda i prelom reda u listi argumenata su sve validni oblici, i svaki
+    je u jednom krugu review-a bio nevidljiv.
+
+    `javne` je ime -> (fajl, pozivljiva_bez_argumenata). Drugi clan nije kozmetika:
+    runner zove `xl.Run("<ime>")` BEZ argumenata, pa procedura sa obaveznim
+    argumentom nije upotrebljiva kao ulazna tacka ni kad postoji.
 
     `po_konvenciji` su kandidati za ulaznu tacku suite-a, i to su TRI uslova nad
     razlozenom deklaracijom, ne jedan izraz:
@@ -257,7 +271,7 @@ def skeniraj(src_dir: str = SRC_VBA, razlagac=None) -> tuple:
     `Function` se prihvata uz `Sub`: i nju `Application.Run` zove po imenu, pa bi
     inace bila ista rupa drugog oblika.
     """
-    razlagac = _razlagac() if razlagac is None else razlagac
+    razlagac, izjave = _razlagac() if razlagac is None else razlagac
     javne, po_konvenciji = {}, {}
     if not os.path.isdir(src_dir):
         return javne, po_konvenciji
@@ -267,7 +281,7 @@ def skeniraj(src_dir: str = SRC_VBA, razlagac=None) -> tuple:
         with io.open(os.path.join(src_dir, ime), encoding="ascii",
                      errors="replace", newline="") as fh:
             tekst = fh.read().replace("\r\n", "\n")
-        for red in tekst.split("\n"):
+        for red, _broj in izjave(tekst):
             d = razlagac(red)
             if not d or not d["javna"] or d["vrsta"] == "property":
                 continue
@@ -291,11 +305,23 @@ def popis_problemi(suites: dict = None, registar: dict = None,
 
     nalazi = []
 
-    # a) katalog imenuje proceduru koje nema -- run bi pukao na Run()
+    # a) katalog imenuje proceduru koje nema, ili koja se ne moze pozvati
+    #
+    # Postojanje nije dovoljno: `run_vba` zove `xl.Run("<ime>")` BEZ argumenata,
+    # pa `Public Sub RunAllTests(ByVal mode As Boolean)` postoji a run pada. To
+    # je rupa izmedju kataloga i stvarno pozivljive ulazne tacke, i `skeniraj`
+    # je odgovor imao -- samo se nije gledao.
     for ime in sorted(suites):
-        if ime not in javne:
+        podaci = javne.get(ime)
+        if not podaci:
             nalazi.append("FANTOM: SUITES['%s'] nema `Public Sub %s` u src-vba"
                           % (ime, ime))
+        # Tolerantno na None iz istog razloga kao kod registra ispod: gasenje
+        # provere iznad mora da da NALAZ, ne traceback -- pad nije merenje.
+        elif not (podaci or (None, True))[1]:
+            nalazi.append("NEPOZIVLJIVA: SUITES['%s'] (%s) ima OBAVEZNE "
+                          "argumente -- runner je zove kao `xl.Run(\"%s\")`, "
+                          "bez argumenata" % (ime, podaci[0], ime))
 
     # b) suite po konvenciji koju nijedna kapija ne pokrece i koja nije zapisana
     for ime in sorted(set(po_konvenciji) - set(suites) - set(registar)):
@@ -311,6 +337,11 @@ def popis_problemi(suites: dict = None, registar: dict = None,
         elif ime not in javne:
             nalazi.append("MRTAV UNOS: `%s` ne postoji u src-vba -- obrisi ga iz "
                           "SUITE_VAN_KAPIJA" % ime)
+        elif not (javne.get(ime) or (None, True))[1]:
+            # Registar opisuje STANDALONE suite. Ako se vise ne moze pozvati bez
+            # argumenata, unos opisuje nesto drugo nego sto tvrdi.
+            nalazi.append("NEPOZIVLJIVA: SUITE_VAN_KAPIJA['%s'] ima OBAVEZNE "
+                          "argumente -- to vise nije samostalna suite" % ime)
         elif len((registar[ime] or "").strip()) < MIN_RAZLOG:
             nalazi.append("BEZ RAZLOGA: SUITE_VAN_KAPIJA['%s'] ne kaze zasto je "
                           "van kapije ni sta bi je zatvorilo" % ime)
@@ -774,6 +805,7 @@ def _self_test(tiho: bool = False) -> int:
     # PRAVI deljeni razlagac, ne kopija: self-test time meri i to da je
     # definicija "javne procedure" stvarno jedna za ceo tooling sloj.
     RAZLAGAC = _razlagac()
+    RAZLOZI = RAZLAGAC[0]
 
     def tvrdi(uslov, opis):
         if not uslov:
@@ -804,11 +836,47 @@ def _self_test(tiho: bool = False) -> int:
 
         # Razlagac odbija red koji NIJE deklaracija (ime pa nesto trece), a
         # prihvata deklaraciju sa tipom povratka bez zagrada.
-        tvrdi(RAZLAGAC("Sub RunNijeSuite: Bar") is None,
+        tvrdi(RAZLOZI("Sub RunNijeSuite: Bar") is None,
               "RAZLAGAC: red koji nije deklaracija se razlaze kao deklaracija")
-        tvrdi((RAZLAGAC("Function RunTipSuite As String") or {}).get(
+        tvrdi((RAZLOZI("Function RunTipSuite As String") or {}).get(
                   "obaveznih") == 0,
               "RAZLAGAC: deklaracija sa tipom povratka bez zagrada se odbija")
+        tvrdi((RAZLOZI('Sub X(Optional s As String = "a,b")') or {}).get(
+                  "obaveznih") == 0,
+              "RAZLAGAC: zapeta u STRING literalu se broji kao separator "
+              "argumenata")
+        # Uvlacenje drze dva mesta (sloj izjava strip-uje, razlagac takodje), pa
+        # se kroz census ne vidi nijedno. Vlasnik je razlagac i meri se ovde.
+        tvrdi((RAZLOZI("    Public Sub RunUvucenaSuite()") or {}).get("ime")
+              == "RunUvucenaSuite",
+              "RAZLAGAC: uvucena deklaracija se odbija")
+
+        # IZJAVA, NE FIZICKI RED. Sva tri oblika su validna, i svaki je u jednom
+        # krugu review-a bio nevidljiv.
+        for naziv, sadrzaj in (
+                ("modUvucena", "    Public Sub RunUvucenaSuite()\r\n    End Sub\r\n"),
+                ("modKomentar", "Sub RunKomentarSuite ' standalone test\r\nEnd Sub\r\n"),
+                ("modPrelom", "Public Sub RunPrelomSuite( _\r\n    Optional ByVal mode As Boolean = False)\r\nEnd Sub\r\n"),
+                ("modZapeta", 'Sub RunZapetaSuite(Optional ByVal s As String = "a,b")\r\nEnd Sub\r\n'),
+        ):
+            put_m = os.path.join(src, naziv + ".bas")
+            with io.open(put_m, "w", newline="") as fh:
+                fh.write(sadrzaj)
+            tvrdi(any("NEPOKRETANA" in n and naziv[3:] in n for n in popis()),
+                  "POPIS: suite u obliku %s je nevidljiva" % naziv[3:])
+            os.remove(put_m)
+
+        # P2 #1: postoji, ali se NE MOZE pozvati bez argumenata.
+        with io.open(os.path.join(src, "modTest.bas"), "w", newline="") as fh:
+            fh.write("Public Sub RunAllTests(ByVal mode As Boolean)\r\nEnd Sub\r\n")
+        tvrdi(any("NEPOZIVLJIVA" in n and "RunAllTests" in n for n in popis()),
+              "POPIS: suite iz SUITES sa OBAVEZNIM argumentom prolazi")
+        tvrdi(any("NEPOZIVLJIVA" in n for n in popis(
+                  suites={}, registar={"RunAllTests": "x" * MIN_RAZLOG})),
+              "POPIS: nepozivljiv unos u REGISTRU prolazi")
+        with io.open(os.path.join(src, "modTest.bas"), "w", newline="") as fh:
+            fh.write("Public Sub RunAllTests()\r\nEnd Sub\r\n")
+        tvrdi(not popis(), "POPIS: vracena deklaracija i dalje daje nalaz")
 
         # IMPLICITNO JAVNA suite: `Sub RunX()` je u VBA Public po defaultu.
         # Prva verzija je trazila literalni "Public Sub" i ovo je bilo
@@ -869,6 +937,16 @@ def _self_test(tiho: bool = False) -> int:
             fh.write("Public Sub RunNestoSuite(ByVal x As Long)\r\nEnd Sub\r\n")
         tvrdi(not popis(), "POPIS: procedura SA argumentima se broji kao suite")
         os.remove(os.path.join(src, "modP.bas"))
+
+        # Kontrola sa APOSTROFOM u string literalu: bez pracenja stringa u sloju
+        # izjava komentar se odseca unutar literala, lista argumenata se raspadne,
+        # i procedura sa OBAVEZNIM argumentom postane "kandidat".
+        with io.open(os.path.join(src, "modAp.bas"), "w", newline="") as fh:
+            fh.write('Sub RunApostrofSuite(Optional ByVal s As String = "a\'b", '
+                     'ByVal n As Long)\r\nEnd Sub\r\n')
+        tvrdi(not popis(),
+              "POPIS: apostrof u string literalu razbija listu argumenata")
+        os.remove(os.path.join(src, "modAp.bas"))
 
         # Isto i bez zagrada u kontroli: `Sub RunSaArgumentomSuite(ByVal x)`.
         with io.open(os.path.join(src, "modPA.bas"), "w", newline="") as fh:
