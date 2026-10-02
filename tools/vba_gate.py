@@ -154,10 +154,12 @@ TEKST_NASTAVCI = (".bas", ".cls", ".frm", ".doccls")
 # odgovara, i ne mora: sve iz `SUITES` se proverava po IMENU (da procedura
 # postoji), a konvencija sluzi samo da nadje ono sto u katalogu NIJE.
 #
-# Vidljivost i lista argumenata se NE proveravaju ovde nego kroz
-# `vba_check.JAVNA_PROC_ARG` -- jedna definicija "javne procedure modula" za ceo
-# tooling sloj. Prva verzija je trazila literalni "Public Sub" i time propustala
-# `Sub RunNovaSuite()`, koja je u VBA javna isto kao i sa modifikatorom.
+# Vidljivost i argumenti se NE proveravaju ovde nego kroz
+# `vba_check.deklaracija_procedure` -- jedan razlagac deklaracije za ceo tooling
+# sloj. Dva promasaja koja su se tu vec platila: izraz je trazio literalni
+# "Public Sub" (a modifikator je opcion, default Public), pa literalne "()" (a
+# zagrade su opcione, pa je `Sub RunFooSuite` validna javna suite bez
+# argumenata). Oba su bila nevidljiva, i oba su obarala glavnu tvrdnju popisa.
 IME_SUITE = re.compile(r"^(?:Run\w*(?:Suite|Tests)|Test\w*_All)$")
 
 MIN_RAZLOG = 40
@@ -187,6 +189,12 @@ SUITE_VAN_KAPIJA = {
         "(modSEFClient.bas) i pad broji u lokalnu promenljivu. Zatvara se "
         "premestanjem u modSEFTests uz Err.Raise, ili brisanjem ako su te tvrdnje "
         "pokrivene drugde."),
+    "RunSEFOfflineSuite": (
+        "SEF tok bez mreze. Nasao je razlagac, jer je deklarisana sa JEDNIM "
+        "OPCIONIM argumentom (`Optional ByVal fakturaID As String = \"\"`) -- "
+        "stari izraz je trazio praznu listu i preskakao je. Telo nema Err.Raise "
+        "nego LogFatal, pa bi prikljucena bila BLIND: zatvara se Err.Raise-om na "
+        "kraju, pa unosom u SUITES sa gate: True."),
 }
 
 
@@ -211,22 +219,22 @@ def katalog_suita() -> dict:
     return _ucitaj_run_vba().SUITES
 
 
-def _javni_izraz():
-    """`vba_check.JAVNA_PROC_ARG` -- jedna definicija javne procedure modula.
+def _razlagac():
+    """`vba_check.deklaracija_procedure` -- jedan razlagac za ceo tooling sloj.
 
     Uvozi se LENJO, iz funkcije: `vba_check` sa svoje strane uvozi ovaj modul
     zbog kapije popisa, pa bi uvoz na nivou modula bio kruzan. Na toj (hook)
-    putanji vba_check izraz PREDAJE, pa se ne uvozi dvaput; ovaj put placa samo
-    samostalni `--popis`.
+    putanji vba_check razlagac PREDAJE, pa se ne uvozi dvaput; ovaj put placa
+    samo samostalni `--popis`.
     """
     put = os.path.join(ROOT, "tools", "vba_check.py")
     spec = importlib.util.spec_from_file_location("_vba_check_za_gate", put)
     modul = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(modul)
-    return modul.JAVNA_PROC_ARG
+    return modul.deklaracija_procedure
 
 
-def skeniraj(src_dir: str = SRC_VBA, proc_izraz=None) -> tuple:
+def skeniraj(src_dir: str = SRC_VBA, razlagac=None) -> tuple:
     """(javne, po_konvenciji) iz JEDNOG prolaza kroz src-vba.
 
     Jedan prolaz, ne dva: provera ide kroz `vba_check`, dakle kroz PostToolUse
@@ -236,13 +244,20 @@ def skeniraj(src_dir: str = SRC_VBA, proc_izraz=None) -> tuple:
     POSTOJANJE imena iz kataloga -- ukljucujuci implicitno javne, bez
     modifikatora.
 
-    `po_konvenciji` su kandidati za ulaznu tacku suite-a: javna, BEZ argumenata,
-    imena po konvenciji, i samo u `.bas`. Makro se po imenu zove jedino iz
-    standardnog modula, pa `Sub RunFooSuite()` u klasi ili formi nije suite koju
-    bi kapija mogla da pokrene. `Function` se prihvata uz `Sub`: i nju
-    `Application.Run` zove po imenu, pa bi inace bila ista rupa drugog oblika.
+    `po_konvenciji` su kandidati za ulaznu tacku suite-a, i to su TRI uslova nad
+    razlozenom deklaracijom, ne jedan izraz:
+
+      javna (Public ili bez modifikatora)
+      + NULA OBAVEZNIH argumenata -- `Sub Foo`, `Sub Foo()` i
+        `Sub Foo(Optional x)` se sve zovu po imenu bez argumenta
+      + ime po konvenciji, i samo u `.bas`
+
+    `.bas` jer se makro po imenu zove jedino iz standardnog modula: `Sub
+    RunFooSuite()` u klasi ili formi nije suite koju bi kapija mogla da pokrene.
+    `Function` se prihvata uz `Sub`: i nju `Application.Run` zove po imenu, pa bi
+    inace bila ista rupa drugog oblika.
     """
-    proc_izraz = _javni_izraz() if proc_izraz is None else proc_izraz
+    razlagac = _razlagac() if razlagac is None else razlagac
     javne, po_konvenciji = {}, {}
     if not os.path.isdir(src_dir):
         return javne, po_konvenciji
@@ -252,22 +267,25 @@ def skeniraj(src_dir: str = SRC_VBA, proc_izraz=None) -> tuple:
         with io.open(os.path.join(src_dir, ime), encoding="ascii",
                      errors="replace", newline="") as fh:
             tekst = fh.read().replace("\r\n", "\n")
-        for m in proc_izraz.finditer(tekst):
-            bez_arg = not m.group(3).strip()
-            javne.setdefault(m.group(2), (ime, bez_arg))
-            if ime.endswith(".bas") and bez_arg and IME_SUITE.match(m.group(2)):
-                po_konvenciji.setdefault(m.group(2), ime)
+        for red in tekst.split("\n"):
+            d = razlagac(red)
+            if not d or not d["javna"] or d["vrsta"] == "property":
+                continue
+            bez_arg = d["obaveznih"] == 0
+            javne.setdefault(d["ime"], (ime, bez_arg))
+            if ime.endswith(".bas") and bez_arg and IME_SUITE.match(d["ime"]):
+                po_konvenciji.setdefault(d["ime"], ime)
     return javne, po_konvenciji
 
 
 def popis_problemi(suites: dict = None, registar: dict = None,
                    src_dir: str = SRC_VBA, skenirano: tuple = None,
-                   proc_izraz=None) -> list:
+                   razlagac=None) -> list:
     """Nalazi iz popisa suita. Prazna lista = cisto."""
     suites = katalog_suita() if suites is None else suites
     registar = SUITE_VAN_KAPIJA if registar is None else registar
     if skenirano is None:
-        javne, po_konvenciji = skeniraj(src_dir, proc_izraz)
+        javne, po_konvenciji = skeniraj(src_dir, razlagac)
     else:
         javne, po_konvenciji = skenirano
 
@@ -753,9 +771,9 @@ def _self_test(tiho: bool = False) -> int:
     import tempfile
 
     nalazi = []
-    # PRAVI deljeni izraz, ne kopija: self-test time meri i to da je
+    # PRAVI deljeni razlagac, ne kopija: self-test time meri i to da je
     # definicija "javne procedure" stvarno jedna za ceo tooling sloj.
-    IZRAZ = _javni_izraz()
+    RAZLAGAC = _razlagac()
 
     def tvrdi(uslov, opis):
         if not uslov:
@@ -780,9 +798,17 @@ def _self_test(tiho: bool = False) -> int:
 
         def popis(suites=SUITES, registar=None, src_dir=src):
             return popis_problemi(suites, registar or {}, src_dir,
-                                  proc_izraz=IZRAZ)
+                                  razlagac=RAZLAGAC)
 
         tvrdi(not popis(), "POPIS: cist izvor daje nalaz")
+
+        # Razlagac odbija red koji NIJE deklaracija (ime pa nesto trece), a
+        # prihvata deklaraciju sa tipom povratka bez zagrada.
+        tvrdi(RAZLAGAC("Sub RunNijeSuite: Bar") is None,
+              "RAZLAGAC: red koji nije deklaracija se razlaze kao deklaracija")
+        tvrdi((RAZLAGAC("Function RunTipSuite As String") or {}).get(
+                  "obaveznih") == 0,
+              "RAZLAGAC: deklaracija sa tipom povratka bez zagrada se odbija")
 
         # IMPLICITNO JAVNA suite: `Sub RunX()` je u VBA Public po defaultu.
         # Prva verzija je trazila literalni "Public Sub" i ovo je bilo
@@ -828,11 +854,38 @@ def _self_test(tiho: bool = False) -> int:
               "POPIS: unos kog nema u src-vba nije MRTAV UNOS")
         os.remove(os.path.join(src, "modNov.bas"))
 
-        # Procedura sa argumentima nije ulazna tacka suite-a.
+        # BEZ ZAGRADA. VBA: `Sub name [ ( arglist ) ]` -- zagrade su opcione, pa
+        # je ovo validna javna suite bez argumenata. Izraz koji je trazio "()" ju
+        # je potpuno promasivao.
+        with io.open(os.path.join(src, "modBZ.bas"), "w", newline="") as fh:
+            fh.write("Sub RunBezZagradaSuite\r\nEnd Sub\r\n")
+        tvrdi(any("NEPOKRETANA" in n and "RunBezZagradaSuite" in n
+                  for n in popis()),
+              "POPIS: suite BEZ ZAGRADA (`Sub RunFooSuite`) je nevidljiva")
+        os.remove(os.path.join(src, "modBZ.bas"))
+
+        # Kontrola: procedura SA obaveznim argumentom nije ulazna tacka.
         with io.open(os.path.join(src, "modP.bas"), "w", newline="") as fh:
             fh.write("Public Sub RunNestoSuite(ByVal x As Long)\r\nEnd Sub\r\n")
         tvrdi(not popis(), "POPIS: procedura SA argumentima se broji kao suite")
         os.remove(os.path.join(src, "modP.bas"))
+
+        # Isto i bez zagrada u kontroli: `Sub RunSaArgumentomSuite(ByVal x)`.
+        with io.open(os.path.join(src, "modPA.bas"), "w", newline="") as fh:
+            fh.write("Sub RunSaArgumentomSuite(ByVal x As Long)\r\n"
+                     "End Sub\r\n")
+        tvrdi(not popis(),
+              "POPIS: implicitno javna procedura SA argumentom je kandidat")
+        os.remove(os.path.join(src, "modPA.bas"))
+
+        # OPCIONI argument nije obavezan -- takva se zove po imenu bez argumenta,
+        # pa JE ulazna tacka.
+        with io.open(os.path.join(src, "modOP.bas"), "w", newline="") as fh:
+            fh.write("Sub RunOpcioniSuite(Optional ByVal x As Long = 1)\r\n"
+                     "End Sub\r\n")
+        tvrdi(any("RunOpcioniSuite" in n for n in popis()),
+              "POPIS: suite sa samo OPCIONIM argumentom je nevidljiva")
+        os.remove(os.path.join(src, "modOP.bas"))
 
         # Isto ime u KLASI nije suite: makro se po imenu zove samo iz .bas.
         with io.open(os.path.join(src, "clsX.cls"), "w", newline="") as fh:

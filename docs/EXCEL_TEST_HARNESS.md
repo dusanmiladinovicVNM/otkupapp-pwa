@@ -194,30 +194,49 @@ python tools/vba_gate.py --popis
 ```
 
 Takva suite je **nevidljiva**: katalog `SUITES` ne zna da procedura postoji, pa je
-ne pominje ni kao preskočenu. Pri prvom pokretanju su nađene **četiri** —
+ne pominje ni kao preskočenu. Danas ih je **pet** —
 `RunHttpUtilsSmokeSuite`, `RunSEFDocumentIdShapeSuite`, `RunSEFStateTransitionSuite`,
-`RunSEFClientParserSmokeSuite` — i njihova zaglavlja to i kažu naglas
-(„Pozivaj sa: `?RunHttpUtilsSmokeSuite` / Ocekivano: PASS=18"), dakle i verdikt i
-očekivan broj žive u komentaru. Nijedna nema `Err.Raise` u telu, pa bi i
+`RunSEFClientParserSmokeSuite`, `RunSEFOfflineSuite` — i njihova zaglavlja to i kažu
+naglas („Pozivaj sa: `?RunHttpUtilsSmokeSuite` / Ocekivano: PASS=18"), dakle i
+verdikt i očekivan broj žive u komentaru. Nijedna nema `Err.Raise` u telu, pa bi i
 priključena bila `BLIND` — to je posao koji svaki unos zatvara.
 
 `SUITE_VAN_KAPIJA` je zato **registar, ne izuzetak**: prazan ili prekratak razlog
 je nalaz, i zastareo unos je nalaz (suite obrisana, ili je u međuvremenu u
 `SUITES`). Isti oblik i isti razlog kao `MRTAV_UNOS` u `vba_hard_census`.
 
-**Procedura bez modifikatora je u VBA Public.** `Sub RunFooSuite()` je isto što i
-`Public Sub RunFooSuite()`, pa scanner koji traži literalni `Public` propušta
-validnu javnu suite — CI zelen, suite nevidljiva. Definicija „javne procedure
-modula" zato stoji **na jednom mestu**, `vba_check.JAVNA_PROC_ARG`, i dele je obe
-provere: `DUPLIKAT` („Ambiguous name detected") i ovaj popis. `Const` je obrnuto —
-modul-level `Const X = 1` bez modifikatora je **Private** — i ta asimetrija je u
-kodu, ne u glavi: široki izraz bez nje prijavi 609 „javnih imena", sve lokalni
-`Const SRC` po procedurama.
+### Jedan razlagač deklaracije, ne sve širi izraz
 
-Ulazna tačka se traži **samo u `.bas` i samo bez argumenata** — makro se po imenu
-poziva jedino iz standardnog modula, pa `Sub RunFooSuite()` u klasi nije suite koju
-bi kapija mogla da pokrene. `Function` se prihvata uz `Sub`: i nju
-`Application.Run` zove po imenu.
+VBA deklaracija je `[Public|Private|Friend] [Static] Sub|Function name [ ( arglist ) ]`,
+i izraz koji je čita lako vidi **manje** od toga. Tri promašaja koji su se ovde
+platili, svaki kao nevidljiva suite:
+
+| što izraz promaši | zašto je važno |
+|---|---|
+modifikator je **opcion** | `Sub RunFooSuite()` je javna, default je Public |
+zagrade su **opcione** | `Sub RunFooSuite` je validna javna suite bez argumenata |
+**opcioni** argument nije obavezan | `Sub RunFooSuite(Optional x)` se zove po imenu bez argumenta |
+
+Treći je našao `RunSEFOfflineSuite` — deklarisanu kao
+`Public Sub RunSEFOfflineSuite(Optional ByVal fakturaID As String = "")`. Izraz koji
+je tražio **praznu** listu argumenata ju je preskakao.
+
+Zato `vba_check.deklaracija_procedure` vraća **polja** (vidljivost, vrsta, ime,
+`ima_zagrade`, argumenti, broj **obaveznih** argumenata), a odluka stoji kao uslov
+nad njima:
+
+```
+javna  +  .bas  +  nula OBAVEZNIH argumenata  +  ime po konvenciji
+```
+
+`.bas` jer se makro po imenu poziva jedino iz standardnog modula; `Function` se
+prihvata uz `Sub`, jer je i nju `Application.Run` zove po imenu.
+
+Razlagač je **jedan za ceo tooling sloj** — dele ga `DUPLIKAT` („Ambiguous name
+detected") i ovaj popis. `Const` ne ide kroz njega: modul-level `Const X = 1` bez
+modifikatora je **Private**, obrnuto od procedure. Ta asimetrija je u kodu, ne u
+glavi: široki izraz bez nje prijavi 609 „javnih imena", sve lokalni `Const SRC` po
+procedurama.
 
 **2) Da li je baš OVAJ izvor prošao testove?**
 

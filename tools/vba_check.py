@@ -98,31 +98,100 @@ MODULE_DECL = re.compile(
     r"^(Public|Private|Global)\s+"
     r"(Const\b|Declare\b|Type\b|Enum\b|WithEvents\b|\w+\s+As\b|\w+\s*\()", re.IGNORECASE)
 
-# PROCEDURA BEZ MODIFIKATORA JE PUBLIC. `Sub Foo()` je u VBA isto sto i
-# `Public Sub Foo()` -- modifikator je opcion, a default je Public. `Const` je
-# OBRNUTO: modul-level `Const X = 1` bez modifikatora je PRIVATE. Zato Const ide
-# samo uz eksplicitni `Public`, a Sub/Function i bez njega.
+# --- jedan razlagac deklaracije procedure za ceo tooling sloj ---------------
 #
-# Bez te asimetrije provera gleda pola stvarnosti u DVA alata: `DUPLIKAT` ne bi
-# video implicitno javnu proceduru istog imena u dva modula (VBA tada javi
-# "Ambiguous name detected"), a `vba_gate --popis` ne bi video napisanu test
-# suite deklarisanu kao `Sub RunFooSuite()`. Mereno nad src-vba: tri implicitno
-# javne procedure (modBankaImportParserPdfToText), nijedna se ne sudara -- pa
-# sirenje ne donosi nov nalaz, ali zatvara rupu za sledecu.
+# VBA: `[Public|Private|Friend] [Static] Sub|Function name [ ( arglist ) ]`.
+# Tri stvari koje izraz lako promasi, i svaka je vec bila rupa u popisu suita:
 #
-# Prvo merenje je ovo promasilo i prijavilo 609 "javnih imena": siri izraz bez
-# asimetrije hvata i lokalni `Const SRC` iz svake procedure.
-PUBLIC_PROC = re.compile(
-    r"^(?:Public\s+(?:Static\s+)?(?:Sub|Function|Const)"
-    r"|(?:Static\s+)?(?:Sub|Function))\s+(\w+)", re.IGNORECASE)
+#   1. MODIFIKATOR JE OPCION, a default je Public -- `Sub Foo()` je javna.
+#   2. ZAGRADE SU OPCIONE -- `Sub Foo` je validna javna procedura bez
+#      argumenata, i upravo upotrebljiva kao ulazna tacka suite-a.
+#   3. OPCIONI ARGUMENT NIJE OBAVEZAN -- `Sub Foo(Optional x As Long)` se zove
+#      po imenu bez ijednog argumenta, pa je i ona ulazna tacka.
+#
+# Zato razlagac vraca POLJA, a odluka ("kandidat za suite", "javno ime") stoji
+# kao uslov nad njima -- ne kao sve siri izraz. Siri izraz je ovde opasan u
+# drugom smeru: `()` kao opcione lako pocnu da klasifikuju proceduru SA
+# argumentima kao zero-arg.
+#
+# `Const` NE ide kroz razlagac: modul-level `Const X = 1` bez modifikatora je
+# PRIVATE, obrnuto od procedure (v. PUBLIC_CONST). Prvo merenje te asimetrije ju
+# je promasilo i prijavilo 609 "javnih imena" -- sve lokalni `Const SRC`.
+_DEKL_PROC = re.compile(
+    r"^(?:(?P<vid>Public|Private|Friend)\s+)?(?:Static\s+)?"
+    r"(?P<vrsta>Sub|Function|Property)\s+(?:(?:Get|Let|Set)\s+)?"
+    r"(?P<ime>\w+)\s*(?P<ostatak>.*)$", re.IGNORECASE)
+_VRACA_TIP = re.compile(r"^As\s+\w", re.IGNORECASE)
+_NIJE_OBAVEZAN = re.compile(r"(?:Optional|ParamArray)\b", re.IGNORECASE)
 
-# ISTA definicija javne procedure modula, ali SA listom argumenata -- koristi je
-# `tools/vba_gate.py` za popis test suita (ulazna tacka suite-a ne prima
-# argumente). Jedna definicija za oba alata; druga kopija bi bila druga stvar
-# koja moze da se razidje.
-JAVNA_PROC_ARG = re.compile(
-    r"^(?:Public\s+)?(?:Static\s+)?(Sub|Function)\s+(\w+)\s*\(([^)]*)\)",
-    re.IGNORECASE | re.M)
+# Public Const deli globalni imenski prostor; implicitni modul-level Const NE.
+PUBLIC_CONST = re.compile(
+    r"^Public\s+(?:Static\s+)?Const\s+(\w+)", re.IGNORECASE)
+
+
+def _arglist(ostatak: str) -> tuple:
+    """(ima_zagrade, argumenti) iz ostatka reda posle imena procedure."""
+    ostatak = ostatak.strip()
+    if not ostatak.startswith("("):
+        return False, ""
+    dubina = 0
+    for i, c in enumerate(ostatak):
+        if c == "(":
+            dubina += 1
+        elif c == ")":
+            dubina -= 1
+            if dubina == 0:
+                return True, ostatak[1:i]
+    return True, ostatak[1:]          # nezatvorena zagrada: uzmi sve
+
+
+def _obaveznih_argumenata(argumenti: str) -> int:
+    """Koliko argumenata se MORA dati. Optional i ParamArray se ne broje."""
+    broj, dubina, tekuci = 0, 0, ""
+    for c in argumenti + ",":
+        if c == "(":
+            dubina += 1
+        elif c == ")":
+            dubina -= 1
+        if c == "," and dubina == 0:
+            t = tekuci.strip()
+            if t and not _NIJE_OBAVEZAN.match(t):
+                broj += 1
+            tekuci = ""
+        else:
+            tekuci += c
+    return broj
+
+
+def deklaracija_procedure(red: str) -> dict:
+    """Razlozena deklaracija procedure, ili None ako red nije deklaracija.
+
+    Jedna definicija za ceo tooling sloj: dele je `collect_public` (kapija
+    DUPLIKAT) i `tools/vba_gate.py` (popis test suita). Druga kopija bi bila
+    druga stvar koja moze da se razidje -- a oba promasaja nadjena u popisu su
+    bila upravo "izraz vidi manje od VBA sintakse".
+
+    Polja: vidljivost, javna, vrsta, ime, ima_zagrade, argumenti, obaveznih.
+    `javna` je True i bez modifikatora (default je Public); `Friend` nije javno
+    u smislu globalnog imenskog prostora standardnog modula.
+    """
+    m = _DEKL_PROC.match(red)
+    if not m:
+        return None
+    ostatak = (m.group("ostatak") or "").strip()
+    ima_zagrade, argumenti = _arglist(ostatak)
+    if not ima_zagrade and ostatak and not _VRACA_TIP.match(ostatak):
+        return None                   # ime pa nesto trece -- nije deklaracija
+    vid = (m.group("vid") or "").lower()
+    return {
+        "vidljivost": vid or "implicitno",
+        "javna": vid in ("", "public"),
+        "vrsta": m.group("vrsta").lower(),
+        "ime": m.group("ime"),
+        "ima_zagrade": ima_zagrade,
+        "argumenti": argumenti,
+        "obaveznih": _obaveznih_argumenata(argumenti),
+    }
 
 # --- izuzetak od DUPLIKAT-a: ugovor ekrana novog UI-ja ---------------------
 #
@@ -611,7 +680,11 @@ def collect_public(path: str, lines: list[str]) -> list[tuple[str, int]]:
             continue
         if cond_depth:
             continue
-        m = PUBLIC_PROC.match(line)
+        d = deklaracija_procedure(line)
+        if d and d["javna"] and d["vrsta"] in ("sub", "function"):
+            out.append((d["ime"], i))
+            continue
+        m = PUBLIC_CONST.match(line)
         if m:
             out.append((m.group(1), i))
     return out
@@ -3500,9 +3573,9 @@ def check_popis_suita(tiho: bool = False) -> int:
     modul = importlib.util.module_from_spec(spec)
     try:
         spec.loader.exec_module(modul)
-        # Izraz se PREDAJE, da se vba_check ne uvozi drugi put na ovoj
-        # (hook) putanji -- v. `_javni_izraz` u vba_gate.
-        nalazi = modul.popis_problemi(proc_izraz=JAVNA_PROC_ARG)
+        # Razlagac se PREDAJE, da se vba_check ne uvozi drugi put na ovoj
+        # (hook) putanji -- v. `_razlagac` u vba_gate.
+        nalazi = modul.popis_problemi(razlagac=deklaracija_procedure)
     except Exception as e:                       # pokvaren alat je isto nalaz
         print(f"POPIS: tools/vba_gate.py se ne ucitava -- {e}", file=sys.stderr)
         return 2

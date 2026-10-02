@@ -389,7 +389,7 @@
 | `OTKUP_CONFLICT` lifecycle | deterministički konflikt ostaje retryable pending — vidljivo i bezbedno, ali traži svoj rez |
 | `DEGRADIRANO` grana ciklusa | `modGoogleSyncOrchestrator:384` — poslednji OTK razlog je nestao, sama grana nije |
 | `BuildOTKFixtureData` (smoke) | gradi pre-S5-5b oblik žice; suite je zatečeno crven i van FULL prolaza, a izmena se **ne može izmeriti** bez živog Google-a |
-| **četiri test suite-a koja nijedna kapija ne pokreće** | `RunHttpUtilsSmokeSuite`, `RunSEFDocumentIdShapeSuite`, `RunSEFStateTransitionSuite`, `RunSEFClientParserSmokeSuite`. Nađene `vba_gate.py --popis`-om; do tada nisu bile zapisane nigde. Nijedna nema `Err.Raise` u telu, pa bi i priključena bila `BLIND` — zato unos u `SUITES` nije dovoljan posao. Razlog i šta ga zatvara stoje u `SUITE_VAN_KAPIJA` |
+| **pet test suite-ova koje nijedna kapija ne pokreće** | `RunHttpUtilsSmokeSuite`, `RunSEFDocumentIdShapeSuite`, `RunSEFStateTransitionSuite`, `RunSEFClientParserSmokeSuite`, `RunSEFOfflineSuite`. Nađene `vba_gate.py --popis`-om; do tada nisu bile zapisane nigde (petu je našao razlagač deklaracije — ima jedan **opcioni** argument, pa ju je izraz koji je tražio praznu listu preskakao). Nijedna nema `Err.Raise` u telu, pa bi i priključena bila `BLIND` — zato unos u `SUITES` nije dovoljan posao. Razlog i šta ga zatvara stoje u `SUITE_VAN_KAPIJA` |
 | `.claude/rules/testovi.md` ne zna za JS kapiju | **samo process PR**, nikad uz feature izmenu |
 | Node 20 deprecation u tri GitHub akcije | process PR |
 | `popis_citalaca` javlja UPOZORENJE za `IzvedeniLanacIzPwaDostupan` | kapija ne postoji od #388 — očekivanje alata je zastarelo |
@@ -410,7 +410,10 @@
   njih: `docs/EXCEL_TEST_HARNESS.md` → „Grupni dokaz".
 - **Popis test suita: `python tools/vba_gate.py --popis`** — suite u kodu vs katalog `SUITES` vs registar
   `SUITE_VAN_KAPIJA`. Ide i kroz `vba_check` (dakle kroz hook) i kroz CI. Hvata napisanu suite koju
-  nijedna kapija ne pokreće, fantom u katalogu, i zastareo unos u registru.
+  nijedna kapija ne pokreće, fantom u katalogu, i zastareo unos u registru. Deklaracije čita **jedan
+  razlagač** (`vba_check.deklaracija_procedure`), deljen sa kapijom `DUPLIKAT`: modifikator i zagrade su
+  u VBA opcioni, a opcioni argument nije obavezan, pa je uslov „javna + `.bas` + nula **obaveznih**
+  argumenata + ime po konvenciji" — ne sve širi izraz.
 - **Marker zelenog: `python tools/vba_gate.py --require-green`** — rezultat **po suite-u** iz poslednjeg
   run-a (`tests/last_green.json`, gitignored; piše ga `run_vba.py`), uz **dva otiska**: `izvor` (`src-vba`)
   i `ugovor` (`izvor` + imenovani delovi `runner` / `fixture` / `kapija` / `golden` + verzija markera).
