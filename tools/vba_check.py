@@ -98,8 +98,168 @@ MODULE_DECL = re.compile(
     r"^(Public|Private|Global)\s+"
     r"(Const\b|Declare\b|Type\b|Enum\b|WithEvents\b|\w+\s+As\b|\w+\s*\()", re.IGNORECASE)
 
-PUBLIC_PROC = re.compile(
-    r"^Public\s+(?:Static\s+)?(?:Sub|Function|Const)\s+(\w+)", re.IGNORECASE)
+# --- jedan razlagac deklaracije procedure za ceo tooling sloj ---------------
+#
+# VBA: `[Public|Private|Friend] [Static] Sub|Function name [ ( arglist ) ]`.
+# Tri stvari koje izraz lako promasi, i svaka je vec bila rupa u popisu suita:
+#
+#   1. MODIFIKATOR JE OPCION, a default je Public -- `Sub Foo()` je javna.
+#   2. ZAGRADE SU OPCIONE -- `Sub Foo` je validna javna procedura bez
+#      argumenata, i upravo upotrebljiva kao ulazna tacka suite-a.
+#   3. OPCIONI ARGUMENT NIJE OBAVEZAN -- `Sub Foo(Optional x As Long)` se zove
+#      po imenu bez ijednog argumenta, pa je i ona ulazna tacka.
+#
+# Zato razlagac vraca POLJA, a odluka ("kandidat za suite", "javno ime") stoji
+# kao uslov nad njima -- ne kao sve siri izraz. Siri izraz je ovde opasan u
+# drugom smeru: `()` kao opcione lako pocnu da klasifikuju proceduru SA
+# argumentima kao zero-arg.
+#
+# `Const` NE ide kroz razlagac: modul-level `Const X = 1` bez modifikatora je
+# PRIVATE, obrnuto od procedure (v. PUBLIC_CONST). Prvo merenje te asimetrije ju
+# je promasilo i prijavilo 609 "javnih imena" -- sve lokalni `Const SRC`.
+# --- fizicki redovi -> LOGICKE IZJAVE --------------------------------------
+#
+# Razlagac ispod cita IZJAVU, ne fizicki red. Bez ovog sloja je svaki krug
+# review-a nalazio nov validan oblik koji mu je bio nevidljiv: uvucena
+# deklaracija, komentar na kraju reda, prelom reda u listi argumenata. To nije
+# bio niz izuzetaka nego pogresan sloj.
+_NASTAVAK = re.compile(r"\s_$")
+
+
+def _izjava_deo(red: str) -> tuple:
+    """(tekst reda bez komentara, da li se izjava nastavlja u sledecem redu).
+
+    String literal se CUVA: `"a,b"` ostaje ceo, pa ni zapeta ni apostrof u njemu
+    ne menjaju znacenje. VBA string ne poznaje escape osim udvojenih navodnika
+    (`""`), sto se prirodno resava prebacivanjem stanja na svakom `"`.
+
+    Komentar se skida PRE provere nastavka: `..., _   ' komentar` je u VBA syntax
+    error (`_` mora biti poslednji znak), pa je svejedno da li ga ovde tretiramo
+    kao nastavak -- a ovako se ne gubi deklaracija zbog zaostalog komentara.
+    """
+    u_str = False
+    kraj = len(red)
+    for i, c in enumerate(red):
+        if c == '"':
+            u_str = not u_str
+        elif c == "'" and not u_str:
+            kraj = i
+            break
+    tekst = red[:kraj].rstrip()
+    nastavlja = not u_str and bool(_NASTAVAK.search(tekst))
+    if nastavlja:
+        tekst = _NASTAVAK.sub("", tekst)
+    return tekst, nastavlja
+
+
+def logicke_izjave(tekst: str) -> list:
+    """[(izjava, broj PRVOG fizickog reda)] -- spojeni nastavci, bez komentara.
+
+    Broj reda je prvog fizickog: nalaz treba da pokaze na pocetak deklaracije, ne
+    na njen rep.
+    """
+    out, bafer, prvi = [], "", 0
+    for i, red in enumerate(tekst.replace("\r\n", "\n").split("\n"), 1):
+        deo, nastavlja = _izjava_deo(red)
+        if not bafer:
+            prvi = i
+        bafer = (bafer + " " + deo.strip()) if bafer else deo.strip()
+        if not nastavlja:
+            out.append((bafer, prvi))
+            bafer = ""
+    if bafer:
+        out.append((bafer, prvi))
+    return out
+
+
+_DEKL_PROC = re.compile(
+    r"^(?:(?P<vid>Public|Private|Friend)\s+)?(?:Static\s+)?"
+    r"(?P<vrsta>Sub|Function|Property)\s+(?:(?:Get|Let|Set)\s+)?"
+    r"(?P<ime>\w+)\s*(?P<ostatak>.*)$", re.IGNORECASE)
+_VRACA_TIP = re.compile(r"^As\s+\w", re.IGNORECASE)
+_NIJE_OBAVEZAN = re.compile(r"(?:Optional|ParamArray)\b", re.IGNORECASE)
+
+# Public Const deli globalni imenski prostor; implicitni modul-level Const NE.
+PUBLIC_CONST = re.compile(
+    r"^Public\s+(?:Static\s+)?Const\s+(\w+)", re.IGNORECASE)
+
+
+def _arglist(ostatak: str) -> tuple:
+    """(ima_zagrade, argumenti) iz ostatka reda posle imena procedure."""
+    ostatak = ostatak.strip()
+    if not ostatak.startswith("("):
+        return False, ""
+    dubina, u_str = 0, False
+    for i, c in enumerate(ostatak):
+        if c == '"':
+            u_str = not u_str
+        elif u_str:
+            continue
+        elif c == "(":
+            dubina += 1
+        elif c == ")":
+            dubina -= 1
+            if dubina == 0:
+                return True, ostatak[1:i]
+    return True, ostatak[1:]          # nezatvorena zagrada: uzmi sve
+
+
+def _obaveznih_argumenata(argumenti: str) -> int:
+    """Koliko argumenata se MORA dati. Optional i ParamArray se ne broje.
+
+    Deli po zapeti koja je VAN zagrada I VAN string literala. Bez drugog uslova
+    `Sub X(Optional s As String = "a,b")` izgleda kao dva argumenta, pa bi se
+    izmislio obavezan -- i suite bi postala nevidljiva popisu.
+    """
+    broj, dubina, u_str, tekuci = 0, 0, False, ""
+    for c in argumenti + ",":
+        if c == '"':
+            u_str = not u_str
+        elif not u_str and c == "(":
+            dubina += 1
+        elif not u_str and c == ")":
+            dubina -= 1
+        if c == "," and dubina == 0 and not u_str:
+            t = tekuci.strip()
+            if t and not _NIJE_OBAVEZAN.match(t):
+                broj += 1
+            tekuci = ""
+        else:
+            tekuci += c
+    return broj
+
+
+def deklaracija_procedure(red: str) -> dict:
+    """Razlozena deklaracija procedure, ili None ako red nije deklaracija.
+
+    Jedna definicija za ceo tooling sloj: dele je `collect_public` (kapija
+    DUPLIKAT) i `tools/vba_gate.py` (popis test suita). Druga kopija bi bila
+    druga stvar koja moze da se razidje -- a oba promasaja nadjena u popisu su
+    bila upravo "izraz vidi manje od VBA sintakse".
+
+    Polja: vidljivost, javna, vrsta, ime, ima_zagrade, argumenti, obaveznih.
+    `javna` je True i bez modifikatora (default je Public); `Friend` nije javno
+    u smislu globalnog imenskog prostora standardnog modula.
+    """
+    # Uvucena deklaracija je validna (`    Public Sub X()`), pa se vodeci razmak
+    # skida ovde -- a ne pretpostavlja da je pozivalac vec ocistio red.
+    m = _DEKL_PROC.match(red.strip())
+    if not m:
+        return None
+    ostatak = (m.group("ostatak") or "").strip()
+    ima_zagrade, argumenti = _arglist(ostatak)
+    if not ima_zagrade and ostatak and not _VRACA_TIP.match(ostatak):
+        return None                   # ime pa nesto trece -- nije deklaracija
+    vid = (m.group("vid") or "").lower()
+    return {
+        "vidljivost": vid or "implicitno",
+        "javna": vid in ("", "public"),
+        "vrsta": m.group("vrsta").lower(),
+        "ime": m.group("ime"),
+        "ima_zagrade": ima_zagrade,
+        "argumenti": argumenti,
+        "obaveznih": _obaveznih_argumenata(argumenti),
+    }
 
 # --- izuzetak od DUPLIKAT-a: ugovor ekrana novog UI-ja ---------------------
 #
@@ -578,7 +738,10 @@ def collect_public(path: str, lines: list[str]) -> list[tuple[str, int]]:
     jer se u projekat kompajlira samo jedna grana.
     """
     out, cond_depth = [], 0
-    for i, line in enumerate(lines, start=1):
+    # Preko LOGICKIH IZJAVA, ne fizickih redova: `Public Function X( _` u dva
+    # reda je jedna deklaracija, a uvucena deklaracija je validna. Dva sloja za
+    # istu stvar su vec tri puta divergirala, pa ih je ovde jedan.
+    for line, i in logicke_izjave("\n".join(lines)):
         stripped = line.strip().lower()
         if stripped.startswith("#if"):
             cond_depth += 1
@@ -588,7 +751,11 @@ def collect_public(path: str, lines: list[str]) -> list[tuple[str, int]]:
             continue
         if cond_depth:
             continue
-        m = PUBLIC_PROC.match(line)
+        d = deklaracija_procedure(line)
+        if d and d["javna"] and d["vrsta"] in ("sub", "function"):
+            out.append((d["ime"], i))
+            continue
+        m = PUBLIC_CONST.match(line)
         if m:
             out.append((m.group(1), i))
     return out
@@ -3460,6 +3627,38 @@ def check_dokaz_grupe(tiho: bool = False) -> int:
     return 2 if modul._self_test(tiho) else 0
 
 
+# --- popis test suita -------------------------------------------------------
+#
+# Suite koju nijedna kapija ne pokrece je nevidljiva: `SUITES` u run_vba.py ne zna
+# da procedura postoji, pa je ne pominje ni kao preskocenu. Zato provera ide ovde,
+# uz katalog sabotaza: oba nalaza nastaju BAS VBA izmenom (nova suite, obrisana
+# suite, suite prikljucena kapiji), i oba se vide bez Excela.
+#
+# Pravila i registar `SUITE_VAN_KAPIJA` su u tools/vba_gate.py, zajedno sa svojim
+# dvosmernim dokazom.
+def check_popis_suita(tiho: bool = False) -> int:
+    put = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vba_gate.py")
+    if not os.path.exists(put):
+        return 0
+    spec = importlib.util.spec_from_file_location("_gate_za_check", put)
+    modul = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(modul)
+        # Sloj se PREDAJE kao PAR (razlagac, izjave), da se vba_check ne uvozi
+        # drugi put na ovoj (hook) putanji -- v. `_razlagac` u vba_gate.
+        nalazi = modul.popis_problemi(
+            razlagac=(deklaracija_procedure, logicke_izjave))
+    except Exception as e:                       # pokvaren alat je isto nalaz
+        print(f"POPIS: tools/vba_gate.py se ne ucitava -- {e}", file=sys.stderr)
+        return 2
+    for n in nalazi:
+        print(f"POPIS-SUITA: {n}", file=sys.stderr)
+    if not nalazi and not tiho:
+        print(f"popis suita: {len(modul.katalog_suita())} u SUITES, "
+              f"{len(modul.SUITE_VAN_KAPIJA)} van kapija sa zapisanim razlogom")
+    return 2 if nalazi else 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Staticke provere nad src-vba")
     ap.add_argument("paths", nargs="*", help="konkretni fajlovi (podrazumevano ceo src-vba/)")
@@ -3485,7 +3684,8 @@ def main(argv: list[str]) -> int:
     # ijedne od ovih provera. Ovde se to vise ne moze zaobici.
     rc_kat = check_katalog_sabotaza(args.hook)
     rc_grupe = check_dokaz_grupe(args.hook)
-    rc_alata = rc_kat or rc_grupe
+    rc_popis = check_popis_suita(args.hook)
+    rc_alata = rc_kat or rc_grupe or rc_popis
 
     if not files:
         return rc_alata
@@ -3537,7 +3737,8 @@ def main(argv: list[str]) -> int:
                 # da pravila nad fajlovima nisu nasla nista.
                 krivci = " i ".join(ime for ime, rc in (
                     ("KATALOG SABOTAZA", rc_kat),
-                    ("PRAVILA GRUPISANJA DOKAZA", rc_grupe)) if rc)
+                    ("PRAVILA GRUPISANJA DOKAZA", rc_grupe),
+                    ("POPIS TEST SUITA", rc_popis)) if rc)
                 print(f"vba_check: pravila nad fajlovima cista "
                       f"({len(files)} fajlova), ali {krivci} ne prolazi.",
                       file=sys.stderr)

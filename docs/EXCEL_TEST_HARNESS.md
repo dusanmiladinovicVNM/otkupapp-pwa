@@ -182,6 +182,183 @@ Radi svuda (i u Claude Code sesiji na Linuxu). Proverava da strip VBA header-a n
 propušta header u kod — greška koja je jednom već prošla neopaženo i videla se
 tek kao `[break]` u naslovu VBE prozora na Windows mašini.
 
+### `tools/vba_gate.py` — popis suita i marker zelenog
+
+Dve stvari koje `run_vba.py` ne može da pita samo sebe. Oba rade bez Excela i idu
+kroz CI; `--popis` ide i kroz `vba_check`, dakle kroz `PostToolUse` hook.
+
+**1) Postoji li suite koju nijedna kapija ne pokreće?**
+
+```bash
+python tools/vba_gate.py --popis
+```
+
+Takva suite je **nevidljiva**: katalog `SUITES` ne zna da procedura postoji, pa je
+ne pominje ni kao preskočenu. Danas ih je **pet** —
+`RunHttpUtilsSmokeSuite`, `RunSEFDocumentIdShapeSuite`, `RunSEFStateTransitionSuite`,
+`RunSEFClientParserSmokeSuite`, `RunSEFOfflineSuite` — i njihova zaglavlja to i kažu
+naglas („Pozivaj sa: `?RunHttpUtilsSmokeSuite` / Ocekivano: PASS=18"), dakle i
+verdikt i očekivan broj žive u komentaru. Nijedna nema `Err.Raise` u telu, pa bi i
+priključena bila `BLIND` — to je posao koji svaki unos zatvara.
+
+`SUITE_VAN_KAPIJA` je zato **registar, ne izuzetak**: prazan ili prekratak razlog
+je nalaz, i zastareo unos je nalaz (suite obrisana, ili je u međuvremenu u
+`SUITES`). Isti oblik i isti razlog kao `MRTAV_UNOS` u `vba_hard_census`.
+
+### Deklaracija je izjava, ne fizički red
+
+Census je tri kruga review-a dobijao po jedan „nedostajući slučaj" u izraz. To nije
+bio niz izuzetaka nego **pogrešan sloj**: VBA deklaracija je izjava, a izjava se
+proteže preko redova, nosi komentar na kraju, sme biti uvučena, i u podrazumevanoj
+vrednosti sme imati zapetu ili apostrof unutar string literala.
+
+```
+fizički redovi  ->  LOGIČKE IZJAVE  ->  razlagač deklaracije
+```
+
+`vba_check.logicke_izjave` spaja nastavke (` _`), skida komentar **van** string
+literala i normalizuje razmak. `vba_check.deklaracija_procedure` onda vraća **polja**
+— vidljivost, vrsta, ime, `ima_zagrade`, argumenti, broj **obaveznih** argumenata —
+a odluka stoji kao uslov nad njima:
+
+```
+javna  +  .bas  +  nula OBAVEZNIH argumenata  +  ime po konvenciji
+```
+
+Šta je izraz promašivao, i svaki je bio nevidljiva suite:
+
+| oblik | zašto je validan |
+|---|---|
+`Sub RunFooSuite()` | modifikator je **opcion**, default je Public |
+`Sub RunFooSuite` | zagrade su **opcione** |
+`Sub RunFooSuite(Optional x)` | **opcioni** argument nije obavezan |
+`    Public Sub RunFooSuite()` | uvučena deklaracija je validna |
+`Sub RunFooSuite ' test` | komentar na kraju izjave |
+`Sub RunFooSuite( _` + sledeći red | prelom reda u listi argumenata |
+`Sub RunFooSuite(Optional s = "a,b")` | zapeta u **string literalu** nije separator |
+
+Treći red je našao `RunSEFOfflineSuite` — deklarisanu kao
+`Public Sub RunSEFOfflineSuite(Optional ByVal fakturaID As String = "")`. Izraz koji
+je tražio **praznu** listu argumenata ju je preskakao.
+
+`.bas` jer se makro po imenu poziva jedino iz standardnog modula; `Function` se
+prihvata uz `Sub`, jer je i nju `Application.Run` zove po imenu.
+
+Oba sloja su **jedna za ceo tooling sloj** — dele ih `DUPLIKAT` („Ambiguous name
+detected") i ovaj popis. Prelazak `collect_public` na logičke izjave je izmeren:
+skup javnih imena nad svim `.bas` fajlovima je **identičan** (0 dodato, 0
+izgubljeno), pa `DUPLIKAT` nije promenjen. `Const` ne ide kroz razlagač: modul-level
+`Const X = 1` bez modifikatora je **Private**, obrnuto od procedure — široki izraz
+bez te asimetrije prijavi 609 „javnih imena", sve lokalni `Const SRC`.
+
+### „Javna deklaracija negde" nije ulazna tačka
+
+Census je dugo značio *„negde postoji javna deklaracija tog imena"*, a treba da
+znači *„`Application.Run` to može pozvati u aktivnom compile kontekstu"*. Razlika
+nije akademska — tri oblika postoje, a `xl.Run("<ime>")` pada:
+
+| oblik | zašto nije ulazna tačka |
+|---|---|
+`clsX.cls` / `frmX.frm` / `.doccls` | javna metoda klase ili forme je član objekta, ne makro |
+unutar `#If … #End If` | u aktivnom projektu te grane možda nema |
+sa **obaveznim** argumentom | runner zove bez argumenata |
+
+Zato postoji jedan pojam, `je_ulazna_tacka`, sa pet uslova koji su svi runtime
+činjenice: **`.bas` + javna + `Sub`/`Function` + nula obaveznih + bezuslovna**. Nalaz
+imenuje **koji** uslov je pao:
+
+```
+nema deklaracije                 -> FANTOM
+deklarisana, ali ne kao makro    -> NIJE ULAZNA TACKA -- <razlog>
+suite po imenu, samo u #If       -> USLOVNA
+```
+
+Deklaracije se pamte kao **lista po imenu**, ne jedna vrednost: sa `setdefault` je
+ishod zavisio od abecednog redosleda fajlova, pa je isto ime u `.bas` i `.cls` moglo
+dati dva odgovora na dve mašine. Uslovna ulazna tačka je namerno **nalaz**, ne tiho
+priznanje — ako jednog dana treba, modeluje se izričito po compile targetu.
+
+Isto pravilo važi za `SUITE_VAN_KAPIJA`: unos koji nije ulazna tačka ne opisuje
+samostalnu suite.
+
+**2) Da li je baš OVAJ izvor prošao testove?**
+
+```bash
+python tools/vba_gate.py --status           # izvor, ugovor, marker po suite-u
+python tools/vba_gate.py --require-green    # exit 0 samo ako je ovaj izvor dokazan
+python tools/vba_gate.py --require-green --require-compile
+python tools/vba_gate.py --mark-compile     # posle Debug > Compile VBAProject
+```
+
+„Suite su bile zelene" je tvrdnja o **nekom** izvoru. Posle rebase-a, amend-a ili
+jedne usputne izmene ta rečenica i dalje stoji a više ne važi. `run_vba.py` zato na
+kraju run-a piše marker (`tests/last_green.json`, **gitignored**) sa rezultatom
+**po suite-u** i otiscima pod kojima je nastao.
+
+**Dva otiska, ne jedan.** Otisak samog `src-vba` ne dokazuje da je dokaz izvršen
+nad *ovim* test sistemom:
+
+| otisak | šta pokriva | koristi ga |
+|---|---|---|
+`izvor` | `src-vba` (bez `modBuildInfo.bas`) | compile evidence |
+`ugovor` | `izvor` + `runner` + `fixture` + `kapija` + `golden` + verzija markera | dokaz suita |
+
+Delovi ugovora su **imenovani**, pa nalaz kaže *koji* se promenio:
+
+| deo | fajl | zašto je u ugovoru |
+|---|---|---|
+`runner` | `tools/run_vba.py` | odlučuje koja suite postoji, da li je `gate` i kako se čita rezultat |
+`fixture` | `tools/make_fixture.py` | određuje podatke nad kojima testovi rade |
+`kapija` | `tools/vba_gate.py` | odlučuje **šta se priznaje kao dokaz** |
+`golden` | `tests/golden/*` | `RunGoldenSuite` meri ishod protiv njih |
+
+`kapija` je tu zbog asimetrije koja je inače ostala: alat je automatski hvatao
+promenu test **runnera**, a ne i promenu **verifikatora** koji odlučuje da li
+runnerov rezultat važi. `MARKER_VERZIJA` to pokriva samo ako se čovek seti da je
+bumpuje — a to je baš ona ručna disciplina koju alat zamenjuje. Verzija ostaje, kao
+izričita oznaka namere, ne kao jedina brana.
+
+Razdvojeni su od `izvor`-a zato što **compile pripada samo izvoru**: `Debug > Compile`
+ne zna za golden fajlove, pa potvrda ne sme da propadne zato što se jedan promenio.
+
+**Kontekst se snima PRE run-a, i upis je fail-closed.** Otisci računati na kraju
+opisuju stanje diska **posle** testova, a ne ono što je testirano — a prolaz traje
+20–60 minuta i razvoj ide paralelno, pa je prozor stvaran:
+
+```
+snimi kontekst  ->  kopiraj/uvezi TAČNO taj  ->  testovi
+   ->  proveri da se ništa nije promenilo  ->  upiši SNIMLJENO
+```
+
+`run_vba` snima kontekst pre nego što Excel krene, i to **nad temp kopijom** sveske
+(ona je ono što Excel otvara, pa heš iz nje nema prozor između „pročitao sam fixture
+radi heša" i „kopirao sam ga"). `zabelezi_prolaz` ga samo prima; pre upisa tvrdi da
+se `src-vba`, ugovor i sveska nisu promenili. Ako jesu, **run može biti zelen a
+marker se ne upisuje** — bolje nema dokaza nego dokaz o stanju koje nije mereno.
+
+Šta marker **ne** upisuje: pao run; `--no-import` run (kod u svesci tada nije
+`src-vba`, pa bi otisak lagao o tome šta je izvršeno); **`BLIND` suite kao
+dokazanu** — `gate: False` znači „prošla bez greške", što nije „sve provere
+prošle"; i upis **bez snimka konteksta**. Potvrda compile-a (`--mark-compile`)
+vezana je za **otisak izvora**, pa potvrda data nad jednim izvorom prestaje da važi
+za sledeći (to se već desilo, kao P3 u review-u #400).
+
+**Kontekst sveske je identitet, ne ime.** Uz svaki rezultat se pamte putanja i
+**heš sadržaja** izvorne sveske (ne temp kopije — `run_vba` je prvo kopira, pa je
+izvor stabilan). Basename ne razlikuje `C:\A\test.xlsm` od `D:\B\test.xlsm`, a
+podrazumevani fixture je **gitignored i regeneriše se**: bez heša sadržaja zamena
+sveske bi ostavila prethodni GREEN na nogama. `make_fixture.signature()` to ne
+pokriva i nije mu namena — on opisuje deklarativni seed/config, a sveska je izvedena
+iz donora, pa dve različite sveske mogu imati isti potpis generatora. Zato
+`run_vba --workbook X.xlsm` ne zadovoljava podrazumevani zahtev (traži se
+`--sveska <putanja>`), a ni zamenjen fixture ne prolazi pod starim dokazom.
+
+Otisak izvora normalizuje prelome i **izuzima `modBuildInfo.bas`** — `stamp-build`
+ga prepisuje pred svaki `ImportAllVBA`, pa bi inače stamp obarao marker baš u
+trenutku release-a. Nije isti otisak kao `dokaz.py._otisak`, i ne treba da bude:
+tamo se porede dva stanja u istom procesu (pa je sirov bajt tačno ono što se
+traži), ovde dva procesa i dve mašine.
+
 ## Ako zapne
 
 - Skripta ima **tvrdi prekid** (`--timeout`, default 600 s): ako Excel prestane da
