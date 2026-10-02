@@ -510,6 +510,48 @@ jedina tvrdnja koja razlikuje `CDate` od determinističkog parsera **na DMY
 mašini**. Razliku na MDY mašini ne pokriva nijedan test i to se ne prijavljuje kao
 pokriveno.
 
+### Grupni dokaz — `--grupe`
+
+Cena punog dokaza je **prolaz suite-a po sabotaži**, ne sama mutacija: BFP traje
+~150 s, a režija jednog poziva je ~18 s. Zato `dokaz.py --grupe N` pušta do N
+mutacija u **jednom** prolazu:
+
+```bash
+python tools/dokaz.py amb-pisac --grupe        # N = 6
+python tools/dokaz.py --grupe 8 --plan         # samo podela, bez Excela
+```
+
+Izmereno nad katalogom od 649 sabotaža: `2 → 325` prolaza, `4 → 167`,
+**`6 → 118` (5,5×)**, `8 → 95`, `12 → 71`. Na jednom rezu je dobitak manji jer
+pravila vežu grupu — `amb-pisac` je 20 sabotaža → **9** prolaza (2,2×).
+
+Koliko ih sme zajedno, odlučuju četiri tvrda pravila: **ista suita**, **različit
+test**, **različit ključ** poređenja, **različita procedura** (i poznata). Zašto
+baš ta četiri i šta bi grupni prolaz bez svakog od njih prećutao — u
+docstring-u nad `naprav_grupe`.
+
+**Grupni prolaz tvrdi manje od pojedinačnog.** Dokazuje da je svaka tvrdnja
+osetljiva na mutacije grupe **zajedno** — ne i da je baš njena mutacija oborila
+baš nju. Zato verdikt glasi `DOKAZANO (grupno)`, a pun pojedinačni dokaz je isti
+poziv **bez** `--grupe`. U rezu se pušta grupno, pred release pojedinačno.
+
+Šta grupni prolaz **ne** propušta: član koji nije oborio **svoju** tvrdnju ne
+dobija priznanje iz grupe nego se **ponavlja sam**. Istrunulo sidro, sabotaža
+koja ne obara ništa, sabotaža koja obara tuđu tvrdnju i sudar sidara dva člana
+zato i dalje idu kroz pojedinačno merenje. Cena je jedan prolaz više za tog
+člana, ne slabija tvrdnja.
+
+Pravila su čiste funkcije, pa im dokaz ne traži Excel. `dokaz.py --self-test`
+meri pravila, ocenu izlaza i **orkestraciju** prolaza (primeni sve → pusti suitu
+tačno jednom → vrati sve → oceni), i vrti se kroz `vba_check`, dakle i kroz
+`PostToolUse` hook.
+
+Uz to je `vba_check` pomerio kapije nad **alatima** (katalog sabotaža, pravila
+grupisanja) **ispred** izlaza `if not files: return 0`. Hook se zove i sa
+putanjom koja nije VBA fajl — na primer baš `tools/sabotaza.py`, gde se greška u
+katalogu i pravi — i tada je `files` prazno, pa se izlazilo sa `0` pre ijedne od
+tih provera.
+
 ## Trijaža masovnih padova
 
 ```bash

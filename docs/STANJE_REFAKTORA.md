@@ -401,4 +401,13 @@
   merenje ISPOD praga takođe pada (zastareo prag pušta grupu da naraste nazad bez ijednog crvenog).
 - Pre push-a: `python tools/vba_check.py`, `python tools/who_writes.py --check` i `--check-ownership`,
   `python tools/gen_schema_module.py --check`; ponašanje: `python tools/run_vba.py --suite <ime>`.
+- **Grupni dokaz: `python tools/dokaz.py <filter> --grupe`** — do 6 mutacija u **jednom** prolazu suite-a.
+  Nad celim katalogom 649 → **118** prolaza (5,5×), na rezu `amb-pisac` 20 → **9** (2,2×); `--plan` ispiše
+  podelu bez Excela. Verdikt je `DOKAZANO (grupno)` jer je tvrdnja sprovedena nad mutacijama grupe
+  **zajedno**: u rezu se pušta grupno, **pred release pojedinačno** (isti poziv bez `--grupe`). Član koji
+  u grupi ne obori **svoju** tvrdnju ne dobija priznanje nego se ponavlja sam. Pravila i cena svakog od
+  njih: `docs/EXCEL_TEST_HARNESS.md` → „Grupni dokaz".
+- `vba_check` kapije nad **alatima** (katalog sabotaža, pravila grupisanja) idu **ispred** izlaza
+  `if not files: return 0` — hook sa putanjom koja nije VBA fajl ih je dotad preskakao, uključujući
+  baš `tools/sabotaza.py`, gde se greška u katalogu i pravi.
 - Poznati živi kvarovi van refaktora: `docs/KNOWN_ISSUES.md` AUD-055..057.

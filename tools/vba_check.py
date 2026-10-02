@@ -3436,6 +3436,30 @@ def check_katalog_sabotaza(tiho: bool = False) -> int:
     return 2 if modul.proveri_sidra(tiho) else 0
 
 
+# --- pravila grupisanja dokaza ---------------------------------------------
+#
+# `tools/dokaz.py --grupe` skracuje dvosmerni dokaz tako sto pusta vise mutacija
+# u JEDNOM prolazu suite-a. Koliko ih sme zajedno, odlucuju cetiri pravila (ista
+# suite, razlicit test, razlicit kljuc, razlicita procedura) -- a pravilo koje
+# prestane da grize ne pravi crven alat nego TISE TVRDNJU: dokaz i dalje kaze
+# "crvenih = sabotaza", samo vise ne zna koja je mutacija oborila koju tvrdnju.
+#
+# Ta pravila su ciste funkcije, pa im dokaz ne trazi ni Excel ni src-vba i staje
+# u isti budzet kao katalog: ide ovde, dakle i kroz PostToolUse hook.
+def check_dokaz_grupe(tiho: bool = False) -> int:
+    put = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dokaz.py")
+    if not os.path.exists(put):
+        return 0
+    spec = importlib.util.spec_from_file_location("_dokaz_za_check", put)
+    modul = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(modul)
+    except Exception as e:                       # pokvaren alat je isto nalaz
+        print(f"GRUPE: tools/dokaz.py se ne ucitava -- {e}", file=sys.stderr)
+        return 2
+    return 2 if modul._self_test(tiho) else 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Staticke provere nad src-vba")
     ap.add_argument("paths", nargs="*", help="konkretni fajlovi (podrazumevano ceo src-vba/)")
@@ -3448,8 +3472,23 @@ def main(argv: list[str]) -> int:
         return self_test()
 
     files = vba_files(args.paths)
+    # KAPIJE NAD ALATIMA se racunaju PRE izlaza "nema fajlova".
+    #
+    # Katalog sabotaza i pravila grupisanja dokaza ne zavise od toga koji su
+    # fajlovi dati: sidra pokrivaju ceo src-vba, a pravila grupisanja ne citaju
+    # ni jedan fajl. Prva verzija je ovo vezala za `not args.paths` -- a
+    # PostToolUse hook zove `vba_check.py --hook <fajl>`, pa se katalog kroz
+    # hook nikad nije proveravao; to je popravljeno, ali je ostao jos jedan
+    # izlaz ispred: `if not files: return 0`. Hook se zove i sa putanjom koja
+    # NIJE VBA fajl -- na primer bas `tools/sabotaza.py`, gde se greska u
+    # katalogu i pravi -- i tada je `files` prazno, pa se izlazilo sa 0 pre
+    # ijedne od ovih provera. Ovde se to vise ne moze zaobici.
+    rc_kat = check_katalog_sabotaza(args.hook)
+    rc_grupe = check_dokaz_grupe(args.hook)
+    rc_alata = rc_kat or rc_grupe
+
     if not files:
-        return 0
+        return rc_alata
 
     findings: list[Finding] = []
     publics: dict[str, list[tuple[str, int]]] = defaultdict(list)
@@ -3490,27 +3529,21 @@ def main(argv: list[str]) -> int:
     findings += check_sema_registar()
     findings += check_clan_forme(files)
 
-    # Katalog se proverava UVEK, i kad je dat jedan fajl.
-    #
-    # Prva verzija je ovo vezala za `not args.paths` -- a PostToolUse hook zove
-    # bas `vba_check.py --hook <fajl>`, pa se katalog kroz hook nikad nije
-    # proveravao. Time je i cela poenta promasena: sidro obara VBA izmena, i
-    # treba da se vidi u toj sekundi, a ne tek u CI-ju posle dvadeset izmena.
-    # Katalog nema veze sa tim koji je fajl dat -- sidra pokrivaju ceo src-vba.
-    rc_kat = check_katalog_sabotaza(args.hook)
-
     if not findings:
         if not args.hook:
-            if rc_kat:
+            if rc_alata:
                 # NE 'izvor cist': jedan od nalaza kataloga je bas to da je
                 # izvor zatecen sabotiran. Tvrdi se samo ono sto je mereno --
                 # da pravila nad fajlovima nisu nasla nista.
+                krivci = " i ".join(ime for ime, rc in (
+                    ("KATALOG SABOTAZA", rc_kat),
+                    ("PRAVILA GRUPISANJA DOKAZA", rc_grupe)) if rc)
                 print(f"vba_check: pravila nad fajlovima cista "
-                      f"({len(files)} fajlova), ali KATALOG SABOTAZA nije.",
+                      f"({len(files)} fajlova), ali {krivci} ne prolazi.",
                       file=sys.stderr)
             else:
                 print(f"vba_check: cisto ({len(files)} fajlova).")
-        return rc_kat
+        return rc_alata
 
     by_code: dict[str, int] = defaultdict(int)
     for f in sorted(findings, key=lambda f: (f.path, f.line)):
