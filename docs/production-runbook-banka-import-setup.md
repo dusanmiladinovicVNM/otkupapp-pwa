@@ -118,7 +118,7 @@ Na **mašini gde radi Excel** (za svakog novog klijenta isto):
 
 Parser koristi lokalni `pdftotext.exe` (Poppler).
 1. Ako nije instaliran: skini „poppler-windows" release, raspakuj (layout `...\poppler-XX\Library\bin\pdftotext.exe`), kopiraj **ceo** folder (treba mu prateći DLL-ovi).
-2. **Preporučeni (auto-default) raspored:** preimenuj raspakovani folder u `poppler` i stavi ga pored radne sveske, tako da putanja bude `<folder sa OtkupApp.xlsm>\Tools\poppler\Library\bin\pdftotext.exe`. Tada `PDFTOTEXT_EXE_PATH` može ostati prazan — VBA računa default relativno na radnu svesku (`Setup-OtkupApp.ps1` ovo radi automatski kopiranjem `Tools\`).
+2. **Preporučeni (auto-default) raspored:** preimenuj raspakovani folder u `poppler` i stavi ga pored radne sveske, tako da putanja bude `<folder sa AgriX.xlsm>\Tools\poppler\Library\bin\pdftotext.exe`. Tada `PDFTOTEXT_EXE_PATH` može ostati prazan — VBA računa default relativno na radnu svesku (`Setup-AgriX.ps1` ovo radi automatski kopiranjem `Tools\`).
 3. **Alternativa (versioned):** ostavi folder kako je (`poppler-XX`) i zapamti punu putanju do `pdftotext.exe` — nju upisuješ eksplicitno u `PDFTOTEXT_EXE_PATH` (Faza 4). Za pronalazak: `where /R C:\Users\<user> pdftotext.exe`.
 
 > **Najlakše (bez ručnog upisa):** Podešavanja → grupa „Banka / lokalno" → dugme **„…"** pored `PDFTOTEXT_EXE_PATH` (= `SetupPopplerInteractive`): ako je poppler pored xlsm-a upiše auto-režim (prazna vrednost = relativno na svesku), inače otvori folder picker i sam nađe `pdftotext.exe` (traži i u `\Library\bin`, `\bin`, `\poppler\Library\bin`).
@@ -150,7 +150,7 @@ SetLocalConfigValue "BANKA_DRIVE_MAX_FILES", "500", "Backfill kapacitet"
 
 > **NAPOMENA:** `PDFTOTEXT_EXE_PATH` i `BANKA_*` putanje su per-mašina i žive u
 > `tblLocalConfig`. Grupa „Banka / lokalno" u Podešavanjima ih rutira tamo; ostatak
-> editora i dalje piše u `tblSEFConfig`. Ako `Tools\poppler` stoji pored `OtkupApp.xlsm`,
+> editora i dalje piše u `tblSEFConfig`. Ako `Tools\poppler` stoji pored `AgriX.xlsm`,
 > `PDFTOTEXT_EXE_PATH` možeš i ostaviti prazan — default se računa relativno na radnu svesku.
 
 Provera (mora vratiti vrednosti, ne prazno):

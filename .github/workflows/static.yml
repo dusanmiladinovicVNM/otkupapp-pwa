@@ -96,6 +96,15 @@ jobs:
       - name: vba_parity_check self-test
         run: python3 tools/vba_parity_check.py --self-test
 
+      # Setup-AgriX.ps1 raznosi svesku KOJA NOSI PODATKE, a ponovno pokretanje
+      # setup-a je normalno (Poppler, certifikat, Trusted Location, shortcut).
+      # Dok je tamo stajao Copy-Item -Force, rerun je pregazio zivu klijentovu
+      # svesku -- i to se ne vidi kao crven test nego kao izgubljeni podaci.
+      # Install-Workbook radi samo nad fajlovima, pa se self-test vrti i ovde.
+      - name: Setup-AgriX self-test (rerun ne dira zivu svesku)
+        shell: pwsh
+        run: ./install/Setup-AgriX.ps1 -SelfTest
+
       # Atomarnost self-update-a pociva na tome da se Save NIKAD ne dosegne bez
       # zavrsne provere release-a. To je invarijanta RASPOREDA koda -- suite je
       # ne moze uhvatiti: put se otvara tek kad neko doda TRECI uspesan izlaz i
