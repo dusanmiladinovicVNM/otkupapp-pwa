@@ -463,6 +463,7 @@
 | `.claude/rules/testovi.md` ne zna za JS kapiju | **samo process PR**, nikad uz feature izmenu |
 | Node 20 deprecation u tri GitHub akcije | process PR |
 | `popis_citalaca` javlja UPOZORENJE za `IzvedeniLanacIzPwaDostupan` | kapija ne postoji od #388 — očekivanje alata je zastarelo |
+| **`vba_gate` pamti JEDAN compile, a više suita** | `marker["suites"]` je rečnik i svaka suita nosi svoj `izvor`, a `marker["compile"]` je **jedan objekat** — pa `--mark-compile` na drugoj grani pregazi potvrdu prve. Nađeno 03.10.2026 na #405/#406: operater je kompajlirao oba izvora, a marker je zadržao samo zadnji. Kapija to **tačno prijavljuje** (`<-- DRUGI IZVOR`), pa nema lažnog zelenog — ali rad na dve grane šalje compile u ping-pong. Ispravka je `compile` po `izvor`-u, kao `suites`; menja `kapija` deo ugovora, pa traži svoj dvosmerni dokaz i obara ZELENO suita (ne i compile, koji ključa samo na `izvor`). **Zaseban process PR**, ne uz feature rez |
 
 
 ## Alati i kapije
