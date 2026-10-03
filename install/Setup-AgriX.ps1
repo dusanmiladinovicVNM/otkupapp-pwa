@@ -65,16 +65,47 @@ function Install-Workbook {
     }
     # Two replaces inside the same second would produce the same name, and
     # Copy-Item overwrites silently -- destroying the FIRST backup, which is the
-    # one holding the original client data. Do not assume the timestamp is
-    # unique: look for a free name.
+    # one holding the original client data.
+    #
+    # Test-Path followed by Copy-Item is TOCTOU: two concurrent processes can
+    # both see the same name as free. CreateNew is an ATOMIC reservation at the
+    # OS level -- exactly one of them gets the name, the other moves on. A GUID
+    # would only lower the probability of the race, not remove it.
+    #
+    # LIMIT OF THE PROOF, measured: -SelfTest does NOT distinguish CreateNew
+    # from Test-Path-then-write. Putting the old TOCTOU form back makes the
+    # self-test pass 15/15, because a single-process test never enters the
+    # race. The sequential cases below prove only that a taken name is not
+    # reused -- which the old form also did. Atomicity here is held by reading
+    # the OS contract of FileMode::CreateNew, not by a green test. Do not
+    # "simplify" this back to Test-Path: no test will stop you.
     $stamp  = Get-Date -Format "yyyy-MM-dd_HHmmss"
-    $backup = Join-Path $BackupDir ("AgriX_pre-replace_" + $stamp + ".xlsm")
-    $seq = 2
-    while (Test-Path $backup) {
-        $backup = Join-Path $BackupDir ("AgriX_pre-replace_" + $stamp + "_" + $seq + ".xlsm")
-        $seq++
+    $backup = $null
+    $seq = 1
+    while ($seq -le 999) {
+        if ($seq -eq 1) {
+            $cand = Join-Path $BackupDir ("AgriX_pre-replace_" + $stamp + ".xlsm")
+        } else {
+            $cand = Join-Path $BackupDir ("AgriX_pre-replace_" + $stamp + "_" + $seq + ".xlsm")
+        }
+        try {
+            $fs = [System.IO.File]::Open($cand, [System.IO.FileMode]::CreateNew)
+            $fs.Close()
+            $backup = $cand
+            break
+        } catch {
+            # Only a name collision is skipped. Any other failure (missing
+            # folder, no permission) must surface -- otherwise this spins 999
+            # times and then reports the wrong reason.
+            if (-not (Test-Path $cand)) { throw }
+            $seq++
+        }
     }
-    Copy-Item $Target $backup -ErrorAction Stop
+    if ($null -eq $backup) {
+        throw ("Cannot reserve a backup name in {0} ({1} is taken 999 times). Workbook NOT replaced." -f $BackupDir, $stamp)
+    }
+    # -Force is for OUR OWN zero-byte placeholder, not for someone else's file.
+    Copy-Item $Target $backup -Force -ErrorAction Stop
 
     # An unverified backup is a promise, not a copy. Compare content, not size:
     # a truncated copy of an .xlsm can match on neither but a partial flush can.
@@ -148,11 +179,28 @@ function Invoke-SelfTest {
         Set-Content -Path $src -Value "PAKET" -Encoding utf8
         $r = Install-Workbook -Source $src -Target $tgt -BackupDir $bak -Replace $true
         $bakFile2 = $r.Substring("replaced:".Length)
-        Assert-SelfTest ($bakFile2 -ne $mamac) "backup does not reuse an existing file name"
-        Assert-SelfTest ((Get-Content $mamac -Raw).Trim() -eq "ZAUZETO") "EXISTING BACKUP MUST NOT BE OVERWRITTEN"
+        Assert-SelfTest ($bakFile2 -ne $mamac) "[sequential] taken name is not reused"
+        Assert-SelfTest ((Get-Content $mamac -Raw).Trim() -eq "ZAUZETO") "[sequential] EXISTING BACKUP MUST NOT BE OVERWRITTEN"
         Assert-SelfTest ((Get-Content $bakFile2 -Raw).Trim() -eq "SENTINEL-2") "new backup carries the workbook it replaced"
 
-        # 5. nema paketne sveske -> jasna greska, ne tiho preskakanje
+        # 5. Prazno rezervisano ime se ne koristi ponovo. Vazi i za fajl od 0
+        #    bajtova -- provera velicine ili sadrzaja bi ga smatrala slobodnim.
+        #    OVO NIJE DOKAZ ATOMICNOSTI: vidi "LIMIT OF THE PROOF" iznad.
+        Set-Content -Path $tgt -Value "SENTINEL-3" -Encoding utf8
+        $stampNow2 = Get-Date -Format "yyyy-MM-dd_HHmmss"
+        $mamac2 = Join-Path $bak ("AgriX_pre-replace_" + $stampNow2 + ".xlsm")
+        if (-not (Test-Path $mamac2)) {
+            $fs0 = [System.IO.File]::Open($mamac2, [System.IO.FileMode]::CreateNew)
+            $fs0.Close()
+        }
+        $prazanPre = (Get-Item $mamac2).Length
+        $r = Install-Workbook -Source $src -Target $tgt -BackupDir $bak -Replace $true
+        $bakFile3 = $r.Substring("replaced:".Length)
+        Assert-SelfTest ($bakFile3 -ne $mamac2) "[sequential] reserved-but-EMPTY name is not reused"
+        Assert-SelfTest ((Get-Item $mamac2).Length -eq $prazanPre) "[sequential] reserved-but-empty backup stays untouched"
+        Assert-SelfTest ((Get-Content $bakFile3 -Raw).Trim() -eq "SENTINEL-3") "new backup still carries the replaced workbook"
+
+        # 6. nema paketne sveske -> jasna greska, ne tiho preskakanje
         Remove-Item $src -Force
         $threw = $false
         try { Install-Workbook -Source $src -Target $tgt -BackupDir $bak -Replace $false | Out-Null }
