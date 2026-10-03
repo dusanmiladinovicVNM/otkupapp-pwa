@@ -56,6 +56,12 @@ pogled izgledaju nedosledno (dve noge kod otkupa, jedna kod otpremnice).
 | 6 | modDokumenta:6857 | `KolAmbalaze` | Ulaz · Kupac | da | `PrijemnicaID` | `Prijemnica` |
 | 7 | modDokumenta:6863 | `KolAmbVracena` | Izlaz · Kupac | da | `PrijemnicaID` | **`Prijemnica`** |
 | 8 | modDokumenta:7026 | `kolAmb` | Izlaz · Kupac | da | **`brojDok`** | `Kupci-Otpremnica` |
+
+> **REDOVI 1–4 SU PRESEČENI (`10b-2`, 6.12e) — tabela ostaje kao MERENJE
+> ZATEČENOG.** Danas otkup knjiži **dva reda** umesto četiri nogu: `UZ_ROBU`
+> (Kooperant → Stanica) i `IZDATA_PRAZNA` (Stanica → Kooperant), **oba pod
+> `Otkup`**. Tabela se ne prepisuje jer je ona zapis šta je bilo — iz nje se čita
+> zašto su odluke donete, a prepisana bi izgubila taj razlog.
 | 9 | modDokumenta:8619–8669 | revers, 4 smera | 2 noge (KOOP) / 1 noga (FIRMA) | samo FIRMA | **`brojDok`** | `OM-*` |
 
 Redovi 1–2 i 3–4 su dvonožni jer su **oba** učesnika nosioci salda i vozača nema.
@@ -106,7 +112,7 @@ Jedine su takve u celom kanonu: pretraga po „Vracen" daje **samo**
 > **ono što je tada uneto**, ili **ono što važi danas** (nula). Dok se to ne
 > odluči, čitalac se ne sme pisati.
 
-### T3 — pozajmljen tip dokumenta pravi izuzetak u kapiji
+### T3 — pozajmljen tip dokumenta pravi izuzetak u kapiji **[REŠENO u `10b-2`]**
 
 Otkup knjiži svoje kretanje pod **`OM-Izlaz-Koop`** — tipom *revers dokumenta*.
 Zato integritetska provera mora da pravi izuzetak
@@ -120,6 +126,19 @@ If modStorno.ReversTipJe(tip) And Not otkupi.Exists(dok) Then
 Izuzetak je **tačan** i namerno napisan — ali postoji samo zato što je tip
 pozajmljen. Kretanje uz dokument sa sopstvenim tipom ukinulo bi ga: pravilo
 umesto izuzetka.
+
+> **REŠENO u `10b-2`:** nov pisac knjiži **oba** otkupna događaja pod `Otkup`,
+> a razlikuje ih `VrstaKretanja` (`AMB-INV-04` nosi i tip i vrstu). Pozajmljen
+> tip više **ne nastaje**, i to je tvrdnja u testu
+> (`OTK ambalaza: pozajmljen tip dokumenta vise ne nastaje`).
+>
+> Izbor nije bio slobodan: `AmbIzvornaTabela` je **zatvorena mapa**, a
+> `OM-Izlaz-Koop` u njoj nema izvornu tabelu — pa bi druga noga pala
+> fail-closed na `AMB-INV-08`. Događaj se dešava **unutar otkupa**, dakle otkup
+> mu je i izvorni dokument.
+>
+> Izuzetak u `modIntegritet` **ostaje do `10e`**: on čita stari oblik reda, a
+> stari redovi postoje dok čitaoci ne pređu (`10c`).
 
 A prijemnica je u trećem svetu: povrat praznih knjiži pod `Prijemnica` (red 7),
 dakle **van `OM-*` taksonomije** — u izveštajima ambalaže se ne vidi kao povrat,
@@ -261,6 +280,29 @@ Odbijanje je **potpuno**: nema dokumenta, nema ambalaze, nema parcijalnog upisa.
 >
 > Pisac klasu **cita iz matrice** a ne nosi spisak: kad bi se odrediste
 > `ULAZ_TUDJE` ikad promenilo, pravilo ide za njim samo.
+
+> **AMB-10-ODL-18 (odluke operatera, 03.10.2026).** Kooperant koji donese
+> **svoje** gajbe nije edge case: **5–10% otkupa**. Dakle izuzetak, ali redovan
+> — pa zaslužuje zastajanje sa pitanjem, a ne polje koje 90% vremena stoji na
+> ekranu bez svrhe.
+>
+> | Putanja | Ponašanje | Zato |
+> |---|---|---|
+> | ekran (`modOtkupUnos.OtkupUpisi`) | **pita operatera i ZADRŽAVA podatke** | poziv se ponavlja iz istog poziva, pa se ništa ne unosi ponovo |
+> | sync (`modMasterSync.ImportRowToTblOtkup`) | **auto-potvrda** | operatera nema, a otkupac je na terenu već uneo koliko je gajbi došlo |
+>
+> Slučaj se prepoznaje po **broju greške** (`AMB_ERR_POTVRDA_DEFICITA`), ne po
+> tekstu: tekst je prevodiv i menja se, broj je ugovor. Zato `CreateOtkup_TX` i
+> `IspravkaOtkupa_TX` imaju `outErrNum` — pre toga su grešku gutali u
+> `outGreska` i broj se gubio.
+>
+> Potvrda deficita **ne ide u log grešaka**: `CreateOtkup_TX` izlazi PRE
+> `LogError` i `DOKUMENT_SAVE_FAIL`, iz istog razloga zbog kog ni pisac ne
+> guta pitanje u svoj log — inače log prestaje da bude signal.
+>
+> Broj za potvrdu računa **jedan** javni račun
+> (`modOtkup.OtkupDeficitKooperanta` → `AmbDeficitZaPrenos`), isti koji pisac
+> zove — pa potvrda ne može da imenuje drugi broj od onog koji pisac meri.
 
 ### 6.6 Fizicko stanje i dug vlasniku nisu ista stvar
 
@@ -1296,6 +1338,55 @@ da ispuni. Zato je `modAmbalaza.StornirajAmbalazuDokumenta` drugi clan
 `amb-storno-ne-upisuje-kontrastav`, `amb-kontrastav-provera-u-istom-smeru`,
 `amb-storno-udvaja`, `amb-storno-posle-vracanja-prolazi` — svaka sa svojom
 prvom tvrdnjom.
+
+### 6.12e Otkup — prvo presečeno mesto knjiženja
+
+Četiri noge postaju **dva događaja**:
+
+```
+primljeno   Kooperant -> Stanica   AMBALAZA_UZ_ROBU    Otkup / otkupID   (+ potvrda)
+izdato      Stanica -> Kooperant   IZDATA_PRAZNA       Otkup / otkupID
+```
+
+Oba dele **isti neuređen par** `{Kooperant, Stanica}`, pa `AMB-INV-10` drži bez
+izuzetka — zato je taj par u invarijanti neuređen. `AMB-INV-04` ih razlikuje po
+`VrstaKretanja`.
+
+`potvrdaDeficita` ide **samo prvoj nozi**. Manjak nastaje na
+`Kooperant -> Stanica` (partner donosi svoje, 6.4), a manjak **stanice** se po
+`AMB-10-ODL-8` ne pokriva tuđom ambalažom — za njega ide `NABAVKA`, pa druga
+noga nema šta da potvrđuje.
+
+Dokument se vežuje **tek posle uspešnog `AppendRow` zaglavlja**: vezivanje pre
+upisa tvrdilo bi vlasništvo nad redom koji može da ne nastane. `modOtkup.CreateOtkup`
+je zato treći član `AMB_BIND_DOZVOLJENI` (`AMB-10-ODL-15`).
+
+**Storno otkupa ide kroz kontra-stav** (`AMB-10-ODL-16`), uz zatečenu zastavicu
+koja pokriva redove starog oblika. Preklapanje je izgovoreno u kodu:
+`StornoAmbalazaByDokument` gađa po `(DokumentID, DokumentTip)` pa žigoše i nove
+redove — za novog čitaoca inertno, i stoji **pre** kontra-stava da njega ne
+ožigoše. `10e` briše zastavicu.
+
+**POSLEDICA NA FIXTURE, I ONA JE POSLOVNA.** Pisac sada **traži** da
+kooperantove gajbe postoje; stari `TrackAmbalaza` nije imao nikakvu kapiju, pa je
+fixture mogao da krene od nule. Mereno: **139** poziva `CreateOtkup_TX` u BFP
+suite-u. Zato opticaj zaseva **jedno** mesto
+(`SeedAmbalazaOpticaj`, unutar `SeedBusinessFlowProMasterData`): nabavka po
+stanici i tipu, pa izdavanje praznih kooperantima. To nije podešavanje testa nego
+**vernije stanje** — u 90–95% slučajeva kooperant vraća **naše** gajbe koje mu je
+stanica izdala (`AMB-10-ODL-18`).
+
+*Provera:* `Test_OTK_AmbalazaIdeNaDokument` (prepisan u nov model, 12 tvrdnji) ·
+`Test_OTK_StornoJednimID` (tvrdnja nad **saldom**, ne nad zastavicom) ·
+`Test_OTK_DeficitKooperantaTraziPotvrdu` 7 tvrdnji · sabotaže
+`amb-otkup-izdato-ne-knjizi`, `amb-otkup-primljeno-nosi-izdato`,
+`amb-otkup-storno-bez-kontrastava`.
+
+**ŠTA OSTAJE NEIZMERENO:** auto-potvrda na **sync** putanji
+(`modMasterSync.ImportRowToTblOtkup`) nema test — scenario traži PWA red, a ne
+samo pisca. Napisano je, ali nije dokazano, i tako se i prijavljuje. Isto važi za
+`MsgBox` granu na ekranu: dijalog se iz suite-a ne može potvrditi, pa je merena
+samo granica ispod njega (broj greške i račun manjka).
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 

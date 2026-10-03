@@ -86,7 +86,7 @@ Public Function StornoOtkup_TX(ByVal otkupID As String) As Boolean
 
     ' StornoOtkup otvara i zatvara SVOJ zurnal op, pa kaskada ispod NE ulazi u
     ' operaciju otkupa.
-    If Not StornoOtkup(otkupID) Then
+    If Not StornoOtkup(otkupID, tx) Then
         Err.Raise ERR_STORNO_BASE + 1, SRC, _
                   "StornoOtkup nije uspeo. OtkupID=" & otkupID
     End If
@@ -130,7 +130,11 @@ Private Function RedJeIzabranogDokumenta(ByRef data As Variant, ByVal i As Long,
     RedJeIzabranogDokumenta = (Trim$(NzToText(data(i, colGen))) = Trim$(gen))
 End Function
 
-Public Function StornoOtkup(ByVal otkupID As String) As Boolean
+' tx je OBAVEZAN, ne opcion: storno knjige je kontra-stav koji mora da legne u
+' ISTU transakciju (AMB-INV-08). Opcion tx bio bi fail-open seam -- pozivalac
+' koji ga zaboravi tiho preskoci kontra-stavove, a zastavica bi ostavila zeleno.
+Public Function StornoOtkup(ByVal otkupID As String, _
+                            ByVal tx As clsTransaction) As Boolean
     Const SRC As String = "StornoOtkup"
     Dim owns As Boolean
 
@@ -169,6 +173,18 @@ Public Function StornoOtkup(ByVal otkupID As String) As Boolean
     MarkRowStornirano TBL_OTKUP, rowOtkup, SRC
     StornoAmbalazaByDokument otkupID, DOK_TIP_OTKUP
     StornoAmbalazaByDokument otkupID, DOK_TIP_OM_IZLAZ_KOOP   ' izdata ambalaza (OM->kooperant) uz otkup
+
+    ' NOV MODEL: KONTRA-STAV, jer nov citalac zastavicu NE GLEDA.
+    ' RedDoticeKnjigu i AmbSaldoNaloga vide red po Od_*/Na_*/VrstaKretanja/
+    ' StornoOd -- pa bi otkup presecen na nov pisac, a storniran samo
+    ' zastavicom, ostavio gajbe na saldu TIHO (AMB-10-ODL-16, 6.12d).
+    '
+    ' OBA mehanizma stoje jer tabela tokom prelaza nosi DVA OBLIKA REDA (6.13):
+    ' zastavica pokriva zatecene redove starog oblika, kontra-stav nove.
+    ' PREKLAPANJE JE IZGOVORENO: StornoAmbalazaByDokument gada po (DokumentID,
+    ' DokumentTip), pa zigose i nove redove -- za nov citalac inertno, i stoji
+    ' PRE kontra-stava da njega ne ozigose. 10e brise zastavicu.
+    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_OTKUP, otkupID
     ResetNovacOtkupLink otkupID
 
     EndStornoOp owns

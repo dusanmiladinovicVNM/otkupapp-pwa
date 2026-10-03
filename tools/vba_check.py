@@ -1296,9 +1296,14 @@ ROLLBACK_RED_CASES = [
 #                                  trazi i IZVORNU TABELU tog dokumenta u
 #                                  snapshotu -- a to pozivalac mora stvarno da
 #                                  ispuni, ne da tvrdi.
+#   CreateOtkup                 -- otkup NASTAJE tu, i bind stoji TEK POSLE
+#                                  uspesnog AppendRow zaglavlja. Otkup je prvi
+#                                  presecen izvorni dokument (10b-2), pa je i
+#                                  prvi clan liste van modAmbalaza.
 AMB_BIND_DOZVOLJENI = {
     ("modAmbalaza", "UpisiAmbDokument"),
     ("modAmbalaza", "StornirajAmbalazuDokumenta"),
+    ("modOtkup", "CreateOtkup"),
 }
 _AMB_END = re.compile(r'^End\s+(?:Sub|Function|Property)\b', re.IGNORECASE)
 _BIND_POZIV = re.compile(r'\.\s*BindSourceDocument\b', re.IGNORECASE)

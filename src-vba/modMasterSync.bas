@@ -3563,7 +3563,24 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     ' Stavke idu pisacu KAKVE SU DOSLE. RedniBroj dodeljuje pisac, po kanonskom
     ' redu klasa -- redosled u Collection-u nista ne znaci (modOtkup.bas:749).
     Dim greska As String
-    newID = CreateOtkup_TX(h, stavke, greska)
+    Dim ambErrNum As Long
+    newID = CreateOtkup_TX(h, stavke, greska, , ambErrNum)
+
+    ' AUTO-POTVRDA DEFICITA, I SAMO NA OVOJ PUTANJI (odluka 03.10.2026).
+    '
+    ' Operatera ovde nema, a otkupac je na terenu vec uneo koliko je gajbi
+    ' doslo -- potvrda je formalnost koju nema kome postaviti, a odbijanje bi
+    ' zaustavilo sinhronizaciju na redu koji je u polju vec prihvacen. Ekran
+    ' (modOtkupUnos) PITA, jer tamo operater postoji.
+    '
+    ' Broj se cita istim javnim racunom koji pisac koristi, pa auto-potvrda ne
+    ' moze da potvrdi drugi broj od onog koji pisac meri. Ako se ne slozi,
+    ' pisac odbija i red ostaje neuvezen -- sto je ispravno.
+    If ambErrNum = AMB_ERR_POTVRDA_DEFICITA Then
+        greska = ""
+        newID = CreateOtkup_TX(h, stavke, greska, _
+                               modOtkup.OtkupDeficitKooperanta(h, stavke), ambErrNum)
+    End If
 
     If Len(newID) = 0 Then
         Err.Raise vbObjectError + 8108, "ImportRowToTblOtkup", _

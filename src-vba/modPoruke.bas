@@ -965,6 +965,8 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUNOS_ERR_TARA_VECA", "je ve" & ChrW(263) & "a ili jednaka bruto te" & ChrW(382) & "ini " & ChrW(8212) & " proveri broj gajbi"
     UpsertRow lo, existing, "OTKUNOS_ASK_PARCELA_1", "Kultura parcele"
     UpsertRow lo, existing, "OTKUNOS_ASK_PARCELA_2", "ne odgovara izabranoj vrsti"
+    UpsertRow lo, existing, "AMB_ASK_DEFICIT_1", "Kooperant nema toliko na" & ChrW(353) & "ih gajbi."
+    UpsertRow lo, existing, "AMB_ASK_DEFICIT_2", "Manjak ulazi u opticaj kao TU" & ChrW(272) & "A ambala" & ChrW(382) & "a " & ChrW(8212) & " firma ga duguje kooperantu:"
     UpsertRow lo, existing, "OTKUNOS_MSG_NIJE_HLADNJACA", "Napomena: ovaj unos nije autohladnja" & ChrW(269) & "a lanac " & ChrW(8212) & " palete stornirane prijemnice NISU prevezane:"
     UpsertRow lo, existing, "OTKUNOS_ERR_BROJ_ZAUZET", "Taj broj otkupnog lista je ve" & ChrW(263) & " izdat na ovom otkupnom mestu tog dana. Storno ne osloba" & ChrW(273) & "a broj " & ChrW(8212) & " ispravka dobija NOV broj. Postoje" & ChrW(263) & "i dokument:"
     UpsertRow lo, existing, "OTKUNOS_ERR_KULTURA", "Izabrana vrsta i sorta se ne prevode u ta" & ChrW(269) & "no jednu kulturu iz " & ChrW(353) & "ifarnika:"

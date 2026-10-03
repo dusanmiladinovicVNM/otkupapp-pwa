@@ -398,6 +398,41 @@
     van trake (lokalni log + `Monitor_Critical`, koji je no-op kad monitoring nije
     podešen — zato dva kanala). Pravilo je zapisano u
     `ARCHITECTURE_CONTRACT.md` uz „Snapshot nije vlasništvo“.
+54. **Ulaz za storno ambalaže pomeren PRED cutover** (03.10.2026, `AMB-10-ODL-16/-17`).
+    Plan ga je držao kao `10d`, **posle** devet mesta knjiženja. Merenje pred prvi
+    rez je oborilo taj red: nov čitalac salda (`RedDoticeKnjigu`,
+    `AmbSaldoNaloga`) **ne čita `Stornirano` nigde**, a `modStorno` otkazuje gajbe
+    **zastavicom** — otkup (`:170`), otpremnica (`:245`) i prijemnica (`:458`).
+    Dokument presečen na nov model a storniran zastavicom ostavio bi gajbe na
+    saldu **tiho**, a tvrdnja koja čita zastavicu ostala bi **zelena**: lažno
+    zeleno, ne pad. `NABAVKA` je mogla da legne sama jer storno put **nema**.
+    Ulaz je `modAmbalaza.StornirajAmbalazuDokumenta(tx, dokTip, dokID)` — **po
+    dokumentu**, jer životni ciklus ima dokument a ne red; datum kontra-stava je
+    datum **originala** (zastavica je red uklanjala iz **svih** perioda);
+    idempotentan; `AMB-INV-09` se meri nad **posle-stanjem** postojećim čitaocem.
+    Kontra-stav nosi zamenjene `Od`/`Na`, pa se proverava **u obrnutom smeru** —
+    pravilo stoji na **jednom** mestu u pisaču, uz čitaoca koji ga je već imao.
+55. **Otkup — prvo presečeno mesto knjiženja** (03.10.2026, `10b-2`).
+    Četiri noge → dva događaja (`UZ_ROBU` Kooperant→Stanica, `IZDATA_PRAZNA`
+    Stanica→Kooperant), **oba pod `Otkup`** — čime je napetost **T3** (pozajmljen
+    `OM-Izlaz-Koop`) rešena, i to ne iz estetike: `AmbIzvornaTabela` je zatvorena
+    mapa, pa bi pozajmljen tip pao fail-closed na `AMB-INV-08`.
+    **Dva nalaza koja kapija nije uhvatila, a čitanje je:** promena potpisa
+    `CreateOtkup` nije oborila `vba_check` jer je drugi pozivalac
+    (`IspravkaOtkupa_TX`) zove u **izraznoj poziciji** (`ARNOST` to ne vidi) —
+    projekat se ne bi kompajlirao; i parametar `src` je ostao bez upotrebe kad je
+    `TrackAmbalaza` nestao.
+    **Posledica na fixture je poslovna, ne tehnička:** pisac sada **traži** da
+    kooperantove gajbe postoje, a mereno je **139** poziva `CreateOtkup_TX` u BFP
+    suite-u. Opticaj zaseva **jedno** mesto (`SeedAmbalazaOpticaj`) — nabavka po
+    stanici i tipu, pa izdavanje praznih kooperantima; u 90–95% slučajeva
+    kooperant i u stvarnosti vraća **naše** gajbe (`AMB-10-ODL-18`).
+    Protokol potvrde ide **dvema putanjama**: ekran pita i **zadržava podatke**
+    (poziv se ponavlja iz istog poziva), sync **auto-potvrđuje** (operatera nema).
+    Slučaj se prepoznaje po **broju greške** — zato `outErrNum`, i zato potvrda
+    deficita izlazi **pre** `LogError`/`DOKUMENT_SAVE_FAIL`.
+    **Neizmereno i tako prijavljeno:** sync auto-potvrda i `MsgBox` grana nemaju
+    test.
     Sabotaža je **preimenovanje** tabele (`GetTable` vraća `Nothing` → 91), ne
     menjanje šeme; tri privremene tabele imaju **po dve kolone** jer `Value2` nad
     jednom ćelijom vraća skalar, a `RestoreTable` radi `UBound`. Tri sabotaže, po

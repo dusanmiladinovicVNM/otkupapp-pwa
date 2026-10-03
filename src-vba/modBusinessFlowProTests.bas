@@ -76,6 +76,10 @@ Private Const TEST_TIP_AMB As String = "Test Gajba"
 ' Drugi tip ambalaze: clanovi otpremnice moraju biti homogeni -- header nosi
 ' jedan TipAmbalaze, pa 20 plasticnih + 30 drvenih gajbi nije 50 gajbi.
 Private Const TEST_TIP_AMB_B As String = "Test Letvarica"
+' Treci tip NAMERNO ostaje van SeedAmbalazaOpticaj: scenario deficita mora sam
+' da proizvede manjak, a ne da zavisi od toga koliko je zalihe potrosio neki
+' test pre njega.
+Private Const TEST_TIP_AMB_C As String = "Test Kaseta"
 Private Const TEST_VRSTA_BEZ_SORTE As String = "Test Dunja"
 
 Private Const TEST_PREFIX As String = "TST-PRO"
@@ -222,6 +226,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_SamoKlasaII
     Test_OTK_SortaPraznaSamoUzKulturuBezSorte
     Test_OTK_TipAmbalazeVezujeSvakaAmbalaza
+    Test_OTK_DeficitKooperantaTraziPotvrdu
     Test_OTK_AmbalazaIdeNaDokument
     Test_OTK_OdbijenDokumentNeKnjiziAmbalazu
     Test_OTK_EkranPiseNovimModelom
@@ -1126,6 +1131,7 @@ Private Sub SeedBusinessFlowProMasterData()
     SeedKooperant
     SeedKooperant2
     SeedParcelaIfAvailable
+    SeedAmbalazaOpticaj
 
     LogPass "Seed master data ready"
     Exit Sub
@@ -4958,6 +4964,68 @@ End Sub
 ' Slucaj (c) je onaj koji je zatecen ekran vec pokrivao (modOtkupUnos:158
 ' gleda i kolAmbIzdata), a nov writer umalo nije: izdata ambalaza bez tipa je
 ' gajba koja je otisla kooperantu a ne zna se koja.
+' KOOPERANT DONESE SVOJE GAJBE -- 5-10% otkupa (mereno kod operatera).
+'
+' Nije edge case nego osnovno pravilo (6.4): manjak kooperanta se POKRIVA kao
+' ulaz tudje ambalaze, a to je dug firme prema njemu -- pa trazi pristanak i NE
+' sme da prodje tiho (6.5).
+'
+' Meri UGOVOR IZMEDJU PISCA I EKRANA, ne samo odbijanje: ekran prepoznaje slucaj
+' po BROJU greske (tekst je prevodiv, broj je ugovor) i dobija TACAN broj istim
+' javnim racunom koji pisac koristi. Zato tvrdnje gledaju outErrNum i
+' OtkupDeficitKooperanta, a ne tekst poruke.
+'
+' Tip je TEST_TIP_AMB_C, koji SeedAmbalazaOpticaj namerno ne zaseje.
+'
+' Saldo se po ovom testu VRACA na nulu sam: kooperant da 20 (-20), a pokrice mu
+' upise 20 (+20) -- pa ponovljen prolaz suite-a vidi isti deficit.
+Private Sub Test_OTK_DeficitKooperantaTraziPotvrdu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKDEF")
+
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-DF-" & scenario)
+    h("TipAmbalaze") = TEST_TIP_AMB_C
+
+    Dim stavke As Collection
+    Set stavke = OtkStavke(400#, 50#, 20, 0#, 0#, 0)
+
+    Dim greska As String, errNum As Long, bezPotvrde As String
+    bezPotvrde = CreateOtkup_TX(h, stavke, greska, , errNum)
+
+    Dim deficit As Double
+    deficit = modOtkup.OtkupDeficitKooperanta(h, stavke)
+
+    ' Pogresna potvrda se odbija: izmedju pitanja i odgovora stanje se moglo
+    ' promeniti, pa pisac meri prema SVEZE izracunatom manjku.
+    Dim greska2 As String, errNum2 As Long, saPogresnom As String
+    saPogresnom = CreateOtkup_TX(h, stavke, greska2, deficit + 1#, errNum2)
+
+    Dim greska3 As String, errNum3 As Long, saPotvrdom As String
+    saPotvrdom = CreateOtkup_TX(h, stavke, greska3, deficit, errNum3)
+
+    AssertEquals "", bezPotvrde, "OTK deficit: bez potvrde dokument ne nastaje"
+    AssertEquals CStr(AMB_ERR_POTVRDA_DEFICITA), CStr(errNum), _
+                 "OTK deficit: ekran prepoznaje slucaj po BROJU greske"
+    AssertTrue Abs(deficit - 20#) < 0.001, _
+               "OTK deficit: javni racun daje tacan manjak za potvrdu"
+    AssertEquals "", saPogresnom, "OTK deficit: pogresna potvrda se odbija"
+    AssertTrue Len(saPotvrdom) > 0, _
+               "OTK deficit: sa tacnom potvrdom dokument nastaje"
+    AssertEquals "1", _
+                 CStr(AmbNoviBrojRedova(saPotvrdom, DOK_TIP_OTKUP, AMB_VK_ULAZ_TUDJE)), _
+                 "OTK deficit: pokrice je upisano kao ULAZ tudje ambalaze"
+    AssertTrue Abs(AmbNoviKolicina(saPotvrdom, DOK_TIP_OTKUP, AMB_VK_ULAZ_TUDJE) _
+                   - deficit) < 0.001, _
+               "OTK deficit: pokrice nosi tacno manjak, ni vise ni manje"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_DeficitKooperantaTraziPotvrdu", Err.Number, Err.description
+End Sub
+
 Private Sub Test_OTK_TipAmbalazeVezujeSvakaAmbalaza()
     On Error GoTo EH
 
@@ -5004,6 +5072,78 @@ Private Sub Test_OTK_TipAmbalazeVezujeSvakaAmbalaza()
 
 EH:
     LogFatal "Test_OTK_TipAmbalazeVezujeSvakaAmbalaza", Err.Number, Err.description
+End Sub
+
+' OPTICAJ AMBALAZE ZA SUITE -- fixture mora da predstavlja POSLOVANJE U TOKU.
+'
+' Posle cutovera otkupa pisac TRAZI da kooperantove gajbe postoje: primljena
+' ambalaza je prenos Kooperant -> Stanica, a nalog koji nema dovoljno ulazi u
+' protokol potvrde deficita (6.5). Stari pisac (TrackAmbalaza) nije imao nikakvu
+' kapiju, pa je fixture mogao da krene od nule.
+'
+' Zasejava se na JEDNOM mestu, a ne potvrdom deficita na 139 pozivnih mesta
+' CreateOtkup_TX: u stvarnosti kooperant vraca NASE gajbe koje mu je stanica
+' izdala, i to je 90-95% slucajeva (odluka operatera 03.10.2026). Potvrda
+' deficita ostaje ono sto jeste -- izuzetak, koji ima svoj test.
+'
+' Zaliha se ponovnim pokretanjem suite-a samo DODAJE, nikad ne umanjuje, pa
+' visestruki prolaz nad istom sveskom ne menja ishod.
+Private Sub SeedAmbalazaOpticaj()
+    Const SRC As String = "SeedAmbalazaOpticaj"
+    Const SEED_NABAVKA As Double = 100000#
+    Const SEED_KOOPERANTU As Double = 20000#
+
+    On Error GoTo EH
+
+    Dim stanice As Variant, kooperanti As Variant, tipovi As Variant
+    stanice = Array(TEST_ST_ID, TEST_HLAD_ST_ID, TEST_HLAD2_ST_ID)
+    kooperanti = Array(TEST_KOOP_ID, TEST_KOOP2_ID)
+    tipovi = Array(TEST_TIP_AMB, TEST_TIP_AMB_B)
+
+    ' NASE gajbe ulaze u opticaj samo kroz NABAVKU (AMB-10-ODL-8).
+    Dim i As Long, j As Long
+    For i = LBound(stanice) To UBound(stanice)
+        For j = LBound(tipovi) To UBound(tipovi)
+            modAmbalaza.NabaviAmbalazu_TX Date, CStr(stanice(i)), CStr(tipovi(j)), _
+                                          SEED_NABAVKA, "", "SEED opticaj suite"
+        Next j
+    Next i
+
+    ' Stanica izdaje prazne kooperantima -- tek posle toga kooperant ima sta da
+    ' vrati pun, sto je normalan tok otkupa.
+    Dim tx As clsTransaction, dokID As String
+    For i = LBound(kooperanti) To UBound(kooperanti)
+        For j = LBound(tipovi) To UBound(tipovi)
+            Set tx = New clsTransaction
+            tx.BeginTx
+            tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+            tx.AddTableSnapshot TBL_AMBALAZA
+            ' SVOJ dokument po (kooperant, tip): AMB-INV-10 zakljucava JEDAN par
+            ' naloga po dokumentu, pa dva kooperanta ne mogu deliti zaglavlje.
+            dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, _
+                        "SEED-" & NewScenarioCode("AMBOP"), _
+                        Date, AMB_NALOG_STANICA, TEST_ST_ID)
+            modAmbalaza.PrenesiAmbalazu tx, Date, CStr(tipovi(j)), SEED_KOOPERANTU, _
+                        AMB_NALOG_STANICA, TEST_ST_ID, _
+                        AMB_NALOG_KOOPERANT, CStr(kooperanti(i)), _
+                        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+            tx.CommitTx
+            Set tx = Nothing
+        Next j
+    Next i
+    Exit Sub
+
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    ' Pad zasejavanja se NE guta: bez opticaja bi 139 testova palo na potvrdi
+    ' deficita, a izvestaj bi pokazivao 139 nepovezanih nalaza.
+    LogFatal SRC, errNum, errDesc
 End Sub
 
 Private Function OtkHeader(ByVal brDok As String) As Object
@@ -14196,27 +14336,50 @@ Private Sub Test_OTK_AmbalazaIdeNaDokument()
 
     AssertTrue Len(otkID) > 0, "OTK ambalaza: upis prosao"
 
-    ' Primljene gajbe: 20 + 30 = 50, JEDAN par redova.
+    ' DVA DOGADJAJA, NE CETIRI NOGE (10b-2). Nov red imenuje OBE strane, pa
+    ' dokument ima tacno dva reda -- primljeno i izdato.
     AssertEquals "2", CStr(AmbBrojRedova(otkID, DOK_TIP_OTKUP)), _
-                 "OTK ambalaza: primljeno = jedan dvojni upis, ne po klasi"
-    AssertTrue Abs(AmbKolicina(otkID, DOK_TIP_OTKUP, "Izlaz") - 50#) < 0.001, _
-               "OTK ambalaza: kooperant IZLAZ nosi zbir stavki"
-    AssertTrue Abs(AmbKolicina(otkID, DOK_TIP_OTKUP, "Ulaz") - 50#) < 0.001, _
-               "OTK ambalaza: OM ULAZ nosi isti zbir"
-    AssertEquals TEST_KOOP_ID, AmbEntitet(otkID, DOK_TIP_OTKUP, "Izlaz"), _
-                 "OTK ambalaza: izlazna noga je kooperantova"
-    AssertEquals TEST_ST_ID, AmbEntitet(otkID, DOK_TIP_OTKUP, "Ulaz"), _
-                 "OTK ambalaza: ulazna noga je stanicina"
+                 "OTK ambalaza: dokument ima DVA reda -- dva dogadjaja, ne cetiri noge"
 
-    ' Izdate gajbe: obrnut smer, svoj tip dokumenta.
-    AssertEquals "2", CStr(AmbBrojRedova(otkID, DOK_TIP_OM_IZLAZ_KOOP)), _
-                 "OTK ambalaza: izdato = jedan dvojni upis"
-    AssertTrue Abs(AmbKolicina(otkID, DOK_TIP_OM_IZLAZ_KOOP, "Ulaz") - 7#) < 0.001, _
-               "OTK ambalaza: kooperant ULAZ prima prazne"
+    ' Primljene gajbe: 20 + 30 = 50, JEDAN red nad zbirom stavki.
+    AssertEquals "1", CStr(AmbNoviBrojRedova(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU)), _
+                 "OTK ambalaza: primljeno = JEDAN red, ne po klasi"
+    AssertTrue Abs(AmbNoviKolicina(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU) - 50#) < 0.001, _
+               "OTK ambalaza: primljeno nosi zbir stavki"
+    AssertEquals AMB_NALOG_KOOPERANT, _
+                 AmbNoviPolje(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU, COL_AMB_OD_TIP), _
+                 "OTK ambalaza: primljeno ide OD kooperanta"
+    AssertEquals TEST_KOOP_ID, _
+                 AmbNoviPolje(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU, COL_AMB_OD_ID), _
+                 "OTK ambalaza: primljeno imenuje BAS tog kooperanta"
+    AssertEquals AMB_NALOG_STANICA, _
+                 AmbNoviPolje(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU, COL_AMB_NA_TIP), _
+                 "OTK ambalaza: primljeno ide NA stanicu"
+    AssertEquals TEST_ST_ID, _
+                 AmbNoviPolje(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU, COL_AMB_NA_ID), _
+                 "OTK ambalaza: primljeno imenuje BAS tu stanicu"
 
-    ' Vozac se NE zigose -- otkup ga u ciljnom modelu nema.
-    AssertEquals "", AmbVozac(otkID, DOK_TIP_OTKUP, "Izlaz"), _
-                 "OTK ambalaza: nema vozaca na otkupnoj nozi"
+    ' Izdate gajbe: obrnut par, ISTI tip dokumenta. Pozajmljen DokumentTIP
+    ' (OM-Izlaz-Koop) je napetost T3 iz AMBALAZA.md i vise ne nastaje -- dogadjaj
+    ' se desava UNUTAR otkupa, a AMB-INV-04 ih razlikuje po VrstaKretanja.
+    AssertEquals "1", _
+                 CStr(AmbNoviBrojRedova(otkID, DOK_TIP_OTKUP, AMB_VK_IZDATA_PRAZNA)), _
+                 "OTK ambalaza: izdato = JEDAN red, pod ISTIM tipom dokumenta"
+    AssertEquals "0", CStr(AmbBrojRedova(otkID, DOK_TIP_OM_IZLAZ_KOOP)), _
+                 "OTK ambalaza: pozajmljen tip dokumenta vise ne nastaje"
+    AssertTrue Abs(AmbNoviKolicina(otkID, DOK_TIP_OTKUP, AMB_VK_IZDATA_PRAZNA) - 7#) < 0.001, _
+               "OTK ambalaza: izdato nosi kolicinu sa zaglavlja"
+    AssertEquals AMB_NALOG_STANICA, _
+                 AmbNoviPolje(otkID, DOK_TIP_OTKUP, AMB_VK_IZDATA_PRAZNA, COL_AMB_OD_TIP), _
+                 "OTK ambalaza: izdato ide OD stanice"
+    AssertEquals AMB_NALOG_KOOPERANT, _
+                 AmbNoviPolje(otkID, DOK_TIP_OTKUP, AMB_VK_IZDATA_PRAZNA, COL_AMB_NA_TIP), _
+                 "OTK ambalaza: izdato ide NA kooperanta"
+
+    ' Vozac nije STRANA ni u jednom redu otkupa. Tvrdnja nad kolonom VozacID bi
+    ' posle prelaza prolazila vakuumski -- nov pisac tu kolonu ne pise nikad.
+    AssertEquals "0", CStr(AmbNoviBrojSaNalogom(otkID, DOK_TIP_OTKUP, AMB_NALOG_VOZAC)), _
+                 "OTK ambalaza: vozac nije strana ni u jednom redu otkupa"
 
     ' Bez gajbi nema ni reda -- prazan upis nije nula, nego odsustvo.
     Dim otkID2 As String
@@ -18465,6 +18628,10 @@ Private Sub Test_OTK_StornoJednimID()
     Set h = OtkHeader(TEST_PREFIX & "-OTK-SJ-" & scenario)
     h.Add "KolAmbIzdata", 7#
 
+    Dim stPre As Double, koopPre As Double
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    koopPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)
+
     Dim otkID As String
     otkID = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 600#, 40#, 30))
     AssertTrue Len(otkID) > 0, "OTK storno: dvoklasni dokument upisan"
@@ -18475,11 +18642,17 @@ Private Sub Test_OTK_StornoJednimID()
 
     AssertEquals "Da", OtkPolje(otkID, COL_STORNIRANO), "OTK storno: header storniran"
 
-    ' Obe noge ambalaze idu sa dokumentom -- primljena i izdata.
-    AssertEquals "Da", AmbPolje(otkID, DOK_TIP_OTKUP, "Izlaz", COL_STORNIRANO), _
-                 "OTK storno: primljena ambalaza stornirana"
-    AssertEquals "Da", AmbPolje(otkID, DOK_TIP_OM_IZLAZ_KOOP, "Ulaz", COL_STORNIRANO), _
-                 "OTK storno: izdata ambalaza stornirana"
+    ' OBA DOGADJAJA IDU SA DOKUMENTOM, i to KONTRA-STAVOM a ne zastavicom:
+    ' nov citalac salda zastavicu ne gleda, pa bi zigosan red ostavio gajbe u
+    ' opticaju tiho (AMB-10-ODL-16). Tvrdnja je zato nad SALDOM, ne nad kolonom.
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, _
+                   TEST_TIP_AMB) - stPre) < 0.001, _
+               "OTK storno: saldo stanice se vraca na stanje pre otkupa"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                   TEST_TIP_AMB) - koopPre) < 0.001, _
+               "OTK storno: saldo kooperanta se vraca na stanje pre otkupa"
+    AssertEquals "2", CStr(AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)), _
+                 "OTK storno: oba dogadjaja otkupa imaju svoj kontra-stav"
 
     ' Stavke NEMAJU svoj storno: aktivnost stavke je pitanje za header (S7).
     AssertEquals "2", CStr(OtkBrojStavkiZaOtkup(otkID)), _
@@ -19776,7 +19949,8 @@ Private Sub Test_OTK_OdvezanVirmanJeRaspolozivAvans()
     AssertTrue Abs(GetKooperantUnallocatedAvans(TEST_KOOP_ID) - pre) < 0.001, _
                "Odvezan virman: dok je vezan za blok NIJE raspoloziv"
 
-    AssertTrue modStorno.StornoOtkup(otkID), "Odvezan virman: storno prosao"
+    ' Produkcioni ulaz, ne jezgro: jezgro trazi tx (AMB-INV-08), a _TX ga nosi.
+    AssertTrue modStorno.StornoOtkup_TX(otkID), "Odvezan virman: storno prosao"
 
     ' Posle storna JESTE raspoloziv. Pre odluke je ovde bilo 0.
     AssertTrue Abs(GetKooperantUnallocatedAvans(TEST_KOOP_ID) - pre - 7000#) < 0.001, _
@@ -20901,6 +21075,91 @@ Private Function AmbRedovi(ByVal dokID As String, ByVal dokTip As String) As Col
             End If
         End If
     Next i
+End Function
+
+' ---- citaoci NOVOG oblika reda knjige ----
+'
+' Identitet reda je (DokumentTip, DokumentID, VrstaKretanja) -- tacno kljuc koji
+' AMB-INV-04 cuva, pa helper ne mora da zna nista o smeru. Kontra-stavovi su
+' IZUZETI (StornoOd neprazan): tvrdnja meri sta je dokument knjizio, ne sta je od
+' toga kasnije povuceno.
+Private Function AmbNoviRedIdx(ByVal dokID As String, ByVal dokTip As String, _
+                               ByVal vrsta As String) As Long
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cVK As Long, cSt As Long
+    cVK = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, "AmbNoviRedIdx")
+    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, "AmbNoviRedIdx")
+
+    Dim i As Variant
+    For Each i In AmbRedovi(dokID, dokTip)
+        If Len(Trim$(nz(d(CLng(i), cSt), ""))) = 0 Then
+            If StrComp(Trim$(nz(d(CLng(i), cVK), "")), vrsta, vbTextCompare) = 0 Then
+                AmbNoviRedIdx = CLng(i)
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+Private Function AmbNoviBrojRedova(ByVal dokID As String, ByVal dokTip As String, _
+                                   ByVal vrsta As String) As Long
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cVK As Long, cSt As Long
+    cVK = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, "AmbNoviBrojRedova")
+    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, "AmbNoviBrojRedova")
+
+    Dim i As Variant, n As Long
+    For Each i In AmbRedovi(dokID, dokTip)
+        If Len(Trim$(nz(d(CLng(i), cSt), ""))) = 0 Then
+            If StrComp(Trim$(nz(d(CLng(i), cVK), "")), vrsta, vbTextCompare) = 0 Then n = n + 1
+        End If
+    Next i
+    AmbNoviBrojRedova = n
+End Function
+
+Private Function AmbNoviPolje(ByVal dokID As String, ByVal dokTip As String, _
+                              ByVal vrsta As String, ByVal kolona As String) As String
+    Dim r As Long
+    r = AmbNoviRedIdx(dokID, dokTip, vrsta)
+    If r = 0 Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    AmbNoviPolje = Trim$(nz(d(r, RequireColumnIndex(TBL_AMBALAZA, kolona, "AmbNoviPolje")), ""))
+End Function
+
+Private Function AmbNoviKolicina(ByVal dokID As String, ByVal dokTip As String, _
+                                 ByVal vrsta As String) As Double
+    Dim s As String
+    s = AmbNoviPolje(dokID, dokTip, vrsta, COL_AMB_KOLICINA)
+    If IsNumeric(s) Then AmbNoviKolicina = CDbl(s)
+End Function
+
+' Koliko redova dokumenta ima dati nalog kao STRANU (Od ili Na). Zamena za
+' tvrdnju nad kolonom VozacID: posle prelaza se ta kolona ne pise nikad, pa bi
+' tvrdnja "vozac je prazan" prolazila vakuumski.
+Private Function AmbNoviBrojSaNalogom(ByVal dokID As String, ByVal dokTip As String, _
+                                      ByVal nalogTip As String) As Long
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cOd As Long, cNa As Long
+    cOd = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_OD_TIP, "AmbNoviBrojSaNalogom")
+    cNa = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_NA_TIP, "AmbNoviBrojSaNalogom")
+
+    Dim i As Variant, n As Long
+    For Each i In AmbRedovi(dokID, dokTip)
+        If StrComp(Trim$(nz(d(CLng(i), cOd), "")), nalogTip, vbTextCompare) = 0 Or _
+           StrComp(Trim$(nz(d(CLng(i), cNa), "")), nalogTip, vbTextCompare) = 0 Then n = n + 1
+    Next i
+    AmbNoviBrojSaNalogom = n
 End Function
 
 ' Kontra-stavovi dokumenta -- redovi sa nepraznim StornoOd. Oblik-neutralno:

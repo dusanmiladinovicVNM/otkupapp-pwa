@@ -6859,6 +6859,34 @@ SABOTAZE = {
         "Test_Amb_StornoPosleVracanjaOdbijen",
         "STORNO: ulaz tudje ambalaze koja je vracena se NE stornira (AMB-INV-09)",
     ),
+    # Izdate prazne se ne knjize: dokument ostaje sa jednim dogadjajem, a
+    # kooperantovo zaduzenje za prazne gajbe nestaje bez traga.
+    "amb-otkup-izdato-ne-knjizi": (
+        "modOtkup.bas",
+        "    If izdato > 0 Then\n",
+        "    If False Then   ' SABOTAZA: izdate prazne se ne knjize\n",
+        "Test_OTK_AmbalazaIdeNaDokument",
+        "OTK ambalaza: dokument ima DVA reda -- dva dogadjaja, ne cetiri noge",
+    ),
+    # Primljeno nosi kolicinu IZDATOG: saldo se razilazi sa dokumentom, a oba
+    # reda izgledaju uredno.
+    "amb-otkup-primljeno-nosi-izdato": (
+        "modOtkup.bas",
+        "        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, primljeno, _\n",
+        "        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, primljeno + 1#, _\n",
+        "Test_OTK_AmbalazaIdeNaDokument",
+        "OTK ambalaza: primljeno nosi zbir stavki",
+    ),
+    # Storno otkupa bez kontra-stava: zastavica se okrene, test koji je cita bi
+    # ostao zelen, a gajbe ostaju na saldu. Kvar zbog kog ulaz storna ide PRED
+    # cutover (AMB-10-ODL-16).
+    "amb-otkup-storno-bez-kontrastava": (
+        "modStorno.bas",
+        "    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_OTKUP, otkupID\n",
+        "    ' SABOTAZA: storno otkupa ostaje na zastavici\n",
+        "Test_OTK_StornoJednimID",
+        "OTK storno: saldo stanice se vraca na stanje pre otkupa",
+    ),
     # Validator postoji, ali se ne zove iz pisca -- tacno placebo koji bi tablica
     # istinitosti pustila zelenu.
     "amb-odl9-validator-se-ne-zove": (
