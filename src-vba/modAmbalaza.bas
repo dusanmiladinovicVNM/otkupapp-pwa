@@ -1230,13 +1230,18 @@ End Function
 ' Red se gradi PO IMENU KOLONE (SetRowValueByColumn), ne golim Array(...):
 ' AppendRow pise poziciono, pa bi kolona ubacena u sredinu tiho poslala sve iza
 ' sebe u pogresna polja.
-Public Function UpisiAmbDokument(ByVal vrsta As String, ByVal broj As String, _
+' Zaglavlje trazi SVOJU tabelu u snapshotu, ne knjigu: pozivalac koji kreira
+' dokument I redove mora da snapshotuje OBE, inace rollback vraca pola
+' dokumenta -- zaglavlje bez redova ili redove bez zaglavlja.
+Public Function UpisiAmbDokument(ByVal tx As clsTransaction, _
+                                 ByVal vrsta As String, ByVal broj As String, _
                                  ByVal datum As Date, _
                                  ByVal brojOwnerTip As String, _
                                  ByVal brojOwnerID As String, _
                                  Optional ByVal napomena As String = "") As String
     Const SRC As String = "modAmbalaza.UpisiAmbDokument"
 
+    RequireAmbTxVlasnistvo tx, TBL_AMBALAZA_DOKUMENT, SRC
     RequireAmbDokSchema SRC
     modAmbalazaUgovor.RequireAmbDok vrsta, broj, datum, brojOwnerTip, brojOwnerID, SRC
 
@@ -1319,13 +1324,20 @@ End Function
 ' ORIGINALE. Kontra-stav (StornoOd <> "") ima isti kljuc kao original po
 ' konstrukciji, pa se na njega ne primenjuje -- njegovu jedinstvenost drzi
 ' AMB-INV-06, u 10d.
-Private Function UpisiRedKnjige(ByVal datum As Date, ByVal tipAmb As String, _
+' AMB-INV-08 ZIVI OVDE, jer kroz ovu funkciju prolazi SVAKI red knjige -- i
+' pokrice deficita i ostatak podele, ne samo trazeni prenos. Kopija kapije na
+' ulazu u PrenesiAmbalazu bila bi placebo: jezgro bi odbilo isti upis i bez nje,
+' pa je nijedna sabotaza ne bi mogla oboriti. Isti razlog je tamo vec zapisan za
+' identitet dokumenta.
+Private Function UpisiRedKnjige(ByVal tx As clsTransaction, _
+                                ByVal datum As Date, ByVal tipAmb As String, _
                                 ByVal kolicina As Double, _
                                 ByVal odTip As String, ByVal odID As String, _
                                 ByVal naTip As String, ByVal naID As String, _
                                 ByVal dokTip As String, ByVal dokID As String, _
                                 ByVal vrsta As String, ByVal stornoOd As String, _
                                 ByVal sourceName As String) As String
+    RequireAmbTxVlasnistvo tx, TBL_AMBALAZA, sourceName
     RequireKnjigaSchema sourceName
     modAmbalazaUgovor.RequireAmbPrenos odTip, odID, naTip, naID, kolicina, tipAmb, vrsta, sourceName
 
@@ -1619,6 +1631,34 @@ Private Function ZbirZahteva(ByVal dokTip As String, ByVal dokID As String, _
     ZbirZahteva = zbir
 End Function
 
+' AMB-INV-08: nijedan upis u knjigu ne nastaje van vlasnistva transakcije
+' izvornog dokumenta.
+'
+' Ovo je bila STATICKA kapija u planu, i napisana je -- pa pala na svom drugom
+' nivou dokaza. Pravilo "neki predak u pozivnom lancu poseduje tx sa snapshotom"
+' je nad 4120 procedura i 17 vlasnika uvek istinito ako se ide dovoljno visoko:
+' skinuta su oba AddTableSnapshot iz modOtkup, a kapija je ostala zelena. Alat
+' koji se moze prevariti dubinom ne sme da cuva invarijantu.
+'
+' Zato pisac TRAZI transakciju i sam pita. Razlika nije stilska:
+'   - poziv bez tx je COMPILE ERROR, ne nalaz koji se moze ignorisati;
+'   - nema grafa, nema dubine, nema laznog zelenog ni laznog nalaza;
+'   - sabotaza je prava: skini snapshot, pisac padne po imenu.
+Private Sub RequireAmbTxVlasnistvo(ByVal tx As clsTransaction, _
+                                   ByVal tabela As String, _
+                                   ByVal sourceName As String)
+    If tx Is Nothing Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, sourceName, _
+                  "AMB-INV-08: upis u " & tabela & " bez transakcije. Pisac " & _
+                  "trazi clsTransaction izvornog dokumenta."
+    End If
+    If Not tx.ImaSnapshot(tabela) Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, sourceName, _
+                  "AMB-INV-08: transakcija ne snapshotuje " & tabela & _
+                  " -- rollback izvornog dokumenta ne bi vratio ambalazu."
+    End If
+End Sub
+
 ' ============================================================
 ' PRENESI AMBALAZU -- javni ulaz u knjigu
 ' ============================================================
@@ -1632,7 +1672,8 @@ End Function
 '
 ' potvrdaDeficita: -1 znaci "nije data". Nula NIJE sentinela -- deficit nula ne
 ' trazi potvrdu, pa bi 0 bila dvosmislena vrednost.
-Public Function PrenesiAmbalazu(ByVal datum As Date, ByVal tipAmb As String, _
+Public Function PrenesiAmbalazu(ByVal tx As clsTransaction, _
+                                ByVal datum As Date, ByVal tipAmb As String, _
                                 ByVal kolicina As Double, _
                                 ByVal odTip As String, ByVal odID As String, _
                                 ByVal naTip As String, ByVal naID As String, _
@@ -1752,13 +1793,13 @@ Public Function PrenesiAmbalazu(ByVal datum As Date, ByVal tipAmb As String, _
 
     Dim glavniID As String
     If glavna > 0 Then
-        glavniID = UpisiRedKnjige(datum, tipAmb, glavna, odTip, odID, naTip, naID, _
+        glavniID = UpisiRedKnjige(tx, datum, tipAmb, glavna, odTip, odID, naTip, naID, _
                                   dokTip, dokID, vrstaK, "", SRC)
     End If
 
     If ostatak > 0 Then
         Dim ostatakID As String
-        ostatakID = UpisiRedKnjige(datum, tipAmb, ostatak, odTip, odID, naTip, naID, _
+        ostatakID = UpisiRedKnjige(tx, datum, tipAmb, ostatak, odTip, odID, naTip, naID, _
                                    dokTip, dokID, AMB_VK_IZDATA_PRAZNA, "", SRC)
         If Len(glavniID) = 0 Then glavniID = ostatakID
     End If
@@ -1768,7 +1809,7 @@ Public Function PrenesiAmbalazu(ByVal datum As Date, ByVal tipAmb As String, _
     End If
 
     If pokriceZaUpis > 0 Then
-        UpisiRedKnjige datum, tipAmb, pokriceZaUpis, _
+        UpisiRedKnjige tx, datum, tipAmb, pokriceZaUpis, _
                        AMB_NALOG_SPOLJNI, "", odTip, odID, _
                        dokTip, dokID, AMB_VK_ULAZ_TUDJE, "", SRC
     End If

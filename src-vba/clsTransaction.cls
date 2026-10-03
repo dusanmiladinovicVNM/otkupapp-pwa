@@ -149,6 +149,21 @@ Public Sub RollbackTx()
     End If
 End Sub
 
+' Je li tabela u ovoj transakciji -- citac za AMB-INV-08.
+'
+' Pisac knjige ne moze da zna da li ga je pozivalac snapshotovao: tx je lokalan
+' objekat i nema globalnog "tekuceg tx". Zato ga pisac TRAZI kao argument i pita
+' ovo -- invarijanta time prestaje da bude tvrdnja o obliku koda.
+'
+' FAIL-CLOSED: neaktivna transakcija (posle Commit/Rollback, ili pre BeginTx)
+' vraca False. Upis posle commit-a nije pokriven rollback-om, pa "nema snapshot"
+' jeste tacan odgovor, ne tehnikalija.
+Public Function ImaSnapshot(ByVal tableName As String) As Boolean
+    If Not mActive Then Exit Function
+    If mSnapshots Is Nothing Then Exit Function
+    ImaSnapshot = mSnapshots.Exists(tableName)
+End Function
+
 ' Nepotpun rollback je cinjenica koju pozivalac mora moci da PROCITA -- signal
 ' koji ne stigne do citaoca ne postoji. Vazi od zadnjeg RollbackTx-a nad ovom
 ' instancom; BeginTx ga resetuje.

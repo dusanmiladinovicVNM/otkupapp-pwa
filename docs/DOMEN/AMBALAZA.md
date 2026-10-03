@@ -1059,6 +1059,61 @@ koje je posledica `AMB-INV-07` a ne vrsta posla). `IZDATA_PRAZNA` tu **ne sme**:
 mi izdajemo partneru, dokument je **naš**, dakle `REVERS`. Ni `PRENOS_INTERNO`:
 interno kretanje ne može imati partnerov papir kao povod.
 
+### 6.12c `AMB-INV-08` je u JEZGRU, ne u statickoj analizi
+
+Plan je za `10b-2` predvidjao **staticku kapiju** za `AMB-INV-08`. Napisana je:
+hod po pozivnom grafu, kljuc po `(modul, procedura)`, razrešavanje nekvalifikovanog
+poziva prvo u istom modulu, 10 self-test slučajeva u oba smera, zelena nad pravim
+izvorom.
+
+**I pala je na drugom nivou dokaza.** Pravilo je bilo *„neki predak u pozivnom lancu
+poseduje `clsTransaction` sa snapshotom"* — a nad **4120 procedura** i **17**
+vlasnika koji snapshotuju `tblAmbalaza` to je uvek istinito ako se ide dovoljno
+visoko. Skinuta su **oba** `AddTableSnapshot TBL_AMBALAZA` iz `modOtkup`, i kapija
+je ostala **zelena**, `rc=0`, nula nalaza.
+
+Ispravno staticko pravilo (*„nijedna putanja od ulazne tačke do pisca ne sme da
+izbegne vlasnika"*) je rešivo, ali nosi stvarnu šansu za lažne nalaze nad 4120
+procedura — a invarijantu ne sme da čuva alat koji se može prevariti dubinom.
+
+> **AMB-10-ODL-11.** `AMB-INV-08` se sprovodi u **jezgru**: pisac **traži**
+> `clsTransaction` i sam proverava snapshot. Statickke analize nema.
+
+```vba
+clsTransaction.ImaSnapshot(tableName)   fail-closed: neaktivna tx vraca False
+PrenesiAmbalazu(tx, ...)   -> UpisiRedKnjige trazi snapshot tblAmbalaza
+UpisiAmbDokument(tx, ...)  -> trazi snapshot tblAmbalazaDokument
+```
+
+Razlika nije stilska:
+
+| | |
+|---|---|
+poziv bez `tx` | **compile error**, ne nalaz koji se može ignorisati |
+lažno zeleno | nemoguće — nema grafa, nema dubine |
+lažen nalaz | nemoguć — nema heuristike |
+sabotaža | prava: skini snapshot, pisac padne **po imenu** |
+
+Kapija stoji u **`UpisiRedKnjige`**, kroz koji prolazi **svaki** red knjige — i
+pokriće deficita i ostatak podele — a ne na ulazu u `PrenesiAmbalazu`. Kopija na
+ulazu bila bi placebo: jezgro bi odbilo isti upis i bez nje, pa je nijedna sabotaža
+ne bi mogla oboriti. Isti razlog je tamo već zapisan za identitet dokumenta.
+
+Zaglavlje traži **svoju** tabelu, ne knjigu: pozivalac koji kreira dokument **i**
+redove mora da snapshotuje **obe**, inače rollback vraća pola dokumenta — zaglavlje
+bez redova ili redove bez zaglavlja.
+
+*Provera:* `Test_Amb_Inv08TxVlasnistvo` (7 tvrdnji) + tri sabotaže
+(`amb-inv08-tabela-se-ne-proverava`, `amb-inv08-zaglavlje-bez-kapije`,
+`amb-inv08-imasnapshot-fail-open`). Pozitivan smer se ne ponavlja u tom testu:
+**50** poziva u četiri `Amb` testa prolaze kroz istu kapiju sa ispravnim
+snapshotom, pa bi „uvek odbij" oborilo njih.
+
+**Prva verzija tog testa je bila placebo** i to je izmereno pre commit-a: koristila
+je `dokID = "NEMA"`, pa je `PrenesiAmbalazu` padala na `AmbDokVrstaZaID` još pre
+jezgra — tvrdnja „puklo" je bila istinita iz pogrešnog razloga. Sada zaglavlje iz
+iste transakcije daje **pravi** `dokID`.
+
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
 1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..09`, protokol potvrde deficita, storno-svesna formula obaveze i njena donja granica. **Bez produkcionog cutovera.**

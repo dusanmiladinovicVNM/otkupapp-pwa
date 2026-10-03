@@ -6722,6 +6722,36 @@ SABOTAZE = {
         "Test_Amb_PisacKnjige",
         "AmbDok: partnerov revers NE nosi IZDATA_PRAZNA",
     ),
+    # Kapija prestaje da pita TABELU, a jos pita postoji li tx. Pada tvrdnja o
+    # redu knjige; tvrdnja "bez transakcije" pre nje PROLAZI, pa se vidi da je
+    # izgubljena bas provera snapshota.
+    "amb-inv08-tabela-se-ne-proverava": (
+        "modAmbalaza.bas",
+        "    If Not tx.ImaSnapshot(tabela) Then\n",
+        "    If False Then   ' SABOTAZA: tabela se ne proverava\n",
+        "Test_Amb_Inv08TxVlasnistvo",
+        "AMB-INV-08: red knjige bez snapshota knjige mora pasti",
+    ),
+    # Zaglavlje gubi SVOJU kapiju, a knjiga je zadrzava: pozivalac koji kreira
+    # dokument i redove mogao bi da snapshotuje samo knjigu, pa bi rollback
+    # vratio redove a ostavio zaglavlje -- siroce.
+    "amb-inv08-zaglavlje-bez-kapije": (
+        "modAmbalaza.bas",
+        "    RequireAmbTxVlasnistvo tx, TBL_AMBALAZA_DOKUMENT, SRC\n",
+        "    ' SABOTAZA: zaglavlje ne proverava vlasnistvo transakcije\n",
+        "Test_Amb_Inv08TxVlasnistvo",
+        "AMB-INV-08: zaglavlje bez snapshota SVOJE tabele mora pasti",
+    ),
+    # ImaSnapshot postaje fail-open za neaktivnu transakciju: upis posle commit-a
+    # ili rollback-a nije pokriven, a citac bi rekao da jeste.
+    "amb-inv08-imasnapshot-fail-open": (
+        "clsTransaction.cls",
+        "    If Not mActive Then Exit Function\n"
+        "    If mSnapshots Is Nothing Then Exit Function\n",
+        "    If mSnapshots Is Nothing Then Exit Function   ' SABOTAZA: mActive se ne gleda\n",
+        "Test_Amb_Inv08TxVlasnistvo",
+        "ImaSnapshot je fail-closed: posle rollback-a nema snapshota",
+    ),
 }
 
 
