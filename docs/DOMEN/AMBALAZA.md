@@ -389,14 +389,19 @@ Nema grananja po tipu, nema inverzije, vozac ispada sam jer je **nalog**.
 Danasnja inverzija je fail-open: citalac koji zaboravi `VozacAmbEffectiveSmer`
 dobija **pogresan znak**, ne gresku.
 
-Storno je kontra-stav:
+Storno je kontra-stav, a ulaz je **po dokumentu**:
 
 ```
-StornirajPrenos(originalAmbID)     ' i nista vise
+StornirajAmbalazuDokumenta(tx, dokTip, dokID)     ' i nista vise
 ```
 
-Pozivalac **ne salje** strane, kolicinu ni tip — pisac ih cita iz originala.
-Pozivalac koji sme da posalje svoj iznos sme i da posalje pogresan.
+Pozivalac **ne salje** strane, kolicinu, tip ni `AmbID` — pisac ih cita iz
+originala. Pozivalac koji sme da posalje svoj iznos sme i da posalje pogresan.
+
+**Zasto po dokumentu, a ne po redu** (`AMB-10-ODL-16`, 6.12d): zivotni ciklus
+ima **dokument**, ne red. `modStorno.StornoOtkup_TX` zna `otkupID`, a `AmbID`-jeve
+ne zna — pa bi ulaz po redu vratio na pozivaoca tacno onaj posao koji mu se ovde
+odbija. Princip ostaje: pozivalac posalje **identitet**, pisac procita ostalo.
 
 | Pitanje | Upit |
 |---|---|
@@ -1233,6 +1238,65 @@ preširoka.
 (pokvareno očekivanje self-testa, pa poziv u nedozvoljenoj proceduri nad pravim
 izvorom).
 
+### 6.12d Storno u knjizi — kontra-stav, i njegov ulaz ide PRED cutover
+
+Ulaz za storno je u planu stajao kao `10d`, **posle** cutovera devet mesta
+knjizenja. Merenje pred prvi rez je pokazalo da taj red ne stoji:
+
+| Sto je mereno | Nalaz |
+|---|---|
+| `RedDoticeKnjigu` / `AmbSaldoNaloga` | ne citaju `Stornirano` **nigde** — red se vidi po `Od_*`/`Na_*`/`VrstaKretanja`/`StornoOd` |
+| `modStorno.StornoAmbalazaByDokument` | otkazuje gajbe **zastavicom** (`MarkRowStornirano`) |
+| `modStorno` linije 170, 245, 458 | otkup, otpremnica i prijemnica idu tim putem |
+
+Dakle: dokument presecen na nov model, a storniran zastavicom, ostavlja gajbe
+na saldu **tiho**. Zastavica se i dalje okrece, test koji je cita ostaje
+**zelen**, a saldo je pogresan — lazno zeleno, ne pad. `NABAVKA` je mogla da
+legne sama jer storno put **nema**; otkup, otpremnica i prijemnica ga imaju.
+
+> **AMB-10-ODL-16.** Storno u knjizi je **kontra-stav**, i njegov ulaz je
+> `modAmbalaza.StornirajAmbalazuDokumenta(tx, dokTip, dokID)` — **po dokumentu**,
+> jer zivotni ciklus ima dokument a ne red (6.8). Ulaz legne **pre** cutovera
+> mesta knjizenja, ne posle njega.
+>
+> Tri svojstva su deo odluke, ne implementacije:
+>
+> **Datum kontra-stava je datum ORIGINALA**, ne danasnji. Stara zastavica je red
+> uklanjala iz **svih** perioda; isti datum je jedini oblik koji ne menja nijedan
+> periodski saldo. Danasnji datum ostavio bi fantom u starom periodu i visak u
+> novom.
+>
+> **Idempotentno.** Original koji vec ima kontra-stav se preskace, pa drugi poziv
+> vraca `0`. Bez toga drugi storno ne vraca saldo na nulu nego ga prebacuje na
+> drugu stranu.
+>
+> **`AMB-INV-09` se meri nad POSLE-stanjem.** Zahtev nije nov — pisac ga je sam
+> imenovao kao nasledje za ulaz storna: storno **ulaza tudje ambalaze** cija je
+> obaveza vec zatvorena vracanjem daje **negativnu** obavezu, i takav storno se
+> odbija. Meri se **postojecim** citaocem (`AmbObavezaPartneru`) nad upisanim
+> stanjem, ne drugom kopijom pravila o znaku — druga kopija bi se razisla sa
+> prvom.
+
+> **AMB-10-ODL-17.** Kontra-stav nosi **zamenjene** `Od` i `Na`, pa se njegov
+> prenos proverava **u obrnutom smeru** — u smeru originala. Bez toga ga odbija
+> matrica klasa: `IZDATA_PRAZNA` trazi `SOPSTVENI` kao izvor, a kontra-stav tu
+> ima partnera. Pravilo stoji na **jednom** mestu u pisacu
+> (`UpisiRedKnjige`), uz citaoca koji ga je vec imao (`KnjigaRedProblem`) — dve
+> kopije bi se razisle, a razlika bi se videla samo kao odbijen storno.
+
+**`BindSourceDocument` iz storna nije samopotvrda.** Ulaz vezuje dokument koji
+stornira, ali ista kapija (`RequireAmbTxIzvorniDokument`) trazi i **izvornu
+tabelu** tog dokumenta u snapshotu te transakcije — a to pozivalac mora stvarno
+da ispuni. Zato je `modAmbalaza.StornirajAmbalazuDokumenta` drugi clan
+`AMB_BIND_DOZVOLJENI` (`AMB-10-ODL-15`), i uz njega u `tools/vba_check.py` stoji
+**sta ga cini kanonskim** — lista bez tog obrazlozenja postaje spisak izuzetaka.
+
+*Provera:* `Test_Amb_StornoKontraStavVracaSaldo` 9 tvrdnji ·
+`Test_Amb_StornoPosleVracanjaOdbijen` 5 tvrdnji · sabotaze
+`amb-storno-ne-upisuje-kontrastav`, `amb-kontrastav-provera-u-istom-smeru`,
+`amb-storno-udvaja`, `amb-storno-posle-vracanja-prolazi` — svaka sa svojom
+prvom tvrdnjom.
+
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
 1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..09`, protokol potvrde deficita, storno-svesna formula obaveze i njena donja granica. **Bez produkcionog cutovera.**
@@ -1242,10 +1306,14 @@ izvorom).
    kapije `AMB-INV-01..04`, `-07`, `-09` i sabotaze. **Bez cutovera.**
 4. **AMB-10b-2** — svih devet mesta knjizenja + **razlaganje OBA slozena pisca**
    (`SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`): ambalaza ostaje, novcana polovina
-   odlazi u kasu. Uz njih i staticka kapija za `AMB-INV-08` i numeracija
-   ambalaznog dokumenta.
+   odlazi u kasu. Uz njih `AMB-INV-08` **u jezgru** (`AMB-10-ODL-11`; staticka
+   kapija je pala kao placebo, v. 6.12c) i numeracija ambalaznog dokumenta.
+   **Ulaz za storno (`10d`) legao je PRE ovog koraka** — razlog je meren, v. 6.12d.
 5. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
-6. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit.
+6. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit. **Ulaz je
+   vec legao** (`AMB-10-ODL-16`, 6.12d), jer bez njega cutover dokumenta koji ima
+   storno put ostavlja gajbe na saldu tiho. Ostaje: istorijski upit i veza sa
+   `UndoOperation_TX`.
 7. **AMB-10e** — **tek tada** brisanje starog modela.
 
 > **NALAZ IZ `10b-1`, ZA `10b-2`: tabela tokom prelaza nosi DVA OBLIKA REDA.**

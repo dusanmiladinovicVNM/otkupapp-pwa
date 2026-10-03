@@ -305,6 +305,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_Amb_ZaglavljeDokumentaPisac
     Test_Amb_Inv08TxVlasnistvo
     Test_Amb_NabavkaOtvaraIzdavanje
+    Test_Amb_StornoKontraStavVracaSaldo
+    Test_Amb_StornoPosleVracanjaOdbijen
     Test_Amb_JedanProtivpartnerPoDokumentu
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
@@ -16914,6 +16916,214 @@ End Sub
 ' PREDUSLOV SVAKOG SCENARIJA JE NULA. Fixture nema redova novog oblika, pa je
 ' saldo svakog naloga 0 i stanje se gradi u testu. Prvi upis zato mora biti
 ' NABAVKA (GRANICA -> SOPSTVENI): jedini prenos koji ne trazi postojeci saldo.
+' STORNO U KNJIZI: kontra-stav vraca saldo, zastavica ga ne bi vratila.
+'
+' Meri POSLOVNU POSLEDICU, ne upis. Nov citalac (RedDoticeKnjigu/AmbSaldoNaloga)
+' ne gleda COL_STORNIRANO nigde, pa dokument storniran zastavicom ostavlja gajbe
+' na saldu. Tvrdnja (c) je zato jedina koja dokazuje da ulaz ima svrhu.
+'
+' Tvrdnje su nad DELTOM i nad vracanjem na izmerenu pre-vrednost, ne nad
+' apsolutnim brojem: suite vrti vise testova nad istim fixture-om.
+Private Sub Test_Amb_StornoKontraStavVracaSaldo()
+    Dim scenario As String
+    Dim tx As clsTransaction, txNula As clsTransaction
+    Dim dokID As String, ambID As String, pokazuje As String
+    Dim stPre As Double, koopPre As Double
+    Dim stPosle As Double, koopPosle As Double
+    Dim stStorno As Double, koopStorno As Double
+    Dim stDrugi As Double
+    Dim n1 As Long, n2 As Long
+    Dim pukloStorno As Boolean, opisStorno As String
+    Dim pukloBezTx As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("STKS")
+
+    ' Stanica mora imati sta da izda -- inace AMB-10-ODL-8 tvrdo odbija.
+    modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, TEST_TIP_AMB, 12#
+
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    koopPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)
+
+    ' --- dogadjaj: stanica izdaje 5 praznih kooperantu
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "STK-" & scenario, _
+                                         Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    ambID = modAmbalaza.PrenesiAmbalazu(tx, Date, TEST_TIP_AMB, 5#, _
+                       AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                       AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokID)
+    tx.CommitTx
+    Set tx = Nothing
+
+    stPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    koopPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)
+
+    ' --- storno: kontra-stav, ne zastavica
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    On Error Resume Next
+    n1 = modAmbalaza.StornirajAmbalazuDokumenta(tx, DOK_TIP_AMBALAZA_DOKUMENT, dokID)
+    pukloStorno = (Err.Number <> 0)
+    opisStorno = Err.description
+    Err.Clear
+    On Error GoTo EH
+    If pukloStorno Then tx.RollbackTx Else tx.CommitTx
+    Set tx = Nothing
+
+    stStorno = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    koopStorno = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)
+    pokazuje = AmbStornoOdPrvi(dokID, DOK_TIP_AMBALAZA_DOKUMENT)
+
+    ' --- drugi poziv: nema sta da se stornira dvaput
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    n2 = modAmbalaza.StornirajAmbalazuDokumenta(tx, DOK_TIP_AMBALAZA_DOKUMENT, dokID)
+    tx.CommitTx
+    Set tx = Nothing
+    stDrugi = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+
+    ' --- bez transakcije: AMB-INV-08 ne poznaje upis van vlasnistva
+    On Error Resume Next
+    modAmbalaza.StornirajAmbalazuDokumenta txNula, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    pukloBezTx = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue Abs((stPre - stPosle) - 5#) < 0.001, _
+               "STORNO: izdavanje je skinulo gajbe sa stanice"
+    AssertFalse pukloStorno, _
+                "STORNO: kontra-stav IZDATA_PRAZNA prolazi jer se proverava OBRNUTO"
+    AssertTrue Abs(stStorno - stPre) < 0.001, _
+               "STORNO: saldo stanice se vraca na stanje pre dogadjaja"
+    AssertTrue Abs(koopStorno - koopPre) < 0.001, _
+               "STORNO: saldo kooperanta se vraca na stanje pre dogadjaja"
+    AssertEquals "1", CStr(n1), _
+                 "STORNO: kontra-stav je upisan za svaki aktivan red dokumenta"
+    AssertEquals ambID, pokazuje, _
+                 "STORNO: kontra-stav pokazuje na AmbID originala"
+    AssertEquals "0", CStr(n2), _
+                 "STORNO: drugi poziv ne upisuje nista (idempotentno)"
+    AssertTrue Abs(stDrugi - stPre) < 0.001, _
+               "STORNO: drugi poziv ne menja saldo"
+    AssertTrue pukloBezTx, _
+               "STORNO: bez transakcije se odbija"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal "Test_Amb_StornoKontraStavVracaSaldo", errNum, errDesc
+End Sub
+
+' AMB-INV-09 NAD POSLE-STANJEM: storno ULAZA tudje ambalaze koja je VEC vracena
+' se odbija.
+'
+' Zahtev nije nov -- pisac ga je imenovao kao nasledje za ulaz storna
+' (PrenesiAmbalazu, VRACANJE_TUDJE, "negativna obaveza ne spusta se na nulu").
+' Lanac: kooperant donese SVOJE gajbe (deficit -> pokrice ULAZ_TUDJE), stanica mu
+' ih vrati (VRACANJE_TUDJE), pa storno prvog dokumenta ostavlja obavezu -N.
+Private Sub Test_Amb_StornoPosleVracanjaOdbijen()
+    Dim scenario As String
+    Dim tx As clsTransaction
+    Dim dok1 As String, dok2 As String
+    Dim koopSaldo As Double, kol As Double, deficit As Double
+    Dim obavezaPosleVracanja As Double
+    Dim pukloStorno As Boolean, opisStorno As String
+    Dim kontraPosle As Long
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("STPV")
+
+    ' Deficit se PROIZVODI, ne pretpostavlja: kolicina se racuna iz zateceneg
+    ' salda, a stvaran manjak se CITA javnim racunom koji i UI koristi.
+    koopSaldo = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)
+    If koopSaldo > 0 Then kol = koopSaldo + 7# Else kol = 7#
+    deficit = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                                             TEST_TIP_AMB, kol)
+
+    ' Stanica mora imati cime da vrati.
+    modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, TEST_TIP_AMB, deficit + 5#
+
+    ' --- dokument 1: kooperant donosi svoje gajbe, pokrice ulazi u opticaj
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dok1 = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "SPV1-" & scenario, _
+                                        Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    modAmbalaza.PrenesiAmbalazu tx, Date, TEST_TIP_AMB, kol, _
+                AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_UZ_ROBU, DOK_TIP_AMBALAZA_DOKUMENT, dok1, deficit
+    tx.CommitTx
+    Set tx = Nothing
+
+    ' --- dokument 2: stanica vraca tacno onoliko koliko duguje
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dok2 = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "SPV2-" & scenario, _
+                                        Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    modAmbalaza.PrenesiAmbalazu tx, Date, TEST_TIP_AMB, deficit, _
+                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_VRACANJE_TUDJE, DOK_TIP_AMBALAZA_DOKUMENT, dok2
+    tx.CommitTx
+    Set tx = Nothing
+
+    obavezaPosleVracanja = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, _
+                                                          TEST_KOOP_ID, TEST_TIP_AMB)
+
+    ' --- storno dokumenta 1: obaveza bi pala pod nulu
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    On Error Resume Next
+    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_AMBALAZA_DOKUMENT, dok1
+    pukloStorno = (Err.Number <> 0)
+    opisStorno = Err.description
+    Err.Clear
+    On Error GoTo EH
+    tx.RollbackTx
+    Set tx = Nothing
+
+    kontraPosle = AmbBrojKontraStavova(dok1, DOK_TIP_AMBALAZA_DOKUMENT)
+
+    AssertTrue deficit > 0, _
+               "STORNO: scenario je stvarno proizveo manjak kooperanta"
+    AssertTrue Abs(obavezaPosleVracanja) < 0.001, _
+               "STORNO: vracanje je zatvorilo obavezu prema kooperantu"
+    AssertTrue pukloStorno, _
+               "STORNO: ulaz tudje ambalaze koja je vracena se NE stornira (AMB-INV-09)"
+    AssertTrue InStr(1, opisStorno, "AMB-INV-09") > 0, _
+               "STORNO: odbijenica imenuje AMB-INV-09: [" & opisStorno & "]"
+    AssertEquals "0", CStr(kontraPosle), _
+                 "STORNO: odbijen storno ne ostavlja kontra-stav"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal "Test_Amb_StornoPosleVracanjaOdbijen", errNum, errDesc
+End Sub
+
 ' NABAVKA: jedini put kojim NASE gajbe ulaze u opticaj.
 '
 ' Meri POSLOVNU POSLEDICU, ne upis. Pre nabavke stanica ne moze da izda vise
@@ -20689,6 +20899,45 @@ Private Function AmbRedovi(ByVal dokID As String, ByVal dokTip As String) As Col
             If StrComp(Trim$(nz(d(i, cTip), "")), dokTip, vbTextCompare) = 0 Then
                 c.Add i
             End If
+        End If
+    Next i
+End Function
+
+' Kontra-stavovi dokumenta -- redovi sa nepraznim StornoOd. Oblik-neutralno:
+' AmbRedovi grupise po (DokumentID, DokumentTip), sto vazi i u starom i u novom
+' modelu, pa helper ne mora da zna koji je red kog oblika.
+Private Function AmbBrojKontraStavova(ByVal dokID As String, _
+                                      ByVal dokTip As String) As Long
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cSt As Long
+    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, "AmbBrojKontraStavova")
+
+    Dim i As Variant, n As Long
+    For Each i In AmbRedovi(dokID, dokTip)
+        If Len(Trim$(nz(d(CLng(i), cSt), ""))) > 0 Then n = n + 1
+    Next i
+    AmbBrojKontraStavova = n
+End Function
+
+' AmbID na koji pokazuje PRVI kontra-stav dokumenta, inace "".
+Private Function AmbStornoOdPrvi(ByVal dokID As String, _
+                                 ByVal dokTip As String) As String
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cSt As Long
+    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, "AmbStornoOdPrvi")
+
+    Dim i As Variant, s As String
+    For Each i In AmbRedovi(dokID, dokTip)
+        s = Trim$(nz(d(CLng(i), cSt), ""))
+        If Len(s) > 0 Then
+            AmbStornoOdPrvi = s
+            Exit Function
         End If
     Next i
 End Function

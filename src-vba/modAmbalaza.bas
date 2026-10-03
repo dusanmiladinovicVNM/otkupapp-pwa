@@ -32,6 +32,7 @@ Public Const AMB_ERR_POTVRDA_DEFICITA As Long = vbObjectError + 4470
 Public Const AMB_ERR_DEFICIT_NEPOKRIV As Long = vbObjectError + 4471
 Public Const AMB_ERR_IDENTITET As Long = vbObjectError + 4472
 Public Const AMB_ERR_JEDAN_PARTNER As Long = vbObjectError + 4475
+Public Const AMB_ERR_STORNO As Long = vbObjectError + 4476
 Private Const AMB_ERR_KNJIGA_KVAR As Long = vbObjectError + 4473
 Private Const AMB_ERR_KNJIGA_ULAZ As Long = vbObjectError + 4474
 
@@ -722,8 +723,9 @@ End Function
 ' sa svojim brojem.
 '
 ' STA PISAC NE RADI:
-'   STORNO       -- kontra-stav sa StornoOd; svoj ulaz dobija u 10d. PrenesiAmbalazu
-'                   upisuje samo ORIGINALE, pa StornoOd ostaje prazan.
+'   STORNO       -- kontra-stav sa StornoOd. PrenesiAmbalazu upisuje samo
+'                   ORIGINALE, pa StornoOd ostaje prazan; ulaz za storno je
+'                   StornirajAmbalazuDokumenta (AMB-10-ODL-16).
 '   AMB-INV-08   -- "upis u istoj transakciji sa izvornim dokumentom" se ne moze
 '                   dokazati iznutra: clsTransaction nema globalan registar aktivne
 '                   transakcije. To je STATICKA kapija nad pozivnim mestima, a njih
@@ -1361,7 +1363,17 @@ Private Function UpisiRedKnjige(ByVal tx As clsTransaction, _
     RequireAmbTxVlasnistvo tx, TBL_AMBALAZA, sourceName
     RequireAmbTxIzvorniDokument tx, dokTip, dokID, sourceName
     RequireKnjigaSchema sourceName
-    modAmbalazaUgovor.RequireAmbPrenos odTip, odID, naTip, naID, kolicina, tipAmb, vrsta, sourceName
+
+    ' KONTRA-STAV SE PROVERAVA U OBRNUTOM SMERU -- isto pravilo koje citalac
+    ' vec ima (KnjigaRedProblem). Kontra-stav nosi zamenjene Od i Na, pa bi ga
+    ' prava provera odbila na matrici klasa: IZDATA_PRAZNA trazi SOPSTVENI kao
+    ' izvor, a kontra-stav tu ima partnera. Pravilo stoji na JEDNOM mestu u
+    ' pisacu, da ne moze da se razidje sa citaocem.
+    If Len(Trim$(stornoOd)) = 0 Then
+        modAmbalazaUgovor.RequireAmbPrenos odTip, odID, naTip, naID, kolicina, tipAmb, vrsta, sourceName
+    Else
+        modAmbalazaUgovor.RequireAmbPrenos naTip, naID, odTip, odID, kolicina, tipAmb, vrsta, sourceName
+    End If
 
     Dim vrstaK As String, odTipK As String, naTipK As String
     vrstaK = modAmbalazaUgovor.AmbVrstaKanon(vrsta)
@@ -1652,6 +1664,166 @@ Private Function ZbirZahteva(ByVal dokTip As String, ByVal dokID As String, _
 
     ZbirZahteva = zbir
 End Function
+
+' ============================================================
+' STORNO U KNJIZI -- KONTRA-STAV, NE ZASTAVICA (AMB-10-ODL-16)
+' ============================================================
+'
+' Zastavica Stornirano je mehanizam STAROG modela i nov citalac je ne gleda:
+' RedDoticeKnjigu trazi Od_*/Na_*/VrstaKretanja/StornoOd, a AmbSaldoNaloga
+' sumira po tome. Dokument presecen na nov model a storniran zastavicom
+' ostavio bi gajbe na saldu TIHO, pa ovaj ulaz ide PRED cutover mesta
+' knjizenja, ne posle njega.
+'
+' DATUM KONTRA-STAVA JE DATUM ORIGINALA, ne danasnji. Stara zastavica je red
+' uklanjala iz SVIH perioda; isti datum je jedini oblik koji ne menja nijedan
+' periodski saldo. Danasnji datum bi ostavio fantom u starom periodu i visak
+' u novom.
+'
+' IDEMPOTENTNO: original koji VEC ima kontra-stav se preskace, pa drugi poziv
+' vraca 0 i ne duplira. Vraca broj upisanih kontra-stavova.
+Public Function StornirajAmbalazuDokumenta(ByVal tx As clsTransaction, _
+                                           ByVal dokTip As String, _
+                                           ByVal dokID As String) As Long
+    Const SRC As String = "modAmbalaza.StornirajAmbalazuDokumenta"
+
+    If tx Is Nothing Then
+        Err.Raise AMB_ERR_STORNO, SRC, _
+                  "Storno knjige trazi aktivnu transakciju (AMB-INV-08)."
+    End If
+    If Len(Trim$(dokTip)) = 0 Or Len(Trim$(dokID)) = 0 Then
+        Err.Raise AMB_ERR_STORNO, SRC, "Storno knjige trazi identitet dokumenta."
+    End If
+
+    RequireKnjigaSchema SRC
+
+    ' Dokument se vezuje za OVU transakciju jer UpisiRedKnjige to trazi. To nije
+    ' samopotvrda: ista kapija zahteva i da IZVORNA TABELA dokumenta bude u
+    ' snapshotu ove transakcije, a to pozivalac mora stvarno da ispuni.
+    tx.BindSourceDocument dokTip, dokID
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim kol As Object, vrste As Object
+    Set kol = KnjigaZaCitanje(data, SRC, vrste)
+
+    Dim cID As Long, cDat As Long, cTipA As Long, cKol As Long
+    Dim cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
+    Dim cVK As Long, cDokT As Long, cDokI As Long, cSt As Long
+    cID = kol(COL_AMB_ID)
+    cDat = kol(COL_AMB_DATUM)
+    cTipA = kol(COL_AMB_TIP)
+    cKol = kol(COL_AMB_KOLICINA)
+    cOdTip = kol(COL_AMB_OD_TIP)
+    cOdID = kol(COL_AMB_OD_ID)
+    cNaTip = kol(COL_AMB_NA_TIP)
+    cNaID = kol(COL_AMB_NA_ID)
+    cVK = kol(COL_AMB_VRSTA_KRETANJA)
+    cDokT = kol(COL_AMB_DOK_TIP)
+    cDokI = kol(COL_AMB_DOK_ID)
+    cSt = kol(COL_AMB_STORNO_OD)
+
+    ' PRVI PROLAZ: na sta kontra-stavovi vec pokazuju. Bez ovoga drugi poziv
+    ' udvaja storno, a saldo prelazi na drugu stranu umesto da stane na nuli.
+    Dim vecStornirani As Object
+    Set vecStornirani = CreateObject("Scripting.Dictionary")
+    Dim i As Long, st As String
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kol) Then
+            st = AmbText(data(i, cSt))
+            If Len(st) > 0 Then
+                If Not vecStornirani.Exists(st) Then vecStornirani.Add st, True
+            End If
+        End If
+    Next i
+
+    ' DRUGI PROLAZ: aktivni originali ovog dokumenta.
+    Dim originali As Collection
+    Set originali = New Collection
+    Dim partneri As Object
+    Set partneri = CreateObject("Scripting.Dictionary")
+    Dim klasaDuga As String
+    klasaDuga = modAmbalazaUgovor.AmbPokriceKlasa()
+
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kol) Then
+            If Len(AmbText(data(i, cSt))) = 0 Then
+                If StrComp(AmbText(data(i, cDokT)), Trim$(dokTip), vbTextCompare) = 0 And _
+                   StrComp(AmbText(data(i, cDokI)), Trim$(dokID), vbTextCompare) = 0 Then
+                    If Not vecStornirani.Exists(AmbText(data(i, cID))) Then
+                        If Not IsDate(data(i, cDat)) Then
+                            Err.Raise AMB_ERR_STORNO, SRC, _
+                                      "Red knjige " & AmbText(data(i, cID)) & _
+                                      " nema datum -- kontra-stav ga nasledjuje, pa bez " & _
+                                      "njega storno ne moze da nastane."
+                        End If
+                        originali.Add Array(AmbText(data(i, cID)), _
+                                            CDate(data(i, cDat)), _
+                                            AmbText(data(i, cTipA)), _
+                                            CDbl(data(i, cKol)), _
+                                            AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), _
+                                            AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), _
+                                            AmbText(data(i, cVK)))
+                        ZabeleziPartnera partneri, klasaDuga, _
+                                         AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), _
+                                         AmbText(data(i, cTipA))
+                        ZabeleziPartnera partneri, klasaDuga, _
+                                         AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), _
+                                         AmbText(data(i, cTipA))
+                    End If
+                End If
+            End If
+        End If
+    Next i
+
+    If originali.count = 0 Then Exit Function
+
+    Dim r As Variant
+    For Each r In originali
+        ' Od i Na ZAMENJENI, StornoOd pokazuje na original.
+        UpisiRedKnjige tx, CDate(r(1)), CStr(r(2)), CDbl(r(3)), _
+                       CStr(r(6)), CStr(r(7)), CStr(r(4)), CStr(r(5)), _
+                       Trim$(dokTip), Trim$(dokID), CStr(r(8)), CStr(r(0)), SRC
+    Next r
+
+    ' AMB-INV-09 NAD POSLE-STANJEM -- zahtev koji je ovaj ulaz NASLEDIO od pisca
+    ' (PrenesiAmbalazu, VRACANJE_TUDJE): storno ULAZA tudje ambalaze cija je
+    ' obaveza vec zatvorena vracanjem daje NEGATIVNU obavezu. Takav storno se
+    ' odbija, a meri se POSTOJECIM citaocem nad upisanim stanjem -- ne drugom
+    ' kopijom pravila o znaku, koja bi se razisla sa prvom.
+    Dim k As Variant, ob As Double, pr As Variant
+    For Each k In partneri.Keys
+        pr = partneri(k)
+        ob = AmbObavezaPartneru(CStr(pr(0)), CStr(pr(1)), CStr(pr(2)))
+        If ob < 0 Then
+            Err.Raise AMB_ERR_STORNO, SRC, _
+                      "Storno bi ostavio obavezu " & CStr(ob) & " prema " & CStr(pr(0)) & _
+                      " '" & CStr(pr(1)) & "' za '" & CStr(pr(2)) & "' -- tudja " & _
+                      "ambalaza je vec vracena, pa se njen ulaz ne moze stornirati " & _
+                      "(AMB-INV-09)."
+        End If
+    Next k
+
+    StornirajAmbalazuDokumenta = originali.count
+End Function
+
+' Partner cija se obaveza meri posle storna. Klasa se CITA iz matrice pokrica,
+' jer dug nastaje tacno tim dogadjajem -- AmbObavezaPartneru dize gresku za
+' nalog van te klase, pa se van nje i ne sme pitati.
+Private Sub ZabeleziPartnera(ByRef partneri As Object, ByVal klasaDuga As String, _
+                             ByVal tip As String, ByVal id As String, _
+                             ByVal tipAmb As String)
+    If Len(klasaDuga) = 0 Then Exit Sub
+    If Not modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, tip) Then Exit Sub
+
+    Dim kljuc As String
+    kljuc = NalogKljuc(tip, id) & "|" & UCase$(Trim$(tipAmb))
+    If Not partneri.Exists(kljuc) Then
+        partneri.Add kljuc, Array(Trim$(tip), Trim$(id), Trim$(tipAmb))
+    End If
+End Sub
 
 ' ============================================================
 ' NABAVKA -- jedini put kojim NASE gajbe ulaze u opticaj

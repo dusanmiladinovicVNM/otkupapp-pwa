@@ -1282,12 +1282,23 @@ ROLLBACK_RED_CASES = [
 #
 # STA OVA KAPIJA DOKAZUJE, I STA NE. Dokazuje KO: (modul, procedura) je na
 # listi. NE dokazuje KADA -- da BindSourceDocument stoji POSLE uspesnog upisa
-# dokumenta. To ostaje na pregledu i testu kanonskog pisca, i tako se izgovara,
-# da dokumentacija ne tvrdi vise od koda. Danasnji jedini pozivalac
-# (modAmbalaza.UpisiAmbDokument) to radi ispravno: AppendRow, provera
-# rowIdx > 0, pa tek onda bind.
+# dokumenta, niti da vezan dokument stvarno pripada pozivaocu. To ostaje na
+# pregledu i testu kanonskog pisca, i tako se izgovara, da dokumentacija ne
+# tvrdi vise od koda.
+#
+# Za svakog clana liste se izgovara STA ga cini kanonskim:
+#
+#   UpisiAmbDokument            -- dokument NASTAJE tu: AppendRow, provera
+#                                  rowIdx > 0, pa tek onda bind.
+#   StornirajAmbalazuDokumenta  -- dokument se tu MENJA (kontra-stavovi nad
+#                                  njegovim redovima). Vezivanje nije samopotvrda
+#                                  jer ista kapija (RequireAmbTxIzvorniDokument)
+#                                  trazi i IZVORNU TABELU tog dokumenta u
+#                                  snapshotu -- a to pozivalac mora stvarno da
+#                                  ispuni, ne da tvrdi.
 AMB_BIND_DOZVOLJENI = {
     ("modAmbalaza", "UpisiAmbDokument"),
+    ("modAmbalaza", "StornirajAmbalazuDokumenta"),
 }
 _AMB_END = re.compile(r'^End\s+(?:Sub|Function|Property)\b', re.IGNORECASE)
 _BIND_POZIV = re.compile(r'\.\s*BindSourceDocument\b', re.IGNORECASE)

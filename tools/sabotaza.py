@@ -5205,8 +5205,10 @@ SABOTAZE = {
     # JEZGRU, kroz koje prolazi svaki red -- i pokrice i ostatak podele.
     "amb-pisac-red-bez-dokumenta": (
         "modAmbalaza.bas",
-        "    If Len(Trim$(dokTip)) = 0 Or Len(Trim$(dokID)) = 0 Then\n",
-        "    If False Then   ' SABOTAZA: red knjige sme bez identiteta dokumenta\n",
+        "    If Len(Trim$(dokTip)) = 0 Or Len(Trim$(dokID)) = 0 Then\n"
+        "        Err.Raise AMB_ERR_KNJIGA_ULAZ, sourceName, _\n",
+        "    If False Then   ' SABOTAZA: red knjige sme bez identiteta dokumenta\n"
+        "        Err.Raise AMB_ERR_KNJIGA_ULAZ, sourceName, _\n",
         "Test_Amb_ZaglavljeDokumentaPisac",
         "Amb zaglavlje: kretanje bez identiteta dokumenta se odbija (AMB-INV-04)",
     ),
@@ -6820,6 +6822,42 @@ SABOTAZE = {
         "    GenerateBrojAmbDokumenta = FormatBroj(brojOwnerID, datum, 1)   ' SABOTAZA\n",
         "Test_Amb_NabavkaOtvaraIzdavanje",
         "NABAVKA: dva dokumenta istog dana imaju razlicite brojeve",
+    ),
+    # Storno ne upise nista: zastavica bi bila "stornirano", a gajbe bi ostale
+    # na saldu -- tacno kvar zbog kog ulaz postoji.
+    "amb-storno-ne-upisuje-kontrastav": (
+        "modAmbalaza.bas",
+        "    If originali.count = 0 Then Exit Function\n",
+        "    If True Then Exit Function   ' SABOTAZA: storno ne upisuje kontra-stav\n",
+        "Test_Amb_StornoKontraStavVracaSaldo",
+        "STORNO: saldo stanice se vraca na stanje pre dogadjaja",
+    ),
+    # Kontra-stav se proverava u ISTOM smeru: matrica klasa tada odbija storno
+    # izdate prazne, pa se dokument ne moze stornirati uopste.
+    "amb-kontrastav-provera-u-istom-smeru": (
+        "modAmbalaza.bas",
+        "        modAmbalazaUgovor.RequireAmbPrenos naTip, naID, odTip, odID, kolicina, tipAmb, vrsta, sourceName\n",
+        "        modAmbalazaUgovor.RequireAmbPrenos odTip, odID, naTip, naID, kolicina, tipAmb, vrsta, sourceName   ' SABOTAZA: kontra-stav se proverava u ISTOM smeru\n",
+        "Test_Amb_StornoKontraStavVracaSaldo",
+        "STORNO: kontra-stav IZDATA_PRAZNA prolazi jer se proverava OBRNUTO",
+    ),
+    # Idempotencija pada: drugi poziv upise JOS JEDAN kontra-stav, pa saldo
+    # prelazi na drugu stranu umesto da stane na nuli.
+    "amb-storno-udvaja": (
+        "modAmbalaza.bas",
+        "                    If Not vecStornirani.Exists(AmbText(data(i, cID))) Then\n",
+        "                    If True Then   ' SABOTAZA: storno se moze ponoviti\n",
+        "Test_Amb_StornoKontraStavVracaSaldo",
+        "STORNO: drugi poziv ne upisuje nista (idempotentno)",
+    ),
+    # AMB-INV-09 nad posle-stanjem se gasi: storno ulaza vracene tudje ambalaze
+    # prolazi i ostavlja NEGATIVNU obavezu, koja izgleda kao normalno stanje.
+    "amb-storno-posle-vracanja-prolazi": (
+        "modAmbalaza.bas",
+        "        If ob < 0 Then\n",
+        "        If False Then   ' SABOTAZA: negativna obaveza posle storna je OK\n",
+        "Test_Amb_StornoPosleVracanjaOdbijen",
+        "STORNO: ulaz tudje ambalaze koja je vracena se NE stornira (AMB-INV-09)",
     ),
     # Validator postoji, ali se ne zove iz pisca -- tacno placebo koji bi tablica
     # istinitosti pustila zelenu.
