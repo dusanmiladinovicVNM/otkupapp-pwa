@@ -321,16 +321,20 @@ Configuration boundary:
 
 `SetupNewPC` / health-check flow should initialize or validate local requirements, including `PDFTOTEXT_EXE_PATH` for bank-statement parsing.
 
-`Setup-OtkupApp.ps1` is the clean-PC bootstrapper. Active responsibilities:
+`Setup-AgriX.ps1` is the clean-PC bootstrapper. Active responsibilities:
 
-- create `C:\OtkupApp` or the configured install root;
+- create `C:\AgriX` or the configured install root;
 - create core folders such as `Backups`, `Logs`, `Journal`, `Export`, `Temp`, `Secrets` and `Bank_Izvodi`;
-- copy `OtkupApp.xlsm`;
+- copy `AgriX.xlsm`;
 - unblock the workbook;
 - optionally install the VBA publisher certificate;
 - add the Excel trusted location;
 - create the desktop shortcut;
 - optionally copy bundled tools such as Poppler under `Tools\poppler\Library\bin\pdftotext.exe`.
+
+Folder layout and the step-by-step packaging/install procedure live in
+`docs/DESKTOP_SETUP_REFERENCE.md`; this section states the contract only, so the
+two do not drift.
 
 ### 4.6 AutoSave After Commit
 
@@ -1581,14 +1585,14 @@ Canonical rules:
 - Setup fallback may derive from `APP_ROOT_PATH`, for example:
 
 ```text
-C:\OtkupApp\Tools\poppler\Library\bin\pdftotext.exe
+C:\AgriX\Tools\poppler\Library\bin\pdftotext.exe
 ```
 
 Recommended local config row:
 
 ```text
 Kljuc: PDFTOTEXT_EXE_PATH
-Vrednost: C:\OtkupApp\Tools\poppler\Library\bin\pdftotext.exe
+Vrednost: C:\AgriX\Tools\poppler\Library\bin\pdftotext.exe
 Opis: Putanja do pdftotext.exe za PDF bankarske izvode
 ```
 
@@ -4972,7 +4976,7 @@ Rules:
 - `tblLocalConfig` owns local workstation settings such as `PDFTOTEXT_EXE_PATH`;
 - `tblConfig` remains Google/PWA config and must not become workstation-local config storage;
 - `tblSEFConfig` owns SEF and monitoring workbook/runtime configuration;
-- `Setup-OtkupApp.ps1` may create install folders, logs, temp, backups, secrets and tools directories, but executable/tool paths must still be validated;
+- `Setup-AgriX.ps1` may create install folders, logs, temp, backups, secrets and tools directories, but executable/tool paths must still be validated;
 - missing required tools such as `pdftotext.exe` must be reported by health/setup checks;
 - local PDF extraction uses unique temp output and deletes temp files before/after extraction to avoid stale-content leakage.
 
