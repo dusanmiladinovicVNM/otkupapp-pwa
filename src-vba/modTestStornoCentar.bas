@@ -228,8 +228,18 @@ Public Sub Test_StornoJournalUndo_Auto()
 
     TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), _
               Array("SVT-SJ-OID", "SVT-SJ-B")
-    TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), _
-              Array("SVT-SJ-AID", "SVT-SJ-OID", DOK_TIP_OTKUP)
+    ' VALJAN STARI RED, ne tri kolone. KnjigaIntegritet odbija red koji ne dotice
+    ' knjigu a nije ni valjan stari red: takav bi tiho nestao iz svakog salda.
+    ' Test meri zurnal i undo nad LEGACY zastavicom, pa red i ostaje legacy --
+    ' nov oblik bi postao red knjige, storno bi upisao kontra-stav, a AMB-10-ODL-19
+    ' bi undo odbio (druga tvrdnja, drugi test).
+    TcSeedRow TBL_AMBALAZA, _
+              Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP, _
+                    COL_AMB_SMER, COL_AMB_ENTITET_TIP, COL_AMB_ENTITET, _
+                    COL_AMB_TIP, COL_AMB_KOLICINA), _
+              Array("SVT-SJ-AID", "SVT-SJ-OID", DOK_TIP_OTKUP, _
+                    "Ulaz", "Stanica", "SVT-SJ-ST", _
+                    "SVT-SJ-GAJBA", 5)
     TcSeedRow TBL_NOVAC, Array(COL_NOV_ID, COL_NOV_OTKUP_ID), _
               Array("SVT-SJ-NID", "SVT-SJ-OID")
 
