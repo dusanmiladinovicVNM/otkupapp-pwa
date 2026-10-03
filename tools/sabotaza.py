@@ -492,21 +492,21 @@ SABOTAZE = {
         "        RequireOtpValidanIzvorZbirne data, r, otpID, SRC\n",
         "        ' SABOTAZA: jednopotezni ulaz ne proverava izvor\n",
         "Test_ZBR_ObaUlazaTrazeIzdatIzvor",
-        "jedan potez ODBIJA nacrt otpremnice",
+        "ZBR oba ulaza: jedan potez ODBIJA nacrt otpremnice",
     ),
     "zbirna-ne-preuzima-cinjenice": (
         "modDokumenta.bas",
         "    ZbrPreuzmiCinjeniceZaIzvor zbirnaID, Trim$(otpremnicaID), \"ZbrDodajIzvor\"\n",
         "    ' SABOTAZA: prvi izvor ne definise cinjenice robe\n",
         "Test_ZBR_PrviIzvorDefiniseCinjenice",
-        "prvi izvor je definisao vrstu",
+        "ZBR cinjenice: prvi izvor je definisao vrstu",
     ),
     "zbirna-prima-negativne-gajbe": (
         "modDokumenta.bas",
         "        If CDbl(s(\"KolAmbalaze\")) < 0 Then\n",
         "        If False Then   ' SABOTAZA: negativne gajbe prolaze\n",
         "Test_ZBR_NegativnaAmbalazaSeNeUpisuje",
-        "nacrt je odbijen",
+        "ZBR negativna ambalaza: nacrt je odbijen",
     ),
     # --- S4-2c: kapija nacrta (izmena najave, zivot izvedene cinjenice)
     "zbirna-nacrt-se-menja-i-posle-izdavanja": (
@@ -514,49 +514,49 @@ SABOTAZE = {
         "    RequireZbrDraft zbirnaID, rZbr, SRC\n\n    HdrProveriKljuceve h, SRC\n",
         "    ' SABOTAZA: izmena ne pita da li je jos nacrt\n\n    HdrProveriKljuceve h, SRC\n",
         "Test_ZBR_NacrtSeMenjaDokNijeIzdat",
-        "izdata zbirna se NE menja",
+        "ZBR izmena: izdata zbirna se NE menja",
     ),
     "zbirna-izmena-ne-pise-iznova": (
         "modDokumenta.bas",
         "    ZbrObrisiOcekivano zbirnaID, SRC\n    ZbrUpisiOcekivano zbirnaID, ocekivano, SRC\n",
         "    ' SABOTAZA: staro ocekivanje ostaje pored novog\n    ZbrUpisiOcekivano zbirnaID, ocekivano, SRC\n",
         "Test_ZBR_NacrtSeMenjaDokNijeIzdat",
-        "izmena PISE IZNOVA, ne dodaje",
+        "ZBR izmena: izmena PISE IZNOVA, ne dodaje",
     ),
     "zbirna-izmena-krade-tudji-broj": (
         "modDokumenta.bas",
         "    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _\n                                        brojZbirne, SRC, zbirnaID\n",
         "    ' SABOTAZA: izmena ne proverava zauzetost broja\n",
         "Test_ZBR_IzmenaNacrtaCuvaSvojBroj",
-        "tudji broj se NE preuzima",
+        "ZBR broj: tudji broj se NE preuzima",
     ),
     "zbirna-izmena-ne-revalidira-clanstvo": (
         "modDokumenta.bas",
         "    Dim k As Long\n    For k = 1 To clanovi.count\n        ZbrRequireIzvorValjan zbirnaID, CStr(clanovi(k)), SRC, False\n    Next k\nEnd Sub\n\nPrivate Sub ZbrObrisiOcekivano",
         "    ' SABOTAZA: izmena ne revalidira clanstvo\nEnd Sub\n\nPrivate Sub ZbrObrisiOcekivano",
         "Test_ZBR_IzmenaNacrtaRevalidiraClanstvo",
-        "clan drugog vozaca je odbijen",
+        "ZBR revalidacija: clan drugog vozaca je odbijen",
     ),
     "zbirna-drzi-cinjenice-bez-izvora": (
         "modDokumenta.bas",
         "    ZbrOcistiCinjeniceBezClanstva zbirnaID, \"ZbrUkloniIzvor\"\n",
         "    ' SABOTAZA: cinjenice prezivljavaju prazno clanstvo\n",
         "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice",
-        "prazan nacrt vise NEMA vrstu",
+        "ZBR prazno clanstvo: prazan nacrt vise NEMA vrstu",
     ),
     "zbirna-brise-cinjenice-i-sa-clanovima": (
         "modDokumenta.bas",
         "    If ZbrClanovi(zbirnaID).count > 0 Then Exit Sub\n",
         "    If False Then Exit Sub   ' SABOTAZA: brise i kad clanova ima\n",
         "Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice",
-        "nacrt sa preostalim izvorom ZADRZAVA vrstu",
+        "ZBR prazno clanstvo: nacrt sa preostalim izvorom ZADRZAVA vrstu",
     ),
     "zbirna-prazno-ocekivanje-prolazi": (
         "modDokumenta.bas",
         "    If ocekivano.count = 0 Then\n        Err.Raise vbObjectError + 1342, src, _\n                  \"Ocekivanje je prazno. Nacrt mora da prijavi bar jednu klasu.\"\n    End If\n",
         "    ' SABOTAZA: prazno ocekivanje prolazi kroz pisca\n",
         "Test_ZBR_UpdateNePrimaPraznoOcekivanje",
-        "izmena bez ijedne klase je odbijena",
+        "ZBR prazno ocekivanje: izmena bez ijedne klase je odbijena",
     ),
     # --- S4-2c/2a: kapije broja su se preselile iz obrisanog starog pisca
     "zbirna-nacrt-prima-zauzet-broj": (
@@ -564,14 +564,14 @@ SABOTAZE = {
         "    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _\n                                        brojZbirne, SRC\n\n    Dim zbirnaID As String\n",
         "    ' SABOTAZA: nacrt ne proverava zauzetost broja\n\n    Dim zbirnaID As String\n",
         "Test_ZBR_StorniranBrojIstogVozacaOdbijen",
-        "storniran broj istog vozaca istog dana ne upisuje nov red",
+        "ZBR broj: storniran broj istog vozaca istog dana ne upisuje nov red (A9)",
     ),
     "zbirna-nacrt-prima-tudji-niz": (
         "modDokumenta.bas",
         "    modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_ZBR, vozacID, datum, _\n                                     brojZbirne, SRC\n    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _\n                                        brojZbirne, SRC\n\n    Dim zbirnaID As String\n",
         "    ' SABOTAZA: nacrt ne proverava vlasnika niza brojeva\n    modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_ZBR, vozacID, datum, _\n                                        brojZbirne, SRC\n\n    Dim zbirnaID As String\n",
         "Test_BKTX_ZbirnaTudjegVlasnikaOdbijena",
-        "pisac odbija broj tudjeg vlasnika",
+        "BKTX zbirna: pisac odbija broj tudjeg vlasnika",
     ),
     # --- S4-2c/2b-1: citaoci za ekrane zbirne
     "zbirna-nevezane-nude-nacrt": (
@@ -579,28 +579,28 @@ SABOTAZE = {
         "                If OtpremnicaJeIzdata(oidRaw) Then\n",
         "                If True Then   ' SABOTAZA: i nacrt se nudi kao izvor\n",
         "Test_ZBR_NevezaneSamoIzdateISlobodne",
-        "NACRT otpremnice se ne nudi",
+        "ZBR nevezane: NACRT otpremnice se ne nudi",
     ),
     "zbirna-nevezane-nude-zauzetu": (
         "modDokumenta.bas",
         "                    If Not aktivno.Exists(oid) Then\n",
         "                    If True Then   ' SABOTAZA: clanstvo se ne gleda\n",
         "Test_ZBR_NevezaneSamoIzdateISlobodne",
-        "otpremnica u sastavu aktivne zbirne se ne nudi",
+        "ZBR nevezane: otpremnica u sastavu aktivne zbirne se ne nudi",
     ),
     "zbirna-napredak-ne-vidi-visak": (
         "modDokumenta.bas",
         "    ZbrUcitajPovezano zbirnaID, ZbrClanovi(zbirnaID), pov, povAmb, SRC\n",
         "    ZbrUcitajPovezano zbirnaID, ZbrClanovi(zbirnaID), pov, povAmb, SRC\n    Set pov = CreateObject(\"Scripting.Dictionary\")   ' SABOTAZA: visak nestaje\n",
         "Test_ZBR_NapredakPokrivanja",
-        "klasa koju izvor nosi a najava ne VIDI se",
+        "ZBR napredak: klasa koju izvor nosi a najava ne VIDI se",
     ),
     "zbirna-validacija-ne-izuzima-sebe": (
         "modDokUnos.bas",
         "                                      datum, S(p, \"brDok\"), zbirnaID)) > 0 Then\n",
         "                                      datum, S(p, \"brDok\"))) > 0 Then\n",
         "Test_ZBR_ValidacijaNadKanonom",
-        "nacrt sme da ZADRZI svoj broj",
+        "ZBR validacija: nacrt sme da ZADRZI svoj broj",
     ),
     # --- review #375: adapter preslikava, ne popravlja
     "zbirna-adapter-zaokruzuje-gajbe": (
@@ -608,28 +608,28 @@ SABOTAZE = {
         "        ocek.Add ZbrStavkaDTO(KLASA_I, D(p, \"kolicinaI\"), D(p, \"kolAmb\"))\n",
         "        ocek.Add ZbrStavkaDTO(KLASA_I, D(p, \"kolicinaI\"), L(p, \"kolAmb\"))\n",
         "Test_ZBR_AdapterNePopravljaUnos",
-        "20.5 gajbi ne prolazi ni kroz pisca",
+        "ZBR adapter: 20.5 gajbi ne prolazi ni kroz pisca",
     ),
     "zbirna-adapter-gubi-negativnu-klasu": (
         "modDokUnos.bas",
         "    If D(p, \"kolicinaI\") <> 0 Or D(p, \"kolAmb\") <> 0 Then\n",
         "    If D(p, \"kolicinaI\") > 0 Then   ' SABOTAZA: minus nestaje\n",
         "Test_ZBR_AdapterNePopravljaUnos",
-        "negativna kilaza NE nestaje tiho",
+        "ZBR adapter: negativna kilaza NE nestaje tiho",
     ),
     "zbirna-validator-pusta-gajbe-bez-kg": (
         "modDokUnos.bas",
         "    If kolI = 0 And kolAmb <> 0 Then\n",
         "    If False Then   ' SABOTAZA: gajbe bez kilaze prolaze\n",
         "Test_ZBR_AdapterNePopravljaUnos",
-        "gajbe bez kilaze ne prolaze validaciju",
+        "ZBR adapter: gajbe bez kilaze ne prolaze validaciju",
     ),
     "zbirna-adapter-gubi-praznu-drugu-klasu": (
         "modDokUnos.bas",
         "    If B(p, \"dveKlase\") Then\n        ocek.Add ZbrStavkaDTO(KLASA_II, D(p, \"kolicinaII\"), D(p, \"kolAmbII\"))\n    End If\n",
         "    If B(p, \"dveKlase\") Then\n        If D(p, \"kolicinaII\") <> 0 Then   ' SABOTAZA: prazna II nestaje\n            ocek.Add ZbrStavkaDTO(KLASA_II, D(p, \"kolicinaII\"), D(p, \"kolAmbII\"))\n        End If\n    End If\n",
         "Test_ZBR_AdapterNePopravljaUnos",
-        "prazna II klasa NE postaje jednoklasna zbirna",
+        "ZBR adapter: prazna II klasa NE postaje jednoklasna zbirna",
     ),
     # --- S4-2c/2b-2: ekran F3
     "zbirna-ekran-izmena-pravi-nov": (
@@ -637,21 +637,21 @@ SABOTAZE = {
         "    If Len(mIzmenaZbrID) > 0 Then\n",
         "    If False Then   ' SABOTAZA: izmena pravi nov nacrt\n",
         "Test_ZBR_EkranPraviIMenjaNacrt",
-        "izmena NE pravi nov nacrt",
+        "ZBR ekran: izmena NE pravi nov nacrt",
     ),
     "zbirna-ekran-otvara-izdatu": (
         "modScrDokumenti.bas",
         "    If st <> UCase$(IZDATO_DRAFT) Then ZbrNacrtRazlog = Poruka(\"OTKUI_ERR_ZBR_IZDATA\")\n",
         "    ' SABOTAZA: izdata zbirna se otvara za izmenu\n",
         "Test_ZBR_EkranPraviIMenjaNacrt",
-        "izdata zbirna se NE otvara za izmenu",
+        "ZBR ekran: izdata zbirna se NE otvara za izmenu",
     ),
     "zbirna-ekran-ne-izuzima-svoj-broj": (
         "modScrDokumenti.bas",
         "    greska = modDokUnos.ZbirnaValidiraj(p, fokus, mIzmenaZbrID)\n",
         "    greska = modDokUnos.ZbirnaValidiraj(p, fokus)\n",
         "Test_ZBR_EkranPraviIMenjaNacrt",
-        "izmena nacrta prolazi kroz ekran",
+        "ZBR ekran: izmena nacrta prolazi kroz ekran",
     ),
     "zbirna-mreza-bez-identiteta": (
         "modScrDokumenti.bas",
@@ -679,21 +679,21 @@ SABOTAZE = {
         "        Set c = modDokumenta.ZbrClanovi(mZbrID)\n",
         "        Set c = modDokumenta.IzvoriZbirne(mZbrID)\n",
         "Test_ZBR_PrazanNacrtNeRusiListu",
-        "prazan nacrt daje nula redova, ne gresku",
+        "ZBR prazna lista: prazan nacrt daje nula redova, ne gresku",
     ),
     "zbirna-sto-veze-po-broju": (
         "modScrDokumenti.bas",
         "            Case Else\n                otkupID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks(\"OTPREMNICA\"))))\n",
         "            Case Else\n                otkupID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))   ' SABOTAZA: po broju\n",
         "Test_ZBR_RadniStoVezePoIdentitetu",
-        "vezana je BAS izabrana otpremnica, ne prva sa tim brojem",
+        "ZBR identitet: vezana je BAS izabrana otpremnica, ne prva sa tim brojem",
     ),
     "zbirna-svi-nudi-vezivanje": (
         "modScrDokumenti.bas",
         "            Case \"NEVEZANE\"\n",
         "            Case \"NEVEZANE\", \"SVI\"\n",
         "Test_ZBR_SpisakKojiSeNudiNeLaze",
-        "sveobuhvatna lista NE nudi vezivanje",
+        "ZBR ponuda: sveobuhvatna lista NE nudi vezivanje ni uz aktivan nacrt",
     ),
     "zbirna-forma-krije-prekidac-klase": (
         "modOtkupUI.bas",
@@ -710,14 +710,14 @@ SABOTAZE = {
         "    ZbrRequireJednakost zbirnaID, ocek, pov, \"Kolicina\", SRC\n",
         "    ' SABOTAZA: pokrivenost se ne proverava\n",
         "Test_ZBR_NepokrivenNacrtSeNeIzdaje",
-        "nepokrivena zbirna se NE izdaje",
+        "ZBR nepokriven: nepokrivena zbirna se NE izdaje",
     ),
     "zbirna-prima-nacrt-otpremnice": (
         "modDokumenta.bas",
         "    If Not OtpremnicaJeIzdata(otpremnicaID) Then\n",
         "    If False Then   ' SABOTAZA: i nacrt otpremnice ulazi u zbirnu\n",
         "Test_ZBR_IzvorMoraBitiIzdatISlobodan",
-        "nacrt otpremnice se NE prima u zbirnu",
+        "ZBR izvor: nacrt otpremnice se NE prima u zbirnu",
     ),
     "zbirna-prima-tudji-izvor": (
         "modDokumenta.bas",
@@ -726,7 +726,7 @@ SABOTAZE = {
         "        If False Then   ' SABOTAZA: izvor sme u dve zbirne\n"
         "            Err.Raise vbObjectError + 1354, src, _\n",
         "Test_ZBR_IzvorMoraBitiIzdatISlobodan",
-        "ista otpremnica ne moze u dve zbirne",
+        "ZBR izvor: ista otpremnica ne moze u dve zbirne",
     ),
     # --- prefill posle storna (Z10) -----------------------------------------
     # --- S4-1: sadrzaj zbirne se cita sa stavki -----------------------------
@@ -739,21 +739,21 @@ SABOTAZE = {
         "            If False Then   ' SABOTAZA: dve iste klase prolaze\n"
         "                Err.Raise vbObjectError + 1952, SRC, _\n",
         "Test_ZBR_CitalacStavkiDrziUgovor",
-        "dve stavke iste klase obaraju citaoca po imenu",
+        "ZBR ugovor: dve stavke iste klase obaraju citaoca po imenu",
     ),
     "zbr-citalac-pusta-zaglavlje-bez-stavki": (
         "modDokumenta.bas",
         "    RequireZaglavljaZbirneSaStavkama zagl, imaStavku, SRC\n",
         "    ' SABOTAZA: zaglavlje bez stavki prolazi kao dokument\n",
         "Test_ZBR_CitalacStavkiDrziUgovor",
-        "zaglavlje bez stavki obara citaoca po imenu",
+        "ZBR ugovor: zaglavlje bez stavki obara citaoca po imenu",
     ),
     "zbr-lista-cita-zaglavlje": (
         "modScrDokumenti.bas",
         '    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "ZBIRNA")\n',
         '    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA")   \' SABOTAZA\n',
         "Test_ZBR_SadrzajCitaStavkeNeZaglavlje",
-        "mreza F8 pokazuje 1000 kg sa stavki",
+        "ZBR sadrzaj: mreza F8 pokazuje 1000 kg sa stavki",
     ),
     # S4-1: zbirna vise ne cita kolonu zaglavlja nego svoju stavku, pa sabotaza
     # meri BAS to -- iskljuci citanje stavki i prefill ostane bez kilaze.
@@ -802,7 +802,7 @@ SABOTAZE = {
         "        Case \"OTPREMNICA\":                                IdKolonaTipa = COL_OTP_ID\n",
         "        Case \"OTPREMNICA\":                                IdKolonaTipa = COL_GENERACIJA_ID   ' SABOTAZA\n",
         "Test_OTP_F8StornoPoID",
-        "skrivena kolona identiteta je OtpremnicaID",
+        "OTP F8: skrivena kolona identiteta je OtpremnicaID",
     ),
     # --- radni sto otpremnice u F1 (S3b-2) --------------------------------------
     # Dok je otpremnica aktivna, datum bloka se opet vraca na danas.
@@ -846,14 +846,14 @@ SABOTAZE = {
         "        If False Then prek = True   ' SABOTAZA: visak zbirne se ne vidi\n"
         '        If Abs(CDbl(r("preostalo"))) > 0.0001 Or Abs(CDbl(r("preostaloAmb"))) > 0.0001 Then _\n',
         "Test_ZBR_TrakaNapretka",
-        "prekoracenje je crveno",
+        "ZBR traka: prekoracenje je crveno",
     ),
     "traka-bez-podrazumevanih-natpisa": (
         "modOtkupUI.bas",
         "    TrakaNatpisi = podr\n",
         "    ' SABOTAZA: podrazumevanih natpisa nema\n",
         "Test_ZBR_TrakaNatpisi",
-        "prazan spec daje NIZ, ne prazno",
+        "ZBR natpisi: prazan spec daje NIZ, ne prazno",
     ),
     "traka-cita-polje-koje-f1-ne-salje": (
         "modOtkupUI.bas",
@@ -874,7 +874,7 @@ SABOTAZE = {
         "    razlogIzvora = modDokumenta.ZbrIzvoriNevaljaniRazlog(mZbrID)\n",
         "    razlogIzvora = \"\"   ' SABOTAZA: traka ne gleda izvore\n",
         "Test_ZBR_TrakaNapretka",
-        "nad nevaljanim izvorom traka NE kaze spremna",
+        "ZBR traka: nad nevaljanim izvorom traka NE kaze spremna",
     ),
     # Klasa koju otpremnica ne ocekuje opet prolazi bez pitanja.
     "prekoracenje-neocekivana-klasa": (
@@ -890,7 +890,7 @@ SABOTAZE = {
         "    outIzdata = True\n",
         "    ' SABOTAZA: primarna mutacija se ne prijavljuje\n",
         "Test_OTP_IzdavanjeDelimicanUspeh",
-        "ekran ZNA da je otpremnica izdata",
+        "DU: ekran ZNA da je otpremnica izdata",
     ),
     "autozbr-jezgro-dize-gresku": (
         "modMasterSync.bas",
@@ -901,14 +901,14 @@ SABOTAZE = {
         "\n"
         "    Dim slobodne As Object",
         "Test_OTP_IzdavanjeDelimicanUspeh",
-        "jezgro vraca razlog, ne dize gresku",
+        "DU: jezgro vraca razlog, ne dize gresku",
     ),
     "zbirna-pisac-ne-proverava-kupca": (
         "modDokumenta.bas",
         "    RequireTacnoJedan TBL_KUPCI, COL_KUP_ID, kupacID, \"KupacID\", SRC\n",
         "    ' SABOTAZA: kupac zbirne bez pokrica\n",
         "Test_ZBR_PisacTraziPostojeceVeze",
-        "nepostojeci kupac NE pravi zbirnu",
+        "ZBR FK: nepostojeci kupac NE pravi zbirnu",
     ),
     "izdaj-ostaje-u-kontekstu": (
         "modScrDokumenti.bas",
@@ -963,7 +963,7 @@ SABOTAZE = {
         "    ocekRedovi = StavkeOtpremniceRedovi()\n"
         "    On Error GoTo 0\n",
         "Test_OTP_IzdavanjeCitaStrogo",
-        "OTP strogo: read-model pada po imenu",
+        "OTP strogo: read-model pada po imenu, ne sabira 2 x I",
     ),
     # Izmena nacrta u F2 opet odbija SOPSTVENI broj (validacija ne izuzima svoj red).
     "izmena-nacrta-sopstveni-broj": (
@@ -979,7 +979,7 @@ SABOTAZE = {
         "            If parKlasa.Exists(kParKl) Then\n",
         "            If False Then   ' SABOTAZA: dve iste klase otkupa prolaze\n",
         "Test_OTP_IzdavanjeCitaIzvorStrogo",
-        "OTP strogo izvor: read-model pada po imenu",
+        "OTP strogo izvor: read-model pada po imenu, ne sabira 2 x I izvora",
     ),
     # Citalac otkupa opet pusta bruto manji od neta.
     "otk-citalac-bruto-manji": (
@@ -1242,7 +1242,7 @@ SABOTAZE = {
         '        ws.Range(ws.cells(startRow, 1), ws.cells(startRow + nRows - 1, 9)).NumberFormat = "@"\n',
         '        ws.Range(ws.cells(startRow, 1), ws.cells(startRow + nRows - 1, 9)).NumberFormat = "General"   \' SABOTAZA\n',
         "Test_OTP_SpecifikacijaBlokova",
-        "Spec: kolona broja je TEKST",
+        "Spec: kolona broja je TEKST -- '3/2026' ne sme da postane datum",
     ),
     # Lista nevezanih opet broji i clanove aktivne otpremnice.
     "nevezani-clan-nacrta": (
@@ -1294,7 +1294,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: izvor zbirne se stornira\n"
         "        Err.Raise ERR_STORNO_BASE + 71, SRC, _\n",
         "Test_OTP_IzvorAktivneZbirneSeNeStornira",
-        "pisac odbija storno izvora aktivne zbirne",
+        "OTP izvor zbirne: pisac odbija storno izvora aktivne zbirne",
     ),
     # Storno otpremnice opet ide po broju -- pisac tada ne zna koju od dve
     # otpremnice istog broja da uzme.
@@ -4790,7 +4790,7 @@ SABOTAZE = {
         "        If modDokumenta.IzdatoStatusJeIzdato(d(i, cIzd)) Then   ' SABOTAZA: i stornirane\n"
         "            If IsDate(d(i, cDat)) Then\n",
         "Test_OTP_OtpremljenoJeSamoIzdato",
-        "stornirana izdata otpremnica ne ulazi",
+        "OTP otpremljeno: stornirana izdata otpremnica ne ulazi",
     ),
     # Nacrt opet postaje otpremljena roba: filter IZDATO nestaje (review #362 P1).
     "otp-nacrt-je-otpremljena-roba": (
@@ -4801,7 +4801,7 @@ SABOTAZE = {
         "        If (cStorno = 0 Or CStr(d(i, cStorno)) <> \"Da\") Then   ' SABOTAZA: i nacrti\n"
         "            If IsDate(d(i, cDat)) Then\n",
         "Test_OTP_OtpremljenoJeSamoIzdato",
-        "nacrt nije otpremljena roba (roba po vozacu)",
+        "OTP otpremljeno: nacrt nije otpremljena roba (roba po vozacu)",
     ),
     # PROSLEDJENO opet nije izdato: sync bi retroaktivno brisao otpremljenu robu
     # iz izvestaja (review #362, drugi krug).
@@ -4810,7 +4810,7 @@ SABOTAZE = {
         "        Case UCase$(IZDATO_IZDATO), UCase$(IZDATO_PROSLEDJENO)\n",
         "        Case UCase$(IZDATO_IZDATO)   ' SABOTAZA: prosledjeno ispada\n",
         "Test_OTP_IzdatoStatusPravilo",
-        "PROSLEDJENO je izdat -- sync ne brise otpremljenu robu",
+        "OTP status: PROSLEDJENO je izdat -- sync ne brise otpremljenu robu",
     ),
     # Citalac opet pusta dve stavke iste klase -- slabiji ugovor od pisca (P2).
     "otp-citalac-pusta-dve-iste-klase": (
@@ -4820,7 +4820,7 @@ SABOTAZE = {
         "            If False Then   ' SABOTAZA: dve iste klase prolaze\n"
         "                Err.Raise vbObjectError + 1942, SRC, _\n",
         "Test_OTP_DveStavkeIsteKlaseObaraCitaoce",
-        "mreza pada po imenu, ne sabira 2 x I",
+        "OTP dve iste klase: mreza pada po imenu, ne sabira 2 x I",
     ),
     # Vrednost otpremnice opet dolazi iz zbira stavki -- mesto koje je do review-a
     # #362 nosilo Kolicina x PredlogCena. Predlog nije placena cena.
@@ -4830,7 +4830,7 @@ SABOTAZE = {
         "                                    vredIzv, Trim$(NzToText(d(i, cId))), SRC)\n",
         "                        vr(k) = IzvNum(vr(k)) + CDbl(z(1))   ' SABOTAZA: predlog kao vrednost\n",
         "Test_OTP_VrednostIzIzvoraNePredlogCene",
-        "vrednost je ono sto je placeno (300x50 + 200x40), ne 500x999",
+        "OTP vrednost: vrednost je ono sto je placeno (300x50 + 200x40), ne 500x999",
     ),
     # Rang se OTVARA po rangu rastuce -- shell sort ugovor (recenzija
     # #245 blocker: izvor sortiran, a ekran presortira po imenu).
@@ -5591,7 +5591,7 @@ SABOTAZE = {
         "    OtpKnjiziAmbalazu otpremnicaID, rOtp, ocekAmb, SRC\n",
         "    ' SABOTAZA: izdavanje ne knjizi gajbe\n",
         "Test_OTP_AmbalazaSeKnjiziPriIzdavanju",
-        "izdavanje knjizi TACNO jedan red",
+        "OTP ambalaza: izdavanje knjizi TACNO jedan red",
     ),
 
     # PREDLOG CENE JE PO KLASI. Vracanje kljuca na zaglavlje znaci jedan broj za
@@ -5601,7 +5601,7 @@ SABOTAZE = {
         "             \"tipambalaze\", \"predajaid\"\n",
         "             \"tipambalaze\", \"predajaid\", \"cena\"   ' SABOTAZA: cena opet na zaglavlju\n",
         "Test_OTP_PredlogCeneJePoKlasi",
-        "cena na zaglavlju NE prolazi",
+        "OTP predlog cene: cena na zaglavlju NE prolazi",
     ),
 
     # PAUZA MORA DA BUDE GLASNA. Tiha pauza znaci da malina operater ceka zbirnu
@@ -5617,7 +5617,7 @@ SABOTAZE = {
         "    ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA, S(p, \"brDok\"), poruke\n"
         + "    If modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_OTPREMNICA, _\n",
         "Test_OTP_NacrtNijeZavrsetakIspravke",
-        "correction NIJE zavrsen nad nacrtom",
+        "OTP ispravka: correction NIJE zavrsen nad nacrtom",
     ),
     # --- S3b: citaoci otpremnice citaju stavke -------------------------------
     # Izvestaj po otkupnom mestu spaja klase u jedan red: prijem obe klase se
@@ -5628,7 +5628,7 @@ SABOTAZE = {
         "            For s = 1 To 1                       ' SABOTAZA: samo prva klasa\n"
         + "                stavka = stavke(s)\n                nPar = nPar + 1\n",
         "Test_OTP_IzvestajOMRedPoKlasi",
-        "dvoklasna otpremnica daje DVA reda",
+        "OTP izvestaj OM: dvoklasna otpremnica daje DVA reda",
     ),
     # Invarijanta zbirne opet cita kilazu sa ZAGLAVLJA -- od S3a prazno, pa bi
     # svaka zbirna bila poredjena sa nulom i proglasena neispravnom.
@@ -5637,7 +5637,7 @@ SABOTAZE = {
         "                    kol = CDbl(stavka(4))\n",
         "                    kol = 0#                 ' SABOTAZA: zaglavlje je prazno\n",
         "Test_OTP_InvarijantaSabiraStavke",
-        "ukupno je zbir stavki, ne prazno zaglavlje",
+        "OTP invarijanta: ukupno je zbir stavki, ne prazno zaglavlje",
     ),
     # Prefill ispravke opet uzima kolicinu sa zaglavlja: operater dobija formu
     # bez kilaze i bez klase, pa "ispravka" cuva nesto sto original nije bio.
@@ -5662,7 +5662,7 @@ SABOTAZE = {
         "    If Not slobodne.Exists(UCase$(otpremnicaID)) Then Exit Function\n",
         "    ' SABOTAZA: ne pita da li je otpremnica vec vezana\n",
         "Test_OTP_MalinaAutoZbirna",
-        "drugi poziv je TIH -- bez greske operateru",
+        "OTP malina: drugi poziv je TIH -- bez greske operateru",
     ),
     "banka-writer-blok-tudjeg-kooperanta": (
         "modBankaMapiranje.bas",
@@ -6490,7 +6490,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: kaskada opet gleda samo staru vezu\n"
         "        Dim clan As Variant, clanId As String",
         "Test_ZBR_KanonskoPonistenjeStorniraIzvore",
-        "IZVORNA OTPREMNICA je stornirana -- lanac je stvarno oboren",
+        "ZBR pon: IZVORNA OTPREMNICA je stornirana -- lanac je stvarno oboren",
     ),
     "kanonska-zbirna-ne-sme-da-se-razveze": (
         "modDokumenta.bas",
@@ -6558,7 +6558,7 @@ SABOTAZE = {
         "        Case \"ZBIRNA\":                                      IdKolonaTipa = COL_ZBR_ID\n",
         "        Case \"ZBIRNA\":                                      IdKolonaTipa = COL_GENERACIJA_ID\n",
         "Test_ZBR_LjuskaNosiZbirnaID",
-        "red u mrezi F8 nosi ZbirnaID",
+        "ZBR identitet: red u mrezi F8 nosi ZbirnaID",
     ),
     # Paleta ponovo pogadja po broju umesto da nasledi od prijemnice. Razlika se
     # vidi SAMO kad se prijemnicina generacija razlikuje od "ko je SADA pod ovim
@@ -6722,7 +6722,7 @@ SABOTAZE = {
         "                    AmbDokDozvoljavaKretanje = True\n"
         "            End Select\n",
         "Test_Amb_PisacKnjige",
-        "AmbDok: partnerov revers NE nosi IZDATA_PRAZNA",
+        "AmbDok: partnerov revers NE nosi IZDATA_PRAZNA -- to je nas papir",
     ),
     # Kapija prestaje da pita TABELU, a jos pita postoji li tx. Pada tvrdnja o
     # redu knjige; tvrdnja "bez transakcije" pre nje PROLAZI, pa se vidi da je
@@ -6762,7 +6762,7 @@ SABOTAZE = {
         "    RequireAmbTxIzvorniDokument tx, dokTip, dokID, sourceName\n",
         "    ' SABOTAZA: vlasnistvo izvornog dokumenta se ne proverava\n",
         "Test_Amb_Inv08TxVlasnistvo",
-        "AMB-INV-08: DRUGA transakcija sa istim snapshotom ne sme da ",
+        "AMB-INV-08: DRUGA transakcija sa istim snapshotom ne sme da pise u knjigu nad tudjim dokumentom",
     ),
     # Vezivanje ostaje, ali izvorna tabela se ne proverava -- bind nad Otkup-om
     # uz snapshot samo knjige ponovo prolazi, pa rollback nije zajednicki.
@@ -6940,7 +6940,7 @@ SABOTAZE = {
         "    If Len(parProblem) > 0 Then\n",
         "    If False Then   ' SABOTAZA: nalaz validatora se ignorise\n",
         "Test_Amb_Inv08TxVlasnistvo",
-        "ODL-9: pisac mora da ODBIJE kupac -> firma na partnerovom ",
+        "ODL-9: pisac mora da ODBIJE kupac -> firma na partnerovom reversu -- validator se zove iz PrenesiAmbalazu",
     ),
 }
 
@@ -7054,6 +7054,39 @@ _KOMENTAR_POSLE_PODVLAKE = re.compile(r"\s_\s+'")
 # istom sabotazom i dalje obara gejt. Spisak citaju i --proveri-sidra i
 # tools/dokaz.py, jer je isti pojam: nalaz koji je priznat, zapisan i ima vlasnika.
 POZNATI_NALAZI = {
+    # ---- osam ZATECENIH tvrdnji koje dokaz.py ne moze da poklopi -------------
+    #
+    # Kapija je do 04.10.2026 tvrdnju merila kao PODNIZ, uz obrazlozenje da
+    # "dokaz.py isto radi podniz". Za BFP to NE VAZI: tamo runner belezi NAZIV
+    # TVRDNJE, pa je ona KLJUC (dokaz.py _pali / _kljuc_testa) i mora biti CEO
+    # STATICAN literal. Merenje 04.10.2026: 69 tvrdnji nije bilo dokazivo.
+    # 57 je sireno do celog literala mehanicki (ista tvrdnja, pun tekst), 4 su
+    # bile u ambalaznom rezu i popravljene su u TESTU.
+    #
+    # Ovih osam trazi izmenu TUDJEG testa, pa stoje imenovane:
+    #   literal pa & VREDNOST  -> vrednost u svoju tvrdnju, ciljana ostaje
+    #                             staticna (obrazac: "X je izracunat: [..]" pa
+    #                             "X nije Y")
+    #   dva literala spojena & -> spoji u JEDAN literal
+    # Popis je zatvoren: kapija ih i dalje meri, pa nova ne moze da se ubaci
+    # tiho.
+    "clanstvo-bulk-dete":
+        "tvrdnja nije CEO STATICAN literal",
+    "clanstvo-bulk-roditelj":
+        "tvrdnja nije CEO STATICAN literal",
+    "ispravka-bloka-bez-vadjenja":
+        "tvrdnja nije CEO STATICAN literal",
+    "otk-storno-izvora-aktivne-otpremnice":
+        "tvrdnja nije CEO STATICAN literal",
+    "otp-f8-storno-po-broju":
+        "tvrdnja nije CEO STATICAN literal",
+    "otp-prefill-bez-stavki":
+        "tvrdnja nije CEO STATICAN literal",
+    "malina-zbirna-nasledjuje-broj":
+        "tvrdnja nije CEO STATICAN literal",
+    "kanonska-zbirna-ne-sme-da-se-razveze":
+        "tvrdnja nije CEO STATICAN literal",
+
     # Ista klasa, nadjena zetvom tvrdnji: OBE sabotaze obore BAS istu poruku
     # ("isti broj zbirne kod dva vozaca daje DVA ciljna dokumenta"), pa test
     # ne moze da kaze koja je od njih pala. Razdvajanje trazi novu tvrdnju u
@@ -7368,6 +7401,47 @@ def _tela_testova() -> dict:
     return tela
 
 
+_BFP_FAJL = "modBusinessFlowProTests.bas"
+_bfp_kes = {}
+
+
+def _bfp_tela() -> dict:
+    """{ime testa: SIROVO telo} iz BFP modula -- samo za proveru literala."""
+    if _bfp_kes:
+        return _bfp_kes
+    put = os.path.join(SRC_VBA, _BFP_FAJL)
+    if not os.path.exists(put):
+        return _bfp_kes
+    tekst = _procitaj(put)[0].replace("\r\n", "\n")
+    for m in re.finditer(r"^(?:Public |Private )?(?:Sub|Function) (\w+)",
+                         tekst, re.M):
+        k = re.search(r"^End (?:Sub|Function)\b", tekst[m.start():], re.M)
+        _bfp_kes[m.group(1)] = tekst[m.start(): m.start() + (k.end() if k else len(tekst))]
+    return _bfp_kes
+
+
+def _tvrdnja_ceo_literal(tvrdnja: str, telo: str) -> bool:
+    """Je li tvrdnja CEO STATICAN literal tog tela?
+
+    BFP runner belezi IZRACUNATU poruku, a dokaz.py je koristi kao KLJUC. Zato
+    odrezana tvrdnja (nije ceo literal) i dinamicka (literal pa '&') nikad ne
+    mogu da se poklope -- i prijavljuju se kao "NE OBARA SVOJ TEST", 25 minuta
+    Excela kasnije.
+    """
+    igla = '"' + tvrdnja + '"'
+    poz = 0
+    while True:
+        k = telo.find(igla, poz)
+        if k < 0:
+            return False
+        ostatak = telo[k + len(igla):].lstrip()
+        while ostatak.startswith('_'):
+            ostatak = ostatak[1:].lstrip()
+        if not ostatak.startswith('&'):
+            return True                 # nije u konkatenaciji -> cela poruka
+        poz = k + 1
+
+
 def _tvrdnja_pripada(tvrdnja: str, podaci) -> bool:
     """Da li je tvrdnja tvrdnja BAS ovog testa.
 
@@ -7386,8 +7460,11 @@ def _tvrdnja_pripada(tvrdnja: str, podaci) -> bool:
     """
     literali, sabloni = podaci
     t = tvrdnja.lower()
-    # Podniz je dovoljan, jer dokaz.py isto radi proveru podniza: katalog sme da
-    # nosi prepoznatljiv deo duge tvrdnje. Ali samo unutar LITERALA.
+    # Podniz je dovoljan SAMO za suite koje dokaz.py poredi po tekstu poruke.
+    # Za BFP NE: tamo je tvrdnja KLJUC (dokaz.py _kljuc_testa), pa mora da bude
+    # ceo statican literal -- to proverava _tvrdnja_ceo_literal, odvojeno.
+    # Obrazlozenje "dokaz.py isto radi podniz" je bilo NETACNO i propustilo je
+    # pet nalaza (mereno 04.10.2026, prvi prolaz dokaza nad 10b-2).
     if any(t in l for l in literali):
         return True
     for izraz in sabloni:
@@ -7692,6 +7769,11 @@ def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
             else:
                 nalazi.append((ime, "tvrdnja ZASTARELA -- '%s' nema takvu tvrdnju "
                                     "(dokaz.py bi javio PALA DRUGA TVRDNJA)" % test))
+        elif test in _bfp_tela() and not _tvrdnja_ceo_literal(tvrdnja, _bfp_tela()[test]):
+            nalazi.append((ime, "tvrdnja nije CEO STATICAN literal testa '%s' -- "
+                                "za BFP je tvrdnja KLJUC u dokaz.py, pa odrezana ili "
+                                "dinamicka (literal pa '&') nikad ne moze da se "
+                                "poklopi: 'NE OBARA SVOJ TEST'" % test))
 
         # zamka 5: dve sabotaze koje test ne razlikuje
         kljuc = (test, tvrdnja)

@@ -17473,9 +17473,14 @@ Private Sub Test_Amb_DokBrojZauzetPoVlasniku()
                "AMB DOK broj: odbijenica imenuje zauzet broj: [" & opisIsti & "]"
     AssertTrue Len(drugiVlasnik) > 0, _
                "AMB DOK broj: isti broj za DRUGOG vlasnika prolazi -- drugi niz"
-    AssertTrue Len(nizVozaca) > 0 And nizVozaca <> nizStanice, _
-               "AMB DOK broj: niz vozaca nije niz stanice sa istim ID-em: [" & _
-               nizVozaca & "] [" & nizStanice & "]"
+    ' VREDNOSTI IDU U SVOJU TVRDNJU. Ciljana tvrdnja mora da bude JEDAN statican
+    ' literal: dokaz.py je za BFP koristi kao KLJUC, pa interpolirana poruka nikad
+    ' ne moze da se poklopi i prijavljuje se kao "NE OBARA SVOJ TEST".
+    AssertTrue Len(nizVozaca) > 0, _
+               "AMB DOK broj: niz vozaca je izracunat: [" & nizVozaca & "] [" & _
+               nizStanice & "]"
+    AssertTrue nizVozaca <> nizStanice, _
+               "AMB DOK broj: niz vozaca nije niz stanice sa istim ID-em"
     Exit Sub
 
 EH:
@@ -17565,9 +17570,11 @@ Private Sub Test_Amb_NabavkaOtvaraIzdavanje()
                  "NABAVKA: vrsta se cita sa zaglavlja"
     AssertEquals CStr(saldoPre + 15#), CStr(saldoPosle), _
                  "NABAVKA: saldo stanice raste za ukupnu nabavljenu kolicinu"
-    AssertTrue Len(brojNab) > 0 And brojNab <> brojNab2, _
-               "NABAVKA: dva dokumenta istog dana imaju razlicite brojeve: [" & _
-               brojNab & "] [" & brojNab2 & "]"
+    AssertTrue Len(brojNab) > 0, _
+               "NABAVKA: prvi broj je izracunat: [" & brojNab & "] [" & _
+               brojNab2 & "]"
+    AssertTrue brojNab <> brojNab2, _
+               "NABAVKA: dva dokumenta istog dana imaju razlicite brojeve"
     AssertTrue presloPosle, _
                "NABAVKA: posle nabavke stanica MOZE da izda iste gajbe"
     AssertTrue pukloNula, "NABAVKA: nulta kolicina je odbijena"
@@ -17768,16 +17775,14 @@ Private Sub Test_Amb_Inv08TxVlasnistvo()
                "AMB-INV-08: svoja transakcija i svoj dokument PROLAZE -- " & _
                "kapija nije 'uvek odbij'"
     AssertTrue pukloTudjaTx, _
-               "AMB-INV-08: DRUGA transakcija sa istim snapshotom ne sme da " & _
-               "pise u knjigu nad tudjim dokumentom"
+               "AMB-INV-08: DRUGA transakcija sa istim snapshotom ne sme da pise u knjigu nad tudjim dokumentom"
     AssertTrue InStr(1, opisTudjaTx, "nije vezan za ovu transakciju") > 0, _
                "AMB-INV-08: odbijenica imenuje NEVEZAN dokument, ne snapshot: [" & _
                opisTudjaTx & "]"
 
     ' --- ODL-9 je OZICEN u piscu, ne samo u ugovoru
     AssertTrue pukloPar, _
-               "ODL-9: pisac mora da ODBIJE kupac -> firma na partnerovom " & _
-               "reversu -- validator se zove iz PrenesiAmbalazu"
+               "ODL-9: pisac mora da ODBIJE kupac -> firma na partnerovom reversu -- validator se zove iz PrenesiAmbalazu"
     AssertTrue InStr(1, opisPar, "AMB-10-ODL-9") > 0, _
                "ODL-9: odbijenica imenuje odluku: [" & opisPar & "]"
 
