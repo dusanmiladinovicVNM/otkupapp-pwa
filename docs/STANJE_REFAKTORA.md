@@ -380,6 +380,37 @@
     (`modPrint`, `modIzvestaj`, `modScrIzvestaji`, `modStornoDok`); ovim redom se
     diraju jednom.
 
+53. **Rollback koji padne na pola prestaje da bude tih** (02.10.2026).
+    Review `main`-a je dao dva P1 o gutanju rollback greške (`modStorno`,
+    `modBankaMapiranje`). Mereno: obrazac `On Error Resume Next` + `RollbackTx`
+    stoji na **25 produkcionih mesta u 14 modula**, a `.RollbackTx` se zove
+    **276 puta** (68 produkcionih u 24 modula, 208 u testovima) — pa zakrpa na dva
+    imenovana modula ne bi bila ispravka nego još jedan prekršaj `CLAUDE.md` §2.
+    **Uzrok je u primitivu, ne u omotačima:** `clsTransaction.RollbackTx` nije
+    imao handler i nije bio atomičan — prva greška iz `RestoreTable` (koja se
+    diže eksplicitno, `clsTransaction.cls:117`) prekidala je petlju, pa su ostale
+    tabele ostajale nevraćene, `CleanUp` se nije izvršavao (`EnableEvents` ostaje
+    `False` do kraja sesije), a `mActive` je ostajao `True`.
+    **Primitiv svesno NE diže grešku:** 182 od 276 poziva nisu pod
+    `On Error Resume Next` i većina je u aktivnom `EH` bloku, gde bi nov raise
+    zamenio originalnu poslovnu grešku i u testovima pretvorio cleanup u pad.
+    Zato činjenica ide kao **stanje** (`RollbackNepotpun` / `NevraceneTabele`) i
+    van trake (lokalni log + `Monitor_Critical`, koji je no-op kad monitoring nije
+    podešen — zato dva kanala). Pravilo je zapisano u
+    `ARCHITECTURE_CONTRACT.md` uz „Snapshot nije vlasništvo“.
+    Sabotaža je **preimenovanje** tabele (`GetTable` vraća `Nothing` → 91), ne
+    menjanje šeme; tri privremene tabele imaju **po dve kolone** jer `Value2` nad
+    jednom ćelijom vraća skalar, a `RestoreTable` radi `UBound`. Tri sabotaže, po
+    jedna na svaku posledicu — ne grupišu se (isti test, ista procedura za dve).
+    `WHO_WRITES.md` dobija tri reda `TST_RB_*` sa **0 produkcionih pisaca**:
+    generisani artefakt verno prijavljuje `AddTableSnapshot` iz testa. Alternativa
+    (naučiti `who_writes` da prećuti prefiks `TST_`) je izmena **kapije** i traži
+    svoj dvosmerni dokaz — ostaje kao moguć naredni process rez, ne u ovom.
+    **Dokaz je PLANIRAN, ne izmeren:** `dokaz.py` i `run_vba.py` čekaju reviewer GO
+    (v. `skupe-kapije-cekaju-reviewer-go`). Statički: 19/19 kapija `rc=0`, katalog
+    649 → **652**, a `vba_gate --require-green` tačno javlja `rc=2` — izvor je
+    promenjen, pa nijedna suite nije dokazana nad njim.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

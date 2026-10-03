@@ -6620,6 +6620,45 @@ SABOTAZE = {
         "T_ZbirnaKapija_AktivanBrojNeSmeDvaput",
         "I1: aktivna prijemnica daje oznaku izvora P",
     ),
+    # Rollback je i sam operacija koja moze da padne: RestoreTable dize gresku na
+    # neuskladjen broj kolona, a GetTable / ListRows.Add / Value2= na zasticen
+    # list ili nestalu tabelu. Tri sabotaze obaraju TRI RAZLICITE tvrdnje istog
+    # testa, jer su i posledice jednog pada bile tri: parcijalno vracen podatak,
+    # suspendovan Application state, i cinjenica koju pozivalac ne vidi.
+    #
+    # Prva je "Exit For", a ne gasenje handlera: bez handlera RollbackTx DIZE 91,
+    # pa bi test pao na toj gresci umesto na tvrdnji -- dokaz bi javio PALA DRUGA
+    # TVRDNJA, a ne "petlja staje".
+    "rollback-petlja-staje-na-padu": (
+        "clsTransaction.cls",
+        "            mNevracene = mNevracene & CStr(key)\n"
+        "            Err.Clear\n"
+        "        End If\n",
+        "            mNevracene = mNevracene & CStr(key)\n"
+        "            Err.Clear\n"
+        "            Exit For   ' SABOTAZA: petlja staje na prvom padu\n"
+        "        End If\n",
+        "T_TxRollback_NepotpunVracaOstale",
+        "C POSLE pada mora biti vracena",
+    ),
+    # Sidro nosi i dva reda komentara: goli "CleanUp\n    mActive = False" stoji i
+    # u CommitTx, pa bi zamena bila dvosmislena.
+    "rollback-cleanup-samo-kad-prodje": (
+        "clsTransaction.cls",
+        "    ' CleanUp UVEK: Application state se ne sme ostaviti suspendovan ni kad\n"
+        "    ' restore padne. CleanUp i sam guta greske (On Error Resume Next u njemu).\n"
+        "    CleanUp\n",
+        "    If Len(mNevracene) = 0 Then CleanUp   ' SABOTAZA: state ostaje suspendovan\n",
+        "T_TxRollback_NepotpunVracaOstale",
+        "EnableEvents mora biti vracen i kad restore padne",
+    ),
+    "rollback-nepotpun-nevidljiv": (
+        "clsTransaction.cls",
+        "    RollbackNepotpun = (Len(mNevracene) > 0)\n",
+        "    RollbackNepotpun = False   ' SABOTAZA: cinjenica se ne vidi\n",
+        "T_TxRollback_NepotpunVracaOstale",
+        "nepotpun rollback mora biti citljiv",
+    ),
 }
 
 

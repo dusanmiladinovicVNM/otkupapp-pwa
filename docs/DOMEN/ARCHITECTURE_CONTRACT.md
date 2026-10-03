@@ -314,6 +314,27 @@ koji snapshotuje tuđu tabelu i zove API njenog vlasnika. Kapija zato meri
 **mutatore** (`AppendRow` / `UpdateCell` / `RequireUpdateCell`), a učesnici
 transakcije se prikazuju odvojeno.
 
+**Rollback mora biti potpun ili prijavljen — ne sme biti ništa između.**
+`AddTableSnapshot` obećava da transakcija **ume** da vrati tabelu, ali je i sam
+rollback operacija koja može da padne: `RestoreTable` diže grešku na neusklađen
+broj kolona, a `GetTable` / `ListRows.Add` / `DataBodyRange.Value2 =` na zaštićen
+list ili nestalu tabelu. Dok je petlja u `RollbackTx` stajala na **prvoj** takvoj
+grešci, jedan pad je nosio tri posledice i sve tri su bile tihe: ostale tabele su
+ostajale nevraćene, `CleanUp` se nije izvršavao (pa je `Application.EnableEvents`
+ostajao `False` **do kraja sesije**, i svaki kasniji Workbook event prestajao da
+radi), a `mActive` je ostajao `True`.
+
+Pravilo: rollback pokušava **svaku** snapshot-ovanu tabelu, `CleanUp` se izvršava
+**uvek**, a nepotpun rollback je **čitljiva činjenica** (`RollbackNepotpun`,
+`NevraceneTabele`) i signal van trake (lokalni log + `Monitor_Critical`).
+Primitiv **ne diže** grešku: od 276 poziva `.RollbackTx` u izvoru 182 ne stoje pod
+`On Error Resume Next`, a većina je unutar aktivnog `EH` bloka — nov raise bi tamo
+zamenio originalnu poslovnu grešku. Pozivalac koji želi da eskalira čita stanje.
+
+*Provera:* `T_TxRollback_NepotpunVracaOstale` + tri sabotaže
+(`rollback-petlja-staje-na-padu`, `rollback-cleanup-samo-kad-prodje`,
+`rollback-nepotpun-nevidljiv`) — po jedna na svaku od tri posledice.
+
 **Oblik poziva ne sme da menja ishod.** `AppendRow` je funkcija i pola koda je
 zove kao funkciju (`newRow = AppendRow(TBL_ZBIRNA, rowData)`), pola kao naredbu
 (`AppendRow TBL_ZBIRNA, rowData`). Do PR3 je regex tražio razmak posle imena, pa

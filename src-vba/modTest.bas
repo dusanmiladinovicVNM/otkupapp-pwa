@@ -495,6 +495,9 @@ Public Sub RunAllTests()
     RunOne 199
     RunOne 38
 
+    ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
+    RunOne 200
+
     SetTestMode prevMode
     WriteResultFile
 End Sub
@@ -763,6 +766,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 113: TestName = "T_Zbirna_NemaIspravku"
         Case 43: TestName = "T_Traka_NatpisiPoRezimu"
         Case 38: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
+        Case 200: TestName = "T_TxRollback_NepotpunVracaOstale"
         Case 199: TestName = "T_ZbirnaRadniSto_BiraSvojNacrt"
         Case 198: TestName = "T_ZbirnaKlik_OtvaraSvojDokument"
         Case 197: TestName = "T_Otp_OpsegIOznake"
@@ -970,6 +974,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 113: T_Zbirna_NemaIspravku
         Case 43: T_Traka_NatpisiPoRezimu
         Case 38: T_ZbirnaForma_KlasaOstajeBezCene
+        Case 200: T_TxRollback_NepotpunVracaOstale
         Case 199: T_ZbirnaRadniSto_BiraSvojNacrt
         Case 198: T_ZbirnaKlik_OtvaraSvojDokument
         Case 197: T_Otp_OpsegIOznake
@@ -7564,6 +7569,142 @@ EH:
     On Error GoTo 0
     Err.Raise ERR_ASSERT, "T_Sema_PrefiksNijeString", _
               "greska u toku testa (ime vraceno): " & Err.description
+End Sub
+
+
+' Rollback je i sam operacija koja moze da padne. Ovaj test meri sta se desi
+' kad padne na SREDNJOJ od tri snapshot-ovane tabele. Do izmene u
+' clsTransaction prva greska je prekidala petlju, pa su treca tabela i
+' Application state ostajali nedirnuti -- i nista to nije prijavljivalo.
+'
+' Sabotaza: srednja tabela se PREIMENUJE. modDataAccess.GetTable je trazi po
+' imenu kroz sve listove i vraca Nothing, pa RestoreTable pukne na 91 jos u
+' prvom redu. Nijedna domen-tabela se ne dira -- tri privremene tabele zive na
+' svom listu koji test brise za sobom.
+'
+' Redosled je deo merenja: Scripting.Dictionary cuva redosled unosa, pa je B
+' zaista u sredini, a tvrdnja nad C dokazuje da petlja nije stala na B.
+Private Sub T_TxRollback_NepotpunVracaOstale()
+    Const SHEET_IME As String = "_TestTxRollback"
+    Dim ws As Worksheet
+    Dim tx As clsTransaction
+    Dim evPre As Boolean
+    Dim calcPre As XlCalculation
+    Dim preimenovana As Boolean
+
+    evPre = Application.EnableEvents
+    calcPre = Application.Calculation
+
+    On Error GoTo EH
+    Set ws = TxRbNapraviList(SHEET_IME)
+
+    modDataAccess.GetTable("TST_RB_A").DataBodyRange.Cells(1, 1).value = 1
+    modDataAccess.GetTable("TST_RB_B").DataBodyRange.Cells(1, 1).value = 2
+    modDataAccess.GetTable("TST_RB_C").DataBodyRange.Cells(1, 1).value = 3
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot "TST_RB_A"
+    tx.AddTableSnapshot "TST_RB_B"
+    tx.AddTableSnapshot "TST_RB_C"
+
+    ' "posao": sve tri promenjene
+    modDataAccess.GetTable("TST_RB_A").DataBodyRange.Cells(1, 1).value = 11
+    modDataAccess.GetTable("TST_RB_B").DataBodyRange.Cells(1, 1).value = 22
+    modDataAccess.GetTable("TST_RB_C").DataBodyRange.Cells(1, 1).value = 33
+
+    ' sabotaza: SREDNJA tabela postaje nenalaziva za GetTable
+    ws.ListObjects("TST_RB_B").name = "TST_RB_B_SAKRIVENA"
+    preimenovana = True
+
+    tx.RollbackTx
+
+    ' 1. petlja NIJE stala na B -- vracene su i ona pre i ona posle pada
+    AssertEq modDataAccess.GetTable("TST_RB_A").DataBodyRange.Cells(1, 1).value, _
+             1, "A pre pada mora biti vracena"
+    AssertEq modDataAccess.GetTable("TST_RB_C").DataBodyRange.Cells(1, 1).value, _
+             3, "C POSLE pada mora biti vracena -- petlja ne sme stati na padu"
+
+    ' 2. CleanUp se izvrsio: Application state nije ostao suspendovan
+    AssertEq Application.EnableEvents, evPre, _
+             "EnableEvents mora biti vracen i kad restore padne"
+    AssertEq Application.Calculation, calcPre, _
+             "Calculation mora biti vracen i kad restore padne"
+
+    ' 3. cinjenica je CITLJIVA, ne samo logovana
+    AssertEq tx.RollbackNepotpun, True, "nepotpun rollback mora biti citljiv"
+    AssertEq (InStr(1, tx.NevraceneTabele, "TST_RB_B") > 0), True, _
+             "NevraceneTabele mora IMENOVATI tabelu koja nije vracena: [" & _
+             tx.NevraceneTabele & "]"
+
+    ' 4. mActive je ociscen: ista instanca prima novu transakciju
+    tx.BeginTx
+    AssertEq tx.RollbackNepotpun, False, "BeginTx mora resetovati stanje"
+    tx.RollbackTx
+
+    ws.ListObjects("TST_RB_B_SAKRIVENA").name = "TST_RB_B"
+    preimenovana = False
+    TxRbObrisiList SHEET_IME
+    Exit Sub
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If preimenovana Then ws.ListObjects("TST_RB_B_SAKRIVENA").name = "TST_RB_B"
+    TxRbObrisiList SHEET_IME
+    Application.EnableEvents = evPre
+    Application.Calculation = calcPre
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_TxRollback_NepotpunVracaOstale", errDesc
+End Sub
+
+' Tri tabele na svom listu, svaka sa DVE kolone: Range.Value2 nad jednom
+' celijom vraca skalar, a RestoreTable radi UBound(snapData, 1) -- tabela 1x1
+' bi oborila test na toj mehanici umesto na ponasanju koje se meri.
+Private Function TxRbNapraviList(ByVal imeLista As String) As Worksheet
+    Dim ws As Worksheet
+    TxRbObrisiList imeLista
+
+    Set ws = ThisWorkbook.Worksheets.Add( _
+        After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+    ws.name = imeLista
+
+    TxRbNapraviTabelu ws, "TST_RB_A", 1
+    TxRbNapraviTabelu ws, "TST_RB_B", 4
+    TxRbNapraviTabelu ws, "TST_RB_C", 7
+
+    Set TxRbNapraviList = ws
+End Function
+
+Private Sub TxRbNapraviTabelu(ws As Worksheet, ByVal ime As String, _
+                              ByVal prvaKolona As Long)
+    ws.Cells(1, prvaKolona).value = "V1"
+    ws.Cells(1, prvaKolona + 1).value = "V2"
+    ws.Cells(2, prvaKolona).value = 0
+    ws.Cells(2, prvaKolona + 1).value = 0
+
+    Dim lo As ListObject
+    Set lo = ws.ListObjects.Add(xlSrcRange, _
+        ws.Range(ws.Cells(1, prvaKolona), ws.Cells(2, prvaKolona + 1)), , xlYes)
+    lo.name = ime
+End Sub
+
+Private Sub TxRbObrisiList(ByVal imeLista As String)
+    Dim ws As Worksheet
+    Dim alertsPre As Boolean
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(imeLista)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Sub
+
+    alertsPre = Application.DisplayAlerts
+    Application.DisplayAlerts = False
+    ws.Delete
+    Application.DisplayAlerts = alertsPre
 End Sub
 
 
