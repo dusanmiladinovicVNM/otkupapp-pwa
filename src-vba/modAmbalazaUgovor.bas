@@ -515,13 +515,42 @@ End Function
 ' Mapa stoji u domenu, ne u clsTransaction: transakcija je genericki primitiv i
 ' ne sme da zna tipove poslovnih dokumenata. Nepoznat tip vraca prazno, a pisac
 ' to tretira kao odbijanje -- nov tip dokumenta ne moze da se provuce.
+' IZVORNI DOKUMENTI -- JEDAN POPIS, OBA SMERA IZ NJEGA.
+'
+' AMB-INV-08 trazi TABELU po tipu; undo garda (modStornoZurnal) trazi TIP po
+' tabeli. Dve Select Case mape bi se razisle prvim sledecim presecenim
+' dokumentom, pa oba citaoca citaju OVAJ popis. Fail-closed ostaje: sto nije u
+' popisu, nema ni tabelu ni tip.
+Public Function AmbIzvorniParovi() As Variant
+    AmbIzvorniParovi = Array( _
+        Array(DOK_TIP_AMBALAZA_DOKUMENT, TBL_AMBALAZA_DOKUMENT), _
+        Array(DOK_TIP_OTKUP, TBL_OTKUP), _
+        Array(DOK_TIP_OTPREMNICA, TBL_OTPREMNICA), _
+        Array(DOK_TIP_PRIJEMNICA, TBL_PRIJEMNICA))
+End Function
+
 Public Function AmbIzvornaTabela(ByVal dokTip As String) As String
-    Select Case Trim$(dokTip)
-        Case DOK_TIP_AMBALAZA_DOKUMENT: AmbIzvornaTabela = TBL_AMBALAZA_DOKUMENT
-        Case DOK_TIP_OTKUP:             AmbIzvornaTabela = TBL_OTKUP
-        Case DOK_TIP_OTPREMNICA:        AmbIzvornaTabela = TBL_OTPREMNICA
-        Case DOK_TIP_PRIJEMNICA:        AmbIzvornaTabela = TBL_PRIJEMNICA
-    End Select
+    Dim p As Variant, i As Long
+    p = AmbIzvorniParovi()
+    For i = LBound(p) To UBound(p)
+        If StrComp(Trim$(dokTip), CStr(p(i)(0)), vbTextCompare) = 0 Then
+            AmbIzvornaTabela = CStr(p(i)(1))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Obrnut smer: tip izvornog dokumenta za tabelu u kojoj zaglavlje zivi. Vraca
+' "" za svaku tabelu koja nije izvorna -- pozivalac tada nema sta da pita.
+Public Function AmbDokTipZaIzvornuTabelu(ByVal tabela As String) As String
+    Dim p As Variant, i As Long
+    p = AmbIzvorniParovi()
+    For i = LBound(p) To UBound(p)
+        If StrComp(Trim$(tabela), CStr(p(i)(1)), vbTextCompare) = 0 Then
+            AmbDokTipZaIzvornuTabelu = CStr(p(i)(0))
+            Exit Function
+        End If
+    Next i
 End Function
 
 ' ZAGLAVLJE I KRETANJE SE PROVERAVAJU ZAJEDNO (AMB-10-ODL-9, -10).

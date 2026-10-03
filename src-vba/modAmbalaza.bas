@@ -1247,6 +1247,20 @@ Public Function UpisiAmbDokument(ByVal tx As clsTransaction, _
     RequireAmbDokSchema SRC
     modAmbalazaUgovor.RequireAmbDok vrsta, broj, datum, brojOwnerTip, brojOwnerID, SRC
 
+    ' ZAUZETOST BROJA JE KAPIJA PISCA, NE UI-ja. RequireAmbDok sudi OBLIK
+    ' (vrsta, neprazan broj, datum, klasa vlasnika); bez ovoga su dva poziva sa
+    ' istim rucno prosledjenim brojem davala dva AmbDokID-a i jedan poslovni broj
+    ' u istom nizu (review 03.10.2026, P2 #2). Opseg je kanonski:
+    ' (BrojOwnerTip, BrojOwnerID, dan) -- isti koji generator koristi.
+    Dim zauzeo As String
+    zauzeo = modBrojevi.AmbDokBrojZauzet(brojOwnerTip, brojOwnerID, datum, broj)
+    If Len(zauzeo) > 0 Then
+        Err.Raise AMB_ERR_IDENTITET, SRC, _
+                  "Broj '" & Trim$(broj) & "' je u nizu " & Trim$(brojOwnerTip) & _
+                  " '" & Trim$(brojOwnerID) & "' tog dana vec zauzet (dokument " & _
+                  zauzeo & "). Storno ne oslobadja broj."
+    End If
+
     Dim vrstaK As String, ownerK As String
     vrstaK = modAmbalazaUgovor.AmbDokVrstaKanon(vrsta)
     ownerK = modAmbalazaUgovor.AmbNalogTipKanon(brojOwnerTip)
@@ -1879,24 +1893,30 @@ End Sub
 ' Javno jer ga undo garda (modStornoZurnal.UndoGuardReasonZaOp) mora pitati, a
 ' knjigu ne sme da cita sama -- oblik reda knjige nije njen posao.
 '
-' Trazi po DokumentID BEZ tipa: ID je globalno jedinstven (NewEntityID), pa tip
-' ne dodaje razlucivost, a izbegava se druga mapa tabela -> tip koja bi
-' zastarevala sa svakim presecenim dokumentom.
-Public Function AmbImaKontraStav(ByVal dokID As String) As Boolean
+' KLJUC JE KOMPOZITAN: (DokumentTIP, DokumentID). Prva verzija je trazila samo
+' ID, uz obrazlozenje da je ID globalno jedinstven pa tip ne dodaje razlucivost
+' -- a AMB-INV-04 nosi DokumentTIP tacno zato sto se jedan globalni namespace
+' DokumentID-eva NE SME pretpostaviti (review 03.10.2026, P2 #1). Garda koja
+' sluzi svim presecenim dokumentima ne sme da ima slabiji identitet od knjige.
+Public Function AmbImaKontraStav(ByVal dokTip As String, _
+                                 ByVal dokID As String) As Boolean
     Const SRC As String = "modAmbalaza.AmbImaKontraStav"
 
-    If Len(Trim$(dokID)) = 0 Then Exit Function
+    If Len(Trim$(dokTip)) = 0 Or Len(Trim$(dokID)) = 0 Then Exit Function
 
     Dim data As Variant
     data = GetTableData(TBL_AMBALAZA)
     If IsEmpty(data) Then Exit Function
 
-    Dim cDokI As Long, cSt As Long
+    Dim cDokT As Long, cDokI As Long, cSt As Long
+    cDokT = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
     cDokI = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
     cSt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD)
     ' Zatecena sveska bez nove kolone nema ni kontra-stavova -- ali odgovor
     ' "nema" bi tada bio pretpostavka. Sema je kanon, pa nedostatak kolone je
     ' kvar, i tako se i dize.
+    If cDokT = 0 Then Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                                "tblAmbalaza nema " & COL_AMB_DOK_TIP & "."
     If cDokI = 0 Then Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
                                 "tblAmbalaza nema " & COL_AMB_DOK_ID & "."
     If cSt = 0 Then Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
@@ -1905,9 +1925,11 @@ Public Function AmbImaKontraStav(ByVal dokID As String) As Boolean
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If Len(AmbText(data(i, cSt))) > 0 Then
-            If StrComp(AmbText(data(i, cDokI)), Trim$(dokID), vbTextCompare) = 0 Then
-                AmbImaKontraStav = True
-                Exit Function
+            If StrComp(AmbText(data(i, cDokT)), Trim$(dokTip), vbTextCompare) = 0 Then
+                If StrComp(AmbText(data(i, cDokI)), Trim$(dokID), vbTextCompare) = 0 Then
+                    AmbImaKontraStav = True
+                    Exit Function
+                End If
             End If
         End If
     Next i
@@ -1932,7 +1954,9 @@ End Function
 ' prenos IZ nje nikad nije u manjku.
 '
 ' Broj se moze proslediti (operater prepisuje sa racuna) ili izracunati. Oba
-' puta idu kroz istu kapiju zaglavlja, pa prosledjen broj nije povlasten.
+' puta idu kroz istu kapiju zaglavlja -- a ona od 03.10.2026 sudi i ZAUZETOST
+' u nizu (BrojOwnerTip, BrojOwnerID, dan), ne samo oblik. Zato prosledjen broj
+' nije povlasten: ako je zauzet, upis pada.
 Public Function NabaviAmbalazu_TX(ByVal datum As Date, _
                                   ByVal stanicaID As String, _
                                   ByVal tipAmb As String, _
@@ -1954,7 +1978,7 @@ Public Function NabaviAmbalazu_TX(ByVal datum As Date, _
 
     brojK = Trim$(broj)
     If Len(brojK) = 0 Then
-        brojK = modBrojevi.GenerateBrojAmbDokumenta(stanicaID, datum)
+        brojK = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, stanicaID, datum)
         If Len(brojK) = 0 Then
             Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
                       "Broj nabavke nije izracunat -- vidi Log."

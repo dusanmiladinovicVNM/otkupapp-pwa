@@ -1010,6 +1010,40 @@ tblAmbalazaDokument
 > stanicu, ili da pusti broj bez opsega, ili da menja tek upisanu strukturu.
 > Vlasnik je zato **obavezan**, i razresava se **istom kapijom** kao svaki nalog.
 >
+> **AMB-10-ODL-20 (review 03.10.2026, P2 #2).** Numerički niz ambalažnog
+> dokumenta ima opseg **`(BrojOwnerTip, BrojOwnerID, dan)`**, i **zauzetost broja
+> je kapija PISCA**.
+>
+> Dva prekršaja, oba ista greška — skraćen kanonski vlasnik:
+>
+> | Gde | Šta je bilo |
+> |---|---|
+> | `UpisiAmbDokument` | zvao je samo `RequireAmbDok`, a on sudi **oblik** (vrsta, neprazan broj, datum, klasa vlasnika) — ne zauzetost. Dva poziva sa istim ručno prosleđenim brojem davala su **dva `AmbDokID`-a i jedan poslovni broj u istom nizu** |
+> | `GenerateBrojAmbDokumenta` | skenirao je samo `BrojOwnerID`. U AgriX-u `VozacID` može biti jednak `StanicaID` (ogledalo vozača), pa bi dva naloga delila jedan niz |
+>
+> Oba čitaju **jedan sken** (`AmbDokNizSken`): dva skena sa dva opsega su upravo
+> način da se niz raziđe sam sa sobom — generator bi brojao jedan skup redova, a
+> kapija sudila nad drugim.
+>
+> **Storniran dokument drži svoj broj** — sken ne filtrira po `Stornirano`. Isto
+> pravilo važi za otkupni list (`OTKUNOS_ERR_BROJ_ZAUZET`: „storno ne
+> oslobađa broj — ispravka dobija NOV broj"), pa ambalažni dokument ne uvodi drugo.
+>
+> **Isti broj za drugog vlasnika prolazi, i to je pravilo a ne rupa.** Sam broj
+> nosi samo numerički deo ID-a (`FormatBroj`) — to je poslovni format — pa dva
+> vlasnika različitog tipa mogu imati isti **tekst** broja; nizovi su različiti,
+> a dokument nosi i tip i ID vlasnika, pa je par **(vlasnik, broj)** jedinstven.
+>
+> Kapija pokriva **sve** putanje jer je `UpisiAmbDokument` jedini pisac
+> `tblAmbalazaDokument` (jedan `AppendRow` u celom izvoru).
+>
+> Izuzimanje sopstvenog `AmbDokID`-a (za ispravku u mestu) **nije** dodato:
+> ambalažni dokument još nema putanju ispravke, pa bi argument bio mrtav —
+> dodaje se sa tom putanjom, kao što ga `BrojZauzetRevers` ima za svoju.
+>
+> *Provera:* `Test_Amb_DokBrojZauzetPoVlasniku` 5 tvrdnji · sabotaže
+> `amb-dok-broj-bez-kapije-zauzetosti`, `amb-dok-niz-bez-tipa-vlasnika`.
+>
 > **Kanonski `DokumentTIP` je `AmbalazaDokument`** -- jedna tabela, jedan tip.
 > Vrsta posla (`REVERS`/`NABAVKA`/`OTPIS`) ostaje na zaglavlju, u `Vrsta`. Da je
 > obrnuto, ista klasifikacija bi stajala u dve kolone, a `AMB-INV-04` racuna
@@ -1394,10 +1428,30 @@ ambalažni efekat ostaje anuliran. Dokument aktivan sa nula ambalaže. Putanja j
 > sposobnost stoji — vidljivo, sa razlogom, a ne tiše pokvarena.
 >
 > Kapija stoji u `UndoGuardReasonZaOp`, koju gledaju **i** komanda **i** ekran
-> oporavka — pa operater vidi razlog, ne samo odbijenicu. Pita se za **svaki
-> `RowID` operacije**, bez grananja po tipu dokumenta: ista garda tako važi i za
-> preostalih osam mesta knjiženja. `RowID` koji nije dokument nema kontra-stav,
-> pa ne daje lažnu odbijenicu.
+> oporavka — pa operater vidi razlog, ne samo odbijenicu.
+>
+> **ISPRAVKA (P2 #1): ključ je kompozitan `(DokumentTIP, DokumentID)`.** Prva
+> verzija `AmbImaKontraStav` je tražila **samo `DokumentID`**, uz obrazloženje da
+> je ID globalno jedinstven pa tip ne dodaje razlučivost. To je tačno ona
+> pretpostavka koju je `AMB-INV-04` **eksplicitno odbacio** — on nosi
+> `DokumentTIP` zato što se jedan globalni namespace `DokumentID`-eva **ne sme**
+> pretpostaviti. Garda koja treba da posluži svim presecenim dokumentima ne sme
+> da ima **slabiji identitet od same knjige**.
+>
+> Tip se **izvodi iz tabele žurnalnog reda**, ne iz oznake operacije:
+>
+> ```
+> tblOtkup.Stornirano    -> Otkup                  -> pitaj knjigu
+> tblAmbalaza.Stornirano -> nije izvorna tabela     -> preskoči
+> ```
+>
+> Oznaka operacije bi danas za otkup bila ista, ali za revers je
+> `OM-Izlaz-Koop` dok će u knjizi stajati `AmbalazaDokument` — pa bi se posle tog
+> cutovera razišla. **Tabela je činjenica, oznaka je labela.**
+>
+> Oba smera (`tip → tabela` za `AMB-INV-08`, `tabela → tip` za ovu gardu) čitaju
+> **jedan popis** (`AmbIzvorniParovi`): dve `Select Case` mape bi se razišle prvim
+> sledećim presečenim dokumentom.
 
 *Provera:* `Test_Amb_StornoKontraStavVracaSaldo` 9 tvrdnji ·
 `Test_Amb_StornoPosleVracanjaOdbijen` 5 · `Test_Amb_StornoNePraviMinus` 6 ·

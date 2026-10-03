@@ -114,10 +114,19 @@ End Sub
 ' krse vazeci ugovor: brisanje kontra-stavova (knjiga je nepromenljiva) i
 ' storno storna (najvise jedan direktan storno).
 '
-' Pita se za SVAKI RowID operacije, bez obzira na tip dokumenta: tako ista
-' garda vazi i za preostalih osam mesta knjizenja, bez dodavanja po jednog
-' slucaja. RowID koji nije dokument (npr. AmbID legacy zastavice) nema
-' kontra-stav, pa ne daje laznu odbijenicu.
+' Pita se za SVAKI zurnalni red operacije, a TIP DOKUMENTA SE IZVODI IZ TABELE
+' tog reda (AmbDokTipZaIzvornuTabelu), ne iz oznake operacije:
+'
+'   tblOtkup.Stornirano   -> Otkup        -> pitaj knjigu
+'   tblAmbalaza.Stornirano -> nije izvorna tabela -> preskoci
+'
+' Oznaka operacije (DocType) bi danas za otkup bila ista, ali za revers je
+' 'OM-Izlaz-Koop' dok ce u knjizi stajati 'AmbalazaDokument' -- pa bi se posle
+' tog cutovera razisla. Tabela je cinjenica, oznaka je labela.
+'
+' Kljuc je KOMPOZITAN (DokumentTIP, DokumentID): AMB-INV-04 nosi tip tacno zato
+' sto se jedan globalni namespace DokumentID-eva ne sme pretpostaviti
+' (review 03.10.2026, P2 #1).
 Private Function KontraStavRazlog(ByVal opID As String) As String
     Const SRC As String = MOD_NAME & ".KontraStavRazlog"
 
@@ -127,24 +136,28 @@ Private Function KontraStavRazlog(ByVal opID As String) As String
     data = GetTableData(TBL_STORNO_ZURNAL)
     If IsEmpty(data) Then Exit Function
 
-    Dim cOp As Long, cRow As Long
+    Dim cOp As Long, cRow As Long, cTbl As Long
     cOp = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_OP_ID)
     cRow = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_ROWID)
-    If cOp = 0 Or cRow = 0 Then Err.Raise ERR_SZ_BASE + 16, SRC, _
-                                         "Zurnal sema nije kompletna (OperationID/RowID)."
+    cTbl = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_TABELA)
+    If cOp = 0 Or cRow = 0 Or cTbl = 0 Then Err.Raise ERR_SZ_BASE + 16, SRC, _
+                                         "Zurnal sema nije kompletna (OperationID/RowID/Tabela)."
 
     Dim vidjeni As Object
     Set vidjeni = CreateObject("Scripting.Dictionary")
     vidjeni.CompareMode = vbTextCompare
 
-    Dim i As Long, rid As String
+    Dim i As Long, rid As String, dokTip As String, kljuc As String
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cOp))) = Trim$(opID) Then
             rid = Trim$(CStr(data(i, cRow)))
-            If Len(rid) > 0 And Not vidjeni.Exists(rid) Then
-                vidjeni.Add rid, True
-                If modAmbalaza.AmbImaKontraStav(rid) Then
-                    KontraStavRazlog = "Storno dokumenta " & rid & " je u knjizi " & _
+            dokTip = modAmbalazaUgovor.AmbDokTipZaIzvornuTabelu(CStr(data(i, cTbl)))
+            kljuc = dokTip & "|" & rid
+            If Len(rid) > 0 And Len(dokTip) > 0 And Not vidjeni.Exists(kljuc) Then
+                vidjeni.Add kljuc, True
+                If modAmbalaza.AmbImaKontraStav(dokTip, rid) Then
+                    KontraStavRazlog = "Storno dokumenta " & dokTip & " " & rid & _
+                        " je u knjizi " & _
                         "ambalaze upisan kao KONTRA-STAV, a knjiga je append-only. " & _
                         "Undo bi vratio zaglavlje u aktivno stanje, a ambalazni " & _
                         "efekat bi ostao anuliran -- zato je odbijen (AMB-10-ODL-19)."

@@ -310,6 +310,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_Amb_ZaglavljeDokumentaPisac
     Test_Amb_Inv08TxVlasnistvo
     Test_Amb_NabavkaOtvaraIzdavanje
+    Test_Amb_DokBrojZauzetPoVlasniku
     Test_Amb_StornoKontraStavVracaSaldo
     Test_Amb_StornoPosleVracanjaOdbijen
     Test_Amb_StornoNePraviMinus
@@ -17427,10 +17428,84 @@ Private Sub Test_Amb_UndoStornaOdbijenNadKnjigom()
                  "UNDO: odbijen undo ostavlja dokument STORNIRAN"
     AssertEquals CStr(kontraPre), CStr(kontraPosle), _
                  "UNDO: odbijen undo ne dira knjigu"
+
+    ' KLJUC KNJIGE JE KOMPOZITAN (DokumentTIP, DokumentID). Isti ID pod drugim
+    ' tipom NE SME da da pogodak -- inace bi undo jednog dokumenta mogao da bude
+    ' lazno odbijen zbog kontra-stava tudjeg. AMB-INV-04 nosi tip tacno zato sto
+    ' se jedan globalni namespace DokumentID-eva ne sme pretpostaviti.
+    AssertTrue modAmbalaza.AmbImaKontraStav(DOK_TIP_OTKUP, otkID), _
+               "UNDO: kontra-stav se nalazi pod SVOJIM tipom dokumenta"
+    AssertFalse modAmbalaza.AmbImaKontraStav(DOK_TIP_AMBALAZA_DOKUMENT, otkID), _
+                "UNDO: isti DokumentID pod DRUGIM tipom nije pogodak"
+    AssertFalse modAmbalaza.AmbImaKontraStav("", otkID), _
+                "UNDO: prazan tip dokumenta ne daje pogodak (fail-closed)"
     Exit Sub
 
 EH:
     LogFatal "Test_Amb_UndoStornaOdbijenNadKnjigom", Err.Number, Err.description
+End Sub
+
+' BROJ AMBALAZNOG DOKUMENTA: NIZ JE (BrojOwnerTip, BrojOwnerID, DAN).
+'
+' Dve stvari koje stari test nije merio (review 03.10.2026, P2 #2):
+'
+'   1. RUCNO PROSLEDJEN broj koji je vec zauzet mora biti ODBIJEN. Stari test je
+'      merio samo da dva AUTO-generisana dokumenta dobiju razlicite brojeve -- a
+'      to generator postize sa max+1 i bez ikakve kapije.
+'   2. TIP vlasnika je deo opsega. U AgriX-u VozacID moze da bude jednak
+'      StanicaID (ogledalo vozaca), pa niz koji gleda samo ID spaja dva naloga.
+'
+' Isti broj za DRUGOG vlasnika prolazi -- to nije rupa nego pravilo: nizovi su
+' razliciti, a dokument nosi i tip i ID vlasnika, pa je par (vlasnik, broj)
+' jedinstven.
+Private Sub Test_Amb_DokBrojZauzetPoVlasniku()
+    Dim scenario As String
+    Dim brojK As String
+    Dim prvi As String, drugiVlasnik As String
+    Dim pukloIsti As Boolean, opisIsti As String
+    Dim nizStanice As String, nizVozaca As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("AMBBR")
+
+    ' Broj u kanonskom obliku, ali namerno sa drugim numerickim delom od onog koji
+    ' bi generator dao -- da se ne sudari sa zasejanim nabavkama istog dana.
+    brojK = "7731/" & Format$(Date, "ddmmyy")
+
+    prvi = modAmbalaza.NabaviAmbalazu_TX(Date, TEST_ST_ID, TEST_TIP_AMB, 5#, brojK, _
+                                         "P2 broj " & scenario)
+
+    ' --- isti broj, isti vlasnik, isti dan: HARD REJECT
+    On Error Resume Next
+    modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, TEST_TIP_AMB, 3#, brojK
+    pukloIsti = (Err.Number <> 0)
+    opisIsti = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    ' --- isti broj, DRUGI vlasnik: prolazi, jer je drugi niz
+    drugiVlasnik = modAmbalaza.NabaviAmbalazu_TX(Date, TEST_HLAD_ST_ID, TEST_TIP_AMB, _
+                                                 4#, brojK, "P2 drugi " & scenario)
+
+    ' --- opseg niza: vozac sa ISTIM ID-em kao stanica ima SVOJ niz
+    nizStanice = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, TEST_ST_ID, Date)
+    nizVozaca = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_VOZAC, TEST_ST_ID, Date)
+
+    AssertTrue Len(prvi) > 0, _
+               "AMB DOK broj: prvi dokument sa rucno unetim brojem prolazi"
+    AssertTrue pukloIsti, _
+               "AMB DOK broj: isti broj u istom nizu je ODBIJEN"
+    AssertTrue InStr(1, opisIsti, "zauzet") > 0, _
+               "AMB DOK broj: odbijenica imenuje zauzet broj: [" & opisIsti & "]"
+    AssertTrue Len(drugiVlasnik) > 0, _
+               "AMB DOK broj: isti broj za DRUGOG vlasnika prolazi -- drugi niz"
+    AssertTrue Len(nizVozaca) > 0 And nizVozaca <> nizStanice, _
+               "AMB DOK broj: niz vozaca nije niz stanice sa istim ID-em: [" & _
+               nizVozaca & "] [" & nizStanice & "]"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_DokBrojZauzetPoVlasniku", Err.Number, Err.description
 End Sub
 
 ' NABAVKA: jedini put kojim NASE gajbe ulaze u opticaj.

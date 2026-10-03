@@ -465,6 +465,31 @@
     `StornoOtkup_TX`, nad **nezasejanim** tipom — nad zasejanom stanicom se minus ne
     može proizvesti) · `Test_Amb_UndoStornaOdbijenNadKnjigom` 6 · tri nove sabotaže.
     Katalog 675 → 678.
+57. **Dva P2 — jedna greška: skraćen kanonski identitet** (03.10.2026, review
+    `465790f0`). Oba nalaza su na mestu gde se sistem **generizuje** za preostalih
+    osam write-site-ova, i oba su isto: uzeo sam uži ključ od onog koji domen već
+    nosi.
+    **P2 #1.** `AmbImaKontraStav` je tražio samo `DokumentID`, uz komentar da „tip
+    ne dodaje razlučivost". `AMB-INV-04` nosi `DokumentTIP` **tačno zato** što se
+    jedan globalni namespace `DokumentID`-eva ne sme pretpostaviti — dakle ponovo
+    ista pretpostavka koju je domen eksplicitno odbacio. Ključ je sada kompozitan, a
+    tip se **izvodi iz tabele žurnalnog reda**, ne iz oznake operacije: za otkup bi
+    danas bile iste, ali za revers je oznaka `OM-Izlaz-Koop` dok će u knjizi stajati
+    `AmbalazaDokument`. Oba smera (`tip → tabela`, `tabela → tip`) čitaju **jedan
+    popis** (`AmbIzvorniParovi`).
+    **P2 #2.** `tblAmbalazaDokument` nije imao kapiju **zauzetosti** broja
+    (`RequireAmbDok` sudi oblik, ne zauzetost), pa su dva poziva sa istim ručno
+    prosleđenim brojem davala dva `AmbDokID`-a i **jedan poslovni broj u istom
+    nizu**; a generator je skenirao samo `BrojOwnerID`, dok je kanonski vlasnik
+    `BrojOwnerTip + BrojOwnerID` (u AgriX-u `VozacID` može biti jednak `StanicaID`).
+    Oba sada čitaju **jedan sken** (`AmbDokNizSken`) sa istim opsegom; storniran
+    dokument **drži** svoj broj, kao i otkupni list. Kapija pokriva sve putanje jer
+    je `UpisiAmbDokument` jedini pisac te tabele.
+    Usput je oboren i moj komentar koji je tvrdio da „prosleđen i izračunat broj
+    prolaze istu kapiju" — kapija zauzetost nije sudila.
+    Dokaz: `Test_Amb_DokBrojZauzetPoVlasniku` 5 tvrdnji · tri tvrdnje dopune u
+    `Test_Amb_UndoStornaOdbijenNadKnjigom` (isti ID pod drugim tipom **nije**
+    pogodak) · tri nove sabotaže. Katalog 678 → 681.
     Sabotaža je **preimenovanje** tabele (`GetTable` vraća `Nothing` → 91), ne
     menjanje šeme; tri privremene tabele imaju **po dve kolone** jer `Value2` nad
     jednom ćelijom vraća skalar, a `RestoreTable` radi `UBound`. Tri sabotaže, po

@@ -6915,6 +6915,33 @@ SABOTAZE = {
         "Test_Amb_UndoStornaOdbijenNadKnjigom",
         "UNDO: operacija sa kontra-stavom u knjizi se ODBIJA (AMB-10-ODL-19)",
     ),
+    # Kontra-stav se trazi BEZ tipa dokumenta: isti DokumentID pod drugim tipom
+    # daje pogodak, pa undo jednog dokumenta pada zbog tudjeg kontra-stava.
+    "amb-kontrastav-bez-tipa": (
+        "modAmbalaza.bas",
+        "            If StrComp(AmbText(data(i, cDokT)), Trim$(dokTip), vbTextCompare) = 0 Then\n",
+        "            If True Then   ' SABOTAZA: kontra-stav se trazi bez tipa\n",
+        "Test_Amb_UndoStornaOdbijenNadKnjigom",
+        "UNDO: isti DokumentID pod DRUGIM tipom nije pogodak",
+    ),
+    # Pisac ne sudi zauzetost broja: dva dokumenta dobiju isti poslovni broj u
+    # istom nizu, pa su dva racuna za gajbe nerazluciva.
+    "amb-dok-broj-bez-kapije-zauzetosti": (
+        "modAmbalaza.bas",
+        "    If Len(zauzeo) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: zauzet broj prolazi\n",
+        "Test_Amb_DokBrojZauzetPoVlasniku",
+        "AMB DOK broj: isti broj u istom nizu je ODBIJEN",
+    ),
+    # Niz ne gleda TIP vlasnika: vozac i stanica sa istim ID-em dele jedan niz,
+    # pa drugi nalog dobija broj koji je prvi vec potrosio.
+    "amb-dok-niz-bez-tipa-vlasnika": (
+        "modBrojevi.bas",
+        "        If StrComp(Trim$(NzToText(data(i, cOwnTip))), Trim$(brojOwnerTip), vbTextCompare) = 0 Then\n",
+        "        If True Then   ' SABOTAZA: niz ne gleda tip vlasnika\n",
+        "Test_Amb_DokBrojZauzetPoVlasniku",
+        "AMB DOK broj: niz vozaca nije niz stanice sa istim ID-em",
+    ),
     # Validator postoji, ali se ne zove iz pisca -- tacno placebo koji bi tablica
     # istinitosti pustila zelenu.
     "amb-odl9-validator-se-ne-zove": (

@@ -232,36 +232,117 @@ End Function
 ' ============================================================
 
 ' "VOZ-00004" -> 4 ; "ST-00001" -> 1 ; "ST-103" -> 103 ; "garbage" -> 0
-' Broj ambalaznog dokumenta -- dnevni niz po VLASNIKU broja.
+' NUMERICKI NIZ AMBALAZNOG DOKUMENTA -- OPSEG JE (BrojOwnerTip, BrojOwnerID, DAN).
 '
-' Ovde a ne u modAmbalaza: MaxSeqFromTable je privatan, i ceo racun broja po
-' (vlasnik, dan) zivi u ovom modulu. Druga kopija bila bi druga istina.
+' Ovde a ne u modAmbalaza: ceo racun broja po (vlasnik, dan) zivi u ovom modulu.
+' Druga kopija bila bi druga istina.
 '
-' Radi za SVE vrste ambalaznog dokumenta, jer tabela nosi i broj i datum i
-' vlasnika niza -- ne treba joj poseban KIND_* kao reversu, koji je svoj niz
-' morao da skenira iz tblAmbalaza po prefiksu.
+' TIP VLASNIKA JE DEO OPSEGA, NE KOZMETIKA (review 03.10.2026, P2 #2). Kanonski
+' vlasnik niza je BrojOwnerTip + BrojOwnerID, a prva verzija je skenirala samo
+' ID. U AgriX-u VozacID moze da bude jednak StanicaID (ogledalo vozaca), pa bi
+' dva razlicita naloga delila jedan niz i drugi bi dobio zauzet broj.
+'
+' Sam BROJ i dalje nosi samo numericki deo ID-a (FormatBroj) -- to je poslovni
+' format i ne menja se. Dva vlasnika razlicitog tipa zato MOGU imati isti
+' tekst broja: njihovi nizovi su razliciti, a dokument nosi i tip i ID vlasnika,
+' pa je par (vlasnik, broj) jedinstven.
 '
 ' EH NE SME da vrati validan-looking broj: "1/ddmmyy" izgleda kao regularan
 ' prvi broj dana, pa je posle greske u skenu dokument dobijao broj koji vec
 ' postoji (AUD-041a, isti razlog kao GenerateBrojPrijemnice). Prazan string je
 ' jedini bezbedan izlaz -- pozivalac ga vidi kao pad koraka.
-Public Function GenerateBrojAmbDokumenta(ByVal brojOwnerID As String, _
+Public Function GenerateBrojAmbDokumenta(ByVal brojOwnerTip As String, _
+                                         ByVal brojOwnerID As String, _
                                          ByVal datum As Date) As String
     Const SRC As String = "GenerateBrojAmbDokumenta"
 
     On Error GoTo EH
 
     Dim maxSeq As Long
-    maxSeq = MaxSeqFromTable(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, _
-                             COL_AMBD_DATUM, COL_AMBD_BROJ_OWNER_ID, _
-                             brojOwnerID, datum)
+    Call AmbDokNizSken(brojOwnerTip, brojOwnerID, datum, "", maxSeq, SRC)
 
     GenerateBrojAmbDokumenta = FormatBroj(brojOwnerID, datum, maxSeq + 1)
     Exit Function
 
 EH:
-    LogErr SRC, "owner=" & brojOwnerID
+    LogErr SRC, "owner=" & brojOwnerTip & "/" & brojOwnerID
     GenerateBrojAmbDokumenta = ""
+End Function
+
+' JE LI BROJ ZAUZET U TOM NIZU? Vraca AmbDokID koji ga drzi, inace "".
+'
+' Pisac je zvao samo AmbDokProblem, a on sudi OBLIK (vrsta, neprazan broj,
+' datum, klasa vlasnika) -- ne ZAUZETOST. Zato je prolazilo dva puta
+' NabaviAmbalazu_TX sa istim rucno prosledjenim brojem: dva AmbDokID-a, jedan
+' poslovni broj u istom nizu (review 03.10.2026, P2 #2).
+'
+' STORNIRAN DOKUMENT DRZI SVOJ BROJ: sken NE filtrira po Stornirano. Isto
+' pravilo vazi i za otkupni list (OTKUNOS_ERR_BROJ_ZAUZET: "storno ne
+' oslobadja broj -- ispravka dobija NOV broj"), pa ambalazni dokument ne uvodi
+' drugo.
+'
+' Izuzimanje sopstvenog AmbDokID-a (za ispravku u mestu) NIJE dodato: ambalazni
+' dokument jos ne ima putanju ispravke, pa bi argument bio mrtav. Dodaje se sa
+' tom putanjom, kao sto ga BrojZauzetRevers ima za svoju.
+Public Function AmbDokBrojZauzet(ByVal brojOwnerTip As String, _
+                                 ByVal brojOwnerID As String, _
+                                 ByVal datum As Date, _
+                                 ByVal broj As String) As String
+    Const SRC As String = "AmbDokBrojZauzet"
+
+    Dim maxSeq As Long
+    AmbDokBrojZauzet = AmbDokNizSken(brojOwnerTip, brojOwnerID, datum, broj, _
+                                     maxSeq, SRC)
+End Function
+
+' JEDAN SKEN, JEDAN OPSEG NIZA -- i generator i kapija zauzetosti citaju ovo.
+'
+' Dva skena sa dva opsega su upravo nacin da se niz razide sam sa sobom:
+' generator bi brojao jedan skup redova, a kapija sudila nad drugim.
+'
+' Ne dize gresku na nedostajucu kolonu nego je prepusta RequireColumnIndex-u:
+' sema je kanon, pa je nedostatak kolone kvar, a ne slucaj.
+Private Function AmbDokNizSken(ByVal brojOwnerTip As String, _
+                               ByVal brojOwnerID As String, _
+                               ByVal datum As Date, _
+                               ByVal broj As String, _
+                               ByRef outMaxSeq As Long, _
+                               ByVal sourceName As String) As String
+    outMaxSeq = 0
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA_DOKUMENT)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cID As Long, cBroj As Long, cDat As Long, cOwnTip As Long, cOwnID As Long
+    cID = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, sourceName)
+    cBroj = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, sourceName)
+    cDat = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_DATUM, sourceName)
+    cOwnTip = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_TIP, sourceName)
+    cOwnID = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_ID, sourceName)
+
+    Dim danKljuc As String
+    danKljuc = Format$(datum, "ddmmyy")
+
+    Dim i As Long, redDan As String, seq As Long
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cOwnTip))), Trim$(brojOwnerTip), vbTextCompare) = 0 Then
+            If StrComp(Trim$(NzToText(data(i, cOwnID))), Trim$(brojOwnerID), vbTextCompare) = 0 Then
+                redDan = ""
+                If IsDate(data(i, cDat)) Then redDan = Format$(CDate(data(i, cDat)), "ddmmyy")
+                If redDan = danKljuc Then
+                    seq = ExtractSeqFromBroj(NzToText(data(i, cBroj)))
+                    If seq > outMaxSeq Then outMaxSeq = seq
+                    If Len(Trim$(broj)) > 0 Then
+                        If BrojJednak(data(i, cBroj), broj) Then
+                            AmbDokNizSken = Trim$(NzToText(data(i, cID)))
+                            Exit Function
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next i
 End Function
 
 Public Function ExtractNumericFromEntityID(ByVal entityID As String) As Long
