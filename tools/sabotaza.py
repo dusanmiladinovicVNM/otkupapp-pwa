@@ -6699,6 +6699,29 @@ SABOTAZE = {
         "T_TxRollback_NepotpunZatvaraUpisISnimanje",
         "posle nepotpunog rollback-a poruka NE SME da tvrdi da su ",
     ),
+    # Partnerov broj se vraca na "nas" -- tacno regresija koju je 03.10.2026
+    # ispravila. Pada tvrdnja o klasi; sve pre nje prolazi.
+    "amb-partner-broj-nas": (
+        "modAmbalazaUgovor.bas",
+        "        Case AMB_DOK_REVERS_PARTNERA\n"
+        "            AmbDokBrojOwnerKlasa = AMB_KLASA_PARTNER\n",
+        "        Case AMB_DOK_REVERS_PARTNERA\n"
+        "            AmbDokBrojOwnerKlasa = AMB_KLASA_SOPSTVENI   ' SABOTAZA\n",
+        "Test_Amb_PisacKnjige",
+        "AmbDok: partnerov revers broji PARTNER",
+    ),
+    # Partnerov papir poceo bi da nosi i NASE izdavanje, pa bi jedan dokument
+    # pokrivao oba smera -- a tada vlasnik broja nije odredjen vrstom.
+    "amb-partner-nosi-izdavanje": (
+        "modAmbalazaUgovor.bas",
+        "            AmbDokDozvoljavaKretanje = (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)\n",
+        "            Select Case Trim$(vrstaKretanja)   ' SABOTAZA: nosi i izdavanje\n"
+        "                Case AMB_VK_POVRAT_PRAZNE, AMB_VK_IZDATA_PRAZNA\n"
+        "                    AmbDokDozvoljavaKretanje = True\n"
+        "            End Select\n",
+        "Test_Amb_PisacKnjige",
+        "AmbDok: partnerov revers NE nosi IZDATA_PRAZNA",
+    ),
 }
 
 

@@ -16886,6 +16886,50 @@ Private Sub Test_Amb_PisacKnjige()
     AssertTrue errNum <> 0, _
                "Amb pisac: obaveza se ne racuna prema SOPSTVENOM nalogu"
 
+    ' --- A0) REVERS_PARTNERA: partnerov papir nosi PARTNEROV broj ----------
+    '
+    ' AMB-10-ODL-10 (03.10.2026): dokument od kupca je dokaz da je vozac preuzeo
+    ' ambalazu -- kupcev papir, kupcev broj. Do ovog reza je AmbDokBrojOwnerKlasa
+    ' vracala SOPSTVENI za SVE vrste, pa bi BrojOwnerTip=Kupac pao pre upisa.
+    '
+    ' Oba smera su obavezna: partnerov dokument prima partnera i ODBIJA nas
+    ' nalog, a nas dokument ODBIJA partnera. Kapija koja bi primala oba bila bi
+    ' zelena na prvoj tvrdnji, a pustila bi dva pozivna mesta da izaberu
+    ' razlicitu politiku -- sto ova funkcija postoji da spreci.
+    AssertEquals AMB_KLASA_PARTNER, _
+                 modAmbalazaUgovor.AmbDokBrojOwnerKlasa(AMB_DOK_REVERS_PARTNERA), _
+                 "AmbDok: partnerov revers broji PARTNER"
+    AssertEquals AMB_KLASA_SOPSTVENI, _
+                 modAmbalazaUgovor.AmbDokBrojOwnerKlasa(AMB_DOK_REVERS), _
+                 "AmbDok: nas revers i dalje broji SOPSTVENI nalog"
+    AssertEquals "", modAmbalazaUgovor.AmbDokMatricaNepotpuna(), _
+                 "AmbDok: nova vrsta ima definisanog vlasnika broja"
+
+    AssertEquals "", modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS_PARTNERA, "KUP-9/" & scenario, Date, _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID), _
+                 "AmbDok: partnerov revers prima kupca kao vlasnika broja"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokProblem( _
+                   AMB_DOK_REVERS_PARTNERA, "X/" & scenario, Date, _
+                   AMB_NALOG_STANICA, TEST_ST_ID)) > 0, _
+               "AmbDok: partnerov revers ODBIJA nas nalog kao vlasnika broja"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokProblem( _
+                   AMB_DOK_REVERS, "Y/" & scenario, Date, _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID)) > 0, _
+               "AmbDok: nas revers ODBIJA partnera kao vlasnika broja"
+
+    ' Veza dokument <-> kretanje: partnerov papir dokazuje da je ambalaza stigla
+    ' OD NJEGA. Kad mi izdajemo partneru, dokument je NAS.
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje( _
+                   AMB_DOK_REVERS_PARTNERA, AMB_VK_POVRAT_PRAZNE), _
+               "AmbDok: partnerov revers nosi POVRAT_PRAZNE"
+    AssertTrue Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje( _
+                   AMB_DOK_REVERS_PARTNERA, AMB_VK_IZDATA_PRAZNA), _
+               "AmbDok: partnerov revers NE nosi IZDATA_PRAZNA -- to je nas papir"
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje( _
+                   AMB_DOK_REVERS_PARTNERA, AMB_VK_ULAZ_TUDJE), _
+               "AmbDok: pokrice deficita ide uz svaki ambalazni dokument"
+
     ' --- A) NABAVKA: knjiga pocinje na granici opticaja --------------------
     Dim dokNab As String, nabID As String
     dokNab = modAmbalaza.UpisiAmbDokument(AMB_DOK_NABAVKA, "NAB-" & scenario, Date, _

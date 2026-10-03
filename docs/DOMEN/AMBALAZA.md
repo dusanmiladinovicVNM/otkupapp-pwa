@@ -996,6 +996,67 @@ Time u celom domenu ambalaze **nema nijednog dogadjaja bez identiteta dokumenta*
 
 `AMB-INV-04` i `AMB-INV-08` tek time vaze **bez ijednog imenovanog izuzetka**.
 
+### 6.12b Lanac kupac → vozač → OM, i čiji je broj (odluke 03.10.2026)
+
+> **Odluka operatera.** *„Dokument od kupca je dokaz da je vozač preuzeo ambalažu.
+> Dokumenti reversi ka OM su dokazi da je vozač predao dalje ambalažu, ili osim
+> reversa isporuka centralnom magacinu odnosno OM koja je hladnjača."*
+
+Pitao sam da li vozačev saldo treba da pokazuje gajbe koje su kod njega. Odgovor
+je u samoj formulaciji: dva dokumenta su **dokaz preuzimanja** i **dokaz predaje**,
+pa je ono između njih upravo vozačev saldo.
+
+```
+kupac -> vozac      dokument OD KUPCA, njegov broj    = dokaz da je vozac PREUZEO
+vozac -> Stanica    revers, nas broj po stanici       = dokaz da je vozac PREDAO
+                    stanica = obicni OM  ILI  JeHladnjaca=DA (centralni magacin)
+```
+
+> **AMB-10-ODL-9.** Lanac je `kupac → vozač → stanica`. Vozač je **strana**, ne
+> kolona: saldo mu pokazuje ono što je preuzeo a nije predao. **`Firma` ne ulazi u
+> ovaj lanac.** Odredište predaje je stanica — običan OM ili onaj sa
+> `JeHladnjaca = DA` (centralni magacin, `tblStanice.JeHladnjaca`, čita ga
+> `modAutoHladnjaca`).
+
+**Šta je ovo oborilo:** tri moja nacrta. (1) `kupac → firma` sa vozačem kao
+izvedenim transporterom — to važi za **zatečeni** model (§2), ne ciljni, a
+`AMB-10-ODL-7` već kaže da je vozač „naš" nalog jer *„prazne gajbe sa stanice
+najčešće idu VOZAČU pa tek onda drugoj stanici"*. (2) Lanac sa generisanim hopovima
+`vozač → firma → vozač` — njima bi vozačev saldo posle commit-a bio **uvek nula**,
+što obesmišljava `AMB-10-ODL-7`. (3) Zbog (2) sam predlagao širenje izuzetka u
+`AMB-INV-10`; nije potrebno — **svaki dokument nosi tačno jedan par `{Od, Na}`**, pa
+invarijanta ostaje netaknuta.
+
+> **AMB-10-ODL-10.** Dokument koji izdaje **partner** nosi **njegov** broj.
+> `BrojDokumenta` je taj broj, `BrojOwnerTip`/`BrojOwnerID` imenuju **partnera**.
+> Nova vrsta: **`REVERS_PARTNERA`**.
+
+Pravilo iz 6.12a — *„broj je naš, protivpartner je njihov"* — važi za dokument
+**koji pišemo mi**, i time prestaje da bude univerzalno. Operaterova formulacija je
+šira od ambalaže: *„to važi i za prijemnicu i za izvode banaka. To su mesta gde su
+brojevi dokumenata prirodno eksterni i ne treba tu izmišljati besmisleno dodatne
+naše brojeve."*
+
+**Kod to već radi za prijemnicu**, pa je ugovor ambalaže bio stroži od sistema oko
+sebe:
+
+| mereno | |
+|---|---|
+[modOtkupUI.bas:8640](../../src-vba/modOtkupUI.bas) | *„auto-broj SAMO za hladnjača-kupca. **Ostali kupci nose svoj eksterni, nezavisni broj — polje se tada NE dira.**"* |
+[modBrojevi.bas:360](../../src-vba/modBrojevi.bas) | *„eksterni kupac nosi svoj niz"* |
+[modAmbalazaUgovor.bas:344](../../src-vba/modAmbalazaUgovor.bas) | `AmbDokBrojOwnerKlasa` je vraćao `SOPSTVENI` za **sve** vrste → `BrojOwnerTip=Kupac` bi **pao** pre upisa |
+
+Put ispravke je propisan u 6.12a: *„Ako je za neku od njih poslovni odgovor
+drugačiji, menja se **spisak `Vrsta`**, ne model."* Zato nova vrsta, a ne nov
+potpis: `AmbDokBrojOwnerKlasa` ostaje **po vrsti**, pa `AmbDokMatricaNepotpuna`
+obara svaku vrstu bez odgovora — nova putanja se ne može provući tiho. Da je po
+smeru, zaglavlje bi se upisivalo pre nego što se smer zna.
+
+`REVERS_PARTNERA` nosi **samo** `POVRAT_PRAZNE` (uz univerzalno `ULAZ_TUDJE_AMBALAZE`,
+koje je posledica `AMB-INV-07` a ne vrsta posla). `IZDATA_PRAZNA` tu **ne sme**: kad
+mi izdajemo partneru, dokument je **naš**, dakle `REVERS`. Ni `PRENOS_INTERNO`:
+interno kretanje ne može imati partnerov papir kao povod.
+
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
 1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..09`, protokol potvrde deficita, storno-svesna formula obaveze i njena donja granica. **Bez produkcionog cutovera.**

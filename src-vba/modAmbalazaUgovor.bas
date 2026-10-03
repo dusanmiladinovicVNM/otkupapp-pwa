@@ -61,6 +61,10 @@ Public Const AMB_VK_OTPIS As String = "OTPIS"
 ' Ne mesati sa VrstaKretanja iznad: ovo je vrsta DOKUMENTA, ono je vrsta
 ' KRETANJA. Vezu medju njima drzi AmbDokDozvoljavaKretanje.
 Public Const AMB_DOK_REVERS As String = "REVERS"
+' Dokument koji je izdao PARTNER, a ne mi. Danas: revers kupca -- dokaz da je
+' vozac preuzeo prazne gajbe (odluka operatera 03.10.2026, AMB-10-ODL-10).
+' Broj je NJEGOV, pa je vlasnik numerickog niza partner, ne sopstveni nalog.
+Public Const AMB_DOK_REVERS_PARTNERA As String = "REVERS_PARTNERA"
 Public Const AMB_DOK_NABAVKA As String = "NABAVKA"
 Public Const AMB_DOK_OTPIS As String = "OTPIS"
 
@@ -262,7 +266,8 @@ End Function
 ' AmbDokID ide u tblAmbalaza.DokumentID, cime ReversID prestaje da bude drugi,
 ' paralelan identitet -- ne brise se nego POSTAJE ovo.
 Public Function AmbDokVrsteSve() As Variant
-    AmbDokVrsteSve = Array(AMB_DOK_REVERS, AMB_DOK_NABAVKA, AMB_DOK_OTPIS)
+    AmbDokVrsteSve = Array(AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA, _
+                           AMB_DOK_NABAVKA, AMB_DOK_OTPIS)
 End Function
 
 Public Function AmbDokVrstaPoznata(ByVal vrsta As String) As Boolean
@@ -314,6 +319,13 @@ Public Function AmbDokDozvoljavaKretanje(ByVal dokVrsta As String, _
                      AMB_VK_PRENOS_INTERNO, AMB_VK_VRACANJE_TUDJE
                     AmbDokDozvoljavaKretanje = True
             End Select
+        Case AMB_DOK_REVERS_PARTNERA
+            ' Partnerov dokument dokazuje da je ambalaza STIGLA OD NJEGA: kupac
+            ' vraca prazne, vozac ih preuzima. IZDATA_PRAZNA ovde NE sme -- kad
+            ' mi izdajemo partneru, dokument je NAS, pa je to AMB_DOK_REVERS.
+            ' PRENOS_INTERNO takodje ne: interno kretanje ne moze imati partnerov
+            ' papir kao povod.
+            AmbDokDozvoljavaKretanje = (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)
         Case AMB_DOK_NABAVKA
             AmbDokDozvoljavaKretanje = (StrComp(Trim$(vrstaKretanja), AMB_VK_NABAVKA, vbTextCompare) = 0)
         Case AMB_DOK_OTPIS
@@ -333,18 +345,27 @@ End Function
 '   BROJ JE NAS, PROTIVPARTNER JE NJIHOV.
 '
 ' Dokument pisemo mi -- i revers kooperantu, i revers kupca, i nabavku, i otpis.
-' Partner nikad ne izdaje nas broj, pa vlasnik mora biti SOPSTVENI nalog (Stanica,
-' Firma, Vozac). Koji tacno, po vrsti i po putanji, ostaje numeraciji u 10b -- ali
-' KLASA je zakljucana ovde, da dva pozivna mesta ne bi izabrala razlicitu politiku
-' a da nijedno ne prekrsi ugovor.
+' Vlasnik numerickog niza, po vrsti dokumenta.
 '
-' Funkcija postoji po vrsti iako je odgovor danas isti za sve tri: kad bi se neka
-' vrsta ikad brojala drugacije, ovo je mesto na kom se to kaze -- i AmbDokMatricaNepotpuna
-' odmah obara vrstu bez odgovora.
+' NAS dokument nosi NAS broj: partner ne izdaje nasu seriju, pa je vlasnik
+' sopstveni nalog (Stanica, Firma, Vozac).
+'
+' PARTNEROV dokument nosi NJEGOV broj, i to je 03.10.2026 ispravljeno kao
+' pravilo, ne izuzetak: dokument od kupca je dokaz da je vozac preuzeo ambalazu --
+' kupcev papir, kupcev broj. Isto vazi za prijemnicu i bankovne izvode; tamo kod
+' to vec radi (modOtkupUI.PredlogPrijemnice: "Ostali kupci nose svoj eksterni,
+' nezavisni broj -- polje se tada NE dira"). Izmisljati uz njih i nas broj znaci
+' dva broja za jedan papir, pa ni jedan nije onaj po kome operater trazi.
+'
+' Funkcija je po VRSTI, ne po smeru, i to je namerno: AmbDokMatricaNepotpuna
+' obara svaku vrstu bez odgovora, pa nova putanja ne moze da se provuce tiho.
+' Da je po smeru, zaglavlje bi se upisivalo pre nego sto se smer zna.
 Public Function AmbDokBrojOwnerKlasa(ByVal vrsta As String) As String
     Select Case Trim$(vrsta)
         Case AMB_DOK_REVERS, AMB_DOK_NABAVKA, AMB_DOK_OTPIS
             AmbDokBrojOwnerKlasa = AMB_KLASA_SOPSTVENI
+        Case AMB_DOK_REVERS_PARTNERA
+            AmbDokBrojOwnerKlasa = AMB_KLASA_PARTNER
     End Select
 End Function
 
