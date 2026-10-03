@@ -1278,12 +1278,18 @@ ROLLBACK_RED_CASES = [
 # pa nema dubine koja se moze prevariti.
 #
 # Dodavanje pozivaoca je namerno NEUDOBNO: menja se ova lista, sto je vidljiv cin
-# u diff-u. Pravilo za upis u listu: kanonski pisac izvornog dokumenta, u ISTOJ
-# proceduri i TEK POSLE uspesnog upisa dokumenta.
+# u diff-u.
+#
+# STA OVA KAPIJA DOKAZUJE, I STA NE. Dokazuje KO: (modul, procedura) je na
+# listi. NE dokazuje KADA -- da BindSourceDocument stoji POSLE uspesnog upisa
+# dokumenta. To ostaje na pregledu i testu kanonskog pisca, i tako se izgovara,
+# da dokumentacija ne tvrdi vise od koda. Danasnji jedini pozivalac
+# (modAmbalaza.UpisiAmbDokument) to radi ispravno: AppendRow, provera
+# rowIdx > 0, pa tek onda bind.
 AMB_BIND_DOZVOLJENI = {
     ("modAmbalaza", "UpisiAmbDokument"),
 }
-_AMB_END = re.compile(r'^End\\s+(?:Sub|Function|Property)\\b', re.IGNORECASE)
+_AMB_END = re.compile(r'^End\s+(?:Sub|Function|Property)\b', re.IGNORECASE)
 _BIND_POZIV = re.compile(r'\.\s*BindSourceDocument\b', re.IGNORECASE)
 _BIND_STRING = re.compile(r'"[^"]*"')
 
@@ -1295,7 +1301,10 @@ def check_amb_bind_vlasnik(src_dir: str | None = None) -> list[Finding]:
         return []
     out = []
     for ime_f in sorted(os.listdir(src_dir)):
-        if not ime_f.endswith((".bas", ".cls")):
+        # VBA_EXT, ne samo .bas/.cls: BindSourceDocument je JAVNA metoda, pa
+        # poziv iz .frm ili .doccls mora da se vidi. Dok je ovde stajao uzi
+        # spisak, kapija je tvrdila vise nego sto je proveravala.
+        if not ime_f.lower().endswith(VBA_EXT):
             continue
         modul = ime_f.rsplit(".", 1)[0]
         # Testovi smeju: oni MERE kapiju, i to nad svojim transakcijama.
@@ -1359,6 +1368,26 @@ AMB_BIND_CASES = [
      'Option Explicit\n'
      'Public Sub BindSourceDocument(ByVal dokTip As String)\n'
      'End Sub\n'),
+    # JAVNA metoda se moze zvati i iz forme i iz ThisWorkbook -- dok je kapija
+    # gledala samo .bas/.cls, ovo su bile nevidljive zaobilaznice.
+    ("poziv iz .frm", 1, "frmNesto.frm",
+     'Option Explicit\n'
+     'Private Sub cmd_Click()\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-1"\n'
+     'End Sub\n'),
+    ("poziv iz .doccls", 1, "ThisWorkbook.doccls",
+     'Option Explicit\n'
+     'Private Sub Workbook_Open()\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-1"\n'
+     'End Sub\n'),
+    # Granica procedure: poziv POSLE End Function ne sme da se pripise
+    # dozvoljenoj proceduri iznad. Slucaj postoji jer je _AMB_END bio
+    # dvostruko escapovan i nije pogadjao nista -- bez tvrdnje se to ne vidi.
+    ("granica procedure se resetuje", 1, "modAmbalaza.bas",
+     'Option Explicit\n'
+     'Public Function UpisiAmbDokument() As String\n'
+     'End Function\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-1"\n'),
     ("test modul se ne gleda", 0, "modNestoTests.bas",
      'Option Explicit\n'
      'Public Sub T()\n'

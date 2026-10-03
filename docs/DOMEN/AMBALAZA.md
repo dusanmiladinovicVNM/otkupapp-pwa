@@ -688,7 +688,8 @@ Dakle `KupciIzlaz` nije dokument nego **presiroka helper funkcija** koja je
 slepila **dve nezavisne poslovne operacije**:
 
 ```
-1. revers            kupac -> firma      (prazne gajbe)   -> tblAmbalazaDokument
+1. revers            kupac -> firma   ZATECEN opis; ciljno: kupac -> vozac
+                                      (AMB-10-ODL-9)    -> tblAmbalazaDokument
 2. uplata            po fakturi          (novac)          -> tblNovac, fakturaID
 ```
 
@@ -808,8 +809,10 @@ kod reversa su **dva dogadjaja delila jedan broj**.
 
 #### Dobitak
 
-- **jedan revers za sve parove**: stanica <-> kooperant, stanica <-> firma,
-  kupac -> firma. Cetiri smera plus poseban slucaj na drugom mestu postaju jedan
+- **jedan revers za sve parove**: stanica ↔ kooperant, stanica ↔ firma,
+  **kupac → vozač** i vozač → stanica (`AMB-10-ODL-9`; `kupac → firma` je bio
+  **zatečen** opis, ne ciljni — firma u taj lanac ne ulazi).
+  Cetiri smera plus poseban slucaj na drugom mestu postaju jedan
   mehanizam;
 - **jedna kasa**: danas unos **samo novca** na F6 ide kroz funkciju imenovanu po
   ambalazi (`SaveKupciIzlaz_TX`) — to je i bio prvi znak da su dve stvari slepljene;
@@ -901,7 +904,7 @@ je obrisao S3-ostatak. Ali:
 > **Odluka operatera (28.09.2026):** dogadjaji ambalaze koji nemaju svoj poslovni dokument **dobijaju ga**.
 > Pitanje je bilo uze, ali odgovor je izvukao nalaz koji ga cini sirim.
 
-> **Ispravka operatera:** revers ide i **od stanice ka kooperantu**, ne samo firma <-> stanica. Merenje se slaze: `SaveOMUlaz_TX` ima **cetiri** smera (`IZDAVANJE`, `PRIJEM`, `IZDATO_OM`, `PRIJEM_OD_OM`). Uz 6.11 se dodaje i peti par — **kupac -> firma**. Revers je dakle **partner-genericki** dokument predaje ambalaze, ne interni.
+> **Ispravka operatera:** revers ide i **od stanice ka kooperantu**, ne samo firma <-> stanica. Merenje se slaze: `SaveOMUlaz_TX` ima **cetiri** smera (`IZDAVANJE`, `PRIJEM`, `IZDATO_OM`, `PRIJEM_OD_OM`). Uz 6.11 se dodaje i peti par — tada zapisan kao **kupac -> firma**, a 03.10.2026 ispravljen na **kupac → vozač** (`AMB-10-ODL-9`: firma u lanac ne ulazi; vozač je strana, ne kolona). Revers je dakle **partner-genericki** dokument predaje ambalaze, ne interni.
 
 **Mereno:** `ReversID` postoji **samo kao kolona na `tblAmbalaza`** — tabele
 reversa **nema nigde u kanonu**. Revers dakle ima identitet i broj, ali **nema
@@ -994,7 +997,7 @@ Time u celom domenu ambalaze **nema nijednog dogadjaja bez identiteta dokumenta*
 |---|---|
 | otkup, otpremnica, prijemnica | vec postoji |
 | ~~`KupciIzlaz`~~ | **nije dokument** — revers + uplata (6.11) |
-| **revers** (stanica <-> kooperant, stanica <-> firma, **kupac -> firma**), nabavka, otpis | **`tblAmbalazaDokument`** |
+| **revers** (stanica ↔ kooperant, stanica ↔ firma, **kupac → vozač**, vozač → stanica), nabavka, otpis | **`tblAmbalazaDokument`** |
 
 `AMB-INV-04` i `AMB-INV-08` tek time vaze **bez ijednog imenovanog izuzetka**.
 
