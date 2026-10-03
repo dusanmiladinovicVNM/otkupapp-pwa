@@ -1801,7 +1801,8 @@ Public Function Scr_Save(ByVal polja As Object) As String
 
     res = modOtkupUnos.OtkupUpisi(p, poruke, ispravkaID)
     If Len(res) = 0 Then
-        Scr_Save = Poruka("OTKUP_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        Scr_Save = modTxState.PorukaIshodaRollbacka(Poruka("OTKUP_MSG_GRESKA_PRI_CUVANJU") & _
+                                                    " " & poruke)
         Exit Function
     End If
 
@@ -1876,7 +1877,8 @@ Private Function SnimiOtpremnicu(ByVal polja As Object) As String
     ' Otvorena izmena nacrta: snimanje MENJA taj nacrt, ne pravi nov.
     If Len(mIzmenaOtpID) > 0 Then
         If Not modDokUnos.OtpremnicaIzmeniNacrt(mIzmenaOtpID, p, poruke) Then
-            SnimiOtpremnicu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+            SnimiOtpremnicu = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+                                                               " " & poruke)
             Exit Function
         End If
         Scr_ResetCache
@@ -1889,7 +1891,8 @@ Private Function SnimiOtpremnicu(ByVal polja As Object) As String
 
     res = modDokUnos.OtpremnicaUpisi(p, poruke)
     If Len(res) = 0 Then
-        SnimiOtpremnicu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SnimiOtpremnicu = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+                                                           " " & poruke)
         Exit Function
     End If
 
@@ -2061,7 +2064,8 @@ Private Function SnimiZbirnu(ByVal polja As Object) As String
     ' Otvorena izmena nacrta: snimanje MENJA taj nacrt, ne pravi nov.
     If Len(mIzmenaZbrID) > 0 Then
         If Not modDokUnos.ZbirnaIzmeniNacrt(mIzmenaZbrID, p, poruke) Then
-            SnimiZbirnu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+            SnimiZbirnu = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+                                                           " " & poruke)
             Exit Function
         End If
         Scr_ResetCache
@@ -2074,7 +2078,8 @@ Private Function SnimiZbirnu(ByVal polja As Object) As String
 
     res = modDokUnos.ZbirnaUpisi(p, poruke)
     If Len(res) = 0 Then
-        SnimiZbirnu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SnimiZbirnu = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+                                                       " " & poruke)
         Exit Function
     End If
 
@@ -2116,7 +2121,8 @@ Private Function SavePrijemnica(ByVal polja As Object) As String
 
     res = modDokUnos.PrijemnicaUpisi(p, poruke)
     If Len(res) = 0 Then
-        SavePrijemnica = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SavePrijemnica = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+                                                          " " & poruke)
         Exit Function
     End If
 
@@ -2154,7 +2160,8 @@ Private Function SaveIsplata(ByVal polja As Object) As String
 
     res = modNovacUnos.IsplataUpisi(p, poruke)
     If Len(res) = 0 Then
-        SaveIsplata = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SaveIsplata = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+                                                       " " & poruke)
         Exit Function
     End If
 
@@ -2187,7 +2194,8 @@ Private Function SaveUplata(ByVal polja As Object) As String
 
     res = modNovacUnos.UplataUpisi(p, poruke)
     If Len(res) = 0 Then
-        SaveUplata = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SaveUplata = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+                                                      " " & poruke)
         Exit Function
     End If
 
@@ -2225,7 +2233,8 @@ Private Function SaveRevers(ByVal polja As Object) As String
 
     res = modNovacUnos.ReversUpisi(p, poruke)
     If Len(res) = 0 Then
-        SaveRevers = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SaveRevers = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+                                                      " " & poruke)
         Exit Function
     End If
 

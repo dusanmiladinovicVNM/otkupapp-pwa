@@ -314,6 +314,76 @@ koji snapshotuje tuđu tabelu i zove API njenog vlasnika. Kapija zato meri
 **mutatore** (`AppendRow` / `UpdateCell` / `RequireUpdateCell`), a učesnici
 transakcije se prikazuju odvojeno.
 
+**Rollback mora biti potpun ili prijavljen — ne sme biti ništa između.**
+`AddTableSnapshot` obećava da transakcija **ume** da vrati tabelu, ali je i sam
+rollback operacija koja može da padne: `RestoreTable` diže grešku na neusklađen
+broj kolona, a `GetTable` / `ListRows.Add` / `DataBodyRange.Value2 =` na zaštićen
+list ili nestalu tabelu. Dok je petlja u `RollbackTx` stajala na **prvoj** takvoj
+grešci, jedan pad je nosio tri posledice i sve tri su bile tihe: ostale tabele su
+ostajale nevraćene, `CleanUp` se nije izvršavao (pa je `Application.EnableEvents`
+ostajao `False` **do kraja sesije**, i svaki kasniji Workbook event prestajao da
+radi), a `mActive` je ostajao `True`.
+
+Pravilo: rollback pokušava **svaku** snapshot-ovanu tabelu, `CleanUp` se izvršava
+**uvek**, a nepotpun rollback je **čitljiva činjenica** (`RollbackNepotpun`,
+`NevraceneTabele`) i signal van trake (lokalni log + `Monitor_Critical`).
+Primitiv **ne diže** grešku: od 276 poziva `.RollbackTx` u izvoru 182 ne stoje pod
+`On Error Resume Next`, a većina je unutar aktivnog `EH` bloka — nov raise bi tamo
+zamenio originalnu poslovnu grešku. Pozivalac koji želi da eskalira čita stanje.
+
+**Nepotpun rollback nije nova normalna transakcija.** Property na `tx` objektu je
+signal za tog pozivaoca, **ne granica bezbednosti** — lokalni `tx` nestane kad
+pozivalac izađe iz procedure, a nekonzistentno stanje ostaje. Prva verzija ovog
+pravila je zato bila nedovoljna: posle nepotpunog rollback-a sistem se vraćao u
+**puno operativan** režim — nova transakcija dozvoljena, `AutoSaveAfterCommit`
+zakazan, a `ZatvoriAplikaciju` radi `Close SaveChanges:=True`. Operater koji samo
+zatvori program zabetonirao bi parcijalno vraćen podatak na disk, bez ijedne
+greške na ekranu.
+
+Granica je zato **globalna za sesiju** (`modTxState`, obrazac `modImportState`), i
+zatvara **svih pet** puteva:
+
+| put | ishod |
+|---|---|
+`clsTransaction.BeginTx` | nov upis **odbijen** (`UPIS ZATVOREN`) |
+`modJournaling.MarkDirtyAndSchedule` | AutoSave se **ne zakazuje** |
+`modJournaling.AutoSaveAfterCommit` | stvarni Save **preskočen** |
+`ThisWorkbook.Workbook_BeforeSave` | `Cancel` — jedina tačka kroz koju prolaze Ctrl+S, File > Save, Save As i `.Save` iz VBA |
+`modMain.ZatvoriAplikaciju` | `Close SaveChanges:=False` + poruka |
+
+Zadnja dva nisu suvišna jedno drugom: `Workbook_BeforeSave` je brana i kad bi
+izlaz zaboravio svoju proveru, ali bi tada `Close` bio **otkazan** usred gašenja —
+eksplicitna grana u `ZatvoriAplikaciju` postoji da se izađe uredno i sa razlogom.
+
+Dve odluke su obrnute od `modImportState` i obe su namerne: marker **nema
+registar** (živi samo u memoriji — recovery *je* reload, jer je Save zatvoren pa na
+disku stoji stanje pre transakcije), i **fail-closed** je bezbedan ovde jer nema
+čitanja koje može da pukne. Perzistiran marker bi svesku učinio trajno
+nesnimljivom bez izlaza iz aplikacije — šteta koju `ImportNijeDovrsen` izričito
+odbija da napravi. Marker se **ne briše** iz produkcionog koda.
+
+**Poruka o ishodu ide kroz jedno mesto, i POSLE rollback-a.** EH put ne sme da
+tvrdi „promene vraćene" dok ne zna ishod: posle nepotpunog rollback-a to je
+netačno, a operater iz te poruke zaključi da može da ponovi unos. Tekst ide kroz
+`modTxState.PorukaIshodaRollbacka`, koja čita **globalnu** branu — i to je tačno,
+ne približno, jer je `BeginTx` fail-closed pa marker može biti postavljen samo
+transakcijom koja se upravo odmotava.
+
+Prolazak kroz wrapper **nije** isto što i prolazak posle rollback-a: dva EH bloka
+u `modAgroUnos` su računala poruku pre `tx.RollbackTx`, pa je marker tada još bio
+prazan. `Err` se zato čuva **pre** rollback-a (rollback menja `Err` kontekst), a
+poruka računa **posle** njega.
+
+*Provera:* `T_TxRollback_NepotpunZatvaraUpisISnimanje` + **šest** sabotaža
+(`rollback-petlja-staje-na-padu`, `rollback-cleanup-samo-kad-prodje`,
+`rollback-nepotpun-nevidljiv`, `rollback-upis-ostaje-dozvoljen`,
+`rollback-save-ostaje-dozvoljen`, `rollback-poruka-tvrdi-vraceno`) — po jedna na
+svaku posledicu, na svaku od dve brane koje test meri kroz pravi seam, i na
+poruku. Statički: `vba_check` pravila **`ROLLBACK_TVRDNJA`** (tekst ide kroz
+wrapper; ključevi se čitaju iz `modPoruke`, ne hardkoduju) i
+**`ROLLBACK_TVRDNJA_RED`** (u proceduri koja sama poseduje `tx`, wrapper stoji
+posle zadnjeg `.RollbackTx`).
+
 **Oblik poziva ne sme da menja ishod.** `AppendRow` je funkcija i pola koda je
 zove kao funkciju (`newRow = AppendRow(TBL_ZBIRNA, rowData)`), pola kao naredbu
 (`AppendRow TBL_ZBIRNA, rowData`). Do PR3 je regex tražio razmak posle imena, pa

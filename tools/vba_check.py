@@ -1156,6 +1156,204 @@ def check_clan_forme(files: list[str],
                                    f"tek kad se pozove."))
     return out
 
+# --- ROLLBACK_TVRDNJA_RED: wrapper mora da zna ishod koji opisuje -------------
+#
+# Prolazak kroz PorukaIshodaRollbacka nije isto sto i prolazak POSLE rollback-a.
+# Dva EH bloka u modAgroUnos su racunala poruku PRE tx.RollbackTx, pa je
+# modTxState tada jos govorio "nije kompromitovano" -- parcijalan rollback je i
+# dalje vracao "promene vracene", dok su se globalne brane ispravno zatvarale.
+# Kapija koja meri samo prisustvo wrappera je na tome bila ZELENA.
+#
+# Gleda se samo procedura koja SAMA poseduje tx. Ko zove *_TX pisca nema sta da
+# ceka -- rollback je zavrsen unutra (mereno: 11 takvih pozivnih mesta).
+_RB_PROC_KRAJ = re.compile(r'^End\s+(?:Sub|Function|Property)\b', re.IGNORECASE)
+_RB_ROLLBACK = re.compile(r'\.RollbackTx\b', re.IGNORECASE)
+
+
+def check_rollback_red(files: list[str]) -> list[Finding]:
+    out = []
+    for path in files:
+        ime = os.path.basename(path)
+        # Testovi smeju da zovu wrapper izolovano, da bi ga MERILI.
+        if "Test" in ime:
+            continue
+        with open(path, "r", encoding="ascii", errors="replace") as fh:
+            tekst = fh.read()
+
+        proc = None
+        wrap: list[int] = []
+        roll: list[int] = []
+
+        def zatvori():
+            if proc is None or not wrap or not roll:
+                return
+            zadnji_roll = max(roll)
+            for n in wrap:
+                if n < zadnji_roll:
+                    out.append(Finding(
+                        path, n, "ROLLBACK_TVRDNJA_RED",
+                        f"PorukaIshodaRollbacka u '{proc}' stoji PRE .RollbackTx "
+                        f"(red {zadnji_roll}) -- poruka se racuna dok modTxState jos "
+                        f"ne zna da je rollback bio nepotpun, pa i dalje tvrdi da su "
+                        f"promene vracene."))
+
+        for izjava, nred in logicke_izjave(tekst):
+            if _RB_PROC_KRAJ.match(izjava.strip()):
+                zatvori()
+                proc, wrap, roll = None, [], []
+                continue
+            d = deklaracija_procedure(izjava)
+            if d:
+                zatvori()
+                proc, wrap, roll = d["ime"], [], []
+                continue
+            if proc is None:
+                continue
+            if "PorukaIshodaRollbacka" in izjava:
+                wrap.append(nred)
+            if _RB_ROLLBACK.search(izjava):
+                roll.append(nred)
+        zatvori()
+    return out
+
+
+ROLLBACK_RED_CASES = [
+    # (naziv, ocekivano nalaza, telo)
+    ("wrapper POSLE rollback-a", 0,
+     'Option Explicit\n'
+     'Function F() As String\n'
+     '    Dim tx As clsTransaction\n'
+     'EH:\n'
+     '    If Not tx Is Nothing Then tx.RollbackTx\n'
+     '    F = modTxState.PorukaIshodaRollbacka("x")\n'
+     'End Function\n'),
+    ("wrapper PRE rollback-a", 1,
+     'Option Explicit\n'
+     'Function F() As String\n'
+     '    Dim tx As clsTransaction\n'
+     'EH:\n'
+     '    F = modTxState.PorukaIshodaRollbacka("x")\n'
+     '    If Not tx Is Nothing Then tx.RollbackTx\n'
+     'End Function\n'),
+    ("procedura NE poseduje tx", 0,
+     'Option Explicit\n'
+     'Function F() As String\n'
+     '    F = modTxState.PorukaIshodaRollbacka("x")\n'
+     'End Function\n'),
+    ("prelomljen poziv je JEDNA izjava", 0,
+     'Option Explicit\n'
+     'Function F() As String\n'
+     'EH:\n'
+     '    If Not tx Is Nothing Then tx.RollbackTx\n'
+     '    F = modTxState.PorukaIshodaRollbacka(Poruka("K") & _\n'
+     '        " " & errDesc)\n'
+     'End Function\n'),
+    ("rollback u DRUGOJ proceduri ne vazi", 0,
+     'Option Explicit\n'
+     'Sub A()\n'
+     '    If Not tx Is Nothing Then tx.RollbackTx\n'
+     'End Sub\n'
+     'Function F() As String\n'
+     '    F = modTxState.PorukaIshodaRollbacka("x")\n'
+     'End Function\n'),
+    ("dva wrappera, jedan pre jedan posle", 1,
+     'Option Explicit\n'
+     'Function F() As String\n'
+     '    F = modTxState.PorukaIshodaRollbacka("rano")\n'
+     '    If Not tx Is Nothing Then tx.RollbackTx\n'
+     '    F = modTxState.PorukaIshodaRollbacka("pozno")\n'
+     'End Function\n'),
+]
+
+# --- ROLLBACK_TVRDNJA: poruka ne sme da tvrdi ishod koji ne zna ---------------
+#
+# Posle NEPOTPUNOG rollback-a tvrdnja "promene vracene" je cinjenicno netacna:
+# podaci su delimicno vraceni, a upis i snimanje su zakljucani (modTxState).
+# Operater koji procita staru poruku pokusa ponovo i tek tada sazna istinu.
+#
+# Kljucevi se CITAJU iz modPoruke, ne hardkoduju: pravilo pokriva i dvanaesti
+# takav kljuc dodat sutra, bez izmene kapije. Isto za inline tekst.
+TVRDNJA_VRACENO = re.compile(
+    r'promene\s+(?:su\s+)?vra"\s*&\s*ChrW\(263\)\s*&\s*"ene', re.IGNORECASE)
+TVRDNJA_WRAPPER = "PorukaIshodaRollbacka"
+
+
+def check_rollback_tvrdnja(files: list[str],
+                           poruke_path: str | None = None) -> list[Finding]:
+    if poruke_path is None:
+        poruke_path = os.path.join(SRC_VBA, "modPoruke.bas")
+    kljucevi: set[str] = set()
+    if os.path.exists(poruke_path):
+        with open(poruke_path, "r", encoding="ascii", errors="replace") as fh:
+            for line in fh:
+                if "UpsertRow" in line and TVRDNJA_VRACENO.search(line):
+                    m = re.search(r'"([A-Z0-9_]+)"', line)
+                    if m:
+                        kljucevi.add(m.group(1))
+
+    out = []
+    for path in files:
+        ime = os.path.basename(path)
+        if ime == os.path.basename(poruke_path):
+            continue
+        # Testovi smeju da nose tekst kao PODATAK (ocekivana poruka u tvrdnji).
+        if "Test" in ime:
+            continue
+        with open(path, "r", encoding="ascii", errors="replace") as fh:
+            for i, line in enumerate(fh, start=1):
+                if line.lstrip().startswith("'"):
+                    continue
+                if TVRDNJA_WRAPPER in line:
+                    continue
+                pogodak = None
+                if TVRDNJA_VRACENO.search(line):
+                    pogodak = "inline tekst"
+                else:
+                    for k in sorted(kljucevi):
+                        if f'"{k}"' in line:
+                            pogodak = k
+                            break
+                if pogodak:
+                    out.append(Finding(
+                        path, i, "ROLLBACK_TVRDNJA",
+                        f"poruka tvrdi da su promene vracene ({pogodak}) a ne pita "
+                        f"modTxState.PorukaIshodaRollbacka -- posle nepotpunog "
+                        f"rollback-a je ta tvrdnja netacna."))
+    return out
+
+
+ROLLBACK_TVRDNJA_CASES = [
+    # (naziv, ocekivano nalaza, telo pozivaoca)
+    ("gola inline tvrdnja", 1,
+     'Option Explicit\n'
+     'Sub X()\n'
+     '    MsgBox "Gre" & ChrW(353) & "ka, promene vra" & ChrW(263) & "ene: " & e\n'
+     'End Sub\n'),
+    ("inline kroz wrapper", 0,
+     'Option Explicit\n'
+     'Sub X()\n'
+     '    MsgBox modTxState.PorukaIshodaRollbacka("promene vra" & ChrW(263) & "ene")\n'
+     'End Sub\n'),
+    ("gol kljuc iz modPoruke", 1,
+     'Option Explicit\n'
+     'Sub X()\n'
+     '    MsgBox Poruka("DOK_MSG_LAZE") & e\n'
+     'End Sub\n'),
+    ("kljuc kroz wrapper", 0,
+     'Option Explicit\n'
+     'Sub X()\n'
+     '    MsgBox modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_LAZE") & e)\n'
+     'End Sub\n'),
+    ("kljuc koji NE tvrdi ishod", 0,
+     'Option Explicit\n'
+     'Sub X()\n'
+     '    MsgBox Poruka("DOK_MSG_CIST") & e\n'
+     'End Sub\n'),
+    ("komentar nije kod", 0,
+     'Option Explicit\n'
+     "    ' MsgBox Poruka(\"DOK_MSG_LAZE\")\n"),
+]
+
 def check_poruke(files: list[str]) -> list[Finding]:
     poruke_path = os.path.join(SRC_VBA, "modPoruke.bas")
     if not os.path.exists(poruke_path):
@@ -3390,6 +3588,46 @@ def self_test() -> int:
     finally:
         shutil.rmtree(tmp2, ignore_errors=True)
 
+    # ROLLBACK_TVRDNJA je cross-file (kljucevi se citaju iz modPoruke), pa ide
+    # kroz svoju funkciju sa laznim katalogom na disku. Meri se i da pravilo
+    # PUSTA kljuc koji ne tvrdi ishod -- inace bi "uvek prijavi" bilo zeleno.
+    tmp4 = tempfile.mkdtemp(prefix="vbacheck_rt_")
+    try:
+        katalog = os.path.join(tmp4, "modPoruke.bas")
+        with open(katalog, "w", encoding="ascii", newline="\r\n") as fh:
+            fh.write('Option Explicit\n'
+                     'Sub UpsertPoruke()\n'
+                     '    UpsertRow lo, ex, "DOK_MSG_LAZE", "Gre" & ChrW(353) & '
+                     '"ka. Promene su vra" & ChrW(263) & "ene."\n'
+                     '    UpsertRow lo, ex, "DOK_MSG_CIST", "Gre" & ChrW(353) & "ka."\n'
+                     'End Sub\n')
+        for naziv, ocekivano, telo in ROLLBACK_TVRDNJA_CASES:
+            put = os.path.join(tmp4, "modPozivalac.bas")
+            with open(put, "w", encoding="ascii", newline="\r\n") as fh:
+                fh.write(telo)
+            dobijeno = len(check_rollback_tvrdnja([put], katalog))
+            if dobijeno != ocekivano:
+                palo.append(f"  ROLLBACK_TVRDNJA/{naziv}: ocekivano {ocekivano} "
+                            f"nalaza, dobijeno {dobijeno}")
+    finally:
+        shutil.rmtree(tmp4, ignore_errors=True)
+
+    # ROLLBACK_TVRDNJA_RED: meri REDOSLED, pa mu self-test mora nositi i
+    # slucajeve koji NE smeju da opale -- procedura bez tx, prelomljen poziv,
+    # rollback u tudjoj proceduri. Bez njih bi "uvek prijavi" bilo zeleno.
+    tmp5 = tempfile.mkdtemp(prefix="vbacheck_rr_")
+    try:
+        for naziv, ocekivano, telo in ROLLBACK_RED_CASES:
+            put = os.path.join(tmp5, "modPozivalac.bas")
+            with open(put, "w", encoding="ascii", newline="\r\n") as fh:
+                fh.write(telo)
+            dobijeno = len(check_rollback_red([put]))
+            if dobijeno != ocekivano:
+                palo.append(f"  ROLLBACK_TVRDNJA_RED/{naziv}: ocekivano "
+                            f"{ocekivano} nalaza, dobijeno {dobijeno}")
+    finally:
+        shutil.rmtree(tmp5, ignore_errors=True)
+
     # SEMA_REGISTAR je isto cross-file (modConfig + modSchema), sa lazna dva
     # fajla na disku.
     tmp3 = tempfile.mkdtemp(prefix="vbacheck_sr_")
@@ -3486,7 +3724,8 @@ def self_test() -> int:
               + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES)
               + len(PROC_SIZE_CASES) + len(KVAL_CASES)
               + len(KRAJ_REDA_CASES) + len(CLAN_FORME_CASES)
-              + len(DUPLI_LOKAL_CASES) + 3)
+              + len(DUPLI_LOKAL_CASES)
+              + len(ROLLBACK_TVRDNJA_CASES) + len(ROLLBACK_RED_CASES) + 3)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
@@ -3725,6 +3964,8 @@ def main(argv: list[str]) -> int:
                                         f'-- VBA "Ambiguous name detected".'))
 
     findings += check_poruke(files)
+    findings += check_rollback_tvrdnja(files)
+    findings += check_rollback_red(files)
     findings += check_storno_registar(files)
     findings += check_sema_registar()
     findings += check_clan_forme(files)

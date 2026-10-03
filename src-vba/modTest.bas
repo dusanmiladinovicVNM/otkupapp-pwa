@@ -495,6 +495,9 @@ Public Sub RunAllTests()
     RunOne 199
     RunOne 38
 
+    ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
+    RunOne 200
+
     SetTestMode prevMode
     WriteResultFile
 End Sub
@@ -763,6 +766,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 113: TestName = "T_Zbirna_NemaIspravku"
         Case 43: TestName = "T_Traka_NatpisiPoRezimu"
         Case 38: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
+        Case 200: TestName = "T_TxRollback_NepotpunZatvaraUpisISnimanje"
         Case 199: TestName = "T_ZbirnaRadniSto_BiraSvojNacrt"
         Case 198: TestName = "T_ZbirnaKlik_OtvaraSvojDokument"
         Case 197: TestName = "T_Otp_OpsegIOznake"
@@ -970,6 +974,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 113: T_Zbirna_NemaIspravku
         Case 43: T_Traka_NatpisiPoRezimu
         Case 38: T_ZbirnaForma_KlasaOstajeBezCene
+        Case 200: T_TxRollback_NepotpunZatvaraUpisISnimanje
         Case 199: T_ZbirnaRadniSto_BiraSvojNacrt
         Case 198: T_ZbirnaKlik_OtvaraSvojDokument
         Case 197: T_Otp_OpsegIOznake
@@ -7564,6 +7569,254 @@ EH:
     On Error GoTo 0
     Err.Raise ERR_ASSERT, "T_Sema_PrefiksNijeString", _
               "greska u toku testa (ime vraceno): " & Err.description
+End Sub
+
+
+' Rollback je i sam operacija koja moze da padne. Ovaj test meri sta se desi kad
+' padne na SREDNJOJ od tri snapshot-ovane tabele -- i, vaznije, sta sistem sme
+' POSLE toga.
+'
+' Prva verzija ovog testa je tvrdila da "tx.BeginTx posle nepotpunog rollback-a
+' prolazi". To je bila pogresna acceptance odluka: sistem se vracao u PUNO
+' operativan rezim dok zna da jedna tabela nije vracena, pa je sledeci commit
+' zakazivao AutoSave, a ZatvoriAplikaciju radio Close SaveChanges:=True --
+' parcijalno stanje je moglo da se zabetonira na disk bez ijedne greske na ekranu.
+' Sada se tvrdi obrnuto: nepotpun rollback ZATVARA i upis i snimanje.
+'
+' Sabotaza: srednja tabela se PREIMENUJE. modDataAccess.GetTable je trazi po
+' imenu kroz sve listove i vraca Nothing, pa RestoreTable pukne na 91 jos u
+' prvom redu. Nijedna domen-tabela se ne dira -- tri privremene tabele zive na
+' svom listu koji test brise za sobom.
+'
+' Redosled je deo merenja: Scripting.Dictionary cuva redosled unosa, pa je B
+' zaista u sredini, a tvrdnja nad C dokazuje da petlja nije stala na B.
+'
+' OBA SMERA su obavezna. Meri se i da PRE kompromisa Save prolazi, i da POSLE
+' reset-a (koji u produkciji znaci reload) opet prolazi -- kapija koja uvek
+' odbija izgledala bi isto tako zeleno na srednjoj tvrdnji, a ucinila bi svesku
+' trajno nesnimljivom.
+Private Sub T_TxRollback_NepotpunZatvaraUpisISnimanje()
+    Const SHEET_IME As String = "_TestTxRollback"
+    Dim ws As Worksheet
+    Dim tx As clsTransaction
+    Dim origEvents As Boolean
+    Dim calcPre As XlCalculation
+    Dim preimenovana As Boolean
+    Dim vredA As Variant, vredC As Variant
+    Dim evPosle As Boolean, calcPosle As XlCalculation
+    Dim nepotpun As Boolean, nevracene As String
+    Dim snimioPre As Boolean, snimioPosle As Boolean, snimioPosleReseta As Boolean
+    Dim upisOdbijen As Boolean, upisErr As String
+    Dim cistoPreSnimanja As Boolean
+    Dim porukaKompromis As String, porukaCista As String
+
+    On Error GoTo EH
+
+    ' Kapija nad Save-om je EVENT, a run_vba gasi evente da Workbook_Open ne
+    ' krene. Bez ovoga test ne meri kapiju nego njeno odsustvo -- bio bi zelen i
+    ' kad handler uopste ne postoji (isti razlog kao u
+    ' T_Save_PrekinutImportZatvaraSvaVrata).
+    origEvents = Application.EnableEvents
+    Application.EnableEvents = True
+    calcPre = Application.Calculation
+    modTxState.TxKompromisTestReset
+
+    ' --- smer 1: bez kompromisa Save prolazi
+    ThisWorkbook.Saved = False
+    ThisWorkbook.Save
+    snimioPre = ThisWorkbook.Saved
+
+    Set ws = TxRbNapraviList(SHEET_IME)
+
+    modDataAccess.GetTable("TST_RB_A").DataBodyRange.Cells(1, 1).value = 1
+    modDataAccess.GetTable("TST_RB_B").DataBodyRange.Cells(1, 1).value = 2
+    modDataAccess.GetTable("TST_RB_C").DataBodyRange.Cells(1, 1).value = 3
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot "TST_RB_A"
+    tx.AddTableSnapshot "TST_RB_B"
+    tx.AddTableSnapshot "TST_RB_C"
+
+    ' "posao": sve tri promenjene
+    modDataAccess.GetTable("TST_RB_A").DataBodyRange.Cells(1, 1).value = 11
+    modDataAccess.GetTable("TST_RB_B").DataBodyRange.Cells(1, 1).value = 22
+    modDataAccess.GetTable("TST_RB_C").DataBodyRange.Cells(1, 1).value = 33
+
+    ' sabotaza: SREDNJA tabela postaje nenalaziva za GetTable
+    ws.ListObjects("TST_RB_B").name = "TST_RB_B_SAKRIVENA"
+    preimenovana = True
+
+    tx.RollbackTx
+
+    ' sve se cita PRE ciscenja -- brisanje lista unistava tabele
+    vredA = modDataAccess.GetTable("TST_RB_A").DataBodyRange.Cells(1, 1).value
+    vredC = modDataAccess.GetTable("TST_RB_C").DataBodyRange.Cells(1, 1).value
+    evPosle = Application.EnableEvents
+    calcPosle = Application.Calculation
+    nepotpun = tx.RollbackNepotpun
+    nevracene = tx.NevraceneTabele
+
+    ' Poruka operateru, u pravom kompromitovanom stanju -- ne nad podmetnutom
+    ' zastavicom. Pozivna mesta (modBankaMapiranje, modScrDokumenti, ...) salju
+    ' svoj normalan tekst kroz isti wrapper.
+    porukaKompromis = modTxState.PorukaIshodaRollbacka("promene vracene")
+
+    ' --- nov upis mora biti ODBIJEN
+    On Error Resume Next
+    tx.BeginTx
+    upisOdbijen = (Err.Number <> 0)
+    upisErr = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    ' --- Save mora biti ODBIJEN (Ctrl+S / File > Save / .Save iz VBA)
+    ThisWorkbook.Saved = False
+    On Error Resume Next
+    ThisWorkbook.Save                     ' Cancel u BeforeSave sme da podigne 1004
+    Err.Clear
+    On Error GoTo EH
+    snimioPosle = ThisWorkbook.Saved
+
+    ' --- smer 2: marker nije trajna smrt sveske.
+    '
+    ' CISCENJE IDE PRE OVOG SAVE-a, ne posle. Obrnut redosled je bio pravi kvar
+    ' u ovom testu: resetovao bi branu i onda STVARNO snimio svesku u kojoj jos
+    ' stoje _TestTxRollback list i preimenovana TST_RB_B_SAKRIVENA. Pod run_vba
+    ' to ne boli (radi nad temp kopijom), ali RunAllTests je VBA entrypoint --
+    ' pokrenut rucno u razvojnoj svesci upisao bi testni state na disk, pa ga
+    ' obrisao samo iz memorije.
+    '
+    ' Reset ovde stoji za RELOAD, a reload znaci cist workbook. Zato se smer
+    ' "opet snimljivo" meri nad cistim stanjem, i to se TVRDI (cistoPreSnimanja),
+    ' ne ostavlja komentaru -- da se redosled vrati, ta tvrdnja pada.
+    ws.ListObjects("TST_RB_B_SAKRIVENA").name = "TST_RB_B"
+    preimenovana = False
+    TxRbObrisiList SHEET_IME
+    cistoPreSnimanja = Not TxRbListPostoji(SHEET_IME)
+
+    modTxState.TxKompromisTestReset
+    porukaCista = modTxState.PorukaIshodaRollbacka("promene vracene")
+    ThisWorkbook.Saved = False
+    ThisWorkbook.Save
+    snimioPosleReseta = ThisWorkbook.Saved
+
+    Application.EnableEvents = origEvents
+
+    ' --- 1. petlja NIJE stala na B -- vracene su i ona pre i ona posle pada
+    AssertEq vredA, 1, "A pre pada mora biti vracena"
+    AssertEq vredC, 3, _
+             "C POSLE pada mora biti vracena -- petlja ne sme stati na padu"
+
+    ' --- 2. CleanUp se izvrsio: Application state nije ostao suspendovan
+    AssertEq evPosle, True, _
+             "EnableEvents mora biti vracen i kad restore padne"
+    AssertEq calcPosle, calcPre, _
+             "Calculation mora biti vracen i kad restore padne"
+
+    ' --- 3. cinjenica je CITLJIVA, ne samo logovana
+    AssertEq nepotpun, True, "nepotpun rollback mora biti citljiv"
+    AssertEq (InStr(1, nevracene, "TST_RB_B") > 0), True, _
+             "NevraceneTabele mora IMENOVATI tabelu koja nije vracena: [" & _
+             nevracene & "]"
+
+    ' --- 4. i, glavno: sistem se NE vraca u normalan rezim
+    AssertEq snimioPre, True, _
+             "bez kompromisa Save i dalje prolazi (kapija nije 'uvek odbij')"
+    AssertEq upisOdbijen, True, _
+             "nov BeginTx posle nepotpunog rollback-a mora biti ODBIJEN"
+    AssertEq (InStr(1, upisErr, "UPIS ZATVOREN") > 0), True, _
+             "odbijenica mora da IMENUJE razlog: [" & upisErr & "]"
+    AssertEq snimioPosle, False, _
+             "posle nepotpunog rollback-a Save (Ctrl+S put) mora biti ODBIJEN"
+    AssertEq cistoPreSnimanja, True, _
+             "pred zavrsnim Save-om workbook mora biti CIST -- nijedan test " & _
+             "artefakt ne sme da ode na disk"
+    AssertEq snimioPosleReseta, True, _
+             "posle reload-a sveska mora opet biti snimljiva"
+
+    ' --- 5. operater ne sme da dobije tvrdnju koja nije tacna
+    AssertEq (InStr(1, porukaKompromis, "promene vracene") > 0), False, _
+             "posle nepotpunog rollback-a poruka NE SME da tvrdi da su " & _
+             "promene vracene: [" & porukaKompromis & "]"
+    AssertEq (InStr(1, porukaKompromis, "TST_RB_B") > 0), True, _
+             "poruka operateru mora da IMENUJE nevracenu tabelu: [" & _
+             porukaKompromis & "]"
+    AssertEq porukaCista, "promene vracene", _
+             "bez kompromisa poruka ostaje NEPROMENJENA -- wrapper nije " & _
+             "'uvek alarm', inace bi svaka poslovna greska izgledala kao " & _
+             "ostecenje podataka"
+    Exit Sub
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If preimenovana Then ws.ListObjects("TST_RB_B_SAKRIVENA").name = "TST_RB_B"
+    TxRbObrisiList SHEET_IME
+    modTxState.TxKompromisTestReset
+    Application.EnableEvents = origEvents
+    Application.Calculation = calcPre
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_TxRollback_NepotpunZatvaraUpisISnimanje", errDesc
+End Sub
+
+' Tri tabele na svom listu, svaka sa DVE kolone: Range.Value2 nad jednom
+' celijom vraca skalar, a RestoreTable radi UBound(snapData, 1) -- tabela 1x1
+' bi oborila test na toj mehanici umesto na ponasanju koje se meri.
+Private Function TxRbNapraviList(ByVal imeLista As String) As Worksheet
+    Dim ws As Worksheet
+    TxRbObrisiList imeLista
+
+    Set ws = ThisWorkbook.Worksheets.Add( _
+        After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+    ws.name = imeLista
+
+    TxRbNapraviTabelu ws, "TST_RB_A", 1
+    TxRbNapraviTabelu ws, "TST_RB_B", 4
+    TxRbNapraviTabelu ws, "TST_RB_C", 7
+
+    Set TxRbNapraviList = ws
+End Function
+
+Private Sub TxRbNapraviTabelu(ws As Worksheet, ByVal ime As String, _
+                              ByVal prvaKolona As Long)
+    ws.Cells(1, prvaKolona).value = "V1"
+    ws.Cells(1, prvaKolona + 1).value = "V2"
+    ws.Cells(2, prvaKolona).value = 0
+    ws.Cells(2, prvaKolona + 1).value = 0
+
+    Dim lo As ListObject
+    Set lo = ws.ListObjects.Add(xlSrcRange, _
+        ws.Range(ws.Cells(1, prvaKolona), ws.Cells(2, prvaKolona + 1)), , xlYes)
+    lo.name = ime
+End Sub
+
+' Postoji li list. Potreban je da bi "cisto pred Save-om" bila TVRDNJA, a ne
+' posledica redosleda koji neko kasnije sme da promeni.
+Private Function TxRbListPostoji(ByVal imeLista As String) As Boolean
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(imeLista)
+    On Error GoTo 0
+    TxRbListPostoji = Not (ws Is Nothing)
+End Function
+
+Private Sub TxRbObrisiList(ByVal imeLista As String)
+    Dim ws As Worksheet
+    Dim alertsPre As Boolean
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(imeLista)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Sub
+
+    alertsPre = Application.DisplayAlerts
+    Application.DisplayAlerts = False
+    ws.Delete
+    Application.DisplayAlerts = alertsPre
 End Sub
 
 

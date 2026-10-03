@@ -641,7 +641,8 @@ EH:
     errDesc = Err.description
     LogErr "modScrBankaUvoz.JakiKljucevi"
     Scr_ResetCache
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_BATCH") & " " & errDesc, True
+    modOtkupUI.ShowToast modTxState.PorukaIshodaRollbacka(Poruka("OTKUI_ERR_BU_BATCH") & _
+                         " " & errDesc), True
     JakiKljucevi = True
 End Function
 
@@ -664,7 +665,8 @@ EH:
     errDesc = Err.description
     LogErr "modScrBankaUvoz.AutoSve"
     Scr_ResetCache
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_BATCH") & " " & errDesc, True
+    modOtkupUI.ShowToast modTxState.PorukaIshodaRollbacka(Poruka("OTKUI_ERR_BU_BATCH") & _
+                         " " & errDesc), True
     AutoSve = True
 End Function
 

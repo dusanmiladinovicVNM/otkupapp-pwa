@@ -55,6 +55,9 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblVozaci` | 1 | `modMalina` |
 | `tblZbirnaIzvori` | 1 | `modDokumenta` |
 | `tblZbirnaStavke` | 1 | `modDokumenta` |
+| `TST_RB_A` | 0 | _(samo testovi)_ |
+| `TST_RB_B` | 0 | _(samo testovi)_ |
+| `TST_RB_C` | 0 | _(samo testovi)_ |
 | `tblKulture` | 0 | _(samo testovi)_ |
 | `tblKupci` | 0 | _(samo testovi)_ |
 | `tblKutije` | 0 | _(samo testovi)_ |
@@ -123,6 +126,9 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblVozaci`: `modBusinessFlowProTests`, `modGoldenTests`
 - `tblZbirnaIzvori`: `modBusinessFlowProTests`, `modTestStornoCentar`
 - `tblZbirnaStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
+- `TST_RB_A`: `modTest`
+- `TST_RB_B`: `modTest`
+- `TST_RB_C`: `modTest`
 - `tblKulture`: `modGoldenTests`, `modTest`, `modTestPalete`
 - `tblKupci`: `modGoldenTests`, `modTestBanka`
 - `tblKutije`: `modTest`

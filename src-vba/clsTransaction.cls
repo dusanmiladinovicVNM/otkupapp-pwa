@@ -18,12 +18,30 @@ Private mEvents As Boolean
 Private mDisplayStatusBar As Boolean
 Private mStatusBarText As Variant
 
+' Imena tabela koje rollback NIJE uspeo da vrati. Prazno = rollback potpun.
+' Nosi se kao stanje jer RollbackTx ne sme da digne gresku -- vidi komentar
+' iznad RollbackTx.
+Private mNevracene As String
+
 
 Public Sub BeginTx()
     If mActive Then Err.Raise 5, , "Transaction already active."
 
+    ' Nepotpun rollback NIJE nova normalna transakcija. Dok ova sesija zna da
+    ' jedna snapshot-ovana tabela nije vracena, nov upis bi pisao PREKO
+    ' nekonzistentnog stanja -- i prvi sledeci commit bi ga zakazao za Save.
+    ' Jedini izlaz je zatvaranje bez snimanja i ponovno otvaranje: na disku
+    ' stoji stanje pre te transakcije, jer je Save zatvoren (modTxState).
+    If Not modTxState.UpisDozvoljen() Then
+        Err.Raise vbObjectError + 2700, "clsTransaction.BeginTx", _
+                  "UPIS ZATVOREN: prethodni rollback nije bio potpun (" & _
+                  modTxState.NevraceneTabeleSesije() & _
+                  "). Zatvorite aplikaciju BEZ snimanja i otvorite je ponovo."
+    End If
+
     Set mSnapshots = CreateObject("Scripting.Dictionary")
     mActive = True
+    mNevracene = ""
 
     ' Performance / stability
     mCalc = Application.Calculation
@@ -80,16 +98,81 @@ Public Sub CommitTx()
     On Error GoTo 0
 End Sub
 
+' Rollback je i sam operacija koja moze da padne: RestoreTable dize gresku na
+' neuskladjen broj kolona, a GetTable / ListRows.Add / DataBodyRange.Value2 na
+' zasticen list ili nestalu tabelu. Dok je petlja stajala na prvom raise-u,
+' jedan pad je nosio tri posledice, sve tihe:
+'   1. ostale snapshot-ovane tabele su ostajale NEVRACENE (parcijalan rollback);
+'   2. CleanUp se nije izvrsio, pa je Application.EnableEvents ostajao False do
+'      kraja sesije -- svaki kasniji Workbook event tiho prestane da radi;
+'   3. mActive je ostajao True, pa je sledeci BeginTx dizao
+'      "Transaction already active."
+'
+' Primitiv NE DIZE gresku i to je namerno, ne propust. Od 276 poziva .RollbackTx
+' u izvoru 182 ne stoje pod On Error Resume Next, a vecina je unutar aktivnog EH
+' bloka (obrazac "If Not tx Is Nothing Then tx.RollbackTx"). Nov raise bi tamo
+' ZAMENIO originalnu poslovnu gresku, a u testovima pretvorio cleanup u pad.
+' Zato cinjenica ide dva puta: kao citljivo stanje (RollbackNepotpun /
+' NevraceneTabele) i van trake (lokalni log + Monitor_Critical).
 Public Sub RollbackTx()
     If Not mActive Then Exit Sub
 
     Dim key As Variant
+    Dim prvaGreska As String
+
     For Each key In mSnapshots.keys
+        On Error Resume Next
         RestoreTable CStr(key), mSnapshots(key)
+        If Err.Number <> 0 Then
+            If Len(prvaGreska) = 0 Then
+                prvaGreska = CStr(Err.Number) & ": " & Err.description
+            End If
+            If Len(mNevracene) > 0 Then mNevracene = mNevracene & ", "
+            mNevracene = mNevracene & CStr(key)
+            Err.Clear
+        End If
+        On Error GoTo 0
     Next key
 
+    ' CleanUp UVEK: Application state se ne sme ostaviti suspendovan ni kad
+    ' restore padne. CleanUp i sam guta greske (On Error Resume Next u njemu).
     CleanUp
     mActive = False
+
+    ' Granica bezbednosti je GLOBALNA, ne na ovom objektu: tx nestane kad
+    ' pozivalac izadje iz procedure, a nekonzistentno stanje ostaje. modTxState
+    ' zatvara upis i snimanje do reload-a; property-ji ispod ostaju za
+    ' pozivaoca koji zeli detalj odmah, ali oni nisu brana.
+    If Len(mNevracene) > 0 Then
+        modTxState.OznaciNepotpunRollback mNevracene, prvaGreska
+        PrijaviNepotpunRollback prvaGreska
+    End If
+End Sub
+
+' Nepotpun rollback je cinjenica koju pozivalac mora moci da PROCITA -- signal
+' koji ne stigne do citaoca ne postoji. Vazi od zadnjeg RollbackTx-a nad ovom
+' instancom; BeginTx ga resetuje.
+Public Property Get RollbackNepotpun() As Boolean
+    RollbackNepotpun = (Len(mNevracene) > 0)
+End Property
+
+' Imena tabela koje nisu vracene, zapetom razdvojena. Prazno = rollback potpun.
+Public Property Get NevraceneTabele() As String
+    NevraceneTabele = mNevracene
+End Property
+
+' Dva kanala, jer ni jedan nije uvek dostupan: Monitor_Critical je no-op kad
+' monitoring nije podesen (Monitoring_IsEnabled), a lokalni log radi uvek.
+' Oba sama gutaju greske, pa ovaj poziv ne moze da obori rollback.
+Private Sub PrijaviNepotpunRollback(ByVal prvaGreska As String)
+    Dim msg As String
+    msg = "ROLLBACK NEPOTPUN -- nevracene tabele: " & mNevracene
+    If Len(prvaGreska) > 0 Then msg = msg & " | prva greska: " & prvaGreska
+
+    On Error Resume Next
+    LogError "clsTransaction.RollbackTx", msg
+    Monitor_Critical "clsTransaction", "RollbackTx", msg
+    On Error GoTo 0
 End Sub
 
 Private Sub CleanUp()

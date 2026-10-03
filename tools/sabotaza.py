@@ -6620,6 +6620,85 @@ SABOTAZE = {
         "T_ZbirnaKapija_AktivanBrojNeSmeDvaput",
         "I1: aktivna prijemnica daje oznaku izvora P",
     ),
+    # Brana, ne telemetrija: posle nepotpunog rollback-a nov upis mora biti
+    # odbijen. Bez ovoga se sistem vraca u normalan writable rezim i prvi
+    # sledeci commit zakazuje AutoSave nad nekonzistentnim podatkom.
+    "rollback-upis-ostaje-dozvoljen": (
+        "clsTransaction.cls",
+        "    If Not modTxState.UpisDozvoljen() Then\n"
+        "        Err.Raise vbObjectError + 2700, \"clsTransaction.BeginTx\", _\n"
+        "                  \"UPIS ZATVOREN: prethodni rollback nije bio potpun (\" & _\n"
+        "                  modTxState.NevraceneTabeleSesije() & _\n"
+        "                  \"). Zatvorite aplikaciju BEZ snimanja i otvorite je ponovo.\"\n"
+        "    End If\n",
+        "    ' SABOTAZA: nov upis posle nepotpunog rollback-a je dozvoljen\n",
+        "T_TxRollback_NepotpunZatvaraUpisISnimanje",
+        "nov BeginTx posle nepotpunog rollback-a mora biti ODBIJEN",
+    ),
+    # Workbook_BeforeSave je JEDINA tacka kroz koju prolaze Ctrl+S, File > Save,
+    # Save As i .Save iz VBA. Gasenjem ove kapije korisnik moze da zabetonira
+    # parcijalno vracen podatak jednim pritiskom tastera ili zatvaranjem programa.
+    "rollback-save-ostaje-dozvoljen": (
+        "ThisWorkbook.doccls",
+        "    If Not modTxState.SnimanjeDozvoljeno() Then\n"
+        "        Cancel = True\n"
+        "        LogError \"ThisWorkbook.Workbook_BeforeSave\", _\n"
+        "                 \"Save ODBIJEN: rollback nije bio potpun, nevracene: \" & _\n"
+        "                 modTxState.NevraceneTabeleSesije(), 0, \"WARN\"\n",
+        "    If False Then   ' SABOTAZA: Save nije zatvoren posle nepotpunog rollback-a\n"
+        "        Cancel = True\n",
+        "T_TxRollback_NepotpunZatvaraUpisISnimanje",
+        "posle nepotpunog rollback-a Save (Ctrl+S put) mora biti ODBIJEN",
+    ),
+    # Rollback je i sam operacija koja moze da padne: RestoreTable dize gresku na
+    # neuskladjen broj kolona, a GetTable / ListRows.Add / Value2= na zasticen
+    # list ili nestalu tabelu. Tri sabotaze obaraju TRI RAZLICITE tvrdnje istog
+    # testa, jer su i posledice jednog pada bile tri: parcijalno vracen podatak,
+    # suspendovan Application state, i cinjenica koju pozivalac ne vidi.
+    #
+    # Prva je "Exit For", a ne gasenje handlera: bez handlera RollbackTx DIZE 91,
+    # pa bi test pao na toj gresci umesto na tvrdnji -- dokaz bi javio PALA DRUGA
+    # TVRDNJA, a ne "petlja staje".
+    "rollback-petlja-staje-na-padu": (
+        "clsTransaction.cls",
+        "            mNevracene = mNevracene & CStr(key)\n"
+        "            Err.Clear\n"
+        "        End If\n",
+        "            mNevracene = mNevracene & CStr(key)\n"
+        "            Err.Clear\n"
+        "            Exit For   ' SABOTAZA: petlja staje na prvom padu\n"
+        "        End If\n",
+        "T_TxRollback_NepotpunZatvaraUpisISnimanje",
+        "C POSLE pada mora biti vracena",
+    ),
+    # Sidro nosi i dva reda komentara: goli "CleanUp\n    mActive = False" stoji i
+    # u CommitTx, pa bi zamena bila dvosmislena.
+    "rollback-cleanup-samo-kad-prodje": (
+        "clsTransaction.cls",
+        "    ' CleanUp UVEK: Application state se ne sme ostaviti suspendovan ni kad\n"
+        "    ' restore padne. CleanUp i sam guta greske (On Error Resume Next u njemu).\n"
+        "    CleanUp\n",
+        "    If Len(mNevracene) = 0 Then CleanUp   ' SABOTAZA: state ostaje suspendovan\n",
+        "T_TxRollback_NepotpunZatvaraUpisISnimanje",
+        "EnableEvents mora biti vracen i kad restore padne",
+    ),
+    "rollback-nepotpun-nevidljiv": (
+        "clsTransaction.cls",
+        "    RollbackNepotpun = (Len(mNevracene) > 0)\n",
+        "    RollbackNepotpun = False   ' SABOTAZA: cinjenica se ne vidi\n",
+        "T_TxRollback_NepotpunZatvaraUpisISnimanje",
+        "nepotpun rollback mora biti citljiv",
+    ),
+    # Brana radi, ali poruka o njoj ne zna: wrapper postaje identitet i pozivna
+    # mesta opet tvrde "promene vracene" dok su podaci delimicno vraceni.
+    # Pada tacno tvrdnja o poruci -- sve pre nje prolazi, jer brana je ziva.
+    "rollback-poruka-tvrdi-vraceno": (
+        "modTxState.bas",
+        "    If Not mKompromitovan Then\n",
+        "    If True Then   ' SABOTAZA: poruka ne zna za kompromis\n",
+        "T_TxRollback_NepotpunZatvaraUpisISnimanje",
+        "posle nepotpunog rollback-a poruka NE SME da tvrdi da su ",
+    ),
 }
 
 

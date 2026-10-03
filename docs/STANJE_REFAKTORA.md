@@ -380,6 +380,76 @@
     (`modPrint`, `modIzvestaj`, `modScrIzvestaji`, `modStornoDok`); ovim redom se
     diraju jednom.
 
+53. **Rollback koji padne na pola prestaje da bude tih** (02.10.2026).
+    Review `main`-a je dao dva P1 o gutanju rollback greške (`modStorno`,
+    `modBankaMapiranje`). Mereno: obrazac `On Error Resume Next` + `RollbackTx`
+    stoji na **25 produkcionih mesta u 14 modula**, a `.RollbackTx` se zove
+    **276 puta** (68 produkcionih u 24 modula, 208 u testovima) — pa zakrpa na dva
+    imenovana modula ne bi bila ispravka nego još jedan prekršaj `CLAUDE.md` §2.
+    **Uzrok je u primitivu, ne u omotačima:** `clsTransaction.RollbackTx` nije
+    imao handler i nije bio atomičan — prva greška iz `RestoreTable` (koja se
+    diže eksplicitno, `clsTransaction.cls:117`) prekidala je petlju, pa su ostale
+    tabele ostajale nevraćene, `CleanUp` se nije izvršavao (`EnableEvents` ostaje
+    `False` do kraja sesije), a `mActive` je ostajao `True`.
+    **Primitiv svesno NE diže grešku:** 182 od 276 poziva nisu pod
+    `On Error Resume Next` i većina je u aktivnom `EH` bloku, gde bi nov raise
+    zamenio originalnu poslovnu grešku i u testovima pretvorio cleanup u pad.
+    Zato činjenica ide kao **stanje** (`RollbackNepotpun` / `NevraceneTabele`) i
+    van trake (lokalni log + `Monitor_Critical`, koji je no-op kad monitoring nije
+    podešen — zato dva kanala). Pravilo je zapisano u
+    `ARCHITECTURE_CONTRACT.md` uz „Snapshot nije vlasništvo“.
+    Sabotaža je **preimenovanje** tabele (`GetTable` vraća `Nothing` → 91), ne
+    menjanje šeme; tri privremene tabele imaju **po dve kolone** jer `Value2` nad
+    jednom ćelijom vraća skalar, a `RestoreTable` radi `UBound`. Tri sabotaže, po
+    jedna na svaku posledicu — ne grupišu se (isti test, ista procedura za dve).
+    `WHO_WRITES.md` dobija tri reda `TST_RB_*` sa **0 produkcionih pisaca**:
+    generisani artefakt verno prijavljuje `AddTableSnapshot` iz testa. Alternativa
+    (naučiti `who_writes` da prećuti prefiks `TST_`) je izmena **kapije** i traži
+    svoj dvosmerni dokaz — ostaje kao moguć naredni process rez, ne u ovom.
+    **Review je na to dao P1 i bio je u pravu:** prijaviti nije isto sto i
+    **zatvoriti**. Property na `tx` objektu nestane kad pozivalac izađe, pa se
+    sistem posle nepotpunog rollback-a vraćao u **puno operativan** režim — nova
+    transakcija dozvoljena, AutoSave zakazan, a `ZatvoriAplikaciju` radi
+    `Close SaveChanges:=True`. Operater koji samo zatvori program zabetonirao bi
+    parcijalno vraćen podatak. Prethodna (loša) verzija je sistem ostavljala
+    očigledno polomljenim; prva moja verzija ga je vraćala u ispravno stanje dok
+    zna da podaci to nisu — gore.
+    Brana je sad **globalna za sesiju** (`modTxState`, obrazac `modImportState`) i
+    zatvara pet puteva: `BeginTx`, `MarkDirtyAndSchedule`, `AutoSaveAfterCommit`,
+    `Workbook_BeforeSave` (jedina tačka kroz koju prolaze Ctrl+S / File > Save /
+    Save As / `.Save` iz VBA) i `ZatvoriAplikaciju`. **Bez registra** i
+    **fail-closed**, obrnuto od `modImportState`, i oba namerno: recovery *je*
+    reload (Save je zatvoren, pa na disku stoji stanje pre transakcije), a nema
+    čitanja koje može da pukne. Perzistiran marker bi svesku učinio trajno
+    nesnimljivom bez izlaza iz aplikacije.
+    Test je prepisan: tvrdio je da `BeginTx` posle nepotpunog rollback-a
+    **prolazi** — to je bila acceptance odluka za ponašanje koje ne želimo. Sada
+    meri **ishod kroz prave seam-ove**: `BeginTx` diže `UPIS ZATVOREN`, a
+    `ThisWorkbook.Save` ostavlja `Saved = False`. Oba smera: i da PRE kompromisa
+    Save prolazi, i da POSLE reset-a (= reload) opet prolazi.
+    **Četvrti krug review-a je našao rupu u DOKAZNOM modelu, ne u kodu:** poruka se
+    u dva EH bloka (`modAgroUnos`) računala **pre** `tx.RollbackTx`, pa je marker
+    tada još bio prazan i parcijalan rollback je i dalje vraćao „promene vraćene" —
+    a kapija je bila **zelena**, jer je merila *prisustvo* wrappera, ne *redosled*.
+    Zato je dodato `ROLLBACK_TVRDNJA_RED` (u proceduri koja sama poseduje `tx`,
+    wrapper mora stajati posle zadnjeg `.RollbackTx`), a `Err` se čuva pre
+    rollback-a. Mereno po proceduri nad celim izvorom: **tačno 2** takva mesta;
+    7 u `modBankaMapiranje` je bilo ispravno, a 11 (`modScrDokumenti`,
+    `modScrBankaUvoz`) ne poseduje `tx` pa im je rollback završen unutra.
+    Usput: dokaz nivoa „da li se self-test uopšte vrti" otkrio je da je zbir
+    slučajeva **ručno** održavan i nije uključio dve nove liste — `--self-test` je
+    javljao 130 i posle dodavanja 12 slučajeva. Ispravljen na **142**, ali broj se
+    više ne uzima na reč nego se dokazuje padom (v. [[broj-tvrdnji-je-merenje]]).
+    **Dokaz je IZMEREN**, na exact head-u `783b7946`:
+    `RunAllTests` **200/0 ZELENO** · `dokaz.py rollback` **6/6 DOKAZANO** (potpis
+    izvora `935f070a003272e0` identičan pre i posle) ·
+    `vba_gate --require-green --suite RunAllTests` **rc=0**
+    (`izvor bc84a7d4168e, ugovor 9c3f30001038`) · 19/19 jeftinih kapija `rc=0`
+    · 142 self-test slučaja · katalog 649 → **655**.
+    `--require-green` **bez** `--suite` je `rc=2` i to je tačno: samo je
+    `RunAllTests` puštena nad ovim izvorom, pun prolaz ide pred release.
+    **Compile ostaje ručna kapija operatera** (`--mark-compile`).
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
@@ -393,6 +463,7 @@
 | `.claude/rules/testovi.md` ne zna za JS kapiju | **samo process PR**, nikad uz feature izmenu |
 | Node 20 deprecation u tri GitHub akcije | process PR |
 | `popis_citalaca` javlja UPOZORENJE za `IzvedeniLanacIzPwaDostupan` | kapija ne postoji od #388 — očekivanje alata je zastarelo |
+| **`vba_gate` pamti JEDAN compile, a više suita** | `marker["suites"]` je rečnik i svaka suita nosi svoj `izvor`, a `marker["compile"]` je **jedan objekat** — pa `--mark-compile` na drugoj grani pregazi potvrdu prve. Nađeno 03.10.2026 na #405/#406: operater je kompajlirao oba izvora, a marker je zadržao samo zadnji. Kapija to **tačno prijavljuje** (`<-- DRUGI IZVOR`), pa nema lažnog zelenog — ali rad na dve grane šalje compile u ping-pong. Ispravka je `compile` po `izvor`-u, kao `suites`; menja `kapija` deo ugovora, pa traži svoj dvosmerni dokaz i obara ZELENO suita (ne i compile, koji ključa samo na `izvor`). **Zaseban process PR**, ne uz feature rez |
 
 
 ## Alati i kapije
