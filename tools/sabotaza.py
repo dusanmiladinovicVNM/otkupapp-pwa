@@ -6841,15 +6841,6 @@ SABOTAZE = {
         "Test_Amb_StornoKontraStavVracaSaldo",
         "STORNO: kontra-stav IZDATA_PRAZNA prolazi jer se proverava OBRNUTO",
     ),
-    # Idempotencija pada: drugi poziv upise JOS JEDAN kontra-stav, pa saldo
-    # prelazi na drugu stranu umesto da stane na nuli.
-    "amb-storno-udvaja": (
-        "modAmbalaza.bas",
-        "                    If Not vecStornirani.Exists(AmbText(data(i, cID))) Then\n",
-        "                    If True Then   ' SABOTAZA: storno se moze ponoviti\n",
-        "Test_Amb_StornoKontraStavVracaSaldo",
-        "STORNO: drugi poziv ne upisuje nista (idempotentno)",
-    ),
     # AMB-INV-09 nad posle-stanjem se gasi: storno ulaza vracene tudje ambalaze
     # prolazi i ostavlja NEGATIVNU obavezu, koja izgleda kao normalno stanje.
     "amb-storno-posle-vracanja-prolazi": (

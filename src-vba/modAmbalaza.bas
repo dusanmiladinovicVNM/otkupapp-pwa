@@ -1755,6 +1755,13 @@ Public Function StornirajAmbalazuDokumenta(ByVal tx As clsTransaction, _
 
     ' PRVI PROLAZ: na sta kontra-stavovi vec pokazuju. Bez ovoga drugi poziv
     ' udvaja storno, a saldo prelazi na drugu stranu umesto da stane na nuli.
+    '
+    ' NEDOSTIZNA ODBRANA -- namerno, i tako imenovana. Primitiv ne vezuje dokument
+    ' (P1 #1), pa ga test ne moze pozvati direktno; jedini pozivalac je
+    ' modStorno.StornoOtkup, a RequireStornoAllowed odbija DRUGI storno pre njega.
+    ' Grana se zato NE MOZE dosegnuti i njena sabotaza je obrisana iz kataloga:
+    ' sabotaza koja ne moze da obori nijednu tvrdnju je placebo. Ostaje jer bi
+    ' drugi pozivalac (otpremnica, prijemnica) bez nje udvajao kontra-stav.
     Dim vecStornirani As Object
     Set vecStornirani = CreateObject("Scripting.Dictionary")
     Dim i As Long, st As String

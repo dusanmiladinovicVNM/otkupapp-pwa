@@ -997,7 +997,16 @@ Private Sub GldOtkup(ByVal brojZbirne As String, ByVal brDok As String, _
 
     Dim greska As String
     Dim res As String
-    res = CreateOtkup_TX(h, stavke, greska)
+    ' GOLDEN STOJI IZA OPERATERA, pa daje potvrdu deficita.
+    '
+    ' Scenariji namerno koriste SOPSTVENE identitete (KOOP-GLD-1 i dr.) koji
+    ' nemaju opticaj ambalaze, pa kooperant u njima uvek donosi SVOJE gajbe --
+    ' manjak koji po 6.5 trazi pristanak. Ekran to resava pitanjem, sync
+    ' auto-potvrdom; golden scenario je skriptovana operaterska sesija, pa daje
+    ' isto. Broj racuna ISTI javni racun koji pisac zove, ne drugi.
+    Dim potvrda As Double
+    potvrda = modOtkup.OtkupDeficitKooperanta(h, stavke)
+    res = CreateOtkup_TX(h, stavke, greska, potvrda)
     If Len(res) = 0 Then
         Err.Raise GLD_ERR, "GldOtkup", "CreateOtkup_TX nije vratio ID: " & greska
     End If
