@@ -1653,6 +1653,90 @@ Private Function ZbirZahteva(ByVal dokTip As String, ByVal dokID As String, _
     ZbirZahteva = zbir
 End Function
 
+' ============================================================
+' NABAVKA -- jedini put kojim NASE gajbe ulaze u opticaj
+' ============================================================
+'
+' Postoji jer AMB-INV-07 i AMB-10-ODL-8 ne dozvoljavaju stanici da izda gajbe
+' koje nema: njen manjak nije "tudja ambalaza" nego SKRIVEN MANJAK, pa je put
+' NABAVKA, sa svojim dokumentom i svojom cenom. Na svezoj instalaciji svaka
+' stanica pocinje od nule, pa bi bez ovog ulaza prvo izdavanje praznih bilo
+' odbijeno -- cutover devet mesta bi blokirao rad. Odluka operatera 03.10.2026.
+'
+' VLASNIK BROJA JE STANICA, izvedeno a ne izmisljeno: AMB-10-ODL-3 trazi jedan
+' protivpartner po dokumentu, a 6.9 izricito kaze da bi "jedan NABAVKA dokument
+' nad dve stanice" tu invarijantu odmah prekrsio.
+'
+' NEMA PROTOKOLA POTVRDE: AmbDeficitZaPrenos vraca 0 za sve sto nije REALAN, a
+' SpoljniSvet je iz te klase iskljucen (6.3 -- granica nema fizicko stanje), pa
+' prenos IZ nje nikad nije u manjku.
+'
+' Broj se moze proslediti (operater prepisuje sa racuna) ili izracunati. Oba
+' puta idu kroz istu kapiju zaglavlja, pa prosledjen broj nije povlasten.
+Public Function NabaviAmbalazu_TX(ByVal datum As Date, _
+                                  ByVal stanicaID As String, _
+                                  ByVal tipAmb As String, _
+                                  ByVal kolicina As Double, _
+                                  Optional ByVal broj As String = "", _
+                                  Optional ByVal napomena As String = "") As String
+    Const SRC As String = "modAmbalaza.NabaviAmbalazu_TX"
+
+    Dim tx As clsTransaction
+    Dim dokID As String, brojK As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+
+    If kolicina <= 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Nabavka trazi pozitivnu kolicinu."
+    End If
+
+    brojK = Trim$(broj)
+    If Len(brojK) = 0 Then
+        brojK = modBrojevi.GenerateBrojAmbDokumenta(stanicaID, datum)
+        If Len(brojK) = 0 Then
+            Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                      "Broj nabavke nije izracunat -- vidi Log."
+        End If
+    End If
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    ' Obe tabele: zaglavlje i knjiga nastaju u ISTOM rollback-u (AMB-INV-08).
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    ' UpisiAmbDokument sam vezuje dokument za ovu transakciju.
+    dokID = UpisiAmbDokument(tx, AMB_DOK_NABAVKA, brojK, datum, _
+                             AMB_NALOG_STANICA, stanicaID, napomena)
+
+    PrenesiAmbalazu tx, datum, tipAmb, kolicina, _
+                    AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, stanicaID, _
+                    AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    NabaviAmbalazu_TX = dokID
+    Exit Function
+
+EH:
+    ' Err se cuva PRE rollback-a, i PONOVO se dize SA ISTIM BROJEM: pozivalac
+    ' (UI) razlikuje kapije po kodu greske, pa bi zamena broja unistila tu
+    ' informaciju -- i protokol potvrde deficita na drugim putanjama.
+    errNum = Err.Number
+    errDesc = Err.description
+    LogErr SRC
+
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, errDesc
+End Function
+
 ' AMB-INV-08: nijedan upis u knjigu ne nastaje van vlasnistva transakcije
 ' izvornog dokumenta.
 '

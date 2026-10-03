@@ -6803,6 +6803,24 @@ SABOTAZE = {
         "Test_Amb_DokumentUgovor",
         "ODL-9: obican REVERS ne sme da nosi kupac -> firma",
     ),
+    # Stanica sme u minus: AMB-INV-07 pada, i to tiho -- saldo postaje negativan
+    # a nijedan NABAVKA dokument ne postoji, pa se gajbe pojave iz vazduha.
+    "amb-nabavka-stanica-sme-u-minus": (
+        "modAmbalazaUgovor.bas",
+        "    If Not AmbNalogUKlasi(klasa, tip) Then\n",
+        "    If False Then   ' SABOTAZA: svaki nalog se pokriva tudjom ambalazom\n",
+        "Test_Amb_NabavkaOtvaraIzdavanje",
+        "NABAVKA: stanica NE SME da izda vise gajbi nego sto ima",
+    ),
+    # Broj se ne uvecava: dva dokumenta istog dana dobiju ISTI broj, pa dva
+    # racuna za gajbe postanu nerazlucivi u knjizi.
+    "amb-nabavka-broj-se-ne-uvecava": (
+        "modBrojevi.bas",
+        "    GenerateBrojAmbDokumenta = FormatBroj(brojOwnerID, datum, maxSeq + 1)\n",
+        "    GenerateBrojAmbDokumenta = FormatBroj(brojOwnerID, datum, 1)   ' SABOTAZA\n",
+        "Test_Amb_NabavkaOtvaraIzdavanje",
+        "NABAVKA: dva dokumenta istog dana imaju razlicite brojeve",
+    ),
     # Validator postoji, ali se ne zove iz pisca -- tacno placebo koji bi tablica
     # istinitosti pustila zelenu.
     "amb-odl9-validator-se-ne-zove": (

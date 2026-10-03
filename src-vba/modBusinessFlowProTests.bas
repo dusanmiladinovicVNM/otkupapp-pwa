@@ -304,6 +304,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_Amb_DeficitIObaveza
     Test_Amb_ZaglavljeDokumentaPisac
     Test_Amb_Inv08TxVlasnistvo
+    Test_Amb_NabavkaOtvaraIzdavanje
     Test_Amb_JedanProtivpartnerPoDokumentu
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
@@ -16913,6 +16914,107 @@ End Sub
 ' PREDUSLOV SVAKOG SCENARIJA JE NULA. Fixture nema redova novog oblika, pa je
 ' saldo svakog naloga 0 i stanje se gradi u testu. Prvi upis zato mora biti
 ' NABAVKA (GRANICA -> SOPSTVENI): jedini prenos koji ne trazi postojeci saldo.
+' NABAVKA: jedini put kojim NASE gajbe ulaze u opticaj.
+'
+' Meri POSLOVNU POSLEDICU, ne upis. Pre nabavke stanica ne moze da izda vise
+' nego sto ima -- i to nije pitanje potvrde nego TVRDO odbijanje, jer
+' AMB-10-ODL-8 kaze da se deficit sopstvenog naloga ne pokriva ulazom tudje
+' ambalaze: "nase gajbe ne nastaju iz vazduha, za njih ide NABAVKA". Posle
+' nabavke isto izdavanje prolazi.
+'
+' Tvrdnje su nad DELTOM salda, ne nad apsolutnom vrednoscu: suite vrti vise
+' testova nad istim fixture-om, pa bi apsolutan broj zavisio od redosleda.
+' Isti razlog i za "izdaj saldoPre + 1" umesto "izdaj 1 iz nule".
+Private Sub Test_Amb_NabavkaOtvaraIzdavanje()
+    Dim scenario As String
+    Dim tx As clsTransaction
+    Dim dokNab As String, dokNab2 As String, dokRev As String
+    Dim saldoPre As Double, saldoPosle As Double
+    Dim brojNab As String, brojNab2 As String
+    Dim pukloBezNabavke As Boolean, opisBez As String
+    Dim pukloNula As Boolean
+    Dim presloPosle As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("NABAV")
+
+    saldoPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+
+    ' --- PRE nabavke: izdavanje preko salda je TVRDO odbijeno
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokRev = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "NBR-" & scenario, _
+                                          Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, TEST_TIP_AMB, saldoPre + 1#, _
+                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev
+    pukloBezNabavke = (Err.Number <> 0)
+    opisBez = Err.description
+    Err.Clear
+    On Error GoTo EH
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- nabavka: dva dokumenta istog dana moraju imati RAZLICITE brojeve
+    dokNab = modAmbalaza.NabaviAmbalazu_TX(Date, TEST_ST_ID, TEST_TIP_AMB, 10#)
+    dokNab2 = modAmbalaza.NabaviAmbalazu_TX(Date, TEST_ST_ID, TEST_TIP_AMB, 5#)
+    brojNab = CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokNab, COL_AMBD_BROJ))
+    brojNab2 = CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokNab2, COL_AMBD_BROJ))
+
+    saldoPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+
+    ' --- POSLE nabavke: isto izdavanje prolazi
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokRev = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "NBR2-" & scenario, _
+                                          Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    presloPosle = Len(modAmbalaza.PrenesiAmbalazu(tx, Date, TEST_TIP_AMB, 10#, _
+                      AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                      AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev)) > 0
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- nulta kolicina nema poslovno znacenje
+    On Error Resume Next
+    modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, TEST_TIP_AMB, 0#
+    pukloNula = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue pukloBezNabavke, _
+               "NABAVKA: stanica NE SME da izda vise gajbi nego sto ima"
+    AssertTrue InStr(1, opisBez, "NABAVKA") > 0, _
+               "NABAVKA: odbijenica mora da imenuje PUT (nabavku), ne samo " & _
+               "manjak: [" & opisBez & "]"
+    AssertTrue Len(dokNab) > 0, "NABAVKA: nabavka ima zaglavlje"
+    AssertEquals AMB_DOK_NABAVKA, modAmbalaza.AmbDokVrstaZaID(dokNab), _
+                 "NABAVKA: vrsta se cita sa zaglavlja"
+    AssertEquals CStr(saldoPre + 15#), CStr(saldoPosle), _
+                 "NABAVKA: saldo stanice raste za ukupnu nabavljenu kolicinu"
+    AssertTrue Len(brojNab) > 0 And brojNab <> brojNab2, _
+               "NABAVKA: dva dokumenta istog dana imaju razlicite brojeve: [" & _
+               brojNab & "] [" & brojNab2 & "]"
+    AssertTrue presloPosle, _
+               "NABAVKA: posle nabavke stanica MOZE da izda iste gajbe"
+    AssertTrue pukloNula, "NABAVKA: nulta kolicina je odbijena"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal "Test_Amb_NabavkaOtvaraIzdavanje", errNum, errDesc
+End Sub
+
 ' AMB-INV-08 U JEZGRU: upis u knjigu ne nastaje van vlasnistva transakcije
 ' izvornog dokumenta.
 '

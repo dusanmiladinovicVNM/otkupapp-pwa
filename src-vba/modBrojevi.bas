@@ -232,6 +232,38 @@ End Function
 ' ============================================================
 
 ' "VOZ-00004" -> 4 ; "ST-00001" -> 1 ; "ST-103" -> 103 ; "garbage" -> 0
+' Broj ambalaznog dokumenta -- dnevni niz po VLASNIKU broja.
+'
+' Ovde a ne u modAmbalaza: MaxSeqFromTable je privatan, i ceo racun broja po
+' (vlasnik, dan) zivi u ovom modulu. Druga kopija bila bi druga istina.
+'
+' Radi za SVE vrste ambalaznog dokumenta, jer tabela nosi i broj i datum i
+' vlasnika niza -- ne treba joj poseban KIND_* kao reversu, koji je svoj niz
+' morao da skenira iz tblAmbalaza po prefiksu.
+'
+' EH NE SME da vrati validan-looking broj: "1/ddmmyy" izgleda kao regularan
+' prvi broj dana, pa je posle greske u skenu dokument dobijao broj koji vec
+' postoji (AUD-041a, isti razlog kao GenerateBrojPrijemnice). Prazan string je
+' jedini bezbedan izlaz -- pozivalac ga vidi kao pad koraka.
+Public Function GenerateBrojAmbDokumenta(ByVal brojOwnerID As String, _
+                                         ByVal datum As Date) As String
+    Const SRC As String = "GenerateBrojAmbDokumenta"
+
+    On Error GoTo EH
+
+    Dim maxSeq As Long
+    maxSeq = MaxSeqFromTable(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, _
+                             COL_AMBD_DATUM, COL_AMBD_BROJ_OWNER_ID, _
+                             brojOwnerID, datum)
+
+    GenerateBrojAmbDokumenta = FormatBroj(brojOwnerID, datum, maxSeq + 1)
+    Exit Function
+
+EH:
+    LogErr SRC, "owner=" & brojOwnerID
+    GenerateBrojAmbDokumenta = ""
+End Function
+
 Public Function ExtractNumericFromEntityID(ByVal entityID As String) As Long
     Dim i As Long, ch As String, digits As String
     

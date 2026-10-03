@@ -73,11 +73,12 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblNovac`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modOtkup`, `modStorno`, `modUtovar`
 - `tblOtkup`: `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
 - `tblPrijemnica`: `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`
-- `tblAmbalaza`: `modDokumenta`, `modMasterSync`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
+- `tblAmbalaza`: `modAmbalaza`, `modDokumenta`, `modMasterSync`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery`
 - `tblPaleta`: `modDokumenta`, `modPaletniList`, `modStorno`
 - `tblParcele`: `modGeoParcele`, `modMasterSync`
 - `tblUtovar`: `modStorno`, `modUtovar`
 - `tblZbirna`: `modDokumentInvariant`, `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow`
+- `tblAmbalazaDokument`: `modAmbalaza`
 - `tblKooperanti`: `modKooperant`
 - `tblMagacin`: `modAgroUnos`, `modAgrohemija`
 - `tblOtkupStavke`: `modOtkup`
