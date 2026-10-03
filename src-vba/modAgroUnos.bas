@@ -525,7 +525,8 @@ Public Function AgroUpisiIzlaz(ByVal korpa As Collection, _
     Set tx = Nothing
     Exit Function
 EH:
-    AgroUpisiIzlaz = Poruka("AGRO_MSG_GRESKA_PRI_CUVANJU") & " " & Err.description
+    AgroUpisiIzlaz = modTxState.PorukaIshodaRollbacka(Poruka("AGRO_MSG_GRESKA_PRI_CUVANJU") & _
+                     " " & Err.description)
     upisano = 0
     LogErr SRC
     On Error Resume Next
@@ -583,7 +584,8 @@ Public Function AgroUpisiUlaz(ByVal korpa As Collection, _
     Set tx = Nothing
     Exit Function
 EH:
-    AgroUpisiUlaz = Poruka("AGRO_MSG_GRESKA_PRI_CUVANJU_2") & " " & Err.description
+    AgroUpisiUlaz = modTxState.PorukaIshodaRollbacka(Poruka("AGRO_MSG_GRESKA_PRI_CUVANJU_2") & _
+                    " " & Err.description)
     upisano = 0
     LogErr SRC
     On Error Resume Next

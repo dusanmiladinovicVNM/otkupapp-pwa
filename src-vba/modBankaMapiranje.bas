@@ -396,7 +396,7 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
 
     If Not gBankaSilentBatch Then
-        MsgBox "Gre" & ChrW(353) & "ka pri automatskom mapiranju banke, promene vra" & ChrW(263) & "ene: " & errDesc, _
+        MsgBox modTxState.PorukaIshodaRollbacka("Gre" & ChrW(353) & "ka pri automatskom mapiranju banke, promene vra" & ChrW(263) & "ene: " & errDesc), _
                vbCritical, APP_NAME
     End If
 
@@ -597,7 +597,8 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
 
     If Not gBankaSilentBatch Then
-        MsgBox "Gre" & ChrW(353) & "ka pri mapiranju kupca, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+        MsgBox modTxState.PorukaIshodaRollbacka("Gre" & ChrW(353) & "ka pri mapiranju kupca, promene vra" & ChrW(263) & "ene: " & errDesc), _
+               vbCritical, APP_NAME
     End If
 
     MapBankaImportAsKupac_TX = ""
@@ -746,7 +747,8 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
 
     If Not gBankaSilentBatch Then
-        MsgBox "Gre" & ChrW(353) & "ka pri mapiranju kooperanta, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+        MsgBox modTxState.PorukaIshodaRollbacka("Gre" & ChrW(353) & "ka pri mapiranju kooperanta, promene vra" & ChrW(263) & "ene: " & errDesc), _
+               vbCritical, APP_NAME
     End If
 
     MapBankaImportAsKooperant_TX = ""
@@ -866,7 +868,8 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
 
     If Not gBankaSilentBatch Then
-        MsgBox "Gre" & ChrW(353) & "ka pri mapiranju OM, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+        MsgBox modTxState.PorukaIshodaRollbacka("Gre" & ChrW(353) & "ka pri mapiranju OM, promene vra" & ChrW(263) & "ene: " & errDesc), _
+               vbCritical, APP_NAME
     End If
 
     MapBankaImportAsOM_TX = ""
@@ -951,7 +954,8 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
 
     If Not gBankaSilentBatch Then
-        MsgBox "Gre" & ChrW(353) & "ka pri mapiranju kooperanta po bloku, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+        MsgBox modTxState.PorukaIshodaRollbacka("Gre" & ChrW(353) & "ka pri mapiranju kooperanta po bloku, promene vra" & ChrW(263) & "ene: " & errDesc), _
+               vbCritical, APP_NAME
     End If
 
     MapBankaImportAsKooperantBlock_TX = 0
@@ -1032,7 +1036,8 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
 
     If Not gBankaSilentBatch Then
-        MsgBox "Gre" & ChrW(353) & "ka pri rucnom mapiranju kooperanta po bloku, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+        MsgBox modTxState.PorukaIshodaRollbacka("Gre" & ChrW(353) & "ka pri rucnom mapiranju kooperanta po bloku, promene vra" & ChrW(263) & "ene: " & errDesc), _
+               vbCritical, APP_NAME
         ' Pozivalac je vec obavesten, i to KONKRETNO. Bez ovoga forma povrh toga
         ' pokaze jos i genericko "NIJE izvrseno", pa operater za jednu ocekivanu
         ' validacionu situaciju dobija DVA dijaloga.
@@ -1362,7 +1367,8 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
 
     If Not gBankaSilentBatch Then
-        MsgBox "Gre" & ChrW(353) & "ka pri preskakanju bank stavke, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+        MsgBox modTxState.PorukaIshodaRollbacka("Gre" & ChrW(353) & "ka pri preskakanju bank stavke, promene vra" & ChrW(263) & "ene: " & errDesc), _
+               vbCritical, APP_NAME
     End If
 
     SkipBankaImportRow_TX = False

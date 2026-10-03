@@ -6689,6 +6689,16 @@ SABOTAZE = {
         "T_TxRollback_NepotpunZatvaraUpisISnimanje",
         "nepotpun rollback mora biti citljiv",
     ),
+    # Brana radi, ali poruka o njoj ne zna: wrapper postaje identitet i pozivna
+    # mesta opet tvrde "promene vracene" dok su podaci delimicno vraceni.
+    # Pada tacno tvrdnja o poruci -- sve pre nje prolazi, jer brana je ziva.
+    "rollback-poruka-tvrdi-vraceno": (
+        "modTxState.bas",
+        "    If Not mKompromitovan Then\n",
+        "    If True Then   ' SABOTAZA: poruka ne zna za kompromis\n",
+        "T_TxRollback_NepotpunZatvaraUpisISnimanje",
+        "posle nepotpunog rollback-a poruka NE SME da tvrdi da su ",
+    ),
 }
 
 

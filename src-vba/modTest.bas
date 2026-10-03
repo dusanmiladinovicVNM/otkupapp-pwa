@@ -7608,6 +7608,7 @@ Private Sub T_TxRollback_NepotpunZatvaraUpisISnimanje()
     Dim snimioPre As Boolean, snimioPosle As Boolean, snimioPosleReseta As Boolean
     Dim upisOdbijen As Boolean, upisErr As String
     Dim cistoPreSnimanja As Boolean
+    Dim porukaKompromis As String, porukaCista As String
 
     On Error GoTo EH
 
@@ -7656,6 +7657,11 @@ Private Sub T_TxRollback_NepotpunZatvaraUpisISnimanje()
     nepotpun = tx.RollbackNepotpun
     nevracene = tx.NevraceneTabele
 
+    ' Poruka operateru, u pravom kompromitovanom stanju -- ne nad podmetnutom
+    ' zastavicom. Pozivna mesta (modBankaMapiranje, modScrDokumenti, ...) salju
+    ' svoj normalan tekst kroz isti wrapper.
+    porukaKompromis = modTxState.PorukaIshodaRollbacka("promene vracene")
+
     ' --- nov upis mora biti ODBIJEN
     On Error Resume Next
     tx.BeginTx
@@ -7690,6 +7696,7 @@ Private Sub T_TxRollback_NepotpunZatvaraUpisISnimanje()
     cistoPreSnimanja = Not TxRbListPostoji(SHEET_IME)
 
     modTxState.TxKompromisTestReset
+    porukaCista = modTxState.PorukaIshodaRollbacka("promene vracene")
     ThisWorkbook.Saved = False
     ThisWorkbook.Save
     snimioPosleReseta = ThisWorkbook.Saved
@@ -7727,6 +7734,18 @@ Private Sub T_TxRollback_NepotpunZatvaraUpisISnimanje()
              "artefakt ne sme da ode na disk"
     AssertEq snimioPosleReseta, True, _
              "posle reload-a sveska mora opet biti snimljiva"
+
+    ' --- 5. operater ne sme da dobije tvrdnju koja nije tacna
+    AssertEq (InStr(1, porukaKompromis, "promene vracene") > 0), False, _
+             "posle nepotpunog rollback-a poruka NE SME da tvrdi da su " & _
+             "promene vracene: [" & porukaKompromis & "]"
+    AssertEq (InStr(1, porukaKompromis, "TST_RB_B") > 0), True, _
+             "poruka operateru mora da IMENUJE nevracenu tabelu: [" & _
+             porukaKompromis & "]"
+    AssertEq porukaCista, "promene vracene", _
+             "bez kompromisa poruka ostaje NEPROMENJENA -- wrapper nije " & _
+             "'uvek alarm', inace bi svaka poslovna greska izgledala kao " & _
+             "ostecenje podataka"
     Exit Sub
 
 EH:

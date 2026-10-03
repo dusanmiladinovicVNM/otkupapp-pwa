@@ -80,6 +80,26 @@ Public Function SnimanjeDozvoljeno() As Boolean
     SnimanjeDozvoljeno = Not mKompromitovan
 End Function
 
+' Poruka o ishodu rollback-a, na JEDNOM mestu.
+'
+' EH putevi su tvrdili "promene vracene" bez obzira na ishod rollback-a. Posle
+' nepotpunog rollback-a to je cinjenicno netacno: podaci su delimicno vraceni, a
+' upis i snimanje su zakljucani -- operater bi iz te poruke zakljucio da moze da
+' ponovi unos, pa bi tek sledeci upis ili Save saznao istinu.
+'
+' Cita se GLOBALNA brana, ne stanje jednog tx objekta, i to nije priblizno nego
+' tacno: BeginTx je fail-closed dok brana stoji, pa nova transakcija ne moze ni
+' da pocne. Marker zato moze biti postavljen samo transakcijom koja se upravo
+' odmotava -- globalno i "ovaj tx" se ne mogu razici.
+Public Function PorukaIshodaRollbacka(ByVal normalna As String) As String
+    If Not mKompromitovan Then
+        PorukaIshodaRollbacka = normalna
+        Exit Function
+    End If
+    PorukaIshodaRollbacka = Poruka("APP_MSG_ROLLBACK_NEPOTPUN_NE_SNIMAM") & _
+                            vbCrLf & mTabele
+End Function
+
 ' Test seam, tvrdo gejtovan -- isti obrazac kao
 ' modImportState.ImportPendingTestSet (.claude/rules/testovi.md S4). Van
 ' test-rezima ne radi nista, pa se kapija ne moze ugasiti spolja.
