@@ -91,13 +91,65 @@ Koraci 1–4 su spojeni u skriptu (pokreni iz repo klona **na build mašini**):
 
 ```
 bash tools/release.sh 2.2.2
-# Windows:  powershell -ExecutionPolicy Bypass -File tools\release.ps1 2.2.2
+# Windows:  powershell -ExecutionPolicy Bypass -File tools/release.ps1 2.2.2
+#           (ps1 je tanka ljuska nad .sh — jedna implementacija kapije)
 ```
 
-Ona uradi: `checkout main` + `pull` → bump `APP_VERSION` → commit → `git tag
-vba-v2.2.2` + push → `stamp-build`. Zatim ti ostaju **3 Excel klika** (Import →
-Compile → Snimi) i `git checkout -- src-vba/modBuildInfo.bas`, što skripta ispiše
-na kraju. Excel deo se ne automatizuje (cloud/CLI ne pokreću Excel).
+Ona uradi: `checkout main` + `pull` → bump `APP_VERSION` → **KAPIJA** → commit →
+**anotiran** `git tag vba-v2.2.2` + push → `stamp-build`. Zatim ti ostaju Excel
+koraci i `git checkout -- src-vba/modBuildInfo.bas`, što skripta ispiše na kraju.
+Excel deo se ne automatizuje (cloud/CLI ne pokreću Excel).
+
+### Kapija pred tagom (od 03.10.2026)
+
+**Tag ne može da nastane dok marker ne dokaže da je baš taj `src-vba` — bump
+`APP_VERSION`-a uključen — prošao suite i ručni compile.**
+
+Do tada je redosled bio bump → commit → push `main` → tag → push tag, a Excel
+je bio *uputstvo ispod toga*. Tag je dakle nastajao i bio objavljen **pre** nego
+što je bilo šta izmereno. Nije teorija: `vba-v2.40.0` release notes izričito
+kaže da `run_vba.py` nije bio pokrenut — a tag je postojao i bio push-ovan.
+
+Kapija vrti dve stvari i **ne pokreće Excel**:
+
+| | šta |
+|---|---|
+| statika | `vba_check.py` — ASCII, kraj reda, deklaracije, duplikati (ono što bump može da pokvari) |
+| dokaz | `vba_gate.py --require-green --require-compile` — marker protiv otiska izvora koji se isporučuje |
+
+Pun prolaz traje 20–60 minuta, a compile je ručna kapija operatera; posao
+skripte je da **proveri marker**, ne da trči testove. Zato je kapija dovoljno
+jeftina da stoji u skripti i da se ne preskače.
+
+**Na padu kapije ništa nije commit-ovano, tag-ovano ni push-ovano**, a bump
+`APP_VERSION`-a **ostaje u radnom drvetu**, nekomitovan — pa testiraš tačno onaj
+izvor koji se isporučuje. Redosled koji skripta i ispiše:
+
+```bash
+python tools/run_vba.py                    # pun prolaz, piše marker
+# Alt+F11 -> Debug -> Compile VBAProject   (mora bez greske)
+python tools/vba_gate.py --mark-compile    # potvrdi compile nad OVIM izvorom
+python tools/vba_gate.py --status          # šta još fali
+bash tools/release.sh 2.2.2                # pa ponovo
+```
+
+Ponovno pokretanje je idempotentno: zatečen nekomitovan bump se prepoznaje i
+rad se nastavlja nad njim.
+
+**Tag je anotiran i nosi verdikt** — otisak izvora, dokazane suite i potvrdu
+compile-a. `git show vba-v2.2.2` je zato provera koja se može uraditi kasnije;
+rečenica u PR-u ili u release notes-u nije.
+
+**Waiver, ako kapija objektivno nije izvodljiva:**
+
+```bash
+bash tools/release.sh 2.2.2 --waive ponasanje --reason "<zasto>"
+bash tools/release.sh 2.2.2 --waive compile   --reason "<zasto>"
+```
+
+`--reason` je **obavezan** — waiver bez zapisanog razloga je tiho preskakanje
+kapije. Razlog i oznaka `WAIVED` ulaze u anotirani tag, pa je takav release
+zauvek obeležen kao waived.
 
 ## R3 — Podaci: migracija, ne kopiranje koda
 
@@ -215,11 +267,16 @@ hardening „samo potpisani makroi". Inače su `BUILD_SHA` telemetrija +
 
 ### B) Svaki release (zameni `2.2.2` svojim brojem)
 1. **[Git Bash]** Otvori Git Bash u folderu klona (desni klik → *Git Bash Here*), ili `cd /putanja/do/otkupapp-pwa`.
-2. **[Git Bash]** `bash tools/release.sh 2.2.2`  *(pull → bump APP_VERSION → commit → tag `vba-v2.2.2` → push → stamp)*
+2. **[Git Bash]** `bash tools/release.sh 2.2.2` → **prvi put namerno padne na kapiji** ako izvor sa bump-om još nije dokazan. Bump ostaje u radnom drvetu; nastavi na 2a.
+2a. **[Git Bash]** `python tools/run_vba.py` → pun prolaz nad izvorom **sa bump-om** (piše marker). Vidi `docs/EXCEL_TEST_HARNESS.md`.
+2b. **[Excel]** `Alt+F8` → **ImportAllVBA** → Run, pa **Debug → Compile VBAProject** (mora bez greške).
+2c. **[Git Bash]** `python tools/vba_gate.py --mark-compile` → potvrdi compile **nad tim izvorom**.
+2d. **[Git Bash]** `bash tools/release.sh 2.2.2` **ponovo** → kapija prolazi, nastaje commit + **anotiran** tag, oboje se push-uje.
 3. **[Git Bash]** `cat src-vba/modBuildInfo.bas` → mora `BUILD_VERSION As String = "vba-v2.2.2"` (bez `+dirty`).
+3a. **[Git Bash]** `git show vba-v2.2.2` → tag nosi otisak izvora i verdikt markera. Ako piše `WAIVED`, zna se šta nije mereno.
 4. **[Excel]** Otvori **prazan build-master** `.xlsm` (master koji NE drži podatke — vidi R3 „Blanko garancija").
 5. **[Excel]** `Alt+F8` → **ImportAllVBA** → Run.
-6. **[Excel]** **Debug → Compile VBAProject** (mora bez greške).
+6. **[Excel]** **Debug → Compile VBAProject** (mora bez greške). *(Ponovo, sada nad stamp-ovanim `modBuildInfo` i u blanko masteru — korak 2b je bio nad istim kodom, pa je ovo potvrda build-mastera, ne nova kapija.)*
 7. **[Excel]** `Alt+F8` → **AssertBlankBuild** → mora „BLANKO OK". Ako prijavi tabele s podacima → isprazni ih pa ponovi (taj fajl ide SVIMA).
 7b. **[Excel]** `Alt+F8` → **PublishReleaseToDrive** (`modRelease`) → objavi `src-vba` kod + `version.json` u Drive folder `AgriX_Release` (kanal za self-update postojećih klijenata). Radi **tek pošto Compile prođe**, a **pre** koraka 9 (čita stamp-ovan `BUILD_*`). Preduslov: `REL_FOLDER_ID` postavljen u `modConfig.bas`.
 8. **[Excel]** **File → Save As** → `builds\AgriX_2.2.2.xlsm` (ime prati `vba-v2.2.2`).
@@ -230,7 +287,9 @@ hardening „samo potpisani makroi". Inače su `BUILD_SHA` telemetrija +
 13. **[Browser/GAS]** *(opciono)* kad se flota digne na novu verziju: u Script Properties podigni `VERSION_MIN` (i `VERSION_ENFORCE=YES` ako želiš blok). Vidi „Min-version gate".
 
 ### Ako stane
-- **„Radni direktorijum nije cist"** (korak 2) → commit-uj ili odloži izmene pa ponovi.
+- **„Radni direktorijum nije cist"** (korak 2) → commit-uj ili odloži izmene pa ponovi. Nekomitovan bump `APP_VERSION`-a i `modBuildInfo.bas` su **dozvoljeni** i neće zaustaviti skriptu.
+- **„KAPIJA PALA"** (korak 2) → to je očekivan prvi prolaz. Idi na 2a–2d. Skripta ispiše tačne komande, a `python tools/vba_gate.py --status` kaže koja suite fali i da li je compile potvrđen nad **ovim** izvorom.
+- **„compile je potvrđen nad DRUGIM izvorom"** → kompajliran je neki drugi `src-vba` (druga grana, ili izmena posle compile-a). Potvrde se pamte po izvoru, pa se stara ne gubi — samo uradi `Debug → Compile` i `--mark-compile` nad ovim.
 - **Push padne (mreža)** → ponovi `bash tools/release.sh 2.2.2` (preskoči gotovo, gurne ostatak).
 
 ---

@@ -190,6 +190,18 @@ jobs:
       - name: vba_gate self-test
         run: python3 tools/vba_gate.py --self-test
 
+      # Kapija u `release.sh` je jedina koja odlucuje da li tag MOZE da nastane,
+      # a nemoguce ju je izmeriti usput: radi `checkout main`, `commit`, `tag` i
+      # `push`. Zato dokaz gradi izolovan repo sa lokalnim bare "origin"-om --
+      # nema mreze, nema pravog push-a, i nijedna komanda ne dira ovaj checkout.
+      #
+      # Excel se NE pokrece: marker se za pozitivan slucaj pise rucno preko
+      # `vba_gate` API-ja. Meri se kapija, ne suite. Pet sabotaza nad
+      # `release.sh` (kapija posle taga, vracen bump, lagan tag, waiver bez
+      # razloga, ignorisan rc vba_check-a) obara ga 5/5, svaka na svoju tvrdnju.
+      - name: dokaz release kapije (tag ne moze bez dokaza)
+        run: bash tools/dokaz_release.sh
+
       # ----------------------------------------------------------------
       # PWA / GAS sloj
       # ----------------------------------------------------------------

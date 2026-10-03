@@ -492,6 +492,62 @@
     oba** — pre ispravke je za A bio `rc=2`. 13/13 jeftinih kapija `rc=0`.
     `src-vba` nije dirnut (otisak `075c45f5f5153da2` pre i posle).
 
+55. **Kapija pred tagom: release ne može da nastane bez dokaza** (03.10.2026).
+
+    Najstariji otvoren nalaz iz ovog lanca, i jedini koji `main` nije dotakao
+    kroz #402. Redosled u `release.sh` je bio: bump → commit → push `main` →
+    tag → push tag, a Excel (`ImportAllVBA` + `Debug → Compile`) je bio
+    **uputstvo ispod toga**. Tag je dakle nastajao i bio objavljen **pre** nego
+    što je bilo šta izmereno nad tim izvorom. Nije teorija: `vba-v2.40.0`
+    release notes izričito kaže da `run_vba.py` nije bio pokrenut — a tag je
+    postojao i bio push-ovan. Nalaz je na `main`-u bio zapisan samo kao
+    *„release checklist formalizovati"* (`docs/reviews/2026-10-02-main-nalaz.md`
+    §7) — a checklista nije kapija, i `CLAUDE.md` §5 to sam kaže.
+
+    Sad: bump → **KAPIJA** → commit → **anotiran** tag → push.
+
+    **Kapija ne pokreće Excel**, i to je ono što je čini izvodljivom. Pun prolaz
+    traje 20–60 minuta, compile je ručna kapija operatera; posao skripte je da
+    **proveri marker** protiv otiska izvora koji se isporučuje. Vrti dve stvari:
+    `vba_check.py` (ono što bump može da pokvari) i
+    `vba_gate.py --require-green --require-compile`. Ostatak statike se ne
+    ponavlja — `release.sh` kreće od `main`-a koji je CI već izmerio, a bump dira
+    jednu string konstantu.
+
+    **Bump ulazi u otisak izvora**, pa marker napravljen pre bump-a ne važi — i
+    tako treba: testira se tačno ono što se isporučuje. Zato na padu kapije bump
+    **ostaje u radnom drvetu**, nekomitovan, a provera čistoće ga izričito
+    propušta. Da ga skripta vraćala, operater bi testirao drugi izvor. Ponovno
+    pokretanje je idempotentno.
+
+    **Tag je anotiran i nosi verdikt** (otisak izvora + stanje markera):
+    `git show <tag>` je provera koja se može uraditi kasnije, a rečenica u PR-u
+    nije. `--waive ponasanje|compile` postoji, ali **traži `--reason`**, i razlog
+    uz oznaku `WAIVED` ulazi u tag — waived release je zauvek obeležen.
+
+    `release.ps1` je sveden na **tanku ljusku** nad `.sh`. Druga kopija kapije bi
+    se razišla kao HARD/SOFT kopije u #274 — a njena divergencija znači tag bez
+    dokaza, što nijedna kapija ne bi videla. Skripta koja zaobilazi kapiju je
+    opasnija od skripte koje nema.
+
+    **Dokaz je u repou, ne u chatu:** `bash tools/dokaz_release.sh` (**18
+    tvrdnji, 7 s**, u CI-ju). Gradi izolovan repo sa lokalnim bare „origin"-om,
+    pa nijedna komanda ne dira pravi checkout; marker za pozitivan slučaj se piše
+    ručno preko `vba_gate` API-ja. Drugi smer: **5 sabotaža** nad `release.sh`
+    (kapija posle taga, vraćen bump, lagan tag, waiver bez razloga, ignorisan
+    `rc` od `vba_check`-a) obara ga **5/5**, svaka na svoju tvrdnju, potpis
+    skripte `136d119ffd6efe28` identičan posle svakog vraćanja.
+
+    Usput, i ovde je dvosmerni dokaz našao **moju** tvrdnju koja ne grize:
+    „pala statika obara release" je bila zelena jer je stub `vba_check`-a prljao
+    radno drvo — pa je kapija stajala na **proveri čistoće** i do statike nikad
+    nije stigla. Stub se sada commit-uje. Ista klasa greške kao placebo test.
+
+    **Šta ovo NE dokazuje:** da suite prolaze (to je `run_vba.py`) ni da compile
+    prolazi (ručna kapija operatera). Dokazuje da tag **ne može** da nastane bez
+    tih dokaza, i da može sa njima. Prvi stvarni release kroz novu kapiju je prvi
+    po operaterovom GO-u.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
@@ -546,7 +602,17 @@
   upis je **fail-closed**: ako se `src-vba`, ugovor ili sveska promene **tokom** run-a, prolaz može biti
   zelen a marker se ne upisuje — inače bi GREEN bio pripisan stanju koje Excel nikad nije video, a
   prolaz traje 20–60 min uz paralelan razvoj. Ne upisuje ni: pao run, `--no-import` run, `BLIND` suite
-  kao dokazanu, ni upis bez snimka konteksta.
+  kao dokazanu, ni upis bez snimka konteksta. Potvrde compile-a se pamte **po izvoru** (najnovijih
+  `MAX_POTVRDA_COMPILE = 20`): dok je `compile` bio jedan objekat, `--mark-compile` na drugoj grani je
+  gazio potvrdu prve i rad na dve grane je compile slao u ping-pong (#405/#406). Stari marker se
+  **migrira**, fail-closed — zapis bez upotrebljivog `izvor`-a nije potvrda ničega.
+- **Kapija pred tagom: `bash tools/release.sh <verzija>`** — tag **ne može** da nastane dok
+  `vba_gate --require-green --require-compile` ne dokaže da je baš taj `src-vba` (bump `APP_VERSION`-a
+  uključen) prošao suite i ručni compile. Ne pokreće Excel: proverava **marker**, pa je dovoljno jeftina
+  da stoji u skripti. Na padu ništa nije commit-ovano/tag-ovano/push-ovano, a bump ostaje u radnom
+  drvetu da se testira tačno ono što se isporučuje. Tag je **anotiran** i nosi verdikt; `--waive` traži
+  `--reason`, koji ulazi u tag. Dokaz: `bash tools/dokaz_release.sh` (18 tvrdnji, izolovan repo sa
+  lokalnim bare „origin"-om, bez Excela i bez mreže) — u CI-ju.
 - `vba_check` kapije nad **alatima** (katalog sabotaža, pravila grupisanja, popis suita) idu **ispred** izlaza
   `if not files: return 0` — hook sa putanjom koja nije VBA fajl ih je dotad preskakao, uključujući
   baš `tools/sabotaza.py`, gde se greška u katalogu i pravi.
