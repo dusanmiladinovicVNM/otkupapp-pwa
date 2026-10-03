@@ -171,6 +171,13 @@ Public Function StornoOtkup(ByVal otkupID As String, _
         NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO)), "Da"
 
     MarkRowStornirano TBL_OTKUP, rowOtkup, SRC
+
+    ' AMB-INV-08: dokument se vezuje TEK POSLE sto je OVA transakcija stvarno
+    ' promenila zaglavlje. Vezivanje iz ambalaznog primitiva bilo bi samopotvrda --
+    ' ledger-storno nije pisac izvornog dokumenta, pa je mogao da anulira efekat
+    ' AKTIVNOG otkupa i prodje sve kapije (review 03.10.2026, P1 #1). Zato je
+    ' modStorno.StornoOtkup na AMB_BIND_DOZVOLJENI, a primitiv nije.
+    tx.BindSourceDocument DOK_TIP_OTKUP, otkupID
     StornoAmbalazaByDokument otkupID, DOK_TIP_OTKUP
     StornoAmbalazaByDokument otkupID, DOK_TIP_OM_IZLAZ_KOOP   ' izdata ambalaza (OM->kooperant) uz otkup
 

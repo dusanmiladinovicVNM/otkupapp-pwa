@@ -433,6 +433,38 @@
     deficita izlazi **pre** `LogError`/`DOKUMENT_SAVE_FAIL`.
     **Neizmereno i tako prijavljeno:** sync auto-potvrda i `MsgBox` grana nemaju
     test.
+56. **Tri P1 u storno sloju** (03.10.2026, review `cac06c3c`).
+    Sva tri su u **storno sloju**, a glavni write put otkupa je prošao — pa je
+    nalaz da se cutover **ne nastavlja** na preostalih osam mesta dok storno
+    lifecycle ne legne jednom kako treba.
+    **P1 #1 — moja odbrana je falsifikovana.** `StornirajAmbalazuDokumenta` je sam
+    zvao `BindSourceDocument`, uz obrazloženje „nije samopotvrda jer kapija traži i
+    izvornu tabelu u snapshotu". Snapshot je **jeftin** i ne dokazuje da je dokument
+    promenjen: pozivalac je mogao da anulira ambalažni efekat **aktivnog** otkupa i
+    prođe sve kapije. Vezivanje je prešlo na kanonskog pisca zaglavlja
+    (`modStorno.StornoOtkup`: `MarkRowStornirano` → `bind` → primitiv), pa
+    `AMB_BIND_DOZVOLJENI` ponovo znači „pisci izvornog dokumenta". `tblAmbalazaDokument`
+    još nema kanonskog storno pisca, pa njegov ledger storno **namerno** pada
+    fail-closed.
+    **P1 #2 — kontra-stav je zaobilazio `AMB-INV-07`.** Ide direktno kroz
+    `UpisiRedKnjige`, a `AMB-INV-07` živi u `PrenesiAmbalazu`; proveravan je bio samo
+    `AMB-INV-09`. Storno dokumenta čija je ambalaža kasnije otišla dalje mogao je da
+    **commituje negativan fizički saldo** — stanje koje normalan pisac eksplicitno
+    zabranjuje. Provera sada ide nad **posle-stanjem**, nad svakim pogođenim realnim
+    nalogom; dva popisa naloga su spojena u **jedan** (`ZabeleziNalog`), a klasu bira
+    čitalac.
+    **P1 #3 — postojeći undo je postao kontradiktoran.** Žurnal je **ćelijski**, a
+    kontra-stav je **nov red** koji u njemu ne postoji — `UndoOperation_TX` je vraćao
+    zaglavlje u aktivno, a ambalažni efekat je ostajao anuliran (dokument aktivan sa
+    nula ambalaže). Odgovor je **fail-closed odbijanje** (`AMB-10-ODL-19`) u
+    `UndoGuardReasonZaOp`, koju gledaju i komanda i ekran oporavka. Brisanje
+    kontra-stavova i storno storna su **odbijeni jer krše važeći ugovor**; semantika
+    „vraćanja storna" nad append-only knjigom je **poslovna odluka** koja stoji
+    otvorena, vidljivo i sa razlogom.
+    Dokaz: `Test_Amb_StornoNePraviMinus` 6 tvrdnji (kroz **produkcioni**
+    `StornoOtkup_TX`, nad **nezasejanim** tipom — nad zasejanom stanicom se minus ne
+    može proizvesti) · `Test_Amb_UndoStornaOdbijenNadKnjigom` 6 · tri nove sabotaže.
+    Katalog 675 → 678.
     Sabotaža je **preimenovanje** tabele (`GetTable` vraća `Nothing` → 91), ne
     menjanje šeme; tri privremene tabele imaju **po dve kolone** jer `Value2` nad
     jednom ćelijom vraća skalar, a `RestoreTable` radi `UBound`. Tri sabotaže, po

@@ -1290,20 +1290,22 @@ ROLLBACK_RED_CASES = [
 #
 #   UpisiAmbDokument            -- dokument NASTAJE tu: AppendRow, provera
 #                                  rowIdx > 0, pa tek onda bind.
-#   StornirajAmbalazuDokumenta  -- dokument se tu MENJA (kontra-stavovi nad
-#                                  njegovim redovima). Vezivanje nije samopotvrda
-#                                  jer ista kapija (RequireAmbTxIzvorniDokument)
-#                                  trazi i IZVORNU TABELU tog dokumenta u
-#                                  snapshotu -- a to pozivalac mora stvarno da
-#                                  ispuni, ne da tvrdi.
 #   CreateOtkup                 -- otkup NASTAJE tu, i bind stoji TEK POSLE
-#                                  uspesnog AppendRow zaglavlja. Otkup je prvi
-#                                  presecen izvorni dokument (10b-2), pa je i
-#                                  prvi clan liste van modAmbalaza.
+#                                  uspesnog AppendRow zaglavlja.
+#   StornoOtkup                 -- otkup se tu MENJA (MarkRowStornirano), i bind
+#                                  stoji POSLE te izmene.
+#
+# NA LISTI SU PISCI IZVORNOG DOKUMENTA, NE LEDGER PRIMITIVI.
+# modAmbalaza.StornirajAmbalazuDokumenta je bio na listi i vezivao dokument sam.
+# Obrazlozenje je bilo da to nije samopotvrda jer kapija trazi i izvornu tabelu u
+# snapshotu -- i to je FALSIFIKOVANO (review 03.10.2026, P1 #1): snapshot je
+# jeftin i ne dokazuje da je dokument promenjen, pa je pozivalac mogao da anulira
+# ambalazni efekat AKTIVNOG otkupa i prodje sve kapije. Ledger-storno zato NE
+# vezuje; ako kanonski pisac nije vezao, primitiv pada fail-closed.
 AMB_BIND_DOZVOLJENI = {
     ("modAmbalaza", "UpisiAmbDokument"),
-    ("modAmbalaza", "StornirajAmbalazuDokumenta"),
     ("modOtkup", "CreateOtkup"),
+    ("modStorno", "StornoOtkup"),
 }
 _AMB_END = re.compile(r'^End\s+(?:Sub|Function|Property)\b', re.IGNORECASE)
 _BIND_POZIV = re.compile(r'\.\s*BindSourceDocument\b', re.IGNORECASE)

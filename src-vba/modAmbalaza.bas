@@ -1697,10 +1697,24 @@ Public Function StornirajAmbalazuDokumenta(ByVal tx As clsTransaction, _
 
     RequireKnjigaSchema SRC
 
-    ' Dokument se vezuje za OVU transakciju jer UpisiRedKnjige to trazi. To nije
-    ' samopotvrda: ista kapija zahteva i da IZVORNA TABELA dokumenta bude u
-    ' snapshotu ove transakcije, a to pozivalac mora stvarno da ispuni.
-    tx.BindSourceDocument dokTip, dokID
+    ' OVAJ PRIMITIV NE VEZUJE DOKUMENT, I TO JE SUSTINA KAPIJE.
+    '
+    ' Ranije je zvao BindSourceDocument sam, uz obrazlozenje da to nije
+    ' samopotvrda jer ista kapija trazi i izvornu tabelu u snapshotu. Ta odbrana
+    ' je falsifikovana (review 03.10.2026, P1 #1): snapshot je jeftin i ne
+    ' dokazuje da je dokument PROMENJEN. Pozivalac je mogao da snapshotuje
+    ' tblOtkup, anulira efekat AKTIVNOG otkupa i prodje sve kapije.
+    '
+    ' Ledger-storno NIJE pisac izvornog dokumenta. Vezivanje zato pripada
+    ' kanonskom piscu koji je zaglavlje stvarno promenio (modStorno.StornoOtkup:
+    ' MarkRowStornirano, pa bind, pa ovaj poziv). Ako nije vezao, ovde pada
+    ' fail-closed kroz RequireAmbTxIzvorniDokument -- sto je i jedini nacin da
+    ' AMB-INV-08 znaci "izvorni dokument je promenjen u istoj TX", a ne
+    ' "transakcija je rekla da ga poseduje".
+    '
+    ' Posledica: tblAmbalazaDokument (nabavka, revers) jos NEMA kanonskog
+    ' storno pisca, pa njegov ledger storno ovde pada -- namerno, dok taj pisac
+    ' ne nastane (10d).
 
     Dim data As Variant
     data = GetTableData(TBL_AMBALAZA)
@@ -1742,10 +1756,10 @@ Public Function StornirajAmbalazuDokumenta(ByVal tx As clsTransaction, _
     ' DRUGI PROLAZ: aktivni originali ovog dokumenta.
     Dim originali As Collection
     Set originali = New Collection
-    Dim partneri As Object
-    Set partneri = CreateObject("Scripting.Dictionary")
-    Dim klasaDuga As String
-    klasaDuga = modAmbalazaUgovor.AmbPokriceKlasa()
+    ' SVI nalozi koje kontra-stavovi dotice -- iz njih se posle mere DVE
+    ' invarijante: AMB-INV-07 nad realnim, AMB-INV-09 nad partnerskim.
+    Dim nalozi As Object
+    Set nalozi = CreateObject("Scripting.Dictionary")
 
     For i = 1 To UBound(data, 1)
         If RedDoticeKnjigu(data, i, kol) Then
@@ -1766,12 +1780,12 @@ Public Function StornirajAmbalazuDokumenta(ByVal tx As clsTransaction, _
                                             AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), _
                                             AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), _
                                             AmbText(data(i, cVK)))
-                        ZabeleziPartnera partneri, klasaDuga, _
-                                         AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), _
-                                         AmbText(data(i, cTipA))
-                        ZabeleziPartnera partneri, klasaDuga, _
-                                         AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), _
-                                         AmbText(data(i, cTipA))
+                        ZabeleziNalog nalozi, _
+                                      AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), _
+                                      AmbText(data(i, cTipA))
+                        ZabeleziNalog nalozi, _
+                                      AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), _
+                                      AmbText(data(i, cTipA))
                     End If
                 End If
             End If
@@ -1788,42 +1802,116 @@ Public Function StornirajAmbalazuDokumenta(ByVal tx As clsTransaction, _
                        Trim$(dokTip), Trim$(dokID), CStr(r(8)), CStr(r(0)), SRC
     Next r
 
-    ' AMB-INV-09 NAD POSLE-STANJEM -- zahtev koji je ovaj ulaz NASLEDIO od pisca
-    ' (PrenesiAmbalazu, VRACANJE_TUDJE): storno ULAZA tudje ambalaze cija je
-    ' obaveza vec zatvorena vracanjem daje NEGATIVNU obavezu. Takav storno se
-    ' odbija, a meri se POSTOJECIM citaocem nad upisanim stanjem -- ne drugom
-    ' kopijom pravila o znaku, koja bi se razisla sa prvom.
-    Dim k As Variant, ob As Double, pr As Variant
-    For Each k In partneri.Keys
-        pr = partneri(k)
-        ob = AmbObavezaPartneru(CStr(pr(0)), CStr(pr(1)), CStr(pr(2)))
-        If ob < 0 Then
-            Err.Raise AMB_ERR_STORNO, SRC, _
-                      "Storno bi ostavio obavezu " & CStr(ob) & " prema " & CStr(pr(0)) & _
-                      " '" & CStr(pr(1)) & "' za '" & CStr(pr(2)) & "' -- tudja " & _
-                      "ambalaza je vec vracena, pa se njen ulaz ne moze stornirati " & _
-                      "(AMB-INV-09)."
+    ' DVE INVARIJANTE NAD POSLE-STANJEM.
+    '
+    ' Kontra-stav ide direktno kroz UpisiRedKnjige, pa ZAOBILAZI sve sto stoji u
+    ' PrenesiAmbalazu -- a tamo zivi i AMB-INV-07. Bez ovih provera storno pise
+    ' stanje koje normalan pisac eksplicitno zabranjuje (review 03.10.2026, P1 #2):
+    '
+    '   otkup donese 20 na stanicu -> ta 20 odu dalje (saldo 0) -> storno otkupa
+    '   upise kontra-stav -20  =>  saldo -20, a INV-09 je uredan
+    '
+    ' Mere se POSTOJECIM citaocima nad upisanim stanjem, ne drugom kopijom pravila
+    ' o znaku -- druga kopija bi se razisla sa prvom.
+    Dim k As Variant, nl As Variant
+    Dim saldo As Double, ob As Double
+
+    ' AMB-INV-07: realan nalog ne sme da ostane u minusu. GRANICA (SpoljniSvet)
+    ' je izuzeta po konstrukciji -- ona nema fizicko stanje (6.3), pa nije u
+    ' klasi REALAN i petlja je i ne vidi.
+    For Each k In nalozi.Keys
+        nl = nalozi(k)
+        If modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_REALAN, CStr(nl(0))) Then
+            saldo = AmbSaldoNaloga(CStr(nl(0)), CStr(nl(1)), CStr(nl(2)))
+            If saldo < 0 Then
+                Err.Raise AMB_ERR_STORNO, SRC, _
+                          "AMB-INV-07: storno bi ostavio saldo " & CStr(saldo) & " na " & _
+                          CStr(nl(0)) & " '" & CStr(nl(1)) & "' za '" & CStr(nl(2)) & _
+                          "' -- ta ambalaza je posle ovog dokumenta otisla dalje, pa " & _
+                          "se dokument ne moze stornirati bez njenog vracanja."
+            End If
         End If
     Next k
+
+    ' AMB-INV-09: zahtev koji je ovaj ulaz NASLEDIO od pisca (PrenesiAmbalazu,
+    ' VRACANJE_TUDJE): storno ULAZA tudje ambalaze cija je obaveza vec zatvorena
+    ' vracanjem daje NEGATIVNU obavezu. Klasa duga se CITA iz matrice pokrica, jer
+    ' dug nastaje tacno tim dogadjajem -- AmbObavezaPartneru dize gresku za nalog
+    ' van te klase, pa se van nje i ne sme pitati.
+    Dim klasaDuga As String
+    klasaDuga = modAmbalazaUgovor.AmbPokriceKlasa()
+    If Len(klasaDuga) > 0 Then
+        For Each k In nalozi.Keys
+            nl = nalozi(k)
+            If modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, CStr(nl(0))) Then
+                ob = AmbObavezaPartneru(CStr(nl(0)), CStr(nl(1)), CStr(nl(2)))
+                If ob < 0 Then
+                    Err.Raise AMB_ERR_STORNO, SRC, _
+                              "Storno bi ostavio obavezu " & CStr(ob) & " prema " & _
+                              CStr(nl(0)) & " '" & CStr(nl(1)) & "' za '" & CStr(nl(2)) & _
+                              "' -- tudja ambalaza je vec vracena, pa se njen ulaz " & _
+                              "ne moze stornirati (AMB-INV-09)."
+                End If
+            End If
+        Next k
+    End If
 
     StornirajAmbalazuDokumenta = originali.count
 End Function
 
-' Partner cija se obaveza meri posle storna. Klasa se CITA iz matrice pokrica,
-' jer dug nastaje tacno tim dogadjajem -- AmbObavezaPartneru dize gresku za
-' nalog van te klase, pa se van nje i ne sme pitati.
-Private Sub ZabeleziPartnera(ByRef partneri As Object, ByVal klasaDuga As String, _
-                             ByVal tip As String, ByVal id As String, _
-                             ByVal tipAmb As String)
-    If Len(klasaDuga) = 0 Then Exit Sub
-    If Not modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, tip) Then Exit Sub
+' Nalog koji je kontra-stav dotakao. BEZ klasne kapije: jedan popis, a klasu
+' bira CITALAC -- INV-07 gleda REALAN, INV-09 klasu pokrica. Dva popisa bi se
+' razisla, a prazan popis bi tiho ugasio onu proveru koja ga nema.
+Private Sub ZabeleziNalog(ByRef nalozi As Object, _
+                          ByVal tip As String, ByVal id As String, _
+                          ByVal tipAmb As String)
+    If Len(Trim$(tip)) = 0 Then Exit Sub
 
     Dim kljuc As String
     kljuc = NalogKljuc(tip, id) & "|" & UCase$(Trim$(tipAmb))
-    If Not partneri.Exists(kljuc) Then
-        partneri.Add kljuc, Array(Trim$(tip), Trim$(id), Trim$(tipAmb))
+    If Not nalozi.Exists(kljuc) Then
+        nalozi.Add kljuc, Array(Trim$(tip), Trim$(id), Trim$(tipAmb))
     End If
 End Sub
+
+' IMA LI KNJIGA KONTRA-STAV ZA OVAJ DOKUMENT?
+'
+' Javno jer ga undo garda (modStornoZurnal.UndoGuardReasonZaOp) mora pitati, a
+' knjigu ne sme da cita sama -- oblik reda knjige nije njen posao.
+'
+' Trazi po DokumentID BEZ tipa: ID je globalno jedinstven (NewEntityID), pa tip
+' ne dodaje razlucivost, a izbegava se druga mapa tabela -> tip koja bi
+' zastarevala sa svakim presecenim dokumentom.
+Public Function AmbImaKontraStav(ByVal dokID As String) As Boolean
+    Const SRC As String = "modAmbalaza.AmbImaKontraStav"
+
+    If Len(Trim$(dokID)) = 0 Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cDokI As Long, cSt As Long
+    cDokI = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
+    cSt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD)
+    ' Zatecena sveska bez nove kolone nema ni kontra-stavova -- ali odgovor
+    ' "nema" bi tada bio pretpostavka. Sema je kanon, pa nedostatak kolone je
+    ' kvar, i tako se i dize.
+    If cDokI = 0 Then Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                                "tblAmbalaza nema " & COL_AMB_DOK_ID & "."
+    If cSt = 0 Then Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                              "tblAmbalaza nema " & COL_AMB_STORNO_OD & "."
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Len(AmbText(data(i, cSt))) > 0 Then
+            If StrComp(AmbText(data(i, cDokI)), Trim$(dokID), vbTextCompare) = 0 Then
+                AmbImaKontraStav = True
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
 
 ' ============================================================
 ' NABAVKA -- jedini put kojim NASE gajbe ulaze u opticaj

@@ -6854,8 +6854,8 @@ SABOTAZE = {
     # prolazi i ostavlja NEGATIVNU obavezu, koja izgleda kao normalno stanje.
     "amb-storno-posle-vracanja-prolazi": (
         "modAmbalaza.bas",
-        "        If ob < 0 Then\n",
-        "        If False Then   ' SABOTAZA: negativna obaveza posle storna je OK\n",
+        "                If ob < 0 Then\n",
+        "                If False Then   ' SABOTAZA: negativna obaveza je OK\n",
         "Test_Amb_StornoPosleVracanjaOdbijen",
         "STORNO: ulaz tudje ambalaze koja je vracena se NE stornira (AMB-INV-09)",
     ),
@@ -6886,6 +6886,34 @@ SABOTAZE = {
         "    ' SABOTAZA: storno otkupa ostaje na zastavici\n",
         "Test_OTK_StornoJednimID",
         "OTK storno: saldo stanice se vraca na stanje pre otkupa",
+    ),
+    # AMB-INV-07 se ne meri posle kontra-stava: storno dokumenta cija je
+    # ambalaza kasnije otisla dalje ostavi REALAN nalog u minusu, a to je stanje
+    # koje normalan pisac eksplicitno zabranjuje.
+    "amb-storno-bez-inv07": (
+        "modAmbalaza.bas",
+        "            If saldo < 0 Then\n",
+        "            If False Then   ' SABOTAZA: negativan fizicki saldo je OK\n",
+        "Test_Amb_StornoNePraviMinus",
+        "STORNO: dokument cija je ambalaza otisla dalje se NE stornira (AMB-INV-07)",
+    ),
+    # Ledger-storno ponovo vezuje dokument sam: tada AKTIVAN otkup moze da dobije
+    # anuliran ambalazni efekat bez ijedne izmene zaglavlja.
+    "amb-storno-primitiv-vezuje": (
+        "modStorno.bas",
+        "    tx.BindSourceDocument DOK_TIP_OTKUP, otkupID\n",
+        "    ' SABOTAZA: zaglavlje se ne vezuje za transakciju\n",
+        "Test_OTK_StornoJednimID",
+        "OTK storno: jedan poziv je dovoljan",
+    ),
+    # Undo prolazi preko kontra-stavova: zaglavlje postaje AKTIVNO, a ambalazni
+    # efekat ostaje anuliran -- dokument sa nula ambalaze.
+    "amb-undo-preko-kontrastava": (
+        "modStornoZurnal.bas",
+        "    raz = KontraStavRazlog(opID)\n",
+        "    raz = \"\"   ' SABOTAZA: kontra-stavovi ne blokiraju undo\n",
+        "Test_Amb_UndoStornaOdbijenNadKnjigom",
+        "UNDO: operacija sa kontra-stavom u knjizi se ODBIJA (AMB-10-ODL-19)",
     ),
     # Validator postoji, ali se ne zove iz pisca -- tacno placebo koji bi tablica
     # istinitosti pustila zelenu.

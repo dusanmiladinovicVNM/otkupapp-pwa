@@ -1326,18 +1326,86 @@ legne sama jer storno put **nema**; otkup, otpremnica i prijemnica ga imaju.
 > (`UpisiRedKnjige`), uz citaoca koji ga je vec imao (`KnjigaRedProblem`) — dve
 > kopije bi se razisle, a razlika bi se videla samo kao odbijen storno.
 
-**`BindSourceDocument` iz storna nije samopotvrda.** Ulaz vezuje dokument koji
-stornira, ali ista kapija (`RequireAmbTxIzvorniDokument`) trazi i **izvornu
-tabelu** tog dokumenta u snapshotu te transakcije — a to pozivalac mora stvarno
-da ispuni. Zato je `modAmbalaza.StornirajAmbalazuDokumenta` drugi clan
-`AMB_BIND_DOZVOLJENI` (`AMB-10-ODL-15`), i uz njega u `tools/vba_check.py` stoji
-**sta ga cini kanonskim** — lista bez tog obrazlozenja postaje spisak izuzetaka.
+**ISPRAVKA (review 03.10.2026, P1 #1): ulaz za storno NE vezuje dokument.**
+
+Prva verzija ga je vezivala sama, uz obrazloženje da to nije samopotvrda jer
+`RequireAmbTxIzvorniDokument` traži i **izvornu tabelu** u snapshotu. **Ta
+odbrana je falsifikovana:** snapshot je jeftin i ne dokazuje da je dokument
+**promenjen**. Pozivalac je mogao da napiše
+
+```
+tx.BeginTx
+tx.AddTableSnapshot tblOtkup       ← jeftino
+tx.AddTableSnapshot tblAmbalaza
+StornirajAmbalazuDokumenta tx, "Otkup", aktivniOtkupID
+tx.CommitTx
+```
+
+i dobiti **aktivan otkup sa anuliranim ambalažnim efektom**, uz sve kapije
+zelene — jer ga je ambalažni storno sam proglasio svojim.
+
+> **AMB-10-ODL-15 (preciznije).** `BindSourceDocument` sme da zove samo **pisac
+> izvornog dokumenta** — onaj koji ga u toj transakciji **stvarno menja** — i to
+> **posle** te izmene. Ledger-storno nije pisac izvornog dokumenta, pa ne vezuje:
+> `modStorno.StornoOtkup` radi `MarkRowStornirano`, pa `bind`, pa poziva
+> primitiv. Ako kanonski pisac nije vezao, primitiv pada **fail-closed**.
+>
+> Posledica koja se izgovara: `tblAmbalazaDokument` (nabavka, revers) **još nema
+> kanonskog storno pisca**, pa njegov ledger storno danas pada — namerno, dok taj
+> pisac ne nastane. Lista `AMB_BIND_DOZVOLJENI` time ponovo znači „pisci izvornog
+> dokumenta", a ne „ko sve dodiruje knjigu".
+
+**ISPRAVKA (P1 #2): `AMB-INV-07` se meri NAD POSLE-STANJEM.** Kontra-stav ide
+direktno kroz `UpisiRedKnjige`, pa **zaobilazi** sve što stoji u
+`PrenesiAmbalazu` — a tamo živi `AMB-INV-07`. Prva verzija je proveravala samo
+`AMB-INV-09`, pa je storno mogao da commituje stanje koje normalan pisac
+**eksplicitno zabranjuje**:
+
+```
+otkup donese 20 na stanicu          stanica +20
+ta 20 legitimno odu dalje           stanica   0
+storno otkupa -> kontra-stav -20    stanica -20     AMB-INV-09 uredan
+```
+
+Isto na `NABAVKA`: +100, potrošeno 80, storno nabavke → –80. Sada se posle svih
+kontra-stavova meri **svaki pogođeni realan nalog** (`SpoljniSvet` je izuzet po
+konstrukciji — nije u klasi `REALAN`), i negativan saldo obara ceo storno; vanjska
+transakcija vraća i kontra-stavove i storno zaglavlja.
+
+Oba popisa naloga su **jedan** popis (`ZabeleziNalog`), a klasu bira čitalac —
+dva popisa bi se razišla, a prazan bi tiše ugasio onu proveru koja ga nema.
+
+
+**ISPRAVKA (P1 #3): „vrati storno" se nad append-only knjigom ODBIJA.**
+
+`tblStornoZurnal` je **ćelijski**: undo vraća `(Tabela, RowID, Kolona)` na staru
+vrednost. Storno u novom modelu ne menja ćeliju nego **dodaje red**, a taj red
+nije u žurnalu — pa `UndoOperation_TX` vrati zaglavlje u **aktivno**, dok
+ambalažni efekat ostaje anuliran. Dokument aktivan sa nula ambalaže. Putanja je
+**postojeća**: `UndoStorno_TX` kad operacija postoji odmah delegira tamo.
+
+> **AMB-10-ODL-19.** Undo operacije koja je proizvela **kontra-stav u knjizi**
+> odbija se **fail-closed**, dok se ne definise koji poslovni događaj je
+> „vraćanje storna" nad append-only knjigom.
+>
+> Dve očigledne zakrpe su **odbijene jer krše važeći ugovor**: brisanje
+> kontra-stavova (knjiga je nepromenljiva, 6.8) i storno storna (najviše jedan
+> direktan storno). Odluka o semantici je **poslovna**, ne tehnička, i do nje
+> sposobnost stoji — vidljivo, sa razlogom, a ne tiše pokvarena.
+>
+> Kapija stoji u `UndoGuardReasonZaOp`, koju gledaju **i** komanda **i** ekran
+> oporavka — pa operater vidi razlog, ne samo odbijenicu. Pita se za **svaki
+> `RowID` operacije**, bez grananja po tipu dokumenta: ista garda tako važi i za
+> preostalih osam mesta knjiženja. `RowID` koji nije dokument nema kontra-stav,
+> pa ne daje lažnu odbijenicu.
 
 *Provera:* `Test_Amb_StornoKontraStavVracaSaldo` 9 tvrdnji ·
-`Test_Amb_StornoPosleVracanjaOdbijen` 5 tvrdnji · sabotaze
+`Test_Amb_StornoPosleVracanjaOdbijen` 5 · `Test_Amb_StornoNePraviMinus` 6 ·
+`Test_Amb_UndoStornaOdbijenNadKnjigom` 6 · sabotaže
 `amb-storno-ne-upisuje-kontrastav`, `amb-kontrastav-provera-u-istom-smeru`,
-`amb-storno-udvaja`, `amb-storno-posle-vracanja-prolazi` — svaka sa svojom
-prvom tvrdnjom.
+`amb-storno-udvaja`, `amb-storno-posle-vracanja-prolazi`,
+`amb-storno-bez-inv07`, `amb-storno-primitiv-vezuje`,
+`amb-undo-preko-kontrastava` — svaka sa svojom prvom tvrdnjom.
 
 ### 6.12e Otkup — prvo presečeno mesto knjiženja
 

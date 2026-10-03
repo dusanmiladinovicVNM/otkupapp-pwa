@@ -312,6 +312,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_Amb_NabavkaOtvaraIzdavanje
     Test_Amb_StornoKontraStavVracaSaldo
     Test_Amb_StornoPosleVracanjaOdbijen
+    Test_Amb_StornoNePraviMinus
+    Test_Amb_UndoStornaOdbijenNadKnjigom
     Test_Amb_JedanProtivpartnerPoDokumentu
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
@@ -17285,6 +17287,150 @@ EH:
     Set tx = Nothing
     On Error GoTo 0
     LogFatal "Test_Amb_StornoPosleVracanjaOdbijen", errNum, errDesc
+End Sub
+
+' AMB-INV-07 NAD KONTRA-STAVOM: dokument cija je ambalaza otisla dalje se ne
+' stornira.
+'
+' Kontra-stav ide direktno kroz UpisiRedKnjige, pa zaobilazi sve sto stoji u
+' PrenesiAmbalazu -- a tamo zivi AMB-INV-07. Bez provere nad posle-stanjem storno
+' commituje stanje koje normalan pisac eksplicitno zabranjuje.
+'
+' Ide kroz PRODUKCIONI ulaz StornoOtkup_TX, ne kroz primitiv: nalaz je bio da
+' bas ta putanja moze da commituje minus.
+'
+' Tip je TEST_TIP_AMB_C (nezasejan): zasejana stanica ima desetine hiljada gajbi,
+' pa se minus nad njom ne moze proizvesti. Dreniranje ide Stanica -> druga Stanica
+' (PRENOS_INTERNO) a ne ka partneru, jer bi partnerska noga dirala AMB-INV-09 --
+' storno bi tada pao i sa ugasenom INV-07, pa sabotaza ne bi nista merila.
+Private Sub Test_Amb_StornoNePraviMinus()
+    Dim scenario As String
+    Dim tx As clsTransaction
+    Dim h As Object
+    Dim otkID As String, dokPrenos As String
+    Dim deficit As Double
+    Dim stPosleOtkupa As Double, stPosleDrena As Double, stNaKraju As Double
+    Dim pukao As Boolean
+    Dim kontra As Long, zastavica As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("STMIN")
+
+    ' --- otkup donese 20 gajbi na stanicu (kooperant ih nema, pa ide potvrda)
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-MIN-" & scenario)
+    h("TipAmbalaze") = TEST_TIP_AMB_C
+
+    Dim stavke As Collection
+    Set stavke = OtkStavke(400#, 50#, 20, 0#, 0#, 0)
+    deficit = modOtkup.OtkupDeficitKooperanta(h, stavke)
+
+    Dim greska As String, errN As Long
+    otkID = CreateOtkup_TX(h, stavke, greska, deficit, errN)
+
+    stPosleOtkupa = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, _
+                                               TEST_TIP_AMB_C)
+
+    ' --- te gajbe legitimno odu dalje, na drugu stanicu
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokPrenos = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "MIN-" & scenario, _
+                                             Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    modAmbalaza.PrenesiAmbalazu tx, Date, TEST_TIP_AMB_C, 20#, _
+                AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_NALOG_STANICA, TEST_HLAD_ST_ID, _
+                AMB_VK_PRENOS_INTERNO, DOK_TIP_AMBALAZA_DOKUMENT, dokPrenos
+    tx.CommitTx
+    Set tx = Nothing
+
+    stPosleDrena = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, _
+                                              TEST_TIP_AMB_C)
+
+    ' --- storno otkupa bi stanicu odveo u minus
+    pukao = Not StornoOtkup_TX(otkID)
+
+    stNaKraju = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, _
+                                           TEST_TIP_AMB_C)
+    kontra = AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)
+    zastavica = OtkPolje(otkID, COL_STORNIRANO)
+
+    AssertTrue Len(otkID) > 0, "STORNO minus: polazni otkup je upisan"
+    AssertTrue Abs((stPosleOtkupa - stPosleDrena) - 20#) < 0.001, _
+               "STORNO minus: scenario je stvarno odveo gajbe dalje"
+    AssertTrue pukao, _
+               "STORNO: dokument cija je ambalaza otisla dalje se NE stornira (AMB-INV-07)"
+    AssertTrue Abs(stNaKraju - stPosleDrena) < 0.001, _
+               "STORNO minus: odbijen storno ne menja saldo"
+    AssertEquals "0", CStr(kontra), _
+                 "STORNO minus: odbijen storno ne ostavlja kontra-stav"
+    AssertTrue zastavica <> "Da", _
+               "STORNO minus: izvorni dokument ostaje AKTIVAN posle rollback-a"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal "Test_Amb_StornoNePraviMinus", errNum, errDesc
+End Sub
+
+' UNDO NAD APPEND-ONLY KNJIGOM SE ODBIJA (AMB-10-ODL-19).
+'
+' Zurnal je CELIJSKI, a kontra-stav je NOV RED koji u njemu ne postoji. Undo bi
+' vratio zaglavlje u aktivno stanje, a ambalazni efekat bi ostao anuliran --
+' dokument aktivan sa nula ambalaze. Putanja je POSTOJECA lossless undo
+' (UndoStorno_TX delegira ovamo kad operacija postoji), pa je ovo regresija a ne
+' hipoteza.
+'
+' Tvrdnja ide i nad RAZLOGOM, ne samo nad ishodom: ekran oporavka prikazuje bas
+' taj tekst, pa odbijenica bez razloga operateru ne znaci nista.
+Private Sub Test_Amb_UndoStornaOdbijenNadKnjigom()
+    Dim scenario As String
+    Dim h As Object
+    Dim otkID As String, brDok As String, opID As String
+    Dim razlog As String
+    Dim undoProsao As Boolean
+    Dim kontraPre As Long, kontraPosle As Long
+    Dim zastavica As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("UNDKS")
+
+    brDok = TEST_PREFIX & "-OTK-UK-" & scenario
+    Set h = OtkHeader(brDok)
+    h.Add "KolAmbIzdata", 7#
+    otkID = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+
+    AssertTrue StornoOtkup_TX(otkID), "UNDO: polazni storno je prosao"
+    kontraPre = AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)
+
+    opID = modStornoZurnal.LatestOpFor(DOK_TIP_OTKUP, brDok)
+    razlog = modStornoZurnal.UndoGuardReasonZaOp(opID, DOK_TIP_OTKUP, brDok)
+    undoProsao = modStornoZurnal.UndoOperation_TX(opID)
+
+    kontraPosle = AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)
+    zastavica = OtkPolje(otkID, COL_STORNIRANO)
+
+    AssertTrue Len(opID) > 0, "UNDO: operacija storna je nadjena u zurnalu"
+    AssertEquals "2", CStr(kontraPre), "UNDO: storno je upisao oba kontra-stava"
+    AssertFalse undoProsao, _
+                "UNDO: operacija sa kontra-stavom u knjizi se ODBIJA (AMB-10-ODL-19)"
+    AssertTrue InStr(1, razlog, "AMB-10-ODL-19") > 0, _
+               "UNDO: odbijenica imenuje razlog, jer je ekran oporavka prikazuje: [" & _
+               razlog & "]"
+    AssertEquals "Da", zastavica, _
+                 "UNDO: odbijen undo ostavlja dokument STORNIRAN"
+    AssertEquals CStr(kontraPre), CStr(kontraPosle), _
+                 "UNDO: odbijen undo ne dira knjigu"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_UndoStornaOdbijenNadKnjigom", Err.Number, Err.description
 End Sub
 
 ' NABAVKA: jedini put kojim NASE gajbe ulaze u opticaj.

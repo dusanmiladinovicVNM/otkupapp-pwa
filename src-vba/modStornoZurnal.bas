@@ -99,6 +99,68 @@ Public Sub JournalCell(ByVal tbl As String, ByVal rowID As String, ByVal col As 
     mNextZur = mNextZur + 1
 End Sub
 
+' KONTRA-STAVOVI SE NE MOGU VRATITI CELIJAMA (AMB-10-ODL-19).
+'
+' Zurnal je CELIJSKI: undo vraca (Tabela, RowID, Kolona) na staru vrednost.
+' Storno u novom modelu knjige ne menja celiju nego DODAJE kontra-stav, i taj
+' red nije u zurnalu -- pa undo vrati zaglavlje u AKTIVNO, a ambalazni efekat
+' ostaje anuliran. Dokument bi bio aktivan sa nula ambalaze: tiha
+' kontradikcija, i to na POSTOJECOJ lossless undo putanji (review 03.10.2026,
+' P1 #3). Legacy UndoStorno_TX ne spasava stvar jer kad operacija postoji on
+' odmah delegira ovamo.
+'
+' Dok se ne definise KOJI POSLOVNI DOGADJAJ je "vracanje storna" nad
+' append-only knjigom, undo se ODBIJA. Dve ocigledne zakrpe su odbijene jer
+' krse vazeci ugovor: brisanje kontra-stavova (knjiga je nepromenljiva) i
+' storno storna (najvise jedan direktan storno).
+'
+' Pita se za SVAKI RowID operacije, bez obzira na tip dokumenta: tako ista
+' garda vazi i za preostalih osam mesta knjizenja, bez dodavanja po jednog
+' slucaja. RowID koji nije dokument (npr. AmbID legacy zastavice) nema
+' kontra-stav, pa ne daje laznu odbijenicu.
+Private Function KontraStavRazlog(ByVal opID As String) As String
+    Const SRC As String = MOD_NAME & ".KontraStavRazlog"
+
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_STORNO_ZURNAL)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cOp As Long, cRow As Long
+    cOp = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_OP_ID)
+    cRow = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_ROWID)
+    If cOp = 0 Or cRow = 0 Then Err.Raise ERR_SZ_BASE + 16, SRC, _
+                                         "Zurnal sema nije kompletna (OperationID/RowID)."
+
+    Dim vidjeni As Object
+    Set vidjeni = CreateObject("Scripting.Dictionary")
+    vidjeni.CompareMode = vbTextCompare
+
+    Dim i As Long, rid As String
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cOp))) = Trim$(opID) Then
+            rid = Trim$(CStr(data(i, cRow)))
+            If Len(rid) > 0 And Not vidjeni.Exists(rid) Then
+                vidjeni.Add rid, True
+                If modAmbalaza.AmbImaKontraStav(rid) Then
+                    KontraStavRazlog = "Storno dokumenta " & rid & " je u knjizi " & _
+                        "ambalaze upisan kao KONTRA-STAV, a knjiga je append-only. " & _
+                        "Undo bi vratio zaglavlje u aktivno stanje, a ambalazni " & _
+                        "efekat bi ostao anuliran -- zato je odbijen (AMB-10-ODL-19)."
+                    Exit Function
+                End If
+            End If
+        End If
+    Next i
+    Exit Function
+
+EH:
+    LogErr SRC
+    KontraStavRazlog = "Greska pri proveri kontra-stavova -> undo odbijen " & _
+                       "(fail-closed)."
+End Function
+
 ' ============================================================
 ' UNDO - pravi inverz jedne operacije.
 ' ============================================================
@@ -209,6 +271,15 @@ Public Function UndoGuardReasonZaOp(ByVal opID As String, ByVal docType As Strin
                                     ByVal broj As String) As String
     Dim rid As String, raz As String
     On Error GoTo EH
+
+    ' Kontra-stavovi se ne mogu vratiti celijama -- gleda se PRVO, jer vazi za
+    ' svaki tip dokumenta.
+    raz = KontraStavRazlog(opID)
+    If Len(raz) > 0 Then
+        UndoGuardReasonZaOp = raz
+        Exit Function
+    End If
+
     If Not ReversTipJe(docType) Then
         UndoGuardReasonZaOp = UndoGuardReason(docType, broj)
         Exit Function
