@@ -7607,6 +7607,7 @@ Private Sub T_TxRollback_NepotpunZatvaraUpisISnimanje()
     Dim nepotpun As Boolean, nevracene As String
     Dim snimioPre As Boolean, snimioPosle As Boolean, snimioPosleReseta As Boolean
     Dim upisOdbijen As Boolean, upisErr As String
+    Dim cistoPreSnimanja As Boolean
 
     On Error GoTo EH
 
@@ -7671,15 +7672,28 @@ Private Sub T_TxRollback_NepotpunZatvaraUpisISnimanje()
     On Error GoTo EH
     snimioPosle = ThisWorkbook.Saved
 
-    ' --- smer 2: marker nije trajna smrt sveske. Reset ovde stoji za reload.
+    ' --- smer 2: marker nije trajna smrt sveske.
+    '
+    ' CISCENJE IDE PRE OVOG SAVE-a, ne posle. Obrnut redosled je bio pravi kvar
+    ' u ovom testu: resetovao bi branu i onda STVARNO snimio svesku u kojoj jos
+    ' stoje _TestTxRollback list i preimenovana TST_RB_B_SAKRIVENA. Pod run_vba
+    ' to ne boli (radi nad temp kopijom), ali RunAllTests je VBA entrypoint --
+    ' pokrenut rucno u razvojnoj svesci upisao bi testni state na disk, pa ga
+    ' obrisao samo iz memorije.
+    '
+    ' Reset ovde stoji za RELOAD, a reload znaci cist workbook. Zato se smer
+    ' "opet snimljivo" meri nad cistim stanjem, i to se TVRDI (cistoPreSnimanja),
+    ' ne ostavlja komentaru -- da se redosled vrati, ta tvrdnja pada.
+    ws.ListObjects("TST_RB_B_SAKRIVENA").name = "TST_RB_B"
+    preimenovana = False
+    TxRbObrisiList SHEET_IME
+    cistoPreSnimanja = Not TxRbListPostoji(SHEET_IME)
+
     modTxState.TxKompromisTestReset
     ThisWorkbook.Saved = False
     ThisWorkbook.Save
     snimioPosleReseta = ThisWorkbook.Saved
 
-    ws.ListObjects("TST_RB_B_SAKRIVENA").name = "TST_RB_B"
-    preimenovana = False
-    TxRbObrisiList SHEET_IME
     Application.EnableEvents = origEvents
 
     ' --- 1. petlja NIJE stala na B -- vracene su i ona pre i ona posle pada
@@ -7708,6 +7722,9 @@ Private Sub T_TxRollback_NepotpunZatvaraUpisISnimanje()
              "odbijenica mora da IMENUJE razlog: [" & upisErr & "]"
     AssertEq snimioPosle, False, _
              "posle nepotpunog rollback-a Save (Ctrl+S put) mora biti ODBIJEN"
+    AssertEq cistoPreSnimanja, True, _
+             "pred zavrsnim Save-om workbook mora biti CIST -- nijedan test " & _
+             "artefakt ne sme da ode na disk"
     AssertEq snimioPosleReseta, True, _
              "posle reload-a sveska mora opet biti snimljiva"
     Exit Sub
@@ -7757,6 +7774,16 @@ Private Sub TxRbNapraviTabelu(ws As Worksheet, ByVal ime As String, _
         ws.Range(ws.Cells(1, prvaKolona), ws.Cells(2, prvaKolona + 1)), , xlYes)
     lo.name = ime
 End Sub
+
+' Postoji li list. Potreban je da bi "cisto pred Save-om" bila TVRDNJA, a ne
+' posledica redosleda koji neko kasnije sme da promeni.
+Private Function TxRbListPostoji(ByVal imeLista As String) As Boolean
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(imeLista)
+    On Error GoTo 0
+    TxRbListPostoji = Not (ws Is Nothing)
+End Function
 
 Private Sub TxRbObrisiList(ByVal imeLista As String)
     Dim ws As Worksheet
