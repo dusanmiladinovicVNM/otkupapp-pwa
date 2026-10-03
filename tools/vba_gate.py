@@ -86,6 +86,27 @@ ima svoj upis: `--mark-compile` vezuje tu potvrdu za OTISAK. Potvrda data nad
 jednim izvorom time prestaje da vazi za sledeci -- a bas to se vec desilo, kao P3
 u review-u PR #400 ("compile evidence stale").
 
+POTVRDE COMPILE-A SE PAMTE PO IZVORU, kao i rezultati suita. Do 03.10.2026 je
+`compile` bio JEDAN objekat, pa je `--mark-compile` nad drugim izvorom gazio
+potvrdu prvog. Izmereno na #405/#406: operater je kompajlirao oba izvora
+(`bc84a7d4168e` i `71678f7cff47`), marker je zadrzao samo zadnji, i
+`--require-compile` za #406 je posle toga bio rc=2. Kapija to nije lagala
+(prijavljivala je DRUGI IZVOR, dakle nema laznog zelenog) -- gubio se zabelezen
+rad, a rad na dve grane je compile slao u ping-pong.
+
+    STARI MARKER SE MIGRIRA, NE ODBACUJE. `MARKER_VERZIJA` se ovde namerno NE
+    bumpuje: migracija je bez gubitka i ne slabi tvrdnju -- stari zapis je
+    potvrdjivao tacno jedan izvor i posle migracije potvrdjuje tacno taj isti.
+    Nijedan dokaz se ne dobija, pa nema sta da se obori. (Dokazi SUITA ovu
+    izmenu ionako ne prezive: `vba_gate.py` je `kapija` deo ugovora, pa promena
+    ovog fajla obara svaki zapisan GREEN sama -- v. `UGOVOR_FAJLOVI`. Compile
+    prezivi jer kljuca samo na izvor, i to je cela poenta razdvajanja.)
+
+    BROJ POTVRDA JE OGRANICEN (`MAX_POTVRDA_COMPILE`). Recnik kljucan hesom
+    izvora raste neograniceno -- jedan unos po svakom ikad kompajliranom izvoru,
+    u fajlu koji niko ne gleda. Drzi se najnovijih; najstarije ispadaju. Granica
+    je velicina jednog release ciklusa sa nekoliko paralelnih grana, ne arhiva.
+
 ZASTO NORMALIZACIJA PRELOMA
     `.gitattributes` danas drzi `eol=crlf` nad celim `src-vba/`, pa bi i sirov
     hash bajtova bio stabilan -- ali samo dok ta linija stoji i dok se ne pojavi
@@ -127,7 +148,15 @@ MARKER = os.path.join(ROOT, "tests", "last_green.json")
 # napravljene pod slabijim. Zato verzija ulazi i u otisak ugovora.
 # 4: upis je od tada fail-closed nad snimkom konteksta uzetim PRE run-a.
 # Marker verzije 3 je mogao nastati bez te provere, pa mu se ne veruje.
+#
+# Prelazak `compile`-a na recnik po izvoru NIJE bumpovao verziju: migracija je
+# bez gubitka i ne priznaje nista novo (v. docstring). Verzija se bumpuje kad
+# stari zapis moze da zadovolji STROZE pravilo, a ovde ne moze.
 MARKER_VERZIJA = 4
+
+# Koliko potvrda compile-a marker drzi. V. docstring: kljuc je hes izvora, pa bi
+# bez granice recnik rastao jedan unos po svakom ikad kompajliranom izvoru.
+MAX_POTVRDA_COMPILE = 20
 
 # Delovi TEST-UGOVORA koji zive van src-vba, IMENOVANI -- da nalaz kaze koji se
 # deo promenio, a ne samo "nesto".
@@ -714,22 +743,72 @@ def zabelezi_prolaz(report: dict, rc: int, no_import: bool = False,
                ", ".join(imena) or "nijedna"))
 
 
+def potvrde_compile(marker: dict) -> dict:
+    """Potvrde compile-a iz markera, PO IZVORU -- jedan oblik za ostatak koda.
+
+    Stari marker (do 03.10.2026) nosi `compile` kao JEDAN objekat sa poljem
+    `izvor`. Migrira se u recnik `{izvor: zapis}`, jer je kljuc hes izvora
+    (64 hex znaka) pa se sa imenom polja `izvor` ne moze pomesati.
+
+    Migracija je FAIL-CLOSED: zapis bez upotrebljivog `izvor`-a nije potvrda
+    nicega, pa se odbacuje. Da se propusti kao kljuc `None` ili `""`, jedan
+    takav zapis bi se poklopio sa otiskom praznog `src-vba` (`otisak_izvora`
+    vraca "" kad foldera nema) i tiho potvrdio izvor koji nikad nije kompajliran.
+    """
+    c = (marker or {}).get("compile") or {}
+    if not isinstance(c, dict):
+        return {}
+    stari = c.get("izvor")
+    if isinstance(stari, str):              # stari oblik: jedan objekat
+        return {stari: dict(c)} if stari else {}
+    return {k: v for k, v in c.items() if isinstance(v, dict)}
+
+
+def _skrati_potvrde(potvrde: dict) -> dict:
+    """Zadrzi najnovijih `MAX_POTVRDA_COMPILE`. Kljuc sortiranja je (kada, izvor).
+
+    `izvor` je u kljucu zato sto `kada` ima rezoluciju sekunde: dve potvrde u
+    istoj sekundi bi inace ispadale po slucajnom redosledu recnika, pa bi i
+    pravilo i njegov dokaz zavisili od rasporeda.
+    """
+    if len(potvrde) <= MAX_POTVRDA_COMPILE:
+        return potvrde
+    red = sorted(potvrde.items(),
+                 key=lambda kv: (kv[1].get("kada") or "", kv[0]))
+    return dict(red[-MAX_POTVRDA_COMPILE:])
+
+
 def zabelezi_compile(put: str = MARKER, src_dir: str = SRC_VBA) -> str:
     """Operater je potvrdio `Debug > Compile` nad OVIM IZVOROM.
 
     Vezuje se SAMO za izvor, ne za test-ugovor: compile ne zna za golden fajlove
     ni za runner, pa ne sme da izgubi potvrdu zato sto se jedan golden promenio.
     Zato i ne brise rezultate suita -- oni nose svoje otiske.
+
+    Ne brise ni POTVRDE DRUGIH IZVORA: potvrda je zapis o radu koji je operater
+    stvarno uradio, i gubila se samo zato sto je stajala na jednom mestu. Rad na
+    dve grane je zbog toga compile slao u ping-pong (v. docstring).
     """
     otisak = otisak_izvora(src_dir)
+    if not otisak:
+        # Prazan otisak znaci "nema src-vba" (v. `otisak_izvora`), a ne "izvor
+        # bez sadrzaja". Zapisan kao kljuc, poklopio bi se sa svakim sledecim
+        # pozivom nad istim nedostajucim folderom -- potvrda nad nicim.
+        return ("compile NIJE zabelezen: %s ne daje otisak (nema src-vba?)"
+                % src_dir)
     podaci = procitaj_marker(put)
     if not podaci or podaci.get("verzija") != MARKER_VERZIJA:
         podaci = {"verzija": MARKER_VERZIJA, "suites": {}}
-    podaci["compile"] = {"izvor": otisak,
-                         "kada": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                         "git": _git_glava()}
+    potvrde = potvrde_compile(podaci)
+    potvrde[otisak] = {"izvor": otisak,
+                       "kada": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                       "git": _git_glava()}
+    podaci["compile"] = _skrati_potvrde(potvrde)
     upisi_marker(podaci, put)
-    return "compile potvrdjen nad izvorom %s" % otisak[:12]
+    ostale = len(podaci["compile"]) - 1
+    return ("compile potvrdjen nad izvorom %s%s"
+            % (otisak[:12],
+               "" if ostale <= 0 else " (+%d zapamcenih potvrda)" % ostale))
 
 
 def zahtevaj_zeleno(trazene: list = None, suites: dict = None,
@@ -787,14 +866,19 @@ def zahtevaj_zeleno(trazene: list = None, suites: dict = None,
                           % (ime, _razlika_sveske(z.get("sveska"), trazena),
                              trazena["ime"]))
     if trazi_compile:
-        c = marker.get("compile") or {}
-        if not c:
-            nalazi.append("compile nije potvrdjen nad ovim izvorom "
-                          "(`--mark-compile` posle Debug > Compile VBAProject)")
-        elif c.get("izvor") != delovi["izvor"]:
-            nalazi.append("compile je potvrdjen nad DRUGIM izvorom (%s, sada %s)"
-                          % ((c.get("izvor") or "?")[:12],
-                             delovi["izvor"][:12]))
+        potvrde = potvrde_compile(marker)
+        if delovi["izvor"] not in potvrde:
+            poruka = ("compile nije potvrdjen nad ovim izvorom (%s) "
+                      "-- `--mark-compile` posle Debug > Compile VBAProject"
+                      % delovi["izvor"][:12])
+            if potvrde:
+                # Imenuj zapamcene potvrde: nalaz time kaze "kompajliran je
+                # DRUGI izvor", a ne samo "nije potvrdjeno". Prethodna verzija
+                # je pamtila jednu potvrdu, pa je ovo bio jedini moguci oblik
+                # nalaza; sada je dodatak, i potvrda prvog izvora ostaje.
+                poruka += ("; potvrda postoji nad DRUGIM izvorom (%s)"
+                           % ", ".join(sorted(i[:12] for i in potvrde)))
+            nalazi.append(poruka)
     return nalazi
 
 
@@ -820,12 +904,21 @@ def stanje_redovi(suites: dict = None, put: str = MARKER,
         redovi.append("marker:  verzija %s, trazi se %s -- stari upis ne vazi"
                       % (marker.get("verzija"), MARKER_VERZIJA))
         return redovi
-    c = marker.get("compile") or {}
+    # Potvrda OVOG izvora je odgovor na pitanje; ostale idu uz nju kao kontekst,
+    # jer rad na dve grane sada ostavlja oba zapisa (v. docstring).
+    potvrde = potvrde_compile(marker)
+    moja = potvrde.get(delovi["izvor"])
     redovi.append("compile: %s" % (
-        "nije potvrdjen" if not c else
-        "potvrdjen %s nad %s%s" % (c.get("kada"), (c.get("izvor") or "?")[:12],
-                                   "" if c.get("izvor") == delovi["izvor"]
-                                   else "  <-- DRUGI IZVOR")))
+        "potvrdjen %s nad %s" % (moja.get("kada"), delovi["izvor"][:12])
+        if moja else "nije potvrdjen nad ovim izvorom (%s)"
+        % delovi["izvor"][:12]))
+    for izvor, z in sorted(potvrde.items(),
+                           key=lambda kv: (kv[1].get("kada") or "", kv[0]),
+                           reverse=True):
+        if izvor == delovi["izvor"]:
+            continue
+        redovi.append("         %s nad %s  <-- DRUGI IZVOR"
+                      % (z.get("kada"), izvor[:12]))
     zapisane = marker.get("suites") or {}
     trazene = set(potrebne_suite(suites))
     for ime in sorted(set(zapisane) | trazene):
@@ -1345,6 +1438,120 @@ def _self_test(tiho: bool = False) -> int:
               "SVESKA: putanja se uzima iz temp kopije umesto iz izvora")
         tvrdi(ks["otisak"] == _hash_sirov(kopija),
               "SVESKA: sadrzaj se ne cita iz temp kopije koju Excel otvara")
+
+        # --- COMPILE PO IZVORU --------------------------------------------
+        #
+        # Nalaz od 03.10.2026 (#405/#406): `marker["compile"]` je bio JEDAN
+        # objekat, pa je `--mark-compile` nad drugom granom gazio potvrdu prve.
+        # Kapija to nije lagala, ali se zabelezen rad gubio.
+        #
+        # Blok je IZOLOVAN -- svoj koren, svoj izvor, svoj marker. Gore se meri
+        # lanac u kome je potvrda tacno jedna; ovde se namerno gomilaju, pa bi
+        # deljenje markera jedno od dva merenja ucinilo nemerljivim.
+        ckoren = os.path.join(tmp, "compile")
+        os.makedirs(os.path.join(ckoren, "tools"), exist_ok=True)
+        os.makedirs(os.path.join(ckoren, "tests", "golden"), exist_ok=True)
+        os.makedirs(os.path.join(ckoren, "tests", "fixtures"), exist_ok=True)
+        csrc = _lazni_izvor(ckoren, {
+            "modA.bas": "Public Sub RunASuite()\r\nEnd Sub\r\n"})
+        cput = os.path.join(ckoren, "tests", "last_green.json")
+        CIST_A = "Public Sub RunASuite()\r\nEnd Sub\r\n"
+
+        def cmark():
+            return zabelezi_compile(put=cput, src_dir=csrc)
+
+        def cnalazi():
+            # `trazene=[]`: ovde se meri SAMO compile osa. Suite dokazi imaju
+            # svoj lanac gore i ne smeju da ulaze u ove nalaze.
+            return zahtevaj_zeleno(trazene=[], suites=SUITES,
+                                   trazi_compile=True, put=cput,
+                                   src_dir=csrc, koren=ckoren)
+
+        def cizmeni(tekst):
+            with io.open(os.path.join(csrc, "modA.bas"), "a",
+                         newline="") as fh:
+                fh.write(tekst)
+
+        cmark()
+        izvor_a = otisak_izvora(csrc)
+        tvrdi(not cnalazi(), "COMPILE: potvrda nad ovim izvorom se ne priznaje")
+
+        cizmeni("' grana B\r\n")
+        poruke = cnalazi()
+        tvrdi(any("nije potvrdjen" in n for n in poruke),
+              "COMPILE: potvrda izvora A vazi i za izvor B")
+        tvrdi(any("DRUGIM izvorom" in n and izvor_a[:12] in n for n in poruke),
+              "COMPILE: nalaz ne imenuje izvor nad kojim potvrda POSTOJI")
+
+        cmark()                                  # operater kompajlirao i B
+        tvrdi(not cnalazi(), "COMPILE: potvrda izvora B se ne priznaje")
+
+        # JEDRO NALAZA: vracanje na granu A. Dok je compile bio jedan objekat,
+        # potvrda B je pregazila A -- pa je bas ovde bilo rc=2, i compile je
+        # izmedju dve grane isao u ping-pong.
+        with io.open(os.path.join(csrc, "modA.bas"), "w", newline="") as fh:
+            fh.write(CIST_A)
+        tvrdi(otisak_izvora(csrc) == izvor_a,
+              "COMPILE: vracen izvor ne daje isti otisak (merenje je neispravno)")
+        tvrdi(not cnalazi(),
+              "COMPILE: potvrda drugog izvora BRISE potvrdu prvog (ping-pong)")
+
+        # STARI OBLIK MARKERA. Migrira se, i to bez sirenja: potvrdjuje tacno
+        # onaj izvor koji je i nosio, nijedan drugi.
+        stari = {"izvor": izvor_a, "kada": "2026-10-01T10:00:00",
+                 "git": "deadbee"}
+        podaci = procitaj_marker(cput)
+        podaci["compile"] = dict(stari)
+        upisi_marker(podaci, cput)
+        tvrdi(potvrde_compile(podaci) == {izvor_a: stari},
+              "MIGRACIJA: stari oblik se ne prevodi u recnik po izvoru")
+        tvrdi(not cnalazi(), "MIGRACIJA: stari oblik gubi potvrdu svog izvora")
+        cizmeni("' posle migracije\r\n")
+        tvrdi(any("nije potvrdjen" in n for n in cnalazi()),
+              "MIGRACIJA: stari oblik potvrdjuje i DRUGI izvor")
+        with io.open(os.path.join(csrc, "modA.bas"), "w", newline="") as fh:
+            fh.write(CIST_A)
+
+        # Migracija je FAIL-CLOSED. Prazan ili nedostajuci `izvor` bi se kao
+        # kljuc poklopio sa otiskom nedostajuceg `src-vba` ("" iz
+        # `otisak_izvora`), pa bi potvrdio izvor koji nikad nije kompajliran.
+        for los in ({"izvor": None}, {"izvor": ""}, {"kada": "x"},
+                    "nije recnik", []):
+            tvrdi(potvrde_compile({"compile": los}) == {},
+                  "MIGRACIJA: zapis %r postaje potvrda" % (los,))
+
+        # Ni UPIS ne sme da zapise prazan otisak kao kljuc -- citanje i pisanje
+        # moraju da budu zatvoreni na istoj osi.
+        tvrdi("NIJE zabelezen" in zabelezi_compile(
+                  put=cput, src_dir=os.path.join(tmp, "nema-src")),
+              "COMPILE: potvrda se belezi i kad izvor ne daje otisak")
+        tvrdi("" not in potvrde_compile(procitaj_marker(cput)),
+              "COMPILE: prazan otisak je upisan kao kljuc potvrde")
+
+        # GRANICA. Kljuc je hes izvora, pa bi recnik rastao jedan unos po svakom
+        # ikad kompajliranom izvoru -- u fajlu koji niko ne gleda.
+        podaci = procitaj_marker(cput)
+        podaci["compile"] = {
+            ("%064x" % i): {"izvor": "%064x" % i,
+                            "kada": "2026-01-%02dT00:00:00" % (i + 1)}
+            for i in range(MAX_POTVRDA_COMPILE + 5)}
+        upisi_marker(podaci, cput)
+        cmark()
+        posle = potvrde_compile(procitaj_marker(cput))
+        tvrdi(len(posle) == MAX_POTVRDA_COMPILE,
+              "GRANICA: broj potvrda nije ogranicen (%d)" % len(posle))
+        tvrdi(otisak_izvora(csrc) in posle,
+              "GRANICA: skracivanje izbacuje bas NAJNOVIJU potvrdu")
+        tvrdi(("%064x" % 0) not in posle,
+              "GRANICA: skracivanje izbacuje najnovije umesto najstarijih")
+
+        # `--status` mora da PRIKAZE i potvrde drugih izvora: bez njih operater
+        # ne vidi da je rad zapamcen, pa ga ponavlja.
+        redovi = "\n".join(stanje_redovi(SUITES, cput, csrc, ckoren))
+        tvrdi("DRUGI IZVOR" in redovi,
+              "STATUS: potvrde drugih izvora se ne prikazuju")
+        tvrdi(otisak_izvora(csrc)[:12] in redovi,
+              "STATUS: potvrda OVOG izvora se ne prikazuje")
 
         # --- potrebne_suite -----------------------------------------------
         tvrdi(potrebne_suite(SUITES) == ["RunAllTests"],

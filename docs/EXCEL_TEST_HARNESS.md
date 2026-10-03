@@ -321,6 +321,23 @@ izričita oznaka namere, ne kao jedina brana.
 Razdvojeni su od `izvor`-a zato što **compile pripada samo izvoru**: `Debug > Compile`
 ne zna za golden fajlove, pa potvrda ne sme da propadne zato što se jedan promenio.
 
+**Potvrde compile-a se pamte po izvoru, ne jedna.** Do 03.10.2026 je `compile` bio
+jedan objekat, pa je `--mark-compile` nad drugim izvorom gazio potvrdu prvog —
+rad na dve grane je compile slao u ping-pong (izmereno na #405/#406). Kapija to
+nije lagala, prijavljivala je `DRUGI IZVOR`; gubio se zabeležen rad. Sada:
+
+- `--status` pokazuje potvrdu **ovog** izvora, a potvrde ostalih uz nju kao
+  kontekst (`<-- DRUGI IZVOR`) — da operater vidi da je rad zapamćen;
+- marker drži najnovijih `MAX_POTVRDA_COMPILE` (20); ključ je heš izvora, pa bi
+  bez granice rastao jedan unos po svakom ikad kompajliranom izvoru;
+- stari marker se **migrira**, ne odbacuje — `MARKER_VERZIJA` ostaje `4`, jer
+  migracija ne priznaje ništa novo (stari oblik je potvrđivao tačno jedan izvor
+  i posle migracije potvrđuje tačno taj isti). Zapis bez upotrebljivog `izvor`-a
+  nije potvrda ničega, a `--mark-compile` bez otiska ne zapisuje ništa.
+
+Dokazi **suita** ovu izmenu ne preživljavaju, i tako treba: `vba_gate.py` je
+`kapija` deo ugovora, pa njegova promena obara svaki zapisan `GREEN` sama.
+
 **Kontekst se snima PRE run-a, i upis je fail-closed.** Otisci računati na kraju
 opisuju stanje diska **posle** testova, a ne ono što je testirano — a prolaz traje
 20–60 minuta i razvoj ide paralelno, pa je prozor stvaran:

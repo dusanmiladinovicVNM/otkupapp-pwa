@@ -450,6 +450,48 @@
     `RunAllTests` puštena nad ovim izvorom, pun prolaz ide pred release.
     **Compile ostaje ručna kapija operatera** (`--mark-compile`).
 
+54. **`vba_gate` pamti potvrdu compile-a PO IZVORU** (03.10.2026).
+
+    Dug zapisan istog dana je i zatvoren. `marker["compile"]` je bio **jedan
+    objekat**, pa je `--mark-compile` nad drugim izvorom gazio potvrdu prvog:
+    operater je na #405/#406 kompajlirao oba (`bc84a7d4168e`, `71678f7cff47`),
+    marker je zadržao samo zadnji, i `--require-compile` za #406 je posle toga
+    bio `rc=2`. Kapija pritom **nije lagala** — prijavljivala je `DRUGI IZVOR`,
+    dakle nema lažnog zelenog; gubio se **zabeležen rad**, pa je compile između
+    dve grane išao u ping-pong.
+
+    Sada je `compile` rečnik `{izvor: zapis}`, kao `suites`.
+
+    **`MARKER_VERZIJA` se namerno NE bumpuje.** Stari zapis se **migrira**
+    (`potvrde_compile`), a ne odbacuje: migracija je bez gubitka i ne priznaje
+    ništa novo — stari oblik je potvrđivao tačno jedan izvor i posle migracije
+    potvrđuje tačno taj isti. Verzija se bumpuje kad stari zapis može da
+    zadovolji **strože** pravilo; ovde ne može. Dokazi **suita** ovu izmenu
+    ionako ne preživljavaju: `vba_gate.py` je `kapija` deo ugovora, pa promena
+    ovog fajla obara svaki zapisan `GREEN` **sama**. Compile preživi jer ključa
+    samo na `izvor` — to je i cela poenta razdvajanja te dve ose.
+
+    Migracija je **fail-closed**: zapis bez upotrebljivog `izvor`-a nije potvrda
+    ničega. Prazan ključ bi se poklopio sa otiskom nedostajućeg `src-vba`
+    (`otisak_izvora` vraća `""` kad foldera nema) i tiho potvrdio izvor koji
+    nikad nije kompajliran — pa je **i upis** zatvoren na istoj osi
+    (`--mark-compile` bez otiska ne zapisuje ništa i to kaže).
+
+    Broj potvrda je **ograničen** (`MAX_POTVRDA_COMPILE = 20`, najstarije
+    ispadaju): rečnik ključan hešom bi inače rastao jedan unos po svakom ikad
+    kompajliranom izvoru, u gitignored fajlu koji niko ne gleda. `--status`
+    prikazuje potvrdu ovog izvora, a potvrde ostalih uz nju kao kontekst — bez
+    njih operater ne vidi da je rad zapamćen, pa ga ponavlja.
+
+    **Dokaz, bez Excela:** 9 pravila ugašeno jedno po jedno → `--self-test`
+    crven **baš sa svojim nalazom**, 9/9, potpis alata `567bdcc08cbca7fb`
+    identičan posle svakog vraćanja. Prva sabotaža je bukvalno **zatečeni bug**
+    (jedan objekat umesto rečnika) i ruši tvrdnju „potvrda drugog izvora BRIŠE
+    potvrdu prvog (ping-pong)". Živo mereno nad pravim `src-vba` u dve kopije:
+    posle `--mark-compile` nad A i nad B, `--require-compile` je **`rc=0` za
+    oba** — pre ispravke je za A bio `rc=2`. 13/13 jeftinih kapija `rc=0`.
+    `src-vba` nije dirnut (otisak `075c45f5f5153da2` pre i posle).
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
@@ -463,7 +505,7 @@
 | `.claude/rules/testovi.md` ne zna za JS kapiju | **samo process PR**, nikad uz feature izmenu |
 | Node 20 deprecation u tri GitHub akcije | process PR |
 | `popis_citalaca` javlja UPOZORENJE za `IzvedeniLanacIzPwaDostupan` | kapija ne postoji od #388 — očekivanje alata je zastarelo |
-| **`vba_gate` pamti JEDAN compile, a više suita** | `marker["suites"]` je rečnik i svaka suita nosi svoj `izvor`, a `marker["compile"]` je **jedan objekat** — pa `--mark-compile` na drugoj grani pregazi potvrdu prve. Nađeno 03.10.2026 na #405/#406: operater je kompajlirao oba izvora, a marker je zadržao samo zadnji. Kapija to **tačno prijavljuje** (`<-- DRUGI IZVOR`), pa nema lažnog zelenog — ali rad na dve grane šalje compile u ping-pong. Ispravka je `compile` po `izvor`-u, kao `suites`; menja `kapija` deo ugovora, pa traži svoj dvosmerni dokaz i obara ZELENO suita (ne i compile, koji ključa samo na `izvor`). **Zaseban process PR**, ne uz feature rez |
+| **`.claude/rules/testovi.md` ne zna za `vba_gate`** | pravilo i dalje kaže da je katalog `SUITES` jedini izvor istine o suite-ovima, a od #402 postoji i registar `SUITE_VAN_KAPIJA`; marker zelenog i `--require-green` u pravilu ne postoje. **Samo process PR**, nikad uz feature izmenu |
 
 
 ## Alati i kapije
