@@ -16974,15 +16974,22 @@ Private Sub Test_Amb_DokumentUgovor()
                "ODL-10: obican REVERS ne sme da nosi kupac -> vozac"
     ' Obrnuta kapija pokriva SVAKI povrat od kupca, ne samo kupac -> vozac:
     ' prva verzija je trazila ceo par, pa su ova dva prolazila na NASEM reversu.
-    AssertTrue Len(modAmbalazaUgovor.AmbDokKretanjeProblem( _
+    '
+    ' TVRDNJA IMENUJE ODLUKU, NE SAMO ODBIJANJE. Blok povratOdKupca ima DVE
+    ' posledice: naTip <> Vozac daje ODL-9, a inace pada na ODL-10 (vrsta mora
+    ' biti REVERS_PARTNERA). Dok je tvrdnja bila "Len(...) > 0", gasenje prvog
+    ' pravila nije obaralo nista -- drugi sloj je i dalje odbijao slucaj, pa je
+    ' sabotaza amb-odl9-povrat-od-kupca-ide-svuda javljala NE OBARA NISTA
+    ' (prvi prolaz dokaza, 04.10.2026).
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
                    AMB_DOK_REVERS, AMB_NALOG_FIRMA, "", _
                    AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_FIRMA, _
-                   AMB_VK_POVRAT_PRAZNE)) > 0, _
+                   AMB_VK_POVRAT_PRAZNE), "AMB-10-ODL-9") > 0, _
                "ODL-9: obican REVERS ne sme da nosi kupac -> firma"
-    AssertTrue Len(modAmbalazaUgovor.AmbDokKretanjeProblem( _
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
                    AMB_DOK_REVERS, AMB_NALOG_STANICA, TEST_ST_ID, _
                    AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_STANICA, _
-                   AMB_VK_POVRAT_PRAZNE)) > 0, _
+                   AMB_VK_POVRAT_PRAZNE), "AMB-10-ODL-9") > 0, _
                "ODL-9: obican REVERS ne sme da nosi kupac -> stanica"
     ' Obrnuta kapija ne sme da bude presiroka: kooperant -> stanica je NAS
     ' revers i mora da prolazi (danasnji PRIJEM smer).
@@ -17504,7 +17511,8 @@ Private Sub Test_Amb_NabavkaOtvaraIzdavanje()
     Dim dokNab As String, dokNab2 As String, dokRev As String
     Dim saldoPre As Double, saldoPosle As Double
     Dim brojNab As String, brojNab2 As String
-    Dim pukloBezNabavke As Boolean, opisBez As String
+    Dim opisBez As String
+    Dim errBezNabavke As Long
     Dim pukloNula As Boolean
     Dim presloPosle As Boolean
     Dim errNum As Long, errDesc As String
@@ -17525,7 +17533,7 @@ Private Sub Test_Amb_NabavkaOtvaraIzdavanje()
     modAmbalaza.PrenesiAmbalazu tx, Date, TEST_TIP_AMB, saldoPre + 1#, _
                 AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
                 AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev
-    pukloBezNabavke = (Err.Number <> 0)
+    errBezNabavke = Err.Number
     opisBez = Err.description
     Err.Clear
     On Error GoTo EH
@@ -17560,8 +17568,13 @@ Private Sub Test_Amb_NabavkaOtvaraIzdavanje()
     Err.Clear
     On Error GoTo EH
 
-    AssertTrue pukloBezNabavke, _
-               "NABAVKA: stanica NE SME da izda vise gajbi nego sto ima"
+    ' TVRDNJA GLEDA BROJ GRESKE, ne "nesto je palo". Sa ugasenom klasnom kapijom
+    ' manjak stanice postane PITANJE POTVRDE (AMB_ERR_POTVRDA_DEFICITA) umesto
+    ' tvrdog odbijanja -- pa je sabotaza amb-nabavka-stanica-sme-u-minus obarala
+    ' druge tvrdnje a ne svoju. AMB-10-ODL-8: manjak SOPSTVENOG naloga se NE
+    ' pokriva, dakle ishod je NEPOKRIV, a ne pitanje.
+    AssertEquals CStr(AMB_ERR_DEFICIT_NEPOKRIV), CStr(errBezNabavke), _
+                 "NABAVKA: stanica NE SME da izda vise gajbi nego sto ima"
     AssertTrue InStr(1, opisBez, "NABAVKA") > 0, _
                "NABAVKA: odbijenica mora da imenuje PUT (nabavku), ne samo " & _
                "manjak: [" & opisBez & "]"
@@ -17620,7 +17633,7 @@ Private Sub Test_Amb_Inv08TxVlasnistvo()
     Dim dokP As String, pukloPar As Boolean, opisPar As String
     Dim pukloIzvorTbl As Boolean, opisIzvorTbl As String
     Dim opisKnjiga As String, opisZaglavlje As String
-    Dim imaPosle As Boolean
+    Dim imaPosle As Boolean, pukloImaPosle As Boolean
     Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
@@ -17653,7 +17666,13 @@ Private Sub Test_Amb_Inv08TxVlasnistvo()
     On Error GoTo EH
 
     txA.RollbackTx
+    ' Poziv se HVATA: sa ugasenim kapijama ImaSnapshot pada na Nothing, a
+    ' nehvatan pad bi bio LogFatal -- tvrdnja se tada ne bi ni izgovorila.
+    On Error Resume Next
     imaPosle = txA.ImaSnapshot(TBL_AMBALAZA_DOKUMENT)
+    pukloImaPosle = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
     Set txA = Nothing
 
     ' --- txB: ima KNJIGU, nema ZAGLAVLJE
@@ -17767,7 +17786,11 @@ Private Sub Test_Amb_Inv08TxVlasnistvo()
     AssertTrue InStr(1, opisZaglavlje, "AmbalazaDokument") > 0, _
                "AMB-INV-08: odbijenica zaglavlja imenuje SVOJU tabelu: [" & _
                opisZaglavlje & "]"
-    AssertTrue Not imaPosle, _
+    ' FAIL-CLOSED ZNACI I "BEZ GRESKE". ImaSnapshot ima dve kapije (mActive,
+    ' mSnapshots Is Nothing), a CleanUp gasi OBE -- pa uklanjanje jedne ne menja
+    ' ishod i sabotaza je javljala NE OBARA NISTA. Sabotaza sada uklanja OBE, a
+    ' poziv tada pada na Nothing: tvrdnja mora da meri i da GRESKE NEMA.
+    AssertTrue (Not imaPosle) And (Not pukloImaPosle), _
                "ImaSnapshot je fail-closed: posle rollback-a nema snapshota"
 
     ' --- TACKA 3: vlasnistvo DOKUMENTA, ne samo pokrivenost tabele

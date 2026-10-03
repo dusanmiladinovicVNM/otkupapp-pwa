@@ -6750,7 +6750,7 @@ SABOTAZE = {
         "clsTransaction.cls",
         "    If Not mActive Then Exit Function\n"
         "    If mSnapshots Is Nothing Then Exit Function\n",
-        "    If mSnapshots Is Nothing Then Exit Function   ' SABOTAZA: mActive se ne gleda\n",
+        "    ' SABOTAZA: ImaSnapshot bez ijedne fail-closed kapije\n",
         "Test_Amb_Inv08TxVlasnistvo",
         "ImaSnapshot je fail-closed: posle rollback-a nema snapshota",
     ),
