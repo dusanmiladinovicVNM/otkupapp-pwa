@@ -427,10 +427,28 @@
     meri **ishod kroz prave seam-ove**: `BeginTx` diže `UPIS ZATVOREN`, a
     `ThisWorkbook.Save` ostavlja `Saved = False`. Oba smera: i da PRE kompromisa
     Save prolazi, i da POSLE reset-a (= reload) opet prolazi.
-    **Dokaz je PLANIRAN, ne izmeren:** `dokaz.py` i `run_vba.py` čekaju reviewer GO
-    (v. `skupe-kapije-cekaju-reviewer-go`). Statički: 19/19 kapija `rc=0`, katalog
-    649 → **654**, a `vba_gate --require-green` tačno javlja `rc=2` — izvor je
-    promenjen, pa nijedna suite nije dokazana nad njim.
+    **Četvrti krug review-a je našao rupu u DOKAZNOM modelu, ne u kodu:** poruka se
+    u dva EH bloka (`modAgroUnos`) računala **pre** `tx.RollbackTx`, pa je marker
+    tada još bio prazan i parcijalan rollback je i dalje vraćao „promene vraćene" —
+    a kapija je bila **zelena**, jer je merila *prisustvo* wrappera, ne *redosled*.
+    Zato je dodato `ROLLBACK_TVRDNJA_RED` (u proceduri koja sama poseduje `tx`,
+    wrapper mora stajati posle zadnjeg `.RollbackTx`), a `Err` se čuva pre
+    rollback-a. Mereno po proceduri nad celim izvorom: **tačno 2** takva mesta;
+    7 u `modBankaMapiranje` je bilo ispravno, a 11 (`modScrDokumenti`,
+    `modScrBankaUvoz`) ne poseduje `tx` pa im je rollback završen unutra.
+    Usput: dokaz nivoa „da li se self-test uopšte vrti" otkrio je da je zbir
+    slučajeva **ručno** održavan i nije uključio dve nove liste — `--self-test` je
+    javljao 130 i posle dodavanja 12 slučajeva. Ispravljen na **142**, ali broj se
+    više ne uzima na reč nego se dokazuje padom (v. [[broj-tvrdnji-je-merenje]]).
+    **Dokaz je IZMEREN**, na exact head-u `783b7946`:
+    `RunAllTests` **200/0 ZELENO** · `dokaz.py rollback` **6/6 DOKAZANO** (potpis
+    izvora `935f070a003272e0` identičan pre i posle) ·
+    `vba_gate --require-green --suite RunAllTests` **rc=0**
+    (`izvor bc84a7d4168e, ugovor 9c3f30001038`) · 19/19 jeftinih kapija `rc=0`
+    · 142 self-test slučaja · katalog 649 → **655**.
+    `--require-green` **bez** `--suite` je `rc=2` i to je tačno: samo je
+    `RunAllTests` puštena nad ovim izvorom, pun prolaz ide pred release.
+    **Compile ostaje ručna kapija operatera** (`--mark-compile`).
 
 ## Dug sa imenom (posle S5-5b)
 

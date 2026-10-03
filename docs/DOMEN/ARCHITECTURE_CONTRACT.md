@@ -362,11 +362,27 @@ disku stoji stanje pre transakcije), i **fail-closed** je bezbedan ovde jer nema
 nesnimljivom bez izlaza iz aplikacije — šteta koju `ImportNijeDovrsen` izričito
 odbija da napravi. Marker se **ne briše** iz produkcionog koda.
 
-*Provera:* `T_TxRollback_NepotpunZatvaraUpisISnimanje` + **pet** sabotaža
+**Poruka o ishodu ide kroz jedno mesto, i POSLE rollback-a.** EH put ne sme da
+tvrdi „promene vraćene" dok ne zna ishod: posle nepotpunog rollback-a to je
+netačno, a operater iz te poruke zaključi da može da ponovi unos. Tekst ide kroz
+`modTxState.PorukaIshodaRollbacka`, koja čita **globalnu** branu — i to je tačno,
+ne približno, jer je `BeginTx` fail-closed pa marker može biti postavljen samo
+transakcijom koja se upravo odmotava.
+
+Prolazak kroz wrapper **nije** isto što i prolazak posle rollback-a: dva EH bloka
+u `modAgroUnos` su računala poruku pre `tx.RollbackTx`, pa je marker tada još bio
+prazan. `Err` se zato čuva **pre** rollback-a (rollback menja `Err` kontekst), a
+poruka računa **posle** njega.
+
+*Provera:* `T_TxRollback_NepotpunZatvaraUpisISnimanje` + **šest** sabotaža
 (`rollback-petlja-staje-na-padu`, `rollback-cleanup-samo-kad-prodje`,
 `rollback-nepotpun-nevidljiv`, `rollback-upis-ostaje-dozvoljen`,
-`rollback-save-ostaje-dozvoljen`) — po jedna na svaku posledicu i na svaku od
-dve brane koje test meri kroz pravi seam.
+`rollback-save-ostaje-dozvoljen`, `rollback-poruka-tvrdi-vraceno`) — po jedna na
+svaku posledicu, na svaku od dve brane koje test meri kroz pravi seam, i na
+poruku. Statički: `vba_check` pravila **`ROLLBACK_TVRDNJA`** (tekst ide kroz
+wrapper; ključevi se čitaju iz `modPoruke`, ne hardkoduju) i
+**`ROLLBACK_TVRDNJA_RED`** (u proceduri koja sama poseduje `tx`, wrapper stoji
+posle zadnjeg `.RollbackTx`).
 
 **Oblik poziva ne sme da menja ishod.** `AppendRow` je funkcija i pola koda je
 zove kao funkciju (`newRow = AppendRow(TBL_ZBIRNA, rowData)`), pola kao naredbu
