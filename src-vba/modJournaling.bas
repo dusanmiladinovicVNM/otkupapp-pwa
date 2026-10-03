@@ -699,6 +699,19 @@ Public Sub AutoSaveAfterCommit(ByVal sourceName As String, _
                 "Source=" & sourceName
         GoTo CleanExit
     End If
+
+    ' Nepotpun rollback -- jedna ili vise tabela nisu vracene, pa bi Save
+    ' zabetonirao parcijalno stanje. Ista logika kao kapija iznad, druga steta:
+    ' tamo nepotpun VBA projekat, ovde nekonzistentni PODACI. Vlasnik markera:
+    ' modTxState (postavlja clsTransaction.RollbackTx).
+    If Not modTxState.SnimanjeDozvoljeno() Then
+        LogWarn "AutoSaveAfterCommit", _
+                "ROLLBACK NEPOTPUN -- AutoSave preskocen da ne bi snimio " & _
+                "parcijalno vracen podatak. Nevracene: " & _
+                modTxState.NevraceneTabeleSesije() & _
+                ". Zatvori BEZ snimanja i otvori ponovo. Source=" & sourceName
+        GoTo CleanExit
+    End If
     
     If Len(Trim$(ThisWorkbook.path)) = 0 Then
         LogWarn "AutoSaveAfterCommit", _
@@ -789,6 +802,16 @@ Public Sub MarkDirtyAndSchedule(ByVal sourceName As String)
     On Error Resume Next
 
     If m_TestModeQuiet Then Exit Sub            ' test-mode: ne zakazuj AutoSave
+
+    ' Kapija u AutoSaveAfterCommit nije dovoljna: bez ove bi OnTime ostao
+    ' ZAKAZAN i opalio 60s kasnije, pa bi se zakazivanje i odbijanje vrtelo u
+    ' krug na svaki commit. Marker se ne brise sam -- izlaz je reload.
+    If Not modTxState.SnimanjeDozvoljeno() Then
+        LogWarn "MarkDirtyAndSchedule", _
+                "ROLLBACK NEPOTPUN -- AutoSave se NE zakazuje. Source=" & _
+                sourceName
+        Exit Sub
+    End If
 
     Dim delaySec As Long
     delaySec = AUTOSAVE_IDLE_SECONDS               ' uvek 60s posle poslednje aktivnosti

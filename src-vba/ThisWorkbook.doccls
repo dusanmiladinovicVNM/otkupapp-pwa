@@ -100,6 +100,20 @@ Private Sub Workbook_BeforeSave(ByVal SaveAsUI As Boolean, Cancel As Boolean)
             MsgBox Poruka("APP_MSG_IMPORT_PREKINUT_NE_SNIMAM"), vbExclamation, APP_NAME
         End If
     End If
+
+    ' Druga steta, isti put: posle nepotpunog rollback-a podaci u memoriji mogu
+    ' biti nekonzistentni, a Ctrl+S / File > Save / .Save iz VBA ne prolaze kroz
+    ' nijednu drugu kapiju. Vlasnik markera: modTxState.
+    If Not modTxState.SnimanjeDozvoljeno() Then
+        Cancel = True
+        LogError "ThisWorkbook.Workbook_BeforeSave", _
+                 "Save ODBIJEN: rollback nije bio potpun, nevracene: " & _
+                 modTxState.NevraceneTabeleSesije(), 0, "WARN"
+        If Not IsTestMode() Then
+            MsgBox Poruka("APP_MSG_ROLLBACK_NEPOTPUN_NE_SNIMAM") & vbCrLf & _
+                   modTxState.NevraceneTabeleSesije(), vbCritical, APP_NAME
+        End If
+    End If
     Exit Sub
 EH:
     LogErr "ThisWorkbook.Workbook_BeforeSave"

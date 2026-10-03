@@ -27,6 +27,18 @@ Private mNevracene As String
 Public Sub BeginTx()
     If mActive Then Err.Raise 5, , "Transaction already active."
 
+    ' Nepotpun rollback NIJE nova normalna transakcija. Dok ova sesija zna da
+    ' jedna snapshot-ovana tabela nije vracena, nov upis bi pisao PREKO
+    ' nekonzistentnog stanja -- i prvi sledeci commit bi ga zakazao za Save.
+    ' Jedini izlaz je zatvaranje bez snimanja i ponovno otvaranje: na disku
+    ' stoji stanje pre te transakcije, jer je Save zatvoren (modTxState).
+    If Not modTxState.UpisDozvoljen() Then
+        Err.Raise vbObjectError + 2700, "clsTransaction.BeginTx", _
+                  "UPIS ZATVOREN: prethodni rollback nije bio potpun (" & _
+                  modTxState.NevraceneTabeleSesije() & _
+                  "). Zatvorite aplikaciju BEZ snimanja i otvorite je ponovo."
+    End If
+
     Set mSnapshots = CreateObject("Scripting.Dictionary")
     mActive = True
     mNevracene = ""
@@ -127,7 +139,14 @@ Public Sub RollbackTx()
     CleanUp
     mActive = False
 
-    If Len(mNevracene) > 0 Then PrijaviNepotpunRollback prvaGreska
+    ' Granica bezbednosti je GLOBALNA, ne na ovom objektu: tx nestane kad
+    ' pozivalac izadje iz procedure, a nekonzistentno stanje ostaje. modTxState
+    ' zatvara upis i snimanje do reload-a; property-ji ispod ostaju za
+    ' pozivaoca koji zeli detalj odmah, ali oni nisu brana.
+    If Len(mNevracene) > 0 Then
+        modTxState.OznaciNepotpunRollback mNevracene, prvaGreska
+        PrijaviNepotpunRollback prvaGreska
+    End If
 End Sub
 
 ' Nepotpun rollback je cinjenica koju pozivalac mora moci da PROCITA -- signal

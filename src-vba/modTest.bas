@@ -766,7 +766,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 113: TestName = "T_Zbirna_NemaIspravku"
         Case 43: TestName = "T_Traka_NatpisiPoRezimu"
         Case 38: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
-        Case 200: TestName = "T_TxRollback_NepotpunVracaOstale"
+        Case 200: TestName = "T_TxRollback_NepotpunZatvaraUpisISnimanje"
         Case 199: TestName = "T_ZbirnaRadniSto_BiraSvojNacrt"
         Case 198: TestName = "T_ZbirnaKlik_OtvaraSvojDokument"
         Case 197: TestName = "T_Otp_OpsegIOznake"
@@ -974,7 +974,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 113: T_Zbirna_NemaIspravku
         Case 43: T_Traka_NatpisiPoRezimu
         Case 38: T_ZbirnaForma_KlasaOstajeBezCene
-        Case 200: T_TxRollback_NepotpunVracaOstale
+        Case 200: T_TxRollback_NepotpunZatvaraUpisISnimanje
         Case 199: T_ZbirnaRadniSto_BiraSvojNacrt
         Case 198: T_ZbirnaKlik_OtvaraSvojDokument
         Case 197: T_Otp_OpsegIOznake
@@ -7572,10 +7572,16 @@ EH:
 End Sub
 
 
-' Rollback je i sam operacija koja moze da padne. Ovaj test meri sta se desi
-' kad padne na SREDNJOJ od tri snapshot-ovane tabele. Do izmene u
-' clsTransaction prva greska je prekidala petlju, pa su treca tabela i
-' Application state ostajali nedirnuti -- i nista to nije prijavljivalo.
+' Rollback je i sam operacija koja moze da padne. Ovaj test meri sta se desi kad
+' padne na SREDNJOJ od tri snapshot-ovane tabele -- i, vaznije, sta sistem sme
+' POSLE toga.
+'
+' Prva verzija ovog testa je tvrdila da "tx.BeginTx posle nepotpunog rollback-a
+' prolazi". To je bila pogresna acceptance odluka: sistem se vracao u PUNO
+' operativan rezim dok zna da jedna tabela nije vracena, pa je sledeci commit
+' zakazivao AutoSave, a ZatvoriAplikaciju radio Close SaveChanges:=True --
+' parcijalno stanje je moglo da se zabetonira na disk bez ijedne greske na ekranu.
+' Sada se tvrdi obrnuto: nepotpun rollback ZATVARA i upis i snimanje.
 '
 ' Sabotaza: srednja tabela se PREIMENUJE. modDataAccess.GetTable je trazi po
 ' imenu kroz sve listove i vraca Nothing, pa RestoreTable pukne na 91 jos u
@@ -7584,18 +7590,40 @@ End Sub
 '
 ' Redosled je deo merenja: Scripting.Dictionary cuva redosled unosa, pa je B
 ' zaista u sredini, a tvrdnja nad C dokazuje da petlja nije stala na B.
-Private Sub T_TxRollback_NepotpunVracaOstale()
+'
+' OBA SMERA su obavezna. Meri se i da PRE kompromisa Save prolazi, i da POSLE
+' reset-a (koji u produkciji znaci reload) opet prolazi -- kapija koja uvek
+' odbija izgledala bi isto tako zeleno na srednjoj tvrdnji, a ucinila bi svesku
+' trajno nesnimljivom.
+Private Sub T_TxRollback_NepotpunZatvaraUpisISnimanje()
     Const SHEET_IME As String = "_TestTxRollback"
     Dim ws As Worksheet
     Dim tx As clsTransaction
-    Dim evPre As Boolean
+    Dim origEvents As Boolean
     Dim calcPre As XlCalculation
     Dim preimenovana As Boolean
-
-    evPre = Application.EnableEvents
-    calcPre = Application.Calculation
+    Dim vredA As Variant, vredC As Variant
+    Dim evPosle As Boolean, calcPosle As XlCalculation
+    Dim nepotpun As Boolean, nevracene As String
+    Dim snimioPre As Boolean, snimioPosle As Boolean, snimioPosleReseta As Boolean
+    Dim upisOdbijen As Boolean, upisErr As String
 
     On Error GoTo EH
+
+    ' Kapija nad Save-om je EVENT, a run_vba gasi evente da Workbook_Open ne
+    ' krene. Bez ovoga test ne meri kapiju nego njeno odsustvo -- bio bi zelen i
+    ' kad handler uopste ne postoji (isti razlog kao u
+    ' T_Save_PrekinutImportZatvaraSvaVrata).
+    origEvents = Application.EnableEvents
+    Application.EnableEvents = True
+    calcPre = Application.Calculation
+    modTxState.TxKompromisTestReset
+
+    ' --- smer 1: bez kompromisa Save prolazi
+    ThisWorkbook.Saved = False
+    ThisWorkbook.Save
+    snimioPre = ThisWorkbook.Saved
+
     Set ws = TxRbNapraviList(SHEET_IME)
 
     modDataAccess.GetTable("TST_RB_A").DataBodyRange.Cells(1, 1).value = 1
@@ -7619,32 +7647,69 @@ Private Sub T_TxRollback_NepotpunVracaOstale()
 
     tx.RollbackTx
 
-    ' 1. petlja NIJE stala na B -- vracene su i ona pre i ona posle pada
-    AssertEq modDataAccess.GetTable("TST_RB_A").DataBodyRange.Cells(1, 1).value, _
-             1, "A pre pada mora biti vracena"
-    AssertEq modDataAccess.GetTable("TST_RB_C").DataBodyRange.Cells(1, 1).value, _
-             3, "C POSLE pada mora biti vracena -- petlja ne sme stati na padu"
+    ' sve se cita PRE ciscenja -- brisanje lista unistava tabele
+    vredA = modDataAccess.GetTable("TST_RB_A").DataBodyRange.Cells(1, 1).value
+    vredC = modDataAccess.GetTable("TST_RB_C").DataBodyRange.Cells(1, 1).value
+    evPosle = Application.EnableEvents
+    calcPosle = Application.Calculation
+    nepotpun = tx.RollbackNepotpun
+    nevracene = tx.NevraceneTabele
 
-    ' 2. CleanUp se izvrsio: Application state nije ostao suspendovan
-    AssertEq Application.EnableEvents, evPre, _
-             "EnableEvents mora biti vracen i kad restore padne"
-    AssertEq Application.Calculation, calcPre, _
-             "Calculation mora biti vracen i kad restore padne"
-
-    ' 3. cinjenica je CITLJIVA, ne samo logovana
-    AssertEq tx.RollbackNepotpun, True, "nepotpun rollback mora biti citljiv"
-    AssertEq (InStr(1, tx.NevraceneTabele, "TST_RB_B") > 0), True, _
-             "NevraceneTabele mora IMENOVATI tabelu koja nije vracena: [" & _
-             tx.NevraceneTabele & "]"
-
-    ' 4. mActive je ociscen: ista instanca prima novu transakciju
+    ' --- nov upis mora biti ODBIJEN
+    On Error Resume Next
     tx.BeginTx
-    AssertEq tx.RollbackNepotpun, False, "BeginTx mora resetovati stanje"
-    tx.RollbackTx
+    upisOdbijen = (Err.Number <> 0)
+    upisErr = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    ' --- Save mora biti ODBIJEN (Ctrl+S / File > Save / .Save iz VBA)
+    ThisWorkbook.Saved = False
+    On Error Resume Next
+    ThisWorkbook.Save                     ' Cancel u BeforeSave sme da podigne 1004
+    Err.Clear
+    On Error GoTo EH
+    snimioPosle = ThisWorkbook.Saved
+
+    ' --- smer 2: marker nije trajna smrt sveske. Reset ovde stoji za reload.
+    modTxState.TxKompromisTestReset
+    ThisWorkbook.Saved = False
+    ThisWorkbook.Save
+    snimioPosleReseta = ThisWorkbook.Saved
 
     ws.ListObjects("TST_RB_B_SAKRIVENA").name = "TST_RB_B"
     preimenovana = False
     TxRbObrisiList SHEET_IME
+    Application.EnableEvents = origEvents
+
+    ' --- 1. petlja NIJE stala na B -- vracene su i ona pre i ona posle pada
+    AssertEq vredA, 1, "A pre pada mora biti vracena"
+    AssertEq vredC, 3, _
+             "C POSLE pada mora biti vracena -- petlja ne sme stati na padu"
+
+    ' --- 2. CleanUp se izvrsio: Application state nije ostao suspendovan
+    AssertEq evPosle, True, _
+             "EnableEvents mora biti vracen i kad restore padne"
+    AssertEq calcPosle, calcPre, _
+             "Calculation mora biti vracen i kad restore padne"
+
+    ' --- 3. cinjenica je CITLJIVA, ne samo logovana
+    AssertEq nepotpun, True, "nepotpun rollback mora biti citljiv"
+    AssertEq (InStr(1, nevracene, "TST_RB_B") > 0), True, _
+             "NevraceneTabele mora IMENOVATI tabelu koja nije vracena: [" & _
+             nevracene & "]"
+
+    ' --- 4. i, glavno: sistem se NE vraca u normalan rezim
+    AssertEq snimioPre, True, _
+             "bez kompromisa Save i dalje prolazi (kapija nije 'uvek odbij')"
+    AssertEq upisOdbijen, True, _
+             "nov BeginTx posle nepotpunog rollback-a mora biti ODBIJEN"
+    AssertEq (InStr(1, upisErr, "UPIS ZATVOREN") > 0), True, _
+             "odbijenica mora da IMENUJE razlog: [" & upisErr & "]"
+    AssertEq snimioPosle, False, _
+             "posle nepotpunog rollback-a Save (Ctrl+S put) mora biti ODBIJEN"
+    AssertEq snimioPosleReseta, True, _
+             "posle reload-a sveska mora opet biti snimljiva"
     Exit Sub
 
 EH:
@@ -7655,10 +7720,11 @@ EH:
     On Error Resume Next
     If preimenovana Then ws.ListObjects("TST_RB_B_SAKRIVENA").name = "TST_RB_B"
     TxRbObrisiList SHEET_IME
-    Application.EnableEvents = evPre
+    modTxState.TxKompromisTestReset
+    Application.EnableEvents = origEvents
     Application.Calculation = calcPre
     On Error GoTo 0
-    Err.Raise errNum, "modTest.T_TxRollback_NepotpunVracaOstale", errDesc
+    Err.Raise errNum, "modTest.T_TxRollback_NepotpunZatvaraUpisISnimanje", errDesc
 End Sub
 
 ' Tri tabele na svom listu, svaka sa DVE kolone: Range.Value2 nad jednom

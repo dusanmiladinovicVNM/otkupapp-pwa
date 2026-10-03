@@ -406,9 +406,30 @@
     generisani artefakt verno prijavljuje `AddTableSnapshot` iz testa. Alternativa
     (naučiti `who_writes` da prećuti prefiks `TST_`) je izmena **kapije** i traži
     svoj dvosmerni dokaz — ostaje kao moguć naredni process rez, ne u ovom.
+    **Review je na to dao P1 i bio je u pravu:** prijaviti nije isto sto i
+    **zatvoriti**. Property na `tx` objektu nestane kad pozivalac izađe, pa se
+    sistem posle nepotpunog rollback-a vraćao u **puno operativan** režim — nova
+    transakcija dozvoljena, AutoSave zakazan, a `ZatvoriAplikaciju` radi
+    `Close SaveChanges:=True`. Operater koji samo zatvori program zabetonirao bi
+    parcijalno vraćen podatak. Prethodna (loša) verzija je sistem ostavljala
+    očigledno polomljenim; prva moja verzija ga je vraćala u ispravno stanje dok
+    zna da podaci to nisu — gore.
+    Brana je sad **globalna za sesiju** (`modTxState`, obrazac `modImportState`) i
+    zatvara pet puteva: `BeginTx`, `MarkDirtyAndSchedule`, `AutoSaveAfterCommit`,
+    `Workbook_BeforeSave` (jedina tačka kroz koju prolaze Ctrl+S / File > Save /
+    Save As / `.Save` iz VBA) i `ZatvoriAplikaciju`. **Bez registra** i
+    **fail-closed**, obrnuto od `modImportState`, i oba namerno: recovery *je*
+    reload (Save je zatvoren, pa na disku stoji stanje pre transakcije), a nema
+    čitanja koje može da pukne. Perzistiran marker bi svesku učinio trajno
+    nesnimljivom bez izlaza iz aplikacije.
+    Test je prepisan: tvrdio je da `BeginTx` posle nepotpunog rollback-a
+    **prolazi** — to je bila acceptance odluka za ponašanje koje ne želimo. Sada
+    meri **ishod kroz prave seam-ove**: `BeginTx` diže `UPIS ZATVOREN`, a
+    `ThisWorkbook.Save` ostavlja `Saved = False`. Oba smera: i da PRE kompromisa
+    Save prolazi, i da POSLE reset-a (= reload) opet prolazi.
     **Dokaz je PLANIRAN, ne izmeren:** `dokaz.py` i `run_vba.py` čekaju reviewer GO
     (v. `skupe-kapije-cekaju-reviewer-go`). Statički: 19/19 kapija `rc=0`, katalog
-    649 → **652**, a `vba_gate --require-green` tačno javlja `rc=2` — izvor je
+    649 → **654**, a `vba_gate --require-green` tačno javlja `rc=2` — izvor je
     promenjen, pa nijedna suite nije dokazana nad njim.
 
 ## Dug sa imenom (posle S5-5b)

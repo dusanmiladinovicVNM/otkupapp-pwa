@@ -331,9 +331,42 @@ Primitiv **ne diže** grešku: od 276 poziva `.RollbackTx` u izvoru 182 ne stoje
 `On Error Resume Next`, a većina je unutar aktivnog `EH` bloka — nov raise bi tamo
 zamenio originalnu poslovnu grešku. Pozivalac koji želi da eskalira čita stanje.
 
-*Provera:* `T_TxRollback_NepotpunVracaOstale` + tri sabotaže
+**Nepotpun rollback nije nova normalna transakcija.** Property na `tx` objektu je
+signal za tog pozivaoca, **ne granica bezbednosti** — lokalni `tx` nestane kad
+pozivalac izađe iz procedure, a nekonzistentno stanje ostaje. Prva verzija ovog
+pravila je zato bila nedovoljna: posle nepotpunog rollback-a sistem se vraćao u
+**puno operativan** režim — nova transakcija dozvoljena, `AutoSaveAfterCommit`
+zakazan, a `ZatvoriAplikaciju` radi `Close SaveChanges:=True`. Operater koji samo
+zatvori program zabetonirao bi parcijalno vraćen podatak na disk, bez ijedne
+greške na ekranu.
+
+Granica je zato **globalna za sesiju** (`modTxState`, obrazac `modImportState`), i
+zatvara **svih pet** puteva:
+
+| put | ishod |
+|---|---|
+`clsTransaction.BeginTx` | nov upis **odbijen** (`UPIS ZATVOREN`) |
+`modJournaling.MarkDirtyAndSchedule` | AutoSave se **ne zakazuje** |
+`modJournaling.AutoSaveAfterCommit` | stvarni Save **preskočen** |
+`ThisWorkbook.Workbook_BeforeSave` | `Cancel` — jedina tačka kroz koju prolaze Ctrl+S, File > Save, Save As i `.Save` iz VBA |
+`modMain.ZatvoriAplikaciju` | `Close SaveChanges:=False` + poruka |
+
+Zadnja dva nisu suvišna jedno drugom: `Workbook_BeforeSave` je brana i kad bi
+izlaz zaboravio svoju proveru, ali bi tada `Close` bio **otkazan** usred gašenja —
+eksplicitna grana u `ZatvoriAplikaciju` postoji da se izađe uredno i sa razlogom.
+
+Dve odluke su obrnute od `modImportState` i obe su namerne: marker **nema
+registar** (živi samo u memoriji — recovery *je* reload, jer je Save zatvoren pa na
+disku stoji stanje pre transakcije), i **fail-closed** je bezbedan ovde jer nema
+čitanja koje može da pukne. Perzistiran marker bi svesku učinio trajno
+nesnimljivom bez izlaza iz aplikacije — šteta koju `ImportNijeDovrsen` izričito
+odbija da napravi. Marker se **ne briše** iz produkcionog koda.
+
+*Provera:* `T_TxRollback_NepotpunZatvaraUpisISnimanje` + **pet** sabotaža
 (`rollback-petlja-staje-na-padu`, `rollback-cleanup-samo-kad-prodje`,
-`rollback-nepotpun-nevidljiv`) — po jedna na svaku od tri posledice.
+`rollback-nepotpun-nevidljiv`, `rollback-upis-ostaje-dozvoljen`,
+`rollback-save-ostaje-dozvoljen`) — po jedna na svaku posledicu i na svaku od
+dve brane koje test meri kroz pravi seam.
 
 **Oblik poziva ne sme da menja ishod.** `AppendRow` je funkcija i pola koda je
 zove kao funkciju (`newRow = AppendRow(TBL_ZBIRNA, rowData)`), pola kao naredbu
