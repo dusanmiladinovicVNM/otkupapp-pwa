@@ -63,8 +63,17 @@ function Install-Workbook {
     if (!(Test-Path $BackupDir)) {
         New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
     }
+    # Two replaces inside the same second would produce the same name, and
+    # Copy-Item overwrites silently -- destroying the FIRST backup, which is the
+    # one holding the original client data. Do not assume the timestamp is
+    # unique: look for a free name.
     $stamp  = Get-Date -Format "yyyy-MM-dd_HHmmss"
     $backup = Join-Path $BackupDir ("AgriX_pre-replace_" + $stamp + ".xlsm")
+    $seq = 2
+    while (Test-Path $backup) {
+        $backup = Join-Path $BackupDir ("AgriX_pre-replace_" + $stamp + "_" + $seq + ".xlsm")
+        $seq++
+    }
     Copy-Item $Target $backup -ErrorAction Stop
 
     # An unverified backup is a promise, not a copy. Compare content, not size:
@@ -127,7 +136,23 @@ function Invoke-SelfTest {
         Assert-SelfTest (Test-Path $bakFile) "backup file exists"
         Assert-SelfTest ((Get-Content $bakFile -Raw).Trim() -eq "SENTINEL-KLIJENT") "backup carries the REPLACED workbook, not the package"
 
-        # 4. nema paketne sveske -> jasna greska, ne tiho preskakanje
+        # 4. postojeci backup iz iste sekunde se NE pregazi.
+        #    Deterministicki: ime se racuna isto kao u funkciji, pa ako sekunda
+        #    nije pretekla ide u granu sa sufiksom; ako je pretekla, ime je
+        #    svakako drugo. Tvrdnja je u oba slucaja ista -- podmetnuti fajl
+        #    mora ostati netaknut.
+        Set-Content -Path $tgt -Value "SENTINEL-2" -Encoding utf8
+        $stampNow = Get-Date -Format "yyyy-MM-dd_HHmmss"
+        $mamac = Join-Path $bak ("AgriX_pre-replace_" + $stampNow + ".xlsm")
+        Set-Content -Path $mamac -Value "ZAUZETO" -Encoding utf8
+        Set-Content -Path $src -Value "PAKET" -Encoding utf8
+        $r = Install-Workbook -Source $src -Target $tgt -BackupDir $bak -Replace $true
+        $bakFile2 = $r.Substring("replaced:".Length)
+        Assert-SelfTest ($bakFile2 -ne $mamac) "backup does not reuse an existing file name"
+        Assert-SelfTest ((Get-Content $mamac -Raw).Trim() -eq "ZAUZETO") "EXISTING BACKUP MUST NOT BE OVERWRITTEN"
+        Assert-SelfTest ((Get-Content $bakFile2 -Raw).Trim() -eq "SENTINEL-2") "new backup carries the workbook it replaced"
+
+        # 5. nema paketne sveske -> jasna greska, ne tiho preskakanje
         Remove-Item $src -Force
         $threw = $false
         try { Install-Workbook -Source $src -Target $tgt -BackupDir $bak -Replace $false | Out-Null }
