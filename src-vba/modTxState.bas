@@ -96,8 +96,16 @@ Public Function PorukaIshodaRollbacka(ByVal normalna As String) As String
         PorukaIshodaRollbacka = normalna
         Exit Function
     End If
+    ' Rezerva se dodeljuje PRE citanja kataloga. Pozivna mesta su pod
+    ' On Error Resume Next, pa bi greska u Poruka() ostavila PRAZAN string --
+    ' a prazna poruka o gresci operateru izgleda kao da greske nema.
+    PorukaIshodaRollbacka = "ROLLBACK NEPOTPUN -- upis i snimanje su zatvoreni. " & _
+                            "Zatvorite aplikaciju BEZ snimanja i otvorite je " & _
+                            "ponovo. Nevracene tabele: " & mTabele
+    On Error Resume Next
     PorukaIshodaRollbacka = Poruka("APP_MSG_ROLLBACK_NEPOTPUN_NE_SNIMAM") & _
                             vbCrLf & mTabele
+    On Error GoTo 0
 End Function
 
 ' Test seam, tvrdo gejtovan -- isti obrazac kao

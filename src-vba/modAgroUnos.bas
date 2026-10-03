@@ -525,12 +525,24 @@ Public Function AgroUpisiIzlaz(ByVal korpa As Collection, _
     Set tx = Nothing
     Exit Function
 EH:
-    AgroUpisiIzlaz = modTxState.PorukaIshodaRollbacka(Poruka("AGRO_MSG_GRESKA_PRI_CUVANJU") & _
-                     " " & Err.description)
+    ' Err se cuva PRE rollback-a: RollbackTx i sve pod On Error Resume Next
+    ' menjaju Err kontekst, a poruka mora da nosi ORIGINALNU poslovnu gresku.
+    Dim errDesc As String
+    errDesc = Err.description
     upisano = 0
     LogErr SRC
+
     On Error Resume Next
     If txStarted And Not tx Is Nothing Then tx.RollbackTx
+
+    ' Poruka se racuna TEK POSLE rollback-a. Dok se racunala PRE njega,
+    ' modTxState jos nije znao da rollback nije bio potpun, pa je vracala
+    ' "promene vracene" i kad nisu -- a globalne brane su se pritom
+    ' ispravno zatvarale, tako da je operater dobijao tvrdnju koju mu
+    ' prvi sledeci upis odmah pobija. Kapija ROLLBACK_TVRDNJA_RED to
+    ' sada drzi staticki.
+    AgroUpisiIzlaz = modTxState.PorukaIshodaRollbacka(Poruka("AGRO_MSG_GRESKA_PRI_CUVANJU") & _
+                                                      " " & errDesc)
     Set tx = Nothing
 End Function
 
@@ -584,12 +596,24 @@ Public Function AgroUpisiUlaz(ByVal korpa As Collection, _
     Set tx = Nothing
     Exit Function
 EH:
-    AgroUpisiUlaz = modTxState.PorukaIshodaRollbacka(Poruka("AGRO_MSG_GRESKA_PRI_CUVANJU_2") & _
-                    " " & Err.description)
+    ' Err se cuva PRE rollback-a: RollbackTx i sve pod On Error Resume Next
+    ' menjaju Err kontekst, a poruka mora da nosi ORIGINALNU poslovnu gresku.
+    Dim errDesc As String
+    errDesc = Err.description
     upisano = 0
     LogErr SRC
+
     On Error Resume Next
     If txStarted And Not tx Is Nothing Then tx.RollbackTx
+
+    ' Poruka se racuna TEK POSLE rollback-a. Dok se racunala PRE njega,
+    ' modTxState jos nije znao da rollback nije bio potpun, pa je vracala
+    ' "promene vracene" i kad nisu -- a globalne brane su se pritom
+    ' ispravno zatvarale, tako da je operater dobijao tvrdnju koju mu
+    ' prvi sledeci upis odmah pobija. Kapija ROLLBACK_TVRDNJA_RED to
+    ' sada drzi staticki.
+    AgroUpisiUlaz = modTxState.PorukaIshodaRollbacka(Poruka("AGRO_MSG_GRESKA_PRI_CUVANJU_2") & _
+                                                     " " & errDesc)
     Set tx = Nothing
 End Function
 
