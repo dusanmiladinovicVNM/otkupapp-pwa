@@ -502,6 +502,28 @@ Public Function AmbKlaseVrste(ByVal vrsta As String) As Variant
     End Select
 End Function
 
+' IZVORNA TABELA PO TIPU DOKUMENTA -- zatvorena mapa, fail-closed.
+'
+' AMB-INV-08 trazi da knjiga i izvorni dokument dele rollback. Vezivanje
+' dokumenta za transakciju (BindSourceDocument) dokazuje IDENTITET transakcije,
+' ali ne i da je tabela tog dokumenta u njenom snapshotu -- pa bi ovo prolazilo:
+'
+'   BindSourceDocument(Otkup, OTK-123)
+'   snapshot tblAmbalaza    DA
+'   snapshot tblOtkup       NE     -> rollback nije zajednicki
+'
+' Mapa stoji u domenu, ne u clsTransaction: transakcija je genericki primitiv i
+' ne sme da zna tipove poslovnih dokumenata. Nepoznat tip vraca prazno, a pisac
+' to tretira kao odbijanje -- nov tip dokumenta ne moze da se provuce.
+Public Function AmbIzvornaTabela(ByVal dokTip As String) As String
+    Select Case Trim$(dokTip)
+        Case DOK_TIP_AMBALAZA_DOKUMENT: AmbIzvornaTabela = TBL_AMBALAZA_DOKUMENT
+        Case DOK_TIP_OTKUP:             AmbIzvornaTabela = TBL_OTKUP
+        Case DOK_TIP_OTPREMNICA:        AmbIzvornaTabela = TBL_OTPREMNICA
+        Case DOK_TIP_PRIJEMNICA:        AmbIzvornaTabela = TBL_PRIJEMNICA
+    End Select
+End Function
+
 ' ZAGLAVLJE I KRETANJE SE PROVERAVAJU ZAJEDNO (AMB-10-ODL-9, -10).
 '
 ' Klasa vlasnika broja i dozvoljeno kretanje su bile dve nezavisne provere, pa
@@ -524,11 +546,15 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
                                       ByVal odTip As String, ByVal odID As String, _
                                       ByVal naTip As String, _
                                       ByVal vrstaKretanja As String) As String
-    Dim jePartnerov As Boolean, jeKupacVozac As Boolean
+    Dim jePartnerov As Boolean, povratOdKupca As Boolean
     jePartnerov = (StrComp(Trim$(vrsta), AMB_DOK_REVERS_PARTNERA, vbTextCompare) = 0)
-    jeKupacVozac = (StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _
-                   (StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) = 0) And _
-                   (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)
+    ' OBRNUTA KAPIJA GLEDA SVAKI POVRAT OD KUPCA, ne samo kupac -> vozac.
+    ' Prva verzija je trazila ceo par, pa su obican REVERS nad kupac -> FIRMA i
+    ' kupac -> STANICA prolazili: par nije bio kupac -> vozac, pa se kapija nije
+    ' ni palila. ODL-9 kaze da lanac ide kupac -> vozac -> stanica i da firma u
+    ' njega NE ulazi, pa je uslov sam POVRAT OD KUPCA.
+    povratOdKupca = (StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _
+                    (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)
 
     If jePartnerov Then
         If StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
@@ -560,9 +586,15 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
         Exit Function
     End If
 
-    If jeKupacVozac Then
-        AmbDokKretanjeProblem = "AMB-10-ODL-10: kupac -> vozac (povrat praznih) " & _
-            "je partnerov dokument i nosi njegov broj -- vrsta mora biti " & _
+    If povratOdKupca Then
+        If StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-9: povrat praznih od kupca ide " & _
+                "na vozaca (lanac kupac -> vozac -> stanica), a ide na " & _
+                Trim$(naTip) & "."
+            Exit Function
+        End If
+        AmbDokKretanjeProblem = "AMB-10-ODL-10: povrat praznih od kupca je " & _
+            "partnerov dokument i nosi njegov broj -- vrsta mora biti " & _
             AMB_DOK_REVERS_PARTNERA & ", a nije (" & Trim$(vrsta) & ")."
     End If
 End Function

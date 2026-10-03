@@ -6762,12 +6762,23 @@ SABOTAZE = {
         "Test_Amb_Inv08TxVlasnistvo",
         "AMB-INV-08: DRUGA transakcija sa istim snapshotom ne sme da ",
     ),
+    # Vezivanje ostaje, ali izvorna tabela se ne proverava -- bind nad Otkup-om
+    # uz snapshot samo knjige ponovo prolazi, pa rollback nije zajednicki.
+    "amb-inv08-izvorna-tabela-bez-snapshota": (
+        "modAmbalaza.bas",
+        "    If Not tx.ImaSnapshot(izvornaTbl) Then\n",
+        "    If False Then   ' SABOTAZA: izvorna tabela se ne proverava\n",
+        "Test_Amb_Inv08TxVlasnistvo",
+        "AMB-INV-08: vezan dokument bez snapshota SVOJE tabele mora pasti",
+    ),
     # Firma se vraca u lanac: ODL-9 kaze da ne ulazi, a bez prednje grane
     # validatora kupac -> firma prolazi jer su klase (PARTNER -> SOPSTVENI) dobre.
     "amb-odl9-firma-u-lancu": (
         "modAmbalazaUgovor.bas",
-        "        If StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then\n",
-        "        If False Then   ' SABOTAZA: na-strana se ne proverava\n",
+        "        If StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then\n"
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-9: lanac je kupac -> vozac -> \" & _\n",
+        "        If False Then   ' SABOTAZA: na-strana se ne proverava\n"
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-9: lanac je kupac -> vozac -> \" & _\n",
         "Test_Amb_DokumentUgovor",
         "ODL-9: firma NE ulazi u lanac -- kupac -> firma pada",
     ),
@@ -6775,10 +6786,22 @@ SABOTAZE = {
     # brojem, cime je AMB-10-ODL-10 potpuno zaobidjen.
     "amb-odl10-nas-revers-nosi-kupca": (
         "modAmbalazaUgovor.bas",
-        "    If jeKupacVozac Then\n",
+        "    If povratOdKupca Then\n",
         "    If False Then   ' SABOTAZA: obrnuta kapija ugasena\n",
         "Test_Amb_DokumentUgovor",
         "ODL-10: obican REVERS ne sme da nosi kupac -> vozac",
+    ),
+    # Obrnuta kapija se vraca na "ceo par": tada obican REVERS nad kupac -> FIRMA
+    # i kupac -> STANICA ponovo prolaze, jer par nije kupac -> vozac pa se kapija
+    # ni ne pali. To je bila druga polovina P1 #2.
+    "amb-odl9-povrat-od-kupca-ide-svuda": (
+        "modAmbalazaUgovor.bas",
+        "        If StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then\n"
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-9: povrat praznih od kupca ide \" & _\n",
+        "        If False Then   ' SABOTAZA: povrat od kupca sme na bilo koga\n"
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-9: povrat praznih od kupca ide \" & _\n",
+        "Test_Amb_DokumentUgovor",
+        "ODL-9: obican REVERS ne sme da nosi kupac -> firma",
     ),
     # Validator postoji, ali se ne zove iz pisca -- tacno placebo koji bi tablica
     # istinitosti pustila zelenu.

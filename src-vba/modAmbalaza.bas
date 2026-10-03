@@ -1695,6 +1695,24 @@ Private Sub RequireAmbTxIzvorniDokument(ByVal tx As clsTransaction, _
                   "(BindSourceDocument) -- knjiga i dokument ne dele vlasnika, " & _
                   "pa rollback dokumenta ne bi vratio ambalazu."
     End If
+
+    ' Vezivanje dokazuje IDENTITET transakcije, ne i da je tabela tog dokumenta
+    ' u njenom snapshotu. Bez ovoga prolazi bind nad Otkup-om uz snapshot samo
+    ' knjige -- rollback tada nije zajednicki. Nepoznat tip je fail-closed.
+    Dim izvornaTbl As String
+    izvornaTbl = modAmbalazaUgovor.AmbIzvornaTabela(dokTip)
+    If Len(izvornaTbl) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, sourceName, _
+                  "AMB-INV-08: tip izvornog dokumenta '" & Trim$(dokTip) & _
+                  "' nema poznatu izvornu tabelu -- ne moze se dokazati da " & _
+                  "knjiga i dokument dele rollback."
+    End If
+    If Not tx.ImaSnapshot(izvornaTbl) Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, sourceName, _
+                  "AMB-INV-08: transakcija ne snapshotuje " & izvornaTbl & _
+                  " -- izvorni dokument je vezan, ali se ne bi vratio " & _
+                  "rollback-om zajedno sa knjigom."
+    End If
 End Sub
 
 ' ============================================================

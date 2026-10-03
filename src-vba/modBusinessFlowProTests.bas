@@ -16795,6 +16795,18 @@ Private Sub Test_Amb_DokumentUgovor()
                    AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
                    AMB_VK_POVRAT_PRAZNE)) > 0, _
                "ODL-10: obican REVERS ne sme da nosi kupac -> vozac"
+    ' Obrnuta kapija pokriva SVAKI povrat od kupca, ne samo kupac -> vozac:
+    ' prva verzija je trazila ceo par, pa su ova dva prolazila na NASEM reversu.
+    AssertTrue Len(modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   AMB_DOK_REVERS, AMB_NALOG_FIRMA, "", _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_FIRMA, _
+                   AMB_VK_POVRAT_PRAZNE)) > 0, _
+               "ODL-9: obican REVERS ne sme da nosi kupac -> firma"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   AMB_DOK_REVERS, AMB_NALOG_STANICA, TEST_ST_ID, _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_STANICA, _
+                   AMB_VK_POVRAT_PRAZNE)) > 0, _
+               "ODL-9: obican REVERS ne sme da nosi kupac -> stanica"
     ' Obrnuta kapija ne sme da bude presiroka: kooperant -> stanica je NAS
     ' revers i mora da prolazi (danasnji PRIJEM smer).
     AssertEquals "", modAmbalazaUgovor.AmbDokKretanjeProblem( _
@@ -16929,6 +16941,7 @@ Private Sub Test_Amb_Inv08TxVlasnistvo()
     Dim dokC As String, pukloTudjaTx As Boolean, opisTudjaTx As String
     Dim presloSvoja As Boolean
     Dim dokP As String, pukloPar As Boolean, opisPar As String
+    Dim pukloIzvorTbl As Boolean, opisIzvorTbl As String
     Dim opisKnjiga As String, opisZaglavlje As String
     Dim imaPosle As Boolean
     Dim errNum As Long, errDesc As String
@@ -16979,6 +16992,26 @@ Private Sub Test_Amb_Inv08TxVlasnistvo()
     Err.Clear
     On Error GoTo EH
 
+    txB.RollbackTx
+    Set txB = Nothing
+
+    ' --- IZVORNA TABELA MORA BITI U ISTOM ROLLBACK-u
+    '
+    ' Vezivanje dokumenta dokazuje IDENTITET transakcije, ne i da je tabela tog
+    ' dokumenta u njenom snapshotu. Ovde je dokument VEZAN, knjiga snapshotovana,
+    ' a tblOtkup nije -- pa rollback ne bi bio zajednicki.
+    Set txB = New clsTransaction
+    txB.BeginTx
+    txB.AddTableSnapshot TBL_AMBALAZA
+    txB.BindSourceDocument DOK_TIP_OTKUP, "OTK-I8-" & scenario
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu txB, Date, TEST_TIP_AMB, 1#, _
+                AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_NABAVKA, DOK_TIP_OTKUP, "OTK-I8-" & scenario
+    pukloIzvorTbl = (Err.Number <> 0)
+    opisIzvorTbl = Err.description
+    Err.Clear
+    On Error GoTo EH
     txB.RollbackTx
     Set txB = Nothing
 
@@ -17077,6 +17110,12 @@ Private Sub Test_Amb_Inv08TxVlasnistvo()
                "reversu -- validator se zove iz PrenesiAmbalazu"
     AssertTrue InStr(1, opisPar, "AMB-10-ODL-9") > 0, _
                "ODL-9: odbijenica imenuje odluku: [" & opisPar & "]"
+
+    AssertTrue pukloIzvorTbl, _
+               "AMB-INV-08: vezan dokument bez snapshota SVOJE tabele mora pasti"
+    AssertTrue InStr(1, opisIzvorTbl, "tblOtkup") > 0, _
+               "AMB-INV-08: odbijenica imenuje IZVORNU tabelu: [" & _
+               opisIzvorTbl & "]"
     Exit Sub
 
 EH:

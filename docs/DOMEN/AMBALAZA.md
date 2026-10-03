@@ -1175,6 +1175,61 @@ onaj koji **ne sme** da opali) + ožičenje kroz `PrenesiAmbalazu` u
 `amb-odl10-nas-revers-nosi-kupca`, `amb-odl9-validator-se-ne-zove`). Zadnja
 postoji jer tablica istinitosti ne bi primetila da se validator **ne zove**.
 
+#### Ispravka 03.10.2026 (krug 2) — bind je bio self-assertion, a ODL-9 nije bio totalan
+
+**`BindSourceDocument` je javna capability.** Dokazivala je *„neko je ovoj tx rekao
+da poseduje dokument"*, ne *„dokument je stvarno nastao u ovoj tx"*. Isti originalni
+kvar se time vraćao:
+
+```
+txAmb.AddTableSnapshot TBL_AMBALAZA
+txAmb.BindSourceDocument "Otkup", "OTK-123"      <- niko nije pravio OTK-123
+PrenesiAmbalazu txAmb, ..., "Otkup", "OTK-123"   -> prolazilo
+```
+
+Dve odvojene rupe, dva različita leka:
+
+> **AMB-10-ODL-14.** Vezivanje dokazuje **identitet** transakcije; da je i
+> **izvorna tabela** u istom rollback-u proverava se posebno. `AmbIzvornaTabela`
+> je **zatvorena** mapa `dokTip → tabela`, a nepoznat tip je **fail-closed**. Mapa
+> živi u domenu, ne u `clsTransaction`: transakcija je generički primitiv i ne sme
+> da zna tipove poslovnih dokumenata.
+
+> **AMB-10-ODL-15.** `BindSourceDocument` sme da zove **samo kanonski pisac
+> izvornog dokumenta**, u istoj proceduri i tek posle uspešnog upisa. Sprovodi se
+> **exact allowlist**-om (`AMB_BIND_DOZVOLJENI` u `tools/vba_check.py`), ne hodom
+> po grafu — taj je već jednom pao kao placebo (6.12c). Popis pozivnih mesta
+> **jedne** funkcije nema dubinu koja se može prevariti; danas je na listi jedan
+> unos. Dodavanje pozivaoca je namerno neudobno: menja se lista, što je vidljiv čin
+> u diff-u.
+
+**`AMB-10-ODL-13` nije bio totalan.** Obrnuta kapija je tražila **ceo par**
+`Kupac → Vozac`, pa se nije ni palila za:
+
+```
+obican REVERS + Kupac -> Firma    + POVRAT_PRAZNE   prolazilo
+obican REVERS + Kupac -> Stanica  + POVRAT_PRAZNE   prolazilo
+```
+
+a `ODL-9` kaže da lanac ide `kupac → vozac → stanica` i da firma u njega **ne
+ulazi**. Uslov je zato **sam povrat od kupca**, ne ceo par:
+
+```
+OdTip = Kupac AND VrstaKretanja = POVRAT_PRAZNE
+    =>  NaTip MORA biti Vozac
+    =>  vrsta MORA biti REVERS_PARTNERA
+```
+
+`Kooperant → Stanica` + `POVRAT_PRAZNE` ostaje dozvoljen (naš revers, današnji
+`PRIJEM` smer) i to je tvrdnja u testu — kapija koja bi i to odbila bila bi
+preširoka.
+
+*Provera:* `Test_Amb_DokumentUgovor` 8 slučajeva · `Test_Amb_Inv08TxVlasnistvo`
+16 tvrdnji · sabotaže `amb-inv08-izvorna-tabela-bez-snapshota`,
+`amb-odl9-povrat-od-kupca-ide-svuda`, i dvonivoski dokaz `AMB_BIND_VLASNIK`
+(pokvareno očekivanje self-testa, pa poziv u nedozvoljenoj proceduri nad pravim
+izvorom).
+
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
 1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..09`, protokol potvrde deficita, storno-svesna formula obaveze i njena donja granica. **Bez produkcionog cutovera.**
