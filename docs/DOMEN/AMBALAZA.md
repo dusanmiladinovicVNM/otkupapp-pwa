@@ -921,7 +921,7 @@ Skica (finalizuje je `10a`):
 ```
 tblAmbalazaDokument
   AmbDokID         identitet -> ide u tblAmbalaza.DokumentID
-  Vrsta            REVERS | NABAVKA | OTPIS
+  Vrsta            REVERS | REVERS_PARTNERA | NABAVKA | OTPIS   (v. 6.12b)
   BrojDokumenta    labela (modBrojevi; revers zadrzava KIND_REV)
   Datum
   BrojOwnerTip     VLASNIK NUMERICKOG NIZA -- obavezan
@@ -935,9 +935,11 @@ tblAmbalazaDokument
 > tabela u `STORNO_TABELE`, vlasnik `modAmbalaza`, kanonski `DokumentTIP` je
 > `AmbalazaDokument`.
 >
-> **Vlasnik broja mora biti SOPSTVENI nalog** (Stanica, Firma, Vozac) za sve tri
-> vrste. Pravilo je jedna recenica: **broj je nas, protivpartner je njihov** --
-> dokument pisemo mi, pa partner nikad ne izdaje nasu seriju. Koji tacno sopstveni
+> **Vlasnik broja mora biti SOPSTVENI nalog** (Stanica, Firma, Vozac) za dokument
+> **koji pišemo mi**. Od 03.10.2026 to nisu sve vrste: partnerov dokument nosi
+> **njegov** broj i ima svoju vrstu `REVERS_PARTNERA` (`AMB-10-ODL-10`, 6.12b).
+> Za naše tri vrste pravilo je jedna rečenica: **broj je naš, protivpartner je
+> njihov** — dokument pišemo mi, pa partner nikad ne izdaje našu seriju. Koji tacno sopstveni
 > nalog, po vrsti i putanji, ostaje numeraciji u `10b`; **klasa** je zakljucana
 > ovde, da dva pozivna mesta ne bi izabrala razlicitu politiku a da nijedno ne
 > prekrsi ugovor.

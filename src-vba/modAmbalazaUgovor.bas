@@ -340,11 +340,14 @@ End Function
 ' poseduje NASU seriju -- pa cak i "vlasnik = SpoljniSvet", granica koja uopste
 ' nije drzalac.
 '
-' Pravilo je jedno i za sve tri vrste, i izgovara se u jednoj recenici:
+' Pravilo je bilo jedno za sve vrste, u jednoj recenici:
 '
 '   BROJ JE NAS, PROTIVPARTNER JE NJIHOV.
 '
-' Dokument pisemo mi -- i revers kooperantu, i revers kupca, i nabavku, i otpis.
+' 03.10.2026 je dobilo opseg: vazi za dokument KOJI PISEMO MI -- revers
+' kooperantu, nabavku, otpis. Revers KUPCA je njegov papir i nosi njegov broj
+' (AMB-10-ODL-10), pa je dobio svoju vrstu REVERS_PARTNERA. Stari tekst je ovde
+' izricito nabrajao "i revers kupca" kao nas -- to je bilo netacno.
 ' Vlasnik numerickog niza, po vrsti dokumenta.
 '
 ' NAS dokument nosi NAS broj: partner ne izdaje nasu seriju, pa je vlasnik

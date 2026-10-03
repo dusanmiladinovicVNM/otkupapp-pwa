@@ -16753,9 +16753,13 @@ Private Sub Test_Amb_DokumentUgovor()
     On Error GoTo EH
 
     ' --- ZATVOREN ENUM VRSTE ---------------------------------------------
-    AssertEquals "3", CStr(UBound(modAmbalazaUgovor.AmbDokVrsteSve()) - _
+    ' CETIRI od 03.10.2026: REVERS_PARTNERA je dodat jer partnerov dokument nosi
+    ' NJEGOV broj (AMB-10-ODL-10). Broj je tvrdnja, ne kozmetika -- da je ostao
+    ' na tri, nova vrsta bi se mogla dodati a da niko ne primeti da je enum
+    ' prestao da bude zatvoren.
+    AssertEquals "4", CStr(UBound(modAmbalazaUgovor.AmbDokVrsteSve()) - _
                            LBound(modAmbalazaUgovor.AmbDokVrsteSve()) + 1), _
-                 "Amb dokument: vrsta dokumenta ima tacno tri vrednosti"
+                 "Amb dokument: vrsta dokumenta ima tacno cetiri vrednosti"
     AssertTrue Not modAmbalazaUgovor.AmbDokVrstaPoznata("POCETNO_STANJE"), _
                "Amb dokument: POCETNO_STANJE nije vrsta dokumenta -- ne postoji"
 
