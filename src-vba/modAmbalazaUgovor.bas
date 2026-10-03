@@ -433,10 +433,12 @@ Public Function AmbDokProblem(ByVal vrsta As String, ByVal broj As String, _
         Exit Function
     End If
 
+    ' Poruka je NEUTRALNA od 03.10.2026: ranije je zavrsavala sa "broj je nas,
+    ' protivpartner je njihov", a to za REVERS_PARTNERA vise nije tacno -- pa je
+    ' validacija padala ispravno a objasnjavala suprotno od pravila.
     If Not AmbNalogUKlasi(klasa, brojOwnerTip) Then
         AmbDokProblem = "'" & Trim$(vrsta) & "' trazi " & klasa & " kao vlasnika broja, " & _
-                        "a dobio je " & Trim$(brojOwnerTip) & " -- broj je nas, " & _
-                        "protivpartner je njihov."
+                        "a dobio je " & Trim$(brojOwnerTip) & "."
     End If
 End Function
 
@@ -498,6 +500,71 @@ Public Function AmbKlaseVrste(ByVal vrsta As String) As Variant
         Case Else
             AmbKlaseVrste = Array()
     End Select
+End Function
+
+' ZAGLAVLJE I KRETANJE SE PROVERAVAJU ZAJEDNO (AMB-10-ODL-9, -10).
+'
+' Klasa vlasnika broja i dozvoljeno kretanje su bile dve nezavisne provere, pa
+' nijedna nije videla drugu. Tri zaobilaznice koje su time prolazile:
+'
+'   Kupac -> FIRMA sa REVERS_PARTNERA   Firma je SOPSTVENI, pa klase prolaze --
+'                                       a ODL-9 kaze da firma NE ulazi u lanac
+'   BrojOwner K1, kretanje K2 -> Vozac  broj jednog partnera, dogadjaj drugog
+'   obican REVERS: Kupac -> Vozac       partnerov broj potpuno zaobidjen
+'
+' OBRNUTA KAPIJA JE DEO PRAVILA, ne dodatak: bez nje se isto kretanje moze
+' knjiziti na nasu vrstu i dobiti nas broj, pa ODL-10 ne vazi ni za jedan
+' dokument -- samo za one koje pozivalac izvoli da nazove REVERS_PARTNERA.
+'
+' Generisani redovi NE prolaze ovde: pisac ih zove iz vec provernog zahteva, a
+' pokrice deficita ima par GRANICA -> PARTNER koji ni jedno pravilo ne pogadja.
+Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
+                                      ByVal brojOwnerTip As String, _
+                                      ByVal brojOwnerID As String, _
+                                      ByVal odTip As String, ByVal odID As String, _
+                                      ByVal naTip As String, _
+                                      ByVal vrstaKretanja As String) As String
+    Dim jePartnerov As Boolean, jeKupacVozac As Boolean
+    jePartnerov = (StrComp(Trim$(vrsta), AMB_DOK_REVERS_PARTNERA, vbTextCompare) = 0)
+    jeKupacVozac = (StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _
+                   (StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) = 0) And _
+                   (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)
+
+    If jePartnerov Then
+        If StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-9: partnerov revers polazi od " & _
+                "kupca, a dobio je " & Trim$(odTip) & "."
+            Exit Function
+        End If
+        If StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-9: lanac je kupac -> vozac -> " & _
+                "stanica; partnerov revers ne ide na " & Trim$(naTip) & "."
+            Exit Function
+        End If
+        If StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-10: partnerov revers nosi " & _
+                "povrat praznih, a dobio je " & Trim$(vrstaKretanja) & "."
+            Exit Function
+        End If
+        If StrComp(Trim$(brojOwnerTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-10: broj partnerovog reversa " & _
+                "pripada kupcu, a vlasnik niza je " & Trim$(brojOwnerTip) & "."
+            Exit Function
+        End If
+        If StrComp(Trim$(brojOwnerID), Trim$(odID), vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-10: broj nosi kupac '" & _
+                Trim$(brojOwnerID) & "' a ambalazu predaje '" & Trim$(odID) & _
+                "' -- dokument bi imao tudj broj."
+            Exit Function
+        End If
+        Exit Function
+    End If
+
+    If jeKupacVozac Then
+        AmbDokKretanjeProblem = "AMB-10-ODL-10: kupac -> vozac (povrat praznih) " & _
+            "je partnerov dokument i nosi njegov broj -- vrsta mora biti " & _
+            AMB_DOK_REVERS_PARTNERA & ", a nije (" & Trim$(vrsta) & ")."
+    End If
 End Function
 
 ' Pripada li nalog trazenoj klasi.

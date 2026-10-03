@@ -16764,6 +16764,45 @@ Private Sub Test_Amb_DokumentUgovor()
     AssertTrue Not modAmbalazaUgovor.AmbDokVrstaPoznata("POCETNO_STANJE"), _
                "Amb dokument: POCETNO_STANJE nije vrsta dokumenta -- ne postoji"
 
+    ' --- ODL-9/-10: VRSTA, VLASNIK BROJA I PAR NALOGA ZAJEDNO -------------
+    '
+    ' Klasa vlasnika i dozvoljeno kretanje su bile dve NEZAVISNE provere, pa su
+    ' tri zaobilaznice prolazile: kupac -> FIRMA (Firma je SOPSTVENI), broj
+    ' jednog kupca uz kretanje drugog, i obican REVERS nad kupac -> vozac (cime
+    ' je partnerov broj potpuno zaobidjen).
+    AssertEquals "", modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     AMB_DOK_REVERS_PARTNERA, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
+                     AMB_VK_POVRAT_PRAZNE), _
+                 "ODL-9: kupac -> vozac na partnerovom reversu PROLAZI"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   AMB_DOK_REVERS_PARTNERA, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_FIRMA, _
+                   AMB_VK_POVRAT_PRAZNE)) > 0, _
+               "ODL-9: firma NE ulazi u lanac -- kupac -> firma pada"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   AMB_DOK_REVERS_PARTNERA, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_STANICA, _
+                   AMB_VK_POVRAT_PRAZNE)) > 0, _
+               "ODL-9: kupac -> stanica preskace vozaca -- pada"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   AMB_DOK_REVERS_PARTNERA, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                   AMB_NALOG_KUPAC, TEST_KUP2_ID, AMB_NALOG_VOZAC, _
+                   AMB_VK_POVRAT_PRAZNE)) > 0, _
+               "ODL-10: broj jednog kupca uz kretanje drugog -- pada"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   AMB_DOK_REVERS, AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
+                   AMB_VK_POVRAT_PRAZNE)) > 0, _
+               "ODL-10: obican REVERS ne sme da nosi kupac -> vozac"
+    ' Obrnuta kapija ne sme da bude presiroka: kooperant -> stanica je NAS
+    ' revers i mora da prolazi (danasnji PRIJEM smer).
+    AssertEquals "", modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     AMB_DOK_REVERS, AMB_NALOG_STANICA, TEST_ST_ID, _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, _
+                     AMB_VK_POVRAT_PRAZNE), _
+                 "ODL-10: kooperant -> stanica je NAS revers i prolazi"
+
     ' --- ZAGLAVLJE --------------------------------------------------------
     AssertEquals "", modAmbalazaUgovor.AmbDokProblem( _
                      AMB_DOK_REVERS, "1/011026", Date, AMB_NALOG_STANICA, TEST_ST_ID), _
@@ -16886,6 +16925,10 @@ Private Sub Test_Amb_Inv08TxVlasnistvo()
     Dim txA As clsTransaction, txB As clsTransaction
     Dim scenario As String, dokID As String
     Dim pukloBezTx As Boolean, pukloKnjiga As Boolean, pukloZaglavlje As Boolean
+    Dim txC As clsTransaction
+    Dim dokC As String, pukloTudjaTx As Boolean, opisTudjaTx As String
+    Dim presloSvoja As Boolean
+    Dim dokP As String, pukloPar As Boolean, opisPar As String
     Dim opisKnjiga As String, opisZaglavlje As String
     Dim imaPosle As Boolean
     Dim errNum As Long, errDesc As String
@@ -16939,6 +16982,66 @@ Private Sub Test_Amb_Inv08TxVlasnistvo()
     txB.RollbackTx
     Set txB = Nothing
 
+    ' --- OZICENJE ODL-9: validator mora da se ZOVE iz pisca
+    '
+    ' Nova kapija stoji PRE idempotencije i pre racuna deficita, pa padajuci
+    ' slucaj ne trazi ni potvrdu deficita ni saldo -- meri bas nju. Prolazni
+    ' smer je pokriven tablicom u Test_Amb_DokumentUgovor i sa 50 postojecih
+    ' poziva kroz isti pisac.
+    Set txB = New clsTransaction
+    txB.BeginTx
+    txB.AddTableSnapshot TBL_AMBALAZA
+    txB.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    dokP = modAmbalaza.UpisiAmbDokument(txB, AMB_DOK_REVERS_PARTNERA, _
+                                        "KUPREV-" & scenario, Date, _
+                                        AMB_NALOG_KUPAC, TEST_KUP_ID)
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu txB, Date, TEST_TIP_AMB, 1#, _
+                AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_FIRMA, "", _
+                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokP
+    pukloPar = (Err.Number <> 0)
+    opisPar = Err.description
+    Err.Clear
+    On Error GoTo EH
+    txB.RollbackTx
+    Set txB = Nothing
+
+    ' --- TACKA 3: ista tabela u snapshotu, DRUGA transakcija
+    '
+    ' txC snapshotuje OBE tabele, pa je po snapshotu neodvojiv od vlasnika --
+    ' razlikuje ih samo to CIJI je dokument. Zaglavlje se pravi u svojoj
+    ' transakciji i ona se COMMIT-uje, da zaglavlje stvarno postoji kad ga txC
+    ' pomene; rollback bi ga uklonio, pa bi test pao na "dokument ne postoji" --
+    ' opet placebo.
+    Set txC = New clsTransaction
+    txC.BeginTx
+    txC.AddTableSnapshot TBL_AMBALAZA
+    txC.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    dokC = modAmbalaza.UpisiAmbDokument(txC, AMB_DOK_NABAVKA, "I8C-" & scenario, _
+                                        Date, AMB_NALOG_FIRMA, "")
+    ' svoja transakcija, svoj dokument -- mora da PROLAZI
+    presloSvoja = Len(modAmbalaza.PrenesiAmbalazu(txC, Date, TEST_TIP_AMB, 1#, _
+                      AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                      AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokC)) > 0
+    txC.CommitTx
+    Set txC = Nothing
+
+    ' nova transakcija, iste tabele, TUDJ dokument -- mora da PADNE
+    Set txC = New clsTransaction
+    txC.BeginTx
+    txC.AddTableSnapshot TBL_AMBALAZA
+    txC.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu txC, Date, TEST_TIP_AMB_B, 1#, _
+                AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokC
+    pukloTudjaTx = (Err.Number <> 0)
+    opisTudjaTx = Err.description
+    Err.Clear
+    On Error GoTo EH
+    txC.RollbackTx
+    Set txC = Nothing
+
     AssertTrue Len(dokID) > 0, _
                "AMB-INV-08: zaglavlje sa SVOJIM snapshotom prolazi -- kapija " & _
                "nije 'uvek odbij'"
@@ -16956,6 +17059,24 @@ Private Sub Test_Amb_Inv08TxVlasnistvo()
                opisZaglavlje & "]"
     AssertTrue Not imaPosle, _
                "ImaSnapshot je fail-closed: posle rollback-a nema snapshota"
+
+    ' --- TACKA 3: vlasnistvo DOKUMENTA, ne samo pokrivenost tabele
+    AssertTrue presloSvoja, _
+               "AMB-INV-08: svoja transakcija i svoj dokument PROLAZE -- " & _
+               "kapija nije 'uvek odbij'"
+    AssertTrue pukloTudjaTx, _
+               "AMB-INV-08: DRUGA transakcija sa istim snapshotom ne sme da " & _
+               "pise u knjigu nad tudjim dokumentom"
+    AssertTrue InStr(1, opisTudjaTx, "nije vezan za ovu transakciju") > 0, _
+               "AMB-INV-08: odbijenica imenuje NEVEZAN dokument, ne snapshot: [" & _
+               opisTudjaTx & "]"
+
+    ' --- ODL-9 je OZICEN u piscu, ne samo u ugovoru
+    AssertTrue pukloPar, _
+               "ODL-9: pisac mora da ODBIJE kupac -> firma na partnerovom " & _
+               "reversu -- validator se zove iz PrenesiAmbalazu"
+    AssertTrue InStr(1, opisPar, "AMB-10-ODL-9") > 0, _
+               "ODL-9: odbijenica imenuje odluku: [" & opisPar & "]"
     Exit Sub
 
 EH:
@@ -16964,8 +17085,10 @@ EH:
     On Error Resume Next
     If Not txA Is Nothing Then txA.RollbackTx
     If Not txB Is Nothing Then txB.RollbackTx
+    If Not txC Is Nothing Then txC.RollbackTx
     Set txA = Nothing
     Set txB = Nothing
+    Set txC = Nothing
     On Error GoTo 0
     LogFatal "Test_Amb_Inv08TxVlasnistvo", errNum, errDesc
 End Sub

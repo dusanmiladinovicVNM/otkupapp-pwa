@@ -6752,6 +6752,43 @@ SABOTAZE = {
         "Test_Amb_Inv08TxVlasnistvo",
         "ImaSnapshot je fail-closed: posle rollback-a nema snapshota",
     ),
+    # Kapija prestaje da trazi vlasnistvo DOKUMENTA, a jos trazi snapshot -- bas
+    # stanje koje je review #10b-2 imenovao kao P1: dve transakcije, dokument u
+    # jednoj, knjiga u drugoj, rollback dokumenta ostavi ambalazu.
+    "amb-inv08-dokument-nije-vezan": (
+        "modAmbalaza.bas",
+        "    RequireAmbTxIzvorniDokument tx, dokTip, dokID, sourceName\n",
+        "    ' SABOTAZA: vlasnistvo izvornog dokumenta se ne proverava\n",
+        "Test_Amb_Inv08TxVlasnistvo",
+        "AMB-INV-08: DRUGA transakcija sa istim snapshotom ne sme da ",
+    ),
+    # Firma se vraca u lanac: ODL-9 kaze da ne ulazi, a bez prednje grane
+    # validatora kupac -> firma prolazi jer su klase (PARTNER -> SOPSTVENI) dobre.
+    "amb-odl9-firma-u-lancu": (
+        "modAmbalazaUgovor.bas",
+        "        If StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then\n",
+        "        If False Then   ' SABOTAZA: na-strana se ne proverava\n",
+        "Test_Amb_DokumentUgovor",
+        "ODL-9: firma NE ulazi u lanac -- kupac -> firma pada",
+    ),
+    # Obrnuta kapija pada: kupac -> vozac moze da se knjizi na NAS revers sa NASIM
+    # brojem, cime je AMB-10-ODL-10 potpuno zaobidjen.
+    "amb-odl10-nas-revers-nosi-kupca": (
+        "modAmbalazaUgovor.bas",
+        "    If jeKupacVozac Then\n",
+        "    If False Then   ' SABOTAZA: obrnuta kapija ugasena\n",
+        "Test_Amb_DokumentUgovor",
+        "ODL-10: obican REVERS ne sme da nosi kupac -> vozac",
+    ),
+    # Validator postoji, ali se ne zove iz pisca -- tacno placebo koji bi tablica
+    # istinitosti pustila zelenu.
+    "amb-odl9-validator-se-ne-zove": (
+        "modAmbalaza.bas",
+        "    If Len(parProblem) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: nalaz validatora se ignorise\n",
+        "Test_Amb_Inv08TxVlasnistvo",
+        "ODL-9: pisac mora da ODBIJE kupac -> firma na partnerovom ",
+    ),
 }
 
 

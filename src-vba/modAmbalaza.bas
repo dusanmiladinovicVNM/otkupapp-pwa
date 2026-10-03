@@ -1280,16 +1280,24 @@ Public Function UpisiAmbDokument(ByVal tx As clsTransaction, _
         Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, "AppendRow nije uspeo za tblAmbalazaDokument."
     End If
 
+    ' Dokument koji smo upravo napravili pripada OVOJ transakciji, pa ga ona i
+    ' vezuje: sledeci PrenesiAmbalazu nad njim ne trazi nista od pozivaoca.
+    tx.BindSourceDocument DOK_TIP_AMBALAZA_DOKUMENT, novID
+
     UpisiAmbDokument = novID
 End Function
 
-' Vrsta posla sa zaglavlja, za kapiju AmbDokDozvoljavaKretanje.
+' Zaglavlje u celini: vrsta + vlasnik numerickog niza.
 '
-' STORNIRAN DOKUMENT NE PRIMA NOVA KRETANJA: zaglavlje sme da nosi Stornirano
-' (ono nije knjiga), a dopisivanje na ponisten dokument bilo bi kretanje bez
-' ziveg povoda.
-Public Function AmbDokVrstaZaID(ByVal ambDokID As String) As String
-    Const SRC As String = "modAmbalaza.AmbDokVrstaZaID"
+' Postoji jer AMB-10-ODL-10 trazi da se BrojOwner uporedi sa stranom kretanja,
+' a to se ne moze iz vrste same. AmbDokVrstaZaID ostaje javan (testovi ga
+' koriste) i poziva ovo, da provera storniranog i postojanja stoji na JEDNOM
+' mestu.
+Public Sub AmbDokZaglavlje(ByVal ambDokID As String, _
+                           ByRef vrsta As String, _
+                           ByRef brojOwnerTip As String, _
+                           ByRef brojOwnerID As String)
+    Const SRC As String = "modAmbalaza.AmbDokZaglavlje"
 
     RequireAmbDokSchema SRC
     RequireTacnoJedan TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, Trim$(ambDokID), _
@@ -1302,14 +1310,27 @@ Public Function AmbDokVrstaZaID(ByVal ambDokID As String) As String
                   "Ambalazni dokument '" & Trim$(ambDokID) & "' je storniran."
     End If
 
-    Dim v As Variant
-    v = LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, Trim$(ambDokID), COL_AMBD_VRSTA)
-    AmbDokVrstaZaID = AmbText(v)
+    vrsta = AmbText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                Trim$(ambDokID), COL_AMBD_VRSTA))
+    brojOwnerTip = AmbText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                       Trim$(ambDokID), COL_AMBD_BROJ_OWNER_TIP))
+    brojOwnerID = AmbText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                      Trim$(ambDokID), COL_AMBD_BROJ_OWNER_ID))
 
-    If Len(AmbDokVrstaZaID) = 0 Then
+    If Len(vrsta) = 0 Then
         Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
                   "Ambalazni dokument '" & Trim$(ambDokID) & "' nema vrstu."
     End If
+End Sub
+
+' Vrsta posla sa zaglavlja, za kapiju AmbDokDozvoljavaKretanje.
+'
+' STORNIRAN DOKUMENT NE PRIMA NOVA KRETANJA: zaglavlje sme da nosi Stornirano
+' (ono nije knjiga), a dopisivanje na ponisten dokument bilo bi kretanje bez
+' ziveg povoda.
+Public Function AmbDokVrstaZaID(ByVal ambDokID As String) As String
+    Dim ot As String, oi As String
+    AmbDokZaglavlje ambDokID, AmbDokVrstaZaID, ot, oi
 End Function
 
 ' ============================================================
@@ -1338,6 +1359,7 @@ Private Function UpisiRedKnjige(ByVal tx As clsTransaction, _
                                 ByVal vrsta As String, ByVal stornoOd As String, _
                                 ByVal sourceName As String) As String
     RequireAmbTxVlasnistvo tx, TBL_AMBALAZA, sourceName
+    RequireAmbTxIzvorniDokument tx, dokTip, dokID, sourceName
     RequireKnjigaSchema sourceName
     modAmbalazaUgovor.RequireAmbPrenos odTip, odID, naTip, naID, kolicina, tipAmb, vrsta, sourceName
 
@@ -1659,6 +1681,22 @@ Private Sub RequireAmbTxVlasnistvo(ByVal tx As clsTransaction, _
     End If
 End Sub
 
+' Tacka 3 iste invarijante: izvorni dokument mora biti vezan BAS za ovu
+' transakciju. Snapshot tabele dokazuje da se knjiga MOZE vratiti; ovo dokazuje
+' da se vraca ZAJEDNO sa dokumentom koji ju je izazvao.
+Private Sub RequireAmbTxIzvorniDokument(ByVal tx As clsTransaction, _
+                                        ByVal dokTip As String, _
+                                        ByVal dokID As String, _
+                                        ByVal sourceName As String)
+    If Not tx.OwnsSourceDocument(dokTip, dokID) Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, sourceName, _
+                  "AMB-INV-08: izvorni dokument " & Trim$(dokTip) & " '" & _
+                  Trim$(dokID) & "' nije vezan za ovu transakciju " & _
+                  "(BindSourceDocument) -- knjiga i dokument ne dele vlasnika, " & _
+                  "pa rollback dokumenta ne bi vratio ambalazu."
+    End If
+End Sub
+
 ' ============================================================
 ' PRENESI AMBALAZU -- javni ulaz u knjigu
 ' ============================================================
@@ -1703,13 +1741,24 @@ Public Function PrenesiAmbalazu(ByVal tx As clsTransaction, _
     ' VEZA DOKUMENT <-> KRETANJE. Vazi samo za tblAmbalazaDokument: za robne
     ' dokumente (otkup, otpremnica, prijemnica) tipovi nisu zatvoren skup, pa
     ' ugovor o njima namerno ne tvrdi nista.
+    Dim dokVrsta As String, dokOwnerTip As String, dokOwnerID As String
     If StrComp(Trim$(dokTip), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) = 0 Then
-        Dim dokVrsta As String
-        dokVrsta = AmbDokVrstaZaID(dokID)
+        AmbDokZaglavlje dokID, dokVrsta, dokOwnerTip, dokOwnerID
         If Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje(dokVrsta, vrstaK) Then
             Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
                       "Dokument vrste " & dokVrsta & " ne nosi kretanje " & vrstaK & "."
         End If
+    End If
+
+    ' AMB-10-ODL-9/-10: vrsta, vlasnik broja i par naloga se gledaju ZAJEDNO.
+    ' Obrnuta kapija vazi i kad dokument NIJE ambalazni (dokVrsta ostaje prazna):
+    ' kupac -> vozac uz povrat praznih je partnerov dokument, pa ga robni
+    ' dokument isto tako ne sme nositi.
+    Dim parProblem As String
+    parProblem = modAmbalazaUgovor.AmbDokKretanjeProblem( _
+        dokVrsta, dokOwnerTip, dokOwnerID, odTip, odID, naTip, vrstaK)
+    If Len(parProblem) > 0 Then
+        Err.Raise AMB_ERR_IDENTITET, SRC, parProblem
     End If
 
     ' AMB-INV-04, idempotencija: isti zahtev nad istim dokumentom i parem naloga.

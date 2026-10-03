@@ -1090,7 +1090,7 @@ Razlika nije stilska:
 | | |
 |---|---|
 poziv bez `tx` | **compile error**, ne nalaz koji se može ignorisati |
-lažno zeleno | nemoguće — nema grafa, nema dubine |
+lažno zeleno | nema grafa ni dubine koja se može prevariti — **ali vidi ispravku ispod**: prva verzija je dokazivala tri od pet tačaka |
 lažen nalaz | nemoguć — nema heuristike |
 sabotaža | prava: skini snapshot, pisac padne **po imenu** |
 
@@ -1113,6 +1113,67 @@ snapshotom, pa bi „uvek odbij" oborilo njih.
 je `dokID = "NEMA"`, pa je `PrenesiAmbalazu` padala na `AmbDokVrstaZaID` još pre
 jezgra — tvrdnja „puklo" je bila istinita iz pogrešnog razloga. Sada zaglavlje iz
 iste transakcije daje **pravi** `dokID`.
+
+#### Ispravka 03.10.2026 — jezgro je prvo dokazivalo TRI od PET tačaka
+
+Prva verzija runtime kapije je tražila `tx.ImaSnapshot(TBL_AMBALAZA)` i time
+dokazivala *„NEKA aktivna transakcija može da vrati knjigu"*, a ne *„ovo je ISTA
+transakcija koja poseduje izvorni dokument"*. Scenario koji je time prolazio:
+
+```
+txDoc: snapshot tblOtkup       -> upisi Otkup
+txAmb: snapshot tblAmbalaza    -> PrenesiAmbalazu(txAmb, Otkup, OTK-123) -> commit
+txDoc pukne                    -> rollback
+=> Otkup VRACEN, ambalaza OSTALA
+```
+
+To je tačno stanje zbog kojeg `AMB-INV-08` postoji, i **6.9 je to već pisalo**
+dvadeset redova ispod tabele iz koje sam implementirao: *„Kod koji commit-uje
+dokument, pa u **novoj** transakciji snapshot-uje samo knjigu, prošao bi zelen a
+invarijantu prekršio."* Pročitao sam jednolinijski unos, ne i paragraf koji
+opisuje tačno tu grešku.
+
+> **AMB-10-ODL-12.** Transakcija nosi **skup izvornih dokumenata**.
+> `BindSourceDocument(dokTip, dokID)` postavlja **pisac dokumenta** unutar svoje
+> TX; `PrenesiAmbalazu` traži `OwnsSourceDocument(dokTip, dokID)`. Time se
+> dokazuje **identitet transakcije**, ne pokrivenost tabele.
+
+Skup, ne jedna vrednost: `SavePrijemnicaMulti_TX` upisuje više prijemnica u jednoj
+transakciji. `UpisiAmbDokument` sam vezuje dokument koji napravi, pa pozivalac za
+ambalažne dokumente ne radi ništa dodatno.
+
+**Tačka 5** iz 6.9 (*registar vlasništva za OTK/OTP/PRJ, kao `who_writes`*) time
+**otpada**: bila je zahtev **statickog** checkera. Runtime vezivanje je jače —
+pisac dokumenta sam kaže šta poseduje, pa registar ne može da zastari.
+
+#### Ispravka 03.10.2026 — ODL-9/-10 su bile zapisane, a jezgro ih je zaobilazilo
+
+Klasa vlasnika broja i dozvoljeno kretanje su bile **dve nezavisne** provere, pa
+nijedna nije videla drugu. Tri zaobilaznice su prolazile:
+
+| | prošlo jer |
+|---|---|
+`Kupac → Firma` sa `REVERS_PARTNERA` | `Firma` je `SOPSTVENI`, pa su klase dobre — a ODL-9 kaže da firma **ne ulazi** u lanac |
+`BrojOwner = K1`, kretanje `K2 → Vozac` | nijedna provera nije poredila broj sa stranom kretanja — audit kvar |
+običan `REVERS` nad `Kupac → Vozac` | `REVERS` već dozvoljava `POVRAT_PRAZNE`, pa je partnerov broj potpuno zaobiđen |
+
+> **AMB-10-ODL-13.** Vrsta dokumenta, vlasnik broja i par naloga proveravaju se
+> **zajedno** (`AmbDokKretanjeProblem`), i **u oba smera**: `REVERS_PARTNERA`
+> zahteva `Kupac → Vozac` + `POVRAT_PRAZNE` + `BrojOwner = (Kupac, OdID)`; a
+> `Kupac → Vozac` + `POVRAT_PRAZNE` **mora** biti `REVERS_PARTNERA`.
+
+Obrnuta kapija je **deo pravila**, ne dodatak: bez nje se isto kretanje može
+knjižiti na našu vrstu i dobiti naš broj, pa ODL-10 ne važi ni za jedan dokument —
+samo za one koje pozivalac izvoli da nazove `REVERS_PARTNERA`. Nije preširoka:
+`Kooperant → Stanica` + `POVRAT_PRAZNE` je **naš** revers i prolazi (današnji
+`PRIJEM` smer), i to je tvrdnja u testu.
+
+*Provera:* tablica istinitosti u `Test_Amb_DokumentUgovor` (6 slučajeva, uključujući
+onaj koji **ne sme** da opali) + ožičenje kroz `PrenesiAmbalazu` u
+`Test_Amb_Inv08TxVlasnistvo`, i četiri sabotaže
+(`amb-inv08-dokument-nije-vezan`, `amb-odl9-firma-u-lancu`,
+`amb-odl10-nas-revers-nosi-kupca`, `amb-odl9-validator-se-ne-zove`). Zadnja
+postoji jer tablica istinitosti ne bi primetila da se validator **ne zove**.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 

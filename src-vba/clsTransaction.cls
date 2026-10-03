@@ -18,6 +18,17 @@ Private mEvents As Boolean
 Private mDisplayStatusBar As Boolean
 Private mStatusBarText As Variant
 
+' Izvorni dokumenti koje OVA transakcija poseduje -- kljuc "TIP|ID".
+'
+' AMB-INV-08 trazi da knjiga i njen izvorni dokument imaju ISTOG vlasnika
+' transakcije. Snapshot tabele to NE dokazuje: dve razlicite transakcije mogu
+' obe snapshotovati tblAmbalaza, pa dokument commit-ovati u jednoj a knjigu u
+' drugoj -- i rollback dokumenta ostavi ambalazu.
+'
+' SKUP, ne jedna vrednost: SavePrijemnicaMulti_TX upisuje vise prijemnica u
+' jednoj transakciji, pa bi jedna vrednost priznala samo prvu.
+Private mIzvorniDok As Object
+
 ' Imena tabela koje rollback NIJE uspeo da vrati. Prazno = rollback potpun.
 ' Nosi se kao stanje jer RollbackTx ne sme da digne gresku -- vidi komentar
 ' iznad RollbackTx.
@@ -40,6 +51,7 @@ Public Sub BeginTx()
     End If
 
     Set mSnapshots = CreateObject("Scripting.Dictionary")
+    Set mIzvorniDok = CreateObject("Scripting.Dictionary")
     mActive = True
     mNevracene = ""
 
@@ -149,6 +161,37 @@ Public Sub RollbackTx()
     End If
 End Sub
 
+' Ova transakcija POSEDUJE izvorni dokument -- postavlja ga pisac dokumenta,
+' unutar svoje TX, odmah po upisu.
+'
+' Bez ovoga AMB-INV-08 dokazuje samo da NEKA aktivna transakcija moze da vrati
+' knjigu. Scenario koji time prolazi, a invarijantu krsi:
+'
+'   txDoc: snapshot tblOtkup -> upisi Otkup
+'   txAmb: snapshot tblAmbalaza -> PrenesiAmbalazu(txAmb, Otkup, OTK-123) -> commit
+'   txDoc pukne -> rollback
+'   => Otkup vracen, ambalaza OSTALA
+Public Sub BindSourceDocument(ByVal dokTip As String, ByVal dokID As String)
+    If Not mActive Then Err.Raise 5, , "BindSourceDocument bez aktivne transakcije."
+    If Len(Trim$(dokTip)) = 0 Or Len(Trim$(dokID)) = 0 Then
+        Err.Raise 5, , "BindSourceDocument trazi i tip i ID izvornog dokumenta."
+    End If
+    If mIzvorniDok Is Nothing Then Exit Sub
+    Dim k As String
+    k = UCase$(Trim$(dokTip)) & "|" & UCase$(Trim$(dokID))
+    If Not mIzvorniDok.Exists(k) Then mIzvorniDok.Add k, True
+End Sub
+
+' FAIL-CLOSED, isto kao ImaSnapshot: neaktivna ili neuvezana transakcija vraca
+' False. "Ne znam" i "ne poseduje" se za invarijantu ne razlikuju.
+Public Function OwnsSourceDocument(ByVal dokTip As String, _
+                                   ByVal dokID As String) As Boolean
+    If Not mActive Then Exit Function
+    If mIzvorniDok Is Nothing Then Exit Function
+    OwnsSourceDocument = mIzvorniDok.Exists( _
+        UCase$(Trim$(dokTip)) & "|" & UCase$(Trim$(dokID)))
+End Function
+
 ' Je li tabela u ovoj transakciji -- citac za AMB-INV-08.
 '
 ' Pisac knjige ne moze da zna da li ga je pozivalac snapshotovao: tx je lokalan
@@ -200,6 +243,7 @@ Private Sub CleanUp()
     On Error GoTo 0
     
     Set mSnapshots = Nothing
+    Set mIzvorniDok = Nothing
     mActive = False
 End Sub
 
