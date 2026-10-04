@@ -17522,6 +17522,7 @@ Private Sub Test_Amb_NabavkaOtvaraIzdavanje()
     Dim dokNab As String, dokNab2 As String, dokRev As String
     Dim saldoPre As Double, saldoPosle As Double
     Dim brojNab As String, brojNab2 As String
+    Dim pukloDrugiNab As Boolean
     Dim opisBez As String
     Dim errBezNabavke As Long
     Dim pukloNula As Boolean
@@ -17552,8 +17553,18 @@ Private Sub Test_Amb_NabavkaOtvaraIzdavanje()
     Set tx = Nothing
 
     ' --- nabavka: dva dokumenta istog dana moraju imati RAZLICITE brojeve
+    '
+    ' DRUGI POZIV SE HVATA. Od kapije zauzetosti broja (AMB-10-ODL-20) ugasen
+    ' generator ne proizvodi dva ista broja nego ODBIJEN upis -- sto je bolje
+    ' ponasanje, ali nehvatan pad ide u LogFatal i tvrdnja se nikad ne izgovori
+    ' (drugi prolaz dokaza, 04.10.2026). Tvrdnja zato meri OBE posledice: da je
+    ' drugi dokument PROSAO i da nosi DRUG broj.
     dokNab = modAmbalaza.NabaviAmbalazu_TX(Date, TEST_ST_ID, TEST_TIP_AMB, 10#)
+    On Error Resume Next
     dokNab2 = modAmbalaza.NabaviAmbalazu_TX(Date, TEST_ST_ID, TEST_TIP_AMB, 5#)
+    pukloDrugiNab = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
     brojNab = CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokNab, COL_AMBD_BROJ))
     brojNab2 = CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokNab2, COL_AMBD_BROJ))
 
@@ -17597,7 +17608,7 @@ Private Sub Test_Amb_NabavkaOtvaraIzdavanje()
     AssertTrue Len(brojNab) > 0, _
                "NABAVKA: prvi broj je izracunat: [" & brojNab & "] [" & _
                brojNab2 & "]"
-    AssertTrue brojNab <> brojNab2, _
+    AssertTrue (Not pukloDrugiNab) And brojNab <> brojNab2, _
                "NABAVKA: dva dokumenta istog dana imaju razlicite brojeve"
     AssertTrue presloPosle, _
                "NABAVKA: posle nabavke stanica MOZE da izda iste gajbe"
