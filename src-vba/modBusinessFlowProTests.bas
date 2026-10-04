@@ -322,6 +322,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_JedanBrojJedanHeader
     Test_OTP_PredlogCeneJePoKlasi
     Test_OTP_AmbalazaSeKnjiziPriIzdavanju
+    Test_OTP_StornoVracaGajbeVozacu
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -5368,6 +5369,66 @@ End Sub
 ' i sme da ostane neizdat. Da se ambalaza knjizila sa nacrtom, napusten nacrt bi
 ' trajno umanjio stanje gajbi na otkupnom mestu, a svaka izmena ocekivanja bi
 ' trazila storniranje knjizenja.
+' STORNO OTPREMNICE: kontra-stav vraca gajbe i stanici i vozacu.
+'
+' Meri POSLOVNU POSLEDICU, ne upis. Izdavanje prebacuje gajbe sa stanice NA
+' VOZACA -- u starom modelu vozac je bio ZIG na redu stanice, pa je njegov saldo
+' nastajao inverzijom smera (VozacAmbEffectiveSmer) i ovaj test se nije mogao
+' napisati. Sada je vozac nalog, pa se njegov saldo meri direktno.
+'
+' Tvrdnje su nad vracanjem na IZMERENU pre-vrednost: suite vrti vise testova nad
+' istim fixture-om, pa apsolutan broj zavisi od redosleda.
+Private Sub Test_OTP_StornoVracaGajbeVozacu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPSTV")
+
+    Dim izvor As String
+    izvor = OtpNoviOtkup(scenario, 400#, 0#)      ' Klasa I: 400 kg, 20 gajbi
+    AssertTrue Len(izvor) > 0, "OTP storno: polazni otkup je upisan"
+
+    Dim stPre As Double, vozPre As Double
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-STV-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, izvor, razlog), _
+               "OTP storno: izvor vezan"
+    AssertTrue IzdajOtpremnicu_TX(otpID, razlog), _
+               "OTP storno: otpremnica je izdata"
+
+    Dim stPosle As Double, vozPosle As Double
+    stPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    vozPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+
+    Dim stornoProsao As Boolean
+    stornoProsao = StornoOtpremnica_TX(otpID)
+
+    Dim stKraj As Double, vozKraj As Double, kontra As Long
+    stKraj = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    vozKraj = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    kontra = AmbBrojKontraStavova(otpID, DOK_TIP_OTPREMNICA)
+
+    AssertTrue Abs((stPre - stPosle) - 20#) < 0.001, _
+               "OTP storno: izdavanje je skinulo gajbe sa stanice"
+    AssertTrue Abs((vozPosle - vozPre) - 20#) < 0.001, _
+               "OTP storno: izdavanje je prebacilo gajbe NA VOZACA"
+    AssertTrue stornoProsao, "OTP storno: storno izdate otpremnice prolazi"
+    AssertTrue Abs(stKraj - stPre) < 0.001, _
+               "OTP storno: saldo stanice se vraca na stanje pre izdavanja"
+    AssertTrue Abs(vozKraj - vozPre) < 0.001, _
+               "OTP storno: saldo vozaca se vraca na stanje pre izdavanja"
+    AssertEquals "1", CStr(kontra), _
+                 "OTP storno: jedan dogadjaj -- jedan kontra-stav"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_StornoVracaGajbeVozacu", Err.Number, Err.description
+End Sub
+
 Private Sub Test_OTP_AmbalazaSeKnjiziPriIzdavanju()
     On Error GoTo EH
 
@@ -5398,10 +5459,23 @@ Private Sub Test_OTP_AmbalazaSeKnjiziPriIzdavanju()
                  "OTP ambalaza: izdavanje knjizi TACNO jedan red"
     AssertTrue Abs(AmbKolicinaZaDokument(otpID) - 20#) < 0.001, _
                "OTP ambalaza: kolicina je ZBIR STAVKI izdate otpremnice"
-    AssertEquals "Izlaz", AmbPoljeZaDokument(otpID, COL_AMB_SMER), _
-                 "OTP ambalaza: smer je izlaz sa stanice"
-    AssertEquals TEST_ST_ID, AmbPoljeZaDokument(otpID, COL_AMB_ENTITET), _
+    ' SMER JE SADA PAR NALOGA, ne kolona. Stari red je imao JEDAN entitet
+    ' (stanicu) i ZIG vozaca, pa se saldo vozaca dobijao INVERZIJOM smera
+    ' (VozacAmbEffectiveSmer) -- citalac koji inverziju zaboravi dobijao je
+    ' pogresan ZNAK, ne gresku (6.8, fail-open). Nov red imenuje obe strane.
+    AssertEquals AMB_NALOG_STANICA, AmbPoljeZaDokument(otpID, COL_AMB_OD_TIP), _
                  "OTP ambalaza: gajbe odlaze sa OTKUPNOG MESTA otpremnice"
+    AssertEquals TEST_ST_ID, AmbPoljeZaDokument(otpID, COL_AMB_OD_ID), _
+                 "OTP ambalaza: izvorni nalog je BAS ta stanica"
+    ' Ova tvrdnja je NOVA sposobnost, ne prevod: stari model je vozaca mogao samo
+    ' da zigose, pa nije mogao da kaze da gajbe IDU NA NJEGOV nalog.
+    AssertEquals AMB_NALOG_VOZAC, AmbPoljeZaDokument(otpID, COL_AMB_NA_TIP), _
+                 "OTP ambalaza: gajbe idu NA VOZACA -- on je nalog, ne zig"
+    AssertEquals TEST_VOZ_ID, AmbPoljeZaDokument(otpID, COL_AMB_NA_ID), _
+                 "OTP ambalaza: odredisni nalog je BAS taj vozac"
+    AssertEquals AMB_VK_UZ_ROBU, _
+                 AmbPoljeZaDokument(otpID, COL_AMB_VRSTA_KRETANJA), _
+                 "OTP ambalaza: gajbe putuju SA ROBOM (AMBALAZA_UZ_ROBU)"
     AssertEquals TEST_TIP_AMB, AmbPoljeZaDokument(otpID, COL_AMB_TIP), _
                  "OTP ambalaza: knjizi se PO TIPU gajbe"
 

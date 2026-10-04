@@ -1176,7 +1176,7 @@ SABOTAZE = {
     # Stara ostaje aktivna: dve aktivne otpremnice nad istim blokovima.
     "ispravka-ne-stornira-staru": (
         "modDokumenta.bas",
-        "    If Not modStorno.StornoOtpremnica(staraID) Then\n",
+        "    If Not modStorno.StornoOtpremnica(staraID, tx) Then\n",
         "    If False Then   ' SABOTAZA: stara se ne stornira\n",
         "Test_OTP_IspravkaIzdate",
         "Ispravka: stara je stornirana",
@@ -5588,7 +5588,7 @@ SABOTAZE = {
     # trajno umanjilo stanje gajbi na otkupnom mestu.
     "otp-ambalaza-se-ne-knjizi-pri-izdavanju": (
         "modDokumenta.bas",
-        "    OtpKnjiziAmbalazu otpremnicaID, rOtp, ocekAmb, SRC\n",
+        "    OtpKnjiziAmbalazu tx, otpremnicaID, rOtp, ocekAmb, SRC\n",
         "    ' SABOTAZA: izdavanje ne knjizi gajbe\n",
         "Test_OTP_AmbalazaSeKnjiziPriIzdavanju",
         "OTP ambalaza: izdavanje knjizi TACNO jedan red",
@@ -6877,6 +6877,25 @@ SABOTAZE = {
         "    ' SABOTAZA: storno otkupa ostaje na zastavici\n",
         "Test_OTK_StornoJednimID",
         "OTK storno: saldo stanice se vraca na stanje pre otkupa",
+    ),
+    # Storno otpremnice ostaje na zastavici: nov citalac je ne gleda, pa gajbe
+    # ostaju na vozacu i posle storna -- tiho.
+    "amb-otp-storno-bez-kontrastava": (
+        "modStorno.bas",
+        "    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_OTPREMNICA, otpremnicaID\n",
+        "    ' SABOTAZA: storno otpremnice ostaje na zastavici\n",
+        "Test_OTP_StornoVracaGajbeVozacu",
+        "OTP storno: saldo stanice se vraca na stanje pre izdavanja",
+    ),
+    # Vrsta kretanja postaje PRENOS_INTERNO: matrica klasa to pusta (oba naloga
+    # su SOPSTVENI), pa red nastaje sa POGRESNIM poslovnim znacenjem -- gajbe uz
+    # robu izgledaju kao interni prenos praznih (6.7).
+    "amb-otp-vrsta-prenos-interno": (
+        "modDokumenta.bas",
+        "                AMB_VK_UZ_ROBU, DOK_TIP_OTPREMNICA, otpremnicaID\n",
+        "                AMB_VK_PRENOS_INTERNO, DOK_TIP_OTPREMNICA, otpremnicaID\n",
+        "Test_OTP_AmbalazaSeKnjiziPriIzdavanju",
+        "OTP ambalaza: gajbe putuju SA ROBOM (AMBALAZA_UZ_ROBU)",
     ),
     # AMB-INV-07 se ne meri posle kontra-stava: storno dokumenta cija je
     # ambalaza kasnije otisla dalje ostavi REALAN nalog u minusu, a to je stanje

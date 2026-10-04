@@ -1294,6 +1294,11 @@ ROLLBACK_RED_CASES = [
 #                                  uspesnog AppendRow zaglavlja.
 #   StornoOtkup                 -- otkup se tu MENJA (MarkRowStornirano), i bind
 #                                  stoji POSLE te izmene.
+#   OtpIzdaj                    -- otpremnica se tu MENJA (IzdatoStatus), i bind
+#                                  stoji POSLE te izmene. Knjizenje je zbog toga
+#                                  i premesteno IZA nje: ranije je stajalo pre,
+#                                  pa bind nije imao sta da dokazuje.
+#   StornoOtpremnica            -- otpremnica se tu MENJA (MarkRowStornirano).
 #
 # NA LISTI SU PISCI IZVORNOG DOKUMENTA, NE LEDGER PRIMITIVI.
 # modAmbalaza.StornirajAmbalazuDokumenta je bio na listi i vezivao dokument sam.
@@ -1306,6 +1311,8 @@ AMB_BIND_DOZVOLJENI = {
     ("modAmbalaza", "UpisiAmbDokument"),
     ("modOtkup", "CreateOtkup"),
     ("modStorno", "StornoOtkup"),
+    ("modDokumenta", "OtpIzdaj"),
+    ("modStorno", "StornoOtpremnica"),
 }
 _AMB_END = re.compile(r'^End\s+(?:Sub|Function|Property)\b', re.IGNORECASE)
 _BIND_POZIV = re.compile(r'\.\s*BindSourceDocument\b', re.IGNORECASE)

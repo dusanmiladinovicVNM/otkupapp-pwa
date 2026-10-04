@@ -57,10 +57,12 @@ pogled izgledaju nedosledno (dve noge kod otkupa, jedna kod otpremnice).
 | 7 | modDokumenta:6863 | `KolAmbVracena` | Izlaz · Kupac | da | `PrijemnicaID` | **`Prijemnica`** |
 | 8 | modDokumenta:7026 | `kolAmb` | Izlaz · Kupac | da | **`brojDok`** | `Kupci-Otpremnica` |
 
-> **REDOVI 1–4 SU PRESEČENI (`10b-2`, 6.12e) — tabela ostaje kao MERENJE
+> **REDOVI 1–5 SU PRESEČENI (`10b-2`, 6.12e i 6.12f) — tabela ostaje kao MERENJE
 > ZATEČENOG.** Danas otkup knjiži **dva reda** umesto četiri nogu: `UZ_ROBU`
 > (Kooperant → Stanica) i `IZDATA_PRAZNA` (Stanica → Kooperant), **oba pod
-> `Otkup`**. Tabela se ne prepisuje jer je ona zapis šta je bilo — iz nje se čita
+> `Otkup`**. **Red 5** (otpremnica) je jedan red `Stanica → Vozac` sa
+> `AMBALAZA_UZ_ROBU` — vozač više nije **žig** nego **nalog** (6.12f).
+> Tabela se ne prepisuje jer je ona zapis šta je bilo — iz nje se čita
 > zašto su odluke donete, a prepisana bi izgubila taj razlog.
 | 9 | modDokumenta:8619–8669 | revers, 4 smera | 2 noge (KOOP) / 1 noga (FIRMA) | samo FIRMA | **`brojDok`** | `OM-*` |
 
@@ -1509,6 +1511,51 @@ stanica izdala (`AMB-10-ODL-18`).
 samo pisca. Napisano je, ali nije dokazano, i tako se i prijavljuje. Isto važi za
 `MsgBox` granu na ekranu: dijalog se iz suite-a ne može potvrditi, pa je merena
 samo granica ispod njega (broj greške i račun manjka).
+
+### 6.12f Otpremnica — vozač prestaje da bude žig
+
+Jedan događaj, jedan red:
+
+```
+ukupno gajbi   Stanica -> Vozac   AMBALAZA_UZ_ROBU   Otpremnica / otpremnicaID
+```
+
+**Vrsta je pročitana, ne izvedena.** 6.7 imenuje `AMBALAZA_UZ_ROBU` za „otkup,
+**otpremnica**, prijemnica, izlaz kupcu", a `PRENOS_INTERNO` za **prazne** gajbe
+između sopstvenih naloga (6.7a). Otpremnica nosi robu — dakle `UZ_ROBU`. Oba
+naloga su `SOPSTVENI`, pa bi matrica klasa pustila i `PRENOS_INTERNO`: razlika je
+**poslovna**, i zato je vrsta podatak a ne izvod iz para.
+
+**VOZAČ PRESTAJE DA BUDE ŽIG, I TO JE NOVA SPOSOBNOST.** Stari red je imao jedan
+entitet (stanicu) i `VozacID` kao **oznaku**, pa se vozačev saldo dobijao
+**inverzijom smera** (`VozacAmbEffectiveSmer`) — čitalac koji inverziju zaboravi
+dobija **pogrešan znak**, ne grešku (6.8, fail-open). Nov red imenuje obe strane,
+pa se vozačev saldo čita istim računom kao svaki drugi. Test to i tvrdi
+(`OTP ambalaza: gajbe idu NA VOZACA -- on je nalog, ne zig`) — tvrdnja koja se u
+starom modelu nije mogla napisati.
+
+**NEMA PROTOKOLA POTVRDE DEFICITA, i to je razlika od otkupa.** Izvor je Stanica,
+dakle `SOPSTVENI` nalog, pa se po `AMB-10-ODL-8` njen manjak **ne pokriva** tuđom
+ambalažom nego je **tvrdo odbijen**. Stanica gajbe dobija otkupom; ako ih nema,
+pitanje operateru ne bi imalo smisla — nema čega da potvrdi.
+
+**REDOSLED SE MORAO PROMENITI.** Knjiženje je stajalo **pre** izmene zaglavlja
+(`OtpKnjiziAmbalazu`, pa `IzdatoStatus = IZDATO`), a `AMB-10-ODL-15` traži da
+`BindSourceDocument` stoji **posle** što je transakcija dokument stvarno promenila.
+Sada je: **označi izdato → veži → knjiži**. Oba poteza su u istoj transakciji, pa
+rollback i dalje povlači oba — menja se samo šta se čime dokazuje.
+
+`tx` je **obavezan** i na `OtpIzdaj` i na `StornoOtpremnica`: opcion bi bio
+fail-open seam. Storno ide kroz **kontra-stav** (`AMB-10-ODL-16`), uz zatečenu
+zastavicu koja pokriva redove starog oblika — isto preklapanje, i isto izgovoreno,
+kao kod otkupa. Tri pozivna mesta (`StornoOtpremnica_TX`, `OtpIspravi`,
+`PonistiZbirnaChain_TX`) tx već imaju, uz snapshot obe tabele — izmereno pre koda.
+
+*Provera:* `Test_OTP_AmbalazaSeKnjiziPriIzdavanju` (dve tvrdnje prevedene, tri
+nove: `Od`, `Na`, vrsta) · `Test_OTP_StornoVracaGajbeVozacu` 6 tvrdnji · sabotaže
+`amb-otp-storno-bez-kontrastava`, `amb-otp-vrsta-prenos-interno`, uz zatečene
+`otp-ambalaza-se-ne-knjizi-pri-izdavanju` i `ispravka-ne-stornira-staru` (sidra
+pomerena, tvrdnje netaknute).
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 

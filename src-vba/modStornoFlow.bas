@@ -2186,7 +2186,7 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
     Next k
 
     For k = 1 To otpIDs.count
-        If Not StornoOtpremnica(CStr(otpIDs(k))) Then _
+        If Not StornoOtpremnica(CStr(otpIDs(k)), tx) Then _
             Err.Raise ERR_STORNO_FW_BASE + 51, SRC, "StornoOtpremnica (ponistenje) nije uspeo: " & CStr(otpIDs(k))
     Next k
     res("otp") = otpIDs.count

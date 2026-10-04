@@ -219,7 +219,7 @@ Public Function StornoOtpremnica_TX(ByVal otpremnicaID As String) As Boolean
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    If Not StornoOtpremnica(otpremnicaID) Then
+    If Not StornoOtpremnica(otpremnicaID, tx) Then
         Err.Raise ERR_STORNO_BASE + 2, SRC, _
                   "StornoOtpremnica nije uspeo. OtpremnicaID=" & otpremnicaID
     End If
@@ -237,7 +237,12 @@ EH:
     StornoOtpremnica_TX = False
 End Function
 
-Public Function StornoOtpremnica(ByVal otpremnicaID As String) As Boolean
+' tx je OBAVEZAN -- isti razlog kao kod StornoOtkup: storno knjige je
+' kontra-stav koji mora da legne u ISTU transakciju (AMB-INV-08). Sva tri
+' pozivna mesta (StornoOtpremnica_TX, OtpIspravi, PonistiZbirnaChain_TX) tx vec
+' imaju, uz snapshot TBL_OTPREMNICA i TBL_AMBALAZA.
+Public Function StornoOtpremnica(ByVal otpremnicaID As String, _
+                                 ByVal tx As clsTransaction) As Boolean
     Const SRC As String = "StornoOtpremnica"
 
     On Error GoTo EH
@@ -265,7 +270,19 @@ Public Function StornoOtpremnica(ByVal otpremnicaID As String) As Boolean
     rowOtp = RequireStornoAllowed(TBL_OTPREMNICA, otpremnicaID, COL_OTP_ID, SRC)
 
     MarkRowStornirano TBL_OTPREMNICA, rowOtp, SRC
+
+    ' AMB-INV-08: dokument se vezuje POSLE sto ga je ova transakcija promenila.
+    ' Vezivanje iz ambalaznog primitiva bilo bi samopotvrda (v. AMB-10-ODL-15),
+    ' pa je modStorno.StornoOtpremnica na AMB_BIND_DOZVOLJENI.
+    tx.BindSourceDocument DOK_TIP_OTPREMNICA, otpremnicaID
+
     StornoAmbalazaByDokument otpremnicaID, DOK_TIP_OTPREMNICA
+    ' NOV MODEL: kontra-stav. Zastavica pokriva redove STAROG oblika, kontra-stav
+    ' nove -- oba stoje dok tabela nosi dva oblika reda (6.13). Preklapanje je
+    ' isto kao kod otkupa: zastavica gada po (DokumentID, DokumentTip) pa zigose
+    ' i nove redove, sto je za nov citalac inertno, i stoji PRE kontra-stava da
+    ' njega ne ozigose.
+    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_OTPREMNICA, otpremnicaID
 
     StornoOtpremnica = True
     Exit Function

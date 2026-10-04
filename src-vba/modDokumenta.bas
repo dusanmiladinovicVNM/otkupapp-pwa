@@ -3426,7 +3426,7 @@ Public Function IzdajOtpremnicu_TX(ByVal otpremnicaID As String, _
     ' sa stanice, a otpremnicu neizdatu.
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    OtpIzdaj otpremnicaID
+    OtpIzdaj otpremnicaID, tx
 
     tx.CommitTx
     Set tx = Nothing
@@ -3490,7 +3490,7 @@ Public Function CreateOtpremnicaIzIzvora_TX(ByVal h As Object, _
     Next i
 
     OtpUpisiOcekivanjeIzIzvora CreateOtpremnicaIzIzvora_TX
-    OtpIzdaj CreateOtpremnicaIzIzvora_TX
+    OtpIzdaj CreateOtpremnicaIzIzvora_TX, tx
 
     tx.CommitTx
     Set tx = Nothing
@@ -4717,7 +4717,10 @@ Private Sub OtpUkloniIzvor(ByVal otpremnicaID As String, ByVal otkupID As String
 End Sub
 
 ' --- core: izdavanje --------------------------------------------------------
-Private Sub OtpIzdaj(ByVal otpremnicaID As String)
+' tx je OBAVEZAN: izdavanje knjizi gajbe, a AMB-INV-08 trazi da knjiga i izvorni
+' dokument dele rollback. Opcion tx bio bi fail-open seam -- pozivalac koji ga
+' zaboravi tiho preskoci vezivanje, a kapija bi pala na nejasnoj poruci.
+Private Sub OtpIzdaj(ByVal otpremnicaID As String, ByVal tx As clsTransaction)
     Const SRC As String = "OtpIzdaj"
 
     Dim rOtp As Long
@@ -4782,9 +4785,15 @@ Private Sub OtpIzdaj(ByVal otpremnicaID As String)
         End If
     Next i
 
-    OtpKnjiziAmbalazu otpremnicaID, rOtp, ocekAmb, SRC
-
+    ' REDOSLED: OZNACI IZDATO -> VEZI -> KNJIZI.
+    '
+    ' Knjizenje je stajalo PRE izmene zaglavlja, a AMB-10-ODL-15 trazi da
+    ' BindSourceDocument stoji POSLE sto je ova transakcija dokument stvarno
+    ' promenila. Oba poteza su u istoj transakciji, pa rollback i dalje povlaci
+    ' oba -- menja se samo sta se cime dokazuje.
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO, SRC
+    tx.BindSourceDocument DOK_TIP_OTPREMNICA, otpremnicaID
+    OtpKnjiziAmbalazu tx, otpremnicaID, rOtp, ocekAmb, SRC
 End Sub
 
 ' --- core: ispravka izdate -------------------------------------------------
@@ -4828,7 +4837,7 @@ Private Function OtpIspravi(ByVal staraID As String) As String
     ' Storno stare IDE PRE nego sto nova primi izvore: izvor sme da bude u
     ' tacno jednoj aktivnoj otpremnici (OtpRequireIzvorValjan), pa bi obrnut
     ' redosled sam sebe odbio. Jezgro nosi i kapiju izvora aktivne zbirne.
-    If Not modStorno.StornoOtpremnica(staraID) Then
+    If Not modStorno.StornoOtpremnica(staraID, tx) Then
         Err.Raise vbObjectError + 1340, SRC, _
                   "Storno stare otpremnice nije uspeo: " & staraID
     End If
@@ -4928,7 +4937,23 @@ End Function
 '
 ' Zato je i kolicina ZBIR STAVKI izdate otpremnice, a ne broj sa zaglavlja: posle
 ' S1/S3a zaglavlje kolicinu ambalaze vise i ne nosi.
-Private Sub OtpKnjiziAmbalazu(ByVal otpremnicaID As String, ByVal rOtp As Long, _
+' JEDAN DOGADJAJ: Stanica -> Vozac, uz robu (AMB-10b-2, cutover).
+'
+' Stari red je nosio Smer=Izlaz i Entitet=Stanica, a VozacID je bio ZIGOSAN --
+' saldo vozaca se racunao inverzijom smera (VozacAmbEffectiveSmer), sto 6.8
+' zove fail-open: citalac koji inverziju zaboravi dobija POGRESAN ZNAK, ne
+' gresku. Nov red imenuje OBE strane, pa vozac prestaje da bude labela i
+' postaje nalog.
+'
+' VRSTA JE ZAPISANA, NE IZVEDENA: 6.7 imenuje AMBALAZA_UZ_ROBU za otkup,
+' OTPREMNICU, prijemnicu i izlaz kupcu; PRENOS_INTERNO je za PRAZNE gajbe
+' izmedju sopstvenih naloga (6.7a). Otpremnica nosi robu, pa nosi UZ_ROBU.
+'
+' NEMA PROTOKOLA POTVRDE DEFICITA, i to je razlika od otkupa: izvor je Stanica,
+' dakle SOPSTVENI nalog, pa se po AMB-10-ODL-8 njen manjak NE pokriva tudjom
+' ambalazom nego je TVRDO odbijen. Gajbe stanica dobija otkupom.
+Private Sub OtpKnjiziAmbalazu(ByVal tx As clsTransaction, _
+                              ByVal otpremnicaID As String, ByVal rOtp As Long, _
                               ByVal ocekAmb As Object, ByVal src As String)
     Dim ukupno As Double
     Dim kljuc As Variant
@@ -4966,8 +4991,17 @@ Private Sub OtpKnjiziAmbalazu(ByVal otpremnicaID As String, ByVal rOtp As Long, 
                   Fmt2Zbr(ukupno) & " gajbi."
     End If
 
-    TrackAmbalaza datum, tipAmb, CLng(ukupno), "Izlaz", stanicaID, "Stanica", _
-                  vozacID, otpremnicaID, DOK_TIP_OTPREMNICA
+    ' Vozac je sada STRANA, ne zig: bez njega red ne bi imao odrediste.
+    If Len(vozacID) = 0 Then
+        Err.Raise vbObjectError + 1338, src, _
+                  "Otpremnica " & otpremnicaID & " nema vozaca, a izdaje " & _
+                  Fmt2Zbr(ukupno) & " gajbi -- gajbe ne mogu da odu NIKOME."
+    End If
+
+    modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, ukupno, _
+                AMB_NALOG_STANICA, stanicaID, _
+                AMB_NALOG_VOZAC, vozacID, _
+                AMB_VK_UZ_ROBU, DOK_TIP_OTPREMNICA, otpremnicaID
 End Sub
 
 Private Sub OtpRequireJednakost(ByVal otpremnicaID As String, _
