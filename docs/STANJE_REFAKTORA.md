@@ -490,6 +490,22 @@
     Dokaz: `Test_Amb_DokBrojZauzetPoVlasniku` 5 tvrdnji · tri tvrdnje dopune u
     `Test_Amb_UndoStornaOdbijenNadKnjigom` (isti ID pod drugim tipom **nije**
     pogodak) · tri nove sabotaže. Katalog 678 → 681.
+58. **Dokaz reza: DOKAZANO (grupno), posle šest nalaza iste klase** (04.10.2026).
+    `dokaz.py --grupe 6` nad **25** sabotaža koje je ovaj rez dodao ili dirao:
+    **25/25 crvenih, svih 25 obara SVOJU tvrdnju**, izvor identičan pre i posle
+    (`71bf98185db62752`). Trebalo je **četiri** prolaza da se tamo dođe, i svaki je
+    našao nalaze iste klase: **tvrdnja koja meri ISHOD, a ne RAZLOG, ostaje istinita
+    kad se ugasi jedan sloj kapije.**
+    Redom: `ODL-9` pokriven `ODL-10` · `ImaSnapshot` pokriven time što `CleanUp`
+    briše i snapshote · manjak stanice pokriven protokolom potvrde · `ODL-9`
+    validator pokriven protokolom potvrde · seed zavisio od generatora · i
+    posledica duplog broja pokrivena **novom kapijom iz istog reza**
+    (`AMB-10-ODL-20`): sabotaza generatora više ne pravi dva ista broja nego
+    **odbijen upis**. Kapija se nije slabila — tvrdnja je ojačana.
+    Uz to je nađeno da **69 BFP tvrdnji nije bilo dokazivo** jer je kapija merila
+    podniz (v. red u „Dug sa imenom“).
+    `grupno izmereno 19/25` — pun pojedinačni dokaz je isti poziv bez `--grupe` i ide
+    pred release.
     Sabotaža je **preimenovanje** tabele (`GetTable` vraća `Nothing` → 91), ne
     menjanje šeme; tri privremene tabele imaju **po dve kolone** jer `Value2` nad
     jednom ćelijom vraća skalar, a `RestoreTable` radi `UBound`. Tri sabotaže, po
