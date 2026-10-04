@@ -3547,7 +3547,7 @@ Public Function IspravkaOtpremnice_TX(ByVal otpremnicaID As String, _
     ' Storno stare vraca gajbe koje je njeno izdavanje knjizilo (OtpIzdaj).
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    IspravkaOtpremnice_TX = OtpIspravi(otpremnicaID)
+    IspravkaOtpremnice_TX = OtpIspravi(otpremnicaID, tx)
 
     tx.CommitTx
     Set tx = Nothing
@@ -4797,7 +4797,19 @@ Private Sub OtpIzdaj(ByVal otpremnicaID As String, ByVal tx As clsTransaction)
 End Sub
 
 ' --- core: ispravka izdate -------------------------------------------------
-Private Function OtpIspravi(ByVal staraID As String) As String
+' tx je OBAVEZAN, i to NIJE kozmetika: ispravka stornira staru otpremnicu, a
+' njen storno od 10b-2 upisuje kontra-stav u knjigu -- AMB-INV-08 trazi da
+' knjiga i izvorni dokument dele rollback. Vlasnik transakcije je
+' IspravkaOtpremnice_TX (snapshot tblOtpremnica + tblAmbalaza), pa se tx
+' PROVLACI; nova transakcija ovde bi razdvojila rollback granice.
+'
+' Prvi pokusaj je zvao modStorno.StornoOtpremnica(staraID, tx) bez ovog
+' parametra. U VBA lokalna promenljiva POZIVAOCA nije vidljiva pozvanoj
+' proceduri, pa je uz Option Explicit to compile error -- a arity sweep je bio
+' zelen, jer je broj argumenata tacan. Nedeklarisana promenljiva je semantika,
+' ne arnost (review 04.10.2026, P1).
+Private Function OtpIspravi(ByVal staraID As String, _
+                            ByVal tx As clsTransaction) As String
     Const SRC As String = "OtpIspravi"
 
     Dim rStara As Long
