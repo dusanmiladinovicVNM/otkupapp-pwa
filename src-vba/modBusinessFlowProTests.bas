@@ -5107,8 +5107,16 @@ Private Sub SeedAmbalazaOpticaj()
     Dim i As Long, j As Long
     For i = LBound(stanice) To UBound(stanice)
         For j = LBound(tipovi) To UBound(tipovi)
+            ' BROJ SE PROSLEDJUJE, ne racuna: zasejavanje ne sme da zavisi od
+            ' generatora. Sabotaza generatora je inace obarala SEED (duplikat broja
+            ' na kapiji zauzetosti), fixture je ostajao nezasejan i padale su
+            ' STOTINE tvrdnji -- a ciljani test je LogFatal-ovao pre svoje tvrdnje.
+            ' Jedinstven je po (stanica, tip, run), pa kapija zauzetosti prolazi.
             modAmbalaza.NabaviAmbalazu_TX Date, CStr(stanice(i)), CStr(tipovi(j)), _
-                                          SEED_NABAVKA, "", "SEED opticaj suite"
+                                          SEED_NABAVKA, _
+                                          "SEEDNAB-" & CStr(i) & "-" & CStr(j) & _
+                                          "-" & NewScenarioCode("AMBNAB"), _
+                                          "SEED opticaj suite"
         Next j
     Next i
 
@@ -17469,6 +17477,9 @@ Private Sub Test_Amb_DokBrojZauzetPoVlasniku()
                                                  4#, brojK, "P2 drugi " & scenario)
 
     ' --- opseg niza: vozac sa ISTIM ID-em kao stanica ima SVOJ niz
+    ' Niz stanice je neprazan zbog DVA dokumenta koja je ovaj test upisao gore --
+    ' ne zbog zasejavanja, koje od 04.10.2026 nosi svoje brojeve. Ako se ti upisi
+    ' ikad uklone, ova tvrdnja prestaje da meri (oba niza bi krenula od 1).
     nizStanice = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, TEST_ST_ID, Date)
     nizVozaca = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_VOZAC, TEST_ST_ID, Date)
 
@@ -17804,7 +17815,14 @@ Private Sub Test_Amb_Inv08TxVlasnistvo()
                opisTudjaTx & "]"
 
     ' --- ODL-9 je OZICEN u piscu, ne samo u ugovoru
-    AssertTrue pukloPar, _
+    '
+    ' TVRDNJA IMENUJE ODLUKU, ne samo odbijanje. Sa ugasenim validatorom upis je
+    ' i dalje odbijen -- ali PROTOKOLOM POTVRDE DEFICITA, jer kupac u fixture-u
+    ' nema gajbe. "Puklo je" zato ostaje istinito i sabotaza
+    ' amb-odl9-validator-se-ne-zove je javljala NE OBARA SVOJ TEST (drugi prolaz
+    ' dokaza, 04.10.2026). Sestrinska tvrdnja ispod meri isto, ali nosi dinamican
+    ' rep, pa ne moze biti meta sabotaze.
+    AssertTrue pukloPar And InStr(1, opisPar, "AMB-10-ODL-9") > 0, _
                "ODL-9: pisac mora da ODBIJE kupac -> firma na partnerovom reversu -- validator se zove iz PrenesiAmbalazu"
     AssertTrue InStr(1, opisPar, "AMB-10-ODL-9") > 0, _
                "ODL-9: odbijenica imenuje odluku: [" & opisPar & "]"
