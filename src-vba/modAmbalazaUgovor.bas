@@ -576,6 +576,7 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
                                       ByVal naTip As String, _
                                       ByVal vrstaKretanja As String) As String
     Dim jePartnerov As Boolean, povratOdKupca As Boolean
+    Dim ko As String
     jePartnerov = (StrComp(Trim$(vrsta), AMB_DOK_REVERS_PARTNERA, vbTextCompare) = 0)
     ' OBRNUTA KAPIJA GLEDA SVAKI POVRAT OD KUPCA, ne samo kupac -> vozac.
     ' Prva verzija je trazila ceo par, pa su obican REVERS nad kupac -> FIRMA i
@@ -622,10 +623,48 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
                 Trim$(naTip) & "."
             Exit Function
         End If
-        AmbDokKretanjeProblem = "AMB-10-ODL-10: povrat praznih od kupca je " & _
-            "partnerov dokument i nosi njegov broj -- vrsta mora biti " & _
-            AMB_DOK_REVERS_PARTNERA & ", a nije (" & Trim$(vrsta) & ")."
+        ' AMB-10-ODL-22: pravilo je VLASNIK BROJA, ne vrsta dokumenta.
+        '
+        ' Do 05.10.2026 je ovde stajalo "vrsta mora biti REVERS_PARTNERA".
+        ' Operater je izmerio premisu: PRIJEMNICA je i sama partnerov dokument
+        ' (eksterna je, osim kad nasa hladnjaca izdaje), a zamena pune ambalaze
+        ' praznom se knjizi POD BROJEM PRIJEMNICE -- bez dodatnog broja. ODL-10
+        ' tu nije zaobidjen nego ISPUNJEN: povrat nosi kupcev broj.
+        '
+        ' Zato se meri ono sto ODL-10 i kaze -- "nosi njegov broj" -- a ne vrsta
+        ' dokumenta kao njena zamena. Obican REVERS nad kupac -> vozac i dalje
+        ' pada, jer je njegov broj NAS; robni dokument koji vlasnika broja ne
+        ' objavi isto pada, jer prazan vlasnik nije kupac (fail-closed).
+        ko = Trim$(brojOwnerTip)
+        If Len(ko) = 0 Then ko = "(nije zadat)"
+        If StrComp(Trim$(brojOwnerTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-10: povrat praznih od kupca " & _
+                "nosi kupcev broj, a vlasnik broja je " & ko & " (dokument '" & _
+                Trim$(vrsta) & "')."
+            Exit Function
+        End If
+        If StrComp(Trim$(brojOwnerID), Trim$(odID), vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-10: broj nosi kupac '" & _
+                Trim$(brojOwnerID) & "' a prazne vraca '" & Trim$(odID) & _
+                "' -- dokument bi imao tudj broj."
+        End If
     End If
+End Function
+' AMB-10-ODL-22: ROBNI dokument UME da bude partnerov.
+'
+' Prijemnica je eksterni dokument -- izdaje ju hladnjaca, a mi je primamo --
+' pa je njen broj KUPCEV broj. Kad nasa hladnjaca izdaje prijemnicu, broj je
+' nas, ali je i taj kupac red u tblKupci, pa je vlasnik broja isti izraz.
+'
+' Mapa je ZATVORENA i za ostale tipove vraca prazno. To nije rupa nego
+' fail-closed: obrnuta kapija ODL-10 odbija povrat od kupca bez vlasnika
+' broja, pa dokument koji ga ne objavi ne moze da knjizi taj povrat.
+'
+' Oblik reda: (dokTip, tabela, kolona ID-a, nalogTip vlasnika, kolona vlasnika)
+Public Function AmbRobniVlasniciBroja() As Variant
+    AmbRobniVlasniciBroja = Array( _
+        Array(DOK_TIP_PRIJEMNICA, TBL_PRIJEMNICA, COL_PRJ_ID, _
+              AMB_NALOG_KUPAC, COL_PRJ_KUPAC))
 End Function
 
 ' Pripada li nalog trazenoj klasi.

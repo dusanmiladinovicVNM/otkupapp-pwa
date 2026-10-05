@@ -2185,19 +2185,38 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
         blokKanon = blokKanon + modDokumenta.IzvoriOtpremnice(CStr(otpIDs(k))).count
     Next k
 
+    ' AMB-10-ODL-21: LANAC SE ODMOTAVA OBRNUTO OD FIZICKOG REDA.
+    '
+    ' Fizicki red je stanica -> vozac (otpremnica) -> kupac (prijemnica). Dok je
+    ' knjiga bila ZASTAVICA, red odmotavanja nije znacio nista. Od 10b-2 je ona
+    ' STVARAN saldo: storno otpremnice upisuje kontra-stav koji skida gajbe sa
+    ' vozaca -- a njih je prijemnica vec predala kupcu. Obrnut red bi vozaca
+    ' gurnuo u MINUS i AMB-INV-07 bi fail-closed oborio celu kaskadu.
+    '
+    ' Zato prijemnice idu PRVE: one vracaju gajbe na vozaca, pa otpremnica ima
+    ' sta da skine. Isti princip kao LIFO -- poslednji fizicki potez se prvi
+    ' ponistava.
+    '
+    ' KAD LANAC NIJE NAS (ownsChain = False, kupac je eksterni) prijemnica je
+    ' KUPCEV dokument i ne smemo da je stornirano -- pa storno otpremnice padne
+    ' na AMB-INV-07. I to je TACNO: ne mozemo da tvrdimo da gajbe nisu otisle sa
+    ' stanice dok ziv kupcev dokument kaze da su stigle njemu. Stari model je tu
+    ' prijavljivao delimican uspeh kao pun (v. ZbirnaOwnsExternalChain), pa je
+    ' ovo nova SPOSOBNOST kapije, ne regresija.
+    If ownsChain Then
+        For k = 1 To prijIDs.count
+            If Not StornoPrijemnica(CStr(prijIDs(k)), tx) Then _
+                Err.Raise ERR_STORNO_FW_BASE + 52, SRC, "StornoPrijemnica (ponistenje) nije uspeo: " & CStr(prijIDs(k))
+        Next k
+        res("prij") = prijIDs.count
+    End If
+
     For k = 1 To otpIDs.count
         If Not StornoOtpremnica(CStr(otpIDs(k)), tx) Then _
             Err.Raise ERR_STORNO_FW_BASE + 51, SRC, "StornoOtpremnica (ponistenje) nije uspeo: " & CStr(otpIDs(k))
     Next k
     res("otp") = otpIDs.count
     res("blok") = FreeOtkupBloksInline(otpIDs, SRC) + blokKanon
-    If ownsChain Then
-        For k = 1 To prijIDs.count
-            If Not StornoPrijemnica(CStr(prijIDs(k))) Then _
-                Err.Raise ERR_STORNO_FW_BASE + 52, SRC, "StornoPrijemnica (ponistenje) nije uspeo: " & CStr(prijIDs(k))
-        Next k
-        res("prij") = prijIDs.count
-    End If
     tx.CommitTx
     Set tx = Nothing
 

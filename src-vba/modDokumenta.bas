@@ -6630,6 +6630,7 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     Dim resultI As String
     If hasKlasaI Then
         resultI = SavePrijemnica( _
+            tx, _
             datum, _
             kupacID, _
             vozacID, _
@@ -6654,6 +6655,7 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     Dim resultII As String
     If hasKlasaII Then
         resultII = SavePrijemnica( _
+            tx, _
             datum, _
             kupacID, _
             vozacID, _
@@ -6778,7 +6780,7 @@ tx.BeginTx
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
-    SavePrijemnica_TX = SavePrijemnica(datum, kupacID, vozacID, brojPrij, _
+    SavePrijemnica_TX = SavePrijemnica(tx, datum, kupacID, vozacID, brojPrij, _
                                         brojZbirne, vrstaVoca, sortaVoca, _
                                         kolicina, cena, tipAmb, kolAmb, _
                                         kolAmbVracena, klasa, brutoKg)
@@ -6849,7 +6851,18 @@ EH:
     PrintTxFailure "SavePrijemnica_TX", errSrc, errNum, errDesc
 End Function
     
-Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
+' AMBALAZA PRIJEMNICE: tx je OBAVEZAN, prvi argument.
+'
+' Od 10b-2 prijemnica knjizi u knjigu ambalaze, a AMB-INV-08 trazi da knjiga i
+' izvorni dokument dele JEDAN rollback. Opcion tx bio bi fail-open seam -- isti
+' razlog zbog kog su ga StornoOtkup i StornoOtpremnica dobili kao obavezan.
+'
+' Ide PRVI, ne poslednji: SavePrijemnica ima opcione repove (klasa, brutoKg), a
+' obavezan argument posle opcionih je u VBA sintaksna greska. Oba _TX omotaca
+' (SavePrijemnica_TX, SavePrijemnicaMulti_TX) vec snapshotuju tblPrijemnica I
+' tblAmbalaza -- izmereno pre koda, nijedno pozivno mesto ne trazi nov snapshot.
+Public Function SavePrijemnica(ByVal tx As clsTransaction, _
+                               ByVal datum As Date, ByVal kupacID As String, _
                                ByVal vozacID As String, ByVal brojPrij As String, _
                                ByVal brojZbirne As String, ByVal vrstaVoca As String, _
                                ByVal sortaVoca As String, ByVal kolicina As Double, _
@@ -6886,6 +6899,11 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                 "AppendRow fehlgeschlagen fuer tblPrijemnica."
     End If
 
+    ' AMB-10-ODL-15: vezati sme SAMO kanonski pisac izvornog dokumenta, u svojoj
+    ' proceduri i tek POSLE sto ga je ova transakcija stvarno promenila.
+    ' AppendRow je bas to. Pisac je na exact allowlist-i AMB_BIND_DOZVOLJENI.
+    tx.BindSourceDocument DOK_TIP_PRIJEMNICA, newID
+
     ' ZBR-CHILD-01: generacija roditeljske zbirne (v. isti komentar u
     ' SaveOtpremnica). Prijemnica roditelja obicno IMA, pa je ovde retko prazna.
     PoveziDeteNaZbirnu TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ_ZBIRNE, brojZbirne, _
@@ -6897,17 +6915,55 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
     ' prazno = neto. Kolona postoji posle EnsureDoradeSchema (na kraju tblPrijemnica).
     If brutoKg > 0 Then UpdateCell TBL_PRIJEMNICA, appendedRow, COL_PRJ_BRUTO, brutoKg
 
-    ' Ambalaza je ENTITETSKI-relativna (smer iz ugla hladnjace / Kupca):
-    ' 1. txt = pune gajbe koje hladnjaca PRIMA od zbirne -> Kupac ULAZ.
-    If kolAmb > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmb, "Ulaz", kupacID, "Kupac", _
-                      vozacID, newID, DOK_TIP_PRIJEMNICA
+    ' AMBALAZA: DVA DOGADJAJA NAD JEDNIM PAREM NALOGA (10b-2, 6.12g).
+    '
+    ' Stari red je imao JEDAN entitet (Kupca) i smer iz NJEGOVOG ugla, a vozaca je
+    ' nosio kao ZIG -- pa se vozacev saldo dobijao inverzijom smera, sto je
+    ' fail-open (citalac koji inverziju zaboravi dobija pogresan ZNAK, ne gresku).
+    ' Nov red imenuje obe strane, pa je ceo lanac vidljiv jednim racunom:
+    ' stanica -> vozac (otpremnica) -> kupac (prijemnica).
+    '
+    ' VRSTA JE PROCITANA IZ 6.7, NE IZVEDENA IZ PARA. Pune gajbe putuju SA ROBOM,
+    ' prazne su POVRAT -- isti par naloga, suprotno poslovno znacenje. Zato je
+    ' vrsta podatak. AMB-INV-10 trazi jedan NEUREDJEN par po dokumentu i oba reda
+    ' ga dele ({Vozac, Kupac}); AMB-INV-04 ih razlikuje po vrsti.
+    '
+    ' AMB-10-ODL-22: povrat praznih od kupca mora da nosi KUPCEV broj -- a broj
+    ' prijemnice to i jeste, jer je prijemnica eksterni dokument (operater,
+    ' 05.10.2026: "nema dodatnog broja"). Vlasnika broja objavljuje
+    ' AmbRobniZaglavlje iz zatvorene mape, ne ovaj pisac o sebi.
+    '
+    ' NEMA PROTOKOLA POTVRDE, i to je razlika od otkupa -- ali NE zbog obaveze.
+    '
+    ' Ovu odbranu je merenje pobilo pre nego sto je stigla u review: prvo je
+    ' pisalo da kapija ovde AMB-INV-09. AmbDoprinosObavezi kaze suprotno --
+    ' obavezi doprinose SAMO ULAZ_TUDJE_AMBALAZE (+) i VRACANJE_TUDJE (-), a
+    ' obe ove vrste doprinose NULU. INV-09 nije kapija ovog pisca.
+    '
+    ' Kapija je AMB-INV-07, jer je i Kupac REALAN nalog (AmbNalogUKlasi: svaki
+    ' poznat tip osim SpoljniSvet). ZATO JE REDOSLED NOGU NOSEC, ne kozmetika:
+    ' prva noga kupcu DAJE gajbe, pa druga ima sta da vrati. Obrnut red bi na
+    ' punoj zameni (vracena = kolAmb) gurnuo kupca u minus i ceo upis bi pao.
+    ' Povrat veci od onoga sto kupac drzi ostaje odbijen, i to je tacno: gajbe
+    ' koje nema ne mogu da se vrate.
+    If kolAmb > 0 Or kolAmbVracena > 0 Then
+        If Len(Trim$(vozacID)) = 0 Then
+            Err.Raise vbObjectError + 1367, "SavePrijemnica", _
+                      "Prijemnica " & brojPrij & " knjizi gajbe a nema vozaca. " & _
+                      "Gajbe ne mogu da dodju NI OD KOGA."
+        End If
     End If
 
-    ' 2. txt = zamena: prazne gajbe koje hladnjaca VRACA (daje vozacu) -> Kupac IZLAZ.
+    If kolAmb > 0 Then
+        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, CDbl(kolAmb), _
+                    AMB_NALOG_VOZAC, vozacID, AMB_NALOG_KUPAC, kupacID, _
+                    AMB_VK_UZ_ROBU, DOK_TIP_PRIJEMNICA, newID
+    End If
+
     If kolAmbVracena > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmbVracena, "Izlaz", kupacID, "Kupac", _
-                      vozacID, newID, DOK_TIP_PRIJEMNICA
+        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, CDbl(kolAmbVracena), _
+                    AMB_NALOG_KUPAC, kupacID, AMB_NALOG_VOZAC, vozacID, _
+                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_PRIJEMNICA, newID
     End If
 
     RelinkFakturaStavke newID, brojPrij, klasa

@@ -57,11 +57,13 @@ pogled izgledaju nedosledno (dve noge kod otkupa, jedna kod otpremnice).
 | 7 | modDokumenta:6863 | `KolAmbVracena` | Izlaz · Kupac | da | `PrijemnicaID` | **`Prijemnica`** |
 | 8 | modDokumenta:7026 | `kolAmb` | Izlaz · Kupac | da | **`brojDok`** | `Kupci-Otpremnica` |
 
-> **REDOVI 1–5 SU PRESEČENI (`10b-2`, 6.12e i 6.12f) — tabela ostaje kao MERENJE
+> **REDOVI 1–7 SU PRESEČENI (`10b-2`, 6.12e–6.12g) — tabela ostaje kao MERENJE
 > ZATEČENOG.** Danas otkup knjiži **dva reda** umesto četiri nogu: `UZ_ROBU`
 > (Kooperant → Stanica) i `IZDATA_PRAZNA` (Stanica → Kooperant), **oba pod
 > `Otkup`**. **Red 5** (otpremnica) je jedan red `Stanica → Vozac` sa
 > `AMBALAZA_UZ_ROBU` — vozač više nije **žig** nego **nalog** (6.12f).
+> **Redovi 6 i 7** (prijemnica) su `Vozac → Kupac` + `AMBALAZA_UZ_ROBU` i
+> `Kupac → Vozac` + `POVRAT_PRAZNE` — jedan **neuređen** par, dve vrste (6.12g).
 > Tabela se ne prepisuje jer je ona zapis šta je bilo — iz nje se čita
 > zašto su odluke donete, a prepisana bi izgubila taj razlog.
 | 9 | modDokumenta:8619–8669 | revers, 4 smera | 2 noge (KOOP) / 1 noga (FIRMA) | samo FIRMA | **`brojDok`** | `OM-*` |
@@ -145,6 +147,12 @@ umesto izuzetka.
 A prijemnica je u trećem svetu: povrat praznih knjiži pod `Prijemnica` (red 7),
 dakle **van `OM-*` taksonomije** — u izveštajima ambalaže se ne vidi kao povrat,
 iako to jeste.
+
+> **Nov model ovo rešava u podatku, ali ne u izveštaju.** Od 6.12g red nosi
+> `VrstaKretanja = POVRAT_PRAZNE`, pa je povrat **imenovan kao povrat** i
+> pitanje „šta izveštaj broji" postaje odgovorljivo bez taksonomije `OM-*`.
+> Sam izveštaj se **ne menja** — čitaoci prelaze u `10c`, i tek tada je AMB-04
+> odluka o brojanju, a ne o modelu.
 
 > **AMB-04 (predlog, poslovna odluka).** Kretanje ambalaže uz dokument dobija
 > svoj tip, odvojen od tipa revers dokumenta, i prijemnica ulazi u istu
@@ -1310,6 +1318,12 @@ OdTip = Kupac AND VrstaKretanja = POVRAT_PRAZNE
 `PRIJEM` smer) i to je tvrdnja u testu — kapija koja bi i to odbila bila bi
 preširoka.
 
+> **REVIDIRANO `AMB-10-ODL-22` (05.10.2026).** Posledica „vrsta **mora** biti
+> `REVERS_PARTNERA`" bila je **zamena** za pravi uslov. Prijemnica je i sama
+> partnerov dokument, pa je uslov **vlasnik broja**, ne vrsta — v. 6.12g.
+> Ostatak `ODL-13` (vrsta, vlasnik broja i par se gledaju **zajedno**, i u oba
+> smera) stoji nepromenjen.
+
 *Provera:* `Test_Amb_DokumentUgovor` 8 slučajeva · `Test_Amb_Inv08TxVlasnistvo`
 16 tvrdnji · sabotaže `amb-inv08-izvorna-tabela-bez-snapshota`,
 `amb-odl9-povrat-od-kupca-ide-svuda`, i dvonivoski dokaz `AMB_BIND_VLASNIK`
@@ -1563,6 +1577,94 @@ Gašenje storna stare ne pravi „dve aktivne otpremnice" nego **tvrdo odbijanje
 storno u `OtpIspravi` i stoji PRED upisom članstva. Pošto ceo poziv padne, ciljana
 tvrdnja `Ispravka: stara je stornirana` iza rane izlazne tačke nije ni dolazila na
 red; premeštena je **iznad** nje (hronologija 60).
+
+### 6.12g Prijemnica — i sama partnerov dokument
+
+Dva događaja, jedan **neuređen** par naloga:
+
+```
+KolAmbalaze     Vozac -> Kupac   AMBALAZA_UZ_ROBU   Prijemnica / prijemnicaID
+KolAmbVracena   Kupac -> Vozac   POVRAT_PRAZNE      Prijemnica / prijemnicaID
+```
+
+`AMB-INV-10` traži **jedan neuređen par po dokumentu** — `{Vozac, Kupac}` je
+jedan par, pa oba reda prolaze; `AMB-INV-04` ih razlikuje po **vrsti**. To je
+ujedno provera da je par namerno neuređen: da je bio uređen, zamena bi bila
+drugi par i invarijanta bi oborila normalan dokument.
+
+**REDOSLED NOGU JE NOSEĆ.** `Kupac` je **REALAN** nalog
+(`AmbNalogUKlasi`: svaki poznat tip osim `SpoljniSvet`), pa `AMB-INV-07` važi i
+na njemu. Prva noga kupcu **daje** gajbe, pa druga ima šta da vrati; obrnut red
+bi na punoj zameni gurnuo kupca u minus i ceo upis bi pao.
+
+**`AMB-INV-09` ovde NIJE kapija, i to je merenje koje je pobilo napisanu
+odbranu.** Prvo je stajalo da povrat veći od duga obara `AMB-INV-09`.
+`AmbDoprinosObavezi` kaže suprotno: obavezi doprinose **samo**
+`ULAZ_TUDJE_AMBALAZE` (+) i `VRACANJE_TUDJE_AMBALAZE` (−), a obe ove vrste
+doprinose **nulu**. Povrat veći od stanja obara `AMB-INV-07` — gajbe koje kupac
+ne drži ne mogu da se vrate.
+
+> **AMB-10-ODL-22.** „Partnerov dokument" **nije sinonim za `REVERS_PARTNERA`**.
+> Obrnuta kapija `ODL-13` je tražila **vrstu dokumenta** kao zamenu za vlasnika
+> broja, a operater je 05.10.2026 pobio premisu: *„prijemnica je uvek eksterni
+> dokument sem kada je naša hladnjača ona koja izdaje prijemnice. u svakom
+> slučaju zamena pune ambalaže praznom se knjiži pod brojem prijemnice, nema
+> dodatnog broja."*
+>
+> Dakle `ODL-10` nije zaobiđen kad prijemnica knjiži povrat — on je **ispunjen**:
+> povrat nosi kupčev broj, samo je taj broj na prijemnici. Pravilo se zato meri
+> nad onim što `ODL-10` i kaže:
+>
+> ```
+> OdTip = Kupac AND VrstaKretanja = POVRAT_PRAZNE
+>     =>  NaTip MORA biti Vozac                    (ODL-9, nepromenjeno)
+>     =>  BrojOwner MORA biti (Kupac, OdID)         (ODL-10, pravi uslov)
+> ```
+>
+> Običan `REVERS` nad `Kupac → Vozac` i dalje **pada**, jer je njegov broj naš —
+> ista rupa, zatvorena istim pravilom. Dokument koji vlasnika broja **ne objavi**
+> isto pada: prazan vlasnik nije kupac, pa je podrazumevano fail-closed.
+> Vlasnika objavljuje **zatvorena mapa** `AmbRobniVlasniciBroja`, a čita je
+> `AmbRobniZaglavlje` **iz tabele dokumenta** — ne iz argumenta pisca, jer bi to
+> bila tvrdnja pisca o sebi.
+
+> **AMB-10-ODL-21.** **Lanac se odmotava obrnuto od fizičkog reda.** Fizički je
+> `stanica → vozac` (otpremnica) `→ kupac` (prijemnica). Dok je knjiga bila
+> **zastavica**, red odmotavanja nije značio ništa. Od `10b-2` je ona **stvaran
+> saldo**: storno otpremnice skida gajbe sa vozača, a njih je prijemnica već
+> predala kupcu — pa bi vozač otišao u minus i `AMB-INV-07` bi fail-closed oborio
+> celu kaskadu. `PonistiZbirnaChain_TX` zato stornira **prijemnice pre
+> otpremnica**.
+>
+> Kad lanac **nije naš** (`ownsChain = False`, kupac je eksterni), prijemnica je
+> **kupčev** dokument i ne smemo da je stornirano — pa storno otpremnice padne na
+> `AMB-INV-07`. **I to je tačno:** ne možemo da tvrdimo da gajbe nisu otišle sa
+> stanice dok živ kupčev dokument kaže da su stigle njemu. Stari model je tu
+> prijavljivao *„delimičan uspeh kao pun"* (v. `ZbirnaOwnsExternalChain`), pa je
+> ovo **nova sposobnost kapije, ne regresija**.
+
+**Seed je morao da dobije vozače.** Prva noga polazi **od vozača**, a
+`SeedAmbalazaOpticaj` je punio samo stanice i kooperante — pa bi 14 zatečenih
+pozivnih mesta koja prijemnicu prave sa gajbama oborilo `AMB-INV-07`. Stanica
+sada daje prazne i vozačima (`PRENOS_INTERNO`, po `ODL-7`), što je i realan tok.
+
+*Provera:* `Test_PRJ_AmbalazaDveNogeJedanPar` (14 tvrdnji: `Od`, `Na`, vrsta i
+količina po nozi, jedan par, oba salda) · `Test_PRJ_StornoVracaGajbe` (dva
+kontra-stava) · `Test_PRJ_LanacSeOdmotavaObrnuto` — meri **svojstvo** na kom
+`ODL-21` stoji, na dva dokumenta: dok prijemnica stoji, storno otpremnice
+**mora** da padne, a po odmotanom lancu prolazi · `Test_Amb_DokumentUgovor` +3
+slučaja za `ODL-22` (prolazi · bez vlasnika pada · tuđ broj pada) · sabotaže
+`amb-prj-puna-noga-nosi-vracene`, `amb-prj-povrat-se-ne-knjizi`,
+`amb-prj-storno-bez-kontrastava`, `amb-odl22-vlasnik-broja-se-ne-gleda`,
+`amb-odl22-broj-drugog-kupca`.
+
+> **ŠTA OVAJ REZ NIJE POKRIO.** Sam **redosled u kaskadi** nema test — prijemnica
+> vezana za zbirnu nema fixture u ovoj suite (isti razlog stoji u
+> `Test_ZBR_VlasnistvoLanca`, koji zato meri samo *predikciju*
+> `BuildPonistenjePosledice`). Izmereno je **svojstvo** na kom redosled stoji,
+> ne redosled sam. Sabotaža koja bi vratila stari red zato **nije upisana** —
+> ne bi se videla, a sabotaža koja ne obara ništa je placebo. Zatvara ga fixture
+> „prijemnica pod zbirnom", upisan kao dug sa imenom.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 

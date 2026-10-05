@@ -323,6 +323,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_PredlogCeneJePoKlasi
     Test_OTP_AmbalazaSeKnjiziPriIzdavanju
     Test_OTP_StornoVracaGajbeVozacu
+    Test_PRJ_AmbalazaDveNogeJedanPar
+    Test_PRJ_StornoVracaGajbe
+    Test_PRJ_LanacSeOdmotavaObrnuto
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -2242,7 +2245,10 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
         "ZBR-PAL: paletna stavka nosi ISTU generaciju kao njena prijemnica"
 
     ' --- B) ZATECEN red: broj stoji, generacija prazna ---
-    prjB = SavePrijemnica(testDate, TEST_KUP_ID, TEST_VOZ_ID, brPrijB, brojA, _
+    ' Pisac od 10b-2 trazi tx (AMB-INV-08). Ovaj test ga VEC ima i snapshotuje
+    ' tblPrijemnica; tblAmbalaza mu ne treba jer su obe kolicine gajbi 0, pa
+    ' PrenesiAmbalazu nema sta da upise.
+    prjB = SavePrijemnica(tx, testDate, TEST_KUP_ID, TEST_VOZ_ID, brPrijB, brojA, _
                           TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 0, 0, _
                           KLASA_I, 0)
     AssertTrue Len(prjB) > 0, "ZBR-PAL preduslov: druga prijemnica je snimljena"
@@ -5147,6 +5153,32 @@ Private Sub SeedAmbalazaOpticaj()
             Set tx = Nothing
         Next j
     Next i
+
+    ' Stanica daje prazne i VOZACIMA (AMB-10-ODL-7: vozac je SOPSTVEN nalog, a
+    ' prazne sa stanice najcesce idu bas njemu). Bez ovoga prijemnica od 10b-2
+    ' nema sta da knjizi: njena prva noga je Vozac -> Kupac, pa bi vozac bez
+    ' zaliha otisao u minus i AMB-INV-07 bi fail-closed odbio 14 zatecenih
+    ' pozivnih mesta koja prijemnicu prave sa gajbama.
+    Dim vozaci As Variant
+    vozaci = Array(TEST_VOZ_ID, TEST_VOZ_ID_B)
+    For i = LBound(vozaci) To UBound(vozaci)
+        For j = LBound(tipovi) To UBound(tipovi)
+            Set tx = New clsTransaction
+            tx.BeginTx
+            tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+            tx.AddTableSnapshot TBL_AMBALAZA
+            dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, _
+                        "SEEDVOZ-" & NewScenarioCode("AMBVOZ") & "-" & _
+                        CStr(i) & "-" & CStr(j), _
+                        Date, AMB_NALOG_STANICA, TEST_ST_ID)
+            modAmbalaza.PrenesiAmbalazu tx, Date, CStr(tipovi(j)), SEED_KOOPERANTU, _
+                        AMB_NALOG_STANICA, TEST_ST_ID, _
+                        AMB_NALOG_VOZAC, CStr(vozaci(i)), _
+                        AMB_VK_PRENOS_INTERNO, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+            tx.CommitTx
+            Set tx = Nothing
+        Next j
+    Next i
     Exit Sub
 
 EH:
@@ -5378,6 +5410,227 @@ End Sub
 '
 ' Tvrdnje su nad vracanjem na IZMERENU pre-vrednost: suite vrti vise testova nad
 ' istim fixture-om, pa apsolutan broj zavisi od redosleda.
+' ============================================================
+' PRIJEMNICA -- trece preseceno mesto knjizenja (10b-2, 6.12g)
+'
+' Stari red je imao JEDAN entitet (Kupca), smer iz njegovog ugla i vozaca kao
+' ZIG -- pa je vozacev saldo nastajao inverzijom smera. Nov red imenuje obe
+' strane, pa ceo lanac stanica -> vozac -> kupac ima jedan racun.
+'
+' Zasto PER-TEST tip ambalaze nije potreban ovde: tvrdnje gledaju Od/Na/vrstu
+' KONKRETNOG reda dokumenta (AmbNoviPolje), ne deltu salda suite-a -- pa ih
+' tudji promet ne pomera. Saldo se meri samo kao razlika pre/posle istog
+' poteza, u istom testu.
+' ============================================================
+Private Sub Test_PRJ_AmbalazaDveNogeJedanPar()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("PRJAMB")
+    testDate = NextTestDate()
+
+    Dim brZbr As String, zbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    zbr = ZbrZateceniRed(testDate, TEST_VOZ_ID, brZbr, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         100#, TEST_TIP_AMB, 20, KLASA_I)
+    AssertTrue Len(zbr) > 0, "PRJ ambalaza: preduslov -- zbirna je snimljena"
+
+    Dim vozPre As Double, kupPre As Double
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, TEST_TIP_AMB)
+
+    ' Nesimetricna zamena (20 punih dole, 8 praznih gore): simetricna bi dala
+    ' nulu na oba salda, pa tvrdnja ne bi razlikovala DVE noge od NIJEDNE.
+    Dim prj As String
+    prj = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
+                            TEST_PREFIX & "-PRJ-AMB-" & scenario, brZbr, _
+                            TEST_VRSTA, TEST_SORTA, 400#, 100#, TEST_TIP_AMB, _
+                            20, 8, KLASA_I, 0)
+    AssertTrue Len(prj) > 0, "PRJ ambalaza: prijemnica je snimljena"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    ' --- noga 1: pune gajbe idu SA ROBOM, od vozaca kupcu ---
+    AssertEquals "1", CStr(AmbNoviBrojRedova(prj, DOK_TIP_PRIJEMNICA, AMB_VK_UZ_ROBU)), _
+                 "PRJ ambalaza: pune gajbe knjize TACNO jedan red"
+    AssertEquals AMB_NALOG_VOZAC, _
+                 AmbNoviPolje(prj, DOK_TIP_PRIJEMNICA, AMB_VK_UZ_ROBU, COL_AMB_OD_TIP), _
+                 "PRJ ambalaza: pune gajbe POLAZE OD VOZACA -- on je nalog, ne zig"
+    AssertEquals TEST_KUP_ID, _
+                 AmbNoviPolje(prj, DOK_TIP_PRIJEMNICA, AMB_VK_UZ_ROBU, COL_AMB_NA_ID), _
+                 "PRJ ambalaza: pune gajbe stizu BAS tom kupcu"
+    AssertTrue Abs(AmbNoviKolicina(prj, DOK_TIP_PRIJEMNICA, AMB_VK_UZ_ROBU) - 20#) < 0.001, _
+               "PRJ ambalaza: kolicina punih je KolAmbalaze"
+
+    ' --- noga 2: prazne se VRACAJU, od kupca vozacu ---
+    AssertEquals "1", _
+                 CStr(AmbNoviBrojRedova(prj, DOK_TIP_PRIJEMNICA, AMB_VK_POVRAT_PRAZNE)), _
+                 "PRJ ambalaza: povrat praznih knjizi TACNO jedan red"
+    AssertEquals AMB_NALOG_KUPAC, _
+                 AmbNoviPolje(prj, DOK_TIP_PRIJEMNICA, AMB_VK_POVRAT_PRAZNE, COL_AMB_OD_TIP), _
+                 "PRJ ambalaza: prazne POLAZE OD KUPCA"
+    AssertEquals TEST_VOZ_ID, _
+                 AmbNoviPolje(prj, DOK_TIP_PRIJEMNICA, AMB_VK_POVRAT_PRAZNE, COL_AMB_NA_ID), _
+                 "PRJ ambalaza: prazne se vracaju BAS tom vozacu"
+    AssertTrue Abs(AmbNoviKolicina(prj, DOK_TIP_PRIJEMNICA, AMB_VK_POVRAT_PRAZNE) - 8#) < 0.001, _
+               "PRJ ambalaza: kolicina praznih je KolAmbVracena"
+
+    ' AMB-10-ODL-22: obrnuta kapija ODL-10 pusta povrat od kupca na dokumentu
+    ' koji NIJE REVERS_PARTNERA -- jer je prijemnica i sama partnerov dokument i
+    ' nosi kupcev broj. Pre ODL-22 je ovaj red bio tvrdo odbijen.
+    AssertTrue AmbNoviRedIdx(prj, DOK_TIP_PRIJEMNICA, AMB_VK_POVRAT_PRAZNE) > 0, _
+               "PRJ ambalaza: povrat praznih PROLAZI na prijemnici (AMB-10-ODL-22)"
+
+    ' AMB-INV-10: jedan NEUREDJEN par naloga po dokumentu. Obe noge dele
+    ' {Vozac, Kupac}, pa oba naloga stoje na oba reda.
+    AssertEquals "2", _
+                 CStr(AmbNoviBrojSaNalogom(prj, DOK_TIP_PRIJEMNICA, AMB_NALOG_VOZAC)), _
+                 "PRJ ambalaza: vozac je strana na OBA reda (jedan par, AMB-INV-10)"
+    AssertEquals "2", _
+                 CStr(AmbNoviBrojSaNalogom(prj, DOK_TIP_PRIJEMNICA, AMB_NALOG_KUPAC)), _
+                 "PRJ ambalaza: kupac je strana na OBA reda (jedan par, AMB-INV-10)"
+
+    Dim vozPosle As Double, kupPosle As Double
+    vozPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    kupPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, TEST_TIP_AMB)
+    AssertTrue Abs((vozPre - vozPosle) - 12#) < 0.001, _
+               "PRJ ambalaza: vozacu je ostalo 12 manje (20 dato, 8 vraceno)"
+    AssertTrue Abs((kupPosle - kupPre) - 12#) < 0.001, _
+               "PRJ ambalaza: kupcu je ostalo 12 vise (20 primljeno, 8 vraceno)"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_PRJ_AmbalazaDveNogeJedanPar", Err.Number, Err.description
+End Sub
+
+' Storno prijemnice ide kroz KONTRA-STAV (AMB-10-ODL-16), ne kroz zastavicu --
+' nov citalac zastavicu ne gleda, pa bi gajbe ostale kod kupca i posle storna.
+' DVA dogadjaja -> DVA kontra-stava.
+Private Sub Test_PRJ_StornoVracaGajbe()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("PRJSTO")
+    testDate = NextTestDate()
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrZateceniRed(testDate, TEST_VOZ_ID, brZbr, TEST_KUP_ID, _
+                   "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                   100#, TEST_TIP_AMB, 20, KLASA_I)) > 0, _
+               "PRJ storno: preduslov -- zbirna je snimljena"
+
+    Dim vozPre As Double, kupPre As Double
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, TEST_TIP_AMB)
+
+    Dim prj As String
+    prj = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
+                            TEST_PREFIX & "-PRJ-STO-" & scenario, brZbr, _
+                            TEST_VRSTA, TEST_SORTA, 400#, 100#, TEST_TIP_AMB, _
+                            20, 8, KLASA_I, 0)
+    AssertTrue Len(prj) > 0, "PRJ storno: prijemnica je snimljena"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    Dim prosao As Boolean
+    prosao = modStorno.StornoPrijemnica_TX(prj)
+
+    Dim vozKraj As Double, kupKraj As Double
+    vozKraj = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    kupKraj = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, TEST_TIP_AMB)
+
+    AssertTrue prosao, "PRJ storno: storno prijemnice prolazi"
+    AssertEquals "2", CStr(AmbBrojKontraStavova(prj, DOK_TIP_PRIJEMNICA)), _
+                 "PRJ storno: dva dogadjaja -- DVA kontra-stava"
+    AssertTrue Abs(vozKraj - vozPre) < 0.001, _
+               "PRJ storno: saldo vozaca se vraca na stanje pre prijemnice"
+    AssertTrue Abs(kupKraj - kupPre) < 0.001, _
+               "PRJ storno: saldo kupca se vraca na stanje pre prijemnice"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_PRJ_StornoVracaGajbe", Err.Number, Err.description
+End Sub
+
+' AMB-10-ODL-21: LANAC SE ODMOTAVA OBRNUTO OD FIZICKOG REDA.
+'
+' Ovo je tvrdnja o SVOJSTVU na kom kaskada stoji, merena na dva dokumenta --
+' ne grep redosleda poziva u PonistiZbirnaChain_TX. Prijemnica vezana za
+' zbirnu nema fixture u ovoj suite (v. isti razlog u Test_ZBR_VlasnistvoLanca),
+' pa se meri bas pravilo: dok prijemnica stoji, storno otpremnice MORA da
+' padne, jer bi vozac otisao u minus.
+Private Sub Test_PRJ_LanacSeOdmotavaObrnuto()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("PRJLAN")
+    testDate = NextTestDate()
+
+    Dim izvor As String
+    izvor = OtpNoviOtkup(scenario, 400#, 0#)
+    AssertTrue Len(izvor) > 0, "PRJ lanac: preduslov -- otkup je upisan"
+
+    Dim vozPre As Double
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-LAN-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, izvor, razlog), "PRJ lanac: izvor vezan"
+    AssertTrue IzdajOtpremnicu_TX(otpID, razlog), "PRJ lanac: otpremnica je izdata"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrZateceniRed(testDate, TEST_VOZ_ID, brZbr, TEST_KUP_ID, _
+                   "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                   100#, TEST_TIP_AMB, 20, KLASA_I)) > 0, _
+               "PRJ lanac: preduslov -- zbirna je snimljena"
+
+    ' Prijemnica odnosi SVE gajbe sa vozaca (bez povrata), pa je njegov saldo
+    ' tacno na stanju pre otpremnice -- i otpremnica vise nema sta da skine.
+    Dim prj As String
+    prj = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
+                            TEST_PREFIX & "-PRJ-LAN-" & scenario, brZbr, _
+                            TEST_VRSTA, TEST_SORTA, 400#, 100#, TEST_TIP_AMB, _
+                            20, 0, KLASA_I, 0)
+    AssertTrue Len(prj) > 0, "PRJ lanac: prijemnica je snimljena"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    Dim vozPosle As Double
+    vozPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    AssertTrue Abs(vozPosle - vozPre) < 0.001, _
+               "PRJ lanac: prijemnica je odnela sve gajbe koje je otpremnica dala"
+
+    ' POGRESAN RED: otpremnica prva. Mora da padne -- gajbe vise nisu na vozacu.
+    Dim raniOtp As Boolean
+    raniOtp = modStorno.StornoOtpremnica_TX(otpID)
+    AssertTrue Not raniOtp, _
+               "PRJ lanac: storno otpremnice PRE prijemnice je ODBIJEN (AMB-INV-07)"
+
+    ' TACAN RED: prijemnica prva vraca gajbe vozacu, pa otpremnica ima sta da skine.
+    AssertTrue modStorno.StornoPrijemnica_TX(prj), _
+               "PRJ lanac: storno prijemnice prolazi i bez storna otpremnice"
+    Dim vozVracen As Double
+    vozVracen = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    AssertTrue Abs(vozVracen - (vozPre + 20#)) < 0.001, _
+               "PRJ lanac: storno prijemnice je vratio gajbe NA VOZACA"
+    AssertTrue modStorno.StornoOtpremnica_TX(otpID), _
+               "PRJ lanac: storno otpremnice POSLE prijemnice prolazi"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                   TEST_TIP_AMB) - vozPre) < 0.001, _
+               "PRJ lanac: po odmotanom lancu vozac je na pocetnom stanju"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_PRJ_LanacSeOdmotavaObrnuto", Err.Number, Err.description
+End Sub
+
 Private Sub Test_OTP_StornoVracaGajbeVozacu()
     On Error GoTo EH
 
@@ -17094,6 +17347,30 @@ Private Sub Test_Amb_DokumentUgovor()
                      AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, _
                      AMB_VK_POVRAT_PRAZNE), _
                  "ODL-10: kooperant -> stanica je NAS revers i prolazi"
+
+    ' --- AMB-10-ODL-22: pravilo je VLASNIK BROJA, ne vrsta dokumenta --------
+    '
+    ' Operater je 05.10.2026 pobio premisu obrnute kapije: prijemnica je i sama
+    ' partnerov dokument (eksterna je) i zamena pune ambalaze praznom se knjizi
+    ' POD NJENIM brojem, bez dodatnog. Dakle ODL-10 nije zaobidjen nego ispunjen.
+    '
+    ' Robni dokument nosi praznu VRSTU (dokVrsta se puni samo za ambalazni), pa
+    ' se meri bas vlasnik broja -- i to u OBA smera.
+    AssertEquals "", modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     "", AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
+                     AMB_VK_POVRAT_PRAZNE), _
+                 "ODL-22: povrat od kupca na ROBNOM dokumentu sa KUPCEVIM brojem prolazi"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   "", "", "", _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
+                   AMB_VK_POVRAT_PRAZNE), "AMB-10-ODL-10") > 0, _
+               "ODL-22: dokument koji NE objavi vlasnika broja pada (fail-closed)"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   "", AMB_NALOG_KUPAC, TEST_KUP2_ID, _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
+                   AMB_VK_POVRAT_PRAZNE), "AMB-10-ODL-10") > 0, _
+               "ODL-22: broj jednog kupca uz povrat drugog pada i na robnom dokumentu"
 
     ' --- ZAGLAVLJE --------------------------------------------------------
     AssertEquals "", modAmbalazaUgovor.AmbDokProblem( _

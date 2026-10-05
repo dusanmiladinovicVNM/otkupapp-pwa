@@ -600,6 +600,37 @@
     review-a, katalog 649 → 655) stajao je od `ef60fc91` na **kraju** liste, pa ga
     je svaka nova stavka odvlačila dalje — od 59 se čitao kao deo otpremničkog
     reza. Vraćen je pod 53, kojoj po sadržaju i datumu (02–03.10) pripada.
+61. **Prijemnica — treće presečeno mesto, i dva nova pravila** (05.10.2026, 6.12g).
+    Dva događaja nad **jednim neuređenim parom**: `Vozac → Kupac` uz robu i
+    `Kupac → Vozac` povrat praznih. `AMB-INV-10` prolazi jer je par neuređen —
+    što je ujedno provera da je tako i mišljen.
+    **Rez je prvo BLOKIRAN, i to zapisanim pravilom.** Obrnuta kapija `ODL-13`
+    je povrat od kupca dozvoljavala **samo** na `REVERS_PARTNERA`, a
+    `modAmbalaza.bas` je to i izričito branio u komentaru. Istovremeno §3 red 7
+    i `AMB-04` kažu da prijemnica taj povrat **knjiži**. Dva zapisana pravila,
+    jedan događaj — `DOMAIN GAP`, pa nije pisan kod nego je pitanje išlo
+    operateru.
+    **Odgovor je pobio premisu, ne kapiju:** prijemnica je **i sama partnerov
+    dokument** (eksterna je), i povrat se knjiži **pod njenim brojem, bez
+    dodatnog**. Dakle `ODL-10` nije zaobiđen nego **ispunjen** — i uslov je
+    **vlasnik broja**, ne vrsta dokumenta (`AMB-10-ODL-22`). Običan `REVERS` nad
+    `Kupac → Vozac` i dalje pada, jer je njegov broj naš.
+    **`AMB-10-ODL-21`: lanac se odmotava obrnuto od fizičkog reda.** Izmereno u
+    `modStornoFlow`: kaskada je stornirala **otpremnice pre prijemnica**, a od
+    `10b-2` je knjiga stvaran saldo — pa bi vozač otišao u minus i `AMB-INV-07`
+    bi oborio celu kaskadu. Red je obrnut; kad lanac nije naš (`ownsChain =
+    False`) storno otpremnice **pada**, i to je tačno — stari model je tu
+    prijavljivao „delimičan uspeh kao pun".
+    **Dva komentara koje je merenje pobilo pre review-a.** (1) Napisao sam da je
+    kapija povrata `AMB-INV-09`; `AmbDoprinosObavezi` kaže da obavezi doprinose
+    samo `ULAZ_TUDJE`/`VRACANJE_TUDJE`, a ove vrste doprinose **nulu** — kapija
+    je `AMB-INV-07`, jer je i `Kupac` REALAN. (2) Hteo sam da spojim dve grane
+    kapije koje izgledaju kao duplikat; `jePartnerov` radi `Exit Function` pre
+    druge, pa su im sabotaže razlučive — spajanje bi dve svelo na jedno sidro.
+    `SeedAmbalazaOpticaj` je morao da dobije **vozače** (`PRENOS_INTERNO` po
+    `ODL-7`): prva noga polazi od vozača, a seed je punio samo stanice i
+    kooperante — 14 zatečenih pozivnih mesta bi palo na `AMB-INV-07`.
+    Katalog 682 → 687.
     **DOKAZ JE IZMEREN — za stavke 59 i 60 zajedno, nad jednim izvorom.**
     `run_vba.py` pun prolaz **ZELENO**: 12/12 suita, `RunBusinessFlowProSuite`
     **0/2318**, `RunAllTests` 0/200, banka 0/241, storno 0/163, palete 97,
@@ -624,6 +655,7 @@
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
+| **redosled u kaskadi storna nema test** | `AMB-10-ODL-21` je izmeren kao **svojstvo** (`Test_PRJ_LanacSeOdmotavaObrnuto`, dva dokumenta), ali sam redosled u `PonistiZbirnaChain_TX` nije — prijemnica vezana za zbirnu **nema fixture** u BFP suite-u, isti razlog zbog kog `Test_ZBR_VlasnistvoLanca` meri samo predikciju `BuildPonistenjePosledice`. Sabotaža koja bi vratila stari red zato **nije upisana**: ne bi se videla, a sabotaža koja ne obara ništa je placebo. Zatvara ga fixture „prijemnica pod zbirnom" |
 | **bruto grana otkupa/otpremnice bez testa** | posledica pina `OTKUP_BRUTO_UNOS = NO` u `make_fixture` (KI-008): tara, odbijanje kad `tara >= kolicina` i zamrzavanje `BrutoKg` nemaju **ni jedan** test. Njen test mora sam da postavi zastavicu, kao `modIzvestajTests` za `MALINA_MODE` — nasleđivanje od donora je ono što je pet padova i napravilo |
 | `dispecer.js` alokacija po klasama | **poslovna odluka**, ne prevod: raspodela količine na više klasa traži pravilo od operatera. Dok je N=1 ponašanje je identično |
 | `OTKUP_CONFLICT` lifecycle | deterministički konflikt ostaje retryable pending — vidljivo i bezbedno, ali traži svoj rez |

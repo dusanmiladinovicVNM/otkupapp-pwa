@@ -432,7 +432,7 @@ Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String) As Boolean
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
 
-    If Not StornoPrijemnica(prijemnicaID) Then
+    If Not StornoPrijemnica(prijemnicaID, tx) Then
         Err.Raise ERR_STORNO_BASE + 4, SRC, _
                   "StornoPrijemnica nije uspeo. PrijemnicaID=" & prijemnicaID
     End If
@@ -450,7 +450,14 @@ EH:
     StornoPrijemnica_TX = False
 End Function
 
-Public Function StornoPrijemnica(ByVal prijemnicaID As String) As Boolean
+' STORNO PRIJEMNICE: tx je OBAVEZAN (isti razlog kao StornoOtkup/StornoOtpremnica).
+'
+' Od 10b-2 storno upisuje KONTRA-STAV u knjigu (AMB-10-ODL-16), pa knjiga i
+' dokument moraju da dele rollback (AMB-INV-08). Sva tri pozivna mesta
+' (StornoPrijemnica_TX, StornoPrijemnicaByBroj_TX, PonistiZbirnaChain_TX) tx vec
+' imaju i snapshotuju tblPrijemnica I tblAmbalaza -- izmereno pre koda.
+Public Function StornoPrijemnica(ByVal prijemnicaID As String, _
+                                 ByVal tx As clsTransaction) As Boolean
     Const SRC As String = "StornoPrijemnica"
 
     On Error GoTo EH
@@ -485,6 +492,10 @@ Public Function StornoPrijemnica(ByVal prijemnicaID As String) As Boolean
 
     MarkRowStornirano TBL_PRIJEMNICA, rowPrij, SRC
 
+    ' Vezivanje stoji POSLE izmene zaglavlja (AMB-10-ODL-15): ova transakcija je
+    ' dokument stvarno promenila, pa sme da tvrdi da ga poseduje.
+    tx.BindSourceDocument DOK_TIP_PRIJEMNICA, prijemnicaID
+
     If UCase$(Trim$(CStr(prijData(rowPrij, colFakturisano)))) = "DA" Then
         RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURISANO, "", SRC
         RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURA_ID, "", SRC
@@ -495,7 +506,14 @@ Public Function StornoPrijemnica(ByVal prijemnicaID As String) As Boolean
         End If
     End If
 
+    ' DVA OBLIKA REDA, DVA LEKA -- i preklapanje je izgovoreno.
+    '
+    ' StornoAmbalazaByDokument okrece zastavicu Stornirano i pokriva redove
+    ' STAROG oblika. Nov citalac zastavicu NE gleda (AMB-10-ODL-16), pa nov red
+    ' trazi KONTRA-STAV. Zastavica stoji PRVA: tako ne stampa svoj zig na
+    ' kontra-redove koje tek treba da nastanu.
     StornoAmbalazaByDokument prijemnicaID, DOK_TIP_PRIJEMNICA
+    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_PRIJEMNICA, prijemnicaID
 
     StornoPrijemnica = True
     Exit Function
@@ -558,7 +576,7 @@ Public Function StornoPrijemnicaByBroj_TX(ByVal brBroj As String, _
 
     Dim k As Long
     For k = 1 To ids.count
-        If Not StornoPrijemnica(CStr(ids(k))) Then
+        If Not StornoPrijemnica(CStr(ids(k)), tx) Then
             Err.Raise ERR_STORNO_BASE + 4, SRC, _
                       "StornoPrijemnica nije uspeo. PrijemnicaID=" & CStr(ids(k))
         End If

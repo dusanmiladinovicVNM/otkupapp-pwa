@@ -6887,6 +6887,74 @@ SABOTAZE = {
         "Test_OTP_StornoVracaGajbeVozacu",
         "OTP storno: saldo stanice se vraca na stanje pre izdavanja",
     ),
+    # PRIJEMNICA (10b-2, 6.12g) -- tri sabotaze nad piscem i stornom.
+    #
+    # Puna noga nosi KolAmbVracena: dokument ima oba reda, oba su na pravom paru
+    # i prave vrste, ali kolicina punih je tudja. Bira se BAS to, a ne zamena
+    # Od/Na: zamena bi kupca (REALAN nalog, saldo 0) gurnula u minus, AMB-INV-07
+    # bi odbio ceo upis, i pala bi tvrdnja da je prijemnica SNIMLJENA -- tvrdnja
+    # o ishodu iza rane izlazne tacke, tacno klasa koju je 05.10.2026 zatvorila.
+    #
+    # SIDRO JE DVOREDNO jer je `CDbl(kolAmbVracena), _` sam po sebi ZDRAV red
+    # (to je druga noga), pa bi ga posle sabotaze bilo dva i --vrati ne bi znao
+    # koji da vrati. Drugi red para naloga pripada samo prvoj nozi.
+    "amb-prj-puna-noga-nosi-vracene": (
+        "modDokumenta.bas",
+        "        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, CDbl(kolAmb), _\n"
+        "                    AMB_NALOG_VOZAC, vozacID, AMB_NALOG_KUPAC, kupacID, _\n",
+        "        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, CDbl(kolAmbVracena), _\n"
+        "                    AMB_NALOG_VOZAC, vozacID, AMB_NALOG_KUPAC, kupacID, _\n",
+        "Test_PRJ_AmbalazaDveNogeJedanPar",
+        "PRJ ambalaza: kolicina punih je KolAmbalaze",
+    ),
+    # Povrat praznih se ne knjizi: gajbe koje su fizicki vracene vozacu ostaju
+    # kod kupca -- tiho, jer dokument i dalje ima jedan uredan red.
+    "amb-prj-povrat-se-ne-knjizi": (
+        "modDokumenta.bas",
+        "    If kolAmbVracena > 0 Then\n",
+        "    If False Then   ' SABOTAZA: povrat praznih se ne knjizi\n",
+        "Test_PRJ_AmbalazaDveNogeJedanPar",
+        "PRJ ambalaza: povrat praznih knjizi TACNO jedan red",
+    ),
+    # Storno prijemnice ostaje na zastavici: nov citalac je ne gleda, pa gajbe
+    # ostaju kod kupca i posle storna.
+    "amb-prj-storno-bez-kontrastava": (
+        "modStorno.bas",
+        "    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_PRIJEMNICA, prijemnicaID\n",
+        "    ' SABOTAZA: storno prijemnice ostaje na zastavici\n",
+        "Test_PRJ_StornoVracaGajbe",
+        "PRJ storno: saldo vozaca se vraca na stanje pre prijemnice",
+    ),
+    # AMB-10-ODL-22: obrnuta kapija se vraca na "vrsta dokumenta" kao zamenu za
+    # vlasnika broja. Tada NAS revers sa NASIM brojem opet sme da nosi povrat od
+    # kupca -- tacno rupa koju je ODL-13 zatvorio, samo kroz drugi izraz.
+    #
+    # TVRDNJA NIJE "obican REVERS ne sme da nosi kupac -> vozac": tu deli sidro
+    # sa amb-odl10-nas-revers-nosi-kupca (koja gasi CEO blok), pa test ne bi
+    # razlikovao koja je pala -- kapija kataloga je to i prijavila. Uzima zato
+    # tvrdnju koju bas prvi uslov i cuva: dokument BEZ vlasnika broja.
+    "amb-odl22-vlasnik-broja-se-ne-gleda": (
+        "modAmbalazaUgovor.bas",
+        "        If StrComp(Trim$(brojOwnerTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then\n"
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: povrat praznih od kupca \" & _\n",
+        "        If False Then   ' SABOTAZA: vlasnik broja se ne gleda\n"
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: povrat praznih od kupca \" & _\n",
+        "Test_Amb_DokumentUgovor",
+        "ODL-22: dokument koji NE objavi vlasnika broja pada (fail-closed)",
+    ),
+    # Vlasnik broja je KUPAC, ali DRUGI kupac: dokument bi nosio tudj broj, a
+    # klasa vlasnika je ispravna -- pa prva provera sama ne hvata ovo.
+    "amb-odl22-broj-drugog-kupca": (
+        "modAmbalazaUgovor.bas",
+        "        If StrComp(Trim$(brojOwnerID), Trim$(odID), vbTextCompare) <> 0 Then\n"
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: broj nosi kupac '\" & _\n"
+        "                Trim$(brojOwnerID) & \"' a prazne vraca '\" & Trim$(odID) & _\n",
+        "        If False Then   ' SABOTAZA: tudj broj prolazi\n"
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: broj nosi kupac '\" & _\n"
+        "                Trim$(brojOwnerID) & \"' a prazne vraca '\" & Trim$(odID) & _\n",
+        "Test_Amb_DokumentUgovor",
+        "ODL-22: broj jednog kupca uz povrat drugog pada i na robnom dokumentu",
+    ),
     # Vrsta kretanja postaje PRENOS_INTERNO: matrica klasa to pusta (oba naloga
     # su SOPSTVENI), pa red nastaje sa POGRESNIM poslovnim znacenjem -- gajbe uz
     # robu izgledaju kao interni prenos praznih (6.7).

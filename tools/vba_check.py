@@ -1313,6 +1313,12 @@ AMB_BIND_DOZVOLJENI = {
     ("modStorno", "StornoOtkup"),
     ("modDokumenta", "OtpIzdaj"),
     ("modStorno", "StornoOtpremnica"),
+    # Prijemnica (10b-2): pisac vezuje posle AppendRow, storno posle
+    # MarkRowStornirano. Prijemnica je jedini robni dokument koji je I SAM
+    # partnerov (AMB-10-ODL-22), pa joj vlasnika broja daje zatvorena mapa
+    # AmbRobniVlasniciBroja -- ne ovaj pisac o sebi.
+    ("modDokumenta", "SavePrijemnica"),
+    ("modStorno", "StornoPrijemnica"),
 }
 _AMB_END = re.compile(r'^End\s+(?:Sub|Function|Property)\b', re.IGNORECASE)
 _BIND_POZIV = re.compile(r'\.\s*BindSourceDocument\b', re.IGNORECASE)

@@ -1309,6 +1309,41 @@ End Function
 ' a to se ne moze iz vrste same. AmbDokVrstaZaID ostaje javan (testovi ga
 ' koriste) i poziva ovo, da provera storniranog i postojanja stoji na JEDNOM
 ' mestu.
+' Vlasnik broja ROBNOG dokumenta, iz zatvorene mape (AMB-10-ODL-22).
+'
+' Prazno za tip koji ga ne objavljuje -- i to je fail-closed, jer obrnuta
+' kapija ODL-10 bez vlasnika broja odbija povrat od kupca.
+'
+' Cita se IZ TABELE dokumenta, ne iz argumenta pozivaoca: tabela je cinjenica,
+' a argument bi bio tvrdnja pisca o sebi (isti razlog kao u modStornoZurnal).
+Public Sub AmbRobniZaglavlje(ByVal dokTip As String, ByVal dokID As String, _
+                             ByRef outOwnerTip As String, _
+                             ByRef outOwnerID As String)
+    Const SRC As String = "modAmbalaza.AmbRobniZaglavlje"
+
+    outOwnerTip = ""
+    outOwnerID = ""
+    If Len(Trim$(dokID)) = 0 Then Exit Sub
+
+    Dim mapa As Variant, i As Long, red As Variant
+    mapa = modAmbalazaUgovor.AmbRobniVlasniciBroja()
+    For i = LBound(mapa) To UBound(mapa)
+        red = mapa(i)
+        If StrComp(Trim$(dokTip), CStr(red(0)), vbTextCompare) = 0 Then
+            outOwnerTip = CStr(red(3))
+            outOwnerID = Trim$(NzToText(LookupValue(CStr(red(1)), CStr(red(2)), _
+                                                    dokID, CStr(red(4)))))
+            If Len(outOwnerID) = 0 Then
+                Err.Raise AMB_ERR_IDENTITET, SRC, _
+                          "Dokument " & Trim$(dokTip) & " " & Trim$(dokID) & _
+                          " ne nosi vlasnika svog broja (" & CStr(red(4)) & _
+                          "). AMB-10-ODL-22 trazi da ga robni dokument objavi."
+            End If
+            Exit Sub
+        End If
+    Next i
+End Sub
+
 Public Sub AmbDokZaglavlje(ByVal ambDokID As String, _
                            ByRef vrsta As String, _
                            ByRef brojOwnerTip As String, _
@@ -2143,10 +2178,19 @@ Public Function PrenesiAmbalazu(ByVal tx As clsTransaction, _
         End If
     End If
 
+    ' AMB-10-ODL-22: robni dokument koji je I SAM partnerov objavljuje vlasnika
+    ' svog broja. Prijemnica je takav: eksterna je, njen broj je kupcev, i
+    ' povrat praznih se knjizi POD TIM brojem (operater, 05.10.2026). Bez ovoga
+    ' bi obrnuta kapija odbila prijemnicu -- merila bi VRSTU dokumenta kao
+    ' zamenu za vlasnika broja, a to je zamena koju je ODL-22 pobio.
+    If Len(dokOwnerTip) = 0 Then
+        AmbRobniZaglavlje dokTip, dokID, dokOwnerTip, dokOwnerID
+    End If
+
     ' AMB-10-ODL-9/-10: vrsta, vlasnik broja i par naloga se gledaju ZAJEDNO.
     ' Obrnuta kapija vazi i kad dokument NIJE ambalazni (dokVrsta ostaje prazna):
-    ' kupac -> vozac uz povrat praznih je partnerov dokument, pa ga robni
-    ' dokument isto tako ne sme nositi.
+    ' povrat praznih od kupca mora da nosi kupcev broj, pa ga dokument koji
+    ' vlasnika broja ne objavi ne sme nositi.
     Dim parProblem As String
     parProblem = modAmbalazaUgovor.AmbDokKretanjeProblem( _
         dokVrsta, dokOwnerTip, dokOwnerID, odTip, odID, naTip, vrstaK)
