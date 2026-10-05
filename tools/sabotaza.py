@@ -6887,6 +6887,20 @@ SABOTAZE = {
         "Test_OTP_StornoVracaGajbeVozacu",
         "OTP storno: saldo stanice se vraca na stanje pre izdavanja",
     ),
+    # AMB-10-ODL-21, P1 iz review-a: gasi se kapija koja brani EKSTERNI nizvodni
+    # dokument, pa se kaskada vraca na oslanjanje na saldo. Nad PUNOM ZAMENOM je
+    # saldo vozaca vracen, kontra-stav otpremnice prolazi, i ponistenje javi USPEH
+    # dok eksterna prijemnica ostaje aktivna i vezana na stornirane dokumente.
+    #
+    # Tvrdnja NIJE "zbirna je ostala aktivna" nego ODBIJANJE po imenu: prva bi
+    # pala i od bilo kog drugog pada u kaskadi, pa ne bi imenovala razlog.
+    "amb-odl21-eksterna-prijemnica-ne-blokira": (
+        "modStornoFlow.bas",
+        "        If eksternePrij.count > 0 Then\n",
+        "        If False Then   ' SABOTAZA: eksterni nizvodni dokument ne blokira\n",
+        "Test_PRJ_EksternaPrijemnicaBlokiraPonistenje",
+        "PRJ eksterna: ponistenje je ODBIJENO zbog aktivne eksterne prijemnice",
+    ),
     # PRIJEMNICA (10b-2, 6.12g) -- tri sabotaze nad piscem i stornom.
     #
     # Puna noga nosi KolAmbVracena: dokument ima oba reda, oba su na pravom paru

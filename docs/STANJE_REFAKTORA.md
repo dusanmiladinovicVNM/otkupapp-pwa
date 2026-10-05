@@ -631,6 +631,32 @@
     `ODL-7`): prva noga polazi od vozača, a seed je punio samo stanice i
     kooperante — 14 zatečenih pozivnih mesta bi palo na `AMB-INV-07`.
     Katalog 682 → 687.
+62. **P1: zaštita eksternog lanca je bila izvedena iz SALDA** (05.10.2026,
+    review `cb6c93bb`). Napisao sam da `ownsChain = False` rešava `AMB-INV-07`
+    sam — *„prijemnica ostaje, vozač nema gajbe, storno otpremnice padne"*. Važi
+    **samo** kad kupac nije vratio dovoljno praznih. **Puna zamena** (20 punih,
+    20 praznih) vraća vozačev saldo, kontra-stav otpremnice **prolazi**, i
+    kaskada javi `ok = True` nad lancem u kom eksterna prijemnica ostaje aktivna
+    i vezana na stornirane dokumente — **lažno uspešno poslovno poništenje**.
+    **Uzrok klase:** `AMB-INV-07` sudi **posle-stanje salda**, a ne **lifecycle
+    zavisnost**. Saldo ne zna da aktivan nizvodni dokument još zavisi od onog
+    koji se stornira. Lek nije jači saldo nego **eksplicitna kapija pred svakom
+    mutacijom**; dve politike (eksterni dokument netaknut / poništenje celog
+    toka) se iskljucuju, pa se bira **odbijanje**, ne orphaning.
+    **Moj test je bio deo problema:** `Test_PRJ_LanacSeOdmotavaObrnuto` koristi
+    `kolAmbVracena = 0` — jedini slučaj u kom odbrana iz salda slučajno važi. Nov
+    test uzima **punu zamenu** i tvrdnja br. 4 imenuje bas to: *„saldo je vraćen,
+    dakle saldo ne bi zaustavio storno"*. Bez te tvrdnje bi i ugasena kapija
+    prolazila.
+    Kaskada je `Private`, pa je dodat **test seam** `PonistiZbirnaChain_Test` —
+    po zatečenom obrascu `DistinctActiveValues_Test`, jer javni put traži
+    correction context i `forceConfirm`, pa bi pad mogao da dođe sa tri sloja.
+    Usput izmereno pre koda: prazan `scopeID` **širi** skup dece
+    (`SuziDecuNaZbirnu`, pravilo 1), pa je kapija nad njim fail-closed — i skup
+    se broji **bez obzira na `ownsChain`**, jer je `prijIDs` u toj grani namerno
+    prazan i kapija nad njim bi bila placebo.
+    Katalog 687 → 688. **P2 (vlasnik broja kad naša hladnjača izdaje prijemnicu)
+    je otvoren i čeka odgovor operatera** — v. dug sa imenom.
     **DOKAZ JE IZMEREN — za stavke 59 i 60 zajedno, nad jednim izvorom.**
     `run_vba.py` pun prolaz **ZELENO**: 12/12 suita, `RunBusinessFlowProSuite`
     **0/2318**, `RunAllTests` 0/200, banka 0/241, storno 0/163, palete 97,
@@ -655,7 +681,8 @@
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
-| **redosled u kaskadi storna nema test** | `AMB-10-ODL-21` je izmeren kao **svojstvo** (`Test_PRJ_LanacSeOdmotavaObrnuto`, dva dokumenta), ali sam redosled u `PonistiZbirnaChain_TX` nije — prijemnica vezana za zbirnu **nema fixture** u BFP suite-u, isti razlog zbog kog `Test_ZBR_VlasnistvoLanca` meri samo predikciju `BuildPonistenjePosledice`. Sabotaža koja bi vratila stari red zato **nije upisana**: ne bi se videla, a sabotaža koja ne obara ništa je placebo. Zatvara ga fixture „prijemnica pod zbirnom" |
+| **redosled u VLASNICKOJ grani kaskade nema test** | eksterna grana je pokrivena od P1 ispravke (`Test_PRJ_EksternaPrijemnicaBlokiraPonistenje` nad pravom kaskadom, kroz test seam). Vlasnička (`ownsChain = True`) nije: `ZbirnaOwnsExternalChain` je istina samo kad je kupac **konfigurisana** hladnjača (`CFG_MALINA_DEFAULT_KUPAC`), pa bi test morao da menja podesavanja — mutacija configa u suite-u je sama rizik. Za tu granu je izmereno **svojstvo** (`Test_PRJ_LanacSeOdmotavaObrnuto`), ne redosled; sabotaža koja bi vratila stari red **nije upisana** jer se ne bi videla, a sabotaža koja ne obara ništa je placebo |
+| **ODL-22: vlasnik broja kad NAŠA hladnjača izdaje prijemnicu** | mapa `AmbRobniVlasniciBroja` bezuslovno kaže `(Kupac, Prijemnica.KupacID)`. Za eksternog kupca je to tačno — broj je njegov. Ali kanonska odluka kaže da prijemnicu **sme da izdaje i naša hladnjača**, a tada je broj **naš**. `KupacID` odgovara na *„ko je kupac u poslu"*, `BrojOwner` na *„čijem nizu pripada broj"* — `AMB-10` te dve stvari razdvaja svuda drugde. Ne zatvara se kodom: traži odgovor operatera (`Firma`? neki `SOPSTVENI` nalog? namerno `KupacID` naše hladnjače?), pa onda red u mapi i test. Review: **P2**, jer nije izmereno koliko je taj režim danas aktivan |
 | **bruto grana otkupa/otpremnice bez testa** | posledica pina `OTKUP_BRUTO_UNOS = NO` u `make_fixture` (KI-008): tara, odbijanje kad `tara >= kolicina` i zamrzavanje `BrutoKg` nemaju **ni jedan** test. Njen test mora sam da postavi zastavicu, kao `modIzvestajTests` za `MALINA_MODE` — nasleđivanje od donora je ono što je pet padova i napravilo |
 | `dispecer.js` alokacija po klasama | **poslovna odluka**, ne prevod: raspodela količine na više klasa traži pravilo od operatera. Dok je N=1 ponašanje je identično |
 | `OTKUP_CONFLICT` lifecycle | deterministički konflikt ostaje retryable pending — vidljivo i bezbedno, ali traži svoj rez |

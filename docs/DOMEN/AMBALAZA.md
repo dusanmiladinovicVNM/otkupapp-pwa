@@ -1637,11 +1637,35 @@ ne drži ne mogu da se vrate.
 > otpremnica**.
 >
 > Kad lanac **nije naš** (`ownsChain = False`, kupac je eksterni), prijemnica je
-> **kupčev** dokument i ne smemo da je stornirano — pa storno otpremnice padne na
-> `AMB-INV-07`. **I to je tačno:** ne možemo da tvrdimo da gajbe nisu otišle sa
-> stanice dok živ kupčev dokument kaže da su stigle njemu. Stari model je tu
-> prijavljivao *„delimičan uspeh kao pun"* (v. `ZbirnaOwnsExternalChain`), pa je
-> ovo **nova sposobnost kapije, ne regresija**.
+> **kupčev** dokument i ne smemo da je stornirano. Tada se **ceo potez odbija**,
+> i to **pred svakom mutacijom** — pa ni zbirna ne bude dirnuta.
+>
+> **OVDE JE PRVO STAJALA ODBRANA IZVEDENA IZ SALDA, I POBIJENA JE** (review
+> 05.10.2026, P1). Pisalo je: *„prijemnica ostaje, vozač više nema gajbe, pa
+> storno otpremnice padne na `AMB-INV-07`"*. To važi **samo** kad kupac nije
+> vratio dovoljno praznih. Normalna **puna zamena** je kontraprimer:
+>
+> ```
+> otpremnica   Stanica -> Vozac   20
+> prijemnica   Vozac -> Kupac     20      pa   Kupac -> Vozac   20
+> vozac opet ima 20   ->   kontra-stav otpremnice PROLAZI
+> ```
+>
+> Ishod je bio: zbirna i otpremnica **stornirane**, eksterna prijemnica
+> **aktivna** i dalje vezana na njih, i `res("ok") = True` — **lažno uspešno**
+> poslovno poništenje nad polomljenim lifecycle-om.
+>
+> `AMB-INV-07` sudi **samo posle-stanje salda**. On ne zna da li **aktivan
+> nizvodni dokument još zavisi** od onog koji se stornira. Zato kapija nije
+> jači saldo nego **eksplicitna zavisnost**: aktivna eksterna prijemnica znači
+> da uzvodni tok ne sme da se proglasi nepostojećim. Dve politike — „eksterni
+> dokument ostaje netaknut" i „poništenje **celog** toka" — ne mogu obe da važe;
+> bira se **odbijanje**, ne orphaning.
+>
+> Skup aktivnih prijemnica se broji **bez obzira na `ownsChain`**: u `False`
+> grani je `prijIDs` namerno prazan (kaskada ih ne dira), pa bi kapija nad njim
+> bila placebo. Prazan `scopeID` je bezbedan — `SuziDecuNaZbirnu` tada vraća
+> kandidate **nepromenjeno**, dakle skup je **širi**, a kapija fail-closed.
 
 **Seed je morao da dobije vozače.** Prva noga polazi **od vozača**, a
 `SeedAmbalazaOpticaj` je punio samo stanice i kooperante — pa bi 14 zatečenih
@@ -1658,13 +1682,19 @@ slučaja za `ODL-22` (prolazi · bez vlasnika pada · tuđ broj pada) · sabota�
 `amb-prj-storno-bez-kontrastava`, `amb-odl22-vlasnik-broja-se-ne-gleda`,
 `amb-odl22-broj-drugog-kupca`.
 
-> **ŠTA OVAJ REZ NIJE POKRIO.** Sam **redosled u kaskadi** nema test — prijemnica
-> vezana za zbirnu nema fixture u ovoj suite (isti razlog stoji u
-> `Test_ZBR_VlasnistvoLanca`, koji zato meri samo *predikciju*
-> `BuildPonistenjePosledice`). Izmereno je **svojstvo** na kom redosled stoji,
-> ne redosled sam. Sabotaža koja bi vratila stari red zato **nije upisana** —
-> ne bi se videla, a sabotaža koja ne obara ništa je placebo. Zatvara ga fixture
-> „prijemnica pod zbirnom", upisan kao dug sa imenom.
+> **ŠTA OVAJ REZ NIJE POKRIO.** Eksterna grana kaskade **ima** test od P1
+> ispravke — `Test_PRJ_EksternaPrijemnicaBlokiraPonistenje` vrti **pravu**
+> kaskadu kroz test seam `PonistiZbirnaChain_Test` (isti obrazac i razlog kao
+> zatečeni `DistinctActiveValues_Test`), nad **punom zamenom**, pa ga ugasena
+> kapija obara po imenu. Fixture „prijemnica pod zbirnom" je time napravljen.
+>
+> Nepokriven ostaje **redosled u vlasničkoj grani** (`ownsChain = True`):
+> `ZbirnaOwnsExternalChain` je istina samo kad je kupac **konfigurisana**
+> hladnjača (`CFG_MALINA_DEFAULT_KUPAC`), pa bi test morao da menja config —
+> mutacija podesavanja u suite-u je sama po sebi rizik. Za tu granu je
+> izmereno **svojstvo** na kom redosled stoji
+> (`Test_PRJ_LanacSeOdmotavaObrnuto`), ne redosled sam; sabotaža koja bi vratila
+> stari red **nije upisana** jer se ne bi videla. Upisano kao dug sa imenom.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 

@@ -2058,6 +2058,16 @@ End Function
 ' gen bira ZAGLAVLJE zbirne. Decu bira BROJ -- drugog kljuca u semi nema -- pa
 ' kad broj nose dve aktivne zbirne kaskada staje: ponistavanje bi odvezalo i
 ' tudje otpremnice i prijemnice.
+' TEST SEAM: PonistiZbirnaChain_TX je Private, a kapija "aktivna EKSTERNA
+' prijemnica blokira ponistenje" mora da se meri nad PRAVOM kaskadom -- ne nad
+' predikcijom BuildPonistenjePosledice. Javni put trazi correction context i
+' forceConfirm, pa bi test merio tri sloja umesto jednog i pad bi mogao da dodje
+' sa bilo kog. Isti obrazac i isti razlog kao DistinctActiveValues_Test.
+Public Function PonistiZbirnaChain_Test(ByVal brojZbirne As String, _
+                                        ByVal zbrID As String) As Object
+    Set PonistiZbirnaChain_Test = PonistiZbirnaChain_TX(brojZbirne, zbrID)
+End Function
+
 Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
                                        Optional ByVal zbirnaID As String = "") As Object
     Const SRC As String = MOD_NAME & ".PonistiZbirnaChain_TX"
@@ -2150,6 +2160,45 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
         Set prijIDs = New Collection: Set prijBrPalete = New Collection
     End If
 
+    ' AKTIVAN EKSTERNI NIZVODNI DOKUMENT JE LIFECYCLE ZAVISNOST, NE SALDO
+    ' (review 05.10.2026, P1).
+    '
+    ' Prva verzija ovog reza se oslanjala na AMB-INV-07: kad lanac nije nas,
+    ' prijemnica ostaje aktivna, vozac vise nema gajbe, pa storno otpremnice padne
+    ' sam. TA ODBRANA JE BILA IZVEDENA IZ SALDA i vazi SAMO kad kupac nije vratio
+    ' dovoljno praznih. Normalna PUNA ZAMENA je kontraprimer:
+    '
+    '   otpremnica   Stanica -> Vozac   20
+    '   prijemnica   Vozac -> Kupac     20   pa   Kupac -> Vozac   20
+    '   vozac opet ima 20  ->  kontra-stav otpremnice PROLAZI
+    '
+    ' Ishod je bio: zbirna i otpremnica STORNIRANE, eksterna prijemnica AKTIVNA i
+    ' dalje vezana na njih, i res("ok") = True -- lazno uspesno poslovno
+    ' ponistenje nad polomljenim lifecycle-om. AMB-INV-07 sudi samo POSLE-STANJE
+    ' SALDA; on ne zna da li aktivan nizvodni dokument jos zavisi od onog koji se
+    ' stornira. Zato kapija nije jaci saldo nego EKSPLICITNA ZAVISNOST.
+    '
+    ' Politike se iskljucuju: "eksterni dokument ostaje netaknut" i "ponistenje
+    ' CELOG toka" ne mogu obe da vaze. Bira se ODBIJANJE, ne orphaning -- a
+    ' odbijanje stoji PRED svakom mutacijom, pa ni zbirna ne bude dirnuta.
+    '
+    ' Skup se broji BEZ OBZIRA na ownsChain: u False grani je prijIDs namerno
+    ' prazan (kaskada ih ne dira), pa bi kapija nad njim bila placebo. Prazan
+    ' scopeID je ovde bezbedan -- SuziDecuNaZbirnu tada vraca kandidate
+    ' NEPROMENJENO (pravilo 1), dakle skup je SIRI, a kapija fail-closed.
+    If Not ownsChain Then
+        Dim eksternePrij As Collection
+        Set eksternePrij = ActivePrijIDsByZbirna(brojZbirne, scopeID, SRC)
+        If eksternePrij.count > 0 Then
+            res("message") = "Zbirna '" & brojZbirne & "' ima " & _
+                CStr(eksternePrij.count) & " aktivnu prijemnicu EKSTERNOG kupca (" & _
+                CStr(eksternePrij(1)) & "). Ponistenje celog toka bi je ostavilo " & _
+                "vezanu na stornirane dokumente, a njen storno nije nas potez. " & _
+                "Storniraj prijemnicu kod kupca pa ponovi."
+            Exit Function
+        End If
+    End If
+
     ' --- Faza A: dokument kaskada (zbirna + otpremnice + blokovi + prijemnice) ---
     Set tx = New clsTransaction
     tx.BeginTx
@@ -2198,11 +2247,9 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
     ' ponistava.
     '
     ' KAD LANAC NIJE NAS (ownsChain = False, kupac je eksterni) prijemnica je
-    ' KUPCEV dokument i ne smemo da je stornirano -- pa storno otpremnice padne
-    ' na AMB-INV-07. I to je TACNO: ne mozemo da tvrdimo da gajbe nisu otisle sa
-    ' stanice dok ziv kupcev dokument kaze da su stigle njemu. Stari model je tu
-    ' prijavljivao delimican uspeh kao pun (v. ZbirnaOwnsExternalChain), pa je
-    ' ovo nova SPOSOBNOST kapije, ne regresija.
+    ' KUPCEV dokument i ne smemo da je stornirano. Do tog mesta se vise i ne
+    ' stize: kapija iznad odbija ceo potez PRED mutacijom. Ovde je prvo stajalo
+    ' da taj slucaj resava AMB-INV-07 sam -- v. zasto je to pobijeno, u kapiji.
     If ownsChain Then
         For k = 1 To prijIDs.count
             If Not StornoPrijemnica(CStr(prijIDs(k)), tx) Then _

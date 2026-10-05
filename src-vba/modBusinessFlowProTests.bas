@@ -326,6 +326,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_PRJ_AmbalazaDveNogeJedanPar
     Test_PRJ_StornoVracaGajbe
     Test_PRJ_LanacSeOdmotavaObrnuto
+    Test_PRJ_EksternaPrijemnicaBlokiraPonistenje
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -5629,6 +5630,86 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_PRJ_LanacSeOdmotavaObrnuto", Err.Number, Err.description
+End Sub
+
+' AKTIVNA EKSTERNA PRIJEMNICA BLOKIRA PONISTENJE (review 05.10.2026, P1).
+'
+' Ovaj test postoji zato sto je prethodna odbrana bila IZVEDENA IZ SALDA:
+' "eksterna prijemnica ostaje, vozac nema gajbe, storno otpremnice padne sam".
+' Puna zamena je kontraprimer -- kupac vrati sve prazne, vozacev saldo se vrati,
+' kontra-stav otpremnice prodje, i kaskada javi USPEH nad polomljenim lancem.
+'
+' Zato scenario koristi 20 punih i 20 PRAZNIH: tvrdnja br. 3 imenuje bas to --
+' saldo je vracen, dakle saldo NE BI zaustavio storno. Da je test uzeo
+' kolAmbVracena = 0 (kao Test_PRJ_LanacSeOdmotavaObrnuto), prosao bi i sa
+' ugasenom kapijom, jer bi ga AMB-INV-07 slucajno spasao.
+Private Sub Test_PRJ_EksternaPrijemnicaBlokiraPonistenje()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("PRJEXT")
+    testDate = NextTestDate()
+
+    Dim stPre As Double, vozPre As Double
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+
+    Dim otp As String
+    otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-EXT-" & scenario, KLASA_I, 400#, 20)
+    AssertTrue Len(otp) > 0, "PRJ eksterna: preduslov -- otpremnica je izdata"
+    If Len(otp) = 0 Then GoTo Kraj
+
+    Dim brZbr As String, zbrID As String
+    brZbr = TEST_PREFIX & "-ZBR-EXT-" & scenario
+    zbrID = CreateZbirnaIzIzvora_TX(Pr3Header(brZbr), Pr3Izvor(otp, ""))
+    AssertTrue Len(zbrID) > 0, "PRJ eksterna: preduslov -- zbirna nosi tu otpremnicu"
+    If Len(zbrID) = 0 Then GoTo Kraj
+
+    ' PUNA ZAMENA: 20 punih dole, 20 praznih gore.
+    Dim prj As String
+    prj = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
+                            TEST_PREFIX & "-PRJ-EXT-" & scenario, brZbr, _
+                            TEST_VRSTA, TEST_SORTA, 400#, 100#, TEST_TIP_AMB, _
+                            20, 20, KLASA_I, 0)
+    AssertTrue Len(prj) > 0, "PRJ eksterna: preduslov -- prijemnica je snimljena"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    Dim stPosle As Double, vozPosle As Double
+    stPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    vozPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+
+    ' TVRDNJA KOJA IMENUJE RAZLOG: saldo je vracen, pa saldo nije kapija.
+    AssertTrue Abs((vozPosle - vozPre) - 20#) < 0.001, _
+               "PRJ eksterna: puna zamena je VRATILA gajbe vozacu -- saldo ne bi zaustavio storno"
+
+    Dim res As Object
+    Set res = modStornoFlow.PonistiZbirnaChain_Test(brZbr, zbrID)
+
+    AssertTrue Not CBool(res("owns")), _
+               "PRJ eksterna: rezim je EKSTERNI kupac (ownsChain = False)"
+    AssertTrue Not CBool(res("ok")), _
+               "PRJ eksterna: ponistenje je ODBIJENO zbog aktivne eksterne prijemnice"
+    AssertTrue InStr(1, NzToText(res("message")), "EKSTERNOG kupca", vbTextCompare) > 0, _
+               "PRJ eksterna: razlog imenuje eksternu prijemnicu, ne genericki neuspeh"
+
+    ' NISTA NIJE DIRNUTO -- kapija stoji PRED mutacijom, pa ni zbirna nije pala.
+    AssertTrue NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_STORNIRANO)) <> "Da", _
+               "PRJ eksterna: zbirna je ostala AKTIVNA"
+    AssertTrue NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otp, COL_STORNIRANO)) <> "Da", _
+               "PRJ eksterna: otpremnica je ostala AKTIVNA"
+    AssertTrue NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_STORNIRANO)) <> "Da", _
+               "PRJ eksterna: eksterna prijemnica je ostala AKTIVNA"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                   TEST_TIP_AMB) - vozPosle) < 0.001, _
+               "PRJ eksterna: saldo vozaca je NEPROMENJEN posle odbijanja"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, _
+                   TEST_TIP_AMB) - stPosle) < 0.001, _
+               "PRJ eksterna: saldo stanice je NEPROMENJEN posle odbijanja"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_PRJ_EksternaPrijemnicaBlokiraPonistenje", Err.Number, Err.description
 End Sub
 
 Private Sub Test_OTP_StornoVracaGajbeVozacu()
