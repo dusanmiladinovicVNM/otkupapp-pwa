@@ -5568,63 +5568,100 @@ End Sub
 Private Sub Test_PRJ_LanacSeOdmotavaObrnuto()
     On Error GoTo EH
 
-    Dim scenario As String, testDate As Date
+    Dim scenario As String, testDate As Date, tipT As String
     scenario = NewScenarioCode("PRJLAN")
     testDate = NextTestDate()
+    tipT = "TIPL-" & scenario
 
-    Dim izvor As String
-    izvor = OtpNoviOtkup(scenario, 400#, 0#)
-    AssertTrue Len(izvor) > 0, "PRJ lanac: preduslov -- otkup je upisan"
+    ' SVEZ TIP AMBALAZE, i to je NOSEC deo testa, ne higijena.
+    '
+    ' Prva verzija je koristila TEST_TIP_AMB -- a SeedAmbalazaOpticaj vozacu daje
+    ' 20000 gajbi tog tipa, pa kontra-stav od 20 nikad ne obori saldo u minus i
+    ' odbijanja NEMA. Tvrdnja je time bila nemerljiva: ista klasa kao P1 koji je
+    ' review nasao -- odbrana izvedena iz salda vazi samo za NEKE vrednosti salda.
+    '
+    ' Sa svezim tipom vozac pocinje od NULE, pa je ceo racun vidljiv. Preduslov
+    ' se i TVRDI: ako neki buduci seed zaprlja ovaj tip, test to kaze po imenu
+    ' umesto da tiho prestane da meri.
+    modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, tipT, 40#, _
+                                  "PRJLAN-NAB-" & scenario, "preduslov lanca"
 
-    Dim vozPre As Double
-    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    ' Stanica zaduzi kooperanta praznim, da otkup ima sta da donese pun.
+    Dim tx As clsTransaction, dokID As String
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, _
+                "PRJLAN-REV-" & scenario, Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 20#, _
+                AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    tx.CommitTx
+    Set tx = Nothing
 
-    Dim razlog As String, otpID As String
-    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-LAN-" & scenario), _
-                                     OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                   tipT)) < 0.001, _
+               "PRJ lanac: preduslov -- vozac NE drzi gajbe ovog tipa, pa je saldo merljiv"
+
+    Dim oh As Object, g As String, izvor As String
+    Set oh = OtkHeader(TEST_PREFIX & "-OTK-LAN-" & scenario)
+    oh("TipAmbalaze") = tipT
+    izvor = CreateOtkup_TX(oh, OtkStavke(400#, 50#, 20, 0#, 0#, 0), g)
+    AssertTrue Len(izvor) > 0, "PRJ lanac: preduslov -- otkup je upisan (" & g & ")"
+    If Len(izvor) = 0 Then GoTo Kraj
+
+    Dim razlog As String, otpID As String, ohdr As Object
+    Set ohdr = OtpHeader(TEST_PREFIX & "-OTP-LAN-" & scenario)
+    ohdr("TipAmbalaze") = tipT
+    otpID = CreateOtpremnicaDraft_TX(ohdr, OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue Len(otpID) > 0, "PRJ lanac: nacrt otpremnice napravljen (" & razlog & ")"
+    If Len(otpID) = 0 Then GoTo Kraj
     AssertTrue DodajOtpremnicaIzvor_TX(otpID, izvor, razlog), "PRJ lanac: izvor vezan"
     AssertTrue IzdajOtpremnicu_TX(otpID, razlog), "PRJ lanac: otpremnica je izdata"
+
+    Dim vozPosleOtp As Double
+    vozPosleOtp = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT)
+    AssertTrue Abs(vozPosleOtp - 20#) < 0.001, _
+               "PRJ lanac: izdavanje je stavilo gajbe NA VOZACA"
 
     Dim brZbr As String
     brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
             Format$(testDate, "ddmmyy")
     AssertTrue Len(ZbrZateceniRed(testDate, TEST_VOZ_ID, brZbr, TEST_KUP_ID, _
                    "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
-                   100#, TEST_TIP_AMB, 20, KLASA_I)) > 0, _
+                   100#, tipT, 20, KLASA_I)) > 0, _
                "PRJ lanac: preduslov -- zbirna je snimljena"
 
-    ' Prijemnica odnosi SVE gajbe sa vozaca (bez povrata), pa je njegov saldo
-    ' tacno na stanju pre otpremnice -- i otpremnica vise nema sta da skine.
+    ' Prijemnica odnosi SVE gajbe sa vozaca (bez povrata), pa mu je saldo opet 0
+    ' i otpremnica vise nema sta da skine.
     Dim prj As String
     prj = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
                             TEST_PREFIX & "-PRJ-LAN-" & scenario, brZbr, _
-                            TEST_VRSTA, TEST_SORTA, 400#, 100#, TEST_TIP_AMB, _
+                            TEST_VRSTA, TEST_SORTA, 400#, 100#, tipT, _
                             20, 0, KLASA_I, 0)
     AssertTrue Len(prj) > 0, "PRJ lanac: prijemnica je snimljena"
     If Len(prj) = 0 Then GoTo Kraj
 
-    Dim vozPosle As Double
-    vozPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
-    AssertTrue Abs(vozPosle - vozPre) < 0.001, _
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                   tipT)) < 0.001, _
                "PRJ lanac: prijemnica je odnela sve gajbe koje je otpremnica dala"
 
     ' POGRESAN RED: otpremnica prva. Mora da padne -- gajbe vise nisu na vozacu.
-    Dim raniOtp As Boolean
-    raniOtp = modStorno.StornoOtpremnica_TX(otpID)
-    AssertTrue Not raniOtp, _
+    AssertTrue Not modStorno.StornoOtpremnica_TX(otpID), _
                "PRJ lanac: storno otpremnice PRE prijemnice je ODBIJEN (AMB-INV-07)"
 
-    ' TACAN RED: prijemnica prva vraca gajbe vozacu, pa otpremnica ima sta da skine.
+    ' TACAN RED: prijemnica prva vraca gajbe, pa otpremnica ima sta da skine.
     AssertTrue modStorno.StornoPrijemnica_TX(prj), _
                "PRJ lanac: storno prijemnice prolazi i bez storna otpremnice"
-    Dim vozVracen As Double
-    vozVracen = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
-    AssertTrue Abs(vozVracen - (vozPre + 20#)) < 0.001, _
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                   tipT) - 20#) < 0.001, _
                "PRJ lanac: storno prijemnice je vratio gajbe NA VOZACA"
     AssertTrue modStorno.StornoOtpremnica_TX(otpID), _
                "PRJ lanac: storno otpremnice POSLE prijemnice prolazi"
     AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, _
-                   TEST_TIP_AMB) - vozPre) < 0.001, _
+                   tipT)) < 0.001, _
                "PRJ lanac: po odmotanom lancu vozac je na pocetnom stanju"
 
 Kraj:
@@ -5647,9 +5684,17 @@ End Sub
 Private Sub Test_PRJ_EksternaPrijemnicaBlokiraPonistenje()
     On Error GoTo EH
 
-    Dim scenario As String, testDate As Date
+    Dim scenario As String, testDate As Date, prevKupac As String
     scenario = NewScenarioCode("PRJEXT")
     testDate = NextTestDate()
+
+    ' REZIM SE POSTAVLJA, NE NASLEDJUJE. ownsChain je IsHladnjacaKupac(zbirna.Kupac),
+    ' tj. poredjenje sa CFG_MALINA_DEFAULT_KUPAC -- ambijentalnom vrednoscu koju
+    ' zatecen Test_ZBR_AutoLanac postavlja na TEST_KUP_ID. Bez ovoga bi rezim ovog
+    ' testa zavisio od REDOSLEDA testova, a on meri bas eksternu granu.
+    ' Tvrdnja res("owns") = False ostaje -- ona je kapija nad ovim preduslovom.
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP2_ID
 
     Dim stPre As Double, vozPre As Double
     stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
@@ -5708,8 +5753,10 @@ Private Sub Test_PRJ_EksternaPrijemnicaBlokiraPonistenje()
                "PRJ eksterna: saldo stanice je NEPROMENJEN posle odbijanja"
 
 Kraj:
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
     Exit Sub
 EH:
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
     LogFatal "Test_PRJ_EksternaPrijemnicaBlokiraPonistenje", Err.Number, Err.description
 End Sub
 
