@@ -653,8 +653,26 @@ End Function
 ' AMB-10-ODL-22: ROBNI dokument UME da bude partnerov.
 '
 ' Prijemnica je eksterni dokument -- izdaje ju hladnjaca, a mi je primamo --
-' pa je njen broj KUPCEV broj. Kad nasa hladnjaca izdaje prijemnicu, broj je
-' nas, ali je i taj kupac red u tblKupci, pa je vlasnik broja isti izraz.
+' pa je njen broj KUPCEV broj.
+'
+' KAD NASA HLADNJACA IZDAJE PRIJEMNICU, VLASNIK BROJA JE NAMERNO ISTI IZRAZ
+' (odluka operatera 05.10.2026, posle P2 iz review-a). Review je tacno rekao da
+' KupacID odgovara na "ko je kupac u poslu" a BrojOwner na "cijem nizu pripada
+' broj" -- i da ih AMB-10 svuda drugde razdvaja. Ovde se NE razdvajaju, i to je
+' IZMERENO a ne pretpostavljeno: modBrojevi.GenerateBrojPrijemnice scope-uje niz
+' bas po (KupacID, dan) --
+'
+'   MaxSeqFromTable(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_DATUM,
+'                   COL_PRJ_KUPAC, kupacID, datum)
+'
+' -- uz svoj komentar da auto-numeracija vazi SAMO za hladnjaca-kupca, a ostali
+' kupci nose svoj eksterni broj. Dakle vlasnik broja JE kupac, u oba rezima, i
+' poklapa se sa AMB-10-ODL-20 (BrojOwnerTip, BrojOwnerID, dan). Jedno pravilo,
+' bez grananja po izdavaocu.
+'
+' Ovo bi se MORALO ponovo izmeriti ako broj prijemnice ikada pocne da se
+' generise iz NASEG niza nezavisnog od kupca -- tada role i vlasnistvo prestaju
+' da se poklapaju i mapa treba granu.
 '
 ' Mapa je ZATVORENA i za ostale tipove vraca prazno. To nije rupa nego
 ' fail-closed: obrnuta kapija ODL-10 odbija povrat od kupca bez vlasnika

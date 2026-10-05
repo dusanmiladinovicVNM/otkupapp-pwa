@@ -1627,6 +1627,32 @@ ne drži ne mogu da se vrate.
 > Vlasnika objavljuje **zatvorena mapa** `AmbRobniVlasniciBroja`, a čita je
 > `AmbRobniZaglavlje` **iz tabele dokumenta** — ne iz argumenta pisca, jer bi to
 > bila tvrdnja pisca o sebi.
+>
+> **KAD NAŠA HLADNJAČA IZDAJE PRIJEMNICU, VLASNIK BROJA JE NAMERNO ISTI IZRAZ**
+> (odluka operatera 05.10.2026, posle P2 iz review-a). Prigovor je bio tačan u
+> postavci: `KupacID` odgovara na *„ko je kupac u poslu"*, `BrojOwner` na *„čijem
+> nizu pripada broj"*, i `AMB-10` ih svuda drugde razdvaja. Ovde se **ne**
+> razdvajaju, i to je **izmereno**, ne pretpostavljeno —
+> `modBrojevi.GenerateBrojPrijemnice` scope-uje niz baš po `(KupacID, dan)`:
+>
+> ```
+> MaxSeqFromTable(tblPrijemnica, BrojPrijemnice, Datum, KupacID, kupacID, datum)
+> ```
+>
+> uz svoj komentar da auto-numeracija važi **samo** za hladnjača-kupca, a ostali
+> kupci nose svoj eksterni broj koji se unosi ručno. Vlasnik broja dakle **jeste**
+> kupac — u oba režima — i poklapa se sa `AMB-10-ODL-20`
+> `(BrojOwnerTip, BrojOwnerID, dan)`. Jedno pravilo, bez grane po izdavaocu.
+>
+> *Obavezno ponovo izmeriti* ako broj prijemnice ikada počne da se generiše iz
+> **našeg** niza nezavisnog od kupca — tada role i vlasništvo prestaju da se
+> poklapaju i mapa traži granu.
+>
+> *Provera:* `Test_PRJ_VlasnikBrojaJeNjenKupac` meri **odsustvo grane** — dva
+> različita kupca, isti pisac, svaki dokument prijavljuje svog; jedan kupac ne bi
+> razlikovao pravilo od hardkodirane vrednosti. Uz to i fail-closed default (tip
+> van mape ne objavljuje vlasnika) i sabotaža
+> `amb-odl22-vlasnik-broja-iz-pogresne-kolone`.
 
 > **AMB-10-ODL-21.** **Lanac se odmotava obrnuto od fizičkog reda.** Fizički je
 > `stanica → vozac` (otpremnica) `→ kupac` (prijemnica). Dok je knjiga bila

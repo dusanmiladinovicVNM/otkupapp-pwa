@@ -327,6 +327,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_PRJ_StornoVracaGajbe
     Test_PRJ_LanacSeOdmotavaObrnuto
     Test_PRJ_EksternaPrijemnicaBlokiraPonistenje
+    Test_PRJ_VlasnikBrojaJeNjenKupac
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -5710,6 +5711,75 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_PRJ_EksternaPrijemnicaBlokiraPonistenje", Err.Number, Err.description
+End Sub
+
+' AMB-10-ODL-22: VLASNIK BROJA PRIJEMNICE JE NJEN KUPAC -- BEZ GRANE PO IZDAVAOCU.
+'
+' Review (P2, 05.10.2026) je tacno prigovorio da KupacID odgovara na "ko je kupac
+' u poslu" a BrojOwner na "cijem nizu pripada broj", i da testa za slucaj "nasa
+' hladnjaca je izdavalac" nema. Odluka operatera je da vlasnik NAMERNO ostaje
+' KupacID u oba rezima; merenje koje je opravdava stoji u AmbRobniVlasniciBroja
+' (generator broja prijemnice scope-uje niz bas po (KupacID, dan)).
+'
+' Zato test meri bas ODSUSTVO GRANE: dva razlicita kupca, isti pisac, i svaki
+' dokument prijavljuje SVOG kupca. Jedan kupac ne bi razlikovao pravilo od
+' hardkodirane vrednosti.
+Private Sub Test_PRJ_VlasnikBrojaJeNjenKupac()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("PRJVLB")
+    testDate = NextTestDate()
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrZateceniRed(testDate, TEST_VOZ_ID, brZbr, TEST_KUP_ID, _
+                   "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                   100#, TEST_TIP_AMB, 20, KLASA_I)) > 0, _
+               "PRJ vlasnik: preduslov -- zbirna je snimljena"
+
+    ' Gajbe nisu predmet ovog testa, pa su obe kolicine 0: meri se ZAGLAVLJE.
+    Dim prjA As String, prjB As String
+    prjA = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-PRJ-VLA-" & scenario, brZbr, _
+                             TEST_VRSTA, TEST_SORTA, 400#, 100#, TEST_TIP_AMB, _
+                             0, 0, KLASA_I, 0)
+    prjB = SavePrijemnica_TX(testDate, TEST_KUP2_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-PRJ-VLB-" & scenario, brZbr, _
+                             TEST_VRSTA, TEST_SORTA, 400#, 100#, TEST_TIP_AMB, _
+                             0, 0, KLASA_I, 0)
+    AssertTrue Len(prjA) > 0 And Len(prjB) > 0, _
+               "PRJ vlasnik: preduslov -- dve prijemnice, RAZLICITI kupci"
+    If Len(prjA) = 0 Or Len(prjB) = 0 Then GoTo Kraj
+
+    Dim tA As String, iA As String, tB As String, iB As String
+    modAmbalaza.AmbRobniZaglavlje DOK_TIP_PRIJEMNICA, prjA, tA, iA
+    modAmbalaza.AmbRobniZaglavlje DOK_TIP_PRIJEMNICA, prjB, tB, iB
+
+    AssertEquals AMB_NALOG_KUPAC, tA, _
+                 "ODL-22: vlasnik broja prijemnice je nalog tipa Kupac"
+    AssertEquals TEST_KUP_ID, iA, _
+                 "ODL-22: prva prijemnica prijavljuje SVOG kupca"
+    AssertEquals TEST_KUP2_ID, iB, _
+                 "ODL-22: druga prijemnica prijavljuje SVOG kupca -- nema grane po izdavaocu"
+    AssertEquals AMB_NALOG_KUPAC, tB, _
+                 "ODL-22: tip vlasnika je isti za oba kupca"
+
+    ' FAIL-CLOSED DEFAULT: tip koji mapa ne poznaje ne objavljuje vlasnika, pa ga
+    ' obrnuta kapija ODL-10 odbija. Meri se nad ISTIM ID-em, da razlika dodje
+    ' samo od TIPA dokumenta.
+    Dim tX As String, iX As String
+    modAmbalaza.AmbRobniZaglavlje DOK_TIP_OTKUP, prjA, tX, iX
+    AssertEquals "", tX, _
+                 "ODL-22: dokument van zatvorene mape NE objavljuje vlasnika broja"
+    AssertEquals "", iX, _
+                 "ODL-22: ni ID vlasnika ne nastaje za tip van mape"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_PRJ_VlasnikBrojaJeNjenKupac", Err.Number, Err.description
 End Sub
 
 Private Sub Test_OTP_StornoVracaGajbeVozacu()

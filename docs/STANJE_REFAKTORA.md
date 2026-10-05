@@ -655,8 +655,27 @@
     (`SuziDecuNaZbirnu`, pravilo 1), pa je kapija nad njim fail-closed — i skup
     se broji **bez obzira na `ownsChain`**, jer je `prijIDs` u toj grani namerno
     prazan i kapija nad njim bi bila placebo.
-    Katalog 687 → 688. **P2 (vlasnik broja kad naša hladnjača izdaje prijemnicu)
-    je otvoren i čeka odgovor operatera** — v. dug sa imenom.
+    Katalog 687 → 688.
+63. **P2 zatvoren: vlasnik broja prijemnice NAMERNO ostaje njen `KupacID`**
+    (05.10.2026, odluka operatera). Review je postavku imao tačnu — `KupacID`
+    odgovara na „ko je kupac u poslu", `BrojOwner` na „čijem nizu pripada broj",
+    i `AMB-10` ih svuda drugde razdvaja.
+    **Odgovor je potvrđen merenjem koje je pobilo obrazloženje koje sam
+    nameravao da napišem.** Hteo sam da napišem „brojevi prijemnice se ne
+    generišu kod nas, pa nema ništa čiji bi niz bio" — generator **postoji**:
+    `GenerateBrojPrijemnice(kupacID, datum)` scope-uje niz baš po
+    `(KupacID, dan)` (`MaxSeqFromTable(... COL_PRJ_KUPAC, kupacID, datum)`), uz
+    svoj komentar da auto-numeracija važi **samo** za hladnjača-kupca a ostali
+    nose eksterni broj. Dakle vlasnik broja **jeste** kupac u oba režima, i
+    poklapa se sa `ODL-20`. To je jače obrazloženje od onog koje sam imao — i
+    peti put u ovom rezu da je merenje pobilo odbranu **pre** review-a.
+    Kod se **nije menjao** (ponašanje je već bilo takvo); dodat je test koji meri
+    **odsustvo grane** (dva različita kupca — jedan ne bi razlikovao pravilo od
+    hardkodirane vrednosti) i fail-closed default za tip van mape, plus sabotaža
+    `amb-odl22-vlasnik-broja-iz-pogresne-kolone` (tip vlasnika ostaje `Kupac`, pa
+    klasa izgleda dobro, a ID je vozačev). Upisan je i uslov za reviziju: ako broj
+    ikada počne da se generiše iz **našeg** niza nezavisnog od kupca, mapa traži
+    granu. Katalog 688 → 689.
     **DOKAZ JE IZMEREN — za stavke 59 i 60 zajedno, nad jednim izvorom.**
     `run_vba.py` pun prolaz **ZELENO**: 12/12 suita, `RunBusinessFlowProSuite`
     **0/2318**, `RunAllTests` 0/200, banka 0/241, storno 0/163, palete 97,
@@ -682,7 +701,6 @@
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
 | **redosled u VLASNICKOJ grani kaskade nema test** | eksterna grana je pokrivena od P1 ispravke (`Test_PRJ_EksternaPrijemnicaBlokiraPonistenje` nad pravom kaskadom, kroz test seam). Vlasnička (`ownsChain = True`) nije: `ZbirnaOwnsExternalChain` je istina samo kad je kupac **konfigurisana** hladnjača (`CFG_MALINA_DEFAULT_KUPAC`), pa bi test morao da menja podesavanja — mutacija configa u suite-u je sama rizik. Za tu granu je izmereno **svojstvo** (`Test_PRJ_LanacSeOdmotavaObrnuto`), ne redosled; sabotaža koja bi vratila stari red **nije upisana** jer se ne bi videla, a sabotaža koja ne obara ništa je placebo |
-| **ODL-22: vlasnik broja kad NAŠA hladnjača izdaje prijemnicu** | mapa `AmbRobniVlasniciBroja` bezuslovno kaže `(Kupac, Prijemnica.KupacID)`. Za eksternog kupca je to tačno — broj je njegov. Ali kanonska odluka kaže da prijemnicu **sme da izdaje i naša hladnjača**, a tada je broj **naš**. `KupacID` odgovara na *„ko je kupac u poslu"*, `BrojOwner` na *„čijem nizu pripada broj"* — `AMB-10` te dve stvari razdvaja svuda drugde. Ne zatvara se kodom: traži odgovor operatera (`Firma`? neki `SOPSTVENI` nalog? namerno `KupacID` naše hladnjače?), pa onda red u mapi i test. Review: **P2**, jer nije izmereno koliko je taj režim danas aktivan |
 | **bruto grana otkupa/otpremnice bez testa** | posledica pina `OTKUP_BRUTO_UNOS = NO` u `make_fixture` (KI-008): tara, odbijanje kad `tara >= kolicina` i zamrzavanje `BrutoKg` nemaju **ni jedan** test. Njen test mora sam da postavi zastavicu, kao `modIzvestajTests` za `MALINA_MODE` — nasleđivanje od donora je ono što je pet padova i napravilo |
 | `dispecer.js` alokacija po klasama | **poslovna odluka**, ne prevod: raspodela količine na više klasa traži pravilo od operatera. Dok je N=1 ponašanje je identično |
 | `OTKUP_CONFLICT` lifecycle | deterministički konflikt ostaje retryable pending — vidljivo i bezbedno, ali traži svoj rez |

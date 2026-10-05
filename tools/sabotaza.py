@@ -6901,6 +6901,17 @@ SABOTAZE = {
         "Test_PRJ_EksternaPrijemnicaBlokiraPonistenje",
         "PRJ eksterna: ponistenje je ODBIJENO zbog aktivne eksterne prijemnice",
     ),
+    # AMB-10-ODL-22: mapa vlasnika broja cita POGRESNU kolonu. Tip vlasnika
+    # ostaje Kupac, pa klasa i dalje izgleda dobro -- ali ID je vozacev, dakle
+    # dokument bi nosio tudj broj. Obrnuta kapija ODL-10 bi tada odbila povrat na
+    # svakoj prijemnici, a zaglavlje bi lagalo cijiim nizom broj pripada.
+    "amb-odl22-vlasnik-broja-iz-pogresne-kolone": (
+        "modAmbalazaUgovor.bas",
+        "              AMB_NALOG_KUPAC, COL_PRJ_KUPAC))\n",
+        "              AMB_NALOG_KUPAC, COL_PRJ_VOZAC))\n",
+        "Test_PRJ_VlasnikBrojaJeNjenKupac",
+        "ODL-22: prva prijemnica prijavljuje SVOG kupca",
+    ),
     # PRIJEMNICA (10b-2, 6.12g) -- tri sabotaze nad piscem i stornom.
     #
     # Puna noga nosi KolAmbVracena: dokument ima oba reda, oba su na pravom paru
