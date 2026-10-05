@@ -600,6 +600,25 @@
     review-a, katalog 649 → 655) stajao je od `ef60fc91` na **kraju** liste, pa ga
     je svaka nova stavka odvlačila dalje — od 59 se čitao kao deo otpremničkog
     reza. Vraćen je pod 53, kojoj po sadržaju i datumu (02–03.10) pripada.
+    **DOKAZ JE IZMEREN — za stavke 59 i 60 zajedno, nad jednim izvorom.**
+    `run_vba.py` pun prolaz **ZELENO**: 12/12 suita, `RunBusinessFlowProSuite`
+    **0/2318**, `RunAllTests` 0/200, banka 0/241, storno 0/163, palete 97,
+    faktura 35, agrohemija 25, Sheets 72. Marker nad izvorom `c7a34a14b436`
+    (ugovor `849cba105e9c`, sveska `otkup_test.xlsm/d24883a3`) ·
+    **compile potvrđen** nad istim izvorom — a compile je **jedina** kapija koja
+    bi sama uhvatila P1 iz `OtpIspravi` (`Variable not defined: tx`) ·
+    `dokaz.py` **DOKAZANO (grupno)**, `crvenih 4/4`, potpis izvora
+    `fcde30a28b7da85c` identičan pre i posle, `grupno izmereno 2/4` — pun
+    pojedinačni dokaz je isti poziv bez `--grupe` i ide pred release · jeftine
+    kapije `rc=0` (`vba_check` 191/682/0+10, arnost 300, scope 5522/0, schema,
+    ownership, čitaoci).
+    **2318 je držalo** — isti broj pre i posle premeštanja tvrdnje, što je i bila
+    tvrdnja o samoj zakrpi: ista tvrdnja, drugo mesto.
+    Usput izmereno o **grupisanju**: `amb-otp-storno-bez-kontrastava` u grupi
+    *nije* oborila svoju tvrdnju, jer je kaskada iz `ispravka-ne-stornira-staru`
+    oborila ceo poziv ispravke pre nje; sama je **OK**. Drugi put da grupisanje
+    traži solo ponavljanje — protokol `--grupe` to radi sam, i to je razlog
+    zbog kog postoji.
 
 ## Dug sa imenom (posle S5-5b)
 
