@@ -2225,6 +2225,12 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
     ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_PRIJEMNICA
+    ' KNJIGA IDE SA DOKUMENTOM (10b-2). Od cutovera prijemnica knjizi
+    ' Vozac -> Kupac, a SavePrijemnica_TX commituje SVOJU tx. Bez ovog snimka
+    ' spoljni rollback vrati tblPrijemnica a knjigu ne -- red ostaje kao
+    ' SIROTAN, GetNextID ponovo izda isti broj, i AMB-INV-04 ga obori u
+    ' TUDJEM testu dva testa kasnije (05.10.2026, bas tako i jeste palo).
+    tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 

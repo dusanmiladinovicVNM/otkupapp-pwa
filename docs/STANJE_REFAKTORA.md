@@ -703,6 +703,31 @@
     ulazi kao test-pisac `tblAmbalaza` i `tblAmbalazaDokument`, verno, jer seed
     ide kroz produkcione pisce i `AddTableSnapshot`). A11 prolazi. Pravilo
     „CI kapije se vrte sve" je imalo tri clana u mojoj glavi, a ima četiri.
+65. **Sirotan u knjizi: `AMB-INV-04` je uhvatio sudar identiteta** (05.10.2026).
+    BFP je ostao na 2359/2, i obe pale tvrdnje su bile isti upis. Razlog se
+    **nije video iz izveštaja** — `SavePrijemnica_TX` grešku ne propagira nego
+    je štampa u Immediate prozor, koji runner ne hvata. To je kvar **instrumenta**:
+    tvrdnja o upisu bez razloga me je dvaput poslala u nov prolaz. Dodat je seam
+    `PrjUpisiSaRazlogom` koji zove **jezgro** (ono grešku diže) i nosi `Err` u
+    tvrdnju — i tek tada se razlog video:
+
+    ```
+    AMB-INV-04: Prijemnica 'PRJ-00011' je vec knjizio AMBALAZA_UZ_ROBU
+    za 'Test Gajba' (red AMB-4653CCE7...)
+    ```
+
+    **Isti ID u oba pada** — broj se ponovo dodeljuje, a u knjizi je ostao red
+    starog nosioca. Mehanizam: `SavePrijemnica_TX` commituje **svoju** tx
+    (dokument + knjiga), pa spoljna tx testa vrati `tblPrijemnica` ali ne i
+    `tblAmbalaza` — koje nema u njenom snimku. Red ostaje **sirotan**, `GetNextID`
+    ponovo izda isti broj, i invarijanta ga obori u **tuđem** testu dva testa
+    kasnije. Tačno obrazac „rollback vraća CEO dokument".
+    **Kapija nije pogrešila — uradila je svoj posao.** Nalaz je u **opsegu
+    transakcije jednog testa**, i lek je jedan red: `tblAmbalaza` u njen snimak.
+    Izmereno nad svim test modulima: **tačno jedna** takva procedura
+    (`Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice`). Izmereno nad produkcijom:
+    jedine procedure koje imaju tx i pišu prijemnicu su sama dva `_TX` omotača, i
+    **oba** snimaju `tblAmbalaza` — produkcija ovu rupu nema.
     **DOKAZ JE IZMEREN — za stavke 59 i 60 zajedno, nad jednim izvorom.**
     `run_vba.py` pun prolaz **ZELENO**: 12/12 suita, `RunBusinessFlowProSuite`
     **0/2318**, `RunAllTests` 0/200, banka 0/241, storno 0/163, palete 97,
@@ -727,6 +752,7 @@
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
+| **nema kapije za „snimak testa mora pokriti sve što pisac piše"** | cutover proširi šta jedan pisac upisuje, a testovi sa **svojom** transakcijom i dalje snimaju stari skup tabela — pa inner commit preživi outer rollback i ostavi **sirotana** koji padne u tuđem testu (05.10.2026, stavka 65). Merenje je jednokratno napisano i dalo **1** nalaz u testovima i **0** u produkciji; kao trajna kapija traži mapu „pisac → tabele" iz `WHO_WRITES` i svoj dvosmerni dokaz, dakle **zaseban process PR** |
 | **redosled u VLASNICKOJ grani kaskade nema test** | eksterna grana je pokrivena od P1 ispravke (`Test_PRJ_EksternaPrijemnicaBlokiraPonistenje` nad pravom kaskadom, kroz test seam). Vlasnička (`ownsChain = True`) nije: `ZbirnaOwnsExternalChain` je istina samo kad je kupac **konfigurisana** hladnjača (`CFG_MALINA_DEFAULT_KUPAC`), pa bi test morao da menja podesavanja — mutacija configa u suite-u je sama rizik. Za tu granu je izmereno **svojstvo** (`Test_PRJ_LanacSeOdmotavaObrnuto`), ne redosled; sabotaža koja bi vratila stari red **nije upisana** jer se ne bi videla, a sabotaža koja ne obara ništa je placebo |
 | **bruto grana otkupa/otpremnice bez testa** | posledica pina `OTKUP_BRUTO_UNOS = NO` u `make_fixture` (KI-008): tara, odbijanje kad `tara >= kolicina` i zamrzavanje `BrutoKg` nemaju **ni jedan** test. Njen test mora sam da postavi zastavicu, kao `modIzvestajTests` za `MALINA_MODE` — nasleđivanje od donora je ono što je pet padova i napravilo |
 | `dispecer.js` alokacija po klasama | **poslovna odluka**, ne prevod: raspodela količine na više klasa traži pravilo od operatera. Dok je N=1 ponašanje je identično |
