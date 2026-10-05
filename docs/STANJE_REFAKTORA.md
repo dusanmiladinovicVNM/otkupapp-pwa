@@ -676,6 +676,33 @@
     klasa izgleda dobro, a ID je vozačev). Upisan je i uslov za reviziju: ako broj
     ikada počne da se generiše iz **našeg** niza nezavisnog od kupca, mapa traži
     granu. Katalog 688 → 689.
+64. **Baza `RunAllTests` je pala, i `dokaz.py` je stao pre merenja**
+    (05.10.2026). `STOP: baza nije zelena. Dokaz bi merio crveno koje sabotaza
+    nije izazvala.` — kapija je uradila tačno ono zašto postoji.
+    **Uzrok izveden iz izvora, bez Immediate prozora:** test 26
+    (`T_IspravkaPrijemnice_SkipIRelink`) **dva puta** piše prijemnicu sa 40
+    gajbi — i to su **jedina dva** takva poziva u celom `modTest` (mereno). Od
+    `10b-2` prijemnica knjiži `Vozac → Kupac`, a `make_fixture` nosi samo
+    redove **starog** oblika (`Smer`/`EntitetID`), koje nov čitalac ne vidi —
+    saldo vozača u novom modelu je **0**. `PrenesiAmbalazu` sprovodi
+    `AMB-INV-07` i na **običnom** upisu (`AmbDeficitZaPrenos`), a manjak
+    **sopstvenog** naloga se po `AMB-10-ODL-8` ne pokriva tuđom ambalažom nego
+    je **tvrdo odbijen** — vozač nema šta da pokrije manjak.
+    **Blast radius je izmeren, ne pretpostavljen:** prijemnicu kroz te ulaze
+    pišu samo `modTest` (2 poziva) i `modBusinessFlowProTests` (20, već
+    zasejan u 61). `RunPaleteTestSuite` i `RunStornoTestSuite` koriste zatečene
+    redove fixture-a, pa ih ovo ne dira.
+    Optičaj se zato zasejava **u testu**, kao preduslov sa svojom tvrdnjom — ne
+    u `make_fixture` (traži ponovnu izgradnju sveske) i ne u `RunAllTests` (traži
+    ga tačno jedan test). Seed je **idempotentan**, i to nije kozmetika: suite se
+    vrti nad istom sveskom više puta, a kapija zauzetosti broja (`ODL-20`) bi
+    odbila ponovljen broj istog dana.
+    **Usput: propuštena kapija cele sesije.** `who_writes --check` (generisani
+    `WHO_WRITES.md`) nije bio puštan — puštan je samo `--check-ownership`.
+    Dokument je bio zastareo **samo zbog ovog seeda** (regenerisan: `modTest`
+    ulazi kao test-pisac `tblAmbalaza` i `tblAmbalazaDokument`, verno, jer seed
+    ide kroz produkcione pisce i `AddTableSnapshot`). A11 prolazi. Pravilo
+    „CI kapije se vrte sve" je imalo tri clana u mojoj glavi, a ima četiri.
     **DOKAZ JE IZMEREN — za stavke 59 i 60 zajedno, nad jednim izvorom.**
     `run_vba.py` pun prolaz **ZELENO**: 12/12 suita, `RunBusinessFlowProSuite`
     **0/2318**, `RunAllTests` 0/200, banka 0/241, storno 0/163, palete 97,

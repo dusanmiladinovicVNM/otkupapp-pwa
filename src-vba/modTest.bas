@@ -2818,6 +2818,23 @@ Private Sub T_IspravkaPrijemnice_SkipIRelink()
     Dim p As Object, res As String, poruke As String
     Dim cid As String, prevPal As String
 
+    ' PREDUSLOV OD 10b-2: PRIJEMNICA KNJIZI Vozac -> Kupac.
+    '
+    ' Ovaj test dva puta pise prijemnicu sa 40 gajbi, pa vozac mora da ih IMA.
+    ' Fixture nosi samo redove STAROG oblika (Smer/EntitetID), koje nov citalac
+    ' ne vidi -- saldo vozaca u novom modelu je 0. PrenesiAmbalazu sprovodi
+    ' AMB-INV-07 i na obicnom upisu, a manjak SOPSTVENOG naloga se po
+    ' AMB-10-ODL-8 ne pokriva tudjom ambalazom nego je tvrdo odbijen -- pa bi
+    ' oba upisa pala, i to pre svoje tvrdnje.
+    '
+    ' Zasejava se OVDE, a ne u make_fixture (ponovna izgradnja sveske) i ne u
+    ' RunAllTests (trazi ga tacno jedan test -- mereno: samo ova dva poziva u
+    ' celom modTest pisu prijemnicu kroz PrijemnicaUpisi).
+    ZasejOpticajVozacu
+    AssertEq (modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, _
+              FX_TIP_AMB) >= 100), True, _
+             "preduslov: vozac ima gajbe za knjizenje prijemnice"
+
     ' Preduslov: bez ukljucenog paletiranja ceo test meri prazno.
     prevPal = GetConfigValue(CFG_PALETIRANJE)
     SetConfigValue CFG_PALETIRANJE, "DA"
@@ -2886,6 +2903,43 @@ End Sub
 ' Zajednicka polja za oba upisa iz gornjeg testa. Kolicine i gajbice su iste
 ' kao na storniranoj prijemnici (400 kg / 40 gajbica) - v. napomenu o
 ' PaletaAdjustPrompt.
+' Stanica nabavi gajbe pa ih da VOZACU (AMB-10-ODL-7: vozac je sopstven
+' nalog, a prazne sa stanice najcesce idu bas njemu).
+'
+' IDEMPOTENTNO, i to nije kozmetika: suite se vrti nad ISTOM sveskom vise
+' puta, a kapija zauzetosti broja (AMB-10-ODL-20) bi odbila ponovljen broj
+' istog dana. Zato se prvo cita saldo, pa se ne radi nista ako ga ima.
+'
+' Broj se PROSLEDJUJE, ne racuna iz generatora: zasejavanje ne sme da zavisi
+' od alata koji drugi testovi mere (isti razlog kao u SeedAmbalazaOpticaj).
+Private Sub ZasejOpticajVozacu()
+    Const SEED_KOL As Double = 400
+    Dim tx As clsTransaction, dokID As String, oznaka As String
+
+    If modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, FX_TIP_AMB) >= 100 Then
+        Exit Sub
+    End If
+
+    oznaka = "SEEDVOZ-T26-" & Format$(Now, "yyyymmddhhnnss")
+
+    ' NASE gajbe ulaze u opticaj samo kroz NABAVKU (AMB-10-ODL-8).
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, SEED_KOL, _
+                                  oznaka & "-NAB", "preduslov testa 26"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, oznaka, Date, _
+                                         AMB_NALOG_STANICA, FX_STANICA)
+    modAmbalaza.PrenesiAmbalazu tx, Date, FX_TIP_AMB, SEED_KOL, _
+                AMB_NALOG_STANICA, FX_STANICA, _
+                AMB_NALOG_VOZAC, FX_VOZAC, _
+                AMB_VK_PRENOS_INTERNO, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    tx.CommitTx
+    Set tx = Nothing
+End Sub
+
 Private Sub PopuniPrijemnicu(ByVal p As Object, ByVal broj As String)
     p("datum") = CDate(FX_DATUM)
     p("kupacID") = FX_KUPAC
