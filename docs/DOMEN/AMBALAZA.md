@@ -1555,7 +1555,14 @@ kao kod otkupa. Tri pozivna mesta (`StornoOtpremnica_TX`, `OtpIspravi`,
 nove: `Od`, `Na`, vrsta) · `Test_OTP_StornoVracaGajbeVozacu` 6 tvrdnji · sabotaže
 `amb-otp-storno-bez-kontrastava`, `amb-otp-vrsta-prenos-interno`, uz zatečene
 `otp-ambalaza-se-ne-knjizi-pri-izdavanju` i `ispravka-ne-stornira-staru` (sidra
-pomerena, tvrdnje netaknute).
+pomerena, **tekst** tvrdnji netaknut).
+
+**Kod `ispravka-ne-stornira-staru` je morao da se promeni POLOŽAJ tvrdnje.**
+Gašenje storna stare ne pravi „dve aktivne otpremnice" nego **tvrdo odbijanje**:
+`OtpRequireIzvorValjan` ne pušta novu dok je izvor u sastavu aktivne stare — zato
+storno u `OtpIspravi` i stoji PRED upisom članstva. Pošto ceo poziv padne, ciljana
+tvrdnja `Ispravka: stara je stornirana` iza rane izlazne tačke nije ni dolazila na
+red; premeštena je **iznad** nje (hronologija 60).
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 

@@ -398,6 +398,57 @@
     van trake (lokalni log + `Monitor_Critical`, koji je no-op kad monitoring nije
     podešen — zato dva kanala). Pravilo je zapisano u
     `ARCHITECTURE_CONTRACT.md` uz „Snapshot nije vlasništvo“.
+    Sabotaža je **preimenovanje** tabele (`GetTable` vraća `Nothing` → 91), ne
+    menjanje šeme; tri privremene tabele imaju **po dve kolone** jer `Value2` nad
+    jednom ćelijom vraća skalar, a `RestoreTable` radi `UBound`. Tri sabotaže, po
+    jedna na svaku posledicu — ne grupišu se (isti test, ista procedura za dve).
+    `WHO_WRITES.md` dobija tri reda `TST_RB_*` sa **0 produkcionih pisaca**:
+    generisani artefakt verno prijavljuje `AddTableSnapshot` iz testa. Alternativa
+    (naučiti `who_writes` da prećuti prefiks `TST_`) je izmena **kapije** i traži
+    svoj dvosmerni dokaz — ostaje kao moguć naredni process rez, ne u ovom.
+    **Review je na to dao P1 i bio je u pravu:** prijaviti nije isto sto i
+    **zatvoriti**. Property na `tx` objektu nestane kad pozivalac izađe, pa se
+    sistem posle nepotpunog rollback-a vraćao u **puno operativan** režim — nova
+    transakcija dozvoljena, AutoSave zakazan, a `ZatvoriAplikaciju` radi
+    `Close SaveChanges:=True`. Operater koji samo zatvori program zabetonirao bi
+    parcijalno vraćen podatak. Prethodna (loša) verzija je sistem ostavljala
+    očigledno polomljenim; prva moja verzija ga je vraćala u ispravno stanje dok
+    zna da podaci to nisu — gore.
+    Brana je sad **globalna za sesiju** (`modTxState`, obrazac `modImportState`) i
+    zatvara pet puteva: `BeginTx`, `MarkDirtyAndSchedule`, `AutoSaveAfterCommit`,
+    `Workbook_BeforeSave` (jedina tačka kroz koju prolaze Ctrl+S / File > Save /
+    Save As / `.Save` iz VBA) i `ZatvoriAplikaciju`. **Bez registra** i
+    **fail-closed**, obrnuto od `modImportState`, i oba namerno: recovery *je*
+    reload (Save je zatvoren, pa na disku stoji stanje pre transakcije), a nema
+    čitanja koje može da pukne. Perzistiran marker bi svesku učinio trajno
+    nesnimljivom bez izlaza iz aplikacije.
+    Test je prepisan: tvrdio je da `BeginTx` posle nepotpunog rollback-a
+    **prolazi** — to je bila acceptance odluka za ponašanje koje ne želimo. Sada
+    meri **ishod kroz prave seam-ove**: `BeginTx` diže `UPIS ZATVOREN`, a
+    `ThisWorkbook.Save` ostavlja `Saved = False`. Oba smera: i da PRE kompromisa
+    Save prolazi, i da POSLE reset-a (= reload) opet prolazi.
+    **Četvrti krug review-a je našao rupu u DOKAZNOM modelu, ne u kodu:** poruka se
+    u dva EH bloka (`modAgroUnos`) računala **pre** `tx.RollbackTx`, pa je marker
+    tada još bio prazan i parcijalan rollback je i dalje vraćao „promene vraćene" —
+    a kapija je bila **zelena**, jer je merila *prisustvo* wrappera, ne *redosled*.
+    Zato je dodato `ROLLBACK_TVRDNJA_RED` (u proceduri koja sama poseduje `tx`,
+    wrapper mora stajati posle zadnjeg `.RollbackTx`), a `Err` se čuva pre
+    rollback-a. Mereno po proceduri nad celim izvorom: **tačno 2** takva mesta;
+    7 u `modBankaMapiranje` je bilo ispravno, a 11 (`modScrDokumenti`,
+    `modScrBankaUvoz`) ne poseduje `tx` pa im je rollback završen unutra.
+    Usput: dokaz nivoa „da li se self-test uopšte vrti" otkrio je da je zbir
+    slučajeva **ručno** održavan i nije uključio dve nove liste — `--self-test` je
+    javljao 130 i posle dodavanja 12 slučajeva. Ispravljen na **142**, ali broj se
+    više ne uzima na reč nego se dokazuje padom (v. [[broj-tvrdnji-je-merenje]]).
+    **Dokaz je IZMEREN**, na exact head-u `783b7946`:
+    `RunAllTests` **200/0 ZELENO** · `dokaz.py rollback` **6/6 DOKAZANO** (potpis
+    izvora `935f070a003272e0` identičan pre i posle) ·
+    `vba_gate --require-green --suite RunAllTests` **rc=0**
+    (`izvor bc84a7d4168e, ugovor 9c3f30001038`) · 19/19 jeftinih kapija `rc=0`
+    · 142 self-test slučaja · katalog 649 → **655**.
+    `--require-green` **bez** `--suite` je `rc=2` i to je tačno: samo je
+    `RunAllTests` puštena nad ovim izvorom, pun prolaz ide pred release.
+    **Compile ostaje ručna kapija operatera** (`--mark-compile`).
 54. **Ulaz za storno ambalaže pomeren PRED cutover** (03.10.2026, `AMB-10-ODL-16/-17`).
     Plan ga je držao kao `10d`, **posle** devet mesta knjiženja. Merenje pred prvi
     rez je oborilo taj red: nov čitalac salda (`RedDoticeKnjigu`,
@@ -521,57 +572,34 @@
     `tx` je obavezan i na `OtpIzdaj` i na `StornoOtpremnica` (3 pozivna mesta, sva
     u tx sa obe tabele — izmereno pre koda). Dva zatečena sidra je kapija
     prijavila po imenu i pomerena su bez menjanja tvrdnji. Katalog 680 → 682.
-    Sabotaža je **preimenovanje** tabele (`GetTable` vraća `Nothing` → 91), ne
-    menjanje šeme; tri privremene tabele imaju **po dve kolone** jer `Value2` nad
-    jednom ćelijom vraća skalar, a `RestoreTable` radi `UBound`. Tri sabotaže, po
-    jedna na svaku posledicu — ne grupišu se (isti test, ista procedura za dve).
-    `WHO_WRITES.md` dobija tri reda `TST_RB_*` sa **0 produkcionih pisaca**:
-    generisani artefakt verno prijavljuje `AddTableSnapshot` iz testa. Alternativa
-    (naučiti `who_writes` da prećuti prefiks `TST_`) je izmena **kapije** i traži
-    svoj dvosmerni dokaz — ostaje kao moguć naredni process rez, ne u ovom.
-    **Review je na to dao P1 i bio je u pravu:** prijaviti nije isto sto i
-    **zatvoriti**. Property na `tx` objektu nestane kad pozivalac izađe, pa se
-    sistem posle nepotpunog rollback-a vraćao u **puno operativan** režim — nova
-    transakcija dozvoljena, AutoSave zakazan, a `ZatvoriAplikaciju` radi
-    `Close SaveChanges:=True`. Operater koji samo zatvori program zabetonirao bi
-    parcijalno vraćen podatak. Prethodna (loša) verzija je sistem ostavljala
-    očigledno polomljenim; prva moja verzija ga je vraćala u ispravno stanje dok
-    zna da podaci to nisu — gore.
-    Brana je sad **globalna za sesiju** (`modTxState`, obrazac `modImportState`) i
-    zatvara pet puteva: `BeginTx`, `MarkDirtyAndSchedule`, `AutoSaveAfterCommit`,
-    `Workbook_BeforeSave` (jedina tačka kroz koju prolaze Ctrl+S / File > Save /
-    Save As / `.Save` iz VBA) i `ZatvoriAplikaciju`. **Bez registra** i
-    **fail-closed**, obrnuto od `modImportState`, i oba namerno: recovery *je*
-    reload (Save je zatvoren, pa na disku stoji stanje pre transakcije), a nema
-    čitanja koje može da pukne. Perzistiran marker bi svesku učinio trajno
-    nesnimljivom bez izlaza iz aplikacije.
-    Test je prepisan: tvrdio je da `BeginTx` posle nepotpunog rollback-a
-    **prolazi** — to je bila acceptance odluka za ponašanje koje ne želimo. Sada
-    meri **ishod kroz prave seam-ove**: `BeginTx` diže `UPIS ZATVOREN`, a
-    `ThisWorkbook.Save` ostavlja `Saved = False`. Oba smera: i da PRE kompromisa
-    Save prolazi, i da POSLE reset-a (= reload) opet prolazi.
-    **Četvrti krug review-a je našao rupu u DOKAZNOM modelu, ne u kodu:** poruka se
-    u dva EH bloka (`modAgroUnos`) računala **pre** `tx.RollbackTx`, pa je marker
-    tada još bio prazan i parcijalan rollback je i dalje vraćao „promene vraćene" —
-    a kapija je bila **zelena**, jer je merila *prisustvo* wrappera, ne *redosled*.
-    Zato je dodato `ROLLBACK_TVRDNJA_RED` (u proceduri koja sama poseduje `tx`,
-    wrapper mora stajati posle zadnjeg `.RollbackTx`), a `Err` se čuva pre
-    rollback-a. Mereno po proceduri nad celim izvorom: **tačno 2** takva mesta;
-    7 u `modBankaMapiranje` je bilo ispravno, a 11 (`modScrDokumenti`,
-    `modScrBankaUvoz`) ne poseduje `tx` pa im je rollback završen unutra.
-    Usput: dokaz nivoa „da li se self-test uopšte vrti" otkrio je da je zbir
-    slučajeva **ručno** održavan i nije uključio dve nove liste — `--self-test` je
-    javljao 130 i posle dodavanja 12 slučajeva. Ispravljen na **142**, ali broj se
-    više ne uzima na reč nego se dokazuje padom (v. [[broj-tvrdnji-je-merenje]]).
-    **Dokaz je IZMEREN**, na exact head-u `783b7946`:
-    `RunAllTests` **200/0 ZELENO** · `dokaz.py rollback` **6/6 DOKAZANO** (potpis
-    izvora `935f070a003272e0` identičan pre i posle) ·
-    `vba_gate --require-green --suite RunAllTests` **rc=0**
-    (`izvor bc84a7d4168e, ugovor 9c3f30001038`) · 19/19 jeftinih kapija `rc=0`
-    · 142 self-test slučaja · katalog 649 → **655**.
-    `--require-green` **bez** `--suite` je `rc=2` i to je tačno: samo je
-    `RunAllTests` puštena nad ovim izvorom, pun prolaz ide pred release.
-    **Compile ostaje ručna kapija operatera** (`--mark-compile`).
+60. **Nalaz dokaza: tvrdnja je stajala IZA rane izlazne tačke** (05.10.2026).
+    `dokaz.py` nad otpremničkim rezom: `crvenih 4 / sabotaza 4`, izvor pre/posle
+    identičan — ali `ispravka-ne-stornira-staru` **NE OBARA SVOJ TEST**.
+    **Uzrok nije u produkcionom kodu nego u položaju tvrdnje.** Kad se ugasi
+    `StornoOtpremnica` u `OtpIspravi`, posledica **nije** „dve aktivne
+    otpremnice": `OtpRequireIzvorValjan` odbije novu jer je izvor još u sastavu
+    aktivne stare — ista veza koju `OtpIspravi` imenuje u svom komentaru
+    („storno stare IDE PRE nego sto nova primi izvore"). Ceo poziv padne i vrati
+    `""`, pa je u testu pucala samo tvrdnja da je ispravka **uspela** — posledica,
+    ne razlog — a ciljana `Ispravka: stara je stornirana` stajala je iza
+    `If Len(nova) = 0 Then GoTo Kraj` i **nikad nije bila izvršena**.
+    Ispravka je **premeštanje** te tvrdnje iznad kapije: vrednost koju čita
+    postoji i kad poziv padne (rollback vraća staru u aktivno stanje), pa tada
+    čita `""` umesto `"Da"` i puca **po imenu**. Katalog i tekst tvrdnje ostaju
+    netaknuti — pogrešan je bio **redosled u testu**.
+    **Treći mehanizam istog oblika.** `NE OBARA SVOJ TEST, nego: …` je do sada
+    značio ili pogrešno imenovanu tvrdnju ili `LogFatal`; ovo je **rana izlazna
+    tačka** posle tvrdnje o ishodu. Zapisano u memoriju.
+    Provereno i za ostale četiri `ispravka-*` sabotaže nad istim testom
+    (`nacrt-prolazi`, `bez-clanstva`, `trag-po-broju`, `pad-ostavlja-storniranu`):
+    kod njih ispravka **uspeva**, pa su im tvrdnje dostižne — zaklonjena je bila
+    tačno jedna.
+    **Broj tvrdnji se ne menja** (2318): ista tvrdnja, drugo mesto. Promena broja
+    bi značila da se nešto prećutalo (v. „broj tvrdnji je merenje").
+    Usput popravljeno: **rep stavke 53** (`modTxState`, `TST_RB_*`, četvrti krug
+    review-a, katalog 649 → 655) stajao je od `ef60fc91` na **kraju** liste, pa ga
+    je svaka nova stavka odvlačila dalje — od 59 se čitao kao deo otpremničkog
+    reza. Vraćen je pod 53, kojoj po sadržaju i datumu (02–03.10) pripada.
 
 ## Dug sa imenom (posle S5-5b)
 

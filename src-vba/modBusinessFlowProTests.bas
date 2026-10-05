@@ -10231,9 +10231,23 @@ Private Sub Test_OTP_IspravkaIzdate()
     Dim nova As String
     nova = modDokumenta.IspravkaOtpremnice_TX(izdata, gr)
     AssertTrue Len(nova) > 0, "Ispravka: izdata otpremnica ispravljena (" & gr & ")"
+
+    ' TVRDNJA O STORNU STOJI PRED RANOM IZLAZNOM TACKOM, ne za njom.
+    '
+    ' Sabotaza `ispravka-ne-stornira-staru` gasi bas poziv StornoOtpremnica, a
+    ' posledica NIJE "dve aktivne otpremnice": OtpRequireIzvorValjan odbije novu
+    ' jer je izvor jos u sastavu aktivne stare -- ista veza koju OtpIspravi
+    ' imenuje u svom komentaru (storno stare IDE PRE nego sto nova primi izvore).
+    ' Ceo poziv zato padne i vrati "".
+    '
+    ' Dok je ova tvrdnja stajala POSLE `GoTo Kraj`, sabotaza je nije dosegla:
+    ' padala je samo tvrdnja da je ispravka USPELA, a to je POSLEDICA, ne razlog
+    ' (dokaz.py 05.10.2026: NE OBARA SVOJ TEST). Vrednost koju ova tvrdnja cita
+    ' postoji i kad poziv padne -- rollback vrati staru u AKTIVNO -- pa tada cita
+    ' "" umesto "Da" i puca PO IMENU, imenujuci tacno ono sto je ugaseno.
+    AssertEquals "Da", OtpPolje(izdata, COL_STORNIRANO), "Ispravka: stara je stornirana"
     If Len(nova) = 0 Then GoTo Kraj
 
-    AssertEquals "Da", OtpPolje(izdata, COL_STORNIRANO), "Ispravka: stara je stornirana"
     AssertEquals IZDATO_DRAFT, OtpPolje(nova, COL_TRACE_IZDATO_STATUS), _
                  "Ispravka: nova je NACRT"
     AssertTrue OtpPolje(nova, COL_OTP_BROJ) <> brStari, "Ispravka: nova nosi NOV broj"
