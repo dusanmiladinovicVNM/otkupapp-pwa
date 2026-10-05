@@ -5412,6 +5412,59 @@ End Sub
 '
 ' Tvrdnje su nad vracanjem na IZMERENU pre-vrednost: suite vrti vise testova nad
 ' istim fixture-om, pa apsolutan broj zavisi od redosleda.
+' PISAC KOJI PADNE MORA DA KAZE ZASTO -- U TVRDNJI.
+'
+' SavePrijemnica_TX gresku NE propagira: vraca "" i stampa je u Immediate
+' prozor. Runner taj prozor ne hvata -- ni tests/last_run.txt ni last_run.json
+' ga ne nose -- pa je pad 05.10.2026 bio nedijagnostikovan iz izvestaja i
+' trazio dva dodatna prolaza. Tvrdnja o upisu bez razloga je slepa kapija.
+'
+' Seam zato zove JEZGRO (SavePrijemnica, koje gresku DIZE) i cuva Err, pa
+' tvrdnja nosi broj i tekst. Isti obrazac kao "dve tvrdnje, pa se vidi koja je
+' pukla" iz modOtkupUnos. Paletizacije nema jer je ne zove jezgro nego omotac;
+' za ambalazne tvrdnje je nebitna.
+Private Function PrjUpisiSaRazlogom(ByVal datum As Date, ByVal kupacID As String, _
+                                    ByVal vozacID As String, _
+                                    ByVal brojPrij As String, _
+                                    ByVal brojZbirne As String, _
+                                    ByVal kolicina As Double, _
+                                    ByVal tipAmb As String, ByVal kolAmb As Long, _
+                                    ByVal kolAmbVracena As Long, _
+                                    ByRef outRazlog As String) As String
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, res As String
+    outRazlog = ""
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_FAKTURE
+
+    On Error Resume Next
+    res = modDokumenta.SavePrijemnica(tx, datum, kupacID, vozacID, brojPrij, _
+                                      brojZbirne, TEST_VRSTA, TEST_SORTA, _
+                                      kolicina, 100#, tipAmb, kolAmb, _
+                                      kolAmbVracena, KLASA_I, 0)
+    errNum = Err.Number
+    errDesc = Err.description
+    Err.Clear
+
+    If errNum <> 0 Then
+        outRazlog = "err " & CStr(errNum - vbObjectError) & ": " & errDesc
+        tx.RollbackTx
+        Err.Clear
+        On Error GoTo 0
+        PrjUpisiSaRazlogom = ""
+        Exit Function
+    End If
+
+    tx.CommitTx
+    Err.Clear
+    On Error GoTo 0
+    PrjUpisiSaRazlogom = res
+End Function
+
 ' ============================================================
 ' PRIJEMNICA -- trece preseceno mesto knjizenja (10b-2, 6.12g)
 '
@@ -5445,12 +5498,12 @@ Private Sub Test_PRJ_AmbalazaDveNogeJedanPar()
 
     ' Nesimetricna zamena (20 punih dole, 8 praznih gore): simetricna bi dala
     ' nulu na oba salda, pa tvrdnja ne bi razlikovala DVE noge od NIJEDNE.
-    Dim prj As String
-    prj = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
-                            TEST_PREFIX & "-PRJ-AMB-" & scenario, brZbr, _
-                            TEST_VRSTA, TEST_SORTA, 400#, 100#, TEST_TIP_AMB, _
-                            20, 8, KLASA_I, 0)
-    AssertTrue Len(prj) > 0, "PRJ ambalaza: prijemnica je snimljena"
+    Dim prj As String, razlogPrj As String
+    prj = PrjUpisiSaRazlogom(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-PRJ-AMB-" & scenario, brZbr, _
+                             400#, TEST_TIP_AMB, 20, 8, razlogPrj)
+    AssertTrue Len(prj) > 0, _
+               "PRJ ambalaza: prijemnica je snimljena (" & razlogPrj & ")"
     If Len(prj) = 0 Then GoTo Kraj
 
     ' --- noga 1: pune gajbe idu SA ROBOM, od vozaca kupcu ---
@@ -5529,12 +5582,12 @@ Private Sub Test_PRJ_StornoVracaGajbe()
     vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
     kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, TEST_TIP_AMB)
 
-    Dim prj As String
-    prj = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
-                            TEST_PREFIX & "-PRJ-STO-" & scenario, brZbr, _
-                            TEST_VRSTA, TEST_SORTA, 400#, 100#, TEST_TIP_AMB, _
-                            20, 8, KLASA_I, 0)
-    AssertTrue Len(prj) > 0, "PRJ storno: prijemnica je snimljena"
+    Dim prj As String, razlogPrj As String
+    prj = PrjUpisiSaRazlogom(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-PRJ-STO-" & scenario, brZbr, _
+                             400#, TEST_TIP_AMB, 20, 8, razlogPrj)
+    AssertTrue Len(prj) > 0, _
+               "PRJ storno: prijemnica je snimljena (" & razlogPrj & ")"
     If Len(prj) = 0 Then GoTo Kraj
 
     Dim prosao As Boolean
