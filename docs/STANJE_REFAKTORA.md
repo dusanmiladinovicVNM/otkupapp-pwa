@@ -916,6 +916,25 @@
     `gen_schema_module --check`, `who_writes --check` / `--check-ownership` /
     `--self-test`, `popis_citalaca --check`, arnost 321, scope 5545, nastavak
     195908 redova, privatno 191 fajl. **Skupe kapije čekaju reviewer GO.**
+73. **Presuda operatera: povrat praznih od kupca postoji i BEZ prijemnice**
+    (06.10.2026, `AMB-10-ODL-23`, 6.12i). Pitanje otvoreno u stavci 72
+    odgovoreno je isti dan, i odgovor je **da — redovno**. Dva pod-pitanja su
+    namerno postavljena kao „potvrdi ili ispravi kapiju", jer je kod već nosio
+    pretpostavku: oba odgovora su je **potvrdila** — dokument nosi **kupčev**
+    broj (`REVERS_PARTNERA`, `BrojOwnerTip = Kupac`), a gajbe idu **na vozača**
+    (`Kupac → Vozac`, `POVRAT_PRAZNE`). Grana `jePartnerov` u
+    `AmbDokKretanjeProblem` traži baš taj oblik, pa **ugovor se ne menja**.
+    Dve posledice se čitaju iz presude, ne biraju: broj se **ne predlaže** (iz
+    našeg niza bio bi izmišljen broj tuđe serije; zauzetost u opsegu
+    `(Kupac, KupacID, dan)`), i peti smer **ne ide** u `AmbReversSmerovi` — ta
+    mapa je mapa **našeg** reversa sa staničinim brojem.
+    Rez koji sledi nosi zato **samo pisca i ulaz**: `REVERS_PARTNERA` prestaje da
+    bude vrsta bez pisca, storno je već pokriven `StornirajAmbDokument_TX`, a F7
+    prestaje da važi u delu „ne prima kupca kao partnera".
+    **Zabeleženo kao merenje, ne kao pohvala:** ugovor napisan u `10a` izdržao je
+    domaće pitanje koje mu je postavljeno **pet dana kasnije**, dok je isti ugovor
+    u `ODL-22` pukao na premisi. Razlika je u tome što je ovde kapija merila
+    **vlasnika broja** (činjenicu), a tamo **vrstu dokumenta** (zamenu za pravilo).
 
 ## Dug sa imenom (posle S5-5b)
 

@@ -1830,14 +1830,30 @@ Uz rez je ispravljena i poruka: `DOK_ERR_NEMA_AMBALAZE_NOVCA` („Nema ambalaže
 novca za čuvanje") zamenjena je novčanom u **oba** pisca — `SaveOMUlaz_TX` je istu
 rečenicu nosio od svog reza, a ni on ambalažu više ne prima.
 
-> **⚠ CAPABILITY — „kupac vraća prazne BEZ dostave robe".** Ta sposobnost nije
-> izgubljena **ovde**: F6 je nikad nije imao (`kolAmb:=0` tvrdo upisano), a legacy
-> ekran koji je polje imao ne postoji od §27.18. Ciljni oblik je spreman i
-> **zaključan kapijom** — `AMB_DOK_REVERS_PARTNERA`, kupčev broj, par
-> `Kupac → Vozac` (`AmbDokKretanjeProblem`) — ali **pisca nema**, pa nema ni ulaza.
-> Pitanje je **poslovno**: vraćaju li se prazne gajbe od kupca ikad bez prijemnice.
-> Dok odgovora nema, pisac se **ne izmišlja** — vrsta bez pisca je prazna ljuska, a
-> pisac bez ulaza je mrtav kod.
+> **CAPABILITY — „kupac vraća prazne BEZ dostave robe": POSTOJI.** Ta sposobnost
+> nije izgubljena **ovde**: F6 je nikad nije imao (`kolAmb:=0` tvrdo upisano), a
+> legacy ekran koji je polje imao ne postoji od §27.18. Pitanje je bilo poslovno i
+> **odgovoreno je isti dan**:
+>
+> **AMB-10-ODL-23 (presuda operatera, 06.10.2026).** Kupac vraća prazne gajbe **i
+> bez prijemnice**, i to nije redak slučaj nego redovan. Takav povrat je **kupčev
+> dokument**: nosi **njegov** broj (`BrojOwnerTip = Kupac`, `BrojOwnerID = KupacID`),
+> vrsta je `REVERS_PARTNERA`, par je `Kupac → Vozac`, kretanje `POVRAT_PRAZNE`.
+>
+> Dve posledice koje se iz toga **čitaju, ne biraju**:
+>
+> | | Zašto |
+> |---|---|
+> | broj se **ne predlaže** | predlog iz **našeg** niza bio bi izmišljen broj **tuđe** serije; polje je obavezan unos, a zauzetost se meri u opsegu `(Kupac, KupacID, dan)` po `ODL-20` |
+> | gajbe idu **na vozača** | lanac `kupac → vozac → stanica` iz `ODL-9` važi i kad prijemnice nema — potvrđeno uz istu presudu |
+>
+> Time `REVERS_PARTNERA` prestaje da bude vrsta bez pisca. **Kapija je već traži u
+> tom obliku** (`AmbDokKretanjeProblem`, grana `jePartnerov`), a storno je već
+> pokriven (`StornirajAmbDokument_TX` radi nad svakim ambalažnim dokumentom) — pa
+> rez nosi **pisca i ulaz**, ne nova pravila. Ulaz: F7 danas **ne prima kupca kao
+> partnera**, pa to prestaje da važi — ali peti smer **ne ide** u zatvorenu mapu
+> `AmbReversSmerovi`: ona je mapa **našeg** reversa (broj je staničin), a ovo je
+> dokument sa **tuđim** brojem i drugom vrstom. Svoj pisac, svoj red na ulazu.
 
 *Provera:* `Test_KUP_UplataJeSamoNovac` — avans kupca legne u kasu **i** knjiga
 ambalaže ostane nedirnuta (obe tvrdnje **zajedno**: sama „knjiga nije porasla"
