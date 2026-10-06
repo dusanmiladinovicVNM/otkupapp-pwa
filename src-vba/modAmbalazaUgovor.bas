@@ -61,6 +61,16 @@ Public Const AMB_VK_OTPIS As String = "OTPIS"
 ' Ne mesati sa VrstaKretanja iznad: ovo je vrsta DOKUMENTA, ono je vrsta
 ' KRETANJA. Vezu medju njima drzi AmbDokDozvoljavaKretanje.
 Public Const AMB_DOK_REVERS As String = "REVERS"
+
+' SMEROVI REVERSA -- do 10b-2 goli literali na 12 mesta.
+'
+' Konstante postoje da bi mapa ispod mogla da bude ZATVORENA: nepoznat smer
+' nema red, pa pisac fail-closed pada. Zateceni Case Else je radio isto, ali je
+' pravilo zivelo u pisecu; sada zivi u ugovoru, uz par naloga i vrstu.
+Public Const REV_SMER_IZDAVANJE As String = "IZDAVANJE"
+Public Const REV_SMER_PRIJEM As String = "PRIJEM"
+Public Const REV_SMER_IZDATO_OM As String = "IZDATO_OM"
+Public Const REV_SMER_PRIJEM_OD_OM As String = "PRIJEM_OD_OM"
 ' Dokument koji je izdao PARTNER, a ne mi. Danas: revers kupca -- dokaz da je
 ' vozac preuzeo prazne gajbe (odluka operatera 03.10.2026, AMB-10-ODL-10).
 ' Broj je NJEGOV, pa je vlasnik numerickog niza partner, ne sopstveni nalog.
@@ -683,6 +693,31 @@ Public Function AmbRobniVlasniciBroja() As Variant
     AmbRobniVlasniciBroja = Array( _
         Array(DOK_TIP_PRIJEMNICA, TBL_PRIJEMNICA, COL_PRJ_ID, _
               AMB_NALOG_KUPAC, COL_PRJ_KUPAC))
+End Function
+
+' SMER REVERSA -> PAR NALOGA I VRSTA KRETANJA (AMB-10-ODL-7, -ODL-8).
+'
+' Stari pisac je isti posao radio SA SEST NOGU u cetiri smera, i vozaca nosio
+' kao ZIG (kolona VozacID) -- pa se njegov saldo dobijao inverzijom smera, sto
+' je fail-open. Nov red imenuje obe strane, pa je po smeru dovoljan JEDAN red.
+'
+' Vrste nisu izvedene iz para nego PROCITANE iz 6.7:
+'   stanica zaduzuje kooperanta praznim   -> IZDATA_PRAZNA
+'   kooperant ih vraca                    -> POVRAT_PRAZNE
+'   vozac <-> stanica, oba SOPSTVENA      -> PRENOS_INTERNO (ODL-7)
+'
+' Mapa je ZATVORENA: nepoznat smer nema red i pisac pada fail-closed. Oblik:
+' (smer, odTip, naTip, vrstaKretanja).
+Public Function AmbReversSmerovi() As Variant
+    AmbReversSmerovi = Array( _
+        Array(REV_SMER_IZDAVANJE, AMB_NALOG_STANICA, AMB_NALOG_KOOPERANT, _
+              AMB_VK_IZDATA_PRAZNA), _
+        Array(REV_SMER_PRIJEM, AMB_NALOG_KOOPERANT, AMB_NALOG_STANICA, _
+              AMB_VK_POVRAT_PRAZNE), _
+        Array(REV_SMER_IZDATO_OM, AMB_NALOG_VOZAC, AMB_NALOG_STANICA, _
+              AMB_VK_PRENOS_INTERNO), _
+        Array(REV_SMER_PRIJEM_OD_OM, AMB_NALOG_STANICA, AMB_NALOG_VOZAC, _
+              AMB_VK_PRENOS_INTERNO))
 End Function
 
 ' Pripada li nalog trazenoj klasi.

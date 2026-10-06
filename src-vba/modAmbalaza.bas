@@ -1999,6 +1999,135 @@ End Function
 ' puta idu kroz istu kapiju zaglavlja -- a ona od 03.10.2026 sudi i ZAUZETOST
 ' u nizu (BrojOwnerTip, BrojOwnerID, dan), ne samo oblik. Zato prosledjen broj
 ' nije povlasten: ako je zauzet, upis pada.
+' REVERS KAO AMBALAZNI DOKUMENT (10b-2, cetvrto mesto knjizenja).
+'
+' Stari pisac (modDokumenta.SaveOMUlaz_TX) je knjizio SEST nogu u cetiri smera,
+' a vozaca nosio kao ZIG -- pa se njegov saldo dobijao INVERZIJOM smera, sto je
+' fail-open: citalac koji inverziju zaboravi dobija pogresan ZNAK, ne gresku.
+' Ovde je po smeru JEDAN red koji imenuje obe strane, iz zatvorene mape
+' AmbReversSmerovi.
+'
+' Revers je AMBALAZNI dokument (AMB-10-ODL-5), pa dobija pravo zaglavlje u
+' tblAmbalazaDokument umesto brojDok rasutog po nogama. Broj je NAS
+' (AmbDokBrojOwnerKlasa = SOPSTVENI, vlasnik stanica), a kapija zauzetosti iz
+' AMB-10-ODL-20 radi isti posao kao zateceni RequireBrojSlobodanUNizu --
+' nad istim kljucem (vlasnik, dan).
+Public Function UpisiReversAmbalaze_TX(ByVal datum As Date, ByVal broj As String, _
+                                       ByVal stanicaID As String, _
+                                       ByVal tipAmb As String, _
+                                       ByVal kolicina As Double, _
+                                       ByVal smer As String, _
+                                       ByVal kooperantID As String, _
+                                       ByVal vozacID As String, _
+                                       Optional ByVal napomena As String = "") As String
+    Const SRC As String = "modAmbalaza.UpisiReversAmbalaze_TX"
+
+    Dim tx As clsTransaction
+    Dim dokID As String, brojK As String
+    Dim red As Variant, odTip As String, naTip As String, vrstaK As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+
+    If kolicina <= 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Revers trazi pozitivnu kolicinu."
+    End If
+
+    red = ReversSmerRed(smer, SRC)
+    odTip = CStr(red(1))
+    naTip = CStr(red(2))
+    vrstaK = CStr(red(3))
+
+    brojK = Trim$(broj)
+    If Len(brojK) > 0 Then
+        ' DVE KAPIJE BROJA, A NOV MODEL POKRIVA SAMO JEDNU.
+        '
+        ' Zauzetost (AMB-10-ODL-20) radi UpisiAmbDokument -- to je zamena za
+        ' zateceni RequireBrojSlobodanUNizu. Ali OBLIK I KONTEKST broja (pripada li
+        ' bas nizu te stanice i tog dana) nov model NE proverava, pa bi prelazak
+        ' tiho izgubio tu kapiju.
+        '
+        ' Zato ostaje, i to samo za broj KOJI JE POZIVALAC ZADAO: generisan broj
+        ' dolazi iz ambalaznog niza i nema REV oblik, pa bi ga ova kapija odbila.
+        modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_REV, stanicaID, datum, _
+                                         brojK, SRC
+    Else
+        brojK = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, stanicaID, datum)
+        If Len(brojK) = 0 Then
+            Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                      "Broj reversa nije izracunat -- vidi Log."
+        End If
+    End If
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    ' Obe tabele: zaglavlje i knjiga nastaju u ISTOM rollback-u (AMB-INV-08).
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    dokID = UpisiAmbDokument(tx, AMB_DOK_REVERS, brojK, datum, _
+                             AMB_NALOG_STANICA, stanicaID, napomena)
+
+    PrenesiAmbalazu tx, datum, tipAmb, kolicina, _
+                    odTip, ReversNalogID(odTip, stanicaID, kooperantID, vozacID, smer, SRC), _
+                    naTip, ReversNalogID(naTip, stanicaID, kooperantID, vozacID, smer, SRC), _
+                    vrstaK, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    UpisiReversAmbalaze_TX = dokID
+    Exit Function
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogError SRC, errDesc, errNum
+    Err.Raise errNum, SRC, errDesc
+End Function
+
+' Red zatvorene mape za trazeni smer. Nepoznat smer je FAIL-CLOSED, i poruka
+' nabraja sta je dozvoljeno -- isto kao zateceni Case Else u SaveOMUlaz_TX, samo
+' sto spisak sada dolazi IZ MAPE, pa ne moze da se razidje sa njom.
+Private Function ReversSmerRed(ByVal smer As String, ByVal SRC As String) As Variant
+    Dim mapa As Variant, i As Long, spisak As String
+    mapa = modAmbalazaUgovor.AmbReversSmerovi()
+    For i = LBound(mapa) To UBound(mapa)
+        If StrComp(Trim$(smer), CStr(mapa(i)(0)), vbTextCompare) = 0 Then
+            ReversSmerRed = mapa(i)
+            Exit Function
+        End If
+        If Len(spisak) > 0 Then spisak = spisak & ", "
+        spisak = spisak & CStr(mapa(i)(0))
+    Next i
+    Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+              "Nepoznat smer reversa '" & Trim$(smer) & "'. Dozvoljeni: " & spisak & "."
+End Function
+
+' Koji ID popunjava stranu datog tipa. Prazan ID je FAIL-CLOSED: stari pisac je
+' imao po dve takve provere u svakom od cetiri Case bloka -- osam kopija jednog
+' pravila. Ovde je jedno telo, pa ne moze da se razidje po granama.
+Private Function ReversNalogID(ByVal nalogTip As String, ByVal stanicaID As String, _
+                               ByVal kooperantID As String, ByVal vozacID As String, _
+                               ByVal smer As String, ByVal SRC As String) As String
+    Select Case Trim$(nalogTip)
+        Case AMB_NALOG_STANICA: ReversNalogID = Trim$(stanicaID)
+        Case AMB_NALOG_KOOPERANT: ReversNalogID = Trim$(kooperantID)
+        Case AMB_NALOG_VOZAC: ReversNalogID = Trim$(vozacID)
+    End Select
+
+    If Len(ReversNalogID) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Revers (" & Trim$(smer) & ") trazi nalog " & Trim$(nalogTip) & _
+                  ", a nije zadat."
+    End If
+End Function
+
 Public Function NabaviAmbalazu_TX(ByVal datum As Date, _
                                   ByVal stanicaID As String, _
                                   ByVal tipAmb As String, _
