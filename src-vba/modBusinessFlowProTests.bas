@@ -16219,10 +16219,14 @@ Private Sub Test_BKTX_ReversKoopIstiBrojDveStanice()
     AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, k1) Or RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s1), _
                 "REV KOOP 2b: storno S2 ne dira revers S1"
 
-    ' Storno ne oslobadja broj u nizu S2 (A9), a treca stanica ga istog dana prima.
+    ' Treca stanica isti broj istog dana prima -- niz je (stanica, dan).
+    '
+    ' Tvrdnja "storno ne oslobadja broj" je ODAVDE UKLONJENA: ovaj test seje
+    ' STARI oblik, a niz je od 10b-2 kanonski (tblAmbalazaDokument) -- stari
+    ' redovi ga ne zauzimaju, pa bi tvrdnja merila pogresan izvor i jos ostavila
+    ' red viska. A9 nad nizom mere Test_BKTX_ReversPisacOdbijaZauzet i
+    ' Test_REV_AutoBrojJedanNiz, oba kroz pravog pisca.
     pre = CountRows(TBL_AMBALAZA)
-    AssertFalse UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP2_ID, "IZDAVANJE"), _
-                "REV KOOP 2b: storno ne oslobadja broj u nizu S2 (A9)"
     AssertTrue Len(SejRevStariOblik(d, broj, TEST_HLAD_ST_ID, TEST_KOOP2_ID, "IZDAVANJE")) > 0, _
                "REV KOOP 2b: treca stanica istog dana prima isti broj -- niz je (stanica, dan)"
     AssertEquals CStr(pre + 2), CStr(CountRows(TBL_AMBALAZA)), _
