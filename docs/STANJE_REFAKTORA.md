@@ -747,6 +747,25 @@
     hvata. Čim je seam počeo da nosi `Err`, uzrok se video iz prvog pokušaja.
     Pouka je instrumentalna, ne domenska: **tvrdnja o upisu bez razloga je slepa
     kapija**, i košta više od samog kvara.
+67. **Pun prolaz ZELENO: 12/12 suita** (06.10.2026, izvor `9b149e39aeea`).
+    `RunAllTests` 200 · `RunBusinessFlowProSuite` 2376 · `RunStornoTestSuite` **164**
+    (bilo 163 — T18 je dobio tvrdnju više) · `Test_StornoCentar_All` · banka 241 ·
+    palete 97 · faktura 35 · agrohemija 25 · Sheets 72 · golden · licenca.
+    **Pun prolaz je našao dve stvari koje ciljane suite nisu mogle**, i nisu iste
+    vrste. **(1) Moja greška u kapiji:** poništenje **prijemnice** nad eksternim
+    lancem ukida baš tu prijemnicu, ali ju je grana stornirala **tek posle**
+    kaskade — pa je kapija blokirala operaciju zbog dokumenta koji pozivalac
+    upravo gasi, a redosled je bio obrnut od fizičkog. Kaskada sada dobija
+    **subjekat**: izuzima ga iz blokirajućeg skupa (druga aktivna prijemnica i
+    dalje blokira) i stornira ga **prvog**. Subjekat je **skup**, ne jedan ID —
+    broj prijemnice pokriva i Klasu I i II. **(2) Zastareo test:** `T18` je tvrdio
+    da taj tok **uspeva**, što je tačno ono što je review nazvao lažno uspešnim
+    poništenjem; preveden je na nov ugovor. Stara tvrdnja „prijemnica netaknuta"
+    je **zadržana uz napomenu da sama ne razlikuje stari i nov ugovor** — prolazi u
+    oba, pa stoji uz tvrdnje koje ga razlikuju.
+    Ostaje još samo ručna kapija: `Alt+F11 → Debug → Compile VBAProject` +
+    `--mark-compile`.
+
 
     **DOKAZ JE IZMEREN — za stavke 59 i 60 zajedno, nad jednim izvorom.**
     `run_vba.py` pun prolaz **ZELENO**: 12/12 suita, `RunBusinessFlowProSuite`
