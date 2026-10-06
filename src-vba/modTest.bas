@@ -2276,7 +2276,8 @@ Private Sub T_WriterGuard_AvansSaldoOM()
 
     pre = NovacRedova()
     ok = SaveOMUlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-AV", _
-                       stanicaNaziv:=FX_STANICA, stanicaID:=FX_STANICA, _                       vrstaVoca:=FX_VRSTA, _
+                       stanicaNaziv:=FX_STANICA, stanicaID:=FX_STANICA, _
+                       vrstaVoca:=FX_VRSTA, _
                        novac:=100, kooperantID:=FX_KOOPERANT, _
                        primalacDisplay:=FX_KOOPERANT, otkupID:="", _
                        tipNovca:=NOV_KES_OTKUPAC_KOOP)
@@ -2286,7 +2287,8 @@ Private Sub T_WriterGuard_AvansSaldoOM()
     ' KONTROLA: virman firme NE trosi OM avans, pa isti iznos mora da prodje.
     ' Bez ove grane test ne bi razlikovao ciljanu kapiju od opste blokade.
     ok = SaveOMUlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-VIR", _
-                       stanicaNaziv:=FX_STANICA, stanicaID:=FX_STANICA, _                       vrstaVoca:=FX_VRSTA, _
+                       stanicaNaziv:=FX_STANICA, stanicaID:=FX_STANICA, _
+                       vrstaVoca:=FX_VRSTA, _
                        novac:=100, kooperantID:=FX_KOOPERANT, _
                        primalacDisplay:=FX_KOOPERANT, otkupID:="", _
                        tipNovca:=NOV_VIRMAN_FIRMA_KOOP)
