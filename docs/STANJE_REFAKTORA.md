@@ -785,6 +785,37 @@
     11 blokova od po šest redova je 11 prilika za tihu grešku u jednom polju. Parser
     je usput našao i **jedan poziv koji nije revers nego isplata** (`novac:=5000#`) —
     on ostaje na starom piscu. Katalog 689 → 692.
+69. **Rez reversa izmeren: DOKAZANO + pun prolaz ZELENO** (06.10.2026,
+    izvor `ea584f8335fe`). `RunAllTests` 200 · `RunBusinessFlowProSuite` **2392**
+    · `RunStornoTestSuite` 164 · banka 241 · i ostalih osam — **12/12, nula**
+    **padova**. `dokaz.py` **DOKAZANO (grupno)**, `crvenih 3/3`, potpis izvora
+    `c1d1fae401498fa2` identičan pre i posle.
+    **Put do zelenog je dao tri nalaza, i sva tri su bila u MOM kodu.**
+    **(1) Rezu je falio lifecycle** — presekao sam pisca pre nego što je storno
+    postojao, tačno ono što `AMB-10-ODL-16` zabranjuje. `tblAmbalazaDokument` je
+    imao kolonu `Stornirano` i nijedan put da je okrene; dobio je
+    `StornirajAmbDokument_TX` i time je zatvoren zapisan dug `10d`.
+    **(2) Dva niza broja, a ja sam računao na jedan.** Ispustio sam
+    `RequireBrojSlobodanUNizu` misleći da ga `ODL-20` zamenjuje — ali `ODL-20`
+    sudi nad `tblAmbalazaDokument`, a stari niz nad `tblAmbalaza`. Broj zauzet
+    starim reversom bio bi slobodan za nov. Dok oba oblika postoje, oba niza
+    važe; kad stari redovi nestanu (`10e`), provera postaje mrtva i briše se s
+    njima.
+    **(3) Sabotaža vrste je UBIJALA test pre tvrdnje** — `NE OBARA SVOJ TEST,
+    nego: <ImeTesta>` je `LogFatal`. Pisac diže grešku, test ga je zvao direktno.
+    Oba leka iz memorije primenjena zajedno: poziv od kog se očekuje uspeh ide
+    kroz `On Error Resume Next`, a ciljane tvrdnje su se popele **iznad** rane
+    izlazne tačke.
+    **Četiri zatečene procedure nisu bile zastarele.** Dve mere **B10**
+    (`modIntegritet`) — **produkcioni** čekar koji je po konstrukciji stari oblik —
+    a dve mere **stari storno ekran**, koji radi po nogama. Oboje živi do
+    `10c`/`10e` i mora da ostane merljivo, inače bi čekar koji još radi u
+    produkciji ostao bez ijednog testa. Zato seju stari oblik **same**
+    (`SejRevStariOblik` → `TrackAmbalaza`), a tvrdnje su im **netaknute**.
+    Ostaje ručna kapija: compile + `--mark-compile`. Ona je ovde teža nego obično —
+    rez je menjao **potpis** `SaveOMUlaz_TX` i preselio 19 pozivnih mesta, a to je
+    tačno klasa koju samo compile hvata sam.
+
 
 
     **DOKAZ JE IZMEREN — za stavke 59 i 60 zajedno, nad jednim izvorom.**
