@@ -16515,22 +16515,51 @@ End Sub
 ' SABOTAZE: izbaci filter tipa u BrojZauzetRevers -> pukne "ambalaza otkupa na
 ' istoj stanici nije revers"; izbaci poredjenje stanice -> pukne "druga stanica je
 ' drugi niz"; izbaci filter noge Stanica -> pukne "noga Kooperant ne zauzima broj".
+' ZAUZECE BROJA REVERSA U KANONSKOM NIZU.
+'
+' Fixture nosi staru nogu AMB-IZV-S3 sa DokumentID REV-IZV-2, i ona je do
+' 10b-2 zauzimala REV niz. Niz je sada nad tblAmbalazaDokument, pa ga stara
+' noga ne drzi -- pravilo je isto, izvor je drugi.
+'
+' Zato se zauzece pravi kroz PRAVOG pisca, idempotentno: suite se vrti nad
+' istom sveskom vise puta, a drugi upis istog broja bi pao na zauzetosti.
+' Vraca AmbDokID drzaoca.
+Private Function ZasejReversZaNiz() As String
+    Const BR As String = "REV-IZV-2"
+    Dim d As Date: d = CDate(FX_DATUM)
+
+    ZasejReversZaNiz = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, _
+                                                  FX_STANICA, d, BR)
+    If Len(ZasejReversZaNiz) > 0 Then Exit Function
+
+    ZasejOpticajVozacu
+    ZasejReversZaNiz = modAmbalaza.UpisiReversAmbalaze_TX(d, BR, FX_STANICA, _
+                           FX_TIP_AMB, 1, REV_SMER_IZDATO_OM, "", FX_VOZAC, _
+                           "preduslov REV niza")
+End Function
+
 Private Sub T_BrojZauzetUNizu_Revers()
     Dim d As Date
     d = CDate(FX_DATUM)
 
+    Dim drzalac As String
+    drzalac = ZasejReversZaNiz()
+    AssertEq (Len(drzalac) > 0), True, _
+             "preduslov: broj REV-IZV-2 je zauzet u KANONSKOM nizu"
+    ' Fixture noga i dalje postoji, ali od 10b-2 niz vise ne drzi ona -- drzi ga
+    ' zaglavlje. Tvrdnja je zadrzana kao zapis sta se promenilo.
     AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-IZV-S3", COL_AMB_DOK_ID)), _
-             "REV-IZV-2", "preduslov: fixture noga Stanica reversa REV-IZV-2"
+             "REV-IZV-2", "preduslov: fixture noga Stanica reversa REV-IZV-2 postoji"
     AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-OTK-S1A", COL_AMB_ENTITET)), _
              FX_STANICA, "preduslov: ambalaza otkupa OTK-LEG-A lezi na istoj stanici"
     AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-IZV-KS", COL_AMB_ENTITET)), _
              FX_KOOPERANT, "preduslov: REV-IZV-X ima samo nogu Kooperant"
 
     AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA, d, "REV-IZV-2"), _
-             "AMB-IZV-S3", "REV: broj je zauzet na svojoj stanici tog dana -- drzi ga noga Stanica"
+             drzalac, "REV: broj je zauzet na svojoj stanici tog dana -- drzi ga ZAGLAVLJE"
     AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, " " & LCase$(FX_STANICA) & " ", d, _
                                         "  rev-izv-2 "), _
-             "AMB-IZV-S3", "REV: razmaci i mala slova ne otvaraju rupu"
+             drzalac, "REV: razmaci i mala slova ne otvaraju rupu"
     AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA_B, d, "REV-IZV-2"), _
              "", "REV: druga stanica je drugi niz -- isti broj sme (A2)"
     AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA, DateAdd("d", 1, d), _
@@ -16565,6 +16594,8 @@ End Sub
 ' imenu na "isti broj na drugoj stanici istog dana prolazi ekran".
 Private Sub T_ReversValidiraj_BrojUNizu()
     Dim p As Object, fokus As String
+    ' Zauzece broja ide kroz pisca -- niz je od 10b-2 kanonski.
+    ZasejReversZaNiz
     Dim rZauzet As String, fZauzet As String, rDrugaSt As String, rDrugiDan As String
 
     Set p = ReversUnosKojiProlazi()
@@ -16608,6 +16639,8 @@ End Sub
 ' drugoj stanici prolazi ekran (Faza 2b)".
 Private Sub T_ReversValidiraj_KoopBrojDrugeStanice()
     Dim p As Object, fokus As String
+    ' Zauzece broja ide kroz pisca -- niz je od 10b-2 kanonski.
+    ZasejReversZaNiz
     Dim rKoop As String, rDrugiSmer As String, rFirma As String
     Dim rIstaSt As String, fIstaSt As String
 
