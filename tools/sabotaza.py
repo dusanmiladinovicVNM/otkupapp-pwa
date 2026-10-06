@@ -6959,6 +6959,39 @@ SABOTAZE = {
         "Test_REV_UgovorSmeraJeFailClosed",
         "REV ugovor: razlog imenuje nalog koji nedostaje, ne opstu gresku",
     ),
+    # KUPCEV REVERS (AMB-10-ODL-23) -- dve sabotaze nad onim sto pisac SAM nosi.
+    #
+    # Broj pocinje da se PREDLAZE, kao kod naseg reversa. Upis tada USPEVA (broj
+    # iz kupcevog niza prolazi i kapiju zauzetosti), pa tvrdnja o ishodu ostaje
+    # zelena -- crveni se tvrdnja da je prazan broj ODBIJEN.
+    "amb-rvp-broj-se-predlaze": (
+        "modAmbalaza.bas",
+        "    brojK = Trim$(broj)\n"
+        "    If Len(brojK) = 0 Then\n"
+        "        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _\n"
+        "                  \"Broj je obavezan i ne predlaze se: dokument je kupcev.\"\n"
+        "    End If\n",
+        "    brojK = Trim$(broj)\n"
+        "    If Len(brojK) = 0 Then\n"
+        "        brojK = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_KUPAC, _\n"
+        "                                                   Trim$(kupacID), datum)\n"
+        "    End If\n",
+        "Test_RVP_BrojJeKupcevINePredlazeSe",
+        "RVP broj: prazan broj je ODBIJEN, ne dopunjen predlogom",
+    ),
+    # Vlasnik broja postaje NAS nalog. RequireAmbDok to odbija (REVERS_PARTNERA
+    # trazi klasu PARTNER), pa ceo upis pada -- i zato tvrdnja o vlasniku stoji
+    # IZNAD rane izlazne tacke: LookupValue nad praznim dokID-em vraca "", pa
+    # puca ona, a ne samo posledica "dokument nije upisan".
+    "amb-rvp-vlasnik-broja-nije-kupac": (
+        "modAmbalaza.bas",
+        "    dokID = UpisiAmbDokument(tx, AMB_DOK_REVERS_PARTNERA, brojK, datum, _\n"
+        "                             AMB_NALOG_KUPAC, Trim$(kupacID), napomena)\n",
+        "    dokID = UpisiAmbDokument(tx, AMB_DOK_REVERS_PARTNERA, brojK, datum, _\n"
+        "                             AMB_NALOG_VOZAC, Trim$(vozacID), napomena)\n",
+        "Test_RVP_KupcevDokumentJedanRed",
+        "RVP: vlasnik broja je KUPAC, ne nas nalog",
+    ),
     # UPLATA KUPCA (10b-2, red 8) -- dve sabotaze nad OBIMOM pisca.
     #
     # Ambalazna noga se VRACA. Tip je bilo koja neprazna rec (ValidateAmbalazaInput

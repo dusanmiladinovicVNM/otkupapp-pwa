@@ -955,6 +955,35 @@
     ovaj je i obrisao konstantu `DOK_TIP_IZLAZ_KUPCI`.
     Ostaje nepokriveno i zapisano: **P2 iz review-a** (ekran Storno ne vidi nov
     revers — `10c`, pred merge) i **pisac + ulaz za `AMB-10-ODL-23`** (stavka 73).
+75. **Pisac kupčevog reversa** (06.10.2026, `AMB-10-ODL-23`, 6.12j).
+    `modAmbalaza.UpisiReversPartnera_TX` — povrat praznih od kupca **bez
+    prijemnice**: vrsta `REVERS_PARTNERA`, vlasnik broja `Kupac`/`KupacID`, par
+    `Kupac → Vozac`, kretanje `POVRAT_PRAZNE`.
+    **Pisac nosi tačno jedno pravilo koje nigde drugde ne postoji: broj je
+    obavezan i NE predlaže se.** Sve ostalo je već bilo u jezgru — par i vlasnik
+    broja sudi `AmbDokKretanjeProblem` (grana `jePartnerov`), vrstu kretanja
+    `AmbDokDozvoljavaKretanje`, zauzetost `UpisiAmbDokument` u opsegu
+    `(Kupac, KupacID, dan)`, identitet i saldo `PrenesiAmbalazu`
+    (`AMB-INV-04`, `-07`), a **storno je postojao od reza reversa**
+    (`StornirajAmbDokument_TX` radi nad svakim ambalažnim dokumentom). Zato je rez
+    mali: ugovor je bio napisan pet dana pre pitanja koje ga je potvrdilo.
+    **Peti smer nije dodat u `AmbReversSmerovi`** — ta mapa je mapa **našeg**
+    reversa (vlasnik broja je stanica), pa bi peti red tiho uveo dokument sa
+    tuđim brojem i drugom vrstom u mapu koja o njima ne zna ništa.
+    **Tvrdnje o zaglavlju stoje IZNAD rane izlazne tačke** — `LookupValue` nad
+    praznim `dokID`-em vraća `""`, pa pucaju **po imenu** i kad sabotaža obori ceo
+    upis. Da stoje ispod, sabotaža vlasnika broja obarala bi samo tvrdnju da je
+    dokument upisan — **posledicu, ne pravilo** (klasa zatvorena 05.10.2026).
+    **⚠ Ulaza još nema:** F7 odbija kupca kao partnera, pa `popis_citalaca` pisca
+    vidi kao `SAMO_TEST` — tačan opis stanja, ne propust zapisa. Ulaz je sledeći
+    korak. Uz njega ide i **zajednički dug**: prekomeran povrat traži protokol
+    potvrde manjka, koji danas prosleđuje **samo otkup** — isto važi za prijemnicu
+    od 6.12g, pa parametar ne uvodi ovaj pisac sam.
+    Testovi `Test_RVP_KupcevDokumentJedanRed`, `Test_RVP_BrojJeKupcevINePredlazeSe`;
+    sabotaže `amb-rvp-broj-se-predlaze`, `amb-rvp-vlasnik-broja-nije-kupac`.
+    Katalog 695 → 697. Jeftine kapije `rc=0`: `vba_check` (191 fajl, 697 sabotaža,
+    0+10), schema, `who_writes` ×3, čitaoci, arnost 323, scope 5550, nastavak
+    196149, privatno 191. **Skupe kapije čekaju reviewer GO.**
 
 ## Dug sa imenom (posle S5-5b)
 

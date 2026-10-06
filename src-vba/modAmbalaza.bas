@@ -2175,6 +2175,99 @@ EH:
     Err.Raise errNum, SRC, errDesc
 End Function
 
+' POVRAT PRAZNIH OD KUPCA BEZ PRIJEMNICE -- KUPCEV DOKUMENT (AMB-10-ODL-23).
+'
+' Presuda operatera 06.10.2026: kupac vraca prazne gajbe i bez prijemnice, i to
+' redovno. Takav povrat je NJEGOV dokument -- nosi njegov broj, vrsta je
+' REVERS_PARTNERA, par je Kupac -> Vozac (lanac kupac -> vozac -> stanica,
+' AMB-10-ODL-9), kretanje POVRAT_PRAZNE.
+'
+' ZASTO NIJE PETI SMER U AmbReversSmerovi. Ta mapa je mapa NASEG reversa: njen
+' vlasnik broja je stanica, pa bi peti red tiho uveo dokument sa TUDJIM brojem i
+' drugom vrstom u mapu koja o njima ne zna nista. Dva pisca se ovde razlikuju po
+' vlasniku niza, ne po stilu.
+'
+' SVE INVARIJANTE SU U JEZGRU, ne ovde: AmbDokKretanjeProblem sudi par i
+' vlasnika broja (grana jePartnerov), AmbDokDozvoljavaKretanje pusta samo
+' POVRAT_PRAZNE uz ovu vrstu, UpisiAmbDokument meri zauzetost broja u opsegu
+' (Kupac, KupacID, dan) po ODL-20, a PrenesiAmbalazu drzi AMB-INV-04 i -07.
+' Ovaj pisac zato nosi tacno jedno pravilo koje nigde drugde ne postoji: BROJ JE
+' OBAVEZAN I NE PREDLAZE SE.
+'
+' STORNO JE VEC POKRIVEN: StornirajAmbDokument_TX radi nad svakim ambalaznim
+' dokumentom, pa ova vrsta ne trazi svoju putanju.
+Public Function UpisiReversPartnera_TX(ByVal datum As Date, ByVal broj As String, _
+                                       ByVal kupacID As String, _
+                                       ByVal vozacID As String, _
+                                       ByVal tipAmb As String, _
+                                       ByVal kolicina As Double, _
+                                       Optional ByVal napomena As String = "") As String
+    Const SRC As String = "modAmbalaza.UpisiReversPartnera_TX"
+
+    Dim tx As clsTransaction
+    Dim dokID As String, brojK As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+
+    If kolicina <= 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Povrat praznih od kupca trazi pozitivnu kolicinu."
+    End If
+
+    ' BROJ JE OBAVEZAN I NE PREDLAZE SE -- to je jedino pravilo koje je ovde, i
+    ' jedina razlika prema UpisiReversAmbalaze_TX, koji na prazan broj zove
+    ' generator. Predlog iz NASEG niza bio bi izmisljen broj TUDJE serije: papir
+    ' koji operater drzi u ruci nosi kupcev broj, pa bi nas predlog bio drugi broj
+    ' za isti dokument -- i ni jedan ne bi bio onaj po kome se dokument trazi.
+    brojK = Trim$(broj)
+    If Len(brojK) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Broj je obavezan i ne predlaze se: dokument je kupcev."
+    End If
+
+    ' Oba naloga su obavezna, i razlog je razlicit za svaki: bez kupca nema
+    ' vlasnika broja, bez vozaca nema odredista lanca.
+    If Len(Trim$(kupacID)) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Povrat od kupca trazi nalog Kupac -- on je i vlasnik broja."
+    End If
+    If Len(Trim$(vozacID)) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Povrat od kupca trazi nalog Vozac -- lanac ide kupac -> vozac."
+    End If
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    ' Obe tabele: zaglavlje i knjiga nastaju u ISTOM rollback-u (AMB-INV-08).
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    dokID = UpisiAmbDokument(tx, AMB_DOK_REVERS_PARTNERA, brojK, datum, _
+                             AMB_NALOG_KUPAC, Trim$(kupacID), napomena)
+
+    PrenesiAmbalazu tx, datum, tipAmb, kolicina, _
+                    AMB_NALOG_KUPAC, Trim$(kupacID), _
+                    AMB_NALOG_VOZAC, Trim$(vozacID), _
+                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    UpisiReversPartnera_TX = dokID
+    Exit Function
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogError SRC, errDesc, errNum
+    Err.Raise errNum, SRC, errDesc
+End Function
+
 ' Red zatvorene mape za trazeni smer. Nepoznat smer je FAIL-CLOSED, i poruka
 ' nabraja sta je dozvoljeno -- isto kao zateceni Case Else u SaveOMUlaz_TX, samo
 ' sto spisak sada dolazi IZ MAPE, pa ne moze da se razidje sa njom.

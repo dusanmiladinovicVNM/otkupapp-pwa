@@ -1847,11 +1847,12 @@ rečenicu nosio od svog reza, a ni on ambalažu više ne prima.
 > | broj se **ne predlaže** | predlog iz **našeg** niza bio bi izmišljen broj **tuđe** serije; polje je obavezan unos, a zauzetost se meri u opsegu `(Kupac, KupacID, dan)` po `ODL-20` |
 > | gajbe idu **na vozača** | lanac `kupac → vozac → stanica` iz `ODL-9` važi i kad prijemnice nema — potvrđeno uz istu presudu |
 >
-> Time `REVERS_PARTNERA` prestaje da bude vrsta bez pisca. **Kapija je već traži u
+> Time `REVERS_PARTNERA` prestaje da bude vrsta bez pisca. **Kapija je već tražila u
 > tom obliku** (`AmbDokKretanjeProblem`, grana `jePartnerov`), a storno je već
-> pokriven (`StornirajAmbDokument_TX` radi nad svakim ambalažnim dokumentom) — pa
-> rez nosi **pisca i ulaz**, ne nova pravila. Ulaz: F7 danas **ne prima kupca kao
-> partnera**, pa to prestaje da važi — ali peti smer **ne ide** u zatvorenu mapu
+> bio pokriven (`StornirajAmbDokument_TX` radi nad svakim ambalažnim dokumentom) —
+> pa rez nosi **pisca i ulaz**, ne nova pravila. **Pisac je napisan isti dan
+> (6.12j); ulaz još ne postoji.** F7 danas **ne prima kupca kao partnera**, pa to
+> prestaje da važi — ali peti smer **ne ide** u zatvorenu mapu
 > `AmbReversSmerovi`: ona je mapa **našeg** reversa (broj je staničin), a ovo je
 > dokument sa **tuđim** brojem i drugom vrstom. Svoj pisac, svoj red na ulazu.
 
@@ -1860,6 +1861,52 @@ ambalaže ostane nedirnuta (obe tvrdnje **zajedno**: sama „knjiga nije porasla
 bila bi zelena i kad pisac uopšte ne radi), a prazan upis ostaje odbijen ·
 sabotaže `amb-kup-uplata-knjizi-ambalazu`, `amb-kup-prazna-uplata-prolazi`.
 Katalog 693 → 695.
+
+### 6.12j Pisac kupčevog reversa — jedno pravilo gore, sve ostalo u jezgru
+
+`UpisiReversPartnera_TX(datum, broj, kupacID, vozacID, tipAmb, kolicina, [napomena])`
+([modAmbalaza:2199](../../src-vba/modAmbalaza.bas)) — povrat praznih od kupca
+**bez prijemnice** (`AMB-10-ODL-23`).
+
+| | Vrednost | Ko je drži |
+|---|---|---|
+| vrsta | `REVERS_PARTNERA` | `AmbDokDozvoljavaKretanje` pušta **samo** `POVRAT_PRAZNE` uz nju |
+| vlasnik broja | `Kupac` / `KupacID` | `RequireAmbDok` traži klasu `PARTNER` (`AmbDokBrojOwnerKlasa`) |
+| par | `Kupac → Vozac` | `AmbDokKretanjeProblem`, grana `jePartnerov` |
+| kretanje | `POVRAT_PRAZNE` | ista grana |
+| zauzetost broja | `(Kupac, KupacID, dan)` | `UpisiAmbDokument` (`ODL-20`) |
+| identitet | `AmbDokID` | `AMB-INV-04` u `PrenesiAmbalazu` |
+| storno | `StornirajAmbDokument_TX` | **već je postojao** — radi nad svakim ambalažnim dokumentom |
+
+**Pisac nosi tačno jedno pravilo koje nigde drugde ne postoji: broj je obavezan i
+ne predlaže se.** Brat blizanac (`UpisiReversAmbalaze_TX`) na prazan broj zove
+generator, jer je tamo niz **naš**; ovde generatora ne sme biti — predlog iz našeg
+niza bio bi **drugi broj za isti papir**, pa ni jedan ne bi bio onaj po kome
+operater dokument traži.
+
+**Zašto nije peti smer u `AmbReversSmerovi`:** ta mapa je mapa **našeg** reversa
+(njen vlasnik broja je stanica), pa bi peti red tiho uveo dokument sa **tuđim**
+brojem i drugom vrstom u mapu koja o njima ne zna ništa. Dva pisca se razlikuju
+po **vlasniku niza**, ne po stilu.
+
+> **⚠ CAPABILITY — ulaza još nema.** Pisac je tu i dokazan, ali ga nijedan ekran
+> ne zove: F7 i dalje odbija kupca kao partnera. Dok to stoji, `popis_citalaca`
+> ga vidi kao `SAMO_TEST` — i to je **tačan opis stanja**, ne propust zapisa.
+> Ulaz je sledeći korak ovog reza.
+
+> **PREKOMERAN POVRAT OSTAJE ODBIJEN, i to je zatečeno pravilo, ne odluka ovog
+> reza.** Kad kupac vrati **više** nego što knjiga kaže da drži, `PrenesiAmbalazu`
+> traži **potvrdu tačnog manjka** (`AMB_ERR_POTVRDA_DEFICITA`), a tu potvrdu danas
+> prosleđuje **samo otkup** (`modOtkup`, `potvrdaDeficita`). Prijemnica je u istom
+> stanju od 6.12g. Ulaz za protokol potvrde je zato **jedan dug za oba pisca**, ne
+> poseban za ovaj — i zato ovaj pisac taj parametar **ne uvodi sam**.
+
+*Provera:* `Test_RVP_KupcevDokumentJedanRed` (vlasnik broja, vrsta i par — tvrdnje
+stoje **iznad** rane izlazne tačke, pa pucaju po imenu i kad sabotaža obori ceo
+upis; plus storno kao **kontra-stav**) · `Test_RVP_BrojJeKupcevINePredlazeSe`
+(prazan broj odbijen **uz razlog po imenu**; isti broj istog kupca istog dana
+odbijen uz zauzetost) · sabotaže `amb-rvp-broj-se-predlaze`,
+`amb-rvp-vlasnik-broja-nije-kupac`. Katalog 695 → 697.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 

@@ -332,6 +332,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_REV_UgovorSmeraJeFailClosed
     Test_REV_AutoBrojJedanNiz
     Test_KUP_UplataJeSamoNovac
+    Test_RVP_KupcevDokumentJedanRed
+    Test_RVP_BrojJeKupcevINePredlazeSe
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -6097,6 +6099,152 @@ Private Sub Test_KUP_UplataJeSamoNovac()
     Exit Sub
 EH:
     LogFatal "Test_KUP_UplataJeSamoNovac", Err.Number, Err.description
+End Sub
+
+' Pisac kupcevog reversa, kroz produkcioni seam. Vraca "" i RAZLOG, jer pisac
+' gresku DIZE a ovi testovi mere i odbijanja.
+Private Function RvpUpisi(ByVal d As Date, ByVal broj As String, _
+                          ByVal kupacID As String, ByVal vozacID As String, _
+                          ByVal tipAmb As String, ByVal kol As Double, _
+                          Optional ByRef outRazlog As String) As String
+    Dim res As String
+    outRazlog = ""
+    On Error Resume Next
+    res = modAmbalaza.UpisiReversPartnera_TX(d, broj, kupacID, vozacID, _
+                                             tipAmb, kol, "test RVP")
+    If Err.Number <> 0 Then
+        outRazlog = Err.description
+        res = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+    RvpUpisi = res
+End Function
+
+' PREDUSLOV ZA POVRAT: kupac mora da DRZI gajbe. Puni ih prijemnica --
+' produkcioni put, ne direktan upis u knjigu.
+Private Function RvpSejKupcu(ByVal testDate As Date, ByVal scenario As String, _
+                             ByVal kupacID As String, ByVal kol As Long, _
+                             Optional ByRef outRazlog As String) As String
+    Dim brZbr As String, zbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    zbr = ZbrZateceniRed(testDate, TEST_VOZ_ID, brZbr, kupacID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         100#, TEST_TIP_AMB, kol, KLASA_I)
+    RvpSejKupcu = PrjUpisiSaRazlogom(testDate, kupacID, TEST_VOZ_ID, _
+                                     TEST_PREFIX & "-RVPSEED-" & scenario, brZbr, _
+                                     400#, TEST_TIP_AMB, kol, 0, outRazlog)
+End Function
+
+' KUPCEV REVERS: jedan red, par Kupac -> Vozac, i broj koji je NJEGOV.
+'
+' AMB-10-ODL-23 (operater, 06.10.2026): kupac vraca prazne i bez prijemnice.
+' Tri tvrdnje o zaglavlju stoje IZNAD rane izlazne tacke -- LookupValue nad
+' praznim dokID-em vraca "", pa pucaju PO IMENU i kad sabotaza obori ceo upis.
+' Da stoje ispod, sabotaza vlasnika broja obarala bi samo tvrdnju da je
+' dokument upisan -- posledicu, ne pravilo.
+Private Sub Test_RVP_KupcevDokumentJedanRed()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("RVPDOK")
+    testDate = NextTestDate()
+
+    Dim razlogSeed As String
+    AssertTrue Len(RvpSejKupcu(testDate, scenario, TEST_KUP_ID, 20, razlogSeed)) > 0, _
+               "RVP: preduslov -- kupac je dobio 20 gajbi (" & razlogSeed & ")"
+
+    Dim dok As String, razlog As String
+    dok = RvpUpisi(testDate, "KUP-R/" & scenario, TEST_KUP_ID, TEST_VOZ_ID, _
+                   TEST_TIP_AMB, 20#, razlog)
+
+    AssertEquals AMB_NALOG_KUPAC, _
+                 CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, _
+                      COL_AMBD_BROJ_OWNER_TIP)), _
+                 "RVP: vlasnik broja je KUPAC, ne nas nalog"
+    AssertEquals TEST_KUP_ID, _
+                 CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, _
+                      COL_AMBD_BROJ_OWNER_ID)), _
+                 "RVP: vlasnik broja je BAS taj kupac"
+    AssertEquals AMB_DOK_REVERS_PARTNERA, _
+                 CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, _
+                      COL_AMBD_VRSTA)), _
+                 "RVP: vrsta je partnerov revers"
+    AssertTrue Len(dok) > 0, "RVP: kupcev revers je upisan (" & razlog & ")"
+    If Len(dok) = 0 Then GoTo Kraj
+
+    ' JEDAN RED, i par je lanac iz ODL-9.
+    AssertEquals "1", CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                           AMB_VK_POVRAT_PRAZNE)), _
+                 "RVP: povrat knjizi TACNO jedan red"
+    AssertEquals TEST_KUP_ID, AmbNoviPolje(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_POVRAT_PRAZNE, COL_AMB_OD_ID), _
+                 "RVP: prazne POLAZE OD KUPCA"
+    AssertEquals TEST_VOZ_ID, AmbNoviPolje(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_POVRAT_PRAZNE, COL_AMB_NA_ID), _
+                 "RVP: prazne STIZU VOZACU -- lanac kupac -> vozac -> stanica"
+
+    ' STORNO NIJE PISAN ZA OVU VRSTU, i to je tvrdnja: StornirajAmbDokument_TX
+    ' radi nad SVAKIM ambalaznim dokumentom, pa partnerov ne trazi svoju putanju.
+    AssertTrue modAmbalaza.StornirajAmbDokument_TX(dok), _
+               "RVP: storno kupcevog reversa prolazi kroz zajednicku putanju"
+    AssertEquals "1", CStr(AmbBrojKontraStavova(dok, DOK_TIP_AMBALAZA_DOKUMENT)), _
+                 "RVP: storno je upisao KONTRA-STAV, ne izmenu reda"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_RVP_KupcevDokumentJedanRed", Err.Number, Err.description
+End Sub
+
+' BROJ JE KUPCEV: obavezan, i NE predlaze se.
+'
+' Ovo je jedino pravilo koje nosi sam pisac -- sve ostalo sudi jezgro. Brat
+' blizanac (UpisiReversAmbalaze_TX) na prazan broj zove generator; ovde
+' generator ne sme ni da postoji, jer bi predlozio broj iz NASEG niza.
+Private Sub Test_RVP_BrojJeKupcevINePredlazeSe()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("RVPBRJ")
+    testDate = NextTestDate()
+
+    Dim razlogSeed As String
+    AssertTrue Len(RvpSejKupcu(testDate, scenario, TEST_KUP_ID, 20, razlogSeed)) > 0, _
+               "RVP broj: preduslov -- kupac je dobio 20 gajbi (" & razlogSeed & ")"
+
+    ' PRAZAN BROJ: odbijen, i razlog imenuje BAS to pravilo.
+    Dim n As Long, razlog As String
+    n = CountRows(TBL_AMBALAZA_DOKUMENT)
+    AssertTrue Len(RvpUpisi(testDate, "", TEST_KUP_ID, TEST_VOZ_ID, _
+                            TEST_TIP_AMB, 5#, razlog)) = 0, _
+               "RVP broj: prazan broj je ODBIJEN, ne dopunjen predlogom"
+    AssertTrue InStr(1, razlog, "ne predlaze", vbTextCompare) > 0, _
+               "RVP broj: razlog imenuje da se broj NE PREDLAZE"
+    AssertEquals CStr(n), CStr(CountRows(TBL_AMBALAZA_DOKUMENT)), _
+                 "RVP broj: odbijen upis nije ostavio zaglavlje"
+
+    ' ZAUZETOST IDE KROZ OVOG PISCA, u opsegu (Kupac, KupacID, dan) -- ODL-20.
+    ' Drugi upis istog broja nad istim kupcem i danom mora da padne, inace bi
+    ' jedan poslovni broj nosila dva AmbDokID-a.
+    Dim br As String
+    br = "KUP-Z/" & scenario
+    AssertTrue Len(RvpUpisi(testDate, br, TEST_KUP_ID, TEST_VOZ_ID, _
+                            TEST_TIP_AMB, 5#, razlog)) > 0, _
+               "RVP broj: prvi upis sa kupcevim brojem prolazi (" & razlog & ")"
+    n = CountRows(TBL_AMBALAZA_DOKUMENT)
+    AssertTrue Len(RvpUpisi(testDate, br, TEST_KUP_ID, TEST_VOZ_ID, _
+                            TEST_TIP_AMB, 5#, razlog)) = 0, _
+               "RVP broj: isti broj istog kupca istog dana je ODBIJEN"
+    AssertTrue InStr(1, razlog, "zauzet", vbTextCompare) > 0, _
+               "RVP broj: razlog imenuje zauzetost, ne neku drugu kapiju"
+    AssertEquals CStr(n), CStr(CountRows(TBL_AMBALAZA_DOKUMENT)), _
+                 "RVP broj: odbijen duplikat nije ostavio zaglavlje"
+
+    Exit Sub
+EH:
+    LogFatal "Test_RVP_BrojJeKupcevINePredlazeSe", Err.Number, Err.description
 End Sub
 
 Private Sub Test_OTP_StornoVracaGajbeVozacu()
