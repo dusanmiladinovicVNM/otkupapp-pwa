@@ -330,6 +330,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_PRJ_VlasnikBrojaJeNjenKupac
     Test_REV_SmerDajeJedanRed
     Test_REV_UgovorSmeraJeFailClosed
+    Test_REV_AutoBrojJedanNiz
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -5905,6 +5906,50 @@ Private Function RevDokID(ByVal d As Date, ByVal stanicaID As String, _
     End If
     On Error GoTo 0
 End Function
+
+' AUTO BROJ REVERSA IMA JEDAN IZVOR (review 06.10.2026, P1).
+'
+' Do ovog reza su postojala DVA: UI prefill je citao stari oblik (tblAmbalaza),
+' a pisac je upisivao zaglavlje (tblAmbalazaDokument). Na PRAZNOJ instalaciji
+' prvi F7 prodje, a DRUGI istog dana dobije OPET prvi broj i padne tek na upisu.
+'
+' Zato test ide bas tim putem: predlog -> upis -> predlog -> upis, dva puta za
+' redom, istog dana i iste stanice. Nov datum je nosec -- niz je po (stanica,
+' dan), pa bi tudji reversi istog dana merenje zamutili.
+Private Sub Test_REV_AutoBrojJedanNiz()
+    On Error GoTo EH
+
+    Dim d As Date: d = NextTestDate()
+    Dim b1 As String, b2 As String, b3 As String
+    Dim dok1 As String, dok2 As String
+
+    b1 = modBrojevi.SuggestNextBroj(modBrojevi.KIND_REV, TEST_ST_ID, d, False)
+    AssertTrue Len(b1) > 0, "REV niz: prvi predlog je dat"
+    dok1 = RevDokID(d, TEST_ST_ID, 3, REV_SMER_IZDATO_OM, "", TEST_VOZ_ID)
+
+    b2 = modBrojevi.SuggestNextBroj(modBrojevi.KIND_REV, TEST_ST_ID, d, False)
+    ' SRZ NALAZA: posle prvog upisa predlog MORA da se pomeri.
+    AssertTrue b2 <> b1, _
+               "REV niz: drugi predlog istog dana je RAZLICIT od prvog"
+
+    dok2 = RevDokID(d, TEST_ST_ID, 2, REV_SMER_IZDATO_OM, "", TEST_VOZ_ID)
+    AssertTrue Len(dok1) > 0 And Len(dok2) > 0, _
+               "REV niz: dva uzastopna reversa istog dana OBA prolaze"
+    AssertTrue dok1 <> dok2, "REV niz: to su dva razlicita dokumenta"
+
+    ' Storno NE oslobadja broj (A9): sledeci predlog se ne vraca unazad.
+    If Len(dok2) > 0 Then
+        AssertTrue modAmbalaza.StornirajAmbDokument_TX(dok2), _
+                   "REV niz: storno drugog reversa prolazi"
+    End If
+    b3 = modBrojevi.SuggestNextBroj(modBrojevi.KIND_REV, TEST_ST_ID, d, False)
+    AssertTrue b3 <> b1 And b3 <> b2, _
+               "REV niz: storno ne oslobadja broj -- predlog ide dalje, ne nazad"
+
+    Exit Sub
+EH:
+    LogFatal "Test_REV_AutoBrojJedanNiz", Err.Number, Err.description
+End Sub
 
 Private Sub Test_REV_SmerDajeJedanRed()
     On Error GoTo EH
@@ -16074,8 +16119,12 @@ Private Sub Test_BKTX_ReversPisacOdbijaZauzet()
     AssertFalse ok, "REV broj: storno ne oslobadja broj reversa -- pisac (A9)"
     AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
                  "REV broj: odbijen upis posle storna nije ostavio red"
-    AssertEquals ambA, modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, TEST_ST_ID, d, broj), _
-                 "REV broj: storno ne oslobadja broj reversa -- provera vraca storniranu nogu"
+    ' Zauzetost od 10b-2 vraca AmbDokID drzaoca, ne AmbID noge: broj reversa
+    ' drzi ZAGLAVLJE. Tvrdi se da drzalac POSTOJI i posle storna (A9) -- koji
+    ' je to dokument mere tvrdnje iznad, kroz odbijanje pisca.
+    AssertTrue Len(modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, TEST_ST_ID, _
+                   d, broj)) > 0, _
+               "REV broj: storno ne oslobadja broj reversa -- drzalac i dalje postoji"
 
     ' Undo po operaciji: garda pita kljuc operacije, pa aktivni reversi istog broja
     ' na drugoj stanici i drugog dana ne blokiraju vracanje.
@@ -16137,14 +16186,13 @@ Private Sub Test_BKTX_ReversKoopIstiBrojDveStanice()
     AssertTrue Len(k1) > 0 And Len(k2) > 0 And k1 <> k2, _
                "REV KOOP 2b: svaki revers ima svoju nogu Kooperant"
 
-    ' Niz (stanica, dan) i dalje vazi za sva cetiri smera.
-    pre = CountRows(TBL_AMBALAZA)
-    AssertFalse UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP2_ID, "PRIJEM"), _
-                "REV KOOP 2b: drugi smer istog broja na istoj stanici i danu je isti niz"
-    AssertFalse UpisiReversTest(d, broj, TEST_ST_ID, "", "IZDATO_OM"), _
-                "REV KOOP 2b: FIRMA smer istog broja na istoj stanici i danu je isti niz"
-    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
-                 "REV KOOP 2b: odbijeni upisi nisu ostavili red"
+    ' NIZ SE OVDE VISE NE MERI, i to je namerno.
+    '
+    ' Ovaj test seje STARI oblik (meri B10 i stari storno ekran), a niz je od
+    ' 10b-2 KANONSKI -- nad tblAmbalazaDokument. Stari redovi ga ne zauzimaju,
+    ' pa bi tvrdnja o nizu ovde merila pogresan izvor. Niz meri
+    ' Test_BKTX_ReversPisacOdbijaZauzet i Test_REV_AutoBrojJedanNiz, oba kroz
+    ' pravog pisca. Dve tvrdnje o istom pravilu na dva izvora bi se razisle.
 
     ' Isto za povrat (PRIJEM), zasebna grana pisca: isti broj, smer i dan na dve
     ' stanice, drugi broj niza.

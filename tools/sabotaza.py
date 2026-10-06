@@ -6912,6 +6912,19 @@ SABOTAZE = {
         "Test_PRJ_VlasnikBrojaJeNjenKupac",
         "ODL-22: prva prijemnica prijavljuje SVOG kupca",
     ),
+    # AUTO BROJ IZ POGRESNOG IZVORA: predlog prestane da vidi kanonski niz, pa
+    # drugi F7 istog dana dobije OPET prvi broj. To je bio P1 06.10.2026 -- i
+    # reprodukuje se na PRAZNOJ instalaciji, bez ijednog starog reda.
+    #
+    # Tvrdnja je RAZLIKA DVA PREDLOGA, ne uspeh upisa: upis bi svejedno pao na
+    # kapiji zauzetosti, pa bi tvrdnja o ishodu bila zelena i sa kvarom.
+    "amb-rev-broj-iz-pogresnog-niza": (
+        "modBrojevi.bas",
+        "            Call AmbDokNizSken(AMB_NALOG_STANICA, entityID, datum, \"\", maxLocal, SRC)\n",
+        "            maxLocal = 0   ' SABOTAZA: predlog ne vidi kanonski niz\n",
+        "Test_REV_AutoBrojJedanNiz",
+        "REV niz: drugi predlog istog dana je RAZLICIT od prvog",
+    ),
     # REVERS (10b-2, 6.12h) -- tri sabotaze nad ugovorom smera i piscem.
     #
     # Smer se okrece u MAPI, ne u piscu: vozac i stanica su oba SOPSTVENA pa

@@ -7,9 +7,9 @@ Attribute VB_Name = "modNovacUnos"
 ' modNovacUnos (F5-F7). Razlog je isti - poslovni posao ne sme da zivi
 ' u formi, jer ga onda drugi ekran ne moze pozvati bez prepisivanja.
 '
-'   IsplataValidiraj / IsplataUpisi   F5, SaveOMUlaz_TX (samo novac)
+'   IsplataValidiraj / IsplataUpisi   F5, SaveOMUlaz_TX (od 10b-2 SAMO novac)
 '   UplataValidiraj  / UplataUpisi    F6, SaveKupciIzlaz_TX (samo novac)
-'   ReversValidiraj  / ReversUpisi    F7, SaveOMUlaz_TX (samo ambalaza)
+'   ReversValidiraj  / ReversUpisi    F7, modAmbalaza.UpisiReversAmbalaze_TX
 '
 ' Sve tri Validiraj rutine vracaju "" kad je proslo, inace poruku za
 ' operatera, i pune LOGICKO ime polja na koje treba vratiti fokus.

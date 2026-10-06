@@ -1780,10 +1780,16 @@ sabotaže `amb-rev-smer-obrnut`, `amb-rev-vrsta-nije-izdavanje`,
 > i tvrdnja meri **tekst koji proizvodi samo prvi sloj**. Naučeno na skupi način u
 > 6.12g; ovde primenjeno **pre** prvog prolaza.
 
-> **ŠTA OVAJ REZ NIJE POKRIO.** Revers **nema kanonskog storno pisca** —
-> `tblAmbalazaDokument` ga još nema uopšte, i to je zapisan dug `10d`. Stari
-> čitaoci reversa (`ReversID`, ekran Storno) idu **slepi** nad novim redovima, isto
-> kao kod otkupa, otpremnice i prijemnice — čitaoci prelaze u `10c`.
+> **STORNO POSTOJI, ČITALAC JOŠ NE.** Revers je u istom rezu dobio
+> `StornirajAmbDokument_TX` — dokument-level storno nad zaglavljem i knjigom —
+> čime je zatvoren dug „`tblAmbalazaDokument` nema kanonski storno".
+>
+> Ono što **nije** pokriveno je čitalac: produkcioni ekran Storno još bira revers
+> preko `AmbID`/`ReversID` **noge**, koju nov revers nema — pa ga operater u tom
+> ekranu ne vidi. To nije razlog za kompatibilnost sa starim modelom: program
+> kreće od nule, pa `STIP_REVERSI` jednostavno prelazi na
+> `tblAmbalazaDokument` + `AmbDokID`, a stari put nestaje. Ide u `10c`, zajedno
+> sa ostalim čitaocima, i **pred merge** — grana se ne mergeuje bez njega.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 

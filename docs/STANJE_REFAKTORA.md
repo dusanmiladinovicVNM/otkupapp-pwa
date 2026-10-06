@@ -815,6 +815,36 @@
     Ostaje ručna kapija: compile + `--mark-compile`. Ona je ovde teža nego obično —
     rez je menjao **potpis** `SaveOMUlaz_TX` i preselio 19 pozivnih mesta, a to je
     tačno klasa koju samo compile hvata sam.
+70. **P1: auto broj reversa je imao DVA izvora** (06.10.2026, review `1cc8a186`).
+    UI prefill je čitao **stari** oblik (`MaxSeqReversAmbalaza` nad
+    `tblAmbalaza`), a pisac je upisivao **zaglavlje**. Nov revers u
+    `tblAmbalaza` više nema poslovni broj — tamo stoji `AmbDokID` — pa drugi F7
+    istog dana dobije **opet prvi broj** i padne tek na upisu.
+    **Reprodukuje se na PRAZNOJ instalaciji, na drugom reversu.** To je bio
+    funkcionalni blocker, ne rupa u dokazu.
+    **Lek nije spajanje dva niza, i tu sam grešio u prethodnom commit-u.** Vratio
+    sam bio `RequireBrojSlobodanUNizu` uz obrazloženje „dok oba oblika postoje, oba
+    niza moraju da važe". Program **kreće od nule**: nema podataka koje treba
+    pomiriti, pa finalni proizvod ne treba da plaća cenu dvomodelne numeracije.
+    `KIND_REV` je zato preveden na **kanonski** niz (`AmbDokNizSken` /
+    `AmbDokBrojZauzet`), a `MaxSeqReversAmbalaza` i `BrojZauzetRevers` su
+    **obrisani** — sa njima i dva komentara koja su ih pominjala. Duplikat kapije u
+    piscu je otpao: `UpisiAmbDokument` sudi istu činjenicu (`ODL-20`).
+    Format broja se **ne menja** — `GenerateBrojAmbDokumenta` koristi isti
+    `FormatBroj(stanica, datum, seq)` — pa operater vidi isto što i pre.
+    **Acceptance koji je falio** je dodat (`Test_REV_AutoBrojJedanNiz`): predlog →
+    upis → predlog → upis, istog dana i iste stanice; drugi predlog **mora** da se
+    pomeri, oba upisa prolaze, i storno **ne** vraća predlog unazad (A9). Sabotaža
+    `amb-rev-broj-iz-pogresnog-niza` gasi baš čitanje kanonskog niza; tvrdnja je
+    **razlika dva predloga**, ne uspeh upisa — upis bi svejedno pao na kapiji
+    zauzetosti, pa bi tvrdnja o ishodu bila zelena i sa kvarom.
+    Usput zatvoren **P3**: `6.12h` je i dalje tvrdio da revers nema storno pisca, a
+    zaglavlje `modNovacUnos` da F7 ide na `SaveOMUlaz_TX`. Oba ispravljena.
+    **P2 (ekran Storno još ne vidi nov revers) ostaje otvoren i ide u `10c`** — ne
+    kao kompatibilnost sa starim modelom nego kao prelazak čitaoca: `STIP_REVERSI`
+    na `tblAmbalazaDokument` + `AmbDokID`, a stari put nestaje. Grana se **ne
+    mergeuje** bez toga. Katalog 692 → 693.
+
 
 
 
