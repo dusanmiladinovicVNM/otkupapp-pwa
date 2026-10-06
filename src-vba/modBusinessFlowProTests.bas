@@ -17618,10 +17618,16 @@ Private Sub Test_Amb_DokumentUgovor()
                      AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
                      AMB_VK_POVRAT_PRAZNE), _
                  "ODL-22: povrat od kupca na ROBNOM dokumentu sa KUPCEVIM brojem prolazi"
+    ' TRAZI SE PORUKA PRVOG SLOJA, ne ID odluke. Blok ima DVA uslova i oba su
+    ' AMB-10-ODL-10: prvi trazi da je vlasnik KUPAC, drugi da je BAS taj kupac.
+    ' Nad dokumentom bez vlasnika oba su netacna, pa je gasenje prvog ostajalo
+    ' nevidljivo -- drugi sloj odbije isti slucaj i tvrdnja ostane zelena
+    ' (dokaz.py 05.10.2026: NE OBARA NISTA). Zato se meri tekst KOJI SAMO PRVI
+    ' SLOJ proizvodi.
     AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
                    "", "", "", _
                    AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
-                   AMB_VK_POVRAT_PRAZNE), "AMB-10-ODL-10") > 0, _
+                   AMB_VK_POVRAT_PRAZNE), "vlasnik broja je") > 0, _
                "ODL-22: dokument koji NE objavi vlasnika broja pada (fail-closed)"
     AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
                    "", AMB_NALOG_KUPAC, TEST_KUP2_ID, _
