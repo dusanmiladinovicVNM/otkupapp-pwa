@@ -8654,133 +8654,41 @@ End Function
 ' modul moze da se testira bez instanciranja forme (core guard za smer ambalaze).
 ' ============================================================
 
+' SAMO NOVAC (AMB-10-ODL-5). Ambalazna polovina je 10b-2 presla na
+' modAmbalaza.UpisiReversAmbalaze_TX -- revers je AMBALAZNI dokument i nosi svoj
+' AmbDokID, svoj broj i svoj storno.
+'
+' Prekrsaj je bio LATENTAN: nijedan ziv pozivalac nije mesao klase (F5 je slao
+' kolAmb:=0, F7 novac:=0), pa je ovo razlaganje POTPISA, ne ponasanja -- nijedan
+' poslovni tok se ne menja. Cetiri ambalazna parametra i reversID su otisli jer
+' ih novcana grana ne koristi (izmereno), a ostavljeni bi bili poziv da se klase
+' opet pomesaju.
+'
+' IME JE ZADRZANO namerno: preimenovanje dira modNovacUnos, modPrint i 12 test
+' poziva bez ijedne promene ponasanja. To je kozmetika i ide svojim rezom.
 Public Function SaveOMUlaz_TX(ByVal datum As Date, _
                               ByVal brojDok As String, _
                               ByVal stanicaNaziv As String, _
                               ByVal stanicaID As String, _
-                              ByVal vozacID As String, _
-                              ByVal tipAmb As String, _
-                              ByVal kolAmb As Long, _
                               ByVal vrstaVoca As String, _
                               ByVal novac As Double, _
                               ByVal kooperantID As String, _
                               ByVal primalacDisplay As String, _
                               ByVal otkupID As String, _
-                              ByVal tipNovca As String, _
-                              ByVal koopSmer As String) As Boolean
+                              ByVal tipNovca As String) As Boolean
     Dim tx As clsTransaction
-    Dim reversID As String
     Set tx = New clsTransaction
 
     On Error GoTo EH
 
-    If kolAmb <= 0 And novac <= 0 Then
+    If novac <= 0 Then
         Err.Raise vbObjectError + 1501, "SaveOMUlaz_TX", _
                   Poruka("DOK_ERR_NEMA_AMBALAZE_NOVCA")
     End If
 
     tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_OTKUP
-
-    If kolAmb > 0 Then
-        ' Kapija broja stoji SAMO ovde, u revers grani. Cist gotovinski
-        ' promet (F5 isplata / F6 uplata) prolazi kroz istu proceduru sa
-        ' kolAmb = 0, nema svoj brojevni niz (broj je slobodan unos) i
-        ' tamo stanicaID postaje partner-OM -- kapija nad celom procedurom
-        ' odbijala bi legitimnu isplatu.
-        modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_REV, stanicaID, datum, _
-                                         brojDok, "SaveOMUlaz_TX"
-
-        ' Zauzetost broja u nizu (stanica, dan), sa storniranima (A9) -- ista
-        ' provera koju ekran zove u ReversValidiraj. Jednom po dokumentu, pre
-        ' nogu: provera po nozi odbila bi sopstvenu nogu Kooperant. Vazi za SVA
-        ' CETIRI smera, i jedina je provera broja: isti KOOP broj, smer i dan na
-        ' drugoj stanici je legalan (REV-IDENT-01 Faza 2b -- noge povezuje ReversID).
-        modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_REV, stanicaID, datum, _
-                                            brojDok, "SaveOMUlaz_TX"
-
-        ' REV-IDENT-01: JEDAN identitet po dokumentu, zajednicki svim nogama
-        ' (Kooperant + Stanica za KOOP, sama Stanica za FIRMA). Kuje se jednom i
-        ' NASLEDJUJE u svakoj nozi -- nikad po nozi.
-        reversID = modAmbalaza.NoviReversID()
-
-        Select Case koopSmer
-        Case "IZDAVANJE"
-            ' OM IZDAJE prazne kooperantu -> DVOJNI upis (bez vozaca):
-            '   1) Kooperant ULAZ (dobija prazne), 2) OM/Stanica IZLAZ (razduzenje OM).
-            If Trim$(kooperantID) = "" Then
-                Err.Raise vbObjectError + 1503, "SaveOMUlaz_TX", _
-                          "Izdavanje kooperantu: kooperant je obavezan."
-            End If
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1504, "SaveOMUlaz_TX", _
-                          "Izdavanje kooperantu: OM (otkupno mesto) je obavezan za razdu" & ChrW(382) & "enje."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", kooperantID, "Kooperant", _
-                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP, reversID
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Izlaz", stanicaID, "Stanica", _
-                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP, reversID
-        Case "PRIJEM"
-            ' KOOPERANT VRACA prazne na OM (povrat) -> DVOJNI upis, mirror izdavanja:
-            '   1) Kooperant IZLAZ (predaje prazne), 2) OM/Stanica ULAZ (zaduzenje OM).
-            If Trim$(kooperantID) = "" Then
-                Err.Raise vbObjectError + 1505, "SaveOMUlaz_TX", _
-                          "Prijem od kooperanta: kooperant je obavezan."
-            End If
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1506, "SaveOMUlaz_TX", _
-                          "Prijem od kooperanta: OM (otkupno mesto) je obavezan za zadu" & ChrW(382) & "enje."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Izlaz", kooperantID, "Kooperant", _
-                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP, reversID
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", stanicaID, "Stanica", _
-                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP, reversID
-        Case "IZDATO_OM"
-            ' Vozac raspodeljuje prazne na OM (revers ide na OM): OM (Stanica) ULAZ +
-            ' vozac (inverzno Izlaz = vozac se razduzuje). Vozac je prethodno zaduzen
-            ' kod kupca (prijemnica-povrat / kupci-izlaz) -> hladnjaca se NE knjizi ovde.
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1507, "SaveOMUlaz_TX", _
-                          "Izdato OM: OM (otkupno mesto) je obavezan."
-            End If
-            If Trim$(vozacID) = "" Then
-                Err.Raise vbObjectError + 1509, "SaveOMUlaz_TX", _
-                          "Izdato OM: vozac je obavezan (firma<->OM ide preko vozaca)."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", stanicaID, "Stanica", _
-                          vozacID, brojDok, DOK_TIP_OM_ULAZ_FIRMA, reversID
-        Case "PRIJEM_OD_OM"
-            ' OM vraca prazne vozacu (revers ide na OM): OM (Stanica) IZLAZ + vozac
-            ' (inverzno Ulaz = vozac se zaduzuje). Vozac kasnije razduzuje firmi
-            ' (hladnjaci) kroz postojece kupac tokove -> hladnjaca se NE knjizi ovde.
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1508, "SaveOMUlaz_TX", _
-                          "Prijem od OM: OM (otkupno mesto) je obavezan."
-            End If
-            If Trim$(vozacID) = "" Then
-                Err.Raise vbObjectError + 1510, "SaveOMUlaz_TX", _
-                          "Prijem od OM: vozac je obavezan (firma<->OM ide preko vozaca)."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Izlaz", stanicaID, "Stanica", _
-                          vozacID, brojDok, DOK_TIP_OM_IZLAZ_FIRMA, reversID
-        Case Else
-            ' Smer je OBAVEZAN uz kolicinu ambalaze. Ranije je ovde tiho knjizen
-            ' legacy "OM prima od vozaca" (Stanica ULAZ, DOK_TIP_OM_ULAZ), pa je
-            ' prazan/nepoznat smer davao pogresan ledger red bez ijedne poruke.
-            ' UI blokira prazan smer, ovo je core guard za sve ostale pozivaoce.
-            Err.Raise vbObjectError + 1511, "SaveOMUlaz_TX", _
-                      "Nepoznat smer ambalaze '" & koopSmer & "'. Dozvoljeni: " & _
-                      "IZDAVANJE, PRIJEM, IZDATO_OM, PRIJEM_OD_OM."
-        End Select
-    End If
 
     If novac > 0 Then
         Dim novacID As String

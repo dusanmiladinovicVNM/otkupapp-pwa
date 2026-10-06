@@ -2190,16 +2190,12 @@ Private Sub T_WriterGuard_OdbijaTudjBlok()
                        brojDok:=FX_BROJ_NOVAC & "-W", _
                        stanicaNaziv:=FX_STANICA2, _
                        stanicaID:=FX_STANICA2, _
-                       vozacID:="", _
-                       tipAmb:="", _
-                       kolAmb:=0, _
                        vrstaVoca:=FX_VRSTA, _
                        novac:=100, _
                        kooperantID:=FX_KOOPERANT, _
                        primalacDisplay:=FX_KOOPERANT, _
                        otkupID:=FX_BLOK, _
-                       tipNovca:=NOV_VIRMAN_FIRMA_KOOP, _
-                       koopSmer:="")
+                       tipNovca:=NOV_VIRMAN_FIRMA_KOOP)
 
     uplataPosle = GetUplataForOtkup(FX_BLOK)
 
@@ -2280,22 +2276,20 @@ Private Sub T_WriterGuard_AvansSaldoOM()
 
     pre = NovacRedova()
     ok = SaveOMUlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-AV", _
-                       stanicaNaziv:=FX_STANICA, stanicaID:=FX_STANICA, _
-                       vozacID:="", tipAmb:="", kolAmb:=0, vrstaVoca:=FX_VRSTA, _
+                       stanicaNaziv:=FX_STANICA, stanicaID:=FX_STANICA, _                       vrstaVoca:=FX_VRSTA, _
                        novac:=100, kooperantID:=FX_KOOPERANT, _
                        primalacDisplay:=FX_KOOPERANT, otkupID:="", _
-                       tipNovca:=NOV_KES_OTKUPAC_KOOP, koopSmer:="")
+                       tipNovca:=NOV_KES_OTKUPAC_KOOP)
     AssertEq ok, False, "writer odbija kes isplatu preko avans salda OM"
     AssertEq NovacRedova(), pre, "odbijen upis ne ostavlja red u tblNovac"
 
     ' KONTROLA: virman firme NE trosi OM avans, pa isti iznos mora da prodje.
     ' Bez ove grane test ne bi razlikovao ciljanu kapiju od opste blokade.
     ok = SaveOMUlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-VIR", _
-                       stanicaNaziv:=FX_STANICA, stanicaID:=FX_STANICA, _
-                       vozacID:="", tipAmb:="", kolAmb:=0, vrstaVoca:=FX_VRSTA, _
+                       stanicaNaziv:=FX_STANICA, stanicaID:=FX_STANICA, _                       vrstaVoca:=FX_VRSTA, _
                        novac:=100, kooperantID:=FX_KOOPERANT, _
                        primalacDisplay:=FX_KOOPERANT, otkupID:="", _
-                       tipNovca:=NOV_VIRMAN_FIRMA_KOOP, koopSmer:="")
+                       tipNovca:=NOV_VIRMAN_FIRMA_KOOP)
     AssertEq ok, True, "virman firme ne trosi OM avans i prolazi"
     AssertEq NovacRedova(), pre + 1, "prosao upis JESTE ostavio red"
 End Sub

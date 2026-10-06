@@ -68,6 +68,10 @@ pogled izgledaju nedosledno (dve noge kod otkupa, jedna kod otpremnice).
 > zašto su odluke donete, a prepisana bi izgubila taj razlog.
 | 9 | modDokumenta:8619–8669 | revers, 4 smera | 2 noge (KOOP) / 1 noga (FIRMA) | samo FIRMA | **`brojDok`** | `OM-*` |
 
+> **RED 9 JE PRESEČEN (`10b-2`, 6.12h).** Šest nogu je postalo **četiri reda**, po
+> jedan na smer, a vozač je iz **žiga** (kolona) postao **nalog**. Revers više nije skup
+> redova pod `brojDok` nego **ambalažni dokument** sa zaglavljem u `tblAmbalazaDokument`.
+
 Redovi 1–2 i 3–4 su dvonožni jer su **oba** učesnika nosioci salda i vozača nema.
 Red 5–8 su jednonožni jer je protivpartner **vozač**. Red 9 je oba oblika, po
 smeru: KOOP je dvonožan, FIRMA jednonožan jer firma nije nosilac salda.
@@ -1721,6 +1725,65 @@ slučaja za `ODL-22` (prolazi · bez vlasnika pada · tuđ broj pada) · sabota�
 > izmereno **svojstvo** na kom redosled stoji
 > (`Test_PRJ_LanacSeOdmotavaObrnuto`), ne redosled sam; sabotaža koja bi vratila
 > stari red **nije upisana** jer se ne bi videla. Upisano kao dug sa imenom.
+
+### 6.12h Revers — ambalažni dokument, i vozač prestaje da bude žig
+
+Četiri smera, po jedan red:
+
+```
+IZDAVANJE     Stanica   -> Kooperant   IZDATA_PRAZNA
+PRIJEM        Kooperant -> Stanica     POVRAT_PRAZNE
+IZDATO_OM     Vozac     -> Stanica     PRENOS_INTERNO
+PRIJEM_OD_OM  Stanica   -> Vozac       PRENOS_INTERNO
+```
+
+Stari pisac je prva dva smera knjižio sa **dve noge**, a druga dva sa **jednom**
+uz vozača u koloni `VozacID` — pa se vozačev saldo dobijao **inverzijom smera**,
+fail-open po 6.8. Sada je nalog, pa test može da tvrdi da gajbe **polaze od
+njega**; u starom modelu se to nije moglo napisati.
+
+**MAPA SMEROVA ŽIVI U UGOVORU, NE U PISCU.** `AmbReversSmerovi` je **zatvorena**:
+nepoznat smer nema red i pisac pada fail-closed, a spisak dozvoljenih u poruci
+dolazi **iz mape** — pa ne može da se raziđe sa njom, kao što je zatečeni
+`Case Else` sa svojim nabrajanjem mogao. Smerovi su dobili konstante (do ovog
+reza goli literali na 12 mesta).
+
+**`AMB-10-ODL-5` JE ZATVOREN, I PREKRŠAJ JE BIO LATENTAN.** Dokument je opisivao
+`SaveOMUlaz_TX` kao ambalažni dokument koji nosi i novac pod istim brojem.
+Merenje pozivnih mesta pokazuje da **nijedan živ poziv ne meša klase**: F5 isplata
+šalje `kolAmb:=0`, F7 revers šalje `novac:=0`. Prekršaj je dakle bio u **potpisu**
+pisca, ne u ponašanju — pa je razlaganje mehaničko i **nijedan poslovni tok se ne
+menja**. Ambalažna polovina je otišla svom piscu, a `SaveOMUlaz_TX` je ostao
+**samo novčani**; četiri ambalažna parametra su uklonjena jer ih novčana grana ne
+koristi (izmereno), a ostavljena bi bila poziv da se klase opet pomešaju.
+
+**DVE KAPIJE BROJA, A NOV MODEL POKRIVA SAMO JEDNU.** Zauzetost (`AMB-10-ODL-20`)
+radi `UpisiAmbDokument` i time zamenjuje zatečeni `RequireBrojSlobodanUNizu`. Ali
+**oblik i kontekst** broja — pripada li baš nizu te stanice i tog dana — nov model
+ne proverava, pa bi prelazak tiho izgubio tu kapiju. Zato je zadržana, i to samo
+za broj **koji pozivalac zada**: generisan dolazi iz ambalažnog niza i nema `REV`
+oblik.
+
+Zatečeno pravilo „nalog je obavezan" stajalo je u **osam kopija** (po dve u svakom
+od četiri `Case` bloka). Sada je jedno telo, pa ne može da se raziđe po granama.
+
+*Provera:* `Test_REV_SmerDajeJedanRed` (jedan red po smeru, par naloga, vozač kao
+nalog, vrsta) · `Test_REV_UgovorSmeraJeFailClosed` (mapa nosi tačno četiri smera;
+nepoznat smer i nedostajući nalog odbijeni, **uz razlog po imenu**) · 11 zatečenih
+`REV` testova numeracije preseljeno na istog pisca, bez menjanja tvrdnji ·
+sabotaže `amb-rev-smer-obrnut`, `amb-rev-vrsta-nije-izdavanje`,
+`amb-rev-nalog-nije-obavezan`.
+
+> **TVRDNJA O ODBIJANJU MORA DA IMENUJE RAZLOG.** Provera „nalog je obavezan" je
+> **dvoslojna**: ugasi se, a `PrenesiAmbalazu` svejedno odbije nepostojeći nalog —
+> pa bi tvrdnja „odbijeno" ostala zelena. Zato test helper vraća `Err.Description`
+> i tvrdnja meri **tekst koji proizvodi samo prvi sloj**. Naučeno na skupi način u
+> 6.12g; ovde primenjeno **pre** prvog prolaza.
+
+> **ŠTA OVAJ REZ NIJE POKRIO.** Revers **nema kanonskog storno pisca** —
+> `tblAmbalazaDokument` ga još nema uopšte, i to je zapisan dug `10d`. Stari
+> čitaoci reversa (`ReversID`, ekran Storno) idu **slepi** nad novim redovima, isto
+> kao kod otkupa, otpremnice i prijemnice — čitaoci prelaze u `10c`.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 

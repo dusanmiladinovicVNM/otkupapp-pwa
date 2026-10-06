@@ -305,16 +305,12 @@ Public Function IsplataUpisi(ByVal p As Object, ByRef poruke As String) As Strin
         brojDok:=S(p, "brDok"), _
         stanicaNaziv:=S(p, "stanicaTekst"), _
         stanicaID:=S(p, "stanicaID"), _
-        vozacID:="", _
-        tipAmb:="", _
-        kolAmb:=0, _
         vrstaVoca:=S(p, "vrsta"), _
         novac:=D(p, "novac"), _
         kooperantID:=S(p, "partnerID"), _
         primalacDisplay:=S(p, "partnerTekst"), _
         otkupID:=S(p, "otkupID"), _
-        tipNovca:=S(p, "tipNovca"), _
-        koopSmer:="") Then Exit Function
+        tipNovca:=S(p, "tipNovca")) Then Exit Function
 
     IsplataUpisi = BrojIliOznaka(S(p, "brDok"))
     Exit Function
@@ -506,10 +502,10 @@ End Function
 ' smer vraca prazno, pa core guard puca umesto da knjizi nasumice.
 Public Function SmerRevKljuc(ByVal smer As Long) As String
     Select Case smer
-        Case SMER_REV_IZD_KOOP: SmerRevKljuc = "IZDAVANJE"
-        Case SMER_REV_PRI_KOOP: SmerRevKljuc = "PRIJEM"
-        Case SMER_REV_IZD_OM:   SmerRevKljuc = "IZDATO_OM"
-        Case SMER_REV_PRI_OM:   SmerRevKljuc = "PRIJEM_OD_OM"
+        Case SMER_REV_IZD_KOOP: SmerRevKljuc = REV_SMER_IZDAVANJE
+        Case SMER_REV_PRI_KOOP: SmerRevKljuc = REV_SMER_PRIJEM
+        Case SMER_REV_IZD_OM:   SmerRevKljuc = REV_SMER_IZDATO_OM
+        Case SMER_REV_PRI_OM:   SmerRevKljuc = REV_SMER_PRIJEM_OD_OM
     End Select
 End Function
 
@@ -521,21 +517,23 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String) As String
     smer = L(p, "smerRev")
     brDok = S(p, "brDok")
 
-    If Not SaveOMUlaz_TX( _
+    ' REVERS JE AMBALAZNI DOKUMENT (AMB-10-ODL-5, rez 10b-2): ide SVOM piscu,
+    ' koji mu pravi zaglavlje u tblAmbalazaDokument i knjizi JEDAN red po smeru.
+    ' Stari put (SaveOMUlaz_TX) je od ovog reza samo novcani.
+    '
+    ' Pisac gresku DIZE umesto da vrati False -- i to je bolje: EH ispod je
+    ' pretvara u poruku operateru, dok je stari put cutke izlazio.
+    Dim revDokID As String
+    revDokID = modAmbalaza.UpisiReversAmbalaze_TX( _
         datum:=CDate(p("datum")), _
-        brojDok:=brDok, _
-        stanicaNaziv:=S(p, "stanicaTekst"), _
+        broj:=brDok, _
         stanicaID:=S(p, "stanicaID"), _
-        vozacID:=S(p, "vozacID"), _
         tipAmb:=S(p, "tipAmb"), _
-        kolAmb:=L(p, "kolAmb"), _
-        vrstaVoca:=S(p, "vrsta"), _
-        novac:=0, _
+        kolicina:=L(p, "kolAmb"), _
+        smer:=SmerRevKljuc(smer), _
         kooperantID:=S(p, "partnerID"), _
-        primalacDisplay:=S(p, "partnerTekst"), _
-        otkupID:="", _
-        tipNovca:="", _
-        koopSmer:=SmerRevKljuc(smer)) Then Exit Function
+        vozacID:=S(p, "vozacID"))
+    If Len(revDokID) = 0 Then Exit Function
 
     ' ISPRAVKA reversa (druga faza): ako je revers-ispravka na cekanju,
     ' upravo snimljeni revers je njena zamena. No-op inace. Stanica i dan idu

@@ -6912,6 +6912,40 @@ SABOTAZE = {
         "Test_PRJ_VlasnikBrojaJeNjenKupac",
         "ODL-22: prva prijemnica prijavljuje SVOG kupca",
     ),
+    # REVERS (10b-2, 6.12h) -- tri sabotaze nad ugovorom smera i piscem.
+    #
+    # Smer se okrece u MAPI, ne u piscu: vozac i stanica su oba SOPSTVENA pa
+    # matrica klasa pusta oba smera, a saldo ide na pogresnu stranu -- tiho.
+    "amb-rev-smer-obrnut": (
+        "modAmbalazaUgovor.bas",
+        "        Array(REV_SMER_IZDATO_OM, AMB_NALOG_VOZAC, AMB_NALOG_STANICA, _\n",
+        "        Array(REV_SMER_IZDATO_OM, AMB_NALOG_STANICA, AMB_NALOG_VOZAC, _\n",
+        "Test_REV_SmerDajeJedanRed",
+        "REV IZDATO_OM: gajbe POLAZE OD VOZACA -- on je nalog, ne zig",
+    ),
+    # Vrsta se menja na POVRAT_PRAZNE: REVERS je i nju dozvoljava, pa upis
+    # PROLAZI -- a izdavanje kooperantu se u knjizi predstavlja kao povrat od
+    # njega. Bira se BAS dozvoljena vrsta: nedozvoljena bi oborila ceo upis i
+    # pala bi tvrdnja o ishodu iza rane izlazne tacke, ne ova.
+    "amb-rev-vrsta-nije-izdavanje": (
+        "modAmbalazaUgovor.bas",
+        "        Array(REV_SMER_IZDAVANJE, AMB_NALOG_STANICA, AMB_NALOG_KOOPERANT, _\n"
+        "              AMB_VK_IZDATA_PRAZNA), _\n",
+        "        Array(REV_SMER_IZDAVANJE, AMB_NALOG_STANICA, AMB_NALOG_KOOPERANT, _\n"
+        "              AMB_VK_POVRAT_PRAZNE), _\n",
+        "Test_REV_SmerDajeJedanRed",
+        "REV smer: IZDAVANJE knjizi TACNO jedan red",
+    ),
+    # Nalog koji smer trazi prestaje da bude obavezan. Upis svejedno padne --
+    # PrenesiAmbalazu ne prima nepostojeci nalog -- pa tvrdnja o ISHODU ostaje
+    # zelena. Zato sabotaza kljuca na tvrdnju koja imenuje RAZLOG.
+    "amb-rev-nalog-nije-obavezan": (
+        "modAmbalaza.bas",
+        "    If Len(ReversNalogID) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: nalog smera nije obavezan\n",
+        "Test_REV_UgovorSmeraJeFailClosed",
+        "REV ugovor: razlog imenuje nalog koji nedostaje, ne opstu gresku",
+    ),
     # PRIJEMNICA (10b-2, 6.12g) -- tri sabotaze nad piscem i stornom.
     #
     # Puna noga nosi KolAmbVracena: dokument ima oba reda, oba su na pravom paru

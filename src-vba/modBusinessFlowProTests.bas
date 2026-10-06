@@ -328,6 +328,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_PRJ_LanacSeOdmotavaObrnuto
     Test_PRJ_EksternaPrijemnicaBlokiraPonistenje
     Test_PRJ_VlasnikBrojaJeNjenKupac
+    Test_REV_SmerDajeJedanRed
+    Test_REV_UgovorSmeraJeFailClosed
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -2731,36 +2733,21 @@ Private Sub Test_OMUlazSmerObavezan()
     ' Prazan smer uz kolicinu ambalaze: ranije je tiho knjizen legacy Stanica ULAZ.
     ' Sada core guard odbija upis (UI dodatno blokira pre poziva).
     Dim ok As Boolean
-    ok = SaveOMUlaz_TX(datum:=testDate, brojDok:=brojDok, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="")
+    ok = UpisiReversKol(testDate, brojDok, TEST_ST_ID, "", "", 10)
 
     AssertFalse ok, "OM ulaz: prazan smer uz kolicinu ambalaze je odbijen"
     AssertEquals CStr(ambBefore), CStr(CountRows(TBL_AMBALAZA)), _
                  "OM ulaz: odbijen upis nije ostavio ambalaza red"
 
     ' Nepoznat smer takodje pada (nije jedan od cetiri dozvoljena).
-    ok = SaveOMUlaz_TX(datum:=testDate, brojDok:=brojDok & "-X", _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="NEPOSTOJECI")
+    ok = UpisiReversKol(testDate, brojDok & "-X", TEST_ST_ID, "", "NEPOSTOJECI", 10)
 
     AssertFalse ok, "OM ulaz: nepoznat smer je odbijen"
     AssertEquals CStr(ambBefore), CStr(CountRows(TBL_AMBALAZA)), _
                  "OM ulaz: nepoznat smer nije ostavio ambalaza red"
 
     ' Kontrola: eksplicitan smer prolazi (IZDATO_OM = vozac predaje na OM).
-    ok = SaveOMUlaz_TX(datum:=testDate, brojDok:=brojDok & "-OK", _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(testDate, brojDok & "-OK", TEST_ST_ID, "", "IZDATO_OM", 10)
 
     AssertTrue ok, "OM ulaz: eksplicitan smer IZDATO_OM prolazi"
     AssertEquals CStr(ambBefore + 1), CStr(CountRows(TBL_AMBALAZA)), _
@@ -5886,6 +5873,117 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_PRJ_VlasnikBrojaJeNjenKupac", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' REVERS -- cetvrto preseceno mesto knjizenja (10b-2, 6.12h)
+'
+' Stari pisac je isti posao radio sa SEST nogu u cetiri smera, a vozaca nosio
+' kao ZIG. Nov model daje PO JEDAN red na smer, iz zatvorene mape.
+'
+' Broj se NE zadaje (broj:="") nego ga pisac generise: zadat broj ide kroz
+' RequireBrojUKontekstu, koji trazi REV oblik -- a test meri par naloga i vrstu,
+' ne numeraciju. Numeraciju mere zateceni REV testovi, koji su preseljeni na
+' istog pisca.
+' ============================================================
+Private Sub Test_REV_SmerDajeJedanRed()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("REVSMR")
+
+    Dim dIzd As String, dPri As String, dOm As String, dOdOm As String
+    dIzd = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", TEST_ST_ID, TEST_TIP_AMB, _
+               6, REV_SMER_IZDAVANJE, TEST_KOOP_ID, "", "test " & scenario)
+    dPri = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", TEST_ST_ID, TEST_TIP_AMB, _
+               4, REV_SMER_PRIJEM, TEST_KOOP_ID, "", "test " & scenario)
+    dOm = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", TEST_ST_ID, TEST_TIP_AMB, _
+               3, REV_SMER_IZDATO_OM, "", TEST_VOZ_ID, "test " & scenario)
+    dOdOm = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", TEST_ST_ID, TEST_TIP_AMB, _
+               2, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test " & scenario)
+
+    AssertTrue Len(dIzd) > 0 And Len(dPri) > 0 And Len(dOm) > 0 And Len(dOdOm) > 0, _
+               "REV smer: sva cetiri reversa su upisana"
+    If Len(dIzd) = 0 Or Len(dPri) = 0 Or Len(dOm) = 0 Or Len(dOdOm) = 0 Then GoTo Kraj
+
+    ' JEDAN RED PO SMERU -- stari pisac je za prva dva smera pisao DVE noge.
+    AssertEquals "1", CStr(AmbNoviBrojRedova(dIzd, DOK_TIP_AMBALAZA_DOKUMENT, _
+                           AMB_VK_IZDATA_PRAZNA)), _
+                 "REV smer: IZDAVANJE knjizi TACNO jedan red"
+    AssertEquals "1", CStr(AmbNoviBrojRedova(dPri, DOK_TIP_AMBALAZA_DOKUMENT, _
+                           AMB_VK_POVRAT_PRAZNE)), _
+                 "REV smer: PRIJEM knjizi TACNO jedan red"
+
+    ' PAR NALOGA PO SMERU.
+    AssertEquals TEST_ST_ID, AmbNoviPolje(dIzd, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_IZDATA_PRAZNA, COL_AMB_OD_ID), _
+                 "REV IZDAVANJE: polazi od stanice"
+    AssertEquals TEST_KOOP_ID, AmbNoviPolje(dIzd, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_IZDATA_PRAZNA, COL_AMB_NA_ID), _
+                 "REV IZDAVANJE: stize kooperantu"
+    AssertEquals TEST_KOOP_ID, AmbNoviPolje(dPri, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_POVRAT_PRAZNE, COL_AMB_OD_ID), _
+                 "REV PRIJEM: polazi od kooperanta"
+
+    ' VOZAC JE NALOG, NE ZIG -- to se u starom modelu nije moglo tvrditi, jer je
+    ' stajao u koloni VozacID a saldo se dobijao inverzijom smera.
+    AssertEquals TEST_VOZ_ID, AmbNoviPolje(dOm, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_PRENOS_INTERNO, COL_AMB_OD_ID), _
+                 "REV IZDATO_OM: gajbe POLAZE OD VOZACA -- on je nalog, ne zig"
+    AssertEquals TEST_VOZ_ID, AmbNoviPolje(dOdOm, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_PRENOS_INTERNO, COL_AMB_NA_ID), _
+                 "REV PRIJEM_OD_OM: gajbe STIZU VOZACU -- on je nalog, ne zig"
+
+    ' VRSTA JE PROCITANA IZ 6.7, ne izvedena iz para: isti par (Stanica, Vozac)
+    ' nosi PRENOS_INTERNO u oba smera, a Stanica <-> Kooperant dve razlicite.
+    AssertEquals AMB_VK_PRENOS_INTERNO, AmbNoviPolje(dOm, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_PRENOS_INTERNO, COL_AMB_VRSTA_KRETANJA), _
+                 "REV IZDATO_OM: vozac i stanica su oba SOPSTVENA -- PRENOS_INTERNO"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_REV_SmerDajeJedanRed", Err.Number, Err.description
+End Sub
+
+' Ugovor smera je ZATVOREN, i nalog koji smer trazi je OBAVEZAN.
+'
+' Stari pisac je isto pravilo nosio u OSAM kopija (po dve u svakom od cetiri
+' Case bloka) plus Case Else za nepoznat smer. Ovde je jedno telo, pa test meri
+' da se grane ne razilaze: isti razlog pada za sva cetiri smera.
+Private Sub Test_REV_UgovorSmeraJeFailClosed()
+    On Error GoTo EH
+
+    Dim scenario As String, n As Long
+    scenario = NewScenarioCode("REVUGV")
+
+    AssertEquals "4", CStr(UBound(modAmbalazaUgovor.AmbReversSmerovi()) - _
+                           LBound(modAmbalazaUgovor.AmbReversSmerovi()) + 1), _
+                 "REV ugovor: mapa nosi TACNO cetiri smera"
+
+    n = CountRows(TBL_AMBALAZA)
+    AssertTrue Not UpisiReversKol(Date, "", TEST_ST_ID, TEST_KOOP_ID, _
+                                  "NEPOSTOJECI", 5), _
+               "REV ugovor: nepoznat smer je ODBIJEN (zatvorena mapa)"
+    AssertEquals CStr(n), CStr(CountRows(TBL_AMBALAZA)), _
+                 "REV ugovor: odbijen smer nije ostavio red u knjizi"
+
+    ' Nalog koji smer trazi mora da postoji -- i to je JEDNO telo za sva cetiri.
+    Dim raz As String
+    AssertTrue Not UpisiReversKol(Date, "", TEST_ST_ID, "", _
+                                  REV_SMER_IZDAVANJE, 5, raz), _
+               "REV ugovor: IZDAVANJE bez kooperanta je ODBIJENO"
+    AssertTrue InStr(1, raz, "trazi nalog", vbTextCompare) > 0, _
+               "REV ugovor: razlog imenuje nalog koji nedostaje, ne opstu gresku"
+    AssertTrue Not UpisiReversKol(Date, "", TEST_ST_ID, "", _
+                                  REV_SMER_PRIJEM, 5), _
+               "REV ugovor: PRIJEM bez kooperanta je ODBIJEN"
+    AssertEquals CStr(n), CStr(CountRows(TBL_AMBALAZA)), _
+                 "REV ugovor: nijedno odbijanje nije ostavilo red u knjizi"
+
+    Exit Sub
+EH:
+    LogFatal "Test_REV_UgovorSmeraJeFailClosed", Err.Number, Err.description
 End Sub
 
 Private Sub Test_OTP_StornoVracaGajbeVozacu()
@@ -15853,34 +15951,23 @@ Private Sub Test_BKTX_ReversSudiSamoAmbalazu()
     ambPre = CountRows(TBL_AMBALAZA)
 
     Dim ok As Boolean
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=tudjBroj, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d, tudjBroj, TEST_ST_ID, "", "IZDATO_OM", 10)
 
     AssertFalse ok, "BKTX revers: broj tudje stanice je ODBIJEN"
     AssertEquals CStr(ambPre), CStr(CountRows(TBL_AMBALAZA)), _
                  "BKTX revers: odbijen upis nije ostavio ambalaza red"
 
     ' Kontrola: broj ove stanice prolazi.
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=modBrojevi.FormatBroj(TEST_ST_ID, d, 1), _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d, modBrojevi.FormatBroj(TEST_ST_ID, d, 1), TEST_ST_ID, "", "IZDATO_OM", 10)
 
     AssertTrue ok, "BKTX revers: broj ove stanice prolazi"
 
     ' GOTOVINA: isti "tudj" broj, ali kolAmb = 0 -- nema niza, kapija cuti.
     ok = SaveOMUlaz_TX(datum:=d, brojDok:=tudjBroj, _
                        stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:="", tipAmb:="", kolAmb:=0, _
                        vrstaVoca:=TEST_VRSTA, novac:=5000#, kooperantID:="", _
                        primalacDisplay:="Test primalac", otkupID:="", _
-                       tipNovca:=NOV_KES_FIRMA_OTKUPAC, koopSmer:="")
+                       tipNovca:=NOV_KES_FIRMA_OTKUPAC)
 
     AssertTrue ok, "BKTX revers: cist gotovinski promet NIJE sudjen po broju"
 
@@ -15912,45 +15999,20 @@ Private Sub Test_BKTX_ReversPisacOdbijaZauzet()
     Dim broj As String: broj = TEST_PREFIX & "-REV-BZ-" & scenario
 
     Dim ok As Boolean, pre As Long
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d, broj, TEST_ST_ID, "", "IZDATO_OM", 10)
     AssertTrue ok, "REV broj: prvi revers se upisuje"
 
     pre = CountRows(TBL_AMBALAZA)
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d, broj, TEST_ST_ID, "", "IZDATO_OM", 5)
     AssertFalse ok, "REV broj: pisac odbija isti broj, stanicu i dan"
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="PRIJEM_OD_OM")
+    ok = UpisiReversKol(d, broj, TEST_ST_ID, "", "PRIJEM_OD_OM", 5)
     AssertFalse ok, "REV broj: drugi smer istog broja je isti niz"
     AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
                  "REV broj: odbijeni upisi nisu ostavili red"
 
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
-                       stanicaNaziv:="Test OM 2", stanicaID:=BKTX_ST2, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=7, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d, broj, BKTX_ST2, "", "IZDATO_OM", 7)
     AssertTrue ok, "REV broj: druga stanica istog dana prima isti broj (A2)"
-    ok = SaveOMUlaz_TX(datum:=d2, brojDok:=broj, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=9, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d2, broj, TEST_ST_ID, "", "IZDATO_OM", 9)
     AssertTrue ok, "REV broj: drugi dan iste stanice prima isti broj"
 
     Dim ambA As String, ambB As String, ambC As String
@@ -15978,12 +16040,7 @@ Private Sub Test_BKTX_ReversPisacOdbijaZauzet()
 
     ' Storno ne oslobadja broj (A9): ni pisac ni ekran.
     pre = CountRows(TBL_AMBALAZA)
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d, broj, TEST_ST_ID, "", "IZDATO_OM", 10)
     AssertFalse ok, "REV broj: storno ne oslobadja broj reversa -- pisac (A9)"
     AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
                  "REV broj: odbijen upis posle storna nije ostavio red"
@@ -16351,17 +16408,40 @@ Private Function IntegritetRedoviSa(ByVal sadrzi As String) As String
     IntegritetRedoviSa = out
 End Function
 
-' Revers kroz pravi pisac (SaveOMUlaz_TX): 5 gajbi test tipa, bez novca.
+' Revers kroz PRAVI pisac (modAmbalaza.UpisiReversAmbalaze_TX), bez novca.
+'
+' Pisac gresku DIZE, a SaveOMUlaz_TX je vracao False -- ovi testovi mere i
+' ODBIJANJA, pa helper gresku hvata i prevodi u False. Tvrdnje time ostaju
+' nepromenjene, a put je nov: smisao selidbe je da se ISTO pravilo meri na
+' novom piscu, ne da se uvedu nova pravila.
+Private Function UpisiReversKol(ByVal d As Date, ByVal broj As String, _
+                                ByVal stanicaID As String, ByVal kooperantID As String, _
+                                ByVal koopSmer As String, ByVal kol As Long, _
+                                Optional ByRef outRazlog As String) As Boolean
+    Dim dokID As String
+    outRazlog = ""
+    On Error Resume Next
+    dokID = modAmbalaza.UpisiReversAmbalaze_TX(datum:=d, broj:=broj, _
+                stanicaID:=stanicaID, tipAmb:=TEST_TIP_AMB, kolicina:=kol, _
+                smer:=koopSmer, kooperantID:=kooperantID, vozacID:=TEST_VOZ_ID)
+    ' RAZLOG IZLAZI, ne samo ishod: tvrdnja koja kaze samo "odbijeno" je nad
+    ' dvoslojnom kapijom nemerljiva -- ugasi se prva provera, a druga odbije
+    ' isti slucaj i tvrdnja ostane zelena.
+    If Err.Number <> 0 Then
+        outRazlog = Err.description
+        Err.Clear
+    End If
+    On Error GoTo 0
+    UpisiReversKol = (Len(dokID) > 0)
+End Function
+
+' Isto, sa zatecenih 5 gajbi -- da 11 pozivnih mesta ne mora da se dira.
 Private Function UpisiReversTest(ByVal d As Date, ByVal broj As String, _
                                  ByVal stanicaID As String, ByVal kooperantID As String, _
                                  ByVal koopSmer As String) As Boolean
-    UpisiReversTest = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
-                                    stanicaNaziv:="Test OM", stanicaID:=stanicaID, _
-                                    vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
-                                    vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:=kooperantID, _
-                                    primalacDisplay:="", otkupID:="", tipNovca:="", _
-                                    koopSmer:=koopSmer)
+    UpisiReversTest = UpisiReversKol(d, broj, stanicaID, kooperantID, koopSmer, 5)
 End Function
+
 
 ' AmbID noge Stanica reversa (broj, stanica, dan) -- identitet reda, onako kako ga
 ' salje ekran Storno. Prazno kad nema.

@@ -765,6 +765,26 @@
     oba, pa stoji uz tvrdnje koje ga razlikuju.
     Ostaje još samo ručna kapija: `Alt+F11 → Debug → Compile VBAProject` +
     `--mark-compile`.
+68. **Revers — četvrto presečeno mesto, i `ODL-5` zatvoren** (06.10.2026, 6.12h).
+    Šest nogu u četiri smera postalo je **četiri reda**, po jedan na smer, iz
+    **zatvorene mape u ugovoru**. Vozač je iz **žiga** postao **nalog** — u starom
+    modelu se njegov saldo dobijao inverzijom smera.
+    **Merenje je promenilo opseg pre koda.** Dokument opisuje `SaveOMUlaz_TX` kao
+    prekršaj `ODL-5` (ambalažni dokument nosi novac pod istim brojem). Pozivna
+    mesta kažu da **nijedan živ poziv ne meša klase** — F5 šalje `kolAmb:=0`, F7
+    `novac:=0`. Prekršaj je bio u **potpisu**, ne u ponašanju: razlaganje je
+    mehaničko, bez promene poslovnog toka i bez pitanja za operatera.
+    Zadržano svesno: **`RequireBrojUKontekstu`** — nov model pokriva zauzetost
+    (`ODL-20`) ali ne i oblik/kontekst broja, pa bi prelazak tu kapiju tiho
+    izgubio. Osam kopija pravila „nalog je obavezan" svedeno na **jedno telo**.
+    **Lekcija iz 6.12g primenjena PRE prvog prolaza:** provera naloga je
+    dvoslojna, pa tvrdnja o odbijanju meri **tekst prvog sloja**, ne ishod — helper
+    zato vraća `Err.Description`. Bez toga bi sabotaža nad tom proverom obarala
+    ništa.
+    11 zatečenih `REV` testova numeracije **preseljeno parserom**, ne prepisivanjem:
+    11 blokova od po šest redova je 11 prilika za tihu grešku u jednom polju. Parser
+    je usput našao i **jedan poziv koji nije revers nego isplata** (`novac:=5000#`) —
+    on ostaje na starom piscu. Katalog 689 → 692.
 
 
     **DOKAZ JE IZMEREN — za stavke 59 i 60 zajedno, nad jednim izvorom.**
