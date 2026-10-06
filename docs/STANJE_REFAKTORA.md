@@ -935,6 +935,26 @@
     domaće pitanje koje mu je postavljeno **pet dana kasnije**, dok je isti ugovor
     u `ODL-22` pukao na premisi. Razlika je u tome što je ovde kapija merila
     **vlasnika broja** (činjenicu), a tamo **vrstu dokumenta** (zamenu za pravilo).
+74. **Rez reda 8 zatvoren: DOKAZANO 2/2 + pun prolaz ZELENO** (06.10.2026).
+    `dokaz.py --grupe 6 amb-kup-`: **crvenih 2 / sabotaža 2**, potpis izvora
+    `ab359375960e4353` **identičan pre i posle**. Grupisanje je dalo **2 prolaza
+    nad 2 sabotaže**, pa je ovo **pun pojedinačni dokaz**, ne grupni — verdikt je
+    `DOKAZANO`, bez „(grupno)".
+    Baza: `RunAllTests` 200/0, `RunBusinessFlowProSuite` **2399**/0.
+    Pun prolaz `run_vba.py`: **ZELENO**, 12/12 suita, nula padova
+    (`RunAllTests` 200, BFP 2399, `RunStornoTestSuite` 164, banka 241, palete,
+    faktura, agrohemija, Sheets, golden, licenca, StornoCentar, izveštaji).
+    GREEN marker: izvor `6baf27d0ae8a`, ugovor `a10b23d003d7`, sveska
+    `otkup_test.xlsm/d24883a3`. Marker **pokriva i tekući HEAD**, jer je stavka 73
+    (`d190041c`) bila **samo docs** — potpis izvora se nije promenio.
+    **2394 → 2399 je tačno pet novih tvrdnji** — koliko ih `Test_KUP_UplataJeSamoNovac`
+    i ima. Neobjašnjena razlika bi značila da je test prećutao deo sebe
+    (v. „broj tvrdnji je merenje"); ovde se poklapa po stavci.
+    Compile je kao i uvek `NEJASNO` (nema dijaloga) — ručna kapija stoji, i sad
+    pokriva **dva reza**: revers (stavka 71) i ovaj. Oba su menjala **potpis**, a
+    ovaj je i obrisao konstantu `DOK_TIP_IZLAZ_KUPCI`.
+    Ostaje nepokriveno i zapisano: **P2 iz review-a** (ekran Storno ne vidi nov
+    revers — `10c`, pred merge) i **pisac + ulaz za `AMB-10-ODL-23`** (stavka 73).
 
 ## Dug sa imenom (posle S5-5b)
 
