@@ -5886,6 +5886,26 @@ End Sub
 ' ne numeraciju. Numeraciju mere zateceni REV testovi, koji su preseljeni na
 ' istog pisca.
 ' ============================================================
+' Revers kroz pravog pisca, ali tako da GRESKA NE UBIJE TEST.
+'
+' Pisac gresku DIZE, a ovaj test meri i sabotaze koje ga obaraju. Bez
+' On Error Resume Next sabotaza digne gresku na pozivu od kog se ocekuje USPEH,
+' EH uradi LogFatal i ciljana tvrdnja nikad ne dodje na red -- dokaz.py to
+' prijavi kao "NE OBARA SVOJ TEST, nego: <ImeTesta>" (06.10.2026).
+Private Function RevDokID(ByVal d As Date, ByVal stanicaID As String, _
+                          ByVal kol As Long, ByVal smer As String, _
+                          ByVal kooperantID As String, _
+                          ByVal vozacID As String) As String
+    On Error Resume Next
+    RevDokID = modAmbalaza.UpisiReversAmbalaze_TX(d, "", stanicaID, TEST_TIP_AMB, _
+                                                  kol, smer, kooperantID, vozacID)
+    If Err.Number <> 0 Then
+        RevDokID = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Function
+
 Private Sub Test_REV_SmerDajeJedanRed()
     On Error GoTo EH
 
@@ -5893,26 +5913,27 @@ Private Sub Test_REV_SmerDajeJedanRed()
     scenario = NewScenarioCode("REVSMR")
 
     Dim dIzd As String, dPri As String, dOm As String, dOdOm As String
-    dIzd = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", TEST_ST_ID, TEST_TIP_AMB, _
-               6, REV_SMER_IZDAVANJE, TEST_KOOP_ID, "", "test " & scenario)
-    dPri = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", TEST_ST_ID, TEST_TIP_AMB, _
-               4, REV_SMER_PRIJEM, TEST_KOOP_ID, "", "test " & scenario)
-    dOm = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", TEST_ST_ID, TEST_TIP_AMB, _
-               3, REV_SMER_IZDATO_OM, "", TEST_VOZ_ID, "test " & scenario)
-    dOdOm = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", TEST_ST_ID, TEST_TIP_AMB, _
-               2, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test " & scenario)
+    dIzd = RevDokID(Date, TEST_ST_ID, 6, REV_SMER_IZDAVANJE, TEST_KOOP_ID, "")
+    dPri = RevDokID(Date, TEST_ST_ID, 4, REV_SMER_PRIJEM, TEST_KOOP_ID, "")
+    dOm = RevDokID(Date, TEST_ST_ID, 3, REV_SMER_IZDATO_OM, "", TEST_VOZ_ID)
+    dOdOm = RevDokID(Date, TEST_ST_ID, 2, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID)
 
     AssertTrue Len(dIzd) > 0 And Len(dPri) > 0 And Len(dOm) > 0 And Len(dOdOm) > 0, _
                "REV smer: sva cetiri reversa su upisana"
-    If Len(dIzd) = 0 Or Len(dPri) = 0 Or Len(dOm) = 0 Or Len(dOdOm) = 0 Then GoTo Kraj
 
     ' JEDAN RED PO SMERU -- stari pisac je za prva dva smera pisao DVE noge.
+    '
+    ' STOJE IZNAD RANE IZLAZNE TACKE, i to je nosece: sabotaza vrste obara sam
+    ' UPIS, pa bi iza `GoTo Kraj` ove tvrdnje ostale nedosegnute -- padala bi
+    ' samo tvrdnja da su reversi upisani, a to je POSLEDICA, ne razlog. Sa
+    ' praznim dokID-em broj redova nije 1, pa pucaju PO IMENU.
     AssertEquals "1", CStr(AmbNoviBrojRedova(dIzd, DOK_TIP_AMBALAZA_DOKUMENT, _
                            AMB_VK_IZDATA_PRAZNA)), _
                  "REV smer: IZDAVANJE knjizi TACNO jedan red"
     AssertEquals "1", CStr(AmbNoviBrojRedova(dPri, DOK_TIP_AMBALAZA_DOKUMENT, _
                            AMB_VK_POVRAT_PRAZNE)), _
                  "REV smer: PRIJEM knjizi TACNO jedan red"
+    If Len(dIzd) = 0 Or Len(dPri) = 0 Or Len(dOm) = 0 Or Len(dOdOm) = 0 Then GoTo Kraj
 
     ' PAR NALOGA PO SMERU.
     AssertEquals TEST_ST_ID, AmbNoviPolje(dIzd, DOK_TIP_AMBALAZA_DOKUMENT, _
