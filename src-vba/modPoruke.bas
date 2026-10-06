@@ -273,7 +273,7 @@ Private Sub UpsertPoruke02(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "SETUP_MSG_BANKARSKI_FOLDERI_PODESENI", "Bankarski folderi su pode" & ChrW(353) & "eni."
     UpsertRow lo, existing, "SETUP_ERR_GRESKA_PRI_PODESAVANJU", "Gre" & ChrW(353) & "ka pri pode" & ChrW(353) & "avanju bankarskih foldera:"
     UpsertRow lo, existing, "STM_ERR_GRESKA_PRI_EXPORTU", "Gre" & ChrW(353) & "ka pri exportu parcela:"
-    UpsertRow lo, existing, "DOK_ERR_NEMA_AMBALAZE_NOVCA", "Nema ambala" & ChrW(382) & "e ni novca za " & ChrW(269) & "uvanje."
+    UpsertRow lo, existing, "DOK_ERR_NEMA_NOVCA", "Nema novca za " & ChrW(269) & "uvanje."
     UpsertRow lo, existing, "SEF_MSG_SENDING_FAKTURA_TRENUTNO", "- SENDING: Faktura se trenutno " & ChrW(353) & "alje."
     UpsertRow lo, existing, "SEF_MSG_SENT_FAKTURA_USPESNO", "- SENT: Faktura uspe" & ChrW(353) & "no primljena na SEF."
     UpsertRow lo, existing, "SEF_MSG_REJECTED_GRESKA_PROVERI", "- REJECTED: Gre" & ChrW(353) & "ka! Proveri 'Poslednja gre" & ChrW(353) & "ka'."

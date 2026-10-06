@@ -6959,6 +6959,38 @@ SABOTAZE = {
         "Test_REV_UgovorSmeraJeFailClosed",
         "REV ugovor: razlog imenuje nalog koji nedostaje, ne opstu gresku",
     ),
+    # UPLATA KUPCA (10b-2, red 8) -- dve sabotaze nad OBIMOM pisca.
+    #
+    # Ambalazna noga se VRACA. Tip je bilo koja neprazna rec (ValidateAmbalazaInput
+    # trazi samo neprazan tip i ispravan smer), a smer je legalan -- pa upis
+    # PROLAZI i tvrdnja o ishodu ostaje zelena. Crveni se bas tvrdnja o obimu:
+    # knjiga ambalaze je porasla na uplatu novca.
+    "amb-kup-uplata-knjizi-ambalazu": (
+        "modDokumenta.bas",
+        "    tx.BeginTx\n"
+        "    tx.AddTableSnapshot TBL_NOVAC\n"
+        "    tx.AddTableSnapshot TBL_FAKTURE\n",
+        "    tx.BeginTx\n"
+        "    tx.AddTableSnapshot TBL_NOVAC\n"
+        "    tx.AddTableSnapshot TBL_FAKTURE\n"
+        "    tx.AddTableSnapshot TBL_AMBALAZA\n"
+        "    TrackAmbalaza datum, \"GAJBA\", 1, \"Izlaz\", kupacID, \"Kupac\", _\n"
+        "                  \"\", brojDok, \"Kupci-Otpremnica\"   ' SABOTAZA\n",
+        "Test_KUP_UplataJeSamoNovac",
+        "KUP uplata: knjiga ambalaze je NEDIRNUTA",
+    ),
+    # Kapija prazne uplate. Stara je glasila `kolAmb <= 0 And novac <= 0`; posle
+    # reza je ostao jedan clan, i upravo on je mogao da ispadne neprimetno --
+    # jedan znak manje, a u kasi red od nula dinara.
+    "amb-kup-prazna-uplata-prolazi": (
+        "modDokumenta.bas",
+        "    If novac <= 0 Then\n"
+        "        Err.Raise vbObjectError + 1602, \"SaveKupciIzlaz_TX\", _\n",
+        "    If novac < 0 Then   ' SABOTAZA: nula prolazi\n"
+        "        Err.Raise vbObjectError + 1602, \"SaveKupciIzlaz_TX\", _\n",
+        "Test_KUP_UplataJeSamoNovac",
+        "KUP uplata: upis bez novca je ODBIJEN",
+    ),
     # PRIJEMNICA (10b-2, 6.12g) -- tri sabotaze nad piscem i stornom.
     #
     # Puna noga nosi KolAmbVracena: dokument ima oba reda, oba su na pravom paru

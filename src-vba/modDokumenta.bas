@@ -7092,13 +7092,29 @@ EH:
     GetPrijemniceByKupac = Empty
 End Function
 
+' UPLATA KUPCA -- SAMO NOVAC (AMB-10-ODL-5: nijedan dokument nije istovremeno
+' ambalazni i novcani).
+'
+' Do 06.10.2026 je ova funkcija bila i ambalazni pisac: isti brojDok nosili su
+' i noga u tblAmbalaza ("Izlaz" kod kupca, zig vozaca, DokumentTIP
+' "Kupci-Otpremnica") i red u kasi. Dva dogadjaja su delila jedan broj, a
+' zivotni ciklus im nije isti: storno uplate ne vraca gajbe, a storno povrata
+' ne vraca novac (AMBALAZA.md 6.11a).
+'
+' GDE SE POVRAT PRAZNE AMBALAZE OD KUPCA KNJIZI SADA: na prijemnici, kao
+' Kupac -> Vozac + POVRAT_PRAZNE, pod BROJEM PRIJEMNICE -- AMB-10-ODL-9/-10 uz
+' ODL-22 (presuda operatera 05.10.2026: zamena pune ambalaze praznom nema
+' dodatan broj). Ime funkcije ostaje; menja se obim, ne pozivno mesto.
+'
+' AMBALAZNA NOGA NIJE IMALA POZIVAOCA NI PRE REZA, i to je mereno: jedini
+' produkcioni pozivalac je F6 (modNovacUnos.UplataUpisi), a on je slao
+' kolAmb:=0, tipAmb:="" i vozacID:="" tvrdo upisane. Sposobnost "kupac vraca
+' prazne BEZ dostave robe" time nije izgubljena ovde nego je vec bila bez
+' ulaza; vrsta AMB_DOK_REVERS_PARTNERA je za nju spremna ali jos bez pisca.
 Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
                                   ByVal brojDok As String, _
                                   ByVal kupacNaziv As String, _
                                   ByVal kupacID As String, _
-                                  ByVal vozacID As String, _
-                                  ByVal tipAmb As String, _
-                                  ByVal kolAmb As Long, _
                                   ByVal vrstaVoca As String, _
                                   ByVal novac As Double, _
                                   ByVal fakturaID As String, _
@@ -7114,21 +7130,14 @@ Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
                   "KupacID je obavezan."
     End If
 
-    If kolAmb <= 0 And novac <= 0 Then
+    If novac <= 0 Then
         Err.Raise vbObjectError + 1602, "SaveKupciIzlaz_TX", _
-                  Poruka("DOK_ERR_NEMA_AMBALAZE_NOVCA")
+                  Poruka("DOK_ERR_NEMA_NOVCA")
     End If
 
     tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_FAKTURE
-
-    If kolAmb > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmb, _
-                      "Izlaz", kupacID, "Kupac", _
-                      vozacID, brojDok, DOK_TIP_IZLAZ_KUPCI
-    End If
 
     If novac > 0 Then
         Dim novacID As String
@@ -8683,7 +8692,7 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
 
     If novac <= 0 Then
         Err.Raise vbObjectError + 1501, "SaveOMUlaz_TX", _
-                  Poruka("DOK_ERR_NEMA_AMBALAZE_NOVCA")
+                  Poruka("DOK_ERR_NEMA_NOVCA")
     End If
 
     tx.BeginTx

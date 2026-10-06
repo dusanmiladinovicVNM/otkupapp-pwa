@@ -331,6 +331,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_REV_SmerDajeJedanRed
     Test_REV_UgovorSmeraJeFailClosed
     Test_REV_AutoBrojJedanNiz
+    Test_KUP_UplataJeSamoNovac
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -6050,6 +6051,52 @@ Private Sub Test_REV_UgovorSmeraJeFailClosed()
     Exit Sub
 EH:
     LogFatal "Test_REV_UgovorSmeraJeFailClosed", Err.Number, Err.description
+End Sub
+
+' UPLATA KUPCA NE SME DA DODIRNE KNJIGU AMBALAZE (AMB-10-ODL-5, red 8).
+'
+' Do 06.10.2026 je isti poziv pisao i nogu u tblAmbalaza, pod istim brojem.
+' Rez je OBIM pisca, pa tvrdnja mora da meri obe strane: da je novac legao I
+' da knjiga nije porasla. Sama "knjiga nije porasla" bila bi zelena i kad
+' pisac uopste ne radi -- zato stoji uz tvrdnju da je red u kasi nastao.
+Private Sub Test_KUP_UplataJeSamoNovac()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("KUPNOV")
+
+    Dim nAmb As Long, nNov As Long, ok As Boolean
+    nAmb = CountRows(TBL_AMBALAZA)
+    nNov = CountRows(TBL_NOVAC)
+
+    ok = SaveKupciIzlaz_TX(datum:=Date, brojDok:="KUP-" & scenario, _
+                           kupacNaziv:=TEST_KUP_ID, kupacID:=TEST_KUP_ID, _
+                           vrstaVoca:=TEST_VRSTA, novac:=1000, fakturaID:="", _
+                           napomena:="test: avans kupca " & scenario, _
+                           tipNovca:=NOV_KUPCI_AVANS)
+
+    AssertTrue ok, "KUP uplata: avans kupca je proknjizen"
+    AssertEquals CStr(nNov + 1), CStr(CountRows(TBL_NOVAC)), _
+                 "KUP uplata: nastao je TACNO jedan red u kasi"
+    AssertEquals CStr(nAmb), CStr(CountRows(TBL_AMBALAZA)), _
+                 "KUP uplata: knjiga ambalaze je NEDIRNUTA"
+
+    ' KAPIJA JE SAD SAMO NOVAC: stara je glasila `kolAmb <= 0 And novac <= 0`,
+    ' pa je sa ambalaznom nogom nestao i njen drugi clan. Prazan upis mora da
+    ' ostane odbijen -- inace bi u kasi legao red od nula dinara.
+    nNov = CountRows(TBL_NOVAC)
+    AssertTrue Not SaveKupciIzlaz_TX(datum:=Date, brojDok:="KUP0-" & scenario, _
+                           kupacNaziv:=TEST_KUP_ID, kupacID:=TEST_KUP_ID, _
+                           vrstaVoca:=TEST_VRSTA, novac:=0, fakturaID:="", _
+                           napomena:="test: bez novca " & scenario, _
+                           tipNovca:=NOV_KUPCI_AVANS), _
+               "KUP uplata: upis bez novca je ODBIJEN"
+    AssertEquals CStr(nNov), CStr(CountRows(TBL_NOVAC)), _
+                 "KUP uplata: odbijen upis nije ostavio red u kasi"
+
+    Exit Sub
+EH:
+    LogFatal "Test_KUP_UplataJeSamoNovac", Err.Number, Err.description
 End Sub
 
 Private Sub Test_OTP_StornoVracaGajbeVozacu()

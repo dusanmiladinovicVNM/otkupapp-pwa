@@ -600,6 +600,25 @@
     review-a, katalog 649 → 655) stajao je od `ef60fc91` na **kraju** liste, pa ga
     je svaka nova stavka odvlačila dalje — od 59 se čitao kao deo otpremničkog
     reza. Vraćen je pod 53, kojoj po sadržaju i datumu (02–03.10) pripada.
+    **DOKAZ JE IZMEREN — za stavke 59 i 60 zajedno, nad jednim izvorom.**
+    `run_vba.py` pun prolaz **ZELENO**: 12/12 suita, `RunBusinessFlowProSuite`
+    **0/2318**, `RunAllTests` 0/200, banka 0/241, storno 0/163, palete 97,
+    faktura 35, agrohemija 25, Sheets 72. Marker nad izvorom `c7a34a14b436`
+    (ugovor `849cba105e9c`, sveska `otkup_test.xlsm/d24883a3`) ·
+    **compile potvrđen** nad istim izvorom — a compile je **jedina** kapija koja
+    bi sama uhvatila P1 iz `OtpIspravi` (`Variable not defined: tx`) ·
+    `dokaz.py` **DOKAZANO (grupno)**, `crvenih 4/4`, potpis izvora
+    `fcde30a28b7da85c` identičan pre i posle, `grupno izmereno 2/4` — pun
+    pojedinačni dokaz je isti poziv bez `--grupe` i ide pred release · jeftine
+    kapije `rc=0` (`vba_check` 191/682/0+10, arnost 300, scope 5522/0, schema,
+    ownership, čitaoci).
+    **2318 je držalo** — isti broj pre i posle premeštanja tvrdnje, što je i bila
+    tvrdnja o samoj zakrpi: ista tvrdnja, drugo mesto.
+    Usput izmereno o **grupisanju**: `amb-otp-storno-bez-kontrastava` u grupi
+    *nije* oborila svoju tvrdnju, jer je kaskada iz `ispravka-ne-stornira-staru`
+    oborila ceo poziv ispravke pre nje; sama je **OK**. Drugi put da grupisanje
+    traži solo ponavljanje — protokol `--grupe` to radi sam, i to je razlog
+    zbog kog postoji.
 61. **Prijemnica — treće presečeno mesto, i dva nova pravila** (05.10.2026, 6.12g).
     Dva događaja nad **jednim neuređenim parom**: `Vozac → Kupac` uz robu i
     `Kupac → Vozac` povrat praznih. `AMB-INV-10` prolazi jer je par neuređen —
@@ -870,30 +889,33 @@
     Ostaje ručna kapija (compile + `--mark-compile`) i **P2 iz review-a**: ekran
     Storno još ne vidi nov revers — ide u `10c`, i grana se **ne mergeuje** bez
     toga.
-
-
-
-
-
-    **DOKAZ JE IZMEREN — za stavke 59 i 60 zajedno, nad jednim izvorom.**
-    `run_vba.py` pun prolaz **ZELENO**: 12/12 suita, `RunBusinessFlowProSuite`
-    **0/2318**, `RunAllTests` 0/200, banka 0/241, storno 0/163, palete 97,
-    faktura 35, agrohemija 25, Sheets 72. Marker nad izvorom `c7a34a14b436`
-    (ugovor `849cba105e9c`, sveska `otkup_test.xlsm/d24883a3`) ·
-    **compile potvrđen** nad istim izvorom — a compile je **jedina** kapija koja
-    bi sama uhvatila P1 iz `OtpIspravi` (`Variable not defined: tx`) ·
-    `dokaz.py` **DOKAZANO (grupno)**, `crvenih 4/4`, potpis izvora
-    `fcde30a28b7da85c` identičan pre i posle, `grupno izmereno 2/4` — pun
-    pojedinačni dokaz je isti poziv bez `--grupe` i ide pred release · jeftine
-    kapije `rc=0` (`vba_check` 191/682/0+10, arnost 300, scope 5522/0, schema,
-    ownership, čitaoci).
-    **2318 je držalo** — isti broj pre i posle premeštanja tvrdnje, što je i bila
-    tvrdnja o samoj zakrpi: ista tvrdnja, drugo mesto.
-    Usput izmereno o **grupisanju**: `amb-otp-storno-bez-kontrastava` u grupi
-    *nije* oborila svoju tvrdnju, jer je kaskada iz `ispravka-ne-stornira-staru`
-    oborila ceo poziv ispravke pre nje; sama je **OK**. Drugi put da grupisanje
-    traži solo ponavljanje — protokol `--grupe` to radi sam, i to je razlog
-    zbog kog postoji.
+72. **Uplata kupca — poslednje presečeno mesto knjiženja (red 8)** (06.10.2026, 6.12i).
+    `SaveKupciIzlaz_TX` je ostao **samo kasa**: nestali su `vozacID`, `tipAmb`,
+    `kolAmb`, snapshot `TBL_AMBALAZA` i noga u knjizi; kapija
+    `kolAmb <= 0 And novac <= 0` postala je `novac <= 0`, a poruka koja je
+    imenovala ambalažu zamenjena je novčanom u **oba** pisca — `SaveOMUlaz_TX`
+    je istu zastarelu rečenicu nosio od svog reza. `DOK_TIP_IZLAZ_KUPCI` je
+    **obrisan**: jedan pisac, nula čitalaca.
+    **Ovde se knjiženje nije preselilo nego je prestalo** — povrat praznih od
+    kupca ima svoje mesto u redu 7 (prijemnica, pod **njenim** brojem, `ODL-9/-10`
+    uz `ODL-22`). Dva reda za isti događaj bila bi dva traga.
+    **Tri merenja pre koda:** ambalažna noga nije imala **nijednog** produkcionog
+    pozivaoca (F6 šalje `kolAmb:=0` tvrdo upisano) · `DOK_TIP_IZLAZ_KUPCI` nije
+    imao **nijednog** čitaoca · posle reza `TrackAmbalaza` nema **nijednog**
+    produkcionog pozivaoca — čime je **write-side deo `10b-2` zatvoren**: svih
+    devet mesta knjiženja piše nov oblik, stari pisac je još samo test-alat.
+    **⚠ CAPABILITY, zapisano a ne zatvoreno:** „kupac vraća prazne bez dostave
+    robe" — vrsta `AMB_DOK_REVERS_PARTNERA` i kapija postoje, **pisca nema**, a
+    ulaza nema ni u legacy-ju od §27.18. Poslovno pitanje za operatera; pisac se
+    ne izmišlja pre odgovora.
+    Usput popravljeno: **rep stavke 60** (pun prolaz za 59+60) stajao je od
+    `18dfc330` na **kraju** sekcije — isti kvar kao rep stavke 53, i to iz **istog
+    commit-a koji taj rep popravlja**. Vraćen pod 60. Hronologija je izmerena cela:
+    to je bio **jedini** blok posle dva ili više praznih redova (857 redova).
+    Jeftine kapije `rc=0`: `vba_check` (191 fajl, 695 sabotaža, 0+10 poznatih),
+    `gen_schema_module --check`, `who_writes --check` / `--check-ownership` /
+    `--self-test`, `popis_citalaca --check`, arnost 321, scope 5545, nastavak
+    195908 redova, privatno 191 fajl. **Skupe kapije čekaju reviewer GO.**
 
 ## Dug sa imenom (posle S5-5b)
 

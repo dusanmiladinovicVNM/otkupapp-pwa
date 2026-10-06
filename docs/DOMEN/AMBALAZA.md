@@ -57,13 +57,16 @@ pogled izgledaju nedosledno (dve noge kod otkupa, jedna kod otpremnice).
 | 7 | modDokumenta:6863 | `KolAmbVracena` | Izlaz · Kupac | da | `PrijemnicaID` | **`Prijemnica`** |
 | 8 | modDokumenta:7026 | `kolAmb` | Izlaz · Kupac | da | **`brojDok`** | `Kupci-Otpremnica` |
 
-> **REDOVI 1–7 SU PRESEČENI (`10b-2`, 6.12e–6.12g) — tabela ostaje kao MERENJE
+> **REDOVI 1–8 SU PRESEČENI (`10b-2`, 6.12e–6.12i) — tabela ostaje kao MERENJE
 > ZATEČENOG.** Danas otkup knjiži **dva reda** umesto četiri nogu: `UZ_ROBU`
 > (Kooperant → Stanica) i `IZDATA_PRAZNA` (Stanica → Kooperant), **oba pod
 > `Otkup`**. **Red 5** (otpremnica) je jedan red `Stanica → Vozac` sa
 > `AMBALAZA_UZ_ROBU` — vozač više nije **žig** nego **nalog** (6.12f).
 > **Redovi 6 i 7** (prijemnica) su `Vozac → Kupac` + `AMBALAZA_UZ_ROBU` i
 > `Kupac → Vozac` + `POVRAT_PRAZNE` — jedan **neuređen** par, dve vrste (6.12g).
+> **Red 8** (izlaz kupcima) nema više **nijedan** red: `SaveKupciIzlaz_TX` je
+> ostao samo kasa, a povrat praznih od kupca nosi **broj prijemnice** — to je
+> red 7 (6.12i). `DOK_TIP_IZLAZ_KUPCI` je time obrisan.
 > Tabela se ne prepisuje jer je ona zapis šta je bilo — iz nje se čita
 > zašto su odluke donete, a prepisana bi izgubila taj razlog.
 | 9 | modDokumenta:8619–8669 | revers, 4 smera | 2 noge (KOOP) / 1 noga (FIRMA) | samo FIRMA | **`brojDok`** | `OM-*` |
@@ -1790,6 +1793,57 @@ sabotaže `amb-rev-smer-obrnut`, `amb-rev-vrsta-nije-izdavanje`,
 > kreće od nule, pa `STIP_REVERSI` jednostavno prelazi na
 > `tblAmbalazaDokument` + `AmbDokID`, a stari put nestaje. Ide u `10c`, zajedno
 > sa ostalim čitaocima, i **pred merge** — grana se ne mergeuje bez njega.
+
+### 6.12i Uplata kupca — poslednje presečeno mesto, i jedno koje nije imalo ulaz
+
+**Red 8** matrice: `SaveKupciIzlaz_TX` je knjižio nogu `Izlaz · Kupac` sa vozačem
+kao **žigom** i `DokumentTIP = Kupci-Otpremnica`, pod **istim** `brojDok` kojim je
+pisao i red u kasi. To je drugi od **dva ogledalna prekršaja** `AMB-10-ODL-5`
+(prvi je `SaveOMUlaz_TX`, 6.12h) — i rešen je isto: pisac ostaje **samo kasa**.
+
+| | Pre | Posle |
+|---|---|---|
+| `tblAmbalaza` | jedna noga pod `brojDok` | **ništa** |
+| `tblNovac` | red pod **istim** `brojDok` | red pod `brojDok` |
+| snapshot | `TBL_AMBALAZA` + `TBL_NOVAC` + `TBL_FAKTURE` | `TBL_NOVAC` + `TBL_FAKTURE` |
+| kapija | `kolAmb <= 0 And novac <= 0` | `novac <= 0` |
+| `DOK_TIP_IZLAZ_KUPCI` | tip dokumenta | **obrisan** |
+
+**Razlika od ostalih osam mesta: ovde se knjiženje nije PRESELILO nego je
+PRESTALO.** Povrat praznih od kupca već ima svoje mesto — red 7, `Kupac → Vozac`
++ `POVRAT_PRAZNE`, **pod brojem prijemnice** (`AMB-10-ODL-9/-10` uz `ODL-22`,
+6.12g). Dva reda za isti događaj bila bi dva traga, a `brojDok` nad ambalažnom
+nogom je upravo onaj **plutajući identitet** koji je 6.11 odbio.
+
+**Izmereno pre koda, i to je ono što ovaj rez čini malim:**
+
+| Merenje | Nalaz |
+|---|---|
+| ko zove ambalažnu nogu | **nijedan produkcioni pozivalac**: F6 (`modNovacUnos.UplataUpisi`) šalje `kolAmb:=0`, `tipAmb:=""`, `vozacID:=""` **tvrdo upisane** |
+| ko čita `DOK_TIP_IZLAZ_KUPCI` | **nijedan** — jedan pisac, nula čitalaca |
+| ko još zove `TrackAmbalaza` | posle ovog reza **nijedan produkcioni pozivalac**; ostaju samo testovi koji **namerno** seju stari oblik za `Chk_B10` i stari ekran Storno |
+
+Treći red je i **kraj write-side dela `10b-2`**: svih devet mesta knjiženja piše
+nov oblik, a stari pisac je od ovog trenutka samo test-alat.
+
+Uz rez je ispravljena i poruka: `DOK_ERR_NEMA_AMBALAZE_NOVCA` („Nema ambalaže ni
+novca za čuvanje") zamenjena je novčanom u **oba** pisca — `SaveOMUlaz_TX` je istu
+rečenicu nosio od svog reza, a ni on ambalažu više ne prima.
+
+> **⚠ CAPABILITY — „kupac vraća prazne BEZ dostave robe".** Ta sposobnost nije
+> izgubljena **ovde**: F6 je nikad nije imao (`kolAmb:=0` tvrdo upisano), a legacy
+> ekran koji je polje imao ne postoji od §27.18. Ciljni oblik je spreman i
+> **zaključan kapijom** — `AMB_DOK_REVERS_PARTNERA`, kupčev broj, par
+> `Kupac → Vozac` (`AmbDokKretanjeProblem`) — ali **pisca nema**, pa nema ni ulaza.
+> Pitanje je **poslovno**: vraćaju li se prazne gajbe od kupca ikad bez prijemnice.
+> Dok odgovora nema, pisac se **ne izmišlja** — vrsta bez pisca je prazna ljuska, a
+> pisac bez ulaza je mrtav kod.
+
+*Provera:* `Test_KUP_UplataJeSamoNovac` — avans kupca legne u kasu **i** knjiga
+ambalaže ostane nedirnuta (obe tvrdnje **zajedno**: sama „knjiga nije porasla"
+bila bi zelena i kad pisac uopšte ne radi), a prazan upis ostaje odbijen ·
+sabotaže `amb-kup-uplata-knjizi-ambalazu`, `amb-kup-prazna-uplata-prolazi`.
+Katalog 693 → 695.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 

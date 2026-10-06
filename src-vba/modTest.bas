@@ -2225,8 +2225,8 @@ Private Sub T_UplataGuard_VecPlacenaFaktura()
 
     ' Plati je u CELOSTI, kroz pravi writer.
     ok = SaveKupciIzlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-FULL", _
-                           kupacNaziv:=FX_KUPAC, kupacID:=FX_KUPAC, vozacID:="", _
-                           tipAmb:="", kolAmb:=0, vrstaVoca:=FX_VRSTA, _
+                           kupacNaziv:=FX_KUPAC, kupacID:=FX_KUPAC, _
+                           vrstaVoca:=FX_VRSTA, _
                            novac:=FX_FAKTURA_IZNOS, fakturaID:=FX_FAKTURA, _
                            napomena:="test: puna uplata", tipNovca:=NOV_KUPCI_UPLATA)
     AssertEq ok, True, "puna uplata je proknjizena"
@@ -2239,8 +2239,8 @@ Private Sub T_UplataGuard_VecPlacenaFaktura()
     ' I writer mora da odbije, bez ijedne UI provere.
     pre = GetUplataForFaktura(FX_FAKTURA)
     ok = SaveKupciIzlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-VISAK", _
-                           kupacNaziv:=FX_KUPAC, kupacID:=FX_KUPAC, vozacID:="", _
-                           tipAmb:="", kolAmb:=0, vrstaVoca:=FX_VRSTA, _
+                           kupacNaziv:=FX_KUPAC, kupacID:=FX_KUPAC, _
+                           vrstaVoca:=FX_VRSTA, _
                            novac:=1, fakturaID:=FX_FAKTURA, _
                            napomena:="test: uplata preko pune", tipNovca:=NOV_KUPCI_UPLATA)
     posle = GetUplataForFaktura(FX_FAKTURA)

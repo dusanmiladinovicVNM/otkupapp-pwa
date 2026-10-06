@@ -394,9 +394,6 @@ Public Function UplataUpisi(ByVal p As Object, ByRef poruke As String) As String
         brojDok:=S(p, "brDok"), _
         kupacNaziv:=S(p, "partnerTekst"), _
         kupacID:=S(p, "partnerID"), _
-        vozacID:="", _
-        tipAmb:="", _
-        kolAmb:=0, _
         vrstaVoca:=S(p, "vrsta"), _
         novac:=D(p, "novac"), _
         fakturaID:=S(p, "fakturaID"), _
