@@ -728,6 +728,26 @@
     (`Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice`). Izmereno nad produkcijom:
     jedine procedure koje imaju tx i pišu prijemnicu su sama dva `_TX` omotača, i
     **oba** snimaju `tblAmbalaza` — produkcija ovu rupu nema.
+66. **Dokaz prijemničkog reza: DOKAZANO (grupno), 7/7** (06.10.2026).
+    `RunAllTests` 200/0 · `RunBusinessFlowProSuite` **2376/0** — tačno predviđen
+    broj (2359 + 17 tvrdnji koje su do tada preskakane posle palog upisa), pa
+    ništa nije prećutano. Potpis izvora `fdae701158aeb01b` identičan pre i posle;
+    `grupno izmereno 4/7`, pun pojedinačni dokaz ide pred release.
+    **Poslednji nalaz je bio dvoslojna kapija.** `amb-odl22-vlasnik-broja-se-ne-gleda`
+    nije obarala ništa: blok `povratOdKupca` ima **dva** uslova i oba nose isti ID
+    odluke (`AMB-10-ODL-10`) — prvi traži da je vlasnik broja **Kupac**, drugi da je
+    **baš taj** kupac. Nad dokumentom bez vlasnika oba su netačna, pa je gašenje
+    prvog ostajalo nevidljivo. Tvrdnja je merila ID odluke; sada meri tekst koji
+    proizvodi **samo prvi sloj**, provereno da u izvoru stoji tačno jednom.
+    **Šta je ovaj rez koštao, i zašto.** Četiri zastoja do zelene baze, i nijedan
+    nije bio u modelu reza: preduslov vozača u `RunAllTests`, dva moja testa koja
+    su merila premisu koju nisu postavila, i siroče u knjizi od pretesnog snimka.
+    Ali **dva prolaza su otišla samo na to što tvrdnja o upisu nije govorila
+    zašto** — pisac vraća `""` i štampa razlog u Immediate prozor koji runner ne
+    hvata. Čim je seam počeo da nosi `Err`, uzrok se video iz prvog pokušaja.
+    Pouka je instrumentalna, ne domenska: **tvrdnja o upisu bez razloga je slepa
+    kapija**, i košta više od samog kvara.
+
     **DOKAZ JE IZMEREN — za stavke 59 i 60 zajedno, nad jednim izvorom.**
     `run_vba.py` pun prolaz **ZELENO**: 12/12 suita, `RunBusinessFlowProSuite`
     **0/2318**, `RunAllTests` 0/200, banka 0/241, storno 0/163, palete 97,
