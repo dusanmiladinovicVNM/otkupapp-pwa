@@ -1999,6 +1999,70 @@ End Function
 ' puta idu kroz istu kapiju zaglavlja -- a ona od 03.10.2026 sudi i ZAUZETOST
 ' u nizu (BrojOwnerTip, BrojOwnerID, dan), ne samo oblik. Zato prosledjen broj
 ' nije povlasten: ako je zauzet, upis pada.
+' STORNO AMBALAZNOG DOKUMENTA -- revers, nabavka, otpis.
+'
+' Do ovog reza ga NIJE BILO: tblAmbalazaDokument je imao pisca i kolonu
+' Stornirano, ali nijedan put da je okrene. Dok je revers bio skup nogu u
+' tblAmbalaza, storno je isao po REDU (ekran Storno, AmbID noge). Cim revers
+' postane dokument, storno mora da bude PO DOKUMENTU -- inace bi zaglavlje i
+' knjiga mogli da se razidju.
+'
+' Redosled je isti kao kod otkupa, otpremnice i prijemnice: oznaci zaglavlje,
+' pa VEZI (AMB-10-ODL-15 trazi bind POSLE stvarne izmene), pa kontra-stav.
+' Kontra-stav sam proverava AMB-INV-07 i -09 nad POSLE-stanjem.
+Public Function StornirajAmbDokument_TX(ByVal ambDokID As String) As Boolean
+    Const SRC As String = "modAmbalaza.StornirajAmbDokument_TX"
+
+    Dim tx As clsTransaction
+    Dim red As Long, errNum As Long, errDesc As String
+
+    On Error GoTo EH
+
+    red = RedAmbDokumenta(ambDokID, SRC)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    MarkRowStornirano TBL_AMBALAZA_DOKUMENT, red, SRC
+    tx.BindSourceDocument DOK_TIP_AMBALAZA_DOKUMENT, ambDokID
+    StornirajAmbalazuDokumenta tx, DOK_TIP_AMBALAZA_DOKUMENT, ambDokID
+
+    tx.CommitTx
+    Set tx = Nothing
+    StornirajAmbDokument_TX = True
+    Exit Function
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogError SRC, errDesc, errNum
+    StornirajAmbDokument_TX = False
+End Function
+
+' Red zaglavlja, fail-closed. Nepostojeci ili vec storniran dokument se NE
+' stornira drugi put -- druga storno operacija bi upisala drugi kontra-stav nad
+' istim redovima, a AmbImaKontraStav bi ga tek posle prijavio.
+Private Function RedAmbDokumenta(ByVal ambDokID As String, _
+                                 ByVal SRC As String) As Long
+    Dim redovi As Collection
+    RequireTacnoJedan TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, Trim$(ambDokID), _
+                      "AmbDokID", SRC
+    Set redovi = FindRows(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, Trim$(ambDokID))
+    RedAmbDokumenta = CLng(redovi(1))
+
+    If UCase$(Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                         Trim$(ambDokID), COL_STORNIRANO)))) = "DA" Then
+        Err.Raise AMB_ERR_IDENTITET, SRC, _
+                  "Ambalazni dokument '" & Trim$(ambDokID) & "' je vec storniran."
+    End If
+End Function
+
 ' REVERS KAO AMBALAZNI DOKUMENT (10b-2, cetvrto mesto knjizenja).
 '
 ' Stari pisac (modDokumenta.SaveOMUlaz_TX) je knjizio SEST nogu u cetiri smera,
@@ -2052,6 +2116,17 @@ Public Function UpisiReversAmbalaze_TX(ByVal datum As Date, ByVal broj As String
         ' dolazi iz ambalaznog niza i nema REV oblik, pa bi ga ova kapija odbila.
         modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_REV, stanicaID, datum, _
                                          brojK, SRC
+        ' I ZAUZETOST NAD STARIM NIZOM -- ovo sam prvo ispustio.
+        '
+        ' Mislio sam da je AMB-10-ODL-20 (kapija u UpisiAmbDokument) zamena za
+        ' RequireBrojSlobodanUNizu. Nije: ODL-20 sudi nad tblAmbalazaDokument, a
+        ' stari niz zivi nad tblAmbalaza. To su DVA RAZLICITA NIZA, pa bi broj
+        ' zauzet starim reversom bio slobodan za nov -- i obrnuto.
+        '
+        ' Dok oba oblika postoje (do 10e), oba niza moraju da vaze. Kad stari
+        ' redovi nestanu, ova provera postaje mrtva i brise se sa njima.
+        modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_REV, stanicaID, datum, _
+                                            brojK, SRC
     Else
         brojK = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, stanicaID, datum)
         If Len(brojK) = 0 Then

@@ -1319,6 +1319,10 @@ AMB_BIND_DOZVOLJENI = {
     # AmbRobniVlasniciBroja -- ne ovaj pisac o sebi.
     ("modDokumenta", "SavePrijemnica"),
     ("modStorno", "StornoPrijemnica"),
+    # Ambalazni dokument (revers/nabavka/otpis) dobija svoj storno u 10b-2:
+    # oznaci zaglavlje, pa vezi, pa kontra-stav -- isti redosled kao tri robna
+    # storna iznad. Do ovog reza tblAmbalazaDokument uopste nije imao storno.
+    ("modAmbalaza", "StornirajAmbDokument_TX"),
 }
 _AMB_END = re.compile(r'^End\s+(?:Sub|Function|Property)\b', re.IGNORECASE)
 _BIND_POZIV = re.compile(r'\.\s*BindSourceDocument\b', re.IGNORECASE)

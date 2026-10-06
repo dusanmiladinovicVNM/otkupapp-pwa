@@ -16015,6 +16015,15 @@ Private Sub Test_BKTX_ReversPisacOdbijaZauzet()
     ok = UpisiReversKol(d2, broj, TEST_ST_ID, "", "IZDATO_OM", 9)
     AssertTrue ok, "REV broj: drugi dan iste stanice prima isti broj"
 
+    ' STARI OBLIK ZA STARI STORNO. Ekran Storno radi po NOGAMA (AmbID reda), a
+    ' pisac od 10b-2 pravi JEDAN red pod zaglavljem -- noge vise nema. Taj ekran
+    ' zivi do 10c i mora da ostane merljiv, pa se oblik seje ovde.
+    '
+    ' Novi redovi iznad ostaju netaknuti: oni mere KAPIJU BROJA, ne storno.
+    SejRevStariOblik d, broj, TEST_ST_ID, "", REV_SMER_IZDATO_OM
+    SejRevStariOblik d, broj, BKTX_ST2, "", REV_SMER_IZDATO_OM
+    SejRevStariOblik d2, broj, TEST_ST_ID, "", REV_SMER_IZDATO_OM
+
     Dim ambA As String, ambB As String, ambC As String
     ambA = AmbIDNogeStanice(broj, TEST_ST_ID, d)
     ambB = AmbIDNogeStanice(broj, BKTX_ST2, d)
@@ -16086,10 +16095,10 @@ Private Sub Test_BKTX_ReversKoopIstiBrojDveStanice()
     Dim broj As String: broj = TEST_PREFIX & "-REV-KS-" & scenario
     Dim pre As Long
 
-    AssertTrue UpisiReversTest(d, broj, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE"), _
+    AssertTrue Len(SejRevStariOblik(d, broj, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE")) > 0, _
                "REV KOOP 2b: izdavanje kooperantu na S1 upisano"
     pre = CountRows(TBL_AMBALAZA)
-    AssertTrue UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP_ID, "IZDAVANJE"), _
+    AssertTrue Len(SejRevStariOblik(d, broj, BKTX_ST2, TEST_KOOP_ID, "IZDAVANJE")) > 0, _
                "REV KOOP 2b: isti broj, smer i dan na drugoj stanici se upisuje (i za istog kooperanta)"
     AssertEquals CStr(pre + 2), CStr(CountRows(TBL_AMBALAZA)), _
                  "REV KOOP 2b: revers na S2 ima obe noge"
@@ -16120,9 +16129,9 @@ Private Sub Test_BKTX_ReversKoopIstiBrojDveStanice()
     ' stanice, drugi broj niza.
     Dim brojP As String: brojP = TEST_PREFIX & "-REV-KSP-" & scenario
     pre = CountRows(TBL_AMBALAZA)
-    AssertTrue UpisiReversTest(d, brojP, TEST_ST_ID, TEST_KOOP_ID, "PRIJEM"), _
+    AssertTrue Len(SejRevStariOblik(d, brojP, TEST_ST_ID, TEST_KOOP_ID, "PRIJEM")) > 0, _
                "REV KOOP 2b: povrat od kooperanta na S1 upisan"
-    AssertTrue UpisiReversTest(d, brojP, BKTX_ST2, TEST_KOOP_ID, "PRIJEM"), _
+    AssertTrue Len(SejRevStariOblik(d, brojP, BKTX_ST2, TEST_KOOP_ID, "PRIJEM")) > 0, _
                "REV KOOP 2b: povrat istog broja i dana na drugoj stanici se upisuje"
     AssertEquals CStr(pre + 4), CStr(CountRows(TBL_AMBALAZA)), _
                  "REV KOOP 2b: oba povrata imaju obe noge"
@@ -16145,7 +16154,7 @@ Private Sub Test_BKTX_ReversKoopIstiBrojDveStanice()
     pre = CountRows(TBL_AMBALAZA)
     AssertFalse UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP2_ID, "IZDAVANJE"), _
                 "REV KOOP 2b: storno ne oslobadja broj u nizu S2 (A9)"
-    AssertTrue UpisiReversTest(d, broj, TEST_HLAD_ST_ID, TEST_KOOP2_ID, "IZDAVANJE"), _
+    AssertTrue Len(SejRevStariOblik(d, broj, TEST_HLAD_ST_ID, TEST_KOOP2_ID, "IZDAVANJE")) > 0, _
                "REV KOOP 2b: treca stanica istog dana prima isti broj -- niz je (stanica, dan)"
     AssertEquals CStr(pre + 2), CStr(CountRows(TBL_AMBALAZA)), _
                  "REV KOOP 2b: noge je ostavio samo upis trece stanice"
@@ -16205,13 +16214,13 @@ Private Sub Test_BKTX_ReversIDNaSvimNogama()
     Dim brojF As String: brojF = TEST_PREFIX & "-REV-IDF-" & scenario
     Dim brojO As String: brojO = TEST_PREFIX & "-REV-IDO-" & scenario
 
-    AssertTrue UpisiReversTest(d, brojI, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE"), _
+    AssertTrue Len(SejRevStariOblik(d, brojI, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE")) > 0, _
                "REV-ID: izdavanje kooperantu upisano"
-    AssertTrue UpisiReversTest(d, brojP, TEST_ST_ID, TEST_KOOP_ID, "PRIJEM"), _
+    AssertTrue Len(SejRevStariOblik(d, brojP, TEST_ST_ID, TEST_KOOP_ID, "PRIJEM")) > 0, _
                "REV-ID: povrat od kooperanta upisan"
-    AssertTrue UpisiReversTest(d, brojF, TEST_ST_ID, "", "IZDATO_OM"), _
+    AssertTrue Len(SejRevStariOblik(d, brojF, TEST_ST_ID, "", "IZDATO_OM")) > 0, _
                "REV-ID: FIRMA izdato OM upisan"
-    AssertTrue UpisiReversTest(d, brojO, TEST_ST_ID, "", "PRIJEM_OD_OM"), _
+    AssertTrue Len(SejRevStariOblik(d, brojO, TEST_ST_ID, "", "PRIJEM_OD_OM")) > 0, _
                "REV-ID: FIRMA prijem od OM upisan"
 
     Dim kI As String, sI As String, kP As String, sP As String, sF As String, sO As String
@@ -16293,13 +16302,13 @@ Private Sub Test_BKTX_ReversIDJedanDokument()
     Dim brojF2 As String: brojF2 = TEST_PREFIX & "-REV-JDF2-" & scenario
     Dim tipB As String: tipB = TEST_TIP_AMB & "-B10"
 
-    AssertTrue UpisiReversTest(d, brojA, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE"), _
+    AssertTrue Len(SejRevStariOblik(d, brojA, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE")) > 0, _
                "REV-ID JD: KOOP revers A upisan"
-    AssertTrue UpisiReversTest(d, brojB, BKTX_ST2, TEST_KOOP2_ID, "IZDAVANJE"), _
+    AssertTrue Len(SejRevStariOblik(d, brojB, BKTX_ST2, TEST_KOOP2_ID, "IZDAVANJE")) > 0, _
                "REV-ID JD: KOOP revers B (druga stanica i kooperant) upisan"
-    AssertTrue UpisiReversTest(d, brojF1, TEST_ST_ID, "", "IZDATO_OM"), _
+    AssertTrue Len(SejRevStariOblik(d, brojF1, TEST_ST_ID, "", "IZDATO_OM")) > 0, _
                "REV-ID JD: FIRMA revers F1 upisan"
-    AssertTrue UpisiReversTest(d, brojF2, TEST_ST_ID, "", "IZDATO_OM"), _
+    AssertTrue Len(SejRevStariOblik(d, brojF2, TEST_ST_ID, "", "IZDATO_OM")) > 0, _
                "REV-ID JD: FIRMA revers F2 upisan"
 
     Dim kA As String, sA As String, kB As String, sB As String, sF1 As String, sF2 As String
@@ -16414,6 +16423,53 @@ End Function
 ' ODBIJANJA, pa helper gresku hvata i prevodi u False. Tvrdnje time ostaju
 ' nepromenjene, a put je nov: smisao selidbe je da se ISTO pravilo meri na
 ' novom piscu, ne da se uvedu nova pravila.
+' REVERS U STAROM OBLIKU -- dve noge vezane ReversID-om, direktno.
+'
+' Pisac od 10b-2 pravi JEDAN red pod zaglavljem ambalaznog dokumenta, pa stari
+' oblik vise ne postoji ni za jedan ziv put. Ali B10 (modIntegritet) i citaoci
+' ReversID-a ostaju do 10c/10e, i moraju da ostanu MERLJIVI -- inace bi cekar
+' koji jos radi u produkciji ostao bez ijednog testa.
+'
+' Zato testovi koji mere BAS B10 seju oblik sami, kroz TrackAmbalaza (isti pisac
+' koji ga i danas pravi za SaveKupciIzlaz_TX). Njihove tvrdnje ostaju netaknute:
+' mere tudji cekar, ne mog pisca.
+Private Function SejRevStariOblik(ByVal d As Date, ByVal broj As String, _
+                                  ByVal stanicaID As String, _
+                                  ByVal kooperantID As String, _
+                                  ByVal smer As String, _
+                                  Optional ByVal tipAmb As String = "", _
+                                  Optional ByVal rid As String = "") As String
+    Dim t As String, r As String
+    t = tipAmb
+    If Len(t) = 0 Then t = TEST_TIP_AMB
+    r = rid
+    If Len(r) = 0 Then r = modAmbalaza.NoviReversID()
+
+    Select Case smer
+    Case REV_SMER_IZDAVANJE
+        modAmbalaza.TrackAmbalaza d, t, 5, "Ulaz", kooperantID, "Kooperant", _
+                                  "", broj, DOK_TIP_OM_IZLAZ_KOOP, r
+        modAmbalaza.TrackAmbalaza d, t, 5, "Izlaz", stanicaID, "Stanica", _
+                                  "", broj, DOK_TIP_OM_IZLAZ_KOOP, r
+    Case REV_SMER_PRIJEM
+        modAmbalaza.TrackAmbalaza d, t, 5, "Izlaz", kooperantID, "Kooperant", _
+                                  "", broj, DOK_TIP_OM_ULAZ_KOOP, r
+        modAmbalaza.TrackAmbalaza d, t, 5, "Ulaz", stanicaID, "Stanica", _
+                                  "", broj, DOK_TIP_OM_ULAZ_KOOP, r
+    Case REV_SMER_IZDATO_OM
+        modAmbalaza.TrackAmbalaza d, t, 5, "Ulaz", stanicaID, "Stanica", _
+                                  TEST_VOZ_ID, broj, DOK_TIP_OM_ULAZ_FIRMA, r
+    Case REV_SMER_PRIJEM_OD_OM
+        modAmbalaza.TrackAmbalaza d, t, 5, "Izlaz", stanicaID, "Stanica", _
+                                  TEST_VOZ_ID, broj, DOK_TIP_OM_IZLAZ_FIRMA, r
+    Case Else
+        Err.Raise vbObjectError + 2971, "SejRevStariOblik", _
+                  "Nepoznat smer: " & smer
+    End Select
+
+    SejRevStariOblik = r
+End Function
+
 Private Function UpisiReversKol(ByVal d As Date, ByVal broj As String, _
                                 ByVal stanicaID As String, ByVal kooperantID As String, _
                                 ByVal koopSmer As String, ByVal kol As Long, _
