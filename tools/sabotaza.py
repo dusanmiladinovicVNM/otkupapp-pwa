@@ -6896,7 +6896,7 @@ SABOTAZE = {
     # pala i od bilo kog drugog pada u kaskadi, pa ne bi imenovala razlog.
     "amb-odl21-eksterna-prijemnica-ne-blokira": (
         "modStornoFlow.bas",
-        "        If eksternePrij.count > 0 Then\n",
+        "        If ostalePrij.count > 0 Then\n",
         "        If False Then   ' SABOTAZA: eksterni nizvodni dokument ne blokira\n",
         "Test_PRJ_EksternaPrijemnicaBlokiraPonistenje",
         "PRJ eksterna: ponistenje je ODBIJENO zbog aktivne eksterne prijemnice",

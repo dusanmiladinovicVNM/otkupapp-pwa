@@ -789,7 +789,7 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 ' generacijama, nikad ga ne nasao i TIHO vratio prazno. Identitet
                 ' bi se izgubio, a kaskada pala nazad na broj: tacno ona klasa
                 ' kvara zbog koje ceo ovaj refaktor postoji.
-                Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, zbrIdP)
+                Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, zbrIdP, broj)
                 Dim ownsP As Boolean: ownsP = CBool(cascP("owns"))
                 If Not CBool(cascP("ok")) Then
                     ' RAZLOG iz kaskade ide dalje -- isto kao u zbirna grani.
@@ -800,17 +800,18 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                     If Len(razlogP) > 0 Then r("message") = razlogP
                     Exit Function
                 End If
-                ' Eksterni kupac (zbirna ne poseduje prijemnicu u kaskadi) -> prijemnicu
-                ' + njene palete storniramo ovde (retko: prijemnica ~ hladnjaca = internal).
+                ' Eksterni kupac: SAMU prijemnicu je stornirala kaskada, i to PRVU
+                ' (AMB-10-ODL-21 -- subjekat je poslednji fizicki potez, pa se
+                ' odmotava prvi). Do ovog reza je to stajalo OVDE, posle kaskade; sa
+                ' knjigom kao stvarnim saldom takav red obara AMB-INV-07, jer bi
+                ' storno otpremnice isao dok su gajbe jos kod kupca.
+                ' Ovde zato ostaju samo PALETE.
                 Dim detX As Long, extRemainder As Boolean
                 If Not ownsP Then
-                    If Len(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_ID)) > 0 Then
-                        StornoPrijemnicaByBroj_TX broj
-                        Dim dInfoX As String
-                        If CBool(s("hasPalete")) Then detX = DetachOsirocenePaletaStavke_TX(broj, dInfoX)
-                        If CBool(s("hasPalete")) And CLng(s("paleteCount")) > 0 And detX <> CLng(s("paleteCount")) Then _
-                            extRemainder = True
-                    End If
+                    Dim dInfoX As String
+                    If CBool(s("hasPalete")) Then detX = DetachOsirocenePaletaStavke_TX(broj, dInfoX)
+                    If CBool(s("hasPalete")) And CLng(s("paleteCount")) > 0 And detX <> CLng(s("paleteCount")) Then _
+                        extRemainder = True
                 End If
                 If extRemainder Then
                     MarkCorrectionManual cidP, "Skini preostale paletne stavke (Osiroceni dokumenti -> Palete).", _
@@ -1974,6 +1975,31 @@ Private Function KolekcijaUNiz(ByVal c As Collection) As Variant
 End Function
 
 ' Aktivni PrijemnicaID-jevi za dati BrojZbirne (svi redovi, obe klase).
+' Podeli aktivne prijemnice lanca na SUBJEKAT operacije i ostale.
+'
+' Broj prijemnice legitimno pokriva DVA reda (Klasa I i II), pa subjekat nije
+' jedan ID nego SKUP -- isti razlog zbog kog postoji StornoPrijemnicaByBroj_TX.
+' Prazan subjektPrij znaci da ga operacija nema (ponistenje zbirne), pa sve ide
+' u blokirajuci skup.
+Private Sub PodeliPrijemnice(ByVal ids As Collection, ByVal subjektBroj As String, _
+                             ByRef outSubjekt As Collection, _
+                             ByRef outOstali As Collection, ByVal SRC As String)
+    Set outSubjekt = New Collection
+    Set outOstali = New Collection
+    If ids Is Nothing Then Exit Sub
+
+    Dim k As Long, br As String, subj As String
+    subj = Trim$(subjektBroj)
+    For k = 1 To ids.count
+        br = Trim$(NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, CStr(ids(k)), COL_PRJ_BROJ)))
+        If Len(subj) > 0 And StrComp(br, subj, vbTextCompare) = 0 Then
+            outSubjekt.Add CStr(ids(k))
+        Else
+            outOstali.Add CStr(ids(k))
+        End If
+    Next k
+End Sub
+
 Private Function ActivePrijIDsByZbirna(ByVal brojZbirne As String, ByVal gen As String, _
                                        ByVal SRC As String) As Collection
     Dim result As New Collection
@@ -2065,11 +2091,16 @@ End Function
 ' sa bilo kog. Isti obrazac i isti razlog kao DistinctActiveValues_Test.
 Public Function PonistiZbirnaChain_Test(ByVal brojZbirne As String, _
                                         ByVal zbrID As String) As Object
-    Set PonistiZbirnaChain_Test = PonistiZbirnaChain_TX(brojZbirne, zbrID)
+    Set PonistiZbirnaChain_Test = PonistiZbirnaChain_TX(brojZbirne, zbrID, "")
 End Function
 
+' subjektPrij: BROJ prijemnice koju sama operacija ponistava (grana ponistenja
+' prijemnice). Nije isto sto i "prijemnica ovog lanca": subjekat se NE racuna u
+' blokirajuci skup -- pozivalac ga upravo ukida -- a stornira se PRVI, jer je po
+' AMB-10-ODL-21 poslednji fizicki potez u lancu.
 Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
-                                       Optional ByVal zbirnaID As String = "") As Object
+                                       Optional ByVal zbirnaID As String = "", _
+                                       Optional ByVal subjektPrij As String = "") As Object
     Const SRC As String = MOD_NAME & ".PonistiZbirnaChain_TX"
     Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
     res("ok") = False: res("otp") = 0&: res("prij") = 0&: res("pals") = 0&: res("blok") = 0&
@@ -2186,13 +2217,18 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
     ' prazan (kaskada ih ne dira), pa bi kapija nad njim bila placebo. Prazan
     ' scopeID je ovde bezbedan -- SuziDecuNaZbirnu tada vraca kandidate
     ' NEPROMENJENO (pravilo 1), dakle skup je SIRI, a kapija fail-closed.
+    Dim subjektPrijIDs As Collection, ostalePrij As Collection
     If Not ownsChain Then
-        Dim eksternePrij As Collection
-        Set eksternePrij = ActivePrijIDsByZbirna(brojZbirne, scopeID, SRC)
-        If eksternePrij.count > 0 Then
+        ' SUBJEKAT OPERACIJE NIJE PREPREKA. Ponistenje prijemnice ukida bas nju, pa
+        ' bi kapija nad njom odbila operaciju zbog dokumenta koji pozivalac upravo
+        ' gasi. Druga aktivna prijemnica istog lanca i dalje blokira -- nju niko ne
+        ' ukida, i to je cela razlika.
+        PodeliPrijemnice ActivePrijIDsByZbirna(brojZbirne, scopeID, SRC), _
+                         subjektPrij, subjektPrijIDs, ostalePrij, SRC
+        If ostalePrij.count > 0 Then
             res("message") = "Zbirna '" & brojZbirne & "' ima " & _
-                CStr(eksternePrij.count) & " aktivnu prijemnicu EKSTERNOG kupca (" & _
-                CStr(eksternePrij(1)) & "). Ponistenje celog toka bi je ostavilo " & _
+                CStr(ostalePrij.count) & " aktivnu prijemnicu EKSTERNOG kupca (" & _
+                CStr(ostalePrij(1)) & "). Ponistenje celog toka bi je ostavilo " & _
                 "vezanu na stornirane dokumente, a njen storno nije nas potez. " & _
                 "Storniraj prijemnicu kod kupca pa ponovi."
             Exit Function
@@ -2250,6 +2286,20 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
     ' KUPCEV dokument i ne smemo da je stornirano. Do tog mesta se vise i ne
     ' stize: kapija iznad odbija ceo potez PRED mutacijom. Ovde je prvo stajalo
     ' da taj slucaj resava AMB-INV-07 sam -- v. zasto je to pobijeno, u kapiji.
+    ' SUBJEKAT SE ODMOTAVA PRVI I KAD LANAC NIJE NAS (AMB-10-ODL-21). Do ovog
+    ' reza ga je grana ponistenja prijemnice stornirala TEK POSLE kaskade -- dok
+    ' je knjiga bila zastavica to nije znacilo nista, a sada bi storno otpremnice
+    ' isao dok su gajbe jos kod kupca i pao na AMB-INV-07.
+    If Not ownsChain Then
+        If Not subjektPrijIDs Is Nothing Then
+            For k = 1 To subjektPrijIDs.count
+                If Not StornoPrijemnica(CStr(subjektPrijIDs(k)), tx) Then _
+                    Err.Raise ERR_STORNO_FW_BASE + 53, SRC, "StornoPrijemnica (subjekat) nije uspeo: " & CStr(subjektPrijIDs(k))
+            Next k
+            res("prij") = subjektPrijIDs.count
+        End If
+    End If
+
     If ownsChain Then
         For k = 1 To prijIDs.count
             If Not StornoPrijemnica(CStr(prijIDs(k)), tx) Then _

@@ -608,11 +608,24 @@ Private Sub T17_PonistenjeZbirnaHladnjacaKaskada()
 End Sub
 
 ' ============================================================
-' T18 - PONISTENJE zbirne (EKSTERNI kupac): interne otpremnice se storniraju, ali
-' prijemnica (eksterna) ostaje NETAKNUTA (zbirna je poslednji interni dok).
+' T18 - PONISTENJE zbirne (EKSTERNI kupac): ODBIJENO dok je prijemnica aktivna.
+'
+' Do 10b-2 je ovaj tok "uspevao": zbirna i otpremnica su se stornirale, a
+' eksterna prijemnica ostajala AKTIVNA i vezana na njih. Review (05.10.2026, P1)
+' je to nazvao LAZNO USPESNIM poslovnim ponistenjem -- funkcija je prijavljivala
+' uspeh nad polomljenim lifecycle-om, a zastita se oslanjala na SALDO, koji nad
+' punom zamenom gajbi ne zaustavi nista.
+'
+' AMB-10-ODL-21: aktivan nizvodni dokument koji NE smemo da storniramo znaci da
+' uzvodni tok ne sme da se proglasi nepostojecim. Odbijanje stoji PRED mutacijom,
+' pa ni zbirna ne bude dirnuta.
+'
+' Prijemnica i dalje ostaje netaknuta -- ali sada zato sto se NISTA nije desilo,
+' a ne kao ostatak polovicne kaskade. Zato je zadrzana i ta tvrdnja: ona sama ne
+' razlikuje stari i nov ugovor, pa stoji uz tvrdnje koje ga razlikuju.
 ' ============================================================
 Private Sub T18_PonistenjeZbirnaEksterniNeDiraPrijemnicu()
-    Const S As String = "T18 PONISTENJE zbirna (eksterni) ne dira prijemnicu: "
+    Const S As String = "T18 PONISTENJE zbirna (eksterni) je odbijeno: "
 
     SeedZbirna "SVT-Z18", "I", 100, 10, "SVT-EXT-KUPAC"
     SeedOtpremnica "SVT-O18", "SVT-Z18", "I", 100, 10
@@ -620,9 +633,11 @@ Private Sub T18_PonistenjeZbirnaEksterniNeDiraPrijemnicu()
 
     Dim res As Object
     Set res = modStornoFlow.RunZbirnaCorrection("SVT-Z18", SV_MODE_PONISTENJE, True)
-    Chk CBool(res("success")), S & "PONISTENJE uspeo"
-    Chk Not ZbirnaPostoji("SVT-Z18"), S & "zbirna stornirana"
-    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O18", COL_OTP_ID), "", S & "otpremnica STORNIRANA (interno)"
+    Chk Not CBool(res("success")), S & "PONISTENJE je ODBIJENO"
+    Chk InStr(1, CStr(res("message")), "EKSTERNOG kupca", vbTextCompare) > 0, _
+        S & "razlog imenuje eksternu prijemnicu, ne genericki neuspeh"
+    Chk ZbirnaPostoji("SVT-Z18"), S & "zbirna je ostala AKTIVNA (odbijeno PRED mutacijom)"
+    Chk LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O18", COL_OTP_ID) <> "", S & "otpremnica je ostala AKTIVNA"
     Chk LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P18", COL_PRJ_ID) <> "", S & "prijemnica NETAKNUTA (eksterni kupac)"
 End Sub
 
