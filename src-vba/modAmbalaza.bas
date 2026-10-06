@@ -2025,7 +2025,16 @@ Public Function StornirajAmbDokument_TX(ByVal ambDokID As String) As Boolean
     tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    MarkRowStornirano TBL_AMBALAZA_DOKUMENT, red, SRC
+    ' MarkRowStornirano je PRIVATE u modStorno, pa se iz ovog modula ne vidi --
+    ' a ono je ionako samo omotac oko RequireUpdateCell. Zove se primitiv
+    ' direktno, umesto da se tudja privatnost otvara zbog jednog poziva.
+    '
+    ' Kvar se nije video ni u jednoj jeftinoj kapiji: VBA kompajlira NA ZAHTEV,
+    ' pa je 'Sub or Function not defined' pukao tek kad je prvi test pozvao ovu
+    ' proceduru -- posle 600s i ubijenog Excela.
+    ' "Da" je literal jer je STORNO_DA takodje Private u modStorno. Vrednost je
+    ' ista koju citaju IsStorniranoValue i svi ostali pisci.
+    RequireUpdateCell TBL_AMBALAZA_DOKUMENT, red, COL_STORNIRANO, "Da", SRC
     tx.BindSourceDocument DOK_TIP_AMBALAZA_DOKUMENT, ambDokID
     StornirajAmbalazuDokumenta tx, DOK_TIP_AMBALAZA_DOKUMENT, ambDokID
 
