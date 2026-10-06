@@ -844,6 +844,33 @@
     kao kompatibilnost sa starim modelom nego kao prelazak čitaoca: `STIP_REVERSI`
     na `tblAmbalazaDokument` + `AmbDokID`, a stari put nestaje. Grana se **ne
     mergeuje** bez toga. Katalog 692 → 693.
+71. **Rez reversa zatvoren: DOKAZANO 4/4 + pun prolaz ZELENO** (06.10.2026,
+    izvor `6e2767e18f87`). `RunAllTests` 200 · `RunBusinessFlowProSuite` **2394** ·
+    `RunStornoTestSuite` 164 · banka 241 — **12/12, nula padova**. `dokaz.py`
+    `crvenih 4/4`, potpis `4c9d94988cbb1c63` identičan pre i posle.
+    **Put do zelenog je dao još dva nalaza, oba u mom kodu.**
+    **(1) `StornirajAmbDokument_TX` je zvao TUĐ `Private` simbol** —
+    `MarkRowStornirano` iz `modStorno`. VBA kompajlira **na zahtev**, pa je
+    `Sub or Function not defined` puklo tek kad je prvi test pozvao baš tu
+    proceduru: posle 585 s i ubijenog Excela, uz poruku **bez fajla i linije**.
+    Tuđa privatnost nije otvarana — primitiv (`RequireUpdateCell`) se zove direktno,
+    jer je `MarkRowStornirano` ionako samo njegov omotač. Napisan je merač za celu
+    klasu; **dvosmeran dokaz: 1 nalaz sa fajlom i linijom, 0 posle**.
+    **(2) Tri tvrdnje su posle prelaska na kanonski niz ostale da mere stari
+    izvor** — u testovima koji seju stari oblik za B10 i stari storno ekran.
+    Uklonjene su **odatle**, ne oslabljene: `A9` nad nizom mere dva testa kroz
+    pravog pisca. Dve tvrdnje o istom pravilu nad dva izvora bi se razišle — a to
+    je i bio ceo P1.
+    **Tri lažna nalaza merača su i sama merenje:** repni komentar, labela kao cilj
+    skoka, i **LF kopija iz git-a** — `git show` vraća blob sa LF, a merač je delio
+    po `
+` i dobio ceo fajl kao jedan red, pa je prvi prolaz dvosmernog dokaza
+    bio **lažno čist**. Nalaz u **merenju**, ne u meraču — i razlog zbog kog se
+    dvosmeran dokaz uopšte radi.
+    Ostaje ručna kapija (compile + `--mark-compile`) i **P2 iz review-a**: ekran
+    Storno još ne vidi nov revers — ide u `10c`, i grana se **ne mergeuje** bez
+    toga.
+
 
 
 
