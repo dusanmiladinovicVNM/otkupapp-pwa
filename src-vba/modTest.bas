@@ -16595,7 +16595,8 @@ End Sub
 Private Sub T_ReversValidiraj_BrojUNizu()
     Dim p As Object, fokus As String
     ' Zauzece broja ide kroz pisca -- niz je od 10b-2 kanonski.
-    ZasejReversZaNiz
+    Dim drzalac As String
+    drzalac = ZasejReversZaNiz()
     Dim rZauzet As String, fZauzet As String, rDrugaSt As String, rDrugiDan As String
 
     Set p = ReversUnosKojiProlazi()
@@ -16619,8 +16620,8 @@ Private Sub T_ReversValidiraj_BrojUNizu()
     AssertEq rDrugiDan, "", "isti broj iste stanice drugog dana prolazi ekran"
     AssertEq (InStr(1, rZauzet, Poruka("DOKUNOS_ERR_BROJ_ZAUZET"), vbBinaryCompare) = 1), True, _
              "zauzet broj u nizu se odbija na ekranu (bilo: " & rZauzet & ")"
-    AssertEq (InStr(1, rZauzet, "AMB-IZV-S3", vbBinaryCompare) > 0), True, _
-             "poruka imenuje nogu koja drzi broj"
+    AssertEq (InStr(1, rZauzet, drzalac, vbBinaryCompare) > 0), True, _
+             "poruka imenuje DOKUMENT koji drzi broj"
     AssertEq fZauzet, "brDok", "fokus ide na broj"
 End Sub
 
@@ -16640,7 +16641,8 @@ End Sub
 Private Sub T_ReversValidiraj_KoopBrojDrugeStanice()
     Dim p As Object, fokus As String
     ' Zauzece broja ide kroz pisca -- niz je od 10b-2 kanonski.
-    ZasejReversZaNiz
+    Dim drzalac As String
+    drzalac = ZasejReversZaNiz()
     Dim rKoop As String, rDrugiSmer As String, rFirma As String
     Dim rIstaSt As String, fIstaSt As String
 
@@ -16672,8 +16674,8 @@ Private Sub T_ReversValidiraj_KoopBrojDrugeStanice()
     AssertEq rFirma, "", "FIRMA isti broj i dan na drugoj stanici prolazi"
     AssertEq (InStr(1, rIstaSt, Poruka("DOKUNOS_ERR_BROJ_ZAUZET"), vbBinaryCompare) = 1), True, _
              "KOOP povrat istog broja, smera i dana na ISTOJ stanici se odbija (bilo: " & rIstaSt & ")"
-    AssertEq (InStr(1, rIstaSt, "AMB-IZV-S3", vbBinaryCompare) > 0), True, _
-             "poruka imenuje nogu Stanica koja drzi broj"
+    AssertEq (InStr(1, rIstaSt, drzalac, vbBinaryCompare) > 0), True, _
+             "poruka imenuje DOKUMENT koji drzi broj (ista stanica)"
     AssertEq fIstaSt, "brDok", "fokus ide na broj"
 End Sub
 
