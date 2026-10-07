@@ -1068,6 +1068,30 @@
     Ostaje za ulaz: F7 i F4 moraju da **pitaju** operatera i ponove poziv —
     produkcioni uzorak je `modOtkupUnos` (prepoznaje slučaj po **broju** greške,
     zadržava podatke na ekranu, ponavlja poziv).
+79. **P2 #2 dokazan, i evidence dug iz review-a zatvoren** (07.10.2026).
+    Četiri koraka u jednom lancu, svaki sa branom na prethodni:
+
+    | | Korak | Ishod |
+    |---|---|---|
+    | 1 | ciljana `RunBusinessFlowProSuite` | **2436**/0 |
+    | 2 | `dokaz.py --grupe 6 amb-rvp-potvrda` | crvenih **1/1**, `DOKAZANO` |
+    | 3 | `dokaz.py --grupe 6 amb-prj-povrat-samo` | crvenih **1/1**, `DOKAZANO` |
+    | 4 | pun prolaz `run_vba.py` | **ZELENO**, 12/12 suita, nula padova |
+
+    Dva `dokaz` poziva jer su prefiksi različiti, a alat prima **jedan** filter;
+    potpis izvora `aec7caf100818d2b` **identičan** pre i posle oba.
+    Pun prolaz: `RunAllTests` 200/0, BFP 2436/0, `RunStornoTestSuite` 164/0,
+    banka 241/0, i ostalih osam. GREEN marker nad izvorom `c410e67318a5`
+    (ugovor `a58367524387`). **Time je zatvoren evidence dug koji je reviewer
+    imenovao** — „punih 12/12 nije ponovljeno posle RVP commit-a" — i to nad
+    izvorom koji nosi **i** RVP pisca **i** protokol potvrde.
+    **2417 → 2436 je tačno devetnaest novih tvrdnji** (14 + 5), koliko ih dva
+    testa i nose. Četvrti put u ovom rezu da se broj poklopi po stavci; da nije,
+    značilo bi da je test prećutao deo sebe.
+    Compile je i dalje `NEJASNO` (nema dijaloga) — ručna kapija sada pokriva
+    **četiri reza**: revers, red 8, RVP pisac i protokol potvrde.
+    Od review-a `024995de` ostaje **jedna** stavka: `P2 #1`, ekran Storno ne vidi
+    `AmbDok` revers (`10c`, merge blocker). `P2 #2` i `P3` su zatvoreni.
 
 ## Dug sa imenom (posle S5-5b)
 
