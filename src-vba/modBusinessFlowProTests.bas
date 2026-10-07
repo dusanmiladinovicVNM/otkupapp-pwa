@@ -334,6 +334,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_KUP_UplataJeSamoNovac
     Test_RVP_KupcevDokumentJedanRed
     Test_RVP_BrojJeKupcevINePredlazeSe
+    Test_RVP_DeficitSePotvrdjuje
+    Test_PRJ_PovratIdeSaKlasomKojaPostoji
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -6125,16 +6127,19 @@ End Function
 ' produkcioni put, ne direktan upis u knjigu.
 Private Function RvpSejKupcu(ByVal testDate As Date, ByVal scenario As String, _
                              ByVal kupacID As String, ByVal kol As Long, _
-                             Optional ByRef outRazlog As String) As String
-    Dim brZbr As String, zbr As String
+                             Optional ByRef outRazlog As String, _
+                             Optional ByVal tipAmb As String = "") As String
+    Dim brZbr As String, zbr As String, t As String
+    t = tipAmb
+    If Len(t) = 0 Then t = TEST_TIP_AMB
     brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
             Format$(testDate, "ddmmyy")
     zbr = ZbrZateceniRed(testDate, TEST_VOZ_ID, brZbr, kupacID, _
                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
-                         100#, TEST_TIP_AMB, kol, KLASA_I)
+                         100#, t, kol, KLASA_I)
     RvpSejKupcu = PrjUpisiSaRazlogom(testDate, kupacID, TEST_VOZ_ID, _
                                      TEST_PREFIX & "-RVPSEED-" & scenario, brZbr, _
-                                     400#, TEST_TIP_AMB, kol, 0, outRazlog)
+                                     400#, t, kol, 0, outRazlog)
 End Function
 
 ' KUPCEV REVERS: jedan red, par Kupac -> Vozac, i broj koji je NJEGOV.
@@ -6246,6 +6251,179 @@ Private Sub Test_RVP_BrojJeKupcevINePredlazeSe()
 EH:
     LogFatal "Test_RVP_BrojJeKupcevINePredlazeSe", Err.Number, Err.description
 End Sub
+
+' PREKOMERAN POVRAT JE PITANJE, NE ZID (P2 #2 iz review-a 024995de).
+'
+' Kupac fizicki vraca vise gajbi nego sto po knjizi drzi. Jezgro je protokol
+' imalo sve vreme (PrenesiAmbalazu, potvrdaDeficita), ali ga pisac nije prenosio
+' -- pa nije postojao nacin da pozivalac ponovi upis sa potvrdjenim manjkom.
+'
+' SVEZ TIP AMBALAZE je uslov merenja, ne ukras: nad TEST_TIP_AMB kupcev saldo
+' nosi i sve ostale testove, pa deficit ne bi bio TACNO 15 i tvrdnja o broju u
+' poruci ne bi bila ponovljiva.
+Private Sub Test_RVP_DeficitSePotvrdjuje()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("RVPDEF")
+    testDate = NextTestDate()
+    tipT = "TIPD-" & scenario
+
+    ' Nase gajbe u opticaj ulaze samo kroz NABAVKU (ODL-8), pa stanica -> vozac
+    ' kroz pravi revers, pa vozac -> kupac kroz prijemnicu. Sve produkcioni put.
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABD-" & scenario, "test deficit"
+    Dim revD As String
+    revD = modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, tipT, _
+                                              50#, REV_SMER_PRIJEM_OD_OM, "", _
+                                              TEST_VOZ_ID, "test deficit")
+    AssertTrue Len(revD) > 0, "RVP deficit: preduslov -- vozac je preuzeo 50"
+
+    Dim razlogSeed As String
+    AssertTrue Len(RvpSejKupcu(testDate, scenario, TEST_KUP_ID, 5, razlogSeed, tipT)) > 0, _
+               "RVP deficit: preduslov -- kupac drzi TACNO 5 (" & razlogSeed & ")"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT) - 5#) < 0.001, _
+               "RVP deficit: preduslov -- saldo kupca je 5, ne vise"
+
+    Dim kupPre As Double, vozPre As Double
+    kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT)
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT)
+
+    ' BEZ POTVRDE: odbijeno, i poruka nosi TACAN manjak -- pozivalac iz nje zna
+    ' sta da potvrdi. Broj u poruci je ceo ugovor protokola.
+    Dim razlog As String
+    AssertTrue Len(RvpUpisi(testDate, "KUPD1-" & scenario, TEST_KUP_ID, TEST_VOZ_ID, _
+                            tipT, 20#, razlog)) = 0, _
+               "RVP deficit: povrat 20 bez potvrde je ODBIJEN"
+    AssertTrue InStr(1, razlog, "Manjak 15", vbTextCompare) > 0, _
+               "RVP deficit: poruka imenuje TACAN manjak (15)"
+
+    ' POGRESNA POTVRDA: takodje odbijena -- potvrda se meri prema SVEZEM manjku.
+    AssertTrue Len(RvpUpisiSaPotvrdom(testDate, "KUPD2-" & scenario, TEST_KUP_ID, _
+                                      TEST_VOZ_ID, tipT, 20#, 14#, razlog)) = 0, _
+               "RVP deficit: potvrda 14 na manjak 15 je ODBIJENA"
+    AssertTrue InStr(1, razlog, "ne slaze", vbTextCompare) > 0, _
+               "RVP deficit: razlog imenuje da se potvrda NE SLAZE sa manjkom"
+
+    ' TACNA POTVRDA: upis prolazi, i visak ulazi kao TUDJA ambalaza.
+    Dim dok As String
+    dok = RvpUpisiSaPotvrdom(testDate, "KUPD3-" & scenario, TEST_KUP_ID, _
+                             TEST_VOZ_ID, tipT, 20#, 15#, razlog)
+    ' RAZLOG IDE U SVOJU TVRDNJU, ne u tekst one iznad: sabotaza se u dokaz.py
+    ' poklapa po DOSLOVNOM literalu, pa tvrdnja sa `& razlog &` nikad ne moze da
+    ' se poklopi. AssertEquals svejedno ispisuje stvaran razlog kad padne.
+    AssertEquals "", razlog, "RVP deficit: potvrdjen manjak ne ostavlja razlog"
+    AssertTrue Len(dok) > 0, "RVP deficit: potvrdjen manjak 15 PROLAZI"
+    If Len(dok) = 0 Then GoTo Kraj
+
+    ' KOLICINE I SALDA -- P3 iz review-a: do sada je RVP acceptance merio samo
+    ' oblik reda, a ne brojeve.
+    AssertTrue Abs(AmbNoviKolicina(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                   AMB_VK_POVRAT_PRAZNE) - 20#) < 0.001, _
+               "RVP deficit: noga povrata nosi TRAZENIH 20, ne pokrivenih 15"
+    AssertEquals "1", CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                           AMB_VK_ULAZ_TUDJE)), _
+                 "RVP deficit: pokrice je JEDAN red tudje ambalaze"
+    AssertTrue Abs(AmbNoviKolicina(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                   AMB_VK_ULAZ_TUDJE) - 15#) < 0.001, _
+               "RVP deficit: pokrice je TACNO manjak (15), ne cela kolicina"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT) - _
+                   (kupPre + 15# - 20#)) < 0.001, _
+               "RVP deficit: kupcev saldo je 0 -- pokrice pa povrat, nijedan minus"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT) - _
+                   (vozPre + 20#)) < 0.001, _
+               "RVP deficit: vozac je dobio svih 20"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_RVP_DeficitSePotvrdjuje", Err.Number, Err.description
+End Sub
+
+' NOGA POVRATA NE SME DA ZAVISI OD POSTOJANJA KLASE I.
+'
+' Nalaz 07.10.2026 (nadjen pri citanju za P2 #2, nije iz review-a): u
+' SavePrijemnicaMulti_TX je kolAmbVracena isla SAMO pozivu za Klasu I, a Klasa II
+' je dobijala tvrdo upisanu 0. Klasa I je OPCIONA, pa je prijemnica sa samo
+' Klasom II i vracenim gajbama TIHO gubila nogu povrata.
+'
+' Test ide kroz Multi, jer se bas tamo bira kome noga ide -- SavePrijemnica je
+' sve vreme radio ispravno sa onim sto dobije.
+Private Sub Test_PRJ_PovratIdeSaKlasomKojaPostoji()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("PRJKL2")
+    testDate = NextTestDate()
+    tipT = "TIPK-" & scenario
+
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABK-" & scenario, "test klasa II"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "PRJ klasa II: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrZateceniRed(testDate, TEST_VOZ_ID, brZbr, TEST_KUP_ID, _
+                   "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                   100#, tipT, 10, KLASA_II)) > 0, _
+               "PRJ klasa II: preduslov -- zbirna je snimljena"
+
+    ' SAMO KLASA II: kolicinaI = 0. Vracene prazne idu uz nju, jer druge nema.
+    Dim prj As String, errNum As Long
+    On Error Resume Next
+    prj = SavePrijemnicaMulti_TX( _
+              datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+              brojPrij:=TEST_PREFIX & "-PRJKL2-" & scenario, brojZbirne:=brZbr, _
+              vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+              kolicinaI:=0#, cenaI:=0#, tipAmb:=tipT, _
+              kolAmb:=0, kolAmbVracena:=4, _
+              hasKlasaII:=True, kolicinaII:=300#, cenaII:=90#, kolAmbII:=10, _
+              outErrNum:=errNum)
+    If Err.Number <> 0 Then
+        prj = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+
+    AssertTrue Len(prj) > 0, "PRJ klasa II: prijemnica bez Klase I je snimljena"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    AssertEquals "1", CStr(AmbNoviBrojRedova(prj, DOK_TIP_PRIJEMNICA, _
+                           AMB_VK_POVRAT_PRAZNE)), _
+                 "PRJ klasa II: povrat praznih JE knjizen i bez Klase I"
+    AssertTrue Abs(AmbNoviKolicina(prj, DOK_TIP_PRIJEMNICA, _
+                   AMB_VK_POVRAT_PRAZNE) - 4#) < 0.001, _
+               "PRJ klasa II: knjizene su TACNO vracene 4 gajbe"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_PRJ_PovratIdeSaKlasomKojaPostoji", Err.Number, Err.description
+End Sub
+
+' Pisac kupcevog reversa SA potvrdom manjka -- odvojen helper, da pozivi bez
+' potvrde ostanu citljivi.
+Private Function RvpUpisiSaPotvrdom(ByVal d As Date, ByVal broj As String, _
+                                    ByVal kupacID As String, ByVal vozacID As String, _
+                                    ByVal tipAmb As String, ByVal kol As Double, _
+                                    ByVal potvrda As Double, _
+                                    Optional ByRef outRazlog As String) As String
+    Dim res As String
+    outRazlog = ""
+    On Error Resume Next
+    res = modAmbalaza.UpisiReversPartnera_TX(d, broj, kupacID, vozacID, _
+                                             tipAmb, kol, "test RVP", potvrda)
+    If Err.Number <> 0 Then
+        outRazlog = Err.description
+        res = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+    RvpUpisiSaPotvrdom = res
+End Function
 
 Private Sub Test_OTP_StornoVracaGajbeVozacu()
     On Error GoTo EH

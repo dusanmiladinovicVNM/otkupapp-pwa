@@ -6959,6 +6959,33 @@ SABOTAZE = {
         "Test_REV_UgovorSmeraJeFailClosed",
         "REV ugovor: razlog imenuje nalog koji nedostaje, ne opstu gresku",
     ),
+    # PROTOKOL POTVRDE DEFICITA (P2 #2 iz review-a 024995de) -- dve sabotaze.
+    #
+    # Pisac prestane da PRENOSI potvrdu. Jezgro je tada ponovo pita, pa upis sa
+    # tacnom potvrdom pada -- a to je bas stanje koje je review prijavio: nema
+    # nacina da pozivalac ponovi upis sa potvrdjenih 15.
+    "amb-rvp-potvrda-se-ne-prosledjuje": (
+        "modAmbalaza.bas",
+        "                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID, _\n"
+        "                    potvrdaDeficita\n",
+        "                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID\n",
+        "Test_RVP_DeficitSePotvrdjuje",
+        "RVP deficit: potvrdjen manjak 15 PROLAZI",
+    ),
+    # Noga povrata se vraca na "samo sa Klasom I". Prijemnica se SNIMI (roba legne),
+    # pa tvrdnja o ishodu ostaje zelena -- crveni se tvrdnja da je povrat knjizen.
+    # Tacno taj oblik je kvar i bio: tiho, bez ijedne poruke.
+    "amb-prj-povrat-samo-sa-klasom-i": (
+        "modDokumenta.bas",
+        "    Else\n"
+        "        vracenaII = kolAmbVracena\n"
+        "    End If\n",
+        "    Else\n"
+        "        vracenaII = 0   ' SABOTAZA: povrat zavisi od Klase I\n"
+        "    End If\n",
+        "Test_PRJ_PovratIdeSaKlasomKojaPostoji",
+        "PRJ klasa II: povrat praznih JE knjizen i bez Klase I",
+    ),
     # KUPCEV REVERS (AMB-10-ODL-23) -- dve sabotaze nad onim sto pisac SAM nosi.
     #
     # Broj pocinje da se PREDLAZE, kao kod naseg reversa. Upis tada USPEVA (broj

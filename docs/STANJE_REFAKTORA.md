@@ -1031,6 +1031,43 @@
     Dostupno iz F4: `kolicinaI` i `kolAmbVracena` dolaze **nezavisno**
     (`modDokUnos.PrijemnicaUpisi`). Utvrđeno **čitanjem**, ne pretpostavkom:
     argument je doslovna nula. Ide u isti rez kao P2 #2, jer se dira ista noga.
+78. **P2 #2 zatvoren: zajednički protokol potvrde deficita** (07.10.2026, 6.12j).
+    Reviewer je pobio moju odbranu iz stavke 75 — i bio je u pravu. Napisao sam
+    da parametar `potvrdaDeficita` „ne uvodi ovaj pisac sam", jer bi bio bez
+    pozivaoca. Ali `ODL-23` je sposobnost definisao kao **redovnu**, a pisac koji
+    potvrdu ne može ni da **primi** nema samo strožu kapiju — on ima **nedostižnu
+    poslovnu putanju**: pozivalac nema čime da ponovi upis.
+    Protokol je proširen na **oba** pisca, i to **isti** protokol, po obrascu koji
+    `CreateOtkup_TX` nosi od 6.5: `UpisiReversPartnera_TX`, `SavePrijemnica`,
+    `SavePrijemnica_TX` i `SavePrijemnicaMulti_TX` dobijaju `potvrdaDeficita`, a
+    `Multi_TX` i **`outErrNum`** — bez njega F4 dobija tekst greške ali ne i broj,
+    a broj je ugovor (tekst je prevodiv). Potvrda **ne ide u log**: kupac koji
+    vrati više nego što knjiga kaže je redovan slučaj, a log koji ga beleži kao
+    kvar prestaje da bude signal.
+    Potvrda ide **samo na nogu povrata**: puna noga polazi od vozača, a on je
+    `SOPSTVENI` — njegov manjak je po `ODL-8` **tvrdo** odbijen i potvrda tamo ne
+    postoji.
+    **NALAZ U SUSEDNOM KODU (nije iz review-a):** u `SavePrijemnicaMulti_TX` je
+    `kolAmbVracena` išla **samo** pozivu za Klasu I, a Klasa II je dobijala tvrdo
+    upisanu `0`. Klasa I je **opciona**, pa je prijemnica sa samo Klasom II i
+    vraćenim gajbama **tiho gubila nogu povrata** — bez ijedne poruke, a iz F4
+    dostupno (`kolicinaI` i `kolAmbVracena` dolaze nezavisno). Povrat je **jedan
+    događaj**, pa sada ide uz **dokument koji postoji**.
+    **Usput naučeno o samim tvrdnjama:** prva verzija je ciljala tvrdnju
+    `"... PROLAZI (" & razlog & ")"` — a `dokaz.py` se poklapa po **doslovnom**
+    literalu, pa bi sabotaža javila `NE OBARA SVOJ TEST`. Razlog je zato dobio
+    **svoju** tvrdnju (`AssertEquals "", razlog`), koja ga ispisuje kad padne.
+    `P3` iz review-a je zatvoren istim testom: acceptance sada meri **količine i
+    salda** (povrat 20, pokriće 15, kupac 0, vozač +20), nad **svežim** tipom
+    ambalaže — nad zajedničkim bi saldo nosili i drugi testovi, pa manjak ne bi
+    bio ponovljivo 15.
+    Testovi `Test_RVP_DeficitSePotvrdjuje`, `Test_PRJ_PovratIdeSaKlasomKojaPostoji`;
+    sabotaže `amb-rvp-potvrda-se-ne-prosledjuje`, `amb-prj-povrat-samo-sa-klasom-i`.
+    Katalog 697 → 699. Jeftine kapije `rc=0` (`vba_check` 191/699/0+10, schema,
+    `who_writes` ×3, čitaoci, četiri merača).
+    Ostaje za ulaz: F7 i F4 moraju da **pitaju** operatera i ponove poziv —
+    produkcioni uzorak je `modOtkupUnos` (prepoznaje slučaj po **broju** greške,
+    zadržava podatke na ekranu, ponavlja poziv).
 
 ## Dug sa imenom (posle S5-5b)
 

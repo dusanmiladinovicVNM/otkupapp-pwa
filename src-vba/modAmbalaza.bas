@@ -2201,7 +2201,8 @@ Public Function UpisiReversPartnera_TX(ByVal datum As Date, ByVal broj As String
                                        ByVal vozacID As String, _
                                        ByVal tipAmb As String, _
                                        ByVal kolicina As Double, _
-                                       Optional ByVal napomena As String = "") As String
+                                       Optional ByVal napomena As String = "", _
+                                       Optional ByVal potvrdaDeficita As Double = -1) As String
     Const SRC As String = "modAmbalaza.UpisiReversPartnera_TX"
 
     Dim tx As clsTransaction
@@ -2249,7 +2250,8 @@ Public Function UpisiReversPartnera_TX(ByVal datum As Date, ByVal broj As String
     PrenesiAmbalazu tx, datum, tipAmb, kolicina, _
                     AMB_NALOG_KUPAC, Trim$(kupacID), _
                     AMB_NALOG_VOZAC, Trim$(vozacID), _
-                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID, _
+                    potvrdaDeficita
 
     tx.CommitTx
     Set tx = Nothing
@@ -2264,7 +2266,13 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
     On Error GoTo 0
-    LogError SRC, errDesc, errNum
+
+    ' POTVRDA DEFICITA NIJE KVAR NEGO PITANJE POZIVAOCU (6.5), pa izlazi PRE
+    ' loga -- isti obrazac kao CreateOtkup_TX. Da ide kroz LogError, log bi
+    ' prestao da bude signal: kupac koji vrati vise nego sto knjiga kaze je
+    ' REDOVAN slucaj, ne kvar. Greska se i dalje DIZE, sa istim brojem, pa
+    ' pozivalac prepoznaje slucaj po BROJU a ne po tekstu.
+    If errNum <> AMB_ERR_POTVRDA_DEFICITA Then LogError SRC, errDesc, errNum
     Err.Raise errNum, SRC, errDesc
 End Function
 

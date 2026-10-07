@@ -1894,12 +1894,47 @@ po **vlasniku niza**, ne po stilu.
 > ga vidi kao `SAMO_TEST` — i to je **tačan opis stanja**, ne propust zapisa.
 > Ulaz je sledeći korak ovog reza.
 
-> **PREKOMERAN POVRAT OSTAJE ODBIJEN, i to je zatečeno pravilo, ne odluka ovog
-> reza.** Kad kupac vrati **više** nego što knjiga kaže da drži, `PrenesiAmbalazu`
-> traži **potvrdu tačnog manjka** (`AMB_ERR_POTVRDA_DEFICITA`), a tu potvrdu danas
-> prosleđuje **samo otkup** (`modOtkup`, `potvrdaDeficita`). Prijemnica je u istom
-> stanju od 6.12g. Ulaz za protokol potvrde je zato **jedan dug za oba pisca**, ne
-> poseban za ovaj — i zato ovaj pisac taj parametar **ne uvodi sam**.
+> **PREKOMERAN POVRAT: ZATVORENO 07.10.2026 (P2 #2 iz review-a `024995de`).**
+>
+> Ovde je prvo stajalo da prekomeran povrat „ostaje odbijen, i to je zatečeno
+> pravilo" — uz obrazloženje da parametar ne uvodi pisac sam. **Reviewer je to
+> pobio argumentom koji stoji:** `ODL-23` je sposobnost definisao kao **redovnu**,
+> a pisac bez `potvrdaDeficita` ne može ni da **primi** potvrđen manjak — pa
+> pozivalac nema čime da ponovi upis. To nije „strog pisac" nego **nedostižna
+> poslovna putanja**.
+>
+> Protokol je zato proširen na **oba** pisca, i to **isti** protokol (bez drugog
+> mehanizma), po obrascu koji `CreateOtkup_TX` nosi od 6.5:
+>
+> ```
+> poziv bez potvrde  ->  AMB_ERR_POTVRDA_DEFICITA + TACAN manjak u poruci
+> operater potvrdi   ->  isti poziv, potvrdaDeficita = taj broj
+> jezgro meri SVEZ manjak -> pogresna potvrda se odbija
+> ```
+>
+> | Pisac | Šta je dobio |
+> |---|---|
+> | `UpisiReversPartnera_TX` | `Optional potvrdaDeficita` → `PrenesiAmbalazu` |
+> | `SavePrijemnica` / `_TX` / `Multi_TX` | isto, na **nogu povrata** (puna noga polazi od vozača — `SOPSTVENI`, pa je njen manjak po `ODL-8` **tvrdo** odbijen i potvrda tamo ne postoji) |
+> | `SavePrijemnicaMulti_TX` | i `Optional ByRef outErrNum` — bez njega F4 dobija **tekst** greške ali ne i **broj**, a broj je ugovor: tekst je prevodiv |
+>
+> **Potvrda ne ide u log** (`LogError` se preskoči za taj broj) — kupac koji vrati
+> više nego što knjiga kaže je redovan slučaj, a log koji ga beleži kao kvar
+> prestaje da bude signal. Isti razlog i isti obrazac kao u `CreateOtkup_TX`.
+>
+> Ostaje **samo UI**: F7/F4 moraju da pitaju operatera i ponove poziv. Produkcioni
+> pozivalac koji to radi danas postoji jedino za otkup (`modOtkupUnos`), i on je
+> uzorak za oba.
+
+> **NALAZ U SUSEDNOM KODU: noga povrata je zavisila od postojanja Klase I.**
+> Nađeno pri čitanju za P2 #2, nije iz review-a. U `SavePrijemnicaMulti_TX` je
+> `kolAmbVracena` išla **samo** pozivu za Klasu I, a Klasa II je dobijala **tvrdo
+> upisanu `0`**. Klasa I je **opciona** (`kolicinaI = 0` → snima se samo Klasa II),
+> pa je prijemnica sa samo Klasom II i vraćenim praznim gajbama **tiše nego tiho**
+> gubila nogu povrata — bez ijedne poruke, a iz F4 dostupno, jer `kolicinaI` i
+> `kolAmbVracena` dolaze **nezavisno** (`modDokUnos.PrijemnicaUpisi`). Utvrđeno
+> **čitanjem**, ne pretpostavkom: argument je doslovna nula. Povrat je **jedan
+> događaj**, pa sada ide uz **dokument koji postoji**.
 
 *Provera:* `Test_RVP_KupcevDokumentJedanRed` (vlasnik broja, vrsta i par — tvrdnje
 stoje **iznad** rane izlazne tačke, pa pucaju po imenu i kad sabotaža obori ceo
@@ -1907,6 +1942,16 @@ upis; plus storno kao **kontra-stav**) · `Test_RVP_BrojJeKupcevINePredlazeSe`
 (prazan broj odbijen **uz razlog po imenu**; isti broj istog kupca istog dana
 odbijen uz zauzetost) · sabotaže `amb-rvp-broj-se-predlaze`,
 `amb-rvp-vlasnik-broja-nije-kupac`. Katalog 695 → 697.
+
+*Provera protokola (07.10.2026):* `Test_RVP_DeficitSePotvrdjuje` — povrat 20 nad
+saldom 5: bez potvrde odbijen **uz tačan manjak u poruci**, potvrda 14 odbijena,
+potvrda 15 prošla; noga povrata nosi **traženih 20**, pokriće **tačno 15**, kupčev
+saldo **0**, vozač **+20** — čime je i `P3` zatvoren (acceptance meri količine i
+salda, ne samo oblik reda). Tip ambalaže je **svež**, jer bi nad zajedničkim
+tipom saldo nosili i drugi testovi, pa manjak ne bi bio ponovljivo 15 ·
+`Test_PRJ_PovratIdeSaKlasomKojaPostoji` (prijemnica **bez Klase I** knjiži
+povrat) · sabotaže `amb-rvp-potvrda-se-ne-prosledjuje`,
+`amb-prj-povrat-samo-sa-klasom-i`. Katalog 697 → 699.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 

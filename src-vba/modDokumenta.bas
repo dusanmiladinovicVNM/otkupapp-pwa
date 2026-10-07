@@ -6596,7 +6596,9 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                                        Optional ByVal cenaII As Double = 0, _
                                        Optional ByVal kolAmbII As Long = 0, _
                                        Optional ByVal brutoKgI As Double = 0, _
-                                       Optional ByVal brutoKgII As Double = 0) As String
+                                       Optional ByVal brutoKgII As Double = 0, _
+                                       Optional ByVal potvrdaDeficita As Double = -1, _
+                                       Optional ByRef outErrNum As Long) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -6627,6 +6629,22 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                   "Mora postojati bar jedna klasa (I ili II)."
     End If
 
+    ' NOGA POVRATA IDE SA KLASOM KOJA POSTOJI, a ne tvrdo sa Klasom I.
+    '
+    ' Do 07.10.2026 je kolAmbVracena isla SAMO pozivu za Klasu I, a Klasa II je
+    ' dobijala tvrdo upisanu 0. Klasa I je OPCIONA (kolicinaI = 0 -> snima se
+    ' samo Klasa II), pa je prijemnica sa samo Klasom II i vracenim praznim
+    ' gajbama TIHO GUBILA nogu povrata -- bez ijedne poruke. Iz F4 je to
+    ' dostupno: kolicinaI i kolAmbVracena dolaze nezavisno.
+    '
+    ' Povrat je JEDAN dogadjaj, pa ide uz JEDAN dokument -- onaj koji postoji.
+    Dim vracenaI As Long, vracenaII As Long
+    If hasKlasaI Then
+        vracenaI = kolAmbVracena
+    Else
+        vracenaII = kolAmbVracena
+    End If
+
     Dim resultI As String
     If hasKlasaI Then
         resultI = SavePrijemnica( _
@@ -6642,9 +6660,10 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
             cenaI, _
             tipAmb, _
             kolAmb, _
-            kolAmbVracena, _
+            vracenaI, _
             KLASA_I, _
-            brutoKgI)
+            brutoKgI, _
+            potvrdaDeficita)
 
         If resultI = "" Then
             Err.Raise vbObjectError + 1301, "SavePrijemnicaMulti_TX", _
@@ -6667,9 +6686,10 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
             cenaII, _
             tipAmb, _
             kolAmbII, _
-            0, _
+            vracenaII, _
             KLASA_II, _
-            brutoKgII)
+            brutoKgII, _
+            potvrdaDeficita)
 
         If resultII = "" Then
             Err.Raise vbObjectError + 1302, "SavePrijemnicaMulti_TX", _
@@ -6721,6 +6741,21 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
+    outErrNum = errNum
+
+    ' POTVRDA DEFICITA NIJE KVAR NEGO PITANJE POZIVAOCU (6.5), pa izlazi PRE
+    ' loga i monitora -- isti obrazac kao CreateOtkup_TX. Bez ovoga bi F4 imao
+    ' tekst greske ali ne i BROJ, a broj je ugovor: tekst je prevodiv i menja
+    ' se. Rollback i prazan povratak OSTAJU -- dokument stvarno nije nastao, pa
+    ' pozivalac ponavlja poziv sa potvrdjenim manjkom.
+    If errNum = AMB_ERR_POTVRDA_DEFICITA Then
+        If Not tx Is Nothing Then tx.RollbackTx
+        Set tx = Nothing
+        On Error GoTo 0
+        SavePrijemnicaMulti_TX = ""
+        Exit Function
+    End If
+
     LogError "SavePrijemnicaMulti_TX", errDesc, errNum
     Monitor_Error _
         moduleName:="modDokumenta", _
@@ -6763,7 +6798,8 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
                                    ByVal cena As Double, ByVal tipAmb As String, _
                                    ByVal kolAmb As Long, ByVal kolAmbVracena As Long, _
                                    Optional ByVal klasa As String = "I", _
-                                   Optional ByVal brutoKg As Double = 0) As String
+                                   Optional ByVal brutoKg As Double = 0, _
+                                   Optional ByVal potvrdaDeficita As Double = -1) As String
     Dim tx As New clsTransaction
 
     On Error GoTo EH
@@ -6783,7 +6819,8 @@ tx.BeginTx
     SavePrijemnica_TX = SavePrijemnica(tx, datum, kupacID, vozacID, brojPrij, _
                                         brojZbirne, vrstaVoca, sortaVoca, _
                                         kolicina, cena, tipAmb, kolAmb, _
-                                        kolAmbVracena, klasa, brutoKg)
+                                        kolAmbVracena, klasa, brutoKg, _
+                                        potvrdaDeficita)
 
     If SavePrijemnica_TX = "" Then
         Err.Raise vbObjectError + 1011, "SavePrijemnica_TX", _
@@ -6869,7 +6906,8 @@ Public Function SavePrijemnica(ByVal tx As clsTransaction, _
                                ByVal cena As Double, ByVal tipAmb As String, _
                                ByVal kolAmb As Long, ByVal kolAmbVracena As Long, _
                                Optional ByVal klasa As String = "I", _
-                               Optional ByVal brutoKg As Double = 0) As String
+                               Optional ByVal brutoKg As Double = 0, _
+                               Optional ByVal potvrdaDeficita As Double = -1) As String
     On Error GoTo EH
 
     Call ValidatePrijemnicaInput(kupacID, vozacID, brojPrij, brojZbirne, _
@@ -6944,8 +6982,12 @@ Public Function SavePrijemnica(ByVal tx As clsTransaction, _
     ' poznat tip osim SpoljniSvet). ZATO JE REDOSLED NOGU NOSEC, ne kozmetika:
     ' prva noga kupcu DAJE gajbe, pa druga ima sta da vrati. Obrnut red bi na
     ' punoj zameni (vracena = kolAmb) gurnuo kupca u minus i ceo upis bi pao.
-    ' Povrat veci od onoga sto kupac drzi ostaje odbijen, i to je tacno: gajbe
-    ' koje nema ne mogu da se vrate.
+    ' POVRAT VECI OD ONOGA STO KUPAC DRZI: od 07.10.2026 nije tvrdo odbijen
+    ' nego PITANJE, kroz isti protokol koji otkup ima od 6.5 -- kupac fizicki
+    ' vraca gajbe koje po nasoj knjizi ne drzi, pa visak ulazi u opticaj kao
+    ' tudja ambalaza (ULAZ_TUDJE, AMB-10-ODL-8: deficit PARTNERA je pokriv).
+    ' Prethodni komentar je tu tvrdio da je odbijanje 'tacno'; to je bila moja
+    ' odluka bez protokola, a ne pravilo -- jezgro je protokol imalo sve vreme.
     If kolAmb > 0 Or kolAmbVracena > 0 Then
         If Len(Trim$(vozacID)) = 0 Then
             Err.Raise vbObjectError + 1367, "SavePrijemnica", _
@@ -6963,7 +7005,8 @@ Public Function SavePrijemnica(ByVal tx As clsTransaction, _
     If kolAmbVracena > 0 Then
         modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, CDbl(kolAmbVracena), _
                     AMB_NALOG_KUPAC, kupacID, AMB_NALOG_VOZAC, vozacID, _
-                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_PRIJEMNICA, newID
+                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_PRIJEMNICA, newID, _
+                    potvrdaDeficita
     End If
 
     RelinkFakturaStavke newID, brojPrij, klasa
@@ -6981,7 +7024,10 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogError "SavePrijemnica", errDesc, errNum
+    ' Potvrda deficita je PITANJE pozivaocu, ne kvar -- ne ide u log (obrazac
+    ' iz CreateOtkup_TX). Broj greske se cuva, jer je on ugovor sa pozivaocem.
+    If errNum <> AMB_ERR_POTVRDA_DEFICITA Then _
+        LogError "SavePrijemnica", errDesc, errNum
     On Error GoTo 0
 
     Err.Raise errNum, "SavePrijemnica", _
