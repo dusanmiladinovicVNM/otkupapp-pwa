@@ -1001,6 +1001,36 @@
     Ostaje: ručna kapija (compile + `--mark-compile`, **tri reza**), **ulaz** za
     ovog pisca (F7 odbija kupca kao partnera), i **P2** — ekran Storno ne vidi nov
     revers, `10c`, pred merge.
+77. **Review `024995de`: CODE GO, P0 = 0, P1 = 0** (07.10.2026).
+    Reviewer je prešao oba reza (`SaveKupciIzlaz_TX` → samo novac;
+    `REVERS_PARTNERA` pisac) i **nije našao nijedan P1 u implementiranom kodu**.
+    Potvrđeno kao ispravno: razlaganje F6, brisanje `DOK_TIP_IZLAZ_KUPCI`,
+    odluka da RVP **nije peti smer** u `AmbReversSmerovi`, hard-fail na prazan
+    broj, TX granica bez self-bind rupe, i acceptance koji meri **obe** strane
+    (novac upisan **i** knjiga nedirnuta) — „test ne može lažno da pozeleni nad
+    potpuno mrtvim writerom".
+    Nezavisno merenje koje je reviewer dodao: `WHO_WRITES` sada pokazuje **samo
+    `modAmbalaza` i `modStornoRecovery`** kao produkcione mutatore `tblAmbalaza`,
+    a `modStornoRecovery` je legacy recovery koji **produkciono dugme odbija**.
+    **Tri otvorene stavke iz review-a:**
+
+    | | Šta | Status |
+    |---|---|---|
+    | P2 #1 | ekran Storno ne vidi `AmbDok` revers — ni naš ni kupčev | **merge blocker**, `10c` |
+    | P2 #2 | protokol potvrde deficita: `UpisiReversPartnera_TX` ne može da **primi** potvrđen manjak, pa nema načina da pozivalac ponovi upis | mora **pre** produkcionog ulaza; **zajednički** sa prijemnicom, jedan mehanizam |
+    | P3 | RVP acceptance ne meri direktno količinu i salda | širi se zajedno sa deficit scenarijem |
+
+    Evidence dug koji reviewer imenuje: **punih 12/12 nije ponovljeno posle RVP
+    commit-a** (ima ciljanu BFP 2417/0 + `dokaz` 2/2), i compile je još
+    `NEJASNO`. Ne zaustavlja razvoj, ali stoji pred merge.
+    **NALAZ U SUSEDNOM KODU, nađen pri čitanju za P2 #2** (nije moj, nije iz
+    review-a): u `SavePrijemnicaMulti_TX` `kolAmbVracena` ide **samo** pozivu za
+    Klasu I, a Klasa II dobija tvrdo upisanu `0`. Klasa I je **opciona**
+    (`kolicinaI = 0` → snima se samo Klasa II), pa prijemnica sa samo Klasom II i
+    vraćenim praznim gajbama **tiho gubi nogu povrata** — bez ijedne poruke.
+    Dostupno iz F4: `kolicinaI` i `kolAmbVracena` dolaze **nezavisno**
+    (`modDokUnos.PrijemnicaUpisi`). Utvrđeno **čitanjem**, ne pretpostavkom:
+    argument je doslovna nula. Ide u isti rez kao P2 #2, jer se dira ista noga.
 
 ## Dug sa imenom (posle S5-5b)
 
