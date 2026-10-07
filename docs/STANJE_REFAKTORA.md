@@ -1244,6 +1244,16 @@
     prolaz 12/12 **sa ovim kvarom u sebi**. Zelena suite ne pokriva sloj koji
     nijedan test ne dodiruje — operaterska provera je ovde bila **jedina** kapija,
     i zato stoji u ček-listi, ne kao formalnost.
+85. **Ispravka predloga dokazana: DOKAZANO 3/3 + pun prolaz ZELENO** (07.10.2026).
+    `dokaz.py --grupe 6 amb-ulaz-`: **crvenih 3 / sabotaža 3** (dve zatečene plus
+    nova `amb-ulaz-predlog-ne-gleda-smer`), potpis izvora `8676e5910540691d`
+    **identičan pre i posle**.
+    Pun prolaz: **ZELENO**, 12/12. `RunAllTests` 201/0, BFP 2436/0, Storno 164/0,
+    banka 241/0. GREEN marker nad izvorom `366c3083ee2e` (ugovor `f357cc70ea15`).
+    Broj testova se **nije** menjao (201) ni broj BFP tvrdnji (2436) — tvrdnje su
+    dodate **postojećem** testu, pa se poklapa i to.
+    Ostaje operaterska potvrda baš te putanje: izaberi otkupno mesto (broj se
+    popuni), pa „Povrat kupca" — **polje mora da se isprazni**.
 
 ## Dug sa imenom (posle S5-5b)
 
