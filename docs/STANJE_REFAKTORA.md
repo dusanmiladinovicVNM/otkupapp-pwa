@@ -984,6 +984,23 @@
     Katalog 695 → 697. Jeftine kapije `rc=0`: `vba_check` (191 fajl, 697 sabotaža,
     0+10), schema, `who_writes` ×3, čitaoci, arnost 323, scope 5550, nastavak
     196149, privatno 191. **Skupe kapije čekaju reviewer GO.**
+76. **Pisac `ODL-23` dokazan: DOKAZANO 2/2, ciljana suite ZELENA** (07.10.2026).
+    Redosled je bio namenski: **ciljana BFP suite PRVA**, pa `dokaz.py` samo ako
+    je zelena — pisac i njegova dva testa dotad nisu bili izvršeni ni jednom, a
+    dokaz nad crvenom bazom meri crveno koje sabotaža nije izazvala.
+    `RunBusinessFlowProSuite` **2417**/0 (210 s). `dokaz.py --grupe 6 amb-rvp-`:
+    **crvenih 2 / sabotaža 2**, potpis izvora `4bf0a36b54e84179` **identičan pre i
+    posle**, 2 prolaza nad 2 sabotaže — dakle **pun pojedinačni dokaz**, verdikt
+    `DOKAZANO` bez „(grupno)".
+    **2399 → 2417 je tačno osamnaest novih tvrdnji**, koliko ih dva testa i nose
+    (10 + 8). Poklapanje po stavci je jedini način da se vidi da nijedan test nije
+    prećutao deo sebe (v. „broj tvrdnji je merenje").
+    `amb-rvp-vlasnik-broja-nije-kupac` oborila je uz svoju tvrdnju i **pet drugih**
+    — kaskada iz palóg upisa, i to je očekivano: zato je tvrdnja o vlasniku broja
+    postavljena **iznad** rane izlazne tačke, da crveno ne bude samo posledica.
+    Ostaje: ručna kapija (compile + `--mark-compile`, **tri reza**), **ulaz** za
+    ovog pisca (F7 odbija kupca kao partnera), i **P2** — ekran Storno ne vidi nov
+    revers, `10c`, pred merge.
 
 ## Dug sa imenom (posle S5-5b)
 
