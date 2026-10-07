@@ -1889,10 +1889,47 @@ operater dokument traži.
 brojem i drugom vrstom u mapu koja o njima ne zna ništa. Dva pisca se razlikuju
 po **vlasniku niza**, ne po stilu.
 
-> **⚠ CAPABILITY — ulaza još nema.** Pisac je tu i dokazan, ali ga nijedan ekran
-> ne zove: F7 i dalje odbija kupca kao partnera. Dok to stoji, `popis_citalaca`
-> ga vidi kao `SAMO_TEST` — i to je **tačan opis stanja**, ne propust zapisa.
-> Ulaz je sledeći korak ovog reza.
+> **CAPABILITY — ULAZ POSTOJI od 07.10.2026: F7, peti segment „Povrat kupca".**
+>
+> Odluka gde ulaz živi je bila otvorena: **nov ekran** ili **peti smer na F7**.
+> Izabran je peti smer, i razlog nije štednja nego **oblik koji ekran već ima**:
+> F7 od početka prebacuje politiku po smeru — smerovi 1–2 traže kooperanta,
+> 3–4 vozača i nikakvog partnera. „Smer 5 traži kupca i ručno upisan broj" je
+> nastavak istog oblika, bez novog ekrana, novog F-tastera i novog reda u
+> registru ekrana.
+>
+> Partnerska lista se **nije menjala**: `PartnerSrcOrder("F7")` je već nosila
+> `KUP` (lista je mešana, a treća kolona nosi tip partnera), pa kupci na F7 već
+> postoje — dosad ih je validator odbijao.
+>
+> | Šta ulaz nosi | Gde |
+> |---|---|
+> | peti segment, širina 73 umesto 91 (`1 + 5*73 + 4*1 = 370`) | `modOtkupUI` |
+> | partner mora biti **kupac** (`partnerTip = "KUP"`) | `ReversValidiraj` |
+> | vozač **obavezan** i bez `VALIDACIJA_UNOSA` (`ODL-9`) | `ReversValidiraj` |
+> | broj **obavezan i bez predloga** — grana izlazi **pre** auto-broja | `ReversValidiraj` |
+> | zauzetost broja u opsegu **`(Kupac, KupacID, dan)`** | `ReversBrojZauzet` |
+> | upis ide `UpisiReversPartnera_TX` | `ReversUpisi` |
+> | štampa imenuje **kupca**, ne vozača | `StampajRevers` |
+
+> **DVA MESTA SU NAMERNO OSTAVLJENA.** `SmerRevKljuc(5)` vraća `""` — peti smer
+> **nema** prevod u mapu našeg reversa, jer ide svom piscu; prevod bi značio da ga
+> `AmbReversSmerovi` ipak poznaje. I `ZavrsiIspravkuAko` se za peti smer **ne**
+> zove: tok ispravke reversa ključa po `(broj, stanica, dan)`, a kupčev revers
+> staničin niz ne dira — poziv bi mogao da zatvori **tuđu** ispravku sa slučajno
+> istim brojem. Ispravka kupčevog reversa je svoj tok i još ne postoji.
+
+> **PROTOKOL POTVRDE DEFICITA JE DOBIO SVOJ UI, na oba mesta.** F7
+> (`modNovacUnos.RevKupcaUpisi`) i F4 (`modDokUnos.PrijemnicaUpisi`) hvataju
+> **broj** greške `AMB_ERR_POTVRDA_DEFICITA`, čitaju **svež** manjak
+> (`AmbDeficitZaPrenos`), pitaju operatera i **ponavljaju poziv** sa potvrđenim
+> brojem — ekran pritom **zadržava podatke**. Obrazac je prepisan iz
+> `modOtkupUnos`, gde isti protokol radi za otkup od 03.10.2026.
+>
+> **⚠ NIJEDAN TEST NE SME DA UĐE U TU GRANU:** `MsgBox` u `run_vba` prolazu visi
+> do timeout-a i ostavlja Excel u `[break]`. Zato testovi mere **pisca** (gde
+> protokol i živi, 6.12j), a dijalog ide u **operatersku ček-listu**. Isti rizik
+> nosi i otkup od 03.10.2026 — ovo ga ne uvodi, ali ga sada nosi na tri mesta.
 
 > **PREKOMERAN POVRAT: ZATVORENO 07.10.2026 (P2 #2 iz review-a `024995de`).**
 >

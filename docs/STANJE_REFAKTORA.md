@@ -1092,6 +1092,44 @@
     **četiri reza**: revers, red 8, RVP pisac i protokol potvrde.
     Od review-a `024995de` ostaje **jedna** stavka: `P2 #1`, ekran Storno ne vidi
     `AmbDok` revers (`10c`, merge blocker). `P2 #2` i `P3` su zatvoreni.
+80. **Ulaz za `AMB-10-ODL-23`: peti segment na F7** (07.10.2026, 6.12j).
+    Odluka gde ulaz živi bila je otvorena — **nov ekran** ili **peti smer na
+    F7** — i izabran je peti smer, ne zbog štednje nego zbog **oblika koji ekran
+    već ima**: F7 od početka prebacuje politiku po smeru (1–2 traže kooperanta,
+    3–4 vozača i nikakvog partnera). „Smer 5 traži kupca i ručno upisan broj" je
+    nastavak istog oblika, bez novog ekrana, F-tastera i reda u registru.
+    **Partnerska lista se nije menjala:** `PartnerSrcOrder("F7")` je već nosila
+    `KUP` — kupci su na F7 postojali, samo ih je validator odbijao. Izmereno pre
+    koda; prvo sam planirao refill liste po smeru, i to je bilo nepotrebno.
+    Geometrija: pet segmenata po **73pt** umesto četiri po 91 (`1 + 5*73 + 4*1 =
+    370`), isti okvir. Najduži natpis ostaje 12 znakova.
+    **Šta ulaz nosi:** partner mora biti kupac · vozač obavezan i bez
+    `VALIDACIJA_UNOSA` · **broj obavezan i bez predloga** (grana izlazi **pre**
+    auto-broja) · zauzetost u opsegu `(Kupac, KupacID, dan)` · upis ide
+    `UpisiReversPartnera_TX` · štampa imenuje **kupca**, ne vozača.
+    **Dva mesta namerno ostavljena:** `SmerRevKljuc(5)` vraća `""` (prevod bi
+    značio da `AmbReversSmerovi` peti smer ipak poznaje), a `ZavrsiIspravkuAko` se
+    ne zove — tok ispravke ključa po `(broj, stanica, dan)`, pa bi mogao da
+    zatvori **tuđu** ispravku sa slučajno istim brojem.
+    **Protokol potvrde deficita dobio je UI na oba mesta** (F7 i F4): hvata se
+    **broj** greške, manjak se čita **svež**, operater se pita, poziv se
+    **ponavlja** — ekran zadržava podatke. Obrazac prepisan iz `modOtkupUnos`.
+    Na F4 je `SetPaletizeSkip False` **pomeren ispod** ponovnog poziva: između dva
+    pokušaja mora da ostane uključen, jer je ispravka ista roba.
+    **⚠ Nijedan test ne sme da uđe u tu granu** — `MsgBox` u `run_vba` prolazu
+    visi do timeout-a i ostavlja Excel u `[break]`. Testovi zato mere **pisca**,
+    a dijalog ide u operatersku ček-listu. Isti rizik nosi otkup od 03.10.2026;
+    ovo ga ne uvodi, ali ga sada nosi **tri** mesta — upisano kao dug.
+    **Zatečena sabotaža je oborila kapiju, i to je dobro:** `revers-smer` je
+    sidrila opseg `smer > SMER_REV_PRI_OM`, koji je ovaj rez promenio — `KATALOG`
+    je javio „sidro ZASTARELO" (0 pogodaka). Osveženo bez menjanja tvrdnje.
+    `RunAllTests` sada ima **201** test (nov: `T_ReversValidiraj_PovratKupcaJeSvojSmer`,
+    koji **sam uključuje** `AUTO_BROJ_DOKUMENTA` — bez toga bi tvrdnja „broj je
+    ostao prazan" bila zelena i kad je predlog iskqučen u Podešavanjima, pa ne bi
+    merila granu nego konfiguraciju).
+    Sabotaže `amb-ulaz-kupcev-broj-se-predlaze`, `amb-ulaz-kupcev-smer-prima-kooperanta`.
+    Katalog 699 → 701. Jeftine kapije `rc=0` (`vba_check`, schema, `who_writes`
+    ×3, čitaoci, četiri merača, popis suita).
 
 ## Dug sa imenom (posle S5-5b)
 

@@ -61,6 +61,9 @@ Public Const SMER_REV_IZD_KOOP As Long = 1
 Public Const SMER_REV_PRI_KOOP As Long = 2
 Public Const SMER_REV_IZD_OM As Long = 3
 Public Const SMER_REV_PRI_OM As Long = 4
+' Peti smer NIJE nas revers: dokument je kupcev (AMB-10-ODL-23), pa ide svom
+' piscu i svom nizu brojeva. Vrednost 5 je redni broj segmenta na F7.
+Public Const SMER_REV_POVRAT_KUP As Long = 5
 
 '--------------------------------------------------------------- ULAZ
 ' Prazan recnik sa svim kljucevima - da pozivalac ne mora da pamti spisak.
@@ -181,11 +184,27 @@ End Function
 ' je isti broj na drugoj stanici ili drugi dan (po A2 legalno), a pustala broj
 ' storniranog reversa. Novac je od 14.09.2026 odvojen (A2 red NOV).
 ' Prazno = slobodan; inace poruka sa AmbID-em noge koja drzi broj.
+' Zauzetost broja -- OPSEG ZAVISI OD SMERA, i to je cela razlika petog smera.
+'
+' Nasi reversi dele niz (Stanica, dan). Kupcev revers nosi KUPCEV broj, pa mu
+' je niz (Kupac, KupacID, dan) -- isti opseg koji meri i pisac (ODL-20). Da je
+' ostalo na stanici, kupcev broj bi se merio nad NASIM nizom: i lazno zauzet
+' (kad slucajno poklopi nas broj) i lazno slobodan (kad isti kupac dva puta
+' istog dana posalje isti broj).
 Private Function ReversBrojZauzet(ByVal p As Object) As String
     Dim zauzeo As String
     If Len(S(p, "brDok")) = 0 Then Exit Function
-    zauzeo = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, S(p, "stanicaID"), _
-                                        CDate(p("datum")), S(p, "brDok"))
+
+    If L(p, "smerRev") = SMER_REV_POVRAT_KUP Then
+        ' Bez izabranog kupca nema niza -- partnersku gresku javlja validator.
+        If Len(S(p, "partnerID")) = 0 Then Exit Function
+        zauzeo = modBrojevi.AmbDokBrojZauzet(AMB_NALOG_KUPAC, S(p, "partnerID"), _
+                                             CDate(p("datum")), S(p, "brDok"))
+    Else
+        zauzeo = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, S(p, "stanicaID"), _
+                                            CDate(p("datum")), S(p, "brDok"))
+    End If
+
     If Len(zauzeo) > 0 Then _
         ReversBrojZauzet = Poruka("DOKUNOS_ERR_BROJ_ZAUZET") & " " & zauzeo
 End Function
@@ -445,11 +464,37 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     End If
 
     smer = L(p, "smerRev")
-    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_PRI_OM Then
+    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POVRAT_KUP Then
         fokus = "smerRev": ReversValidiraj = Poruka("NOVUNOS_ERR_SMER"): Exit Function
     End If
 
     partTip = UCase$(S(p, "partnerTip"))
+    ' POVRAT OD KUPCA (AMB-10-ODL-23): kupac je partner, vozac je odredisten
+    ' (lanac kupac -> vozac -> stanica, ODL-9), a broj je KUPCEV -- pa je
+    ' obavezan i NE predlaze se. Zato ova grana stoji PRE auto-broja ispod i
+    ' izlazi iz funkcije sama: predlog iz naseg niza bio bi tudj broj.
+    If smer = SMER_REV_POVRAT_KUP Then
+        If NerazresenIzbor(S(p, "partnerTekst"), S(p, "partnerID")) Then
+            fokus = "partnerID": ReversValidiraj = Poruka("NOVUNOS_ERR_PARTNER_NEIZABRAN"): Exit Function
+        End If
+        If Len(S(p, "partnerID")) = 0 Or partTip <> "KUP" Then
+            fokus = "partnerID": ReversValidiraj = Poruka("NOVUNOS_ERR_SMER_KUP"): Exit Function
+        End If
+        If Len(S(p, "vozacID")) = 0 Then
+            fokus = "vozacID": ReversValidiraj = Poruka("NOVUNOS_ERR_VOZAC_OM"): Exit Function
+        End If
+        ' Broj je obavezan BEZ OBZIRA na VALIDACIJA_UNOSA: pisac ga tvrdo trazi
+        ' (UpisiReversPartnera_TX), pa bi prazan dao izuzetak umesto polja.
+        If Len(S(p, "brDok")) = 0 Then
+            fokus = "brDok": ReversValidiraj = Poruka("NOVUNOS_ERR_BROJ_KUPCA"): Exit Function
+        End If
+        dup = ReversBrojZauzet(p)
+        If Len(dup) > 0 Then
+            fokus = "brDok": ReversValidiraj = dup: Exit Function
+        End If
+        Exit Function
+    End If
+
     If smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP Then
         ' Ukucano ime bez izbora iz liste dobija svoju poruku: opsta ("izaberi
         ' kooperanta") ne bi objasnila zasto polje sa vidljivim imenom ne valja.
@@ -521,6 +566,22 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String) As String
     ' Pisac gresku DIZE umesto da vrati False -- i to je bolje: EH ispod je
     ' pretvara u poruku operateru, dok je stari put cutke izlazio.
     Dim revDokID As String
+
+    ' POVRAT OD KUPCA IDE SVOM PISCU (AMB-10-ODL-23): dokument je kupcev, nosi
+    ' njegov broj i vrstu REVERS_PARTNERA. Zato nije peti red u
+    ' AmbReversSmerovi -- ta mapa je mapa NASEG reversa, sa stanicinim brojem.
+    If smer = SMER_REV_POVRAT_KUP Then
+        revDokID = RevKupcaUpisi(p, poruke)
+        If Len(revDokID) = 0 Then Exit Function
+        ' ZavrsiIspravkuAko se NE zove: tok ispravke reversa kljuca po
+        ' (broj, stanica, dan), a kupcev revers stanicin niz ne dira -- poziv bi
+        ' mogao da zatvori TUDJU ispravku sa slucajno istim brojem. Ispravka
+        ' kupcevog reversa je svoj tok i jos ne postoji.
+        StampajRevers p, smer
+        ReversUpisi = BrojIliOznaka(brDok)
+        Exit Function
+    End If
+
     revDokID = modAmbalaza.UpisiReversAmbalaze_TX( _
         datum:=CDate(p("datum")), _
         broj:=brDok, _
@@ -551,17 +612,87 @@ EH:
     poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
 
+
+' UPIS KUPCEVOG REVERSA, SA PROTOKOLOM POTVRDE DEFICITA (AMB-10-ODL-8, 6.5).
+'
+' Kupac koji vrati vise gajbi nego sto po knjizi drzi nije kvar nego REDOVAN
+' slucaj: visak ulazi u opticaj kao tudja ambalaza. Jezgro zato ne odbija nego
+' PITA -- a pitanje se prepoznaje po BROJU greske, ne po tekstu (tekst je
+' prevodiv i menja se). Obrazac je prepisan iz modOtkupUnos, gde isti protokol
+' radi za otkup od 03.10.2026: ekran ZADRZAVA podatke, pa operater ne unosi
+' nista ponovo.
+'
+' NIJEDAN TEST NE SME DA UDJE U OVU GRANU: MsgBox u run_vba prolazu visi do
+' timeout-a i ostavlja Excel u [break]. Zato testovi mere pisca (gde protokol i
+' zivi), a dijalog ide u operatersku cek-listu.
+Private Function RevKupcaUpisi(ByVal p As Object, ByRef poruke As String) As String
+    Dim res As String, greska As String, errNum As Long, manjak As Double
+
+    res = RevKupcaPisac(p, -1, errNum, greska)
+
+    If errNum = AMB_ERR_POTVRDA_DEFICITA Then
+        ' Manjak se cita SADA, ne iz poruke: izmedju pitanja i odgovora stanje se
+        ' moglo promeniti, a jezgro potvrdu meri prema SVEZEM manjku.
+        manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KUPAC, S(p, "partnerID"), _
+                                                S(p, "tipAmb"), CDbl(L(p, "kolAmb")))
+        If manjak > 0 Then
+            If MsgBox(Poruka("AMB_ASK_DEFICIT_1") & vbCrLf & _
+                      Poruka("AMB_ASK_DEFICIT_2") & " " & _
+                      Format$(manjak, "#,##0") & vbCrLf & vbCrLf & _
+                      Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE"), _
+                      vbExclamation + vbYesNo, APP_NAME) = vbYes Then
+                res = RevKupcaPisac(p, manjak, errNum, greska)
+            End If
+        End If
+    End If
+
+    If Len(res) = 0 Then
+        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+    End If
+    RevKupcaUpisi = res
+End Function
+
+' Jedan poziv pisca. Pisac gresku DIZE, pa se ovde hvata broj -- on je ugovor.
+Private Function RevKupcaPisac(ByVal p As Object, ByVal potvrda As Double, _
+                               ByRef outErrNum As Long, _
+                               ByRef outGreska As String) As String
+    outErrNum = 0
+    outGreska = ""
+    On Error Resume Next
+    RevKupcaPisac = modAmbalaza.UpisiReversPartnera_TX( _
+        datum:=CDate(p("datum")), _
+        broj:=S(p, "brDok"), _
+        kupacID:=S(p, "partnerID"), _
+        vozacID:=S(p, "vozacID"), _
+        tipAmb:=S(p, "tipAmb"), _
+        kolicina:=CDbl(L(p, "kolAmb")), _
+        napomena:=S(p, "napomena"), _
+        potvrdaDeficita:=potvrda)
+    If Err.Number <> 0 Then
+        outErrNum = Err.Number
+        outGreska = Err.description
+        RevKupcaPisac = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Function
+
 ' Dva oblika reversa, kao u legacy: kooperantski nosi ime kooperanta i
 ' ID, firma<->OM nosi ime vozaca (bez ID-ja) i drugu protivstranu.
 Private Sub StampajRevers(ByVal p As Object, ByVal smer As Long)
     Dim vozacNaziv As String
     On Error GoTo EH
-    If smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP Then
+    ' Kupcev revers ide u PRVU granu: ona imenuje PARTNERA, a kupac je partner.
+    ' Druga grana nosi ime vozaca i protivstranu firma<->OM, sto bi na kupcevom
+    ' papiru bilo tacno pogresno.
+    If smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP _
+       Or smer = SMER_REV_POVRAT_KUP Then
         OutputIzdavanjeAmbalaze CDate(p("datum")), S(p, "brDok"), _
                                 S(p, "stanicaTekst"), S(p, "stanicaID"), _
                                 S(p, "partnerTekst"), S(p, "partnerID"), _
                                 S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
-                                (smer = SMER_REV_PRI_KOOP)
+                                (smer = SMER_REV_PRI_KOOP Or _
+                                 smer = SMER_REV_POVRAT_KUP)
     Else
         vozacNaziv = Trim$(NzToText(LookupValue(TBL_VOZACI, "VozacID", S(p, "vozacID"), "Ime")) & " " & _
                            NzToText(LookupValue(TBL_VOZACI, "VozacID", S(p, "vozacID"), "Prezime")))

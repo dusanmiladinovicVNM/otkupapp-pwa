@@ -293,6 +293,7 @@ Public Sub RunAllTests()
     RunOne 10
     RunOne 11
     RunOne 12
+    RunOne 201
     RunOne 13
     RunOne 14
     RunOne 15
@@ -766,6 +767,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 113: TestName = "T_Zbirna_NemaIspravku"
         Case 43: TestName = "T_Traka_NatpisiPoRezimu"
         Case 38: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
+        Case 201: TestName = "T_ReversValidiraj_PovratKupcaJeSvojSmer"
         Case 200: TestName = "T_TxRollback_NepotpunZatvaraUpisISnimanje"
         Case 199: TestName = "T_ZbirnaRadniSto_BiraSvojNacrt"
         Case 198: TestName = "T_ZbirnaKlik_OtvaraSvojDokument"
@@ -974,6 +976,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 113: T_Zbirna_NemaIspravku
         Case 43: T_Traka_NatpisiPoRezimu
         Case 38: T_ZbirnaForma_KlasaOstajeBezCene
+        Case 201: T_ReversValidiraj_PovratKupcaJeSvojSmer
         Case 200: T_TxRollback_NepotpunZatvaraUpisISnimanje
         Case 199: T_ZbirnaRadniSto_BiraSvojNacrt
         Case 198: T_ZbirnaKlik_OtvaraSvojDokument
@@ -6218,6 +6221,78 @@ Private Sub T_ReversValidiraj_SmerJeObavezan()
              "segment 4 = prijem od OM"
     AssertEq modNovacUnos.SmerRevKljuc(0), "", _
              "neizabran smer nema prevod -- core guard puca umesto da knjizi"
+End Sub
+
+
+' F7 PETI SMER -- POVRAT PRAZNIH OD KUPCA (AMB-10-ODL-23).
+'
+' Dokument je KUPCEV: nosi njegov broj, pa se broj NE PREDLAZE. To je jedino
+' pravilo koje ovaj ulaz ima a ostala cetiri smera nemaju -- i jedino koje se
+' ovde meri; par naloga i vlasnika broja sudi jezgro (PrenesiAmbalazu).
+'
+' Auto-broj se UKLJUCUJE u testu, ne pretpostavlja: bez toga bi tvrdnja
+' "brDok je ostao prazan" bila zelena i kad je predlog iskljucen u Podesavanjima,
+' pa ne bi merila granu nego konfiguraciju.
+Private Sub T_ReversValidiraj_PovratKupcaJeSvojSmer()
+    Dim p As Object, fokus As String, prevAuto As String
+
+    prevAuto = GetConfigValue(CFG_AUTO_BROJ_DOK)
+    SetConfigValue CFG_AUTO_BROJ_DOK, "DA"
+
+    ' KONTROLA: nasi smerovi i dalje DOBIJAJU predlog broja.
+    Set p = ReversUnosKojiProlazi()
+    p("brDok") = ""
+    modNovacUnos.ReversValidiraj p, fokus
+    AssertEq (Len(CStr(p("brDok"))) > 0), True, _
+             "nas revers i dalje dobija predlog broja"
+
+    ' KUPCEV SMER: predloga NEMA, i poruka kaze zasto.
+    Set p = ReversUnosKojiProlazi()
+    p("smerRev") = modNovacUnos.SMER_REV_POVRAT_KUP
+    p("partnerID") = FX_KUPAC
+    p("partnerTip") = "KUP"
+    p("partnerTekst") = FX_KUPAC
+    p("brDok") = ""
+    AssertEq modNovacUnos.ReversValidiraj(p, fokus), Poruka("NOVUNOS_ERR_BROJ_KUPCA"), _
+             "kupcev revers trazi UPISAN broj"
+    AssertEq CStr(p("brDok")), "", _
+             "kupcev broj se NE predlaze iz naseg niza"
+    AssertEq fokus, "brDok", "fokus ide na broj"
+
+    SetConfigValue CFG_AUTO_BROJ_DOK, prevAuto
+
+    ' PARTNER MORA BITI KUPAC -- kooperant u ovom smeru nema sta da vrati pod
+    ' svojim brojem (njegov povrat je segment 2, nas dokument).
+    Set p = ReversUnosKojiProlazi()
+    p("smerRev") = modNovacUnos.SMER_REV_POVRAT_KUP
+    AssertEq modNovacUnos.ReversValidiraj(p, fokus), Poruka("NOVUNOS_ERR_SMER_KUP"), _
+             "kupcev smer ne prima kooperanta"
+    AssertEq fokus, "partnerID", "fokus ide na partnera"
+
+    ' VOZAC JE ODREDISTE LANCA (ODL-9), pa je obavezan i bez stroge validacije.
+    Set p = ReversUnosKojiProlazi()
+    p("smerRev") = modNovacUnos.SMER_REV_POVRAT_KUP
+    p("partnerID") = FX_KUPAC
+    p("partnerTip") = "KUP"
+    p("partnerTekst") = FX_KUPAC
+    p("vozacID") = ""
+    AssertEq modNovacUnos.ReversValidiraj(p, fokus), Poruka("NOVUNOS_ERR_VOZAC_OM"), _
+             "kupcev revers bez vozaca se ne knjizi"
+
+    ' PUN UNOS PROLAZI -- inace bi sve gore bila blokada, ne kapija.
+    Set p = ReversUnosKojiProlazi()
+    p("smerRev") = modNovacUnos.SMER_REV_POVRAT_KUP
+    p("partnerID") = FX_KUPAC
+    p("partnerTip") = "KUP"
+    p("partnerTekst") = FX_KUPAC
+    p("brDok") = "KUP-R/9001"
+    AssertEq modNovacUnos.ReversValidiraj(p, fokus), "", _
+             "pun kupcev revers prolazi validaciju"
+
+    ' Peti segment nema prevod u mapu NASEG reversa -- i to je namerno: ide svom
+    ' piscu, pa bi prevod znacio da ga AmbReversSmerovi ipak poznaje.
+    AssertEq modNovacUnos.SmerRevKljuc(modNovacUnos.SMER_REV_POVRAT_KUP), "", _
+             "kupcev smer NEMA prevod u nas revers"
 End Sub
 
 ' Isplata koja prolazi sve provere: kooperant sa izabranim otkupnim blokom.

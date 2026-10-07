@@ -1134,34 +1134,47 @@ End Function
 Public Function PrijemnicaUpisi(ByVal p As Object, ByRef poruke As String) As String
     Dim res As String, defHlad As String, palStatus As String, errDesc As String
     Dim ispravka As Boolean
+    Dim ambErrNum As Long, manjak As Double
     On Error GoTo EH
     poruke = ""
 
     ispravka = (Len(S(p, "ispravkaID")) > 0)
     If ispravka Then SetPaletizeSkip True
 
-    res = SavePrijemnicaMulti_TX( _
-        datum:=CDate(p("datum")), _
-        kupacID:=S(p, "kupacID"), _
-        vozacID:=S(p, "vozacID"), _
-        brojPrij:=S(p, "brDok"), _
-        brojZbirne:=S(p, "brojZbirne"), _
-        vrstaVoca:=S(p, "vrsta"), _
-        sortaVoca:=S(p, "sorta"), _
-        kolicinaI:=D(p, "kolicinaI"), _
-        cenaI:=D(p, "cenaI"), _
-        tipAmb:=S(p, "tipAmb"), _
-        kolAmb:=L(p, "kolAmb"), _
-        kolAmbVracena:=L(p, "kolAmbVracena"), _
-        hasKlasaII:=B(p, "dveKlase"), _
-        kolicinaII:=D(p, "kolicinaII"), _
-        cenaII:=D(p, "cenaII"), _
-        kolAmbII:=L(p, "kolAmbII"), _
-        brutoKgI:=D(p, "brutoKgI"), _
-        brutoKgII:=D(p, "brutoKgII"))
+    res = PrjUpisPoziv(p, -1, ambErrNum)
+
+    ' POTVRDA DEFICITA: pitanje operateru, ne greska (6.5, AMB-10-ODL-8).
+    '
+    ' Kupac koji vrati VISE praznih gajbi nego sto po knjizi drzi nije kvar nego
+    ' redovan slucaj -- visak ulazi u opticaj kao tudja ambalaza. Isti protokol i
+    ' isti obrazac kao na otkupu (modOtkupUnos) i na F7 (modNovacUnos): slucaj se
+    ' prepoznaje po BROJU greske jer je tekst prevodiv, manjak se cita SADA jer se
+    ' stanje izmedju pitanja i odgovora moglo promeniti, a ekran ZADRZAVA podatke
+    ' pa operater ne unosi nista ponovo.
+    '
+    ' Manjak se meri na NOZI POVRATA: puna noga polazi od vozaca, a njegov manjak
+    ' je po ODL-8 tvrdo odbijen i potvrda tamo ne postoji.
+    '
+    ' NIJEDAN TEST NE SME DA UDJE U OVU GRANU -- MsgBox u run_vba prolazu visi.
+    If Len(res) = 0 And ambErrNum = AMB_ERR_POTVRDA_DEFICITA Then
+        manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KUPAC, S(p, "kupacID"), _
+                                                S(p, "tipAmb"), _
+                                                CDbl(L(p, "kolAmbVracena")))
+        If manjak > 0 Then
+            If MsgBox(Poruka("AMB_ASK_DEFICIT_1") & vbCrLf & _
+                      Poruka("AMB_ASK_DEFICIT_2") & " " & _
+                      Format$(manjak, "#,##0") & vbCrLf & vbCrLf & _
+                      Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE"), _
+                      vbExclamation + vbYesNo, APP_NAME) = vbYes Then
+                res = PrjUpisPoziv(p, manjak, ambErrNum)
+            End If
+        End If
+    End If
 
     ' Toggle se vraca UVEK, i kad upis nije uspeo: ostavljen ukljucen bi
-    ' sledecoj prijemnici tiho preskocio paletizaciju.
+    ' sledecoj prijemnici tiho preskocio paletizaciju. Stoji POSLE ponovnog
+    ' poziva -- izmedju dva pokusaja mora da ostane ukljucen, jer je ispravka
+    ' ista roba i drugi poziv ne sme da je paletizuje.
     SetPaletizeSkip False
 
     If Len(res) = 0 Then Exit Function
@@ -1197,6 +1210,35 @@ EH:
     SetPaletizeSkip False        ' toggle ne sme da ostane ukljucen ni na gresci
     LogErr "modDokUnos.PrijemnicaUpisi"
     poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+End Function
+
+
+' Jedan poziv pisca prijemnice. Postoji zato da protokol potvrde deficita ne
+' duplira osamnaest imenovanih argumenata -- ponovljen poziv se razlikuje SAMO po
+' potvrdjenom manjku.
+Private Function PrjUpisPoziv(ByVal p As Object, ByVal potvrda As Double, _
+                              ByRef outErrNum As Long) As String
+    PrjUpisPoziv = SavePrijemnicaMulti_TX( _
+        datum:=CDate(p("datum")), _
+        kupacID:=S(p, "kupacID"), _
+        vozacID:=S(p, "vozacID"), _
+        brojPrij:=S(p, "brDok"), _
+        brojZbirne:=S(p, "brojZbirne"), _
+        vrstaVoca:=S(p, "vrsta"), _
+        sortaVoca:=S(p, "sorta"), _
+        kolicinaI:=D(p, "kolicinaI"), _
+        cenaI:=D(p, "cenaI"), _
+        tipAmb:=S(p, "tipAmb"), _
+        kolAmb:=L(p, "kolAmb"), _
+        kolAmbVracena:=L(p, "kolAmbVracena"), _
+        hasKlasaII:=B(p, "dveKlase"), _
+        kolicinaII:=D(p, "kolicinaII"), _
+        cenaII:=D(p, "cenaII"), _
+        kolAmbII:=L(p, "kolAmbII"), _
+        brutoKgI:=D(p, "brutoKgI"), _
+        brutoKgII:=D(p, "brutoKgII"), _
+        potvrdaDeficita:=potvrda, _
+        outErrNum:=outErrNum)
 End Function
 
 ' Nova prijemnica preuzima palete stare (bez ponovne paletizacije - ista

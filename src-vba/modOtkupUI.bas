@@ -1267,8 +1267,13 @@ Private Sub BuildForm(frm As Object)
     NewFieldG z, "fgHladnjaca", Poruka("OTKUI_FLD_HLADNJACA"), "cmb", "", 1, False, False, "DOK"
     NewFieldG z, "fgPogon", Poruka("OTKUI_FLD_POGON"), "txt", "", 1, False, False, "DOK"
 
-    ' SMER REVERSA - cetiri medjusobno iskljuciva segmenta, isti skup kao
-    ' frmDokumenta.SetupOMIzdavanjeToggle. Span 2 da sva cetiri stanu u red.
+    ' SMER REVERSA - PET medjusobno iskljucivih segmenata. Prva cetiri su isti
+    ' skup kao frmDokumenta.SetupOMIzdavanjeToggle; peti je povrat praznih od
+    ' kupca (AMB-10-ODL-23), dokument koji nosi KUPCEV broj.
+    '
+    ' Sirina je 73 umesto 91 jer peti segment u istih 370pt inace ne staje:
+    ' 1 + 5*73 + 4*1 = 370. Najduzi natpis je 12 znakova ('Prijem od OM',
+    ' 'Povrat kupca'), isti kao pre reza.
     Set fr = NewFrame(z, "fgSmerRev", 0, 0, 370, FIELD_GRP_H, C_WHITE)
     fr.tag = "fld:3:AMB"
     NewLbl fr, "fgSmerRevL", Poruka("OTKUI_FLD_SMER_REV"), 0, 0, 300, 12, TS_LABEL, True, C_MUTED, -1
@@ -1276,10 +1281,11 @@ Private Sub BuildForm(frm As Object)
     ' NIJEDAN segment nije unapred obelezen: smer se bira eksplicitno. Ranije je
     ' segRev1 izgledao izabrano a mSmerRev je bio 0, pa je forma pokazivala smer
     ' koji dokument nije imao.
-    NewSegBtn fr, "segRev1", Poruka("OTKUI_SEG_REV_IZD_KOOP"), 1, 17, 91, FIELD_H - 2, False
-    NewSegBtn fr, "segRev2", Poruka("OTKUI_SEG_REV_PRI_KOOP"), 93, 17, 91, FIELD_H - 2, False
-    NewSegBtn fr, "segRev3", Poruka("OTKUI_SEG_REV_IZD_OM"), 185, 17, 91, FIELD_H - 2, False
-    NewSegBtn fr, "segRev4", Poruka("OTKUI_SEG_REV_PRI_OM"), 277, 17, 91, FIELD_H - 2, False
+    NewSegBtn fr, "segRev1", Poruka("OTKUI_SEG_REV_IZD_KOOP"), 1, 17, 73, FIELD_H - 2, False
+    NewSegBtn fr, "segRev2", Poruka("OTKUI_SEG_REV_PRI_KOOP"), 75, 17, 73, FIELD_H - 2, False
+    NewSegBtn fr, "segRev3", Poruka("OTKUI_SEG_REV_IZD_OM"), 149, 17, 73, FIELD_H - 2, False
+    NewSegBtn fr, "segRev4", Poruka("OTKUI_SEG_REV_PRI_OM"), 223, 17, 73, FIELD_H - 2, False
+    NewSegBtn fr, "segRev5", Poruka("OTKUI_SEG_REV_POVRAT_KUP"), 297, 17, 73, FIELD_H - 2, False
 
 
     ' VREDNOST - forest ploca (isti shell, druga ispuna). Ploca ne zauzima celo
@@ -3617,15 +3623,15 @@ Private Sub KlasaCenaPoRezimu(ByVal z As Object, ByVal mode As String)
         UCase$(Poruka(IIf(imaCenu, "OTKUI_FLD_KLASA_CENA", "OTKUI_FLD_KLASA")))
 End Sub
 
-' Cetiri smera reversa su medjusobno iskljuciva - isti obrazac kao SetKlasa.
-' n = 0 gasi sve cetiri (stanje "nije izabrano", u koje se rezim i vraca).
+' Pet smerova reversa su medjusobno iskljucivi - isti obrazac kao SetKlasa.
+' n = 0 gasi sve (stanje "nije izabrano", u koje se rezim i vraca).
 Private Sub SetSmerRev(ByVal n As Long)
     Dim z As Object, i As Long, sel As Boolean
     On Error Resume Next
     Set z = mFrm.Controls("zForm").Controls("fgSmerRev")
     mSmerRev = n
     MarkDirty
-    For i = 1 To 4
+    For i = 1 To 5
         sel = (i = n)
         BoxState z, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
     Next i
@@ -4387,6 +4393,7 @@ Private Sub UiClickCore(ByVal tag As String)
         Case "segRev2": SetSmerRev 2
         Case "segRev3": SetSmerRev 3
         Case "segRev4": SetSmerRev 4
+        Case "segRev5": SetSmerRev 5
         Case "segAvans1": SetAvans 1
         Case "segAvans2": SetAvans 2
         Case "btnSacuvaj", "btnSacuvajPrint": CommitDokument (tag = "btnSacuvajPrint")

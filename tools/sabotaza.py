@@ -310,7 +310,7 @@ SABOTAZE = {
     "revers-smer": (
         "modNovacUnos.bas",
         '    smer = L(p, "smerRev")\n'
-        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_PRI_OM Then\n"
+        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POVRAT_KUP Then\n"
         '        fokus = "smerRev": ReversValidiraj = Poruka("NOVUNOS_ERR_SMER"): Exit Function\n'
         "    End If\n",
         '    smer = L(p, "smerRev")   \' SABOTAZA: smer vise nije obavezan\n',
@@ -6958,6 +6958,33 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: nalog smera nije obavezan\n",
         "Test_REV_UgovorSmeraJeFailClosed",
         "REV ugovor: razlog imenuje nalog koji nedostaje, ne opstu gresku",
+    ),
+    # ULAZ ZA KUPCEV REVERS (F7, peti smer) -- dve sabotaze nad onim sto ulaz nosi.
+    #
+    # Broj pocinje da se PREDLAZE i za kupcev smer: grana izgubi svoju proveru, pa
+    # padne do auto-broja ispod i dobije broj iz NASEG niza. Validacija tada
+    # PROLAZI, pa tvrdnja o ishodu ne bi pokazala nista -- crveni se tvrdnja da
+    # broj mora biti upisan.
+    "amb-ulaz-kupcev-broj-se-predlaze": (
+        "modNovacUnos.bas",
+        "        If Len(S(p, \"brDok\")) = 0 Then\n"
+        "            fokus = \"brDok\": ReversValidiraj = Poruka(\"NOVUNOS_ERR_BROJ_KUPCA\"): Exit Function\n"
+        "        End If\n",
+        "        If False Then   ' SABOTAZA: kupcev broj se predlaze kao nas\n"
+        "            fokus = \"brDok\": ReversValidiraj = Poruka(\"NOVUNOS_ERR_BROJ_KUPCA\"): Exit Function\n"
+        "        End If\n",
+        "T_ReversValidiraj_PovratKupcaJeSvojSmer",
+        "kupcev revers trazi UPISAN broj",
+    ),
+    # Tip partnera se ne gleda: kooperant prolazi kao kupac. Upis bi posle pao u
+    # jezgru (nalog Kupac ne postoji sa kooperantovim ID-em), ali TIHO -- operater
+    # bi dobio izuzetak umesto polja, a to je bas ono sto ulaz postoji da spreci.
+    "amb-ulaz-kupcev-smer-prima-kooperanta": (
+        "modNovacUnos.bas",
+        "        If Len(S(p, \"partnerID\")) = 0 Or partTip <> \"KUP\" Then\n",
+        "        If Len(S(p, \"partnerID\")) = 0 Then   ' SABOTAZA: tip partnera se ne gleda\n",
+        "T_ReversValidiraj_PovratKupcaJeSvojSmer",
+        "kupcev smer ne prima kooperanta",
     ),
     # PROTOKOL POTVRDE DEFICITA (P2 #2 iz review-a 024995de) -- dve sabotaze.
     #
