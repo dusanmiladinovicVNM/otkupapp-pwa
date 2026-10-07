@@ -1195,6 +1195,26 @@
     Ručna kapija compile sada pokriva **pet rezova**: revers, red 8, RVP pisac,
     protokol potvrde i ulaz. Od review-a `024995de` ostaje jedino `P2 #1` —
     ekran Storno ne vidi `AmbDok` revers (`10c`, merge blocker).
+83. **Operaterska provera ulaza: geometrija prolazi, nov ključ poruke traži
+    RESTART** (07.10.2026).
+    Prva stavka ček-liste je **potvrđena na ekranu**: pet segmenata smera stoji u
+    jednom redu, jednake širine, bez preklapanja i bez isečenog natpisa
+    („Prijem od OM" i „Povrat kupca" se vide celi). Geometrija 73pt radi.
+    **Nalaz usput, i koštao je operatera vremena:** peti segment je prvo pisao
+    `[OTKUI_SEG_REV_POVRAT_KUP]` — fallback `Poruka()` za ključ kog **nema u
+    `tblPoruke`**. Ostala četiri su bila ispravna, što je odmah isključilo
+    geometriju i gradnju forme kao uzrok i pokazalo na tabelu poruka.
+    **`EnsurePoruke` iz Immediate prozora nije pomogao** — i to je mehanizam koji
+    vredi zapamtiti: on **puni tabelu**, ali natpisi runtime kontrola se **peku u
+    trenutku gradnje ljuske** (`NewSegBtn ... Poruka("KLJUC")`). Već izgrađeno
+    dugme zadrži stari tekst. Rešenje je **zatvoriti i otvoriti fajl**:
+    `modMain.InitApp` zove `EnsurePoruke` na svakom startu **i** gradi ljusku
+    iznova — oboje, a potrebno je oboje.
+    **Produkciju ne pogađa:** self-update koda ionako restartuje aplikaciju. Ovo
+    je zamka razvojne petlje (uvoz koda u otvoren Excel), ne isporuke.
+    Pravilo po sadržaju pripada `.claude/rules/forme-i-kontrole.md`, ali `.claude/`
+    ide **isključivo kroz zaseban process PR** (`CLAUDE.md` §6), pa ovde stoji
+    nalaz, a preseljenje je zasebna stavka.
 
 ## Dug sa imenom (posle S5-5b)
 
