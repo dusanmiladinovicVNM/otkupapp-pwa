@@ -1171,6 +1171,30 @@
     „0 pogodaka". Patch skripte za taj fajl grade redove iz `N = "\r\n"`.
     `git checkout` za vraćanje ostatka je bio **odbijen** (destruktivna radnja),
     pa je red vraćen običnom izmenom izvora — ista vrednost, vidljiv trag.
+82. **Ulaz dokazan: DOKAZANO 2/2 + pun prolaz ZELENO 12/12** (07.10.2026).
+    Posle razdvajanja zamena (stavka 81) dokaz je prošao iz prvog puta:
+    `crvenih 2 / sabotaža 2`, potpis izvora `b031cbdeab622872` **identičan pre i
+    posle** — isti potpis kao u palóm prolazu, što i potvrđuje da je ostatak bio
+    u **revertu**, ne u mojoj izmeni.
+    Pun prolaz: **ZELENO**, 12/12 suita. `RunAllTests` **201**/0, BFP 2436/0,
+    `RunStornoTestSuite` 164/0, banka 241/0. GREEN marker nad izvorom
+    `1fe99d7bc980` (ugovor `57412040ddf9`).
+    `RunAllTests` 200 → 201 je **jedan nov test**, a BFP je ostao 2436 — nov test
+    je otišao u `modTest`, ne u BFP, pa se oba broja poklapaju sa onim što je
+    dodato.
+    **ČEK-LISTA ZA OPERATERA** — ovo se ne meri automatski (`CLAUDE.md` §5):
+
+    | Šta proveriti | Gde |
+    |---|---|
+    | pet segmenata smera stoji u jednom redu, bez preklapanja i bez odrezanog natpisa | F7, polje „Smer reversa" |
+    | izbor „Povrat kupca" nudi **kupce** u listi partnera i prima ih | F7 |
+    | broj se **ne** popuni sam kad je izabran „Povrat kupca" | F7 |
+    | dijalog potvrde manjka ponovi upis **sa zadržanim podacima** | F7 i F4 |
+    | štampani kupčev revers imenuje **kupca**, ne vozača | F7 → PDF |
+
+    Ručna kapija compile sada pokriva **pet rezova**: revers, red 8, RVP pisac,
+    protokol potvrde i ulaz. Od review-a `024995de` ostaje jedino `P2 #1` —
+    ekran Storno ne vidi `AmbDok` revers (`10c`, merge blocker).
 
 ## Dug sa imenom (posle S5-5b)
 
