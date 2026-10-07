@@ -518,7 +518,7 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     ' ako broj nije unet ni predlozen, generise se sada, po modelu
     ' x/ddmmyy[-N] iz revers tokova nad tblAmbalaza. Isto radi legacy, i to
     ' tek posle izbora smera - zato je ovde, a ne pre njega.
-    If Len(S(p, "brDok")) = 0 Then
+    If Len(S(p, "brDok")) = 0 And RevSmerPredlazeBroj(smer) Then
         p("brDok") = SuggestNextBroj(KIND_REV, S(p, "stanicaID"), CDate(p("datum")))
         dup = ReversBrojZauzet(p)
         If Len(dup) > 0 Then
@@ -538,6 +538,22 @@ EH:
     errDesc = Err.description
     LogErr "modNovacUnos.ReversValidiraj"
     ReversValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+End Function
+
+
+' DA LI SMER UOPSTE DOBIJA PREDLOG BROJA.
+'
+' Cetiri nasa smera dele niz (Stanica, dan), pa im ljuska predlaze broj cim se
+' izabere otkupno mesto. Peti je KUPCEV dokument (AMB-10-ODL-23) i nosi NJEGOV
+' broj -- predlog iz naseg niza bio bi izmisljen broj tudje serije.
+'
+' PRAVILO ZIVI OVDE, A NE U LJUSCI, jer ga trazi DVA sloja: RefreshBrojPredlog
+' (predlog cim se izabere stanica) i ReversValidiraj (predlog ako je polje
+' ostalo prazno). Dve kopije istog uslova bi se razisle -- i prvi put su se bas
+' tako i razisle: validator je imao granu, ljuska nije, pa je kupcev revers na
+' ekranu nosio nas broj (nadjeno operaterskom proverom 07.10.2026).
+Public Function RevSmerPredlazeBroj(ByVal smer As Long) As Boolean
+    RevSmerPredlazeBroj = (smer <> SMER_REV_POVRAT_KUP)
 End Function
 
 ' Redni broj segmenta -> vrednost koju SaveOMUlaz_TX poznaje. Nepoznat

@@ -3635,6 +3635,18 @@ Private Sub SetSmerRev(ByVal n As Long)
         sel = (i = n)
         BoxState z, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
     Next i
+
+    ' BROJ PRATI SMER, kao sto vec prati stanicu (v. RefreshBrojPredlog).
+    '
+    ' Predlog stize cim se izabere otkupno mesto, dakle PRE nego sto se smer
+    ' izabere -- pa bi kupcev revers nosio NAS broj, tacno ono sto AMB-10-ODL-23
+    ' zabranjuje. Prelazak na kupcev smer zato polje PRAZNI, a povratak na nas
+    ' smer vraca predlog. n = 0 (reset rezima) ne dira polje.
+    If n = modNovacUnos.SMER_REV_POVRAT_KUP Then
+        SetFld "fgBrOtpr", ""
+    ElseIf n > 0 Then
+        RefreshBrojPredlog False
+    End If
 End Sub
 
 ' Isplata iz OM avansa vs virman firme - dva segmenta, isti obrazac. Prekidac
@@ -8600,6 +8612,13 @@ Private Sub RefreshBrojPredlog(Optional ByVal checkRemote As Boolean = True)
 
     kind = KindZaRezim(mk)
     If Len(kind) = 0 Then Exit Sub
+
+    ' KUPCEV REVERS NE DOBIJA PREDLOG (AMB-10-ODL-23): dokument je njegov i nosi
+    ' njegov broj. Isti oblik kao PredlogPrijemnice ispod -- "polje se tada NE
+    ' dira". Odluku drzi modNovacUnos, jer je isto pravilo potrebno i validatoru.
+    If kind = KIND_REV Then
+        If Not modNovacUnos.RevSmerPredlazeBroj(mSmerRev) Then Exit Sub
+    End If
     entID = EntitetZaBroj(kind)
     If Len(entID) = 0 Then Exit Sub
     sug = SuggestNextBroj(kind, entID, DatumIzPolja(), checkRemote)

@@ -6959,6 +6959,17 @@ SABOTAZE = {
         "Test_REV_UgovorSmeraJeFailClosed",
         "REV ugovor: razlog imenuje nalog koji nedostaje, ne opstu gresku",
     ),
+    # Predlog broja prestaje da gleda smer: i kupcev revers dobija NAS broj iz
+    # niza stanice. Tacno taj kvar je nasla operaterska provera 07.10.2026 --
+    # validator je imao granu, ljuska nije. Posle selidbe pravila u jednu
+    # funkciju, oba sloja padaju zajedno, pa ga jedna tvrdnja hvata.
+    "amb-ulaz-predlog-ne-gleda-smer": (
+        "modNovacUnos.bas",
+        "    RevSmerPredlazeBroj = (smer <> SMER_REV_POVRAT_KUP)\n",
+        "    RevSmerPredlazeBroj = True   ' SABOTAZA: predlog ne gleda smer\n",
+        "T_ReversValidiraj_PovratKupcaJeSvojSmer",
+        "kupcev smer NE dobija predlog broja",
+    ),
     # ULAZ ZA KUPCEV REVERS (F7, peti smer) -- dve sabotaze nad onim sto ulaz nosi.
     #
     # Broj pocinje da se PREDLAZE i za kupcev smer: grana izgubi svoju proveru, pa

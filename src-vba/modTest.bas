@@ -6293,6 +6293,20 @@ Private Sub T_ReversValidiraj_PovratKupcaJeSvojSmer()
     ' piscu, pa bi prevod znacio da ga AmbReversSmerovi ipak poznaje.
     AssertEq modNovacUnos.SmerRevKljuc(modNovacUnos.SMER_REV_POVRAT_KUP), "", _
              "kupcev smer NEMA prevod u nas revers"
+
+    ' PREDLOG BROJA PO SMERU -- pravilo koje trazi DVA sloja, pa zivi na jednom
+    ' mestu: ljuska (RefreshBrojPredlog, predlog cim se izabere stanica) i
+    ' validator (auto-broj kad je polje ostalo prazno).
+    '
+    ' Nadjeno operaterskom proverom 07.10.2026: validator je imao granu, ljuska
+    ' nije -- pa je kupcev revers na ekranu nosio NAS broj iz niza stanice. Test
+    ' meri bas tu funkciju, jer ona je sada jedini izvor odluke za oba sloja.
+    AssertEq modNovacUnos.RevSmerPredlazeBroj(modNovacUnos.SMER_REV_IZD_KOOP), True, _
+             "nas smer dobija predlog broja"
+    AssertEq modNovacUnos.RevSmerPredlazeBroj(modNovacUnos.SMER_REV_PRI_OM), True, _
+             "i cetvrti nas smer dobija predlog broja"
+    AssertEq modNovacUnos.RevSmerPredlazeBroj(modNovacUnos.SMER_REV_POVRAT_KUP), False, _
+             "kupcev smer NE dobija predlog broja"
 End Sub
 
 ' Isplata koja prolazi sve provere: kooperant sa izabranim otkupnim blokom.

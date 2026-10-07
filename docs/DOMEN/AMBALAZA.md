@@ -1908,6 +1908,8 @@ po **vlasniku niza**, ne po stilu.
 > | partner mora biti **kupac** (`partnerTip = "KUP"`) | `ReversValidiraj` |
 > | vozač **obavezan** i bez `VALIDACIJA_UNOSA` (`ODL-9`) | `ReversValidiraj` |
 > | broj **obavezan i bez predloga** — grana izlazi **pre** auto-broja | `ReversValidiraj` |
+> | **predlog broja se ne računa za taj smer** (odluka na jednom mestu) | `RevSmerPredlazeBroj` → zove je i ljuska i validator |
+> | prelazak na taj smer **prazni** polje broja, povratak vraća predlog | `SetSmerRev` |
 > | zauzetost broja u opsegu **`(Kupac, KupacID, dan)`** | `ReversBrojZauzet` |
 > | upis ide `UpisiReversPartnera_TX` | `ReversUpisi` |
 > | štampa imenuje **kupca**, ne vozača | `StampajRevers` |

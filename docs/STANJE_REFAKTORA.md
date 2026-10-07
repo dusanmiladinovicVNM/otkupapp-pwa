@@ -1215,6 +1215,35 @@
     Pravilo po sadržaju pripada `.claude/rules/forme-i-kontrole.md`, ali `.claude/`
     ide **isključivo kroz zaseban process PR** (`CLAUDE.md` §6), pa ovde stoji
     nalaz, a preseljenje je zasebna stavka.
+84. **Operaterska provera našla P1 u ulazu: ljuska je kupčevom reversu
+    predlagala NAŠ broj** (07.10.2026).
+    Na ekranu je, uz izabran smer „Povrat kupca", u polju **BROJ REVERSA**
+    stajalo `1/071026` — broj iz **našeg** niza `(Stanica, dan)`. Da je upis
+    prošao, kupčev dokument bi nosio broj koji smo mi izmislili — tačno ono što
+    `AMB-10-ODL-23` zabranjuje. Pisac bi ga primio: on traži da broj **postoji**,
+    ne da je kupčev.
+    **Uzrok je sloj, ne pravilo.** Kapiju sam stavio u `ReversValidiraj`, a broj
+    stiže iz **ljuske**: `RefreshBrojPredlog` ga upiše čim se izabere otkupno
+    mesto — dakle **pre** nego što se smer uopšte bira. Komentar u
+    `modScrDokumenti.SaveRevers` je to i govorio („Broj reversa se predlaže u
+    ljusci"), a ja sam ga pročitao tek kad je slika pokazala broj.
+    **Isti oblik već postoji u istom fajlu:** `PredlogPrijemnice` — „Ostali kupci
+    nose svoj eksterni, nezavisni broj — polje se tada **NE dira**". Repo je
+    pravilo znao; moj ulaz ga nije sledio.
+    **Ispravka je selidba odluke, ne druga kopija kapije:**
+    `modNovacUnos.RevSmerPredlazeBroj(smer)` je sada **jedini izvor**, a zovu je
+    **oba** sloja — ljuska pre nego što dodirne polje, validator pre auto-broja.
+    Dve kopije istog uslova bi se razišle; prvi put su se i razišle.
+    Uz to `SetSmerRev` **prazni** polje na prelasku na kupčev smer i **vraća**
+    predlog na povratku — broj prati smer kao što već prati stanicu.
+    **Zasto ga nijedan test nije uhvatio:** svi su merili `ReversValidiraj`, a
+    kvar je bio u ljusci. Sada tvrdnja meri **funkciju koju oba sloja zovu**, pa
+    jedna sabotaža (`amb-ulaz-predlog-ne-gleda-smer`) obara oba puta. Katalog
+    701 → 702.
+    **Cena je izmerena i vredi je zapisati:** ulaz je prošao `DOKAZANO 2/2` i pun
+    prolaz 12/12 **sa ovim kvarom u sebi**. Zelena suite ne pokriva sloj koji
+    nijedan test ne dodiruje — operaterska provera je ovde bila **jedina** kapija,
+    i zato stoji u ček-listi, ne kao formalnost.
 
 ## Dug sa imenom (posle S5-5b)
 
