@@ -1254,11 +1254,32 @@
     dodate **postojećem** testu, pa se poklapa i to.
     Ostaje operaterska potvrda baš te putanje: izaberi otkupno mesto (broj se
     popuni), pa „Povrat kupca" — **polje mora da se isprazni**.
+86. **`AMB-10-ODL-24` otvoren: pozajmica ambalaže od kupca** (08.10.2026, 6.12k).
+    Operater je, posle potvrde da ulaz radi, imenovao **recipročan** smer: kupci
+    **često pre sezone predaju SVOJE prazne gajbe** — pozajmica nama, ne povrat
+    naših — i to **vozaču**, istim lancem. „Time se zaokružuje celina."
+    **Nisam krenuo u kod, i to je nalaz:** merenje je pokazalo da sposobnost
+    **već postoji** — potvrda manjka daje `SpoljniSvet → Kupac` (`ULAZ_TUDJE`,
+    obaveza +N) i `Kupac → Vozac` (`POVRAT_PRAZNE`), saldo kupca 0, vozač +N,
+    obaveza po tipu ambalaže tačna. Da sam odmah dodao vrstu u zatvoren enum,
+    dodao bih je **pored** mehanizma koji već radi.
+    **Rupa je u značenju:** planirana pozajmica i neobjašnjeno odstupanje
+    ostavljaju **isti trag**. Dve stvari koje se ne razlikuju su tačno ono što
+    ovaj refaktor uklanja.
+    **Asimetrija otkrivena usput:** model ume da **vrati** tuđu ambalažu kao
+    događaj (`VRACANJE_TUDJE` **jeste** zahtev), a da je **primi** samo kao
+    posledicu (`ULAZ_TUDJE` **nije** zahtev, par uvek `SpoljniSvet → nalog`, i ne
+    ulazi u par dokumenta).
+    **Redosled je operaterov:** prvo `10c` (merge blocker), pozajmica posle
+    merge-a. Zapisano na **tri mesta** da ne ispari: kanon (6.12k), tabela „Dug sa
+    imenom", i memorija sesije — na operaterov izričit zahtev („ekstremno bitno
+    za dalji rad, da se ne zaboravi").
 
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
+| **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a** |
 | **nema kapije „modul ne sme da koristi tuđ `Private` simbol"** | VBA kompajlira **na zahtev**, pa `Sub or Function not defined` pukne tek kad neki test prvi put pozove baš tu proceduru — i to posle **600 s i ubijenog Excela**, uz poruku bez fajla i linije (06.10.2026: `MarkRowStornirano`, `Private` u `modStorno`, pozvan iz `modAmbalaza`). Ime **postoji** u projektu, samo nije vidljivo — pa ga nijedna jeftina kapija ne vidi. Jednokratni merač je napisan i dao **1 nalaz sa fajlom i linijom nad pokvarenim izvorom, 0 posle** — dvosmeran dokaz. Tri lažna nalaza prvog izdanja su i sama merenje: repni komentar, labela (`Resume CleanUp`) i **LF kopija iz git-a** (split po `
 ` dao je ceo fajl kao jedan red, pa je prvi „čist" prolaz bio lažan). Kao trajna kapija ide u `vba_check`, dakle **zaseban process PR** |
 | **nema kapije „nastavak reda je poslednji znak u redu"** | regex nad VBA izvorom ume da pojede **prelom reda** (`\s*` hvata i `\r\n`), pa `_` ostane usred linije — sintaksna greška koju nijedna jeftina kapija ne vidi. Cena je nesrazmerna: **585 s i ubijen Excel**, a poruka je samo „Compile error: Syntax error" bez mesta (06.10.2026, rez reversa). Jednokratni merač je napisan i dao **2 nalaza pre ispravke, 0 posle** — dvosmeran dokaz po konstrukciji, nad celim `src-vba`. Kao trajna kapija ide u `vba_check` i traži svoj dvosmerni dokaz, dakle **zaseban process PR** |

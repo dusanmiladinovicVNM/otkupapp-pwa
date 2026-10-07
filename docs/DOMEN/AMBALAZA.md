@@ -1992,6 +1992,56 @@ tipom saldo nosili i drugi testovi, pa manjak ne bi bio ponovljivo 15 ·
 povrat) · sabotaže `amb-rvp-potvrda-se-ne-prosledjuje`,
 `amb-prj-povrat-samo-sa-klasom-i`. Katalog 697 → 699.
 
+### 6.12k Pozajmica ambalaže od kupca — `AMB-10-ODL-24` (**OTVORENO**)
+
+> **Presuda operatera, 08.10.2026.** Kupci **često, pre početka sezone, predaju
+> svoju praznu ambalažu** — **njihove** gajbe, pozajmica nama, ne povrat naših.
+> Predaju je **vozaču**, kao i inače (lanac `kupac → vozac → stanica`). Operater
+> je to nazvao **recipročnim** smerom kupčevog reversa: „time se zaokružuje
+> celina".
+
+**Sposobnost danas POSTOJI — izmereno, ne pretpostavljeno.** Kupac bez naših
+gajbi preda 40 svojih; `UpisiReversPartnera_TX` sa potvrđenim manjkom 40 daje:
+
+```
+SpoljniSvet -> Kupac   40   ULAZ_TUDJE_AMBALAZE    obaveza +40
+Kupac       -> Vozac   40   POVRAT_PRAZNE          obaveza   0
+                            saldo kupca 0, vozac +40
+```
+
+Obaveza prema tom kupcu je **40**, po tipu ambalaže — `AmbObavezaPartneru` hvata
+red jer kupac stoji na **bilo kojoj** strani. **Ekonomija je tačna.**
+
+**Rupa je u ZNAČENJU, ne u brojkama.** Planirana pozajmica i **neobjašnjeno
+odstupanje** (kupac vrati 20, a knjiga kaže da drži 5) ostavljaju **isti trag**,
+pa se posle ne mogu razlikovati. Uz to operater za redovan posao dobija pitanje
+o **manjku** — „nalog nema 40, manjak ulazi u opticaj kao tuđa ambalaža".
+
+**Šta košta da postane svoj događaj:** izmena **ugovora** u `10a`, ne samo pisca.
+
+| Šta se dira | Zašto |
+|---|---|
+| `AmbVrsteSve` + `AmbKlaseVrste` | `VrstaKretanja` je **zatvoren** enum sa kapijama potpunosti; par i klase pozajmice su `PARTNER → SOPSTVENI`, **identični** povratu — razlika je samo čije su gajbe |
+| `AmbDoprinosObavezi` (`AMB-INV-09`) | pozajmica diže obavezu; povrat je ne dira |
+| `AmbDokDozvoljavaKretanje`, `AmbDokKretanjeProblem` | kupčev dokument (`REVERS_PARTNERA`) nosio bi **dve** vrste |
+| čitaoci u `10c` | svaki koji grupiše po vrsti kretanja |
+
+> **ČVOR KOJI SE MORA REŠITI PRE KODA.** Eksplicitan ulaz tuđe ambalaže bi sa
+> **pokrićem deficita** delio **par i vrstu** na istom dokumentu — a to je tačno
+> razlog zbog kog `ULAZ_TUDJE_AMBALAZE` i **nije** zahtev nego posledica
+> (`AmbVrstaJeZahtev` → `False`, par uvek `SpoljniSvet → nalog`, i ne ulazi u par
+> dokumenta — `DodajStranu`). Rešenje nije „pustiti ULAZ_TUDJE kao zahtev" nego
+> odluka šta tačno nosi koji red; bez nje bi jedan događaj tiho progutao drugi
+> kao „idempotentno ponavljanje".
+
+**Asimetrija koju je ovo otkrilo** vredi zapisati i sama po sebi: model ume da
+**vrati** tuđu ambalažu kao događaj (`VRACANJE_TUDJE_AMBALAZE` **jeste** zahtev),
+ali da je **primi** samo kao sporedni efekat.
+
+**Redosled je operaterov (08.10.2026):** prvo `10c` (ekran Storno, merge
+blocker), pozajmica **posle merge-a**. Do tada se knjiži kroz potvrdu manjka —
+ispravno po brojkama, nedovoljno po značenju.
+
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
 1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..09`, protokol potvrde deficita, storno-svesna formula obaveze i njena donja granica. **Bez produkcionog cutovera.**
