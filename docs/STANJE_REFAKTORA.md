@@ -1130,6 +1130,47 @@
     Sabotaže `amb-ulaz-kupcev-broj-se-predlaze`, `amb-ulaz-kupcev-smer-prima-kooperanta`.
     Katalog 699 → 701. Jeftine kapije `rc=0` (`vba_check`, schema, `who_writes`
     ×3, čitaoci, četiri merača, popis suita).
+81. **`REVERT-FAIL`: dve sabotaze sa ISTIM pokvarenim tekstom** (07.10.2026).
+    Dokaz ulaza je stao posle prve sabotaže: `amb-ulaz-kupcev-smer-prima-kooperanta`
+    → `REVERT-FAIL`, `izvor pre/posle RAZLIKA`, i radno stablo je ostalo
+    **pokvareno** — u KUP grani je pisalo `partTip <> "KOOP"`.
+    **Mehanizam:** revert traži **svoju** zamenu i na njeno mesto vraća **svoje**
+    sidro. Moja sabotaža je imala **isti** pokvaren tekst kao zatečena
+    `revers-kupac` — dve grane istog validatora, razlika samo u `"KUP"`/`"KOOP"`,
+    a komentar sabotaže prepisan — pa je revert u KUP granu upisao **tuđe** sidro.
+    Izvor time ostaje **zdrav po obliku a pogrešan po sadržaju**: to je najgora
+    vrsta ostatka, jer ga nijedna sintaksna provera ne vidi.
+    **Nijedna zatečena provera to nije mogla da vidi:** sidro je bilo jednoznacno,
+    zamena odsutna u zdravom izvoru, tvrdnje različite. Katalog je imao zamke za
+    prazan tekst, zamenu jednaku sidru, zamenu kao podniz sidra, deljenu tvrdnju,
+    dodelu tuđoj proceduri — ali ne za **deljenu zamenu**.
+    **Zamka 11** je zato napisana: dva unosa nad istim fajlom sa istim
+    pokvarenim tekstom → nalaz po imenu oba. Dvosmeran dokaz nad **pravim**
+    katalogom (`CLAUDE.md` §5 ga za izmenu checkera i zahteva):
+
+    | | Ishod |
+    |---|---|
+    | pre razdvajanja | **crvenih 3**, svaki imenuje svoj par |
+    | posle razdvajanja | `nalaza 0`, `rc=0` |
+    | `--self-test` | 42 → **43** slučaja, čisto |
+
+    **Dva od tri para bila su ZATEČENA** — i to je ono što pravilo opravdava:
+    `izmena-nacrta-pravi-nov` / `zbirna-ekran-izmena-pravi-nov` (ista zamena,
+    sidra `mIzmenaOtpID` vs `mIzmenaZbrID`) i `otp-kapija-mreza-tiha-nula` /
+    `otk-kapija-mreza-tiha-nula` (ista zamena, sidra `ZbirStavkiZaOtpremnicu` vs
+    `ZbirStavkiZaOtkup`). Oba bi pri revertu upisala **tuđu** granu, u istom
+    obliku kao moj slučaj; nisu pukla samo zato što ih nijedan rez nije pustio
+    zajedno. Razdvojeni su **komentarom**, koji je inertan — šta sabotaža meri
+    nije dirnuto.
+    **Self-test nove zamke tvrdi i šta se NE sme upaliti:** par deli zamenu a
+    tvrdnje su različite, pa pravilo o deljenoj tvrdnji mora da ostane tiho —
+    inace bi self-test prolazio i bez zamke 11.
+    Usput izmereno: `tools/sabotaza.py` je **CRLF** fajl, a moji ranije ubacivani
+    blokovi su išli sa `LF` (119 samotnih LF-ova). Python to ne vidi, ali anchor
+    građen sa `\n` **ne pogađa** — prva dva pokusaja patch-a su zato javila
+    „0 pogodaka". Patch skripte za taj fajl grade redove iz `N = "\r\n"`.
+    `git checkout` za vraćanje ostatka je bio **odbijen** (destruktivna radnja),
+    pa je red vraćen običnom izmenom izvora — ista vrednost, vidljiv trag.
 
 ## Dug sa imenom (posle S5-5b)
 

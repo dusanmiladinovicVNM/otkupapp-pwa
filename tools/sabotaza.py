@@ -635,7 +635,7 @@ SABOTAZE = {
     "zbirna-ekran-izmena-pravi-nov": (
         "modScrDokumenti.bas",
         "    If Len(mIzmenaZbrID) > 0 Then\n",
-        "    If False Then   ' SABOTAZA: izmena pravi nov nacrt\n",
+        "    If False Then   ' SABOTAZA: izmena zbirne pravi nov nacrt\n",
         "Test_ZBR_EkranPraviIMenjaNacrt",
         "ZBR ekran: izmena NE pravi nov nacrt",
     ),
@@ -5543,7 +5543,7 @@ SABOTAZE = {
     "otk-kapija-mreza-tiha-nula": (
         "modScrDokumenti.bas",
         "                zStav = modOtkup.ZbirStavkiZaOtkup(dStav, CellS(src, r, iStavID), _\n                            \"modScrDokumenti.RedoviZaTip\")\n",
-        "                If dStav.Exists(CellS(src, r, iStavID)) Then\n                    zStav = dStav(CellS(src, r, iStavID))\n                Else\n                    zStav = Array(0#, 0#, 0#, \"\")   ' SABOTAZA: tiha nula\n                End If\n",
+        "                If dStav.Exists(CellS(src, r, iStavID)) Then\n                    zStav = dStav(CellS(src, r, iStavID))\n                Else\n                    zStav = Array(0#, 0#, 0#, \"\")   ' SABOTAZA: tiha nula (otkup)\n                End If\n",
         "Test_OTK_ZaglavljeBezIDObaraCitaoce",
         "OTK bez ID: mreza pada po imenu, ne crta 0 kg",
     ),
@@ -6982,7 +6982,7 @@ SABOTAZE = {
     "amb-ulaz-kupcev-smer-prima-kooperanta": (
         "modNovacUnos.bas",
         "        If Len(S(p, \"partnerID\")) = 0 Or partTip <> \"KUP\" Then\n",
-        "        If Len(S(p, \"partnerID\")) = 0 Then   ' SABOTAZA: tip partnera se ne gleda\n",
+        "        If Len(S(p, \"partnerID\")) = 0 Then   ' SABOTAZA: kupcev smer ne gleda tip partnera\n",
         "T_ReversValidiraj_PovratKupcaJeSvojSmer",
         "kupcev smer ne prima kooperanta",
     ),
@@ -7958,6 +7958,7 @@ def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
     podmetne izmisljene unose, umesto da alat prepisuje sopstveni fajl."""
     nalazi = []
     videne_tvrdnje = {}
+    videne_zamene = {}
     kes = {}                 # fajl se cita jednom, ne 222 puta (ovo ide u hook)
     if tela is None:
         tela = _tela_testova()
@@ -8052,6 +8053,29 @@ def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
                                 "za BFP je tvrdnja KLJUC u dokaz.py, pa odrezana ili "
                                 "dinamicka (literal pa '&') nikad ne moze da se "
                                 "poklopi: 'NE OBARA SVOJ TEST'" % test))
+
+        # zamka 11: dve sabotaze nad ISTIM fajlom sa ISTOM zamenom.
+        #
+        # Revert trazi SVOJU zamenu i na njeno mesto vraca SVOJE sidro. Kad
+        # dve sabotaze imaju identican pokvaren tekst, revert jedne vrati
+        # sidro DRUGE: izvor ostane zdrav po OBLIKU a pogresan po SADRZAJU,
+        # pa dokaz stane sa REVERT-FAIL i radno stablo ostane pokvareno.
+        #
+        # Mereno 07.10.2026: "amb-ulaz-kupcev-smer-prima-kooperanta" i
+        # "revers-kupac" delili su zamenu
+        #     If Len(S(p, "partnerID")) = 0 Then   ' SABOTAZA: tip partnera se ne gleda
+        # (dve grane istog validatora, razlika samo u "KUP"/"KOOP"), pa je
+        # revert u KUP granu upisao <> "KOOP". Nijedna zatecena provera to
+        # nije videla: sidro je bilo jednoznacno, zamena odsutna u zdravom
+        # izvoru, a tvrdnje razlicite.
+        kljuc_z = (fajl, novo)
+        if kljuc_z in videne_zamene:
+            nalazi.append((ime, "deli ZAMENU sa '%s' nad istim fajlom -- "
+                                "revert ne moze da ih razlikuje, pa vraca "
+                                "TUDJE sidro (REVERT-FAIL)"
+                                % videne_zamene[kljuc_z]))
+        else:
+            videne_zamene[kljuc_z] = ime
 
         # zamka 5: dve sabotaze koje test ne razlikuje
         kljuc = (test, tvrdnja)
@@ -8423,6 +8447,22 @@ def _self_test() -> int:
         print("SELF-TEST: _zameni prihvata stanje koje provera ne priznaje "
               "(visestruko=%r, nema=%r, upisano=%r)"
               % ((ok_vise, k_vise), (ok_nema, k_nema), dirnuto), file=sys.stderr)
+        lose += 1
+
+    # deljena ZAMENA: dva unosa nad istim fajlom sa istim pokvarenim tekstom.
+    # Tvrdnje su RAZLICITE, pa pravilo o deljenoj tvrdnji ne sme da se upali --
+    # inace bi self-test prolazio i bez zamke 11.
+    par_z = {"prvi-z": zdravo,
+             "drugi-z": tuple(zdravo[:3]) + ("T_Postoji", "tvrdnja iz AssertFalse")}
+    n += 1
+    nalazi_z = _nalazi(par_z, imena, tela)
+    if not any("deli ZAMENU" in sta for _, sta in nalazi_z):
+        print("SELF-TEST: deljena ZAMENA nije prijavljena (%s)" % nalazi_z,
+              file=sys.stderr)
+        lose += 1
+    if any("deli tvrdnju" in sta for _, sta in nalazi_z):
+        print("SELF-TEST: deljena ZAMENA se prijavljuje kao deljena tvrdnja",
+              file=sys.stderr)
         lose += 1
 
     # deljena tvrdnja: dva unosa sa istim (test, tvrdnja)
