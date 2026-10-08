@@ -4,8 +4,9 @@
 **Model:** `ops@agrix.rs` + Google Drive/Sheets/GAS/PWA + lokalni Excel/VBA + SEF + bankarski import  
 **Primena:** C001, C002, C003...  
 **Status:** Operativni vodič zasnovan na uspešno stabilizovanom C001 putu  
-**Ažurirano:** 2026-05-13
-**Revizija:** v2 — dodati digitalni potpis, certifikat, Trusted Location, PS1 install pravila, release manifest
+**Ažurirano:** 2026-10-08
+**Revizija:** v2 — dodati digitalni potpis, certifikat, Trusted Location, PS1 install pravila, release manifest  
+**Revizija:** v2.1 — usklađeno sa kodom na `main`: makro `SyncPWAFullCycle` (ne `RunFullPWAGoogleSyncCycle`), 32 folder ID-ja (ne 33), §24A.10 folder lista uz `Setup-AgriX.ps1` (`Backups`/`Journal`/`Temp`/`Secrets`), §15 header `ConfigKey`/`ConfigValue`
 
 ---
 
@@ -272,7 +273,7 @@ AgriX_C00X_PROD/
 > skupljanje folder ID-jeva (§8) + upis u Script Properties (§11) možeš zameniti jednom
 > GAS funkcijom. Napravi **samo root** `AgriX_C00X_PROD` (i podeli ga sa backup nalogom, §6),
 > pa kad postaviš GAS projekat (§10) pokreni `bootstrapAgriXFolderTree` iz `DriveFolder.gs` —
-> on napravi celo stablo i upiše svih 33 folder ID-ja odjednom. Ručni postupak ispod
+> on napravi celo stablo i upiše svih 32 folder ID-ja odjednom. Ručni postupak ispod
 > (§8, §11) ostaje kao referenca/fallback.
 
 ---
@@ -499,7 +500,7 @@ bootstrapAgriXFolderTree
 ```
 
 `bootstrapAgriXFolderTree` je one-time bootstrap za novog klijenta: napravi celo Drive
-stablo (§5) i upiše svih 33 folder ID-ja u Script Properties (§8 + §11) u jednom run-u.
+stablo (§5) i upiše svih 32 folder ID-ja u Script Properties (§8 + §11) u jednom run-u.
 Pokreni ga u GAS projektu **tog** klijenta (Script Properties su per-projekat); idempotentan je.
 
 Obavezno dodati `getLoginLogSpreadsheet_()`:
@@ -521,7 +522,7 @@ Bez ove funkcije login može raditi, ali se `LoginLog` neće napraviti, jer logi
 ## 11. Script Properties u Apps Script
 
 > **Brži put:** umesto ručnog upisa folder ID-jeva ispod, pokreni `bootstrapAgriXFolderTree`
-> (`DriveFolder.gs`, §10) — napravi stablo i upiše svih 33 `AGRIX_*_FOLDER_ID` propsa odjednom.
+> (`DriveFolder.gs`, §10) — napravi stablo i upiše svih 32 `AGRIX_*_FOLDER_ID` propsa odjednom.
 > Posle njega idi pravo na §13 (`debugAgriXFolders`) za proveru. Lista ispod je referenca šta
 > mora da postoji (i za ručni upis). `MONITORING_*` tajne (§12) se i dalje upisuju ručno.
 
@@ -703,7 +704,7 @@ Ako ping radi u jednom browser profilu, a ne radi u drugom, problem je Google mu
 U `AgriX.xlsm`, u `tblSEFConfig`, postavi (kod čita GOOGLE_*/CLIENT_* iz tblSEFConfig, ne tblConfig):
 
 ```text
-Kljuc                         Vrednost
+ConfigKey                         ConfigValue
 
 GOOGLE_CLIENT_ID              <OAuth client id>
 GOOGLE_CLIENT_SECRET          <OAuth client secret>
@@ -848,7 +849,7 @@ Pravila:
 Pokreni:
 
 ```vb
-RunFullPWAGoogleSyncCycle
+SyncPWAFullCycle
 ```
 
 Očekivanje:
@@ -1052,7 +1053,7 @@ TEST C00X - OBRISATI
 Posle PWA test unosa ponovo pokreni:
 
 ```vb
-RunFullPWAGoogleSyncCycle
+SyncPWAFullCycle
 ```
 
 Proveri:
@@ -1336,13 +1337,16 @@ Minimalni installer mora da uradi sledeće:
 ```text
 [ ] Detektuje package root.
 [ ] Kreira C:\AgriX.
-[ ] Kreira lokalne foldere:
+[ ] Kreira lokalne foldere (isti set koji pravi i SetupNewPC/EnsureAppFolders):
     C:\AgriX\Bank_Izvodi\Inbox
     C:\AgriX\Bank_Izvodi\Processed
     C:\AgriX\Bank_Izvodi\Error
+    C:\AgriX\Backups
     C:\AgriX\Logs
-    C:\AgriX\Backup
+    C:\AgriX\Journal
     C:\AgriX\Export
+    C:\AgriX\Temp
+    C:\AgriX\Secrets
 
 [ ] Kopira app/AgriX.xlsm u C:\AgriX.
 [ ] Kopira Tools\poppler u C:\AgriX\Tools\poppler (pored AgriX.xlsm).
@@ -1782,7 +1786,7 @@ otvori setup log i reši prijavljene stavke.
 Pokreni:
 
 ```vb
-RunFullPWAGoogleSyncCycle
+SyncPWAFullCycle
 ```
 
 Očekivanje:
