@@ -1905,6 +1905,57 @@
      nastavljaju dok ta četiri ne budu zatvorena ili objašnjena — `dokaz.py` nad
      crvenom suitom ne meri ništa.
 
+103. **Ambalažni fixture je kanonizovan u IZVORU — ali donor lanac je ustajao**
+     (08.10.2026).
+     Reviewer je sveo put do merge-a na dva posla; ovo je prvi.
+     `tools/make_fixture.py` je sejao `tblAmbalaza` u **starom** obliku: po **dve
+     noge** na događaj (`Smer` + `EntitetID` + `EntitetTip`), jer je star red
+     imenovao samo jednu stranu. To je i bio izvor sva četiri preostala pada —
+     **ne moj kod.**
+     Blok je prepisan: svaki par nogu je postao **jedan** kanonski red, sa
+     nedirnutim količinama, pa su i saldi isti:
+
+     ```
+     KOOP-TEST-1:  +30 +5 (izdate) -10 (povrat) +-99 (storniran par) -72 (uz-otkup) = -47
+     ```
+
+     To je **isti broj** koji je kartica davala i pre cutovera, pa slaganje kartice
+     i kanonskog salda ponovo meri **jedan** skup, a ne dva modela.
+     Usput su dve stvari prevedene po odluci, ne mehanički: storniran red je
+     postao **par original + kontra-stav** (`StornoOd` → `AmbID` originala, strane
+     zamenjene, **ista** vrsta kretanja — oblik koji
+     `StornirajAmbalazuDokumenta` zaista piše), a stari `OM-Ulaz-Firma` red je
+     postao **`NABAVKA`** (`SpoljniSvet → Stanica`), jer naše gajbe ulaze **samo**
+     kroz nabavku (`AMB-10-ODL-8`). Dodata su i **zaglavlja** u
+     `tblAmbalazaDokument` — bez njih bi kartica, pregled i papir pokazivali
+     `ADK-...` umesto poslovnog broja.
+
+     **ALI FIXTURE SE NE MOŽE REGENERISATI, i to je pravi blokator posla #1:**
+
+     ```
+     --donor tests/fixtures/otkup_test.xlsm
+       SEMA: tblAmbalaza: donor nema kolone
+             [OdNalogTip, OdNalogID, NaNalogTip, NaNalogID, VrstaKretanja]
+     ```
+
+     Kanonske kolone u svesku dodaje **`modSetup.EnsureRuntimeSchema`**, u runtime-u.
+     Commit-ovani fixture ih **nema**, pa bi generator moje redove upisao **bez**
+     tih kolona — a takav red ne pripada **nijednom** modelu i `KnjigaIntegritet`
+     na njega **podiže grešku**. Taj izlaz je zato odbačen, ne instaliran.
+     Donor koji kolone **ima** je temp kopija posle `EnsureRuntimeSchema`. Iz nje
+     generisana sveska je **9,8 MB** prema **1,08 MB** sadašnje, i **bez `.sig`**
+     fajla. Deset puta veći fixture nepoznatog porekla se ne instalira kao osnova
+     projekta — to je tačno zamka koju vodimo kao „donor nosi formate" (jedan
+     pogrešan donor je već oborio 10 testova bez ikakve veze sa kodom). Artefakt je
+     obrisan.
+     **Dakle posao #1 nije „prepiši fixture" nego „obnovi donor lanac":** treba
+     donor koji nosi **tekuću** šemu a nije naduvan — najverovatnije operaterova
+     radna sveska, koja kroz normalan rad već ima kanonske kolone. To je **njegov**
+     fajl i njegova mašina, pa je odluka njegova.
+     Izmena u `make_fixture.py` je **commit-ovana** i sintaksno proverena; čeka
+     samo donora da bi se izvršila. Dok se fixture ne regeneriše, `RunAllTests`
+     ostaje **204 / 4**, i to su ta četiri pada — ne nova.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
