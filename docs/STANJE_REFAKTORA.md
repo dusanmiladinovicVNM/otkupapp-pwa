@@ -1347,6 +1347,19 @@
     nogama — naslednice postoje nad pravim dokumentom. Ostatak tog testa
     (undo, ispravka, Nedovršeno) **namerno** i dalje meri stari model: te
     putanje nisu presečene i žive do `10e`.
+89. **`P2 #1` zatvoren: dokaz nad KONACNIM izvorom** (08.10.2026).
+    Prethodni dokaz je bio nad starijim potpisom — posle njega je još menjan
+    `modTestStornoCentar`, pa je pušten ponovo: `crvenih 5 / sabotaža 5`, potpis
+    izvora `ed649ee2f0354214` **identičan pre i posle**, `DOKAZANO`.
+    Time je **jedina preostala stavka iz review-a `024995de` zatvorena**: ekran
+    Storno vidi i **naš** i **kupčev** ambalazni dokument, bira ga po `AmbDokID` i
+    stornira kroz `StornirajAmbDokument_TX`.
+    **Šta `10c` još nosi** (nije merge blocker): osam produkcionih modula i dalje
+    čita stare kolone — `modIzvestaj` (27), `modAmbalaza` (18), `modStorno` (14),
+    `modIntegritet` (4), `modStornoFlow` (2), `modDokumenta` (2), `modStornoZurnal`
+    (1). To su izveštaji, integritet i žurnal; oni čitaju **stari** model, koji još
+    nosi stare redove, pa im je presek deo „staro i novo jedno protiv drugog" iz
+    6.13 — ne ulazni ekran.
 
 ## Dug sa imenom (posle S5-5b)
 
