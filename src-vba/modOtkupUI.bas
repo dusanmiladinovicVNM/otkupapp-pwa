@@ -3794,11 +3794,14 @@ Public Function AktivanEkran() As String
 End Function
 
 Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As Boolean)
-    Dim k As String
+    Dim k As String, stariRezim As String
     On Error Resume Next
     mPopMute = True                    ' punjenje lista pise u combo -> ne otvaraj panel
     mLoading = True                    ' i to NIJE izmena korisnika
     ClosePopup
+    ' Stari rezim se cita PRE dodele -- posle nje se vise ne zna odakle se doslo,
+    ' a bas to odlucuje da li broj pripada ovom dokumentu (v. kraj procedure).
+    stariRezim = ActiveMode
     ActiveMode = key
     k = modeKey(key)
     ' Ovde je do v6-ui-143 stajao grid-max za STORNO: F8 je crtao unosnu formu
@@ -3902,9 +3905,25 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     mPopMute = False
     mLoading = False
     ' Svaki rezim ima svoj brojevni niz (otkupni list / otpremnica / zbirna /
-    ' revers), pa se predlog racuna i pri promeni rezima - inace bi u polju
-    ' ostao broj iz prethodnog niza. Rezimi bez niza ga ne diraju.
-    If Not mBuilding Then RefreshBrojPredlog False
+    ' revers), pa broj prethodnog dokumenta ne sme da predje u sledeci.
+    '
+    ' PRAZNJENJE JE NOSECE, a ne sam predlog -- i to je bio P1 (review
+    ' 08.10.2026). RefreshBrojPredlog upisuje SAMO kad ima sta da predlozi:
+    '
+    '   AUTO_BROJ_DOKUMENTA = NE   -> SuggestNextBroj vraca "" -> Exit Sub
+    '   rezim bez niza (F5, F6)    -> KindZaRezim vraca "" -> Exit Sub
+    '
+    ' U oba slucaja polje ostaje netaknuto, pa bi broj prethodnog dokumenta
+    ' otisao u pisac sledeceg: kupcev broj reversa je tako mogao da postane
+    ' broj OTKUPNOG LISTA, a OtkupValidiraj ga ne odbija (rucno unet broj van
+    ' nase seme je legitiman -- BrojOdgovaraKontekstu vraca NEPRIMENLJIVO).
+    '
+    ' Zato se polje PRVO prazni, pa tek onda trazi predlog. Prefill ispravke
+    ' ide POSLE SelectMode i upisuje svoj broj, pa ga ovo ne dira.
+    If Not mBuilding Then
+        If StrComp(stariRezim, key, vbTextCompare) <> 0 Then SetFld "fgBrOtpr", ""
+        RefreshBrojPredlog False
+    End If
     If doReload Then
         mView = Empty: mViewN = 0
         ReloadGrid

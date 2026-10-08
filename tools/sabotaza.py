@@ -6997,6 +6997,17 @@ SABOTAZE = {
         "T_ReversValidiraj_PovratKupcaJeSvojSmer",
         "kupcev smer NE dobija predlog broja",
     ),
+    # ZIVOTNI CIKLUS BROJA (review 08.10.2026, P1). Promena rezima prestaje da
+    # prazni polje, pa se oslanja na predlog -- a on sa iskljucenim AUTO_BROJ-em
+    # (i u rezimima bez niza) ne upisuje nista. Broj prethodnog dokumenta tada
+    # predje u sledeci rezim i ode u njegov pisac.
+    "amb-rezim-ne-prazni-broj": (
+        "modOtkupUI.bas",
+        '        If StrComp(stariRezim, key, vbTextCompare) <> 0 Then SetFld "fgBrOtpr", ""\n',
+        '        \' SABOTAZA: promena rezima ne prazni broj\n',
+        "T_RezimBroja_PrelazakNeNasledjuje",
+        "prelazak F7 -> F1 ne nasledjuje broj",
+    ),
     # CITALAC LISTE (review 08.10.2026, P1 #1). Filter reda se vraca na legacy
     # oblik: vrsta sa zaglavlja ("REVERS") pada u Case Else -> False -> svaki nov
     # dokument ispada iz liste. Mapa tipa ostaje tacna, pa sve tvrdnje o njoj

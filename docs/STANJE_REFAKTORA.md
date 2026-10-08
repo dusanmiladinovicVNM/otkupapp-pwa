@@ -1391,6 +1391,38 @@
     Završno: `RunAllTests` **202**/0, `dokaz.py --grupe 6 amb-10c-` crvenih
     **7/7** `DOKAZANO`, pun prolaz **ZELENO 12/12**, marker nad izvorom
     `bd976a311551`. Katalog 706 → 708.
+91. **Review `cf14dc92`: broj je preživljavao promenu REZIMA, ne samo smera**
+    (08.10.2026).
+    Prethodna ispravka je rešila put **unutar** F7 (`SetSmerRev`), ali je polje
+    broja **zajedničko** za sve režime (`fgBrOtpr`). `SelectModeCore` je računao
+    da će `RefreshBrojPredlog` pregaziti stari broj — a on upisuje **samo kad ima
+    šta da predloži**:
+
+    ```
+    AUTO_BROJ_DOKUMENTA = NE   -> SuggestNextBroj vraca "" -> Exit Sub
+    rezim bez niza (F5, F6)    -> KindZaRezim vraca ""    -> Exit Sub
+    ```
+
+    **Nalaz je širi nego što je review opisao:** u režimima bez niza stari broj
+    ostaje **i sa uključenim** auto-brojem. Komentar u kodu je tvrdio da je to
+    pokriveno („inače bi u polju ostao broj iz prethodnog niza") — implementacija
+    se oslanjala na pregazenje koje se ne dešava. **Komentar nije kapija.**
+    Posledica nije kozmetička: `SkupiPolja` taj broj šalje piscu, a `OtkupValidiraj`
+    ga ne odbija — ručno unet broj van naše šeme je legitiman
+    (`BrojOdgovaraKontekstu` → `NEPRIMENLJIVO`). Kupčev broj reversa je tako mogao
+    da postane **broj otkupnog lista**.
+    Ispravka: `stariRezim` se čita **pre** dodele, polje se prazni **pre** predloga.
+    `T_RezimBroja_PrelazakNeNasledjuje` je **životni ciklus**, ne helper: ide kroz
+    `SelectMode`, meri sva tri slučaja (AUTO off, režim bez niza, AUTO on), i
+    **skuplja nalaze pa tvrdi posle** vraćanja podešavanja i `Unload`-a — pad usred
+    testa bi inače ostavio `AUTO_BROJ` isključen za sve naredne testove.
+    **P3 zatvoren, uz nalaz u mom testu:** kupčev revers se nije pojavio u listi —
+    ne zbog koda, nego zbog **UI keša**. Produkcija posle upisa zove
+    `Scr_ResetCache`; test koji zove pisca **direktno** mora sam da ispuni isti
+    preduslov, inače meri keš a ne listu.
+    Završno: `RunAllTests` **203**/0, `dokaz amb-10c-` **7/7**, `dokaz amb-rezim-`
+    **1/1**, oba `DOKAZANO`, pun prolaz **ZELENO 12/12**, marker nad izvorom
+    `96c6757e2ded`. Katalog 708 → 709.
 
 ## Dug sa imenom (posle S5-5b)
 

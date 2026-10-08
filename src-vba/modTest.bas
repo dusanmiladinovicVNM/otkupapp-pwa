@@ -295,6 +295,7 @@ Public Sub RunAllTests()
     RunOne 12
     RunOne 201
     RunOne 202
+    RunOne 203
     RunOne 13
     RunOne 14
     RunOne 15
@@ -768,6 +769,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 113: TestName = "T_Zbirna_NemaIspravku"
         Case 43: TestName = "T_Traka_NatpisiPoRezimu"
         Case 38: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
+        Case 203: TestName = "T_RezimBroja_PrelazakNeNasledjuje"
         Case 202: TestName = "T_ReversiLista_CitaAmbalazniDokument"
         Case 201: TestName = "T_ReversValidiraj_PovratKupcaJeSvojSmer"
         Case 200: TestName = "T_TxRollback_NepotpunZatvaraUpisISnimanje"
@@ -978,6 +980,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 113: T_Zbirna_NemaIspravku
         Case 43: T_Traka_NatpisiPoRezimu
         Case 38: T_ZbirnaForma_KlasaOstajeBezCene
+        Case 203: T_RezimBroja_PrelazakNeNasledjuje
         Case 202: T_ReversiLista_CitaAmbalazniDokument
         Case 201: T_ReversValidiraj_PovratKupcaJeSvojSmer
         Case 200: T_TxRollback_NepotpunZatvaraUpisISnimanje
@@ -6321,6 +6324,58 @@ End Sub
 
 
 
+
+' BROJ NE PRELAZI IZ REZIMA U REZIM.
+'
+' Svaki rezim ima svoj brojevni niz, a polje broja je ZAJEDNICKO (fgBrOtpr).
+' SelectModeCore je racunao da ce RefreshBrojPredlog pregaziti stari broj -- ali
+' on upisuje SAMO kad ima sta da predlozi:
+'
+'   AUTO_BROJ_DOKUMENTA = NE   -> SuggestNextBroj vraca prazno -> Exit Sub
+'   rezim bez niza (F5, F6)    -> KindZaRezim vraca prazno    -> Exit Sub
+'
+' Zato kupcev broj reversa moze da zavrsi kao broj otkupnog lista (review
+' 08.10.2026, P1). Ovo je ZIVOTNI CIKLUS, ne helper: meri se kroz SelectMode,
+' isti poziv koji radi precica ljuske.
+'
+' Nalazi se skupljaju pa tvrde POSLE vracanja podesavanja i Unload-a: pad usred
+' testa bi inace ostavio AUTO_BROJ iskljucen za sve naredne testove.
+Private Sub T_RezimBroja_PrelazakNeNasledjuje()
+    Dim f As frmOtkupUI, zf As Object, prevAuto As String
+    Dim poF7 As String, poF1 As String, poF5 As String, poAuto As String
+
+    prevAuto = GetConfigValue(CFG_AUTO_BROJ_DOK)
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+
+    ' --- AUTO ISKLJUCEN: niko ne prepisuje broj, pa mora da se OBRISE
+    SetConfigValue CFG_AUTO_BROJ_DOK, "NE"
+    modOtkupUI.SelectMode f, "F7"
+    SetPolje zf, "fgBrOtpr", "KUP-R/9001"
+    poF7 = Polje(zf, "fgBrOtpr")
+    modOtkupUI.SelectMode f, "F1"
+    poF1 = Polje(zf, "fgBrOtpr")
+    SetPolje zf, "fgBrOtpr", "OTK-RUCNI-1"
+    modOtkupUI.SelectMode f, "F5"
+    poF5 = Polje(zf, "fgBrOtpr")
+
+    ' --- AUTO UKLJUCEN: nov rezim ne sme da nosi STARI broj
+    SetConfigValue CFG_AUTO_BROJ_DOK, "DA"
+    modOtkupUI.SelectMode f, "F7"
+    SetPolje zf, "fgBrOtpr", "KUP-R/9002"
+    modOtkupUI.SelectMode f, "F2"
+    poAuto = Polje(zf, "fgBrOtpr")
+
+    SetConfigValue CFG_AUTO_BROJ_DOK, prevAuto
+    Unload f
+
+    AssertEq poF7, "KUP-R/9001", "preduslov: kupcev broj je upisan u F7"
+    AssertEq poF1, "", "prelazak F7 -> F1 ne nasledjuje broj"
+    AssertEq poF5, "", "prelazak u rezim BEZ niza takodje prazni broj"
+    AssertEq (poAuto <> "KUP-R/9002"), True, _
+             "sa auto-brojem nov rezim ne nosi stari broj"
+End Sub
+
 ' CITALAC LISTE "REVERSI" MORA DA VRATI NOV DOKUMENT.
 '
 ' Ovaj test postoji zbog P1 koji su jeftine kapije i 12/12 ZELENO propustili
@@ -6355,6 +6410,31 @@ Private Sub T_ReversiLista_CitaAmbalazniDokument()
     ' pa ova tvrdnja meri bas to, a ne postojanje liste.
     AssertEq (RedoviSadrze(res, nabBroj)), False, _
              "lista REVERSI ne pokazuje nabavku"
+
+    ' KUPCEV REVERS JE DRUGA VRSTA ISTE LISTE (AMB-10-ODL-23), pa se meri
+    ' zasebno: docs tvrde da ekran vidi i nas i kupcev dokument, a tvrdnja nad
+    ' samo jednom vrstom bi tu tvrdnju ostavila nedokazanu.
+    '
+    ' Kupac ne mora da DRZI gajbe: povrat se knjizi uz potvrdjen manjak, pa
+    ' pokrice (SpoljniSvet -> Kupac) ulazi kao tudja ambalaza. Time test usput
+    ' prolazi i kroz AmbDokRedMapa, koja tehnicki ULAZ_TUDJE red PRESKACE i
+    ' uzima poslovni POVRAT_PRAZNE.
+    Dim kupDok As String, kupBroj As String
+    kupBroj = "KUP-LST-" & Format$(Now, "hhnnss")
+    kupDok = modAmbalaza.UpisiReversPartnera_TX(Date, kupBroj, FX_KUPAC, FX_VOZAC, _
+                                                FX_TIP_AMB, 3, "test liste", 3)
+    AssertEq (Len(kupDok) > 0), True, "preduslov: kupcev revers je upisan"
+
+    ' KES LISTE SE RESETUJE RUCNO, kao sto to radi i produkcija posle upisa
+    ' (modScrDokumenti.SaveRevers zove Scr_ResetCache). Ovaj test zove pisca
+    ' DIREKTNO, pa mora sam da ispuni isti preduslov -- bez toga bi citalac
+    ' vratio snimak od pre upisa i tvrdnja bi merila kes, ne listu.
+    modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache
+
+    res = modScrDokumenti.RedoviZaTip("REVERSI", "sve", "")
+    AssertEq (RedoviSadrze(res, kupBroj)), True, _
+             "lista REVERSI sadrzi i KUPCEV revers"
 End Sub
 
 ' Da li mreza ijednom celijom nosi trazen tekst. Trazi se po SVIM kolonama, jer
