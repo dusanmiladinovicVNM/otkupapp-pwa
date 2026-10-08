@@ -260,32 +260,51 @@ Public Function GetAmbalazeStanje(ByVal entitetID As String, _
         Exit Function
     End If
 
-    data = ExcludeStornirano(data, TBL_AMBALAZA)
+    ' NOV MODEL (AMB-10c): red imenuje OBE strane, pa JEDAN red dotice DVA
+    ' naloga -- suprotnim znakom. Stari oblik je nosio jednu stranu i Smer, pa
+    ' je filter bio jedan; sada se mora pitati za obe strane, inace polovina
+    ' knjige ispada iz salda.
+    '
+    ' Pravilo znaka se NE prepisuje ovde nego je isto kao u AmbSaldoNaloga
+    ' (6.8): +kolicina kad je nalog ODREDISTE, -kolicina kad je IZVOR. Ova
+    ' funkcija se od nje razlikuje samo oblikom -- vraca SVE tipove ambalaze
+    ' tog naloga odjednom, jer stampa i izvestaj tako citaju.
+    '
+    ' Storno se gasi kroz RedDoticeKnjigu (kontra-stav), ne kroz
+    ' ExcludeStornirano: nov model ne pise mutabilnu zastavicu, pa bi stara
+    ' provera pustila stornirani red da i dalje stoji u saldu.
+    RequireKnjigaSchema SRC
 
-    If IsEmpty(data) Then
-        GetAmbalazeStanje = Empty
-        Exit Function
-    End If
+    Dim kolIdx As Object, vrsteDok As Object
+    Set kolIdx = KnjigaZaCitanje(data, SRC, vrsteDok)
 
     Dim colTip As Long
     Dim colKol As Long
-    Dim colSmer As Long
-    Dim colEntID As Long
-    Dim colEntTip As Long
+    Dim colOdTip As Long, colOdID As Long, colNaTip As Long, colNaID As Long
 
-    colTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
-    colKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
-    colSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
-    colEntID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-    colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    colTip = kolIdx(COL_AMB_TIP)
+    colKol = kolIdx(COL_AMB_KOLICINA)
+    colOdTip = kolIdx(COL_AMB_OD_TIP)
+    colOdID = kolIdx(COL_AMB_OD_ID)
+    colNaTip = kolIdx(COL_AMB_NA_TIP)
+    colNaID = kolIdx(COL_AMB_NA_ID)
 
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
 
-    Dim i As Long
+    Dim i As Long, znak As Long
     For i = 1 To UBound(data, 1)
-        If AmbText(data(i, colEntID)) = Trim$(entitetID) And _
-           AmbText(data(i, colEntTip)) = Trim$(entitetTip) Then
+        znak = 0
+        If RedDoticeKnjigu(data, i, kolIdx) Then
+            If IstiNalog(AmbText(data(i, colNaTip)), AmbText(data(i, colNaID)), _
+                         entitetTip, entitetID) Then
+                znak = 1
+            ElseIf IstiNalog(AmbText(data(i, colOdTip)), AmbText(data(i, colOdID)), _
+                             entitetTip, entitetID) Then
+                znak = -1
+            End If
+        End If
+        If znak <> 0 Then
 
             Dim key As String
             key = AmbText(data(i, colTip))
@@ -302,17 +321,7 @@ Public Function GetAmbalazeStanje(ByVal entitetID As String, _
 
             If Not dict.Exists(key) Then dict.Add key, 0&
 
-            Select Case AmbText(data(i, colSmer))
-                Case AMB_SMER_ULAZ
-                    dict(key) = CLng(dict(key)) + CLng(data(i, colKol))
-
-                Case AMB_SMER_IZLAZ
-                    dict(key) = CLng(dict(key)) - CLng(data(i, colKol))
-
-                Case Else
-                    Err.Raise vbObjectError + 4412, SRC, _
-                              "Neispravan smer ambala" & ChrW(382) & "e u redu " & CStr(i)
-            End Select
+            dict(key) = CLng(dict(key)) + znak * CLng(data(i, colKol))
         End If
     Next i
 
@@ -356,6 +365,27 @@ End Function
 ' blockOtkupIDs: niz (npr. Split rezultat) ili string "OTK-1 + OTK-2".
 ' Vraca Long (entitetski saldo: Ulaz = +Kolicina, Izlaz = -Kolicina).
 ' ============================================================
+' DA LI RED DOTICE KOOPERANTA, I SA KOJIM ZNAKOM.
+'
+' Jedno mesto, jer se isto pitanje u GetKooperantAmbOpening postavlja DVAPUT:
+' pri trazenju granice bloka i pri sumiranju. Dve kopije istog pravila bi se
+' razisle prvom doradom -- a razlika se ne bi videla kao greska nego kao
+' pogresno pocetno stanje na stampi.
+Private Function KoopZnakReda(ByRef data As Variant, ByVal i As Long, _
+                              ByRef kol As Object, ByVal koopID As String) As Long
+    If Not RedDoticeKnjigu(data, i, kol) Then Exit Function
+
+    If IstiNalog(AmbText(data(i, kol(COL_AMB_NA_TIP))), _
+                 AmbText(data(i, kol(COL_AMB_NA_ID))), _
+                 AMB_NALOG_KOOPERANT, koopID) Then
+        KoopZnakReda = 1
+    ElseIf IstiNalog(AmbText(data(i, kol(COL_AMB_OD_TIP))), _
+                     AmbText(data(i, kol(COL_AMB_OD_ID))), _
+                     AMB_NALOG_KOOPERANT, koopID) Then
+        KoopZnakReda = -1
+    End If
+End Function
+
 Public Function GetKooperantAmbOpening(ByVal koopID As String, _
                                        ByVal tipAmb As String, _
                                        ByVal blockOtkupIDs As Variant) As Long
@@ -371,17 +401,19 @@ Public Function GetKooperantAmbOpening(ByVal koopID As String, _
     data = GetTableData(TBL_AMBALAZA)
     If IsEmpty(data) Then Exit Function
 
-    data = ExcludeStornirano(data, TBL_AMBALAZA)
-    If IsEmpty(data) Then Exit Function
+    ' Redovi se NE izbacuju iz niza (ExcludeStornirano) nego se preskacu u
+    ' petlji: granica bloka je INDEKS u append redosledu, a brisanje redova bi
+    ' ga pomerilo. Storno gasi RedDoticeKnjigu kroz kontra-stav, koji je i
+    ' sam upisan POSLE bloka -- pa u pocetno stanje ionako ne ulazi.
+    RequireKnjigaSchema SRC
 
-    Dim colTip As Long, colKol As Long, colSmer As Long
-    Dim colEntID As Long, colEntTip As Long, colDokID As Long
-    colTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
-    colKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
-    colSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
-    colEntID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-    colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-    colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
+    Dim kolIdx As Object, vrsteDok As Object
+    Set kolIdx = KnjigaZaCitanje(data, SRC, vrsteDok)
+
+    Dim colTip As Long, colKol As Long, colDokID As Long
+    colTip = kolIdx(COL_AMB_TIP)
+    colKol = kolIdx(COL_AMB_KOLICINA)
+    colDokID = kolIdx(COL_AMB_DOK_ID)
 
     ' Skup otkup-ID-jeva ovog bloka (niz ili string "OTK-1 + OTK-2").
     Dim blk As Object
@@ -407,8 +439,7 @@ Public Function GetKooperantAmbOpening(ByVal koopID As String, _
     Dim minIdx As Long: minIdx = 0
     If blk.count > 0 Then
         For i = 1 To UBound(data, 1)
-            If AmbText(data(i, colEntTip)) = "Kooperant" And _
-               AmbText(data(i, colEntID)) = Trim$(koopID) Then
+            If KoopZnakReda(data, i, kolIdx, koopID) <> 0 Then
                 If blk.Exists(AmbText(data(i, colDokID))) Then
                     minIdx = i
                     Exit For
@@ -426,16 +457,12 @@ Public Function GetKooperantAmbOpening(ByVal koopID As String, _
     End If
 
     Dim saldo As Long: saldo = 0
+    Dim znak As Long
     For i = 1 To cutoff
-        If AmbText(data(i, colEntTip)) = "Kooperant" And _
-           AmbText(data(i, colEntID)) = Trim$(koopID) And _
-           AmbText(data(i, colTip)) = Trim$(tipAmb) Then
-
+        znak = KoopZnakReda(data, i, kolIdx, koopID)
+        If znak <> 0 And AmbText(data(i, colTip)) = Trim$(tipAmb) Then
             If IsNumeric(data(i, colKol)) Then
-                Select Case AmbText(data(i, colSmer))
-                    Case AMB_SMER_ULAZ:  saldo = saldo + CLng(data(i, colKol))
-                    Case AMB_SMER_IZLAZ: saldo = saldo - CLng(data(i, colKol))
-                End Select
+                saldo = saldo + znak * CLng(data(i, colKol))
             End If
         End If
     Next i
@@ -1099,6 +1126,72 @@ Public Function AmbSaldoNaloga(ByVal tip As String, ByVal id As String, _
     Next i
 
     AmbSaldoNaloga = saldo
+End Function
+
+
+' SALDO SVIH NALOGA JEDNOG TIPA, U JEDNOM PROLAZU.
+'
+' AmbSaldoNaloga odgovara na "koliko drzi OVAJ nalog, od OVOG tipa gajbe".
+' Izvestaj pita obrnuto: "koliko drzi SVAKI kooperant, preko svih tipova" -- a to
+' je N prolaza kroz knjigu kad se zove u petlji. Zato jedan prolaz, ali ISTO
+' pravilo znaka (ODREDISTE +, IZVOR -) i ISTI lifecycle (RedDoticeKnjigu).
+'
+' Postoji zato da izvestaj ne bi nosio svoju kopiju tog pravila. Do 10c ju je
+' nosio: ReportSaldoOM je imao svoj prolaz, svoj Select Case po Smer-u i svoj
+' ExcludeStornirano -- tri stvari koje su vlasnistvo knjige.
+'
+' Red sme da ima isti tip na OBE strane (Stanica -> Stanica, PRENOS_INTERNO). Oba
+' doprinosa se tada primenjuju: par se anulira, a svaki nalog dobija svoj znak.
+'
+' Suma je preko SVIH tipova ambalaze, kao i kolona koju izvestaj prikazuje. Kome
+' treba po tipu, zove GetAmbalazeStanje (isto pravilo, drugi oblik).
+Public Function AmbSaldoPoNalogu(ByVal tip As String) As Object
+    Const SRC As String = "modAmbalaza.AmbSaldoPoNalogu"
+
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set AmbSaldoPoNalogu = res
+
+    If Len(Trim$(tip)) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, "Tip naloga je obavezan."
+    End If
+
+    RequireKnjigaSchema SRC
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim kolIdx As Object, vrsteDok As Object
+    Set kolIdx = KnjigaZaCitanje(data, SRC, vrsteDok)
+
+    Dim cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long, cKol As Long
+    cOdTip = kolIdx(COL_AMB_OD_TIP)
+    cOdID = kolIdx(COL_AMB_OD_ID)
+    cNaTip = kolIdx(COL_AMB_NA_TIP)
+    cNaID = kolIdx(COL_AMB_NA_ID)
+    cKol = kolIdx(COL_AMB_KOLICINA)
+
+    Dim i As Long, nid As String
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kolIdx) Then
+            If StrComp(AmbText(data(i, cNaTip)), Trim$(tip), vbTextCompare) = 0 Then
+                nid = AmbText(data(i, cNaID))
+                If Len(nid) > 0 Then
+                    If Not res.Exists(nid) Then res.Add nid, 0&
+                    res(nid) = CLng(res(nid)) + CLng(data(i, cKol))
+                End If
+            End If
+            If StrComp(AmbText(data(i, cOdTip)), Trim$(tip), vbTextCompare) = 0 Then
+                nid = AmbText(data(i, cOdID))
+                If Len(nid) > 0 Then
+                    If Not res.Exists(nid) Then res.Add nid, 0&
+                    res(nid) = CLng(res(nid)) - CLng(data(i, cKol))
+                End If
+            End If
+        End If
+    Next i
 End Function
 
 ' OBAVEZA FIRME PREMA PARTNERU -- izvedena iz iste knjige, bez ijedne mutabilne

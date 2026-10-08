@@ -6997,6 +6997,38 @@ SABOTAZE = {
         "T_ReversValidiraj_PovratKupcaJeSvojSmer",
         "kupcev smer NE dobija predlog broja",
     ),
+    # SALDO PITA SAMO JEDNU STRANU (10c-2). Nov red imenuje OBE strane, pa citalac
+    # koji izgubi granu IZVORA vidi samo prilive: stanica koja je izdala gajbe
+    # ostaje sa punim saldom. Tacno stanje starog modela, u kome je red nosio jednu
+    # stranu i Smer.
+    "amb-10c-saldo-samo-jedna-strana": (
+        "modAmbalaza.bas",
+        '            ElseIf IstiNalog(AmbText(data(i, colOdTip)), AmbText(data(i, colOdID)), _\n',
+        '            ElseIf False Then   \' SABOTAZA: izvorna strana se ne pita\n',
+        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "stanica je IZDALA gajbe -- saldo pada na istom redu",
+    ),
+    # LIFECYCLE SE VRACA NA ZASTAVICU: citalac prestaje da preskace kontra-stav,
+    # pa storniran revers i dalje stoji u saldu. Stari citalac je gasio red kroz
+    # ExcludeStornirano, koji nov model NE pise -- ova sabotaza meri bas to.
+    "amb-10c-saldo-ne-vidi-kontrastav": (
+        "modAmbalaza.bas",
+        '        If RedDoticeKnjigu(data, i, kolIdx) Then\n'
+        '            If IstiNalog(AmbText(data(i, colNaTip)), AmbText(data(i, colNaID)), _\n',
+        '        If True Then   \' SABOTAZA: kontra-stav se vise ne preskace\n'
+        '            If IstiNalog(AmbText(data(i, colNaTip)), AmbText(data(i, colNaID)), _\n',
+        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "storno reversa vraca saldo kooperanta na pocetno",
+    ),
+    # IZVESTAJ VRACA SVOJU KOPIJU PRAVILA: mapa svih naloga prestaje da se poklapa
+    # sa citaocem po nalogu. Dva oblika istog pravila moraju da daju isti broj.
+    "amb-10c-mapa-naloga-ne-pita-izvor": (
+        "modAmbalaza.bas",
+        '            If StrComp(AmbText(data(i, cOdTip)), Trim$(tip), vbTextCompare) = 0 Then\n',
+        '            If False Then   \' SABOTAZA: mapa ne pita izvornu stranu\n',
+        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "mapa svih naloga i saldo po nalogu daju ISTI broj",
+    ),
     # ZIVOTNI CIKLUS BROJA (review 08.10.2026, P1). Promena rezima prestaje da
     # prazni polje, pa se oslanja na predlog -- a on sa iskljucenim AUTO_BROJ-em
     # (i u rezimima bez niza) ne upisuje nista. Broj prethodnog dokumenta tada

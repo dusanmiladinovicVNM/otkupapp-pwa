@@ -745,33 +745,18 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
             Next m
     End If
     
-    ' --- Aktivni saldo ambalaze po kooperantu (neto iz ledgera: Ulaz - Izlaz,
-    '     EntitetTip="Kooperant"); prikazuje se umesto zbira predatih gajbica. ---
-    Dim koopAmbDict As Object: Set koopAmbDict = CreateObject("Scripting.Dictionary")
-    Dim ambData As Variant: ambData = GetTableData(TBL_AMBALAZA)
-    If IsArray(ambData) Then
-        ambData = ExcludeStornirano(ambData, TBL_AMBALAZA)
-        If IsArray(ambData) And Not IsEmpty(ambData) Then
-            Dim caEnt As Long, caEntTip As Long, caKol As Long, caSmer As Long
-            caEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-            caEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-            caKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
-            caSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
-            Dim ai As Long
-            For ai = 1 To UBound(ambData, 1)
-                If Trim$(CStr(ambData(ai, caEntTip))) = "Kooperant" Then
-                    Dim akoop As String: akoop = Trim$(CStr(ambData(ai, caEnt)))
-                    If akoop <> "" And IsNumeric(ambData(ai, caKol)) Then
-                        If Not koopAmbDict.Exists(akoop) Then koopAmbDict.Add akoop, 0&
-                        Select Case Trim$(CStr(ambData(ai, caSmer)))
-                            Case "Ulaz":  koopAmbDict(akoop) = koopAmbDict(akoop) + CLng(ambData(ai, caKol))
-                            Case "Izlaz": koopAmbDict(akoop) = koopAmbDict(akoop) - CLng(ambData(ai, caKol))
-                        End Select
-                    End If
-                End If
-            Next ai
-        End If
-    End If
+    ' --- Aktivni saldo ambalaze po kooperantu, iz KNJIGE (AMB-10c).
+    '
+    ' Ovde je stajao SVOJ prolaz kroz tblAmbalaza: svoje pravilo znaka (Select
+    ' Case po Smer-u) i svoj lifecycle (ExcludeStornirano). Nov model imenuje
+    ' obe strane, pa bi taj prolaz morao da pita za OBE -- ali pravilo znaka i
+    ' otkazivanje su vlasnistvo knjige, ne izvestaja.
+    '
+    ' Zato jedan poziv: isti jedan prolaz, isto pravilo, bez kopije koja se
+    ' razilazi prvom doradom. Kolona prikazuje sumu preko svih tipova gajbe,
+    ' sto je tacno ono sto primitiv vraca.
+    Dim koopAmbDict As Object
+    Set koopAmbDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT)
 
     ' --- Ergebnis-Array: 7 Spalten ---
     ' Kooperant | Kolicina | Vrednost | Isplaceno | AgroZaduzenje | Saldo | Ambalaza

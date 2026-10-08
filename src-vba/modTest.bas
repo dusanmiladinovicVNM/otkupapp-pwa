@@ -296,6 +296,7 @@ Public Sub RunAllTests()
     RunOne 201
     RunOne 202
     RunOne 203
+    RunOne 204
     RunOne 13
     RunOne 14
     RunOne 15
@@ -769,6 +770,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 113: TestName = "T_Zbirna_NemaIspravku"
         Case 43: TestName = "T_Traka_NatpisiPoRezimu"
         Case 38: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
+        Case 204: TestName = "T_AmbSaldo_CitaociSuNaNovomModelu"
         Case 203: TestName = "T_RezimBroja_PrelazakNeNasledjuje"
         Case 202: TestName = "T_ReversiLista_CitaAmbalazniDokument"
         Case 201: TestName = "T_ReversValidiraj_PovratKupcaJeSvojSmer"
@@ -980,6 +982,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 113: T_Zbirna_NemaIspravku
         Case 43: T_Traka_NatpisiPoRezimu
         Case 38: T_ZbirnaForma_KlasaOstajeBezCene
+        Case 204: T_AmbSaldo_CitaociSuNaNovomModelu
         Case 203: T_RezimBroja_PrelazakNeNasledjuje
         Case 202: T_ReversiLista_CitaAmbalazniDokument
         Case 201: T_ReversValidiraj_PovratKupcaJeSvojSmer
@@ -6324,6 +6327,75 @@ End Sub
 
 
 
+
+
+' CITAOCI SALDA MORAJU DA VIDE ONO STO PRODUKCIJA UPISUJE (AMB-10c).
+'
+' Ovaj test postoji zbog nalaza od 08.10.2026: cutover je presekao PISCA, a
+' citaoci su ostali na starom modelu. Stari pisac TrackAmbalaza nije imao vise
+' ni jedno produkciono pozivno mesto, pa su stare kolone bile PRAZNE na svakom
+' novom redu -- a GetAmbalazeStanje i ReportSaldoOM su citali bas njih. Saldo je
+' zato bio slep na sve sto operater upise.
+'
+' Suite to nije videla jer testovi koji mere te citaoce SAME seju stari oblik
+' kroz TrackAmbalaza. Zato ovaj test seje ISKLJUCIVO kroz produkcione pisce.
+'
+' Meri se DELTA, ne apsolutna vrednost: fixture vec nosi ambalazne redove, pa
+' bi tvrdnja o apsolutnom saldu merila fixture a ne rez.
+Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
+    Dim stPre As Long, koopPre As Long, stPosle As Long, koopPosle As Long
+    Dim koopStorno As Long, nabBroj As String, revDok As String
+    Dim mapa As Object
+
+    stPre = AmbSaldoTipa(FX_STANICA, AMB_NALOG_STANICA)
+    koopPre = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
+
+    ' 1) NABAVKA: SpoljniSvet -> Stanica. Stanica je ODREDISTE, pa saldo RASTE.
+    nabBroj = "NAB-SLD-" & Format$(Now, "hhnnss")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 10, nabBroj, _
+                                  "preduslov testa salda"
+    stPosle = AmbSaldoTipa(FX_STANICA, AMB_NALOG_STANICA)
+    AssertEq (stPosle - stPre), 10, _
+             "nabavka podize saldo stanice -- citalac vidi nov red"
+
+    ' 2) REVERS: Stanica -> Kooperant. Jedan red, DVA naloga, suprotan znak.
+    '    Stari model je nosio jednu stranu i Smer; da citalac pita samo jednu
+    '    stranu, polovina knjige bi ispala iz salda -- zato se mere OBE.
+    revDok = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, _
+                                                4, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    AssertEq (Len(revDok) > 0), True, "preduslov: revers je upisan"
+
+    koopPosle = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
+    AssertEq (koopPosle - koopPre), 4, "kooperant je PRIMIO gajbe -- saldo raste"
+    AssertEq (AmbSaldoTipa(FX_STANICA, AMB_NALOG_STANICA) - stPre), 6, _
+             "stanica je IZDALA gajbe -- saldo pada na istom redu"
+
+    ' 3) MAPA SVIH NALOGA mora da da isti broj kao citalac po nalogu. Dva oblika,
+    '    jedno pravilo -- da izvestaj ne bi nosio svoju kopiju.
+    Set mapa = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT)
+    AssertEq mapa.Exists(FX_KOOPERANT), True, "mapa naloga poznaje kooperanta"
+    AssertEq CLng(mapa(FX_KOOPERANT)), koopPosle, _
+             "mapa svih naloga i saldo po nalogu daju ISTI broj"
+
+    ' 4) LIFECYCLE: storno je KONTRA-STAV, ne zastavica. Stari citalac je gasio
+    '    red kroz ExcludeStornirano, sto nov model ne pise -- da je ta provera
+    '    ostala, storniran revers bi i dalje stajao u saldu.
+    modAmbalaza.StornirajAmbDokument_TX revDok
+    koopStorno = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
+    AssertEq (koopStorno - koopPre), 0, _
+             "storno reversa vraca saldo kooperanta na pocetno"
+End Sub
+
+' Saldo jednog naloga preko SVIH tipova ambalaze, kroz produkcionog citaoca
+' GetAmbalazeStanje -- isti poziv koji radi i stampa (modPrint).
+Private Function AmbSaldoTipa(ByVal nalogID As String, ByVal nalogTip As String) As Long
+    Dim st As Variant, i As Long
+    st = modAmbalaza.GetAmbalazeStanje(nalogID, nalogTip)
+    If Not IsArray(st) Then Exit Function
+    For i = LBound(st, 1) To UBound(st, 1)
+        If IsNumeric(st(i, 2)) Then AmbSaldoTipa = AmbSaldoTipa + CLng(st(i, 2))
+    Next i
+End Function
 
 ' BROJ NE PRELAZI IZ REZIMA U REZIM.
 '

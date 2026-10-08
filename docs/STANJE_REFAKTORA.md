@@ -1503,11 +1503,60 @@
        nov događaj bez starog ekvivalenta bio bi **nevidljiv** svakom nepresečenom
        čitaocu — to je i razlog zašto ne ide prvi, uz operaterov redosled.
 
+94. **`10c-2` prvi rez: sloj API-ja, pa izveštaj** (08.10.2026).
+    Pre koda je izmerena jedna stvar koja je promenila obim: **`modPrint` je bio
+    slep bez ijedne reference na staru kolonu.** Zove stare čitaoce u
+    `modAmbalaza` (`GetStanicaAmbSaldo` 343 i 1243, `GetKooperantAmbOpening` 741,
+    `GetAmbalazeStanje` 2053), pa ga grep po kolonama ne vidi. Prava mera nije
+    „imenuje staru kolonu" nego **„dohvata stari model"** — spisak iz stavke 93 je
+    zato bio uži od stvarnosti.
+    Zbog toga rez ide **slojem**, ne modulom: presečeni su `GetAmbalazeStanje` i
+    `GetKooperantAmbOpening`, a `GetStanicaAmbSaldo` je tanak omotač nad prvim —
+    pa je **`modPrint` izlečen bez ijedne izmene u `modPrint`**.
+    **Znak je izmeren, ne pretpostavljen:** staro `Ulaz(+) / Izlaz(−)` po entitetu
+    je **identično** novom `Na(+) / Od(−)` po nalogu, a tipovi naloga
+    (`modAmbalazaUgovor.bas:33-38`) su **isti stringovi** kao stari `EntitetTip` —
+    pa pozivaoci ostaju nedirnuti. Potvrđeno je i da novi redovi stari čitalac ne
+    **ruše** nego ga tiho preskaču: filter je `EntitetID = ...`, a on je prazan, pa
+    se `Case Else → Err.Raise "Neispravan smer"` nikad ne dosegne.
+    **Lifecycle se menja u istom rezu:** `ExcludeStornirano` (mutabilna zastavica,
+    koju nov model **ne piše**) → `RedDoticeKnjigu` (kontra-stav). Bez toga bi
+    storniran revers i dalje stajao u saldu.
+    **Nov primitiv `AmbSaldoPoNalogu(tip)`** — saldo **svih** naloga jednog tipa u
+    **jednom** prolazu. Postoji zato što je `ReportSaldoOM` imao **svoj** prolaz,
+    svoj `Select Case` po `Smer`-u i svoj `ExcludeStornirano`: tri stvari koje su
+    vlasništvo knjige. Poziv u petlji bi bio N prolaza, pa oblik ide u jezgro, a ne
+    kopija pravila u izveštaj.
+    **Zašto `2a` i `2b` nisu razdvojivi:** `modTest.IzvAmbSaldo` i
+    `modGoldenTests.GldAmbSaldo` čitaju kroz `GetAmbalazeStanje` i porede sa
+    `ReportSaldoOM`. Dok je jedan sloj na novom a drugi na starom modelu, ta tvrdnja
+    poredi **nov broj sa starim** — a do sada je poredila **0 sa 0**, dakle
+    vakuumski. To je isti vakuum koji je stavka 93 imenovala unaprijed.
+    **Test #204 `T_AmbSaldo_CitaociSuNaNovomModelu`** seje **isključivo** kroz
+    produkcione pisce (`NabaviAmbalazu_TX`, `UpisiReversAmbalaze_TX`,
+    `StornirajAmbDokument_TX`) i meri **deltu**, ne apsolutni saldo — fixture već
+    nosi ambalažne redove, pa bi apsolutna tvrdnja merila fixture a ne rez. Meri
+    četiri stvari: priliv, **obe strane istog reda** (stanica −4 i kooperant +4),
+    poklapanje dva oblika istog pravila, i vraćanje na nulu posle storna.
+    Katalog sabotaža 709 → **712** (jedna strana, kontra-stav, mapa naloga).
+    `GetVozacAmbSaldo` je izmeren kao **mrtav** (0 pozivaoca u `src-vba`) — ne briše
+    se ovde nego u `10e`, sa ostatkom starog modela.
+    Stanje posle reza: `modIzvestaj` 24 → **21** mesto (ostaje pet funkcija:
+    `ReportKarticaKooperanta`, `ReportKarticaAmbalaze`, `ReportAmbalazaZbirnoSvi`,
+    `IzvStaniceIzPodataka`, `ReportAmbalaza`, `StampajReversAmbalaze`),
+    `modAmbalaza` 17 → **11** (ostatak je namerno dvomodelan: `KnjigaIndeksi`,
+    `LegacyRedProblem`, `RequireAmbalazaSchema`, i mrtav `GetVozacAmbSaldo`).
+    Jeftine kapije: `vba_check` čisto (712 sabotaža, 0 nalaza), `who_writes`
+    `--check` i `--check-ownership`, `gen_schema_module --check`,
+    `popis_citalaca --check` — sve zeleno. **Skupe čekaju reviewer GO**, a compile i
+    zeleni marker su **oboreni** izmenom izvora (`96c6757e2ded` → `93ac16cfe092`).
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
 | **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). Danas to drže samo komentari uz tri grane; kapija bi morala da zna koji su pozivi iz suite-a dostupni, pa traži svoj rez i svoj dvosmerni dokaz |
+| **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita |
 | **badge "nesacuvano" na novoj formi** | `SelectModeCore` pise u polje broja POSLE `MarkClean` i `mLoading = False`, pa programski upis prodje kroz `MarkDirty` i prazna forma tvrdi da ima neupisanih izmena (review 08.10.2026, `P3`). Zatecen obrazac -- vazio je i pre P1 ispravke, za svaki rezim sa auto-brojem. Jedan premesten red, ali izmena `src-vba` obara compile i zeleni marker, a nov test (natpis u zaglavlju) trazi svoj dvosmeran dokaz; zato **svoj rez posle merge-a**, pre `ODL-24` |
 | **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a** |
 | **nema kapije „modul ne sme da koristi tuđ `Private` simbol"** | VBA kompajlira **na zahtev**, pa `Sub or Function not defined` pukne tek kad neki test prvi put pozove baš tu proceduru — i to posle **600 s i ubijenog Excela**, uz poruku bez fajla i linije (06.10.2026: `MarkRowStornirano`, `Private` u `modStorno`, pozvan iz `modAmbalaza`). Ime **postoji** u projektu, samo nije vidljivo — pa ga nijedna jeftina kapija ne vidi. Jednokratni merač je napisan i dao **1 nalaz sa fajlom i linijom nad pokvarenim izvorom, 0 posle** — dvosmeran dokaz. Tri lažna nalaza prvog izdanja su i sama merenje: repni komentar, labela (`Resume CleanUp`) i **LF kopija iz git-a** (split po `
