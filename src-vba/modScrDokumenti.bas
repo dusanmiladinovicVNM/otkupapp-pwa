@@ -2649,12 +2649,22 @@ End Function
 ' Zato se po tipu dokumenta bira SAMO noga koja nosi znacenje:
 '   revers/otkup ka kooperantu  -> noga kooperanta
 '   revers firma <-> OM         -> noga otkupnog mesta (tada OM JESTE partner)
-Public Function RevRowVisible(ByVal dokTip As String, ByVal entTip As String) As Boolean
-    Select Case Trim$(dokTip)
-        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, DOK_TIP_OTKUP
-            RevRowVisible = (Trim$(entTip) = "Kooperant")
-        Case DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-            RevRowVisible = (Trim$(entTip) = "Stanica")
+' KOJE VRSTE AMBALAZNOG DOKUMENTA ULAZE U LISTU "REVERSI".
+'
+' ZATVOREN SPISAK, a ne AmbDokVrstaPoznata: nabavka i otpis SU poznate vrste,
+' ali nisu reversi -- pustiti ih znacilo bi da F7 i Storno/Reversi pokazuju
+' dokumente koje taj ekran ne ume ni da napravi ni da stornira kao revers.
+'
+' ZAMENILA JE RevRowVisible, i to je bio P1 (review 08.10.2026). Stari filter
+' je sudio po TIPU DOKUMENTA NOGE (DOK_TIP_OM_*) i po entitetu reda. Posle
+' 10c je red mreze DOKUMENT, pa je `Vrsta` sa zaglavlja ("REVERS") padala u
+' Case Else -> False -> svaki nov revers je ISPADAO iz liste. Mapa tipa je
+' bila presecena, filter reda nije -- i nijedan test nije zvao citaoca, pa je
+' 12/12 ZELENO bilo saglasno sa potpuno praznom listom.
+Public Function AmbDokUListiReversa(ByVal vrsta As String) As Boolean
+    Select Case Trim$(vrsta)
+        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA
+            AmbDokUListiReversa = True
     End Select
 End Function
 
@@ -3038,7 +3048,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
 
         ' reversi su podskup tblAmbalaza - ostalo iz te knjige ne ulazi
         If rev Then
-            If Not RevRowVisible(CellS(src, r, iDokTip), CellS(src, r, iEntTip)) Then GoTo NextRow
+            If Not AmbDokUListiReversa(CellS(src, r, iDokTip)) Then GoTo NextRow
         End If
 
         vDatK = 0

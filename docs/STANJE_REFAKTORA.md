@@ -1360,6 +1360,37 @@
     (1). To su izveštaji, integritet i žurnal; oni čitaju **stari** model, koji još
     nosi stare redove, pa im je presek deo „staro i novo jedno protiv drugog" iz
     6.13 — ne ulazni ekran.
+90. **Review `7299b03f`: dva P1 zatvorena — i jedan je bio NEVIDLJIV suite-u**
+    (08.10.2026).
+    **P1 #1, najvažniji nalaz celog reza:** `10c` je presekao **mapu tipa** na
+    `tblAmbalazaDokument`, ali je **filter REDA ostao legacy**. `RevRowVisible`
+    sudi po `DOK_TIP_OM_*` i entitetu noge, pa vrsta sa zaglavlja (`"REVERS"`)
+    pada u `Case Else` → `False` → **svaki nov dokument ispada iz liste**. Ekran bi
+    opet pisao „Prikazano 0" — tačno ono što je rez trebalo da popravi.
+    **Zašto su jeftine kapije i 12/12 ZELENO bili saglasni sa praznom listom:**
+    nijedan test nije zvao **čitaoca**. Svi su merili mapu (tabela, identitet,
+    broj), `StornoRazlog`, `StornoIzvrsi` i `DokumentOpis` — sve **oko** njega.
+    Zamena je `AmbDokUListiReversa`: odluka na nivou **dokumenta**, zatvoren spisak
+    (`REVERS`, `REVERS_PARTNERA`). Namerno **ne** `AmbDokVrstaPoznata` — nabavka i
+    otpis su poznate vrste, ali nisu reversi.
+    **P1 #2:** broj je pratio **smer**, a mora da prati **vlasnika niza**. Moja
+    prva verzija je čistila polje samo na prelasku `1..4 → 5`; obrnuto je zvala
+    `RefreshBrojPredlog`, a on sa isključenim `AUTO_BROJ`-em vraća prazno i **izlazi
+    bez diranja polja** — pa bi kupčev broj tiho postao broj **našeg** dokumenta.
+    Sada: `1 ↔ 2` i `3 ↔ 4` ne diraju polje, a svaka promena **vlasnika** ga prazni.
+    **P2:** `ISPRAVKA` se više ne nudi za revers — još ide kroz
+    `RunReversCorrection` → `ReversIDRazresi`, koji očekuje `AmbID` noge i stari
+    `DOK_TIP_OM_*`. Ponuđena radnja koja nad izabranim dokumentom **ne može** da
+    radi gora je od radnje koje nema. Vraća se uz `10d/10e`.
+    **P3:** `StornirajAmbalazuDokumenta` je **fail-closed** za ambalazni dokument
+    (nula aktivnih originala → greška). Robni sme da nema red — prijemnica bez
+    ambalaže je legitimna — pa za njega ostaje tih izlaz.
+    **Nov test je klasa koja je falila:** `T_ReversiLista_CitaAmbalazniDokument`
+    zove **`RedoviZaTip("REVERSI")`**, isti poziv koji radi mreža. Dve tvrdnje: nov
+    dokument **jeste** u listi, a nabavka **nije** — druga meri baš zatvoren spisak.
+    Završno: `RunAllTests` **202**/0, `dokaz.py --grupe 6 amb-10c-` crvenih
+    **7/7** `DOKAZANO`, pun prolaz **ZELENO 12/12**, marker nad izvorom
+    `bd976a311551`. Katalog 706 → 708.
 
 ## Dug sa imenom (posle S5-5b)
 

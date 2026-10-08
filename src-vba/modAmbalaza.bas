@@ -1848,7 +1848,25 @@ Public Function StornirajAmbalazuDokumenta(ByVal tx As clsTransaction, _
         End If
     Next i
 
-    If originali.count = 0 Then Exit Function
+    If originali.count = 0 Then
+        ' FAIL-CLOSED ZA AMBALAZNI DOKUMENT (review 08.10.2026, P3).
+        '
+        ' On po konstrukciji ima bar jedan poslovni red: zaglavlje i knjiga
+        ' nastaju u ISTOJ transakciji. Nula aktivnih originala znaci pokvaren
+        ' zapis, a tih izlaz bi ga ostavio sa zaglavljem "Stornirano = Da" i
+        ' NULA kontra-stavova -- dokument koji izgleda storniran, a knjiga ga
+        ' nikad nije videla.
+        '
+        ' ROBNI dokument sme da nema nijedan red (prijemnica bez ambalaze je
+        ' legitimna), pa za njega ostaje tih izlaz -- inace bi svaki storno
+        ' takve prijemnice pao.
+        If StrComp(Trim$(dokTip), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) = 0 Then
+            Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                      "Ambalazni dokument '" & Trim$(dokID) & "' nema nijedan aktivan " & _
+                      "red knjige -- storno bi ostavio zaglavlje bez kontra-stava."
+        End If
+        Exit Function
+    End If
 
     Dim r As Variant
     For Each r In originali

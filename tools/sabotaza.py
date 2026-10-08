@@ -6853,8 +6853,9 @@ SABOTAZE = {
     # na saldu -- tacno kvar zbog kog ulaz postoji.
     "amb-storno-ne-upisuje-kontrastav": (
         "modAmbalaza.bas",
-        "    If originali.count = 0 Then Exit Function\n",
-        "    If True Then Exit Function   ' SABOTAZA: storno ne upisuje kontra-stav\n",
+        "    If originali.count = 0 Then\n",
+        "    If True Then Exit Function   ' SABOTAZA: storno ne upisuje kontra-stav\n"
+        "    If originali.count = 0 Then\n",
         "Test_Amb_StornoKontraStavVracaSaldo",
         "STORNO: saldo stanice se vraca na stanje pre dogadjaja",
     ),
@@ -6995,6 +6996,27 @@ SABOTAZE = {
         "    RevSmerPredlazeBroj = True   ' SABOTAZA: predlog ne gleda smer\n",
         "T_ReversValidiraj_PovratKupcaJeSvojSmer",
         "kupcev smer NE dobija predlog broja",
+    ),
+    # CITALAC LISTE (review 08.10.2026, P1 #1). Filter reda se vraca na legacy
+    # oblik: vrsta sa zaglavlja ("REVERS") pada u Case Else -> False -> svaki nov
+    # dokument ispada iz liste. Mapa tipa ostaje tacna, pa sve tvrdnje o njoj
+    # ostaju zelene -- tacno stanje koje je P1 i proizvelo.
+    "amb-10c-lista-filtrira-po-nozi": (
+        "modScrDokumenti.bas",
+        '        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA\n',
+        '        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP   \' SABOTAZA: filter po nozi\n',
+        "T_ReversiLista_CitaAmbalazniDokument",
+        "lista REVERSI sadrzi nov ambalazni dokument",
+    ),
+    # Spisak vrsta postaje otvoren: nabavka i otpis upadaju u listu reversa.
+    "amb-10c-lista-prima-svaku-vrstu": (
+        "modScrDokumenti.bas",
+        '        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA\n'
+        '            AmbDokUListiReversa = True\n',
+        '        Case Else\n'
+        '            AmbDokUListiReversa = True   \' SABOTAZA: svaka vrsta je revers\n',
+        "T_ReversiLista_CitaAmbalazniDokument",
+        "lista REVERSI ne pokazuje nabavku",
     ),
     # 10c: LISTA REVERSA PRELAZI NA AMBALAZNI DOKUMENT -- dve sabotaze nad
     # mapom tipa, jer je ona jedini spoj ekrana i tabele.

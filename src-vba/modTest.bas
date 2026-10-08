@@ -294,6 +294,7 @@ Public Sub RunAllTests()
     RunOne 11
     RunOne 12
     RunOne 201
+    RunOne 202
     RunOne 13
     RunOne 14
     RunOne 15
@@ -767,6 +768,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 113: TestName = "T_Zbirna_NemaIspravku"
         Case 43: TestName = "T_Traka_NatpisiPoRezimu"
         Case 38: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
+        Case 202: TestName = "T_ReversiLista_CitaAmbalazniDokument"
         Case 201: TestName = "T_ReversValidiraj_PovratKupcaJeSvojSmer"
         Case 200: TestName = "T_TxRollback_NepotpunZatvaraUpisISnimanje"
         Case 199: TestName = "T_ZbirnaRadniSto_BiraSvojNacrt"
@@ -976,6 +978,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 113: T_Zbirna_NemaIspravku
         Case 43: T_Traka_NatpisiPoRezimu
         Case 38: T_ZbirnaForma_KlasaOstajeBezCene
+        Case 202: T_ReversiLista_CitaAmbalazniDokument
         Case 201: T_ReversValidiraj_PovratKupcaJeSvojSmer
         Case 200: T_TxRollback_NepotpunZatvaraUpisISnimanje
         Case 199: T_ZbirnaRadniSto_BiraSvojNacrt
@@ -3852,9 +3855,16 @@ Private Sub T_StornoBezUvida_NemaAkcije()
     AssertEq modScrStorno.Scr_BrojAkcija(), 1, _
              "tip bez uvida i dalje nudi obican storno"
 
-    ' Revers isto: nema uvid po prirodi (list u lancu), ali ima svoja dva izbora.
+    ' Revers isto: nema uvid po prirodi (list u lancu), pa kapija uvida ne sme da
+    ' ga zakljuca -- mora da ponudi BAR jednu radnju.
+    '
+    ' Od 08.10.2026 je to TACNO JEDNA: ISPRAVKA je povucena jer jos ide kroz
+    ' RunReversCorrection -> ReversIDRazresi, koji ocekuje AmbID noge i stari
+    ' DOK_TIP_OM_*, a lista od 10c salje AmbDokID. Ponudjena radnja koja nad
+    ' izabranim dokumentom NE MOZE da radi je gora od radnje koje nema.
+    ' Vraca se uz 10d/10e, kad se i tok ispravke preseca na AmbDokID.
     modScrStorno.Scr_IzborTestSet STIP_REVERSI, "REV-NEMA", "", DOK_TIP_OM_IZLAZ_KOOP
-    AssertEq modScrStorno.Scr_BrojAkcija(), 2, _
+    AssertEq modScrStorno.Scr_BrojAkcija(), 1, _
              "revers nema uvid po prirodi, pa kapija ne sme da ga zakljuca"
 
     ' Revers nema uvid, pa pre storna i zamene (ISPRAVKA) potvrda imenuje stanicu
@@ -6309,6 +6319,62 @@ Private Sub T_ReversValidiraj_SmerJeObavezan()
              "neizabran smer nema prevod -- core guard puca umesto da knjizi"
 End Sub
 
+
+
+' CITALAC LISTE "REVERSI" MORA DA VRATI NOV DOKUMENT.
+'
+' Ovaj test postoji zbog P1 koji su jeftine kapije i 12/12 ZELENO propustili
+' (review 08.10.2026): mapa tipa je bila presecena na tblAmbalazaDokument, ali
+' je filter REDA ostao legacy (RevRowVisible po DOK_TIP_OM_*), pa je svaki nov
+' revers ISPADAO iz liste. Svi tadasnji testovi su merili MAPU (tabela,
+' identitet, broj) i STORNO, a nijedan nije zvao citaoca -- pa je zelena suite
+' bila saglasna sa potpuno praznom listom.
+'
+' Zato tvrdnja ide kroz RedoviZaTip, isti poziv koji radi i mreza.
+Private Sub T_ReversiLista_CitaAmbalazniDokument()
+    Dim nabBroj As String, revDok As String, revBroj As String
+    Dim res As Variant, i As Long
+
+    ' Preduslov: stanica mora da DRZI gajbe (ODL-8 -- nase ne nastaju iz vazduha).
+    nabBroj = "NAB-LST-" & Format$(Now, "hhnnss")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 10, nabBroj, _
+                                  "preduslov testa liste"
+    revDok = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, _
+                                                2, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    AssertEq (Len(revDok) > 0), True, "preduslov: revers je upisan"
+    revBroj = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, revDok, COL_AMBD_BROJ))
+    AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima broj"
+
+    res = modScrDokumenti.RedoviZaTip("REVERSI", "sve", "")
+    AssertEq IsArray(res), True, "citalac liste je vratio rezultat"
+    AssertEq (RedoviSadrze(res, revBroj)), True, _
+             "lista REVERSI sadrzi nov ambalazni dokument"
+
+    ' ZATVOREN SPISAK VRSTA: nabavka JESTE ambalazni dokument i poznata vrsta,
+    ' ali nije revers. Da je filter samo "poznata vrsta", ovde bi se pojavila --
+    ' pa ova tvrdnja meri bas to, a ne postojanje liste.
+    AssertEq (RedoviSadrze(res, nabBroj)), False, _
+             "lista REVERSI ne pokazuje nabavku"
+End Sub
+
+' Da li mreza ijednom celijom nosi trazen tekst. Trazi se po SVIM kolonama, jer
+' redosled kolona nije predmet ove tvrdnje.
+Private Function RedoviSadrze(ByVal res As Variant, ByVal tekst As String) As Boolean
+    Dim outA As Variant, r As Long, c As Long
+    If Not IsArray(res) Then Exit Function
+    If UBound(res) < 2 Then Exit Function
+    If CLng(res(2)) <= 0 Then Exit Function
+    outA = res(1)
+    If Not IsArray(outA) Then Exit Function
+    For r = LBound(outA, 1) To UBound(outA, 1)
+        For c = LBound(outA, 2) To UBound(outA, 2)
+            If InStr(1, NzToText(outA(r, c)), tekst, vbTextCompare) > 0 Then
+                RedoviSadrze = True
+                Exit Function
+            End If
+        Next c
+    Next r
+End Function
 
 ' F7 PETI SMER -- POVRAT PRAZNIH OD KUPCA (AMB-10-ODL-23).
 '

@@ -3627,8 +3627,12 @@ End Sub
 ' n = 0 gasi sve (stanje "nije izabrano", u koje se rezim i vraca).
 Private Sub SetSmerRev(ByVal n As Long)
     Dim z As Object, i As Long, sel As Boolean
+    Dim stariKupcev As Boolean, noviKupcev As Boolean
     On Error Resume Next
     Set z = mFrm.Controls("zForm").Controls("fgSmerRev")
+    ' Vlasnik niza se cita PRE dodele -- posle nje se stari smer vise ne zna.
+    stariKupcev = (mSmerRev = modNovacUnos.SMER_REV_POVRAT_KUP)
+    noviKupcev = (n = modNovacUnos.SMER_REV_POVRAT_KUP)
     mSmerRev = n
     MarkDirty
     For i = 1 To 5
@@ -3636,16 +3640,22 @@ Private Sub SetSmerRev(ByVal n As Long)
         BoxState z, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
     Next i
 
-    ' BROJ PRATI SMER, kao sto vec prati stanicu (v. RefreshBrojPredlog).
+    ' BROJ PRATI VLASNIKA NIZA, ne svaki smer.
     '
-    ' Predlog stize cim se izabere otkupno mesto, dakle PRE nego sto se smer
-    ' izabere -- pa bi kupcev revers nosio NAS broj, tacno ono sto AMB-10-ODL-23
-    ' zabranjuje. Prelazak na kupcev smer zato polje PRAZNI, a povratak na nas
-    ' smer vraca predlog. n = 0 (reset rezima) ne dira polje.
-    If n = modNovacUnos.SMER_REV_POVRAT_KUP Then
+    ' Nasa cetiri smera dele niz STANICE; peti nosi KUPCEV broj. Dok se vlasnik
+    ' ne menja (1 <-> 2, 3 <-> 4), broj se NE dira -- rucno upisan broj bi inace
+    ' nestajao na svaki klik. Kad se vlasnik promeni, polje se PRAZNI, pa se za
+    ' nase smerove trazi predlog.
+    '
+    ' PRAZNJENJE JE NOSECE I U SMERU 5 -> 1..4, i to je bio P1 (review
+    ' 08.10.2026): prva verzija je samo zvala RefreshBrojPredlog, a on sa
+    ' iskljucenim AUTO_BROJ-em vraca prazno i IZLAZI bez diranja polja -- pa bi
+    ' kupcev broj tiho postao broj NASEG dokumenta.
+    '
+    ' n = 0 (reset rezima) ne dira polje.
+    If n > 0 And (stariKupcev <> noviKupcev) Then
         SetFld "fgBrOtpr", ""
-    ElseIf n > 0 Then
-        RefreshBrojPredlog False
+        If Not noviKupcev Then RefreshBrojPredlog False
     End If
 End Sub
 

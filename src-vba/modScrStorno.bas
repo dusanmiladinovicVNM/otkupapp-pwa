@@ -735,10 +735,19 @@ Private Function AkcijeRacun() As Variant
         If Not CBool(mImpact("valid")) Then Exit Function
     End If
 
+    ' REVERS NUDI SAMO STORNO (od 10c).
+    '
+    ' ISPRAVKA i dalje ide kroz RunReversCorrection -> ReversIDRazresi, koji
+    ' ocekuje AmbID NOGE i stari DOK_TIP_OM_*. Lista od 10c salje AmbDokID i
+    ' vrstu REVERS / REVERS_PARTNERA, pa bi akcija pala fail-safe na "red
+    ' ambalaze nije pronadjen". Ponuditi radnju koja nad izabranim dokumentom
+    ' NE MOZE da radi je gore od toga da je nema (review 08.10.2026, P2).
+    '
+    ' Presecanje toka ispravke na AmbDokID ide uz 10d/10e, zajedno sa
+    ' UndoOperation_TX i brisanjem starog modela -- tada se vraca i ovaj segment.
     If mSelTip = STIP_REVERSI Then
         AkcijeRacun = Array( _
-            "|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger", _
-            SV_MODE_ISPRAVKA & "|OTKUI_SCRST_B_REV_ISPR|OTKUI_SCRST_H_REV_ISPR|secondary")
+            "|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger")
         Exit Function
     End If
 
