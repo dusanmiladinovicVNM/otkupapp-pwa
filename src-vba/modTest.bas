@@ -2336,7 +2336,8 @@ Private Sub T_Storno_TipBiraTabeluIKolone()
     tipovi = Array(STIP_OTKUP, STIP_OTPREMNICA, STIP_ZBIRNA, STIP_PRIJEMNICA, _
                    STIP_ISPLATE, STIP_UPLATE, STIP_REVERSI, STIP_FAKTURA, STIP_IZVOD)
     tabele = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, _
-                   TBL_NOVAC, TBL_NOVAC, TBL_AMBALAZA, TBL_FAKTURE, TBL_BANKA_IMPORT)
+                   TBL_NOVAC, TBL_NOVAC, TBL_AMBALAZA_DOKUMENT, TBL_FAKTURE, _
+                   TBL_BANKA_IMPORT)
 
     For i = 0 To UBound(tipovi)
         AssertEq modScrDokumenti.TabelaTipa(CStr(tipovi(i))), CStr(tabele(i)), _
@@ -2353,6 +2354,15 @@ Private Sub T_Storno_TipBiraTabeluIKolone()
     ' unosni ekran i storno gledaju u razlicite tabele za isti dokument.
     AssertEq modScrDokumenti.ModeTable("F4"), TBL_PRIJEMNICA, _
              "rezim i tip vode u istu tabelu"
+
+    ' REVERSI CITA ZAGLAVLJE, NE KNJIGU (10c). Identitet reda je AmbDokID: storno
+    ' dokumenta ga uzima direktno, bez razresavanja (broj, smer) -- plutajuceg
+    ' identiteta koji je rez 10b-2 uklonio. Tabela i identitet se mere ZAJEDNO:
+    ' tabela bez svoje kolone identiteta daje mrezu iz koje se ne moze stornirati.
+    AssertEq modScrDokumenti.IdKolonaTipa(STIP_REVERSI), COL_AMBD_ID, _
+             "revers se bira po AmbDokID, ne po redu knjige"
+    AssertEq modScrDokumenti.ColBroj(STIP_REVERSI), COL_AMBD_BROJ, _
+             "broj reversa dolazi sa zaglavlja dokumenta"
 
     ' Broj zbirne postoji samo tamo gde ga dokument NOSI. Dok je storno bio
     ' otpremnica, cip "Bez zbirne" je bio ukljucen i nad novcem, gde tblNovac
@@ -2391,11 +2401,20 @@ Private Sub T_StornoDok_KapijePreUpisa()
     AssertEq (Len(modStornoDok.StornoRazlog(STIP_OTKUP, "", "")) > 0), True, _
              "kapija zaustavlja prazan broj"
 
-    ' 3) Revers bez smera. Broj postoji ili ne -- svejedno: bez smera se ne
-    '    zna koji je od cetiri dokumenta, pa se ne sme ni pokusati.
-    AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, NEMA, ""), _
-             Poruka("STORNO_ERR_NEMA_SMERA"), _
-             "revers bez smera se odbija PRE trazenja dokumenta"
+    ' 3) Revers po IDENTITETU, ne po smeru (10c).
+    '
+    ' Do 08.10.2026 je ovde stajalo "bez smera se ne zna koji je od cetiri" --
+    ' i to je bilo tacno dok je identitet bio PLUTAJUCI (broj + smer + noga
+    ' knjige). Ambalazni dokument ima svoj AmbDokID, pa smer nestaje iz izbora:
+    ' tvrdnja se ne slabi nego PRESELJAVA na pravilo koje ga je zamenilo.
+    '
+    ' Nepostojeci dokument mora da padne i kad je identitet zadat -- inace bi
+    ' kapija merila samo prazno polje, a ne postojanje.
+    AssertEq (Len(modStornoDok.StornoRazlog(STIP_REVERSI, NEMA, "")) > 0), True, _
+             "revers bez identiteta se odbija PRE storna"
+    AssertEq (Len(modStornoDok.StornoRazlog(STIP_REVERSI, NEMA, "", _
+                  "AMBDOK-NEPOSTOJECI")) > 0), True, _
+             "revers sa nepostojecim AmbDokID se odbija PRE storna"
 
     ' 4) Nepoznat tip ne sme tiho da ne uradi nista.
     AssertEq (Len(modStornoDok.StornoRazlog("NEPOSTOJECI_TIP", NEMA, "")) > 0), True, _

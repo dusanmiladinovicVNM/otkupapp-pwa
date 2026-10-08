@@ -2042,6 +2042,58 @@ ali da je **primi** samo kao sporedni efekat.
 blocker), pozajmica **posle merge-a**. Do tada se knjiži kroz potvrdu manjka —
 ispravno po brojkama, nedovoljno po značenju.
 
+### 6.12l `10c` prvi rez — lista i storno reversa (`P2 #1` iz review-a)
+
+Ekran Storno i donja lista na F7 dele **jednu** mapu tipa, pa su obe gledale u
+`tblAmbalaza`. Posle reza `10b-2` tamo nema nijednog novog reversa — zato je
+operater video „Prikazano 0" iako je dokument upisan, i zato nov revers nije
+mogao da se stornira sa ekrana.
+
+| | Pre | Posle |
+|---|---|---|
+| tabela liste | `tblAmbalaza` | **`tblAmbalazaDokument`** |
+| identitet reda | `AmbID` (noga knjige) | **`AmbDokID`** |
+| broj · datum | `DokumentID` · `Datum` reda | zaglavlje |
+| preflight | `ActiveAmbalazaDokExists(broj, smer)` + `ReversIDRazresi` + `ReversStanicaDan` | `AktivanPoIdentitetu(…)` — **jedna linija**, ista kao kod prijemnice |
+| storno | `StornoOMKoopByBrDok_TX(broj, smer, AmbID)` | **`StornirajAmbDokument_TX(AmbDokID)`** |
+| opis uz potvrdu | razrešavanje `ReversID`-a | vlasnik niza + datum sa zaglavlja |
+
+**„Smer" je nestao iz izbora, i to je suština reza.** Dokument ga nema — ima
+**vrstu** (`REVERS` / `REVERS_PARTNERA`); smer je bio deo **plutaćeg identiteta**
+(broj + smer + noga), koji je `AMB-10-ODL-16/-17` ukinuo. Zato je i sabotaža
+`storno-revers-smer` **obrisana**, a ne preusmerena: kapija nad obrisanim
+pravilom zacementira staro stanje.
+
+**Četiri ćelije dolaze sa REDA, ne sa zaglavlja** — tip ambalaže, količina, vrsta
+kretanja i protivpartner. Zaglavlje ih po `AMB-10-ODL-3` **nema**, jer bi kopija
+bila druga istina. Čita ih `modAmbalaza.AmbDokRedMapa` — jedan prolaz, jer bi po
+redu mreže bio sken po redu — preskočeći kontra-stavove i pokriće deficita
+(`ULAZ_TUDJE`), jer to nisu posao dokumenta.
+
+> **ZAŠTO NIJE DEDIKOVAN BUILDER, kao kod izvoda.** Izvod ga ima jer mu je red
+> **grupa redova** (`N:1`). Revers je sada **jedan red zaglavlja = jedan red
+> mreže**, pa generički builder odgovara; dedikovan bi prepisao filtere,
+> pretragu, čipove i status — četiri stvari koje već rade.
+
+> **KOLONA PARTNER JE IZBOR PRIKAZA, NE PODATAK.** Red imenuje **obe** strane, pa
+> se bira ona koja **nije naša**; kad su obe naše (vozač i stanica,
+> `PRENOS_INTERNO` po `ODL-7`) bira se ona koja nije stanica — stanica je
+> kontekst ekrana. Ko je „naš" čita se iz **ugovora** (`AmbNalogUKlasi`), ne iz
+> spiska imena u ekranu.
+
+*Provera:* `T_Storno_TipBiraTabeluIKolone` (tabela **i** identitet **i** broj —
+mere se zajedno: tabela bez svoje kolone identiteta daje mrežu iz koje se ne može
+stornirati) · `T_StornoDok_KapijePreUpisa` (revers bez identiteta i sa
+nepostojećim `AmbDokID` odbijen **pre** storna) · sabotaže
+`amb-10c-revers-identitet-noga`, `amb-10c-broj-sa-noge`,
+`amb-10c-storno-ne-trazi-dokument`.
+
+**Šta ostaje:** stari klaster u `modStorno` (`StornoOMKoopByBrDok_TX`,
+`ReversIDRazresi`, `ActiveAmbalazaDokExists`, `ReversStanicaDan`) **nije obrisan**
+— još ga zovu testovi, `modStornoFlow` i tok **ispravke** reversa
+(`modDokUnos`). Briše se u `10e`, po redosledu iz 6.13: stare strukture
+poslednje.
+
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
 1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..09`, protokol potvrde deficita, storno-svesna formula obaveze i njena donja granica. **Bez produkcionog cutovera.**

@@ -1094,13 +1094,17 @@ End Function
 ' jedinstven tek u nizu (stanica, dan) -- pa ni broj ni "koji smer ima aktivan
 ' red pod brojem" ne kazu koji je dokument. Prazno kad red nema identitet ili
 ' nije revers: StornoRazlog tada odbija (STORNO_ERR_NEMA_SMERA), ne pogadja.
-Private Function ReversTipReda(ByVal ambID As String) As String
+' Od 10c je red liste DOKUMENT, pa se vrsta cita sa zaglavlja (REVERS /
+' REVERS_PARTNERA), a ne vise tip dokumenta sa noge knjige. Vrstu priznaje
+' UGOVOR (AmbDokVrstaPoznata), ne spisak imena ovde.
+Private Function ReversTipReda(ByVal ambDokID As String) As String
     Dim t As String
-    If Len(Trim$(ambID)) = 0 Then Exit Function
+    If Len(Trim$(ambDokID)) = 0 Then Exit Function
     On Error Resume Next
-    t = Trim$(NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, Trim$(ambID), COL_AMB_DOK_TIP)))
+    t = Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                   Trim$(ambDokID), COL_AMBD_VRSTA)))
     On Error GoTo 0
-    If ReversTipJe(t) Then ReversTipReda = t
+    If modAmbalazaUgovor.AmbDokVrstaPoznata(t) Then ReversTipReda = t
 End Function
 
 ' "broj/racun" - jednoznacan kljuc izvoda. Bez racuna se salje goli broj, pa

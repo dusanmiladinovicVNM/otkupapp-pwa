@@ -1857,17 +1857,25 @@ SABOTAZE = {
         "T_Oporavak_CiljneListe",
         "stornirana zbirna se NE nudi kao cilj",
     ),
-    "storno-revers-smer": (
+    # 10c: preflight reversa trazi AKTIVAN DOKUMENT PO IDENTITETU.
+    #
+    # Zamenila je "storno-revers-smer", koja je cuvala pravilo "bez smera se ne
+    # zna koji je dokument" -- tacno dok je identitet bio plutajuci (broj + smer
+    # + noga knjige). AmbDokID ga je ukinuo, pa je i sabotaza obrisana: cuvati
+    # kapiju nad obrisanim pravilom znaci zacementirati staro stanje.
+    #
+    # Ova gasi SAMU proveru postojanja: storno bi tada krenuo nad dokumentom koga
+    # nema, a operater bi video potvrdu umesto razloga.
+    "amb-10c-storno-ne-trazi-dokument": (
         "modStornoDok.bas",
-        "            If Len(Trim$(opcija)) = 0 Then\n"
-        "                StornoRazlog = Poruka(\"STORNO_ERR_NEMA_SMERA\")\n"
-        "            ElseIf Not ActiveAmbalazaDokExists(broj, opcija) Then\n",
-        "            If False Then\n"
-        "                StornoRazlog = \"\"   ' SABOTAZA: smer reversa vise nije obavezan\n"
-        "            ElseIf Not ActiveAmbalazaDokExists(broj, opcija) Then\n",
+        '            If Not AktivanPoIdentitetu(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, _\n'
+        '                                       COL_AMBD_ID, broj, docID) Then _\n'
+        '                StornoRazlog = NijePronadjen(broj)\n',
+        '            If False Then StornoRazlog = NijePronadjen(broj)   \' SABOTAZA: dokument se ne trazi\n',
         "T_StornoDok_KapijePreUpisa",
-        "revers bez smera se odbija PRE trazenja dokumenta",
+        "revers sa nepostojecim AmbDokID se odbija PRE storna",
     ),
+
     # --- "Odbaci zaostalu ispravku" na ekranu Oporavak ---------------------------
     # Lista Nedovrseno je bila cist pregled: operater vidi da ga safe-stop blokira,
     # a nema cime da to razresi -- jedini izlaz je bila legacy forma.
@@ -6969,6 +6977,28 @@ SABOTAZE = {
         "    RevSmerPredlazeBroj = True   ' SABOTAZA: predlog ne gleda smer\n",
         "T_ReversValidiraj_PovratKupcaJeSvojSmer",
         "kupcev smer NE dobija predlog broja",
+    ),
+    # 10c: LISTA REVERSA PRELAZI NA AMBALAZNI DOKUMENT -- dve sabotaze nad
+    # mapom tipa, jer je ona jedini spoj ekrana i tabele.
+    #
+    # Identitet se vraca na NOGU knjige. Mreza bi i dalje crtala redove, pa
+    # tvrdnja o ishodu ne bi pokazala nista -- a storno bi ponovo morao da
+    # razresava (broj, smer), tj. plutajuci identitet koji je rez uklonio.
+    "amb-10c-revers-identitet-noga": (
+        "modScrDokumenti.bas",
+        '        Case "REVERSI":                                     IdKolonaTipa = COL_AMBD_ID\n',
+        '        Case "REVERSI":                                     IdKolonaTipa = COL_AMB_ID\n',
+        "T_Storno_TipBiraTabeluIKolone",
+        "revers se bira po AmbDokID, ne po redu knjige",
+    ),
+    # Broj se vraca na kolonu noge. Kolona POSTOJI u staroj knjizi, pa bi se
+    # razilazenje videlo tek kao prazna kolona u mrezi -- tiho.
+    "amb-10c-broj-sa-noge": (
+        "modScrDokumenti.bas",
+        '        Case "REVERSI":                 ColBroj = COL_AMBD_BROJ\n',
+        '        Case "REVERSI":                 ColBroj = COL_AMB_DOK_ID\n',
+        "T_Storno_TipBiraTabeluIKolone",
+        "broj reversa dolazi sa zaglavlja dokumenta",
     ),
     # ULAZ ZA KUPCEV REVERS (F7, peti smer) -- dve sabotaze nad onim sto ulaz nosi.
     #

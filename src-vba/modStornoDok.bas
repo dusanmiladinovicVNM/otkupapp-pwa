@@ -239,28 +239,15 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
             End If
 
         Case STIP_REVERSI
-            If Len(Trim$(opcija)) = 0 Then
-                StornoRazlog = Poruka("STORNO_ERR_NEMA_SMERA")
-            ElseIf Not ActiveAmbalazaDokExists(broj, opcija) Then
+            ' IDENTITET REVERSA JE AmbDokID (AMB-10-ODL-16/-17), pa je preflight ista
+            ' jednolinijska provera kao kod prijemnice -- aktivan red po identitetu.
+            '
+            ' Nestalo je sve sto je sluzilo PLUTAJUCEM identitetu: zahtev za smerom
+            ' (dokument ga nema -- ima vrstu), razresavanje ReversID-a iz (broj, smer),
+            ' i provera granice. Dokument se bira klikom, a klik nosi njegov ID.
+            If Not AktivanPoIdentitetu(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, _
+                                       COL_AMBD_ID, broj, docID) Then _
                 StornoRazlog = NijePronadjen(broj)
-            Else
-                ' Identitet reversa je ReversID: uzima se iz kliknutog reda (docID =
-                ' AmbID), a bez njega mora biti jednoznacan po (broj, smer). Pisac
-                ' (StornoOMKoopByBrDok) razresava isto -- ovde je samo da operater
-                ' razlog vidi pre potvrde.
-                revBroj = broj: revTip = opcija
-                razlog = ReversIDRazresi(docID, revBroj, revTip, revID, False)
-                If Len(razlog) = 0 Then razlog = ReversIDGranica(revID)
-                ' Stanica i dan moraju biti poznati: potvrda ih imenuje, jer isti KOOP
-                ' broj, smer i dan legalno nose reversi dve stanice (Faza 2b). Ista
-                ' fail-closed kapija kao undo garda (UndoGuardReason).
-                If Len(razlog) = 0 Then razlog = ReversStanicaDan(revID, revSt, revDan)
-                If Len(razlog) > 0 Then
-                    StornoRazlog = Poruka("STORNO_ERR_REV_KLJUC") & " " & razlog
-                ElseIf ReversRedoviRID(revID, False).count = 0 Then
-                    StornoRazlog = NijePronadjen(broj)
-                End If
-            End If
 
         Case STIP_IZVOD
             If Not ResolveIzvodZaStorno(broj, izvBroj, izvRacun, razlog) Then
@@ -398,8 +385,10 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ok = StornoNovac_TX(novID)
 
         Case STIP_REVERSI
-            ' docID = AmbID kliknutog reda: iz njega se cita ReversID dokumenta.
-            ok = StornoOMKoopByBrDok_TX(broj, opcija, docID)
+            ' docID = AmbDokID: storno ambalaznog dokumenta je kontra-stav nad
+            ' zaglavljem I knjigom, u jednoj transakciji (AMB-10-ODL-16/-17).
+            ' Broj i vrsta vise ne ucestvuju u izboru -- identitet je dovoljan.
+            ok = modAmbalaza.StornirajAmbDokument_TX(docID)
 
         Case STIP_IZVOD
             If Not ResolveIzvodZaStorno(broj, izvBroj, izvRacun, razlog) Then
@@ -1096,7 +1085,7 @@ Public Function TipNaziv(ByVal tip As String, ByVal opcija As String) As String
         Case STIP_UPLATE:     TipNaziv = Poruka("STORNO_TIP_UPLATA")
         Case STIP_FAKTURA:    TipNaziv = Poruka("STORNO_TIP_FAKTURA")
         Case STIP_IZVOD:      TipNaziv = Poruka("STORNO_TIP_IZVOD")
-        Case STIP_REVERSI:    TipNaziv = ReversNaziv(opcija)
+        Case STIP_REVERSI:    TipNaziv = modScrDokumenti.AmbVrstaDokNaziv(opcija)
         Case Else:            TipNaziv = tip
     End Select
 End Function
@@ -1119,9 +1108,16 @@ Public Function DokumentOpis(ByVal tip As String, ByVal broj As String, _
         Exit Function
     End If
     If tip <> STIP_REVERSI Or Len(Trim$(docID)) = 0 Then Exit Function
-    revBroj = broj: revTip = opcija
-    If Len(modStorno.ReversIDRazresi(docID, revBroj, revTip, revID, False)) > 0 Then Exit Function
-    If Len(modStorno.ReversStanicaDan(revID, st, dan)) > 0 Then Exit Function
+    ' Stanica i dan se citaju SA ZAGLAVLJA (vlasnik niza + datum), ne vise
+    ' razresavanjem ReversID-a iz noge knjige. Kod kupcevog reversa vlasnik
+    ' niza JE kupac (AMB-10-ODL-23), pa opis imenuje njega -- i to je tacno:
+    ' potvrda treba da kaze cijim brojem dokument ide.
+    st = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                              Trim$(docID), COL_AMBD_BROJ_OWNER_ID))
+    dan = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                               Trim$(docID), COL_AMBD_DATUM))
+    If Len(st) = 0 Or Len(dan) = 0 Then Exit Function
+    If Not IsDate(dan) Then Exit Function
     DokumentOpis = opis & modDokUnos.ReversOpis(st, CDate(dan))
     Exit Function
 EH:

@@ -2175,6 +2175,86 @@ EH:
     Err.Raise errNum, SRC, errDesc
 End Function
 
+
+' POSLOVNI RED AMBALAZNOG DOKUMENTA -- za citaoce koji prikazuju DOKUMENT.
+'
+' Zaglavlje nema ni strane dogadjaja ni kolicinu ni tip ambalaze: po
+' AMB-10-ODL-3 one zive na REDU knjige, a kopija na zaglavlju bila bi DRUGA
+' ISTINA koja moze da se razidje. Ekran koji lista dokumente ih zato uzima
+' odavde, a ne iz zaglavlja.
+'
+' JEDAN PROLAZ, jer mreza crta stotine redova; po redu dokumenta bi bio sken
+' po redu.
+'
+' Sta se NE racuna u poslovni red, i zasto:
+'   kontra-stav (StornoOd)   nije dogadjaj nego njegov inverz
+'   ULAZ_TUDJE_AMBALAZE      pokrice deficita -- posledica, ne posao dokumenta
+'                            (AmbVrstaJeZahtev je i zove 'posledica')
+' Ostaje POSLOVNI red; ambalazni dokument ih po konstrukciji ima tacno jedan,
+' pa se uzima PRVI i ostali se ne gledaju.
+'
+' Vrednost je PAKOVAN STRING, ne ugnjezden objekat: late-bound Dictionary nema
+' Property Set, pa `Set d(kljuc) = objekat` puca.
+'
+'   AmbDokID -> vrstaKretanja | tipAmb | kolicina | odTip | odID | naTip | naID
+Public Function AmbDokRedMapa() As Object
+    Const SRC As String = "modAmbalaza.AmbDokRedMapa"
+
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set AmbDokRedMapa = d
+
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim kol As Object, vrste As Object
+    Set kol = KnjigaZaCitanje(data, SRC, vrste)
+
+    Dim cDokTip As Long, cDokID As Long, cVK As Long, cTipA As Long
+    Dim cKol As Long, cOdT As Long, cOdI As Long, cNaT As Long, cNaI As Long
+    Dim cSt As Long
+    cDokTip = kol(COL_AMB_DOK_TIP)
+    cDokID = kol(COL_AMB_DOK_ID)
+    cVK = kol(COL_AMB_VRSTA_KRETANJA)
+    cTipA = kol(COL_AMB_TIP)
+    cKol = kol(COL_AMB_KOLICINA)
+    cOdT = kol(COL_AMB_OD_TIP)
+    cOdI = kol(COL_AMB_OD_ID)
+    cNaT = kol(COL_AMB_NA_TIP)
+    cNaI = kol(COL_AMB_NA_ID)
+    cSt = kol(COL_AMB_STORNO_OD)
+
+    Dim i As Long, dokID As String, vk As String
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kol) Then
+            If StrComp(AmbText(data(i, cDokTip)), DOK_TIP_AMBALAZA_DOKUMENT, _
+                       vbTextCompare) = 0 Then
+                dokID = AmbText(data(i, cDokID))
+                vk = AmbText(data(i, cVK))
+                If Len(dokID) > 0 And Len(AmbText(data(i, cSt))) = 0 Then
+                    If StrComp(vk, AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0 Then
+                        If Not d.Exists(dokID) Then
+                            d.Add dokID, vk & "|" & AmbText(data(i, cTipA)) & "|" & _
+                                  CStr(CDbl(nz(data(i, cKol), 0))) & "|" & _
+                                  AmbText(data(i, cOdT)) & "|" & AmbText(data(i, cOdI)) & _
+                                  "|" & AmbText(data(i, cNaT)) & "|" & AmbText(data(i, cNaI))
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next i
+
+    Exit Function
+EH:
+    ' Citalac liste ne sme da obori ekran: prazna mapa daje dokument bez detalja,
+    ' a razlog ostaje u logu. Kapije koje sude ispravnost knjige su drugde.
+    LogErr SRC
+End Function
+
 ' POVRAT PRAZNIH OD KUPCA BEZ PRIJEMNICE -- KUPCEV DOKUMENT (AMB-10-ODL-23).
 '
 ' Presuda operatera 06.10.2026: kupac vraca prazne gajbe i bez prijemnice, i to

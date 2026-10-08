@@ -1274,6 +1274,41 @@
     merge-a. Zapisano na **tri mesta** da ne ispari: kanon (6.12k), tabela „Dug sa
     imenom", i memorija sesije — na operaterov izričit zahtev („ekstremno bitno
     za dalji rad, da se ne zaboravi").
+87. **`10c` prvi rez: lista i storno reversa na ambalaznom dokumentu**
+    (08.10.2026, 6.12l) — ovo je **`P2 #1`**, jedini preostali merge blocker.
+    Ekran Storno i donja lista na F7 dele **jednu** mapu tipa, pa su obe gledale
+    u `tblAmbalaza`. Zato je operater video „Prikazano 0" iako je revers upisan
+    — isti kvar, dva ekrana, jedan presek.
+    **Obim je pao posle merenja:** ekran ne čita stare kolone direktno nego kroz
+    mapu tipa, pa su tabela, identitet, broj i datum **četiri reda** u
+    `modScrDokumenti`. Preflight storna je postao **jedna linija**
+    (`AktivanPoIdentitetu`), ista koju prijemnica već koristi — umesto tri
+    razrešavanja (`ActiveAmbalazaDokExists` + `ReversIDRazresi` +
+    `ReversStanicaDan`).
+    **„Smer" je nestao iz izbora**, i to je suština: dokument ga nema — ima
+    vrstu. Smer je bio deo **plutaćeg identiteta** koji je `ODL-16/-17` ukinuo.
+    **Sabotaža `storno-revers-smer` je zato OBRISANA, ne preusmerena**, a tvrdnja
+    koju je držala **preseljena** na pravilo koje ju je zamenilo. Kapija nad
+    obrisanim pravilom zacementira staro stanje — isti obrazac kao „brisanje
+    pisca veze: proveri kapije".
+    **Odluka koju sam u toku rada preokrenuo, i razlog:** prvo sam planirao
+    **dedikovan builder** (kao izvod). Merenje je pokazalo da izvod ga ima jer mu
+    je red **grupa redova**; revers je sada **jedan red zaglavlja = jedan red
+    mreže**, pa generički builder odgovara — dedikovan bi prepisao filtere,
+    pretragu, čipove i status. Četiri ćelije se čitaju iz
+    `modAmbalaza.AmbDokRedMapa` (jedan prolaz; po redu bi bio sken po redu).
+    **Kolona PARTNER je izbor prikaza, ne podatak:** red imenuje obe strane, pa
+    se bira ona koja nije naša — a „ko je naš" čita se iz **ugovora**
+    (`AmbNalogUKlasi`), ne iz spiska imena u ekranu. Vozač je dobio mapu imena:
+    od `10b-2` je **nalog**, pa se pojavljuje kao protivpartner.
+    **Dve mine koje `vba_check` ne vidi, obe uhvaćene pre suite-a:**
+    `Optional mVoz As Object = Nothing` (podrazumevana vrednost objekta nije
+    validan izraz u VBA) i **heredoc koji je opet pojeo `\n`** u katalogu
+    sabotaža — isto pravilo koje memorija izričito zabranjuje; popravljeno
+    skriptom iz fajla.
+    Katalog 702 → 704 (jedna obrisana, tri nove). Jeftine kapije `rc=0`.
+    **Stari klaster u `modStorno` nije obrisan** — još ga zovu testovi,
+    `modStornoFlow` i tok ispravke reversa. Briše se u `10e`, po 6.13.
 
 ## Dug sa imenom (posle S5-5b)
 
