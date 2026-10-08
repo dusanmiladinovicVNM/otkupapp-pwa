@@ -1551,6 +1551,35 @@
     `popis_citalaca --check` — sve zeleno. **Skupe čekaju reviewer GO**, a compile i
     zeleni marker su **oboreni** izmenom izvora (`96c6757e2ded` → `93ac16cfe092`).
 
+95. **`10c-2`, drugi deo: kartice — i jedna odluka pročitana, ne doneta**
+    (08.10.2026).
+    Kartice su **redni** izveštaji: treba im datum, dokument i doprinos **tog**
+    reda, a ne saldo — pa im primitiv iz stavke 94 ne pomaže. Zato nov javni
+    `AmbKretanjaNaloga(tip, id)`: 2D niz `Datum · DokID · DokTip · TipAmbalaze ·
+    Kolicina **sa znakom**`, u jednom prolazu. Znak ostaje u knjizi (`+` kad nalog
+    prima, `−` kad daje, 6.8); do sada ga je **svaka kartica vadila sama** iz
+    `Smer`-a, i svaka je nosila svoj `ExcludeStornirano`.
+    `ReportKarticaAmbalaze` i `ReportKarticaKooperanta` time gube i filter po
+    entitetu (redovi su već naloga) i svoj `Select Case`. Kontra-stav se vraća kao
+    **običan red sa svojim znakom** — kartica mora da **pokaže** storno, a ne da ga
+    sakrije; saldo se time sam vraća na početno.
+    **Odluka o vozaču je pročitana iz 6.8, nije doneta ovde:** „Nema grananja po
+    tipu, nema inverzije, vozac ispada sam jer je **nalog**." Time staro isključenje
+    `DokumentTip <> Otkup` u vozačevoj grani **otpada po odluci**, kao i
+    `VozacAmbEffectiveSmer`. To je **promena ponašanja** vozačevog izveštaja i mora
+    tako da se prijavi — nije prevod. Isti pasus daje i `AMB-INV-02`
+    (`OdNalog <> NaNalog`), pa je komentar u `AmbSaldoPoNalogu` ispravljen: isti
+    **nalog** na obe strane ne postoji, isti **tip** (dve stanice) postoji.
+    **`ReportAmbalaza` i `ReportAmbalazaZbirnoSvi` idu ZAJEDNO** i zato nisu u ovom
+    rezu: druga samo skuplja spisak naloga pa **delegira** prvoj. Da je presečena
+    samo jedna, zbirni izveštaj bi nabrajao naloge iz novog modela a redove računao
+    iz starog — dakle nule. Ista spojenost kao `2a`/`2b` u stavci 94.
+    Tvrdnja je dodata u **#204** (jedan test, jedno zasejavanje): kartica mora da
+    pokaže primljene gajbe **tog** reversa. Katalog 712 → **713**.
+    Stanje: `modIzvestaj` 21 → **15** mesta, ostaju četiri funkcije
+    (`ReportAmbalaza`, `ReportAmbalazaZbirnoSvi`, `IzvStaniceIzPodataka`,
+    `StampajReversAmbalaze`). Jeftine kapije zelene; skupe čekaju reviewer GO.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

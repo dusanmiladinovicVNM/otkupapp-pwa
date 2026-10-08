@@ -1078,21 +1078,20 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
     '    otkup redove (ambIzdata - ambPrimljena). Zato uzimamo SAMO one ciji DokID
     '    NIJE otkupID (prava samostalna kretanja, npr. izdate prazne gajbe bez
     '    otkupa) -> postaju vidljivi redovi i UKUPNO/saldo postaju tacni.
+    ' KRETANJA IZ KNJIGE (AMB-10c) -- isti primitiv kao ambalazna kartica.
+    ' Indeksi su njegov ugovor: 1=Datum 2=DokID 3=DokTip 4=TipAmb 5=Kolicina
+    ' SA ZNAKOM. Filter po entitetu nestaje jer su redovi vec naloga.
     Dim ambData As Variant
-    ambData = GetTableData(TBL_AMBALAZA)
+    ambData = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, Trim$(kooperantID))
     If IsArray(ambData) Then
-        ambData = ExcludeStornirano(ambData, TBL_AMBALAZA)
         If IsArray(ambData) Then
-            Dim cAmbDat As Long, cAmbEnt As Long, cAmbEntTip As Long, cAmbTip As Long
-            Dim cAmbKol As Long, cAmbSmer As Long, cAmbDokID As Long, cAmbDokTip As Long
-            cAmbDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
-            cAmbEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-            cAmbEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-            cAmbTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
-            cAmbKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
-            cAmbSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
-            cAmbDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
-            cAmbDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)   ' opciono (friendly opis)
+            Dim cAmbDat As Long, cAmbTip As Long
+            Dim cAmbKol As Long, cAmbDokID As Long, cAmbDokTip As Long
+            cAmbDat = 1
+            cAmbDokID = 2
+            cAmbDokTip = 3
+            cAmbTip = 4
+            cAmbKol = 5
 
             ' Kljucevi = svi otkupID-evi (za iskljucivanje otkup-vezanih amb stavki).
             Dim otkIdDict As Object
@@ -1100,8 +1099,7 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
 
             Dim a As Long
             For a = 1 To UBound(ambData, 1)
-                If NzToText(ambData(a, cAmbEntTip)) = "Kooperant" And _
-                   NzToText(ambData(a, cAmbEnt)) = kooperantID Then
+                If Len(NzToText(ambData(a, cAmbDokID))) > 0 Then
                     Dim aDokID As String
                     aDokID = NzToText(ambData(a, cAmbDokID))
                     If Not otkIdDict.Exists(aDokID) Then          ' samostalno (ne otkup)
@@ -1113,12 +1111,10 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                                 aKol = 0
                                 If IsNumeric(ambData(a, cAmbKol)) Then aKol = CDbl(ambData(a, cAmbKol))
 
+                                ' Znak je vec u kolicini (6.8): + kad kooperant
+                                ' PRIMA, - kad vraca. Nema vise svog Select Case.
                                 Dim aDelta As Double
-                                If NzToText(ambData(a, cAmbSmer)) = "Ulaz" Then
-                                    aDelta = aKol            ' OM -> koop (drzi vise)
-                                Else
-                                    aDelta = -aKol           ' koop -> OM (vratio)
-                                End If
+                                aDelta = aKol
 
                                 If aDat < datumOd Then
                                     pocetniSaldoAmb = pocetniSaldoAmb + aDelta
@@ -1133,7 +1129,7 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                                 Dim aOpis As String
                                 aOpis = "Ambala" & ChrW(382) & "a"
                                 If aLbl <> "" Then aOpis = aOpis & ": " & aLbl
-                                aOpis = aOpis & " (" & aTip & " x " & CStr(CLng(aKol)) & ")"
+                                aOpis = aOpis & " (" & aTip & " x " & CStr(CLng(Abs(aKol))) & ")"
 
                                 moves.Add Array( _
                                     aDat, _
@@ -1338,23 +1334,28 @@ Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
         ReportKarticaAmbalaze = Empty
         Exit Function
     End If
-    ambData = ExcludeStornirano(ambData, TBL_AMBALAZA)
+    ' KRETANJA DOLAZE IZ KNJIGE (AMB-10c), ne iz njenih kolona.
+    '
+    ' Ovde je stajao svoj prolaz kroz tblAmbalaza: ExcludeStornirano (zastavica
+    ' koju nov model NE pise) i svoj znak po Smer-u. Nov red imenuje obe strane,
+    ' pa znak zna knjiga -- kartica ga samo razdvaja u dve kolone.
+    '
+    ' Redovi su vec filtrirani na nalog, pa filter po entitetu nestaje. Indeksi
+    ' su ugovor primitiva (1=Datum 2=DokID 3=DokTip 4=TipAmb 5=Kolicina), a imena
+    ' promenljivih ostaju ista da telo kartice ostane nedirnuto.
+    ambData = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, Trim$(kooperantID))
     If Not IsArray(ambData) Then
         ReportKarticaAmbalaze = Empty
         Exit Function
     End If
 
-    Dim colDat As Long, colEnt As Long, colEntTip As Long, colTip As Long
-    Dim colKol As Long, colSmer As Long, colDokID As Long
-    colDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
-    colEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-    colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-    colTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
-    colKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
-    colSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
-    colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
-    Dim colDokTip As Long
-    colDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)   ' opciono (friendly opis)
+    Dim colDat As Long, colTip As Long
+    Dim colKol As Long, colDokID As Long, colDokTip As Long
+    colDat = 1
+    colDokID = 2
+    colDokTip = 3
+    colTip = 4
+    colKol = 5
 
     ' DokumentID (otkupID) -> BrojDok, jednim prolazom (bez per-row LookupValue).
     Dim brDokDict As Object
@@ -1366,8 +1367,8 @@ Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
 
     Dim i As Long
     For i = 1 To UBound(ambData, 1)
-        If NzToText(ambData(i, colEntTip)) = "Kooperant" And _
-           NzToText(ambData(i, colEnt)) = Trim$(kooperantID) Then
+        ' Red bez dokumenta nije kretanje koje kartica ume da imenuje.
+        If Len(NzToText(ambData(i, colDokID))) > 0 Then
             If IsDate(ambData(i, colDat)) Then
                 Dim d As Date
                 d = CDate(ambData(i, colDat))
@@ -1379,11 +1380,11 @@ Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
                     Dim ulaz As Double, izlaz As Double
                     ulaz = 0
                     izlaz = 0
-                    ' Ledger Smer: "Ulaz" = kooperant dobija (+), inace izlaz (-).
-                    If NzToText(ambData(i, colSmer)) = "Ulaz" Then
+                    ' Znak je iz knjige: + kad nalog PRIMA, - kad daje (6.8).
+                    If kol >= 0 Then
                         ulaz = kol
                     Else
-                        izlaz = kol
+                        izlaz = -kol
                     End If
 
                     If d < datumOd Then

@@ -1140,8 +1140,9 @@ End Function
 ' nosio: ReportSaldoOM je imao svoj prolaz, svoj Select Case po Smer-u i svoj
 ' ExcludeStornirano -- tri stvari koje su vlasnistvo knjige.
 '
-' Red sme da ima isti tip na OBE strane (Stanica -> Stanica, PRENOS_INTERNO). Oba
-' doprinosa se tada primenjuju: par se anulira, a svaki nalog dobija svoj znak.
+' Red sme da ima isti TIP na obe strane (Stanica -> Stanica, dve stanice). Oba
+' doprinosa se tada primenjuju, svaki svom ID-u. Isti NALOG na obe strane ne
+' postoji -- to zabranjuje AMB-INV-02 -- pa se nijedan nalog ne anulira sam.
 '
 ' Suma je preko SVIH tipova ambalaze, kao i kolona koju izvestaj prikazuje. Kome
 ' treba po tipu, zove GetAmbalazeStanje (isto pravilo, drugi oblik).
@@ -1192,6 +1193,88 @@ Public Function AmbSaldoPoNalogu(ByVal tip As String) As Object
             End If
         End If
     Next i
+End Function
+
+
+' SVA AKTIVNA KRETANJA JEDNOG NALOGA, SA ZNAKOM -- u jednom prolazu.
+'
+' Kartice su REDNI izvestaji: treba im datum, dokument i doprinos TOG reda, a ne
+' saldo. Do 10c su to vadile same, kroz Smer -- pa je svaka nosila SVOJU kopiju
+' pravila znaka, i svaka svoj lifecycle (ExcludeStornirano).
+'
+' Vraca 2D niz (1 To n, 1 To 5):
+'   1 = Datum   2 = DokumentID   3 = DokumentTip   4 = TipAmbalaze
+'   5 = Kolicina SA ZNAKOM: pozitivna kad nalog PRIMA, negativna kad daje (6.8)
+'
+' Prazno kad nalog nema ni jedno kretanje -- isti ugovor kao GetAmbalazeStanje, pa
+' pozivaoci koji vrte IsArray ostaju nedirnuti.
+'
+' Kontra-stav se vraca kao OBICAN red, sa svojim znakom: kartica mora da pokaze i
+' storno, a ne da ga sakrije. Saldo se tako sam vraca na pocetno.
+Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Variant
+    Const SRC As String = "modAmbalaza.AmbKretanjaNaloga"
+
+    Dim p As String
+    p = modAmbalazaUgovor.AmbNalogProblem(tip, id)
+    If Len(p) > 0 Then Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, p
+
+    RequireKnjigaSchema SRC
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim kolIdx As Object, vrsteDok As Object
+    Set kolIdx = KnjigaZaCitanje(data, SRC, vrsteDok)
+
+    Dim cDat As Long, cDokID As Long, cDokTip As Long, cTipA As Long, cKol As Long
+    Dim cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
+    cDat = kolIdx(COL_AMB_DATUM)
+    cDokID = kolIdx(COL_AMB_DOK_ID)
+    cDokTip = kolIdx(COL_AMB_DOK_TIP)
+    cTipA = kolIdx(COL_AMB_TIP)
+    cKol = kolIdx(COL_AMB_KOLICINA)
+    cOdTip = kolIdx(COL_AMB_OD_TIP)
+    cOdID = kolIdx(COL_AMB_OD_ID)
+    cNaTip = kolIdx(COL_AMB_NA_TIP)
+    cNaID = kolIdx(COL_AMB_NA_ID)
+
+    ' Prvo se skupe POZICIJE pa se niz dimenzionise jednom: ReDim Preserve nad 2D
+    ' nizom menja samo poslednju dimenziju, pa rast po redovima nije moguc.
+    Dim poz As Collection
+    Set poz = New Collection
+
+    Dim i As Long, znak As Long
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kolIdx) Then
+            znak = 0
+            If IstiNalog(AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), tip, id) Then
+                znak = 1
+            ElseIf IstiNalog(AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), tip, id) Then
+                znak = -1
+            End If
+            If znak <> 0 Then poz.Add Array(i, znak)
+        End If
+    Next i
+
+    If poz.count = 0 Then Exit Function
+
+    Dim res() As Variant
+    ReDim res(1 To poz.count, 1 To 5)
+
+    Dim n As Long, ri As Long, par As Variant
+    For n = 1 To poz.count
+        par = poz(n)
+        ri = CLng(par(0))
+        znak = CLng(par(1))
+        res(n, 1) = data(ri, cDat)
+        res(n, 2) = AmbText(data(ri, cDokID))
+        res(n, 3) = AmbText(data(ri, cDokTip))
+        res(n, 4) = AmbText(data(ri, cTipA))
+        res(n, 5) = znak * CDbl(data(ri, cKol))
+    Next n
+
+    AmbKretanjaNaloga = res
 End Function
 
 ' OBAVEZA FIRME PREMA PARTNERU -- izvedena iz iste knjige, bez ijedne mutabilne

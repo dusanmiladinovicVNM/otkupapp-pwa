@@ -6377,6 +6377,15 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
     AssertEq CLng(mapa(FX_KOOPERANT)), koopPosle, _
              "mapa svih naloga i saldo po nalogu daju ISTI broj"
 
+    ' 3b) KARTICA JE REDNI IZVESTAJ: mora da pokaze TAJ red, ne samo saldo. Do 10c
+    '     je znak vadila sama, po Smer-u, pa je na nov red bila slepa kao i saldo.
+    '     Opseg je +-1 dan oko danas, jer pisac upisuje Date.
+    Dim kart As Variant
+    kart = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, DateAdd("d", -1, Date), _
+                                             DateAdd("d", 1, Date))
+    AssertEq KarticaUlazZaDok(kart, revDok), 4, _
+             "kartica ambalaze pokazuje PRIMLJENE gajbe tog reversa"
+
     ' 4) LIFECYCLE: storno je KONTRA-STAV, ne zastavica. Stari citalac je gasio
     '    red kroz ExcludeStornirano, sto nov model ne pise -- da je ta provera
     '    ostala, storniran revers bi i dalje stajao u saldu.
@@ -6385,6 +6394,22 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
     AssertEq (koopStorno - koopPre), 0, _
              "storno reversa vraca saldo kooperanta na pocetno"
 End Sub
+
+
+' Zbir kolone ULAZ sa kartice ambalaze za dati dokument. Kartica vraca 2D niz
+' (1)=Datum (2)=BrojDok (3)=Opis (4)=Ulaz (5)=Izlaz (6)=Saldo. Revers nije otkup,
+' pa mu kartica kao broj prikazuje sam DokumentID.
+Private Function KarticaUlazZaDok(ByVal res As Variant, ByVal dok As String) As Double
+    Dim i As Long
+    If Not IsArray(res) Then Exit Function
+    For i = LBound(res, 1) To UBound(res, 1)
+        If StrComp(NzToText(res(i, 2)), Trim$(dok), vbTextCompare) = 0 Then
+            If IsNumeric(res(i, 4)) Then
+                KarticaUlazZaDok = KarticaUlazZaDok + CDbl(res(i, 4))
+            End If
+        End If
+    Next i
+End Function
 
 ' Saldo jednog naloga preko SVIH tipova ambalaze, kroz produkcionog citaoca
 ' GetAmbalazeStanje -- isti poziv koji radi i stampa (modPrint).

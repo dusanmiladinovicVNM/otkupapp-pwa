@@ -6997,6 +6997,18 @@ SABOTAZE = {
         "T_ReversValidiraj_PovratKupcaJeSvojSmer",
         "kupcev smer NE dobija predlog broja",
     ),
+    # KARTICA NE VIDI PRIJEM (10c-2). Primitiv kretanja prestaje da prepozna nalog
+    # kao ODREDISTE, pa kartica ostaje bez svih priliva -- tacno ono stanje u kome je
+    # bila pre reza, kad je znak vadila iz praznog Smer-a.
+    "amb-10c-kartica-ne-vidi-prijem": (
+        "modAmbalaza.bas",
+        '            If IstiNalog(AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), tip, id) Then\n'
+        '                znak = 1\n',
+        '            If False Then   \' SABOTAZA: prijem naloga se ne vidi\n'
+        '                znak = 1\n',
+        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "kartica ambalaze pokazuje PRIMLJENE gajbe tog reversa",
+    ),
     # SALDO PITA SAMO JEDNU STRANU (10c-2). Nov red imenuje OBE strane, pa citalac
     # koji izgubi granu IZVORA vidi samo prilive: stanica koja je izdala gajbe
     # ostaje sa punim saldom. Tacno stanje starog modela, u kome je red nosio jednu
