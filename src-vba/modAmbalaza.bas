@@ -1333,8 +1333,17 @@ End Function
 ' Mapa, a ne LookupValue po redu: kartica ima N redova, a zaglavlja su jedna
 ' tabela -- isti razlog zbog koga postoji i AmbDokRedMapa.
 '
-' Vrednost je "broj|vrsta|datum". Broj je poslovni i ne sadrzi '|', vrsta je
-' enum, a datum ide zato sto papir reversa nosi datum ZAGLAVLJA, ne reda.
+' VREDNOST JE NIZ (broj, vrsta, datum), ne spojen string.
+'
+' Prvo izdanje je pakovalo "broj|vrsta|datum" uz komentar da "broj ne sadrzi
+' '|'". To je bila PRETPOSTAVKA napisana kao cinjenica: kupcev revers (ODL-23)
+' nosi broj sa KUPCEVOG dokumenta, a nijedna kapija ne filtrira karaktere -- pa
+' je "KUP|R-17" legalan broj. Parser bi tada procitao broj="KUP",
+' vrsta="R-17", datum=vrsta, i to ne bi PUKLO nego tiho promenilo i karticu i
+' PAPIR (review 08.10.2026, P2).
+'
+' Datum se cuva kao SIROVA vrednost celije, ne kao tekst: tekstualni datum je
+' vec jednom pojeo stanicu iz opisa, jer je IsDate nad "8.10.2026." False.
 Public Function AmbDokPrikazMapa() As Object
     Const SRC As String = "modAmbalaza.AmbDokPrikazMapa"
 
@@ -1357,8 +1366,9 @@ Public Function AmbDokPrikazMapa() As Object
     For i = 1 To UBound(data, 1)
         k = AmbText(data(i, cID))
         If Len(k) > 0 Then
-            res(k) = AmbText(data(i, cBroj)) & "|" & AmbText(data(i, cVrsta)) & _
-                     "|" & AmbText(data(i, cDat))
+            res(k) = Array(AmbText(data(i, cBroj)), _
+                           AmbText(data(i, cVrsta)), _
+                           data(i, cDat))
         End If
     Next i
 End Function
@@ -2517,10 +2527,17 @@ Public Function AmbDokRedMapa() As Object
                 If Len(dokID) > 0 And Len(AmbText(data(i, cSt))) = 0 Then
                     If StrComp(vk, AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0 Then
                         If Not d.Exists(dokID) Then
-                            d.Add dokID, vk & "|" & AmbText(data(i, cTipA)) & "|" & _
-                                  CStr(CDbl(nz(data(i, cKol), 0))) & "|" & _
-                                  AmbText(data(i, cOdT)) & "|" & AmbText(data(i, cOdI)) & _
-                                  "|" & AmbText(data(i, cNaT)) & "|" & AmbText(data(i, cNaI))
+                            ' NIZ, ne spojen string: TipAmbalaze je operaterski
+                            ' podatak iz lookup tabele, pa i on sme da nosi '|'
+                            ' -- ista rupa kao kod poslovnog broja (P2,
+                            ' 08.10.2026). Indeksi su ugovor citaoca.
+                            d.Add dokID, Array(vk, _
+                                               AmbText(data(i, cTipA)), _
+                                               CDbl(nz(data(i, cKol), 0)), _
+                                               AmbText(data(i, cOdT)), _
+                                               AmbText(data(i, cOdI)), _
+                                               AmbText(data(i, cNaT)), _
+                                               AmbText(data(i, cNaI)))
                         End If
                     End If
                 End If

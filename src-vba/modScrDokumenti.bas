@@ -3090,7 +3090,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                 Dim dokKljuc As String
                 dokKljuc = CellS(src, r, iAmbDokID)
                 If mAmbRed.Exists(dokKljuc) Then _
-                    ambRec = Split(CStr(mAmbRed(dokKljuc)), "|")
+                    ambRec = mAmbRed(dokKljuc)
             End If
         End If
 

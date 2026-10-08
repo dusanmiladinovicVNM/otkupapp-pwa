@@ -7020,6 +7020,17 @@ SABOTAZE = {
         "T_AmbSaldo_CitaociSuNaNovomModelu",
         "stanica je IZDALA gajbe -- saldo pada na istom redu",
     ),
+    # POSLOVNI BROJ SE REZE NA DELIMITERU (review 08.10.2026, P2). Mapa zaglavlja
+    # uzima samo deo broja do "|", tacno onako kako je stari string protokol i
+    # citao. Kupcev broj dolazi spolja i sme da nosi "|", pa bi kartica i PAPIR
+    # tiho nosili skracen broj.
+    "amb-10c-broj-se-reze-na-delimiteru": (
+        "modAmbalaza.bas",
+        '            res(k) = Array(AmbText(data(i, cBroj)), _\n',
+        '            res(k) = Array(Split(AmbText(data(i, cBroj)), "|")(0), _\n',
+        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "poslovni broj sa znakom | prezivljava mapu zaglavlja",
+    ),
     # PREGLED SPAJA DVA DOKUMENTA (10c-2). Identitet dokumenta ispada iz kljuca
     # grupisanja, pa dva reversa iste stanice i istog tipa gajbe padnu u JEDAN red --
     # a ref-kljuc tada vodi stampu na pogresan papir.

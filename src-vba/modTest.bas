@@ -6478,6 +6478,30 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
                                              DateAdd("d", 1, Date))
     AssertEq (KarticaUlazZaDok(kart, revBroj) > 0), True, _
              "kartica storniran revers i dalje PRIKAZUJE"
+
+    ' 5) DELIMITER NAD POSLOVNIM PODATKOM (review 08.10.2026, P2).
+    '
+    '    Kupcev broj reversa dolazi sa KUPCEVOG dokumenta i nijedna kapija ne
+    '    filtrira karaktere, pa je "KUP|R-17" legalan broj. Mapa zaglavlja ga
+    '    je pakovala u "broj|vrsta|datum", pa bi citalac procitao broj="KUP" i
+    '    vrstu="R-17" -- i to ne bi puklo nego TIHO promenilo i karticu i PAPIR.
+    '
+    '    Tvrdnja ide nad MAPOM, a ne nad karticom, jer je kupcev revers par
+    '    Kupac <-> Vozac: na kartici kooperanta ga nema. Mapa je mesto gde je
+    '    greska i zivela.
+    Dim pbroj As String, kupDok As String, zag As Variant, pmapa As Object
+    pbroj = "KUP|R-17"
+    kupDok = modAmbalaza.UpisiReversPartnera_TX(Date, pbroj, FX_KUPAC, FX_VOZAC, _
+                                                FX_TIP_AMB, 3, "test delimitera", 3)
+    AssertEq (Len(kupDok) > 0), True, "preduslov: kupcev revers sa znakom | je upisan"
+
+    Set pmapa = modAmbalaza.AmbDokPrikazMapa()
+    AssertEq pmapa.Exists(kupDok), True, "mapa zaglavlja poznaje kupcev revers"
+    zag = pmapa(kupDok)
+    AssertEq CStr(zag(0)), pbroj, _
+             "poslovni broj sa znakom | prezivljava mapu zaglavlja"
+    AssertEq CStr(zag(1)), AMB_DOK_REVERS_PARTNERA, _
+             "vrsta dokumenta nije pomerena delimiterom"
 End Sub
 
 

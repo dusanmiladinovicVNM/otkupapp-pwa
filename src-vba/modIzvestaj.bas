@@ -1508,8 +1508,10 @@ Private Sub KarticaDokPrikaz(ByVal dokTip As String, ByVal dokID As String, _
     If StrComp(Trim$(dokTip), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) = 0 Then
         If Not ambMapa Is Nothing Then
             If ambMapa.Exists(dokID) Then
+                ' Mapa nosi NIZ (broj, vrsta, datum) -- bez delimitera nad
+                ' poslovnim podatkom (P2, 08.10.2026).
                 Dim par As Variant
-                par = Split(CStr(ambMapa(dokID)), "|")
+                par = ambMapa(dokID)
                 If Len(Trim$(par(0))) > 0 Then outBroj = Trim$(par(0))
                 If UBound(par) >= 1 Then
                     outLabel = modAmbalazaUgovor.AmbVrstaDokNaziv(Trim$(par(1)))
@@ -3437,7 +3439,9 @@ Private Function ResolveDokBrojMape(ByVal dokTip As String, ByVal dokID As Strin
             ' (isti prevod kao na karticama, review 08.10.2026 P2 #1).
             If Not mapaAmb Is Nothing Then
                 If mapaAmb.Exists(dokID) Then
-                    sOut = Trim$(Split(CStr(mapaAmb(dokID)), "|")(0))
+                    Dim zag As Variant
+                    zag = mapaAmb(dokID)
+                    If IsArray(zag) Then sOut = Trim$(NzToText(zag(0)))
                 End If
             End If
         Case DOK_TIP_OTKUP, DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP
@@ -4379,9 +4383,13 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
                   "nepostojeci) -- stampa odbijena."
     End If
 
-    ' vrstaKretanja | tipAmb | kolicina | odTip | odID | naTip | naID
+    ' NIZ: vrstaKretanja, tipAmb, kolicina, odTip, odID, naTip, naID
     Dim f As Variant
-    f = Split(CStr(mapaRed(ambDokID)), "|")
+    f = mapaRed(ambDokID)
+    If Not IsArray(f) Then
+        Err.Raise vbObjectError + 7505, SRC, _
+                  "Red ambalaznog dokumenta nije citljiv -- stampa odbijena."
+    End If
     If UBound(f) < 6 Then
         Err.Raise vbObjectError + 7505, SRC, _
                   "Red ambalaznog dokumenta nije citljiv -- stampa odbijena."
@@ -4409,10 +4417,12 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
     datum = Date
     If mapaZag.Exists(ambDokID) Then
         Dim z As Variant
-        z = Split(CStr(mapaZag(ambDokID)), "|")
-        If Len(Trim$(CStr(z(0)))) > 0 Then broj = Trim$(CStr(z(0)))
-        If UBound(z) >= 2 Then
-            If IsDate(z(2)) Then datum = CDate(z(2))
+        z = mapaZag(ambDokID)
+        If IsArray(z) Then
+            If Len(Trim$(NzToText(z(0)))) > 0 Then broj = Trim$(NzToText(z(0)))
+            If UBound(z) >= 2 Then
+                If IsDate(z(2)) Then datum = CDate(z(2))
+            End If
         End If
     End If
 

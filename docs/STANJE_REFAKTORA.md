@@ -1742,6 +1742,40 @@
     **`10c-2` je time zatvoren.** Sledi `10c-3`: `modStorno` 14, `modIntegritet` 4,
     `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1.
 
+99. **Review `2f2f3eaf`: `P2` delimitera — pretpostavka napisana kao činjenica**
+    (08.10.2026).
+    `AmbDokPrikazMapa` je pakovala `"broj|vrsta|datum"`, a ja sam uz nju napisao
+    komentar: *„Broj je poslovni i ne sadrži `|`"*. To nije bila provera nego
+    **pretpostavka u obliku tvrdnje** — i pogrešna: kupčev broj reversa (ODL-23)
+    dolazi sa **kupčevog** dokumenta, a izmereno je da **nijedna kapija ne filtrira
+    karaktere** (nema `InStr`/`Replace` nad `"|"` ni u `modNovacUnos` ni u
+    `modBrojevi`). Dakle `KUP|R-17` je legalan broj, a parser bi pročitao
+    `broj="KUP"`, `vrsta="R-17"`, `datum=vrsta` — i to **ne bi puklo** nego tiho
+    promenilo i karticu i **papir za potpis**.
+    **Ista rupa je bila i sloj niže, pa je i ona zatvorena:** `AmbDokRedMapa` je
+    pakovala `"vrstaKretanja|tipAmb|kolicina|..."`, a `TipAmbalaze` je **operaterski**
+    podatak iz lookup tabele (`TBL_TIP_AMBALAZE`) — isti rod izloženosti. Reviewer
+    je prijavio samo prvu; popravka jedne a ostavljanje druge je tačno obrazac koji
+    `CLAUDE.md` §2 zabranjuje.
+    Oba protokola sada nose **niz**, ne spojen string: `Array(broj, vrsta, datum)`
+    i `Array(vrsta, tipAmb, kolicina, odTip, odID, naTip, naID)`. Nizovi u
+    `Scripting.Dictionary` rade i već se koriste u ovom repou — ograničenje iz
+    memorije važi za **objekte** (`Set d(k) = obj`), ne za nizove. Datum se usput
+    čuva kao **sirova** vrednost ćelije: tekstualni datum je već jednom pojeo
+    stanicu iz opisa, jer je `IsDate("8.10.2026.")` **False**.
+    Čitaoci presečeni na niz: `KarticaDokPrikaz`, `ResolveDokBrojMape`,
+    `StampajAmbDokument`, `modScrDokumenti` (lista reversa). Posle reza **nijedan**
+    `Split` nad tim mapama ne postoji.
+    **Tvrdnja koja bi ovo uhvatila** je dodata u `#204`, i ide nad **mapom**, ne nad
+    karticom: kupčev revers je par `Kupac ↔ Vozac`, pa ga na kartici kooperanta nema
+    — a mapa je mesto gde je greška i živela. Upisuje se revers sa brojem
+    `KUP|R-17` i tvrdi se da broj **preživljava** mapu i da vrsta **nije pomerena**.
+    Sabotaža `amb-10c-broj-se-reze-na-delimiteru` reže broj na `"|"` — isto što je
+    stari protokol i činio. Katalog 717 → **718**.
+    Usput je kapija kataloga uhvatila **moju** grešku u samoj sabotaži: komentar
+    posle nastavka reda `_` je sintaksna greška. To je ona ista zamka koja je dvaput
+    naplatila 585 s i ubijen Excel — sada je kapija, pa je naplatila **nula**.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
