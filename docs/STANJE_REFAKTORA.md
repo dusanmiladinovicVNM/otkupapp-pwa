@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · `10b-2` cutover ⏳; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** (stavka 93) · `10d` / `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -1450,6 +1450,58 @@
     `Private` tvrdnja nego natpis u zaglavlju, pa nov test po `testovi.md` §6 trazi
     dvosmeran dokaz. Cena jednog premestenog reda je dakle pun prolaz + `dokaz` +
     **drugi** operaterov compile. Ide kao prvi mali rez posle merge-a.
+
+93. **NALAZ: cutover je presekao PISCA, a čitaoci izveštaja su ostali na starom
+    modelu** (08.10.2026).
+    Tvrdio sam — i u prvo izdanje opisa PR-a #408 upisao — da se stari model „i dalje
+    piše", pa merge ne ostavlja `main` polomljen. **Netačno.** Merenje:
+
+    ```
+    TrackAmbalaza (stari pisac), produkciona pozivna mesta
+      na grani:   0        zivi pozivi su SAMO zasejavanje u modBusinessFlowProTests
+      na main-u:  modOtkup 1445-1460, modDokumenta 4969, 6857, 6863, 7026, ...
+    modIzvestaj -> nove kolone (Od_Tip / Na_Tip / VrstaKretanja):  0 referenci
+    ```
+
+    Stare kolone su, dakle, **prazne na svakom redu koji produkcija upiše**, a šest
+    funkcija izveštaja čita **isključivo** njih: `ReportAmbalaza`,
+    `ReportAmbalazaZbirnoSvi`, `ReportKarticaAmbalaze`, `ReportKarticaKooperanta`,
+    `ReportSaldoOM`, `StampajReversAmbalaze` (+ `IzvStaniceIzPodataka`). Sve vise na
+    **živom** ekranu `IZVESTAJI` (`modScrIzvestaji`), a `ReportSaldoOM` zove i sama
+    ljuska (`modOtkupUI.RefreshSaldoOM` — saldo koji operater vidi **pri unosu**) i
+    **PWA sync** (`modStammdatenSync`).
+    **Zašto 12/12 ZELENO ovo ne protivreči:** `modIzvestajTests` (6 mesta) i
+    `modBusinessFlowProTests` (11) **same seju stari oblik** kroz `TrackAmbalaza` — pa
+    mere čitaoca nad redovima koje produkcija više ne pravi. Zeleno je tačno, ali o
+    **premisi koju je test sam postavio**; ista klasa kao „test meri pomoćnik, ne
+    poziv", samo na nivou modela podatka.
+    Posledica za plan: **`10c` čitaoci nisu čišćenje posle cutover-a nego njegov deo.**
+    PR #408 je zato prebačen u **draft**, a opis ispravljen na mestu.
+
+    **Redosled rezova odavde (08.10.2026):**
+
+    1. **`10c-2` `modIzvestaj`** — 24 mesta, 6 funkcija, operaterski vidljivo + PWA.
+       Test zasejavanje **ide sa njim** (`modIzvestajTests` 6, BFP 11). Rizik koji se
+       imenuje unaprijed: tvrdnja koja seje stari oblik pa tvrdi „nema redova" posle
+       prelaska postaje **vakuum** — svaka takva mora da dobije pozitivnu
+       protivtvrdnju, inače zeleno ne meri ništa.
+    2. **`10c-3` storno i integritet** — `modStorno` 9 (`ActiveAmbalazaDokExists`,
+       `ReversIDGranica`, `ReversIDStanice`, `ReversStanicaDan`), `modStornoFlow` 2,
+       `modDokumenta` 2, `modIntegritet` 3 (`Chk_B10_ReversBezID`). **Prvo merenje, pa
+       rez:** posle prvog reza `10c` deo njih može biti **mrtav** — tada je to
+       brisanje, ne prelazak, i ne nosi istu cenu.
+    3. **merge #408.**
+    4. **`P3` badge** — svoj mali rez; može i uz `10c-2`, pa je jedan operaterov
+       compile manje (cena je mešan rez).
+    5. **`10d`** — istorijski upit, `UndoOperation_TX`, ispravka reversa na `AmbDokID`;
+       time se vraća i privremeno **skinuta** akcija ISPRAVKA.
+    6. **`10e`** — brisanje starog modela: kolone, `TrackAmbalaza`, `KnjigaIndeksi`
+       (namerno dvomodelni čitalac) i konstante u `modConfig`.
+    7. **`AMB-10-ODL-24`** — **odluka ide pred kod**: `VrstaKretanja` je zatvoren enum,
+       pa se specifikacija pozajmice piše pre `10e` da se enum širi **jednom**, a
+       implementacija ide posle `10e`, kad postoji samo jedan model. Dok traje `10c`,
+       nov događaj bez starog ekvivalenta bio bi **nevidljiv** svakom nepresečenom
+       čitaocu — to je i razlog zašto ne ide prvi, uz operaterov redosled.
 
 ## Dug sa imenom (posle S5-5b)
 
