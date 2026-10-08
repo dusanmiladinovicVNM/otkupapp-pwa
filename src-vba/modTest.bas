@@ -6460,10 +6460,17 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
     ' 4) LIFECYCLE: storno je KONTRA-STAV, ne zastavica. Stari citalac je gasio
     '    red kroz ExcludeStornirano, sto nov model ne pise -- da je ta provera
     '    ostala, storniran revers bi i dalje stajao u saldu.
+    '    SNIMAK IDE NEPOSREDNO PRED STORNO, ne na pocetak testa: prva verzija je
+    '    merila deltu prema koopPre i trazila NULU, a izmedju je upisan drugi
+    '    revers (+2) zbog tvrdnje 3e -- pa je tvrdnja merila premisu koju je sam
+    '    test u medjuvremenu promenio (pad 08.10.2026: dobijeno 2, trazeno 0).
+    '    Ovako se meri storno SAM PO SEBI i ne zavisi od drugih dokumenata.
+    Dim koopPreStorna As Long
+    koopPreStorna = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
     modAmbalaza.StornirajAmbDokument_TX revDok
     koopStorno = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
-    AssertEq (koopStorno - koopPre), 0, _
-             "storno reversa vraca saldo kooperanta na pocetno"
+    AssertEq (koopStorno - koopPreStorna), -4, _
+             "storno gasi TACNO svoja cetiri, ostali dokumenti ostaju"
 
     ' 4b) DVA CITAOCA, DVA PITANJA (6.8). Pregled KRETANJA storniran dokument
     '     SKRIVA -- kao i stari filter COL_STORNIRANO. Kartica ga PRIKAZUJE, jer

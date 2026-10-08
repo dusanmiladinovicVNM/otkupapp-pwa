@@ -7077,7 +7077,7 @@ SABOTAZE = {
         '        If RedDoticeKnjigu(data, i, kolIdx) And Len(AmbText(data(i, kolIdx(COL_AMB_STORNO_OD)))) = 0 Then   \' SABOTAZA: kontra-stav ispada iz zbira\n'
         '            If IstiNalog(AmbText(data(i, colNaTip)), AmbText(data(i, colNaID)), _\n',
         "T_AmbSaldo_CitaociSuNaNovomModelu",
-        "storno reversa vraca saldo kooperanta na pocetno",
+        "storno gasi TACNO svoja cetiri, ostali dokumenti ostaju",
     ),
     # KARTICA SE VRACA NA TEHNICKI ID: prevod ambalaznog dokumenta u poslovni broj
     # i vrstu se preskace, pa operater na kartici vidi "ADK-<hex>" i genericku
