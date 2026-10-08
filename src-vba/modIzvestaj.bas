@@ -1496,9 +1496,14 @@ End Function
 '
 ' Obe mape se grade JEDNOM po izvestaju, ne po redu.
 '
-' Kad zaglavlja nema, broj ostaje DokumentID: to je kvar knjige (noga pokazuje na
-' zaglavlje koje ne postoji) i meri ga integritet, a izvestaj ga ne sme sakriti
-' praznim poljem.
+' Kad zaglavlja nema, broj ostaje DokumentID: to je kvar knjige -- noga pokazuje
+' na zaglavlje koje ne postoji -- i izvestaj ga ne sme sakriti praznim poljem.
+'
+' PRVO IZDANJE OVOG KOMENTARA JE TVRDILO DA "to meri integritet". Ne meri:
+' modIntegritet ima NULA referenci na kanonske kolone, pa kanonsku knjigu ne
+' proverava nijedna njegova provera (merenje 08.10.2026). Dok se to ne napravi,
+' jedini signal takvog kvara je tehnicki ID vidljiv na ekranu -- zato se ne
+' skriva.
 Private Sub KarticaDokPrikaz(ByVal dokTip As String, ByVal dokID As String, _
                              ByVal otkMapa As Object, ByVal ambMapa As Object, _
                              ByRef outBroj As String, ByRef outLabel As String)

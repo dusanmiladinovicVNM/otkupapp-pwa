@@ -1799,12 +1799,55 @@
      Za reviewer-ov uslovni `P1` („svaki F7 revers mora biti štampiv") odgovor je
      time **negativan po domenu**, ne po obimu reza.
 
+101. **Klasifikacija `10c-3`: klasa A je PRAZNA — `#408` ga ne mora nositi**
+     (08.10.2026).
+     Reviewer je tražio da se 23 mesta **klasifikuju**, ne mehanički prepišu.
+     Mesta žive u **deset** funkcija, sve `ReversID`-centrične, a `ReversID` je
+     stara identitetska kolona koju nov pisac **ne piše** (zamenio ju je `AmbDokID`,
+     ODL-16). Doseg je izmeren po pozivaocima, uz izbacivanje komentara:
+
+     | Funkcija | Mesta | Klasa | Dokaz dosega |
+     |---|---|---|---|
+     | `modStorno.ActiveAmbalazaDokExists` | 2 | **B** | jedini cross-module pozivalac je `modStornoRecovery.UndoGuardReason` → **undo**, a to je `10d` |
+     | `modStorno.ReversIDRazresi` | 1 | **B** | nijedan živ cross-module poziv — tri „poziva" u `modScrDokumenti`, `modScrStorno` i `modStornoDok` su **komentari**; put je `RunReversCorrection` = ISPRAVKA |
+     | `modStorno.ReversRedoviRID` | 1 | **B** | `modStornoFlow` 322 / 536 / 2532 — ispravka reversa |
+     | `modStorno.ReversIDGranica` | 4 | **C** | cross-module samo `modIzvestaj.ReversStampaNoge`, a njega kanonski dokument **više ne dosegne** (grana iz stavke 98) |
+     | `modStorno.ReversStanicaDan` | 3 | **B** | `modDokUnos.ZavrsiIspravkuPitanje` (ISPRAVKA) + recovery |
+     | `modStorno.ReversIDStanice` | 3 | **B** | `modStornoFlow:632` |
+     | `modIntegritet.Chk_B10_ReversBezID` | 4 | **C** | gejtovan `modStorno.ReversTipJe(dokTip)` = **stari** `OM-*` tipovi; kanonski red pada u `ElseIf` sa praznim `ReversID`-om, pa **ne prijavljuje nalaz** |
+     | `modStornoFlow.ScanRevers` | 2 | **B** | ispravka reversa |
+     | `modDokumenta.GetStorniraniRevers` | 2 | **D** | `Private`, **nula** pozivaoca — mrtva |
+     | `modStornoZurnal.ReversIDOperacije` | 1 | **B** | žurnal undo / ispravka |
+
+     **Ključni dokaz za sve B stavke:** `modScrStorno.AkcijeRacun` za `REVERSI`
+     vraća **samo** `STORNO` — ISPRAVKA je skinuta sa kanonskog UI-ja u `10c`, i
+     vraća se u `10d`. Komentar u tom istom modulu to i kaže: *„ISPRAVKA i dalje ide
+     kroz `RunReversCorrection` → `ReversIDRazresi`"*.
+     **Ishod: klasa A ima NULA mesta.** Nijedno od 23 ne stoji na putu koji kanonski
+     UI danas može da dosegne. `#408` zato **ne mora** da nosi `10c-3`: B ide sa
+     `10d` (kad se ISPRAVKA i undo vrate, na `AmbDokID`), C i D sa `10e` (kad stari
+     model nestane). Tako `#408` ostaje `10b-2 + 10c`, a ne postaje `10d`.
+
+     **ALI klasifikacija je izbacila nalaz van tih 23 mesta, i on je klase A:**
+     `modIntegritet` ima **nula** referenci na kanonske kolone
+     (`Od_Tip` / `Na_Tip` / `VrstaKretanja` / `tblAmbalazaDokument`). Posle cutovera
+     to znači da integritetni izveštaj proverava **samo legacy redove** — a
+     produkcija ih ne piše. Operateru bi, dakle, rekao „nema nalaza" **ne pogledavši
+     kanonsku knjigu**. To je fail-open izveštaj, ista klasa kao čitalac koji
+     prećuti grešku.
+     Nije **regresija** (pre cutovera kanonskih redova nije ni bilo) i ne kvari
+     podatke, pa ga ne predlažem kao merge-blocker — ali mora da ima ime i red.
+     **I treći put ista moja greška:** u `KarticaDokPrikaz` sam napisao da nogu bez
+     zaglavlja „meri integritet". Ne meri. Komentar je ispravljen da kaže šta je
+     izmereno, a ne šta bih voleo da važi.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
 | **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). Danas to drže samo komentari uz tri grane; kapija bi morala da zna koji su pozivi iz suite-a dostupni, pa traži svoj rez i svoj dvosmerni dokaz |
 | **`dokaz.py` ne dosegne `modIzvestajTests`** | kapija kataloga sabotaža priznaje samo `modTest`, `modTestBanka` i `modBusinessFlowProTests`, pa tvrdnja iz `modIzvestajTests` **ne može da se obori** — a tamo živi najdetaljnije merenje ambalažnog pregleda. Posledica je izmerena u `10c-2`: tvrdnja o identitetu dokumenta je **preseljena** u `#204`, a tvrdnja o spajanju dve vrste istog dokumenta ostala **bez sabotaže**. Proširenje kapije dira sam alat, pa ide **zaseban process PR** sa svojim dvosmernim dokazom |
+| **kanonska knjiga nema integritetnu proveru** | `modIntegritet` ima **nula** referenci na `Od_Tip` / `Na_Tip` / `VrstaKretanja` / `tblAmbalazaDokument` (merenje 08.10.2026). Posle cutovera proverava samo legacy redove, koje produkcija ne piše — pa operateru kaže „nema nalaza" ne pogledavši kanonsku knjigu. Kandidati za provere: noga bez zaglavlja, zaglavlje bez noge, `StornoOd` koji ne pokazuje nigde, par koji nije neuređen (`AMB-INV-10`), obaveza partneru < 0 (`AMB-INV-09`). `Chk_B10_ReversBezID` ostaje tačan za legacy i odlazi sa njim u `10e` |
 | **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita |
 | **badge "nesacuvano" na novoj formi** | `SelectModeCore` pise u polje broja POSLE `MarkClean` i `mLoading = False`, pa programski upis prodje kroz `MarkDirty` i prazna forma tvrdi da ima neupisanih izmena (review 08.10.2026, `P3`). Zatecen obrazac -- vazio je i pre P1 ispravke, za svaki rezim sa auto-brojem. Jedan premesten red, ali izmena `src-vba` obara compile i zeleni marker, a nov test (natpis u zaglavlju) trazi svoj dvosmeran dokaz; zato **svoj rez posle merge-a**, pre `ODL-24` |
 | **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a** |
