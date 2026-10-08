@@ -7007,7 +7007,7 @@ SABOTAZE = {
         '            If False Then   \' SABOTAZA: prijem naloga se ne vidi\n'
         '                znak = 1\n',
         "T_AmbSaldo_CitaociSuNaNovomModelu",
-        "kartica ambalaze pokazuje PRIMLJENE gajbe tog reversa",
+        "kartica kooperanta pokazuje revers pod poslovnim brojem",
     ),
     # SALDO PITA SAMO JEDNU STRANU (10c-2). Nov red imenuje OBE strane, pa citalac
     # koji izgubi granu IZVORA vidi samo prilive: stanica koja je izdala gajbe
@@ -7020,17 +7020,30 @@ SABOTAZE = {
         "T_AmbSaldo_CitaociSuNaNovomModelu",
         "stanica je IZDALA gajbe -- saldo pada na istom redu",
     ),
-    # LIFECYCLE SE VRACA NA ZASTAVICU: citalac prestaje da preskace kontra-stav,
-    # pa storniran revers i dalje stoji u saldu. Stari citalac je gasio red kroz
-    # ExcludeStornirano, koji nov model NE pise -- ova sabotaza meri bas to.
-    "amb-10c-saldo-ne-vidi-kontrastav": (
+    # STORNO PRESTAJE DA SE PONISTAVA (review 08.10.2026, P2 #2). Prva verzija ove
+    # sabotaze je menjala RedDoticeKnjigu u "If True" i tvrdila da time kontra-stav
+    # prestaje da se preskace -- a RedDoticeKnjigu kontra-stav NE preskace nego samo
+    # bira kanonske redove, pa je bila PLACEBO. Storno se ponistava ALGEBARSKI.
+    # Zato sabotaza sada stvarno izbacuje kontra-stav iz zbira: original ostaje, -N
+    # se ne sabira, i saldo se ne vraca na pocetno.
+    "amb-10c-saldo-ne-ponistava-storno": (
         "modAmbalaza.bas",
         '        If RedDoticeKnjigu(data, i, kolIdx) Then\n'
         '            If IstiNalog(AmbText(data(i, colNaTip)), AmbText(data(i, colNaID)), _\n',
-        '        If True Then   \' SABOTAZA: kontra-stav se vise ne preskace\n'
+        '        If RedDoticeKnjigu(data, i, kolIdx) And Len(AmbText(data(i, kolIdx(COL_AMB_STORNO_OD)))) = 0 Then   \' SABOTAZA: kontra-stav ispada iz zbira\n'
         '            If IstiNalog(AmbText(data(i, colNaTip)), AmbText(data(i, colNaID)), _\n',
         "T_AmbSaldo_CitaociSuNaNovomModelu",
         "storno reversa vraca saldo kooperanta na pocetno",
+    ),
+    # KARTICA SE VRACA NA TEHNICKI ID: prevod ambalaznog dokumenta u poslovni broj
+    # i vrstu se preskace, pa operater na kartici vidi "ADK-<hex>" i genericku
+    # klasu dokumenta (review 08.10.2026, P2 #1).
+    "amb-10c-kartica-pokazuje-tehnicki-id": (
+        "modIzvestaj.bas",
+        '    If StrComp(Trim$(dokTip), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) = 0 Then\n',
+        '    If False Then   \' SABOTAZA: ambalazni dokument se ne prevodi\n',
+        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "kartica ambalaze pokazuje primljene gajbe pod POSLOVNIM brojem",
     ),
     # IZVESTAJ VRACA SVOJU KOPIJU PRAVILA: mapa svih naloga prestaje da se poklapa
     # sa citaocem po nalogu. Dva oblika istog pravila moraju da daju isti broj.

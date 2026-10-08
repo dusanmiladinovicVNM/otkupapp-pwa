@@ -1096,6 +1096,10 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
             ' Kljucevi = svi otkupID-evi (za iskljucivanje otkup-vezanih amb stavki).
             Dim otkIdDict As Object
             Set otkIdDict = BuildOtkupBrojDokDict()
+            ' Poslovni broj i vrsta ambalaznog dokumenta -- isti prevod kao na
+            ' ambalaznoj kartici, jednom po izvestaju.
+            Dim ambDokMapa As Object
+            Set ambDokMapa = modAmbalaza.AmbDokPrikazMapa()
 
             Dim a As Long
             For a = 1 To UBound(ambData, 1)
@@ -1123,9 +1127,10 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
 
                                 Dim aTip As String
                                 aTip = NzToText(ambData(a, cAmbTip))
-                                Dim aLbl As String
-                                aLbl = ""
-                                If cAmbDokTip > 0 Then aLbl = KarticaAmbDocLabel(NzToText(ambData(a, cAmbDokTip)))
+                                Dim aLbl As String, aBroj As String
+                                KarticaDokPrikaz NzToText(ambData(a, cAmbDokTip)), _
+                                                 aDokID, otkIdDict, ambDokMapa, _
+                                                 aBroj, aLbl
                                 Dim aOpis As String
                                 aOpis = "Ambala" & ChrW(382) & "a"
                                 If aLbl <> "" Then aOpis = aOpis & ": " & aLbl
@@ -1133,7 +1138,7 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
 
                                 moves.Add Array( _
                                     aDat, _
-                                    aDokID, _
+                                    aBroj, _
                                     "", _
                                     aOpis, _
                                     0#, _
@@ -1357,9 +1362,13 @@ Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
     colTip = 4
     colKol = 5
 
-    ' DokumentID (otkupID) -> BrojDok, jednim prolazom (bez per-row LookupValue).
+    ' DokumentID -> poslovni broj, jednim prolazom (bez per-row LookupValue).
+    ' Dve mape jer su dva izvora broja: otkup ga nosi na svom zaglavlju,
+    ' ambalazni dokument na svom.
     Dim brDokDict As Object
     Set brDokDict = BuildOtkupBrojDokDict()
+    Dim ambDokMapa As Object
+    Set ambDokMapa = modAmbalaza.AmbDokPrikazMapa()
 
     Dim moves As New Collection
     Dim pocetniSaldo As Double
@@ -1394,20 +1403,13 @@ Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
 
                     Dim dokID As String
                     dokID = NzToText(ambData(i, colDokID))
-                    Dim brojDok As String
-                    If brDokDict.Exists(dokID) Then
-                        brojDok = CStr(brDokDict(dokID))
-                    Else
-                        brojDok = dokID
-                    End If
+                    Dim brojDok As String, lbl As String
+                    KarticaDokPrikaz NzToText(ambData(i, colDokTip)), dokID, _
+                                     brDokDict, ambDokMapa, brojDok, lbl
 
                     Dim opis As String
                     opis = NzToText(ambData(i, colTip))   ' TipAmbalaze
-                    If colDokTip > 0 Then
-                        Dim lbl As String
-                        lbl = KarticaAmbDocLabel(NzToText(ambData(i, colDokTip)))
-                        If lbl <> "" Then opis = Trim$(opis & " (" & lbl & ")")
-                    End If
+                    If lbl <> "" Then opis = Trim$(opis & " (" & lbl & ")")
 
                     moves.Add Array(d, brojDok, opis, ulaz, izlaz)
                 End If
@@ -1483,6 +1485,45 @@ EH:
 End Function
 
 ' Friendly oznaka tipa dokumenta za "Pregled ambalaze".
+
+' POSLOVNI BROJ I VRSTA DOKUMENTA ZA KARTICU.
+'
+' Knjiga nosi (DokumentTip, DokumentID). Za otkup je DokumentID = OtkupID, pa broj
+' daje otkupna mapa. Za ambalazni dokument je DokumentID opaque "ADK-<hex>", a
+' poslovni broj i vrsta stoje na ZAGLAVLJU (tblAmbalazaDokument) -- bez ovog
+' prevoda kartica je operateru pokazivala tehnicki ID i genericki
+' "AmbalazaDokument" (review 08.10.2026, P2 #1).
+'
+' Obe mape se grade JEDNOM po izvestaju, ne po redu.
+'
+' Kad zaglavlja nema, broj ostaje DokumentID: to je kvar knjige (noga pokazuje na
+' zaglavlje koje ne postoji) i meri ga integritet, a izvestaj ga ne sme sakriti
+' praznim poljem.
+Private Sub KarticaDokPrikaz(ByVal dokTip As String, ByVal dokID As String, _
+                             ByVal otkMapa As Object, ByVal ambMapa As Object, _
+                             ByRef outBroj As String, ByRef outLabel As String)
+    outBroj = dokID
+    outLabel = KarticaAmbDocLabel(dokTip)
+
+    If StrComp(Trim$(dokTip), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) = 0 Then
+        If Not ambMapa Is Nothing Then
+            If ambMapa.Exists(dokID) Then
+                Dim par As Variant
+                par = Split(CStr(ambMapa(dokID)), "|")
+                If Len(Trim$(par(0))) > 0 Then outBroj = Trim$(par(0))
+                If UBound(par) >= 1 Then
+                    outLabel = modAmbalazaUgovor.AmbVrstaDokNaziv(Trim$(par(1)))
+                End If
+            End If
+        End If
+        Exit Sub
+    End If
+
+    If Not otkMapa Is Nothing Then
+        If otkMapa.Exists(dokID) Then outBroj = CStr(otkMapa(dokID))
+    End If
+End Sub
+
 Private Function KarticaAmbDocLabel(ByVal dokTip As String) As String
     Select Case Trim$(dokTip)
         Case DOK_TIP_OTKUP:         KarticaAmbDocLabel = "otkup"

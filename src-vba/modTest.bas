@@ -6380,11 +6380,40 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
     ' 3b) KARTICA JE REDNI IZVESTAJ: mora da pokaze TAJ red, ne samo saldo. Do 10c
     '     je znak vadila sama, po Smer-u, pa je na nov red bila slepa kao i saldo.
     '     Opseg je +-1 dan oko danas, jer pisac upisuje Date.
+    '
+    '     BROJ NA KARTICI JE POSLOVNI, NE TEHNICKI. AmbDokID je opaque
+    '     "ADK-<hex>" i na kartici ne sme da se pojavi -- poslovni broj stoji na
+    '     ZAGLAVLJU (review 08.10.2026, P2 #1). Prva verzija ove tvrdnje je
+    '     merila bas AmbDokID, pa je CEMENTIRALA defekt: zato ide i kontra-tvrdnja
+    '     da se tehnicki ID NE vidi, i tvrdnja da je imenovana VRSTA dokumenta a
+    '     ne genericki "AmbalazaDokument".
+    Dim revBroj As String
+    revBroj = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, revDok, _
+                                   COL_AMBD_BROJ))
+    AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima poslovni broj"
+
     Dim kart As Variant
     kart = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, DateAdd("d", -1, Date), _
                                              DateAdd("d", 1, Date))
-    AssertEq KarticaUlazZaDok(kart, revDok), 4, _
-             "kartica ambalaze pokazuje PRIMLJENE gajbe tog reversa"
+    AssertEq KarticaUlazZaDok(kart, revBroj), 4, _
+             "kartica ambalaze pokazuje primljene gajbe pod POSLOVNIM brojem"
+    AssertEq KarticaUlazZaDok(kart, revDok), 0, _
+             "kartica ne pokazuje tehnicki AmbDokID kao broj dokumenta"
+    AssertEq KarticaOpisSadrzi(kart, revBroj, Poruka("OTKUI_AMBD_REVERS")), True, _
+             "kartica imenuje VRSTU dokumenta sa zaglavlja"
+
+    ' 3c) KARTICA KOOPERANTA ima SVOJU ambalaznu putanju (samostalna kretanja,
+    '     bez otkupa) i svoju kolonu dokumenta. Presecena je istim rezom, pa i
+    '     ona mora da se izmeri -- inace je produkcioni rezultat te putanje
+    '     ostao nedokazan.
+    Dim kartK As Variant
+    kartK = modIzvestaj.ReportKarticaKooperanta(FX_KOOPERANT, _
+                                                DateAdd("d", -1, Date), _
+                                                DateAdd("d", 1, Date))
+    AssertEq KarticaImaBroj(kartK, 2, revBroj), True, _
+             "kartica kooperanta pokazuje revers pod poslovnim brojem"
+    AssertEq KarticaImaBroj(kartK, 2, revDok), False, _
+             "kartica kooperanta ne pokazuje tehnicki AmbDokID"
 
     ' 4) LIFECYCLE: storno je KONTRA-STAV, ne zastavica. Stari citalac je gasio
     '    red kroz ExcludeStornirano, sto nov model ne pise -- da je ta provera
@@ -6395,6 +6424,39 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
              "storno reversa vraca saldo kooperanta na pocetno"
 End Sub
 
+
+
+' Da li kartica ijednim redom nosi dati tekst u ZADATOJ koloni. Kolona se trazi
+' izricito, jer dve kartice nemaju isti raspored.
+Private Function KarticaImaBroj(ByVal res As Variant, ByVal kol As Long, _
+                                ByVal tekst As String) As Boolean
+    Dim i As Long
+    If Not IsArray(res) Then Exit Function
+    If Len(Trim$(tekst)) = 0 Then Exit Function
+    For i = LBound(res, 1) To UBound(res, 1)
+        If StrComp(NzToText(res(i, kol)), Trim$(tekst), vbTextCompare) = 0 Then
+            KarticaImaBroj = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Da li OPIS reda ambalazne kartice (kolona 3) za dati broj dokumenta sadrzi dati
+' deo teksta -- tako se meri da li je imenovana vrsta, a ne klasa dokumenta.
+Private Function KarticaOpisSadrzi(ByVal res As Variant, ByVal broj As String, _
+                                   ByVal deo As String) As Boolean
+    Dim i As Long
+    If Not IsArray(res) Then Exit Function
+    If Len(Trim$(deo)) = 0 Then Exit Function
+    For i = LBound(res, 1) To UBound(res, 1)
+        If StrComp(NzToText(res(i, 2)), Trim$(broj), vbTextCompare) = 0 Then
+            If InStr(1, NzToText(res(i, 3)), Trim$(deo), vbTextCompare) > 0 Then
+                KarticaOpisSadrzi = True
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
 
 ' Zbir kolone ULAZ sa kartice ambalaze za dati dokument. Kartica vraca 2D niz
 ' (1)=Datum (2)=BrojDok (3)=Opis (4)=Ulaz (5)=Izlaz (6)=Saldo. Revers nije otkup,

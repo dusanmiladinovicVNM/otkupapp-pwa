@@ -95,6 +95,26 @@ Public Const AMB_KLASA_REALAN As String = "REALAN"
 ' ZATVORENE LISTE -- jedan izvor, da se citalac i test ne razidju
 ' ============================================================
 
+' NAZIV VRSTE AMBALAZNOG DOKUMENTA (zaglavlje), za coveka.
+'
+' Zivi u UGOVORU, a ne u ekranu, jer je spisak vrsta domenski: enum je ovde
+' (AMB_DOK_*), pa i njegov naziv. Do 10c-2 je stajao u modScrDokumenti i zvao ga
+' je i modStornoDok; kad mu je trebao i IZVESTAJ, zavisnost bi isla report ->
+' ekran, sto je obrnuto. Tri spiska naziva za isti enum bi se razisla prvom
+' izmenom.
+'
+' Fail-open je namerni: nepoznata vrsta se vraca kao sopstveni tekst, da nov enum
+' ne bi proizveo prazan natpis dok mu se ne doda poruka.
+Public Function AmbVrstaDokNaziv(ByVal v As String) As String
+    AmbVrstaDokNaziv = Trim$(v)
+    Select Case Trim$(v)
+        Case AMB_DOK_REVERS:          AmbVrstaDokNaziv = Poruka("OTKUI_AMBD_REVERS")
+        Case AMB_DOK_REVERS_PARTNERA: AmbVrstaDokNaziv = Poruka("OTKUI_AMBD_REVERS_PART")
+        Case AMB_DOK_NABAVKA:         AmbVrstaDokNaziv = Poruka("OTKUI_AMBD_NABAVKA")
+        Case AMB_DOK_OTPIS:           AmbVrstaDokNaziv = Poruka("OTKUI_AMBD_OTPIS")
+    End Select
+End Function
+
 Public Function AmbNaloziSvi() As Variant
     AmbNaloziSvi = Array(AMB_NALOG_KOOPERANT, AMB_NALOG_STANICA, AMB_NALOG_KUPAC, _
                          AMB_NALOG_VOZAC, AMB_NALOG_FIRMA, AMB_NALOG_SPOLJNI)

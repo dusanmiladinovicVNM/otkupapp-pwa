@@ -1132,7 +1132,7 @@ Public Function TipNaziv(ByVal tip As String, ByVal opcija As String) As String
         Case STIP_UPLATE:     TipNaziv = Poruka("STORNO_TIP_UPLATA")
         Case STIP_FAKTURA:    TipNaziv = Poruka("STORNO_TIP_FAKTURA")
         Case STIP_IZVOD:      TipNaziv = Poruka("STORNO_TIP_IZVOD")
-        Case STIP_REVERSI:    TipNaziv = modScrDokumenti.AmbVrstaDokNaziv(opcija)
+        Case STIP_REVERSI:    TipNaziv = modAmbalazaUgovor.AmbVrstaDokNaziv(opcija)
         Case Else:            TipNaziv = tip
     End Select
 End Function

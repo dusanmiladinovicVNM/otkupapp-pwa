@@ -1580,6 +1580,59 @@
     (`ReportAmbalaza`, `ReportAmbalazaZbirnoSvi`, `IzvStaniceIzPodataka`,
     `StampajReversAmbalaze`). Jeftine kapije zelene; skupe čekaju reviewer GO.
 
+96. **Review `034a63e3`: dva `P2`, oba moja — jedan ih je i cementirao**
+    (08.10.2026).
+    **`P2 #1`: kartica je prikazivala tehnički `AmbDokID` kao poslovni broj.**
+    Knjiga nosi `(DokumentTip, DokumentID)` i to je **ispravno** — ledger ne sme da
+    zna kako se dokument prikazuje. Ali za ambalažni dokument je `DokumentID`
+    opaque `ADK-<hex>`, a poslovni broj i vrsta stoje na **zaglavlju**. Kartica je
+    zato operateru pokazivala `ADK-8f...` umesto `1/081026`, i generički
+    `AmbalazaDokument` umesto `Revers` — jedan koren, dva simptoma.
+    **Gore od samog defekta:** moja tvrdnja u `#204` ga je **cementirala** —
+    merila je baš `AmbDokID`, a komentar uz nju je tehnički detalj izgovorio kao
+    poslovno pravilo („pa mu kartica kao broj prikazuje sam DokumentID"). Test koji
+    opisuje zatečeno ponašanje umesto pravila ne čuva ništa; on ga **brani**.
+    Ispravka je tamo gde je reviewer pokazao: `AmbKretanjaNaloga` se **ne dira**,
+    nego dolazi prevod. Nov `modAmbalaza.AmbDokPrikazMapa()` daje
+    `AmbDokID -> "broj|vrsta"` u **jednom** prolazu kroz zaglavlja, a
+    `modIzvestaj.KarticaDokPrikaz` bira izvor broja po tipu dokumenta (otkup sa
+    svog zaglavlja, ambalažni sa svog). Obe kartice idu kroz njega.
+    Uz to je `AmbVrstaDokNaziv` **iseljen** iz `modScrDokumenti` u
+    `modAmbalazaUgovor`: spisak vrsta je domenski (`AMB_DOK_*` je tamo), a trebao je
+    i izveštaju — zavisnost bi inače išla **report → ekran**, što je obrnuto. Tri
+    spiska naziva za isti enum bi se razišla prvom izmenom.
+    **`P2 #2`: sabotaža `amb-10c-saldo-ne-vidi-kontrastav` je bila placebo.**
+    Menjala je `RedDoticeKnjigu` u `If True` i tvrdila da time kontra-stav prestaje
+    da se preskače — **a `RedDoticeKnjigu` kontra-stav ne preskače**: on samo bira
+    **kanonske** redove, i original i kontra-stav su to. Storno se poništava
+    **algebarski** (`+N` i `−N` daju 0). Za sve kanonske redove su `If
+    RedDoticeKnjigu` i `If True` identični, pa sabotaža ne bi obarala ništa.
+    Zamenjena je sa `amb-10c-saldo-ne-ponistava-storno`, koja **stvarno** izbacuje
+    kontra-stav iz zbira (`Len(StornoOd) = 0`). Netačan komentar u
+    `GetAmbalazeStanje` je ispravljen — tvrdio je isto što i placebo tvrdnja.
+    `vba_check` ovo **nije mogao** da uhvati: on potvrđuje **oblik** sidra (pogađa
+    tačno jedno mesto, tvrdnja je ceo statičan literal), ne njegovu semantiku.
+    Zato placebo sabotažu hvata reviewer ili `dokaz.py`, a ne jeftina kapija.
+    **Tvrdnje:** `#204` sada meri **poslovni** broj, uz **kontra-tvrdnju** da se
+    tehnički `AmbDokID` ne vidi i tvrdnju da je imenovana **vrsta** sa zaglavlja.
+    Dodata je i `ReportKarticaKooperanta` — njena samostalna ambalažna putanja je
+    presečena istim rezom, a bila je nedokazana.
+    Usput je kapija kataloga uhvatila **zastarelo sidro**: preimenovana tvrdnja je
+    ostavila `amb-10c-kartica-ne-vidi-prijem` bez mete, i ona je preusmerena na
+    tvrdnju koju stvarno obara (kartica kooperanta), da ne bi **delila** tvrdnju sa
+    drugom sabotažom. Katalog 713 → **714**.
+    **Za skupi prolaz, unaprijed:** golden fajlovi nose `kooperant 12/1  0`. Ta
+    nula je bila **zagarantovana** dok je čitalac bio slep, pa danas ne nosi
+    informaciju. Posle reza postaje stvarno merenje: ako ostane 0, treba potvrditi
+    da je to **neto-nula** (otkup knjiži `UZ_ROBU` i `IZDATA_PRAZNA` u suprotnim
+    smerovima), a ne i dalje slepo. Prva crvena u `RunGoldenSuite` zato nije
+    automatski regresija.
+    **Reviewer evidencija koju priznajem:** `modIzvestajTests` još seje stari oblik
+    (`T_E2E_AmbPregledRazdvajaTipDokumenta`, `T_E2E_ReversIstiBrojDveStanice`), ali
+    oba mere **`ReportAmbalaza`**, koja još nije presečena — legacy seme uz legacy
+    čitaoca je konzistentno. Kad ta funkcija pređe, **moraju** i oni, inače se
+    vraća isti vakuum koji je stavka 93 imenovala.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

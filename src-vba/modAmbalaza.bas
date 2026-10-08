@@ -270,9 +270,12 @@ Public Function GetAmbalazeStanje(ByVal entitetID As String, _
     ' funkcija se od nje razlikuje samo oblikom -- vraca SVE tipove ambalaze
     ' tog naloga odjednom, jer stampa i izvestaj tako citaju.
     '
-    ' Storno se gasi kroz RedDoticeKnjigu (kontra-stav), ne kroz
-    ' ExcludeStornirano: nov model ne pise mutabilnu zastavicu, pa bi stara
-    ' provera pustila stornirani red da i dalje stoji u saldu.
+    ' DVE RAZLICITE STVARI, da se ne pomesaju (review 08.10.2026, P2 #2):
+    '   RedDoticeKnjigu bira KANONSKE redove -- i original i kontra-stav su to.
+    '   Storno se ponistava ALGEBARSKI: original +N i kontra-stav -N daju 0.
+    ' Stari ExcludeStornirano je citao mutabilnu zastavicu koju nov model ne
+    ' pise, pa ovde ne bi gasio nista -- zato odlazi, a ne zato sto ga menja
+    ' RedDoticeKnjigu.
     RequireKnjigaSchema SRC
 
     Dim kolIdx As Object, vrsteDok As Object
@@ -1275,6 +1278,45 @@ Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Va
     Next n
 
     AmbKretanjaNaloga = res
+End Function
+
+
+' KAKO SE AMBALAZNI DOKUMENT ZOVE: poslovni broj i vrsta, po AmbDokID -- u jednom
+' prolazu kroz zaglavlja.
+'
+' Knjiga nosi (DokumentTip, DokumentID) i to je ispravno: ledger ne sme da zna
+' kako se dokument PRIKAZUJE. Ali AmbDokID je opaque "ADK-<hex>", pa bi kartica
+' bez ovog prevoda operateru pokazala tehnicki identitet kao broj dokumenta, i
+' genericki "AmbalazaDokument" umesto "Revers" (review 08.10.2026, P2 #1).
+'
+' Mapa, a ne LookupValue po redu: kartica ima N redova, a zaglavlja su jedna
+' tabela -- isti razlog zbog koga postoji i AmbDokRedMapa.
+'
+' Vrednost je "broj|vrsta". Broj je poslovni i ne sadrzi '|'; vrsta je enum.
+Public Function AmbDokPrikazMapa() As Object
+    Const SRC As String = "modAmbalaza.AmbDokPrikazMapa"
+
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set AmbDokPrikazMapa = res
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA_DOKUMENT)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cID As Long, cBroj As Long, cVrsta As Long
+    cID = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, SRC)
+    cBroj = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, SRC)
+    cVrsta = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_VRSTA, SRC)
+
+    Dim i As Long, k As String
+    For i = 1 To UBound(data, 1)
+        k = AmbText(data(i, cID))
+        If Len(k) > 0 Then
+            res(k) = AmbText(data(i, cBroj)) & "|" & AmbText(data(i, cVrsta))
+        End If
+    Next i
 End Function
 
 ' OBAVEZA FIRME PREMA PARTNERU -- izvedena iz iste knjige, bez ijedne mutabilne

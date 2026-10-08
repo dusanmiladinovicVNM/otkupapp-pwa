@@ -2765,20 +2765,6 @@ Private Function AmbKretanjeNaziv(ByVal vk As String) As String
     End Select
 End Function
 
-' Naziv vrste ambalaznog DOKUMENTA (zaglavlje). Isti fail-open kao iznad.
-'
-' JAVAN, jer ga zove i ekran Storno (modStornoDok.TipNaziv): dva spiska naziva
-' za iste vrste bi se razisla prvom izmenom enuma.
-Public Function AmbVrstaDokNaziv(ByVal v As String) As String
-    AmbVrstaDokNaziv = Trim$(v)
-    Select Case Trim$(v)
-        Case AMB_DOK_REVERS:          AmbVrstaDokNaziv = Poruka("OTKUI_AMBD_REVERS")
-        Case AMB_DOK_REVERS_PARTNERA: AmbVrstaDokNaziv = Poruka("OTKUI_AMBD_REVERS_PART")
-        Case AMB_DOK_NABAVKA:         AmbVrstaDokNaziv = Poruka("OTKUI_AMBD_NABAVKA")
-        Case AMB_DOK_OTPIS:           AmbVrstaDokNaziv = Poruka("OTKUI_AMBD_OTPIS")
-    End Select
-End Function
-
 ' Ime naloga za kolonu PARTNER. Vozac je dodat uz rez 10b-2: tada je prestao
 ' da bude zig (kolona uz red) i postao NALOG, pa se u listi pojavljuje kao
 ' protivpartner -- bez mape bi stajao go ID.
@@ -3154,7 +3140,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                 Case "ambosnov"
                     ' OSNOV reversa je VRSTA DOKUMENTA sa zaglavlja (REVERS /
                     ' REVERS_PARTNERA), a ne vise tip dokumenta sa noge knjige.
-                    cell = AmbVrstaDokNaziv(CellS(src, r, iDokTip))
+                    cell = modAmbalazaUgovor.AmbVrstaDokNaziv(CellS(src, r, iDokTip))
                     hay = hay & "|" & cell
                 Case "ambsmer"
                     cell = AmbKretanjeNaziv(AmbRecPolje(ambRec, 0))
