@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice ✅ (stavke 93–95), **sledi `ReportAmbalaza` + `ReportAmbalazaZbirnoSvi` (spojeni), pa `IzvStaniceIzPodataka` i `StampajReversAmbalaze`**; onda `10c-3` · `10d` / `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), **sledi `ReportAmbalaza` + `ReportAmbalazaZbirnoSvi` (spojeni; nose odluku iz 6.8 o vozacu i obavezu da legacy zasejavanje u `modIzvestajTests` pređe SA njima)**, pa `IzvStaniceIzPodataka` i `StampajReversAmbalaze`; onda `10c-3` · `10d` / `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
