@@ -1424,11 +1424,39 @@
     **1/1**, oba `DOKAZANO`, pun prolaz **ZELENO 12/12**, marker nad izvorom
     `96c6757e2ded`. Katalog 708 → 709.
 
+92. **Compile potvrdjen nad TACNIM izvorom; `P2` evidencije zatvoren** (08.10.2026).
+    Operater je pustio `Debug -> Compile VBAProject` nad `a4e8729e`, pa je marker
+    upisan: `python tools/vba_gate.py --mark-compile` -> izvor **`96c6757e2ded`**,
+    isti otisak nad kojim stoji i zeleni marker. `--require-green --require-compile`
+    izlazi **0**. Compile je vezan **samo za izvor**, pa ovaj zapis (docs) potvrdu ne
+    obara.
+    **Zasto uopste ide u commit:** marker zivi u `tests/last_green.json`, koji je
+    **gitignored** -- review koji cita repo ga ne vidi. Nalaz "compile nije dokazan"
+    je zato bio tacan o **evidenciji**, ne o izvoru, i resava se zapisom a ne
+    recenicom u chatu.
+    **Preostali `P3` je proveren u kodu i siri je nego u opisu.** `SelectModeCore`
+    radi `MarkClean` -> `mPopMute = False` -> `mLoading = False`, pa **tek onda** pise
+    u polje broja. `MarkDirty` prestaje da propusta programski upis cim `mLoading`
+    padne, a `SetFld` menja `.text` -> `UiChange("fgBrOtprT")` -> `MarkDirty`, pa
+    zaglavlje nove, prazne forme kaze "nesacuvano".
+    **Nije regresija ovog reza:** na `cf14dc92` je `RefreshBrojPredlog` vec stajao
+    posle `mLoading = False`, pa je svaki rezim sa auto-brojem badge prljao i pre P1
+    ispravke; ispravka je u isti prozor dodala samo jos jedan upis (praznjenje), koji
+    to cini i sa **iskljucenim** auto-brojem. Druga dva pozivaoca (prefill, upis
+    dokumenta) zovu `MarkClean` **posle** broja -- obrazac postoji, `SelectModeCore`
+    je jedino mesto koje ga ne postuje.
+    **Ne ulazi u ovaj rez, i to je merenje a ne odlaganje:** svaka izmena `src-vba`
+    obara i compile i zeleni marker, a promena ponasanja nosi test -- badge nije
+    `Private` tvrdnja nego natpis u zaglavlju, pa nov test po `testovi.md` §6 trazi
+    dvosmeran dokaz. Cena jednog premestenog reda je dakle pun prolaz + `dokaz` +
+    **drugi** operaterov compile. Ide kao prvi mali rez posle merge-a.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
 | **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). Danas to drže samo komentari uz tri grane; kapija bi morala da zna koji su pozivi iz suite-a dostupni, pa traži svoj rez i svoj dvosmerni dokaz |
+| **badge "nesacuvano" na novoj formi** | `SelectModeCore` pise u polje broja POSLE `MarkClean` i `mLoading = False`, pa programski upis prodje kroz `MarkDirty` i prazna forma tvrdi da ima neupisanih izmena (review 08.10.2026, `P3`). Zatecen obrazac -- vazio je i pre P1 ispravke, za svaki rezim sa auto-brojem. Jedan premesten red, ali izmena `src-vba` obara compile i zeleni marker, a nov test (natpis u zaglavlju) trazi svoj dvosmeran dokaz; zato **svoj rez posle merge-a**, pre `ODL-24` |
 | **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a** |
 | **nema kapije „modul ne sme da koristi tuđ `Private` simbol"** | VBA kompajlira **na zahtev**, pa `Sub or Function not defined` pukne tek kad neki test prvi put pozove baš tu proceduru — i to posle **600 s i ubijenog Excela**, uz poruku bez fajla i linije (06.10.2026: `MarkRowStornirano`, `Private` u `modStorno`, pozvan iz `modAmbalaza`). Ime **postoji** u projektu, samo nije vidljivo — pa ga nijedna jeftina kapija ne vidi. Jednokratni merač je napisan i dao **1 nalaz sa fajlom i linijom nad pokvarenim izvorom, 0 posle** — dvosmeran dokaz. Tri lažna nalaza prvog izdanja su i sama merenje: repni komentar, labela (`Resume CleanUp`) i **LF kopija iz git-a** (split po `
 ` dao je ceo fajl kao jedan red, pa je prvi „čist" prolaz bio lažan). Kao trajna kapija ide u `vba_check`, dakle **zaseban process PR** |
