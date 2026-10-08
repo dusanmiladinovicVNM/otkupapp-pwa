@@ -118,6 +118,50 @@ Private Function OtpremnicaAktivnaPoID(ByVal otpremnicaID As String) As Boolean
         LookupValue(TBL_OTPREMNICA, COL_OTP_ID, Trim$(otpremnicaID), COL_STORNIRANO)))) <> "DA")
 End Function
 
+
+
+' AKTIVAN AMBALAZNI DOKUMENT PO PK: postoji TACNO jednom i nije storniran.
+' Prazan ID = False, fail-closed.
+'
+' NE IDE KROZ AktivanPoIdentitetu, i to je nalaz a ne stil: on docID tumaci kao
+' GENERACIJU (IdoviGeneracije trazi kolonu GeneracijaID), a tblAmbalazaDokument
+' je nema -- pa bi vracao False za SVAKI dokument i storno reversa ne bi prosao
+' nikad. Prva verzija cutovera je bas to i radila; tvrdnja koja je to prikrivala
+' bila je placebo (prolazila je i za validan dokument), a otkrila ju je tek
+' tvrdnja o paru (identitet, broj), koja do svoje grane nije ni stizala.
+'
+' Oblik je prepisan sa OtpremnicaAktivnaPoID, iz istog razloga (review #362):
+' dokument se ne pogadja po broju.
+Private Function AmbDokAktivanPoID(ByVal ambDokID As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(ambDokID)) = 0 Then Exit Function
+    If FindRows(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, Trim$(ambDokID)).count <> 1 Then Exit Function
+    AmbDokAktivanPoID = (UCase$(Trim$(NzToText( _
+        LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, Trim$(ambDokID), COL_STORNIRANO)))) <> "DA")
+End Function
+
+' PAR (IDENTITET, BROJ) MORA DA PRIPADA ISTOM DOKUMENTU.
+'
+' Isti razlog kao ZbirnaParOK (review #371, P1): ekran salje broj iz KLIKNUTOG
+' reda, a izbor moze da zastari -- lista se osvezi, red se pomeri, a broj ostane
+' od prethodnog. Bez ovoga bi storno otisao na dokument koji operater nije
+' izabrao, i to TIHO, jer identitet sam po sebi postoji.
+'
+' Stari put je isto proveravao, samo kroz razresavanje (broj, smer) -> ReversID.
+' Cutover na AmbDokID bi tu kapiju izgubio -- uhvatio ju je test
+' T_BrojZauzetUNizu_Revers, koji je bas nju i cuvao.
+'
+' Prazan broj NIJE prekrsaj: tada se ne poredi nista, a dokument je ionako
+' izabran po identitetu.
+Private Function AmbDokParOK(ByVal docID As String, ByVal broj As String) As Boolean
+    AmbDokParOK = True
+    If Len(Trim$(broj)) = 0 Then Exit Function
+    On Error Resume Next
+    AmbDokParOK = (StrComp(Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, _
+                   COL_AMBD_ID, Trim$(docID), COL_AMBD_BROJ))), _
+                   Trim$(broj), vbTextCompare) = 0)
+End Function
+
 ' Par (identitet, broj) mora da pripada ISTOM dokumentu (review #371, P1).
 '
 ' Prost storno zbirne ne ide kroz okvir ispravke, pa se par ovde i proverava:
@@ -245,9 +289,12 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
             ' Nestalo je sve sto je sluzilo PLUTAJUCEM identitetu: zahtev za smerom
             ' (dokument ga nema -- ima vrstu), razresavanje ReversID-a iz (broj, smer),
             ' i provera granice. Dokument se bira klikom, a klik nosi njegov ID.
-            If Not AktivanPoIdentitetu(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, _
-                                       COL_AMBD_ID, broj, docID) Then _
+            If Not AmbDokAktivanPoID(docID) Then
                 StornoRazlog = NijePronadjen(broj)
+            ElseIf Not AmbDokParOK(docID, broj) Then
+                StornoRazlog = Poruka("STORNO_ERR_REV_KLJUC") & " " & _
+                               NijePronadjen(broj)
+            End If
 
         Case STIP_IZVOD
             If Not ResolveIzvodZaStorno(broj, izvBroj, izvRacun, razlog) Then
@@ -1098,8 +1145,12 @@ End Function
 ' (kapija StornoRazlog tada vec odbija).
 Public Function DokumentOpis(ByVal tip As String, ByVal broj As String, _
                              ByVal opcija As String, Optional ByVal docID As String = "") As String
-    Dim opis As String, revBroj As String, revTip As String, revID As String
-    Dim st As String, dan As Long
+    Dim opis As String
+    ' `dan` je do 10c bio As Long, jer ga je ReversStanicaDan vracao kao broj
+    ' dana. Zaglavlje nosi DATUM, pa je sada tekst -- upis stringa u Long je
+    ' davao gresku konverzije koju EH guta, i opis je tiho ostajao bez stanice.
+    Dim st As String
+    Dim dan As Variant
     opis = TipNaziv(tip, opcija) & " " & broj
     DokumentOpis = opis
     On Error GoTo EH
@@ -1114,9 +1165,13 @@ Public Function DokumentOpis(ByVal tip As String, ByVal broj As String, _
     ' potvrda treba da kaze cijim brojem dokument ide.
     st = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
                               Trim$(docID), COL_AMBD_BROJ_OWNER_ID))
-    dan = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
-                               Trim$(docID), COL_AMBD_DATUM))
-    If Len(st) = 0 Or Len(dan) = 0 Then Exit Function
+    dan = LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                      Trim$(docID), COL_AMBD_DATUM)
+    ' DATUM SE NE PRETVARA U TEKST pa nazad: celija nosi pravi Date, a tekst u
+    ' srpskom obliku ("8.10.2026.", sa tackom na kraju) IsDate ODBIJA -- opis je
+    ' tada tiho ostajao bez stanice. Prva verzija je istu gresku imala i u tipu
+    ' (`dan As Long`), pa je ovo isti kvar u drugom ruhu.
+    If Len(st) = 0 Then Exit Function
     If Not IsDate(dan) Then Exit Function
     DokumentOpis = opis & modDokUnos.ReversOpis(st, CDate(dan))
     Exit Function

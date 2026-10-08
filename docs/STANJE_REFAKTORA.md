@@ -1309,6 +1309,44 @@
     Katalog 702 → 704 (jedna obrisana, tri nove). Jeftine kapije `rc=0`.
     **Stari klaster u `modStorno` nije obrisan** — još ga zovu testovi,
     `modStornoFlow` i tok ispravke reversa. Briše se u `10e`, po 6.13.
+88. **`10c` prvi rez: pet krugova, i četiri nalaza u MOM kodu** (08.10.2026).
+    Rez iz stavke 87 je prošao jeftine kapije iz prve, a onda ga je suite četiri
+    puta vratio. Nijedan nalaz nije bio „zastareo test".
+
+    | Krug | Nalaz | Gde je bio |
+    |---|---|---|
+    | 1 | tri tvrdnje mere stari oblik | dve **preseljene**, jedna **obrisana** sa pravilom |
+    | 2 | preduslov testa: stanica izdaje gajbe koje ne drži | **moj test** — `ODL-8` ga je odbio po imenu |
+    | 3 | `Dim dan As Long`, pa `dan` kao **tekst** | **moj kod** — „8.10.2026." `IsDate` odbija, opis tiho bez stanice |
+    | 4 | izgubljena provera para `(identitet, broj)` | **moj kod** — zastareo izbor bi stornirao tuđ dokument |
+    | 5 | `AktivanPoIdentitetu` traži `GeneracijaID` | **moj kod** — preflight bi odbijao **svaki** revers |
+
+    **Peti je bio najteži i najopasniji:** `IdoviGeneracije` traži kolonu
+    `GeneracijaID`, koju `tblAmbalazaDokument` nema — pa bi storno reversa sa
+    ekrana **ne prolazio nikad**, a merge blocker ostao zatvoren sa drugom
+    porukom. Prva tvrdnja ga je **prikrivala**: prolazila bi i za validan
+    dokument. Otkrila ga je tek tvrdnja o paru, koja do svoje grane nije ni
+    stizala — zato uz svaku kapiju odbijanja sada stoji i **protiv-slučaj**
+    („aktivan revers sa svojim brojem PROLAZI").
+    **Dijagnostička tvrdnja je platila odmah.** Posle dva kruga nagađanja o
+    uzroku, jedna tvrdnja koja NAMERNO pada ispisala je stvarnu vrednost
+    (`dat=8.10.2026.`) i uzrok je bio vidljiv iz prvog pokušaja. To je jeftinije
+    od svake teorije — jedan prolaz suite-a.
+    **`dokaz.py` me je tri puta ispravio u MERENJU, ne u kodu:**
+    `NE OBARA NISTA` (dvoslojna kapija — par i sam odbija nepostojeći dokument),
+    `PALA DRUGA TVRDNJA` (sabotaža opisa je skidala i datum, jer `ReversOpis` sa
+    praznom stanicom vraća prazno), i **vakuumska tvrdnja** (prazan broj meri
+    generičku kapiju iznad `Select Case`, ne postojanje dokumenta). Dve brane
+    razdvaja **jedino storniran dokument**: broj mu odgovara, a postojanje ne —
+    pa je tvrdnja postala „već storniran revers se ne stornira ponovo", što je uz
+    to i poslovno pravilo za sebe.
+    **Završno:** `RunAllTests` **201**/0, `dokaz.py --grupe 6 amb-10c-` crvenih
+    **5/5**, pun prolaz **ZELENO 12/12** (BFP 2436/0, Storno 164/0, banka 241/0),
+    GREEN marker nad izvorom `74c07d9ce2c0`. Katalog 702 → 706.
+    U `Test_StornoCentar_All` su obrisane **dve** provere `DokumentOpis` nad
+    nogama — naslednice postoje nad pravim dokumentom. Ostatak tog testa
+    (undo, ispravka, Nedovršeno) **namerno** i dalje meri stari model: te
+    putanje nisu presečene i žive do `10e`.
 
 ## Dug sa imenom (posle S5-5b)
 

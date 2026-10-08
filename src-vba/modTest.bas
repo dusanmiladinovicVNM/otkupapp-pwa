@@ -2416,6 +2416,16 @@ Private Sub T_StornoDok_KapijePreUpisa()
                   "AMBDOK-NEPOSTOJECI")) > 0), True, _
              "revers sa nepostojecim AmbDokID se odbija PRE storna"
 
+    ' PRVA BRANA (postojanje) MERI SE U T_StornoBezUvida_NemaAkcije, nad
+    ' STORNIRANIM dokumentom -- ne ovde.
+    '
+    ' Pokusaj da se izoluje praznim brojem je bio vakuumski: iznad Select Case
+    ' stoji genericka kapija koja prazan broj odbija za SVAKI tip (tacka 2
+    ' gore), pa bi tvrdnja merila nju, a ne postojanje dokumenta. Dve brane se
+    ' nad NEPOSTOJECIM dokumentom potpuno preklapaju: broj koga nema ne moze
+    ' da se poklopi ni sa cim. Razdvaja ih jedino dokument koji POSTOJI a
+    ' storniran je -- tamo broj odgovara, a postojanje ne.
+
     ' 4) Nepoznat tip ne sme tiho da ne uradi nista.
     AssertEq (Len(modStornoDok.StornoRazlog("NEPOSTOJECI_TIP", NEMA, "")) > 0), True, _
              "nepoznat tip vraca razlog"
@@ -3621,14 +3631,18 @@ Private Sub T_StornoEkran_KolonaIdentiteta()
     Next i
     AssertEq ima, False, "revers nema GeneracijaID, pa ni tu kolonu"
 
-    ' ...ali ima identitet REDA: AmbID kliknute noge. Broj reversa je jedinstven
-    ' tek u nizu (stanica, dan), pa bez njega storno ne zna koji je dokument.
+    ' ...ali ima identitet DOKUMENTA: AmbDokID (10c).
+    '
+    ' Do 08.10.2026 je ovde stajao AmbID kliknute NOGE, uz obrazlozenje da je
+    ' broj jedinstven tek u nizu (stanica, dan). Oboje je bilo tacno dok je
+    ' identitet bio PLUTAJUCI; ambalazni dokument ima svoj ID, pa tvrdnja ne
+    ' slabi nego se SELI na njega.
     ' SABOTAZA: izbaci Case "REVERSI" iz IdKolonaTipa -> pukne po imenu.
     ima = False
     For i = 0 To UBound(cols)
-        If modScrDokumenti.ColF(CStr(cols(i)), 1) = COL_AMB_ID Then ima = True
+        If modScrDokumenti.ColF(CStr(cols(i)), 1) = COL_AMBD_ID Then ima = True
     Next i
-    AssertEq ima, True, "revers nosi AmbID kao kolonu identiteta"
+    AssertEq ima, True, "revers nosi AmbDokID kao kolonu identiteta"
 
     ' I na kraju: ono sto ekran zapamti pri izboru reda je ono sto salje nizvodno.
     modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-F8-2", ""
@@ -3843,14 +3857,67 @@ Private Sub T_StornoBezUvida_NemaAkcije()
     AssertEq modScrStorno.Scr_BrojAkcija(), 2, _
              "revers nema uvid po prirodi, pa kapija ne sme da ga zakljuca"
 
-    ' Revers nema uvid, pa pre storna i zamene (ISPRAVKA) potvrda imenuje stanicu i
-    ' dan: od REV-IDENT-01 Faze 2b isti KOOP broj, smer i dan legalno nose reversi dve
-    ' stanice. MsgBox se ne meri -- meri se tekst koji mu se predaje. Fixture
-    ' REV-IZV-2, klik na nogu Kooperant. SABOTAZA: StornoPotvrdaTekst po (tip, broj)
-    ' -> pukne "potvrda storna reversa imenuje stanicu".
-    modScrStorno.Scr_IzborTestSet STIP_REVERSI, "REV-IZV-2", "AMB-IZV-K3", DOK_TIP_OM_ULAZ_KOOP
+    ' Revers nema uvid, pa pre storna i zamene (ISPRAVKA) potvrda imenuje stanicu
+    ' i dan -- isti KOOP broj, smer i dan legalno nose reversi dve stanice.
+    ' MsgBox se ne meri; meri se tekst koji mu se predaje.
+    '
+    ' DOKUMENT SE PRAVI OVDE, kroz pravog pisca. Fixture nosi samo STARI oblik
+    ' (noge u tblAmbalaza), a od 10c potvrda cita ZAGLAVLJE -- pa bi tvrdnja nad
+    ' fixture nogom merila odsustvo dokumenta, ne tekst potvrde. Tvrdnja ostaje
+    ' ista; menja se oblik dokumenta nad kojim se meri.
+    ' SABOTAZA: StornoPotvrdaTekst po (tip, broj) -> pukne po imenu.
+    ' NASE GAJBE NE NASTAJU IZ VAZDUHA (AMB-10-ODL-8): stanica je SOPSTVENI
+    ' nalog, pa joj se manjak NE pokriva ulazom tudje ambalaze nego trazi
+    ' NABAVKU. Prvi pokusaj ovog testa je to i naucio -- pisac je odbio
+    ' izdavanje jer stanica u NOVOM modelu drzi nulu (fixture nosi samo stari
+    ' oblik). Zato se seje nabavkom, kroz pravog pisca.
+    Dim revDok As String, nabBroj As String
+    nabBroj = "NAB-ST-" & Format$(Now, "hhnnss")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 10, nabBroj, _
+                                  "preduslov testa potvrde storna"
+    revDok = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, _
+                                                3, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    AssertEq (Len(revDok) > 0), True, "preduslov: nov revers je upisan"
+    modScrStorno.Scr_IzborTestSet STIP_REVERSI, "", revDok, AMB_DOK_REVERS
+    ' DATUM SE MERI UZ STANICU, i to je namerno: prva verzija je datum citala
+    ' kao TEKST, a srpski oblik ("8.10.2026.") IsDate odbija -- opis je tada
+    ' tiho ostajao bez oba podatka. Tvrdnja samo o stanici bi i dalje mogla da
+    ' prodje kroz drugu putanju, pa se mere ZAJEDNO.
+    AssertEq (InStr(1, modStornoDok.DokumentOpis(STIP_REVERSI, "", AMB_DOK_REVERS, revDok), _
+                    Format$(Date, "dd.mm.yyyy"), vbBinaryCompare) > 0), True, _
+             "opis reversa nosi i DATUM sa zaglavlja"
     AssertEq (InStr(1, modScrStorno.StornoPotvrdaTekst(), FX_STANICA, vbBinaryCompare) > 0), True, _
              "potvrda storna reversa imenuje stanicu"
+
+    ' PAR (identitet, broj) -- tvrdnja preseljena iz T_BrojZauzetUNizu_Revers,
+    ' gde je merila fixture NOGU (AMB-IZV-K3). Noga nije dokument, pa nov
+    ' preflight na nju odgovara "nije pronadjen" i par se nikad ne poredi.
+    ' Ovde dokument POSTOJI, pa se meri bas kapija para.
+    AssertEq (InStr(1, modStornoDok.StornoRazlog(STIP_REVERSI, "NE-POSTOJI-BROJ", _
+                                                 AMB_DOK_REVERS, revDok), _
+                    Poruka("STORNO_ERR_REV_KLJUC"), vbBinaryCompare) = 1), True, _
+             "storno kapija: red koji ne nosi izabrani broj se odbija"
+
+    ' PROTIV-SLUCAJ: dokument sa SVOJIM brojem mora da PRODJE. Bez njega je
+    ' tvrdnja o odbijanju placebo -- a to se ovde i desilo: prva verzija
+    ' preflighta je odbijala SVE (AktivanPoIdentitetu trazi GeneracijaID, koje
+    ' tblAmbalazaDokument nema), pa su tvrdnje o odbijanju bile zelene dok
+    ' storno nije radio uopste.
+    Dim revBrojDok As String
+    revBrojDok = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                      revDok, COL_AMBD_BROJ))
+    AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, revBrojDok, AMB_DOK_REVERS, revDok), _
+             "", "storno kapija: aktivan revers sa svojim brojem PROLAZI"
+
+    ' PRVA BRANA, IZOLOVANA: storniran dokument. Broj mu i dalje ODGOVARA, pa
+    ' druga brana (par) cuti -- jedino postojanje odlucuje. To je jedini ulaz
+    ' koji razdvaja dve brane, i zato sabotaza postojanja kljuca bas na njega.
+    ' Uz to je poslovna tvrdnja za sebe: dvaput storniran dokument ne postoji.
+    AssertEq modAmbalaza.StornirajAmbDokument_TX(revDok), True, _
+             "preduslov: revers je storniran"
+    AssertEq (Len(modStornoDok.StornoRazlog(STIP_REVERSI, revBrojDok, _
+                  AMB_DOK_REVERS, revDok)) > 0), True, _
+             "vec storniran revers se ne stornira ponovo"
     AssertEq (InStr(1, modScrStorno.StornoPotvrdaTekst(SV_MODE_ISPRAVKA), FX_STANICA, vbBinaryCompare) > 0), True, _
              "potvrda zamene reversa (ISPRAVKA) imenuje stanicu"
 
@@ -16684,14 +16751,23 @@ Private Sub T_BrojZauzetUNizu_Revers()
     AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA, d, "REV-NOV-TEST"), _
              "", "REV: nov broj je slobodan -- provera ne odbija sve"
 
-    AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, "REV-IZV-2", DOK_TIP_OM_ULAZ_KOOP, "AMB-IZV-K3"), _
-             "", "storno kapija: noga Kooperant nosi ReversID dokumenta"
-    AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, "REV-IZV-1", DOK_TIP_OM_IZLAZ_KOOP, ""), _
-             "", "storno kapija: bez identiteta jednoznacan broj prolazi"
-    AssertEq (InStr(1, modStornoDok.StornoRazlog(STIP_REVERSI, "REV-IZV-1", DOK_TIP_OM_IZLAZ_KOOP, _
-                                                 "AMB-IZV-K3"), _
-                    Poruka("STORNO_ERR_REV_KLJUC"), vbBinaryCompare) = 1), True, _
-             "storno kapija: red koji ne nosi izabrani broj se odbija"
+    ' TVRDNJA O NOZI JE OBRISANA 08.10.2026, ne oslabljena.
+    '
+    ' Glasila je: StornoRazlog nad klikom na nogu Kooperant (AmbID) vraca prazno,
+    ' jer pisac iz noge razresava ReversID. Od 10c noge u izboru NEMA -- identitet
+    ' je AmbDokID, a preflight trazi aktivan DOKUMENT. Pravilo koje je tvrdnja
+    ' cuvala vise ne postoji, pa bi je drzati znacilo meriti obrisan put.
+    ' Nov preflight meri T_StornoDok_KapijePreUpisa, kroz svoje dve tvrdnje.
+    '
+    ' Uz nju je obrisana i tvrdnja "bez identiteta jednoznacan broj prolazi".
+    ' Ona je opisivala BAS plutajuci identitet: broj reversa nije jedinstven
+    ' globalno nego tek u nizu (vlasnik, dan), pa je "jednoznacan broj" bio
+    ' svojstvo ZATECENIH PODATAKA, ne pravilo. Ekran od 10c uvek salje AmbDokID.
+    ' Tvrdnja o PARU (identitet, broj) je preseljena u T_StornoBezUvida_NemaAkcije,
+    ' gde test sam pravi dokument. Ovde je merila fixture NOGU (AMB-IZV-K3), a
+    ' noga nije dokument -- nov preflight na nju odgovara "nije pronadjen", pa se
+    ' par nikad i ne poredi. Kapija nije oslabljena nego merena tamo gde postoji
+    ' predmet merenja.
 End Sub
 
 ' F7 REVERS -- PROVERA BROJA PO NIZU (stanica, dan), ista kao u piscu. Zatecena

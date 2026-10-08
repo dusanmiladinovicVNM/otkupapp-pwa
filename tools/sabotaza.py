@@ -1868,12 +1868,30 @@ SABOTAZE = {
     # nema, a operater bi video potvrdu umesto razloga.
     "amb-10c-storno-ne-trazi-dokument": (
         "modStornoDok.bas",
-        '            If Not AktivanPoIdentitetu(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, _\n'
-        '                                       COL_AMBD_ID, broj, docID) Then _\n'
-        '                StornoRazlog = NijePronadjen(broj)\n',
-        '            If False Then StornoRazlog = NijePronadjen(broj)   \' SABOTAZA: dokument se ne trazi\n',
-        "T_StornoDok_KapijePreUpisa",
-        "revers sa nepostojecim AmbDokID se odbija PRE storna",
+        '            If Not AmbDokAktivanPoID(docID) Then\n',
+        '            If False Then   \' SABOTAZA: dokument se ne trazi\n',
+        "T_StornoBezUvida_NemaAkcije",
+        "vec storniran revers se ne stornira ponovo",
+    ),
+    # Opis uz potvrdu gubi STANICU: operater vidi "Revers 1/081026?" bez vlasnika
+    # niza, pa ne zna koji dokument stornira -- isti broj i dan legalno nose
+    # dokumenti dve stanice. Upis i storno rade, pa tvrdnja o ishodu cuti.
+    "amb-10c-opis-bez-stanice": (
+        "modStornoDok.bas",
+        '    DokumentOpis = opis & modDokUnos.ReversOpis(st, CDate(dan))\n',
+        '    DokumentOpis = opis & " (" & Format$(CDate(dan), "dd.mm.yyyy") & ")"   \' SABOTAZA: bez stanice\n',
+        "T_StornoBezUvida_NemaAkcije",
+        "potvrda storna reversa imenuje stanicu",
+    ),
+    # PAR (identitet, broj) prestaje da se poredi. Dokument POSTOJI, pa prva
+    # kapija cuti -- a storno bi otisao na dokument koji operater nije izabrao.
+    # Tacno tu kapiju je cutover prvo IZGUBIO, i vratio je zatecen test.
+    "amb-10c-par-broja-se-ne-gleda": (
+        "modStornoDok.bas",
+        '    If Len(Trim$(broj)) = 0 Then Exit Function\n',
+        '    Exit Function   \' SABOTAZA: par (identitet, broj) se ne poredi\n',
+        "T_StornoBezUvida_NemaAkcije",
+        "storno kapija: red koji ne nosi izabrani broj se odbija",
     ),
 
     # --- "Odbaci zaostalu ispravku" na ekranu Oporavak ---------------------------
