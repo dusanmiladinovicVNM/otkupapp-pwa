@@ -6434,6 +6434,29 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
     AssertEq KarticaImaBroj(izv, 4, revDok), False, _
              "pregled kretanja ne pokazuje tehnicki AmbDokID"
 
+    ' 3e) DVA DOKUMENTA OSTAJU DVA REDA. Identitet dokumenta je deo kljuca
+    '     grupisanja; da ispadne, dva reversa ISTE stanice, istog tipa gajbe i
+    '     istog dana pala bi u JEDAN red -- a ref-kljuc tada vodi stampu na
+    '     pogresan papir.
+    '
+    '     Tvrdnja stoji OVDE, a ne u modIzvestajTests gde je kanonski pregled
+    '     izmeren do detalja: kapija kataloga sabotaza priznaje samo modTest,
+    '     modTestBanka i modBusinessFlowProTests, pa dokaz.py tvrdnju iz
+    '     modIzvestajTests ne moze da obori.
+    Dim revDok2 As String, revBroj2 As String
+    revDok2 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, _
+                                                 2, REV_SMER_IZDAVANJE, _
+                                                 FX_KOOPERANT, "")
+    AssertEq (Len(revDok2) > 0), True, "preduslov: drugi revers je upisan"
+    revBroj2 = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, revDok2, _
+                                    COL_AMBD_BROJ))
+
+    izv = modIzvestaj.ReportAmbalaza("OM", FX_STANICA, DateAdd("d", -1, Date), _
+                                     DateAdd("d", 1, Date), False)
+    AssertEq (KarticaImaBroj(izv, 4, revBroj) And _
+              KarticaImaBroj(izv, 4, revBroj2)), True, _
+             "dva reversa ostaju dva reda u pregledu"
+
     ' 4) LIFECYCLE: storno je KONTRA-STAV, ne zastavica. Stari citalac je gasio
     '    red kroz ExcludeStornirano, sto nov model ne pise -- da je ta provera
     '    ostala, storniran revers bi i dalje stajao u saldu.

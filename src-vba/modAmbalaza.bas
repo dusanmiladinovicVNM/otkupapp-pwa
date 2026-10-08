@@ -1333,7 +1333,8 @@ End Function
 ' Mapa, a ne LookupValue po redu: kartica ima N redova, a zaglavlja su jedna
 ' tabela -- isti razlog zbog koga postoji i AmbDokRedMapa.
 '
-' Vrednost je "broj|vrsta". Broj je poslovni i ne sadrzi '|'; vrsta je enum.
+' Vrednost je "broj|vrsta|datum". Broj je poslovni i ne sadrzi '|', vrsta je
+' enum, a datum ide zato sto papir reversa nosi datum ZAGLAVLJA, ne reda.
 Public Function AmbDokPrikazMapa() As Object
     Const SRC As String = "modAmbalaza.AmbDokPrikazMapa"
 
@@ -1346,16 +1347,18 @@ Public Function AmbDokPrikazMapa() As Object
     data = GetTableData(TBL_AMBALAZA_DOKUMENT)
     If IsEmpty(data) Then Exit Function
 
-    Dim cID As Long, cBroj As Long, cVrsta As Long
+    Dim cID As Long, cBroj As Long, cVrsta As Long, cDat As Long
     cID = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, SRC)
     cBroj = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, SRC)
     cVrsta = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_VRSTA, SRC)
+    cDat = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_DATUM, SRC)
 
     Dim i As Long, k As String
     For i = 1 To UBound(data, 1)
         k = AmbText(data(i, cID))
         If Len(k) > 0 Then
-            res(k) = AmbText(data(i, cBroj)) & "|" & AmbText(data(i, cVrsta))
+            res(k) = AmbText(data(i, cBroj)) & "|" & AmbText(data(i, cVrsta)) & _
+                     "|" & AmbText(data(i, cDat))
         End If
     Next i
 End Function

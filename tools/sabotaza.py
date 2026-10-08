@@ -7020,6 +7020,16 @@ SABOTAZE = {
         "T_AmbSaldo_CitaociSuNaNovomModelu",
         "stanica je IZDALA gajbe -- saldo pada na istom redu",
     ),
+    # PREGLED SPAJA DVA DOKUMENTA (10c-2). Identitet dokumenta ispada iz kljuca
+    # grupisanja, pa dva reversa iste stanice i istog tipa gajbe padnu u JEDAN red --
+    # a ref-kljuc tada vodi stampu na pogresan papir.
+    "amb-10c-pregled-spaja-dokumente": (
+        "modIzvestaj.bas",
+        '        gkey = Trim$(dokTipv) & "|" & Trim$(dokIDv) & "|" & AmbTipKljuc(tipv)\n',
+        '        gkey = Trim$(dokTipv) & "|" & AmbTipKljuc(tipv)   \' SABOTAZA: identitet dokumenta ispada iz kljuca\n',
+        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "dva reversa ostaju dva reda u pregledu",
+    ),
     # PREGLED PRESTAJE DA SKRIVA STORNO (10c-2). Kolona "otkazano" se ignorise, pa
     # storniran dokument ostaje u pregledu kretanja -- a stari filter
     # COL_STORNIRANO ga je skrivao. Kartica se ponasa obrnuto NAMERNO, pa ovu
@@ -7063,8 +7073,10 @@ SABOTAZE = {
     # klasu dokumenta (review 08.10.2026, P2 #1).
     "amb-10c-kartica-pokazuje-tehnicki-id": (
         "modIzvestaj.bas",
-        '    If StrComp(Trim$(dokTip), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) = 0 Then\n',
-        '    If False Then   \' SABOTAZA: ambalazni dokument se ne prevodi\n',
+        '    If StrComp(Trim$(dokTip), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) = 0 Then\n'
+        '        If Not ambMapa Is Nothing Then\n',
+        '    If False Then   \' SABOTAZA: ambalazni dokument se ne prevodi\n'
+        '        If Not ambMapa Is Nothing Then\n',
         "T_AmbSaldo_CitaociSuNaNovomModelu",
         "kartica ambalaze pokazuje primljene gajbe pod POSLOVNIM brojem",
     ),

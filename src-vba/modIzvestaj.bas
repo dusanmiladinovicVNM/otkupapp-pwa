@@ -4347,11 +4347,119 @@ End Function
 '     ne nudi na "Da" -- papir za potpis ne sme da spoji dva reversa. Ambalaza
 '     uz otkup ReversID nema: njen identitet je OtkupID (DokumentID).
 ' ============================================================
+
+' STAMPA AMBALAZNOG DOKUMENTA (AMB-10c).
+'
+' Nov dokument ima SVOJE zaglavlje (broj, vrsta, datum) i poslovni red koji
+' imenuje OBE strane -- pa rekonstrukcija "nogu" i brojanje strana otpada. Ono
+' sto NE otpada je BROJ: AmbDokID je opaque "ADK-<hex>", a na papir za potpis ide
+' POSLOVNI broj. Legacy samostalan revers je imao DokumentID = brojDok, pa je
+' stari kod broj dobijao besplatno; ovde se mora razresiti, inace papir nosi
+' tehnicki identitet -- ista klasa greske kao na karticama (review 08.10.2026,
+' P2 #1), samo na dokumentu koji operater potpisuje.
+'
+' SABLON TRAZI OTKUPNO MESTO. Kupcev revers (ODL-23) je par Kupac <-> Vozac i
+' stanice NEMA, pa se stampa ODBIJA sa imenom razloga: papir sa praznim otkupnim
+' mestom je losiji od odbijene stampe. To je imenovana rupa SPOSOBNOSTI (katalog),
+' ne propust ovog reza.
+'
+' Red bira AmbDokRedMapa, koja kontra-stavove PRESKACE -- storniran dokument zato
+' nema aktivan red i stampa se odbija. Fail-closed je namerno: nema papira za
+' dokument koji je povucen.
+Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
+    Const SRC As String = "modIzvestaj.StampajAmbDokument"
+
+    Dim mapaRed As Object, mapaZag As Object
+    Set mapaRed = modAmbalaza.AmbDokRedMapa()
+    Set mapaZag = modAmbalaza.AmbDokPrikazMapa()
+
+    If Not mapaRed.Exists(ambDokID) Then
+        Err.Raise vbObjectError + 7505, SRC, _
+                  "Ambalazni dokument nema aktivan poslovni red (storniran ili " & _
+                  "nepostojeci) -- stampa odbijena."
+    End If
+
+    ' vrstaKretanja | tipAmb | kolicina | odTip | odID | naTip | naID
+    Dim f As Variant
+    f = Split(CStr(mapaRed(ambDokID)), "|")
+    If UBound(f) < 6 Then
+        Err.Raise vbObjectError + 7505, SRC, _
+                  "Red ambalaznog dokumenta nije citljiv -- stampa odbijena."
+    End If
+
+    Dim tipAmb As String: tipAmb = Trim$(CStr(f(1)))
+    Dim kolAmb As Long: kolAmb = 0
+    If IsNumeric(f(2)) Then kolAmb = CLng(f(2))
+    Dim odTip As String: odTip = Trim$(CStr(f(3)))
+    Dim odID As String: odID = Trim$(CStr(f(4)))
+    Dim naTip As String: naTip = Trim$(CStr(f(5)))
+    Dim naID As String: naID = Trim$(CStr(f(6)))
+
+    ' Izabran tip sa ekrana mora da bude tip poslovnog reda. Ne preskace se tiho:
+    ' papir na pogresan tip gajbe je greska koju operater ne vidi.
+    If Len(Trim$(tipSel)) > 0 Then
+        If AmbTipKljuc(tipSel) <> AmbTipKljuc(tipAmb) Then
+            Err.Raise vbObjectError + 7506, SRC, _
+                      "Izabrani tip ambalaze nije tip poslovnog reda dokumenta."
+        End If
+    End If
+
+    Dim broj As String, datum As Date
+    broj = ambDokID
+    datum = Date
+    If mapaZag.Exists(ambDokID) Then
+        Dim z As Variant
+        z = Split(CStr(mapaZag(ambDokID)), "|")
+        If Len(Trim$(CStr(z(0)))) > 0 Then broj = Trim$(CStr(z(0)))
+        If UBound(z) >= 2 Then
+            If IsDate(z(2)) Then datum = CDate(z(2))
+        End If
+    End If
+
+    ' Koja strana je STANICA, a koja partner. prijem = stanica PRIMA (ulaz).
+    Dim omID As String, pTip As String, pID As String, prijem As Boolean
+    If StrComp(odTip, AMB_NALOG_STANICA, vbTextCompare) = 0 Then
+        omID = odID: pTip = naTip: pID = naID: prijem = False
+    ElseIf StrComp(naTip, AMB_NALOG_STANICA, vbTextCompare) = 0 Then
+        omID = naID: pTip = odTip: pID = odID: prijem = True
+    Else
+        Err.Raise vbObjectError + 7507, SRC, _
+                  "Dokument nema otkupno mesto (par " & odTip & " - " & naTip & _
+                  ") -- sablon reversa ga ne pokriva, pa je stampa odbijena."
+    End If
+
+    Dim omNaziv As String
+    omNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", omID, "Naziv"))
+
+    ' Vozac na drugoj strani je stari "FIRMA" revers: papir nosi vozaca, ne
+    ' partnera sa svojim ID-om.
+    If StrComp(pTip, AMB_NALOG_VOZAC, vbTextCompare) = 0 Then
+        OutputIzdavanjeAmbalaze datum, broj, omNaziv, omID, _
+                                ResolveEntitetName(pID, pTip), "", _
+                                tipAmb, kolAmb, "", prijem, "FIRMA"
+        Exit Sub
+    End If
+
+    OutputIzdavanjeAmbalaze datum, broj, omNaziv, omID, _
+                            ResolveEntitetName(pID, pTip), pID, _
+                            tipAmb, kolAmb, "", prijem
+End Sub
+
 Public Sub StampajReversAmbalaze(ByVal dokID As String, ByVal dokTip As String, _
                                  ByVal tipSel As String, _
                                  Optional ByVal reversID As String = "")
     Const SRC As String = "modIzvestaj.StampajReversAmbalaze"
     On Error GoTo EH
+
+    ' NOV MODEL IMA SVOJ PUT (AMB-10c). Sve ispod ovog reda rekonstruise revers
+    ' iz DVE noge starog oblika (EntitetTip Stanica / Kooperant, ReversID kao
+    ' identitet). Nov dokument ima zaglavlje i jedan red koji imenuje obe strane,
+    ' pa mu ta rekonstrukcija nije potrebna -- a ni moguca. Stari put ostaje za
+    ' zatecene redove i odlazi sa njima u 10e.
+    If StrComp(Trim$(dokTip), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) = 0 Then
+        StampajAmbDokument Trim$(dokID), tipSel
+        Exit Sub
+    End If
 
     Dim d As Variant: d = GetTableData(TBL_AMBALAZA)
     If Not IsArray(d) Then Exit Sub

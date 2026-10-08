@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), **sledi `ReportAmbalaza` + `ReportAmbalazaZbirnoSvi` (spojeni; nose odluku iz 6.8 o vozacu i obavezu da legacy zasejavanje u `modIzvestajTests` pređe SA njima)**, pa `IzvStaniceIzPodataka` i `StampajReversAmbalaze`; onda `10c-3` · `10d` / `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · `10d` / `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -1701,11 +1701,54 @@
     `AmbDokID`, a posle storna pregled ga **skriva** dok ga kartica **i dalje
     prikazuje**. Katalog 714 → **716**.
 
+98. **`10c-2` zatvoren: štampa ambalažnog dokumenta i dva testa** (08.10.2026).
+    Nov dokument ima **svoje zaglavlje** i **jedan** poslovni red koji imenuje obe
+    strane, pa rekonstrukcija „nogu" (dve strane, `ReversID` kao identitet) nije
+    ni potrebna ni moguća. `StampajReversAmbalaze` zato dobija granu
+    `StampajAmbDokument`, a stari put **ostaje** za zatečene redove i odlazi sa
+    njima u `10e`.
+    **Nalaz koji je ovaj rez sprečio:** na **papir za potpis** bi išao `ADK-<hex>`
+    umesto poslovnog broja. Legacy samostalan revers je imao
+    `DokumentID = brojDok`, pa je stari kod broj dobijao **besplatno**; nov
+    `DokumentID` je `AmbDokID`, pa se broj mora razrešiti. Ista klasa greške kao
+    `P2 #1` sa kartica — samo na dokumentu koji operater potpisuje. `AmbDokPrikazMapa`
+    je zato proširena datumom (papir nosi datum **zaglavlja**, ne reda).
+    **Fail-closed na dva mesta, oba namerno:** dokument bez aktivnog poslovnog reda
+    (storniran ili nepostojeći) **nema papira**, i izabrani tip gajbe koji nije tip
+    poslovnog reda **odbija** štampu — papir na pogrešan tip je greška koju operater
+    ne vidi.
+    **Dva testa: jedan je dobio novu formu, drugi je izgubio polovinu.**
+    `T_E2E_AmbPregledRazdvajaTipDokumenta` → **`T_E2E_AmbPregledKanonskiDokumenti`**.
+    Stara premisa (jedan `otkupID` pod **dva** tipa dokumenta) je nestala, ali
+    pravilo koje je čuvala nije: pregled ne sme da **spoji dva dokumenta** u jedan
+    red, jer ref-ključ tada vodi štampu na pogrešan papir. Usput je dodata tvrdnja
+    koju stari **nije imao**, a nov model je traži: **dve vrste kretanja istog
+    dokumenta** (`POVRAT_PRAZNE` + `IZDATA_PRAZNA`) daju **jedan** red sa oba
+    stupca. Tvrdi se i da kolona dokumenta nosi **poslovni** broj, i da „Mesto"
+    nosi **protivpartnera**.
+    `T_E2E_ReversIstiBrojDveStanice` je **izgubio deo o pregledu** — seje stari
+    oblik, pa bi tvrdnja merila prazan rezultat, ne pravilo. **Deo o štampi ostaje**
+    i dalje meri stari put, jer on još postoji; oba odlaze u `10e`.
+
+    **MERENJE KOJE JE PREMESTILO TVRDNJU:** kapija kataloga sabotaža priznaje samo
+    `modTest`, `modTestBanka` i `modBusinessFlowProTests` — `dokaz.py` tvrdnju iz
+    `modIzvestajTests` **ne može da obori**. Zato je tvrdnja o identitetu dokumenta
+    („dva reversa ostaju dva reda") preseljena u **#204**, gde se seje kroz
+    produkcione pisce i gde sabotaža stiže. Tvrdnja o **spajanju dve vrste** ostaje
+    bez sabotaže i to je **imenovana rupa**, ne propust.
+    Katalog 716 → **717** (jedna sabotaža je skinuta jer joj tvrdnja nije dosegljiva).
+    Stanje: `modIzvestaj` **5** mesta — sva u **legacy putu štampe**
+    (`ReversStampaNoge`, `StampajReversAmbalaze`), koji po planu odlazi u `10e`.
+    **`10c-2` je time zatvoren.** Sledi `10c-3`: `modStorno` 14, `modIntegritet` 4,
+    `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
 | **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). Danas to drže samo komentari uz tri grane; kapija bi morala da zna koji su pozivi iz suite-a dostupni, pa traži svoj rez i svoj dvosmerni dokaz |
+| **kupčev revers nema papir** | `OutputIzdavanjeAmbalaze` je šablon „otkupno mesto ↔ partner", a `REVERS_PARTNERA` (ODL-23) je par **Kupac ↔ Vozac** — stanice nema. Štampa se zato **odbija sa imenom razloga** (`10c-2`); papir sa praznim otkupnim mestom bio bi gori. Nijedna sposobnost nije **izgubljena** — legacy put ga je već odbijao, samo uz zbunjujući razlog („nema ReversID"). Da kupčev revers dobije papir, traži **svoj šablon** i odluku šta na njemu stoji umesto otkupnog mesta |
+| **`dokaz.py` ne dosegne `modIzvestajTests`** | kapija kataloga sabotaža priznaje samo `modTest`, `modTestBanka` i `modBusinessFlowProTests`, pa tvrdnja iz `modIzvestajTests` **ne može da se obori** — a tamo živi najdetaljnije merenje ambalažnog pregleda. Posledica je izmerena u `10c-2`: tvrdnja o identitetu dokumenta je **preseljena** u `#204`, a tvrdnja o spajanju dve vrste istog dokumenta ostala **bez sabotaže**. Proširenje kapije dira sam alat, pa ide **zaseban process PR** sa svojim dvosmernim dokazom |
 | **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita |
 | **badge "nesacuvano" na novoj formi** | `SelectModeCore` pise u polje broja POSLE `MarkClean` i `mLoading = False`, pa programski upis prodje kroz `MarkDirty` i prazna forma tvrdi da ima neupisanih izmena (review 08.10.2026, `P3`). Zatecen obrazac -- vazio je i pre P1 ispravke, za svaki rezim sa auto-brojem. Jedan premesten red, ali izmena `src-vba` obara compile i zeleni marker, a nov test (natpis u zaglavlju) trazi svoj dvosmeran dokaz; zato **svoj rez posle merge-a**, pre `ODL-24` |
 | **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a** |
