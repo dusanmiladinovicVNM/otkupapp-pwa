@@ -6358,6 +6358,10 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
     AssertEq (stPosle - stPre), 10, _
              "nabavka podize saldo stanice -- citalac vidi nov red"
 
+    ' Snimak PRE reversa, da se zbirni pregled meri po delti.
+    Dim izlazPre As Double
+    izlazPre = IzvZbirniKol(FX_STANICA, FX_TIP_AMB, 6)
+
     ' 2) REVERS: Stanica -> Kooperant. Jedan red, DVA naloga, suprotan znak.
     '    Stari model je nosio jednu stranu i Smer; da citalac pita samo jednu
     '    stranu, polovina knjige bi ispala iz salda -- zato se mere OBE.
@@ -6415,6 +6419,21 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
     AssertEq KarticaImaBroj(kartK, 2, revDok), False, _
              "kartica kooperanta ne pokazuje tehnicki AmbDokID"
 
+    ' 3d) PREGLED KRETANJA (ReportAmbalaza) je treci citalac iste knjige, sa
+    '     svojim pitanjem. Meri se po OM-u, jer je stanica ta koja je IZDALA:
+    '     kolona 6 je Izlaz. Delta, ne apsolutna vrednost -- fixture nosi svoje
+    '     redove u istom opsegu.
+    AssertEq (IzvZbirniKol(FX_STANICA, FX_TIP_AMB, 6) - izlazPre), 4, _
+             "zbirni pregled OM-a vidi IZDATE gajbe reversa"
+
+    Dim izv As Variant
+    izv = modIzvestaj.ReportAmbalaza("OM", FX_STANICA, DateAdd("d", -1, Date), _
+                                     DateAdd("d", 1, Date), False)
+    AssertEq IzvKolZaBroj(izv, revBroj, 6), 4, _
+             "pregled kretanja pokazuje revers pod poslovnim brojem"
+    AssertEq KarticaImaBroj(izv, 4, revDok), False, _
+             "pregled kretanja ne pokazuje tehnicki AmbDokID"
+
     ' 4) LIFECYCLE: storno je KONTRA-STAV, ne zastavica. Stari citalac je gasio
     '    red kroz ExcludeStornirano, sto nov model ne pise -- da je ta provera
     '    ostala, storniran revers bi i dalje stajao u saldu.
@@ -6422,9 +6441,54 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
     koopStorno = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
     AssertEq (koopStorno - koopPre), 0, _
              "storno reversa vraca saldo kooperanta na pocetno"
+
+    ' 4b) DVA CITAOCA, DVA PITANJA (6.8). Pregled KRETANJA storniran dokument
+    '     SKRIVA -- kao i stari filter COL_STORNIRANO. Kartica ga PRIKAZUJE, jer
+    '     je storno i sam dogadjaj koji operater mora da vidi. Ova asimetrija je
+    '     namerna i zato se tvrdi, a ne podrazumeva.
+    izv = modIzvestaj.ReportAmbalaza("OM", FX_STANICA, DateAdd("d", -1, Date), _
+                                     DateAdd("d", 1, Date), False)
+    AssertEq KarticaImaBroj(izv, 4, revBroj), False, _
+             "storniran revers ispada iz pregleda kretanja"
+
+    kart = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, DateAdd("d", -1, Date), _
+                                             DateAdd("d", 1, Date))
+    AssertEq (KarticaUlazZaDok(kart, revBroj) > 0), True, _
+             "kartica storniran revers i dalje PRIKAZUJE"
 End Sub
 
 
+
+
+' Zbirni ambalazni pregled OM-a: vrednost zadate kolone za dati tip gajbe.
+' Kolone zbirnog: 1 = TipAmbalaze, 5 = Ulaz, 6 = Izlaz.
+Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _
+                              ByVal kol As Long) As Double
+    Dim r As Variant, i As Long
+    r = modIzvestaj.ReportAmbalaza("OM", stanicaID, DateAdd("d", -1, Date), _
+                                   DateAdd("d", 1, Date), True)
+    If Not IsArray(r) Then Exit Function
+    For i = LBound(r, 1) To UBound(r, 1)
+        If StrComp(NzToText(r(i, 1)), Trim$(tipAmb), vbTextCompare) = 0 Then
+            If IsNumeric(r(i, kol)) Then IzvZbirniKol = CDbl(r(i, kol))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Vrednost zadate kolone pregleda kretanja, za red sa datim brojem dokumenta.
+' Kolone: 1 Datum, 2 Mesto, 3 TipAmbalaze, 4 Dokument, 5 Ulaz, 6 Izlaz.
+Private Function IzvKolZaBroj(ByVal res As Variant, ByVal broj As String, _
+                              ByVal kol As Long) As Double
+    Dim i As Long
+    If Not IsArray(res) Then Exit Function
+    If Len(Trim$(broj)) = 0 Then Exit Function
+    For i = LBound(res, 1) To UBound(res, 1)
+        If StrComp(NzToText(res(i, 4)), Trim$(broj), vbTextCompare) = 0 Then
+            If IsNumeric(res(i, kol)) Then IzvKolZaBroj = IzvKolZaBroj + CDbl(res(i, kol))
+        End If
+    Next i
+End Function
 
 ' Da li kartica ijednim redom nosi dati tekst u ZADATOJ koloni. Kolona se trazi
 ' izricito, jer dve kartice nemaju isti raspored.

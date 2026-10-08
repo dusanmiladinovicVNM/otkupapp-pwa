@@ -1633,6 +1633,74 @@
     čitaoca je konzistentno. Kad ta funkcija pređe, **moraju** i oni, inače se
     vraća isti vakuum koji je stavka 93 imenovala.
 
+97. **`10c-2` peti korak: `ReportAmbalaza` presečena — i dva testa su time
+    CRVENA** (08.10.2026).
+    `ReportAmbalaza` + `ReportAmbalazaZbirnoSvi` sada čitaju knjigu kroz
+    `AmbKretanjaNaloga`. Iz funkcije su **otišle četiri stvari**, i ni jedna zbog
+    estetike:
+
+    | Otišlo | Zašto |
+    |---|---|
+    | filter po entitetu kroz `clsFilterParam` | nov red imenuje **obe** strane, pa je uslov „nalog je na bilo kojoj" **ILI** preko dve kolone — `FilterArray` to ne ume |
+    | `VozacAmbEffectiveSmer` (inverzija) | **po odluci** 6.8: „nema inverzije, vozac ispada sam jer je NALOG" |
+    | `DokumentTip <> Otkup` za vozača | **po odluci** 6.8: „nema grananja po tipu" — gajba više nije žigosana na dva dokumenta, pa duplog terećenja nema |
+    | `ReversID` u ključu grupisanja | `AmbDokID` **jeste** identitet dokumenta (ODL-16), pa je `(DokTip, DokID, TipAmbalaze)` već jednoznačno |
+
+    **`COL_STORNIRANO` je zamenjen, ne obrisan:** knjiga je nepromenljiva i tu
+    kolonu ne piše. Primitiv zato dobija kolonu **`Otkazano`** (kontra-stav **i**
+    original na koji pokazuje) — i to je **kolona, a ne filter**, jer se dva
+    čitaoca iste knjige legitimno razlikuju (6.8): **pregled kretanja** storniran
+    dokument **skriva**, a **kartica** ga **prikazuje**, pošto je storno i sam
+    događaj koji operater mora da vidi. Ta asimetrija je sada **tvrdnja**, ne
+    navika.
+    **Promena ponašanja koju prijavljujem, a nije tražena:** kolona „Mesto" u
+    pregledu kretanja sada nosi **protivpartnera**, a ne naslovni entitet. Star red
+    je imenovao jednu stranu, pa je u izveštaju po **vozaču** to i bila druga
+    strana — ali u izveštaju po OM i po Kupcu ista vrednost u svakom redu, dakle
+    nula informacije. Za vozača je ponašanje **identično** kao pre. `AMB-INV-10`
+    garantuje jedan neuređen par po dokumentu, pa dva reda istog dokumenta ne mogu
+    dati različitog protivpartnera.
+    Prevod broja iz stavke 96 je iskorišćen i ovde (`ResolveDokBrojMape` dobija
+    `AmbDokPrikazMapa`), kako je reviewer i predvideo. `ResolveEntitetName` je
+    dobio **`Vozac`** — bez toga bi protivpartner stajao kao go ID.
+
+    **MERENJE KOJE JE ISPRAVILO MOJE SOPSTVENO MERENJE:** spisak `10c` u stavkama
+    93–96 je bio **uži od stvarnog**, jer `COL_AMB_REVERS_ID` nije bio u mom grep
+    obrascu. Tačno stanje posle ovog reza:
+
+    ```
+    modIzvestaj   5   (IzvStaniceIzPodataka je presecen; ostaju ReversStampaNoge
+                       i StampajReversAmbalaze -- STAMPA, ne pregled)
+    modAmbalaza  12   (namerno dvomodelno: KnjigaIndeksi, LegacyRedProblem,
+                       RequireAmbalazaSchema, mrtav GetVozacAmbSaldo)
+    modStorno    14   modIntegritet 4   modStornoFlow 2   modDokumenta 2
+    modStornoZurnal 1
+    ```
+
+    **DVA TESTA SU SADA CRVENA I TO SE NE PREĆUTKUJE.** Oba zovu `ReportAmbalaza`
+    nad **legacy zasejanim** redovima, koje nov čitalac ne vidi:
+
+    - `T_E2E_AmbPregledRazdvajaTipDokumenta` — premisa mu je **nestala**, ne samo
+      zasejavanje: tražio je jedan `otkupID` pod **dva** tipa dokumenta
+      (`Otkup` + `OM-Izlaz-Koop`), a danas otkup knjiži **oba reda pod `Otkup`**
+      (`AMBALAZA.md` tabela, red 1–8). Pravilo koje je čuvao (`DokumentTip` ostaje u
+      ključu grupisanja) i dalje postoji u kodu, ali ovaj proizvođač premise ne.
+      Nova forma tvrdnje: jedan otkup → **jedan** red sa **oba** stupca, jer su
+      `UZ_ROBU` i `IZDATA_PRAZNA` dve vrste istog dokumenta.
+    - `T_E2E_ReversIstiBrojDveStanice` — identitet mu je `ReversID` (REV-IDENT-01),
+      koga je zamenio `AmbDokID` (ODL-16). Deo koji meri **štampu**
+      (`ReversStampaNoge`) je i dalje konzistentan sa starim modelom, jer štampa
+      **nije** presečena — pa test straddle-uje dva modela i mora da se podeli kad
+      štampa pređe.
+
+    **Zato skupi prolaz NE ide pre tog reza** — bio bi zagarantovano crven, i to
+    na mestu koje već znam. To je i reviewer-ova otvorena stavka „report fixture
+    cutover još nije završen", sada sa imenima i razlozima.
+    Nove tvrdnje u **#204**: zbirni pregled vidi izdate gajbe (po **delti**),
+    pregled kretanja pokazuje revers pod **poslovnim** brojem i **ne** pokazuje
+    `AmbDokID`, a posle storna pregled ga **skriva** dok ga kartica **i dalje
+    prikazuje**. Katalog 714 → **716**.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

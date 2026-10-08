@@ -2104,32 +2104,23 @@ Public Function ReportAmbalazaZbirnoSvi(ByVal entitetTip As String, _
     Const SRC As String = "modIzvestaj.ReportAmbalazaZbirnoSvi"
     On Error GoTo EH
 
-    Dim d As Variant, i As Long
-    Dim cEnt As Long, cEntTip As Long, cVoz As Long, cDokTip As Long, cStorno As Long
-    d = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(d) Then Exit Function
-    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-    cVoz = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, SRC)
-    cDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
-    cStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+    Dim i As Long
 
-    Dim ents As Object, k As String
-    Set ents = CreateObject("Scripting.Dictionary")
-    For i = 1 To UBound(d, 1)
-        If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
-            k = ""
-            Select Case entitetTip
-                Case "OM"
-                    If CStr(d(i, cEntTip)) = "Stanica" Then k = Trim$(CStr(d(i, cEnt)))
-                Case "Kupac"
-                    If CStr(d(i, cEntTip)) = "Kupac" Then k = Trim$(CStr(d(i, cEnt)))
-                Case "Vozac"
-                    If CStr(d(i, cDokTip)) <> DOK_TIP_OTKUP Then k = Trim$(CStr(d(i, cVoz)))
-            End Select
-            If Len(k) > 0 Then ents(k) = True
-        End If
-    Next i
+    ' SPISAK NALOGA DOLAZI IZ KNJIGE, jednim prolazom (AMB-10c).
+    '
+    ' Ovde je stajao svoj prolaz kroz tblAmbalaza, sa svojim grananjem po tipu
+    ' dokumenta za vozaca i svojim citanjem kolone Stornirano. Oba su otpala:
+    ' grananje PO ODLUCI (6.8 -- vozac je nalog), a Stornirano zato sto ga nov
+    ' model ne pise.
+    '
+    ' Nalog koji se u knjizi nijednom ne pojavi nema ni sta da prikaze, pa je
+    ' spisak kljuceva salda tacno univerzum ovog izvestaja.
+    Dim nalogTip As String
+    nalogTip = AmbNalogZaIzvestaj(entitetTip)
+    If Len(nalogTip) = 0 Then Exit Function
+
+    Dim ents As Object
+    Set ents = modAmbalaza.AmbSaldoPoNalogu(nalogTip)
     If ents.count = 0 Then Exit Function
 
     Dim linije As Collection, kk As Variant, r As Variant
@@ -2196,7 +2187,15 @@ Private Function IzvStaniceIzPodataka() As Variant
     Set dict = CreateObject("Scripting.Dictionary")
     IzvStaniceUnion dict, TBL_OTKUP, COL_OTK_STANICA, "", ""
     IzvStaniceUnion dict, TBL_NOVAC, COL_NOV_OM_ID, "", ""
-    IzvStaniceUnion dict, TBL_AMBALAZA, COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, "Stanica"
+    ' Stanice iz KNJIGE ambalaze (AMB-10c). Star red je imenovao jednu stranu, pa
+    ' je distinct po koloni EntitetID bio dovoljan; nov imenuje obe, pa univerzum
+    ' daje knjiga -- isti kljucevi koje vidi i saldo. IzvStaniceUnion ostaje za
+    ' tabele koje stanicu i dalje nose kao jednu kolonu (otkup, novac).
+    Dim ambSt As Object, ak As Variant
+    Set ambSt = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_STANICA)
+    For Each ak In ambSt.keys
+        If Len(Trim$(CStr(ak))) > 0 Then dict(Trim$(CStr(ak))) = True
+    Next ak
     If dict.count = 0 Then Exit Function
 
     Dim outA() As Variant, kk As Variant, n As Long, nm As String
@@ -3118,108 +3117,62 @@ Public Function ReportAmbalaza(ByVal entitetTip As String, _
                                ByVal datumOd As Date, _
                                ByVal datumDo As Date, _
                                ByVal zbirni As Boolean) As Variant
-    
+
     Const SRC As String = "modIzvestaj.ReportAmbalaza"
     On Error GoTo EH
-    ' Zbirni Returns: 2D Array (Tip, "", "", "", Ulaz, Izlaz)
-    ' Einzeln Returns: 2D Array (Datum, Mesto, Tip, DokID, Ulaz, Izlaz)
-    ' Letzte Zeile = UKUPNO
-    
-    Dim data As Variant
-    data = GetTableData(TBL_AMBALAZA)
-    If IsEmpty(data) Then
+    ' Zbirni Returns:      2D Array (Tip, "", "", "", Ulaz, Izlaz)
+    ' Pojedinacni Returns: 2D Array (Datum, Mesto, Tip, Dokument, Ulaz, Izlaz, RefKljuc)
+    ' Poslednji red = UKUPNO
+
+    ' NOV MODEL (AMB-10c). Sta je odavde OTISLO i zasto:
+    '
+    ' 1) FILTER PO ENTITETU. Star red je imenovao JEDNU stranu
+    '    (EntitetTip/EntitetID), pa se birao jednim clsFilterParam-om. Nov red
+    '    imenuje OBE, a nalog sme da bude na bilo kojoj -- to je uslov ILI preko
+    '    dve kolone, koji FilterArray ne ume da izrazi. Zato redove daje knjiga
+    '    (AmbKretanjaNaloga), vec filtrirane na nalog i sa ZNAKOM.
+    '
+    ' 2) INVERZIJA ZA VOZACA i IZUZIMANJE OTKUPA. Oboje otpada PO ODLUCI, ne po
+    '    mojoj proceni: AMBALAZA.md 6.8 kaze "nema grananja po tipu, nema
+    '    inverzije, vozac ispada sam jer je NALOG". Do 10b-2 je vozac bio ZIG
+    '    (kolona uz red), pa mu se saldo racunao okretanjem smera --
+    '    VozacAmbEffectiveSmer, fail-open koji citaocu bez inverzije daje
+    '    POGRESAN ZNAK, ne gresku. Izuzimanje otkupa je postojalo jer je ista
+    '    gajba bila zigosana i na otkupu i na otpremnici; sada je svaki red
+    '    jedan dogadjaj izmedju dva naloga, pa duplog terecenja nema.
+    '    OVO MENJA VOZACEV IZVESTAJ i tako se prijavljuje -- nije prevod.
+    '
+    ' 3) ReversID. Grupisanje ga je trazilo jer je isti broj legalno nosilo vise
+    '    reversa. Nov model nosi AmbDokID kao DokumentID (ODL-16), pa je
+    '    (DokumentTip, DokumentID, TipAmbalaze) vec jednoznacno.
+    '
+    ' 4) COL_STORNIRANO. Knjiga je nepromenljiva i tu kolonu ne pise; otkazivanje
+    '    je KONTRA-STAV. Otkazane parove izbacuje AmbKretanjaUOpsegu.
+    Dim nalogTip As String
+    nalogTip = AmbNalogZaIzvestaj(entitetTip)
+    If Len(nalogTip) = 0 Or Len(Trim$(entitetID)) = 0 Then
         ReportAmbalaza = Empty
         Exit Function
     End If
-    ' --- Filter aufbauen ---
-    ' Storno se filtrira UNUTAR FilterArray (umesto zasebnog ExcludeStornirano koji
-    ' je pravio JOS jednu kopiju cele tblAmbalaza) -> jedan prolaz umesto dva.
-    Dim filters As New Collection
-    Dim fp As clsFilterParam
 
-    Dim colStornoAmb As Long
-    colStornoAmb = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
-    If colStornoAmb > 0 Then
-        Set fp = New clsFilterParam
-        fp.Init colStornoAmb, "<>", "Da"
-        filters.Add fp
-    End If
-
-    Set fp = New clsFilterParam
-    fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, "modIzvestaj.ReportAmbalaza"), "BETWEEN", datumOd, datumDo
-    filters.Add fp
-    
-    ' Eksplicitan dispatch (RF-06): nepoznat tip je pre padao kroz SVE grane bez
-    ' entitet filtera -> globalni ambalazni izvestaj pod naslovom entiteta
-    ' (FM-0028 #12).
-    Select Case entitetTip
-    Case "OM"
-        Set fp = New clsFilterParam
-        fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, "modIzvestaj.ReportAmbalaza"), "=", entitetID
-        filters.Add fp
-
-        Set fp = New clsFilterParam
-        fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, "modIzvestaj.ReportAmbalaza"), "=", "Stanica"
-        filters.Add fp
-
-    Case "Kupac"
-        Set fp = New clsFilterParam
-        fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, "modIzvestaj.ReportAmbalaza"), "=", entitetID
-        filters.Add fp
-
-        Set fp = New clsFilterParam
-        fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, "modIzvestaj.ReportAmbalaza"), "=", "Kupac"
-        filters.Add fp
-
-    Case "Vozac"
-        Set fp = New clsFilterParam
-        fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, "modIzvestaj.ReportAmbalaza"), "=", entitetID
-        filters.Add fp
-
-        ' Otkup (Kooperant-nabavka) NIJE vozaceva transportna noga. Iste gajbice
-        ' se vec broje na otpremnici, pa bi otkup duplo teretio vozacev saldo
-        ' (narocito uz auto-hladnjacu, koja mirror-vozaca vezuje za svaki otkup).
-        ' Vozacev saldo = otpremnica (utovar) - prijemnica (predaja).
-        Set fp = New clsFilterParam
-        fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, "modIzvestaj.ReportAmbalaza"), "<>", DOK_TIP_OTKUP
-        filters.Add fp
-
-    Case Else
-        ReportAmbalaza = Empty
-        Exit Function
-    End Select
-
-    Dim filtered As Variant
-    filtered = FilterArray(data, filters)
-    If IsEmpty(filtered) Or Not IsArray(filtered) Then
+    Dim kret As Variant
+    kret = modAmbalaza.AmbKretanjaNaloga(nalogTip, Trim$(entitetID))
+    If Not IsArray(kret) Then
         ReportAmbalaza = Empty
         Exit Function
     End If
-    
-    Dim colTip As Long, colKol As Long, colSmer As Long
-    Dim colDokID As Long, colDokTip As Long, colDatum As Long
-    Dim colEntitet As Long, colEntTip As Long, colRID As Long
-    colTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, "modIzvestaj.ReportAmbalaza")
-    colKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, "modIzvestaj.ReportAmbalaza")
-    colSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, "modIzvestaj.ReportAmbalaza")
-    colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, "modIzvestaj.ReportAmbalaza")
-    colDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, "modIzvestaj.ReportAmbalaza")
-    colDatum = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, "modIzvestaj.ReportAmbalaza")
-    colEntitet = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, "modIzvestaj.ReportAmbalaza")
-    colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, "modIzvestaj.ReportAmbalaza")
-    colRID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, "modIzvestaj.ReportAmbalaza")
-    
-    ' Vozac = inverzni protivpartner entiteta (Stanica / Kupac); kompletna ruta
-    ' otpremnica -> prijemnica daje saldo 0. Otkup nema vozaca -> izuzet (filter).
-    ' Entitetski izvestaji (OM / Kupac) koriste sirovi Smer (isVozac = False).
-    Dim isVozac As Boolean
-    isVozac = (entitetTip = "Vozac")
+
+    Dim uOpsegu As Variant
+    uOpsegu = AmbKretanjaUOpsegu(kret, datumOd, datumDo)
+    If Not IsArray(uOpsegu) Then
+        ReportAmbalaza = Empty
+        Exit Function
+    End If
 
     If zbirni Then
-        ReportAmbalaza = ReportAmbalazeZbirni(filtered, colTip, colKol, colSmer, colEntTip, isVozac)
+        ReportAmbalaza = ReportAmbalazeZbirni(uOpsegu)
     Else
-        ReportAmbalaza = ReportAmbalazePojedinacni(filtered, colDatum, colEntitet, colEntTip, _
-                                                    colTip, colDokID, colDokTip, colKol, colSmer, isVozac, colRID)
+        ReportAmbalaza = ReportAmbalazePojedinacni(uOpsegu)
     End If
     Exit Function
 
@@ -3227,46 +3180,99 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
-Private Function ReportAmbalazeZbirni(ByVal filtered As Variant, _
-                                      ByVal colTip As Long, ByVal colKol As Long, _
-                                      ByVal colSmer As Long, _
-                                      ByVal colEntTip As Long, _
-                                      ByVal isVozac As Boolean) As Variant
-    
+' Ekran imenuje entitete svojim recima ("OM"), knjiga svojim ("Stanica"). Prevod
+' stoji na JEDNOM mestu, i nepoznat tip vraca PRAZNO -- RF-06: pre je nepoznat tip
+' padao kroz sve grane bez entitet filtera i davao globalni ambalazni izvestaj pod
+' naslovom entiteta (FM-0028 #12).
+Private Function AmbNalogZaIzvestaj(ByVal entitetTip As String) As String
+    Select Case Trim$(entitetTip)
+        Case "OM":    AmbNalogZaIzvestaj = AMB_NALOG_STANICA
+        Case "Kupac": AmbNalogZaIzvestaj = AMB_NALOG_KUPAC
+        Case "Vozac": AmbNalogZaIzvestaj = AMB_NALOG_VOZAC
+    End Select
+End Function
+
+' DATUMSKI OPSEG + OTKAZANI PAROVI.
+'
+' Pregled KRETANJA storniran dokument SKRIVA -- ista namera kao stari filter
+' COL_STORNIRANO <> "Da". Saldo time ne trpi, jer je par algebarski nula. Kartica
+' se ponasa obrnuto i to je namerno: storno je i sam dogadjaj koji operater na
+' kartici mora da vidi (6.8 -- "sta vazi danas" i "sta je dokument tada rekao" su
+' dva pitanja).
+'
+' Dan, ne trenutak: celija sme da nosi vreme, a knjiga ambalaze je dnevna -- bez
+' Int() bi dokument unet u 14h ispao iz opsega koji se zavrsava tog dana.
+Private Function AmbKretanjaUOpsegu(ByVal kret As Variant, ByVal datumOd As Date, _
+                                    ByVal datumDo As Date) As Variant
+    Dim poz As Collection
+    Set poz = New Collection
+
+    Dim od As Long, do_ As Long
+    od = Int(CDbl(datumOd))
+    do_ = Int(CDbl(datumDo))
+
+    Dim i As Long, dan As Long
+    For i = LBound(kret, 1) To UBound(kret, 1)
+        If Not CBool(kret(i, 6)) Then
+            If IsDate(kret(i, 1)) Then
+                dan = Int(CDbl(CDate(kret(i, 1))))
+                If dan >= od And dan <= do_ Then poz.Add i
+            End If
+        End If
+    Next i
+
+    If poz.count = 0 Then Exit Function
+
+    Dim res() As Variant
+    ReDim res(1 To poz.count, 1 To 8)
+
+    Dim n As Long, c As Long, ri As Long
+    For n = 1 To poz.count
+        ri = CLng(poz(n))
+        For c = 1 To 8
+            res(n, c) = kret(ri, c)
+        Next c
+    Next n
+
+    AmbKretanjaUOpsegu = res
+End Function
+
+Private Function ReportAmbalazeZbirni(ByVal kret As Variant) As Variant
+
     Const SRC As String = "modIzvestaj.ReportAmbalazeZbirni"
     On Error GoTo EH
-    
+
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
-    
+
     Dim i As Long
-    For i = 1 To UBound(filtered, 1)
+    For i = LBound(kret, 1) To UBound(kret, 1)
         Dim key As String
-        key = CStr(filtered(i, colTip))
+        key = NzToText(kret(i, 4))
         If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#)
         Dim vals As Variant
         vals = dict(key)
-        Dim kol As Long: kol = 0
-        If IsNumeric(filtered(i, colKol)) Then kol = CLng(filtered(i, colKol))
-        Dim effSmer As String
-        effSmer = CStr(filtered(i, colSmer))
-        If isVozac Then effSmer = VozacAmbEffectiveSmer(effSmer, CStr(filtered(i, colEntTip)))
-        If effSmer = "Ulaz" Then
+        ' Znak je iz knjige (6.8): + kad nalog PRIMA (Ulaz), - kad daje (Izlaz).
+        ' Ovde je stajao Select Case po Smer-u, uz inverziju za vozaca.
+        Dim kol As Double
+        kol = 0
+        If IsNumeric(kret(i, 5)) Then kol = CDbl(kret(i, 5))
+        If kol >= 0 Then
             vals(0) = vals(0) + kol
         Else
-            vals(1) = vals(1) + kol
+            vals(1) = vals(1) - kol
         End If
         dict(key) = vals
     Next i
-    
+
     If dict.count = 0 Then
         ReportAmbalazeZbirni = Empty
         Exit Function
     End If
-    
+
     Dim result() As Variant
     ReDim result(1 To dict.count, 1 To 6)
-    
+
     Dim keys As Variant
     keys = dict.keys
     For i = 0 To dict.count - 1
@@ -3278,7 +3284,7 @@ Private Function ReportAmbalazeZbirni(ByVal filtered As Variant, _
         result(i + 1, 5) = vals(0)
         result(i + 1, 6) = vals(1)
     Next i
-    
+
     ReportAmbalazeZbirni = result
     Exit Function
 
@@ -3286,110 +3292,93 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
-Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
-                                            ByVal colDatum As Long, ByVal colEntitet As Long, _
-                                            ByVal colEntTip As Long, ByVal colTip As Long, _
-                                            ByVal colDokID As Long, ByVal colDokTip As Long, _
-                                            ByVal colKol As Long, _
-                                            ByVal colSmer As Long, ByVal isVozac As Boolean, _
-                                            ByVal colRID As Long) As Variant
-    
+Private Function ReportAmbalazePojedinacni(ByVal kret As Variant) As Variant
+
     Const SRC As String = "modIzvestaj.ReportAmbalazePojedinacni"
     On Error GoTo EH
-    
-    Dim rowCount As Long
-    rowCount = UBound(filtered, 1)
 
-    ' Grupisanje po JEDNOM dokumentu (DokumentTip + DokumentID + TipAmbalaze):
-    ' ako isti dokument ima i Ulaz i Izlaz red, prikazi oba u istom redu. Ako ima
-    ' samo jedan smer -> red ostaje kao i do sada. Redovi RAZLICITOG DokumentTip-a
-    ' su razliciti dokumenti (uz-otkup: `Otkup` + `OM-Izlaz-Koop` dele otkupID) i
-    ' NE smeju u isti red -- vidi gkey nize.
-    ' Scripting.Dictionary cuva redosled umetanja (kao redosled filtriranih redova).
+    ' GRUPISANJE PO JEDNOM DOKUMENTU: (DokumentTip, DokumentID, TipAmbalaze).
+    '
+    ' VrstaKretanja NIJE u kljucu, i to je namerno: prijemnica nosi DVE vrste nad
+    ' istim parom (AMBALAZA_UZ_ROBU i POVRAT_PRAZNE), i upravo njih dve treba
+    ' prikazati kao Ulaz i Izlaz JEDNOG reda. AMB-INV-04 ih razlikuje u knjizi,
+    ' pregled ih sabira.
+    '
+    ' DokumentTip ostaje u kljucu jer otkup pod istim otkupID-om knjizi dve vrste
+    ' pod DVA tipa dokumenta -- bez njega bi se spojili u jedan red koji nosi tip
+    ' prvog zapisa, pa bi "Stampaj dokument" uvek rutirao na otkupni list.
     Dim grp As Object
     Set grp = CreateObject("Scripting.Dictionary")
 
-    ' Memo za ResolveEntitetName: (tip|id) -> naziv za trajanje ovog izvestaja, da se
-    ' LookupValue ne ponavlja po svakom redu (O(jedinstvenih) umesto O(redova)).
+    ' Memo za ime protivpartnera: (tip|id) -> naziv, za trajanje izvestaja.
     Dim nameMemo As Object
     Set nameMemo = CreateObject("Scripting.Dictionary")
 
-    Dim totalUlaz As Long, totalIzlaz As Long
+    Dim totalUlaz As Double, totalIzlaz As Double
     Dim i As Long
-    For i = 1 To rowCount
-        Dim kol As Long: kol = 0
-        If IsNumeric(filtered(i, colKol)) Then kol = CLng(filtered(i, colKol))
+    For i = LBound(kret, 1) To UBound(kret, 1)
+        Dim kol As Double
+        kol = 0
+        If IsNumeric(kret(i, 5)) Then kol = CDbl(kret(i, 5))
 
-        Dim entID As String: entID = CStr(filtered(i, colEntitet))
-        Dim entTipVal As String: entTipVal = CStr(filtered(i, colEntTip))
-        Dim dokIDv As String: dokIDv = CStr(filtered(i, colDokID))
-        Dim tipv As String: tipv = CStr(filtered(i, colTip))
-        Dim dokTipv As String: dokTipv = CStr(filtered(i, colDokTip))
+        Dim dokIDv As String: dokIDv = NzToText(kret(i, 2))
+        Dim dokTipv As String: dokTipv = NzToText(kret(i, 3))
+        Dim tipv As String: tipv = NzToText(kret(i, 4))
+        Dim pTip As String: pTip = NzToText(kret(i, 7))
+        Dim pID As String: pID = NzToText(kret(i, 8))
 
-        Dim effSmer As String
-        effSmer = CStr(filtered(i, colSmer))
-        If isVozac Then effSmer = VozacAmbEffectiveSmer(effSmer, entTipVal)
-
-        ' PUN identitet dokumenta, isti koji `ReversRedPripada` koristi za match:
-        ' DokumentTip + DokumentID + TipAmbalaze. `DokumentTip` je nuzan jer
-        ' `modOtkup.SaveOtkup` na NORMALNOJ putanji upisuje isti `otkupID` i isti
-        ' tip ambalaze pod DVA tipa dokumenta -- primljene pune gajbe kao
-        ' `DOK_TIP_OTKUP`, izdate prazne kao `DOK_TIP_OM_IZLAZ_KOOP`. Bez njega su
-        ' se spajali u JEDAN red koji nosi tip PRVOG zapisa ("Otkup"), pa je
-        ' skriveni ref-kljuc bio `AMB|Otkup|<id>` i "Stampaj dokument" je uvek
-        ' rutirao na `ReprintOtkupniListByOtkupID` -- revers `OM-Izlaz-Koop` nije
-        ' imao svoj red i bio je NEDOSTUPAN za stampu iz pregleda.
         Dim gkey As String
         gkey = Trim$(dokTipv) & "|" & Trim$(dokIDv) & "|" & AmbTipKljuc(tipv)
-        ' REVERS: identitet je ReversID (REV-IDENT-01) -- isti broj legalno nose
-        ' reversi druge stanice ili drugog dana (A2 red REV), pa bez njega pregled
-        ' po vozacu spaja dva reversa u jedan red sa datumom prvog i zbirom
-        ' kolicina. ReversID ide i u red (ref-kljuc), da stampa bira noge po
-        ' njemu, a ne po broju. Ambalaza uz otkup ReversID nema (DokumentID =
-        ' OtkupID je vec jedinstven): za nju ostaje (stanica, dan) -- u pregledu
-        ' po OM i po vozacu red daje samo nogu Stanica, pa EntitetID JESTE stanica.
-        ' Samostalan revers bez ReversID-a (nalaz B10) grupise se isto, a stampa
-        ' ga odbija.
-        Dim ridv As String: ridv = Trim$(NzToText(filtered(i, colRID)))
-        If Len(ridv) > 0 Then
-            gkey = gkey & "|" & ridv
-        ElseIf modStorno.ReversTipJe(dokTipv) Then
-            Dim danKljuc As String: danKljuc = ""
-            If IsDate(filtered(i, colDatum)) Then danKljuc = CStr(Int(CDbl(CDate(filtered(i, colDatum)))))
-            gkey = gkey & "|" & UCase$(Trim$(entID)) & "|" & danKljuc
-        End If
+
         Dim rec As Variant
         If grp.Exists(gkey) Then
             rec = grp(gkey)
         Else
-            ' Datum, Mesto, Tip, Dokument, Ulaz, Izlaz, DokTip, ReversID
-            Dim entMemoKey As String: entMemoKey = entTipVal & "|" & entID
-            If Not nameMemo.Exists(entMemoKey) Then nameMemo.Add entMemoKey, ResolveEntitetName(entID, entTipVal)
-            rec = Array(filtered(i, colDatum), CStr(nameMemo(entMemoKey)), _
-                        tipv, dokIDv, 0&, 0&, dokTipv, ridv)
+            ' MESTO je PROTIVPARTNER, ne naslovni entitet.
+            '
+            ' Star red je imenovao jednu stranu, pa je kolona pokazivala nju: u
+            ' izvestaju po VOZACU to je BILA druga strana (Stanica / Kupac), a u
+            ' izvestaju po OM i po Kupcu sam naslovni entitet -- ista vrednost u
+            ' svakom redu, dakle nula informacije. Nov red imenuje obe strane, pa
+            ' kolona uvek nosi onoga S KIM je nalog radio; za vozaca je to isto sto
+            ' i pre. AMB-INV-10 (jedan neuredjen par po dokumentu) garantuje da dva
+            ' reda istog dokumenta ne mogu dati razlicitog protivpartnera.
+            Dim memoKey As String: memoKey = pTip & "|" & pID
+            If Not nameMemo.Exists(memoKey) Then
+                nameMemo.Add memoKey, ResolveEntitetName(pID, pTip)
+            End If
+            ' Datum, Mesto, Tip, Dokument, Ulaz, Izlaz, DokTip
+            rec = Array(kret(i, 1), CStr(nameMemo(memoKey)), tipv, dokIDv, _
+                        0#, 0#, dokTipv)
         End If
-        If effSmer = "Ulaz" Then
-            rec(4) = CLng(rec(4)) + kol
+
+        If kol >= 0 Then
+            rec(4) = CDbl(rec(4)) + kol
             totalUlaz = totalUlaz + kol
         Else
-            rec(5) = CLng(rec(5)) + kol
-            totalIzlaz = totalIzlaz + kol
+            rec(5) = CDbl(rec(5)) - kol
+            totalIzlaz = totalIzlaz - kol
         End If
         grp(gkey) = rec
     Next i
 
-    Dim nGrp As Long: nGrp = grp.Count
+    If grp.count = 0 Then
+        ReportAmbalazePojedinacni = Empty
+        Exit Function
+    End If
+
+    Dim nGrp As Long: nGrp = grp.count
     Dim result() As Variant
     ReDim result(1 To nGrp + 1, 1 To 7)  ' +1 UKUPNO, kol.7 = skriveni ref-kljuc
 
-    ' Poslovni brojevi dokumenata JEDNIM prolazom po tabeli (mape), umesto
-    ' LookupValue po redu: na svesci sa 1.596 amb redova je razresenje broja
-    ' radilo 1.596 punih skenova tabela i tab je delovao zamrznuto (smoke
-    ' 28.08, krug 3) -- isti potez kao BuildOtkupBrojDokDict u karticama.
-    Dim mapaOtp As Object, mapaPrj As Object, mapaOtk As Object
+    ' Poslovni brojevi JEDNIM prolazom po tabeli (mape), ne LookupValue po redu: na
+    ' svesci sa 1.596 amb redova je razresenje broja radilo 1.596 punih skenova i tab
+    ' je delovao zamrznuto (smoke 28.08, krug 3).
+    Dim mapaOtp As Object, mapaPrj As Object, mapaOtk As Object, mapaAmb As Object
     Set mapaOtp = BuildLookupDict(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ)
     Set mapaPrj = BuildLookupDict(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ)
     Set mapaOtk = BuildLookupDict(TBL_OTKUP, COL_OTK_ID, COL_OTK_BR_DOK)
+    Set mapaAmb = modAmbalaza.AmbDokPrikazMapa()
 
     Dim keys As Variant: keys = grp.keys
     Dim r As Long
@@ -3403,12 +3392,12 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
         result(r + 1, 2) = rr(1)
         result(r + 1, 3) = rr(2)
         result(r + 1, 4) = ResolveDokBrojMape(CStr(rr(6)), CStr(rr(3)), _
-                                              mapaOtp, mapaPrj, mapaOtk)
-        result(r + 1, 5) = IIf(CLng(rr(4)) <> 0, CLng(rr(4)), "")
-        result(r + 1, 6) = IIf(CLng(rr(5)) <> 0, CLng(rr(5)), "")
-        ' "AMB|<DokTip>|<DokID>[|<ReversID>]" -- ReversID samo kad ga red nosi.
+                                              mapaOtp, mapaPrj, mapaOtk, mapaAmb)
+        result(r + 1, 5) = IIf(CDbl(rr(4)) <> 0, CLng(rr(4)), "")
+        result(r + 1, 6) = IIf(CDbl(rr(5)) <> 0, CLng(rr(5)), "")
+        ' "AMB|<DokTip>|<DokID>" -- ReversID je otisao sa starim modelom: AmbDokID
+        ' JESTE identitet dokumenta (ODL-16), pa je kljuc pun i bez njega.
         result(r + 1, 7) = "AMB|" & CStr(rr(6)) & "|" & CStr(rr(3))
-        If Len(CStr(rr(7))) > 0 Then result(r + 1, 7) = CStr(result(r + 1, 7)) & "|" & CStr(rr(7))
     Next r
 
     ' UKUPNO
@@ -3434,7 +3423,8 @@ End Function
 ' Vraca DokumentID ako broj nije razresiv.
 Private Function ResolveDokBrojMape(ByVal dokTip As String, ByVal dokID As String, _
                                     ByVal mapaOtp As Object, ByVal mapaPrj As Object, _
-                                    ByVal mapaOtk As Object) As String
+                                    ByVal mapaOtk As Object, _
+                                    ByVal mapaAmb As Object) As String
     On Error Resume Next
     Dim sOut As String: sOut = dokID
     Select Case dokTip
@@ -3442,6 +3432,14 @@ Private Function ResolveDokBrojMape(ByVal dokTip As String, ByVal dokID As Strin
             If mapaOtp.Exists(dokID) Then sOut = CStr(mapaOtp(dokID))
         Case DOK_TIP_PRIJEMNICA
             If mapaPrj.Exists(dokID) Then sOut = CStr(mapaPrj(dokID))
+        Case DOK_TIP_AMBALAZA_DOKUMENT
+            ' AmbDokID je opaque "ADK-<hex>"; poslovni broj stoji na zaglavlju
+            ' (isti prevod kao na karticama, review 08.10.2026 P2 #1).
+            If Not mapaAmb Is Nothing Then
+                If mapaAmb.Exists(dokID) Then
+                    sOut = Trim$(Split(CStr(mapaAmb(dokID)), "|")(0))
+                End If
+            End If
         Case DOK_TIP_OTKUP, DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP
             ' uz-otkup: DokumentID = otkupID -> BrojDokumenta; standalone
             ' revers: DokumentID = brojDok
@@ -4322,6 +4320,11 @@ Private Function ResolveEntitetName(ByVal entitetID As String, _
         Case "Kooperant"
             ResolveEntitetName = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", entitetID, "Ime")) & " " & _
                                  CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", entitetID, "Prezime"))
+        ' Vozac je od 10b-2 NALOG, pa se u izvestajima pojavljuje kao
+        ' protivpartner -- bez ovoga bi stajao go ID.
+        Case "Vozac"
+            ResolveEntitetName = CStr(LookupValue(TBL_VOZACI, "VozacID", entitetID, "Ime")) & " " & _
+                                 CStr(LookupValue(TBL_VOZACI, "VozacID", entitetID, "Prezime"))
         Case Else
             ResolveEntitetName = entitetID
     End Select

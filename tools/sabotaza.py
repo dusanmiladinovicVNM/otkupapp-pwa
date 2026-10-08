@@ -7020,6 +7020,29 @@ SABOTAZE = {
         "T_AmbSaldo_CitaociSuNaNovomModelu",
         "stanica je IZDALA gajbe -- saldo pada na istom redu",
     ),
+    # PREGLED PRESTAJE DA SKRIVA STORNO (10c-2). Kolona "otkazano" se ignorise, pa
+    # storniran dokument ostaje u pregledu kretanja -- a stari filter
+    # COL_STORNIRANO ga je skrivao. Kartica se ponasa obrnuto NAMERNO, pa ovu
+    # razliku mora da drzi tvrdnja, ne navika.
+    "amb-10c-pregled-ne-skriva-storno": (
+        "modIzvestaj.bas",
+        '        If Not CBool(kret(i, 6)) Then\n',
+        '        If True Then   \' SABOTAZA: otkazan par ostaje u pregledu\n',
+        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "storniran revers ispada iz pregleda kretanja",
+    ),
+    # INVERZIJA SE VRACA (10c-2). Zbirni pregled zamenjuje Ulaz i Izlaz -- tacno
+    # ono sto je VozacAmbEffectiveSmer radio nad starim modelom, i sto 6.8 zove
+    # fail-open: citalac dobija POGRESAN ZNAK, ne gresku.
+    "amb-10c-zbirni-okrece-znak": (
+        "modIzvestaj.bas",
+        '        If kol >= 0 Then\n'
+        '            vals(0) = vals(0) + kol\n',
+        '        If kol < 0 Then   \' SABOTAZA: znak je okrenut\n'
+        '            vals(0) = vals(0) + kol\n',
+        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "zbirni pregled OM-a vidi IZDATE gajbe reversa",
+    ),
     # STORNO PRESTAJE DA SE PONISTAVA (review 08.10.2026, P2 #2). Prva verzija ove
     # sabotaze je menjala RedDoticeKnjigu u "If True" i tvrdila da time kontra-stav
     # prestaje da se preskace -- a RedDoticeKnjigu kontra-stav NE preskace nego samo

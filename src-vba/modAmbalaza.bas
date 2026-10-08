@@ -1205,9 +1205,14 @@ End Function
 ' saldo. Do 10c su to vadile same, kroz Smer -- pa je svaka nosila SVOJU kopiju
 ' pravila znaka, i svaka svoj lifecycle (ExcludeStornirano).
 '
-' Vraca 2D niz (1 To n, 1 To 5):
+' Vraca 2D niz (1 To n, 1 To 8):
 '   1 = Datum   2 = DokumentID   3 = DokumentTip   4 = TipAmbalaze
 '   5 = Kolicina SA ZNAKOM: pozitivna kad nalog PRIMA, negativna kad daje (6.8)
+'   6 = Otkazano: True za kontra-stav I za original na koji pokazuje
+'   7 = ProtivpartnerTip   8 = ProtivpartnerID
+'
+' Kolone 6-8 su IDENTITET, ne prikaz: ko je druga strana i da li par jos
+' stoji. Kako se to imenuje coveku ostaje na citaocu.
 '
 ' Prazno kad nalog nema ni jedno kretanje -- isti ugovor kao GetAmbalazeStanje, pa
 ' pozivaoci koji vrte IsArray ostaju nedirnuti.
@@ -1232,6 +1237,9 @@ Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Va
 
     Dim cDat As Long, cDokID As Long, cDokTip As Long, cTipA As Long, cKol As Long
     Dim cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
+    Dim cStorno As Long, cAmbID As Long
+    cStorno = kolIdx(COL_AMB_STORNO_OD)
+    cAmbID = kolIdx(COL_AMB_ID)
     cDat = kolIdx(COL_AMB_DATUM)
     cDokID = kolIdx(COL_AMB_DOK_ID)
     cDokTip = kolIdx(COL_AMB_DOK_TIP)
@@ -1244,10 +1252,33 @@ Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Va
 
     ' Prvo se skupe POZICIJE pa se niz dimenzionise jednom: ReDim Preserve nad 2D
     ' nizom menja samo poslednju dimenziju, pa rast po redovima nije moguc.
+    Dim i As Long, znak As Long
+
+    ' OTKAZANI PAROVI, jednim prolazom: kontra-stav nosi StornoOd -> AmbID
+    ' originala, pa su otkazana OBA reda.
+    '
+    ' Ovo je KOLONA, a ne filter, jer se dva citaoca iste knjige legitimno
+    ' razlikuju (6.8): pregled KRETANJA storniran dokument skriva, a KARTICA ga
+    ' prikazuje -- storno je i sam dogadjaj koji operater mora da vidi. Odluku
+    ' zato nosi pozivalac, a knjiga samo kaze sta je otkazano.
+    Dim otkazani As Object
+    Set otkazani = CreateObject("Scripting.Dictionary")
+    otkazani.CompareMode = vbTextCompare
+
+    Dim so As String
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kolIdx) Then
+            so = AmbText(data(i, cStorno))
+            If Len(so) > 0 Then
+                otkazani(so) = True
+                otkazani(AmbText(data(i, cAmbID))) = True
+            End If
+        End If
+    Next i
+
     Dim poz As Collection
     Set poz = New Collection
 
-    Dim i As Long, znak As Long
     For i = 1 To UBound(data, 1)
         If RedDoticeKnjigu(data, i, kolIdx) Then
             znak = 0
@@ -1263,7 +1294,7 @@ Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Va
     If poz.count = 0 Then Exit Function
 
     Dim res() As Variant
-    ReDim res(1 To poz.count, 1 To 5)
+    ReDim res(1 To poz.count, 1 To 8)
 
     Dim n As Long, ri As Long, par As Variant
     For n = 1 To poz.count
@@ -1275,6 +1306,16 @@ Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Va
         res(n, 3) = AmbText(data(ri, cDokTip))
         res(n, 4) = AmbText(data(ri, cTipA))
         res(n, 5) = znak * CDbl(data(ri, cKol))
+        res(n, 6) = otkazani.Exists(AmbText(data(ri, cAmbID)))
+        ' PROTIVPARTNER: kad nalog PRIMA, druga strana je IZVOR; kad daje,
+        ' ODREDISTE. AMB-INV-02 (OdNalog <> NaNalog) garantuje da to nije on sam.
+        If znak > 0 Then
+            res(n, 7) = AmbText(data(ri, cOdTip))
+            res(n, 8) = AmbText(data(ri, cOdID))
+        Else
+            res(n, 7) = AmbText(data(ri, cNaTip))
+            res(n, 8) = AmbText(data(ri, cNaID))
+        End If
     Next n
 
     AmbKretanjaNaloga = res
