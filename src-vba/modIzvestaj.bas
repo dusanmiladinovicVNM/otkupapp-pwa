@@ -4362,10 +4362,21 @@ End Function
 ' tehnicki identitet -- ista klasa greske kao na karticama (review 08.10.2026,
 ' P2 #1), samo na dokumentu koji operater potpisuje.
 '
-' SABLON TRAZI OTKUPNO MESTO. Kupcev revers (ODL-23) je par Kupac <-> Vozac i
-' stanice NEMA, pa se stampa ODBIJA sa imenom razloga: papir sa praznim otkupnim
-' mestom je losiji od odbijene stampe. To je imenovana rupa SPOSOBNOSTI (katalog),
-' ne propust ovog reza.
+' KUPCEV REVERS SE NE STAMPA, I TO NIJE RUPA (ispravka okvira, 08.10.2026).
+'
+' Prvo izdanje ovog komentara je tvrdilo da "sablon trazi otkupno mesto", pa je
+' odbijanje nazvalo rupom u sposobnosti. Pitanje je bilo pogresno postavljeno:
+' firma kupcu NE IZDAJE prazne gajbe. Kupac dobija nase gajbe PUNE, uz robu
+' (AMBALAZA_UZ_ROBU, Vozac -> Kupac), i vraca ih prazne. Zato
+' UpisiReversPartnera_TX knjizi SAMO jedan smer -- Kupac -> Vozac, POVRAT_PRAZNE
+' -- i smera "izdavanje kupcu" kao poslovnog dogadjaja nema.
+'
+' Posledica: papir VEC POSTOJI i KUPCEV je. Operater drzi original sa kupcevim
+' brojem (zato je broj obavezan i ne predlaze se, ODL-23), a nasa knjiga ga samo
+' evidentira. Stampati ga znacilo bi izdati drugi dokument za isti cin.
+'
+' Ostali parovi bez stanice su druga stvar: njih sablon stvarno ne pokriva, pa
+' se odbijaju sa svojim razlogom.
 '
 ' Red bira AmbDokRedMapa, koja kontra-stavove PRESKACE -- storniran dokument zato
 ' nema aktivan red i stampa se odbija. Fail-closed je namerno: nema papira za
@@ -4412,7 +4423,7 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
         End If
     End If
 
-    Dim broj As String, datum As Date
+    Dim broj As String, datum As Date, vrstaDok As String
     broj = ambDokID
     datum = Date
     If mapaZag.Exists(ambDokID) Then
@@ -4420,6 +4431,7 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
         z = mapaZag(ambDokID)
         If IsArray(z) Then
             If Len(Trim$(NzToText(z(0)))) > 0 Then broj = Trim$(NzToText(z(0)))
+            If UBound(z) >= 1 Then vrstaDok = Trim$(NzToText(z(1)))
             If UBound(z) >= 2 Then
                 If IsDate(z(2)) Then datum = CDate(z(2))
             End If
@@ -4433,6 +4445,12 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
     ElseIf StrComp(naTip, AMB_NALOG_STANICA, vbTextCompare) = 0 Then
         omID = naID: pTip = odTip: pID = odID: prijem = True
     Else
+        If StrComp(vrstaDok, AMB_DOK_REVERS_PARTNERA, vbTextCompare) = 0 Then
+            Err.Raise vbObjectError + 7507, SRC, _
+                      "Kupcev revers se ne stampa: dokument je KUPCEV i nosi " & _
+                      "njegov broj. Original drzi operater, a nasa knjiga ga " & _
+                      "samo evidentira."
+        End If
         Err.Raise vbObjectError + 7507, SRC, _
                   "Dokument nema otkupno mesto (par " & odTip & " - " & naTip & _
                   ") -- sablon reversa ga ne pokriva, pa je stampa odbijena."

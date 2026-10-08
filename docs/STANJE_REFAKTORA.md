@@ -1776,12 +1776,34 @@
     posle nastavka reda `_` je sintaksna greška. To je ona ista zamka koja je dvaput
     naplatila 585 s i ubijen Excel — sada je kapija, pa je naplatila **nula**.
 
+100. **Ispravka okvira: kupčev revers se NE štampa, i to nije rupa**
+     (08.10.2026, operaterov nalaz).
+     Upisao sam u stavku 98 i u tabelu duga da „kupčev revers nema papir", kao
+     rupu u sposobnosti koju šablon ne pokriva. Operater je pitao jednu stvar koja
+     je to obesmislila: **kako firma izdaje kupcu revers, i šta će kupcu naše
+     prazne gajbe?**
+     Merenje potvrđuje da je pitanje bilo pogrešno postavljeno:
+     `UpisiReversPartnera_TX` knjiži **samo jedan smer** — `Kupac → Vozac` sa
+     `POVRAT_PRAZNE`. Kupac dobija naše gajbe **pune**, uz robu
+     (`AMBALAZA_UZ_ROBU`, `Vozac → Kupac`), i vraća ih prazne. Smera „izdavanje
+     praznih kupcu" **kao poslovnog događaja nema** — pa nema ni papira koji bismo
+     mi izdali.
+     Pisač je to i **sam govorio**, u komentaru koji sam napisao a nisam pročitao
+     kao odgovor: *„papir koji operater drži u ruci nosi kupčev broj"*. Dokument je
+     **kupčev**; zato je broj obavezan i ne predlaže se (ODL-23). Štampati ga
+     značilo bi izdati **drugi** dokument za isti čin.
+     Ispravka u kodu je mala: odbijanje štampe za `REVERS_PARTNERA` sada imenuje
+     **tačan** razlog (dokument je kupčev), a generičko „nema otkupnog mesta"
+     ostaje za ostale parove bez stanice, koje šablon stvarno ne pokriva.
+     **Red „kupčev revers nema papir" je izbrisan iz tabele duga** — nije dug.
+     Za reviewer-ov uslovni `P1` („svaki F7 revers mora biti štampiv") odgovor je
+     time **negativan po domenu**, ne po obimu reza.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
 | **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). Danas to drže samo komentari uz tri grane; kapija bi morala da zna koji su pozivi iz suite-a dostupni, pa traži svoj rez i svoj dvosmerni dokaz |
-| **kupčev revers nema papir** | `OutputIzdavanjeAmbalaze` je šablon „otkupno mesto ↔ partner", a `REVERS_PARTNERA` (ODL-23) je par **Kupac ↔ Vozac** — stanice nema. Štampa se zato **odbija sa imenom razloga** (`10c-2`); papir sa praznim otkupnim mestom bio bi gori. Nijedna sposobnost nije **izgubljena** — legacy put ga je već odbijao, samo uz zbunjujući razlog („nema ReversID"). Da kupčev revers dobije papir, traži **svoj šablon** i odluku šta na njemu stoji umesto otkupnog mesta |
 | **`dokaz.py` ne dosegne `modIzvestajTests`** | kapija kataloga sabotaža priznaje samo `modTest`, `modTestBanka` i `modBusinessFlowProTests`, pa tvrdnja iz `modIzvestajTests` **ne može da se obori** — a tamo živi najdetaljnije merenje ambalažnog pregleda. Posledica je izmerena u `10c-2`: tvrdnja o identitetu dokumenta je **preseljena** u `#204`, a tvrdnja o spajanju dve vrste istog dokumenta ostala **bez sabotaže**. Proširenje kapije dira sam alat, pa ide **zaseban process PR** sa svojim dvosmernim dokazom |
 | **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita |
 | **badge "nesacuvano" na novoj formi** | `SelectModeCore` pise u polje broja POSLE `MarkClean` i `mLoading = False`, pa programski upis prodje kroz `MarkDirty` i prazna forma tvrdi da ima neupisanih izmena (review 08.10.2026, `P3`). Zatecen obrazac -- vazio je i pre P1 ispravke, za svaki rezim sa auto-brojem. Jedan premesten red, ali izmena `src-vba` obara compile i zeleni marker, a nov test (natpis u zaglavlju) trazi svoj dvosmeran dokaz; zato **svoj rez posle merge-a**, pre `ODL-24` |
