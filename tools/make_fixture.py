@@ -1229,7 +1229,7 @@ SEED = {
         # stari "OM-Ulaz-Firma" red sada nabavka: SpoljniSvet -> Stanica. Lista
         # AMBALAZA za stanicu time ima i ulazne i izlazne redove.
         {"AmbID": "AMB-IZV-S4", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 100, "OdNalogTip": "SpoljniSvet", "OdNalogID": "SpoljniSvet",
+         "Kolicina": 100, "OdNalogTip": "SpoljniSvet", "OdNalogID": "",
          "NaNalogTip": "Stanica", "NaNalogID": STANICA,
          "DokumentID": "ADK-IZV-3", "DokumentTip": "AmbalazaDokument",
          "VrstaKretanja": "NABAVKA"},
@@ -1284,23 +1284,18 @@ SEED = {
          "DokumentID": "PRJ-TEST-A", "DokumentTip": "Prijemnica",
          "VrstaKretanja": "AMBALAZA_UZ_ROBU"},
     ],
-    # ZAGLAVLJA AMBALAZNIH DOKUMENATA. Poslovni broj i vrsta zive TU, a ne na
-    # nozi knjige -- AmbDokID je opaque identitet (AMB-10-ODL-16). Bez zaglavlja
-    # bi kartica, pregled i papir pokazivali "ADK-..." umesto broja.
-    "tblAmbalazaDokument": [
-        {"AmbDokID": "ADK-IZV-1", "Datum": FIXTURE_DATE, "Vrsta": "REVERS",
-         "BrojDokumenta": "1/IZV", "BrojOwnerTip": "Stanica",
-         "BrojOwnerID": STANICA},
-        {"AmbDokID": "ADK-IZV-2", "Datum": FIXTURE_DATE, "Vrsta": "REVERS",
-         "BrojDokumenta": "2/IZV", "BrojOwnerTip": "Stanica",
-         "BrojOwnerID": STANICA},
-        {"AmbDokID": "ADK-IZV-X", "Datum": FIXTURE_DATE, "Vrsta": "REVERS",
-         "BrojDokumenta": "3/IZV", "BrojOwnerTip": "Stanica",
-         "BrojOwnerID": STANICA},
-        {"AmbDokID": "ADK-IZV-3", "Datum": FIXTURE_DATE, "Vrsta": "NABAVKA",
-         "BrojDokumenta": "4/IZV", "BrojOwnerTip": "Stanica",
-         "BrojOwnerID": STANICA},
-    ],
+    # ZAGLAVLJA AMBALAZNIH DOKUMENATA SE NE SEJU, I TO JE OGRANICENJE ALATA.
+    #
+    # tblAmbalazaDokument NE POSTOJI u donoru: u aplikaciji je pravi
+    # modSchema.EnsureAllTables na startu, a generator ume da doda samo KOLONU
+    # (ENSURE_COLS), ne i tabelu -- nedostajuca tabela mu je SchemaError.
+    #
+    # Posledica koja se zna i prihvata: kanonski redovi iznad nose
+    # DokumentID "ADK-IZV-*" bez zaglavlja, pa im kartica, pregled i papir
+    # prikazuju taj tehnicki ID umesto poslovnog broja. Nijedna tvrdnja to danas
+    # ne meri (tvrdnje o poslovnom broju idu nad prijemnicom i nad dokumentima
+    # koje testovi sami upisu kroz produkcione pisce), ali fixture je time slabiji
+    # nego sto moze biti. Da generator nauci da pravi tabelu -- zaseban rez.
     "tblFakture": [
         {"FakturaID": FAKTURA, "KupacID": KUPAC, "Iznos": FAKTURA_IZNOS},
         {"FakturaID": FAKTURA_BEZ_IZNOSA, "KupacID": KUPAC, "Iznos": 0},
@@ -2352,7 +2347,12 @@ ENSURE_COLS = {
     # REV-IDENT-01: identitet logickog reversa. Kanon ga drzi kao poslednju
     # kolonu tblAmbalaza, a donor (stari fixture) je nema -- bez nje sejanje po
     # imenu obara red, jer SEED upisuje ReversID na revers noge.
-    "tblAmbalaza": ["ReversID"],
+    # AMB-10c: kanonske kolone knjige. Isti razlog kao ReversID -- kanon ih drzi,
+    # a donor (stari fixture) ih nema, jer ih u aplikaciji dodaje
+    # modSetup.EnsureRuntimeSchema na startu. Bez njih sejanje po imenu obara red,
+    # jer SEED od 08.10.2026 upisuje kanonski oblik (jedan red, obe strane).
+    "tblAmbalaza": ["ReversID", "OdNalogTip", "OdNalogID", "NaNalogTip",
+                    "NaNalogID", "VrstaKretanja", "StornoOd"],
 }
 
 # Tabele koje donor NEMA (krug 5: utovarna lista) -- generator ih pravi

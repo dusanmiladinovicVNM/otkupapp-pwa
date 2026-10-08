@@ -1956,12 +1956,71 @@
      samo donora da bi se izvršila. Dok se fixture ne regeneriše, `RunAllTests`
      ostaje **204 / 4**, i to su ta četiri pada — ne nova.
 
+104. **Fixture je regenerisan: `4 → 21 → 5`, i blokator je imenovan**
+     (08.10.2026).
+     Stavka 103 je tvrdila da je donor lanac ustajao. **Pola je bilo tačno, pola
+     moja greška.** Ispravke po redu:
+
+     1. **„Generator seje mrtve kolone otpremnice" — netačno.** Komentar u
+        generatoru izričito kaže: *„Kolone zaglavlja (Klasa/Kolicina/KolAmbalaze/
+        Cena) se **NE brišu** — odlaze u **S3e**"*, i iz njih se **izvode stavke**
+        (`red["Kolicina"]`). Moja prva izmena ih je obrisala i oborila generator.
+        **Vraćena.**
+     2. **Pravi uzrok je drugde:** `modSetup.bas:1322-1326` te kolone **aktivno
+        briše** (`ObrisiKolonuAko`, rez `S3`). Zato sveska koja je prošla
+        `EnsureRuntimeSchema` **ne može biti donor** — i zato je jedini valjan
+        donor stari fixture, koji pak nema kanonske ambalažne kolone.
+     3. **Rešenje je bilo u samom generatoru**, idiomom koji on već ima:
+        `ENSURE_COLS` dodaje kolone koje donor nema (tako već ulazi `ReversID`).
+        Dodate su `OdNalogTip`, `OdNalogID`, `NaNalogTip`, `NaNalogID`,
+        `VrstaKretanja`, `StornoOd` — i generacija je prošla, sa potpisom.
+     4. **„Sveska od 9,8 MB je sumnjiva" — netačno**, i operater me je ispravio:
+        prave sveske su 3–12 MB, a stari fixture od 1 MB je bio izuzetak. Ali
+        pravi fixture iz **pravog** donora je **1,08 MB** — ista veličina kao
+        postojeći, jer donor i jeste stari fixture.
+
+     **Merenje posle regeneracije:**
+
+     ```
+     pre izmene fixture-a        204 / 4
+     posle, sa mojom greskom     204 / 21
+     posle ispravke greske       204 / 5
+     ```
+
+     Grešku je dalo **jedno** polje: sistemski nalog **nema ID**, a ja sam u
+     `SpoljniSvet` upisao `"SpoljniSvet"` kao ID (`AmbNalogProblem` to odbija po
+     imenu). Taj jedan znak je držao **14 od 21** pada — i to je dobar primer
+     zašto se fixture meri, a ne procenjuje.
+
+     **Preostalih pet, po poreklu:**
+
+     | Pad | Poreklo |
+     |---|---|
+     | `T_AmbSaldo_CitaociSuNaNovomModelu` — storno dao `0` umesto `−4` | **moje područje**, traži merenje: ili `StornirajAmbDokument_TX` nije prošao, ili čitalac ne vidi kontra-stav |
+     | `T_StornoBezUvida_NemaAkcije` — „revers je storniran" `False` | premisa je bila **`Stornirano="Da"`** red; kanonski storno je kontra-stav, pa zastavice nema |
+     | `T_Izv_SlaganjeIsplataManjakAmb` — ručni prolaz `612` vs `0` | oracle još sabira ledger po **starom** pravilu znaka |
+     | `T_Novac_BrojNijeJedinstven` — „broj reversa postoji u `tblAmbalaza`" `False` | star `DokumentID` je **bio broj** (`REV-IZV-1`); kanonski je `AmbDokID`, a broj živi na **zaglavlju** |
+     | `T_BrojZauzetUNizu_Revers` — noga reversa `REV-IZV-2` ne postoji | isti uzrok kao iznad |
+
+     **BLOKATOR, imenovan:** poslednja dva pada se **ne mogu** zatvoriti bez
+     zaglavlja u `tblAmbalazaDokument` — tamo poslovni broj i živi. A generator
+     **ne ume da napravi tabelu**: `ENSURE_COLS` dodaje kolonu, a nedostajuća
+     tabela mu je `SchemaError` (`tblAmbalazaDokument ne postoji u donoru`; u
+     aplikaciji je pravi `modSchema.EnsureAllTables` na startu). Dok to ne nauči,
+     fixture nosi kanonske redove **bez** zaglavlja, pa im kartica, pregled i papir
+     prikazuju `ADK-IZV-*` umesto broja. Ograničenje je zapisano u samom
+     generatoru, na mestu gde je seme skinuto.
+     **Nov fixture NIJE instaliran** kao osnova: stoji kao
+     `tests/fixtures/otkup_test_kanon.xlsm` (potpis `e2d5d9487b30a3d7`). Zamena
+     postojećeg je odluka operatera, ne moja.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
 | **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). Danas to drže samo komentari uz tri grane; kapija bi morala da zna koji su pozivi iz suite-a dostupni, pa traži svoj rez i svoj dvosmerni dokaz |
 | **`dokaz.py` ne dosegne `modIzvestajTests`** | kapija kataloga sabotaža priznaje samo `modTest`, `modTestBanka` i `modBusinessFlowProTests`, pa tvrdnja iz `modIzvestajTests` **ne može da se obori** — a tamo živi najdetaljnije merenje ambalažnog pregleda. Posledica je izmerena u `10c-2`: tvrdnja o identitetu dokumenta je **preseljena** u `#204`, a tvrdnja o spajanju dve vrste istog dokumenta ostala **bez sabotaže**. Proširenje kapije dira sam alat, pa ide **zaseban process PR** sa svojim dvosmernim dokazom |
+| **`make_fixture` ne ume da napravi tabelu** | `ENSURE_COLS` dodaje kolonu koju donor nema, ali nedostajuća **tabela** je `SchemaError`. `tblAmbalazaDokument` postoji samo posle `modSchema.EnsureAllTables` u aplikaciji, pa se **zaglavlja ambalažnih dokumenata ne mogu sejati** — i dva pada (`T_Novac_BrojNijeJedinstven`, `T_BrojZauzetUNizu_Revers`) nemaju gde da stoje, jer poslovni broj živi na zaglavlju. Rez: `ENSURE_TABLES` po uzoru na `ENSURE_COLS`, sa kolonama iz `schema/schema.json` — dakle dira **alat** i traži svoj dvosmeran dokaz |
 | **`run_vba` korak compile-a obara poziv posle sebe** | izmereno 08.10.2026: posle `COMPILE NEJASNO` (VBE prozor + tastaturne komande) `Application.Run` nekvalifikovano **ne prolazi**, pa alat prijavi „Cannot run the macro" — potpis koji `docs` i memorija vode kao **modul koji se ne kompajlira**. Direktan poziv nad istom temp kopijom prolazi, i suite daje `TESTS=204 FAIL=5`. Dve mogućnosti za rez: zvati suite **kvalifikovano** (`'sveska'!Suite`), kao što probe već radi, ili vratiti VBE u stanje pre koraka compile-a. Dok to ne bude rešeno, **crveno iz `run_vba` se proverava direktnim pozivom pre nego što se poveruje da je compile** |
 | **kanonska knjiga nema integritetnu proveru** | `modIntegritet` ima **nula** referenci na `Od_Tip` / `Na_Tip` / `VrstaKretanja` / `tblAmbalazaDokument` (merenje 08.10.2026). Posle cutovera proverava samo legacy redove, koje produkcija ne piše — pa operateru kaže „nema nalaza" ne pogledavši kanonsku knjigu. Kandidati za provere: noga bez zaglavlja, zaglavlje bez noge, `StornoOd` koji ne pokazuje nigde, par koji nije neuređen (`AMB-INV-10`), obaveza partneru < 0 (`AMB-INV-09`). `Chk_B10_ReversBezID` ostaje tačan za legacy i odlazi sa njim u `10e` |
 | **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita |
