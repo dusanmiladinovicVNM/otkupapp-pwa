@@ -302,6 +302,8 @@ Public Sub RunAllTests()
     RunOne 207
     RunOne 208
     RunOne 209
+    RunOne 210
+    RunOne 211
     RunOne 13
     RunOne 14
     RunOne 15
@@ -776,6 +778,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 43: TestName = "T_Traka_NatpisiPoRezimu"
         Case 38: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
         Case 209: TestName = "T_AmbBroj_DelimiterPrezivljavaMapu"
+        Case 210: TestName = "T_AmbIntegritet_SkenerVidiKanonskuKnjigu"
+        Case 211: TestName = "T_AmbKnjigaNalazi_SakupljaUmestoDaDigne"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -993,6 +997,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 43: T_Traka_NatpisiPoRezimu
         Case 38: T_ZbirnaForma_KlasaOstajeBezCene
         Case 209: T_AmbBroj_DelimiterPrezivljavaMapu
+        Case 210: T_AmbIntegritet_SkenerVidiKanonskuKnjigu
+        Case 211: T_AmbKnjigaNalazi_SakupljaUmestoDaDigne
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -6543,6 +6549,99 @@ End Sub
 
 ' Zbirni ambalazni pregled OM-a: vrednost zadate kolone za dati tip gajbe.
 ' Kolone zbirnog: 1 = TipAmbalaze, 5 = Ulaz, 6 = Izlaz.
+' 210. SKENER MORA DA VIDI KANONSKU KNJIGU.
+'
+' Posle 10b-2 cutovera jedina ambalazna provera u modIntegritet-u (Chk_B10) bila
+' je gejtovana STARIM tipovima dokumenta, pa nad kanonskim redom cuti. Operater je
+' mogao da pokrene integritet nad pokvarenom knjigom i procita "nema nalaza" --
+' ne zato sto je knjiga ispravna nego zato sto je skener nije ni otvorio.
+'
+' Meri se SEAM, ne pravilo: da li nalaz iz jezgra stize do ekrana. Samo pravilo
+' (ugovor reda, jedinstven AmbID, StornoOd) vec mere sabotaze nad citaocem.
+'
+' Kontra-tvrdnja je obavezna: bez nje bi provera koja UVEK prijavljuje nalaz
+' prosla kao ispravna.
+Private Sub T_AmbIntegritet_SkenerVidiKanonskuKnjigu()
+    Dim revDok As String, revBroj As String
+    Dim ambID As String, naTipPre As String
+    Dim pre As Variant, posle As Variant
+
+    AmbSejRevers 3, revDok, revBroj
+    AssertEq (Len(revDok) > 0), True, "preduslov: revers je upisan"
+
+    ambID = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_DOK_ID, revDok, COL_AMB_ID))
+    AssertEq (Len(ambID) > 0), True, "preduslov: knjiga nosi red tog dokumenta"
+
+    pre = modIntegritet.GetIntegritetRows()
+
+    ' KVAR: kanonski red ostaje bez ODREDISTA. Red i dalje dotice knjigu (izvor
+    ' je tu), pa se ne moze proglasiti legacy redom -- mora da padne na ugovoru.
+    naTipPre = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP))
+    PostaviPoljePoPK TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP, ""
+
+    posle = modIntegritet.GetIntegritetRows()
+
+    ' Fixture se vraca PRE tvrdnji -- inace pokvaren red ostaje tudjim testovima.
+    PostaviPoljePoPK TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP, naTipPre
+
+    AssertEq (Len(naTipPre) > 0), True, _
+             "preduslov: kanonski red je NOSIO odrediste pre kvara"
+    AssertEq NalazSadrzi(posle, "AMB1", ambID), True, _
+             "AMB1 prijavljuje pokvaren red KANONSKE knjige"
+    AssertEq NalazSadrzi(pre, "AMB1", ambID), False, _
+             "kontra-tvrdnja: ispravna knjiga ne daje AMB1 nalaz"
+End Sub
+
+' 211. SAKUPLJAC U JEZGRU -- sloj ispod ekrana.
+'
+' #210 meri da nalaz STIZE do ekrana. Ovaj meri da ga jezgro uopste NAPRAVI.
+' Razdvojeni su jer ih inace nijedna sabotaza ne razlikuje: i neregistrovana
+' provera i sakupljac koji ne obilazi knjigu daju isto -- prazan ekran. Kapija
+' kataloga je to i odbila ("deli tvrdnju -- test ih ne razlikuje").
+'
+' Druga tvrdnja cuva ono sto se lako izgubi: audit rezim ne sme da OSLABI
+' citanje. Citalac je fail-closed i mora da ostane takav, inace bi saldo tiho
+' racunao nad pokvarenom knjigom -- a taj saldo odlucuje o sledecem upisu.
+Private Sub T_AmbKnjigaNalazi_SakupljaUmestoDaDigne()
+    Dim revDok As String, revBroj As String
+    Dim ambID As String, naTipPre As String
+    Dim nalazi As Collection, nadjen As Boolean, dignuto As Boolean
+    Dim i As Long, stavka As Variant
+
+    AmbSejRevers 2, revDok, revBroj
+    ambID = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_DOK_ID, revDok, COL_AMB_ID))
+    AssertEq (Len(ambID) > 0), True, "preduslov: knjiga nosi red tog dokumenta"
+
+    Set nalazi = modAmbalaza.AmbKnjigaNalazi()
+    AssertEq (nalazi Is Nothing), False, "preduslov: sakupljac vraca kolekciju"
+
+    naTipPre = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP))
+    PostaviPoljePoPK TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP, ""
+
+    Set nalazi = modAmbalaza.AmbKnjigaNalazi()
+    For i = 1 To nalazi.count
+        stavka = nalazi(i)
+        If StrComp(NzToText(stavka(1)), ambID, vbTextCompare) = 0 Then nadjen = True
+    Next i
+
+    ' Citanje mora i dalje da PUKNE nad istim redom -- audit ne slabi citaoca.
+    On Error Resume Next
+    modAmbalaza.AmbSaldoPoNalogu AMB_NALOG_STANICA
+    dignuto = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo 0
+
+    ' Fixture se vraca PRE tvrdnji.
+    PostaviPoljePoPK TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP, naTipPre
+
+    AssertEq (Len(naTipPre) > 0), True, _
+             "preduslov: kanonski red je NOSIO odrediste pre kvara"
+    AssertEq nadjen, True, _
+             "sakupljac vidi pokvaren red i vraca ga kao nalaz"
+    AssertEq dignuto, True, _
+             "audit rezim NE slabi citaoca -- saldo i dalje pada fail-closed"
+End Sub
+
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _
                               ByVal kol As Long) As Double
     Dim r As Variant, i As Long

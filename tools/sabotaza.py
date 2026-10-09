@@ -5171,10 +5171,30 @@ SABOTAZE = {
         "Test_Amb_PisacKnjige",
         "Amb pisac: red bez oba modela imenuje sta fali",
     ),
+    # Provera koja nije registrovana je isto sto i provera koje nema. Pre 10c-int je
+    # modIntegritet nad kanonskom knjigom cutao, a ekran je operateru pisao "nema
+    # nalaza" -- ne zato sto je knjiga bila cista nego zato sto je nije ni otvorio.
+    "amb-int-skener-ne-gleda-knjigu": (
+        "modIntegritet.bas",
+        "    Chk_AMB_KnjigaIntegritet\n",
+        "    ' SABOTAZA: skener preskace kanonsku knjigu\n",
+        "T_AmbIntegritet_SkenerVidiKanonskuKnjigu",
+        "AMB1 prijavljuje pokvaren red KANONSKE knjige",
+    ),
+    # Registrovana provera koja uvek dobija praznu listu izgleda isto kao cista knjiga.
+    # Ova sabotaza meri da sakupljac stvarno PROLAZI kroz redove, a ne samo da je
+    # Chk_AMB_KnjigaIntegritet pozvan.
+    "amb-int-sakupljac-ne-obilazi-knjigu": (
+        "modAmbalaza.bas",
+        "    KnjigaIntegritet data, kol, SRC, nalazi\n",
+        "    ' SABOTAZA: sakupljac vraca praznu kolekciju\n",
+        "T_AmbKnjigaNalazi_SakupljaUmestoDaDigne",
+        "sakupljac vidi pokvaren red i vraca ga kao nalaz",
+    ),
     "amb-pisac-dupli-ambid-u-saldu": (
         "modAmbalaza.bas",
-        "            If vrste.Exists(ambID) Then\n",
-        "            If False Then   ' SABOTAZA: dva reda smeju isti AmbID\n",
+        "            ElseIf vrste.Exists(ambID) Then\n",
+        "            ElseIf False Then   ' SABOTAZA: dva reda smeju isti AmbID\n",
         "Test_Amb_PisacKnjige",
         "Amb pisac: dva reda sa istim AmbID-em obaraju citaoca SALDA",
     ),
