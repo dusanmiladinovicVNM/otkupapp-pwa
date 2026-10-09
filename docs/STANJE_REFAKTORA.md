@@ -2234,6 +2234,39 @@
      bez `#` (`sabotaza.py` se nije učitavao), i **heredoc koji je opet pojeo
      backslash** — treći put u istoj sesiji, uprkos pravilu napisanom baš za to.
 
+110. **Evidencija nad KONAČNIM izvorom, na jednom mestu** (09.10.2026).
+     Review je tražio da se brojevi usklade i prijavio da pun prolaz prethodi
+     rasturanju `#204`. **Prolaz je zapravo napravljen POSLE rasturanja** — ali to
+     nigde nije bilo zapisano, pa je prigovor o evidenciji bio tačan i bez obzira
+     na to. Otisak to i dokazuje:
+
+     ```
+     vba_gate --hash                  3b19a4defd38
+     GREEN marker  izvor              3b19a4defd38      <- isti izvor
+                   ugovor             5b73e8d90fc3
+                   sveska             otkup_test.xlsm / 45ac0c56
+     --require-green                  RC=0
+     ```
+
+     **Pun prolaz nad `3b19a4defd38`** (posle rasturanja `#204`):
+
+     ```
+     RunAllTests              209 / 0      RunStornoTestSuite       164 / 0
+     RunBusinessFlowProSuite 2436 / 0      RunBankaImportTestSuite  241 / 0
+     palih suita                0 / 12     REZULTAT                 ZELENO
+     ```
+
+     **Dokaz, bez dvosmislenosti:** `crvenih 16 / 16` znači da je **svih šesnaest**
+     sabotaža oborilo **svoju** tvrdnju po imenu. `grupno izmereno 14 / 16` znači da
+     je četrnaest od njih mereno u **grupi** (više mutacija u jednom prolazu suite),
+     a dve pojedinačno. To nisu dva različita broja o istoj stvari nego **ishod** i
+     **način merenja** — verdikt je zato `DOKAZANO (grupno)`.
+     Po `CLAUDE.md` §5 grupni dokaz je **razvojni**: *„u rezu se pušta grupno, pred
+     release pojedinačno"*. Zato ide još jedan prolaz, **bez `--grupe`**, nad istim
+     izvorom — to je i reviewer-ova tačka 3.
+     Opis PR-a je usklađen: tvrdnja „skupe kapije nisu puštene" je bila tačna kad je
+     napisana, a od tada više nije.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
