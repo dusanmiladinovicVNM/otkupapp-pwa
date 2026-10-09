@@ -2482,8 +2482,14 @@ Private Sub T_PrefillIzStorniranog_CitaSvojuTabelu()
     AssertEq SpecVal(s, "datum"), "15.03.2026", "datum se preuzima iz storniranog"
     ' Broj se NE preuzima: ispravka je nov dokument sa novim brojem.
     AssertEq SpecVal(s, "brdok"), "", "broj dokumenta se NE preuzima"
-    ' Nula se ne salje: fixture nema izdatu ambalazu na otkupu.
-    AssertEq SpecVal(s, "ambpr"), "", "nula se ne salje kao vrednost"
+    ' IZDATA AMBALAZA SE PREUZIMA. Do 09.10.2026 je ovde stajalo da se nula ne
+    ' salje, jer fixture izdatu ambalazu nije imao -- posle kanonizacije otkup
+    ' je razmena, pa OTK-TEST-1 nosi 40 izdatih i prefill ih mora preneti.
+    '
+    ' Pravilo "nula se ne salje" nije izgubljeno nego je ostalo bez OVOG
+    ' predmeta: fixture ga drzi na OTK-NAL-DELIM, koji je namerno jednosmeran
+    ' (2 primljene, 0 izdatih).
+    AssertEq SpecVal(s, "ambpr"), "40", "izdata ambalaza se preuzima iz storniranog"
 
     ' --- OTPREMNICA: isti BROJ, druga tabela, druge kolicine ---
     s = modStornoDok.PrefillIzStorniranog(STIP_OTPREMNICA, "1/TEST", "")
@@ -13129,28 +13135,55 @@ Private Sub T_Izv_SlaganjeIsplataManjakAmb()
         AssertEq Format$(CDbl(az(i, 6)), "0"), Format$(CDbl(tipovi(kljuc)(1)), "0"), _
                  "izlaz po tipu " & kljuc & ": zbirni = suma pojedinacnih"
     Next i
-    ' UKUPNO pojedinacnog = rucni prolaz kroz tblAmbalaza.
+    ' UKUPNO pojedinacnog = rucni prolaz kroz tblAmbalaza, KANONSKI (AMB-10c).
+    '
+    ' Prolaz je do 09.10.2026 citao Smer + EntitetTip + EntitetID i kolonu
+    ' Stornirano -- oblik koji produkcija vise ne pise. Zato je davao NULU, a
+    ' izvestaj stvaran broj: oracle je merio prazan skup i to je izgledalo kao
+    ' razlika u izvestaju.
+    '
+    ' Nov red imenuje OBE strane, pa se pita za obe: stanica kao ODREDISTE je
+    ' ulaz, kao IZVOR izlaz. Storno je kontra-stav, pa se ne filtrira nego se
+    ' sabira sa svojim znakom -- isto sto radi i citalac.
     amb = GetTableData(TBL_AMBALAZA)
-    cEnt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
-    cEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
-    cSmer = GetColumnIndex(TBL_AMBALAZA, COL_AMB_SMER)
     cKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
     cDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
-    cStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+    Dim cOdT As Long, cOdI As Long, cNaT As Long, cNaI As Long
+    cOdT = GetColumnIndex(TBL_AMBALAZA, COL_AMB_OD_TIP)
+    cOdI = GetColumnIndex(TBL_AMBALAZA, COL_AMB_OD_ID)
+    cNaT = GetColumnIndex(TBL_AMBALAZA, COL_AMB_NA_TIP)
+    cNaI = GetColumnIndex(TBL_AMBALAZA, COL_AMB_NA_ID)
+    ' OTKAZANI PAROVI SE SKRIVAJU, kao i u pregledu kretanja: kontra-stav nosi
+    ' StornoOd -> AmbID originala, pa su otkazana OBA reda. Bez ovoga oracle
+    ' sabira i par koji citalac namerno ne prikazuje (6.8), pa razlika izgleda
+    ' kao greska izvestaja.
+    Dim cAmbID As Long, cStOd As Long
+    cAmbID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
+    cStOd = GetColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD)
+    Dim otkaz As Object
+    Set otkaz = CreateObject("Scripting.Dictionary")
+    otkaz.CompareMode = vbTextCompare
+    For i = 1 To UBound(amb, 1)
+        If Len(Trim$(NzToText(amb(i, cStOd)))) > 0 Then
+            otkaz(Trim$(NzToText(amb(i, cStOd)))) = True
+            otkaz(Trim$(NzToText(amb(i, cAmbID)))) = True
+        End If
+    Next i
+
     sumU = 0: sumI = 0
     For i = 1 To UBound(amb, 1)
-        If CStr(amb(i, cStorno)) <> "Da" And _
-           Trim$(CStr(amb(i, cEntTip))) = "Stanica" And _
-           Trim$(CStr(amb(i, cEnt))) = FX_STANICA Then
-            If IsDate(amb(i, cDat)) Then
-                If CDate(amb(i, cDat)) >= IzvOdD() And CDate(amb(i, cDat)) <= IzvDoD() Then
-                    If Trim$(CStr(amb(i, cSmer))) = "Ulaz" Then
-                        sumU = sumU + NzBIM(amb(i, cKol), 0)
-                    Else
-                        sumI = sumI + NzBIM(amb(i, cKol), 0)
-                    End If
+        If Not otkaz.Exists(Trim$(NzToText(amb(i, cAmbID)))) Then
+        If IsDate(amb(i, cDat)) Then
+            If CDate(amb(i, cDat)) >= IzvOdD() And CDate(amb(i, cDat)) <= IzvDoD() Then
+                If Trim$(CStr(amb(i, cNaT))) = AMB_NALOG_STANICA And _
+                   Trim$(CStr(amb(i, cNaI))) = FX_STANICA Then
+                    sumU = sumU + NzBIM(amb(i, cKol), 0)
+                ElseIf Trim$(CStr(amb(i, cOdT))) = AMB_NALOG_STANICA And _
+                       Trim$(CStr(amb(i, cOdI))) = FX_STANICA Then
+                    sumI = sumI + NzBIM(amb(i, cKol), 0)
                 End If
             End If
+        End If
         End If
     Next i
     n = UBound(ap, 1)
@@ -17066,7 +17099,10 @@ End Sub
 ' kao nekadasnji DuplBroj) u IsplataValidiraj -> pukne po imenu na isplati i na
 ' broju reversa; isto u UplataValidiraj -> pukne na uplati.
 Private Sub T_Novac_BrojNijeJedinstven()
-    Const REV_BROJ As String = "REV-IZV-1"
+    ' Broj reversa od 10b-2 zivi na ZAGLAVLJU (tblAmbalazaDokument.BrojDokumenta),
+    ' a ne kao DokumentID na nozi knjige -- DokumentID je opaque AmbDokID
+    ' (AMB-10-ODL-16). Fixture ga nosi kao "1/IZV" na ADK-IZV-1.
+    Const REV_BROJ As String = "1/IZV"
     Dim p As Object, fokus As String
     Dim rIsplata As String, rUplata As String, rRevBroj As String
 
@@ -17091,8 +17127,9 @@ Private Sub T_Novac_BrojNijeJedinstven()
     ' Preduslovi: brojevi STVARNO postoje, inace tvrdnje ispod ne mere nista.
     AssertEq (Len(CheckDuplicate(TBL_NOVAC, COL_NOV_BROJ_DOK, FX_NOVAC_DUPLI, COL_NOV_DATUM)) > 0), True, _
              "preduslov: broj novca vec postoji u tblNovac"
-    AssertEq (Len(CheckDuplicate(TBL_AMBALAZA, COL_AMB_DOK_ID, REV_BROJ, COL_AMB_DATUM)) > 0), True, _
-             "preduslov: broj reversa postoji u tblAmbalaza"
+    AssertEq (Len(CheckDuplicate(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, REV_BROJ, _
+                                 COL_AMBD_DATUM)) > 0), True, _
+             "preduslov: broj reversa postoji na zaglavlju ambalaznog dokumenta"
 
     AssertEq rIsplata, "", "isplata pod vec postojecim brojem novca prolazi"
     AssertEq rUplata, "", "uplata pod vec postojecim brojem novca prolazi"
@@ -17144,14 +17181,21 @@ Private Sub T_BrojZauzetUNizu_Revers()
     drzalac = ZasejReversZaNiz()
     AssertEq (Len(drzalac) > 0), True, _
              "preduslov: broj REV-IZV-2 je zauzet u KANONSKOM nizu"
-    ' Fixture noga i dalje postoji, ali od 10b-2 niz vise ne drzi ona -- drzi ga
-    ' zaglavlje. Tvrdnja je zadrzana kao zapis sta se promenilo.
-    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-IZV-S3", COL_AMB_DOK_ID)), _
-             "REV-IZV-2", "preduslov: fixture noga Stanica reversa REV-IZV-2 postoji"
-    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-OTK-S1A", COL_AMB_ENTITET)), _
+    ' NIZ DRZI ZAGLAVLJE, NE NOGA. Do 09.10.2026 je ovde stajala tvrdnja o
+    ' legacy nozi (AMB-IZV-S3 sa DokumentID = "REV-IZV-2"), zadrzana kao zapis
+    ' sta se promenilo. Posle kanonizacije fixture-a te noge NEMA: par nogu je
+    ' postao jedan red, a broj je presao na zaglavlje. Tvrdnja zato meri bas to.
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, "ADK-IZV-2", _
+                                  COL_AMBD_BROJ)), _
+             "2/IZV", "preduslov: broj reversa zivi na zaglavlju ADK-IZV-2"
+    ' Otkupna ambalaza lezi na istoj stanici -- citano iz KANONSKOG reda:
+    ' AMB-OTK-S1A je noga IZDATA_PRAZNA, pa je stanica njen IZVOR (OdNalogID).
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-OTK-S1A", _
+                                  COL_AMB_OD_ID)), _
              FX_STANICA, "preduslov: ambalaza otkupa OTK-LEG-A lezi na istoj stanici"
-    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-IZV-KS", COL_AMB_ENTITET)), _
-             FX_KOOPERANT, "preduslov: REV-IZV-X ima samo nogu Kooperant"
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-IZV-KS", _
+                                  COL_AMB_NA_ID)), _
+             FX_KOOPERANT, "preduslov: storniran revers ADK-IZV-X ide kooperantu"
 
     AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA, d, "REV-IZV-2"), _
              drzalac, "REV: broj je zauzet na svojoj stanici tog dana -- drzi ga ZAGLAVLJE"

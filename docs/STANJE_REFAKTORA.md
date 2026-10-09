@@ -2049,6 +2049,50 @@
      uveriti šta se dešava kad **list** već postoji a `ListObject` ne — aplikacija
      taj slučaj rešava u `modSetup.EnsureDataTable`.
 
+106. **`RunAllTests` 204 / 0 nad kanonskim fixture-om** (09.10.2026).
+     Posao #1 iz reviewer-ovog plana je zatvoren za `RunAllTests`. Put je išao kroz
+     **pet merenja**, i svako je ispravilo prethodnu pretpostavku:
+
+     ```
+     4   pocetno stanje (legacy fixture, kanonski citaoci)
+     21  posle kanonizacije -- 14 od njih jedno polje: sistemski nalog NEMA ID
+     5   posle ispravke tog polja
+     2   posle tri zastarela oracle-a / premise
+     1   posle druge otkupne noge i KolAmbIzdata
+     0   posle jednosmernog OTK-NAL-DELIM
+     ```
+
+     **`ENSURE_TABLES` je bio jedan unos**, ne nov mehanizam (v. stavku 105):
+     `tblAmbalazaDokument` + njegove četiri glave u SEED-u, i zaglavlja su počela da
+     se seju.
+     **`AMB-INV-07` je uhvatio nelegalan fixture.** Moja prva kanonizacija je otkup
+     knjižila **jednom** nogom (`UZ_ROBU`), pa je kooperant pao na **−47** i svaki
+     storno je padao sa *„storno bi ostavio saldo −48 na Kooperant"*. Invarijanta je
+     izričita i potvrđena 28.09.2026: **nijedan realni nalog nema saldo < 0**, bez
+     izuzetka. Otkup je **razmena** — `AMBALAZA.md` kaže da knjiži **dve** vrste
+     (`UZ_ROBU` i `IZDATA_PRAZNA`) — pa sada i fixture tako radi. Stari model to nije
+     prijavljivao jer ta invarijanta nad njegovim redovima nije ni postojala.
+     **Kartica nije bila u krivu, sveska je bila nekonzistentna.** Razlika
+     „kartica −43 / knjiga 29" je bila **točno 72** = ukupna otkupna ambalaža:
+     `tblOtkup` nosi **dve** kolone (`KolAmbalaze`, `KolAmbIzdata`), čitalac čita
+     **obe** (`modIzvestaj:896`), a fixture je sejao samo prvu. Pet otkupa koji u
+     knjizi imaju `IZDATA_PRAZNA` nogu zato i na zaglavlju nose istu količinu.
+     **Jedan otkup je NAMERNO ostao jednosmeran.** Sejanje `KolAmbIzdata` je oborilo
+     `T_PrefillIzStorniranog_CitaSvojuTabelu`, čiji je komentar glasio *„nula se ne
+     šalje: fixture nema izdatu ambalažu na otkupu"* — uzeo sam mu premisu.
+     Računica dopušta da `OTK-NAL-DELIM` (2 gajbe) ostane jednosmeran: kooperant
+     ostaje na **+23**, pa `AMB-INV-07` miruje, a pravilo „nula se ne šalje" **zadržava
+     predmet merenja**. Tvrdnja nad `OTK-TEST-1` je prešla na ono što sada važi
+     („izdata ambalaža se preuzima"), uz zapis gde je staro pravilo ostalo merljivo.
+
+     **Šta OVO NE tvrdi:** izmereno je samo `RunAllTests`. BFP, Storno, Banka i
+     golden **nisu** vrtjeni nad kanonskim fixture-om. Golden posebno nosi
+     `kooperant 12/1  0`, a ta nula je bila zagarantovana dok je čitalac bio slep
+     (stavka 96) — prva crvena tamo nije automatski regresija.
+     **Nov fixture i dalje NIJE instaliran** kao osnova: `otkup_test_kanon.xlsm`,
+     potpis `f5b6d4c488fdb068`. Zamena `otkup_test.xlsm` je odluka operatera.
+     Posao #2 (`RunIntegritetProvere` slep na kanonski model) je **nedirnut**.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
