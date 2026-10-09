@@ -2093,13 +2093,40 @@
      potpis `f5b6d4c488fdb068`. Zamena `otkup_test.xlsm` je odluka operatera.
      Posao #2 (`RunIntegritetProvere` slep na kanonski model) je **nedirnut**.
 
+107. **`run_vba` zove makro KVALIFIKOVANO — lažni „kvar projekta" je zatvoren**
+     (09.10.2026).
+     Stavka 102 je izmerila da alat posle svog koraka detekcije compile-a prijavi
+     *„Cannot run the macro 'EnsureRuntimeSchema'"* u `0.0s`, na **svakoj** suite —
+     potpis koji `docs` i memorija vode kao **modul koji se ne kompajlira**. Ta
+     poruka je dva puta u ovoj sesiji poslala dijagnozu u pogrešan smer.
+     Popravka je **jedan red po pozivu**: `xl.Run(suite)` →
+     `xl.Run(f"'{wb.Name}'!{suite}")`, isto i za `EnsureRuntimeSchema`. Probe
+     (`_run_probe`) je **od početka** bio kvalifikovan i zato je prolazio — razlika
+     je bila u **pozivu**, ne u projektu.
+     Dokaz u oba smera je sama istorija merenja: nekvalifikovan poziv je davao
+     `SCHEMA FAIL` u `0.0s`, a kvalifikovan nad **istom** temp kopijom daje
+
+     ```
+     SCHEMA  OK
+     SUITE   OK     RunAllTests (73.5s)
+     TESTS   RunAllTests: 204 ukupno, 0 palo
+     REZULTAT: ZELENO
+     ```
+
+     **Red iz tabele duga je time zatvoren.** `COMPILE NEJASNO` i dalje stoji i
+     dalje je poznato ograničenje — ali više ne obara poziv posle sebe, pa se
+     „nejasan compile" ne pretvara u lažan „projekat ne radi".
+     Izmena dira **alat**, pa je prijavljujem kao takvu: ako reviewer traži da ide
+     zasebnim PR-om, lako se izdvaja — ali bez nje grana nije **merljiva**, jer
+     suite sa dijalozima (BFP, Storno, Banka) traže runner-ov watchdog koji moja
+     pomoćna skripta ne nosi.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
 | **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). Danas to drže samo komentari uz tri grane; kapija bi morala da zna koji su pozivi iz suite-a dostupni, pa traži svoj rez i svoj dvosmerni dokaz |
 | **`dokaz.py` ne dosegne `modIzvestajTests`** | kapija kataloga sabotaža priznaje samo `modTest`, `modTestBanka` i `modBusinessFlowProTests`, pa tvrdnja iz `modIzvestajTests` **ne može da se obori** — a tamo živi najdetaljnije merenje ambalažnog pregleda. Posledica je izmerena u `10c-2`: tvrdnja o identitetu dokumenta je **preseljena** u `#204`, a tvrdnja o spajanju dve vrste istog dokumenta ostala **bez sabotaže**. Proširenje kapije dira sam alat, pa ide **zaseban process PR** sa svojim dvosmernim dokazom |
-| **`run_vba` korak compile-a obara poziv posle sebe** | izmereno 08.10.2026: posle `COMPILE NEJASNO` (VBE prozor + tastaturne komande) `Application.Run` nekvalifikovano **ne prolazi**, pa alat prijavi „Cannot run the macro" — potpis koji `docs` i memorija vode kao **modul koji se ne kompajlira**. Direktan poziv nad istom temp kopijom prolazi, i suite daje `TESTS=204 FAIL=5`. Dve mogućnosti za rez: zvati suite **kvalifikovano** (`'sveska'!Suite`), kao što probe već radi, ili vratiti VBE u stanje pre koraka compile-a. Dok to ne bude rešeno, **crveno iz `run_vba` se proverava direktnim pozivom pre nego što se poveruje da je compile** |
 | **kanonska knjiga nema integritetnu proveru** | `modIntegritet` ima **nula** referenci na `Od_Tip` / `Na_Tip` / `VrstaKretanja` / `tblAmbalazaDokument` (merenje 08.10.2026). Posle cutovera proverava samo legacy redove, koje produkcija ne piše — pa operateru kaže „nema nalaza" ne pogledavši kanonsku knjigu. Kandidati za provere: noga bez zaglavlja, zaglavlje bez noge, `StornoOd` koji ne pokazuje nigde, par koji nije neuređen (`AMB-INV-10`), obaveza partneru < 0 (`AMB-INV-09`). `Chk_B10_ReversBezID` ostaje tačan za legacy i odlazi sa njim u `10e` |
 | **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita |
 | **badge "nesacuvano" na novoj formi** | `SelectModeCore` pise u polje broja POSLE `MarkClean` i `mLoading = False`, pa programski upis prodje kroz `MarkDirty` i prazna forma tvrdi da ima neupisanih izmena (review 08.10.2026, `P3`). Zatecen obrazac -- vazio je i pre P1 ispravke, za svaki rezim sa auto-brojem. Jedan premesten red, ali izmena `src-vba` obara compile i zeleni marker, a nov test (natpis u zaglavlju) trazi svoj dvosmeran dokaz; zato **svoj rez posle merge-a**, pre `ODL-24` |
