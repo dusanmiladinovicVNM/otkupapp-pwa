@@ -2300,6 +2300,30 @@
      je usklađen i proveren grep-om: tvrdnja „skupe kapije nisu puštene" je
      obrisana, stanje dokaza prepisano, hronologija 93–110.
 
+112. **Compile zatvoren — sve kapije nad JEDNIM izvorom** (09.10.2026).
+     Operater je pustio `ImportAllVBA`, pa `Alt+F11 → Debug → Compile VBAProject`.
+     Prošlo je, i `--mark-compile` je vezao potvrdu za otisak:
+
+     ```
+     izvor    3b19a4defd382ba7
+     ugovor   5b73e8d90fc359ff  (fixture b641807d, kapija 34c739f6,
+                                 runner 4a9a70bf, golden 9a01af15, verzija 4)
+     sveska   otkup_test.xlsm   45ac0c565c336f51
+     compile  potvrdjen 2026-10-09T14:34:34 nad 3b19a4defd38
+     suites   12 / 12 OK        vba_gate --require-green   RC=0
+     ```
+
+     **Nijedna suite ne stoji kao `DRUGI IZVOR`.** Compile, zeleni marker i oba
+     sabotažna dokaza (grupni i pojedinačni) dele **jedan** izvor. To je ono što
+     marker i treba da tvrdi, a kroz ceo ovaj rez nije mogao: compile je od 08.10.
+     stajao nad `a4e8729e`, dakle **pre** rasturanja `#204`, i marker ga je uredno
+     prijavljivao kao stariji izvor umesto da ga prećuti.
+
+     Opis `#408` je usaglašen istog trena, jer je do tada nosio tvrdnju
+     „otvoren je samo compile" — tačnu kad je napisana, netačnu čim je marker legao.
+     Ostaje jedino **finalni reviewer prolaz**; posle njega se izvor ne dira, jer bi
+     svaka izmena oborila i compile i oba dokaza.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
