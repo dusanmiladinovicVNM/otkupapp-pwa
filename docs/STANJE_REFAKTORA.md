@@ -2014,13 +2014,47 @@
      `tests/fixtures/otkup_test_kanon.xlsm` (potpis `e2d5d9487b30a3d7`). Zamena
      postojećeg je odluka operatera, ne moja.
 
+105. **ISPRAVKA stavke 104: `make_fixture` UME da napravi tabelu** (09.10.2026).
+     Stavka 104 je blokator imenovala kao „generator ne ume da napravi tabelu" i
+     predložila nov `ENSURE_TABLES`. **Netačno** — `ENSURE_TABLES` **već postoji**:
+
+     ```
+     tools/make_fixture.py:2361   ENSURE_TABLES = { ... }        (na main: 2344)
+     tools/make_fixture.py:2828   pravi Worksheet + ListObject   (na main: 2811)
+     ```
+
+     Komentar na mestu primene to i kaže: *„Nove TABELE koje donor nema (krug 5) —
+     isto što radi `modSetup.EnsureDataTable`: sheet + ListObject sa kolonama"*. Kroz
+     njega već ulaze `tblUtovar`, `tblUtovarStavke`, `tblPrevoznici`,
+     `tblOtkupStavke`. Mehanizam se izvršava **pre** `DROP_COLS` / `RENAME_COLS` /
+     `ENSURE_COLS`, dakle pre sejanja.
+     **Pravi blokator je bio uži za jedan red:** `tblAmbalazaDokument` prosto **nije
+     upisan** u `ENSURE_TABLES`. Oblik unosa je `"tblX": ("ImeLista", [kolone])`, a
+     kanon već nosi i jedno i drugo (`sheet: "AmbalazaDokument"`, dvanaest kolona).
+     **Kako je greška nastala:** izmerio sam da nedostajuća tabela diže
+     `SchemaError` (`find_table` → `tblAmbalazaDokument ne postoji u donoru`) i iz
+     toga **zaključio** da generator tabelu ne ume da napravi — a nisam pretražio
+     fajl za postojeći mehanizam. Poruka o grešci je opisivala **simptom**, ne
+     odsustvo sposobnosti. To je **četvrti** put u ovom nizu da sam merenje jednog
+     mesta proširio u tvrdnju o celini: prethodna tri su `TrackAmbalaza` („stari
+     model se i dalje piše"), `AmbDokPrikazMapa` („broj ne sadrži `|`") i
+     `KarticaDokPrikaz` („to meri integritet").
+     **Pouka koja ide u pravilo, ne u ovu stavku:** pre tvrdnje „alat to ne ume",
+     pretraži alat za postojeći mehanizam. Poruka o grešci nije popis sposobnosti.
+     **Red „`make_fixture` ne ume da napravi tabelu" je izbrisan iz tabele duga** —
+     nije dug. Ostaje posao od jednog unosa u `ENSURE_TABLES` + vraćanje semena
+     zaglavlja, i on **ne traži** zaseban rez nad alatom.
+     Edge koji pri tome treba izmeriti, a ne pretpostaviti: postojeća grana pravi
+     **nov** list (`wb.Worksheets.Add` → `ws_new.Name = sheet_name`), pa se treba
+     uveriti šta se dešava kad **list** već postoji a `ListObject` ne — aplikacija
+     taj slučaj rešava u `modSetup.EnsureDataTable`.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
 | **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). Danas to drže samo komentari uz tri grane; kapija bi morala da zna koji su pozivi iz suite-a dostupni, pa traži svoj rez i svoj dvosmerni dokaz |
 | **`dokaz.py` ne dosegne `modIzvestajTests`** | kapija kataloga sabotaža priznaje samo `modTest`, `modTestBanka` i `modBusinessFlowProTests`, pa tvrdnja iz `modIzvestajTests` **ne može da se obori** — a tamo živi najdetaljnije merenje ambalažnog pregleda. Posledica je izmerena u `10c-2`: tvrdnja o identitetu dokumenta je **preseljena** u `#204`, a tvrdnja o spajanju dve vrste istog dokumenta ostala **bez sabotaže**. Proširenje kapije dira sam alat, pa ide **zaseban process PR** sa svojim dvosmernim dokazom |
-| **`make_fixture` ne ume da napravi tabelu** | `ENSURE_COLS` dodaje kolonu koju donor nema, ali nedostajuća **tabela** je `SchemaError`. `tblAmbalazaDokument` postoji samo posle `modSchema.EnsureAllTables` u aplikaciji, pa se **zaglavlja ambalažnih dokumenata ne mogu sejati** — i dva pada (`T_Novac_BrojNijeJedinstven`, `T_BrojZauzetUNizu_Revers`) nemaju gde da stoje, jer poslovni broj živi na zaglavlju. Rez: `ENSURE_TABLES` po uzoru na `ENSURE_COLS`, sa kolonama iz `schema/schema.json` — dakle dira **alat** i traži svoj dvosmeran dokaz |
 | **`run_vba` korak compile-a obara poziv posle sebe** | izmereno 08.10.2026: posle `COMPILE NEJASNO` (VBE prozor + tastaturne komande) `Application.Run` nekvalifikovano **ne prolazi**, pa alat prijavi „Cannot run the macro" — potpis koji `docs` i memorija vode kao **modul koji se ne kompajlira**. Direktan poziv nad istom temp kopijom prolazi, i suite daje `TESTS=204 FAIL=5`. Dve mogućnosti za rez: zvati suite **kvalifikovano** (`'sveska'!Suite`), kao što probe već radi, ili vratiti VBE u stanje pre koraka compile-a. Dok to ne bude rešeno, **crveno iz `run_vba` se proverava direktnim pozivom pre nego što se poveruje da je compile** |
 | **kanonska knjiga nema integritetnu proveru** | `modIntegritet` ima **nula** referenci na `Od_Tip` / `Na_Tip` / `VrstaKretanja` / `tblAmbalazaDokument` (merenje 08.10.2026). Posle cutovera proverava samo legacy redove, koje produkcija ne piše — pa operateru kaže „nema nalaza" ne pogledavši kanonsku knjigu. Kandidati za provere: noga bez zaglavlja, zaglavlje bez noge, `StornoOd` koji ne pokazuje nigde, par koji nije neuređen (`AMB-INV-10`), obaveza partneru < 0 (`AMB-INV-09`). `Chk_B10_ReversBezID` ostaje tačan za legacy i odlazi sa njim u `10e` |
 | **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita |
