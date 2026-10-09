@@ -140,6 +140,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | Arhitektura, moduli, tokovi | `docs/ARCHITECTURE_REFERENCE.md`, `docs/ARCHITECTURE_CHANGELOG.md` |
 | Ambalaža (ledger, saldo, revers) | `docs/AMBALAZA_MODEL.md` |
 | Funkcionalna mapa ekrana | `docs/AgriX_Functional_Map_v142.md` |
+| Funkcionalne bele zone i product roadmap | `docs/DOMEN/FUNKCIONALNE_BELE_ZONE_I_ROADMAP.md` |
 | Storno i kaskade | `docs/STORNO_BACKLOG.md`, `docs/STORNO_CENTAR_PLAN_RADA.md` |
 | Prerada 2.0 — proizvodno jezgro (model, faze, odluke) | `docs/PRERADA_2_MODEL_I_PLAN.md` |
 | SEF (e-fakture) | `docs/SEF_LIFECYCLE_MANUAL.md` |
