@@ -2338,6 +2338,33 @@ ENSURE_COLS = {
     "tblAmbalaza": ["ReversID"],
 }
 
+# Kanon seme, procitan JEDNOM. Dele ga ENSURE_TABLES (ime lista i kolone) i
+# ugovor o formatu (_formati_kanona). Ide PRE ENSURE_TABLES jer se unos iz
+# kanona razresava pri uvozu modula.
+_KANON_KES = None
+
+
+def _kanon() -> dict:
+    global _KANON_KES
+    if _KANON_KES is None:
+        put = os.path.join(ROOT, "schema", "schema.json")
+        _KANON_KES = json.load(io.open(put, encoding="utf-8"))
+    return _KANON_KES
+
+
+def _tabela_kanona(ime: str) -> tuple:
+    """(ime lista, kolone) iz kanona -- oblik jednog unosa ENSURE_TABLES.
+
+    Kolone su u KANONSKOM redosledu: AppendRow pise poziciono, pa redosled nije
+    kozmetika. Tabela koje nema u kanonu je greska u ENSURE_TABLES, ne prazna
+    tabela -- pada odmah, pri uvozu, a ne tek kad SEED trazi kolonu.
+    """
+    for t in _kanon().get("tables") or []:
+        if str(t.get("table", "")).strip().lower() == ime.strip().lower():
+            return (t["sheet"], list(t["columns"]))
+    raise KeyError(f"{ime} nije u kanonu (schema/schema.json)")
+
+
 # Tabele koje donor NEMA (krug 5: utovarna lista) -- generator ih pravi
 # isto kao modSetup.EnsureUtovarSchemaCore (EnsureDataTable): novi sheet
 # + ListObject sa ovim kolonama. Redosled = redosled u modSetup Array.
@@ -2387,6 +2414,11 @@ ENSURE_TABLES = {
                         ["ZbirnaStavkaID", "ZbirnaID", "RedniBroj", "Klasa",
                          "Kolicina", "KolAmbalaze", "CreatedAt", "CreatedBy",
                          "ModifiedAt", "ModifiedBy"]),
+    # Zaglavlje ambalaznog dokumenta (AMB-10): poslovni broj (BrojDokumenta)
+    # zivi OVDE, ne na nozi u tblAmbalaza. Donor je nema -- u aplikaciji je pravi
+    # modSchema.EnsureAllTables na startu. List i kolone se citaju iz kanona,
+    # ne pisu se rukom, pa unos ne moze da se razidje sa schema.json.
+    "tblAmbalazaDokument": _tabela_kanona("tblAmbalazaDokument"),
 }
 
 # tblLocalConfig (Kljuc | Vrednost | Opis)
@@ -2651,9 +2683,7 @@ def _formati_kanona() -> list:
     """
     global _FORMATI_KES
     if _FORMATI_KES is None:
-        put = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                           "schema", "schema.json")
-        d = json.load(io.open(put, encoding="utf-8"))
+        d = _kanon()
         _FORMATI_KES = {
             t.lower(): {c.lower(): v for c, v in kol.items()}
             for t, kol in (d.get("formats") or {}).items()
@@ -2811,8 +2841,14 @@ def build(donor: str, out: str, force: bool) -> int:
         for table_name, (sheet_name, headers) in ENSURE_TABLES.items():
             lo_ex = find_table(wb, table_name)
             if lo_ex is None:
-                ws_new = wb.Worksheets.Add()
-                ws_new.Name = sheet_name
+                # List koji vec postoji se koristi (modSetup.GetOrCreateWorksheet);
+                # inace bi preimenovanje novog lista u zauzeto ime oborilo build.
+                ws_new = next((ws for ws in wb.Worksheets
+                               if str(ws.Name).strip().lower() == sheet_name.strip().lower()),
+                              None)
+                if ws_new is None:
+                    ws_new = wb.Worksheets.Add()
+                    ws_new.Name = sheet_name
                 for ci, h in enumerate(headers, start=1):
                     ws_new.Cells(1, ci).Value = h
                 lo_new = ws_new.ListObjects.Add(
