@@ -953,6 +953,18 @@ Private Sub T_E2E_AmbPregledKanonskiDokumenti()
     Const BR2 As String = "IZVT-R/2"
     Const KOOP As String = "IZVT-KOOP-AMB"
 
+    ' NALOG MORA DA POSTOJI U MATICNOJ TABELI. Kanonski citalac razresava obe
+    ' strane kroz JEDNU kapiju (AMB-INV-03), pa stanica koja nije u tblStanice
+    ' obara citanje po imenu: "Nalog 'Stanica' sa ID 'IZVT-OM' ne postoji".
+    ' Star citalac to nije proveravao -- ovo je pooštravanje modela, ne regresija.
+    IzvSeed TBL_STANICE, Array("StanicaID", "Naziv", "Aktivan"), _
+        Array(IZVT_STANICA, "IZVT Otkupno Mesto", "Da")
+    ' Kolona Mesto nosi IME protivpartnera, ne njegov ID: ResolveEntitetName za
+    ' kooperanta spaja Ime i Prezime, pa nepoznat kooperant daje prazan natpis
+    ' (dva prazna lookup-a), a ne ID. Fixture zato imenuje svog partnera.
+    IzvSeed TBL_KOOPERANTI, Array("KooperantID", "Ime", "Prezime", "Aktivan"), _
+        Array(KOOP, "IZVT", "Koop", "Da")
+
     Dim cols As Variant
     cols = Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, _
                  COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _
@@ -999,8 +1011,10 @@ Private Sub T_E2E_AmbPregledKanonskiDokumenti()
     IzvChkEqText CStr(r(2, 4)), BR2, S & "drugi dokument nosi svoj poslovni broj"
     IzvChk CStr(r(1, 4)) <> D1, S & "kolona dokumenta NE nosi tehnicki AmbDokID"
 
-    ' MESTO je protivpartner, ne naslovni entitet (10c-2).
-    IzvChkEqText CStr(r(1, 2)), KOOP, S & "kolona Mesto nosi protivpartnera"
+    ' MESTO je protivpartner, ne naslovni entitet (10c-2) -- i prikazuje se
+    ' IMENOM. Da kolona nosi naslovni entitet, ovde bi stajao naziv stanice.
+    IzvChkEqText CStr(r(1, 2)), "IZVT Koop", _
+           S & "kolona Mesto nosi protivpartnera, imenom"
 
     ' Ref-kljuc vodi stampu, pa mora da nosi IDENTITET dokumenta.
     Dim k1 As String: k1 = CStr(r(1, 7))

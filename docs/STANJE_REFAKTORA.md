@@ -2121,6 +2121,64 @@
      suite sa dijalozima (BFP, Storno, Banka) traže runner-ov watchdog koji moja
      pomoćna skripta ne nosi.
 
+108. **Pun prolaz 12/12 ZELENO nad kanonskim fixture-om** (09.10.2026).
+
+     ```
+     RunAllTests              204 / 0        RunStornoTestSuite       164 / 0
+     RunBusinessFlowProSuite 2436 / 0        RunBankaImportTestSuite  241 / 0
+     RunIzvestajTests          203 provere   + 7 ostalih suita        OK
+     GREEN marker  izvor 214110fe23fb, ugovor 80213dfa2fd1,
+                   sveska otkup_test_kanon.xlsm / 45ac0c56
+     ```
+
+     Put od prvog prolaza: **3 pala suite → 1 → 0**, i sva tri pada su bila u
+     **testovima**, nijedan u produkciji.
+     **`RunGoldenSuite` je prošao iz prvog puta.** To je zatvorilo otvorenu sumnju
+     iz stavke 96: `kooperant 12/1  0` je **neto-nula**, a ne slepa nula. Otkup
+     knjiži dve vrste koje se potiru, pa je taj red tačan i pre i posle cutovera.
+
+     **Tri pada, tri različita uzroka:**
+
+     1. **Kanonski čitalac validira nalog prema matičnoj tabeli** (`AMB-INV-03` —
+        obe strane kroz **jednu** kapiju), a stari nije. `IZVT-OM` je živeo kao
+        test-only stanica koje u `tblStanice` **nema** i prolazio godinama. To je
+        **pooštravanje modela** koje je ovaj rez otkrio, ne regresija — test sada
+        seje i stanicu i kooperanta.
+     2. **Seme i orakl moraju biti u ISTOM modelu.** Četiri pada `RunStornoTestSuite`
+        držao je **jedan** pomoćnik: `AmbSaldo` je zvao `GetAmbalazeStanje`, presečen
+        u `10c` na kanonsku knjigu, dok taj modul seje legacy oblik i vozi **legacy**
+        tok ispravke (`RunReversCorrection` sa `DOK_TIP_OM_*`, nedostupan sa
+        kanonskog UI-ja, klasa B → `10d`). Orakl je vraćen u legacy model, kao i
+        seme; oboje odlazi u `10e`.
+     3. **`B10` je legacy provera i traži legacy podatak.** BFP premisa
+        („`REV-IZV-1` ima 4 noge dva tipa pod jednim `ReversID`-om") izgubila je
+        predmet kad je fixture kanonizovan. `Chk_B10_ReversBezID` je gejtovan na
+        **stare** tipove dokumenta, pa su četiri legacy noge vraćene u fixture,
+        izričito označene da odlaze u `10e`. Kanonski čitaoci ih preskaču
+        (`RedDoticeKnjigu` je `False`), pa ne ulaze ni u jedan saldo.
+
+     **Zadnji pad je bio o PRIKAZU, ne o modelu:** „kolona Mesto nosi
+     protivpartnera" je padala jer `ResolveEntitetName` za **nepoznatog** kooperanta
+     spaja dva prazna lookup-a i vraća `" "` — ne ID. Fixture je imenovao stanicu a
+     ne partnera. Popravka je **pojačala** tvrdnju: meri se **ime** (`"IZVT Koop"`),
+     pa tvrdnja sada stvarno razdvaja „protivpartner" od „naslovni entitet" — da
+     kolona nosi naslovni entitet, tamo bi stajao naziv stanice.
+
+     **ŠTA DOKAZ POKRIVA, A ŠTA NE:** marker je upisan nad
+     **`otkup_test_kanon.xlsm`**, ne nad instaliranim fixture-om. Kapija to i kaže:
+
+     ```
+     --require-green --sveska tests/fixtures/otkup_test_kanon.xlsm   ->  dokazano
+     --require-green  (podrazumevani fixture)                       ->  ODBIJA
+         "sadrzaj sveske je drugi -- dokaz nije napravljen nad svescom koja se trazi"
+     ```
+
+     To je kapija koja radi kako je projektovana (kontekst sveske je **identitet**,
+     ne ime). Da dokaz postane projektov, kanonski fixture mora da **zameni**
+     `otkup_test.xlsm` — i to je odluka operatera, ne moja.
+     Ostaje: posao #2 (`RunIntegritetProvere` slep na kanonski model), `dokaz.py`
+     nad prefiksom `amb-10c-`, i ručni `Debug → Compile` nad konačnim izvorom.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

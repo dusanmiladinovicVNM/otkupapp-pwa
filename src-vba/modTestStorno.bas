@@ -1331,18 +1331,45 @@ Private Function OtkOtvorenaObaveza(ByVal otkID As String) As Boolean
 End Function
 
 ' Saldo (Ulaz +, Izlaz -) za entitet+tip -> iz produkcijskog GetAmbalazeStanje.
+' SALDO NAD STARIM MODELOM -- namerno, jer ovaj modul vozi STARI tok.
+'
+' Do 09.10.2026 je zvao GetAmbalazeStanje. Taj citalac je u 10c presecen na
+' kanonsku knjigu, pa je nad legacy semenom ovog modula vracao NULU: cetiri
+' tvrdnje (T06, T07, T13) su pale, a izgledalo je kao kvar storna.
+'
+' Testovi ovde voze modStornoFlow.RunReversCorrection sa DOK_TIP_OM_* -- stari
+' put ispravke/ponistenja, koji je sa kanonskog UI-ja nedostupan i prelazi u
+' 10d. Seme i orakl zato moraju da budu u ISTOM modelu; mesanje je ono sto ih
+' je oborilo. Oboje odlazi zajedno sa starim modelom u 10e.
 Private Function AmbSaldo(ByVal entID As String, ByVal entTip As String, ByVal tip As String) As Long
     On Error GoTo EH
-    Dim arr As Variant
-    arr = GetAmbalazeStanje(entID, entTip)
-    If Not IsArray(arr) Then Exit Function
-    Dim i As Long
-    For i = LBound(arr, 1) To UBound(arr, 1)
-        If Trim$(CStr(arr(i, 1))) = tip Then
-            AmbSaldo = CLng(arr(i, 2))
-            Exit Function
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cTip As Long, cKol As Long, cSmer As Long
+    Dim cEnt As Long, cEntTip As Long, cSt As Long
+    cTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
+    cKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
+    cSmer = GetColumnIndex(TBL_AMBALAZA, COL_AMB_SMER)
+    cEnt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
+    cEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
+    cSt = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+
+    Dim i As Long, s As Long
+    For i = 1 To UBound(d, 1)
+        If cSt = 0 Or CStr(d(i, cSt)) <> "Da" Then
+            If NzTx(d(i, cEntTip)) = entTip And NzTx(d(i, cEnt)) = entID And _
+               NzTx(d(i, cTip)) = tip Then
+                If NzTx(d(i, cSmer)) = "Ulaz" Then
+                    s = s + CLng(Nz(d(i, cKol), 0))
+                Else
+                    s = s - CLng(Nz(d(i, cKol), 0))
+                End If
+            End If
         End If
     Next i
+    AmbSaldo = s
     Exit Function
 EH:
     AmbSaldo = -99999      ' sentinel -> test vidljivo pada

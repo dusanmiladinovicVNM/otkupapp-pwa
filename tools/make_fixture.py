@@ -1233,6 +1233,36 @@ SEED = {
          "NaNalogTip": "Stanica", "NaNalogID": STANICA,
          "DokumentID": "ADK-IZV-3", "DokumentTip": "AmbalazaDokument",
          "VrstaKretanja": "NABAVKA"},
+        # LEGACY NOGE ZA B10 -- namerno u STAROM obliku, i odlaze u 10e.
+        #
+        # modIntegritet.Chk_B10_ReversBezID je gejtovan na STARE tipove dokumenta
+        # (modStorno.ReversTipJe), pa kanonski red ne prijavljuje. Njegova tvrdnja u
+        # BFP-u ("REV-IZV-1 ima 4 noge dva tipa pod jednim ReversID-om") zato trazi
+        # legacy oblik: jedan ReversID, cetiri noge, dva tipa. B10 broji noge PO
+        # TIPU, pa ga ne prijavljuje -- i to je ono sto se meri.
+        #
+        # Kanonski citaoci ih PRESKACU (RedDoticeKnjigu je False kad nijedna nova
+        # kolona nije popunjena), pa ne ulaze ni u jedan saldo.
+        {"AmbID": "AMB-LEG-K1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 30, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
+         "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-1",
+         "DokumentTip": "OM-Izlaz-Koop",
+         "ReversID": "RID-00000000000000000000000000000001"},
+        {"AmbID": "AMB-LEG-S1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 30, "Smer": "Izlaz", "EntitetID": STANICA,
+         "EntitetTip": "Stanica", "DokumentID": "REV-IZV-1",
+         "DokumentTip": "OM-Izlaz-Koop",
+         "ReversID": "RID-00000000000000000000000000000001"},
+        {"AmbID": "AMB-LEG-K2", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_LETVA,
+         "Kolicina": 5, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
+         "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-1",
+         "DokumentTip": "OM-Izlaz-Koop",
+         "ReversID": "RID-00000000000000000000000000000001"},
+        {"AmbID": "AMB-LEG-S2", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_LETVA,
+         "Kolicina": 5, "Smer": "Izlaz", "EntitetID": STANICA,
+         "EntitetTip": "Stanica", "DokumentID": "REV-IZV-1",
+         "DokumentTip": "OM-Izlaz-Koop",
+         "ReversID": "RID-00000000000000000000000000000001"},
         # KUPAC: prijemnica PRJ-FAK-3 nosi gajbe UZ ROBU, Vozac -> Kupac. Pregled
         # kupca mora da pokaze POSLOVNI broj prijemnice, ne DokumentID.
         {"AmbID": "AMB-IZV-KP1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
