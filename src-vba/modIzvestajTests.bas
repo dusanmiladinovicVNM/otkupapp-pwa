@@ -956,7 +956,7 @@ Private Sub T_E2E_AmbPregledKanonskiDokumenti()
     ' NALOG MORA DA POSTOJI U MATICNOJ TABELI. Kanonski citalac razresava obe
     ' strane kroz JEDNU kapiju (AMB-INV-03), pa stanica koja nije u tblStanice
     ' obara citanje po imenu: "Nalog 'Stanica' sa ID 'IZVT-OM' ne postoji".
-    ' Star citalac to nije proveravao -- ovo je pooštravanje modela, ne regresija.
+    ' Star citalac to nije proveravao -- ovo je poostravanje modela, ne regresija.
     IzvSeed TBL_STANICE, Array("StanicaID", "Naziv", "Aktivan"), _
         Array(IZVT_STANICA, "IZVT Otkupno Mesto", "Da")
     ' Kolona Mesto nosi IME protivpartnera, ne njegov ID: ResolveEntitetName za

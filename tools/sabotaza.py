@@ -7006,18 +7006,23 @@ SABOTAZE = {
         '                znak = 1\n',
         '            If False Then   \' SABOTAZA: prijem naloga se ne vidi\n'
         '                znak = 1\n',
-        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "T_AmbKarticaKooperanta_PokazujeRevers",
         "kartica kooperanta pokazuje revers pod poslovnim brojem",
     ),
-    # SALDO PITA SAMO JEDNU STRANU (10c-2). Nov red imenuje OBE strane, pa citalac
+    # SALDO PITA SAMO JEDNU STRANU (10c-2). SIDRO POKRIVA OBA REDA ISKAZA:
+    # prva verzija je zamenila samo prvi red nastavljene naredbe, pa je drugi
+    # ("entitetTip, entitetID) Then") ostao siroce -- sintaksna greska, projekat se
+    # ne kompajlira i sabotaza ne obori NISTA (dokaz 09.10.2026: NE OBARA NISTA).
+    # Nov red imenuje OBE strane, pa citalac
     # koji izgubi granu IZVORA vidi samo prilive: stanica koja je izdala gajbe
     # ostaje sa punim saldom. Tacno stanje starog modela, u kome je red nosio jednu
     # stranu i Smer.
     "amb-10c-saldo-samo-jedna-strana": (
         "modAmbalaza.bas",
-        '            ElseIf IstiNalog(AmbText(data(i, colOdTip)), AmbText(data(i, colOdID)), _\n',
-        '            ElseIf False Then   \' SABOTAZA: izvorna strana se ne pita\n',
-        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        '            ElseIf IstiNalog(AmbText(data(i, colOdTip)), AmbText(data(i, colOdID)), _\n'
+        '                             entitetTip, entitetID) Then\n',
+        '            ElseIf False Then\n',
+        "T_AmbSaldo_ObeStraneJednogReda",
         "stanica je IZDALA gajbe -- saldo pada na istom redu",
     ),
     # POSLOVNI BROJ SE REZE NA DELIMITERU (review 08.10.2026, P2). Mapa zaglavlja
@@ -7028,7 +7033,7 @@ SABOTAZE = {
         "modAmbalaza.bas",
         '            res(k) = Array(AmbText(data(i, cBroj)), _\n',
         '            res(k) = Array(Split(AmbText(data(i, cBroj)), "|")(0), _\n',
-        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "T_AmbBroj_DelimiterPrezivljavaMapu",
         "poslovni broj sa znakom | prezivljava mapu zaglavlja",
     ),
     # PREGLED SPAJA DVA DOKUMENTA (10c-2). Identitet dokumenta ispada iz kljuca
@@ -7038,7 +7043,7 @@ SABOTAZE = {
         "modIzvestaj.bas",
         '        gkey = Trim$(dokTipv) & "|" & Trim$(dokIDv) & "|" & AmbTipKljuc(tipv)\n',
         '        gkey = Trim$(dokTipv) & "|" & AmbTipKljuc(tipv)   \' SABOTAZA: identitet dokumenta ispada iz kljuca\n',
-        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "T_AmbPregled_DvaDokumentaDvaReda",
         "dva reversa ostaju dva reda u pregledu",
     ),
     # PREGLED PRESTAJE DA SKRIVA STORNO (10c-2). Kolona "otkazano" se ignorise, pa
@@ -7049,7 +7054,7 @@ SABOTAZE = {
         "modIzvestaj.bas",
         '        If Not CBool(kret(i, 6)) Then\n',
         '        If True Then   \' SABOTAZA: otkazan par ostaje u pregledu\n',
-        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje",
         "storniran revers ispada iz pregleda kretanja",
     ),
     # INVERZIJA SE VRACA (10c-2). Zbirni pregled zamenjuje Ulaz i Izlaz -- tacno
@@ -7061,7 +7066,7 @@ SABOTAZE = {
         '            vals(0) = vals(0) + kol\n',
         '        If kol < 0 Then   \' SABOTAZA: znak je okrenut\n'
         '            vals(0) = vals(0) + kol\n',
-        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "T_AmbPregled_DvaDokumentaDvaReda",
         "zbirni pregled OM-a vidi IZDATE gajbe reversa",
     ),
     # STORNO PRESTAJE DA SE PONISTAVA (review 08.10.2026, P2 #2). Prva verzija ove
@@ -7076,7 +7081,7 @@ SABOTAZE = {
         '            If IstiNalog(AmbText(data(i, colNaTip)), AmbText(data(i, colNaID)), _\n',
         '        If RedDoticeKnjigu(data, i, kolIdx) And Len(AmbText(data(i, kolIdx(COL_AMB_STORNO_OD)))) = 0 Then   \' SABOTAZA: kontra-stav ispada iz zbira\n'
         '            If IstiNalog(AmbText(data(i, colNaTip)), AmbText(data(i, colNaID)), _\n',
-        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje",
         "storno gasi TACNO svoja cetiri, ostali dokumenti ostaju",
     ),
     # KARTICA SE VRACA NA TEHNICKI ID: prevod ambalaznog dokumenta u poslovni broj
@@ -7088,7 +7093,7 @@ SABOTAZE = {
         '        If Not ambMapa Is Nothing Then\n',
         '    If False Then   \' SABOTAZA: ambalazni dokument se ne prevodi\n'
         '        If Not ambMapa Is Nothing Then\n',
-        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "T_AmbKartica_PoslovniBrojIVrsta",
         "kartica ambalaze pokazuje primljene gajbe pod POSLOVNIM brojem",
     ),
     # IZVESTAJ VRACA SVOJU KOPIJU PRAVILA: mapa svih naloga prestaje da se poklapa
@@ -7097,7 +7102,7 @@ SABOTAZE = {
         "modAmbalaza.bas",
         '            If StrComp(AmbText(data(i, cOdTip)), Trim$(tip), vbTextCompare) = 0 Then\n',
         '            If False Then   \' SABOTAZA: mapa ne pita izvornu stranu\n',
-        "T_AmbSaldo_CitaociSuNaNovomModelu",
+        "T_AmbSaldo_ObeStraneJednogReda",
         "mapa svih naloga i saldo po nalogu daju ISTI broj",
     ),
     # ZIVOTNI CIKLUS BROJA (review 08.10.2026, P1). Promena rezima prestaje da

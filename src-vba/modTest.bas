@@ -297,6 +297,11 @@ Public Sub RunAllTests()
     RunOne 202
     RunOne 203
     RunOne 204
+    RunOne 205
+    RunOne 206
+    RunOne 207
+    RunOne 208
+    RunOne 209
     RunOne 13
     RunOne 14
     RunOne 15
@@ -770,7 +775,12 @@ Private Function TestName(ByVal idx As Long) As String
         Case 113: TestName = "T_Zbirna_NemaIspravku"
         Case 43: TestName = "T_Traka_NatpisiPoRezimu"
         Case 38: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
-        Case 204: TestName = "T_AmbSaldo_CitaociSuNaNovomModelu"
+        Case 209: TestName = "T_AmbBroj_DelimiterPrezivljavaMapu"
+        Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
+        Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
+        Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
+        Case 205: TestName = "T_AmbKartica_PoslovniBrojIVrsta"
+        Case 204: TestName = "T_AmbSaldo_ObeStraneJednogReda"
         Case 203: TestName = "T_RezimBroja_PrelazakNeNasledjuje"
         Case 202: TestName = "T_ReversiLista_CitaAmbalazniDokument"
         Case 201: TestName = "T_ReversValidiraj_PovratKupcaJeSvojSmer"
@@ -982,7 +992,12 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 113: T_Zbirna_NemaIspravku
         Case 43: T_Traka_NatpisiPoRezimu
         Case 38: T_ZbirnaForma_KlasaOstajeBezCene
-        Case 204: T_AmbSaldo_CitaociSuNaNovomModelu
+        Case 209: T_AmbBroj_DelimiterPrezivljavaMapu
+        Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
+        Case 207: T_AmbPregled_DvaDokumentaDvaReda
+        Case 206: T_AmbKarticaKooperanta_PokazujeRevers
+        Case 205: T_AmbKartica_PoslovniBrojIVrsta
+        Case 204: T_AmbSaldo_ObeStraneJednogReda
         Case 203: T_RezimBroja_PrelazakNeNasledjuje
         Case 202: T_ReversiLista_CitaAmbalazniDokument
         Case 201: T_ReversValidiraj_PovratKupcaJeSvojSmer
@@ -6335,44 +6350,49 @@ End Sub
 
 
 
-' CITAOCI SALDA MORAJU DA VIDE ONO STO PRODUKCIJA UPISUJE (AMB-10c).
+' SEST FOKUSIRANIH TESTOVA UMESTO JEDNOG DUGACKOG (09.10.2026).
 '
-' Ovaj test postoji zbog nalaza od 08.10.2026: cutover je presekao PISCA, a
-' citaoci su ostali na starom modelu. Stari pisac TrackAmbalaza nije imao vise
-' ni jedno produkciono pozivno mesto, pa su stare kolone bile PRAZNE na svakom
-' novom redu -- a GetAmbalazeStanje i ReportSaldoOM su citali bas njih. Saldo je
-' zato bio slep na sve sto operater upise.
+' Do danas je ovo bio JEDAN test sa devet pravila, jer su sva trazila isto
+' zasejavanje. Dokaz je to odbio, i s pravom: AssertEq PREKIDA test na prvom
+' padu, pa je sabotaza bilo kog citaoca obarala PRVU tvrdnju u nizu, a ne onu
+' koju imenuje -- cetiri sabotaze su zato dale 'PALA DRUGA TVRDNJA' ili
+' 'NE OBARA NISTA'. Tvrdnja koja ne pada PO IMENU ne dokazuje da meri bas to.
 '
-' Suite to nije videla jer testovi koji mere te citaoce SAME seju stari oblik
-' kroz TrackAmbalaza. Zato ovaj test seje ISKLJUCIVO kroz produkcione pisce.
+' Zato svaki test nosi JEDNO pravilo i svoje zasejavanje, a tvrdnje pre te
+' jedne su birane tako da ih njena sabotaza NE obara -- inace bi opet pucale
+' prve.
+
+' Zasejava jedan revers kroz PRODUKCIONE pisce i vraca njegov identitet i broj.
+' Nabavka ide prva jer stanica mora da DRZI gajbe (AMB-10-ODL-8): nase gajbe ne
+' nastaju iz vazduha. Broj nabavke nosi slucajan rep -- ODL-20 drzi zauzetost po
+' (vlasnik, dan), pa bi dva poziva u istoj sekundi sudarila broj.
+Private Sub AmbSejRevers(ByVal kol As Long, ByRef outDok As String, _
+                         ByRef outBroj As String)
+    Dim nabBroj As String
+    nabBroj = "NAB-SLD-" & Format$(Now, "hhnnss") & "-" & CStr(kol) & _
+              "-" & CStr(Int(Rnd() * 9999))
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, kol + 6, nabBroj, _
+                                  "preduslov testa salda"
+    outDok = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, _
+                                                kol, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    outBroj = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, outDok, _
+                                   COL_AMBD_BROJ))
+End Sub
+
+' 1/6 -- JEDAN RED DOTICE DVA NALOGA, SUPROTNIM ZNAKOM.
 '
-' Meri se DELTA, ne apsolutna vrednost: fixture vec nosi ambalazne redove, pa
-' bi tvrdnja o apsolutnom saldu merila fixture a ne rez.
-Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
-    Dim stPre As Long, koopPre As Long, stPosle As Long, koopPosle As Long
-    Dim koopStorno As Long, nabBroj As String, revDok As String
-    Dim mapa As Object
+' Star red je imenovao jednu stranu i Smer; da citalac pita samo jednu stranu,
+' polovina knjige ispadne iz salda. Zato se mere OBE, a tvrdnja o IZVORU ide
+' posle tvrdnji o odredistu -- sabotaza izvorne grane njih ne dira, pa pukne bas
+' ona koju imenuje.
+Private Sub T_AmbSaldo_ObeStraneJednogReda()
+    Dim stPre As Long, koopPre As Long, revDok As String, revBroj As String
+    Dim mapa As Object, koopPosle As Long
 
     stPre = AmbSaldoTipa(FX_STANICA, AMB_NALOG_STANICA)
     koopPre = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
 
-    ' 1) NABAVKA: SpoljniSvet -> Stanica. Stanica je ODREDISTE, pa saldo RASTE.
-    nabBroj = "NAB-SLD-" & Format$(Now, "hhnnss")
-    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 10, nabBroj, _
-                                  "preduslov testa salda"
-    stPosle = AmbSaldoTipa(FX_STANICA, AMB_NALOG_STANICA)
-    AssertEq (stPosle - stPre), 10, _
-             "nabavka podize saldo stanice -- citalac vidi nov red"
-
-    ' Snimak PRE reversa, da se zbirni pregled meri po delti.
-    Dim izlazPre As Double
-    izlazPre = IzvZbirniKol(FX_STANICA, FX_TIP_AMB, 6)
-
-    ' 2) REVERS: Stanica -> Kooperant. Jedan red, DVA naloga, suprotan znak.
-    '    Stari model je nosio jednu stranu i Smer; da citalac pita samo jednu
-    '    stranu, polovina knjige bi ispala iz salda -- zato se mere OBE.
-    revDok = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, _
-                                                4, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    AmbSejRevers 4, revDok, revBroj
     AssertEq (Len(revDok) > 0), True, "preduslov: revers je upisan"
 
     koopPosle = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
@@ -6380,29 +6400,26 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
     AssertEq (AmbSaldoTipa(FX_STANICA, AMB_NALOG_STANICA) - stPre), 6, _
              "stanica je IZDALA gajbe -- saldo pada na istom redu"
 
-    ' 3) MAPA SVIH NALOGA mora da da isti broj kao citalac po nalogu. Dva oblika,
-    '    jedno pravilo -- da izvestaj ne bi nosio svoju kopiju.
+    ' Dva oblika istog pravila moraju dati isti broj -- da izvestaj ne bi nosio
+    ' svoju kopiju. Mapa pita obe strane kao i citalac po nalogu.
     Set mapa = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT)
     AssertEq mapa.Exists(FX_KOOPERANT), True, "mapa naloga poznaje kooperanta"
     AssertEq CLng(mapa(FX_KOOPERANT)), koopPosle, _
              "mapa svih naloga i saldo po nalogu daju ISTI broj"
+End Sub
 
-    ' 3b) KARTICA JE REDNI IZVESTAJ: mora da pokaze TAJ red, ne samo saldo. Do 10c
-    '     je znak vadila sama, po Smer-u, pa je na nov red bila slepa kao i saldo.
-    '     Opseg je +-1 dan oko danas, jer pisac upisuje Date.
-    '
-    '     BROJ NA KARTICI JE POSLOVNI, NE TEHNICKI. AmbDokID je opaque
-    '     "ADK-<hex>" i na kartici ne sme da se pojavi -- poslovni broj stoji na
-    '     ZAGLAVLJU (review 08.10.2026, P2 #1). Prva verzija ove tvrdnje je
-    '     merila bas AmbDokID, pa je CEMENTIRALA defekt: zato ide i kontra-tvrdnja
-    '     da se tehnicki ID NE vidi, i tvrdnja da je imenovana VRSTA dokumenta a
-    '     ne genericki "AmbalazaDokument".
-    Dim revBroj As String
-    revBroj = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, revDok, _
-                                   COL_AMBD_BROJ))
+' 2/6 -- KARTICA AMBALAZE NOSI POSLOVNI BROJ, NE TEHNICKI ID.
+'
+' AmbDokID je opaque "ADK-<hex>"; poslovni broj stoji na ZAGLAVLJU. Prva verzija
+' ove tvrdnje je merila bas AmbDokID i time CEMENTIRALA defekt (review
+' 08.10.2026, P2 #1) -- zato uz nju ide i kontra-tvrdnja da se tehnicki ID NE
+' vidi, i tvrdnja da je imenovana VRSTA, a ne genericka klasa dokumenta.
+Private Sub T_AmbKartica_PoslovniBrojIVrsta()
+    Dim revDok As String, revBroj As String, kart As Variant
+
+    AmbSejRevers 4, revDok, revBroj
     AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima poslovni broj"
 
-    Dim kart As Variant
     kart = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, DateAdd("d", -1, Date), _
                                              DateAdd("d", 1, Date))
     AssertEq KarticaUlazZaDok(kart, revBroj), 4, _
@@ -6411,12 +6428,18 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
              "kartica ne pokazuje tehnicki AmbDokID kao broj dokumenta"
     AssertEq KarticaOpisSadrzi(kart, revBroj, Poruka("OTKUI_AMBD_REVERS")), True, _
              "kartica imenuje VRSTU dokumenta sa zaglavlja"
+End Sub
 
-    ' 3c) KARTICA KOOPERANTA ima SVOJU ambalaznu putanju (samostalna kretanja,
-    '     bez otkupa) i svoju kolonu dokumenta. Presecena je istim rezom, pa i
-    '     ona mora da se izmeri -- inace je produkcioni rezultat te putanje
-    '     ostao nedokazan.
-    Dim kartK As Variant
+' 3/6 -- KARTICA KOOPERANTA IMA SVOJU AMBALAZNU PUTANJU.
+'
+' Samostalna kretanja (bez otkupa) i svoja kolona dokumenta. Presecena je istim
+' rezom kao ambalazna kartica, pa bi bez svoje tvrdnje ostala nedokazana.
+Private Sub T_AmbKarticaKooperanta_PokazujeRevers()
+    Dim revDok As String, revBroj As String, kartK As Variant
+
+    AmbSejRevers 4, revDok, revBroj
+    AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima poslovni broj"
+
     kartK = modIzvestaj.ReportKarticaKooperanta(FX_KOOPERANT, _
                                                 DateAdd("d", -1, Date), _
                                                 DateAdd("d", 1, Date))
@@ -6424,64 +6447,60 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
              "kartica kooperanta pokazuje revers pod poslovnim brojem"
     AssertEq KarticaImaBroj(kartK, 2, revDok), False, _
              "kartica kooperanta ne pokazuje tehnicki AmbDokID"
+End Sub
 
-    ' 3d) PREGLED KRETANJA (ReportAmbalaza) je treci citalac iste knjige, sa
-    '     svojim pitanjem. Meri se po OM-u, jer je stanica ta koja je IZDALA:
-    '     kolona 6 je Izlaz. Delta, ne apsolutna vrednost -- fixture nosi svoje
-    '     redove u istom opsegu.
-    AssertEq (IzvZbirniKol(FX_STANICA, FX_TIP_AMB, 6) - izlazPre), 4, _
-             "zbirni pregled OM-a vidi IZDATE gajbe reversa"
+' 4/6 -- DVA DOKUMENTA OSTAJU DVA REDA.
+'
+' Identitet dokumenta je deo kljuca grupisanja; da ispadne, dva reversa ISTE
+' stanice, istog tipa gajbe i istog dana pala bi u JEDAN red -- a ref-kljuc tada
+' vodi stampu na pogresan papir. Tvrdnja stoji ovde, a ne u modIzvestajTests gde
+' je pregled izmeren do detalja: kapija kataloga sabotaza priznaje samo modTest,
+' modTestBanka i modBusinessFlowProTests.
+Private Sub T_AmbPregled_DvaDokumentaDvaReda()
+    Dim revDok As String, revBroj As String
+    Dim revDok2 As String, revBroj2 As String, izv As Variant
+    Dim izlazPre As Double
 
-    Dim izv As Variant
-    izv = modIzvestaj.ReportAmbalaza("OM", FX_STANICA, DateAdd("d", -1, Date), _
-                                     DateAdd("d", 1, Date), False)
-    AssertEq IzvKolZaBroj(izv, revBroj, 6), 4, _
-             "pregled kretanja pokazuje revers pod poslovnim brojem"
-    AssertEq KarticaImaBroj(izv, 4, revDok), False, _
-             "pregled kretanja ne pokazuje tehnicki AmbDokID"
-
-    ' 3e) DVA DOKUMENTA OSTAJU DVA REDA. Identitet dokumenta je deo kljuca
-    '     grupisanja; da ispadne, dva reversa ISTE stanice, istog tipa gajbe i
-    '     istog dana pala bi u JEDAN red -- a ref-kljuc tada vodi stampu na
-    '     pogresan papir.
-    '
-    '     Tvrdnja stoji OVDE, a ne u modIzvestajTests gde je kanonski pregled
-    '     izmeren do detalja: kapija kataloga sabotaza priznaje samo modTest,
-    '     modTestBanka i modBusinessFlowProTests, pa dokaz.py tvrdnju iz
-    '     modIzvestajTests ne moze da obori.
-    Dim revDok2 As String, revBroj2 As String
-    revDok2 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, _
-                                                 2, REV_SMER_IZDAVANJE, _
-                                                 FX_KOOPERANT, "")
-    AssertEq (Len(revDok2) > 0), True, "preduslov: drugi revers je upisan"
-    revBroj2 = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, revDok2, _
-                                    COL_AMBD_BROJ))
+    izlazPre = IzvZbirniKol(FX_STANICA, FX_TIP_AMB, 6)
+    AmbSejRevers 4, revDok, revBroj
+    AmbSejRevers 2, revDok2, revBroj2
+    AssertEq (Len(revBroj2) > 0), True, "preduslov: drugi revers ima broj"
 
     izv = modIzvestaj.ReportAmbalaza("OM", FX_STANICA, DateAdd("d", -1, Date), _
                                      DateAdd("d", 1, Date), False)
     AssertEq (KarticaImaBroj(izv, 4, revBroj) And _
               KarticaImaBroj(izv, 4, revBroj2)), True, _
              "dva reversa ostaju dva reda u pregledu"
+    AssertEq IzvKolZaBroj(izv, revBroj, 6), 4, _
+             "pregled kretanja pokazuje revers pod poslovnim brojem"
+    AssertEq KarticaImaBroj(izv, 4, revDok), False, _
+             "pregled kretanja ne pokazuje tehnicki AmbDokID"
 
-    ' 4) LIFECYCLE: storno je KONTRA-STAV, ne zastavica. Stari citalac je gasio
-    '    red kroz ExcludeStornirano, sto nov model ne pise -- da je ta provera
-    '    ostala, storniran revers bi i dalje stajao u saldu.
-    '    SNIMAK IDE NEPOSREDNO PRED STORNO, ne na pocetak testa: prva verzija je
-    '    merila deltu prema koopPre i trazila NULU, a izmedju je upisan drugi
-    '    revers (+2) zbog tvrdnje 3e -- pa je tvrdnja merila premisu koju je sam
-    '    test u medjuvremenu promenio (pad 08.10.2026: dobijeno 2, trazeno 0).
-    '    Ovako se meri storno SAM PO SEBI i ne zavisi od drugih dokumenata.
-    Dim koopPreStorna As Long
+    ' Zbirni je drugi oblik istog citanja: 4 + 2 izdate gajbe.
+    AssertEq (IzvZbirniKol(FX_STANICA, FX_TIP_AMB, 6) - izlazPre), 6, _
+             "zbirni pregled OM-a vidi IZDATE gajbe reversa"
+End Sub
+
+' 5/6 -- STORNO JE KONTRA-STAV, I DVA CITAOCA GA VIDE RAZLICITO.
+'
+' Pregled KRETANJA storniran dokument SKRIVA -- ista namera kao stari filter
+' COL_STORNIRANO. Kartica ga PRIKAZUJE, jer je storno i sam dogadjaj koji
+' operater mora da vidi (6.8). Ta asimetrija je tvrdnja, ne navika.
+'
+' Snimak ide NEPOSREDNO pred storno, pa tvrdnja meri storno SAM PO SEBI.
+Private Sub T_AmbStorno_GasiSvojeIKarticaGaPrikazuje()
+    Dim revDok As String, revBroj As String
+    Dim koopPreStorna As Long, izv As Variant, kart As Variant
+
+    AmbSejRevers 4, revDok, revBroj
+    AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima poslovni broj"
+
     koopPreStorna = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
-    modAmbalaza.StornirajAmbDokument_TX revDok
-    koopStorno = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
-    AssertEq (koopStorno - koopPreStorna), -4, _
+    AssertEq modAmbalaza.StornirajAmbDokument_TX(revDok), True, _
+             "preduslov: storno reversa je prosao"
+    AssertEq (AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT) - koopPreStorna), -4, _
              "storno gasi TACNO svoja cetiri, ostali dokumenti ostaju"
 
-    ' 4b) DVA CITAOCA, DVA PITANJA (6.8). Pregled KRETANJA storniran dokument
-    '     SKRIVA -- kao i stari filter COL_STORNIRANO. Kartica ga PRIKAZUJE, jer
-    '     je storno i sam dogadjaj koji operater mora da vidi. Ova asimetrija je
-    '     namerna i zato se tvrdi, a ne podrazumeva.
     izv = modIzvestaj.ReportAmbalaza("OM", FX_STANICA, DateAdd("d", -1, Date), _
                                      DateAdd("d", 1, Date), False)
     AssertEq KarticaImaBroj(izv, 4, revBroj), False, _
@@ -6491,18 +6510,20 @@ Private Sub T_AmbSaldo_CitaociSuNaNovomModelu()
                                              DateAdd("d", 1, Date))
     AssertEq (KarticaUlazZaDok(kart, revBroj) > 0), True, _
              "kartica storniran revers i dalje PRIKAZUJE"
+End Sub
 
-    ' 5) DELIMITER NAD POSLOVNIM PODATKOM (review 08.10.2026, P2).
-    '
-    '    Kupcev broj reversa dolazi sa KUPCEVOG dokumenta i nijedna kapija ne
-    '    filtrira karaktere, pa je "KUP|R-17" legalan broj. Mapa zaglavlja ga
-    '    je pakovala u "broj|vrsta|datum", pa bi citalac procitao broj="KUP" i
-    '    vrstu="R-17" -- i to ne bi puklo nego TIHO promenilo i karticu i PAPIR.
-    '
-    '    Tvrdnja ide nad MAPOM, a ne nad karticom, jer je kupcev revers par
-    '    Kupac <-> Vozac: na kartici kooperanta ga nema. Mapa je mesto gde je
-    '    greska i zivela.
+' 6/6 -- POSLOVNI BROJ SA ZNAKOM | PREZIVLJAVA MAPU.
+'
+' Kupcev broj reversa dolazi sa KUPCEVOG dokumenta i nijedna kapija ne filtrira
+' karaktere, pa je "KUP|R-17" legalan broj. Mapa zaglavlja ga je pakovala u
+' "broj|vrsta|datum", pa bi citalac procitao broj="KUP" -- tiho, i na kartici i
+' na PAPIRU (review 08.10.2026, P2).
+'
+' Tvrdnja ide nad MAPOM, ne nad karticom: kupcev revers je par Kupac <-> Vozac,
+' pa ga na kartici kooperanta nema -- a mapa je mesto gde je greska i zivela.
+Private Sub T_AmbBroj_DelimiterPrezivljavaMapu()
     Dim pbroj As String, kupDok As String, zag As Variant, pmapa As Object
+
     pbroj = "KUP|R-17"
     kupDok = modAmbalaza.UpisiReversPartnera_TX(Date, pbroj, FX_KUPAC, FX_VOZAC, _
                                                 FX_TIP_AMB, 3, "test delimitera", 3)

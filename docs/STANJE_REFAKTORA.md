@@ -2179,6 +2179,61 @@
      Ostaje: posao #2 (`RunIntegritetProvere` slep na kanonski model), `dokaz.py`
      nad prefiksom `amb-10c-`, i ručni `Debug → Compile` nad konačnim izvorom.
 
+109. **Dokaz je odbio dugačak test: `#204` rasturen na šest** (09.10.2026).
+     Prvi `dokaz.py amb-10c-` je dao **NIJE DOKAZANO**, uz četiri problema:
+
+     ```
+     PALA DRUGA TVRDNJA   pregled-spaja-dokumente, saldo-ne-ponistava-storno,
+                          kartica-ne-vidi-prijem
+     NE OBARA NISTA       saldo-samo-jedna-strana
+     ```
+
+     **Izvor je bio netaknut** (`e3e87b52f0191b90` pre i posle) — sva četiri su
+     bila u **sabotažama i u strukturi testa**, nijedan u produkcionom kodu.
+     **Koren je izmeren u `dokaz.py`, ne pogođen:** ocena poredi samo ono što je
+     palo **u njenom testu**, a komentar uz to kaže zašto — *„ciljana tvrdnja možda
+     nije ni izvršena (`AssertEq` puca na prvom padu)"*. Dakle imenovana tvrdnja
+     mora da bude **PRVA koja pukne** u svom testu.
+     `#204` je u međuvremenu narastao u niz od devet pravila nad jednim
+     zasejavanjem: `nabavka → revers → mapa → kartica → pregled → drugi dokument →
+     storno → kartica po stornu → delimiter`. Sabotaža bilo kog čitaoca obarala je
+     **prvu** tvrdnju, a ne onu koju imenuje. To je bila moja greška u **strukturi
+     testa**, ne u pojedinačnim sabotažama.
+
+     **Rasturen na šest, svaki sa svojim zasejavanjem i JEDNIM pravilom:**
+
+     ```
+     204  T_AmbSaldo_ObeStraneJednogReda            obe strane + mapa
+     205  T_AmbKartica_PoslovniBrojIVrsta           broj, kontra-tvrdnja, vrsta
+     206  T_AmbKarticaKooperanta_PokazujeRevers     svoja ambalazna putanja
+     207  T_AmbPregled_DvaDokumentaDvaReda          identitet dokumenta + zbirni
+     208  T_AmbStorno_GasiSvojeIKarticaGaPrikazuje  asimetrija dva citaoca
+     209  T_AmbBroj_DelimiterPrezivljavaMapu        | u poslovnom broju
+     ```
+
+     Tvrdnje **pre** ciljane u svakom testu birane su tako da ih njena sabotaža
+     **ne obara** — inače bi opet pucale prve. Zajedničko zasejavanje je izvučeno u
+     `AmbSejRevers`, koji ide kroz **produkcione** pisce (nabavka pa revers, jer
+     stanica mora da drži gajbe po `ODL-8`).
+     Deveta sabotaža je dobila i **ispravno sidro**: prva verzija je zamenila samo
+     **prvi** red nastavljene naredbe, pa je drugi (`entitetTip, entitetID) Then`)
+     ostao siroče → sintaksna greška → projekat se ne kompajlira i sabotaža ne
+     obori ništa. Sidro sada pokriva **ceo** iskaz (i uvlačenje nastavka je bilo
+     pogrešno: 29 razmaka, ne 25).
+
+     **Verdikt posle rasturanja:**
+
+     ```
+     crvenih 16 / 16        izvor pre/posle 14ccad6e88a3bc6b -> IDENTICAN
+     grupno izmereno 14/16  === DOKAZANO (grupno) ===
+     RunAllTests            209 / 0
+     ```
+
+     **Tri moje greške usput, i sve tri su uhvatile kapije:** dijakritika u VBA
+     komentaru (`ASCII`), zamena komentara koja je presekla rečenicu i ostavila red
+     bez `#` (`sabotaza.py` se nije učitavao), i **heredoc koji je opet pojeo
+     backslash** — treći put u istoj sesiji, uprkos pravilu napisanom baš za to.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
