@@ -2267,6 +2267,39 @@
      Opis PR-a je usklađen: tvrdnja „skupe kapije nisu puštene" je bila tačna kad je
      napisana, a od tada više nije.
 
+111. **Pojedinačni dokaz: `DOKAZANO`, bez kvalifikatora** (09.10.2026).
+     Grupni prolaz je dao `DOKAZANO (grupno)`, što je po `CLAUDE.md` §5 **razvojni**
+     verdikt. Pojedinačni — svaka sabotaža sama, 16 prolaza suite — dao je:
+
+     ```
+     crvenih 16 / 16
+     izvor pre/posle  14ccad6e88a3bc6b / 14ccad6e88a3bc6b -> IDENTICAN
+     === DOKAZANO ===
+     ```
+
+     Posle prolaza: `git status` prazan, `vba_check` čisto (191 fajlova),
+     `vba_gate --hash` = `3b19a4defd382ba7`. To je **tačno** izvor pod kojim stoji
+     zeleni marker svih 12 suita, pa dokaz i pun prolaz **dele izvor** — nije reč o
+     dva merenja nad dva drveta.
+
+     **Devet od šesnaest sabotaža oborilo je i druge testove** pored svog
+     (`uz jos N testa`, najviše 7). To je merenje, ne šum: pokvaren čitalac koji
+     dele kartica, pregled i saldo obara **svakog** pozivaoca. Ocena broji samo da li
+     je **imenovana** tvrdnja pala — i pala je u svih šesnaest. Preostalih sedam
+     obara tačno svoj test.
+
+     **Greška usput:** pozvao sam `vba_gate --hash` **dok dokaz radi** i dobio
+     `7d31b606a569` — hash **sabotiranog** drveta, ne izvora; `git status` je u tom
+     trenutku pokazivao ` M src-vba/modIzvestaj.bas`, što je ubrizgana mutacija.
+     Mid-run merenje potpisa je besmisleno: merodavan je potpis koji driver uzme na
+     startu. Iz istog razloga operater **ne sme** da pusti compile dok dokaz radi —
+     projekat je tada namerno pokvaren, a driver vozi svoju instancu Excela.
+
+     **Compile je jedina otvorena kapija.** Marker stoji nad `izvor 96c6757e2ded /
+     git a4e8729e` (08.10.2026 14:39), dakle **pre** rasturanja `#204`. Opis `#408`
+     je usklađen i proveren grep-om: tvrdnja „skupe kapije nisu puštene" je
+     obrisana, stanje dokaza prepisano, hronologija 93–110.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
