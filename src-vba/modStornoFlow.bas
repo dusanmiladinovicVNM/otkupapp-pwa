@@ -789,7 +789,7 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 ' generacijama, nikad ga ne nasao i TIHO vratio prazno. Identitet
                 ' bi se izgubio, a kaskada pala nazad na broj: tacno ona klasa
                 ' kvara zbog koje ceo ovaj refaktor postoji.
-                Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, zbrIdP)
+                Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, zbrIdP, broj)
                 Dim ownsP As Boolean: ownsP = CBool(cascP("owns"))
                 If Not CBool(cascP("ok")) Then
                     ' RAZLOG iz kaskade ide dalje -- isto kao u zbirna grani.
@@ -800,17 +800,18 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                     If Len(razlogP) > 0 Then r("message") = razlogP
                     Exit Function
                 End If
-                ' Eksterni kupac (zbirna ne poseduje prijemnicu u kaskadi) -> prijemnicu
-                ' + njene palete storniramo ovde (retko: prijemnica ~ hladnjaca = internal).
+                ' Eksterni kupac: SAMU prijemnicu je stornirala kaskada, i to PRVU
+                ' (AMB-10-ODL-21 -- subjekat je poslednji fizicki potez, pa se
+                ' odmotava prvi). Do ovog reza je to stajalo OVDE, posle kaskade; sa
+                ' knjigom kao stvarnim saldom takav red obara AMB-INV-07, jer bi
+                ' storno otpremnice isao dok su gajbe jos kod kupca.
+                ' Ovde zato ostaju samo PALETE.
                 Dim detX As Long, extRemainder As Boolean
                 If Not ownsP Then
-                    If Len(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_ID)) > 0 Then
-                        StornoPrijemnicaByBroj_TX broj
-                        Dim dInfoX As String
-                        If CBool(s("hasPalete")) Then detX = DetachOsirocenePaletaStavke_TX(broj, dInfoX)
-                        If CBool(s("hasPalete")) And CLng(s("paleteCount")) > 0 And detX <> CLng(s("paleteCount")) Then _
-                            extRemainder = True
-                    End If
+                    Dim dInfoX As String
+                    If CBool(s("hasPalete")) Then detX = DetachOsirocenePaletaStavke_TX(broj, dInfoX)
+                    If CBool(s("hasPalete")) And CLng(s("paleteCount")) > 0 And detX <> CLng(s("paleteCount")) Then _
+                        extRemainder = True
                 End If
                 If extRemainder Then
                     MarkCorrectionManual cidP, "Skini preostale paletne stavke (Osiroceni dokumenti -> Palete).", _
@@ -1974,6 +1975,31 @@ Private Function KolekcijaUNiz(ByVal c As Collection) As Variant
 End Function
 
 ' Aktivni PrijemnicaID-jevi za dati BrojZbirne (svi redovi, obe klase).
+' Podeli aktivne prijemnice lanca na SUBJEKAT operacije i ostale.
+'
+' Broj prijemnice legitimno pokriva DVA reda (Klasa I i II), pa subjekat nije
+' jedan ID nego SKUP -- isti razlog zbog kog postoji StornoPrijemnicaByBroj_TX.
+' Prazan subjektPrij znaci da ga operacija nema (ponistenje zbirne), pa sve ide
+' u blokirajuci skup.
+Private Sub PodeliPrijemnice(ByVal ids As Collection, ByVal subjektBroj As String, _
+                             ByRef outSubjekt As Collection, _
+                             ByRef outOstali As Collection, ByVal SRC As String)
+    Set outSubjekt = New Collection
+    Set outOstali = New Collection
+    If ids Is Nothing Then Exit Sub
+
+    Dim k As Long, br As String, subj As String
+    subj = Trim$(subjektBroj)
+    For k = 1 To ids.count
+        br = Trim$(NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, CStr(ids(k)), COL_PRJ_BROJ)))
+        If Len(subj) > 0 And StrComp(br, subj, vbTextCompare) = 0 Then
+            outSubjekt.Add CStr(ids(k))
+        Else
+            outOstali.Add CStr(ids(k))
+        End If
+    Next k
+End Sub
+
 Private Function ActivePrijIDsByZbirna(ByVal brojZbirne As String, ByVal gen As String, _
                                        ByVal SRC As String) As Collection
     Dim result As New Collection
@@ -2058,8 +2084,23 @@ End Function
 ' gen bira ZAGLAVLJE zbirne. Decu bira BROJ -- drugog kljuca u semi nema -- pa
 ' kad broj nose dve aktivne zbirne kaskada staje: ponistavanje bi odvezalo i
 ' tudje otpremnice i prijemnice.
+' TEST SEAM: PonistiZbirnaChain_TX je Private, a kapija "aktivna EKSTERNA
+' prijemnica blokira ponistenje" mora da se meri nad PRAVOM kaskadom -- ne nad
+' predikcijom BuildPonistenjePosledice. Javni put trazi correction context i
+' forceConfirm, pa bi test merio tri sloja umesto jednog i pad bi mogao da dodje
+' sa bilo kog. Isti obrazac i isti razlog kao DistinctActiveValues_Test.
+Public Function PonistiZbirnaChain_Test(ByVal brojZbirne As String, _
+                                        ByVal zbrID As String) As Object
+    Set PonistiZbirnaChain_Test = PonistiZbirnaChain_TX(brojZbirne, zbrID, "")
+End Function
+
+' subjektPrij: BROJ prijemnice koju sama operacija ponistava (grana ponistenja
+' prijemnice). Nije isto sto i "prijemnica ovog lanca": subjekat se NE racuna u
+' blokirajuci skup -- pozivalac ga upravo ukida -- a stornira se PRVI, jer je po
+' AMB-10-ODL-21 poslednji fizicki potez u lancu.
 Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
-                                       Optional ByVal zbirnaID As String = "") As Object
+                                       Optional ByVal zbirnaID As String = "", _
+                                       Optional ByVal subjektPrij As String = "") As Object
     Const SRC As String = MOD_NAME & ".PonistiZbirnaChain_TX"
     Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
     res("ok") = False: res("otp") = 0&: res("prij") = 0&: res("pals") = 0&: res("blok") = 0&
@@ -2150,6 +2191,50 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
         Set prijIDs = New Collection: Set prijBrPalete = New Collection
     End If
 
+    ' AKTIVAN EKSTERNI NIZVODNI DOKUMENT JE LIFECYCLE ZAVISNOST, NE SALDO
+    ' (review 05.10.2026, P1).
+    '
+    ' Prva verzija ovog reza se oslanjala na AMB-INV-07: kad lanac nije nas,
+    ' prijemnica ostaje aktivna, vozac vise nema gajbe, pa storno otpremnice padne
+    ' sam. TA ODBRANA JE BILA IZVEDENA IZ SALDA i vazi SAMO kad kupac nije vratio
+    ' dovoljno praznih. Normalna PUNA ZAMENA je kontraprimer:
+    '
+    '   otpremnica   Stanica -> Vozac   20
+    '   prijemnica   Vozac -> Kupac     20   pa   Kupac -> Vozac   20
+    '   vozac opet ima 20  ->  kontra-stav otpremnice PROLAZI
+    '
+    ' Ishod je bio: zbirna i otpremnica STORNIRANE, eksterna prijemnica AKTIVNA i
+    ' dalje vezana na njih, i res("ok") = True -- lazno uspesno poslovno
+    ' ponistenje nad polomljenim lifecycle-om. AMB-INV-07 sudi samo POSLE-STANJE
+    ' SALDA; on ne zna da li aktivan nizvodni dokument jos zavisi od onog koji se
+    ' stornira. Zato kapija nije jaci saldo nego EKSPLICITNA ZAVISNOST.
+    '
+    ' Politike se iskljucuju: "eksterni dokument ostaje netaknut" i "ponistenje
+    ' CELOG toka" ne mogu obe da vaze. Bira se ODBIJANJE, ne orphaning -- a
+    ' odbijanje stoji PRED svakom mutacijom, pa ni zbirna ne bude dirnuta.
+    '
+    ' Skup se broji BEZ OBZIRA na ownsChain: u False grani je prijIDs namerno
+    ' prazan (kaskada ih ne dira), pa bi kapija nad njim bila placebo. Prazan
+    ' scopeID je ovde bezbedan -- SuziDecuNaZbirnu tada vraca kandidate
+    ' NEPROMENJENO (pravilo 1), dakle skup je SIRI, a kapija fail-closed.
+    Dim subjektPrijIDs As Collection, ostalePrij As Collection
+    If Not ownsChain Then
+        ' SUBJEKAT OPERACIJE NIJE PREPREKA. Ponistenje prijemnice ukida bas nju, pa
+        ' bi kapija nad njom odbila operaciju zbog dokumenta koji pozivalac upravo
+        ' gasi. Druga aktivna prijemnica istog lanca i dalje blokira -- nju niko ne
+        ' ukida, i to je cela razlika.
+        PodeliPrijemnice ActivePrijIDsByZbirna(brojZbirne, scopeID, SRC), _
+                         subjektPrij, subjektPrijIDs, ostalePrij, SRC
+        If ostalePrij.count > 0 Then
+            res("message") = "Zbirna '" & brojZbirne & "' ima " & _
+                CStr(ostalePrij.count) & " aktivnu prijemnicu EKSTERNOG kupca (" & _
+                CStr(ostalePrij(1)) & "). Ponistenje celog toka bi je ostavilo " & _
+                "vezanu na stornirane dokumente, a njen storno nije nas potez. " & _
+                "Storniraj prijemnicu kod kupca pa ponovi."
+            Exit Function
+        End If
+    End If
+
     ' --- Faza A: dokument kaskada (zbirna + otpremnice + blokovi + prijemnice) ---
     Set tx = New clsTransaction
     tx.BeginTx
@@ -2185,19 +2270,50 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
         blokKanon = blokKanon + modDokumenta.IzvoriOtpremnice(CStr(otpIDs(k))).count
     Next k
 
-    For k = 1 To otpIDs.count
-        If Not StornoOtpremnica(CStr(otpIDs(k))) Then _
-            Err.Raise ERR_STORNO_FW_BASE + 51, SRC, "StornoOtpremnica (ponistenje) nije uspeo: " & CStr(otpIDs(k))
-    Next k
-    res("otp") = otpIDs.count
-    res("blok") = FreeOtkupBloksInline(otpIDs, SRC) + blokKanon
+    ' AMB-10-ODL-21: LANAC SE ODMOTAVA OBRNUTO OD FIZICKOG REDA.
+    '
+    ' Fizicki red je stanica -> vozac (otpremnica) -> kupac (prijemnica). Dok je
+    ' knjiga bila ZASTAVICA, red odmotavanja nije znacio nista. Od 10b-2 je ona
+    ' STVARAN saldo: storno otpremnice upisuje kontra-stav koji skida gajbe sa
+    ' vozaca -- a njih je prijemnica vec predala kupcu. Obrnut red bi vozaca
+    ' gurnuo u MINUS i AMB-INV-07 bi fail-closed oborio celu kaskadu.
+    '
+    ' Zato prijemnice idu PRVE: one vracaju gajbe na vozaca, pa otpremnica ima
+    ' sta da skine. Isti princip kao LIFO -- poslednji fizicki potez se prvi
+    ' ponistava.
+    '
+    ' KAD LANAC NIJE NAS (ownsChain = False, kupac je eksterni) prijemnica je
+    ' KUPCEV dokument i ne smemo da je stornirano. Do tog mesta se vise i ne
+    ' stize: kapija iznad odbija ceo potez PRED mutacijom. Ovde je prvo stajalo
+    ' da taj slucaj resava AMB-INV-07 sam -- v. zasto je to pobijeno, u kapiji.
+    ' SUBJEKAT SE ODMOTAVA PRVI I KAD LANAC NIJE NAS (AMB-10-ODL-21). Do ovog
+    ' reza ga je grana ponistenja prijemnice stornirala TEK POSLE kaskade -- dok
+    ' je knjiga bila zastavica to nije znacilo nista, a sada bi storno otpremnice
+    ' isao dok su gajbe jos kod kupca i pao na AMB-INV-07.
+    If Not ownsChain Then
+        If Not subjektPrijIDs Is Nothing Then
+            For k = 1 To subjektPrijIDs.count
+                If Not StornoPrijemnica(CStr(subjektPrijIDs(k)), tx) Then _
+                    Err.Raise ERR_STORNO_FW_BASE + 53, SRC, "StornoPrijemnica (subjekat) nije uspeo: " & CStr(subjektPrijIDs(k))
+            Next k
+            res("prij") = subjektPrijIDs.count
+        End If
+    End If
+
     If ownsChain Then
         For k = 1 To prijIDs.count
-            If Not StornoPrijemnica(CStr(prijIDs(k))) Then _
+            If Not StornoPrijemnica(CStr(prijIDs(k)), tx) Then _
                 Err.Raise ERR_STORNO_FW_BASE + 52, SRC, "StornoPrijemnica (ponistenje) nije uspeo: " & CStr(prijIDs(k))
         Next k
         res("prij") = prijIDs.count
     End If
+
+    For k = 1 To otpIDs.count
+        If Not StornoOtpremnica(CStr(otpIDs(k)), tx) Then _
+            Err.Raise ERR_STORNO_FW_BASE + 51, SRC, "StornoOtpremnica (ponistenje) nije uspeo: " & CStr(otpIDs(k))
+    Next k
+    res("otp") = otpIDs.count
+    res("blok") = FreeOtkupBloksInline(otpIDs, SRC) + blokKanon
     tx.CommitTx
     Set tx = Nothing
 

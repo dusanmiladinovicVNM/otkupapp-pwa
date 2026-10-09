@@ -3426,7 +3426,7 @@ Public Function IzdajOtpremnicu_TX(ByVal otpremnicaID As String, _
     ' sa stanice, a otpremnicu neizdatu.
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    OtpIzdaj otpremnicaID
+    OtpIzdaj otpremnicaID, tx
 
     tx.CommitTx
     Set tx = Nothing
@@ -3490,7 +3490,7 @@ Public Function CreateOtpremnicaIzIzvora_TX(ByVal h As Object, _
     Next i
 
     OtpUpisiOcekivanjeIzIzvora CreateOtpremnicaIzIzvora_TX
-    OtpIzdaj CreateOtpremnicaIzIzvora_TX
+    OtpIzdaj CreateOtpremnicaIzIzvora_TX, tx
 
     tx.CommitTx
     Set tx = Nothing
@@ -3547,7 +3547,7 @@ Public Function IspravkaOtpremnice_TX(ByVal otpremnicaID As String, _
     ' Storno stare vraca gajbe koje je njeno izdavanje knjizilo (OtpIzdaj).
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    IspravkaOtpremnice_TX = OtpIspravi(otpremnicaID)
+    IspravkaOtpremnice_TX = OtpIspravi(otpremnicaID, tx)
 
     tx.CommitTx
     Set tx = Nothing
@@ -4717,7 +4717,10 @@ Private Sub OtpUkloniIzvor(ByVal otpremnicaID As String, ByVal otkupID As String
 End Sub
 
 ' --- core: izdavanje --------------------------------------------------------
-Private Sub OtpIzdaj(ByVal otpremnicaID As String)
+' tx je OBAVEZAN: izdavanje knjizi gajbe, a AMB-INV-08 trazi da knjiga i izvorni
+' dokument dele rollback. Opcion tx bio bi fail-open seam -- pozivalac koji ga
+' zaboravi tiho preskoci vezivanje, a kapija bi pala na nejasnoj poruci.
+Private Sub OtpIzdaj(ByVal otpremnicaID As String, ByVal tx As clsTransaction)
     Const SRC As String = "OtpIzdaj"
 
     Dim rOtp As Long
@@ -4782,13 +4785,31 @@ Private Sub OtpIzdaj(ByVal otpremnicaID As String)
         End If
     Next i
 
-    OtpKnjiziAmbalazu otpremnicaID, rOtp, ocekAmb, SRC
-
+    ' REDOSLED: OZNACI IZDATO -> VEZI -> KNJIZI.
+    '
+    ' Knjizenje je stajalo PRE izmene zaglavlja, a AMB-10-ODL-15 trazi da
+    ' BindSourceDocument stoji POSLE sto je ova transakcija dokument stvarno
+    ' promenila. Oba poteza su u istoj transakciji, pa rollback i dalje povlaci
+    ' oba -- menja se samo sta se cime dokazuje.
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO, SRC
+    tx.BindSourceDocument DOK_TIP_OTPREMNICA, otpremnicaID
+    OtpKnjiziAmbalazu tx, otpremnicaID, rOtp, ocekAmb, SRC
 End Sub
 
 ' --- core: ispravka izdate -------------------------------------------------
-Private Function OtpIspravi(ByVal staraID As String) As String
+' tx je OBAVEZAN, i to NIJE kozmetika: ispravka stornira staru otpremnicu, a
+' njen storno od 10b-2 upisuje kontra-stav u knjigu -- AMB-INV-08 trazi da
+' knjiga i izvorni dokument dele rollback. Vlasnik transakcije je
+' IspravkaOtpremnice_TX (snapshot tblOtpremnica + tblAmbalaza), pa se tx
+' PROVLACI; nova transakcija ovde bi razdvojila rollback granice.
+'
+' Prvi pokusaj je zvao modStorno.StornoOtpremnica(staraID, tx) bez ovog
+' parametra. U VBA lokalna promenljiva POZIVAOCA nije vidljiva pozvanoj
+' proceduri, pa je uz Option Explicit to compile error -- a arity sweep je bio
+' zelen, jer je broj argumenata tacan. Nedeklarisana promenljiva je semantika,
+' ne arnost (review 04.10.2026, P1).
+Private Function OtpIspravi(ByVal staraID As String, _
+                            ByVal tx As clsTransaction) As String
     Const SRC As String = "OtpIspravi"
 
     Dim rStara As Long
@@ -4828,7 +4849,7 @@ Private Function OtpIspravi(ByVal staraID As String) As String
     ' Storno stare IDE PRE nego sto nova primi izvore: izvor sme da bude u
     ' tacno jednoj aktivnoj otpremnici (OtpRequireIzvorValjan), pa bi obrnut
     ' redosled sam sebe odbio. Jezgro nosi i kapiju izvora aktivne zbirne.
-    If Not modStorno.StornoOtpremnica(staraID) Then
+    If Not modStorno.StornoOtpremnica(staraID, tx) Then
         Err.Raise vbObjectError + 1340, SRC, _
                   "Storno stare otpremnice nije uspeo: " & staraID
     End If
@@ -4928,7 +4949,23 @@ End Function
 '
 ' Zato je i kolicina ZBIR STAVKI izdate otpremnice, a ne broj sa zaglavlja: posle
 ' S1/S3a zaglavlje kolicinu ambalaze vise i ne nosi.
-Private Sub OtpKnjiziAmbalazu(ByVal otpremnicaID As String, ByVal rOtp As Long, _
+' JEDAN DOGADJAJ: Stanica -> Vozac, uz robu (AMB-10b-2, cutover).
+'
+' Stari red je nosio Smer=Izlaz i Entitet=Stanica, a VozacID je bio ZIGOSAN --
+' saldo vozaca se racunao inverzijom smera (VozacAmbEffectiveSmer), sto 6.8
+' zove fail-open: citalac koji inverziju zaboravi dobija POGRESAN ZNAK, ne
+' gresku. Nov red imenuje OBE strane, pa vozac prestaje da bude labela i
+' postaje nalog.
+'
+' VRSTA JE ZAPISANA, NE IZVEDENA: 6.7 imenuje AMBALAZA_UZ_ROBU za otkup,
+' OTPREMNICU, prijemnicu i izlaz kupcu; PRENOS_INTERNO je za PRAZNE gajbe
+' izmedju sopstvenih naloga (6.7a). Otpremnica nosi robu, pa nosi UZ_ROBU.
+'
+' NEMA PROTOKOLA POTVRDE DEFICITA, i to je razlika od otkupa: izvor je Stanica,
+' dakle SOPSTVENI nalog, pa se po AMB-10-ODL-8 njen manjak NE pokriva tudjom
+' ambalazom nego je TVRDO odbijen. Gajbe stanica dobija otkupom.
+Private Sub OtpKnjiziAmbalazu(ByVal tx As clsTransaction, _
+                              ByVal otpremnicaID As String, ByVal rOtp As Long, _
                               ByVal ocekAmb As Object, ByVal src As String)
     Dim ukupno As Double
     Dim kljuc As Variant
@@ -4966,8 +5003,17 @@ Private Sub OtpKnjiziAmbalazu(ByVal otpremnicaID As String, ByVal rOtp As Long, 
                   Fmt2Zbr(ukupno) & " gajbi."
     End If
 
-    TrackAmbalaza datum, tipAmb, CLng(ukupno), "Izlaz", stanicaID, "Stanica", _
-                  vozacID, otpremnicaID, DOK_TIP_OTPREMNICA
+    ' Vozac je sada STRANA, ne zig: bez njega red ne bi imao odrediste.
+    If Len(vozacID) = 0 Then
+        Err.Raise vbObjectError + 1338, src, _
+                  "Otpremnica " & otpremnicaID & " nema vozaca, a izdaje " & _
+                  Fmt2Zbr(ukupno) & " gajbi -- gajbe ne mogu da odu NIKOME."
+    End If
+
+    modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, ukupno, _
+                AMB_NALOG_STANICA, stanicaID, _
+                AMB_NALOG_VOZAC, vozacID, _
+                AMB_VK_UZ_ROBU, DOK_TIP_OTPREMNICA, otpremnicaID
 End Sub
 
 Private Sub OtpRequireJednakost(ByVal otpremnicaID As String, _
@@ -6550,7 +6596,9 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                                        Optional ByVal cenaII As Double = 0, _
                                        Optional ByVal kolAmbII As Long = 0, _
                                        Optional ByVal brutoKgI As Double = 0, _
-                                       Optional ByVal brutoKgII As Double = 0) As String
+                                       Optional ByVal brutoKgII As Double = 0, _
+                                       Optional ByVal potvrdaDeficita As Double = -1, _
+                                       Optional ByRef outErrNum As Long) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -6581,9 +6629,26 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                   "Mora postojati bar jedna klasa (I ili II)."
     End If
 
+    ' NOGA POVRATA IDE SA KLASOM KOJA POSTOJI, a ne tvrdo sa Klasom I.
+    '
+    ' Do 07.10.2026 je kolAmbVracena isla SAMO pozivu za Klasu I, a Klasa II je
+    ' dobijala tvrdo upisanu 0. Klasa I je OPCIONA (kolicinaI = 0 -> snima se
+    ' samo Klasa II), pa je prijemnica sa samo Klasom II i vracenim praznim
+    ' gajbama TIHO GUBILA nogu povrata -- bez ijedne poruke. Iz F4 je to
+    ' dostupno: kolicinaI i kolAmbVracena dolaze nezavisno.
+    '
+    ' Povrat je JEDAN dogadjaj, pa ide uz JEDAN dokument -- onaj koji postoji.
+    Dim vracenaI As Long, vracenaII As Long
+    If hasKlasaI Then
+        vracenaI = kolAmbVracena
+    Else
+        vracenaII = kolAmbVracena
+    End If
+
     Dim resultI As String
     If hasKlasaI Then
         resultI = SavePrijemnica( _
+            tx, _
             datum, _
             kupacID, _
             vozacID, _
@@ -6595,9 +6660,10 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
             cenaI, _
             tipAmb, _
             kolAmb, _
-            kolAmbVracena, _
+            vracenaI, _
             KLASA_I, _
-            brutoKgI)
+            brutoKgI, _
+            potvrdaDeficita)
 
         If resultI = "" Then
             Err.Raise vbObjectError + 1301, "SavePrijemnicaMulti_TX", _
@@ -6608,6 +6674,7 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     Dim resultII As String
     If hasKlasaII Then
         resultII = SavePrijemnica( _
+            tx, _
             datum, _
             kupacID, _
             vozacID, _
@@ -6619,9 +6686,10 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
             cenaII, _
             tipAmb, _
             kolAmbII, _
-            0, _
+            vracenaII, _
             KLASA_II, _
-            brutoKgII)
+            brutoKgII, _
+            potvrdaDeficita)
 
         If resultII = "" Then
             Err.Raise vbObjectError + 1302, "SavePrijemnicaMulti_TX", _
@@ -6673,6 +6741,21 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
+    outErrNum = errNum
+
+    ' POTVRDA DEFICITA NIJE KVAR NEGO PITANJE POZIVAOCU (6.5), pa izlazi PRE
+    ' loga i monitora -- isti obrazac kao CreateOtkup_TX. Bez ovoga bi F4 imao
+    ' tekst greske ali ne i BROJ, a broj je ugovor: tekst je prevodiv i menja
+    ' se. Rollback i prazan povratak OSTAJU -- dokument stvarno nije nastao, pa
+    ' pozivalac ponavlja poziv sa potvrdjenim manjkom.
+    If errNum = AMB_ERR_POTVRDA_DEFICITA Then
+        If Not tx Is Nothing Then tx.RollbackTx
+        Set tx = Nothing
+        On Error GoTo 0
+        SavePrijemnicaMulti_TX = ""
+        Exit Function
+    End If
+
     LogError "SavePrijemnicaMulti_TX", errDesc, errNum
     Monitor_Error _
         moduleName:="modDokumenta", _
@@ -6715,7 +6798,8 @@ Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, 
                                    ByVal cena As Double, ByVal tipAmb As String, _
                                    ByVal kolAmb As Long, ByVal kolAmbVracena As Long, _
                                    Optional ByVal klasa As String = "I", _
-                                   Optional ByVal brutoKg As Double = 0) As String
+                                   Optional ByVal brutoKg As Double = 0, _
+                                   Optional ByVal potvrdaDeficita As Double = -1) As String
     Dim tx As New clsTransaction
 
     On Error GoTo EH
@@ -6732,10 +6816,11 @@ tx.BeginTx
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
-    SavePrijemnica_TX = SavePrijemnica(datum, kupacID, vozacID, brojPrij, _
+    SavePrijemnica_TX = SavePrijemnica(tx, datum, kupacID, vozacID, brojPrij, _
                                         brojZbirne, vrstaVoca, sortaVoca, _
                                         kolicina, cena, tipAmb, kolAmb, _
-                                        kolAmbVracena, klasa, brutoKg)
+                                        kolAmbVracena, klasa, brutoKg, _
+                                        potvrdaDeficita)
 
     If SavePrijemnica_TX = "" Then
         Err.Raise vbObjectError + 1011, "SavePrijemnica_TX", _
@@ -6803,14 +6888,26 @@ EH:
     PrintTxFailure "SavePrijemnica_TX", errSrc, errNum, errDesc
 End Function
     
-Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
+' AMBALAZA PRIJEMNICE: tx je OBAVEZAN, prvi argument.
+'
+' Od 10b-2 prijemnica knjizi u knjigu ambalaze, a AMB-INV-08 trazi da knjiga i
+' izvorni dokument dele JEDAN rollback. Opcion tx bio bi fail-open seam -- isti
+' razlog zbog kog su ga StornoOtkup i StornoOtpremnica dobili kao obavezan.
+'
+' Ide PRVI, ne poslednji: SavePrijemnica ima opcione repove (klasa, brutoKg), a
+' obavezan argument posle opcionih je u VBA sintaksna greska. Oba _TX omotaca
+' (SavePrijemnica_TX, SavePrijemnicaMulti_TX) vec snapshotuju tblPrijemnica I
+' tblAmbalaza -- izmereno pre koda, nijedno pozivno mesto ne trazi nov snapshot.
+Public Function SavePrijemnica(ByVal tx As clsTransaction, _
+                               ByVal datum As Date, ByVal kupacID As String, _
                                ByVal vozacID As String, ByVal brojPrij As String, _
                                ByVal brojZbirne As String, ByVal vrstaVoca As String, _
                                ByVal sortaVoca As String, ByVal kolicina As Double, _
                                ByVal cena As Double, ByVal tipAmb As String, _
                                ByVal kolAmb As Long, ByVal kolAmbVracena As Long, _
                                Optional ByVal klasa As String = "I", _
-                               Optional ByVal brutoKg As Double = 0) As String
+                               Optional ByVal brutoKg As Double = 0, _
+                               Optional ByVal potvrdaDeficita As Double = -1) As String
     On Error GoTo EH
 
     Call ValidatePrijemnicaInput(kupacID, vozacID, brojPrij, brojZbirne, _
@@ -6840,6 +6937,11 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                 "AppendRow fehlgeschlagen fuer tblPrijemnica."
     End If
 
+    ' AMB-10-ODL-15: vezati sme SAMO kanonski pisac izvornog dokumenta, u svojoj
+    ' proceduri i tek POSLE sto ga je ova transakcija stvarno promenila.
+    ' AppendRow je bas to. Pisac je na exact allowlist-i AMB_BIND_DOZVOLJENI.
+    tx.BindSourceDocument DOK_TIP_PRIJEMNICA, newID
+
     ' ZBR-CHILD-01: generacija roditeljske zbirne (v. isti komentar u
     ' SaveOtpremnica). Prijemnica roditelja obicno IMA, pa je ovde retko prazna.
     PoveziDeteNaZbirnu TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ_ZBIRNE, brojZbirne, _
@@ -6851,17 +6953,60 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
     ' prazno = neto. Kolona postoji posle EnsureDoradeSchema (na kraju tblPrijemnica).
     If brutoKg > 0 Then UpdateCell TBL_PRIJEMNICA, appendedRow, COL_PRJ_BRUTO, brutoKg
 
-    ' Ambalaza je ENTITETSKI-relativna (smer iz ugla hladnjace / Kupca):
-    ' 1. txt = pune gajbe koje hladnjaca PRIMA od zbirne -> Kupac ULAZ.
-    If kolAmb > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmb, "Ulaz", kupacID, "Kupac", _
-                      vozacID, newID, DOK_TIP_PRIJEMNICA
+    ' AMBALAZA: DVA DOGADJAJA NAD JEDNIM PAREM NALOGA (10b-2, 6.12g).
+    '
+    ' Stari red je imao JEDAN entitet (Kupca) i smer iz NJEGOVOG ugla, a vozaca je
+    ' nosio kao ZIG -- pa se vozacev saldo dobijao inverzijom smera, sto je
+    ' fail-open (citalac koji inverziju zaboravi dobija pogresan ZNAK, ne gresku).
+    ' Nov red imenuje obe strane, pa je ceo lanac vidljiv jednim racunom:
+    ' stanica -> vozac (otpremnica) -> kupac (prijemnica).
+    '
+    ' VRSTA JE PROCITANA IZ 6.7, NE IZVEDENA IZ PARA. Pune gajbe putuju SA ROBOM,
+    ' prazne su POVRAT -- isti par naloga, suprotno poslovno znacenje. Zato je
+    ' vrsta podatak. AMB-INV-10 trazi jedan NEUREDJEN par po dokumentu i oba reda
+    ' ga dele ({Vozac, Kupac}); AMB-INV-04 ih razlikuje po vrsti.
+    '
+    ' AMB-10-ODL-22: povrat praznih od kupca mora da nosi KUPCEV broj -- a broj
+    ' prijemnice to i jeste, jer je prijemnica eksterni dokument (operater,
+    ' 05.10.2026: "nema dodatnog broja"). Vlasnika broja objavljuje
+    ' AmbRobniZaglavlje iz zatvorene mape, ne ovaj pisac o sebi.
+    '
+    ' NEMA PROTOKOLA POTVRDE, i to je razlika od otkupa -- ali NE zbog obaveze.
+    '
+    ' Ovu odbranu je merenje pobilo pre nego sto je stigla u review: prvo je
+    ' pisalo da kapija ovde AMB-INV-09. AmbDoprinosObavezi kaze suprotno --
+    ' obavezi doprinose SAMO ULAZ_TUDJE_AMBALAZE (+) i VRACANJE_TUDJE (-), a
+    ' obe ove vrste doprinose NULU. INV-09 nije kapija ovog pisca.
+    '
+    ' Kapija je AMB-INV-07, jer je i Kupac REALAN nalog (AmbNalogUKlasi: svaki
+    ' poznat tip osim SpoljniSvet). ZATO JE REDOSLED NOGU NOSEC, ne kozmetika:
+    ' prva noga kupcu DAJE gajbe, pa druga ima sta da vrati. Obrnut red bi na
+    ' punoj zameni (vracena = kolAmb) gurnuo kupca u minus i ceo upis bi pao.
+    ' POVRAT VECI OD ONOGA STO KUPAC DRZI: od 07.10.2026 nije tvrdo odbijen
+    ' nego PITANJE, kroz isti protokol koji otkup ima od 6.5 -- kupac fizicki
+    ' vraca gajbe koje po nasoj knjizi ne drzi, pa visak ulazi u opticaj kao
+    ' tudja ambalaza (ULAZ_TUDJE, AMB-10-ODL-8: deficit PARTNERA je pokriv).
+    ' Prethodni komentar je tu tvrdio da je odbijanje 'tacno'; to je bila moja
+    ' odluka bez protokola, a ne pravilo -- jezgro je protokol imalo sve vreme.
+    If kolAmb > 0 Or kolAmbVracena > 0 Then
+        If Len(Trim$(vozacID)) = 0 Then
+            Err.Raise vbObjectError + 1367, "SavePrijemnica", _
+                      "Prijemnica " & brojPrij & " knjizi gajbe a nema vozaca. " & _
+                      "Gajbe ne mogu da dodju NI OD KOGA."
+        End If
     End If
 
-    ' 2. txt = zamena: prazne gajbe koje hladnjaca VRACA (daje vozacu) -> Kupac IZLAZ.
+    If kolAmb > 0 Then
+        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, CDbl(kolAmb), _
+                    AMB_NALOG_VOZAC, vozacID, AMB_NALOG_KUPAC, kupacID, _
+                    AMB_VK_UZ_ROBU, DOK_TIP_PRIJEMNICA, newID
+    End If
+
     If kolAmbVracena > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmbVracena, "Izlaz", kupacID, "Kupac", _
-                      vozacID, newID, DOK_TIP_PRIJEMNICA
+        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, CDbl(kolAmbVracena), _
+                    AMB_NALOG_KUPAC, kupacID, AMB_NALOG_VOZAC, vozacID, _
+                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_PRIJEMNICA, newID, _
+                    potvrdaDeficita
     End If
 
     RelinkFakturaStavke newID, brojPrij, klasa
@@ -6879,7 +7024,10 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogError "SavePrijemnica", errDesc, errNum
+    ' Potvrda deficita je PITANJE pozivaocu, ne kvar -- ne ide u log (obrazac
+    ' iz CreateOtkup_TX). Broj greske se cuva, jer je on ugovor sa pozivaocem.
+    If errNum <> AMB_ERR_POTVRDA_DEFICITA Then _
+        LogError "SavePrijemnica", errDesc, errNum
     On Error GoTo 0
 
     Err.Raise errNum, "SavePrijemnica", _
@@ -6990,13 +7138,29 @@ EH:
     GetPrijemniceByKupac = Empty
 End Function
 
+' UPLATA KUPCA -- SAMO NOVAC (AMB-10-ODL-5: nijedan dokument nije istovremeno
+' ambalazni i novcani).
+'
+' Do 06.10.2026 je ova funkcija bila i ambalazni pisac: isti brojDok nosili su
+' i noga u tblAmbalaza ("Izlaz" kod kupca, zig vozaca, DokumentTIP
+' "Kupci-Otpremnica") i red u kasi. Dva dogadjaja su delila jedan broj, a
+' zivotni ciklus im nije isti: storno uplate ne vraca gajbe, a storno povrata
+' ne vraca novac (AMBALAZA.md 6.11a).
+'
+' GDE SE POVRAT PRAZNE AMBALAZE OD KUPCA KNJIZI SADA: na prijemnici, kao
+' Kupac -> Vozac + POVRAT_PRAZNE, pod BROJEM PRIJEMNICE -- AMB-10-ODL-9/-10 uz
+' ODL-22 (presuda operatera 05.10.2026: zamena pune ambalaze praznom nema
+' dodatan broj). Ime funkcije ostaje; menja se obim, ne pozivno mesto.
+'
+' AMBALAZNA NOGA NIJE IMALA POZIVAOCA NI PRE REZA, i to je mereno: jedini
+' produkcioni pozivalac je F6 (modNovacUnos.UplataUpisi), a on je slao
+' kolAmb:=0, tipAmb:="" i vozacID:="" tvrdo upisane. Sposobnost "kupac vraca
+' prazne BEZ dostave robe" time nije izgubljena ovde nego je vec bila bez
+' ulaza; vrsta AMB_DOK_REVERS_PARTNERA je za nju spremna ali jos bez pisca.
 Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
                                   ByVal brojDok As String, _
                                   ByVal kupacNaziv As String, _
                                   ByVal kupacID As String, _
-                                  ByVal vozacID As String, _
-                                  ByVal tipAmb As String, _
-                                  ByVal kolAmb As Long, _
                                   ByVal vrstaVoca As String, _
                                   ByVal novac As Double, _
                                   ByVal fakturaID As String, _
@@ -7012,21 +7176,14 @@ Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
                   "KupacID je obavezan."
     End If
 
-    If kolAmb <= 0 And novac <= 0 Then
+    If novac <= 0 Then
         Err.Raise vbObjectError + 1602, "SaveKupciIzlaz_TX", _
-                  Poruka("DOK_ERR_NEMA_AMBALAZE_NOVCA")
+                  Poruka("DOK_ERR_NEMA_NOVCA")
     End If
 
     tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_FAKTURE
-
-    If kolAmb > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmb, _
-                      "Izlaz", kupacID, "Kupac", _
-                      vozacID, brojDok, DOK_TIP_IZLAZ_KUPCI
-    End If
 
     If novac > 0 Then
         Dim novacID As String
@@ -8552,133 +8709,41 @@ End Function
 ' modul moze da se testira bez instanciranja forme (core guard za smer ambalaze).
 ' ============================================================
 
+' SAMO NOVAC (AMB-10-ODL-5). Ambalazna polovina je 10b-2 presla na
+' modAmbalaza.UpisiReversAmbalaze_TX -- revers je AMBALAZNI dokument i nosi svoj
+' AmbDokID, svoj broj i svoj storno.
+'
+' Prekrsaj je bio LATENTAN: nijedan ziv pozivalac nije mesao klase (F5 je slao
+' kolAmb:=0, F7 novac:=0), pa je ovo razlaganje POTPISA, ne ponasanja -- nijedan
+' poslovni tok se ne menja. Cetiri ambalazna parametra i reversID su otisli jer
+' ih novcana grana ne koristi (izmereno), a ostavljeni bi bili poziv da se klase
+' opet pomesaju.
+'
+' IME JE ZADRZANO namerno: preimenovanje dira modNovacUnos, modPrint i 12 test
+' poziva bez ijedne promene ponasanja. To je kozmetika i ide svojim rezom.
 Public Function SaveOMUlaz_TX(ByVal datum As Date, _
                               ByVal brojDok As String, _
                               ByVal stanicaNaziv As String, _
                               ByVal stanicaID As String, _
-                              ByVal vozacID As String, _
-                              ByVal tipAmb As String, _
-                              ByVal kolAmb As Long, _
                               ByVal vrstaVoca As String, _
                               ByVal novac As Double, _
                               ByVal kooperantID As String, _
                               ByVal primalacDisplay As String, _
                               ByVal otkupID As String, _
-                              ByVal tipNovca As String, _
-                              ByVal koopSmer As String) As Boolean
+                              ByVal tipNovca As String) As Boolean
     Dim tx As clsTransaction
-    Dim reversID As String
     Set tx = New clsTransaction
 
     On Error GoTo EH
 
-    If kolAmb <= 0 And novac <= 0 Then
+    If novac <= 0 Then
         Err.Raise vbObjectError + 1501, "SaveOMUlaz_TX", _
-                  Poruka("DOK_ERR_NEMA_AMBALAZE_NOVCA")
+                  Poruka("DOK_ERR_NEMA_NOVCA")
     End If
 
     tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_OTKUP
-
-    If kolAmb > 0 Then
-        ' Kapija broja stoji SAMO ovde, u revers grani. Cist gotovinski
-        ' promet (F5 isplata / F6 uplata) prolazi kroz istu proceduru sa
-        ' kolAmb = 0, nema svoj brojevni niz (broj je slobodan unos) i
-        ' tamo stanicaID postaje partner-OM -- kapija nad celom procedurom
-        ' odbijala bi legitimnu isplatu.
-        modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_REV, stanicaID, datum, _
-                                         brojDok, "SaveOMUlaz_TX"
-
-        ' Zauzetost broja u nizu (stanica, dan), sa storniranima (A9) -- ista
-        ' provera koju ekran zove u ReversValidiraj. Jednom po dokumentu, pre
-        ' nogu: provera po nozi odbila bi sopstvenu nogu Kooperant. Vazi za SVA
-        ' CETIRI smera, i jedina je provera broja: isti KOOP broj, smer i dan na
-        ' drugoj stanici je legalan (REV-IDENT-01 Faza 2b -- noge povezuje ReversID).
-        modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_REV, stanicaID, datum, _
-                                            brojDok, "SaveOMUlaz_TX"
-
-        ' REV-IDENT-01: JEDAN identitet po dokumentu, zajednicki svim nogama
-        ' (Kooperant + Stanica za KOOP, sama Stanica za FIRMA). Kuje se jednom i
-        ' NASLEDJUJE u svakoj nozi -- nikad po nozi.
-        reversID = modAmbalaza.NoviReversID()
-
-        Select Case koopSmer
-        Case "IZDAVANJE"
-            ' OM IZDAJE prazne kooperantu -> DVOJNI upis (bez vozaca):
-            '   1) Kooperant ULAZ (dobija prazne), 2) OM/Stanica IZLAZ (razduzenje OM).
-            If Trim$(kooperantID) = "" Then
-                Err.Raise vbObjectError + 1503, "SaveOMUlaz_TX", _
-                          "Izdavanje kooperantu: kooperant je obavezan."
-            End If
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1504, "SaveOMUlaz_TX", _
-                          "Izdavanje kooperantu: OM (otkupno mesto) je obavezan za razdu" & ChrW(382) & "enje."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", kooperantID, "Kooperant", _
-                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP, reversID
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Izlaz", stanicaID, "Stanica", _
-                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP, reversID
-        Case "PRIJEM"
-            ' KOOPERANT VRACA prazne na OM (povrat) -> DVOJNI upis, mirror izdavanja:
-            '   1) Kooperant IZLAZ (predaje prazne), 2) OM/Stanica ULAZ (zaduzenje OM).
-            If Trim$(kooperantID) = "" Then
-                Err.Raise vbObjectError + 1505, "SaveOMUlaz_TX", _
-                          "Prijem od kooperanta: kooperant je obavezan."
-            End If
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1506, "SaveOMUlaz_TX", _
-                          "Prijem od kooperanta: OM (otkupno mesto) je obavezan za zadu" & ChrW(382) & "enje."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Izlaz", kooperantID, "Kooperant", _
-                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP, reversID
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", stanicaID, "Stanica", _
-                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP, reversID
-        Case "IZDATO_OM"
-            ' Vozac raspodeljuje prazne na OM (revers ide na OM): OM (Stanica) ULAZ +
-            ' vozac (inverzno Izlaz = vozac se razduzuje). Vozac je prethodno zaduzen
-            ' kod kupca (prijemnica-povrat / kupci-izlaz) -> hladnjaca se NE knjizi ovde.
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1507, "SaveOMUlaz_TX", _
-                          "Izdato OM: OM (otkupno mesto) je obavezan."
-            End If
-            If Trim$(vozacID) = "" Then
-                Err.Raise vbObjectError + 1509, "SaveOMUlaz_TX", _
-                          "Izdato OM: vozac je obavezan (firma<->OM ide preko vozaca)."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", stanicaID, "Stanica", _
-                          vozacID, brojDok, DOK_TIP_OM_ULAZ_FIRMA, reversID
-        Case "PRIJEM_OD_OM"
-            ' OM vraca prazne vozacu (revers ide na OM): OM (Stanica) IZLAZ + vozac
-            ' (inverzno Ulaz = vozac se zaduzuje). Vozac kasnije razduzuje firmi
-            ' (hladnjaci) kroz postojece kupac tokove -> hladnjaca se NE knjizi ovde.
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1508, "SaveOMUlaz_TX", _
-                          "Prijem od OM: OM (otkupno mesto) je obavezan."
-            End If
-            If Trim$(vozacID) = "" Then
-                Err.Raise vbObjectError + 1510, "SaveOMUlaz_TX", _
-                          "Prijem od OM: vozac je obavezan (firma<->OM ide preko vozaca)."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Izlaz", stanicaID, "Stanica", _
-                          vozacID, brojDok, DOK_TIP_OM_IZLAZ_FIRMA, reversID
-        Case Else
-            ' Smer je OBAVEZAN uz kolicinu ambalaze. Ranije je ovde tiho knjizen
-            ' legacy "OM prima od vozaca" (Stanica ULAZ, DOK_TIP_OM_ULAZ), pa je
-            ' prazan/nepoznat smer davao pogresan ledger red bez ijedne poruke.
-            ' UI blokira prazan smer, ovo je core guard za sve ostale pozivaoce.
-            Err.Raise vbObjectError + 1511, "SaveOMUlaz_TX", _
-                      "Nepoznat smer ambalaze '" & koopSmer & "'. Dozvoljeni: " & _
-                      "IZDAVANJE, PRIJEM, IZDATO_OM, PRIJEM_OD_OM."
-        End Select
-    End If
 
     If novac > 0 Then
         Dim novacID As String

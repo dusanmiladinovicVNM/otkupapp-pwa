@@ -1267,8 +1267,13 @@ Private Sub BuildForm(frm As Object)
     NewFieldG z, "fgHladnjaca", Poruka("OTKUI_FLD_HLADNJACA"), "cmb", "", 1, False, False, "DOK"
     NewFieldG z, "fgPogon", Poruka("OTKUI_FLD_POGON"), "txt", "", 1, False, False, "DOK"
 
-    ' SMER REVERSA - cetiri medjusobno iskljuciva segmenta, isti skup kao
-    ' frmDokumenta.SetupOMIzdavanjeToggle. Span 2 da sva cetiri stanu u red.
+    ' SMER REVERSA - PET medjusobno iskljucivih segmenata. Prva cetiri su isti
+    ' skup kao frmDokumenta.SetupOMIzdavanjeToggle; peti je povrat praznih od
+    ' kupca (AMB-10-ODL-23), dokument koji nosi KUPCEV broj.
+    '
+    ' Sirina je 73 umesto 91 jer peti segment u istih 370pt inace ne staje:
+    ' 1 + 5*73 + 4*1 = 370. Najduzi natpis je 12 znakova ('Prijem od OM',
+    ' 'Povrat kupca'), isti kao pre reza.
     Set fr = NewFrame(z, "fgSmerRev", 0, 0, 370, FIELD_GRP_H, C_WHITE)
     fr.tag = "fld:3:AMB"
     NewLbl fr, "fgSmerRevL", Poruka("OTKUI_FLD_SMER_REV"), 0, 0, 300, 12, TS_LABEL, True, C_MUTED, -1
@@ -1276,10 +1281,11 @@ Private Sub BuildForm(frm As Object)
     ' NIJEDAN segment nije unapred obelezen: smer se bira eksplicitno. Ranije je
     ' segRev1 izgledao izabrano a mSmerRev je bio 0, pa je forma pokazivala smer
     ' koji dokument nije imao.
-    NewSegBtn fr, "segRev1", Poruka("OTKUI_SEG_REV_IZD_KOOP"), 1, 17, 91, FIELD_H - 2, False
-    NewSegBtn fr, "segRev2", Poruka("OTKUI_SEG_REV_PRI_KOOP"), 93, 17, 91, FIELD_H - 2, False
-    NewSegBtn fr, "segRev3", Poruka("OTKUI_SEG_REV_IZD_OM"), 185, 17, 91, FIELD_H - 2, False
-    NewSegBtn fr, "segRev4", Poruka("OTKUI_SEG_REV_PRI_OM"), 277, 17, 91, FIELD_H - 2, False
+    NewSegBtn fr, "segRev1", Poruka("OTKUI_SEG_REV_IZD_KOOP"), 1, 17, 73, FIELD_H - 2, False
+    NewSegBtn fr, "segRev2", Poruka("OTKUI_SEG_REV_PRI_KOOP"), 75, 17, 73, FIELD_H - 2, False
+    NewSegBtn fr, "segRev3", Poruka("OTKUI_SEG_REV_IZD_OM"), 149, 17, 73, FIELD_H - 2, False
+    NewSegBtn fr, "segRev4", Poruka("OTKUI_SEG_REV_PRI_OM"), 223, 17, 73, FIELD_H - 2, False
+    NewSegBtn fr, "segRev5", Poruka("OTKUI_SEG_REV_POVRAT_KUP"), 297, 17, 73, FIELD_H - 2, False
 
 
     ' VREDNOST - forest ploca (isti shell, druga ispuna). Ploca ne zauzima celo
@@ -3617,18 +3623,40 @@ Private Sub KlasaCenaPoRezimu(ByVal z As Object, ByVal mode As String)
         UCase$(Poruka(IIf(imaCenu, "OTKUI_FLD_KLASA_CENA", "OTKUI_FLD_KLASA")))
 End Sub
 
-' Cetiri smera reversa su medjusobno iskljuciva - isti obrazac kao SetKlasa.
-' n = 0 gasi sve cetiri (stanje "nije izabrano", u koje se rezim i vraca).
+' Pet smerova reversa su medjusobno iskljucivi - isti obrazac kao SetKlasa.
+' n = 0 gasi sve (stanje "nije izabrano", u koje se rezim i vraca).
 Private Sub SetSmerRev(ByVal n As Long)
     Dim z As Object, i As Long, sel As Boolean
+    Dim stariKupcev As Boolean, noviKupcev As Boolean
     On Error Resume Next
     Set z = mFrm.Controls("zForm").Controls("fgSmerRev")
+    ' Vlasnik niza se cita PRE dodele -- posle nje se stari smer vise ne zna.
+    stariKupcev = (mSmerRev = modNovacUnos.SMER_REV_POVRAT_KUP)
+    noviKupcev = (n = modNovacUnos.SMER_REV_POVRAT_KUP)
     mSmerRev = n
     MarkDirty
-    For i = 1 To 4
+    For i = 1 To 5
         sel = (i = n)
         BoxState z, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
     Next i
+
+    ' BROJ PRATI VLASNIKA NIZA, ne svaki smer.
+    '
+    ' Nasa cetiri smera dele niz STANICE; peti nosi KUPCEV broj. Dok se vlasnik
+    ' ne menja (1 <-> 2, 3 <-> 4), broj se NE dira -- rucno upisan broj bi inace
+    ' nestajao na svaki klik. Kad se vlasnik promeni, polje se PRAZNI, pa se za
+    ' nase smerove trazi predlog.
+    '
+    ' PRAZNJENJE JE NOSECE I U SMERU 5 -> 1..4, i to je bio P1 (review
+    ' 08.10.2026): prva verzija je samo zvala RefreshBrojPredlog, a on sa
+    ' iskljucenim AUTO_BROJ-em vraca prazno i IZLAZI bez diranja polja -- pa bi
+    ' kupcev broj tiho postao broj NASEG dokumenta.
+    '
+    ' n = 0 (reset rezima) ne dira polje.
+    If n > 0 And (stariKupcev <> noviKupcev) Then
+        SetFld "fgBrOtpr", ""
+        If Not noviKupcev Then RefreshBrojPredlog False
+    End If
 End Sub
 
 ' Isplata iz OM avansa vs virman firme - dva segmenta, isti obrazac. Prekidac
@@ -3766,11 +3794,14 @@ Public Function AktivanEkran() As String
 End Function
 
 Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As Boolean)
-    Dim k As String
+    Dim k As String, stariRezim As String
     On Error Resume Next
     mPopMute = True                    ' punjenje lista pise u combo -> ne otvaraj panel
     mLoading = True                    ' i to NIJE izmena korisnika
     ClosePopup
+    ' Stari rezim se cita PRE dodele -- posle nje se vise ne zna odakle se doslo,
+    ' a bas to odlucuje da li broj pripada ovom dokumentu (v. kraj procedure).
+    stariRezim = ActiveMode
     ActiveMode = key
     k = modeKey(key)
     ' Ovde je do v6-ui-143 stajao grid-max za STORNO: F8 je crtao unosnu formu
@@ -3874,9 +3905,25 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     mPopMute = False
     mLoading = False
     ' Svaki rezim ima svoj brojevni niz (otkupni list / otpremnica / zbirna /
-    ' revers), pa se predlog racuna i pri promeni rezima - inace bi u polju
-    ' ostao broj iz prethodnog niza. Rezimi bez niza ga ne diraju.
-    If Not mBuilding Then RefreshBrojPredlog False
+    ' revers), pa broj prethodnog dokumenta ne sme da predje u sledeci.
+    '
+    ' PRAZNJENJE JE NOSECE, a ne sam predlog -- i to je bio P1 (review
+    ' 08.10.2026). RefreshBrojPredlog upisuje SAMO kad ima sta da predlozi:
+    '
+    '   AUTO_BROJ_DOKUMENTA = NE   -> SuggestNextBroj vraca "" -> Exit Sub
+    '   rezim bez niza (F5, F6)    -> KindZaRezim vraca "" -> Exit Sub
+    '
+    ' U oba slucaja polje ostaje netaknuto, pa bi broj prethodnog dokumenta
+    ' otisao u pisac sledeceg: kupcev broj reversa je tako mogao da postane
+    ' broj OTKUPNOG LISTA, a OtkupValidiraj ga ne odbija (rucno unet broj van
+    ' nase seme je legitiman -- BrojOdgovaraKontekstu vraca NEPRIMENLJIVO).
+    '
+    ' Zato se polje PRVO prazni, pa tek onda trazi predlog. Prefill ispravke
+    ' ide POSLE SelectMode i upisuje svoj broj, pa ga ovo ne dira.
+    If Not mBuilding Then
+        If StrComp(stariRezim, key, vbTextCompare) <> 0 Then SetFld "fgBrOtpr", ""
+        RefreshBrojPredlog False
+    End If
     If doReload Then
         mView = Empty: mViewN = 0
         ReloadGrid
@@ -4387,6 +4434,7 @@ Private Sub UiClickCore(ByVal tag As String)
         Case "segRev2": SetSmerRev 2
         Case "segRev3": SetSmerRev 3
         Case "segRev4": SetSmerRev 4
+        Case "segRev5": SetSmerRev 5
         Case "segAvans1": SetAvans 1
         Case "segAvans2": SetAvans 2
         Case "btnSacuvaj", "btnSacuvajPrint": CommitDokument (tag = "btnSacuvajPrint")
@@ -8593,6 +8641,13 @@ Private Sub RefreshBrojPredlog(Optional ByVal checkRemote As Boolean = True)
 
     kind = KindZaRezim(mk)
     If Len(kind) = 0 Then Exit Sub
+
+    ' KUPCEV REVERS NE DOBIJA PREDLOG (AMB-10-ODL-23): dokument je njegov i nosi
+    ' njegov broj. Isti oblik kao PredlogPrijemnice ispod -- "polje se tada NE
+    ' dira". Odluku drzi modNovacUnos, jer je isto pravilo potrebno i validatoru.
+    If kind = KIND_REV Then
+        If Not modNovacUnos.RevSmerPredlazeBroj(mSmerRev) Then Exit Sub
+    End If
     entID = EntitetZaBroj(kind)
     If Len(entID) = 0 Then Exit Sub
     sug = SuggestNextBroj(kind, entID, DatumIzPolja(), checkRemote)

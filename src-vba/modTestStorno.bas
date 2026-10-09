@@ -608,11 +608,24 @@ Private Sub T17_PonistenjeZbirnaHladnjacaKaskada()
 End Sub
 
 ' ============================================================
-' T18 - PONISTENJE zbirne (EKSTERNI kupac): interne otpremnice se storniraju, ali
-' prijemnica (eksterna) ostaje NETAKNUTA (zbirna je poslednji interni dok).
+' T18 - PONISTENJE zbirne (EKSTERNI kupac): ODBIJENO dok je prijemnica aktivna.
+'
+' Do 10b-2 je ovaj tok "uspevao": zbirna i otpremnica su se stornirale, a
+' eksterna prijemnica ostajala AKTIVNA i vezana na njih. Review (05.10.2026, P1)
+' je to nazvao LAZNO USPESNIM poslovnim ponistenjem -- funkcija je prijavljivala
+' uspeh nad polomljenim lifecycle-om, a zastita se oslanjala na SALDO, koji nad
+' punom zamenom gajbi ne zaustavi nista.
+'
+' AMB-10-ODL-21: aktivan nizvodni dokument koji NE smemo da storniramo znaci da
+' uzvodni tok ne sme da se proglasi nepostojecim. Odbijanje stoji PRED mutacijom,
+' pa ni zbirna ne bude dirnuta.
+'
+' Prijemnica i dalje ostaje netaknuta -- ali sada zato sto se NISTA nije desilo,
+' a ne kao ostatak polovicne kaskade. Zato je zadrzana i ta tvrdnja: ona sama ne
+' razlikuje stari i nov ugovor, pa stoji uz tvrdnje koje ga razlikuju.
 ' ============================================================
 Private Sub T18_PonistenjeZbirnaEksterniNeDiraPrijemnicu()
-    Const S As String = "T18 PONISTENJE zbirna (eksterni) ne dira prijemnicu: "
+    Const S As String = "T18 PONISTENJE zbirna (eksterni) je odbijeno: "
 
     SeedZbirna "SVT-Z18", "I", 100, 10, "SVT-EXT-KUPAC"
     SeedOtpremnica "SVT-O18", "SVT-Z18", "I", 100, 10
@@ -620,9 +633,11 @@ Private Sub T18_PonistenjeZbirnaEksterniNeDiraPrijemnicu()
 
     Dim res As Object
     Set res = modStornoFlow.RunZbirnaCorrection("SVT-Z18", SV_MODE_PONISTENJE, True)
-    Chk CBool(res("success")), S & "PONISTENJE uspeo"
-    Chk Not ZbirnaPostoji("SVT-Z18"), S & "zbirna stornirana"
-    ChkEq LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O18", COL_OTP_ID), "", S & "otpremnica STORNIRANA (interno)"
+    Chk Not CBool(res("success")), S & "PONISTENJE je ODBIJENO"
+    Chk InStr(1, CStr(res("message")), "EKSTERNOG kupca", vbTextCompare) > 0, _
+        S & "razlog imenuje eksternu prijemnicu, ne genericki neuspeh"
+    Chk ZbirnaPostoji("SVT-Z18"), S & "zbirna je ostala AKTIVNA (odbijeno PRED mutacijom)"
+    Chk LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, "SVT-O18", COL_OTP_ID) <> "", S & "otpremnica je ostala AKTIVNA"
     Chk LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, "SVT-P18", COL_PRJ_ID) <> "", S & "prijemnica NETAKNUTA (eksterni kupac)"
 End Sub
 
@@ -1316,18 +1331,45 @@ Private Function OtkOtvorenaObaveza(ByVal otkID As String) As Boolean
 End Function
 
 ' Saldo (Ulaz +, Izlaz -) za entitet+tip -> iz produkcijskog GetAmbalazeStanje.
+' SALDO NAD STARIM MODELOM -- namerno, jer ovaj modul vozi STARI tok.
+'
+' Do 09.10.2026 je zvao GetAmbalazeStanje. Taj citalac je u 10c presecen na
+' kanonsku knjigu, pa je nad legacy semenom ovog modula vracao NULU: cetiri
+' tvrdnje (T06, T07, T13) su pale, a izgledalo je kao kvar storna.
+'
+' Testovi ovde voze modStornoFlow.RunReversCorrection sa DOK_TIP_OM_* -- stari
+' put ispravke/ponistenja, koji je sa kanonskog UI-ja nedostupan i prelazi u
+' 10d. Seme i orakl zato moraju da budu u ISTOM modelu; mesanje je ono sto ih
+' je oborilo. Oboje odlazi zajedno sa starim modelom u 10e.
 Private Function AmbSaldo(ByVal entID As String, ByVal entTip As String, ByVal tip As String) As Long
     On Error GoTo EH
-    Dim arr As Variant
-    arr = GetAmbalazeStanje(entID, entTip)
-    If Not IsArray(arr) Then Exit Function
-    Dim i As Long
-    For i = LBound(arr, 1) To UBound(arr, 1)
-        If Trim$(CStr(arr(i, 1))) = tip Then
-            AmbSaldo = CLng(arr(i, 2))
-            Exit Function
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cTip As Long, cKol As Long, cSmer As Long
+    Dim cEnt As Long, cEntTip As Long, cSt As Long
+    cTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
+    cKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
+    cSmer = GetColumnIndex(TBL_AMBALAZA, COL_AMB_SMER)
+    cEnt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
+    cEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
+    cSt = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+
+    Dim i As Long, s As Long
+    For i = 1 To UBound(d, 1)
+        If cSt = 0 Or CStr(d(i, cSt)) <> "Da" Then
+            If NzTx(d(i, cEntTip)) = entTip And NzTx(d(i, cEnt)) = entID And _
+               NzTx(d(i, cTip)) = tip Then
+                If NzTx(d(i, cSmer)) = "Ulaz" Then
+                    s = s + CLng(Nz(d(i, cKol), 0))
+                Else
+                    s = s - CLng(Nz(d(i, cKol), 0))
+                End If
+            End If
         End If
     Next i
+    AmbSaldo = s
     Exit Function
 EH:
     AmbSaldo = -99999      ' sentinel -> test vidljivo pada

@@ -371,13 +371,48 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
     End If
 
     Dim greska As String, upozorenje As String
+    Dim ambErrNum As Long, ambDeficit As Double
     If Len(Trim$(ispravljaOtkupID)) > 0 Then
-        res = modOtkup.IspravkaOtkupa_TX(Trim$(ispravljaOtkupID), h, stavke, greska, upozorenje)
+        res = modOtkup.IspravkaOtkupa_TX(Trim$(ispravljaOtkupID), h, stavke, _
+                                         greska, upozorenje, , ambErrNum)
         ' Upozorenje NIJE greska (preplata posle smanjenja): ispravka prolazi, a
         ' operater to mora da vidi -- inace preplatu nadje tek na kartici.
         If Len(upozorenje) > 0 Then poruke = poruke & upozorenje & vbCrLf
     Else
-        res = CreateOtkup_TX(h, stavke, greska)
+        res = CreateOtkup_TX(h, stavke, greska, , ambErrNum)
+    End If
+
+    ' POTVRDA DEFICITA: pitanje operateru, ne greska (6.5, AMB-10-ODL-8).
+    '
+    ' Kooperant koji donese SVOJE gajbe pravi manjak na svom nalogu, a pokrice
+    ' toga je dug firme prema njemu -- pa ne sme da prodje tiho. Mereno kod
+    ' operatera: 5-10% otkupa, dakle izuzetak ali redovan.
+    '
+    ' EKRAN ZADRZAVA PODATKE: poziv se ponavlja ODAVDE, pa operater ne unosi
+    ' nista ponovo (odluka 03.10.2026). Slucaj se prepoznaje po BROJU greske, ne
+    ' po tekstu -- tekst je prevodiv i menja se, broj je ugovor.
+    '
+    ' Odbijena potvrda nije greska: res ostaje prazan, a pozivalac je vec dobio
+    ' tekst odbijenice u greska.
+    If ambErrNum = AMB_ERR_POTVRDA_DEFICITA Then
+        ambDeficit = modOtkup.OtkupDeficitKooperanta(h, stavke)
+        If ambDeficit > 0 Then
+            If MsgBox(Poruka("AMB_ASK_DEFICIT_1") & vbCrLf & _
+                      Poruka("AMB_ASK_DEFICIT_2") & " " & _
+                      Format$(ambDeficit, "#,##0") & vbCrLf & vbCrLf & _
+                      Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE"), _
+                      vbExclamation + vbYesNo, APP_NAME) = vbYes Then
+                greska = ""
+                ambErrNum = 0
+                If Len(Trim$(ispravljaOtkupID)) > 0 Then
+                    res = modOtkup.IspravkaOtkupa_TX(Trim$(ispravljaOtkupID), h, stavke, _
+                                                     greska, upozorenje, ambDeficit, ambErrNum)
+                    If Len(upozorenje) > 0 Then poruke = poruke & upozorenje & vbCrLf
+                Else
+                    res = CreateOtkup_TX(h, stavke, greska, ambDeficit, ambErrNum)
+                End If
+            End If
+        End If
     End If
 
     If Len(res) = 0 Then

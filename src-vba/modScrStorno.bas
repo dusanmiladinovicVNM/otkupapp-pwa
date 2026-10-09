@@ -735,10 +735,19 @@ Private Function AkcijeRacun() As Variant
         If Not CBool(mImpact("valid")) Then Exit Function
     End If
 
+    ' REVERS NUDI SAMO STORNO (od 10c).
+    '
+    ' ISPRAVKA i dalje ide kroz RunReversCorrection -> ReversIDRazresi, koji
+    ' ocekuje AmbID NOGE i stari DOK_TIP_OM_*. Lista od 10c salje AmbDokID i
+    ' vrstu REVERS / REVERS_PARTNERA, pa bi akcija pala fail-safe na "red
+    ' ambalaze nije pronadjen". Ponuditi radnju koja nad izabranim dokumentom
+    ' NE MOZE da radi je gore od toga da je nema (review 08.10.2026, P2).
+    '
+    ' Presecanje toka ispravke na AmbDokID ide uz 10d/10e, zajedno sa
+    ' UndoOperation_TX i brisanjem starog modela -- tada se vraca i ovaj segment.
     If mSelTip = STIP_REVERSI Then
         AkcijeRacun = Array( _
-            "|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger", _
-            SV_MODE_ISPRAVKA & "|OTKUI_SCRST_B_REV_ISPR|OTKUI_SCRST_H_REV_ISPR|secondary")
+            "|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger")
         Exit Function
     End If
 
@@ -1094,13 +1103,17 @@ End Function
 ' jedinstven tek u nizu (stanica, dan) -- pa ni broj ni "koji smer ima aktivan
 ' red pod brojem" ne kazu koji je dokument. Prazno kad red nema identitet ili
 ' nije revers: StornoRazlog tada odbija (STORNO_ERR_NEMA_SMERA), ne pogadja.
-Private Function ReversTipReda(ByVal ambID As String) As String
+' Od 10c je red liste DOKUMENT, pa se vrsta cita sa zaglavlja (REVERS /
+' REVERS_PARTNERA), a ne vise tip dokumenta sa noge knjige. Vrstu priznaje
+' UGOVOR (AmbDokVrstaPoznata), ne spisak imena ovde.
+Private Function ReversTipReda(ByVal ambDokID As String) As String
     Dim t As String
-    If Len(Trim$(ambID)) = 0 Then Exit Function
+    If Len(Trim$(ambDokID)) = 0 Then Exit Function
     On Error Resume Next
-    t = Trim$(NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, Trim$(ambID), COL_AMB_DOK_TIP)))
+    t = Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                   Trim$(ambDokID), COL_AMBD_VRSTA)))
     On Error GoTo 0
-    If ReversTipJe(t) Then ReversTipReda = t
+    If modAmbalazaUgovor.AmbDokVrstaPoznata(t) Then ReversTipReda = t
 End Function
 
 ' "broj/racun" - jednoznacan kljuc izvoda. Bez racuna se salje goli broj, pa

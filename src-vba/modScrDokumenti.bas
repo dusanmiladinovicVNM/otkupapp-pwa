@@ -2300,7 +2300,10 @@ Public Function IdKolonaTipa(ByVal tk As String) As String
         Case "PRIJEMNICA":                                  IdKolonaTipa = COL_GENERACIJA_ID
         Case "FAKTURA":                                     IdKolonaTipa = COL_FAK_ID
         Case "AMB_ISPLATE", "AMB_UPLATE":                   IdKolonaTipa = COL_NOV_ID
-        Case "REVERSI":                                     IdKolonaTipa = COL_AMB_ID
+        ' Identitet reversa je AmbDokID (AMB-10-ODL-16/-17): dokument, ne noga.
+        ' Stari COL_AMB_ID je bio red knjige, pa je storno morao da ga razresava
+        ' u (broj, smer) -- plutajuci identitet koji je rez 10b-2 uklonio.
+        Case "REVERSI":                                     IdKolonaTipa = COL_AMBD_ID
         Case Else:                                          IdKolonaTipa = ""
     End Select
 End Function
@@ -2356,13 +2359,17 @@ Public Function GridCols(ByVal mk As String, Optional ByVal saIdentitetom As Boo
             c.Add "OTKUI_HD_KANAL||kanal|82|1"
             c.Add "OTKUI_HD_VREDNOST|" & COL_NOV_UPLATA & "|rsd|110|1"
         Case "REVERSI"
-            ' OSNOV nosi najduzi tekst u mrezi ("Revers " & em-dash & " OM prijem",
-            ' 18 znakova) - 112pt ga je seklo. 150pt prima i najduzu varijantu sa
-            ' rezervom, a mesta ima: ovaj rezim ima samo 7 kolona.
-            c.Add "OTKUI_HD_SMER|" & COL_AMB_SMER & "|txt|62|1"
-            c.Add "OTKUI_HD_OSNOV||osnov|150|1"
-            c.Add "OTKUI_HD_TIP_AMB|" & COL_AMB_TIP & "|txt|96|2"
-            c.Add "OTKUI_HD_KOMADA|" & COL_AMB_KOLICINA & "|sum0|80|1"
+            ' CETIRI CELIJE DOLAZE SA REDA KNJIGE, NE SA ZAGLAVLJA.
+            '
+            ' Zaglavlje ambalaznog dokumenta nosi broj, datum, vrstu i vlasnika
+            ' niza -- ali ni strane dogadjaja ni tip ambalaze ni kolicinu
+            ' (AMB-10-ODL-3). Zato su izvorne kolone prazne, a vrednost puni
+            ' citalac poslovnog reda (modAmbalaza.AmbDokRedMapa) u RedoviZaTip.
+            ' Isti obrazac kao kolona OSNOV, koja je i dosad bila izvedena.
+            c.Add "OTKUI_HD_SMER||ambsmer|62|1"
+            c.Add "OTKUI_HD_OSNOV||ambosnov|150|1"
+            c.Add "OTKUI_HD_TIP_AMB||ambtip|96|2"
+            c.Add "OTKUI_HD_KOMADA||ambkol|80|1"
         Case "FAKTURA"
             ' Faktura nema ni robu ni ambalazu - nosi iznos i svoj status.
             c.Add "OTKUI_HD_IZNOS|" & COL_FAK_IZNOS & "|rsd|110|1"
@@ -2414,7 +2421,7 @@ Public Function ColBroj(ByVal m As String) As String
         Case "ZBIRNA":                  ColBroj = COL_ZBR_BROJ
         Case "PRIJEMNICA":              ColBroj = COL_PRJ_BROJ
         Case "AMB_ISPLATE", "AMB_UPLATE": ColBroj = COL_NOV_BROJ_DOK
-        Case "REVERSI":                 ColBroj = COL_AMB_DOK_ID
+        Case "REVERSI":                 ColBroj = COL_AMBD_BROJ
         Case "FAKTURA":                 ColBroj = COL_FAK_BROJ
     End Select
 End Function
@@ -2426,7 +2433,7 @@ Public Function ColDatum(ByVal m As String) As String
         Case "ZBIRNA":                  ColDatum = COL_ZBR_DATUM
         Case "PRIJEMNICA":              ColDatum = COL_PRJ_DATUM
         Case "AMB_ISPLATE", "AMB_UPLATE": ColDatum = COL_NOV_DATUM
-        Case "REVERSI":                 ColDatum = COL_AMB_DATUM
+        Case "REVERSI":                 ColDatum = COL_AMBD_DATUM
         Case "FAKTURA":                 ColDatum = COL_FAK_DATUM
     End Select
 End Function
@@ -2438,7 +2445,10 @@ Public Function ColPartner(ByVal m As String) As String
         Case "ZBIRNA":                  ColPartner = COL_ZBR_KUPAC
         Case "PRIJEMNICA":              ColPartner = COL_PRJ_KUPAC
         Case "AMB_ISPLATE", "AMB_UPLATE": ColPartner = COL_NOV_PARTNER
-        Case "REVERSI":                 ColPartner = COL_AMB_ENTITET
+        ' Zaglavlje NEMA protivpartnera (AMB-10-ODL-3: strane dogadjaja zive na
+        ' redu knjige, kopija na zaglavlju bila bi druga istina), pa celiju puni
+        ' citalac reda -- v. kind "part" uz `rev` u RedoviZaTip.
+        Case "REVERSI":                 ColPartner = ""
         Case "FAKTURA":                 ColPartner = COL_FAK_KUPAC
     End Select
 End Function
@@ -2557,7 +2567,7 @@ Public Function TabelaTipa(ByVal tk As String) As String
         Case "ZBIRNA":      TabelaTipa = TBL_ZBIRNA
         Case "PRIJEMNICA":  TabelaTipa = TBL_PRIJEMNICA
         Case "AMB_ISPLATE", "AMB_UPLATE": TabelaTipa = TBL_NOVAC
-        Case "REVERSI":     TabelaTipa = TBL_AMBALAZA
+        Case "REVERSI":     TabelaTipa = TBL_AMBALAZA_DOKUMENT
         Case "FAKTURA":     TabelaTipa = TBL_FAKTURE
         Case "IZVOD":       TabelaTipa = TBL_BANKA_IMPORT
         Case Else:          TabelaTipa = TBL_OTKUP
@@ -2639,12 +2649,22 @@ End Function
 ' Zato se po tipu dokumenta bira SAMO noga koja nosi znacenje:
 '   revers/otkup ka kooperantu  -> noga kooperanta
 '   revers firma <-> OM         -> noga otkupnog mesta (tada OM JESTE partner)
-Public Function RevRowVisible(ByVal dokTip As String, ByVal entTip As String) As Boolean
-    Select Case Trim$(dokTip)
-        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, DOK_TIP_OTKUP
-            RevRowVisible = (Trim$(entTip) = "Kooperant")
-        Case DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-            RevRowVisible = (Trim$(entTip) = "Stanica")
+' KOJE VRSTE AMBALAZNOG DOKUMENTA ULAZE U LISTU "REVERSI".
+'
+' ZATVOREN SPISAK, a ne AmbDokVrstaPoznata: nabavka i otpis SU poznate vrste,
+' ali nisu reversi -- pustiti ih znacilo bi da F7 i Storno/Reversi pokazuju
+' dokumente koje taj ekran ne ume ni da napravi ni da stornira kao revers.
+'
+' ZAMENILA JE RevRowVisible, i to je bio P1 (review 08.10.2026). Stari filter
+' je sudio po TIPU DOKUMENTA NOGE (DOK_TIP_OM_*) i po entitetu reda. Posle
+' 10c je red mreze DOKUMENT, pa je `Vrsta` sa zaglavlja ("REVERS") padala u
+' Case Else -> False -> svaki nov revers je ISPADAO iz liste. Mapa tipa je
+' bila presecena, filter reda nije -- i nijedan test nije zvao citaoca, pa je
+' 12/12 ZELENO bilo saglasno sa potpuno praznom listom.
+Public Function AmbDokUListiReversa(ByVal vrsta As String) As Boolean
+    Select Case Trim$(vrsta)
+        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA
+            AmbDokUListiReversa = True
     End Select
 End Function
 
@@ -2683,14 +2703,81 @@ End Function
 ' Kod reversa EntitetID pokazuje u RAZLICITU tabelu zavisno od EntitetTip
 ' (modAmbalaza koristi "Kooperant" / "Stanica" / "Kupac"), pa se partner ne moze
 ' razresiti jednim recnikom kao kod ostalih rezima.
+
+' Polje pakovanog reda ambalaznog dokumenta (v. modAmbalaza.AmbDokRedMapa).
+' Prazno za dokument bez poslovnog reda -- lista tada pokazuje zaglavlje bez
+' detalja, a ne puca: mreza nije kapija integriteta.
+Private Function AmbRecPolje(ByVal rec As Variant, ByVal i As Long) As String
+    If Not IsArray(rec) Then Exit Function
+    If i < LBound(rec) Or i > UBound(rec) Then Exit Function
+    AmbRecPolje = CStr(rec(i))
+End Function
+
+' KOGA KOLONA PARTNER POKAZUJE kod ambalaznog dokumenta.
+'
+' Red knjige imenuje OBE strane, pa "partner" nije podatak nego IZBOR prikaza:
+' pokazuje se strana koja NIJE nasa (kooperant ili kupac). Kad su obe nase --
+' vozac i stanica, PRENOS_INTERNO po AMB-10-ODL-7 -- pokazuje se ona koja nije
+' stanica: stanica je kontekst ekrana i ne kaze nista novo.
+'
+' Ko je "nas" cita se iz UGOVORA (AmbNalogUKlasi), ne iz spiska imena ovde --
+' dva spiska bi se razisla prvom izmenom naloga.
+Private Sub AmbProtivpartner(ByVal rec As Variant, ByRef tip As String, ByRef id As String)
+    tip = ""
+    id = ""
+    If Not IsArray(rec) Then Exit Sub
+    If UBound(rec) < 6 Then Exit Sub
+
+    Dim odT As String, odI As String, naT As String, naI As String
+    odT = CStr(rec(3))
+    odI = CStr(rec(4))
+    naT = CStr(rec(5))
+    naI = CStr(rec(6))
+
+    If Not modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_SOPSTVENI, odT) Then
+        tip = odT
+        id = odI
+    ElseIf Not modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_SOPSTVENI, naT) Then
+        tip = naT
+        id = naI
+    ElseIf StrComp(odT, AMB_NALOG_STANICA, vbTextCompare) <> 0 Then
+        tip = odT
+        id = odI
+    Else
+        tip = naT
+        id = naI
+    End If
+End Sub
+
+' Naziv vrste kretanja za mrezu. Nepoznata vrsta vraca SVOJ KOD, ne prazno:
+' prazna celija bi izgledala kao da reda nema, a kod kaze sta je zateceno.
+Private Function AmbKretanjeNaziv(ByVal vk As String) As String
+    AmbKretanjeNaziv = Trim$(vk)
+    Select Case Trim$(vk)
+        Case AMB_VK_IZDATA_PRAZNA:   AmbKretanjeNaziv = Poruka("OTKUI_VK_IZDATA")
+        Case AMB_VK_POVRAT_PRAZNE:   AmbKretanjeNaziv = Poruka("OTKUI_VK_POVRAT")
+        Case AMB_VK_PRENOS_INTERNO:  AmbKretanjeNaziv = Poruka("OTKUI_VK_INTERNO")
+        Case AMB_VK_UZ_ROBU:         AmbKretanjeNaziv = Poruka("OTKUI_VK_UZ_ROBU")
+        Case AMB_VK_ULAZ_TUDJE:      AmbKretanjeNaziv = Poruka("OTKUI_VK_ULAZ_TUDJE")
+        Case AMB_VK_VRACANJE_TUDJE:  AmbKretanjeNaziv = Poruka("OTKUI_VK_VRACANJE_TUDJE")
+        Case AMB_VK_NABAVKA:         AmbKretanjeNaziv = Poruka("OTKUI_VK_NABAVKA")
+        Case AMB_VK_OTPIS:           AmbKretanjeNaziv = Poruka("OTKUI_VK_OTPIS")
+    End Select
+End Function
+
+' Ime naloga za kolonu PARTNER. Vozac je dodat uz rez 10b-2: tada je prestao
+' da bude zig (kolona uz red) i postao NALOG, pa se u listi pojavljuje kao
+' protivpartner -- bez mape bi stajao go ID.
 Public Function RevPartner(ByVal entTip As String, ByVal entID As String, _
-                            mKoop As Object, mStan As Object, mKup As Object) As String
+                            mKoop As Object, mStan As Object, mKup As Object, _
+                            Optional mVoz As Object) As String
     Dim d As Object
     RevPartner = entID
     Select Case Trim$(entTip)
         Case "Kooperant": Set d = mKoop
         Case "Stanica":   Set d = mStan
         Case "Kupac":     Set d = mKup
+        Case "Vozac":     Set d = mVoz
         Case Else:        Exit Function
     End Select
     If d Is Nothing Then Exit Function
@@ -2767,6 +2854,8 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     Dim iKoopID As Long, iPartID As Long, iOtkID As Long
     Dim mKoop As Object, mStan As Object, mKup As Object
     Dim rev As Boolean, kanal As Boolean
+    Dim mAmbRed As Object, mVoz As Object, iAmbDokID As Long
+    Dim ambRec As Variant
 
     ' Izvod nije red tabele nego GRUPA redova (jedan izvod = mnogo stavki), pa
     ' se ne moze prikazati kroz listu dokumenata (koja je red = dokument).
@@ -2880,9 +2969,14 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
 
     rev = (mk = "REVERSI")
     If rev Then
-        iBrojCol = ColIdx(tblName, COL_AMB_DOK_ID)
-        iDokTip = ColIdx(tblName, COL_AMB_DOK_TIP)
-        iEntTip = ColIdx(tblName, COL_AMB_ENTITET_TIP)
+        ' RED MREZE JE DOKUMENT, pa genericki builder i dalje odgovara -- za
+        ' razliku od izvoda, kome je red GRUPA redova i zato ima svoj builder.
+        ' Sa zaglavlja dolaze broj, datum i vrsta; tip ambalaze, kolicina i
+        ' strane dogadjaja dolaze sa POSLOVNOG REDA, kroz jednu mapu i jedan
+        ' prolaz (po redu bi bio sken po redu).
+        iAmbDokID = ColIdx(tblName, COL_AMBD_ID)
+        iDokTip = ColIdx(tblName, COL_AMBD_VRSTA)
+        Set mAmbRed = modAmbalaza.AmbDokRedMapa()
     End If
     kanal = (mk = "AMB_ISPLATE" Or mk = "AMB_UPLATE")
     If kanal Then
@@ -2898,6 +2992,9 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     If rev Or kanal Then
         Set mKoop = PartnerMap(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
         Set mStan = PartnerMap(TBL_STANICE, "StanicaID", "Naziv", "")
+        ' Vozac je od reza 10b-2 NALOG, ne zig -- pa se u listi pojavljuje kao
+        ' protivpartner i mora da ima ime, a ne go ID.
+        Set mVoz = PartnerMap(TBL_VOZACI, "VozacID", "Ime", "Prezime")
         Set mKup = PartnerMap(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV, "")
     End If
 
@@ -2937,7 +3034,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
 
         ' reversi su podskup tblAmbalaza - ostalo iz te knjige ne ulazi
         If rev Then
-            If Not RevRowVisible(CellS(src, r, iDokTip), CellS(src, r, iEntTip)) Then GoTo NextRow
+            If Not AmbDokUListiReversa(CellS(src, r, iDokTip)) Then GoTo NextRow
         End If
 
         vDatK = 0
@@ -2987,6 +3084,16 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             If pRest < 0 Then pRest = 0
         End If
 
+        If rev Then
+            ambRec = Empty
+            If iAmbDokID > 0 And Not mAmbRed Is Nothing Then
+                Dim dokKljuc As String
+                dokKljuc = CellS(src, r, iAmbDokID)
+                If mAmbRed.Exists(dokKljuc) Then _
+                    ambRec = mAmbRed(dokKljuc)
+            End If
+        End If
+
         For c = 0 To colN - 1
             Select Case kind(c)
                 Case "txt"
@@ -2995,7 +3102,9 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                 Case "part"
                     cell = CellS(src, r, ix(c))
                     If rev Then
-                        cell = RevPartner(CellS(src, r, iEntTip), CStr(cell), mKoop, mStan, mKup)
+                        Dim pTip As String, pID As String
+                        AmbProtivpartner ambRec, pTip, pID
+                        cell = RevPartner(pTip, pID, mKoop, mStan, mKup, mVoz)
                     ElseIf kanal Then
                         cell = NovacPartner(CellS(src, r, iEntTip), CellS(src, r, iKoopID), _
                                             CellS(src, r, iPartID), CellS(src, r, iOtkID), _
@@ -3028,6 +3137,19 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                 Case "osnov"
                     cell = OsnovNaziv(CellS(src, r, iDokTip), CellS(src, r, iBrojCol))
                     hay = hay & "|" & cell
+                Case "ambosnov"
+                    ' OSNOV reversa je VRSTA DOKUMENTA sa zaglavlja (REVERS /
+                    ' REVERS_PARTNERA), a ne vise tip dokumenta sa noge knjige.
+                    cell = modAmbalazaUgovor.AmbVrstaDokNaziv(CellS(src, r, iDokTip))
+                    hay = hay & "|" & cell
+                Case "ambsmer"
+                    cell = AmbKretanjeNaziv(AmbRecPolje(ambRec, 0))
+                    hay = hay & "|" & cell
+                Case "ambtip"
+                    cell = AmbRecPolje(ambRec, 1)
+                    hay = hay & "|" & cell
+                Case "ambkol"
+                    cell = Val(AmbRecPolje(ambRec, 2))
                 Case "kanal"
                     cell = KanalNaziv(KanalCode(CellS(src, r, iTip), CellS(src, r, iNap)))
                     hay = hay & "|" & cell

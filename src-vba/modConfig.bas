@@ -640,7 +640,11 @@ Public Const COL_OSIROCENO_OD As String = "OsirocenoOd"
 Public Const DOK_TIP_OTKUP As String = "Otkup"
 Public Const DOK_TIP_OTPREMNICA As String = "Otpremnica"
 Public Const DOK_TIP_PRIJEMNICA As String = "Prijemnica"
-Public Const DOK_TIP_IZLAZ_KUPCI As String = "Kupci-Otpremnica"
+' DOK_TIP_IZLAZ_KUPCI ("Kupci-Otpremnica") je OBRISAN 06.10.2026 uz red 8
+' matrice: njegov jedini pisac (SaveKupciIzlaz_TX) prestao je da knjizi
+' ambalazu, citaoca nije imao ni jednog, a povrat praznih od kupca nosi broj
+' prijemnice (AMB-10-ODL-9/-10). Tip dokumenta koji nijedan red vise ne nosi
+' ne ostaje kao ime.
 Public Const DOK_TIP_OM_IZLAZ_KOOP As String = "OM-Izlaz-Koop"  ' OM izdaje (praznu) ambalazu kooperantu
 Public Const DOK_TIP_OM_ULAZ_KOOP As String = "OM-Ulaz-Koop"    ' kooperant vraca (praznu) ambalazu na OM (povrat)
 Public Const DOK_TIP_OM_IZLAZ_FIRMA As String = "OM-Izlaz-Firma" ' OM vraca (praznu) ambalazu firmi (centrala)

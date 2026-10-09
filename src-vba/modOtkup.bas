@@ -68,9 +68,19 @@ Option Explicit
 '
 ' Redosled stavki u Collection-u NE odredjuje RedniBroj -- klase se pisu u
 ' kanonskom redu, isto kao kod zbirne.
+' potvrdaDeficita: -1 znaci "nije data". Kooperant koji donese SVOJE gajbe pravi
+' manjak na svom nalogu, a pokrice toga je dug firme prema njemu (6.4) -- pa po
+' 6.5 trazi pristanak, i to NE sme da bude tiho. Operater ga daje na ekranu;
+' PWA sync ga daje sam (odluka operatera 03.10.2026), jer tamo nema koga pitati
+' a otkupac je na telefonu vec uneo koliko je gajbi doslo.
+'
+' Izmereno: 5-10% otkupa. Dakle izuzetak, ali redovan -- zato zastajanje sa
+' pitanjem, a ne broj koji 90% vremena stoji na ekranu bez svrhe.
 Public Function CreateOtkup_TX(ByVal h As Object, _
                                ByVal stavke As Collection, _
-                               Optional ByRef outGreska As String) As String
+                               Optional ByRef outGreska As String, _
+                               Optional ByVal potvrdaDeficita As Double = -1, _
+                               Optional ByRef outErrNum As Long) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -86,13 +96,15 @@ Public Function CreateOtkup_TX(ByVal h As Object, _
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
-    ' Ambalaza je u snapshotu zbog pada IZMEDJU dva TrackAmbalaza poziva. Taj pad
-    ' se iz javnog API-ja ne moze izazvati (svi ulazi su vec provereni), pa je ovo
-    ' NEIZMERENA odbrana -- namerno, i tako imenovana.
+    ' Ambalaza je u snapshotu jer AMB-INV-08 to TRAZI, i jezgro to proverava:
+    ' PrenesiAmbalazu odbija upis ako ova transakcija ne snapshotuje i knjigu i
+    ' tblOtkup, i ako otkup nije vezan za nju (BindSourceDocument). Do cutovera je
+    ' ovo bila NEIZMERENA odbrana od pada izmedju dva TrackAmbalaza poziva; sada je
+    ' uslov bez kojeg knjizenje ne prolazi.
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
 
-    CreateOtkup_TX = CreateOtkup(h, stavke)
+    CreateOtkup_TX = CreateOtkup(tx, h, stavke, potvrdaDeficita)
 
     If CreateOtkup_TX = "" Then
         Err.Raise vbObjectError + 1860, "CreateOtkup_TX", _
@@ -114,6 +126,21 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
+    outErrNum = errNum
+
+    ' POTVRDA DEFICITA NIJE KVAR NEGO PITANJE POZIVAOCU (6.5), pa izlazi PRE
+    ' loga i monitora. Da ide kroz LogError i DOKUMENT_SAVE_FAIL, log bi
+    ' prestao da bude signal -- isti razlog zbog kog ga ni pisac ne guta u svoj
+    ' log. Rollback i prazan povratak OSTAJU: dokument stvarno nije nastao, pa
+    ' pozivalac ponavlja poziv sa potvrdom.
+    If errNum = AMB_ERR_POTVRDA_DEFICITA Then
+        If Not tx Is Nothing Then tx.RollbackTx
+        On Error GoTo 0
+        CreateOtkup_TX = ""
+        outGreska = errDesc
+        Exit Function
+    End If
+
     LogError "CreateOtkup_TX", errDesc, errNum
     Monitor_Error _
         moduleName:="modOtkup", _
@@ -292,7 +319,9 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
                                   ByVal h As Object, _
                                   ByVal stavke As Collection, _
                                   Optional ByRef outGreska As String, _
-                                  Optional ByRef outUpozorenje As String) As String
+                                  Optional ByRef outUpozorenje As String, _
+                                  Optional ByVal potvrdaDeficita As Double = -1, _
+                                  Optional ByRef outErrNum As Long) As String
     Const SRC As String = "IspravkaOtkupa_TX"
 
     Dim tx As clsTransaction
@@ -399,13 +428,15 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
         modDokumenta.IzvadiIzvorIzNacrta roditelj, stariOtkupID
     End If
 
-    If Not modStorno.StornoOtkup(stariOtkupID) Then
+    ' tx ide dalje: storno knjige je KONTRA-STAV u istoj transakciji
+    ' (AMB-10-ODL-16), a ne zastavica koju nov citalac ne gleda.
+    If Not modStorno.StornoOtkup(stariOtkupID, tx) Then
         Err.Raise vbObjectError + 1914, SRC, _
                   "Storno dokumenta koji se ispravlja nije uspeo: " & stariOtkupID
     End If
 
     Dim noviID As String
-    noviID = CreateOtkup(h, stavke)
+    noviID = CreateOtkup(tx, h, stavke, potvrdaDeficita)
 
     If Len(noviID) = 0 Then
         Err.Raise vbObjectError + 1915, SRC, "CreateOtkup nije vratio OtkupID."
@@ -497,6 +528,7 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
     errSrc = Err.SOURCE
+    outErrNum = errNum
 
     On Error Resume Next
     LogError SRC, errDesc, errNum
@@ -556,8 +588,10 @@ Private Function OtkBrojRedovaTabele(ByVal tblName As String) As Long
     If IsArray(d) Then OtkBrojRedovaTabele = UBound(d, 1)
 End Function
 
-Private Function CreateOtkup(ByVal h As Object, _
-                             ByVal stavke As Collection) As String
+Private Function CreateOtkup(ByVal tx As clsTransaction, _
+                             ByVal h As Object, _
+                             ByVal stavke As Collection, _
+                             Optional ByVal potvrdaDeficita As Double = -1) As String
     Const SRC As String = "CreateOtkup"
 
     On Error GoTo EH
@@ -741,10 +775,15 @@ Private Function CreateOtkup(ByVal h As Object, _
                                       OtkHdrOpcion(h, "SyncSource"), _
                                       OtkHdrOpcion(h, "SourceCreatedAt"))
 
+    ' AMB-INV-08: dokument se vezuje za OVU transakciju, i to TEK POSLE uspesnog
+    ' upisa zaglavlja -- vezivanje pre upisa tvrdilo bi vlasnistvo nad redom koji
+    ' moze da ne nastane. modOtkup.CreateOtkup je zato na AMB_BIND_DOZVOLJENI.
     If AppendRow(TBL_OTKUP, rowData) <= 0 Then
         Err.Raise vbObjectError + 1874, SRC, _
                   "AppendRow nije upisao header u tblOtkup."
     End If
+
+    tx.BindSourceDocument DOK_TIP_OTKUP, otkupID
 
     ' RedniBroj ide po KANONSKOM redu klasa, ne po redosledu u Collection-u.
     ' Ista poslovna cinjenica (I=400, II=600) mora dati isti dokument bez obzira
@@ -782,8 +821,8 @@ Private Function CreateOtkup(ByVal h As Object, _
         End If
     Next rb
 
-    KnjiziOtkupAmbalazu otkupID, datum, tipAmb, kooperantID, stanicaID, _
-                        ZbirAmbalazeStavki(stavke), kolAmbIzdata, SRC
+    KnjiziOtkupAmbalazu tx, otkupID, datum, tipAmb, kooperantID, stanicaID, _
+                        ZbirAmbalazeStavki(stavke), kolAmbIzdata, potvrdaDeficita
 
     ' ZATECEN AVANS SE PRIMENJUJE -- jednom po dokumentu.
     '
@@ -910,6 +949,31 @@ End Function
 ' povratnu informaciju rano, ali pravilo i opseg zive samo ovde. Dve
 ' implementacije istog invarijanta su se vec razisle -- UI je gledao broj+datum
 ' bez stanice, pa bi odbio dokument koji je writer smatrao legalnim.
+' MANJAK KOOPERANTA ZA OVAJ DOKUMENT -- jedan racun, dva pozivaoca.
+'
+' Ekran ga prikazuje operateru, sync ga koristi za auto-potvrdu. Ne duplira
+' pravilo: zbir gajbi je isti koji pisac knjizi, a manjak racuna javni
+' AmbDeficitZaPrenos -- ISTA funkcija koju pisac zove, pa potvrda ne moze da
+' imenuje drugi broj od onog koji pisac meri.
+'
+' Nula znaci "nema manjka", i to je ispravno i kad zaglavlje nema kljuceve:
+' pozivalac tada ne sme nista da potvrdjuje.
+Public Function OtkupDeficitKooperanta(ByVal h As Object, _
+                                       ByVal stavke As Collection) As Double
+    If h Is Nothing Then Exit Function
+    If stavke Is Nothing Then Exit Function
+    If Not h.Exists("KooperantID") Then Exit Function
+    If Not h.Exists("TipAmbalaze") Then Exit Function
+
+    Dim gajbi As Double
+    gajbi = ZbirAmbalazeStavki(stavke)
+    If gajbi <= 0 Then Exit Function
+
+    OtkupDeficitKooperanta = modAmbalaza.AmbDeficitZaPrenos( _
+        AMB_NALOG_KOOPERANT, NzToText(h("KooperantID")), _
+        NzToText(h("TipAmbalaze")), gajbi)
+End Function
+
 Public Function BrojDokumentaZauzet(ByVal stanicaID As String, ByVal datum As Date, _
                                     ByVal brDok As String) As String
     ' Tanak omotac. Pravilo i opseg zive u modBrojevi.BrojZauzetUNizu, jedinoj
@@ -1432,34 +1496,47 @@ End Function
 ' U ciljnom modelu otkup vozaca ni nema -- gajbe idu kooperant -> OM, a vozac
 ' dolazi tek sa otpremnicom (S4.1c). Posledica je merena: saldo ambalaze po
 ' vozacu gubi otkupnu nogu (modAmbalaza:499, modIzvestaj:1975, 3011, 4153).
-Private Sub KnjiziOtkupAmbalazu(ByVal otkupID As String, ByVal datum As Date, _
+' DVA DOGADJAJA, NE CETIRI NOGE (AMB-10b-2, cutover).
+'
+' Stari pisac je svaki dogadjaj pisao kao dve noge, po jednu za svakog nosioca
+' salda. Nov red imenuje OBE strane (6.1), pa su cetiri TrackAmbalaza poziva
+' dva PrenesiAmbalazu poziva:
+'
+'   primljeno   Kooperant -> Stanica   AMBALAZA_UZ_ROBU
+'   izdato      Stanica -> Kooperant   IZDATA_PRAZNA
+'
+' Oba dele ISTI NEUREDJEN par {Kooperant, Stanica}, pa AMB-INV-10 drzi bez
+' izuzetka -- zato je taj par u invarijanti neuredjen. AMB-INV-04 ih razlikuje
+' po VrstaKretanja.
+'
+' DokumentTIP je OBA PUTA Otkup. Druga noga je ranije nosila POZAJMLJEN tip
+' (OM-Izlaz-Koop) -- napetost T3 iz AMBALAZA.md -- a AmbIzvornaTabela je
+' zatvorena mapa pa taj tip nema izvornu tabelu i bio bi fail-closed. Dogadjaj
+' se desava UNUTAR otkupa, pa je otkup i njegov izvorni dokument.
+'
+' potvrdaDeficita ide SAMO prvoj nozi. Manjak nastaje na Kooperant -> Stanica
+' (partner donosi svoje, 6.4), a manjak STANICE se po AMB-10-ODL-8 ne pokriva
+' tudjom ambalazom -- za njega ide NABAVKA, pa druga noga nema sta da potvrdjuje.
+Private Sub KnjiziOtkupAmbalazu(ByVal tx As clsTransaction, _
+                                ByVal otkupID As String, ByVal datum As Date, _
                                 ByVal tipAmb As String, _
                                 ByVal kooperantID As String, _
                                 ByVal stanicaID As String, _
                                 ByVal primljeno As Double, _
                                 ByVal izdato As Double, _
-                                ByVal src As String)
+                                Optional ByVal potvrdaDeficita As Double = -1)
     If primljeno > 0 Then
-        ' Kooperant predaje pune gajbe na OM:
-        '   kooperant IZLAZ (razduzuje se), OM ULAZ (zaduzuje se).
-        TrackAmbalaza datum, tipAmb, CLng(primljeno), "Izlaz", _
-                      kooperantID, "Kooperant", "", _
-                      otkupID, DOK_TIP_OTKUP
-        TrackAmbalaza datum, tipAmb, CLng(primljeno), "Ulaz", _
-                      stanicaID, "Stanica", "", _
-                      otkupID, DOK_TIP_OTKUP
+        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, primljeno, _
+                    AMB_NALOG_KOOPERANT, kooperantID, _
+                    AMB_NALOG_STANICA, stanicaID, _
+                    AMB_VK_UZ_ROBU, DOK_TIP_OTKUP, otkupID, potvrdaDeficita
     End If
 
     If izdato > 0 Then
-        ' OM izdaje prazne gajbe kooperantu uz otkup:
-        '   kooperant ULAZ (dobija prazne), OM IZLAZ (razduzuje se).
-        ' Isti DokumentID -> storno otkupa hvata i ovu nogu (modStorno).
-        TrackAmbalaza datum, tipAmb, CLng(izdato), "Ulaz", _
-                      kooperantID, "Kooperant", "", _
-                      otkupID, DOK_TIP_OM_IZLAZ_KOOP
-        TrackAmbalaza datum, tipAmb, CLng(izdato), "Izlaz", _
-                      stanicaID, "Stanica", "", _
-                      otkupID, DOK_TIP_OM_IZLAZ_KOOP
+        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, izdato, _
+                    AMB_NALOG_STANICA, stanicaID, _
+                    AMB_NALOG_KOOPERANT, kooperantID, _
+                    AMB_VK_IZDATA_PRAZNA, DOK_TIP_OTKUP, otkupID
     End If
 End Sub
 

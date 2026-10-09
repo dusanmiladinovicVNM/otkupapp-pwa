@@ -228,8 +228,18 @@ Public Sub Test_StornoJournalUndo_Auto()
 
     TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), _
               Array("SVT-SJ-OID", "SVT-SJ-B")
-    TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), _
-              Array("SVT-SJ-AID", "SVT-SJ-OID", DOK_TIP_OTKUP)
+    ' VALJAN STARI RED, ne tri kolone. KnjigaIntegritet odbija red koji ne dotice
+    ' knjigu a nije ni valjan stari red: takav bi tiho nestao iz svakog salda.
+    ' Test meri zurnal i undo nad LEGACY zastavicom, pa red i ostaje legacy --
+    ' nov oblik bi postao red knjige, storno bi upisao kontra-stav, a AMB-10-ODL-19
+    ' bi undo odbio (druga tvrdnja, drugi test).
+    TcSeedRow TBL_AMBALAZA, _
+              Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP, _
+                    COL_AMB_SMER, COL_AMB_ENTITET_TIP, COL_AMB_ENTITET, _
+                    COL_AMB_TIP, COL_AMB_KOLICINA), _
+              Array("SVT-SJ-AID", "SVT-SJ-OID", DOK_TIP_OTKUP, _
+                    "Ulaz", "Stanica", "SVT-SJ-ST", _
+                    "SVT-SJ-GAJBA", 5)
     TcSeedRow TBL_NOVAC, Array(COL_NOV_ID, COL_NOV_OTKUP_ID), _
               Array("SVT-SJ-NID", "SVT-SJ-OID")
 
@@ -593,13 +603,22 @@ Public Sub Test_StornoReversOpisStanice_Auto()
     TcSeedRevNoga "SVT-OP-KB", d, "SVT-KOOP-OP", "Kooperant", "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, ridB
     TcSeedRevNoga "SVT-OP-SB", d, "SVT-ST-OPB", "Stanica", "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, ridB
 
-    Dim opisA As String, opisB As String
+    ' DVE PROVERE NAD DokumentOpis SU OBRISANE 08.10.2026 (10c), ne oslabljene.
+    '
+    ' Merile su opis nad NOGAMA knjige (SVT-OP-KA / SVT-OP-KB), i bile su tacne
+    ' dok je identitet reversa bio plutajuci: dva dokumenta istog broja, smera i
+    ' dana na dve stanice razlikovala su se jedino po opisu. Od 10c su to dva
+    ' ambalazna dokumenta sa razlicitim AmbDokID-em -- dvosmislenosti nema po
+    ' KONSTRUKCIJI, a DokumentOpis cita ZAGLAVLJE, koje noga nema.
+    '
+    ' Naslednice postoje i mere isto pravilo nad PRAVIM dokumentom, u modTest:
+    '   "potvrda storna reversa imenuje stanicu"  (sabotaza amb-10c-opis-bez-stanice)
+    '   "opis reversa nosi i DATUM sa zaglavlja"
+    '
+    ' Ostatak ovog testa (undo opis, ispravka opis, Nedovrseno) i dalje meri
+    ' stari model namerno: te putanje nisu presecene i zive do 10e.
+    Dim opisA As String
     opisA = modStornoDok.DokumentOpis(STIP_REVERSI, "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-KA")
-    opisB = modStornoDok.DokumentOpis(STIP_REVERSI, "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-KB")
-    TcChk InStr(1, opisA, "SVT-ST-OPA", vbBinaryCompare) > 0 And _
-          InStr(1, opisB, "SVT-ST-OPB", vbBinaryCompare) > 0 And opisA <> opisB, _
-          "storno opis: dva reversa istog broja, smera i dana razlikuju se po stanici"
-    TcChk InStr(1, opisA, Format$(d, "dd.mm.yyyy"), vbBinaryCompare) > 0, "storno opis: nosi dan reversa"
     TcChk InStr(1, opisA, "SVT-OP-7", vbBinaryCompare) > 0, "storno opis: i dalje nosi broj"
 
     Dim opA As String, opB As String, uA As String, uB As String

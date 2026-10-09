@@ -118,6 +118,50 @@ Private Function OtpremnicaAktivnaPoID(ByVal otpremnicaID As String) As Boolean
         LookupValue(TBL_OTPREMNICA, COL_OTP_ID, Trim$(otpremnicaID), COL_STORNIRANO)))) <> "DA")
 End Function
 
+
+
+' AKTIVAN AMBALAZNI DOKUMENT PO PK: postoji TACNO jednom i nije storniran.
+' Prazan ID = False, fail-closed.
+'
+' NE IDE KROZ AktivanPoIdentitetu, i to je nalaz a ne stil: on docID tumaci kao
+' GENERACIJU (IdoviGeneracije trazi kolonu GeneracijaID), a tblAmbalazaDokument
+' je nema -- pa bi vracao False za SVAKI dokument i storno reversa ne bi prosao
+' nikad. Prva verzija cutovera je bas to i radila; tvrdnja koja je to prikrivala
+' bila je placebo (prolazila je i za validan dokument), a otkrila ju je tek
+' tvrdnja o paru (identitet, broj), koja do svoje grane nije ni stizala.
+'
+' Oblik je prepisan sa OtpremnicaAktivnaPoID, iz istog razloga (review #362):
+' dokument se ne pogadja po broju.
+Private Function AmbDokAktivanPoID(ByVal ambDokID As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(ambDokID)) = 0 Then Exit Function
+    If FindRows(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, Trim$(ambDokID)).count <> 1 Then Exit Function
+    AmbDokAktivanPoID = (UCase$(Trim$(NzToText( _
+        LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, Trim$(ambDokID), COL_STORNIRANO)))) <> "DA")
+End Function
+
+' PAR (IDENTITET, BROJ) MORA DA PRIPADA ISTOM DOKUMENTU.
+'
+' Isti razlog kao ZbirnaParOK (review #371, P1): ekran salje broj iz KLIKNUTOG
+' reda, a izbor moze da zastari -- lista se osvezi, red se pomeri, a broj ostane
+' od prethodnog. Bez ovoga bi storno otisao na dokument koji operater nije
+' izabrao, i to TIHO, jer identitet sam po sebi postoji.
+'
+' Stari put je isto proveravao, samo kroz razresavanje (broj, smer) -> ReversID.
+' Cutover na AmbDokID bi tu kapiju izgubio -- uhvatio ju je test
+' T_BrojZauzetUNizu_Revers, koji je bas nju i cuvao.
+'
+' Prazan broj NIJE prekrsaj: tada se ne poredi nista, a dokument je ionako
+' izabran po identitetu.
+Private Function AmbDokParOK(ByVal docID As String, ByVal broj As String) As Boolean
+    AmbDokParOK = True
+    If Len(Trim$(broj)) = 0 Then Exit Function
+    On Error Resume Next
+    AmbDokParOK = (StrComp(Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, _
+                   COL_AMBD_ID, Trim$(docID), COL_AMBD_BROJ))), _
+                   Trim$(broj), vbTextCompare) = 0)
+End Function
+
 ' Par (identitet, broj) mora da pripada ISTOM dokumentu (review #371, P1).
 '
 ' Prost storno zbirne ne ide kroz okvir ispravke, pa se par ovde i proverava:
@@ -239,27 +283,17 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
             End If
 
         Case STIP_REVERSI
-            If Len(Trim$(opcija)) = 0 Then
-                StornoRazlog = Poruka("STORNO_ERR_NEMA_SMERA")
-            ElseIf Not ActiveAmbalazaDokExists(broj, opcija) Then
+            ' IDENTITET REVERSA JE AmbDokID (AMB-10-ODL-16/-17), pa je preflight ista
+            ' jednolinijska provera kao kod prijemnice -- aktivan red po identitetu.
+            '
+            ' Nestalo je sve sto je sluzilo PLUTAJUCEM identitetu: zahtev za smerom
+            ' (dokument ga nema -- ima vrstu), razresavanje ReversID-a iz (broj, smer),
+            ' i provera granice. Dokument se bira klikom, a klik nosi njegov ID.
+            If Not AmbDokAktivanPoID(docID) Then
                 StornoRazlog = NijePronadjen(broj)
-            Else
-                ' Identitet reversa je ReversID: uzima se iz kliknutog reda (docID =
-                ' AmbID), a bez njega mora biti jednoznacan po (broj, smer). Pisac
-                ' (StornoOMKoopByBrDok) razresava isto -- ovde je samo da operater
-                ' razlog vidi pre potvrde.
-                revBroj = broj: revTip = opcija
-                razlog = ReversIDRazresi(docID, revBroj, revTip, revID, False)
-                If Len(razlog) = 0 Then razlog = ReversIDGranica(revID)
-                ' Stanica i dan moraju biti poznati: potvrda ih imenuje, jer isti KOOP
-                ' broj, smer i dan legalno nose reversi dve stanice (Faza 2b). Ista
-                ' fail-closed kapija kao undo garda (UndoGuardReason).
-                If Len(razlog) = 0 Then razlog = ReversStanicaDan(revID, revSt, revDan)
-                If Len(razlog) > 0 Then
-                    StornoRazlog = Poruka("STORNO_ERR_REV_KLJUC") & " " & razlog
-                ElseIf ReversRedoviRID(revID, False).count = 0 Then
-                    StornoRazlog = NijePronadjen(broj)
-                End If
+            ElseIf Not AmbDokParOK(docID, broj) Then
+                StornoRazlog = Poruka("STORNO_ERR_REV_KLJUC") & " " & _
+                               NijePronadjen(broj)
             End If
 
         Case STIP_IZVOD
@@ -398,8 +432,10 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ok = StornoNovac_TX(novID)
 
         Case STIP_REVERSI
-            ' docID = AmbID kliknutog reda: iz njega se cita ReversID dokumenta.
-            ok = StornoOMKoopByBrDok_TX(broj, opcija, docID)
+            ' docID = AmbDokID: storno ambalaznog dokumenta je kontra-stav nad
+            ' zaglavljem I knjigom, u jednoj transakciji (AMB-10-ODL-16/-17).
+            ' Broj i vrsta vise ne ucestvuju u izboru -- identitet je dovoljan.
+            ok = modAmbalaza.StornirajAmbDokument_TX(docID)
 
         Case STIP_IZVOD
             If Not ResolveIzvodZaStorno(broj, izvBroj, izvRacun, razlog) Then
@@ -1096,7 +1132,7 @@ Public Function TipNaziv(ByVal tip As String, ByVal opcija As String) As String
         Case STIP_UPLATE:     TipNaziv = Poruka("STORNO_TIP_UPLATA")
         Case STIP_FAKTURA:    TipNaziv = Poruka("STORNO_TIP_FAKTURA")
         Case STIP_IZVOD:      TipNaziv = Poruka("STORNO_TIP_IZVOD")
-        Case STIP_REVERSI:    TipNaziv = ReversNaziv(opcija)
+        Case STIP_REVERSI:    TipNaziv = modAmbalazaUgovor.AmbVrstaDokNaziv(opcija)
         Case Else:            TipNaziv = tip
     End Select
 End Function
@@ -1109,8 +1145,12 @@ End Function
 ' (kapija StornoRazlog tada vec odbija).
 Public Function DokumentOpis(ByVal tip As String, ByVal broj As String, _
                              ByVal opcija As String, Optional ByVal docID As String = "") As String
-    Dim opis As String, revBroj As String, revTip As String, revID As String
-    Dim st As String, dan As Long
+    Dim opis As String
+    ' `dan` je do 10c bio As Long, jer ga je ReversStanicaDan vracao kao broj
+    ' dana. Zaglavlje nosi DATUM, pa je sada tekst -- upis stringa u Long je
+    ' davao gresku konverzije koju EH guta, i opis je tiho ostajao bez stanice.
+    Dim st As String
+    Dim dan As Variant
     opis = TipNaziv(tip, opcija) & " " & broj
     DokumentOpis = opis
     On Error GoTo EH
@@ -1119,9 +1159,20 @@ Public Function DokumentOpis(ByVal tip As String, ByVal broj As String, _
         Exit Function
     End If
     If tip <> STIP_REVERSI Or Len(Trim$(docID)) = 0 Then Exit Function
-    revBroj = broj: revTip = opcija
-    If Len(modStorno.ReversIDRazresi(docID, revBroj, revTip, revID, False)) > 0 Then Exit Function
-    If Len(modStorno.ReversStanicaDan(revID, st, dan)) > 0 Then Exit Function
+    ' Stanica i dan se citaju SA ZAGLAVLJA (vlasnik niza + datum), ne vise
+    ' razresavanjem ReversID-a iz noge knjige. Kod kupcevog reversa vlasnik
+    ' niza JE kupac (AMB-10-ODL-23), pa opis imenuje njega -- i to je tacno:
+    ' potvrda treba da kaze cijim brojem dokument ide.
+    st = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                              Trim$(docID), COL_AMBD_BROJ_OWNER_ID))
+    dan = LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                      Trim$(docID), COL_AMBD_DATUM)
+    ' DATUM SE NE PRETVARA U TEKST pa nazad: celija nosi pravi Date, a tekst u
+    ' srpskom obliku ("8.10.2026.", sa tackom na kraju) IsDate ODBIJA -- opis je
+    ' tada tiho ostajao bez stanice. Prva verzija je istu gresku imala i u tipu
+    ' (`dan As Long`), pa je ovo isti kvar u drugom ruhu.
+    If Len(st) = 0 Then Exit Function
+    If Not IsDate(dan) Then Exit Function
     DokumentOpis = opis & modDokUnos.ReversOpis(st, CDate(dan))
     Exit Function
 EH:

@@ -56,7 +56,24 @@ pogled izgledaju nedosledno (dve noge kod otkupa, jedna kod otpremnice).
 | 6 | modDokumenta:6857 | `KolAmbalaze` | Ulaz · Kupac | da | `PrijemnicaID` | `Prijemnica` |
 | 7 | modDokumenta:6863 | `KolAmbVracena` | Izlaz · Kupac | da | `PrijemnicaID` | **`Prijemnica`** |
 | 8 | modDokumenta:7026 | `kolAmb` | Izlaz · Kupac | da | **`brojDok`** | `Kupci-Otpremnica` |
+
+> **REDOVI 1–8 SU PRESEČENI (`10b-2`, 6.12e–6.12i) — tabela ostaje kao MERENJE
+> ZATEČENOG.** Danas otkup knjiži **dva reda** umesto četiri nogu: `UZ_ROBU`
+> (Kooperant → Stanica) i `IZDATA_PRAZNA` (Stanica → Kooperant), **oba pod
+> `Otkup`**. **Red 5** (otpremnica) je jedan red `Stanica → Vozac` sa
+> `AMBALAZA_UZ_ROBU` — vozač više nije **žig** nego **nalog** (6.12f).
+> **Redovi 6 i 7** (prijemnica) su `Vozac → Kupac` + `AMBALAZA_UZ_ROBU` i
+> `Kupac → Vozac` + `POVRAT_PRAZNE` — jedan **neuređen** par, dve vrste (6.12g).
+> **Red 8** (izlaz kupcima) nema više **nijedan** red: `SaveKupciIzlaz_TX` je
+> ostao samo kasa, a povrat praznih od kupca nosi **broj prijemnice** — to je
+> red 7 (6.12i). `DOK_TIP_IZLAZ_KUPCI` je time obrisan.
+> Tabela se ne prepisuje jer je ona zapis šta je bilo — iz nje se čita
+> zašto su odluke donete, a prepisana bi izgubila taj razlog.
 | 9 | modDokumenta:8619–8669 | revers, 4 smera | 2 noge (KOOP) / 1 noga (FIRMA) | samo FIRMA | **`brojDok`** | `OM-*` |
+
+> **RED 9 JE PRESEČEN (`10b-2`, 6.12h).** Šest nogu je postalo **četiri reda**, po
+> jedan na smer, a vozač je iz **žiga** (kolona) postao **nalog**. Revers više nije skup
+> redova pod `brojDok` nego **ambalažni dokument** sa zaglavljem u `tblAmbalazaDokument`.
 
 Redovi 1–2 i 3–4 su dvonožni jer su **oba** učesnika nosioci salda i vozača nema.
 Red 5–8 su jednonožni jer je protivpartner **vozač**. Red 9 je oba oblika, po
@@ -106,7 +123,7 @@ Jedine su takve u celom kanonu: pretraga po „Vracen" daje **samo**
 > **ono što je tada uneto**, ili **ono što važi danas** (nula). Dok se to ne
 > odluči, čitalac se ne sme pisati.
 
-### T3 — pozajmljen tip dokumenta pravi izuzetak u kapiji
+### T3 — pozajmljen tip dokumenta pravi izuzetak u kapiji **[REŠENO u `10b-2`]**
 
 Otkup knjiži svoje kretanje pod **`OM-Izlaz-Koop`** — tipom *revers dokumenta*.
 Zato integritetska provera mora da pravi izuzetak
@@ -121,9 +138,28 @@ Izuzetak je **tačan** i namerno napisan — ali postoji samo zato što je tip
 pozajmljen. Kretanje uz dokument sa sopstvenim tipom ukinulo bi ga: pravilo
 umesto izuzetka.
 
+> **REŠENO u `10b-2`:** nov pisac knjiži **oba** otkupna događaja pod `Otkup`,
+> a razlikuje ih `VrstaKretanja` (`AMB-INV-04` nosi i tip i vrstu). Pozajmljen
+> tip više **ne nastaje**, i to je tvrdnja u testu
+> (`OTK ambalaza: pozajmljen tip dokumenta vise ne nastaje`).
+>
+> Izbor nije bio slobodan: `AmbIzvornaTabela` je **zatvorena mapa**, a
+> `OM-Izlaz-Koop` u njoj nema izvornu tabelu — pa bi druga noga pala
+> fail-closed na `AMB-INV-08`. Događaj se dešava **unutar otkupa**, dakle otkup
+> mu je i izvorni dokument.
+>
+> Izuzetak u `modIntegritet` **ostaje do `10e`**: on čita stari oblik reda, a
+> stari redovi postoje dok čitaoci ne pređu (`10c`).
+
 A prijemnica je u trećem svetu: povrat praznih knjiži pod `Prijemnica` (red 7),
 dakle **van `OM-*` taksonomije** — u izveštajima ambalaže se ne vidi kao povrat,
 iako to jeste.
+
+> **Nov model ovo rešava u podatku, ali ne u izveštaju.** Od 6.12g red nosi
+> `VrstaKretanja = POVRAT_PRAZNE`, pa je povrat **imenovan kao povrat** i
+> pitanje „šta izveštaj broji" postaje odgovorljivo bez taksonomije `OM-*`.
+> Sam izveštaj se **ne menja** — čitaoci prelaze u `10c`, i tek tada je AMB-04
+> odluka o brojanju, a ne o modelu.
 
 > **AMB-04 (predlog, poslovna odluka).** Kretanje ambalaže uz dokument dobija
 > svoj tip, odvojen od tipa revers dokumenta, i prijemnica ulazi u istu
@@ -262,6 +298,29 @@ Odbijanje je **potpuno**: nema dokumenta, nema ambalaze, nema parcijalnog upisa.
 > Pisac klasu **cita iz matrice** a ne nosi spisak: kad bi se odrediste
 > `ULAZ_TUDJE` ikad promenilo, pravilo ide za njim samo.
 
+> **AMB-10-ODL-18 (odluke operatera, 03.10.2026).** Kooperant koji donese
+> **svoje** gajbe nije edge case: **5–10% otkupa**. Dakle izuzetak, ali redovan
+> — pa zaslužuje zastajanje sa pitanjem, a ne polje koje 90% vremena stoji na
+> ekranu bez svrhe.
+>
+> | Putanja | Ponašanje | Zato |
+> |---|---|---|
+> | ekran (`modOtkupUnos.OtkupUpisi`) | **pita operatera i ZADRŽAVA podatke** | poziv se ponavlja iz istog poziva, pa se ništa ne unosi ponovo |
+> | sync (`modMasterSync.ImportRowToTblOtkup`) | **auto-potvrda** | operatera nema, a otkupac je na terenu već uneo koliko je gajbi došlo |
+>
+> Slučaj se prepoznaje po **broju greške** (`AMB_ERR_POTVRDA_DEFICITA`), ne po
+> tekstu: tekst je prevodiv i menja se, broj je ugovor. Zato `CreateOtkup_TX` i
+> `IspravkaOtkupa_TX` imaju `outErrNum` — pre toga su grešku gutali u
+> `outGreska` i broj se gubio.
+>
+> Potvrda deficita **ne ide u log grešaka**: `CreateOtkup_TX` izlazi PRE
+> `LogError` i `DOKUMENT_SAVE_FAIL`, iz istog razloga zbog kog ni pisac ne
+> guta pitanje u svoj log — inače log prestaje da bude signal.
+>
+> Broj za potvrdu računa **jedan** javni račun
+> (`modOtkup.OtkupDeficitKooperanta` → `AmbDeficitZaPrenos`), isti koji pisac
+> zove — pa potvrda ne može da imenuje drugi broj od onog koji pisac meri.
+
 ### 6.6 Fizicko stanje i dug vlasniku nisu ista stvar
 
 Knjiga odgovara na „gde su gajbe". Obaveza se **izvodi** iz iste knjige, bez
@@ -389,14 +448,19 @@ Nema grananja po tipu, nema inverzije, vozac ispada sam jer je **nalog**.
 Danasnja inverzija je fail-open: citalac koji zaboravi `VozacAmbEffectiveSmer`
 dobija **pogresan znak**, ne gresku.
 
-Storno je kontra-stav:
+Storno je kontra-stav, a ulaz je **po dokumentu**:
 
 ```
-StornirajPrenos(originalAmbID)     ' i nista vise
+StornirajAmbalazuDokumenta(tx, dokTip, dokID)     ' i nista vise
 ```
 
-Pozivalac **ne salje** strane, kolicinu ni tip — pisac ih cita iz originala.
-Pozivalac koji sme da posalje svoj iznos sme i da posalje pogresan.
+Pozivalac **ne salje** strane, kolicinu, tip ni `AmbID` — pisac ih cita iz
+originala. Pozivalac koji sme da posalje svoj iznos sme i da posalje pogresan.
+
+**Zasto po dokumentu, a ne po redu** (`AMB-10-ODL-16`, 6.12d): zivotni ciklus
+ima **dokument**, ne red. `modStorno.StornoOtkup_TX` zna `otkupID`, a `AmbID`-jeve
+ne zna — pa bi ulaz po redu vratio na pozivaoca tacno onaj posao koji mu se ovde
+odbija. Princip ostaje: pozivalac posalje **identitet**, pisac procita ostalo.
 
 | Pitanje | Upit |
 |---|---|
@@ -688,7 +752,8 @@ Dakle `KupciIzlaz` nije dokument nego **presiroka helper funkcija** koja je
 slepila **dve nezavisne poslovne operacije**:
 
 ```
-1. revers            kupac -> firma      (prazne gajbe)   -> tblAmbalazaDokument
+1. revers            kupac -> firma   ZATECEN opis; ciljno: kupac -> vozac
+                                      (AMB-10-ODL-9)    -> tblAmbalazaDokument
 2. uplata            po fakturi          (novac)          -> tblNovac, fakturaID
 ```
 
@@ -808,8 +873,10 @@ kod reversa su **dva dogadjaja delila jedan broj**.
 
 #### Dobitak
 
-- **jedan revers za sve parove**: stanica <-> kooperant, stanica <-> firma,
-  kupac -> firma. Cetiri smera plus poseban slucaj na drugom mestu postaju jedan
+- **jedan revers za sve parove**: stanica ↔ kooperant, stanica ↔ firma,
+  **kupac → vozač** i vozač → stanica (`AMB-10-ODL-9`; `kupac → firma` je bio
+  **zatečen** opis, ne ciljni — firma u taj lanac ne ulazi).
+  Cetiri smera plus poseban slucaj na drugom mestu postaju jedan
   mehanizam;
 - **jedna kasa**: danas unos **samo novca** na F6 ide kroz funkciju imenovanu po
   ambalazi (`SaveKupciIzlaz_TX`) — to je i bio prvi znak da su dve stvari slepljene;
@@ -901,7 +968,7 @@ je obrisao S3-ostatak. Ali:
 > **Odluka operatera (28.09.2026):** dogadjaji ambalaze koji nemaju svoj poslovni dokument **dobijaju ga**.
 > Pitanje je bilo uze, ali odgovor je izvukao nalaz koji ga cini sirim.
 
-> **Ispravka operatera:** revers ide i **od stanice ka kooperantu**, ne samo firma <-> stanica. Merenje se slaze: `SaveOMUlaz_TX` ima **cetiri** smera (`IZDAVANJE`, `PRIJEM`, `IZDATO_OM`, `PRIJEM_OD_OM`). Uz 6.11 se dodaje i peti par — **kupac -> firma**. Revers je dakle **partner-genericki** dokument predaje ambalaze, ne interni.
+> **Ispravka operatera:** revers ide i **od stanice ka kooperantu**, ne samo firma <-> stanica. Merenje se slaze: `SaveOMUlaz_TX` ima **cetiri** smera (`IZDAVANJE`, `PRIJEM`, `IZDATO_OM`, `PRIJEM_OD_OM`). Uz 6.11 se dodaje i peti par — tada zapisan kao **kupac -> firma**, a 03.10.2026 ispravljen na **kupac → vozač** (`AMB-10-ODL-9`: firma u lanac ne ulazi; vozač je strana, ne kolona). Revers je dakle **partner-genericki** dokument predaje ambalaze, ne interni.
 
 **Mereno:** `ReversID` postoji **samo kao kolona na `tblAmbalaza`** — tabele
 reversa **nema nigde u kanonu**. Revers dakle ima identitet i broj, ali **nema
@@ -921,7 +988,7 @@ Skica (finalizuje je `10a`):
 ```
 tblAmbalazaDokument
   AmbDokID         identitet -> ide u tblAmbalaza.DokumentID
-  Vrsta            REVERS | NABAVKA | OTPIS
+  Vrsta            REVERS | REVERS_PARTNERA | NABAVKA | OTPIS   (v. 6.12b)
   BrojDokumenta    labela (modBrojevi; revers zadrzava KIND_REV)
   Datum
   BrojOwnerTip     VLASNIK NUMERICKOG NIZA -- obavezan
@@ -935,9 +1002,11 @@ tblAmbalazaDokument
 > tabela u `STORNO_TABELE`, vlasnik `modAmbalaza`, kanonski `DokumentTIP` je
 > `AmbalazaDokument`.
 >
-> **Vlasnik broja mora biti SOPSTVENI nalog** (Stanica, Firma, Vozac) za sve tri
-> vrste. Pravilo je jedna recenica: **broj je nas, protivpartner je njihov** --
-> dokument pisemo mi, pa partner nikad ne izdaje nasu seriju. Koji tacno sopstveni
+> **Vlasnik broja mora biti SOPSTVENI nalog** (Stanica, Firma, Vozac) za dokument
+> **koji pišemo mi**. Od 03.10.2026 to nisu sve vrste: partnerov dokument nosi
+> **njegov** broj i ima svoju vrstu `REVERS_PARTNERA` (`AMB-10-ODL-10`, 6.12b).
+> Za naše tri vrste pravilo je jedna rečenica: **broj je naš, protivpartner je
+> njihov** — dokument pišemo mi, pa partner nikad ne izdaje našu seriju. Koji tacno sopstveni
 > nalog, po vrsti i putanji, ostaje numeraciji u `10b`; **klasa** je zakljucana
 > ovde, da dva pozivna mesta ne bi izabrala razlicitu politiku a da nijedno ne
 > prekrsi ugovor.
@@ -957,6 +1026,40 @@ tblAmbalazaDokument
 > ni u potpisu. Da je zaglavlje ostalo na stanici, `10b` bi morao ili da izmisli
 > stanicu, ili da pusti broj bez opsega, ili da menja tek upisanu strukturu.
 > Vlasnik je zato **obavezan**, i razresava se **istom kapijom** kao svaki nalog.
+>
+> **AMB-10-ODL-20 (review 03.10.2026, P2 #2).** Numerički niz ambalažnog
+> dokumenta ima opseg **`(BrojOwnerTip, BrojOwnerID, dan)`**, i **zauzetost broja
+> je kapija PISCA**.
+>
+> Dva prekršaja, oba ista greška — skraćen kanonski vlasnik:
+>
+> | Gde | Šta je bilo |
+> |---|---|
+> | `UpisiAmbDokument` | zvao je samo `RequireAmbDok`, a on sudi **oblik** (vrsta, neprazan broj, datum, klasa vlasnika) — ne zauzetost. Dva poziva sa istim ručno prosleđenim brojem davala su **dva `AmbDokID`-a i jedan poslovni broj u istom nizu** |
+> | `GenerateBrojAmbDokumenta` | skenirao je samo `BrojOwnerID`. U AgriX-u `VozacID` može biti jednak `StanicaID` (ogledalo vozača), pa bi dva naloga delila jedan niz |
+>
+> Oba čitaju **jedan sken** (`AmbDokNizSken`): dva skena sa dva opsega su upravo
+> način da se niz raziđe sam sa sobom — generator bi brojao jedan skup redova, a
+> kapija sudila nad drugim.
+>
+> **Storniran dokument drži svoj broj** — sken ne filtrira po `Stornirano`. Isto
+> pravilo važi za otkupni list (`OTKUNOS_ERR_BROJ_ZAUZET`: „storno ne
+> oslobađa broj — ispravka dobija NOV broj"), pa ambalažni dokument ne uvodi drugo.
+>
+> **Isti broj za drugog vlasnika prolazi, i to je pravilo a ne rupa.** Sam broj
+> nosi samo numerički deo ID-a (`FormatBroj`) — to je poslovni format — pa dva
+> vlasnika različitog tipa mogu imati isti **tekst** broja; nizovi su različiti,
+> a dokument nosi i tip i ID vlasnika, pa je par **(vlasnik, broj)** jedinstven.
+>
+> Kapija pokriva **sve** putanje jer je `UpisiAmbDokument` jedini pisac
+> `tblAmbalazaDokument` (jedan `AppendRow` u celom izvoru).
+>
+> Izuzimanje sopstvenog `AmbDokID`-a (za ispravku u mestu) **nije** dodato:
+> ambalažni dokument još nema putanju ispravke, pa bi argument bio mrtav —
+> dodaje se sa tom putanjom, kao što ga `BrojZauzetRevers` ima za svoju.
+>
+> *Provera:* `Test_Amb_DokBrojZauzetPoVlasniku` 5 tvrdnji · sabotaže
+> `amb-dok-broj-bez-kapije-zauzetosti`, `amb-dok-niz-bez-tipa-vlasnika`.
 >
 > **Kanonski `DokumentTIP` je `AmbalazaDokument`** -- jedna tabela, jedan tip.
 > Vrsta posla (`REVERS`/`NABAVKA`/`OTPIS`) ostaje na zaglavlju, u `Vrsta`. Da je
@@ -992,9 +1095,1004 @@ Time u celom domenu ambalaze **nema nijednog dogadjaja bez identiteta dokumenta*
 |---|---|
 | otkup, otpremnica, prijemnica | vec postoji |
 | ~~`KupciIzlaz`~~ | **nije dokument** — revers + uplata (6.11) |
-| **revers** (stanica <-> kooperant, stanica <-> firma, **kupac -> firma**), nabavka, otpis | **`tblAmbalazaDokument`** |
+| **revers** (stanica ↔ kooperant, stanica ↔ firma, **kupac → vozač**, vozač → stanica), nabavka, otpis | **`tblAmbalazaDokument`** |
 
 `AMB-INV-04` i `AMB-INV-08` tek time vaze **bez ijednog imenovanog izuzetka**.
+
+### 6.12b Lanac kupac → vozač → OM, i čiji je broj (odluke 03.10.2026)
+
+> **Odluka operatera.** *„Dokument od kupca je dokaz da je vozač preuzeo ambalažu.
+> Dokumenti reversi ka OM su dokazi da je vozač predao dalje ambalažu, ili osim
+> reversa isporuka centralnom magacinu odnosno OM koja je hladnjača."*
+
+Pitao sam da li vozačev saldo treba da pokazuje gajbe koje su kod njega. Odgovor
+je u samoj formulaciji: dva dokumenta su **dokaz preuzimanja** i **dokaz predaje**,
+pa je ono između njih upravo vozačev saldo.
+
+```
+kupac -> vozac      dokument OD KUPCA, njegov broj    = dokaz da je vozac PREUZEO
+vozac -> Stanica    revers, nas broj po stanici       = dokaz da je vozac PREDAO
+                    stanica = obicni OM  ILI  JeHladnjaca=DA (centralni magacin)
+```
+
+> **AMB-10-ODL-9.** Lanac je `kupac → vozač → stanica`. Vozač je **strana**, ne
+> kolona: saldo mu pokazuje ono što je preuzeo a nije predao. **`Firma` ne ulazi u
+> ovaj lanac.** Odredište predaje je stanica — običan OM ili onaj sa
+> `JeHladnjaca = DA` (centralni magacin, `tblStanice.JeHladnjaca`, čita ga
+> `modAutoHladnjaca`).
+
+**Šta je ovo oborilo:** tri moja nacrta. (1) `kupac → firma` sa vozačem kao
+izvedenim transporterom — to važi za **zatečeni** model (§2), ne ciljni, a
+`AMB-10-ODL-7` već kaže da je vozač „naš" nalog jer *„prazne gajbe sa stanice
+najčešće idu VOZAČU pa tek onda drugoj stanici"*. (2) Lanac sa generisanim hopovima
+`vozač → firma → vozač` — njima bi vozačev saldo posle commit-a bio **uvek nula**,
+što obesmišljava `AMB-10-ODL-7`. (3) Zbog (2) sam predlagao širenje izuzetka u
+`AMB-INV-10`; nije potrebno — **svaki dokument nosi tačno jedan par `{Od, Na}`**, pa
+invarijanta ostaje netaknuta.
+
+> **AMB-10-ODL-10.** Dokument koji izdaje **partner** nosi **njegov** broj.
+> `BrojDokumenta` je taj broj, `BrojOwnerTip`/`BrojOwnerID` imenuju **partnera**.
+> Nova vrsta: **`REVERS_PARTNERA`**.
+
+Pravilo iz 6.12a — *„broj je naš, protivpartner je njihov"* — važi za dokument
+**koji pišemo mi**, i time prestaje da bude univerzalno. Operaterova formulacija je
+šira od ambalaže: *„to važi i za prijemnicu i za izvode banaka. To su mesta gde su
+brojevi dokumenata prirodno eksterni i ne treba tu izmišljati besmisleno dodatne
+naše brojeve."*
+
+**Kod to već radi za prijemnicu**, pa je ugovor ambalaže bio stroži od sistema oko
+sebe:
+
+| mereno | |
+|---|---|
+[modOtkupUI.bas:8640](../../src-vba/modOtkupUI.bas) | *„auto-broj SAMO za hladnjača-kupca. **Ostali kupci nose svoj eksterni, nezavisni broj — polje se tada NE dira.**"* |
+[modBrojevi.bas:360](../../src-vba/modBrojevi.bas) | *„eksterni kupac nosi svoj niz"* |
+[modAmbalazaUgovor.bas:344](../../src-vba/modAmbalazaUgovor.bas) | `AmbDokBrojOwnerKlasa` je vraćao `SOPSTVENI` za **sve** vrste → `BrojOwnerTip=Kupac` bi **pao** pre upisa |
+
+Put ispravke je propisan u 6.12a: *„Ako je za neku od njih poslovni odgovor
+drugačiji, menja se **spisak `Vrsta`**, ne model."* Zato nova vrsta, a ne nov
+potpis: `AmbDokBrojOwnerKlasa` ostaje **po vrsti**, pa `AmbDokMatricaNepotpuna`
+obara svaku vrstu bez odgovora — nova putanja se ne može provući tiho. Da je po
+smeru, zaglavlje bi se upisivalo pre nego što se smer zna.
+
+`REVERS_PARTNERA` nosi **samo** `POVRAT_PRAZNE` (uz univerzalno `ULAZ_TUDJE_AMBALAZE`,
+koje je posledica `AMB-INV-07` a ne vrsta posla). `IZDATA_PRAZNA` tu **ne sme**: kad
+mi izdajemo partneru, dokument je **naš**, dakle `REVERS`. Ni `PRENOS_INTERNO`:
+interno kretanje ne može imati partnerov papir kao povod.
+
+### 6.12c `AMB-INV-08` je u JEZGRU, ne u statickoj analizi
+
+Plan je za `10b-2` predvidjao **staticku kapiju** za `AMB-INV-08`. Napisana je:
+hod po pozivnom grafu, kljuc po `(modul, procedura)`, razrešavanje nekvalifikovanog
+poziva prvo u istom modulu, 10 self-test slučajeva u oba smera, zelena nad pravim
+izvorom.
+
+**I pala je na drugom nivou dokaza.** Pravilo je bilo *„neki predak u pozivnom lancu
+poseduje `clsTransaction` sa snapshotom"* — a nad **4120 procedura** i **17**
+vlasnika koji snapshotuju `tblAmbalaza` to je uvek istinito ako se ide dovoljno
+visoko. Skinuta su **oba** `AddTableSnapshot TBL_AMBALAZA` iz `modOtkup`, i kapija
+je ostala **zelena**, `rc=0`, nula nalaza.
+
+Ispravno staticko pravilo (*„nijedna putanja od ulazne tačke do pisca ne sme da
+izbegne vlasnika"*) je rešivo, ali nosi stvarnu šansu za lažne nalaze nad 4120
+procedura — a invarijantu ne sme da čuva alat koji se može prevariti dubinom.
+
+> **AMB-10-ODL-11.** `AMB-INV-08` se sprovodi u **jezgru**: pisac **traži**
+> `clsTransaction` i sam proverava snapshot. Statickke analize nema.
+
+```vba
+clsTransaction.ImaSnapshot(tableName)   fail-closed: neaktivna tx vraca False
+PrenesiAmbalazu(tx, ...)   -> UpisiRedKnjige trazi snapshot tblAmbalaza
+UpisiAmbDokument(tx, ...)  -> trazi snapshot tblAmbalazaDokument
+```
+
+Razlika nije stilska:
+
+| | |
+|---|---|
+poziv bez `tx` | **compile error**, ne nalaz koji se može ignorisati |
+lažno zeleno | nema grafa ni dubine koja se može prevariti — **ali vidi ispravku ispod**: prva verzija je dokazivala tri od pet tačaka |
+lažen nalaz | nemoguć — nema heuristike |
+sabotaža | prava: skini snapshot, pisac padne **po imenu** |
+
+Kapija stoji u **`UpisiRedKnjige`**, kroz koji prolazi **svaki** red knjige — i
+pokriće deficita i ostatak podele — a ne na ulazu u `PrenesiAmbalazu`. Kopija na
+ulazu bila bi placebo: jezgro bi odbilo isti upis i bez nje, pa je nijedna sabotaža
+ne bi mogla oboriti. Isti razlog je tamo već zapisan za identitet dokumenta.
+
+Zaglavlje traži **svoju** tabelu, ne knjigu: pozivalac koji kreira dokument **i**
+redove mora da snapshotuje **obe**, inače rollback vraća pola dokumenta — zaglavlje
+bez redova ili redove bez zaglavlja.
+
+*Provera:* `Test_Amb_Inv08TxVlasnistvo` (7 tvrdnji) + tri sabotaže
+(`amb-inv08-tabela-se-ne-proverava`, `amb-inv08-zaglavlje-bez-kapije`,
+`amb-inv08-imasnapshot-fail-open`). Pozitivan smer se ne ponavlja u tom testu:
+**50** poziva u četiri `Amb` testa prolaze kroz istu kapiju sa ispravnim
+snapshotom, pa bi „uvek odbij" oborilo njih.
+
+**Prva verzija tog testa je bila placebo** i to je izmereno pre commit-a: koristila
+je `dokID = "NEMA"`, pa je `PrenesiAmbalazu` padala na `AmbDokVrstaZaID` još pre
+jezgra — tvrdnja „puklo" je bila istinita iz pogrešnog razloga. Sada zaglavlje iz
+iste transakcije daje **pravi** `dokID`.
+
+#### Ispravka 03.10.2026 — jezgro je prvo dokazivalo TRI od PET tačaka
+
+Prva verzija runtime kapije je tražila `tx.ImaSnapshot(TBL_AMBALAZA)` i time
+dokazivala *„NEKA aktivna transakcija može da vrati knjigu"*, a ne *„ovo je ISTA
+transakcija koja poseduje izvorni dokument"*. Scenario koji je time prolazio:
+
+```
+txDoc: snapshot tblOtkup       -> upisi Otkup
+txAmb: snapshot tblAmbalaza    -> PrenesiAmbalazu(txAmb, Otkup, OTK-123) -> commit
+txDoc pukne                    -> rollback
+=> Otkup VRACEN, ambalaza OSTALA
+```
+
+To je tačno stanje zbog kojeg `AMB-INV-08` postoji, i **6.9 je to već pisalo**
+dvadeset redova ispod tabele iz koje sam implementirao: *„Kod koji commit-uje
+dokument, pa u **novoj** transakciji snapshot-uje samo knjigu, prošao bi zelen a
+invarijantu prekršio."* Pročitao sam jednolinijski unos, ne i paragraf koji
+opisuje tačno tu grešku.
+
+> **AMB-10-ODL-12.** Transakcija nosi **skup izvornih dokumenata**.
+> `BindSourceDocument(dokTip, dokID)` postavlja **pisac dokumenta** unutar svoje
+> TX; `PrenesiAmbalazu` traži `OwnsSourceDocument(dokTip, dokID)`. Time se
+> dokazuje **identitet transakcije**, ne pokrivenost tabele.
+
+Skup, ne jedna vrednost: `SavePrijemnicaMulti_TX` upisuje više prijemnica u jednoj
+transakciji. `UpisiAmbDokument` sam vezuje dokument koji napravi, pa pozivalac za
+ambalažne dokumente ne radi ništa dodatno.
+
+**Tačka 5** iz 6.9 (*registar vlasništva za OTK/OTP/PRJ, kao `who_writes`*) time
+**otpada**: bila je zahtev **statickog** checkera. Runtime vezivanje je jače —
+pisac dokumenta sam kaže šta poseduje, pa registar ne može da zastari.
+
+#### Ispravka 03.10.2026 — ODL-9/-10 su bile zapisane, a jezgro ih je zaobilazilo
+
+Klasa vlasnika broja i dozvoljeno kretanje su bile **dve nezavisne** provere, pa
+nijedna nije videla drugu. Tri zaobilaznice su prolazile:
+
+| | prošlo jer |
+|---|---|
+`Kupac → Firma` sa `REVERS_PARTNERA` | `Firma` je `SOPSTVENI`, pa su klase dobre — a ODL-9 kaže da firma **ne ulazi** u lanac |
+`BrojOwner = K1`, kretanje `K2 → Vozac` | nijedna provera nije poredila broj sa stranom kretanja — audit kvar |
+običan `REVERS` nad `Kupac → Vozac` | `REVERS` već dozvoljava `POVRAT_PRAZNE`, pa je partnerov broj potpuno zaobiđen |
+
+> **AMB-10-ODL-13.** Vrsta dokumenta, vlasnik broja i par naloga proveravaju se
+> **zajedno** (`AmbDokKretanjeProblem`), i **u oba smera**: `REVERS_PARTNERA`
+> zahteva `Kupac → Vozac` + `POVRAT_PRAZNE` + `BrojOwner = (Kupac, OdID)`; a
+> `Kupac → Vozac` + `POVRAT_PRAZNE` **mora** biti `REVERS_PARTNERA`.
+
+Obrnuta kapija je **deo pravila**, ne dodatak: bez nje se isto kretanje može
+knjižiti na našu vrstu i dobiti naš broj, pa ODL-10 ne važi ni za jedan dokument —
+samo za one koje pozivalac izvoli da nazove `REVERS_PARTNERA`. Nije preširoka:
+`Kooperant → Stanica` + `POVRAT_PRAZNE` je **naš** revers i prolazi (današnji
+`PRIJEM` smer), i to je tvrdnja u testu.
+
+*Provera:* tablica istinitosti u `Test_Amb_DokumentUgovor` (6 slučajeva, uključujući
+onaj koji **ne sme** da opali) + ožičenje kroz `PrenesiAmbalazu` u
+`Test_Amb_Inv08TxVlasnistvo`, i četiri sabotaže
+(`amb-inv08-dokument-nije-vezan`, `amb-odl9-firma-u-lancu`,
+`amb-odl10-nas-revers-nosi-kupca`, `amb-odl9-validator-se-ne-zove`). Zadnja
+postoji jer tablica istinitosti ne bi primetila da se validator **ne zove**.
+
+#### Ispravka 03.10.2026 (krug 2) — bind je bio self-assertion, a ODL-9 nije bio totalan
+
+**`BindSourceDocument` je javna capability.** Dokazivala je *„neko je ovoj tx rekao
+da poseduje dokument"*, ne *„dokument je stvarno nastao u ovoj tx"*. Isti originalni
+kvar se time vraćao:
+
+```
+txAmb.AddTableSnapshot TBL_AMBALAZA
+txAmb.BindSourceDocument "Otkup", "OTK-123"      <- niko nije pravio OTK-123
+PrenesiAmbalazu txAmb, ..., "Otkup", "OTK-123"   -> prolazilo
+```
+
+Dve odvojene rupe, dva različita leka:
+
+> **AMB-10-ODL-14.** Vezivanje dokazuje **identitet** transakcije; da je i
+> **izvorna tabela** u istom rollback-u proverava se posebno. `AmbIzvornaTabela`
+> je **zatvorena** mapa `dokTip → tabela`, a nepoznat tip je **fail-closed**. Mapa
+> živi u domenu, ne u `clsTransaction`: transakcija je generički primitiv i ne sme
+> da zna tipove poslovnih dokumenata.
+
+> **AMB-10-ODL-15.** `BindSourceDocument` sme da zove **samo kanonski pisac
+> izvornog dokumenta**, u istoj proceduri i tek posle uspešnog upisa. Sprovodi se
+> **exact allowlist**-om (`AMB_BIND_DOZVOLJENI` u `tools/vba_check.py`), ne hodom
+> po grafu — taj je već jednom pao kao placebo (6.12c). Popis pozivnih mesta
+> **jedne** funkcije nema dubinu koja se može prevariti; danas je na listi jedan
+> unos. Dodavanje pozivaoca je namerno neudobno: menja se lista, što je vidljiv čin
+> u diff-u.
+
+**`AMB-10-ODL-13` nije bio totalan.** Obrnuta kapija je tražila **ceo par**
+`Kupac → Vozac`, pa se nije ni palila za:
+
+```
+obican REVERS + Kupac -> Firma    + POVRAT_PRAZNE   prolazilo
+obican REVERS + Kupac -> Stanica  + POVRAT_PRAZNE   prolazilo
+```
+
+a `ODL-9` kaže da lanac ide `kupac → vozac → stanica` i da firma u njega **ne
+ulazi**. Uslov je zato **sam povrat od kupca**, ne ceo par:
+
+```
+OdTip = Kupac AND VrstaKretanja = POVRAT_PRAZNE
+    =>  NaTip MORA biti Vozac
+    =>  vrsta MORA biti REVERS_PARTNERA
+```
+
+`Kooperant → Stanica` + `POVRAT_PRAZNE` ostaje dozvoljen (naš revers, današnji
+`PRIJEM` smer) i to je tvrdnja u testu — kapija koja bi i to odbila bila bi
+preširoka.
+
+> **REVIDIRANO `AMB-10-ODL-22` (05.10.2026).** Posledica „vrsta **mora** biti
+> `REVERS_PARTNERA`" bila je **zamena** za pravi uslov. Prijemnica je i sama
+> partnerov dokument, pa je uslov **vlasnik broja**, ne vrsta — v. 6.12g.
+> Ostatak `ODL-13` (vrsta, vlasnik broja i par se gledaju **zajedno**, i u oba
+> smera) stoji nepromenjen.
+
+*Provera:* `Test_Amb_DokumentUgovor` 8 slučajeva · `Test_Amb_Inv08TxVlasnistvo`
+16 tvrdnji · sabotaže `amb-inv08-izvorna-tabela-bez-snapshota`,
+`amb-odl9-povrat-od-kupca-ide-svuda`, i dvonivoski dokaz `AMB_BIND_VLASNIK`
+(pokvareno očekivanje self-testa, pa poziv u nedozvoljenoj proceduri nad pravim
+izvorom).
+
+### 6.12d Storno u knjizi — kontra-stav, i njegov ulaz ide PRED cutover
+
+Ulaz za storno je u planu stajao kao `10d`, **posle** cutovera devet mesta
+knjizenja. Merenje pred prvi rez je pokazalo da taj red ne stoji:
+
+| Sto je mereno | Nalaz |
+|---|---|
+| `RedDoticeKnjigu` / `AmbSaldoNaloga` | ne citaju `Stornirano` **nigde** — red se vidi po `Od_*`/`Na_*`/`VrstaKretanja`/`StornoOd` |
+| `modStorno.StornoAmbalazaByDokument` | otkazuje gajbe **zastavicom** (`MarkRowStornirano`) |
+| `modStorno` linije 170, 245, 458 | otkup, otpremnica i prijemnica idu tim putem |
+
+Dakle: dokument presecen na nov model, a storniran zastavicom, ostavlja gajbe
+na saldu **tiho**. Zastavica se i dalje okrece, test koji je cita ostaje
+**zelen**, a saldo je pogresan — lazno zeleno, ne pad. `NABAVKA` je mogla da
+legne sama jer storno put **nema**; otkup, otpremnica i prijemnica ga imaju.
+
+> **AMB-10-ODL-16.** Storno u knjizi je **kontra-stav**, i njegov ulaz je
+> `modAmbalaza.StornirajAmbalazuDokumenta(tx, dokTip, dokID)` — **po dokumentu**,
+> jer zivotni ciklus ima dokument a ne red (6.8). Ulaz legne **pre** cutovera
+> mesta knjizenja, ne posle njega.
+>
+> Tri svojstva su deo odluke, ne implementacije:
+>
+> **Datum kontra-stava je datum ORIGINALA**, ne danasnji. Stara zastavica je red
+> uklanjala iz **svih** perioda; isti datum je jedini oblik koji ne menja nijedan
+> periodski saldo. Danasnji datum ostavio bi fantom u starom periodu i visak u
+> novom.
+>
+> **Idempotentno.** Original koji vec ima kontra-stav se preskace, pa drugi poziv
+> vraca `0`. Bez toga drugi storno ne vraca saldo na nulu nego ga prebacuje na
+> drugu stranu.
+>
+> **`AMB-INV-09` se meri nad POSLE-stanjem.** Zahtev nije nov — pisac ga je sam
+> imenovao kao nasledje za ulaz storna: storno **ulaza tudje ambalaze** cija je
+> obaveza vec zatvorena vracanjem daje **negativnu** obavezu, i takav storno se
+> odbija. Meri se **postojecim** citaocem (`AmbObavezaPartneru`) nad upisanim
+> stanjem, ne drugom kopijom pravila o znaku — druga kopija bi se razisla sa
+> prvom.
+
+> **AMB-10-ODL-17.** Kontra-stav nosi **zamenjene** `Od` i `Na`, pa se njegov
+> prenos proverava **u obrnutom smeru** — u smeru originala. Bez toga ga odbija
+> matrica klasa: `IZDATA_PRAZNA` trazi `SOPSTVENI` kao izvor, a kontra-stav tu
+> ima partnera. Pravilo stoji na **jednom** mestu u pisacu
+> (`UpisiRedKnjige`), uz citaoca koji ga je vec imao (`KnjigaRedProblem`) — dve
+> kopije bi se razisle, a razlika bi se videla samo kao odbijen storno.
+
+**ISPRAVKA (review 03.10.2026, P1 #1): ulaz za storno NE vezuje dokument.**
+
+Prva verzija ga je vezivala sama, uz obrazloženje da to nije samopotvrda jer
+`RequireAmbTxIzvorniDokument` traži i **izvornu tabelu** u snapshotu. **Ta
+odbrana je falsifikovana:** snapshot je jeftin i ne dokazuje da je dokument
+**promenjen**. Pozivalac je mogao da napiše
+
+```
+tx.BeginTx
+tx.AddTableSnapshot tblOtkup       ← jeftino
+tx.AddTableSnapshot tblAmbalaza
+StornirajAmbalazuDokumenta tx, "Otkup", aktivniOtkupID
+tx.CommitTx
+```
+
+i dobiti **aktivan otkup sa anuliranim ambalažnim efektom**, uz sve kapije
+zelene — jer ga je ambalažni storno sam proglasio svojim.
+
+> **AMB-10-ODL-15 (preciznije).** `BindSourceDocument` sme da zove samo **pisac
+> izvornog dokumenta** — onaj koji ga u toj transakciji **stvarno menja** — i to
+> **posle** te izmene. Ledger-storno nije pisac izvornog dokumenta, pa ne vezuje:
+> `modStorno.StornoOtkup` radi `MarkRowStornirano`, pa `bind`, pa poziva
+> primitiv. Ako kanonski pisac nije vezao, primitiv pada **fail-closed**.
+>
+> Posledica koja se izgovara: `tblAmbalazaDokument` (nabavka, revers) **još nema
+> kanonskog storno pisca**, pa njegov ledger storno danas pada — namerno, dok taj
+> pisac ne nastane. Lista `AMB_BIND_DOZVOLJENI` time ponovo znači „pisci izvornog
+> dokumenta", a ne „ko sve dodiruje knjigu".
+
+**ISPRAVKA (P1 #2): `AMB-INV-07` se meri NAD POSLE-STANJEM.** Kontra-stav ide
+direktno kroz `UpisiRedKnjige`, pa **zaobilazi** sve što stoji u
+`PrenesiAmbalazu` — a tamo živi `AMB-INV-07`. Prva verzija je proveravala samo
+`AMB-INV-09`, pa je storno mogao da commituje stanje koje normalan pisac
+**eksplicitno zabranjuje**:
+
+```
+otkup donese 20 na stanicu          stanica +20
+ta 20 legitimno odu dalje           stanica   0
+storno otkupa -> kontra-stav -20    stanica -20     AMB-INV-09 uredan
+```
+
+Isto na `NABAVKA`: +100, potrošeno 80, storno nabavke → –80. Sada se posle svih
+kontra-stavova meri **svaki pogođeni realan nalog** (`SpoljniSvet` je izuzet po
+konstrukciji — nije u klasi `REALAN`), i negativan saldo obara ceo storno; vanjska
+transakcija vraća i kontra-stavove i storno zaglavlja.
+
+Oba popisa naloga su **jedan** popis (`ZabeleziNalog`), a klasu bira čitalac —
+dva popisa bi se razišla, a prazan bi tiše ugasio onu proveru koja ga nema.
+
+
+**ISPRAVKA (P1 #3): „vrati storno" se nad append-only knjigom ODBIJA.**
+
+`tblStornoZurnal` je **ćelijski**: undo vraća `(Tabela, RowID, Kolona)` na staru
+vrednost. Storno u novom modelu ne menja ćeliju nego **dodaje red**, a taj red
+nije u žurnalu — pa `UndoOperation_TX` vrati zaglavlje u **aktivno**, dok
+ambalažni efekat ostaje anuliran. Dokument aktivan sa nula ambalaže. Putanja je
+**postojeća**: `UndoStorno_TX` kad operacija postoji odmah delegira tamo.
+
+> **AMB-10-ODL-19.** Undo operacije koja je proizvela **kontra-stav u knjizi**
+> odbija se **fail-closed**, dok se ne definise koji poslovni događaj je
+> „vraćanje storna" nad append-only knjigom.
+>
+> Dve očigledne zakrpe su **odbijene jer krše važeći ugovor**: brisanje
+> kontra-stavova (knjiga je nepromenljiva, 6.8) i storno storna (najviše jedan
+> direktan storno). Odluka o semantici je **poslovna**, ne tehnička, i do nje
+> sposobnost stoji — vidljivo, sa razlogom, a ne tiše pokvarena.
+>
+> Kapija stoji u `UndoGuardReasonZaOp`, koju gledaju **i** komanda **i** ekran
+> oporavka — pa operater vidi razlog, ne samo odbijenicu.
+>
+> **ISPRAVKA (P2 #1): ključ je kompozitan `(DokumentTIP, DokumentID)`.** Prva
+> verzija `AmbImaKontraStav` je tražila **samo `DokumentID`**, uz obrazloženje da
+> je ID globalno jedinstven pa tip ne dodaje razlučivost. To je tačno ona
+> pretpostavka koju je `AMB-INV-04` **eksplicitno odbacio** — on nosi
+> `DokumentTIP` zato što se jedan globalni namespace `DokumentID`-eva **ne sme**
+> pretpostaviti. Garda koja treba da posluži svim presecenim dokumentima ne sme
+> da ima **slabiji identitet od same knjige**.
+>
+> Tip se **izvodi iz tabele žurnalnog reda**, ne iz oznake operacije:
+>
+> ```
+> tblOtkup.Stornirano    -> Otkup                  -> pitaj knjigu
+> tblAmbalaza.Stornirano -> nije izvorna tabela     -> preskoči
+> ```
+>
+> Oznaka operacije bi danas za otkup bila ista, ali za revers je
+> `OM-Izlaz-Koop` dok će u knjizi stajati `AmbalazaDokument` — pa bi se posle tog
+> cutovera razišla. **Tabela je činjenica, oznaka je labela.**
+>
+> Oba smera (`tip → tabela` za `AMB-INV-08`, `tabela → tip` za ovu gardu) čitaju
+> **jedan popis** (`AmbIzvorniParovi`): dve `Select Case` mape bi se razišle prvim
+> sledećim presečenim dokumentom.
+
+*Provera:* `Test_Amb_StornoKontraStavVracaSaldo` 9 tvrdnji ·
+`Test_Amb_StornoPosleVracanjaOdbijen` 5 · `Test_Amb_StornoNePraviMinus` 6 ·
+`Test_Amb_UndoStornaOdbijenNadKnjigom` 6 · sabotaže
+`amb-storno-ne-upisuje-kontrastav`, `amb-kontrastav-provera-u-istom-smeru`,
+`amb-storno-udvaja`, `amb-storno-posle-vracanja-prolazi`,
+`amb-storno-bez-inv07`, `amb-storno-primitiv-vezuje`,
+`amb-undo-preko-kontrastava` — svaka sa svojom prvom tvrdnjom.
+
+### 6.12e Otkup — prvo presečeno mesto knjiženja
+
+Četiri noge postaju **dva događaja**:
+
+```
+primljeno   Kooperant -> Stanica   AMBALAZA_UZ_ROBU    Otkup / otkupID   (+ potvrda)
+izdato      Stanica -> Kooperant   IZDATA_PRAZNA       Otkup / otkupID
+```
+
+Oba dele **isti neuređen par** `{Kooperant, Stanica}`, pa `AMB-INV-10` drži bez
+izuzetka — zato je taj par u invarijanti neuređen. `AMB-INV-04` ih razlikuje po
+`VrstaKretanja`.
+
+`potvrdaDeficita` ide **samo prvoj nozi**. Manjak nastaje na
+`Kooperant -> Stanica` (partner donosi svoje, 6.4), a manjak **stanice** se po
+`AMB-10-ODL-8` ne pokriva tuđom ambalažom — za njega ide `NABAVKA`, pa druga
+noga nema šta da potvrđuje.
+
+Dokument se vežuje **tek posle uspešnog `AppendRow` zaglavlja**: vezivanje pre
+upisa tvrdilo bi vlasništvo nad redom koji može da ne nastane. `modOtkup.CreateOtkup`
+je zato treći član `AMB_BIND_DOZVOLJENI` (`AMB-10-ODL-15`).
+
+**Storno otkupa ide kroz kontra-stav** (`AMB-10-ODL-16`), uz zatečenu zastavicu
+koja pokriva redove starog oblika. Preklapanje je izgovoreno u kodu:
+`StornoAmbalazaByDokument` gađa po `(DokumentID, DokumentTip)` pa žigoše i nove
+redove — za novog čitaoca inertno, i stoji **pre** kontra-stava da njega ne
+ožigoše. `10e` briše zastavicu.
+
+**POSLEDICA NA FIXTURE, I ONA JE POSLOVNA.** Pisac sada **traži** da
+kooperantove gajbe postoje; stari `TrackAmbalaza` nije imao nikakvu kapiju, pa je
+fixture mogao da krene od nule. Mereno: **139** poziva `CreateOtkup_TX` u BFP
+suite-u. Zato opticaj zaseva **jedno** mesto
+(`SeedAmbalazaOpticaj`, unutar `SeedBusinessFlowProMasterData`): nabavka po
+stanici i tipu, pa izdavanje praznih kooperantima. To nije podešavanje testa nego
+**vernije stanje** — u 90–95% slučajeva kooperant vraća **naše** gajbe koje mu je
+stanica izdala (`AMB-10-ODL-18`).
+
+*Provera:* `Test_OTK_AmbalazaIdeNaDokument` (prepisan u nov model, 12 tvrdnji) ·
+`Test_OTK_StornoJednimID` (tvrdnja nad **saldom**, ne nad zastavicom) ·
+`Test_OTK_DeficitKooperantaTraziPotvrdu` 7 tvrdnji · sabotaže
+`amb-otkup-izdato-ne-knjizi`, `amb-otkup-primljeno-nosi-izdato`,
+`amb-otkup-storno-bez-kontrastava`.
+
+**ŠTA OSTAJE NEIZMERENO:** auto-potvrda na **sync** putanji
+(`modMasterSync.ImportRowToTblOtkup`) nema test — scenario traži PWA red, a ne
+samo pisca. Napisano je, ali nije dokazano, i tako se i prijavljuje. Isto važi za
+`MsgBox` granu na ekranu: dijalog se iz suite-a ne može potvrditi, pa je merena
+samo granica ispod njega (broj greške i račun manjka).
+
+### 6.12f Otpremnica — vozač prestaje da bude žig
+
+Jedan događaj, jedan red:
+
+```
+ukupno gajbi   Stanica -> Vozac   AMBALAZA_UZ_ROBU   Otpremnica / otpremnicaID
+```
+
+**Vrsta je pročitana, ne izvedena.** 6.7 imenuje `AMBALAZA_UZ_ROBU` za „otkup,
+**otpremnica**, prijemnica, izlaz kupcu", a `PRENOS_INTERNO` za **prazne** gajbe
+između sopstvenih naloga (6.7a). Otpremnica nosi robu — dakle `UZ_ROBU`. Oba
+naloga su `SOPSTVENI`, pa bi matrica klasa pustila i `PRENOS_INTERNO`: razlika je
+**poslovna**, i zato je vrsta podatak a ne izvod iz para.
+
+**VOZAČ PRESTAJE DA BUDE ŽIG, I TO JE NOVA SPOSOBNOST.** Stari red je imao jedan
+entitet (stanicu) i `VozacID` kao **oznaku**, pa se vozačev saldo dobijao
+**inverzijom smera** (`VozacAmbEffectiveSmer`) — čitalac koji inverziju zaboravi
+dobija **pogrešan znak**, ne grešku (6.8, fail-open). Nov red imenuje obe strane,
+pa se vozačev saldo čita istim računom kao svaki drugi. Test to i tvrdi
+(`OTP ambalaza: gajbe idu NA VOZACA -- on je nalog, ne zig`) — tvrdnja koja se u
+starom modelu nije mogla napisati.
+
+**NEMA PROTOKOLA POTVRDE DEFICITA, i to je razlika od otkupa.** Izvor je Stanica,
+dakle `SOPSTVENI` nalog, pa se po `AMB-10-ODL-8` njen manjak **ne pokriva** tuđom
+ambalažom nego je **tvrdo odbijen**. Stanica gajbe dobija otkupom; ako ih nema,
+pitanje operateru ne bi imalo smisla — nema čega da potvrdi.
+
+**REDOSLED SE MORAO PROMENITI.** Knjiženje je stajalo **pre** izmene zaglavlja
+(`OtpKnjiziAmbalazu`, pa `IzdatoStatus = IZDATO`), a `AMB-10-ODL-15` traži da
+`BindSourceDocument` stoji **posle** što je transakcija dokument stvarno promenila.
+Sada je: **označi izdato → veži → knjiži**. Oba poteza su u istoj transakciji, pa
+rollback i dalje povlači oba — menja se samo šta se čime dokazuje.
+
+`tx` je **obavezan** i na `OtpIzdaj` i na `StornoOtpremnica`: opcion bi bio
+fail-open seam. Storno ide kroz **kontra-stav** (`AMB-10-ODL-16`), uz zatečenu
+zastavicu koja pokriva redove starog oblika — isto preklapanje, i isto izgovoreno,
+kao kod otkupa. Tri pozivna mesta (`StornoOtpremnica_TX`, `OtpIspravi`,
+`PonistiZbirnaChain_TX`) tx već imaju, uz snapshot obe tabele — izmereno pre koda.
+
+*Provera:* `Test_OTP_AmbalazaSeKnjiziPriIzdavanju` (dve tvrdnje prevedene, tri
+nove: `Od`, `Na`, vrsta) · `Test_OTP_StornoVracaGajbeVozacu` 6 tvrdnji · sabotaže
+`amb-otp-storno-bez-kontrastava`, `amb-otp-vrsta-prenos-interno`, uz zatečene
+`otp-ambalaza-se-ne-knjizi-pri-izdavanju` i `ispravka-ne-stornira-staru` (sidra
+pomerena, **tekst** tvrdnji netaknut).
+
+**Kod `ispravka-ne-stornira-staru` je morao da se promeni POLOŽAJ tvrdnje.**
+Gašenje storna stare ne pravi „dve aktivne otpremnice" nego **tvrdo odbijanje**:
+`OtpRequireIzvorValjan` ne pušta novu dok je izvor u sastavu aktivne stare — zato
+storno u `OtpIspravi` i stoji PRED upisom članstva. Pošto ceo poziv padne, ciljana
+tvrdnja `Ispravka: stara je stornirana` iza rane izlazne tačke nije ni dolazila na
+red; premeštena je **iznad** nje (hronologija 60).
+
+### 6.12g Prijemnica — i sama partnerov dokument
+
+Dva događaja, jedan **neuređen** par naloga:
+
+```
+KolAmbalaze     Vozac -> Kupac   AMBALAZA_UZ_ROBU   Prijemnica / prijemnicaID
+KolAmbVracena   Kupac -> Vozac   POVRAT_PRAZNE      Prijemnica / prijemnicaID
+```
+
+`AMB-INV-10` traži **jedan neuređen par po dokumentu** — `{Vozac, Kupac}` je
+jedan par, pa oba reda prolaze; `AMB-INV-04` ih razlikuje po **vrsti**. To je
+ujedno provera da je par namerno neuređen: da je bio uređen, zamena bi bila
+drugi par i invarijanta bi oborila normalan dokument.
+
+**REDOSLED NOGU JE NOSEĆ.** `Kupac` je **REALAN** nalog
+(`AmbNalogUKlasi`: svaki poznat tip osim `SpoljniSvet`), pa `AMB-INV-07` važi i
+na njemu. Prva noga kupcu **daje** gajbe, pa druga ima šta da vrati; obrnut red
+bi na punoj zameni gurnuo kupca u minus i ceo upis bi pao.
+
+**`AMB-INV-09` ovde NIJE kapija, i to je merenje koje je pobilo napisanu
+odbranu.** Prvo je stajalo da povrat veći od duga obara `AMB-INV-09`.
+`AmbDoprinosObavezi` kaže suprotno: obavezi doprinose **samo**
+`ULAZ_TUDJE_AMBALAZE` (+) i `VRACANJE_TUDJE_AMBALAZE` (−), a obe ove vrste
+doprinose **nulu**. Povrat veći od stanja obara `AMB-INV-07` — gajbe koje kupac
+ne drži ne mogu da se vrate.
+
+> **AMB-10-ODL-22.** „Partnerov dokument" **nije sinonim za `REVERS_PARTNERA`**.
+> Obrnuta kapija `ODL-13` je tražila **vrstu dokumenta** kao zamenu za vlasnika
+> broja, a operater je 05.10.2026 pobio premisu: *„prijemnica je uvek eksterni
+> dokument sem kada je naša hladnjača ona koja izdaje prijemnice. u svakom
+> slučaju zamena pune ambalaže praznom se knjiži pod brojem prijemnice, nema
+> dodatnog broja."*
+>
+> Dakle `ODL-10` nije zaobiđen kad prijemnica knjiži povrat — on je **ispunjen**:
+> povrat nosi kupčev broj, samo je taj broj na prijemnici. Pravilo se zato meri
+> nad onim što `ODL-10` i kaže:
+>
+> ```
+> OdTip = Kupac AND VrstaKretanja = POVRAT_PRAZNE
+>     =>  NaTip MORA biti Vozac                    (ODL-9, nepromenjeno)
+>     =>  BrojOwner MORA biti (Kupac, OdID)         (ODL-10, pravi uslov)
+> ```
+>
+> Običan `REVERS` nad `Kupac → Vozac` i dalje **pada**, jer je njegov broj naš —
+> ista rupa, zatvorena istim pravilom. Dokument koji vlasnika broja **ne objavi**
+> isto pada: prazan vlasnik nije kupac, pa je podrazumevano fail-closed.
+> Vlasnika objavljuje **zatvorena mapa** `AmbRobniVlasniciBroja`, a čita je
+> `AmbRobniZaglavlje` **iz tabele dokumenta** — ne iz argumenta pisca, jer bi to
+> bila tvrdnja pisca o sebi.
+>
+> **KAD NAŠA HLADNJAČA IZDAJE PRIJEMNICU, VLASNIK BROJA JE NAMERNO ISTI IZRAZ**
+> (odluka operatera 05.10.2026, posle P2 iz review-a). Prigovor je bio tačan u
+> postavci: `KupacID` odgovara na *„ko je kupac u poslu"*, `BrojOwner` na *„čijem
+> nizu pripada broj"*, i `AMB-10` ih svuda drugde razdvaja. Ovde se **ne**
+> razdvajaju, i to je **izmereno**, ne pretpostavljeno —
+> `modBrojevi.GenerateBrojPrijemnice` scope-uje niz baš po `(KupacID, dan)`:
+>
+> ```
+> MaxSeqFromTable(tblPrijemnica, BrojPrijemnice, Datum, KupacID, kupacID, datum)
+> ```
+>
+> uz svoj komentar da auto-numeracija važi **samo** za hladnjača-kupca, a ostali
+> kupci nose svoj eksterni broj koji se unosi ručno. Vlasnik broja dakle **jeste**
+> kupac — u oba režima — i poklapa se sa `AMB-10-ODL-20`
+> `(BrojOwnerTip, BrojOwnerID, dan)`. Jedno pravilo, bez grane po izdavaocu.
+>
+> *Obavezno ponovo izmeriti* ako broj prijemnice ikada počne da se generiše iz
+> **našeg** niza nezavisnog od kupca — tada role i vlasništvo prestaju da se
+> poklapaju i mapa traži granu.
+>
+> *Provera:* `Test_PRJ_VlasnikBrojaJeNjenKupac` meri **odsustvo grane** — dva
+> različita kupca, isti pisac, svaki dokument prijavljuje svog; jedan kupac ne bi
+> razlikovao pravilo od hardkodirane vrednosti. Uz to i fail-closed default (tip
+> van mape ne objavljuje vlasnika) i sabotaža
+> `amb-odl22-vlasnik-broja-iz-pogresne-kolone`.
+
+> **AMB-10-ODL-21.** **Lanac se odmotava obrnuto od fizičkog reda.** Fizički je
+> `stanica → vozac` (otpremnica) `→ kupac` (prijemnica). Dok je knjiga bila
+> **zastavica**, red odmotavanja nije značio ništa. Od `10b-2` je ona **stvaran
+> saldo**: storno otpremnice skida gajbe sa vozača, a njih je prijemnica već
+> predala kupcu — pa bi vozač otišao u minus i `AMB-INV-07` bi fail-closed oborio
+> celu kaskadu. `PonistiZbirnaChain_TX` zato stornira **prijemnice pre
+> otpremnica**.
+>
+> Kad lanac **nije naš** (`ownsChain = False`, kupac je eksterni), prijemnica je
+> **kupčev** dokument i ne smemo da je stornirano. Tada se **ceo potez odbija**,
+> i to **pred svakom mutacijom** — pa ni zbirna ne bude dirnuta.
+>
+> **OVDE JE PRVO STAJALA ODBRANA IZVEDENA IZ SALDA, I POBIJENA JE** (review
+> 05.10.2026, P1). Pisalo je: *„prijemnica ostaje, vozač više nema gajbe, pa
+> storno otpremnice padne na `AMB-INV-07`"*. To važi **samo** kad kupac nije
+> vratio dovoljno praznih. Normalna **puna zamena** je kontraprimer:
+>
+> ```
+> otpremnica   Stanica -> Vozac   20
+> prijemnica   Vozac -> Kupac     20      pa   Kupac -> Vozac   20
+> vozac opet ima 20   ->   kontra-stav otpremnice PROLAZI
+> ```
+>
+> Ishod je bio: zbirna i otpremnica **stornirane**, eksterna prijemnica
+> **aktivna** i dalje vezana na njih, i `res("ok") = True` — **lažno uspešno**
+> poslovno poništenje nad polomljenim lifecycle-om.
+>
+> `AMB-INV-07` sudi **samo posle-stanje salda**. On ne zna da li **aktivan
+> nizvodni dokument još zavisi** od onog koji se stornira. Zato kapija nije
+> jači saldo nego **eksplicitna zavisnost**: aktivna eksterna prijemnica znači
+> da uzvodni tok ne sme da se proglasi nepostojećim. Dve politike — „eksterni
+> dokument ostaje netaknut" i „poništenje **celog** toka" — ne mogu obe da važe;
+> bira se **odbijanje**, ne orphaning.
+>
+> Skup aktivnih prijemnica se broji **bez obzira na `ownsChain`**: u `False`
+> grani je `prijIDs` namerno prazan (kaskada ih ne dira), pa bi kapija nad njim
+> bila placebo. Prazan `scopeID` je bezbedan — `SuziDecuNaZbirnu` tada vraća
+> kandidate **nepromenjeno**, dakle skup je **širi**, a kapija fail-closed.
+
+**Seed je morao da dobije vozače.** Prva noga polazi **od vozača**, a
+`SeedAmbalazaOpticaj` je punio samo stanice i kooperante — pa bi 14 zatečenih
+pozivnih mesta koja prijemnicu prave sa gajbama oborilo `AMB-INV-07`. Stanica
+sada daje prazne i vozačima (`PRENOS_INTERNO`, po `ODL-7`), što je i realan tok.
+
+*Provera:* `Test_PRJ_AmbalazaDveNogeJedanPar` (14 tvrdnji: `Od`, `Na`, vrsta i
+količina po nozi, jedan par, oba salda) · `Test_PRJ_StornoVracaGajbe` (dva
+kontra-stava) · `Test_PRJ_LanacSeOdmotavaObrnuto` — meri **svojstvo** na kom
+`ODL-21` stoji, na dva dokumenta: dok prijemnica stoji, storno otpremnice
+**mora** da padne, a po odmotanom lancu prolazi · `Test_Amb_DokumentUgovor` +3
+slučaja za `ODL-22` (prolazi · bez vlasnika pada · tuđ broj pada) · sabotaže
+`amb-prj-puna-noga-nosi-vracene`, `amb-prj-povrat-se-ne-knjizi`,
+`amb-prj-storno-bez-kontrastava`, `amb-odl22-vlasnik-broja-se-ne-gleda`,
+`amb-odl22-broj-drugog-kupca`.
+
+> **ŠTA OVAJ REZ NIJE POKRIO.** Eksterna grana kaskade **ima** test od P1
+> ispravke — `Test_PRJ_EksternaPrijemnicaBlokiraPonistenje` vrti **pravu**
+> kaskadu kroz test seam `PonistiZbirnaChain_Test` (isti obrazac i razlog kao
+> zatečeni `DistinctActiveValues_Test`), nad **punom zamenom**, pa ga ugasena
+> kapija obara po imenu. Fixture „prijemnica pod zbirnom" je time napravljen.
+>
+> Nepokriven ostaje **redosled u vlasničkoj grani** (`ownsChain = True`):
+> `ZbirnaOwnsExternalChain` je istina samo kad je kupac **konfigurisana**
+> hladnjača (`CFG_MALINA_DEFAULT_KUPAC`), pa bi test morao da menja config —
+> mutacija podesavanja u suite-u je sama po sebi rizik. Za tu granu je
+> izmereno **svojstvo** na kom redosled stoji
+> (`Test_PRJ_LanacSeOdmotavaObrnuto`), ne redosled sam; sabotaža koja bi vratila
+> stari red **nije upisana** jer se ne bi videla. Upisano kao dug sa imenom.
+
+### 6.12h Revers — ambalažni dokument, i vozač prestaje da bude žig
+
+Četiri smera, po jedan red:
+
+```
+IZDAVANJE     Stanica   -> Kooperant   IZDATA_PRAZNA
+PRIJEM        Kooperant -> Stanica     POVRAT_PRAZNE
+IZDATO_OM     Vozac     -> Stanica     PRENOS_INTERNO
+PRIJEM_OD_OM  Stanica   -> Vozac       PRENOS_INTERNO
+```
+
+Stari pisac je prva dva smera knjižio sa **dve noge**, a druga dva sa **jednom**
+uz vozača u koloni `VozacID` — pa se vozačev saldo dobijao **inverzijom smera**,
+fail-open po 6.8. Sada je nalog, pa test može da tvrdi da gajbe **polaze od
+njega**; u starom modelu se to nije moglo napisati.
+
+**MAPA SMEROVA ŽIVI U UGOVORU, NE U PISCU.** `AmbReversSmerovi` je **zatvorena**:
+nepoznat smer nema red i pisac pada fail-closed, a spisak dozvoljenih u poruci
+dolazi **iz mape** — pa ne može da se raziđe sa njom, kao što je zatečeni
+`Case Else` sa svojim nabrajanjem mogao. Smerovi su dobili konstante (do ovog
+reza goli literali na 12 mesta).
+
+**`AMB-10-ODL-5` JE ZATVOREN, I PREKRŠAJ JE BIO LATENTAN.** Dokument je opisivao
+`SaveOMUlaz_TX` kao ambalažni dokument koji nosi i novac pod istim brojem.
+Merenje pozivnih mesta pokazuje da **nijedan živ poziv ne meša klase**: F5 isplata
+šalje `kolAmb:=0`, F7 revers šalje `novac:=0`. Prekršaj je dakle bio u **potpisu**
+pisca, ne u ponašanju — pa je razlaganje mehaničko i **nijedan poslovni tok se ne
+menja**. Ambalažna polovina je otišla svom piscu, a `SaveOMUlaz_TX` je ostao
+**samo novčani**; četiri ambalažna parametra su uklonjena jer ih novčana grana ne
+koristi (izmereno), a ostavljena bi bila poziv da se klase opet pomešaju.
+
+**DVE KAPIJE BROJA, A NOV MODEL POKRIVA SAMO JEDNU.** Zauzetost (`AMB-10-ODL-20`)
+radi `UpisiAmbDokument` i time zamenjuje zatečeni `RequireBrojSlobodanUNizu`. Ali
+**oblik i kontekst** broja — pripada li baš nizu te stanice i tog dana — nov model
+ne proverava, pa bi prelazak tiho izgubio tu kapiju. Zato je zadržana, i to samo
+za broj **koji pozivalac zada**: generisan dolazi iz ambalažnog niza i nema `REV`
+oblik.
+
+Zatečeno pravilo „nalog je obavezan" stajalo je u **osam kopija** (po dve u svakom
+od četiri `Case` bloka). Sada je jedno telo, pa ne može da se raziđe po granama.
+
+*Provera:* `Test_REV_SmerDajeJedanRed` (jedan red po smeru, par naloga, vozač kao
+nalog, vrsta) · `Test_REV_UgovorSmeraJeFailClosed` (mapa nosi tačno četiri smera;
+nepoznat smer i nedostajući nalog odbijeni, **uz razlog po imenu**) · 11 zatečenih
+`REV` testova numeracije preseljeno na istog pisca, bez menjanja tvrdnji ·
+sabotaže `amb-rev-smer-obrnut`, `amb-rev-vrsta-nije-izdavanje`,
+`amb-rev-nalog-nije-obavezan`.
+
+> **TVRDNJA O ODBIJANJU MORA DA IMENUJE RAZLOG.** Provera „nalog je obavezan" je
+> **dvoslojna**: ugasi se, a `PrenesiAmbalazu` svejedno odbije nepostojeći nalog —
+> pa bi tvrdnja „odbijeno" ostala zelena. Zato test helper vraća `Err.Description`
+> i tvrdnja meri **tekst koji proizvodi samo prvi sloj**. Naučeno na skupi način u
+> 6.12g; ovde primenjeno **pre** prvog prolaza.
+
+> **STORNO POSTOJI, ČITALAC JOŠ NE.** Revers je u istom rezu dobio
+> `StornirajAmbDokument_TX` — dokument-level storno nad zaglavljem i knjigom —
+> čime je zatvoren dug „`tblAmbalazaDokument` nema kanonski storno".
+>
+> Ono što **nije** pokriveno je čitalac: produkcioni ekran Storno još bira revers
+> preko `AmbID`/`ReversID` **noge**, koju nov revers nema — pa ga operater u tom
+> ekranu ne vidi. To nije razlog za kompatibilnost sa starim modelom: program
+> kreće od nule, pa `STIP_REVERSI` jednostavno prelazi na
+> `tblAmbalazaDokument` + `AmbDokID`, a stari put nestaje. Ide u `10c`, zajedno
+> sa ostalim čitaocima, i **pred merge** — grana se ne mergeuje bez njega.
+
+### 6.12i Uplata kupca — poslednje presečeno mesto, i jedno koje nije imalo ulaz
+
+**Red 8** matrice: `SaveKupciIzlaz_TX` je knjižio nogu `Izlaz · Kupac` sa vozačem
+kao **žigom** i `DokumentTIP = Kupci-Otpremnica`, pod **istim** `brojDok` kojim je
+pisao i red u kasi. To je drugi od **dva ogledalna prekršaja** `AMB-10-ODL-5`
+(prvi je `SaveOMUlaz_TX`, 6.12h) — i rešen je isto: pisac ostaje **samo kasa**.
+
+| | Pre | Posle |
+|---|---|---|
+| `tblAmbalaza` | jedna noga pod `brojDok` | **ništa** |
+| `tblNovac` | red pod **istim** `brojDok` | red pod `brojDok` |
+| snapshot | `TBL_AMBALAZA` + `TBL_NOVAC` + `TBL_FAKTURE` | `TBL_NOVAC` + `TBL_FAKTURE` |
+| kapija | `kolAmb <= 0 And novac <= 0` | `novac <= 0` |
+| `DOK_TIP_IZLAZ_KUPCI` | tip dokumenta | **obrisan** |
+
+**Razlika od ostalih osam mesta: ovde se knjiženje nije PRESELILO nego je
+PRESTALO.** Povrat praznih od kupca već ima svoje mesto — red 7, `Kupac → Vozac`
++ `POVRAT_PRAZNE`, **pod brojem prijemnice** (`AMB-10-ODL-9/-10` uz `ODL-22`,
+6.12g). Dva reda za isti događaj bila bi dva traga, a `brojDok` nad ambalažnom
+nogom je upravo onaj **plutajući identitet** koji je 6.11 odbio.
+
+**Izmereno pre koda, i to je ono što ovaj rez čini malim:**
+
+| Merenje | Nalaz |
+|---|---|
+| ko zove ambalažnu nogu | **nijedan produkcioni pozivalac**: F6 (`modNovacUnos.UplataUpisi`) šalje `kolAmb:=0`, `tipAmb:=""`, `vozacID:=""` **tvrdo upisane** |
+| ko čita `DOK_TIP_IZLAZ_KUPCI` | **nijedan** — jedan pisac, nula čitalaca |
+| ko još zove `TrackAmbalaza` | posle ovog reza **nijedan produkcioni pozivalac**; ostaju samo testovi koji **namerno** seju stari oblik za `Chk_B10` i stari ekran Storno |
+
+Treći red je i **kraj write-side dela `10b-2`**: svih devet mesta knjiženja piše
+nov oblik, a stari pisac je od ovog trenutka samo test-alat.
+
+Uz rez je ispravljena i poruka: `DOK_ERR_NEMA_AMBALAZE_NOVCA` („Nema ambalaže ni
+novca za čuvanje") zamenjena je novčanom u **oba** pisca — `SaveOMUlaz_TX` je istu
+rečenicu nosio od svog reza, a ni on ambalažu više ne prima.
+
+> **CAPABILITY — „kupac vraća prazne BEZ dostave robe": POSTOJI.** Ta sposobnost
+> nije izgubljena **ovde**: F6 je nikad nije imao (`kolAmb:=0` tvrdo upisano), a
+> legacy ekran koji je polje imao ne postoji od §27.18. Pitanje je bilo poslovno i
+> **odgovoreno je isti dan**:
+>
+> **AMB-10-ODL-23 (presuda operatera, 06.10.2026).** Kupac vraća prazne gajbe **i
+> bez prijemnice**, i to nije redak slučaj nego redovan. Takav povrat je **kupčev
+> dokument**: nosi **njegov** broj (`BrojOwnerTip = Kupac`, `BrojOwnerID = KupacID`),
+> vrsta je `REVERS_PARTNERA`, par je `Kupac → Vozac`, kretanje `POVRAT_PRAZNE`.
+>
+> Dve posledice koje se iz toga **čitaju, ne biraju**:
+>
+> | | Zašto |
+> |---|---|
+> | broj se **ne predlaže** | predlog iz **našeg** niza bio bi izmišljen broj **tuđe** serije; polje je obavezan unos, a zauzetost se meri u opsegu `(Kupac, KupacID, dan)` po `ODL-20` |
+> | gajbe idu **na vozača** | lanac `kupac → vozac → stanica` iz `ODL-9` važi i kad prijemnice nema — potvrđeno uz istu presudu |
+>
+> Time `REVERS_PARTNERA` prestaje da bude vrsta bez pisca. **Kapija je već tražila u
+> tom obliku** (`AmbDokKretanjeProblem`, grana `jePartnerov`), a storno je već
+> bio pokriven (`StornirajAmbDokument_TX` radi nad svakim ambalažnim dokumentom) —
+> pa rez nosi **pisca i ulaz**, ne nova pravila. **Pisac je napisan isti dan
+> (6.12j); ulaz još ne postoji.** F7 danas **ne prima kupca kao partnera**, pa to
+> prestaje da važi — ali peti smer **ne ide** u zatvorenu mapu
+> `AmbReversSmerovi`: ona je mapa **našeg** reversa (broj je staničin), a ovo je
+> dokument sa **tuđim** brojem i drugom vrstom. Svoj pisac, svoj red na ulazu.
+
+*Provera:* `Test_KUP_UplataJeSamoNovac` — avans kupca legne u kasu **i** knjiga
+ambalaže ostane nedirnuta (obe tvrdnje **zajedno**: sama „knjiga nije porasla"
+bila bi zelena i kad pisac uopšte ne radi), a prazan upis ostaje odbijen ·
+sabotaže `amb-kup-uplata-knjizi-ambalazu`, `amb-kup-prazna-uplata-prolazi`.
+Katalog 693 → 695.
+
+### 6.12j Pisac kupčevog reversa — jedno pravilo gore, sve ostalo u jezgru
+
+`UpisiReversPartnera_TX(datum, broj, kupacID, vozacID, tipAmb, kolicina, [napomena])`
+([modAmbalaza:2199](../../src-vba/modAmbalaza.bas)) — povrat praznih od kupca
+**bez prijemnice** (`AMB-10-ODL-23`).
+
+| | Vrednost | Ko je drži |
+|---|---|---|
+| vrsta | `REVERS_PARTNERA` | `AmbDokDozvoljavaKretanje` pušta **samo** `POVRAT_PRAZNE` uz nju |
+| vlasnik broja | `Kupac` / `KupacID` | `RequireAmbDok` traži klasu `PARTNER` (`AmbDokBrojOwnerKlasa`) |
+| par | `Kupac → Vozac` | `AmbDokKretanjeProblem`, grana `jePartnerov` |
+| kretanje | `POVRAT_PRAZNE` | ista grana |
+| zauzetost broja | `(Kupac, KupacID, dan)` | `UpisiAmbDokument` (`ODL-20`) |
+| identitet | `AmbDokID` | `AMB-INV-04` u `PrenesiAmbalazu` |
+| storno | `StornirajAmbDokument_TX` | **već je postojao** — radi nad svakim ambalažnim dokumentom |
+
+**Pisac nosi tačno jedno pravilo koje nigde drugde ne postoji: broj je obavezan i
+ne predlaže se.** Brat blizanac (`UpisiReversAmbalaze_TX`) na prazan broj zove
+generator, jer je tamo niz **naš**; ovde generatora ne sme biti — predlog iz našeg
+niza bio bi **drugi broj za isti papir**, pa ni jedan ne bi bio onaj po kome
+operater dokument traži.
+
+**Zašto nije peti smer u `AmbReversSmerovi`:** ta mapa je mapa **našeg** reversa
+(njen vlasnik broja je stanica), pa bi peti red tiho uveo dokument sa **tuđim**
+brojem i drugom vrstom u mapu koja o njima ne zna ništa. Dva pisca se razlikuju
+po **vlasniku niza**, ne po stilu.
+
+> **CAPABILITY — ULAZ POSTOJI od 07.10.2026: F7, peti segment „Povrat kupca".**
+>
+> Odluka gde ulaz živi je bila otvorena: **nov ekran** ili **peti smer na F7**.
+> Izabran je peti smer, i razlog nije štednja nego **oblik koji ekran već ima**:
+> F7 od početka prebacuje politiku po smeru — smerovi 1–2 traže kooperanta,
+> 3–4 vozača i nikakvog partnera. „Smer 5 traži kupca i ručno upisan broj" je
+> nastavak istog oblika, bez novog ekrana, novog F-tastera i novog reda u
+> registru ekrana.
+>
+> Partnerska lista se **nije menjala**: `PartnerSrcOrder("F7")` je već nosila
+> `KUP` (lista je mešana, a treća kolona nosi tip partnera), pa kupci na F7 već
+> postoje — dosad ih je validator odbijao.
+>
+> | Šta ulaz nosi | Gde |
+> |---|---|
+> | peti segment, širina 73 umesto 91 (`1 + 5*73 + 4*1 = 370`) | `modOtkupUI` |
+> | partner mora biti **kupac** (`partnerTip = "KUP"`) | `ReversValidiraj` |
+> | vozač **obavezan** i bez `VALIDACIJA_UNOSA` (`ODL-9`) | `ReversValidiraj` |
+> | broj **obavezan i bez predloga** — grana izlazi **pre** auto-broja | `ReversValidiraj` |
+> | **predlog broja se ne računa za taj smer** (odluka na jednom mestu) | `RevSmerPredlazeBroj` → zove je i ljuska i validator |
+> | prelazak na taj smer **prazni** polje broja, povratak vraća predlog | `SetSmerRev` |
+> | zauzetost broja u opsegu **`(Kupac, KupacID, dan)`** | `ReversBrojZauzet` |
+> | upis ide `UpisiReversPartnera_TX` | `ReversUpisi` |
+> | štampa imenuje **kupca**, ne vozača | `StampajRevers` |
+
+> **DVA MESTA SU NAMERNO OSTAVLJENA.** `SmerRevKljuc(5)` vraća `""` — peti smer
+> **nema** prevod u mapu našeg reversa, jer ide svom piscu; prevod bi značio da ga
+> `AmbReversSmerovi` ipak poznaje. I `ZavrsiIspravkuAko` se za peti smer **ne**
+> zove: tok ispravke reversa ključa po `(broj, stanica, dan)`, a kupčev revers
+> staničin niz ne dira — poziv bi mogao da zatvori **tuđu** ispravku sa slučajno
+> istim brojem. Ispravka kupčevog reversa je svoj tok i još ne postoji.
+
+> **PROTOKOL POTVRDE DEFICITA JE DOBIO SVOJ UI, na oba mesta.** F7
+> (`modNovacUnos.RevKupcaUpisi`) i F4 (`modDokUnos.PrijemnicaUpisi`) hvataju
+> **broj** greške `AMB_ERR_POTVRDA_DEFICITA`, čitaju **svež** manjak
+> (`AmbDeficitZaPrenos`), pitaju operatera i **ponavljaju poziv** sa potvrđenim
+> brojem — ekran pritom **zadržava podatke**. Obrazac je prepisan iz
+> `modOtkupUnos`, gde isti protokol radi za otkup od 03.10.2026.
+>
+> **⚠ NIJEDAN TEST NE SME DA UĐE U TU GRANU:** `MsgBox` u `run_vba` prolazu visi
+> do timeout-a i ostavlja Excel u `[break]`. Zato testovi mere **pisca** (gde
+> protokol i živi, 6.12j), a dijalog ide u **operatersku ček-listu**. Isti rizik
+> nosi i otkup od 03.10.2026 — ovo ga ne uvodi, ali ga sada nosi na tri mesta.
+
+> **PREKOMERAN POVRAT: ZATVORENO 07.10.2026 (P2 #2 iz review-a `024995de`).**
+>
+> Ovde je prvo stajalo da prekomeran povrat „ostaje odbijen, i to je zatečeno
+> pravilo" — uz obrazloženje da parametar ne uvodi pisac sam. **Reviewer je to
+> pobio argumentom koji stoji:** `ODL-23` je sposobnost definisao kao **redovnu**,
+> a pisac bez `potvrdaDeficita` ne može ni da **primi** potvrđen manjak — pa
+> pozivalac nema čime da ponovi upis. To nije „strog pisac" nego **nedostižna
+> poslovna putanja**.
+>
+> Protokol je zato proširen na **oba** pisca, i to **isti** protokol (bez drugog
+> mehanizma), po obrascu koji `CreateOtkup_TX` nosi od 6.5:
+>
+> ```
+> poziv bez potvrde  ->  AMB_ERR_POTVRDA_DEFICITA + TACAN manjak u poruci
+> operater potvrdi   ->  isti poziv, potvrdaDeficita = taj broj
+> jezgro meri SVEZ manjak -> pogresna potvrda se odbija
+> ```
+>
+> | Pisac | Šta je dobio |
+> |---|---|
+> | `UpisiReversPartnera_TX` | `Optional potvrdaDeficita` → `PrenesiAmbalazu` |
+> | `SavePrijemnica` / `_TX` / `Multi_TX` | isto, na **nogu povrata** (puna noga polazi od vozača — `SOPSTVENI`, pa je njen manjak po `ODL-8` **tvrdo** odbijen i potvrda tamo ne postoji) |
+> | `SavePrijemnicaMulti_TX` | i `Optional ByRef outErrNum` — bez njega F4 dobija **tekst** greške ali ne i **broj**, a broj je ugovor: tekst je prevodiv |
+>
+> **Potvrda ne ide u log** (`LogError` se preskoči za taj broj) — kupac koji vrati
+> više nego što knjiga kaže je redovan slučaj, a log koji ga beleži kao kvar
+> prestaje da bude signal. Isti razlog i isti obrazac kao u `CreateOtkup_TX`.
+>
+> Ostaje **samo UI**: F7/F4 moraju da pitaju operatera i ponove poziv. Produkcioni
+> pozivalac koji to radi danas postoji jedino za otkup (`modOtkupUnos`), i on je
+> uzorak za oba.
+
+> **NALAZ U SUSEDNOM KODU: noga povrata je zavisila od postojanja Klase I.**
+> Nađeno pri čitanju za P2 #2, nije iz review-a. U `SavePrijemnicaMulti_TX` je
+> `kolAmbVracena` išla **samo** pozivu za Klasu I, a Klasa II je dobijala **tvrdo
+> upisanu `0`**. Klasa I je **opciona** (`kolicinaI = 0` → snima se samo Klasa II),
+> pa je prijemnica sa samo Klasom II i vraćenim praznim gajbama **tiše nego tiho**
+> gubila nogu povrata — bez ijedne poruke, a iz F4 dostupno, jer `kolicinaI` i
+> `kolAmbVracena` dolaze **nezavisno** (`modDokUnos.PrijemnicaUpisi`). Utvrđeno
+> **čitanjem**, ne pretpostavkom: argument je doslovna nula. Povrat je **jedan
+> događaj**, pa sada ide uz **dokument koji postoji**.
+
+*Provera:* `Test_RVP_KupcevDokumentJedanRed` (vlasnik broja, vrsta i par — tvrdnje
+stoje **iznad** rane izlazne tačke, pa pucaju po imenu i kad sabotaža obori ceo
+upis; plus storno kao **kontra-stav**) · `Test_RVP_BrojJeKupcevINePredlazeSe`
+(prazan broj odbijen **uz razlog po imenu**; isti broj istog kupca istog dana
+odbijen uz zauzetost) · sabotaže `amb-rvp-broj-se-predlaze`,
+`amb-rvp-vlasnik-broja-nije-kupac`. Katalog 695 → 697.
+
+*Provera protokola (07.10.2026):* `Test_RVP_DeficitSePotvrdjuje` — povrat 20 nad
+saldom 5: bez potvrde odbijen **uz tačan manjak u poruci**, potvrda 14 odbijena,
+potvrda 15 prošla; noga povrata nosi **traženih 20**, pokriće **tačno 15**, kupčev
+saldo **0**, vozač **+20** — čime je i `P3` zatvoren (acceptance meri količine i
+salda, ne samo oblik reda). Tip ambalaže je **svež**, jer bi nad zajedničkim
+tipom saldo nosili i drugi testovi, pa manjak ne bi bio ponovljivo 15 ·
+`Test_PRJ_PovratIdeSaKlasomKojaPostoji` (prijemnica **bez Klase I** knjiži
+povrat) · sabotaže `amb-rvp-potvrda-se-ne-prosledjuje`,
+`amb-prj-povrat-samo-sa-klasom-i`. Katalog 697 → 699.
+
+### 6.12k Pozajmica ambalaže od kupca — `AMB-10-ODL-24` (**OTVORENO**)
+
+> **Presuda operatera, 08.10.2026.** Kupci **često, pre početka sezone, predaju
+> svoju praznu ambalažu** — **njihove** gajbe, pozajmica nama, ne povrat naših.
+> Predaju je **vozaču**, kao i inače (lanac `kupac → vozac → stanica`). Operater
+> je to nazvao **recipročnim** smerom kupčevog reversa: „time se zaokružuje
+> celina".
+
+**Sposobnost danas POSTOJI — izmereno, ne pretpostavljeno.** Kupac bez naših
+gajbi preda 40 svojih; `UpisiReversPartnera_TX` sa potvrđenim manjkom 40 daje:
+
+```
+SpoljniSvet -> Kupac   40   ULAZ_TUDJE_AMBALAZE    obaveza +40
+Kupac       -> Vozac   40   POVRAT_PRAZNE          obaveza   0
+                            saldo kupca 0, vozac +40
+```
+
+Obaveza prema tom kupcu je **40**, po tipu ambalaže — `AmbObavezaPartneru` hvata
+red jer kupac stoji na **bilo kojoj** strani. **Ekonomija je tačna.**
+
+**Rupa je u ZNAČENJU, ne u brojkama.** Planirana pozajmica i **neobjašnjeno
+odstupanje** (kupac vrati 20, a knjiga kaže da drži 5) ostavljaju **isti trag**,
+pa se posle ne mogu razlikovati. Uz to operater za redovan posao dobija pitanje
+o **manjku** — „nalog nema 40, manjak ulazi u opticaj kao tuđa ambalaža".
+
+**Šta košta da postane svoj događaj:** izmena **ugovora** u `10a`, ne samo pisca.
+
+| Šta se dira | Zašto |
+|---|---|
+| `AmbVrsteSve` + `AmbKlaseVrste` | `VrstaKretanja` je **zatvoren** enum sa kapijama potpunosti; par i klase pozajmice su `PARTNER → SOPSTVENI`, **identični** povratu — razlika je samo čije su gajbe |
+| `AmbDoprinosObavezi` (`AMB-INV-09`) | pozajmica diže obavezu; povrat je ne dira |
+| `AmbDokDozvoljavaKretanje`, `AmbDokKretanjeProblem` | kupčev dokument (`REVERS_PARTNERA`) nosio bi **dve** vrste |
+| čitaoci u `10c` | svaki koji grupiše po vrsti kretanja |
+
+> **ČVOR KOJI SE MORA REŠITI PRE KODA.** Eksplicitan ulaz tuđe ambalaže bi sa
+> **pokrićem deficita** delio **par i vrstu** na istom dokumentu — a to je tačno
+> razlog zbog kog `ULAZ_TUDJE_AMBALAZE` i **nije** zahtev nego posledica
+> (`AmbVrstaJeZahtev` → `False`, par uvek `SpoljniSvet → nalog`, i ne ulazi u par
+> dokumenta — `DodajStranu`). Rešenje nije „pustiti ULAZ_TUDJE kao zahtev" nego
+> odluka šta tačno nosi koji red; bez nje bi jedan događaj tiho progutao drugi
+> kao „idempotentno ponavljanje".
+
+**Asimetrija koju je ovo otkrilo** vredi zapisati i sama po sebi: model ume da
+**vrati** tuđu ambalažu kao događaj (`VRACANJE_TUDJE_AMBALAZE` **jeste** zahtev),
+ali da je **primi** samo kao sporedni efekat.
+
+**Redosled je operaterov (08.10.2026):** prvo `10c` (ekran Storno, merge
+blocker), pozajmica **posle merge-a**. Do tada se knjiži kroz potvrdu manjka —
+ispravno po brojkama, nedovoljno po značenju.
+
+### 6.12l `10c` prvi rez — lista i storno reversa (`P2 #1` iz review-a)
+
+Ekran Storno i donja lista na F7 dele **jednu** mapu tipa, pa su obe gledale u
+`tblAmbalaza`. Posle reza `10b-2` tamo nema nijednog novog reversa — zato je
+operater video „Prikazano 0" iako je dokument upisan, i zato nov revers nije
+mogao da se stornira sa ekrana.
+
+| | Pre | Posle |
+|---|---|---|
+| tabela liste | `tblAmbalaza` | **`tblAmbalazaDokument`** |
+| identitet reda | `AmbID` (noga knjige) | **`AmbDokID`** |
+| broj · datum | `DokumentID` · `Datum` reda | zaglavlje |
+| preflight | `ActiveAmbalazaDokExists(broj, smer)` + `ReversIDRazresi` + `ReversStanicaDan` | `AktivanPoIdentitetu(…)` — **jedna linija**, ista kao kod prijemnice |
+| storno | `StornoOMKoopByBrDok_TX(broj, smer, AmbID)` | **`StornirajAmbDokument_TX(AmbDokID)`** |
+| opis uz potvrdu | razrešavanje `ReversID`-a | vlasnik niza + datum sa zaglavlja |
+
+**„Smer" je nestao iz izbora, i to je suština reza.** Dokument ga nema — ima
+**vrstu** (`REVERS` / `REVERS_PARTNERA`); smer je bio deo **plutaćeg identiteta**
+(broj + smer + noga), koji je `AMB-10-ODL-16/-17` ukinuo. Zato je i sabotaža
+`storno-revers-smer` **obrisana**, a ne preusmerena: kapija nad obrisanim
+pravilom zacementira staro stanje.
+
+**Četiri ćelije dolaze sa REDA, ne sa zaglavlja** — tip ambalaže, količina, vrsta
+kretanja i protivpartner. Zaglavlje ih po `AMB-10-ODL-3` **nema**, jer bi kopija
+bila druga istina. Čita ih `modAmbalaza.AmbDokRedMapa` — jedan prolaz, jer bi po
+redu mreže bio sken po redu — preskočeći kontra-stavove i pokriće deficita
+(`ULAZ_TUDJE`), jer to nisu posao dokumenta.
+
+> **ZAŠTO NIJE DEDIKOVAN BUILDER, kao kod izvoda.** Izvod ga ima jer mu je red
+> **grupa redova** (`N:1`). Revers je sada **jedan red zaglavlja = jedan red
+> mreže**, pa generički builder odgovara; dedikovan bi prepisao filtere,
+> pretragu, čipove i status — četiri stvari koje već rade.
+
+> **KOLONA PARTNER JE IZBOR PRIKAZA, NE PODATAK.** Red imenuje **obe** strane, pa
+> se bira ona koja **nije naša**; kad su obe naše (vozač i stanica,
+> `PRENOS_INTERNO` po `ODL-7`) bira se ona koja nije stanica — stanica je
+> kontekst ekrana. Ko je „naš" čita se iz **ugovora** (`AmbNalogUKlasi`), ne iz
+> spiska imena u ekranu.
+
+*Provera:* `T_Storno_TipBiraTabeluIKolone` (tabela **i** identitet **i** broj —
+mere se zajedno: tabela bez svoje kolone identiteta daje mrežu iz koje se ne može
+stornirati) · `T_StornoDok_KapijePreUpisa` (revers bez identiteta i sa
+nepostojećim `AmbDokID` odbijen **pre** storna) · sabotaže
+`amb-10c-revers-identitet-noga`, `amb-10c-broj-sa-noge`,
+`amb-10c-storno-ne-trazi-dokument`.
+
+**Šta ostaje:** stari klaster u `modStorno` (`StornoOMKoopByBrDok_TX`,
+`ReversIDRazresi`, `ActiveAmbalazaDokExists`, `ReversStanicaDan`) **nije obrisan**
+— još ga zovu testovi, `modStornoFlow` i tok **ispravke** reversa
+(`modDokUnos`). Briše se u `10e`, po redosledu iz 6.13: stare strukture
+poslednje.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
@@ -1005,10 +2103,14 @@ Time u celom domenu ambalaze **nema nijednog dogadjaja bez identiteta dokumenta*
    kapije `AMB-INV-01..04`, `-07`, `-09` i sabotaze. **Bez cutovera.**
 4. **AMB-10b-2** — svih devet mesta knjizenja + **razlaganje OBA slozena pisca**
    (`SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`): ambalaza ostaje, novcana polovina
-   odlazi u kasu. Uz njih i staticka kapija za `AMB-INV-08` i numeracija
-   ambalaznog dokumenta.
+   odlazi u kasu. Uz njih `AMB-INV-08` **u jezgru** (`AMB-10-ODL-11`; staticka
+   kapija je pala kao placebo, v. 6.12c) i numeracija ambalaznog dokumenta.
+   **Ulaz za storno (`10d`) legao je PRE ovog koraka** — razlog je meren, v. 6.12d.
 5. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
-6. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit.
+6. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit. **Ulaz je
+   vec legao** (`AMB-10-ODL-16`, 6.12d), jer bez njega cutover dokumenta koji ima
+   storno put ostavlja gajbe na saldu tiho. Ostaje: istorijski upit i veza sa
+   `UndoOperation_TX`.
 7. **AMB-10e** — **tek tada** brisanje starog modela.
 
 > **NALAZ IZ `10b-1`, ZA `10b-2`: tabela tokom prelaza nosi DVA OBLIKA REDA.**

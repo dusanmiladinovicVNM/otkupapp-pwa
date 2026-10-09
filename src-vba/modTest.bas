@@ -293,6 +293,15 @@ Public Sub RunAllTests()
     RunOne 10
     RunOne 11
     RunOne 12
+    RunOne 201
+    RunOne 202
+    RunOne 203
+    RunOne 204
+    RunOne 205
+    RunOne 206
+    RunOne 207
+    RunOne 208
+    RunOne 209
     RunOne 13
     RunOne 14
     RunOne 15
@@ -766,6 +775,15 @@ Private Function TestName(ByVal idx As Long) As String
         Case 113: TestName = "T_Zbirna_NemaIspravku"
         Case 43: TestName = "T_Traka_NatpisiPoRezimu"
         Case 38: TestName = "T_ZbirnaForma_KlasaOstajeBezCene"
+        Case 209: TestName = "T_AmbBroj_DelimiterPrezivljavaMapu"
+        Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
+        Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
+        Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
+        Case 205: TestName = "T_AmbKartica_PoslovniBrojIVrsta"
+        Case 204: TestName = "T_AmbSaldo_ObeStraneJednogReda"
+        Case 203: TestName = "T_RezimBroja_PrelazakNeNasledjuje"
+        Case 202: TestName = "T_ReversiLista_CitaAmbalazniDokument"
+        Case 201: TestName = "T_ReversValidiraj_PovratKupcaJeSvojSmer"
         Case 200: TestName = "T_TxRollback_NepotpunZatvaraUpisISnimanje"
         Case 199: TestName = "T_ZbirnaRadniSto_BiraSvojNacrt"
         Case 198: TestName = "T_ZbirnaKlik_OtvaraSvojDokument"
@@ -974,6 +992,15 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 113: T_Zbirna_NemaIspravku
         Case 43: T_Traka_NatpisiPoRezimu
         Case 38: T_ZbirnaForma_KlasaOstajeBezCene
+        Case 209: T_AmbBroj_DelimiterPrezivljavaMapu
+        Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
+        Case 207: T_AmbPregled_DvaDokumentaDvaReda
+        Case 206: T_AmbKarticaKooperanta_PokazujeRevers
+        Case 205: T_AmbKartica_PoslovniBrojIVrsta
+        Case 204: T_AmbSaldo_ObeStraneJednogReda
+        Case 203: T_RezimBroja_PrelazakNeNasledjuje
+        Case 202: T_ReversiLista_CitaAmbalazniDokument
+        Case 201: T_ReversValidiraj_PovratKupcaJeSvojSmer
         Case 200: T_TxRollback_NepotpunZatvaraUpisISnimanje
         Case 199: T_ZbirnaRadniSto_BiraSvojNacrt
         Case 198: T_ZbirnaKlik_OtvaraSvojDokument
@@ -2190,16 +2217,12 @@ Private Sub T_WriterGuard_OdbijaTudjBlok()
                        brojDok:=FX_BROJ_NOVAC & "-W", _
                        stanicaNaziv:=FX_STANICA2, _
                        stanicaID:=FX_STANICA2, _
-                       vozacID:="", _
-                       tipAmb:="", _
-                       kolAmb:=0, _
                        vrstaVoca:=FX_VRSTA, _
                        novac:=100, _
                        kooperantID:=FX_KOOPERANT, _
                        primalacDisplay:=FX_KOOPERANT, _
                        otkupID:=FX_BLOK, _
-                       tipNovca:=NOV_VIRMAN_FIRMA_KOOP, _
-                       koopSmer:="")
+                       tipNovca:=NOV_VIRMAN_FIRMA_KOOP)
 
     uplataPosle = GetUplataForOtkup(FX_BLOK)
 
@@ -2229,8 +2252,8 @@ Private Sub T_UplataGuard_VecPlacenaFaktura()
 
     ' Plati je u CELOSTI, kroz pravi writer.
     ok = SaveKupciIzlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-FULL", _
-                           kupacNaziv:=FX_KUPAC, kupacID:=FX_KUPAC, vozacID:="", _
-                           tipAmb:="", kolAmb:=0, vrstaVoca:=FX_VRSTA, _
+                           kupacNaziv:=FX_KUPAC, kupacID:=FX_KUPAC, _
+                           vrstaVoca:=FX_VRSTA, _
                            novac:=FX_FAKTURA_IZNOS, fakturaID:=FX_FAKTURA, _
                            napomena:="test: puna uplata", tipNovca:=NOV_KUPCI_UPLATA)
     AssertEq ok, True, "puna uplata je proknjizena"
@@ -2243,8 +2266,8 @@ Private Sub T_UplataGuard_VecPlacenaFaktura()
     ' I writer mora da odbije, bez ijedne UI provere.
     pre = GetUplataForFaktura(FX_FAKTURA)
     ok = SaveKupciIzlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-VISAK", _
-                           kupacNaziv:=FX_KUPAC, kupacID:=FX_KUPAC, vozacID:="", _
-                           tipAmb:="", kolAmb:=0, vrstaVoca:=FX_VRSTA, _
+                           kupacNaziv:=FX_KUPAC, kupacID:=FX_KUPAC, _
+                           vrstaVoca:=FX_VRSTA, _
                            novac:=1, fakturaID:=FX_FAKTURA, _
                            napomena:="test: uplata preko pune", tipNovca:=NOV_KUPCI_UPLATA)
     posle = GetUplataForFaktura(FX_FAKTURA)
@@ -2281,10 +2304,10 @@ Private Sub T_WriterGuard_AvansSaldoOM()
     pre = NovacRedova()
     ok = SaveOMUlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-AV", _
                        stanicaNaziv:=FX_STANICA, stanicaID:=FX_STANICA, _
-                       vozacID:="", tipAmb:="", kolAmb:=0, vrstaVoca:=FX_VRSTA, _
+                       vrstaVoca:=FX_VRSTA, _
                        novac:=100, kooperantID:=FX_KOOPERANT, _
                        primalacDisplay:=FX_KOOPERANT, otkupID:="", _
-                       tipNovca:=NOV_KES_OTKUPAC_KOOP, koopSmer:="")
+                       tipNovca:=NOV_KES_OTKUPAC_KOOP)
     AssertEq ok, False, "writer odbija kes isplatu preko avans salda OM"
     AssertEq NovacRedova(), pre, "odbijen upis ne ostavlja red u tblNovac"
 
@@ -2292,10 +2315,10 @@ Private Sub T_WriterGuard_AvansSaldoOM()
     ' Bez ove grane test ne bi razlikovao ciljanu kapiju od opste blokade.
     ok = SaveOMUlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-VIR", _
                        stanicaNaziv:=FX_STANICA, stanicaID:=FX_STANICA, _
-                       vozacID:="", tipAmb:="", kolAmb:=0, vrstaVoca:=FX_VRSTA, _
+                       vrstaVoca:=FX_VRSTA, _
                        novac:=100, kooperantID:=FX_KOOPERANT, _
                        primalacDisplay:=FX_KOOPERANT, otkupID:="", _
-                       tipNovca:=NOV_VIRMAN_FIRMA_KOOP, koopSmer:="")
+                       tipNovca:=NOV_VIRMAN_FIRMA_KOOP)
     AssertEq ok, True, "virman firme ne trosi OM avans i prolazi"
     AssertEq NovacRedova(), pre + 1, "prosao upis JESTE ostavio red"
 End Sub
@@ -2337,7 +2360,8 @@ Private Sub T_Storno_TipBiraTabeluIKolone()
     tipovi = Array(STIP_OTKUP, STIP_OTPREMNICA, STIP_ZBIRNA, STIP_PRIJEMNICA, _
                    STIP_ISPLATE, STIP_UPLATE, STIP_REVERSI, STIP_FAKTURA, STIP_IZVOD)
     tabele = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, _
-                   TBL_NOVAC, TBL_NOVAC, TBL_AMBALAZA, TBL_FAKTURE, TBL_BANKA_IMPORT)
+                   TBL_NOVAC, TBL_NOVAC, TBL_AMBALAZA_DOKUMENT, TBL_FAKTURE, _
+                   TBL_BANKA_IMPORT)
 
     For i = 0 To UBound(tipovi)
         AssertEq modScrDokumenti.TabelaTipa(CStr(tipovi(i))), CStr(tabele(i)), _
@@ -2354,6 +2378,15 @@ Private Sub T_Storno_TipBiraTabeluIKolone()
     ' unosni ekran i storno gledaju u razlicite tabele za isti dokument.
     AssertEq modScrDokumenti.ModeTable("F4"), TBL_PRIJEMNICA, _
              "rezim i tip vode u istu tabelu"
+
+    ' REVERSI CITA ZAGLAVLJE, NE KNJIGU (10c). Identitet reda je AmbDokID: storno
+    ' dokumenta ga uzima direktno, bez razresavanja (broj, smer) -- plutajuceg
+    ' identiteta koji je rez 10b-2 uklonio. Tabela i identitet se mere ZAJEDNO:
+    ' tabela bez svoje kolone identiteta daje mrezu iz koje se ne moze stornirati.
+    AssertEq modScrDokumenti.IdKolonaTipa(STIP_REVERSI), COL_AMBD_ID, _
+             "revers se bira po AmbDokID, ne po redu knjige"
+    AssertEq modScrDokumenti.ColBroj(STIP_REVERSI), COL_AMBD_BROJ, _
+             "broj reversa dolazi sa zaglavlja dokumenta"
 
     ' Broj zbirne postoji samo tamo gde ga dokument NOSI. Dok je storno bio
     ' otpremnica, cip "Bez zbirne" je bio ukljucen i nad novcem, gde tblNovac
@@ -2392,11 +2425,30 @@ Private Sub T_StornoDok_KapijePreUpisa()
     AssertEq (Len(modStornoDok.StornoRazlog(STIP_OTKUP, "", "")) > 0), True, _
              "kapija zaustavlja prazan broj"
 
-    ' 3) Revers bez smera. Broj postoji ili ne -- svejedno: bez smera se ne
-    '    zna koji je od cetiri dokumenta, pa se ne sme ni pokusati.
-    AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, NEMA, ""), _
-             Poruka("STORNO_ERR_NEMA_SMERA"), _
-             "revers bez smera se odbija PRE trazenja dokumenta"
+    ' 3) Revers po IDENTITETU, ne po smeru (10c).
+    '
+    ' Do 08.10.2026 je ovde stajalo "bez smera se ne zna koji je od cetiri" --
+    ' i to je bilo tacno dok je identitet bio PLUTAJUCI (broj + smer + noga
+    ' knjige). Ambalazni dokument ima svoj AmbDokID, pa smer nestaje iz izbora:
+    ' tvrdnja se ne slabi nego PRESELJAVA na pravilo koje ga je zamenilo.
+    '
+    ' Nepostojeci dokument mora da padne i kad je identitet zadat -- inace bi
+    ' kapija merila samo prazno polje, a ne postojanje.
+    AssertEq (Len(modStornoDok.StornoRazlog(STIP_REVERSI, NEMA, "")) > 0), True, _
+             "revers bez identiteta se odbija PRE storna"
+    AssertEq (Len(modStornoDok.StornoRazlog(STIP_REVERSI, NEMA, "", _
+                  "AMBDOK-NEPOSTOJECI")) > 0), True, _
+             "revers sa nepostojecim AmbDokID se odbija PRE storna"
+
+    ' PRVA BRANA (postojanje) MERI SE U T_StornoBezUvida_NemaAkcije, nad
+    ' STORNIRANIM dokumentom -- ne ovde.
+    '
+    ' Pokusaj da se izoluje praznim brojem je bio vakuumski: iznad Select Case
+    ' stoji genericka kapija koja prazan broj odbija za SVAKI tip (tacka 2
+    ' gore), pa bi tvrdnja merila nju, a ne postojanje dokumenta. Dve brane se
+    ' nad NEPOSTOJECIM dokumentom potpuno preklapaju: broj koga nema ne moze
+    ' da se poklopi ni sa cim. Razdvaja ih jedino dokument koji POSTOJI a
+    ' storniran je -- tamo broj odgovara, a postojanje ne.
 
     ' 4) Nepoznat tip ne sme tiho da ne uradi nista.
     AssertEq (Len(modStornoDok.StornoRazlog("NEPOSTOJECI_TIP", NEMA, "")) > 0), True, _
@@ -2445,8 +2497,14 @@ Private Sub T_PrefillIzStorniranog_CitaSvojuTabelu()
     AssertEq SpecVal(s, "datum"), "15.03.2026", "datum se preuzima iz storniranog"
     ' Broj se NE preuzima: ispravka je nov dokument sa novim brojem.
     AssertEq SpecVal(s, "brdok"), "", "broj dokumenta se NE preuzima"
-    ' Nula se ne salje: fixture nema izdatu ambalazu na otkupu.
-    AssertEq SpecVal(s, "ambpr"), "", "nula se ne salje kao vrednost"
+    ' IZDATA AMBALAZA SE PREUZIMA. Do 09.10.2026 je ovde stajalo da se nula ne
+    ' salje, jer fixture izdatu ambalazu nije imao -- posle kanonizacije otkup
+    ' je razmena, pa OTK-TEST-1 nosi 40 izdatih i prefill ih mora preneti.
+    '
+    ' Pravilo "nula se ne salje" nije izgubljeno nego je ostalo bez OVOG
+    ' predmeta: fixture ga drzi na OTK-NAL-DELIM, koji je namerno jednosmeran
+    ' (2 primljene, 0 izdatih).
+    AssertEq SpecVal(s, "ambpr"), "40", "izdata ambalaza se preuzima iz storniranog"
 
     ' --- OTPREMNICA: isti BROJ, druga tabela, druge kolicine ---
     s = modStornoDok.PrefillIzStorniranog(STIP_OTPREMNICA, "1/TEST", "")
@@ -2818,6 +2876,23 @@ Private Sub T_IspravkaPrijemnice_SkipIRelink()
     Dim p As Object, res As String, poruke As String
     Dim cid As String, prevPal As String
 
+    ' PREDUSLOV OD 10b-2: PRIJEMNICA KNJIZI Vozac -> Kupac.
+    '
+    ' Ovaj test dva puta pise prijemnicu sa 40 gajbi, pa vozac mora da ih IMA.
+    ' Fixture nosi samo redove STAROG oblika (Smer/EntitetID), koje nov citalac
+    ' ne vidi -- saldo vozaca u novom modelu je 0. PrenesiAmbalazu sprovodi
+    ' AMB-INV-07 i na obicnom upisu, a manjak SOPSTVENOG naloga se po
+    ' AMB-10-ODL-8 ne pokriva tudjom ambalazom nego je tvrdo odbijen -- pa bi
+    ' oba upisa pala, i to pre svoje tvrdnje.
+    '
+    ' Zasejava se OVDE, a ne u make_fixture (ponovna izgradnja sveske) i ne u
+    ' RunAllTests (trazi ga tacno jedan test -- mereno: samo ova dva poziva u
+    ' celom modTest pisu prijemnicu kroz PrijemnicaUpisi).
+    ZasejOpticajVozacu
+    AssertEq (modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, _
+              FX_TIP_AMB) >= 100), True, _
+             "preduslov: vozac ima gajbe za knjizenje prijemnice"
+
     ' Preduslov: bez ukljucenog paletiranja ceo test meri prazno.
     prevPal = GetConfigValue(CFG_PALETIRANJE)
     SetConfigValue CFG_PALETIRANJE, "DA"
@@ -2886,6 +2961,43 @@ End Sub
 ' Zajednicka polja za oba upisa iz gornjeg testa. Kolicine i gajbice su iste
 ' kao na storniranoj prijemnici (400 kg / 40 gajbica) - v. napomenu o
 ' PaletaAdjustPrompt.
+' Stanica nabavi gajbe pa ih da VOZACU (AMB-10-ODL-7: vozac je sopstven
+' nalog, a prazne sa stanice najcesce idu bas njemu).
+'
+' IDEMPOTENTNO, i to nije kozmetika: suite se vrti nad ISTOM sveskom vise
+' puta, a kapija zauzetosti broja (AMB-10-ODL-20) bi odbila ponovljen broj
+' istog dana. Zato se prvo cita saldo, pa se ne radi nista ako ga ima.
+'
+' Broj se PROSLEDJUJE, ne racuna iz generatora: zasejavanje ne sme da zavisi
+' od alata koji drugi testovi mere (isti razlog kao u SeedAmbalazaOpticaj).
+Private Sub ZasejOpticajVozacu()
+    Const SEED_KOL As Double = 400
+    Dim tx As clsTransaction, dokID As String, oznaka As String
+
+    If modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, FX_TIP_AMB) >= 100 Then
+        Exit Sub
+    End If
+
+    oznaka = "SEEDVOZ-T26-" & Format$(Now, "yyyymmddhhnnss")
+
+    ' NASE gajbe ulaze u opticaj samo kroz NABAVKU (AMB-10-ODL-8).
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, SEED_KOL, _
+                                  oznaka & "-NAB", "preduslov testa 26"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, oznaka, Date, _
+                                         AMB_NALOG_STANICA, FX_STANICA)
+    modAmbalaza.PrenesiAmbalazu tx, Date, FX_TIP_AMB, SEED_KOL, _
+                AMB_NALOG_STANICA, FX_STANICA, _
+                AMB_NALOG_VOZAC, FX_VOZAC, _
+                AMB_VK_PRENOS_INTERNO, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    tx.CommitTx
+    Set tx = Nothing
+End Sub
+
 Private Sub PopuniPrijemnicu(ByVal p As Object, ByVal broj As String)
     p("datum") = CDate(FX_DATUM)
     p("kupacID") = FX_KUPAC
@@ -3549,14 +3661,18 @@ Private Sub T_StornoEkran_KolonaIdentiteta()
     Next i
     AssertEq ima, False, "revers nema GeneracijaID, pa ni tu kolonu"
 
-    ' ...ali ima identitet REDA: AmbID kliknute noge. Broj reversa je jedinstven
-    ' tek u nizu (stanica, dan), pa bez njega storno ne zna koji je dokument.
+    ' ...ali ima identitet DOKUMENTA: AmbDokID (10c).
+    '
+    ' Do 08.10.2026 je ovde stajao AmbID kliknute NOGE, uz obrazlozenje da je
+    ' broj jedinstven tek u nizu (stanica, dan). Oboje je bilo tacno dok je
+    ' identitet bio PLUTAJUCI; ambalazni dokument ima svoj ID, pa tvrdnja ne
+    ' slabi nego se SELI na njega.
     ' SABOTAZA: izbaci Case "REVERSI" iz IdKolonaTipa -> pukne po imenu.
     ima = False
     For i = 0 To UBound(cols)
-        If modScrDokumenti.ColF(CStr(cols(i)), 1) = COL_AMB_ID Then ima = True
+        If modScrDokumenti.ColF(CStr(cols(i)), 1) = COL_AMBD_ID Then ima = True
     Next i
-    AssertEq ima, True, "revers nosi AmbID kao kolonu identiteta"
+    AssertEq ima, True, "revers nosi AmbDokID kao kolonu identiteta"
 
     ' I na kraju: ono sto ekran zapamti pri izboru reda je ono sto salje nizvodno.
     modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-F8-2", ""
@@ -3766,19 +3882,79 @@ Private Sub T_StornoBezUvida_NemaAkcije()
     AssertEq modScrStorno.Scr_BrojAkcija(), 1, _
              "tip bez uvida i dalje nudi obican storno"
 
-    ' Revers isto: nema uvid po prirodi (list u lancu), ali ima svoja dva izbora.
+    ' Revers isto: nema uvid po prirodi (list u lancu), pa kapija uvida ne sme da
+    ' ga zakljuca -- mora da ponudi BAR jednu radnju.
+    '
+    ' Od 08.10.2026 je to TACNO JEDNA: ISPRAVKA je povucena jer jos ide kroz
+    ' RunReversCorrection -> ReversIDRazresi, koji ocekuje AmbID noge i stari
+    ' DOK_TIP_OM_*, a lista od 10c salje AmbDokID. Ponudjena radnja koja nad
+    ' izabranim dokumentom NE MOZE da radi je gora od radnje koje nema.
+    ' Vraca se uz 10d/10e, kad se i tok ispravke preseca na AmbDokID.
     modScrStorno.Scr_IzborTestSet STIP_REVERSI, "REV-NEMA", "", DOK_TIP_OM_IZLAZ_KOOP
-    AssertEq modScrStorno.Scr_BrojAkcija(), 2, _
+    AssertEq modScrStorno.Scr_BrojAkcija(), 1, _
              "revers nema uvid po prirodi, pa kapija ne sme da ga zakljuca"
 
-    ' Revers nema uvid, pa pre storna i zamene (ISPRAVKA) potvrda imenuje stanicu i
-    ' dan: od REV-IDENT-01 Faze 2b isti KOOP broj, smer i dan legalno nose reversi dve
-    ' stanice. MsgBox se ne meri -- meri se tekst koji mu se predaje. Fixture
-    ' REV-IZV-2, klik na nogu Kooperant. SABOTAZA: StornoPotvrdaTekst po (tip, broj)
-    ' -> pukne "potvrda storna reversa imenuje stanicu".
-    modScrStorno.Scr_IzborTestSet STIP_REVERSI, "REV-IZV-2", "AMB-IZV-K3", DOK_TIP_OM_ULAZ_KOOP
+    ' Revers nema uvid, pa pre storna i zamene (ISPRAVKA) potvrda imenuje stanicu
+    ' i dan -- isti KOOP broj, smer i dan legalno nose reversi dve stanice.
+    ' MsgBox se ne meri; meri se tekst koji mu se predaje.
+    '
+    ' DOKUMENT SE PRAVI OVDE, kroz pravog pisca. Fixture nosi samo STARI oblik
+    ' (noge u tblAmbalaza), a od 10c potvrda cita ZAGLAVLJE -- pa bi tvrdnja nad
+    ' fixture nogom merila odsustvo dokumenta, ne tekst potvrde. Tvrdnja ostaje
+    ' ista; menja se oblik dokumenta nad kojim se meri.
+    ' SABOTAZA: StornoPotvrdaTekst po (tip, broj) -> pukne po imenu.
+    ' NASE GAJBE NE NASTAJU IZ VAZDUHA (AMB-10-ODL-8): stanica je SOPSTVENI
+    ' nalog, pa joj se manjak NE pokriva ulazom tudje ambalaze nego trazi
+    ' NABAVKU. Prvi pokusaj ovog testa je to i naucio -- pisac je odbio
+    ' izdavanje jer stanica u NOVOM modelu drzi nulu (fixture nosi samo stari
+    ' oblik). Zato se seje nabavkom, kroz pravog pisca.
+    Dim revDok As String, nabBroj As String
+    nabBroj = "NAB-ST-" & Format$(Now, "hhnnss")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 10, nabBroj, _
+                                  "preduslov testa potvrde storna"
+    revDok = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, _
+                                                3, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    AssertEq (Len(revDok) > 0), True, "preduslov: nov revers je upisan"
+    modScrStorno.Scr_IzborTestSet STIP_REVERSI, "", revDok, AMB_DOK_REVERS
+    ' DATUM SE MERI UZ STANICU, i to je namerno: prva verzija je datum citala
+    ' kao TEKST, a srpski oblik ("8.10.2026.") IsDate odbija -- opis je tada
+    ' tiho ostajao bez oba podatka. Tvrdnja samo o stanici bi i dalje mogla da
+    ' prodje kroz drugu putanju, pa se mere ZAJEDNO.
+    AssertEq (InStr(1, modStornoDok.DokumentOpis(STIP_REVERSI, "", AMB_DOK_REVERS, revDok), _
+                    Format$(Date, "dd.mm.yyyy"), vbBinaryCompare) > 0), True, _
+             "opis reversa nosi i DATUM sa zaglavlja"
     AssertEq (InStr(1, modScrStorno.StornoPotvrdaTekst(), FX_STANICA, vbBinaryCompare) > 0), True, _
              "potvrda storna reversa imenuje stanicu"
+
+    ' PAR (identitet, broj) -- tvrdnja preseljena iz T_BrojZauzetUNizu_Revers,
+    ' gde je merila fixture NOGU (AMB-IZV-K3). Noga nije dokument, pa nov
+    ' preflight na nju odgovara "nije pronadjen" i par se nikad ne poredi.
+    ' Ovde dokument POSTOJI, pa se meri bas kapija para.
+    AssertEq (InStr(1, modStornoDok.StornoRazlog(STIP_REVERSI, "NE-POSTOJI-BROJ", _
+                                                 AMB_DOK_REVERS, revDok), _
+                    Poruka("STORNO_ERR_REV_KLJUC"), vbBinaryCompare) = 1), True, _
+             "storno kapija: red koji ne nosi izabrani broj se odbija"
+
+    ' PROTIV-SLUCAJ: dokument sa SVOJIM brojem mora da PRODJE. Bez njega je
+    ' tvrdnja o odbijanju placebo -- a to se ovde i desilo: prva verzija
+    ' preflighta je odbijala SVE (AktivanPoIdentitetu trazi GeneracijaID, koje
+    ' tblAmbalazaDokument nema), pa su tvrdnje o odbijanju bile zelene dok
+    ' storno nije radio uopste.
+    Dim revBrojDok As String
+    revBrojDok = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                      revDok, COL_AMBD_BROJ))
+    AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, revBrojDok, AMB_DOK_REVERS, revDok), _
+             "", "storno kapija: aktivan revers sa svojim brojem PROLAZI"
+
+    ' PRVA BRANA, IZOLOVANA: storniran dokument. Broj mu i dalje ODGOVARA, pa
+    ' druga brana (par) cuti -- jedino postojanje odlucuje. To je jedini ulaz
+    ' koji razdvaja dve brane, i zato sabotaza postojanja kljuca bas na njega.
+    ' Uz to je poslovna tvrdnja za sebe: dvaput storniran dokument ne postoji.
+    AssertEq modAmbalaza.StornirajAmbDokument_TX(revDok), True, _
+             "preduslov: revers je storniran"
+    AssertEq (Len(modStornoDok.StornoRazlog(STIP_REVERSI, revBrojDok, _
+                  AMB_DOK_REVERS, revDok)) > 0), True, _
+             "vec storniran revers se ne stornira ponovo"
     AssertEq (InStr(1, modScrStorno.StornoPotvrdaTekst(SV_MODE_ISPRAVKA), FX_STANICA, vbBinaryCompare) > 0), True, _
              "potvrda zamene reversa (ISPRAVKA) imenuje stanicu"
 
@@ -6168,6 +6344,505 @@ Private Sub T_ReversValidiraj_SmerJeObavezan()
              "segment 4 = prijem od OM"
     AssertEq modNovacUnos.SmerRevKljuc(0), "", _
              "neizabran smer nema prevod -- core guard puca umesto da knjizi"
+End Sub
+
+
+
+
+
+' SEST FOKUSIRANIH TESTOVA UMESTO JEDNOG DUGACKOG (09.10.2026).
+'
+' Do danas je ovo bio JEDAN test sa devet pravila, jer su sva trazila isto
+' zasejavanje. Dokaz je to odbio, i s pravom: AssertEq PREKIDA test na prvom
+' padu, pa je sabotaza bilo kog citaoca obarala PRVU tvrdnju u nizu, a ne onu
+' koju imenuje -- cetiri sabotaze su zato dale 'PALA DRUGA TVRDNJA' ili
+' 'NE OBARA NISTA'. Tvrdnja koja ne pada PO IMENU ne dokazuje da meri bas to.
+'
+' Zato svaki test nosi JEDNO pravilo i svoje zasejavanje, a tvrdnje pre te
+' jedne su birane tako da ih njena sabotaza NE obara -- inace bi opet pucale
+' prve.
+
+' Zasejava jedan revers kroz PRODUKCIONE pisce i vraca njegov identitet i broj.
+' Nabavka ide prva jer stanica mora da DRZI gajbe (AMB-10-ODL-8): nase gajbe ne
+' nastaju iz vazduha. Broj nabavke nosi slucajan rep -- ODL-20 drzi zauzetost po
+' (vlasnik, dan), pa bi dva poziva u istoj sekundi sudarila broj.
+Private Sub AmbSejRevers(ByVal kol As Long, ByRef outDok As String, _
+                         ByRef outBroj As String)
+    Dim nabBroj As String
+    nabBroj = "NAB-SLD-" & Format$(Now, "hhnnss") & "-" & CStr(kol) & _
+              "-" & CStr(Int(Rnd() * 9999))
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, kol + 6, nabBroj, _
+                                  "preduslov testa salda"
+    outDok = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, _
+                                                kol, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    outBroj = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, outDok, _
+                                   COL_AMBD_BROJ))
+End Sub
+
+' 1/6 -- JEDAN RED DOTICE DVA NALOGA, SUPROTNIM ZNAKOM.
+'
+' Star red je imenovao jednu stranu i Smer; da citalac pita samo jednu stranu,
+' polovina knjige ispadne iz salda. Zato se mere OBE, a tvrdnja o IZVORU ide
+' posle tvrdnji o odredistu -- sabotaza izvorne grane njih ne dira, pa pukne bas
+' ona koju imenuje.
+Private Sub T_AmbSaldo_ObeStraneJednogReda()
+    Dim stPre As Long, koopPre As Long, revDok As String, revBroj As String
+    Dim mapa As Object, koopPosle As Long
+
+    stPre = AmbSaldoTipa(FX_STANICA, AMB_NALOG_STANICA)
+    koopPre = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
+
+    AmbSejRevers 4, revDok, revBroj
+    AssertEq (Len(revDok) > 0), True, "preduslov: revers je upisan"
+
+    koopPosle = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
+    AssertEq (koopPosle - koopPre), 4, "kooperant je PRIMIO gajbe -- saldo raste"
+    AssertEq (AmbSaldoTipa(FX_STANICA, AMB_NALOG_STANICA) - stPre), 6, _
+             "stanica je IZDALA gajbe -- saldo pada na istom redu"
+
+    ' Dva oblika istog pravila moraju dati isti broj -- da izvestaj ne bi nosio
+    ' svoju kopiju. Mapa pita obe strane kao i citalac po nalogu.
+    Set mapa = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT)
+    AssertEq mapa.Exists(FX_KOOPERANT), True, "mapa naloga poznaje kooperanta"
+    AssertEq CLng(mapa(FX_KOOPERANT)), koopPosle, _
+             "mapa svih naloga i saldo po nalogu daju ISTI broj"
+End Sub
+
+' 2/6 -- KARTICA AMBALAZE NOSI POSLOVNI BROJ, NE TEHNICKI ID.
+'
+' AmbDokID je opaque "ADK-<hex>"; poslovni broj stoji na ZAGLAVLJU. Prva verzija
+' ove tvrdnje je merila bas AmbDokID i time CEMENTIRALA defekt (review
+' 08.10.2026, P2 #1) -- zato uz nju ide i kontra-tvrdnja da se tehnicki ID NE
+' vidi, i tvrdnja da je imenovana VRSTA, a ne genericka klasa dokumenta.
+Private Sub T_AmbKartica_PoslovniBrojIVrsta()
+    Dim revDok As String, revBroj As String, kart As Variant
+
+    AmbSejRevers 4, revDok, revBroj
+    AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima poslovni broj"
+
+    kart = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, DateAdd("d", -1, Date), _
+                                             DateAdd("d", 1, Date))
+    AssertEq KarticaUlazZaDok(kart, revBroj), 4, _
+             "kartica ambalaze pokazuje primljene gajbe pod POSLOVNIM brojem"
+    AssertEq KarticaUlazZaDok(kart, revDok), 0, _
+             "kartica ne pokazuje tehnicki AmbDokID kao broj dokumenta"
+    AssertEq KarticaOpisSadrzi(kart, revBroj, Poruka("OTKUI_AMBD_REVERS")), True, _
+             "kartica imenuje VRSTU dokumenta sa zaglavlja"
+End Sub
+
+' 3/6 -- KARTICA KOOPERANTA IMA SVOJU AMBALAZNU PUTANJU.
+'
+' Samostalna kretanja (bez otkupa) i svoja kolona dokumenta. Presecena je istim
+' rezom kao ambalazna kartica, pa bi bez svoje tvrdnje ostala nedokazana.
+Private Sub T_AmbKarticaKooperanta_PokazujeRevers()
+    Dim revDok As String, revBroj As String, kartK As Variant
+
+    AmbSejRevers 4, revDok, revBroj
+    AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima poslovni broj"
+
+    kartK = modIzvestaj.ReportKarticaKooperanta(FX_KOOPERANT, _
+                                                DateAdd("d", -1, Date), _
+                                                DateAdd("d", 1, Date))
+    AssertEq KarticaImaBroj(kartK, 2, revBroj), True, _
+             "kartica kooperanta pokazuje revers pod poslovnim brojem"
+    AssertEq KarticaImaBroj(kartK, 2, revDok), False, _
+             "kartica kooperanta ne pokazuje tehnicki AmbDokID"
+End Sub
+
+' 4/6 -- DVA DOKUMENTA OSTAJU DVA REDA.
+'
+' Identitet dokumenta je deo kljuca grupisanja; da ispadne, dva reversa ISTE
+' stanice, istog tipa gajbe i istog dana pala bi u JEDAN red -- a ref-kljuc tada
+' vodi stampu na pogresan papir. Tvrdnja stoji ovde, a ne u modIzvestajTests gde
+' je pregled izmeren do detalja: kapija kataloga sabotaza priznaje samo modTest,
+' modTestBanka i modBusinessFlowProTests.
+Private Sub T_AmbPregled_DvaDokumentaDvaReda()
+    Dim revDok As String, revBroj As String
+    Dim revDok2 As String, revBroj2 As String, izv As Variant
+    Dim izlazPre As Double
+
+    izlazPre = IzvZbirniKol(FX_STANICA, FX_TIP_AMB, 6)
+    AmbSejRevers 4, revDok, revBroj
+    AmbSejRevers 2, revDok2, revBroj2
+    AssertEq (Len(revBroj2) > 0), True, "preduslov: drugi revers ima broj"
+
+    izv = modIzvestaj.ReportAmbalaza("OM", FX_STANICA, DateAdd("d", -1, Date), _
+                                     DateAdd("d", 1, Date), False)
+    AssertEq (KarticaImaBroj(izv, 4, revBroj) And _
+              KarticaImaBroj(izv, 4, revBroj2)), True, _
+             "dva reversa ostaju dva reda u pregledu"
+    AssertEq IzvKolZaBroj(izv, revBroj, 6), 4, _
+             "pregled kretanja pokazuje revers pod poslovnim brojem"
+    AssertEq KarticaImaBroj(izv, 4, revDok), False, _
+             "pregled kretanja ne pokazuje tehnicki AmbDokID"
+
+    ' Zbirni je drugi oblik istog citanja: 4 + 2 izdate gajbe.
+    AssertEq (IzvZbirniKol(FX_STANICA, FX_TIP_AMB, 6) - izlazPre), 6, _
+             "zbirni pregled OM-a vidi IZDATE gajbe reversa"
+End Sub
+
+' 5/6 -- STORNO JE KONTRA-STAV, I DVA CITAOCA GA VIDE RAZLICITO.
+'
+' Pregled KRETANJA storniran dokument SKRIVA -- ista namera kao stari filter
+' COL_STORNIRANO. Kartica ga PRIKAZUJE, jer je storno i sam dogadjaj koji
+' operater mora da vidi (6.8). Ta asimetrija je tvrdnja, ne navika.
+'
+' Snimak ide NEPOSREDNO pred storno, pa tvrdnja meri storno SAM PO SEBI.
+Private Sub T_AmbStorno_GasiSvojeIKarticaGaPrikazuje()
+    Dim revDok As String, revBroj As String
+    Dim koopPreStorna As Long, izv As Variant, kart As Variant
+
+    AmbSejRevers 4, revDok, revBroj
+    AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima poslovni broj"
+
+    koopPreStorna = AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
+    AssertEq modAmbalaza.StornirajAmbDokument_TX(revDok), True, _
+             "preduslov: storno reversa je prosao"
+    AssertEq (AmbSaldoTipa(FX_KOOPERANT, AMB_NALOG_KOOPERANT) - koopPreStorna), -4, _
+             "storno gasi TACNO svoja cetiri, ostali dokumenti ostaju"
+
+    izv = modIzvestaj.ReportAmbalaza("OM", FX_STANICA, DateAdd("d", -1, Date), _
+                                     DateAdd("d", 1, Date), False)
+    AssertEq KarticaImaBroj(izv, 4, revBroj), False, _
+             "storniran revers ispada iz pregleda kretanja"
+
+    kart = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, DateAdd("d", -1, Date), _
+                                             DateAdd("d", 1, Date))
+    AssertEq (KarticaUlazZaDok(kart, revBroj) > 0), True, _
+             "kartica storniran revers i dalje PRIKAZUJE"
+End Sub
+
+' 6/6 -- POSLOVNI BROJ SA ZNAKOM | PREZIVLJAVA MAPU.
+'
+' Kupcev broj reversa dolazi sa KUPCEVOG dokumenta i nijedna kapija ne filtrira
+' karaktere, pa je "KUP|R-17" legalan broj. Mapa zaglavlja ga je pakovala u
+' "broj|vrsta|datum", pa bi citalac procitao broj="KUP" -- tiho, i na kartici i
+' na PAPIRU (review 08.10.2026, P2).
+'
+' Tvrdnja ide nad MAPOM, ne nad karticom: kupcev revers je par Kupac <-> Vozac,
+' pa ga na kartici kooperanta nema -- a mapa je mesto gde je greska i zivela.
+Private Sub T_AmbBroj_DelimiterPrezivljavaMapu()
+    Dim pbroj As String, kupDok As String, zag As Variant, pmapa As Object
+
+    pbroj = "KUP|R-17"
+    kupDok = modAmbalaza.UpisiReversPartnera_TX(Date, pbroj, FX_KUPAC, FX_VOZAC, _
+                                                FX_TIP_AMB, 3, "test delimitera", 3)
+    AssertEq (Len(kupDok) > 0), True, "preduslov: kupcev revers sa znakom | je upisan"
+
+    Set pmapa = modAmbalaza.AmbDokPrikazMapa()
+    AssertEq pmapa.Exists(kupDok), True, "mapa zaglavlja poznaje kupcev revers"
+    zag = pmapa(kupDok)
+    AssertEq CStr(zag(0)), pbroj, _
+             "poslovni broj sa znakom | prezivljava mapu zaglavlja"
+    AssertEq CStr(zag(1)), AMB_DOK_REVERS_PARTNERA, _
+             "vrsta dokumenta nije pomerena delimiterom"
+End Sub
+
+
+
+
+' Zbirni ambalazni pregled OM-a: vrednost zadate kolone za dati tip gajbe.
+' Kolone zbirnog: 1 = TipAmbalaze, 5 = Ulaz, 6 = Izlaz.
+Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _
+                              ByVal kol As Long) As Double
+    Dim r As Variant, i As Long
+    r = modIzvestaj.ReportAmbalaza("OM", stanicaID, DateAdd("d", -1, Date), _
+                                   DateAdd("d", 1, Date), True)
+    If Not IsArray(r) Then Exit Function
+    For i = LBound(r, 1) To UBound(r, 1)
+        If StrComp(NzToText(r(i, 1)), Trim$(tipAmb), vbTextCompare) = 0 Then
+            If IsNumeric(r(i, kol)) Then IzvZbirniKol = CDbl(r(i, kol))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Vrednost zadate kolone pregleda kretanja, za red sa datim brojem dokumenta.
+' Kolone: 1 Datum, 2 Mesto, 3 TipAmbalaze, 4 Dokument, 5 Ulaz, 6 Izlaz.
+Private Function IzvKolZaBroj(ByVal res As Variant, ByVal broj As String, _
+                              ByVal kol As Long) As Double
+    Dim i As Long
+    If Not IsArray(res) Then Exit Function
+    If Len(Trim$(broj)) = 0 Then Exit Function
+    For i = LBound(res, 1) To UBound(res, 1)
+        If StrComp(NzToText(res(i, 4)), Trim$(broj), vbTextCompare) = 0 Then
+            If IsNumeric(res(i, kol)) Then IzvKolZaBroj = IzvKolZaBroj + CDbl(res(i, kol))
+        End If
+    Next i
+End Function
+
+' Da li kartica ijednim redom nosi dati tekst u ZADATOJ koloni. Kolona se trazi
+' izricito, jer dve kartice nemaju isti raspored.
+Private Function KarticaImaBroj(ByVal res As Variant, ByVal kol As Long, _
+                                ByVal tekst As String) As Boolean
+    Dim i As Long
+    If Not IsArray(res) Then Exit Function
+    If Len(Trim$(tekst)) = 0 Then Exit Function
+    For i = LBound(res, 1) To UBound(res, 1)
+        If StrComp(NzToText(res(i, kol)), Trim$(tekst), vbTextCompare) = 0 Then
+            KarticaImaBroj = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Da li OPIS reda ambalazne kartice (kolona 3) za dati broj dokumenta sadrzi dati
+' deo teksta -- tako se meri da li je imenovana vrsta, a ne klasa dokumenta.
+Private Function KarticaOpisSadrzi(ByVal res As Variant, ByVal broj As String, _
+                                   ByVal deo As String) As Boolean
+    Dim i As Long
+    If Not IsArray(res) Then Exit Function
+    If Len(Trim$(deo)) = 0 Then Exit Function
+    For i = LBound(res, 1) To UBound(res, 1)
+        If StrComp(NzToText(res(i, 2)), Trim$(broj), vbTextCompare) = 0 Then
+            If InStr(1, NzToText(res(i, 3)), Trim$(deo), vbTextCompare) > 0 Then
+                KarticaOpisSadrzi = True
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+' Zbir kolone ULAZ sa kartice ambalaze za dati dokument. Kartica vraca 2D niz
+' (1)=Datum (2)=BrojDok (3)=Opis (4)=Ulaz (5)=Izlaz (6)=Saldo. Revers nije otkup,
+' pa mu kartica kao broj prikazuje sam DokumentID.
+Private Function KarticaUlazZaDok(ByVal res As Variant, ByVal dok As String) As Double
+    Dim i As Long
+    If Not IsArray(res) Then Exit Function
+    For i = LBound(res, 1) To UBound(res, 1)
+        If StrComp(NzToText(res(i, 2)), Trim$(dok), vbTextCompare) = 0 Then
+            If IsNumeric(res(i, 4)) Then
+                KarticaUlazZaDok = KarticaUlazZaDok + CDbl(res(i, 4))
+            End If
+        End If
+    Next i
+End Function
+
+' Saldo jednog naloga preko SVIH tipova ambalaze, kroz produkcionog citaoca
+' GetAmbalazeStanje -- isti poziv koji radi i stampa (modPrint).
+Private Function AmbSaldoTipa(ByVal nalogID As String, ByVal nalogTip As String) As Long
+    Dim st As Variant, i As Long
+    st = modAmbalaza.GetAmbalazeStanje(nalogID, nalogTip)
+    If Not IsArray(st) Then Exit Function
+    For i = LBound(st, 1) To UBound(st, 1)
+        If IsNumeric(st(i, 2)) Then AmbSaldoTipa = AmbSaldoTipa + CLng(st(i, 2))
+    Next i
+End Function
+
+' BROJ NE PRELAZI IZ REZIMA U REZIM.
+'
+' Svaki rezim ima svoj brojevni niz, a polje broja je ZAJEDNICKO (fgBrOtpr).
+' SelectModeCore je racunao da ce RefreshBrojPredlog pregaziti stari broj -- ali
+' on upisuje SAMO kad ima sta da predlozi:
+'
+'   AUTO_BROJ_DOKUMENTA = NE   -> SuggestNextBroj vraca prazno -> Exit Sub
+'   rezim bez niza (F5, F6)    -> KindZaRezim vraca prazno    -> Exit Sub
+'
+' Zato kupcev broj reversa moze da zavrsi kao broj otkupnog lista (review
+' 08.10.2026, P1). Ovo je ZIVOTNI CIKLUS, ne helper: meri se kroz SelectMode,
+' isti poziv koji radi precica ljuske.
+'
+' Nalazi se skupljaju pa tvrde POSLE vracanja podesavanja i Unload-a: pad usred
+' testa bi inace ostavio AUTO_BROJ iskljucen za sve naredne testove.
+Private Sub T_RezimBroja_PrelazakNeNasledjuje()
+    Dim f As frmOtkupUI, zf As Object, prevAuto As String
+    Dim poF7 As String, poF1 As String, poF5 As String, poAuto As String
+
+    prevAuto = GetConfigValue(CFG_AUTO_BROJ_DOK)
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+
+    ' --- AUTO ISKLJUCEN: niko ne prepisuje broj, pa mora da se OBRISE
+    SetConfigValue CFG_AUTO_BROJ_DOK, "NE"
+    modOtkupUI.SelectMode f, "F7"
+    SetPolje zf, "fgBrOtpr", "KUP-R/9001"
+    poF7 = Polje(zf, "fgBrOtpr")
+    modOtkupUI.SelectMode f, "F1"
+    poF1 = Polje(zf, "fgBrOtpr")
+    SetPolje zf, "fgBrOtpr", "OTK-RUCNI-1"
+    modOtkupUI.SelectMode f, "F5"
+    poF5 = Polje(zf, "fgBrOtpr")
+
+    ' --- AUTO UKLJUCEN: nov rezim ne sme da nosi STARI broj
+    SetConfigValue CFG_AUTO_BROJ_DOK, "DA"
+    modOtkupUI.SelectMode f, "F7"
+    SetPolje zf, "fgBrOtpr", "KUP-R/9002"
+    modOtkupUI.SelectMode f, "F2"
+    poAuto = Polje(zf, "fgBrOtpr")
+
+    SetConfigValue CFG_AUTO_BROJ_DOK, prevAuto
+    Unload f
+
+    AssertEq poF7, "KUP-R/9001", "preduslov: kupcev broj je upisan u F7"
+    AssertEq poF1, "", "prelazak F7 -> F1 ne nasledjuje broj"
+    AssertEq poF5, "", "prelazak u rezim BEZ niza takodje prazni broj"
+    AssertEq (poAuto <> "KUP-R/9002"), True, _
+             "sa auto-brojem nov rezim ne nosi stari broj"
+End Sub
+
+' CITALAC LISTE "REVERSI" MORA DA VRATI NOV DOKUMENT.
+'
+' Ovaj test postoji zbog P1 koji su jeftine kapije i 12/12 ZELENO propustili
+' (review 08.10.2026): mapa tipa je bila presecena na tblAmbalazaDokument, ali
+' je filter REDA ostao legacy (RevRowVisible po DOK_TIP_OM_*), pa je svaki nov
+' revers ISPADAO iz liste. Svi tadasnji testovi su merili MAPU (tabela,
+' identitet, broj) i STORNO, a nijedan nije zvao citaoca -- pa je zelena suite
+' bila saglasna sa potpuno praznom listom.
+'
+' Zato tvrdnja ide kroz RedoviZaTip, isti poziv koji radi i mreza.
+Private Sub T_ReversiLista_CitaAmbalazniDokument()
+    Dim nabBroj As String, revDok As String, revBroj As String
+    Dim res As Variant, i As Long
+
+    ' Preduslov: stanica mora da DRZI gajbe (ODL-8 -- nase ne nastaju iz vazduha).
+    nabBroj = "NAB-LST-" & Format$(Now, "hhnnss")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 10, nabBroj, _
+                                  "preduslov testa liste"
+    revDok = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, _
+                                                2, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    AssertEq (Len(revDok) > 0), True, "preduslov: revers je upisan"
+    revBroj = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, revDok, COL_AMBD_BROJ))
+    AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima broj"
+
+    res = modScrDokumenti.RedoviZaTip("REVERSI", "sve", "")
+    AssertEq IsArray(res), True, "citalac liste je vratio rezultat"
+    AssertEq (RedoviSadrze(res, revBroj)), True, _
+             "lista REVERSI sadrzi nov ambalazni dokument"
+
+    ' ZATVOREN SPISAK VRSTA: nabavka JESTE ambalazni dokument i poznata vrsta,
+    ' ali nije revers. Da je filter samo "poznata vrsta", ovde bi se pojavila --
+    ' pa ova tvrdnja meri bas to, a ne postojanje liste.
+    AssertEq (RedoviSadrze(res, nabBroj)), False, _
+             "lista REVERSI ne pokazuje nabavku"
+
+    ' KUPCEV REVERS JE DRUGA VRSTA ISTE LISTE (AMB-10-ODL-23), pa se meri
+    ' zasebno: docs tvrde da ekran vidi i nas i kupcev dokument, a tvrdnja nad
+    ' samo jednom vrstom bi tu tvrdnju ostavila nedokazanu.
+    '
+    ' Kupac ne mora da DRZI gajbe: povrat se knjizi uz potvrdjen manjak, pa
+    ' pokrice (SpoljniSvet -> Kupac) ulazi kao tudja ambalaza. Time test usput
+    ' prolazi i kroz AmbDokRedMapa, koja tehnicki ULAZ_TUDJE red PRESKACE i
+    ' uzima poslovni POVRAT_PRAZNE.
+    Dim kupDok As String, kupBroj As String
+    kupBroj = "KUP-LST-" & Format$(Now, "hhnnss")
+    kupDok = modAmbalaza.UpisiReversPartnera_TX(Date, kupBroj, FX_KUPAC, FX_VOZAC, _
+                                                FX_TIP_AMB, 3, "test liste", 3)
+    AssertEq (Len(kupDok) > 0), True, "preduslov: kupcev revers je upisan"
+
+    ' KES LISTE SE RESETUJE RUCNO, kao sto to radi i produkcija posle upisa
+    ' (modScrDokumenti.SaveRevers zove Scr_ResetCache). Ovaj test zove pisca
+    ' DIREKTNO, pa mora sam da ispuni isti preduslov -- bez toga bi citalac
+    ' vratio snimak od pre upisa i tvrdnja bi merila kes, ne listu.
+    modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache
+
+    res = modScrDokumenti.RedoviZaTip("REVERSI", "sve", "")
+    AssertEq (RedoviSadrze(res, kupBroj)), True, _
+             "lista REVERSI sadrzi i KUPCEV revers"
+End Sub
+
+' Da li mreza ijednom celijom nosi trazen tekst. Trazi se po SVIM kolonama, jer
+' redosled kolona nije predmet ove tvrdnje.
+Private Function RedoviSadrze(ByVal res As Variant, ByVal tekst As String) As Boolean
+    Dim outA As Variant, r As Long, c As Long
+    If Not IsArray(res) Then Exit Function
+    If UBound(res) < 2 Then Exit Function
+    If CLng(res(2)) <= 0 Then Exit Function
+    outA = res(1)
+    If Not IsArray(outA) Then Exit Function
+    For r = LBound(outA, 1) To UBound(outA, 1)
+        For c = LBound(outA, 2) To UBound(outA, 2)
+            If InStr(1, NzToText(outA(r, c)), tekst, vbTextCompare) > 0 Then
+                RedoviSadrze = True
+                Exit Function
+            End If
+        Next c
+    Next r
+End Function
+
+' F7 PETI SMER -- POVRAT PRAZNIH OD KUPCA (AMB-10-ODL-23).
+'
+' Dokument je KUPCEV: nosi njegov broj, pa se broj NE PREDLAZE. To je jedino
+' pravilo koje ovaj ulaz ima a ostala cetiri smera nemaju -- i jedino koje se
+' ovde meri; par naloga i vlasnika broja sudi jezgro (PrenesiAmbalazu).
+'
+' Auto-broj se UKLJUCUJE u testu, ne pretpostavlja: bez toga bi tvrdnja
+' "brDok je ostao prazan" bila zelena i kad je predlog iskljucen u Podesavanjima,
+' pa ne bi merila granu nego konfiguraciju.
+Private Sub T_ReversValidiraj_PovratKupcaJeSvojSmer()
+    Dim p As Object, fokus As String, prevAuto As String
+
+    prevAuto = GetConfigValue(CFG_AUTO_BROJ_DOK)
+    SetConfigValue CFG_AUTO_BROJ_DOK, "DA"
+
+    ' KONTROLA: nasi smerovi i dalje DOBIJAJU predlog broja.
+    Set p = ReversUnosKojiProlazi()
+    p("brDok") = ""
+    modNovacUnos.ReversValidiraj p, fokus
+    AssertEq (Len(CStr(p("brDok"))) > 0), True, _
+             "nas revers i dalje dobija predlog broja"
+
+    ' KUPCEV SMER: predloga NEMA, i poruka kaze zasto.
+    Set p = ReversUnosKojiProlazi()
+    p("smerRev") = modNovacUnos.SMER_REV_POVRAT_KUP
+    p("partnerID") = FX_KUPAC
+    p("partnerTip") = "KUP"
+    p("partnerTekst") = FX_KUPAC
+    p("brDok") = ""
+    AssertEq modNovacUnos.ReversValidiraj(p, fokus), Poruka("NOVUNOS_ERR_BROJ_KUPCA"), _
+             "kupcev revers trazi UPISAN broj"
+    AssertEq CStr(p("brDok")), "", _
+             "kupcev broj se NE predlaze iz naseg niza"
+    AssertEq fokus, "brDok", "fokus ide na broj"
+
+    SetConfigValue CFG_AUTO_BROJ_DOK, prevAuto
+
+    ' PARTNER MORA BITI KUPAC -- kooperant u ovom smeru nema sta da vrati pod
+    ' svojim brojem (njegov povrat je segment 2, nas dokument).
+    Set p = ReversUnosKojiProlazi()
+    p("smerRev") = modNovacUnos.SMER_REV_POVRAT_KUP
+    AssertEq modNovacUnos.ReversValidiraj(p, fokus), Poruka("NOVUNOS_ERR_SMER_KUP"), _
+             "kupcev smer ne prima kooperanta"
+    AssertEq fokus, "partnerID", "fokus ide na partnera"
+
+    ' VOZAC JE ODREDISTE LANCA (ODL-9), pa je obavezan i bez stroge validacije.
+    Set p = ReversUnosKojiProlazi()
+    p("smerRev") = modNovacUnos.SMER_REV_POVRAT_KUP
+    p("partnerID") = FX_KUPAC
+    p("partnerTip") = "KUP"
+    p("partnerTekst") = FX_KUPAC
+    p("vozacID") = ""
+    AssertEq modNovacUnos.ReversValidiraj(p, fokus), Poruka("NOVUNOS_ERR_VOZAC_OM"), _
+             "kupcev revers bez vozaca se ne knjizi"
+
+    ' PUN UNOS PROLAZI -- inace bi sve gore bila blokada, ne kapija.
+    Set p = ReversUnosKojiProlazi()
+    p("smerRev") = modNovacUnos.SMER_REV_POVRAT_KUP
+    p("partnerID") = FX_KUPAC
+    p("partnerTip") = "KUP"
+    p("partnerTekst") = FX_KUPAC
+    p("brDok") = "KUP-R/9001"
+    AssertEq modNovacUnos.ReversValidiraj(p, fokus), "", _
+             "pun kupcev revers prolazi validaciju"
+
+    ' Peti segment nema prevod u mapu NASEG reversa -- i to je namerno: ide svom
+    ' piscu, pa bi prevod znacio da ga AmbReversSmerovi ipak poznaje.
+    AssertEq modNovacUnos.SmerRevKljuc(modNovacUnos.SMER_REV_POVRAT_KUP), "", _
+             "kupcev smer NEMA prevod u nas revers"
+
+    ' PREDLOG BROJA PO SMERU -- pravilo koje trazi DVA sloja, pa zivi na jednom
+    ' mestu: ljuska (RefreshBrojPredlog, predlog cim se izabere stanica) i
+    ' validator (auto-broj kad je polje ostalo prazno).
+    '
+    ' Nadjeno operaterskom proverom 07.10.2026: validator je imao granu, ljuska
+    ' nije -- pa je kupcev revers na ekranu nosio NAS broj iz niza stanice. Test
+    ' meri bas tu funkciju, jer ona je sada jedini izvor odluke za oba sloja.
+    AssertEq modNovacUnos.RevSmerPredlazeBroj(modNovacUnos.SMER_REV_IZD_KOOP), True, _
+             "nas smer dobija predlog broja"
+    AssertEq modNovacUnos.RevSmerPredlazeBroj(modNovacUnos.SMER_REV_PRI_OM), True, _
+             "i cetvrti nas smer dobija predlog broja"
+    AssertEq modNovacUnos.RevSmerPredlazeBroj(modNovacUnos.SMER_REV_POVRAT_KUP), False, _
+             "kupcev smer NE dobija predlog broja"
 End Sub
 
 ' Isplata koja prolazi sve provere: kooperant sa izabranim otkupnim blokom.
@@ -12481,28 +13156,55 @@ Private Sub T_Izv_SlaganjeIsplataManjakAmb()
         AssertEq Format$(CDbl(az(i, 6)), "0"), Format$(CDbl(tipovi(kljuc)(1)), "0"), _
                  "izlaz po tipu " & kljuc & ": zbirni = suma pojedinacnih"
     Next i
-    ' UKUPNO pojedinacnog = rucni prolaz kroz tblAmbalaza.
+    ' UKUPNO pojedinacnog = rucni prolaz kroz tblAmbalaza, KANONSKI (AMB-10c).
+    '
+    ' Prolaz je do 09.10.2026 citao Smer + EntitetTip + EntitetID i kolonu
+    ' Stornirano -- oblik koji produkcija vise ne pise. Zato je davao NULU, a
+    ' izvestaj stvaran broj: oracle je merio prazan skup i to je izgledalo kao
+    ' razlika u izvestaju.
+    '
+    ' Nov red imenuje OBE strane, pa se pita za obe: stanica kao ODREDISTE je
+    ' ulaz, kao IZVOR izlaz. Storno je kontra-stav, pa se ne filtrira nego se
+    ' sabira sa svojim znakom -- isto sto radi i citalac.
     amb = GetTableData(TBL_AMBALAZA)
-    cEnt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
-    cEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
-    cSmer = GetColumnIndex(TBL_AMBALAZA, COL_AMB_SMER)
     cKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
     cDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
-    cStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+    Dim cOdT As Long, cOdI As Long, cNaT As Long, cNaI As Long
+    cOdT = GetColumnIndex(TBL_AMBALAZA, COL_AMB_OD_TIP)
+    cOdI = GetColumnIndex(TBL_AMBALAZA, COL_AMB_OD_ID)
+    cNaT = GetColumnIndex(TBL_AMBALAZA, COL_AMB_NA_TIP)
+    cNaI = GetColumnIndex(TBL_AMBALAZA, COL_AMB_NA_ID)
+    ' OTKAZANI PAROVI SE SKRIVAJU, kao i u pregledu kretanja: kontra-stav nosi
+    ' StornoOd -> AmbID originala, pa su otkazana OBA reda. Bez ovoga oracle
+    ' sabira i par koji citalac namerno ne prikazuje (6.8), pa razlika izgleda
+    ' kao greska izvestaja.
+    Dim cAmbID As Long, cStOd As Long
+    cAmbID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
+    cStOd = GetColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD)
+    Dim otkaz As Object
+    Set otkaz = CreateObject("Scripting.Dictionary")
+    otkaz.CompareMode = vbTextCompare
+    For i = 1 To UBound(amb, 1)
+        If Len(Trim$(NzToText(amb(i, cStOd)))) > 0 Then
+            otkaz(Trim$(NzToText(amb(i, cStOd)))) = True
+            otkaz(Trim$(NzToText(amb(i, cAmbID)))) = True
+        End If
+    Next i
+
     sumU = 0: sumI = 0
     For i = 1 To UBound(amb, 1)
-        If CStr(amb(i, cStorno)) <> "Da" And _
-           Trim$(CStr(amb(i, cEntTip))) = "Stanica" And _
-           Trim$(CStr(amb(i, cEnt))) = FX_STANICA Then
-            If IsDate(amb(i, cDat)) Then
-                If CDate(amb(i, cDat)) >= IzvOdD() And CDate(amb(i, cDat)) <= IzvDoD() Then
-                    If Trim$(CStr(amb(i, cSmer))) = "Ulaz" Then
-                        sumU = sumU + NzBIM(amb(i, cKol), 0)
-                    Else
-                        sumI = sumI + NzBIM(amb(i, cKol), 0)
-                    End If
+        If Not otkaz.Exists(Trim$(NzToText(amb(i, cAmbID)))) Then
+        If IsDate(amb(i, cDat)) Then
+            If CDate(amb(i, cDat)) >= IzvOdD() And CDate(amb(i, cDat)) <= IzvDoD() Then
+                If Trim$(CStr(amb(i, cNaT))) = AMB_NALOG_STANICA And _
+                   Trim$(CStr(amb(i, cNaI))) = FX_STANICA Then
+                    sumU = sumU + NzBIM(amb(i, cKol), 0)
+                ElseIf Trim$(CStr(amb(i, cOdT))) = AMB_NALOG_STANICA And _
+                       Trim$(CStr(amb(i, cOdI))) = FX_STANICA Then
+                    sumI = sumI + NzBIM(amb(i, cKol), 0)
                 End If
             End If
+        End If
         End If
     Next i
     n = UBound(ap, 1)
@@ -16418,7 +17120,10 @@ End Sub
 ' kao nekadasnji DuplBroj) u IsplataValidiraj -> pukne po imenu na isplati i na
 ' broju reversa; isto u UplataValidiraj -> pukne na uplati.
 Private Sub T_Novac_BrojNijeJedinstven()
-    Const REV_BROJ As String = "REV-IZV-1"
+    ' Broj reversa od 10b-2 zivi na ZAGLAVLJU (tblAmbalazaDokument.BrojDokumenta),
+    ' a ne kao DokumentID na nozi knjige -- DokumentID je opaque AmbDokID
+    ' (AMB-10-ODL-16). Fixture ga nosi kao "1/IZV" na ADK-IZV-1.
+    Const REV_BROJ As String = "1/IZV"
     Dim p As Object, fokus As String
     Dim rIsplata As String, rUplata As String, rRevBroj As String
 
@@ -16443,8 +17148,9 @@ Private Sub T_Novac_BrojNijeJedinstven()
     ' Preduslovi: brojevi STVARNO postoje, inace tvrdnje ispod ne mere nista.
     AssertEq (Len(CheckDuplicate(TBL_NOVAC, COL_NOV_BROJ_DOK, FX_NOVAC_DUPLI, COL_NOV_DATUM)) > 0), True, _
              "preduslov: broj novca vec postoji u tblNovac"
-    AssertEq (Len(CheckDuplicate(TBL_AMBALAZA, COL_AMB_DOK_ID, REV_BROJ, COL_AMB_DATUM)) > 0), True, _
-             "preduslov: broj reversa postoji u tblAmbalaza"
+    AssertEq (Len(CheckDuplicate(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, REV_BROJ, _
+                                 COL_AMBD_DATUM)) > 0), True, _
+             "preduslov: broj reversa postoji na zaglavlju ambalaznog dokumenta"
 
     AssertEq rIsplata, "", "isplata pod vec postojecim brojem novca prolazi"
     AssertEq rUplata, "", "uplata pod vec postojecim brojem novca prolazi"
@@ -16465,22 +17171,58 @@ End Sub
 ' SABOTAZE: izbaci filter tipa u BrojZauzetRevers -> pukne "ambalaza otkupa na
 ' istoj stanici nije revers"; izbaci poredjenje stanice -> pukne "druga stanica je
 ' drugi niz"; izbaci filter noge Stanica -> pukne "noga Kooperant ne zauzima broj".
+' ZAUZECE BROJA REVERSA U KANONSKOM NIZU.
+'
+' Fixture nosi staru nogu AMB-IZV-S3 sa DokumentID REV-IZV-2, i ona je do
+' 10b-2 zauzimala REV niz. Niz je sada nad tblAmbalazaDokument, pa ga stara
+' noga ne drzi -- pravilo je isto, izvor je drugi.
+'
+' Zato se zauzece pravi kroz PRAVOG pisca, idempotentno: suite se vrti nad
+' istom sveskom vise puta, a drugi upis istog broja bi pao na zauzetosti.
+' Vraca AmbDokID drzaoca.
+Private Function ZasejReversZaNiz() As String
+    Const BR As String = "REV-IZV-2"
+    Dim d As Date: d = CDate(FX_DATUM)
+
+    ZasejReversZaNiz = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, _
+                                                  FX_STANICA, d, BR)
+    If Len(ZasejReversZaNiz) > 0 Then Exit Function
+
+    ZasejOpticajVozacu
+    ZasejReversZaNiz = modAmbalaza.UpisiReversAmbalaze_TX(d, BR, FX_STANICA, _
+                           FX_TIP_AMB, 1, REV_SMER_IZDATO_OM, "", FX_VOZAC, _
+                           "preduslov REV niza")
+End Function
+
 Private Sub T_BrojZauzetUNizu_Revers()
     Dim d As Date
     d = CDate(FX_DATUM)
 
-    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-IZV-S3", COL_AMB_DOK_ID)), _
-             "REV-IZV-2", "preduslov: fixture noga Stanica reversa REV-IZV-2"
-    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-OTK-S1A", COL_AMB_ENTITET)), _
+    Dim drzalac As String
+    drzalac = ZasejReversZaNiz()
+    AssertEq (Len(drzalac) > 0), True, _
+             "preduslov: broj REV-IZV-2 je zauzet u KANONSKOM nizu"
+    ' NIZ DRZI ZAGLAVLJE, NE NOGA. Do 09.10.2026 je ovde stajala tvrdnja o
+    ' legacy nozi (AMB-IZV-S3 sa DokumentID = "REV-IZV-2"), zadrzana kao zapis
+    ' sta se promenilo. Posle kanonizacije fixture-a te noge NEMA: par nogu je
+    ' postao jedan red, a broj je presao na zaglavlje. Tvrdnja zato meri bas to.
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, "ADK-IZV-2", _
+                                  COL_AMBD_BROJ)), _
+             "2/IZV", "preduslov: broj reversa zivi na zaglavlju ADK-IZV-2"
+    ' Otkupna ambalaza lezi na istoj stanici -- citano iz KANONSKOG reda:
+    ' AMB-OTK-S1A je noga IZDATA_PRAZNA, pa je stanica njen IZVOR (OdNalogID).
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-OTK-S1A", _
+                                  COL_AMB_OD_ID)), _
              FX_STANICA, "preduslov: ambalaza otkupa OTK-LEG-A lezi na istoj stanici"
-    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-IZV-KS", COL_AMB_ENTITET)), _
-             FX_KOOPERANT, "preduslov: REV-IZV-X ima samo nogu Kooperant"
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "AMB-IZV-KS", _
+                                  COL_AMB_NA_ID)), _
+             FX_KOOPERANT, "preduslov: storniran revers ADK-IZV-X ide kooperantu"
 
     AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA, d, "REV-IZV-2"), _
-             "AMB-IZV-S3", "REV: broj je zauzet na svojoj stanici tog dana -- drzi ga noga Stanica"
+             drzalac, "REV: broj je zauzet na svojoj stanici tog dana -- drzi ga ZAGLAVLJE"
     AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, " " & LCase$(FX_STANICA) & " ", d, _
                                         "  rev-izv-2 "), _
-             "AMB-IZV-S3", "REV: razmaci i mala slova ne otvaraju rupu"
+             drzalac, "REV: razmaci i mala slova ne otvaraju rupu"
     AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA_B, d, "REV-IZV-2"), _
              "", "REV: druga stanica je drugi niz -- isti broj sme (A2)"
     AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA, DateAdd("d", 1, d), _
@@ -16497,14 +17239,23 @@ Private Sub T_BrojZauzetUNizu_Revers()
     AssertEq modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, FX_STANICA, d, "REV-NOV-TEST"), _
              "", "REV: nov broj je slobodan -- provera ne odbija sve"
 
-    AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, "REV-IZV-2", DOK_TIP_OM_ULAZ_KOOP, "AMB-IZV-K3"), _
-             "", "storno kapija: noga Kooperant nosi ReversID dokumenta"
-    AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, "REV-IZV-1", DOK_TIP_OM_IZLAZ_KOOP, ""), _
-             "", "storno kapija: bez identiteta jednoznacan broj prolazi"
-    AssertEq (InStr(1, modStornoDok.StornoRazlog(STIP_REVERSI, "REV-IZV-1", DOK_TIP_OM_IZLAZ_KOOP, _
-                                                 "AMB-IZV-K3"), _
-                    Poruka("STORNO_ERR_REV_KLJUC"), vbBinaryCompare) = 1), True, _
-             "storno kapija: red koji ne nosi izabrani broj se odbija"
+    ' TVRDNJA O NOZI JE OBRISANA 08.10.2026, ne oslabljena.
+    '
+    ' Glasila je: StornoRazlog nad klikom na nogu Kooperant (AmbID) vraca prazno,
+    ' jer pisac iz noge razresava ReversID. Od 10c noge u izboru NEMA -- identitet
+    ' je AmbDokID, a preflight trazi aktivan DOKUMENT. Pravilo koje je tvrdnja
+    ' cuvala vise ne postoji, pa bi je drzati znacilo meriti obrisan put.
+    ' Nov preflight meri T_StornoDok_KapijePreUpisa, kroz svoje dve tvrdnje.
+    '
+    ' Uz nju je obrisana i tvrdnja "bez identiteta jednoznacan broj prolazi".
+    ' Ona je opisivala BAS plutajuci identitet: broj reversa nije jedinstven
+    ' globalno nego tek u nizu (vlasnik, dan), pa je "jednoznacan broj" bio
+    ' svojstvo ZATECENIH PODATAKA, ne pravilo. Ekran od 10c uvek salje AmbDokID.
+    ' Tvrdnja o PARU (identitet, broj) je preseljena u T_StornoBezUvida_NemaAkcije,
+    ' gde test sam pravi dokument. Ovde je merila fixture NOGU (AMB-IZV-K3), a
+    ' noga nije dokument -- nov preflight na nju odgovara "nije pronadjen", pa se
+    ' par nikad i ne poredi. Kapija nije oslabljena nego merena tamo gde postoji
+    ' predmet merenja.
 End Sub
 
 ' F7 REVERS -- PROVERA BROJA PO NIZU (stanica, dan), ista kao u piscu. Zatecena
@@ -16515,6 +17266,9 @@ End Sub
 ' imenu na "isti broj na drugoj stanici istog dana prolazi ekran".
 Private Sub T_ReversValidiraj_BrojUNizu()
     Dim p As Object, fokus As String
+    ' Zauzece broja ide kroz pisca -- niz je od 10b-2 kanonski.
+    Dim drzalac As String
+    drzalac = ZasejReversZaNiz()
     Dim rZauzet As String, fZauzet As String, rDrugaSt As String, rDrugiDan As String
 
     Set p = ReversUnosKojiProlazi()
@@ -16538,8 +17292,8 @@ Private Sub T_ReversValidiraj_BrojUNizu()
     AssertEq rDrugiDan, "", "isti broj iste stanice drugog dana prolazi ekran"
     AssertEq (InStr(1, rZauzet, Poruka("DOKUNOS_ERR_BROJ_ZAUZET"), vbBinaryCompare) = 1), True, _
              "zauzet broj u nizu se odbija na ekranu (bilo: " & rZauzet & ")"
-    AssertEq (InStr(1, rZauzet, "AMB-IZV-S3", vbBinaryCompare) > 0), True, _
-             "poruka imenuje nogu koja drzi broj"
+    AssertEq (InStr(1, rZauzet, drzalac, vbBinaryCompare) > 0), True, _
+             "poruka imenuje DOKUMENT koji drzi broj"
     AssertEq fZauzet, "brDok", "fokus ide na broj"
 End Sub
 
@@ -16558,6 +17312,9 @@ End Sub
 ' drugoj stanici prolazi ekran (Faza 2b)".
 Private Sub T_ReversValidiraj_KoopBrojDrugeStanice()
     Dim p As Object, fokus As String
+    ' Zauzece broja ide kroz pisca -- niz je od 10b-2 kanonski.
+    Dim drzalac As String
+    drzalac = ZasejReversZaNiz()
     Dim rKoop As String, rDrugiSmer As String, rFirma As String
     Dim rIstaSt As String, fIstaSt As String
 
@@ -16589,8 +17346,8 @@ Private Sub T_ReversValidiraj_KoopBrojDrugeStanice()
     AssertEq rFirma, "", "FIRMA isti broj i dan na drugoj stanici prolazi"
     AssertEq (InStr(1, rIstaSt, Poruka("DOKUNOS_ERR_BROJ_ZAUZET"), vbBinaryCompare) = 1), True, _
              "KOOP povrat istog broja, smera i dana na ISTOJ stanici se odbija (bilo: " & rIstaSt & ")"
-    AssertEq (InStr(1, rIstaSt, "AMB-IZV-S3", vbBinaryCompare) > 0), True, _
-             "poruka imenuje nogu Stanica koja drzi broj"
+    AssertEq (InStr(1, rIstaSt, drzalac, vbBinaryCompare) > 0), True, _
+             "poruka imenuje DOKUMENT koji drzi broj (ista stanica)"
     AssertEq fIstaSt, "brDok", "fokus ide na broj"
 End Sub
 

@@ -1265,6 +1265,171 @@ ROLLBACK_RED_CASES = [
      'End Function\n'),
 ]
 
+# --- AMB_BIND_VLASNIK: ko sme da veze izvorni dokument za transakciju ---------
+#
+# clsTransaction.BindSourceDocument je capability: ko ga pozove, ta transakcija
+# tvrdi da poseduje dokument. Runtime to ne moze da proveri -- transakcija ne zna
+# ko ju je pozvao -- pa bi svaka procedura mogla da veze TUDJ (DokTip, DokID) i
+# time ponovo zaobidje AMB-INV-08.
+#
+# Zato EXACT ALLOWLIST, ne hod po grafu. Hod po grafu je nad ovim projektom danas
+# jednom pao kao placebo (v. AMBALAZA.md 6.12c): pravilo "neki predak poseduje tx"
+# je nad 4120 procedura uvek istinito. Ovo je popis pozivnih mesta JEDNE funkcije,
+# pa nema dubine koja se moze prevariti.
+#
+# Dodavanje pozivaoca je namerno NEUDOBNO: menja se ova lista, sto je vidljiv cin
+# u diff-u.
+#
+# STA OVA KAPIJA DOKAZUJE, I STA NE. Dokazuje KO: (modul, procedura) je na
+# listi. NE dokazuje KADA -- da BindSourceDocument stoji POSLE uspesnog upisa
+# dokumenta, niti da vezan dokument stvarno pripada pozivaocu. To ostaje na
+# pregledu i testu kanonskog pisca, i tako se izgovara, da dokumentacija ne
+# tvrdi vise od koda.
+#
+# Za svakog clana liste se izgovara STA ga cini kanonskim:
+#
+#   UpisiAmbDokument            -- dokument NASTAJE tu: AppendRow, provera
+#                                  rowIdx > 0, pa tek onda bind.
+#   CreateOtkup                 -- otkup NASTAJE tu, i bind stoji TEK POSLE
+#                                  uspesnog AppendRow zaglavlja.
+#   StornoOtkup                 -- otkup se tu MENJA (MarkRowStornirano), i bind
+#                                  stoji POSLE te izmene.
+#   OtpIzdaj                    -- otpremnica se tu MENJA (IzdatoStatus), i bind
+#                                  stoji POSLE te izmene. Knjizenje je zbog toga
+#                                  i premesteno IZA nje: ranije je stajalo pre,
+#                                  pa bind nije imao sta da dokazuje.
+#   StornoOtpremnica            -- otpremnica se tu MENJA (MarkRowStornirano).
+#
+# NA LISTI SU PISCI IZVORNOG DOKUMENTA, NE LEDGER PRIMITIVI.
+# modAmbalaza.StornirajAmbalazuDokumenta je bio na listi i vezivao dokument sam.
+# Obrazlozenje je bilo da to nije samopotvrda jer kapija trazi i izvornu tabelu u
+# snapshotu -- i to je FALSIFIKOVANO (review 03.10.2026, P1 #1): snapshot je
+# jeftin i ne dokazuje da je dokument promenjen, pa je pozivalac mogao da anulira
+# ambalazni efekat AKTIVNOG otkupa i prodje sve kapije. Ledger-storno zato NE
+# vezuje; ako kanonski pisac nije vezao, primitiv pada fail-closed.
+AMB_BIND_DOZVOLJENI = {
+    ("modAmbalaza", "UpisiAmbDokument"),
+    ("modOtkup", "CreateOtkup"),
+    ("modStorno", "StornoOtkup"),
+    ("modDokumenta", "OtpIzdaj"),
+    ("modStorno", "StornoOtpremnica"),
+    # Prijemnica (10b-2): pisac vezuje posle AppendRow, storno posle
+    # MarkRowStornirano. Prijemnica je jedini robni dokument koji je I SAM
+    # partnerov (AMB-10-ODL-22), pa joj vlasnika broja daje zatvorena mapa
+    # AmbRobniVlasniciBroja -- ne ovaj pisac o sebi.
+    ("modDokumenta", "SavePrijemnica"),
+    ("modStorno", "StornoPrijemnica"),
+    # Ambalazni dokument (revers/nabavka/otpis) dobija svoj storno u 10b-2:
+    # oznaci zaglavlje, pa vezi, pa kontra-stav -- isti redosled kao tri robna
+    # storna iznad. Do ovog reza tblAmbalazaDokument uopste nije imao storno.
+    ("modAmbalaza", "StornirajAmbDokument_TX"),
+}
+_AMB_END = re.compile(r'^End\s+(?:Sub|Function|Property)\b', re.IGNORECASE)
+_BIND_POZIV = re.compile(r'\.\s*BindSourceDocument\b', re.IGNORECASE)
+_BIND_STRING = re.compile(r'"[^"]*"')
+
+
+def check_amb_bind_vlasnik(src_dir: str | None = None) -> list[Finding]:
+    if src_dir is None:
+        src_dir = SRC_VBA
+    if not os.path.isdir(src_dir):
+        return []
+    out = []
+    for ime_f in sorted(os.listdir(src_dir)):
+        # VBA_EXT, ne samo .bas/.cls: BindSourceDocument je JAVNA metoda, pa
+        # poziv iz .frm ili .doccls mora da se vidi. Dok je ovde stajao uzi
+        # spisak, kapija je tvrdila vise nego sto je proveravala.
+        if not ime_f.lower().endswith(VBA_EXT):
+            continue
+        modul = ime_f.rsplit(".", 1)[0]
+        # Testovi smeju: oni MERE kapiju, i to nad svojim transakcijama.
+        if "Test" in modul:
+            continue
+        with open(os.path.join(src_dir, ime_f), "r", encoding="ascii",
+                  errors="replace") as fh:
+            tekst = fh.read()
+        proc = None
+        for izjava, nred in logicke_izjave(tekst):
+            go = izjava.strip()
+            if _AMB_END.match(go):
+                proc = None
+                continue
+            d = deklaracija_procedure(go)
+            if d:
+                proc = d["ime"]
+                continue
+            # String literali se skidaju: poruka o gresci sme da pomene ime.
+            if not _BIND_POZIV.search(_BIND_STRING.sub('""', go)):
+                continue
+            if (modul, proc) in AMB_BIND_DOZVOLJENI:
+                continue
+            out.append(Finding(
+                os.path.join(src_dir, ime_f), nred, "AMB_BIND_VLASNIK",
+                f"'{modul}.{proc}' zove BindSourceDocument a nije na listi "
+                f"kanonskih pisaca izvornog dokumenta (AMB_BIND_DOZVOLJENI u "
+                f"tools/vba_check.py). Vezivanje tudjeg dokumenta zaobilazi "
+                f"AMB-INV-08: transakcija bi tvrdila vlasnistvo koje nema."))
+    return out
+
+
+AMB_BIND_CASES = [
+    # (naziv, ocekivano nalaza, ime fajla, telo)
+    ("dozvoljen pisac", 0, "modAmbalaza.bas",
+     'Option Explicit\n'
+     'Public Function UpisiAmbDokument() As String\n'
+     '    tx.BindSourceDocument DOK_TIP_AMBALAZA_DOKUMENT, novID\n'
+     'End Function\n'),
+    ("tudja procedura istog modula", 1, "modAmbalaza.bas",
+     'Option Explicit\n'
+     'Public Sub NekaDruga()\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-123"\n'
+     'End Sub\n'),
+    ("tudj modul", 1, "modOrkestrator.bas",
+     'Option Explicit\n'
+     'Public Sub Snimi()\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-123"\n'
+     'End Sub\n'),
+    ("komentar nije poziv", 0, "modNesto.bas",
+     'Option Explicit\n'
+     'Public Sub S()\n'
+     "    ' tx.BindSourceDocument \"Otkup\", \"X\"\n"
+     'End Sub\n'),
+    ("ime u tekstu greske nije poziv", 0, "modNesto.bas",
+     'Option Explicit\n'
+     'Public Sub S()\n'
+     '    Err.Raise 5, , "nije vezan (tx.BindSourceDocument)"\n'
+     'End Sub\n'),
+    ("definicija nije poziv", 0, "clsTransaction.cls",
+     'Option Explicit\n'
+     'Public Sub BindSourceDocument(ByVal dokTip As String)\n'
+     'End Sub\n'),
+    # JAVNA metoda se moze zvati i iz forme i iz ThisWorkbook -- dok je kapija
+    # gledala samo .bas/.cls, ovo su bile nevidljive zaobilaznice.
+    ("poziv iz .frm", 1, "frmNesto.frm",
+     'Option Explicit\n'
+     'Private Sub cmd_Click()\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-1"\n'
+     'End Sub\n'),
+    ("poziv iz .doccls", 1, "ThisWorkbook.doccls",
+     'Option Explicit\n'
+     'Private Sub Workbook_Open()\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-1"\n'
+     'End Sub\n'),
+    # Granica procedure: poziv POSLE End Function ne sme da se pripise
+    # dozvoljenoj proceduri iznad. Slucaj postoji jer je _AMB_END bio
+    # dvostruko escapovan i nije pogadjao nista -- bez tvrdnje se to ne vidi.
+    ("granica procedure se resetuje", 1, "modAmbalaza.bas",
+     'Option Explicit\n'
+     'Public Function UpisiAmbDokument() As String\n'
+     'End Function\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-1"\n'),
+    ("test modul se ne gleda", 0, "modNestoTests.bas",
+     'Option Explicit\n'
+     'Public Sub T()\n'
+     '    tx.BindSourceDocument "Otkup", "X"\n'
+     'End Sub\n'),
+]
+
 # --- ROLLBACK_TVRDNJA: poruka ne sme da tvrdi ishod koji ne zna ---------------
 #
 # Posle NEPOTPUNOG rollback-a tvrdnja "promene vracene" je cinjenicno netacna:
@@ -3628,6 +3793,24 @@ def self_test() -> int:
     finally:
         shutil.rmtree(tmp5, ignore_errors=True)
 
+    # AMB_BIND_VLASNIK je allowlist nad jednom primitivom, pa mu self-test mora
+    # nositi i slucajeve koji NE smeju da opale: komentar, ime u tekstu greske,
+    # sama definicija, i test modul.
+    tmp7 = tempfile.mkdtemp(prefix="vbacheck_bv_")
+    try:
+        for naziv, ocekivano, ime_f, telo in AMB_BIND_CASES:
+            poddir = os.path.join(tmp7, re.sub(r"[^a-z0-9]+", "_", naziv.lower()))
+            os.makedirs(poddir, exist_ok=True)
+            with open(os.path.join(poddir, ime_f), "w", encoding="ascii",
+                      newline="\r\n") as fh:
+                fh.write(telo)
+            dobijeno = len(check_amb_bind_vlasnik(poddir))
+            if dobijeno != ocekivano:
+                palo.append(f"  AMB_BIND_VLASNIK/{naziv}: ocekivano {ocekivano} "
+                            f"nalaza, dobijeno {dobijeno}")
+    finally:
+        shutil.rmtree(tmp7, ignore_errors=True)
+
     # SEMA_REGISTAR je isto cross-file (modConfig + modSchema), sa lazna dva
     # fajla na disku.
     tmp3 = tempfile.mkdtemp(prefix="vbacheck_sr_")
@@ -3725,7 +3908,8 @@ def self_test() -> int:
               + len(PROC_SIZE_CASES) + len(KVAL_CASES)
               + len(KRAJ_REDA_CASES) + len(CLAN_FORME_CASES)
               + len(DUPLI_LOKAL_CASES)
-              + len(ROLLBACK_TVRDNJA_CASES) + len(ROLLBACK_RED_CASES) + 3)
+              + len(ROLLBACK_TVRDNJA_CASES) + len(ROLLBACK_RED_CASES)
+              + len(AMB_BIND_CASES) + 3)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
@@ -3968,6 +4152,7 @@ def main(argv: list[str]) -> int:
     findings += check_rollback_red(files)
     findings += check_storno_registar(files)
     findings += check_sema_registar()
+    findings += check_amb_bind_vlasnik()
     findings += check_clan_forme(files)
 
     if not findings:

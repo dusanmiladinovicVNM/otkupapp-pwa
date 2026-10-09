@@ -99,6 +99,81 @@ Public Sub JournalCell(ByVal tbl As String, ByVal rowID As String, ByVal col As 
     mNextZur = mNextZur + 1
 End Sub
 
+' KONTRA-STAVOVI SE NE MOGU VRATITI CELIJAMA (AMB-10-ODL-19).
+'
+' Zurnal je CELIJSKI: undo vraca (Tabela, RowID, Kolona) na staru vrednost.
+' Storno u novom modelu knjige ne menja celiju nego DODAJE kontra-stav, i taj
+' red nije u zurnalu -- pa undo vrati zaglavlje u AKTIVNO, a ambalazni efekat
+' ostaje anuliran. Dokument bi bio aktivan sa nula ambalaze: tiha
+' kontradikcija, i to na POSTOJECOJ lossless undo putanji (review 03.10.2026,
+' P1 #3). Legacy UndoStorno_TX ne spasava stvar jer kad operacija postoji on
+' odmah delegira ovamo.
+'
+' Dok se ne definise KOJI POSLOVNI DOGADJAJ je "vracanje storna" nad
+' append-only knjigom, undo se ODBIJA. Dve ocigledne zakrpe su odbijene jer
+' krse vazeci ugovor: brisanje kontra-stavova (knjiga je nepromenljiva) i
+' storno storna (najvise jedan direktan storno).
+'
+' Pita se za SVAKI zurnalni red operacije, a TIP DOKUMENTA SE IZVODI IZ TABELE
+' tog reda (AmbDokTipZaIzvornuTabelu), ne iz oznake operacije:
+'
+'   tblOtkup.Stornirano   -> Otkup        -> pitaj knjigu
+'   tblAmbalaza.Stornirano -> nije izvorna tabela -> preskoci
+'
+' Oznaka operacije (DocType) bi danas za otkup bila ista, ali za revers je
+' 'OM-Izlaz-Koop' dok ce u knjizi stajati 'AmbalazaDokument' -- pa bi se posle
+' tog cutovera razisla. Tabela je cinjenica, oznaka je labela.
+'
+' Kljuc je KOMPOZITAN (DokumentTIP, DokumentID): AMB-INV-04 nosi tip tacno zato
+' sto se jedan globalni namespace DokumentID-eva ne sme pretpostaviti
+' (review 03.10.2026, P2 #1).
+Private Function KontraStavRazlog(ByVal opID As String) As String
+    Const SRC As String = MOD_NAME & ".KontraStavRazlog"
+
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_STORNO_ZURNAL)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cOp As Long, cRow As Long, cTbl As Long
+    cOp = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_OP_ID)
+    cRow = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_ROWID)
+    cTbl = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_TABELA)
+    If cOp = 0 Or cRow = 0 Or cTbl = 0 Then Err.Raise ERR_SZ_BASE + 16, SRC, _
+                                         "Zurnal sema nije kompletna (OperationID/RowID/Tabela)."
+
+    Dim vidjeni As Object
+    Set vidjeni = CreateObject("Scripting.Dictionary")
+    vidjeni.CompareMode = vbTextCompare
+
+    Dim i As Long, rid As String, dokTip As String, kljuc As String
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cOp))) = Trim$(opID) Then
+            rid = Trim$(CStr(data(i, cRow)))
+            dokTip = modAmbalazaUgovor.AmbDokTipZaIzvornuTabelu(CStr(data(i, cTbl)))
+            kljuc = dokTip & "|" & rid
+            If Len(rid) > 0 And Len(dokTip) > 0 And Not vidjeni.Exists(kljuc) Then
+                vidjeni.Add kljuc, True
+                If modAmbalaza.AmbImaKontraStav(dokTip, rid) Then
+                    KontraStavRazlog = "Storno dokumenta " & dokTip & " " & rid & _
+                        " je u knjizi " & _
+                        "ambalaze upisan kao KONTRA-STAV, a knjiga je append-only. " & _
+                        "Undo bi vratio zaglavlje u aktivno stanje, a ambalazni " & _
+                        "efekat bi ostao anuliran -- zato je odbijen (AMB-10-ODL-19)."
+                    Exit Function
+                End If
+            End If
+        End If
+    Next i
+    Exit Function
+
+EH:
+    LogErr SRC
+    KontraStavRazlog = "Greska pri proveri kontra-stavova -> undo odbijen " & _
+                       "(fail-closed)."
+End Function
+
 ' ============================================================
 ' UNDO - pravi inverz jedne operacije.
 ' ============================================================
@@ -209,6 +284,15 @@ Public Function UndoGuardReasonZaOp(ByVal opID As String, ByVal docType As Strin
                                     ByVal broj As String) As String
     Dim rid As String, raz As String
     On Error GoTo EH
+
+    ' Kontra-stavovi se ne mogu vratiti celijama -- gleda se PRVO, jer vazi za
+    ' svaki tip dokumenta.
+    raz = KontraStavRazlog(opID)
+    If Len(raz) > 0 Then
+        UndoGuardReasonZaOp = raz
+        Exit Function
+    End If
+
     If Not ReversTipJe(docType) Then
         UndoGuardReasonZaOp = UndoGuardReason(docType, broj)
         Exit Function

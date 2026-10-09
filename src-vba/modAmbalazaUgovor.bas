@@ -61,6 +61,20 @@ Public Const AMB_VK_OTPIS As String = "OTPIS"
 ' Ne mesati sa VrstaKretanja iznad: ovo je vrsta DOKUMENTA, ono je vrsta
 ' KRETANJA. Vezu medju njima drzi AmbDokDozvoljavaKretanje.
 Public Const AMB_DOK_REVERS As String = "REVERS"
+
+' SMEROVI REVERSA -- do 10b-2 goli literali na 12 mesta.
+'
+' Konstante postoje da bi mapa ispod mogla da bude ZATVORENA: nepoznat smer
+' nema red, pa pisac fail-closed pada. Zateceni Case Else je radio isto, ali je
+' pravilo zivelo u pisecu; sada zivi u ugovoru, uz par naloga i vrstu.
+Public Const REV_SMER_IZDAVANJE As String = "IZDAVANJE"
+Public Const REV_SMER_PRIJEM As String = "PRIJEM"
+Public Const REV_SMER_IZDATO_OM As String = "IZDATO_OM"
+Public Const REV_SMER_PRIJEM_OD_OM As String = "PRIJEM_OD_OM"
+' Dokument koji je izdao PARTNER, a ne mi. Danas: revers kupca -- dokaz da je
+' vozac preuzeo prazne gajbe (odluka operatera 03.10.2026, AMB-10-ODL-10).
+' Broj je NJEGOV, pa je vlasnik numerickog niza partner, ne sopstveni nalog.
+Public Const AMB_DOK_REVERS_PARTNERA As String = "REVERS_PARTNERA"
 Public Const AMB_DOK_NABAVKA As String = "NABAVKA"
 Public Const AMB_DOK_OTPIS As String = "OTPIS"
 
@@ -80,6 +94,26 @@ Public Const AMB_KLASA_REALAN As String = "REALAN"
 ' ============================================================
 ' ZATVORENE LISTE -- jedan izvor, da se citalac i test ne razidju
 ' ============================================================
+
+' NAZIV VRSTE AMBALAZNOG DOKUMENTA (zaglavlje), za coveka.
+'
+' Zivi u UGOVORU, a ne u ekranu, jer je spisak vrsta domenski: enum je ovde
+' (AMB_DOK_*), pa i njegov naziv. Do 10c-2 je stajao u modScrDokumenti i zvao ga
+' je i modStornoDok; kad mu je trebao i IZVESTAJ, zavisnost bi isla report ->
+' ekran, sto je obrnuto. Tri spiska naziva za isti enum bi se razisla prvom
+' izmenom.
+'
+' Fail-open je namerni: nepoznata vrsta se vraca kao sopstveni tekst, da nov enum
+' ne bi proizveo prazan natpis dok mu se ne doda poruka.
+Public Function AmbVrstaDokNaziv(ByVal v As String) As String
+    AmbVrstaDokNaziv = Trim$(v)
+    Select Case Trim$(v)
+        Case AMB_DOK_REVERS:          AmbVrstaDokNaziv = Poruka("OTKUI_AMBD_REVERS")
+        Case AMB_DOK_REVERS_PARTNERA: AmbVrstaDokNaziv = Poruka("OTKUI_AMBD_REVERS_PART")
+        Case AMB_DOK_NABAVKA:         AmbVrstaDokNaziv = Poruka("OTKUI_AMBD_NABAVKA")
+        Case AMB_DOK_OTPIS:           AmbVrstaDokNaziv = Poruka("OTKUI_AMBD_OTPIS")
+    End Select
+End Function
 
 Public Function AmbNaloziSvi() As Variant
     AmbNaloziSvi = Array(AMB_NALOG_KOOPERANT, AMB_NALOG_STANICA, AMB_NALOG_KUPAC, _
@@ -262,7 +296,8 @@ End Function
 ' AmbDokID ide u tblAmbalaza.DokumentID, cime ReversID prestaje da bude drugi,
 ' paralelan identitet -- ne brise se nego POSTAJE ovo.
 Public Function AmbDokVrsteSve() As Variant
-    AmbDokVrsteSve = Array(AMB_DOK_REVERS, AMB_DOK_NABAVKA, AMB_DOK_OTPIS)
+    AmbDokVrsteSve = Array(AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA, _
+                           AMB_DOK_NABAVKA, AMB_DOK_OTPIS)
 End Function
 
 Public Function AmbDokVrstaPoznata(ByVal vrsta As String) As Boolean
@@ -314,6 +349,13 @@ Public Function AmbDokDozvoljavaKretanje(ByVal dokVrsta As String, _
                      AMB_VK_PRENOS_INTERNO, AMB_VK_VRACANJE_TUDJE
                     AmbDokDozvoljavaKretanje = True
             End Select
+        Case AMB_DOK_REVERS_PARTNERA
+            ' Partnerov dokument dokazuje da je ambalaza STIGLA OD NJEGA: kupac
+            ' vraca prazne, vozac ih preuzima. IZDATA_PRAZNA ovde NE sme -- kad
+            ' mi izdajemo partneru, dokument je NAS, pa je to AMB_DOK_REVERS.
+            ' PRENOS_INTERNO takodje ne: interno kretanje ne moze imati partnerov
+            ' papir kao povod.
+            AmbDokDozvoljavaKretanje = (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)
         Case AMB_DOK_NABAVKA
             AmbDokDozvoljavaKretanje = (StrComp(Trim$(vrstaKretanja), AMB_VK_NABAVKA, vbTextCompare) = 0)
         Case AMB_DOK_OTPIS
@@ -328,23 +370,35 @@ End Function
 ' poseduje NASU seriju -- pa cak i "vlasnik = SpoljniSvet", granica koja uopste
 ' nije drzalac.
 '
-' Pravilo je jedno i za sve tri vrste, i izgovara se u jednoj recenici:
+' Pravilo je bilo jedno za sve vrste, u jednoj recenici:
 '
 '   BROJ JE NAS, PROTIVPARTNER JE NJIHOV.
 '
-' Dokument pisemo mi -- i revers kooperantu, i revers kupca, i nabavku, i otpis.
-' Partner nikad ne izdaje nas broj, pa vlasnik mora biti SOPSTVENI nalog (Stanica,
-' Firma, Vozac). Koji tacno, po vrsti i po putanji, ostaje numeraciji u 10b -- ali
-' KLASA je zakljucana ovde, da dva pozivna mesta ne bi izabrala razlicitu politiku
-' a da nijedno ne prekrsi ugovor.
+' 03.10.2026 je dobilo opseg: vazi za dokument KOJI PISEMO MI -- revers
+' kooperantu, nabavku, otpis. Revers KUPCA je njegov papir i nosi njegov broj
+' (AMB-10-ODL-10), pa je dobio svoju vrstu REVERS_PARTNERA. Stari tekst je ovde
+' izricito nabrajao "i revers kupca" kao nas -- to je bilo netacno.
+' Vlasnik numerickog niza, po vrsti dokumenta.
 '
-' Funkcija postoji po vrsti iako je odgovor danas isti za sve tri: kad bi se neka
-' vrsta ikad brojala drugacije, ovo je mesto na kom se to kaze -- i AmbDokMatricaNepotpuna
-' odmah obara vrstu bez odgovora.
+' NAS dokument nosi NAS broj: partner ne izdaje nasu seriju, pa je vlasnik
+' sopstveni nalog (Stanica, Firma, Vozac).
+'
+' PARTNEROV dokument nosi NJEGOV broj, i to je 03.10.2026 ispravljeno kao
+' pravilo, ne izuzetak: dokument od kupca je dokaz da je vozac preuzeo ambalazu --
+' kupcev papir, kupcev broj. Isto vazi za prijemnicu i bankovne izvode; tamo kod
+' to vec radi (modOtkupUI.PredlogPrijemnice: "Ostali kupci nose svoj eksterni,
+' nezavisni broj -- polje se tada NE dira"). Izmisljati uz njih i nas broj znaci
+' dva broja za jedan papir, pa ni jedan nije onaj po kome operater trazi.
+'
+' Funkcija je po VRSTI, ne po smeru, i to je namerno: AmbDokMatricaNepotpuna
+' obara svaku vrstu bez odgovora, pa nova putanja ne moze da se provuce tiho.
+' Da je po smeru, zaglavlje bi se upisivalo pre nego sto se smer zna.
 Public Function AmbDokBrojOwnerKlasa(ByVal vrsta As String) As String
     Select Case Trim$(vrsta)
         Case AMB_DOK_REVERS, AMB_DOK_NABAVKA, AMB_DOK_OTPIS
             AmbDokBrojOwnerKlasa = AMB_KLASA_SOPSTVENI
+        Case AMB_DOK_REVERS_PARTNERA
+            AmbDokBrojOwnerKlasa = AMB_KLASA_PARTNER
     End Select
 End Function
 
@@ -409,10 +463,12 @@ Public Function AmbDokProblem(ByVal vrsta As String, ByVal broj As String, _
         Exit Function
     End If
 
+    ' Poruka je NEUTRALNA od 03.10.2026: ranije je zavrsavala sa "broj je nas,
+    ' protivpartner je njihov", a to za REVERS_PARTNERA vise nije tacno -- pa je
+    ' validacija padala ispravno a objasnjavala suprotno od pravila.
     If Not AmbNalogUKlasi(klasa, brojOwnerTip) Then
         AmbDokProblem = "'" & Trim$(vrsta) & "' trazi " & klasa & " kao vlasnika broja, " & _
-                        "a dobio je " & Trim$(brojOwnerTip) & " -- broj je nas, " & _
-                        "protivpartner je njihov."
+                        "a dobio je " & Trim$(brojOwnerTip) & "."
     End If
 End Function
 
@@ -474,6 +530,214 @@ Public Function AmbKlaseVrste(ByVal vrsta As String) As Variant
         Case Else
             AmbKlaseVrste = Array()
     End Select
+End Function
+
+' IZVORNA TABELA PO TIPU DOKUMENTA -- zatvorena mapa, fail-closed.
+'
+' AMB-INV-08 trazi da knjiga i izvorni dokument dele rollback. Vezivanje
+' dokumenta za transakciju (BindSourceDocument) dokazuje IDENTITET transakcije,
+' ali ne i da je tabela tog dokumenta u njenom snapshotu -- pa bi ovo prolazilo:
+'
+'   BindSourceDocument(Otkup, OTK-123)
+'   snapshot tblAmbalaza    DA
+'   snapshot tblOtkup       NE     -> rollback nije zajednicki
+'
+' Mapa stoji u domenu, ne u clsTransaction: transakcija je genericki primitiv i
+' ne sme da zna tipove poslovnih dokumenata. Nepoznat tip vraca prazno, a pisac
+' to tretira kao odbijanje -- nov tip dokumenta ne moze da se provuce.
+' IZVORNI DOKUMENTI -- JEDAN POPIS, OBA SMERA IZ NJEGA.
+'
+' AMB-INV-08 trazi TABELU po tipu; undo garda (modStornoZurnal) trazi TIP po
+' tabeli. Dve Select Case mape bi se razisle prvim sledecim presecenim
+' dokumentom, pa oba citaoca citaju OVAJ popis. Fail-closed ostaje: sto nije u
+' popisu, nema ni tabelu ni tip.
+Public Function AmbIzvorniParovi() As Variant
+    AmbIzvorniParovi = Array( _
+        Array(DOK_TIP_AMBALAZA_DOKUMENT, TBL_AMBALAZA_DOKUMENT), _
+        Array(DOK_TIP_OTKUP, TBL_OTKUP), _
+        Array(DOK_TIP_OTPREMNICA, TBL_OTPREMNICA), _
+        Array(DOK_TIP_PRIJEMNICA, TBL_PRIJEMNICA))
+End Function
+
+Public Function AmbIzvornaTabela(ByVal dokTip As String) As String
+    Dim p As Variant, i As Long
+    p = AmbIzvorniParovi()
+    For i = LBound(p) To UBound(p)
+        If StrComp(Trim$(dokTip), CStr(p(i)(0)), vbTextCompare) = 0 Then
+            AmbIzvornaTabela = CStr(p(i)(1))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Obrnut smer: tip izvornog dokumenta za tabelu u kojoj zaglavlje zivi. Vraca
+' "" za svaku tabelu koja nije izvorna -- pozivalac tada nema sta da pita.
+Public Function AmbDokTipZaIzvornuTabelu(ByVal tabela As String) As String
+    Dim p As Variant, i As Long
+    p = AmbIzvorniParovi()
+    For i = LBound(p) To UBound(p)
+        If StrComp(Trim$(tabela), CStr(p(i)(1)), vbTextCompare) = 0 Then
+            AmbDokTipZaIzvornuTabelu = CStr(p(i)(0))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' ZAGLAVLJE I KRETANJE SE PROVERAVAJU ZAJEDNO (AMB-10-ODL-9, -10).
+'
+' Klasa vlasnika broja i dozvoljeno kretanje su bile dve nezavisne provere, pa
+' nijedna nije videla drugu. Tri zaobilaznice koje su time prolazile:
+'
+'   Kupac -> FIRMA sa REVERS_PARTNERA   Firma je SOPSTVENI, pa klase prolaze --
+'                                       a ODL-9 kaze da firma NE ulazi u lanac
+'   BrojOwner K1, kretanje K2 -> Vozac  broj jednog partnera, dogadjaj drugog
+'   obican REVERS: Kupac -> Vozac       partnerov broj potpuno zaobidjen
+'
+' OBRNUTA KAPIJA JE DEO PRAVILA, ne dodatak: bez nje se isto kretanje moze
+' knjiziti na nasu vrstu i dobiti nas broj, pa ODL-10 ne vazi ni za jedan
+' dokument -- samo za one koje pozivalac izvoli da nazove REVERS_PARTNERA.
+'
+' Generisani redovi NE prolaze ovde: pisac ih zove iz vec provernog zahteva, a
+' pokrice deficita ima par GRANICA -> PARTNER koji ni jedno pravilo ne pogadja.
+Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
+                                      ByVal brojOwnerTip As String, _
+                                      ByVal brojOwnerID As String, _
+                                      ByVal odTip As String, ByVal odID As String, _
+                                      ByVal naTip As String, _
+                                      ByVal vrstaKretanja As String) As String
+    Dim jePartnerov As Boolean, povratOdKupca As Boolean
+    Dim ko As String
+    jePartnerov = (StrComp(Trim$(vrsta), AMB_DOK_REVERS_PARTNERA, vbTextCompare) = 0)
+    ' OBRNUTA KAPIJA GLEDA SVAKI POVRAT OD KUPCA, ne samo kupac -> vozac.
+    ' Prva verzija je trazila ceo par, pa su obican REVERS nad kupac -> FIRMA i
+    ' kupac -> STANICA prolazili: par nije bio kupac -> vozac, pa se kapija nije
+    ' ni palila. ODL-9 kaze da lanac ide kupac -> vozac -> stanica i da firma u
+    ' njega NE ulazi, pa je uslov sam POVRAT OD KUPCA.
+    povratOdKupca = (StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _
+                    (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)
+
+    If jePartnerov Then
+        If StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-9: partnerov revers polazi od " & _
+                "kupca, a dobio je " & Trim$(odTip) & "."
+            Exit Function
+        End If
+        If StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-9: lanac je kupac -> vozac -> " & _
+                "stanica; partnerov revers ne ide na " & Trim$(naTip) & "."
+            Exit Function
+        End If
+        If StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-10: partnerov revers nosi " & _
+                "povrat praznih, a dobio je " & Trim$(vrstaKretanja) & "."
+            Exit Function
+        End If
+        If StrComp(Trim$(brojOwnerTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-10: broj partnerovog reversa " & _
+                "pripada kupcu, a vlasnik niza je " & Trim$(brojOwnerTip) & "."
+            Exit Function
+        End If
+        If StrComp(Trim$(brojOwnerID), Trim$(odID), vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-10: broj nosi kupac '" & _
+                Trim$(brojOwnerID) & "' a ambalazu predaje '" & Trim$(odID) & _
+                "' -- dokument bi imao tudj broj."
+            Exit Function
+        End If
+        Exit Function
+    End If
+
+    If povratOdKupca Then
+        If StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-9: povrat praznih od kupca ide " & _
+                "na vozaca (lanac kupac -> vozac -> stanica), a ide na " & _
+                Trim$(naTip) & "."
+            Exit Function
+        End If
+        ' AMB-10-ODL-22: pravilo je VLASNIK BROJA, ne vrsta dokumenta.
+        '
+        ' Do 05.10.2026 je ovde stajalo "vrsta mora biti REVERS_PARTNERA".
+        ' Operater je izmerio premisu: PRIJEMNICA je i sama partnerov dokument
+        ' (eksterna je, osim kad nasa hladnjaca izdaje), a zamena pune ambalaze
+        ' praznom se knjizi POD BROJEM PRIJEMNICE -- bez dodatnog broja. ODL-10
+        ' tu nije zaobidjen nego ISPUNJEN: povrat nosi kupcev broj.
+        '
+        ' Zato se meri ono sto ODL-10 i kaze -- "nosi njegov broj" -- a ne vrsta
+        ' dokumenta kao njena zamena. Obican REVERS nad kupac -> vozac i dalje
+        ' pada, jer je njegov broj NAS; robni dokument koji vlasnika broja ne
+        ' objavi isto pada, jer prazan vlasnik nije kupac (fail-closed).
+        ko = Trim$(brojOwnerTip)
+        If Len(ko) = 0 Then ko = "(nije zadat)"
+        If StrComp(Trim$(brojOwnerTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-10: povrat praznih od kupca " & _
+                "nosi kupcev broj, a vlasnik broja je " & ko & " (dokument '" & _
+                Trim$(vrsta) & "')."
+            Exit Function
+        End If
+        If StrComp(Trim$(brojOwnerID), Trim$(odID), vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-10: broj nosi kupac '" & _
+                Trim$(brojOwnerID) & "' a prazne vraca '" & Trim$(odID) & _
+                "' -- dokument bi imao tudj broj."
+        End If
+    End If
+End Function
+' AMB-10-ODL-22: ROBNI dokument UME da bude partnerov.
+'
+' Prijemnica je eksterni dokument -- izdaje ju hladnjaca, a mi je primamo --
+' pa je njen broj KUPCEV broj.
+'
+' KAD NASA HLADNJACA IZDAJE PRIJEMNICU, VLASNIK BROJA JE NAMERNO ISTI IZRAZ
+' (odluka operatera 05.10.2026, posle P2 iz review-a). Review je tacno rekao da
+' KupacID odgovara na "ko je kupac u poslu" a BrojOwner na "cijem nizu pripada
+' broj" -- i da ih AMB-10 svuda drugde razdvaja. Ovde se NE razdvajaju, i to je
+' IZMERENO a ne pretpostavljeno: modBrojevi.GenerateBrojPrijemnice scope-uje niz
+' bas po (KupacID, dan) --
+'
+'   MaxSeqFromTable(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_DATUM,
+'                   COL_PRJ_KUPAC, kupacID, datum)
+'
+' -- uz svoj komentar da auto-numeracija vazi SAMO za hladnjaca-kupca, a ostali
+' kupci nose svoj eksterni broj. Dakle vlasnik broja JE kupac, u oba rezima, i
+' poklapa se sa AMB-10-ODL-20 (BrojOwnerTip, BrojOwnerID, dan). Jedno pravilo,
+' bez grananja po izdavaocu.
+'
+' Ovo bi se MORALO ponovo izmeriti ako broj prijemnice ikada pocne da se
+' generise iz NASEG niza nezavisnog od kupca -- tada role i vlasnistvo prestaju
+' da se poklapaju i mapa treba granu.
+'
+' Mapa je ZATVORENA i za ostale tipove vraca prazno. To nije rupa nego
+' fail-closed: obrnuta kapija ODL-10 odbija povrat od kupca bez vlasnika
+' broja, pa dokument koji ga ne objavi ne moze da knjizi taj povrat.
+'
+' Oblik reda: (dokTip, tabela, kolona ID-a, nalogTip vlasnika, kolona vlasnika)
+Public Function AmbRobniVlasniciBroja() As Variant
+    AmbRobniVlasniciBroja = Array( _
+        Array(DOK_TIP_PRIJEMNICA, TBL_PRIJEMNICA, COL_PRJ_ID, _
+              AMB_NALOG_KUPAC, COL_PRJ_KUPAC))
+End Function
+
+' SMER REVERSA -> PAR NALOGA I VRSTA KRETANJA (AMB-10-ODL-7, -ODL-8).
+'
+' Stari pisac je isti posao radio SA SEST NOGU u cetiri smera, i vozaca nosio
+' kao ZIG (kolona VozacID) -- pa se njegov saldo dobijao inverzijom smera, sto
+' je fail-open. Nov red imenuje obe strane, pa je po smeru dovoljan JEDAN red.
+'
+' Vrste nisu izvedene iz para nego PROCITANE iz 6.7:
+'   stanica zaduzuje kooperanta praznim   -> IZDATA_PRAZNA
+'   kooperant ih vraca                    -> POVRAT_PRAZNE
+'   vozac <-> stanica, oba SOPSTVENA      -> PRENOS_INTERNO (ODL-7)
+'
+' Mapa je ZATVORENA: nepoznat smer nema red i pisac pada fail-closed. Oblik:
+' (smer, odTip, naTip, vrstaKretanja).
+Public Function AmbReversSmerovi() As Variant
+    AmbReversSmerovi = Array( _
+        Array(REV_SMER_IZDAVANJE, AMB_NALOG_STANICA, AMB_NALOG_KOOPERANT, _
+              AMB_VK_IZDATA_PRAZNA), _
+        Array(REV_SMER_PRIJEM, AMB_NALOG_KOOPERANT, AMB_NALOG_STANICA, _
+              AMB_VK_POVRAT_PRAZNE), _
+        Array(REV_SMER_IZDATO_OM, AMB_NALOG_VOZAC, AMB_NALOG_STANICA, _
+              AMB_VK_PRENOS_INTERNO), _
+        Array(REV_SMER_PRIJEM_OD_OM, AMB_NALOG_STANICA, AMB_NALOG_VOZAC, _
+              AMB_VK_PRENOS_INTERNO))
 End Function
 
 ' Pripada li nalog trazenoj klasi.

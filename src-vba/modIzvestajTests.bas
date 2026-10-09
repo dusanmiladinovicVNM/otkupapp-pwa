@@ -88,7 +88,7 @@ Public Sub RunIzvestajTests()
         T_E2E_RobaOMDvaVlasnikaIstiBroj
         T_E2E_KlasaIiIINeMesajuPrijem
         T_E2E_ProsecnaCenaZbirniKupac
-        T_E2E_AmbPregledRazdvajaTipDokumenta
+        T_E2E_AmbPregledKanonskiDokumenti
         T_E2E_ReversIstiBrojDveStanice
 
         tx.RollbackTx
@@ -925,56 +925,109 @@ End Sub
 ' zapisa -- skriveni ref-kljuc `AMB|Otkup|<id>`, pa je "Stampaj dokument" uvek
 ' rutirao na otkupni list, a revers OM-Izlaz-Koop nije imao svoj red i bio je
 ' NEDOSTUPAN za stampu. Test tvrdi DVA reda i DVA razlicita ref-kljuca.
-Private Sub T_E2E_AmbPregledRazdvajaTipDokumenta()
-    Const S As String = "E2E Amb pregled (dva tipa dokumenta, isti otkupID): "
+' PREGLED KRETANJA NAD KANONSKIM DOKUMENTIMA (AMB-10c).
+'
+' Ovaj test je NOVA FORMA starog: stari je tvrdio da jedan otkupID pod DVA tipa
+' dokumenta daje dva reda. Ta premisa je NESTALA -- otkup danas knjizi oba reda
+' pod istim tipom (AMBALAZA.md, redovi 1-8), pa je proizvodjaca te premise nemoguce
+' napraviti. Pravilo koje je stari cuvao se ne gubi nego preseljava: pregled ne sme
+' da spoji DVA DOKUMENTA u jedan red, jer bi ref-kljuc tada vodio stampu na pogresan
+' papir.
+'
+' Uz to je dodata tvrdnja koju stari NIJE imao, a nov model je trazi: dve VRSTE
+' KRETANJA istog dokumenta (POVRAT_PRAZNE + IZDATA_PRAZNA) daju JEDAN red sa oba
+' stupca. AMB-INV-04 ih razlikuje u knjizi, pregled ih sabira.
+'
+' Seje se KANONSKI oblik direktno, kao i ostali testovi ovog modula: predmet
+' merenja je CITALAC nad oblikom tabele. Da pisac i citalac vide istu stvar
+' dokazuje modTest #204, koji seje kroz produkcione pisce.
+Private Sub T_E2E_AmbPregledKanonskiDokumenti()
+    Const S As String = "E2E Amb pregled (kanonski dokumenti): "
     On Error GoTo EH
 
     Dim d As Date: d = IZVT_DATUM
-    Const DOK As String = "IZVT-OTK-AMB"
     Const TIPA As String = "IZVT-Letvarica"
+    Const D1 As String = "IZVT-ADK-1"
+    Const D2 As String = "IZVT-ADK-2"
+    Const BR1 As String = "IZVT-R/1"
+    Const BR2 As String = "IZVT-R/2"
+    Const KOOP As String = "IZVT-KOOP-AMB"
 
-    ' Samo OM/Stanica noge -- ReportAmbalaza("OM", ...) filtrira EntitetTip="Stanica".
-    ' Pune gajbe stizu na OM (Ulaz) pod tipom dokumenta "Otkup".
-    IzvSeed TBL_AMBALAZA, _
-        Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, COL_AMB_SMER, _
-              COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), _
-        Array("IZVT-AMB-1", d, TIPA, 20, "Ulaz", _
-              IZVT_STANICA, "Stanica", DOK, DOK_TIP_OTKUP)
+    ' NALOG MORA DA POSTOJI U MATICNOJ TABELI. Kanonski citalac razresava obe
+    ' strane kroz JEDNU kapiju (AMB-INV-03), pa stanica koja nije u tblStanice
+    ' obara citanje po imenu: "Nalog 'Stanica' sa ID 'IZVT-OM' ne postoji".
+    ' Star citalac to nije proveravao -- ovo je poostravanje modela, ne regresija.
+    IzvSeed TBL_STANICE, Array("StanicaID", "Naziv", "Aktivan"), _
+        Array(IZVT_STANICA, "IZVT Otkupno Mesto", "Da")
+    ' Kolona Mesto nosi IME protivpartnera, ne njegov ID: ResolveEntitetName za
+    ' kooperanta spaja Ime i Prezime, pa nepoznat kooperant daje prazan natpis
+    ' (dva prazna lookup-a), a ne ID. Fixture zato imenuje svog partnera.
+    IzvSeed TBL_KOOPERANTI, Array("KooperantID", "Ime", "Prezime", "Aktivan"), _
+        Array(KOOP, "IZVT", "Koop", "Da")
 
-    ' Prazne gajbe OM izdaje kooperantu (Izlaz) -- ISTI DokumentID, ISTI tip
-    ' ambalaze, ali tip dokumenta "OM-Izlaz-Koop".
-    IzvSeed TBL_AMBALAZA, _
-        Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, COL_AMB_SMER, _
-              COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), _
-        Array("IZVT-AMB-2", d, TIPA, 8, "Izlaz", _
-              IZVT_STANICA, "Stanica", DOK, DOK_TIP_OM_IZLAZ_KOOP)
+    Dim cols As Variant
+    cols = Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, _
+                 COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _
+                 COL_AMB_DOK_ID, COL_AMB_DOK_TIP, COL_AMB_VRSTA_KRETANJA)
+
+    ' DOKUMENT 1, dve vrste nad istim parom: kooperant vraca 20, stanica izdaje 8.
+    IzvSeed TBL_AMBALAZA, cols, _
+        Array("IZVT-AMB-K1", d, TIPA, 20, _
+              AMB_NALOG_KOOPERANT, KOOP, AMB_NALOG_STANICA, IZVT_STANICA, _
+              D1, DOK_TIP_AMBALAZA_DOKUMENT, AMB_VK_POVRAT_PRAZNE)
+    IzvSeed TBL_AMBALAZA, cols, _
+        Array("IZVT-AMB-K2", d, TIPA, 8, _
+              AMB_NALOG_STANICA, IZVT_STANICA, AMB_NALOG_KOOPERANT, KOOP, _
+              D1, DOK_TIP_AMBALAZA_DOKUMENT, AMB_VK_IZDATA_PRAZNA)
+
+    ' DOKUMENT 2, isti par i isti tip gajbe -- razlikuje ga samo IDENTITET.
+    IzvSeed TBL_AMBALAZA, cols, _
+        Array("IZVT-AMB-K3", d, TIPA, 5, _
+              AMB_NALOG_STANICA, IZVT_STANICA, AMB_NALOG_KOOPERANT, KOOP, _
+              D2, DOK_TIP_AMBALAZA_DOKUMENT, AMB_VK_IZDATA_PRAZNA)
+
+    ' Zaglavlja: poslovni broj i vrsta zive TU, ne na nozi knjige.
+    Dim zcols As Variant
+    zcols = Array(COL_AMBD_ID, COL_AMBD_BROJ, COL_AMBD_VRSTA, COL_AMBD_DATUM)
+    IzvSeed TBL_AMBALAZA_DOKUMENT, zcols, Array(D1, BR1, AMB_DOK_REVERS, d)
+    IzvSeed TBL_AMBALAZA_DOKUMENT, zcols, Array(D2, BR2, AMB_DOK_REVERS, d)
 
     Dim r As Variant
     r = ReportAmbalaza("OM", IZVT_STANICA, d, d, False)
     IzvChk IsArray(r), S & "izvestaj vraca redove"
     If Not IsArray(r) Then Exit Sub
 
-    ' Poslednji red je UKUPNO -> dva dokumenta = 3 reda.
-    IzvChkEq UBound(r, 1), 3, S & "dva dokumenta + UKUPNO = 3 reda"
+    IzvChkEq UBound(r, 1), 3, S & "dva dokumenta ostaju dva reda (+ UKUPNO)"
     If UBound(r, 1) < 3 Then Exit Sub
 
-    ' Skriveni ref-kljuc (kol. 7) mora da razlikuje tip dokumenta.
+    ' JEDAN dokument, DVE vrste -> JEDAN red sa oba stupca.
+    IzvChkEqD NzNum(r(1, 5)), 20#, S & "dve vrste istog dokumenta daju jedan red: Ulaz 20"
+    IzvChkEqD NzNum(r(1, 6)), 8#, S & "dve vrste istog dokumenta daju jedan red: Izlaz 8"
+    IzvChk Len(Trim$(CStr(r(2, 5)))) = 0, S & "drugi dokument: Ulaz prazan"
+    IzvChkEqD NzNum(r(2, 6)), 5#, S & "drugi dokument: Izlaz 5"
+
+    ' BROJ je POSLOVNI, ne AmbDokID -- isto pravilo kao na karticama.
+    IzvChkEqText CStr(r(1, 4)), BR1, S & "kolona dokumenta nosi poslovni broj"
+    IzvChkEqText CStr(r(2, 4)), BR2, S & "drugi dokument nosi svoj poslovni broj"
+    IzvChk CStr(r(1, 4)) <> D1, S & "kolona dokumenta NE nosi tehnicki AmbDokID"
+
+    ' MESTO je protivpartner, ne naslovni entitet (10c-2) -- i prikazuje se
+    ' IMENOM. Da kolona nosi naslovni entitet, ovde bi stajao naziv stanice.
+    IzvChkEqText CStr(r(1, 2)), "IZVT Koop", _
+           S & "kolona Mesto nosi protivpartnera, imenom"
+
+    ' Ref-kljuc vodi stampu, pa mora da nosi IDENTITET dokumenta.
     Dim k1 As String: k1 = CStr(r(1, 7))
     Dim k2 As String: k2 = CStr(r(2, 7))
-    IzvChkEqText k1, "AMB|" & DOK_TIP_OTKUP & "|" & DOK, S & "1. red -> ref-kljuc Otkup"
-    IzvChkEqText k2, "AMB|" & DOK_TIP_OM_IZLAZ_KOOP & "|" & DOK, _
-           S & "2. red -> ref-kljuc OM-Izlaz-Koop (revers dostupan za stampu)"
+    IzvChkEqText k1, "AMB|" & DOK_TIP_AMBALAZA_DOKUMENT & "|" & D1, _
+           S & "1. red -> ref-kljuc nosi svoj AmbDokID"
+    IzvChkEqText k2, "AMB|" & DOK_TIP_AMBALAZA_DOKUMENT & "|" & D2, _
+           S & "2. red -> ref-kljuc nosi svoj AmbDokID"
     IzvChk k1 <> k2, S & "ref-kljucevi su razliciti"
 
-    ' Kolicine ostaju na svom dokumentu (nema spajanja Ulaz+Izlaz tudjih tipova).
-    IzvChkEqD NzNum(r(1, 5)), 20#, S & "Otkup red: Ulaz 20"
-    IzvChk Len(Trim$(CStr(r(1, 6)))) = 0, S & "Otkup red: Izlaz prazan"
-    IzvChk Len(Trim$(CStr(r(2, 5)))) = 0, S & "OM-Izlaz-Koop red: Ulaz prazan"
-    IzvChkEqD NzNum(r(2, 6)), 8#, S & "OM-Izlaz-Koop red: Izlaz 8"
-
-    ' UKUPNO se ne menja grupisanjem -- i dalje 20 / 8.
+    ' UKUPNO se ne menja grupisanjem.
     IzvChkEqD NzNum(r(3, 5)), 20#, S & "UKUPNO Ulaz 20"
-    IzvChkEqD NzNum(r(3, 6)), 8#, S & "UKUPNO Izlaz 8"
+    IzvChkEqD NzNum(r(3, 6)), 13#, S & "UKUPNO Izlaz 13"
     Exit Sub
 
 EH:
@@ -1024,19 +1077,16 @@ Private Sub T_E2E_ReversIstiBrojDveStanice()
     IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-B", d, TIPA, 20, "Ulaz", _
                                       IZVT_STANICA2, "Stanica", VOZ, DOK, DOK_TIP_OM_ULAZ_FIRMA, ridB)
 
-    Dim r As Variant
-    r = ReportAmbalaza("Vozac", VOZ, d, d, False)
-    IzvChk IsArray(r), S & "izvestaj vraca redove"
-    If Not IsArray(r) Then Exit Sub
-    IzvChkEq UBound(r, 1), 3, S & "dva reversa ostaju dva reda (+ UKUPNO)"
-    If UBound(r, 1) >= 3 Then
-        IzvChkEqD NzNum(r(1, 5)) + NzNum(r(1, 6)), 10#, S & "1. red nosi samo svoju kolicinu (10)"
-        IzvChkEqD NzNum(r(2, 5)) + NzNum(r(2, 6)), 20#, S & "2. red nosi samo svoju kolicinu (20)"
-        IzvChkEqText CStr(r(1, 7)), "AMB|" & DOK_TIP_OM_ULAZ_FIRMA & "|" & DOK & "|" & ridA, _
-                     S & "1. red nosi svoj ReversID u ref-kljucu"
-        IzvChkEqText CStr(r(2, 7)), "AMB|" & DOK_TIP_OM_ULAZ_FIRMA & "|" & DOK & "|" & ridB, _
-                     S & "2. red nosi svoj ReversID u ref-kljucu"
-    End If
+    ' PREGLED JE ODAVDE SKINUT (AMB-10c). ReportAmbalaza cita KANONSKU knjigu,
+    ' a ovaj test seje STARI oblik -- pa bi tvrdnja o pregledu merila prazan
+    ' rezultat, ne pravilo. Isto pravilo (dva dokumenta ostaju dva reda, svaki
+    ' sa svojim identitetom u ref-kljucu) sada stoji u
+    ' T_E2E_AmbPregledKanonskiDokumenti, nad kanonskim oblikom.
+    '
+    ' STAMPA ostaje ovde i dalje meri stari put, jer on jos postoji: legacy
+    ' redovi se stampaju kroz ReversStampaNoge i ReversID. Nov dokument ima svoju
+    ' granu (StampajAmbDokument). Oba odlaze zajedno sa starim modelom u 10e --
+    ' tada i ovaj test.
 
     Dim noge As Collection, raz As String
     raz = ReversStampaNoge(DOK, DOK_TIP_OM_ULAZ_FIRMA, TIPA, ridB, noge)

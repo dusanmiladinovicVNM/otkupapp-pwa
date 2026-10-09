@@ -924,7 +924,18 @@ def main(argv: list[str]) -> int:
             # Isti redosled trazi i modTestStornoCentar (v. komentar na vrhu tog
             # modula). Mora POSLE importa -- schema pravila dolaze iz svezeg koda.
             try:
-                xl.Run("EnsureRuntimeSchema")
+            # POZIV JE KVALIFIKOVAN IMENOM SVESKE, i to nije stil.
+            #
+            # Izmereno 08.10.2026: posle koraka detekcije compile-a (VBE prozor +
+            # tastaturne komande, verdikt NEJASNO) NEKVALIFIKOVAN Application.Run
+            # prestane da prolazi -- "Cannot run the macro 'EnsureRuntimeSchema'" u
+            # 0.0s, i to na SVAKOJ suite. Taj potpis docs i memorija vode kao modul
+            # koji se ne kompajlira, pa alat lazno prijavi kvar projekta: direktan
+            # kvalifikovan poziv nad istom temp kopijom prolazi i daje 204/0.
+            #
+            # Probe (_run_probe) je OD POCETKA kvalifikovan i zato je prolazio --
+            # razlika je bila u pozivu, ne u projektu.
+                xl.Run(f"'{wb.Name}'!EnsureRuntimeSchema")
                 report["schema"] = "OK"
             except Exception as exc:        # noqa: BLE001
                 report["schema"] = f"FAIL {exc}"
@@ -935,7 +946,7 @@ def main(argv: list[str]) -> int:
                 entry = {"name": suite, "gate": meta["gate"]}
                 t0 = time.time()
                 try:
-                    xl.Run(suite)
+                    xl.Run(f"'{wb.Name}'!{suite}")
                 except Exception as exc:    # noqa: BLE001
                     entry["status"] = "FAIL"
                     entry["error"] = str(exc)

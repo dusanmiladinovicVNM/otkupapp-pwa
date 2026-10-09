@@ -98,10 +98,17 @@ Public Function SuggestNextBroj(ByVal kind As String, _
                                                   "BrojZbirne", datum)
             End If
         Case KIND_REV
-            ' Revers (sva cetiri smera): sopstveni dnevni niz po stanici. Generator
-            ' skenira celu tblAmbalaza po prefiksu x/ddmmyy (strozi od provere
-            ' zauzetosti, BrojZauzetRevers) -- v. MaxSeqReversAmbalaza.
-            maxLocal = MaxSeqReversAmbalaza(entityID, datum)
+            ' REVERS IMA JEDAN NIZ, I TO KANONSKI (tblAmbalazaDokument).
+            '
+            ' Do 10b-2 je revers bio skup nogu u tblAmbalaza, pa je i niz zivio
+            ' tamo. Cim je dobio zaglavlje, poslovni broj je presao u njega -- u
+            ' tblAmbalaza na tom mestu sada stoji AmbDokID. Generator koji je i
+            ' dalje citao stari oblik video bi max = 0 i drugi F7 istog dana bi
+            ' dobio OPET prvi broj, pa pao tek na upisu (review 06.10.2026, P1).
+            '
+            ' Dva niza se NE spajaju: program krece od nule, nema podataka koje
+            ' treba pomiriti. Jedan izvor istine, isti koji pisac i proverava.
+            Call AmbDokNizSken(AMB_NALOG_STANICA, entityID, datum, "", maxLocal, SRC)
             maxRemote = 0
         Case Else
             LogError SRC, "Nepoznata kind vrednost: " & kind
@@ -232,6 +239,120 @@ End Function
 ' ============================================================
 
 ' "VOZ-00004" -> 4 ; "ST-00001" -> 1 ; "ST-103" -> 103 ; "garbage" -> 0
+' NUMERICKI NIZ AMBALAZNOG DOKUMENTA -- OPSEG JE (BrojOwnerTip, BrojOwnerID, DAN).
+'
+' Ovde a ne u modAmbalaza: ceo racun broja po (vlasnik, dan) zivi u ovom modulu.
+' Druga kopija bila bi druga istina.
+'
+' TIP VLASNIKA JE DEO OPSEGA, NE KOZMETIKA (review 03.10.2026, P2 #2). Kanonski
+' vlasnik niza je BrojOwnerTip + BrojOwnerID, a prva verzija je skenirala samo
+' ID. U AgriX-u VozacID moze da bude jednak StanicaID (ogledalo vozaca), pa bi
+' dva razlicita naloga delila jedan niz i drugi bi dobio zauzet broj.
+'
+' Sam BROJ i dalje nosi samo numericki deo ID-a (FormatBroj) -- to je poslovni
+' format i ne menja se. Dva vlasnika razlicitog tipa zato MOGU imati isti
+' tekst broja: njihovi nizovi su razliciti, a dokument nosi i tip i ID vlasnika,
+' pa je par (vlasnik, broj) jedinstven.
+'
+' EH NE SME da vrati validan-looking broj: "1/ddmmyy" izgleda kao regularan
+' prvi broj dana, pa je posle greske u skenu dokument dobijao broj koji vec
+' postoji (AUD-041a, isti razlog kao GenerateBrojPrijemnice). Prazan string je
+' jedini bezbedan izlaz -- pozivalac ga vidi kao pad koraka.
+Public Function GenerateBrojAmbDokumenta(ByVal brojOwnerTip As String, _
+                                         ByVal brojOwnerID As String, _
+                                         ByVal datum As Date) As String
+    Const SRC As String = "GenerateBrojAmbDokumenta"
+
+    On Error GoTo EH
+
+    Dim maxSeq As Long
+    Call AmbDokNizSken(brojOwnerTip, brojOwnerID, datum, "", maxSeq, SRC)
+
+    GenerateBrojAmbDokumenta = FormatBroj(brojOwnerID, datum, maxSeq + 1)
+    Exit Function
+
+EH:
+    LogErr SRC, "owner=" & brojOwnerTip & "/" & brojOwnerID
+    GenerateBrojAmbDokumenta = ""
+End Function
+
+' JE LI BROJ ZAUZET U TOM NIZU? Vraca AmbDokID koji ga drzi, inace "".
+'
+' Pisac je zvao samo AmbDokProblem, a on sudi OBLIK (vrsta, neprazan broj,
+' datum, klasa vlasnika) -- ne ZAUZETOST. Zato je prolazilo dva puta
+' NabaviAmbalazu_TX sa istim rucno prosledjenim brojem: dva AmbDokID-a, jedan
+' poslovni broj u istom nizu (review 03.10.2026, P2 #2).
+'
+' STORNIRAN DOKUMENT DRZI SVOJ BROJ: sken NE filtrira po Stornirano. Isto
+' pravilo vazi i za otkupni list (OTKUNOS_ERR_BROJ_ZAUZET: "storno ne
+' oslobadja broj -- ispravka dobija NOV broj"), pa ambalazni dokument ne uvodi
+' drugo.
+'
+' Izuzimanje sopstvenog AmbDokID-a (za ispravku u mestu) NIJE dodato OVDE:
+' ambalazni dokument jos ne ima putanju ispravke, pa bi argument bio mrtav.
+' BrojZauzetUNizu(KIND_REV) ga od 06.10.2026 primenjuje SPOLJA -- poredi
+' drzaoca sa izuzmiID -- pa semantika ispravke postoji i bez argumenta ovde.
+Public Function AmbDokBrojZauzet(ByVal brojOwnerTip As String, _
+                                 ByVal brojOwnerID As String, _
+                                 ByVal datum As Date, _
+                                 ByVal broj As String) As String
+    Const SRC As String = "AmbDokBrojZauzet"
+
+    Dim maxSeq As Long
+    AmbDokBrojZauzet = AmbDokNizSken(brojOwnerTip, brojOwnerID, datum, broj, _
+                                     maxSeq, SRC)
+End Function
+
+' JEDAN SKEN, JEDAN OPSEG NIZA -- i generator i kapija zauzetosti citaju ovo.
+'
+' Dva skena sa dva opsega su upravo nacin da se niz razide sam sa sobom:
+' generator bi brojao jedan skup redova, a kapija sudila nad drugim.
+'
+' Ne dize gresku na nedostajucu kolonu nego je prepusta RequireColumnIndex-u:
+' sema je kanon, pa je nedostatak kolone kvar, a ne slucaj.
+Private Function AmbDokNizSken(ByVal brojOwnerTip As String, _
+                               ByVal brojOwnerID As String, _
+                               ByVal datum As Date, _
+                               ByVal broj As String, _
+                               ByRef outMaxSeq As Long, _
+                               ByVal sourceName As String) As String
+    outMaxSeq = 0
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA_DOKUMENT)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cID As Long, cBroj As Long, cDat As Long, cOwnTip As Long, cOwnID As Long
+    cID = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, sourceName)
+    cBroj = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ, sourceName)
+    cDat = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_DATUM, sourceName)
+    cOwnTip = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_TIP, sourceName)
+    cOwnID = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_ID, sourceName)
+
+    Dim danKljuc As String
+    danKljuc = Format$(datum, "ddmmyy")
+
+    Dim i As Long, redDan As String, seq As Long
+    For i = 1 To UBound(data, 1)
+        If StrComp(Trim$(NzToText(data(i, cOwnTip))), Trim$(brojOwnerTip), vbTextCompare) = 0 Then
+            If StrComp(Trim$(NzToText(data(i, cOwnID))), Trim$(brojOwnerID), vbTextCompare) = 0 Then
+                redDan = ""
+                If IsDate(data(i, cDat)) Then redDan = Format$(CDate(data(i, cDat)), "ddmmyy")
+                If redDan = danKljuc Then
+                    seq = ExtractSeqFromBroj(NzToText(data(i, cBroj)))
+                    If seq > outMaxSeq Then outMaxSeq = seq
+                    If Len(Trim$(broj)) > 0 Then
+                        If BrojJednak(data(i, cBroj), broj) Then
+                            AmbDokNizSken = Trim$(NzToText(data(i, cID)))
+                            Exit Function
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next i
+End Function
+
 Public Function ExtractNumericFromEntityID(ByVal entityID As String) As Long
     Dim i As Long, ch As String, digits As String
     
@@ -525,8 +646,9 @@ End Sub
 '
 ' Nepoznata vrsta je GRESKA, ne "slobodno": prazan odgovor znaci da broj sme, pa
 ' ne sme da nastane iz neznanja. PRJ jos nije ovde -- prijemnica ide posle
-' prelaska nizvodnih potrosaca na GeneracijaID. REV ima svoju granu
-' (BrojZauzetRevers): dokument su dve noge u tblAmbalaza, a stanicu nosi samo jedna.
+' prelaska nizvodnih potrosaca na GeneracijaID. REV ima svoju granu i ona od
+' 10b-2 vodi na KANONSKI niz (AmbDokBrojZauzet): revers je dokument sa
+' zaglavljem, pa broj drzi zaglavlje -- ne noga u tblAmbalaza.
 Public Function BrojZauzetUNizu(ByVal kind As String, _
                                 ByVal entityID As String, _
                                 ByVal datum As Date, _
@@ -551,7 +673,16 @@ Public Function BrojZauzetUNizu(ByVal kind As String, _
             tbl = TBL_ZBIRNA: colBroj = COL_ZBR_BROJ: colDatum = COL_ZBR_DATUM
             colVlasnik = COL_ZBR_VOZAC: colID = COL_ZBR_ID
         Case KIND_REV
-            BrojZauzetUNizu = BrojZauzetRevers(entityID, datum, broj, izuzmiID)
+            ' Isti kanonski niz kao generator -- jedan izvor istine za broj
+            ' reversa. Vraca AmbDokID drzaoca (ranije AmbID noge Stanica).
+            BrojZauzetUNizu = AmbDokBrojZauzet(AMB_NALOG_STANICA, entityID, _
+                                               datum, broj)
+            ' izuzmiID cuva semantiku ispravke: dokument ne zauzima broj SAM
+            ' sebi.
+            If Len(Trim$(izuzmiID)) > 0 Then
+                If StrComp(BrojZauzetUNizu, Trim$(izuzmiID), vbTextCompare) = 0 Then _
+                    BrojZauzetUNizu = ""
+            End If
             Exit Function
         Case Else
             Err.Raise vbObjectError + 1923, SRC, _
@@ -607,105 +738,11 @@ Public Sub RequireBrojSlobodanUNizu(ByVal kind As String, _
               "vlasniku niza " & Trim$(entityID) & " dana " & Format$(datum, "dd.mm.yyyy") & _
               ": " & zauzeo & ". Storno ne oslobadja broj -- ispravka dobija NOV broj (A9)."
 End Sub
-
-' REV: niz je (stanica, dan) nad tblAmbalaza. Revers je DVE noge istog broja i
-' tipa, a stanicu nosi samo noga Stanica (noga Kooperant nosi kooperanta), pa
-' broj zauzima samo ona. Tip mora biti jedan od cetiri smera: smerovi dele jedan
-' niz (MaxSeqReversAmbalaza ih ne razlikuje), a ambalaza otkupa ili otpremnice
-' na istoj stanici nije revers. Stornirani se broje (A9).
-'
-' Red reversa bez noge Stanica (sinteticki seed) broj NE zauzima. Identitet
-' dokumenta je ReversID (modStorno.ReversIDRazresi), ne ovaj niz. Vraca AmbID
-' noge Stanica koja drzi broj.
-Private Function BrojZauzetRevers(ByVal stanicaID As String, _
-                                  ByVal datum As Date, _
-                                  ByVal broj As String, _
-                                  ByVal izuzmiID As String) As String
-    Const SRC As String = "BrojZauzetRevers"
-
-    Dim d As Variant
-    d = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(d) Then Exit Function
-
-    Dim cBr As Long, cDat As Long, cEnt As Long, cEntTip As Long
-    Dim cTip As Long, cID As Long
-    cBr = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
-    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
-    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
-    cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
-
-    Dim dan As Long
-    dan = Int(CDbl(datum))
-
-    Dim i As Long, rowID As String
-    For i = 1 To UBound(d, 1)
-        If BrojJednak(d(i, cBr), broj) Then
-            If Trim$(NzToText(d(i, cEntTip))) = "Stanica" Then
-                If BrojJednak(d(i, cEnt), stanicaID) Then
-                    Select Case Trim$(NzToText(d(i, cTip)))
-                        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, _
-                             DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-                            If IsDate(d(i, cDat)) Then
-                                If Int(CDbl(CDate(d(i, cDat)))) = dan Then
-                                    rowID = Trim$(NzToText(d(i, cID)))
-                                    If Len(izuzmiID) = 0 Or Not BrojJednak(rowID, izuzmiID) Then
-                                        BrojZauzetRevers = rowID
-                                        Exit Function
-                                    End If
-                                End If
-                            End If
-                    End Select
-                End If
-            End If
-        End If
-    Next i
-End Function
-
 ' Reset sheet ID cache. Zovi ako se OTK-* / VOZ-* sheet rucno preimenuje
 ' ili obrise tokom rada workbook-a (retko).
 Public Sub ClearSpreadsheetIDCache()
     Set gSheetIDCache = Nothing
 End Sub
-
-' ============================================================
-' PRIVATE -- scan helperi
-' ============================================================
-
-' Max sekvenca broja za stanicu+datum nad CELOM tblAmbalaza (svi tipovi/noge).
-' Broji se po PREFIKSU broja, pa je generator STROZI od provere zauzetosti
-' (BrojZauzetRevers gleda samo nogu Stanica cetiri smera reversa): broj koji
-' generator predlozi nikad nije zauzet u nizu. OTP-/PRJ-/OTK- ID-evi drugih
-' tokova ne odgovaraju prefiksu, pa ne uticu; bare "x/ddmmyy" = seq 1.
-Private Function MaxSeqReversAmbalaza(ByVal stanicaID As String, _
-                                     ByVal datum As Date) As Long
-    On Error GoTo EH
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If IsEmpty(data) Then Exit Function
-
-    Dim iBroj As Long: iBroj = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
-    If iBroj = 0 Then Exit Function
-
-    Dim base As String
-    base = CStr(ExtractNumericFromEntityID(stanicaID)) & "/" & Format$(datum, "ddmmyy")
-    Dim baseDash As String: baseDash = base & "-"
-    Dim nDash As Long: nDash = Len(baseDash)
-
-    Dim r As Long, best As Long, broj As String, seq As Long
-    For r = 1 To UBound(data, 1)
-        broj = Trim$(CStr(data(r, iBroj)))
-        If broj = base Or (Len(broj) > nDash And Left$(broj, nDash) = baseDash) Then
-            seq = ExtractSeqFromBroj(broj)
-            If seq > best Then best = seq
-        End If
-    Next r
-    MaxSeqReversAmbalaza = best
-    Exit Function
-EH:
-    LogErr "modBrojevi.MaxSeqReversAmbalaza", "stanica=" & stanicaID
-End Function
-
 Private Function MaxSeqFromTable(ByVal tblName As String, _
                                   ByVal colBroj As String, _
                                   ByVal colDatum As String, _
