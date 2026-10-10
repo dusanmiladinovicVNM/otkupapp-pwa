@@ -4477,6 +4477,33 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
     End If
     datum = CDate(z(2))
 
+    ' SABLON JE REVERSOV -- BELA LISTA, NE CRNA.
+    '
+    ' Kanonski dokument nosi CETIRI vrste (REVERS, REVERS_PARTNERA, NABAVKA,
+    ' OTPIS), a ovaj izlaz je pisan za JEDNU: revers stanica <-> kooperant.
+    ' Dok grana iz 10c-2 nije bila dosegnuta iz UI-ja to se nije videlo.
+    ' Otvaranje rute (KI-009a) je razotkrilo da NABAVKA prolazi: njen par je
+    ' SpoljniSvet -> Stanica, pa joj je JEDNA strana Stanica i par-kapija
+    ' ispod je pusta. Papir bi nosio oznake za kooperanta ("Prijem (povrat)
+    ' prazne ambalaze od kooperanta", "Primerak: kooperant") uz prazan pID --
+    ' poslovno pogresan dokument (review KI-009, 10.10.2026).
+    '
+    ' Lista je BELA namerno: nova vrsta dokumenta mora da bude SVESNO pustena,
+    ' a ne da tiho nasledi tudji sablon. Kad NABAVKA i OTPIS dobiju svoj
+    ' izlaz, ovde se dodaje grana -- ne brise kapija.
+    If StrComp(vrstaDok, AMB_DOK_REVERS_PARTNERA, vbTextCompare) = 0 Then
+        Err.Raise vbObjectError + 7507, SRC, _
+                  "Kupcev revers se ne stampa: dokument je KUPCEV i nosi " & _
+                  "njegov broj. Original drzi operater, a nasa knjiga ga " & _
+                  "samo evidentira."
+    End If
+
+    If StrComp(vrstaDok, AMB_DOK_REVERS, vbTextCompare) <> 0 Then
+        Err.Raise vbObjectError + 7510, SRC, _
+                  "Vrsta '" & vrstaDok & "' nema svoj sablon -- sablon je " & _
+                  "reversov (stanica - kooperant). Stampa odbijena."
+    End If
+
     ' Koja strana je STANICA, a koja partner. prijem = stanica PRIMA (ulaz).
     Dim omID As String, pTip As String, pID As String, prijem As Boolean
     If StrComp(odTip, AMB_NALOG_STANICA, vbTextCompare) = 0 Then
@@ -4484,12 +4511,6 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
     ElseIf StrComp(naTip, AMB_NALOG_STANICA, vbTextCompare) = 0 Then
         omID = naID: pTip = odTip: pID = odID: prijem = True
     Else
-        If StrComp(vrstaDok, AMB_DOK_REVERS_PARTNERA, vbTextCompare) = 0 Then
-            Err.Raise vbObjectError + 7507, SRC, _
-                      "Kupcev revers se ne stampa: dokument je KUPCEV i nosi " & _
-                      "njegov broj. Original drzi operater, a nasa knjiga ga " & _
-                      "samo evidentira."
-        End If
         Err.Raise vbObjectError + 7507, SRC, _
                   "Dokument nema otkupno mesto (par " & odTip & " - " & naTip & _
                   ") -- sablon reversa ga ne pokriva, pa je stampa odbijena."

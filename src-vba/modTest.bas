@@ -305,6 +305,7 @@ Public Sub RunAllTests()
     RunOne 210
     RunOne 211
     RunOne 212
+    RunOne 213
     RunOne 13
     RunOne 14
     RunOne 15
@@ -782,6 +783,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 210: TestName = "T_AmbIntegritet_SkenerVidiKanonskuKnjigu"
         Case 211: TestName = "T_AmbKnjigaNalazi_SakupljaUmestoDaDigne"
         Case 212: TestName = "T_AmbStampa_StornoOdbijaPapir"
+        Case 213: TestName = "T_AmbStampa_NabavkaNeDobijaReversSablon"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1002,6 +1004,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 210: T_AmbIntegritet_SkenerVidiKanonskuKnjigu
         Case 211: T_AmbKnjigaNalazi_SakupljaUmestoDaDigne
         Case 212: T_AmbStampa_StornoOdbijaPapir
+        Case 213: T_AmbStampa_NabavkaNeDobijaReversSablon
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -6717,6 +6720,54 @@ Private Sub T_AmbStampa_StornoOdbijaPapir()
 
     AssertEq (InStr(1, razlogNema, "zaglavlje", vbTextCompare) > 0), True, _
              "nepostojec dokument se odbija zbog ZAGLAVLJA, bez papira"
+End Sub
+
+' 213. SABLON JE REVERSOV -- NABAVKA GA NE SME DOBITI.
+'
+' Posledica otvaranja UI rute u KI-009a: Case u modScrIzvestaji salje SVAKI
+' AmbalazniDokument na StampajReversAmbalaze, a kanonski dokument nosi cetiri
+' vrste. NABAVKA ima par SpoljniSvet -> Stanica, pa joj je JEDNA strana Stanica
+' i par-kapija je pusta -- papir bi nosio oznake za kooperanta uz prazan
+' partnerov ID. Nalaz nezavisnog review-a, 10.10.2026.
+'
+' IZLAZ JE UGASEN, NE SIMULIRAN. OM_IZDAVANJE_PRINT_MODE = "OFF" prolazi kroz
+' DocResolveMode netaknut, a Select Case u OutputIzdavanjeAmbalaze nema granu za
+' njega -- dakle ceo produkcioni lanac se vrti, samo se papir ne pravi. Zato je
+' pozitivna tvrdnja stvarna, a ne zamena.
+'
+' STA OVAJ TEST NE TVRDI: sadrzaj papira. Sa ugasenim izlazom nema sta da se
+' procita; tvrdi se da lanac prolazi do izlaza bez greske.
+Private Sub T_AmbStampa_NabavkaNeDobijaReversSablon()
+    Dim revDok As String, revBroj As String
+    Dim nabDok As String, nabBroj As String, modePre As String
+    Dim greskaNab As String, greskaRev As String
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "OFF"
+
+    nabBroj = "NAB-SAB-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    nabDok = modAmbalaza.NabaviAmbalazu_TX(Date, FX_STANICA, FX_TIP_AMB, 7, _
+                                           nabBroj, "preduslov testa sablona")
+    AmbSejRevers 3, revDok, revBroj
+
+    On Error Resume Next
+    modIzvestaj.StampajReversAmbalaze nabDok, DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    greskaNab = Err.description
+    Err.Clear
+    modIzvestaj.StampajReversAmbalaze revDok, DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    greskaRev = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    ' Config se vraca PRE tvrdnji -- inace ostaje ugasen tudjim testovima.
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+
+    AssertEq (Len(nabDok) > 0), True, "preduslov: nabavka je upisana"
+    AssertEq (Len(revDok) > 0), True, "preduslov: revers je upisan"
+    AssertEq (InStr(1, greskaNab, "sablon", vbTextCompare) > 0), True, _
+             "NABAVKA ne dobija reversov sablon -- odbijena je"
+    AssertEq greskaRev, "", _
+             "aktivan REVERS prolazi ceo lanac stampe bez greske"
 End Sub
 
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _

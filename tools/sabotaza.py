@@ -5176,6 +5176,16 @@ SABOTAZE = {
     # nalaza" -- ne zato sto je knjiga bila cista nego zato sto je nije ni otvorio.
     # Skup aktivnih zaglavlja je jedini izvor odluke "sme li papir". Ako u njemu
     # ostanu i stornirana, kapija iznad je placebo -- uvek prolazi.
+    # Kanonski dokument nosi cetiri vrste, a ovaj izlaz je pisan za JEDNU.
+    # NABAVKA ima par SpoljniSvet -> Stanica, pa joj par-kapija ispod nista ne
+    # kaze -- bez bele liste dobija reversov papir sa oznakama za kooperanta.
+    "amb-stampa-nabavka-uzima-reversov-sablon": (
+        "modIzvestaj.bas",
+        "    If StrComp(vrstaDok, AMB_DOK_REVERS, vbTextCompare) <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: svaka vrsta sme reversov sablon\n",
+        "T_AmbStampa_NabavkaNeDobijaReversSablon",
+        "NABAVKA ne dobija reversov sablon -- odbijena je",
+    ),
     "amb-stampa-skup-ne-izbacuje-storno": (
         "modAmbalaza.bas",
         "    data = ExcludeStornirano(data, TBL_AMBALAZA_DOKUMENT)\n",
