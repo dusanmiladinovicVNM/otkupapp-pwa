@@ -2500,6 +2500,26 @@
      uspeha ni sa uključenim PDF-om. Sadržaj papira ostaje na **ručnom smoke-u**, i
      to je uslov za merge koji je review izričito tražio.
 
+115. **`#411` merge-ovan BEZ ručnog smoke-a — svesna odluka** (10.10.2026).
+     Review je ručni print smoke postavio kao uslov za merge. **Nije izvršen**, i
+     razlog nije propust: u radnoj svesci još **nema unetih podataka** nad kojima bi
+     se štampao kanonski revers. Operater je odlučio da se merge-uje svejedno.
+
+     **Šta to znači, bez ulepšavanja.** Automatski dokaz pokriva **odluke**:
+     kapije (zaglavlje, storno, bela lista vrsta), rutiranje iz UI-ja, i razrešenje
+     partnera — sve kroz produkcione pisce, uz četiri sabotaze `DOKAZANO` i compile
+     nad istim izvorom. Ne pokriva **sam ispis**: da li papir nosi poslovni broj
+     umesto `ADK-<hex>`, datum dokumenta umesto današnjeg, tačnog protivpartnera i
+     količinu. To je upisano kao **`KI-010`**, otvoreno.
+
+     **Nije regresija:** pre `#411` se kanonski dokument **uopšte nije mogao
+     odštampati** — padao je u `Case Else`. Rizik je zato „papir možda nije tačan",
+     a ne „papir je bio tačan pa više nije".
+
+     Stanje `main`-a posle merge-a (`ede1ff1b`): potpis `b696c49e88e6ec1f` je
+     **bajt-identičan** dokazanom, pa `--require-green` daje `RC=0`, `DRUGI IZVOR`
+     je `0`, a compile marker važi i za `main`.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
