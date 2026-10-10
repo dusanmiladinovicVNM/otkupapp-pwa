@@ -6682,9 +6682,12 @@ Private Sub T_AmbStampa_StornoOdbijaPapir()
     ' stvarno krene da pravi PDF, to pukne u headless Excelu, i "odbijeno"
     ' postane tacno iz POGRESNOG razloga -- tvrdnja se zadovolji slucajnim
     ' padom. Dokaz je to i prijavio: PALA DRUGA TVRDNJA.
+    ' modePre se cita PRE handlera, i to namerno: da GetConfigValue pukne pod
+    ' naoruzanim handlerom, cleanup bi upisao PRAZAN rezim stampe. Handler je
+    ' naoruzan PRE prve izmene konfiguracije, ne pre citanja.
     modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
-    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "OFF"
     On Error GoTo CleanUp212
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "OFF"
 
     AmbSejRevers 5, revDok, revBroj
     AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima poslovni broj"
@@ -6706,7 +6709,10 @@ Private Sub T_AmbStampa_StornoOdbijaPapir()
                                       DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
     razlogNema = Err.description
     Err.Clear
-    On Error GoTo 0
+    ' VRACA se handler, ne gasi (P3, review 10.10.2026). Sa "On Error GoTo 0"
+    ' bi greska u citaocu kartice izasla iz procedure PRE CleanUp212, i rezim
+    ' stampe bi ostao OFF za sledece testove.
+    On Error GoTo CleanUp212
 
     kartK = modIzvestaj.ReportKarticaKooperanta(FX_KOOPERANT, _
                                                 DateAdd("d", -1, Date), _
