@@ -6675,7 +6675,16 @@ End Sub
 Private Sub T_AmbStampa_StornoOdbijaPapir()
     Dim revDok As String, revBroj As String
     Dim odbijeno As Boolean, razlog As String, kartK As Variant
-    Dim razlogNema As String
+    Dim razlogNema As String, modePre As String
+    Dim errNumT212 As Long, errDescT212 As String
+
+    ' IZLAZ SE GASI I OVDE (dokaz 10.10.2026). Bez toga sabotirani prolaz
+    ' stvarno krene da pravi PDF, to pukne u headless Excelu, i "odbijeno"
+    ' postane tacno iz POGRESNOG razloga -- tvrdnja se zadovolji slucajnim
+    ' padom. Dokaz je to i prijavio: PALA DRUGA TVRDNJA.
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "OFF"
+    On Error GoTo CleanUp212
 
     AmbSejRevers 5, revDok, revBroj
     AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima poslovni broj"
@@ -6693,11 +6702,23 @@ Private Sub T_AmbStampa_StornoOdbijaPapir()
     odbijeno = (Err.Number <> 0)
     razlog = Err.description
     Err.Clear
+    modIzvestaj.StampajReversAmbalaze "ADK-NEPOSTOJI", _
+                                      DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    razlogNema = Err.description
+    Err.Clear
     On Error GoTo 0
 
     kartK = modIzvestaj.ReportKarticaKooperanta(FX_KOOPERANT, _
                                                 DateAdd("d", -1, Date), _
                                                 DateAdd("d", 1, Date))
+
+CleanUp212:
+    errNumT212 = Err.Number
+    errDescT212 = Err.description
+    On Error Resume Next
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNumT212 <> 0 Then Err.Raise errNumT212, "modTest.T212", errDescT212
 
     AssertEq odbijeno, True, _
              "stampa storniranog dokumenta je odbijena"
@@ -6705,19 +6726,6 @@ Private Sub T_AmbStampa_StornoOdbijaPapir()
              "odbijanje imenuje STORNO, a ne drugi razlog"
     AssertEq KarticaImaBroj(kartK, 2, revBroj), True, _
              "kartica i dalje prikazuje storniran dokument (6.8)"
-
-    ' NEPOSTOJEC DOKUMENT -- prva kapija. Ranije se broj postavljao na
-    ' ambDokID a datum na Date PRE citanja zaglavlja, pa bi dokument bez
-    ' zaglavlja dobio papir sa tehnickim ADK-<hex> i danasnjim datumom
-    ' (KI-009c). Meri se RAZLOG, ne samo odbijanje: bez zaglavlja i druga
-    ' kapija odbija, pa bi tvrdnja "odbijeno" prosla i sa ugasenom prvom.
-    On Error Resume Next
-    modIzvestaj.StampajReversAmbalaze "ADK-NEPOSTOJI", _
-                                      DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
-    razlogNema = Err.description
-    Err.Clear
-    On Error GoTo 0
-
     AssertEq (InStr(1, razlogNema, "zaglavlje", vbTextCompare) > 0), True, _
              "nepostojec dokument se odbija zbog ZAGLAVLJA, bez papira"
 End Sub
