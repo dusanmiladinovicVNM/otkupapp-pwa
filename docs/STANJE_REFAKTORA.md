@@ -2398,9 +2398,28 @@
      krugovima. Posledica za plan: (a) i (b) se **ne smeju razdvajati** — dodavanje
      `Case`-a bez storno kapije otvara rupu istog trena. Parkirano kao `KI-009`.
 
-     **Otvoreno je samo compile.** Marker stoji nad `3b19a4defd38` (izvor `#408`), pa
-     ga `--status` uredno prijavljuje kao `DRUGI IZVOR`. Ništa iz dokaza `#408` ne
-     važi za ovu granu — i izvor i ugovor su se promenili.
+     **Compile zatvoren nad istim izvorom** (10.10.2026 15:57:33 nad `bce9b4b93b59`).
+     Ništa iz dokaza `#408` nije važilo za ovu granu — i izvor i ugovor su se
+     promenili (`3b19a4defd38` → `bce9b4b93b590498`, `5b73e8d90fc3` →
+     `1efeb85b947ec88c`), pa je sve mereno iznova. Posle compile-a `--status` daje
+     `DRUGI IZVOR = 0`, a `--require-green` `RC=0`.
+
+     > Prva verzija ove stavke je završavala rečenicom *„otvoreno je samo compile"*.
+     > Bila je tačna kad je napisana i netačna čim je marker legao — review `#409` ju
+     > je s pravom prijavio kao neusaglašenost evidencije. Ispravljeno pre merge-a;
+     > docs ne menjaju otisak izvora, pa nijedan marker nije pao.
+
+     **Verdikt review-a `#409`: `GO ZA MERGE`** — `P0 0`, `P1 0`, `P2 0 novih`,
+     četiri neblokirajuća `P3`, CI `GREEN`. Potvrđeno je i ono što je trebalo:
+     *„produkcioni `AmbSaldoPoNalogu` zaista poziva `KnjigaZaCitanje`, pa novi audit
+     režim ne zaobilazi postojeću integritetnu kapiju"*.
+
+     **Četvrti `P3`, njihov nalaz i moja greška:** `#211` meri `Err.Number <> 0`, a
+     ne **baš** `AMB_ERR_KNJIGA_KVAR` — pa bi i nepovezana VBA greška zadovoljila
+     tvrdnju *„audit režim NE slabi čitaoca"*. Orakl je širi od pravila koje meri.
+     Konstanta je `Private` u `modAmbalaza`, pa tvrdnja traži ili javni ulaz ili
+     merenje teksta poruke. **Ne ispravlja se u `#409`** (review: *„ne bih sada
+     dodavao ništa drugo"*) — ide uz rez `KI-009`, koji ionako dira testove.
 
 ## Dug sa imenom (posle S5-5b)
 
