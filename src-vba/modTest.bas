@@ -304,6 +304,8 @@ Public Sub RunAllTests()
     RunOne 209
     RunOne 210
     RunOne 211
+    RunOne 212
+    RunOne 213
     RunOne 13
     RunOne 14
     RunOne 15
@@ -780,6 +782,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 209: TestName = "T_AmbBroj_DelimiterPrezivljavaMapu"
         Case 210: TestName = "T_AmbIntegritet_SkenerVidiKanonskuKnjigu"
         Case 211: TestName = "T_AmbKnjigaNalazi_SakupljaUmestoDaDigne"
+        Case 212: TestName = "T_AmbStampa_StornoOdbijaPapir"
+        Case 213: TestName = "T_AmbStampa_NabavkaNeDobijaReversSablon"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -999,6 +1003,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 209: T_AmbBroj_DelimiterPrezivljavaMapu
         Case 210: T_AmbIntegritet_SkenerVidiKanonskuKnjigu
         Case 211: T_AmbKnjigaNalazi_SakupljaUmestoDaDigne
+        Case 212: T_AmbStampa_StornoOdbijaPapir
+        Case 213: T_AmbStampa_NabavkaNeDobijaReversSablon
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -6606,6 +6612,7 @@ Private Sub T_AmbKnjigaNalazi_SakupljaUmestoDaDigne()
     Dim revDok As String, revBroj As String
     Dim ambID As String, naTipPre As String
     Dim nalazi As Collection, nadjen As Boolean, dignuto As Boolean
+    Dim razlogCitanja As String
     Dim i As Long, stavka As Variant
 
     AmbSejRevers 2, revDok, revBroj
@@ -6628,6 +6635,7 @@ Private Sub T_AmbKnjigaNalazi_SakupljaUmestoDaDigne()
     On Error Resume Next
     modAmbalaza.AmbSaldoPoNalogu AMB_NALOG_STANICA
     dignuto = (Err.Number <> 0)
+    razlogCitanja = Err.description
     Err.Clear
     On Error GoTo 0
 
@@ -6640,6 +6648,157 @@ Private Sub T_AmbKnjigaNalazi_SakupljaUmestoDaDigne()
              "sakupljac vidi pokvaren red i vraca ga kao nalaz"
     AssertEq dignuto, True, _
              "audit rezim NE slabi citaoca -- saldo i dalje pada fail-closed"
+    ' Review #409 (P3): prva verzija je merila samo Err.Number <> 0, pa bi je
+    ' zadovoljila i nepovezana VBA greska. AMB_ERR_KNJIGA_KVAR je Private u
+    ' modAmbalaza, pa se umesto broja meri TEKST koji pise sam ugovor knjige.
+    ' Javni ulaz zbog jedne tvrdnje se ne otvara.
+    AssertEq (InStr(1, razlogCitanja, "Red knjige ", vbTextCompare) > 0), True, _
+             "greska dolazi iz ugovora knjige, ne bilo koja VBA greska"
+End Sub
+
+' 212. STORNIRAN DOKUMENT NE DOBIJA PAPIR (KI-009).
+'
+' Dva kvara u jednom rezu, i mere se zajedno jer su spojeni: ekran nije poznavao
+' DOK_TIP_AMBALAZA_DOKUMENT (pa stampa nije ni bila dosegnuta), a kad bi se taj
+' Case dodao, storniran dokument bi se odstampao -- storno DODAJE kontra-stav a
+' original ne dira, pa AmbDokRedMapa original zadrzava.
+'
+' Ide kroz PRODUKCIONE pisce: nabavka -> revers -> StornirajAmbDokument_TX, pa
+' javni StampajReversAmbalaze. Nista se ne seje rucno u tabele.
+'
+' Redosled tvrdnji je biran da svaka sabotaza obori SVOJU prvu: sabotaza nad
+' skupom aktivnih pada na tvrdnji o skupu i do stampe nikad ne stigne, a sabotaza
+' nad kapijom prolazi skup pa pada na tvrdnji o odbijanju.
+'
+' Poslednja tvrdnja cuva AMBALAZA.md 6.8: pregled kretanja storniran dokument
+' SKRIVA, kartica ga PRIKAZUJE. Bez nje bi popravka tiho pojela tu asimetriju.
+Private Sub T_AmbStampa_StornoOdbijaPapir()
+    Dim revDok As String, revBroj As String
+    Dim odbijeno As Boolean, razlog As String, kartK As Variant
+    Dim razlogNema As String, modePre As String
+    Dim errNumT212 As Long, errDescT212 As String
+
+    ' IZLAZ SE GASI I OVDE (dokaz 10.10.2026). Bez toga sabotirani prolaz
+    ' stvarno krene da pravi PDF, to pukne u headless Excelu, i "odbijeno"
+    ' postane tacno iz POGRESNOG razloga -- tvrdnja se zadovolji slucajnim
+    ' padom. Dokaz je to i prijavio: PALA DRUGA TVRDNJA.
+    ' modePre se cita PRE handlera, i to namerno: da GetConfigValue pukne pod
+    ' naoruzanim handlerom, cleanup bi upisao PRAZAN rezim stampe. Handler je
+    ' naoruzan PRE prve izmene konfiguracije, ne pre citanja.
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    On Error GoTo CleanUp212
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "OFF"
+
+    AmbSejRevers 5, revDok, revBroj
+    AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima poslovni broj"
+    AssertEq modAmbalaza.AmbDokAktivanSkup().Exists(revDok), True, _
+             "preduslov: nestorniran dokument JESTE u skupu aktivnih"
+
+    AssertEq modAmbalaza.StornirajAmbDokument_TX(revDok), True, _
+             "preduslov: storno dokumenta je izvrsen"
+
+    AssertEq modAmbalaza.AmbDokAktivanSkup().Exists(revDok), False, _
+             "storniran dokument ispada iz skupa aktivnih"
+
+    On Error Resume Next
+    modIzvestaj.StampajReversAmbalaze revDok, DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    odbijeno = (Err.Number <> 0)
+    razlog = Err.description
+    Err.Clear
+    modIzvestaj.StampajReversAmbalaze "ADK-NEPOSTOJI", _
+                                      DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    razlogNema = Err.description
+    Err.Clear
+    ' VRACA se handler, ne gasi (P3, review 10.10.2026). Sa "On Error GoTo 0"
+    ' bi greska u citaocu kartice izasla iz procedure PRE CleanUp212, i rezim
+    ' stampe bi ostao OFF za sledece testove.
+    On Error GoTo CleanUp212
+
+    kartK = modIzvestaj.ReportKarticaKooperanta(FX_KOOPERANT, _
+                                                DateAdd("d", -1, Date), _
+                                                DateAdd("d", 1, Date))
+
+CleanUp212:
+    errNumT212 = Err.Number
+    errDescT212 = Err.description
+    On Error Resume Next
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNumT212 <> 0 Then Err.Raise errNumT212, "modTest.T212", errDescT212
+
+    AssertEq odbijeno, True, _
+             "stampa storniranog dokumenta je odbijena"
+    AssertEq (InStr(1, razlog, "storniran", vbTextCompare) > 0), True, _
+             "odbijanje imenuje STORNO, a ne drugi razlog"
+    AssertEq KarticaImaBroj(kartK, 2, revBroj), True, _
+             "kartica i dalje prikazuje storniran dokument (6.8)"
+    AssertEq (InStr(1, razlogNema, "zaglavlje", vbTextCompare) > 0), True, _
+             "nepostojec dokument se odbija zbog ZAGLAVLJA, bez papira"
+End Sub
+
+' 213. SABLON JE REVERSOV -- NABAVKA GA NE SME DOBITI.
+'
+' Posledica otvaranja UI rute u KI-009a: Case u modScrIzvestaji salje SVAKI
+' AmbalazniDokument na StampajReversAmbalaze, a kanonski dokument nosi cetiri
+' vrste. NABAVKA ima par SpoljniSvet -> Stanica, pa joj je JEDNA strana Stanica
+' i par-kapija je pusta -- papir bi nosio oznake za kooperanta uz prazan
+' partnerov ID. Nalaz nezavisnog review-a, 10.10.2026.
+'
+' IZLAZ JE UGASEN, NE SIMULIRAN. OM_IZDAVANJE_PRINT_MODE = "OFF" prolazi kroz
+' DocResolveMode netaknut, a Select Case u OutputIzdavanjeAmbalaze nema granu za
+' njega -- dakle ceo produkcioni lanac se vrti, samo se papir ne pravi. Zato je
+' pozitivna tvrdnja stvarna, a ne zamena.
+'
+' STA OVAJ TEST NE TVRDI: da je papir napravljen, ni sta na njemu pise.
+' Dva razloga, oba imenovana: izlaz je ugasen, pa nema sta da se procita; i
+' OutputIzdavanjeAmbalaze ima SOPSTVENI On Error GoTo EH koji gresku samo
+' loguje -- dakle "nema greske" ne bi bio orakl uspeha ni sa ukljucenim PDF-om
+' (P3, review 10.10.2026). Tvrdi se tacno ovo: aktivan REVERS prolazi SVE
+' kapije i stize do izlaza. Sadrzaj papira ostaje na rucnom smoke-u.
+Private Sub T_AmbStampa_NabavkaNeDobijaReversSablon()
+    Dim revDok As String, revBroj As String
+    Dim nabDok As String, nabBroj As String, modePre As String
+    Dim greskaNab As String, greskaRev As String
+    Dim errNumT213 As Long, errDescT213 As String
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "OFF"
+
+    ' BEZUSLOVAN POVRATAK KONFIGURACIJE (P3, review 10.10.2026). Bez ovoga bi
+    ' neocekivana greska u pisacima preskocila vracanje, pa bi rezim stampe
+    ' ostao OFF i SLEDECI testovi bi radili nad promenjenim stanjem.
+    ' CleanupPosleTesta resetuje UI i test seam-ove, ali NE ovu vrednost.
+    On Error GoTo CleanUp
+
+    nabBroj = "NAB-SAB-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    nabDok = modAmbalaza.NabaviAmbalazu_TX(Date, FX_STANICA, FX_TIP_AMB, 7, _
+                                           nabBroj, "preduslov testa sablona")
+    AmbSejRevers 3, revDok, revBroj
+
+    On Error Resume Next
+    modIzvestaj.StampajReversAmbalaze nabDok, DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    greskaNab = Err.description
+    Err.Clear
+    modIzvestaj.StampajReversAmbalaze revDok, DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    greskaRev = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+CleanUp:
+    errNumT213 = Err.Number
+    errDescT213 = Err.description
+    On Error Resume Next
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNumT213 <> 0 Then Err.Raise errNumT213, "modTest." & "T_AmbStampa_NabavkaNeDobijaReversSablon", _
+                                     errDescT213
+
+    AssertEq (Len(nabDok) > 0), True, "preduslov: nabavka je upisana"
+    AssertEq (Len(revDok) > 0), True, "preduslov: revers je upisan"
+    AssertEq (InStr(1, greskaNab, "sablon", vbTextCompare) > 0), True, _
+             "NABAVKA ne dobija reversov sablon -- odbijena je"
+    AssertEq greskaRev, "", _
+             "aktivan REVERS prolazi sve kapije i stize do izlaza"
 End Sub
 
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _

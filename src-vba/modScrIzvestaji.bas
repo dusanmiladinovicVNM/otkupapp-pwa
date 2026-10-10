@@ -2774,6 +2774,18 @@ Private Sub StampajDokumentReda(ByVal red As Long)
                     ' dokument ne trazi po broju, stanici ni danu.
                     StampajReversAmbalaze dokID, dokTip, tipAmb, _
                                           NzS(modOtkupUI.GridCell(red, 9))
+                Case DOK_TIP_AMBALAZA_DOKUMENT
+                    ' KANONSKI DOKUMENT (AMB-10c). Ovaj Case je NEDOSTAJAO, pa je
+                    ' posle 10b-2 cutovera svaki NOV revers padao u Case Else i
+                    ' operater je dobijao "stampa nedostupna". Grana
+                    ' modIzvestaj.StampajAmbDokument, napisana u 10c-2, nije bila
+                    ' dosegnuta NI JEDNOM iz UI-ja -- regresija sposobnosti koju
+                    ' su propustila i dva review kruga (KI-009a).
+                    '
+                    ' ReversID se NE salje: nov dokument ima SVOJ identitet
+                    ' (AmbDokID), pa rekonstrukcija iz nogu starog oblika nije ni
+                    ' potrebna ni moguca.
+                    StampajReversAmbalaze dokID, dokTip, tipAmb
                 Case Else
                     modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_STAMPA_NEDOSTUPNA"), True
             End Select
