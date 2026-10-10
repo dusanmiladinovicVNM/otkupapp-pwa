@@ -2421,6 +2421,85 @@
      merenje teksta poruke. **Ne ispravlja se u `#409`** (review: *„ne bih sada
      dodavao ništa drugo"*) — ide uz rez `KI-009`, koji ionako dira testove.
 
+114. **`KI-009`: kanonska štampa vraćena, i dokaz koji je uhvatio ORAKL** (10.10.2026).
+     Grana `claude/amb-stampa-ki009`, glava `d2772eaf`. Tri kvara u jednom PR-u, jer
+     popravka jednog otvara drugi:
+
+     ```
+     (a) DOK_TIP_AMBALAZA_DOKUMENT: 0 pojava u svim modScr*.bas -> svaki NOV
+         revers je isao u Case Else, "stampa nedostupna". Grana StampajAmbDokument
+         iz 10c-2 NIJE bila dosegnuta ni jednom. Regresija sposobnosti iz 10b-2.
+     (b) storno DODAJE kontra-stav a original NE dira -> original ostaje u
+         AmbDokRedMapa, pa mapaRed.Exists vraca True i posle storna.
+     (c) broj = ambDokID, datum = Date PRE citanja zaglavlja -> papir sa
+         tehnickim ADK-<hex> i danasnjim datumom.
+     ```
+
+     Nalaze (b) i (c) prijavio je nezavisan review; **(a) je izmereno pri proveri
+     tog nalaza** i ispalo teže od prijave. Komentar koji sam napisao u `10c-2`
+     (*„storniran dokument nema aktivan red"*) bio je **netačan** — komentar ne može
+     da bude kapija.
+
+     **Četvrti kvar je napravila sama popravka.** Otvaranje UI rute poslalo je na
+     reversov šablon **svaku** vrstu kanonskog dokumenta, a ima ih četiri. `NABAVKA`
+     ima par `SpoljniSvet → Stanica`, pa joj je **jedna** strana Stanica i par-kapija
+     je pušta — dobila bi papir sa oznakama za kooperanta i praznim partnerovim
+     ID-em. Rešeno **belom** listom: nova vrsta mora biti **svesno** puštena.
+     Usput je nađeno da je odbijanje kupčevog reversa bilo **uže od pravila** —
+     stajalo je u `Else` grani, a razlog je poslovni i ne zavisi od para naloga.
+
+     **NAJVREDNIJI NALAZ REZA: `dokaz.py` je uhvatio grešku u ORAKLU, ne u kodu.**
+
+     ```
+     amb-stampa-ne-pita-za-storno   PALA DRUGA TVRDNJA:
+                                    "odbijanje imenuje STORNO, a ne drugi razlog"
+     === NIJE DOKAZANO ===
+     ```
+
+     `#212` nije gasio izlaz. Sa ugasenom storno kapijom dokument je **stvarno**
+     krenuo da pravi PDF, to je puklo u headless Excelu, `Err.Number` je postao
+     `<> 0` — i tvrdnja *„štampa storniranog je odbijena"* se zadovoljila **slučajnim
+     padom** umesto kapijom. Suite je bio `213 / 0` i pre i posle; razliku je
+     napravilo jedino to što ocena traži da **imenovana** tvrdnja padne **PRVA**.
+     Popravka: izlaz na `"OFF"` (prolazi kroz `DocResolveMode` netaknut, `Select
+     Case` nema granu za njega), pa se ceo produkcioni lanac vrti a papir se ne
+     pravi.
+
+     **Dva `P3` o izolaciji testa, oba iz review-a i oba moja:** cleanup nije bio
+     bezuslovan (greska u piscu preskace vracanje `OM_IZDAVANJE_PRINT_MODE`), i
+     posle `On Error GoTo 0` je čitalac kartice išao **bez** handlera. Oba
+     zatvorena; red je sada `pročitaj modePre → naoružaj handler → menjaj config`,
+     jer bi naoružavanje **pre čitanja** upisalo **prazan** režim da `GetConfigValue`
+     pukne.
+
+     **SVESNO PRIHVAĆEN DUG (odluka operatera, 10.10.2026).** U `#213` je
+     `SetConfigValue "OFF"` ostao **pre** `On Error GoTo CleanUp`, dok `#212` to već
+     radi obrnuto. Asimetrija je stvarna i review ju je imenovao kao `P3`. **Ne
+     zatvara se.** Razlog: ujela bi samo ako `SetConfigValue` pukne **pošto je
+     delimično promenio** config, a on upisuje **jednu ćeliju u jednoj tabeli** —
+     delimična izmena nije moguća. Cena zatvaranja je pun ponovni prolaz (~37 min)
+     **i još jedan ručni compile**, za rizik koji je praktično nula. Ako se
+     `SetConfigValue` ikad proširi na više ćelija ili tabela, ovaj dug se **mora**
+     zatvoriti.
+
+     **Dokaz nad `b696c49e88e6ec1f`** (ugovor `231f920c6423ac94`):
+
+     ```
+     RunAllTests              213 / 0      RunStornoTestSuite       164 / 0
+     RunBusinessFlowProSuite 2436 / 0      RunBankaImportTestSuite  241 / 0
+     palih suita                0 / 12     --require-green            RC=0
+     compile  potvrdjen 2026-10-10T19:31:59 nad b696c49e88e6   DRUGI IZVOR 0
+
+     dokaz amb-stampa-  4 / 4  \  oba nad potpisom e2fc6c4bb86e4495,
+     dokaz amb-int-     2 / 2  /  izvor pre/posle IDENTICAN   === DOKAZANO ===
+     ```
+
+     **Šta dokaz NE tvrdi:** da je papir napravljen ni šta na njemu piše. Dva
+     razloga: izlaz je u testu ugašen, i `OutputIzdavanjeAmbalaze` ima **sopstveni**
+     `On Error GoTo EH` koji grešku samo loguje — pa *„nema greške"* ne bi bio orakl
+     uspeha ni sa uključenim PDF-om. Sadržaj papira ostaje na **ručnom smoke-u**, i
+     to je uslov za merge koji je review izričito tražio.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
