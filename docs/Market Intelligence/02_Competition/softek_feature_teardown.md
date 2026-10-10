@@ -294,7 +294,70 @@ u ovim snimcima nema pandana — `modLogError`, `modIntegritet`, `modDokumentInv
 To ne dokazuje da je AgriX stabilniji u produkciji; dokazuje samo da postoji sloj koji
 greške hvata pre korisnika.
 
-## 9. Šta ostaje da se proveri
+## 9. Tri opsega poređenja — odgovor na „jesu li izjednačeni?"
+
+Pitanje se često postavlja kao „ako AgriX gledamo samo kao desktop core, jesmo li
+na istom?". Odgovor zavisi od toga šta se meri, pa ga treba davati u tri opsega.
+
+### 9.1. Opseg koji uputstva pokrivaju (otkupni modul)
+
+Šifarnici, otkupni list, obračun neto iz gajbica, revers ambalaže, kartica robe i
+ambalaže, lager, izveštaji o otkupljenim količinama, kartica proizvođača.
+
+**Efektivno izjednačeno.** AgriX ima sve, i u dva detalja bolje (dve klase na jednom
+otkupu, zaštita „tara ≥ bruto" u `frmOtkup:938–974`). SOFTEK vodi u četiri stavke
+(KEP, kontni nalog, nalepnice, virman iz kartice).
+
+### 9.2. Ceo AgriX desktop core (samo `src-vba/`, bez PWA i cloud-a)
+
+**Nisu izjednačeni, i skidanje PWA sloja to ne menja.** Većina onoga što AgriX ima
+preko SOFTEK-ovog otkupnog modula **nije** PWA nego VBA:
+
+| Oblast | Modul (čist desktop) | U SOFTEK uputstvima |
+|---|---|---|
+| Kupci, otpremnice, zbirne, prijemnice | `modDokumenta` | ne |
+| Fakturisanje | `modFaktura` | ne |
+| SEF e-faktura | `modSEFClient/Mapper/Validator/StatusSync/Persistance` | ne |
+| Uvoz izvoda 4 banke + CSV nalozi | `modBankaImport` (+4 parsera), `modBankaExportPregled` | ne |
+| Palete, paletni list, hladnjača, prerada | `modPaletniList` | ne |
+| Agrohemija: magacin, zaduženje, dug, karenca | `modAgrohemija` | ne |
+| Sledljivost lanca | `modSledljivost` | ne |
+| Storno centar (žurnal, impact, recovery) | `modStorno*` | ne |
+| Marža | `modMarza` | ne |
+| Korisnici i prava po 12 oblasti | `modAuth`, `tblKorisnici` | ne |
+| Parcele, GGAP | `tblParcele`, `modGeoParcele` | ne |
+| Self-update, licenca, monitoring | `modSelfUpdate`, `modLicense`, `modMonitoring` | ne |
+
+`INFERENCE`: PWA je vrh, ne temelj. Prednost prema SOFTEK-u pravi **desktop**, a PWA
+je dodatak preko toga.
+
+### 9.3. Ceo SOFTEK paket
+
+**Nepoznato.** Uputstva pokrivaju samo otkupni modul, a §8.2 pokazuje da ispod stoji
+glavna knjiga. Ne tvrditi da je AgriX širi od SOFTEK **proizvoda** — samo od onoga
+što je dokumentovano i viđeno.
+
+### 9.4. Osa na kojoj SOFTEK vodi bez obzira na opseg
+
+**Knjigovodstvo.** KEP, kontni nalog, otvorene stavke, IOS, bruto bilans. AgriX tu ima
+nulu i to je namerno — staje na fakturi i SEF-u. Za kupca koji hoće „sve na jednom
+mestu" to nije mala razlika.
+
+### Kratko
+
+| Opseg | Ishod |
+|---|---|
+| Otkupni modul | **izjednačeni** |
+| AgriX desktop core vs SOFTEK otkupni modul | **AgriX znatno širi** (bez PWA) |
+| AgriX ukupno vs SOFTEK paket | **nepoznato** — nedostaje dokaz |
+| Knjigovodstvo | **SOFTEK**, uvek |
+| Baza podataka | **AGROSOFT** (MySQL) > SOFTEK (Jet) ≈ AgriX (Excel+Sheets) |
+
+`INFERENCE` za pozicioniranje: ako se AgriX predstavlja kao „bolji otkupni list",
+izjednačen je i ulazi u borbu cenom. Razlika počinje kod otpremnice, hladnjače, banke
+i SEF-a — a to je sve desktop.
+
+## 10. Šta ostaje da se proveri
 
 1. Puni obim SOFTEK proizvoda — da li postoje moduli za prodaju, fakturisanje i SEF.
    Kontni katalog (`05`–`08`) potvrđuje glavnu knjigu, blagajnu i kompenzacije, ali

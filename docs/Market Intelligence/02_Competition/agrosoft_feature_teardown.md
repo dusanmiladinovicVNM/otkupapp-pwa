@@ -253,7 +253,86 @@ Praktične posledice:
 3. Zadruga koja radi i žito i voće je mešoviti slučaj — tu AgriX ne može da zameni
    ceo sistem, samo voćarski deo. To treba reći otvoreno u kvalifikaciji.
 
-## 7. Šta ostaje da se proveri
+## 7. Kandidati za preuzimanje u AgriX
+
+Izdvojeno iz uputstva: mehanika koja se može preneti u voćarski kontekst, **bez**
+silosa, laboratorije i pariteta. Oznake: 🟢 vredi · 🟡 srednje · ⚪ nice-to-have.
+
+`INFERENCE`: ovo nije zahtev za razvojem nego katalog ideja sa dokazom da ih
+konkurent već ima. Prioritizacija je stvar odluke, ne ovog dokumenta.
+
+### 7.1. Prijem robe
+
+| # | Funkcija (AGROSOFT, strana) | AgriX danas | Kako bi legla |
+|---:|---|---|---|
+| 1 | 🟢 **Red čekanja „nezavršenih merenja"** — dugme *Završi* otvara listu započetih a nezatvorenih prijema (str. 31) | delimično: `modSledljivost.GetUnlinkedOtkupi()` daje otkupe bez otpremnice, ali post-hoc, nije radni red | ekran „otvoreni prijemi": šta je započeto danas a nije zatvoreno |
+| 2 | 🟢 **Merenje ≠ stanje** — robu na stanje stavlja tek prijemnica (str. 34, 38) | ista ideja već postoji: `modDokumentInvariant`, `modIntegritet` | potvrda da je AgriX model ispravan, ništa da se menja |
+| 3 | 🟢 **Guard „jedan prijem → jedan dokument"** sa porukom „Nije dozvoljeno pravljenje dokumenta od ove odvage" (str. 34) | delimično: `docs/production-runbook-submit-lock-duplicates.md` | eksplicitna poruka umesto tihog blokiranja → `modPoruke` |
+| 4 | 🟢 **„Radi sad, ispravi posle"** — uzmi bilo kog partnera, ispravi kad vozilo siđe; uz *Osveži* koji ponovo učita šifarnike bez restarta (str. 40) | `KOOP_AUTO_CREATE` rešava pola | „Osveži šifarnike" na glavnom ekranu je jeftino, a u sezoni vredi |
+| 5 | 🟡 **Registracija vozila** kao obavezno polje na prijemu (str. 30) | vozač da, registracija ne (`Registracija` samo u `modMaticniLookups`) | dopuna otkupa/otpremnice — sledljivost i spor sa prevoznikom |
+| 6 | 🟡 **Uslužno merenje** — za treće lice, bez predaje robe (str. 43–44) | nema | voćarski pandan: usluga hladnjače / merenje bez otkupa |
+| 7 | ⚪ Servis-prozor za naknadnu korekciju datuma/vremena/težine (str. 47) | storno lanac pokriva ispravke, i stroži je | — |
+
+### 7.2. Izdavanje dokumenata
+
+| # | Funkcija (str.) | AgriX danas | Kako bi legla |
+|---:|---|---|---|
+| 8 | 🟢 **Worklist „čeka dokument"** — *Napravi* otvara listu partnera koji su prošli prijem a nemaju prijemnicu/otpremnicu (str. 53, 59) | nema kao ekran | **najjača ideja iz celog uputstva**: „šta je danas primljeno a nije dokumentovano" |
+| 9 | 🟢 **Prefiks po tipu dokumenta + godina** — `T00036/2012`, `N00413/2012`, `SE-00001` (str. 56, 61, 71) | `modBrojevi` (`SuggestNextBroj`, `FormatBroj`, mirror prefiks `S`) | proveriti da svaki tip ima svoj prefiks — iz broja se vidi tip |
+| 10 | 🟢 **Upozorenje pri izmeni dokumenta koji ima stavke** (str. 56) | nema eksplicitno | jeftina zaštita → `modPoruke` |
+| 11 | 🟢 **Batch izdavanje** — partner + sorta + datumski opseg → dokument automatski (str. 57) | grupni otkup (`GRUPNI_OTKUP_PRINT_MODE`) | proširiti na „napravi dokumente za sve prijeme partnera u periodu" |
+| 12 | 🟢 **Guard 1:1 na obračunskom dokumentu** — „Ova prijemnica već ima priznanicu" (str. 57) | nema | isti princip kao #3, drugi nivo |
+| 13 | 🟡 **Usluge kao stavke vezane za dokument** — analiza, ulaz, sušenje (str. 58) | nema (`Usluga` samo konstanta u `modConfig`) | pandan: hlađenje, paletiranje, transport, ambalaža kao naplative usluge |
+| 14 | 🟡 **Dve varijante štampe istog dokumenta** — „svoje robe" vs „tuđe robe" (str. 54–55) | print modes po dokumentu, ne po vlasništvu robe | korisno ako se uvede roba na čuvanju |
+| 15 | 🟡 **Šabloni ugovora sa članovima**, auto-popunjeno zaglavlje, štampa i praznog formulara (str. 125–128) | nema; `modDocStyle`/`modPrint` su osnova | ugovor o kooperaciji |
+| 16 | ⚪ Aneks kao poseban ispis (str. 130, 134) | nema | tek uz ugovore |
+| 17 | 🟢 **Definisana procedura ispravke pogrešnog dokumenta** (str. 42) | AgriX ima jači ekvivalent (storno centar) | vredi kao **tekst u uputstvu za operatere**, ne kao kod |
+
+### 7.3. Pregledi stanja
+
+| # | Funkcija (str.) | AgriX danas | Kako bi legla |
+|---:|---|---|---|
+| 18 | 🟢 **Presek stanja kao matrica parametara** — jedan ekran, 6 kombinacija (jedan/svi partner × jedna roba/grupa/sve), + tip partnera, + grupno vs po magacinima, na dan (str. 75–76) | ~10 zasebnih izveštaja u `modIzvestaj` | ne nov izveštaj — **jedan parametarski ekran** umesto grananja po dugmadima |
+| 19 | 🟢 **Filter „prebačeno / nije prebačeno u fakture"** (str. 77) | postoji u sloju podataka: `GetPrijemnice(..., samoNefakturisano)`, `COL_PRJ_FAKTURISANO` | proveriti da li je izloženo u formi — ako nije, **najjeftiniji dobitak u listi** |
+| 20 | 🟢 **Kolone Prethodno / Na dan / Ukupno** (str. 92–97) | nema takav oblik | „doneto ranije u sezoni / danas / ukupno" po kooperantu — traženo na otkupnom mestu |
+| 21 | 🟢 **Dnevni promet jednim klikom** (str. 91) | kroz `ReportOtkupListe`, ali sa više parametara | ekran „zatvaranje dana" |
+| 22 | 🟡 **Ista kartica, dva ispisa: MAT i FIN** (str. 78–80) | efektivno postoji, ali kao dva odvojena izveštaja (`ReportKarticaRobaRekap` vs `ReportKarticaKooperanta`) | spojiti u jedan izbor pri štampi |
+| 23 | 🟡 **Rekapitulacija sa ručnim izborom skupa partnera** — plus/minus dugmad, + „računaj i fizička/pravna lica" (str. 82, 84) | nema | izveštaj vlasniku po grupi kooperanata |
+| 24 | 🟡 **Kumulativ trgovine** — ulaz/izlaz po skladištu, sorti i partneru za period (str. 89–90) | delimično `ReportZbirni`/`ReportSaldoOM` | — |
+| 25 | 🟡 **Filter po opsegu parametra** (kod njih vlaga 12,5–14%) (str. 85) | nema | pandan: filter po klasi ili ceni od–do |
+| 26 | 🟢 **Status obračuna na dokumentu** — `NIJE OBRAČUNAT / OBRAČUNAT / STORNIRAN` (str. 104–105) | storno statusi da, trostepeni status obračuna ne | jasno stanje smanjuje pitanja operatera |
+| 27 | 🟢 **„Provera obr." — validacija svih obračuna sa nalazom** (str. 105) | `modIntegritet`, `RunProductionHealthCheck` — postoji, jače | potvrda smera |
+
+### 7.4. Sitne UX stvari koje se isplate
+
+| # | Detalj (str.) | Zašto vredi |
+|---:|---|---|
+| 28 | 🟢 **Žuta polja = obavezna** (str. 16, 30, 45) | vizuelni signal **pre** greške; AgriX ima `VALIDACIJA_UNOSA`, ali ne i signal |
+| 29 | 🟢 **„Partneri sa nepotpunim podacima"** — ekran + štampa spiska (str. 18) | data-quality alat koji operater koristi sam; kod AgriX-a: kooperanti bez računa, BPG-a ili PIB-a |
+| 30 | 🟢 **„Idi na broj"** — skok na dokument po broju (str. 32, 47, 119) | u sezoni, kad kooperant zove sa brojem u ruci |
+| 31 | 🟡 Navigacija prvi/prethodni/sledeći/poslednji na svakom ekranu (str. 32) | konzistentnost — korisnik ne uči nov obrazac po ekranu |
+| 32 | 🟡 **Pretraga po kriterijumu sa čekboksovima** — uključiš samo ono što ti treba, pa *Izvrši* + *Štampa* (str. 35–36) | jedan ekran pretrage umesto deset filtera |
+| 33 | ⚪ Brza pretraga dvoklikom na kolonu, izlaz na ESC (str. 16) | Excel to daje besplatno; relevantno samo za PWA liste |
+| 34 | ⚪ **TEST baza uz produkcionu, bira se na prijavi** (str. 9) | obuka operatera pred sezonu |
+
+### 7.5. Ako se bira troje
+
+1. **#8 worklist „čeka dokument"** — jedini pravi procesni nedostatak u AgriX-u iz
+   ovog spiska; sve ostalo je poliranje.
+2. **#19 filter „nefakturisano"** — podaci već postoje (`COL_PRJ_FAKTURISANO`),
+   pitanje je samo da li su izloženi u formi.
+3. **#20 Prethodno / Na dan / Ukupno** — jedan oblik izveštaja koji odgovara na
+   najčešće pitanje na otkupnom mestu.
+
+`DECISION` referenca: sve tri su čist AgriX domen (voće, hladnjača), ne dodiruju
+silos ni laboratoriju, pa **ne diraju granicu iz odluke 242**.
+
+`LIMITATION`: statusi u koloni „AgriX danas" su iz čitanja koda, ne iz pokretanja
+aplikacije. Pre bilo kakvog planiranja proveriti #19 u `frmDokumenta`/
+`frmFakturisanje` — tvrdnja „postoji u sloju podataka, možda nije u UI" nije
+dovršena provera.
+
+## 8. Šta ostaje da se proveri
 
 1. Aktuelna verzija AGROSOFT-a — da li danas ima web/mobilni klijent, SEF i e-fakturu.
 2. Reference i broj instalacija (DATA SOFT Vrbas nije u `competitor_references.csv`

@@ -1,8 +1,8 @@
 # 02 — Competition
 
 **Status:** Initial evidence set  
-**Poslednje ažuriranje:** 2026-08-02  
-**Izvori:** reference liste koje je osnivač AgriX-a dostavio iz javno prikazanih materijala konkurenata, founder-confirmed AgriX win/loss događaji i zvanična korisnička dokumentacija konkurenta (AGROSOFT). Javne reference nisu nezavisno proverene sa navedenim korisnicima.
+**Poslednje ažuriranje:** 2026-10-10  
+**Izvori:** reference liste koje je osnivač AgriX-a dostavio iz javno prikazanih materijala konkurenata, founder-confirmed AgriX win/loss događaji, zvanična korisnička dokumentacija konkurenata (AGROSOFT, SOFTEK) i screenshot-ovi žive SOFTEK aplikacije `Ver.20.2.4`. Javne reference nisu nezavisno proverene sa navedenim korisnicima.
 
 Konkurenti, alternative, interne Excel varijante, ERP sistemi, specijalizovani proizvodi, cene, funkcije, screenshotovi i win/loss dokazi pripadaju ovom direktorijumu.
 
@@ -31,7 +31,8 @@ Podaci o konkurenciji moraju imati datum, izvor i jasno odvojene činjenice od p
 | `agrosoft_feature_teardown.md` | feature-level poređenje AGROSOFT ↔ AgriX po deset oblasti, sa dokazima iz `src-vba/`, `src/` i `gas/` |
 | `SOFTEK_uputstvp_otkup_poljoproizvoda.pdf` | korisničko uputstvo za SOFTEK modul „Otkup poljoprivrednih proizvoda", 34 strane; PDF kreiran 2017-06-06 |
 | `Softek-otkup.pdf` | **uputstvo na koje sam program linkuje** (Pomoć), „Verzija 2.1", 16 strana; PDF kreiran 2014-05-28. Tanje od verzije iz 2017 i ne pominje funkcije viđene u aplikaciji v20.2.4 — in-app pomoć kasni za proizvodom |
-| `softek_feature_teardown.md` | feature-level poređenje SOFTEK ↔ AgriX; prvi dokumentovani **direktan** konkurent (malina, gajbice, PDV nadoknada 8%). §8 opisuje **živu aplikaciju `Ver.20.2.4`** iz ~20 screenshot-ova: kontna arhitektura, IOS i otvorene stavke, KEP, Access/Jet backend, šest uočenih defekata |
+| `softek_feature_teardown.md` | feature-level poređenje SOFTEK ↔ AgriX; prvi dokumentovani **direktan** konkurent (malina, gajbice, PDV nadoknada 8%). §8 opisuje **živu aplikaciju `Ver.20.2.4`** iz ~20 screenshot-ova: kontna arhitektura, IOS i otvorene stavke, KEP, Access/Jet backend, šest uočenih defekata. §9 daje odgovor na „jesu li izjednačeni?" kroz tri opsega poređenja |
+| `Scripts/pdf_text.py` | izvlačenje teksta iz konkurentskih PDF uputstava bez spoljnih zavisnosti (nema `pdftotext` u web sesiji). Rešava ObjStm, Type0/Identity-H fontove i nepotpun/pogrešan `/ToUnicode`. Provereno na sva tri uputstva iz ovog foldera |
 
 ## 3. Sažetak javnih i klasifikovanih referenci
 
