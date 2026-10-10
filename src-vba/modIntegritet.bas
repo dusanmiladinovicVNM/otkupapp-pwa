@@ -103,6 +103,7 @@ Private Sub RunAllChecks()
     Chk_B9_ZbirnaBezIdentiteta
     Chk_B11_PredajaDvaDokumenta
     Chk_B10_ReversBezID
+    Chk_AMB_KnjigaIntegritet
     Chk_C1_C4_StavkaPrijemnica
     Chk_C2_StavkaBezZbirne
     Chk_C3_PaletaBezStavke
@@ -633,6 +634,36 @@ Private Sub Chk_B10_ReversBezID()
 
 EH:
     WriteErr "B10", Err.description
+End Sub
+
+' ============================================================
+' CHECK AMB1: KANONSKA KNJIGA AMBALAZE
+' ============================================================
+' Chk_B10 gleda STARI model i gejtovan je starim tipovima dokumenta
+' (modStorno.ReversTipJe), pa nad kanonskim redom cuti. Posle 10b-2 cutovera to
+' znaci da je ceo integritetni ekran bio SLEP za kanonsku knjigu: pokvaren red,
+' dva reda sa istim AmbID-em ili StornoOd koji ne pokazuje nigde prosli bi uz
+' poruku "nema nalaza" -- zato sto skener tu knjigu nije ni otvorio.
+'
+' Pravilo se OVDE NE implementira ponovo. modAmbalaza.AmbKnjigaNalazi vrti isti
+' ugovor kroz koji prolazi svako citanje knjige, samo sakuplja umesto da digne.
+' Druga kopija AMB invarijanti u ovom modulu bila bi druga stvar koja moze da
+' divergira -- isti rod greske koji je HARD/SOFT paritet vec jednom naplatio.
+'
+' Zasto nije dovoljno sto je pisac fail-closed: pisac brani SLEDECI upis, a ovde
+' se meri sta je u knjizi VEC zapisano -- rucna izmena celije, polu-izvrsen
+' rollback ili uvoz ne prolaze kroz pisca.
+Private Sub Chk_AMB_KnjigaIntegritet()
+    On Error GoTo EH
+
+    WriteBlock "AMB1", _
+               "Kanonska knjiga ambalaze (ugovor reda, jedinstven AmbID, StornoOd)", _
+               Array("Red", "AmbID", "Razlog"), _
+               CollToArray(modAmbalaza.AmbKnjigaNalazi(), 3)
+    Exit Sub
+
+EH:
+    WriteErr "AMB1", Err.description
 End Sub
 
 ' Jedna vrednost za ceo ReversID: prva vidjena ostaje, svaka razlicita daje

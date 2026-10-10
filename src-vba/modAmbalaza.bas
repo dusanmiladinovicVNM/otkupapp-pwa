@@ -953,6 +953,52 @@ Private Function KnjigaRedProblem(ByRef data As Variant, ByVal i As Long, _
                                                                   kolicina, tipAmb, vrsta)
 End Function
 
+' DVA REZIMA ISTOG SUDA. Citanje je fail-closed i staje na PRVOM kvaru -- to je
+' ispravno za citaoca, jer racunanje dalje nad pokvarenom knjigom nema smisla.
+' Audit mora suprotno: da vidi SVE nalaze i da NE obori ceo integritetni prolaz.
+'
+' Zato jedna implementacija, dva izlaza: bez kolekcije se DIZE (zatecen ugovor,
+' nepromenjen), sa kolekcijom se SAKUPLJA. Druga kopija pravila bila bi tacno ono
+' sto AMBALAZA.md 6.x zabranjuje -- ugovor je JEDNO mesto za sve citaoce.
+Private Sub KnjigaKvar(ByVal nalazi As Collection, ByVal sourceName As String, _
+                       ByVal red As Long, ByVal ambID As String, _
+                       ByVal razlog As String)
+    If nalazi Is Nothing Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, razlog
+    End If
+
+    nalazi.Add Array(CStr(red), ambID, razlog)
+End Sub
+
+' AUDIT KANONSKE KNJIGE -- isti sud kao citanje, sakupljen umesto dignut.
+'
+' Postoji jer modIntegritet pre ovoga NIJE gledao kanonsku knjigu: jedina
+' ambalazna provera (Chk_B10) gejtovana je starim tipovima dokumenta
+' (ReversTipJe), pa nad kanonskim redom cuti. Operater je mogao da pokrene
+' integritet nad pokvarenom knjigom i dobije "nema nalaza" -- zato sto skener
+' tu knjigu nije ni pogledao.
+'
+' Vraca Collection od Array(red, AmbID, razlog); prazna = knjiga je cista. Ne
+' vraca niz: modIntegritet vec ima CollToArray, pa bi treca kopija konvertera
+' bila treca stvar koja moze da divergira.
+Public Function AmbKnjigaNalazi() As Collection
+    Const SRC As String = "modAmbalaza.AmbKnjigaNalazi"
+
+    Dim nalazi As Collection
+    Set nalazi = New Collection
+    Set AmbKnjigaNalazi = nalazi
+
+    RequireKnjigaSchema SRC
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Function
+
+    Dim kol As Object
+    Set kol = KnjigaIndeksi(SRC)
+    KnjigaIntegritet data, kol, SRC, nalazi
+End Function
+
 ' INTEGRITET KNJIGE -- jedan prolaz, pa SVAKI citalac dobija isti odgovor.
 '
 ' Vraca mapu AmbID -> VrstaKretanja; ta mapa je i sama dokaz jedinstvenosti
@@ -969,7 +1015,8 @@ End Function
 ' pokrica. Za 10d je gore: StornoOd = AMB-X vise ne pokazuje na jedan original.
 ' Pravilo je isto kao za nalog (AmbNalogProblem): 0 pada, 1 prolazi, 2+ pada.
 Private Function KnjigaIntegritet(ByRef data As Variant, ByRef kol As Object, _
-                                  ByVal sourceName As String) As Object
+                                  ByVal sourceName As String, _
+                                  Optional ByVal nalazi As Collection) As Object
     Dim vrste As Object
     Set vrste = CreateObject("Scripting.Dictionary")
     Set KnjigaIntegritet = vrste
@@ -985,26 +1032,25 @@ Private Function KnjigaIntegritet(ByRef data As Variant, ByRef kol As Object, _
             ' pripada nijednom modelu i tiho bi nestalo iz svakog salda.
             p = LegacyRedProblem(data, i, kol)
             If Len(p) > 0 Then
-                Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
-                          "Red " & CStr(i) & ": " & p
+                KnjigaKvar nalazi, sourceName, i, AmbText(data(i, kol(COL_AMB_ID))), _
+                           "Red " & CStr(i) & ": " & p
             End If
         Else
             p = KnjigaRedProblem(data, i, kol)
-            If Len(p) > 0 Then
-                Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
-                          "Red knjige " & CStr(i) & ": " & p
-            End If
-
             ambID = AmbText(data(i, kol(COL_AMB_ID)))
-            If vrste.Exists(ambID) Then
-                Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
-                          "Dva reda knjige nose AmbID '" & ambID & "'."
+            If Len(p) > 0 Then
+                KnjigaKvar nalazi, sourceName, i, ambID, _
+                           "Red knjige " & CStr(i) & ": " & p
+            ElseIf vrste.Exists(ambID) Then
+                KnjigaKvar nalazi, sourceName, i, ambID, _
+                           "Dva reda knjige nose AmbID '" & ambID & "'."
+            Else
+                ' DODELA, ne .Add: Add bi na postojecem kljucu pukao sam od sebe i time
+                ' bio SLUCAJNA druga brana ispred imenovane provere iznad. Dvosmerni
+                ' dokaz je to i pokazao -- sa ugasenom imenovanom kapijom test je i
+                ' dalje padao, samo sa tudjom porukom. Kapija sme biti samo jedna.
+                vrste(ambID) = AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA)))
             End If
-            ' DODELA, ne .Add: Add bi na postojecem kljucu pukao sam od sebe i time
-            ' bio SLUCAJNA druga brana ispred imenovane provere iznad. Dvosmerni
-            ' dokaz je to i pokazao -- sa ugasenom imenovanom kapijom test je i
-            ' dalje padao, samo sa tudjom porukom. Kapija sme biti samo jedna.
-            vrste(ambID) = AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA)))
         End If
     Next i
 
@@ -1016,8 +1062,8 @@ Private Function KnjigaIntegritet(ByRef data As Variant, ByRef kol As Object, _
             st = AmbText(data(i, kol(COL_AMB_STORNO_OD)))
             If Len(st) > 0 Then
                 If Not vrste.Exists(st) Then
-                    Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
-                              "StornoOd '" & st & "' ne pokazuje na red knjige."
+                    KnjigaKvar nalazi, sourceName, i, AmbText(data(i, kol(COL_AMB_ID))), _
+                               "StornoOd '" & st & "' ne pokazuje na red knjige."
                 End If
             End If
         End If

@@ -2324,6 +2324,103 @@
      Ostaje jedino **finalni reviewer prolaz**; posle njega se izvor ne dira, jer bi
      svaka izmena oborila i compile i oba dokaza.
 
+113. **Kanonska knjiga ulazi u integritetni skener — i usput je nađena rupa u
+     štampi** (09–10.10.2026).
+     Reviewer je posle `#408` imenovao ovo kao prvu stavku: *„Chk_AMB_KnjigaIntegritet
+     koji koristi isti canonical validator, umesto da se AMB invarijante ponovo
+     implementiraju u modIntegritet"*. Grana `claude/amb-integritet-knjige`, kod
+     `7d43ca0c`.
+
+     **Nalaz koji je odredio oblik rešenja:** čitalac knjige je fail-closed —
+     `KnjigaIntegritet` diže `AMB_ERR_KNJIGA_KVAR`, a ta konstanta je **`Private`**.
+     Provera koja bi samo pozvala čitaoca ne bi prijavila nalaz nego **oborila ceo
+     `RunIntegritetProvere`**, i to na PRVOM pokvarenom redu — operater ne bi video
+     ni ostale. Zato jedna implementacija, dva režima:
+
+     ```
+     KnjigaIntegritet(data, kol, sourceName, Optional nalazi As Collection)
+         nalazi Is Nothing  -> Err.Raise   (zatecen ugovor citaoca, NEPROMENJEN)
+         nalazi prosledjen  -> nalazi.Add  (audit)
+     Public  modAmbalaza.AmbKnjigaNalazi() As Collection
+     Private modIntegritet.Chk_AMB_KnjigaIntegritet   -- samo prikazuje
+     ```
+
+     Vraća `Collection`, ne niz: `modIntegritet` već ima `CollToArray`, pa bi treća
+     kopija konvertera bila treća stvar koja može da divergira.
+
+     **Kapija je oborila prvi pokušaj testa, i bila je u pravu.** Napisao sam dve
+     sabotaže uz **jedan** test; `vba_check` je odbio:
+
+     ```
+     KATALOG: amb-int-sakupljac-ne-obilazi-knjigu: deli tvrdnju sa
+              amb-int-skener-ne-gleda-knjigu -- test ih ne razlikuje
+     ```
+
+     Tačno: i neregistrovana provera i sakupljač koji ne obilazi knjigu daju **isto**
+     — prazan ekran. Rešenje nije bilo obrisati sabotažu nego **razdvojiti slojeve**:
+     `#210` meri da nalaz STIGNE do ekrana, `#211` da ga jezgro NAPRAVI. `#211` nosi i
+     tvrdnju koja se lako gubi: **audit režim ne sme da oslabi čitaoca** — saldo nad
+     istim pokvarenim redom i dalje mora da padne fail-closed.
+
+     **Dokaz nad `bce9b4b93b590498`** (ugovor `1efeb85b947ec88c`):
+
+     ```
+     RunAllTests              211 / 0      RunStornoTestSuite       164 / 0
+     RunBusinessFlowProSuite 2436 / 0      RunBankaImportTestSuite  241 / 0
+     palih suita                0 / 12     --require-green            RC=0
+
+     amb-int-skener-ne-gleda-knjigu        OK                    -> #210
+     amb-int-sakupljac-ne-obilazi-knjigu   OK (uz jos 1 testa)   -> #211
+     amb-pisac-dupli-ambid-u-saldu         OK (uz jos 1 testa)   -> If->ElseIf
+     === DOKAZANO ===   izvor pre/posle 54ef3ea8c19ca240 IDENTICAN
+     ```
+
+     Druga sabotaža obara i `#210` — tačno i očekivano (prazan sakupljač = prazan
+     ekran). Razdvojenost je ipak dokazana, jer **prva obara SAMO `#210`**.
+
+     **Tri `P3` koja reviewer imenuje, sva tri potvrđena i nijedno ne blokira:**
+     audit ne prijavljuje duplikat kad je prethodni red sa istim `AmbID`-em
+     strukturno neispravan (taj red **jeste** prijavljen, pa duplikat izlazi u
+     sledećem prolazu — otkrivanje u dva koraka, ne prećutan kvar); agregacija više
+     nalaza nije zasebno dokazana; cena jednog dodatnog prolaza kroz `tblAmbalaza`
+     nad **pravom** knjigom nije merena.
+
+     **Usput nađeno nešto teže — `KI-009`.** Reviewer je prijavio da se storniran
+     ambalazni dokument može ponovo odštampati. Potvrđeno u izvoru, i komentar koji
+     sam napisao u `10c-2` (*„storniran dokument nema aktivan red, štampa se odbija"*)
+     je **netačan**: storno dodaje kontra-stav a original ne dira, pa mu `StornoOd`
+     ostaje prazan — a `AmbDokRedMapa` zadržava baš takve redove.
+     Pri proveri tog nalaza izmereno je nešto šire: **`DOK_TIP_AMBALAZA_DOKUMENT` ima
+     NULA pojava u svim `modScr*.bas`.** `Select Case` u `modScrIzvestaji:2775` ga ne
+     poznaje, pa kanonski dokument pada u `Case Else` — `„štampa nedostupna"`. Grana
+     `StampajAmbDokument`, napisana u `10c-2`, **ne doseže se iz UI-ja**. To je
+     **regresija sposobnosti** koju je uveo `10b-2` i promakla je meni i dvama review
+     krugovima. Posledica za plan: (a) i (b) se **ne smeju razdvajati** — dodavanje
+     `Case`-a bez storno kapije otvara rupu istog trena. Parkirano kao `KI-009`.
+
+     **Compile zatvoren nad istim izvorom** (10.10.2026 15:57:33 nad `bce9b4b93b59`).
+     Ništa iz dokaza `#408` nije važilo za ovu granu — i izvor i ugovor su se
+     promenili (`3b19a4defd38` → `bce9b4b93b590498`, `5b73e8d90fc3` →
+     `1efeb85b947ec88c`), pa je sve mereno iznova. Posle compile-a `--status` daje
+     `DRUGI IZVOR = 0`, a `--require-green` `RC=0`.
+
+     > Prva verzija ove stavke je završavala rečenicom *„otvoreno je samo compile"*.
+     > Bila je tačna kad je napisana i netačna čim je marker legao — review `#409` ju
+     > je s pravom prijavio kao neusaglašenost evidencije. Ispravljeno pre merge-a;
+     > docs ne menjaju otisak izvora, pa nijedan marker nije pao.
+
+     **Verdikt review-a `#409`: `GO ZA MERGE`** — `P0 0`, `P1 0`, `P2 0 novih`,
+     četiri neblokirajuća `P3`, CI `GREEN`. Potvrđeno je i ono što je trebalo:
+     *„produkcioni `AmbSaldoPoNalogu` zaista poziva `KnjigaZaCitanje`, pa novi audit
+     režim ne zaobilazi postojeću integritetnu kapiju"*.
+
+     **Četvrti `P3`, njihov nalaz i moja greška:** `#211` meri `Err.Number <> 0`, a
+     ne **baš** `AMB_ERR_KNJIGA_KVAR` — pa bi i nepovezana VBA greška zadovoljila
+     tvrdnju *„audit režim NE slabi čitaoca"*. Orakl je širi od pravila koje meri.
+     Konstanta je `Private` u `modAmbalaza`, pa tvrdnja traži ili javni ulaz ili
+     merenje teksta poruke. **Ne ispravlja se u `#409`** (review: *„ne bih sada
+     dodavao ništa drugo"*) — ide uz rez `KI-009`, koji ionako dira testove.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
