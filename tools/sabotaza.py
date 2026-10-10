@@ -5174,6 +5174,35 @@ SABOTAZE = {
     # Provera koja nije registrovana je isto sto i provera koje nema. Pre 10c-int je
     # modIntegritet nad kanonskom knjigom cutao, a ekran je operateru pisao "nema
     # nalaza" -- ne zato sto je knjiga bila cista nego zato sto je nije ni otvorio.
+    # Skup aktivnih zaglavlja je jedini izvor odluke "sme li papir". Ako u njemu
+    # ostanu i stornirana, kapija iznad je placebo -- uvek prolazi.
+    "amb-stampa-skup-ne-izbacuje-storno": (
+        "modAmbalaza.bas",
+        "    data = ExcludeStornirano(data, TBL_AMBALAZA_DOKUMENT)\n",
+        "    ' SABOTAZA: skup nosi i stornirana zaglavlja\n",
+        "T_AmbStampa_StornoOdbijaPapir",
+        "storniran dokument ispada iz skupa aktivnih",
+    ),
+    # Kapija na granici komande. Pre KI-009 je nije bilo, a komentar je tvrdio da
+    # je AmbDokRedMapa sprovodi -- original posle storna ostaje u toj mapi, pa je
+    # tvrdnja bila netacna.
+    "amb-stampa-ne-pita-za-storno": (
+        "modIzvestaj.bas",
+        "    If Not aktivni.Exists(ambDokID) Then\n",
+        "    If False Then   ' SABOTAZA: stampa ne pita da li je storniran\n",
+        "T_AmbStampa_StornoOdbijaPapir",
+        "stampa storniranog dokumenta je odbijena",
+    ),
+    # Bez zaglavlja je papir ranije nosio tehnicki ADK-<hex> i DANASNJI datum.
+    # Tvrdnja meri RAZLOG odbijanja, ne samo da je odbijeno: druga kapija bi
+    # nepostojec dokument odbila i sama, pa bi "odbijeno" prolazilo i bez ove.
+    "amb-stampa-zaglavlje-nije-obavezno": (
+        "modIzvestaj.bas",
+        "    If Not mapaZag.Exists(ambDokID) Then\n",
+        "    If False Then   ' SABOTAZA: papir sme i bez zaglavlja\n",
+        "T_AmbStampa_StornoOdbijaPapir",
+        "nepostojec dokument se odbija zbog ZAGLAVLJA, bez papira",
+    ),
     "amb-int-skener-ne-gleda-knjigu": (
         "modIntegritet.bas",
         "    Chk_AMB_KnjigaIntegritet\n",

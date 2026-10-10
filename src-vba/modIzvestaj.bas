@@ -4383,20 +4383,41 @@ End Function
 ' Ostali parovi bez stanice su druga stvar: njih sablon stvarno ne pokriva, pa
 ' se odbijaju sa svojim razlogom.
 '
-' Red bira AmbDokRedMapa, koja kontra-stavove PRESKACE -- storniran dokument zato
-' nema aktivan red i stampa se odbija. Fail-closed je namerno: nema papira za
-' dokument koji je povucen.
+' STORNIRAN DOKUMENT SE NE STAMPA -- i to mora da tvrdi KAPIJA, ne komentar.
+'
+' Ovde je stajala recenica da AmbDokRedMapa "kontra-stavove PRESKACE, pa storniran
+' dokument nema aktivan red". NETACNA JE. Storno DODAJE kontra-stav a ORIGINAL ne
+' dira (knjiga je append-only), pa originalu StornoOd ostaje prazan -- a mapa
+' zadrzava bas redove sa praznim StornoOd. Original je time ostajao aktivan i
+' posle storna (KI-009b, nezavisan review 09.10.2026).
+'
+' Kapija stoji OVDE, na granici komande, a ne u mrezi iznad: ReportAmbalaza jeste
+' skriva stornirane, ali StampajReversAmbalaze je Public i svaki drugi pozivalac
+' taj filter zaobilazi. Osvezivac nije kapija.
+'
+' Redosled odbijanja ide od najodredjenijeg razloga ka najsirem: nema zaglavlja ->
+' storniran -> nema poslovni red. Operater tako dobija razlog, a ne simptom.
 Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
     Const SRC As String = "modIzvestaj.StampajAmbDokument"
 
-    Dim mapaRed As Object, mapaZag As Object
+    Dim mapaRed As Object, mapaZag As Object, aktivni As Object
     Set mapaRed = modAmbalaza.AmbDokRedMapa()
     Set mapaZag = modAmbalaza.AmbDokPrikazMapa()
+    Set aktivni = modAmbalaza.AmbDokAktivanSkup()
+
+    If Not mapaZag.Exists(ambDokID) Then
+        Err.Raise vbObjectError + 7508, SRC, _
+                  "Ambalazni dokument nema zaglavlje -- stampa odbijena."
+    End If
+
+    If Not aktivni.Exists(ambDokID) Then
+        Err.Raise vbObjectError + 7509, SRC, _
+                  "Ambalazni dokument je storniran -- stampa odbijena."
+    End If
 
     If Not mapaRed.Exists(ambDokID) Then
         Err.Raise vbObjectError + 7505, SRC, _
-                  "Ambalazni dokument nema aktivan poslovni red (storniran ili " & _
-                  "nepostojeci) -- stampa odbijena."
+                  "Ambalazni dokument nema aktivan poslovni red -- stampa odbijena."
     End If
 
     ' NIZ: vrstaKretanja, tipAmb, kolicina, odTip, odID, naTip, naID
@@ -4428,20 +4449,33 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
         End If
     End If
 
-    Dim broj As String, datum As Date, vrstaDok As String
-    broj = ambDokID
-    datum = Date
-    If mapaZag.Exists(ambDokID) Then
-        Dim z As Variant
-        z = mapaZag(ambDokID)
-        If IsArray(z) Then
-            If Len(Trim$(NzToText(z(0)))) > 0 Then broj = Trim$(NzToText(z(0)))
-            If UBound(z) >= 1 Then vrstaDok = Trim$(NzToText(z(1)))
-            If UBound(z) >= 2 Then
-                If IsDate(z(2)) Then datum = CDate(z(2))
-            End If
-        End If
+    ' ZAGLAVLJE JE OBAVEZNO, BEZ FALLBACK-A. Ranije se broj postavljao na
+    ' ambDokID a datum na Date PRE citanja zaglavlja, pa bi dokument sa
+    ' pokidanom vezom dao papir sa tehnickim ADK-<hex> i DANASNJIM datumom --
+    ' na dokumentu koji operater potpisuje. Fail-open na papiru (KI-009c).
+    Dim z As Variant
+    z = mapaZag(ambDokID)
+    If Not IsArray(z) Then
+        Err.Raise vbObjectError + 7508, SRC, _
+                  "Zaglavlje ambalaznog dokumenta nije citljivo -- stampa odbijena."
     End If
+    If UBound(z) < 2 Then
+        Err.Raise vbObjectError + 7508, SRC, _
+                  "Zaglavlje ambalaznog dokumenta nije citljivo -- stampa odbijena."
+    End If
+
+    Dim broj As String, datum As Date, vrstaDok As String
+    broj = Trim$(NzToText(z(0)))
+    vrstaDok = Trim$(NzToText(z(1)))
+    If Len(broj) = 0 Then
+        Err.Raise vbObjectError + 7508, SRC, _
+                  "Ambalazni dokument nema poslovni broj -- stampa odbijena."
+    End If
+    If Not IsDate(z(2)) Then
+        Err.Raise vbObjectError + 7508, SRC, _
+                  "Ambalazni dokument nema datum -- stampa odbijena."
+    End If
+    datum = CDate(z(2))
 
     ' Koja strana je STANICA, a koja partner. prijem = stanica PRIMA (ulaz).
     Dim omID As String, pTip As String, pID As String, prijem As Boolean

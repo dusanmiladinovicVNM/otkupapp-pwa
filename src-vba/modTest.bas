@@ -304,6 +304,7 @@ Public Sub RunAllTests()
     RunOne 209
     RunOne 210
     RunOne 211
+    RunOne 212
     RunOne 13
     RunOne 14
     RunOne 15
@@ -780,6 +781,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 209: TestName = "T_AmbBroj_DelimiterPrezivljavaMapu"
         Case 210: TestName = "T_AmbIntegritet_SkenerVidiKanonskuKnjigu"
         Case 211: TestName = "T_AmbKnjigaNalazi_SakupljaUmestoDaDigne"
+        Case 212: TestName = "T_AmbStampa_StornoOdbijaPapir"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -999,6 +1001,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 209: T_AmbBroj_DelimiterPrezivljavaMapu
         Case 210: T_AmbIntegritet_SkenerVidiKanonskuKnjigu
         Case 211: T_AmbKnjigaNalazi_SakupljaUmestoDaDigne
+        Case 212: T_AmbStampa_StornoOdbijaPapir
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -6606,6 +6609,7 @@ Private Sub T_AmbKnjigaNalazi_SakupljaUmestoDaDigne()
     Dim revDok As String, revBroj As String
     Dim ambID As String, naTipPre As String
     Dim nalazi As Collection, nadjen As Boolean, dignuto As Boolean
+    Dim razlogCitanja As String
     Dim i As Long, stavka As Variant
 
     AmbSejRevers 2, revDok, revBroj
@@ -6628,6 +6632,7 @@ Private Sub T_AmbKnjigaNalazi_SakupljaUmestoDaDigne()
     On Error Resume Next
     modAmbalaza.AmbSaldoPoNalogu AMB_NALOG_STANICA
     dignuto = (Err.Number <> 0)
+    razlogCitanja = Err.description
     Err.Clear
     On Error GoTo 0
 
@@ -6640,6 +6645,78 @@ Private Sub T_AmbKnjigaNalazi_SakupljaUmestoDaDigne()
              "sakupljac vidi pokvaren red i vraca ga kao nalaz"
     AssertEq dignuto, True, _
              "audit rezim NE slabi citaoca -- saldo i dalje pada fail-closed"
+    ' Review #409 (P3): prva verzija je merila samo Err.Number <> 0, pa bi je
+    ' zadovoljila i nepovezana VBA greska. AMB_ERR_KNJIGA_KVAR je Private u
+    ' modAmbalaza, pa se umesto broja meri TEKST koji pise sam ugovor knjige.
+    ' Javni ulaz zbog jedne tvrdnje se ne otvara.
+    AssertEq (InStr(1, razlogCitanja, "Red knjige ", vbTextCompare) > 0), True, _
+             "greska dolazi iz ugovora knjige, ne bilo koja VBA greska"
+End Sub
+
+' 212. STORNIRAN DOKUMENT NE DOBIJA PAPIR (KI-009).
+'
+' Dva kvara u jednom rezu, i mere se zajedno jer su spojeni: ekran nije poznavao
+' DOK_TIP_AMBALAZA_DOKUMENT (pa stampa nije ni bila dosegnuta), a kad bi se taj
+' Case dodao, storniran dokument bi se odstampao -- storno DODAJE kontra-stav a
+' original ne dira, pa AmbDokRedMapa original zadrzava.
+'
+' Ide kroz PRODUKCIONE pisce: nabavka -> revers -> StornirajAmbDokument_TX, pa
+' javni StampajReversAmbalaze. Nista se ne seje rucno u tabele.
+'
+' Redosled tvrdnji je biran da svaka sabotaza obori SVOJU prvu: sabotaza nad
+' skupom aktivnih pada na tvrdnji o skupu i do stampe nikad ne stigne, a sabotaza
+' nad kapijom prolazi skup pa pada na tvrdnji o odbijanju.
+'
+' Poslednja tvrdnja cuva AMBALAZA.md 6.8: pregled kretanja storniran dokument
+' SKRIVA, kartica ga PRIKAZUJE. Bez nje bi popravka tiho pojela tu asimetriju.
+Private Sub T_AmbStampa_StornoOdbijaPapir()
+    Dim revDok As String, revBroj As String
+    Dim odbijeno As Boolean, razlog As String, kartK As Variant
+    Dim razlogNema As String
+
+    AmbSejRevers 5, revDok, revBroj
+    AssertEq (Len(revBroj) > 0), True, "preduslov: revers ima poslovni broj"
+    AssertEq modAmbalaza.AmbDokAktivanSkup().Exists(revDok), True, _
+             "preduslov: nestorniran dokument JESTE u skupu aktivnih"
+
+    AssertEq modAmbalaza.StornirajAmbDokument_TX(revDok), True, _
+             "preduslov: storno dokumenta je izvrsen"
+
+    AssertEq modAmbalaza.AmbDokAktivanSkup().Exists(revDok), False, _
+             "storniran dokument ispada iz skupa aktivnih"
+
+    On Error Resume Next
+    modIzvestaj.StampajReversAmbalaze revDok, DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    odbijeno = (Err.Number <> 0)
+    razlog = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    kartK = modIzvestaj.ReportKarticaKooperanta(FX_KOOPERANT, _
+                                                DateAdd("d", -1, Date), _
+                                                DateAdd("d", 1, Date))
+
+    AssertEq odbijeno, True, _
+             "stampa storniranog dokumenta je odbijena"
+    AssertEq (InStr(1, razlog, "storniran", vbTextCompare) > 0), True, _
+             "odbijanje imenuje STORNO, a ne drugi razlog"
+    AssertEq KarticaImaBroj(kartK, 2, revBroj), True, _
+             "kartica i dalje prikazuje storniran dokument (6.8)"
+
+    ' NEPOSTOJEC DOKUMENT -- prva kapija. Ranije se broj postavljao na
+    ' ambDokID a datum na Date PRE citanja zaglavlja, pa bi dokument bez
+    ' zaglavlja dobio papir sa tehnickim ADK-<hex> i danasnjim datumom
+    ' (KI-009c). Meri se RAZLOG, ne samo odbijanje: bez zaglavlja i druga
+    ' kapija odbija, pa bi tvrdnja "odbijeno" prosla i sa ugasenom prvom.
+    On Error Resume Next
+    modIzvestaj.StampajReversAmbalaze "ADK-NEPOSTOJI", _
+                                      DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    razlogNema = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq (InStr(1, razlogNema, "zaglavlje", vbTextCompare) > 0), True, _
+             "nepostojec dokument se odbija zbog ZAGLAVLJA, bez papira"
 End Sub
 
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _

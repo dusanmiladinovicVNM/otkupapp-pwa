@@ -1390,6 +1390,40 @@ End Function
 '
 ' Datum se cuva kao SIROVA vrednost celije, ne kao tekst: tekstualni datum je
 ' vec jednom pojeo stanicu iz opisa, jer je IsDate nad "8.10.2026." False.
+' AKTIVNA ZAGLAVLJA -- skup AmbDokID-eva koji NISU stornirani.
+'
+' Ide kroz modHelpers.ExcludeStornirano, a ne kroz novo poredjenje: semantika
+' vrednosti "Da" vec zivi u DVE privatne kopije (modStorno.IsStorniranoValue i
+' modProductionHealthCheck.IsStorniranoValue). Treca bi bila treca stvar koja moze
+' da divergira -- isti rod greske koji je HARD/SOFT paritet vec naplatio.
+'
+' ZASTO SKUP, A NE ZASTAVICA U AmbDokPrikazMapa: tu mapu cita i KARTICA, koja po
+' AMBALAZA.md 6.8 storniran dokument mora da PRIKAZE. Filtriranje te mape bi joj
+' pojelo poslovni broj bas za povucene dokumente -- a ta asimetrija (pregled
+' skriva, kartica prikazuje) je tvrdnja, ne navika.
+Public Function AmbDokAktivanSkup() As Object
+    Const SRC As String = "modAmbalaza.AmbDokAktivanSkup"
+
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set AmbDokAktivanSkup = res
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA_DOKUMENT)
+    data = ExcludeStornirano(data, TBL_AMBALAZA_DOKUMENT)
+    If Not IsArray(data) Then Exit Function
+
+    Dim cID As Long
+    cID = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, SRC)
+
+    Dim i As Long, k As String
+    For i = 1 To UBound(data, 1)
+        k = AmbText(data(i, cID))
+        If Len(k) > 0 Then res(k) = True
+    Next i
+End Function
+
 Public Function AmbDokPrikazMapa() As Object
     Const SRC As String = "modAmbalaza.AmbDokPrikazMapa"
 
