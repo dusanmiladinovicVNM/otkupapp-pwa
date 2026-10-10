@@ -6735,15 +6735,26 @@ End Sub
 ' njega -- dakle ceo produkcioni lanac se vrti, samo se papir ne pravi. Zato je
 ' pozitivna tvrdnja stvarna, a ne zamena.
 '
-' STA OVAJ TEST NE TVRDI: sadrzaj papira. Sa ugasenim izlazom nema sta da se
-' procita; tvrdi se da lanac prolazi do izlaza bez greske.
+' STA OVAJ TEST NE TVRDI: da je papir napravljen, ni sta na njemu pise.
+' Dva razloga, oba imenovana: izlaz je ugasen, pa nema sta da se procita; i
+' OutputIzdavanjeAmbalaze ima SOPSTVENI On Error GoTo EH koji gresku samo
+' loguje -- dakle "nema greske" ne bi bio orakl uspeha ni sa ukljucenim PDF-om
+' (P3, review 10.10.2026). Tvrdi se tacno ovo: aktivan REVERS prolazi SVE
+' kapije i stize do izlaza. Sadrzaj papira ostaje na rucnom smoke-u.
 Private Sub T_AmbStampa_NabavkaNeDobijaReversSablon()
     Dim revDok As String, revBroj As String
     Dim nabDok As String, nabBroj As String, modePre As String
     Dim greskaNab As String, greskaRev As String
+    Dim errNumT213 As Long, errDescT213 As String
 
     modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
     SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "OFF"
+
+    ' BEZUSLOVAN POVRATAK KONFIGURACIJE (P3, review 10.10.2026). Bez ovoga bi
+    ' neocekivana greska u pisacima preskocila vracanje, pa bi rezim stampe
+    ' ostao OFF i SLEDECI testovi bi radili nad promenjenim stanjem.
+    ' CleanupPosleTesta resetuje UI i test seam-ove, ali NE ovu vrednost.
+    On Error GoTo CleanUp
 
     nabBroj = "NAB-SAB-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
     nabDok = modAmbalaza.NabaviAmbalazu_TX(Date, FX_STANICA, FX_TIP_AMB, 7, _
@@ -6759,15 +6770,21 @@ Private Sub T_AmbStampa_NabavkaNeDobijaReversSablon()
     Err.Clear
     On Error GoTo 0
 
-    ' Config se vraca PRE tvrdnji -- inace ostaje ugasen tudjim testovima.
+CleanUp:
+    errNumT213 = Err.Number
+    errDescT213 = Err.description
+    On Error Resume Next
     SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNumT213 <> 0 Then Err.Raise errNumT213, "modTest." & "T_AmbStampa_NabavkaNeDobijaReversSablon", _
+                                     errDescT213
 
     AssertEq (Len(nabDok) > 0), True, "preduslov: nabavka je upisana"
     AssertEq (Len(revDok) > 0), True, "preduslov: revers je upisan"
     AssertEq (InStr(1, greskaNab, "sablon", vbTextCompare) > 0), True, _
              "NABAVKA ne dobija reversov sablon -- odbijena je"
     AssertEq greskaRev, "", _
-             "aktivan REVERS prolazi ceo lanac stampe bez greske"
+             "aktivan REVERS prolazi sve kapije i stize do izlaza"
 End Sub
 
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _
