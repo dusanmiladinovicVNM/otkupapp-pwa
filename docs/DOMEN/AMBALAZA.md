@@ -2170,7 +2170,18 @@ nosi.
 — kapija je odbija, a ekran nudi samo storno; ispravka naseg reversa ne sme da postane
 kupcev revers (`NOVUNOS_ERR_ISPR_REV_KUPAC`).
 
-*Provera:* `modTest` 214–219 · sabotaze `amb-isprrev-*` (deset).
+**Tacno jedan poslovni red (review `#414`, P2).** `AMB-INV-10` dozvoljava dokument sa
+vise originalnih redova, a forma prikazuje samo prvi, dok storno povlaci sve. Zato
+kapija ispravke broji poslovne redove (`AmbDokBrojPoslovnihRedova`, strogo) i trazi
+**tacno jedan**. Definicija reda je jedna (`PoslovniRedDokumenta`) i deli je mapa
+prikaza `AmbDokRedMapa`.
+
+**Pad posle traga vraca sve (review `#414`, P3).** `CreateCorrectionContext` /
+`CompleteCorrectionContext` commit-uju svoje transakcije unutar ispravke, a spoljni
+snapshot `tblStornoVeze` ih vraca. Meri se seam-om tik pre commit-a
+(`IspravkaReversaPadniTest`, samo test rezim).
+
+*Provera:* `modTest` 214–221 · sabotaze `amb-isprrev-*` (dvanaest).
 
 > **NALAZ IZ `10b-1`, ZA `10b-2`: tabela tokom prelaza nosi DVA OBLIKA REDA.**
 > Pisac ne upisuje stare kolone (`Smer`, `EntitetID`, `VozacID`) -- kopija bi bila

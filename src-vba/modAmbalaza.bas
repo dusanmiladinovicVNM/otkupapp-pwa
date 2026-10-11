@@ -36,6 +36,12 @@ Public Const AMB_ERR_STORNO As Long = vbObjectError + 4476
 Private Const AMB_ERR_KNJIGA_KVAR As Long = vbObjectError + 4473
 Private Const AMB_ERR_KNJIGA_ULAZ As Long = vbObjectError + 4474
 
+' TEST SEAM (10d, review #414 P3): pad ispravke reversa NEPOSREDNO pre commit-a,
+' kad su storno, nov revers, trag i veza vec napisani. Jedini nacin da se izmeri
+' da spoljni snapshot vraca i red koji je ugnjezdeni CreateCorrectionContext vec
+' commit-ovao. Tvrdo gejtovan test rezimom; modTest.ResetSeamova ga gasi.
+Private mIspravkaPadPreCommit As Boolean
+
 ' ============================================================
 ' Helpers
 ' ============================================================
@@ -2607,7 +2613,7 @@ End Function
 ' kupcev broj i svoj niz, pa njegova ispravka nije ista radnja; nabavka i otpis
 ' se ne ispravljaju ovim putem. Za sve njih ostaje storno.
 Public Function IspravkaReversaRazlog(ByVal ambDokID As String) As String
-    Dim redovi As Collection, vrsta As String
+    Dim redovi As Collection, vrsta As String, nPoslovnih As Long
     On Error GoTo EH
 
     ambDokID = Trim$(ambDokID)
@@ -2636,11 +2642,31 @@ Public Function IspravkaReversaRazlog(ByVal ambDokID As String) As String
                                 "' je " & vrsta & ". Takav dokument se stornira i unosi ponovo."
         Exit Function
     End If
+
+    ' TACNO JEDAN POSLOVNI RED (review #414, P2). Zamena se pise iz forme kao
+    ' JEDAN red, a storno povlaci SVE originalne redove dokumenta. AMB-INV-10
+    ' dozvoljava dokument sa vise redova (dva tipa ambalaze, oba smera prema
+    ' istom partneru), a forma prikazuje samo prvi -- pa bi ispravka tiho
+    ' zamenila dva kretanja jednim, i to ono koje operater nije video. Nula je
+    ' zaglavlje bez knjige, dakle kvar, i takodje pada. Merenje ide POSLEDNJE:
+    ' jedino ono cita celu knjigu.
+    nPoslovnih = AmbDokBrojPoslovnihRedova(ambDokID)
+    If nPoslovnih <> 1 Then
+        IspravkaReversaRazlog = "Revers '" & ambDokID & "' nema tacno jedan poslovni red u knjizi (" & _
+                                CStr(nPoslovnih) & ") -- zamena iz forme ne bi bila ista radnja. " & _
+                                "Storniraj ga i unesi ponovo."
+        Exit Function
+    End If
     Exit Function
 EH:
     ' FAIL-CLOSED: kapija koja ne moze da procita zaglavlje ne pusta ispravku.
     IspravkaReversaRazlog = "Revers se ne moze proveriti za ispravku: " & Err.description
 End Function
+
+' Podmetni pad ispravke reversa tik pre commit-a. ISKLJUCIVO iz test modula.
+Public Sub IspravkaReversaPadniTest(ByVal onOff As Boolean)
+    mIspravkaPadPreCommit = onOff
+End Sub
 
 ' ISPRAVKA NASEG REVERSA (10d) -- JEDAN POTEZ, kao IspravkaOtkupa_TX (B-040).
 '
@@ -2739,6 +2765,10 @@ Public Function IspravkaReversa_TX(ByVal stariAmbDokID As String, ByVal datum As
         Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, "Trag ispravke nije zatvoren -- vidi Log."
     End If
 
+    If mIspravkaPadPreCommit And IsTestMode() Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, "TEST: podmetnut pad ispravke pre commit-a."
+    End If
+
     tx.CommitTx
     Set tx = Nothing
 
@@ -2771,8 +2801,12 @@ End Function
 '   kontra-stav (StornoOd)   nije dogadjaj nego njegov inverz
 '   ULAZ_TUDJE_AMBALAZE      pokrice deficita -- posledica, ne posao dokumenta
 '                            (AmbVrstaJeZahtev je i zove 'posledica')
-' Ostaje POSLOVNI red; ambalazni dokument ih po konstrukciji ima tacno jedan,
-' pa se uzima PRVI i ostali se ne gledaju.
+' Ostaje POSLOVNI red. Danasnji pisci ambalaznog dokumenta pisu tacno jedan, pa
+' se uzima PRVI -- ali AMB-INV-10 dozvoljava i vise (dva tipa ambalaze, oba
+' smera prema istom partneru). Mapa je PRIKAZ i tu pretpostavku sme da nosi;
+' kapija koja na njoj odlucuje ne sme (IspravkaReversaRazlog broji kroz
+' AmbDokBrojPoslovnihRedova, review #414 P2). Definicija reda je JEDNA:
+' PoslovniRedDokumenta.
 '
 ' Vrednost je PAKOVAN STRING, ne ugnjezden objekat: late-bound Dictionary nema
 ' Property Set, pa `Set d(kljuc) = objekat` puca.
@@ -2794,11 +2828,8 @@ Public Function AmbDokRedMapa() As Object
     Dim kol As Object, vrste As Object
     Set kol = KnjigaZaCitanje(data, SRC, vrste)
 
-    Dim cDokTip As Long, cDokID As Long, cVK As Long, cTipA As Long
+    Dim cVK As Long, cTipA As Long
     Dim cKol As Long, cOdT As Long, cOdI As Long, cNaT As Long, cNaI As Long
-    Dim cSt As Long
-    cDokTip = kol(COL_AMB_DOK_TIP)
-    cDokID = kol(COL_AMB_DOK_ID)
     cVK = kol(COL_AMB_VRSTA_KRETANJA)
     cTipA = kol(COL_AMB_TIP)
     cKol = kol(COL_AMB_KOLICINA)
@@ -2806,32 +2837,23 @@ Public Function AmbDokRedMapa() As Object
     cOdI = kol(COL_AMB_OD_ID)
     cNaT = kol(COL_AMB_NA_TIP)
     cNaI = kol(COL_AMB_NA_ID)
-    cSt = kol(COL_AMB_STORNO_OD)
 
-    Dim i As Long, dokID As String, vk As String
+    Dim i As Long, dokID As String
     For i = 1 To UBound(data, 1)
-        If RedDoticeKnjigu(data, i, kol) Then
-            If StrComp(AmbText(data(i, cDokTip)), DOK_TIP_AMBALAZA_DOKUMENT, _
-                       vbTextCompare) = 0 Then
-                dokID = AmbText(data(i, cDokID))
-                vk = AmbText(data(i, cVK))
-                If Len(dokID) > 0 And Len(AmbText(data(i, cSt))) = 0 Then
-                    If StrComp(vk, AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0 Then
-                        If Not d.Exists(dokID) Then
-                            ' NIZ, ne spojen string: TipAmbalaze je operaterski
-                            ' podatak iz lookup tabele, pa i on sme da nosi '|'
-                            ' -- ista rupa kao kod poslovnog broja (P2,
-                            ' 08.10.2026). Indeksi su ugovor citaoca.
-                            d.Add dokID, Array(vk, _
-                                               AmbText(data(i, cTipA)), _
-                                               CDbl(nz(data(i, cKol), 0)), _
-                                               AmbText(data(i, cOdT)), _
-                                               AmbText(data(i, cOdI)), _
-                                               AmbText(data(i, cNaT)), _
-                                               AmbText(data(i, cNaI)))
-                        End If
-                    End If
-                End If
+        dokID = PoslovniRedDokumenta(data, i, kol)
+        If Len(dokID) > 0 Then
+            If Not d.Exists(dokID) Then
+                ' NIZ, ne spojen string: TipAmbalaze je operaterski
+                ' podatak iz lookup tabele, pa i on sme da nosi '|'
+                ' -- ista rupa kao kod poslovnog broja (P2,
+                ' 08.10.2026). Indeksi su ugovor citaoca.
+                d.Add dokID, Array(AmbText(data(i, cVK)), _
+                                   AmbText(data(i, cTipA)), _
+                                   CDbl(nz(data(i, cKol), 0)), _
+                                   AmbText(data(i, cOdT)), _
+                                   AmbText(data(i, cOdI)), _
+                                   AmbText(data(i, cNaT)), _
+                                   AmbText(data(i, cNaI)))
             End If
         End If
     Next i
@@ -2841,6 +2863,47 @@ EH:
     ' Citalac liste ne sme da obori ekran: prazna mapa daje dokument bez detalja,
     ' a razlog ostaje u logu. Kapije koje sude ispravnost knjige su drugde.
     LogErr SRC
+End Function
+
+' POSLOVNI RED AMBALAZNOG DOKUMENTA -- JEDNA definicija, za mapu prikaza
+' (AmbDokRedMapa) i za kapiju ispravke (AmbDokBrojPoslovnihRedova). Dve kopije
+' bi se razisle, a razlika bi se videla tek kao ispravka koja povuce red koji
+' forma nije prikazala.
+'
+' Vraca AmbDokID kome red (data, i) pripada kao POSLOVNI red, inace "".
+' Nije poslovni red: red van knjige, red tudjeg tipa dokumenta, kontra-stav
+' (StornoOd) i pokrice deficita (ULAZ_TUDJE_AMBALAZE -- posledica, ne posao).
+Private Function PoslovniRedDokumenta(ByRef data As Variant, ByVal i As Long, _
+                                      ByRef kol As Object) As String
+    If Not RedDoticeKnjigu(data, i, kol) Then Exit Function
+    If StrComp(AmbText(data(i, kol(COL_AMB_DOK_TIP))), DOK_TIP_AMBALAZA_DOKUMENT, _
+               vbTextCompare) <> 0 Then Exit Function
+    If Len(AmbText(data(i, kol(COL_AMB_STORNO_OD)))) > 0 Then Exit Function
+    If StrComp(AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA))), AMB_VK_ULAZ_TUDJE, _
+               vbTextCompare) = 0 Then Exit Function
+    PoslovniRedDokumenta = AmbText(data(i, kol(COL_AMB_DOK_ID)))
+End Function
+
+' Broj POSLOVNIH redova jednog ambalaznog dokumenta -- STROGO.
+'
+' Za razliku od AmbDokRedMapa (prikaz, guta greske), ovo je ulaz u KAPIJU:
+' greska u citanju knjige se DIZE, jer kapija ne sme da procita "jedan" iz
+' knjige koju nije procitala do kraja. Integritet knjige ide kroz isti ulaz kao
+' kod svakog citaoca (KnjigaZaCitanje).
+Private Function AmbDokBrojPoslovnihRedova(ByVal ambDokID As String) As Long
+    Const SRC As String = "modAmbalaza.AmbDokBrojPoslovnihRedova"
+    Dim data As Variant, kol As Object, vrste As Object
+    Dim i As Long, n As Long
+
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+    Set kol = KnjigaZaCitanje(data, SRC, vrste)
+
+    For i = 1 To UBound(data, 1)
+        If StrComp(PoslovniRedDokumenta(data, i, kol), Trim$(ambDokID), _
+                   vbTextCompare) = 0 Then n = n + 1
+    Next i
+    AmbDokBrojPoslovnihRedova = n
 End Function
 
 ' POVRAT PRAZNIH OD KUPCA BEZ PRIJEMNICE -- KUPCEV DOKUMENT (AMB-10-ODL-23).

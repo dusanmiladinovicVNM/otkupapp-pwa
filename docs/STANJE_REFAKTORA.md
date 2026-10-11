@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 11.10.2026 (stavka 117, `10d` ispravka reversa).
+**Ažurirano:** 11.10.2026 (stavka 118, review `#414`).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** kod ✅, čeka reviewer GO (stavka 117) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** kod ✅ + review `P2` zatvoren, čeka reviewer GO (stavke 117–118) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -2661,6 +2661,55 @@
 
      **Ostaje:** odluka o REŠI KASNIJE za revers (nalaz 2); ispravka kupčevog reversa ne
      postoji (glasno, kapija je odbija); `KI-010`; `B5b`; `10e`.
+
+118. **Review `#414` (`c53c7394`): `P2` jednoznačnosti poslovnog reda — i jedan `P3`
+     koji je bio nemeren i kod otkupa** (11.10.2026).
+
+     Verdikt: `NO-GO` za merge, `GO` za nastavak i ciljane testove posle `P2`.
+     `P0 0`, `P1 0`, `P2 1`, `P3 2`; static CI `GREEN`.
+
+     **`P2` je stvaran, i širi nego što ga review opisuje.** Kapija je proveravala
+     jedno zaglavlje, ali ne i jedan poslovni red u knjizi. Mapa prikaza
+     (`AmbDokRedMapa`) uzima **prvi** red, storno povlači **sve**. Review piše da je to
+     „rupa nad nejednoznačnim podacima". Merenje kaže da je to **ugovorom dozvoljen
+     oblik**: `AMB-INV-10` izričito pušta dokument sa više originalnih redova (dva tipa
+     ambalaže, oba smera prema istom partneru). Današnji pisac reversa piše jedan red,
+     ali kapija to ne sme da pretpostavi:
+
+     ```
+     ADK-100  REVERS
+       red A  Stanica -> K1  IZDATA_PRAZNA  3     <- forma vidi samo ovaj
+       red B  K1 -> Stanica  POVRAT_PRAZNE  1
+     ispravka -> storno A i B -> upis JEDNOG reda iz forme   (dva kretanja tiho postaju jedno)
+     ```
+
+     **Popravka bez drugog validatora.** Pravilo ide u **postojeću** kapiju
+     (`IspravkaReversaRazlog`), koju već pitaju i ekran i pisac. Definicija „poslovnog
+     reda" izdvojena je u `PoslovniRedDokumenta` i deli je mapa prikaza. Kapija broji
+     kroz **strogu** `AmbDokBrojPoslovnihRedova`, koja grešku čitanja diže, a ne guta,
+     jer kapija ne sme da pročita „jedan" iz knjige koju nije pročitala do kraja. Uslov
+     je tačno jedan: nula je zaglavlje bez knjige, dakle kvar, i takođe pada.
+
+     **`P3` o ugnježdenim transakcijama.** Izmereno: unutrašnji `CommitTx` samo zakazuje
+     snimanje (`OnTime`, 60 s neaktivnosti), a `OnTime` ne prekida kod koji se izvršava,
+     pa snimanje vidi stanje posle spoljnog commit-a ili rollback-a. Rollback reda koji
+     je ugnježdeni `CreateCorrectionContext` već commit-ovao **nije bio meren nigde**: ni
+     ovde, ni kod ispravke otkupa, čiji rollback test pada **pre** traga (na stavci).
+     Zato postoji uzak seam `IspravkaReversaPadniTest`, tvrdo gejtovan test režimom.
+     On obara ispravku tik pre commit-a, kad su storno, nov revers, trag i veza već
+     napisani, a `#221` meri da se vrati **sve**.
+
+     **`P3` o testu `#219`** (forma se ne gradi) je prihvaćen. Raspored polja na pravoj
+     formi ostaje na ručnoj proveri, i ne gradi se nova test platforma.
+
+     **Testovi i sabotaže:** `#220` (dva poslovna reda, napravljena produkcionim
+     primitivima, odbijena u kapiji, pisac odbija **pre** storna, ekran ne nudi zamenu)
+     i `#221` (pad posle traga). Sabotaže `amb-isprrev-vise-poslovnih-redova` i
+     `amb-isprrev-trag-van-snapshota`. Katalog **733 → 735**.
+
+     **Verifikacija:** jeftine kapije zelene. `run_vba` i `dokaz.py` **nisu pušteni**.
+     Review je dao `GO` za ciljane testove posle `P2`, ali sama ispravka `P2` još nije
+     pregledana. Pre prvog prolaza fixture se regeneriše (šema je promenjena u `10d`).
 
 ## Dug sa imenom (posle S5-5b)
 

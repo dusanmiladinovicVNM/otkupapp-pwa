@@ -7578,6 +7578,27 @@ SABOTAZE = {
         "T_AmbIspravkaReversa_EkranNudiIOtvara",
         "snimanje F7 uz otvorenu ispravku pravi ZAMENU starog reversa",
     ),
+    # Kapija pusti revers sa VISE poslovnih redova (review #414, P2): forma
+    # prikaze prvi, storno povuce oba, a zamena iz forme upise jedan -- dva
+    # kretanja tiho postanu jedno. Nula i dalje pada, pa se meri bas "vise".
+    "amb-isprrev-vise-poslovnih-redova": (
+        "modAmbalaza.bas",
+        "    If nPoslovnih <> 1 Then\n",
+        "    If nPoslovnih < 1 Then   ' SABOTAZA: vise poslovnih redova prolazi\n",
+        "T_AmbIspravkaReversa_DvaPoslovnaRedaOdbijena",
+        "revers sa dva poslovna reda se ne ispravlja",
+    ),
+    # Trag ispravke izlazi iz spoljnog snapshota (review #414, P3). Uspesna
+    # ispravka i dalje radi -- CreateCorrectionContext ima svoju transakciju --
+    # ali pad posle traga ostavlja COMPLETED red koji pokazuje na nov revers
+    # koga posle rollback-a nema.
+    "amb-isprrev-trag-van-snapshota": (
+        "modAmbalaza.bas",
+        "    tx.AddTableSnapshot TBL_STORNO_VEZE\n",
+        "    ' SABOTAZA: trag nije u snapshotu\n",
+        "T_AmbIspravkaReversa_PadPosleTragaVracaSve",
+        "rollback posle traga: trag ispravke ne ostaje",
+    ),
 }
 
 

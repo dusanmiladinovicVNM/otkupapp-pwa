@@ -312,6 +312,8 @@ Public Sub RunAllTests()
     RunOne 217
     RunOne 218
     RunOne 219
+    RunOne 220
+    RunOne 221
     RunOne 13
     RunOne 14
     RunOne 15
@@ -563,6 +565,9 @@ End Sub
 ' Novi seam koji samo suzava ide OVDE, ne u pojedinacni test.
 Private Sub ResetSeamova()
     On Error Resume Next
+    ' Podmetnut pad ispravke reversa (221): zaostao seam bi oborio svaku
+    ' sledecu ispravku.
+    modAmbalaza.IspravkaReversaPadniTest False
     modUiScreens.ScrSekcijuZabraniTest ""
     modUiScreens.ScrGradnjuOboriTest False
     modUiScreens.ScrResetCache
@@ -796,6 +801,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 217: TestName = "T_AmbIspravkaReversa_KapijeBezTraga"
         Case 218: TestName = "T_AmbIspravkaReversa_Inv07UMedjukoraku"
         Case 219: TestName = "T_AmbIspravkaReversa_EkranNudiIOtvara"
+        Case 220: TestName = "T_AmbIspravkaReversa_DvaPoslovnaRedaOdbijena"
+        Case 221: TestName = "T_AmbIspravkaReversa_PadPosleTragaVracaSve"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1023,6 +1030,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 217: T_AmbIspravkaReversa_KapijeBezTraga
         Case 218: T_AmbIspravkaReversa_Inv07UMedjukoraku
         Case 219: T_AmbIspravkaReversa_EkranNudiIOtvara
+        Case 220: T_AmbIspravkaReversa_DvaPoslovnaRedaOdbijena
+        Case 221: T_AmbIspravkaReversa_PadPosleTragaVracaSve
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -7123,6 +7132,135 @@ CleanUp:
                                          COL_STORNIRANO))), "DA", _
              "snimanje F7 uz otvorenu ispravku stornira stari revers"
     AssertEq posle, "", "posle uspeha ispravka se gasi -- sledece snimanje je nov dokument"
+End Sub
+
+' 220. ISPRAVKA ODBIJA REVERS SA VISE POSLOVNIH REDOVA (review #414, P2).
+'
+' AMB-INV-10 dozvoljava dokument sa vise originalnih redova -- jedan revers sme
+' istom partneru i da izda i da primi. Forma ispravke prikazuje samo PRVI red
+' (AmbDokRedMapa), a storno povlaci SVE, pa bi zamena iz forme tiho zamenila
+' dva kretanja jednim. Kapija zato trazi TACNO JEDAN poslovni red.
+'
+' Dokument se pravi PRODUKCIONIM primitivima u transakciji testa (UpisiAmbDokument
+' + dva PrenesiAmbalazu), a ne rucnim upisom redova: oblik mora da prodje sve
+' kapije pisca, inace bi test merio kvar podataka umesto dozvoljenog oblika.
+' Danasnji pisac reversa pise jedan red -- ovo je slucaj koji ugovor dozvoljava,
+' a ispravka ne sme da pretpostavi da ga nema.
+' SABOTAZA: amb-isprrev-vise-poslovnih-redova -> pukne "revers sa dva poslovna
+' reda se ne ispravlja".
+Private Sub T_AmbIspravkaReversa_DvaPoslovnaRedaOdbijena()
+    Dim tx As clsTransaction, dokID As String, broj As String, nabBroj As String
+    Dim greska As String, nDok As Long, nKnj As Long, nSv As Long
+    Dim errNum As Long, errDesc As String
+
+    nabBroj = "NAB-2RED-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 5, nabBroj, _
+                                  "preduslov testa dva poslovna reda"
+    broj = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date)
+
+    Set tx = New clsTransaction
+    On Error GoTo EH
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, broj, Date, _
+                                         AMB_NALOG_STANICA, FX_STANICA, "dva poslovna reda")
+    ' Isti neuredjen par {Stanica, Kooperant}, oba smera -- AMB-INV-10 ga pusta.
+    modAmbalaza.PrenesiAmbalazu tx, Date, FX_TIP_AMB, 3, _
+                                AMB_NALOG_STANICA, FX_STANICA, AMB_NALOG_KOOPERANT, FX_KOOPERANT, _
+                                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    modAmbalaza.PrenesiAmbalazu tx, Date, FX_TIP_AMB, 1, _
+                                AMB_NALOG_KOOPERANT, FX_KOOPERANT, AMB_NALOG_STANICA, FX_STANICA, _
+                                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    tx.CommitTx
+    Set tx = Nothing
+    On Error GoTo 0
+
+    AssertEq FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, dokID).count, 2, _
+             "preduslov: revers nosi dva poslovna reda"
+
+    AssertEq (InStr(1, modAmbalaza.IspravkaReversaRazlog(dokID), "tacno jedan poslovni red", _
+                    vbTextCompare) > 0), True, "revers sa dva poslovna reda se ne ispravlja"
+
+    ' Pisac dize ISTU kapiju -- i pre storna, pa knjiga ostaje netaknuta.
+    nDok = IspRevRedova(TBL_AMBALAZA_DOKUMENT)
+    nKnj = IspRevRedova(TBL_AMBALAZA)
+    nSv = IspRevRedova(TBL_STORNO_VEZE)
+    On Error Resume Next
+    modAmbalaza.IspravkaReversa_TX dokID, Date, "", FX_STANICA, FX_TIP_AMB, _
+                                   3, REV_SMER_IZDAVANJE, FX_KOOPERANT, ""
+    greska = Err.description
+    Err.Clear
+    On Error GoTo 0
+    AssertEq (InStr(1, greska, "tacno jedan poslovni red", vbTextCompare) > 0), True, _
+             "pisac odbija revers sa dva poslovna reda istom kapijom"
+    AssertEq IspRevRedova(TBL_AMBALAZA), nKnj, "odbijena ispravka ne dira knjigu"
+    AssertEq IspRevRedova(TBL_AMBALAZA_DOKUMENT), nDok, "odbijena ispravka ne upisuje zaglavlje"
+    AssertEq IspRevRedova(TBL_STORNO_VEZE), nSv, "odbijena ispravka ne ostavlja trag"
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokID, COL_STORNIRANO)), _
+             "", "revers sa dva poslovna reda nije storniran"
+
+    ' Ekran ne nudi zamenu -- isto pitanje, isti odgovor.
+    modScrStorno.Scr_ResetCache
+    modScrStorno.Scr_IzborTestSet STIP_REVERSI, broj, dokID, AMB_DOK_REVERS
+    AssertEq modScrStorno.Scr_BrojAkcija(), 1, "ekran ne nudi zamenu reversa sa dva poslovna reda"
+    modScrStorno.Scr_ResetCache
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "modTest." & "T_AmbIspravkaReversa_DvaPoslovnaRedaOdbijena", errDesc
+End Sub
+
+' 221. PAD POSLE TRAGA VRACA SVE -- i trag koji je ugnjezdeno commit-ovan
+' (review #414, P3).
+'
+' CreateCorrectionContext i CompleteCorrectionContext otvaraju i commit-uju SVOJE
+' transakcije unutar ispravke. Spoljni snapshot tblStornoVeze mora da vrati i te
+' redove kad ispravka padne POSLE njih -- inace ostaje COMPLETED trag koji
+' pokazuje na dokument koji ne postoji. Pad se podmece seam-om tik pre commit-a,
+' kad je SVE vec napisano: storno, nov revers, trag, veza.
+'
+' Ispravka otkupa koristi isti mehanizam, a njen rollback test pada PRE traga
+' (na stavci) -- pa ovo nije bilo mereno ni tamo.
+' SABOTAZA: amb-isprrev-trag-van-snapshota -> pukne "rollback posle traga: trag
+' ispravke ne ostaje".
+Private Sub T_AmbIspravkaReversa_PadPosleTragaVracaSve()
+    Dim revDok As String, revBroj As String, novi As String, greska As String
+    Dim koopPre As Double, nDok As Long, nKnj As Long, nSv As Long
+
+    AmbSejRevers 2, revDok, revBroj
+    AssertEq (Len(revDok) > 0), True, "preduslov: revers je upisan"
+    koopPre = IspRevSaldo(AMB_NALOG_KOOPERANT, FX_KOOPERANT)
+    nDok = IspRevRedova(TBL_AMBALAZA_DOKUMENT)
+    nKnj = IspRevRedova(TBL_AMBALAZA)
+    nSv = IspRevRedova(TBL_STORNO_VEZE)
+
+    modAmbalaza.IspravkaReversaPadniTest True
+    On Error Resume Next
+    novi = modAmbalaza.IspravkaReversa_TX(revDok, Date, "", FX_STANICA, FX_TIP_AMB, _
+                                          2, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    greska = Err.description
+    Err.Clear
+    modAmbalaza.IspravkaReversaPadniTest False
+    On Error GoTo 0
+
+    AssertEq (InStr(1, greska, "podmetnut pad ispravke", vbTextCompare) > 0), True, _
+             "preduslov: ispravka je pala BAS na podmetnutom padu, posle traga"
+    AssertEq IspRevRedova(TBL_STORNO_VEZE), nSv, "rollback posle traga: trag ispravke ne ostaje"
+    AssertEq IspRevRedova(TBL_AMBALAZA_DOKUMENT), nDok, "rollback posle traga: nov revers ne postoji"
+    AssertEq IspRevRedova(TBL_AMBALAZA), nKnj, "rollback posle traga: knjiga je kao pre"
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, revDok, COL_STORNIRANO)), _
+             "", "rollback posle traga: stari revers je aktivan"
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, revDok, _
+                                  COL_TRACE_ZAMENJEN_SA_ID)), "", _
+             "rollback posle traga: stari nema naslednika"
+    AssertEq IspRevSaldo(AMB_NALOG_KOOPERANT, FX_KOOPERANT), koopPre, _
+             "rollback posle traga: saldo kooperanta je kao pre"
+    AssertEq novi, "", "rollback posle traga: pisac ne vraca ID"
 End Sub
 
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _
