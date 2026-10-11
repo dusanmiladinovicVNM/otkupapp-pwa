@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 11.10.2026 (stavka 119, dokaz `#414`).
+**Ažurirano:** 11.10.2026 (stavka 120, ručna provera `#414`).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -2767,6 +2767,42 @@
      pozivaoca**, nego samo testove. Na novoj instalaciji stanica zato počinje od nule, a
      izdavanje praznih se odbija (`AMB-INV-07`). Komentar pisca to izričito predviđa,
      a ulaz na ekranu ne postoji niti je zapisan kao odložen. Izdvojeno kao zaseban zadatak.
+
+120. **Ručna provera `#414` nad kopijom fixture-a — ispravka radi, a usput su izmerena dva
+     stara kvara štampe** (11.10.2026). Review `481e4e91`: `CODE REVIEW GO`; merge čeka
+     ručnu proveru.
+
+     **Potvrđeno (operater, `tests/fixtures/rucna_provera_10d.xlsm`):**
+
+     ```
+     2/IZV (prijem 10)  -> "Zamena reversa" -> F7 popunjen: datum 15.03.2026, stanica,
+                           smer "Prijem koop.", kooperant, 12/1, 10; broj NOV (1/150326-2)
+     kolicina 8, snimi  -> 2/IZV Stornirano=Da, ZamenjenSaID -> nov ADK
+                           1/150326-2 IspravkaOdID = ADK-IZV-2; papir nosi nov broj
+     obican revers      -> 1/150326-3 snimljen, forma ociscena
+     ```
+
+     Vrsta voća se u prefill-u ne popunjava, jer je revers ne čuva, a validacija je traži pa
+     je operater bira. Da li revers treba da čuva vrstu, koju papir nosi, poslovna je odluka
+     za kasnije. **Još čeka:** odustanak bez snimanja, kao i `1/IZV` (dva reda) i `4/IZV`
+     (nabavka), gde se nudi samo storno.
+
+     **`KI-011` — lažan neuspeh posle snimanja reversa.** Posle uspešne ispravke ljuska je
+     javila `Scr_Save -> 9 Subscript out of range`, a forma je ostala popunjena. U logu za
+     taj trenutak nema `ERROR`-a, samo tri uredna commit-a. Uzrok je izmeren u harness-u
+     nad kopijom sveske (bez test režima, sa PDF štampom): `modSetup.LogSetup` ostavlja
+     prigušenu grešku 9 kad lista `SETUP_LOG` nema. Greška putuje kroz `EnsureDocFolder` i
+     štampu do `ScrSave`, koja je posle `Application.Run` čita kao neuspeh. Pogađa i
+     **običan** prijem (3/3 u harness-u), a postoji od `17f44ffa` (27.06.2026). Testovi je ne
+     vide jer gase štampu. **Neobjašnjeno:** drugi, običan revers operatera snimljen je bez
+     greške, iako `SETUP_LOG` ni tada nije postojao.
+
+     **`KI-012` — `1.dec` umesto `12/1` na papiru** (`modPrint.bas:1972`): tip se upisuje u
+     ćeliju opšteg formata, pa ga Excel pretvara u datum. Pogađa svaki revers iz F7.
+
+     **Odluka operatera:** oba kvara idu u **zaseban PR posle `#414`**, a `#414` ostaje sa
+     zelenim dokazom nad `44cb49d0ea21`. Rizik do tada: posle štampe operater vidi lažan
+     neuspeh i nepočišćenu formu, pa obican revers može da snimi dvaput.
 
 ## Dug sa imenom (posle S5-5b)
 
