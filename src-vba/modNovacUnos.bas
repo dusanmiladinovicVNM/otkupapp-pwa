@@ -567,13 +567,19 @@ Public Function SmerRevKljuc(ByVal smer As Long) As String
     End Select
 End Function
 
-Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String) As String
+' `ispravljaAmbDokID` != "" -> upis je ISPRAVKA tog naseg reversa (10d): nov
+' broj, nov AmbDokID, stari storniran -- sve u JEDNOJ transakciji
+' (modAmbalaza.IspravkaReversa_TX). Prazno -> obican nov unos. Jedan ulaz
+' namerno, kao OtkupUpisi: stampa i poruke su isti posao u oba slucaja.
+Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
+                            Optional ByVal ispravljaAmbDokID As String = "") As String
     Dim smer As Long, brDok As String
     Dim errDesc As String
     On Error GoTo EH
     poruke = ""
     smer = L(p, "smerRev")
     brDok = S(p, "brDok")
+    ispravljaAmbDokID = Trim$(ispravljaAmbDokID)
 
     ' REVERS JE AMBALAZNI DOKUMENT (AMB-10-ODL-5, rez 10b-2): ide SVOM piscu,
     ' koji mu pravi zaglavlje u tblAmbalazaDokument i knjizi JEDAN red po smeru.
@@ -581,7 +587,36 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String) As String
     '
     ' Pisac gresku DIZE umesto da vrati False -- i to je bolje: EH ispod je
     ' pretvara u poruku operateru, dok je stari put cutke izlazio.
-    Dim revDokID As String
+    Dim revDokID As String, stariBroj As String
+
+    ' ISPRAVKA NASEG REVERSA (10d). Ide PRE kupceve grane: ispravka naseg reversa
+    ' ostaje nas revers (nas broj, nas niz), pa se peti smer ovde odbija -- inace
+    ' bi zamena tiho postala kupcev dokument sa tudjim brojem, a stari bi ostao
+    ' storniran bez naslednika iste vrste.
+    If Len(ispravljaAmbDokID) > 0 Then
+        If smer = SMER_REV_POVRAT_KUP Then
+            poruke = poruke & Poruka("NOVUNOS_ERR_ISPR_REV_KUPAC")
+            Exit Function
+        End If
+        stariBroj = Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                               ispravljaAmbDokID, COL_AMBD_BROJ)))
+        revDokID = modAmbalaza.IspravkaReversa_TX( _
+            stariAmbDokID:=ispravljaAmbDokID, _
+            datum:=CDate(p("datum")), _
+            broj:=brDok, _
+            stanicaID:=S(p, "stanicaID"), _
+            tipAmb:=S(p, "tipAmb"), _
+            kolicina:=L(p, "kolAmb"), _
+            smer:=SmerRevKljuc(smer), _
+            kooperantID:=S(p, "partnerID"), _
+            vozacID:=S(p, "vozacID"))
+        If Len(revDokID) = 0 Then Exit Function
+        poruke = poruke & Poruka("NOVUNOS_MSG_ISPR_REV_OK") & " " & stariBroj & vbCrLf
+        ' Nov dokument = nov papir (A9: nov broj).
+        StampajRevers p, smer
+        ReversUpisi = BrojIliOznaka(brDok)
+        Exit Function
+    End If
 
     ' POVRAT OD KUPCA IDE SVOM PISCU (AMB-10-ODL-23): dokument je kupcev, nosi
     ' njegov broj i vrstu REVERS_PARTNERA. Zato nije peti red u
@@ -589,10 +624,8 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String) As String
     If smer = SMER_REV_POVRAT_KUP Then
         revDokID = RevKupcaUpisi(p, poruke)
         If Len(revDokID) = 0 Then Exit Function
-        ' ZavrsiIspravkuAko se NE zove: tok ispravke reversa kljuca po
-        ' (broj, stanica, dan), a kupcev revers stanicin niz ne dira -- poziv bi
-        ' mogao da zatvori TUDJU ispravku sa slucajno istim brojem. Ispravka
-        ' kupcevog reversa je svoj tok i jos ne postoji.
+        ' Ispravka kupcevog reversa ne postoji: 10d ispravlja samo NAS revers, a
+        ' kupcev se stornira i unosi ponovo (IspravkaReversaRazlog ga odbija).
         StampajRevers p, smer
         ReversUpisi = BrojIliOznaka(brDok)
         Exit Function
@@ -609,12 +642,10 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String) As String
         vozacID:=S(p, "vozacID"))
     If Len(revDokID) = 0 Then Exit Function
 
-    ' ISPRAVKA reversa (druga faza): ako je revers-ispravka na cekanju,
-    ' upravo snimljeni revers je njena zamena. No-op inace. Stanica i dan idu
-    ' uz broj: broj reversa je jedinstven tek u nizu (stanica, dan), a zamena
-    ' sme na drugu stanicu ili drugi dan.
-    modDokUnos.ZavrsiIspravkuAko FLOW_DOC_REVERS, brDok, poruke, _
-                                 S(p, "stanicaID"), CDate(p("datum"))
+    ' "Druga faza ispravke" (ZavrsiIspravkuAko) je ovde stajala do 10d: stari
+    ' tok je stornirao odmah, a zamenu vezivao pri SLEDECEM snimanju F7. Od 10d
+    ' je ispravka jedan potez (grana iznad), pa obican unos vise nije zamena ni
+    ' za koga -- i ne sme da zatvori tudju ispravku sa slucajno istim brojem.
 
     ' PDF revers - best-effort, isto kao u legacy: pad stampe ne sme da
     ' obori potvrdu upisa (rutina loguje sama).

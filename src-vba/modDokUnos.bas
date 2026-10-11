@@ -1327,100 +1327,11 @@ Private Sub OznaciRucnuIspravku(ByVal cid As String, ByVal razlog As String)
 End Sub
 
 '--------------------------------------------------------- ISPRAVKA
-' Zavrsetak ispravke posle snimanja zamenskog dokumenta.
-'
-' Radi SAMO nad PERSISTENTNOM ispravkom na cekanju (tblStornoVeza), ne nad
-' stanjem sesije. Razlog vazi i sad kad F8 ume da pokrene ispravku: storno
-' se pokrece u jednom rezimu (F8), a zamenski dokument se unosi u drugom
-' (F2/F3/F7), i izmedju to dvoje operater sme da zatvori Excel. Persistentan
-' zapis to prezivljava, promenljiva u modulu ne bi.
-'
-' SAFE-STOP kao u legacy: dve ili vise otvorenih ispravki istog tipa = ne
-' biraj naslepo, nego pusti operatera kroz "Osiroceni dokumenti".
-'
-' PRIJEMNICA NIJE U OVOM SELECT-u namerno: njena ispravka nije samo zatvaranje
-' konteksta nego i prevezivanje paleta, koje mora da krene PRE upisa
-' (SetPaletizeSkip). Zato ima svoj tok - PrepoznajIspravkuPrijemnice u
-' PrijemnicaValidiraj i PreveziPaleteIspravke u PrijemnicaUpisi.
-'
-' PUBLIC je zbog modNovacUnos (revers, F7): pravilo "posle zamenskog dokumenta
-' zavrsi ispravku" je isto za sva tri tipa, pa se zove odavde umesto da se
-' prepise u treci modul.
-'
-' stanicaID / datum nosi samo revers: pisac vraca samo uspeh, pa
-' CompleteReversIspravka ReversID zamene nalazi po (broj, stanica, dan) --
-' zamena sme na drugu stanicu ili drugi dan. Ostali tipovi ih ne citaju.
-Public Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, _
-                             ByRef poruke As String, _
-                             Optional ByVal stanicaID As String = "", _
-                             Optional ByVal datum As Variant = Empty)
-    Dim cnt As Long, cid As String, res As Object
-    On Error GoTo EH
-    newBroj = Trim$(newBroj)
-    If Len(newBroj) = 0 Then Exit Sub
-
-    cnt = modStornoContext.CountPendingCorrectionsByDocType(docType, SV_MODE_ISPRAVKA)
-    If cnt = 0 Then Exit Sub                    ' nema ispravke -> obican unos
-    If cnt > 1 Then
-        poruke = poruke & Poruka("DOKUNOS_MSG_VISE_ISPRAVKI") & vbCrLf
-        Exit Sub
-    End If
-
-    cid = modStornoContext.FindLatestPending(docType, SV_MODE_ISPRAVKA)
-    If Len(cid) = 0 Then Exit Sub
-
-    ' Potvrda je obavezna: operater je mozda napustio ispravku pa uneo DRUGI
-    ' dokument - automatsko vezivanje bi tada spojilo pogresna dva.
-    If MsgBox(ZavrsiIspravkuPitanje(docType, cid, newBroj, stanicaID, datum), _
-              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
-
-    ' ZBIRNE VISE NEMA OVDE (S4-3a). Ispravka zbirne je bila DVOKORAK -- storno
-    ' sada, zamena kasnije -- pa je ovo bio "kasnije". ZBR-KANON-03 taj mod
-    ' ukida; do S6 zbirna se ne ispravlja nego stornira (DUPLI/PONISTENJE).
-    Select Case docType
-        Case FLOW_DOC_REVERS:     Set res = CompleteReversIspravka(cid, newBroj, stanicaID, datum)
-        Case Else: Exit Sub
-    End Select
-
-    If res Is Nothing Then Exit Sub
-    If CBool(res("success")) Then
-        poruke = poruke & Poruka("DOKUNOS_MSG_ISPRAVKA_OK") & " " & CStr(res("message")) & vbCrLf
-    Else
-        poruke = poruke & Poruka("DOKUNOS_MSG_ISPRAVKA_NIJE") & " " & CStr(res("message")) & vbCrLf
-    End If
-    Exit Sub
-EH:
-    LogErr "modDokUnos.ZavrsiIspravkuAko"
-End Sub
-
-' Pitanje pre vezivanja zamene za ispravku na cekanju. Ispravka se bira po TIPU
-' (jedna otvorena ispravka tog tipa), pa je ovo pitanje jedina kapija protiv
-' vezivanja pogresnog dokumenta. Za revers zato nosi i STANICU i DAN oba
-' dokumenta: broj reversa je jedinstven tek u nizu (stanica, dan), pa bi
-' "'45' -> '45'?" izgledalo isto i kad je snimljen tudj revers istog broja na
-' drugoj stanici -- a jedno "Da" bi zatvorilo pogresnu ispravku.
-' Stari revers se cita iz traga (OldDocID = ReversID; stanica i dan iz njegovih
-' nogu Stanica), novi iz snimanja.
-' Za ostale tipove tekst je nepromenjen. PUBLIC zbog testa: MsgBox se ne meri.
-Public Function ZavrsiIspravkuPitanje(ByVal docType As String, ByVal cid As String, _
-                                      ByVal newBroj As String, _
-                                      Optional ByVal stanicaID As String = "", _
-                                      Optional ByVal datum As Variant = Empty) As String
-    Dim oldBroj As String, oldID As String, oldOpis As String, newOpis As String
-    Dim oldSt As String, oldDan As Long
-    oldBroj = modStornoContext.GetCorrectionField(cid, COL_SV_OLD_BROJ)
-    If docType = FLOW_DOC_REVERS Then
-        oldID = Trim$(modStornoContext.GetCorrectionField(cid, COL_SV_OLD_DOCID))
-        If Len(oldID) > 0 Then
-            If Len(modStorno.ReversStanicaDan(oldID, oldSt, oldDan)) = 0 Then _
-                oldOpis = ReversOpis(oldSt, CDate(oldDan))
-        End If
-        newOpis = ReversOpis(stanicaID, datum)
-    End If
-    ZavrsiIspravkuPitanje = Poruka("DOKUNOS_ASK_ISPRAVKA_1") & " '" & oldBroj & "'" & oldOpis & "." & _
-                            vbCrLf & vbCrLf & _
-                            Poruka("DOKUNOS_ASK_ISPRAVKA_2") & " '" & Trim$(newBroj) & "'" & newOpis & "?"
-End Function
+' ZavrsiIspravkuAko (zavrsetak ispravke pri snimanju zamene) i njegovo pitanje
+' su obrisani u 10d. Poslednji tip koji ga je koristio bio je revers, a njegova
+' ispravka je od 10d JEDAN potez (modAmbalaza.IspravkaReversa_TX) -- nema
+' "druge faze" koju bi snimanje zatvaralo. Prijemnica ima svoj tok
+' (PrepoznajIspravkuPrijemnice / PreveziPaleteIspravke).
 
 ' " (naziv / StanicaID, dd.mm.yyyy)" -- ID ostaje i uz naziv, jer dve stanice
 ' mogu imati slican naziv. "" kad stanica nije poznata.

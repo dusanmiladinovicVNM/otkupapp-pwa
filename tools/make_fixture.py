@@ -2434,6 +2434,11 @@ ENSURE_COLS = {
     # jer SEED od 08.10.2026 upisuje kanonski oblik (jedan red, obe strane).
     "tblAmbalaza": ["ReversID", "OdNalogTip", "OdNalogID", "NaNalogTip",
                     "NaNalogID", "VrstaKretanja", "StornoOd"],
+    # AMB-10d: veza ispravke reversa po ID-u (A9). Kanon ih drzi na KRAJU
+    # tblAmbalazaDokument, a donor (stari fixture) ih nema. Bez njih pisac pada
+    # na SchemaReadyOrFail (kanonski prefiks), pa bi svaki test sa reversom
+    # merio svesku, a ne kod.
+    "tblAmbalazaDokument": ["IspravkaOdID", "ZamenjenSaID"],
 }
 
 # Tabele koje donor NEMA (krug 5: utovarna lista) -- generator ih pravi
@@ -2450,7 +2455,9 @@ ENSURE_TABLES = {
                             ["AmbDokID", "Vrsta", "BrojDokumenta", "Datum",
                              "BrojOwnerTip", "BrojOwnerID", "Napomena",
                              "Stornirano", "CreatedAt", "CreatedBy",
-                             "ModifiedAt", "ModifiedBy"]),
+                             "ModifiedAt", "ModifiedBy",
+                             # AMB-10d (A9): veza ispravke po ID-u, na kraju.
+                             "IspravkaOdID", "ZamenjenSaID"]),
     "tblUtovar": ("Utovar",
                   ["UtovarID", "BrojUtovara", "Godina", "DatumUtovara",
                    "KupacID", "Fakturisano", "FakturaID", "Napomena",

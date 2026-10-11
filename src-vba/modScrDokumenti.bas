@@ -80,6 +80,10 @@ Public Const RUTA_LANAC As String = "LANAC"
 Public Const RUTA_NACRT As String = "NACRT"
 Private mIspravkaOtkupID As String
 Private mIspravkaBroj As String
+' Otvorena ISPRAVKA NASEG REVERSA (10d): sledece snimanje F7 pravi ZAMENU ovog
+' ambalaznog dokumenta -- stari storniran, nov sa novim brojem, u jednom potezu.
+Private mIspravkaAmbDokID As String
+Private mIspravkaRevBroj As String
 Private mIzmenaBroj As String
 
 ' Isto za F3: ZbirnaID nacrta koji je otvoren za izmenu, i njegov broj za
@@ -413,10 +417,59 @@ Public Function RutaPosleUpisa(ByVal otkupID As String, _
 End Function
 
 ' Otkazuje ispravku bloka -- sledece snimanje opet pravi NOV dokument.
+'
+' Gasi i ispravku reversa (10d), iz istog razloga i istom kukom: forma je
+' popunjena starim dokumentom, pa bi posle praznjenja ili promene rezima sledeci
+' "nov" unos tiho postao zamena -- stari storniran, a operater misli da je uneo
+' nov dokument.
 Public Sub Scr_IspravkaOtkazi()
     mIspravkaOtkupID = ""
     mIspravkaBroj = ""
+    mIspravkaAmbDokID = ""
+    mIspravkaRevBroj = ""
 End Sub
+
+' PRIPREMA ISPRAVKE NASEG REVERSA (10d): kapija + forma starog, BEZ stanja.
+' "" = moze, a `spec` je forma za ApplyPrefill; inace razlog.
+'
+' Kapije se NE prepisuju ovde: pita se modAmbalaza.IspravkaReversaRazlog, isti
+' izvor pravila koji pisac dize kao gresku -- obrazac OtvoriIspravkuBloka.
+'
+' STANJE SE OVDE NE POSTAVLJA, i to je razlika od OtvoriIspravkuBloka. Ispravka
+' reversa stize sa ekrana Storno, pa ljuska prvo prelazi u F7 -- a promena
+' rezima gasi otvorenu ispravku (OtkaziIzmenuNacrta -> Scr_IspravkaOtkazi).
+' Stanje upisano pre prelaska bilo bi obrisano pre nego sto operater vidi
+' formu, pa bi snimanje napravilo NOV revers uz stari koji je ostao aktivan.
+' Pozivalac zato zove Scr_IspravkaReversaOtvori tek POSLE prelaska i prefill-a.
+Public Function IspravkaReversaPripremi(ByVal ambDokID As String, _
+                                        Optional ByRef spec As String) As String
+    spec = ""
+    On Error GoTo EH
+    ambDokID = Trim$(ambDokID)
+    IspravkaReversaPripremi = modAmbalaza.IspravkaReversaRazlog(ambDokID)
+    If Len(IspravkaReversaPripremi) > 0 Then Exit Function
+
+    spec = modStornoDok.PrefillIzStorniranog(modStornoDok.STIP_REVERSI, "", ambDokID)
+    If Len(spec) = 0 Then IspravkaReversaPripremi = Poruka("OTKUI_ERR_ISPRAVI_REVERS") & " " & ambDokID
+    Exit Function
+EH:
+    spec = ""
+    IspravkaReversaPripremi = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
+End Function
+
+' Otvara ispravku reversa: SLEDECE snimanje F7 pravi zamenu ovog dokumenta.
+' Vraca broj starog reversa -- za poruku operateru, ne za identitet.
+Public Function Scr_IspravkaReversaOtvori(ByVal ambDokID As String) As String
+    mIspravkaAmbDokID = Trim$(ambDokID)
+    mIspravkaRevBroj = Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                                  mIspravkaAmbDokID, COL_AMBD_BROJ)))
+    Scr_IspravkaReversaOtvori = mIspravkaRevBroj
+End Function
+
+' AmbDokID reversa koji je otvoren za ispravku ("" = nema).
+Public Function Scr_IspravkaReversaID() As String
+    Scr_IspravkaReversaID = mIspravkaAmbDokID
+End Function
 
 ' OtkupID bloka koji je otvoren za ispravku ("" = nema).
 Public Function Scr_IspravkaOtkupID() As String
@@ -2231,12 +2284,17 @@ Private Function SaveRevers(ByVal polja As Object) As String
         Exit Function
     End If
 
-    res = modNovacUnos.ReversUpisi(p, poruke)
+    ' Otvorena ispravka (10d): snimanje pravi ZAMENU tog reversa, ne nov dokument.
+    res = modNovacUnos.ReversUpisi(p, poruke, mIspravkaAmbDokID)
     If Len(res) = 0 Then
         SaveRevers = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
                                                       " " & poruke)
         Exit Function
     End If
+
+    ' Ispravka je uspela -- sledece snimanje je opet nov dokument. Gasi se TEK
+    ' posle uspeha: na gresku operater popravi polja i snimi ponovo.
+    If Len(mIspravkaAmbDokID) > 0 Then Scr_IspravkaOtkazi
 
     Scr_ResetCache
     polja("rezultat") = res

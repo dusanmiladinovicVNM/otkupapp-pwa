@@ -5691,19 +5691,10 @@ SABOTAZE = {
 
     # PAUZA MORA DA BUDE GLASNA. Tiha pauza znaci da malina operater ceka zbirnu
     # koja nikad nece doci -- gore od greske, jer nema sta da prijavi.
-    # NACRT NIJE ZAMENA. Vracanje legacy correction completion-a nad upravo
-    # otvorenim nacrtom prevezuje Otkup.OtpremnicaID (stara veza) i zatvara
-    # correction kontekst nad dokumentom koji jos nema izvore ni status IZDATO.
-    "otp-nacrt-zavrsava-ispravku": (
-        "modDokUnos.bas",
-        "    If modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_OTPREMNICA, _\n",
-        # Legacy poziv se VRACA ispred kapije, koja ostaje -- inace bi se merilo
-        # brisanje poruke umesto vracanja starog toka.
-        "    ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA, S(p, \"brDok\"), poruke\n"
-        + "    If modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_OTPREMNICA, _\n",
-        "Test_OTP_NacrtNijeZavrsetakIspravke",
-        "OTP ispravka: correction NIJE zavrsen nad nacrtom",
-    ),
+    # "otp-nacrt-zavrsava-ispravku" je obrisana u 10d: VRACALA je poziv
+    # ZavrsiIspravkuAko, a te procedure vise nema (ispravka reversa, njen
+    # poslednji korisnik, je od 10d jedan potez). Sabotaza bi obarala COMPILE
+    # umesto tvrdnje. Test_OTP_NacrtNijeZavrsetakIspravke ostaje.
     # --- S3b: citaoci otpremnice citaju stavke -------------------------------
     # Izvestaj po otkupnom mestu spaja klase u jedan red: prijem obe klase se
     # tada sabere i pripise jednoj (u malina modu duplo).
@@ -6822,10 +6813,15 @@ SABOTAZE = {
     # Zaglavlje gubi SVOJU kapiju, a knjiga je zadrzava: pozivalac koji kreira
     # dokument i redove mogao bi da snapshotuje samo knjigu, pa bi rollback
     # vratio redove a ostavio zaglavlje -- siroce.
+    #
+    # Sidro nosi i SLEDECI red: od 10d isti poziv stoji i u jezgru storna
+    # (StornirajAmbDokument), a sabotaza gadja PISCA zaglavlja.
     "amb-inv08-zaglavlje-bez-kapije": (
         "modAmbalaza.bas",
-        "    RequireAmbTxVlasnistvo tx, TBL_AMBALAZA_DOKUMENT, SRC\n",
-        "    ' SABOTAZA: zaglavlje ne proverava vlasnistvo transakcije\n",
+        "    RequireAmbTxVlasnistvo tx, TBL_AMBALAZA_DOKUMENT, SRC\n"
+        "    RequireAmbDokSchema SRC\n",
+        "    ' SABOTAZA: zaglavlje ne proverava vlasnistvo transakcije\n"
+        "    RequireAmbDokSchema SRC\n",
         "Test_Amb_Inv08TxVlasnistvo",
         "AMB-INV-08: zaglavlje bez snapshota SVOJE tabele mora pasti",
     ),
@@ -7478,6 +7474,132 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: nalaz validatora se ignorise\n",
         "Test_Amb_Inv08TxVlasnistvo",
         "ODL-9: pisac mora da ODBIJE kupac -> firma na partnerovom reversu -- validator se zove iz PrenesiAmbalazu",
+    ),
+
+    # --- 10d: ispravka naseg reversa u jednom potezu (modTest 214-219) ------
+    # Ispravka upise nov revers, a stari NE stornira. Pisac i dalje uspeva
+    # (veza, trag, sve), pa bi tvrdnja o ishodu cutala -- crveni se saldo:
+    # kooperant dobije gajbe dvaput za jedan fizicki dogadjaj.
+    "amb-isprrev-bez-storna": (
+        "modAmbalaza.bas",
+        "    StornirajAmbDokument tx, stariAmbDokID\n",
+        "    ' SABOTAZA: storno starog izostaje\n",
+        "T_AmbIspravkaReversa_BrojIDatumNeMenjajuSaldo",
+        "ispravka broja i datuma ne menja saldo kooperanta",
+    ),
+    # Nov upis ne nosi kolicinu sa forme. Razlika vise nije TACNO razlika
+    # izmedju starog i novog -- tvrdnja meri bas to.
+    "amb-isprrev-kolicina-pomerena": (
+        "modAmbalaza.bas",
+        "    noviID = UpisiReversUTx(tx, red, datum, brojK, stanicaID, tipAmb, kolicina, _\n",
+        "    noviID = UpisiReversUTx(tx, red, datum, brojK, stanicaID, tipAmb, kolicina + 1, _\n",
+        "T_AmbIspravkaReversa_KolicinaTacnoZaRazliku",
+        "ispravka 5 -> 3: kooperant ima TACNO 2 manje",
+    ),
+    # Veza novog na stari ide po BROJU umesto po ID-u. A9 to izricito zabranjuje:
+    # broj je labela, i dva dokumenta ga legalno dele u razlicitim nizovima.
+    "amb-isprrev-veza-po-broju": (
+        "modAmbalaza.bas",
+        "    RequireUpdateCell TBL_AMBALAZA_DOKUMENT, rNovi, COL_TRACE_ISPRAVKA_OD_ID, stariAmbDokID, SRC\n",
+        "    RequireUpdateCell TBL_AMBALAZA_DOKUMENT, rNovi, COL_TRACE_ISPRAVKA_OD_ID, stariBroj, SRC\n",
+        "T_AmbIspravkaReversa_NovIdentitetIVezaPoID",
+        "nov revers pokazuje na stari po ID-u (IspravkaOdID)",
+    ),
+    # Trag se ne zatvara: ostaje PENDING red nad zavrsenom ispravkom, pa ekran
+    # Oporavak nudi MANUAL zadatak koji niko ne treba. Veza u tragu postoji od
+    # upisa, pa se crveni bas tvrdnja o statusu.
+    "amb-isprrev-trag-ostaje-otvoren": (
+        "modAmbalaza.bas",
+        "    If Not modStornoContext.CompleteCorrectionContext(cid, noviID, brojK, _\n"
+        '            "Ispravka reversa zavrsena: nov dokument " & noviID & ".") Then\n',
+        "    If False Then   ' SABOTAZA: trag se ne zatvara\n",
+        "T_AmbIspravkaReversa_NovIdentitetIVezaPoID",
+        "trag ispravke je zatvoren -- nema MANUAL zadatka",
+    ),
+    # A9 se ne proverava. Upis ipak pada -- na zauzetosti, jer storno ne
+    # oslobadja broj -- ali porukom o ZAUZETOSTI, ne o ispravci. Dvoslojna
+    # kapija: druga brana drzi podatke, prva drzi razlog, i tvrdnja meri prvu.
+    # Prvi dokaz (11.10.2026) je ovu sabotazu prijavio NE OBARA NISTA: A9 je
+    # stajao POSLE kapija broja, a poruka zauzetosti takodje pominje A9.
+    "amb-isprrev-isti-broj-prolazi": (
+        "modAmbalaza.bas",
+        "    If StrComp(Trim$(broj), stariBroj, vbTextCompare) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: A9 se ne proverava\n",
+        "T_AmbIspravkaReversa_KapijeBezTraga",
+        "ispravka sa STARIM brojem je odbijena po pravilu A9",
+    ),
+    # Kapija pusti storniran dokument: ekran bi ponudio zamenu dokumenta koji
+    # je vec povucen. Pisac bi pao kasnije (RedAmbDokumenta), pa se meri KAPIJA.
+    "amb-isprrev-storniran-prolazi": (
+        "modAmbalaza.bas",
+        "    If UCase$(Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, ambDokID, _\n"
+        '                                         COL_STORNIRANO)))) = "DA" Then\n',
+        "    If False Then   ' SABOTAZA: storniran prolazi\n",
+        "T_AmbIspravkaReversa_KapijeBezTraga",
+        "storniran revers se ne ispravlja",
+    ),
+    # Kapija ne gleda vrstu: nabavka (i kupcev revers) dobijaju zamenu kao nas
+    # revers -- sa nasim brojem i nasim smerovima.
+    "amb-isprrev-svaka-vrsta": (
+        "modAmbalaza.bas",
+        "    If StrComp(vrsta, AMB_DOK_REVERS, vbTextCompare) <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: svaka vrsta se ispravlja\n",
+        "T_AmbIspravkaReversa_KapijeBezTraga",
+        "nabavka se ne ispravlja kao revers",
+    ),
+    # Nov upis ide PRE storna. Kooperant tada u medjukoraku ima 6, pa storno
+    # prolazi -- a odluka 11.10.2026 je da AMB-INV-07 vazi i u medjukoraku,
+    # kao kod otkupa (storno prvi).
+    "amb-isprrev-upis-pre-storna": (
+        "modAmbalaza.bas",
+        "    StornirajAmbDokument tx, stariAmbDokID\n"
+        "    noviID = UpisiReversUTx(tx, red, datum, brojK, stanicaID, tipAmb, kolicina, _\n"
+        "                            smer, kooperantID, vozacID, napomena, SRC)\n",
+        "    noviID = UpisiReversUTx(tx, red, datum, brojK, stanicaID, tipAmb, kolicina, _\n"
+        "                            smer, kooperantID, vozacID, napomena, SRC)\n"
+        "    StornirajAmbDokument tx, stariAmbDokID   ' SABOTAZA: upis pre storna\n",
+        "T_AmbIspravkaReversa_Inv07UMedjukoraku",
+        "ispravka koja u medjukoraku obara kooperanta ispod nule je odbijena",
+    ),
+    # Storno ekran vise ne nudi zamenu naseg reversa -- tacno stanje od 10c do
+    # 10d, kad je operater imao MANJE nego pre refaktora.
+    "amb-isprrev-ekran-ne-nudi": (
+        "modScrStorno.bas",
+        "        If Len(modAmbalaza.IspravkaReversaRazlog(mSelDocID)) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: zamena se ne nudi\n",
+        "T_AmbIspravkaReversa_EkranNudiIOtvara",
+        "aktivan nas revers nudi storno i ZAMENU (10d)",
+    ),
+    # Ekran ne prosledi otvorenu ispravku: snimanje F7 napravi NOV revers uz
+    # stari koji ostaje aktivan -- dva papira za jedan dogadjaj. Snimanje
+    # uspeva, pa se crveni tvrdnja da je nastala ZAMENA.
+    "amb-isprrev-ekran-ne-prosledjuje": (
+        "modScrDokumenti.bas",
+        "    res = modNovacUnos.ReversUpisi(p, poruke, mIspravkaAmbDokID)\n",
+        "    res = modNovacUnos.ReversUpisi(p, poruke)   ' SABOTAZA: ispravka se ne prosledjuje\n",
+        "T_AmbIspravkaReversa_EkranNudiIOtvara",
+        "snimanje F7 uz otvorenu ispravku pravi ZAMENU starog reversa",
+    ),
+    # Kapija pusti revers sa VISE poslovnih redova (review #414, P2): forma
+    # prikaze prvi, storno povuce oba, a zamena iz forme upise jedan -- dva
+    # kretanja tiho postanu jedno. Nula i dalje pada, pa se meri bas "vise".
+    "amb-isprrev-vise-poslovnih-redova": (
+        "modAmbalaza.bas",
+        "    If nPoslovnih <> 1 Then\n",
+        "    If nPoslovnih < 1 Then   ' SABOTAZA: vise poslovnih redova prolazi\n",
+        "T_AmbIspravkaReversa_DvaPoslovnaRedaOdbijena",
+        "revers sa dva poslovna reda se ne ispravlja",
+    ),
+    # Trag ispravke izlazi iz spoljnog snapshota (review #414, P3). Uspesna
+    # ispravka i dalje radi -- CreateCorrectionContext ima svoju transakciju --
+    # ali pad posle traga ostavlja COMPLETED red koji pokazuje na nov revers
+    # koga posle rollback-a nema.
+    "amb-isprrev-trag-van-snapshota": (
+        "modAmbalaza.bas",
+        "    tx.AddTableSnapshot TBL_STORNO_VEZE\n",
+        "    ' SABOTAZA: trag nije u snapshotu\n",
+        "T_AmbIspravkaReversa_PadPosleTragaVracaSve",
+        "rollback posle traga: trag ispravke ne ostaje",
     ),
 }
 

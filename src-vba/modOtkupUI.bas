@@ -8867,6 +8867,9 @@ Public Sub ApplyPrefill(ByVal spec As String)
                 Case "cena2":    If Len(v) > 0 Then zf.Controls("fgCena").Controls("fgCena2T").text = v
                 Case "ambpr":    If Len(v) > 0 Then zf.Controls("fgAmbPr").Controls("fgAmbPrT").text = v
                 Case "parcela":  If Len(v) > 0 Then SetComboByID cbPar, v
+                ' Smer reversa (F7, ispravka 10d). Segmenti su Label-i, pa nema
+                ' kontrole kojoj bi se upisala vrednost -- bira se isto kao klik.
+                Case "smerrev":  If val(v) > 0 Then SetSmerRev CLng(val(v))
                 Case "fokus":    fokus = v
             End Select
         End If
@@ -8905,6 +8908,8 @@ Public Sub ApplyPrefill(ByVal spec As String)
     If IsTestMode() Then Exit Sub
     If fokus = "kolicina" Then
         zf.Controls("fgKgI").Controls("fgKgIT").SetFocus
+    ElseIf fokus = "kolamb" Then
+        zf.Controls("fgKolAmb").Controls("fgKolAmbT").SetFocus
     Else
         ctx.Controls("cbKupac").SetFocus
     End If

@@ -1503,6 +1503,11 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_BTN_RED_ISPRAVI_BLOK", "Ispravi"
     UpsertRow lo, existing, "OTKUI_MSG_ISPRAVKA_BLOKA", "Ispravka bloka " & ChrW(8212) & " snimanje pravi NOV dokument umesto:"
     UpsertRow lo, existing, "OTKUI_ERR_ISPRAVI_BLOK", ChrW(10007) & " Podaci bloka se ne mogu pro" & ChrW(269) & "itati za ispravku:"
+    ' --- 10d: ispravka naseg reversa u jednom potezu ---
+    UpsertRow lo, existing, "OTKUI_MSG_ISPRAVKA_REVERSA", "Ispravka reversa " & ChrW(8212) & " snimanje pravi NOV revers sa novim brojem umesto:"
+    UpsertRow lo, existing, "OTKUI_ERR_ISPRAVI_REVERS", ChrW(10007) & " Podaci reversa se ne mogu pro" & ChrW(269) & "itati za ispravku:"
+    UpsertRow lo, existing, "NOVUNOS_ERR_ISPR_REV_KUPAC", ChrW(10007) & " Ispravka na" & ChrW(353) & "eg reversa ostaje na" & ChrW(353) & " revers " & ChrW(8212) & " izaberi jedan od " & ChrW(269) & "etiri na" & ChrW(353) & "a smera. Kup" & ChrW(269) & "ev revers se unosi kao nov dokument."
+    UpsertRow lo, existing, "NOVUNOS_MSG_ISPR_REV_OK", ChrW(10003) & " Ispravka reversa: stari je storniran, a nov je snimljen sa novim brojem. Stari:"
     UpsertRow lo, existing, "OTKUI_ERR_VEZA_HLADNJACA", ChrW(10007) & " Hladnja" & ChrW(269) & "ki blok ide u svoj lanac " & ChrW(8212) & " ru" & ChrW(269) & "no vezivanje nije dozvoljeno; otkloni uzrok pa ponovi auto-lanac"
     UpsertRow lo, existing, "OTKUI_ERR_PONOVI_NIJE_HLAD", ChrW(10007) & " Auto-lanac va" & ChrW(382) & "i samo za blok na hladnja" & ChrW(269) & "koj stanici"
     UpsertRow lo, existing, "OTKUI_ERR_LANAC_PUT", ChrW(10007) & " Ne mo" & ChrW(382) & "e da se utvrdi da li blok ide u hladnja" & ChrW(269) & "ki lanac, pa nije vezan ni za jedan dokument:"

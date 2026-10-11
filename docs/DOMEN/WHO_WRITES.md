@@ -91,7 +91,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblPreradaStavka`: `modPaletniList`, `modStorno`
 - `tblSEFEventLog`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
 - `tblSEFSubmission`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
-- `tblStornoVeze`: `modOtkup`, `modStornoContext`
+- `tblStornoVeze`: `modAmbalaza`, `modOtkup`, `modStornoContext`
 - `tblStornoZurnal`: `modOtkup`, `modStorno`
 - `tblUtovarStavke`: `modStorno`, `modUtovar`
 - `tblZbirnaIzvori`: `modDokumenta`, `modMasterSync`

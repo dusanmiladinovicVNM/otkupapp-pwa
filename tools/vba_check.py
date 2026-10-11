@@ -1322,7 +1322,11 @@ AMB_BIND_DOZVOLJENI = {
     # Ambalazni dokument (revers/nabavka/otpis) dobija svoj storno u 10b-2:
     # oznaci zaglavlje, pa vezi, pa kontra-stav -- isti redosled kao tri robna
     # storna iznad. Do ovog reza tblAmbalazaDokument uopste nije imao storno.
-    ("modAmbalaza", "StornirajAmbDokument_TX"),
+    # Od 10d bind stoji u JEZGRU (StornirajAmbDokument, tx pozivaoca), jer ga
+    # zovu dva pisca: samostalan storno (_TX omotac) i ispravka reversa, koja
+    # storno i nov dokument radi u JEDNOJ transakciji. Isti oblik kao
+    # modStorno.StornoOtkup, koji je na listi umesto svog _TX omotaca.
+    ("modAmbalaza", "StornirajAmbDokument"),
 }
 _AMB_END = re.compile(r'^End\s+(?:Sub|Function|Property)\b', re.IGNORECASE)
 _BIND_POZIV = re.compile(r'\.\s*BindSourceDocument\b', re.IGNORECASE)
