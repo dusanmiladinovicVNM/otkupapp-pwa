@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 11.10.2026 (stavka 118, review `#414`).
+**Ažurirano:** 11.10.2026 (stavka 119, dokaz `#414`).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** kod ✅ + review `P2` zatvoren, čeka reviewer GO (stavke 117–118) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ 12/12 + dokaz 13/13 nad `44cb49d0ea21`, čeka compile i merge review (stavke 117–119) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -2710,6 +2710,52 @@
      **Verifikacija:** jeftine kapije zelene. `run_vba` i `dokaz.py` **nisu pušteni**.
      Review je dao `GO` za ciljane testove posle `P2`, ali sama ispravka `P2` još nije
      pregledana. Pre prvog prolaza fixture se regeneriše (šema je promenjena u `10d`).
+
+119. **Dokaz `#414` nad konačnim izvorom — i jedna placebo tvrdnja koju je uhvatio**
+     (11.10.2026). Reviewer je posle stavke 118 dao `GO za execution proof`.
+
+     **Fixture:** regeneracija iz starog donora **nije** dodala dve nove kolone
+     `tblAmbalazaDokument`, pa je tabela ostala sa 12 kolona umesto 14. Uzrok:
+     `make_fixture.py` nosi prepisane spiskove kolona (`ENSURE_TABLES` /
+     `ENSURE_COLS`). Pisac bi tada pao na `SchemaReadyOrFail` u svakom testu sa
+     reversom, pa bi se merila sveska, a ne kod. Dopunjeno istim obrascem kao kolone
+     knjige u `10c` (`1e367c15`). Nov potpis fixture-a je `54298ba411e550be`; stari
+     fixture je sačuvan kao `otkup_test_pre_10d.*`.
+
+     **Prvi dokaz (izvor `14c213baaddc`): 12/13, `NIJE DOKAZANO`.**
+     `amb-isprrev-isti-broj-prolazi` → `NE OBARA NISTA`. Uzrok je u **mom** kodu:
+     poređenje sa starim brojem stajalo je **posle** `ReversBrojZaUpis`, pa je stari
+     broj na istoj stanici i danu prvo odbijala kapija zauzetosti. Njena poruka
+     **takođe** pominje `NOV broj (A9)`, pa je tvrdnja `#217` bila zadovoljena i bez
+     A9 kapije. Komentar u kodu je pri tom tvrdio suprotan redosled.
+     Popravka (`4254b2d1`): **zadat** broj se poredi pre kapija broja, **izračunat**
+     posle (jedan pomoćnik, `RequireNovBrojIspravke`). Tvrdnja sada traži tekst koji
+     nosi **samo** poruka pravila A9.
+
+     **Konačno (izvor `44cb49d0ea21`, ugovor `8694e2348800`, fixture `580ff34c`):**
+
+     ```
+     RunAllTests              221 / 0      (#214-221 svi OK)
+     RunBusinessFlowProSuite 2436 / 0
+     RunBankaImportTestSuite  241 / 0
+     RunStornoTestSuite       131 / 0      (bilo 164: obrisano sest testova dvokoraka)
+     ostalih 8 suita             OK        12 / 12 ZELENO, marker upisan
+     --require-green          RC=0
+
+     dokaz.py amb-isprrev + amb-inv08-zaglavlje-bez-kapije
+       crvenih 13 / 13, izvor pre/posle 778a7f7b9411cde3 IDENTICAN
+       === DOKAZANO ===
+     ```
+
+     Pojedinačno: `amb-inv08-zaglavlje-bez-kapije` OK (uz još 1 test, sidro suženo u
+     117) · `bez-storna` OK (uz još 4) · `kolicina-pomerena` OK (uz još 1) ·
+     `veza-po-broju` OK (uz još 1) · `trag-ostaje-otvoren`, `isti-broj-prolazi`,
+     `storniran-prolazi`, `svaka-vrsta`, `upis-pre-storna`, `ekran-ne-nudi`,
+     `ekran-ne-prosledjuje`, `vise-poslovnih-redova`, `trag-van-snapshota` — OK.
+
+     **Otvoreno:** compile (`Alt+F11 → Debug → Compile`) nad `44cb49d0ea21`, jer marker
+     compile-a je još sa `main`-a (`b696c49e88e6`) · ručna provera F7 (forma se u testu
+     ne gradi) · finalni merge review.
 
 ## Dug sa imenom (posle S5-5b)
 
