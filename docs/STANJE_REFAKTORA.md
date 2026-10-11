@@ -2753,9 +2753,20 @@
      `storniran-prolazi`, `svaka-vrsta`, `upis-pre-storna`, `ekran-ne-nudi`,
      `ekran-ne-prosledjuje`, `vise-poslovnih-redova`, `trag-van-snapshota` — OK.
 
-     **Otvoreno:** compile (`Alt+F11 → Debug → Compile`) nad `44cb49d0ea21`, jer marker
-     compile-a je još sa `main`-a (`b696c49e88e6`) · ručna provera F7 (forma se u testu
-     ne gradi) · finalni merge review.
+     **Compile zatvoren** (11.10.2026): operater je potvrdio `Debug → Compile` posle
+     uvoza; marker je upisan nad `44cb49d0ea21`. `--require-green --require-compile`
+     daje `RC=0`, a `DRUGI IZVOR` je `0`. Uvoz ne beleži otisak, pa marker počiva na toj
+     potvrdi. Review `481e4e91`: `CODE REVIEW GO`, merge čeka samo ručnu proveru F7.
+
+     **Ručna provera ide nad kopijom fixture-a** (`tests/fixtures/rucna_provera_10d.xlsm`,
+     trenutni kod, netaknuti podaci). Operater nema svoje podatke, a fixture već nosi sva
+     tri slučaja: `2/IZV` (jedan red → zamena), `1/IZV` (**dva** reda, 12/1 + Letvarica →
+     samo storno, P2 nad stvarnim podatkom) i `4/IZV` (nabavka → samo storno).
+
+     **Nalaz usput, van `10d`:** `NabaviAmbalazu_TX` nema **nijednog produkcionog
+     pozivaoca**, nego samo testove. Na novoj instalaciji stanica zato počinje od nule, a
+     izdavanje praznih se odbija (`AMB-INV-07`). Komentar pisca to izričito predviđa,
+     a ulaz na ekranu ne postoji niti je zapisan kao odložen. Izdvojeno kao zaseban zadatak.
 
 ## Dug sa imenom (posle S5-5b)
 
