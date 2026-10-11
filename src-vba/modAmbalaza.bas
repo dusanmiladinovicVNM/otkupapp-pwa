@@ -368,8 +368,13 @@ End Function
 ' otkupID). Tako je ispravno i kod ponovne stampe starijeg bloka:
 ' kasniji blokovi se NE uracunavaju u pocetno stanje.
 '
-' Fallback: ako se nijedan red bloka ne nadje (npr. legacy red pre
-' dvojnog upisa), uzima SVE kooperantove redove tog tipa kao pocetno.
+' BEZ GRANICE NEMA POCETNOG STANJA (AMB-10-ODL-27, 11.10.2026). Dokument koji
+' nema nijedan svoj red knjige (otkup bez gajbi, neto unos) nema ni TACKU u
+' knjizi od koje bi se znalo "pre njega". Citac tada NE pogadja: outPoznato je
+' False, a vrednost 0 nije stanje. Ranije je ovde stajao fallback na CELU
+' knjigu ("legacy red pre dvojnog upisa") -- prva stampa je bila tacna, a svaka
+' ponovna je pokazivala DANASNJE stanje (review #415, P2; reprodukovano
+' Test_Amb_PonovnaStampaBezRedaKnjige). Starih redova vise nema.
 '
 ' blockOtkupIDs: niz (npr. Split rezultat) ili string "OTK-1 + OTK-2".
 ' Vraca Long (entitetski saldo: Ulaz = +Kolicina, Izlaz = -Kolicina).
@@ -397,12 +402,14 @@ End Function
 
 Public Function GetKooperantAmbOpening(ByVal koopID As String, _
                                        ByVal tipAmb As String, _
-                                       ByVal blockOtkupIDs As Variant) As Long
+                                       ByVal blockOtkupIDs As Variant, _
+                                       Optional ByRef outPoznato As Boolean) As Long
     Const SRC As String = "modAmbalaza.GetKooperantAmbOpening"
 
     On Error GoTo EH
 
     GetKooperantAmbOpening = 0
+    outPoznato = False
 
     If Len(Trim$(koopID)) = 0 Or Len(Trim$(tipAmb)) = 0 Then Exit Function
 
@@ -457,13 +464,11 @@ Public Function GetKooperantAmbOpening(ByVal koopID As String, _
         Next i
     End If
 
-    ' 2) Saldo svih redova PRE granice (ili svih, ako blok nije nadjen -> fallback).
+    ' 2) Saldo svih redova PRE granice. Bez granice nema pocetnog stanja (ODL-27).
+    outPoznato = (minIdx > 0)
+    If Not outPoznato Then Exit Function
     Dim cutoff As Long
-    If minIdx > 0 Then
-        cutoff = minIdx - 1
-    Else
-        cutoff = UBound(data, 1)
-    End If
+    cutoff = minIdx - 1
 
     Dim saldo As Long: saldo = 0
     Dim znak As Long
@@ -482,6 +487,7 @@ Public Function GetKooperantAmbOpening(ByVal koopID As String, _
 EH:
     LogErr SRC
     GetKooperantAmbOpening = 0
+    outPoznato = False
 End Function
 
 ' ============================================================

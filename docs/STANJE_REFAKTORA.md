@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 11.10.2026 (stavka 121, `10d` ostatak).
+**Ažurirano:** 11.10.2026 (stavka 122, review `#415`).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ merge-ovano (`#414`, stavke 117–120) · **`10d` ostatak** (undo ODL-25, istorija ODL-26) ⏳ čeka GO (stavka 121) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ merge-ovano (`#414`, stavke 117–120) · **`10d` ostatak** (undo ODL-25, istorija ODL-26/-27) ⏳ čeka GO (stavke 121–122) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -2851,6 +2851,29 @@
 
      **Verifikacija:** jeftine kapije zelene. `run_vba` i `dokaz.py` nisu pušteni, čeka se
      reviewer GO.
+
+122. **Review `#415` (`f0f16b62`): `P2` ponovna štampa bez granice — reprodukovano, pa
+     odlučeno** (11.10.2026). Verdikt: `NO-GO` za zatvaranje ODL-26. Nalazi su `P0 0`,
+     `P1 0`, `P2 1`, `P3 1`, a static CI je `GREEN`.
+
+     **`P2`:** `GetKooperantAmbOpening` je, kad ne nađe nijedan red bloka, uzimao **celu
+     današnju knjigu** („legacy" fallback). Otkup bez gajbi nema red u knjizi
+     (`KnjiziOtkupAmbalazu` piše samo količinu veću od nule), a validacija ga pušta kad je
+     stroga validacija isključena i unos neto. Štampa otkupnog lista **uvek** ispisuje
+     početno stanje i saldo. Prva štampa je zato bila tačna, a ponovna nije.
+     **Reprodukovano pre ispravke** (`Test_Amb_PonovnaStampaBezRedaKnjige`, BFP 2441/1):
+     očekivano 17740, dobijeno 17743, tačno kasniji revers od 3.
+
+     **Odluka operatera `AMB-10-ODL-27`:** bez granice nema stanja. Čitalac javlja
+     `outPoznato = False`, papir početno i saldo štampa kao „-", a fallback se briše. Nije
+     uveden u `#415`; ODL-26 ga je samo razotkrio.
+
+     **`P3` (status „moguce" u listi „Vrati storno")** reviewer prihvata kao zaseban zadatak,
+     uz uslov da kapija ostane fail-closed, što i jeste.
+
+     **Ciljano posle ispravke:** `RunAllTests` 223/0, BFP 2442/0 (2436 + 1 tvrdnja nad putem
+     undo-a + 5 u reprodukciji). Katalog **738 → 740**. Pun prolaz, dokaz za pet novih
+     sabotaža i compile čekaju reviewer GO.
 
 ## Dug sa imenom (posle S5-5b)
 

@@ -7618,8 +7618,8 @@ SABOTAZE = {
     # (D-057, AMB-10-ODL-26).
     "amb-istorija-stampa-bez-granice": (
         "modAmbalaza.bas",
-        "        cutoff = minIdx - 1\n",
-        "        cutoff = UBound(data, 1)   ' SABOTAZA: granica bloka se ignorise\n",
+        "    cutoff = minIdx - 1\n",
+        "    cutoff = UBound(data, 1)   ' SABOTAZA: granica bloka se ignorise\n",
         "T_AmbIstorija_PonovnaStampaKakoJeBilo",
         "ponovna stampa: storno ranijeg dokumenta ne menja pocetno stanje papira",
     ),
@@ -7631,6 +7631,25 @@ SABOTAZE = {
         "                        \"(AMB-10-ODL-19). SABOTAZA bez puta: \" & _\n",
         "Test_Amb_UndoStornaOdbijenNadKnjigom",
         "UNDO: storno sa ambalazom je konacan, a odbijenica kaze put (AMB-10-ODL-25)",
+    ),
+    # Citac proglasi granicu POZNATOM i kad je nema: dokument bez svog reda
+    # knjige dobija "stanje" (0), a papir stampa broj koji nista ne znaci
+    # (AMB-10-ODL-27, review #415 P2).
+    "amb-istorija-bez-granice-poznato": (
+        "modAmbalaza.bas",
+        "    outPoznato = (minIdx > 0)\n",
+        "    outPoznato = True   ' SABOTAZA: granica uvek poznata\n",
+        "Test_Amb_PonovnaStampaBezRedaKnjige",
+        "D-057 bez reda: stanje pre dokumenta bez reda knjige je NEPOZNATO",
+    ),
+    # Citac NIKAD ne nadje granicu: svaki papir dobija "-" umesto pocetnog
+    # stanja, i za dokument koji svoj red ima.
+    "amb-istorija-granica-nikad": (
+        "modAmbalaza.bas",
+        "    outPoznato = (minIdx > 0)\n",
+        "    outPoznato = False   ' SABOTAZA: granica nikad nije poznata\n",
+        "T_AmbIstorija_PonovnaStampaKakoJeBilo",
+        "dokument sa svojim redom knjige ima poznato pocetno stanje",
     ),
 }
 

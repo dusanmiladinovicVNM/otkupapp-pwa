@@ -7349,11 +7349,13 @@ End Sub
 ' Storno RANIJEG dokumenta, upisan posle bloka, ne sme da promeni ponovno
 ' odstampan papir -- a tekuci saldo mora. "Blok" je ovde revers: citac radi nad
 ' DokumentID-em bilo kog dokumenta, a otkupni list mu predaje svoj OtkupID.
-' SABOTAZA: amb-istorija-stampa-bez-granice -> pukne "ponovna stampa: storno
-' ranijeg dokumenta ne menja pocetno stanje papira".
+' SABOTAZE: amb-istorija-stampa-bez-granice -> pukne "ponovna stampa: storno
+' ranijeg dokumenta ne menja pocetno stanje papira"; amb-istorija-granica-nikad
+' -> pukne "dokument sa svojim redom knjige ima poznato pocetno stanje".
 Private Sub T_AmbIstorija_PonovnaStampaKakoJeBilo()
     Dim dok1 As String, dok2 As String
     Dim o1 As Long, o2 As Long, preR1 As Long, sPre As Double, sPosle As Double
+    Dim poznato As Boolean
 
     modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 10, "", _
                                   "preduslov testa ponovne stampe"
@@ -7363,7 +7365,7 @@ Private Sub T_AmbIstorija_PonovnaStampaKakoJeBilo()
                                               REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
     AssertEq (Len(dok1) > 0 And Len(dok2) > 0), True, "preduslov: oba reversa su upisana"
 
-    o1 = modAmbalaza.GetKooperantAmbOpening(FX_KOOPERANT, FX_TIP_AMB, dok2)
+    o1 = modAmbalaza.GetKooperantAmbOpening(FX_KOOPERANT, FX_TIP_AMB, dok2, poznato)
     preR1 = modAmbalaza.GetKooperantAmbOpening(FX_KOOPERANT, FX_TIP_AMB, dok1)
     sPre = IspRevSaldo(AMB_NALOG_KOOPERANT, FX_KOOPERANT)
 
@@ -7374,6 +7376,10 @@ Private Sub T_AmbIstorija_PonovnaStampaKakoJeBilo()
     AssertEq o2, o1, "ponovna stampa: storno ranijeg dokumenta ne menja pocetno stanje papira"
     AssertEq sPre - sPosle, 3, "tekuci saldo: storno ranijeg dokumenta JESTE oduzet"
     AssertEq o1 - preR1, 3, "pocetno stanje bloka sadrzi raniji revers -- granica je redosled upisa"
+    ' Pozitivna kontrola za ODL-27: dokument SA svojim redom ima granicu, pa je
+    ' pocetno stanje poznato. Bez nje bi tvrdnja "nepoznato" u BFP prolazila i
+    ' kad citac nikad ne nadje granicu.
+    AssertEq poznato, True, "dokument sa svojim redom knjige ima poznato pocetno stanje"
 End Sub
 
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _

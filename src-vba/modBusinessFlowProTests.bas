@@ -315,6 +315,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_Amb_StornoPosleVracanjaOdbijen
     Test_Amb_StornoNePraviMinus
     Test_Amb_UndoStornaOdbijenNadKnjigom
+    Test_Amb_PonovnaStampaBezRedaKnjige
     Test_Amb_JedanProtivpartnerPoDokumentu
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
@@ -18647,6 +18648,47 @@ Private Sub Test_Amb_UndoStornaOdbijenNadKnjigom()
 
 EH:
     LogFatal "Test_Amb_UndoStornaOdbijenNadKnjigom", Err.Number, Err.description
+End Sub
+
+' D-057 / AMB-10-ODL-27: PONOVNA STAMPA DOKUMENTA BEZ SOPSTVENOG REDA KNJIGE.
+'
+' Review #415 (P2): otkup bez gajbi (neto unos, stroga validacija iskljucena) ne
+' pravi nijedan red knjige, pa citac pocetnog stanja nije nalazio granicu bloka i
+' uzimao je CELU danasnju knjigu. Prva stampa je tada bila tacna (danas = pre
+' dokumenta), a ponovna posle kasnijeg kretanja nije. REPRODUKOVANO pre
+' ispravke (11.10.2026): ocekivano 17740, dobijeno 17743 -- tacno kasniji revers.
+'
+' Odluka operatera (ODL-27): bez granice nema stanja. Tvrdnja o NEPOZNATOM ide
+' prva: ona je pravilo, a nepromenjena vrednost je njegova posledica.
+' SABOTAZA: amb-istorija-bez-granice-poznato -> pukne "D-057 bez reda: stanje pre
+' dokumenta bez reda knjige je NEPOZNATO".
+Private Sub Test_Amb_PonovnaStampaBezRedaKnjige()
+    Dim scenario As String, h As Object, otkID As String, revDok As String
+    Dim o1 As Long, o2 As Long, p1 As Boolean, p2 As Boolean
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("PSBRK")
+
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-PS-" & scenario)
+    otkID = CreateOtkup_TX(h, OtkStavke(100#, 50#, 0, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "D-057 bez reda: otkup bez gajbi je upisan"
+    AssertEquals "0", CStr(FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, otkID).count), _
+                 "D-057 bez reda: otkup bez gajbi nema red u knjizi"
+
+    o1 = modAmbalaza.GetKooperantAmbOpening(TEST_KOOP_ID, TEST_TIP_AMB, otkID, p1)
+    revDok = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", TEST_ST_ID, TEST_TIP_AMB, 3, _
+                                                REV_SMER_IZDAVANJE, TEST_KOOP_ID, "")
+    AssertTrue Len(revDok) > 0, "D-057 bez reda: kasniji revers je upisan"
+    o2 = modAmbalaza.GetKooperantAmbOpening(TEST_KOOP_ID, TEST_TIP_AMB, otkID, p2)
+
+    AssertFalse p1 Or p2, _
+                "D-057 bez reda: stanje pre dokumenta bez reda knjige je NEPOZNATO"
+    AssertEquals CStr(o1), CStr(o2), _
+                 "D-057 bez reda: kasniji revers ne menja pocetno stanje ponovne stampe"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_PonovnaStampaBezRedaKnjige", Err.Number, Err.description
 End Sub
 
 ' BROJ AMBALAZNOG DOKUMENTA: NIZ JE (BrojOwnerTip, BrojOwnerID, DAN).

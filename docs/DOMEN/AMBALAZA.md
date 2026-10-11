@@ -2243,6 +2243,22 @@ vide različito, i to je pravilo (odluka operatera), ne slučajnost:
 Ispravka sa promenom datuma se uklapa u obe: stari revers i njegov kontra-stav su na
 starom datumu, nov revers na novom, a nov je upisan **posle** bloka koji je stampan pre.
 
+> **AMB-10-ODL-27 (odluka operatera 11.10.2026): bez granice nema stanja.** Dokument koji
+> nema nijedan **svoj** red knjige (otkup bez gajbi, neto unos uz isključenu strogu
+> validaciju) nema ni tačku u knjizi od koje bi se znalo stanje „pre njega". Čitalac
+> (`GetKooperantAmbOpening`) tada javlja da je stanje **nepoznato** i ne nagađa, a papir
+> početno stanje i saldo štampa kao „-". To važi i za prvu i za ponovnu štampu, pa se
+> papir uvek reprodukuje.
+>
+> Ranije je tu stajao fallback na **celu** knjigu („legacy red pre dvojnog upisa"): prva
+> štampa je bila tačna, a svaka ponovna je pokazivala današnje stanje. Review `#415` (P2),
+> reprodukovano testom pre ispravke: očekivano 17740, dobijeno 17743, što je tačno kasniji
+> revers od 3. Starih redova više nema, pa ni razloga za fallback.
+>
+> *Provera:* `Test_Amb_PonovnaStampaBezRedaKnjige` (BFP) · pozitivna kontrola u `#223` ·
+> sabotaže `amb-istorija-bez-granice-poznato`, `amb-istorija-granica-nikad`. Prikaz „-" na
+> papiru je ručna provera.
+
 *Provera:* `T_AmbIstorija_KarticaStornoVaziUnazad` (222) ·
 `T_AmbIstorija_PonovnaStampaKakoJeBilo` (223) · sabotaže `amb-istorija-kontrastav-danas`,
 `amb-istorija-stampa-bez-granice`.

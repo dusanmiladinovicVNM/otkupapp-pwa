@@ -738,11 +738,20 @@ Public Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     ' upisa, pa je ispravno i kod ponovne stampe starijeg bloka.
     ' Jedan dokument -> jedan ID. Helper prima i niz i "ID1 + ID2" string, pa mu
     ' se prosledjuje sam OtkupID (ranije: Split rezultat obe klase).
-    Dim ambPoc As Long: ambPoc = GetKooperantAmbOpening(koopID, tipAmb, otkupID)
-    h("ambPocetno") = tipAmb & " x " & CStr(ambPoc)
+    ' AMB-10-ODL-27: dokument bez SVOG reda knjige (otkup bez gajbi) nema tacku od
+    ' koje bi se znalo stanje pre njega -- pocetno i saldo se stampaju kao "-",
+    ' isto pri prvoj i pri ponovnoj stampi, pa se papir uvek reprodukuje.
+    Dim ambPoc As Long, ambPocPoznato As Boolean
+    ambPoc = GetKooperantAmbOpening(koopID, tipAmb, otkupID, ambPocPoznato)
     h("ambPrijem") = tipAmb & " x " & CStr(CLng(kolAmb))         ' primljeno (tekuci blok)
     h("ambIzdavanje") = tipAmb & " x " & CStr(CLng(kolAmbIzd))   ' izdato (tekuci blok)
-    h("ambSaldo") = tipAmb & " x " & CStr(CLng(ambPoc + kolAmbIzd - kolAmb))
+    If ambPocPoznato Then
+        h("ambPocetno") = tipAmb & " x " & CStr(ambPoc)
+        h("ambSaldo") = tipAmb & " x " & CStr(CLng(ambPoc + kolAmbIzd - kolAmb))
+    Else
+        h("ambPocetno") = tipAmb & " x -"
+        h("ambSaldo") = tipAmb & " x -"
+    End If
     h("stopa") = stopa
     h("osnovica") = osnovica
     h("nadoknada") = osnovica * stopa / 100
