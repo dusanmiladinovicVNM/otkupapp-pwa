@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 11.10.2026 (stavka 122, review `#415`).
+**Ažurirano:** 11.10.2026 (stavka 123, dokaz `#415`).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ merge-ovano (`#414`, stavke 117–120) · **`10d` ostatak** (undo ODL-25, istorija ODL-26/-27) ⏳ čeka GO (stavke 121–122) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ merge-ovano (`#414`, stavke 117–120) · **`10d` ostatak** (undo ODL-25, istorija ODL-26/-27) ✅ 12/12 + dokaz 5/5, čeka compile i papir (stavke 121–123) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -2874,6 +2874,32 @@
      **Ciljano posle ispravke:** `RunAllTests` 223/0, BFP 2442/0 (2436 + 1 tvrdnja nad putem
      undo-a + 5 u reprodukciji). Katalog **738 → 740**. Pun prolaz, dokaz za pet novih
      sabotaža i compile čekaju reviewer GO.
+
+123. **Review `#415` (`5e95876c`): dokazni `P2`, pa dokaz nad konačnim izvorom** (11.10.2026).
+     Verdikt je bio `MERGE PENDING`, a `GO` za finalno testiranje posle male ispravke.
+
+     **Dokazni `P2`:** pozitivna kontrola `poznato = True` u `#223` stajala je **poslednja**.
+     Pod sabotažom `amb-istorija-granica-nikad` čitalac vraća 0, pa je prva padala računska
+     tvrdnja `o1 - preR1 = 3` i zaklanjala imenovanu. Dokaz bi javio „PALA DRUGA TVRDNJA",
+     isti obrazac kao A9 i `#212`. Tvrdnja je premeštena odmah iza prvog čitanja
+     (`a77502e4`); produkcioni kod nije diran. Ista provera redosleda urađena je i za ostale
+     četiri nove sabotaže.
+
+     **Konačno (izvor `87c8d3542702`, ugovor `e288c5255f1a`, fixture `580ff34c`):**
+
+     ```
+     RunAllTests              223 / 0      (#222, #223 OK)
+     RunBusinessFlowProSuite 2442 / 0
+     RunBankaImportTestSuite  241 / 0      RunStornoTestSuite 131 / 0
+     12 / 12 ZELENO, marker upisan, --require-green RC=0
+
+     dokaz.py amb-istorija + amb-undo-odbijenica-bez-puta
+       crvenih 5 / 5, izvor pre/posle f3a7fa2c78ec8932 IDENTICAN -> DOKAZANO
+     ```
+
+     **Otvoreno:** compile nad `87c8d3542702` · ručna provera papira otkupnog lista bez
+     gajbi (početno i saldo „-"; uz prazan tip ambalaže papir piše „ x -", isti format kao
+     „ x 5" kad je stanje poznato) · finalni merge review.
 
 ## Dug sa imenom (posle S5-5b)
 
