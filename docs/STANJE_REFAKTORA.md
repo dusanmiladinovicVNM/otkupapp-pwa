@@ -2784,8 +2784,21 @@
 
      Vrsta voća se u prefill-u ne popunjava, jer je revers ne čuva, a validacija je traži pa
      je operater bira. Da li revers treba da čuva vrstu, koju papir nosi, poslovna je odluka
-     za kasnije. **Još čeka:** odustanak bez snimanja, kao i `1/IZV` (dva reda) i `4/IZV`
-     (nabavka), gde se nudi samo storno.
+     za kasnije.
+
+     **Završetak provere (isti dan):** `1/IZV` (dva poslovna reda) nudi **samo** „Storno bez
+     zamene" — P2 nad stvarnim podatkom ✓. Odustanak (prelazak iz zamene u F1) ne upisuje
+     ništa, a otvorena zamena se gasi (`SelectModeCore` → `OtkaziIzmenuNacrta` →
+     `Scr_IspravkaOtkazi`) ✓. `4/IZV` (nabavka) se na listi „Reversi" uopšte ne vidi, i to je
+     **ispravno**: lista namerno prikazuje samo reverse (test 202). Korak iz mog uputstva je
+     bio pogrešan. Kupčev revers fixture nema, pa ručno nije proveren; kapija po vrsti je
+     ista kao za nabavku (`#217`, sabotaža `amb-isprrev-svaka-vrsta`).
+
+     **Uzgredno, nije iz `10d`:** prelazak režima **nikad ne čisti** uneta polja. Datum 15.03 i
+     99 kom iz napuštene zamene ostali su u F1. Komentari „`SelectMode` čisti formu" (u
+     `modScrStorno.OtvoriIspravku`, `modOtkupUI.IdiNaEkran` i moj korak 2 u
+     `OtvoriIspravkuReversa`) su zato netačni; baš zbog toga postoji `ClearForm` pri otvaranju
+     zamene. Komentar se ispravlja u zasebnom PR-u (`KI-011`), da se ne obori dokaz `#414`.
 
      **`KI-011` — lažan neuspeh posle snimanja reversa.** Posle uspešne ispravke ljuska je
      javila `Scr_Save -> 9 Subscript out of range`, a forma je ostala popunjena. U logu za
