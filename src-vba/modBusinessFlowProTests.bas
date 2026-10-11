@@ -18623,6 +18623,11 @@ Private Sub Test_Amb_UndoStornaOdbijenNadKnjigom()
     AssertTrue InStr(1, razlog, "AMB-10-ODL-19") > 0, _
                "UNDO: odbijenica imenuje razlog, jer je ekran oporavka prikazuje: [" & _
                razlog & "]"
+    ' AMB-10-ODL-25: odbijanje je PRAVILO, ne privremena brana -- pa odbijenica
+    ' kaze i sta operater radi. Bez toga bi ekran oporavka nudio razlog bez izlaza.
+    AssertTrue InStr(1, razlog, "unesi dokument ponovo", vbTextCompare) > 0 And _
+               InStr(1, razlog, "AMB-10-ODL-25") > 0, _
+               "UNDO: storno sa ambalazom je konacan, a odbijenica kaze put (AMB-10-ODL-25)"
     AssertEquals "Da", zastavica, _
                  "UNDO: odbijen undo ostavlja dokument STORNIRAN"
     AssertEquals CStr(kontraPre), CStr(kontraPosle), _

@@ -156,11 +156,14 @@ Private Function KontraStavRazlog(ByVal opID As String) As String
             If Len(rid) > 0 And Len(dokTip) > 0 And Not vidjeni.Exists(kljuc) Then
                 vidjeni.Add kljuc, True
                 If modAmbalaza.AmbImaKontraStav(dokTip, rid) Then
+                    ' AMB-10-ODL-25 (11.10.2026): storno dokumenta sa ambalazom je
+                    ' KONACAN. Odbijanje nije privremeno nego pravilo, pa poruka kaze
+                    ' i STA operater radi -- ekran Oporavak prikazuje bas ovaj tekst.
                     KontraStavRazlog = "Storno dokumenta " & dokTip & " " & rid & _
-                        " je u knjizi " & _
-                        "ambalaze upisan kao KONTRA-STAV, a knjiga je append-only. " & _
-                        "Undo bi vratio zaglavlje u aktivno stanje, a ambalazni " & _
-                        "efekat bi ostao anuliran -- zato je odbijen (AMB-10-ODL-19)."
+                        " je konacan (AMB-10-ODL-25): dokument nosi ambalazu, a njen " & _
+                        "storno je u knjizi upisan kao KONTRA-STAV, koji se ne vraca " & _
+                        "(AMB-10-ODL-19). Ako je storno bio greska, unesi dokument " & _
+                        "ponovo -- dobija nov broj."
                     Exit Function
                 End If
             End If

@@ -314,6 +314,8 @@ Public Sub RunAllTests()
     RunOne 219
     RunOne 220
     RunOne 221
+    RunOne 222
+    RunOne 223
     RunOne 13
     RunOne 14
     RunOne 15
@@ -803,6 +805,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 219: TestName = "T_AmbIspravkaReversa_EkranNudiIOtvara"
         Case 220: TestName = "T_AmbIspravkaReversa_DvaPoslovnaRedaOdbijena"
         Case 221: TestName = "T_AmbIspravkaReversa_PadPosleTragaVracaSve"
+        Case 222: TestName = "T_AmbIstorija_KarticaStornoVaziUnazad"
+        Case 223: TestName = "T_AmbIstorija_PonovnaStampaKakoJeBilo"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1032,6 +1036,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 219: T_AmbIspravkaReversa_EkranNudiIOtvara
         Case 220: T_AmbIspravkaReversa_DvaPoslovnaRedaOdbijena
         Case 221: T_AmbIspravkaReversa_PadPosleTragaVracaSve
+        Case 222: T_AmbIstorija_KarticaStornoVaziUnazad
+        Case 223: T_AmbIstorija_PonovnaStampaKakoJeBilo
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -7262,6 +7268,112 @@ Private Sub T_AmbIspravkaReversa_PadPosleTragaVracaSve()
     AssertEq IspRevSaldo(AMB_NALOG_KOOPERANT, FX_KOOPERANT), koopPre, _
              "rollback posle traga: saldo kooperanta je kao pre"
     AssertEq novi, "", "rollback posle traga: pisac ne vraca ID"
+End Sub
+
+' ============================================================
+' 222-223. ISTORIJA KNJIGE: DVE SEMANTIKE (AMB-10-ODL-26, 11.10.2026).
+' ============================================================
+' Storno se u knjizi upisuje kao kontra-stav, KASNIJE od originala. Dva citaoca
+' vremena ga zato vide razlicito, i to je pravilo, ne slucajnost:
+'
+'   kartica po periodu      kontra-stav NOSI DATUM ORIGINALA, pa storno vazi
+'                           UNAZAD -- u svakom prozoru dokument kao da nije bilo
+'   ponovna stampa (D-057)  sece po REDOSLEDU UPISA, pa kasniji storno ne menja
+'                           pocetno stanje -- papir je isti kao kad je stampan
+'
+' Saldo kooperanta (prva stavka kartice ili kraj prozora) izvodi se iz kartice:
+' kolona 6 je tekuci saldo, a prvi red je IZV_POCETNO_STANJE kad ga ima.
+Private Function IstKarticaPocetno(ByRef k As Variant) As Double
+    If Not IsArray(k) Then Exit Function
+    If CStr(k(1, 3)) = IZV_POCETNO_STANJE Then IstKarticaPocetno = CDbl(k(1, 6))
+End Function
+
+Private Function IstKarticaZavrsno(ByRef k As Variant, ByVal pocetno As Double) As Double
+    IstKarticaZavrsno = pocetno
+    If Not IsArray(k) Then Exit Function
+    IstKarticaZavrsno = CDbl(k(UBound(k, 1), 6))
+End Function
+
+' 222. KARTICA: STORNO VAZI UNAZAD.
+'
+' Revers od pre 20 dana, pa storno danas. U PERIODU ORIGINALA storno se ponistava
+' (original i kontra-stav istog dana), a pocetno stanje SVAKOG kasnijeg perioda
+' vise ne sadrzi dokument. Datum je u proslosti namerno: kontra-stav sa
+' DANASNJIM datumom bi u tom prozoru ostavio dokument ziv.
+' SABOTAZA: amb-istorija-kontrastav-danas -> pukne "kartica: u periodu originala
+' storno se ponistava".
+Private Sub T_AmbIstorija_KarticaStornoVaziUnazad()
+    Dim dan As Date, revDok As String, k As Variant
+    Dim pocPre As Double, pocPosle As Double, poc As Double, zav As Double
+    Dim data As Variant, i As Long, n As Long, cDok As Long, cDat As Long, isti As Boolean
+
+    dan = DateAdd("d", -20, Date)
+    modAmbalaza.NabaviAmbalazu_TX dan, FX_STANICA, FX_TIP_AMB, 10, "", _
+                                  "preduslov testa istorije kartice"
+    revDok = modAmbalaza.UpisiReversAmbalaze_TX(dan, "", FX_STANICA, FX_TIP_AMB, 4, _
+                                                REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    AssertEq (Len(revDok) > 0), True, "preduslov: revers je upisan"
+    pocPre = IstKarticaPocetno(modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, _
+                                   DateAdd("d", 1, dan), Date))
+
+    AssertEq modAmbalaza.StornirajAmbDokument_TX(revDok), True, "preduslov: revers je storniran"
+
+    k = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, dan, dan)
+    poc = IstKarticaPocetno(k)
+    zav = IstKarticaZavrsno(k, poc)
+    AssertEq zav - poc, 0, "kartica: u periodu originala storno se ponistava"
+
+    pocPosle = IstKarticaPocetno(modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, _
+                                     DateAdd("d", 1, dan), Date))
+    AssertEq pocPre - pocPosle, 4, _
+             "kartica: pocetno stanje kasnijeg perioda vise ne sadrzi storniran dokument"
+
+    ' Pravilo iza obe tvrdnje, izmereno direktno: kontra-stav nosi datum originala.
+    data = GetTableData(TBL_AMBALAZA)
+    cDok = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
+    cDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
+    isti = True
+    For i = 1 To UBound(data, 1)
+        If StrComp(CStr(data(i, cDok)), revDok, vbTextCompare) = 0 Then
+            n = n + 1
+            If Format$(CDate(data(i, cDat)), "yyyymmdd") <> Format$(dan, "yyyymmdd") Then isti = False
+        End If
+    Next i
+    AssertEq n, 2, "preduslov: original i kontra-stav"
+    AssertEq isti, True, "kontra-stav nosi datum originala"
+End Sub
+
+' 223. PONOVNA STAMPA: KAKO JE BILO (D-057).
+'
+' Pocetno stanje kooperanta na papiru je stanje PRE bloka, po redosledu upisa.
+' Storno RANIJEG dokumenta, upisan posle bloka, ne sme da promeni ponovno
+' odstampan papir -- a tekuci saldo mora. "Blok" je ovde revers: citac radi nad
+' DokumentID-em bilo kog dokumenta, a otkupni list mu predaje svoj OtkupID.
+' SABOTAZA: amb-istorija-stampa-bez-granice -> pukne "ponovna stampa: storno
+' ranijeg dokumenta ne menja pocetno stanje papira".
+Private Sub T_AmbIstorija_PonovnaStampaKakoJeBilo()
+    Dim dok1 As String, dok2 As String
+    Dim o1 As Long, o2 As Long, preR1 As Long, sPre As Double, sPosle As Double
+
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 10, "", _
+                                  "preduslov testa ponovne stampe"
+    dok1 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, 3, _
+                                              REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    dok2 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, 2, _
+                                              REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    AssertEq (Len(dok1) > 0 And Len(dok2) > 0), True, "preduslov: oba reversa su upisana"
+
+    o1 = modAmbalaza.GetKooperantAmbOpening(FX_KOOPERANT, FX_TIP_AMB, dok2)
+    preR1 = modAmbalaza.GetKooperantAmbOpening(FX_KOOPERANT, FX_TIP_AMB, dok1)
+    sPre = IspRevSaldo(AMB_NALOG_KOOPERANT, FX_KOOPERANT)
+
+    AssertEq modAmbalaza.StornirajAmbDokument_TX(dok1), True, "preduslov: raniji revers je storniran"
+    o2 = modAmbalaza.GetKooperantAmbOpening(FX_KOOPERANT, FX_TIP_AMB, dok2)
+    sPosle = IspRevSaldo(AMB_NALOG_KOOPERANT, FX_KOOPERANT)
+
+    AssertEq o2, o1, "ponovna stampa: storno ranijeg dokumenta ne menja pocetno stanje papira"
+    AssertEq sPre - sPosle, 3, "tekuci saldo: storno ranijeg dokumenta JESTE oduzet"
+    AssertEq o1 - preR1, 3, "pocetno stanje bloka sadrzi raniji revers -- granica je redosled upisa"
 End Sub
 
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _

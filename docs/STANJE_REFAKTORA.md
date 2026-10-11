@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 11.10.2026 (stavka 120, ručna provera `#414`).
+**Ažurirano:** 11.10.2026 (stavka 121, `10d` ostatak).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ 12/12 + dokaz 13/13 nad `44cb49d0ea21`, čeka compile i merge review (stavke 117–119) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ merge-ovano (`#414`, stavke 117–120) · **`10d` ostatak** (undo ODL-25, istorija ODL-26) ⏳ čeka GO (stavka 121) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -2816,6 +2816,41 @@
      **Odluka operatera:** oba kvara idu u **zaseban PR posle `#414`**, a `#414` ostaje sa
      zelenim dokazom nad `44cb49d0ea21`. Rizik do tada: posle štampe operater vidi lažan
      neuspeh i nepočišćenu formu, pa obican revers može da snimi dvaput.
+
+121. **`10d` ostatak: undo i istorija su dve ODLUKE, ne kod** (11.10.2026). Grana
+     `claude/amb-10d-ostatak`, iz `main`-a posle merge-a `#414` (`dc5a32c4`).
+
+     **Pre-flight verdikt:** `DOMAIN` GAP (ODL-19 je izričito čekao poslovnu semantiku),
+     `CARDINALITY` PROVEN (`AMB-INV-06`: storno se ne stornira), `CAPABILITY` GAP. B-046
+     „Vrati storno" je od `10b-2` odbijen za svaki otkup, otpremnicu i prijemnicu sa
+     gajbama, a revers i nabavku od `10c` lista uopšte ne nudi, jer
+     `StornirajAmbDokument_TX` nije u žurnalu. Istorija: kontra-stav **nasleđuje datum
+     originala** (kartica vidi storno unazad), a D-057 seče po **redosledu upisa** (papir
+     se ne menja). To su bile dve semantike, nijedna zapisana i nijedna pokrivena testom
+     sa stornom.
+
+     **Odluke operatera:**
+
+     ```
+     AMB-10-ODL-25  storno dokumenta sa ambalazom je KONACAN; put je ponovni unos
+                    (nov broj, A9). B-046 se svesno suzava na dokumente bez ambalaze.
+     AMB-10-ODL-26  dve semantike istorije, zapisane i pinovane testom:
+                    kartica po periodu -> storno vazi unazad
+                    ponovna stampa (D-057) -> papir kakav je bio
+     ```
+
+     **Šta je urađeno:** kod se ne menja osim **poruke** kapije undo-a. Ona sada imenuje
+     ODL-25 i put, jer je ekran Oporavak prikazuje. Dodato: tvrdnja nad putem u
+     `Test_Amb_UndoStornaOdbijenNadKnjigom`, testovi `#222` (kartica, storno unazad, i
+     kontra-stav nosi datum originala) i `#223` (ponovna štampa ista posle storna ranijeg
+     dokumenta, dok se tekući saldo menja), i tri sabotaže. Katalog **735 → 738**.
+
+     **Imenovan dug:** lista „Vrati storno" pokazuje „moguce" za operaciju koju kapija uvek
+     odbija (`OpStatusFor` gleda samo ćeliju). Ispravka traži sken knjige po operaciji, a
+     cena nije merena.
+
+     **Verifikacija:** jeftine kapije zelene. `run_vba` i `dokaz.py` nisu pušteni, čeka se
+     reviewer GO.
 
 ## Dug sa imenom (posle S5-5b)
 

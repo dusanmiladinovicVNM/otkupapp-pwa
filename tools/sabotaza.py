@@ -7601,6 +7601,37 @@ SABOTAZE = {
         "T_AmbIspravkaReversa_PadPosleTragaVracaSve",
         "rollback posle traga: trag ispravke ne ostaje",
     ),
+
+    # --- 10d ostatak: AMB-10-ODL-25 i -26 ----------------------------------------
+    # Kontra-stav nosi DANASNJI datum umesto datuma originala. Saldo ostaje tacan,
+    # ali kartica u periodu originala vidi dokument kao ziv: storno vise ne vazi
+    # unazad (AMB-10-ODL-26).
+    "amb-istorija-kontrastav-danas": (
+        "modAmbalaza.bas",
+        "        UpisiRedKnjige tx, CDate(r(1)), CStr(r(2)), CDbl(r(3)), _\n",
+        "        UpisiRedKnjige tx, Date, CStr(r(2)), CDbl(r(3)), _\n",
+        "T_AmbIstorija_KarticaStornoVaziUnazad",
+        "kartica: u periodu originala storno se ponistava",
+    ),
+    # Pocetno stanje za ponovnu stampu ignorise granicu bloka: sabere i redove
+    # upisane POSLE njega, pa kasniji storno menja papir koji je vec odstampan
+    # (D-057, AMB-10-ODL-26).
+    "amb-istorija-stampa-bez-granice": (
+        "modAmbalaza.bas",
+        "        cutoff = minIdx - 1\n",
+        "        cutoff = UBound(data, 1)   ' SABOTAZA: granica bloka se ignorise\n",
+        "T_AmbIstorija_PonovnaStampaKakoJeBilo",
+        "ponovna stampa: storno ranijeg dokumenta ne menja pocetno stanje papira",
+    ),
+    # Odbijenica undo-a gubi PUT: ekran oporavka kaze "odbijeno" bez izlaza, a
+    # AMB-10-ODL-25 kaze da je odbijanje pravilo, ne privremena brana.
+    "amb-undo-odbijenica-bez-puta": (
+        "modStornoZurnal.bas",
+        "                        \"(AMB-10-ODL-19). Ako je storno bio greska, unesi dokument \" & _\n",
+        "                        \"(AMB-10-ODL-19). SABOTAZA bez puta: \" & _\n",
+        "Test_Amb_UndoStornaOdbijenNadKnjigom",
+        "UNDO: storno sa ambalazom je konacan, a odbijenica kaze put (AMB-10-ODL-25)",
+    ),
 }
 
 
