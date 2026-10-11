@@ -2520,6 +2520,80 @@
      **bajt-identičan** dokazanom, pa `--require-green` daje `RC=0`, `DRUGI IZVOR`
      je `0`, a compile marker važi i za `main`.
 
+116. **`10d` — `pre-flight` verdikt, PRE koda** (11.10.2026). Predaja čistoj sesiji:
+     sve ispod je **izmereno**, da se ne meri ponovo.
+
+     **Zašto `10d` ide prvi:** `modScrStorno.AkcijeRacun` za `STIP_REVERSI` vraća
+     **samo `STORNO`**. Operater od `10c` **ne može da ispravi revers** — može samo
+     da ga stornira i unese iznova. Skinuto svesno i zapisano u kodu, uz obećanje
+     `10d`. To je jedina preostala stavka gde operater ima **manje** nego pre
+     refaktora.
+
+     **Verdikt po osama:**
+
+     ```
+     DOMAIN              PROVEN   A9 + B-036 (nize)
+     IDENTITY            GAP      = predmet reza
+     CARDINALITY         PROVEN   AMB-INV-10, AMB-INV-11
+     INVARIANTS/OWNER    PROVEN   StornirajAmbDokument_TX postoji i dokazan (#212)
+     WRITERS             RELEVANTNO  menja se korekcioni trag I storno pisac
+     EVENTS              TRAZI ODLUKU (nize)
+     DOWNSTREAM          PROVEN   StornoVeze, StornoZurnal, Prefill, ekran
+     CAPABILITY          GAP      = predmet reza
+     PLATFORM            N/A
+     LANDING             SERIJSKI 10d i 10e dele sedam ReversID* funkcija
+     ```
+
+     **DOMAIN, doslovno iz ugovora.** `ARCHITECTURE_CONTRACT.md` **A9**: ispravka
+     dobija **nov `DocumentID` I nov poslovni broj**, veza je `IspravkaOdID` /
+     `ZamenjenSaID` **po ID-u, nikad po broju**; izričito prošireno na **REV**
+     odlukom 14.09.2026. `MAPA_SPOSOBNOSTI` **B-036**: prefill uzima **datum**, ne
+     uzima **broj**, i polazi od **PK-a**, ne od broja.
+
+     **Šta tačno treba preseći** (izmereno, sa mestima):
+
+     ```
+     modStornoDok:568        Case FLOW_DOC_REVERS -> RunReversCorrection(broj, opcija, ...)
+     modStornoFlow:520       RunReversCorrection(brDok, dokumentTip, mode, ambID)
+                             -> ReversIDRazresi -> ReversIDGranica -> ReversRedoviRID
+                             -> CreateCorrectionContext(..., revID, brDok, ...)
+                             -> StornoOMKoopByBrDok_TX     <- LEGACY pisac
+     modStornoFlow:604       CompleteReversIspravka(correctionID, newBrDok, ...)
+     modScrStorno            AkcijeRacun: vratiti ISPRAVKA segment
+     ```
+
+     Kanonska zamena je spremna: **`StornirajAmbDokument_TX`** je dokazan u `#212`,
+     a identitet je **`AmbDokID`** umesto `ReversID`.
+
+     **EVENTS — najvažniji nalaz ovog verdikta.** Ispravka reversa **ne pomera robu**:
+
+     ```
+     fizicki       NISTA -- gajbe su gde su bile
+     poslovni      stari dokument povucen, nov izdat sa NOVIM brojem (A9)
+     "finansijski" saldo se vraca kontra-stavom pa ponovo upisuje
+     ```
+
+     Kroz knjigu zato prolaze **ČETIRI reda** (kontra-stav + nov upis, obe strane) za
+     događaj u kome se fizički **ništa** nije desilo. **Glavna tvrdnja `10d`:** saldo
+     posle ispravke mora biti **identičan** ako je promenjen samo broj ili datum, a
+     različit **tačno za razliku** ako je promenjena količina. **Nijedan postojeći
+     test to ne pokriva.**
+
+     **Druga zamka, imenovana unapred:** A9 traži **nov** poslovni broj. Proveriti da
+     kapija jedinstvenosti (`BrojZauzetUNizu`, `ReversValidiraj`) nov broj ne odbije
+     i da stari **ne oslobodi** — isti obrazac je već ujeo kod otpremnice (`KI-008`).
+
+     **ACCEPTANCE CONTRACT** (plan dokaza, kod još ne postoji): ispravka reversa daje
+     nov `AmbDokID` **i** nov broj; veza ide po ID-u; saldo se ponaša po pravilu
+     iznad; stari broj ostaje zauzet; `AMB-INV-07` (nijedan realan nalog ispod nule)
+     važi **u svakom međukoraku**, ne samo na kraju; ekran ponovo nudi `ISPRAVKA`.
+     Negativan slučaj koji mora pasti: ispravka nad **već storniranim** dokumentom.
+     Dokaz: testovi u `modTest` kroz **produkcione** pisce + sabotaze po kapiji.
+
+     **Stanje `main`-a na predaji:** `09d9c467`, potpis `b696c49e88e6ec1f`,
+     `--require-green RC=0`, `DRUGI IZVOR 0`. Otvoreno i dalje: `KI-010` (smoke
+     štampe, čeka podatke) i `B5b` otpremnica `1/220926`.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
