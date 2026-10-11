@@ -6951,9 +6951,10 @@ End Sub
 
 ' 217. KAPIJE ISPRAVKE: A9, storniran dokument, vrsta -- i odbijanje bez traga.
 '
-' A9 se meri sa STARIM brojem na istoj stanici i danu: kapija konteksta ga
-' pusta, pa do odluke stize bas pravilo A9 (bez njega bi pao na zauzetosti, sa
-' porukom koja ne kaze zasto).
+' A9 se meri sa STARIM brojem na istoj stanici i danu. Tvrdnja trazi tekst koji
+' nosi SAMO poruka pravila A9 ("mora dobiti NOV broj"): poruka zauzetosti
+' takodje pominje A9, pa je prva verzija tvrdnje ("NOV broj (A9)") bila
+' zadovoljena i bez ove kapije -- dokaz 11.10.2026 ju je uhvatio kao placebo.
 ' SABOTAZE: amb-isprrev-isti-broj-prolazi -> pukne "ispravka sa STARIM brojem je
 ' odbijena po pravilu A9"; amb-isprrev-storniran-prolazi -> pukne "storniran
 ' revers se ne ispravlja"; amb-isprrev-svaka-vrsta -> pukne "nabavka se ne
@@ -6975,7 +6976,7 @@ Private Sub T_AmbIspravkaReversa_KapijeBezTraga()
     Err.Clear
     On Error GoTo 0
 
-    AssertEq (InStr(1, greska, "NOV broj (A9)", vbBinaryCompare) > 0), True, _
+    AssertEq (InStr(1, greska, "Ispravka reversa mora dobiti NOV broj", vbBinaryCompare) > 0), True, _
              "ispravka sa STARIM brojem je odbijena po pravilu A9"
     AssertEq IspRevRedova(TBL_AMBALAZA_DOKUMENT), nDok, "odbijena ispravka ne upisuje zaglavlje"
     AssertEq IspRevRedova(TBL_AMBALAZA), nKnj, "odbijena ispravka ne upisuje knjigu"

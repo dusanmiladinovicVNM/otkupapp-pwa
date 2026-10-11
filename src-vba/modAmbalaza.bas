@@ -2663,6 +2663,16 @@ EH:
     IspravkaReversaRazlog = "Revers se ne moze proveriti za ispravku: " & Err.description
 End Function
 
+' A9 za ispravku: zamena ne sme da nosi STARI poslovni broj. Poruka imenuje
+' pravilo i stari broj -- ne zauzetost, koja je druga kapija i drugi razlog.
+Private Sub RequireNovBrojIspravke(ByVal broj As String, ByVal stariBroj As String, _
+                                   ByVal SRC As String)
+    If StrComp(Trim$(broj), stariBroj, vbTextCompare) = 0 Then
+        Err.Raise AMB_ERR_IDENTITET, SRC, _
+                  "Ispravka reversa mora dobiti NOV broj (A9). Stari: " & stariBroj & "."
+    End If
+End Sub
+
 ' Podmetni pad ispravke reversa tik pre commit-a. ISKLJUCIVO iz test modula.
 Public Sub IspravkaReversaPadniTest(ByVal onOff As Boolean)
     mIspravkaPadPreCommit = onOff
@@ -2715,19 +2725,22 @@ Public Function IspravkaReversa_TX(ByVal stariAmbDokID As String, ByVal datum As
     If Len(prepreka) > 0 Then Err.Raise AMB_ERR_IDENTITET, SRC, prepreka
 
     red = ReversSmerZaUpis(kolicina, smer, SRC)
-    brojK = ReversBrojZaUpis(datum, broj, stanicaID, SRC)
 
-    ' A9: NOV POSLOVNI BROJ. Poredi se KONACAN broj -- i upisan i izracunat --
-    ' jer generator broji niz NOVE stanice, pa zamena na drugoj stanici istog
-    ' dana ume da dobije isti TEKST broja. Poredi se pre pisca, da poruka imenuje
-    ' PRAVILO: na istoj stanici i danu bi pao i na zauzetosti (storno ne
-    ' oslobadja broj), ali sa porukom koja ne kaze zasto.
+    ' A9: NOV POSLOVNI BROJ -- dvaput, jer broj nastaje na dva nacina.
+    '
+    ' ZADAT broj se poredi PRE kapija broja (ReversBrojZaUpis). Na istoj stanici
+    ' i danu stari broj je zauzet (storno ga ne oslobadja), pa bi ga kapija
+    ' zauzetosti odbila prva -- porukom o ZAUZETOSTI, ne o ispravci. Dokaz je to
+    ' izmerio 11.10.2026: dok je ovo poredjenje stajalo posle kapija, nijedan put
+    ' do njega nije vodio za taj slucaj.
+    '
+    ' IZRACUNAT broj se poredi POSLE: generator broji niz NOVE stanice, pa zamena
+    ' na drugoj stanici istog dana ume da dobije isti TEKST broja.
     stariBroj = Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
                                            stariAmbDokID, COL_AMBD_BROJ)))
-    If StrComp(brojK, stariBroj, vbTextCompare) = 0 Then
-        Err.Raise AMB_ERR_IDENTITET, SRC, _
-                  "Ispravka reversa mora dobiti NOV broj (A9). Stari: " & stariBroj & "."
-    End If
+    RequireNovBrojIspravke broj, stariBroj, SRC
+    brojK = ReversBrojZaUpis(datum, broj, stanicaID, SRC)
+    RequireNovBrojIspravke brojK, stariBroj, SRC
 
     Set tx = New clsTransaction
     tx.BeginTx

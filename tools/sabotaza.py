@@ -7517,11 +7517,13 @@ SABOTAZE = {
         "trag ispravke je zatvoren -- nema MANUAL zadatka",
     ),
     # A9 se ne proverava. Upis ipak pada -- na zauzetosti, jer storno ne
-    # oslobadja broj -- ali sa porukom koja ne kaze ZASTO. Dvoslojna kapija:
-    # druga brana drzi podatke, prva drzi razlog, i tvrdnja meri prvu.
+    # oslobadja broj -- ali porukom o ZAUZETOSTI, ne o ispravci. Dvoslojna
+    # kapija: druga brana drzi podatke, prva drzi razlog, i tvrdnja meri prvu.
+    # Prvi dokaz (11.10.2026) je ovu sabotazu prijavio NE OBARA NISTA: A9 je
+    # stajao POSLE kapija broja, a poruka zauzetosti takodje pominje A9.
     "amb-isprrev-isti-broj-prolazi": (
         "modAmbalaza.bas",
-        "    If StrComp(brojK, stariBroj, vbTextCompare) = 0 Then\n",
+        "    If StrComp(Trim$(broj), stariBroj, vbTextCompare) = 0 Then\n",
         "    If False Then   ' SABOTAZA: A9 se ne proverava\n",
         "T_AmbIspravkaReversa_KapijeBezTraga",
         "ispravka sa STARIM brojem je odbijena po pravilu A9",
