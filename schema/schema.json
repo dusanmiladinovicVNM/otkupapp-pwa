@@ -61,7 +61,9 @@
         "CreatedAt",
         "CreatedBy",
         "ModifiedAt",
-        "ModifiedBy"
+        "ModifiedBy",
+        "IspravkaOdID",
+        "ZamenjenSaID"
       ]
     },
     {

@@ -629,6 +629,15 @@ Public Function PrefillIzStorniranog(ByVal tip As String, ByVal brStorn As Strin
     Dim res As String, brutoMode As Boolean
     On Error GoTo EH
 
+    ' REVERS NIJE TABELA SA KOLONAMA ZAGLAVLJA (10d): strane, kolicina i tip
+    ' ambalaze zive na REDU knjige (AMB-10-ODL-3), a zaglavlje nosi samo datum i
+    ' broj. Zato ima svoj sastavljac umesto Col*ZaPrefill grane. Polazi od PK-a,
+    ' kao i ostali (pravilo 1); broj mu se ne gleda.
+    If tip = STIP_REVERSI Then
+        PrefillIzStorniranog = PrefillReversa(oldDocID)
+        Exit Function
+    End If
+
     tbl = TabelaZaPrefill(tip)
     If Len(tbl) = 0 Then Exit Function
     d = GetTableData(tbl)
@@ -1109,6 +1118,83 @@ End Function
 Private Function BrojUTekst(ByVal v As Double) As String
     If v <> 0 Then BrojUTekst = CStr(v)
 End Function
+
+' Forma NASEG reversa iz AmbDokID-a -- ispravka u jednom potezu (10d, B-036):
+'
+'   datum   SA ZAGLAVLJA: ispravka sutradan ne sme da promeni dan dokumenta
+'   broj    NE: ispravka je nov dokument i dobija NOV broj (A9); predlog racuna
+'           ljuska posle prefill-a, nad stanicom i datumom iz forme
+'   smer    izveden iz para strana i vrste kretanja kroz ISTU zatvorenu mapu
+'           koju pisac koristi (AmbReversSmerovi), pa segment preko
+'           modNovacUnos.SmerRevKljuc -- druga mapa bi se razisla sa pisacem
+'   strane  stanica, kooperant ili vozac, po tipu naloga na redu knjige
+'
+' Vrsta voca se ne preuzima: revers je ne nosi (AMB-10-ODL-5 -- nije robni
+' dokument), pa je operater bira kad je validacija trazi.
+'
+' "" = dokument se ne moze procitati kao nas revers; ekran tada ispravku NE
+' otvara (fail-closed, kao OtvoriIspravkuBloka).
+Private Function PrefillReversa(ByVal ambDokID As String) As String
+    Dim mapa As Object, red As Variant, smerovi As Variant
+    Dim i As Long, n As Long, smerKey As String, dat As Variant
+    Dim stanica As String, koop As String, voz As String, res As String
+    On Error GoTo EH
+
+    ambDokID = Trim$(ambDokID)
+    If Len(ambDokID) = 0 Then Exit Function
+    Set mapa = modAmbalaza.AmbDokRedMapa()
+    If Not mapa.Exists(ambDokID) Then Exit Function
+    ' (vrstaKretanja, tipAmb, kolicina, odTip, odID, naTip, naID)
+    red = mapa(ambDokID)
+
+    smerovi = modAmbalazaUgovor.AmbReversSmerovi()
+    For i = LBound(smerovi) To UBound(smerovi)
+        If StrComp(CStr(smerovi(i)(1)), CStr(red(3)), vbTextCompare) = 0 And _
+           StrComp(CStr(smerovi(i)(2)), CStr(red(5)), vbTextCompare) = 0 And _
+           StrComp(CStr(smerovi(i)(3)), CStr(red(0)), vbTextCompare) = 0 Then
+            smerKey = CStr(smerovi(i)(0))
+            Exit For
+        End If
+    Next i
+    If Len(smerKey) = 0 Then Exit Function
+
+    For n = modNovacUnos.SMER_REV_IZD_KOOP To modNovacUnos.SMER_REV_PRI_OM
+        If StrComp(modNovacUnos.SmerRevKljuc(n), smerKey, vbTextCompare) = 0 Then Exit For
+    Next n
+    If n > modNovacUnos.SMER_REV_PRI_OM Then Exit Function
+
+    PrefillStranaReversa CStr(red(3)), CStr(red(4)), stanica, koop, voz
+    PrefillStranaReversa CStr(red(5)), CStr(red(6)), stanica, koop, voz
+    If Len(stanica) = 0 Then Exit Function
+
+    ' Datum PRVI: predlog broja zavisi od njega (isto kao kod ostalih tipova).
+    dat = LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, ambDokID, COL_AMBD_DATUM)
+    If IsDate(dat) Then res = Spoji(res, "datum", Format$(CDate(dat), "dd.mm.yyyy"))
+    res = Spoji(res, "omid", stanica)
+    res = Spoji(res, "smerrev", CStr(n))
+    res = Spoji(res, "partnerid", koop)
+    res = Spoji(res, "vozacid", voz)
+    res = Spoji(res, "tipamb", CStr(red(1)))
+    res = Spoji(res, "amb1", BrojUTekst(CDbl(red(2))))
+    res = Spoji(res, "fokus", "kolamb")
+    PrefillReversa = res
+    Exit Function
+EH:
+    PrefillReversa = ""
+End Function
+
+' Strana reda knjige -> polje forme reversa, po tipu naloga.
+Private Sub PrefillStranaReversa(ByVal tip As String, ByVal id As String, _
+                                 ByRef stanica As String, ByRef koop As String, _
+                                 ByRef voz As String)
+    If StrComp(tip, AMB_NALOG_STANICA, vbTextCompare) = 0 Then
+        stanica = id
+    ElseIf StrComp(tip, AMB_NALOG_KOOPERANT, vbTextCompare) = 0 Then
+        koop = id
+    ElseIf StrComp(tip, AMB_NALOG_VOZAC, vbTextCompare) = 0 Then
+        voz = id
+    End If
+End Sub
 
 Private Function Spoji(ByVal res As String, ByVal k As String, ByVal v As String) As String
     Spoji = res

@@ -548,21 +548,10 @@ Public Function RunReversCorrection(ByVal brDok As String, ByVal dokumentTip As 
             r("success") = (Len(CStr(r("correctionID"))) > 0)
             r("message") = "Kreiran recovery zapis (RESI_KASNIJE)."
 
-        Case SV_MODE_ISPRAVKA
-            Dim cid As String
-            cid = CreateCorrectionContext(mode, FLOW_DOC_REVERS, revID, brDok, FLOW_DOC_REVERS, , , _
-                dokumentTip, , , "Ispravka reversa: storno stari, ceka novi.")
-            r("correctionID") = cid
-            ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
-            If Len(cid) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
-            If Not StornoOMKoopByBrDok_TX(brDok, dokumentTip, ambID) Then
-                FailCorrectionContext cid, "Storno starog reversa nije uspeo."
-                r("message") = "Storno reversa nije uspeo.": Exit Function
-            End If
-            r("needsForm") = True
-            r("success") = True
-            r("message") = "Stari revers storniran (uklonjen iz salda). Unesi NOVI revers; " & _
-                           "saldo racuna samo novi (bez duple stavke)."
+        ' ISPRAVKA vise nije ovde (10d): bila je dvokorak -- storno odmah, zamena
+        ' pri sledecem snimanju F7 -- nad starim identitetom (ReversID noge).
+        ' Ispravka naseg reversa je od 10d jedan potez nad AmbDokID-em
+        ' (modAmbalaza.IspravkaReversa_TX), pa ovaj mod pada u Case Else.
 
         Case SV_MODE_DUPLI, SV_MODE_PONISTENJE
             Dim cidX As String
@@ -589,72 +578,8 @@ EH:
     r("message") = "Greska: " & errDescEH
 End Function
 
-' Zavrsi ISPRAVKA reversa: veze novi revers u context -- NewDocID je ReversID
-' novog reversa, NewBroj njegov broj (labela). Saldo je vec tacan (stari
-' storniran, novi aktivan) -> nema dupliranja. Context postaje COMPLETED SAMO ako
-' novi revers stvarno postoji kao AKTIVAN (inace MANUAL_REQUIRED).
-' dokumentTip se cita iz konteksta (upisan u ParentDocType pri RunReversCorrection).
-'
-' newStanicaID / newDatum: stanica i dan NOVOG reversa iz snimanja
-' (ZavrsiIspravkuAko <- ReversUpisi). Pisac vraca samo uspeh, pa se ReversID
-' zamene nalazi po (broj, stanica, dan); zamena sme na drugu stanicu ili drugi
-' dan, pa se proverava bas taj revers, ne "ima li aktivan red pod ovim brojem".
-' Bez njih (legacy/test poziv) ReversID se trazi po (broj, tip) i mora biti
-' jednoznacan, inace MANUAL.
-Public Function CompleteReversIspravka(ByVal correctionID As String, ByVal newBrDok As String, _
-                                       Optional ByVal newStanicaID As String = "", _
-                                       Optional ByVal newDatum As Variant = Empty) As Object
-    Dim r As Object: Set r = NewRes(SV_MODE_ISPRAVKA)
-    Set CompleteReversIspravka = r
-    On Error GoTo EH
-    newBrDok = Trim$(newBrDok)
-    r("correctionID") = correctionID
-
-    Dim dokTip As String
-    dokTip = GetCorrectionField(correctionID, COL_SV_PARENT_DOCTYPE)
-    If Len(dokTip) = 0 Then
-        MarkCorrectionManual correctionID, "Nedostaje tip reversa u kontekstu -> zavrsi ispravku rucno.", _
-            "Context reversa nema DokumentTip (ParentDocType prazan)."
-        r("message") = "Ne mogu da odredim tip reversa iz konteksta. Oznaceno za recovery."
-        Exit Function
-    End If
-
-    ' NewDocID = ReversID NOVOG reversa; NewBroj = labela.
-    '
-    ' Smer zamene se NE pretpostavlja iz starog reversa: pogresan smer je upravo
-    ' jedan od razloga za ispravku, pa bi trazenje pod starim smerom ostavilo
-    ' ispravku MANUAL iako je zamena snimljena. Uz stanicu i dan iz snimanja zamenu
-    ' nosi JEDAN ReversID preko sva cetiri smera (ReversIDStanice sa praznim tipom).
-    ' Bez stanice (legacy/test poziv) vazi smer iz konteksta (ParentDocType).
-    ' Oba puta gledaju samo AKTIVNE redove, pa nadjen ReversID jeste aktivan revers.
-    Dim revRaz As String, newID As String
-    If Len(Trim$(newStanicaID)) > 0 And IsDate(newDatum) Then
-        newID = ReversIDStanice(newBrDok, "", Trim$(newStanicaID), Int(CDbl(CDate(newDatum))), False)
-        If Len(newID) = 0 Then _
-            revRaz = "Novi revers " & newBrDok & " nema jednoznacan aktivan ReversID na toj stanici " & _
-                     "tog dana -> identitet zamene nije poznat."
-    Else
-        revRaz = ReversIDRazresi("", newBrDok, dokTip, newID, False)
-    End If
-    ' Trag ne sme da pokazuje na ReversID cija granica dokumenta nije cista.
-    If Len(revRaz) = 0 Then revRaz = ReversIDGranica(newID)
-
-    If Len(revRaz) > 0 Then
-        MarkCorrectionManual correctionID, "Snimi novi revers pa ponovi zavrsetak ispravke.", _
-            revRaz
-        r("message") = "Novi revers nije pronadjen kao aktivan. Snimi novi revers pa ponovi zavrsetak ispravke."
-        Exit Function
-    End If
-
-    CompleteCorrectionContext correctionID, newID, newBrDok, "Ispravka reversa: novi revers " & newBrDok & "."
-    r("success") = True
-    r("message") = "Ispravka reversa zavrsena. Saldo racuna samo novi revers."
-    Exit Function
-EH:
-    Dim errDescEH As String: errDescEH = Err.description
-    LogErr MOD_NAME & ".CompleteReversIspravka"
-    r("message") = "Greska: " & errDescEH
-End Function
+' CompleteReversIspravka (druga faza dvokoraka ispravke reversa) je obrisan u
+' 10d -- ispravka je od tada jedan potez, modAmbalaza.IspravkaReversa_TX.
 
 ' ============================================================
 ' PRIJEMNICA - dispatch po modu. Prijemnica je skoro-list: nizvodni tok = paletne

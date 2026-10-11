@@ -2090,9 +2090,10 @@ nepostojećim `AmbDokID` odbijen **pre** storna) · sabotaže
 
 **Šta ostaje:** stari klaster u `modStorno` (`StornoOMKoopByBrDok_TX`,
 `ReversIDRazresi`, `ActiveAmbalazaDokExists`, `ReversStanicaDan`) **nije obrisan**
-— još ga zovu testovi, `modStornoFlow` i tok **ispravke** reversa
-(`modDokUnos`). Briše se u `10e`, po redosledu iz 6.13: stare strukture
-poslednje.
+— još ga zovu testovi i `modStornoFlow` (modovi DUPLI / PONIŠTENJE / REŠI KASNIJE,
+koje ekran reversu ne nudi). Tok **ispravke** ga od `10d` više ne zove: ispravka je
+jedan potez nad `AmbDokID`-em (6.13a). Briše se u `10e`, po redosledu iz 6.13: stare
+strukture poslednje.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
@@ -2109,9 +2110,67 @@ poslednje.
 5. **AMB-10c** — saldo, vozac, kooperant, stanica, kupac, ukupno u opticaju, pozajmljeno od partnera; staro i novo se mere **jedno protiv drugog**.
 6. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit. **Ulaz je
    vec legao** (`AMB-10-ODL-16`, 6.12d), jer bez njega cutover dokumenta koji ima
-   storno put ostavlja gajbe na saldu tiho. Ostaje: istorijski upit i veza sa
-   `UndoOperation_TX`.
+   storno put ostavlja gajbe na saldu tiho. **Ispravka naseg reversa ✅ (11.10.2026,
+   6.13a).** Ostaje: istorijski upit i veza sa `UndoOperation_TX`.
 7. **AMB-10e** — **tek tada** brisanje starog modela.
+
+### 6.13a Ispravka naseg reversa — jedan potez (10d, 11.10.2026)
+
+Od `10c` do `10d` revers je na ekranu Storno nudio **samo storno**: stari tok ispravke
+je radio nad identitetom noge (`ReversID`), a lista od `10c` salje `AmbDokID`.
+
+**Odluke operatera 11.10.2026:**
+
+| Pitanje | Odluka |
+|---|---|
+| Oblik ispravke | **Jedan potez**, kao ispravka otkupnog bloka (B-040). Dvokorak (storno odmah, zamena pri sledecem snimanju F7) je obrisan. |
+| Gde stoji veza | `IspravkaOdID` / `ZamenjenSaID` na kraju `tblAmbalazaDokument` **i** red u `tblStornoVeze` (A9 doslovno). |
+| REŠI KASNIJE za revers | zaseban rez. *(Merenje posle odluke: ekran Storno reversu taj mod nije nudio ni pre `10c`, v. MAPA B-025.)* |
+
+**Sta ispravka jeste.** Ispravka reversa **ne pomera robu**: stari dokument se povlaci
+i izdaje nov, sa novim brojem i novim `AmbDokID`-em (A9). Kroz knjigu prolaze
+**cetiri reda** — kontra-stav starog i upis novog, svaki sa obe strane:
+
+```
+fizicki       NISTA -- gajbe su gde su bile
+poslovni      stari povucen (Stornirano), nov izdat sa NOVIM brojem
+knjiga        kontra-stav starog  +  nov red
+saldo         isti ako je promenjen samo broj/datum; razlika TACNO za kolicinu
+```
+
+**Put:**
+
+```
+Storno ekran  AkcijeRacun -- "Zamena reversa" samo ako IspravkaReversaRazlog = ""
+klik          IspravkaReversaPripremi (kapija + forma)  -> F7 -> ClearForm
+              -> ApplyPrefill -> Scr_IspravkaReversaOtvori   (nista se ne menja)
+snimanje F7   SaveRevers -> ReversUpisi(p, poruke, AmbDokID)
+              -> modAmbalaza.IspravkaReversa_TX, JEDNA transakcija:
+                 StornirajAmbDokument (kontra-stav; AMB-INV-07 posle njega)
+                 UpisiReversUTx       (zaglavlje + red knjige)
+                 CreateCorrectionContext / IspravkaOdID / ZamenjenSaID
+                 CompleteCorrectionContext
+```
+
+**Storno prvi, kao kod otkupa.** `AMB-INV-07` se meri posle kontra-stava, dakle i u
+medjukoraku: revers cije su gajbe vec otisle dalje (kooperant ih je delom vratio) ne
+moze da se ispravi — isto pravilo koje ispravka otkupa ima danas.
+
+**Broj.** A9 trazi nov broj; poredi se **konacan** broj (i upisan i izracunat), pre
+pisca, da poruka imenuje pravilo. Stari broj ostaje **zauzet** — storno ga ne
+oslobadja (`AmbDokBrojZauzet` ne filtrira stornirane), pa se obrazac `KI-008` ne
+ponavlja.
+
+**Prefill (B-036 za revers).** Datum sa zaglavlja, smer iz para strana i vrste kretanja
+kroz **istu** mapu koju pisac koristi (`AmbReversSmerovi`), stanica / kooperant /
+vozac, tip i kolicina. Broj se ne preuzima. Vrsta voca se ne preuzima — revers je ne
+nosi.
+
+**Van ovog reza, glasno:** ispravka **kupcevog** reversa (`REVERS_PARTNERA`) ne postoji
+— kapija je odbija, a ekran nudi samo storno; ispravka naseg reversa ne sme da postane
+kupcev revers (`NOVUNOS_ERR_ISPR_REV_KUPAC`).
+
+*Provera:* `modTest` 214–219 · sabotaze `amb-isprrev-*` (deset).
 
 > **NALAZ IZ `10b-1`, ZA `10b-2`: tabela tokom prelaza nosi DVA OBLIKA REDA.**
 > Pisac ne upisuje stare kolone (`Smer`, `EntitetID`, `VozacID`) -- kopija bi bila

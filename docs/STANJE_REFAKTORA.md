@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 27.09.2026 (S5-5b spojen, #394 `561fcad9`).
+**Ažurirano:** 11.10.2026 (stavka 117, `10d` ispravka reversa).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · `10d` / `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** kod ✅, čeka reviewer GO (stavka 117) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -2593,6 +2593,74 @@
      **Stanje `main`-a na predaji:** `09d9c467`, potpis `b696c49e88e6ec1f`,
      `--require-green RC=0`, `DRUGI IZVOR 0`. Otvoreno i dalje: `KI-010` (smoke
      štampe, čeka podatke) i `B5b` otpremnica `1/220926`.
+
+117. **`10d` — ispravka našeg reversa u JEDNOM potezu** (11.10.2026). Grana
+     `claude/amb-10d-ispravka`, iz stavke 116.
+
+     **Odluke operatera (osa EVENTS iz 116):**
+
+     ```
+     oblik             JEDAN POTEZ (kao B-040 / IspravkaOtkupa_TX); dvokorak obrisan
+     veza              IspravkaOdID + ZamenjenSaID na kraju tblAmbalazaDokument
+                       I red u tblStornoVeze (A9 doslovno)
+     RESI KASNIJE      zaseban rez -- v. nalaz 2 ispod: premisa pitanja je bila netacna
+     ```
+
+     **Šta je urađeno** (domen: `docs/DOMEN/AMBALAZA.md` 6.13a):
+
+     - `modAmbalaza.IspravkaReversa_TX`: u **jednoj** transakciji storno starog, nov revers
+       sa novim brojem i `AmbDokID`-em, trag u `tblStornoVeze` (tip `AmbalazaDokument`,
+       ne `FLOW_DOC_REVERS` — stari tip nosi `ReversID` u `OldDocID`), veza po ID-u na
+       oba kraja, zatvaranje traga čija se povratna vrednost **čita**.
+     - Jedna kapija za ekran i pisca: `IspravkaReversaRazlog` (prazan ID, nejednoznačan
+       red, storniran, vrsta ≠ `REVERS`).
+     - Jezgra u transakciji pozivaoca: `StornirajAmbDokument` (bind je sada ovde —
+       `AMB_BIND_DOZVOLJENI` ažuriran) i `UpisiReversUTx`; kapije broja i smera izdvojene
+       (`ReversBrojZaUpis`, `ReversSmerZaUpis`) da ih ispravka prolazi **istim** putem.
+     - **Storno prvi, kao otkup:** `AMB-INV-07` važi i u međukoraku.
+     - Ekran: Storno nudi „Zamena reversa" (raspored i natpis od pre `10c`), klik otvara
+       F7 popunjen starim i ništa ne menja; snimanje F7 ide kroz ispravku.
+       `PrefillReversa` (B-036 za revers): datum, smer kroz `AmbReversSmerovi`, strane,
+       tip, količina — **bez broja**.
+     - Obrisano: `CompleteReversIspravka`, grana ISPRAVKA u `RunReversCorrection`,
+       `ZavrsiIspravkuAko`, `ZavrsiIspravkuPitanje`, šest testova dvokoraka u
+       `modTestStorno` (`TRev_TragIspravkeNosiReversID` prešao na `DUPLI` — isti trag,
+       isti `OldDocID`), varijanta potvrde `StornoPotvrdaTekst(mode)`.
+
+     **Nalazi tokom rada:**
+
+     1. **`IdiNaRezim` ne čisti formu kad je F7 već aktivan režim** — izlazi rano
+        (`key = ActiveMode`). Ispravka bi tada nasledila broj prethodnog unosa (sa
+        isključenim auto-brojem ga ni predlog ne bi pregazio). Zato `ClearForm` između
+        prelaska i prefill-a. **Isti obrazac postoji u `OtvoriIspravku` za prijemnicu** —
+        nije diran, van reza.
+     2. **Tvrdnja koju sam dao pre odluke bila je netačna:** rekao sam da je `10c` skinuo i
+        REŠI KASNIJE za revers. Izmereno posle: ekran Storno reversu taj mod **nije nudio
+        od prve verzije** (`dba78545`) — samo storno i zamenu. Grana u
+        `RunReversCorrection` postoji, ali je sa ekrana nedostižna od ranije. Odluka
+        „zaseban rez" je doneta nad pogrešnom premisom i vraća se operateru (MAPA B-025).
+     3. `ARNOST` ne vidi poziv u izraznoj poziciji: `StornoPotvrdaTekst(SV_MODE_ISPRAVKA)`
+        u `modTest` bi oborio compile modula. Nađen ručnim grep-om po imenu.
+     4. Sabotaža `otp-nacrt-zavrsava-ispravku` je **obrisana**: vraćala je poziv
+        `ZavrsiIspravkuAko`, koga više nema — oborila bi compile, ne tvrdnju.
+     5. Sidro `amb-inv08-zaglavlje-bez-kapije` je postalo dvoznačno (isti poziv i u jezgru
+        storna) — suženo na sledeći red pisca zaglavlja.
+
+     **Testovi:** `modTest` 214–219 (`T_AmbIspravkaReversa_*`), svi kroz produkcione
+     pisce; 219 ide kroz `Scr_BrojAkcija` → `IspravkaReversaPripremi` →
+     `Scr_IspravkaReversaOtvori` → `Scr_Save` F7. Katalog sabotaža **724 → 733**
+     (+10 `amb-isprrev-*`, −1). `RunStornoTestSuite` gubi šest testova dvokoraka, pa mu
+     broj tvrdnji **mora** pasti — to je merenje, ne regresija.
+
+     **Verifikacija:** zelene SAMO jeftine kapije — `vba_check` (191 fajl, katalog 733),
+     `vba_check --self-test`, `gen_schema_module --check`, `who_writes --check`
+     (regenerisan: `modAmbalaza` u transakciji `tblStornoVeze`, kao `modOtkup`),
+     `--check-ownership`, `popis_citalaca --check`. **`run_vba` i `dokaz.py` NISU
+     pušteni — čeka se reviewer GO.** Šema je promenjena (`0B3506AD`), pa fixture mora
+     da se regeneriše pre prvog prolaza. Compile ostaje ručna kapija.
+
+     **Ostaje:** odluka o REŠI KASNIJE za revers (nalaz 2); ispravka kupčevog reversa ne
+     postoji (glasno, kapija je odbija); `KI-010`; `B5b`; `10e`.
 
 ## Dug sa imenom (posle S5-5b)
 
