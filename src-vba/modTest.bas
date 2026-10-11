@@ -7366,6 +7366,12 @@ Private Sub T_AmbIstorija_PonovnaStampaKakoJeBilo()
     AssertEq (Len(dok1) > 0 And Len(dok2) > 0), True, "preduslov: oba reversa su upisana"
 
     o1 = modAmbalaza.GetKooperantAmbOpening(FX_KOOPERANT, FX_TIP_AMB, dok2, poznato)
+    ' Pozitivna kontrola za ODL-27 ide ODMAH, pre racunskih tvrdnji: pod sabotazom
+    ' "granica nikad" citac vraca 0, pa bi racunska tvrdnja pala prva i zaklonila
+    ' ovu (review #415, P2 dokazni -- isti obrazac kao A9 i #212). Dokument SA
+    ' svojim redom ima granicu; bez ove tvrdnje bi "nepoznato" u BFP prolazilo i
+    ' kad citac granicu nikad ne nadje.
+    AssertEq poznato, True, "dokument sa svojim redom knjige ima poznato pocetno stanje"
     preR1 = modAmbalaza.GetKooperantAmbOpening(FX_KOOPERANT, FX_TIP_AMB, dok1)
     sPre = IspRevSaldo(AMB_NALOG_KOOPERANT, FX_KOOPERANT)
 
@@ -7376,10 +7382,6 @@ Private Sub T_AmbIstorija_PonovnaStampaKakoJeBilo()
     AssertEq o2, o1, "ponovna stampa: storno ranijeg dokumenta ne menja pocetno stanje papira"
     AssertEq sPre - sPosle, 3, "tekuci saldo: storno ranijeg dokumenta JESTE oduzet"
     AssertEq o1 - preR1, 3, "pocetno stanje bloka sadrzi raniji revers -- granica je redosled upisa"
-    ' Pozitivna kontrola za ODL-27: dokument SA svojim redom ima granicu, pa je
-    ' pocetno stanje poznato. Bez nje bi tvrdnja "nepoznato" u BFP prolazila i
-    ' kad citac nikad ne nadje granicu.
-    AssertEq poznato, True, "dokument sa svojim redom knjige ima poznato pocetno stanje"
 End Sub
 
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _
