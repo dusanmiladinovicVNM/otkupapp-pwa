@@ -11,7 +11,6 @@ Option Explicit
 ' - AppendRow result check
 ' - RequireColumnIndex schema guards
 ' - Strict Smer = Ulaz / Izlaz
-' - Safe date filtering in GetVozacAmbSaldo
 ' - Numeric guards before CLng
 '
 ' NOTE:
@@ -60,36 +59,6 @@ Private Function IsValidAmbSmer(ByVal smer As String) As Boolean
             IsValidAmbSmer = True
         Case Else
             IsValidAmbSmer = False
-    End Select
-End Function
-
-' ============================================================
-' Vozac-perspektiva smera ambalaze (jednostran ledger).
-'
-' Ambalaza se upisuje JEDNOM, entitetski-relativno. Vozac je transporter
-' = INVERZNI protivpartner entiteta: sta entitetu UDE (Ulaz), iz vozaca
-' IZLAZI, i obrnuto. Definicija "za koga vazi suprotno":
-'   - Stanica (OM):    otpremnica / OM-ulaz   -> vozac = inverzno.
-'   - Kupac (hladnj.): prijemnica / izlaz-kupci -> vozac = inverzno.
-'   - Kooperant (otkup): NEMA vozaca -> izuzet uzvodno (filter / skip).
-' Primeri: otpremnica (Stanica Izlaz) -> vozac ULAZ (puni se);
-'          prijemnica-pune (Kupac Ulaz) -> vozac IZLAZ (prazni se).
-' Tako kompletna ruta daje saldo 0; otvorena otpremnica = pozitivan
-' saldo (gajbice jos kod vozaca).
-' ============================================================
-Public Function VozacAmbEffectiveSmer(ByVal smer As String, _
-                                      ByVal entitetTip As String) As String
-    Select Case Trim$(entitetTip)
-        Case "Stanica", "Kupac"
-            ' Transport: vozac je inverzni protivpartner entiteta.
-            Select Case Trim$(smer)
-                Case AMB_SMER_IZLAZ: VozacAmbEffectiveSmer = AMB_SMER_ULAZ
-                Case AMB_SMER_ULAZ:  VozacAmbEffectiveSmer = AMB_SMER_IZLAZ
-                Case Else:           VozacAmbEffectiveSmer = smer
-            End Select
-        Case Else
-            ' Kooperant (otkup) nema vozaca -> izuzet uzvodno; ostavi sirovo.
-            VozacAmbEffectiveSmer = smer
     End Select
 End Function
 
@@ -524,154 +493,6 @@ EH:
 End Function
 
 ' ============================================================
-' READ: saldo ambalaze po vozacu
-'
-' Returns:
-'   result(row, 1) = TipAmbalaze
-'   result(row, 2) = Izlaz
-'   result(row, 3) = Ulaz
-'   result(row, 4) = Saldo = Izlaz - Ulaz
-'
-' Semantika:
-'   Vozac saldo se racuna iz svih aktivnih pokreta gde je VozacID isti.
-'   Ne filtrira se po DokumentTip-u.
-' ============================================================
-
-Public Function GetVozacAmbSaldo(ByVal vozacID As String, _
-                                  Optional ByVal datumOd As Date = 0, _
-                                  Optional ByVal datumDo As Date = 0) As Variant
-    Const SRC As String = "modAmbalaza.GetVozacAmbSaldo"
-
-    On Error GoTo EH
-
-    If Len(Trim$(vozacID)) = 0 Then
-        GetVozacAmbSaldo = Empty
-        Exit Function
-    End If
-
-    Dim data As Variant
-    data = GetTableData(TBL_AMBALAZA)
-
-    If IsEmpty(data) Then
-        GetVozacAmbSaldo = Empty
-        Exit Function
-    End If
-
-    data = ExcludeStornirano(data, TBL_AMBALAZA)
-
-    If IsEmpty(data) Then
-        GetVozacAmbSaldo = Empty
-        Exit Function
-    End If
-
-    Dim colTip As Long
-    Dim colKol As Long
-    Dim colSmer As Long
-    Dim colVozac As Long
-    Dim colDatum As Long
-    Dim colEntTip As Long
-    Dim colDokTip As Long
-
-    colTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, SRC)
-    colKol = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, SRC)
-    colSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, SRC)
-    colVozac = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, SRC)
-    colDatum = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
-    colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-    colDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
-
-    Dim dict As Object
-    Set dict = CreateObject("Scripting.Dictionary")
-
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If AmbText(data(i, colVozac)) = Trim$(vozacID) Then
-
-            ' Otkup (Kooperant-nabavka) nije vozaceva transportna noga -> izuzmi
-            ' (inace dupli teret: otkup + otpremnica iste gajbice). Saldo vozaca =
-            ' otpremnica (utovar) - prijemnica (predaja).
-            If AmbText(data(i, colDokTip)) = DOK_TIP_OTKUP Then GoTo NextRow
-
-            If datumOd > 0 Or datumDo > 0 Then
-                If Not IsDate(data(i, colDatum)) Then GoTo NextRow
-
-                Dim d As Date
-                d = CDate(data(i, colDatum))
-
-                If datumOd > 0 And d < datumOd Then GoTo NextRow
-                If datumDo > 0 And d > datumDo Then GoTo NextRow
-            End If
-
-            Dim key As String
-            key = AmbText(data(i, colTip))
-
-            If Len(key) = 0 Then
-                Err.Raise vbObjectError + 4421, SRC, _
-                          "Prazan TipAmbalaze u redu " & CStr(i)
-            End If
-
-            If Not IsNumeric(data(i, colKol)) Then
-                Err.Raise vbObjectError + 4420, SRC, _
-                          "Neispravna koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e u redu " & CStr(i)
-            End If
-
-            If Not dict.Exists(key) Then dict.Add key, Array(0&, 0&) ' Izlaz, Ulaz
-
-            Dim vals As Variant
-            vals = dict(key)
-
-            ' Vozac = inverzni protivpartner entiteta (Stanica / Kupac); ruta
-            ' otpremnica -> prijemnica se netira na 0. Otkup nema vozaca (skip gore).
-            Dim effSmer As String
-            effSmer = VozacAmbEffectiveSmer(AmbText(data(i, colSmer)), AmbText(data(i, colEntTip)))
-
-            Select Case effSmer
-                Case AMB_SMER_IZLAZ
-                    vals(0) = CLng(vals(0)) + CLng(data(i, colKol))
-
-                Case AMB_SMER_ULAZ
-                    vals(1) = CLng(vals(1)) + CLng(data(i, colKol))
-
-                Case Else
-                    Err.Raise vbObjectError + 4422, SRC, _
-                              "Neispravan smer ambala" & ChrW(382) & "e u redu " & CStr(i)
-            End Select
-
-            dict(key) = vals
-        End If
-
-NextRow:
-    Next i
-
-    If dict.count = 0 Then
-        GetVozacAmbSaldo = Empty
-        Exit Function
-    End If
-
-    Dim result() As Variant
-    ReDim result(1 To dict.count, 1 To 4)
-
-    Dim keys As Variant
-    keys = dict.keys
-
-    For i = 0 To dict.count - 1
-        vals = dict(keys(i))
-
-        result(i + 1, 1) = keys(i)
-        result(i + 1, 2) = vals(0)
-        result(i + 1, 3) = vals(1)
-        result(i + 1, 4) = vals(0) - vals(1)
-    Next i
-
-    GetVozacAmbSaldo = result
-    Exit Function
-
-EH:
-    LogErr SRC
-    GetVozacAmbSaldo = Empty
-End Function
-
-' ============================================================
 ' READ: opcije za "Tip ambalaze" combo (frmOtkup / frmDokumenta)
 '
 ' Vraca tipove koje je kupac uneo u tblTipAmbalaze (maticni podaci).
@@ -983,8 +804,8 @@ End Sub
 ' AUDIT KANONSKE KNJIGE -- isti sud kao citanje, sakupljen umesto dignut.
 '
 ' Postoji jer modIntegritet pre ovoga NIJE gledao kanonsku knjigu: jedina
-' ambalazna provera (Chk_B10) gejtovana je starim tipovima dokumenta
-' (ReversTipJe), pa nad kanonskim redom cuti. Operater je mogao da pokrene
+' ambalazna provera (Chk_B10, obrisana u 10e-1) bila je gejtovana starim tipovima
+' dokumenta (ReversTipJe), pa je nad kanonskim redom cutala. Operater je mogao da pokrene
 ' integritet nad pokvarenom knjigom i dobije "nema nalaza" -- zato sto skener
 ' tu knjigu nije ni pogledao.
 '

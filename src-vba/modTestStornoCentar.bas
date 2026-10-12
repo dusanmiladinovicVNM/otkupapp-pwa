@@ -449,7 +449,7 @@ End Sub
 ' odbijen"; izbaci granicu iz UndoGuardReason -> "undo po operaciji: tudj red sa
 ' istim ReversID-om -> undo odbijen" (zurnal-put nema drugi sloj; legacy undo po
 ' broju hvata i ReversRedoviRID pri vracanju, pa "undo: tudj red ..." drze dva
-' sloja); izbaci B10 nalaz -> "B10: ReversID na redu koji nije revers prijavljen".
+' sloja). B10 nalaz (integritet) je otisao sa Chk_B10 u 10e-1.
 Public Sub Test_StornoReversGranicaRID_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -495,8 +495,6 @@ Public Sub Test_StornoReversGranicaRID_Auto()
     TcChk TcAmbStorno("SVT-GR-A-K") = "" And TcAmbStorno("SVT-GR-A-S") = "" And _
           TcAmbStorno("SVT-GR-A-X") = "", _
           "storno odbijen na granici: nijedan red nije promenjen (ni red otpremnice)"
-    TcChk InStr(1, TcIntegritetSa("SVT-GR-A-X"), "ReversID na redu koji nije revers", vbBinaryCompare) > 0, _
-          "B10: ReversID na redu koji nije revers prijavljen"
 
     ' Red drugog broja (isti smer) pod istim ReversID-om.
     rid = TcSeedKoopRevers("SVT-GR-B", d)
@@ -1104,17 +1102,6 @@ Private Function TcSeedKoopRevers(ByVal broj As String, ByVal d As Date) As Stri
     TcSeedRevNoga broj & "-K", d, "SVT-KOOP-GR1", "Kooperant", broj, DOK_TIP_OM_IZLAZ_KOOP, rid
     TcSeedRevNoga broj & "-S", d, "SVT-ST-GR1", "Stanica", broj, DOK_TIP_OM_IZLAZ_KOOP, rid
     TcSeedKoopRevers = rid
-End Function
-
-' Redovi nalaza integriteta (modIntegritet) koji sadrze dati tekst, spojeni vbLf.
-Private Function TcIntegritetSa(ByVal sadrzi As String) As String
-    Dim nal As Variant, i As Long, spoj As String
-    nal = modIntegritet.GetIntegritetRows()
-    If Not IsArray(nal) Then Exit Function
-    For i = LBound(nal, 1) To UBound(nal, 1)
-        If InStr(1, CStr(nal(i, 2)), sadrzi, vbBinaryCompare) > 0 Then spoj = spoj & CStr(nal(i, 2)) & vbLf
-    Next i
-    TcIntegritetSa = spoj
 End Function
 
 ' Oznaka storna reda ambalaze po AmbID-u, velikim slovima ("" = aktivan).

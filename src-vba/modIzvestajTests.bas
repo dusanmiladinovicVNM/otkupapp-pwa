@@ -65,7 +65,7 @@ Public Sub RunIzvestajTests()
     T_DispatchNepodrzanTip
     T_EntitetKod
     T_TabMatrica
-    T_ReversKljucPoTipu
+    T_AmbTipKljuc
 
     ' --- End-to-end nad tabelama (u transakciji, UVEK rollback) ---
     ' Seam testovi ne mogu da uhvate gresku u samom table-join-u, a upravo je
@@ -89,7 +89,6 @@ Public Sub RunIzvestajTests()
         T_E2E_KlasaIiIINeMesajuPrijem
         T_E2E_ProsecnaCenaZbirniKupac
         T_E2E_AmbPregledKanonskiDokumenti
-        T_E2E_ReversIstiBrojDveStanice
 
         tx.RollbackTx
         Set tx = Nothing
@@ -828,45 +827,18 @@ Private Sub T_TabMatrica()
     IzvChk IzvestajTabDostupan("OM", True, 10) = False, S & "runtime tab nije u matrici (zbirni)"
 End Sub
 
-' --- RF-07 (AUD-012 / FM-0029 #4): kljuc reversa nosi i TIP AMBALAZE ---
-Private Sub T_ReversKljucPoTipu()
-    Const S As String = "Revers kljuc: "
+' --- RF-07 (AUD-012 / FM-0029 #4): tip ambalaze je deo kljuca reda ---
+' Poklapanje reda sa reversom po (DokumentID, DokumentTip, tip) otislo je sa
+' starim modelom (10e-1); kljuc tipa ostaje, jer ga dele pregled i papir.
+Private Sub T_AmbTipKljuc()
+    Const S As String = "AmbTipKljuc: "
 
-    ' Isti dokument, DVA tipa gajbica -> samo izabrani tip pripada reversu.
-    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica", _
-                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica"), _
-           S & "isti dokument + isti tip -> pripada"
-    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Plasticna", _
-                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica") = False, _
-           S & "isti dokument + DRUGI tip -> NE pripada (bez mesanja tipova)"
-
-    ' Kljuc i dalje trazi isti dokument i isti tip dokumenta.
-    IzvChk ReversRedPripada("OTK-2", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica", _
-                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica") = False, _
-           S & "drugi DokumentID -> NE pripada"
-    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_ULAZ_KOOP, "Letvarica", _
-                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica") = False, _
-           S & "drugi DokumentTip -> NE pripada"
-
-    ' Slobodan unos sifarnika: razmaci i velicina slova ne smeju da razbiju match.
-    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, " letvarica ", _
-                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica"), _
-           S & "tip: trim + case-insensitive"
-
-    ' Kanonizacija mora da bude ISTA kao u pregledu (`AmbTipKljuc` na obe
-    ' putanje) -- inace pregled napravi dva reda a svaki revers sabere oba.
+    ' Kanonizacija mora da bude ISTA na svim putanjama (pregled i papir
+    ' dokumenta) -- inace pregled napravi dva reda a papir sabere oba.
     IzvChkEqText AmbTipKljuc(" letvarica "), AmbTipKljuc("Letvarica"), _
-           S & "AmbTipKljuc: trim + velicina slova daju isti kljuc"
+           S & "trim + velicina slova daju isti kljuc"
     IzvChk AmbTipKljuc("Letvarica") <> AmbTipKljuc("Plasticna"), _
-           S & "AmbTipKljuc: razliciti tipovi ostaju razliciti"
-
-    ' Prazan tip je legitimna grupa (red pregleda bez tipa), ne wildcard.
-    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "", _
-                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, ""), _
-           S & "prazan tip sa obe strane -> pripada"
-    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica", _
-                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "") = False, _
-           S & "prazan trazeni tip NIJE wildcard"
+           S & "razliciti tipovi ostaju razliciti"
 End Sub
 
 ' --- RF-07 review nalaz: matrica se ne sme raziti od core-a ---
@@ -1035,121 +1007,6 @@ EH:
     m_izvFailImena = m_izvFailImena & " | " & S & "ERROR " & Err.description
     Debug.Print "  FAIL | " & S & "ERROR " & Err.Number & ": " & Err.description
 End Sub
-
-' REVERS: ISTI BROJ, DVE STANICE ISTOG DANA (A2 red REV). Identitet je ReversID
-' (REV-IDENT-01): pregled po vozacu drzi dva reversa u DVA reda, svaki red nosi
-' svoj ReversID, a stampa bira noge po njemu -- i za KOOP, gde noga Kooperant ne
-' nosi stanicu. Stampa odbija red bez ReversID-a i ReversID koji nose redovi
-' drugog broja.
-' Fixture: seed u rollback-u; oblik noge je produkcioni (FIRMA smer pise samo
-' nogu Stanica sa vozacem, KOOP nogu Kooperant + nogu Stanica -- SaveOMUlaz_TX),
-' ReversID kuje produkciona fabrika (NoviReversID). Fault injection su noga bez
-' ReversID-a i red drugog broja pod istim ReversID-om.
-'
-' SABOTAZE: izbaci ReversID iz gkey reversa -> pukne "dva reversa ostaju dva
-' reda"; u ReversStampaNoge ne poredi ReversID -> pukne "stampa FIRMA bira samo
-' nogu svog ReversID-a"; pusti prazan ReversID -> pukne "stampa odbija revers bez
-' ReversID-a"; izbaci granicu dokumenta iz ReversStampaNoge -> pukne "stampa odbija
-' ReversID koji nosi i red koji nije revers" (red DRUGOG BROJA pod istim ReversID-om
-' hvataju i granica i petlja nogu -- dva sloja, pa "stampa odbija ReversID koji nose
-' redovi drugog broja" nije dokaz ni jedne od njih).
-Private Sub T_E2E_ReversIstiBrojDveStanice()
-    Const S As String = "E2E revers isti broj, dve stanice: "
-    On Error GoTo EH
-
-    Dim d As Date: d = IZVT_DATUM
-    Const DOK As String = "IZVT-REV-7"
-    Const DOKK As String = "IZVT-REV-8"
-    Const TIPA As String = "IZVT-Letvarica"
-    Const TIPC As String = "IZVT-Letvarica-C"
-    Const VOZ As String = "IZVT-VZ-REV"
-    Dim ridA As String: ridA = NoviReversID()
-    Dim ridB As String: ridB = NoviReversID()
-    Dim ridK1 As String: ridK1 = NoviReversID()
-    Dim ridK2 As String: ridK2 = NoviReversID()
-    Dim cols As Variant
-    cols = Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, COL_AMB_SMER, _
-                 COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, COL_AMB_VOZAC, COL_AMB_DOK_ID, _
-                 COL_AMB_DOK_TIP, COL_AMB_REVERS_ID)
-
-    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-A", d, TIPA, 10, "Ulaz", _
-                                      IZVT_STANICA, "Stanica", VOZ, DOK, DOK_TIP_OM_ULAZ_FIRMA, ridA)
-    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-B", d, TIPA, 20, "Ulaz", _
-                                      IZVT_STANICA2, "Stanica", VOZ, DOK, DOK_TIP_OM_ULAZ_FIRMA, ridB)
-
-    ' PREGLED JE ODAVDE SKINUT (AMB-10c). ReportAmbalaza cita KANONSKU knjigu,
-    ' a ovaj test seje STARI oblik -- pa bi tvrdnja o pregledu merila prazan
-    ' rezultat, ne pravilo. Isto pravilo (dva dokumenta ostaju dva reda, svaki
-    ' sa svojim identitetom u ref-kljucu) sada stoji u
-    ' T_E2E_AmbPregledKanonskiDokumenti, nad kanonskim oblikom.
-    '
-    ' STAMPA ostaje ovde i dalje meri stari put, jer on jos postoji: legacy
-    ' redovi se stampaju kroz ReversStampaNoge i ReversID. Nov dokument ima svoju
-    ' granu (StampajAmbDokument). Oba odlaze zajedno sa starim modelom u 10e --
-    ' tada i ovaj test.
-
-    Dim noge As Collection, raz As String
-    raz = ReversStampaNoge(DOK, DOK_TIP_OM_ULAZ_FIRMA, TIPA, ridB, noge)
-    IzvChkEqText raz, "", S & "stampa po ReversID-u razresava revers druge stanice"
-    IzvChkEqText IzvAmbIDRedova(noge), "IZVT-REV-B", S & "stampa FIRMA bira samo nogu svog ReversID-a"
-    ' Fault injection: noga istog broja i smera BEZ ReversID-a, sopstvenog tipa
-    ' ambalaze -- bez kapije bi bas ona postala papir.
-    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-C", d, TIPC, 4, "Ulaz", _
-                                      IZVT_STANICA, "Stanica", "", DOK, DOK_TIP_OM_ULAZ_FIRMA, "")
-    raz = ReversStampaNoge(DOK, DOK_TIP_OM_ULAZ_FIRMA, TIPC, "", noge)
-    IzvChk Len(raz) > 0, S & "stampa odbija revers bez ReversID-a"
-
-    ' KOOP: noga Kooperant ne nosi stanicu, ali nosi ReversID -- isti broj istog dana
-    ' na dve stanice daje dva papira. Do Faze 2a stampa je ovo odbijala.
-    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-K1", d, TIPA, 5, "Ulaz", _
-                                      "IZVT-KOOP-1", "Kooperant", "", DOKK, DOK_TIP_OM_IZLAZ_KOOP, ridK1)
-    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-S1", d, TIPA, 5, "Izlaz", _
-                                      IZVT_STANICA, "Stanica", "", DOKK, DOK_TIP_OM_IZLAZ_KOOP, ridK1)
-    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-K2", d, TIPA, 7, "Ulaz", _
-                                      "IZVT-KOOP-2", "Kooperant", "", DOKK, DOK_TIP_OM_IZLAZ_KOOP, ridK2)
-    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-S2", d, TIPA, 7, "Izlaz", _
-                                      IZVT_STANICA2, "Stanica", "", DOKK, DOK_TIP_OM_IZLAZ_KOOP, ridK2)
-    raz = ReversStampaNoge(DOKK, DOK_TIP_OM_IZLAZ_KOOP, TIPA, ridK1, noge)
-    IzvChkEqText raz, "", S & "KOOP: isti broj istog dana na dve stanice se stampa po ReversID-u"
-    IzvChkEqText IzvAmbIDRedova(noge), "IZVT-REV-K1|IZVT-REV-S1", _
-                 S & "KOOP: stampa bira noge Kooperant i Stanica svog ReversID-a"
-
-    ' Fault injection: isti ReversID na redu drugog broja -- papir se ne sklapa.
-    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-K9", d, TIPA, 3, "Ulaz", _
-                                      "IZVT-KOOP-1", "Kooperant", "", "IZVT-REV-9", _
-                                      DOK_TIP_OM_IZLAZ_KOOP, ridK1)
-    raz = ReversStampaNoge(DOKK, DOK_TIP_OM_IZLAZ_KOOP, TIPA, ridK1, noge)
-    IzvChk Len(raz) > 0, S & "stampa odbija ReversID koji nose redovi drugog broja"
-
-    ' Fault injection: red koji nije revers (otpremnica, sopstveni tip ambalaze) sa
-    ' ReversID-om reversa B. Tip ambalaze je drugi, pa ga petlja nogu ne bi ni
-    ' videla -- papir odbija granica dokumenta.
-    IzvSeed TBL_AMBALAZA, cols, Array("IZVT-REV-BX", d, TIPC, 2, "Izlaz", _
-                                      IZVT_STANICA2, "Stanica", "", "IZVT-OTP-BX", _
-                                      DOK_TIP_OTPREMNICA, ridB)
-    raz = ReversStampaNoge(DOK, DOK_TIP_OM_ULAZ_FIRMA, TIPA, ridB, noge)
-    IzvChk Len(raz) > 0, S & "stampa odbija ReversID koji nosi i red koji nije revers"
-    Exit Sub
-
-EH:
-    m_izvFail = m_izvFail + 1
-    m_izvFailImena = m_izvFailImena & " | " & S & "ERROR " & Err.description
-    Debug.Print "  FAIL | " & S & "ERROR " & Err.Number & ": " & Err.description
-End Sub
-
-' AmbID-evi redova tblAmbalaza (indeksi u GetTableData) spojeni "|", po redosledu.
-Private Function IzvAmbIDRedova(ByVal redovi As Collection) As String
-    If redovi Is Nothing Then Exit Function
-    Dim d As Variant: d = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(d) Then Exit Function
-    Dim c As Long: c = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
-    If c = 0 Then Exit Function
-    Dim v As Variant, spoj As String
-    For Each v In redovi
-        spoj = spoj & "|" & Trim$(NzToText(d(CLng(v), c)))
-    Next v
-    If Len(spoj) > 0 Then IzvAmbIDRedova = Mid$(spoj, 2)
-End Function
 
 ' Prazna celija ("" kad je smer bez kolicine) -> 0, za brojcano poredjenje.
 Private Function NzNum(ByVal v As Variant) As Double

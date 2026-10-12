@@ -7677,6 +7677,18 @@ SABOTAZE = {
         "T_AmbIstorija_KvarKnjigeNijeNepoznato",
         "kvar knjige: otkupni list se ne popunjava",
     ),
+    # PAPIR SAMO ZA AMBALAZNI DOKUMENT (10e-1). Rekonstrukcija starog reversa iz
+    # nogu je obrisana; bez kapije tipa bi tudji dokument stigao do citaoca
+    # zaglavlja i pao kao "nema zaglavlja" -- istinito, ali pogresan razlog.
+    "amb-10e1-stampa-pusta-tudji-tip": (
+        "modIzvestaj.bas",
+        "    If StrComp(Trim$(dokTip), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) <> 0 Then\n"
+        "        Err.Raise vbObjectError + 7504, SRC, _\n",
+        "    If False Then   ' SABOTAZA: tudji tip ide citaocu zaglavlja\n"
+        "        Err.Raise vbObjectError + 7504, SRC, _\n",
+        "T_AmbStampa_TudjiTipOdbijen",
+        "stampa: tip koji nije ambalazni dokument se odbija po imenu",
+    ),
 }
 
 

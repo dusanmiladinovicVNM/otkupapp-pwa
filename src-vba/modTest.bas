@@ -317,6 +317,7 @@ Public Sub RunAllTests()
     RunOne 222
     RunOne 223
     RunOne 224
+    RunOne 225
     RunOne 13
     RunOne 14
     RunOne 15
@@ -809,6 +810,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 222: TestName = "T_AmbIstorija_KarticaStornoVaziUnazad"
         Case 223: TestName = "T_AmbIstorija_PonovnaStampaKakoJeBilo"
         Case 224: TestName = "T_AmbIstorija_KvarKnjigeNijeNepoznato"
+        Case 225: TestName = "T_AmbStampa_TudjiTipOdbijen"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1041,6 +1043,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 222: T_AmbIstorija_KarticaStornoVaziUnazad
         Case 223: T_AmbIstorija_PonovnaStampaKakoJeBilo
         Case 224: T_AmbIstorija_KvarKnjigeNijeNepoznato
+        Case 225: T_AmbStampa_TudjiTipOdbijen
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -7435,6 +7438,34 @@ Private Sub T_AmbIstorija_KvarKnjigeNijeNepoznato()
              "kvar knjige: greska citaca dolazi iz ugovora knjige"
     AssertEq (wsKvar Is Nothing), True, _
              "kvar knjige: otkupni list se ne popunjava"
+End Sub
+
+' 225. PAPIR AMBALAZNOG DOKUMENTA SAMO ZA AMBALAZNI DOKUMENT (10e-1).
+'
+' Do 10e-1 je StampajReversAmbalaze svaki drugi tip dokumenta slao u
+' rekonstrukciju STAROG reversa iz nogu ledgera. Taj put je obrisan sa starim
+' modelom, jer redova tog oblika vise nema. Ulaz zato drugi tip ODBIJA po imenu,
+' umesto da ga pusti do citaoca zaglavlja: tamo bi OtkupID pao kao "nema
+' zaglavlja", sto je istinito, ali je pogresan razlog.
+'
+' Pozitivna kontrola je u 212 i 213 (ambalazni dokument stize do izlaza). Ovde
+' se meri samo granica: nista se ne upisuje i nista se ne stampa.
+' SABOTAZA: amb-10e1-stampa-pusta-tudji-tip -> pukne "stampa: tip koji nije
+' ambalazni dokument se odbija po imenu".
+Private Sub T_AmbStampa_TudjiTipOdbijen()
+    Dim dignuto As Boolean, razlog As String
+
+    On Error Resume Next
+    modIzvestaj.StampajReversAmbalaze "OTK-NIJE-AMB", DOK_TIP_OTKUP, FX_TIP_AMB
+    dignuto = (Err.Number <> 0)
+    razlog = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq dignuto, True, _
+             "stampa: tip koji nije ambalazni dokument ne prolazi tiho"
+    AssertEq (InStr(1, razlog, "nije ambalazni dokument", vbTextCompare) > 0), True, _
+             "stampa: tip koji nije ambalazni dokument se odbija po imenu"
 End Sub
 
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _
