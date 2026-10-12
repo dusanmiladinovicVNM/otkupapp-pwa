@@ -2348,6 +2348,15 @@ delimično: `StornoOtkup`, `StornoOtpremnica`, `StornoPrijemnica`, `KnjigaIntegr
 `RedDoticeKnjigu`, `RunAllChecks`, `UndoGuardReasonZaOp` i `ResolveDokBrojMape`. Posle
 svakog reza se broje **crvene**, ne samo padovi.
 
+**Odluke operatera 12.10.2026:**
+
+| Pitanje | Odluka |
+|---|---|
+| `ODL-24` pre ili posle `10e` | **`10e` prvo**, specifikacija pozajmice posle, nad jednim modelom. Enum se i tako širi jednom. |
+| **`AMB-10-ODL-28`** REŠI KASNIJE za revers | **Briše se sa starim klasterom.** Nijedan ekran ga nikad nije nudio: legacy `frmDokumenta` je nudila storno, ispravku i otkazivanje (do `58a3213d`), a ekran Storno od `dba78545` samo storno i zamenu. B-025 za revers postaje `INTENTIONALLY REMOVED`. Ako zatreba, gradi se kao nova sposobnost nad `AmbDokID`. |
+| Rezanje | **Tri reza, tri PR-a, serijski:** `10e-1` čitaoci, štampa i integritet → `10e-2` stari storno, undo i ispravka reversa plus zastavica → `10e-3` pisac, dvomodelni čitalac, šema i fixture. `10e-1` ide prvi, jer uklanja potrošače `modStorno` helpera iz drugih modula. |
+| Čip „print readers swallowing ledger corruption" | **Posle `10e`, zaseban PR.** To je politika greške, ne model podatka, a `modAmbalaza` se tako ne dira dvaput paralelno. |
+
 ### 6.14 Sta model sada ume da odgovori
 
 ```

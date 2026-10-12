@@ -2990,9 +2990,9 @@
      2. `10e-2`: stari storno, undo i ispravka reversa, plus zastavica `Stornirano`.
      3. `10e-3`: pisac, dvomodelni čitalac, šema i fixture.
 
-     **Otvoreno, pitanja operateru:** `ODL-24` pre ili posle; REŠI KASNIJE za revers
-     (nijedan ekran ga nikad nije nudio); rezanje; čip „print readers swallowing ledger
-     corruption".
+     **Odluke operatera (12.10.2026, AMBALAZA 6.13c):** `10e` ide pre specifikacije
+     `ODL-24`; REŠI KASNIJE za revers se briše (`AMB-10-ODL-28`); tri reza, tri PR-a;
+     čip „print readers swallowing ledger corruption" ide posle `10e`, kao zaseban PR.
 
 ## Dug sa imenom (posle S5-5b)
 
