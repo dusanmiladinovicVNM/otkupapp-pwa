@@ -3182,19 +3182,49 @@
      - Merač siročadi je pušten pre reza i posle njega i daje 0 novih siročadi. Prva dva
        kruga su našla `NoviReversID`, `AmbIDNoge` i `StornoOznaka`.
      - Svako obrisano ime je proveren grep-om, pa ostaju samo istorijski komentari.
-     - **`run_vba` i `dokaz` nisu pušteni, jer se čeka reviewer GO.** Posle GO-a ide pun
-       prolaz, pa jedan grupni dokaz nad 15 sabotaža u 7 prolaza. To su dve nove, devet sa
-       sidrom u presečenim procedurama i četiri nad dva testa kojima su dodate tvrdnje.
+     - **Posle reviewer GO** su pušteni pun prolaz i jedan grupni dokaz nad 15 sabotaža u 7
+       prolaza. To su dve nove, devet sa sidrom u presečenim procedurama i četiri nad dva
+       testa kojima su dodate tvrdnje.
 
        ```
        python tools/dokaz.py amb-10e2- amb-otkup-storno-bez-kontrastava amb-otp-storno-bez-kontrastava amb-prj-storno-bez-kontrastava amb-storno-primitiv-vezuje otk-storno-izvora-aktivne-otpremnice otp-storno-izvora-aktivne-zbirne blok-izvor-sme-storno amb-undo-preko-kontrastava amb-undo-odbijenica-bez-puta framework-otkup framework-otpremnica-vracen amb-isprrev-ekran-ne-nudi amb-isprrev-ekran-ne-prosledjuje --grupe
        ```
 
      **Compile ✅** (12.10.2026 17:13, izvor `4e68278b0c8a`): operater posle `ImportAllVBA`,
-     zabeleženo kroz `vba_gate --mark-compile`. Suite su još na prethodnom izvoru.
+     zabeleženo kroz `vba_gate --mark-compile`.
+
+     **Konačno** (izvor `4e68278b0c8a`, ugovor `f236a8675976`, fixture `580ff34c`). Svi
+     brojevi su tačno oni izvedeni iz diff-a:
+
+     ```
+     RunAllTests              225 / 0
+     RunBusinessFlowProSuite 2381 / 0      (2412 - 19 - 12)
+     RunStornoTestSuite       111 / 0      (131 - 20)
+     RunBankaImportTestSuite  241 / 0
+     12 / 12 ZELENO, marker upisan
+
+     dokaz.py <15 sabotaza> --grupe
+       crvenih 15 / 15, izvor pre/posle 22ab8d49f5582471 IDENTICAN
+       grupno izmereno 12 / 15; amb-otkup-storno-bez-kontrastava i
+         amb-storno-primitiv-vezuje su bile same u svojoj grupi (OK)
+       PROBLEM: otk-storno-izvora-aktivne-otpremnice NE OBARA SVOJ TEST
+       === NIJE DOKAZANO ===  (14 / 15 obara svoju tvrdnju)
+     ```
+
+     **Jedan član nije priznat, a to nije posledica reza.** `otk-storno-izvora-aktivne-otpremnice`
+     stoji u `POZNATI_NALAZI` (`tools/sabotaza.py`) kao „tvrdnja nije CEO STATIČAN literal".
+     Katalog za nju čuva podniz „pisac odbija storno izvora", a `dokaz.py` traži ceo literal,
+     pa ta sabotaža po konstrukciji ne može da dobije priznanje. Test je pao baš na dve tvrdnje
+     koje taj podniz nose u punom obliku: „OTK izvor otpremnice DRAFT: pisac odbija storno
+     izvora" i ista za IZDATO. Sabotaža dakle grize. U filter je ušla jer joj je sidro u
+     `StornoOtkup`, a kvar je trebalo prijaviti pre prolaza.
+
+     Popravka je jedan red: tvrdnja u katalogu postaje pun literal iz testa (koji ga već ima),
+     a unos odlazi iz `POZNATI_NALAZI`. Napomena tamo („ovih osam traži izmenu tuđeg testa")
+     za ovaj unos nije tačna.
 
      **Otvoreno:**
-     - reviewer GO, pa pun prolaz i dokaz;
+     - odluka o popravci kataloga za `otk-storno-izvora-aktivne-otpremnice` (ovde ili zaseban PR);
      - ručna provera iz stavke 126 (štampa reversa iz liste `AMBALAZA`, Integritet bez B10)
        još nije javljena;
      - `10e-3` (pisac, dvomodelni čitalac, šema, fixture) ide posle merge-a.
