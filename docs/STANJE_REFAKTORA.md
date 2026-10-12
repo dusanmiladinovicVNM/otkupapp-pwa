@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125); `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ kod, čeka review — stavka 126); `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -2993,6 +2993,57 @@
      **Odluke operatera (12.10.2026, AMBALAZA 6.13c):** `10e` ide pre specifikacije
      `ODL-24`; REŠI KASNIJE za revers se briše (`AMB-10-ODL-28`); tri reza, tri PR-a;
      čip „print readers swallowing ledger corruption" ide posle `10e`, kao zaseban PR.
+
+126. **`10e-1` — čitaoci, štampa i integritet starog modela obrisani** (12.10.2026).
+     Grana `claude/amb-10e1-citaoci`, prvi od tri reza (`AMBALAZA.md` 6.13c). Sve obrisano
+     je bilo nedostižno ili bez pozivaoca, a mereno je pre reza.
+
+     **Obrisano.**
+     - **Štampa:** rekonstrukcija starog reversa iz nogu (`ReversStampaNoge`,
+       `ReversRedPripada`, `IzvAmbRedStorniran`) i grana `OM-*` u `StampajDokumentReda`.
+     - **Labele:** `OM-*` u kartici i prevodu broja.
+     - **Kolona „osnov":** `OsnovNaziv` i sama kolona; nijedan ekran je ne deklariše od
+       `b1458258`.
+     - **Integritet i saldo vozača:** `Chk_B10_ReversBezID` i `GetVozacAmbSaldo` sa
+       `VozacAmbEffectiveSmer`.
+     - **Bez pozivaoca:** `ReversNaziv`, `GetStorniraniRevers`, 10 pomoćnika (5 produkcionih, 5 testnih) i 11 ključeva
+       poruka koji su ostali bez korisnika.
+
+     **Merenje siročadi.** Merač nad `47e590de` i nad rezom poredi procedure bez
+     pozivaoca, pa se brisanje ponavlja dok nova siročad ne nestanu. Kod u izraznoj
+     poziciji je proveren grep-om, jer ga `ARNOST` ne vidi.
+
+     **Promena ponašanja.** `StampajReversAmbalaze` sada drugi tip dokumenta **odbija po
+     imenu**. Ranije bi stigao do čitaoca zaglavlja i pao kao „nema zaglavlja", što je
+     istinito, ali pogrešan razlog. Ovo meri test `#225 T_AmbStampa_TudjiTipOdbijen`.
+     Nova sabotaža je `amb-10e1-stampa-pusta-tudji-tip`, pa katalog ide **742 → 743**.
+
+     **Testovi.**
+     - Obrisani su BFP `Test_BKTX_ReversIDNaSvimNogama` i `Test_BKTX_ReversIDJedanDokument`.
+       Merili su test-only pisca `TrackAmbalaza` i B10.
+     - Obrisan je i `T_E2E_ReversIstiBrojDveStanice`.
+     - `T_ReversKljucPoTipu` je postao `T_AmbTipKljuc`, a ključ tipa ostaje meren.
+
+     **Očekivani brojevi** (izvedeni iz diff-a, proverava ih prolaz):
+
+     | Suita | Pre | Posle | Razlog |
+     |---|---|---|---|
+     | `RunAllTests` | 224 | **225** | `#225` |
+     | `RunBusinessFlowProSuite` | 2442 | **2412** | −18 i −12, dva obrisana testa |
+     | `RunIzvestajTests` | — | **−14** | −7 ključ, −7 E2E |
+     | `RunStornoTestSuite`, `RunBankaImportTestSuite` | 131, 241 | bez promene | — |
+
+     **Mapa.** C-029, C-061, D-056 i `Chk_B10` su zatvoreni u `MAPA_SPOSOBNOSTI.md`.
+
+     **Platforma.** Nijedan modul nije obrisan, pa posle `ImportAllVBA` nema ručnog
+     `Remove`. Fixture se ne menja (u `make_fixture` je izmenjen samo komentar; potpis
+     podataka je isti).
+
+     **Verifikacija.** Jeftine kapije su zelene (`vba_check`, `--self-test`, `who_writes`
+     `--check` i `--check-ownership`, `gen_schema_module --check`, `popis_citalaca --check`,
+     `vba_gate --popis`). `run_vba` i dokaz čekaju reviewer GO. Plan dokaza je jedan
+     grupni prolaz: `amb-10e1-stampa-pusta-tudji-tip`, `amb-int-skener-ne-gleda-knjigu`
+     (`RunAllChecks`) i `izvestaji-amb-broj-ostaje-id` (`ResolveDokBrojMape`).
 
 ## Dug sa imenom (posle S5-5b)
 
