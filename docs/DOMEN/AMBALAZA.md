@@ -2115,6 +2115,7 @@ nepostojećim `AmbDokID` odbijen **pre** storna) · sabotaže
 koje ekran reversu ne nudi). Tok **ispravke** ga od `10d` više ne zove: ispravka je
 jedan potez nad `AmbDokID`-em (6.13a). Briše se u `10e`, po redosledu iz 6.13: stare
 strukture poslednje.
+**Obrisan u `10e-2` (6.13d).**
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
@@ -2357,6 +2358,63 @@ svakog reza se broje **crvene**, ne samo padovi.
 | **`AMB-10-ODL-28`** REŠI KASNIJE za revers | **Briše se sa starim klasterom.** Nijedan ekran ga nikad nije nudio: legacy `frmDokumenta` je nudila storno, ispravku i otkazivanje (do `58a3213d`), a ekran Storno od `dba78545` samo storno i zamenu. B-025 za revers postaje `INTENTIONALLY REMOVED`. Ako zatreba, gradi se kao nova sposobnost nad `AmbDokID`. |
 | Rezanje | **Tri reza, tri PR-a, serijski:** `10e-1` čitaoci, štampa i integritet → `10e-2` stari storno, undo i ispravka reversa plus zastavica → `10e-3` pisac, dvomodelni čitalac, šema i fixture. `10e-1` ide prvi, jer uklanja potrošače `modStorno` helpera iz drugih modula. |
 | Čip „print readers swallowing ledger corruption" | **Posle `10e`, zaseban PR.** To je politika greške, ne model podatka, a `modAmbalaza` se tako ne dira dvaput paralelno. |
+
+### 6.13d `10e-2` — stari storno, undo i ispravka reversa obrisani (12.10.2026)
+
+Drugi od tri reza iz 6.13c. Mapa iz 6.13c je ponovljena nad `eaf130da`, pre koda. Ovde
+stoji samo ono što je merenje **promenilo**, i šta posle reza važi.
+
+**Pisci zastavice `Stornirano` na `tblAmbalaza` su bili četiri, ne tri.** Mapa je
+nabrajala `StornoAmbalazaByDokument` i `UnmarkAmbalazaByDokument`. Pored njih stoje i
+`StornoOMKoopByBrDok`, preko `MarkRowStornirano`, i `modStornoZurnal.RestoreCell`, koji
+undo-om vraća svaku ćeliju čiju tabelu `PkColForTable` poznaje, a `tblAmbalaza` je tu
+bila. Obrisana su sva četiri. `PkColForTable` više ne vraća `tblAmbalaza`, pa je žurnal
+red nad njom „nepodržana tabela" (fail-closed), a ne ćelija koju undo tiho vraća. Posle
+reza zastavicu na knjizi ne piše niko, a nijedan čitalac van klastera je nije ni čitao.
+`tblAmbalaza` ima jednog pisca, `modAmbalaza` (`WRITE_OWNERSHIP.json`).
+
+**Legacy grana `UndoStorno_TX` je obrisana.** Granu za otkup ne doseže **nijedan** test,
+a ni produkcija: `StornoOtkup` uvek otvara žurnal operaciju (`BeginStornoOp`), pa
+`LatestOpFor` za njegov storno nikad ne vraća prazno. Ta grana je skidala `Stornirano`
+sa bloka i zastavicu sa reda knjige, a kontra-stav je ostajao, što znači aktivan otkup
+bez ambalaže, suprotno ODL-25. Granu za revers su dosezala samo dva testa starog oblika,
+i oba odlaze. Ostaje samo žurnal-put (`LatestOpFor` → `UndoOperation_TX`), i dalje
+`SAMO_TEST`. Sa granom su otišli i `OtkupBlockDeadParent` (verzija po broju; živa garda
+je `...ByID`, po redu) i njen test.
+
+**Kapija ODL-25 ostaje ista, i to je mereno.** `UndoGuardReasonZaOp` sada ima jedan
+razlog, `KontraStavRazlog`. Revers grana je otišla, jer operacija reversa više ne nastaje:
+storno reversa je kontra-stav nad `AmbDokID`-em i nije u žurnalu. Sidro sabotaže
+`amb-undo-preko-kontrastava` je ostalo netaknuto.
+
+**Šta revers na ekranu Storno može, i čime se to meri.** Ekran nudi samo storno
+(`StornirajAmbDokument_TX`) i „Zamenu reversa" (`IspravkaReversa_TX`). Okvir
+(`StornoIzvrsiMod`) nad reversom ne izvršava nijedan mod. `FLOW_DOC_REVERS` ostaje kao
+**tip**: po njemu `AkcijeRacun` i `GradiUvid` prepoznaju revers. Kapija zbog koje je
+stari okvir bio nedostižan meri se po ključevima reda odluke, a ne samo po broju dugmadi.
+
+- `T_AmbIspravkaReversa_EkranNudiIOtvara`: „revers nudi samo storno i zamenu, nijedan
+  drugi mod okvira". Sabotaža `amb-10e2-revers-nudi-drugi-mod` stavlja DUPLI umesto
+  ISPRAVKE, pa broj dugmadi ostaje 2.
+- `T_FrameworkIspravke_SamoTriTipa`: „framework ne izvrsava nijedan mod nad reversom".
+  Sabotaža je `amb-10e2-okvir-izvrsava-revers`.
+
+**Testovi.** Obrisani su testovi starog oblika:
+- `modTestStornoCentar`: šest testova i tri pomoćnika (`TcSeedRevNoga`, `TcSeedKoopRevers`,
+  `TcAmbStorno`);
+- `modTestStorno`: `T07`, dva `TRev` testa i revers tvrdnja u `T10`;
+- BFP: `Test_BKTX_ReversKoopIstiBrojDveStanice` i druga polovina
+  `Test_BKTX_ReversPisacOdbijaZauzet`.
+
+Prva polovina BFP testa meri **kanonskog** pisca i ostaje. Tri tvrdnje A9 iz druge
+polovine su od 10b-2 bile placebo. Stornirale su red starog oblika, a broj je držalo
+nestornirano kanonsko zaglavlje. A9 nad istim skenom niza meri `Test_REV_AutoBrojJedanNiz`.
+`Test_StornoJournalUndo_Auto` meri otkup **bez** ambalaže, i to po pravilu: undo bez
+ambalažnog efekta prolazi, a sa njim ODL-25 odbija (BFP `Test_Amb_UndoStornaOdbijenNadKnjigom`).
+
+*Provera:* BFP 2412 → **2381** (−31). `RunStornoTestSuite` 131 → **111** (−20).
+`RunAllTests` ostaje 225 testova, uz dve nove tvrdnje. `Test_StornoCentar_All` je izgubio
+74 tvrdnje, ali broj u zelenom prolazu ne ispisuje. Katalog sabotaža je 743 → **745**.
 
 ### 6.14 Sta model sada ume da odgovori
 
