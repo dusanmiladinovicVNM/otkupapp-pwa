@@ -24,8 +24,7 @@
   ],
   "tblAmbalaza": {
     "row_owner": [
-      "modAmbalaza",
-      "modStornoRecovery"
+      "modAmbalaza"
     ],
     "schema_owner": [],
     "cilj": []

@@ -7689,6 +7689,29 @@ SABOTAZE = {
         "T_AmbStampa_TudjiTipOdbijen",
         "stampa: tip koji nije ambalazni dokument se odbija po imenu",
     ),
+    # REVERS NA EKRANU STORNO: SAMO STORNO I ZAMENA (10e-2). Stari okvir
+    # ispravke reversa (RunReversCorrection) je obrisan jer do njega ekran nije
+    # stizao -- red odluke nudi storno i ISPRAVKU, a StornoPoModu za revers izlazi
+    # pre StornoIzvrsiMod. Broj dugmadi to ne meri: DUPLI umesto ISPRAVKE ostavlja
+    # dva. Zato tvrdnja cita KLJUCEVE reda odluke.
+    "amb-10e2-revers-nudi-drugi-mod": (
+        "modScrStorno.bas",
+        "                SV_MODE_ISPRAVKA & \"|OTKUI_SCRST_B_REV_ISPR|OTKUI_SCRST_H_REV_ISPR|secondary\")\n",
+        "                SV_MODE_DUPLI & \"|OTKUI_SCRST_B_REV_ISPR|OTKUI_SCRST_H_REV_ISPR|secondary\")   ' SABOTAZA: revers nudi DUPLI\n",
+        "T_AmbIspravkaReversa_EkranNudiIOtvara",
+        "revers nudi samo storno i zamenu, nijedan drugi mod okvira",
+    ),
+    # OKVIR NAD REVERSOM NE IZVRSAVA NISTA (10e-2). FLOW_DOC_REVERS ostaje kao
+    # TIP (po njemu ekran prepoznaje revers), ali StornoIzvrsiMod za njega nema
+    # granu. Sabotaza revers usmerava u granu drugog tipa -- isto sto bi uradilo
+    # vracanje bilo kog moda okvira nad reversom.
+    "amb-10e2-okvir-izvrsava-revers": (
+        "modStornoDok.bas",
+        "        Case FLOW_DOC_ZBIRNA:     Set StornoIzvrsiMod = RunZbirnaCorrection(broj, mode, forceConfirm, docID)\n",
+        "        Case FLOW_DOC_ZBIRNA, FLOW_DOC_REVERS: Set StornoIzvrsiMod = RunZbirnaCorrection(broj, mode, forceConfirm, docID)   ' SABOTAZA: okvir izvrsava revers\n",
+        "T_FrameworkIspravke_SamoTriTipa",
+        "framework ne izvrsava nijedan mod nad reversom",
+    ),
 }
 
 

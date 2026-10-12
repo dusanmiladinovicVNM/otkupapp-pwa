@@ -5,12 +5,13 @@ Option Explicit
 ' modStornoZurnal - append-only cell-level zurnal storno operacija za LOSSLESS
 ' "Vrati storno" (pravi inverz storna).
 '
-' Ambient op-kontekst: storno primitiva (StornoOtkup / StornoOMKoopByBrDok) pozove
+' Ambient op-kontekst: storno primitiva (StornoOtkup) pozove
 ' BeginStornoOp na ulazu; mutacione tacke JournalCell-uju (StaraVrednost, NovaVrednost)
 ' PRE mutacije; EndStornoOp zatvara. UndoOperation_TX vrati svaku celiju na
 ' StaraVrednost i cilja SAMO tu operaciju.
 '
-' Opseg (faza 1): Otkup + Revers (OM-koop). Chain kasnije.
+' Opseg: Otkup (i veza novca uz njega). Revers je izasao u 10e-2 -- storno mu je
+' kontra-stav u knjizi, ne celija.
 '
 ' SIGURNOST (posle review-a):
 '  - BeginStornoOp je FAIL-CLOSED: bez OperationID -> raise (storno se prekida), nema
@@ -106,8 +107,7 @@ End Sub
 ' red nije u zurnalu -- pa undo vrati zaglavlje u AKTIVNO, a ambalazni efekat
 ' ostaje anuliran. Dokument bi bio aktivan sa nula ambalaze: tiha
 ' kontradikcija, i to na POSTOJECOJ lossless undo putanji (review 03.10.2026,
-' P1 #3). Legacy UndoStorno_TX ne spasava stvar jer kad operacija postoji on
-' odmah delegira ovamo.
+' P1 #3). UndoStorno_TX (po broju) ide istim putem -- od 10e-2 drugog nema.
 '
 ' Dok se ne definise KOJI POSLOVNI DOGADJAJ je "vracanje storna" nad
 ' append-only knjigom, undo se ODBIJA. Dve ocigledne zakrpe su odbijene jer
@@ -118,11 +118,14 @@ End Sub
 ' tog reda (AmbDokTipZaIzvornuTabelu), ne iz oznake operacije:
 '
 '   tblOtkup.Stornirano   -> Otkup        -> pitaj knjigu
-'   tblAmbalaza.Stornirano -> nije izvorna tabela -> preskoci
+'   druga tabela          -> nije izvorna tabela -> preskoci
 '
-' Oznaka operacije (DocType) bi danas za otkup bila ista, ali za revers je
-' 'OM-Izlaz-Koop' dok ce u knjizi stajati 'AmbalazaDokument' -- pa bi se posle
-' tog cutovera razisla. Tabela je cinjenica, oznaka je labela.
+' Zastavicu Stornirano na tblAmbalaza ova kapija nikad nije citala kao hranu; od
+' 10e-2 je niko ni ne pise ni ne zurnalira.
+'
+' Oznaka operacije (DocType) bi za otkup bila ista, ali se oznaka i tip u knjizi
+' razilaze cim dokument promeni ime (stari revers: 'OM-Izlaz-Koop' naspram
+' 'AmbalazaDokument'). Tabela je cinjenica, oznaka je labela.
 '
 ' Kljuc je KOMPOZITAN (DokumentTIP, DokumentID): AMB-INV-04 nosi tip tacno zato
 ' sto se jedan globalni namespace DokumentID-eva ne sme pretpostaviti
@@ -220,8 +223,7 @@ Public Function UndoOperation_TX(ByVal opID As String) As Boolean
     Next i
     If rows.count = 0 Then Err.Raise ERR_SZ_BASE + 3, SRC, "Operacija nije nadjena: " & opID
 
-    ' Garde: dead-parent (otkup) + active-dup ambalaze (revers, po KLJUCU iz redova
-    ' ove operacije). Otkup active-dup se proverava PO REDU nize (parcijalna klasa).
+    ' Garda operacije (kontra-stav u knjizi); mrtav roditelj otkupa ide PO REDU nize.
     Dim gr As String: gr = UndoGuardReasonZaOp(opID, docType, broj)
     If Len(gr) > 0 Then Err.Raise ERR_SZ_BASE + 4, SRC, gr
 
@@ -278,120 +280,35 @@ EH:
 End Function
 
 ' Undo garda za KONKRETNU operaciju -- ista kapija za UndoOperation_TX i za ekran
-' Oporavak (VratiStorno). Za revers ReversID dolazi iz redova koje je BAS ova
-' operacija stornirala, ne iz broja: isti broj reversa legalno nosi i revers druge
-' stanice ili drugog dana (A2), pa bi garda po broju odbila legitiman undo ili
-' pustila duplikat.
-' FAIL-CLOSED: red bez ReversID-a, vise ReversID-a, ili greska -> razlog.
+' Oporavak (VratiStorno), pa operater vidi razlog, ne samo odbijenicu.
+'
+' Jedan razlog: kontra-stav u knjizi (AMB-10-ODL-19, konacan po AMB-10-ODL-25).
+' Revers grana (ReversID iz AmbID-eva operacije, duplikat u nizu stanica/dan) je
+' obrisana u 10e-2 -- storno reversa je kontra-stav nad AmbDokID-em i nije u
+' zurnalu, pa operacija reversa ne nastaje. Mrtav roditelj otkupa se proverava PO
+' REDU u UndoOperation_TX (OtkupBlockDeadParentByID).
+' docType i broj ostaju u potpisu: oba pozivaoca ih imaju, a ekran ih prikazuje.
+' FAIL-CLOSED: greska -> razlog.
 Public Function UndoGuardReasonZaOp(ByVal opID As String, ByVal docType As String, _
                                     ByVal broj As String) As String
-    Dim rid As String, raz As String
+    Dim raz As String
     On Error GoTo EH
 
-    ' Kontra-stavovi se ne mogu vratiti celijama -- gleda se PRVO, jer vazi za
-    ' svaki tip dokumenta.
+    ' Kontra-stavovi se ne mogu vratiti celijama.
     raz = KontraStavRazlog(opID)
-    If Len(raz) > 0 Then
-        UndoGuardReasonZaOp = raz
-        Exit Function
-    End If
-
-    If Not ReversTipJe(docType) Then
-        UndoGuardReasonZaOp = UndoGuardReason(docType, broj)
-        Exit Function
-    End If
-    raz = ReversIDOperacije(opID, rid)
-    If Len(raz) > 0 Then
-        UndoGuardReasonZaOp = raz
-        Exit Function
-    End If
-    UndoGuardReasonZaOp = UndoGuardReason(docType, broj, rid)
+    UndoGuardReasonZaOp = raz
     Exit Function
 EH:
     LogErr MOD_NAME & ".UndoGuardReasonZaOp"
     UndoGuardReasonZaOp = "Greska pri proveri undo garde -> odbijeno (fail-closed)."
 End Function
 
-' ReversID reversa iz AmbID-eva koje je operacija opID stornirala -- svaka noga
-' ga nosi, pa nema uparivanja preko noge Stanica.
-' "" = tacno jedan ReversID (ByRef popunjen); inace razlog.
-Public Function ReversIDOperacije(ByVal opID As String, ByRef reversID As String) As String
-    Const SRC As String = MOD_NAME & ".ReversIDOperacije"
-    Dim ids As Object: Set ids = CreateObject("Scripting.Dictionary")
-    ids.CompareMode = vbTextCompare
-    Dim i As Long
-    reversID = ""
-
-    Dim z As Variant: z = GetTableData(TBL_STORNO_ZURNAL)
-    If IsArray(z) Then
-        Dim cOp As Long, cTbl As Long, cRow As Long
-        cOp = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_OP_ID, SRC)
-        cTbl = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_TABELA, SRC)
-        cRow = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_ROWID, SRC)
-        For i = 1 To UBound(z, 1)
-            If Trim$(NzToText(z(i, cOp))) = Trim$(opID) Then
-                If StrComp(Trim$(NzToText(z(i, cTbl))), TBL_AMBALAZA, vbTextCompare) = 0 Then
-                    ids(Trim$(NzToText(z(i, cRow)))) = True
-                End If
-            End If
-        Next i
-    End If
-    If ids.count = 0 Then
-        ReversIDOperacije = "Operacija " & opID & " nema redova ambalaze -> ReversID " & _
-                            "nije poznat. Odbijeno."
-        Exit Function
-    End If
-
-    Dim nasao As String, rid As String
-    Dim a As Variant: a = GetTableData(TBL_AMBALAZA)
-    If IsArray(a) Then
-        Dim cID As Long, cRid As Long
-        cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
-        cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC)
-        For i = 1 To UBound(a, 1)
-            If ids.Exists(Trim$(NzToText(a(i, cID)))) Then
-                rid = Trim$(NzToText(a(i, cRid)))
-                If Len(rid) = 0 Then
-                    ReversIDOperacije = "Operacija " & opID & " je stornirala red ambalaze " & _
-                                        Trim$(NzToText(a(i, cID))) & " bez ReversID-a -> undo " & _
-                                        "nije jednoznacan. Odbijeno (fail-closed)."
-                    Exit Function
-                ElseIf Len(nasao) = 0 Then
-                    nasao = rid
-                ElseIf StrComp(rid, nasao, vbTextCompare) <> 0 Then
-                    ReversIDOperacije = "Operacija " & opID & " je stornirala redove vise reversa " & _
-                                        "(ReversID) -> undo nije jednoznacan. Odbijeno."
-                    Exit Function
-                End If
-            End If
-        Next i
-    End If
-    If Len(nasao) = 0 Then
-        ReversIDOperacije = "Operacija " & opID & " nema svoje redove u tblAmbalaza -> ReversID " & _
-                            "nije poznat. Odbijeno (fail-closed)."
-    Else
-        reversID = nasao
-    End If
-End Function
-
-' Opis operacije za potvrdu "Vrati storno": tip i broj, a za revers i otkupno mesto
-' i dan njegovog ReversID-a. REV-IDENT-01 Faza 2b: isti KOOP broj, smer i dan
-' legalno nose reversi dve stanice (i istog kooperanta), pa lista i potvrda po
-' (tip, broj) ne kazu KOJI se vraca. Kad ReversID operacije nije razresiv, ostaje
-' tip i broj -- garda (UndoGuardReasonZaOp) tada vec odbija.
+' Opis operacije za potvrdu "Vrati storno": tip i broj. Za revers je nosio i
+' otkupno mesto i dan (ReversID operacije) -- obrisano u 10e-2, jer storno reversa
+' nije u zurnalu pa takve operacije nema. opID ostaje u potpisu pozivaoca.
 Public Function UndoOpisOperacije(ByVal opID As String, ByVal docType As String, _
                                   ByVal broj As String) As String
-    Dim opis As String, rid As String, st As String, dan As Long
-    opis = Trim$(docType) & " " & Trim$(broj)
-    UndoOpisOperacije = opis
-    On Error GoTo EH
-    If Not ReversTipJe(docType) Then Exit Function
-    If Len(ReversIDOperacije(opID, rid)) > 0 Then Exit Function
-    If Len(ReversStanicaDan(rid, st, dan)) > 0 Then Exit Function
-    UndoOpisOperacije = opis & modDokUnos.ReversOpis(st, CDate(dan))
-    Exit Function
-EH:
-    UndoOpisOperacije = opis
+    UndoOpisOperacije = Trim$(docType) & " " & Trim$(broj)
 End Function
 
 Private Sub RestoreCell(ByVal tbl As String, ByVal rowID As String, _
@@ -402,11 +319,13 @@ Private Sub RestoreCell(ByVal tbl As String, ByVal rowID As String, _
     If ri > 0 Then RequireUpdateCell tbl, ri, col, oldVal, SRC
 End Sub
 
-' PK kolona po tabeli (opseg faze 1: Otkup + Revers -> tblOtkup/Ambalaza/Novac).
+' PK kolona po tabeli koju zurnal sme da vrati: tblOtkup i tblNovac.
+' tblAmbalaza je izasla u 10e-2 -- knjiga je nepromenljiva, a zastavicu na njoj
+' vise niko ne pise. Zurnal red nad njom je zato "nepodrzana tabela" (fail-closed),
+' ne celija koju undo tiho vraca.
 Private Function PkColForTable(ByVal tbl As String) As String
     Select Case tbl
         Case TBL_OTKUP: PkColForTable = COL_OTK_ID
-        Case TBL_AMBALAZA: PkColForTable = COL_AMB_ID
         Case TBL_NOVAC: PkColForTable = COL_NOV_ID
     End Select
 End Function
@@ -459,55 +378,6 @@ Public Function LatestOpFor(ByVal docType As String, ByVal broj As String) As St
     Exit Function
 EH:
     LogErr MOD_NAME & ".LatestOpFor"
-End Function
-
-' Najskoriji OperationID za revers (docType, broj) CIJI je ReversID zadat --
-' ReversID se cita iz redova koje je operacija stornirala. Broj reversa je labela,
-' pa "poslednja operacija po broju" (LatestOpFor) moze biti tudja: storno reversa
-' iste oznake na drugoj stanici, i to vec vracen.
-' Poslednja operacija ISTOG ReversID-a je ona koja drzi trenutno storno: undo ne
-' pravi novu operaciju, a svaki nov storno pravi.
-' "" = nema operacije tog ReversID-a (storno pre zurnala). Greska se DIZE: bez nje
-' bi pozivalac tiho presao na put bez zurnala.
-Public Function LatestOpForRevers(ByVal docType As String, ByVal broj As String, _
-                                  ByVal reversID As String) As String
-    Dim errNum As Long, errDesc As String
-    On Error GoTo EH
-    Dim data As Variant: data = GetTableData(TBL_STORNO_ZURNAL)
-    If IsEmpty(data) Then Exit Function
-    Dim cOp As Long, cDoc As Long, cBroj As Long
-    cOp = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_OP_ID, MOD_NAME & ".LatestOpForRevers")
-    cDoc = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_DOCTYPE, MOD_NAME & ".LatestOpForRevers")
-    cBroj = RequireColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_BROJ, MOD_NAME & ".LatestOpForRevers")
-
-    Dim ops As Object: Set ops = CreateObject("Scripting.Dictionary")
-    Dim i As Long, opv As String
-    For i = 1 To UBound(data, 1)
-        If StrComp(Trim$(NzToText(data(i, cDoc))), docType, vbTextCompare) = 0 _
-           And StrComp(Trim$(NzToText(data(i, cBroj))), Trim$(broj), vbTextCompare) = 0 Then
-            opv = Trim$(NzToText(data(i, cOp)))
-            If Len(opv) > 0 Then ops(opv) = OpNum4(opv, "SOP-")
-        End If
-    Next i
-
-    Dim best As String, bestN As Long, k As Variant, rid As String
-    bestN = -1
-    For Each k In ops.keys
-        If CLng(ops(k)) > bestN Then
-            If Len(ReversIDOperacije(CStr(k), rid)) = 0 Then
-                If StrComp(rid, Trim$(reversID), vbTextCompare) = 0 Then
-                    best = CStr(k)
-                    bestN = CLng(ops(k))
-                End If
-            End If
-        End If
-    Next k
-    LatestOpForRevers = best
-    Exit Function
-EH:
-    errNum = Err.Number: errDesc = Err.description
-    LogErr MOD_NAME & ".LatestOpForRevers"
-    Err.Raise errNum, MOD_NAME & ".LatestOpForRevers", errDesc
 End Function
 
 ' Numericki deo ID-a sa datim prefiksom (SOP-/ZUR-). 0 ako ne pasuje.

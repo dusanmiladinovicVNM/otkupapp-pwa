@@ -2453,9 +2453,7 @@ End Sub
 ' Ekran pita StornoRazlog pre nego sto uopste ponudi potvrdu -- da operater
 ' vidi zasto se nesto ne moze stornirati, umesto tihog neuspeha posle "Da".
 ' Pada ako se neka grana Select Case-a izgubi (tada nepostojeci dokument
-' prolazi kapiju i ide pravo u Storno*_TX) ili ako se izgubi zahtev za
-' smerom reversa (cetiri smera dele isti brojevni niz, pa bi bez smera
-' StornoOMKoopByBrDok_TX gadjao pogresne redove).
+' prolazi kapiju i ide pravo u Storno*_TX). Revers se od 10c bira po AmbDokID-u.
 '
 ' Test NE upisuje nista: svi brojevi su izmisljeni, pa nijedna grana ne
 ' stigne do transakcije.
@@ -2619,6 +2617,16 @@ Private Sub T_FrameworkIspravke_SamoTriTipa()
                   SV_MODE_ISPRAVKA, False, False) Is Nothing), True, _
                  "framework ne izvrsava nista nad: " & CStr(nisu(i))
     Next i
+
+    ' REVERS JE TIP OKVIRA, ALI OKVIR NAD NJIM NE IZVRSAVA NISTA (10e-2). Po tipu
+    ' ekran prepoznaje revers (uvid se ne gradi, red odluke je storno + zamena),
+    ' a storno ide kroz StornirajAmbDokument_TX i zamena kroz IspravkaReversa_TX.
+    ' Do 10e-2 je ovde stajao RunReversCorrection nad nogama STAROG oblika, do
+    ' kog ekran nije stizao (StornoPoModu izlazi pre StornoIzvrsiMod). Kapija koja
+    ' ga je cinila nedostiznim meri se u T_AmbIspravkaReversa_EkranNudiIOtvara.
+    AssertEq (modStornoDok.StornoIzvrsiMod(STIP_REVERSI, "1/TEST", "", _
+              SV_MODE_DUPLI, False, False) Is Nothing), True, _
+             "framework ne izvrsava nijedan mod nad reversom"
 End Sub
 
 ' ZBIRNA VISE NE NUDI ISPRAVKU -- A PRIJEMNICA JE JOS NUDI (S4-3a).
@@ -7092,6 +7100,11 @@ Private Sub T_AmbIspravkaReversa_EkranNudiIOtvara()
     modScrStorno.Scr_ResetCache
     modScrStorno.Scr_IzborTestSet STIP_REVERSI, revBroj, revDok, AMB_DOK_REVERS
     AssertEq modScrStorno.Scr_BrojAkcija(), 2, "aktivan nas revers nudi storno i ZAMENU (10d)"
+    ' KLJUCEVI, ne samo broj: zamena DUPLI-jem bi broj ostavila istim. Storno je
+    ' prazan kljuc, zamena je ISPRAVKA -- nijedan drugi mod okvira (10e-2 je
+    ' obrisao RunReversCorrection, pa revers drugog moda ni nema).
+    AssertEq modScrStorno.Scr_AkcijeKljucevi(), ";;" & SV_MODE_ISPRAVKA & ";", _
+             "revers nudi samo storno i zamenu, nijedan drugi mod okvira"
     modScrStorno.Scr_ResetCache
 
     razlog = modScrDokumenti.IspravkaReversaPripremi(revDok, spec)
@@ -18225,8 +18238,8 @@ End Sub
 ' F7 KOOP REVERS -- isti (broj, smer, dan) na DRUGOJ stanici PROLAZI ekran
 ' (REV-IDENT-01 Faza 2b): noge jednog reversa povezuje ReversID, pa zabrana iz
 ' ranijih faza vise ne postoji. ISTA stanica istog dana i dalje odbija -- niz je
-' (stanica, dan) za sva cetiri smera. Pisac isto meri BFP
-' Test_BKTX_ReversKoopIstiBrojDveStanice.
+' (stanica, dan) za sva cetiri smera. Niz u piscu meri BFP
+' Test_BKTX_ReversPisacOdbijaZauzet.
 '
 ' Fixture (normal production state): REV-IZV-2 je povrat (OM-Ulaz-Koop), REV-IZV-3
 ' je OM-Ulaz-Firma, oba na FX_STANICA 15.03.2026. Nivo merenja: poslovni broj u
