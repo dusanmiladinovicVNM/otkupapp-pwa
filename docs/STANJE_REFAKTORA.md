@@ -3190,8 +3190,11 @@
        python tools/dokaz.py amb-10e2- amb-otkup-storno-bez-kontrastava amb-otp-storno-bez-kontrastava amb-prj-storno-bez-kontrastava amb-storno-primitiv-vezuje otk-storno-izvora-aktivne-otpremnice otp-storno-izvora-aktivne-zbirne blok-izvor-sme-storno amb-undo-preko-kontrastava amb-undo-odbijenica-bez-puta framework-otkup framework-otpremnica-vracen amb-isprrev-ekran-ne-nudi amb-isprrev-ekran-ne-prosledjuje --grupe
        ```
 
+     **Compile ✅** (12.10.2026 17:13, izvor `4e68278b0c8a`): operater posle `ImportAllVBA`,
+     zabeleženo kroz `vba_gate --mark-compile`. Suite su još na prethodnom izvoru.
+
      **Otvoreno:**
-     - reviewer GO, pa pun prolaz, dokaz i compile operatera;
+     - reviewer GO, pa pun prolaz i dokaz;
      - ručna provera iz stavke 126 (štampa reversa iz liste `AMBALAZA`, Integritet bez B10)
        još nije javljena;
      - `10e-3` (pisac, dvomodelni čitalac, šema, fixture) ide posle merge-a.
