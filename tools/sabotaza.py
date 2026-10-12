@@ -1284,7 +1284,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: izvor otpremnice se stornira\n"
         "        Err.Raise ERR_STORNO_BASE + 72, SRC, _\n",
         "Test_OTK_IzvorAktivneOtpremniceSeNeStornira",
-        "pisac odbija storno izvora",
+        "OTK izvor otpremnice DRAFT: pisac odbija storno izvora",
     ),
     # Pisac opet stornira izvor aktivne kanonske zbirne (review #362, A13/A15).
     "otp-storno-izvora-aktivne-zbirne": (
@@ -7824,7 +7824,7 @@ _KOMENTAR_POSLE_PODVLAKE = re.compile(r"\s_\s+'")
 # istom sabotazom i dalje obara gejt. Spisak citaju i --proveri-sidra i
 # tools/dokaz.py, jer je isti pojam: nalaz koji je priznat, zapisan i ima vlasnika.
 POZNATI_NALAZI = {
-    # ---- osam ZATECENIH tvrdnji koje dokaz.py ne moze da poklopi -------------
+    # ---- sedam ZATECENIH tvrdnji koje dokaz.py ne moze da poklopi ------------
     #
     # Kapija je do 04.10.2026 tvrdnju merila kao PODNIZ, uz obrazlozenje da
     # "dokaz.py isto radi podniz". Za BFP to NE VAZI: tamo runner belezi NAZIV
@@ -7833,7 +7833,12 @@ POZNATI_NALAZI = {
     # 57 je sireno do celog literala mehanicki (ista tvrdnja, pun tekst), 4 su
     # bile u ambalaznom rezu i popravljene su u TESTU.
     #
-    # Ovih osam trazi izmenu TUDJEG testa, pa stoje imenovane:
+    # Bilo ih je osam. otk-storno-izvora-aktivne-otpremnice je izasla u 10e-2:
+    # izmena testa NIJE trebala -- test vec nosi pun literal ("OTK izvor
+    # otpremnice DRAFT: pisac odbija storno izvora"), a katalog je cuvao samo
+    # njegov rep. Grupni dokaz ju je video kao 15/15 crvenu, a NE OBARA SVOJ TEST.
+    #
+    # Ovih sedam trazi izmenu TUDJEG testa, pa stoje imenovane:
     #   literal pa & VREDNOST  -> vrednost u svoju tvrdnju, ciljana ostaje
     #                             staticna (obrazac: "X je izracunat: [..]" pa
     #                             "X nije Y")
@@ -7845,8 +7850,6 @@ POZNATI_NALAZI = {
     "clanstvo-bulk-roditelj":
         "tvrdnja nije CEO STATICAN literal",
     "ispravka-bloka-bez-vadjenja":
-        "tvrdnja nije CEO STATICAN literal",
-    "otk-storno-izvora-aktivne-otpremnice":
         "tvrdnja nije CEO STATICAN literal",
     "otp-f8-storno-po-broju":
         "tvrdnja nije CEO STATICAN literal",

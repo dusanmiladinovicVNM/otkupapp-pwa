@@ -3211,20 +3211,28 @@
        === NIJE DOKAZANO ===  (14 / 15 obara svoju tvrdnju)
      ```
 
-     **Jedan član nije priznat, a to nije posledica reza.** `otk-storno-izvora-aktivne-otpremnice`
-     stoji u `POZNATI_NALAZI` (`tools/sabotaza.py`) kao „tvrdnja nije CEO STATIČAN literal".
-     Katalog za nju čuva podniz „pisac odbija storno izvora", a `dokaz.py` traži ceo literal,
-     pa ta sabotaža po konstrukciji ne može da dobije priznanje. Test je pao baš na dve tvrdnje
-     koje taj podniz nose u punom obliku: „OTK izvor otpremnice DRAFT: pisac odbija storno
-     izvora" i ista za IZDATO. Sabotaža dakle grize. U filter je ušla jer joj je sidro u
-     `StornoOtkup`, a kvar je trebalo prijaviti pre prolaza.
+     **Jedan član nije priznat, a to nije bila posledica reza.** `otk-storno-izvora-aktivne-otpremnice`
+     je stajala u `POZNATI_NALAZI` (`tools/sabotaza.py`) kao „tvrdnja nije CEO STATIČAN
+     literal". Katalog je za nju čuvao podniz „pisac odbija storno izvora", a `dokaz.py`
+     traži ceo literal, pa ta sabotaža po konstrukciji nije mogla da dobije priznanje. Test
+     je pao baš na dve tvrdnje koje taj podniz nose u punom obliku: „OTK izvor otpremnice
+     DRAFT: pisac odbija storno izvora" i ista za IZDATO. Sabotaža je dakle grizla. U filter
+     je ušla jer joj je sidro u `StornoOtkup`, a kvar je trebalo prijaviti pre prolaza.
 
-     Popravka je jedan red: tvrdnja u katalogu postaje pun literal iz testa (koji ga već ima),
-     a unos odlazi iz `POZNATI_NALAZI`. Napomena tamo („ovih osam traži izmenu tuđeg testa")
-     za ovaj unos nije tačna.
+     **Popravljeno ovde, po odluci operatera (12.10.2026).** Tvrdnja u katalogu je sada pun
+     literal iz testa, a test se nije menjao, jer ga je već imao. Unos je izašao iz
+     `POZNATI_NALAZI` (osam → sedam). Napomena „ovih osam traži izmenu tuđeg testa" za njega
+     nije bila tačna. `vba_check` daje 745 sabotaža, 0 nalaza i 9 poznatih (bilo je 10).
+
+     ```
+     dokaz.py otk-storno-izvora-aktivne-otpremnice      (pojedinacno)
+       crvenih 1 / 1, izvor pre/posle 22ab8d49f5582471 IDENTICAN -> DOKAZANO
+     ```
+
+     Svih 15 sabotaža ovog reza sada obara svoju tvrdnju: 14 iz grupnog prolaza, a ova
+     pojedinačno. `src-vba` se nije menjao, pa marker zelenog i compile i dalje važe.
 
      **Otvoreno:**
-     - odluka o popravci kataloga za `otk-storno-izvora-aktivne-otpremnice` (ovde ili zaseban PR);
      - ručna provera iz stavke 126 (štampa reversa iz liste `AMBALAZA`, Integritet bez B10)
        još nije javljena;
      - `10e-3` (pisac, dvomodelni čitalac, šema, fixture) ide posle merge-a.
@@ -3253,7 +3261,7 @@
 | `.claude/rules/testovi.md` ne zna za JS kapiju | **samo process PR**, nikad uz feature izmenu |
 | Node 20 deprecation u tri GitHub akcije | process PR |
 | `popis_citalaca` javlja UPOZORENJE za `IzvedeniLanacIzPwaDostupan` | kapija ne postoji od #388 — očekivanje alata je zastarelo |
-| **69 BFP tvrdnji nije bilo dokazivo — kapija ih je merila kao PODNIZ** | `dokaz.py` za BFP belezi **naziv tvrdnje** (runner ne ispisuje ime Sub-a), pa je tvrdnja **ključ** i mora biti **ceo statičan literal**. `vba_check` ju je merio kao podniz, uz obrazloženje u kodu da „dokaz.py isto radi podniz" — **netačno**. Posledica: odrezana (`'NACRT otpremnice se ne nudi'` umesto `"ZBR nevezane: NACRT otpremnice se ne nudi"`) i dinamička tvrdnja prolaze kapiju, a `dokaz.py` ih 25 minuta kasnije javi kao **NE OBARA SVOJ TEST**. Nađeno prvim prolazom dokaza nad `10b-2`, 04.10.2026: **5 od 8 problema** je bilo tačno to. Kapija je **pojačana** (claim mora biti ceo statičan literal), merenje je dalo **69** takvih; **57** je sireno do celog literala mehanički, **4** ambalažna su ispravljena u testu (vrednosti u svoju tvrdnju; dva literala spojena u jedan), a **8** traži izmenu tuđeg testa (OTP/ZBR/OTK) i stoji imenovano u `POZNATI_NALAZI` sa receptom. Popis je zatvoren — nova ne može tiho da uđe |
+| **69 BFP tvrdnji nije bilo dokazivo — kapija ih je merila kao PODNIZ** | `dokaz.py` za BFP belezi **naziv tvrdnje** (runner ne ispisuje ime Sub-a), pa je tvrdnja **ključ** i mora biti **ceo statičan literal**. `vba_check` ju je merio kao podniz, uz obrazloženje u kodu da „dokaz.py isto radi podniz" — **netačno**. Posledica: odrezana (`'NACRT otpremnice se ne nudi'` umesto `"ZBR nevezane: NACRT otpremnice se ne nudi"`) i dinamička tvrdnja prolaze kapiju, a `dokaz.py` ih 25 minuta kasnije javi kao **NE OBARA SVOJ TEST**. Nađeno prvim prolazom dokaza nad `10b-2`, 04.10.2026: **5 od 8 problema** je bilo tačno to. Kapija je **pojačana** (claim mora biti ceo statičan literal), merenje je dalo **69** takvih; **57** je sireno do celog literala mehanički, **4** ambalažna su ispravljena u testu (vrednosti u svoju tvrdnju; dva literala spojena u jedan), a **8** traži izmenu tuđeg testa (OTP/ZBR/OTK) i stoji imenovano u `POZNATI_NALAZI` sa receptom. **10e-2 (stavka 127):** `otk-storno-izvora-aktivne-otpremnice` izmenu testa nije tražila. Test je već imao pun literal, pa je ispravljen samo katalog i ostalo ih je **7**. Popis je zatvoren — nova ne može tiho da uđe |
 | **`NEDEKLARISAN` ne vidi provučenu transakciju** | `OtpIspravi` je koristio `tx` iz scope-a **pozivaoca** — uz `Option Explicit` to je `Variable not defined`, dakle glava se ne kompajlira. Ni jedna jeftina kapija to nije prijavila: arity sweep je **zelen** jer je broj argumenata tačan (`StornoOtpremnica(staraID, tx)` = 2), a nedeklarisana promenljiva je **semantika**, ne arnost. Našao ga je **review**, 04.10.2026 — drugi put u istom rezu da se `tx` provlači pogrešno. Jednokratni merač (`scratchpad/scope_scan.py`) je pušten nad celim `src-vba`: **5522 procedure, tačno 1 nalaz** (baš taj), i **0 posle ispravke** — dvosmeran dokaz po konstrukciji. Obim je namerno uzak: samo imena negde deklarisana kao `clsTransaction`; pun resolver bi tražio `With`, `For Each`, implicitne tipove. Dva lažna nalaza prvog izdanja su i sama merenje: `Dim tx As **New** clsTransaction` (12× u `modNovac`) i polje klase `TX As MSForms.TextBox` (`clsFlatBtn`) — zato merač sada skuplja **svako** deklarisano ime, bez obzira na tip. Usvajanje kao trajne kapije (ili jačanje `NEDEKLARISAN`-a) je **zaseban process PR** |
 | **`ARNOST` ne vidi poziv u izraznoj poziciji** | kapija gleda samo statement pozive, pa je promena potpisa `CreateOtkup` prošla zelena dok se projekat ne bi kompajlirao — nađeno **čitanjem**, 03.10.2026. Jednokratni sweep koji gleda i izraznu poziciju (`scratchpad/sweep_arnost.py`) je pušten nad celim `src-vba`: **299 pozivnih mesta, 22 imena, nula nalaza**, uz dvosmerni dokaz nad **kopijom** izvora (tri oblika slomljenog poziva daju crveno po imenu i fajlu). **Granica je izmerena, ne tvrđena:** sweep vidi samo **arnost**, pa zamena tipa pri istom broju argumenata (`tx` izbačen, a poziv popunjava opcione argumente) ostaje zelena — to je slučaj koji **samo Compile** hvata, i tačno taj kvar je i nastao. Usvajanje kao trajne kapije je **zaseban process PR**: nad svim procedurama (ne samo nad 22) može da iznese zatečene nalaze, pa nije posao feature reza |
 | **`vba_gate` pamti JEDAN compile, a više suita** | `marker["suites"]` je rečnik i svaka suita nosi svoj `izvor`, a `marker["compile"]` je **jedan objekat** — pa `--mark-compile` na drugoj grani pregazi potvrdu prve. Nađeno 03.10.2026 na #405/#406: operater je kompajlirao oba izvora, a marker je zadržao samo zadnji. Kapija to **tačno prijavljuje** (`<-- DRUGI IZVOR`), pa nema lažnog zelenog — ali rad na dve grane šalje compile u ping-pong. Ispravka je `compile` po `izvor`-u, kao `suites`; menja `kapija` deo ugovora, pa traži svoj dvosmerni dokaz i obara ZELENO suita (ne i compile, koji ključa samo na `izvor`). **Zaseban process PR**, ne uz feature rez |
