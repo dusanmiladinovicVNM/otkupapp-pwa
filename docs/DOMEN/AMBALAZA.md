@@ -2257,7 +2257,20 @@ starom datumu, nov revers na novom, a nov je upisan **posle** bloka koji je stam
 >
 > *Provera:* `Test_Amb_PonovnaStampaBezRedaKnjige` (BFP) · pozitivna kontrola u `#223` ·
 > sabotaže `amb-istorija-bez-granice-poznato`, `amb-istorija-granica-nikad`. Prikaz „-" na
-> papiru je ručna provera.
+> papiru je ručna provera (✅ 12.10.2026, prva i ponovna štampa otkupa `1/121026`).
+>
+> **Nepoznato nije kvar (review `#415`, P2).** „-" sme da znači samo odsutnu granicu.
+> Ranije je čitalac imao handler koji je i **kvar knjige** (pokvaren red, pad šeme)
+> vraćao kao „nepoznato", pa je pokvarena knjiga davala isti papir kao otkup bez gajbi.
+> Handler je uklonjen: kvar ide pozivaocu, a otkupni list se tada **ne popunjava**.
+> Nema papira, umesto papira koji laže; razlog je u logu, a integritet ga prijavljuje
+> kao nalaz knjige.
+>
+> *Provera:* `#224 T_AmbIstorija_KvarKnjigeNijeNepoznato` (kvar na redu koji nije red
+> tog otkupa, uz pozitivnu kontrolu nad čistom knjigom) · sabotaže
+> `amb-istorija-kvar-kao-nepoznato`, `amb-istorija-stampa-guta-kvar`. Isto gutanje u
+> `GetAmbalazeStanje` i `GetStanicaAmbSaldo` (štampa daje 0) starije je od 10d i ide
+> zasebno.
 
 *Provera:* `T_AmbIstorija_KarticaStornoVaziUnazad` (222) ·
 `T_AmbIstorija_PonovnaStampaKakoJeBilo` (223) · sabotaže `amb-istorija-kontrastav-danas`,

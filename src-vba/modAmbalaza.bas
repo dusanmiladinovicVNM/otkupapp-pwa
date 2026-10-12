@@ -406,7 +406,11 @@ Public Function GetKooperantAmbOpening(ByVal koopID As String, _
                                        Optional ByRef outPoznato As Boolean) As Long
     Const SRC As String = "modAmbalaza.GetKooperantAmbOpening"
 
-    On Error GoTo EH
+    ' BEZ HANDLERA, namerno (review #415, P2). "Nepoznato" (outPoznato = False)
+    ' sme da znaci samo jedno: dokument nema svoj red knjige (ODL-27). Kvar
+    ' knjige, pad seme ili bilo koja druga greska ide pozivaocu -- handler koji
+    ' bi je pretvorio u False stampao bi pokvarenu knjigu kao legitiman "-".
+    ' Stampa (FillOtkupSablon) ima svoj handler i list tada ne popunjava.
 
     GetKooperantAmbOpening = 0
     outPoznato = False
@@ -482,12 +486,6 @@ Public Function GetKooperantAmbOpening(ByVal koopID As String, _
     Next i
 
     GetKooperantAmbOpening = saldo
-    Exit Function
-
-EH:
-    LogErr SRC
-    GetKooperantAmbOpening = 0
-    outPoznato = False
 End Function
 
 ' ============================================================

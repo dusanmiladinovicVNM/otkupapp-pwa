@@ -316,6 +316,7 @@ Public Sub RunAllTests()
     RunOne 221
     RunOne 222
     RunOne 223
+    RunOne 224
     RunOne 13
     RunOne 14
     RunOne 15
@@ -807,6 +808,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 221: TestName = "T_AmbIspravkaReversa_PadPosleTragaVracaSve"
         Case 222: TestName = "T_AmbIstorija_KarticaStornoVaziUnazad"
         Case 223: TestName = "T_AmbIstorija_PonovnaStampaKakoJeBilo"
+        Case 224: TestName = "T_AmbIstorija_KvarKnjigeNijeNepoznato"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1038,6 +1040,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 221: T_AmbIspravkaReversa_PadPosleTragaVracaSve
         Case 222: T_AmbIstorija_KarticaStornoVaziUnazad
         Case 223: T_AmbIstorija_PonovnaStampaKakoJeBilo
+        Case 224: T_AmbIstorija_KvarKnjigeNijeNepoznato
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -7382,6 +7385,56 @@ Private Sub T_AmbIstorija_PonovnaStampaKakoJeBilo()
     AssertEq o2, o1, "ponovna stampa: storno ranijeg dokumenta ne menja pocetno stanje papira"
     AssertEq sPre - sPosle, 3, "tekuci saldo: storno ranijeg dokumenta JESTE oduzet"
     AssertEq o1 - preR1, 3, "pocetno stanje bloka sadrzi raniji revers -- granica je redosled upisa"
+End Sub
+
+' 224. KVAR KNJIGE NIJE NEPOZNATO STANJE (review #415, P2).
+'
+' ODL-27 stampa "-" kad dokument NEMA svoj red knjige: to je legitimno nepoznato
+' stanje, i meri ga BFP Test_Amb_PonovnaStampaBezRedaKnjige (bez greske). Pokvarena
+' knjiga je nesto drugo. Citac je i nju gutao u isti "-", pa se papir sa laznim
+' "nepoznato" nije razlikovao od papira bez granice. Sada citac dize gresku, a
+' otkupni list se ne popunjava: nema papira, umesto papira koji laze.
+'
+' Kvar je na redu koji NIJE red ovog otkupa -- integritet je sud nad celom
+' knjigom, ne nad redovima jednog kooperanta. Pozitivna kontrola ide PRE kvara:
+' bez nje bi "list se ne popunjava" prolazilo i kad stampa ne radi uopste.
+' SABOTAZE: amb-istorija-kvar-kao-nepoznato -> pukne "kvar knjige: citac
+' pocetnog stanja dize gresku, ne vraca nepoznato"; amb-istorija-stampa-guta-kvar
+' -> pukne "kvar knjige: otkupni list se ne popunjava".
+Private Sub T_AmbIstorija_KvarKnjigeNijeNepoznato()
+    Dim revDok As String, revBroj As String, ambID As String, naTipPre As String
+    Dim wsCista As Worksheet, wsKvar As Worksheet
+    Dim poznato As Boolean, dignuto As Boolean, razlog As String
+
+    Set wsCista = modPrint.FillOtkupSablon(FX_BLOK)
+
+    AmbSejRevers 2, revDok, revBroj
+    ambID = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_DOK_ID, revDok, COL_AMB_ID))
+    naTipPre = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP))
+    PostaviPoljePoPK TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP, ""
+
+    On Error Resume Next
+    modAmbalaza.GetKooperantAmbOpening FX_KOOPERANT, FX_TIP_AMB, FX_BLOK, poznato
+    dignuto = (Err.Number <> 0)
+    razlog = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    Set wsKvar = modPrint.FillOtkupSablon(FX_BLOK)
+
+    ' Fixture se vraca PRE tvrdnji.
+    PostaviPoljePoPK TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP, naTipPre
+
+    AssertEq (wsCista Is Nothing), False, _
+             "preduslov: nad cistom knjigom otkupni list se popunjava"
+    AssertEq (Len(naTipPre) > 0), True, _
+             "preduslov: pokvaren red je NOSIO odrediste pre kvara"
+    AssertEq dignuto, True, _
+             "kvar knjige: citac pocetnog stanja dize gresku, ne vraca nepoznato"
+    AssertEq (InStr(1, razlog, "Red knjige ", vbTextCompare) > 0), True, _
+             "kvar knjige: greska citaca dolazi iz ugovora knjige"
+    AssertEq (wsKvar Is Nothing), True, _
+             "kvar knjige: otkupni list se ne popunjava"
 End Sub
 
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _

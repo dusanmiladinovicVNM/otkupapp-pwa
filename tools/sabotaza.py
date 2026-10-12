@@ -7651,6 +7651,32 @@ SABOTAZE = {
         "T_AmbIstorija_PonovnaStampaKakoJeBilo",
         "dokument sa svojim redom knjige ima poznato pocetno stanje",
     ),
+    # Review #415 (P2): kvar knjige se guta kao "nepoznato" -- papir pokvarene
+    # knjige dobija isti "-" kao dokument bez svog reda (ODL-27).
+    "amb-istorija-kvar-kao-nepoznato": (
+        "modAmbalaza.bas",
+        "    Set kolIdx = KnjigaZaCitanje(data, SRC, vrsteDok)\n"
+        "\n"
+        "    Dim colTip As Long, colKol As Long, colDokID As Long\n",
+        "    On Error Resume Next   ' SABOTAZA: kvar knjige se guta kao nepoznato\n"
+        "    Set kolIdx = KnjigaZaCitanje(data, SRC, vrsteDok)\n"
+        "    If Err.Number <> 0 Then Err.Clear: Exit Function\n"
+        "    On Error GoTo 0\n"
+        "\n"
+        "    Dim colTip As Long, colKol As Long, colDokID As Long\n",
+        "T_AmbIstorija_KvarKnjigeNijeNepoznato",
+        "kvar knjige: citac pocetnog stanja dize gresku, ne vraca nepoznato",
+    ),
+    # Citac dize gresku, ali je stampa proguta i popuni list sa "-".
+    "amb-istorija-stampa-guta-kvar": (
+        "modPrint.bas",
+        "    ambPoc = GetKooperantAmbOpening(koopID, tipAmb, otkupID, ambPocPoznato)\n",
+        "    On Error Resume Next   ' SABOTAZA: stampa guta kvar knjige\n"
+        "    ambPoc = GetKooperantAmbOpening(koopID, tipAmb, otkupID, ambPocPoznato)\n"
+        "    On Error GoTo EH\n",
+        "T_AmbIstorija_KvarKnjigeNijeNepoznato",
+        "kvar knjige: otkupni list se ne popunjava",
+    ),
 }
 
 

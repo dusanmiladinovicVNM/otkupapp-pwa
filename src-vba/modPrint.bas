@@ -741,6 +741,8 @@ Public Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     ' AMB-10-ODL-27: dokument bez SVOG reda knjige (otkup bez gajbi) nema tacku od
     ' koje bi se znalo stanje pre njega -- pocetno i saldo se stampaju kao "-",
     ' isto pri prvoj i pri ponovnoj stampi, pa se papir uvek reprodukuje.
+    ' Kvar knjige NIJE nepoznato stanje: citac tada dize gresku, pa handler ovog
+    ' lista prekida popunjavanje -- nema papira, umesto papira sa laznim "-".
     Dim ambPoc As Long, ambPocPoznato As Boolean
     ambPoc = GetKooperantAmbOpening(koopID, tipAmb, otkupID, ambPocPoznato)
     h("ambPrijem") = tipAmb & " x " & CStr(CLng(kolAmb))         ' primljeno (tekuci blok)
