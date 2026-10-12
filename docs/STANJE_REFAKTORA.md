@@ -2967,6 +2967,33 @@
 
      **Otvoreno:** finalni merge review.
 
+125. **`10e` — `pre-flight` i mapa merenja, PRE koda** (12.10.2026). Grana
+     `claude/amb-10e-brisanje-starog-modela`, sa `main`-a `47e590de`. Mapa simbol →
+     pozivaoci → dostupnost → klasa je u `AMBALAZA.md` 6.13c i ovde se ne prepisuje.
+
+     **Verdikt.** `DOMAIN`, `IDENTITY`, `CARDINALITY`, `INVARIANTS/OWNER`, `WRITERS`,
+     `DOWNSTREAM` i `PLATFORM` su PROVEN, a `EVENTS` je N/A, jer se nijedan poslovni
+     događaj ne menja i briše se samo druga predstava istog događaja. `CAPABILITY` je
+     PROVEN osim B-025 za revers, gde je pitanje otvoreno. `LANDING` je PROVEN: drugih
+     aktivnih grana nad istim fajlovima nema, a šema ide u svom rezu.
+     `ACCEPTANCE CONTRACT` je plan po rezu.
+
+     **Merenje je promenilo dve tvrdnje iz plana.**
+     - `DOK_TIP_OM_*` je u produkciji **u celini** stari model (12 procedura).
+     - Redosled `ODL-24` pre `10e` više nema razlog. `10e` ne dira `VrstaKretanja`
+       (`AmbVrsteSve` nema nijednog legacy člana), a razlog „nov događaj je nevidljiv
+       nepresečenom čitaocu" otpao je kad se `10c` zatvorio.
+
+     **Predlog rezova** (svaki je svoj PR, serijski):
+     1. `10e-1`: čitaoci, štampa i integritet. Uklanja potrošače `modStorno` helpera iz
+        drugih modula.
+     2. `10e-2`: stari storno, undo i ispravka reversa, plus zastavica `Stornirano`.
+     3. `10e-3`: pisac, dvomodelni čitalac, šema i fixture.
+
+     **Otvoreno, pitanja operateru:** `ODL-24` pre ili posle; REŠI KASNIJE za revers
+     (nijedan ekran ga nikad nije nudio); rezanje; čip „print readers swallowing ledger
+     corruption".
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

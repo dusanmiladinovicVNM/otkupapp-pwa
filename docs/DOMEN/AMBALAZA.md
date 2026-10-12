@@ -2276,6 +2276,78 @@ starom datumu, nov revers na novom, a nov je upisan **posle** bloka koji je stam
 `T_AmbIstorija_PonovnaStampaKakoJeBilo` (223) · sabotaže `amb-istorija-kontrastav-danas`,
 `amb-istorija-stampa-bez-granice`.
 
+### 6.13c `10e` — mapa merenja pre reza (12.10.2026)
+
+Obim „šta odlazi u `10e`" bio je **tvrdnja** iz ranijih koraka. Ovo je merenje nad
+`47e590de`: za svaki simbol procedura koja ga referencira, bez komentara i string
+literala, pa dostupnost iz ekrana, pa ko zavisi od podatka koji piše.
+
+**Stari pisac — mrtav.** `TrackAmbalaza` nema nijedan produkcioni poziv; zovu ga BFP
+`SejRevStariOblik` i jedna tvrdnja u `Test_Amb_PisacKnjige`. Samo njemu služe
+`ValidateAmbalazaInput`, `RequireAmbalazaSchema` i `IsValidAmbSmer` (još i
+`LegacyRedProblem`); `NoviReversID` zovu samo testovi.
+
+**Zastavica `Stornirano` na knjizi.** Pišu je `modStorno.StornoAmbalazaByDokument` (iz
+`StornoOtkup`, `StornoOtpremnica`, `StornoPrijemnica`) i
+`modStornoRecovery.UnmarkAmbalazaByDokument` (samo `UndoStorno_TX`, koji je `SAMO_TEST`).
+Kapija `AMB-10-ODL-25` je **ne čita**: `KontraStavRazlog` prevodi izvornu tabelu žurnala
+u tip dokumenta (`AmbDokTipZaIzvornuTabelu`), a `tblAmbalaza` nije izvorna tabela. Zato
+brisanje zastavice ne ostavlja kapiju bez hrane.
+
+**Stari storno klaster — nedostižan iz ekrana.** Storno reversa ide kroz
+`StornirajAmbDokument_TX(AmbDokID)` (`modStornoDok.StornoIzvrsi`), a ispravka kroz
+`OtvoriIspravkuReversa`, koji izlazi **pre** `StornoIzvrsiMod` (`modScrStorno.StornoPoModu`).
+Uvid se za revers ne gradi (`GradiUvid`). Zato su nedostižne `FLOW_DOC_REVERS` grane u
+`StornoIzvrsiMod`, `CorrectionNeedsDialog`, `GetChainFlags` i `GetStornoChainRows`.
+`RunSimpleStornoRevers` nema poziva. `PreviewRevers` i `ScanRevers` vise na
+`StornoPregledLanca`, a ni on nema poziva.
+
+- **Undo.** Revers grana `UndoGuardReasonZaOp` / `UndoOpisOperacije` hrani se samo
+  operacijom starog tipa, a takvu pravi jedino `StornoOMKoopByBrDok_TX`. Kanonski storno
+  reversa nije u žurnalu (6.13b), a fixture žurnal ne seje.
+- **Nedovršeno.** `IspravkaReversOpis` čita kontekst sa `OldDocType = REVERS`. Pravio ga
+  je samo dvokorak ispravke, koji je obrisan u `10d`.
+
+**Čitaoci starog oblika.**
+- `GetVozacAmbSaldo` i `VozacAmbEffectiveSmer` nemaju poziva (D-056, `SAMO_TEST`).
+- `modIzvestaj.StampajReversAmbalaze` kanonski dokument šalje u `StampajAmbDokument` već
+  na prvom koraku. Ostatak, zajedno sa `ReversStampaNoge` i `IzvAmbRedStorniran`, čita
+  samo noge starog oblika.
+- Grane `DOK_TIP_OM_*` u `OsnovNaziv`, `StampajDokumentReda`, `KarticaAmbDocLabel` i
+  `ResolveDokBrojMape` prevode labele starih redova. `ReversNaziv` i
+  `modDokumenta.GetStorniraniRevers` nemaju poziva.
+
+**`DOK_TIP_OM_*`** ima 171 referencu u 14 fajlova, a u produkciji **12 procedura, sve
+stari model**. Nijedna kanonska putanja ne nosi taj tip, jer je `10b-2` otkupni događaj
+prebacio na `Otkup` + `VrstaKretanja` (T3). `DOK_TIP_OM_ULAZ` (`"OMUlaz"`) nema nijednu
+upotrebu.
+
+**Integritet.** `Chk_B10_ReversBezID`, zajedno sa izuzetkom za otkup iz T3, gejtovan je
+starim tipovima (`ReversTipJe`), pa nad kanonskom knjigom ćuti. Kanonsku knjigu meri
+`Chk_AMB_KnjigaIntegritet` (stavka 113).
+
+**Kolone koje odlaze iz kanona:** `Smer`, `EntitetID`, `EntitetTip`, `VozacID`,
+`Stornirano`, `ReversID`.
+- **Pozicija:** oba kanonska pisca (`UpisiRedKnjige`, `UpisiAmbDokument`) grade red **po
+  imenu** (`SetRowValueByColumn`). Brisanje iz sredine zato ne pomera nijednu vrednost.
+- Testovi seju po imenu kolone, ne poziciono.
+- Zatečena sveska stare kolone gubi kroz `ObrisiKolonuAko`, isto kao S1d i S3-ostatak.
+  Bez toga `SchemaReadyOrFail` staje na kanonskom prefiksu.
+
+**Čitalac posle `10e` ima tri stanja, ne četiri:** `prazan`, `knjiga` i `KVAR`. Stanje
+„legacy" nestaje, pa je red koji nije prazan a ne dotiče knjigu kvar, po imenu.
+`KnjigaIndeksi` gubi stare kolone, a `LegacyRedProblem` se briše.
+
+> **Posledica na svesku koja nije fixture.** Red starog oblika u zatečenoj svesci posle
+> `10e` je **kvar knjige**, pa staje svako čitanje ambalaže. Programa u produkciji nema,
+> a migracija se ne pravi. Sveska se zato pravi iznova, ili se stari redovi brišu ručno.
+
+**Sabotaže (742).** Samo jedna ima sidro u kodu koji se briše ceo
+(`amb-pisac-nevalidan-legacy-prolazi`). Još 14 ima sidro u proceduri koja se seče
+delimično: `StornoOtkup`, `StornoOtpremnica`, `StornoPrijemnica`, `KnjigaIntegritet`,
+`RedDoticeKnjigu`, `RunAllChecks`, `UndoGuardReasonZaOp` i `ResolveDokBrojMape`. Posle
+svakog reza se broje **crvene**, ne samo padovi.
+
 ### 6.14 Sta model sada ume da odgovori
 
 ```
