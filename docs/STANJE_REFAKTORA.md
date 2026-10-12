@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ kod, čeka review — stavka 126); `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ 12/12 + dokaz 3/3, čeka compile i merge `#416` — stavka 126); `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -3041,9 +3041,33 @@
 
      **Verifikacija.** Jeftine kapije su zelene (`vba_check`, `--self-test`, `who_writes`
      `--check` i `--check-ownership`, `gen_schema_module --check`, `popis_citalaca --check`,
-     `vba_gate --popis`). `run_vba` i dokaz čekaju reviewer GO. Plan dokaza je jedan
-     grupni prolaz: `amb-10e1-stampa-pusta-tudji-tip`, `amb-int-skener-ne-gleda-knjigu`
-     (`RunAllChecks`) i `izvestaji-amb-broj-ostaje-id` (`ResolveDokBrojMape`).
+     `vba_gate --popis`). Reviewer GO je stigao 12.10.2026.
+
+     **Prvi pun prolaz je pao na jednoj tvrdnji, i to je rupa u MOM merenju.**
+     `Test_StornoCentar_All` je dao 130/1, sa porukom „B10: ReversID na redu koji nije revers
+     prijavljen". Tvrdnja u `Test_StornoReversGranicaRID_Auto` merila je **tekst nalaza**
+     integriteta (`TcIntegritetSa`), pa je grep po imenu `Chk_B10` nije video. Uklonjena je,
+     zajedno sa pomoćnikom koji je ostao bez korisnika (`5b6b1498`). Ostatak testa pripada
+     starom storno klasteru i odlazi u `10e-2`. Pouka za brisanje integritetske provere je
+     da se grep radi i po ID-u nalaza (`B10`), ne samo po imenu funkcije.
+
+     **Konačno** (izvor `a569d067a17b`, ugovor `402b3467071c`, fixture `580ff34c`):
+
+     ```
+     RunAllTests              225 / 0      (#225 OK)
+     RunBusinessFlowProSuite 2412 / 0      (2442 - 18 - 12, kako je predvidjeno)
+     RunBankaImportTestSuite  241 / 0      RunStornoTestSuite 131 / 0
+     Test_StornoCentar_All, RunIzvestajTests  OK -- broj se u zelenom prolazu ne ispisuje,
+                                             pa -1 i -14 NISU izmereni
+     12 / 12 ZELENO, marker upisan
+
+     dokaz.py amb-10e1-stampa-pusta-tudji-tip amb-int-skener-ne-gleda-knjigu
+              izvestaji-amb-broj-ostaje-id --grupe
+       crvenih 3 / 3, izvor pre/posle 61439cd3b0e48b3c IDENTICAN -> DOKAZANO (grupno)
+     ```
+
+     **Otvoreno:** compile (operater, posle `ImportAllVBA`) i `vba_gate --mark-compile`;
+     ručna provera iz opisa PR-a; finalni merge review `#416`.
 
 ## Dug sa imenom (posle S5-5b)
 
