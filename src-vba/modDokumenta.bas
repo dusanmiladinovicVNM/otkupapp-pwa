@@ -7977,60 +7977,6 @@ Public Function StorniraniHeaders() As Variant
                               "Zbirna", "Otpremnica", "Faktura")
 End Function
 
-' Stornirani OM<->koop revers (dokTip) iz tblAmbalaza -> unifikovane 12 kolona.
-' Jedan red po dokumentu: Kooperant noga (nosi partnera); Stanica noga se preskace.
-' Mapiranje: Vrsta=TipAmbalaze, Kolicina=broj gajbica; ostalo prazno.
-' Preskace OM-Izlaz-Koop noge knjizene UZ otkup (DokumentID = otkupID "OTK-...";
-' vec se vide pod grupom 'Otkup') -> ostaju samo standalone reversi (broj x/ddmmyy).
-Private Function GetStorniraniRevers(ByVal dokTip As String, _
-                                     Optional ByVal entType As String = "Kooperant") As Variant
-    On Error GoTo EH
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If IsEmpty(data) Then Exit Function
-
-    Dim iBroj As Long, iDat As Long, iEntID As Long, iEntTip As Long
-    Dim iDokTip As Long, iTipAmb As Long, iKol As Long, iStorno As Long
-    iBroj = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
-    iDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
-    iEntID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
-    iEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
-    iDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
-    iTipAmb = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
-    iKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
-    iStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
-    If iBroj = 0 Or iDokTip = 0 Or iStorno = 0 Then Exit Function
-
-    Dim pdict As Object
-    If entType = "Stanica" Then
-        Set pdict = BuildIdNameDict(TBL_STANICE, "StanicaID", "Naziv")
-    Else
-        Set pdict = BuildIdNameDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
-    End If
-    Dim rows As Collection: Set rows = New Collection
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If UCase$(Trim$(NzToText(data(i, iStorno)))) = "DA" Then
-            If Trim$(CStr(data(i, iDokTip))) = dokTip And _
-               Trim$(CStr(data(i, iEntTip))) = entType And _
-               UCase$(Left$(Trim$(CStr(data(i, iBroj))), 3)) <> "OTK" Then
-                rows.Add Array( _
-                    StornoCellText(data, i, iBroj), _
-                    StornoDateText(StornoCellRaw(data, i, iDat)), _
-                    ResolveNameFromDict(pdict, StornoCellRaw(data, i, iEntID)), _
-                    StornoCellText(data, i, iTipAmb), _
-                    "", "", _
-                    StornoNumText(StornoCellRaw(data, i, iKol), "#,##0"), _
-                    "", "", "", "", "")
-            End If
-        End If
-    Next i
-    GetStorniraniRevers = StornoRowsTo2D(rows, 12)
-    Exit Function
-EH:
-    LogErr "modDokumenta.GetStorniraniRevers(" & dokTip & ")"
-    GetStorniraniRevers = Empty
-End Function
-
 ' id -> "Naziv" (ili "Ime Prezime") recnik; prazan recnik ako tabela/kolone fale.
 ' Public: reuse i iz modIntegritet (OtkupnoMestoByZbirna).
 Public Function BuildIdNameDict(ByVal tbl As String, ByVal idCol As String, _
@@ -8060,48 +8006,6 @@ Public Function BuildIdNameDict(ByVal tbl As String, ByVal idCol As String, _
             If Not d.Exists(idv) Then d.Add idv, nm
         End If
     Next i
-End Function
-
-Private Function ResolveNameFromDict(ByVal d As Object, ByVal idRaw As Variant) As String
-    Dim s As String
-    s = Trim$(NzToText(idRaw))
-    If Len(s) = 0 Then Exit Function
-    If Not d Is Nothing Then
-        If d.Exists(s) Then
-            If Len(Trim$(NzToText(d(s)))) > 0 Then
-                ResolveNameFromDict = d(s)
-                Exit Function
-            End If
-        End If
-    End If
-    ResolveNameFromDict = s          ' fallback: prikazi ID ako nema imena
-End Function
-
-' Sirova vrednost celije (Empty ako kolona ne postoji -> idx=0).
-' `data` je ByRef namerno. ByVal na Variantu koji SADRZI niz kopira ceo niz pri
-' svakom pozivu, a ovo je citac PO CELIJI -- u petlji se zove vise puta po redu.
-' Mereno na istom obrascu u modPaletniList.SafeCell: 1063 stavke, 1883 ms, to jest
-' 1.8 ms po redu za citanje dva polja iz niza koji je vec u memoriji.
-'
-' Funkcija niz samo CITA, nikad ne pise, pa je razlika iskljucivo u tome sto se
-' niz ne umnozava.
-Private Function StornoCellRaw(ByRef data As Variant, ByVal r As Long, ByVal idx As Long) As Variant
-    If idx = 0 Then Exit Function
-    StornoCellRaw = data(r, idx)
-End Function
-
-' ByRef iz istog razloga kao StornoCellRaw: ByVal bi kopirao ceo niz po pozivu.
-Private Function StornoCellText(ByRef data As Variant, ByVal r As Long, ByVal idx As Long) As String
-    If idx = 0 Then Exit Function
-    StornoCellText = Trim$(NzToText(data(r, idx)))
-End Function
-
-Private Function StornoDateText(ByVal v As Variant) As String
-    If IsDate(v) Then
-        StornoDateText = Format$(CDate(v), "d.m.yyyy")
-    Else
-        StornoDateText = Trim$(NzToText(v))
-    End If
 End Function
 
 Private Function StornoNumText(ByVal v As Variant, ByVal fmt As String) As String

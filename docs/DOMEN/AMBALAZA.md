@@ -148,8 +148,9 @@ umesto izuzetka.
 > fail-closed na `AMB-INV-08`. Događaj se dešava **unutar otkupa**, dakle otkup
 > mu je i izvorni dokument.
 >
-> Izuzetak u `modIntegritet` **ostaje do `10e`**: on čita stari oblik reda, a
-> stari redovi postoje dok čitaoci ne pređu (`10c`).
+> Izuzetak u `modIntegritet` je **obrisan u `10e-1`**, zajedno sa celim
+> `Chk_B10_ReversBezID`: čitao je samo stari oblik reda, a kanonsku knjigu meri
+> `Chk_AMB_KnjigaIntegritet` (6.13c).
 
 A prijemnica je u trećem svetu: povrat praznih knjiži pod `Prijemnica` (red 7),
 dakle **van `OM-*` taksonomije** — u izveštajima ambalaže se ne vidi kao povrat,

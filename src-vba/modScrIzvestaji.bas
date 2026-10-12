@@ -2764,16 +2764,6 @@ Private Sub StampajDokumentReda(ByVal red As Long)
                     ReprintOtkupniListByOtkupID dokID
                 Case DOK_TIP_OTPREMNICA
                     OutputOtpremnicaPDF dokID
-                Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, _
-                     DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-                    ' Revers: rekonstrukcija iz nogu ledgera -- racun izdvojen
-                    ' u modIzvestaj.StampajReversAmbalaze (AUD-012: tip
-                    ' ambalaze IZABRANOG reda je deo kljuca). Identitet je
-                    ' ReversID reda (skrivena kolona 9, REV-IDENT-01): isti broj
-                    ' legalno nose reversi druge stanice ili drugog dana, pa se
-                    ' dokument ne trazi po broju, stanici ni danu.
-                    StampajReversAmbalaze dokID, dokTip, tipAmb, _
-                                          NzS(modOtkupUI.GridCell(red, 9))
                 Case DOK_TIP_AMBALAZA_DOKUMENT
                     ' KANONSKI DOKUMENT (AMB-10c). Ovaj Case je NEDOSTAJAO, pa je
                     ' posle 10b-2 cutovera svaki NOV revers padao u Case Else i

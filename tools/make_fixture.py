@@ -1233,13 +1233,10 @@ SEED = {
          "NaNalogTip": "Stanica", "NaNalogID": STANICA,
          "DokumentID": "ADK-IZV-3", "DokumentTip": "AmbalazaDokument",
          "VrstaKretanja": "NABAVKA"},
-        # LEGACY NOGE ZA B10 -- namerno u STAROM obliku, i odlaze u 10e.
-        #
-        # modIntegritet.Chk_B10_ReversBezID je gejtovan na STARE tipove dokumenta
-        # (modStorno.ReversTipJe), pa kanonski red ne prijavljuje. Njegova tvrdnja u
-        # BFP-u ("REV-IZV-1 ima 4 noge dva tipa pod jednim ReversID-om") zato trazi
-        # legacy oblik: jedan ReversID, cetiri noge, dva tipa. B10 broji noge PO
-        # TIPU, pa ga ne prijavljuje -- i to je ono sto se meri.
+        # LEGACY NOGE -- namerno u STAROM obliku. Merila ih je B10 tvrdnja u BFP-u
+        # ("REV-IZV-1 ima 4 noge dva tipa pod jednim ReversID-om"), koja je otisla
+        # sa Chk_B10 u 10e-1. Redovi ostaju do 10e-3: tamo odlaze i kolone starog
+        # modela koje nose, pa se fixture menja jednom, uz semu.
         #
         # Kanonski citaoci ih PRESKACU (RedDoticeKnjigu je False kad nijedna nova
         # kolona nije popunjena), pa ne ulaze ni u jedan saldo.

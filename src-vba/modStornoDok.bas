@@ -1325,16 +1325,6 @@ EH:
     IspravkaReversOpis = ""
 End Function
 
-Private Function ReversNaziv(ByVal dokTip As String) As String
-    Select Case dokTip
-        Case DOK_TIP_OM_IZLAZ_KOOP:  ReversNaziv = Poruka("STORNO_TIP_REV_IZD_KOOP")
-        Case DOK_TIP_OM_ULAZ_KOOP:   ReversNaziv = Poruka("STORNO_TIP_REV_PRI_KOOP")
-        Case DOK_TIP_OM_ULAZ_FIRMA:  ReversNaziv = Poruka("STORNO_TIP_REV_IZD_OM")
-        Case DOK_TIP_OM_IZLAZ_FIRMA: ReversNaziv = Poruka("STORNO_TIP_REV_PRI_OM")
-        Case Else:                   ReversNaziv = Poruka("STORNO_TIP_REVERS")
-    End Select
-End Function
-
 Private Function NijePronadjen(ByVal broj As String) As String
     NijePronadjen = Poruka("STORNO_ERR_NEMA_DOK") & " " & broj
 End Function

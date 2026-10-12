@@ -3192,9 +3192,6 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                     Else
                         cell = 0
                     End If
-                Case "osnov"
-                    cell = OsnovNaziv(CellS(src, r, iDokTip), CellS(src, r, iBrojCol))
-                    hay = hay & "|" & cell
                 Case "ambosnov"
                     ' OSNOV reversa je VRSTA DOKUMENTA sa zaglavlja (REVERS /
                     ' REVERS_PARTNERA), a ne vise tip dokumenta sa noge knjige.
@@ -3288,28 +3285,6 @@ Public Function MatchFilterFast(ByVal filter As String, ByVal vDatK As Double, _
         Case "nedelja":   MatchFilterFast = (Not isStorno) And (vDatK >= mToday - 6)
         Case "mesec":     MatchFilterFast = (Not isStorno) And (vDatK >= mMonthStart)
         Case Else:        MatchFilterFast = Not isStorno
-    End Select
-End Function
-
-' Citljiv osnov reda. DOK_TIP_OTKUP je tu jer kooperant i pri predaji PUNIH
-' gajbi ima izlaz ambalaze - to nije revers, ali jeste njegovo kretanje.
-Public Function OsnovNaziv(ByVal dokTip As String, ByVal dokID As String) As String
-    Dim izOtkupa As Boolean
-    On Error Resume Next
-    izOtkupa = OtkupKoopMap().Exists(Trim$(dokID))
-    Select Case Trim$(dokTip)
-        Case DOK_TIP_OM_IZLAZ_KOOP
-            ' Prazne gajbe uz otkup se knjize ISTIM tipom kao pravi revers
-            ' (modOtkup.bas:611), samo im je DokumentID = OtkupID. Bez ove
-            ' razlike bi dva reda istog otkupa nosila razlicit osnov: jedan
-            ' "Uz otkup", drugi "Revers" - a revers dokument ne postoji.
-            OsnovNaziv = IIf(izOtkupa, Poruka("OTKUI_OSN_OTKUP_PRAZNE"), _
-                                       Poruka("OTKUI_OSN_REV_IZDATO"))
-        Case DOK_TIP_OM_ULAZ_KOOP:   OsnovNaziv = Poruka("OTKUI_OSN_REV_POVRAT")
-        Case DOK_TIP_OM_IZLAZ_FIRMA: OsnovNaziv = Poruka("OTKUI_OSN_REV_OM_IZDATO")
-        Case DOK_TIP_OM_ULAZ_FIRMA:  OsnovNaziv = Poruka("OTKUI_OSN_REV_OM_PRIJEM")
-        Case DOK_TIP_OTKUP:          OsnovNaziv = Poruka("OTKUI_OSN_OTKUP_PUNE")
-        Case Else:                   OsnovNaziv = dokTip
     End Select
 End Function
 
