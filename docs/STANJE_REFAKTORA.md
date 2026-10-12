@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 11.10.2026 (stavka 120, ručna provera `#414`).
+**Ažurirano:** 12.10.2026 (stavka 124, review P2 `#415`).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ 12/12 + dokaz 13/13 nad `44cb49d0ea21`, čeka compile i merge review (stavke 117–119) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ merge-ovano (`#414`, stavke 117–120) · **`10d` ostatak** (undo ODL-25, istorija ODL-26/-27) papir ✅; review P2 „kvar knjige nije nepoznato" ✅ 12/12 + dokaz 2/2 + compile ✅, čeka merge (stavke 121–124) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -2816,6 +2816,156 @@
      **Odluka operatera:** oba kvara idu u **zaseban PR posle `#414`**, a `#414` ostaje sa
      zelenim dokazom nad `44cb49d0ea21`. Rizik do tada: posle štampe operater vidi lažan
      neuspeh i nepočišćenu formu, pa obican revers može da snimi dvaput.
+
+121. **`10d` ostatak: undo i istorija su dve ODLUKE, ne kod** (11.10.2026). Grana
+     `claude/amb-10d-ostatak`, iz `main`-a posle merge-a `#414` (`dc5a32c4`).
+
+     **Pre-flight verdikt:** `DOMAIN` GAP (ODL-19 je izričito čekao poslovnu semantiku),
+     `CARDINALITY` PROVEN (`AMB-INV-06`: storno se ne stornira), `CAPABILITY` GAP. B-046
+     „Vrati storno" je od `10b-2` odbijen za svaki otkup, otpremnicu i prijemnicu sa
+     gajbama, a revers i nabavku od `10c` lista uopšte ne nudi, jer
+     `StornirajAmbDokument_TX` nije u žurnalu. Istorija: kontra-stav **nasleđuje datum
+     originala** (kartica vidi storno unazad), a D-057 seče po **redosledu upisa** (papir
+     se ne menja). To su bile dve semantike, nijedna zapisana i nijedna pokrivena testom
+     sa stornom.
+
+     **Odluke operatera:**
+
+     ```
+     AMB-10-ODL-25  storno dokumenta sa ambalazom je KONACAN; put je ponovni unos
+                    (nov broj, A9). B-046 se svesno suzava na dokumente bez ambalaze.
+     AMB-10-ODL-26  dve semantike istorije, zapisane i pinovane testom:
+                    kartica po periodu -> storno vazi unazad
+                    ponovna stampa (D-057) -> papir kakav je bio
+     ```
+
+     **Šta je urađeno:** kod se ne menja osim **poruke** kapije undo-a. Ona sada imenuje
+     ODL-25 i put, jer je ekran Oporavak prikazuje. Dodato: tvrdnja nad putem u
+     `Test_Amb_UndoStornaOdbijenNadKnjigom`, testovi `#222` (kartica, storno unazad, i
+     kontra-stav nosi datum originala) i `#223` (ponovna štampa ista posle storna ranijeg
+     dokumenta, dok se tekući saldo menja), i tri sabotaže. Katalog **735 → 738**.
+
+     **Imenovan dug:** lista „Vrati storno" pokazuje „moguce" za operaciju koju kapija uvek
+     odbija (`OpStatusFor` gleda samo ćeliju). Ispravka traži sken knjige po operaciji, a
+     cena nije merena.
+
+     **Verifikacija:** jeftine kapije zelene. `run_vba` i `dokaz.py` nisu pušteni, čeka se
+     reviewer GO.
+
+122. **Review `#415` (`f0f16b62`): `P2` ponovna štampa bez granice — reprodukovano, pa
+     odlučeno** (11.10.2026). Verdikt: `NO-GO` za zatvaranje ODL-26. Nalazi su `P0 0`,
+     `P1 0`, `P2 1`, `P3 1`, a static CI je `GREEN`.
+
+     **`P2`:** `GetKooperantAmbOpening` je, kad ne nađe nijedan red bloka, uzimao **celu
+     današnju knjigu** („legacy" fallback). Otkup bez gajbi nema red u knjizi
+     (`KnjiziOtkupAmbalazu` piše samo količinu veću od nule), a validacija ga pušta kad je
+     stroga validacija isključena i unos neto. Štampa otkupnog lista **uvek** ispisuje
+     početno stanje i saldo. Prva štampa je zato bila tačna, a ponovna nije.
+     **Reprodukovano pre ispravke** (`Test_Amb_PonovnaStampaBezRedaKnjige`, BFP 2441/1):
+     očekivano 17740, dobijeno 17743, tačno kasniji revers od 3.
+
+     **Odluka operatera `AMB-10-ODL-27`:** bez granice nema stanja. Čitalac javlja
+     `outPoznato = False`, papir početno i saldo štampa kao „-", a fallback se briše. Nije
+     uveden u `#415`; ODL-26 ga je samo razotkrio.
+
+     **`P3` (status „moguce" u listi „Vrati storno")** reviewer prihvata kao zaseban zadatak,
+     uz uslov da kapija ostane fail-closed, što i jeste.
+
+     **Ciljano posle ispravke:** `RunAllTests` 223/0, BFP 2442/0 (2436 + 1 tvrdnja nad putem
+     undo-a + 5 u reprodukciji). Katalog **738 → 740**. Pun prolaz, dokaz za pet novih
+     sabotaža i compile čekaju reviewer GO.
+
+123. **Review `#415` (`5e95876c`): dokazni `P2`, pa dokaz nad konačnim izvorom** (11.10.2026).
+     Verdikt je bio `MERGE PENDING`, a `GO` za finalno testiranje posle male ispravke.
+
+     **Dokazni `P2`:** pozitivna kontrola `poznato = True` u `#223` stajala je **poslednja**.
+     Pod sabotažom `amb-istorija-granica-nikad` čitalac vraća 0, pa je prva padala računska
+     tvrdnja `o1 - preR1 = 3` i zaklanjala imenovanu. Dokaz bi javio „PALA DRUGA TVRDNJA",
+     isti obrazac kao A9 i `#212`. Tvrdnja je premeštena odmah iza prvog čitanja
+     (`a77502e4`); produkcioni kod nije diran. Ista provera redosleda urađena je i za ostale
+     četiri nove sabotaže.
+
+     **Konačno (izvor `87c8d3542702`, ugovor `e288c5255f1a`, fixture `580ff34c`):**
+
+     ```
+     RunAllTests              223 / 0      (#222, #223 OK)
+     RunBusinessFlowProSuite 2442 / 0
+     RunBankaImportTestSuite  241 / 0      RunStornoTestSuite 131 / 0
+     12 / 12 ZELENO, marker upisan, --require-green RC=0
+
+     dokaz.py amb-istorija + amb-undo-odbijenica-bez-puta
+       crvenih 5 / 5, izvor pre/posle f3a7fa2c78ec8932 IDENTICAN -> DOKAZANO
+     ```
+
+     **Ručna provera papira ✅ (12.10.2026)**, sveska `rucna_provera_10d_ostatak.xlsm`,
+     validacija unosa isključena, neto unos. Otkup `1/121026` (100 kg, 0 gajbi) nema red u
+     knjizi (22 reda pre i posle), pa je to baš slučaj iz ODL-27:
+
+     ```
+     10:25:19  prva stampa      Pocetno stanje 12/1 x -   Primljeno/Izdato 12/1 x 0   Saldo 12/1 x -
+     10:58:21  revers 8080C     izdato 30, pocetno 18 -> novo stanje 48
+     10:58:53  ponovna stampa   Pocetno stanje 12/1 x -   Saldo 12/1 x -   (nepromenjeno)
+     ```
+
+     Usput su nađene dve stvari, nijedna iz `#415`:
+     - **Oštećeno zaglavlje (nije reprodukovano).** Prvi pokušaj reversa odbijen je sa
+       „Nedostaje kolona `AmbDokID`": ćelija `AmbalazaDokument!A1` sadržala je razmak. Nijedna
+       procedura u `src-vba` ne piše u zaglavlje tabele. Sveska se otvara na tom listu sa
+       izabranom A1, pa je verovatan uzrok taster otkucan u Excel tabelu. Kapija je odbila
+       upis i tačno imenovala kolonu. Posle ručne popravke A1 revers je prošao.
+     - **Pogrešno ime dokumenta u porukama.** `DOK_MSG_GRESKA_PRI_CUVANJU` („…čuvanju
+       otpremnice") dele i zbirna, prijemnica, isplata, uplata i revers, a prefiks
+       `OTKUP_ERR_GRESKA_PRI_UNOSU` („…unosu otkupa:") deli 25 validatora. Ide kao zaseban
+       zadatak. Odbijenica deficita pri izdavanju preko stanja je ispravna poslovna kapija.
+
+     **Compile ✅** (12.10.2026 11:37, isti izvor `87c8d3542702`):
+     `vba_gate --require-green --require-compile` RC=0.
+
+     **Otvoreno:** finalni merge review.
+
+124. **Review `#415` (`87f7dbf8`): kvar knjige nije nepoznato stanje** (12.10.2026).
+     Verdikt `NO-GO`, jedan `P2`; ostale kapije (papir, compile, CI #935) reviewer je
+     prihvatio.
+
+     **`P2`:** `GetKooperantAmbOpening` je imao handler koji je i **kvar knjige**
+     (`KnjigaKvar` → `AMB_ERR_KNJIGA_KVAR`, pad šeme) vraćao kao `outPoznato = False`.
+     Papir pokvarene knjige je zato bio isti kao papir otkupa bez gajbi (ODL-27, „-").
+     **Reprodukovano pre ispravke:** `#224 T_AmbIstorija_KvarKnjigeNijeNepoznato` nad
+     starim kodom daje `RunAllTests` 224/1, i pada baš „kvar knjige: citac pocetnog
+     stanja dize gresku, ne vraca nepoznato". Oba preduslova su prošla (list se nad čistom
+     knjigom popunjava, pokvaren red je pre kvara nosio odredište).
+
+     **Ispravka:** handler je uklonjen. Kvar ide pozivaocu, a handler
+     `FillOtkupSablon` list ne popunjava: nema papira, razlog je u logu. Legitimno
+     nepoznato ostaje kakvo je bilo, jer `Test_Amb_PonovnaStampaBezRedaKnjige` (BFP)
+     prolazi bez greške.
+
+     **Ciljano posle ispravke** (izvor `1d4a086844e7`): `RunAllTests` **224/0**, BFP
+     **2442/0**. Katalog **740 → 742**: `amb-istorija-kvar-kao-nepoznato` (čitač guta
+     kvar) i `amb-istorija-stampa-guta-kvar` (štampa guta kvar).
+
+     **Isto gutanje, starije od 10d:** `GetAmbalazeStanje` (vraća `Empty`) i
+     `GetStanicaAmbSaldo` (vraća 0) daju na papiru 0 nad pokvarenom knjigom. Ide kao
+     zaseban zadatak, jer reviewer traži da `#415` ostane uzak.
+
+     Review `448e505b`: P2 **RESOLVED**, test `#224` GOOD, GO za završni dokaz.
+
+     **Konačno (izvor `1d4a086844e7`, ugovor `e38b761cc34d`, fixture `580ff34c`):**
+
+     ```
+     RunAllTests              224 / 0      (#224 OK)
+     RunBusinessFlowProSuite 2442 / 0
+     RunBankaImportTestSuite  241 / 0      RunStornoTestSuite 131 / 0
+     12 / 12 ZELENO, marker upisan, --require-green RC=0
+
+     dokaz.py amb-istorija-kvar-kao-nepoznato amb-istorija-stampa-guta-kvar
+       crvenih 2 / 2, izvor pre/posle 218adcf5ff5dc64d IDENTICAN -> DOKAZANO
+     ```
+
+     **Compile ✅** (12.10.2026 12:57, isti izvor `1d4a086844e7`):
+     `vba_gate --require-green --require-compile` RC=0.
+
+     **Otvoreno:** finalni merge review.
 
 ## Dug sa imenom (posle S5-5b)
 

@@ -1453,6 +1453,26 @@ ambalažni efekat ostaje anuliran. Dokument aktivan sa nula ambalaže. Putanja j
 > Kapija stoji u `UndoGuardReasonZaOp`, koju gledaju **i** komanda **i** ekran
 > oporavka — pa operater vidi razlog, ne samo odbijenicu.
 >
+> **AMB-10-ODL-25 (odluka operatera 11.10.2026): storno dokumenta sa ambalažom je
+> KONAČAN.** Semantika koju ODL-19 traži je izabrana: „vraćanje storna" nad dokumentom
+> čiji storno ima kontra-stav u knjizi **ne postoji** kao poslovni događaj. Ako je storno
+> bio greška, dokument se **unosi ponovo** i dobija nov broj (A9); za naš revers postoji i
+> „Zamena reversa" (6.13a). Razlog: svaki „undo novim redom" krši `AMB-INV-06` (storno se
+> ne stornira), a brisanje kontra-stava krši 6.8.
+>
+> Posledice: kapija (`modStornoZurnal.KontraStavRazlog`) ostaje ista, a poruka imenuje
+> pravilo i put. „Vrati storno" (B-046) važi samo za dokumente **bez** ambalažnog efekta.
+> Storno ambalažnog dokumenta (revers, nabavka) nije u žurnalu, pa se u listi za vraćanje
+> ni ne pojavljuje.
+>
+> **Imenovan dug:** lista „Vrati storno" na ekranu Oporavak i dalje pokazuje status
+> „moguce" za operaciju koju kapija uvek odbija, jer `OpStatusFor` gleda samo ćeliju
+> zaglavlja. Ispravka traži sken knjige po operaciji, a cena nad pravom listom nije
+> merena, pa je ovde nema. Razlog se vidi na klik.
+>
+> *Provera:* `Test_Amb_UndoStornaOdbijenNadKnjigom` (odbijanje i put) · sabotaže
+> `amb-undo-preko-kontrastava`, `amb-undo-odbijenica-bez-puta`.
+
 > **ISPRAVKA (P2 #1): ključ je kompozitan `(DokumentTIP, DokumentID)`.** Prva
 > verzija `AmbImaKontraStav` je tražila **samo `DokumentID`**, uz obrazloženje da
 > je ID globalno jedinstven pa tip ne dodaje razlučivost. To je tačno ona
@@ -2111,7 +2131,8 @@ strukture poslednje.
 6. **AMB-10d** — storno kao tacan inverz; istorijski i tekuci upit. **Ulaz je
    vec legao** (`AMB-10-ODL-16`, 6.12d), jer bez njega cutover dokumenta koji ima
    storno put ostavlja gajbe na saldu tiho. **Ispravka naseg reversa ✅ (11.10.2026,
-   6.13a).** Ostaje: istorijski upit i veza sa `UndoOperation_TX`.
+   6.13a).** **Veza sa `UndoOperation_TX` ✅** (`AMB-10-ODL-25`: storno sa ambalazom je
+   konacan) · **istorijski upit ✅** (`AMB-10-ODL-26`, 6.13b).
 7. **AMB-10e** — **tek tada** brisanje starog modela.
 
 ### 6.13a Ispravka naseg reversa — jedan potez (10d, 11.10.2026)
@@ -2207,6 +2228,53 @@ snapshot `tblStornoVeze` ih vraca. Meri se seam-om tik pre commit-a
 potvrde deficita · test da pozajmljena ambalaza moze **uci -> kretati se -> biti
 vracena vlasniku** bez ijednog negativnog realnog salda · **i bez obaveze koja
 ikad padne ispod nule ili preživi sopstveni storno**.
+
+### 6.13b Istorija knjige — dve semantike (AMB-10-ODL-26, 11.10.2026)
+
+Storno se upisuje kao kontra-stav, **kasnije** od originala. Čitaoci vremena ga zato
+vide različito, i to je pravilo (odluka operatera), ne slučajnost:
+
+| Čitalac | Seče po | Storno ranijeg dokumenta | Zašto |
+|---|---|---|---|
+| kartica ambalaže po periodu (`ReportKarticaAmbalaze`) | **datumu** | važi **unazad**: kontra-stav nosi datum originala, pa je u svakom prozoru dokument „kao da nije bilo" | kartica je pogled na **ispravljenu** istoriju |
+| početno stanje za ponovnu štampu (`GetKooperantAmbOpening`, D-057) | **redosledu upisa** | storno upisan posle bloka **ne menja** papir | ponovna štampa reprodukuje papir **kakav je bio** |
+| tekući saldo (`AmbSaldoNaloga`) | ceo skup | uvek oduzet | — |
+
+Ispravka sa promenom datuma se uklapa u obe: stari revers i njegov kontra-stav su na
+starom datumu, nov revers na novom, a nov je upisan **posle** bloka koji je stampan pre.
+
+> **AMB-10-ODL-27 (odluka operatera 11.10.2026): bez granice nema stanja.** Dokument koji
+> nema nijedan **svoj** red knjige (otkup bez gajbi, neto unos uz isključenu strogu
+> validaciju) nema ni tačku u knjizi od koje bi se znalo stanje „pre njega". Čitalac
+> (`GetKooperantAmbOpening`) tada javlja da je stanje **nepoznato** i ne nagađa, a papir
+> početno stanje i saldo štampa kao „-". To važi i za prvu i za ponovnu štampu, pa se
+> papir uvek reprodukuje.
+>
+> Ranije je tu stajao fallback na **celu** knjigu („legacy red pre dvojnog upisa"): prva
+> štampa je bila tačna, a svaka ponovna je pokazivala današnje stanje. Review `#415` (P2),
+> reprodukovano testom pre ispravke: očekivano 17740, dobijeno 17743, što je tačno kasniji
+> revers od 3. Starih redova više nema, pa ni razloga za fallback.
+>
+> *Provera:* `Test_Amb_PonovnaStampaBezRedaKnjige` (BFP) · pozitivna kontrola u `#223` ·
+> sabotaže `amb-istorija-bez-granice-poznato`, `amb-istorija-granica-nikad`. Prikaz „-" na
+> papiru je ručna provera (✅ 12.10.2026, prva i ponovna štampa otkupa `1/121026`).
+>
+> **Nepoznato nije kvar (review `#415`, P2).** „-" sme da znači samo odsutnu granicu.
+> Ranije je čitalac imao handler koji je i **kvar knjige** (pokvaren red, pad šeme)
+> vraćao kao „nepoznato", pa je pokvarena knjiga davala isti papir kao otkup bez gajbi.
+> Handler je uklonjen: kvar ide pozivaocu, a otkupni list se tada **ne popunjava**.
+> Nema papira, umesto papira koji laže; razlog je u logu, a integritet ga prijavljuje
+> kao nalaz knjige.
+>
+> *Provera:* `#224 T_AmbIstorija_KvarKnjigeNijeNepoznato` (kvar na redu koji nije red
+> tog otkupa, uz pozitivnu kontrolu nad čistom knjigom) · sabotaže
+> `amb-istorija-kvar-kao-nepoznato`, `amb-istorija-stampa-guta-kvar`. Isto gutanje u
+> `GetAmbalazeStanje` i `GetStanicaAmbSaldo` (štampa daje 0) starije je od 10d i ide
+> zasebno.
+
+*Provera:* `T_AmbIstorija_KarticaStornoVaziUnazad` (222) ·
+`T_AmbIstorija_PonovnaStampaKakoJeBilo` (223) · sabotaže `amb-istorija-kontrastav-danas`,
+`amb-istorija-stampa-bez-granice`.
 
 ### 6.14 Sta model sada ume da odgovori
 

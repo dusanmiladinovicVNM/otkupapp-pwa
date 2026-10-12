@@ -7601,6 +7601,82 @@ SABOTAZE = {
         "T_AmbIspravkaReversa_PadPosleTragaVracaSve",
         "rollback posle traga: trag ispravke ne ostaje",
     ),
+
+    # --- 10d ostatak: AMB-10-ODL-25 i -26 ----------------------------------------
+    # Kontra-stav nosi DANASNJI datum umesto datuma originala. Saldo ostaje tacan,
+    # ali kartica u periodu originala vidi dokument kao ziv: storno vise ne vazi
+    # unazad (AMB-10-ODL-26).
+    "amb-istorija-kontrastav-danas": (
+        "modAmbalaza.bas",
+        "        UpisiRedKnjige tx, CDate(r(1)), CStr(r(2)), CDbl(r(3)), _\n",
+        "        UpisiRedKnjige tx, Date, CStr(r(2)), CDbl(r(3)), _\n",
+        "T_AmbIstorija_KarticaStornoVaziUnazad",
+        "kartica: u periodu originala storno se ponistava",
+    ),
+    # Pocetno stanje za ponovnu stampu ignorise granicu bloka: sabere i redove
+    # upisane POSLE njega, pa kasniji storno menja papir koji je vec odstampan
+    # (D-057, AMB-10-ODL-26).
+    "amb-istorija-stampa-bez-granice": (
+        "modAmbalaza.bas",
+        "    cutoff = minIdx - 1\n",
+        "    cutoff = UBound(data, 1)   ' SABOTAZA: granica bloka se ignorise\n",
+        "T_AmbIstorija_PonovnaStampaKakoJeBilo",
+        "ponovna stampa: storno ranijeg dokumenta ne menja pocetno stanje papira",
+    ),
+    # Odbijenica undo-a gubi PUT: ekran oporavka kaze "odbijeno" bez izlaza, a
+    # AMB-10-ODL-25 kaze da je odbijanje pravilo, ne privremena brana.
+    "amb-undo-odbijenica-bez-puta": (
+        "modStornoZurnal.bas",
+        "                        \"(AMB-10-ODL-19). Ako je storno bio greska, unesi dokument \" & _\n",
+        "                        \"(AMB-10-ODL-19). SABOTAZA bez puta: \" & _\n",
+        "Test_Amb_UndoStornaOdbijenNadKnjigom",
+        "UNDO: storno sa ambalazom je konacan, a odbijenica kaze put (AMB-10-ODL-25)",
+    ),
+    # Citac proglasi granicu POZNATOM i kad je nema: dokument bez svog reda
+    # knjige dobija "stanje" (0), a papir stampa broj koji nista ne znaci
+    # (AMB-10-ODL-27, review #415 P2).
+    "amb-istorija-bez-granice-poznato": (
+        "modAmbalaza.bas",
+        "    outPoznato = (minIdx > 0)\n",
+        "    outPoznato = True   ' SABOTAZA: granica uvek poznata\n",
+        "Test_Amb_PonovnaStampaBezRedaKnjige",
+        "D-057 bez reda: stanje pre dokumenta bez reda knjige je NEPOZNATO",
+    ),
+    # Citac NIKAD ne nadje granicu: svaki papir dobija "-" umesto pocetnog
+    # stanja, i za dokument koji svoj red ima.
+    "amb-istorija-granica-nikad": (
+        "modAmbalaza.bas",
+        "    outPoznato = (minIdx > 0)\n",
+        "    outPoznato = False   ' SABOTAZA: granica nikad nije poznata\n",
+        "T_AmbIstorija_PonovnaStampaKakoJeBilo",
+        "dokument sa svojim redom knjige ima poznato pocetno stanje",
+    ),
+    # Review #415 (P2): kvar knjige se guta kao "nepoznato" -- papir pokvarene
+    # knjige dobija isti "-" kao dokument bez svog reda (ODL-27).
+    "amb-istorija-kvar-kao-nepoznato": (
+        "modAmbalaza.bas",
+        "    Set kolIdx = KnjigaZaCitanje(data, SRC, vrsteDok)\n"
+        "\n"
+        "    Dim colTip As Long, colKol As Long, colDokID As Long\n",
+        "    On Error Resume Next   ' SABOTAZA: kvar knjige se guta kao nepoznato\n"
+        "    Set kolIdx = KnjigaZaCitanje(data, SRC, vrsteDok)\n"
+        "    If Err.Number <> 0 Then Err.Clear: Exit Function\n"
+        "    On Error GoTo 0\n"
+        "\n"
+        "    Dim colTip As Long, colKol As Long, colDokID As Long\n",
+        "T_AmbIstorija_KvarKnjigeNijeNepoznato",
+        "kvar knjige: citac pocetnog stanja dize gresku, ne vraca nepoznato",
+    ),
+    # Citac dize gresku, ali je stampa proguta i popuni list sa "-".
+    "amb-istorija-stampa-guta-kvar": (
+        "modPrint.bas",
+        "    ambPoc = GetKooperantAmbOpening(koopID, tipAmb, otkupID, ambPocPoznato)\n",
+        "    On Error Resume Next   ' SABOTAZA: stampa guta kvar knjige\n"
+        "    ambPoc = GetKooperantAmbOpening(koopID, tipAmb, otkupID, ambPocPoznato)\n"
+        "    On Error GoTo EH\n",
+        "T_AmbIstorija_KvarKnjigeNijeNepoznato",
+        "kvar knjige: otkupni list se ne popunjava",
+    ),
 }
 
 
