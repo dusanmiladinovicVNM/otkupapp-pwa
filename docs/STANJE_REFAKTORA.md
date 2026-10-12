@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ 12/12 + dokaz 3/3 + compile ✅, čeka ručnu proveru i merge `#416` — stavka 126); `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ merge-ovano `#416` (ručna provera otvorena — stavka 126) · `10e-2` sledeći; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -3076,8 +3076,10 @@
      - `P3`: štampa iz pravog ekrana nije proverena posle reza.
      - Grupni dokaz je prihvaćen, uz napomenu da nije isto što i pojedinačni.
 
-     **Otvoreno:** ručna provera (štampa reversa iz liste `AMBALAZA`, ekran Integritet bez
-     B10) i finalni merge review `#416`.
+     **`#416` merge-ovan BEZ ručne provere — svesna odluka operatera (12.10.2026)**, po
+     obrascu iz stavke 115. Compile nad konačnim izvorom je potvrđen.
+     **Otvoreno, ručno:** štampa aktivnog reversa iz liste `AMBALAZA` i ekran Integritet bez
+     nalaza B10. Nalaz se upisuje ovde. Ako provera padne, ispravka ide kao zaseban PR, pre `10e-2`.
 
 ## Dug sa imenom (posle S5-5b)
 
