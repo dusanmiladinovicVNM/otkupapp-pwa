@@ -24,8 +24,6 @@ Attribute VB_Name = "modStornoDok"
 '                             vise aktivnih redova trazi NovacID
 '   ResolveIzvodZaStorno      "broj" ili "broj/racun" -> jedan izvod
 '   GetIzvodStornoBlokade     preflight: razlog pre potvrde, ne tih pad
-'   ActiveAmbalazaDokExists   revers po broju I po smeru
-'   ReversIDRazresi           revers po ReversID-u kliknutog reda (REV-IDENT-01)
 ' Ovaj modul ih samo redja po tipu. Duplirane provere se ne pisu.
 '
 ' TIP DOKUMENTA je kljuc rezima novog UI-ja (modScrDokumenti.modeKey),
@@ -565,7 +563,8 @@ Public Function StornoIzvrsiMod(ByVal tip As String, ByVal broj As String, _
     If Len(dt) = 0 Then Exit Function
     Select Case dt
         Case FLOW_DOC_ZBIRNA:     Set StornoIzvrsiMod = RunZbirnaCorrection(broj, mode, forceConfirm, docID)
-        Case FLOW_DOC_REVERS:     Set StornoIzvrsiMod = RunReversCorrection(broj, opcija, mode, docID)
+        ' FLOW_DOC_REVERS namerno nema mod (10e-2): storno reversa ide kroz
+        ' StornoIzvrsi (StornirajAmbDokument_TX), a zamena kroz IspravkaReversa_TX.
         ' neDiraj = "ne diraj palete" (samo prijemnica, DUPLI/PONISTENJE):
         ' palete ostaju vezane za storniranu prijemnicu umesto da se odvezu.
         Case FLOW_DOC_PRIJEMNICA: Set StornoIzvrsiMod = RunPrijemnicaCorrection(broj, mode, forceConfirm, neDiraj, docID)
@@ -1306,23 +1305,6 @@ Public Function KgTekst(ByVal v As Double) As String
     Else
         KgTekst = Format$(v, "#,##0.00")
     End If
-End Function
-
-' Opis reversa iz traga ispravke (OldDocID = ReversID): " (naziv / StanicaID, dan)",
-' ili "" kad kontekst nije revers ili stanica i dan nisu poznati. Dve otvorene
-' ispravke reversa istog broja na dve stanice (od REV-IDENT-01 Faze 2b i KOOP) se u
-' listi Nedovrseno i u potvrdi "Odbaci" inace ne razlikuju.
-Public Function IspravkaReversOpis(ByVal correctionID As String) As String
-    Dim rid As String, st As String, dan As Long
-    On Error GoTo EH
-    If Len(Trim$(correctionID)) = 0 Then Exit Function
-    If modStornoContext.GetCorrectionField(correctionID, COL_SV_OLD_DOCTYPE) <> FLOW_DOC_REVERS Then Exit Function
-    rid = Trim$(modStornoContext.GetCorrectionField(correctionID, COL_SV_OLD_DOCID))
-    If Len(modStorno.ReversStanicaDan(rid, st, dan)) > 0 Then Exit Function
-    IspravkaReversOpis = modDokUnos.ReversOpis(st, CDate(dan))
-    Exit Function
-EH:
-    IspravkaReversOpis = ""
 End Function
 
 Private Function NijePronadjen(ByVal broj As String) As String

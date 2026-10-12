@@ -2335,11 +2335,10 @@ End Function
 ' Klasa I i II iz istog upisa dele vrednost, sto je tacno "jedan logicki
 ' dokument". Novac i faktura su jednoredni, pa im je identitet sopstveni PK.
 '
-' Revers je dve noge (Kooperant + Stanica) istog broja, a broj je jedinstven tek
-' u nizu (stanica, dan) -- ni broj ni broj + smer ne razlucuju dokument. Identitet
-' reda je AmbID kliknute noge; ReversID dokumenta se iz nje cita nizvodno
-' (modStorno.ReversIDRazresi). Izvod nije ovde: ide uz BROJ RACUNA, kompozit
-' koji vec razlucuje dokument.
+' Revers je od 10c ambalazni dokument: identitet je AmbDokID zaglavlja
+' (tblAmbalazaDokument), a broj je jedinstven tek u nizu (stanica, dan). Stari
+' identitet po nogama (AmbID + ReversID) je obrisan u 10e-2. Izvod nije ovde: ide
+' uz BROJ RACUNA, kompozit koji vec razlucuje dokument.
 Public Function IdKolonaTipa(ByVal tk As String) As String
     Select Case tk
         ' Otkup je JEDNO zaglavlje po dokumentu (S1e): identitet je OtkupID.

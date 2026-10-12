@@ -1284,7 +1284,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: izvor otpremnice se stornira\n"
         "        Err.Raise ERR_STORNO_BASE + 72, SRC, _\n",
         "Test_OTK_IzvorAktivneOtpremniceSeNeStornira",
-        "pisac odbija storno izvora",
+        "OTK izvor otpremnice DRAFT: pisac odbija storno izvora",
     ),
     # Pisac opet stornira izvor aktivne kanonske zbirne (review #362, A13/A15).
     "otp-storno-izvora-aktivne-zbirne": (
@@ -7689,6 +7689,29 @@ SABOTAZE = {
         "T_AmbStampa_TudjiTipOdbijen",
         "stampa: tip koji nije ambalazni dokument se odbija po imenu",
     ),
+    # REVERS NA EKRANU STORNO: SAMO STORNO I ZAMENA (10e-2). Stari okvir
+    # ispravke reversa (RunReversCorrection) je obrisan jer do njega ekran nije
+    # stizao -- red odluke nudi storno i ISPRAVKU, a StornoPoModu za revers izlazi
+    # pre StornoIzvrsiMod. Broj dugmadi to ne meri: DUPLI umesto ISPRAVKE ostavlja
+    # dva. Zato tvrdnja cita KLJUCEVE reda odluke.
+    "amb-10e2-revers-nudi-drugi-mod": (
+        "modScrStorno.bas",
+        "                SV_MODE_ISPRAVKA & \"|OTKUI_SCRST_B_REV_ISPR|OTKUI_SCRST_H_REV_ISPR|secondary\")\n",
+        "                SV_MODE_DUPLI & \"|OTKUI_SCRST_B_REV_ISPR|OTKUI_SCRST_H_REV_ISPR|secondary\")   ' SABOTAZA: revers nudi DUPLI\n",
+        "T_AmbIspravkaReversa_EkranNudiIOtvara",
+        "revers nudi samo storno i zamenu, nijedan drugi mod okvira",
+    ),
+    # OKVIR NAD REVERSOM NE IZVRSAVA NISTA (10e-2). FLOW_DOC_REVERS ostaje kao
+    # TIP (po njemu ekran prepoznaje revers), ali StornoIzvrsiMod za njega nema
+    # granu. Sabotaza revers usmerava u granu drugog tipa -- isto sto bi uradilo
+    # vracanje bilo kog moda okvira nad reversom.
+    "amb-10e2-okvir-izvrsava-revers": (
+        "modStornoDok.bas",
+        "        Case FLOW_DOC_ZBIRNA:     Set StornoIzvrsiMod = RunZbirnaCorrection(broj, mode, forceConfirm, docID)\n",
+        "        Case FLOW_DOC_ZBIRNA, FLOW_DOC_REVERS: Set StornoIzvrsiMod = RunZbirnaCorrection(broj, mode, forceConfirm, docID)   ' SABOTAZA: okvir izvrsava revers\n",
+        "T_FrameworkIspravke_SamoTriTipa",
+        "framework ne izvrsava nijedan mod nad reversom",
+    ),
 }
 
 
@@ -7801,7 +7824,7 @@ _KOMENTAR_POSLE_PODVLAKE = re.compile(r"\s_\s+'")
 # istom sabotazom i dalje obara gejt. Spisak citaju i --proveri-sidra i
 # tools/dokaz.py, jer je isti pojam: nalaz koji je priznat, zapisan i ima vlasnika.
 POZNATI_NALAZI = {
-    # ---- osam ZATECENIH tvrdnji koje dokaz.py ne moze da poklopi -------------
+    # ---- sedam ZATECENIH tvrdnji koje dokaz.py ne moze da poklopi ------------
     #
     # Kapija je do 04.10.2026 tvrdnju merila kao PODNIZ, uz obrazlozenje da
     # "dokaz.py isto radi podniz". Za BFP to NE VAZI: tamo runner belezi NAZIV
@@ -7810,7 +7833,12 @@ POZNATI_NALAZI = {
     # 57 je sireno do celog literala mehanicki (ista tvrdnja, pun tekst), 4 su
     # bile u ambalaznom rezu i popravljene su u TESTU.
     #
-    # Ovih osam trazi izmenu TUDJEG testa, pa stoje imenovane:
+    # Bilo ih je osam. otk-storno-izvora-aktivne-otpremnice je izasla u 10e-2:
+    # izmena testa NIJE trebala -- test vec nosi pun literal ("OTK izvor
+    # otpremnice DRAFT: pisac odbija storno izvora"), a katalog je cuvao samo
+    # njegov rep. Grupni dokaz ju je video kao 15/15 crvenu, a NE OBARA SVOJ TEST.
+    #
+    # Ovih sedam trazi izmenu TUDJEG testa, pa stoje imenovane:
     #   literal pa & VREDNOST  -> vrednost u svoju tvrdnju, ciljana ostaje
     #                             staticna (obrazac: "X je izracunat: [..]" pa
     #                             "X nije Y")
@@ -7822,8 +7850,6 @@ POZNATI_NALAZI = {
     "clanstvo-bulk-roditelj":
         "tvrdnja nije CEO STATICAN literal",
     "ispravka-bloka-bez-vadjenja":
-        "tvrdnja nije CEO STATICAN literal",
-    "otk-storno-izvora-aktivne-otpremnice":
         "tvrdnja nije CEO STATICAN literal",
     "otp-f8-storno-po-broju":
         "tvrdnja nije CEO STATICAN literal",

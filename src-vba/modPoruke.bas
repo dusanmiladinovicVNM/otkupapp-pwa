@@ -1175,7 +1175,6 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "STEF_BLOK_IZABRANO_1", "izabrano "
     UpsertRow lo, existing, "STEF_BLOK_IZABRANO_2", " od "
     UpsertRow lo, existing, "STEF_BLOK_IZABRANO_3", " " & ChrW(8212) & " storniraju se uz Dupli unos ili Poni" & ChrW(353) & "tenje prometa"
-    UpsertRow lo, existing, "STEF_REVERS", "stornira se; saldo se koriguje bez kontra-stavke"
     ' natpisi prekidaca tipova u Stornu - kratki, jer ih je deset u jednom redu
     UpsertRow lo, existing, "OTKUI_SEG_ST_OTKUP", "Otkupni"
     UpsertRow lo, existing, "OTKUI_SEG_ST_OTP", "Otpremnice"

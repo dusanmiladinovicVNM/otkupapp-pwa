@@ -118,21 +118,6 @@ End Sub
 ' WRITE
 ' ============================================================
 
-' Nov identitet logickog reversa: opaque "RID-<32 hex>" iz centralne fabrike
-' NewEntityID. Transakcioni identitet, ne max+1 -- GetNextID ostaje za maticne
-' podatke (DOCUMENT_HEADER_LINES.md par. 2). JEDAN po dokumentu: pisac ga kuje
-' jednom i daje svim nogama (REV-IDENT-01, ARCHITECTURE_CONTRACT.md).
-Public Function NoviReversID() As String
-    Const SRC As String = "modAmbalaza.NoviReversID"
-
-    NoviReversID = NewEntityID("RID-")
-
-    If Len(Trim$(NoviReversID)) = 0 Then
-        Err.Raise vbObjectError + 4408, SRC, _
-                  "NewEntityID nije vratio ReversID."
-    End If
-End Function
-
 Public Sub TrackAmbalaza(ByVal datum As Date, ByVal tipAmb As String, _
                          ByVal kolicina As Long, ByVal smer As String, _
                          ByVal entitetID As String, ByVal entitetTip As String, _
@@ -2524,8 +2509,8 @@ End Sub
 '
 ' VEZA JE PO ID-u, na oba kraja (IspravkaOdID na novom, ZamenjenSaID na starom)
 ' i u tragu tblStornoVeze -- nikad po broju. Tip traga je AmbalazaDokument, ne
-' FLOW_DOC_REVERS: stari tip nosi ReversID u OldDocID, pa bi ga citaoci starog
-' oblika (IspravkaReversOpis) procitali kao tudji identitet.
+' FLOW_DOC_REVERS: stari tip je nosio ReversID u OldDocID, pa bi ga citaoci starog
+' oblika (IspravkaReversOpis, obrisan u 10e-2) procitali kao tudji identitet.
 '
 ' Vraca AmbDokID novog reversa. Greska se DIZE, kao kod UpisiReversAmbalaze_TX;
 ' pozivalac je pretvara u poruku operateru.
