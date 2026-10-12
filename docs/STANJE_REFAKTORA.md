@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ merge-ovano (`#414`, stavke 117–120) · **`10d` ostatak** (undo ODL-25, istorija ODL-26/-27) papir ✅; review P2 „kvar knjige nije nepoznato" ispravljen ciljano (224/0, BFP 2442/0), čeka GO za pun prolaz, dokaz i compile (stavke 121–124) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ merge-ovano (`#414`, stavke 117–120) · **`10d` ostatak** (undo ODL-25, istorija ODL-26/-27) papir ✅; review P2 „kvar knjige nije nepoznato" ✅ 12/12 + dokaz 2/2, čeka compile (stavke 121–124) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -2948,9 +2948,21 @@
      `GetStanicaAmbSaldo` (vraća 0) daju na papiru 0 nad pokvarenom knjigom. Ide kao
      zaseban zadatak, jer reviewer traži da `#415` ostane uzak.
 
-     **Otvoreno (čeka reviewer GO):** pun prolaz, `python tools/dokaz.py
-     amb-istorija-kvar-kao-nepoznato amb-istorija-stampa-guta-kvar` i compile nad novim
-     izvorom.
+     Review `448e505b`: P2 **RESOLVED**, test `#224` GOOD, GO za završni dokaz.
+
+     **Konačno (izvor `1d4a086844e7`, ugovor `e38b761cc34d`, fixture `580ff34c`):**
+
+     ```
+     RunAllTests              224 / 0      (#224 OK)
+     RunBusinessFlowProSuite 2442 / 0
+     RunBankaImportTestSuite  241 / 0      RunStornoTestSuite 131 / 0
+     12 / 12 ZELENO, marker upisan, --require-green RC=0
+
+     dokaz.py amb-istorija-kvar-kao-nepoznato amb-istorija-stampa-guta-kvar
+       crvenih 2 / 2, izvor pre/posle 218adcf5ff5dc64d IDENTICAN -> DOKAZANO
+     ```
+
+     **Otvoreno:** compile nad `1d4a086844e7` · finalni merge review.
 
 ## Dug sa imenom (posle S5-5b)
 
