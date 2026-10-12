@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 11.10.2026 (stavka 123, dokaz `#415`).
+**Ažurirano:** 12.10.2026 (stavka 123, dokaz i papir `#415`).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ merge-ovano (`#414`, stavke 117–120) · **`10d` ostatak** (undo ODL-25, istorija ODL-26/-27) ✅ 12/12 + dokaz 5/5, čeka compile i papir (stavke 121–123) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · **`10b-1` pisac ✅** · **`10b-2` cutover pisaca ✅** (PR #408, draft) · `10c` čitaoci ⏳ **blokira merge** — sloj API-ja + `ReportSaldoOM` + kartice + prevod broja/vrste ✅ (stavke 93–96), `10c-2` ✅ **zatvoren** (stavke 93–98: sloj API-ja, `ReportSaldoOM`, kartice, prevod broja, `ReportAmbalaza`, štampa), **sledi `10c-3`: `modStorno` 14, `modIntegritet` 4, `modStornoFlow` 2, `modDokumenta` 2, `modStornoZurnal` 1** · **`10d` ispravka reversa** ✅ merge-ovano (`#414`, stavke 117–120) · **`10d` ostatak** (undo ODL-25, istorija ODL-26/-27) ✅ 12/12 + dokaz 5/5 + papir ✅, čeka compile (stavke 121–123) · `10e` ⏳; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -2897,9 +2897,28 @@
        crvenih 5 / 5, izvor pre/posle f3a7fa2c78ec8932 IDENTICAN -> DOKAZANO
      ```
 
-     **Otvoreno:** compile nad `87c8d3542702` · ručna provera papira otkupnog lista bez
-     gajbi (početno i saldo „-"; uz prazan tip ambalaže papir piše „ x -", isti format kao
-     „ x 5" kad je stanje poznato) · finalni merge review.
+     **Ručna provera papira ✅ (12.10.2026)**, sveska `rucna_provera_10d_ostatak.xlsm`,
+     validacija unosa isključena, neto unos. Otkup `1/121026` (100 kg, 0 gajbi) nema red u
+     knjizi (22 reda pre i posle), pa je to baš slučaj iz ODL-27:
+
+     ```
+     10:25:19  prva stampa      Pocetno stanje 12/1 x -   Primljeno/Izdato 12/1 x 0   Saldo 12/1 x -
+     10:58:21  revers 8080C     izdato 30, pocetno 18 -> novo stanje 48
+     10:58:53  ponovna stampa   Pocetno stanje 12/1 x -   Saldo 12/1 x -   (nepromenjeno)
+     ```
+
+     Usput su nađene dve stvari, nijedna iz `#415`:
+     - **Oštećeno zaglavlje (nije reprodukovano).** Prvi pokušaj reversa odbijen je sa
+       „Nedostaje kolona `AmbDokID`": ćelija `AmbalazaDokument!A1` sadržala je razmak. Nijedna
+       procedura u `src-vba` ne piše u zaglavlje tabele. Sveska se otvara na tom listu sa
+       izabranom A1, pa je verovatan uzrok taster otkucan u Excel tabelu. Kapija je odbila
+       upis i tačno imenovala kolonu. Posle ručne popravke A1 revers je prošao.
+     - **Pogrešno ime dokumenta u porukama.** `DOK_MSG_GRESKA_PRI_CUVANJU` („…čuvanju
+       otpremnice") dele i zbirna, prijemnica, isplata, uplata i revers, a prefiks
+       `OTKUP_ERR_GRESKA_PRI_UNOSU` („…unosu otkupa:") deli 25 validatora. Ide kao zaseban
+       zadatak. Odbijenica deficita pri izdavanju preko stanja je ispravna poslovna kapija.
+
+     **Otvoreno:** compile nad `87c8d3542702` · finalni merge review.
 
 ## Dug sa imenom (posle S5-5b)
 
