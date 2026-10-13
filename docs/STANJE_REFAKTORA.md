@@ -3363,10 +3363,56 @@
      daje 0 novih. Svako obrisano ime je provereno grep-om (0 referenci van komentara). Pun
      prolaz, dokaz i compile čekaju reviewer GO.
 
-     **Otvoreno:** pun prolaz, dokaz nad sedam sabotaža (četiri nove i dve presidrene, uz
-     `amb-pisac-polupisan-red-kao-legacy`, kojoj se promenilo značenje), compile, i ručni
-     smoke nad konačnom šemom (unos i storno reversa, otkup sa gajbama, kartica, Integritet,
-     nad novom sveskom iz kanona).
+     **Review `75eb499e` (13.10.2026):** `CODE REVIEW GO` za izvršne kapije, `MERGE PENDING`.
+     Nalazi: `P0 0`, `P1 0`, `P2 0`, `P3 1` (acceptance). Static CI #950 `SUCCESS`, ocena 9.2/10.
+
+     **Konačno** (head `75eb499e`, izvor `a199cdfa0a35`, ugovor `9bc65bff2826`, fixture
+     `d3d3ff6d`). Brojevi su tačno oni izvedeni iz diff-a:
+
+     ```
+     RunAllTests              225 / 0
+     RunBusinessFlowProSuite 2404 / 0      (2381 - 1 + 18 + 6)
+     RunStornoTestSuite       111 / 0      RunBankaImportTestSuite 241 / 0
+     12 / 12 ZELENO, marker upisan
+
+     dokaz.py amb-10e3- amb-kup-uplata-knjizi-ambalazu amb-10c-lista-filtrira-po-nozi
+              amb-pisac-polupisan-red-kao-legacy --grupe
+       crvenih 7 / 7, izvor pre/posle 4b72c6a0331452a4 IDENTICAN -> DOKAZANO (grupno)
+     ```
+
+     **Compile ✅** (13.10.2026, isti izvor `a199cdfa0a35`): operater ga je pustio nad
+     `rucna_provera_10e3_kod.xlsm`, a `vba_gate --require-green --require-compile` daje RC=0.
+
+     **Ručni smoke nad konačnom šemom ✅** (operater, 13.10.2026). Sveska je
+     `rucna_provera_10e3_kod.xlsm`: nov fixture (16 kolona `tblAmbalaza`), kod sa tačnog izvora.
+
+     ```
+     F7 revers 1/131026, izdato koop. 12/1 x5   papir: pocetno 18 -> novo 23             OK
+     storno 1/131026-2 (ekran Storno)           "Otkazane 1"                              OK
+     F1 otkup 1/131026, 10 primljeno/10 izdato   snimljen, odmah na listi                  OK
+     kartica Prvi Testni, 12/1                   +5, +5/-5 (kontra-stav), +10/-10 -> 23    OK
+     Integritet                                  nema bloka AMB1 (knjiga cista)            OK
+     ```
+
+     Korak „zatečena sveska operatera" (`ImportAllVBA` u svesku po starom kanonu) nije
+     urađen. Put meri `Test_Amb_StareKoloneSelfHeal`, a `schema_diff` nad
+     `otkup_test_pre_10e3` pokazuje tačno šest kolona za brisanje.
+
+     **Usput je izmerena stvarna posledica `KI-011`, van `10e-3`: dupli dokument.** Revers
+     `1/131026` je snimljen, ali je ljuska javila „Scr_Save → 9", pa nije pozvala
+     `RefreshFromData`. Keš ekrana (`modUiData.ResetCache`) je ostao od pre upisa, lista nije
+     prikazala revers, operater je snimio ponovo i nastao je `1/131026-2` sa istim sadržajem.
+     „Otvori Excel → Nazad u aplikaciju" ne gradi formu iznova, pa ni to ne prazni keš. Tek
+     zatvaranje i otvaranje sveske je pokazalo oba reversa. Duplikat je storniran u koraku
+     „storno". `KI-011` je dopunjen; predlog je da njegova ispravka bude **prvi PR posle
+     `#418`**.
+
+     **Nedoslednost fixture-a (nije iz koda):** `ADK-IZV-X` (`3/IZV`) je storniran
+     kontra-stavom u knjizi, ali njegovo zaglavlje u `make_fixture` nema `Stornirano=Da`, pa
+     ga lista F7 prikazuje kao „Sačuvana". Pravi storno postavlja oboje. Ide uz sledeću
+     izmenu fixture-a.
+
+     **Otvoreno:** finalni merge review.
 
 ## Dug sa imenom (posle S5-5b)
 
