@@ -7871,7 +7871,9 @@ End Sub
 ' svakom, a datum je datum u svakom (lokal menja samo ISPIS datuma).
 '
 ' List se pre stampe prazni: ustajao papir iz ranijeg poziva bi inace prosao
-' umesto novog.
+' umesto novog. Kolicina se cita APSOLUTNOM kolonom (5): Offset iz spojene
+' celije tipa (B:D) racuna od spojenog opsega i daje G, ne E -- pa prazno
+' (sonda 13.10.2026, prvi izvrsni prolaz posle GO).
 ' SABOTAZA: ki012-revers-tip-opsti-format -> pukne "revers: tip ambalaze na
 ' papiru je tekst, ne datum"; ki012-prijemnica-tip-opsti-format -> pukne
 ' "prijemnica: tip ambalaze na papiru je tekst, ne datum".
@@ -7898,7 +7900,7 @@ Private Sub T_KI012_TipNaPapiruJeTekst()
         nRev = nRev + 1
         vt1 = VarType(c.value)
         tx1 = c.text
-        kol1 = CStr(c.Offset(0, 3).value)
+        kol1 = CStr(c.Worksheet.cells(c.row, 5).value)
     End If
     Set c = CelijaIspodRb(WS_IZDAMB_SABLON, 2, 2)
     If Not c Is Nothing Then
@@ -7974,7 +7976,7 @@ Private Sub T_KI013_VisetipniDokumentPapirPoTipu()
     Set c = CelijaIspodRb(WS_IZDAMB_SABLON, 1, 2)
     If Not c Is Nothing Then
         tLet = c.text
-        kLet = CStr(c.Offset(0, 3).value)
+        kLet = CStr(c.Worksheet.cells(c.row, 5).value)
     End If
 
     OcistiList WS_IZDAMB_SABLON
@@ -7984,7 +7986,7 @@ Private Sub T_KI013_VisetipniDokumentPapirPoTipu()
     Set c = CelijaIspodRb(WS_IZDAMB_SABLON, 1, 2)
     If Not c Is Nothing Then
         t12 = c.text
-        k12 = CStr(c.Offset(0, 3).value)
+        k12 = CStr(c.Worksheet.cells(c.row, 5).value)
     End If
 
     modIzvestaj.StampajReversAmbalaze "ADK-IZV-1", DOK_TIP_AMBALAZA_DOKUMENT, "Gajba-KI013-nema"
