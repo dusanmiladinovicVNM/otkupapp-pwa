@@ -7790,6 +7790,24 @@ SABOTAZE = {
         "T_KI011_PadStampeJeUpozorenjeUzUspeh",
         "operater vidi da papir nije napravljen",
     ),
+    # KI-011 / review #419 P2: ekran bez modula u registru ponovo izlazi kao
+    # USPEH -- prazan rezultat i prazan ScrLastErr, a CommitDokument cisti formu.
+    "ki011-scrsave-nepoznat-ekran-je-uspeh": (
+        "modUiScreens.bas",
+        "        ScrLastErr = \"modUiScreens.ScrSave: ekran '\" & kljuc & \"' nema modul u registru\"\n",
+        "        Err.Clear   ' SABOTAZA: nepoznat ekran je uspeh\n",
+        "T_KI011_ZaostalaGreskaNijeNeuspeh",
+        "nepoznat ekran ne sme biti uspeh",
+    ),
+    # LOG-01 / review #419 P3: LogSetup vise ne vraca gresku pozivaoca -- handleri
+    # modSetup-a bi opet dizali i prikazivali pogresnu gresku.
+    "ki011-logsetup-brise-gresku-pozivaoca": (
+        "modSetup.bas",
+        "        Err.Number = errNum\n        Err.SOURCE = errSrc\n        Err.description = errDesc\n",
+        "        Err.Clear   ' SABOTAZA: greska pozivaoca se brise\n",
+        "T_KI011_LogSetupCuvaGreskuPozivaoca",
+        "LogSetup cuva BROJ greske pozivaoca (LOG-01)",
+    ),
 }
 
 

@@ -617,7 +617,14 @@ Public Function ScrSave(ByVal kljuc As String, ByVal polja As Object) As String
     ScrZaostalaGreska = ""
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
-    If Len(m) = 0 Then Exit Function
+    ' Ekran bez modula u registru: nijedan pisac nije pozvan, pa to JE neuspeh
+    ' (review #419, P2). Prazan rezultat uz prazan ScrLastErr CommitDokument cita
+    ' kao upis -- ocistio bi formu i javio "sacuvan" bez dokumenta.
+    If Len(m) = 0 Then
+        ScrLastErr = "modUiScreens.ScrSave: ekran '" & kljuc & "' nema modul u registru"
+        Err.Clear
+        Exit Function
+    End If
     Err.Clear
     v = Application.Run(m & ".Scr_Save", polja)
     If IsEmpty(v) Then
