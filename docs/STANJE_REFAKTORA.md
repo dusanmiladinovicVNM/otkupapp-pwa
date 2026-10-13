@@ -3642,6 +3642,156 @@
      - Redosled po reviewer-u: `KI-012` + `KI-013` zajedno (ovaj rez, stavka 133+), pa
        `KI-014` odvojeno. `KI-015` je zaseban mali rez.
 
+133. **`KI-012` + `KI-013` — tip na papiru je tekst, a papir je po (dokument, tip)** (13.10.2026).
+     Grana `claude/amb-stampa-ki012-ki013`, sa `main`-a `e430d41f`.
+
+     **Odluke operatera (13.10.2026), obe po preporuci:**
+     1. `KI-013` ide kao **A2, papir po tipu** (`AMB-10-ODL-30`, `AMBALAZA.md` 6.13f).
+        `AMB-INV-10` ostaje, a papir je po (dokument, tip), kao legacy C-061.
+     2. Fail-open čitaoci štampe (`GetAmbalazeStanje`, `GetStanicaAmbSaldo`) i istorijsko
+        početno stanje na ponovljenom papiru reversa idu u **sledeći korak**. To je politika
+        greške, a za nju postoji red u „Dug sa imenom".
+
+     **`pre-flight`, pre koda.**
+
+     | Osa | Verdikt | Dokaz |
+     |---|---|---|
+     | `DOMAIN` | PROVEN | `AMB-INV-10` (`AMBALAZA.md` 6.9) dozvoljava više tipova i oba smera; `ODL-30` |
+     | `EVENTS` | N/A | štampa čita dokument i knjigu, ne pravi događaj |
+     | `IDENTITY` | PROVEN | papir = (`AmbDokID`, `AmbTipKljuc(tip)`); oba putuju sa reda liste (`modScrIzvestaji.bas:2778`), bez lookup-a po broju. Isti (dokument, tip) sa dva reda daje `7511` |
+     | `CARDINALITY` | PROVEN | dokument : poslovni red je 1:N po ugovoru, a 1:1 kod svih produkcionih pisaca (creation path ispod); papir : red je 1:1 |
+     | `INVARIANTS/OWNER` | PROVEN | `AMB-INV-10` drži `PrenesiAmbalazu` (bez promene); pravila papira `7506`/`7511` drži `StampajAmbDokument`, na granici komande |
+     | `WRITERS` | N/A | read-only izmena: nijedna tabela, `who_writes --check-ownership` bez promene |
+     | `DOWNSTREAM` | PROVEN | čitaoci `AmbDokRedMapa` su lista F7 `REVERSI` (`modScrDokumenti.bas:3036`), prefill ispravke (`modStornoDok.bas:1144`, iza kapije 220) i štampa, koja prelazi na `AmbDokPoslovniRedovi`. Ispravka broji kroz `AmbDokBrojPoslovnihRedova`: semantika je ista, samo ide kroz isti čitalac |
+     | `CAPABILITY` | PROVEN | C-061 je u legacy-ju bio papir po tipu. Tip je ušao u ključ u `71355a4b` (AUD-012, odbrana od sabiranja preko tipova), a legacy pisci su primali jedan `tipAmb` po pozivu. Operater iz liste `AMBALAZA` doseže red Letvarica (ručna provera `10e-1`) |
+     | `ACCEPTANCE CONTRACT` | zatvoren posle odluka | tabela ispod |
+     | `PLATFORM` | PROVEN | sonda ispod |
+     | `LANDING` | PROVEN | grana sa `main`-a posle `#419`; `.claude/` se ne dira; testovi 230/231; katalog 754 → 758 |
+
+     **Creation path višetipnog dokumenta (pitanje 2).** Nijedan produkcioni pisac ga ne pravi:
+     - `UpisiReversUTx` (`modAmbalaza.bas:2216`, i za ispravku), `UpisiReversPartnera_TX`
+       (`:2613`) i `NabaviAmbalazu_TX` (`:2717`) zovu `PrenesiAmbalazu` jednom, sa jednim tipom.
+     - Podela u `PrenesiAmbalazu` (glavni red + ostatak) radi samo za `VRACANJE_TUDJE`. Smerovi
+       reversa (`modAmbalazaUgovor.bas:732`) su `IZDATA_PRAZNA`, `POVRAT_PRAZNE` i
+       `PRENOS_INTERNO`, pa je ne dosežu.
+     - PWA ne piše `tblAmbalazaDokument`. Pokriće (`ULAZ_TUDJE`) i kontra-stav nisu poslovni red.
+     - Oblik postoji samo u fixture-u (`ADK-IZV-1`) i u BFP testovima koji jezgro zovu direktno
+       (merač `visered.py`: dvotipna nabavka u `Test_Amb_JedanProtivpartnerPoDokumentu`, test
+       220 i još četiri).
+
+     **Popis ćelija šablona (pitanje 1).** Statički merač (`popis_celija.py`, scratchpad) je
+     prošao kroz `modPrint`, `modPaletniList`, `modIzvestaj`, `modFaktura`, `modUtovar` i
+     `modDocStyle`: 344 dodele `.Value`, od kojih 184 izraza ne počinju labelom. Pregledano ručno:
+
+     | Papir | Ćelija | `@` pre dodele | Nalaz |
+     |---|---|---|---|
+     | revers (`WriteIzdavanjeCopy`) | tip, kolona 2 | ne | **`KI-012`**, izmereno |
+     | grupna prijemnica (`FillPrijemnicaSablon`) | „Tip amb.", kolona 7 | ne | **isti kvar** (`PRJ-TEST-I1` nosi `12/1`) |
+     | otkupni, grupni otkupni, otpremnica (`WriteOtkupCopy`) | tip samo u tekstu „12/1 x 18" | — | nije pogođen (sonda) |
+     | isti | proizvod (vrsta + sorta), klasa | ne | latentno, samo ako naziv u matičnim liči na datum ili broj |
+     | kartica kooperanta, kartica ambalaže | „Broj dok.", „Opis" | ne | naši brojevi `x/ddmmyy` ostaju tekst (sonda); opis je „tip (oznaka)" |
+     | faktura, utovar | broj, faktura, PO, plomba, vreme | da | već ispravljeno ranije (`modPrint.bas:2201`, `:2462-2497`) |
+     | paleta, prerada | broj, kolona 4 | da | — |
+     | specifikacija, sledljivost, izveštaj | ceo opseg podataka | da | — |
+
+     Ispravljene su dve ćelije sa izmerenim oblikom. Latentne ostaju zapisane ovde, bez izmene:
+     nijedna vrednost iz domena ih danas ne pogađa.
+
+     **Platforma — sonda u sopstvenoj Excel instanci** (13.10.2026, `sonda_tekst.py`, čuvar gasi
+     samo svoj PID). Excel je bio 381 (Srbija), redosled DMY, separator `.`:
+
+     ```
+     "12/1"      opsti -> DATUM 2026-12-01, ispis "1.dec"   @ pre -> "12/1"   @ posle -> 46357
+     "3/2026", "1/2026", "1-2" -> datum;  "001" -> 1;  "123456789012" -> 1,23E+11
+     "1/131026", "1/131026-2", "1/IZV", "12/1 x 18", "13.10.2026" -> ostaju tekst
+     ```
+
+     VBA `.Value` tumači string po en-US pravilima (mesec/dan), mimo DMY lokala; lokal menja
+     samo ispis. `@` POSLE dodele je gore nego bez formata. Tvrdnja testa (`VarType = vbString`)
+     zato ne zavisi od lokala. Izmeren je jedan lokal.
+
+     **Reprodukcija pre ispravke** (`CLAUDE.md` §2, izvor `4d54883e`, fixture `d3d3ff6d`):
+
+     ```
+     RunAllTests: 231 ukupno, 2 palo
+       FAIL T_KI012_TipNaPapiruJeTekst -- revers: tip ambalaze na papiru je tekst, ne datum
+            (KI-012) -- ocekivano [True], dobijeno [False]
+       FAIL T_KI013_VisetipniDokumentPapirPoTipu -- visetipni dokument: drugi tip dobija svoj
+            papir (KI-013) -- dobijeno [... Izabrani tip ambalaze nije tip poslovnog reda dokumenta.]
+     ```
+
+     Preduslovi 230 su prošli, pa je **hipoteza testabilnosti izmerena**: list šablona posle
+     PDF izvoza ostaje popunjen (oba primerka), a list prijemnice se puni kroz `Application.Run`.
+     Test staje na prvoj paloj tvrdnji, pa prijemnica i dva nova odbijanja pre ispravke nisu
+     ispisani. Njih meri dokaz: `ki012-prijemnica-tip-opsti-format` vraća tačno stari kod.
+
+     **Rez.**
+     - `modPrint`: format `@` PRE dodele u dve ćelije (revers, grupna prijemnica).
+     - `modAmbalaza`:
+       - `AmbDokPoslovniRedovi` je nov strog čitalac svih poslovnih redova dokumenta;
+       - `PoslovniRedNiz` je jedan oblik niza za mapu i za papir;
+       - `AmbDokBrojPoslovnihRedova` broji kroz `AmbDokPoslovniRedovi`.
+     - `modIzvestaj.StampajAmbDokument` bira red po tipu; `7506` ostaje, a `7511` je nov.
+     - Pisci, knjiga i fixture se ne diraju (potpis `d3d3ff6d`).
+
+     **Acceptance contract.**
+
+     | Slučaj | Papir | Test |
+     |---|---|---|
+     | jednotipni revers `2/IZV` (12/1 ×10) | tip `12/1` kao tekst, količina 10, isti papir kao pre | 230 |
+     | grupna prijemnica `PRJ-TEST-I1` | tip `12/1` kao tekst | 230 |
+     | višetipni `1/IZV`, red Letvarica | Letvarica ×5 (pre: `7506`) | 231 |
+     | višetipni `1/IZV`, red 12/1 | 12/1 ×30, kao pre | 231 |
+     | tip koji dokument ne nosi | odbijen, `7506` | 231 |
+     | dva reda istog tipa (oba smera) | odbijen, `7511` (pre: tiho prvi red) | 231 |
+     | bez izabranog tipa, višetipni | odbijen, `7511` (pre: tiho prvi red) | 231 |
+
+     - **Netaknuto:** pisci i knjiga, otkupni list i otpremnica, lista F7 `REVERSI` i prefill
+       ispravke (prvi red, imenovano u 6.13f), politika greške čitalaca salda (sledeći korak),
+       dijalog ponovne štampe.
+     - **Edge:** tvrdnja je nad tipom vrednosti, ne nad ispisom, pa ne zavisi od lokala. Tip
+       koji liči na datum (`12/1`) je kanonski tip fixture-a.
+     - Dokument sa dva reda istog tipa test pravi produkcionim primitivima u svojoj
+       transakciji i **vraća** ga posle štampe, pa knjiga za ostale testove ostaje ista.
+     - 230 i 231 štampaju u PDF (kao 226), pa `RunAllTests` otvara još tri PDF-a.
+
+     **Sabotaže (754 → 758)**, dokaz se filtrira na `ki012-` i `ki013-`. Filter ne hvata nijedno
+     ime iz `POZNATI_NALAZI`.
+     - `ki012-revers-tip-opsti-format` → 230 „revers: tip ambalaze na papiru je tekst, ne datum";
+     - `ki012-prijemnica-tip-opsti-format` → 230 „prijemnica: tip ambalaze na papiru je tekst, ne
+       datum";
+     - `ki013-stampa-prvi-red` → 231 „visetipni dokument: papir drugog tipa nosi njegov tip i
+       kolicinu";
+     - `ki013-dvosmislen-tip-pusta` → 231 „dva reda istog tipa se ne spajaju na jedan papir".
+
+     **Očekivani brojevi**, izvedeni iz diff-a:
+
+     | Suita | Pre | Posle | Razlog |
+     |---|---|---|---|
+     | `RunAllTests` | 229 | **231** | +230, +231 |
+     | `RunBusinessFlowProSuite` | 2404 | **2404** | nijedna BFP tvrdnja se ne menja; broj poslovnih redova je isti |
+     | `RunStornoTestSuite`, `RunBankaImportTestSuite` | 111, 241 | bez promene | — |
+
+     **Verifikacija pre GO.** Zelene su:
+     - `vba_check` (758 sabotaža, 0 nalaza, 9 poznatih) i `--self-test`;
+     - `who_writes --check`, `--check-ownership` i `--self-test`;
+     - `gen_schema_module --check` i `--self-test`;
+     - `popis_citalaca --check`, `vba_gate --popis` i `--self-test`, `run_vba --self-test`;
+     - tri kapije self-update motora i `vba_import_marker_gate`, sa `--self-test`.
+
+     **`run_vba` posle ispravke, dokaz i ručna provera NISU pušteni: čeka se reviewer GO.**
+     Zelenilo 230/231 je zato neverifikovano.
+
+     **Otvoreno.**
+     - Review.
+     - Posle GO: pun prolaz, pa `dokaz.py ki012- ki013-` (četiri stavke) i compile.
+     - Ručna provera:
+       1. F7 revers `12/1`: papir nosi `12/1`;
+       2. grupna prijemnica: tip `12/1`;
+       3. `1/IZV` iz liste `AMBALAZA`: Letvarica daje svoj papir, a 12/1 svoj;
+       4. jednotipni revers iz liste: isti papir kao pre.
+     - Sledeći korak: fail-open čitaoci salda i početno stanje na ponovljenom papiru reversa.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
@@ -3649,7 +3799,7 @@
 | **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). Danas to drže samo komentari uz tri grane; kapija bi morala da zna koji su pozivi iz suite-a dostupni, pa traži svoj rez i svoj dvosmerni dokaz |
 | **`dokaz.py` ne dosegne `modIzvestajTests`** | kapija kataloga sabotaža priznaje samo `modTest`, `modTestBanka` i `modBusinessFlowProTests`, pa tvrdnja iz `modIzvestajTests` **ne može da se obori** — a tamo živi najdetaljnije merenje ambalažnog pregleda. Posledica je izmerena u `10c-2`: tvrdnja o identitetu dokumenta je **preseljena** u `#204`, a tvrdnja o spajanju dve vrste istog dokumenta ostala **bez sabotaže**. Proširenje kapije dira sam alat, pa ide **zaseban process PR** sa svojim dvosmernim dokazom |
 | **kanonska knjiga nema PUNU integritetnu proveru** | `modIntegritet` ima **nula** referenci na `Od_Tip` / `Na_Tip` / `VrstaKretanja` / `tblAmbalazaDokument` (merenje 08.10.2026). Posle cutovera proverava samo legacy redove, koje produkcija ne piše — pa operateru kaže „nema nalaza" ne pogledavši kanonsku knjigu. Kandidati za provere: noga bez zaglavlja, zaglavlje bez noge, `StornoOd` koji ne pokazuje nigde, par koji nije neuređen (`AMB-INV-10`), obaveza partneru < 0 (`AMB-INV-09`). Od stavke 113 ugovor reda, dupli `AmbID` i `StornoOd` meri `Chk_AMB_KnjigaIntegritet`; od `10e-3` (stavka 129) i red koji ne dotiče knjigu (red starog oblika) je nalaz po imenu, jer „legacy" stanja više nema. Ostali kandidati (noga bez zaglavlja, zaglavlje bez noge, par koji nije neuređen, obaveza < 0) su i dalje otvoreni. `Chk_B10_ReversBezID` je obrisan u `10e-1` |
-| **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita |
+| **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita. **Odluka operatera (13.10.2026): sledeći korak posle `KI-012`/`KI-013` (stavka 133)**, zajedno sa `GetStanicaAmbSaldo` i istorijskim početnim stanjem na ponovljenom papiru reversa |
 | **badge "nesacuvano" na novoj formi** | `SelectModeCore` pise u polje broja POSLE `MarkClean` i `mLoading = False`, pa programski upis prodje kroz `MarkDirty` i prazna forma tvrdi da ima neupisanih izmena (review 08.10.2026, `P3`). Zatecen obrazac -- vazio je i pre P1 ispravke, za svaki rezim sa auto-brojem. Jedan premesten red, ali izmena `src-vba` obara compile i zeleni marker, a nov test (natpis u zaglavlju) trazi svoj dvosmeran dokaz; zato **svoj rez posle merge-a**, pre `ODL-24` |
 | **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a** |
 | **nema kapije „modul ne sme da koristi tuđ `Private` simbol"** | VBA kompajlira **na zahtev**, pa `Sub or Function not defined` pukne tek kad neki test prvi put pozove baš tu proceduru — i to posle **600 s i ubijenog Excela**, uz poruku bez fajla i linije (06.10.2026: `MarkRowStornirano`, `Private` u `modStorno`, pozvan iz `modAmbalaza`). Ime **postoji** u projektu, samo nije vidljivo — pa ga nijedna jeftina kapija ne vidi. Jednokratni merač je napisan i dao **1 nalaz sa fajlom i linijom nad pokvarenim izvorom, 0 posle** — dvosmeran dokaz. Tri lažna nalaza prvog izdanja su i sama merenje: repni komentar, labela (`Resume CleanUp`) i **LF kopija iz git-a** (split po `
