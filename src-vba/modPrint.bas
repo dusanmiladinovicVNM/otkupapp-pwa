@@ -361,6 +361,14 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     If otpPoznato Then
         h("ambPocetno") = tipAmb & " x " & CStr(otpPosle + CLng(kolAmb))
         h("ambSaldo") = tipAmb & " x " & CStr(otpPosle)
+    ElseIf kolAmb > 0 Then
+        ' Izdata otpremnica SA gajbama uvek ima svoj red knjige
+        ' (modDokumenta.OtpKnjiziAmbalazu). Bez njega je veza pokidana -- narusen
+        ' integritet, a ne "nepoznato stanje" (review #421, P2 #1): papir ne
+        ' nastaje. "-" ostaje samo otpremnici BEZ gajbi.
+        Err.Raise vbObjectError + 7693, "modPrint.FillOtpremnicaSablon", _
+                  "Otpremnica '" & otpID & "' nosi " & CStr(CLng(kolAmb)) & _
+                  " gajbi, a nema svoj red knjige ambalaze -- papir se ne pravi."
     Else
         h("ambPocetno") = tipAmb & " x -"
         h("ambSaldo") = tipAmb & " x -"

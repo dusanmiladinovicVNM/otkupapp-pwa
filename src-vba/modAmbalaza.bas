@@ -222,6 +222,15 @@ Private Function RedJeDokumenta(ByRef data As Variant, ByVal i As Long, _
     RedJeDokumenta = True
 End Function
 
+' ISTI TIP AMBALAZE -- bez obzira na velika slova i razmake, isto kao kanonski
+' saldo (AmbSaldoNaloga: StrComp vbTextCompare) i izbor reda za papir
+' (modIzvestaj.AmbTipKljuc: UCase$ i Trim$). Pisac trazi samo neprazan tip, pa
+' knjiga sme da nosi "letvarica" i "LETVARICA"; citalac koji ih razlikuje daje
+' papiru drugi odgovor od salda (review #421, P2 #2).
+Private Function IstiTipAmb(ByVal a As String, ByVal b As String) As Boolean
+    IstiTipAmb = (StrComp(Trim$(a), Trim$(b), vbTextCompare) = 0)
+End Function
+
 ' ============================================================
 ' READ: stanje NALOGA OKO JEDNOG DOKUMENTA, po redosledu upisa (AMB-10-ODL-31).
 '
@@ -333,7 +342,7 @@ Public Function AmbStanjeOkoDokumenta(ByVal nalogTip As String, _
     Dim znak As Long
     For i = 1 To cutoff
         znak = NalogZnakReda(data, i, kolIdx, nalogTip, nalogID)
-        If znak <> 0 And AmbText(data(i, colTip)) = Trim$(tipAmb) Then
+        If znak <> 0 And IstiTipAmb(AmbText(data(i, colTip)), tipAmb) Then
             If IsNumeric(data(i, colKol)) Then
                 saldo = saldo + znak * CLng(data(i, colKol))
             End If
@@ -348,7 +357,7 @@ Public Function AmbStanjeOkoDokumenta(ByVal nalogTip As String, _
         If Len(AmbText(data(i, colStornoOd))) = 0 Then
             If RedJeDokumenta(data, i, colDokTip, colDokID, dokTip, blk) Then
                 znak = NalogZnakReda(data, i, kolIdx, nalogTip, nalogID)
-                If znak <> 0 And AmbText(data(i, colTip)) = Trim$(tipAmb) Then
+                If znak <> 0 And IstiTipAmb(AmbText(data(i, colTip)), tipAmb) Then
                     If IsNumeric(data(i, colKol)) Then
                         posle = posle + znak * CLng(data(i, colKol))
                     End If

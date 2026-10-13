@@ -7929,6 +7929,33 @@ SABOTAZE = {
         "Test_OTP_PapirStanjeOkoSvogReda",
         "OTP papir: kvar knjige -- otpremnica se ne popunjava",
     ),
+    # Review #421, P2 #1: izdata otpremnica SA gajbama bez svog reda knjige opet
+    # stampa "-" kao da je bez gajbi -- pokidana veza prolazi kao nepoznato stanje.
+    "saldo-otp-bez-veze-nepoznato": (
+        "modPrint.bas",
+        "    ElseIf kolAmb > 0 Then\n",
+        "    ElseIf False Then   ' SABOTAZA: otpremnica sa gajbama bez reda stampa nepoznato\n",
+        "Test_OTP_PapirBezVezeKnjige",
+        "OTP papir bez veze: izgubljen DokumentID -- otpremnica sa gajbama se ne popunjava",
+    ),
+    # Identitet dokumenta u knjizi se suzi na sam DokumentID: red TUDJEG tipa sa
+    # istim ID-om postaje "red ove otpremnice" (AMB-INV-04, generizacija).
+    "saldo-dokument-bez-tipa": (
+        "modAmbalaza.bas",
+        "    If Len(Trim$(dokTip)) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: tip dokumenta se ne poredi\n",
+        "Test_OTP_PapirBezVezeKnjige",
+        "OTP papir bez veze: red tudjeg tipa dokumenta -- otpremnica sa gajbama se ne popunjava",
+    ),
+    # Review #421, P2 #2: istorijski citalac opet poredi tip binarno, pa papir ne
+    # vidi raniji red istog tipa u drugom zapisu, a saldo ga vidi.
+    "saldo-tip-osetljiv-na-slova": (
+        "modAmbalaza.bas",
+        "    IstiTipAmb = (StrComp(Trim$(a), Trim$(b), vbTextCompare) = 0)\n",
+        "    IstiTipAmb = (Trim$(a) = Trim$(b))   ' SABOTAZA: tip osetljiv na velika slova\n",
+        "T_SaldoPapir_TipBezObziraNaVelikaSlova",
+        "tip bez obzira na velika slova: papir nosi stanje istog tipa kao saldo",
+    ),
 }
 
 
