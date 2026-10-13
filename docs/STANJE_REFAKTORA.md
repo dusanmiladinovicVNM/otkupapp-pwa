@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 13.10.2026 (red AMB-10: `10e-3` merge-ovan `#418`, stavka 130; `KI-011` od stavke 131).
+**Ažurirano:** 13.10.2026 (red AMB-10: `10e-3` merge-ovan `#418`, stavka 130; `KI-011` merge-ovan `#419`, stavka 132; `KI-012`/`KI-013` od stavke 133).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -3629,6 +3629,18 @@
      mesta. Ide u svoj rez; reviewer je tražio da se `#419` ne širi.
 
      **Preostalo:** finalni exact-head review.
+
+132. **Review `#419` — `GO` na tačnom head-u, merge-ovano bez dodatnog commita** (13.10.2026).
+     Zapis ide ovde, a ne u `#419`: reviewer je dao GO za head `9d6b22d3`, pa bi svaki novi
+     commit na tom PR-u poništio taj GO. Obrazac su stavke 128 i 130.
+
+     - Verdikt: `P0 0`, `P1 0`, `P2 0`, `P3 1`. Static CI #957 `SUCCESS`, ocena 9,6/10.
+     - `P3` je prihvaćen bez izmene. Automatski „drugi klik" (226, 228) meri klik nad
+       **očišćenom** formom. Istorijski scenario, u kome je operater dobio nov broj i ponovo
+       uneo isti sadržaj, nije automatski meren.
+     - Merge-ovano 13.10.2026 kao `e430d41f`. `KI-011` je `CLOSED`.
+     - Redosled po reviewer-u: `KI-012` + `KI-013` zajedno (ovaj rez, stavka 133+), pa
+       `KI-014` odvojeno. `KI-015` je zaseban mali rez.
 
 ## Dug sa imenom (posle S5-5b)
 
