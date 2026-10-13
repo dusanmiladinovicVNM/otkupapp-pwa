@@ -3594,8 +3594,41 @@
      compile: NEJASNO (automatski) -- rucna kapija operatera
      ```
 
-     **Preostalo:** compile operatera i ručna provera nad `tests/fixtures/rucna_provera_ki011_kod.xlsm`
-     (kod sa `e840b729`, sveska bez lista `SETUP_LOG`), pa finalni exact-head review.
+     **Compile ✅** (operater, 13.10.2026, `rucna_provera_ki011_kod.xlsm`, kod sa `e840b729`):
+     `vba_gate --mark-compile`, pa `--require-green --require-compile` daje RC=0 nad izvorom
+     `fbe6332aca81`.
+
+     **Ručna provera ✅** (operater, 13.10.2026, ista sveska, bez lista `SETUP_LOG`; snimci ekrana i
+     log `tests/fixtures/Log/OtkupApp_2026-10-13.log`):
+
+     ```
+     start sveske (2x, 13:02 i 13:05)   bez "ERROR InitApp.EnsurePoruke | 9"   (pre: 6 od 6)   OK
+     F7 tip 12 x10 (3 pokusaja)         "nije snimljeno": dijalog sa razlogom (manjak '12'),
+                                         forma ostaje, lista bez reversa                       OK
+     F7 12/1 x2 -> 1/131026             PDF ..._130808.pdf, forma ociscena, odmah na listi
+                                         (pocetno 18 -> novo 20)                                OK
+     pad stampe (A: zabranjen upis u
+       "Revers ambalaze") -> 1/131026-2  toast "Revers sacuvan: 1/131026-2 . Revers je sacuvan,
+                                         ali papir nije napravljen -- NE unosi ga ponovo.
+                                         Razlog: Document not saved..." + dijalog; forma
+                                         ociscena; lista 1/131026 i -2; PDF za -2 nije nastao;
+                                         log: ERROR 1004 iz izvoza, bez WARN "zaostala greska"  OK
+     ```
+
+     - F1 kontrola nije izvedena: u logu nema otkupnog upisa, a u `Otkupni listovi` nema PDF-a iz
+       sesije. Otkupni put štampe automatski meri BFP u PDF režimu (2404/0), a on je `Err` čistio
+       i pre ispravke.
+     - Drugi klik posle pada štampe nije ručno prikazan; meri ga 228.
+     - Papir i dalje nosi `1.dec` umesto `12/1`: to je `KI-012`, ide posle (odluka operatera).
+     - U MsgBox-u stoji „sacuvan" bez č, a u traci poruka je ispravno. To nije iz `#419`:
+       MsgBox crta kroz ANSI kodnu stranu mašine (ovde DEU, 1252), u kojoj č ne postoji.
+
+     **Usput, nije iz `#419`: `KI-015`.** Poruka o odbijenom upisu reversa glasi „Greška pri čuvanju
+     **otpremnice**… Greška pri unosu **otkupa**". Zatečeno na `main`-u: `SaveRevers` koristi
+     `DOK_MSG_GRESKA_PRI_CUVANJU`, a `modNovacUnos` koristi `OTKUP_ERR_GRESKA_PRI_UNOSU` na sedam
+     mesta. Ide u svoj rez; reviewer je tražio da se `#419` ne širi.
+
+     **Preostalo:** finalni exact-head review.
 
 ## Dug sa imenom (posle S5-5b)
 
