@@ -20,6 +20,12 @@ Private Const OL_TOP_MARGIN_TRIM_PT As Double = 0#
 ' i WriteIzdavanjeCopy (preko h("prijem")) za naslov/saldo/potpise.
 Private m_izdAmbPrijem As Boolean
 
+' TEST SEAM (KI-011): "pada" = izvoz reversa digne gresku posle foldera; "curi" =
+' ostavi gresku u Err i vrati se normalno, isto kao LogSetup pre KI-011. Dejstvo
+' je vezano za test rezim (izvoz pita IsTestMode pri svakom pozivu), pa zaostao
+' seam van testa ne radi nista.
+Private mStampaTest As String
+
 ' ============================================================
 ' modPrint - Druckausgabe (ersetzt direkte PrintOut-Aufrufe)
 ' ============================================================
@@ -1632,14 +1638,22 @@ End Function
 ' (broj dok. opcioni). Izlaz po CFG_OM_IZDAVANJE_PRINT_MODE: PDF | PRINT | PREVIEW | OFF.
 ' ============================================================
 
-' Glavni ulaz (zove se posle SaveOMUlaz_TX). Best-effort: greska se loguje.
-Public Sub OutputIzdavanjeAmbalaze(ByVal datum As Date, ByVal brojDok As String, _
-                                   ByVal omNaziv As String, ByVal omID As String, _
-                                   ByVal koopNaziv As String, ByVal koopID As String, _
-                                   ByVal tipAmb As String, ByVal kolAmb As Long, _
-                                   ByVal vrstaVoca As String, _
-                                   ByVal prijem As Boolean, _
-                                   Optional ByVal counterparty As String = "KOOP")
+' Glavni ulaz (posle upisa reversa i iz ponovne stampe). Best-effort: greska se
+' loguje i VRACA kao razlog; "" = izlaz je napravljen ili je ugasen (OFF).
+'
+' tiho (KI-011): pozivalac je POSLE commit-a (modNovacUnos.StampajRevers) i pad
+' prijavljuje SAM, kao upozorenje uz uspeh -- dijalog iz dubine stampe bi bio
+' drugi prozor za isti dogadjaj. Ponovna stampa iz liste (modIzvestaj) tiho ne
+' prosledjuje i zadrzava dijalog iz izvoza kakav je bio.
+Public Function OutputIzdavanjeAmbalaze(ByVal datum As Date, ByVal brojDok As String, _
+                                        ByVal omNaziv As String, ByVal omID As String, _
+                                        ByVal koopNaziv As String, ByVal koopID As String, _
+                                        ByVal tipAmb As String, ByVal kolAmb As Long, _
+                                        ByVal vrstaVoca As String, _
+                                        ByVal prijem As Boolean, _
+                                        Optional ByVal counterparty As String = "KOOP", _
+                                        Optional ByVal tiho As Boolean = False) As String
+    Dim errDesc As String
     On Error GoTo EH
     m_izdAmbPrijem = prijem
     Dim mode As String
@@ -1650,16 +1664,24 @@ Public Sub OutputIzdavanjeAmbalaze(ByVal datum As Date, ByVal brojDok As String,
             Dim ws As Worksheet
             Set ws = FillIzdavanjeAmbalazeSablon(datum, brojDok, omNaziv, omID, _
                                                  koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca, counterparty)
-            If Not ws Is Nothing Then DocPrintWs ws, mode
+            If ws Is Nothing Then
+                If tiho Then Err.Raise vbObjectError + 7691, "modPrint.OutputIzdavanjeAmbalaze", _
+                                       "priprema lista nije uspela"
+            Else
+                DocPrintWs ws, mode
+            End If
         Case "PDF"
             ExportIzdavanjeAmbalazePDF datum, brojDok, omNaziv, omID, _
-                                       koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca, True, counterparty
+                                       koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca, True, counterparty, tiho
         ' OFF -> bez izlaza
     End Select
-    Exit Sub
+    Exit Function
 EH:
+    ' Opis se cita PRE LogErr-a: LogErr ide kroz On Error Resume Next i brise Err.
+    errDesc = Err.description
     LogErr "modPrint.OutputIzdavanjeAmbalaze"
-End Sub
+    OutputIzdavanjeAmbalaze = errDesc
+End Function
 
 ' PDF reversa -> <workbook>\Revers ambalaze\IzdavanjeAmbalaze_<suff>_<vreme>.pdf. Vraca putanju.
 ' Vremenski pecat u imenu -> nema "file in use" (1004) ako je prethodni otvoren.
@@ -1669,18 +1691,25 @@ Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As
                                            ByVal tipAmb As String, ByVal kolAmb As Long, _
                                            ByVal vrstaVoca As String, _
                                            Optional ByVal openAfter As Boolean = True, _
-                                           Optional ByVal counterparty As String = "KOOP") As String
+                                           Optional ByVal counterparty As String = "KOOP", _
+                                           Optional ByVal tiho As Boolean = False) As String
+    Dim errNum As Long, errDesc As String
     On Error GoTo EH
     Dim ws As Worksheet
     Set ws = FillIzdavanjeAmbalazeSablon(datum, brojDok, omNaziv, omID, _
                                          koopNaziv, koopID, tipAmb, kolAmb, vrstaVoca, counterparty)
     If ws Is Nothing Then
+        If tiho Then Err.Raise vbObjectError + 7691, "modPrint.ExportIzdavanjeAmbalazePDF", _
+                               "priprema lista nije uspela"
         MsgBox "PDF reversa (izdavanje ambala" & ChrW(382) & "e) nije napravljen: priprema lista nije uspela.", _
                vbExclamation, APP_NAME
         Exit Function
     End If
 
     Dim folder As String: folder = EnsureDocFolder(PDF_DIR_REVERS)
+    ' TEST SEAM (KI-011): pad ili curenje TACNO tamo gde je kvar nastao -- posle
+    ' foldera, pre izvoza.
+    If IsTestMode() Then StampaSeamTest
     Dim suff As String: suff = Trim$(brojDok)
     If suff = "" Then suff = koopID
     suff = Replace(Replace(suff, " + ", "_"), "/", "-")
@@ -1697,10 +1726,37 @@ Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As
     ExportIzdavanjeAmbalazePDF = pdfPath
     Exit Function
 EH:
+    ' tiho (KI-011): pozivalac sam javlja "papir nije napravljen", pa se greska
+    ' VRACA njemu umesto da se prikaze ovde. Opis se cita PRE LogErr-a.
+    If tiho Then
+        errNum = Err.Number
+        errDesc = Err.description
+        LogErr "modPrint.ExportIzdavanjeAmbalazePDF"
+        Err.Raise errNum, "modPrint.ExportIzdavanjeAmbalazePDF", errDesc
+    End If
     MsgBox "Gre" & ChrW(353) & "ka pri izradi PDF reversa (izdavanje ambala" & ChrW(382) & "e):" & vbCrLf & _
            "  [" & Err.Number & "] " & Err.description, vbExclamation, APP_NAME
     LogErr "modPrint.ExportIzdavanjeAmbalazePDF"
 End Function
+
+' TEST SEAM (KI-011). Tvrdo gejtovan; "" gasi.
+Public Sub StampaTestSet(ByVal rezim As String)
+    If Not IsTestMode() Then Exit Sub
+    mStampaTest = rezim
+End Sub
+
+' Dejstvo seam-a. "curi" radi TACNO ono sto je LogSetup radio pre KI-011:
+' greska pod Resume Next, pa izlaz VAN handlera, koji je ne brise (sonda P1).
+Private Sub StampaSeamTest()
+    Select Case mStampaTest
+        Case "pada"
+            Err.Raise vbObjectError + 7690, "modPrint.ExportIzdavanjeAmbalazePDF", _
+                      "test: izvoz PDF-a pada"
+        Case "curi"
+            On Error Resume Next
+            Err.Raise 9, "modPrint.StampaSeamTest", "test: zaostala greska"
+    End Select
+End Sub
 
 ' Popuni IzdAmbSablon: dva identicna primerka jedan iznad drugog, svaki tacno
 ' 1/3 A4 (99mm) - ista geometrija kao otkupni list (papir sa dve perforacije;

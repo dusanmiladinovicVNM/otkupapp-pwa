@@ -82,6 +82,12 @@ Public Const SEK_MATICNI As String = "MATICNI"
 ' zna zasto - tacno to se desilo sa "Po datumu". Ljuska ovo cita i prikazuje.
 Public ScrLastErr As String
 
+' Greska koju je Scr_Save OSTAVIO u Err, a ipak VRATIO rezultat (KI-011). To nije
+' neuspeh upisa nego kvar koda -- neki pomocni korak je gresku prigusio i nije je
+' obrisao. Ne prikazuje se operateru (upis JESTE prosao), ali se ne guta: ide u
+' log kao WARN, a test ga tvrdi kao prazan.
+Public ScrZaostalaGreska As String
+
 ' Kes odgovora "da li modul postoji" - Application.Run na nepostojeci modul
 ' baca gresku, a to je skupo raditi pri svakom crtanju sidebara.
 Private mHas As Object
@@ -592,16 +598,37 @@ End Function
 ' zna sta su i sta se sa njima radi. Vraca "" kad je proslo, inace poruku za
 ' operatera (jedan razmak = operater je odustao, ne prikazuje se nista).
 ' Ekran u isti recnik upisuje "fokus", "rezultat" i "poruke".
+'
+' NEUSPEH JE SAMO NEVRACEN REZULTAT (KI-011, UI-ISHOD-01). Izmereno sondom
+' 13.10.2026:
+'   - makro koji DIGNE gresku kroz Application.Run je NE vraca pozivaocu, nego
+'     otvara runtime dijalog -- pa "greska u Err posle Run-a" nikad nije bila
+'     pad Scr_Save;
+'   - Run koji makro ne moze da pokrene (1004) ne vraca nista -- to JESTE
+'     neuspeh, upis se nije ni desio;
+'   - makro koji VRATI rezultat a ostavi gresku u Err vraca i jedno i drugo.
+' Treci slucaj je do KI-011 citan kao neuspeh: revers je bio snimljen, a ljuska je
+' javila "Radnja nije uspela", nije ocistila formu ni osvezila listu, pa je
+' operater isti revers snimio dvaput. Sada vazi ono sto je ekran VRATIO, a
+' zaostala greska ide u ScrZaostalaGreska i u log -- vidljiva, ne progutana.
 Public Function ScrSave(ByVal kljuc As String, ByVal polja As Object) As String
-    Dim m As String
+    Dim m As String, v As Variant
     ScrLastErr = ""
+    ScrZaostalaGreska = ""
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) = 0 Then Exit Function
     Err.Clear
-    ScrSave = CStr(Application.Run(m & ".Scr_Save", polja))
-    If Err.Number <> 0 Then
+    v = Application.Run(m & ".Scr_Save", polja)
+    If IsEmpty(v) Then
         ScrLastErr = m & ".Scr_Save -> " & Err.Number & " " & Err.description
-        Err.Clear
+    Else
+        ScrSave = CStr(v)
+        If Err.Number <> 0 Then
+            ScrZaostalaGreska = m & ".Scr_Save: " & Err.Number & " " & Err.description
+            LogWarn "modUiScreens.ScrSave", "zaostala greska posle upisa (KI-011): " & _
+                    ScrZaostalaGreska
+        End If
     End If
+    Err.Clear
 End Function

@@ -7750,6 +7750,46 @@ SABOTAZE = {
         "T_FrameworkIspravke_SamoTriTipa",
         "framework ne izvrsava nijedan mod nad reversom",
     ),
+    # KI-011 IZVOR: LogSetup ponovo ostavlja svoju gresku (proba lista SETUP_LOG
+    # pod Resume Next, izlaz van handlera je ne brise). ScrSave je od KI-011
+    # tolerantan, pa ishod za operatera ostaje dobar -- crveni se tvrdnja koja
+    # meri IZVOR, ne ishod.
+    "ki011-logsetup-ostavlja-gresku": (
+        "modSetup.bas",
+        "    Err.Clear\n    If errNum <> 0 Then\n        Err.Number = errNum\n",
+        "    If errNum <> 0 Then   ' SABOTAZA: proba ostavlja svoju gresku\n        Err.Number = errNum\n",
+        "T_KI011_UspesanUpisJeUspeh",
+        "upis ne ostavlja zaostalu gresku u Err (izvor KI-011: LogSetup)",
+    ),
+    # KI-011 CITALAC: ScrSave opet cita zaostalu gresku kao neuspeh upisa --
+    # tacno ponasanje pre KI-011. Seam "curi" ostavlja gresku nezavisno od
+    # LogSetup-a, pa se crveni test citaoca.
+    "ki011-scrsave-zaostala-je-neuspeh": (
+        "modUiScreens.bas",
+        '            ScrZaostalaGreska = m & ".Scr_Save: " & Err.Number & " " & Err.description\n',
+        '            ScrLastErr = m & ".Scr_Save -> " & Err.Number & " " & Err.description   \' SABOTAZA: zaostala greska je neuspeh\n',
+        "T_KI011_ZaostalaGreskaNijeNeuspeh",
+        "zaostala greska iz pomocnog koraka nije neuspeh upisa",
+    ),
+    # KI-011 POZITIVNA KONTROLA: tolerancija prema zaostaloj gresci ne sme da
+    # proguta i PRAVI neuspeh -- Scr_Save koji se ne moze pokrenuti (1004) i ne
+    # vrati rezultat.
+    "ki011-scrsave-ne-javlja-neuspeh": (
+        "modUiScreens.bas",
+        "    If IsEmpty(v) Then\n",
+        "    If False Then   ' SABOTAZA: nevracen rezultat nije neuspeh\n",
+        "T_KI011_ZaostalaGreskaNijeNeuspeh",
+        "ekran koji ne vrati rezultat se javlja kao neuspeh",
+    ),
+    # KI-011 KANAL: pad stampe posle upisa se precutkuje -- revers je snimljen,
+    # papira nema, a operater ne zna da posao nije zavrsen.
+    "ki011-stampa-pad-precutan": (
+        "modNovacUnos.bas",
+        '    If Len(razlog) > 0 Then StampajRevers = Poruka("NOVUNOS_MSG_STAMPA_NIJE") & " " & razlog & vbCrLf\n',
+        "    razlog = \"\"   ' SABOTAZA: pad stampe se precutkuje\n",
+        "T_KI011_PadStampeJeUpozorenjeUzUspeh",
+        "operater vidi da papir nije napravljen",
+    ),
 }
 
 

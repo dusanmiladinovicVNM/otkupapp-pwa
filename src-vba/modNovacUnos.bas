@@ -613,7 +613,7 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
         If Len(revDokID) = 0 Then Exit Function
         poruke = poruke & Poruka("NOVUNOS_MSG_ISPR_REV_OK") & " " & stariBroj & vbCrLf
         ' Nov dokument = nov papir (A9: nov broj).
-        StampajRevers p, smer
+        poruke = poruke & StampajRevers(p, smer)
         ReversUpisi = BrojIliOznaka(brDok)
         Exit Function
     End If
@@ -626,7 +626,7 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
         If Len(revDokID) = 0 Then Exit Function
         ' Ispravka kupcevog reversa ne postoji: 10d ispravlja samo NAS revers, a
         ' kupcev se stornira i unosi ponovo (IspravkaReversaRazlog ga odbija).
-        StampajRevers p, smer
+        poruke = poruke & StampajRevers(p, smer)
         ReversUpisi = BrojIliOznaka(brDok)
         Exit Function
     End If
@@ -647,9 +647,9 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
     ' je ispravka jedan potez (grana iznad), pa obican unos vise nije zamena ni
     ' za koga -- i ne sme da zatvori tudju ispravku sa slucajno istim brojem.
 
-    ' PDF revers - best-effort, isto kao u legacy: pad stampe ne sme da
-    ' obori potvrdu upisa (rutina loguje sama).
-    StampajRevers p, smer
+    ' PDF revers - best-effort: pad stampe ne sme da obori potvrdu upisa. Rutina
+    ' ga vraca kao upozorenje uz uspeh (KI-011), pa ide u poruke.
+    poruke = poruke & StampajRevers(p, smer)
 
     ReversUpisi = BrojIliOznaka(brDok)
     Exit Function
@@ -726,30 +726,41 @@ End Function
 
 ' Dva oblika reversa, kao u legacy: kooperantski nosi ime kooperanta i
 ' ID, firma<->OM nosi ime vozaca (bez ID-ja) i drugu protivstranu.
-Private Sub StampajRevers(ByVal p As Object, ByVal smer As Long)
-    Dim vozacNaziv As String
+'
+' PAPIR JE SPOREDNI EFEKAT, NE DOKUMENT (KI-011). Vraca "" kad je papir napravljen
+' ili je stampa ugasena; inace UPOZORENJE za niz poruka iz ReversUpisi. Pad se
+' klasifikuje OVDE, jer je ovo jedino mesto koje zna da je upis vec prosao: poruka
+' nosi oznaku ChrW(10007) iz kataloga, pa ga ljuska prikaze kao upozorenje UZ
+' USPEH -- forma se cisti, lista osvezava, a operater zna da revers ne unosi
+' ponovo. Do KI-011 je pad PDF-a otvarao dijalog iz dubine stampe, a pad
+' PRINT/PREVIEW izlaza je bio tih.
+Private Function StampajRevers(ByVal p As Object, ByVal smer As Long) As String
+    Dim vozacNaziv As String, razlog As String
     On Error GoTo EH
     ' Kupcev revers ide u PRVU granu: ona imenuje PARTNERA, a kupac je partner.
     ' Druga grana nosi ime vozaca i protivstranu firma<->OM, sto bi na kupcevom
     ' papiru bilo tacno pogresno.
     If smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP _
        Or smer = SMER_REV_POVRAT_KUP Then
-        OutputIzdavanjeAmbalaze CDate(p("datum")), S(p, "brDok"), _
-                                S(p, "stanicaTekst"), S(p, "stanicaID"), _
-                                S(p, "partnerTekst"), S(p, "partnerID"), _
-                                S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
-                                (smer = SMER_REV_PRI_KOOP Or _
-                                 smer = SMER_REV_POVRAT_KUP)
+        razlog = OutputIzdavanjeAmbalaze(CDate(p("datum")), S(p, "brDok"), _
+                                         S(p, "stanicaTekst"), S(p, "stanicaID"), _
+                                         S(p, "partnerTekst"), S(p, "partnerID"), _
+                                         S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
+                                         (smer = SMER_REV_PRI_KOOP Or _
+                                          smer = SMER_REV_POVRAT_KUP), tiho:=True)
     Else
         vozacNaziv = Trim$(NzToText(LookupValue(TBL_VOZACI, "VozacID", S(p, "vozacID"), "Ime")) & " " & _
                            NzToText(LookupValue(TBL_VOZACI, "VozacID", S(p, "vozacID"), "Prezime")))
-        OutputIzdavanjeAmbalaze CDate(p("datum")), S(p, "brDok"), _
-                                S(p, "stanicaTekst"), S(p, "stanicaID"), _
-                                vozacNaziv, "", _
-                                S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
-                                (smer = SMER_REV_IZD_OM), "FIRMA"
+        razlog = OutputIzdavanjeAmbalaze(CDate(p("datum")), S(p, "brDok"), _
+                                         S(p, "stanicaTekst"), S(p, "stanicaID"), _
+                                         vozacNaziv, "", _
+                                         S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
+                                         (smer = SMER_REV_IZD_OM), "FIRMA", True)
     End If
-    Exit Sub
+    If Len(razlog) > 0 Then StampajRevers = Poruka("NOVUNOS_MSG_STAMPA_NIJE") & " " & razlog & vbCrLf
+    Exit Function
 EH:
+    razlog = Err.description
     LogErr "modNovacUnos.StampajRevers"
-End Sub
+    StampajRevers = Poruka("NOVUNOS_MSG_STAMPA_NIJE") & " " & razlog & vbCrLf
+End Function

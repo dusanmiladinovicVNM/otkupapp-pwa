@@ -319,6 +319,8 @@ Public Sub RunAllTests()
     RunOne 224
     RunOne 225
     RunOne 226
+    RunOne 227
+    RunOne 228
     RunOne 13
     RunOne 14
     RunOne 15
@@ -586,6 +588,9 @@ Private Sub ResetSeamova()
     ' Podmetnut pad generatora ID-a: zaostao seam bi svakom sledecem upisu dao
     ' prazan ID.
     modDataAccess.NewEntityIDPadniTest False
+    ' Podmetnut pad/curenje stampe reversa (227, 228): zaostao seam bi svakom
+    ' sledecem upisu reversa oborio ili zaprljao papir.
+    modPrint.StampaTestSet ""
     Err.Clear
 End Sub
 
@@ -813,6 +818,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 224: TestName = "T_AmbIstorija_KvarKnjigeNijeNepoznato"
         Case 225: TestName = "T_AmbStampa_TudjiTipOdbijen"
         Case 226: TestName = "T_KI011_UspesanUpisJeUspeh"
+        Case 227: TestName = "T_KI011_ZaostalaGreskaNijeNeuspeh"
+        Case 228: TestName = "T_KI011_PadStampeJeUpozorenjeUzUspeh"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1047,6 +1054,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 224: T_AmbIstorija_KvarKnjigeNijeNepoznato
         Case 225: T_AmbStampa_TudjiTipOdbijen
         Case 226: T_KI011_UspesanUpisJeUspeh
+        Case 227: T_KI011_ZaostalaGreskaNijeNeuspeh
+        Case 228: T_KI011_PadStampeJeUpozorenjeUzUspeh
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -4323,7 +4332,8 @@ Private Sub T_PorukeUnosa_UpozorenjeNosiOznaku()
     modPoruke.InvalidateCache
 
     upoz = Array("DOKUNOS_MSG_VISE_ISPRAVKI", "DOKUNOS_MSG_PALETE_NISU", _
-                 "DOKUNOS_MSG_ZBIRNA_NIJE", "DOKUNOS_MSG_ISPRAVKA_NIJE")
+                 "DOKUNOS_MSG_ZBIRNA_NIJE", "DOKUNOS_MSG_ISPRAVKA_NIJE", _
+                 "NOVUNOS_MSG_STAMPA_NIJE")
     For i = 0 To UBound(upoz)
         t = Poruka(CStr(upoz(i)))
         AssertEq (Len(t) > 0), True, CStr(upoz(i)) & " postoji u katalogu"
@@ -7514,7 +7524,7 @@ Private Sub T_KI011_UspesanUpisJeUspeh()
     Dim pdfPre As Long, pdfPosle As Long, bezLoga As Boolean
     Dim lazna As String, kolPosle As String, partnerPosle As String
     Dim naListiPre As Boolean, naListiPosle As Boolean
-    Dim toast As String, dijalog1 As String, omPre As String
+    Dim toast As String, dijalog1 As String, omPre As String, zaostala As String
     Dim errNum As Long, errDesc As String
 
     bezLoga = Not ImaList("SETUP_LOG")
@@ -7543,10 +7553,7 @@ Private Sub T_KI011_UspesanUpisJeUspeh()
 
     ' Forma se puni ISTIM prepisom kojim ga puni "Zamena reversa" -- polja koja
     ' operater vidi, ne recnik mimo ljuske.
-    spec = "datum=" & Format$(Date, "dd.mm.yyyy") & "|omid=" & FX_STANICA & _
-           "|partnerid=" & FX_KOOPERANT & "|vrsta=" & FX_VRSTA & _
-           "|tipamb=" & FX_TIP_AMB & "|amb1=2" & _
-           "|smerrev=" & CStr(modNovacUnos.SMER_REV_IZD_KOOP) & "|brdok=" & broj
+    spec = SpecReversaKI011(broj, 2)
     modOtkupUI.ApplyPrefill spec
     omPre = Trim$(CStr(f.Controls("zCtx").Controls("cbOM").value))
 
@@ -7556,6 +7563,7 @@ Private Sub T_KI011_UspesanUpisJeUspeh()
     ' PRVI KLIK: snimanje sa stampom.
     modOtkupUI.CommitDokumentTest False
     lazna = modUiScreens.ScrLastErr
+    zaostala = modUiScreens.ScrZaostalaGreska
     nDok1 = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
     pdfPosle = BrojPdfReversa(broj)
     kolPosle = Polje(zf, "fgKolAmb")
@@ -7581,6 +7589,9 @@ CleanUp:
     AssertEq naListiPre, False, "preduslov: revers jos nije na listi"
     AssertEq (Len(omPre) > 0), True, "preduslov: prefill je izabrao otkupno mesto"
     AssertEq lazna, "", "uspesan upis se ne prijavljuje kao neuspeh (KI-011)"
+    ' IZVOR, ne samo ishod: ScrSave od KI-011 zaostalu gresku ne prijavljuje kao
+    ' neuspeh, pa bi tvrdnja iznad prosla i sa LogSetup-om koji curi. Ova ne bi.
+    AssertEq zaostala, "", "upis ne ostavlja zaostalu gresku u Err (izvor KI-011: LogSetup)"
     AssertEq nDok1 - nDokPre, 1, "prvi klik upisuje TACNO JEDAN revers"
     AssertEq pdfPosle - pdfPre, 1, "papir reversa je napravljen (PDF)"
     AssertEq kolPosle, "", "posle uspeha forma je ociscena (kolicina)"
@@ -7591,6 +7602,203 @@ CleanUp:
     AssertEq dijalog1, "", "uspeh bez upozorenja ne otvara dijalog"
     AssertEq nDok2 - nDok1, 0, "drugi klik na Sacuvaj ne pravi drugi revers"
 End Sub
+
+' 227. KI-011: ZAOSTALA GRESKA NIJE NEUSPEH UPISA -- A PRAVI NEUSPEH JESTE.
+'
+' Ugovor ishoda (UI-ISHOD-01): "nije snimljeno" se javlja SAMO kad ekran vrati
+' poruku ili kad Scr_Save uopste ne vrati rezultat. Izmereno sondom 13.10.2026:
+' makro koji DIGNE gresku kroz Application.Run je ne vraca pozivaocu (otvara
+' runtime dijalog), pa je greska u Err uz VRACEN rezultat uvek zaostatak nekog
+' pomocnog koraka -- tacno ono sto je KI-011 citao kao pad.
+'
+' Seam ostavlja gresku u Err NA ISTOM MESTU gde ju je ostavljao LogSetup (izvoz
+' reversa, posle foldera), nezavisno od ispravke LogSetup-a. Zato ovaj test meri
+' CITAOCA, a 226 IZVOR -- bez toga bi popravljen LogSetup ostavio citaoca
+' nemerenim.
+'
+' Dve kontrole iz suprotnog smera:
+'   - ekran ciji Scr_Save ne moze da se pokrene (Run -> 1004) se i dalje javlja
+'     kao neuspeh -- jedini neuspeh koji ScrSave sam vidi;
+'   - upis koji pisac odbije (stanica nema toliko gajbi) je "nije snimljeno":
+'     nema dokumenta, forma ostaje, operater dobija razlog u dijalogu.
+' SABOTAZE: ki011-scrsave-zaostala-je-neuspeh -> pukne "zaostala greska iz
+' pomocnog koraka nije neuspeh upisa"; ki011-scrsave-ne-javlja-neuspeh -> pukne
+' "ekran koji ne vrati rezultat se javlja kao neuspeh".
+Private Sub T_KI011_ZaostalaGreskaNijeNeuspeh()
+    Dim f As frmOtkupUI, zf As Object, modePre As String
+    Dim nabBroj As String, broj As String, broj2 As String, omPre As String
+    Dim nDokPre As Long, nDok1 As Long, nDok3 As Long
+    Dim lazna As String, zaostala As String, kolPosle As String
+    Dim naListiPosle As Boolean, polja As Object, lazna1004 As String
+    Dim lazna3 As String, dijalog3 As String, kol3 As String
+    Dim errNum As Long, errDesc As String
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    On Error GoTo CleanUp
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+
+    nabBroj = "NAB-KI011Z-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 10, nabBroj, _
+                                  "preduslov KI-011"
+    broj = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date)
+
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F7"
+    modOtkupUI.GridTestLoad "DOKUMENTI"
+    modOtkupUI.ApplyPrefill SpecReversaKI011(broj, 2)
+    omPre = Trim$(CStr(f.Controls("zCtx").Controls("cbOM").value))
+    nDokPre = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+
+    ' 1) Stampa ostavi gresku u Err i vrati se normalno -- kao LogSetup pre KI-011.
+    modPrint.StampaTestSet "curi"
+    modOtkupUI.CommitDokumentTest False
+    modPrint.StampaTestSet ""
+    lazna = modUiScreens.ScrLastErr
+    zaostala = modUiScreens.ScrZaostalaGreska
+    nDok1 = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+    kolPosle = Polje(zf, "fgKolAmb")
+    naListiPosle = MrezaImaTekst(broj)
+
+    ' 2) Pisac odbije upis -- stanica nema toliko gajbi: "nije snimljeno".
+    broj2 = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date)
+    modOtkupUI.ApplyPrefill SpecReversaKI011(broj2, 999999)
+    modOtkupUI.CommitDokumentTest False
+    lazna3 = modUiScreens.ScrLastErr
+    dijalog3 = modOtkupUI.DijalogTest()
+    kol3 = Polje(zf, "fgKolAmb")
+    nDok3 = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modPrint.StampaTestSet ""
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest." & "T_KI011_ZaostalaGreskaNijeNeuspeh", errDesc
+
+    ' 3) Ekran bez Scr_Save: Run ne vrati nista (1004). Bez forme -- meri se
+    ' omotac ugovora, jedino mesto koje taj slucaj vidi.
+    Set polja = CreateObject("Scripting.Dictionary")
+    modUiScreens.ScrSave "PALETE", polja
+    lazna1004 = modUiScreens.ScrLastErr
+
+    AssertEq (Len(omPre) > 0), True, "preduslov: prefill je izabrao otkupno mesto"
+    AssertEq lazna, "", "zaostala greska iz pomocnog koraka nije neuspeh upisa"
+    AssertEq (InStr(1, zaostala, "zaostala greska", vbTextCompare) > 0), True, _
+             "zaostala greska je zabelezena, ne progutana"
+    AssertEq nDok1 - nDokPre, 1, "upis uz zaostalu gresku je upisan tacno jednom"
+    AssertEq kolPosle, "", "upis uz zaostalu gresku cisti formu"
+    AssertEq naListiPosle, True, "upis uz zaostalu gresku osvezava listu"
+    AssertEq (InStr(1, lazna1004, "1004", vbBinaryCompare) > 0), True, _
+             "ekran koji ne vrati rezultat se javlja kao neuspeh"
+    AssertEq nDok3 - nDok1, 0, "odbijen upis ne pravi dokument"
+    AssertEq lazna3, "", "odbijen upis je poruka ekrana, ne pad omotaca"
+    AssertEq (Len(dijalog3) > 0), True, "odbijen upis: operater dobija razlog u dijalogu"
+    AssertEq kol3, "999999", "odbijen upis: forma ostaje popunjena"
+End Sub
+
+' 228. KI-011: PAD STAMPE POSLE UPISA JE UPOZORENJE UZ USPEH, A DRUGI KLIK NE
+' PRAVI DUPLIKAT.
+'
+' Revers je dokument, papir je njegov sporedni efekat. Kad papir ne nastane POSLE
+' commit-a, dokument JESTE snimljen: operater mora da vidi "sacuvan, ali papir
+' nije napravljen", uz ociscenu formu i osvezenu listu -- inace ponovi unos i
+' nastane drugi dokument (smoke 13.10.2026). Pad se klasifikuje na mestu
+' podizanja (modNovacUnos.StampajRevers), jedinom koje zna da je upis prosao, i
+' ide kroz postojeci kanal upozorenja uz uspeh (oznaka ChrW(10007), test 69).
+'
+' Drugi klik je ISTI potez operatera posle poruke: forma je prazna, pa upisa ne
+' sme da bude, a odbijanje je validacija polja (toast), ne nov dijalog.
+' SABOTAZA: ki011-stampa-pad-precutan -> pukne "operater vidi da papir nije
+' napravljen".
+Private Sub T_KI011_PadStampeJeUpozorenjeUzUspeh()
+    Dim f As frmOtkupUI, zf As Object, modePre As String
+    Dim nabBroj As String, broj As String, omPre As String, upozorenje As String
+    Dim nDokPre As Long, nDok1 As Long, nDok2 As Long, pdfPre As Long, pdfPosle As Long
+    Dim lazna As String, dijalog1 As String, dijalog2 As String, toast1 As String
+    Dim kolPosle As String, naListiPosle As Boolean
+    Dim errNum As Long, errDesc As String
+
+    ' Katalog iz koda (obrazac testa 69): nov kljuc ne postoji u fixture-u dok
+    ' ga EnsurePoruke ne upise, a Poruka() bi vratila "[KLJUC]" bez oznake.
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    upozorenje = modOtkupUI.PorukaZaDijalog(Poruka("NOVUNOS_MSG_STAMPA_NIJE"))
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    On Error GoTo CleanUp
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+
+    nabBroj = "NAB-KI011P-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 10, nabBroj, _
+                                  "preduslov KI-011"
+    broj = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date)
+
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F7"
+    modOtkupUI.GridTestLoad "DOKUMENTI"
+    modOtkupUI.ApplyPrefill SpecReversaKI011(broj, 2)
+    omPre = Trim$(CStr(f.Controls("zCtx").Controls("cbOM").value))
+    nDokPre = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+    pdfPre = BrojPdfReversa(broj)
+
+    ' PRVI KLIK: upis prolazi, izvoz PDF-a padne posle foldera.
+    modPrint.StampaTestSet "pada"
+    modOtkupUI.CommitDokumentTest False
+    modPrint.StampaTestSet ""
+    lazna = modUiScreens.ScrLastErr
+    dijalog1 = modOtkupUI.DijalogTest()
+    toast1 = ToastTekst(f)
+    nDok1 = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+    pdfPosle = BrojPdfReversa(broj)
+    kolPosle = Polje(zf, "fgKolAmb")
+    naListiPosle = MrezaImaTekst(broj)
+
+    ' DRUGI KLIK: isto dugme, odmah posle poruke.
+    modOtkupUI.CommitDokumentTest False
+    dijalog2 = modOtkupUI.DijalogTest()
+    nDok2 = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modPrint.StampaTestSet ""
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest." & "T_KI011_PadStampeJeUpozorenjeUzUspeh", errDesc
+
+    AssertEq (Len(omPre) > 0), True, "preduslov: prefill je izabrao otkupno mesto"
+    AssertEq (InStr(1, dijalog1, upozorenje, vbBinaryCompare) > 0), True, _
+             "operater vidi da papir nije napravljen"
+    AssertEq (InStr(1, dijalog1, "test: izvoz PDF-a pada", vbBinaryCompare) > 0), True, _
+             "upozorenje imenuje razlog pada stampe"
+    AssertEq lazna, "", "pad stampe posle upisa nije neuspeh upisa"
+    AssertEq nDok1 - nDokPre, 1, "revers je upisan tacno jednom i kad stampa padne"
+    AssertEq pdfPosle - pdfPre, 0, "preduslov: pad je stvarno sprecio papir"
+    AssertEq (InStr(1, toast1, broj, vbBinaryCompare) > 0), True, _
+             "toast potvrdjuje upis sa brojem reversa"
+    AssertEq kolPosle, "", "posle pada stampe forma je ociscena"
+    AssertEq naListiPosle, True, "posle pada stampe lista prikazuje revers"
+    AssertEq nDok2 - nDok1, 0, "drugi klik posle pada stampe ne pravi drugi revers"
+    AssertEq dijalog2, "", "drugi klik nad praznom formom je validacija, ne dijalog"
+End Sub
+
+' Forma F7 za KI-011 testove -- isti prepis kojim je puni "Zamena reversa".
+Private Function SpecReversaKI011(ByVal broj As String, ByVal kol As Long) As String
+    SpecReversaKI011 = "datum=" & Format$(Date, "dd.mm.yyyy") & "|omid=" & FX_STANICA & _
+                       "|partnerid=" & FX_KOOPERANT & "|vrsta=" & FX_VRSTA & _
+                       "|tipamb=" & FX_TIP_AMB & "|amb1=" & CStr(kol) & _
+                       "|smerrev=" & CStr(modNovacUnos.SMER_REV_IZD_KOOP) & _
+                       "|brdok=" & broj
+End Function
 
 ' Da li sveska ima list ovog imena.
 Private Function ImaList(ByVal ime As String) As Boolean
