@@ -3816,13 +3816,33 @@
      `tests/fixtures/rucna_provera_ki012_kod.xlsm` (`run_vba --compile-only --keep` nad
      `82f2ab6c`).
 
+     **Compile ✅** (operater, 13.10.2026, `rucna_provera_ki012_kod.xlsm`, kod sa `82f2ab6c`):
+     `vba_gate --mark-compile`, pa `--require-green --require-compile` daje RC=0 nad izvorom
+     `a2ce8b2f5fba`.
+
+     **Ručna provera ✅** (operater, 13.10.2026, ista sveska; snimci PDF-ova u sesiji):
+
+     ```
+     F7 revers 12/1 x2 -> 1/131026     "12/1" u tabeli (ne "1.dec"), pocetno 18 -> novo 20    OK
+     AMBALAZA 1/IZV, red Letvarica     papir: Letvarica x5, UKUPNO 5 (pre: odbijenica 7506)  OK
+     AMBALAZA 1/IZV, red 12/1          papir: 12/1 x30                                       OK
+     AMBALAZA 2/IZV (jednotipni)       "Prijem (povrat)", 12/1 x10, kao pre                  OK
+     Roba / Test kupac 1, 3/150326     prijemnica (Adobe PDF stampac): "Tip amb." = 12/1,
+                                        levo poravnato (tekst)                               OK
+     ```
+
+     Usput, ništa od ovoga nije iz ovog reza (diff `modPrint`-a je samo format dve ćelije):
+     - **Početno stanje na ponovljenom papiru je izvedeno iz DANAŠNJEG salda.** Na `1/IZV` za
+       12/1 piše „-10 kom", jer je novo stanje danas 20, a dokument nosi 30. To je poznata
+       stavka za sledeći korak (odluka operatera, red u „Dug sa imenom").
+     - **„Otkupno mesto: Test Otkupr"** je odsečeno na svim papirima reversa, jer je kolona
+       uska za naziv. Zatečeni raspored.
+     - Papir iz F7 nosi „Kooperant: Prvi Testni · Test Otkupno Mesto" (natpis iz liste forme),
+       a ponovna štampa „Kooperant: Prvi Testni". Dva puta do istog papira daju različit tekst
+       partnera. Nije izmereno odakle F7 uzima naziv; odluka da li je to kvar ostaje operateru.
+
      **Otvoreno.**
-     - Compile (operater), pa `vba_gate --mark-compile`.
-     - Ručna provera:
-       1. F7 revers `12/1`: papir nosi `12/1`;
-       2. grupna prijemnica: tip `12/1`;
-       3. `1/IZV` iz liste `AMBALAZA`: Letvarica daje svoj papir, a 12/1 svoj;
-       4. jednotipni revers iz liste: isti papir kao pre.
+     - Finalni exact-head review i merge.
      - Sledeći korak: fail-open čitaoci salda i početno stanje na ponovljenom papiru reversa.
 
 ## Dug sa imenom (posle S5-5b)
