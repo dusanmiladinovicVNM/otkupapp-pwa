@@ -2543,8 +2543,17 @@ nalog, pa njen manjak pisac odbija.
 
 **Bez granice:**
 - otpremnica bez gajbi nema svoj red knjige, pa po ODL-27 štampa „-";
+- izdata otpremnica **sa** gajbama svoj red uvek ima (`OtpKnjiziAmbalazu`), pa je njegovo
+  odsustvo pokidana veza, a papir ne nastaje (7693). Review `#421`, P2 #1: ranije je i taj
+  slučaj štampao „-";
 - revers uvek ima svoj red za nalog i tip papira, pa je odsustvo granice kvar
   identiteta i papir ne nastaje (7692), umesto papira bez redova stanja.
+
+**Tip ambalaže je isti tip bez obzira na velika slova** (review `#421`, P2 #2). Pisac traži
+samo neprazan tip, pa knjiga sme da nosi `letvarica` i `LETVARICA`. Istorijski čitalac zato
+poredi tip kao kanonski saldo (`AmbSaldoNaloga`, `vbTextCompare`) i izbor reda za papir
+(`AmbTipKljuc`), inače bi papir i saldo davali dva odgovora. `GetAmbalazeStanje` i dalje
+grupiše binarno; zove ga samo grupni otkupni list, pa ide uz S6.
 
 > **`AMB-10-ODL-32` (odluka operatera 13.10.2026): kupčev revers se ne štampa ni iz F7.**
 > Lista ga je odbijala (7507: dokument je kupčev, nosi njegov broj, original drži
@@ -2554,8 +2563,9 @@ nalog, pa njen manjak pisac odbija.
 > ne pravi i ne javlja upozorenje: to je pravilo, ne pad štampe.
 
 *Provera:* `modTest` 232 (`T_SaldoPapir_ReversKakoJeBio`), 233
-(`T_SaldoPapir_KupcevReversF7BezPapira`), 234 (`T_SaldoPapir_KvarKnjigeNijeNula`), BFP
-`Test_OTP_PapirStanjeOkoSvogReda`; sabotaže `saldo-*`.
+(`T_SaldoPapir_KupcevReversF7BezPapira`), 234 (`T_SaldoPapir_KvarKnjigeNijeNula`), 235
+(`T_SaldoPapir_TipBezObziraNaVelikaSlova`), BFP `Test_OTP_PapirStanjeOkoSvogReda` i
+`Test_OTP_PapirBezVezeKnjige`; sabotaže `saldo-*` (10).
 
 ### 6.14 Sta model sada ume da odgovori
 
