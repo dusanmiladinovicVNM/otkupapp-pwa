@@ -328,6 +328,7 @@ Public Sub RunAllTests()
     RunOne 232
     RunOne 233
     RunOne 234
+    RunOne 235
     RunOne 13
     RunOne 14
     RunOne 15
@@ -833,6 +834,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 232: TestName = "T_SaldoPapir_ReversKakoJeBio"
         Case 233: TestName = "T_SaldoPapir_KupcevReversF7BezPapira"
         Case 234: TestName = "T_SaldoPapir_KvarKnjigeNijeNula"
+        Case 235: TestName = "T_SaldoPapir_TipBezObziraNaVelikaSlova"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1075,6 +1077,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 232: T_SaldoPapir_ReversKakoJeBio
         Case 233: T_SaldoPapir_KupcevReversF7BezPapira
         Case 234: T_SaldoPapir_KvarKnjigeNijeNula
+        Case 235: T_SaldoPapir_TipBezObziraNaVelikaSlova
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -8250,6 +8253,79 @@ Private Sub T_SaldoPapir_KvarKnjigeNijeNula()
     AssertEq (InStr(1, razlog1, "Red knjige ", vbTextCompare) > 0), True, _
              "kvar knjige: greska citaoca stanja dolazi iz ugovora knjige"
     AssertEq dignuto2, True, "kvar knjige: GetStanicaAmbSaldo dize gresku, ne vraca nulu"
+End Sub
+
+' 235. TIP AMBALAZE NA PAPIRU JE ISTI TIP KAO U SALDU, BEZ OBZIRA NA VELIKA SLOVA
+'      (review #421, P2 #2).
+'
+' Pisac trazi samo neprazan tip (AmbPrenosStrukturaProblem), a F7 combo dopusta
+' kucanje -- pa knjiga sme da nosi "letvarica" i "LETVARICA". Kanonski saldo
+' (AmbSaldoNaloga) ih poredi bez obzira na velika slova, a i stampa bira red po
+' AmbTipKljuc (UCase). Istorijski citalac je poredio binarno, pa je papir drugog
+' reversa izostavljao prvi: knjiga i papir su davali dva odgovora na isto pitanje.
+'
+' Oba reversa su POVRAT kooperanta (njegove gajbe iz fixture-a, 1/IZV Letvarica),
+' pa stanica ne treba nabavku. Pisu se produkcionim primitivima u transakciji
+' testa i VRACAJU posle stampe (obrazac 231), pa knjiga ostaje kakva je bila.
+' SABOTAZA: saldo-tip-osetljiv-na-slova -> pukne "tip bez obzira na velika slova:
+' papir nosi stanje istog tipa kao saldo".
+Private Sub T_SaldoPapir_TipBezObziraNaVelikaSlova()
+    Dim modePre As String, s0 As Long, tx As clsTransaction
+    Dim dokA As String, dokB As String, papirB As String, dB As String
+    Dim nRedA As Long, nRedB As Long
+    Dim errNum As Long, errDesc As String
+
+    s0 = CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, FX_TIP_LETVA))
+    AssertEq (s0 >= 3), True, "preduslov: kooperant drzi bar tri letvarice (1/IZV)"
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+
+    Set tx = New clsTransaction
+    On Error GoTo EH
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokA = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, _
+               modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date), _
+               Date, AMB_NALOG_STANICA, FX_STANICA, "235 mala slova")
+    modAmbalaza.PrenesiAmbalazu tx, Date, LCase$(FX_TIP_LETVA), 2, _
+                                AMB_NALOG_KOOPERANT, FX_KOOPERANT, AMB_NALOG_STANICA, FX_STANICA, _
+                                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokA
+    dokB = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, _
+               modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date), _
+               Date, AMB_NALOG_STANICA, FX_STANICA, "235 velika slova")
+    modAmbalaza.PrenesiAmbalazu tx, Date, UCase$(FX_TIP_LETVA), 1, _
+                                AMB_NALOG_KOOPERANT, FX_KOOPERANT, AMB_NALOG_STANICA, FX_STANICA, _
+                                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokB
+    nRedA = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, dokA).count
+    nRedB = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, dokB).count
+
+    On Error Resume Next
+    OcistiList WS_IZDAMB_SABLON
+    modIzvestaj.StampajReversAmbalaze dokB, DOK_TIP_AMBALAZA_DOKUMENT, UCase$(FX_TIP_LETVA)
+    dB = Err.description
+    Err.Clear
+    papirB = ReversStanjePapira()
+    tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+
+    AssertEq nRedA & "|" & nRedB, "1|1", "preduslov: oba povrata su knjizena (pisac pusta oba zapisa tipa)"
+    ' Papir povrata: novo = stanje posle (s0 - 2 - 1), pocetno = novo + kretanje.
+    AssertEq dB & "|" & papirB, "|" & CStr(s0 - 2) & " kom|" & CStr(s0 - 3) & " kom", _
+             "tip bez obzira na velika slova: papir nosi stanje istog tipa kao saldo"
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_SaldoPapir_TipBezObziraNaVelikaSlova", errDesc
 End Sub
 
 ' F7 unos NASEG reversa (stanica izdaje kooperantu) za modNovacUnos.ReversUpisi --

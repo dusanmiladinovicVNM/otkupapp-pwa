@@ -324,6 +324,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_AmbalazaSeKnjiziPriIzdavanju
     Test_OTP_StornoVracaGajbeVozacu
     Test_OTP_PapirStanjeOkoSvogReda
+    Test_OTP_PapirBezVezeKnjige
     Test_PRJ_AmbalazaDveNogeJedanPar
     Test_PRJ_StornoVracaGajbe
     Test_PRJ_LanacSeOdmotavaObrnuto
@@ -6543,6 +6544,86 @@ Private Sub Test_OTP_PapirStanjeOkoSvogReda()
 
 EH:
     LogFatal "Test_OTP_PapirStanjeOkoSvogReda", Err.Number, Err.description
+End Sub
+
+' OTPREMNICA SA GAJBAMA BEZ SVOG REDA KNJIGE NE DAJE PAPIR (review #421, P2 #1).
+'
+' "-" (ODL-27) sme da znaci samo jedno: otpremnica BEZ gajbi, koja svoj red knjige
+' nema po pravilu. Izdata otpremnica sa gajbama ga uvek ima (OtpKnjiziAmbalazu),
+' pa je njegovo odsustvo pokidana veza -- narusen integritet, ne nepoznato stanje.
+' Papir je ranije u oba slucaja nosio "-".
+'
+' Veza se kida na dva nacina, oba na redu OVE otpremnice i oba se vracaju pre
+' tvrdnji: DokumentID vise ne pokazuje na nju, i red nosi tudji tip dokumenta.
+' Drugi oblik meri i to da je identitet dokumenta u knjizi (DokumentTIP,
+' DokumentID), a ne sam DokumentID (AMB-INV-04). Kontrola: otpremnica bez gajbi i
+' dalje stampa "-".
+' SABOTAZE: saldo-otp-bez-veze-nepoznato -> "OTP papir bez veze: izgubljen
+' DokumentID -- otpremnica sa gajbama se ne popunjava"; saldo-dokument-bez-tipa ->
+' "OTP papir bez veze: red tudjeg tipa dokumenta -- otpremnica sa gajbama se ne
+' popunjava".
+Private Sub Test_OTP_PapirBezVezeKnjige()
+    On Error GoTo EH
+
+    Dim scenario As String, razlog As String
+    scenario = NewScenarioCode("OTPBVK")
+
+    Dim izvor As String, otpID As String
+    izvor = OtpNoviOtkup(scenario, 400#, 0#)      ' Klasa I: 400 kg, 20 gajbi
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-BVK-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, izvor, razlog), "OTP papir bez veze: izvor vezan"
+    AssertTrue IzdajOtpremnicu_TX(otpID, razlog), "OTP papir bez veze: otpremnica je izdata"
+    AssertTrue Len(OtpStanjePapira(otpID)) > 0, _
+               "OTP papir bez veze: nad cistom knjigom otpremnica se popunjava"
+
+    Dim redovi As Collection, rOtp As Long
+    Set redovi = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, otpID)
+    AssertEquals "1", CStr(redovi.count), "OTP papir bez veze: preduslov -- otpremnica ima jedan red knjige"
+    rOtp = CLng(redovi(1))
+
+    ' Izmedju kvara i vracanja nista ne sme da iskoci u EH: pokvarena veza bi
+    ' ostala za sledece testove.
+    Dim papirBezID As String, papirTudjTip As String, vraceno As Boolean
+    On Error Resume Next
+    RequireUpdateCell TBL_AMBALAZA, rOtp, COL_AMB_DOK_ID, otpID & "-BEZVEZE", "Test_OTP_PapirBezVezeKnjige"
+    papirBezID = OtpStanjePapira(otpID)
+    Err.Clear
+    RequireUpdateCell TBL_AMBALAZA, rOtp, COL_AMB_DOK_ID, otpID, "Test_OTP_PapirBezVezeKnjige"
+    vraceno = (Err.Number = 0)
+    Err.Clear
+    RequireUpdateCell TBL_AMBALAZA, rOtp, COL_AMB_DOK_TIP, DOK_TIP_OTKUP, "Test_OTP_PapirBezVezeKnjige"
+    papirTudjTip = OtpStanjePapira(otpID)
+    Err.Clear
+    RequireUpdateCell TBL_AMBALAZA, rOtp, COL_AMB_DOK_TIP, DOK_TIP_OTPREMNICA, "Test_OTP_PapirBezVezeKnjige"
+    vraceno = vraceno And (Err.Number = 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue vraceno, "OTP papir bez veze: preduslov -- pokvareni redovi su vraceni"
+    AssertEquals "", papirBezID, _
+                 "OTP papir bez veze: izgubljen DokumentID -- otpremnica sa gajbama se ne popunjava"
+    AssertEquals "", papirTudjTip, _
+                 "OTP papir bez veze: red tudjeg tipa dokumenta -- otpremnica sa gajbama se ne popunjava"
+
+    ' KONTROLA: otpremnica BEZ gajbi nema svoj red knjige po pravilu (ODL-27).
+    Dim c As Collection, izvorBez As String, otpBez As String
+    Set c = New Collection
+    c.Add OtkStavka(KLASA_I, 400#, 50#, 0#, 0#)
+    izvorBez = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-BVK0-" & scenario), c)
+    otpBez = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-BVK0-" & scenario), _
+                                      OtpOcek(400#, 0#, 0#, 0#), razlog)
+    AssertTrue DodajOtpremnicaIzvor_TX(otpBez, izvorBez, razlog), _
+               "OTP papir bez gajbi: izvor bez gajbi vezan"
+    AssertTrue IzdajOtpremnicu_TX(otpBez, razlog), "OTP papir bez gajbi: otpremnica je izdata"
+    AssertEquals "0", CStr(FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, otpBez).count), _
+                 "OTP papir bez gajbi: preduslov -- otpremnica nema red knjige"
+    AssertEquals TEST_TIP_AMB & " x -|" & TEST_TIP_AMB & " x -", OtpStanjePapira(otpBez), _
+                 "OTP papir bez gajbi: stampa nepoznato stanje (ODL-27), ne odbija se"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_PapirBezVezeKnjige", Err.Number, Err.description
 End Sub
 
 ' Stanje ambalaze sa papira otpremnice, prvi primerak: "pocetno|saldo", npr.
