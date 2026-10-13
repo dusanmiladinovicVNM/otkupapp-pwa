@@ -7834,12 +7834,16 @@ SABOTAZE = {
         "T_KI013_VisetipniDokumentPapirPoTipu",
         "visetipni dokument: papir drugog tipa nosi njegov tip i kolicinu",
     ),
-    # KI-013: dva poslovna reda istog izbora (oba smera istog tipa) ponovo
-    # prolaze -- jedan papir tiho nosi samo jedan od njih.
+    # KI-013: dva poslovna reda ISTOG izabranog tipa (oba smera) ponovo
+    # prolaze -- jedan papir tiho nosi samo jedan od njih. Gasi se SAMO grana sa
+    # izabranim tipom: grana bez tipa ima svoju tvrdnju, koja stoji u testu
+    # PRE ove, pa bi je gasenje obe grane oborilo prvu (review #420, --plan).
     "ki013-dvosmislen-tip-pusta": (
         "modIzvestaj.bas",
-        "    If nTip > 1 Then\n",
-        "    If nTip > 99 Then   ' SABOTAZA: dvosmislen izbor prolazi\n",
+        "        Err.Raise vbObjectError + 7511, SRC, _\n"
+        "                  \"Dokument nosi vise poslovnih redova tipa '\" & Trim$(tipSel) & _\n"
+        "                  \"' (oba smera) -- jedan papir bi ih spojio. Stampa odbijena.\"\n",
+        "        ' SABOTAZA: dvosmislen izbor tipa prolazi\n",
         "T_KI013_VisetipniDokumentPapirPoTipu",
         "dva reda istog tipa se ne spajaju na jedan papir",
     ),
