@@ -7514,7 +7514,7 @@ Private Sub T_KI011_UspesanUpisJeUspeh()
     Dim pdfPre As Long, pdfPosle As Long, bezLoga As Boolean
     Dim lazna As String, kolPosle As String, partnerPosle As String
     Dim naListiPre As Boolean, naListiPosle As Boolean
-    Dim toast As String, dijalog1 As String
+    Dim toast As String, dijalog1 As String, omPre As String
     Dim errNum As Long, errDesc As String
 
     bezLoga = Not ImaList("SETUP_LOG")
@@ -7532,6 +7532,11 @@ Private Sub T_KI011_UspesanUpisJeUspeh()
 
     Set f = NewOtkupUIForm()
     Set zf = f.Controls("zForm")
+    ' Combo-i moraju biti PUNJENI: SetComboByID ne bira stavku u praznoj listi, a
+    ' forma se u testu gradi bez .Show (isto kao T_PrefillBezBroja_PredlaziBroj).
+    ' Bez ovoga prvi klik pada na validaciji "Izaberi otkupno mesto" i test meri
+    ' prazan combo umesto upisa (izmereno 13.10.2026, prvo pustanje 226).
+    modOtkupUI.FillCombos f
     modOtkupUI.SelectMode f, "F7"
     modOtkupUI.GridTestLoad "DOKUMENTI"
     naListiPre = MrezaImaTekst(broj)
@@ -7543,6 +7548,7 @@ Private Sub T_KI011_UspesanUpisJeUspeh()
            "|tipamb=" & FX_TIP_AMB & "|amb1=2" & _
            "|smerrev=" & CStr(modNovacUnos.SMER_REV_IZD_KOOP) & "|brdok=" & broj
     modOtkupUI.ApplyPrefill spec
+    omPre = Trim$(CStr(f.Controls("zCtx").Controls("cbOM").value))
 
     nDokPre = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
     pdfPre = BrojPdfReversa(broj)
@@ -7573,6 +7579,7 @@ CleanUp:
 
     AssertEq bezLoga, True, "preduslov: sveska nema list SETUP_LOG (uslov KI-011)"
     AssertEq naListiPre, False, "preduslov: revers jos nije na listi"
+    AssertEq (Len(omPre) > 0), True, "preduslov: prefill je izabrao otkupno mesto"
     AssertEq lazna, "", "uspesan upis se ne prijavljuje kao neuspeh (KI-011)"
     AssertEq nDok1 - nDokPre, 1, "prvi klik upisuje TACNO JEDAN revers"
     AssertEq pdfPosle - pdfPre, 1, "papir reversa je napravljen (PDF)"
