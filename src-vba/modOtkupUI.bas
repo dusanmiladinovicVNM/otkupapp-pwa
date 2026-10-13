@@ -464,6 +464,10 @@ Private mFltVrsta As String          ' dodatni uslov: vrsta iz Osnovnih podataka
 Private mFltPart As String           ' dodatni uslov: partner iz Osnovnih podataka
 Private mDirty As Boolean            ' ima neupisanih izmena u formi
 Private mLoading As Boolean          ' program puni polja - to NIJE izmena korisnika
+' Tekst dijaloga koji bi CommitDokument otvorio -- belezi se SAMO u test rezimu
+' (v. Dijalog). KI-011: ishod upisa mora da se izmeri, a MsgBox u nevidljivom
+' Excelu visi do timeout-a.
+Private mDijalogTest As String
 '=====================================================================
 ' BUILD
 '=====================================================================
@@ -8280,7 +8284,7 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
         ShowToast listaPoruka, True
         ' I u MsgBox: toast pise u usko polje akcionog reda, a bas rep poruke nosi
         ' RAZLOG -- isti obrazac kao kod neuspelog upisa nize.
-        MsgBox listaPoruka, vbExclamation, APP_NAME
+        Dijalog listaPoruka
         Exit Sub
     End If
 
@@ -8308,7 +8312,7 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
             ' Razlikovanje ide po FOKUSU, ne po duzini: validacija polja ga
             ' postavlja i pokazuje na polje, pa njoj toast i pripada. Pad upisa
             ' nema fokus -- nema polja na koje bi se pokazalo.
-            If Len(fokus) = 0 Then MsgBox greska, vbExclamation, APP_NAME
+            If Len(fokus) = 0 Then Dijalog greska
             FokusNaPolje fokus
         End If
         Exit Sub
@@ -8339,12 +8343,41 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     ' Unicode, ista oznaka se crta ispravno i tamo OSTAJE: tamo nosi znacenje
     ' (crveno = nesto nije proslo), a u dijalogu ga vec nosi sam vbExclamation.
     If InStr(1, dopuna, ChrW(10007)) > 0 Then
-        MsgBox PorukaZaDijalog(dopuna), vbExclamation, APP_NAME
+        Dijalog PorukaZaDijalog(dopuna)
     End If
     Exit Sub
 EH:
     ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Sub
+
+' Dijalog posle pokusaja upisa (CommitDokument). U test rezimu se BELEZI umesto
+' da se otvori: MsgBox u nevidljivom Excelu ne puca nego visi do timeout-a --
+' isti razlog zbog kog su tri SetFocus-a iza IsTestMode. U produkciji je
+' IsTestMode() uvek False, pa operater vidi isti dijalog kao i pre.
+Private Sub Dijalog(ByVal txt As String)
+    If IsTestMode() Then
+        mDijalogTest = txt
+        Exit Sub
+    End If
+    MsgBox txt, vbExclamation, APP_NAME
+End Sub
+
+' TEST SEAM (KI-011): ceo potez "Sacuvaj" kroz CommitDokument -- isti put kojim
+' ide klik operatera, ne kopija. Ishod upisa (lazna greska, forma, lista) se
+' odlucuje BAS ovde, pa test koji meri samo ScrSave meri pomocnik, a ne poziv.
+' Tvrdo gejtovan.
+Public Sub CommitDokumentTest(ByVal alsoPrint As Boolean)
+    If Not IsTestMode() Then Exit Sub
+    mDijalogTest = ""
+    CommitDokument alsoPrint
+End Sub
+
+' TEST SEAM: dijalog koji bi operater video posle poslednjeg CommitDokumentTest
+' ("" = nijedan). Tvrdo gejtovan.
+Public Function DijalogTest() As String
+    If Not IsTestMode() Then Exit Function
+    DijalogTest = mDijalogTest
+End Function
 
 ' Tekst poruke bez oznake za rutiranje. Oznaka (ChrW(10007)) kaze SLOJU IZNAD da
 ' poruku treba pokazati u dijalogu -- nije deo recenice. MsgBox crta kroz ANSI

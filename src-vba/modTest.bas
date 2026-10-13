@@ -318,6 +318,7 @@ Public Sub RunAllTests()
     RunOne 223
     RunOne 224
     RunOne 225
+    RunOne 226
     RunOne 13
     RunOne 14
     RunOne 15
@@ -811,6 +812,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 223: TestName = "T_AmbIstorija_PonovnaStampaKakoJeBilo"
         Case 224: TestName = "T_AmbIstorija_KvarKnjigeNijeNepoznato"
         Case 225: TestName = "T_AmbStampa_TudjiTipOdbijen"
+        Case 226: TestName = "T_KI011_UspesanUpisJeUspeh"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1044,6 +1046,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 223: T_AmbIstorija_PonovnaStampaKakoJeBilo
         Case 224: T_AmbIstorija_KvarKnjigeNijeNepoznato
         Case 225: T_AmbStampa_TudjiTipOdbijen
+        Case 226: T_KI011_UspesanUpisJeUspeh
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -7483,6 +7486,160 @@ Private Sub T_AmbStampa_TudjiTipOdbijen()
     AssertEq (InStr(1, razlog, "nije ambalazni dokument", vbTextCompare) > 0), True, _
              "stampa: tip koji nije ambalazni dokument se odbija po imenu"
 End Sub
+
+' 226. KI-011: USPESAN UPIS JE USPEH -- CEO POTEZ OPERATERA, SA UKLJUCENOM STAMPOM.
+'
+' Smoke 13.10.2026: F7 revers 1/131026 je SNIMLJEN (zaglavlje, red knjige, papir),
+' a ljuska je javila "Scr_Save -> 9 Subscript out of range". Forma nije
+' ociscena, lista ga nije prikazala, pa je operater isti revers snimio DRUGI PUT
+' (1/131026-2). Uzrok: modSetup.LogSetup je ostavljao gresku 9 u Err kad lista
+' SETUP_LOG nema, a ona je kroz EnsureDocFolder i stampu stizala do ScrSave.
+'
+' Testovi kvar nisu videli jer su stampu GASILI. Ovaj je pali, i ide tacno
+' uslovima kvara: OM_IZDAVANJE_PRINT_MODE = PDF, sveska BEZ lista SETUP_LOG, ceo
+' potez kroz CommitDokument -- isti put kojim ide klik na "Sacuvaj".
+'
+' Tvrdi se ISHOD koji operater vidi, ne pomocnik: nema lazne greske, dokument je
+' upisan tacno jednom, papir je napravljen, forma je ociscena, lista ga
+' prikazuje, i DRUGI klik na "Sacuvaj" ne pravi drugi dokument. Dokumenti se
+' broje kao REDOVI zaglavlja, ne po broju: duplikat iz smoke-a je dobio SLEDECI
+' broj iz niza (-2), pa bi brojanje po broju bilo slepo bas za njega.
+'
+' Nalazi se skupljaju pa tvrde posle Unload-a: dok forma zivi, njena masinerija
+' brise Err izmedju Err.Raise i omotnice testa.
+Private Sub T_KI011_UspesanUpisJeUspeh()
+    Dim f As frmOtkupUI, zf As Object, modePre As String
+    Dim nabBroj As String, broj As String, spec As String
+    Dim nDokPre As Long, nDok1 As Long, nDok2 As Long
+    Dim pdfPre As Long, pdfPosle As Long, bezLoga As Boolean
+    Dim lazna As String, kolPosle As String, partnerPosle As String
+    Dim naListiPre As Boolean, naListiPosle As Boolean
+    Dim toast As String, dijalog1 As String
+    Dim errNum As Long, errDesc As String
+
+    bezLoga = Not ImaList("SETUP_LOG")
+    ' Rezim se cita PRE handlera (isti razlog kao u 212): da GetConfigValue
+    ' pukne pod naoruzanim handlerom, cleanup bi upisao PRAZAN rezim stampe.
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    On Error GoTo CleanUp
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+
+    ' Preduslov: stanica mora da DRZI gajbe (ODL-8).
+    nabBroj = "NAB-KI011-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 10, nabBroj, _
+                                  "preduslov KI-011"
+    broj = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date)
+
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    modOtkupUI.SelectMode f, "F7"
+    modOtkupUI.GridTestLoad "DOKUMENTI"
+    naListiPre = MrezaImaTekst(broj)
+
+    ' Forma se puni ISTIM prepisom kojim ga puni "Zamena reversa" -- polja koja
+    ' operater vidi, ne recnik mimo ljuske.
+    spec = "datum=" & Format$(Date, "dd.mm.yyyy") & "|omid=" & FX_STANICA & _
+           "|partnerid=" & FX_KOOPERANT & "|vrsta=" & FX_VRSTA & _
+           "|tipamb=" & FX_TIP_AMB & "|amb1=2" & _
+           "|smerrev=" & CStr(modNovacUnos.SMER_REV_IZD_KOOP) & "|brdok=" & broj
+    modOtkupUI.ApplyPrefill spec
+
+    nDokPre = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+    pdfPre = BrojPdfReversa(broj)
+
+    ' PRVI KLIK: snimanje sa stampom.
+    modOtkupUI.CommitDokumentTest False
+    lazna = modUiScreens.ScrLastErr
+    nDok1 = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+    pdfPosle = BrojPdfReversa(broj)
+    kolPosle = Polje(zf, "fgKolAmb")
+    partnerPosle = Trim$(CStr(f.Controls("zCtx").Controls("cbKupac").value))
+    naListiPosle = MrezaImaTekst(broj)
+    toast = ToastTekst(f)
+    dijalog1 = modOtkupUI.DijalogTest()
+
+    ' DRUGI KLIK: operater koji nije video uspeh pritisne isto dugme ponovo.
+    modOtkupUI.CommitDokumentTest False
+    nDok2 = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest." & "T_KI011_UspesanUpisJeUspeh", errDesc
+
+    AssertEq bezLoga, True, "preduslov: sveska nema list SETUP_LOG (uslov KI-011)"
+    AssertEq naListiPre, False, "preduslov: revers jos nije na listi"
+    AssertEq lazna, "", "uspesan upis se ne prijavljuje kao neuspeh (KI-011)"
+    AssertEq nDok1 - nDokPre, 1, "prvi klik upisuje TACNO JEDAN revers"
+    AssertEq pdfPosle - pdfPre, 1, "papir reversa je napravljen (PDF)"
+    AssertEq kolPosle, "", "posle uspeha forma je ociscena (kolicina)"
+    AssertEq partnerPosle, "", "posle uspeha forma je ociscena (partner)"
+    AssertEq naListiPosle, True, "posle uspeha lista prikazuje nov revers"
+    AssertEq (InStr(1, toast, broj, vbBinaryCompare) > 0), True, _
+             "operater vidi potvrdu upisa sa brojem reversa"
+    AssertEq dijalog1, "", "uspeh bez upozorenja ne otvara dijalog"
+    AssertEq nDok2 - nDok1, 0, "drugi klik na Sacuvaj ne pravi drugi revers"
+End Sub
+
+' Da li sveska ima list ovog imena.
+Private Function ImaList(ByVal ime As String) As Boolean
+    Dim ws As Object
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(ime)
+    ImaList = Not ws Is Nothing
+    Err.Clear
+End Function
+
+' Broj redova tabele (0 kad je nema).
+Private Function BrojRedovaTabele(ByVal tbl As String) As Long
+    Dim lo As ListObject
+    Set lo = GetTable(tbl)
+    If Not lo Is Nothing Then BrojRedovaTabele = lo.ListRows.count
+End Function
+
+' Koliko PDF-ova reversa sa ovim brojem stoji u folderu reversa pored sveske.
+' Ime fajla pravi modPrint.ExportIzdavanjeAmbalazePDF:
+' <prefiks><broj, '/' -> '-'>_<vreme>.pdf. Sufiks "_" iza broja drzi "1-131026"
+' odvojenim od "1-131026-2".
+Private Function BrojPdfReversa(ByVal broj As String) As Long
+    Dim nm As String, n As Long
+    On Error Resume Next
+    nm = Dir$(ThisWorkbook.path & "\" & PDF_DIR_REVERS & "\*_" & _
+              Replace(broj, "/", "-") & "_*.pdf")
+    Do While Len(nm) > 0
+        n = n + 1
+        nm = Dir$()
+    Loop
+    Err.Clear
+    BrojPdfReversa = n
+End Function
+
+' Da li MREZA ljuske ijednim redom nosi tekst -- po svim kolonama, jer redosled
+' kolona nije predmet tvrdnje. Meri se ono sto operater vidi (GridCell nad
+' mView), ne citalac ekrana: lazna greska je ostavljala citaoca ispravnog, a
+' mrezu NEOSVEZENU.
+Private Function MrezaImaTekst(ByVal tekst As String) As Boolean
+    Dim r As Long, c As Long
+    For r = 1 To modOtkupUI.GridBrojRedova()
+        For c = 0 To 40
+            If StrComp(Trim$(NzToText(modOtkupUI.GridCell(r, c))), tekst, _
+                       vbTextCompare) = 0 Then
+                MrezaImaTekst = True
+                Exit Function
+            End If
+        Next c
+    Next r
+End Function
+
+' Tekst trake poruka (toast) onako kako ga operater vidi.
+Private Function ToastTekst(ByVal f As Object) As String
+    On Error Resume Next
+    ToastTekst = CStr(f.Controls("zGrid").Controls("tstScr").Controls("tstScrMsg").caption)
+End Function
 
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _
                               ByVal kol As Long) As Double
