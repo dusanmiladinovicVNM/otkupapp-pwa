@@ -7808,6 +7808,41 @@ SABOTAZE = {
         "T_KI011_LogSetupCuvaGreskuPozivaoca",
         "LogSetup cuva BROJ greske pozivaoca (LOG-01)",
     ),
+    # KI-012: tip ambalaze na reversu ponovo ide u celiju opsteg formata, pa
+    # Excel "12/1" pretvara u datum ("1.dec" na papiru).
+    "ki012-revers-tip-opsti-format": (
+        "modPrint.bas",
+        "    ws.cells(rr, 2).NumberFormat = \"@\"   ' tip je tekst, pre dodele (KI-012)\n",
+        "    ' SABOTAZA: tip u celiji opsteg formata\n",
+        "T_KI012_TipNaPapiruJeTekst",
+        "revers: tip ambalaze na papiru je tekst, ne datum (KI-012)",
+    ),
+    # KI-012: isti kvar na grupnoj prijemnici (kolona "Tip amb.").
+    "ki012-prijemnica-tip-opsti-format": (
+        "modPrint.bas",
+        "        ws.cells(rr, 7).NumberFormat = \"@\"   ' tip amb. je tekst, pre dodele (KI-012)\n",
+        "        ' SABOTAZA: tip amb. u celiji opsteg formata\n",
+        "T_KI012_TipNaPapiruJeTekst",
+        "prijemnica: tip ambalaze na papiru je tekst, ne datum (KI-012)",
+    ),
+    # KI-013: stampa ponovo uzima PRVI poslovni red, bez obzira na izabrani tip --
+    # papir drugog tipa nosi tip i kolicinu prvog (gore od odbijenice).
+    "ki013-stampa-prvi-red": (
+        "modIzvestaj.bas",
+        "        ElseIf AmbTipKljuc(tipSel) = AmbTipKljuc(CStr(r(1))) Then\n",
+        "        ElseIf k = 1 Then   ' SABOTAZA: uvek prvi poslovni red\n",
+        "T_KI013_VisetipniDokumentPapirPoTipu",
+        "visetipni dokument: papir drugog tipa nosi njegov tip i kolicinu",
+    ),
+    # KI-013: dva poslovna reda istog izbora (oba smera istog tipa) ponovo
+    # prolaze -- jedan papir tiho nosi samo jedan od njih.
+    "ki013-dvosmislen-tip-pusta": (
+        "modIzvestaj.bas",
+        "    If nTip > 1 Then\n",
+        "    If nTip > 99 Then   ' SABOTAZA: dvosmislen izbor prolazi\n",
+        "T_KI013_VisetipniDokumentPapirPoTipu",
+        "dva reda istog tipa se ne spajaju na jedan papir",
+    ),
 }
 
 
