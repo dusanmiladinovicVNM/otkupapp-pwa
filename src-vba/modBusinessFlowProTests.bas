@@ -323,6 +323,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_PredlogCeneJePoKlasi
     Test_OTP_AmbalazaSeKnjiziPriIzdavanju
     Test_OTP_StornoVracaGajbeVozacu
+    Test_OTP_PapirStanjeOkoSvogReda
     Test_PRJ_AmbalazaDveNogeJedanPar
     Test_PRJ_StornoVracaGajbe
     Test_PRJ_LanacSeOdmotavaObrnuto
@@ -6465,6 +6466,113 @@ Private Sub Test_OTP_StornoVracaGajbeVozacu()
 EH:
     LogFatal "Test_OTP_StornoVracaGajbeVozacu", Err.Number, Err.description
 End Sub
+
+' OTPREMNICA NA PAPIRU NOSI STANJE STANICE OKO SVOG REDA KNJIGE (stavka 135).
+'
+' Izdavanje knjizi Stanica -> Vozac, a stampa se samo IZDATA otpremnica. Papir je
+' zato citao saldo stanice POSLE otpremnice kao "pocetno" i oduzimao njene gajbe
+' JOS JEDNOM -- pogresno pri svakoj stampi, ne samo pri ponovljenoj. Pravilo je
+' isto kao na reversu (odluka operatera 13.10.2026): saldo = stanje stanice posle
+' ovog dokumenta po redosledu upisa, a pocetno = saldo + gajbe otpremnice.
+'
+' Kvar knjige: papir ne nastaje (odluka operatera 13.10.2026), umesto papira sa
+' izmisljenom nulom. Kvar je na redu KASNIJE nabavke, ne na redu otpremnice, i
+' vraca se pre ijedne tvrdnje.
+' SABOTAZE: saldo-otp-dvostruko -> "OTP papir: pocetno stanje je stanje stanice pre
+' otpremnice"; saldo-otp-danasnji -> "OTP papir: ponovna stampa posle kasnijeg
+' dokumenta je ista"; saldo-otp-guta-kvar -> "OTP papir: kvar knjige -- otpremnica
+' se ne popunjava".
+Private Sub Test_OTP_PapirStanjeOkoSvogReda()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPPAP")
+
+    Dim izvor As String
+    izvor = OtpNoviOtkup(scenario, 400#, 0#)      ' Klasa I: 400 kg, 20 gajbi
+    AssertTrue Len(izvor) > 0, "OTP papir: polazni otkup je upisan"
+
+    Dim stPre As Long, stPosle As Long
+    stPre = CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB))
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-PAP-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, izvor, razlog), "OTP papir: izvor vezan"
+    AssertTrue IzdajOtpremnicu_TX(otpID, razlog), "OTP papir: otpremnica je izdata"
+    stPosle = CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB))
+
+    Dim prvi As String, delovi As Variant
+    prvi = OtpStanjePapira(otpID)
+    delovi = Split(prvi & "||", "|")
+    AssertTrue Len(prvi) > 0, "OTP papir: nad cistom knjigom otpremnica se popunjava"
+    AssertEquals TEST_TIP_AMB & " x " & CStr(stPre), CStr(delovi(0)), _
+                 "OTP papir: pocetno stanje je stanje stanice pre otpremnice"
+    AssertEquals TEST_TIP_AMB & " x " & CStr(stPosle), CStr(delovi(1)), _
+                 "OTP papir: saldo ambalaze je stanje stanice posle otpremnice"
+
+    ' Kasniji dokument iste stanice i istog tipa, pa ponovna stampa.
+    Dim nabDok As String
+    nabDok = modAmbalaza.NabaviAmbalazu_TX(NextTestDate(), TEST_ST_ID, TEST_TIP_AMB, 7#, _
+                                           TEST_PREFIX & "-NAB-PAP-" & scenario, _
+                                           "test papira otpremnice")
+    AssertEquals prvi, OtpStanjePapira(otpID), _
+                 "OTP papir: ponovna stampa posle kasnijeg dokumenta je ista"
+
+    ' Kvar knjige na redu nabavke. Izmedju kvara i vracanja nista ne sme da
+    ' iskoci u EH: pokvarena knjiga bi oborila svaki sledeci test.
+    Dim redovi As Collection, rKvar As Long, naTipPre As String
+    Dim kvarPapir As String, vracen As Boolean
+    Set redovi = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, nabDok)
+    AssertEquals "1", CStr(redovi.count), "OTP papir: preduslov -- nabavka ima jedan red knjige"
+    rKvar = CLng(redovi(1))
+    naTipPre = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_DOK_ID, nabDok, COL_AMB_NA_TIP))
+
+    On Error Resume Next
+    RequireUpdateCell TBL_AMBALAZA, rKvar, COL_AMB_NA_TIP, "", "Test_OTP_PapirStanjeOkoSvogReda"
+    kvarPapir = OtpStanjePapira(otpID)
+    Err.Clear
+    RequireUpdateCell TBL_AMBALAZA, rKvar, COL_AMB_NA_TIP, naTipPre, "Test_OTP_PapirStanjeOkoSvogReda"
+    vracen = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue vracen And Len(naTipPre) > 0, "OTP papir: preduslov -- pokvaren red je vracen"
+    AssertEquals "", kvarPapir, "OTP papir: kvar knjige -- otpremnica se ne popunjava"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_PapirStanjeOkoSvogReda", Err.Number, Err.description
+End Sub
+
+' Stanje ambalaze sa papira otpremnice, prvi primerak: "pocetno|saldo", npr.
+' "Test Gajba x 37|Test Gajba x 17". Labela je u koloni 1, vrednost u koloni 4
+' (modPrint.WriteOtkupCopy). Prazno = list se nije popunio. Fill je Private, pa
+' ide kroz Application.Run, kao FillPrijemnicaSablon u modTest 230.
+Private Function OtpStanjePapira(ByVal otpID As String) As String
+    Dim ws As Object, r As Long, poslednji As Long, t As String
+    Dim poc As String, sal As String, imaPoc As Boolean, imaSal As Boolean
+
+    On Error Resume Next
+    Set ws = Application.Run("modPrint.FillOtpremnicaSablon", otpID)
+    Err.Clear
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+
+    poslednji = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    For r = 1 To poslednji
+        t = NzToText(ws.cells(r, 1).value)
+        If Not imaPoc And t = "Pocetno stanje:" Then
+            poc = NzToText(ws.cells(r, 4).value)
+            imaPoc = True
+        End If
+        If Not imaSal And InStr(1, t, "Saldo ambala", vbBinaryCompare) = 1 Then
+            sal = NzToText(ws.cells(r, 4).value)
+            imaSal = True
+        End If
+    Next r
+    If imaPoc Or imaSal Then OtpStanjePapira = poc & "|" & sal
+End Function
 
 Private Sub Test_OTP_AmbalazaSeKnjiziPriIzdavanju()
     On Error GoTo EH
