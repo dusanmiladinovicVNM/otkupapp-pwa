@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 13.10.2026 (red AMB-10: `10e-2` merge-ovan, `10e-3` na review-u, stavke 128–129).
+**Ažurirano:** 13.10.2026 (red AMB-10: `10e-3` merge-ovan `#418`, stavka 130; `KI-011` od stavke 131).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ merge-ovano `#416` (ručna provera ✅ 13.10.2026, stavka 126) · `10e-2` stari storno, undo i ispravka reversa ✅ merge-ovano `#417` (stavke 127–128) · `10e-3` pisac, dvomodelni čitalac, šema i fixture ⏳ na review-u (stavka 129); `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ merge-ovano `#416` (ručna provera ✅ 13.10.2026, stavka 126) · `10e-2` stari storno, undo i ispravka reversa ✅ merge-ovano `#417` (stavke 127–128) · `10e-3` pisac, dvomodelni čitalac, šema i fixture ✅ merge-ovano `#418` (stavke 129–130); `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -3413,6 +3413,19 @@
      izmenu fixture-a.
 
      **Otvoreno:** finalni merge review.
+
+130. **Review `#418` — `GO` na tačnom head-u, merge-ovano bez dodatnog commita** (13.10.2026).
+     Zapis ide ovde, a ne u `#418`: reviewer je dao GO za head `0f99b0e6`, pa bi svaki novi
+     commit na tom PR-u poništio taj GO. Obrazac je stavka 128.
+
+     - Verdikt: `P0 0`, `P1 0`, `P2 0`, `P3 1`. `P3` je `ImportAllVBA` nad zatečenom sveskom sa
+       starim kolonama, koji nije ručno izvršen; put meri `Test_Amb_StareKoloneSelfHeal`.
+       Static CI #951 `SUCCESS`, ocena 9,5/10.
+     - Merge-ovano 13.10.2026 kao `6318dba3`. **`10e` je time završen**; red AMB-10 čeka još
+       `ODL-24` i dopunu integritetnog audita pre S6.
+     - Redosled koji je reviewer naveo u istom verdiktu: `KI-011` (P1 za operativnu upotrebu,
+       svoj PR) → `KI-012`, `KI-013` i fail-open čitaoci štampe (`GetAmbalazeStanje`,
+       `GetStanicaAmbSaldo`) → `ODL-24` i dopuna integritetnog audita → S6.
 
 ## Dug sa imenom (posle S5-5b)
 
