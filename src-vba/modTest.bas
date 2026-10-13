@@ -321,6 +321,7 @@ Public Sub RunAllTests()
     RunOne 226
     RunOne 227
     RunOne 228
+    RunOne 229
     RunOne 13
     RunOne 14
     RunOne 15
@@ -820,6 +821,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 226: TestName = "T_KI011_UspesanUpisJeUspeh"
         Case 227: TestName = "T_KI011_ZaostalaGreskaNijeNeuspeh"
         Case 228: TestName = "T_KI011_PadStampeJeUpozorenjeUzUspeh"
+        Case 229: TestName = "T_KI011_LogSetupCuvaGreskuPozivaoca"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1056,6 +1058,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 226: T_KI011_UspesanUpisJeUspeh
         Case 227: T_KI011_ZaostalaGreskaNijeNeuspeh
         Case 228: T_KI011_PadStampeJeUpozorenjeUzUspeh
+        Case 229: T_KI011_LogSetupCuvaGreskuPozivaoca
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -7621,16 +7624,20 @@ End Sub
 '     kao neuspeh -- jedini neuspeh koji ScrSave sam vidi;
 '   - upis koji pisac odbije (stanica nema toliko gajbi) je "nije snimljeno":
 '     nema dokumenta, forma ostaje, operater dobija razlog u dijalogu.
+' Treca kontrola (review #419, P2): ekran kog NEMA u registru -- ScrSave tada ne
+' pozove nijednog pisca, a prazan rezultat uz prazan ScrLastErr CommitDokument cita
+' kao upis (cisti formu, javlja "sacuvan" bez dokumenta).
 ' SABOTAZE: ki011-scrsave-zaostala-je-neuspeh -> pukne "zaostala greska iz
 ' pomocnog koraka nije neuspeh upisa"; ki011-scrsave-ne-javlja-neuspeh -> pukne
-' "ekran koji ne vrati rezultat se javlja kao neuspeh".
+' "ekran koji ne vrati rezultat se javlja kao neuspeh";
+' ki011-scrsave-nepoznat-ekran-je-uspeh -> pukne "nepoznat ekran ne sme biti uspeh".
 Private Sub T_KI011_ZaostalaGreskaNijeNeuspeh()
     Dim f As frmOtkupUI, zf As Object, modePre As String
     Dim nabBroj As String, broj As String, broj2 As String, omPre As String
     Dim nDokPre As Long, nDok1 As Long, nDok3 As Long
     Dim lazna As String, zaostala As String, kolPosle As String
     Dim naListiPosle As Boolean, polja As Object, lazna1004 As String
-    Dim lazna3 As String, dijalog3 As String, kol3 As String
+    Dim lazna3 As String, dijalog3 As String, kol3 As String, laznaNema As String
     Dim errNum As Long, errDesc As String
 
     modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
@@ -7686,6 +7693,10 @@ CleanUp:
     modUiScreens.ScrSave "PALETE", polja
     lazna1004 = modUiScreens.ScrLastErr
 
+    ' 4) Ekran kog nema u registru: nijedan pisac nije pozvan, pa to NIJE uspeh.
+    modUiScreens.ScrSave "__NEPOSTOJECI__", polja
+    laznaNema = modUiScreens.ScrLastErr
+
     AssertEq (Len(omPre) > 0), True, "preduslov: prefill je izabrao otkupno mesto"
     AssertEq lazna, "", "zaostala greska iz pomocnog koraka nije neuspeh upisa"
     AssertEq (InStr(1, zaostala, "zaostala greska", vbTextCompare) > 0), True, _
@@ -7695,6 +7706,7 @@ CleanUp:
     AssertEq naListiPosle, True, "upis uz zaostalu gresku osvezava listu"
     AssertEq (InStr(1, lazna1004, "1004", vbBinaryCompare) > 0), True, _
              "ekran koji ne vrati rezultat se javlja kao neuspeh"
+    AssertEq (Len(laznaNema) > 0), True, "nepoznat ekran ne sme biti uspeh"
     AssertEq nDok3 - nDok1, 0, "odbijen upis ne pravi dokument"
     AssertEq lazna3, "", "odbijen upis je poruka ekrana, ne pad omotaca"
     AssertEq (Len(dijalog3) > 0), True, "odbijen upis: operater dobija razlog u dijalogu"
@@ -7789,6 +7801,50 @@ CleanUp:
     AssertEq naListiPosle, True, "posle pada stampe lista prikazuje revers"
     AssertEq nDok2 - nDok1, 0, "drugi klik posle pada stampe ne pravi drugi revers"
     AssertEq dijalog2, "", "drugi klik nad praznom formom je validacija, ne dijalog"
+End Sub
+
+' 229. LOG-01: LogSetup NE MENJA Err POZIVAOCA (review #419, P3).
+'
+' Dva smera, oba nad sveskom BEZ lista SETUP_LOG (proba u LogSetup tada pada):
+'   - pozivalac bez greske ostaje bez greske -- izvor KI-011;
+'   - pozivalac U HANDLERU zadrzava SVOJU gresku (broj, izvor i opis) -- oblik
+'     handlera modSetup-a, koji posle LogSetup-a rade Err.Raise Err.Number ili
+'     MsgBox sa Err.description.
+' LogSetup je Private, pa se zove kroz Application.Run -- sonda 13.10.2026 je nad
+' STARIM kodom pokazala da ovaj put doseze proceduru i da tvrdnje grizu: u
+' handleru je 4242 postajalo 9 "Subscript out of range", a cist pozivalac je
+' dobijao 9. Ishod kroz produkcioni seam (CommitDokument) meri 226.
+' SABOTAZA: ki011-logsetup-brise-gresku-pozivaoca -> pukne "LogSetup cuva BROJ
+' greske pozivaoca (LOG-01)".
+Private Sub T_KI011_LogSetupCuvaGreskuPozivaoca()
+    Dim bezLoga As Boolean, nH As Long, sH As String, dH As String, nCist As Long
+
+    bezLoga = Not ImaList("SETUP_LOG")
+    LogSetupUHandleru nH, sH, dH
+
+    Err.Clear
+    Application.Run "modSetup.LogSetup", "INFO", "T229 cist pozivalac"
+    nCist = Err.Number
+    Err.Clear
+
+    AssertEq bezLoga, True, "preduslov: sveska nema list SETUP_LOG (proba u LogSetup pada)"
+    AssertEq nH, vbObjectError + 4242, "LogSetup cuva BROJ greske pozivaoca (LOG-01)"
+    AssertEq sH, "modTest.LOG01", "LogSetup cuva IZVOR greske pozivaoca (LOG-01)"
+    AssertEq dH, "greska pozivaoca", "LogSetup cuva OPIS greske pozivaoca (LOG-01)"
+    AssertEq nCist, 0, "LogSetup ne ostavlja svoju gresku cistom pozivaocu (LOG-01)"
+End Sub
+
+' Pozivalac u aktivnom handleru, kao handleri modSetup-a: Err se cita POSLE
+' LogSetup-a. Izlaz iz handlera brise Err (sonda P5), pa se vrednosti vracaju.
+Private Sub LogSetupUHandleru(ByRef n As Long, ByRef s As String, ByRef d As String)
+    On Error GoTo EH
+    Err.Raise vbObjectError + 4242, "modTest.LOG01", "greska pozivaoca"
+    Exit Sub
+EH:
+    Application.Run "modSetup.LogSetup", "ERROR", "T229 u handleru"
+    n = Err.Number
+    s = Err.SOURCE
+    d = Err.description
 End Sub
 
 ' Forma F7 za KI-011 testove -- isti prepis kojim je puni "Zamena reversa".
