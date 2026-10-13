@@ -2479,7 +2479,33 @@ kao kontra-stav (`StornirajAmbalazuDokumenta`) i `tblAmbalazaDokument`.
 
 **Van reza, glasno.** Višetipni ambalažni dokument se štampa samo za prvi tip (`KI-013`,
 nađeno u ručnoj proveri `10e-1`). Postoji od `10c-2`, a današnji pisac reversa takav
-dokument ne pravi.
+dokument ne pravi. Ispravka je u 6.13f.
+
+### 6.13f Papir po tipu (AMB-10-ODL-30, 13.10.2026)
+
+> **`AMB-10-ODL-30` (odluka operatera 13.10.2026): papir ambalažnog dokumenta je po
+> (dokument, tip).** `AMB-INV-10` ostaje kakav jeste: dokument sme da nosi više tipova i oba
+> smera prema istom partneru. Šablon reversa nosi jedan red i stanje jednog tipa, pa se papir
+> pravi za red koji operater izabere u listi `AMBALAZA` (dokument + tip). Isto je radio i
+> legacy (C-061: dva tipa daju dva papira).
+
+- **Pravila papira** drži `modIzvestaj.StampajAmbDokument`, na granici komande:
+  - tip koji dokument ne nosi daje `7506`, kao i pre;
+  - više poslovnih redova za isti izbor daje `7511`, jer bi jedan papir spojio dva reda. To
+    važi za oba smera istog tipa i za štampu bez izabranog tipa nad višetipnim dokumentom.
+    Pre `KI-013` se u oba slučaja tiho štampao samo prvi red.
+- **Čitalac papira** je `modAmbalaza.AmbDokPoslovniRedovi`. Strog je i vraća sve poslovne
+  redove. `AmbDokRedMapa` ostaje čitalac prikaza (prvi red). Oblik niza je jedan
+  (`PoslovniRedNiz`), a ispravka broji redove kroz isti čitalac.
+- **Creation path** (`docs/STANJE_REFAKTORA.md`, stavka 133): nijedan produkcioni pisac
+  danas ne pravi dokument sa više poslovnih redova. Taj oblik nosi fixture `ADK-IZV-1`
+  (`1/IZV`).
+- **Imenovano ograničenje:** u listi F7 `REVERSI` red mreže je dokument, a tip i količina su
+  sa prvog poslovnog reda. To je danas dostižno samo kroz fixture. Kad neki pisac počne da
+  pravi višetipni dokument, mreža traži svoj oblik (red po tipu ili zbir).
+- **Odbijena varijanta B** (jedan tip po dokumentu): suzila bi `AMB-INV-10` i promenila
+  premisu oko šest postojećih testova (dvotipna nabavka, test 220), a nijedan operaterski
+  scenario je ne traži.
 
 ### 6.14 Sta model sada ume da odgovori
 

@@ -1534,6 +1534,7 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
         ws.cells(rr, 4).value = stavke(k, 2)
         ws.cells(rr, 5).value = stavke(k, 3)
         ws.cells(rr, 6).value = CDbl(stavke(k, 2)) * CDbl(stavke(k, 3))
+        ws.cells(rr, 7).NumberFormat = "@"   ' tip amb. je tekst, pre dodele (KI-012)
         ws.cells(rr, 7).value = stavke(k, 4)
         ws.cells(rr, 8).value = stavke(k, 5)
         ws.cells(rr, 1).HorizontalAlignment = xlCenter
@@ -2036,6 +2037,11 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     usedPt = usedPt + 18#
     rr = rr + 1
     ws.cells(rr, 1).value = 1
+    ' TIP JE TEKST, I FORMAT IDE PRE DODELE (KI-012). VBA .Value tumaci string po
+    ' en-US pravilima, nezavisno od lokala: "12/1" postaje 1. decembar, a papir
+    ' nosi "1.dec". "@" POSLE dodele ne vraca tekst nego ostavlja serijski broj
+    ' datuma (sonda 13.10.2026).
+    ws.cells(rr, 2).NumberFormat = "@"   ' tip je tekst, pre dodele (KI-012)
     ws.cells(rr, 2).value = CStr(h("tipAmb"))
     ws.cells(rr, 5).value = h("kolAmb")
     ws.Range(ws.cells(rr, 2), ws.cells(rr, 4)).Merge

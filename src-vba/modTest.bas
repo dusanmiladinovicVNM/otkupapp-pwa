@@ -171,6 +171,7 @@ Private Const FX_BROJ_NOVAC As String = "NOVUNOS-TEST-1"
 Private Const FX_VRSTA As String = "TESTVOCE"
 Private Const FX_SORTA As String = "TESTSORTA"
 Private Const FX_TIP_AMB As String = "12/1"         ' AMB_12_1, TezinaGajbiceKg = 1
+Private Const FX_TIP_LETVA As String = "Letvarica"  ' make_fixture AMB_LETVA, drugi tip na ADK-IZV-1
 ' Kupca u fixture-u NEMA i ne treba ga: provere gledaju samo da li je izabran
 ' (Len > 0). Upis, koji bi trazio postojeceg, ovi testovi ne voze.
 Private Const FX_KUPAC As String = "KUP-TEST-1"
@@ -322,6 +323,8 @@ Public Sub RunAllTests()
     RunOne 227
     RunOne 228
     RunOne 229
+    RunOne 230
+    RunOne 231
     RunOne 13
     RunOne 14
     RunOne 15
@@ -822,6 +825,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 227: TestName = "T_KI011_ZaostalaGreskaNijeNeuspeh"
         Case 228: TestName = "T_KI011_PadStampeJeUpozorenjeUzUspeh"
         Case 229: TestName = "T_KI011_LogSetupCuvaGreskuPozivaoca"
+        Case 230: TestName = "T_KI012_TipNaPapiruJeTekst"
+        Case 231: TestName = "T_KI013_VisetipniDokumentPapirPoTipu"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1059,6 +1064,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 227: T_KI011_ZaostalaGreskaNijeNeuspeh
         Case 228: T_KI011_PadStampeJeUpozorenjeUzUspeh
         Case 229: T_KI011_LogSetupCuvaGreskuPozivaoca
+        Case 230: T_KI012_TipNaPapiruJeTekst
+        Case 231: T_KI013_VisetipniDokumentPapirPoTipu
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -7846,6 +7853,234 @@ EH:
     s = Err.SOURCE
     d = Err.description
 End Sub
+
+' 230. KI-012: TIP AMBALAZE NA PAPIRU JE TEKST, NE DATUM.
+'
+' Rucna provera #414 i #419: papir reversa nosi "1.dec" umesto "12/1". Tip se
+' upisivao u celiju opsteg formata, a VBA .Value tumaci string po en-US
+' pravilima, NEZAVISNO od lokala (sonda 13.10.2026, Excel 381 / DMY: "12/1" ->
+' 2026-12-01, ispis "1.dec"). Isti tip kao samostalnu vrednost nosi i grupna
+' prijemnica (kolona "Tip amb."). Otkupni list i otpremnica ga nose u tekstu
+' "12/1 x 18", koji ostaje tekst (ista sonda), pa ovde nisu.
+'
+' Meri se CELIJA sablona, ne PDF. Revers ide produkcionim ulazom ponovne stampe
+' (StampajReversAmbalaze) uz ukljucen PDF, kao 226: sablon posle izvoza ostaje
+' popunjen. Prijemnica ide kroz Application.Run nad privatnim
+' FillPrijemnicaSablon, jer javni izvoz pri padu otvara MsgBox, koji u
+' nevidljivom Excelu visi. Tvrdnja ne zavisi od lokala: tekst je tekst u
+' svakom, a datum je datum u svakom (lokal menja samo ISPIS datuma).
+'
+' List se pre stampe prazni: ustajao papir iz ranijeg poziva bi inace prosao
+' umesto novog. Kolicina se cita APSOLUTNOM kolonom (5): Offset iz spojene
+' celije tipa (B:D) racuna od spojenog opsega i daje G, ne E -- pa prazno
+' (sonda 13.10.2026, prvi izvrsni prolaz posle GO).
+' SABOTAZA: ki012-revers-tip-opsti-format -> pukne "revers: tip ambalaze na
+' papiru je tekst, ne datum"; ki012-prijemnica-tip-opsti-format -> pukne
+' "prijemnica: tip ambalaze na papiru je tekst, ne datum".
+Private Sub T_KI012_TipNaPapiruJeTekst()
+    Dim modePre As String, errNum As Long, errDesc As String
+    Dim c As Range, nRev As Long, nPrj As Long
+    Dim vt1 As Long, vt2 As Long, tx1 As String, tx2 As String, kol1 As String
+    Dim vtP As Long, txP As String
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+
+    On Error Resume Next
+    OcistiList WS_IZDAMB_SABLON
+    OcistiList WS_PRIJEMNICA_SABLON
+
+    ' ADK-IZV-2 = 2/IZV: jednotipni revers, kooperant vratio 12/1 x10.
+    modIzvestaj.StampajReversAmbalaze "ADK-IZV-2", DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    errNum = Err.Number
+    errDesc = Err.description
+    Err.Clear
+    Set c = CelijaIspodRb(WS_IZDAMB_SABLON, 1, 2)
+    If Not c Is Nothing Then
+        nRev = nRev + 1
+        vt1 = VarType(c.value)
+        tx1 = c.text
+        kol1 = CStr(c.Worksheet.cells(c.row, 5).value)
+    End If
+    Set c = CelijaIspodRb(WS_IZDAMB_SABLON, 2, 2)
+    If Not c Is Nothing Then
+        nRev = nRev + 1
+        vt2 = VarType(c.value)
+        tx2 = c.text
+    End If
+
+    Application.Run "modPrint.FillPrijemnicaSablon", "PRJ-TEST-I1"
+    Err.Clear
+    Set c = CelijaIspodRb(WS_PRIJEMNICA_SABLON, 1, 7)
+    If Not c Is Nothing Then
+        nPrj = 1
+        vtP = VarType(c.value)
+        txP = c.text
+    End If
+    Err.Clear
+    On Error GoTo 0
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+
+    AssertEq errDesc, "", "preduslov: jednotipni revers se stampa bez greske"
+    AssertEq nRev, 2, "preduslov: list reversa je popunjen posle izvoza (oba primerka)"
+    AssertEq nPrj, 1, "preduslov: list prijemnice je popunjen"
+    AssertEq (vt1 = vbString And vt2 = vbString), True, _
+             "revers: tip ambalaze na papiru je tekst, ne datum (KI-012)"
+    AssertEq tx1 & "|" & tx2, FX_TIP_AMB & "|" & FX_TIP_AMB, _
+             "revers: papir ispisuje tip kako je unet"
+    AssertEq kol1, "10", "revers: jednotipni dokument nosi svoju kolicinu (kontrola KI-013)"
+    AssertEq (vtP = vbString), True, _
+             "prijemnica: tip ambalaze na papiru je tekst, ne datum (KI-012)"
+    AssertEq txP, FX_TIP_AMB, "prijemnica: papir ispisuje tip kako je unet"
+End Sub
+
+' 231. KI-013: VISETIPNI AMBALAZNI DOKUMENT -- PAPIR PO TIPU.
+'
+' Rucna provera 10e-1 (13.10.2026): ADK-IZV-1 (1/IZV, 12/1 x30 + Letvarica x5)
+' za 12/1 daje papir, a za Letvaricu odbijenicu 7506. Stampa je citala
+' AmbDokRedMapa, koja drzi PRVI poslovni red dokumenta. Odluka operatera
+' 13.10.2026 (A2, AMB-10-ODL-30): AMB-INV-10 ostaje -- dokument sme da nosi vise
+' tipova -- a papir je po (dokument, tip), kao legacy C-061.
+'
+' Tvrdi se SADRZAJ papira (tip i kolicina na listu sablona), ne samo izostanak
+' greske: papir drugog tipa sa kolicinom prvog bio bi gori od odbijenice.
+' Kontrole: prvi tip istog dokumenta i dalje daje svoj papir (jednotipni revers
+' meri 230); tip koji dokument ne nosi se i dalje odbija (7506). Odbijaju se i
+' dva reda ISTOG tipa (oba smera -- AMB-INV-10 ih pusta, oblik testa 220) i
+' stampa bez izbora tipa nad visetipnim dokumentom: jedan papir bi spojio dva
+' reda, a pre KI-013 je tiho stampan samo PRVI.
+'
+' ADK-IZV-1 je oblik koji ugovor dozvoljava, a danasnji pisci ne prave (creation
+' path, stavka 133). Dokument sa dva reda istog tipa se pravi PRODUKCIONIM
+' primitivima u transakciji testa i VRACA posle stampe: stampa cita list, a
+' knjiga posle testa ostaje kakva je bila (saldo kooperanta mere drugi testovi).
+' SABOTAZA: ki013-stampa-prvi-red -> pukne "visetipni dokument: drugi tip dobija
+' svoj papir"; ki013-dvosmislen-tip-pusta -> pukne "dva reda istog tipa se ne
+' spajaju na jedan papir".
+Private Sub T_KI013_VisetipniDokumentPapirPoTipu()
+    Dim modePre As String, c As Range
+    Dim dLet As String, tLet As String, kLet As String
+    Dim d12 As String, t12 As String, k12 As String
+    Dim dTip As String, dBez As String, dDv As String, nDv As Long
+    Dim tx As clsTransaction, dokDv As String, broj As String
+    Dim errNum As Long, errDesc As String
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+
+    On Error Resume Next
+    OcistiList WS_IZDAMB_SABLON
+    modIzvestaj.StampajReversAmbalaze "ADK-IZV-1", DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_LETVA
+    dLet = Err.description
+    Err.Clear
+    Set c = CelijaIspodRb(WS_IZDAMB_SABLON, 1, 2)
+    If Not c Is Nothing Then
+        tLet = c.text
+        kLet = CStr(c.Worksheet.cells(c.row, 5).value)
+    End If
+
+    OcistiList WS_IZDAMB_SABLON
+    modIzvestaj.StampajReversAmbalaze "ADK-IZV-1", DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    d12 = Err.description
+    Err.Clear
+    Set c = CelijaIspodRb(WS_IZDAMB_SABLON, 1, 2)
+    If Not c Is Nothing Then
+        t12 = c.text
+        k12 = CStr(c.Worksheet.cells(c.row, 5).value)
+    End If
+
+    modIzvestaj.StampajReversAmbalaze "ADK-IZV-1", DOK_TIP_AMBALAZA_DOKUMENT, "Gajba-KI013-nema"
+    dTip = Err.description
+    Err.Clear
+    modIzvestaj.StampajReversAmbalaze "ADK-IZV-1", DOK_TIP_AMBALAZA_DOKUMENT, ""
+    dBez = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    ' Dva reda ISTOG tipa, oba smera prema istom kooperantu. Povrat ide PRVI:
+    ' kooperant drzi nase gajbe iz fixture-a (ADK-IZV-1), a stanica tek tada ima
+    ' sta da izda -- bez nabavke, koja bi se commit-ovala sama.
+    Set tx = New clsTransaction
+    On Error GoTo EH
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    broj = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date)
+    dokDv = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, broj, Date, _
+                                         AMB_NALOG_STANICA, FX_STANICA, "KI-013 dva reda istog tipa")
+    modAmbalaza.PrenesiAmbalazu tx, Date, FX_TIP_AMB, 1, _
+                                AMB_NALOG_KOOPERANT, FX_KOOPERANT, AMB_NALOG_STANICA, FX_STANICA, _
+                                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokDv
+    modAmbalaza.PrenesiAmbalazu tx, Date, FX_TIP_AMB, 1, _
+                                AMB_NALOG_STANICA, FX_STANICA, AMB_NALOG_KOOPERANT, FX_KOOPERANT, _
+                                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokDv
+    nDv = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, dokDv).count
+    On Error Resume Next
+    modIzvestaj.StampajReversAmbalaze dokDv, DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    dDv = Err.description
+    Err.Clear
+    tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+
+    AssertEq dLet, "", "visetipni dokument: drugi tip dobija svoj papir (KI-013)"
+    AssertEq tLet & " x" & kLet, FX_TIP_LETVA & " x5", _
+             "visetipni dokument: papir drugog tipa nosi njegov tip i kolicinu"
+    AssertEq d12 & "|" & t12 & " x" & k12, "|" & FX_TIP_AMB & " x30", _
+             "visetipni dokument: prvi tip i dalje dobija svoj papir"
+    AssertEq (InStr(1, dTip, "nije tip poslovnog reda", vbTextCompare) > 0), True, _
+             "tip koji dokument ne nosi se odbija po imenu (7506)"
+    AssertEq (InStr(1, dBez, "vise tipova", vbTextCompare) > 0), True, _
+             "stampa bez izabranog tipa nad visetipnim dokumentom se odbija"
+    AssertEq nDv, 2, "preduslov: dokument nosi dva reda istog tipa"
+    AssertEq (InStr(1, dDv, "vise poslovnih redova", vbTextCompare) > 0), True, _
+             "dva reda istog tipa se ne spajaju na jedan papir"
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_KI013_VisetipniDokumentPapirPoTipu", errDesc
+End Sub
+
+' Prazni list sablona pre stampe u testu: ustajao papir iz ranijeg poziva ne sme
+' da prodje umesto novog. Nepostojeci list se preskace.
+Private Sub OcistiList(ByVal ime As String)
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(ime)
+    If Not ws Is Nothing Then
+        ws.cells.UnMerge
+        ws.cells.Clear
+    End If
+    Err.Clear
+End Sub
+
+' Celija prvog reda stavke ispod n-tog zaglavlja "Rb" (kolona 1) lista sablona.
+' Revers ima dva primerka, prijemnica jedan. Nothing = nema lista ili zaglavlja.
+Private Function CelijaIspodRb(ByVal ime As String, ByVal primerak As Long, _
+                               ByVal kolona As Long) As Range
+    Dim ws As Worksheet, r As Long, n As Long, poslednji As Long
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(ime)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    poslednji = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    For r = 1 To poslednji
+        If StrComp(ws.cells(r, 1).text, "Rb", vbBinaryCompare) = 0 Then
+            n = n + 1
+            If n = primerak Then
+                Set CelijaIspodRb = ws.cells(r + 1, kolona)
+                Exit Function
+            End If
+        End If
+    Next r
+End Function
 
 ' Forma F7 za KI-011 testove -- isti prepis kojim je puni "Zamena reversa".
 Private Function SpecReversaKI011(ByVal broj As String, ByVal kol As Long) As String

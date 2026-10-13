@@ -4295,12 +4295,12 @@ End Function
 ' taj filter zaobilazi. Osvezivac nije kapija.
 '
 ' Redosled odbijanja ide od najodredjenijeg razloga ka najsirem: nema zaglavlja ->
-' storniran -> nema poslovni red. Operater tako dobija razlog, a ne simptom.
+' storniran -> nema poslovni red -> tip nije u dokumentu -> izbor nije
+' jednoznacan. Operater tako dobija razlog, a ne simptom.
 Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
     Const SRC As String = "modIzvestaj.StampajAmbDokument"
 
-    Dim mapaRed As Object, mapaZag As Object, aktivni As Object
-    Set mapaRed = modAmbalaza.AmbDokRedMapa()
+    Dim mapaZag As Object, aktivni As Object
     Set mapaZag = modAmbalaza.AmbDokPrikazMapa()
     Set aktivni = modAmbalaza.AmbDokAktivanSkup()
 
@@ -4314,14 +4314,51 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
                   "Ambalazni dokument je storniran -- stampa odbijena."
     End If
 
-    If Not mapaRed.Exists(ambDokID) Then
+    ' PAPIR JE PO (DOKUMENT, TIP) -- KI-013, AMB-10-ODL-30. AMB-INV-10 dozvoljava
+    ' dokument sa vise tipova i sa oba smera prema istom partneru, a sablon nosi
+    ' JEDAN red i stanje JEDNOG tipa. Red se zato bira iz SVIH poslovnih redova
+    ' po izabranom tipu -- ne iz mape prikaza, koja drzi samo PRVI: drugom tipu je
+    ' davala odbijenicu (7506), a bez izbora tipa je tiho stampala prvi red.
+    ' Citalac je STROG: knjiga koja ne moze da se procita ne daje papir.
+    Dim redovi As Collection
+    Set redovi = modAmbalaza.AmbDokPoslovniRedovi(ambDokID)
+    If redovi.count = 0 Then
         Err.Raise vbObjectError + 7505, SRC, _
                   "Ambalazni dokument nema aktivan poslovni red -- stampa odbijena."
     End If
 
     ' NIZ: vrstaKretanja, tipAmb, kolicina, odTip, odID, naTip, naID
-    Dim f As Variant
-    f = mapaRed(ambDokID)
+    Dim f As Variant, r As Variant, k As Long, nTip As Long
+    For k = 1 To redovi.count
+        r = redovi(k)
+        If Len(Trim$(tipSel)) = 0 Then
+            nTip = nTip + 1
+            f = r
+        ElseIf AmbTipKljuc(tipSel) = AmbTipKljuc(CStr(r(1))) Then
+            nTip = nTip + 1
+            f = r
+        End If
+    Next k
+
+    ' Izabran tip sa ekrana mora da bude tip poslovnog reda. Ne preskace se tiho:
+    ' papir na pogresan tip gajbe je greska koju operater ne vidi.
+    If nTip = 0 Then
+        Err.Raise vbObjectError + 7506, SRC, _
+                  "Izabrani tip ambalaze nije tip poslovnog reda dokumenta."
+    End If
+
+    ' Vise redova za isti izbor: jedan papir bi ih spojio.
+    If nTip > 1 Then
+        If Len(Trim$(tipSel)) = 0 Then
+            Err.Raise vbObjectError + 7511, SRC, _
+                      "Dokument nosi vise poslovnih redova (vise tipova ili oba " & _
+                      "smera), a papir je po tipu -- izaberi red tipa. Stampa odbijena."
+        End If
+        Err.Raise vbObjectError + 7511, SRC, _
+                  "Dokument nosi vise poslovnih redova tipa '" & Trim$(tipSel) & _
+                  "' (oba smera) -- jedan papir bi ih spojio. Stampa odbijena."
+    End If
+
     If Not IsArray(f) Then
         Err.Raise vbObjectError + 7505, SRC, _
                   "Red ambalaznog dokumenta nije citljiv -- stampa odbijena."
@@ -4338,15 +4375,6 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
     Dim odID As String: odID = Trim$(CStr(f(4)))
     Dim naTip As String: naTip = Trim$(CStr(f(5)))
     Dim naID As String: naID = Trim$(CStr(f(6)))
-
-    ' Izabran tip sa ekrana mora da bude tip poslovnog reda. Ne preskace se tiho:
-    ' papir na pogresan tip gajbe je greska koju operater ne vidi.
-    If Len(Trim$(tipSel)) > 0 Then
-        If AmbTipKljuc(tipSel) <> AmbTipKljuc(tipAmb) Then
-            Err.Raise vbObjectError + 7506, SRC, _
-                      "Izabrani tip ambalaze nije tip poslovnog reda dokumenta."
-        End If
-    End If
 
     ' ZAGLAVLJE JE OBAVEZNO, BEZ FALLBACK-A. Ranije se broj postavljao na
     ' ambDokID a datum na Date PRE citanja zaglavlja, pa bi dokument sa
