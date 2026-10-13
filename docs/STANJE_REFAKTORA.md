@@ -3529,7 +3529,7 @@
      - **Netaknuto:** otkup (već je čistio `Err`), ponovna štampa reversa iz liste (zadržava
        dijalog), `ScrEvent`/`ScrGridData` (`KI-014`).
 
-     **Sabotaže (748 → 752)**, dokaz se filtrira na `ki011-` (2 prolaza, `--plan`):
+     **Sabotaže (748 → 754** posle review-a `#419`), dokaz se filtrira na `ki011-` (3 prolaza, `--plan`):
      - `ki011-logsetup-ostavlja-gresku` → 226 „upis ne ostavlja zaostalu gresku u Err (izvor
        KI-011: LogSetup)";
      - `ki011-scrsave-zaostala-je-neuspeh` → 227 „zaostala greska iz pomocnog koraka nije
@@ -3542,7 +3542,7 @@
 
      | Suita | Pre | Posle | Razlog |
      |---|---|---|---|
-     | `RunAllTests` | 225 | **228** | +226, +227, +228; 69 dobija jedan ključ u spisku |
+     | `RunAllTests` | 225 | **229** | +226…+229 (229 iz review-a `#419`); 69 dobija jedan ključ u spisku |
      | `RunBusinessFlowProSuite` | 2404 | **2404** | nijedna BFP tvrdnja se ne menja |
      | `RunStornoTestSuite`, `RunBankaImportTestSuite` | 111, 241 | bez promene | — |
 
@@ -3563,6 +3563,39 @@
        F1 kontrola).
      - Novi seam-ovi treba da uđu u `.claude/rules/testovi.md` §4. To ide **zasebnim process
        PR-om**.
+
+     **Review `#419` (`2ebdd147`), krug 1: `NO-GO`, `P0 0`, `P1 0`, `P2 1`, `P3 1`, 9,0/10.**
+     Static CI #953 `SUCCESS`. Reviewer ne traži nov obim (ni `KI-012`, ni `KI-014`), nego dve
+     uske dopune, pa izvršne kapije.
+     - **`P2` — nepoznat ekran je bio uspeh.** `ScrSave` za ključ kog nema u registru izlazi
+       pre `Application.Run`: `Split("")` daje prazan niz, pa je `m = ""`, a rezultat i
+       `ScrLastErr` su prazni. `CommitDokument` to čita kao upis (čisti formu, toast
+       „sačuvan:" bez broja). Potvrđeno čitanjem, pa **reprodukovano pre ispravke**: 227 crven
+       na „nepoznat ekran ne sme biti uspeh", sve ostale tvrdnje 227 zelene (izvor
+       `c310123b`). Ispravka: izlaz bez poziva pisca postavlja `ScrLastErr`. Sabotaža
+       `ki011-scrsave-nepoznat-ekran-je-uspeh`.
+     - **`P3` — `LOG-01` u handleru nije bio meren testom.** Nov test **229** zove privatni
+       `LogSetup` kroz `Application.Run`, u oba smera nad sveskom bez `SETUP_LOG`. Sonda nad
+       STARIM kodom je pokazala da put doseže proceduru i da tvrdnje grizu (u handleru
+       `4242` → `9 / VBAProject / Subscript out of range`, čist pozivalac → `9`). Sabotaža
+       `ki011-logsetup-brise-gresku-pozivaoca`.
+     - Isti prolaz (`c310123b`, `RunAllTests` 229/1) je i prvo izvršenje posle ispravke:
+       226, 228 i 229 su zeleni.
+
+     **Izvršne kapije posle kruga 1** (head `e840b729`):
+
+     ```
+     RunAllTests              229 / 0      (225 + 226..229)
+     RunBusinessFlowProSuite 2404 / 0      RunStornoTestSuite 111 / 0
+     RunBankaImportTestSuite  241 / 0      12 / 12 ZELENO, marker upisan (izvor fbe6332aca81)
+     dokaz.py ki011- --grupe: crvenih 6 / 6, izvor pre/posle c100346b7742ccde IDENTICAN
+       -> DOKAZANO (grupno); ki011-logsetup-ostavlja-gresku je u grupi oborio drugu
+       tvrdnju (uz sabotazu citaoca), pa je ponovljen sam i oborio svoju
+     compile: NEJASNO (automatski) -- rucna kapija operatera
+     ```
+
+     **Preostalo:** compile operatera i ručna provera nad `tests/fixtures/rucna_provera_ki011_kod.xlsm`
+     (kod sa `e840b729`, sveska bez lista `SETUP_LOG`), pa finalni exact-head review.
 
 ## Dug sa imenom (posle S5-5b)
 
