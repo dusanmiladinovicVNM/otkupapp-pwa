@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 13.10.2026 (red AMB-10: `10e-3` merge-ovan `#418`, stavka 130; `KI-011` merge-ovan `#419`, stavka 132; `KI-012`/`KI-013` od stavke 133).
+**Ažurirano:** 13.10.2026 (red AMB-10: `10e-3` merge-ovan `#418`, stavka 130; `KI-011` merge-ovan `#419`, stavka 132; `KI-012`/`KI-013` merge-ovani `#420`, stavka 134; čitaoci salda na papiru od stavke 135).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -3845,6 +3845,21 @@
      - Finalni exact-head review i merge.
      - Sledeći korak: fail-open čitaoci salda i početno stanje na ponovljenom papiru reversa.
 
+134. **Review `#420` — `GO` za izvršne kapije, merge-ovano na izričit zahtev operatera** (13.10.2026).
+     Zapis ide ovde, a ne u `#420`. Obrazac su stavke 128, 130 i 132.
+
+     - Review `26c01632`: `CODE REVIEW GO` za izvršne kapije, `P0 0`, `P1 0`, `P2 0`, `P3 2`, ocena
+       9,3/10, static CI #959. Oba `P3` su obrađena u PR-u:
+       - mreža F7 `REVERSI` je imenovano ograničenje (`AMBALAZA.md` 6.13f);
+       - `KNOWN_ISSUES.md` je vraćen na CRLF (`0d31a43f`).
+     - Posle GO su na PR-u bili test-commit (`82f2ab6c`, Offset iz spojene ćelije), sabotaža
+       (`27bd0bd4`) i docs. Izvršne kapije, dokaz 4/4, compile i ručna provera su nad tim izvorom
+       (stavka 133).
+     - Merge-ovano 13.10.2026 kao `14b9744d` (head `14a5b264`, static CI pass). `KI-012` i `KI-013`
+       su `CLOSED`.
+     - Sledeći korak (ovaj rez, stavke 135+): čitaoci salda na papiru. `KI-014`, `KI-015` i `ODL-24`
+       su svaki svoj rez.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
@@ -3852,7 +3867,7 @@
 | **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). Danas to drže samo komentari uz tri grane; kapija bi morala da zna koji su pozivi iz suite-a dostupni, pa traži svoj rez i svoj dvosmerni dokaz |
 | **`dokaz.py` ne dosegne `modIzvestajTests`** | kapija kataloga sabotaža priznaje samo `modTest`, `modTestBanka` i `modBusinessFlowProTests`, pa tvrdnja iz `modIzvestajTests` **ne može da se obori** — a tamo živi najdetaljnije merenje ambalažnog pregleda. Posledica je izmerena u `10c-2`: tvrdnja o identitetu dokumenta je **preseljena** u `#204`, a tvrdnja o spajanju dve vrste istog dokumenta ostala **bez sabotaže**. Proširenje kapije dira sam alat, pa ide **zaseban process PR** sa svojim dvosmernim dokazom |
 | **kanonska knjiga nema PUNU integritetnu proveru** | `modIntegritet` ima **nula** referenci na `Od_Tip` / `Na_Tip` / `VrstaKretanja` / `tblAmbalazaDokument` (merenje 08.10.2026). Posle cutovera proverava samo legacy redove, koje produkcija ne piše — pa operateru kaže „nema nalaza" ne pogledavši kanonsku knjigu. Kandidati za provere: noga bez zaglavlja, zaglavlje bez noge, `StornoOd` koji ne pokazuje nigde, par koji nije neuređen (`AMB-INV-10`), obaveza partneru < 0 (`AMB-INV-09`). Od stavke 113 ugovor reda, dupli `AmbID` i `StornoOd` meri `Chk_AMB_KnjigaIntegritet`; od `10e-3` (stavka 129) i red koji ne dotiče knjigu (red starog oblika) je nalaz po imenu, jer „legacy" stanja više nema. Ostali kandidati (noga bez zaglavlja, zaglavlje bez noge, par koji nije neuređen, obaveza < 0) su i dalje otvoreni. `Chk_B10_ReversBezID` je obrisan u `10e-1` |
-| **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita. **Odluka operatera (13.10.2026): sledeći korak posle `KI-012`/`KI-013` (stavka 133)**, zajedno sa `GetStanicaAmbSaldo` i istorijskim početnim stanjem na ponovljenom papiru reversa |
+| **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita. **Odluka operatera (13.10.2026): sledeći korak posle `KI-012`/`KI-013` (stavka 133)**, zajedno sa `GetStanicaAmbSaldo` i istorijskim početnim stanjem na ponovljenom papiru reversa. **Odluke operatera za taj rez (13.10.2026, stavka 135), sve po preporuci:** (1) kad knjiga ne može da se pročita, papir **ne nastaje** (fail-closed, kao otkupni list po ODL-27), a oba čitaoca gube handler; (2) istorijsko stanje dobijaju **revers i otpremnica**, a grupni otkupni list ide u S6 (danas je nedostižan i čita pogrešan nalog); (3) kod pokrića deficita važi **pravilo reversa** (novo = stanje posle dokumenta, početno = novo − kretanje), a prikaz pokrića ide uz `ODL-24`; (4) **kupčev revers se iz F7 ne štampa**, kao iz liste (7507) |
 | **badge "nesacuvano" na novoj formi** | `SelectModeCore` pise u polje broja POSLE `MarkClean` i `mLoading = False`, pa programski upis prodje kroz `MarkDirty` i prazna forma tvrdi da ima neupisanih izmena (review 08.10.2026, `P3`). Zatecen obrazac -- vazio je i pre P1 ispravke, za svaki rezim sa auto-brojem. Jedan premesten red, ali izmena `src-vba` obara compile i zeleni marker, a nov test (natpis u zaglavlju) trazi svoj dvosmeran dokaz; zato **svoj rez posle merge-a**, pre `ODL-24` |
 | **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a** |
 | **nema kapije „modul ne sme da koristi tuđ `Private` simbol"** | VBA kompajlira **na zahtev**, pa `Sub or Function not defined` pukne tek kad neki test prvi put pozove baš tu proceduru — i to posle **600 s i ubijenog Excela**, uz poruku bez fajla i linije (06.10.2026: `MarkRowStornirano`, `Private` u `modStorno`, pozvan iz `modAmbalaza`). Ime **postoji** u projektu, samo nije vidljivo — pa ga nijedna jeftina kapija ne vidi. Jednokratni merač je napisan i dao **1 nalaz sa fajlom i linijom nad pokvarenim izvorom, 0 posle** — dvosmeran dokaz. Tri lažna nalaza prvog izdanja su i sama merenje: repni komentar, labela (`Resume CleanUp`) i **LF kopija iz git-a** (split po `
