@@ -4,23 +4,16 @@ Attribute VB_Name = "modAmbalaza"
 Option Explicit
 
 ' ============================================================
-' modAmbalaza v2.2 - Verpackung-Tracking / Ambalaza ledger
+' modAmbalaza - knjiga ambalaze (AMB-10)
 '
-' v2.2 hardening:
-' - TrackAmbalaza fail-fast validation
-' - AppendRow result check
-' - RequireColumnIndex schema guards
-' - Strict Smer = Ulaz / Izlaz
-' - Numeric guards before CLng
+' Jedan model: red je PRENOS (OdNalog -> NaNalog, VrstaKretanja), a storno je
+' kontra-stav sa StornoOd. Stari model (Smer / EntitetID / EntitetTip / VozacID /
+' Stornirano / ReversID i pisac TrackAmbalaza) obrisan je u 10e-3, zajedno sa
+' kolonama iz kanona (docs/DOMEN/AMBALAZA.md 6.13e).
 '
-' NOTE:
-' Ne praviti poseban TrackAmbalaza_TX ovde.
-' TrackAmbalaza se poziva iz vecih poslovnih TX wrapper-a
-' koji vec snapshot-uju tblAmbalaza.
+' Pisci ne otvaraju svoju transakciju: zovu se iz vecih poslovnih TX-ova koji
+' vec snapshot-uju tblAmbalaza (AMB-INV-08).
 ' ============================================================
-
-Private Const AMB_SMER_ULAZ As String = "Ulaz"
-Private Const AMB_SMER_IZLAZ As String = "Izlaz"
 
 ' --- KNJIGA (AMB-10b): greske koje POZIVALAC mora da razlikuje ---
 '
@@ -52,142 +45,6 @@ Private Function AmbText(ByVal v As Variant) As String
         AmbText = Trim$(CStr(v))
     End If
 End Function
-
-Private Function IsValidAmbSmer(ByVal smer As String) As Boolean
-    Select Case Trim$(smer)
-        Case AMB_SMER_ULAZ, AMB_SMER_IZLAZ
-            IsValidAmbSmer = True
-        Case Else
-            IsValidAmbSmer = False
-    End Select
-End Function
-
-Private Sub ValidateAmbalazaInput(ByVal tipAmb As String, _
-                                  ByVal kolicina As Long, _
-                                  ByVal smer As String, _
-                                  ByVal entitetID As String, _
-                                  ByVal entitetTip As String, _
-                                  ByVal sourceName As String)
-
-    If kolicina < 0 Then
-        Err.Raise vbObjectError + 4401, sourceName, _
-                  "Koli" & ChrW(269) & "ina ambala" & ChrW(382) & "e ne sme biti negativna."
-    End If
-
-    ' Nula je legalan no-op.
-    If kolicina = 0 Then Exit Sub
-
-    If Len(Trim$(tipAmb)) = 0 Then
-        Err.Raise vbObjectError + 4402, sourceName, _
-                  "Tip ambala" & ChrW(382) & "e je obavezan kada postoji koli" & ChrW(269) & "ina."
-    End If
-
-    If Not IsValidAmbSmer(smer) Then
-        Err.Raise vbObjectError + 4403, sourceName, _
-                  "Neispravan smer ambala" & ChrW(382) & "e: " & smer
-    End If
-
-    If Len(Trim$(entitetID)) = 0 Then
-        Err.Raise vbObjectError + 4404, sourceName, _
-                  "EntitetID je obavezan za ambala" & ChrW(382) & "u."
-    End If
-
-    If Len(Trim$(entitetTip)) = 0 Then
-        Err.Raise vbObjectError + 4405, sourceName, _
-                  "EntitetTip je obavezan za ambala" & ChrW(382) & "u."
-    End If
-End Sub
-
-Private Sub RequireAmbalazaSchema(ByVal sourceName As String)
-    ' Fail-fast schema guard. Ne koristimo indekse ovde za rowData,
-    ' ali eksplicitno proveravamo da tabela ima ocekivane kolone.
-    modSchema.SchemaReadyOrFail sourceName, TBL_AMBALAZA
-    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, sourceName)
-    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, sourceName)
-    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_TIP, sourceName)
-    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, sourceName)
-    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, sourceName)
-    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, sourceName)
-    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, sourceName)
-    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, sourceName)
-    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, sourceName)
-    Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, sourceName)
-End Sub
-
-' ============================================================
-' WRITE
-' ============================================================
-
-Public Sub TrackAmbalaza(ByVal datum As Date, ByVal tipAmb As String, _
-                         ByVal kolicina As Long, ByVal smer As String, _
-                         ByVal entitetID As String, ByVal entitetTip As String, _
-                         Optional ByVal vozacID As String = "", _
-                         Optional ByVal dokumentID As String = "", _
-                         Optional ByVal dokumentTip As String = "", _
-                         Optional ByVal reversID As String = "")
-
-    Const SRC As String = "modAmbalaza.TrackAmbalaza"
-
-    On Error GoTo EH
-
-    Call ValidateAmbalazaInput(tipAmb, kolicina, smer, entitetID, entitetTip, SRC)
-
-    If kolicina = 0 Then Exit Sub
-
-    Call RequireAmbalazaSchema(SRC)
-
-    Dim newID As String
-    newID = GetNextID(TBL_AMBALAZA, COL_AMB_ID, "AMB-")
-
-    If Len(Trim$(newID)) = 0 Then
-        Err.Raise vbObjectError + 4406, SRC, _
-                  "GetNextID nije vratio AmbID."
-    End If
-
-    Dim rowData As Variant
-    rowData = Array( _
-        newID, _
-        datum, _
-        Trim$(tipAmb), _
-        kolicina, _
-        Trim$(smer), _
-        Trim$(entitetID), _
-        Trim$(entitetTip), _
-        Trim$(vozacID), _
-        Trim$(dokumentID), _
-        Trim$(dokumentTip))
-
-    Dim rowIdx As Long
-    rowIdx = AppendRow(TBL_AMBALAZA, rowData)
-    If rowIdx <= 0 Then
-        Err.Raise vbObjectError + 4407, SRC, _
-                  "AppendRow nije uspeo za tblAmbalaza."
-    End If
-
-    ' ReversID (REV-IDENT-01) ide PO IMENU: kolona stoji iza Stornirano i audit
-    ' kolona, pa je pozicioni niz ne doseze. Pecat je u istom modulu, pa vlasnik
-    ' reda ostaje jedan (A11).
-    If Len(Trim$(reversID)) > 0 Then
-        RequireUpdateCell TBL_AMBALAZA, rowIdx, COL_AMB_REVERS_ID, Trim$(reversID), SRC
-    End If
-
-    Exit Sub
-
-EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-
-    LogErr SRC
-    On Error Resume Next
-    On Error GoTo 0
-
-    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
-End Sub
 
 ' ============================================================
 ' READ: saldo ambalaze po entitetu
@@ -551,10 +408,9 @@ End Function
 ' veza dokument <-> kretanje) je modAmbalazaUgovor. Ovde je UPIS i ono sto se MORA
 ' procitati da bi upis bio zakonit -- nista vise.
 '
-' OVAJ REZ NE DIRA NIJEDNO POZIVNO MESTO. TrackAmbalaza i dalje pise stari oblik;
-' devet mesta knjizenja, razlaganje SaveOMUlaz_TX / SaveKupciIzlaz_TX i citaoci su
-' 10b-2. Zato tblAmbalaza tokom prelaza nosi DVA oblika reda i svaki citalac mora
-' da kaze koji cita -- to radi KnjigaZaCitanje, i radi to FAIL-CLOSED.
+' 10b-1 nije dirao pozivna mesta: stari pisac je jos pisao stari oblik, pa je
+' tblAmbalaza tokom prelaza nosila DVA oblika reda. Od 10e-3 oblik je jedan, a
+' red koji mu ne pripada je KVAR (KnjigaIntegritet) -- i dalje FAIL-CLOSED.
 '
 ' ZASTO PISAC CITA STANJE: AMB-INV-07 (nijedan realan nalog ispod nule) i
 ' AMB-INV-09 (obaveza >= 0) su granice koje se bez stanja ne mogu proveriti. UI
@@ -562,7 +418,7 @@ End Function
 ' izmedju pitanja i odgovora stanje se moglo promeniti drugim unosom (6.5). Isti
 ' obrazac koji repo vec drzi kod ApplyAvansToOtkup / IsplataBlokProblem.
 '
-' ZASTO OVDE NEMA "On Error GoTo EH / LogErr" BLOKA, kao u TrackAmbalaza:
+' ZASTO OVDE NEMA "On Error GoTo EH / LogErr" BLOKA (stari pisac ga je imao):
 ' odbijanje pisca je najcesce POSLOVNI ishod, ne kvar. Potvrda deficita je
 ' pitanje operateru, a ne greska -- da svaki upit zavrsi u logu gresaka, log bi
 ' prestao da bude signal. Greske se zato ne gutaju i ne prepakuju nego dizu dalje,
@@ -618,14 +474,12 @@ Private Function KnjigaIndeksi(ByVal sourceName As String) As Object
     Set d = CreateObject("Scripting.Dictionary")
 
     Dim imena As Variant, j As Long
-    ' Kolone STAROG modela su ovde jer citalac mora da proveri i NJEGOV ugovor:
-    ' "nije nov red" nije isto sto i "valjan star red". Odlaze zajedno sa njima u
-    ' 10e, kad stari model nestane iz kanona.
+    ' Samo kanonske kolone. Kolone starog modela su ovde stajale dok je citalac
+    ' morao da proveri i NJEGOV ugovor; otisle su iz kanona u 10e-3.
     imena = Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, _
                   COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _
                   COL_AMB_DOK_TIP, COL_AMB_DOK_ID, COL_AMB_VRSTA_KRETANJA, _
-                  COL_AMB_STORNO_OD, _
-                  COL_AMB_SMER, COL_AMB_ENTITET, COL_AMB_ENTITET_TIP)
+                  COL_AMB_STORNO_OD)
 
     For j = LBound(imena) To UBound(imena)
         d.Add CStr(imena(j)), RequireColumnIndex(TBL_AMBALAZA, CStr(imena(j)), sourceName)
@@ -655,7 +509,7 @@ End Function
 
 ' PRAZAN RED NIJE RED. Prazna Excel tabela ima jedan prazan red u DataBodyRange,
 ' pa bi ga svaka kapija inace prijavila kao kvar na praznoj knjizi. Meri se po SVIM
-' kolonama koje knjiga uopste cita -- ni jedno polje, ni staro ni novo.
+' kolonama koje knjiga uopste cita -- nijedno polje nije popunjeno.
 Private Function RedPrazan(ByRef data As Variant, ByVal i As Long, _
                            ByRef kol As Object) As Boolean
     Dim k As Variant
@@ -664,49 +518,6 @@ Private Function RedPrazan(ByRef data As Variant, ByVal i As Long, _
     Next k
 
     RedPrazan = True
-End Function
-
-' UGOVOR STAROG REDA -- jer "nije nov" nije isto sto i "valjan star".
-'
-' Red koji ne dotice knjigu preskace se kao legacy. Ako mu pritom ne vazi ni stari
-' ugovor, on ne pripada NIJEDNOM modelu: stari citalac ga ne vidi (entitet se ne
-' poklapa), novi ga preskace -- a kolicina koju nosi nestaje iz svakog salda bez
-' ijedne poruke (review #400, treci krug).
-'
-' Ugovor je onaj koji stari pisac vec drzi (ValidateAmbalazaInput): smer je Ulaz ili
-' Izlaz, entitet ima tip i ID, tip ambalaze postoji, kolicina je broj veci od nule.
-' Odlazi zajedno sa starim modelom u 10e.
-Private Function LegacyRedProblem(ByRef data As Variant, ByVal i As Long, _
-                                  ByRef kol As Object) As String
-    If Len(AmbText(data(i, kol(COL_AMB_ID)))) = 0 Then
-        LegacyRedProblem = "nema AmbID"
-        Exit Function
-    End If
-
-    If Not IsValidAmbSmer(AmbText(data(i, kol(COL_AMB_SMER)))) Then
-        LegacyRedProblem = "nije ni red knjige ni valjan stari red -- nema Smer"
-        Exit Function
-    End If
-
-    If Len(AmbText(data(i, kol(COL_AMB_ENTITET_TIP)))) = 0 Or _
-       Len(AmbText(data(i, kol(COL_AMB_ENTITET)))) = 0 Then
-        LegacyRedProblem = "stari red bez entiteta"
-        Exit Function
-    End If
-
-    If Len(AmbText(data(i, kol(COL_AMB_TIP)))) = 0 Then
-        LegacyRedProblem = "stari red bez tipa ambalaze"
-        Exit Function
-    End If
-
-    If Not IsNumeric(data(i, kol(COL_AMB_KOLICINA))) Then
-        LegacyRedProblem = "stari red sa nenumerickom kolicinom"
-        Exit Function
-    End If
-
-    If CDbl(data(i, kol(COL_AMB_KOLICINA))) <= 0 Then
-        LegacyRedProblem = "stari red sa kolicinom <= 0"
-    End If
 End Function
 
 ' UGOVOR ZAPISANOG REDA -- jedno mesto za SVE citaoce (saldo, obaveza,
@@ -844,13 +655,14 @@ Private Function KnjigaIntegritet(ByRef data As Variant, ByRef kol As Object, _
         If RedPrazan(data, i, kol) Then
             ' artefakt prazne tabele -- nije red
         ElseIf Not RedDoticeKnjigu(data, i, kol) Then
-            ' Ne dotice knjigu: sme da bude samo VALJAN stari red. Sve ostalo ne
-            ' pripada nijednom modelu i tiho bi nestalo iz svakog salda.
-            p = LegacyRedProblem(data, i, kol)
-            If Len(p) > 0 Then
-                KnjigaKvar nalazi, sourceName, i, AmbText(data(i, kol(COL_AMB_ID))), _
-                           "Red " & CStr(i) & ": " & p
-            End If
+            ' TRI ISHODA, NE CETIRI (10e-3, AMBALAZA.md 6.13e): prazan, knjiga, KVAR.
+            ' Do 10e-3 je red koji ne dotice knjigu smeo da bude VALJAN stari red i
+            ' preskakao se. Stari model je obrisan iz kanona, pa takav red nije vise
+            ' "drugi oblik" nego kvar: kolicina koju nosi bi tiho nestala iz svakog
+            ' salda. Zatecena sveska sa redom starog oblika staje ovde, po imenu.
+            KnjigaKvar nalazi, sourceName, i, AmbText(data(i, kol(COL_AMB_ID))), _
+                       "Red " & CStr(i) & ": ne dotice knjigu -- nema nalog, vrstu " & _
+                       "kretanja ni StornoOd (red starog modela ambalaze?)"
         Else
             p = KnjigaRedProblem(data, i, kol)
             ambID = AmbText(data(i, kol(COL_AMB_ID)))

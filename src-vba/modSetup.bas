@@ -1209,6 +1209,11 @@ Public Sub EnsureRuntimeSchema()
     PreimenujKolonuAko TBL_PRIJEMNICA, "ZbirnaGeneracijaID", COL_DETE_ZBIRNA_ROD
     PreimenujKolonuAko TBL_PALETA_STAVKA, "ZbirnaGeneracijaID", COL_DETE_ZBIRNA_ROD
 
+    ' Brisanje iz kanona ide PRE provere otiska, iz istog razloga kao rename:
+    ' EnsureAllTables ume samo da DODA, pa bi stara kolona u sredini ostala i
+    ' otisak bi prijavljivao drift koji self-heal ne leci.
+    ObrisiStareKoloneAmbalaze
+
     If Len(modSchema.SchemaCheckOnStart()) > 0 Then modSchema.EnsureAllTables
 
     ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
@@ -1401,6 +1406,27 @@ End Sub
 '
 ' Podatak se gubi, i to je namerno: ove dve kolone su bile KES izvedenog statusa
 ' (v. modNovac, obrisan UpdateOtkupStatus). Istina o isplatama zivi u tblNovac.
+' STARI MODEL AMBALAZE JE OBRISAN IZ KANONA (10e-3, AMBALAZA.md 6.13e).
+'
+' Sest kolona (Smer, EntitetID, EntitetTip, VozacID, Stornirano, ReversID) stoji
+' u SREDINI starog kanona (pozicije 5-8, 11 i 16), pa kolona koja ostane u
+' zatecenoj svesci pomera sve iza sebe: SchemaReadyOrFail tada zaustavlja svako
+' citanje i svaki upis knjige. Brisu se PO IMENU, bez obzira na sadrzaj -- nijedan
+' citalac ih vise ne cita, a migracije nema (nema produkcionih podataka).
+'
+' Red STAROG OBLIKA koji ostane posle brisanja nije tiho preskocen: citalac ga
+' prijavljuje kao kvar knjige (modAmbalaza.KnjigaIntegritet). Imena su LITERALI,
+' kao kod ostalih obrisanih kolona -- konstante za njih nema i ne vraca se.
+' Public jer ga meri test (Test_Amb_StareKoloneSelfHeal).
+Public Sub ObrisiStareKoloneAmbalaze()
+    ObrisiKolonuAko TBL_AMBALAZA, "Smer"
+    ObrisiKolonuAko TBL_AMBALAZA, "EntitetID"
+    ObrisiKolonuAko TBL_AMBALAZA, "EntitetTip"
+    ObrisiKolonuAko TBL_AMBALAZA, "VozacID"
+    ObrisiKolonuAko TBL_AMBALAZA, "Stornirano"
+    ObrisiKolonuAko TBL_AMBALAZA, "ReversID"
+End Sub
+
 Public Sub ObrisiKolonuAko(ByVal tbl As String, ByVal ime As String)
     On Error GoTo EH
 

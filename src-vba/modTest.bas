@@ -2509,8 +2509,11 @@ Private Sub T_StornoDok_KapijePreUpisa()
         AssertEq (Len(modStornoDok.TipNaziv(CStr(tipovi(i)), "")) > 0), True, _
                  "tip ima ime za potvrdu: " & CStr(tipovi(i))
     Next i
-    AssertEq (Len(modStornoDok.TipNaziv(STIP_REVERSI, DOK_TIP_OM_IZLAZ_KOOP)) > 0), True, _
-             "revers ima ime po SMERU"
+    ' Ime reversa dolazi iz VRSTE dokumenta (zaglavlje), ne iz tipa noge -- tipovi
+    ' nogu (DOK_TIP_OM_*) su obrisani u 10e-3. Poredi se sa katalogom: Poruka() ne
+    ' vraca prazno, pa bi Len > 0 bila tvrdnja koja ne moze da padne.
+    AssertEq modStornoDok.TipNaziv(STIP_REVERSI, AMB_DOK_REVERS), Poruka("OTKUI_AMBD_REVERS"), _
+             "revers ima ime po VRSTI dokumenta"
 End Sub
 
 ' PREFILL POSLE STORNA CITA TABELU SVOG TIPA, I TO PO PRAVOM IMENU KOLONE.
@@ -3947,7 +3950,7 @@ Private Sub T_StornoBezUvida_NemaAkcije()
     ' Ovde je to TACNO JEDNA, jer izbor nema identitet: ISPRAVKU (10d) nudi samo
     ' kapija ispravke, a ona bez AmbDokID-a odbija. Da aktivan nas revers nudi
     ' obe radnje meri T_AmbIspravkaReversa_EkranNudiIOtvara.
-    modScrStorno.Scr_IzborTestSet STIP_REVERSI, "REV-NEMA", "", DOK_TIP_OM_IZLAZ_KOOP
+    modScrStorno.Scr_IzborTestSet STIP_REVERSI, "REV-NEMA", "", AMB_DOK_REVERS
     AssertEq modScrStorno.Scr_BrojAkcija(), 1, _
              "revers nema uvid po prirodi, pa kapija ne sme da ga zakljuca"
 
@@ -12440,6 +12443,32 @@ Private Sub T_StornoFilter_NedostajucaKolonaNijeTisina()
     AssertEq greskaMat, "", "tabela bez storno pojma prolazi bez greske"
     AssertEq (redovaPre > 0), True, "...nad tabelom koja stvarno ima redove"
     AssertEq redovaPosle, redovaPre, "...i vraca sve svoje redove"
+
+    ' (5) KNJIGA AMBALAZE JE NAMERNO VAN OBA SPISKA (AMB-10-ODL-29, 10e-3).
+    '
+    ' Storno knjige je RED (kontra-stav sa StornoOd), ne kolona -- Stornirano je
+    ' obrisan iz kanona. Filter po zastavici nad knjigom zato mora da PADNE, a ne
+    ' da prodje kao "tabela bez storna": knjiga se cita samo kroz modAmbalaza.
+    ' Ime tabele ide kroz promenljivu -- staticki STORNO_REGISTAR bi inace (s
+    ' pravom) oborio bas ovaj red, a meri se IZVRSAVANJE.
+    Dim tKnjiga As String, porukaKnjiga As String, dataKnjiga As Variant
+    tKnjiga = TBL_AMBALAZA
+    BeginTableCache
+    dataKnjiga = GetTableData(tKnjiga)
+    On Error Resume Next
+    Err.Clear
+    dataKnjiga = ExcludeStornirano(dataKnjiga, tKnjiga)
+    porukaKnjiga = Err.description
+    Err.Clear
+    On Error GoTo 0
+    EndTableCache
+
+    AssertEq modSchemaGuard.StornoRegistarZna(TBL_AMBALAZA), False, _
+             "knjiga ambalaze je namerno van registra storna"
+    AssertEq (InStr(1, porukaKnjiga, "registru") > 0), True, _
+             "filter storna nad knjigom ambalaze PADA, ne propusta redove"
+    AssertEq modSchemaGuard.TabelaNosiStorno(TBL_AMBALAZA_DOKUMENT), True, _
+             "zaglavlje ambalaznog dokumenta i dalje nosi storno"
 End Sub
 
 ' TEST 125: cilj bez generacije mora biti AKTIVAN i ISTORIJSKI jednoznacan.

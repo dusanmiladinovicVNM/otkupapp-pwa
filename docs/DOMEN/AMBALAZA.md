@@ -674,6 +674,11 @@ Stari citalac ga ne vidi (entitet se ne poklapa), novi ga preskace kao legacy.
 Provera **starog** ugovora odlazi zajedno sa starim modelom u `10e`; do tada je ona
 jedino sto razlikuje „star red" od „reda koji ne pripada nicemu".
 
+> **Od `10e-3` (13.10.2026): tri stanja, ne cetiri.** Stanje **legacy** je nestalo sa
+> starim modelom, pa red koji nije prazan a ne dotice knjigu nije vise preskocen nego
+> **KVAR**, po imenu („ne dotice knjigu"). Tabela iznad ostaje kao istorija; vazece
+> pravilo i dokaz stoje u 6.13e.
+
 **`AMB-INV-11` nije svojstvo reda nego KNJIGE**, pa ga ugovor reda ne moze izmeriti:
 dva reda sa istim `AmbID`-em su, red po red, besprekorna. Dok je ta provera stajala
 samo u citaocu obaveze, saldo je sabirao oba i naduvavao stanje:
@@ -2329,7 +2334,7 @@ starim tipovima (`ReversTipJe`), pa nad kanonskom knjigom ćuti. Kanonsku knjigu
 `Chk_AMB_KnjigaIntegritet` (stavka 113).
 
 **Kolone koje odlaze iz kanona:** `Smer`, `EntitetID`, `EntitetTip`, `VozacID`,
-`Stornirano`, `ReversID`.
+`Stornirano`, `ReversID`. *(Obrisane u `10e-3`, 6.13e.)*
 - **Pozicija:** oba kanonska pisca (`UpisiRedKnjige`, `UpisiAmbDokument`) grade red **po
   imenu** (`SetRowValueByColumn`). Brisanje iz sredine zato ne pomera nijednu vrednost.
 - Testovi seju po imenu kolone, ne poziciono.
@@ -2415,6 +2420,66 @@ ambalažnog efekta prolazi, a sa njim ODL-25 odbija (BFP `Test_Amb_UndoStornaOdb
 *Provera:* BFP 2412 → **2381** (−31). `RunStornoTestSuite` 131 → **111** (−20).
 `RunAllTests` ostaje 225 testova, uz dve nove tvrdnje. `Test_StornoCentar_All` je izgubio
 74 tvrdnje, ali broj u zelenom prolazu ne ispisuje. Katalog sabotaža je 743 → **745**.
+
+### 6.13e `10e-3` — jedan model: šema, pisac i čitalac sa tri ishoda (13.10.2026)
+
+Treći i poslednji rez iz 6.13c. Mapa je ponovljena nad `3e0c655d`, pre koda.
+
+**Šta važi posle reza.**
+- **Kanon `tblAmbalaza` ima 16 kolona:** `AmbID`, `Datum`, `TipAmbalaze`, `Kolicina`,
+  `DokumentID`, `DokumentTIP`, četiri audit kolone, `OdNalogTip`, `OdNalogID`,
+  `NaNalogTip`, `NaNalogID`, `VrstaKretanja` i `StornoOd`. Šest kolona starog modela
+  (`Smer`, `EntitetID`, `EntitetTip`, `VozacID`, `Stornirano`, `ReversID`) je obrisano.
+  Stajale su **u sredini** starog kanona (pozicije 5–8, 11 i 16).
+- **Pisac je jedan, po imenu.** `UpisiRedKnjige` gradi niz dužine `TabelaBrojKolona` i
+  svako polje upisuje kroz `SetRowValueByColumn`. Stari pozicioni pisac `TrackAmbalaza`
+  i njegovi validatori su obrisani, a konstante starih kolona i `DOK_TIP_OM_*` ne postoje.
+- **Čitalac ima tri ishoda:** `prazan` (preskače se), `knjiga` (pun ugovor reda) i `KVAR`.
+  Red koji nije prazan a ne dotiče knjigu (nema nalog, vrstu ni `StornoOd`) je kvar po
+  imenu: „ne dotice knjigu". Ista presuda važi za čitanje (diže grešku) i za integritet
+  (`AmbKnjigaNalazi`, nalaz), jer obe idu kroz `KnjigaIntegritet`.
+- **Zatečena sveska** gubi šest kolona na startu (`modSetup.ObrisiStareKoloneAmbalaze` iz
+  `EnsureRuntimeSchema`, **pre** provere otiska), po imenu i bez obzira na sadržaj. Red
+  starog oblika koji ostane posle toga je KVAR i zaustavlja svako čitanje knjige. Migracije
+  nema, jer produkcionih podataka nema: sveska se pravi iznova ili se red briše ručno.
+
+**`AMB-10-ODL-29` (odluka operatera 13.10.2026): knjiga je van registra storna.**
+`tblAmbalaza` ne može da ostane u `STORNO_TABELE`, jer kolone `Stornirano` više nema. Ne
+ide ni u `BEZ_STORNA`: storno knjige postoji, samo kao **red** (kontra-stav, ODL-25), a
+prolaz kroz filter bez greške bi se čitao kao „tačan ishod". Pored toga, pravilo `DeleteRow`
+čita `BEZ_STORNA` kao „redovi se smeju brisati", a knjiga je append-only. Neklasifikovana
+tabela je fail-closed: `ExcludeStornirano` nad knjigom pada i u izvršavanju
+(`RequireStornoKlasifikaciju`) i statički (`vba_check STORNO_REGISTAR`). Knjiga se čita samo
+kroz `modAmbalaza`. `tblAmbalazaDokument` ostaje u `STORNO_TABELE`, jer zaglavlje nosi svoju
+zastavicu.
+
+**Šta je merenje promenilo.**
+- Fixture seme je nosilo četiri reda starog oblika (`AMB-LEG-*`), pa je posle reza svako
+  čitanje knjige nad njim moralo da padne. Obrisani su, a fixture dobija `DROP_COLS`.
+- `ENSURE_COLS` u `make_fixture` je nosio `ReversID`. Generator briše kolone **pre** dopune,
+  pa bi ga obrisao iz sredine i vratio na kraj, gde provera kanonskog **prefiksa** ne vidi
+  ništa. Ta zamka je sada i sabotaža (`amb-10e3-heal-dopise-staru-kolonu`).
+- Sabotaže `amb-kup-uplata-knjizi-ambalazu` i `amb-10c-lista-filtrira-po-nozi` su u
+  **zameni** zvale obrisane simbole, pa bi posle reza oborile COMPILE, a ne test. Obe su
+  presidrene.
+
+**Netaknuto:** kanonski pisci (`UpisiRedKnjige`, `UpisiAmbDokument`, `PrenesiAmbalazu`),
+saldo i obaveza, kartica (`ReportKarticaAmbalaze`), istorija (ODL-26, ODL-27), storno
+kao kontra-stav (`StornirajAmbalazuDokumenta`) i `tblAmbalazaDokument`.
+
+*Provera:*
+- BFP `Test_Amb_PisacKnjige` F2 je negativan slučaj („red starog oblika nije knjiga nego
+  KVAR"), uz pozitivnu kontrolu nad čistom knjigom u istom testu.
+- BFP `Test_Amb_KanonskiRedPoImenu` meri da tabela nosi tačno kanonske kolone i da je svako
+  polje reda kanonskog pisca u svojoj koloni po imenu.
+- BFP `Test_Amb_StareKoloneSelfHeal`: stari raspored obara prefiks, a posle self-heal-a
+  prefiks prolazi i vrednosti su iste.
+- `modTest.T_StornoFilter_NedostajucaKolonaNijeTisina` pinuje ODL-29.
+- Sabotaže su `amb-10e3-*` (četiri).
+
+**Van reza, glasno.** Višetipni ambalažni dokument se štampa samo za prvi tip (`KI-013`,
+nađeno u ručnoj proveri `10e-1`). Postoji od `10c-2`, a današnji pisac reversa takav
+dokument ne pravi.
 
 ### 6.14 Sta model sada ume da odgovori
 
