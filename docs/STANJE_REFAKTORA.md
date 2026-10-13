@@ -3779,12 +3779,45 @@
      - `popis_citalaca --check`, `vba_gate --popis` i `--self-test`, `run_vba --self-test`;
      - tri kapije self-update motora i `vba_import_marker_gate`, sa `--self-test`.
 
-     **`run_vba` posle ispravke, dokaz i ručna provera NISU pušteni: čeka se reviewer GO.**
-     Zelenilo 230/231 je zato neverifikovano.
+     **Review `#420` (`26c01632`): `CODE REVIEW GO` za izvršne kapije, `P0 0`, `P1 0`, `P2 0`,
+     `P3 2`, 9,3/10.** Static CI #959 `SUCCESS`. Merge još nije odobren.
+     - `P3`: mreža F7 `REVERSI` prikazuje prvi red. Već je imenovano u 6.13f i ostaje za dan kad
+       neki pisac počne da pravi višetipni dokument.
+     - `P3`: `KNOWN_ISSUES.md` je pokazivao 381/381 reda. Uzrok je moj commit `2cba28cd`: uz
+       `core.autocrlf=true` blob je sačuvan kao LF, a na `main`-u je CRLF. Vraćeno u `0d31a43f`,
+       pa je diff sada tri reda.
+     - Reviewer je tražio izvršnu potvrdu za `Application.Run` nad privatnim
+       `FillPrijemnicaSablon`. Prolaz ispod je potvrđuje: preduslov „list prijemnice je
+       popunjen" je zelen, a sabotaža prijemnice obara svoju tvrdnju.
+
+     **Posle GO, dve izmene van produkcije.**
+     - `27bd0bd4` (`tools/sabotaza.py`): `--plan` je pokazao da `ki013-dvosmislen-tip-pusta`
+       gasi obe grane `7511`. Test 231 bi tada stao na ranijoj tvrdnji (bez izabranog tipa), a
+       imenovana tvrdnja ne bi bila merena. Sabotaža sada gasi samo granu sa izabranim tipom.
+     - `82f2ab6c` (`modTest`): prvi izvršni prolaz je dao `RunAllTests` **231/2**, i oba pada su
+       bila na KOLIČINI („Letvarica x", a za 10 prazno). Tip i papir su bili tačni.
+       - Sonda: `Offset(0, 3)` iz spojene ćelije B:D računa od spojenog opsega i vraća G5. G5 je
+         unutar spojenog E:H, ali nije gornja leva ćelija, pa je prazna. `Cells(red, 5)` vraća 10.
+       - Kvar je bio u instrumentu; produkcioni kod nije diran. Količina se sada čita
+         apsolutnom kolonom.
+
+     **Izvršne kapije** (head `82f2ab6c`, izvor `a2ce8b2f5fba`, fixture `d3d3ff6d`):
+
+     ```
+     RunAllTests              231 / 0      (229 + 230, 231)
+     RunBusinessFlowProSuite 2404 / 0      RunStornoTestSuite 111 / 0
+     RunBankaImportTestSuite  241 / 0      12 / 12 ZELENO, marker upisan
+     dokaz.py ki012- ki013- --grupe: crvenih 4 / 4, izvor pre/posle ca3b080bbd02d6c2
+       IDENTICAN -> DOKAZANO (grupno)
+     compile: NEJASNO (automatski) -- rucna kapija operatera
+     ```
+
+     Brojevi su tačno oni izvedeni iz diff-a. Sveska za ručnu proveru je
+     `tests/fixtures/rucna_provera_ki012_kod.xlsm` (`run_vba --compile-only --keep` nad
+     `82f2ab6c`).
 
      **Otvoreno.**
-     - Review.
-     - Posle GO: pun prolaz, pa `dokaz.py ki012- ki013-` (četiri stavke) i compile.
+     - Compile (operater), pa `vba_gate --mark-compile`.
      - Ručna provera:
        1. F7 revers `12/1`: papir nosi `12/1`;
        2. grupna prijemnica: tip `12/1`;
