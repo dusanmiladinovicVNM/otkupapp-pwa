@@ -3615,9 +3615,9 @@
                                          log: ERROR 1004 iz izvoza, bez WARN "zaostala greska"  OK
      ```
 
-     - F1 kontrola nije izvedena: u logu nema otkupnog upisa, a u `Otkupni listovi` nema PDF-a iz
-       sesije. Otkupni put štampe automatski meri BFP u PDF režimu (2404/0), a on je `Err` čistio
-       i pre ispravke.
+     - **F1 kontrola ✅** (operater, 13:15): otkup sa štampom je snimljen bez greške; log ima
+       transakciju `tblOtkup`, `tblOtkupStavke`, `tblAmbalaza`, `tblNovac`, nastao je
+       `OtkupniList_OTK-A865…pdf`, a posle toga nema nijednog `ERROR`-a.
      - Drugi klik posle pada štampe nije ručno prikazan; meri ga 228.
      - Papir i dalje nosi `1.dec` umesto `12/1`: to je `KI-012`, ide posle (odluka operatera).
      - U MsgBox-u stoji „sacuvan" bez č, a u traci poruka je ispravno. To nije iz `#419`:
