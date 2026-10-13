@@ -1233,33 +1233,10 @@ SEED = {
          "NaNalogTip": "Stanica", "NaNalogID": STANICA,
          "DokumentID": "ADK-IZV-3", "DokumentTip": "AmbalazaDokument",
          "VrstaKretanja": "NABAVKA"},
-        # LEGACY NOGE -- namerno u STAROM obliku. Merila ih je B10 tvrdnja u BFP-u
-        # ("REV-IZV-1 ima 4 noge dva tipa pod jednim ReversID-om"), koja je otisla
-        # sa Chk_B10 u 10e-1. Redovi ostaju do 10e-3: tamo odlaze i kolone starog
-        # modela koje nose, pa se fixture menja jednom, uz semu.
-        #
-        # Kanonski citaoci ih PRESKACU (RedDoticeKnjigu je False kad nijedna nova
-        # kolona nije popunjena), pa ne ulaze ni u jedan saldo.
-        {"AmbID": "AMB-LEG-K1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 30, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
-         "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-1",
-         "DokumentTip": "OM-Izlaz-Koop",
-         "ReversID": "RID-00000000000000000000000000000001"},
-        {"AmbID": "AMB-LEG-S1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 30, "Smer": "Izlaz", "EntitetID": STANICA,
-         "EntitetTip": "Stanica", "DokumentID": "REV-IZV-1",
-         "DokumentTip": "OM-Izlaz-Koop",
-         "ReversID": "RID-00000000000000000000000000000001"},
-        {"AmbID": "AMB-LEG-K2", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_LETVA,
-         "Kolicina": 5, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
-         "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-1",
-         "DokumentTip": "OM-Izlaz-Koop",
-         "ReversID": "RID-00000000000000000000000000000001"},
-        {"AmbID": "AMB-LEG-S2", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_LETVA,
-         "Kolicina": 5, "Smer": "Izlaz", "EntitetID": STANICA,
-         "EntitetTip": "Stanica", "DokumentID": "REV-IZV-1",
-         "DokumentTip": "OM-Izlaz-Koop",
-         "ReversID": "RID-00000000000000000000000000000001"},
+        # LEGACY NOGE (AMB-LEG-*, revers REV-IZV-1 u STAROM obliku) su obrisane u
+        # 10e-3, zajedno sa kolonama starog modela koje su nosile. Od tada je red
+        # starog oblika KVAR knjige (AMBALAZA.md 6.13e), pa bi svako citanje knjige
+        # nad fixture-om palo -- fixture nosi samo kanonski oblik.
         # KUPAC: prijemnica PRJ-FAK-3 nosi gajbe UZ ROBU, Vozac -> Kupac. Pregled
         # kupca mora da pokaze POSLOVNI broj prijemnice, ne DokumentID.
         {"AmbID": "AMB-IZV-KP1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
@@ -2394,6 +2371,12 @@ for _red in SEED["tblOtpremnica"]:
 DROP_COLS = {
     # Kes izvedenog statusa isplate (korak 7); istina zivi u tblNovac.
     "tblOtkup": ["Isplaceno", "DatumIsplate"],
+    # 10e-3: stari model ambalaze. Kolone su u SREDINI starog kanona (5-8, 11, 16).
+    # Isto radi modSetup.ObrisiStareKoloneAmbalaze na startu aplikacije; ovde se
+    # brisu u donoru da fixture nosi KONACNU semu, a put zatecene sveske meri
+    # Test_Amb_StareKoloneSelfHeal.
+    "tblAmbalaza": ["Smer", "EntitetID", "EntitetTip", "VozacID", "Stornirano",
+                    "ReversID"],
 }
 
 RENAME_COLS = {
@@ -2422,14 +2405,15 @@ ENSURE_COLS = {
     # invarijanta se drzi zbirne -- tblOtpremnica namerno ima red bez generacije
     # (OTP-LEG-A), koji T_ZavrsetakIspravke_NeDegradiraOldDocID tvrdi kao preduslov.
     "tblZbirna": ["GeneracijaID"],
-    # REV-IDENT-01: identitet logickog reversa. Kanon ga drzi kao poslednju
-    # kolonu tblAmbalaza, a donor (stari fixture) je nema -- bez nje sejanje po
-    # imenu obara red, jer SEED upisuje ReversID na revers noge.
-    # AMB-10c: kanonske kolone knjige. Isti razlog kao ReversID -- kanon ih drzi,
-    # a donor (stari fixture) ih nema, jer ih u aplikaciji dodaje
-    # modSetup.EnsureRuntimeSchema na startu. Bez njih sejanje po imenu obara red,
-    # jer SEED od 08.10.2026 upisuje kanonski oblik (jedan red, obe strane).
-    "tblAmbalaza": ["ReversID", "OdNalogTip", "OdNalogID", "NaNalogTip",
+    # AMB-10c: kanonske kolone knjige -- kanon ih drzi, a donor (stari fixture) ih
+    # nema, jer ih u aplikaciji dodaje modSetup.EnsureRuntimeSchema na startu. Bez
+    # njih sejanje po imenu obara red, jer SEED od 08.10.2026 upisuje kanonski oblik
+    # (jedan red, obe strane).
+    #
+    # ReversID (REV-IDENT-01) je ovde stajao do 10e-3. Sada je u DROP_COLS, a
+    # ENSURE_COLS ide POSLE brisanja: da je ostao i ovde, generator bi ga obrisao
+    # iz sredine pa VRATIO na kraj -- gde ga provera kanonskog PREFIKSA ne vidi.
+    "tblAmbalaza": ["OdNalogTip", "OdNalogID", "NaNalogTip",
                     "NaNalogID", "VrstaKretanja", "StornoOd"],
     # AMB-10d: veza ispravke reversa po ID-u (A9). Kanon ih drzi na KRAJU
     # tblAmbalazaDokument, a donor (stari fixture) ih nema. Bez njih pisac pada

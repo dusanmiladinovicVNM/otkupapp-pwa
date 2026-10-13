@@ -3569,6 +3569,18 @@ SABOTAZE = {
         "T_StornoFilter_NedostajucaKolonaNijeTisina",
         "tabela koju registar ne poznaje PADA, ne prolazi kao da nema storno",
     ),
+    # 10e-3, AMB-10-ODL-29: knjiga ambalaze je NAMERNO van oba spiska -- storno joj
+    # je red (kontra-stav), ne kolona. Sabotaza je klasifikuje kao poznatu tabelu bez
+    # zastavice, sto je tacno ono sto bi upis u BEZ_STORNA uradio: filter po stornu
+    # nad knjigom bi tiho propustio sve redove umesto da padne.
+    "amb-10e3-knjiga-u-registru-storna": (
+        "modSchemaGuard.bas",
+        '    k = "|" & Trim$(tableName) & "|"\n',
+        '    k = "|" & Trim$(tableName) & "|"\n'
+        '    If StrComp(Trim$(tableName), TBL_AMBALAZA, vbTextCompare) = 0 Then k = "|" & TBL_KUPCI & "|"   \' SABOTAZA: knjiga klasifikovana kao tabela bez storna\n',
+        "T_StornoFilter_NedostajucaKolonaNijeTisina",
+        "knjiga ambalaze je namerno van registra storna",
+    ),
     # ---- ista klasa na strani KUPCA (legacy F6) i u LJUSCI (F5/F6) ----
     # LJUSKA: ista greska, drugi domacin. Pad je ovde isao samo u Debug.Print.
     "ljuska-pad-liste-blokova-prolazi": (
@@ -5162,14 +5174,41 @@ SABOTAZE = {
     # Jedinstvenost AmbID-a je svojstvo KNJIGE, ne reda. Dok je stajala samo u citaocu
     # obaveze, saldo je sabirao dva reda sa istim identitetom -- a saldo je ulaz u
     # kapiju deficita, dakle u odluku o sledecem upisu.
-    # "Nije nov red" nije isto sto i "valjan star red". Bez ugovora starog reda,
-    # red sa kolicinom a bez ijedne kolone oba modela tiho nestaje iz svakog salda.
-    "amb-pisac-nevalidan-legacy-prolazi": (
+    # 10e-3: citalac ima TRI ishoda (prazan, knjiga, KVAR). Do 10e-3 je red koji ne
+    # dotice knjigu smeo da bude valjan STARI red i preskakao se; stari model je
+    # obrisan, pa je takav red kvar. Ugasena kapija vraca cetvrto stanje "legacy":
+    # red starog oblika tiho ispada iz svakog salda. Zamenjuje
+    # amb-pisac-nevalidan-legacy-prolazi, cije je sidro (ugovor starog reda,
+    # LegacyRedProblem) obrisano sa starim modelom.
+    "amb-10e3-stari-red-preskocen": (
         "modAmbalaza.bas",
-        "    If Not IsValidAmbSmer(AmbText(data(i, kol(COL_AMB_SMER)))) Then\n",
-        "    If False Then   ' SABOTAZA: red bez oba modela prolazi kao legacy\n",
+        '            KnjigaKvar nalazi, sourceName, i, AmbText(data(i, kol(COL_AMB_ID))), _\n'
+        '                       "Red " & CStr(i) & ": ne dotice knjigu -- nema nalog, vrstu " & _\n'
+        '                       "kretanja ni StornoOd (red starog modela ambalaze?)"\n',
+        "            ' SABOTAZA: red starog oblika se tiho preskace (stanje legacy)\n",
         "Test_Amb_PisacKnjige",
-        "Amb pisac: red bez oba modela imenuje sta fali",
+        "Amb pisac: red starog oblika nije knjiga nego KVAR",
+    ),
+    # 10e-3: stara kolona DOPISANA NA KRAJ -- tacno zamka iz make_fixture ENSURE_COLS.
+    # Provera kanonskog PREFIKSA je ne vidi (sve iza poslednje kanonske kolone je
+    # dozvoljeno), pa citaoci rade i suite bi bila zelena; meri je samo pravilo
+    # "tabela nosi tacno kanonske kolone".
+    "amb-10e3-heal-dopise-staru-kolonu": (
+        "modSetup.bas",
+        '    ObrisiKolonuAko TBL_AMBALAZA, "ReversID"\n',
+        '    EnsureColumnOnTable TBL_AMBALAZA, "ReversID"   \' SABOTAZA: stara kolona se dopisuje na kraj\n',
+        "Test_Amb_KanonskiRedPoImenu",
+        "Amb po imenu: tabela nema nijednu kolonu starog modela",
+    ),
+    # 10e-3: self-heal zaboravi jednu kolonu. ReversID je stajao na poziciji 16 starog
+    # kanona; posle brisanja ostalih pet ostaje USRED tabele, pa svako citanje i upis
+    # knjige staje na SchemaReadyOrFail -- zatecena sveska postaje nepopravljiva.
+    "amb-10e3-heal-zaboravi-kolonu": (
+        "modSetup.bas",
+        '    ObrisiKolonuAko TBL_AMBALAZA, "ReversID"\n',
+        "    ' SABOTAZA: self-heal zaboravlja ReversID\n",
+        "Test_Amb_StareKoloneSelfHeal",
+        "Amb self-heal: posle brisanja kanonski prefiks prolazi",
     ),
     # Provera koja nije registrovana je isto sto i provera koje nema. Pre 10c-int je
     # modIntegritet nad kanonskom knjigom cutao, a ekran je operateru pisao "nema
@@ -7178,7 +7217,7 @@ SABOTAZE = {
     "amb-10c-lista-filtrira-po-nozi": (
         "modScrDokumenti.bas",
         '        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA\n',
-        '        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP   \' SABOTAZA: filter po nozi\n',
+        '        Case "OM-Izlaz-Koop", "OM-Ulaz-Koop"   \' SABOTAZA: filter po nozi (literal: konstante tipova nogu obrisane u 10e-3)\n',
         "T_ReversiLista_CitaAmbalazniDokument",
         "lista REVERSI sadrzi nov ambalazni dokument",
     ),
@@ -7316,8 +7355,7 @@ SABOTAZE = {
         "    tx.AddTableSnapshot TBL_NOVAC\n"
         "    tx.AddTableSnapshot TBL_FAKTURE\n"
         "    tx.AddTableSnapshot TBL_AMBALAZA\n"
-        "    TrackAmbalaza datum, \"GAJBA\", 1, \"Izlaz\", kupacID, \"Kupac\", _\n"
-        "                  \"\", brojDok, \"Kupci-Otpremnica\"   ' SABOTAZA\n",
+        "    AppendRow TBL_AMBALAZA, Array(\"\")   ' SABOTAZA: uplata dira knjigu (stari pisac obrisan u 10e-3)\n",
         "Test_KUP_UplataJeSamoNovac",
         "KUP uplata: knjiga ambalaze je NEDIRNUTA",
     ),

@@ -303,6 +303,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_Amb_NalogDvosmislenPada
     Test_Amb_DokumentUgovor
     Test_Amb_PisacKnjige
+    Test_Amb_KanonskiRedPoImenu
+    Test_Amb_StareKoloneSelfHeal
     Test_Amb_DeficitIObaveza
     Test_Amb_ZaglavljeDokumentaPisac
     Test_Amb_Inv08TxVlasnistvo
@@ -15500,11 +15502,14 @@ Private Sub Test_OTK_AmbalazaIdeNaDokument()
     ' Izdate gajbe: obrnut par, ISTI tip dokumenta. Pozajmljen DokumentTIP
     ' (OM-Izlaz-Koop) je napetost T3 iz AMBALAZA.md i vise ne nastaje -- dogadjaj
     ' se desava UNUTAR otkupa, a AMB-INV-04 ih razlikuje po VrstaKretanja.
+    ' Konstanta tog tipa je obrisana u 10e-3, pa kontra-tvrdnja meri PRAVILO, ne
+    ' jedno ime: svi redovi sa DokumentID = otkup stoje pod tipom Otkup.
     AssertEquals "1", _
                  CStr(AmbNoviBrojRedova(otkID, DOK_TIP_OTKUP, AMB_VK_IZDATA_PRAZNA)), _
                  "OTK ambalaza: izdato = JEDAN red, pod ISTIM tipom dokumenta"
-    AssertEquals "0", CStr(AmbBrojRedova(otkID, DOK_TIP_OM_IZLAZ_KOOP)), _
-                 "OTK ambalaza: pozajmljen tip dokumenta vise ne nastaje"
+    AssertEquals CStr(AmbBrojRedova(otkID, DOK_TIP_OTKUP)), _
+                 CStr(FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, otkID).count), _
+                 "OTK ambalaza: nijedan red otkupa ne stoji pod drugim tipom dokumenta"
     AssertTrue Abs(AmbNoviKolicina(otkID, DOK_TIP_OTKUP, AMB_VK_IZDATA_PRAZNA) - 7#) < 0.001, _
                "OTK ambalaza: izdato nosi kolicinu sa zaglavlja"
     AssertEquals AMB_NALOG_STANICA, _
@@ -18765,15 +18770,9 @@ Private Sub Test_Amb_PisacKnjige()
     AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
                  "Amb pisac: odbijen datum ne dopisuje red"
 
-    ' --- C) RED STAROG OBLIKA NIJE KNJIGA ---------------------------------
-    ' Tokom 10b tblAmbalaza nosi DVA oblika reda. Da novi citalac sabira i stare,
-    ' saldo bi bio zbir dva modela -- a iz toga nastaje bas negativan saldo koji
-    ' AMB-INV-07 zabranjuje.
-    modAmbalaza.TrackAmbalaza Date, tipT, 999, "Ulaz", TEST_ST_ID, "Stanica", _
-                              "", "OTK-" & scenario, DOK_TIP_OTKUP
-    AssertEquals "100", CStr(modAmbalaza.AmbSaldoNaloga( _
-                     AMB_NALOG_STANICA, TEST_ST_ID, tipT)), _
-                 "Amb pisac: red STAROG oblika ne ulazi u saldo knjige"
+    ' --- C) (obrisana u 10e-3) ---------------------------------------------
+    ' Merila je da se red STAROG oblika, upisan starim piscem, PRESKACE. Stari
+    ' pisac i kolone su obrisani, a pravilo je obrnuto: takav red je KVAR (F2).
 
     ' --- D) IZDAVANJE PARTNERU: fizicko stanje nije dug -------------------
     Dim dokRev As String, izdID As String
@@ -18813,8 +18812,8 @@ Private Sub Test_Amb_PisacKnjige()
                  "Amb pisac: odbijen drugi protivpartner ne upisuje red"
 
     ' --- F) POLUPISAN RED KNJIGE PADA, NE PRESKACE SE ---------------------
-    ' Citalac preskace STARI oblik reda (sve nove kolone prazne) i to je legitimno
-    ' tokom 10b. Ali red koji DOTICE knjigu a ne prolazi ugovor je KVAR.
+    ' Red koji DOTICE knjigu a ne prolazi ugovor je KVAR. Do 10e-3 je citalac
+    ' preskakao STARI oblik reda (sve nove kolone prazne); od tada ni njega (F2).
     '
     ' TRI OBLIKA, ne jedan (review #400, P2): prva verzija je merila samo "ima Od,
     ' nema vrstu", pa su dva opasnija oblika prolazila -- red sa praznim IZVOROM
@@ -18844,18 +18843,20 @@ Private Sub Test_Amb_PisacKnjige()
     AssertTrue InStr(1, errDesc, "trazi ID", vbTextCompare) > 0, _
                "Amb pisac: kvar reda bez ID-a naloga imenuje polje"
 
-    ' --- F2) RED KOJI NE PRIPADA NIJEDNOM MODELU --------------------------
-    ' "Sve nove kolone prazne" dokazuje samo da red NIJE nov -- ne i da je VALJAN
-    ' star (review #400, treci krug). Red sa kolicinom i dokumentom, a bez ijedne
-    ' kolone oba modela, stari citalac ne vidi (entitet se ne poklapa) a novi ga
-    ' preskace -- pa kolicina nestaje iz svakog salda bez poruke.
+    ' --- F2) RED STAROG OBLIKA JE KVAR (10e-3, AMBALAZA.md 6.13e) -----------
+    ' Citalac ima TRI ishoda: prazan, knjiga, KVAR. Red sa kolicinom i dokumentom,
+    ' a bez naloga, vrste i StornoOd, je tacno ono sto zatecena sveska nosi posle
+    ' brisanja starih kolona (self-heal brise kolone, ne redove). Do 10e-3 je takav
+    ' red smeo da bude VALJAN stari red i preskakao se; preskocen, njegova kolicina
+    ' tiho nestaje iz svakog salda -- pa staje po imenu.
     '
-    ' Granicu u drugom smeru meri sekcija C: VALJAN stari red se i dalje preskace.
+    ' Pozitivnu kontrolu nosi isti test: saldi nad cistom kanonskom knjigom (A, D)
+    ' i G/H ispod, koji bi pali na OVOM redu da ga pomocnik nije obrisao.
     errNum = KvarUKnjizi(scenario & "-F", "", "", "", "", "", errDesc)
     AssertTrue errNum <> 0, _
-               "Amb pisac: red bez OBA modela nije legacy nego KVAR"
-    AssertTrue InStr(1, errDesc, "nema Smer", vbTextCompare) > 0, _
-               "Amb pisac: red bez oba modela imenuje sta fali"
+               "Amb pisac: red starog oblika nije knjiga nego KVAR"
+    AssertTrue InStr(1, errDesc, "ne dotice knjigu", vbTextCompare) > 0, _
+               "Amb pisac: red koji ne dotice knjigu imenuje razlog"
 
     ' --- G) IDENTITET REDA JE SVOJSTVO KNJIGE, NE REDA ---------------------
     ' Dva reda sa istim AmbID-em su, red po red, besprekorna -- pa ih KnjigaRedProblem
@@ -18891,6 +18892,253 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
     LogFatal "Test_Amb_PisacKnjige", errNum, errDesc
+End Sub
+
+' KANONSKI RED SE PISE I CITA PO IMENU, NAD KONACNOM SEMOM (10e-3).
+'
+' 10e-3 je iz kanona tblAmbalaza obrisao sest kolona IZ SREDINE (pozicije 5-8, 11 i
+' 16). Pisac ili seme koje pise POZICIONO bi posle toga tiho slalo vrednosti u
+' pogresne kolone -- gore od pada upisa. UpisiRedKnjige gradi red po imenu, i ovo
+' je dokaz za to: svako polje reda upisanog kanonskim piscem cita se PO IMENU i
+' mora da nosi bas svoju vrednost. Red se nalazi po AmbID-u, ne po dokumentu, da
+' pomerena kolona dokumenta ne bi sakrila i sam red.
+'
+' KONTRA-TVRDNJA nije "pisac ne pise staru kolonu" -- posle reza nema sta da meri.
+' Pravilo je: tabela nosi TACNO kanonske kolone. Zatecena kolona starog modela, i u
+' sredini i dopisana na kraj (koju provera prefiksa NE vidi), obara test po imenu.
+Private Sub Test_Amb_KanonskiRedPoImenu()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, errNum As Long, errDesc As String
+    scenario = NewScenarioCode("AMBIME")
+    Dim tipT As String
+    tipT = "TIP-" & scenario
+
+    ' (1) Tabela nosi tacno kanonske kolone.
+    Dim stare As Variant, k As Long, nadjene As String
+    stare = Array("Smer", "EntitetID", "EntitetTip", "VozacID", "Stornirano", "ReversID")
+    For k = LBound(stare) To UBound(stare)
+        If GetColumnIndex(TBL_AMBALAZA, CStr(stare(k))) > 0 Then
+            nadjene = nadjene & CStr(stare(k)) & " "
+        End If
+    Next k
+    AssertEquals "", Trim$(nadjene), _
+                 "Amb po imenu: tabela nema nijednu kolonu starog modela"
+    AssertEquals CStr(modSchema.SchemaTableColumns(TBL_AMBALAZA).count), _
+                 CStr(GetTable(TBL_AMBALAZA).ListColumns.count), _
+                 "Amb po imenu: tabela nosi tacno kanonske kolone"
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail "Test_Amb_KanonskiRedPoImenu", TBL_AMBALAZA
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), _
+                 "Amb po imenu: kanonski prefiks prolazi (" & errDesc & ")"
+
+    ' (2) Red kanonskog pisca, procitan polje po polje PO IMENU.
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+
+    Dim datum As Date
+    datum = DateSerial(2026, 3, 14)
+    Dim dokNab As String, ambID As String
+    dokNab = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_NABAVKA, "NABI-" & scenario, datum, _
+                                          AMB_NALOG_FIRMA, "")
+    ambID = modAmbalaza.PrenesiAmbalazu(tx, datum, tipT, 37#, _
+                AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab)
+    AssertTrue Len(ambID) > 0, "Amb po imenu: kanonski pisac je upisao red"
+    AssertEquals "1", CStr(FindRows(TBL_AMBALAZA, COL_AMB_ID, ambID).count), _
+                 "Amb po imenu: red je jednoznacno nadjen po AmbID-u"
+
+    Dim dat As Variant
+    dat = GetValueByKey(TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_DATUM)
+    AssertTrue IsDate(dat), "Amb po imenu: Datum je datum"
+    If IsDate(dat) Then
+        AssertEquals Format$(datum, "yyyy-mm-dd"), Format$(CDate(dat), "yyyy-mm-dd"), _
+                     "Amb po imenu: Datum je u svojoj koloni"
+    End If
+    AssertEquals tipT, AmbPoljeReda(ambID, COL_AMB_TIP), _
+                 "Amb po imenu: TipAmbalaze je u svojoj koloni"
+    AssertEquals "37", AmbPoljeReda(ambID, COL_AMB_KOLICINA), _
+                 "Amb po imenu: Kolicina je u svojoj koloni"
+    AssertEquals dokNab, AmbPoljeReda(ambID, COL_AMB_DOK_ID), _
+                 "Amb po imenu: DokumentID je u svojoj koloni"
+    AssertEquals DOK_TIP_AMBALAZA_DOKUMENT, AmbPoljeReda(ambID, COL_AMB_DOK_TIP), _
+                 "Amb po imenu: DokumentTIP je u svojoj koloni"
+    AssertEquals AMB_NALOG_SPOLJNI, AmbPoljeReda(ambID, COL_AMB_OD_TIP), _
+                 "Amb po imenu: OdNalogTip je u svojoj koloni"
+    AssertEquals "", AmbPoljeReda(ambID, COL_AMB_OD_ID), _
+                 "Amb po imenu: OdNalogID granice je prazan"
+    AssertEquals AMB_NALOG_STANICA, AmbPoljeReda(ambID, COL_AMB_NA_TIP), _
+                 "Amb po imenu: NaNalogTip je u svojoj koloni"
+    AssertEquals TEST_ST_ID, AmbPoljeReda(ambID, COL_AMB_NA_ID), _
+                 "Amb po imenu: NaNalogID je u svojoj koloni"
+    AssertEquals AMB_VK_NABAVKA, AmbPoljeReda(ambID, COL_AMB_VRSTA_KRETANJA), _
+                 "Amb po imenu: VrstaKretanja je u svojoj koloni"
+    AssertEquals "", AmbPoljeReda(ambID, COL_AMB_STORNO_OD), _
+                 "Amb po imenu: original nema StornoOd"
+
+    ' I citalac knjige vidi isti red: saldo nad sopstvenim tipom je tacno 37.
+    AssertEquals "37", CStr(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)), _
+                 "Amb po imenu: citalac knjige sabira bas taj red"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_Amb_KanonskiRedPoImenu", errNum, errDesc
+End Sub
+
+' Polje reda knjige po AmbID-u i IMENU kolone, kao tekst.
+Private Function AmbPoljeReda(ByVal ambID As String, ByVal kolona As String) As String
+    AmbPoljeReda = Trim$(CStr(nz(GetValueByKey(TBL_AMBALAZA, COL_AMB_ID, ambID, kolona), "")))
+End Function
+
+' ZATECENA SVESKA GUBI STARE KOLONE PO IMENU, A VREDNOSTI OSTAJU SVOJE (10e-3).
+'
+' Fixture se pravi BEZ starih kolona (make_fixture DROP_COLS), pa self-heal nad
+' njim nikad nema posla -- bez ovog testa bi put zatecene sveske bio meren samo
+' rucnim smoke-om. Test zato FIZICKI vraca stari raspored: sest kolona na njihova
+' mesta iz starog kanona (5-8, 11 i 16), sa vrednoscu starog modela u prvom redu.
+' Meri da kanonski prefiks tada PADA (inace bi test bio vakuumski), pa pusta
+' modSetup.ObrisiStareKoloneAmbalaze i meri: kolone su otisle, prefiks prolazi, a
+' prvi red nosi ISTE vrednosti po imenu u svakoj kanonskoj koloni kao pre.
+'
+' Bez transakcije: clsTransaction.RestoreTable pada na promenu broja kolona.
+' Ciscenje ide kroz isti primitiv, i u EH grani.
+Private Sub Test_Amb_StareKoloneSelfHeal()
+    On Error GoTo EH
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_AMBALAZA)
+    If lo Is Nothing Then
+        AssertTrue False, "Amb self-heal: tabela knjige postoji"
+        Exit Sub
+    End If
+    If lo.ListRows.count = 0 Then
+        AssertTrue False, "Amb self-heal: knjiga ima bar jedan red (svedok vrednosti)"
+        Exit Sub
+    End If
+
+    ' Preduslov: polazi se od kanonske tabele. Zatecena stara kolona bi se pri
+    ' umetanju sudarila po imenu, a test bi tabelu ostavio gorom nego sto ju je nasao.
+    Dim stare As Variant, nadjene As String
+    stare = Array("Smer", "EntitetID", "EntitetTip", "VozacID", "Stornirano", "ReversID")
+    Dim k As Long
+    For k = LBound(stare) To UBound(stare)
+        If GetColumnIndex(TBL_AMBALAZA, CStr(stare(k))) > 0 Then
+            nadjene = nadjene & CStr(stare(k)) & " "
+        End If
+    Next k
+    If Len(nadjene) > 0 Then
+        AssertTrue False, "Amb self-heal: polazna tabela je bez starih kolona"
+        Exit Sub
+    End If
+
+    Dim preKolona As Long
+    preKolona = lo.ListColumns.count
+
+    ' Svedok: prvi red, svaka kanonska kolona po imenu, PRE vracanja starog rasporeda.
+    Dim kanon As Collection, ime As String
+    Set kanon = modSchema.SchemaTableColumns(TBL_AMBALAZA)
+    Dim pre As Object
+    Set pre = CreateObject("Scripting.Dictionary")
+    For k = 1 To kanon.count
+        ime = CStr(kanon(k))
+        pre(ime) = CStr(nz(lo.ListColumns(GetColumnIndex(TBL_AMBALAZA, ime)) _
+                               .DataBodyRange.cells(1, 1).value, ""))
+    Next k
+
+    ' Stari raspored, redom po STAROJ poziciji -- svaka umetnuta kolona pomera ostale.
+    lo.ListColumns.Add(5).name = "Smer"
+    lo.ListColumns.Add(6).name = "EntitetID"
+    lo.ListColumns.Add(7).name = "EntitetTip"
+    lo.ListColumns.Add(8).name = "VozacID"
+    lo.ListColumns.Add(11).name = "Stornirano"
+    lo.ListColumns.Add(16).name = "ReversID"
+    lo.ListColumns(GetColumnIndex(TBL_AMBALAZA, "Smer")).DataBodyRange.cells(1, 1).value = "Ulaz"
+    lo.ListColumns(GetColumnIndex(TBL_AMBALAZA, "ReversID")).DataBodyRange.cells(1, 1).value = _
+        "RID-SELFHEAL"
+
+    Dim errNum As Long, errDesc As String
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail "Test_Amb_StareKoloneSelfHeal", TBL_AMBALAZA
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb self-heal: stari raspored obara kanonski prefiks"
+
+    modSetup.ObrisiStareKoloneAmbalaze
+
+    nadjene = ""
+    For k = LBound(stare) To UBound(stare)
+        If GetColumnIndex(TBL_AMBALAZA, CStr(stare(k))) > 0 Then
+            nadjene = nadjene & CStr(stare(k)) & " "
+        End If
+    Next k
+    AssertEquals "", Trim$(nadjene), _
+                 "Amb self-heal: nijedna kolona starog modela nije ostala"
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_AMBALAZA).ListColumns.count), _
+                 "Amb self-heal: tabela je vracena na kanonski broj kolona"
+
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail "Test_Amb_StareKoloneSelfHeal", TBL_AMBALAZA
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), _
+                 "Amb self-heal: posle brisanja kanonski prefiks prolazi"
+
+    Dim razlike As String
+    Set lo = GetTable(TBL_AMBALAZA)
+    For k = 1 To kanon.count
+        ime = CStr(kanon(k))
+        If CStr(nz(lo.ListColumns(GetColumnIndex(TBL_AMBALAZA, ime)) _
+                       .DataBodyRange.cells(1, 1).value, "")) <> CStr(pre(ime)) Then
+            razlike = razlike & ime & " "
+        End If
+    Next k
+    AssertEquals "", Trim$(razlike), _
+                 "Amb self-heal: prvi red nosi iste vrednosti po imenu"
+
+    ' Idempotentno: drugi prolaz nema sta da obrise.
+    modSetup.ObrisiStareKoloneAmbalaze
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_AMBALAZA).ListColumns.count), _
+                 "Amb self-heal: drugi prolaz ne dira tabelu"
+
+    ' Ciscenje NE ide kroz primitiv koji test meri: pokvaren primitiv bi ostavio
+    ' staru kolonu u sredini, a ona obara SVAKI sledeci test knjige.
+    AmbObrisiStareKoloneTest
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    ' Ciscenje i posle pada -- kolona starog modela ne sme da ostane iza testa.
+    On Error Resume Next
+    AmbObrisiStareKoloneTest
+    On Error GoTo 0
+    LogFatal "Test_Amb_StareKoloneSelfHeal", errNum, errDesc
+End Sub
+
+' Brise sest kolona starog modela GENERICKIM primitivom, po imenu -- nezavisno od
+' modSetup.ObrisiStareKoloneAmbalaze, koji Test_Amb_StareKoloneSelfHeal meri.
+Private Sub AmbObrisiStareKoloneTest()
+    Dim stare As Variant, k As Long
+    stare = Array("Smer", "EntitetID", "EntitetTip", "VozacID", "Stornirano", "ReversID")
+    For k = LBound(stare) To UBound(stare)
+        modSetup.ObrisiKolonuAko TBL_AMBALAZA, CStr(stare(k))
+    Next k
 End Sub
 
 ' Seje JEDAN malformed red knjige, tvrdi da citalac na njemu PADA i imenuje polje,
@@ -22263,46 +22511,6 @@ End Function
 
 Private Function AmbBrojRedova(ByVal dokID As String, ByVal dokTip As String) As Long
     AmbBrojRedova = AmbRedovi(dokID, dokTip).count
-End Function
-
-Private Function AmbPolje(ByVal dokID As String, ByVal dokTip As String, _
-                          ByVal smer As String, ByVal columnName As String) As String
-    Dim d As Variant
-    d = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(d) Then Exit Function
-
-    Dim cSmer As Long, cTraz As Long
-    cSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, "AmbPolje")
-    cTraz = RequireColumnIndex(TBL_AMBALAZA, columnName, "AmbPolje")
-
-    Dim redovi As Collection
-    Set redovi = AmbRedovi(dokID, dokTip)
-
-    Dim k As Long, i As Long
-    For k = 1 To redovi.count
-        i = CLng(redovi(k))
-        If StrComp(Trim$(nz(d(i, cSmer), "")), smer, vbTextCompare) = 0 Then
-            AmbPolje = Trim$(CStr(nz(d(i, cTraz), "")))
-            Exit Function
-        End If
-    Next k
-End Function
-
-Private Function AmbKolicina(ByVal dokID As String, ByVal dokTip As String, _
-                             ByVal smer As String) As Double
-    Dim t As String
-    t = AmbPolje(dokID, dokTip, smer, COL_AMB_KOLICINA)
-    If IsNumeric(t) Then AmbKolicina = CDbl(t)
-End Function
-
-Private Function AmbEntitet(ByVal dokID As String, ByVal dokTip As String, _
-                            ByVal smer As String) As String
-    AmbEntitet = AmbPolje(dokID, dokTip, smer, COL_AMB_ENTITET)
-End Function
-
-Private Function AmbVozac(ByVal dokID As String, ByVal dokTip As String, _
-                          ByVal smer As String) As String
-    AmbVozac = AmbPolje(dokID, dokTip, smer, COL_AMB_VOZAC)
 End Function
 
 ' --- OTP pomocne -------------------------------------------------------------

@@ -240,8 +240,6 @@ Public Const COL_OTP_TIP_AMB As String = "TipAmbalaze"
 ' utovar da razbije na DVE izdate otpremnice.
 Public Const COL_OTP_PREDAJA_ID As String = "PredajaID"
 
-Public Const DOK_TIP_OM_ULAZ As String = "OMUlaz"
-
 ' --- Spaltennamen tblZbirna (NEU) ---
 Public Const COL_ZBR_ID As String = "ZbirnaID"
 Public Const COL_ZBR_DATUM As String = "Datum"
@@ -645,10 +643,9 @@ Public Const DOK_TIP_PRIJEMNICA As String = "Prijemnica"
 ' ambalazu, citaoca nije imao ni jednog, a povrat praznih od kupca nosi broj
 ' prijemnice (AMB-10-ODL-9/-10). Tip dokumenta koji nijedan red vise ne nosi
 ' ne ostaje kao ime.
-Public Const DOK_TIP_OM_IZLAZ_KOOP As String = "OM-Izlaz-Koop"  ' OM izdaje (praznu) ambalazu kooperantu
-Public Const DOK_TIP_OM_ULAZ_KOOP As String = "OM-Ulaz-Koop"    ' kooperant vraca (praznu) ambalazu na OM (povrat)
-Public Const DOK_TIP_OM_IZLAZ_FIRMA As String = "OM-Izlaz-Firma" ' OM vraca (praznu) ambalazu firmi (centrala)
-Public Const DOK_TIP_OM_ULAZ_FIRMA As String = "OM-Ulaz-Firma"   ' firma (centrala) salje (praznu) ambalazu na OM
+' DOK_TIP_OM_* (OM-Izlaz-Koop, OM-Ulaz-Koop, OM-Izlaz-Firma, OM-Ulaz-Firma, OMUlaz)
+' su OBRISANI u 10e-3: bili su tipovi NOGU starog reversa. Od 10b-2 nijedan pisac
+' ih ne upisuje, a od 10e-2 ih nijedan citalac ne cita (AMBALAZA.md 6.13c).
 
 ' AMB-10-DOK: jedna tabela = JEDAN kanonski tip dokumenta.
 '
@@ -673,22 +670,18 @@ Public Const COL_AMB_ID As String = "AmbID"
 Public Const COL_AMB_DATUM As String = "Datum"
 Public Const COL_AMB_TIP As String = "TipAmbalaze"
 Public Const COL_AMB_KOLICINA As String = "Kolicina"
-Public Const COL_AMB_SMER As String = "Smer"
-Public Const COL_AMB_ENTITET As String = "EntitetID"
-Public Const COL_AMB_ENTITET_TIP As String = "EntitetTip"
-Public Const COL_AMB_VOZAC As String = "VozacID"
 Public Const COL_AMB_DOK_ID As String = "DokumentID"
 Public Const COL_AMB_DOK_TIP As String = "DokumentTip"
-' REV-IDENT-01: identitet logickog reversa, isti na svim nogama jednog reversa;
-' prazno za kretanja koja nisu revers (otkup, otpremnica, prijemnica).
-Public Const COL_AMB_REVERS_ID As String = "ReversID"
+' Smer, EntitetID, EntitetTip, VozacID, Stornirano i ReversID (REV-IDENT-01) su
+' kolone STAROG modela i obrisane su iz kanona u 10e-3. Zatecena sveska ih gubi
+' kroz modSetup.ObrisiStareKoloneAmbalaze; konstante se ne vracaju.
 
 ' --- KNJIGA AMBALAZE (AMB-10b) ---
 '
 ' Dogadjaj je PRENOS: jedan red imenuje OBE strane, kolicina je uvek pozitivna,
-' smera kao podatka NEMA -- smer je par (Od -> Na). Zato ove kolone ne zamenjuju
-' Smer/EntitetID/VozacID nego ih CINE NEPOTREBNIM; brisu se u 10e, kad citaoci
-' predju (docs/DOMEN/AMBALAZA.md 6.1 i 6.13).
+' smera kao podatka NEMA -- smer je par (Od -> Na). Zato ove kolone nisu zamenile
+' Smer/EntitetID/VozacID nego su ih UCINILE NEPOTREBNIM; stare su obrisane u
+' 10e-3 (docs/DOMEN/AMBALAZA.md 6.1, 6.13 i 6.13e).
 Public Const COL_AMB_OD_TIP As String = "OdNalogTip"
 Public Const COL_AMB_OD_ID As String = "OdNalogID"
 Public Const COL_AMB_NA_TIP As String = "NaNalogTip"
