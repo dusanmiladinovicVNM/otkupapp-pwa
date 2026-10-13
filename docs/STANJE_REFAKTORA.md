@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 13.10.2026 (red AMB-10: `10e-2` merge-ovan, `10e-3` na review-u, stavke 128–129).
+**Ažurirano:** 13.10.2026 (red AMB-10: `10e-3` merge-ovan `#418`, stavka 130; `KI-011` od stavke 131).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ merge-ovano `#416` (ručna provera ✅ 13.10.2026, stavka 126) · `10e-2` stari storno, undo i ispravka reversa ✅ merge-ovano `#417` (stavke 127–128) · `10e-3` pisac, dvomodelni čitalac, šema i fixture ⏳ na review-u (stavka 129); `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ merge-ovano `#416` (ručna provera ✅ 13.10.2026, stavka 126) · `10e-2` stari storno, undo i ispravka reversa ✅ merge-ovano `#417` (stavke 127–128) · `10e-3` pisac, dvomodelni čitalac, šema i fixture ✅ merge-ovano `#418` (stavke 129–130); `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -3413,6 +3413,222 @@
      izmenu fixture-a.
 
      **Otvoreno:** finalni merge review.
+
+130. **Review `#418` — `GO` na tačnom head-u, merge-ovano bez dodatnog commita** (13.10.2026).
+     Zapis ide ovde, a ne u `#418`: reviewer je dao GO za head `0f99b0e6`, pa bi svaki novi
+     commit na tom PR-u poništio taj GO. Obrazac je stavka 128.
+
+     - Verdikt: `P0 0`, `P1 0`, `P2 0`, `P3 1`. `P3` je `ImportAllVBA` nad zatečenom sveskom sa
+       starim kolonama, koji nije ručno izvršen; put meri `Test_Amb_StareKoloneSelfHeal`.
+       Static CI #951 `SUCCESS`, ocena 9,5/10.
+     - Merge-ovano 13.10.2026 kao `6318dba3`. **`10e` je time završen**; red AMB-10 čeka još
+       `ODL-24` i dopunu integritetnog audita pre S6.
+     - Redosled koji je reviewer naveo u istom verdiktu: `KI-011` (P1 za operativnu upotrebu,
+       svoj PR) → `KI-012`, `KI-013` i fail-open čitaoci štampe (`GetAmbalazeStanje`,
+       `GetStanicaAmbSaldo`) → `ODL-24` i dopuna integritetnog audita → S6.
+
+131. **`KI-011` — lažna greška posle uspešnog upisa: izvor, kanal ishoda i dupli dokument**
+     (13.10.2026). Grana `claude/ki011-lazna-greska`, sa `main`-a `6318dba3`. P1 za operativnu
+     upotrebu (review `#418`), ide sam.
+
+     **`pre-flight`, pre koda.** `DOMAIN`, `WRITERS` (bez promene: posle commit-a `SaveRevers`
+     ne piše nijednu domensku tabelu), `DOWNSTREAM`, `PLATFORM` i `LANDING` su PROVEN.
+     `IDENTITY`, `CARDINALITY`, `EVENTS` i `CAPABILITY` su N/A. `ACCEPTANCE CONTRACT` je
+     zatvoren tek posle odluka operatera ispod. Dve nove invarijante:
+     - **`LOG-01`**: pomoćni logger ne menja `Err` pozivaoca. Vlasnik je `modSetup.LogSetup`.
+     - **`UI-ISHOD-01`**: „nije snimljeno" se javlja samo kad ekran vrati poruku ili kad
+       `Scr_Save` ne vrati rezultat. Vlasnik je `modUiScreens.ScrSave` + `CommitDokument`.
+
+     **Merenje je promenilo tri tvrdnje.**
+     - **Platforma (sonda u sopstvenom Excelu, 13.10.2026):**
+       - Izlaz van handlera ne briše `Err` (`Exit Sub` i `End Sub`).
+       - `On Error` u callee-u **gazi** grešku pozivaoca u handleru (777 → 9).
+       - Neutralan callee je čuva.
+       - `Err.Raise 0` diže grešku 5.
+       - **Makro koji digne grešku kroz `Application.Run` je ne vraća pozivaocu**, nego otvara
+         runtime dijalog.
+       - Makro koji vrati rezultat a ostavi `Err` vraća i jedno i drugo; nepostojeći makro daje
+         `Empty` + 1004.
+
+       Posledica: posle `Run`-a je `Err <> 0` uz vraćen rezultat **uvek** zaostatak. `ScrSave`
+       je baš to čitala kao neuspeh, a pravi pad `Scr_Save` nikad i nije mogla da vidi.
+     - **Zašto otkup ne puca:** `OtkupUpisi` štampa pod `On Error Resume Next` + `Err.Clear`
+       (`modOtkupUnos.bas:424-427`), a `StampajRevers` je bez toga.
+     - **`ERROR modMain.InitApp.EnsurePoruke | 9`** je ista klasa: `EnsurePoruke` se završava sa
+       `LogSetup "OK"`. Log operaterove sveske ga ima na **6 od 6** startova (11–13.10).
+
+     **Popis izvora (pitanje 1).** Statički merač (`curenje_err.py`) je svestan blokova i ima
+     propagaciju kroz pozive i nivo „proba postojanja" koja pada u normalnom toku.
+     - `LogSetup` je koren 32 procedure u `modSetup`-u i **svih 14** izvoza štampe
+       (`EnsureDocFolder`).
+     - Posle ispravke `Scr_Save`, `EnsurePoruke` i izvozi više ne curi.
+     - Ostatak ide u **`KI-014`** (neizmereno, svoj rez):
+       - čitaoci `ScrEvent` / `ScrGridData`;
+       - UI probe (`HasCtl`, `ShowToast`, `OsveziNavBrojace`);
+       - `EnsurePregledDugmad`;
+       - `BackfillColumn`, `SetColumnNumberFormat` i `InitSetupLog`.
+     - Usput, **hipoteza, nije izmereno:** „pad PDF-a u headless Excelu" iz komentara T212 je
+       verovatno bio ovo curenje.
+
+     **Odluke operatera (13.10.2026)** — sve četiri preporuke:
+     1. `KI-012` ide **posle**, u rez čitalaca štampe sa `KI-013` (upisano u `KI-012`).
+     2. `LogSetup` je **neutralan prema `Err` pozivaoca**: čuva tuđu grešku i ne ostavlja svoju.
+        Time se popravljaju i handleri `modSetup`-a koji posle njega rade
+        `Err.Raise Err.Number` ili MsgBox sa `Err.description`. Handler-granu meri samo sonda,
+        ne test.
+     3. `ScrSave` **razlikuje** nevraćen rezultat (neuspeh) od zaostale greške (`ScrZaostalaGreska`
+       + WARN u log, nije neuspeh). Ovo odstupa od doslovne rečenice review-a („`Err.Clear` u
+       `ScrSave` nije prihvatljiv kao ispravka"). Ispravka je i dalje na izvoru, a čitalac
+       samo više ne laže operatera; izvor ostaje meren posebnom tvrdnjom (226).
+     4. Pad štampe posle upisa je **upozorenje uz uspeh** (postojeći kanal, oznaka `ChrW(10007)`,
+        test 69). Klasifikuje se u `StampajRevers`, jedinom mestu koje zna da je upis prošao.
+        `modPrint` u tom toku (`tiho`) ne otvara svoj dijalog; ponovna štampa iz liste ostaje
+        kakva je.
+
+     **Reprodukcija pre ispravke** (`CLAUDE.md` §2), izvor commit-a `5355bc0f`:
+
+     ```
+     RunAllTests: 226 ukupno, 1 palo
+       FAIL T_KI011_UspesanUpisJeUspeh -- uspesan upis se ne prijavljuje kao neuspeh (KI-011)
+            -- ocekivano [], dobijeno [modScrDokumenti.Scr_Save -> 9 Subscript out of range]
+     sonda, isti izvor: 1 zaglavlje upisano, toast "Radnja nije uspela: ... -> 9", forma
+       ostala popunjena (kol 2, partner, broj), SETUP_LOG ne postoji; drugi klik odbija
+       provera broja ("Taj broj je vec izdat..."), pa je duplikat iz smoke-a nastao tek
+       kad je operater dobio ili uneo NOV broj
+     ```
+
+     Prvo puštanje 226 je palo na drugom mestu: forma bez `.Show` nema punjene liste, pa
+     prefill nije izabrao stanicu i potez je stao na validaciji. Test je dobio `FillCombos` i
+     preduslov „prefill je izabrao otkupno mesto", pa takav promašaj više ne prolazi tiho.
+
+     **Rez.**
+     - `modSetup.LogSetup`: neutralan (stanje pozivaoca se čita pre `On Error` i vraća).
+     - `modUiScreens.ScrSave`: sentinel `IsEmpty(v)`, nova `ScrZaostalaGreska`, WARN u log.
+     - `modPrint`:
+       - `OutputIzdavanjeAmbalaze` je Function koja vraća razlog pada, uz opcioni `tiho`;
+       - `ExportIzdavanjeAmbalazePDF` sa `tiho` vraća grešku pozivaocu umesto MsgBox-a;
+       - seam `StampaTestSet` (`pada` / `curi`) je tvrdo gejtovan.
+     - `modNovacUnos.StampajRevers` je Function: pad vraća kao `NOVUNOS_MSG_STAMPA_NIJE` u
+       `poruke` (tri pozivna mesta u `ReversUpisi`).
+     - `modOtkupUI`: tri MsgBox-a u `CommitDokument` idu kroz `Dijalog`, koji u test režimu
+       beleži. Novi seam-ovi `CommitDokumentTest` i `DijalogTest`.
+     - `modPoruke`: `NOVUNOS_MSG_STAMPA_NIJE`.
+
+     **Acceptance contract.**
+
+     | Ishod | Operater vidi | Forma | Lista | Test |
+     |---|---|---|---|---|
+     | snimljeno | toast „Revers sačuvan: broj" | očišćena | osvežena | 226 |
+     | snimljeno, papir nije napravljen | toast + dijalog „Revers je sačuvan, ali papir nije napravljen — NE unosi ga ponovo. Razlog: …" | očišćena | osvežena | 228 |
+     | snimljeno uz zaostalu grešku | isto kao „snimljeno"; greška ide u log (WARN) | očišćena | osvežena | 227 |
+     | nije snimljeno (pisac odbije) | toast + dijalog sa razlogom | ostaje | — | 227 |
+     | nije snimljeno (`Scr_Save` se ne pokrene) | toast „Radnja nije uspela … 1004" | ostaje | — | 227 |
+
+     - **Edge:** sveska bez `SETUP_LOG` je preduslov 226. Drugi klik posle uspeha i posle pada
+       štampe ne pravi drugi dokument (226, 228).
+     - **Netaknuto:** otkup (već je čistio `Err`), ponovna štampa reversa iz liste (zadržava
+       dijalog), `ScrEvent`/`ScrGridData` (`KI-014`).
+
+     **Sabotaže (748 → 754** posle review-a `#419`), dokaz se filtrira na `ki011-` (3 prolaza, `--plan`):
+     - `ki011-logsetup-ostavlja-gresku` → 226 „upis ne ostavlja zaostalu gresku u Err (izvor
+       KI-011: LogSetup)";
+     - `ki011-scrsave-zaostala-je-neuspeh` → 227 „zaostala greska iz pomocnog koraka nije
+       neuspeh upisa";
+     - `ki011-scrsave-ne-javlja-neuspeh` → 227 „ekran koji ne vrati rezultat se javlja kao
+       neuspeh" (pozitivna kontrola);
+     - `ki011-stampa-pad-precutan` → 228 „operater vidi da papir nije napravljen".
+
+     **Očekivani brojevi**, izvedeni iz diff-a:
+
+     | Suita | Pre | Posle | Razlog |
+     |---|---|---|---|
+     | `RunAllTests` | 225 | **229** | +226…+229 (229 iz review-a `#419`); 69 dobija jedan ključ u spisku |
+     | `RunBusinessFlowProSuite` | 2404 | **2404** | nijedna BFP tvrdnja se ne menja |
+     | `RunStornoTestSuite`, `RunBankaImportTestSuite` | 111, 241 | bez promene | — |
+
+     **Verifikacija pre GO.** Zelene su:
+     - `vba_check` (752 sabotaže, 0 nalaza, 9 poznatih) i `--self-test`;
+     - `who_writes --check`, `--check-ownership` i `--self-test`;
+     - `gen_schema_module --check` i `--self-test`;
+     - `popis_citalaca --check`, `vba_gate --popis` i `--self-test`, `run_vba --self-test`;
+     - tri kapije self-update motora i `vba_import_marker_gate`.
+
+     **`run_vba` posle ispravke, dokaz i ručna provera NISU pušteni: čeka se reviewer GO.**
+     Testovi 227/228 i zelenilo 226 su zato neverifikovani.
+
+     **Otvoreno.**
+     - Review.
+     - Posle GO: pun prolaz, `dokaz.py ki011- --grupe`, compile i ručna provera (F7 sa štampom;
+       „Sačuvaj i štampaj" ide istim putem, jer `stampajUvek` niko ne čita; izazvan pad štampe;
+       F1 kontrola).
+     - Novi seam-ovi treba da uđu u `.claude/rules/testovi.md` §4. To ide **zasebnim process
+       PR-om**.
+
+     **Review `#419` (`2ebdd147`), krug 1: `NO-GO`, `P0 0`, `P1 0`, `P2 1`, `P3 1`, 9,0/10.**
+     Static CI #953 `SUCCESS`. Reviewer ne traži nov obim (ni `KI-012`, ni `KI-014`), nego dve
+     uske dopune, pa izvršne kapije.
+     - **`P2` — nepoznat ekran je bio uspeh.** `ScrSave` za ključ kog nema u registru izlazi
+       pre `Application.Run`: `Split("")` daje prazan niz, pa je `m = ""`, a rezultat i
+       `ScrLastErr` su prazni. `CommitDokument` to čita kao upis (čisti formu, toast
+       „sačuvan:" bez broja). Potvrđeno čitanjem, pa **reprodukovano pre ispravke**: 227 crven
+       na „nepoznat ekran ne sme biti uspeh", sve ostale tvrdnje 227 zelene (izvor
+       `c310123b`). Ispravka: izlaz bez poziva pisca postavlja `ScrLastErr`. Sabotaža
+       `ki011-scrsave-nepoznat-ekran-je-uspeh`.
+     - **`P3` — `LOG-01` u handleru nije bio meren testom.** Nov test **229** zove privatni
+       `LogSetup` kroz `Application.Run`, u oba smera nad sveskom bez `SETUP_LOG`. Sonda nad
+       STARIM kodom je pokazala da put doseže proceduru i da tvrdnje grizu (u handleru
+       `4242` → `9 / VBAProject / Subscript out of range`, čist pozivalac → `9`). Sabotaža
+       `ki011-logsetup-brise-gresku-pozivaoca`.
+     - Isti prolaz (`c310123b`, `RunAllTests` 229/1) je i prvo izvršenje posle ispravke:
+       226, 228 i 229 su zeleni.
+
+     **Izvršne kapije posle kruga 1** (head `e840b729`):
+
+     ```
+     RunAllTests              229 / 0      (225 + 226..229)
+     RunBusinessFlowProSuite 2404 / 0      RunStornoTestSuite 111 / 0
+     RunBankaImportTestSuite  241 / 0      12 / 12 ZELENO, marker upisan (izvor fbe6332aca81)
+     dokaz.py ki011- --grupe: crvenih 6 / 6, izvor pre/posle c100346b7742ccde IDENTICAN
+       -> DOKAZANO (grupno); ki011-logsetup-ostavlja-gresku je u grupi oborio drugu
+       tvrdnju (uz sabotazu citaoca), pa je ponovljen sam i oborio svoju
+     compile: NEJASNO (automatski) -- rucna kapija operatera
+     ```
+
+     **Compile ✅** (operater, 13.10.2026, `rucna_provera_ki011_kod.xlsm`, kod sa `e840b729`):
+     `vba_gate --mark-compile`, pa `--require-green --require-compile` daje RC=0 nad izvorom
+     `fbe6332aca81`.
+
+     **Ručna provera ✅** (operater, 13.10.2026, ista sveska, bez lista `SETUP_LOG`; snimci ekrana i
+     log `tests/fixtures/Log/OtkupApp_2026-10-13.log`):
+
+     ```
+     start sveske (2x, 13:02 i 13:05)   bez "ERROR InitApp.EnsurePoruke | 9"   (pre: 6 od 6)   OK
+     F7 tip 12 x10 (3 pokusaja)         "nije snimljeno": dijalog sa razlogom (manjak '12'),
+                                         forma ostaje, lista bez reversa                       OK
+     F7 12/1 x2 -> 1/131026             PDF ..._130808.pdf, forma ociscena, odmah na listi
+                                         (pocetno 18 -> novo 20)                                OK
+     pad stampe (A: zabranjen upis u
+       "Revers ambalaze") -> 1/131026-2  toast "Revers sacuvan: 1/131026-2 . Revers je sacuvan,
+                                         ali papir nije napravljen -- NE unosi ga ponovo.
+                                         Razlog: Document not saved..." + dijalog; forma
+                                         ociscena; lista 1/131026 i -2; PDF za -2 nije nastao;
+                                         log: ERROR 1004 iz izvoza, bez WARN "zaostala greska"  OK
+     ```
+
+     - **F1 kontrola ✅** (operater, 13:15): otkup sa štampom je snimljen bez greške; log ima
+       transakciju `tblOtkup`, `tblOtkupStavke`, `tblAmbalaza`, `tblNovac`, nastao je
+       `OtkupniList_OTK-A865…pdf`, a posle toga nema nijednog `ERROR`-a.
+     - Drugi klik posle pada štampe nije ručno prikazan; meri ga 228.
+     - Papir i dalje nosi `1.dec` umesto `12/1`: to je `KI-012`, ide posle (odluka operatera).
+     - U MsgBox-u stoji „sacuvan" bez č, a u traci poruka je ispravno. To nije iz `#419`:
+       MsgBox crta kroz ANSI kodnu stranu mašine (ovde DEU, 1252), u kojoj č ne postoji.
+
+     **Usput, nije iz `#419`: `KI-015`.** Poruka o odbijenom upisu reversa glasi „Greška pri čuvanju
+     **otpremnice**… Greška pri unosu **otkupa**". Zatečeno na `main`-u: `SaveRevers` koristi
+     `DOK_MSG_GRESKA_PRI_CUVANJU`, a `modNovacUnos` koristi `OTKUP_ERR_GRESKA_PRI_UNOSU` na sedam
+     mesta. Ide u svoj rez; reviewer je tražio da se `#419` ne širi.
+
+     **Preostalo:** finalni exact-head review.
 
 ## Dug sa imenom (posle S5-5b)
 

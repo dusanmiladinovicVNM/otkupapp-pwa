@@ -1066,6 +1066,7 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "NOVUNOS_MSG_UPISANA_ISPL", ChrW(10003) & " Isplata sa" & ChrW(269) & "uvana:"
     UpsertRow lo, existing, "NOVUNOS_MSG_UPISANA_UPL", ChrW(10003) & " Uplata sa" & ChrW(269) & "uvana:"
     UpsertRow lo, existing, "NOVUNOS_MSG_UPISAN_REV", ChrW(10003) & " Revers sa" & ChrW(269) & "uvan:"
+    UpsertRow lo, existing, "NOVUNOS_MSG_STAMPA_NIJE", ChrW(10007) & " Revers je sa" & ChrW(269) & "uvan, ali papir nije napravljen " & ChrW(8212) & " NE unosi ga ponovo. Razlog:"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_REDA", ChrW(10007) & " Prvo izaberi red u listi"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_DOK", ChrW(10007) & " Nema nestorniranog dokumenta broj"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_OTP", ChrW(10007) & " Izaberi otpremnicu (ili vi" & ChrW(353) & "e njih preko " & ChrW(8222) & "Izaberi vi" & ChrW(353) & "e" & ChrW(8220) & ")"

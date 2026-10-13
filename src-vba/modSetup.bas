@@ -2431,20 +2431,45 @@ Private Sub InitSetupLog()
     End If
 End Sub
 
+' NEUTRALAN PREMA Err POZIVAOCA (KI-011, LOG-01): posle LogSetup-a je Err tacno
+' onakav kakav je bio pre njega.
+'
+' Log je opcioni -- lista SETUP_LOG nema dok setup nije pokrenut -- pa proba ispod
+' u NORMALNOM toku padne. Do KI-011 je ta greska 9 ostajala u Err (izlaz VAN
+' handlera je ne brise; izmereno sondom 13.10.2026) i putovala kroz EnsureFolder,
+' EnsureDocFolder i stampu do ScrSave, koja je uspesan upis reversa prijavila kao
+' neuspeh -- pa ga je operater snimio dvaput. Ista greska je na SVAKOM startu
+' pisala lazan "ERROR modMain.InitApp.EnsurePoruke | 9".
+'
+' Drugi smer je jednako vazan: "On Error" na ulazu BRISE gresku pozivaoca, a
+' handleri ovog modula posle LogSetup-a citaju Err (Err.Raise Err.Number, MsgBox
+' sa Err.description) -- pa su dizali i prikazivali gresku logera umesto svoje.
+' Zato se stanje pozivaoca cita PRE "On Error" i vraca na izlazu.
 Private Sub LogSetup(ByVal levelText As String, ByVal messageText As String)
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
     On Error Resume Next
 
     Dim ws As Worksheet
     Set ws = ThisWorkbook.Worksheets(SETUP_LOG_SHEET)
 
-    If ws Is Nothing Then Exit Sub
+    If Not ws Is Nothing Then
+        Dim r As Long
+        r = ws.cells(ws.rows.count, 1).End(xlUp).row + 1
 
-    Dim r As Long
-    r = ws.cells(ws.rows.count, 1).End(xlUp).row + 1
+        ws.cells(r, 1).value = Now
+        ws.cells(r, 2).value = levelText
+        ws.cells(r, 3).value = Left$(messageText, 2000)
+        ws.cells(r, 4).value = Environ$("Username")
+    End If
 
-    ws.cells(r, 1).value = Now
-    ws.cells(r, 2).value = levelText
-    ws.cells(r, 3).value = Left$(messageText, 2000)
-    ws.cells(r, 4).value = Environ$("Username")
+    Err.Clear
+    If errNum <> 0 Then
+        Err.Number = errNum
+        Err.SOURCE = errSrc
+        Err.description = errDesc
+    End If
 End Sub
 
