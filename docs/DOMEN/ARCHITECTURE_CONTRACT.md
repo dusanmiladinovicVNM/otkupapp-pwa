@@ -69,6 +69,15 @@ vrste se ne sudi. Ne proverava jedinstvenost (to je
 `modBrojevi.BrojZauzetUNizu` za OTK, OTP, ZBR i REV — po nizu, sa storniranima;
 `CheckDuplicate` još za prijemnicu) i ne sudi prijemnicu.
 
+> **ZAMENJENO (AMB-10, 13.10.2026).** Dva pasusa ispod (`ReversID`, REV-IDENT-01, i
+> „Granica dokumenta") opisuju **stari** model reversa (dve noge u `tblAmbalaza`) i
+> ostaju kao istorija. Revers je od `10b-2` ambalažni dokument: identitet je
+> `tblAmbalazaDokument.AmbDokID` (AMB-10-ODL-16), broj je labela na zaglavlju, a red
+> knjige imenuje obe strane. Potrošači navedeni ispod (`StornoOMKoopByBrDok`,
+> `ReversIDRazresi`, `ReversRedoviRID`, `ReversIDGranica`, B10, štampa iz nogu) obrisani
+> su u `10e-1`/`10e-2`, a kolona `ReversID` i pisac `TrackAmbalaza` u `10e-3`
+> (`AMBALAZA.md` 6.13c–6.13e).
+
 **Revers: identitet je `ReversID`, broj je labela** (REV-IDENT-01, Faza 2a,
 15.09.2026; do tada je dokument bio ključ (broj, tip, stanica, dan)). Pošto isti
 broj legalno nose dva reversa (druga stanica ili drugi dan), svaki potrošač koji

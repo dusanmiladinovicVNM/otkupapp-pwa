@@ -508,7 +508,7 @@ Transport sheets, exports, caches and dashboards are read models unless explicit
 | `tblFakture` | invoice header | `FakturaID` | Operator / desktop | `Stornirano` | includes SEF workflow state |
 | `tblFakturaStavke` | invoice lines | `StavkaID` | Operator / desktop | `Stornirano` / orphanable | relink workflows may repair document-chain references |
 | `tblNovac` | money movement | `NovacID` | Operator / desktop | `Stornirano` | manual finance, avans and bank-mapping outputs |
-| `tblAmbalaza` | packaging movement ledger | `AmbalazaID` | Operator / desktop | `Stornirano` | strict `Ulaz` / `Izlaz` semantics |
+| `tblAmbalaza` | packaging movement ledger | `AmbID` | Operator / desktop | counter-row (`StornoOd`), no flag | transfer `OdNalog` -> `NaNalog` + `VrstaKretanja` (AMB-10; `docs/DOMEN/AMBALAZA.md`) |
 | `tblMagacin` | agrohemija warehouse movements | `MagacinID` | Operator / desktop | `Stornirano` | `MAG_ULAZ` and `MAG_IZLAZ` journal |
 | `tblBankaImport` | bank statement staging | `BankaImportID` | Operator/system via import | `Stornirano` | staging only; source bank facts are not overwritten |
 | `tblPartnerMap` | learned bank partner mapping | logical composite | Operator/system | n/a | helper table, not a business ledger |
@@ -554,7 +554,7 @@ Transaction tables record source business events or operational movements.
 |---|---|---|---|
 | `tblOtkup` | field procurement | PWA operational input, desktop canonical after import | append/import first; later document links update checked fields |
 | `tblNovac` | finance | desktop | finance movement facts, avans and bank-map outputs |
-| `tblAmbalaza` | packaging ledger | desktop | ledger semantics; no negative quantity; strict direction |
+| `tblAmbalaza` | packaging ledger | desktop | append-only transfer ledger; quantity > 0; storno is a counter-row (AMB-10) |
 | `tblMagacin` | agrohemija warehouse | desktop | movement journal; stock is derived from active movements |
 | `tblBankaImport` | bank staging | desktop/system import | staging source facts; mapping changes status/links, not raw bank facts |
 | role-specific Google sheets | field/PWA transport | PWA/GAS | operational sync queues before desktop import/export reconciliation |
@@ -1181,6 +1181,14 @@ Monitoring boundary:
 - Failure path emits `Monitor_Error` and `SLEDLJIVOST_AUTOLINK_FAIL` before rollback.
 
 ### 6.8 Ambalaža Ledger
+
+> **SUPERSEDED (AMB-10, 13.10.2026).** The rules below describe the OLD model (one-sided
+> rows with `Smer` / `EntitetID` / `EntitetTip` / `VozacID`, `Stornirano` flag, `ReversID`,
+> writer `TrackAmbalaza`). That model was deleted in `10e-1`..`10e-3`: the canonical
+> `tblAmbalaza` row is a transfer (`OdNalogTip/ID` -> `NaNalogTip/ID`, `VrstaKretanja`),
+> storno is a counter-row (`StornoOd`), the only writer is `modAmbalaza.PrenesiAmbalazu`
+> (by column name), and a non-empty row that does not touch the ledger is a named ledger
+> fault. Source of truth: `docs/DOMEN/AMBALAZA.md` (6.9, 6.13c-6.13e). Kept for history.
 
 `tblAmbalaza` is the packaging movement journal used by document side effects and packaging saldo reports.
 

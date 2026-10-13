@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 12.10.2026 (red AMB-10: `10d` merge-ovan, `10e` počinje).
+**Ažurirano:** 13.10.2026 (red AMB-10: `10e-2` merge-ovan, `10e-3` na review-u, stavke 128–129).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,7 +33,7 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ merge-ovano `#416` (ručna provera otvorena — stavka 126) · `10e-2` stari storno, undo i ispravka reversa ⏳ na review-u (stavka 127) · `10e-3` sledeći; `docs/DOMEN/AMBALAZA.md` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ merge-ovano `#416` (ručna provera ✅ 13.10.2026, stavka 126) · `10e-2` stari storno, undo i ispravka reversa ✅ merge-ovano `#417` (stavke 127–128) · `10e-3` pisac, dvomodelni čitalac, šema i fixture ⏳ na review-u (stavka 129); `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
@@ -3081,6 +3081,37 @@
      **Otvoreno, ručno:** štampa aktivnog reversa iz liste `AMBALAZA` i ekran Integritet bez
      nalaza B10. Nalaz se upisuje ovde. Ako provera padne, ispravka ide kao zaseban PR, pre `10e-2`.
 
+     **Ručna provera ✅ (operater, 13.10.2026)**, sveska `tests/fixtures/rucna_provera_10e1_kod.xlsm`
+     (kopija fixture-a, `main` `3e0c655d`, kod uvezen kroz `run_vba --compile-only --keep`,
+     `modVbaTools` ručno). Isti kod kao `10e-1`, jer `10e-2` ne dira štampu ni integritet.
+
+     ```
+     Integritet               nema nalaza B10 ni teksta "ReversID"                        OK
+     AMBALAZA, 1/IZV  12/1    papir IzdavanjeAmbalaze_1-IZV_20261013_083347.pdf nastao    OK
+     AMBALAZA, 1/IZV  Letv.   "Izabrani tip ambalaze nije tip poslovnog reda dokumenta"   KI-013
+     ```
+
+     Tri stvari su nađene usput, i nijedna nije iz `10e-1`:
+     - **`KI-013`: višetipni ambalažni dokument štampa samo prvi tip.** `AmbDokRedMapa` drži
+       **jedan** poslovni red po dokumentu (prvi u knjizi), pa red Letvarica istog dokumenta
+       `StampajAmbDokument` odbija po imenu (`7506`, `modIzvestaj.bas:4347`). Odbijanje je
+       fail-closed (pogrešan papir ne nastaje), ali sposobnost C-061 „dva tipa → dva papira"
+       **nije** zamenjena, a MAPA ju je u `10e-1` upisala kao REPLACED. Isti put postoji od
+       `10c-2`/`KI-009a`. Pisac reversa piše jedan tip po dokumentu (`UpisiReversUTx`: jedan
+       `tipAmb`), pa je oblik danas dostižan samo kroz fixture (`ADK-IZV-1`).
+     - **Početno stanje na ponovljenom papiru je današnje** (`-12` za `1/IZV`): papir računa
+       „početno = saldo posle upisa − ovaj dokument" (`modPrint.bas:2056-2057`), pa ponovna
+       štampa ne reprodukuje papir kakav je bio. Za otkupni list to rešava ODL-26 (D-057), a za
+       revers pravilo nije zapisano. Pripada PR-u „print readers" posle `10e`
+       (`GetAmbalazeStanje`).
+     - `ERROR modMain.InitApp.EnsurePoruke | 9 | Subscript out of range` pri startu sveske.
+       **Nije izmereno**; verovatno je iste klase kao `KI-011` (greška 9 iz `LogSetup` bez
+       lista `SETUP_LOG`).
+     - `1.dec` umesto `12/1` na papiru je već poznat `KI-012`.
+
+     Priprema sveske je dvaput bila pogrešna: kopija fixture-a nema kod, a `run_vba` preskače
+     `modVbaTools`, pa `Compile` pada na `UveziVBA`. Postupak je zapisan u memoriji.
+
 127. **`10e-2` — stari storno, undo i ispravka reversa obrisani, sa zastavicom na knjizi** (12.10.2026).
      Grana je `claude/amb-10e2-storno`, sa `main`-a `eaf130da`. Ovo je drugi od tri reza
      (`AMBALAZA.md` 6.13c). Šta važi posle reza i zašto stoji u 6.13d i ovde se ne
@@ -3234,8 +3265,108 @@
 
      **Otvoreno:**
      - ručna provera iz stavke 126 (štampa reversa iz liste `AMBALAZA`, Integritet bez B10)
-       još nije javljena;
+       još nije javljena (✅ 13.10.2026, upisano u 126);
      - `10e-3` (pisac, dvomodelni čitalac, šema, fixture) ide posle merge-a.
+
+128. **Review `#417` — `GO` na tačnom head-u, merge-ovano bez dodatnog commita** (12.10.2026).
+     Zapis ide ovde, a ne u `#417`: reviewer je dao GO za head `23c206d8a01a`, pa bi svaki
+     novi commit na tom PR-u poništio taj GO.
+
+     - Verdikt: `P0 0`, `P1 0`, `P2 0`, `P3 1` (prenesena ručna provera iz stavke 126).
+       Static CI #948 `SUCCESS`, ocena 9.4/10.
+     - Merge-ovano 12.10.2026 kao `3e0c655d`.
+     - `P3` je zatvoren 13.10.2026: provera je prošla, a usput su nađene tri stvari van
+       `10e-1` (stavka 126, `KI-013`).
+     - Reviewer je za `10e-3` najavio strožiji pregled. Kriterijumi stoje u stavci 129.
+
+129. **`10e-3` — pisac, dvomodelni čitalac, šema i fixture starog modela obrisani** (13.10.2026).
+     Grana `claude/amb-10e3-sema`, sa `main`-a `3e0c655d`. Treći, završni rez iz 6.13c. Šta
+     posle reza važi i zašto stoji u `AMBALAZA.md` 6.13e i ovde se ne prepisuje.
+
+     **`pre-flight`, pre koda.** `DOMAIN`, `IDENTITY`, `INVARIANTS/OWNER`, `WRITERS`,
+     `DOWNSTREAM`, `CAPABILITY`, `PLATFORM` i `LANDING` su PROVEN; `EVENTS` i `CARDINALITY`
+     su N/A. Jedno pitanje je išlo operateru (mina 1, registar storna), jer merenje kaže da je
+     promena bezbedna, ali ne i gde tabela treba da stoji.
+
+     **Merenje je promenilo tri tvrdnje iz plana.**
+     - **Fixture seme je i dalje nosilo četiri reda starog oblika** (`AMB-LEG-*`). Bez
+       brisanja bi posle reza svako čitanje knjige palo na fixture-u.
+     - **`ENSURE_COLS` je vraćao `ReversID`.** `make_fixture` briše kolone pre dopune, pa bi
+       `ReversID` iz sredine otišao i vratio se na kraj, gde ga provera kanonskog prefiksa ne
+       vidi. Izlazi iz `ENSURE_COLS`.
+     - **Pozicioni pisac posle reza ne postoji.** Drugi `AppendRow(TBL_AMBALAZA)` je
+       `UpisiRedKnjige`: niz po `TabelaBrojKolona`, 12× `SetRowValueByColumn`. Sve seme testova
+       idu po imenu (`KvarUKnjizi`, `IzvSeed`, `PostaviPoljePoPK`).
+
+     **Odluka operatera (13.10.2026), `AMB-10-ODL-29`:** `tblAmbalaza` je **van oba spiska**
+     registra storna. Storno knjige je red, ne kolona; neklasifikovana tabela je fail-closed.
+     Odbačeno: `BEZ_STORNA` (pogrešno bi rekao „storno ne postoji", a pravilo `DeleteRow` ga
+     čita kao „redovi se smeju brisati") i treći spisak (nov kod bez novog ponašanja).
+
+     **Obrisano.**
+     - **Šema:** šest kolona iz kanona (`Smer`, `EntitetID`, `EntitetTip`, `VozacID`,
+       `Stornirano`, `ReversID`), regenerisan `modSchema` (otisak `24456ABF`).
+     - **`modAmbalaza`:** `TrackAmbalaza`, `ValidateAmbalazaInput`, `RequireAmbalazaSchema`,
+       `IsValidAmbSmer`, `LegacyRedProblem`, `AMB_SMER_ULAZ/IZLAZ`, stare kolone iz
+       `KnjigaIndeksi`.
+     - **`modConfig`:** `COL_AMB_SMER`, `_ENTITET`, `_ENTITET_TIP`, `_VOZAC`, `_REVERS_ID` i
+       pet `DOK_TIP_OM_*` (nijedan produkcioni korisnik posle `10e-2`).
+     - **Testovi:** sekcija C u `Test_Amb_PisacKnjige` (merila je da se red starog oblika
+       preskače) i siročad BFP `AmbPolje`, `AmbKolicina`, `AmbEntitet`, `AmbVozac`.
+     - **Fixture:** `AMB-LEG-*` redovi; `DROP_COLS` za šest kolona.
+
+     **Dodato.**
+     - `modSetup.ObrisiStareKoloneAmbalaze`, iz `EnsureRuntimeSchema` pre provere otiska.
+     - **Promena ponašanja:** red koji nije prazan a ne dotiče knjigu je KVAR po imenu („ne
+       dotice knjigu"), i u čitanju i u integritetu (`KnjigaIntegritet`).
+     - `modSchemaGuard`: `TBL_AMBALAZA` izlazi iz `STORNO_TABELE`, uz komentar ODL-29.
+
+     **Testovi.**
+     - `Test_Amb_PisacKnjige` F2: „red starog oblika nije knjiga nego KVAR" i „…imenuje razlog".
+     - Nov `Test_Amb_KanonskiRedPoImenu`: tabela nosi tačno kanonske kolone (i kolona dopisana na
+       kraj pada), a svako polje reda kanonskog pisca je u svojoj koloni po imenu.
+     - Nov `Test_Amb_StareKoloneSelfHeal`: fizički vraća stari raspored, meri da prefiks pada, pa
+       da posle self-heal-a prolazi i da prvi red nosi iste vrednosti po imenu.
+     - `T_StornoFilter_NedostajucaKolonaNijeTisina` (+3 tvrdnje): pin ODL-29.
+     - Kontra-tvrdnje bez obrisanog tipa: BFP OTK („nijedan red otkupa ne stoji pod drugim tipom
+       dokumenta"), `modTest` 2512 („revers ima ime po VRSTI", sada prema katalogu, a ne
+       `Len > 0`) i 3950.
+
+     **Sabotaže (745 → 748).**
+     - Obrisana je `amb-pisac-nevalidan-legacy-prolazi` (sidro u `LegacyRedProblem`).
+     - Nove su `amb-10e3-stari-red-preskocen`, `-heal-dopise-staru-kolonu`,
+       `-heal-zaboravi-kolonu` i `-knjiga-u-registru-storna`.
+     - Presidrene zamene (posle reza bi oborile COMPILE, ne test):
+       `amb-kup-uplata-knjizi-ambalazu` (dopis praznog reda umesto `TrackAmbalaza`) i
+       `amb-10c-lista-filtrira-po-nozi` (literal umesto `DOK_TIP_OM_*`).
+     - Sabotaža za T1 namerno ne kvari pozicioni upis pisca: pokvarila bi svaki red knjige iz
+       ranijih testova, pa bi T1 pao na čitanju pre svoje tvrdnje.
+
+     **Očekivani brojevi**, izvedeni iz diff-a. Proverava ih prolaz.
+
+     | Suita | Pre | Posle | Razlog |
+     |---|---|---|---|
+     | `RunAllTests` | 225 | **225** | nove su samo tvrdnje u postojećim testovima |
+     | `RunBusinessFlowProSuite` | 2381 | **2404** | −1 (sekcija C), +18 (T1), +6 (T2) |
+     | `RunStornoTestSuite`, `RunBankaImportTestSuite` | 111, 241 | bez promene | — |
+
+     **Platforma.** Nijedan modul nije obrisan. Fixture je regenerisan: potpis
+     `54298ba4` → `d3d3ff6d`, `tblAmbalaza` 22 → 18 redova, a stari je sačuvan kao
+     `otkup_test_pre_10e3`. `schema_diff` nad novim fixture-om ne prijavljuje `tblAmbalaza`.
+     Nad starim („zatečena sveska") prijavljuje tačno šest viška kolona i pozicioni hazard
+     `tblAmbalaza`. Ostala četiri hazarda su zatečeni drift fixture-a koji `EnsureRuntimeSchema`
+     leči pri svakom prolazu (38 razlika i pre i posle).
+
+     **Verifikacija (pre GO).** Zelene su `vba_check` (748 sabotaža, 0 nalaza, 9 poznatih) i
+     `--self-test`, `who_writes --check`, `--check-ownership` i `--self-test`,
+     `gen_schema_module --check`, `popis_citalaca --check` i `vba_gate --popis`. Merač siročadi
+     daje 0 novih. Svako obrisano ime je provereno grep-om (0 referenci van komentara). Pun
+     prolaz, dokaz i compile čekaju reviewer GO.
+
+     **Otvoreno:** pun prolaz, dokaz nad sedam sabotaža (četiri nove i dve presidrene, uz
+     `amb-pisac-polupisan-red-kao-legacy`, kojoj se promenilo značenje), compile, i ručni
+     smoke nad konačnom šemom (unos i storno reversa, otkup sa gajbama, kartica, Integritet,
+     nad novom sveskom iz kanona).
 
 ## Dug sa imenom (posle S5-5b)
 
@@ -3243,7 +3374,7 @@
 |---|---|
 | **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). Danas to drže samo komentari uz tri grane; kapija bi morala da zna koji su pozivi iz suite-a dostupni, pa traži svoj rez i svoj dvosmerni dokaz |
 | **`dokaz.py` ne dosegne `modIzvestajTests`** | kapija kataloga sabotaža priznaje samo `modTest`, `modTestBanka` i `modBusinessFlowProTests`, pa tvrdnja iz `modIzvestajTests` **ne može da se obori** — a tamo živi najdetaljnije merenje ambalažnog pregleda. Posledica je izmerena u `10c-2`: tvrdnja o identitetu dokumenta je **preseljena** u `#204`, a tvrdnja o spajanju dve vrste istog dokumenta ostala **bez sabotaže**. Proširenje kapije dira sam alat, pa ide **zaseban process PR** sa svojim dvosmernim dokazom |
-| **kanonska knjiga nema PUNU integritetnu proveru** | `modIntegritet` ima **nula** referenci na `Od_Tip` / `Na_Tip` / `VrstaKretanja` / `tblAmbalazaDokument` (merenje 08.10.2026). Posle cutovera proverava samo legacy redove, koje produkcija ne piše — pa operateru kaže „nema nalaza" ne pogledavši kanonsku knjigu. Kandidati za provere: noga bez zaglavlja, zaglavlje bez noge, `StornoOd` koji ne pokazuje nigde, par koji nije neuređen (`AMB-INV-10`), obaveza partneru < 0 (`AMB-INV-09`). Od stavke 113 ugovor reda, dupli `AmbID` i `StornoOd` meri `Chk_AMB_KnjigaIntegritet`; ostali kandidati su i dalje otvoreni. `Chk_B10_ReversBezID` je obrisan u `10e-1` |
+| **kanonska knjiga nema PUNU integritetnu proveru** | `modIntegritet` ima **nula** referenci na `Od_Tip` / `Na_Tip` / `VrstaKretanja` / `tblAmbalazaDokument` (merenje 08.10.2026). Posle cutovera proverava samo legacy redove, koje produkcija ne piše — pa operateru kaže „nema nalaza" ne pogledavši kanonsku knjigu. Kandidati za provere: noga bez zaglavlja, zaglavlje bez noge, `StornoOd` koji ne pokazuje nigde, par koji nije neuređen (`AMB-INV-10`), obaveza partneru < 0 (`AMB-INV-09`). Od stavke 113 ugovor reda, dupli `AmbID` i `StornoOd` meri `Chk_AMB_KnjigaIntegritet`; od `10e-3` (stavka 129) i red koji ne dotiče knjigu (red starog oblika) je nalaz po imenu, jer „legacy" stanja više nema. Ostali kandidati (noga bez zaglavlja, zaglavlje bez noge, par koji nije neuređen, obaveza < 0) su i dalje otvoreni. `Chk_B10_ReversBezID` je obrisan u `10e-1` |
 | **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita |
 | **badge "nesacuvano" na novoj formi** | `SelectModeCore` pise u polje broja POSLE `MarkClean` i `mLoading = False`, pa programski upis prodje kroz `MarkDirty` i prazna forma tvrdi da ima neupisanih izmena (review 08.10.2026, `P3`). Zatecen obrazac -- vazio je i pre P1 ispravke, za svaki rezim sa auto-brojem. Jedan premesten red, ali izmena `src-vba` obara compile i zeleni marker, a nov test (natpis u zaglavlju) trazi svoj dvosmeran dokaz; zato **svoj rez posle merge-a**, pre `ODL-24` |
 | **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a** |
