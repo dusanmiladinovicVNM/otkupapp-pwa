@@ -56,13 +56,15 @@ End Function
 ' Semantika:
 '   Ulaz  => +Kolicina
 '   Izlaz => -Kolicina
+'
+' BEZ HANDLERA (AMB-10-ODL-31, stavka 135). Ranije je kvar knjige isao u LogErr
+' i vracao Empty, pa je papir nosio nulu ili tiho izostavljao redove stanja --
+' netacna tvrdnja operateru, ne odsustvo podatka. Kvar ide pozivaocu.
 ' ============================================================
 
 Public Function GetAmbalazeStanje(ByVal entitetID As String, _
                                   ByVal entitetTip As String) As Variant
     Const SRC As String = "modAmbalaza.GetAmbalazeStanje"
-
-    On Error GoTo EH
 
     If Len(Trim$(entitetID)) = 0 Or Len(Trim$(entitetTip)) = 0 Then
         GetAmbalazeStanje = Empty
@@ -162,116 +164,167 @@ Public Function GetAmbalazeStanje(ByVal entitetID As String, _
     Next i
 
     GetAmbalazeStanje = result
-    Exit Function
-
-EH:
-    LogErr SRC
-    GetAmbalazeStanje = Empty
 End Function
 
 ' ============================================================
-' READ: pocetno stanje ambalaze kooperanta PRE datog bloka.
+' READ: pocetno stanje ambalaze kooperanta PRE datog bloka (D-057).
 '
-' "Pre bloka" = svi redovi tog kooperanta (Ulaz +, Izlaz -) za dati
-' tipAmb upisani PRE prvog reda ovog bloka (po redosledu upisa u
-' append-only tabeli). Blok se identifikuje preko DokumentID-a iz
-' blockOtkupIDs (obe noge - Otkup i OM-Izlaz-Koop - dele DokumentID =
-' otkupID). Tako je ispravno i kod ponovne stampe starijeg bloka:
-' kasniji blokovi se NE uracunavaju u pocetno stanje.
-'
-' BEZ GRANICE NEMA POCETNOG STANJA (AMB-10-ODL-27, 11.10.2026). Dokument koji
-' nema nijedan svoj red knjige (otkup bez gajbi, neto unos) nema ni TACKU u
-' knjizi od koje bi se znalo "pre njega". Citac tada NE pogadja: outPoznato je
-' False, a vrednost 0 nije stanje. Ranije je ovde stajao fallback na CELU
-' knjigu ("legacy red pre dvojnog upisa") -- prva stampa je bila tacna, a svaka
-' ponovna je pokazivala DANASNJE stanje (review #415, P2; reprodukovano
-' Test_Amb_PonovnaStampaBezRedaKnjige). Starih redova vise nema.
+' Omotac oko AmbStanjeOkoDokumenta, sa zatecenim ugovorom otkupnog lista: nalog
+' je kooperant, a blok je skup DokumentID-eva BEZ tipa dokumenta -- test 223 mu
+' predaje i revers kao "blok". Granica, ODL-27 i to da kvar knjige ide pozivaocu
+' zive u jezgru, jednom za sve papire (AMB-10-ODL-31).
 '
 ' blockOtkupIDs: niz (npr. Split rezultat) ili string "OTK-1 + OTK-2".
 ' Vraca Long (entitetski saldo: Ulaz = +Kolicina, Izlaz = -Kolicina).
 ' ============================================================
-' DA LI RED DOTICE KOOPERANTA, I SA KOJIM ZNAKOM.
-'
-' Jedno mesto, jer se isto pitanje u GetKooperantAmbOpening postavlja DVAPUT:
-' pri trazenju granice bloka i pri sumiranju. Dve kopije istog pravila bi se
-' razisle prvom doradom -- a razlika se ne bi videla kao greska nego kao
-' pogresno pocetno stanje na stampi.
-Private Function KoopZnakReda(ByRef data As Variant, ByVal i As Long, _
-                              ByRef kol As Object, ByVal koopID As String) As Long
-    If Not RedDoticeKnjigu(data, i, kol) Then Exit Function
-
-    If IstiNalog(AmbText(data(i, kol(COL_AMB_NA_TIP))), _
-                 AmbText(data(i, kol(COL_AMB_NA_ID))), _
-                 AMB_NALOG_KOOPERANT, koopID) Then
-        KoopZnakReda = 1
-    ElseIf IstiNalog(AmbText(data(i, kol(COL_AMB_OD_TIP))), _
-                     AmbText(data(i, kol(COL_AMB_OD_ID))), _
-                     AMB_NALOG_KOOPERANT, koopID) Then
-        KoopZnakReda = -1
-    End If
-End Function
-
 Public Function GetKooperantAmbOpening(ByVal koopID As String, _
                                        ByVal tipAmb As String, _
                                        ByVal blockOtkupIDs As Variant, _
                                        Optional ByRef outPoznato As Boolean) As Long
-    Const SRC As String = "modAmbalaza.GetKooperantAmbOpening"
+    GetKooperantAmbOpening = AmbStanjeOkoDokumenta(AMB_NALOG_KOOPERANT, koopID, tipAmb, _
+                                                   "", blockOtkupIDs, outPoznato)
+End Function
 
-    ' BEZ HANDLERA, namerno (review #415, P2). "Nepoznato" (outPoznato = False)
-    ' sme da znaci samo jedno: dokument nema svoj red knjige (ODL-27). Kvar
-    ' knjige, pad seme ili bilo koja druga greska ide pozivaocu -- handler koji
-    ' bi je pretvorio u False stampao bi pokvarenu knjigu kao legitiman "-".
-    ' Stampa (FillOtkupSablon) ima svoj handler i list tada ne popunjava.
+' DA LI RED DOTICE NALOG, I SA KOJIM ZNAKOM.
+'
+' Jedno mesto, jer se isto pitanje u AmbStanjeOkoDokumenta postavlja TRIPUT: pri
+' trazenju granice dokumenta, pri sumiranju pre nje i pri sumiranju redova
+' dokumenta. Kopije istog pravila bi se razisle prvom doradom -- a razlika se ne
+' bi videla kao greska nego kao pogresno stanje na stampi.
+Private Function NalogZnakReda(ByRef data As Variant, ByVal i As Long, _
+                               ByRef kol As Object, ByVal nalogTip As String, _
+                               ByVal nalogID As String) As Long
+    If Not RedDoticeKnjigu(data, i, kol) Then Exit Function
 
-    GetKooperantAmbOpening = 0
+    If IstiNalog(AmbText(data(i, kol(COL_AMB_NA_TIP))), _
+                 AmbText(data(i, kol(COL_AMB_NA_ID))), _
+                 nalogTip, nalogID) Then
+        NalogZnakReda = 1
+    ElseIf IstiNalog(AmbText(data(i, kol(COL_AMB_OD_TIP))), _
+                     AmbText(data(i, kol(COL_AMB_OD_ID))), _
+                     nalogTip, nalogID) Then
+        NalogZnakReda = -1
+    End If
+End Function
+
+' RED PRIPADA DOKUMENTU: DokumentID je u skupu, i tip dokumenta je trazeni.
+' Identitet dokumenta u knjizi je (DokumentTIP, DokumentID) -- AMB-INV-04. Prazan
+' dokTip ne poredi tip: to je zatecen ugovor GetKooperantAmbOpening.
+Private Function RedJeDokumenta(ByRef data As Variant, ByVal i As Long, _
+                                ByVal colDokTip As Long, ByVal colDokID As Long, _
+                                ByVal dokTip As String, ByVal blk As Object) As Boolean
+    If Not blk.Exists(AmbText(data(i, colDokID))) Then Exit Function
+    If Len(Trim$(dokTip)) > 0 Then
+        If StrComp(AmbText(data(i, colDokTip)), Trim$(dokTip), vbTextCompare) <> 0 Then
+            Exit Function
+        End If
+    End If
+    RedJeDokumenta = True
+End Function
+
+' ISTI TIP AMBALAZE -- bez obzira na velika slova i razmake, isto kao kanonski
+' saldo (AmbSaldoNaloga: StrComp vbTextCompare) i izbor reda za papir
+' (modIzvestaj.AmbTipKljuc: UCase$ i Trim$). Pisac trazi samo neprazan tip, pa
+' knjiga sme da nosi "letvarica" i "LETVARICA"; citalac koji ih razlikuje daje
+' papiru drugi odgovor od salda (review #421, P2 #2).
+Private Function IstiTipAmb(ByVal a As String, ByVal b As String) As Boolean
+    IstiTipAmb = (StrComp(Trim$(a), Trim$(b), vbTextCompare) = 0)
+End Function
+
+' ============================================================
+' READ: stanje NALOGA OKO JEDNOG DOKUMENTA, po redosledu upisa (AMB-10-ODL-31).
+'
+' Vraca stanje naloga za tipAmb PRE dokumenta: zbir redova tog naloga i tipa
+' upisanih pre PRVOG reda dokumenta koji dotice nalog (granica). outPosle je to
+' stanje plus redovi dokumenta za taj nalog i tip -- stanje POSLE dokumenta, i
+' kad su posle njega upisani drugi dokumenti. Ponovna stampa je zato ista kao
+' prva: kasniji dokument, i storno ranijeg upisan posle, ne menjaju papir
+' (ODL-26). Granica je RED, ne datum: dva dokumenta istog dana su dve tacke.
+'
+' U outPosle ulaze i redovi dokumenta koji nisu poslovni (pokrice deficita,
+' ULAZ_TUDJE), jer su deo stanja posle dokumenta. Kontra-stav (StornoOd) ne
+' ulazi: on je kasniji dogadjaj, a ne deo dokumenta.
+'
+' BEZ GRANICE NEMA STANJA (AMB-10-ODL-27, 11.10.2026). Dokument koji nema
+' nijedan svoj red za nalog (otkup bez gajbi, neto unos) nema ni TACKU u knjizi
+' od koje bi se znalo "pre njega". Citac tada NE pogadja: outPoznato je False, a
+' vrednosti nisu stanje. Ranije je ovde stajao fallback na CELU knjigu ("legacy
+' red pre dvojnog upisa") -- prva stampa je bila tacna, a svaka ponovna je
+' pokazivala DANASNJE stanje (review #415, P2; reprodukovano
+' Test_Amb_PonovnaStampaBezRedaKnjige). Starih redova vise nema.
+'
+' BEZ HANDLERA, namerno (review #415, P2). "Nepoznato" (outPoznato = False) sme
+' da znaci samo jedno: dokument nema svoj red knjige (ODL-27). Kvar knjige, pad
+' seme ili bilo koja druga greska ide pozivaocu -- handler koji bi je pretvorio u
+' False stampao bi pokvarenu knjigu kao legitiman "-". Stampa ima svoj handler i
+' list tada ne popunjava.
+'
+' dokIDs: niz ili string "ID1 + ID2". dokTip: tip dokumenta u knjizi (prazno =
+' ne poredi se, v. RedJeDokumenta).
+' ============================================================
+Public Function AmbStanjeOkoDokumenta(ByVal nalogTip As String, _
+                                      ByVal nalogID As String, _
+                                      ByVal tipAmb As String, _
+                                      ByVal dokTip As String, _
+                                      ByVal dokIDs As Variant, _
+                                      Optional ByRef outPoznato As Boolean, _
+                                      Optional ByRef outPosle As Long) As Long
+    Const SRC As String = "modAmbalaza.AmbStanjeOkoDokumenta"
+
+    AmbStanjeOkoDokumenta = 0
     outPoznato = False
+    outPosle = 0
 
-    If Len(Trim$(koopID)) = 0 Or Len(Trim$(tipAmb)) = 0 Then Exit Function
+    If Len(Trim$(nalogTip)) = 0 Or Len(Trim$(nalogID)) = 0 Then Exit Function
+    If Len(Trim$(tipAmb)) = 0 Then Exit Function
 
     Dim data As Variant
     data = GetTableData(TBL_AMBALAZA)
     If IsEmpty(data) Then Exit Function
 
     ' Redovi se NE izbacuju iz niza (ExcludeStornirano) nego se preskacu u
-    ' petlji: granica bloka je INDEKS u append redosledu, a brisanje redova bi
-    ' ga pomerilo. Storno gasi RedDoticeKnjigu kroz kontra-stav, koji je i
-    ' sam upisan POSLE bloka -- pa u pocetno stanje ionako ne ulazi.
+    ' petlji: granica dokumenta je INDEKS u append redosledu, a brisanje redova
+    ' bi ga pomerilo. Storno gasi RedDoticeKnjigu kroz kontra-stav, koji je i
+    ' sam upisan POSLE dokumenta -- pa u stanje pre njega ionako ne ulazi.
     RequireKnjigaSchema SRC
 
     Dim kolIdx As Object, vrsteDok As Object
     Set kolIdx = KnjigaZaCitanje(data, SRC, vrsteDok)
 
     Dim colTip As Long, colKol As Long, colDokID As Long
+    Dim colDokTip As Long, colStornoOd As Long
     colTip = kolIdx(COL_AMB_TIP)
     colKol = kolIdx(COL_AMB_KOLICINA)
     colDokID = kolIdx(COL_AMB_DOK_ID)
+    colDokTip = kolIdx(COL_AMB_DOK_TIP)
+    colStornoOd = kolIdx(COL_AMB_STORNO_OD)
 
-    ' Skup otkup-ID-jeva ovog bloka (niz ili string "OTK-1 + OTK-2").
+    ' Skup ID-eva dokumenta (niz ili string "ID1 + ID2").
     Dim blk As Object
     Set blk = CreateObject("Scripting.Dictionary")
     blk.CompareMode = vbTextCompare
 
-    If IsArray(blockOtkupIDs) Then
+    If IsArray(dokIDs) Then
         Dim el As Variant
-        For Each el In blockOtkupIDs
+        For Each el In dokIDs
             If Len(Trim$(CStr(el))) > 0 Then blk(Trim$(CStr(el))) = True
         Next el
     Else
         Dim parts() As String
-        parts = Split(CStr(blockOtkupIDs), " + ")
+        parts = Split(CStr(dokIDs), " + ")
         Dim p As Long
         For p = LBound(parts) To UBound(parts)
             If Len(Trim$(parts(p))) > 0 Then blk(Trim$(parts(p))) = True
         Next p
     End If
 
-    ' 1) Prvi (najraniji) red ovog bloka za ovog kooperanta = granica "pre bloka".
+    ' 1) Prvi (najraniji) red dokumenta za ovaj nalog = granica "pre dokumenta".
     Dim i As Long
     Dim minIdx As Long: minIdx = 0
     If blk.count > 0 Then
         For i = 1 To UBound(data, 1)
-            If KoopZnakReda(data, i, kolIdx, koopID) <> 0 Then
-                If blk.Exists(AmbText(data(i, colDokID))) Then
+            If NalogZnakReda(data, i, kolIdx, nalogTip, nalogID) <> 0 Then
+                If RedJeDokumenta(data, i, colDokTip, colDokID, dokTip, blk) Then
                     minIdx = i
                     Exit For
                 End If
@@ -279,7 +332,7 @@ Public Function GetKooperantAmbOpening(ByVal koopID As String, _
         Next i
     End If
 
-    ' 2) Saldo svih redova PRE granice. Bez granice nema pocetnog stanja (ODL-27).
+    ' 2) Saldo svih redova PRE granice. Bez granice nema stanja (ODL-27).
     outPoznato = (minIdx > 0)
     If Not outPoznato Then Exit Function
     Dim cutoff As Long
@@ -288,31 +341,49 @@ Public Function GetKooperantAmbOpening(ByVal koopID As String, _
     Dim saldo As Long: saldo = 0
     Dim znak As Long
     For i = 1 To cutoff
-        znak = KoopZnakReda(data, i, kolIdx, koopID)
-        If znak <> 0 And AmbText(data(i, colTip)) = Trim$(tipAmb) Then
+        znak = NalogZnakReda(data, i, kolIdx, nalogTip, nalogID)
+        If znak <> 0 And IstiTipAmb(AmbText(data(i, colTip)), tipAmb) Then
             If IsNumeric(data(i, colKol)) Then
                 saldo = saldo + znak * CLng(data(i, colKol))
             End If
         End If
     Next i
 
-    GetKooperantAmbOpening = saldo
+    ' 3) Stanje POSLE dokumenta: pre + redovi dokumenta za nalog i tip, bez
+    ' kontra-stava. Prolaz ide preko cele knjige, ne od granice: redovi dokumenta
+    ' su po definiciji granice na njoj ili posle nje, pa je ishod isti.
+    Dim posle As Long: posle = saldo
+    For i = 1 To UBound(data, 1)
+        If Len(AmbText(data(i, colStornoOd))) = 0 Then
+            If RedJeDokumenta(data, i, colDokTip, colDokID, dokTip, blk) Then
+                znak = NalogZnakReda(data, i, kolIdx, nalogTip, nalogID)
+                If znak <> 0 And IstiTipAmb(AmbText(data(i, colTip)), tipAmb) Then
+                    If IsNumeric(data(i, colKol)) Then
+                        posle = posle + znak * CLng(data(i, colKol))
+                    End If
+                End If
+            End If
+        End If
+    Next i
+
+    outPosle = posle
+    AmbStanjeOkoDokumenta = saldo
 End Function
 
 ' ============================================================
-' READ: entitetski saldo gajbica STANICE (OM) za dati tip ambalaze.
+' READ: entitetski saldo gajbica STANICE (OM) za dati tip ambalaze, DANAS.
 '
-' Pandan GetKooperantAmbOpening, ali za entitet "Stanica" (puni se iz
-' otpremnica / OM-ulaz). Vraca pun trenutni saldo (Ulaz +, Izlaz -). Za
-' grupni otkupni list to je "pocetno stanje" jer prijemnica pise "Kupac"
-' stranu i ne pomera "Stanica" entitet. 0 ako nema pokreta / pri gresci.
+' Ceo trenutni saldo (Ulaz +, Izlaz -), ne stanje oko dokumenta. Jedini
+' pozivalac je grupni otkupni list, koji je danas nedostizan (unos prijemnice je
+' pauziran do S6) i cita Stanica:<VozacID>, dok prijemnica od 10b-2 pomera nalog
+' Vozac -- njegovo pravilo ide u S6 (AMBALAZA.md 6.13g). Otpremnica od stavke
+' 135 cita AmbStanjeOkoDokumenta.
+'
+' 0 ako nema pokreta. BEZ HANDLERA (AMB-10-ODL-31): kvar knjige je ranije davao
+' 0, pa je papir nosio izmisljenu nulu; sada ide pozivaocu.
 ' ============================================================
 Public Function GetStanicaAmbSaldo(ByVal stanicaID As String, _
                                    ByVal tipAmb As String) As Long
-    Const SRC As String = "modAmbalaza.GetStanicaAmbSaldo"
-
-    On Error GoTo EH
-
     GetStanicaAmbSaldo = 0
     If Len(Trim$(stanicaID)) = 0 Or Len(Trim$(tipAmb)) = 0 Then Exit Function
 
@@ -327,11 +398,6 @@ Public Function GetStanicaAmbSaldo(ByVal stanicaID As String, _
             Exit Function
         End If
     Next i
-    Exit Function
-
-EH:
-    LogErr SRC
-    GetStanicaAmbSaldo = 0
 End Function
 
 ' ============================================================

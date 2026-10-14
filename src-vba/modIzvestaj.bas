@@ -4448,16 +4448,18 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
 
     ' Vozac na drugoj strani je stari "FIRMA" revers: papir nosi vozaca, ne
     ' partnera sa svojim ID-om.
+    ' ambDokID putuje do papira: stanje se cita oko reda OVOG dokumenta, ne kao
+    ' danasnji saldo partnera (AMB-10-ODL-31, stavka 135).
     If StrComp(pTip, AMB_NALOG_VOZAC, vbTextCompare) = 0 Then
         OutputIzdavanjeAmbalaze datum, broj, omNaziv, omID, _
                                 ResolveEntitetName(pID, pTip), "", _
-                                tipAmb, kolAmb, "", prijem, "FIRMA"
+                                tipAmb, kolAmb, "", prijem, ambDokID, "FIRMA"
         Exit Sub
     End If
 
     OutputIzdavanjeAmbalaze datum, broj, omNaziv, omID, _
                             ResolveEntitetName(pID, pTip), pID, _
-                            tipAmb, kolAmb, "", prijem
+                            tipAmb, kolAmb, "", prijem, ambDokID
 End Sub
 
 Public Sub StampajReversAmbalaze(ByVal dokID As String, ByVal dokTip As String, _

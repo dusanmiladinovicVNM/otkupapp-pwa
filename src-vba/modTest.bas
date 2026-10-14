@@ -325,6 +325,10 @@ Public Sub RunAllTests()
     RunOne 229
     RunOne 230
     RunOne 231
+    RunOne 232
+    RunOne 233
+    RunOne 234
+    RunOne 235
     RunOne 13
     RunOne 14
     RunOne 15
@@ -827,6 +831,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 229: TestName = "T_KI011_LogSetupCuvaGreskuPozivaoca"
         Case 230: TestName = "T_KI012_TipNaPapiruJeTekst"
         Case 231: TestName = "T_KI013_VisetipniDokumentPapirPoTipu"
+        Case 232: TestName = "T_SaldoPapir_ReversKakoJeBio"
+        Case 233: TestName = "T_SaldoPapir_KupcevReversF7BezPapira"
+        Case 234: TestName = "T_SaldoPapir_KvarKnjigeNijeNula"
+        Case 235: TestName = "T_SaldoPapir_TipBezObziraNaVelikaSlova"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1066,6 +1074,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 229: T_KI011_LogSetupCuvaGreskuPozivaoca
         Case 230: T_KI012_TipNaPapiruJeTekst
         Case 231: T_KI013_VisetipniDokumentPapirPoTipu
+        Case 232: T_SaldoPapir_ReversKakoJeBio
+        Case 233: T_SaldoPapir_KupcevReversF7BezPapira
+        Case 234: T_SaldoPapir_KvarKnjigeNijeNula
+        Case 235: T_SaldoPapir_TipBezObziraNaVelikaSlova
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -8047,6 +8059,342 @@ EH:
     On Error GoTo 0
     Err.Raise errNum, "modTest.T_KI013_VisetipniDokumentPapirPoTipu", errDesc
 End Sub
+
+' 232. PAPIR REVERSA NOSI STANJE OKO SVOG REDA KNJIGE (stavka 135).
+'
+' Rucna provera #420: ponovljen papir 1/IZV (12/1 x30) nosi "Pocetno: -10 kom,
+' Novo: 20 kom". Novo je bilo DANASNJI saldo kooperanta, a pocetno novo minus
+' dokument. Pravilo (odluka operatera 13.10.2026): novo = stanje naloga POSLE
+' ovog dokumenta, po redosledu upisa u knjizi, a pocetno = novo - kretanje. Prvi
+' papir (F7) zato ostaje kakav je bio, a ponovljen je isti kao prvi.
+'
+' Pozitivna kontrola ide PRVA: F7 papir posle upisa, za dva dokumenta istog dana
+' i istog partnera. Tek onda ponovna stampa prvog iz liste (produkcioni ulaz) i
+' visetipni 1/IZV iz fixture-a: njegovi redovi su PRVI u knjizi, pa je stanje
+' kooperanta pre njega nula za oba tipa.
+' SABOTAZA: saldo-revers-danasnji -> pukne "ponovna stampa: papir reversa nosi
+' stanje oko svog reda, ne danasnje".
+Private Sub T_SaldoPapir_ReversKakoJeBio()
+    Dim modePre As String, nabBroj As String
+    Dim s0 As Long, broj1 As String, broj2 As String, dok1 As String
+    Dim por1 As String, por2 As String, res1 As String, res2 As String
+    Dim papir1 As String, papir2 As String, papir1R As String
+    Dim izv12 As String, izvLet As String, d1R As String, d12 As String, dLet As String
+    Dim errNum As Long, errDesc As String
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    On Error GoTo CleanUp
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+
+    nabBroj = "NAB-SALDO-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, 10, nabBroj, _
+                                  "preduslov testa stanja na papiru"
+    s0 = CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, FX_TIP_AMB))
+
+    ' Prvi papir dolazi iz F7, istim ulazom kojim ekran snima revers.
+    broj1 = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date)
+    OcistiList WS_IZDAMB_SABLON
+    res1 = modNovacUnos.ReversUpisi(ReversF7Unos(broj1, 3), por1)
+    papir1 = ReversStanjePapira()
+    dok1 = AmbDokIDPoBroju(broj1, FX_STANICA)
+
+    broj2 = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date)
+    OcistiList WS_IZDAMB_SABLON
+    res2 = modNovacUnos.ReversUpisi(ReversF7Unos(broj2, 2), por2)
+    papir2 = ReversStanjePapira()
+
+    ' Ponovna stampa iz liste, POSLE drugog dokumenta istog partnera i tipa.
+    On Error Resume Next
+    OcistiList WS_IZDAMB_SABLON
+    modIzvestaj.StampajReversAmbalaze dok1, DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    d1R = Err.description
+    Err.Clear
+    papir1R = ReversStanjePapira()
+
+    OcistiList WS_IZDAMB_SABLON
+    modIzvestaj.StampajReversAmbalaze "ADK-IZV-1", DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    d12 = Err.description
+    Err.Clear
+    izv12 = ReversStanjePapira()
+
+    OcistiList WS_IZDAMB_SABLON
+    modIzvestaj.StampajReversAmbalaze "ADK-IZV-1", DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_LETVA
+    dLet = Err.description
+    Err.Clear
+    izvLet = ReversStanjePapira()
+    On Error GoTo CleanUp
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_SaldoPapir_ReversKakoJeBio", errDesc
+
+    AssertEq (Len(res1) > 0 And Len(res2) > 0 And Len(dok1) > 0), True, _
+             "preduslov: oba reversa su upisana kroz F7"
+    AssertEq por1 & por2, "", "preduslov: F7 je napravio oba papira bez upozorenja"
+    AssertEq papir1, CStr(s0) & " kom|" & CStr(s0 + 3) & " kom", _
+             "F7: prvi papir nosi stanje pre i posle dokumenta (kontrola)"
+    AssertEq papir2, CStr(s0 + 3) & " kom|" & CStr(s0 + 5) & " kom", _
+             "F7: drugi dokument istog dana nosi stanje posle prvog (kontrola)"
+    AssertEq d1R & "|" & papir1R, "|" & papir1, _
+             "ponovna stampa: papir reversa nosi stanje oko svog reda, ne danasnje"
+    AssertEq d12 & "|" & izv12, "|0 kom|30 kom", _
+             "visetipni 1/IZV, 12/1: pocetno je stanje pre dokumenta"
+    AssertEq dLet & "|" & izvLet, "|0 kom|5 kom", _
+             "visetipni 1/IZV, Letvarica: drugi tip nosi svoje stanje"
+End Sub
+
+' 233. KUPCEV REVERS SE IZ F7 NE STAMPA (odluka operatera 13.10.2026, stavka 135).
+'
+' Lista AMBALAZA kupcev revers odbija po imenu (7507): dokument je KUPCEV, nosi
+' njegov broj, a original drzi operater. F7 ga je ipak stampao -- na sablonu za
+' kooperanta, sa imenom kupca i bez redova stanja, jer je saldo trazio kao
+' Kooperant:<KupacID> i nije ga nalazio (fail-open u IzdAmbSaldoVal). Sada F7 za
+' kupcev revers papir ne pravi, a operater ne dobija ni upozorenje: to nije pad
+' stampe nego pravilo, kao kad je stampa ugasena.
+'
+' Preduslov se meri PRE upisa: kupac bez gajbi otvara pitanje o manjku (MsgBox u
+' RevKupcaUpisi), a MsgBox u run_vba prolazu visi.
+' SABOTAZA: saldo-kupcev-revers-stampa -> pukne "kupcev revers: F7 ne pravi papir
+' i ne javlja kvar (kao lista, 7507)".
+Private Sub T_SaldoPapir_KupcevReversF7BezPapira()
+    Dim modePre As String, kupSaldo As Double, broj As String, upozorenje As String
+    Dim p As Object, res As String, poruke As String
+    Dim pdfPre As Long, pdfPosle As Long, javio As String
+    Dim errNum As Long, errDesc As String
+
+    ' Katalog iz koda (obrazac testa 228): kljuc mora postojati da bi se merio.
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    upozorenje = Poruka("NOVUNOS_MSG_STAMPA_NIJE")
+
+    kupSaldo = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, FX_KUPAC, FX_TIP_AMB)
+    AssertEq (kupSaldo >= 1), True, _
+             "preduslov: kupac drzi bar jednu gajbu (bez pitanja o manjku)"
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    On Error GoTo CleanUp
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+
+    broj = "KUP233-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    pdfPre = BrojPdfReversa(broj)
+    Set p = modNovacUnos.NoviReversUnos()
+    p("stanicaID") = FX_STANICA
+    p("stanicaTekst") = FX_STANICA
+    p("partnerID") = FX_KUPAC
+    p("partnerTip") = "KUP"
+    p("partnerTekst") = FX_KUPAC_NAZIV
+    p("vozacID") = FX_VOZAC
+    p("vrsta") = FX_VRSTA
+    p("brDok") = broj
+    p("tipAmb") = FX_TIP_AMB
+    p("kolAmb") = 1
+    p("smerRev") = modNovacUnos.SMER_REV_POVRAT_KUP
+    res = modNovacUnos.ReversUpisi(p, poruke)
+    pdfPosle = BrojPdfReversa(broj)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_SaldoPapir_KupcevReversF7BezPapira", errDesc
+
+    javio = IIf(InStr(1, poruke, upozorenje, vbBinaryCompare) > 0, "javio", "tiho")
+    AssertEq res, broj, "preduslov: kupcev revers je upisan"
+    AssertEq CStr(pdfPosle - pdfPre) & "|" & javio, "0|tiho", _
+             "kupcev revers: F7 ne pravi papir i ne javlja kvar (kao lista, 7507)"
+End Sub
+
+' 234. KVAR KNJIGE: CITAOCI SALDA NA PAPIRU DIZU GRESKU (stavka 135).
+'
+' GetAmbalazeStanje je kvar knjige gutao (LogErr -> Empty), a GetStanicaAmbSaldo
+' ga je pretvarao u 0, pa je papir nosio izmisljenu nulu umesto da ne nastane.
+' Odluka operatera 13.10.2026: papir ne nastaje, isti sud koji otkupni list ima
+' od #415 (ODL-27, test 224) -- kvar ide pozivaocu. Kvar je na redu koji NIJE red
+' trazenog naloga: integritet je sud nad celom knjigom. Pozitivna kontrola ide
+' PRE kvara.
+' SABOTAZE: saldo-citac-guta-kvar -> pukne "kvar knjige: GetAmbalazeStanje dize
+' gresku, ne vraca prazno"; saldo-stanica-guta-kvar -> pukne "kvar knjige:
+' GetStanicaAmbSaldo dize gresku, ne vraca nulu".
+Private Sub T_SaldoPapir_KvarKnjigeNijeNula()
+    Dim stCista As Variant, revDok As String, revBroj As String
+    Dim ambID As String, naTipPre As String
+    Dim dignuto1 As Boolean, razlog1 As String, dignuto2 As Boolean, v As Long
+
+    stCista = modAmbalaza.GetAmbalazeStanje(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
+
+    AmbSejRevers 2, revDok, revBroj
+    ambID = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_DOK_ID, revDok, COL_AMB_ID))
+    naTipPre = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP))
+    PostaviPoljePoPK TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP, ""
+
+    On Error Resume Next
+    modAmbalaza.GetAmbalazeStanje FX_STANICA, AMB_NALOG_STANICA
+    dignuto1 = (Err.Number <> 0)
+    razlog1 = Err.description
+    Err.Clear
+    v = modAmbalaza.GetStanicaAmbSaldo(FX_STANICA, FX_TIP_AMB)
+    dignuto2 = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo 0
+
+    ' Fixture se vraca PRE tvrdnji.
+    PostaviPoljePoPK TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP, naTipPre
+
+    AssertEq IsArray(stCista), True, "preduslov: nad cistom knjigom citac vraca stanje"
+    AssertEq (Len(naTipPre) > 0), True, _
+             "preduslov: pokvaren red je NOSIO odrediste pre kvara"
+    AssertEq dignuto1, True, "kvar knjige: GetAmbalazeStanje dize gresku, ne vraca prazno"
+    AssertEq (InStr(1, razlog1, "Red knjige ", vbTextCompare) > 0), True, _
+             "kvar knjige: greska citaoca stanja dolazi iz ugovora knjige"
+    AssertEq dignuto2, True, "kvar knjige: GetStanicaAmbSaldo dize gresku, ne vraca nulu"
+End Sub
+
+' 235. TIP AMBALAZE NA PAPIRU JE ISTI TIP KAO U SALDU, BEZ OBZIRA NA VELIKA SLOVA
+'      (review #421, P2 #2).
+'
+' Pisac trazi samo neprazan tip (AmbPrenosStrukturaProblem), a F7 combo dopusta
+' kucanje -- pa knjiga sme da nosi "letvarica" i "LETVARICA". Kanonski saldo
+' (AmbSaldoNaloga) ih poredi bez obzira na velika slova, a i stampa bira red po
+' AmbTipKljuc (UCase). Istorijski citalac je poredio binarno, pa je papir drugog
+' reversa izostavljao prvi: knjiga i papir su davali dva odgovora na isto pitanje.
+'
+' Oba reversa su POVRAT kooperanta (njegove gajbe iz fixture-a, 1/IZV Letvarica),
+' pa stanica ne treba nabavku. Pisu se produkcionim primitivima u transakciji
+' testa i VRACAJU posle stampe (obrazac 231), pa knjiga ostaje kakva je bila.
+' SABOTAZA: saldo-tip-osetljiv-na-slova -> pukne "tip bez obzira na velika slova:
+' papir nosi stanje istog tipa kao saldo".
+Private Sub T_SaldoPapir_TipBezObziraNaVelikaSlova()
+    Dim modePre As String, s0 As Long, tx As clsTransaction
+    Dim dokA As String, dokB As String, papirB As String, dB As String
+    Dim nRedA As Long, nRedB As Long
+    Dim errNum As Long, errDesc As String
+
+    s0 = CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, FX_TIP_LETVA))
+    AssertEq (s0 >= 3), True, "preduslov: kooperant drzi bar tri letvarice (1/IZV)"
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+
+    Set tx = New clsTransaction
+    On Error GoTo EH
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokA = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, _
+               modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date), _
+               Date, AMB_NALOG_STANICA, FX_STANICA, "235 mala slova")
+    modAmbalaza.PrenesiAmbalazu tx, Date, LCase$(FX_TIP_LETVA), 2, _
+                                AMB_NALOG_KOOPERANT, FX_KOOPERANT, AMB_NALOG_STANICA, FX_STANICA, _
+                                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokA
+    dokB = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, _
+               modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date), _
+               Date, AMB_NALOG_STANICA, FX_STANICA, "235 velika slova")
+    modAmbalaza.PrenesiAmbalazu tx, Date, UCase$(FX_TIP_LETVA), 1, _
+                                AMB_NALOG_KOOPERANT, FX_KOOPERANT, AMB_NALOG_STANICA, FX_STANICA, _
+                                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokB
+    nRedA = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, dokA).count
+    nRedB = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, dokB).count
+
+    On Error Resume Next
+    OcistiList WS_IZDAMB_SABLON
+    modIzvestaj.StampajReversAmbalaze dokB, DOK_TIP_AMBALAZA_DOKUMENT, UCase$(FX_TIP_LETVA)
+    dB = Err.description
+    Err.Clear
+    papirB = ReversStanjePapira()
+    tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+
+    AssertEq nRedA & "|" & nRedB, "1|1", "preduslov: oba povrata su knjizena (pisac pusta oba zapisa tipa)"
+    ' Papir povrata: novo = stanje posle (s0 - 2 - 1), pocetno = novo + kretanje.
+    AssertEq dB & "|" & papirB, "|" & CStr(s0 - 2) & " kom|" & CStr(s0 - 3) & " kom", _
+             "tip bez obzira na velika slova: papir nosi stanje istog tipa kao saldo"
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_SaldoPapir_TipBezObziraNaVelikaSlova", errDesc
+End Sub
+
+' F7 unos NASEG reversa (stanica izdaje kooperantu) za modNovacUnos.ReversUpisi --
+' isti recnik koji ekran predaje (NoviReversUnos).
+Private Function ReversF7Unos(ByVal broj As String, ByVal kol As Long) As Object
+    Dim p As Object
+    Set p = modNovacUnos.NoviReversUnos()
+    p("stanicaID") = FX_STANICA
+    p("stanicaTekst") = FX_STANICA
+    p("partnerID") = FX_KOOPERANT
+    p("partnerTip") = "KOOP"
+    p("partnerTekst") = FX_KOOPERANT
+    p("vrsta") = FX_VRSTA
+    p("brDok") = broj
+    p("tipAmb") = FX_TIP_AMB
+    p("kolAmb") = kol
+    p("smerRev") = modNovacUnos.SMER_REV_IZD_KOOP
+    Set ReversF7Unos = p
+End Function
+
+' Stanje sa papira reversa, prvi primerak: "pocetno|novo", npr. "18 kom|21 kom".
+' Red stanja je JEDNA celija kolone 1 ("labela vrednost", DocLabelVal), pa se
+' vrednost cita iza poslednjeg ": ". Prazno = papir nema redove stanja.
+Private Function ReversStanjePapira() As String
+    Dim ws As Worksheet, r As Long, poslednji As Long, t As String
+    Dim poc As String, novo As String
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(WS_IZDAMB_SABLON)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    poslednji = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    For r = 1 To poslednji
+        t = NzToText(ws.cells(r, 1).value)
+        If Len(poc) = 0 And InStr(1, t, "Pocetno stanje", vbBinaryCompare) = 1 Then
+            poc = VrednostIzaLabele(t)
+        End If
+        If Len(novo) = 0 And InStr(1, t, "Novo stanje", vbBinaryCompare) = 1 Then
+            novo = VrednostIzaLabele(t)
+        End If
+    Next r
+    If Len(poc) = 0 And Len(novo) = 0 Then Exit Function
+    ReversStanjePapira = poc & "|" & novo
+End Function
+
+Private Function VrednostIzaLabele(ByVal t As String) As String
+    Dim k As Long
+    k = InStrRev(t, ": ")
+    If k > 0 Then VrednostIzaLabele = Mid$(t, k + 2)
+End Function
+
+' AmbDokID po (broj, vlasnik broja). Broj je jedinstven samo u opsegu vlasnika
+' (ODL-20), pa se vlasnik meri. "" = nije jednoznacno.
+Private Function AmbDokIDPoBroju(ByVal broj As String, ByVal ownerID As String) As String
+    Dim d As Variant, i As Long, n As Long, nadjen As String
+    Dim cID As Long, cBr As Long, cOw As Long
+    d = GetTableData(TBL_AMBALAZA_DOKUMENT)
+    If Not IsArray(d) Then Exit Function
+    cID = GetColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID)
+    cBr = GetColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ)
+    cOw = GetColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_ID)
+    For i = 1 To UBound(d, 1)
+        If StrComp(NzToText(d(i, cBr)), broj, vbTextCompare) = 0 And _
+           StrComp(NzToText(d(i, cOw)), ownerID, vbTextCompare) = 0 Then
+            n = n + 1
+            nadjen = NzToText(d(i, cID))
+        End If
+    Next i
+    If n = 1 Then AmbDokIDPoBroju = nadjen
+End Function
 
 ' Prazni list sablona pre stampe u testu: ustajao papir iz ranijeg poziva ne sme
 ' da prodje umesto novog. Nepostojeci list se preskace.

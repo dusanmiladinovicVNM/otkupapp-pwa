@@ -613,7 +613,7 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
         If Len(revDokID) = 0 Then Exit Function
         poruke = poruke & Poruka("NOVUNOS_MSG_ISPR_REV_OK") & " " & stariBroj & vbCrLf
         ' Nov dokument = nov papir (A9: nov broj).
-        poruke = poruke & StampajRevers(p, smer)
+        poruke = poruke & StampajRevers(p, smer, revDokID)
         ReversUpisi = BrojIliOznaka(brDok)
         Exit Function
     End If
@@ -626,7 +626,12 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
         If Len(revDokID) = 0 Then Exit Function
         ' Ispravka kupcevog reversa ne postoji: 10d ispravlja samo NAS revers, a
         ' kupcev se stornira i unosi ponovo (IspravkaReversaRazlog ga odbija).
-        poruke = poruke & StampajRevers(p, smer)
+        '
+        ' KUPCEV REVERS SE NE STAMPA (AMB-10-ODL-32, odluka operatera 13.10.2026),
+        ' isto pravilo kao lista AMBALAZA (7507): dokument je kupcev, nosi njegov
+        ' broj, a original drzi operater. Bez upozorenja -- to je pravilo, ne pad
+        ' stampe. Ranije je ovde isao papir na sablonu za kooperanta, sa imenom
+        ' kupca i bez redova stanja.
         ReversUpisi = BrojIliOznaka(brDok)
         Exit Function
     End If
@@ -649,7 +654,7 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
 
     ' PDF revers - best-effort: pad stampe ne sme da obori potvrdu upisa. Rutina
     ' ga vraca kao upozorenje uz uspeh (KI-011), pa ide u poruke.
-    poruke = poruke & StampajRevers(p, smer)
+    poruke = poruke & StampajRevers(p, smer, revDokID)
 
     ReversUpisi = BrojIliOznaka(brDok)
     Exit Function
@@ -734,20 +739,20 @@ End Function
 ' USPEH -- forma se cisti, lista osvezava, a operater zna da revers ne unosi
 ' ponovo. Do KI-011 je pad PDF-a otvarao dijalog iz dubine stampe, a pad
 ' PRINT/PREVIEW izlaza je bio tih.
-Private Function StampajRevers(ByVal p As Object, ByVal smer As Long) As String
+'
+' ambDokID je dokument koji je pisac upravo napravio: papir cita stanje oko
+' NJEGOVOG reda knjige (AMB-10-ODL-31). Kupcev revers ovde ne stize -- ne stampa
+' se (AMB-10-ODL-32, ReversUpisi).
+Private Function StampajRevers(ByVal p As Object, ByVal smer As Long, _
+                               ByVal ambDokID As String) As String
     Dim vozacNaziv As String, razlog As String
     On Error GoTo EH
-    ' Kupcev revers ide u PRVU granu: ona imenuje PARTNERA, a kupac je partner.
-    ' Druga grana nosi ime vozaca i protivstranu firma<->OM, sto bi na kupcevom
-    ' papiru bilo tacno pogresno.
-    If smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP _
-       Or smer = SMER_REV_POVRAT_KUP Then
+    If smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP Then
         razlog = OutputIzdavanjeAmbalaze(CDate(p("datum")), S(p, "brDok"), _
                                          S(p, "stanicaTekst"), S(p, "stanicaID"), _
                                          S(p, "partnerTekst"), S(p, "partnerID"), _
                                          S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
-                                         (smer = SMER_REV_PRI_KOOP Or _
-                                          smer = SMER_REV_POVRAT_KUP), tiho:=True)
+                                         (smer = SMER_REV_PRI_KOOP), ambDokID, tiho:=True)
     Else
         vozacNaziv = Trim$(NzToText(LookupValue(TBL_VOZACI, "VozacID", S(p, "vozacID"), "Ime")) & " " & _
                            NzToText(LookupValue(TBL_VOZACI, "VozacID", S(p, "vozacID"), "Prezime")))
@@ -755,7 +760,7 @@ Private Function StampajRevers(ByVal p As Object, ByVal smer As Long) As String
                                          S(p, "stanicaTekst"), S(p, "stanicaID"), _
                                          vozacNaziv, "", _
                                          S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
-                                         (smer = SMER_REV_IZD_OM), "FIRMA", True)
+                                         (smer = SMER_REV_IZD_OM), ambDokID, "FIRMA", True)
     End If
     If Len(razlog) > 0 Then StampajRevers = Poruka("NOVUNOS_MSG_STAMPA_NIJE") & " " & razlog & vbCrLf
     Exit Function

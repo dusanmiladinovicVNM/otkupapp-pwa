@@ -7847,6 +7847,118 @@ SABOTAZE = {
         "T_KI013_VisetipniDokumentPapirPoTipu",
         "dva reda istog tipa se ne spajaju na jedan papir",
     ),
+    # --- stanje na papiru oko svog reda knjige (stavka 135, AMB-10-ODL-31/-32) ---
+    # Papir reversa ponovo cita DANASNJI saldo partnera: prvi papir ostaje isti
+    # (dokument je tada poslednji), a ponovljen nosi i kasnije dokumente.
+    "saldo-revers-danasnji": (
+        "modPrint.bas",
+        "    If Not revPoznato Then\n",
+        "    saldoNovo = CLng(modAmbalaza.AmbSaldoNaloga(nalogTip, nalogID, tipAmb))   ' SABOTAZA: danasnji saldo\n"
+        "    If Not revPoznato Then\n",
+        "T_SaldoPapir_ReversKakoJeBio",
+        "ponovna stampa: papir reversa nosi stanje oko svog reda, ne danasnje",
+    ),
+    # Kupcev revers se iz F7 ponovo salje na stampu. Papir ne nastaje (nema svoj
+    # red za stanicu), ali operater dobija upozorenje o padu stampe za dokument
+    # koji se po pravilu ne stampa (ODL-32).
+    "saldo-kupcev-revers-stampa": (
+        "modNovacUnos.bas",
+        "        ' kupca i bez redova stanja.\n"
+        "        ReversUpisi = BrojIliOznaka(brDok)\n",
+        "        poruke = poruke & StampajRevers(p, smer, revDokID)   ' SABOTAZA: kupcev revers se stampa\n"
+        "        ReversUpisi = BrojIliOznaka(brDok)\n",
+        "T_SaldoPapir_KupcevReversF7BezPapira",
+        "kupcev revers: F7 ne pravi papir i ne javlja kvar (kao lista, 7507)",
+    ),
+    # Citac salda opet guta kvar knjige i vraca prazno: papir bi nosio nulu ili
+    # bez redova stanja (ODL-31).
+    "saldo-citac-guta-kvar": (
+        "modAmbalaza.bas",
+        "    Set kolIdx = KnjigaZaCitanje(data, SRC, vrsteDok)\n"
+        "\n"
+        "    Dim colTip As Long\n",
+        "    On Error Resume Next   ' SABOTAZA: citac salda guta kvar knjige\n"
+        "    Set kolIdx = KnjigaZaCitanje(data, SRC, vrsteDok)\n"
+        "    If Err.Number <> 0 Then Err.Clear: GetAmbalazeStanje = Empty: Exit Function\n"
+        "    On Error GoTo 0\n"
+        "\n"
+        "    Dim colTip As Long\n",
+        "T_SaldoPapir_KvarKnjigeNijeNula",
+        "kvar knjige: GetAmbalazeStanje dize gresku, ne vraca prazno",
+    ),
+    # Saldo stanice opet pretvara kvar knjige u 0.
+    "saldo-stanica-guta-kvar": (
+        "modAmbalaza.bas",
+        "    st = GetAmbalazeStanje(stanicaID, \"Stanica\")\n",
+        "    On Error Resume Next   ' SABOTAZA: saldo stanice guta kvar knjige\n"
+        "    st = GetAmbalazeStanje(stanicaID, \"Stanica\")\n"
+        "    Err.Clear\n"
+        "    On Error GoTo 0\n",
+        "T_SaldoPapir_KvarKnjigeNijeNula",
+        "kvar knjige: GetStanicaAmbSaldo dize gresku, ne vraca nulu",
+    ),
+    # Otpremnica ponovo stampa stanje POSLE sebe kao "pocetno" (zatecen kvar:
+    # izdavanje je vec knjizilo Stanica -> Vozac).
+    "saldo-otp-dvostruko": (
+        "modPrint.bas",
+        "        h(\"ambPocetno\") = tipAmb & \" x \" & CStr(otpPosle + CLng(kolAmb))\n",
+        "        h(\"ambPocetno\") = tipAmb & \" x \" & CStr(otpPosle)   ' SABOTAZA: pocetno je stanje posle otpremnice\n",
+        "Test_OTP_PapirStanjeOkoSvogReda",
+        "OTP papir: pocetno stanje je stanje stanice pre otpremnice",
+    ),
+    # Otpremnica ponovo cita DANASNJI saldo stanice: ponovljen papir nosi i
+    # kasnije dokumente stanice.
+    "saldo-otp-danasnji": (
+        "modPrint.bas",
+        "    h(\"ambIzdavanje\") = tipAmb & \" x 0\"\n",
+        "    otpPosle = CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, stID, tipAmb))   ' SABOTAZA: danasnji saldo\n"
+        "    h(\"ambIzdavanje\") = tipAmb & \" x 0\"\n",
+        "Test_OTP_PapirStanjeOkoSvogReda",
+        "OTP papir: ponovna stampa posle kasnijeg dokumenta je ista",
+    ),
+    # Papir otpremnice guta kvar knjige i nastaje sa "-" umesto da ne nastane.
+    # Meri se nad otpremnicom BEZ gajbi: otpremnicu sa gajbama od review #421
+    # cuva i druga brana (7693, gajbe bez reda), pa nad njom ova sabotaza nije
+    # obarala nista (dokaz 14.10.2026, stavka 137).
+    "saldo-otp-guta-kvar": (
+        "modPrint.bas",
+        "    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_STANICA, stID, tipAmb, _\n"
+        "                                      DOK_TIP_OTPREMNICA, otpID, otpPoznato, otpPosle\n",
+        "    On Error Resume Next   ' SABOTAZA: otpremnica guta kvar knjige\n"
+        "    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_STANICA, stID, tipAmb, _\n"
+        "                                      DOK_TIP_OTPREMNICA, otpID, otpPoznato, otpPosle\n"
+        "    Err.Clear\n"
+        "    On Error GoTo EH\n",
+        "Test_OTP_PapirBezVezeKnjige",
+        "OTP papir bez gajbi: kvar knjige -- ni otpremnica bez gajbi se ne popunjava",
+    ),
+    # Review #421, P2 #1: izdata otpremnica SA gajbama bez svog reda knjige opet
+    # stampa "-" kao da je bez gajbi -- pokidana veza prolazi kao nepoznato stanje.
+    "saldo-otp-bez-veze-nepoznato": (
+        "modPrint.bas",
+        "    ElseIf kolAmb > 0 Then\n",
+        "    ElseIf False Then   ' SABOTAZA: otpremnica sa gajbama bez reda stampa nepoznato\n",
+        "Test_OTP_PapirBezVezeKnjige",
+        "OTP papir bez veze: izgubljen DokumentID -- otpremnica sa gajbama se ne popunjava",
+    ),
+    # Identitet dokumenta u knjizi se suzi na sam DokumentID: red TUDJEG tipa sa
+    # istim ID-om postaje "red ove otpremnice" (AMB-INV-04, generizacija).
+    "saldo-dokument-bez-tipa": (
+        "modAmbalaza.bas",
+        "    If Len(Trim$(dokTip)) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: tip dokumenta se ne poredi\n",
+        "Test_OTP_PapirBezVezeKnjige",
+        "OTP papir bez veze: red tudjeg tipa dokumenta -- otpremnica sa gajbama se ne popunjava",
+    ),
+    # Review #421, P2 #2: istorijski citalac opet poredi tip binarno, pa papir ne
+    # vidi raniji red istog tipa u drugom zapisu, a saldo ga vidi.
+    "saldo-tip-osetljiv-na-slova": (
+        "modAmbalaza.bas",
+        "    IstiTipAmb = (StrComp(Trim$(a), Trim$(b), vbTextCompare) = 0)\n",
+        "    IstiTipAmb = (Trim$(a) = Trim$(b))   ' SABOTAZA: tip osetljiv na velika slova\n",
+        "T_SaldoPapir_TipBezObziraNaVelikaSlova",
+        "tip bez obzira na velika slova: papir nosi stanje istog tipa kao saldo",
+    ),
 }
 
 

@@ -2277,7 +2277,7 @@ starom datumu, nov revers na novom, a nov je upisan **posle** bloka koji je stam
 > tog otkupa, uz pozitivnu kontrolu nad čistom knjigom) · sabotaže
 > `amb-istorija-kvar-kao-nepoznato`, `amb-istorija-stampa-guta-kvar`. Isto gutanje u
 > `GetAmbalazeStanje` i `GetStanicaAmbSaldo` (štampa daje 0) starije je od 10d i ide
-> zasebno.
+> zasebno. *(Rešeno 13.10.2026, `AMB-10-ODL-31`, 6.13g.)*
 
 *Provera:* `T_AmbIstorija_KarticaStornoVaziUnazad` (222) ·
 `T_AmbIstorija_PonovnaStampaKakoJeBilo` (223) · sabotaže `amb-istorija-kontrastav-danas`,
@@ -2506,6 +2506,66 @@ dokument ne pravi. Ispravka je u 6.13f.
 - **Odbijena varijanta B** (jedan tip po dokumentu): suzila bi `AMB-INV-10` i promenila
   premisu oko šest postojećih testova (dvotipna nabavka, test 220), a nijedan operaterski
   scenario je ne traži.
+
+### 6.13g Stanje na papiru — oko svog reda knjige (AMB-10-ODL-31/-32, 13.10.2026)
+
+> **`AMB-10-ODL-31` (odluke operatera 13.10.2026): stanje na papiru je stanje oko SVOG
+> reda knjige, a pokvarena knjiga ne daje papir.** Revers i otpremnica čitaju stanje
+> naloga po redosledu upisa, oko prvog reda **tog** dokumenta. „Novo stanje" (saldo) je
+> stanje posle dokumenta, a „početno" je novo − kretanje. Ponovna štampa je zato ista kao
+> prva, i posle kasnijih dokumenata istog partnera, isto kao otkupni list po ODL-26. Kad
+> knjiga ne može da se pročita, papir **ne nastaje** i razlog ide u log; čitaoci salda
+> (`GetAmbalazeStanje`, `GetStanicaAmbSaldo`) više ne gutaju grešku.
+
+Zatečeno stanje (merenje stavke 135):
+
+| Papir | Nosilac salda | Čitalac pre | Kvar |
+|---|---|---|---|
+| revers (F7 i lista) | kooperant, a FIRMA → stanica | današnji saldo; početno = današnji − dokument | ponovljen papir `1/IZV` nosi −10 → 20 |
+| otpremnica (samo iz liste) | stanica | današnji saldo stanice kao „početno", pa saldo = početno − gajbe | **pogrešno pri svakoj štampi**: izdavanje je već knjižilo `Stanica → Vozač`, pa se gajbe oduzimaju dvaput |
+| grupni otkupni list | `Stanica:<VozacID>` | današnji saldo | danas **nedostižan** (unos prijemnice je pauziran do S6), a prijemnica od 10b-2 pomera nalog `Vozac`; ide u S6 |
+
+**Čitalac je jedan** (`modAmbalaza.AmbStanjeOkoDokumenta`): granica je prvi red
+dokumenta koji dotiče nalog, „pre" je zbir redova naloga i tipa pre granice, a „posle"
+je „pre" plus svi redovi dokumenta za taj nalog i tip, bez kontra-stava. Isto pravilo je
+ranije imao samo otkupni list (`GetKooperantAmbOpening`, D-057), koji je sada omotač
+istog čitaoca. Dokument je `(DokumentTIP, DokumentID)`; otkupni list zadržava zatečen
+ugovor bez tipa (test 223 mu predaje revers kao „blok"). Dva dokumenta istog dana su
+različita tačka u knjizi, jer granica je red, ne datum.
+
+**Pokriće deficita** (kooperant ili kupac vraća više nego što drži): pokriće
+(`SpoljniSvet → partner`, `ULAZ_TUDJE`) je red istog dokumenta, pa ulazi u „novo". Na
+reversu je zato početno = novo − kretanje, a ne stvarno stanje pre dokumenta. To je
+pravilo reversa i pre ovog reza, i odluka ga **zadržava** (prvi papir se ne menja).
+Otkupni list ima drugačije pravilo (početno = stvarno stanje pre bloka, saldo = neto).
+Prikaz pokrića na papiru ide uz `ODL-24`. Otpremnica pokrića nema: stanica je sopstveni
+nalog, pa njen manjak pisac odbija.
+
+**Bez granice:**
+- otpremnica bez gajbi nema svoj red knjige, pa po ODL-27 štampa „-";
+- izdata otpremnica **sa** gajbama svoj red uvek ima (`OtpKnjiziAmbalazu`), pa je njegovo
+  odsustvo pokidana veza, a papir ne nastaje (7693). Review `#421`, P2 #1: ranije je i taj
+  slučaj štampao „-";
+- revers uvek ima svoj red za nalog i tip papira, pa je odsustvo granice kvar
+  identiteta i papir ne nastaje (7692), umesto papira bez redova stanja.
+
+**Tip ambalaže je isti tip bez obzira na velika slova** (review `#421`, P2 #2). Pisac traži
+samo neprazan tip, pa knjiga sme da nosi `letvarica` i `LETVARICA`. Istorijski čitalac zato
+poredi tip kao kanonski saldo (`AmbSaldoNaloga`, `vbTextCompare`) i izbor reda za papir
+(`AmbTipKljuc`), inače bi papir i saldo davali dva odgovora. `GetAmbalazeStanje` i dalje
+grupiše binarno; zove ga samo grupni otkupni list, pa ide uz S6.
+
+> **`AMB-10-ODL-32` (odluka operatera 13.10.2026): kupčev revers se ne štampa ni iz F7.**
+> Lista ga je odbijala (7507: dokument je kupčev, nosi njegov broj, original drži
+> operater), a F7 ga je štampao na šablonu za kooperanta, sa imenom kupca i bez redova
+> stanja: saldo je tražen kao `Kooperant:<KupacID>`, pa ga čitalac nije nalazio i papir je
+> tiho izostavio tri reda (fail-open u `IzdAmbSaldoVal`). Sada F7 za kupčev revers papir
+> ne pravi i ne javlja upozorenje: to je pravilo, ne pad štampe.
+
+*Provera:* `modTest` 232 (`T_SaldoPapir_ReversKakoJeBio`), 233
+(`T_SaldoPapir_KupcevReversF7BezPapira`), 234 (`T_SaldoPapir_KvarKnjigeNijeNula`), 235
+(`T_SaldoPapir_TipBezObziraNaVelikaSlova`), BFP `Test_OTP_PapirStanjeOkoSvogReda` i
+`Test_OTP_PapirBezVezeKnjige`; sabotaže `saldo-*` (10).
 
 ### 6.14 Sta model sada ume da odgovori
 
