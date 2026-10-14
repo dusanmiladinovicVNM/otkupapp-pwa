@@ -7917,6 +7917,9 @@ SABOTAZE = {
         "OTP papir: ponovna stampa posle kasnijeg dokumenta je ista",
     ),
     # Papir otpremnice guta kvar knjige i nastaje sa "-" umesto da ne nastane.
+    # Meri se nad otpremnicom BEZ gajbi: otpremnicu sa gajbama od review #421
+    # cuva i druga brana (7693, gajbe bez reda), pa nad njom ova sabotaza nije
+    # obarala nista (dokaz 14.10.2026, stavka 137).
     "saldo-otp-guta-kvar": (
         "modPrint.bas",
         "    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_STANICA, stID, tipAmb, _\n"
@@ -7926,8 +7929,8 @@ SABOTAZE = {
         "                                      DOK_TIP_OTPREMNICA, otpID, otpPoznato, otpPosle\n"
         "    Err.Clear\n"
         "    On Error GoTo EH\n",
-        "Test_OTP_PapirStanjeOkoSvogReda",
-        "OTP papir: kvar knjige -- otpremnica se ne popunjava",
+        "Test_OTP_PapirBezVezeKnjige",
+        "OTP papir bez gajbi: kvar knjige -- ni otpremnica bez gajbi se ne popunjava",
     ),
     # Review #421, P2 #1: izdata otpremnica SA gajbama bez svog reda knjige opet
     # stampa "-" kao da je bez gajbi -- pokidana veza prolazi kao nepoznato stanje.

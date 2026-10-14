@@ -6481,8 +6481,10 @@ End Sub
 ' vraca se pre ijedne tvrdnje.
 ' SABOTAZE: saldo-otp-dvostruko -> "OTP papir: pocetno stanje je stanje stanice pre
 ' otpremnice"; saldo-otp-danasnji -> "OTP papir: ponovna stampa posle kasnijeg
-' dokumenta je ista"; saldo-otp-guta-kvar -> "OTP papir: kvar knjige -- otpremnica
-' se ne popunjava".
+' dokumenta je ista". Tvrdnja o kvaru ovde je ISHOD (papir ne nastaje), ali od
+' review #421 (7693) ovu otpremnicu sa gajbama cuvaju dve brane, pa sabotaza
+' citaoca nad njom ne grize -- meri se nad otpremnicom bez gajbi
+' (Test_OTP_PapirBezVezeKnjige).
 Private Sub Test_OTP_PapirStanjeOkoSvogReda()
     On Error GoTo EH
 
@@ -6557,11 +6559,12 @@ End Sub
 ' tvrdnji: DokumentID vise ne pokazuje na nju, i red nosi tudji tip dokumenta.
 ' Drugi oblik meri i to da je identitet dokumenta u knjizi (DokumentTIP,
 ' DokumentID), a ne sam DokumentID (AMB-INV-04). Kontrola: otpremnica bez gajbi i
-' dalje stampa "-".
+' dalje stampa "-", a nad pokvarenom knjigom ni ona ne nastaje.
 ' SABOTAZE: saldo-otp-bez-veze-nepoznato -> "OTP papir bez veze: izgubljen
 ' DokumentID -- otpremnica sa gajbama se ne popunjava"; saldo-dokument-bez-tipa ->
 ' "OTP papir bez veze: red tudjeg tipa dokumenta -- otpremnica sa gajbama se ne
-' popunjava".
+' popunjava"; saldo-otp-guta-kvar -> "OTP papir bez gajbi: kvar knjige -- ni
+' otpremnica bez gajbi se ne popunjava".
 Private Sub Test_OTP_PapirBezVezeKnjige()
     On Error GoTo EH
 
@@ -6620,6 +6623,28 @@ Private Sub Test_OTP_PapirBezVezeKnjige()
                  "OTP papir bez gajbi: preduslov -- otpremnica nema red knjige"
     AssertEquals TEST_TIP_AMB & " x -|" & TEST_TIP_AMB & " x -", OtpStanjePapira(otpBez), _
                  "OTP papir bez gajbi: stampa nepoznato stanje (ODL-27), ne odbija se"
+
+    ' KVAR KNJIGE NAD OTPREMNICOM BEZ GAJBI. Za otpremnicu sa gajbama postoje DVE
+    ' brane (strog citalac, pa 7693 "gajbe bez reda"), pa njen papir ne nastaje i
+    ' kad prvu neko ugasi -- dokaz je to izmerio: sabotaza prve brane nad njom nije
+    ' obarala nista. Ovde druge brane nema ("-" je dozvoljen), pa je strog citalac
+    ' jedini: da ga papir proguta, otpremnica bi stampala "-" nad pokvarenom
+    ' knjigom. Kvar je na redu PRVE otpremnice i vraca se pre tvrdnje.
+    Dim naTipPre As String, papirBezGajbiKvar As String, vracenKvar As Boolean
+    naTipPre = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_DOK_ID, otpID, COL_AMB_NA_TIP))
+    On Error Resume Next
+    RequireUpdateCell TBL_AMBALAZA, rOtp, COL_AMB_NA_TIP, "", "Test_OTP_PapirBezVezeKnjige"
+    papirBezGajbiKvar = OtpStanjePapira(otpBez)
+    Err.Clear
+    RequireUpdateCell TBL_AMBALAZA, rOtp, COL_AMB_NA_TIP, naTipPre, "Test_OTP_PapirBezVezeKnjige"
+    vracenKvar = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue vracenKvar And Len(naTipPre) > 0, _
+               "OTP papir bez gajbi: preduslov -- pokvaren red je vracen"
+    AssertEquals "", papirBezGajbiKvar, _
+                 "OTP papir bez gajbi: kvar knjige -- ni otpremnica bez gajbi se ne popunjava"
     Exit Sub
 
 EH:
