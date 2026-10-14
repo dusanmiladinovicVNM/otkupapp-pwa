@@ -239,9 +239,12 @@ Private Sub ZatvoriTiho()
 End Sub
 
 ' Ima li AKTIVAN panel nesacuvanih izmena. Neobavezno: panel koji tu proceduru
-' ne implementira nema sta da izgubi, pa greska poziva znaci False, ne pad.
-' Ime se izvodi iz imena modula, isti dogovor kao <Modul>_Release -- nov panel
-' ne trazi red vise u registru, samo da postuje isti dogovor.
+' ne implementira nema sta da izgubi, pa clan koji se nije izvrsio znaci False,
+' ne pad. Ime se izvodi iz imena modula, isti dogovor kao <Modul>_Release -- nov
+' panel ne trazi red vise u registru, samo da postuje isti dogovor.
+'
+' Ishod tumaci modUiScreens.ScrRunIshod, kao i za ekrane: zaostala greska uz
+' odgovor True NIJE "nema nesacuvanog" -- tako je bilo fail-open (KI-014, 238).
 Public Function PanelImaNesacuvano() As Boolean
     Dim m As String, v As Variant
     If Len(mAktivan) = 0 Then Exit Function
@@ -250,7 +253,8 @@ Public Function PanelImaNesacuvano() As Boolean
     On Error Resume Next
     Err.Clear
     v = Application.Run(m & "." & Mid$(m, 4) & "_ImaNesacuvano")
-    If Err.Number = 0 Then PanelImaNesacuvano = CBool(v)
+    If modUiScreens.ScrRunIshod(v, m & "._ImaNesacuvano") = SCR_RUN_VRATIO Then _
+        PanelImaNesacuvano = CBool(v)
     Err.Clear
 End Function
 

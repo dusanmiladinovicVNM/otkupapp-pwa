@@ -8355,11 +8355,13 @@ End Sub
 '   - lista vracena uz gresku se ucitava, a greska ide u ScrZaostalaGreska;
 '   - lista koju ekran NE vrati, uz gresku, i dalje je pad liste (kontrola);
 '   - ekran bez liste (ANALIZA: Empty uz Err = 0) nije pad.
-' SABOTAZE: ki014-lista-zaostatak-je-pad, ki014-lista-prazno-nije-pad,
-' ki014-pomocnik-zaostatak-je-neuspeh.
+' SABOTAZE: ki014-lista-zaostatak-je-pad, ki014-pomocnik-guta-zaostatak,
+' ki014-pomocnik-nevracen-je-odgovor, ki014-lista-prazno-nije-pad,
+' ki014-lista-bez-liste-je-pad. Redosled tvrdnji je deo dokaza: tvrdnja koja
+' razlikuje POMOCNIK od citaoca (nije zaostatak) ide pre tvrdnje o padu.
 Private Sub T_KI014_ZaostatakListeNijePad()
     Dim pad1 As String, pad2 As String, pad3 As String
-    Dim n1 As Long, zaostala As String
+    Dim n1 As Long, zaostala As String, zaostala2 As String
     Dim errNum As Long, errDesc As String
 
     On Error GoTo CleanUp
@@ -8370,8 +8372,10 @@ Private Sub T_KI014_ZaostatakListeNijePad()
     n1 = modOtkupUI.GridRedovaTest()
     zaostala = modUiScreens.ScrZaostalaGreska
 
+    modUiScreens.ScrZaostalaGreska = ""
     modUiScreens.ScrCuriTestSet "REDOVI_PRAZNO"
     pad2 = GridLoadPad("MAT_PARTNERI")
+    zaostala2 = modUiScreens.ScrZaostalaGreska
 
     modUiScreens.ScrCuriTestSet ""
     pad3 = GridLoadPad("ANALIZA")
@@ -8389,6 +8393,7 @@ CleanUp:
     AssertEq (n1 > 0), True, "lista vracena uz zaostalu gresku je ucitana"
     AssertEq (InStr(1, zaostala, "Scr_Rows", vbBinaryCompare) > 0), True, _
              "zaostala greska liste je zabelezena, ne progutana"
+    AssertEq zaostala2, "", "lista koju ekran ne vrati nije zaostatak nego neuspeh"
     AssertEq (Len(pad2) > 0), True, "lista koju ekran ne vrati uz gresku je pad liste"
     AssertEq pad3, "", "ekran bez liste nije pad liste"
 End Sub

@@ -1988,7 +1988,7 @@ SABOTAZE = {
     # da se doda u ljusku, a ne u svoj modul.
     "brojac-ekran-po-imenu": (
         "modUiScreens.bas",
-        "    ScrBrojac = CLng(Application.Run(m & \".Scr_Brojac\"))\n",
+        "    If ScrRunIshod(v, m & \".Scr_Brojac\") = SCR_RUN_VRATIO Then ScrBrojac = CLng(v)\n",
         "    If kljuc = \"OPORAVAK\" Then ScrBrojac = 0   ' SABOTAZA: ljuska zna ekran po imenu\n",
         "T_NavBrojac_SamoEkranKojiBroji",
         "ljuska dobija BAS ono sto ekran broji, bez posrednika",
@@ -2003,9 +2003,10 @@ SABOTAZE = {
     # povratnu vrednost -- otud PALA DRUGA TVRDNJA. Sada svaka gasi jedno.
     "brojac-nije-opcion": (
         "modUiScreens.bas",
-        "    If Err.Number <> 0 Then\n        ScrBrojac = 0\n        Err.Clear\n    End If\n",
-        "    If Err.Number <> 0 Then\n        ScrBrojac = 0\n"
-        "        ' SABOTAZA: greska se guta, ali ostaje POSTAVLJENA\n    End If\n",
+        "    If ScrRunIshod(v, m & \".Scr_Brojac\") = SCR_RUN_VRATIO Then ScrBrojac = CLng(v)\n"
+        "    Err.Clear\n",
+        "    If ScrRunIshod(v, m & \".Scr_Brojac\") = SCR_RUN_VRATIO Then ScrBrojac = CLng(v)\n"
+        "    ' SABOTAZA: greska se guta, ali ostaje POSTAVLJENA\n",
         "T_NavBrojac_SamoEkranKojiBroji",
         "poziv ekrana bez brojaca ne ostavlja Err postavljen",
     ),
@@ -2013,10 +2014,9 @@ SABOTAZE = {
     # prikazala kao zaostatak koji ne postoji.
     "brojac-sentinel-umesto-nule": (
         "modUiScreens.bas",
-        "    If Err.Number <> 0 Then\n        ScrBrojac = 0\n        Err.Clear\n    End If\n",
-        "    If Err.Number <> 0 Then\n"
-        "        ScrBrojac = -1   ' SABOTAZA: sentinel umesto nule\n"
-        "        Err.Clear\n    End If\n",
+        "    If ScrRunIshod(v, m & \".Scr_Brojac\") = SCR_RUN_VRATIO Then ScrBrojac = CLng(v)\n",
+        "    If ScrRunIshod(v, m & \".Scr_Brojac\") = SCR_RUN_VRATIO Then ScrBrojac = CLng(v)"
+        " Else ScrBrojac = -1   ' SABOTAZA: sentinel umesto nule\n",
         "T_NavBrojac_SamoEkranKojiBroji",
         "ekran bez brojaca daje nulu, ne gresku",
     ),
@@ -3407,15 +3407,16 @@ SABOTAZE = {
     # da pitanje ne ode opet globalnom rezimu, i da dinari nose pare.
     "mreza-podnozje-ljuska-ne-pita-ekran": (
         "modUiScreens.bas",
-        "    ScrBrojiKomade = CBool(Application.Run(m & \".Scr_BrojiKomade\"))\n",
+        "    If ScrRunIshod(v, m & \".Scr_BrojiKomade\") = SCR_RUN_VRATIO Then ScrBrojiKomade = CBool(v)\n",
         "    ScrBrojiKomade = False   ' SABOTAZA: ljuska ne pita ekran\n",
         "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
         "Dokumenta na reversima i dalje broje komade",
     ),
     "mreza-podnozje-ugovor-fail-open": (
         "modUiScreens.bas",
-        "        ScrBrojiKomade = False\n",
-        "        ScrBrojiKomade = True   ' SABOTAZA: ekran bez ugovora nasledjuje komade\n",
+        "    If ScrRunIshod(v, m & \".Scr_BrojiKomade\") = SCR_RUN_VRATIO Then ScrBrojiKomade = CBool(v)\n",
+        "    If ScrRunIshod(v, m & \".Scr_BrojiKomade\") = SCR_RUN_VRATIO Then ScrBrojiKomade = CBool(v)"
+        " Else ScrBrojiKomade = True   ' SABOTAZA: ekran bez ugovora nasledjuje komade\n",
         "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
         "ugovorni ekran ne nasledjuje rezim unosa dokumenata",
     ),
@@ -7763,11 +7764,13 @@ SABOTAZE = {
     ),
     # KI-011 CITALAC: ScrSave opet cita zaostalu gresku kao neuspeh upisa --
     # tacno ponasanje pre KI-011. Seam "curi" ostavlja gresku nezavisno od
-    # LogSetup-a, pa se crveni test citaoca.
+    # LogSetup-a, pa se crveni test citaoca. Od KI-014 ishod tumaci zajednicki
+    # ScrRunIshod; sabotaza vraca citaoca na Err.Number, na POZIVNOM mestu.
     "ki011-scrsave-zaostala-je-neuspeh": (
         "modUiScreens.bas",
-        '            ScrZaostalaGreska = m & ".Scr_Save: " & Err.Number & " " & Err.description\n',
-        '            ScrLastErr = m & ".Scr_Save -> " & Err.Number & " " & Err.description   \' SABOTAZA: zaostala greska je neuspeh\n',
+        '    ishodUpisa = ScrRunIshod(v, m & ".Scr_Save")\n',
+        '    If Err.Number <> 0 Then ishodUpisa = SCR_RUN_PAO Else ishodUpisa = ScrRunIshod(v, m & ".Scr_Save")'
+        '   \' SABOTAZA: zaostala greska je neuspeh\n',
         "T_KI011_ZaostalaGreskaNijeNeuspeh",
         "zaostala greska iz pomocnog koraka nije neuspeh upisa",
     ),
@@ -7776,8 +7779,8 @@ SABOTAZE = {
     # vrati rezultat.
     "ki011-scrsave-ne-javlja-neuspeh": (
         "modUiScreens.bas",
-        "    If IsEmpty(v) Then\n",
-        "    If False Then   ' SABOTAZA: nevracen rezultat nije neuspeh\n",
+        '        ScrLastErr = m & ".Scr_Save -> " & Err.Number & " " & Err.description\n',
+        "        ScrSave = \"\"   ' SABOTAZA: nevracen rezultat nije neuspeh\n",
         "T_KI011_ZaostalaGreskaNijeNeuspeh",
         "ekran koji ne vrati rezultat se javlja kao neuspeh",
     ),
@@ -7798,6 +7801,92 @@ SABOTAZE = {
         "        Err.Clear   ' SABOTAZA: nepoznat ekran je uspeh\n",
         "T_KI011_ZaostalaGreskaNijeNeuspeh",
         "nepoznat ekran ne sme biti uspeh",
+    ),
+    # KI-014 CITALAC LISTE: ScrGridData opet cita zaostalu gresku kao pad liste
+    # -- ponasanje pre KI-014 (LoadGridFromScreen digne OTKUI_ERR_LISTA, mreza
+    # ostaje na staroj listi). Sabotaza je na POZIVNOM mestu, ne u pomocniku.
+    "ki014-lista-zaostatak-je-pad": (
+        "modUiScreens.bas",
+        '    Select Case ScrRunIshod(v, m & ".Scr_Rows")\n',
+        "    If Err.Number <> 0 Then v = Empty   ' SABOTAZA: zaostatak liste je pad\n"
+        '    Select Case ScrRunIshod(v, m & ".Scr_Rows")   \' (sabotaza)\n',
+        "T_KI014_ZaostatakListeNijePad",
+        "zaostala greska uz vracenu listu nije pad liste",
+    ),
+    # KI-014 POZITIVNA KONTROLA LISTE: lista koju ekran ne vrati, uz gresku,
+    # ne sme da prodje kao "ekran nema listu".
+    "ki014-lista-prazno-nije-pad": (
+        "modUiScreens.bas",
+        '        Case Else: ScrLastErr = m & ".Scr_Rows -> " & Err.Number & " " & Err.description\n',
+        "        Case Else   ' SABOTAZA: lista koju ekran ne vrati nije pad\n",
+        "T_KI014_ZaostatakListeNijePad",
+        "lista koju ekran ne vrati uz gresku je pad liste",
+    ),
+    # KI-014 POMOCNIK: zaostatak se guta bez traga -- nije neuspeh, ali ni WARN
+    # ni ScrZaostalaGreska. To je "gusenje bez traga" koje ScrLastErr i postoji
+    # da spreci; vazi za SVE citaoce odjednom.
+    "ki014-pomocnik-guta-zaostatak": (
+        "modUiScreens.bas",
+        '    ScrZaostalaGreska = poziv & ": " & Err.Number & " " & Err.description\n',
+        "    ' SABOTAZA: zaostatak se guta bez traga\n",
+        "T_KI014_ZaostatakListeNijePad",
+        "zaostala greska liste je zabelezena, ne progutana",
+    ),
+    # KI-014 POMOCNIK: clan koji NIJE vratio vrednost se cita kao da jeste --
+    # Empty uz gresku postaje "odgovor" sa zaostatkom. Od citaoca ga razlikuje
+    # tvrdnja da nevracena lista NIJE zaostatak (ide pre tvrdnje o padu).
+    "ki014-pomocnik-nevracen-je-odgovor": (
+        "modUiScreens.bas",
+        "    If IsEmpty(v) Then\n",
+        "    If False Then   ' SABOTAZA: nevracen rezultat je odgovor\n",
+        "T_KI014_ZaostatakListeNijePad",
+        "lista koju ekran ne vrati nije zaostatak nego neuspeh",
+    ),
+    # KI-014 EDGE: ekran bez liste (Empty uz Err = 0) se opet javlja kao pad.
+    "ki014-lista-bez-liste-je-pad": (
+        "modUiScreens.bas",
+        "        Case SCR_RUN_PRAZNO\n",
+        "        Case -1   ' SABOTAZA: ekran bez liste je pad\n",
+        "T_KI014_ZaostatakListeNijePad",
+        "ekran bez liste nije pad liste",
+    ),
+    # KI-014 CITALAC RADNJE: ScrEvent opet cita zaostalu gresku kao pad radnje --
+    # ScrAct javlja "Radnja nije uspela" posle obradjene radnje.
+    "ki014-radnja-zaostatak-je-pad": (
+        "modUiScreens.bas",
+        '    ishodRadnje = ScrRunIshod(v, m & ".Scr_Event " & tag)\n',
+        '    If Err.Number <> 0 Then ishodRadnje = SCR_RUN_PAO Else ishodRadnje = ScrRunIshod(v, m & ".Scr_Event " & tag)'
+        '   \' SABOTAZA: zaostatak radnje je pad\n',
+        "T_KI014_ZaostatakRadnjeNijePad",
+        "zaostala greska uz obradjenu radnju nije pad radnje",
+    ),
+    # KI-014 CITALAC RADNJE: ekran bez Scr_Event (1004) se opet javlja kao pad --
+    # izmeren toast na prelazu ANALIZA -> IZVESTAJI.
+    "ki014-radnja-nema-clana-je-pad": (
+        "modUiScreens.bas",
+        "    If ishodRadnje = SCR_RUN_PAO Then ScrLastErr = ",
+        "    If ishodRadnje >= SCR_RUN_NEMA Then ScrLastErr = ",
+        "T_KI014_ZaostatakRadnjeNijePad",
+        "ekran bez Scr_Event ne javlja pad tudjeg dogadjaja",
+    ),
+    # KI-014 FAIL-OPEN EKRANA: zaostala greska opet znaci "nema nesacuvanog" --
+    # ljuska bi zatvorila ekran bez pitanja i odbacila unos.
+    "ki014-nesacuvano-zaostatak-odbacuje": (
+        "modUiScreens.bas",
+        '    v = Application.Run(m & ".Scr_ImaNesacuvano")\n',
+        '    v = Application.Run(m & ".Scr_ImaNesacuvano"): If Err.Number <> 0 Then v = Empty'
+        "   ' SABOTAZA: zaostatak odbacuje nesacuvano\n",
+        "T_KI014_ZaostatakNesacuvanogNijeOdbacivanje",
+        "zaostala greska ne odbacuje nesacuvan unos ekrana",
+    ),
+    # KI-014 FAIL-OPEN PANELA: isto za panel (Podesavanja).
+    "ki014-panel-zaostatak-odbacuje": (
+        "modUiPanel.bas",
+        '    v = Application.Run(m & "." & Mid$(m, 4) & "_ImaNesacuvano")\n',
+        '    v = Application.Run(m & "." & Mid$(m, 4) & "_ImaNesacuvano"): If Err.Number <> 0 Then v = Empty'
+        "   ' SABOTAZA: zaostatak odbacuje nesacuvano\n",
+        "T_KI014_ZaostatakNesacuvanogNijeOdbacivanje",
+        "zaostala greska ne odbacuje nesacuvanu izmenu panela",
     ),
     # LOG-01 / review #419 P3: LogSetup vise ne vraca gresku pozivaoca -- handleri
     # modSetup-a bi opet dizali i prikazivali pogresnu gresku.
