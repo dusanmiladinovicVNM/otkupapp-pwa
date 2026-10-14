@@ -4169,6 +4169,174 @@
 
      **Otvoreno.** Finalni exact-head review i merge.
 
+138. **Merge `#421` — na izričit zahtev operatera, bez finalnog exact-head review-a** (14.10.2026).
+     Zapis ide ovde, a ne u `#421`. Obrazac su stavke 128, 130, 132 i 134.
+
+     - Review krug 1 (`ca437f68`): `NO-GO`, `P0 0`, `P1 0`, `P2 2`, `P3 0`. Oba `P2` su zatvorena u
+       stavci 136, sa reprodukcijom pre ispravke, testom i sabotažom.
+     - Review krug 2 (`80628068`): `CODE GO` za izvršne kapije, `P0 0`, `P1 0`, `P2 0`, `P3 2`,
+       9,4/10. Merge je tada bio `NO-GO` dok se izvršne kapije ne završe (stavka 137).
+     - **Posle tog GO je ušao test-commit `6460d641`.** Sabotaža `saldo-otp-guta-kvar` je bila
+       placebo: otpremnicu sa gajbama čuvaju dve brane, pa je presidrena na otpremnicu bez gajbi.
+       Produkcioni kod nije diran. Izvršne kapije (12/12), dokaz `saldo-` 10/10, compile i ručna
+       provera su nad tim izvorom (`cc5e27d9cca0`).
+     - Merge-ovano 14.10.2026 kao `fbc16ec6`, na **izričit zahtev operatera**. Head `2a69be53`;
+       posle `6460d641` su na PR-u bili samo docs commit-i, static CI pass.
+     - **Finalni exact-head review nije tražen.** Reviewer nije video ni test-commit `6460d641` ni
+       docs posle njega; GO iz kruga 2 važi za `80628068`.
+     - Sledeći korak (ovaj rez, stavke 139+): `KI-014`. `KI-015` i `ODL-24` su svaki svoj rez.
+
+139. **`KI-014` — zaostala greška posle `Application.Run` u ugovoru ekrana** (14.10.2026). Grana
+     `claude/ki014-zaostala-greska`, sa `main`-a `fbc16ec6`. `KI-010` je `CLOSED` (odluka operatera, ispod).
+
+     **Merenja, pre koda** (skripte u scratchpad-u sesije `0e8f51fe`):
+     - **Statički merač** (`curenje_err.py` iz stavke 131, ponovljen nad `fbc16ec6`): 5560 procedura, 739 curi
+       probom, 1478 samo kroz Resume Next. U ugovoru ekrana PROBA izvor imaju samo:
+       - `Scr_Event` Dokumenti i četiri matična, kroz probu u `ShowToast` (`tstScr`);
+       - `Scr_Rows` Agro, BankaUvoz i Fakture, kroz `HasCtl` u `MoveBtn`.
+
+       `Scr_Meta`, `Scr_Dozvoljen`, `Scr_ImaNesacuvano`, `Scr_Sort` i `Scr_BrojiKomade` su čisti, a
+       `Scr_Build` i `Scr_Brojac` (Oporavak) curi samo kroz RN. Direktni `Run`-ovi u `modOtkupUI` (932 … 9089)
+       odmah rade `Err.Clear`, pa nisu čitaoci. Ne-UI čitaoci su isti kao u stavci 131.
+     - **Platformska sonda** (`sonda_ki014.py`, sopstvena instanca):
+
+       ```
+       F_Bool/F_Long/F_Str/F_Niz _Curi : IsEmpty=False  Err=9     (vrednost + zaostatak)
+       F_Empty_Curi, S_Curi (Sub)      : IsEmpty=True   Err=9     (isto kao nepokrenut clan)
+       NE_POSTOJI / nepostojeci modul  : IsEmpty=True   Err=1004
+       pogresan broj argumenata        : IsEmpty=True   Err=449
+       clan DIGNE gresku               : poziv se NE VRACA; dijalog "Run-time error '9' ...
+                                         [Continue] [End] [Debug] [Help]"; posle End:
+                                         gStanje=[] forme=0 (projekat resetovan)
+       ```
+     - **Dinamička sonda** (`sonda_ekrani.py`, prava gradnja ljuske, 14 ekrana × sve liste, prekidač liste
+       kroz `ScrEvent`, neobavezni članovi „goli"): **nijedan čitalac nije dobio zaostatak**. Statički izvori
+       se u normalnom toku ne dosežu. Usput je izmeren **pravi lažan toast drugog oblika**:
+       ANALIZA → IZVEŠTAJI javlja „Radnja nije uspela: modScrAnaliza.Scr_Event chg:scrIzDoT -> 1004".
+       `ActivateScreen` gradi zonu novog ekrana dok je `mScreen` još stari, pa `UiChange` šalje `chg:` ekranu
+       ANALIZA, koji `Scr_Event` nema.
+
+     **`pre-flight`.** `PLATFORM`, `DOWNSTREAM`, `INVARIANTS/OWNER` i `LANDING` su PROVEN. `WRITERS` je N/A
+     (read-only, WARN ide u log), kao i `DOMAIN`, `IDENTITY`, `CARDINALITY`, `EVENTS` i `CAPABILITY`.
+     `ACCEPTANCE CONTRACT` je zatvoren posle odluka ispod. Invarijanta `UI-ISHOD-01` se širi sa `ScrSave` na
+     ceo ugovor ekrana; vlasnik je `modUiScreens.ScrRunIshod`.
+
+     **Odluke operatera (14.10.2026), sve po preporuci:**
+     1. **Obim:** ugovor ekrana (`modUiScreens` + `modUiPanel.PanelImaNesacuvano`). Ne-UI čitaoci (`InitApp`,
+        Migracija, SEF recovery) su svaki svoj rez, a `modSelfUpdate` posebno (frozen).
+     2. **Ugovor:** jedan pomoćnik za sve čitaoce i za `ScrSave`. `Empty`+1004 kod neobaveznog člana i kod
+        `Scr_Event` znači „nije implementirano", pa time nestaje i izmeren toast ANALIZA → IZVEŠTAJI.
+     3. **Izvori:** nijedan se ne dira, svi ostaju zapisani u `KI-014`. Netačni komentari se ispravljaju na
+        izmereno; sam pad ekrana je nov `KI-016`.
+     4. **`KI-010` → `CLOSED`.** Papir je ručno proveren u `#420` i `#421`. Odbijenice (nabavka, storniran
+        revers) nisu ručno prikazane; to su kapije dokazane automatski.
+
+     **Reprodukcija pre ispravke** (izvor `0ee25c29`: seam + testovi, čitaoci netaknuti;
+     `run_vba --compile-only --keep`, pa samo 236–238 kroz `modTest.RunOne` u sopstvenoj instanci). Ispravka je
+     `87c892b8`:
+
+     ```
+     TESTS=3 FAIL=3
+     FAIL T_KI014_ZaostatakListeNijePad -- zaostala greska uz vracenu listu nije pad liste
+          -- ocekivano [], dobijeno [-2147218582 Lista se nije ucitala]
+     FAIL T_KI014_ZaostatakRadnjeNijePad -- zaostala greska uz obradjenu radnju nije pad radnje
+          -- ocekivano [], dobijeno [? Radnja nije uspela: modScrMatPartneri.Scr_Event scrKI014Proba
+             -> 9 Subscript out of range]
+     FAIL T_KI014_ZaostatakNesacuvanogNijeOdbacivanje -- zaostala greska ne odbacuje nesacuvan unos
+          ekrana -- ocekivano [True], dobijeno [False]
+     ista sveska, tvrdnje iza prve (sonda_ostatak.py):
+       IZVESTAJI posle ANALIZE  toast=[? Radnja nije uspela: modScrAnaliza.Scr_Event chg:scrIzDoT -> 1004 ...]
+       panel: polje=cfg_SELLER_NAME pre=True, uz zaostatak=False   (fail-open)
+     ```
+
+     **Rez.**
+     - `modUiScreens`:
+       - `ScrRunIshod(v, poziv)` vraća `SCR_RUN_VRATIO` / `_PRAZNO` / `_NEMA` / `_PAO`; zaostatak
+         upisuje u `ScrZaostalaGreska` + WARN i briše `Err`. Nema `On Error` naredbu, a `v` je `ByRef`.
+       - Na njemu su `ScrPostoji`, `ScrSopstvenaBrana`, `ScrImaNesacuvano`, `ScrEvent`, `ScrGridData`,
+         `ScrSort`, `ScrBrojac`, `ScrBrojiKomade` i `ScrSave`.
+       - Seam `ScrCuriTestSet` / `ScrCuriAkoTest` je tvrdo gejtovan i gasi ga `ResetSeamova`.
+       - Komentari „POZIV", `ScrGridData` i `ScrSopstvenaBrana` su ispravljeni na izmereno.
+     - `modUiPanel.PanelImaNesacuvano` je na istom pomoćniku.
+     - Kuke seam-a stoje na izlazu pravih članova: `modMaticniEkran.Redovi` / `Dogadjaj` / `ImaNesacuvano` i
+       `modPodesavanja.Podesavanja_ImaNesacuvano`. Van test režima ne rade ništa i ne diraju `Err`.
+     - `modOtkupUI`: samo komentari (`ScrAct`, `ReloadGrid`).
+
+     **Acceptance contract.**
+
+     | Čitalac | Vraćena vrednost (+ zaostatak) | `Empty` + 1004 | `Empty` + druga greška | `Empty` + 0 | Test |
+     |---|---|---|---|---|---|
+     | `ScrGridData` | lista važi, WARN | pad liste (`OTKUI_ERR_LISTA`) | pad liste | **nema liste**, nije pad | 236 |
+     | `ScrEvent` | odgovor važi, WARN, bez toasta | **nije implementirano**: False, bez toasta | toast „Radnja nije uspela" | False | 237 |
+     | `ScrImaNesacuvano` / `PanelImaNesacuvano` | odgovor važi (True ostaje True), WARN | False | False | False | 238 |
+     | `ScrSopstvenaBrana` | odgovor važi, WARN | zabranjeno + `ScrLastErr` | zabranjeno + `ScrLastErr` | zabranjeno | 157 (postojeći) |
+     | `ScrPostoji` | postoji, WARN | ne postoji | ne postoji | postoji | — |
+     | `ScrSort` / `ScrBrojac` / `ScrBrojiKomade` | vrednost, WARN | `""` / 0 / False | isto | isto | postojeći |
+     | `ScrSave` | upis važi, WARN (`UI-ISHOD-01`) | neuspeh | neuspeh | neuspeh | 227 |
+
+     - **Netaknuto:** ponašanje `ScrSave` (227: isti tekst `ScrZaostalaGreska`, isti ishodi); `ScrBuild`, koji
+       je Sub i ostaje na `Err` (sonda: Sub uz zaostatak = nepokrenut član), imenovano ograničenje; svi izvori
+       (`HasCtl`, `ShowToast`, …); direktni `Run`-ovi u `modOtkupUI`.
+     - **Edge:** `Scr_Rows` bez liste (ANALIZA, `Empty` uz `Err = 0`) nije pad (236, poslednja tvrdnja).
+       `Empty` uz zaostatak se ne može razlikovati od nepokrenutog člana, pa važi strožiji ishod.
+     - **Nemerena grana:** `ScrEvent` za `Empty` + druga greška (toast). Svi `Scr_Event` imaju isti potpis, pa
+       produkcioni put do 449 ne postoji; isto mapiranje u `ScrGridData` meri 236.
+     - `ScrZaostalaGreska` nosi **poslednji** zaostatak; prazni ga samo `ScrSave`, na početku upisa.
+
+     **Sabotaže (768 → 777).** Nove:
+     - `ki014-lista-zaostatak-je-pad` → 236 „zaostala greska uz vracenu listu nije pad liste";
+     - `ki014-pomocnik-guta-zaostatak` → 236 „zaostala greska liste je zabelezena, ne progutana";
+     - `ki014-pomocnik-nevracen-je-odgovor` → 236 „lista koju ekran ne vrati nije zaostatak nego neuspeh";
+     - `ki014-lista-prazno-nije-pad` → 236 „lista koju ekran ne vrati uz gresku je pad liste";
+     - `ki014-lista-bez-liste-je-pad` → 236 „ekran bez liste nije pad liste";
+     - `ki014-radnja-zaostatak-je-pad` → 237 „zaostala greska uz obradjenu radnju nije pad radnje";
+     - `ki014-radnja-nema-clana-je-pad` → 237 „ekran bez Scr_Event ne javlja pad tudjeg dogadjaja";
+     - `ki014-nesacuvano-zaostatak-odbacuje` → 238 „zaostala greska ne odbacuje nesacuvan unos ekrana";
+     - `ki014-panel-zaostatak-odbacuje` → 238 „zaostala greska ne odbacuje nesacuvanu izmenu panela".
+
+     Kapija kataloga je tražila da pomoćnik i čitalac liste ne dele tvrdnju. Zato 236 ima tvrdnju koja ih
+     razlikuje („nije zaostatak"), i ona stoji **pre** tvrdnje o padu.
+
+     **Presidreno, isto značenje** (kod ispod sidra je zamenjen):
+     - `brojac-ekran-po-imenu`, `brojac-nije-opcion` i `brojac-sentinel-umesto-nule`;
+     - `mreza-podnozje-ljuska-ne-pita-ekran` i `mreza-podnozje-ugovor-fail-open`;
+     - `ki011-scrsave-zaostala-je-neuspeh` i `ki011-scrsave-ne-javlja-neuspeh`, sada na pozivnom mestu u
+       `ScrSave`, ne u pomoćniku.
+
+     `--plan` za `ki014- ki011-scrsave brojac- mreza-podnozje-` daje 28 sabotaža u 7 prolaza; filter ne hvata
+     nijedan od 9 `POZNATI_NALAZI`. **Očekivano zaklanjanje:** u grupi 3 `ki014-pomocnik-guta-zaostatak` obara i
+     drugu tvrdnju 227 („zabelezena, ne progutana"), pa `ki011-scrsave-nepoznat-ekran-je-uspeh` (poslednja
+     tvrdnja 227) u grupi ne vidi svoju i ponavlja se sam.
+
+     **Očekivani brojevi** (izvedeni iz diff-a):
+
+     | Suita | Pre | Posle | Razlog |
+     |---|---|---|---|
+     | `RunAllTests` | 235 | **238** | +236 … +238; ostali testovi ugovora (157, 227, brojač, podnožje, Palete) zadržavaju tvrdnje |
+     | `RunBusinessFlowProSuite` | 2427 | **2427** | nijedna BFP tvrdnja ne prolazi kroz čitaoce ugovora |
+     | `RunStornoTestSuite`, `RunBankaImportTestSuite` | 111, 241 | bez promene | — |
+
+     **Verifikacija pre GO.** Svih 19 jeftinih kapija je zeleno:
+     - `vba_check` (777 sabotaža, 0 nalaza, 9 poznatih) i `--self-test`;
+     - `who_writes --check`, `--check-ownership` i `--self-test`;
+     - `gen_schema_module --check` i `--self-test`;
+     - `popis_citalaca --check`, `vba_gate --popis` i `--self-test`, `run_vba --self-test`;
+     - paritet, self-update kapije i tvrdi popis, svaka sa `--self-test`, i `vba_import_marker_gate`.
+
+     **`run_vba` posle ispravke, dokaz, compile i ručna provera NISU pušteni: čeka se reviewer GO.** Zelenilo
+     236–238 posle ispravke je zato neverifikovano.
+
+     **Otvoreno.**
+     - Review.
+     - Posle GO:
+       - pun prolaz;
+       - `dokaz.py ki014- ki011-scrsave brojac- mreza-podnozje- --grupe`;
+       - compile;
+       - ručna provera: ANALIZA → IZVEŠTAJI bez toasta, lista PREGLED, zatvaranje matičnog ekrana sa otvorenim
+         editorom (pitanje mora da se pojavi), F7 upis kao kontrola `ScrSave`.
+     - Seam-ovi `ScrCuriTestSet` / `ScrCuriAkoTest` treba da uđu u `.claude/rules/testovi.md` §4 — **zasebnim
+       process PR-om**.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
