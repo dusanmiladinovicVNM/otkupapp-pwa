@@ -4129,19 +4129,45 @@
      Sveska za ručnu proveru je `tests/fixtures/rucna_provera_saldo_kod.xlsm`
      (`run_vba --compile-only --keep` nad `6460d641`).
 
-     > **Fixture otpremnice se posle ovog reza ne štampaju.** Nose gajbe, a nemaju svoj red knjige
-     > (sintetičko stanje fixture-a, `fixture-redovi-zive-u-xlsm`), pa ih P2 #1 tačno odbija kao
-     > pokidanu vezu. Pozitivna ručna provera otpremnice zato traži novu otpremnicu: F1 → F2 →
-     > izdavanje.
+     > **Fixture otpremnice bez svog reda knjige se posle ovog reza ne štampaju.** Nose gajbe, a
+     > red nemaju (sintetičko stanje fixture-a, `fixture-redovi-zive-u-xlsm`), pa ih P2 #1 tačno
+     > odbija kao pokidanu vezu. Izuzetak je `OTP-TEST-1` (`1/TEST`): ona svoj red ima (−40), pa
+     > se štampa. Prvo izdanje ove napomene je tvrdilo da se ne štampa nijedna; ispravljeno
+     > merenjem knjige sveske za ručnu proveru. Pozitivna ručna provera otpremnice traži novu
+     > otpremnicu: F1 → F2 → izdavanje.
 
-     **Otvoreno.**
-     - Compile (operater), pa `vba_gate --mark-compile`.
-     - Ručna provera:
-       - revers: prvi i ponovljeni papir, `1/IZV` za oba tipa;
-       - otpremnica: pre i posle kasnijeg ambalažnog događaja, i otpremnica bez gajbi;
-       - kupčev revers iz F7 (bez papira);
-       - F1 otkup kao kontrola.
-     - Finalni exact-head review i merge.
+     **Compile ✅** (operater, 14.10.2026, `rucna_provera_saldo_kod.xlsm`, kod sa `6460d641`):
+     `vba_gate --mark-compile`, pa `--require-green --require-compile` daje RC=0 nad izvorom
+     `cc5e27d9cca0`.
+
+     **Ručna provera ✅** (operater, 14.10.2026, ista sveska; snimci PDF-ova u sesiji). Brojevi
+     otpremnice su nezavisno provereni čitanjem knjige same sveske (openpyxl, kopija, red po red):
+
+     ```
+     AMBALAZA 1/IZV, 12/1               0 -> 30 kom   (pre ispravke: -10 -> 20)          OK
+     AMBALAZA 1/IZV, Letvarica          0 -> 5 kom                                         OK
+     F7 1/141026 (12/1 x2), prvi papir  18 -> 20      (isto kao pre ispravke, kontrola)  OK
+     F7 1/141026-2 (x1)                 20 -> 21                                           OK
+     1/141026 ponovo iz liste, posle -2 18 -> 20      (ne 19 -> 21)                        OK
+     F7 povrat od kupca (123, pokrice 73) upisan, zaglavlje REVERS_PARTNERA, PDF-a nema    OK
+     F1 otkupni list 1/141026           pocetno 21, primljeno 10, izdato 10, saldo 21     OK
+     F2 otpremnica 1/141026             pocetno 39, saldo 29  (knjiga: 39 -> 29, red 25)  OK
+     F7 FIRMA 1/141026-3 (prijem x1)    stanje na OM-u 29 -> 30                           OK
+     otpremnica 1/141026 ponovo posle   39 -> 29, nepromenjeno                             OK
+       FIRMA reversa
+     ```
+
+     - **Otpremnica bez gajbi nije ručno prikazana.** Otkupni list bez gajbi se iz F1 ne može
+       uneti, a operater je procenio da sada nije važno. Taj slučaj meri BFP
+       `Test_OTP_PapirBezVezeKnjige` (kontrola „-" i kvar knjige).
+     - Upozorenje na kupčevom reversu posle „Yes" nije posebno ručno potvrđeno; meri ga 233.
+     - Usput, nije iz `#421`: pitanje o manjku na kupčevom reversu glasi „Kooperant nema toliko
+       naših gajbi… firma ga duguje kooperantu". Isti par ključeva (`AMB_ASK_DEFICIT_1/_2`) koriste
+       otkup, F7 kupca i prijemnica. Dopisano uz `KI-015`.
+     - Već poznato, van reza: odsečen naziv otkupnog mesta i natpis partnera iz F7 („Prvi Testni ·
+       Test Otkupno Mesto") prema ponovnoj štampi („Prvi Testni").
+
+     **Otvoreno.** Finalni exact-head review i merge.
 
 ## Dug sa imenom (posle S5-5b)
 
