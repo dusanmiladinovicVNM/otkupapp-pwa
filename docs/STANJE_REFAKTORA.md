@@ -4087,6 +4087,62 @@
      **Verifikacija pre GO.** Zelene su jeftine kapije (ceo CI skup, `vba_check` 768 / 0 / 9
      poznatih). `run_vba` posle ispravke, dokaz, compile i ručna provera čekaju reviewer GO.
 
+137. **Review `#421` (`80628068`), krug 2: `CODE GO` za izvršne kapije, `P0 0`, `P1 0`, `P2 0`,
+     `P3 2`, 9,4/10** (14.10.2026). Static CI #964 `SUCCESS`. Merge je `NO-GO` dok se izvršne kapije
+     ne završe.
+     - `P3`: `GetAmbalazeStanje` i dalje grupiše tip binarno. To je već imenovano uz S6 (stavka 136),
+       pa se `#421` zbog toga ne širi.
+     - `P3`: prenos pravila na papire treba potvrditi izvršno, i za otkupni list kao regresionu
+       kontrolu. To je ručna provera ispod.
+
+     **Prvi izvršni prolaz** (head `80628068`, izvor `245e6e302d0c`): `run_vba` je dao **12/12 ZELENO**
+     (`RunAllTests` 235/0, BFP 2425/0, Banka 241/0, Storno 111/0). Dokaz `saldo- --grupe` je dao
+     **9/10**.
+     - `saldo-otp-guta-kvar` → **NE OBARA NIŠTA**. Placebo je napravila MOJA ispravka P2 #1:
+       otpremnicu sa gajbama sada čuvaju dve brane (strog čitalac, pa 7693 „gajbe bez reda"), pa njen
+       papir ne nastaje i kad papir proguta kvar knjige — samo sa drugim razlogom. `--plan` to ne
+       vidi; video ga je tek dokaz (memorija `dvoslojna-kapija-sabotaza-ne-grize`).
+     - `saldo-tip-osetljiv-na-slova` u grupi nije oborio svoj test, jer ga je zaklonio
+       `saldo-revers-danasnji`: kad se „novo" uzme iz kanonskog salda, istorijski čitalac se ne pita.
+       Moja procena u stavci 136, da su nezavisni, bila je pogrešna. Ponovljen sam je oborio svoj
+       test.
+
+     **Ispravka, samo test i katalog** (`6460d641`; produkcioni kod nije diran). Prva brana se meri
+     na slučaju koji druga pušta: otpremnica BEZ gajbi, gde je „-" dozvoljen. U
+     `Test_OTP_PapirBezVezeKnjige` kvar knjige ni nad njom ne sme da da papir (+2 tvrdnje), a
+     `saldo-otp-guta-kvar` je presidren na tu tvrdnju. Tvrdnja o kvaru u
+     `Test_OTP_PapirStanjeOkoSvogReda` ostaje kao ishod.
+
+     **Izvršne kapije** (head `6460d641`, izvor `cc5e27d9cca0`, ugovor `74ffdf8304dd`, fixture
+     `d3d3ff6d`):
+
+     ```
+     RunAllTests              235 / 0      (231 + 232..235)
+     RunBusinessFlowProSuite 2427 / 0      (2404 + 10 + 11 + 2)
+     RunBankaImportTestSuite  241 / 0      RunStornoTestSuite 111 / 0
+     12 / 12 ZELENO, marker upisan
+     dokaz.py saldo- --grupe: crvenih 10 / 10, izvor pre/posle f8e31a078e73bc97 IDENTICAN
+       -> DOKAZANO (grupno); saldo-tip-osetljiv-na-slova ponovljen sam (zaklonjen u grupi)
+     compile: NEJASNO (automatski) -- rucna kapija operatera
+     ```
+
+     Sveska za ručnu proveru je `tests/fixtures/rucna_provera_saldo_kod.xlsm`
+     (`run_vba --compile-only --keep` nad `6460d641`).
+
+     > **Fixture otpremnice se posle ovog reza ne štampaju.** Nose gajbe, a nemaju svoj red knjige
+     > (sintetičko stanje fixture-a, `fixture-redovi-zive-u-xlsm`), pa ih P2 #1 tačno odbija kao
+     > pokidanu vezu. Pozitivna ručna provera otpremnice zato traži novu otpremnicu: F1 → F2 →
+     > izdavanje.
+
+     **Otvoreno.**
+     - Compile (operater), pa `vba_gate --mark-compile`.
+     - Ručna provera:
+       - revers: prvi i ponovljeni papir, `1/IZV` za oba tipa;
+       - otpremnica: pre i posle kasnijeg ambalažnog događaja, i otpremnica bez gajbi;
+       - kupčev revers iz F7 (bez papira);
+       - F1 otkup kao kontrola.
+     - Finalni exact-head review i merge.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
