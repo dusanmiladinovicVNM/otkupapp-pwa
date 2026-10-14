@@ -486,6 +486,10 @@ Public Function Redovi(ByVal ekran As String, ByVal lista As String, _
     ' ne mogu razici. Ekran se prosledjuje jer tri ekrana dele ovo telo, pa se
     ' mora znati CIJU zonu ljuska treba da vrati.
     OsveziZonu ekran, lista
+    ' TEST SEAM (KI-014, test 236): lista se vraca uz gresku ostavljenu u Err, a
+    ' "_PRAZNO" umesto liste vraca Empty uz gresku. Van testa ne radi nista.
+    If modUiScreens.ScrCuriAkoTest("REDOVI_PRAZNO") Then Redovi = Empty
+    modUiScreens.ScrCuriAkoTest "REDOVI"
 End Function
 
 '------------------------------------------------------------- RADNJE
@@ -534,6 +538,8 @@ Public Function Dogadjaj(ByVal tag As String, ByRef lista As String) As Boolean
     ' pogodi -- LayoutScreenZone ide samo iz LayoutOtkup -- pa se trazi izricito.
     If (mEditKljuc & "/" & mEditID & "/" & mGeoID) <> preEdit Then _
         modOtkupUI.OsveziRasporedEkrana
+    ' TEST SEAM (KI-014, test 237): radnja se vraca uz gresku ostavljenu u Err.
+    modUiScreens.ScrCuriAkoTest "DOGADJAJ"
 End Function
 
 Private Function ObradiDogadjaj(ByVal tag As String, ByRef lista As String) As Boolean
@@ -907,6 +913,8 @@ End Sub
 Public Function ImaNesacuvano(ByVal ekran As String) As Boolean
     If Len(mEditKljuc) = 0 Then Exit Function
     ImaNesacuvano = (mEditEkran = ekran)
+    ' TEST SEAM (KI-014, test 238): odgovor se vraca uz gresku ostavljenu u Err.
+    modUiScreens.ScrCuriAkoTest "NESACUVANO"
 End Function
 
 Public Sub Deaktiviraj()

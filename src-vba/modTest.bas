@@ -329,6 +329,9 @@ Public Sub RunAllTests()
     RunOne 233
     RunOne 234
     RunOne 235
+    RunOne 236
+    RunOne 237
+    RunOne 238
     RunOne 13
     RunOne 14
     RunOne 15
@@ -599,6 +602,9 @@ Private Sub ResetSeamova()
     ' Podmetnut pad/curenje stampe reversa (227, 228): zaostao seam bi svakom
     ' sledecem upisu reversa oborio ili zaprljao papir.
     modPrint.StampaTestSet ""
+    ' Podmetnuto curenje clana ugovora ekrana (236-238): zaostao seam bi svaki
+    ' sledeci poziv tog clana vracao uz gresku u Err.
+    modUiScreens.ScrCuriTestSet ""
     Err.Clear
 End Sub
 
@@ -835,6 +841,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 233: TestName = "T_SaldoPapir_KupcevReversF7BezPapira"
         Case 234: TestName = "T_SaldoPapir_KvarKnjigeNijeNula"
         Case 235: TestName = "T_SaldoPapir_TipBezObziraNaVelikaSlova"
+        Case 236: TestName = "T_KI014_ZaostatakListeNijePad"
+        Case 237: TestName = "T_KI014_ZaostatakRadnjeNijePad"
+        Case 238: TestName = "T_KI014_ZaostatakNesacuvanogNijeOdbacivanje"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1078,6 +1087,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 233: T_SaldoPapir_KupcevReversF7BezPapira
         Case 234: T_SaldoPapir_KvarKnjigeNijeNula
         Case 235: T_SaldoPapir_TipBezObziraNaVelikaSlova
+        Case 236: T_KI014_ZaostatakListeNijePad
+        Case 237: T_KI014_ZaostatakRadnjeNijePad
+        Case 238: T_KI014_ZaostatakNesacuvanogNijeOdbacivanje
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -8327,6 +8339,201 @@ EH:
     On Error GoTo 0
     Err.Raise errNum, "modTest.T_SaldoPapir_TipBezObziraNaVelikaSlova", errDesc
 End Sub
+
+' ============================================================
+' 236. KI-014: ZAOSTALA GRESKA UZ VRACENU LISTU NIJE PAD LISTE.
+' ============================================================
+' Posle Application.Run je greska u Err uz VRACEN rezultat uvek zaostatak: makro
+' koji gresku DIGNE je kroz Run ne vraca pozivaocu, nego otvara dijalog (sonde
+' 13. i 14.10.2026). ScrGridData ju je citala kao pad, pa je LoadGridFromScreen
+' dizao OTKUI_ERR_LISTA, a mreza ostajala na prethodnoj listi.
+'
+' Curenje pravi seam u PRAVOM clanu (modMaticniEkran.Redovi, telo Scr_Rows
+' maticnih ekrana), pa putuje kroz pravi Application.Run do citaoca. Ide kroz
+' produkcioni put mreze (GridTestLoad -> LoadGridFromScreen), bez forme.
+' Obe strane ugovora:
+'   - lista vracena uz gresku se ucitava, a greska ide u ScrZaostalaGreska;
+'   - lista koju ekran NE vrati, uz gresku, i dalje je pad liste (kontrola);
+'   - ekran bez liste (ANALIZA: Empty uz Err = 0) nije pad.
+' SABOTAZE: ki014-lista-zaostatak-je-pad, ki014-lista-prazno-nije-pad,
+' ki014-pomocnik-zaostatak-je-neuspeh.
+Private Sub T_KI014_ZaostatakListeNijePad()
+    Dim pad1 As String, pad2 As String, pad3 As String
+    Dim n1 As Long, zaostala As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    modUiScreens.ScrZaostalaGreska = ""
+
+    modUiScreens.ScrCuriTestSet "REDOVI"
+    pad1 = GridLoadPad("MAT_PARTNERI")
+    n1 = modOtkupUI.GridRedovaTest()
+    zaostala = modUiScreens.ScrZaostalaGreska
+
+    modUiScreens.ScrCuriTestSet "REDOVI_PRAZNO"
+    pad2 = GridLoadPad("MAT_PARTNERI")
+
+    modUiScreens.ScrCuriTestSet ""
+    pad3 = GridLoadPad("ANALIZA")
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modUiScreens.ScrCuriTestSet ""
+    modOtkupUI.GridTestLoad ""
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI014_ZaostatakListeNijePad", errDesc
+
+    AssertEq pad1, "", "zaostala greska uz vracenu listu nije pad liste"
+    AssertEq (n1 > 0), True, "lista vracena uz zaostalu gresku je ucitana"
+    AssertEq (InStr(1, zaostala, "Scr_Rows", vbBinaryCompare) > 0), True, _
+             "zaostala greska liste je zabelezena, ne progutana"
+    AssertEq (Len(pad2) > 0), True, "lista koju ekran ne vrati uz gresku je pad liste"
+    AssertEq pad3, "", "ekran bez liste nije pad liste"
+End Sub
+
+' Produkcioni put mreze: opis pada liste, ili "" kad je lista procitana.
+Private Function GridLoadPad(ByVal kljuc As String) As String
+    On Error Resume Next
+    Err.Clear
+    modOtkupUI.GridTestLoad kljuc
+    If Err.Number <> 0 Then GridLoadPad = Err.Number & " " & Err.description
+    Err.Clear
+End Function
+
+Private Sub OcistiToast(ByVal f As Object)
+    On Error Resume Next
+    f.Controls("zGrid").Controls("tstScr").Controls("tstScrMsg").caption = ""
+    Err.Clear
+End Sub
+
+' ============================================================
+' 237. KI-014: ZAOSTALA GRESKA UZ OBRADJENU RADNJU NIJE PAD RADNJE.
+' ============================================================
+' Isti mehanizam kao 236, na citaocu ScrEvent: radnja ekrana vrati odgovor uz
+' gresku u Err, a ScrAct je javljao "Radnja nije uspela". Klik ide kroz pravu
+' ljusku (UiEvent -> ScrAct -> ScrEvent -> Scr_Event), a meri se toast.
+'
+' Drugi slucaj je IZMEREN u ljusci (sonda 14.10.2026), drugog oblika: prelazak
+' ANALIZA -> IZVESTAJI gradi zonu Izvestaja dok je mScreen jos ANALIZA, pa
+' promena polja (chg:scrIzDoT) ide ekranu ANALIZA, koji Scr_Event nema. Run tada
+' vraca Empty uz 1004 -- clan nije implementiran, sto nije pad radnje.
+' SABOTAZE: ki014-radnja-zaostatak-je-pad, ki014-radnja-nema-clana-je-pad.
+Private Sub T_KI014_ZaostatakRadnjeNijePad()
+    Dim f As frmOtkupUI, toastRadnja As String, zaostala As String
+    Dim toastIzv As String, ekran1 As String, ekran2 As String, ekran3 As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    Set f = NewOtkupUIForm()
+    modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
+    modOtkupUI.IdiNaEkran "MAT_PARTNERI"
+    ekran1 = modOtkupUI.AktivanEkran()
+
+    OcistiToast f
+    modUiScreens.ScrZaostalaGreska = ""
+    modUiScreens.ScrCuriTestSet "DOGADJAJ"
+    modOtkupUI.UiEvent "scrKI014Proba", "Click", Empty
+    modUiScreens.ScrCuriTestSet ""
+    toastRadnja = ToastTekst(f)
+    zaostala = modUiScreens.ScrZaostalaGreska
+
+    modOtkupUI.OtkupUI_SekcijaTest SEK_RAD
+    modOtkupUI.IdiNaEkran "ANALIZA"
+    ekran2 = modOtkupUI.AktivanEkran()
+    OcistiToast f
+    modOtkupUI.IdiNaEkran "IZVESTAJI"
+    ekran3 = modOtkupUI.AktivanEkran()
+    toastIzv = ToastTekst(f)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modUiScreens.ScrCuriTestSet ""
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI014_ZaostatakRadnjeNijePad", errDesc
+
+    AssertEq ekran1, "MAT_PARTNERI", "preduslov: ljuska je na ekranu MAT_PARTNERI"
+    AssertEq toastRadnja, "", "zaostala greska uz obradjenu radnju nije pad radnje"
+    AssertEq (InStr(1, zaostala, "Scr_Event", vbBinaryCompare) > 0), True, _
+             "zaostala greska radnje je zabelezena, ne progutana"
+    AssertEq ekran2 & ">" & ekran3, "ANALIZA>IZVESTAJI", _
+             "preduslov: ljuska je presla ANALIZA -> IZVESTAJI"
+    AssertEq toastIzv, "", "ekran bez Scr_Event ne javlja pad tudjeg dogadjaja"
+End Sub
+
+' ============================================================
+' 238. KI-014: ZAOSTALA GRESKA NE ODBACUJE NESACUVAN UNOS.
+' ============================================================
+' Jedini fail-open u ugovoru: ScrImaNesacuvano i PanelImaNesacuvano su gresku
+' posle Run-a citali kao "nema nesacuvanog", pa bi ljuska zatvorila ekran ili
+' panel BEZ pitanja i odbacila unos. Danas nijedan izvor tu ne curi (merenje
+' 14.10.2026), pa test drzi ugovor, ne zatecen kvar.
+'
+' Editor se otvara pravim klikom (scrMatNovi), a izmena panela je prava izmena
+' polja Podesavanja. Pitanje (MsgBox u ActivateScreen/PanelSmemoDaZatvorimo) se
+' ovde ne postavlja -- u harnessu bi visilo -- nego se meri odgovor koji ono cita.
+' SABOTAZE: ki014-nesacuvano-zaostatak-odbacuje, ki014-panel-zaostatak-odbacuje.
+Private Sub T_KI014_ZaostatakNesacuvanogNijeOdbacivanje()
+    Dim f As frmOtkupUI, editorPre As Boolean, editorCuri As Boolean
+    Dim panelPre As Boolean, panelCuri As Boolean, polje As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    Set f = NewOtkupUIForm()
+    modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
+    modOtkupUI.IdiNaEkran "MAT_PARTNERI"
+    modOtkupUI.UiEvent "scrMatNovi", "Click", Empty
+    editorPre = modUiScreens.ScrImaNesacuvano("MAT_PARTNERI")
+    modUiScreens.ScrCuriTestSet "NESACUVANO"
+    editorCuri = modUiScreens.ScrImaNesacuvano("MAT_PARTNERI")
+    modUiScreens.ScrCuriTestSet ""
+    modOtkupUI.UiEvent "scrMatOdustani", "Click", Empty
+
+    modOtkupUI.IdiNaEkran "MAT_PODESAVANJA"
+    polje = IzmeniPoljePanela(modOtkupUI.PanelHost())
+    panelPre = modUiPanel.PanelImaNesacuvano()
+    modUiScreens.ScrCuriTestSet "PANEL_NESACUVANO"
+    panelCuri = modUiPanel.PanelImaNesacuvano()
+    modUiScreens.ScrCuriTestSet ""
+    modUiPanel.PanelZatvori False
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modUiScreens.ScrCuriTestSet ""
+    modUiPanel.PanelZatvori False
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI014_ZaostatakNesacuvanogNijeOdbacivanje", errDesc
+
+    AssertEq editorPre, True, "preduslov: otvoren editor ekrana je nesacuvan unos"
+    AssertEq editorCuri, True, "zaostala greska ne odbacuje nesacuvan unos ekrana"
+    AssertEq (Len(polje) > 0 And panelPre), True, _
+             "preduslov: izmenjeno polje panela je nesacuvana izmena [" & polje & "]"
+    AssertEq panelCuri, True, "zaostala greska ne odbacuje nesacuvanu izmenu panela"
+End Sub
+
+' Prvo vidljivo tekstualno polje panela (bez maske) dobija dodatak -- prava
+' izmena koju operater pravi kucanjem. Vraca ime kontrole, ili "" ako je nema.
+Private Function IzmeniPoljePanela(ByVal host As Object) As String
+    Dim c As Object
+    On Error Resume Next
+    If host Is Nothing Then Exit Function
+    For Each c In host.Controls
+        If TypeName(c) = "TextBox" Then
+            If Len(c.PasswordChar) = 0 And c.Enabled And Not c.Locked Then
+                c.value = CStr(c.value) & "KI014"
+                IzmeniPoljePanela = c.name
+                Exit Function
+            End If
+        End If
+    Next c
+End Function
 
 ' F7 unos NASEG reversa (stanica izdaje kooperantu) za modNovacUnos.ReversUpisi --
 ' isti recnik koji ekran predaje (NoviReversUnos).

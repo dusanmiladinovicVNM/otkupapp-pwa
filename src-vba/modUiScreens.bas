@@ -113,6 +113,13 @@ Private mSekcijaZabranjenaTest As String
 ' kroz pravi prekidac (v. T_Sekcija_OdbijenPrelazakNePomeraSekciju).
 Private mGradnjaPadaTest As Boolean
 
+' mCuriTest (KI-014): clan ugovora cije telo na svom izlazu pozove
+' ScrCuriAkoTest sa ovim imenom VRACA rezultat i ostavlja gresku u Err -- oblik
+' koji je sonda izmerila (proba pod Resume Next, izlaz van handlera). Greska nije
+' dignuta, pa kroz Application.Run stize do citaoca. Ne dodaje ni pristup ni
+' sposobnost; prazno gasi seam.
+Private mCuriTest As String
+
 '------------------------------------------------------------ REGISTAR
 ' kljuc | modul | naslov (kljuc kataloga) | MDL2 kod | grupa | oblast | sekcija
 '       | brana ("1" = ekran nosi svoj Scr_Dozvoljen; v. SCR_BRANA)
@@ -304,6 +311,25 @@ Public Sub ScrGradnjuOboriTest(ByVal obori As Boolean)
     If Not IsTestMode() Then Exit Sub
     mGradnjaPadaTest = obori
 End Sub
+
+' Test seam (KI-014): koji clan ugovora "curi" (v. mCuriTest). Prazno gasi seam.
+Public Sub ScrCuriTestSet(ByVal clan As String)
+    If Not IsTestMode() Then Exit Sub
+    mCuriTest = clan
+End Sub
+
+' Kuka seam-a. Zove je telo clana ugovora NA SVOM IZLAZU, posle poslednjeg
+' On Error/Err.Clear. Van test rezima i za drugi clan ne radi nista i ne dira
+' Err. Vraca True kad je gresku ostavila.
+Public Function ScrCuriAkoTest(ByVal clan As String) As Boolean
+    Dim ws As Object
+    If Len(mCuriTest) = 0 Then Exit Function
+    If mCuriTest <> clan Then Exit Function
+    If Not IsTestMode() Then Exit Function
+    ScrCuriAkoTest = True
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets("__KI014_CURI__")
+End Function
 
 Public Function ScrDozvoljen(ByVal kljuc As String) As Boolean
     Dim obl As String
