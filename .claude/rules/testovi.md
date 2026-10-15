@@ -3,7 +3,7 @@ paths:
   - "src-vba/mod*Tests.bas"
   - "src-vba/modTest*.bas"
   - "src-vba/modOtkupUI.bas"
-  - "src-vba/modScrDokumenti.bas"
+  - "src-vba/modScr*.bas"
   - "src-vba/modUiScreens.bas"
   - "src-vba/modUiPanel.bas"
   - "src-vba/modMaticniEkran.bas"
@@ -22,11 +22,13 @@ paths:
   - "tests/golden/*"
 ---
 
-<!-- modOtkupUI.bas / modScrDokumenti.bas su u paths namerno: u njima su test
+<!-- modOtkupUI.bas / modScr*.bas su u paths namerno: u njima su test
      seam-ovi (§4). Bez ovoga agent koji ih menja ne bi znao da postoje.
+     modScr* je glob, ne samo modScrDokumenti (Scr_OtpTestSet): kuke seam-a
+     pada iz KI-016 stoje u 30 clanova ugovora, u svih 14 modScr* modula.
      Iz istog razloga i modUiScreens / modUiPanel / modMaticniEkran /
-     modPodesavanja / modPrint: seam-ovi i jedini tumac ishoda Run-a iz KI-011 i
-     KI-014 (§4).
+     modPodesavanja / modPrint: seam-ovi i tumac ishoda Run-a iz KI-011 i
+     KI-014, a u modUiScreens i seam i kanal pada iz KI-016 (§4).
      frmOtkup.frm je otisao odavde sa formom (korak 2, §27.10).
 
      tests/golden/* trenutno ne pogadja nijedan fajl: jedini golden je bio snimak
@@ -198,7 +200,7 @@ Ne pokreće se na Linux/macOS — ni u web sesiji ni u CI. Tamo se testovi pona�
 
 ## 4) Test seam-ovi koje produkcioni kod nosi
 
-Ako menjaš `modOtkupUI`, `modScrDokumenti`, `modUiScreens`, `modUiPanel`,
+Ako menjaš `modOtkupUI`, bilo koji `modScr*`, `modUiScreens`, `modUiPanel`,
 `modMaticniEkran`, `modPodesavanja` ili `modPrint`, znaj da ovo postoji i zašto —
 inače ćeš ih „počistiti":
 
@@ -220,23 +222,36 @@ koji **padne** (`RunOne` → `CleanupPosleTesta`); test koji prođe gasi svoj se
 sam. **Nov seam koji nosi stanje ide i u `ResetSeamova`**, inače test koji pukne
 pre čišćenja ostavi seam upaljen i obori tuđi test.
 
-### Ishod `Application.Run` u ugovoru ekrana (KI-011, KI-014)
+### Ishod `Application.Run` u ugovoru ekrana (KI-011, KI-014, KI-016)
 
-- **`modUiScreens.ScrRunIshod` je jedini tumač ishoda `Application.Run` nad
-  članom ugovora** (invarijanta `UI-ISHOD-01`). Član se **nije izvršio** samo
-  kad uz `Empty` stoji greška: 1004 (`SCR_RUN_NEMA`, člana nema) ili druga
-  (`SCR_RUN_PAO`). Vraćena vrednost uz grešku u `Err` je **zaostatak** pomoćnog
-  koraka, ne pad člana (`SCR_RUN_VRATIO`); `Empty` uz `Err = 0` je član koji je
-  vratio `Empty` (`SCR_RUN_PRAZNO`) — šta to znači odlučuje čitalac (lista: „nema
-  liste"; `ScrSave`: neuspeh). Do KI-014 je svaki čitalac
-  `Err` čitao po svom; upis reversa je tako javljao „Radnja nije uspela" posle
-  uspešnog snimanja, pa je operater isti revers snimio dvaput (KI-011). **Nov
-  čitalac ugovora ide kroz `ScrRunIshod`**, ne kroz svoj `Err.Number`.
-- Zove se **odmah** posle `Run`-a. Namerno **nema `On Error`** (obrisao bi `Err`
-  koji pozivalac još čita), a `v` je **`ByRef`** (`Scr_Rows` vraća celu mrežu).
-  Ne „sređuj" ni jedno ni drugo.
-- `ScrBuild` (Sub) i dalje čita `Err` direktno: Sub uz zaostatak izgleda isto kao
-  nepokrenut član (sonda 14.10.2026). Imenovano ograničenje, ne previd.
+- **Ugovor `Application.Run` ima dva nivoa.** Kod članova koje štiti `UI-PAD-01`
+  (`Scr_Rows`, `Scr_Event`, `Scr_Build` — v. KI-016 ispod) čitalac
+  (`ScrGridData`, `ScrEvent`, `ScrBuild`) **pre** poziva prazni kanal pada kroz
+  `ScrPadPreuzmi`, a posle `Run`-a **najpre** ponovo preuzima kanal. Neprazan
+  kanal znači da je član uhvatio izuzetak, i on ima **prednost** nad vraćenom
+  vrednošću i nad `Err`. Tek kad kanal ne prijavi pad, `ScrRunIshod` tumači
+  vraćenu vrednost i zaostali `Err` po `UI-ISHOD-01`. `ScrBuild` je Sub, pa
+  posle kanala zadržava svoje tumačenje `Err`-a (dole). Test člana kome je
+  skinuta zaštita zove član **direktno**: neuhvaćen izuzetak kroz `Run` otvara
+  modalni VBA dijalog (KI-016 ispod).
+- **`modUiScreens.ScrRunIshod` je drugi nivo: tumač vraćene vrednosti i `Err`-a**
+  (invarijanta `UI-ISHOD-01`). Član se **nije izvršio** samo kad uz `Empty`
+  stoji greška: 1004 (`SCR_RUN_NEMA`, člana nema) ili druga (`SCR_RUN_PAO`).
+  Vraćena vrednost uz grešku u `Err` je **zaostatak** pomoćnog koraka, ne pad
+  člana (`SCR_RUN_VRATIO`); `Empty` uz `Err = 0` je član koji je vratio `Empty`
+  (`SCR_RUN_PRAZNO`) — šta to znači odlučuje čitalac (lista: „nema liste";
+  `ScrSave`: neuspeh). Do KI-014 je svaki čitalac `Err` čitao po svom; upis
+  reversa je tako javljao „Radnja nije uspela" posle uspešnog snimanja, pa je
+  operater isti revers snimio dvaput (KI-011). **Nov čitalac ugovora ide kroz
+  `ScrRunIshod`** (a nad članom iz `UI-PAD-01` prvo kroz kanal), ne kroz svoj
+  `Err.Number`.
+- Zove se **odmah** posle `Run`-a (posle kanala, gde ga ima). Namerno **nema
+  `On Error`** (obrisao bi `Err` koji pozivalac još čita), a `v` je **`ByRef`**
+  (`Scr_Rows` vraća celu mrežu). Ne „sređuj" ni jedno ni drugo. Isto važi za
+  `ScrPadPreuzmi`: ni on nema `On Error`.
+- `ScrBuild` (Sub) posle kanala i dalje čita `Err` direktno: Sub uz zaostatak
+  izgleda isto kao nepokrenut član (sonda 14.10.2026). Imenovano ograničenje, ne
+  previd.
 - **`modUiScreens.ScrZaostalaGreska`** je javna promenljiva koju **nijedan
   produkcioni kod ne čita** — piše je `ScrRunIshod` (uz WARN u log), a tvrde je
   testovi 226, 227 i 236. Nije mrtav kod: bez nje se zaostatak guta bez traga, a
@@ -281,9 +296,89 @@ pre čišćenja ostavi seam upaljen i obori tuđi test.
   `ResetSeamova` (`ScrCuriTestSet ""`); stanje je zajedničko, pa time gasi i
   `ScrPraznoAkoTest`.
 
-Šta `modTest` NE pokriva: mrežu, storno, i sam `Save*_TX` (transakcioni upis
-pokrivaju `RunStornoTestSuite` i `RunBusinessFlowProSuite`). Forma se gradi bez
-`.Show`, pa `UserForm_Activate` nikad ne ide.
+### Seam-ovi pada člana ugovora (KI-016)
+
+- **Zašto postoje.** Grešku koju član ugovora **digne** `Application.Run` ne
+  vraća pozivaocu — ni pod `On Error Resume Next`, ni pod `On Error GoTo`, ni iz
+  događaja prikazane forme. Otvara se runtime dijalog sa ugašenim „Continue", a
+  „End" resetuje projekat: forma nestaje, Excel ostaje sakriven (sonda
+  15.10.2026, stavka 142 u `docs/STANJE_REFAKTORA.md`). Jedina brana koju
+  platforma dozvoljava je handler **u samom članu** (invarijanta `UI-PAD-01`).
+- **Kanal pada nije seam, nego produkcioni kod.** Handler člana zove
+  `modUiScreens.ScrPadZabelezi(clan)`, koji pad upiše u kanal i ERROR u log.
+  Zapis nosi ime člana, broj i opis greške, i izvor kad nosi ime (korak funkcije
+  liste); tačan oblik drži komentar nad `ScrPadZabelezi`, ne ovaj fajl.
+  `ScrPadPreuzmi` vraća zapis i **briše** ga. Redosled čitanja je prvi nivo
+  ugovora (gore). Zašto dvaput: pre `Run`-a čitalac odbacuje tuđ pad (član
+  pozvan direktno, mimo čitaoca, ostavlja ga u kanalu), a ugnježden čitalac
+  (radnja koja osveži mrežu) tako preuzme svoj. Zašto pre vrednosti: vrednost pad
+  ne može da nosi — posle uhvaćenog pada je `Err = 0`, `Scr_Event` (Boolean)
+  „vrati" `False`, `Scr_Build` (Sub) izgleda kao uspešna gradnja, a `Scr_Rows`
+  vrati `Empty` kao „nema liste" ili listu koju je već dodelio.
+- **`modUiScreens.ScrPadTestSet(clan)`** bira član koji „pada"; prazno gasi seam.
+  Kuka **`ScrPadAkoTest(clan)`** tada digne grešku 9. Tvrdo je gejtovan:
+  postavljač odbija rad van test režima, a kuka ponovo pita `IsTestMode()`. Van
+  test režima i za drugi član kuka ne radi ništa i **ne dira `Err`**.
+- **Kuka stoji na VRHU člana, odmah posle `On Error GoTo EH`** — obrnuto od kuke
+  iz KI-014, koja stoji na izlazu. Tako podmetnut pad gađa branu koja pokriva
+  celo telo. Iznad `On Error GoTo EH` pad prolazi mimo brane: direktan poziv tada
+  izgleda kao član bez brane, a kroz `Run` je dijalog. Sabotaže
+  `ki016-*-pusta-pad` sidre baš taj par redova. Kuku nosi 30 članova (obim iz
+  stavke 142):
+  - 13 `Scr_Rows` — svi osim ANALIZE, koja nema put do `Err.Raise`;
+  - 4 `Scr_Event` matičnih (MatKorisnici, MatPakovanje, MatPartneri, MatRoba).
+    Ostali imaju svoju zaštitu (osam sopstveni handler, Dokumenti
+    `Resume Next`), a ANALIZA ga nema;
+  - 13 `Scr_Build` — svaki koji postoji (Dokumenti ga nemaju).
+
+  Druga kuka, `"modScrIzvestaji.Scr_Build#usred"`, stoji odmah iza povratka na
+  branu posle lokalnog `Resume Next` segmenta (test 243). Član koji otvori
+  `Resume Next` segment vraća se na `On Error GoTo EH`, ne na `GoTo 0` — kuka na
+  vrhu to ne meri.
+- Gasi ga `ResetSeamova` (`ScrPadTestSet ""`), koji **prazni i kanal**
+  (`ScrPadPreuzmi`): zaostao zapis bi sledećem čitaocu javio tuđ pad.
+- **Test člana BEZ brane zove član DIREKTNO, nikad kroz `Application.Run`.**
+  Greška dignuta kroz `Run` i u testu otvara dijalog: `run_vba` visi do
+  timeout-a, `dokaz.py` to beleži kao `TIMEOUT`, ne kao crveno, i niko ne sazna
+  koji član je pustio pad. Direktno, greška stiže u test i on je crven **po
+  imenu**. „Bez brane" je i član čiju branu skida sabotaža (`ki016-*-pusta-pad`
+  gađa Fakture `Scr_Rows`, MatRoba `Scr_Event` i Storno `Scr_Build`), pa nova
+  sabotaža brane bira član koji se u testovima ne zove kroz `Run`.
+- **Testovi 239–243** i kako svaki poštuje to pravilo:
+  - **239** — svaki od 30 članova hvata svoj pad i upisuje ga u kanal pod svojim
+    imenom. Zove ih **direktno** (`Scr_Build` dobija `Nothing`, jer je kuka prva
+    naredba tela) i posle svakog preuzme kanal, pa nalaz ne prelazi na sledeći;
+  - **240** — pad liste je neuspeh liste, ne „nema liste", sa izvorom koji
+    operater vidi. Ide kroz pravi `Run` (`GridTestLoad`, MatPartneri
+    `Scr_Rows`), A → B → A: pad, obično čitanje, pa pad zabeležen mimo čitaoca
+    koji ne sme da obori sledeće čitanje;
+  - **241** — pad radnje je vidljiv na sva tri ulaza do `Scr_Event`: radnja
+    ekrana, prekidač liste i izbor reda (`UiEvent`, MatPartneri `Scr_Event`);
+  - **242** — pad gradnje ne prebacuje ekran, a sledeći ulazak gradi zonu
+    ispočetka (`IdiNaEkran`, ANALIZA `Scr_Build`);
+  - **243** — pad **usred** gradnje (kuka `#usred`, Izveštaji) ne ostavlja ni
+    zonu ni omotače. Isti član mora i kroz `Run`, pa test prvo **direktno**
+    izmeri da brana važi, a ljusku vozi samo ako važi — bez brane padne po imenu
+    umesto da visi.
+
+  240–242 gađaju članove koje **nijedna sabotaža brane ne skida** (MatPartneri,
+  ANALIZA). Svih pet testova seam gasi sami; ako test pukne pre toga, gasi ga
+  `ResetSeamova`.
+- **Direktan poziv člana iz obima više ne diže grešku.** Vraća `Err = 0`, a pad
+  je u kanalu. Test koji je pad merio kao `Err` posle direktnog poziva meri kanal
+  (`PadDnevnika`, test 162, stavka 143). Zapis ostaje u kanalu i posle direktnog
+  poziva: test ga preuzme sam, a čitalac ga ionako odbaci pre svog `Run`-a (240,
+  poslednja tvrdnja).
+- **Nov član iz obima** — nov `Scr_Rows` ili `Scr_Build`, ili `Scr_Event` bez
+  sopstvenog handlera — po `UI-PAD-01` nosi branu, kuku i `ScrPadZabelezi` u
+  handleru, i ide u spisak 239. Test nabraja članove po imenu, pa član van
+  spiska niko ne meri.
+
+Šta `modTest` pokriva, a šta ne: meri ugovore ekrana i UI ponašanje, uključujući
+mrežu (npr. 236 i 240 čitaju listu kroz pravi `Scr_Rows` i produkcioni put
+mreže). **Ne zamenjuje poslovne suite**: storno i sam `Save*_TX` (transakcioni
+upis) pokrivaju `RunStornoTestSuite` i `RunBusinessFlowProSuite`. Forma se gradi
+bez `.Show`, pa `UserForm_Activate` nikad ne ide.
 
 ## 5) Kapija ide i u writer, ne samo u modul unosa
 
