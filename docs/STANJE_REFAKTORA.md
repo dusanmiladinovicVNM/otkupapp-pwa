@@ -4441,6 +4441,28 @@
 
      **Otvoreno.** Finalni exact-head review i merge.
 
+141. **Merge `#422` — na izričit zahtev operatera, bez finalnog exact-head review-a** (15.10.2026).
+     Zapis ide ovde, a ne u `#422`. Obrazac su stavke 128, 130, 132, 134 i 138.
+
+     - Review (`d3c57cd7`): `CODE GO` za izvršne kapije, `P0 0`, `P1 0`, `P2 0`, `P3 2`, 9,2/10, static CI #969.
+       Oba `P3` su prihvaćena bez izmene koda (stavka 140).
+     - **Posle tog GO su ušla dva commit-a, samo test i test seam:**
+       - `1d18023f`: `Scr_IzTestReset` briše i `mDefaultId`, jer je test 237 zagađivao test 123;
+       - `0b1c5954`: 236 meri „bez liste" kroz seam, jer ANALIZA vraća niz.
+
+       Posle njih su samo docs (`cf6a28d5`, `c4dd1d32`).
+     - Izvršne kapije su nad `0b1c5954` (izvor `08757628f52a`): 12/12, dokaz 28/28 (grupno), compile i ručna
+       provera 6/6.
+     - Merge-ovano 15.10.2026 kao `fc216fc2`, na **izričit zahtev operatera**. Head `c4dd1d32`, static CI
+       `SUCCESS`; `src-vba` je od `0b1c5954` do head-a nepromenjen.
+     - **Finalni exact-head review nije tražen.** Reviewer nije video ni `1d18023f` ni `0b1c5954` ni docs posle
+       njih; GO iz stavke 140 važi za `d3c57cd7`.
+     - **`KI-014` → `CLOSED`** (odluka operatera 15.10.2026, po preporuci). Ugovor ekrana je rešen i dokazan u
+       `#422`. Ne-UI čitaoci (`InitApp`, Migracija, SEF recovery) su različiti moduli i svaki je svoj rez, pa
+       prelaze u nov `KI-017` sa istim popisom. `P3 #1` iz `#422` (`SCR_RUN_NEMA` ćuti i za korisnikov klik)
+       ostaje zapisan i seli se u `KI-016`, kao otvorena stavka van reza.
+     - Sledeći korak (stavke 142+): `KI-016`. `KI-015`, `ODL-24` i S6 dolaze posle njega.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
