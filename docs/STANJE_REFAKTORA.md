@@ -4463,6 +4463,173 @@
        ostaje zapisan i seli se u `KI-016`, kao otvorena stavka van reza.
      - Sledeći korak (stavke 142+): `KI-016`. `KI-015`, `ODL-24` i S6 dolaze posle njega.
 
+142. **`KI-016` — pad člana ugovora ekrana ne izlazi kroz `Application.Run`** (15.10.2026). Grana
+     `claude/ki016-pad-ekrana`, sa `main`-a `fc216fc2`. Skripte i izlazi su u scratchpad-u sesije `60ee0682`:
+     `popis_run.py`, `sonda_ki016.py`, `repro_ki016.py`, `uredi_clanove.py`.
+
+     **Merenja, pre koda.**
+     - **Statički popis ciljeva `Run`-a** (`popis_run.py`: handler na vrhu cilja, ponovno dizanje u handleru,
+       put do `Err.Raise` bez zaštite):
+       - **`Scr_Rows`: 13 od 14** stiže do `Err.Raise` bez zaštite. Čista je samo ANALIZA. Ponovno dizanje
+         (`Err.Raise Err.Number|errNum, ...` u handleru) ima 31 handler-a u `modScr*` i 4 u `modMaticni*`.
+         **Ispravka prompta:** `On Error Resume Next` u `Scr_Rows` BankaNalozi i Izveštaja stoji **posle**
+         poziva liste, pa ni oni nisu bili zaštićeni.
+       - `Scr_Event`: Agro, BankaNalozi, BankaUvoz, Fakture, Izveštaji, Oporavak, Palete i Storno imaju handler
+         (log i sopstveni toast); Dokumenti ima `Resume Next`; **četiri matična nemaju handler**.
+       - `Scr_Build`: 13 od 13 bez handlera, ali bez puta do eksplicitnog `Err.Raise` (pada samo na kvaru koda).
+       - Ostali ciljevi (Layout, Meta, Liste, Lista, Radnje, Cipovi, Sort, Brojac, ResetCache …) nemaju put do
+         `Err.Raise`, a njihovi čitaoci pad ionako ne prikazuju.
+       - **Paneli:** `BuildConfigEditor` i `BuildAdminPanel` hvataju sopstvenu grešku (LogErr + MsgBox) i ne
+         dižu je; `_Release` / `_ImaNesacuvano` imaju `Resume Next`. **Puta do dijaloga nema.** Posledica: EH u
+         `PanelOtvori` (`UIPAN_ERR_GRADNJA`) je mrtav, a pao graditelj se prijavljuje kao otvoren panel.
+     - **Platformska sonda** (`sonda_ki016.py`, deo A, sopstvena instanca):
+
+       ```
+       A1  pozivalac Resume Next (COM)   -> dijalog, Continue UGASEN, End/Debug/Help; posle End: stanje
+                                            prazno, forme=0
+       A1g pozivalac On Error GoTo (COM) -> isto; handler pozivaoca je NE dobija
+       A2  dogadjaj modeless forme,      -> isto; red posle Run-a se nije izvrsio; forma nestala,
+           Excel sakriven                   Application.Visible=False, sveska otvorena
+       A3  clan SAM uhvati gresku        -> Err=0; Variant/Sub=Empty, Boolean=False, String="",
+                                            delimicno dodeljen Variant vraca NIZ; modul-level zapis prezivi
+       A4  VBE Error Trapping            -> BreakOnAllErrors=0, BreakOnServerErrors=0 (podrazumevano)
+       ```
+       Zaključan projekat nije produkciona konfiguracija: nijedan pomen `Protection` u `src-vba`, `tools` i
+       `docs`, a self-update uvozi module. To je pročitano, ne izmereno.
+     - **Pravi put** (`sonda_ki016.py`, deo B, sveska `run_vba --compile-only --keep` nad `fc216fc2`):
+
+       ```
+       B1 kvar SEME (kolona Iznos u tblFakture), ScrGridData -> dijalog "Nedostaje kolona 'Iznos' ..."
+       B2 kvar PODATKA (=NA() u ID celiji tblFakture)        -> NEMA dijaloga; citac toleriše, lista vracena
+       B3 kvar seme, prava ljuska iz OnTime: IdiNaEkran FAKTURE prosao, UiEvent "lsSeg3" -> ReloadGrid ->
+          dijalog; posle End forme=0, Excel sakriven
+       ```
+
+     **`pre-flight`.** `PLATFORM`, `DOWNSTREAM`, `INVARIANTS/OWNER` i `LANDING` su PROVEN. `WRITERS`, `DOMAIN`,
+     `IDENTITY`, `CARDINALITY`, `EVENTS` i `CAPABILITY` su N/A: UI kanal i log, bez domenskih tabela. `Scr_Save`
+     i transakcije se ne diraju (`UI-ISHOD-01`). `ACCEPTANCE CONTRACT` je zatvoren posle odluka ispod.
+     **Nova invarijanta `UI-PAD-01`:** član ugovora koji ljuska zove kroz `Run` ne pušta grešku napolje, nego je
+     beleži u kanal `modUiScreens`. Čitalac kanal čita **pre** vraćene vrednosti. Vlasnik je
+     `modUiScreens.ScrPadZabelezi` (jedna implementacija), a član nosi samo branu i svoje ime.
+
+     **Odluke operatera (15.10.2026), sve po preporuci:**
+     1. **Obim:** lista, radnja i gradnja, ukupno 30 članova: 13 `Scr_Rows`, 4 `Scr_Event` matičnih i 13
+        `Scr_Build`. Paneli ostaju van, jer puta do dijaloga nemaju; mrtav EH u `PanelOtvori` je zapisan u
+        `KI-016`.
+     2. **Šta operater vidi i kanal:**
+        - lista: `OTKUI_MSG_MREZA_PALA`, sa imenom člana i korakom; mreža ostaje stara;
+        - radnja: `OTKUI_ERR_RADNJA`, i na prekidaču liste i na izboru reda;
+        - gradnja: `OTKUI_SCR_NEMA`, zona se uklanja.
+
+        Uz to ERROR u log, bez dijaloga i bez reseta. Kanal je modul-level zapis u `modUiScreens`, ne
+        vrednost (A3).
+     3. **`KI-014` → `CLOSED`**, ne-UI čitaoci u nov `KI-017` (stavka 141).
+     4. **`P3 #1` iz `#422`** ostaje zapisan i seli se u `KI-016`.
+
+     **Reprodukcija pre ispravke** (izvor `2cac7cbf`: seam, kuke i testovi; brana i čitaoci netaknuti.
+     `run_vba --compile-only --keep`, pa samo 239–242 kroz `modTest.RunOne`, svaki u svojoj instanci, sa
+     hvatanjem dijaloga):
+
+     ```
+     239  TESTS=1 FAIL=1
+          FAIL T_KI016_ClanHvataSvojPad -- svaka lista ekrana hvata svoj pad -- ocekivano [], dobijeno
+          [ modScrAgro.Scr_Rows{9} modScrBankaNalozi.Scr_Rows{9} ... modScrStorno.Scr_Rows{9}]   (13 od 13)
+     240  dijalog "Run-time error '9': podmetnut pad clana ugovora (KI-016)" [Continue ugasen]; posle End forme=0
+     241  isto (UiEvent -> ScrAct -> ScrEvent -> Run)
+     242  isto (IdiNaEkran -> ActivateScreen -> ScrBuild -> Run)
+     ```
+     239 staje na prvoj tvrdnji, pa radnje i gradnje u njemu nisu ispisane. 240–242 su pad kroz `Run`, pa se
+     pre ispravke ne mogu izmeriti testom u suite-u, nego samo sondom.
+
+     **Rez** (`949d1ad6`).
+     - `modUiScreens`:
+       - `ScrPadZabelezi(clan)` upisuje „`clan -> broj opis [izvor]`" i ERROR u log. Izvor ide u zapis kad
+         nosi ime, jer funkcija liste diže sa korakom.
+       - `ScrPadPreuzmi` vraća zapis i briše ga. Čitalac ga zove pre `Run`-a, da odbaci tuđ pad, i posle njega.
+       - `ScrGridData`, `ScrEvent` i `ScrBuild` čitaju kanal pre vrednosti; `ScrRunIshod` je netaknut.
+       - Seam `ScrPadTestSet` / `ScrPadAkoTest` je tvrdo gejtovan i gasi ga `ResetSeamova`, koji prazni i
+         kanal.
+     - **Brana u 30 članova:** `On Error GoTo EH` + kuka seam-a na vrhu, a handler zove `ScrPadZabelezi`
+       (`Scr_Event` matičnih šalje i dogadjaj). `Scr_Build` Izveštaja se posle `Resume Next` segmenta vraća na
+       branu (`On Error GoTo EH`), ne na `GoTo 0`.
+     - `modOtkupUI`: prekidač liste i izbor reda idu kroz `ScrAct`, ne direktno kroz `ScrEvent`; komentari
+       `ReloadGrid` i `ScrAct` su ispravljeni.
+
+     **Acceptance contract.**
+
+     | Pad u | Pre (izmereno) | Posle | Test |
+     |---|---|---|---|
+     | `Scr_Rows` (13) | dijalog, reset, Excel sakriven | `ScrLastErr` = zapis → toast „Učitavanje mreže nije uspelo na koraku: `modScrX.Scr_Rows -> … [korak]`" | 239, 240 |
+     | `Scr_Event` matičnih (4) | dijalog, reset | toast „Radnja nije uspela: `modScrX.Scr_Event <dogadjaj> -> …`", i na prekidaču liste i na izboru reda | 239, 241 |
+     | `Scr_Build` (13) | dijalog, reset | ekran se ne menja, toast `OTKUI_SCR_NEMA`, zona uklonjena; sledeći pokušaj gradi iznova | 239, 242 |
+
+     - **Netaknuto:** `ScrRunIshod` i `UI-ISHOD-01`. `Scr_Save` i svih 8 `Scr_Event` koji već imaju handler.
+       Zaostatak uz vraćenu listu i radnju ostaje WARN (236, 237). „Nema liste" (Empty uz `Err = 0`, bez
+       zapisa) i dalje nije pad (236).
+     - **Edge:** pad zabeležen mimo čitaoca, kad je član pozvan direktno, ne obara sledeće čitanje (240,
+       poslednja tvrdnja). Pad uz vraćenu vrednost je pad: `Scr_Event` je Boolean, pa je posle pada „vratio
+       False", a 241 tvrdi toast.
+     - **Zašto nijedna sabotaža ne visi:** 239 zove članove **direktno**. Sabotaže brane gađaju Fakture
+       `Scr_Rows`, MatRoba `Scr_Event` i Storno `Scr_Build`, a 240–242 kroz `Run` zovu MatPartneri i ANALIZU.
+       Ostale sabotaže brane ne skidaju, nego gase kanal ili čitaoca. Višenje `dokaz.py` ionako beleži kao
+       `TIMEOUT`, ne kao crveno.
+     - **Imenovana ograničenja:**
+       - Povratak `Scr_Build` Izveštaja na branu (umesto `GoTo 0`) kuka na vrhu ne meri, pa je bez sabotaže.
+       - Pad uz delimično dodeljenu listu nije zaseban slučaj. Čitalac kanal gleda bez uslova nad vrednošću, a
+         isti oblik meri `ScrEvent` (Boolean).
+       - Direktni pozivi u testovima gube podizanje greške. Od 102 direktna `Scr_Rows` u `modTest`, 11 prvo
+         tvrdi `IsArray`, a ostali čitaju `d(2)`, pa se crvene na `Empty`. `BuBrojRedova` pretvara `Empty` u 0,
+         ali svaki njegov blok prvo tvrdi broj različit od nule (15, 1, 7, 5).
+
+     **Sabotaže (777 → 789).** Nove:
+     - `ki016-lista-pusta-pad` → 239 „svaka lista ekrana hvata svoj pad";
+     - `ki016-radnja-pusta-pad` → 239 „svaka radnja maticnih ekrana hvata svoj pad";
+     - `ki016-gradnja-pusta-pad` → 239 „svaka gradnja ekrana hvata svoj pad";
+     - `ki016-pomocnik-ne-belezi` → 239 „pad clana je zabelezen u kanalu sa imenom clana";
+     - `ki016-lista-pad-ignorisan` → 240 „pad liste je javljen kao neuspeh liste, sa imenom clana";
+     - `ki016-pomocnik-gubi-izvor` → 240 „pad liste nosi izvor greske (korak)";
+     - `ki016-kanal-ne-brise` → 240 „posle pada sledece citanje liste nije pad";
+     - `ki016-lista-stari-pad` → 240 „pad zabelezen van citaoca ne obara sledece citanje liste";
+     - `ki016-radnja-pad-ignorisan` → 241 „pad radnje je vidljiv operateru, sa imenom clana";
+     - `ki016-prekidac-liste-cuti` → 241 „pad radnje na prekidacu liste je vidljiv";
+     - `ki016-izbor-reda-cuti` → 241 „pad radnje na izboru reda je vidljiv";
+     - `ki016-gradnja-pad-je-uspeh` → 242 „pad gradnje ne prebacuje ekran nego javlja da ekran nije dostupan".
+
+     `--plan` za `ki016- ki014- ki011-scrsave` daje 24 sabotaže u 5 prolaza; filter ne hvata nijedan od 9
+     `POZNATI_NALAZI`. `ki014-*` i `ki011-scrsave-*` idu zajedno sa novima jer su čitaoci dirani, a obrazac je
+     memorija „centralna kapija zastareva dokaze". **Očekivano zaklanjanje:**
+     - u grupi 4 `ki016-pomocnik-ne-belezi` gasi kanal, pa 240 i 241 padaju na prvoj tvrdnji, a
+       `ki016-lista-stari-pad` i `ki016-prekidac-liste-cuti` se ponavljaju sami;
+     - u grupi 3, kao u stavci 139, `ki011-scrsave-nepoznat-ekran-je-uspeh`.
+
+     **Očekivani brojevi** (izvedeni iz diff-a):
+
+     | Suita | Pre | Posle | Razlog |
+     |---|---|---|---|
+     | `RunAllTests` | 238 | **242** | +239 … +242; ostali testovi ne menjaju tvrdnje |
+     | `RunBusinessFlowProSuite` | 2427 | **2427** | nijedna BFP tvrdnja ne ide kroz čitaoce ugovora; brana menja samo ishod pada |
+     | `RunStornoTestSuite`, `RunBankaImportTestSuite` | 111, 241 | bez promene | — |
+
+     **Verifikacija pre GO.** Sve jeftine kapije su zelene (20/20): `vba_check` (789 sabotaža, 0 nalaza,
+     9 poznatih) i `--self-test`; `who_writes --check`, `--check-ownership` i `--self-test`;
+     `gen_schema_module --check` i `--self-test`; `popis_citalaca --check`; `vba_gate --popis` i `--self-test`;
+     `run_vba --self-test`; paritet, self-update kapije i tvrdi popis, svaka sa `--self-test`;
+     `vba_import_marker_gate` i njegov `--self-test`; `sabotaza --self-test`.
+
+     **`run_vba` posle ispravke, dokaz, compile i ručna provera NISU pušteni: čeka se reviewer GO.** Zelenilo
+     239–242 posle ispravke je zato neverifikovano.
+
+     **Otvoreno.**
+     - Review.
+     - Posle GO:
+       - pun prolaz;
+       - `dokaz.py ki016- ki014- ki011-scrsave --grupe`;
+       - compile;
+       - ručna provera: izazvan pad liste, radnje i gradnje daje toast, ne dijalog, i aplikacija ostaje živa;
+         kontrola su normalna lista, F7 upis i ANALIZA → IZVEŠTAJI.
+     - Seam-ovi `ScrPadTestSet` / `ScrPadAkoTest` treba da uđu u `.claude/rules/testovi.md` §4, zajedno sa onima
+       iz `#419` i `#422` — **zasebnim process PR-om**.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
