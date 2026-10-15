@@ -362,10 +362,12 @@ Private mCntOtvor As Long
 ' Stoji li na ekranu crveni toast koji je podigla mreza. Sledece uspelo
 ' citanje ga gasi; toast greske nema tajmer, pa bi inace ostao zauvek.
 Private mGridToast As Boolean
-' Stoji li na ekranu crveni toast ODBIJENOG PRELASKA (ActivateScreen: pad gradnje
-' zone). Sledeci uspesan prelazak ga gasi, kao sto uspelo citanje gasi
-' mGridToast -- inace je "ekran nije dostupan" ostajao i posle uspesnog ulaska
-' u bas taj ekran (rucna provera #423). ShowToast je spusta: nova poruka je
+' Stoji li na ekranu crveni toast ODBIJENOG PRELASKA (ActivateScreen: zabranjen
+' ekran ili pad gradnje zone). Sledeci uspesan prelazak ga gasi, kao sto uspelo
+' citanje gasi mGridToast -- inace je "ekran nije dostupan" ostajao i posle
+' uspesnog ulaska u bas taj ekran (rucna provera #423). Zabrana je isti kvar, i
+' dostizniji: prigusena stavka sidebara je klikabilna. Greska panela je van
+' (prakticno nedostizna, KI-016). ShowToast je spusta: nova poruka je
 ' zamenila staru, pa prelazak vise nema svoju poruku da gasi. Bez toga bi stara
 ' zastavica sakrila i poruku koju je neko drugi ostavio namerno (zabranjen
 ' ekran posle zamene operatera, PrimeniNovaPrava -> NaPrviDozvoljenEkran).
@@ -5765,6 +5767,7 @@ Private Function ActivateScreenCore(frm As Object, ByVal kljuc As String, _
     ' bio izuzet, pa se na njega moglo vratiti i bez prava.
     If Not modUiScreens.ScrDozvoljen(kljuc) Then
         ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
+        mScrToast = True
         PaintNav frm, NavTagFor(AktivnaStavka())
         Exit Function
     End If

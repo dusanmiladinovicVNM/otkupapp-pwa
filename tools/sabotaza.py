@@ -8195,6 +8195,17 @@ SABOTAZE = {
         "T_KI016_PadGradnjeJeJavljen",
         "uspesan prelazak ne gasi poruku koja je zamenila poruku o padu",
     ),
+    # KI-016 (e) B: zabranjen prelazak ne dize zastavicu prelaska, pa crvena
+    # zabrana ostaje i na ekranu u koji se posle uspesno uslo.
+    "ki016-poruka-zabrane-ostaje": (
+        "modOtkupUI.bas",
+        '        ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True\n'
+        "        mScrToast = True\n",
+        '        ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True\n'
+        "        ' SABOTAZA: zabrana ne dize zastavicu prelaska\n",
+        "T_KI016_PadGradnjeJeJavljen",
+        "uspesan prelazak gasi poruku o zabranjenom prelasku",
+    ),
     # KI-016, review #423 P3-1: Scr_Build Izvestaja se posle Resume Next segmenta
     # vraca na GoTo 0 -- pad usred gradnje opet izlazi kroz Run (dijalog, reset).
     # 243 to meri DIREKTNIM pozivom i tada ljusku ne vozi, pa sabotaza ne visi.
