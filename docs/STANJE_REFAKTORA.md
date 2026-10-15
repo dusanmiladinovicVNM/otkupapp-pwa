@@ -4737,6 +4737,22 @@
 
      **Otvoreno.** Merge na izričit zahtev, posle zelenog CI na tačnom head-u.
 
+144. **Merge `#423` — na izričit zahtev operatera, na tačnom head-u posle zelenog static CI** (15.10.2026).
+     Zapis ide ovde, a ne u `#423`. Obrazac su stavke 128, 130, 132, 134, 138 i 141.
+
+     - Review (`ac921b4d`): `CODE GO`, `P0 0`, `P1 0`, `P2 0`, `P3 1`, 9,1/10, static CI #974 (stavka 143). `P3-1` je
+       zatvoren testom 243 pre izvršnih kapija (odluka operatera).
+     - **Posle tog GO su ušli samo test i seam:** `00ba4c26` (test 243 i druga kuka seam-a u
+       `modScrIzvestaji.Scr_Build`) i `8c41e572` (`PadDnevnika` meri kanal pada). Posle njih su samo docs
+       (`f769ef80`, `1252f79e`). Produkcioni kod van seam kuke nije diran.
+     - Izvršne kapije su nad `8c41e572` (izvor `48932e3e721a`): 12/12, dokaz 36/36 (grupno), compile i ručna
+       provera 4/4.
+     - Merge-ovano 15.10.2026 kao `66f7897f`, na **izričit zahtev operatera**, sa `--match-head-commit` na head
+       `1252f79e` (static CI `success` na tom head-u, run 38717568835).
+     - **Finalni exact-head review nije tražen.** Reviewer nije video `00ba4c26`, `8c41e572` ni docs posle njih;
+       GO iz stavke 143 važi za `ac921b4d`.
+     - `KI-016` ostaje `OPEN` zbog stavki van reza (a)–(e) iz `KNOWN_ISSUES`; (d) i (e) su ovaj rez (stavke 145+).
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
