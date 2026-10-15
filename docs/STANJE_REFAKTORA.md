@@ -4706,7 +4706,36 @@
      Sveska za compile i ručnu proveru je `tests/fixtures/rucna_provera_ki016_kod.xlsm`
      (`run_vba --compile-only --keep` nad `8c41e572`).
 
-     **Otvoreno.** Compile (operater), ručna provera, pa merge na izričit zahtev.
+     **Compile ✅** (operater, 15.10.2026, `rucna_provera_ki016_kod.xlsm`, kod sa `8c41e572`): `vba_gate
+     --mark-compile`, pa `--require-green --require-compile` daje RC=0 nad izvorom `48932e3e721a`.
+
+     **Ručna provera ✅** (operater, 15.10.2026, ista sveska, snimci ekrana). Nijednom nije bilo dijaloga,
+     aplikacija je ostala živa, a sledeći pokušaj je radio:
+
+     ```
+     1. Fakture uz preimenovanu kolonu (IznosKI016)  crveni toast "Ucitavanje mreze nije uspelo na koraku:
+        modScrFakture.Scr_Rows -> -2147211703 Nedostaje kolona 'Iznos' ..."; posle vracanja imena
+        lista ima 11 faktura i toast je nestao                                                      OK
+     2. Partneri, seam na Scr_Event, izbor reda    "Radnja nije uspela: modScrMatPartneri.Scr_Event row:1
+                                                    -> 9 podmetnut pad clana ugovora (KI-016) [...]"  OK
+     3. seam #usred, klik IZVESTAJI                  ostaje Otkupni list, "Ovaj ekran jos nije prebacen..." OK
+     4. seam ugasen, klik IZVESTAJI                  zona potpuna (Entitet, Od/Do, hint, Stampaj, Saldo)  OK
+     ```
+     Prekidač liste matičnih (stavka 2) nije na snimku; meri ga 241.
+
+     **Dva prezentaciona nalaza ručne provere** (odluka operatera 15.10.2026: zapisati, merge bez izmene koda):
+     - **(a) Korak je odsečen u toastu.** Zapis kanala je „`clan -> broj opis [izvor]`". Opis greške šeme
+       nabraja zaglavlje, pa traka odseče `[modScrFakture.RedoviFakture[fakture]]`. Korak postoji u zapisu i u
+       logu, ali ga operater na ekranu ne vidi, iako ga je acceptance contract iz stavke 142 obećavao.
+       Kandidat za popravku: `[izvor]` ispred opisa u `ScrPadZabelezi`.
+     - **(b) Poruka o padu gradnje ostaje posle uspešnog ulaska.** Crveni toast nema tajmer. `ReloadGrid` briše
+       svoj (`mGridToast`), a uspešna aktivacija ekrana ne briše poruku `OTKUI_SCR_NEMA`, pa ispravan ekran
+       IZVEŠTAJI i dalje „nije prebačen". Ponašanje je staro, ali je pre `KI-016` bilo praktično nedostižno,
+       jer je pad gradnje gasio aplikaciju. Dira životni vek toasta u `ActivateScreen`, pa traži svoj test.
+
+     Oba su zapisana u `KI-016` kao otvorena stavka van reza i idu u mali zaseban rez posle merge-a.
+
+     **Otvoreno.** Merge na izričit zahtev, posle zelenog CI na tačnom head-u.
 
 ## Dug sa imenom (posle S5-5b)
 
