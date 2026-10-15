@@ -339,6 +339,16 @@ Public Function ScrCuriAkoTest(ByVal clan As String) As Boolean
     Set ws = ThisWorkbook.Worksheets("__KI014_CURI__")
 End Function
 
+' Kuka seam-a BEZ curenja: True kad je seam postavljen na ovaj clan, a clan tada
+' vraca Empty uz Err = 0 -- oblik "ekran nema listu" (236). Danas ga nijedan
+' ekran ne proizvodi u normalnom toku (sonda 14.10.2026: svih 14 vraca niz, i
+' ANALIZA), pa bez ovoga grana SCR_RUN_PRAZNO u ScrGridData nema slucaj.
+Public Function ScrPraznoAkoTest(ByVal clan As String) As Boolean
+    If Len(mCuriTest) = 0 Then Exit Function
+    If mCuriTest <> clan Then Exit Function
+    ScrPraznoAkoTest = IsTestMode()
+End Function
+
 Public Function ScrDozvoljen(ByVal kljuc As String) As Boolean
     Dim obl As String
     On Error Resume Next

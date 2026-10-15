@@ -486,8 +486,10 @@ Public Function Redovi(ByVal ekran As String, ByVal lista As String, _
     ' ne mogu razici. Ekran se prosledjuje jer tri ekrana dele ovo telo, pa se
     ' mora znati CIJU zonu ljuska treba da vrati.
     OsveziZonu ekran, lista
-    ' TEST SEAM (KI-014, test 236): lista se vraca uz gresku ostavljenu u Err, a
-    ' "_PRAZNO" umesto liste vraca Empty uz gresku. Van testa ne radi nista.
+    ' TEST SEAM (KI-014, test 236): lista se vraca uz gresku ostavljenu u Err,
+    ' "_PRAZNO" umesto liste vraca Empty uz gresku, a "_BEZ_LISTE" Empty bez
+    ' greske. Van testa ne radi nista.
+    If modUiScreens.ScrPraznoAkoTest("REDOVI_BEZ_LISTE") Then Redovi = Empty
     If modUiScreens.ScrCuriAkoTest("REDOVI_PRAZNO") Then Redovi = Empty
     modUiScreens.ScrCuriAkoTest "REDOVI"
 End Function

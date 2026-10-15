@@ -8354,7 +8354,10 @@ End Sub
 ' Obe strane ugovora:
 '   - lista vracena uz gresku se ucitava, a greska ide u ScrZaostalaGreska;
 '   - lista koju ekran NE vrati, uz gresku, i dalje je pad liste (kontrola);
-'   - ekran bez liste (ANALIZA: Empty uz Err = 0) nije pad.
+'   - ekran bez liste (Empty uz Err = 0) nije pad. Taj oblik danas ne daje
+'     nijedan ekran -- i ANALIZA vraca niz (sonda 14.10.2026) -- pa ga pravi
+'     seam "REDOVI_BEZ_LISTE" u istom clanu. Prvo izdanje je merilo ANALIZU, i
+'     sabotaza grane je bila NE OBARA NISTA (dokaz 15.10.2026).
 ' SABOTAZE: ki014-lista-zaostatak-je-pad, ki014-pomocnik-guta-zaostatak,
 ' ki014-pomocnik-nevracen-je-odgovor, ki014-lista-prazno-nije-pad,
 ' ki014-lista-bez-liste-je-pad. Redosled tvrdnji je deo dokaza: tvrdnja koja
@@ -8377,8 +8380,9 @@ Private Sub T_KI014_ZaostatakListeNijePad()
     pad2 = GridLoadPad("MAT_PARTNERI")
     zaostala2 = modUiScreens.ScrZaostalaGreska
 
+    modUiScreens.ScrCuriTestSet "REDOVI_BEZ_LISTE"
+    pad3 = GridLoadPad("MAT_PARTNERI")
     modUiScreens.ScrCuriTestSet ""
-    pad3 = GridLoadPad("ANALIZA")
 
 CleanUp:
     errNum = Err.Number
