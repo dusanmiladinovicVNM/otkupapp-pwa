@@ -3142,9 +3142,10 @@ Private Sub RenderPager(ft As Object)
     BoxShow ft, "pgNext", (pages > 1)
 End Sub
 
-' Radnja se salje ekranu, a greska iz njega se PRIKAZUJE. Omotac u
-' modUiScreens gusi greske da ekran koji padne ne obori aplikaciju - ali
-' gusenje bez traga znaci dugme koje "ne radi" i niko ne zna zasto.
+' Radnja se salje ekranu, a radnja koja se NIJE izvrsila se PRIKAZUJE --
+' gusenje bez traga znaci dugme koje "ne radi" i niko ne zna zasto. Sta je
+' neuspeh odlucuje modUiScreens.ScrRunIshod: greska koja ostane u Err uz
+' obradjenu radnju je zaostatak (log), ne pad (KI-014, test 237).
 Private Function ScrAct(ByVal tag As String) As Boolean
     ScrAct = modUiScreens.ScrEvent(mScreen, tag, "Click")
     If Len(modUiScreens.ScrLastErr) > 0 Then
@@ -6652,10 +6653,11 @@ EH:
     ' tiho preskakala RenderGrid - mreza bi ostala na starom rezimu i izgledalo
     ' bi da "klik ne radi". Sada se vidi gde je puklo.
     '
-    ' Korak vise ne dolazi iz stanja ljuske: ekran ga upisuje u IZVOR greske
-    ' (Err.Raise ..., "modScrDokumenti.Scr_Rows[petlja po redovima]", ...), pa
-    ' se cita odatle. Tako svaki ekran prijavljuje svoje korake, a ljuska ne
-    ' mora da zna nijedan.
+    ' Korak vise ne dolazi iz stanja ljuske nego iz IZVORA greske. Za listu koja
+    ' se nije procitala izvor je ScrLastErr ("modScrX.Scr_Rows -> broj opis",
+    ' v. LoadGridFromScreen), pa ljuska ne mora da zna nijedan ekran. Greska koju
+    ' Scr_Rows DIGNE ovde ne stize: kroz Application.Run otvara runtime dijalog
+    ' (sonda 14.10.2026, KI-016).
     ' Err se cita PRVI, pre bilo kog drugog poziva: Poruka() usput obrise
     ' stanje greske (ima svoj On Error Resume Next), pa je toast prijavljivao
     ' prazan izvor i sifru 0 - poruku od koje se nije imalo sta zakljuciti.

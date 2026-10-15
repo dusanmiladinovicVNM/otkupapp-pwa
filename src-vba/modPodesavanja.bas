@@ -676,6 +676,8 @@ Public Function Podesavanja_ImaNesacuvano() As Boolean
             If sad <> bilo Then
                 Podesavanja_ImaNesacuvano = True
                 Err.Clear
+                ' TEST SEAM (KI-014, test 238): odgovor uz gresku ostavljenu u Err.
+                modUiScreens.ScrCuriAkoTest "PANEL_NESACUVANO"
                 Exit Function
             End If
         End If

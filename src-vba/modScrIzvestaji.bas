@@ -2904,6 +2904,11 @@ Public Sub Scr_IzTestReset()
     mTestDo = 0
     mSnimakPunjenja = 0
     mComboTip = ""
+    ' Podrazumevani entitet ide uz combo koji ga je napunio: ponovo se racuna
+    ' tek kad se combo ponovo napuni. Bez ovoga test koji je kroz ljusku
+    ' izgradio zonu (237, ANALIZA -> IZVESTAJI) ostavlja prvi OM kao "izbor",
+    ' pa sledeci test "bez entiteta" cita njegove redove (KI-014, 15.10.2026).
+    mDefaultId = ""
     ResetZonskeBrojke
     mHintKljuc = ""
     Scr_ResetCache
