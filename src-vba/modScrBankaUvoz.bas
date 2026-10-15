@@ -963,6 +963,7 @@ End Function
 ' REDOVI MREZE
 '=====================================================================
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    modUiScreens.ScrPadAkoTest "modScrBankaUvoz.Scr_Rows"
     ' Zona se puni odavde, kao i na ekranima Palete, Agrohemija i Fakturisanje:
     ' gradi se jednom, a podaci za nju postoje tek kad se lista cita.
     OsveziZonu
@@ -1296,6 +1297,7 @@ End Function
 '=====================================================================
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    modUiScreens.ScrPadAkoTest "modScrBankaUvoz.Scr_Build"
 
     ' Bela podloga ispod reda polja. Zona je krem, a polja su bela -- bez
     ' podloge se izmedju njih vidi pozadina zone. MORA da bude LABELA, ne Frame:

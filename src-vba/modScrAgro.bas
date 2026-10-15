@@ -236,6 +236,7 @@ End Function
 '=====================================================================
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    modUiScreens.ScrPadAkoTest "modScrAgro.Scr_Build"
 
     ' Bela podloga ispod oba reda polja. Zona je krem, a polja su bela -- bez
     ' podloge se izmedju njih vidi pozadina zone i panel izgleda kao niz
@@ -1379,6 +1380,7 @@ End Sub
 ' REDOVI ZA MREZU
 '=====================================================================
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    modUiScreens.ScrPadAkoTest "modScrAgro.Scr_Rows"
     ' Zona se puni odavde, kao i na ekranu Palete: gradi se jednom, a podaci
     ' za nju postoje tek kad se lista cita.
     OsveziZonu

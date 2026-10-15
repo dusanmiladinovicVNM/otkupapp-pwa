@@ -160,6 +160,7 @@ End Function
 '--------------------------------------------------------------- ZONA
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    modUiScreens.ScrPadAkoTest "modScrPalete.Scr_Build"
     ' levo: aktivna paleta - isti raspored kao traka otpremnice u F1
     modUiKit.NewLbl z, "palCap", UCase$(Poruka("OTKUI_PAL_AKTIVNA")), PAD, 6, 140, 11, _
                     TS_MICRO, True, C_MUTED, -1
@@ -513,6 +514,7 @@ End Function
 
 '--------------------------------------------------------------- REDOVI
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    modUiScreens.ScrPadAkoTest "modScrPalete.Scr_Rows"
     Select Case Scr_Lista()
         Case "STAVKE":  Scr_Rows = RowsStavke(q): Exit Function
         Case "PRERADE": Scr_Rows = RowsPrerade(q): Exit Function

@@ -38,6 +38,7 @@ End Function
 
 '--------------------------------------------------------------- ZONA
 Public Sub Scr_Build(ByVal z As Object)
+    modUiScreens.ScrPadAkoTest "modScrAnaliza.Scr_Build"
     modUiKit.NewLbl z, "anaCap", UCase$(Poruka("OTKUI_SCRAN_CAP")), PAD, 6, 200, 11, _
                     TS_MICRO, True, C_GOLD, -1
     modUiKit.NewLbl z, "anaNaslov", Poruka("OTKUI_SCRAN_IZRADA"), PAD, 18, 460, 20, _

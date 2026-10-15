@@ -634,6 +634,7 @@ End Function
 '=====================================================================
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     Dim rez As Variant
+    modUiScreens.ScrPadAkoTest "modScrIzvestaji.Scr_Rows"
     ' Combo mora biti napunjen PRE citanja konteksta (entitet se cita iz
     ' njega); ostatak zone (hint, brojke, dugmad) se osvezava POSLE citanja,
     ' jer se hint i brojke racunaju iz njega.
@@ -1723,6 +1724,7 @@ End Function
 '=====================================================================
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    modUiScreens.ScrPadAkoTest "modScrIzvestaji.Scr_Build"
 
     ' Bela podloga ispod reda polja -- LABELA, ne Frame (Frame je prozorska
     ' kontrola i crta se iznad bezprozorskih). Napravljena PRVA, ostaje ispod.

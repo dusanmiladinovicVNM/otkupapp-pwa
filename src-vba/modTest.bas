@@ -332,6 +332,10 @@ Public Sub RunAllTests()
     RunOne 236
     RunOne 237
     RunOne 238
+    RunOne 239
+    RunOne 240
+    RunOne 241
+    RunOne 242
     RunOne 13
     RunOne 14
     RunOne 15
@@ -605,6 +609,10 @@ Private Sub ResetSeamova()
     ' Podmetnuto curenje clana ugovora ekrana (236-238): zaostao seam bi svaki
     ' sledeci poziv tog clana vracao uz gresku u Err.
     modUiScreens.ScrCuriTestSet ""
+    ' Podmetnut pad clana ugovora (239-242): zaostao seam bi svaki sledeci poziv
+    ' tog clana oborio; kanal se prazni da tudji pad ne ostane sledecem citaocu.
+    modUiScreens.ScrPadTestSet ""
+    modUiScreens.ScrPadPreuzmi
     Err.Clear
 End Sub
 
@@ -844,6 +852,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 236: TestName = "T_KI014_ZaostatakListeNijePad"
         Case 237: TestName = "T_KI014_ZaostatakRadnjeNijePad"
         Case 238: TestName = "T_KI014_ZaostatakNesacuvanogNijeOdbacivanje"
+        Case 239: TestName = "T_KI016_ClanHvataSvojPad"
+        Case 240: TestName = "T_KI016_PadListeJeJavljen"
+        Case 241: TestName = "T_KI016_PadRadnjeJeJavljen"
+        Case 242: TestName = "T_KI016_PadGradnjeJeJavljen"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1090,6 +1102,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 236: T_KI014_ZaostatakListeNijePad
         Case 237: T_KI014_ZaostatakRadnjeNijePad
         Case 238: T_KI014_ZaostatakNesacuvanogNijeOdbacivanje
+        Case 239: T_KI016_ClanHvataSvojPad
+        Case 240: T_KI016_PadListeJeJavljen
+        Case 241: T_KI016_PadRadnjeJeJavljen
+        Case 242: T_KI016_PadGradnjeJeJavljen
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -8543,6 +8559,297 @@ Private Function IzmeniPoljePanela(ByVal host As Object) As String
         End If
     Next c
 End Function
+
+' ============================================================
+' 239. KI-016: CLAN UGOVORA HVATA SVOJ PAD.
+' ============================================================
+' Clan ugovora koji DIGNE gresku kroz Application.Run je ne vraca pozivaocu:
+' otvara runtime dijalog, a "End" resetuje projekat -- forma nestaje, a Excel
+' ostaje sakriven (sonda 15.10.2026, i iz dogadjaja prikazane forme). Jedina
+' brana koju platforma dozvoljava je handler U CLANU.
+'
+' Zato se svaki od 30 clanova sa citaocem koji javlja pad (13 Scr_Rows, 4 Scr_Event
+' maticnih, 13 Scr_Build) zove DIREKTNO, sa podmetnutim padom na svom vrhu
+' (ScrPadAkoTest). Kroz Run bi clan bez brane (sabotaza) otvorio dijalog i run bi
+' visio do timeout-a; direktno, greska stize ovde i test je crven PO IMENU.
+' Scr_Build dobija Nothing: podmetnut pad je prva naredba tela, pa se zona ne gradi.
+' SABOTAZE: ki016-lista-pusta-pad, ki016-radnja-pusta-pad, ki016-gradnja-pusta-pad,
+' ki016-pomocnik-ne-belezi. Clan koji sabotaza gadja NIJE clan koji 240-242 zovu
+' kroz Run -- inace bi taj test visio umesto da padne.
+Private Sub T_KI016_ClanHvataSvojPad()
+    Dim liste As String, radnje As String, gradnje As String, kanal As String
+    Dim v As Variant, b As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error Resume Next
+    ' ---- liste
+    modUiScreens.ScrPadTestSet "modScrAgro.Scr_Rows": Err.Clear
+    v = modScrAgro.Scr_Rows("sve", ""): KI016Clan "modScrAgro.Scr_Rows", Err.Number, liste, kanal
+    modUiScreens.ScrPadTestSet "modScrBankaNalozi.Scr_Rows": Err.Clear
+    v = modScrBankaNalozi.Scr_Rows("sve", ""): KI016Clan "modScrBankaNalozi.Scr_Rows", Err.Number, liste, kanal
+    modUiScreens.ScrPadTestSet "modScrBankaUvoz.Scr_Rows": Err.Clear
+    v = modScrBankaUvoz.Scr_Rows("sve", ""): KI016Clan "modScrBankaUvoz.Scr_Rows", Err.Number, liste, kanal
+    modUiScreens.ScrPadTestSet "modScrDokumenti.Scr_Rows": Err.Clear
+    v = modScrDokumenti.Scr_Rows("sve", ""): KI016Clan "modScrDokumenti.Scr_Rows", Err.Number, liste, kanal
+    modUiScreens.ScrPadTestSet "modScrFakture.Scr_Rows": Err.Clear
+    v = modScrFakture.Scr_Rows("sve", ""): KI016Clan "modScrFakture.Scr_Rows", Err.Number, liste, kanal
+    modUiScreens.ScrPadTestSet "modScrIzvestaji.Scr_Rows": Err.Clear
+    v = modScrIzvestaji.Scr_Rows("sve", ""): KI016Clan "modScrIzvestaji.Scr_Rows", Err.Number, liste, kanal
+    modUiScreens.ScrPadTestSet "modScrMatKorisnici.Scr_Rows": Err.Clear
+    v = modScrMatKorisnici.Scr_Rows("sve", ""): KI016Clan "modScrMatKorisnici.Scr_Rows", Err.Number, liste, kanal
+    modUiScreens.ScrPadTestSet "modScrMatPakovanje.Scr_Rows": Err.Clear
+    v = modScrMatPakovanje.Scr_Rows("sve", ""): KI016Clan "modScrMatPakovanje.Scr_Rows", Err.Number, liste, kanal
+    modUiScreens.ScrPadTestSet "modScrMatPartneri.Scr_Rows": Err.Clear
+    v = modScrMatPartneri.Scr_Rows("sve", ""): KI016Clan "modScrMatPartneri.Scr_Rows", Err.Number, liste, kanal
+    modUiScreens.ScrPadTestSet "modScrMatRoba.Scr_Rows": Err.Clear
+    v = modScrMatRoba.Scr_Rows("sve", ""): KI016Clan "modScrMatRoba.Scr_Rows", Err.Number, liste, kanal
+    modUiScreens.ScrPadTestSet "modScrOporavak.Scr_Rows": Err.Clear
+    v = modScrOporavak.Scr_Rows("sve", ""): KI016Clan "modScrOporavak.Scr_Rows", Err.Number, liste, kanal
+    modUiScreens.ScrPadTestSet "modScrPalete.Scr_Rows": Err.Clear
+    v = modScrPalete.Scr_Rows("sve", ""): KI016Clan "modScrPalete.Scr_Rows", Err.Number, liste, kanal
+    modUiScreens.ScrPadTestSet "modScrStorno.Scr_Rows": Err.Clear
+    v = modScrStorno.Scr_Rows("sve", ""): KI016Clan "modScrStorno.Scr_Rows", Err.Number, liste, kanal
+    ' ---- radnje maticnih (ostali Scr_Event vec imaju svoj handler)
+    modUiScreens.ScrPadTestSet "modScrMatKorisnici.Scr_Event": Err.Clear
+    b = modScrMatKorisnici.Scr_Event("scrKI016Proba", "Click"): KI016Clan "modScrMatKorisnici.Scr_Event", Err.Number, radnje, kanal
+    modUiScreens.ScrPadTestSet "modScrMatPakovanje.Scr_Event": Err.Clear
+    b = modScrMatPakovanje.Scr_Event("scrKI016Proba", "Click"): KI016Clan "modScrMatPakovanje.Scr_Event", Err.Number, radnje, kanal
+    modUiScreens.ScrPadTestSet "modScrMatPartneri.Scr_Event": Err.Clear
+    b = modScrMatPartneri.Scr_Event("scrKI016Proba", "Click"): KI016Clan "modScrMatPartneri.Scr_Event", Err.Number, radnje, kanal
+    modUiScreens.ScrPadTestSet "modScrMatRoba.Scr_Event": Err.Clear
+    b = modScrMatRoba.Scr_Event("scrKI016Proba", "Click"): KI016Clan "modScrMatRoba.Scr_Event", Err.Number, radnje, kanal
+    ' ---- gradnje
+    modUiScreens.ScrPadTestSet "modScrAgro.Scr_Build": Err.Clear
+    modScrAgro.Scr_Build Nothing: KI016Clan "modScrAgro.Scr_Build", Err.Number, gradnje, kanal
+    modUiScreens.ScrPadTestSet "modScrAnaliza.Scr_Build": Err.Clear
+    modScrAnaliza.Scr_Build Nothing: KI016Clan "modScrAnaliza.Scr_Build", Err.Number, gradnje, kanal
+    modUiScreens.ScrPadTestSet "modScrBankaNalozi.Scr_Build": Err.Clear
+    modScrBankaNalozi.Scr_Build Nothing: KI016Clan "modScrBankaNalozi.Scr_Build", Err.Number, gradnje, kanal
+    modUiScreens.ScrPadTestSet "modScrBankaUvoz.Scr_Build": Err.Clear
+    modScrBankaUvoz.Scr_Build Nothing: KI016Clan "modScrBankaUvoz.Scr_Build", Err.Number, gradnje, kanal
+    modUiScreens.ScrPadTestSet "modScrFakture.Scr_Build": Err.Clear
+    modScrFakture.Scr_Build Nothing: KI016Clan "modScrFakture.Scr_Build", Err.Number, gradnje, kanal
+    modUiScreens.ScrPadTestSet "modScrIzvestaji.Scr_Build": Err.Clear
+    modScrIzvestaji.Scr_Build Nothing: KI016Clan "modScrIzvestaji.Scr_Build", Err.Number, gradnje, kanal
+    modUiScreens.ScrPadTestSet "modScrMatKorisnici.Scr_Build": Err.Clear
+    modScrMatKorisnici.Scr_Build Nothing: KI016Clan "modScrMatKorisnici.Scr_Build", Err.Number, gradnje, kanal
+    modUiScreens.ScrPadTestSet "modScrMatPakovanje.Scr_Build": Err.Clear
+    modScrMatPakovanje.Scr_Build Nothing: KI016Clan "modScrMatPakovanje.Scr_Build", Err.Number, gradnje, kanal
+    modUiScreens.ScrPadTestSet "modScrMatPartneri.Scr_Build": Err.Clear
+    modScrMatPartneri.Scr_Build Nothing: KI016Clan "modScrMatPartneri.Scr_Build", Err.Number, gradnje, kanal
+    modUiScreens.ScrPadTestSet "modScrMatRoba.Scr_Build": Err.Clear
+    modScrMatRoba.Scr_Build Nothing: KI016Clan "modScrMatRoba.Scr_Build", Err.Number, gradnje, kanal
+    modUiScreens.ScrPadTestSet "modScrOporavak.Scr_Build": Err.Clear
+    modScrOporavak.Scr_Build Nothing: KI016Clan "modScrOporavak.Scr_Build", Err.Number, gradnje, kanal
+    modUiScreens.ScrPadTestSet "modScrPalete.Scr_Build": Err.Clear
+    modScrPalete.Scr_Build Nothing: KI016Clan "modScrPalete.Scr_Build", Err.Number, gradnje, kanal
+    modUiScreens.ScrPadTestSet "modScrStorno.Scr_Build": Err.Clear
+    modScrStorno.Scr_Build Nothing: KI016Clan "modScrStorno.Scr_Build", Err.Number, gradnje, kanal
+    On Error GoTo CleanUp
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modUiScreens.ScrPadTestSet ""
+    modUiScreens.ScrPadPreuzmi
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI016_ClanHvataSvojPad", errDesc
+
+    AssertEq liste, "", "svaka lista ekrana hvata svoj pad"
+    AssertEq radnje, "", "svaka radnja maticnih ekrana hvata svoj pad"
+    AssertEq gradnje, "", "svaka gradnja ekrana hvata svoj pad"
+    AssertEq kanal, "", "pad clana je zabelezen u kanalu sa imenom clana"
+End Sub
+
+' Nalaz za jedan clan posle direktnog poziva sa podmetnutim padom (239). errNum
+' je Err.Number procitan u pozivu, pre bilo koje naredbe ovde. Kanal se preuzima
+' (i brise) posle svakog clana, pa nalaz jednog clana ne prelazi na sledeci. Zapis
+' radnje nosi i dogadjaj ("...Scr_Event scrKI016Proba -> ..."), pa se meri pocetak.
+Private Sub KI016Clan(ByVal clan As String, ByVal errNum As Long, _
+                      ByRef pustio As String, ByRef kanal As String)
+    Dim pad As String
+    pad = modUiScreens.ScrPadPreuzmi()
+    If errNum <> 0 Then pustio = pustio & " " & clan & "{" & errNum & "}"
+    If Left$(pad, Len(clan)) <> clan Or InStr(1, pad, " -> ", vbBinaryCompare) = 0 Then _
+        kanal = kanal & " " & clan & "[" & pad & "]"
+    modUiScreens.ScrPadTestSet ""
+    Err.Clear
+End Sub
+
+' ============================================================
+' 240. KI-016: PAD LISTE JE JAVLJEN KAO NEUSPEH LISTE.
+' ============================================================
+' Kroz pravi Application.Run i produkcioni put mreze (GridTestLoad ->
+' LoadGridFromScreen), kao 236. Clan uhvati podmetnut pad i vrati Empty uz
+' Err = 0 -- oblik "ekran nema listu" -- pa bez kanala ScrGridData pad ne vidi.
+' Meri se IZVOR greske liste: to je ono sto ReloadGrid prikazuje operateru posle
+' "na koraku:" (OTKUI_MSG_MREZA_PALA).
+'
+' Prelaz stanja A -> B -> A: pad, pa obicno citanje (kanal se prazni), pa pad
+' zabelezen MIMO citaoca (direktan poziv clana) koji ne sme da obori sledece
+' citanje. Clan je MatPartneri, ne clan koji gadja sabotaza iz 239.
+' SABOTAZE: ki016-lista-pad-ignorisan, ki016-pomocnik-gubi-izvor,
+' ki016-kanal-ne-brise, ki016-lista-stari-pad.
+Private Sub T_KI016_PadListeJeJavljen()
+    Dim izvor1 As String, izvor2 As String, izvor3 As String
+    Dim n2 As Long, v As Variant
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    modUiScreens.ScrPadTestSet "modScrMatPartneri.Scr_Rows"
+    izvor1 = GridLoadIzvor("MAT_PARTNERI")
+    modUiScreens.ScrPadTestSet ""
+    izvor2 = GridLoadIzvor("MAT_PARTNERI")
+    n2 = modOtkupUI.GridRedovaTest()
+
+    modUiScreens.ScrPadTestSet "modScrMatPartneri.Scr_Rows"
+    v = modScrMatPartneri.Scr_Rows("sve", "")
+    modUiScreens.ScrPadTestSet ""
+    izvor3 = GridLoadIzvor("MAT_PARTNERI")
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modUiScreens.ScrPadTestSet ""
+    modUiScreens.ScrPadPreuzmi
+    modOtkupUI.GridTestLoad ""
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI016_PadListeJeJavljen", errDesc
+
+    AssertEq (InStr(1, izvor1, "modScrMatPartneri.Scr_Rows -> ", vbBinaryCompare) > 0), True, _
+             "pad liste je javljen kao neuspeh liste, sa imenom clana"
+    AssertEq (InStr(1, izvor1, "ScrPadAkoTest", vbBinaryCompare) > 0), True, _
+             "pad liste nosi izvor greske (korak)"
+    AssertEq izvor2, "", "posle pada sledece citanje liste nije pad"
+    AssertEq (n2 > 0), True, "lista posle pada je ucitana"
+    AssertEq izvor3, "", "pad zabelezen van citaoca ne obara sledece citanje liste"
+End Sub
+
+' Produkcioni put mreze (kao GridLoadPad): IZVOR pada liste -- ono sto ReloadGrid
+' prikazuje posle "na koraku:" -- ili "" kad je lista procitana.
+Private Function GridLoadIzvor(ByVal kljuc As String) As String
+    On Error Resume Next
+    Err.Clear
+    modOtkupUI.GridTestLoad kljuc
+    If Err.Number <> 0 Then GridLoadIzvor = Err.Source
+    Err.Clear
+End Function
+
+' ============================================================
+' 241. KI-016: PAD RADNJE JE VIDLJIV NA SVAKOM ULAZU RADNJE.
+' ============================================================
+' Klik ide kroz pravu ljusku (UiEvent -> ScrAct -> ScrEvent -> Run), kao 237, a
+' meri se toast. Tri ulaza do Scr_Event: radnja ekrana, prekidac liste i izbor
+' reda. Prekidac i izbor reda su do KI-016 zvali ScrEvent mimo ScrAct, pa im pad
+' (do tada i SCR_RUN_PAO) nije bio vidljiv.
+'
+' Scr_Event je Boolean: posle uhvacenog pada Run vraca False, dakle "vratio" --
+' citalac koji bi kanal gledao tek kad vrednosti nema, ovde ga ne bi video.
+' SABOTAZE: ki016-radnja-pad-ignorisan, ki016-prekidac-liste-cuti,
+' ki016-izbor-reda-cuti.
+Private Sub T_KI016_PadRadnjeJeJavljen()
+    Dim f As frmOtkupUI, ekran1 As String, nRedova As Long
+    Dim toastRadnja As String, toastLista As String, toastRed As String, toastBez As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    Set f = NewOtkupUIForm()
+    modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
+    modOtkupUI.IdiNaEkran "MAT_PARTNERI"
+    ekran1 = modOtkupUI.AktivanEkran()
+    nRedova = modOtkupUI.GridRedovaTest()
+
+    modUiScreens.ScrPadTestSet "modScrMatPartneri.Scr_Event"
+    OcistiToast f
+    modOtkupUI.UiEvent "scrKI016Proba", "Click", Empty
+    toastRadnja = ToastTekst(f)
+    OcistiToast f
+    modOtkupUI.UiEvent "lsSeg0", "Click", Empty
+    toastLista = ToastTekst(f)
+    OcistiToast f
+    modOtkupUI.UiEvent "rb0", "Click", Empty
+    toastRed = ToastTekst(f)
+    modUiScreens.ScrPadTestSet ""
+
+    OcistiToast f
+    modOtkupUI.UiEvent "scrKI016Proba", "Click", Empty
+    toastBez = ToastTekst(f)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modUiScreens.ScrPadTestSet ""
+    modUiScreens.ScrPadPreuzmi
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI016_PadRadnjeJeJavljen", errDesc
+
+    AssertEq ekran1, "MAT_PARTNERI", "preduslov: ljuska je na ekranu MAT_PARTNERI"
+    AssertEq (nRedova > 0), True, "preduslov: lista partnera ima redove, pa izbor reda postoji"
+    AssertEq KI016ToastPada(toastRadnja, "modScrMatPartneri.Scr_Event scrKI016Proba"), True, _
+             "pad radnje je vidljiv operateru, sa imenom clana"
+    AssertEq KI016ToastPada(toastLista, "modScrMatPartneri.Scr_Event ls"), True, _
+             "pad radnje na prekidacu liste je vidljiv"
+    AssertEq KI016ToastPada(toastRed, "modScrMatPartneri.Scr_Event row:"), True, _
+             "pad radnje na izboru reda je vidljiv"
+    AssertEq toastBez, "", "bez pada radnja ne javlja gresku"
+End Sub
+
+' Toast "Radnja nije uspela" koji imenuje clan (i dogadjaj).
+Private Function KI016ToastPada(ByVal toast As String, ByVal clan As String) As Boolean
+    KI016ToastPada = (InStr(1, toast, Poruka("OTKUI_ERR_RADNJA"), vbBinaryCompare) = 1) And _
+                     (InStr(1, toast, clan, vbBinaryCompare) > 0)
+End Function
+
+' ============================================================
+' 242. KI-016: PAD GRADNJE NE PREBACUJE EKRAN.
+' ============================================================
+' Kroz pravu ljusku (IdiNaEkran -> ActivateScreen -> ScrBuild -> Run). Scr_Build
+' je Sub: posle uhvacenog pada Run vraca Empty uz Err = 0 -- isto kao uspesna
+' gradnja -- pa bez kanala ScrBuild javlja uspeh i ljuska prelazi na ekran cija
+' zona nije izgradjena. ANALIZA nema stanje modula, pa gradnja kroz ljusku ne
+' ostavlja nista sto bi sledeci test zatekao.
+'
+' A -> B -> A: posle pada se isti ekran gradi ispocetka (zona je uklonjena, ne
+' sakrivena -- inace bi sledeci pokusaj nasao praznu zonu i prijavio uspeh).
+' SABOTAZA: ki016-gradnja-pad-je-uspeh.
+Private Sub T_KI016_PadGradnjeJeJavljen()
+    Dim f As frmOtkupUI, ekran0 As String, ekran1 As String, ekran2 As String
+    Dim toast1 As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    Set f = NewOtkupUIForm()
+    ekran0 = modOtkupUI.AktivanEkran()
+
+    OcistiToast f
+    modUiScreens.ScrPadTestSet "modScrAnaliza.Scr_Build"
+    modOtkupUI.IdiNaEkran "ANALIZA"
+    modUiScreens.ScrPadTestSet ""
+    ekran1 = modOtkupUI.AktivanEkran()
+    toast1 = ToastTekst(f)
+
+    modOtkupUI.IdiNaEkran "ANALIZA"
+    ekran2 = modOtkupUI.AktivanEkran()
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modUiScreens.ScrPadTestSet ""
+    modUiScreens.ScrPadPreuzmi
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI016_PadGradnjeJeJavljen", errDesc
+
+    AssertEq (ekran0 <> "ANALIZA"), True, "preduslov: ljuska ne pocinje na ANALIZI"
+    AssertEq ekran1 & "|" & toast1, ekran0 & "|" & Poruka("OTKUI_SCR_NEMA"), _
+             "pad gradnje ne prebacuje ekran nego javlja da ekran nije dostupan"
+    AssertEq ekran2, "ANALIZA", "posle pada gradnje ekran se gradi ispocetka"
+End Sub
 
 ' F7 unos NASEG reversa (stanica izdaje kooperantu) za modNovacUnos.ReversUpisi --
 ' isti recnik koji ekran predaje (NoviReversUnos).

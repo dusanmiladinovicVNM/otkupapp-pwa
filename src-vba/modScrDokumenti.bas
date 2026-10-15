@@ -2862,6 +2862,7 @@ End Function
 ' (mView, mViewN, mSumKg, mCnt*), pa je mreza mogla da sluzi samo njega.
 ' Sada vraca - i mreza je time postala neutralna. Sortiranje radi ljuska.
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    modUiScreens.ScrPadAkoTest "modScrDokumenti.Scr_Rows"
     ' F1: rang kooperanata je svoja lista; ostalo je lista dokumenata rezima.
     Select Case Scr_Lista()
         Case "OTPREMNICE": Scr_Rows = RowsOtpremnice(filter, q): Exit Function

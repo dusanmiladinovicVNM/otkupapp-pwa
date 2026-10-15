@@ -276,6 +276,7 @@ End Function
 ' Redovi za deljenu mrezu. Tipizirane liste dolaze iz istog citaca koji puni i
 ' unosni ekran -- odatle i nevidljiva kolona identiteta (True na kraju).
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    modUiScreens.ScrPadAkoTest "modScrStorno.Scr_Rows"
     If Scr_Lista() = ST_LANAC Then
         Scr_Rows = RowsLanac(q)
         Exit Function
@@ -440,6 +441,7 @@ End Function
 ' ISPOD sebe -- objasnjenje je ono sto je do sada zivelo u MsgBox tekstu.
 Public Sub Scr_Build(ByVal z As Object)
     Dim r As Long, c As Long, i As Long
+    modUiScreens.ScrPadAkoTest "modScrStorno.Scr_Build"
 
     modUiKit.NewLbl z, "stCap", UCase$(Poruka("OTKUI_SCRST_IZBOR")), PAD, 6, 220, 11, _
                     TS_MICRO, True, C_MUTED, -1

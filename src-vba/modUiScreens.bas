@@ -128,6 +128,19 @@ Private mGradnjaPadaTest As Boolean
 ' sposobnost; prazno gasi seam.
 Private mCuriTest As String
 
+' mPadTest (KI-016): clan ugovora cije telo na svom vrhu pozove ScrPadAkoTest sa
+' ovim imenom DIGNE gresku -- podmetnut pad. Clan koji ga ne uhvati pusta gresku
+' pozivaocu, a kroz Application.Run je to runtime dijalog i reset projekta. Zato
+' test clan BEZ brane zove DIREKTNO, nikad kroz Run. Prazno gasi seam.
+Private mPadTest As String
+
+' KANAL PADA (KI-016, UI-PAD-01). Clan ugovora koji uhvati svoju gresku upisuje
+' je ovde (ScrPadZabelezi), a citalac je PREUZIMA posle Run-a, PRE nego sto
+' pogleda vracenu vrednost. Vrednost ne moze da nosi pad (sonda 15.10.2026):
+' posle handlera clana je Err = 0, Boolean bez rezultata je False (dakle
+' "vratio"), a clan koji je vec dodelio rezultat pa pao vraca taj rezultat.
+Private mPadClana As String
+
 '------------------------------------------------------------ REGISTAR
 ' kljuc | modul | naslov (kljuc kataloga) | MDL2 kod | grupa | oblast | sekcija
 '       | brana ("1" = ekran nosi svoj Scr_Dozvoljen; v. SCR_BRANA)
@@ -348,6 +361,23 @@ Public Function ScrPraznoAkoTest(ByVal clan As String) As Boolean
     If mCuriTest <> clan Then Exit Function
     ScrPraznoAkoTest = IsTestMode()
 End Function
+
+' Test seam (KI-016): koji clan ugovora "pada" (v. mPadTest). Prazno gasi seam.
+Public Sub ScrPadTestSet(ByVal clan As String)
+    If Not IsTestMode() Then Exit Sub
+    mPadTest = clan
+End Sub
+
+' Kuka seam-a. Zove je telo clana ugovora na SVOM VRHU, odmah posle brane, pa
+' podmetnut pad gadja branu koja pokriva celo telo. Van test rezima i za drugi
+' clan ne radi nista i ne dira Err.
+Public Sub ScrPadAkoTest(ByVal clan As String)
+    If Len(mPadTest) = 0 Then Exit Sub
+    If mPadTest <> clan Then Exit Sub
+    If Not IsTestMode() Then Exit Sub
+    Err.Raise 9, "modUiScreens.ScrPadAkoTest[" & clan & "]", _
+              "podmetnut pad clana ugovora (KI-016)"
+End Sub
 
 Public Function ScrDozvoljen(ByVal kljuc As String) As Boolean
     Dim obl As String
@@ -695,6 +725,16 @@ Public Function ScrSave(ByVal kljuc As String, ByVal polja As Object) As String
         ScrLastErr = m & ".Scr_Save -> " & Err.Number & " " & Err.description
     End If
     Err.Clear
+End Function
+
+' Pad koji je clan zabelezio od poslednjeg preuzimanja; vraca ga i BRISE.
+' Citalac ga zove DVAPUT: pre Run-a (odbacuje pad koji nije iz ovog poziva --
+' clan pozvan direktno, mimo citaoca, ostavlja ga u kanalu) i posle Run-a. Tako
+' i ugnjezden citalac (radnja koja osvezi mrezu) preuzme SVOJ pad, pa spoljni
+' ne dobije tudji. Bez On Error naredbe, iz istog razloga kao ScrRunIshod.
+Public Function ScrPadPreuzmi() As String
+    ScrPadPreuzmi = mPadClana
+    mPadClana = ""
 End Function
 
 ' ISHOD Application.Run NAD CLANOM UGOVORA -- UI-ISHOD-01 za ceo ugovor ekrana

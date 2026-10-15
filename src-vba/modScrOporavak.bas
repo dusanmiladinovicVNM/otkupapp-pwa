@@ -170,6 +170,7 @@ End Function
 ' aktivne palete na ekranu Palete.
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    modUiScreens.ScrPadAkoTest "modScrOporavak.Scr_Build"
     modUiKit.NewLbl z, "opoCap", UCase$(Poruka("OTKUI_OPO_CILJEVI")), PAD, 6, 200, 11, _
                     TS_MICRO, True, C_MUTED, -1
     modUiKit.NewLbl z, "opoZbr", ChrW(8212), PAD, 18, 300, 20, TS_KPI, True, C_FOREST, -1
@@ -440,6 +441,7 @@ End Sub
 
 '-------------------------------------------------------------- REDOVI
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    modUiScreens.ScrPadAkoTest "modScrOporavak.Scr_Rows"
     Select Case Scr_Lista()
         Case "PRIJEMNICE": Scr_Rows = RowsOsiroceninPrijemnica(q): Exit Function
         Case "ZBIRNE":     Scr_Rows = RowsAktivneZbirne(q): Exit Function

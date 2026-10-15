@@ -1054,6 +1054,7 @@ End Function
 '=====================================================================
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     Dim rez As Variant
+    modUiScreens.ScrPadAkoTest "modScrBankaNalozi.Scr_Rows"
     ' Zona se puni odavde, kao na ostalim ugovornim ekranima: gradi se jednom,
     ' a podaci za nju postoje tek kad se lista cita.
     OsveziZonu
@@ -1230,6 +1231,7 @@ End Sub
 '=====================================================================
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    modUiScreens.ScrPadAkoTest "modScrBankaNalozi.Scr_Build"
 
     ' Bela podloga ispod reda polja. MORA da bude LABELA, ne Frame: Frame je
     ' prozorska kontrola i crta se IZNAD bezprozorskih bez obzira na z-order.
