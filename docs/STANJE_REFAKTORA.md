@@ -4424,15 +4424,22 @@
      Sveska za ručnu proveru je `tests/fixtures/rucna_provera_ki014_kod.xlsm`
      (`run_vba --compile-only --keep` nad `0b1c5954`).
 
-     **Otvoreno.**
-     - Compile operatera (`vba_gate --mark-compile`).
-     - Ručna provera:
-       - ANALIZA → IZVEŠTAJI bez toasta;
-       - matični ekran sa otvorenim editorom → drugi ekran: pitanje se pojavljuje;
-       - Podešavanja sa izmenom → drugi ekran: pitanje se pojavljuje;
-       - lista PREGLED i start bez lažnog `ERROR`;
-       - F7 upis kao kontrola `ScrSave`.
-     - Finalni exact-head review.
+     **Compile ✅** (operater, 15.10.2026, `rucna_provera_ki014_kod.xlsm`, kod sa `0b1c5954`):
+     `vba_gate --mark-compile`, pa `--require-green --require-compile` daje RC=0 nad izvorom `08757628f52a`.
+     `src-vba` je od `0b1c5954` do head-a nepromenjen; posle su samo docs.
+
+     **Ručna provera ✅** (operater, 15.10.2026, ista sveska), svih šest stavki po očekivanju:
+
+     ```
+     1. ANALIZA -> IZVESTAJI (prvi ulazak)            bez toasta "Radnja nije uspela"    OK
+     2. Maticni/Partneri "Novi" -> drugi ekran         pitanje o odbacivanju; "Ne" ostaje  OK
+     3. Podesavanja, izmenjeno polje -> drugi ekran    pitanje se pojavljuje              OK
+     4. prekidac lista: Fakture, Agrohemija, Uvoz      liste se ucitavaju, bez greske     OK
+     5. F7 upis reversa (kontrola ScrSave)             toast "sacuvan", forma ociscena    OK
+     6. start sveske (kontrola van reza)               bez laznog ERROR EnsureRuntimeSchema OK
+     ```
+
+     **Otvoreno.** Finalni exact-head review i merge.
 
 ## Dug sa imenom (posle S5-5b)
 
