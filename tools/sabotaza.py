@@ -8082,9 +8082,9 @@ SABOTAZE = {
     "ki016-pomocnik-ne-belezi": (
         "modUiScreens.bas",
         "    errNum = Err.Number: errSrc = Err.Source: errDesc = Err.description\n"
-        '    mPadClana = clan & " -> " & errNum & " " & errDesc\n',
+        "    mPadClana = clan\n",
         "    Exit Sub   ' SABOTAZA: pomocnik ne belezi pad\n"
-        '    mPadClana = clan & " -> " & errNum & " " & errDesc\n',
+        "    mPadClana = clan\n",
         "T_KI016_ClanHvataSvojPad",
         "pad clana je zabelezen u kanalu sa imenom clana",
     ),
@@ -8106,6 +8106,20 @@ SABOTAZE = {
         "    If Len(errSrc) < 0 Then _\n",
         "T_KI016_PadListeJeJavljen",
         "pad liste nosi izvor greske (korak)",
+    ),
+    # KI-016 (d), rucna provera #423: izvor (korak) opet ide IZA opisa greske, pa
+    # ga traka poruke odseca kad je opis dug (greska seme nabraja zaglavlje).
+    "ki016-korak-iza-opisa": (
+        "modUiScreens.bas",
+        "    mPadClana = clan\n"
+        '    If InStr(1, errSrc, ".", vbBinaryCompare) > 0 Then _\n'
+        '        mPadClana = mPadClana & " [" & errSrc & "]"\n'
+        '    mPadClana = mPadClana & " -> " & errNum & " " & errDesc\n',
+        '    mPadClana = clan & " -> " & errNum & " " & errDesc   \' SABOTAZA: korak iza opisa\n'
+        '    If InStr(1, errSrc, ".", vbBinaryCompare) > 0 Then _\n'
+        '        mPadClana = mPadClana & " [" & errSrc & "]"\n',
+        "T_KI016_PadListeJeJavljen",
+        "korak stoji ispred opisa greske, pa ga dug opis ne odseca u toastu",
     ),
     # KI-016: kanal se ne prazni pri preuzimanju -- jedan pad obara svako sledece
     # citanje, i ugnjezden citalac ostavlja svoj pad spoljnom.
@@ -8160,6 +8174,26 @@ SABOTAZE = {
         "    If Len(ScrPadPreuzmi()) < 0 Then   ' SABOTAZA: pad gradnje je uspeh\n",
         "T_KI016_PadGradnjeJeJavljen",
         "pad gradnje ne prebacuje ekran nego javlja da ekran nije dostupan",
+    ),
+    # KI-016 (e), rucna provera #423: uspesan prelazak ne gasi poruku odbijenog
+    # prelaska -- crveni toast nema tajmer, pa "ekran nije dostupan" ostaje i na
+    # ekranu u koji se upravo uspesno uslo.
+    "ki016-poruka-pada-ostaje": (
+        "modOtkupUI.bas",
+        "    If ActivateScreen And mScrToast Then\n",
+        "    If False Then   ' SABOTAZA: uspesan prelazak ne gasi poruku o padu\n",
+        "T_KI016_PadGradnjeJeJavljen",
+        "uspesan ulazak posle pada gradnje gasi poruku o padu",
+    ),
+    # KI-016 (e): nova poruka ne spusta zastavicu prelaska, pa uspesan prelazak
+    # gasi i poruku koja je zamenila poruku o padu (npr. zabranjen ekran posle
+    # zamene operatera, koju PrimeniNovaPrava ostavlja namerno).
+    "ki016-tudja-poruka-nestaje": (
+        "modOtkupUI.bas",
+        "    mScrToast = False                   ' nova poruka je zamenila poruku prelaska\n",
+        "    ' SABOTAZA: nova poruka ne spusta zastavicu prelaska\n",
+        "T_KI016_PadGradnjeJeJavljen",
+        "uspesan prelazak ne gasi poruku koja je zamenila poruku o padu",
     ),
     # KI-016, review #423 P3-1: Scr_Build Izvestaja se posle Resume Next segmenta
     # vraca na GoTo 0 -- pad usred gradnje opet izlazi kroz Run (dijalog, reset).

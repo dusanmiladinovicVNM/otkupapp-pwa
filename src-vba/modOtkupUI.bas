@@ -362,6 +362,14 @@ Private mCntOtvor As Long
 ' Stoji li na ekranu crveni toast koji je podigla mreza. Sledece uspelo
 ' citanje ga gasi; toast greske nema tajmer, pa bi inace ostao zauvek.
 Private mGridToast As Boolean
+' Stoji li na ekranu crveni toast ODBIJENOG PRELASKA (ActivateScreen: pad gradnje
+' zone). Sledeci uspesan prelazak ga gasi, kao sto uspelo citanje gasi
+' mGridToast -- inace je "ekran nije dostupan" ostajao i posle uspesnog ulaska
+' u bas taj ekran (rucna provera #423). ShowToast je spusta: nova poruka je
+' zamenila staru, pa prelazak vise nema svoju poruku da gasi. Bez toga bi stara
+' zastavica sakrila i poruku koju je neko drugi ostavio namerno (zabranjen
+' ekran posle zamene operatera, PrimeniNovaPrava -> NaPrviDozvoljenEkran).
+Private mScrToast As Boolean
 ' Polje na koje ide kursor pri novom dokumentu, i polje koje TRENUTNO ima
 ' zeleni okvir. Drugo se pamti da bi se okvir skinuo i kad MSForms preskoci
 ' dogadjaj napustanja (a preskace ga kad se forma sakrije ili polje ugasi).
@@ -5711,8 +5719,21 @@ End Sub
 ' ShowOtkupUI, pa je NaPrviDozvoljenEkran (posle zamene operatera na nalog sa
 ' pravom samo na Banku) i dalje pokretao uvoz bez ijednog klika. Zastavica
 ' pokriva put koji je autor gledao; argument pokriva svakog pozivaoca.
+'
+' Uspesan prelazak gasi poruku PRETHODNOG odbijenog prelaska (v. mScrToast).
+' Ovde, a ne na izlazima jezgra: jezgro ima pet izlaza sa uspehom, a zaboravljen
+' jedan bi poruku ostavio bas na tom putu.
 Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
                                 Optional ByVal kuka As Boolean = True) As Boolean
+    ActivateScreen = ActivateScreenCore(frm, kljuc, kuka)
+    If ActivateScreen And mScrToast Then
+        mScrToast = False
+        HideToast
+    End If
+End Function
+
+Private Function ActivateScreenCore(frm As Object, ByVal kljuc As String, _
+                                    ByVal kuka As Boolean) As Boolean
     Dim z As Object, nm As String, greska As String, vratiEkran As Boolean
     Dim jePanel As Boolean, zatvorenPanel As Boolean, btnsPre As Long
 
@@ -5721,7 +5742,7 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
     ' na klik u stavku na kojoj operater vec jeste.
     If Len(kljuc) > 0 Then
         If modUiPanel.PanelAktivan() = UCase$(kljuc) Then
-            ActivateScreen = True       ' vec smo tu
+            ActivateScreenCore = True   ' vec smo tu
             Exit Function
         End If
     End If
@@ -5730,7 +5751,7 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
     ' Klik na stavku ekrana na kome VEC jesmo, bez otvorenog panela: nista se
     ' ne menja, pa se nista i ne dira.
     If (Not jePanel) And kljuc = mScreen And modUiPanel.PanelAktivan() = "" Then
-        ActivateScreen = True           ' vec smo tu
+        ActivateScreenCore = True       ' vec smo tu
         Exit Function
     End If
 
@@ -5813,12 +5834,12 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
             PaintNav frm, NavTagFor(AktivnaStavka())
             Exit Function
         End If
-        ActivateScreen = True
+        ActivateScreenCore = True
         Exit Function
     End If
     ' Panel je zatvoren i ekran je vec vracen kad ostajemo na njemu.
     If kljuc = mScreen Then
-        ActivateScreen = True
+        ActivateScreenCore = True
         Exit Function
     End If
     If kljuc <> SCR_POCETNI Then
@@ -5850,6 +5871,7 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
                 Set z = Nothing
                 UkloniZonu frm, nm, btnsPre
                 ShowToast Poruka("OTKUI_SCR_NEMA"), True
+                mScrToast = True
                 If zatvorenPanel Then PanelVracenNaEkran
                 PaintNav frm, NavTagFor(AktivnaStavka())
                 Exit Function
@@ -5902,7 +5924,7 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
         On Error GoTo 0
     End If
 
-    ActivateScreen = True
+    ActivateScreenCore = True
 End Function
 
 ' Ceo prostor desno od sidebara pripada ugovornom ekranu. Ljuska mu daje
@@ -8078,6 +8100,7 @@ End Sub
 Public Sub ShowToast(ByVal msg As String, ByVal isErr As Boolean)
     Dim fr As Object
     On Error Resume Next
+    mScrToast = False                   ' nova poruka je zamenila poruku prelaska
     If mFrm Is Nothing Then Exit Sub
     Set fr = mFrm.Controls("zGrid").Controls("tstScr")
     If fr Is Nothing Then Exit Sub
