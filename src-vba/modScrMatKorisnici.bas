@@ -65,7 +65,13 @@ Public Function Scr_Sort() As String
 End Function
 
 Public Sub Scr_Build(ByVal z As Object)
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrMatKorisnici.Scr_Build"
     modMaticniEkran.ZonaGradi z
+    Exit Sub
+EH:
+    modUiScreens.ScrPadZabelezi "modScrMatKorisnici.Scr_Build"
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
@@ -73,11 +79,23 @@ Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Sing
 End Function
 
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrMatKorisnici.Scr_Rows"
     Scr_Rows = modMaticniEkran.Redovi(EKRAN, Scr_Lista(), filter, q)
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrMatKorisnici.Scr_Rows"
 End Function
 
 Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrMatKorisnici.Scr_Event"
     Scr_Event = modMaticniEkran.Dogadjaj(tag, mLista)
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrMatKorisnici.Scr_Event " & tag
 End Function
 
 ' Ljuska javlja da se ekran napusta -- editor, GEO panel i izbor odlaze s
