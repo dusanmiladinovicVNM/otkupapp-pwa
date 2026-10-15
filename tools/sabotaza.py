@@ -3207,11 +3207,14 @@ SABOTAZE = {
         "ekran ispod panela je posle NAZAD ponovo procitan",
     ),
     # 3) Odbijen prelazak deaktivira ekran na kome jesmo. Vraca staro mesto
-    #    poziva -- na vrh, pre provere prava.
+    #    poziva -- pre provere prava. Sidro je provera prava, ne vrh funkcije:
+    #    na vrhu (posle jePanel) sabotaza je od ba91e66e gadjala i "vec smo tu"
+    #    za isti ekran, pa je test padao na preduslovu (stavka 146).
     "ljuska-deaktivira-pre-provere": (
         "modOtkupUI.bas",
-        "    jePanel = modUiPanel.PanelPostoji(kljuc)\n",
-        "    jePanel = modUiPanel.PanelPostoji(kljuc)\n    If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen   ' SABOTAZA\n",
+        "    If Not modUiScreens.ScrDozvoljen(kljuc) Then\n",
+        "    If Len(mScreen) > 0 Then modUiScreens.ScrDeaktiviraj mScreen   ' SABOTAZA\n"
+        "    If Not modUiScreens.ScrDozvoljen(kljuc) Then\n",
         "T_UiPanel_ZivotniCiklusIPrava",
         "odbijen prelazak NE deaktivira ekran na kome jesmo",
     ),
