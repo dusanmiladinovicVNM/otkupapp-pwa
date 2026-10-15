@@ -19020,17 +19020,24 @@ Private Function MetaKljuc(ByVal meta As String, ByVal polje As String) As Strin
     Next p
 End Function
 
-' Da li citanje dnevnika pod datim seam rezimom PODIZE gresku. Seam se gasi i
+' Da li citanje dnevnika pod datim seam rezimom PRIJAVLJUJE pad. Seam se gasi i
 ' kad prolaz pukne -- zaboravljen seam bi ostavio ekran degradiran do kraja
 ' suite-a (v. modUiScreens, isto pravilo).
+'
+' Od KI-016 (UI-PAD-01) Scr_Rows gresku vise ne DIZE: hvata je i belezi u kanal,
+' a citalac (ScrGridData) je javlja kao neuspeh liste, ne kao praznu listu. Zato
+' se meri kanal, ne Err -- do tada je "prijava" bila podignuta greska. Clan se
+' zove DIREKTNO: kroz Run bi Scr_Rows bez brane (sabotaza ki016-lista-pusta-pad)
+' otvorio dijalog i suite bi visio.
 Private Function PadDnevnika(ByVal rezim As String) As Boolean
     Dim d As Variant
     modSEFPersistance.SefLogPadTestSet rezim
+    modUiScreens.ScrPadPreuzmi
     On Error Resume Next
     d = modScrFakture.Scr_Rows("sve", "")
-    PadDnevnika = (Err.Number <> 0)
     Err.Clear
     On Error GoTo 0
+    PadDnevnika = (Len(modUiScreens.ScrPadPreuzmi()) > 0)
     modSEFPersistance.SefLogPadTestSet ""
 End Function
 
