@@ -4,6 +4,11 @@ paths:
   - "src-vba/modTest*.bas"
   - "src-vba/modOtkupUI.bas"
   - "src-vba/modScrDokumenti.bas"
+  - "src-vba/modUiScreens.bas"
+  - "src-vba/modUiPanel.bas"
+  - "src-vba/modMaticniEkran.bas"
+  - "src-vba/modPodesavanja.bas"
+  - "src-vba/modPrint.bas"
   - "tools/vba_check.py"
   - "tools/run_vba.py"
   - "tools/vba_parity_check.py"
@@ -19,6 +24,9 @@ paths:
 
 <!-- modOtkupUI.bas / modScrDokumenti.bas su u paths namerno: u njima su test
      seam-ovi (§4). Bez ovoga agent koji ih menja ne bi znao da postoje.
+     Iz istog razloga i modUiScreens / modUiPanel / modMaticniEkran /
+     modPodesavanja / modPrint: seam-ovi i jedini tumac ishoda Run-a iz KI-011 i
+     KI-014 (§4).
      frmOtkup.frm je otisao odavde sa formom (korak 2, §27.10).
 
      tests/golden/* trenutno ne pogadja nijedan fajl: jedini golden je bio snimak
@@ -190,7 +198,8 @@ Ne pokreće se na Linux/macOS — ni u web sesiji ni u CI. Tamo se testovi pona�
 
 ## 4) Test seam-ovi koje produkcioni kod nosi
 
-Ako menjaš `modOtkupUI` ili `modScrDokumenti`, znaj da ovo postoji i zašto —
+Ako menjaš `modOtkupUI`, `modScrDokumenti`, `modUiScreens`, `modUiPanel`,
+`modMaticniEkran`, `modPodesavanja` ili `modPrint`, znaj da ovo postoji i zašto —
 inače ćeš ih „počistiti":
 
 - `ClearForm` / `ParseDatum` / `ParcelaID` su **`Public`**, ne `Private` — test ih
@@ -200,6 +209,77 @@ inače ćeš ih „počistiti":
   produkciji je `IsTestMode()` uvek `False`.
 - `modScrDokumenti.Scr_OtpTestSet` postoji samo za test i **tvrdo je gejtovan** —
   van test-režima ne radi ništa.
+
+**Zajedničko svim test seam-ovima ispod.** Seam sme samo da **pokvari, zabrani
+ili posmatra** — nema vrednosti kojom dodaje pristup ili sposobnost. Dejstvo je
+vezano za test režim **pri svakom pozivu**, ne samo pri postavljanju: postavljač
+odbija rad van test režima, a kuka ponovo pita `IsTestMode()`. Zato seam koji
+ostane postavljen postaje inertan čim `RunAllTests` vrati prethodni režim. Unutar
+suite ga gasi `modTest.ResetSeamova` — na početku `RunAllTests` i posle testa
+koji **padne** (`RunOne` → `CleanupPosleTesta`); test koji prođe gasi svoj seam
+sam. **Nov seam koji nosi stanje ide i u `ResetSeamova`**, inače test koji pukne
+pre čišćenja ostavi seam upaljen i obori tuđi test.
+
+### Ishod `Application.Run` u ugovoru ekrana (KI-011, KI-014)
+
+- **`modUiScreens.ScrRunIshod` je jedini tumač ishoda `Application.Run` nad
+  članom ugovora** (invarijanta `UI-ISHOD-01`). Član se **nije izvršio** samo
+  kad uz `Empty` stoji greška: 1004 (`SCR_RUN_NEMA`, člana nema) ili druga
+  (`SCR_RUN_PAO`). Vraćena vrednost uz grešku u `Err` je **zaostatak** pomoćnog
+  koraka, ne pad člana (`SCR_RUN_VRATIO`); `Empty` uz `Err = 0` je član koji je
+  vratio `Empty` (`SCR_RUN_PRAZNO`) — šta to znači odlučuje čitalac (lista: „nema
+  liste"; `ScrSave`: neuspeh). Do KI-014 je svaki čitalac
+  `Err` čitao po svom; upis reversa je tako javljao „Radnja nije uspela" posle
+  uspešnog snimanja, pa je operater isti revers snimio dvaput (KI-011). **Nov
+  čitalac ugovora ide kroz `ScrRunIshod`**, ne kroz svoj `Err.Number`.
+- Zove se **odmah** posle `Run`-a. Namerno **nema `On Error`** (obrisao bi `Err`
+  koji pozivalac još čita), a `v` je **`ByRef`** (`Scr_Rows` vraća celu mrežu).
+  Ne „sređuj" ni jedno ni drugo.
+- `ScrBuild` (Sub) i dalje čita `Err` direktno: Sub uz zaostatak izgleda isto kao
+  nepokrenut član (sonda 14.10.2026). Imenovano ograničenje, ne previd.
+- **`modUiScreens.ScrZaostalaGreska`** je javna promenljiva koju **nijedan
+  produkcioni kod ne čita** — piše je `ScrRunIshod` (uz WARN u log), a tvrde je
+  testovi 226, 227 i 236. Nije mrtav kod: bez nje se zaostatak guta bez traga, a
+  sabotaža `ki014-pomocnik-guta-zaostatak` obara baš tu tvrdnju. Nosi
+  **poslednji** zaostatak; prazni je samo `ScrSave`, na početku upisa. **Nije**
+  test seam — piše se i u produkciji, pa je `ResetSeamova` ne dira.
+
+### Seam-ovi puta upisa (KI-011)
+
+- **`modOtkupUI.CommitDokumentTest`** vozi ceo potez „Sačuvaj" kroz
+  `CommitDokument` — isti put kojim ide klik operatera, ne kopija. Ishod upisa
+  (lažna greška, čišćenje forme, osvežavanje liste) se odlučuje **baš tu**; test
+  samo nad `ScrSave` meri pomoćnik, ne poziv.
+- **`modOtkupUI.Dijalog`** u test režimu **beleži** tekst umesto `MsgBox`-a, a
+  `DijalogTest` ga vraća. `MsgBox` u nevidljivom Excelu visi do timeout-a — isti
+  razlog kao `SetFocus`. Oba su tvrdo gejtovana; `CommitDokumentTest` sam prazni
+  zabeležen dijalog, pa `ResetSeamova` tu nema šta da gasi.
+- **`modPrint.StampaTestSet`** (`"pada"` / `"curi"`) kvari izvoz reversa tačno
+  tamo gde je kvar nastao — posle foldera, pre izvoza. `"curi"` radi ono što je
+  `LogSetup` radio pre KI-011: greška pod `Resume Next`, izlaz van handlera, koji
+  je ne briše. Gasi ga `ResetSeamova` (`StampaTestSet ""`).
+
+### Seam-ovi zaostatka u ugovoru ekrana (KI-014)
+
+- **`modUiScreens.ScrCuriTestSet(clan)`** bira član ugovora koji „curi"; prazno
+  gasi seam. Dve kuke dele to stanje:
+  - **`ScrCuriAkoTest(clan)`** — član **vrati** rezultat i ostavi grešku u `Err`
+    (oblik koji je sonda izmerila: proba pod `Resume Next`, izlaz van handlera);
+  - **`ScrPraznoAkoTest(clan)`** — član vrati `Empty` uz `Err = 0`, oblik „ekran
+    nema listu". Danas ga nijedan ekran ne proizvodi u normalnom toku, pa bez
+    ove kuke grana `SCR_RUN_PRAZNO` u `ScrGridData` nema slučaj — prva tvrdnja o
+    njoj je bila placebo (stavka 140 u `docs/STANJE_REFAKTORA.md`).
+- Kuke stoje u **pravim** članovima, pa testovi 236–238 idu kroz pravi
+  `Application.Run`, ne kroz kopiju: `modMaticniEkran.Redovi` (`REDOVI`,
+  `REDOVI_PRAZNO`, `REDOVI_BEZ_LISTE`), `Dogadjaj` (`DOGADJAJ`), `ImaNesacuvano`
+  (`NESACUVANO`) i `modPodesavanja.Podesavanja_ImaNesacuvano`
+  (`PANEL_NESACUVANO`).
+- **Kuka stoji na izlazu člana, POSLE poslednjeg `On Error` / `Err.Clear`.**
+  Pomerena iznad, `Err.Clear` pojede podmetnutu grešku i seam postane inertan —
+  test tada meri čist izlaz.
+- Van test režima i za drugi član kuka ne radi ništa i **ne dira `Err`**. Gasi je
+  `ResetSeamova` (`ScrCuriTestSet ""`); stanje je zajedničko, pa time gasi i
+  `ScrPraznoAkoTest`.
 
 Šta `modTest` NE pokriva: mrežu, storno, i sam `Save*_TX` (transakcioni upis
 pokrivaju `RunStornoTestSuite` i `RunBusinessFlowProSuite`). Forma se gradi bez
