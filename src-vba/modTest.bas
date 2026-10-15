@@ -336,6 +336,7 @@ Public Sub RunAllTests()
     RunOne 240
     RunOne 241
     RunOne 242
+    RunOne 243
     RunOne 13
     RunOne 14
     RunOne 15
@@ -609,7 +610,7 @@ Private Sub ResetSeamova()
     ' Podmetnuto curenje clana ugovora ekrana (236-238): zaostao seam bi svaki
     ' sledeci poziv tog clana vracao uz gresku u Err.
     modUiScreens.ScrCuriTestSet ""
-    ' Podmetnut pad clana ugovora (239-242): zaostao seam bi svaki sledeci poziv
+    ' Podmetnut pad clana ugovora (239-243): zaostao seam bi svaki sledeci poziv
     ' tog clana oborio; kanal se prazni da tudji pad ne ostane sledecem citaocu.
     modUiScreens.ScrPadTestSet ""
     modUiScreens.ScrPadPreuzmi
@@ -856,6 +857,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 240: TestName = "T_KI016_PadListeJeJavljen"
         Case 241: TestName = "T_KI016_PadRadnjeJeJavljen"
         Case 242: TestName = "T_KI016_PadGradnjeJeJavljen"
+        Case 243: TestName = "T_KI016_PadUsredGradnje"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1106,6 +1108,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 240: T_KI016_PadListeJeJavljen
         Case 241: T_KI016_PadRadnjeJeJavljen
         Case 242: T_KI016_PadGradnjeJeJavljen
+        Case 243: T_KI016_PadUsredGradnje
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -8850,6 +8853,97 @@ CleanUp:
              "pad gradnje ne prebacuje ekran nego javlja da ekran nije dostupan"
     AssertEq ekran2, "ANALIZA", "posle pada gradnje ekran se gradi ispocetka"
 End Sub
+
+' ============================================================
+' 243. KI-016: PAD USRED GRADNJE NE OSTAVLJA ZONU NI OMOTACE.
+' ============================================================
+' Review #423, P3-1. 242 obara gradnju na VRHU Scr_Build, a 183 jos pre Run-a --
+' oba pre nego sto zona dobije ijednu kontrolu. Pad USRED gradnje je do KI-016
+' bio dijalog i reset, pa je ciscenje posle njega tek sada dostizno: zona tada
+' vec ima decu i njihove omotace u Btns.
+'
+' Izvestaji su izabrani jer gradnja ima Resume Next segment, posle koga se clan
+' vraca na branu (On Error GoTo EH, ne GoTo 0). Druga kuka seam-a stoji odmah
+' iza njega. Prvo se DIREKTNO meri da brana tu i dalje vazi: bez nje bi pad kroz
+' Run otvorio dijalog, pa se ljuska tada NE vozi -- test padne po imenu umesto
+' da visi. Tek onda kroz ljusku (IdiNaEkran -> ActivateScreen -> ScrBuild): zona
+' i omotaci nestaju, ekran se ne menja, a sledeci ulazak gradi POTPUNU zonu
+' (izHint nastaje tek posle kuke).
+' SABOTAZA: ki016-izvestaji-gradnja-goto-0. Ciscenje (tvrdnje 4 i 5) grizu i
+' zatecene zona-posle-pada-gradnje-ostaje / omotaci-posle-pada-gradnje-ostaju,
+' deklarisane na 183.
+Private Sub T_KI016_PadUsredGradnje()
+    Dim f As frmOtkupUI, z As Object, errDirekt As Long, padDirekt As String
+    Dim ekran0 As String, ekran1 As String, ekran2 As String, toast1 As String
+    Dim omotacaPre As Long, omotacaPosle As Long, zona1 As Long, hint2 As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    Set f = NewOtkupUIForm()
+    ekran0 = modOtkupUI.AktivanEkran()
+
+    ' 1) DIREKTNO: brana pokriva tacku posle Resume Next segmenta.
+    Set z = f.Controls.Add("Forms.Frame.1", "zKI016Direkt")
+    modUiScreens.ScrPadTestSet "modScrIzvestaji.Scr_Build#usred"
+    On Error Resume Next
+    Err.Clear
+    modScrIzvestaji.Scr_Build z
+    errDirekt = Err.Number
+    On Error GoTo CleanUp
+    modUiScreens.ScrPadTestSet ""
+    padDirekt = modUiScreens.ScrPadPreuzmi()
+    Set z = Nothing
+    f.Controls.Remove "zKI016Direkt"
+    If errDirekt <> 0 Then GoTo CleanUp
+
+    ' 2) KROZ LJUSKU: pad usred gradnje, pa ponovni ulazak.
+    omotacaPre = modOtkupUI.OtkupUI_BrojOmotacaTest()
+    OcistiToast f
+    modUiScreens.ScrPadTestSet "modScrIzvestaji.Scr_Build#usred"
+    modOtkupUI.IdiNaEkran "IZVESTAJI"
+    modUiScreens.ScrPadTestSet ""
+    ekran1 = modOtkupUI.AktivanEkran()
+    toast1 = ToastTekst(f)
+    zona1 = ZonaKontrolaTest("IZVESTAJI")
+    omotacaPosle = modOtkupUI.OtkupUI_BrojOmotacaTest()
+
+    modOtkupUI.IdiNaEkran "IZVESTAJI"
+    ekran2 = modOtkupUI.AktivanEkran()
+    hint2 = ZonaImaKontrolu("IZVESTAJI", "izHint")
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modUiScreens.ScrPadTestSet ""
+    modUiScreens.ScrPadPreuzmi
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    modScrIzvestaji.Scr_IzTestReset
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI016_PadUsredGradnje", errDesc
+
+    AssertEq (ekran0 <> "IZVESTAJI"), True, "preduslov: ljuska ne pocinje na IZVESTAJIMA"
+    AssertEq (errDirekt = 0 And Left$(padDirekt, 28) = "modScrIzvestaji.Scr_Build ->" And _
+              InStr(1, padDirekt, "#usred", vbBinaryCompare) > 0), True, _
+             "brana pokriva gradnju i posle Resume Next segmenta"
+    AssertEq ekran1 & "|" & toast1, ekran0 & "|" & Poruka("OTKUI_SCR_NEMA"), _
+             "pad usred gradnje: ekran ostaje, operater dobija poruku"
+    AssertEq zona1 & "|" & omotacaPosle, "-1|" & omotacaPre, _
+             "pad usred gradnje ne ostavlja zonu ni omotace"
+    AssertEq ekran2 & "|" & hint2, "IZVESTAJI|True", _
+             "posle pada usred gradnje zona se gradi iznova i potpuna"
+End Sub
+
+' Postoji li kontrola datog imena u zoni ekrana (243).
+Private Function ZonaImaKontrolu(ByVal kljuc As String, ByVal ime As String) As Boolean
+    Dim z As Object, c As Object
+    On Error Resume Next
+    Set z = modOtkupUI.ScreenZone(kljuc)
+    If z Is Nothing Then Exit Function
+    Set c = z.Controls(ime)
+    ZonaImaKontrolu = Not (c Is Nothing)
+    Err.Clear
+End Function
 
 ' F7 unos NASEG reversa (stanica izdaje kooperantu) za modNovacUnos.ReversUpisi --
 ' isti recnik koji ekran predaje (NoviReversUnos).

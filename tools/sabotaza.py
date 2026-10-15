@@ -8161,6 +8161,16 @@ SABOTAZE = {
         "T_KI016_PadGradnjeJeJavljen",
         "pad gradnje ne prebacuje ekran nego javlja da ekran nije dostupan",
     ),
+    # KI-016, review #423 P3-1: Scr_Build Izvestaja se posle Resume Next segmenta
+    # vraca na GoTo 0 -- pad usred gradnje opet izlazi kroz Run (dijalog, reset).
+    # 243 to meri DIREKTNIM pozivom i tada ljusku ne vozi, pa sabotaza ne visi.
+    "ki016-izvestaji-gradnja-goto-0": (
+        "modScrIzvestaji.bas",
+        "    On Error GoTo EH                 ' nazad na branu clana (KI-016), ne GoTo 0\n",
+        "    On Error GoTo 0   ' SABOTAZA: posle RN segmenta nema brane\n",
+        "T_KI016_PadUsredGradnje",
+        "brana pokriva gradnju i posle Resume Next segmenta",
+    ),
 }
 
 

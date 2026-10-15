@@ -1790,6 +1790,9 @@ Public Sub Scr_Build(ByVal z As Object)
     z.Controls("scrIzOd").Controls("scrIzOdT").text = "1.1." & Year(Date)
     z.Controls("scrIzDo").Controls("scrIzDoT").text = Format$(Date, "d.m.yyyy")
     On Error GoTo EH                 ' nazad na branu clana (KI-016), ne GoTo 0
+    ' Druga kuka seam-a: pad USRED gradnje, posle Resume Next segmenta -- zona vec
+    ' ima kontrole, a brana mora i dalje da vazi (KI-016, test 243).
+    modUiScreens.ScrPadAkoTest "modScrIzvestaji.Scr_Build#usred"
 
     modUiKit.NewLbl z, "izHint", "", PAD, IZ_Y_HINT, 420, 12, TS_META, False, C_MUTED, -1
 
