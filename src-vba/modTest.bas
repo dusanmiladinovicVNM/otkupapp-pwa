@@ -8831,12 +8831,18 @@ End Function
 ' koja je ZAMENILA poruku o padu nije poruka prelaska, pa je uspesan prelazak ne
 ' gasi. Drugi pad je PRE Run-a (ScrGradnjuOboriTest), nad ekranom cija zona ne
 ' postoji, pa nijedan modul ekrana ne dobija stanje.
+'
+' Zabranjen prelazak je isti kvar (odluka operatera 15.10.2026, KI-016 (e) B):
+' prigusena stavka sidebara je klikabilna, a OTKUI_SCR_ZABRANJEN je crven i bez
+' tajmera. Zabrana ide kroz ScrSekcijuZabraniTest, pa se zona ni ne pravi.
 ' SABOTAZE: ki016-gradnja-pad-je-uspeh, ki016-poruka-pada-ostaje,
-' ki016-tudja-poruka-nestaje.
+' ki016-tudja-poruka-nestaje, ki016-poruka-zabrane-ostaje.
 Private Sub T_KI016_PadGradnjeJeJavljen()
     Dim f As frmOtkupUI, ekran0 As String, ekran1 As String, ekran2 As String
-    Dim ekran3 As String, ekran4 As String, kljucMat As String
+    Dim ekran3 As String, ekran4 As String, ekran5 As String, ekran6 As String
+    Dim kljucMat As String
     Dim toast1 As String, toast2 As String, toast4 As String
+    Dim toast5 As String, toast6 As String
     Dim errNum As Long, errDesc As String
 
     On Error GoTo CleanUp
@@ -8864,6 +8870,17 @@ Private Sub T_KI016_PadGradnjeJeJavljen()
     ekran4 = modOtkupUI.AktivanEkran()
     toast4 = ToastNaEkranu(f)
 
+    modUiScreens.ScrSekcijuZabraniTest SEK_MATICNI
+    modUiScreens.ScrResetCache
+    modOtkupUI.IdiNaEkran kljucMat
+    modUiScreens.ScrSekcijuZabraniTest ""
+    modUiScreens.ScrResetCache
+    ekran5 = modOtkupUI.AktivanEkran()
+    toast5 = ToastNaEkranu(f)
+    modOtkupUI.IdiNaEkran "ANALIZA"
+    ekran6 = modOtkupUI.AktivanEkran()
+    toast6 = ToastNaEkranu(f)
+
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
@@ -8871,6 +8888,8 @@ CleanUp:
     modUiScreens.ScrPadTestSet ""
     modUiScreens.ScrPadPreuzmi
     modUiScreens.ScrGradnjuOboriTest False
+    modUiScreens.ScrSekcijuZabraniTest ""
+    modUiScreens.ScrResetCache
     If Not f Is Nothing Then ReleaseOtkupUIForm f
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI016_PadGradnjeJeJavljen", errDesc
@@ -8884,6 +8903,10 @@ CleanUp:
              "preduslov: drugi pad gradnje ostavlja ANALIZU, a povratak uspeva"
     AssertEq toast4, "KI016 tudja poruka", _
              "uspesan prelazak ne gasi poruku koja je zamenila poruku o padu"
+    AssertEq ekran5 & "|" & toast5, ekran0 & "|" & Poruka("OTKUI_SCR_ZABRANJEN"), _
+             "preduslov: zabranjen prelazak ostavlja ekran i javlja zabranu"
+    AssertEq ekran6 & "|" & toast6, "ANALIZA|", _
+             "uspesan prelazak gasi poruku o zabranjenom prelasku"
 End Sub
 
 ' ============================================================
