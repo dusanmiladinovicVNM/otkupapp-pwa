@@ -4753,6 +4753,101 @@
        GO iz stavke 143 važi za `ac921b4d`.
      - `KI-016` ostaje `OPEN` zbog stavki van reza (a)–(e) iz `KNOWN_ISSUES`; (d) i (e) su ovaj rez (stavke 145+).
 
+145. **`KI-016` (d) i (e) — dva prezentaciona nalaza ručne provere `#423`** (15.10.2026). Grana
+     `claude/ki016-poruke-pada`, sa `main`-a `66f7897f`. Skripte i izlazi su u scratchpad-u sesije `23d2fe62`:
+     `repro_ki016.py` i `sonda_ki016.py` (preuzeti iz `60ee0682`), `fix.py`, `sab.py`, `sabB.py`, `kapije.sh`.
+
+     **Popis pre koda.**
+     - **(d) Ko čita oblik zapisa kanala.** Nijedan produkcioni čitalac ga ne rastavlja: `ScrAct`,
+       `LoadGridFromScreen` (izvor greške → `ReloadGrid`) i `CommitDokument` ga prenose ceo. Nijedan
+       `Split`/`InStr` po `" -> "` u `src-vba` ne čita kanal. Tačan oblik mere samo testovi:
+       - 240 je tražio `"modScrMatPartneri.Scr_Rows -> "`, a 243 `Left$(…, 28) = "modScrIzvestaji.Scr_Build ->"`.
+         Oba posle ispravke mere ime člana kao **početak** zapisa i `" -> "` posebno;
+       - 239 (`KI016Clan`: početak + `" -> "`), 241 (`KI016ToastPada`: sadrži člana i događaj) i 162
+         (`PadDnevnika`: dužina) ne zavise od redosleda.
+
+       Sidro `ki016-pomocnik-gubi-izvor` je red `If InStr(errSrc, ".")`, koji ostaje. `ki016-pomocnik-ne-belezi`
+       je gađao red koji se menja, pa dobija novo sidro.
+     - **(e) Izlazi `ActivateScreen` sa porukom:** `OTKUI_SCR_ZABRANJEN` (crven), `OTKUI_SCR_NEMA` kad modula
+       nema (zelen, tajmer od 4 s), `OTKUI_SCR_NEMA` posle pada gradnje (crven) i greška panela (crven).
+       - Prigušena stavka sidebara je i dalje klikabilna (`PaintNav` samo boji), pa je zabranjen prelazak
+         dostižan jednim klikom.
+       - Greška panela je praktično nedostižna: `UIPAN_ERR_NEPOZNAT` seče `PanelPostoji`, `SAMO_ADMIN` seče
+         `ScrDozvoljen` pre nje, a `UIPAN_ERR_GRADNJA` je mrtav EH (`KI-016` (b)).
+       - `PrimeniNovaPrava` posle zamene operatera **namerno** ostavlja `OTKUI_SCR_ZABRANJEN` pa zove
+         `NaPrviDozvoljenEkran` → uspešan `ActivateScreen`. Zastavica koja preživi tuđu poruku sakrila bi to
+         objašnjenje, pa je `ShowToast` spušta.
+
+     **Odluka operatera (15.10.2026), po preporuci: varijanta B.** Uspešan prelazak gasi crvenu poruku
+     odbijenog prelaska iz `ActivateScreen`-a, i to i `OTKUI_SCR_NEMA` posle pada gradnje i
+     `OTKUI_SCR_ZABRANJEN`. Gasi je **svaki** uspešan prelazak, ne samo ulazak u isti ekran, kao `mGridToast`.
+     - Greška panela ostaje van (varijanta C), zapisana kao nedostižna. Zeleni `OTKUI_SCR_NEMA` ima tajmer.
+     - Zastavicu spušta i `ShowToast`, kad nova poruka zameni staru.
+     - Ista latentna rupa u `mGridToast` se samo zapisuje (ispod), ne dira se.
+
+     **Reprodukcija pre ispravke** (`run_vba --compile-only --keep`, pa `RunOne` kroz `repro_ki016.py`, sopstvena
+     instanca, bez dijaloga):
+
+     ```
+     e500390b (novi testovi, stara produkcija)            TESTS=4 FAIL=2
+       FAIL 240 -- korak stoji ispred opisa greske, pa ga dug opis ne odseca u toastu
+       FAIL 242 -- uspesan ulazak posle pada gradnje gasi poruku o padu
+                   -- ocekivano [], dobijeno [Ovaj ekran jos nije prebacen na novi izgled.]
+       OK   241, 243
+     d9e0a257 (test zabrane, ispravka A bez B)             TESTS=1 FAIL=1
+       FAIL 242 -- uspesan prelazak gasi poruku o zabranjenom prelasku
+                   -- ocekivano [ANALIZA|], dobijeno [ANALIZA|Nemate dozvolu za ovu oblast.]
+     ```
+     Drugi prolaz meri i obe tvrdnje pre nove: posle ispravke A poruka o padu nestaje, a tuđa poruka ostaje.
+     Prvi prolaz meri i instrument: `ToastNaEkranu` je pročitao vidljivu traku, pa `.Visible` nad formom bez
+     `.Show` radi.
+
+     **Ispravka (`952fc745`, `b24053ac`).**
+     - **(d)** `ScrPadZabelezi` piše „`clan [izvor] -> broj opis`". Opis nema granicu dužine, a traka poruke
+       odseca kraj, pa korak ide pre opisa. Log je nepromenjen (izvor ide u svoju kolonu).
+     - **(e)** `mScrToast` po obrascu `mGridToast`:
+       - zastavicu podižu zabrana i pad gradnje, odmah posle svog `ShowToast`-a;
+       - `ActivateScreen` je postao omotač oko `ActivateScreenCore`. Uspešan prelazak gasi poruku na **jednom**
+         mestu, jer jezgro ima pet izlaza sa uspehom;
+       - `ShowToast` zastavicu spušta, jer nova poruka zamenjuje staru.
+
+     **Testovi i sabotaže** (bez novog testa; `RunAllTests` ostaje 243):
+     - 240 + „korak stoji ispred opisa greske, pa ga dug opis ne odseca u toastu" ← `ki016-korak-iza-opisa`;
+     - 242 + „uspesan ulazak posle pada gradnje gasi poruku o padu" ← `ki016-poruka-pada-ostaje`;
+     - 242 + „uspesan prelazak ne gasi poruku koja je zamenila poruku o padu" ← `ki016-tudja-poruka-nestaje`.
+       Drugi pad je pre `Run`-a (`ScrGradnjuOboriTest`), nad ekranom čija zona ne postoji, pa nijedan modul
+       ekrana ne dobija stanje;
+     - 242 + „uspesan prelazak gasi poruku o zabranjenom prelasku" ← `ki016-poruka-zabrane-ostaje`. Zabrana ide
+       kroz `ScrSekcijuZabraniTest`, pa se zona ni ne pravi;
+     - novi pomoćnik `ToastNaEkranu`: `ToastTekst` čita natpis, a `HideToast` traku sakriva i natpis ne briše.
+
+     Nijedna sabotaža ne diže grešku kroz `Run`. Katalog 790 → 794.
+
+     **Provera pre review-a.**
+     - Jeftine kapije 20/20 (794 sabotaže, 0 nalaza, 9 poznatih).
+     - Brza provera, **nije izvršna kapija** (kept sveska nad `b24053ac`, `RunOne`): 1, 84, 103, 109, 153, 159,
+       162, 236, 237 i 239–243, `TESTS=14 FAIL=0`, bez dijaloga.
+     - `run_vba` i `dokaz` čekaju reviewer GO. Dokaz, 22 sabotaže:
+
+       ```
+       dokaz.py ki016- ljuska-deaktivira-pre-provere zona-posle-pada-gradnje omotaci-posle-pada-gradnje
+                bu-ulazak-ne-zove-kuku bu-kuka-ignorise-argument --grupe
+       ```
+       - `ki016-` je 17 sabotaža: četiri nove, `ki016-pomocnik-ne-belezi` sa novim sidrom i 12 zatečenih;
+       - ostalih pet imaju sidro u telu koje je postalo `ActivateScreenCore`, ili u grani pada gradnje.
+
+     **Očekivani brojevi:** `RunAllTests` 243 / 0; BFP 2427, Banka 241, Storno 111 bez promene.
+
+     **Uočeno van reza (zapisano, ne dirano):**
+     - `mGridToast` nema spuštanje u `ShowToast`. Zastarela zastavica mreže može na sledećem uspelom čitanju
+       da sakrije tuđu poruku, i to baš objašnjenje zabrane posle zamene operatera (`NaPrviDozvoljenEkran` →
+       `ReloadGrid`).
+     - Direktan `HideToast` briše `mToastPending`, a tajmer ne otkazuje. Tajmer zelene poruke tada ostaje
+       siroče, a `CancelToastTimer` ga više ne vidi, pa može da sakrije crvenu poruku podignutu u ta 4 s.
+       Ovaj rez to ne pojačava: `mScrToast` se diže crvenom porukom, koja tajmer otkazuje.
+
+     **Otvoreno.** Review, pa izvršne kapije, compile i ručna provera.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
