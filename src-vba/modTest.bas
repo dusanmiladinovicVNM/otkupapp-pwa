@@ -8693,7 +8693,7 @@ End Sub
 ' zabelezen MIMO citaoca (direktan poziv clana) koji ne sme da obori sledece
 ' citanje. Clan je MatPartneri, ne clan koji gadja sabotaza iz 239.
 ' SABOTAZE: ki016-lista-pad-ignorisan, ki016-pomocnik-gubi-izvor,
-' ki016-kanal-ne-brise, ki016-lista-stari-pad.
+' ki016-korak-iza-opisa, ki016-kanal-ne-brise, ki016-lista-stari-pad.
 Private Sub T_KI016_PadListeJeJavljen()
     Dim izvor1 As String, izvor2 As String, izvor3 As String
     Dim n2 As Long, v As Variant
@@ -8721,10 +8721,16 @@ CleanUp:
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI016_PadListeJeJavljen", errDesc
 
-    AssertEq (InStr(1, izvor1, "modScrMatPartneri.Scr_Rows -> ", vbBinaryCompare) > 0), True, _
+    AssertEq (InStr(1, izvor1, "modScrMatPartneri.Scr_Rows ", vbBinaryCompare) = 1 And _
+              InStr(1, izvor1, " -> ", vbBinaryCompare) > 0), True, _
              "pad liste je javljen kao neuspeh liste, sa imenom clana"
     AssertEq (InStr(1, izvor1, "ScrPadAkoTest", vbBinaryCompare) > 0), True, _
              "pad liste nosi izvor greske (korak)"
+    ' Opis greske nema granicu duzine (greska seme nabraja zaglavlje), a traka
+    ' poruke odseca KRAJ -- korak mora da stoji pre opisa (rucna provera #423).
+    AssertEq (InStr(1, izvor1, "ScrPadAkoTest", vbBinaryCompare) < _
+              InStr(1, izvor1, "podmetnut pad clana ugovora", vbBinaryCompare)), True, _
+             "korak stoji ispred opisa greske, pa ga dug opis ne odseca u toastu"
     AssertEq izvor2, "", "posle pada sledece citanje liste nije pad"
     AssertEq (n2 > 0), True, "lista posle pada je ucitana"
     AssertEq izvor3, "", "pad zabelezen van citaoca ne obara sledece citanje liste"
@@ -8818,10 +8824,25 @@ End Function
 '
 ' A -> B -> A: posle pada se isti ekran gradi ispocetka (zona je uklonjena, ne
 ' sakrivena -- inace bi sledeci pokusaj nasao praznu zonu i prijavio uspeh).
-' SABOTAZA: ki016-gradnja-pad-je-uspeh.
+'
+' Poruka o padu gradnje je crvena i nema tajmer, pa je ostajala i posle USPESNOG
+' ulaska u isti ekran (rucna provera #423). Meri se traka NA EKRANU (ToastNaEkranu),
+' ne natpis: HideToast traku sakriva, a natpis ne brise. Kontra-tvrdnja: poruka
+' koja je ZAMENILA poruku o padu nije poruka prelaska, pa je uspesan prelazak ne
+' gasi. Drugi pad je PRE Run-a (ScrGradnjuOboriTest), nad ekranom cija zona ne
+' postoji, pa nijedan modul ekrana ne dobija stanje.
+'
+' Zabranjen prelazak je isti kvar (odluka operatera 15.10.2026, KI-016 (e) B):
+' prigusena stavka sidebara je klikabilna, a OTKUI_SCR_ZABRANJEN je crven i bez
+' tajmera. Zabrana ide kroz ScrSekcijuZabraniTest, pa se zona ni ne pravi.
+' SABOTAZE: ki016-gradnja-pad-je-uspeh, ki016-poruka-pada-ostaje,
+' ki016-tudja-poruka-nestaje, ki016-poruka-zabrane-ostaje.
 Private Sub T_KI016_PadGradnjeJeJavljen()
     Dim f As frmOtkupUI, ekran0 As String, ekran1 As String, ekran2 As String
-    Dim toast1 As String
+    Dim ekran3 As String, ekran4 As String, ekran5 As String, ekran6 As String
+    Dim kljucMat As String
+    Dim toast1 As String, toast2 As String, toast4 As String
+    Dim toast5 As String, toast6 As String
     Dim errNum As Long, errDesc As String
 
     On Error GoTo CleanUp
@@ -8837,6 +8858,28 @@ Private Sub T_KI016_PadGradnjeJeJavljen()
 
     modOtkupUI.IdiNaEkran "ANALIZA"
     ekran2 = modOtkupUI.AktivanEkran()
+    toast2 = ToastNaEkranu(f)
+
+    kljucMat = modOtkupUI.OtkupUI_EkranZaSekcijuTest(SEK_MATICNI)
+    modUiScreens.ScrGradnjuOboriTest True
+    modOtkupUI.IdiNaEkran kljucMat
+    modUiScreens.ScrGradnjuOboriTest False
+    ekran3 = modOtkupUI.AktivanEkran()
+    modOtkupUI.ShowToast "KI016 tudja poruka", True
+    modOtkupUI.IdiNaEkran ekran0
+    ekran4 = modOtkupUI.AktivanEkran()
+    toast4 = ToastNaEkranu(f)
+
+    modUiScreens.ScrSekcijuZabraniTest SEK_MATICNI
+    modUiScreens.ScrResetCache
+    modOtkupUI.IdiNaEkran kljucMat
+    modUiScreens.ScrSekcijuZabraniTest ""
+    modUiScreens.ScrResetCache
+    ekran5 = modOtkupUI.AktivanEkran()
+    toast5 = ToastNaEkranu(f)
+    modOtkupUI.IdiNaEkran "ANALIZA"
+    ekran6 = modOtkupUI.AktivanEkran()
+    toast6 = ToastNaEkranu(f)
 
 CleanUp:
     errNum = Err.Number
@@ -8844,6 +8887,9 @@ CleanUp:
     On Error Resume Next
     modUiScreens.ScrPadTestSet ""
     modUiScreens.ScrPadPreuzmi
+    modUiScreens.ScrGradnjuOboriTest False
+    modUiScreens.ScrSekcijuZabraniTest ""
+    modUiScreens.ScrResetCache
     If Not f Is Nothing Then ReleaseOtkupUIForm f
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI016_PadGradnjeJeJavljen", errDesc
@@ -8852,6 +8898,15 @@ CleanUp:
     AssertEq ekran1 & "|" & toast1, ekran0 & "|" & Poruka("OTKUI_SCR_NEMA"), _
              "pad gradnje ne prebacuje ekran nego javlja da ekran nije dostupan"
     AssertEq ekran2, "ANALIZA", "posle pada gradnje ekran se gradi ispocetka"
+    AssertEq toast2, "", "uspesan ulazak posle pada gradnje gasi poruku o padu"
+    AssertEq ekran3 & "|" & ekran4, "ANALIZA|" & ekran0, _
+             "preduslov: drugi pad gradnje ostavlja ANALIZU, a povratak uspeva"
+    AssertEq toast4, "KI016 tudja poruka", _
+             "uspesan prelazak ne gasi poruku koja je zamenila poruku o padu"
+    AssertEq ekran5 & "|" & toast5, ekran0 & "|" & Poruka("OTKUI_SCR_ZABRANJEN"), _
+             "preduslov: zabranjen prelazak ostavlja ekran i javlja zabranu"
+    AssertEq ekran6 & "|" & toast6, "ANALIZA|", _
+             "uspesan prelazak gasi poruku o zabranjenom prelasku"
 End Sub
 
 ' ============================================================
@@ -8923,7 +8978,8 @@ CleanUp:
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI016_PadUsredGradnje", errDesc
 
     AssertEq (ekran0 <> "IZVESTAJI"), True, "preduslov: ljuska ne pocinje na IZVESTAJIMA"
-    AssertEq (errDirekt = 0 And Left$(padDirekt, 28) = "modScrIzvestaji.Scr_Build ->" And _
+    AssertEq (errDirekt = 0 And InStr(1, padDirekt, "modScrIzvestaji.Scr_Build ", vbBinaryCompare) = 1 And _
+              InStr(1, padDirekt, " -> ", vbBinaryCompare) > 0 And _
               InStr(1, padDirekt, "#usred", vbBinaryCompare) > 0), True, _
              "brana pokriva gradnju i posle Resume Next segmenta"
     AssertEq ekran1 & "|" & toast1, ekran0 & "|" & Poruka("OTKUI_SCR_NEMA"), _
@@ -9110,6 +9166,17 @@ End Function
 Private Function ToastTekst(ByVal f As Object) As String
     On Error Resume Next
     ToastTekst = CStr(f.Controls("zGrid").Controls("tstScr").Controls("tstScrMsg").caption)
+End Function
+
+' Poruka koja je NA EKRANU: natpis trake dok je traka vidljiva, inace "".
+' ToastTekst za to ne vazi -- HideToast traku sakriva, a natpis ne brise (242).
+Private Function ToastNaEkranu(ByVal f As Object) As String
+    Dim fr As Object
+    On Error Resume Next
+    Set fr = f.Controls("zGrid").Controls("tstScr")
+    If fr Is Nothing Then Exit Function
+    If fr.Visible Then ToastNaEkranu = CStr(fr.Controls("tstScrMsg").caption)
+    Err.Clear
 End Function
 
 Private Function IzvZbirniKol(ByVal stanicaID As String, ByVal tipAmb As String, _

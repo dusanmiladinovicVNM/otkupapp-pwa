@@ -773,12 +773,17 @@ End Function
 ' (funkcija liste ga dize sa korakom, npr. "modScrFakture.RedoviFakture[fakture]"),
 ' jer je to ono sto ReloadGrid prikazuje posle "na koraku:". Err se ovde ne brise:
 ' izlaz iz handlera clana ga brise sam (sonda 15.10.2026).
+'
+' Oblik je "clan [izvor] -> broj opis": izvor ide PRE opisa. Opis nema granicu
+' duzine (greska seme nabraja celo zaglavlje), a traka poruke odseca KRAJ -- pa
+' je korak, dok je stajao iza opisa, ispadao sa ekrana (rucna provera #423).
 Public Sub ScrPadZabelezi(ByVal clan As String)
     Dim errNum As Long, errSrc As String, errDesc As String
     errNum = Err.Number: errSrc = Err.Source: errDesc = Err.description
-    mPadClana = clan & " -> " & errNum & " " & errDesc
+    mPadClana = clan
     If InStr(1, errSrc, ".", vbBinaryCompare) > 0 Then _
         mPadClana = mPadClana & " [" & errSrc & "]"
+    mPadClana = mPadClana & " -> " & errNum & " " & errDesc
     LogError clan, "pad clana ugovora (KI-016): " & errDesc, errNum, LOG_ERROR, errSrc
 End Sub
 
