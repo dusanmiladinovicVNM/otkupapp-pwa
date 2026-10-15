@@ -4848,6 +4848,77 @@
 
      **Otvoreno.** Review, pa izvršne kapije, compile i ručna provera.
 
+146. **Review `#425` (`d0c6864e`): `CODE GO`, `P0 0`, `P1 0`, `P2 0`, `P3 1`, 9,3/10** (15.10.2026). Static CI
+     #981 `SUCCESS`. `MERGE HOLD` dok se ne izvrše kapije. Produkcioni kod posle GO nije menjan.
+     - **`P3-1`, nije blokirajući:** test meri redosled izvora i opisa, ali ne i stvarno odsecanje na formi. To
+       meri ručna provera sa pravom greškom šeme Faktura (tačka 1 ispod).
+
+     **Izvršni prolaz** (head `d0c6864e`, izvor `c35dd64b9cc8`, ugovor `75272720898e`, sveska `0bafa704`,
+     fixture `d3d3ff6d`): **12/12 ZELENO**, marker upisan.
+
+     ```
+     RunAllTests              243 / 0      RunBusinessFlowProSuite 2427 / 0
+     RunBankaImportTestSuite  241 / 0      RunStornoTestSuite       111 / 0      ostalih 8 suita OK
+     ```
+
+     **Dokaz** (filter ispod; 22 sabotaže u 5 prolaza). Filter ne hvata nijedan od 9 `POZNATI_NALAZI` ni od 2
+     `POZNATI_NALAZI_DOKAZ`.
+
+     ```
+     dokaz.py ki016- ljuska-deaktivira-pre-provere zona-posle-pada-gradnje omotaci-posle-pada-gradnje
+              bu-ulazak-ne-zove-kuku bu-kuka-ignorise-argument --grupe
+
+     crvenih: 22 / 22    izvor pre/posle 3d1bbea1dd0c0248 IDENTICAN    bez ijednog TIMEOUT-a
+     grupno izmereno 20 / 22 -> prvi verdikt NIJE DOKAZANO (jedan PROBLEM)
+     ```
+     Dva člana nisu priznata u grupi:
+     - **`ki016-kanal-ne-brise`, zaklonjena u grupi 4, predviđeno iz plana.** `ki016-pomocnik-ne-belezi` gasi
+       kanal, pa 240 pada već na prvoj tvrdnji. Sama: OK.
+     - **`ljuska-deaktivira-pre-provere`, PROBLEM i kad je sama.** Pada preduslov „ekran je pre panela imao
+       svoju zonu". **Zastarela je od `ba91e66e` (03.09.2026), ne od ovog reza:**
+       - ista sabotaža nad `main`-om `66f7897f` (privremeni worktree, ista fixture sveska, izvor
+         `e59a78ee3c9822c9`) daje isti pad;
+       - sidro je bio red posle `jePanel = …`, dakle pre provere „već smo tu" za isti ekran, a ta provera je
+         ušla posle sabotaže;
+       - korak 2 testa ide `IdiNaEkran` na ekran na kome sekcija već stoji, pa je sabotaža brisala zonu pre
+         tvrdnje.
+
+       **Ispravka (posle GO, samo `tools/sabotaza.py`):** sidro je provera prava (`If Not
+       modUiScreens.ScrDozvoljen(kljuc) Then`). To je staro mesto poziva, kako i komentar sabotaže kaže. Sama
+       nad `d0c6864e`: `DOKAZANO`, izvor identičan. Marker i dalje važi, jer `sabotaza.py` nije deo ugovora.
+
+     **Ukupno: 22 / 22 dokazano** (20 grupno, 2 sama).
+
+     **Nalaz uz scenario 4 iz review-a (pročitano u kodu, ne izmereno).** Review traži da objašnjenje
+     `OTKUI_SCR_ZABRANJEN`, koje `PrimeniNovaPrava` ostavlja posle zamene operatera, ostane na ekranu. U
+     produkciji se to ne vidi:
+     - `DoSwitchOperater` posle `PrimeniNovaPrava` odmah zove `ShowToast OTKUI_MSG_OPERATER`, zelenu poruku sa
+       tajmerom od 4 s;
+     - na neuspeloj prijavi `ShowToast OTKUI_MSG_ODJAVLJEN`;
+     - preostali poziv je samo test seam.
+
+     Objašnjenje zabrane zato prepiše sledeća poruka, sa spuštanjem zastavice i bez njega, kao i pre ovog reza.
+     Komentar uz `mScrToast` taj primer navodi kao razlog spuštanja u `ShowToast`, što je netačno kao opis
+     onoga što operater vidi.
+
+     Pravi slučaj koji spuštanje štiti je poruka koju podigne **sam prelazak**: pad mreže novog ekrana u
+     `ReloadGrid`, ili poruka kuke ulaska (`ScrAktiviraj`, uvoz izvoda u Banci). Omotač gasi poruku tek posle
+     jezgra, pa bi bez spuštanja stara zastavica sakrila baš poruku o padu mreže ekrana u koji se upravo ušlo.
+     - Test meri isti mehanizam: nova poruka između pada i uspeha, sabotaža `ki016-tudja-poruka-nestaje`.
+     - Komentar se ispravlja posle merge-a, u zasebnom malom rezu. Izmena `src-vba` sada bi oborila marker i
+       dokaz, a ponašanje se ne menja.
+     - Scenario 4 checkliste je zato zamenjen ovim slučajem; scenario iz review-a ostaje kao opcioni.
+
+     **Sveska za compile i ručnu proveru:** `tests/fixtures/rucna_provera_ki016de_kod.xlsm`
+     (`run_vba --compile-only --keep` nad `d0c6864e`, izvor `c35dd64b9cc8`). Operater uvozi
+     `src-vba/modVbaTools.bas`, kompajlira, zatvara i otvara svesku. Checklista je u opisu `#425`:
+     1. greška šeme Faktura: korak se vidi u traci;
+     2. pad gradnje Izveštaja, pa uspešan ulazak: traka nestaje;
+     3. zabranjen prelazak, pa uspešan prelazak: traka nestaje;
+     4. pad gradnje, pa ulazak u ekran čija mreža padne: poruka o padu mreže ostaje.
+
+     **Otvoreno.** Compile i ručna provera (operater), pa merge na izričit zahtev.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
