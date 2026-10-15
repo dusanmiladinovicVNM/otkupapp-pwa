@@ -8048,6 +8048,119 @@ SABOTAZE = {
         "T_SaldoPapir_TipBezObziraNaVelikaSlova",
         "tip bez obzira na velika slova: papir nosi stanje istog tipa kao saldo",
     ),
+    # KI-016 (UI-PAD-01): clan ugovora bez brane pusta pad pozivaocu -- kroz
+    # Application.Run je to runtime dijalog i reset. 239 zove clanove DIREKTNO, pa
+    # je pad crven po imenu, ne dijalog. Gadjani clanovi NISU clanovi koje 240-242
+    # zovu kroz Run (MatPartneri Scr_Rows/Scr_Event, Analiza Scr_Build) -- tamo bi
+    # sabotaza otvorila dijalog i run bi visio umesto da padne.
+    "ki016-lista-pusta-pad": (
+        "modScrFakture.bas",
+        '    On Error GoTo EH\n    modUiScreens.ScrPadAkoTest "modScrFakture.Scr_Rows"\n',
+        "    ' SABOTAZA: lista bez brane\n"
+        '    modUiScreens.ScrPadAkoTest "modScrFakture.Scr_Rows"\n',
+        "T_KI016_ClanHvataSvojPad",
+        "svaka lista ekrana hvata svoj pad",
+    ),
+    "ki016-radnja-pusta-pad": (
+        "modScrMatRoba.bas",
+        '    On Error GoTo EH\n    modUiScreens.ScrPadAkoTest "modScrMatRoba.Scr_Event"\n',
+        "    ' SABOTAZA: radnja bez brane\n"
+        '    modUiScreens.ScrPadAkoTest "modScrMatRoba.Scr_Event"\n',
+        "T_KI016_ClanHvataSvojPad",
+        "svaka radnja maticnih ekrana hvata svoj pad",
+    ),
+    "ki016-gradnja-pusta-pad": (
+        "modScrStorno.bas",
+        '    On Error GoTo EH\n    modUiScreens.ScrPadAkoTest "modScrStorno.Scr_Build"\n',
+        "    ' SABOTAZA: gradnja bez brane\n"
+        '    modUiScreens.ScrPadAkoTest "modScrStorno.Scr_Build"\n',
+        "T_KI016_ClanHvataSvojPad",
+        "svaka gradnja ekrana hvata svoj pad",
+    ),
+    # KI-016: pomocnik koji ne belezi -- clan uhvati pad, a kanal ostane prazan,
+    # pa citalac pad vidi kao "nema liste" / obradjenu radnju / uspesnu gradnju.
+    "ki016-pomocnik-ne-belezi": (
+        "modUiScreens.bas",
+        "    errNum = Err.Number: errSrc = Err.Source: errDesc = Err.description\n"
+        '    mPadClana = clan & " -> " & errNum & " " & errDesc\n',
+        "    Exit Sub   ' SABOTAZA: pomocnik ne belezi pad\n"
+        '    mPadClana = clan & " -> " & errNum & " " & errDesc\n',
+        "T_KI016_ClanHvataSvojPad",
+        "pad clana je zabelezen u kanalu sa imenom clana",
+    ),
+    # KI-016: citalac liste ne gleda kanal -- pad (Empty uz Err = 0) prolazi kao
+    # "ekran nema listu", a mreza tiho ostaje na staroj listi.
+    "ki016-lista-pad-ignorisan": (
+        "modUiScreens.bas",
+        '    v = Application.Run(m & ".Scr_Rows", filter, q)\n    pad = ScrPadPreuzmi()\n',
+        '    v = Application.Run(m & ".Scr_Rows", filter, q)\n'
+        '    pad = "": ScrPadPreuzmi   \' SABOTAZA: pad liste se ne cita\n',
+        "T_KI016_PadListeJeJavljen",
+        "pad liste je javljen kao neuspeh liste, sa imenom clana",
+    ),
+    # KI-016: zapis pada gubi izvor, pa toast mreze vise ne nosi korak funkcije
+    # liste ("na koraku:").
+    "ki016-pomocnik-gubi-izvor": (
+        "modUiScreens.bas",
+        '    If InStr(1, errSrc, ".", vbBinaryCompare) > 0 Then _\n',
+        "    If Len(errSrc) < 0 Then _\n",
+        "T_KI016_PadListeJeJavljen",
+        "pad liste nosi izvor greske (korak)",
+    ),
+    # KI-016: kanal se ne prazni pri preuzimanju -- jedan pad obara svako sledece
+    # citanje, i ugnjezden citalac ostavlja svoj pad spoljnom.
+    "ki016-kanal-ne-brise": (
+        "modUiScreens.bas",
+        '    ScrPadPreuzmi = mPadClana\n    mPadClana = ""\n',
+        "    ScrPadPreuzmi = mPadClana   ' SABOTAZA: kanal se ne brise\n",
+        "T_KI016_PadListeJeJavljen",
+        "posle pada sledece citanje liste nije pad",
+    ),
+    # KI-016: citalac liste ne odbacuje stari pad pre poziva -- pad clana pozvanog
+    # mimo citaoca postaje pad sledeceg citanja.
+    "ki016-lista-stari-pad": (
+        "modUiScreens.bas",
+        '    ScrPadPreuzmi\n    v = Application.Run(m & ".Scr_Rows", filter, q)\n',
+        "    ' SABOTAZA: stari pad se ne odbacuje\n"
+        '    v = Application.Run(m & ".Scr_Rows", filter, q)\n',
+        "T_KI016_PadListeJeJavljen",
+        "pad zabelezen van citaoca ne obara sledece citanje liste",
+    ),
+    # KI-016: citalac radnje ne gleda kanal -- Scr_Event je Boolean, pa posle pada
+    # Run vraca False ("vratio") i radnja tiho ne uradi nista.
+    "ki016-radnja-pad-ignorisan": (
+        "modUiScreens.bas",
+        '    v = Application.Run(m & ".Scr_Event", tag, ev)\n    pad = ScrPadPreuzmi()\n',
+        '    v = Application.Run(m & ".Scr_Event", tag, ev)\n'
+        '    pad = "": ScrPadPreuzmi   \' SABOTAZA: pad radnje se ne cita\n',
+        "T_KI016_PadRadnjeJeJavljen",
+        "pad radnje je vidljiv operateru, sa imenom clana",
+    ),
+    # KI-016: prekidac liste i izbor reda opet zovu ScrEvent mimo ScrAct, pa im
+    # je pad nevidljiv.
+    "ki016-prekidac-liste-cuti": (
+        "modOtkupUI.bas",
+        '        If ScrAct("ls" & segK) Then\n',
+        '        If modUiScreens.ScrEvent(mScreen, "ls" & segK, "Click") Then   \' SABOTAZA: mimo ScrAct\n',
+        "T_KI016_PadRadnjeJeJavljen",
+        "pad radnje na prekidacu liste je vidljiv",
+    ),
+    "ki016-izbor-reda-cuti": (
+        "modOtkupUI.bas",
+        '        If ScrAct("row:" & mSelRow) Then\n',
+        '        If modUiScreens.ScrEvent(mScreen, "row:" & mSelRow, "Click") Then   \' SABOTAZA: mimo ScrAct\n',
+        "T_KI016_PadRadnjeJeJavljen",
+        "pad radnje na izboru reda je vidljiv",
+    ),
+    # KI-016: ScrBuild ne gleda kanal -- Sub posle uhvacenog pada daje Err = 0, pa
+    # ljuska prelazi na ekran cija zona nije izgradjena.
+    "ki016-gradnja-pad-je-uspeh": (
+        "modUiScreens.bas",
+        "    If Len(ScrPadPreuzmi()) > 0 Then\n",
+        "    If Len(ScrPadPreuzmi()) < 0 Then   ' SABOTAZA: pad gradnje je uspeh\n",
+        "T_KI016_PadGradnjeJeJavljen",
+        "pad gradnje ne prebacuje ekran nego javlja da ekran nije dostupan",
+    ),
 }
 
 

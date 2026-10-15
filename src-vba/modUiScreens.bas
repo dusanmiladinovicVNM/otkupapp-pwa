@@ -502,11 +502,14 @@ End Sub
 '--------------------------------------------------------------- POZIV
 ' Omotaci ugovora. Ishod svakog poziva tumaci ScrRunIshod (dole), ne Err.Number.
 '
-' Omotac NE HVATA pad ekrana. Izmereno sondom 14.10.2026: clan koji gresku
-' DIGNE je kroz Application.Run ne vraca pozivaocu ni pod On Error Resume Next,
-' nego otvara runtime dijalog ("Run-time error ... Continue / End / Debug"), a
-' "End" resetuje projekat -- stanje modula se brise i forma nestaje. Ekran koji
-' ne sme da obori aplikaciju mora sam da uhvati svoju gresku (KI-016).
+' Omotac NE MOZE da uhvati pad ekrana. Izmereno sondom (14. i 15.10.2026): clan
+' koji gresku DIGNE je kroz Application.Run ne vraca pozivaocu -- ni pod On Error
+' Resume Next, ni pod On Error GoTo, ni iz dogadjaja prikazane forme -- nego
+' otvara runtime dijalog ("Run-time error ...", Continue UGASEN, End, Debug). "End"
+' resetuje projekat: stanje modula se brise, forma nestaje, a Excel ostaje
+' sakriven. Zato pad hvata CLAN, u svom handleru, i javlja ga kroz kanal
+' (ScrPadZabelezi); citaoci sa porukom za pad -- ScrGridData, ScrEvent, ScrBuild
+' -- kanal citaju pre vracene vrednosti (KI-016, UI-PAD-01).
 Public Function ScrMeta(ByVal kljuc As String) As String
     Dim m As String
     On Error Resume Next
@@ -514,13 +517,21 @@ Public Function ScrMeta(ByVal kljuc As String) As String
     If Len(m) > 0 Then ScrMeta = CStr(Application.Run(m & ".Scr_Meta"))
 End Function
 
+' Gradnja zone. Scr_Build je Sub, pa Run ne vraca nista: uspeh je Err = 0. Pad
+' koji clan uhvati ostavlja Err = 0 kao i uspeh (sonda 15.10.2026), pa se kanal
+' cita PRVI -- bez njega bi ljuska presla na ekran cija zona nije izgradjena.
 Public Function ScrBuild(ByVal kljuc As String, ByVal z As Object) As Boolean
     Dim m As String
     On Error Resume Next
     If mGradnjaPadaTest And IsTestMode() Then Exit Function
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) = 0 Then Exit Function
+    ScrPadPreuzmi
     Application.Run m & ".Scr_Build", z
+    If Len(ScrPadPreuzmi()) > 0 Then
+        Err.Clear
+        Exit Function
+    End If
     ScrBuild = (Err.Number = 0)
 End Function
 
@@ -543,15 +554,25 @@ End Function
 ' nije "nema ga" (SCR_RUN_PAO). Ekran bez Scr_Event (1004) radnju nije ni
 ' imao -- to nije pad: ANALIZA ga nema, a gradnja zone sledeceg ekrana joj salje
 ' "chg:" dok je jos aktivna (izmereno 14.10.2026, test 237).
+'
+' Pad radnje koji clan uhvati (KI-016) javlja kanal, i to PRE vrednosti: Scr_Event
+' je Boolean, pa posle uhvacenog pada Run vraca False -- "vratio", ne Empty.
 Public Function ScrEvent(ByVal kljuc As String, ByVal tag As String, _
                          ByVal ev As String) As Boolean
-    Dim m As String, v As Variant, ishodRadnje As Long
+    Dim m As String, v As Variant, ishodRadnje As Long, pad As String
     ScrLastErr = ""
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) = 0 Then Exit Function
     Err.Clear
+    ScrPadPreuzmi
     v = Application.Run(m & ".Scr_Event", tag, ev)
+    pad = ScrPadPreuzmi()
+    If Len(pad) > 0 Then
+        ScrLastErr = pad
+        Err.Clear
+        Exit Function
+    End If
     ishodRadnje = ScrRunIshod(v, m & ".Scr_Event " & tag)
     If ishodRadnje = SCR_RUN_VRATIO Then ScrEvent = CBool(v)
     If ishodRadnje = SCR_RUN_PAO Then ScrLastErr = m & ".Scr_Event " & tag & " -> " & Err.Number & " " & Err.description
@@ -574,16 +595,25 @@ End Function
 '   - Empty uz gresku            -> neuspeh. Ovde se nepokrenut clan (1004) i
 '     Empty uz zaostatak NE MOGU razlikovati (sonda 14.10.2026), pa vazi
 '     strozi ishod: mreza javlja da se lista nije procitala.
-' Scr_Rows koji gresku DIGNE ovde ne stize (v. POZIV gore).
+' Cetvrti oblik je PAD koji je clan uhvatio (KI-016): Empty uz Err = 0, isto kao
+' "nema liste", a clan koji je vec dodelio listu pa pao vraca i nju. Zato kanal
+' ide pre svih: pad je neuspeh liste, sa imenom clana i korakom u ScrLastErr.
 Public Function ScrGridData(ByVal kljuc As String, ByVal filter As String, _
                             ByVal q As String) As Variant
-    Dim m As String, v As Variant
+    Dim m As String, v As Variant, pad As String
     ScrLastErr = ""
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) = 0 Then Exit Function
     Err.Clear
+    ScrPadPreuzmi
     v = Application.Run(m & ".Scr_Rows", filter, q)
+    pad = ScrPadPreuzmi()
+    If Len(pad) > 0 Then
+        ScrLastErr = pad
+        Err.Clear
+        Exit Function
+    End If
     Select Case ScrRunIshod(v, m & ".Scr_Rows")
         Case SCR_RUN_VRATIO: ScrGridData = v
         Case SCR_RUN_PRAZNO
@@ -737,6 +767,21 @@ Public Function ScrPadPreuzmi() As String
     mPadClana = ""
 End Function
 
+' Zove ga CLAN UGOVORA iz svog handlera (UI-PAD-01): upisuje pad u kanal i ERROR
+' u log. Jedna implementacija za sve clanove -- clan nosi samo branu i ime.
+' Err se cita PRVI, pre bilo kog poziva. Izvor greske ide u zapis kad nosi ime
+' (funkcija liste ga dize sa korakom, npr. "modScrFakture.RedoviFakture[fakture]"),
+' jer je to ono sto ReloadGrid prikazuje posle "na koraku:". Err se ovde ne brise:
+' izlaz iz handlera clana ga brise sam (sonda 15.10.2026).
+Public Sub ScrPadZabelezi(ByVal clan As String)
+    Dim errNum As Long, errSrc As String, errDesc As String
+    errNum = Err.Number: errSrc = Err.Source: errDesc = Err.description
+    mPadClana = clan & " -> " & errNum & " " & errDesc
+    If InStr(1, errSrc, ".", vbBinaryCompare) > 0 Then _
+        mPadClana = mPadClana & " [" & errSrc & "]"
+    LogError clan, "pad clana ugovora (KI-016): " & errDesc, errNum, LOG_ERROR, errSrc
+End Sub
+
 ' ISHOD Application.Run NAD CLANOM UGOVORA -- UI-ISHOD-01 za ceo ugovor ekrana
 ' (KI-011 za Scr_Save, KI-014 za ostale). Jedno pravilo za sve citaoce: do
 ' KI-014 je svaki citao Err.Number po svom, i svaki ga je tumacio drugacije.
@@ -752,7 +797,8 @@ End Function
 '   - Empty uz Err = 0 je clan koji je vratio Empty -> SCR_RUN_PRAZNO.
 ' Variant clan koji vrati Empty UZ zaostatak, i Sub uz zaostatak, nerazlucivi su
 ' od nepokrenutog clana (isti oblik). Zato ScrBuild (Sub) i dalje cita Err.
-' Clan koji gresku DIGNE ovde ne stize (v. POZIV gore).
+' Clan koji gresku DIGNE ovde ne stize (v. POZIV gore); pad koji clan uhvati
+' nosi kanal (ScrPadPreuzmi), a citalac ga gleda PRE ovog pomocnika.
 '
 ' Bez On Error naredbe -- ona bi obrisala Err koji pozivalac jos treba da
 ' procita. v je ByRef: Scr_Rows vraca celu mrezu, ByVal bi je kopirao.

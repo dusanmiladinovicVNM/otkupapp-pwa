@@ -1100,6 +1100,8 @@ End Function
 ' REDOVI MREZE
 '=====================================================================
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
     modUiScreens.ScrPadAkoTest "modScrFakture.Scr_Rows"
     ' Zona se puni odavde, kao i na ekranima Palete i Agrohemija: gradi se
     ' jednom, a podaci za nju postoje tek kad se lista cita.
@@ -1112,6 +1114,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Case FK_UTOVARI: Scr_Rows = RedoviUtovara(filter, q): Exit Function
     End Select
     Scr_Rows = RedoviPrijemnice(filter, q)
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrFakture.Scr_Rows"
 End Function
 
 ' Opis kolona PO KLJUCU LISTE. Postoji da bi se pravilo "identitet je u redu
@@ -1751,6 +1756,8 @@ End Function
 '=====================================================================
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
     modUiScreens.ScrPadAkoTest "modScrFakture.Scr_Build"
 
     ' Bela podloga ispod reda polja. Zona je krem, a polja su bela -- bez
@@ -1851,6 +1858,9 @@ Public Sub Scr_Build(ByVal z As Object)
                   148, FK_BTN_H, "soft"
 
     modUiKit.NewLbl z, "fkLnB", "", 0, FK_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
+    Exit Sub
+EH:
+    modUiScreens.ScrPadZabelezi "modScrFakture.Scr_Build"
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single

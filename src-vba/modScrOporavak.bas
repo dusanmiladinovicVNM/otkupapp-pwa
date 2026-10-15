@@ -170,6 +170,8 @@ End Function
 ' aktivne palete na ekranu Palete.
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
     modUiScreens.ScrPadAkoTest "modScrOporavak.Scr_Build"
     modUiKit.NewLbl z, "opoCap", UCase$(Poruka("OTKUI_OPO_CILJEVI")), PAD, 6, 200, 11, _
                     TS_MICRO, True, C_MUTED, -1
@@ -182,6 +184,9 @@ Public Sub Scr_Build(ByVal z As Object)
                         C_FOREST, -1, fmTextAlignLeft, F_NUM
     Next i
     modUiKit.NewLbl z, "opoLnB", "", 0, OPO_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
+    Exit Sub
+EH:
+    modUiScreens.ScrPadZabelezi "modScrOporavak.Scr_Build"
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
@@ -441,6 +446,8 @@ End Sub
 
 '-------------------------------------------------------------- REDOVI
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
     modUiScreens.ScrPadAkoTest "modScrOporavak.Scr_Rows"
     Select Case Scr_Lista()
         Case "PRIJEMNICE": Scr_Rows = RowsOsiroceninPrijemnica(q): Exit Function
@@ -451,6 +458,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Case "INTEGRITET": Scr_Rows = RowsIntegritet(q): Exit Function
     End Select
     Scr_Rows = RowsNedovrseno(q)
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrOporavak.Scr_Rows"
 End Function
 
 '--- NEDOVRSENO: jedan pregled svega sto ceka -------------------------

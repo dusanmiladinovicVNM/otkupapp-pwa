@@ -2862,6 +2862,8 @@ End Function
 ' (mView, mViewN, mSumKg, mCnt*), pa je mreza mogla da sluzi samo njega.
 ' Sada vraca - i mreza je time postala neutralna. Sortiranje radi ljuska.
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
     modUiScreens.ScrPadAkoTest "modScrDokumenti.Scr_Rows"
     ' F1: rang kooperanata je svoja lista; ostalo je lista dokumenata rezima.
     Select Case Scr_Lista()
@@ -2883,6 +2885,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     Dim mk As String: mk = modeKey(ActiveMode)
     Scr_Rows = RedoviZaTip(mk, filter, q, _
                            (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "ZBIRNA"))
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrDokumenti.Scr_Rows"
 End Function
 
 ' Lista dokumenata JEDNOG TIPA. Javna i parametrizovana tipom, jer je ista

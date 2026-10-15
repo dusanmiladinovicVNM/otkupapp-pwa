@@ -634,6 +634,8 @@ End Function
 '=====================================================================
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     Dim rez As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
     modUiScreens.ScrPadAkoTest "modScrIzvestaji.Scr_Rows"
     ' Combo mora biti napunjen PRE citanja konteksta (entitet se cita iz
     ' njega); ostatak zone (hint, brojke, dugmad) se osvezava POSLE citanja,
@@ -649,6 +651,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     mDiagQ = q
     mDiagN = CLng(rez(2))
     Err.Clear
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrIzvestaji.Scr_Rows"
 End Function
 
 ' Opis kolona PO KLJUCU LISTE I TIPU -- oblik kolona prati stvarni oblik
@@ -1724,6 +1729,8 @@ End Function
 '=====================================================================
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
     modUiScreens.ScrPadAkoTest "modScrIzvestaji.Scr_Build"
 
     ' Bela podloga ispod reda polja -- LABELA, ne Frame (Frame je prozorska
@@ -1782,7 +1789,7 @@ Public Sub Scr_Build(ByVal z As Object)
     On Error Resume Next
     z.Controls("scrIzOd").Controls("scrIzOdT").text = "1.1." & Year(Date)
     z.Controls("scrIzDo").Controls("scrIzDoT").text = Format$(Date, "d.m.yyyy")
-    On Error GoTo 0
+    On Error GoTo EH                 ' nazad na branu clana (KI-016), ne GoTo 0
 
     modUiKit.NewLbl z, "izHint", "", PAD, IZ_Y_HINT, 420, 12, TS_META, False, C_MUTED, -1
 
@@ -1794,6 +1801,9 @@ Public Sub Scr_Build(ByVal z As Object)
                   170, IZ_BTN_H, "soft"
 
     modUiKit.NewLbl z, "izLnB", "", 0, IZ_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
+    Exit Sub
+EH:
+    modUiScreens.ScrPadZabelezi "modScrIzvestaji.Scr_Build"
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
