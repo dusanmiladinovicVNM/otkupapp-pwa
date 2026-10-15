@@ -4337,6 +4337,103 @@
      - Seam-ovi `ScrCuriTestSet` / `ScrCuriAkoTest` treba da uđu u `.claude/rules/testovi.md` §4 — **zasebnim
        process PR-om**.
 
+140. **Review `#422` (`d3c57cd7`): `CODE GO` za izvršne kapije, `P0 0`, `P1 0`, `P2 0`, `P3 2`, 9,2/10**
+     (15.10.2026). Static CI #969 `SUCCESS`. Merge je `NO-GO` dok se ne završe suite, sabotaže, compile i ručna
+     provera. Reviewer ne traži izmenu produkcionog koda. Oba `P3` su prihvaćena bez izmene koda, uz zapis:
+     - **`P3 #1` — `SCR_RUN_NEMA` u `ScrEvent` ćuti i za korisnikov klik**, ne samo za sporedni `chg:`. Ekran čiji
+       bi `Scr_Event` bio obrisan ili pogrešno registrovan tiho ne bi radio ništa. Danas `Scr_Event` imaju svi
+       ekrani osim ANALIZE (13 od 14, popis u stavci 139), pa regresija nije izmerena. Razlikovanje opcione
+       sistemske promene od obaveznog korisničkog događaja ide uz sledeću doradu ugovora (zapisano u `KI-014`).
+     - **`P3 #2` — „jedan pomoćnik za ceo ugovor" je šire od stvarnog obima.** Pomoćnik pokriva sve **čitaoce
+       `Err`-a** u ugovoru (devet u `modUiScreens` i `PanelImaNesacuvano`). `ScrMeta`, `ScrLayout`, `ScrGrid`,
+       `ScrListe`, `ScrLista`, `ScrRadnje`, `ScrCipovi`, `ScrAktiviraj` i `ScrDeaktiviraj` i dalje zovu `Run`
+       direktno, jer `Err` ne čitaju. Prvih šest ga i ne brišu, pa zaostatak ide pozivaocu. Statički merač nije
+       našao nijednog pozivaoca koji ga posle toga čita. Formulacija u `KI-014` i u opisu PR-a je ispravljena.
+     - Reviewer posebno traži da se nove `ki014-*` i presidrene `ki011-scrsave-*` sabotaže puste **zajedno**:
+       pomoćnik je zajednički, pa ne sme da vrati lažan neuspeh upisa reversa. Filter dokaza iz stavke 139 ih
+       već obuhvata.
+     - `KI-016` je po reviewer-u visok prioritet: zaseban zadatak, pre produkcione stabilizacije. Predloženi
+       redosled posle `#422` je `KI-016`, `KI-015`, `ODL-24`, pa S6.
+
+     **Prvi izvršni prolaz** (head `d3c57cd7`): **11/12**. `RunAllTests` 238 / **1 palo**; BFP 2427/0, Banka 241/0,
+     Storno 111/0. 236–238 su zeleni.
+
+     ```
+     FAIL T_Izv_MatricaVodiListe -- bez entiteta nema redova -- ocekivano [0], dobijeno [4]
+     ```
+
+     Tvrdnja zove `modScrIzvestaji.Scr_Rows` direktno, a taj modul rez nije dirao. Mereno kroz `modTest.RunOne`
+     nad istim izvorom:
+
+     ```
+     123            OK
+     237, 123       FAIL  (bez entiteta nema redova -- dobijeno [4])
+     236, 123       OK
+     238, 123       OK
+     ```
+
+     **Uzrok: izolacija testa, ne produkcioni kod.** Test 237 kroz pravu ljusku gradi zonu IZVEŠTAJA (ANALIZA →
+     IZVEŠTAJI). Punjenje combo-a entiteta postavlja `mDefaultId` (prvi OM). `Scr_IzTestReset` je brisao
+     `mComboTip`, ali ne i `mDefaultId`, pa je test 123 „bez entiteta" čitao podrazumevani entitet. Rupa je stara
+     koliko i `mDefaultId`; dok nijedan test nije gradio tu zonu kroz ljusku, nije se videla.
+
+     **Ispravka (`1d18023f`, samo test seam, gejtovan test režimom):** `Scr_IzTestReset` briše i `mDefaultId`,
+     zajedno sa `mComboTip`, od koga zavisi. Posle nje `237, 123` daje OK, a `123` sam i dalje OK. Prvi prolaz
+     zato ne važi za marker; pun prolaz se ponavlja nad novim izvorom.
+
+     **Drugi izvršni prolaz** (head `1d18023f`, izvor `d10578d70bb0`): **12/12 ZELENO**, marker upisan.
+     `RunAllTests` 238/0, BFP 2427/0, Banka 241/0, Storno 111/0, tačno očekivani brojevi.
+
+     **Prvi dokaz** (`ki014- ki011-scrsave brojac- mreza-podnozje- --grupe`, potpis `45664203`): **27/28**, izvor
+     pre i posle identičan.
+     - `ki011-scrsave-nepoznat-ekran-je-uspeh` je u grupi 3 bio zaklonjen, kako je stavka 139 predvidela
+       (`ki014-pomocnik-guta-zaostatak` obara ranije tvrdnju 227); ponovljen sam: OK.
+     - **`ki014-lista-bez-liste-je-pad` → NE OBARA NIŠTA.** Poslednja tvrdnja 236 je merila ANALIZU kao
+       `Empty` uz `Err = 0`, a ANALIZA vraća **niz**. To je dinamička sonda već bila izmerila
+       (`rows{E=False niz=True}`, i to za svih 14 ekrana), a ja to nisam pročitao pre pisanja tvrdnje. Grana
+       `SCR_RUN_PRAZNO` u `ScrGridData` nije imala slučaj, pa je tvrdnja bila placebo.
+
+     **Ispravka (`0b1c5954`, test i seam):**
+     - `ScrPraznoAkoTest` je kuka bez curenja;
+     - `modMaticniEkran.Redovi` u obliku „REDOVI_BEZ_LISTE" vraća `Empty` uz `Err = 0`, kroz pravi `Run`;
+     - 236 meri „bez liste" nad tim oblikom, ne nad ANALIZOM.
+
+     Edge iz stavke 139 („ANALIZA") je time ispravljen: danas **nijedan ekran** ne vraća `Empty` u normalnom toku.
+     Oblik ostaje u ugovoru jer ga zaglavlje modula zove „ekran nema listu".
+
+     **Ispravka moje tvrdnje iz `KI-016` (prvo izdanje).** Tamo piše da `Err.Raise` sa korakom u izvoru, koji
+     opisuje komentar u `ReloadGrid`, „ne postoji u kodu". To je pogrešno. Tražio sam doslovno `Scr_Rows[`, a
+     izvor nosi ime funkcije liste (`"modScrFakture.RedoviSEF[" & mStep & "]"`). **30 funkcija lista**
+     (`Rows*`/`Redovi*` u `modScr*`, sa `On Error GoTo EH`) grešku hvata i **ponovo diže** sa korakom, a
+     `Scr_Rows` iznad njih handler nema (osim BankaNalozi i Izveštaja, koji imaju `On Error Resume Next`). Kroz
+     `Application.Run` je to baš put do dijaloga iz sonde: toast sa korakom, koji je `ReloadGrid` obećavao, kroz
+     ugovor ne stiže. `KI-016` je ispravljen i time pojačan; dinamički nije izmereno.
+
+     **Izvršne kapije** (head `0b1c5954`, izvor `08757628f52a`, ugovor `9242b5a2e03f`, fixture `d3d3ff6d`):
+
+     ```
+     RunAllTests              238 / 0      (235 + 236..238)
+     RunBusinessFlowProSuite 2427 / 0      RunStornoTestSuite 111 / 0
+     RunBankaImportTestSuite  241 / 0      12 / 12 ZELENO, marker upisan
+     dokaz.py ki014- ki011-scrsave brojac- mreza-podnozje- --grupe: crvenih 28 / 28,
+       izvor pre/posle f13e981b010da820 IDENTICAN -> DOKAZANO (grupno);
+       ki011-scrsave-nepoznat-ekran-je-uspeh zaklonjen u grupi 3 (predvidjeno), sam OK
+     compile: NEJASNO (automatski) -- rucna kapija operatera
+     ```
+
+     Sveska za ručnu proveru je `tests/fixtures/rucna_provera_ki014_kod.xlsm`
+     (`run_vba --compile-only --keep` nad `0b1c5954`).
+
+     **Otvoreno.**
+     - Compile operatera (`vba_gate --mark-compile`).
+     - Ručna provera:
+       - ANALIZA → IZVEŠTAJI bez toasta;
+       - matični ekran sa otvorenim editorom → drugi ekran: pitanje se pojavljuje;
+       - Podešavanja sa izmenom → drugi ekran: pitanje se pojavljuje;
+       - lista PREGLED i start bez lažnog `ERROR`;
+       - F7 upis kao kontrola `ScrSave`.
+     - Finalni exact-head review.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
