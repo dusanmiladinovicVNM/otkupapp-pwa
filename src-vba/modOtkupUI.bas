@@ -3145,7 +3145,9 @@ End Sub
 ' Radnja se salje ekranu, a radnja koja se NIJE izvrsila se PRIKAZUJE --
 ' gusenje bez traga znaci dugme koje "ne radi" i niko ne zna zasto. Sta je
 ' neuspeh odlucuje modUiScreens.ScrRunIshod: greska koja ostane u Err uz
-' obradjenu radnju je zaostatak (log), ne pad (KI-014, test 237).
+' obradjenu radnju je zaostatak (log), ne pad (KI-014, test 237). Pad koji clan
+' uhvati stize kroz kanal (KI-016, test 241). Svaki ulaz do Scr_Event ide ovuda --
+' i prekidac liste i izbor reda -- da pad nijednog ne ostane nevidljiv.
 Private Function ScrAct(ByVal tag As String) As Boolean
     ScrAct = modUiScreens.ScrEvent(mScreen, tag, "Click")
     If Len(modUiScreens.ScrLastErr) > 0 Then
@@ -4362,7 +4364,8 @@ Private Sub UiClickCore(ByVal tag As String)
         Dim segK As String
         segK = SegKey(segI)
         If Len(segK) = 0 Then Exit Sub
-        If modUiScreens.ScrEvent(mScreen, "ls" & segK, "Click") Then
+        ' Kroz ScrAct, kao svaka radnja: pad clana se vidi (KI-016).
+        If ScrAct("ls" & segK) Then
             mSelRow = 0
             mSearch = ""
             mFrm.Controls("zGrid").Controls("txtSearch").text = ""
@@ -5147,9 +5150,9 @@ Private Sub RowFromTag(ByVal tag As String)
     If mSelRow > mViewN Then mSelRow = 0
     ' Izbor reda se javlja ekranu: u listi otpremnica klik BIRA otpremnicu, a
     ' ljuska ne zna sta je otpremnica. Ako je ekran nesto uradio, mreza se
-    ' puni ponovo.
+    ' puni ponovo. Ide kroz ScrAct, pa se pad clana vidi (KI-016).
     If mSelRow > 0 Then
-        If modUiScreens.ScrEvent(mScreen, "row:" & mSelRow, "Click") Then
+        If ScrAct("row:" & mSelRow) Then
             mSelRow = 0
             RefreshListSeg mFrm
             RefreshGridTitle mFrm
@@ -6656,8 +6659,9 @@ EH:
     ' Korak vise ne dolazi iz stanja ljuske nego iz IZVORA greske. Za listu koja
     ' se nije procitala izvor je ScrLastErr ("modScrX.Scr_Rows -> broj opis",
     ' v. LoadGridFromScreen), pa ljuska ne mora da zna nijedan ekran. Greska koju
-    ' Scr_Rows DIGNE ovde ne stize: kroz Application.Run otvara runtime dijalog
-    ' (sonda 14.10.2026, KI-016).
+    ' Scr_Rows DIGNE kroz Application.Run ovde ne bi stigla (runtime dijalog i
+    ' reset, sonda 14. i 15.10.2026), pa je clan hvata sam i javlja kroz kanal:
+    ' ScrLastErr tada nosi ime clana i korak funkcije liste (KI-016, UI-PAD-01).
     ' Err se cita PRVI, pre bilo kog drugog poziva: Poruka() usput obrise
     ' stanje greske (ima svoj On Error Resume Next), pa je toast prijavljivao
     ' prazan izvor i sifru 0 - poruku od koje se nije imalo sta zakljuciti.

@@ -276,6 +276,9 @@ End Function
 ' Redovi za deljenu mrezu. Tipizirane liste dolaze iz istog citaca koji puni i
 ' unosni ekran -- odatle i nevidljiva kolona identiteta (True na kraju).
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrStorno.Scr_Rows"
     If Scr_Lista() = ST_LANAC Then
         Scr_Rows = RowsLanac(q)
         Exit Function
@@ -285,6 +288,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Exit Function
     End If
     Scr_Rows = modScrDokumenti.RedoviZaTip(Scr_Lista(), filter, q, True)
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrStorno.Scr_Rows"
 End Function
 
 ' OTKUPNI BLOKOVI IZABRANOG DOKUMENTA -- sa kolonom izbora.
@@ -440,6 +446,9 @@ End Function
 ' ISPOD sebe -- objasnjenje je ono sto je do sada zivelo u MsgBox tekstu.
 Public Sub Scr_Build(ByVal z As Object)
     Dim r As Long, c As Long, i As Long
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrStorno.Scr_Build"
 
     modUiKit.NewLbl z, "stCap", UCase$(Poruka("OTKUI_SCRST_IZBOR")), PAD, 6, 220, 11, _
                     TS_MICRO, True, C_MUTED, -1
@@ -475,6 +484,9 @@ Public Sub Scr_Build(ByVal z As Object)
     Next i
 
     modUiKit.NewLbl z, "stLnB", "", 0, ST_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
+    Exit Sub
+EH:
+    modUiScreens.ScrPadZabelezi "modScrStorno.Scr_Build"
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single

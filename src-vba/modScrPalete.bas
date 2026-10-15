@@ -160,6 +160,9 @@ End Function
 '--------------------------------------------------------------- ZONA
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrPalete.Scr_Build"
     ' levo: aktivna paleta - isti raspored kao traka otpremnice u F1
     modUiKit.NewLbl z, "palCap", UCase$(Poruka("OTKUI_PAL_AKTIVNA")), PAD, 6, 140, 11, _
                     TS_MICRO, True, C_MUTED, -1
@@ -215,6 +218,9 @@ Public Sub Scr_Build(ByVal z As Object)
     modUiKit.BtnV z, "scrPreradi", Poruka("OTKUI_BTN_PRE_URADI"), 0, 0, 168, 26, "primary"
 
     modUiKit.NewLbl z, "palLnB", "", 0, PAL_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
+    Exit Sub
+EH:
+    modUiScreens.ScrPadZabelezi "modScrPalete.Scr_Build"
 End Sub
 
 ' Ponude kombo polja. Isti izvori koje legacy panel koristi (GetKutijeOptions,
@@ -513,6 +519,9 @@ End Function
 
 '--------------------------------------------------------------- REDOVI
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrPalete.Scr_Rows"
     Select Case Scr_Lista()
         Case "STAVKE":  Scr_Rows = RowsStavke(q): Exit Function
         Case "PRERADE": Scr_Rows = RowsPrerade(q): Exit Function
@@ -522,6 +531,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Exit Function
     End If
     Scr_Rows = RowsPalete(filter, q)
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrPalete.Scr_Rows"
 End Function
 
 ' Postavi AKTIVNU paletu iz reda mreze. Vraca False ako red ne nosi paletu

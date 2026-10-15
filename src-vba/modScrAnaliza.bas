@@ -38,6 +38,9 @@ End Function
 
 '--------------------------------------------------------------- ZONA
 Public Sub Scr_Build(ByVal z As Object)
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrAnaliza.Scr_Build"
     modUiKit.NewLbl z, "anaCap", UCase$(Poruka("OTKUI_SCRAN_CAP")), PAD, 6, 200, 11, _
                     TS_MICRO, True, C_GOLD, -1
     modUiKit.NewLbl z, "anaNaslov", Poruka("OTKUI_SCRAN_IZRADA"), PAD, 18, 460, 20, _
@@ -45,6 +48,9 @@ Public Sub Scr_Build(ByVal z As Object)
     modUiKit.NewLbl z, "anaOpis", Poruka("OTKUI_SCRAN_OPIS"), PAD, 40, 620, 13, _
                     TS_META, False, C_MUTED, -1
     modUiKit.NewLbl z, "anaLn", "", 0, ANA_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
+    Exit Sub
+EH:
+    modUiScreens.ScrPadZabelezi "modScrAnaliza.Scr_Build"
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
