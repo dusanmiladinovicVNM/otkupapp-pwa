@@ -4620,7 +4620,7 @@
      239–242 posle ispravke je zato neverifikovano.
 
      **Otvoreno.**
-     - Review.
+     - Review (`#423`).
      - Posle GO:
        - pun prolaz;
        - `dokaz.py ki016- ki014- ki011-scrsave --grupe`;
