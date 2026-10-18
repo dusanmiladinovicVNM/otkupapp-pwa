@@ -4959,6 +4959,62 @@
      - `KI-016` ostaje `OPEN`: (a) `P3 #1` (`SCR_RUN_NEMA` ćuti za korisnikov klik), (b) mrtav EH u
        `PanelOtvori`, (c) ostali ciljevi `Run`-a bez brane, (f) životni vek poruke mreže (stavka 148).
 
+148. **`KI-016` (f) — život poruke mreže i primer uz `mScrToast`** (18.10.2026). Grana
+     `claude/ki016-toast-zivotni-vek`. Rađena je nad granom `#425` (`2ea80dd1`) dok `#425` nije bio merge-ovan
+     (odluka korisnika 18.10.2026: lokalno odmah, PR tek posle merge-a). Posle merge-a je grana napravljena
+     iznova sa `main`-a `06d4a09f`: prvo zapis merge-a (stavka 147), pa cherry-pick oba commit-a. `src-vba` i
+     `tools` su identični vrhu pre rebase-a (`38e8ff30`).
+
+     **Popis pre koda.**
+     - Direktni pozivaoci `HideToast` su samo dva: omotač `ActivateScreen` (`mScrToast`) i `ReloadGrid`
+       (`mGridToast`). Treći je `Application.OnTime`, tajmer zelene poruke.
+     - `mGridToast` se podizao **pre** `ShowToast`-a i ništa ga nije spuštalo kad druga poruka zameni poruku
+       mreže.
+     - Za gašenje poruke mreže nije postojao **nijedan** test.
+     - Stvaran put je `DoSync`: `ShowToast "sync počinje"` (zelena, tajmer 4 s), pa `RefreshFromData` →
+       `ReloadGrid`. Uz zastavicu zaostalu od ranijeg pada liste, direktan `HideToast` gasi „sync počinje"
+       i briše `mToastPending` bez otkazivanja tajmera. Tajmer bez vlasnika zatim može da sakrije i crveni
+       ishod sync-a: `CancelToastTimer` ga više ne vidi.
+
+     **Reprodukcija pre ispravke** (`fa080084`, nov test 244 uz staru produkciju, `RunOne`, bez dijaloga):
+
+     ```
+     TESTS=1 FAIL=1
+     FAIL T_KI016_PorukaMrezeNeGasiTudju -- uspelo citanje ne gasi poruku koja je zamenila poruku mreze
+          -- ocekivano [ANALIZA|KI016 tudja poruka], dobijeno [ANALIZA|]
+     ```
+     Tri tvrdnje pre nje su zelene: oba preduslova i kontra-tvrdnja da uspelo čitanje i dalje gasi poruku
+     mreže.
+
+     **Ispravka (`787fa46b`).** `mGridToast` po obrascu `mScrToast`: `ShowToast` ga spušta, a `ReloadGrid` ga
+     podiže tek **posle** svog `ShowToast`-a.
+
+     Tajmer bez vlasnika posle toga nema puta. Direktan `HideToast` ide samo kad je poslednja poruka crvena
+     poruka vlasnika zastavice, a ona je u `ShowToast`-u otkazala svaki tajmer na čekanju.
+     - To je **pročitano, ne izmereno**: `Application.OnTime` ne okida dok test radi, pa se tajmer u harness-u
+       ne može posmatrati.
+     - `HideToast` zato nije menjan.
+
+     **Komentar uz `mScrToast`** (nalaz iz stavke 146): primer „objašnjenje zabrane posle zamene operatera"
+     zamenjen je pravim slučajem, porukom koju podigne sam prelazak (pad mreže novog ekrana, kuka ulaska).
+
+     **Test i sabotaže:** nov test 244 `T_KI016_PorukaMrezeNeGasiTudju` (`RunAllTests` 243 → 244):
+     - „uspelo citanje ne gasi poruku koja je zamenila poruku mreze" ← `ki016-mreza-gasi-tudju`;
+     - „uspelo citanje posle pada liste gasi poruku mreze" ← `ki016-mreza-bez-zastavice`.
+
+     Katalog 794 → 796.
+
+     **Provera pre review-a.**
+     - Jeftine kapije 20/20 (796 sabotaža, 0 nalaza).
+     - Brza provera, **nije izvršna kapija** (`RunOne` nad `38e8ff30`, isti izvor kao `787fa46b`): 1, 84, 103, 109, 153, 159, 162, 236,
+       237 i 239–244, `TESTS=15 FAIL=0`, bez dijaloga.
+     - `run_vba` i `dokaz` čekaju reviewer GO. Predlog dokaza: `dokaz.py ki016-mreza- ki016-tudja-poruka-nestaje
+       ki016-poruka-pada-ostaje ki016-poruka-zabrane-ostaje --grupe`.
+
+     **Očekivani brojevi:** `RunAllTests` **244** / 0; BFP 2427, Banka 241, Storno 111 bez promene.
+
+     **Otvoreno.** Review, pa izvršne kapije, compile i ručna provera.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
