@@ -5015,6 +5015,60 @@
 
      **Otvoreno.** Review, pa izvršne kapije, compile i ručna provera.
 
+149. **Review `#427` (`360f8b6b`): `CODE GO`, `P0 0`, `P1 0`, `P2 0`, `P3 1`, 9,3/10** (19.10.2026). Static CI
+     #991 `SUCCESS` na tačnom head-u. `MERGE HOLD` dok se ne izvrše kapije. Produkcioni kod posle GO nije menjan.
+     - **`P3-1`:** stvarno ponašanje `Application.OnTime` nije dokazano. Test 244 koristi drugu **crvenu** poruku,
+       a `DoSync` zelenu sa tajmerom od 4 s, koji u automatskom testu ne okida. `CancelToastTimer` ima `On
+       Error Resume Next`, pa neuspešno otkazivanje ne bi bilo prijavljeno. Reviewer traži ručni acceptance.
+
+     **Izvršni prolaz** (head `360f8b6b`, izvor `c259577ff714`, ugovor `8e1d808997fe`, sveska `0bafa704`,
+     fixture `d3d3ff6d`): **12/12 ZELENO**, marker upisan.
+
+     ```
+     RunAllTests              244 / 0      (243 + 244)
+     RunBusinessFlowProSuite 2427 / 0      RunStornoTestSuite 111 / 0
+     RunBankaImportTestSuite  241 / 0      ostalih 8 suita OK
+     ```
+
+     **Dokaz** (5 sabotaža u 3 prolaza). Filter ne hvata nijedan od 9 `POZNATI_NALAZI` ni od 2
+     `POZNATI_NALAZI_DOKAZ`.
+
+     ```
+     dokaz.py ki016-mreza- ki016-tudja-poruka-nestaje ki016-poruka-pada-ostaje ki016-poruka-zabrane-ostaje --grupe
+
+     crvenih: 5 / 5    izvor pre/posle 6e8779c278b21e8c IDENTICAN    bez ijednog TIMEOUT-a
+     === DOKAZANO (grupno) ===   (grupno izmereno 4 / 5, peta je po planu sama u grupi; bez zaklanjanja)
+     ```
+
+     **Sonda tajmera za `P3-1`** (`sonda_ontime.py`, scratchpad `23d2fe62`).
+     - Sopstvena instanca, kept sveska, prava ljuska, put `DoSync` u jednom makrou: pad liste, zelena poruka
+       sa tajmerom, uspelo čitanje, crvena poruka.
+     - Makro se zatim vrati, a Excel miruje 8 s; `OnTime` okida tek tada.
+     - Kontrola je ista sonda nad `main`-om `06d4a09f` (stari kod, privremeni worktree, ista fixture sveska).
+
+     ```
+     korak                         STARI 06d4a09f                 NOVI 360f8b6b
+     1 posle pada liste            vidljiva, poruka mreze         vidljiva, poruka mreze
+     2 posle zelene (tajmer 4 s)   vidljiva, zelena               vidljiva, zelena
+     3 posle uspelog citanja       SAKRIVENA (zelena)             vidljiva, zelena
+     4 posle crvene                vidljiva, crvena               vidljiva, crvena
+     5 posle 8 s mirovanja         SAKRIVENA (crvena)             vidljiva, crvena          bez dijaloga
+     ```
+     Na starom kodu je tajmer bez vlasnika **stvarno okinuo** i sakrio crvenu poruku. Na novom je crvena
+     ostala, jer je njen `ShowToast` otkazao tajmer zelene. Kvar iz `KI-016` (f) je time izmeren u oba smera,
+     stvarnim `OnTime`-om, a ne samo pročitan (stavka 148).
+
+     Granica: sonda ide kroz `ShowToast` i `IdiNaEkran`, ne kroz sam `DoSync` (Sync zahteva Google vezu).
+     Pravi `DoSync` ostaje ručnoj proveri, tačka 1.
+
+     **Sveska za compile i ručnu proveru:** `tests/fixtures/rucna_provera_ki016f_kod.xlsm`
+     (`run_vba --compile-only --keep` nad `360f8b6b`, izvor `c259577ff714`). Operater uvozi
+     `src-vba/modVbaTools.bas`, kompajlira, zatvara i otvara svesku. Checklista je u opisu `#427`:
+     1. `DoSync` posle pada liste: crvena poruka o neuspelom sync-u ostaje i posle 10 s;
+     2. pad liste, pa uspelo čitanje bez druge poruke: crvena poruka mreže nestaje.
+
+     **Otvoreno.** Compile i ručna provera (operater), pa merge na izričit zahtev.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
