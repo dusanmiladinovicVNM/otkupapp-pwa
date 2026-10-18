@@ -361,6 +361,11 @@ Private mCntNefakt As Long
 Private mCntOtvor As Long
 ' Stoji li na ekranu crveni toast koji je podigla mreza. Sledece uspelo
 ' citanje ga gasi; toast greske nema tajmer, pa bi inace ostao zauvek.
+' ShowToast je spusta, kao mScrToast: poruka koja je zamenila poruku mreze nije
+' njena, pa je uspelo citanje ne gasi (KI-016 (f), test 244). Do tada je prvo
+' uspelo citanje posle pada gasilo tudju poruku -- npr. DoSync: "sync pocinje",
+' pa RefreshFromData -- a direktan HideToast je tajmer te zelene poruke
+' ostavljao bez vlasnika, pa je on posle mogao da sakrije i crveni ishod.
 Private mGridToast As Boolean
 ' Stoji li na ekranu crveni toast ODBIJENOG PRELASKA (ActivateScreen: zabranjen
 ' ekran ili pad gradnje zone). Sledeci uspesan prelazak ga gasi, kao sto uspelo
@@ -369,8 +374,9 @@ Private mGridToast As Boolean
 ' dostizniji: prigusena stavka sidebara je klikabilna. Greska panela je van
 ' (prakticno nedostizna, KI-016). ShowToast je spusta: nova poruka je
 ' zamenila staru, pa prelazak vise nema svoju poruku da gasi. Bez toga bi stara
-' zastavica sakrila i poruku koju je neko drugi ostavio namerno (zabranjen
-' ekran posle zamene operatera, PrimeniNovaPrava -> NaPrviDozvoljenEkran).
+' zastavica sakrila poruku koju podigne SAM sledeci prelazak -- pad mreze ekrana
+' u koji se upravo uslo (ReloadGrid) ili poruku kuke ulaska (ScrAktiviraj) --
+' jer ActivateScreen gasi tek posle jezgra (stavka 146).
 Private mScrToast As Boolean
 ' Polje na koje ide kursor pri novom dokumentu, i polje koje TRENUTNO ima
 ' zeleni okvir. Drugo se pamti da bi se okvir skinuo i kad MSForms preskoci
@@ -6692,11 +6698,12 @@ EH:
     ' prazan izvor i sifru 0 - poruku od koje se nije imalo sta zakljuciti.
     errNum = Err.Number: errSrc = Err.Source: errDesc = Err.description
     mBusyGrid = False
-    mGridToast = True
     Debug.Print "modOtkupUI.ReloadGrid PAO [" & mScreen & " / " & ActiveMode & _
                 " / " & errSrc & "]: " & errNum & " " & errDesc
     ShowToast Poruka("OTKUI_MSG_MREZA_PALA") & " " & errSrc & _
               " (" & errNum & ")", True
+    ' Zastavica tek POSLE ShowToast-a, koji je spusta (v. mGridToast).
+    mGridToast = True
 End Sub
 
 ' Rezimi kojima je 4. kolona TEKST, a ne broj: gotovinski promet nosi kanal,
@@ -8104,6 +8111,7 @@ Public Sub ShowToast(ByVal msg As String, ByVal isErr As Boolean)
     Dim fr As Object
     On Error Resume Next
     mScrToast = False                   ' nova poruka je zamenila poruku prelaska
+    mGridToast = False                  ' ... i poruku mreze
     If mFrm Is Nothing Then Exit Sub
     Set fr = mFrm.Controls("zGrid").Controls("tstScr")
     If fr Is Nothing Then Exit Sub
