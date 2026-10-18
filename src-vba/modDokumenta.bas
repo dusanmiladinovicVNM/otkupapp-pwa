@@ -5547,6 +5547,24 @@ Private Function AktivnoOtpClanstvoPoKanonu(ByVal src As String) As Object
     Set brojOtk = BrojRedovaPoID(TBL_OTKUP, COL_OTK_ID, src)
     Set stornirane = StorniraneOtpremnice()
 
+    ' MIG-10: istorijske veze cuvamo; u AKTIVNOJ otpremnici storniran otkup
+    ' nikada ne sme postati tek nula kg/vrednosti kroz tolerantni istorijski read.
+    Dim storniraniOtkupi As Object
+    Set storniraniOtkupi = CreateObject("Scripting.Dictionary")
+    Dim otkHdr As Variant
+    otkHdr = GetTableData(TBL_OTKUP)
+    If IsArray(otkHdr) Then
+        Dim hId As Long, hSto As Long, j As Long, histID As String
+        hId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, src)
+        hSto = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, src)
+        For j = 1 To UBound(otkHdr, 1)
+            If StrComp(Trim$(NzToText(otkHdr(j, hSto))), "Da", vbTextCompare) = 0 Then
+                histID = UCase$(Trim$(NzToText(otkHdr(j, hId))))
+                If Len(histID) > 0 Then storniraniOtkupi(histID) = True
+            End If
+        Next j
+    End If
+
     Dim vidjenPar As Object
     Set vidjenPar = CreateObject("Scripting.Dictionary")
 
@@ -5589,6 +5607,11 @@ Private Function AktivnoOtpClanstvoPoKanonu(ByVal src As String) As Object
         vidjenPar.Add par, True
 
         If Not stornirane.Exists(UCase$(otpID)) Then
+            If storniraniOtkupi.Exists(UCase$(otkupID)) Then
+                Err.Raise vbObjectError + 1947, src, _
+                          "Aktivna otpremnica " & otpID & " ima storniran izvor: " & _
+                          otkupID & ". Sacuvati istorijsku vezu, razresiti aktivno clanstvo."
+            End If
             If mapa.Exists(UCase$(otkupID)) Then
                 Err.Raise vbObjectError + 1305, src, _
                           "Kanonsko clanstvo je nekonzistentno: otkup " & _
