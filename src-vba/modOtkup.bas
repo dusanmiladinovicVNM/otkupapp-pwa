@@ -1126,8 +1126,9 @@ Public Function StavkeOtkupaRedovi() As Variant
 
     StavkeOtkupaRedovi = Empty
 
-    Dim zagl As Object
-    Set zagl = ZaglavljaOtkupaPoID(SRC)
+    Dim zagl As Object, stornirani As Object
+    Set stornirani = CreateObject("Scripting.Dictionary")
+    Set zagl = ZaglavljaOtkupaPoID(SRC, stornirani)
 
     ' IDENTITET PRE AGREGACIJE: dupli OtkupID pada odmah, pre nego sto
     ' ijedan zbir nastane (review #334, drugi krug).
@@ -1165,7 +1166,7 @@ Public Function StavkeOtkupaRedovi() As Variant
         For i = 1 To UBound(d, 1)
             oid = Trim$(NzToText(d(i, cOtk)))
             RequireStavkaUgovor zagl, oid, d(i, cKl), d(i, cKol), d(i, cCena), _
-                                d(i, cAmb), i, SRC
+                                d(i, cAmb), i, SRC, stornirani.Exists(UCase$(oid))
             kParKl = UCase$(oid) & "|" & UCase$(Trim$(NzToText(d(i, cKl))))
             If parKlasa.Exists(kParKl) Then
                 Err.Raise vbObjectError + 1924, SRC, _
@@ -1243,7 +1244,8 @@ End Function
 
 ' Zaglavlja otkupa: OtkupID -> broj redova sa tim ID-em. Prazan OtkupID se NE
 ' broji -- on nije kljuc nego kvar sa svojim vlasnikom (v. StavkeOtkupaRedovi).
-Private Function ZaglavljaOtkupaPoID(ByVal sourceName As String) As Object
+Private Function ZaglavljaOtkupaPoID(ByVal sourceName As String, _
+                                     ByVal stornirani As Object) As Object
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
     Set ZaglavljaOtkupaPoID = dict
@@ -1252,8 +1254,9 @@ Private Function ZaglavljaOtkupaPoID(ByVal sourceName As String) As Object
     d = GetTableData(TBL_OTKUP)
     If Not IsArray(d) Then Exit Function
 
-    Dim cId As Long
+    Dim cId As Long, cStorno As Long
     cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, sourceName)
+    cStorno = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, sourceName)
 
     Dim i As Long, oid As String
     For i = 1 To UBound(d, 1)
@@ -1263,6 +1266,9 @@ Private Function ZaglavljaOtkupaPoID(ByVal sourceName As String) As Object
                 dict(oid) = CLng(dict(oid)) + 1
             Else
                 dict.Add oid, 1&
+            End If
+            If StrComp(Trim$(NzToText(d(i, cStorno))), "Da", vbTextCompare) = 0 Then
+                stornirani(UCase$(oid)) = True
             End If
         End If
     Next i
@@ -1302,7 +1308,8 @@ End Sub
 Private Sub RequireStavkaUgovor(ByVal zagl As Object, ByVal oid As String, _
                                 ByVal klasa As Variant, ByVal kol As Variant, _
                                 ByVal cena As Variant, ByVal amb As Variant, _
-                                ByVal red As Long, ByVal sourceName As String)
+                                ByVal red As Long, ByVal sourceName As String, _
+                                ByVal dozvoliNuluIstorija As Boolean)
     If Len(oid) = 0 Then
         Err.Raise vbObjectError + 1907, sourceName, _
                   "Stavka otkupa bez OtkupID-a: " & TBL_OTKUP_STAVKE & ", red " & _
@@ -1322,7 +1329,10 @@ Private Sub RequireStavkaUgovor(ByVal zagl As Object, ByVal oid As String, _
                   "Stavka nije brojcana: OtkupID=" & oid & "."
     End If
 
-    If CDbl(kol) <= 0 Or CDbl(cena) <= 0 Then
+    ' MIG-10: stornirani istorijski otkup sme imati Kolicina=0; nema olaksice
+    ' za aktivne dokumente, negativnu kolicinu ili nepozitivnu cenu.
+    If CDbl(kol) < 0 Or CDbl(cena) <= 0 Or _
+       (CDbl(kol) = 0 And Not dozvoliNuluIstorija) Then
         Err.Raise vbObjectError + 1906, sourceName, _
                   "Kolicina i cena stavke moraju biti vece od nule: " & _
                   "OtkupID=" & oid & "."
@@ -1418,10 +1428,9 @@ Public Function ZbirStavkiPoOtkupu() As Object
     Next i
 End Function
 
-' Kilogrami otkupa jednog dana -- plocica "danas" u ljusci (modOtkupUI.RefreshKpi).
-' Obuhvat je NAMERNO isti kao zatecen brojac dokumenata na istoj plocici
-' (CountForDate): svi redovi zaglavlja tog dana, bez filtera storna. Menja se
-' samo IZVOR kilograma -- stavke, ne zaglavlje.
+' Kilogrami AKTIVNIH otkupa jednog dana -- plocica "danas" (modOtkupUI.RefreshKpi).
+' Stornirani istorijski otkupi ostaju u kanonskom citacu, ali ne ulaze u KPI.
+' Brojac dokumenata na istoj plocici ima isti aktivni obuhvat (MIG-10).
 Public Function KgOtkupaZaDan(ByVal dan As Date) As Double
     Const SRC As String = "KgOtkupaZaDan"
 
@@ -1429,9 +1438,10 @@ Public Function KgOtkupaZaDan(ByVal dan As Date) As Double
     d = GetTableData(TBL_OTKUP)
     If Not IsArray(d) Then Exit Function
 
-    Dim cId As Long, cDat As Long
+    Dim cId As Long, cDat As Long, cStorno As Long
     cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
+    cStorno = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, SRC)
 
     Dim zbir As Object
     Set zbir = ZbirStavkiPoOtkupu()
@@ -1439,11 +1449,13 @@ Public Function KgOtkupaZaDan(ByVal dan As Date) As Double
     Dim i As Long, oid As String, z As Variant, danKljuc As Long
     danKljuc = Int(CDbl(dan))
     For i = 1 To UBound(d, 1)
-        If IsDate(d(i, cDat)) Then
-            If Int(CDbl(CDate(d(i, cDat)))) = danKljuc Then
-                oid = Trim$(NzToText(d(i, cId)))
-                z = ZbirStavkiZaOtkup(zbir, oid, SRC)
-                KgOtkupaZaDan = KgOtkupaZaDan + CDbl(z(0))
+        If StrComp(Trim$(NzToText(d(i, cStorno))), "Da", vbTextCompare) <> 0 Then
+            If IsDate(d(i, cDat)) Then
+                If Int(CDbl(CDate(d(i, cDat)))) = danKljuc Then
+                    oid = Trim$(NzToText(d(i, cId)))
+                    z = ZbirStavkiZaOtkup(zbir, oid, SRC)
+                    KgOtkupaZaDan = KgOtkupaZaDan + CDbl(z(0))
+                End If
             End If
         End If
     Next i
