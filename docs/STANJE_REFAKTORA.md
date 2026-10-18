@@ -4939,6 +4939,26 @@
 
      **Otvoreno.** Merge na izričit zahtev, posle zelenog CI na tačnom head-u.
 
+147. **Merge `#424` i `#425`** (18.–19.10.2026). Zapis ide ovde, a ne u PR-ove.
+
+     - **`#424`** (process, samo `.claude/rules/testovi.md`): review krug 1 (`9160d3cf`) `NO-GO`, `P2 1` (ugovor
+       `Run`-a bez `UI-PAD-01`), `P3 1` (tvrdnja da `modTest` ne pokriva mrežu). Oba su zatvorena u `88366cf5`,
+       zajedno sa KI-016 odeljkom i dovođenjem grane na `main`. Merge-ovao **operater** 18.10.2026 (13:36 UTC)
+       kao `33896eb9`, na head `88366cf5`, uz static CI `success`. **Rezultat ponovljenog review-a nije zapisan
+       u ovom toku.**
+     - **`#425`** (KI-016 (d) i (e)): review (`d0c6864e`) `CODE GO`, `P0 0`, `P1 0`, `P2 0`, `P3 1` (vizuelno
+       odsecanje meri ručna provera, scenario 1), 9,3/10, static CI #981 (stavka 146).
+     - **Posle tog GO** su ušli `ef0ab8a3` (samo `tools/sabotaza.py`: sidro `ljuska-deaktivira-pre-provere`,
+       zastarelo od `ba91e66e`) i docs (`2ea80dd1`, `eeffddd2`). `src-vba` je od `d0c6864e` nepromenjen.
+     - Izvršne kapije su nad `d0c6864e` (izvor `c35dd64b9cc8`): 12/12, dokaz 22/22, compile (19.10.2026) i
+       ručna provera 4/4.
+     - Merge-ovano 19.10.2026 (22:15 UTC 18.10.) kao `06d4a09f`, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `eeffddd2` (static CI `success`, run 39171262798).
+     - **Finalni exact-head review nije tražen.** Reviewer nije video `ef0ab8a3` ni docs posle njega; GO važi
+       za `d0c6864e`.
+     - `KI-016` ostaje `OPEN`: (a) `P3 #1` (`SCR_RUN_NEMA` ćuti za korisnikov klik), (b) mrtav EH u
+       `PanelOtvori`, (c) ostali ciljevi `Run`-a bez brane, (f) životni vek poruke mreže (stavka 148).
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
