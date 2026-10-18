@@ -5513,15 +5513,16 @@ SABOTAZE = {
     # ------------------------------------------------------------------
     "otk-citaoci-kapija-nepozitivna": (
         "modOtkup.bas",
-        "    If CDbl(kol) <= 0 Or CDbl(cena) <= 0 Then\n",
+        "    If CDbl(kol) < 0 Or CDbl(cena) <= 0 Or _\n"
+        "       (CDbl(kol) = 0 And Not dozvoliNuluIstorija) Then\n",
         "    If False Then   ' SABOTAZA: nepozitivna stavka prolazi\n",
         "Test_OTK_CitaociStavkiFailClosed",
         "OTK citaoci kapija: stavka sa cenom 0 obara zbir po imenu",
     ),
     "otk-citaoci-kpi-kg": (
         "modOtkup.bas",
-        "                KgOtkupaZaDan = KgOtkupaZaDan + CDbl(z(0))\n",
-        "                KgOtkupaZaDan = KgOtkupaZaDan   ' SABOTAZA: kg stavki ne ulazi\n",
+        "                    KgOtkupaZaDan = KgOtkupaZaDan + CDbl(z(0))\n",
+        "                    KgOtkupaZaDan = KgOtkupaZaDan   ' SABOTAZA: kg stavki ne ulazi\n",
         "Test_OTK_CitaociCitajuStavke",
         "OTK citaoci: KPI kg dana = zbir stavki",
     ),
