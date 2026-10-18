@@ -459,8 +459,9 @@ Public Function BulkPushPendingForStanica(ByVal stanicaID As String, _
     Dim iDatum As Long: iDatum = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
     Dim iCRID As Long: iCRID = GetColumnIndex(TBL_OTKUP, "ClientRecordID")
     Dim iSource As Long: iSource = GetColumnIndex(TBL_OTKUP, "SyncSource")
-    
-    If iID = 0 Or iStanica = 0 Or iDatum = 0 Or iCRID = 0 Then
+    Dim iStorno As Long: iStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+
+    If iID = 0 Or iStanica = 0 Or iDatum = 0 Or iCRID = 0 Or iStorno = 0 Then
         LogError SRC, "Required tblOtkup kolone nedostaju."
         BulkPushPendingForStanica = 0
         Exit Function
@@ -488,7 +489,13 @@ Public Function BulkPushPendingForStanica(ByVal stanicaID As String, _
         rowDatumStr = Format$(CDate(lo.DataBodyRange.cells(r, iDatum).value), "yyyy-mm-dd")
         On Error GoTo EH
         If rowDatumStr <> datumStr Then GoTo NextRow
-        
+
+        ' MIG-10: sync stanice salje samo aktivne otkupe.
+        ' Stornirani istorijski dokument ostaje u svesci, ali ne sme u novi
+        ' OTK-* sheet kao tekuci otkup sa nulom kg i pozitivnom ambalazom.
+        If StrComp(Trim$(CStr(nz(lo.DataBodyRange.cells(r, iStorno).value, ""))), _
+                   "Da", vbTextCompare) = 0 Then GoTo NextRow
+
         Dim crid As String
         crid = CStr(nz(lo.DataBodyRange.cells(r, iCRID).value, ""))
         If Len(crid) > 0 Then GoTo NextRow   ' Vec push-ovan
