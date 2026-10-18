@@ -4737,6 +4737,208 @@
 
      **Otvoreno.** Merge na izričit zahtev, posle zelenog CI na tačnom head-u.
 
+144. **Merge `#423` — na izričit zahtev operatera, na tačnom head-u posle zelenog static CI** (15.10.2026).
+     Zapis ide ovde, a ne u `#423`. Obrazac su stavke 128, 130, 132, 134, 138 i 141.
+
+     - Review (`ac921b4d`): `CODE GO`, `P0 0`, `P1 0`, `P2 0`, `P3 1`, 9,1/10, static CI #974 (stavka 143). `P3-1` je
+       zatvoren testom 243 pre izvršnih kapija (odluka operatera).
+     - **Posle tog GO su ušli samo test i seam:** `00ba4c26` (test 243 i druga kuka seam-a u
+       `modScrIzvestaji.Scr_Build`) i `8c41e572` (`PadDnevnika` meri kanal pada). Posle njih su samo docs
+       (`f769ef80`, `1252f79e`). Produkcioni kod van seam kuke nije diran.
+     - Izvršne kapije su nad `8c41e572` (izvor `48932e3e721a`): 12/12, dokaz 36/36 (grupno), compile i ručna
+       provera 4/4.
+     - Merge-ovano 15.10.2026 kao `66f7897f`, na **izričit zahtev operatera**, sa `--match-head-commit` na head
+       `1252f79e` (static CI `success` na tom head-u, run 38717568835).
+     - **Finalni exact-head review nije tražen.** Reviewer nije video `00ba4c26`, `8c41e572` ni docs posle njih;
+       GO iz stavke 143 važi za `ac921b4d`.
+     - `KI-016` ostaje `OPEN` zbog stavki van reza (a)–(e) iz `KNOWN_ISSUES`; (d) i (e) su ovaj rez (stavke 145+).
+
+145. **`KI-016` (d) i (e) — dva prezentaciona nalaza ručne provere `#423`** (15.10.2026). Grana
+     `claude/ki016-poruke-pada`, sa `main`-a `66f7897f`. Skripte i izlazi su u scratchpad-u sesije `23d2fe62`:
+     `repro_ki016.py` i `sonda_ki016.py` (preuzeti iz `60ee0682`), `fix.py`, `sab.py`, `sabB.py`, `kapije.sh`.
+
+     **Popis pre koda.**
+     - **(d) Ko čita oblik zapisa kanala.** Nijedan produkcioni čitalac ga ne rastavlja: `ScrAct`,
+       `LoadGridFromScreen` (izvor greške → `ReloadGrid`) i `CommitDokument` ga prenose ceo. Nijedan
+       `Split`/`InStr` po `" -> "` u `src-vba` ne čita kanal. Tačan oblik mere samo testovi:
+       - 240 je tražio `"modScrMatPartneri.Scr_Rows -> "`, a 243 `Left$(…, 28) = "modScrIzvestaji.Scr_Build ->"`.
+         Oba posle ispravke mere ime člana kao **početak** zapisa i `" -> "` posebno;
+       - 239 (`KI016Clan`: početak + `" -> "`), 241 (`KI016ToastPada`: sadrži člana i događaj) i 162
+         (`PadDnevnika`: dužina) ne zavise od redosleda.
+
+       Sidro `ki016-pomocnik-gubi-izvor` je red `If InStr(errSrc, ".")`, koji ostaje. `ki016-pomocnik-ne-belezi`
+       je gađao red koji se menja, pa dobija novo sidro.
+     - **(e) Izlazi `ActivateScreen` sa porukom:** `OTKUI_SCR_ZABRANJEN` (crven), `OTKUI_SCR_NEMA` kad modula
+       nema (zelen, tajmer od 4 s), `OTKUI_SCR_NEMA` posle pada gradnje (crven) i greška panela (crven).
+       - Prigušena stavka sidebara je i dalje klikabilna (`PaintNav` samo boji), pa je zabranjen prelazak
+         dostižan jednim klikom.
+       - Greška panela je praktično nedostižna: `UIPAN_ERR_NEPOZNAT` seče `PanelPostoji`, `SAMO_ADMIN` seče
+         `ScrDozvoljen` pre nje, a `UIPAN_ERR_GRADNJA` je mrtav EH (`KI-016` (b)).
+       - `PrimeniNovaPrava` posle zamene operatera **namerno** ostavlja `OTKUI_SCR_ZABRANJEN` pa zove
+         `NaPrviDozvoljenEkran` → uspešan `ActivateScreen`. Zastavica koja preživi tuđu poruku sakrila bi to
+         objašnjenje, pa je `ShowToast` spušta.
+
+     **Odluka operatera (15.10.2026), po preporuci: varijanta B.** Uspešan prelazak gasi crvenu poruku
+     odbijenog prelaska iz `ActivateScreen`-a, i to i `OTKUI_SCR_NEMA` posle pada gradnje i
+     `OTKUI_SCR_ZABRANJEN`. Gasi je **svaki** uspešan prelazak, ne samo ulazak u isti ekran, kao `mGridToast`.
+     - Greška panela ostaje van (varijanta C), zapisana kao nedostižna. Zeleni `OTKUI_SCR_NEMA` ima tajmer.
+     - Zastavicu spušta i `ShowToast`, kad nova poruka zameni staru.
+     - Ista latentna rupa u `mGridToast` se samo zapisuje (ispod), ne dira se.
+
+     **Reprodukcija pre ispravke** (`run_vba --compile-only --keep`, pa `RunOne` kroz `repro_ki016.py`, sopstvena
+     instanca, bez dijaloga):
+
+     ```
+     e500390b (novi testovi, stara produkcija)            TESTS=4 FAIL=2
+       FAIL 240 -- korak stoji ispred opisa greske, pa ga dug opis ne odseca u toastu
+       FAIL 242 -- uspesan ulazak posle pada gradnje gasi poruku o padu
+                   -- ocekivano [], dobijeno [Ovaj ekran jos nije prebacen na novi izgled.]
+       OK   241, 243
+     d9e0a257 (test zabrane, ispravka A bez B)             TESTS=1 FAIL=1
+       FAIL 242 -- uspesan prelazak gasi poruku o zabranjenom prelasku
+                   -- ocekivano [ANALIZA|], dobijeno [ANALIZA|Nemate dozvolu za ovu oblast.]
+     ```
+     Drugi prolaz meri i obe tvrdnje pre nove: posle ispravke A poruka o padu nestaje, a tuđa poruka ostaje.
+     Prvi prolaz meri i instrument: `ToastNaEkranu` je pročitao vidljivu traku, pa `.Visible` nad formom bez
+     `.Show` radi.
+
+     **Ispravka (`952fc745`, `b24053ac`).**
+     - **(d)** `ScrPadZabelezi` piše „`clan [izvor] -> broj opis`". Opis nema granicu dužine, a traka poruke
+       odseca kraj, pa korak ide pre opisa. Log je nepromenjen (izvor ide u svoju kolonu).
+     - **(e)** `mScrToast` po obrascu `mGridToast`:
+       - zastavicu podižu zabrana i pad gradnje, odmah posle svog `ShowToast`-a;
+       - `ActivateScreen` je postao omotač oko `ActivateScreenCore`. Uspešan prelazak gasi poruku na **jednom**
+         mestu, jer jezgro ima pet izlaza sa uspehom;
+       - `ShowToast` zastavicu spušta, jer nova poruka zamenjuje staru.
+
+     **Testovi i sabotaže** (bez novog testa; `RunAllTests` ostaje 243):
+     - 240 + „korak stoji ispred opisa greske, pa ga dug opis ne odseca u toastu" ← `ki016-korak-iza-opisa`;
+     - 242 + „uspesan ulazak posle pada gradnje gasi poruku o padu" ← `ki016-poruka-pada-ostaje`;
+     - 242 + „uspesan prelazak ne gasi poruku koja je zamenila poruku o padu" ← `ki016-tudja-poruka-nestaje`.
+       Drugi pad je pre `Run`-a (`ScrGradnjuOboriTest`), nad ekranom čija zona ne postoji, pa nijedan modul
+       ekrana ne dobija stanje;
+     - 242 + „uspesan prelazak gasi poruku o zabranjenom prelasku" ← `ki016-poruka-zabrane-ostaje`. Zabrana ide
+       kroz `ScrSekcijuZabraniTest`, pa se zona ni ne pravi;
+     - novi pomoćnik `ToastNaEkranu`: `ToastTekst` čita natpis, a `HideToast` traku sakriva i natpis ne briše.
+
+     Nijedna sabotaža ne diže grešku kroz `Run`. Katalog 790 → 794.
+
+     **Provera pre review-a.**
+     - Jeftine kapije 20/20 (794 sabotaže, 0 nalaza, 9 poznatih).
+     - Brza provera, **nije izvršna kapija** (kept sveska nad `b24053ac`, `RunOne`): 1, 84, 103, 109, 153, 159,
+       162, 236, 237 i 239–243, `TESTS=14 FAIL=0`, bez dijaloga.
+     - `run_vba` i `dokaz` čekaju reviewer GO. Dokaz, 22 sabotaže:
+
+       ```
+       dokaz.py ki016- ljuska-deaktivira-pre-provere zona-posle-pada-gradnje omotaci-posle-pada-gradnje
+                bu-ulazak-ne-zove-kuku bu-kuka-ignorise-argument --grupe
+       ```
+       - `ki016-` je 17 sabotaža: četiri nove, `ki016-pomocnik-ne-belezi` sa novim sidrom i 12 zatečenih;
+       - ostalih pet imaju sidro u telu koje je postalo `ActivateScreenCore`, ili u grani pada gradnje.
+
+     **Očekivani brojevi:** `RunAllTests` 243 / 0; BFP 2427, Banka 241, Storno 111 bez promene.
+
+     **Uočeno van reza (zapisano, ne dirano):**
+     - `mGridToast` nema spuštanje u `ShowToast`. Zastarela zastavica mreže može na sledećem uspelom čitanju
+       da sakrije tuđu poruku, i to baš objašnjenje zabrane posle zamene operatera (`NaPrviDozvoljenEkran` →
+       `ReloadGrid`).
+     - Direktan `HideToast` briše `mToastPending`, a tajmer ne otkazuje. Tajmer zelene poruke tada ostaje
+       siroče, a `CancelToastTimer` ga više ne vidi, pa može da sakrije crvenu poruku podignutu u ta 4 s.
+       Ovaj rez to ne pojačava: `mScrToast` se diže crvenom porukom, koja tajmer otkazuje.
+
+     **Otvoreno.** Review, pa izvršne kapije, compile i ručna provera.
+
+146. **Review `#425` (`d0c6864e`): `CODE GO`, `P0 0`, `P1 0`, `P2 0`, `P3 1`, 9,3/10** (15.10.2026). Static CI
+     #981 `SUCCESS`. `MERGE HOLD` dok se ne izvrše kapije. Produkcioni kod posle GO nije menjan.
+     - **`P3-1`, nije blokirajući:** test meri redosled izvora i opisa, ali ne i stvarno odsecanje na formi. To
+       meri ručna provera sa pravom greškom šeme Faktura (tačka 1 ispod).
+
+     **Izvršni prolaz** (head `d0c6864e`, izvor `c35dd64b9cc8`, ugovor `75272720898e`, sveska `0bafa704`,
+     fixture `d3d3ff6d`): **12/12 ZELENO**, marker upisan.
+
+     ```
+     RunAllTests              243 / 0      RunBusinessFlowProSuite 2427 / 0
+     RunBankaImportTestSuite  241 / 0      RunStornoTestSuite       111 / 0      ostalih 8 suita OK
+     ```
+
+     **Dokaz** (filter ispod; 22 sabotaže u 5 prolaza). Filter ne hvata nijedan od 9 `POZNATI_NALAZI` ni od 2
+     `POZNATI_NALAZI_DOKAZ`.
+
+     ```
+     dokaz.py ki016- ljuska-deaktivira-pre-provere zona-posle-pada-gradnje omotaci-posle-pada-gradnje
+              bu-ulazak-ne-zove-kuku bu-kuka-ignorise-argument --grupe
+
+     crvenih: 22 / 22    izvor pre/posle 3d1bbea1dd0c0248 IDENTICAN    bez ijednog TIMEOUT-a
+     grupno izmereno 20 / 22 -> prvi verdikt NIJE DOKAZANO (jedan PROBLEM)
+     ```
+     Dva člana nisu priznata u grupi:
+     - **`ki016-kanal-ne-brise`, zaklonjena u grupi 4, predviđeno iz plana.** `ki016-pomocnik-ne-belezi` gasi
+       kanal, pa 240 pada već na prvoj tvrdnji. Sama: OK.
+     - **`ljuska-deaktivira-pre-provere`, PROBLEM i kad je sama.** Pada preduslov „ekran je pre panela imao
+       svoju zonu". **Zastarela je od `ba91e66e` (03.09.2026), ne od ovog reza:**
+       - ista sabotaža nad `main`-om `66f7897f` (privremeni worktree, ista fixture sveska, izvor
+         `e59a78ee3c9822c9`) daje isti pad;
+       - sidro je bio red posle `jePanel = …`, dakle pre provere „već smo tu" za isti ekran, a ta provera je
+         ušla posle sabotaže;
+       - korak 2 testa ide `IdiNaEkran` na ekran na kome sekcija već stoji, pa je sabotaža brisala zonu pre
+         tvrdnje.
+
+       **Ispravka (posle GO, samo `tools/sabotaza.py`):** sidro je provera prava (`If Not
+       modUiScreens.ScrDozvoljen(kljuc) Then`). To je staro mesto poziva, kako i komentar sabotaže kaže. Sama
+       nad `d0c6864e`: `DOKAZANO`, izvor identičan. Marker i dalje važi, jer `sabotaza.py` nije deo ugovora.
+
+     **Ukupno: 22 / 22 dokazano** (20 grupno, 2 sama).
+
+     **Nalaz uz scenario 4 iz review-a (pročitano u kodu, ne izmereno).** Review traži da objašnjenje
+     `OTKUI_SCR_ZABRANJEN`, koje `PrimeniNovaPrava` ostavlja posle zamene operatera, ostane na ekranu. U
+     produkciji se to ne vidi:
+     - `DoSwitchOperater` posle `PrimeniNovaPrava` odmah zove `ShowToast OTKUI_MSG_OPERATER`, zelenu poruku sa
+       tajmerom od 4 s;
+     - na neuspeloj prijavi `ShowToast OTKUI_MSG_ODJAVLJEN`;
+     - preostali poziv je samo test seam.
+
+     Objašnjenje zabrane zato prepiše sledeća poruka, sa spuštanjem zastavice i bez njega, kao i pre ovog reza.
+     Komentar uz `mScrToast` taj primer navodi kao razlog spuštanja u `ShowToast`, što je netačno kao opis
+     onoga što operater vidi.
+
+     Pravi slučaj koji spuštanje štiti je poruka koju podigne **sam prelazak**: pad mreže novog ekrana u
+     `ReloadGrid`, ili poruka kuke ulaska (`ScrAktiviraj`, uvoz izvoda u Banci). Omotač gasi poruku tek posle
+     jezgra, pa bi bez spuštanja stara zastavica sakrila baš poruku o padu mreže ekrana u koji se upravo ušlo.
+     - Test meri isti mehanizam: nova poruka između pada i uspeha, sabotaža `ki016-tudja-poruka-nestaje`.
+     - Komentar se ispravlja posle merge-a, u zasebnom malom rezu. Izmena `src-vba` sada bi oborila marker i
+       dokaz, a ponašanje se ne menja.
+     - Scenario 4 checkliste je zato zamenjen ovim slučajem; scenario iz review-a ostaje kao opcioni.
+
+     **Sveska za compile i ručnu proveru:** `tests/fixtures/rucna_provera_ki016de_kod.xlsm`
+     (`run_vba --compile-only --keep` nad `d0c6864e`, izvor `c35dd64b9cc8`). Operater uvozi
+     `src-vba/modVbaTools.bas`, kompajlira, zatvara i otvara svesku. Checklista je u opisu `#425`:
+     1. greška šeme Faktura: korak se vidi u traci;
+     2. pad gradnje Izveštaja, pa uspešan ulazak: traka nestaje;
+     3. zabranjen prelazak, pa uspešan prelazak: traka nestaje;
+     4. pad gradnje, pa ulazak u ekran čija mreža padne: poruka o padu mreže ostaje.
+
+     **Compile ✅** (operater, 19.10.2026, `rucna_provera_ki016de_kod.xlsm`, kod sa `d0c6864e`): `vba_gate
+     --mark-compile`, pa `--require-green --require-compile` daje RC=0 nad izvorom `c35dd64b9cc8`.
+
+     **Ručna provera ✅** (operater, 18.–19.10.2026, ista sveska, snimci ekrana). Nijednom nije bilo dijaloga:
+
+     ```
+     1. Fakture, preimenovana kolona   traka nosi korak [modScrFakture.RedoviFakture[fakture]] ISPRED
+                                       opisa -- vidljiv (u #423 odsecen)                              OK
+     2. pad gradnje IZVESTAJA          ostaje Fakturisanje i "Ovaj ekran jos nije prebacen..."; sledeci
+                                       ulazak gradi pun ekran BEZ trake                               OK
+     3. zabrana PALETA                 ostaje IZVESTAJI i "Nemate dozvolu za ovu oblast."; sledeci
+                                       prelazak otvara PALETE BEZ trake                               OK
+     4. Fakturisanje, preimenovana     "Ucitavanje mreze nije uspelo" OSTAJE posle prelaska           OK
+        kolona
+     ```
+     Uz tačku 4: snimak ne pokazuje da je pad gradnje ponovljen na svežoj svesci, jer su IZVEŠTAJI već bili
+     izgrađeni. Potvrđeno je krajnje stanje, ne i to da je zastavica prelaska stajala u trenutku prelaska.
+     Isti mehanizam, spuštanje zastavice u `ShowToast`, automatski meri kontra-tvrdnja u 242 („uspesan
+     prelazak ne gasi poruku koja je zamenila poruku o padu"), sa sabotažom `ki016-tudja-poruka-nestaje`.
+
+     **Otvoreno.** Merge na izričit zahtev, posle zelenog CI na tačnom head-u.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
