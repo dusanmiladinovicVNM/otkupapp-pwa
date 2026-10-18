@@ -4917,7 +4917,27 @@
      3. zabranjen prelazak, pa uspešan prelazak: traka nestaje;
      4. pad gradnje, pa ulazak u ekran čija mreža padne: poruka o padu mreže ostaje.
 
-     **Otvoreno.** Compile i ručna provera (operater), pa merge na izričit zahtev.
+     **Compile ✅** (operater, 19.10.2026, `rucna_provera_ki016de_kod.xlsm`, kod sa `d0c6864e`): `vba_gate
+     --mark-compile`, pa `--require-green --require-compile` daje RC=0 nad izvorom `c35dd64b9cc8`.
+
+     **Ručna provera ✅** (operater, 18.–19.10.2026, ista sveska, snimci ekrana). Nijednom nije bilo dijaloga:
+
+     ```
+     1. Fakture, preimenovana kolona   traka nosi korak [modScrFakture.RedoviFakture[fakture]] ISPRED
+                                       opisa -- vidljiv (u #423 odsecen)                              OK
+     2. pad gradnje IZVESTAJA          ostaje Fakturisanje i "Ovaj ekran jos nije prebacen..."; sledeci
+                                       ulazak gradi pun ekran BEZ trake                               OK
+     3. zabrana PALETA                 ostaje IZVESTAJI i "Nemate dozvolu za ovu oblast."; sledeci
+                                       prelazak otvara PALETE BEZ trake                               OK
+     4. Fakturisanje, preimenovana     "Ucitavanje mreze nije uspelo" OSTAJE posle prelaska           OK
+        kolona
+     ```
+     Uz tačku 4: snimak ne pokazuje da je pad gradnje ponovljen na svežoj svesci, jer su IZVEŠTAJI već bili
+     izgrađeni. Potvrđeno je krajnje stanje, ne i to da je zastavica prelaska stajala u trenutku prelaska.
+     Isti mehanizam, spuštanje zastavice u `ShowToast`, automatski meri kontra-tvrdnja u 242 („uspesan
+     prelazak ne gasi poruku koja je zamenila poruku o padu"), sa sabotažom `ki016-tudja-poruka-nestaje`.
+
+     **Otvoreno.** Merge na izričit zahtev, posle zelenog CI na tačnom head-u.
 
 ## Dug sa imenom (posle S5-5b)
 
