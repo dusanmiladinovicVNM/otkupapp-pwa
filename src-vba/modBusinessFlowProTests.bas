@@ -1078,6 +1078,13 @@ Private Sub Test_MIG10_CancelledZeroQuantity()
     AssertTrue Mig10StavkeGreska() = vbObjectError + 1906, SRC & ": nulta cena FAIL"
     RequireUpdateCell TBL_OTKUP_STAVKE, CLng(rows(1)), COL_OKS_CENA, 10#, SRC
     AssertTrue Mig10StavkeGreska() = 0, SRC & ": obnovljeni istorijski izuzetak"
+    AssertTrue Abs(modOtkup.VrednostOtkupa(aktivanID) - 1800#) < 0.001, _
+               SRC & ": ispravan aktivan otkup ima tacnu vrednost"
+
+    ' Ni stornirani istorijski dokument bez stavke nije dozvoljena nula.
+    RequireDeleteRow TBL_OTKUP_STAVKE, CLng(rows(1)), SRC
+    AssertTrue Mig10StavkeGreska() = vbObjectError + 1909, _
+               SRC & ": dokument bez stavke FAIL"
 
     tx.RollbackTx
     Set tx = Nothing
