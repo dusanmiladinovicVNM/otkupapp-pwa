@@ -1025,7 +1025,7 @@ Private Sub Test_MIG10_CancelledZeroQuantity()
 
     ' Aktivan otkup + 0 mora pasti.
     RequireUpdateCell TBL_OTKUP_STAVKE, CLng(rows(1)), COL_OKS_KOLICINA, 0#, SRC
-    AssertTrue Mig10StavkeGreska() <> 0, SRC & ": aktivan sa nulom FAIL"
+    AssertTrue Mig10StavkeGreska() = vbObjectError + 1906, SRC & ": aktivan sa nulom FAIL"
 
     ' Tek status storna daje READ izuzetak.
     MarkTestRowStornirano TBL_OTKUP, COL_OTK_ID, otkupID
@@ -1044,26 +1044,38 @@ Private Sub Test_MIG10_CancelledZeroQuantity()
     End If
     AssertTrue nasao, SRC & ": stornirani dokument nije nestao"
 
+    modUiData.ResetCache
+    Dim grid As Variant
+    grid = modScrDokumenti.RedoviZaTip("OTKUP", "otkazane", _
+                                      TEST_PREFIX & "-MIG10-S-" & scenario, True)
+    AssertTrue IsArray(grid), SRC & ": storno istorijski UI ucitava"
+    If IsArray(grid) Then
+        AssertTrue CLng(grid(2)) = 1, SRC & ": storno istorijski UI cuva jedan dokument"
+    End If
+
     Dim z As Object
     Set z = modOtkup.ZbirStavkiPoOtkupu()
     AssertTrue z.Exists(otkupID), SRC & ": istorijski zbir sadrzi dokument"
     If z.Exists(otkupID) Then
-        AssertTrue CDbl(z(otkupID)(0)) = 0#, SRC & ": istorijski kg su nula"
-        AssertTrue CDbl(z(otkupID)(2)) = 1#, SRC & ": istorijske gajbe sacuvane"
+        Dim zRec As Variant
+        zRec = z(otkupID)
+        AssertTrue CDbl(zRec(0)) = 0#, SRC & ": istorijski kg su nula"
+        AssertTrue CDbl(zRec(2)) = 1#, SRC & ": istorijske gajbe sacuvane"
     End If
 
     AssertTrue Not OtkUOtvorenim(otkupID), SRC & ": nema aktivne obaveze"
     AssertTrue Abs(modOtkup.KgOtkupaZaDan(dan) - (preStornoKg - 100#)) < 0.001, _
                SRC & ": storno iskljucen iz aktivnog KPI"
-    AssertTrue Mig10VrednostGreska(otkupID) <> 0, SRC & ": stroga vrednost ostaje stroga"
+    AssertTrue Mig10VrednostGreska(otkupID) = vbObjectError + 1904, _
+               SRC & ": stroga vrednost ostaje stroga"
     AssertTrue Mig10StavkeGreska() = 0, SRC & ": bulk istorijski citac prolazi"
 
     ' Storniran otkup + negativna kolicina / nulta cena ostaju blokirani.
     RequireUpdateCell TBL_OTKUP_STAVKE, CLng(rows(1)), COL_OKS_KOLICINA, -1#, SRC
-    AssertTrue Mig10StavkeGreska() <> 0, SRC & ": negativna kolicina FAIL"
+    AssertTrue Mig10StavkeGreska() = vbObjectError + 1906, SRC & ": negativna kolicina FAIL"
     RequireUpdateCell TBL_OTKUP_STAVKE, CLng(rows(1)), COL_OKS_KOLICINA, 0#, SRC
     RequireUpdateCell TBL_OTKUP_STAVKE, CLng(rows(1)), COL_OKS_CENA, 0#, SRC
-    AssertTrue Mig10StavkeGreska() <> 0, SRC & ": nulta cena FAIL"
+    AssertTrue Mig10StavkeGreska() = vbObjectError + 1906, SRC & ": nulta cena FAIL"
     RequireUpdateCell TBL_OTKUP_STAVKE, CLng(rows(1)), COL_OKS_CENA, 10#, SRC
     AssertTrue Mig10StavkeGreska() = 0, SRC & ": obnovljeni istorijski izuzetak"
 
@@ -1072,12 +1084,13 @@ Private Sub Test_MIG10_CancelledZeroQuantity()
     Exit Sub
 
 EH:
-    Dim msg As String
+    Dim msg As String, errNum As Long
     msg = Err.description
+    errNum = Err.Number
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    LogFatal SRC, Err.Number, msg
+    LogFatal SRC, errNum, msg
 End Sub
 
 Private Function Mig10StavkeGreska() As Long
