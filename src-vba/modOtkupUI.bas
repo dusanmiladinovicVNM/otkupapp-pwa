@@ -4110,7 +4110,7 @@ Private Sub RefreshKpi(frm As Object)
     ' plocica za nov dokument pokazivala 0 (REFAKTOR S14.7).
     st = "danas": z.Controls("kpiV0").caption = FmtBroj(modOtkup.KgOtkupaZaDan(Int(Now)), 0)
     ' 0 kg je TACAN podatak, ne odsustvo podatka - zato ostaje nula, a ne crta
-    KpiSub z, 0, CountForDate(TBL_OTKUP, COL_OTK_DATUM, Int(Now)) & " " & Poruka("OTKUI_KPI_SUB_DOK")
+    KpiSub z, 0, CountForDate(TBL_OTKUP, COL_OTK_DATUM, Int(Now), True) & " " & Poruka("OTKUI_KPI_SUB_DOK")
 
     st = "OM saldo": om = SelectedStanicaID(frm)
     If Len(om) > 0 Then
@@ -7779,14 +7779,26 @@ Private Sub SetOstatak(ByVal v As Double)
 End Sub
 
 Private Function CountForDate(ByVal tbl As String, ByVal datCol As String, _
-                              ByVal dKey As Double) As Long
-    Dim src As Variant, iD As Long, r As Long
+                              ByVal dKey As Double, _
+                              Optional ByVal samoAktivni As Boolean = False) As Long
+    Dim src As Variant, iD As Long, iSto As Long, r As Long
     src = CachedTable(tbl)
     If Not IsArray(src) Then Exit Function
     iD = ColIdx(tbl, datCol)
     If iD < 1 Then Exit Function
+    If samoAktivni Then
+        iSto = ColIdx(tbl, COL_STORNIRANO)
+        If iSto < 1 Then
+            Err.Raise vbObjectError + 1947, "modOtkupUI.CountForDate", _
+                      "Nedostaje Stornirano kolona za aktivni KPI: " & tbl
+        End If
+    End If
     For r = 1 To UBound(src, 1)
+        If samoAktivni Then
+            If UCase$(Trim$(CellS(src, r, iSto))) = "DA" Then GoTo SledeciKpiRed
+        End If
         If CellDate(src, r, iD) = dKey Then CountForDate = CountForDate + 1
+SledeciKpiRed:
     Next r
 End Function
 
