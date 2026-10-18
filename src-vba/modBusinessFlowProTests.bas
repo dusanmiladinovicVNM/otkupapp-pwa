@@ -122,6 +122,7 @@ Public Sub RunBusinessFlowProSuite()
     '   ambalaza dvoklasnog dokumenta  Test_OTK_AmbalazaIdeNaDokument
     Test_OtkupInputValidationHardening
     Test_OtkupReadHelpersExcludeStornirano
+    Test_MIG10_CancelledZeroQuantity
     Test_DokumentaInputValidationHardening
     Test_MalinaVozacMirror
 
@@ -986,6 +987,118 @@ EH:
     On Error GoTo 0
     LogFail "Otkup read helpers exclude stornirano", errDesc
 End Sub
+
+' MIG-10: istorijski otkup sa nulom je READ izuzetak samo kada je storniran.
+' Fixture pravi NOV ispravan otkup, a zatim namerno injektuje anomaliju pod
+' snapshot transakcijom. NIKADA ne raditi na stvarnoj klijentskoj svesci.
+Private Sub Test_MIG10_CancelledZeroQuantity()
+    Const SRC As String = "Test_MIG10_CancelledZeroQuantity"
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, otkupID As String, aktivanID As String
+    scenario = NewScenarioCode("MIG10")
+    Dim dan As Date
+    dan = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+
+    otkupID = NoviOtkupFixture(dan, TEST_ST_ID, TEST_PREFIX & "-MIG10-S-" & scenario, _
+                               "", 100#, 10#, 1, 0#, 0#, 0)
+    aktivanID = NoviOtkupFixture(dan, TEST_ST_ID, TEST_PREFIX & "-MIG10-A-" & scenario, _
+                                 "", 120#, 15#, 1, 0#, 0#, 0)
+    AssertTrue Len(otkupID) > 0 And Len(aktivanID) > 0, SRC & ": fixtures"
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otkupID)
+    AssertTrue Not rows Is Nothing, SRC & ": stavka"
+    If rows Is Nothing Then Err.Raise vbObjectError + 9402, SRC, "Nema fixture stavke."
+    If rows.count <> 1 Then Err.Raise vbObjectError + 9403, SRC, "Fixture ima neocekivan broj stavki."
+
+    Dim preStornoKg As Double
+    preStornoKg = modOtkup.KgOtkupaZaDan(dan)
+
+    ' Aktivan otkup + 0 mora pasti.
+    RequireUpdateCell TBL_OTKUP_STAVKE, CLng(rows(1)), COL_OKS_KOLICINA, 0#, SRC
+    AssertTrue Mig10StavkeGreska() <> 0, SRC & ": aktivan sa nulom FAIL"
+
+    ' Tek status storna daje READ izuzetak.
+    MarkTestRowStornirano TBL_OTKUP, COL_OTK_ID, otkupID
+    Dim v As Variant, i As Long, nasao As Boolean
+    v = modOtkup.StavkeOtkupaRedovi()
+    AssertTrue IsArray(v), SRC & ": istorijsko citanje prolazi"
+    If IsArray(v) Then
+        For i = 1 To UBound(v, 1)
+            If CStr(v(i, 1)) = otkupID Then
+                nasao = True
+                AssertTrue CDbl(v(i, 4)) = 0#, SRC & ": originalna nula ostaje"
+                AssertTrue CDbl(v(i, 5)) = 10#, SRC & ": cena ostaje"
+                AssertTrue CDbl(v(i, 6)) = 1#, SRC & ": ambalaza ostaje"
+            End If
+        Next i
+    End If
+    AssertTrue nasao, SRC & ": stornirani dokument nije nestao"
+
+    Dim z As Object
+    Set z = modOtkup.ZbirStavkiPoOtkupu()
+    AssertTrue z.Exists(otkupID), SRC & ": istorijski zbir sadrzi dokument"
+    If z.Exists(otkupID) Then
+        AssertTrue CDbl(z(otkupID)(0)) = 0#, SRC & ": istorijski kg su nula"
+        AssertTrue CDbl(z(otkupID)(2)) = 1#, SRC & ": istorijske gajbe sacuvane"
+    End If
+
+    AssertTrue Not OtkUOtvorenim(otkupID), SRC & ": nema aktivne obaveze"
+    AssertTrue Abs(modOtkup.KgOtkupaZaDan(dan) - (preStornoKg - 100#)) < 0.001, _
+               SRC & ": storno iskljucen iz aktivnog KPI"
+    AssertTrue Mig10VrednostGreska(otkupID) <> 0, SRC & ": stroga vrednost ostaje stroga"
+    AssertTrue Mig10StavkeGreska() = 0, SRC & ": bulk istorijski citac prolazi"
+
+    ' Storniran otkup + negativna kolicina / nulta cena ostaju blokirani.
+    RequireUpdateCell TBL_OTKUP_STAVKE, CLng(rows(1)), COL_OKS_KOLICINA, -1#, SRC
+    AssertTrue Mig10StavkeGreska() <> 0, SRC & ": negativna kolicina FAIL"
+    RequireUpdateCell TBL_OTKUP_STAVKE, CLng(rows(1)), COL_OKS_KOLICINA, 0#, SRC
+    RequireUpdateCell TBL_OTKUP_STAVKE, CLng(rows(1)), COL_OKS_CENA, 0#, SRC
+    AssertTrue Mig10StavkeGreska() <> 0, SRC & ": nulta cena FAIL"
+    RequireUpdateCell TBL_OTKUP_STAVKE, CLng(rows(1)), COL_OKS_CENA, 10#, SRC
+    AssertTrue Mig10StavkeGreska() = 0, SRC & ": obnovljeni istorijski izuzetak"
+
+    tx.RollbackTx
+    Set tx = Nothing
+    Exit Sub
+
+EH:
+    Dim msg As String
+    msg = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal SRC, Err.Number, msg
+End Sub
+
+Private Function Mig10StavkeGreska() As Long
+    On Error Resume Next
+    Dim s As Variant
+    Err.Clear
+    s = modOtkup.StavkeOtkupaRedovi()
+    Mig10StavkeGreska = Err.Number
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+Private Function Mig10VrednostGreska(ByVal otkupID As String) As Long
+    On Error Resume Next
+    Dim v As Double
+    Err.Clear
+    v = modOtkup.VrednostOtkupa(otkupID)
+    Mig10VrednostGreska = Err.Number
+    Err.Clear
+    On Error GoTo 0
+End Function
 
 ' ============================================================
 ' TRACEABILITY / AUTOLINK REGRESSION TESTS
