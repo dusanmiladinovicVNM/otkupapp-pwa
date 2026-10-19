@@ -8362,6 +8362,17 @@ SABOTAZE = {
         "Test_AMB_PitanjeManjkaOtkupImenujeKooperanta",
         "KI015 otkup: pitanje o manjku imenuje kooperanta",
     ),
+    # Test prolaz ponovo OTVARA svaki PDF koji napravi: izvoz ignorise kljuc
+    # PDF_OTVORI_POSLE, pa viewer operateru uzima fokus (19.10.2026). Dokaz ove
+    # sabotaze OTVARA PDF-ove svih testova -- to i meri -- pa se pusta kad
+    # operater ne radi na racunaru.
+    "pdf-izvoz-ignorise-kljuc": (
+        "modDocStyle.bas",
+        "    otvori = openAfter And IsPdfOtvoriPosle()\n",
+        "    otvori = openAfter   ' SABOTAZA: kljuc PDF_OTVORI_POSLE se ignorise\n",
+        "T_PDF_TestProlazNeOtvaraPdf",
+        "test prolaz ne otvara PDF (PDF_OTVORI_POSLE = NO)",
+    ),
 }
 
 

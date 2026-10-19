@@ -2560,6 +2560,14 @@ SEF_CONFIG = {
     # klik u testu/smoke-u nad fixture-om ne pravi PDF (ekran OFF prijavljuje
     # porukom, pa dugme ne izgleda mrtvo).
     "SLEDLJIVOST_PRINT_MODE": "OFF",
+    # PDF se u testu PRAVI, ali se NE otvara (19.10.2026). Operater radi na
+    # istom racunaru dok se suite vrti, a svaki otvoren PDF mu uzme fokus:
+    # 16 po punom prolazu (11 reversa iz modTest, 5 otkupnih listova iz BFP
+    # Test_OTK_*), i dokaz.py ih ponavlja po sabotazi. Rezimi iznad koji ostaju
+    # PDF (OTKUP, OM_IZDAVANJE...) ostaju PDF -- KI-011 je ziveo bas zato sto su
+    # testovi gasili stampu, a 226-228 broje napravljene fajlove. Test rezim
+    # nije signal: BFP ga pali samo u pojedinim testovima. Meri test 249.
+    "PDF_OTVORI_POSLE": "NO",
 }
 
 # DEFAULT_VRSTA_VOCA / DEFAULT_SORTA_VOCA se PINUJU NA PRAZNO (v. SEF_CONFIG):

@@ -342,6 +342,7 @@ Public Sub RunAllTests()
     RunOne 246
     RunOne 247
     RunOne 248
+    RunOne 249
     RunOne 13
     RunOne 14
     RunOne 15
@@ -622,6 +623,9 @@ Private Sub ResetSeamova()
     ' Zabelezeno pitanje o manjku (245-248): zaostao tekst bi sledecem testu
     ' izgledao kao pitanje koje je SAM postavio.
     modOtkupUnos.PitanjeManjkaTestReset
+    ' Zabelezen izvoz u PDF (249): zaostao zapis bi sledecem testu izgledao kao
+    ' izvoz koji je SAM napravio.
+    modDocStyle.DocPdfTestReset
     Err.Clear
 End Sub
 
@@ -871,6 +875,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 246: TestName = "T_KI015_NovacImenujeSvojuVrstu"
         Case 247: TestName = "T_KI015_ValidatorImenujeSvojDokument"
         Case 248: TestName = "T_KI015_PitanjeManjkaImenujeKupca"
+        Case 249: TestName = "T_PDF_TestProlazNeOtvaraPdf"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1127,6 +1132,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 246: T_KI015_NovacImenujeSvojuVrstu
         Case 247: T_KI015_ValidatorImenujeSvojDokument
         Case 248: T_KI015_PitanjeManjkaImenujeKupca
+        Case 249: T_PDF_TestProlazNeOtvaraPdf
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -9321,6 +9327,83 @@ Private Sub T_KI015_PitanjeManjkaImenujeKupca()
              "pitanje u test rezimu odgovara Ne: prijemnica nije upisana"
     AssertEq NazivPitanja(pitanjePrij, 3), "kupac=da kooperant=ne || " & pitanjePrij, _
              "prijemnica: pitanje o manjku imenuje kupca"
+End Sub
+
+' 249. TEST PROLAZ PRAVI PAPIR, ALI GA NE OTVARA (PDF_OTVORI_POSLE).
+'
+' Operater radi na istom racunaru dok se suite vrti, a svaki PDF iz prolaza je
+' otvarao viewer koji mu uzima fokus (19.10.2026): 16 po punom prolazu -- 11
+' reversa iz modTest i 5 otkupnih listova iz BFP Test_OTK_* -- a dokaz.py ih
+' ponavlja po svakoj sabotazi. Svi idu kroz modDocStyle.DocExportPdf i svi
+' traze otvaranje.
+'
+' Test rezim NIJE signal za to: BFP ga pali samo u pojedinim testovima, pa
+' otkupni listovi iz Test_OTK_* nastaju van njega (izmereno nad prolazom
+' 19.10.2026). Odluku nosi kljuc PDF_OTVORI_POSLE, koji fixture pinuje na NO
+' (make_fixture.SEF_CONFIG), kao sto vec pinuje sest *_PRINT_MODE na OFF.
+'
+' Tvrdi se kroz produkcioni ulaz ponovne stampe reversa (kao 230):
+'   - fixture pinuje kljuc -- bez pina BFP i dalje otvara PDF-ove;
+'   - papir JE napravljen (fajl na disku): kapija ne sme da postane "nema
+'     PDF-a", inace 226-228 mere prazno;
+'   - pozivalac JE trazio otvaranje: bez ovoga bi tvrdnja prosla i nad putem
+'     koji otvaranje nikad ne trazi;
+'   - Excelu je predato OpenAfterPublish = False.
+' Put se vozi pod NO koji test sam postavi, i nad neregenerisanim fixture-om --
+' inace bi bas ovaj test otvorio viewer; pin meri zasebna tvrdnja.
+' Suprotan smer (prazno/YES -> otvara) NE ide kroz izvoz: otvorio bi bas prozor
+' koji ovaj test gasi. Meri se nad IsPdfOtvoriPosle -- imenovano ogranicenje.
+' SABOTAZA: pdf-izvoz-ignorise-kljuc -> pukne "test prolaz ne otvara PDF
+' (PDF_OTVORI_POSLE = NO)". Dokaz te sabotaze OTVARA PDF-ove svih testova (to i
+' meri), pa se pusta kad operater ne radi na racunaru.
+Private Sub T_PDF_TestProlazNeOtvaraPdf()
+    Dim modePre As String, kljucPre As String, errNum As Long, errDesc As String
+    Dim pinovan As Boolean, pdfPre As Long, pdfPosle As Long, izvoz As String
+    Dim otvaraPrazno As Boolean, otvaraYes As Boolean, otvaraNo As Boolean
+
+    ' Pin se cita PRE ijednog upisa kljuca -- meri fixture, ne ovaj test.
+    pinovan = (UCase$(Trim$(NzToText(GetConfigValue(CFG_PDF_OTVORI_POSLE)))) = "NO")
+    ' Rezim i kljuc se citaju PRE handlera (isti razlog kao u 226): da
+    ' GetConfigValue pukne pod naoruzanim handlerom, cleanup bi upisao prazno.
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    kljucPre = NzToText(GetConfigValue(CFG_PDF_OTVORI_POSLE))
+    On Error GoTo CleanUp
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+    SetConfigValue CFG_PDF_OTVORI_POSLE, "NO"
+
+    ' ADK-IZV-2 = 2/IZV: jednotipni revers iz fixture-a (kao 230).
+    pdfPre = BrojPdfReversa("2/IZV")
+    modDocStyle.DocPdfTestReset
+    modIzvestaj.StampajReversAmbalaze "ADK-IZV-2", DOK_TIP_AMBALAZA_DOKUMENT, FX_TIP_AMB
+    izvoz = modDocStyle.DocPdfTest()
+    pdfPosle = BrojPdfReversa("2/IZV")
+    modDocStyle.DocPdfTestReset
+
+    ' Suprotan smer, bez izvoza.
+    SetConfigValue CFG_PDF_OTVORI_POSLE, ""
+    otvaraPrazno = IsPdfOtvoriPosle()
+    SetConfigValue CFG_PDF_OTVORI_POSLE, "YES"
+    otvaraYes = IsPdfOtvoriPosle()
+    SetConfigValue CFG_PDF_OTVORI_POSLE, "NO"
+    otvaraNo = IsPdfOtvoriPosle()
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modDocStyle.DocPdfTestReset
+    SetConfigValue CFG_PDF_OTVORI_POSLE, kljucPre
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest." & "T_PDF_TestProlazNeOtvaraPdf", errDesc
+
+    AssertEq pinovan, True, "fixture pinuje PDF_OTVORI_POSLE = NO (inace regenerisi fixture)"
+    AssertEq pdfPosle - pdfPre, 1, "papir reversa je i dalje napravljen (PDF na disku)"
+    AssertEq Left$(izvoz, 1), "1", "preduslov: ponovna stampa reversa trazi otvaranje PDF-a"
+    AssertEq Mid$(izvoz, 3, 1), "0", "test prolaz ne otvara PDF (PDF_OTVORI_POSLE = NO)"
+    AssertEq otvaraPrazno, True, "prazan PDF_OTVORI_POSLE otvara PDF, kao do sada"
+    AssertEq otvaraYes, True, "PDF_OTVORI_POSLE = YES otvara PDF"
+    AssertEq otvaraNo, False, "PDF_OTVORI_POSLE = NO ne otvara PDF"
 End Sub
 
 ' KI-015: "da || <tekst>" kad poruka odbijenog upisa POCINJE tekstom kljuca

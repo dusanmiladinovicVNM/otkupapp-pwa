@@ -55,14 +55,14 @@ Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
     ' Daten ausgeben
     OutputToSheet data, wsPrint.Range("A3"), headers
     
-    ' Izlaz: PDF koji se otvori (pouzdanije od direktne stampe; bez zavisnosti
-    ' od podrazumevanog stampaca). Sheet mora biti vidljiv za ExportAsFixedFormat.
+    ' Izlaz: PDF koji se otvori po PDF_OTVORI_POSLE (pouzdanije od direktne
+    ' stampe; bez zavisnosti od podrazumevanog stampaca). Sheet mora biti
+    ' vidljiv za ExportAsFixedFormat.
     On Error Resume Next
     wsPrint.Visible = xlSheetVisible
     Dim pdfPath As String
     pdfPath = EnsureDocFolder(PDF_DIR_IZVESTAJI) & "\Izve" & ChrW(353) & "taj_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
-    wsPrint.UsedRange.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                                          Quality:=xlQualityStandard, OpenAfterPublish:=True
+    DocExportPdf wsPrint.UsedRange, pdfPath, True
     On Error GoTo 0
     
     ' Aufraeumen
@@ -177,8 +177,7 @@ Public Sub PrintIzvestajHouse(ByVal data As Variant, ByVal nRows As Long, _
     Dim pdfPath As String
     pdfPath = EnsureDocFolder(PDF_DIR_IZVESTAJI) & "\Izve" & ChrW(353) & "taj_" & _
               Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
-    ws.UsedRange.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                                     Quality:=xlQualityStandard, OpenAfterPublish:=True
+    DocExportPdf ws.UsedRange, pdfPath, True
 
     ws.Visible = xlSheetVeryHidden
     Application.ScreenUpdating = oldScreen
