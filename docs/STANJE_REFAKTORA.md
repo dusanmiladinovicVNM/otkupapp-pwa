@@ -5097,6 +5097,24 @@
 
      **Otvoreno.** Merge na izričit zahtev, posle zelenog CI na tačnom head-u.
 
+150. **Merge `#427` — na izričit zahtev operatera, na tačnom head-u posle zelenog static CI** (19.10.2026).
+     Zapis ide ovde, a ne u `#427`. Obrazac su stavke 141, 144 i 147.
+
+     - Review (`360f8b6b`): `CODE GO`, `P0 0`, `P1 0`, `P2 0`, `P3 1` (stvaran `OnTime` nedokazan), 9,3/10,
+       static CI #991 (stavka 149). `P3-1` je zatvoren sondom tajmera u oba smera i tačkom 1 ručne provere.
+     - **Posle tog GO su ušli samo docs:** `723fb64b`, `ffce376e` (ispravljen postupak tačke 1) i `96416181`.
+       `src-vba` i `tools` su od `360f8b6b` nepromenjeni.
+     - Izvršne kapije su nad `360f8b6b` (izvor `c259577ff714`): 12/12, dokaz 5/5 (grupno), sonda `OnTime`,
+       compile (19.10.2026) i ručna provera 2/2.
+     - Merge-ovano 19.10.2026 (05:53 UTC) kao `736747b2`, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `96416181` (static CI `success`, run 39206701939). Auto-merge u repou nije
+       dozvoljen, pa je merge urađen ručno, posle zelenog CI.
+     - **Finalni exact-head review nije tražen.** Reviewer nije video docs posle `360f8b6b`; GO važi za
+       `360f8b6b`.
+     - `KI-016` ostaje `OPEN` zbog stavki (a)–(c): (a) `P3 #1` (`SCR_RUN_NEMA` ćuti za korisnikov klik),
+       (b) mrtav EH u `PanelOtvori`, (c) ostali ciljevi `Run`-a bez brane. Stavke (d), (e) i (f) su zatvorene
+       (stavke 145–150).
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
