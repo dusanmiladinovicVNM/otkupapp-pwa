@@ -64,6 +64,10 @@ Public Const SMER_REV_PRI_OM As Long = 4
 ' Peti smer NIJE nas revers: dokument je kupcev (AMB-10-ODL-23), pa ide svom
 ' piscu i svom nizu brojeva. Vrednost 5 je redni broj segmenta na F7.
 Public Const SMER_REV_POVRAT_KUP As Long = 5
+' Sesti je POZAJMICA KUPCA (AMB-10-ODL-24): kupac predaje SVOJE prazne gajbe
+' vozacu. Isti papir kao peti (kupcev, njegov broj), druga vrsta kretanja -- i
+' bez pitanja o manjku, jer pozajmica ne gleda kupcev saldo.
+Public Const SMER_REV_POZAJMICA_KUP As Long = 6
 
 '--------------------------------------------------------------- ULAZ
 ' Prazan recnik sa svim kljucevima - da pozivalac ne mora da pamti spisak.
@@ -195,7 +199,7 @@ Private Function ReversBrojZauzet(ByVal p As Object) As String
     Dim zauzeo As String
     If Len(S(p, "brDok")) = 0 Then Exit Function
 
-    If L(p, "smerRev") = SMER_REV_POVRAT_KUP Then
+    If RevSmerJeKupcev(L(p, "smerRev")) Then
         ' Bez izabranog kupca nema niza -- partnersku gresku javlja validator.
         If Len(S(p, "partnerID")) = 0 Then Exit Function
         zauzeo = modBrojevi.AmbDokBrojZauzet(AMB_NALOG_KUPAC, S(p, "partnerID"), _
@@ -464,7 +468,7 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     If Len(ReversValidiraj) > 0 Then fokus = "tipAmb": Exit Function
 
     smer = L(p, "smerRev")
-    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POVRAT_KUP Then
+    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POZAJMICA_KUP Then
         fokus = "smerRev": ReversValidiraj = Poruka("NOVUNOS_ERR_SMER"): Exit Function
     End If
 
@@ -473,12 +477,19 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     ' (lanac kupac -> vozac -> stanica, ODL-9), a broj je KUPCEV -- pa je
     ' obavezan i NE predlaze se. Zato ova grana stoji PRE auto-broja ispod i
     ' izlazi iz funkcije sama: predlog iz naseg niza bio bi tudj broj.
-    If smer = SMER_REV_POVRAT_KUP Then
+    ' Ista pravila vaze i za POZAJMICU KUPCA (ODL-24): isti papir, isti lanac.
+    If RevSmerJeKupcev(smer) Then
         If NerazresenIzbor(S(p, "partnerTekst"), S(p, "partnerID")) Then
             fokus = "partnerID": ReversValidiraj = Poruka("NOVUNOS_ERR_PARTNER_NEIZABRAN"): Exit Function
         End If
         If Len(S(p, "partnerID")) = 0 Or partTip <> "KUP" Then
-            fokus = "partnerID": ReversValidiraj = Poruka("NOVUNOS_ERR_SMER_KUP"): Exit Function
+            fokus = "partnerID"
+            If smer = SMER_REV_POZAJMICA_KUP Then
+                ReversValidiraj = Poruka("NOVUNOS_ERR_SMER_KUP_POZ")
+            Else
+                ReversValidiraj = Poruka("NOVUNOS_ERR_SMER_KUP")
+            End If
+            Exit Function
         End If
         If Len(S(p, "vozacID")) = 0 Then
             fokus = "vozacID": ReversValidiraj = Poruka("NOVUNOS_ERR_VOZAC_OM"): Exit Function
@@ -553,7 +564,18 @@ End Function
 ' tako i razisle: validator je imao granu, ljuska nije, pa je kupcev revers na
 ' ekranu nosio nas broj (nadjeno operaterskom proverom 07.10.2026).
 Public Function RevSmerPredlazeBroj(ByVal smer As Long) As Boolean
-    RevSmerPredlazeBroj = (smer <> SMER_REV_POVRAT_KUP)
+    RevSmerPredlazeBroj = Not RevSmerJeKupcev(smer)
+End Function
+
+' DA LI JE SMER KUPCEV DOKUMENT -- povrat (5) ili pozajmica (6, ODL-24).
+'
+' Oba nose KUPCEV broj u nizu (Kupac, KupacID, dan) i traze kupca i vozaca, pa
+' je odluka JEDNA: ljuska (vlasnik niza pri promeni smera), validator, zauzetost
+' broja i predlog je citaju odavde. Treca kopija uslova "smer = 5" bi pri
+' sledecem kupcevom smeru ostala nepromenjena -- kao sto je validator vec jednom
+' imao granu koju ljuska nije (07.10.2026).
+Public Function RevSmerJeKupcev(ByVal smer As Long) As Boolean
+    RevSmerJeKupcev = (smer = SMER_REV_POVRAT_KUP) Or (smer = SMER_REV_POZAJMICA_KUP)
 End Function
 
 ' Redni broj segmenta -> vrednost koju SaveOMUlaz_TX poznaje. Nepoznat
@@ -594,7 +616,7 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
     ' bi zamena tiho postala kupcev dokument sa tudjim brojem, a stari bi ostao
     ' storniran bez naslednika iste vrste.
     If Len(ispravljaAmbDokID) > 0 Then
-        If smer = SMER_REV_POVRAT_KUP Then
+        If RevSmerJeKupcev(smer) Then
             poruke = poruke & Poruka("NOVUNOS_ERR_ISPR_REV_KUPAC")
             Exit Function
         End If
@@ -632,6 +654,25 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
         ' broj, a original drzi operater. Bez upozorenja -- to je pravilo, ne pad
         ' stampe. Ranije je ovde isao papir na sablonu za kooperanta, sa imenom
         ' kupca i bez redova stanja.
+        ReversUpisi = BrojIliOznaka(brDok)
+        Exit Function
+    End If
+
+    ' POZAJMICA KUPCA (AMB-10-ODL-24): isti kupcev papir, druga vrsta kretanja.
+    ' Ide pravo piscu, BEZ protokola potvrde manjka -- pozajmica ne gleda kupcev
+    ' saldo, pa manjka nema i pitanje ne postoji (odluka (f), 19.10.2026). Greska
+    ' pisca ide kroz EH ispod, kao kod naseg reversa. Ne stampa se (ODL-32).
+    If smer = SMER_REV_POZAJMICA_KUP Then
+        revDokID = modAmbalaza.UpisiPozajmicuKupca_TX( _
+            datum:=CDate(p("datum")), _
+            broj:=brDok, _
+            kupacID:=S(p, "partnerID"), _
+            vozacID:=S(p, "vozacID"), _
+            tipAmb:=S(p, "tipAmb"), _
+            kolicina:=CDbl(L(p, "kolAmb")), _
+            napomena:=S(p, "napomena"))
+        If Len(revDokID) = 0 Then Exit Function
+        ' Pozajmica je kupcev dokument: papir se ne pravi (ODL-32 vazi i za nju).
         ReversUpisi = BrojIliOznaka(brDok)
         Exit Function
     End If

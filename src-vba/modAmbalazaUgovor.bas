@@ -38,7 +38,7 @@ Public Const AMB_NALOG_FIRMA As String = "Firma"
 Public Const AMB_NALOG_SPOLJNI As String = "SpoljniSvet"
 
 ' ============================================================
-' VRSTA KRETANJA -- zatvoren enum, osam vrednosti
+' VRSTA KRETANJA -- zatvoren enum, devet vrednosti
 ' ============================================================
 '
 ' Odgovara na ZASTO je prenos nastao. Ko kome daje vec nose Od/Na, a koji je
@@ -56,6 +56,12 @@ Public Const AMB_VK_ULAZ_TUDJE As String = "ULAZ_TUDJE_AMBALAZE"
 Public Const AMB_VK_VRACANJE_TUDJE As String = "VRACANJE_TUDJE_AMBALAZE"
 Public Const AMB_VK_NABAVKA As String = "NABAVKA"
 Public Const AMB_VK_OTPIS As String = "OTPIS"
+' Kupac predaje SVOJE prazne gajbe vozacu, na pozajmicu (AMB-10-ODL-24, odluke
+' operatera 19.10.2026). Fizicki je to isti potez kao povrat (kupac -> vozac), a
+' razlika je samo cije su gajbe -- zato je to vrsta, ne par. Obavezu NE nosi
+' ovaj red nego njegov ULAZ_TUDJE iste kolicine (AMB-INV-13), pa ULAZ_TUDJE
+' ostaje posledica, a ne zahtev.
+Public Const AMB_VK_POZAJMICA As String = "POZAJMICA_PARTNERA"
 
 ' Vrsta AMBALAZNOG DOKUMENTA (AMB-10-DOK) -- zatvoren enum, tri vrednosti.
 ' Ne mesati sa VrstaKretanja iznad: ovo je vrsta DOKUMENTA, ono je vrsta
@@ -123,7 +129,7 @@ End Function
 Public Function AmbVrsteSve() As Variant
     AmbVrsteSve = Array(AMB_VK_UZ_ROBU, AMB_VK_IZDATA_PRAZNA, AMB_VK_POVRAT_PRAZNE, _
                         AMB_VK_PRENOS_INTERNO, AMB_VK_ULAZ_TUDJE, AMB_VK_VRACANJE_TUDJE, _
-                        AMB_VK_NABAVKA, AMB_VK_OTPIS)
+                        AMB_VK_NABAVKA, AMB_VK_OTPIS, AMB_VK_POZAJMICA)
 End Function
 
 Private Function UNizu(ByVal niz As Variant, ByVal vrednost As String) As Boolean
@@ -313,7 +319,8 @@ End Function
 ' Bez ovoga bi 10b morao da pretpostavi, a pretpostavka bi prosla tiho: NABAVKA
 ' okacena na revers izgledala bi kao uredan zapis.
 '
-'   REVERS   -> IZDATA_PRAZNA, POVRAT_PRAZNE, PRENOS_INTERNO, VRACANJE_TUDJE
+'   REVERS           -> IZDATA_PRAZNA, POVRAT_PRAZNE, PRENOS_INTERNO, VRACANJE_TUDJE
+'   REVERS_PARTNERA  -> POVRAT_PRAZNE, POZAJMICA_PARTNERA
 '   NABAVKA  -> NABAVKA
 '   OTPIS    -> OTPIS
 '
@@ -355,7 +362,14 @@ Public Function AmbDokDozvoljavaKretanje(ByVal dokVrsta As String, _
             ' mi izdajemo partneru, dokument je NAS, pa je to AMB_DOK_REVERS.
             ' PRENOS_INTERNO takodje ne: interno kretanje ne moze imati partnerov
             ' papir kao povod.
-            AmbDokDozvoljavaKretanje = (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)
+            '
+            ' POZAJMICA (ODL-24) jeste ovde: kupac predaje SVOJE gajbe vozacu -- isti
+            ' papir, isti kupcev broj i isti par kao povrat. Nas revers je ne nosi:
+            ' predaju od kupca dokazuje njegov papir (ODL-9/-10).
+            Select Case Trim$(vrstaKretanja)
+                Case AMB_VK_POVRAT_PRAZNE, AMB_VK_POZAJMICA
+                    AmbDokDozvoljavaKretanje = True
+            End Select
         Case AMB_DOK_NABAVKA
             AmbDokDozvoljavaKretanje = (StrComp(Trim$(vrstaKretanja), AMB_VK_NABAVKA, vbTextCompare) = 0)
         Case AMB_DOK_OTPIS
@@ -501,6 +515,12 @@ End Sub
 '   VRACANJE_TUDJE_AMBALAZE    | SOPSTVENI  | PARTNER
 '   NABAVKA                    | GRANICA    | SOPSTVENI
 '   OTPIS                      | REALAN     | GRANICA
+'   POZAJMICA_PARTNERA         | PARTNER    | SOPSTVENI
+'
+' POZAJMICA ima ISTI par klasa kao povrat (ODL-24): kupac predaje vozacu. Razlika
+' je cije su gajbe, pa je nosi vrsta, a obavezu njen ULAZ_TUDJE (AMB-INV-13).
+' Matrica bi pustila i kooperanta (i on je PARTNER); da je pozajmica samo
+' kupceva, sudi AmbDokKretanjeProblem.
 '
 ' NABAVKA ide na SOPSTVENI, ne na partnera: nove gajbe ulaze u firmu, pa se
 ' partneru IZDAJU (IZDATA_PRAZNA). Direktno `SpoljniSvet -> Kooperant NABAVKA`
@@ -527,6 +547,8 @@ Public Function AmbKlaseVrste(ByVal vrsta As String) As Variant
             AmbKlaseVrste = Array(AMB_KLASA_GRANICA, AMB_KLASA_SOPSTVENI)
         Case AMB_VK_OTPIS
             AmbKlaseVrste = Array(AMB_KLASA_REALAN, AMB_KLASA_GRANICA)
+        Case AMB_VK_POZAJMICA
+            AmbKlaseVrste = Array(AMB_KLASA_PARTNER, AMB_KLASA_SOPSTVENI)
         Case Else
             AmbKlaseVrste = Array()
     End Select
@@ -605,16 +627,32 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
                                       ByVal odTip As String, ByVal odID As String, _
                                       ByVal naTip As String, _
                                       ByVal vrstaKretanja As String) As String
-    Dim jePartnerov As Boolean, povratOdKupca As Boolean
+    Dim jePartnerov As Boolean, predajaOdKupca As Boolean, jePozajmica As Boolean
     Dim ko As String
     jePartnerov = (StrComp(Trim$(vrsta), AMB_DOK_REVERS_PARTNERA, vbTextCompare) = 0)
-    ' OBRNUTA KAPIJA GLEDA SVAKI POVRAT OD KUPCA, ne samo kupac -> vozac.
+    jePozajmica = (StrComp(Trim$(vrstaKretanja), AMB_VK_POZAJMICA, vbTextCompare) = 0)
+    ' OBRNUTA KAPIJA GLEDA SVAKU PREDAJU OD KUPCA, ne samo kupac -> vozac.
     ' Prva verzija je trazila ceo par, pa su obican REVERS nad kupac -> FIRMA i
     ' kupac -> STANICA prolazili: par nije bio kupac -> vozac, pa se kapija nije
     ' ni palila. ODL-9 kaze da lanac ide kupac -> vozac -> stanica i da firma u
-    ' njega NE ulazi, pa je uslov sam POVRAT OD KUPCA.
-    povratOdKupca = (StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _
-                    (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)
+    ' njega NE ulazi, pa je uslov sama PREDAJA OD KUPCA.
+    '
+    ' Od ODL-24 predaja je povrat ILI pozajmica: isti lanac i isti kupcev broj, a
+    ' razlika je samo cije su gajbe. Kapija koja bi gledala samo povrat pustila bi
+    ' pozajmicu na stanicu i pod nasim brojem.
+    predajaOdKupca = (StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _
+                     ((StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0) Or _
+                      jePozajmica)
+
+    ' AMB-10-ODL-24: POZAJMICU DAJE KUPAC. Matrica je pusta i kooperantu (i on je
+    ' PARTNER), a presuda operatera govori o kupcu. Bez ove provere pozajmica
+    ' kooperanta na robnom dokumentu (otkup, gde AmbDokDozvoljavaKretanje ne
+    ' sudi) prosla bi tiho, sa obavezom koju niko nije odlucio.
+    If jePozajmica And StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
+        AmbDokKretanjeProblem = "AMB-10-ODL-24: pozajmicu ambalaze daje kupac, a " & _
+            "dobio je " & Trim$(odTip) & "."
+        Exit Function
+    End If
 
     If jePartnerov Then
         If StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
@@ -627,9 +665,10 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
                 "stanica; partnerov revers ne ide na " & Trim$(naTip) & "."
             Exit Function
         End If
-        If StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) <> 0 Then
+        If StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) <> 0 And _
+           Not jePozajmica Then
             AmbDokKretanjeProblem = "AMB-10-ODL-10: partnerov revers nosi " & _
-                "povrat praznih, a dobio je " & Trim$(vrstaKretanja) & "."
+                "povrat praznih ili pozajmicu, a dobio je " & Trim$(vrstaKretanja) & "."
             Exit Function
         End If
         If StrComp(Trim$(brojOwnerTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
@@ -646,9 +685,9 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
         Exit Function
     End If
 
-    If povratOdKupca Then
+    If predajaOdKupca Then
         If StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then
-            AmbDokKretanjeProblem = "AMB-10-ODL-9: povrat praznih od kupca ide " & _
+            AmbDokKretanjeProblem = "AMB-10-ODL-9: predaja praznih od kupca ide " & _
                 "na vozaca (lanac kupac -> vozac -> stanica), a ide na " & _
                 Trim$(naTip) & "."
             Exit Function
@@ -668,14 +707,14 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
         ko = Trim$(brojOwnerTip)
         If Len(ko) = 0 Then ko = "(nije zadat)"
         If StrComp(Trim$(brojOwnerTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
-            AmbDokKretanjeProblem = "AMB-10-ODL-10: povrat praznih od kupca " & _
+            AmbDokKretanjeProblem = "AMB-10-ODL-10: predaja praznih od kupca " & _
                 "nosi kupcev broj, a vlasnik broja je " & ko & " (dokument '" & _
                 Trim$(vrsta) & "')."
             Exit Function
         End If
         If StrComp(Trim$(brojOwnerID), Trim$(odID), vbTextCompare) <> 0 Then
             AmbDokKretanjeProblem = "AMB-10-ODL-10: broj nosi kupac '" & _
-                Trim$(brojOwnerID) & "' a prazne vraca '" & Trim$(odID) & _
+                Trim$(brojOwnerID) & "' a prazne predaje '" & Trim$(odID) & _
                 "' -- dokument bi imao tudj broj."
         End If
     End If
@@ -792,6 +831,23 @@ End Function
 Public Function AmbVrstaJeZahtev(ByVal vrsta As String) As Boolean
     If Not AmbVrstaPoznata(vrsta) Then Exit Function
     AmbVrstaJeZahtev = (StrComp(Trim$(vrsta), AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0)
+End Function
+
+' AMB-INV-13: VRSTA KOJA SAMA UNOSI SVOJU KOLICINU U OPTICAJ (ODL-24).
+'
+' Pozajmica nosi gajbe koje do tada NISU bile u opticaju -- kupceve. Zato uz nju
+' pisac upisuje ULAZ_TUDJE iz SpoljniSvet iste kolicine, nezavisno od
+' partnerovog salda i bez pitanja o manjku: saldo partnera se ne menja, vozac
+' dobija kolicinu, obaveza raste za kolicinu. Da pisac racuna deficit kao za
+' povrat, kupac koji drzi 5 nasih i pozajmi 40 svojih dobio bi ulaz 35 -- pet
+' nasih bi se proknjizilo kao vraceno, a pozajmica bi opet ostavila trag
+' odstupanja.
+'
+' Ulaz NIJE zahtev (AmbVrstaJeZahtev ostaje kakav je): generise ga pisac, kao i
+' pokrice deficita. Zato cvor AMB-INV-04 ne nastaje -- idempotencija meri zahtev
+' (POZAJMICA), a ne njegov ulaz.
+Public Function AmbVrstaUnosiUOpticaj(ByVal vrsta As String) As Boolean
+    AmbVrstaUnosiUOpticaj = (StrComp(Trim$(vrsta), AMB_VK_POZAJMICA, vbTextCompare) = 0)
 End Function
 
 ' Vrste koje jedan zahtev sme da proizvede NA ISTOM PARU naloga. Prazno za vrstu
@@ -1087,6 +1143,10 @@ End Sub
 '
 ' vrstaOriginala je prazna za obican dogadjaj, a za kontra-stav nosi vrstu reda
 ' koji se ponistava.
+'
+' POZAJMICA_PARTNERA doprinosi NULU, i to je pravilo (ODL-24): obavezu nosi
+' njen ULAZ_TUDJE iste kolicine (AMB-INV-13). Da i ona nosi +N, pozajmica bi
+' obavezu brojala dvaput.
 Public Function AmbDoprinosObavezi(ByVal vrsta As String, ByVal kolicina As Double, _
                                    ByVal vrstaOriginala As String) As Double
     If Len(Trim$(vrstaOriginala)) > 0 Then

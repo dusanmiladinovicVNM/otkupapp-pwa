@@ -310,7 +310,7 @@ SABOTAZE = {
     "revers-smer": (
         "modNovacUnos.bas",
         '    smer = L(p, "smerRev")\n'
-        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POVRAT_KUP Then\n"
+        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POZAJMICA_KUP Then\n"
         '        fokus = "smerRev": ReversValidiraj = Poruka("NOVUNOS_ERR_SMER"): Exit Function\n'
         "    End If\n",
         '    smer = L(p, "smerRev")   \' SABOTAZA: smer vise nije obavezan\n',
@@ -6835,11 +6835,8 @@ SABOTAZE = {
     # pokrivao oba smera -- a tada vlasnik broja nije odredjen vrstom.
     "amb-partner-nosi-izdavanje": (
         "modAmbalazaUgovor.bas",
-        "            AmbDokDozvoljavaKretanje = (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)\n",
-        "            Select Case Trim$(vrstaKretanja)   ' SABOTAZA: nosi i izdavanje\n"
-        "                Case AMB_VK_POVRAT_PRAZNE, AMB_VK_IZDATA_PRAZNA\n"
-        "                    AmbDokDozvoljavaKretanje = True\n"
-        "            End Select\n",
+        "                Case AMB_VK_POVRAT_PRAZNE, AMB_VK_POZAJMICA\n",
+        "                Case AMB_VK_POVRAT_PRAZNE, AMB_VK_POZAJMICA, AMB_VK_IZDATA_PRAZNA   ' SABOTAZA: nosi i izdavanje\n",
         "Test_Amb_PisacKnjige",
         "AmbDok: partnerov revers NE nosi IZDATA_PRAZNA -- to je nas papir",
     ),
@@ -6912,7 +6909,7 @@ SABOTAZE = {
     # brojem, cime je AMB-10-ODL-10 potpuno zaobidjen.
     "amb-odl10-nas-revers-nosi-kupca": (
         "modAmbalazaUgovor.bas",
-        "    If povratOdKupca Then\n",
+        "    If predajaOdKupca Then\n",
         "    If False Then   ' SABOTAZA: obrnuta kapija ugasena\n",
         "Test_Amb_DokumentUgovor",
         "ODL-10: obican REVERS ne sme da nosi kupac -> vozac",
@@ -6923,9 +6920,9 @@ SABOTAZE = {
     "amb-odl9-povrat-od-kupca-ide-svuda": (
         "modAmbalazaUgovor.bas",
         "        If StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then\n"
-        "            AmbDokKretanjeProblem = \"AMB-10-ODL-9: povrat praznih od kupca ide \" & _\n",
-        "        If False Then   ' SABOTAZA: povrat od kupca sme na bilo koga\n"
-        "            AmbDokKretanjeProblem = \"AMB-10-ODL-9: povrat praznih od kupca ide \" & _\n",
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-9: predaja praznih od kupca ide \" & _\n",
+        "        If False Then   ' SABOTAZA: predaja od kupca sme na bilo koga\n"
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-9: predaja praznih od kupca ide \" & _\n",
         "Test_Amb_DokumentUgovor",
         "ODL-9: obican REVERS ne sme da nosi kupac -> firma",
     ),
@@ -7090,7 +7087,7 @@ SABOTAZE = {
     # funkciju, oba sloja padaju zajedno, pa ga jedna tvrdnja hvata.
     "amb-ulaz-predlog-ne-gleda-smer": (
         "modNovacUnos.bas",
-        "    RevSmerPredlazeBroj = (smer <> SMER_REV_POVRAT_KUP)\n",
+        "    RevSmerPredlazeBroj = Not RevSmerJeKupcev(smer)\n",
         "    RevSmerPredlazeBroj = True   ' SABOTAZA: predlog ne gleda smer\n",
         "T_ReversValidiraj_PovratKupcaJeSvojSmer",
         "kupcev smer NE dobija predlog broja",
@@ -7291,9 +7288,9 @@ SABOTAZE = {
     # nacina da pozivalac ponovi upis sa potvrdjenih 15.
     "amb-rvp-potvrda-se-ne-prosledjuje": (
         "modAmbalaza.bas",
-        "                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID, _\n"
+        "                    vrstaKretanja, DOK_TIP_AMBALAZA_DOKUMENT, dokID, _\n"
         "                    potvrdaDeficita\n",
-        "                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID\n",
+        "                    vrstaKretanja, DOK_TIP_AMBALAZA_DOKUMENT, dokID\n",
         "Test_RVP_DeficitSePotvrdjuje",
         "RVP deficit: potvrdjen manjak 15 PROLAZI",
     ),
@@ -7424,9 +7421,9 @@ SABOTAZE = {
     "amb-odl22-vlasnik-broja-se-ne-gleda": (
         "modAmbalazaUgovor.bas",
         "        If StrComp(Trim$(brojOwnerTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then\n"
-        "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: povrat praznih od kupca \" & _\n",
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: predaja praznih od kupca \" & _\n",
         "        If False Then   ' SABOTAZA: vlasnik broja se ne gleda\n"
-        "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: povrat praznih od kupca \" & _\n",
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: predaja praznih od kupca \" & _\n",
         "Test_Amb_DokumentUgovor",
         "ODL-22: dokument koji NE objavi vlasnika broja pada (fail-closed)",
     ),
@@ -7436,10 +7433,10 @@ SABOTAZE = {
         "modAmbalazaUgovor.bas",
         "        If StrComp(Trim$(brojOwnerID), Trim$(odID), vbTextCompare) <> 0 Then\n"
         "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: broj nosi kupac '\" & _\n"
-        "                Trim$(brojOwnerID) & \"' a prazne vraca '\" & Trim$(odID) & _\n",
+        "                Trim$(brojOwnerID) & \"' a prazne predaje '\" & Trim$(odID) & _\n",
         "        If False Then   ' SABOTAZA: tudj broj prolazi\n"
         "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: broj nosi kupac '\" & _\n"
-        "                Trim$(brojOwnerID) & \"' a prazne vraca '\" & Trim$(odID) & _\n",
+        "                Trim$(brojOwnerID) & \"' a prazne predaje '\" & Trim$(odID) & _\n",
         "Test_Amb_DokumentUgovor",
         "ODL-22: broj jednog kupca uz povrat drugog pada i na robnom dokumentu",
     ),
@@ -8500,6 +8497,137 @@ SABOTAZE = {
         "        TekstZaCeliju = tekst   ' SABOTAZA: apostrof se ne udvaja\n",
         "T_KI023_KatalogCuvaVodeciApostrof",
         "katalog cuva vodeci apostrof: tekst sa imenom ostaje pod navodnicima",
+    ),
+    # --- ODL-24: POZAJMICA KUPCA (AMBALAZA.md 6.12k, stavka 166) -----------
+    #
+    # Pozajmica ispada iz zatvorenog enuma: pisac je odbija kao nepoznatu vrstu,
+    # pa model opet ume samo da je knjizi kao povrat sa potvrdom manjka.
+    "odl24-pozajmica-van-enuma": (
+        "modAmbalazaUgovor.bas",
+        "                        AMB_VK_NABAVKA, AMB_VK_OTPIS, AMB_VK_POZAJMICA)\n",
+        "                        AMB_VK_NABAVKA, AMB_VK_OTPIS)   ' SABOTAZA: pozajmica van enuma\n",
+        "Test_ODL24_UgovorPozajmice",
+        "ODL-24 ugovor: POZAJMICA_PARTNERA je poznata vrsta",
+    ),
+    # Matrica obrne strane: pozajmica bi isla od nas ka kupcu, sto je izdavanje
+    # sa drugim imenom.
+    "odl24-matrica-obrnuta": (
+        "modAmbalazaUgovor.bas",
+        "        Case AMB_VK_POZAJMICA\n"
+        "            AmbKlaseVrste = Array(AMB_KLASA_PARTNER, AMB_KLASA_SOPSTVENI)\n",
+        "        Case AMB_VK_POZAJMICA\n"
+        "            AmbKlaseVrste = Array(AMB_KLASA_SOPSTVENI, AMB_KLASA_PARTNER)   ' SABOTAZA\n",
+        "Test_ODL24_UgovorPozajmice",
+        "ODL-24 ugovor: pozajmica ide PARTNER -> SOPSTVENI",
+    ),
+    # Kupcev papir prestane da nosi pozajmicu -- ostaje samo povrat, pa F7 nema
+    # dokument na koji bi pozajmicu knjizio.
+    "odl24-partnerov-ne-nosi-pozajmicu": (
+        "modAmbalazaUgovor.bas",
+        "                Case AMB_VK_POVRAT_PRAZNE, AMB_VK_POZAJMICA\n",
+        "                Case AMB_VK_POVRAT_PRAZNE   ' SABOTAZA: kupcev papir ne nosi pozajmicu\n",
+        "Test_ODL24_UgovorPozajmice",
+        "ODL-24 ugovor: kupcev dokument nosi pozajmicu",
+    ),
+    # Pozajmicu sme da da bilo koji partner: matrica pusta kooperanta, pa bi
+    # pozajmica na otkupu prosla sa obavezom koju niko nije odlucio.
+    "odl24-pozajmica-od-bilo-koga": (
+        "modAmbalazaUgovor.bas",
+        "    If jePozajmica And StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: pozajmicu sme da da bilo ko\n",
+        "Test_ODL24_UgovorPozajmice",
+        "ODL-24 ugovor: pozajmica od kooperanta pada iako je matrica pusta",
+    ),
+    # Obrnuta kapija se vrati na "samo povrat": pozajmica od kupca tada sme na
+    # stanicu i pod nasim brojem.
+    "odl24-predaja-samo-povrat": (
+        "modAmbalazaUgovor.bas",
+        "    predajaOdKupca = (StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _\n"
+        "                     ((StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0) Or _\n"
+        "                      jePozajmica)\n",
+        "    predajaOdKupca = (StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _\n"
+        "                     (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)   ' SABOTAZA\n",
+        "Test_ODL24_UgovorPozajmice",
+        "ODL-24 ugovor: pozajmica od kupca ide na vozaca, ne na stanicu",
+    ),
+    # AMB-INV-13: ulaz pozajmice se racuna kao MANJAK, ne kao cela kolicina.
+    # Upis prolazi bez pitanja, ali kupac izgubi svojih 5 nasih (35 + 5 = 40),
+    # pa pozajmica opet ostavlja trag odstupanja.
+    "odl24-ulaz-je-manjak": (
+        "modAmbalaza.bas",
+        "        pokriceZaUpis = kolicina\n",
+        "        pokriceZaUpis = AmbDeficitZaPrenos(odTip, odID, tipAmb, kolicina)   ' SABOTAZA: ulaz je manjak\n",
+        "Test_ODL24_PozajmicaJeSvojDogadjaj",
+        "ODL-24: u opticaj ulazi CELA kolicina (40), ne manjak (35)",
+    ),
+    # Pozajmica ide putem povrata: jezgro racuna manjak i PITA, pa se pozajmica
+    # bez potvrde ne moze upisati -- tacno zateceno stanje iz 6.12k.
+    "odl24-pozajmica-pita-manjak": (
+        "modAmbalaza.bas",
+        "    If modAmbalazaUgovor.AmbVrstaUnosiUOpticaj(vrstaK) Then\n",
+        "    If False Then   ' SABOTAZA: pozajmica ide putem manjka\n",
+        "Test_ODL24_PozajmicaJeSvojDogadjaj",
+        "ODL-24: pozajmica se upisuje bez potvrde manjka",
+    ),
+    # Pozajmica sama nosi i obavezu: zajedno sa svojim ULAZ_TUDJE firma bi kupcu
+    # dugovala dvostruko.
+    "odl24-pozajmica-dize-obavezu-dvaput": (
+        "modAmbalazaUgovor.bas",
+        "        Case AMB_VK_VRACANJE_TUDJE:  AmbDoprinosObavezi = -kolicina\n",
+        "        Case AMB_VK_VRACANJE_TUDJE:  AmbDoprinosObavezi = -kolicina\n"
+        "        Case AMB_VK_POZAJMICA:       AmbDoprinosObavezi = kolicina   ' SABOTAZA: obaveza dvaput\n",
+        "Test_ODL24_PozajmicaJeSvojDogadjaj",
+        "ODL-24: firma duguje kupcu 40, ne 80",
+    ),
+    # Pisac pozajmice knjizi POVRAT: kupcev papir nastaje sa pogresnom vrstom, a
+    # iznad salda ga jezgro odbija trazeci potvrdu manjka.
+    "odl24-pisac-pise-povrat": (
+        "modAmbalaza.bas",
+        "    UpisiPozajmicuKupca_TX = UpisiKupcevDokument_TX(AMB_VK_POZAJMICA, datum, broj, _\n",
+        "    UpisiPozajmicuKupca_TX = UpisiKupcevDokument_TX(AMB_VK_POVRAT_PRAZNE, datum, broj, _\n",
+        "T_ODL24_F7PozajmicaKupca",
+        "F7 pozajmica: snimanje pravi kupcev dokument",
+    ),
+    # Sesti smer ispadne iz opsega validatora: F7 ga odbija kao "izaberi smer"
+    # pre nego sto stigne do partnera.
+    "odl24-f7-smer-van-opsega": (
+        "modNovacUnos.bas",
+        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POZAJMICA_KUP Then\n",
+        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POVRAT_KUP Then   ' SABOTAZA: sesti smer van opsega\n",
+        "T_ODL24_F7PozajmicaKupca",
+        "F7 pozajmica: partner koji nije kupac se odbija uz polje partnera",
+    ),
+    # Pozajmica prestane da bude kupcev smer: ljuska i validator joj predlazu
+    # broj iz NASEG niza.
+    "odl24-f7-predlaze-broj": (
+        "modNovacUnos.bas",
+        "    RevSmerJeKupcev = (smer = SMER_REV_POVRAT_KUP) Or (smer = SMER_REV_POZAJMICA_KUP)\n",
+        "    RevSmerJeKupcev = (smer = SMER_REV_POVRAT_KUP)   ' SABOTAZA: pozajmica nije kupcev smer\n",
+        "T_ODL24_F7PozajmicaKupca",
+        "F7 pozajmica: broj je kupcev i ne predlaze se",
+    ),
+    # F7 salje pozajmicu kroz protokol povrata: operater dobija pitanje o manjku
+    # za redovan posao -- tacno ono sto je ODL-24 (f) ukinuo.
+    "odl24-f7-ide-kroz-povrat": (
+        "modNovacUnos.bas",
+        "    If smer = SMER_REV_POZAJMICA_KUP Then\n"
+        "        revDokID = modAmbalaza.UpisiPozajmicuKupca_TX( _\n",
+        "    If smer = SMER_REV_POZAJMICA_KUP Then\n"
+        "        revDokID = RevKupcaUpisi(p, poruke)   ' SABOTAZA: pozajmica ide kroz povrat\n"
+        "        If False Then revDokID = modAmbalaza.UpisiPozajmicuKupca_TX( _\n",
+        "T_ODL24_F7PozajmicaKupca",
+        "F7 pozajmica: operater ne dobija pitanje o manjku",
+    ),
+    # Pozajmica se salje na stampu: papir za kupcev dokument ne nastaje, ali
+    # operater dobija upozorenje o padu stampe (ODL-32 vazi i za pozajmicu).
+    "odl24-f7-stampa": (
+        "modNovacUnos.bas",
+        "        ' Pozajmica je kupcev dokument: papir se ne pravi (ODL-32 vazi i za nju).\n"
+        "        ReversUpisi = BrojIliOznaka(brDok)\n",
+        "        poruke = poruke & StampajRevers(p, smer, revDokID)   ' SABOTAZA: pozajmica se stampa\n"
+        "        ReversUpisi = BrojIliOznaka(brDok)\n",
+        "T_ODL24_F7PozajmicaKupca",
+        "F7 pozajmica: kupcev dokument se ne stampa i ne javlja kvar (ODL-32)",
     ),
 }
 

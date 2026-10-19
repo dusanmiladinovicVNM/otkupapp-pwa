@@ -1287,13 +1287,14 @@ Private Sub BuildForm(frm As Object)
     NewFieldG z, "fgHladnjaca", Poruka("OTKUI_FLD_HLADNJACA"), "cmb", "", 1, False, False, "DOK"
     NewFieldG z, "fgPogon", Poruka("OTKUI_FLD_POGON"), "txt", "", 1, False, False, "DOK"
 
-    ' SMER REVERSA - PET medjusobno iskljucivih segmenata. Prva cetiri su isti
+    ' SMER REVERSA - SEST medjusobno iskljucivih segmenata. Prva cetiri su isti
     ' skup kao frmDokumenta.SetupOMIzdavanjeToggle; peti je povrat praznih od
-    ' kupca (AMB-10-ODL-23), dokument koji nosi KUPCEV broj.
+    ' kupca (AMB-10-ODL-23), a sesti pozajmica kupca (AMB-10-ODL-24) -- oba
+    ' dokumenta nose KUPCEV broj.
     '
-    ' Sirina je 73 umesto 91 jer peti segment u istih 370pt inace ne staje:
-    ' 1 + 5*73 + 4*1 = 370. Najduzi natpis je 12 znakova ('Prijem od OM',
-    ' 'Povrat kupca'), isti kao pre reza.
+    ' Sest segmenata u istih 370pt: 1 + 4*61 + 2*60 + 5*1 = 370. Uzi (60) su
+    ' segmenti sa natpisom od 9 znakova ('Izdato OM', 'Pozajmica'); ostali nose
+    ' 12 znakova ('Prijem od OM', 'Povrat kupca'). Izgled je rucna provera.
     Set fr = NewFrame(z, "fgSmerRev", 0, 0, 370, FIELD_GRP_H, C_WHITE)
     fr.tag = "fld:3:AMB"
     NewLbl fr, "fgSmerRevL", Poruka("OTKUI_FLD_SMER_REV"), 0, 0, 300, 12, TS_LABEL, True, C_MUTED, -1
@@ -1301,11 +1302,12 @@ Private Sub BuildForm(frm As Object)
     ' NIJEDAN segment nije unapred obelezen: smer se bira eksplicitno. Ranije je
     ' segRev1 izgledao izabrano a mSmerRev je bio 0, pa je forma pokazivala smer
     ' koji dokument nije imao.
-    NewSegBtn fr, "segRev1", Poruka("OTKUI_SEG_REV_IZD_KOOP"), 1, 17, 73, FIELD_H - 2, False
-    NewSegBtn fr, "segRev2", Poruka("OTKUI_SEG_REV_PRI_KOOP"), 75, 17, 73, FIELD_H - 2, False
-    NewSegBtn fr, "segRev3", Poruka("OTKUI_SEG_REV_IZD_OM"), 149, 17, 73, FIELD_H - 2, False
-    NewSegBtn fr, "segRev4", Poruka("OTKUI_SEG_REV_PRI_OM"), 223, 17, 73, FIELD_H - 2, False
-    NewSegBtn fr, "segRev5", Poruka("OTKUI_SEG_REV_POVRAT_KUP"), 297, 17, 73, FIELD_H - 2, False
+    NewSegBtn fr, "segRev1", Poruka("OTKUI_SEG_REV_IZD_KOOP"), 1, 17, 61, FIELD_H - 2, False
+    NewSegBtn fr, "segRev2", Poruka("OTKUI_SEG_REV_PRI_KOOP"), 63, 17, 61, FIELD_H - 2, False
+    NewSegBtn fr, "segRev3", Poruka("OTKUI_SEG_REV_IZD_OM"), 125, 17, 60, FIELD_H - 2, False
+    NewSegBtn fr, "segRev4", Poruka("OTKUI_SEG_REV_PRI_OM"), 186, 17, 61, FIELD_H - 2, False
+    NewSegBtn fr, "segRev5", Poruka("OTKUI_SEG_REV_POVRAT_KUP"), 248, 17, 61, FIELD_H - 2, False
+    NewSegBtn fr, "segRev6", Poruka("OTKUI_SEG_REV_POZAJMICA_KUP"), 310, 17, 60, FIELD_H - 2, False
 
 
     ' VREDNOST - forest ploca (isti shell, druga ispuna). Ploca ne zauzima celo
@@ -3646,7 +3648,7 @@ Private Sub KlasaCenaPoRezimu(ByVal z As Object, ByVal mode As String)
         UCase$(Poruka(IIf(imaCenu, "OTKUI_FLD_KLASA_CENA", "OTKUI_FLD_KLASA")))
 End Sub
 
-' Pet smerova reversa su medjusobno iskljucivi - isti obrazac kao SetKlasa.
+' Sest smerova reversa su medjusobno iskljucivi - isti obrazac kao SetKlasa.
 ' n = 0 gasi sve (stanje "nije izabrano", u koje se rezim i vraca).
 Private Sub SetSmerRev(ByVal n As Long)
     Dim z As Object, i As Long, sel As Boolean
@@ -3654,19 +3656,20 @@ Private Sub SetSmerRev(ByVal n As Long)
     On Error Resume Next
     Set z = mFrm.Controls("zForm").Controls("fgSmerRev")
     ' Vlasnik niza se cita PRE dodele -- posle nje se stari smer vise ne zna.
-    stariKupcev = (mSmerRev = modNovacUnos.SMER_REV_POVRAT_KUP)
-    noviKupcev = (n = modNovacUnos.SMER_REV_POVRAT_KUP)
+    ' Kupcev je i povrat (5) i pozajmica (6): odluka je u modNovacUnos.
+    stariKupcev = modNovacUnos.RevSmerJeKupcev(mSmerRev)
+    noviKupcev = modNovacUnos.RevSmerJeKupcev(n)
     mSmerRev = n
     MarkDirty
-    For i = 1 To 5
+    For i = 1 To modNovacUnos.SMER_REV_POZAJMICA_KUP
         sel = (i = n)
         BoxState z, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
     Next i
 
     ' BROJ PRATI VLASNIKA NIZA, ne svaki smer.
     '
-    ' Nasa cetiri smera dele niz STANICE; peti nosi KUPCEV broj. Dok se vlasnik
-    ' ne menja (1 <-> 2, 3 <-> 4), broj se NE dira -- rucno upisan broj bi inace
+    ' Nasa cetiri smera dele niz STANICE; peti i sesti nose KUPCEV broj. Dok se
+    ' vlasnik ne menja (1 <-> 2, 3 <-> 4, 5 <-> 6), broj se NE dira -- rucno upisan broj bi inace
     ' nestajao na svaki klik. Kad se vlasnik promeni, polje se PRAZNI, pa se za
     ' nase smerove trazi predlog.
     '
@@ -4459,6 +4462,7 @@ Private Sub UiClickCore(ByVal tag As String)
         Case "segRev3": SetSmerRev 3
         Case "segRev4": SetSmerRev 4
         Case "segRev5": SetSmerRev 5
+        Case "segRev6": SetSmerRev 6
         Case "segAvans1": SetAvans 1
         Case "segAvans2": SetAvans 2
         Case "btnSacuvaj", "btnSacuvajPrint": CommitDokument (tag = "btnSacuvajPrint")

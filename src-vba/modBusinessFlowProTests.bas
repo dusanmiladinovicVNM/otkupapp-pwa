@@ -340,6 +340,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_PRJ_PovratIdeSaKlasomKojaPostoji
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
     Test_AMB_TipVanSifarnikaPisacOdbija
+    Test_ODL24_UgovorPozajmice
+    Test_ODL24_PozajmicaJeSvojDogadjaj
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -6548,6 +6550,228 @@ Private Function RvpUpisiSaPotvrdom(ByVal d As Date, ByVal broj As String, _
     On Error GoTo 0
     RvpUpisiSaPotvrdom = res
 End Function
+
+' ODL-24: POZAJMICA KUPCA KROZ JEZGRO, u jednoj transakciji kao pisac.
+'
+' Zaglavlje kupcevog dokumenta pa PrenesiAmbalazu -- isti redosled kao
+' UpisiReversPartnera_TX. Zahtev se salje DVAPUT u istoj TX: drugi poziv je
+' ponavljanje, i AMB-INV-04 mora da vrati isti red bez drugog ULAZ_TUDJE.
+' Vrsta je LITERAL, ne konstanta: test mora da se kompajlira i nad kodom koji
+' pozajmicu jos ne zna, da bi reprodukcija bila crvena PO IMENU (stavka 166).
+' Vraca AmbDokID ili "" uz RAZLOG -- pisac gresku dize.
+Private Function Odl24Pozajmi(ByVal d As Date, ByVal broj As String, _
+                              ByVal kupacID As String, ByVal vozacID As String, _
+                              ByVal tipAmb As String, ByVal kol As Double, _
+                              Optional ByRef outRazlog As String, _
+                              Optional ByRef outPrvi As String, _
+                              Optional ByRef outPonovljen As String) As String
+    Const VK_POZ As String = "POZAJMICA_PARTNERA"
+    Dim tx As clsTransaction, dokID As String
+
+    outRazlog = ""
+    outPrvi = ""
+    outPonovljen = ""
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS_PARTNERA, broj, d, _
+                                         AMB_NALOG_KUPAC, kupacID, "test ODL-24")
+    outPrvi = modAmbalaza.PrenesiAmbalazu(tx, d, tipAmb, kol, _
+                                          AMB_NALOG_KUPAC, kupacID, AMB_NALOG_VOZAC, vozacID, _
+                                          VK_POZ, DOK_TIP_AMBALAZA_DOKUMENT, dokID)
+    outPonovljen = modAmbalaza.PrenesiAmbalazu(tx, d, tipAmb, kol, _
+                                               AMB_NALOG_KUPAC, kupacID, AMB_NALOG_VOZAC, vozacID, _
+                                               VK_POZ, DOK_TIP_AMBALAZA_DOKUMENT, dokID)
+    tx.CommitTx
+    Set tx = Nothing
+
+    Odl24Pozajmi = dokID
+    Exit Function
+EH:
+    outRazlog = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    Odl24Pozajmi = ""
+End Function
+
+' ODL-24: UGOVOR POZAJMICE -- tablica istinitosti, svaka tvrdnja uz kontra-tvrdnju.
+'
+' Odluke operatera 19.10.2026 (AMBALAZA.md 6.12k): pozajmica je deveta vrsta
+' (PARTNER -> SOPSTVENI), nosi je samo KUPCEV dokument, ide samo od kupca na
+' vozaca uz kupcev broj. Obavezu NE nosi ona nego njen ULAZ_TUDJE (AMB-INV-13),
+' pa ULAZ_TUDJE ostaje posledica -- cvor AMB-INV-04 ne nastaje.
+'
+' Vrsta je LITERAL iz istog razloga kao u Odl24Pozajmi. Kontra-tvrdnje su zelene
+' i pre ispravke; one cuvaju da sirenje ugovora ne pomeri ono sto vec vazi.
+' SABOTAZE: odl24-pozajmica-van-enuma, odl24-matrica-obrnuta,
+' odl24-partnerov-ne-nosi-pozajmicu, odl24-pozajmica-od-bilo-koga,
+' odl24-predaja-samo-povrat (tvrdnje imenuje tools/sabotaza.py).
+Private Sub Test_ODL24_UgovorPozajmice()
+    Const VK_POZ As String = "POZAJMICA_PARTNERA"
+    On Error GoTo EH
+
+    Dim klase As Variant, par As String
+    klase = modAmbalazaUgovor.AmbKlaseVrste(VK_POZ)
+    If UBound(klase) >= 1 Then par = CStr(klase(0)) & ">" & CStr(klase(1))
+
+    ' --- ENUM I MATRICA ---------------------------------------------------
+    AssertTrue modAmbalazaUgovor.AmbVrstaPoznata(VK_POZ), _
+               "ODL-24 ugovor: POZAJMICA_PARTNERA je poznata vrsta"
+    AssertEquals AMB_KLASA_PARTNER & ">" & AMB_KLASA_SOPSTVENI, par, _
+                 "ODL-24 ugovor: pozajmica ide PARTNER -> SOPSTVENI"
+    AssertTrue modAmbalazaUgovor.AmbVrstaJeZahtev(VK_POZ), _
+               "ODL-24 ugovor: pozajmica JE zahtev"
+    AssertTrue Not modAmbalazaUgovor.AmbVrstaJeZahtev(AMB_VK_ULAZ_TUDJE), _
+               "ODL-24 ugovor: ULAZ_TUDJE ostaje posledica, ne zahtev"
+    AssertEquals "0", CStr(modAmbalazaUgovor.AmbDoprinosObavezi(VK_POZ, 40#, "")), _
+                 "ODL-24 ugovor: pozajmica sama ne dize obavezu -- nosi je njen ULAZ"
+
+    ' --- KOJI DOKUMENT JE NOSI --------------------------------------------
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS_PARTNERA, VK_POZ), _
+               "ODL-24 ugovor: kupcev dokument nosi pozajmicu"
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS_PARTNERA, _
+                                                          AMB_VK_POVRAT_PRAZNE), _
+               "ODL-24 ugovor: kupcev dokument i dalje nosi povrat"
+    AssertTrue Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS, VK_POZ), _
+               "ODL-24 ugovor: nas revers NE nosi pozajmicu"
+
+    ' --- KO, KOME, CIJIM BROJEM --------------------------------------------
+    AssertEquals "", modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     AMB_DOK_REVERS_PARTNERA, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, VK_POZ), _
+                 "ODL-24 ugovor: kupac -> vozac uz kupcev broj prolazi"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     "", "", "", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     AMB_NALOG_STANICA, VK_POZ), "ODL-24", vbBinaryCompare) > 0, _
+               "ODL-24 ugovor: pozajmica od kooperanta pada iako je matrica pusta"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     "", "", "", AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     AMB_NALOG_STANICA, VK_POZ), "ODL-9", vbBinaryCompare) > 0, _
+               "ODL-24 ugovor: pozajmica od kupca ide na vozaca, ne na stanicu"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     AMB_DOK_REVERS, AMB_NALOG_STANICA, TEST_ST_ID, _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, VK_POZ), _
+                     "ODL-10", vbBinaryCompare) > 0, _
+               "ODL-24 ugovor: pozajmica nosi kupcev broj, ne nas"
+    Exit Sub
+EH:
+    LogFatal "Test_ODL24_UgovorPozajmice", Err.Number, Err.description
+End Sub
+
+' ODL-24: POZAJMICA JE SVOJ DOGADJAJ -- kroz jezgro, sa brojevima.
+'
+' Presuda operatera 08.10.2026: kupci pre sezone predaju SVOJE prazne gajbe
+' vozacu. Do ODL-24 se to knjizilo kao povrat sa potvrdjenim manjkom, pa su
+' planirana pozajmica i neobjasnjeno odstupanje ostavljali isti trag.
+'
+' Kupac drzi TACNO 5 nasih (svez tip, isti put kao Test_RVP_DeficitSePotvrdjuje)
+' i pozajmi 40 svojih. Po AMB-INV-13 u opticaj ulazi CELA kolicina (40, a ne
+' manjak 35), kupac i dalje drzi 5 nasih, vozac dobija 40, obaveza raste za 40
+' (ne 80). Kontra-tvrdnja na kraju: povrat istog kupca i dalje PITA za manjak,
+' jer odstupanje ostaje odstupanje.
+'
+' Tvrdnje o zaglavlju i ishodu stoje IZNAD rane izlazne tacke. Kraj meri
+' Test_RVP_DeficitSePotvrdjuje (povrat sa potvrdom: pokrice je manjak).
+' SABOTAZE: odl24-ulaz-je-manjak, odl24-pozajmica-dize-obavezu-dvaput,
+' odl24-partnerov-ne-nosi-pozajmicu.
+Private Sub Test_ODL24_PozajmicaJeSvojDogadjaj()
+    Const VK_POZ As String = "POZAJMICA_PARTNERA"
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("ODL24P")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPP-" & scenario)
+
+    ' Nase gajbe kupcu: nabavka -> vozac (revers) -> kupac (prijemnica).
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABP-" & scenario, "test pozajmica"
+    Dim revP As String
+    revP = modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, tipT, _
+                                              50#, REV_SMER_PRIJEM_OD_OM, "", _
+                                              TEST_VOZ_ID, "test pozajmica")
+    AssertTrue Len(revP) > 0, "ODL-24: preduslov -- vozac je preuzeo 50"
+
+    Dim razlogSeed As String
+    AssertTrue Len(RvpSejKupcu(testDate, scenario, TEST_KUP_ID, 5, razlogSeed, tipT)) > 0, _
+               "ODL-24: preduslov -- kupac je dobio 5 nasih"
+
+    Dim kupPre As Double, vozPre As Double, obPre As Double
+    kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT)
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT)
+    obPre = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT)
+    AssertTrue Abs(kupPre - 5#) < 0.001, "ODL-24: preduslov -- saldo kupca je 5"
+
+    ' POZAJMICA 40, BEZ POTVRDE. Ponavljanje ide u istoj TX (Odl24Pozajmi).
+    Dim dok As String, razlog As String, prvi As String, ponovljen As String
+    dok = Odl24Pozajmi(testDate, "KUPP1-" & scenario, TEST_KUP_ID, TEST_VOZ_ID, _
+                       tipT, 40#, razlog, prvi, ponovljen)
+    AssertEquals "", razlog, "ODL-24: pozajmica se upisuje bez potvrde manjka"
+    AssertTrue Len(dok) > 0, "ODL-24: pozajmica je upisana"
+    If Len(dok) = 0 Then GoTo Kraj
+
+    ' DOGADJAJ: jedan red pozajmice, kupac -> vozac, i nijedan povrat.
+    AssertEquals "1", CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, VK_POZ)), _
+                 "ODL-24: predaja je JEDAN red vrste POZAJMICA_PARTNERA"
+    AssertEquals "0", CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                           AMB_VK_POVRAT_PRAZNE)), _
+                 "ODL-24: pozajmica NIJE povrat -- nema reda POVRAT_PRAZNE"
+    AssertEquals TEST_KUP_ID, AmbNoviPolje(dok, DOK_TIP_AMBALAZA_DOKUMENT, VK_POZ, _
+                 COL_AMB_OD_ID), "ODL-24: gajbe polaze od kupca"
+    AssertEquals TEST_VOZ_ID, AmbNoviPolje(dok, DOK_TIP_AMBALAZA_DOKUMENT, VK_POZ, _
+                 COL_AMB_NA_ID), "ODL-24: gajbe stizu vozacu"
+
+    ' AMB-INV-13: u opticaj ulazi CELA kolicina, jednim redom.
+    AssertEquals "1", CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                           AMB_VK_ULAZ_TUDJE)), _
+                 "ODL-24: ulaz u opticaj je JEDAN red i posle ponovljenog zahteva"
+    AssertTrue Abs(AmbNoviKolicina(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                   AMB_VK_ULAZ_TUDJE) - 40#) < 0.001, _
+               "ODL-24: u opticaj ulazi CELA kolicina (40), ne manjak (35)"
+    AssertEquals prvi, ponovljen, _
+                 "ODL-24: ponovljen zahtev vraca isti red (AMB-INV-04)"
+
+    ' BROJEVI: kupac zadrzava nase, vozac dobija sve, obaveza raste jednom.
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT) - _
+                   kupPre) < 0.001, _
+               "ODL-24: kupac i dalje drzi svojih 5 nasih -- pozajmica ne dira saldo"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT) - _
+                   (vozPre + 40#)) < 0.001, _
+               "ODL-24: vozac je dobio svih 40"
+    AssertTrue Abs(modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT) - _
+                   (obPre + 40#)) < 0.001, _
+               "ODL-24: firma duguje kupcu 40, ne 80"
+
+    ' STORNO: zajednicka putanja, kontra-stav OBA reda, sve se vraca.
+    AssertTrue modAmbalaza.StornirajAmbDokument_TX(dok), _
+               "ODL-24: storno pozajmice prolazi kroz zajednicku putanju"
+    AssertEquals "2", CStr(AmbBrojKontraStavova(dok, DOK_TIP_AMBALAZA_DOKUMENT)), _
+                 "ODL-24: storno upisuje kontra-stav OBA reda"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT) - _
+                   vozPre) < 0.001, _
+               "ODL-24: posle storna vozac vise nema pozajmljene gajbe"
+    AssertTrue Abs(modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT) - _
+                   obPre) < 0.001, _
+               "ODL-24: posle storna firma kupcu ne duguje pozajmicu"
+
+    ' KONTRA: povrat istog kupca i dalje PITA -- odstupanje ostaje odstupanje.
+    AssertTrue Len(RvpUpisi(testDate, "KUPP2-" & scenario, TEST_KUP_ID, TEST_VOZ_ID, _
+                            tipT, 20#, razlog)) = 0, _
+               "ODL-24 kontra: povrat 20 uz saldo 5 i dalje trazi potvrdu manjka"
+    AssertTrue InStr(1, razlog, "Manjak 15", vbTextCompare) > 0, _
+               "ODL-24 kontra: manjak povrata je 15 -- pozajmica nije pomerila saldo"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_ODL24_PozajmicaJeSvojDogadjaj", Err.Number, Err.description
+End Sub
 
 Private Sub Test_OTP_StornoVracaGajbeVozacu()
     On Error GoTo EH
@@ -17744,9 +17968,10 @@ Private Sub Test_Amb_UgovorPrenosa()
     On Error GoTo EH
 
     ' --- ZATVOREN ENUM -------------------------------------------------
-    AssertEquals "8", CStr(UBound(modAmbalazaUgovor.AmbVrsteSve()) - _
+    ' Devet od ODL-24 (19.10.2026): POZAJMICA_PARTNERA je jedina nova vrednost.
+    AssertEquals "9", CStr(UBound(modAmbalazaUgovor.AmbVrsteSve()) - _
                            LBound(modAmbalazaUgovor.AmbVrsteSve()) + 1), _
-                 "Amb ugovor: vrsta kretanja ima tacno osam"
+                 "Amb ugovor: vrsta kretanja ima tacno devet"
     AssertTrue modAmbalazaUgovor.AmbVrstaPoznata(AMB_VK_ULAZ_TUDJE), _
                "Amb ugovor: ULAZ_TUDJE_AMBALAZE je poznata vrsta"
     AssertTrue Not modAmbalazaUgovor.AmbVrstaPoznata("POCETNO_STANJE"), _

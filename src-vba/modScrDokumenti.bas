@@ -2819,6 +2819,7 @@ Private Function AmbKretanjeNaziv(ByVal vk As String) As String
         Case AMB_VK_VRACANJE_TUDJE:  AmbKretanjeNaziv = Poruka("OTKUI_VK_VRACANJE_TUDJE")
         Case AMB_VK_NABAVKA:         AmbKretanjeNaziv = Poruka("OTKUI_VK_NABAVKA")
         Case AMB_VK_OTPIS:           AmbKretanjeNaziv = Poruka("OTKUI_VK_OTPIS")
+        Case AMB_VK_POZAJMICA:       AmbKretanjeNaziv = Poruka("OTKUI_VK_POZAJMICA")
     End Select
 End Function
 
