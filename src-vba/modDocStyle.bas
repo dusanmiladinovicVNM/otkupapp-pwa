@@ -9,9 +9,10 @@ Option Explicit
 ' Funkcije su Public da bi ih delili modPrint i modPaletniList.
 ' ============================================================
 
-' TEST SEAM (posmatra): poslednji izvoz u PDF -- "zahtev|predato", 1/0: da li je
-' pozivalac trazio otvaranje i sta je DocExportPdf predao Excelu. Pise se samo u
-' test rezimu; cita ga DocPdfTest, gasi DocPdfTestReset (i ResetSeamova).
+' TEST SEAM (posmatra): poslednji izvoz u PDF -- "zahtev|predato|grana": da li je
+' pozivalac trazio otvaranje (1/0), sta je DocExportPdf predao Excelu (1/0) i
+' kojom granom je izvoz otisao (R = Range, W = Worksheet). Pise se samo u test
+' rezimu; cita ga DocPdfTest, gasi DocPdfTestReset (i ResetSeamova).
 Private mPdfTest As String
 
 Public Function DocColHeaderFill() As Long
@@ -165,19 +166,35 @@ End Function
 ' fokus dok radi na istom racunaru. Test rezim tu NIJE signal: BFP ga
 ' pali samo u pojedinim testovima, a otkupni listovi iz Test_OTK_*
 ' nastaju van njega (izmereno 19.10.2026, test 249).
+'
+' Izvoz ide RANO VEZANIM pozivom u svakoj grani, u istom obliku koji se
+' vec kompajlirao (ws. / UsedRange. sa imenovanim argumentima). Poziv
+' nad cilj As Object bi bio kasno vezan -- neproveren oblik (review #431,
+' P1). Pozicioni poziv nije uzet: jedan pomeren zarez bi OpenAfterPublish
+' tiho predao drugom parametru, a smer "otvara" test ne vozi kroz izvoz.
 ' ------------------------------------------------------------
 Public Sub DocExportPdf(ByVal cilj As Object, ByVal pdfPath As String, _
                         ByVal openAfter As Boolean)
-    Dim otvori As Boolean
+    Dim otvori As Boolean, ws As Worksheet, rng As Range
     otvori = openAfter And IsPdfOtvoriPosle()
     If IsTestMode() Then mPdfTest = IIf(openAfter, "1", "0") & "|" & IIf(otvori, "1", "0")
-    cilj.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                             Quality:=xlQualityStandard, _
-                             IncludeDocProperties:=False, OpenAfterPublish:=otvori
+    If TypeOf cilj Is Range Then
+        If IsTestMode() Then mPdfTest = mPdfTest & "|R"
+        Set rng = cilj
+        rng.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                                Quality:=xlQualityStandard, _
+                                IncludeDocProperties:=False, OpenAfterPublish:=otvori
+    Else
+        If IsTestMode() Then mPdfTest = mPdfTest & "|W"
+        Set ws = cilj
+        ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                               Quality:=xlQualityStandard, _
+                               IncludeDocProperties:=False, OpenAfterPublish:=otvori
+    End If
 End Sub
 
-' TEST SEAM: "zahtev|predato" poslednjeg izvoza ("" = nije bilo izvoza). Tvrdo
-' gejtovan.
+' TEST SEAM: "zahtev|predato|grana" poslednjeg izvoza ("" = nije bilo izvoza);
+' grana je R (Range) ili W (Worksheet). Tvrdo gejtovan.
 Public Function DocPdfTest() As String
     If Not IsTestMode() Then Exit Function
     DocPdfTest = mPdfTest

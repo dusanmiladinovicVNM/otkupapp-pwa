@@ -8373,6 +8373,16 @@ SABOTAZE = {
         "T_PDF_TestProlazNeOtvaraPdf",
         "test prolaz ne otvara PDF (PDF_OTVORI_POSLE = NO)",
     ),
+    # Range grana DocExportPdf (izvestaji, review #431 P2) se ugasi: UsedRange
+    # ode u granu Worksheet, Set ws pukne (13), pa izvestaj ne napravi PDF. Meri
+    # da 250/251 stvarno voze Range put. PDF-ove NE otvara -- izvoz pukne pre.
+    "pdf-range-grana-ugasena": (
+        "modDocStyle.bas",
+        "    If TypeOf cilj Is Range Then\n",
+        "    If False Then   ' SABOTAZA: Range ide u granu Worksheet\n",
+        "T_PDF_IzvestajHouseNeOtvara",
+        "izvestaj u kucnom stilu: PDF je napravljen",
+    ),
 }
 
 
