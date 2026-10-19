@@ -5989,6 +5989,39 @@
          smera i broj, i (5) storno sa ekrana Storno. Te stavke automatski mere test 256 i BFP
          (storno), ali ručno nisu potvrđene.
 
+169. **Merge `#434`, `ODL-24` zatvoren** (20.10.2026). Zapis ide ovde, a ne u `#434`. Obrazac su stavke 163
+     i 165.
+
+     - **Review `#434`** (head `02de4fc2`): `CODE GO` 9,5/10, `CONDITIONAL GO`, `P0`/`P1`/`P2` = 0.
+       Uslov su bila dva ručna koraka (4 i 5) i nepromenjen HEAD.
+       - Posle review-a su ušla dva commita **samo sa dokumentacijom** (`KI-025`/`KI-026`, 2 reda u
+         `KNOWN_ISSUES.md`; `src-vba`, `tools` i šema nedirnuti), pa je head postao `977f64e3`.
+       - Operater je javio da je reviewer potvrdio head `977f64e3`.
+     - **Ručna provera 5/5:**
+       - koraci 1–3 su iz stavke 168;
+       - **korak 4** (prelaz smera i broja) je prošao;
+       - **korak 5** (storno pozajmice sa ekrana Storno) je prvo pao: „Storno nije uspeo: 40",
+         a razlog je bio samo u logu: `AMB-INV-07`, vozač `VOZ-TEST-1` bi ostao na −10 za `12/1`.
+         Uzrok je **fixture**, ne kod: vozač je bio na −10 još pre pozajmice (`KI-028`). Posle
+         F7 „Prijem od OM" 10 gajbi 12/1 storno je prošao (operater).
+       - Usput je nađeno da ekran Storno ne prikazuje razlog (`KI-027`).
+     - **Merge** 20.10.2026 (19.10. 22:15:38 UTC) kao **`6dc32710`**, na **izričit zahtev operatera**,
+       sa `--match-head-commit` na head `977f64e3`. Static CI je #1028 `success` (run 39332073732,
+       izmereno). Stablo `main`-a posle merge-a jednako je stablu `977f64e3` (`febd1239`).
+     - **Izvršne kapije** su nad izvorom `05d768b86545` (head `3438751e`, stavka 168), a posle njih su
+       ušli samo docs:
+       - 12/12 ZELENO: 256/0, BFP 2478/0, Banka 241/0, Storno 111/0;
+       - dokaz 18/18;
+       - compile potvrđen.
+     - **`ODL-24` → zatvoren:** pozajmica ambalaže od kupca je svoj događaj (`POZAJMICA_PARTNERA`,
+       `AMB-INV-13`, samo na kupčevom dokumentu; `AMBALAZA.md` 6.12k). Van reza su ostali:
+       - `KI-024` (vraćanje pozajmice);
+       - `KI-025` + `KI-026` (nabavka i otpis), jedan rez **posle S6**, po odluci operatera;
+       - `KI-027` i `KI-028`, upisani u istom commitu kao ova stavka, po odluci operatera.
+     - **Sledeći je S6** (prijemnica), na grani `claude/s6-prijemnica` sa `6dc32710`.
+       - Pre prvog skupog prolaza: na C: obezbediti nekoliko GB (review `#434`, tačka 5).
+       - Fixture regenerisati ako `run_vba` prijavi potpis.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
@@ -5999,7 +6032,7 @@
 | **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita. **Odluka operatera (13.10.2026): sledeći korak posle `KI-012`/`KI-013` (stavka 133)**, zajedno sa `GetStanicaAmbSaldo` i istorijskim početnim stanjem na ponovljenom papiru reversa. **Odluke operatera za taj rez (13.10.2026, stavka 135), sve po preporuci:** (1) kad knjiga ne može da se pročita, papir **ne nastaje** (fail-closed, kao otkupni list po ODL-27), a oba čitaoca gube handler; (2) istorijsko stanje dobijaju **revers i otpremnica**, a grupni otkupni list ide u S6 (danas je nedostižan i čita pogrešan nalog); (3) kod pokrića deficita važi **pravilo reversa** (novo = stanje posle dokumenta, početno = novo − kretanje), a prikaz pokrića ide uz `ODL-24`; (4) **kupčev revers se iz F7 ne štampa**, kao iz liste (7507) |
 | **grupni otkupni list čita pogrešan nalog** | `FillGrupniOtkupSablon` čita `GetStanicaAmbSaldo(VozacID)`, dakle `Stanica:<VozacID>`, i to današnji saldo, dok prijemnica od 10b-2 pomera nalog `Vozac`. Danas je nedostižan (štampa se samo posle upisa prijemnice, a unos je pauziran do S6), pa se u stavci 135 menja samo politika greške. Koji je nosilac salda na tom papiru i da li dobija stanje oko svog reda odlučuje **S6** (`AMBALAZA.md` 6.13g). Uz to ide i `GetAmbalazeStanje`, koji tip grupiše u rečniku sa **binarnim** poređenjem (`letvarica` i `LETVARICA` su dva reda), dok kanonski saldo i istorijski čitalac porede bez obzira na velika slova (review `#421`, P2 #2, stavka 136). Posle stavke 135 ga zovu samo ovaj list, golden i dva test pomoćnika |
 | **badge "nesacuvano" na novoj formi** | `SelectModeCore` pise u polje broja POSLE `MarkClean` i `mLoading = False`, pa programski upis prodje kroz `MarkDirty` i prazna forma tvrdi da ima neupisanih izmena (review 08.10.2026, `P3`). Zatecen obrazac -- vazio je i pre P1 ispravke, za svaki rezim sa auto-brojem. Jedan premesten red, ali izmena `src-vba` obara compile i zeleni marker, a nov test (natpis u zaglavlju) trazi svoj dvosmeran dokaz; zato **svoj rez posle merge-a**, pre `ODL-24` |
-| **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a.** **Odluke 19.10.2026 (stavka 166): nova vrsta `POZAJMICA_PARTNERA` + `AMB-INV-13`; rez je u toku.** |
+| **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a.** **Odluke 19.10.2026 (stavka 166): nova vrsta `POZAJMICA_PARTNERA` + `AMB-INV-13`; rez je u toku.** **ZATVOREN merge-om `#434` (`6dc32710`, 20.10.2026, stavka 169).** |
 | **nema kapije „modul ne sme da koristi tuđ `Private` simbol"** | VBA kompajlira **na zahtev**, pa `Sub or Function not defined` pukne tek kad neki test prvi put pozove baš tu proceduru — i to posle **600 s i ubijenog Excela**, uz poruku bez fajla i linije (06.10.2026: `MarkRowStornirano`, `Private` u `modStorno`, pozvan iz `modAmbalaza`). Ime **postoji** u projektu, samo nije vidljivo — pa ga nijedna jeftina kapija ne vidi. Jednokratni merač je napisan i dao **1 nalaz sa fajlom i linijom nad pokvarenim izvorom, 0 posle** — dvosmeran dokaz. Tri lažna nalaza prvog izdanja su i sama merenje: repni komentar, labela (`Resume CleanUp`) i **LF kopija iz git-a** (split po `
 ` dao je ceo fajl kao jedan red, pa je prvi „čist" prolaz bio lažan). Kao trajna kapija ide u `vba_check`, dakle **zaseban process PR** |
 | **nema kapije „nastavak reda je poslednji znak u redu"** | regex nad VBA izvorom ume da pojede **prelom reda** (`\s*` hvata i `\r\n`), pa `_` ostane usred linije — sintaksna greška koju nijedna jeftina kapija ne vidi. Cena je nesrazmerna: **585 s i ubijen Excel**, a poruka je samo „Compile error: Syntax error" bez mesta (06.10.2026, rez reversa). Jednokratni merač je napisan i dao **2 nalaza pre ispravke, 0 posle** — dvosmeran dokaz po konstrukciji, nad celim `src-vba`. Kao trajna kapija ide u `vba_check` i traži svoj dvosmerni dokaz, dakle **zaseban process PR** |
