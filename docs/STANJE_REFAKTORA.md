@@ -5201,11 +5201,69 @@
      `IsplataValidiraj`/`UplataValidiraj` EH (validator ne čita datum, pa okidač ne postoji) i grane `Upisi`
      gde pisac odbija posle validatora (validator namerno ponavlja kapije pisca).
 
+154. **`KI-015` — rez: reprodukcija, ispravka i PR `#429` na review-u** (19.10.2026). Grana
+     `claude/ki015-poruke-dokumenta`.
+
+     **Rez A (`eff5e5e7`), ponašanje kao `main`:**
+     - `modOtkupUnos.PotvrdiManjakAmbalaze` je jedno mesto za pitanje o manjku (otkup, kupčev revers,
+       prijemnica). Tekst je bio isti za obe strane.
+     - Tvrdo gejtovan seam: u test režimu beleži tekst i UVEK odgovara „Ne"; gasi ga `ResetSeamova`.
+     - Novi ključevi su u katalogu, ali bez produkcionog pozivaoca.
+     - Dodati su testovi 245–248 i BFP kontrola `Test_AMB_PitanjeManjkaOtkupImenujeKooperanta`.
+
+     **Reprodukcija** (`RunOne` nad kopijom iz `run_vba --compile-only --keep`, posle `EnsureRuntimeSchema`):
+     - 245, 246, 247 i 248 su **crveni po imenu**: „…čuvanju otpremnice… unosu otkupa", pitanje
+       „Kooperant…" kupcu;
+     - BFP kontrola je zelena 5/5;
+     - delove koje prvi pad zaklanja (uplata, zbirna, validator reversa, EH prijemnice, pitanje na
+       prijemnici) izmerila je sonda istim okidačem;
+     - nijedan test nije visio.
+
+     **Usput izmereno:** prvi izolovan prolaz bez `EnsureRuntimeSchema` oborio je BFP otkup na šemi
+     (`tblOtkup` poz. 8), a prijemnicu bez ijedne poruke. Kad pisac odbije iz razloga koji nije potvrda
+     manjka, `PrijemnicaUpisi` vraća prazno sa praznim `poruke` — dopisano u `KI-020`.
+
+     **Rez B (`7466a467`), ispravka:**
+     - ključ po vrsti na 25 mesta: `modScrDokumenti` 6, `modNovacUnos` 7, `modDokUnos` 12;
+     - `OTKUP_ERR_GRESKA_PRI_UNOSU` je ostao samo u otkupu, a `DOK_MSG_GRESKA_PRI_CUVANJU` samo u
+       `SnimiOtpremnicu`;
+     - kupac dobija svoje pitanje, a nepoznat nalog diže grešku;
+     - 15 sabotaža `ki015-*` (796 → 811); plan dokaza je 5 prolaza (4× `RunAllTests`, 1× BFP).
+
+     **Acceptance contract:**
+     - **Šta operater vidi:** svaka vrsta svoj naziv i u prefiksu čuvanja i u razlogu. Kupac (kupčev
+       revers, prijemnica) dobija „Kupac nema toliko naših gajbi… firma ga duguje kupcu". Otkup ostaje
+       nepromenjen u oba teksta.
+     - **Šta ostaje netaknuto:** ključevi otkupa i čuvanja otpremnice, rutiranje toast/dijalog u
+       `CommitDokument`, `UI-ISHOD-01` i `UI-PAD-01`, knjiga, pisci i fixture.
+     - **Čime se meri:** 245–248 i BFP kontrola, svaka tvrdnja sa svojom sabotažom (tabela u `#429`). Ključ
+       se meri i kroz `PorukaNedostaje`/`PorukaPostoji`.
+     - **Zašto nijedan test ne otvara `MsgBox`:** pitanje ide kroz seam koji pri svakom pozivu pita
+       `IsTestMode()`; odbijanje kroz ljusku ide u `modOtkupUI.Dijalog`; BFP test pali test režim sam i
+       vraća ga i na grešci.
+
+     **Kapije:**
+     - **Jeftine, sve zelene:** `vba_check` i `--self-test`, paritet, self-update kapije, tvrdi popis,
+       `vba_import_marker_gate`, `who_writes --check`/`--check-ownership`, `gen_schema_module --check`,
+       `popis_citalaca --check` (alat nema `--self-test`), `vba_gate --popis`, `run_vba`/`sabotaza`/`dokaz
+       --self-test`, `js_sintaksa`, `Setup-AgriX -SelfTest`.
+     - **Čeka reviewer GO:** `run_vba` 12/12 — zelen prolaz novih testova **nije izmeren** — zatim
+       `dokaz.py ki015`, compile i ručna provera.
+
+     **Očekivani brojevi** (iz diff-a):
+     - RunAllTests 248/0 (+4);
+     - BFP 2432/0 (+5);
+     - Banka 241/0 i Storno 111/0 bez promene;
+     - katalog 811, `POZNATI_NALAZI` 9;
+     - fixture `d3d3ff6d` bez promene.
+
+     **Van reza:** pravilo o novom seam-u u `.claude/rules/testovi.md` §4 ide kroz zaseban process PR.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
 |---|---|
-| **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). Danas to drže samo komentari uz tri grane; kapija bi morala da zna koji su pozivi iz suite-a dostupni, pa traži svoj rez i svoj dvosmerni dokaz |
+| **`MsgBox` u pisac-putanji visi u `run_vba` prolazu** | Protokol potvrde deficita pita operatera na **tri** mesta (`modOtkupUnos` od 03.10.2026, `modNovacUnos` i `modDokUnos` od 07.10.2026). Test koji uđe u tu granu ne pada nego **visi do timeout-a** i ostavlja Excel u `[break]` — ista cena kao compile greška (585 s + ubijen Excel). **Od `KI-015` (stavka 154, `#429`) ta tri mesta pitaju kroz `modOtkupUnos.PotvrdiManjakAmbalaze`**, koje u test režimu tekst beleži i odgovara „Ne", pa test u tu granu sme da uđe (245–248, BFP kontrola). Ostaje kapija koja bi uhvatila NOV `MsgBox` u pisac-putanji: ona traži svoj rez i svoj dvosmerni dokaz. Pitanja u validatorima (prekoračenje, prosek gajbi, parcela, duplikat prijemnice) nisu deo ovog reda |
 | **`dokaz.py` ne dosegne `modIzvestajTests`** | kapija kataloga sabotaža priznaje samo `modTest`, `modTestBanka` i `modBusinessFlowProTests`, pa tvrdnja iz `modIzvestajTests` **ne može da se obori** — a tamo živi najdetaljnije merenje ambalažnog pregleda. Posledica je izmerena u `10c-2`: tvrdnja o identitetu dokumenta je **preseljena** u `#204`, a tvrdnja o spajanju dve vrste istog dokumenta ostala **bez sabotaže**. Proširenje kapije dira sam alat, pa ide **zaseban process PR** sa svojim dvosmernim dokazom |
 | **kanonska knjiga nema PUNU integritetnu proveru** | `modIntegritet` ima **nula** referenci na `Od_Tip` / `Na_Tip` / `VrstaKretanja` / `tblAmbalazaDokument` (merenje 08.10.2026). Posle cutovera proverava samo legacy redove, koje produkcija ne piše — pa operateru kaže „nema nalaza" ne pogledavši kanonsku knjigu. Kandidati za provere: noga bez zaglavlja, zaglavlje bez noge, `StornoOd` koji ne pokazuje nigde, par koji nije neuređen (`AMB-INV-10`), obaveza partneru < 0 (`AMB-INV-09`). Od stavke 113 ugovor reda, dupli `AmbID` i `StornoOd` meri `Chk_AMB_KnjigaIntegritet`; od `10e-3` (stavka 129) i red koji ne dotiče knjigu (red starog oblika) je nalaz po imenu, jer „legacy" stanja više nema. Ostali kandidati (noga bez zaglavlja, zaglavlje bez noge, par koji nije neuređen, obaveza < 0) su i dalje otvoreni. `Chk_B10_ReversBezID` je obrisan u `10e-1` |
 | **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita. **Odluka operatera (13.10.2026): sledeći korak posle `KI-012`/`KI-013` (stavka 133)**, zajedno sa `GetStanicaAmbSaldo` i istorijskim početnim stanjem na ponovljenom papiru reversa. **Odluke operatera za taj rez (13.10.2026, stavka 135), sve po preporuci:** (1) kad knjiga ne može da se pročita, papir **ne nastaje** (fail-closed, kao otkupni list po ODL-27), a oba čitaoca gube handler; (2) istorijsko stanje dobijaju **revers i otpremnica**, a grupni otkupni list ide u S6 (danas je nedostižan i čita pogrešan nalog); (3) kod pokrića deficita važi **pravilo reversa** (novo = stanje posle dokumenta, početno = novo − kretanje), a prikaz pokrića ide uz `ODL-24`; (4) **kupčev revers se iz F7 ne štampa**, kao iz liste (7507) |
