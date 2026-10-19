@@ -8394,6 +8394,104 @@ SABOTAZE = {
         "T_KI011_ZaostalaGreskaNijeNeuspeh",
         "zaostala greska je zabelezena, ne progutana",
     ),
+    # KI-021 (AMB-INV-12): tip ambalaze je zatvoren skup iz tblTipAmbalaze.
+    # NBSP vise nije nevidljiv -> postaje "tip van sifarnika" umesto praznog tipa.
+    "ki021-nbsp-nije-prazan": (
+        "modAmbalazaUgovor.bas",
+        "            Case 0 To 32, 127, 160, 173, 8192 To 8207, 8232 To 8239, 8287 To 8288, 12288, 65279\n",
+        "            Case 0 To 32, 127, 173, 8192 To 8207, 8232 To 8239, 8287 To 8288, 12288, 65279\n",
+        "T_KI021_OtkupTipVanSifarnika",
+        "otkup NBSP: tip od samih nevidljivih znakova je prazan tip, bez pitanja o manjku",
+    ),
+    # Validator otkupa trazi samo neprazan tip -> 12/2 prolazi do pisca.
+    "ki021-otkup-bez-sifarnika": (
+        "modOtkupUnos.bas",
+        "        OtkupValidiraj = TipAmbalazePoruka(S(p, \"tipAmb\"))\n",
+        "        If modAmbalazaUgovor.AmbTipPrazan(S(p, \"tipAmb\")) Then OtkupValidiraj = Poruka(\"DOK_MSG_IZABERITE_TIP_AMBALAZE\")\n",
+        "T_KI021_OtkupTipVanSifarnika",
+        "otkup 12/2: tip van sifarnika staje na polju, bez pitanja o manjku",
+    ),
+    "ki021-otp-bez-sifarnika": (
+        "modDokUnos.bas",
+        "        OtpremnicaValidiraj = modOtkupUnos.TipAmbalazePoruka(S(p, \"tipAmb\"))\n",
+        "        OtpremnicaValidiraj = \"\"\n",
+        "T_KI021_ValidatoriTraziSifarnik",
+        "otpremnica: tip van sifarnika staje na polju",
+    ),
+    # Prijemnica (review #432, P3): pravilo je u PrijemnicaTipPoruka, poziv je
+    # staticki do S6 (pauza je pre svega).
+    "ki021-prij-bez-sifarnika": (
+        "modDokUnos.bas",
+        "    ElseIf pune Or povrat Then\n",
+        "    ElseIf False Then\n",
+        "T_KI021_ValidatoriTraziSifarnik",
+        "prijemnica: tip van sifarnika staje na polju",
+    ),
+    "ki021-prij-povrat-bez-tipa": (
+        "modDokUnos.bas",
+        "        If (pune And strogo) Or povrat Then PrijemnicaTipPoruka = Poruka(\"DOK_MSG_IZABERITE_TIP_AMBALAZE\")\n",
+        "        If pune And strogo Then PrijemnicaTipPoruka = Poruka(\"DOK_MSG_IZABERITE_TIP_AMBALAZE\")\n",
+        "T_KI021_ValidatoriTraziSifarnik",
+        "prijemnica povrat bez tipa: trazi tip i bez stroge validacije",
+    ),
+    "ki021-rev-bez-sifarnika": (
+        "modNovacUnos.bas",
+        "    ReversValidiraj = modOtkupUnos.TipAmbalazePoruka(S(p, \"tipAmb\"))\n",
+        "    If modAmbalazaUgovor.AmbTipPrazan(S(p, \"tipAmb\")) Then ReversValidiraj = Poruka(\"DOK_MSG_IZABERITE_TIP_AMBALAZE\")\n",
+        "T_KI021_ValidatoriTraziSifarnik",
+        "nas revers: tip van sifarnika staje na polju",
+    ),
+    # Rezervni tipovi se vracaju u combo.
+    "ki021-combo-rezervni-tipovi": (
+        "modAmbalaza.bas",
+        "    GetTipAmbalazeOptions = GetLookupList(TBL_TIP_AMBALAZE, COL_TAMB_TIP, , , True)\n",
+        "    GetTipAmbalazeOptions = Array(\"12/1\", \"6/1\")\n",
+        "T_KI021_ComboTipaJeSifarnik",
+        "combo nad sifarnikom bez aktivnog tipa je prazan",
+    ),
+    # Ugovor prenosa ne pita sifarnik.
+    "ki021-ugovor-bez-sifarnika": (
+        "modAmbalazaUgovor.bas",
+        "    AmbPrenosProblem = AmbTipProblem(tipAmb)\n",
+        "    AmbPrenosProblem = \"\"\n",
+        "Test_AMB_TipVanSifarnikaPisacOdbija",
+        "KI021 ugovor: tip van sifarnika je odbijen, sa imenom tipa",
+    ),
+    # Sifarnik se poredi binarno -> "TEST GAJBA" nije "Test Gajba".
+    "ki021-ugovor-osetljiv-na-slova": (
+        "modAmbalazaUgovor.bas",
+        "                If StrComp(Trim$(CStr(data(i, c))), Trim$(tipAmb), vbTextCompare) = 0 Then Exit Function\n",
+        "                If StrComp(Trim$(CStr(data(i, c))), Trim$(tipAmb), vbBinaryCompare) = 0 Then Exit Function\n",
+        "Test_AMB_TipVanSifarnikaPisacOdbija",
+        "KI021 ugovor: tip iz sifarnika prolazi bez obzira na velika slova",
+    ),
+    # Kapija gleda samo AKTIVNE tipove -> povrat neaktivnog tipa bi bio odbijen.
+    "ki021-ugovor-samo-aktivni": (
+        "modAmbalazaUgovor.bas",
+        "    data = modDataAccess.GetTableData(TBL_TIP_AMBALAZE)\n",
+        "    data = modDataAccess.GetLookupList(TBL_TIP_AMBALAZE, COL_TAMB_TIP, , , True)\n"
+        "    For i = LBound(data) To UBound(data)\n"
+        "        If StrComp(Trim$(CStr(data(i))), Trim$(tipAmb), vbTextCompare) = 0 Then Exit Function\n"
+        "    Next i\n"
+        "    data = Empty\n",
+        "Test_AMB_TipVanSifarnikaPisacOdbija",
+        "KI021 ugovor: neaktivan tip iz sifarnika prolazi",
+    ),
+    # Pisac zove samo strukturu -> tip (i nalog) bez kapije postojanja.
+    "ki021-pisac-bez-kapije-tipa": (
+        "modAmbalazaUgovor.bas",
+        "    p = AmbPrenosProblem(odTip, odID, naTip, naID, kolicina, tipAmb, vrsta)\n",
+        "    p = AmbPrenosStrukturaProblem(odTip, odID, naTip, naID, kolicina, tipAmb, vrsta)\n",
+        "Test_AMB_TipVanSifarnikaPisacOdbija",
+        "KI021 pisac: PrenesiAmbalazu odbija tip van sifarnika pre upisa",
+    ),
+    "ki021-pwa-bez-sifarnika": (
+        "modMasterSync.bas",
+        "        tipProblem = modAmbalazaUgovor.AmbTipProblem(tipAmb)\n",
+        "        tipProblem = \"\"\n",
+        "Test_AMB_TipVanSifarnikaPisacOdbija",
+        "KI021 PWA: red sa tipom van sifarnika dobija imenovan razlog",
+    ),
 }
 
 

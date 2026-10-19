@@ -339,6 +339,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_RVP_DeficitSePotvrdjuje
     Test_PRJ_PovratIdeSaKlasomKojaPostoji
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
+    Test_AMB_TipVanSifarnikaPisacOdbija
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -1151,6 +1152,7 @@ Private Sub SeedBusinessFlowProMasterData()
     SeedKooperant
     SeedKooperant2
     SeedParcelaIfAvailable
+    SeedTipoveAmbalaze
     SeedAmbalazaOpticaj
 
     LogPass "Seed master data ready"
@@ -5616,7 +5618,7 @@ Private Sub Test_PRJ_LanacSeOdmotavaObrnuto()
     Dim scenario As String, testDate As Date, tipT As String
     scenario = NewScenarioCode("PRJLAN")
     testDate = NextTestDate()
-    tipT = "TIPL-" & scenario
+    tipT = RegistrujTipTesta("TIPL-" & scenario)
 
     ' SVEZ TIP AMBALAZE, i to je NOSEC deo testa, ne higijena.
     '
@@ -6260,7 +6262,7 @@ Private Sub Test_RVP_DeficitSePotvrdjuje()
     Dim scenario As String, testDate As Date, tipT As String
     scenario = NewScenarioCode("RVPDEF")
     testDate = NextTestDate()
-    tipT = "TIPD-" & scenario
+    tipT = RegistrujTipTesta("TIPD-" & scenario)
 
     ' Nase gajbe u opticaj ulaze samo kroz NABAVKU (ODL-8), pa stanica -> vozac
     ' kroz pravi revers, pa vozac -> kupac kroz prijemnicu. Sve produkcioni put.
@@ -6348,7 +6350,7 @@ Private Sub Test_PRJ_PovratIdeSaKlasomKojaPostoji()
     Dim scenario As String, testDate As Date, tipT As String
     scenario = NewScenarioCode("PRJKL2")
     testDate = NextTestDate()
-    tipT = "TIPK-" & scenario
+    tipT = RegistrujTipTesta("TIPK-" & scenario)
 
     modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
                                   "NABK-" & scenario, "test klasa II"
@@ -6453,6 +6455,77 @@ EH:
     modOtkupUnos.PitanjeManjkaTestReset
     SetTestMode prevMode
     LogFatal "Test_AMB_PitanjeManjkaOtkupImenujeKooperanta", Err.Number, Err.description
+End Sub
+
+' KI-021: PISAC ODBIJA TIP AMBALAZE KOGA NEMA U SIFARNIKU (AMB-INV-12).
+'
+' Do KI-021 je pisac trazio samo neprazan tip posle Trim$, koji skida samo ASCII
+' razmak -- pa su NBSP i nepostojece "12/2" prolazili do knjige (rucna provera
+' #429, stavka 155). Kapija stoji u AmbPrenosProblem, POSLE postojanja naloga:
+' postojanje u maticnoj tabeli je kapija UPISA, ne citanja (isti obrazac kao
+' AmbNalogProblem). Vazi bez obzira na velika slova i na Aktivan -- neaktivan tip
+' i dalje sme da se vrati (povrat gajbi koje se vise ne izdaju).
+'
+' Pisac se meri bez transakcije: kapija tipa stoji u RequireAmbPrenos na ulazu u
+' PrenesiAmbalazu, pre AMB-INV-08. Pre ispravke isti poziv pada na INV-08, pa
+' tvrdnja trazi bas razlog kapije tipa. Nista se ne upisuje.
+' SABOTAZE: ki021-ugovor-bez-sifarnika -> "KI021 ugovor: tip van sifarnika je
+' odbijen, sa imenom tipa"; ki021-ugovor-osetljiv-na-slova -> "KI021 ugovor: tip
+' iz sifarnika prolazi bez obzira na velika slova"; ki021-ugovor-samo-aktivni ->
+' "KI021 ugovor: neaktivan tip iz sifarnika prolazi"; ki021-pwa-bez-sifarnika ->
+' "KI021 PWA: red sa tipom van sifarnika dobija imenovan razlog".
+Private Sub Test_AMB_TipVanSifarnikaPisacOdbija()
+    Const TIP_NEMA As String = "KI021-NEMA-U-SIFARNIKU"
+    Const TIP_NEAKTIVAN As String = "KI021-NEAKTIVAN"
+    On Error GoTo EH
+
+    Dim nema As String, nbsp As String, slova As String, neakt As String
+    Dim pisac As String, pwa As String, pwaOk As String
+    Dim rowData As Variant
+
+    If FindRows(TBL_TIP_AMBALAZE, COL_TAMB_TIP, TIP_NEAKTIVAN).count = 0 Then
+        rowData = BlankRow(TBL_TIP_AMBALAZE)
+        SetRequiredField rowData, TBL_TIP_AMBALAZE, COL_TAMB_TIP, TIP_NEAKTIVAN
+        SetRequiredField rowData, TBL_TIP_AMBALAZE, COL_TAMB_TEZINA, 0#
+        SetOptionalField rowData, TBL_TIP_AMBALAZE, "Aktivan", STATUS_NEAKTIVAN
+        RequireAppend TBL_TIP_AMBALAZE, rowData, "Test_AMB_TipVanSifarnikaPisacOdbija"
+    End If
+
+    nema = modAmbalazaUgovor.AmbPrenosProblem(AMB_NALOG_STANICA, TEST_ST_ID, _
+               AMB_NALOG_KOOPERANT, TEST_KOOP_ID, 10, TIP_NEMA, AMB_VK_IZDATA_PRAZNA)
+    nbsp = modAmbalazaUgovor.AmbPrenosProblem(AMB_NALOG_STANICA, TEST_ST_ID, _
+               AMB_NALOG_KOOPERANT, TEST_KOOP_ID, 10, ChrW(160), AMB_VK_IZDATA_PRAZNA)
+    slova = modAmbalazaUgovor.AmbPrenosProblem(AMB_NALOG_STANICA, TEST_ST_ID, _
+               AMB_NALOG_KOOPERANT, TEST_KOOP_ID, 10, UCase$(TEST_TIP_AMB), AMB_VK_IZDATA_PRAZNA)
+    neakt = modAmbalazaUgovor.AmbPrenosProblem(AMB_NALOG_STANICA, TEST_ST_ID, _
+               AMB_NALOG_KOOPERANT, TEST_KOOP_ID, 10, TIP_NEAKTIVAN, AMB_VK_IZDATA_PRAZNA)
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Nothing, Date, TIP_NEMA, 1#, _
+                                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, "KI021-NEMA-DOK"
+    pisac = CStr(Err.Number) & " " & Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    pwa = modMasterSync.TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, DateSerial(2090, 5, 5), _
+                                                       TIP_NEMA, 5#)
+    pwaOk = modMasterSync.TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, DateSerial(2090, 5, 5), _
+                                                         TEST_TIP_AMB, 5#)
+
+    AssertTrue InStr(1, nema, "'" & TIP_NEMA & "' ne postoji u sifarniku", vbBinaryCompare) > 0, _
+               "KI021 ugovor: tip van sifarnika je odbijen, sa imenom tipa"
+    AssertTrue Len(nbsp) > 0, "KI021 ugovor: NBSP nije tip"
+    AssertEquals "", slova, "KI021 ugovor: tip iz sifarnika prolazi bez obzira na velika slova"
+    AssertEquals "", neakt, "KI021 ugovor: neaktivan tip iz sifarnika prolazi"
+    AssertTrue InStr(1, pisac, "'" & TIP_NEMA & "' ne postoji u sifarniku", vbBinaryCompare) > 0, _
+               "KI021 pisac: PrenesiAmbalazu odbija tip van sifarnika pre upisa"
+    AssertTrue InStr(1, pwa, "'" & TIP_NEMA & "' ne postoji u sifarniku", vbBinaryCompare) > 0, _
+               "KI021 PWA: red sa tipom van sifarnika dobija imenovan razlog"
+    AssertEquals "", pwaOk, "KI021 PWA: red sa tipom iz sifarnika prolazi"
+    Exit Sub
+EH:
+    LogFatal "Test_AMB_TipVanSifarnikaPisacOdbija", Err.Number, Err.description
 End Sub
 
 ' Pisac kupcevog reversa SA potvrdom manjka -- odvojen helper, da pozivi bez
@@ -18122,7 +18195,7 @@ Private Sub Test_Amb_StornoKontraStavVracaSaldo()
     scenario = NewScenarioCode("STKS")
     ' SOPSTVEN tip: tvrdnje su nad vracanjem salda na IZMERENU pre-vrednost, a
     ' deljeni tip menja svaki drugi test koji knjizi ambalazu.
-    tipT = "TIPS-" & scenario
+    tipT = RegistrujTipTesta("TIPS-" & scenario)
 
     ' Stanica mora imati sta da izda uz otkup (AMB-10-ODL-8: njen manjak se NE
     ' pokriva tudjom ambalazom).
@@ -18201,7 +18274,7 @@ Private Sub Test_Amb_StornoPosleVracanjaOdbijen()
 
     On Error GoTo EH
     scenario = NewScenarioCode("STPV")
-    tipT = "TIPV-" & scenario
+    tipT = RegistrujTipTesta("TIPV-" & scenario)
 
     modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, tipT, 40#
 
@@ -18294,7 +18367,7 @@ Private Sub Test_Amb_StornoNePraviMinus()
 
     On Error GoTo EH
     scenario = NewScenarioCode("STMIN")
-    tipT = "TIPM-" & scenario
+    tipT = RegistrujTipTesta("TIPM-" & scenario)
 
     ' --- stanica nabavi 20 i izda ih kooperantu kao prazne
     modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, tipT, 20#
@@ -18915,7 +18988,7 @@ Private Sub Test_Amb_PisacKnjige()
     ' Ne prelazi se na delte: delta tvrdnja ne hvata "pisac je upisao na POGRESAN
     ' nalog", a apsolutna nad sopstvenim opsegom hvata.
     Dim tipT As String
-    tipT = "TIP-" & scenario
+    tipT = RegistrujTipTesta("TIP-" & scenario)
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -19186,7 +19259,7 @@ Private Sub Test_Amb_KanonskiRedPoImenu()
     Dim scenario As String, errNum As Long, errDesc As String
     scenario = NewScenarioCode("AMBIME")
     Dim tipT As String
-    tipT = "TIP-" & scenario
+    tipT = RegistrujTipTesta("TIP-" & scenario)
 
     ' (1) Tabela nosi tacno kanonske kolone.
     Dim stare As Variant, k As Long, nadjene As String
@@ -19498,9 +19571,9 @@ Private Sub Test_Amb_JedanProtivpartnerPoDokumentu()
     ' Ne prelazi se na delte: delta tvrdnja ne hvata "pisac je upisao na POGRESAN
     ' nalog", a apsolutna nad sopstvenim opsegom hvata.
     Dim tipT As String
-    tipT = "TIP-" & scenario
+    tipT = RegistrujTipTesta("TIP-" & scenario)
     Dim tipT2 As String
-    tipT2 = "TIP2-" & scenario
+    tipT2 = RegistrujTipTesta("TIP2-" & scenario)
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -19691,7 +19764,7 @@ Private Sub Test_Amb_DeficitIObaveza()
     ' Ne prelazi se na delte: delta tvrdnja ne hvata "pisac je upisao na POGRESAN
     ' nalog", a apsolutna nad sopstvenim opsegom hvata.
     Dim tipT As String
-    tipT = "TIP-" & scenario
+    tipT = RegistrujTipTesta("TIP-" & scenario)
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -19876,7 +19949,7 @@ Private Sub Test_Amb_ZaglavljeDokumentaPisac()
     ' Ne prelazi se na delte: delta tvrdnja ne hvata "pisac je upisao na POGRESAN
     ' nalog", a apsolutna nad sopstvenim opsegom hvata.
     Dim tipT As String
-    tipT = "TIP-" & scenario
+    tipT = RegistrujTipTesta("TIP-" & scenario)
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -22187,10 +22260,11 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
 
     Dim izmenjenT As Variant
     izmenjenT = redT
-    ' TipAmbalaze NIJE FK (v. modOtkup:474 -- FK su kooperant, stanica, kultura,
-    ' parcela), pa je drugi tip legitiman ulaz i kapija jednakosti je jedino sto
-    ' ga moze odbiti.
-    izmenjenT(1, 17) = TEST_TIP_AMB & "-DRUGI"         ' GS_TIP_AMB
+    ' Drugi tip mora biti legitiman ulaz, da kapija jednakosti ostane JEDINO sto
+    ' ga moze odbiti. Od KI-021 tip mora postojati u sifarniku (AMB-INV-12), pa
+    ' se registruje -- bez toga bi ga odbio i pisac, i tvrdnja ispod bi bila
+    ' zelena iz pogresnog razloga.
+    izmenjenT(1, 17) = RegistrujTipTesta(TEST_TIP_AMB & "-DRUGI")   ' GS_TIP_AMB
 
     Dim preT As Long: preT = OtkBrojRedova(TBL_OTKUP)
     AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenT, 1, cridT, _
@@ -22521,6 +22595,24 @@ Private Sub Test_OTK_BrojJedinstvenPoStaniciIDanu()
 EH:
     LogFatal "Test_OTK_BrojJedinstvenPoStaniciIDanu", Err.Number, Err.description
 End Sub
+
+' KI-021: tipovi koje suite upisuje u knjigu moraju postojati u sifarniku
+' (AMB-INV-12). Ide PRE SeedAmbalazaOpticaj, koji nabavlja TEST_TIP_AMB i _B.
+' "G" je tip tvrdnji ugovora prenosa (AmbPrenosProblem).
+Private Sub SeedTipoveAmbalaze()
+    RegistrujTipTesta TEST_TIP_AMB
+    RegistrujTipTesta TEST_TIP_AMB_B
+    RegistrujTipTesta TEST_TIP_AMB_C
+    RegistrujTipTesta "G"
+End Sub
+
+' KI-021: tip koji test upisuje u knjigu, registrovan u sifarniku ako ga nema.
+' Tezina se ne dira (nov red dobija 0 -- GetTezinaGajbice je isti kao bez
+' reda). Vraca tip, pa mesto nastanka svezeg tipa ostaje jedna linija.
+Private Function RegistrujTipTesta(ByVal tip As String) As String
+    If FindRows(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tip).count = 0 Then SeedTaraGajbice tip, 0#
+    RegistrujTipTesta = tip
+End Function
 
 ' Tara gajbice u sifarniku -- upisuje se ili azurira.
 Private Sub SeedTaraGajbice(ByVal tip As String, ByVal tezina As Double)

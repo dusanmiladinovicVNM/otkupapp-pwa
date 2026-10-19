@@ -170,8 +170,9 @@ Private Const FX_BIM_OBRADJENIH As Long = 5 ' DA + dva dvojnika + prosli ciklus 
 Private Const FX_BROJ_NOVAC As String = "NOVUNOS-TEST-1"
 Private Const FX_VRSTA As String = "TESTVOCE"
 Private Const FX_SORTA As String = "TESTSORTA"
-Private Const FX_TIP_AMB As String = "12/1"         ' AMB_12_1, TezinaGajbiceKg = 1
+Private Const FX_TIP_AMB As String = "12/1"         ' make_fixture AMB_12_1, TezinaGajbiceKg = 1
 Private Const FX_TIP_LETVA As String = "Letvarica"  ' make_fixture AMB_LETVA, drugi tip na ADK-IZV-1
+Private Const FX_TIP_NEMA As String = "12/2"        ' KI-021: tip koga NEMA u sifarniku fixture-a
 ' Kupca u fixture-u NEMA i ne treba ga: provere gledaju samo da li je izabran
 ' (Len > 0). Upis, koji bi trazio postojeceg, ovi testovi ne voze.
 Private Const FX_KUPAC As String = "KUP-TEST-1"
@@ -345,6 +346,9 @@ Public Sub RunAllTests()
     RunOne 249
     RunOne 250
     RunOne 251
+    RunOne 252
+    RunOne 253
+    RunOne 254
     RunOne 13
     RunOne 14
     RunOne 15
@@ -880,6 +884,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 249: TestName = "T_PDF_TestProlazNeOtvaraPdf"
         Case 250: TestName = "T_PDF_IzvestajHouseNeOtvara"
         Case 251: TestName = "T_PDF_IzvestajGenerickiNeOtvara"
+        Case 252: TestName = "T_KI021_OtkupTipVanSifarnika"
+        Case 253: TestName = "T_KI021_ValidatoriTraziSifarnik"
+        Case 254: TestName = "T_KI021_ComboTipaJeSifarnik"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1139,6 +1146,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 249: T_PDF_TestProlazNeOtvaraPdf
         Case 250: T_PDF_IzvestajHouseNeOtvara
         Case 251: T_PDF_IzvestajGenerickiNeOtvara
+        Case 252: T_KI021_OtkupTipVanSifarnika
+        Case 253: T_KI021_ValidatoriTraziSifarnik
+        Case 254: T_KI021_ComboTipaJeSifarnik
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -9565,6 +9575,222 @@ Private Function NazivPitanja(ByVal pitanje As String, ByVal manjak As Double) A
     NazivPitanja = "kupac=" & k & " kooperant=" & _
                    IIf(InStr(1, pitanje, "ooperant", vbTextCompare) > 0, "da", "ne") & _
                    " || " & pitanje
+End Function
+
+' 252. KI-021: OTKUP SA TIPOM AMBALAZE VAN SIFARNIKA STAJE NA POLJU, PRE PITANJA O
+'      MANJKU.
+'
+' Rucna provera #429 (19.10.2026, stavka 155): operaterov otkup je u polju tipa
+' imao "razmak". Trim$ skida samo ASCII razmak, pa je NBSP (ChrW(160)) prosao i
+' validator i pisca, a pitanje o manjku je trazilo potvrdu 30 gajbi za tip koji
+' se ne vidi. Isto je proslo i nepostojece "12/2". Sonda je isla kroz Scr_Save
+' F1, pa i test ide tim putem; polja su Trim$-ovana kao u SkupiPolja.
+'
+' Odluka operatera (stavka 158): tip od samih nevidljivih znakova je PRAZAN tip
+' (postojeca poruka), a svaki drugi mora postojati u tblTipAmbalaze. Pitanje o
+' manjku u test rezimu belezi seam i odgovara "Ne", pa se ni pre ispravke nista
+' ne upisuje. Bez aktivne otpremnice nema ni pitanja o prekoracenju (MsgBox).
+' SABOTAZE: ki021-otkup-nbsp-nije-prazan -> "otkup NBSP: ..."; ki021-otkup-bez-
+' sifarnika -> "otkup 12/2: ...".
+Private Sub T_KI021_OtkupTipVanSifarnika()
+    Dim pN As Object, pX As Object, resN As String, resX As String
+    Dim pitN As String, pitX As String, nPre As Long, nPosle As Long
+
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    modScrDokumenti.Scr_OtpTestSet "", ""
+    nPre = BrojRedovaTabele(TBL_OTKUP)
+
+    Set pN = OtkupKI021(Trim$(ChrW(160)), "N")
+    modOtkupUnos.PitanjeManjkaTestReset
+    resN = modScrDokumenti.Scr_Save(pN)
+    pitN = modOtkupUnos.PitanjeManjkaTest()
+
+    Set pX = OtkupKI021(Trim$(FX_TIP_NEMA), "X")
+    modOtkupUnos.PitanjeManjkaTestReset
+    resX = modScrDokumenti.Scr_Save(pX)
+    pitX = modOtkupUnos.PitanjeManjkaTest()
+    modOtkupUnos.PitanjeManjkaTestReset
+    nPosle = BrojRedovaTabele(TBL_OTKUP)
+
+    AssertEq nPosle - nPre, 0, "preduslov: odbijen otkup ne pravi red"
+    AssertEq resN & "|" & CStr(pN("fokus")) & "|" & pitN, _
+             Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE") & "|tipAmb|", _
+             "otkup NBSP: tip od samih nevidljivih znakova je prazan tip, bez pitanja o manjku"
+    AssertEq resX & "|" & CStr(pX("fokus")) & "|" & pitX, _
+             PorukaTipVanSifarnika(FX_TIP_NEMA) & "|tipAmb|", _
+             "otkup 12/2: tip van sifarnika staje na polju, bez pitanja o manjku"
+End Sub
+
+' 253. KI-021: VALIDATORI OTPREMNICE I REVERSA TRAZE TIP IZ SIFARNIKA.
+'
+' Isto pravilo kao 249, na ostalim ulazima sa ambalazom (odluka operatera,
+' stavka 158). Validatori se zovu DIREKTNO: kroz Scr_Save bi otpremnica sa
+' nepostojecim tipom pre ispravke bila upisana kao nacrt (ambalazu knjizi tek
+' izdavanje), pa bi crveni prolaz prljao svesku. Scr_Save validator zove pre
+' pisca, kao i za otkup (252). Revers se meri u oba smera: provera tipa stoji
+' pre smera, pa bi je pogresno mesto preskocilo u jednom od njih. Prijemnica je
+' pauzirana do S6 (PrijemnicaValidiraj vraca pauzu pre svega), pa se meri njeno
+' pravilo -- modDokUnos.PrijemnicaTipPoruka; poziv iz validatora je staticki.
+' Povrat praznih se knjizi po tipu, pa tip trazi i bez stroge validacije
+' (review #432, P3).
+' SABOTAZE: ki021-otp-bez-sifarnika -> "otpremnica: ..."; ki021-rev-bez-
+' sifarnika -> "nas revers: ..."; ki021-prij-bez-sifarnika -> "prijemnica: tip
+' van sifarnika ..."; ki021-prij-povrat-bez-tipa -> "prijemnica povrat bez
+' tipa: ...".
+Private Sub T_KI021_ValidatoriTraziSifarnik()
+    Dim p As Object, fokus As String, otp As String
+    Dim revK As String, revP As String, revN As String
+    Dim prijBez As String, prijNema As String, prijPovrat As String
+
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+
+    Set p = modDokUnos.NoviOtpremnicaUnos()
+    p("datum") = Date
+    p("stanicaID") = FX_STANICA
+    p("vozacID") = FX_VOZAC
+    p("vrsta") = FX_VRSTA
+    p("sorta") = FX_SORTA
+    p("kolicinaI") = 100#
+    p("cenaI") = 50#
+    p("kolAmb") = 10&
+    ' Broj je obavezan uz strogu validaciju; bez njega bi validator pao na broju,
+    ' pa crveno pre ispravke ne bi znacilo "tip je prosao".
+    p("brDok") = "KI021-OTP-" & Format$(Now, "hhnnss")
+    p("tipAmb") = FX_TIP_NEMA
+    otp = modDokUnos.OtpremnicaValidiraj(p, fokus) & "|" & fokus
+
+    revK = ReversKI021(modNovacUnos.SMER_REV_IZD_KOOP, FX_TIP_NEMA)
+    revP = ReversKI021(modNovacUnos.SMER_REV_POVRAT_KUP, FX_TIP_NEMA)
+    revN = ReversKI021(modNovacUnos.SMER_REV_IZD_KOOP, Trim$(ChrW(160)))
+
+    ' Prijemnica: samo povrat praznih (bez punih gajbi), bez stroge validacije.
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("kolAmb") = 0
+    p("kolAmbVracena") = 0
+    p("tipAmb") = ""
+    prijBez = modDokUnos.PrijemnicaTipPoruka(p, False)
+    p("kolAmbVracena") = 4
+    p("tipAmb") = FX_TIP_NEMA
+    prijNema = modDokUnos.PrijemnicaTipPoruka(p, False)
+    p("tipAmb") = ""
+    prijPovrat = modDokUnos.PrijemnicaTipPoruka(p, False)
+
+    AssertEq otp, PorukaTipVanSifarnika(FX_TIP_NEMA) & "|tipAmb", _
+             "otpremnica: tip van sifarnika staje na polju"
+    AssertEq revK, PorukaTipVanSifarnika(FX_TIP_NEMA) & "|tipAmb", _
+             "nas revers: tip van sifarnika staje na polju"
+    AssertEq revP, PorukaTipVanSifarnika(FX_TIP_NEMA) & "|tipAmb", _
+             "kupcev revers: tip van sifarnika staje na polju"
+    AssertEq revN, Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE") & "|tipAmb", _
+             "revers NBSP: tip od samih nevidljivih znakova je prazan tip"
+    AssertEq prijBez, "", "preduslov: prijemnica bez ambalaze ne trazi tip"
+    AssertEq prijNema, PorukaTipVanSifarnika(FX_TIP_NEMA), _
+             "prijemnica: tip van sifarnika staje na polju"
+    AssertEq prijPovrat, Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), _
+             "prijemnica povrat bez tipa: trazi tip i bez stroge validacije"
+End Sub
+
+' 254. KI-021: COMBO TIPA AMBALAZE JE TACNO SIFARNIK, BEZ REZERVNIH TIPOVA.
+'
+' GetTipAmbalazeOptions je nad praznim sifarnikom nudio ugradjene 12/1 i 6/1
+' ("da postojece instalacije ne ostanu bez opcija"). Posle odluke operatera
+' (stavka 158) pisac trazi tip iz sifarnika, pa bi combo nudio tip koji upis
+' odbija; produkcionih podataka nema, pa rezervni tipovi odlaze. Sifarnik se
+' "prazni" gasenjem svih redova (Aktivan = Neaktivan) u transakciji testa i
+' vraca rollback-om.
+' SABOTAZA: ki021-combo-rezervni-tipovi -> "combo nad sifarnikom bez aktivnog
+' tipa je prazan".
+Private Sub T_KI021_ComboTipaJeSifarnik()
+    Dim tx As clsTransaction, n As Long, i As Long, iAkt As Long
+    Dim pre As String, posle As String
+    Dim errNum As Long, errDesc As String
+
+    pre = Join(modAmbalaza.GetTipAmbalazeOptions(), "|")
+    iAkt = GetColumnIndex(TBL_TIP_AMBALAZE, "Aktivan")
+    n = BrojRedovaTabele(TBL_TIP_AMBALAZE)
+
+    Set tx = New clsTransaction
+    On Error GoTo EH
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_TIP_AMBALAZE
+    If iAkt > 0 Then
+        For i = 1 To n
+            RequireUpdateCell TBL_TIP_AMBALAZE, i, "Aktivan", STATUS_NEAKTIVAN, "modTest"
+        Next i
+    End If
+    posle = Join(modAmbalaza.GetTipAmbalazeOptions(), "|")
+    tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+
+    AssertEq (iAkt > 0) & "|" & (InStr(1, "|" & pre & "|", "|" & FX_TIP_AMB & "|") > 0), _
+             "True|True", "preduslov: sifarnik ima kolonu Aktivan i aktivan " & FX_TIP_AMB
+    AssertEq posle, "", "combo nad sifarnikom bez aktivnog tipa je prazan"
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_KI021_ComboTipaJeSifarnik", errDesc
+End Sub
+
+' KI-021: polja otkupa (F1) koja prolaze sve provere pre tipa -- ista kao u sondi
+' stavke 155. Kooperant nema nijednu gajbu nepostojeceg tipa, pa bi bez kapije
+' manjak bio ceo unos (30).
+Private Function OtkupKI021(ByVal tip As String, ByVal oznaka As String) As Object
+    Dim p As Object
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F1"))
+    p("stanicaID") = FX_STANICA
+    p("kooperantID") = FX_KOOPERANT
+    p("vrsta") = FX_VRSTA
+    p("sorta") = FX_SORTA
+    p("kolicinaI") = 300#
+    p("cenaI") = 50#
+    p("kolAmb") = 30&
+    p("brDok") = "KI021-" & oznaka & "-" & Format$(Now, "hhnnss")
+    p("tipAmb") = tip
+    Set OtkupKI021 = p
+End Function
+
+' KI-021: "poruka|fokus" validatora reversa za dati smer i tip. Broj ostaje prazan
+' (bez provere niza); provera tipa stoji pre smera i partnera.
+Private Function ReversKI021(ByVal smer As Long, ByVal tip As String) As String
+    Dim p As Object, fokus As String, r As String
+    Set p = modNovacUnos.NoviReversUnos()
+    p("datum") = Date
+    p("stanicaID") = FX_STANICA
+    p("vrsta") = FX_VRSTA
+    p("kolAmb") = 5&
+    p("tipAmb") = tip
+    p("smerRev") = smer
+    If smer = modNovacUnos.SMER_REV_POVRAT_KUP Then
+        ' Povrat kupca ide preko vozaca -- bez njega validator staje na vozacu.
+        p("partnerID") = FX_KUPAC
+        p("partnerTip") = "KUP"
+        p("vozacID") = FX_VOZAC
+    Else
+        p("partnerID") = FX_KOOPERANT
+        p("partnerTip") = "KOOP"
+    End If
+    r = modNovacUnos.ReversValidiraj(p, fokus)
+    ReversKI021 = r & "|" & fokus
+End Function
+
+' KI-021: poruka validatora za tip van sifarnika. Kljuc koga nema u katalogu
+' daje oznaku koja se ne moze poklopiti -- Poruka() bi dala "[KLJUC]" na obe
+' strane poredjenja, pa bi tvrdnja prosla i nad praznim katalogom (testovi.md 2).
+Private Function PorukaTipVanSifarnika(ByVal tip As String) As String
+    If PorukaNedostaje("DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU") Or _
+       PorukaNedostaje("DOK_MSG_TIP_AMBALAZE") Then
+        PorukaTipVanSifarnika = "<nema kljuca DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU>"
+        Exit Function
+    End If
+    PorukaTipVanSifarnika = Poruka("DOK_MSG_TIP_AMBALAZE") & tip & _
+                            Poruka("DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU")
 End Function
 
 ' Postoji li kontrola datog imena u zoni ekrana (243).

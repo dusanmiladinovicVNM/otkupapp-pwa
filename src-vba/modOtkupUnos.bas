@@ -160,8 +160,10 @@ Public Function OtkupValidiraj(ByVal p As Object, ByRef fokus As String) As Stri
         End If
     End If
 
-    If (kolAmb > 0 Or kolAmbII > 0 Or kolAmbIzd > 0) And Len(S(p, "tipAmb")) = 0 Then
-        fokus = "tipAmb": OtkupValidiraj = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"): Exit Function
+    ' KI-021: tip iz sifarnika (AMB-INV-12); tip od samih nevidljivih znakova je prazan.
+    If kolAmb > 0 Or kolAmbII > 0 Or kolAmbIzd > 0 Then
+        OtkupValidiraj = TipAmbalazePoruka(S(p, "tipAmb"))
+        If Len(OtkupValidiraj) > 0 Then fokus = "tipAmb": Exit Function
     End If
 
     ' Broj gajbi je OBAVEZAN za svaku unetu klasu kad je validacija ukljucena.
@@ -463,6 +465,20 @@ End Function
 
 ' PITANJE O MANJKU AMBALAZE (protokol potvrde deficita, AMB-10-ODL-8, 6.5).
 '
+' KI-021: poruka uz polje tipa ambalaze -- JEDNO mesto za sve validatore sa
+' ambalazom (otkup, otpremnica, prijemnica, revers). Pravilo drzi kapija pisca
+' (modAmbalazaUgovor.AmbTipProblem, AMB-INV-12); ovde se bira samo tekst. Tip od
+' samih nevidljivih znakova je PRAZAN tip (postojeca poruka), a svaki drugi mora
+' postojati u sifarniku. "" kad je tip valjan.
+Public Function TipAmbalazePoruka(ByVal tipAmb As String) As String
+    If modAmbalazaUgovor.AmbTipPrazan(tipAmb) Then
+        TipAmbalazePoruka = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE")
+    ElseIf Len(modAmbalazaUgovor.AmbTipProblem(tipAmb)) > 0 Then
+        TipAmbalazePoruka = Poruka("DOK_MSG_TIP_AMBALAZE") & tipAmb & _
+                            Poruka("DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU")
+    End If
+End Function
+
 ' Jedno mesto za pitanje koje postavljaju sva tri pisca sa potvrdom: otkup
 ' (kooperant donosi svoje gajbe), kupcev revers i prijemnica (kupac vraca vise
 ' nego sto drzi). Do KI-015 je svako mesto sastavljalo isti MsgBox po svom.

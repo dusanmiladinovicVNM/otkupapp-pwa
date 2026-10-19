@@ -2374,14 +2374,17 @@ End Function
 
 ' AUD-042(b): verdikt ValidatePWAOtkup za zadatu Datum vrednost. Ostala polja se
 ' popunjavaju tako da PROLAZE validaciju, pa je datum jedina promenljiva.
+' KI-021: tip i gajbe su opcioni -- bez njih red nema ambalazu, kao do sada.
 Public Function TestHook_ValidatePWAOtkupDatum(ByVal kooperantID As String, _
-                                              ByVal datumValue As Variant) As String
+                                              ByVal datumValue As Variant, _
+                                              Optional ByVal tipAmb As String = "", _
+                                              Optional ByVal kolAmb As Double = 0#) As String
     Dim data As Variant
     ReDim data(1 To 1, 1 To GS_STAVKE_COUNT)
 
     data(1, GS_KOOPERANT_ID) = kooperantID
     data(1, GS_VRSTA) = "Malina"
-    data(1, GS_TIP_AMB) = ""
+    data(1, GS_TIP_AMB) = tipAmb
     data(1, GS_DATUM) = datumValue
     data(1, GS_STAVKE_COUNT) = 1
 
@@ -2392,7 +2395,7 @@ Public Function TestHook_ValidatePWAOtkupDatum(ByVal kooperantID As String, _
     stavka.Add "Klasa", "I"
     stavka.Add "Kolicina", 100#
     stavka.Add "Cena", 200#
-    stavka.Add "KolAmbalaze", 0#
+    stavka.Add "KolAmbalaze", kolAmb
 
     Dim stavke As Collection
     Set stavke = New Collection
@@ -3075,13 +3078,24 @@ Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long, _
     
     ' TIP AMBALAZE JE CINJENICA ZAGLAVLJA, kolicina je po stavci -- zato se
     ' poredi ZBIR: gajbe bez tipa nema kome da se knjize, na kojoj god stavci su.
-    Dim tipAmb As String
+    Dim tipAmb As String, tipProblem As String
     tipAmb = Trim$(CStr(nz(data(row, GS_TIP_AMB), "")))
     If ukupnoAmb > 0 And Len(tipAmb) = 0 Then
         ValidatePWAOtkup = "TipAmbalaze missing while KolAmbalaze > 0"
         Exit Function
     End If
-    
+
+    ' KI-021: tip mora postojati u sifarniku (AMB-INV-12). Pisac bi ga i sam
+    ' odbio, ali njegov razlog do Sheet-a ne stize: ImportRowToTblOtkup_RowTX
+    ' vraca "", red dobije "ERROR:AppendRow failed" i posle se trajno preskace.
+    If ukupnoAmb > 0 Then
+        tipProblem = modAmbalazaUgovor.AmbTipProblem(tipAmb)
+        If Len(tipProblem) > 0 Then
+            ValidatePWAOtkup = tipProblem
+            Exit Function
+        End If
+    End If
+
     ValidatePWAOtkup = ""
 End Function
 

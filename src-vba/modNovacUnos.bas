@@ -459,9 +459,9 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     If kolAmb <= 0 Then
         fokus = "kolAmb": ReversValidiraj = Poruka("NOVUNOS_ERR_KOL_AMB"): Exit Function
     End If
-    If Len(S(p, "tipAmb")) = 0 Then
-        fokus = "tipAmb": ReversValidiraj = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"): Exit Function
-    End If
+    ' KI-021: tip iz sifarnika (AMB-INV-12); tip od samih nevidljivih znakova je prazan.
+    ReversValidiraj = modOtkupUnos.TipAmbalazePoruka(S(p, "tipAmb"))
+    If Len(ReversValidiraj) > 0 Then fokus = "tipAmb": Exit Function
 
     smer = L(p, "smerRev")
     If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POVRAT_KUP Then

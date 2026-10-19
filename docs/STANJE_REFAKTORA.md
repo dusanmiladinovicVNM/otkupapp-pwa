@@ -5320,6 +5320,283 @@
        `ki015-otkup-pita-kupca` sama.
      - Posle kapija `src-vba` i `tools` nisu menjani; ova stavka je samo docs.
 
+157. **Merge `#429` i `#430`, `KI-015` → `CLOSED`** (19.10.2026). Zapis ide ovde, a ne u PR-ove. Obrazac merge-a
+     su stavke 147, 150 i 152, a obrazac zatvaranja stavka 151.
+
+     - **`#429`** je merge-ovan 19.10.2026 (09:02:20 UTC) kao `cb34ce4e`, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `ba821bf5` (static CI #1002 `success`, run 39226708567; izmereno:
+       `gh run view`, broj, head i ishod se poklapaju).
+     - **Posle GO-a je ušao samo docs:** review `CODE GO` 9,2/10 važi za `cae524c4`, a posle njega je ušao samo
+       `ba821bf5` (stavka 156). `src-vba` i `tools` nisu menjani; `git diff cae524c4 ba821bf5` dira samo
+       `docs/KNOWN_ISSUES.md` i `docs/STANJE_REFAKTORA.md`.
+     - Izvršne kapije su nad izvorom `24728470dfcc`: 12/12 ZELENO (248/0, BFP 2432/0, Banka 241/0, Storno
+       111/0), dokaz `ki015` 15/15, compile potvrđen (`vba_gate --mark-compile`) i ručna provera 3/3 (stavke
+       155–156).
+     - **`#430`** je merge-ovan 19.10.2026 (09:03:08 UTC) kao `1abf7026`, sa `--match-head-commit` na head
+       `6a12a6ef`, 48 s posle `#429` (pravilan redosled). Review je `CONTENT GO` 9,5/10 (stavka 156). Static
+       CI #1000 `success` je na head-u (run 39217168265, izmereno), ali je grana rađena nad starom bazom
+       `db528e03`.
+     - Na novoj bazi je provereno sledeće:
+       - stablo `main`-a posle `#429` jednako je stablu `ba821bf5` (`0813e3b3`);
+       - `git merge-tree` sa `6a12a6ef` prolazi bez konflikta;
+       - PR menja samo `.claude/rules/testovi.md`;
+       - sva imena koja pravilo navodi postoje na `main`-u.
+     - Merge su urađeni ručno, posle zelenog CI, jer auto-merge u repou nije dozvoljen. Pre merge-a
+       finalni exact-head review nije tražen.
+     - **Reviewer je posle merge-a dao GO za oba PR-a** (19.10.2026). To je prenela sesija `KI-015`; u
+       GitHub-u na `#429` i `#430` nema ni review-a ni komentara (izmereno: `gh pr view --json
+       reviews,comments`).
+       - **`#429`:** retrospektivni `MERGE GO`, exact-head CI #1002. Reviewer je potvrdio da su posle
+         `CODE GO` (`cae524c4`) ušli samo docs, a produkcioni VBA i testovi nisu menjani. To se poklapa
+         sa izmerenim `git diff cae524c4 ba821bf5` (gore).
+       - **`#430`:** `MERGE GO`, exact-head CI #1000, merge-ovan pravilnim redosledom posle `#429`.
+     - **`KI-015` → `CLOSED`:**
+       - klasa je zatvorena: odbijen upis imenuje svoj dokument, a pitanje o manjku svoju stranu;
+       - ostatak se ne prenosi u `KI-015`;
+       - **`P3-1` (`Err` u EH BFP testa) ostaje OTVOREN.** Reviewer ga vodi kao odložen (odluka operatera,
+         stavka 156), a ne kao tehnički zatvoren, pa se ne zatvara sa `KI-015`;
+       - `KI-019`, `KI-020` i `KI-021` su svaki svoj red.
+     - **Sledeći rez je `KI-021`** (stavke 158+), na grani `claude/ki021-tip-ambalaze` sa `1abf7026`. Rez ide u
+       worktree-ju `.claude/worktrees/ki021`. Disk C: je imao 1,8 GB slobodno, a worktree praćenih fajlova
+       zauzima oko 40 MB uz fixture od 1 MB. Procena od 5,4 GB (stavke 151–152) ne važi za ovakav worktree.
+
+158. **`KI-021` — `pre-flight`, popis ulaza, odluke operatera i plan merenja, PRE koda** (19.10.2026). Grana
+     `claude/ki021-tip-ambalaze`.
+
+     **Verdikt.** Sve je pročitano, ništa nije izmereno dinamički.
+     - **DOMAIN — bio je GAP, zatvoren odlukom ispod.** AMBALAZA.md 6.13g je tvrdio da pisac traži samo
+       neprazan tip, pa knjiga sme da nosi slobodan tekst. I fixture ga tako modeluje: `AMB_LETVA =
+       "Letvarica"` je „slobodan unos kao u pogonu", u knjizi, bez reda u `tblTipAmbalaze`. Zatvoren skup je
+       zato nova odluka, a ne ispravka.
+     - **WRITERS — PROVEN.** `tblAmbalaza` piše samo `modAmbalaza` (`WRITE_OWNERSHIP.json`), a jedini
+       mutator je `UpisiRedKnjige` (`AppendRow`). Svaki red, pa i storno kontra-stav, ide kroz
+       `RequireAmbPrenos` → `AmbPrenosProblem`.
+     - **Ulazi u pisca:**
+       - **otkup:** `KnjiziOtkupAmbalazu` ← `CreateOtkup`; zovu ga `OtkupUpisi` (ekran), `IspravkaOtkupa_TX`
+         i `ImportRowToTblOtkup` (sync iz PWA);
+       - **otpremnica:** `OtpKnjiziAmbalazu` ← `OtpIzdaj`, koji vode ekran, auto-otpremnica iz synca
+         (`AutoOtpremnicaUpis`) i `AutoLanacHladnjaca`;
+       - **reversi:** naš kroz `UpisiReversUTx` (unos i `IspravkaReversa_TX`), kupčev kroz
+         `UpisiReversPartnera_TX`;
+       - **prijemnica:** `SavePrijemnica` (F4 pauziran do S6);
+       - **nabavka:** `NabaviAmbalazu_TX` (danas ga zovu samo testovi);
+       - **storno:** `StornirajAmbalazuDokumenta` ← storno otkupa, otpremnice, prijemnice i ambalažnog
+         dokumenta.
+     - **Ko legitimno šalje tip van šifarnika:**
+       - PWA ima tvrdo upisan spisak `['12/1','6/1','2/1']` (`otkup-form.js:1`), a šifarnik ne dobija;
+       - `GetTipAmbalazeOptions` nudi rezervne `12/1` i `6/1` kad je šifarnik prazan;
+       - fixture (`Letvarica`) i testovi: BFP `TEST_TIP_AMB`/`_B`/`_C`, literal `"G"` (oko 20 tvrdnji
+         `AmbPrenosProblem`), sintetički tipovi po scenariju (`"TIPL-" & scenario` i slični, 11 mesta, plus
+         `tipT2`) i `TEST_TIP_AMB & "-DRUGI"`. Čitalački testovi (`IZVT-Letvarica`) seju knjigu direktno i
+         pisca ne zovu.
+     - **Storno je bezbedan** ako se meri postojanje reda, a ne status. PK tipa je zaključan
+       (`modMaticniUnos.PkNepromenjen`), a redovi šifarnika se ne brišu. Isti obrazac drži nalog
+       (`AmbNalogProblem`, koji takođe ide i za kontra-stav).
+     - **Sync gubi razlog:** kad pisac odbije red, `ImportRowToTblOtkup_RowTX` vrati `""`, a Sheet dobije
+       „ERROR:AppendRow failed". Red sa statusom ERROR se posle toga **trajno** preskače. Imenovan razlog
+       može da da samo `ValidatePWAOtkup`.
+     - **FALSE-GREEN rizik:** BFP „PWA tip" (`TEST_TIP_AMB & "-DRUGI"` pod istim CRID-om) tvrdi da drugi tip
+       odbija samo kapija jednakosti. Kad tip nije u šifarniku, odbila bi ga i nova kapija, pa bi tvrdnja bila
+       zelena iz pogrešnog razloga. Zato se taj tip u testu registruje.
+
+     **Odluke operatera (19.10.2026), sve po preporuci:**
+     1. **Tip je zatvoren skup** (`AMB-INV-12`, `AMB-10-ODL-33`). Kapija je u piscu (`AmbPrenosProblem`,
+        posle postojanja naloga), a poruka uz polje je u validatorima. Pravilo je jedno: tip postoji u
+        `tblTipAmbalaze`, poređenje ide preko `Trim$` i bez obzira na velika slova (kao `IstiTipAmb`), a
+        status `Aktivan` se ne gleda.
+     2. **NBSP i ostali nevidljivi znakovi se odbijaju, ne normalizuju.** Tip od samih nevidljivih znakova
+        dobija postojeću poruku „Izaberite tip ambalaže!". Sve ostalo mora da se poklopi sa šifarnikom, a pisac
+        upisuje tačno ono što je prošlo.
+     3. **Poruku dobijaju svi ulazi:** otkup, otpremnica, revers (oba smera), prijemnica (statički do S6) i
+        `ValidatePWAOtkup`.
+     4. **Rezervni tipovi se brišu** iz `GetTipAmbalazeOptions`: combo pokazuje samo šifarnik. PWA spisak iz
+        matičnih podataka je **poseban rez**. Do tada PWA red sa tipom van šifarnika dobija imenovan ERROR u
+        Sheet-u i ne uvozi se.
+
+     **Acceptance contract:**
+     - **Šta važi kad se završi:**
+       - pisac odbija svaki red (original i kontra-stav) čiji tip nema red u šifarniku i navodi tip;
+       - validatori vraćaju poruku uz polje `tipAmb`;
+       - `ValidatePWAOtkup` vraća imenovan razlog kad je `KolAmbalaze > 0`;
+       - combo je tačno šifarnik.
+     - **Šta ostaje netaknuto:**
+       - čitalac knjige (`KnjigaRedProblem`) ne gleda šifarnik;
+       - poređenje tipa ostaje bez obzira na velika slova (235 i dalje važi);
+       - pitanje o manjku i ključevi `KI-015`;
+       - poruka „nema unetu težinu" za tip koji je u šifarniku, a nema težinu;
+       - redosled ostalih kapija pisca (struktura, nalog).
+     - **Edge case:** varijanta velikih slova postojećeg tipa prolazi, a neaktivan tip prolazi kroz pisca
+       (povrat gajbi koje se više ne izdaju).
+     - **Negativni slučajevi:** sam NBSP, nepostojeći `12/2` i `12/1`+NBSP se odbijaju.
+     - **Čime se meri:**
+       - **249** — otkup kroz `Scr_Save` F1, sa NBSP i sa `12/2`: poruka validatora, bez pitanja o manjku i
+         bez reda;
+       - **250** — validatori otpremnice i reversa (oba smera), direktno. Kroz `Scr_Save` bi nacrt
+         otpremnice danas bio upisan, pa bi crveni prolaz prljao svesku;
+       - **251** — combo bez rezervnih tipova nad šifarnikom bez aktivnog reda (u transakciji);
+       - **BFP** — `AmbPrenosProblem` (nepostojeći tip, NBSP, varijanta slova), pisac u transakciji i
+         `ValidatePWAOtkup` kroz postojeći hook;
+       - svaka tvrdnja ima svoju sabotažu `ki021-*`.
+     - **Statički:** `PrijemnicaValidiraj` (pauza je pre svega).
+
+     **Prateće izmene testova (premisa, ne ponašanje):**
+     - fixture dobija `Letvarica` u šifarniku, sa težinom 0 (`GetTezinaGajbice` ostaje 0, kao i bez reda);
+     - BFP seed registruje `TEST_TIP_AMB`/`_B`/`_C` i `"G"`;
+     - sintetički tipovi i `-DRUGI` se registruju na mestu nastanka.
+
+159. **`KI-021` — rez: reprodukcija, ispravka i PR `#432` na review-u** (19.10.2026). Grana
+     `claude/ki021-tip-ambalaze`, worktree `.claude/worktrees/ki021`, sopstveni fixture iz `make_fixture`.
+
+     **Rez A (`12c6dfec`), ponašanje kao `main`:**
+     - testovi 249–251 i BFP `Test_AMB_TipVanSifarnikaPisacOdbija`;
+     - ključ `DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU` u katalogu, bez produkcionog pozivaoca;
+     - `TestHook_ValidatePWAOtkupDatum` dobija opcioni tip i gajbe.
+
+     **Reprodukcija** (`RunOne` nad kopijom iz `run_vba --compile-only --keep`, posle `EnsureRuntimeSchema`;
+     skripte `repro_ki021.py` i `sonda_ki021.py` u scratchpad-u sesije d5497217):
+     - **249** je crven po imenu, sa NBSP tačno kao na snimku operatera: „Nalog Kooperant … nema 30 ' '" i
+       pitanje „manjak 30";
+     - **250** je crven po imenu: validator otpremnice vraća `""` za `12/2`;
+     - **251** je crven po imenu i vraća `12/1|6/1`;
+     - **BFP** ima 4 crvene tvrdnje i 3 zelene kontrole;
+     - delove koje prvi pad zaklanja izmerila je sonda: otkup `12/2` stiže do pitanja „manjak 30", naš
+       revers propušta `12/2` i NBSP, a kupčev revers prolazi proveru tipa i staje tek na broju;
+     - nijedan test nije visio.
+
+     **Usput ispravljen test pre crvenog prolaza:** prvi crveni 250 je pao na „Broj dokumenta je obavezan"
+     (stroga validacija otpremnice), a sonda kupčevog reversa na „izaberi vozača". Crveno tada ne bi značilo
+     „tip je prošao". Otpremnica je zato dobila broj, a kupčev revers vozača.
+
+     **Rez B (`914c1492`), ispravka:**
+     - `modAmbalazaUgovor.AmbTipPrazan`/`AmbTipProblem`, a `AmbPrenosProblem` ih zove posle postojanja
+       naloga (`AMB-INV-12`);
+     - `modOtkupUnos.TipAmbalazePoruka` daje poruku uz polje za otkup, otpremnicu, prijemnicu i revers;
+     - `ValidatePWAOtkup` vraća razlog pisca;
+     - `GetTipAmbalazeOptions` je bez rezervnih tipova, a `AMB_12_1`/`AMB_6_1` su obrisani;
+     - premise testova: fixture (`Letvarica`, težina 0) i BFP (seed, 12 sintetičkih tipova, `-DRUGI`);
+     - 10 sabotaža `ki021-*` (811 → 821);
+     - AMBALAZA.md 6.9 i 6.13h, `KI-022` (PWA spisak tipova) otvoren.
+
+     **Ciljano posle ispravke** (isti postupak, to nije izvršna kapija): 249–251, 235, 245–248 **8/0**. BFP
+     **71/0**: novi test, `Test_Amb_UgovorPrenosa` (`"G"`), `Test_PWA_KonfliktPoParceliITipu` (`-DRUGI`),
+     `Test_PRJ_LanacSeOdmotavaObrnuto` (sintetički tip) i `Test_AMB_PitanjeManjkaOtkupImenujeKooperanta`.
+
+     **Kapije:**
+     - **Jeftine, sve zelene (26):** ceo skup iz `static.yml` osim JS suite, plus `popis_citalaca --check`
+       i `sabotaza`/`dokaz --self-test`.
+     - **`tests/js/pokreni.js` nije pokrenut:** na mašini nema `npm`, CI je jedini izvršilac, a JS nije
+       diran.
+     - **Čeka reviewer GO:** `run_vba` 12/12, `dokaz.py ki021` (10), compile i ručna provera.
+
+     **Očekivani brojevi** (iz diff-a):
+     - RunAllTests 251/0 (+3);
+     - BFP 2439/0 (+7);
+     - Banka 241/0 i Storno 111/0 bez promene;
+     - katalog 821, `POZNATI_NALAZI` 9;
+     - fixture `d3d3ff6d` → `b9e6fd8a` (izmereno u worktree-ju).
+
+     **Popis ostalih suita, statički:**
+     - Storno seje dokumente sa „SVT-A" bez redova knjige, pa storno nema kontra-stav i kapija se ne
+       aktivira;
+     - Golden piše kroz pisca `12/1`, koji je u šifarniku fixture-a;
+     - Palete seju svoj tip u šifarnik;
+     - čitalački testovi (`IZVT-Letvarica`) seju knjigu direktno.
+
+160. **Review `#432` (`bbeb588a`): `CODE GO` 9,1/10 uz `P3`, `MERGE HOLD` zbog integracionog `P1` sa `#431`**
+     (19.10.2026). Static CI #1010 `SUCCESS` je na tačnom head-u (run 39234473922, izmereno). Review je
+     prenela sesija `KI-015`.
+
+     - **Integracioni `P1`:** `#431` (PDF u test prolazu) i `#432` zauzimaju iste ID-eve testova 249–251. Odluka
+       je sledeća:
+       - `#431` se merge-uje prvi (merge-ovan je 19.10.2026 kao `2dae09e0`);
+       - `#432` se zatim prebacuje na novi `main` i prenumeriše svoje testove u **252–254**. Prenumeracija
+         ide u sva tri registra, u zaglavlja i komentare testova i u `tools/sabotaza.py`;
+       - rebase i `push --force-with-lease` idu tek po izričitom odobrenju operatera, posle pokazanog
+         rezultata (CLAUDE.md §6).
+     - **`P3` (zatvoren ovde):** povrat praznih bez tipa na prijemnici nije dobijao poruku uz polje. Provera
+       praznog tipa je gledala samo pune gajbe, i to samo uz strogu validaciju. Pisac je i dalje odbijao, a
+       F4 je pauziran.
+       - **Rez A′** (commit „test(ki021): review #432 P3 …"; SHA se menja rebase-om): pravilo je izdvojeno
+         u `modDokUnos.PrijemnicaTipPoruka`, sa nepromenjenim
+         ponašanjem. Telo `PrijemnicaValidiraj` je do S6 iza bezuslovnog `Exit Function`, a seam koji bi
+         zaobišao pauzu nije dozvoljen. Test 250 zato meri funkciju, a poziv ostaje statički.
+       - **Reprodukcija:** 250 je crven po imenu („prijemnica povrat bez tipa: …", dobijeno `""`), a ranije
+         tvrdnje istog testa su zelene.
+       - **Ispravka:** povrat praznih traži tip uvek. Posle nje su 249–251 i 247–248 zeleni (5/0).
+         Dodate su sabotaže `ki021-prij-bez-sifarnika` i `ki021-prij-povrat-bez-tipa` (821 → 823).
+     - **`KI-022`** mora biti zatvoren pre puštanja PWA otkupa u redovnu upotrebu (upisano u `KI-022` i u
+       AMBALAZA.md 6.13h).
+     - **Pohvaljeno:**
+       - `AMB-INV-12` je u ugovoru pisca;
+       - istorijski čitalac nije vezan za današnji šifarnik;
+       - neaktivan tip ostaje dozvoljen (povrat, storno);
+       - PWA dobija imenovanu grešku;
+       - rezervni tipovi su uklonjeni.
+     - **Kapije posle rebase-a, nad kombinovanim kodom:** compile (operater), 12 suita, nove sabotaže i ručni
+       acceptance.
+     - **Očekivani brojevi:** reviewer je izveo RunAllTests 254/0, BFP 2439/0, Banka 241/0, Storno 111/0 i
+       katalog 824. **Izmereno posle rebase-a:** `main` posle `#431` ima 814 sabotaža (811 + 3; sesija
+       `#431` je prvo prenela 815, pa ispravila na 814), a grana 814 + 12 = **826**, sa dve nove sabotaže
+       `P3`. Reviewer-ov broj 824
+       je bio 814 + 10, pre `P3`.
+     - **Rebase na `2dae09e0` (merge `#431`), lokalno, 19.10.2026:**
+       - konflikt je bio samo u registrima `modTest` i na kraju kataloga u `tools/sabotaza.py`, a oba skupa
+         su zadržana;
+       - KI-021 testovi su sada **252–254**: `RunAllTests`, `TestName`, `InvokeTest`, zaglavlja i
+         unakrsne reference (`(252)`, `test (253)` u `modDokUnos`), AMBALAZA.md 6.13h;
+       - `make_fixture.py` je spojen automatski (`PDF_OTVORI_POSLE` iz `#431` i `Letvarica` iz KI-021);
+       - u stavkama 158–159 i u ovoj stavci 249–251 su istorijski brojevi, pre rebase-a.
+
+161. **`#432` posle rebase-a: izvršne kapije zelene, dokaz 12/12** (19.10.2026). Rebase je gurnut uz izričito
+     odobrenje operatera (`--force-with-lease`, `bbeb588a` → `79b90dcb`). Izvršne kapije je pustio operater
+     („Pusti run_vba 12/12 pa dokaz.py ki021").
+
+     - **`run_vba`** (head `79b90dcb`, izvor `941c599cf1b7`, ugovor `da9dff03076c`, sveska `18f888aa`,
+       fixture `4a1aa064`): **12/12 ZELENO**, marker upisan.
+
+       ```
+       RunAllTests              254 / 0      (248 + #431 249-251 + KI-021 252-254)
+       RunBusinessFlowProSuite 2439 / 0      (2432 + 7, Test_AMB_TipVanSifarnikaPisacOdbija)
+       RunBankaImportTestSuite  241 / 0      RunStornoTestSuite 111 / 0
+       ostalih 8 suita OK
+       ```
+
+       Brojevi se poklapaju sa onima koje je reviewer izveo iz diff-ova (stavka 160).
+     - **Dokaz** (`dokaz.py ki021 --grupe`, bazno 254/0 i 2439/0): **12/12 crvenih**, svaka sabotaža po
+       svom imenu. Izvor je pre i posle identičan (`2d4a409351a9f962`). Grupno je izmereno 5 od 12, a ostalih
+       7 pojedinačno.
+     - **Čeka operatera:** compile (`vba_gate --mark-compile` posle `Debug → Compile`) i ručna provera.
+       Predlog ručne provere je u opisu `#432`.
+     - Posle kapija `src-vba` i `tools` nisu menjani; ova stavka je samo docs.
+
+162. **Ručna provera `#432` — 5/5 za `KI-021`, compile potvrđen, uz nov nalaz `KI-023`** (19.10.2026).
+
+     **Sveska:** `tests/fixtures/rucna_provera_ki021_kod.xlsm` (`run_vba --compile-only --keep` nad `ed9e4472`;
+     izvor `941c599cf1b7`, isti kao u stavci 161). Operater je uvezao `modVbaTools.bas`, a `Debug → Compile`
+     je prošao. Potvrda je upisana kao `vba_gate --mark-compile`, i `--require-green --require-compile`
+     prolazi.
+
+     | # | Scenario | Šta je operater video | Ocena |
+     |---|---|---|---|
+     | 1 | F1 otkup, 30 gajbi, tip samo NBSP | „Izaberite tip ambalaže!", bez pitanja o manjku | OK |
+     | 2 | F1 otkup, tip `12/2` | „Tip ambalaže '12/2 ne postoji u šifarniku ambalaže", bez pitanja | OK za `KI-021`, nalaz `KI-023` |
+     | 3 | F7 revers `12/2`, „Izdato koop." i „Povrat kupca" | ista poruka | OK |
+     | 4 | `12/2` dodat u Matične podatke | otkup sa `12/2` ide do pitanja o manjku; kontrola `12/1`: pitanje „manjak 12", „Ne" → odbijanje | OK |
+     | 5 | combo TIP AMBALAŽE | `12/1`, `Letvarica`, `12/2`, bez `6/1` | OK |
+
+     - **Nalaz `KI-023`** (u tačkama 2 i 3 nedostaje zatvarajući apostrof posle tipa):
+       - `modPoruke.UpsertRow` piše `Range.Value = tekst`, a Excel vodeći apostrof tumači kao oznaku
+         teksta (prefiks), pa se ne čuva;
+       - ista klasa postoji u još 5 ključeva: `DOK_MSG_NEMA_UNETU_TEZINU` (poruka o tari),
+         `LIC_MSG_PROPUSTAM_VEZANU_MASINU`, `AUTH_MSG_VEC_POSTOJI`, `AUTH_MSG_ADMIN_KREIRAN` i
+         `KOR_MSG_VEC_POSTOJI`;
+       - test 253 ga ne hvata, jer obe strane poređenja prolaze kroz isti `Poruka()`.
+     - **Odluka operatera (19.10.2026, po preporuci):** klasa ide u poseban rez (`KI-023`). Popravka je na
+       jednom mestu (`UpsertRow`), uz test koji meri doslovan apostrof. `#432` ostaje kakav je, jer bi izmena
+       izvora poništila izvršne kapije iz stavke 161.
+     - Posle kapija `src-vba` i `tools` nisu menjani; ova stavka je samo docs.
+     - **Ostaje za `#432`:** reviewer GO za merge i zapis merge-a (`KI-021` → `CLOSED`).
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

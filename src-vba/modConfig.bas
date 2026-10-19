@@ -820,9 +820,10 @@ Public Const COL_FS_BROJ_PRERADE As String = "BrojPrerade"
 ' canonical veza faktura <-> fizicka isporuka (SEF datum, storno).
 Public Const COL_FS_UTOVAR_ID As String = "UtovarID"
 
-' --- Typen Ambalaze ---
-Public Const AMB_12_1 As String = "12/1"
-Public Const AMB_6_1 As String = "6/1"
+' --- Tipovi ambalaze ---
+' Nema ugradjenih tipova: tip je zatvoren skup iz tblTipAmbalaze (AMB-INV-12,
+' KI-021). Ovde su do KI-021 stajali 12/1 i 6/1 -- rezervni tipovi combo-a nad
+' praznim sifarnikom, koje bi pisac sada odbio.
 
 ' --- Klasa ---
 Public Const KLASA_I As String = "I"

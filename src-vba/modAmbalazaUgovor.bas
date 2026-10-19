@@ -968,7 +968,8 @@ Public Function AmbPrenosStrukturaProblem(ByVal odTip As String, ByVal odID As S
     End If
 End Function
 
-' PUN ugovor prenosa: struktura + postojanje oba naloga. Ovo zove PISAC.
+' PUN ugovor prenosa: struktura + postojanje oba naloga + postojanje tipa. Ovo
+' zove PISAC.
 Public Function AmbPrenosProblem(ByVal odTip As String, ByVal odID As String, _
                                  ByVal naTip As String, ByVal naID As String, _
                                  ByVal kolicina As Double, ByVal tipAmb As String, _
@@ -985,7 +986,78 @@ Public Function AmbPrenosProblem(ByVal odTip As String, ByVal odID As String, _
     End If
 
     p = AmbNalogProblem(naTip, naID)
-    If Len(p) > 0 Then AmbPrenosProblem = "Nalog NA: " & p
+    If Len(p) > 0 Then
+        AmbPrenosProblem = "Nalog NA: " & p
+        Exit Function
+    End If
+
+    ' AMB-INV-12 (KI-021): tip postoji u sifarniku. Kapija UPISA, kao postojanje
+    ' naloga -- zato stoji ovde, a ne u AmbPrenosStrukturaProblem, koji meri i
+    ' citalac knjige nad zapisanim redom.
+    AmbPrenosProblem = AmbTipProblem(tipAmb)
+End Function
+
+' ============================================================
+' TIP AMBALAZE -- AMB-INV-12 (KI-021, odluke operatera 19.10.2026)
+' ============================================================
+'
+' Tip je ZATVOREN SKUP: postoji u tblTipAmbalaze. Do KI-021 je pisac trazio samo
+' neprazan tip posle Trim$, koji skida samo ASCII razmak -- pa su NBSP i
+' nepostojece "12/2" prolazili do knjige, a pitanje o manjku je trazilo potvrdu
+' za tip kog nema (rucna provera #429).
+'
+' Tip od samih nevidljivih znakova je PRAZAN tip: kontrolni znakovi, razmaci i
+' Unicode razmaci i formatni znakovi koje tastatura ili kopiranje ume da ubaci.
+' Nista se ne normalizuje -- pisac upisuje tacno ono sto je proslo, pa citaoci
+' (IstiTipAmb, AmbSaldoNaloga) ostaju u koraku sa piscem.
+Public Function AmbTipPrazan(ByVal tipAmb As String) As Boolean
+    Dim i As Long, k As Long
+    For i = 1 To Len(tipAmb)
+        k = AscW(Mid$(tipAmb, i, 1))
+        If k < 0 Then k = k + 65536
+        Select Case k
+            Case 0 To 32, 127, 160, 173, 8192 To 8207, 8232 To 8239, 8287 To 8288, 12288, 65279
+            Case Else
+                Exit Function
+        End Select
+    Next i
+    AmbTipPrazan = True
+End Function
+
+' "" kad tip postoji u sifarniku, inace imenovan razlog (ASCII -- ide piscu i
+' sync-u; ekran bira svoj tekst u modOtkupUnos.TipAmbalazePoruka).
+'
+' Poredjenje je isto kao u citaocima: Trim$ i bez obzira na velika slova. Aktivan
+' se NE gleda: neaktivan tip se vise ne nudi, ali gajbe tog tipa moraju moci da se
+' vrate, a storno zapisanog reda prolazi istu kapiju. PK tipa je zakljucan
+' (modMaticniUnos.PkNepromenjen), a redovi sifarnika se ne brisu, pa kapija ne
+' moze naknadno da obori storno -- isti razlog zbog kog AmbNalogProblem sme da
+' vazi i za kontra-stav.
+Public Function AmbTipProblem(ByVal tipAmb As String) As String
+    Dim data As Variant, c As Long, i As Long
+
+    If AmbTipPrazan(tipAmb) Then
+        AmbTipProblem = "Tip ambalaze je prazan ili nevidljiv -- stanje se vodi PO TIPU."
+        Exit Function
+    End If
+
+    c = modDataAccess.GetColumnIndex(TBL_TIP_AMBALAZE, COL_TAMB_TIP)
+    If c = 0 Then
+        AmbTipProblem = "Sifarnik " & TBL_TIP_AMBALAZE & " nema kolonu " & COL_TAMB_TIP & "."
+        Exit Function
+    End If
+
+    data = modDataAccess.GetTableData(TBL_TIP_AMBALAZE)
+    If Not IsEmpty(data) Then
+        For i = 1 To UBound(data, 1)
+            If Not IsError(data(i, c)) Then
+                If StrComp(Trim$(CStr(data(i, c))), Trim$(tipAmb), vbTextCompare) = 0 Then Exit Function
+            End If
+        Next i
+    End If
+
+    AmbTipProblem = "Tip ambalaze '" & Trim$(tipAmb) & "' ne postoji u sifarniku (" & _
+                    TBL_TIP_AMBALAZE & ")."
 End Function
 
 ' Ista provera, za pisca: greska umesto poruke.

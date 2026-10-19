@@ -130,6 +130,8 @@ Private Sub UpsertPoruke01(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOK_ERR_GRESKA", "Gre" & ChrW(353) & "ka:"
     UpsertRow lo, existing, "DOK_MSG_UNESITE_AMBALAZU_ILI", "Unesite ambala" & ChrW(382) & "u ili novac za OM ulaz."
     UpsertRow lo, existing, "DOK_MSG_IZABERITE_TIP_AMBALAZE", "Izaberite tip ambala" & ChrW(382) & "e!"
+    ' KI-021: ide iza DOK_MSG_TIP_AMBALAZE i otkucanog tipa, kao DOK_MSG_NEMA_UNETU_TEZINU.
+    UpsertRow lo, existing, "DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU", "' ne postoji u " & ChrW(353) & "ifarniku ambala" & ChrW(382) & "e"
     UpsertRow lo, existing, "DOK_MSG_NEDOVOLJNO_AVANSA_RASPOLOZIVO", "Nedovoljno OM avansa! Raspolo" & ChrW(382) & "ivo:"
     UpsertRow lo, existing, "DOK_MSG_GRESKA_PRI_CUVANJU_2", "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju OM ulaza. Promene su vra" & ChrW(263) & "ene."
     UpsertRow lo, existing, "DOK_MSG_VALIDACIJA_NIJE_PROSLA", "Validacija nije pro" & ChrW(353) & "la. Proverite kg i ambala" & ChrW(382) & "u (razlika mora biti 0)."
