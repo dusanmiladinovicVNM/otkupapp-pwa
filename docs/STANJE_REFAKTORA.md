@@ -5547,6 +5547,28 @@
        - `make_fixture.py` je spojen automatski (`PDF_OTVORI_POSLE` iz `#431` i `Letvarica` iz KI-021);
        - u stavkama 158–159 i u ovoj stavci 249–251 su istorijski brojevi, pre rebase-a.
 
+161. **`#432` posle rebase-a: izvršne kapije zelene, dokaz 12/12** (19.10.2026). Rebase je gurnut uz izričito
+     odobrenje operatera (`--force-with-lease`, `bbeb588a` → `79b90dcb`). Izvršne kapije je pustio operater
+     („Pusti run_vba 12/12 pa dokaz.py ki021").
+
+     - **`run_vba`** (head `79b90dcb`, izvor `941c599cf1b7`, ugovor `da9dff03076c`, sveska `18f888aa`,
+       fixture `4a1aa064`): **12/12 ZELENO**, marker upisan.
+
+       ```
+       RunAllTests              254 / 0      (248 + #431 249-251 + KI-021 252-254)
+       RunBusinessFlowProSuite 2439 / 0      (2432 + 7, Test_AMB_TipVanSifarnikaPisacOdbija)
+       RunBankaImportTestSuite  241 / 0      RunStornoTestSuite 111 / 0
+       ostalih 8 suita OK
+       ```
+
+       Brojevi se poklapaju sa onima koje je reviewer izveo iz diff-ova (stavka 160).
+     - **Dokaz** (`dokaz.py ki021 --grupe`, bazno 254/0 i 2439/0): **12/12 crvenih**, svaka sabotaža po
+       svom imenu. Izvor je pre i posle identičan (`2d4a409351a9f962`). Grupno je izmereno 5 od 12, a ostalih
+       7 pojedinačno.
+     - **Čeka operatera:** compile (`vba_gate --mark-compile` posle `Debug → Compile`) i ručna provera.
+       Predlog ručne provere je u opisu `#432`.
+     - Posle kapija `src-vba` i `tools` nisu menjani; ova stavka je samo docs.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
