@@ -170,7 +170,7 @@ Private Const FX_BIM_OBRADJENIH As Long = 5 ' DA + dva dvojnika + prosli ciklus 
 Private Const FX_BROJ_NOVAC As String = "NOVUNOS-TEST-1"
 Private Const FX_VRSTA As String = "TESTVOCE"
 Private Const FX_SORTA As String = "TESTSORTA"
-Private Const FX_TIP_AMB As String = "12/1"         ' AMB_12_1, TezinaGajbiceKg = 1
+Private Const FX_TIP_AMB As String = "12/1"         ' make_fixture AMB_12_1, TezinaGajbiceKg = 1
 Private Const FX_TIP_LETVA As String = "Letvarica"  ' make_fixture AMB_LETVA, drugi tip na ADK-IZV-1
 Private Const FX_TIP_NEMA As String = "12/2"        ' KI-021: tip koga NEMA u sifarniku fixture-a
 ' Kupca u fixture-u NEMA i ne treba ga: provere gledaju samo da li je izabran

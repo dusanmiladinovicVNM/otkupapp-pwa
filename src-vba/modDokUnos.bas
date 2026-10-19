@@ -192,9 +192,16 @@ Public Function OtpremnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         If dveKl And kolAmbII <= 0 Then
             fokus = "kolAmbII": OtpremnicaValidiraj = Poruka("OTKUNOS_ERR_GAJBE_II"): Exit Function
         End If
-        If (kolAmb > 0 Or kolAmbII > 0) And Len(S(p, "tipAmb")) = 0 Then
+        If (kolAmb > 0 Or kolAmbII > 0) And modAmbalazaUgovor.AmbTipPrazan(S(p, "tipAmb")) Then
             fokus = "tipAmb": OtpremnicaValidiraj = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"): Exit Function
         End If
+    End If
+
+    ' KI-021: otkucan tip mora postojati u sifarniku i bez stroge validacije --
+    ' pogresan tip nije nepopunjeno polje nego upis koji pisac odbija (AMB-INV-12).
+    If (kolAmb > 0 Or kolAmbII > 0) And Not modAmbalazaUgovor.AmbTipPrazan(S(p, "tipAmb")) Then
+        OtpremnicaValidiraj = modOtkupUnos.TipAmbalazePoruka(S(p, "tipAmb"))
+        If Len(OtpremnicaValidiraj) > 0 Then fokus = "tipAmb": Exit Function
     End If
 
     ' --- BRUTO -> NETO. Otpremnica se cuva u NETO, isto kao otkupni list, da
@@ -920,9 +927,17 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         If dveKl And kolAmbII <= 0 Then
             fokus = "kolAmbII": PrijemnicaValidiraj = Poruka("OTKUNOS_ERR_GAJBE_II"): Exit Function
         End If
-        If (kolAmb > 0 Or kolAmbII > 0) And Len(S(p, "tipAmb")) = 0 Then
+        If (kolAmb > 0 Or kolAmbII > 0) And modAmbalazaUgovor.AmbTipPrazan(S(p, "tipAmb")) Then
             fokus = "tipAmb": PrijemnicaValidiraj = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"): Exit Function
         End If
+    End If
+
+    ' KI-021: isto kao otpremnica (AMB-INV-12); i povrat praznih se knjizi po tipu.
+    ' Staticki do S6: pauza je pre svega.
+    If (kolAmb > 0 Or kolAmbII > 0 Or L(p, "kolAmbVracena") > 0) And _
+       Not modAmbalazaUgovor.AmbTipPrazan(S(p, "tipAmb")) Then
+        PrijemnicaValidiraj = modOtkupUnos.TipAmbalazePoruka(S(p, "tipAmb"))
+        If Len(PrijemnicaValidiraj) > 0 Then fokus = "tipAmb": Exit Function
     End If
 
     If dveKl Then

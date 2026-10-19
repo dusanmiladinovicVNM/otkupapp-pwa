@@ -487,6 +487,7 @@ nepromenljiva. Razlog mora da stoji u registru.
 | `AMB-INV-09` | **`Obaveza(partner, tip) >= 0`** — firma ne moze partneru vratiti vise tudje ambalaze nego sto je od njega uzela |
 | `AMB-INV-10` | svi originalni redovi **jednog dokumenta**, izuzev generisanog pokrica, nose **jedan isti neuredjen par `{Od, Na}`** — sprovodjenje `AMB-10-ODL-3` |
 | `AMB-INV-11` | **`AmbID` je jedinstven u knjizi**, a `StornoOd` pokazuje na **tacno jedan** postojeci red |
+| `AMB-INV-12` | **`TipAmbalaze` postoji u `tblTipAmbalaze`** (`Trim$`, bez obzira na velika slova i na `Aktivan`) — kapija upisa, kao postojanje naloga; citalac je ne meri (6.13h) |
 
 Zbir svih salda ostaje **sanity check nad oblikom**, ne dokaz ispravnosti: svaki
 prenos po konstrukciji daje `-x` i `+x`, pa je nula i kad je dogadjaj dupliran.
@@ -2549,8 +2550,9 @@ nalog, pa njen manjak pisac odbija.
 - revers uvek ima svoj red za nalog i tip papira, pa je odsustvo granice kvar
   identiteta i papir ne nastaje (7692), umesto papira bez redova stanja.
 
-**Tip ambalaže je isti tip bez obzira na velika slova** (review `#421`, P2 #2). Pisac traži
-samo neprazan tip, pa knjiga sme da nosi `letvarica` i `LETVARICA`. Istorijski čitalac zato
+**Tip ambalaže je isti tip bez obzira na velika slova** (review `#421`, P2 #2). Pisac je tada
+tražio samo neprazan tip (od `KI-021` traži tip iz šifarnika, 6.13h), pa knjiga sme da nosi
+`letvarica` i `LETVARICA`. Istorijski čitalac zato
 poredi tip kao kanonski saldo (`AmbSaldoNaloga`, `vbTextCompare`) i izbor reda za papir
 (`AmbTipKljuc`), inače bi papir i saldo davali dva odgovora. `GetAmbalazeStanje` i dalje
 grupiše binarno; zove ga samo grupni otkupni list, pa ide uz S6.
@@ -2566,6 +2568,39 @@ grupiše binarno; zove ga samo grupni otkupni list, pa ide uz S6.
 (`T_SaldoPapir_KupcevReversF7BezPapira`), 234 (`T_SaldoPapir_KvarKnjigeNijeNula`), 235
 (`T_SaldoPapir_TipBezObziraNaVelikaSlova`), BFP `Test_OTP_PapirStanjeOkoSvogReda` i
 `Test_OTP_PapirBezVezeKnjige`; sabotaže `saldo-*` (10).
+
+### 6.13h Tip ambalaže je zatvoren skup (AMB-10-ODL-33, KI-021, 19.10.2026)
+
+> **`AMB-10-ODL-33` (odluka operatera 19.10.2026): tip ambalaže mora postojati u
+> `tblTipAmbalaze`.** Do sada je pisac tražio samo neprazan tip posle `Trim$`, a `Trim$` skida
+> samo ASCII razmak. Ručna provera `#429` je zato pokazala dva propusta. Otkup sa NBSP
+> (`ChrW(160)`) u polju tipa stigao je do pitanja „manjak 30 ' '". Nepostojeći `12/2` prošao je
+> isto. Na „Da" bi knjiga dobila kretanje i `ULAZ_TUDJE` za tip kog nema, pa bi se saldo cepao
+> na fantomski tip.
+
+- **Kapija je u piscu** (`AMB-INV-12`): `modAmbalazaUgovor.AmbPrenosProblem`, posle postojanja
+  oba naloga. Pravilo drži `AmbTipProblem`. Kapija važi za svaki red, pa i za kontra-stav, kao
+  postojanje naloga. To je bezbedno jer je PK tipa zaključan (`PkNepromenjen`), a redovi
+  šifarnika se ne brišu.
+- **Čitalac je ne meri.** `KnjigaRedProblem` zove samo `AmbPrenosStrukturaProblem`. Promena
+  šifarnika zato ne može retroaktivno da pokvari zapisan red (isti razlog kao za nalog).
+- **Poređenje** je isto kao u čitaocima: `Trim$` i bez obzira na velika slova. Status `Aktivan`
+  se ne gleda, jer neaktivan tip se više ne nudi, ali gajbe tog tipa moraju moći da se vrate.
+- **Nevidljivi znakovi se odbijaju, ne normalizuju.** Tip od samih nevidljivih znakova (NBSP,
+  kontrolni znakovi, Unicode razmaci) je prazan tip (`AmbTipPrazan`). Pisac upisuje tačno ono
+  što je prošlo, pa čitaoci ostaju u koraku sa njim.
+- **Poruka uz polje:**
+  - **ekranski ulazi:** otkup, otpremnica, revers u oba smera i prijemnica (statički do S6)
+    dobijaju poruku kroz `modOtkupUnos.TipAmbalazePoruka`;
+  - **PWA:** `ValidatePWAOtkup` vraća razlog pisca. Odbijen upis u sync-u inače stiže u Sheet
+    samo kao „ERROR:AppendRow failed".
+- **Combo je tačno šifarnik.** Rezervni `12/1` i `6/1` nad praznim šifarnikom su obrisani.
+- **Otvoreno:** PWA nudi tvrdo upisan spisak (`12/1`, `6/1`, `2/1`) i šifarnik ne dobija. Do
+  posebnog reza (`KI-022`) red sa tipom van šifarnika dobija imenovan ERROR i ne uvozi se.
+
+*Provera:* `modTest` 249 (`T_KI021_OtkupTipVanSifarnika`), 250
+(`T_KI021_ValidatoriTraziSifarnik`), 251 (`T_KI021_ComboTipaJeSifarnik`), BFP
+`Test_AMB_TipVanSifarnikaPisacOdbija`; sabotaže `ki021-*` (10).
 
 ### 6.14 Sta model sada ume da odgovori
 

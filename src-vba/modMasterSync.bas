@@ -3078,13 +3078,24 @@ Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long, _
     
     ' TIP AMBALAZE JE CINJENICA ZAGLAVLJA, kolicina je po stavci -- zato se
     ' poredi ZBIR: gajbe bez tipa nema kome da se knjize, na kojoj god stavci su.
-    Dim tipAmb As String
+    Dim tipAmb As String, tipProblem As String
     tipAmb = Trim$(CStr(nz(data(row, GS_TIP_AMB), "")))
     If ukupnoAmb > 0 And Len(tipAmb) = 0 Then
         ValidatePWAOtkup = "TipAmbalaze missing while KolAmbalaze > 0"
         Exit Function
     End If
-    
+
+    ' KI-021: tip mora postojati u sifarniku (AMB-INV-12). Pisac bi ga i sam
+    ' odbio, ali njegov razlog do Sheet-a ne stize: ImportRowToTblOtkup_RowTX
+    ' vraca "", red dobije "ERROR:AppendRow failed" i posle se trajno preskace.
+    If ukupnoAmb > 0 Then
+        tipProblem = modAmbalazaUgovor.AmbTipProblem(tipAmb)
+        If Len(tipProblem) > 0 Then
+            ValidatePWAOtkup = tipProblem
+            Exit Function
+        End If
+    End If
+
     ValidatePWAOtkup = ""
 End Function
 

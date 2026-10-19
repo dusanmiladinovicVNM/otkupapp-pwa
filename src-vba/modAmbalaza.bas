@@ -401,27 +401,22 @@ Public Function GetStanicaAmbSaldo(ByVal stanicaID As String, _
 End Function
 
 ' ============================================================
-' READ: opcije za "Tip ambalaze" combo (frmOtkup / frmDokumenta)
+' READ: opcije za "Tip ambalaze" combo
 '
-' Vraca tipove koje je kupac uneo u tblTipAmbalaze (maticni podaci).
-' Fallback na ugradjene konstante (12/1, 6/1) ako je sifarnik prazan
-' ili tabela ne postoji -- da postojece instalacije ne ostanu bez opcija.
+' Vraca AKTIVNE tipove iz tblTipAmbalaze (maticni podaci) -- tacno sifarnik.
+' Rezervnih tipova (12/1, 6/1 nad praznim sifarnikom) vise nema (KI-021, odluka
+' operatera 19.10.2026): pisac trazi tip iz sifarnika (AMB-INV-12), pa bi combo
+' nudio tip koji upis odbija. Prazan sifarnik daje prazan combo; tip se dodaje u
+' Maticnim podacima. Greska citanja daje prazan spisak uz ERROR u log -- combo
+' ne izmislja tip.
 ' ============================================================
 Public Function GetTipAmbalazeOptions() As Variant
-    On Error GoTo Fallback
-
-    Dim arr As Variant
-    arr = GetLookupList(TBL_TIP_AMBALAZE, COL_TAMB_TIP, , , True)
-
-    If IsArray(arr) Then
-        If (UBound(arr) - LBound(arr) + 1) > 0 Then
-            GetTipAmbalazeOptions = arr
-            Exit Function
-        End If
-    End If
-
-Fallback:
-    GetTipAmbalazeOptions = Array(AMB_12_1, AMB_6_1)
+    On Error GoTo EH
+    GetTipAmbalazeOptions = GetLookupList(TBL_TIP_AMBALAZE, COL_TAMB_TIP, , , True)
+    Exit Function
+EH:
+    LogErr "modAmbalaza.GetTipAmbalazeOptions"
+    GetTipAmbalazeOptions = Array()
 End Function
 
 ' Podrazumevani tip ambalaze za kulturu (tblKulture.TipAmbalaze).

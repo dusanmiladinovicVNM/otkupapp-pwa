@@ -298,7 +298,7 @@ IZV_KES = 200.0
 IZV_VIRMAN = 300.0
 IZV_AVANS_KOOP = 700.0
 IZV_OM_AVANS = 5000.0            # KesFirmaOtkupac; GetOMAvansSaldo = 5000 - 200
-AMB_LETVA = "Letvarica"          # drugi tip ambalaze; slobodan unos kao u pogonu
+AMB_LETVA = "Letvarica"          # drugi tip ambalaze; od KI-021 i on je u sifarniku
 
 # EKRAN SLEDLJIVOST (Faza E/20, v6-ui-187). Do sada fixture NIJE imao nijednu
 # otpremnicu cija zbirna nosi NESTORNIRANU prijemnicu (rupa zapisana u
@@ -486,6 +486,9 @@ SEED = {
     ],
     "tblTipAmbalaze": [
         {"TipAmbalaze": AMB_12_1, "TezinaGajbiceKg": 1.0, "Aktivan": STATUS_AKTIVAN},
+        # KI-021: tip je zatvoren skup (AMB-INV-12), pa i drugi tip knjige mora
+        # biti u sifarniku. Tezina 0 cuva tara ponasanje kakvo je bilo bez reda.
+        {"TipAmbalaze": AMB_LETVA, "TezinaGajbiceKg": 0.0, "Aktivan": STATUS_AKTIVAN},
     ],
     "tblKooperanti": [
         # KOOP-TEST-1 IMA tekuci racun: ekran Platni nalozi bez ijednog
