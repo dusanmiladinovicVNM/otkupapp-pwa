@@ -5536,7 +5536,8 @@
        acceptance.
      - **Očekivani brojevi:** reviewer je izveo RunAllTests 254/0, BFP 2439/0, Banka 241/0, Storno 111/0 i
        katalog 824. **Izmereno posle rebase-a:** `main` posle `#431` ima 814 sabotaža (811 + 3; sesija
-       `#431` je prenela 815), a grana 814 + 12 = **826**, sa dve nove sabotaže `P3`. Reviewer-ov broj 824
+       `#431` je prvo prenela 815, pa ispravila na 814), a grana 814 + 12 = **826**, sa dve nove sabotaže
+       `P3`. Reviewer-ov broj 824
        je bio 814 + 10, pre `P3`.
      - **Rebase na `2dae09e0` (merge `#431`), lokalno, 19.10.2026:**
        - konflikt je bio samo u registrima `modTest` i na kraju kataloga u `tools/sabotaza.py`, a oba skupa
