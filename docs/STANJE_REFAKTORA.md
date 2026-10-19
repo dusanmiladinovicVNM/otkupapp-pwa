@@ -5324,7 +5324,8 @@
      su stavke 147, 150 i 152, a obrazac zatvaranja stavka 151.
 
      - **`#429`** je merge-ovan 19.10.2026 (09:02:20 UTC) kao `cb34ce4e`, na **izričit zahtev operatera**, sa
-       `--match-head-commit` na head `ba821bf5` (static CI `success`, run 39226708567).
+       `--match-head-commit` na head `ba821bf5` (static CI #1002 `success`, run 39226708567; izmereno:
+       `gh run view`, broj, head i ishod se poklapaju).
      - **Posle GO-a je ušao samo docs:** review `CODE GO` 9,2/10 važi za `cae524c4`, a posle njega je ušao samo
        `ba821bf5` (stavka 156). `src-vba` i `tools` nisu menjani; `git diff cae524c4 ba821bf5` dira samo
        `docs/KNOWN_ISSUES.md` i `docs/STANJE_REFAKTORA.md`.
@@ -5332,19 +5333,28 @@
        111/0), dokaz `ki015` 15/15, compile potvrđen (`vba_gate --mark-compile`) i ručna provera 3/3 (stavke
        155–156).
      - **`#430`** je merge-ovan 19.10.2026 (09:03:08 UTC) kao `1abf7026`, sa `--match-head-commit` na head
-       `6a12a6ef`. Review je `CONTENT GO` 9,5/10 (stavka 156). Static CI `success` je na head-u, ali je
-       grana rađena nad starom bazom `db528e03`.
+       `6a12a6ef`, 48 s posle `#429` (pravilan redosled). Review je `CONTENT GO` 9,5/10 (stavka 156). Static
+       CI #1000 `success` je na head-u (run 39217168265, izmereno), ali je grana rađena nad starom bazom
+       `db528e03`.
      - Na novoj bazi je provereno sledeće:
        - stablo `main`-a posle `#429` jednako je stablu `ba821bf5` (`0813e3b3`);
        - `git merge-tree` sa `6a12a6ef` prolazi bez konflikta;
        - PR menja samo `.claude/rules/testovi.md`;
        - sva imena koja pravilo navodi postoje na `main`-u.
-     - Merge su urađeni ručno, posle zelenog CI, jer auto-merge u repou nije dozvoljen. **Finalni exact-head
-       review nije tražen:** GO za `#429` važi za `cae524c4`.
+     - Merge su urađeni ručno, posle zelenog CI, jer auto-merge u repou nije dozvoljen. Pre merge-a
+       finalni exact-head review nije tražen.
+     - **Reviewer je posle merge-a dao GO za oba PR-a** (19.10.2026). To je prenela sesija `KI-015`; u
+       GitHub-u na `#429` i `#430` nema ni review-a ni komentara (izmereno: `gh pr view --json
+       reviews,comments`).
+       - **`#429`:** retrospektivni `MERGE GO`, exact-head CI #1002. Reviewer je potvrdio da su posle
+         `CODE GO` (`cae524c4`) ušli samo docs, a produkcioni VBA i testovi nisu menjani. To se poklapa
+         sa izmerenim `git diff cae524c4 ba821bf5` (gore).
+       - **`#430`:** `MERGE GO`, exact-head CI #1000, merge-ovan pravilnim redosledom posle `#429`.
      - **`KI-015` → `CLOSED`:**
        - klasa je zatvorena: odbijen upis imenuje svoj dokument, a pitanje o manjku svoju stranu;
        - ostatak se ne prenosi u `KI-015`;
-       - `P3-1` (`Err` u EH BFP testa) je odložen odlukom operatera (stavka 156);
+       - **`P3-1` (`Err` u EH BFP testa) ostaje OTVOREN.** Reviewer ga vodi kao odložen (odluka operatera,
+         stavka 156), a ne kao tehnički zatvoren, pa se ne zatvara sa `KI-015`;
        - `KI-019`, `KI-020` i `KI-021` su svaki svoj red.
      - **Sledeći rez je `KI-021`** (stavke 158+), na grani `claude/ki021-tip-ambalaze` sa `1abf7026`. Rez ide u
        worktree-ju `.claude/worktrees/ki021`. Disk C: je imao 1,8 GB slobodno, a worktree praćenih fajlova
