@@ -5142,6 +5142,65 @@
      - Sledeći rez je `KI-015` (stavke 153+), na grani `claude/ki015-poruke-dokumenta` sa `db528e03`. Disk C:
        je 19.10.2026 imao 2,4 GB slobodno, pa rez ide u operaterovom klonu, bez worktree-ja.
 
+153. **`KI-015` — popis, odluke operatera i plan merenja, PRE koda** (19.10.2026). Grana
+     `claude/ki015-poruke-dokumenta`.
+
+     **Popis (grep po ključu i po obrascu; skripta nad svim `Poruka("…")` u četiri modula, čija poruka imenuje
+     dokument ili stranu).** Pročitano, nije izmereno dinamički.
+
+     | Mesto | Šta čuva | Ključ danas | Tačno? |
+     |---|---|---|---|
+     | `modScrDokumenti.Scr_Save` (otkup) | otkup | `OTKUP_MSG_GRESKA_PRI_CUVANJU` | da |
+     | `SnimiOtpremnicu` ×2 | otpremnicu | `DOK_MSG_GRESKA_PRI_CUVANJU` | da |
+     | `SnimiZbirnu` ×2 | zbirnu | isti, „otpremnice" | **ne** (`_3` „zbirne" postoji, bez pozivaoca) |
+     | `SavePrijemnica` | prijemnicu | isti | **ne** (`_4` „prijemnice" postoji); nedostižno do S6 |
+     | `SaveIsplata`, `SaveUplata`, `SaveRevers` | isplatu, uplatu, revers | isti | **ne** |
+     | `modOtkupUnos` ×3 | otkup | `OTKUP_ERR_GRESKA_PRI_UNOSU` | da |
+     | `modDokUnos` otpremnica ×5 (`Validiraj` EH, `Upisi` ×2, `IzmeniNacrt` ×2) | otpremnicu | isti, „otkupa" | **ne** |
+     | `modDokUnos` zbirna ×5, prijemnica ×2 (`PrijemnicaValidiraj` EH je iza bezuslovnog `Exit Function`) | zbirnu, prijemnicu | isti | **ne** |
+     | `modNovacUnos` ×7 (isplata 2, uplata 2, revers 3) | isplatu, uplatu, revers | isti | **ne** |
+     | `AMB_ASK_DEFICIT_1/_2` u `modOtkupUnos` | kooperant | „Kooperant… duguje kooperantu" | da |
+     | isti par u `RevKupcaUpisi` i `PrijemnicaUpisi` | kupac | isti | **ne** |
+     | `RowActionZbr` (radni sto zbirne) ×4 | zbirnu | `OTKUI_MSG_VEZAN`/`_UKLONJEN`/`_IZDATA`, `OTKUI_ASK_IZDAJ` | **ne** → `KI-019` |
+
+     - Brojevi su ponovljeni: `DOK_MSG_GRESKA_PRI_CUVANJU` ima 8 poziva + BFP 2623, `OTKUP_ERR_GRESKA_PRI_UNOSU`
+       ima **22** (brief je pisao 24, a nabrajao 3 + 7 + 12), a `AMB_ASK_DEFICIT_*` ima 3 para.
+     - Ostali ključevi u `modNovacUnos`/`modDokUnos`/`modOtkupUnos` koji imenuju dokument pripadaju svom
+       dokumentu; zajednički su samo neutralni („Izaberi otkupno mesto/kupca/vozača"). Uspeh je tačan po
+       režimu (`modOtkupUI.PorukaUpisano`).
+     - **Uzrok je migracija, ne pisac:** legacy `frmDokumenta` je imao ključ po dokumentu (`_2` OM ulaz, `_3`
+       zbirna, `_4` prijemnica, `_5` izlaz kupca); posle koraka 2 (`58a3213d`) su ljuskini `Save*` prepisali ključ
+       otpremnice, a moduli unosa ključ otkupa.
+     - **Usput, van reza:** `SaveOMUlaz_TX` i `SaveKupciIzlaz_TX` razlog odbijanja gutaju → `KI-020`.
+
+     **Odluke operatera (19.10.2026), sve po preporuci** (upisane i u `KI-015`):
+     1. obim je **cela klasa upisa**; prijemnica se meri samo gde je dostižna, radni sto zbirne je `KI-019`;
+     2. **ključ po vrsti**: reuse `DOK_MSG_GRESKA_PRI_CUVANJU_3`/`_4`, nov ključ za ostale; ključevi otkupa i
+        otpremnice ostaju (BFP 2623 važi);
+     3. pitanje kupcu je **ogledalo kooperanta** („Kupac nema toliko naših gajbi… firma ga duguje kupcu");
+     4. tekst pitanja meri **seam A**: jedna tvrdo gejtovana funkcija pitanja za sva tri mesta, koja u test
+        režimu beleži tekst i uvek odgovara „Ne".
+
+     **`pre-flight` ne treba.** Menja se samo tekst poruke i imenovana strana. Smer duga ostaje „firma duguje
+     partneru": pokriće je `ULAZ_TUDJE` na nalog kupca (`PrenesiAmbalazu`, AMBALAZA.md 6.4, primer „firma duguje
+     KUP3"). Knjiga, pisac, identitet i lifecycle nisu dirani.
+
+     **Plan merenja.** Prvo seam bez promene teksta (ponašanje kao `main`) i testovi, pa crveni prolaz, pa
+     ispravka:
+     - **245** — naš revers koji stanica ne može da pokrije, ceo potez `CommitDokumentTest`; meri se tekst
+       dijaloga;
+     - **246** — isplata i uplata kroz `Scr_Save`, sa izuzetkom u modulu unosa (datum koji ljuska ne šalje);
+       drugi put do istog reda ne postoji (`KI-020`);
+     - **247** — validatori otpremnice, zbirne i reversa (EH), isti okidač, i `PrijemnicaUpisi` (EH);
+     - **248** — kupčev revers iznad salda kroz `Scr_Save`: tekst pitanja i odbijanja, a odgovor „Ne" ne pravi
+       dokument;
+     - **BFP** — pitanje kooperantu na otkupu (kontrola) i kupcu na prijemnici, kroz `OtkupUpisi` i
+       `PrijemnicaUpisi`.
+
+     Ostaje statički, sa razlogom: `SavePrijemnica` (F4 pauziran), `PrijemnicaValidiraj` EH (mrtav),
+     `IsplataValidiraj`/`UplataValidiraj` EH (validator ne čita datum, pa okidač ne postoji) i grane `Upisi`
+     gde pisac odbija posle validatora (validator namerno ponavlja kapije pisca).
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
