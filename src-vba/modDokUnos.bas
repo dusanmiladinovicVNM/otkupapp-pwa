@@ -1028,7 +1028,7 @@ End Function
 ' Otkucan tip mora biti u sifarniku uvek (AMB-INV-12).
 '
 ' Public zbog testa: PrijemnicaValidiraj je do S6 iza pauze, pa pozivno mesto nije
-' dostizno -- test (250) meri ovu funkciju, a poziv je staticki. Seam koji bi
+' dostizno -- test (253) meri ovu funkciju, a poziv je staticki. Seam koji bi
 ' zaobisao pauzu nije dozvoljen (testovi.md 4: seam ne dodaje pristup).
 Public Function PrijemnicaTipPoruka(ByVal p As Object, ByVal strogo As Boolean) As String
     Dim tip As String, pune As Boolean, povrat As Boolean

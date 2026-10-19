@@ -2599,8 +2599,8 @@ grupiše binarno; zove ga samo grupni otkupni list, pa ide uz S6.
   posebnog reza (`KI-022`) red sa tipom van šifarnika dobija imenovan ERROR i ne uvozi se.
   **`KI-022` mora biti zatvoren pre puštanja PWA otkupa u redovnu upotrebu** (review `#432`).
 
-*Provera:* `modTest` 249 (`T_KI021_OtkupTipVanSifarnika`), 250
-(`T_KI021_ValidatoriTraziSifarnik`), 251 (`T_KI021_ComboTipaJeSifarnik`), BFP
+*Provera:* `modTest` 252 (`T_KI021_OtkupTipVanSifarnika`), 253
+(`T_KI021_ValidatoriTraziSifarnik`), 254 (`T_KI021_ComboTipaJeSifarnik`), BFP
 `Test_AMB_TipVanSifarnikaPisacOdbija`; sabotaže `ki021-*` (12). Prijemnica se meri kroz
 `modDokUnos.PrijemnicaTipPoruka`; poziv iz `PrijemnicaValidiraj` je statički do S6.
 

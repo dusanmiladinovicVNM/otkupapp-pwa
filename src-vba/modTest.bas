@@ -9577,7 +9577,7 @@ Private Function NazivPitanja(ByVal pitanje As String, ByVal manjak As Double) A
                    " || " & pitanje
 End Function
 
-' 249. KI-021: OTKUP SA TIPOM AMBALAZE VAN SIFARNIKA STAJE NA POLJU, PRE PITANJA O
+' 252. KI-021: OTKUP SA TIPOM AMBALAZE VAN SIFARNIKA STAJE NA POLJU, PRE PITANJA O
 '      MANJKU.
 '
 ' Rucna provera #429 (19.10.2026, stavka 155): operaterov otkup je u polju tipa
@@ -9622,13 +9622,13 @@ Private Sub T_KI021_OtkupTipVanSifarnika()
              "otkup 12/2: tip van sifarnika staje na polju, bez pitanja o manjku"
 End Sub
 
-' 250. KI-021: VALIDATORI OTPREMNICE I REVERSA TRAZE TIP IZ SIFARNIKA.
+' 253. KI-021: VALIDATORI OTPREMNICE I REVERSA TRAZE TIP IZ SIFARNIKA.
 '
 ' Isto pravilo kao 249, na ostalim ulazima sa ambalazom (odluka operatera,
 ' stavka 158). Validatori se zovu DIREKTNO: kroz Scr_Save bi otpremnica sa
 ' nepostojecim tipom pre ispravke bila upisana kao nacrt (ambalazu knjizi tek
 ' izdavanje), pa bi crveni prolaz prljao svesku. Scr_Save validator zove pre
-' pisca, kao i za otkup (249). Revers se meri u oba smera: provera tipa stoji
+' pisca, kao i za otkup (252). Revers se meri u oba smera: provera tipa stoji
 ' pre smera, pa bi je pogresno mesto preskocilo u jednom od njih. Prijemnica je
 ' pauzirana do S6 (PrijemnicaValidiraj vraca pauzu pre svega), pa se meri njeno
 ' pravilo -- modDokUnos.PrijemnicaTipPoruka; poziv iz validatora je staticki.
@@ -9692,7 +9692,7 @@ Private Sub T_KI021_ValidatoriTraziSifarnik()
              "prijemnica povrat bez tipa: trazi tip i bez stroge validacije"
 End Sub
 
-' 251. KI-021: COMBO TIPA AMBALAZE JE TACNO SIFARNIK, BEZ REZERVNIH TIPOVA.
+' 254. KI-021: COMBO TIPA AMBALAZE JE TACNO SIFARNIK, BEZ REZERVNIH TIPOVA.
 '
 ' GetTipAmbalazeOptions je nad praznim sifarnikom nudio ugradjene 12/1 i 6/1
 ' ("da postojece instalacije ne ostanu bez opcija"). Posle odluke operatera
