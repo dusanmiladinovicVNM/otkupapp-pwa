@@ -5931,14 +5931,43 @@
        spisak kao u stavci 167), BFP podskup **248/0**. ODL-24 nosi **39** BFP tvrdnji (13 + 26).
      - **Očekivano iz diff-a:** RunAllTests **256/0**, BFP **2478/0** (2439 + 39), Banka 241/0, Storno
        111/0, katalog 841.
-     - **Izvršne kapije** (reviewer `CODE GO`):
-       - `run_vba` FULL;
-       - `dokaz.py` nad 18 sabotaža (14 `odl24-*` i 4 presidrene).
+     - **Izvršne kapije** (reviewer `CODE GO`, head `3438751e`):
+       - **`run_vba` FULL: 12/12 ZELENO**, marker upisan (izvor `05d768b86545`, ugovor
+         `bd7bcbcfa408`, sveska `9d488dbf`):
 
-       Ishod je u nastavku stavke.
-     - **Ostaje operateru:** `Debug → Compile` i ručni F7 acceptance (pozajmica 40, bez pitanja, dva
-       reda knjige, ispravan dug, bez PDF-a, šest segmenata). Sveska za to se pravi iznova nad
-       konačnim izvorom.
+         ```
+         RunAllTests              256 / 0
+         RunBusinessFlowProSuite 2478 / 0      RunBankaImportTestSuite 241 / 0
+         RunStornoTestSuite       111 / 0      ostalih 8 suita OK
+         ```
+
+         Brojevi su tačno oni izvedeni iz diff-a.
+       - **Prvi FULL prolaz je pao na disku, ne na kodu:** tri testa koja pišu fajlove
+         (`T_Save_PrekinutImportZatvaraSvaVrata`, `T_TxRollback_NepotpunZatvaraUpisISnimanje` — „The
+         disk is full"; `T_Backup_NeObaraStartINeRasteBezGranice` — „File not found"). Na C: je bilo
+         **71 MB**. Posle brisanja sopstvenih `--keep` svezaka (oko 41 MB) drugi prolaz je zelen.
+         Disk i dalje pada (`Temp\Diagnostics` 1,9 GB, nije iz ovog rada), pa je to rizik za svaki
+         sledeći prolaz.
+       - **Dokaz** (`dokaz.py odl24 revers-smer amb-partner-nosi-izdavanje
+         amb-ulaz-predlog-ne-gleda-smer amb-rvp-potvrda-se-ne-prosledjuje --grupe`, bazno 256/0 i
+         2478/0): **18/18 crveno po imenu**, izvor pre i posle identičan (`f3e007fc080c6bd0`).
+         - `odl24-pisac-pise-povrat` i `odl24-ulaz-je-manjak` su u grupi zaklonjeni drugom sabotažom,
+           pa su ponovljeni sami i pocrveneli po imenu.
+         - Grupno je izmereno 9 od 18. Pun pojedinačni dokaz je isti poziv bez `--grupe`.
+     - **Ostaje operateru:** `Debug → Compile` i ručni F7 acceptance. Sveska je
+       `tests/fixtures/rucna_provera_odl24_kod.xlsm` (`--compile-only --keep` nad `3438751e`, SHA-256
+       `cdb7867e…64fa`); operater uvozi `modVbaTools.bas`. Proverava se:
+       1. F7 nosi šest segmenata, i natpisi staju bez odsecanja.
+       2. „Pozajmica" 40 gajbi: kupac, vozač i kupčev broj (ne predlaže se); bez pitanja o manjku;
+          bez PDF-a.
+       3. Lista F7: red sa kretanjem „Pozajmica" i partnerom kupcem. U listu `tblAmbalaza` gleda se
+          kroz „Otvori Excel": dva reda istog dokumenta (pozajmica 40 i ulaz 40). **Dug prema kupcu
+          nema prikaz na ekranu**, jer `AmbObavezaPartneru` nema produkcionog čitaoca, pa ga meri
+          BFP („firma duguje kupcu 40, ne 80"). Ručna provera duga nije moguća bez novog prikaza.
+       4. Prelaz „Povrat kupca" ↔ „Pozajmica" ne briše upisan broj, a prelaz na naš smer ga briše.
+       5. Ekran Storno stornira pozajmicu.
+
+       Posle compile-a ide `python tools/vba_gate.py --mark-compile`.
 
 ## Dug sa imenom (posle S5-5b)
 
