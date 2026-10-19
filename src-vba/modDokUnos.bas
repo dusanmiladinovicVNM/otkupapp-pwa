@@ -265,7 +265,7 @@ EH:
     ' Next, koji cisti Err - operater bi inace dobio poruku bez objasnjenja.
     errDesc = Err.description
     LogErr "modDokUnos.OtpremnicaValidiraj"
-    OtpremnicaValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    OtpremnicaValidiraj = Poruka("DOKUNOS_ERR_GRESKA_UNOS_OTP") & errDesc
 End Function
 
 ' Ocekivana stavka otpremnice: sta operater PRIJAVLJUJE da ce otpremnica nositi.
@@ -308,7 +308,7 @@ Public Function OtpremnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
     res = CreateOtpremnicaDraft_TX(h, ocek, greska)
 
     If Len(res) = 0 Then
-        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_OTP") & greska
         Exit Function
     End If
 
@@ -352,7 +352,7 @@ Public Function OtpremnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
 EH:
     errDesc = Err.description
     LogErr "modDokUnos.OtpremnicaUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_OTP") & errDesc
 End Function
 
 ' Zaglavlje i ocekivanje nacrta iz unosa F2 -- JEDNO mesto za upis i izmenu
@@ -406,7 +406,7 @@ Public Function OtpremnicaIzmeniNacrt(ByVal otpremnicaID As String, ByVal p As O
     poruke = ""
     If Not OtpremnicaNacrtIzUnosa(p, h, ocek, poruke) Then Exit Function
     If Not UpdateOtpremnicaDraft_TX(otpremnicaID, h, ocek, greska) Then
-        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_OTP") & greska
         Exit Function
     End If
     poruke = poruke & Poruka("DOKUNOS_MSG_OTP_NACRT_IZMENJEN") & vbCrLf
@@ -415,7 +415,7 @@ Public Function OtpremnicaIzmeniNacrt(ByVal otpremnicaID As String, ByVal p As O
 EH:
     errDesc = Err.description
     LogErr "modDokUnos.OtpremnicaIzmeniNacrt"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_OTP") & errDesc
 End Function
 
 '=====================================================================
@@ -625,7 +625,7 @@ EH:
     ' Next, koji cisti Err - operater bi inace dobio poruku bez objasnjenja.
     errDesc = Err.description
     LogErr "modDokUnos.ZbirnaValidiraj"
-    ZbirnaValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    ZbirnaValidiraj = Poruka("DOKUNOS_ERR_GRESKA_UNOS_ZBR") & errDesc
 End Function
 
 ' PREVODILAC PRENOSI, PISAC SUDI (review #375, P1).
@@ -706,7 +706,7 @@ Public Function ZbirnaUpisi(ByVal p As Object, ByRef poruke As String) As String
     res = CreateZbirnaDraft_TX(h, ocek, greska)
 
     If Len(res) = 0 Then
-        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_ZBR") & greska
         Exit Function
     End If
 
@@ -726,7 +726,7 @@ Public Function ZbirnaUpisi(ByVal p As Object, ByRef poruke As String) As String
 EH:
     errDesc = Err.description
     LogErr "modDokUnos.ZbirnaUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_ZBR") & errDesc
 End Function
 
 ' IZMENA NACRTA. Kad povezano nije jednako najavljenom -- operater je pogresio
@@ -740,7 +740,7 @@ Public Function ZbirnaIzmeniNacrt(ByVal zbirnaID As String, ByVal p As Object, _
     poruke = ""
     If Not ZbirnaNacrtIzUnosa(p, h, ocek, poruke) Then Exit Function
     If Not UpdateZbirnaDraft_TX(zbirnaID, h, ocek, greska) Then
-        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_ZBR") & greska
         Exit Function
     End If
     poruke = poruke & Poruka("DOKUNOS_MSG_ZBR_NACRT_IZMENJEN") & vbCrLf
@@ -749,7 +749,7 @@ Public Function ZbirnaIzmeniNacrt(ByVal zbirnaID As String, ByVal p As Object, _
 EH:
     errDesc = Err.description
     LogErr "modDokUnos.ZbirnaIzmeniNacrt"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_ZBR") & errDesc
 End Function
 
 ' Upisuje zbirnu. Vraca ZbirnaID (ili spojene ID-eve obe klase); prazno znaci
@@ -1009,7 +1009,7 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
 EH:
     errDesc = Err.description
     LogErr "modDokUnos.PrijemnicaValidiraj"
-    PrijemnicaValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_GRESKA_UNOS_PRIJ") & errDesc
 End Function
 
 '--------------------------------------------- ISPRAVKA PRIJEMNICE
@@ -1206,7 +1206,7 @@ EH:
     errDesc = Err.description
     SetPaletizeSkip False        ' toggle ne sme da ostane ukljucen ni na gresci
     LogErr "modDokUnos.PrijemnicaUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_PRIJ") & errDesc
 End Function
 
 

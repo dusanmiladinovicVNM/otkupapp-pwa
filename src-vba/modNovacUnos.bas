@@ -311,7 +311,7 @@ EH:
     ' Resume Next, koji cisti Err.
     errDesc = Err.description
     LogErr "modNovacUnos.IsplataValidiraj"
-    IsplataValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    IsplataValidiraj = Poruka("NOVUNOS_ERR_GRESKA_UNOS_ISPL") & errDesc
 End Function
 
 Public Function IsplataUpisi(ByVal p As Object, ByRef poruke As String) As String
@@ -336,7 +336,7 @@ Public Function IsplataUpisi(ByVal p As Object, ByRef poruke As String) As Strin
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.IsplataUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("NOVUNOS_ERR_GRESKA_UNOS_ISPL") & errDesc
 End Function
 
 '=====================================================================
@@ -400,7 +400,7 @@ Public Function UplataValidiraj(ByVal p As Object, ByRef fokus As String) As Str
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.UplataValidiraj"
-    UplataValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    UplataValidiraj = Poruka("NOVUNOS_ERR_GRESKA_UNOS_UPL") & errDesc
 End Function
 
 Public Function UplataUpisi(ByVal p As Object, ByRef poruke As String) As String
@@ -424,7 +424,7 @@ Public Function UplataUpisi(ByVal p As Object, ByRef poruke As String) As String
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.UplataUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("NOVUNOS_ERR_GRESKA_UNOS_UPL") & errDesc
 End Function
 
 '=====================================================================
@@ -537,7 +537,7 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.ReversValidiraj"
-    ReversValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    ReversValidiraj = Poruka("NOVUNOS_ERR_GRESKA_UNOS_REV") & errDesc
 End Function
 
 
@@ -661,7 +661,7 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.ReversUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("NOVUNOS_ERR_GRESKA_UNOS_REV") & errDesc
 End Function
 
 
@@ -695,7 +695,7 @@ Private Function RevKupcaUpisi(ByVal p As Object, ByRef poruke As String) As Str
     End If
 
     If Len(res) = 0 Then
-        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        poruke = poruke & Poruka("NOVUNOS_ERR_GRESKA_UNOS_REV") & greska
     End If
     RevKupcaUpisi = res
 End Function

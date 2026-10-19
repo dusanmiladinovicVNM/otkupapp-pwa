@@ -467,10 +467,16 @@ End Function
 ' (kooperant donosi svoje gajbe), kupcev revers i prijemnica (kupac vraca vise
 ' nego sto drzi). Do KI-015 je svako mesto sastavljalo isti MsgBox po svom.
 '
-' nalogTip je nalog kome fali (AMB_NALOG_KOOPERANT / AMB_NALOG_KUPAC); manjak je
-' SVEZE izracunat manjak -- pozivalac ga cita neposredno pre pitanja.
+' nalogTip je nalog kome fali, i pitanje imenuje BAS tu stranu: kooperant donosi
+' svoje gajbe, kupac vraca vise nego sto drzi. Smer duga je isti -- pokrice je
+' ULAZ_TUDJE na nalog partnera, pa firma duguje partneru (AMBALAZA.md 6.4). Do
+' KI-015 je i kupac dobijao tekst o kooperantu. manjak je SVEZE izracunat manjak
+' -- pozivalac ga cita neposredno pre pitanja.
 '
-' KI-015 REPRODUKCIJA: tekst je jos isti za obe strane (kao pre izdvajanja).
+' Druga strana nema pitanje: stanica i vozac manjak NE pokrivaju ulazom tudje
+' ambalaze (AMB-10-ODL-8), pa ih pisac odbija pre pitanja. Nepoznat nalog je
+' kvar pozivaoca i dize gresku -- pitanje o pogresnoj strani je bas ono sto je
+' KI-015 bio.
 '
 ' TEST SEAM, tvrdo gejtovan (.claude/rules/testovi.md S4): u test rezimu se
 ' pitanje BELEZI umesto da se otvori, a odgovor je UVEK "Ne" -- seam samo
@@ -479,9 +485,18 @@ End Function
 ' a gasi ga ResetSeamova (PitanjeManjkaTestReset).
 Public Function PotvrdiManjakAmbalaze(ByVal nalogTip As String, _
                                       ByVal manjak As Double) As Boolean
-    Dim txt As String
-    txt = Poruka("AMB_ASK_DEFICIT_1") & vbCrLf & _
-          Poruka("AMB_ASK_DEFICIT_2") & " " & _
+    Dim txt As String, k1 As String, k2 As String
+    Select Case nalogTip
+        Case AMB_NALOG_KOOPERANT
+            k1 = "AMB_ASK_DEFICIT_1": k2 = "AMB_ASK_DEFICIT_2"
+        Case AMB_NALOG_KUPAC
+            k1 = "AMB_ASK_DEFICIT_KUP_1": k2 = "AMB_ASK_DEFICIT_KUP_2"
+        Case Else
+            Err.Raise vbObjectError + 1590, "modOtkupUnos.PotvrdiManjakAmbalaze", _
+                      "Pitanje o manjku za nalog '" & nalogTip & "' ne postoji."
+    End Select
+    txt = Poruka(k1) & vbCrLf & _
+          Poruka(k2) & " " & _
           Format$(manjak, "#,##0") & vbCrLf & vbCrLf & _
           Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE")
     If IsTestMode() Then
