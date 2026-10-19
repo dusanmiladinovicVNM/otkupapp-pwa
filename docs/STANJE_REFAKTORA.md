@@ -5975,6 +5975,19 @@
        5. Ekran Storno stornira pozajmicu.
 
        Posle compile-a ide `python tools/vba_gate.py --mark-compile`.
+     - **Compile i ručna provera (operater, 19.10.2026):**
+       - `Debug → Compile` je prošao (operater: „compiles"). Potvrda je upisana
+         (`--mark-compile` 23:56:40, izvor `05d768b86545`), i `--require-green --require-compile`
+         prolazi.
+       - Snimci operatera potvrđuju:
+         - **(1)** šest segmenata, svi natpisi staju;
+         - **(2)** pozajmica 40 sačuvana („Revers sačuvan: 40");
+         - **(3)** lista F7 nosi red „Pozajmica · Revers kupca · Test kupac 1 · 12/1 · 40 ·
+           Sačuvana", a `tblAmbalaza` ima tačno dva reda istog dokumenta:
+           `POZAJMICA_PARTNERA` Kupac → Vozac 40 i `ULAZ_TUDJE_AMBALAZE` SpoljniSvet → Kupac 40.
+       - **Snimcima nije pokazano:** da li se pojavilo pitanje ili PDF uz (2), zatim (4) prelaz
+         smera i broj, i (5) storno sa ekrana Storno. Te stavke automatski mere test 256 i BFP
+         (storno), ali ručno nisu potvrđene.
 
 ## Dug sa imenom (posle S5-5b)
 
