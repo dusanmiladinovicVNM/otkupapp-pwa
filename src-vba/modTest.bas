@@ -9630,13 +9630,18 @@ End Sub
 ' izdavanje), pa bi crveni prolaz prljao svesku. Scr_Save validator zove pre
 ' pisca, kao i za otkup (249). Revers se meri u oba smera: provera tipa stoji
 ' pre smera, pa bi je pogresno mesto preskocilo u jednom od njih. Prijemnica je
-' pauzirana do S6 (PrijemnicaValidiraj vraca pauzu pre svega) -- staticki.
+' pauzirana do S6 (PrijemnicaValidiraj vraca pauzu pre svega), pa se meri njeno
+' pravilo -- modDokUnos.PrijemnicaTipPoruka; poziv iz validatora je staticki.
+' Povrat praznih se knjizi po tipu, pa tip trazi i bez stroge validacije
+' (review #432, P3).
 ' SABOTAZE: ki021-otp-bez-sifarnika -> "otpremnica: ..."; ki021-rev-bez-
-' sifarnika -> "nas revers: ..." i "kupcev revers: ..."; ki021-rev-nbsp-nije-
-' prazan -> "revers NBSP: ...".
+' sifarnika -> "nas revers: ..."; ki021-prij-bez-sifarnika -> "prijemnica: tip
+' van sifarnika ..."; ki021-prij-povrat-bez-tipa -> "prijemnica povrat bez
+' tipa: ...".
 Private Sub T_KI021_ValidatoriTraziSifarnik()
     Dim p As Object, fokus As String, otp As String
     Dim revK As String, revP As String, revN As String
+    Dim prijBez As String, prijNema As String, prijPovrat As String
 
     modSetup.EnsurePoruke
     modPoruke.InvalidateCache
@@ -9660,6 +9665,18 @@ Private Sub T_KI021_ValidatoriTraziSifarnik()
     revP = ReversKI021(modNovacUnos.SMER_REV_POVRAT_KUP, FX_TIP_NEMA)
     revN = ReversKI021(modNovacUnos.SMER_REV_IZD_KOOP, Trim$(ChrW(160)))
 
+    ' Prijemnica: samo povrat praznih (bez punih gajbi), bez stroge validacije.
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("kolAmb") = 0
+    p("kolAmbVracena") = 0
+    p("tipAmb") = ""
+    prijBez = modDokUnos.PrijemnicaTipPoruka(p, False)
+    p("kolAmbVracena") = 4
+    p("tipAmb") = FX_TIP_NEMA
+    prijNema = modDokUnos.PrijemnicaTipPoruka(p, False)
+    p("tipAmb") = ""
+    prijPovrat = modDokUnos.PrijemnicaTipPoruka(p, False)
+
     AssertEq otp, PorukaTipVanSifarnika(FX_TIP_NEMA) & "|tipAmb", _
              "otpremnica: tip van sifarnika staje na polju"
     AssertEq revK, PorukaTipVanSifarnika(FX_TIP_NEMA) & "|tipAmb", _
@@ -9668,6 +9685,11 @@ Private Sub T_KI021_ValidatoriTraziSifarnik()
              "kupcev revers: tip van sifarnika staje na polju"
     AssertEq revN, Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE") & "|tipAmb", _
              "revers NBSP: tip od samih nevidljivih znakova je prazan tip"
+    AssertEq prijBez, "", "preduslov: prijemnica bez ambalaze ne trazi tip"
+    AssertEq prijNema, PorukaTipVanSifarnika(FX_TIP_NEMA), _
+             "prijemnica: tip van sifarnika staje na polju"
+    AssertEq prijPovrat, Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), _
+             "prijemnica povrat bez tipa: trazi tip i bez stroge validacije"
 End Sub
 
 ' 251. KI-021: COMBO TIPA AMBALAZE JE TACNO SIFARNIK, BEZ REZERVNIH TIPOVA.

@@ -927,18 +927,12 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         If dveKl And kolAmbII <= 0 Then
             fokus = "kolAmbII": PrijemnicaValidiraj = Poruka("OTKUNOS_ERR_GAJBE_II"): Exit Function
         End If
-        If (kolAmb > 0 Or kolAmbII > 0) And modAmbalazaUgovor.AmbTipPrazan(S(p, "tipAmb")) Then
-            fokus = "tipAmb": PrijemnicaValidiraj = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"): Exit Function
-        End If
     End If
 
-    ' KI-021: isto kao otpremnica (AMB-INV-12); i povrat praznih se knjizi po tipu.
+    ' KI-021: tip ambalaze prijemnice (AMB-INV-12); pravilo je u PrijemnicaTipPoruka.
     ' Staticki do S6: pauza je pre svega.
-    If (kolAmb > 0 Or kolAmbII > 0 Or L(p, "kolAmbVracena") > 0) And _
-       Not modAmbalazaUgovor.AmbTipPrazan(S(p, "tipAmb")) Then
-        PrijemnicaValidiraj = modOtkupUnos.TipAmbalazePoruka(S(p, "tipAmb"))
-        If Len(PrijemnicaValidiraj) > 0 Then fokus = "tipAmb": Exit Function
-    End If
+    PrijemnicaValidiraj = PrijemnicaTipPoruka(p, strogo)
+    If Len(PrijemnicaValidiraj) > 0 Then fokus = "tipAmb": Exit Function
 
     If dveKl Then
         If kolII <= 0 Then
@@ -1025,6 +1019,25 @@ EH:
     errDesc = Err.description
     LogErr "modDokUnos.PrijemnicaValidiraj"
     PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_GRESKA_UNOS_PRIJ") & errDesc
+End Function
+
+' KI-021: poruka uz polje tipa ambalaze prijemnice; "" kad je tip valjan ili ga ne
+' treba. Pune gajbe (I i II) traze PRAZAN tip samo uz strogu validaciju, kao
+' otpremnica; otkucan tip mora biti u sifarniku uvek (AMB-INV-12).
+'
+' Public zbog testa: PrijemnicaValidiraj je do S6 iza pauze, pa pozivno mesto nije
+' dostizno -- test (250) meri ovu funkciju, a poziv je staticki. Seam koji bi
+' zaobisao pauzu nije dozvoljen (testovi.md 4: seam ne dodaje pristup).
+Public Function PrijemnicaTipPoruka(ByVal p As Object, ByVal strogo As Boolean) As String
+    Dim tip As String, pune As Boolean, povrat As Boolean
+    tip = S(p, "tipAmb")
+    pune = (L(p, "kolAmb") > 0 Or L(p, "kolAmbII") > 0)
+    povrat = (L(p, "kolAmbVracena") > 0)
+    If modAmbalazaUgovor.AmbTipPrazan(tip) Then
+        If pune And strogo Then PrijemnicaTipPoruka = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE")
+    ElseIf pune Or povrat Then
+        PrijemnicaTipPoruka = modOtkupUnos.TipAmbalazePoruka(tip)
+    End If
 End Function
 
 '--------------------------------------------- ISPRAVKA PRIJEMNICE
