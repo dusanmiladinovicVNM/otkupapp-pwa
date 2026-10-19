@@ -8383,6 +8383,17 @@ SABOTAZE = {
         "T_PDF_IzvestajHouseNeOtvara",
         "izvestaj u kucnom stilu: PDF je napravljen",
     ),
+    # Izvoz u PDF ponovo GUTA zaostalu gresku pozivaoca: citanje kljuca
+    # PDF_OTVORI_POSLE (GetColumnIndex, On Error) brise Err, pa ScrRunIshod nema
+    # sta da zabelezi. Tacno ovo je pustio prvi izvrsni prolaz #431 (19.10.2026):
+    # 227 crven po ovoj tvrdnji. PDF-ove ne otvara.
+    "pdf-izvoz-guta-zaostatak": (
+        "modDocStyle.bas",
+        "        Err.Number = errNum: Err.Source = errSrc: Err.description = errDesc\n",
+        "        ' SABOTAZA: izvoz guta zaostalu gresku pozivaoca\n",
+        "T_KI011_ZaostalaGreskaNijeNeuspeh",
+        "zaostala greska je zabelezena, ne progutana",
+    ),
 }
 
 

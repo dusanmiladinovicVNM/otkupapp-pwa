@@ -176,7 +176,16 @@ End Function
 Public Sub DocExportPdf(ByVal cilj As Object, ByVal pdfPath As String, _
                         ByVal openAfter As Boolean)
     Dim otvori As Boolean, ws As Worksheet, rng As Range
+    Dim errNum As Long, errSrc As String, errDesc As String
+    ' Citanje kljuca ide kroz GetColumnIndex (On Error Resume Next), koji brise
+    ' Err -- i ZAOSTALU gresku pozivaoca. Izvoz je tako gutao zaostatak koji
+    ' ScrRunIshod treba da zabelezi (UI-ISHOD-01; test 227 crven 19.10.2026).
+    ' Err se zato posle citanja vraca kakav je bio: izvoz za njega ostaje proziran.
+    errNum = Err.Number: errSrc = Err.Source: errDesc = Err.description
     otvori = openAfter And IsPdfOtvoriPosle()
+    If errNum <> 0 Then
+        Err.Number = errNum: Err.Source = errSrc: Err.description = errDesc
+    End If
     If IsTestMode() Then mPdfTest = IIf(openAfter, "1", "0") & "|" & IIf(otvori, "1", "0")
     If TypeOf cilj Is Range Then
         If IsTestMode() Then mPdfTest = mPdfTest & "|R"
