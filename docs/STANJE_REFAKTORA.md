@@ -5115,6 +5115,20 @@
        (b) mrtav EH u `PanelOtvori`, (c) ostali ciljevi `Run`-a bez brane. Stavke (d), (e) i (f) su zatvorene
        (stavke 145–150).
 
+151. **`KI-016` → `CLOSED`, ostatak u nov `KI-018`** (odluka operatera, 19.10.2026).
+     - **Crash klasa je rešena:** lista, radnja i gradnja ne puštaju grešku kroz `Application.Run` (`#423`,
+       `UI-PAD-01`). Prezentacioni nalazi (d), (e) i (f) ispravljeni su u `#425` i `#427`, a pravilo o dva nivoa
+       ugovora `Run`-a je u `.claude/rules/testovi.md` §4 (`#424`).
+     - **Preostalo danas ne ruši aplikaciju i prelazi u `KI-018`:**
+       - (a) `SCR_RUN_NEMA` ćuti za korisnikov klik;
+       - (b) mrtav EH u `PanelOtvori`;
+       - (c) ostali ciljevi `Run`-a bez brane.
+     - Ova stavka i stavka 150 ulaze u `main` zajedno, kroz jedan docs PR. Grana `claude/ki016-posle-427` je
+       time potrošena.
+     - **Sledeći rez je `KI-015`**, u novoj sesiji (stavke 152+). Prvi pokušaj 19.10.2026 nije krenuo: disk C:
+       je bio pun, a za worktree treba 5,4 GB. Posle njega idu `ODL-24` pa S6; `KI-017` i `KI-018` su svaki svoj
+       rez nižeg prioriteta.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
