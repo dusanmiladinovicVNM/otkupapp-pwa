@@ -2126,20 +2126,26 @@ Pozajmica u svima njima prolazi bez nove grane, osim prikaza naziva.
 pozajmicu ga nema šta prikazati, jer se kupčev dokument ne štampa (`ODL-32`). Za
 kooperantski revers prikaz ostaje otvoren u „Dug sa imenom" i ne ulazi u ovaj rez.
 
-*Plan merenja (pre koda):*
-- BFP `Test_ODL24_UgovorPozajmice` — tablica istinitosti ugovora, svaka tvrdnja uz svoju
-  kontra-tvrdnju;
-- BFP `Test_ODL24_PozajmicaJeSvojDogadjaj` — kroz jezgro (`PrenesiAmbalazu`):
-  - pozajmica 40 kupca koji drži 5: vrsta reda, ulaz 40, kupac 5, vozač +40, obaveza
-    +40 (ne 80);
-  - idempotencija i storno;
-  - kontra-tvrdnja: povrat 20 istog kupca i dalje pita za manjak 15, a ulaz mu je
-    manjak, ne cela količina;
-- `modTest` 256 `T_ODL24_F7PozajmicaKupca` — kroz `Scr_Save` F7, smer 6: kupčev dokument,
-  red pozajmice, bez pitanja i bez papira, broj se ne predlaže, a pogrešan partner je
-  odbijen uz polje;
-- premisa `Test_Amb_UgovorPrenosa` se menja: enum ima devet vrednosti;
-- sabotaže `odl24-*`.
+*Provera (stavka 167):*
+- **reprodukcija pre ispravke** je bila crvena po imenu, i u BFP-u (10 tvrdnji) i u testu 256;
+- BFP `Test_ODL24_UgovorPozajmice` (12 tvrdnji): tablica istinitosti ugovora, svaka tvrdnja
+  uz svoju kontra-tvrdnju;
+- BFP `Test_ODL24_PozajmicaJeSvojDogadjaj` (21 tvrdnja), kroz jezgro:
+  - pozajmica 40 kupca koji drži 5: jedan red `POZAJMICA_PARTNERA` i nijedan povrat;
+  - ulaz 40, a ne manjak 35; kupac ostaje na 5, vozač dobija +40, obaveza +40 (ne 80);
+  - ponovljen zahtev vraća isti red;
+  - storno upisuje dva kontra-stava;
+  - kontra-tvrdnja: povrat istog kupca i dalje pita za manjak 15;
+- `modTest` 256 `T_ODL24_F7PozajmicaKupca`, kroz `Scr_Save` F7 smer 6. Količina je
+  `saldo + 3`, pa bi povrat iste količine pitao. Meri se:
+  - bez pitanja;
+  - kupčev dokument i red pozajmice;
+  - kupčev saldo ostaje isti;
+  - bez papira i bez upozorenja;
+  - broj se ne predlaže;
+  - partner koji nije kupac se odbija uz polje;
+- premisa `Test_Amb_UgovorPrenosa`: osam vrednosti → devet;
+- sabotaže `odl24-*` (13), katalog 827 → 840.
 
 ### 6.12l `10c` prvi rez — lista i storno reversa (`P2 #1` iz review-a)
 

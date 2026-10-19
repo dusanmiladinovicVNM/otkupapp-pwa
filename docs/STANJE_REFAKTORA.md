@@ -5782,6 +5782,98 @@
      - **Bazni brojevi** (preneti iz stavke 165, nisu ponovo mereni): RunAllTests 255/0, BFP 2439/0,
        Banka 241/0, Storno 111/0, katalog 827.
 
+167. **`ODL-24` — reprodukcija, ispravka u jezgru, sabotaže i PR** (19.10.2026). Kod je `fefbdfc8`, nad
+     zapisom pre koda `bb3945b6` (stavka 166). Pun ugovor je u `AMBALAZA.md` 6.12k.
+
+     - **Reprodukcija pre ispravke** (`--compile-only --keep` nad `bb3945b6`, `RunOne` posle
+       `EnsureRuntimeSchema`, skripta `repro_ki021.py`). Testovi ne zovu nijedan nov simbol, pa su se
+       kompajlirali nad zatečenim kodom:
+       - **BFP** 18 tvrdnji, **10 crvenih po imenu**:
+         - pozajmica nije poznata vrsta i nema klase;
+         - kupčev dokument je ne nosi;
+         - `AmbDokKretanjeProblem` vraća „partnerov revers nosi povrat praznih, a dobio je
+           POZAJMICA_PARTNERA";
+         - gate kooperant/stanica/naš broj ne postoje;
+         - upis pada na „Nepoznata vrsta kretanja: 'POZAJMICA_PARTNERA'".
+
+         Kontra-tvrdnje (`ULAZ_TUDJE` nije zahtev, pozajmica ne nosi obavezu, povrat ostaje na
+         kupčevom papiru, naš revers je ne nosi) i tri preduslova su zelene;
+       - **`modTest` 256**: crven na prvoj tvrdnji („broj je kupcev i ne predlaze se" — očekivano
+         `False`, dobijeno `True`). Tvrdnje koje taj pad zaklanja izmerila je **sonda**
+         (`sonda_odl24.py`): validator smer 6 odbija kao „Izaberi smer reversa" (fokus `smerRev`), i
+         za kupca i za kooperanta. Dakle `Scr_Save` dokument ne pravi.
+     - **Test 256 je posle reprodukcije ojačan**, pre ispravke:
+       - količina je `saldo kupca + 3`, pa bi povrat iste količine pitao za manjak;
+       - pitanje stoji pre tvrdnji o dokumentu (modTest staje na prvom padu);
+       - meri se i tišina štampe, kao u 233.
+
+       Crveno za te tvrdnje dokazuju sabotaže, ne ponovljena reprodukcija.
+     - **Ispravka** — invarijanta je u jezgru, jedna implementacija sa dva pozivaoca:
+
+       | Gde | Šta |
+       |---|---|
+       | `modAmbalazaUgovor` | `AMB_VK_POZAJMICA`, enum 9, matrica `PARTNER → SOPSTVENI`; `REVERS_PARTNERA` nosi povrat i pozajmicu; obrnuta kapija `ODL-9/-10` gleda **predaju** od kupca (povrat ili pozajmica); pozajmicu daje samo kupac (`ODL-24`); `AmbVrstaUnosiUOpticaj` (`AMB-INV-13`) |
+       | `modAmbalaza.PrenesiAmbalazu` | za pozajmicu je ulaz cela količina, bez deficita i pitanja; ostatak puta je zatečen (par pre pokrića, `AMB-INV-04` nad zahtevom) |
+       | `modAmbalaza` pisac | `UpisiPozajmicuKupca_TX` i `UpisiReversPartnera_TX` dele telo `UpisiKupcevDokument_TX` |
+       | `modNovacUnos` | smer 6 `SMER_REV_POZAJMICA_KUP`; `RevSmerJeKupcev` je jedna odluka za validator, zauzetost broja, predlog, ispravku i ljusku; upis ide pravo piscu, bez protokola manjka i bez papira |
+       | `modOtkupUI` | šest segmenata (`4×61 + 2×60`); `SetSmerRev` vlasnika niza čita iz `RevSmerJeKupcev` |
+       | `modPoruke`, `modScrDokumenti` | tri ključa; naziv „Pozajmica" u listi |
+
+       Poruke `ODL-9/-10` u obrnutoj kapiji kažu „predaja praznih od kupca", a ne „povrat", jer važe
+       i za pozajmicu.
+     - **Premisa koja se menja:** `Test_Amb_UgovorPrenosa` — vrsta kretanja ima „tačno devet" (bila je
+       osam). Drugih nema: tekstovi poruka koje su promenjene nisu tvrdnje nijednog testa (grep).
+     - **Ciljano posle ispravke** (izvor `fefbdfc8`, sveska `vbatest_me65jyt4`, bez dijaloga):
+       - `modTest` **15/0**: 256, 12, 193, 194, 201, 202, 18, 233, 245–248, 253, 214, 219;
+       - BFP podskup **242/0** (14 testova): oba nova testa, `Test_Amb_UgovorPrenosa`, `_DoprinosObavezi`,
+         `_DokumentUgovor`, `_PisacKnjige`, `_DeficitIObaveza`, `_Inv08TxVlasnistvo`, tri `RVP` i tri
+         `PRJ`.
+
+       Nove BFP tvrdnje: **33** (12 + 21).
+     - **Sabotaže** — 13 novih, katalog **827 → 840**:
+       - ugovor: `odl24-pozajmica-van-enuma`, `-matrica-obrnuta`, `-partnerov-ne-nosi-pozajmicu`,
+         `-pozajmica-od-bilo-koga`, `-predaja-samo-povrat`;
+       - jezgro: `odl24-ulaz-je-manjak`, `-pozajmica-pita-manjak`, `-pozajmica-dize-obavezu-dvaput`,
+         `-pisac-pise-povrat`;
+       - F7: `odl24-f7-smer-van-opsega`, `-f7-predlaze-broj`, `-f7-ide-kroz-povrat`, `-f7-stampa`.
+
+       **Presidreno 8**, bez promene zamene i tvrdnje: `revers-smer`, `amb-partner-nosi-izdavanje`,
+       `amb-odl10-nas-revers-nosi-kupca`, `amb-odl9-povrat-od-kupca-ide-svuda`,
+       `amb-ulaz-predlog-ne-gleda-smer`, `amb-rvp-potvrda-se-ne-prosledjuje`,
+       `amb-odl22-vlasnik-broja-se-ne-gleda`, `amb-odl22-broj-drugog-kupca`. Kod poslednjeg je promenjen
+       tekst poruke; kod `-potvrda-` je parametar jezgra preimenovan u `vrstaKretanja`, jer bi se zamena
+       inače poklopila sa zdravim redom u `UpisiReversUTx`. Katalog nad zdravim izvorom: 0 nalaza.
+     - **Jeftine kapije:** ceo skup iz `static.yml` + `popis_citalaca --check`, sve `rc=0`.
+       - Izuzetak je JS suite: lokalno pada na `Cannot find module 'fake-indexeddb/auto'` (nema
+         `npm ci`), a CI je jedini izvršilac. JS nije diran.
+       - `who_writes --check`: `WHO_WRITES.md` bez promene. `gen_schema_module --check`: šema nije
+         dirana.
+     - **Očekivano posle izvršnih kapija** (iz diff-a, nije izmereno): RunAllTests **256/0**, BFP
+       **2472/0** (2439 + 33), Banka 241/0, Storno 111/0, katalog 840.
+     - **Izvršne kapije čekaju reviewer GO:** `python tools/run_vba.py` (FULL 12/12) i dokaz nad
+       novim i presidrenim sabotažama (21 sabotaža, 11 prolaza, `--plan` proveren):
+
+       ```
+       python tools/dokaz.py odl24 revers-smer amb-partner-nosi-izdavanje amb-odl10-nas-revers-nosi-kupca amb-odl9-povrat-od-kupca-ide-svuda amb-ulaz-predlog-ne-gleda-smer amb-rvp-potvrda-se-ne-prosledjuje amb-odl22-vlasnik-broja-se-ne-gleda amb-odl22-broj-drugog-kupca --grupe
+       ```
+     - **Compile i ručna provera (operater)**:
+       - sveska je `tests/fixtures/rucna_provera_odl24_kod.xlsm` (`--compile-only --keep` nad
+         `fefbdfc8`, SHA-256 `12424489…3EED0`);
+       - operater uvozi `modVbaTools.bas`, pa radi `Debug → Compile`.
+
+       Provera:
+       1. F7 nosi šest segmenata, a „Pozajmica" i ostali natpisi staju bez odsecanja.
+       2. „Pozajmica": kupac, vozač i kupčev broj; broj se ne predlaže; snimanje prolazi bez pitanja
+          o manjku i bez papira.
+       3. Lista F7 prikazuje red sa kretanjem „Pozajmica" i partnerom kupcem.
+       4. Prelaz „Povrat kupca" ↔ „Pozajmica" ne briše upisan broj, a prelaz na naš smer ga briše.
+       5. Ekran Storno stornira pozajmicu.
+     - **Van reza, glasno:**
+       - vraćanje pozajmice kupcu (`KI-024`);
+       - prikaz pokrića na papiru kooperantskog reversa („Dug sa imenom");
+       - ispravka kupčevog dokumenta (ne postoji ni za povrat; grana ispravke odbija oba kupčeva
+         smera, i to nije posebno testirano, jer ekran Storno zamenu za `REVERS_PARTNERA` ne nudi).
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
