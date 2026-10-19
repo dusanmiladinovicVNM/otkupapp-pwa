@@ -339,6 +339,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_RVP_DeficitSePotvrdjuje
     Test_PRJ_PovratIdeSaKlasomKojaPostoji
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
+    Test_AMB_TipVanSifarnikaPisacOdbija
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -6453,6 +6454,77 @@ EH:
     modOtkupUnos.PitanjeManjkaTestReset
     SetTestMode prevMode
     LogFatal "Test_AMB_PitanjeManjkaOtkupImenujeKooperanta", Err.Number, Err.description
+End Sub
+
+' KI-021: PISAC ODBIJA TIP AMBALAZE KOGA NEMA U SIFARNIKU (AMB-INV-12).
+'
+' Do KI-021 je pisac trazio samo neprazan tip posle Trim$, koji skida samo ASCII
+' razmak -- pa su NBSP i nepostojece "12/2" prolazili do knjige (rucna provera
+' #429, stavka 155). Kapija stoji u AmbPrenosProblem, POSLE postojanja naloga:
+' postojanje u maticnoj tabeli je kapija UPISA, ne citanja (isti obrazac kao
+' AmbNalogProblem). Vazi bez obzira na velika slova i na Aktivan -- neaktivan tip
+' i dalje sme da se vrati (povrat gajbi koje se vise ne izdaju).
+'
+' Pisac se meri bez transakcije: kapija tipa stoji u RequireAmbPrenos na ulazu u
+' PrenesiAmbalazu, pre AMB-INV-08. Pre ispravke isti poziv pada na INV-08, pa
+' tvrdnja trazi bas razlog kapije tipa. Nista se ne upisuje.
+' SABOTAZE: ki021-ugovor-bez-sifarnika -> "KI021 ugovor: tip van sifarnika je
+' odbijen, sa imenom tipa"; ki021-ugovor-osetljiv-na-slova -> "KI021 ugovor: tip
+' iz sifarnika prolazi bez obzira na velika slova"; ki021-ugovor-samo-aktivni ->
+' "KI021 ugovor: neaktivan tip iz sifarnika prolazi"; ki021-pwa-bez-sifarnika ->
+' "KI021 PWA: red sa tipom van sifarnika dobija imenovan razlog".
+Private Sub Test_AMB_TipVanSifarnikaPisacOdbija()
+    Const TIP_NEMA As String = "KI021-NEMA-U-SIFARNIKU"
+    Const TIP_NEAKTIVAN As String = "KI021-NEAKTIVAN"
+    On Error GoTo EH
+
+    Dim nema As String, nbsp As String, slova As String, neakt As String
+    Dim pisac As String, pwa As String, pwaOk As String
+    Dim rowData As Variant
+
+    If FindRows(TBL_TIP_AMBALAZE, COL_TAMB_TIP, TIP_NEAKTIVAN).count = 0 Then
+        rowData = BlankRow(TBL_TIP_AMBALAZE)
+        SetRequiredField rowData, TBL_TIP_AMBALAZE, COL_TAMB_TIP, TIP_NEAKTIVAN
+        SetRequiredField rowData, TBL_TIP_AMBALAZE, COL_TAMB_TEZINA, 0#
+        SetOptionalField rowData, TBL_TIP_AMBALAZE, "Aktivan", STATUS_NEAKTIVAN
+        RequireAppend TBL_TIP_AMBALAZE, rowData, "Test_AMB_TipVanSifarnikaPisacOdbija"
+    End If
+
+    nema = modAmbalazaUgovor.AmbPrenosProblem(AMB_NALOG_STANICA, TEST_ST_ID, _
+               AMB_NALOG_KOOPERANT, TEST_KOOP_ID, 10, TIP_NEMA, AMB_VK_IZDATA_PRAZNA)
+    nbsp = modAmbalazaUgovor.AmbPrenosProblem(AMB_NALOG_STANICA, TEST_ST_ID, _
+               AMB_NALOG_KOOPERANT, TEST_KOOP_ID, 10, ChrW(160), AMB_VK_IZDATA_PRAZNA)
+    slova = modAmbalazaUgovor.AmbPrenosProblem(AMB_NALOG_STANICA, TEST_ST_ID, _
+               AMB_NALOG_KOOPERANT, TEST_KOOP_ID, 10, UCase$(TEST_TIP_AMB), AMB_VK_IZDATA_PRAZNA)
+    neakt = modAmbalazaUgovor.AmbPrenosProblem(AMB_NALOG_STANICA, TEST_ST_ID, _
+               AMB_NALOG_KOOPERANT, TEST_KOOP_ID, 10, TIP_NEAKTIVAN, AMB_VK_IZDATA_PRAZNA)
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Nothing, Date, TIP_NEMA, 1#, _
+                                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, "KI021-NEMA-DOK"
+    pisac = CStr(Err.Number) & " " & Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    pwa = modMasterSync.TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, DateSerial(2090, 5, 5), _
+                                                       TIP_NEMA, 5#)
+    pwaOk = modMasterSync.TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, DateSerial(2090, 5, 5), _
+                                                         TEST_TIP_AMB, 5#)
+
+    AssertTrue InStr(1, nema, "'" & TIP_NEMA & "' ne postoji u sifarniku", vbBinaryCompare) > 0, _
+               "KI021 ugovor: tip van sifarnika je odbijen, sa imenom tipa"
+    AssertTrue Len(nbsp) > 0, "KI021 ugovor: NBSP nije tip"
+    AssertEquals "", slova, "KI021 ugovor: tip iz sifarnika prolazi bez obzira na velika slova"
+    AssertEquals "", neakt, "KI021 ugovor: neaktivan tip iz sifarnika prolazi"
+    AssertTrue InStr(1, pisac, "'" & TIP_NEMA & "' ne postoji u sifarniku", vbBinaryCompare) > 0, _
+               "KI021 pisac: PrenesiAmbalazu odbija tip van sifarnika pre upisa"
+    AssertTrue InStr(1, pwa, "'" & TIP_NEMA & "' ne postoji u sifarniku", vbBinaryCompare) > 0, _
+               "KI021 PWA: red sa tipom van sifarnika dobija imenovan razlog"
+    AssertEquals "", pwaOk, "KI021 PWA: red sa tipom iz sifarnika prolazi"
+    Exit Sub
+EH:
+    LogFatal "Test_AMB_TipVanSifarnikaPisacOdbija", Err.Number, Err.description
 End Sub
 
 ' Pisac kupcevog reversa SA potvrdom manjka -- odvojen helper, da pozivi bez
