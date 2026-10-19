@@ -5661,7 +5661,14 @@
        (`eab3b2e6b02db497`). Katalog je 827.
      - **Operaterov klon** je vraćen sa odvojenog HEAD-a `ed9e4472` na `main` (`cd5b8bbe`), po odobrenju
        operatera. Fixture u njemu je regenerisan (`4a1aa064`).
-     - **Čeka operatera:** compile i završni acceptance.
+     - **Compile i acceptance** (sveska `tests/fixtures/rucna_provera_ki023_kod.xlsm`, `--compile-only --keep`
+       nad `fa586eba`, izvor `519e01e4b6d5`):
+       - operater je uvezao `modVbaTools.bas` i `Debug → Compile` je prošao;
+       - potvrda je upisana kao `vba_gate --mark-compile`, i `--require-green --require-compile` prolazi;
+       - **acceptance 2/2:** F1 otkup i F7 revers sa `12/2` prikazuju „Tip ambalaže '12/2' ne postoji u
+         šifarniku ambalaže", sa zatvarajućim apostrofom.
+     - Posle kapija `src-vba` i `tools` nisu menjani. **Ostaje:** reviewer `MERGE GO` i zapis merge-a
+       (`KI-023` → `CLOSED`).
 
 ## Dug sa imenom (posle S5-5b)
 
