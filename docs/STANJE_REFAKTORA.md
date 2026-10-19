@@ -5320,6 +5320,36 @@
        `ki015-otkup-pita-kupca` sama.
      - Posle kapija `src-vba` i `tools` nisu menjani; ova stavka je samo docs.
 
+157. **Merge `#429` i `#430`, `KI-015` → `CLOSED`** (19.10.2026). Zapis ide ovde, a ne u PR-ove. Obrazac merge-a
+     su stavke 147, 150 i 152, a obrazac zatvaranja stavka 151.
+
+     - **`#429`** je merge-ovan 19.10.2026 (09:02:20 UTC) kao `cb34ce4e`, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `ba821bf5` (static CI `success`, run 39226708567).
+     - **Posle GO-a je ušao samo docs:** review `CODE GO` 9,2/10 važi za `cae524c4`, a posle njega je ušao samo
+       `ba821bf5` (stavka 156). `src-vba` i `tools` nisu menjani; `git diff cae524c4 ba821bf5` dira samo
+       `docs/KNOWN_ISSUES.md` i `docs/STANJE_REFAKTORA.md`.
+     - Izvršne kapije su nad izvorom `24728470dfcc`: 12/12 ZELENO (248/0, BFP 2432/0, Banka 241/0, Storno
+       111/0), dokaz `ki015` 15/15, compile potvrđen (`vba_gate --mark-compile`) i ručna provera 3/3 (stavke
+       155–156).
+     - **`#430`** je merge-ovan 19.10.2026 (09:03:08 UTC) kao `1abf7026`, sa `--match-head-commit` na head
+       `6a12a6ef`. Review je `CONTENT GO` 9,5/10 (stavka 156). Static CI `success` je na head-u, ali je
+       grana rađena nad starom bazom `db528e03`.
+     - Na novoj bazi je provereno sledeće:
+       - stablo `main`-a posle `#429` jednako je stablu `ba821bf5` (`0813e3b3`);
+       - `git merge-tree` sa `6a12a6ef` prolazi bez konflikta;
+       - PR menja samo `.claude/rules/testovi.md`;
+       - sva imena koja pravilo navodi postoje na `main`-u.
+     - Merge su urađeni ručno, posle zelenog CI, jer auto-merge u repou nije dozvoljen. **Finalni exact-head
+       review nije tražen:** GO za `#429` važi za `cae524c4`.
+     - **`KI-015` → `CLOSED`:**
+       - klasa je zatvorena: odbijen upis imenuje svoj dokument, a pitanje o manjku svoju stranu;
+       - ostatak se ne prenosi u `KI-015`;
+       - `P3-1` (`Err` u EH BFP testa) je odložen odlukom operatera (stavka 156);
+       - `KI-019`, `KI-020` i `KI-021` su svaki svoj red.
+     - **Sledeći rez je `KI-021`** (stavke 158+), na grani `claude/ki021-tip-ambalaze` sa `1abf7026`. Rez ide u
+       worktree-ju `.claude/worktrees/ki021`. Disk C: je imao 1,8 GB slobodno, a worktree praćenih fajlova
+       zauzima oko 40 MB uz fixture od 1 MB. Procena od 5,4 GB (stavke 151–152) ne važi za ovakav worktree.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
