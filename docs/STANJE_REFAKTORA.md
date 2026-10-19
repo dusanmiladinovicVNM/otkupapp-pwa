@@ -5670,6 +5670,25 @@
      - Posle kapija `src-vba` i `tools` nisu menjani. **Ostaje:** reviewer `MERGE GO` i zapis merge-a
        (`KI-023` → `CLOSED`).
 
+165. **Merge `#433`, `KI-023` → `CLOSED`** (19.10.2026). Zapis ide ovde, a ne u `#433`. Obrazac su stavke 157 i
+     163.
+
+     - **Review `#433`** (head `dd7b8de2`): `CODE GO` 9,4/10, `P0`/`P1`/`P2` = 0. `MERGE HOLD` je trajao samo
+       do uspešnog CI #1020. Reviewer je proverio da je posle izvršnih kapija (`1bb0d8bf`) menjan samo
+       `docs/STANJE_REFAKTORA.md`.
+     - Merge-ovano 19.10.2026 (16:30:44 UTC) kao `ea078bb4`, na **izričit zahtev operatera** („kad CI #1020
+       bude success, merge-uj #433 sa --match-head-commit dd7b8de2"), sa `--match-head-commit` na head
+       `dd7b8de2`. Static CI je #1020 `success` (run 39281883462, izmereno). Stablo `main`-a posle merge-a
+       jednako je stablu `dd7b8de2` (`44b87b5a`).
+     - Izvršne kapije su nad izvorom `519e01e4b6d5` (stavka 164): 12/12 ZELENO (255/0, BFP 2439/0, Banka
+       241/0, Storno 111/0), dokaz `ki023` 1/1, compile potvrđen, acceptance 2/2.
+     - **`KI-023` → `CLOSED`:** katalog poruka čuva vodeći apostrof (`modPoruke.UpsertRow` →
+       `TekstZaCeliju`), za svih 6 ključeva. Ostatka nema.
+     - **Sledeći rez je `ODL-24`** (pozajmica ambalaže od kupca, `AMB-10-ODL-24`, AMBALAZA.md 6.12k), na
+       grani `claude/odl24-pozajmica-kupca` sa `ea078bb4`, zatim S6. Ovo je redosled operatera, a ostali
+       nalazi se samo upisuju u `KNOWN_ISSUES.md`. Review je preporučio da ODL-24 ostane ograničen na
+       eksplicitan poslovni događaj pozajmice, bez novog opšteg refaktora knjige.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
