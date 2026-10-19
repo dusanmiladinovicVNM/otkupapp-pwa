@@ -5646,12 +5646,22 @@
          (`DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU`).
        - **`P2`:** katalog mora ostati ispravan i za naredne testove. Test zato i na putu greške ponovo zove
          `EnsurePoruke`.
-     - **Očekivano posle integracije** (iz diff-ova, još neizmereno): RunAllTests 255/0, BFP 2439/0, katalog
-       827.
-     - **Čeka:**
-       - pokazan rebase i odobrenje za `push --force-with-lease`;
-       - FULL 12/12 i dokaz `ki023` (1);
-       - compile (operater) i završni acceptance.
+     - **Očekivano posle integracije** (iz diff-ova): RunAllTests 255/0, BFP 2439/0, katalog 827.
+     - **Rebase** je gurnut uz izričito odobrenje operatera (`--force-with-lease`, `2206c3bd` → `1bb0d8bf`).
+       Ciljano na kombinovanom kodu: 255, 252–254 i 245–248 **8/0**.
+     - **Izvršne kapije** (head `1bb0d8bf`, izvor `519e01e4b6d5`, ugovor `f703a1eda53f`, sveska `9d488dbf`,
+       fixture `4a1aa064`): **12/12 ZELENO**, marker upisan.
+
+       ```
+       RunAllTests              255 / 0      (254 + KI-023 255)
+       RunBusinessFlowProSuite 2439 / 0      RunBankaImportTestSuite 241 / 0
+       RunStornoTestSuite       111 / 0      ostalih 8 suita OK
+       ```
+     - **Dokaz** (`dokaz.py ki023`, bazno 255/0): **1/1 crven** po imenu; izvor je pre i posle identičan
+       (`eab3b2e6b02db497`). Katalog je 827.
+     - **Operaterov klon** je vraćen sa odvojenog HEAD-a `ed9e4472` na `main` (`cd5b8bbe`), po odobrenju
+       operatera. Fixture u njemu je regenerisan (`4a1aa064`).
+     - **Čeka operatera:** compile i završni acceptance.
 
 ## Dug sa imenom (posle S5-5b)
 
