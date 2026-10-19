@@ -5956,7 +5956,14 @@
          - Grupno je izmereno 9 od 18. Pun pojedinačni dokaz je isti poziv bez `--grupe`.
      - **Ostaje operateru:** `Debug → Compile` i ručni F7 acceptance. Sveska je
        `tests/fixtures/rucna_provera_odl24_kod.xlsm` (`--compile-only --keep` nad `3438751e`, SHA-256
-       `cdb7867e…64fa`); operater uvozi `modVbaTools.bas`. Proverava se:
+       `9be1f9b1…cb1a`); operater uvozi `modVbaTools.bas`.
+
+       **Prva sveska** (`cdb7867e…64fa`) je napravljena kad je na C: bilo oko 40 MB. Kod operatera je
+       Excel javio „We found a problem with some content", pri samo 20 MB slobodnog prostora. Fajl
+       je bio strukturno ispravan (ZIP CRC, 161 XML deo), pa uzrok najverovatnije nije bio fajl nego
+       disk. To nije izmereno. Sveska je zamenjena. Pre nove gradnje obrisani su sopstveni Office
+       ostaci (`~DF*.TMP`, oko 137 MB). Nova je pre predaje otvorena u sopstvenoj Excel instanci
+       **bez dijaloga**, i nosi konačni kod (kapija `ODL-24`, smer 6). Proverava se:
        1. F7 nosi šest segmenata, i natpisi staju bez odsecanja.
        2. „Pozajmica" 40 gajbi: kupac, vozač i kupčev broj (ne predlaže se); bez pitanja o manjku;
           bez PDF-a.
