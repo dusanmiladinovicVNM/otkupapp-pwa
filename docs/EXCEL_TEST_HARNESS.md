@@ -567,6 +567,45 @@ commit, čistoću radne kopije i sastav poslednje test grane.
   kroz `--workbook` ne briše ništa, nego prijavljuje `ORPHAN` red.
 - Šemu donora ispisuje `tools/dump_schema.py` (samo čitanje).
 
+### PDF u test prolazu — pravi se, ali se ne otvara
+
+Operater radi na istom računaru dok se suite vrti. Do 19.10.2026. svaki PDF iz
+prolaza je otvarao viewer koji mu uzima fokus: **16 po punom prolazu** (11
+reversa iz `modTest`, 5 otkupnih listova iz BFP `Test_OTK_*`), a `dokaz.py` ih
+ponavlja po svakoj sabotaži.
+
+- Svi PDF-ovi idu kroz **jedan** izvoz, `modDocStyle.DocExportPdf`, i svi traže
+  otvaranje. Ključ `PDF_OTVORI_POSLE = NO` gasi otvaranje za sve obrasce, a PDF
+  se i dalje piše. Fixture ga pinuje na `NO` (`SEF_CONFIG` u `make_fixture.py`),
+  isti obrazac kao šest `*_PRINT_MODE` ključeva pinovanih na `OFF`.
+- **Režimi štampe ostaju `PDF`.** KI-011 je živeo baš zato što su testovi gasili
+  štampu, a 226–228 broje napravljene fajlove. Fajlovi idu u privremenu kopiju
+  sveske (`%TEMP%\vbatest_*`), ne u repo.
+- **Test režim nije signal.** Pali ga samo `RunAllTests`, BFP ga pali lokalno u
+  pojedinim testovima, a otkupni listovi iz `Test_OTK_*` nastaju van njega.
+  Gejt kroz `IsTestMode()` bi zatvorio reverse, a BFP prozori bi ostali.
+- `DocExportPdf` prima `Worksheet` (obrasci) ili `Range` (izveštaji izvoze
+  `UsedRange`) i izvozi **rano vezanim** pozivom u svakoj grani, u obliku koji se
+  i pre kompajlirao. Poziv nad `As Object` bi bio kasno vezan, a pozicioni poziv
+  bi pomerenim zarezom tiho predao `OpenAfterPublish` drugom parametru (review
+  #431, P1).
+- Meri **test 249** kroz ponovnu štampu reversa: pin u fixture-u, papir napravljen,
+  pozivalac tražio otvaranje, Excelu predato `OpenAfterPublish = False`, grana
+  `Worksheet`. **Testovi 250 i 251** isto mere nad oba izveštaja
+  (`PrintIzvestajHouse`, `PrintIzvestaj`), granom `Range`. Pre izvoza čekaju da
+  prođe sekunda, jer ime fajla nosi sekundu, pa bi izvoz u istoj sekundi prepisao
+  prethodni i brojanje dalo 0. Posmatra ih seam `DocPdfTest` / `DocPdfTestReset`
+  (`"zahtev|predato|grana"`, tvrdo gejtovan, gasi ga i `ResetSeamova`). Suprotan
+  smer (prazno/`YES` → otvara) se ne vozi kroz izvoz, jer bi otvorio baš prozor
+  koji test gasi; meri se nad `IsPdfOtvoriPosle`.
+- Sabotaža `pdf-izvoz-ignorise-kljuc` po prirodi **otvara PDF-ove svih
+  testova** dok traje njen dokaz. Pušta se kad operater ne radi na računaru, i
+  pita se pre puštanja. `pdf-range-grana-ugasena` (250/251) PDF-ove ne otvara:
+  izvoz pukne pre otvaranja.
+- Sveska bez ključa (stari fixture, kopija iz ranije ručne provere) otvara PDF
+  kao pre. Test 249 tada pukne po imenu („fixture pinuje…"), a lek je
+  regeneracija fixture-a (gore).
+
 ### Potpis fixture-a — zašto `git checkout` nije dovoljan
 
 Fixture je gitignored, pa ga **`git checkout` ne menja**. Posle prelaska na drugu

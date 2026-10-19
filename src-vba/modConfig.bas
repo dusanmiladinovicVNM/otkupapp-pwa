@@ -583,6 +583,11 @@ Public Const CFG_ISPLATA_SPEC_PRINT_MODE As String = "ISPLATA_SPEC_PRINT_MODE"
 Public Const CFG_OTPREMNICA_PRINT_MODE As String = "OTPREMNICA_PRINT_MODE"
 Public Const CFG_GRUPNI_OTKUP_PRINT_MODE As String = "GRUPNI_OTKUP_PRINT_MODE"
 Public Const CFG_PRERADA_PRINT_MODE As String = "PRERADA_PRINT_MODE"
+' Otvaranje PDF-a posle izvoza -- vazi za SVE obrasce (DocExportPdf), preko
+' rezima PDF iznad. Prazno/YES = otvori (kao do sada); NO = PDF se pravi, ali se
+' ne otvara. Test fixture ga pinuje na NO: suite se vrti dok operater radi na
+' istom racunaru, a svaki otvoren PDF mu uzme fokus (19.10.2026).
+Public Const CFG_PDF_OTVORI_POSLE As String = "PDF_OTVORI_POSLE"
 Public Const CFG_PDV_NADOKNADA_STOPA As String = "PDV_NADOKNADA_STOPA"
 Public Const PDV_NADOKNADA_DEFAULT As Double = 8
 
@@ -1370,5 +1375,11 @@ End Function
 ' (frmOtkup) i "Br. otk. blk." (Ulaz OM, frmDokumenta).
 Public Function IsKesIsplate() As Boolean
     IsKesIsplate = ConfigFlag(CFG_KES_ISPLATE, True)
+End Function
+
+' PDF se otvara posle izvoza (CFG_PDF_OTVORI_POSLE). Default ON (kao do sada).
+' OFF -> DocExportPdf pravi PDF, ali ga ne otvara.
+Public Function IsPdfOtvoriPosle() As Boolean
+    IsPdfOtvoriPosle = ConfigFlag(CFG_PDF_OTVORI_POSLE, True)
 End Function
 

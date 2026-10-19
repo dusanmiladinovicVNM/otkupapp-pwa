@@ -121,6 +121,8 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, ChrW(352) & "tampa", "SLEDLJIVOST_PRINT_MODE", "Sledljivost", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "ISPLATA_SPEC_PRINT_MODE", "Specifikacija isplata (banka nalozi)", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "SPECIFIKACIJA_PRINT_MODE", "Specifikacija", "list:PDF;PRINT;PREVIEW;OFF"
+    ' Vazi za sve rezime PDF iznad: NO -> PDF se pravi, ali se ne otvara.
+    CfgAdd c, ChrW(352) & "tampa", "PDF_OTVORI_POSLE", "Otvori PDF posle izrade", "bool"
 
     CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
     CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "AUTO_PRIJEMNICA_HLADNJACA", "Auto otpremnica+zbirna+prijemnica (OM=hladnjaca)", "bool"
