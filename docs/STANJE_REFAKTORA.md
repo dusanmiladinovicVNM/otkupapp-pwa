@@ -5874,6 +5874,72 @@
        - ispravka kupčevog dokumenta (ne postoji ni za povrat; grana ispravke odbija oba kupčeva
          smera, i to nije posebno testirano, jer ekran Storno zamenu za `REVERS_PARTNERA` ne nudi).
 
+168. **`ODL-24` — review `#434`: uža kapija, dve testne praznine, izvršne kapije** (19.10.2026).
+
+     - **Review `#434`** (head `d1edf642`, static CI #1022 `success`): `CODE GO` 9,1/10, `MERGE HOLD`,
+       `P0`/`P1` = 0. Dva `P2`:
+       - pozajmica je mogla na prijemnicu;
+       - druga količina pri ponavljanju nije bila merena.
+
+       Uz to tri tačke:
+       - fault injection drugog reda, poželjna, ali bez novog test framework-a;
+       - ugovor idempotencije treba precizirati;
+       - šest segmenata F7 su acceptance `P3`.
+     - **`P2` #1 — pozajmica samo na kupčevom dokumentu.** `AmbDokKretanjeProblem` sada odbija
+       pozajmicu na svakom dokumentu koji nije `REVERS_PARTNERA`, imenom `ODL-24`. To je sprovođenje
+       odluke (e), a ne nova odluka.
+       - **Šta je time otpalo:** zatečena kapija „pozajmicu daje kupac" i proširenje obrnute kapije
+         `ODL-9/-10` na pozajmicu postali su **nedostižni**. Pozajmica van kupčevog dokumenta pada
+         ranije, a na njemu grana `jePartnerov` traži kupca, vozača i kupčev broj. Druga brana koju
+         sabotaža ne može da obori je placebo, pa su obe uklonjene.
+       - **Grana povrata je opet identična `main`-u**, sa tekstovima poruka (`povrat praznih od
+         kupca`, `prazne vraca`).
+       - **Reprodukcija:** nov test nad starom kapijom (`modAmbalazaUgovor.bas` sa `HEAD`-a, novi fajl
+         sačuvan u scratchpad i vraćen sa istim SHA-1 `4a95d78b`, sveska `vbatest_9b1qnr9m`) daje
+         **2/40 crveno po imenu**: „pozajmica ne ide na robni dokument ni uz kupcev broj" (ugovor) i
+         „pozajmica se ne knjizi na prijemnicu -- samo na kupcev dokument". Drugi slučaj ide kroz
+         jezgro nad pravom prijemnicom, bez transakcije: kapija `ODL-24` stoji pre transakcijskih
+         kapija, a bez nje poziv pada sa drugim razlogom.
+       - Dva slučaja ugovornog testa (`ODL-9` stanica, `ODL-10` naš broj) mere se sada **na kupčevom
+         dokumentu**. Na drugim dokumentima pozajmica pada ranije, pa ta tvrdnja ne bi merila ništa.
+     - **`P2` #2 — druga količina je `HARD CONFLICT`.** Tvrdnja meri tekst ponavljanja
+         (`ZbirZahteva`: „vec knjizen sa 40, a trazi se 30"), a ne kapiju identiteta ispod njega, koja
+         bi isti zahtev odbila drugim tekstom. Uz nju se meri i da transakcija vraća ceo dokument.
+     - **Fault injection drugog reda, bez novog framework-a:** mešovit kupčev dokument u jednoj TX
+         (povrat 20 uz potvrdu 15, pa pozajmica 40). Pozajmica upiše svoj red, a njen `ULAZ_TUDJE`
+         udari u pokriće istog tipa (`IdentitetZauzeo`). Izmereno:
+         - sudar je **glasan**;
+         - pad drugog reda vraća zaglavlje, povrat i red pozajmice;
+         - kupčev saldo se ne pomera.
+
+         Tvrdnja iz 6.12k („glasno, a ne tiho gutanje") je do sada bila nemerena.
+     - **Ugovor idempotencije** je u 6.12k:
+       - ponavljanje **knjiženja** je idempotentno;
+       - ponovno **kreiranje** dokumenta istim kupčevim brojem je fail-closed (`ODL-20`, isto telo
+         pisca kao kod povrata, meri ga `Test_RVP_BrojJeKupcevINePredlazeSe`).
+     - **Sabotaže** — katalog **841**, a nad zdravim izvorom 0 nalaza:
+       - `odl24-pozajmica-od-bilo-koga` → **`odl24-pozajmica-van-kupcevog-dokumenta`** (sidro na novoj
+         kapiji, tvrdnja prijemnice);
+       - `odl24-predaja-samo-povrat` je **obrisana**: pravilo više ne postoji, a sabotaža nad obrisanim
+         pravilom zacementira staro stanje;
+       - nove su `odl24-druga-kolicina-je-ponavljanje` i `odl24-ulaz-se-ne-sudara`;
+       - presidravanja `amb-odl10-nas-revers-nosi-kupca`, `amb-odl9-povrat-od-kupca-ide-svuda`,
+         `amb-odl22-vlasnik-broja-se-ne-gleda` i `amb-odl22-broj-drugog-kupca` su **vraćena na `main`**;
+       - presidrene ostaju četiri: `revers-smer`, `amb-partner-nosi-izdavanje`,
+         `amb-ulaz-predlog-ne-gleda-smer`, `amb-rvp-potvrda-se-ne-prosledjuje`.
+     - **Ciljano posle izmene** (sveska `vbatest_y3ci43dl`, bez dijaloga): `modTest` **15/0** (isti
+       spisak kao u stavci 167), BFP podskup **248/0**. ODL-24 nosi **39** BFP tvrdnji (13 + 26).
+     - **Očekivano iz diff-a:** RunAllTests **256/0**, BFP **2478/0** (2439 + 39), Banka 241/0, Storno
+       111/0, katalog 841.
+     - **Izvršne kapije** (reviewer `CODE GO`):
+       - `run_vba` FULL;
+       - `dokaz.py` nad 18 sabotaža (14 `odl24-*` i 4 presidrene).
+
+       Ishod je u nastavku stavke.
+     - **Ostaje operateru:** `Debug → Compile` i ručni F7 acceptance (pozajmica 40, bez pitanja, dva
+       reda knjige, ispravan dug, bez PDF-a, šest segmenata). Sveska za to se pravi iznova nad
+       konačnim izvorom.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

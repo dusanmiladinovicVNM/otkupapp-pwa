@@ -627,30 +627,28 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
                                       ByVal odTip As String, ByVal odID As String, _
                                       ByVal naTip As String, _
                                       ByVal vrstaKretanja As String) As String
-    Dim jePartnerov As Boolean, predajaOdKupca As Boolean, jePozajmica As Boolean
+    Dim jePartnerov As Boolean, povratOdKupca As Boolean, jePozajmica As Boolean
     Dim ko As String
     jePartnerov = (StrComp(Trim$(vrsta), AMB_DOK_REVERS_PARTNERA, vbTextCompare) = 0)
     jePozajmica = (StrComp(Trim$(vrstaKretanja), AMB_VK_POZAJMICA, vbTextCompare) = 0)
-    ' OBRNUTA KAPIJA GLEDA SVAKU PREDAJU OD KUPCA, ne samo kupac -> vozac.
+    ' OBRNUTA KAPIJA GLEDA SVAKI POVRAT OD KUPCA, ne samo kupac -> vozac.
     ' Prva verzija je trazila ceo par, pa su obican REVERS nad kupac -> FIRMA i
     ' kupac -> STANICA prolazili: par nije bio kupac -> vozac, pa se kapija nije
     ' ni palila. ODL-9 kaze da lanac ide kupac -> vozac -> stanica i da firma u
-    ' njega NE ulazi, pa je uslov sama PREDAJA OD KUPCA.
-    '
-    ' Od ODL-24 predaja je povrat ILI pozajmica: isti lanac i isti kupcev broj, a
-    ' razlika je samo cije su gajbe. Kapija koja bi gledala samo povrat pustila bi
-    ' pozajmicu na stanicu i pod nasim brojem.
-    predajaOdKupca = (StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _
-                     ((StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0) Or _
-                      jePozajmica)
+    ' njega NE ulazi, pa je uslov sam POVRAT OD KUPCA.
+    povratOdKupca = (StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _
+                    (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)
 
-    ' AMB-10-ODL-24: POZAJMICU DAJE KUPAC. Matrica je pusta i kooperantu (i on je
-    ' PARTNER), a presuda operatera govori o kupcu. Bez ove provere pozajmica
-    ' kooperanta na robnom dokumentu (otkup, gde AmbDokDozvoljavaKretanje ne
-    ' sudi) prosla bi tiho, sa obavezom koju niko nije odlucio.
-    If jePozajmica And StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
-        AmbDokKretanjeProblem = "AMB-10-ODL-24: pozajmicu ambalaze daje kupac, a " & _
-            "dobio je " & Trim$(odTip) & "."
+    ' AMB-10-ODL-24: POZAJMICA IDE SAMO NA KUPCEV AMBALAZNI DOKUMENT (odluka (e),
+    ' 19.10.2026). Robni dokument nije njeno mesto, iako je i prijemnica kupceva:
+    ' bez ove provere pozajmica na prijemnici (vlasnik broja kupac, par kupac ->
+    ' vozac) ili na otkupu (matrica pusta i kooperanta -- i on je PARTNER)
+    ' prosla bi tiho, sa obavezom koju niko nije odlucio (review #434, P2).
+    ' Na kupcevom dokumentu grana ispod trazi kupca, vozaca i kupcev broj, pa
+    ' obrnuta kapija ODL-9/-10 za pozajmicu nije potrebna: drugde ona ne stize.
+    If jePozajmica And Not jePartnerov Then
+        AmbDokKretanjeProblem = "AMB-10-ODL-24: pozajmica ambalaze ide samo na kupcev " & _
+            "dokument (" & AMB_DOK_REVERS_PARTNERA & "), a dokument je '" & Trim$(vrsta) & "'."
         Exit Function
     End If
 
@@ -685,9 +683,9 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
         Exit Function
     End If
 
-    If predajaOdKupca Then
+    If povratOdKupca Then
         If StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then
-            AmbDokKretanjeProblem = "AMB-10-ODL-9: predaja praznih od kupca ide " & _
+            AmbDokKretanjeProblem = "AMB-10-ODL-9: povrat praznih od kupca ide " & _
                 "na vozaca (lanac kupac -> vozac -> stanica), a ide na " & _
                 Trim$(naTip) & "."
             Exit Function
@@ -707,14 +705,14 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
         ko = Trim$(brojOwnerTip)
         If Len(ko) = 0 Then ko = "(nije zadat)"
         If StrComp(Trim$(brojOwnerTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then
-            AmbDokKretanjeProblem = "AMB-10-ODL-10: predaja praznih od kupca " & _
+            AmbDokKretanjeProblem = "AMB-10-ODL-10: povrat praznih od kupca " & _
                 "nosi kupcev broj, a vlasnik broja je " & ko & " (dokument '" & _
                 Trim$(vrsta) & "')."
             Exit Function
         End If
         If StrComp(Trim$(brojOwnerID), Trim$(odID), vbTextCompare) <> 0 Then
             AmbDokKretanjeProblem = "AMB-10-ODL-10: broj nosi kupac '" & _
-                Trim$(brojOwnerID) & "' a prazne predaje '" & Trim$(odID) & _
+                Trim$(brojOwnerID) & "' a prazne vraca '" & Trim$(odID) & _
                 "' -- dokument bi imao tudj broj."
         End If
     End If

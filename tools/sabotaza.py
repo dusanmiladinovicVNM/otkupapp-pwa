@@ -6909,7 +6909,7 @@ SABOTAZE = {
     # brojem, cime je AMB-10-ODL-10 potpuno zaobidjen.
     "amb-odl10-nas-revers-nosi-kupca": (
         "modAmbalazaUgovor.bas",
-        "    If predajaOdKupca Then\n",
+        "    If povratOdKupca Then\n",
         "    If False Then   ' SABOTAZA: obrnuta kapija ugasena\n",
         "Test_Amb_DokumentUgovor",
         "ODL-10: obican REVERS ne sme da nosi kupac -> vozac",
@@ -6920,9 +6920,9 @@ SABOTAZE = {
     "amb-odl9-povrat-od-kupca-ide-svuda": (
         "modAmbalazaUgovor.bas",
         "        If StrComp(Trim$(naTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then\n"
-        "            AmbDokKretanjeProblem = \"AMB-10-ODL-9: predaja praznih od kupca ide \" & _\n",
-        "        If False Then   ' SABOTAZA: predaja od kupca sme na bilo koga\n"
-        "            AmbDokKretanjeProblem = \"AMB-10-ODL-9: predaja praznih od kupca ide \" & _\n",
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-9: povrat praznih od kupca ide \" & _\n",
+        "        If False Then   ' SABOTAZA: povrat od kupca sme na bilo koga\n"
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-9: povrat praznih od kupca ide \" & _\n",
         "Test_Amb_DokumentUgovor",
         "ODL-9: obican REVERS ne sme da nosi kupac -> firma",
     ),
@@ -7421,9 +7421,9 @@ SABOTAZE = {
     "amb-odl22-vlasnik-broja-se-ne-gleda": (
         "modAmbalazaUgovor.bas",
         "        If StrComp(Trim$(brojOwnerTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then\n"
-        "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: predaja praznih od kupca \" & _\n",
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: povrat praznih od kupca \" & _\n",
         "        If False Then   ' SABOTAZA: vlasnik broja se ne gleda\n"
-        "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: predaja praznih od kupca \" & _\n",
+        "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: povrat praznih od kupca \" & _\n",
         "Test_Amb_DokumentUgovor",
         "ODL-22: dokument koji NE objavi vlasnika broja pada (fail-closed)",
     ),
@@ -7433,10 +7433,10 @@ SABOTAZE = {
         "modAmbalazaUgovor.bas",
         "        If StrComp(Trim$(brojOwnerID), Trim$(odID), vbTextCompare) <> 0 Then\n"
         "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: broj nosi kupac '\" & _\n"
-        "                Trim$(brojOwnerID) & \"' a prazne predaje '\" & Trim$(odID) & _\n",
+        "                Trim$(brojOwnerID) & \"' a prazne vraca '\" & Trim$(odID) & _\n",
         "        If False Then   ' SABOTAZA: tudj broj prolazi\n"
         "            AmbDokKretanjeProblem = \"AMB-10-ODL-10: broj nosi kupac '\" & _\n"
-        "                Trim$(brojOwnerID) & \"' a prazne predaje '\" & Trim$(odID) & _\n",
+        "                Trim$(brojOwnerID) & \"' a prazne vraca '\" & Trim$(odID) & _\n",
         "Test_Amb_DokumentUgovor",
         "ODL-22: broj jednog kupca uz povrat drugog pada i na robnom dokumentu",
     ),
@@ -8529,26 +8529,15 @@ SABOTAZE = {
         "Test_ODL24_UgovorPozajmice",
         "ODL-24 ugovor: kupcev dokument nosi pozajmicu",
     ),
-    # Pozajmicu sme da da bilo koji partner: matrica pusta kooperanta, pa bi
-    # pozajmica na otkupu prosla sa obavezom koju niko nije odlucio.
-    "odl24-pozajmica-od-bilo-koga": (
+    # Pozajmica sme na svaki dokument: na prijemnici (kupcev broj, kupac -> vozac)
+    # i na otkupu (matrica pusta kooperanta) prosla bi sa obavezom koju niko nije
+    # odlucio (review #434, P2).
+    "odl24-pozajmica-van-kupcevog-dokumenta": (
         "modAmbalazaUgovor.bas",
-        "    If jePozajmica And StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) <> 0 Then\n",
-        "    If False Then   ' SABOTAZA: pozajmicu sme da da bilo ko\n",
-        "Test_ODL24_UgovorPozajmice",
-        "ODL-24 ugovor: pozajmica od kooperanta pada iako je matrica pusta",
-    ),
-    # Obrnuta kapija se vrati na "samo povrat": pozajmica od kupca tada sme na
-    # stanicu i pod nasim brojem.
-    "odl24-predaja-samo-povrat": (
-        "modAmbalazaUgovor.bas",
-        "    predajaOdKupca = (StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _\n"
-        "                     ((StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0) Or _\n"
-        "                      jePozajmica)\n",
-        "    predajaOdKupca = (StrComp(Trim$(odTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _\n"
-        "                     (StrComp(Trim$(vrstaKretanja), AMB_VK_POVRAT_PRAZNE, vbTextCompare) = 0)   ' SABOTAZA\n",
-        "Test_ODL24_UgovorPozajmice",
-        "ODL-24 ugovor: pozajmica od kupca ide na vozaca, ne na stanicu",
+        "    If jePozajmica And Not jePartnerov Then\n",
+        "    If False Then   ' SABOTAZA: pozajmica sme na svaki dokument\n",
+        "Test_ODL24_PozajmicaJeSvojDogadjaj",
+        "ODL-24: pozajmica se ne knjizi na prijemnicu -- samo na kupcev dokument",
     ),
     # AMB-INV-13: ulaz pozajmice se racuna kao MANJAK, ne kao cela kolicina.
     # Upis prolazi bez pitanja, ali kupac izgubi svojih 5 nasih (35 + 5 = 40),
@@ -8628,6 +8617,27 @@ SABOTAZE = {
         "        ReversUpisi = BrojIliOznaka(brDok)\n",
         "T_ODL24_F7PozajmicaKupca",
         "F7 pozajmica: kupcev dokument se ne stampa i ne javlja kvar (ODL-32)",
+    ),
+    # Isti zahtev sa DRUGOM kolicinom se proglasi ponavljanjem: pisac vrati stari
+    # red i tiho proguta novu kolicinu (review #434, P2 -- testna praznina).
+    "odl24-druga-kolicina-je-ponavljanje": (
+        "modAmbalaza.bas",
+        "        If vecUpisano = kolicina Then\n",
+        "        If True Then   ' SABOTAZA: druga kolicina je ponavljanje\n",
+        "Test_ODL24_PozajmicaJeSvojDogadjaj",
+        "ODL-24: druga kolicina istog zahteva je HARD CONFLICT, ne ponavljanje",
+    ),
+    # Ulaz tudje ambalaze se izuzme iz kapije identiteta: na mesovitom dokumentu
+    # pozajmica upise DRUGI ULAZ_TUDJE istog tipa pored pokrica -- tacno tiho
+    # gutanje koje 6.12k iskljucuje (cvor AMB-INV-04).
+    "odl24-ulaz-se-ne-sudara": (
+        "modAmbalaza.bas",
+        "        If Len(sudar) > 0 Then\n"
+        "            Err.Raise AMB_ERR_IDENTITET, sourceName, _\n",
+        "        If Len(sudar) > 0 And StrComp(vrstaK, AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0 Then   ' SABOTAZA: ulaz se ne sudara\n"
+        "            Err.Raise AMB_ERR_IDENTITET, sourceName, _\n",
+        "Test_ODL24_PozajmicaJeSvojDogadjaj",
+        "ODL-24: pozajmica na dokumentu sa pokricem je glasan sudar, ne tiho gutanje",
     ),
 }
 

@@ -2068,10 +2068,19 @@ reda**. Pitanje je samo koji od njih nosi značenje.
 **Čvor `AMB-INV-04` je rešen time što `ULAZ_TUDJE` OSTAJE posledica.** Zahtev je
 `POZAJMICA_PARTNERA`, pa idempotencija (`ZbirZahteva` nad `AmbVrsteZahteva`) meri samo
 njene redove. `ULAZ_TUDJE` nikad nije zahtev (`AmbVrstaJeZahtev` se ne menja). Ponovljen
-poziv vraća postojeći red i ne dopisuje drugi ulaz. Dokument sa pozajmicom ne nosi povrat
-(jedan zahtev po kupčevom dokumentu, odluka (c)), pa na njemu pokriće deficita ne nastaje.
-Kad bi ga neko ipak upisao, drugi `ULAZ_TUDJE` istog tipa na istom dokumentu pada na
-`IdentitetZauzeo` kao `HARD CONFLICT` — glasno, a ne kao tiho gutanje.
+poziv vraća postojeći red i ne dopisuje drugi ulaz, a ista vrsta sa **drugom količinom** je
+`HARD CONFLICT`. Dokument sa pozajmicom ne nosi povrat (jedan zahtev po kupčevom dokumentu,
+odluka (c)), pa na njemu pokriće deficita ne nastaje. Kad bi ga neko ipak upisao, drugi
+`ULAZ_TUDJE` istog tipa na istom dokumentu pada na `IdentitetZauzeo` kao `HARD CONFLICT` —
+glasno, a ne kao tiho gutanje — i transakcija vraća ceo dokument (izmereno, review `#434`).
+
+> **Idempotencija ima dva nivoa, i to je ugovor (review `#434`).** Ponavljanje
+> **knjiženja** nad postojećim dokumentom je idempotentno (`PrenesiAmbalazu`: ista količina
+> vraća isti red). Ponovno **kreiranje** dokumenta javnim piscem (`UpisiPozajmicuKupca_TX`)
+> nije replay nego nov dokument, pa je **fail-closed**: isti kupčev broj u opsegu
+> `(Kupac, KupacID, dan)` je zauzet (`ODL-20`). Za ručno unet kupčev broj to je tačno
+> ponašanje, jer drugi dokument sa istim brojem nije isti papir. Telo pisca je isto kao kod
+> povrata, pa to meri `Test_RVP_BrojJeKupcevINePredlazeSe`.
 
 > **`AMB-INV-13`.** Pozajmica unosi u opticaj **tačno svoju količinu**. Uz
 > `POZAJMICA_PARTNERA` pisac na istom dokumentu, u istoj transakciji, upisuje
@@ -2098,7 +2107,7 @@ Kupac       -> Vozac   40   POZAJMICA_PARTNERA     obaveza   0
 | vrsta i njene klase | `modAmbalazaUgovor.AmbVrsteSve`, `AmbKlaseVrste` |
 | ulaz u opticaj = količina | `AmbVrstaUnosiUOpticaj` (ugovor) → `modAmbalaza.PrenesiAmbalazu` |
 | samo kupčev dokument | `AmbDokDozvoljavaKretanje`: `REVERS_PARTNERA` nosi povrat i pozajmicu, naš `REVERS` ne nosi pozajmicu |
-| samo od kupca, na vozača, uz kupčev broj | `AmbDokKretanjeProblem`: obrnuta kapija `ODL-9/-10` se širi sa povrata na **predaju od kupca** (povrat ili pozajmica). Pozajmica od bilo koga drugog pada (`ODL-24`), iako bi je matrica pustila, jer je i kooperant `PARTNER`. |
+| samo na kupčevom dokumentu, od kupca, na vozača, uz kupčev broj | `AmbDokKretanjeProblem`. Pozajmica na bilo kom drugom dokumentu pada imenom `ODL-24`: na robnom (prijemnica sa kupčevim brojem, otkup kooperanta, koga bi matrica pustila kao `PARTNER`) i na našem reversu. Na kupčevom dokumentu grana `REVERS_PARTNERA` traži kupca, vozača i kupčev broj. Obrnuta kapija `ODL-9/-10` zato ostaje nad povratom: pozajmica do nje ne stiže (review `#434`, P2). |
 | pisac | `UpisiPozajmicuKupca_TX` deli telo sa `UpisiReversPartnera_TX` (jedna implementacija) |
 | ulaz sa ekrana | `modNovacUnos`: smer 6 (`SMER_REV_POZAJMICA_KUP`); `RevSmerJeKupcev` odlučuje za oba kupčeva smera |
 | prikaz u listi | `modScrDokumenti.AmbKretanjeNaziv` („Pozajmica") |
@@ -2126,16 +2135,22 @@ Pozajmica u svima njima prolazi bez nove grane, osim prikaza naziva.
 pozajmicu ga nema šta prikazati, jer se kupčev dokument ne štampa (`ODL-32`). Za
 kooperantski revers prikaz ostaje otvoren u „Dug sa imenom" i ne ulazi u ovaj rez.
 
-*Provera (stavka 167):*
-- **reprodukcija pre ispravke** je bila crvena po imenu, i u BFP-u (10 tvrdnji) i u testu 256;
-- BFP `Test_ODL24_UgovorPozajmice` (12 tvrdnji): tablica istinitosti ugovora, svaka tvrdnja
-  uz svoju kontra-tvrdnju;
-- BFP `Test_ODL24_PozajmicaJeSvojDogadjaj` (21 tvrdnja), kroz jezgro:
+*Provera (stavke 167–168):*
+- **reprodukcija pre ispravke** je bila crvena po imenu: BFP 10 tvrdnji i test 256 (stavka
+  167). Uža kapija posle review-a: 2 tvrdnje, robni dokument u ugovoru i prijemnica kroz
+  jezgro (stavka 168);
+- BFP `Test_ODL24_UgovorPozajmice` (13 tvrdnji): tablica istinitosti ugovora, svaka tvrdnja
+  uz svoju kontra-tvrdnju. Strana, odredište i vlasnik broja mere se na kupčevom
+  dokumentu, a robni dokument pada imenom `ODL-24`;
+- BFP `Test_ODL24_PozajmicaJeSvojDogadjaj` (26 tvrdnji), kroz jezgro:
+  - pozajmica na prijemnicu se odbija imenom `ODL-24`;
   - pozajmica 40 kupca koji drži 5: jedan red `POZAJMICA_PARTNERA` i nijedan povrat;
   - ulaz 40, a ne manjak 35; kupac ostaje na 5, vozač dobija +40, obaveza +40 (ne 80);
-  - ponovljen zahtev vraća isti red;
+  - ponovljen zahtev vraća isti red, a druga količina je `HARD CONFLICT` koji vraća ceo dokument;
   - storno upisuje dva kontra-stava;
   - kontra-tvrdnja: povrat istog kupca i dalje pita za manjak 15;
+  - mešovit dokument (povrat sa pokrićem, pa pozajmica) pada glasno na drugom `ULAZ_TUDJE`,
+    a pad drugog reda vraća ceo dokument i kupčev saldo;
 - `modTest` 256 `T_ODL24_F7PozajmicaKupca`, kroz `Scr_Save` F7 smer 6. Količina je
   `saldo + 3`, pa bi povrat iste količine pitao. Meri se:
   - bez pitanja;
@@ -2145,7 +2160,7 @@ kooperantski revers prikaz ostaje otvoren u „Dug sa imenom" i ne ulazi u ovaj 
   - broj se ne predlaže;
   - partner koji nije kupac se odbija uz polje;
 - premisa `Test_Amb_UgovorPrenosa`: osam vrednosti → devet;
-- sabotaže `odl24-*` (13), katalog 827 → 840.
+- sabotaže `odl24-*` (14), katalog 827 → 841.
 
 ### 6.12l `10c` prvi rez — lista i storno reversa (`P2 #1` iz review-a)
 
