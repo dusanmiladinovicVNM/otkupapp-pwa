@@ -9424,24 +9424,35 @@ End Sub
 ' Ime fajla nosi SEKUNDU (Izvestaj_<vreme>.pdf), pa test pre izvoza saceka da
 ' sekunda prodje: izvoz u istoj sekundi kao prethodni bi PREPISAO fajl, pa bi
 ' brojanje dalo 0 i test bio lazno crven (251 ide odmah posle).
+'
+' Pad izvoza se HVATA uz poziv, ne propusta u CleanUp: PrintIzvestajHouse u
+' trenutku izvoza nema aktivan handler (On Error GoTo 0 posle PageSetup-a), pa
+' greska izlazi pozivaocu. Propustena, obarala je test sopstvenim Err.Raise
+' ("Type mismatch") umesto tvrdnjom koja kaze sta fali -- dokaz 19.10.2026 ju je
+' zato vodio kao PALA DRUGA TVRDNJA. Prva tvrdnja nosi i broj fajlova i gresku.
 ' SABOTAZA: pdf-range-grana-ugasena -> pukne "izvestaj u kucnom stilu: PDF je
 ' napravljen". I pdf-izvoz-ignorise-kljuc obara ovaj test, uz 249.
 Private Sub T_PDF_IzvestajHouseNeOtvara()
     Dim kljucPre As String, errNum As Long, errDesc As String
-    Dim data(1 To 2, 1 To 2) As String
-    Dim pdfPre As Long, pdfPosle As Long, izvoz As String
+    Dim data(1 To 2, 1 To 2) As String, suPre As Boolean
+    Dim pdfPre As Long, pdfPosle As Long, izvoz As String, izvozErr As String
 
     data(1, 1) = "Test 250": data(1, 2) = "1,00"
     data(2, 1) = "UKUPNO": data(2, 2) = "1,00"
     kljucPre = NzToText(GetConfigValue(CFG_PDF_OTVORI_POSLE))
+    suPre = Application.ScreenUpdating
     On Error GoTo CleanUp
     SetConfigValue CFG_PDF_OTVORI_POSLE, "NO"
 
     Application.Wait Now + TimeSerial(0, 0, 1)
     pdfPre = BrojPdfIzvestaja()
     modDocStyle.DocPdfTestReset
+    On Error Resume Next
     modPrint.PrintIzvestajHouse data, 2, 2, "Test 250", "smoke izvoza", _
                                 Array("Naziv", "Iznos"), Array(False, True)
+    If Err.Number <> 0 Then izvozErr = CStr(Err.Number) & " " & Err.description
+    Err.Clear
+    On Error GoTo CleanUp
     izvoz = modDocStyle.DocPdfTest()
     pdfPosle = BrojPdfIzvestaja()
 
@@ -9451,10 +9462,14 @@ CleanUp:
     On Error Resume Next
     modDocStyle.DocPdfTestReset
     SetConfigValue CFG_PDF_OTVORI_POSLE, kljucPre
+    ' Pukao izvoz ostavlja list vidljiv i ekran ugasen -- ne sme u sledeci test.
+    ThisWorkbook.Worksheets("_IzvPrint").Visible = xlSheetVeryHidden
+    Application.ScreenUpdating = suPre
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest." & "T_PDF_IzvestajHouseNeOtvara", errDesc
 
-    AssertEq pdfPosle - pdfPre, 1, "izvestaj u kucnom stilu: PDF je napravljen"
+    AssertEq CStr(pdfPosle - pdfPre) & "|" & izvozErr, "1|", _
+             "izvestaj u kucnom stilu: PDF je napravljen"
     AssertEq Left$(izvoz, 1), "1", "preduslov: izvestaj u kucnom stilu trazi otvaranje PDF-a"
     AssertEq Mid$(izvoz, 3, 1), "0", "izvestaj u kucnom stilu: test prolaz ne otvara PDF"
     AssertEq Mid$(izvoz, 5, 1), "R", "izvestaj u kucnom stilu ide kroz granu Range"
@@ -9466,12 +9481,13 @@ End Sub
 ' Danas ga nijedan ekran ne zove, ali je javan i do #431 je nosio sopstveni
 ' izvoz sa OpenAfterPublish:=True -- bez ovog testa bi bio jedini put do PDF-a
 ' koji niko ne izvrsava. Izvoz stoji pod On Error Resume Next, pa pad izvoza
-' vidi SAMO brojanje fajlova, ne Err.
+' danas vidi SAMO brojanje fajlova, ne Err. Greska se ipak hvata uz poziv, kao u
+' 250: ako izvoz jednom izgubi tu branu, tvrdnja i dalje imenuje sta fali.
 ' SABOTAZA: pdf-range-grana-ugasena obara i ovaj test (izvoz pukne, fajla nema).
 Private Sub T_PDF_IzvestajGenerickiNeOtvara()
     Dim kljucPre As String, errNum As Long, errDesc As String
     Dim data(1 To 1, 1 To 2) As Variant
-    Dim pdfPre As Long, pdfPosle As Long, izvoz As String
+    Dim pdfPre As Long, pdfPosle As Long, izvoz As String, izvozErr As String
 
     data(1, 1) = "Test 251": data(1, 2) = 1
     kljucPre = NzToText(GetConfigValue(CFG_PDF_OTVORI_POSLE))
@@ -9481,7 +9497,11 @@ Private Sub T_PDF_IzvestajGenerickiNeOtvara()
     Application.Wait Now + TimeSerial(0, 0, 1)
     pdfPre = BrojPdfIzvestaja()
     modDocStyle.DocPdfTestReset
+    On Error Resume Next
     modPrint.PrintIzvestaj data, "Test 251", Array("Naziv", "Iznos")
+    If Err.Number <> 0 Then izvozErr = CStr(Err.Number) & " " & Err.description
+    Err.Clear
+    On Error GoTo CleanUp
     izvoz = modDocStyle.DocPdfTest()
     pdfPosle = BrojPdfIzvestaja()
 
@@ -9494,7 +9514,7 @@ CleanUp:
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest." & "T_PDF_IzvestajGenerickiNeOtvara", errDesc
 
-    AssertEq pdfPosle - pdfPre, 1, "genericki izvestaj: PDF je napravljen"
+    AssertEq CStr(pdfPosle - pdfPre) & "|" & izvozErr, "1|", "genericki izvestaj: PDF je napravljen"
     AssertEq Left$(izvoz, 1), "1", "preduslov: genericki izvestaj trazi otvaranje PDF-a"
     AssertEq Mid$(izvoz, 3, 1), "0", "genericki izvestaj: test prolaz ne otvara PDF"
     AssertEq Mid$(izvoz, 5, 1), "R", "genericki izvestaj ide kroz granu Range"
