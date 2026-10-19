@@ -5597,6 +5597,62 @@
      - Posle kapija `src-vba` i `tools` nisu menjani; ova stavka je samo docs.
      - **Ostaje za `#432`:** reviewer GO za merge i zapis merge-a (`KI-021` → `CLOSED`).
 
+163. **Merge `#432`, `KI-021` → `CLOSED`** (19.10.2026). Zapis ide ovde, a ne u `#432`. Obrazac su stavke 152 i
+     157.
+
+     - **`#432`** je merge-ovan 19.10.2026 (14:42:12 UTC) kao `cd5b8bbe`, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `e89ffc87` (static CI #1015 `success`, run 39254456351; izmereno kroz
+       `gh`). Merge je prenela sesija `KI-015`. Stablo `main`-a posle merge-a jednako je stablu `e89ffc87`
+       (`4a21ee1e`).
+     - Kapije su izmerene nad izvorom `941c599cf1b7` (stavke 161–162):
+       - 12/12 ZELENO: 254/0, BFP 2439/0, Banka 241/0, Storno 111/0;
+       - dokaz `ki021` 12/12;
+       - compile potvrđen;
+       - ručna provera 5/5.
+
+       Posle njih su ušli samo docs.
+     - **`KI-021` → `CLOSED`:** tip ambalaže je zatvoren skup (`AMB-INV-12`). Ostatak se ne prenosi u
+       `KI-021`:
+       - `KI-022` (PWA spisak tipova) mora biti zatvoren pre redovne upotrebe PWA otkupa;
+       - `KI-023` (apostrof u katalogu) je rez `#433` (stavka 164).
+     - **Redosled koji je odredio operater** (19.10.2026): „433, pa da se završi započeto oko ki21 i 23 i
+       onda odl24 pa s6, ostalo da se zapiše u KI". Ostali nalazi se samo upisuju u `KNOWN_ISSUES.md`, bez
+       novih PR-ova i sesija za sporedne stvari.
+
+164. **`KI-023` — rez: sonda, reprodukcija, ispravka i PR `#433`** (19.10.2026). Grana `claude/ki023-apostrof`
+     je rađena u istom worktree-ju (`.claude/worktrees/ki021`), jer zasebna sesija nije mogla da napravi novi
+     worktree (1,0 GB slobodno).
+
+     - **Sonda nad pravim Excelom** (`sonda_ki023.py`), pre koda:
+       - `Range.Value = "' x"` ostavlja u ćeliji `" x"` uz `PrefixCharacter "'"`;
+       - `"''x"` ostavlja `"'x"`;
+       - tekstovi sa `"+"`/`"-"` ostaju netaknuti, pa klasa nije šira od apostrofa.
+     - **Reprodukcija:** test je bio crven po imenu za svih 5 ključeva sa `main`-a; kontrola `"+ Nova stavka"`
+       je bila zelena.
+     - **Ispravka (`modPoruke`):**
+       - `UpsertRow` piše kroz `TekstZaCeliju`, koji udvaja vodeći apostrof;
+       - poređenje ostaje nad pročitanim tekstom, pa se ispravan red više ne prepisuje na svakom
+         `EnsurePoruke`;
+       - postojeće sveske se same leče pri sledećem `EnsurePoruke`.
+     - **Test:**
+       - pre `EnsurePoruke` zastareva redove (`RequireUpdateCell`). Bez toga bi nad već popravljenim
+         katalogom merio zatečen sadržaj, a sabotaža pisca bi prošla zelena. Zato je regenerisan
+         `WHO_WRITES.md` (`modTest` piše `tblPoruke`);
+       - sabotaža je `ki023-katalog-guta-apostrof`.
+     - **Ciljano posle ispravke:** test i 245–248 5/0.
+     - **Review `#433`** (head `2206c3bd`, CI #1016 `success`, izmereno): `CODE GO` 9,1/10, `MERGE HOLD`.
+       - **Integracioni `P1`:** ID 252 je na `main`-u već KI-021. Grana je rebase-ovana na `cd5b8bbe`, test
+         je postao **255** u sva tri registra i u zaglavlju, a dobio je i šesti ključ
+         (`DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU`).
+       - **`P2`:** katalog mora ostati ispravan i za naredne testove. Test zato i na putu greške ponovo zove
+         `EnsurePoruke`.
+     - **Očekivano posle integracije** (iz diff-ova, još neizmereno): RunAllTests 255/0, BFP 2439/0, katalog
+       827.
+     - **Čeka:**
+       - pokazan rebase i odobrenje za `push --force-with-lease`;
+       - FULL 12/12 i dokaz `ki023` (1);
+       - compile (operater) i završni acceptance.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

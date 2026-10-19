@@ -9533,31 +9533,32 @@ CleanUp:
     AssertEq Mid$(izvoz, 5, 1), "R", "genericki izvestaj ide kroz granu Range"
 End Sub
 
-' 252. KI-023: KATALOG PORUKA CUVA VODECI APOSTROF.
+' 255. KI-023: KATALOG PORUKA CUVA VODECI APOSTROF.
 '
 ' Rucna provera #432 (19.10.2026): "Tip ambalaze '12/2 ne postoji u sifarniku"
 ' -- bez zatvarajuceg apostrofa. Katalog pise Range.Value = tekst, a Excel vodeci
 ' apostrof tumaci kao prefiks teksta (PrefixCharacter) i ne cuva ga: "' nema
 ' unetu tezinu" postane " nema unetu tezinu". Izmereno sondom nad pravim Excelom:
-' svih pet kljuceva ispod gube apostrof, a tekst koji pocinje sa "+" ili "-" ostaje
-' netaknut (kontrola).
+' svih sest kljuceva ispod gube apostrof, a tekst koji pocinje sa "+" ili "-"
+' ostaje netaknut (kontrola).
 '
 ' Tvrdnja je iz pravila, ne iz izlaza: Poruka() mora da POCINJE doslovnim
 ' apostrofom. Poredjenje sa drugim Poruka() pozivom ne bi merilo nista -- obe strane
 ' bi izgubile isti znak (zato ga test 253/KI-021 nije uhvatio).
-' Kljuc DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU (#432) se dodaje u spisak kad se KI-021 i
-' ovaj rez sretnu na main-u.
 '
 ' Redovi se PRE EnsurePoruke zastarevaju: UpsertRow ne prepisuje red koji je vec
 ' ispravan, pa bi nad katalogom koji je neko ranije popravio test merio zatecen
-' sadrzaj, a ne pisca -- i sabotaza pisca bi prosla zelena.
+' sadrzaj, a ne pisca -- i sabotaza pisca bi prosla zelena. Katalog se vraca i na
+' putu greske (CleanUp: EnsurePoruke), da zastareo red ne ostane sledecem testu.
 ' SABOTAZA: ki023-katalog-guta-apostrof -> "katalog cuva vodeci apostrof: ...".
 Private Sub T_KI023_KatalogCuvaVodeciApostrof()
     Dim kljucevi As Variant, i As Long, k As String, losi As String
-    Dim redovi As Collection
+    Dim redovi As Collection, errNum As Long, errDesc As String
 
     kljucevi = Array("DOK_MSG_NEMA_UNETU_TEZINU", "LIC_MSG_PROPUSTAM_VEZANU_MASINU", _
-                     "AUTH_MSG_VEC_POSTOJI", "AUTH_MSG_ADMIN_KREIRAN", "KOR_MSG_VEC_POSTOJI")
+                     "AUTH_MSG_VEC_POSTOJI", "AUTH_MSG_ADMIN_KREIRAN", "KOR_MSG_VEC_POSTOJI", _
+                     "DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU")
+    On Error GoTo CleanUp
     modSetup.EnsurePoruke
     For i = LBound(kljucevi) To UBound(kljucevi)
         Set redovi = FindRows(TBL_PORUKE, COL_POR_KLJUC, CStr(kljucevi(i)))
@@ -9573,6 +9574,17 @@ Private Sub T_KI023_KatalogCuvaVodeciApostrof()
             losi = losi & k & "=[" & Poruka(k) & "] "
         End If
     Next i
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If errNum <> 0 Then
+        modSetup.EnsurePoruke
+        modPoruke.InvalidateCache
+    End If
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI023_KatalogCuvaVodeciApostrof", errDesc
 
     AssertEq Poruka("OTKUI_BTN_MAT_NOVI"), "+ Nova stavka", _
              "preduslov: tekst koji pocinje sa + katalog cuva netaknut"
