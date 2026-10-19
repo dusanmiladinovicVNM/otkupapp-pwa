@@ -8209,6 +8209,27 @@ SABOTAZE = {
         "T_KI016_PadGradnjeJeJavljen",
         "uspesan prelazak gasi poruku o zabranjenom prelasku",
     ),
+    # KI-016 (f): nova poruka ne spusta zastavicu mreze, pa prvo uspelo citanje
+    # posle pada gasi i poruku koja je zamenila poruku mreze (DoSync: "sync
+    # pocinje", pa RefreshFromData).
+    "ki016-mreza-gasi-tudju": (
+        "modOtkupUI.bas",
+        "    mGridToast = False                  ' ... i poruku mreze\n",
+        "    ' SABOTAZA: nova poruka ne spusta zastavicu mreze\n",
+        "T_KI016_PorukaMrezeNeGasiTudju",
+        "uspelo citanje ne gasi poruku koja je zamenila poruku mreze",
+    ),
+    # KI-016 (f): poruka mreze bez zastavice (isti ishod kao zastavica podignuta
+    # PRE ShowToast-a, koji je spusta) -- uspelo citanje je vise ne gasi, a
+    # crvena poruka nema tajmer.
+    "ki016-mreza-bez-zastavice": (
+        "modOtkupUI.bas",
+        "    ' Zastavica tek POSLE ShowToast-a, koji je spusta (v. mGridToast).\n"
+        "    mGridToast = True\n",
+        "    ' SABOTAZA: poruka mreze bez zastavice\n",
+        "T_KI016_PorukaMrezeNeGasiTudju",
+        "uspelo citanje posle pada liste gasi poruku mreze",
+    ),
     # KI-016, review #423 P3-1: Scr_Build Izvestaja se posle Resume Next segmenta
     # vraca na GoTo 0 -- pad usred gradnje opet izlazi kroz Run (dijalog, reset).
     # 243 to meri DIREKTNIM pozivom i tada ljusku ne vozi, pa sabotaza ne visi.

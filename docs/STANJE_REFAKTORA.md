@@ -4939,6 +4939,164 @@
 
      **Otvoreno.** Merge na izričit zahtev, posle zelenog CI na tačnom head-u.
 
+147. **Merge `#424` i `#425`** (18.–19.10.2026). Zapis ide ovde, a ne u PR-ove.
+
+     - **`#424`** (process, samo `.claude/rules/testovi.md`): review krug 1 (`9160d3cf`) `NO-GO`, `P2 1` (ugovor
+       `Run`-a bez `UI-PAD-01`), `P3 1` (tvrdnja da `modTest` ne pokriva mrežu). Oba su zatvorena u `88366cf5`,
+       zajedno sa KI-016 odeljkom i dovođenjem grane na `main`. Merge-ovao **operater** 18.10.2026 (13:36 UTC)
+       kao `33896eb9`, na head `88366cf5`, uz static CI `success`. **Rezultat ponovljenog review-a nije zapisan
+       u ovom toku.**
+     - **`#425`** (KI-016 (d) i (e)): review (`d0c6864e`) `CODE GO`, `P0 0`, `P1 0`, `P2 0`, `P3 1` (vizuelno
+       odsecanje meri ručna provera, scenario 1), 9,3/10, static CI #981 (stavka 146).
+     - **Posle tog GO** su ušli `ef0ab8a3` (samo `tools/sabotaza.py`: sidro `ljuska-deaktivira-pre-provere`,
+       zastarelo od `ba91e66e`) i docs (`2ea80dd1`, `eeffddd2`). `src-vba` je od `d0c6864e` nepromenjen.
+     - Izvršne kapije su nad `d0c6864e` (izvor `c35dd64b9cc8`): 12/12, dokaz 22/22, compile (19.10.2026) i
+       ručna provera 4/4.
+     - Merge-ovano 19.10.2026 (22:15 UTC 18.10.) kao `06d4a09f`, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `eeffddd2` (static CI `success`, run 39171262798).
+     - **Finalni exact-head review nije tražen.** Reviewer nije video `ef0ab8a3` ni docs posle njega; GO važi
+       za `d0c6864e`.
+     - `KI-016` ostaje `OPEN`: (a) `P3 #1` (`SCR_RUN_NEMA` ćuti za korisnikov klik), (b) mrtav EH u
+       `PanelOtvori`, (c) ostali ciljevi `Run`-a bez brane, (f) životni vek poruke mreže (stavka 148).
+
+148. **`KI-016` (f) — život poruke mreže i primer uz `mScrToast`** (18.10.2026). Grana
+     `claude/ki016-toast-zivotni-vek`. Rađena je nad granom `#425` (`2ea80dd1`) dok `#425` nije bio merge-ovan
+     (odluka korisnika 18.10.2026: lokalno odmah, PR tek posle merge-a). Posle merge-a je grana napravljena
+     iznova sa `main`-a `06d4a09f`: prvo zapis merge-a (stavka 147), pa cherry-pick oba commit-a. `src-vba` i
+     `tools` su identični vrhu pre rebase-a (`38e8ff30`).
+
+     **Popis pre koda.**
+     - Direktni pozivaoci `HideToast` su samo dva: omotač `ActivateScreen` (`mScrToast`) i `ReloadGrid`
+       (`mGridToast`). Treći je `Application.OnTime`, tajmer zelene poruke.
+     - `mGridToast` se podizao **pre** `ShowToast`-a i ništa ga nije spuštalo kad druga poruka zameni poruku
+       mreže.
+     - Za gašenje poruke mreže nije postojao **nijedan** test.
+     - Stvaran put je `DoSync`: `ShowToast "sync počinje"` (zelena, tajmer 4 s), pa `RefreshFromData` →
+       `ReloadGrid`. Uz zastavicu zaostalu od ranijeg pada liste, direktan `HideToast` gasi „sync počinje"
+       i briše `mToastPending` bez otkazivanja tajmera. Tajmer bez vlasnika zatim može da sakrije i crveni
+       ishod sync-a: `CancelToastTimer` ga više ne vidi.
+
+     **Reprodukcija pre ispravke** (`fa080084`, nov test 244 uz staru produkciju, `RunOne`, bez dijaloga):
+
+     ```
+     TESTS=1 FAIL=1
+     FAIL T_KI016_PorukaMrezeNeGasiTudju -- uspelo citanje ne gasi poruku koja je zamenila poruku mreze
+          -- ocekivano [ANALIZA|KI016 tudja poruka], dobijeno [ANALIZA|]
+     ```
+     Tri tvrdnje pre nje su zelene: oba preduslova i kontra-tvrdnja da uspelo čitanje i dalje gasi poruku
+     mreže.
+
+     **Ispravka (`787fa46b`).** `mGridToast` po obrascu `mScrToast`: `ShowToast` ga spušta, a `ReloadGrid` ga
+     podiže tek **posle** svog `ShowToast`-a.
+
+     Tajmer bez vlasnika posle toga nema puta. Direktan `HideToast` ide samo kad je poslednja poruka crvena
+     poruka vlasnika zastavice, a ona je u `ShowToast`-u otkazala svaki tajmer na čekanju.
+     - To je **pročitano, ne izmereno**: `Application.OnTime` ne okida dok test radi, pa se tajmer u harness-u
+       ne može posmatrati.
+     - `HideToast` zato nije menjan.
+
+     **Komentar uz `mScrToast`** (nalaz iz stavke 146): primer „objašnjenje zabrane posle zamene operatera"
+     zamenjen je pravim slučajem, porukom koju podigne sam prelazak (pad mreže novog ekrana, kuka ulaska).
+
+     **Test i sabotaže:** nov test 244 `T_KI016_PorukaMrezeNeGasiTudju` (`RunAllTests` 243 → 244):
+     - „uspelo citanje ne gasi poruku koja je zamenila poruku mreze" ← `ki016-mreza-gasi-tudju`;
+     - „uspelo citanje posle pada liste gasi poruku mreze" ← `ki016-mreza-bez-zastavice`.
+
+     Katalog 794 → 796.
+
+     **Provera pre review-a.**
+     - Jeftine kapije 20/20 (796 sabotaža, 0 nalaza).
+     - Brza provera, **nije izvršna kapija** (`RunOne` nad `38e8ff30`, isti izvor kao `787fa46b`): 1, 84, 103, 109, 153, 159, 162, 236,
+       237 i 239–244, `TESTS=15 FAIL=0`, bez dijaloga.
+     - `run_vba` i `dokaz` čekaju reviewer GO. Predlog dokaza: `dokaz.py ki016-mreza- ki016-tudja-poruka-nestaje
+       ki016-poruka-pada-ostaje ki016-poruka-zabrane-ostaje --grupe`.
+
+     **Očekivani brojevi:** `RunAllTests` **244** / 0; BFP 2427, Banka 241, Storno 111 bez promene.
+
+     **Otvoreno.** Review, pa izvršne kapije, compile i ručna provera.
+
+149. **Review `#427` (`360f8b6b`): `CODE GO`, `P0 0`, `P1 0`, `P2 0`, `P3 1`, 9,3/10** (19.10.2026). Static CI
+     #991 `SUCCESS` na tačnom head-u. `MERGE HOLD` dok se ne izvrše kapije. Produkcioni kod posle GO nije menjan.
+     - **`P3-1`:** stvarno ponašanje `Application.OnTime` nije dokazano. Test 244 koristi drugu **crvenu** poruku,
+       a `DoSync` zelenu sa tajmerom od 4 s, koji u automatskom testu ne okida. `CancelToastTimer` ima `On
+       Error Resume Next`, pa neuspešno otkazivanje ne bi bilo prijavljeno. Reviewer traži ručni acceptance.
+
+     **Izvršni prolaz** (head `360f8b6b`, izvor `c259577ff714`, ugovor `8e1d808997fe`, sveska `0bafa704`,
+     fixture `d3d3ff6d`): **12/12 ZELENO**, marker upisan.
+
+     ```
+     RunAllTests              244 / 0      (243 + 244)
+     RunBusinessFlowProSuite 2427 / 0      RunStornoTestSuite 111 / 0
+     RunBankaImportTestSuite  241 / 0      ostalih 8 suita OK
+     ```
+
+     **Dokaz** (5 sabotaža u 3 prolaza). Filter ne hvata nijedan od 9 `POZNATI_NALAZI` ni od 2
+     `POZNATI_NALAZI_DOKAZ`.
+
+     ```
+     dokaz.py ki016-mreza- ki016-tudja-poruka-nestaje ki016-poruka-pada-ostaje ki016-poruka-zabrane-ostaje --grupe
+
+     crvenih: 5 / 5    izvor pre/posle 6e8779c278b21e8c IDENTICAN    bez ijednog TIMEOUT-a
+     === DOKAZANO (grupno) ===   (grupno izmereno 4 / 5, peta je po planu sama u grupi; bez zaklanjanja)
+     ```
+
+     **Sonda tajmera za `P3-1`** (`sonda_ontime.py`, scratchpad `23d2fe62`).
+     - Sopstvena instanca, kept sveska, prava ljuska, put `DoSync` u jednom makrou: pad liste, zelena poruka
+       sa tajmerom, uspelo čitanje, crvena poruka.
+     - Makro se zatim vrati, a Excel miruje 8 s; `OnTime` okida tek tada.
+     - Kontrola je ista sonda nad `main`-om `06d4a09f` (stari kod, privremeni worktree, ista fixture sveska).
+
+     ```
+     korak                         STARI 06d4a09f                 NOVI 360f8b6b
+     1 posle pada liste            vidljiva, poruka mreze         vidljiva, poruka mreze
+     2 posle zelene (tajmer 4 s)   vidljiva, zelena               vidljiva, zelena
+     3 posle uspelog citanja       SAKRIVENA (zelena)             vidljiva, zelena
+     4 posle crvene                vidljiva, crvena               vidljiva, crvena
+     5 posle 8 s mirovanja         SAKRIVENA (crvena)             vidljiva, crvena          bez dijaloga
+     ```
+     Na starom kodu je tajmer bez vlasnika **stvarno okinuo** i sakrio crvenu poruku. Na novom je crvena
+     ostala, jer je njen `ShowToast` otkazao tajmer zelene. Kvar iz `KI-016` (f) je time izmeren u oba smera,
+     stvarnim `OnTime`-om, a ne samo pročitan (stavka 148).
+
+     Granica: sonda ide kroz `ShowToast` i `IdiNaEkran`, ne kroz sam `DoSync` (Sync zahteva Google vezu).
+     Pravi `DoSync` ostaje ručnoj proveri, tačka 1.
+
+     **Sveska za compile i ručnu proveru:** `tests/fixtures/rucna_provera_ki016f_kod.xlsm`
+     (`run_vba --compile-only --keep` nad `360f8b6b`, izvor `c259577ff714`). Operater uvozi
+     `src-vba/modVbaTools.bas`, kompajlira, zatvara i otvara svesku. Checklista je u opisu `#427`:
+     1. `DoSync` posle pada liste: crvena poruka o neuspelom sync-u ostaje i posle 10 s;
+     2. pad liste, pa uspelo čitanje bez druge poruke: crvena poruka mreže nestaje.
+
+     **Ispravka postupka tačke 1 (19.10.2026).** Prvo izdanje je tražilo pad liste na Fakturama, pa Sync. To se
+     ne može izvesti: dugme Sync postoji samo u desnom panelu ekrana Unos dokumenata (`zRight`, vidljiv samo
+     na tom ekranu). Prelazak tamo ponovo učita mrežu, a to uredno ugasi poruku mreže i njenu zastavicu, pa Sync
+     ne bi merio ništa. Pad liste zato ide baš na Unosu dokumenata, kroz seam
+     (`ScrPadTestSet "modScrDokumenti.Scr_Rows"`). Zatim se seam i test režim gase, pa sledi Sync bez interneta.
+
+     **Ručna provera, tačka 1 ✅** (operater, 19.10.2026, snimci 07:20 i 07:21, internet isključen):
+     - pad liste Unosa dokumenata daje traku „Učitavanje mreže nije uspelo na koraku: modScrDokumenti.Scr_Rows
+       [modUiScreens.ScrPadAkoTest[modScrDokumenti.Scr_Rows]] -> 9 …";
+     - zatim „Sinhronizuj", pa crvena „Sinhronizacija nije uspela — vidi Immediate/log." **ostaje** na ekranu i
+       posle 10 s (potvrda operatera), a panel sinhronizacije kaže „Sinhronizacija nije uspela";
+     - bez dijaloga.
+
+     **Uočeno uz tačku 1, nije istraženo:** posle Sync-a zaglavlje prelazi sa „Sve izmene sačuvane" na
+     „Nesačuvan unos", iako je forma prazna. `RefreshFromData` ne zove `SelectModeCore`, pa to nije doslovno
+     put iz duga „badge nesacuvano na novoj formi". Kandidat je ponovno punjenje combo-a (`FillZbirneCombo`,
+     `RefillMaticniCombos`) koje okida `MarkDirty`, ali to nije provereno. Ide uz taj dug, ne uz ovaj rez.
+
+     **Ručna provera, tačka 2 ✅** (operater, 19.10.2026, snimci 07:49 i 07:50, Unos dokumenata u režimu
+     Otpremnica):
+     - seam uključen, pa klik na drugu listu: crvena „Učitavanje mreže nije uspelo na koraku:
+       modScrDokumenti.Scr_Rows […]";
+     - seam ugašen, pa klik na „Sve": lista se učita (27 otpremnica) i crvena traka **nestane**;
+     - bez druge poruke između i bez dijaloga.
+
+     **Compile ✅** (operater, 19.10.2026, `rucna_provera_ki016f_kod.xlsm`, kod sa `360f8b6b`): `vba_gate
+     --mark-compile`, pa `--require-green --require-compile` daje RC=0 nad izvorom `c259577ff714`.
+
+     **Otvoreno.** Merge na izričit zahtev, posle zelenog CI na tačnom head-u.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

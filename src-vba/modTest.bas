@@ -337,6 +337,7 @@ Public Sub RunAllTests()
     RunOne 241
     RunOne 242
     RunOne 243
+    RunOne 244
     RunOne 13
     RunOne 14
     RunOne 15
@@ -858,6 +859,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 241: TestName = "T_KI016_PadRadnjeJeJavljen"
         Case 242: TestName = "T_KI016_PadGradnjeJeJavljen"
         Case 243: TestName = "T_KI016_PadUsredGradnje"
+        Case 244: TestName = "T_KI016_PorukaMrezeNeGasiTudju"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1109,6 +1111,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 241: T_KI016_PadRadnjeJeJavljen
         Case 242: T_KI016_PadGradnjeJeJavljen
         Case 243: T_KI016_PadUsredGradnje
+        Case 244: T_KI016_PorukaMrezeNeGasiTudju
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -8988,6 +8991,73 @@ CleanUp:
              "pad usred gradnje ne ostavlja zonu ni omotace"
     AssertEq ekran2 & "|" & hint2, "IZVESTAJI|True", _
              "posle pada usred gradnje zona se gradi iznova i potpuna"
+End Sub
+
+' ============================================================
+' 244. KI-016 (f): PORUKA MREZE NE GASI TUDJU PORUKU.
+' ============================================================
+' mGridToast znaci "na ekranu je crvena poruka mreze", a sledece uspelo citanje
+' (ReloadGrid) je gasi. Ako je u medjuvremenu NEKA DRUGA poruka zamenila poruku
+' mreze, zastavica je zastarela i uspelo citanje gasi tu tudju poruku -- npr.
+' potvrdu koju radnja prikaze pa osvezi mrezu (stavka 145, KI-016 (f)). Isti
+' obrazac kao mScrToast: ShowToast zastavicu spusta, ReloadGrid je podize tek
+' POSLE svog ShowToast-a.
+'
+' Kroz pravu ljusku: pad liste MAT_PARTNERI (seam kanala, clan pod branom) kroz
+' IdiNaEkran -> ActivateScreen -> ReloadGrid; uspelo citanje kroz ulazak u
+' ANALIZU (lista bez stanja modula). Kontra-tvrdnja: bez tudje poruke uspelo
+' citanje i dalje gasi poruku mreze -- zastavica podignuta PRE ShowToast-a bila
+' bi odmah spustena i poruka mreze bi ostajala zauvek.
+' SABOTAZE: ki016-mreza-gasi-tudju, ki016-mreza-bez-zastavice.
+Private Sub T_KI016_PorukaMrezeNeGasiTudju()
+    Dim f As frmOtkupUI, mreza As String
+    Dim ekran1 As String, ekran2 As String, ekran3 As String, ekran4 As String
+    Dim toastPad As String, toastPosle As String, toastPad2 As String, toastTudja As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    Set f = NewOtkupUIForm()
+    mreza = Poruka("OTKUI_MSG_MREZA_PALA")
+
+    ' A) pad liste, pa uspelo citanje bez ijedne druge poruke izmedju.
+    modUiScreens.ScrPadTestSet "modScrMatPartneri.Scr_Rows"
+    modOtkupUI.IdiNaEkran "MAT_PARTNERI"
+    modUiScreens.ScrPadTestSet ""
+    ekran1 = modOtkupUI.AktivanEkran()
+    toastPad = ToastNaEkranu(f)
+    modOtkupUI.IdiNaEkran "ANALIZA"
+    ekran2 = modOtkupUI.AktivanEkran()
+    toastPosle = ToastNaEkranu(f)
+
+    ' B) pad liste, pa TUDJA poruka, pa uspelo citanje.
+    modUiScreens.ScrPadTestSet "modScrMatPartneri.Scr_Rows"
+    modOtkupUI.IdiNaEkran "MAT_PARTNERI"
+    modUiScreens.ScrPadTestSet ""
+    ekran3 = modOtkupUI.AktivanEkran()
+    toastPad2 = ToastNaEkranu(f)
+    modOtkupUI.ShowToast "KI016 tudja poruka", True
+    modOtkupUI.IdiNaEkran "ANALIZA"
+    ekran4 = modOtkupUI.AktivanEkran()
+    toastTudja = ToastNaEkranu(f)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modUiScreens.ScrPadTestSet ""
+    modUiScreens.ScrPadPreuzmi
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI016_PorukaMrezeNeGasiTudju", errDesc
+
+    AssertEq ekran1 & "|" & (Left$(toastPad, Len(mreza)) = mreza), "MAT_PARTNERI|True", _
+             "preduslov: pad liste digne poruku mreze"
+    AssertEq ekran2 & "|" & toastPosle, "ANALIZA|", _
+             "uspelo citanje posle pada liste gasi poruku mreze"
+    AssertEq ekran3 & "|" & (Left$(toastPad2, Len(mreza)) = mreza), "MAT_PARTNERI|True", _
+             "preduslov: drugi pad liste digne poruku mreze"
+    AssertEq ekran4 & "|" & toastTudja, "ANALIZA|KI016 tudja poruka", _
+             "uspelo citanje ne gasi poruku koja je zamenila poruku mreze"
 End Sub
 
 ' Postoji li kontrola datog imena u zoni ekrana (243).
