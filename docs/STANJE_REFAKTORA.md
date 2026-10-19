@@ -5670,6 +5670,325 @@
      - Posle kapija `src-vba` i `tools` nisu menjani. **Ostaje:** reviewer `MERGE GO` i zapis merge-a
        (`KI-023` → `CLOSED`).
 
+165. **Merge `#433`, `KI-023` → `CLOSED`** (19.10.2026). Zapis ide ovde, a ne u `#433`. Obrazac su stavke 157 i
+     163.
+
+     - **Review `#433`** (head `dd7b8de2`): `CODE GO` 9,4/10, `P0`/`P1`/`P2` = 0. `MERGE HOLD` je trajao samo
+       do uspešnog CI #1020. Reviewer je proverio da je posle izvršnih kapija (`1bb0d8bf`) menjan samo
+       `docs/STANJE_REFAKTORA.md`.
+     - Merge-ovano 19.10.2026 (16:30:44 UTC) kao `ea078bb4`, na **izričit zahtev operatera** („kad CI #1020
+       bude success, merge-uj #433 sa --match-head-commit dd7b8de2"), sa `--match-head-commit` na head
+       `dd7b8de2`. Static CI je #1020 `success` (run 39281883462, izmereno). Stablo `main`-a posle merge-a
+       jednako je stablu `dd7b8de2` (`44b87b5a`).
+     - Izvršne kapije su nad izvorom `519e01e4b6d5` (stavka 164): 12/12 ZELENO (255/0, BFP 2439/0, Banka
+       241/0, Storno 111/0), dokaz `ki023` 1/1, compile potvrđen, acceptance 2/2.
+     - **`KI-023` → `CLOSED`:** katalog poruka čuva vodeći apostrof (`modPoruke.UpsertRow` →
+       `TekstZaCeliju`), za svih 6 ključeva. Ostatka nema.
+     - **Sledeći rez je `ODL-24`** (pozajmica ambalaže od kupca, `AMB-10-ODL-24`, AMBALAZA.md 6.12k), na
+       grani `claude/odl24-pozajmica-kupca` sa `ea078bb4`, zatim S6. Ovo je redosled operatera, a ostali
+       nalazi se samo upisuju u `KNOWN_ISSUES.md`. Review je preporučio da ODL-24 ostane ograničen na
+       eksplicitan poslovni događaj pozajmice, bez novog opšteg refaktora knjige.
+
+166. **`ODL-24` — pre-flight, popis, odluke i plan merenja, PRE koda** (19.10.2026). Grana
+     `claude/odl24-pozajmica-kupca` sa `ea078bb4` (+ docs `fc6d1009`), worktree `.claude/worktrees/ki021`.
+     Pun ugovor je u `AMBALAZA.md` 6.12k, a ovde je samo trag merenja.
+
+     - **Pre-flight (skill), pre odluka:**
+
+       | Osa | Status | Dokaz |
+       |---|---|---|
+       | DOMAIN | GAP → zatvoren odlukama ispod | presuda 08.10.2026; 6.12k |
+       | IDENTITY | PROVEN | `AmbDokID`; kupčev broj je labela u opsegu `(Kupac, KupacID, dan)` (`ODL-20`) |
+       | CARDINALITY | PROVEN | jedan dokument, jedan par `{Kupac, Vozac}` (`AMB-INV-10`, `modAmbalaza.DokumentParProblem`) |
+       | INVARIANTS/OWNER | GAP → `AMB-INV-13` | vlasnik `PrenesiAmbalazu`, pravilo u ugovoru |
+       | WRITERS | PROVEN | knjigu piše samo `UpisiRedKnjige`; vrstu biraju `PrenesiAmbalazu` i storno |
+       | DOWNSTREAM | PROVEN | popis čitalaca ispod |
+       | CAPABILITY | PROVEN | sposobnost postoji kroz potvrdu manjka; posle reza postaje svoj događaj, i ništa se ne gubi |
+       | ACCEPTANCE | plan ispod | — |
+       | PLATFORM | N/A | izgled šest segmenata je ručna provera |
+       | LANDING | PROVEN | nijedan drugi worktree nije na ovoj grani; `.claude/` se ne dira |
+
+     - **BUSINESS EVENTS.**
+       - **Fizički:** kupčeve prazne gajbe prelaze kupac → vozač, na datum dokumenta. Red
+         `Kupac → Vozac` u `tblAmbalaza`: vozač +N, a kupčev saldo se ne menja, jer njegove gajbe
+         ulaze u opticaj (`SpoljniSvet → Kupac`).
+       - **Poslovni:** kupčev papir sa njegovim brojem (`tblAmbalazaDokument`, `REVERS_PARTNERA`),
+         isti datum. Status je aktivan ili `Stornirano`.
+       - **Obaveza:** firma duguje kupcu N gajbi tog tipa. Izvodi se iz knjige (`ULAZ_TUDJE`,
+         doprinos +N), bez novca i bez svoje tabele.
+
+       Sva tri dele datum zato što je **predaja sama pozajmica** (presuda 08.10.2026), a ne zbog
+       lakše implementacije. Obaveza postoji bez sledećeg koraka i prelazi sezonu (6.7b).
+     - **Polazna skica je pala na merenju:** jedan red `PARTNER → SOPSTVENI` koji diže obavezu dao
+       bi **2N**. Kupac bez naših gajbi pada ispod nule, pa pisac ionako dopiše pokriće
+       `ULAZ_TUDJE` +N (`AMB-INV-07`, 6.3). Zato pozajmica nosi dva reda.
+     - **Popis čitalaca i pisaca po vrsti** (grep `AMB_VK_`, `VrstaKretanja`, `Select Case`):
+       - ugovor: `AmbVrsteSve`, `AmbKlaseVrste` (+ `AmbMatricaNepotpuna`, `AmbProizvodnjaNepotpuna`),
+         `AmbVrstaJeZahtev`, `AmbVrsteZahteva`, `AmbDokDozvoljavaKretanje`, `AmbDokKretanjeProblem`,
+         `AmbDoprinosObavezi`, `AmbPokriceKlasa`;
+       - pisac: `PrenesiAmbalazu` (deficit, `AMB-INV-09` podela), `UpisiRedKnjige`, `DokumentParProblem`
+         i `DodajStranu`, `IdentitetZauzeo`, `ZbirZahteva`;
+       - storno: `StornirajAmbalazuDokumenta` (`AMB-INV-07`/`-09` posle kontra-stava), inverzna provera
+         u `KnjigaRedProblem`;
+       - čitaoci: `AmbObavezaPartneru` (bez produkcionog čitaoca van pisca i storna),
+         `PoslovniRedDokumenta` → `AmbDokRedMapa` (lista F7, ekran Storno, prefill ispravke) i
+         `AmbDokPoslovniRedovi` (papir), `AmbKretanjeNaziv` (`modScrDokumenti`). Kartica i
+         `AmbKretanjaNaloga` vrstu ne čitaju;
+       - ispravka: `IspravkaReversaRazlog` kupčev dokument odbija, a `PrefillReversa` zna samo
+         četiri naša smera;
+       - ekran: `modNovacUnos` (`SMER_REV_*`, `ReversValidiraj`, `ReversBrojZauzet`,
+         `RevSmerPredlazeBroj`, `ReversUpisi`, `RevKupcaUpisi`) i `modOtkupUI` (`segRev1..5`,
+         `SetSmerRev`);
+       - PWA: grep `src/` za `VrstaKretanja`/`ULAZ_TUDJE` je prazan.
+     - **Odluke operatera (19.10.2026), sve po preporuci** — tabela je u 6.12k:
+       - (a) nova vrsta `POZAJMICA_PARTNERA` uz `ULAZ_TUDJE` iste količine (`AMB-INV-13`);
+       - (b)+(e) šesti segment F7 „Pozajmica", kupčev dokument, bez papira;
+       - (c)+(f) pozajmica ne gleda saldo i ne pita, a mešovit slučaj su dva dokumenta;
+       - (d) storno postojećim putem, bez ispravke, vraćanje van reza (`KI-024`).
+     - **Nalaz pri popisu → `KI-024`:** `VRACANJE_TUDJE_AMBALAZE` vraćene gajbe ostavlja u opticaju
+       kod partnera. Posle vraćanja partner zato izgleda kao da drži NAŠE gajbe, a kad ih ponovo
+       donese, ne nastaje obaveza. Mana je latentna, jer nijedan produkcioni pisac ne zove tu vrstu.
+       Upisana je samo u `KNOWN_ISSUES.md`.
+     - **Prikaz pokrića na papiru** (stavka 135, „ide uz `ODL-24`") ne ulazi u rez. Kupčev dokument
+       se ne štampa (`ODL-32`), pa za pozajmicu nema šta da se prikaže. Za kooperantski revers prikaz
+       ostaje u „Dug sa imenom".
+     - **Plan merenja (acceptance contract):**
+       - **važi posle reza:**
+         - F7 smer 6 daje `REVERS_PARTNERA` sa redom `Kupac → Vozac N POZAJMICA_PARTNERA` i redom
+           `SpoljniSvet → Kupac N ULAZ_TUDJE`, bez pitanja i bez papira;
+         - kupčev saldo se ne menja, vozač dobija +N, obaveza raste za +N (ne 2N);
+         - ponavljanje istog zahteva je idempotentno, a druga količina je `HARD CONFLICT`;
+         - storno vraća oba reda;
+       - **netaknuto:** povrat kupca (smer 5) i dalje pita za manjak, a pokriće mu je manjak.
+         `AmbDoprinosObavezi`, `AmbVrstaJeZahtev(ULAZ_TUDJE) = False`, `AMB-INV-04`/`-10`, četiri
+         naša smera, prijemnica i otkup se ne menjaju;
+       - **edge:** kupac drži 5 naših i pozajmi 40 → ostaje 5, ulaz je 40. Kupac sa saldom 0 → bez
+         pitanja;
+       - **negativni slučajevi:**
+         - pozajmica od kooperanta, na bilo kom dokumentu → `ODL-24`;
+         - pozajmica na stanicu ili firmu → `ODL-9`;
+         - pozajmica na našem reversu → `AmbDokDozvoljavaKretanje` / `ODL-10`;
+         - F7 smer 6 sa partnerom koji nije kupac, bez vozača ili bez broja → poruka uz polje;
+       - **čime se meri:**
+         - BFP `Test_ODL24_UgovorPozajmice` i `Test_ODL24_PozajmicaJeSvojDogadjaj` (kroz jezgro);
+         - `modTest` 256 `T_ODL24_F7PozajmicaKupca` (kroz `Scr_Save` F7);
+         - premisa `Test_Amb_UgovorPrenosa`: osam vrednosti → devet;
+         - sabotaže `odl24-*`;
+         - reprodukcija pre ispravke: testovi ne zovu nijedan nov simbol (vrsta je literal, a smer
+           je broj 6), pa se kompajliraju nad zatečenim kodom i padaju po imenu.
+     - **Sidra sabotaža koja rez pomera** (presidriti, bez promene broja): `revers-smer`,
+       `amb-ulaz-predlog-ne-gleda-smer`, `amb-partner-nosi-izdavanje`,
+       `amb-odl10-nas-revers-nosi-kupca`, `amb-odl9-povrat-od-kupca-ide-svuda`.
+     - **Bazni brojevi** (preneti iz stavke 165, nisu ponovo mereni): RunAllTests 255/0, BFP 2439/0,
+       Banka 241/0, Storno 111/0, katalog 827.
+
+167. **`ODL-24` — reprodukcija, ispravka u jezgru, sabotaže i PR** (19.10.2026). Kod je `fefbdfc8`, nad
+     zapisom pre koda `bb3945b6` (stavka 166). Pun ugovor je u `AMBALAZA.md` 6.12k.
+
+     - **Reprodukcija pre ispravke** (`--compile-only --keep` nad `bb3945b6`, `RunOne` posle
+       `EnsureRuntimeSchema`, skripta `repro_ki021.py`). Testovi ne zovu nijedan nov simbol, pa su se
+       kompajlirali nad zatečenim kodom:
+       - **BFP** 18 tvrdnji, **10 crvenih po imenu**:
+         - pozajmica nije poznata vrsta i nema klase;
+         - kupčev dokument je ne nosi;
+         - `AmbDokKretanjeProblem` vraća „partnerov revers nosi povrat praznih, a dobio je
+           POZAJMICA_PARTNERA";
+         - gate kooperant/stanica/naš broj ne postoje;
+         - upis pada na „Nepoznata vrsta kretanja: 'POZAJMICA_PARTNERA'".
+
+         Kontra-tvrdnje (`ULAZ_TUDJE` nije zahtev, pozajmica ne nosi obavezu, povrat ostaje na
+         kupčevom papiru, naš revers je ne nosi) i tri preduslova su zelene;
+       - **`modTest` 256**: crven na prvoj tvrdnji („broj je kupcev i ne predlaze se" — očekivano
+         `False`, dobijeno `True`). Tvrdnje koje taj pad zaklanja izmerila je **sonda**
+         (`sonda_odl24.py`): validator smer 6 odbija kao „Izaberi smer reversa" (fokus `smerRev`), i
+         za kupca i za kooperanta. Dakle `Scr_Save` dokument ne pravi.
+     - **Test 256 je posle reprodukcije ojačan**, pre ispravke:
+       - količina je `saldo kupca + 3`, pa bi povrat iste količine pitao za manjak;
+       - pitanje stoji pre tvrdnji o dokumentu (modTest staje na prvom padu);
+       - meri se i tišina štampe, kao u 233.
+
+       Crveno za te tvrdnje dokazuju sabotaže, ne ponovljena reprodukcija.
+     - **Ispravka** — invarijanta je u jezgru, jedna implementacija sa dva pozivaoca:
+
+       | Gde | Šta |
+       |---|---|
+       | `modAmbalazaUgovor` | `AMB_VK_POZAJMICA`, enum 9, matrica `PARTNER → SOPSTVENI`; `REVERS_PARTNERA` nosi povrat i pozajmicu; obrnuta kapija `ODL-9/-10` gleda **predaju** od kupca (povrat ili pozajmica); pozajmicu daje samo kupac (`ODL-24`); `AmbVrstaUnosiUOpticaj` (`AMB-INV-13`) |
+       | `modAmbalaza.PrenesiAmbalazu` | za pozajmicu je ulaz cela količina, bez deficita i pitanja; ostatak puta je zatečen (par pre pokrića, `AMB-INV-04` nad zahtevom) |
+       | `modAmbalaza` pisac | `UpisiPozajmicuKupca_TX` i `UpisiReversPartnera_TX` dele telo `UpisiKupcevDokument_TX` |
+       | `modNovacUnos` | smer 6 `SMER_REV_POZAJMICA_KUP`; `RevSmerJeKupcev` je jedna odluka za validator, zauzetost broja, predlog, ispravku i ljusku; upis ide pravo piscu, bez protokola manjka i bez papira |
+       | `modOtkupUI` | šest segmenata (`4×61 + 2×60`); `SetSmerRev` vlasnika niza čita iz `RevSmerJeKupcev` |
+       | `modPoruke`, `modScrDokumenti` | tri ključa; naziv „Pozajmica" u listi |
+
+       Poruke `ODL-9/-10` u obrnutoj kapiji kažu „predaja praznih od kupca", a ne „povrat", jer važe
+       i za pozajmicu.
+     - **Premisa koja se menja:** `Test_Amb_UgovorPrenosa` — vrsta kretanja ima „tačno devet" (bila je
+       osam). Drugih nema: tekstovi poruka koje su promenjene nisu tvrdnje nijednog testa (grep).
+     - **Ciljano posle ispravke** (izvor `fefbdfc8`, sveska `vbatest_me65jyt4`, bez dijaloga):
+       - `modTest` **15/0**: 256, 12, 193, 194, 201, 202, 18, 233, 245–248, 253, 214, 219;
+       - BFP podskup **242/0** (14 testova): oba nova testa, `Test_Amb_UgovorPrenosa`, `_DoprinosObavezi`,
+         `_DokumentUgovor`, `_PisacKnjige`, `_DeficitIObaveza`, `_Inv08TxVlasnistvo`, tri `RVP` i tri
+         `PRJ`.
+
+       Nove BFP tvrdnje: **33** (12 + 21).
+     - **Sabotaže** — 13 novih, katalog **827 → 840**:
+       - ugovor: `odl24-pozajmica-van-enuma`, `-matrica-obrnuta`, `-partnerov-ne-nosi-pozajmicu`,
+         `-pozajmica-od-bilo-koga`, `-predaja-samo-povrat`;
+       - jezgro: `odl24-ulaz-je-manjak`, `-pozajmica-pita-manjak`, `-pozajmica-dize-obavezu-dvaput`,
+         `-pisac-pise-povrat`;
+       - F7: `odl24-f7-smer-van-opsega`, `-f7-predlaze-broj`, `-f7-ide-kroz-povrat`, `-f7-stampa`.
+
+       **Presidreno 8**, bez promene zamene i tvrdnje: `revers-smer`, `amb-partner-nosi-izdavanje`,
+       `amb-odl10-nas-revers-nosi-kupca`, `amb-odl9-povrat-od-kupca-ide-svuda`,
+       `amb-ulaz-predlog-ne-gleda-smer`, `amb-rvp-potvrda-se-ne-prosledjuje`,
+       `amb-odl22-vlasnik-broja-se-ne-gleda`, `amb-odl22-broj-drugog-kupca`. Kod poslednjeg je promenjen
+       tekst poruke; kod `-potvrda-` je parametar jezgra preimenovan u `vrstaKretanja`, jer bi se zamena
+       inače poklopila sa zdravim redom u `UpisiReversUTx`. Katalog nad zdravim izvorom: 0 nalaza.
+     - **Jeftine kapije:** ceo skup iz `static.yml` + `popis_citalaca --check`, sve `rc=0`.
+       - Izuzetak je JS suite: lokalno pada na `Cannot find module 'fake-indexeddb/auto'` (nema
+         `npm ci`), a CI je jedini izvršilac. JS nije diran.
+       - `who_writes --check`: `WHO_WRITES.md` bez promene. `gen_schema_module --check`: šema nije
+         dirana.
+     - **Očekivano posle izvršnih kapija** (iz diff-a, nije izmereno): RunAllTests **256/0**, BFP
+       **2472/0** (2439 + 33), Banka 241/0, Storno 111/0, katalog 840.
+     - **Izvršne kapije čekaju reviewer GO:** `python tools/run_vba.py` (FULL 12/12) i dokaz nad
+       novim i presidrenim sabotažama (21 sabotaža, 11 prolaza, `--plan` proveren):
+
+       ```
+       python tools/dokaz.py odl24 revers-smer amb-partner-nosi-izdavanje amb-odl10-nas-revers-nosi-kupca amb-odl9-povrat-od-kupca-ide-svuda amb-ulaz-predlog-ne-gleda-smer amb-rvp-potvrda-se-ne-prosledjuje amb-odl22-vlasnik-broja-se-ne-gleda amb-odl22-broj-drugog-kupca --grupe
+       ```
+     - **Compile i ručna provera (operater)**:
+       - sveska je `tests/fixtures/rucna_provera_odl24_kod.xlsm` (`--compile-only --keep` nad
+         `fefbdfc8`, SHA-256 `12424489…3EED0`);
+       - operater uvozi `modVbaTools.bas`, pa radi `Debug → Compile`.
+
+       Provera:
+       1. F7 nosi šest segmenata, a „Pozajmica" i ostali natpisi staju bez odsecanja.
+       2. „Pozajmica": kupac, vozač i kupčev broj; broj se ne predlaže; snimanje prolazi bez pitanja
+          o manjku i bez papira.
+       3. Lista F7 prikazuje red sa kretanjem „Pozajmica" i partnerom kupcem.
+       4. Prelaz „Povrat kupca" ↔ „Pozajmica" ne briše upisan broj, a prelaz na naš smer ga briše.
+       5. Ekran Storno stornira pozajmicu.
+     - **Van reza, glasno:**
+       - vraćanje pozajmice kupcu (`KI-024`);
+       - prikaz pokrića na papiru kooperantskog reversa („Dug sa imenom");
+       - ispravka kupčevog dokumenta (ne postoji ni za povrat; grana ispravke odbija oba kupčeva
+         smera, i to nije posebno testirano, jer ekran Storno zamenu za `REVERS_PARTNERA` ne nudi).
+
+168. **`ODL-24` — review `#434`: uža kapija, dve testne praznine, izvršne kapije** (19.10.2026).
+
+     - **Review `#434`** (head `d1edf642`, static CI #1022 `success`): `CODE GO` 9,1/10, `MERGE HOLD`,
+       `P0`/`P1` = 0. Dva `P2`:
+       - pozajmica je mogla na prijemnicu;
+       - druga količina pri ponavljanju nije bila merena.
+
+       Uz to tri tačke:
+       - fault injection drugog reda, poželjna, ali bez novog test framework-a;
+       - ugovor idempotencije treba precizirati;
+       - šest segmenata F7 su acceptance `P3`.
+     - **`P2` #1 — pozajmica samo na kupčevom dokumentu.** `AmbDokKretanjeProblem` sada odbija
+       pozajmicu na svakom dokumentu koji nije `REVERS_PARTNERA`, imenom `ODL-24`. To je sprovođenje
+       odluke (e), a ne nova odluka.
+       - **Šta je time otpalo:** zatečena kapija „pozajmicu daje kupac" i proširenje obrnute kapije
+         `ODL-9/-10` na pozajmicu postali su **nedostižni**. Pozajmica van kupčevog dokumenta pada
+         ranije, a na njemu grana `jePartnerov` traži kupca, vozača i kupčev broj. Druga brana koju
+         sabotaža ne može da obori je placebo, pa su obe uklonjene.
+       - **Grana povrata je opet identična `main`-u**, sa tekstovima poruka (`povrat praznih od
+         kupca`, `prazne vraca`).
+       - **Reprodukcija:** nov test nad starom kapijom (`modAmbalazaUgovor.bas` sa `HEAD`-a, novi fajl
+         sačuvan u scratchpad i vraćen sa istim SHA-1 `4a95d78b`, sveska `vbatest_9b1qnr9m`) daje
+         **2/40 crveno po imenu**: „pozajmica ne ide na robni dokument ni uz kupcev broj" (ugovor) i
+         „pozajmica se ne knjizi na prijemnicu -- samo na kupcev dokument". Drugi slučaj ide kroz
+         jezgro nad pravom prijemnicom, bez transakcije: kapija `ODL-24` stoji pre transakcijskih
+         kapija, a bez nje poziv pada sa drugim razlogom.
+       - Dva slučaja ugovornog testa (`ODL-9` stanica, `ODL-10` naš broj) mere se sada **na kupčevom
+         dokumentu**. Na drugim dokumentima pozajmica pada ranije, pa ta tvrdnja ne bi merila ništa.
+     - **`P2` #2 — druga količina je `HARD CONFLICT`.** Tvrdnja meri tekst ponavljanja
+         (`ZbirZahteva`: „vec knjizen sa 40, a trazi se 30"), a ne kapiju identiteta ispod njega, koja
+         bi isti zahtev odbila drugim tekstom. Uz nju se meri i da transakcija vraća ceo dokument.
+     - **Fault injection drugog reda, bez novog framework-a:** mešovit kupčev dokument u jednoj TX
+         (povrat 20 uz potvrdu 15, pa pozajmica 40). Pozajmica upiše svoj red, a njen `ULAZ_TUDJE`
+         udari u pokriće istog tipa (`IdentitetZauzeo`). Izmereno:
+         - sudar je **glasan**;
+         - pad drugog reda vraća zaglavlje, povrat i red pozajmice;
+         - kupčev saldo se ne pomera.
+
+         Tvrdnja iz 6.12k („glasno, a ne tiho gutanje") je do sada bila nemerena.
+     - **Ugovor idempotencije** je u 6.12k:
+       - ponavljanje **knjiženja** je idempotentno;
+       - ponovno **kreiranje** dokumenta istim kupčevim brojem je fail-closed (`ODL-20`, isto telo
+         pisca kao kod povrata, meri ga `Test_RVP_BrojJeKupcevINePredlazeSe`).
+     - **Sabotaže** — katalog **841**, a nad zdravim izvorom 0 nalaza:
+       - `odl24-pozajmica-od-bilo-koga` → **`odl24-pozajmica-van-kupcevog-dokumenta`** (sidro na novoj
+         kapiji, tvrdnja prijemnice);
+       - `odl24-predaja-samo-povrat` je **obrisana**: pravilo više ne postoji, a sabotaža nad obrisanim
+         pravilom zacementira staro stanje;
+       - nove su `odl24-druga-kolicina-je-ponavljanje` i `odl24-ulaz-se-ne-sudara`;
+       - presidravanja `amb-odl10-nas-revers-nosi-kupca`, `amb-odl9-povrat-od-kupca-ide-svuda`,
+         `amb-odl22-vlasnik-broja-se-ne-gleda` i `amb-odl22-broj-drugog-kupca` su **vraćena na `main`**;
+       - presidrene ostaju četiri: `revers-smer`, `amb-partner-nosi-izdavanje`,
+         `amb-ulaz-predlog-ne-gleda-smer`, `amb-rvp-potvrda-se-ne-prosledjuje`.
+     - **Ciljano posle izmene** (sveska `vbatest_y3ci43dl`, bez dijaloga): `modTest` **15/0** (isti
+       spisak kao u stavci 167), BFP podskup **248/0**. ODL-24 nosi **39** BFP tvrdnji (13 + 26).
+     - **Očekivano iz diff-a:** RunAllTests **256/0**, BFP **2478/0** (2439 + 39), Banka 241/0, Storno
+       111/0, katalog 841.
+     - **Izvršne kapije** (reviewer `CODE GO`, head `3438751e`):
+       - **`run_vba` FULL: 12/12 ZELENO**, marker upisan (izvor `05d768b86545`, ugovor
+         `bd7bcbcfa408`, sveska `9d488dbf`):
+
+         ```
+         RunAllTests              256 / 0
+         RunBusinessFlowProSuite 2478 / 0      RunBankaImportTestSuite 241 / 0
+         RunStornoTestSuite       111 / 0      ostalih 8 suita OK
+         ```
+
+         Brojevi su tačno oni izvedeni iz diff-a.
+       - **Prvi FULL prolaz je pao na disku, ne na kodu:** tri testa koja pišu fajlove
+         (`T_Save_PrekinutImportZatvaraSvaVrata`, `T_TxRollback_NepotpunZatvaraUpisISnimanje` — „The
+         disk is full"; `T_Backup_NeObaraStartINeRasteBezGranice` — „File not found"). Na C: je bilo
+         **71 MB**. Posle brisanja sopstvenih `--keep` svezaka (oko 41 MB) drugi prolaz je zelen.
+         Disk i dalje pada (`Temp\Diagnostics` 1,9 GB, nije iz ovog rada), pa je to rizik za svaki
+         sledeći prolaz.
+       - **Dokaz** (`dokaz.py odl24 revers-smer amb-partner-nosi-izdavanje
+         amb-ulaz-predlog-ne-gleda-smer amb-rvp-potvrda-se-ne-prosledjuje --grupe`, bazno 256/0 i
+         2478/0): **18/18 crveno po imenu**, izvor pre i posle identičan (`f3e007fc080c6bd0`).
+         - `odl24-pisac-pise-povrat` i `odl24-ulaz-je-manjak` su u grupi zaklonjeni drugom sabotažom,
+           pa su ponovljeni sami i pocrveneli po imenu.
+         - Grupno je izmereno 9 od 18. Pun pojedinačni dokaz je isti poziv bez `--grupe`.
+     - **Ostaje operateru:** `Debug → Compile` i ručni F7 acceptance. Sveska je
+       `tests/fixtures/rucna_provera_odl24_kod.xlsm` (`--compile-only --keep` nad `3438751e`, SHA-256
+       `9be1f9b1…cb1a`); operater uvozi `modVbaTools.bas`.
+
+       **Prva sveska** (`cdb7867e…64fa`) je napravljena kad je na C: bilo oko 40 MB. Kod operatera je
+       Excel javio „We found a problem with some content", pri samo 20 MB slobodnog prostora. Fajl
+       je bio strukturno ispravan (ZIP CRC, 161 XML deo), pa uzrok najverovatnije nije bio fajl nego
+       disk. To nije izmereno. Sveska je zamenjena. Pre nove gradnje obrisani su sopstveni Office
+       ostaci (`~DF*.TMP`, oko 137 MB). Nova je pre predaje otvorena u sopstvenoj Excel instanci
+       **bez dijaloga**, i nosi konačni kod (kapija `ODL-24`, smer 6). Proverava se:
+       1. F7 nosi šest segmenata, i natpisi staju bez odsecanja.
+       2. „Pozajmica" 40 gajbi: kupac, vozač i kupčev broj (ne predlaže se); bez pitanja o manjku;
+          bez PDF-a.
+       3. Lista F7: red sa kretanjem „Pozajmica" i partnerom kupcem. U listu `tblAmbalaza` gleda se
+          kroz „Otvori Excel": dva reda istog dokumenta (pozajmica 40 i ulaz 40). **Dug prema kupcu
+          nema prikaz na ekranu**, jer `AmbObavezaPartneru` nema produkcionog čitaoca, pa ga meri
+          BFP („firma duguje kupcu 40, ne 80"). Ručna provera duga nije moguća bez novog prikaza.
+       4. Prelaz „Povrat kupca" ↔ „Pozajmica" ne briše upisan broj, a prelaz na naš smer ga briše.
+       5. Ekran Storno stornira pozajmicu.
+
+       Posle compile-a ide `python tools/vba_gate.py --mark-compile`.
+     - **Compile i ručna provera (operater, 19.10.2026):**
+       - `Debug → Compile` je prošao (operater: „compiles"). Potvrda je upisana
+         (`--mark-compile` 23:56:40, izvor `05d768b86545`), i `--require-green --require-compile`
+         prolazi.
+       - Snimci operatera potvrđuju:
+         - **(1)** šest segmenata, svi natpisi staju;
+         - **(2)** pozajmica 40 sačuvana („Revers sačuvan: 40");
+         - **(3)** lista F7 nosi red „Pozajmica · Revers kupca · Test kupac 1 · 12/1 · 40 ·
+           Sačuvana", a `tblAmbalaza` ima tačno dva reda istog dokumenta:
+           `POZAJMICA_PARTNERA` Kupac → Vozac 40 i `ULAZ_TUDJE_AMBALAZE` SpoljniSvet → Kupac 40.
+       - **Snimcima nije pokazano:** da li se pojavilo pitanje ili PDF uz (2), zatim (4) prelaz
+         smera i broj, i (5) storno sa ekrana Storno. Te stavke automatski mere test 256 i BFP
+         (storno), ali ručno nisu potvrđene.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
@@ -5680,7 +5999,7 @@
 | **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita. **Odluka operatera (13.10.2026): sledeći korak posle `KI-012`/`KI-013` (stavka 133)**, zajedno sa `GetStanicaAmbSaldo` i istorijskim početnim stanjem na ponovljenom papiru reversa. **Odluke operatera za taj rez (13.10.2026, stavka 135), sve po preporuci:** (1) kad knjiga ne može da se pročita, papir **ne nastaje** (fail-closed, kao otkupni list po ODL-27), a oba čitaoca gube handler; (2) istorijsko stanje dobijaju **revers i otpremnica**, a grupni otkupni list ide u S6 (danas je nedostižan i čita pogrešan nalog); (3) kod pokrića deficita važi **pravilo reversa** (novo = stanje posle dokumenta, početno = novo − kretanje), a prikaz pokrića ide uz `ODL-24`; (4) **kupčev revers se iz F7 ne štampa**, kao iz liste (7507) |
 | **grupni otkupni list čita pogrešan nalog** | `FillGrupniOtkupSablon` čita `GetStanicaAmbSaldo(VozacID)`, dakle `Stanica:<VozacID>`, i to današnji saldo, dok prijemnica od 10b-2 pomera nalog `Vozac`. Danas je nedostižan (štampa se samo posle upisa prijemnice, a unos je pauziran do S6), pa se u stavci 135 menja samo politika greške. Koji je nosilac salda na tom papiru i da li dobija stanje oko svog reda odlučuje **S6** (`AMBALAZA.md` 6.13g). Uz to ide i `GetAmbalazeStanje`, koji tip grupiše u rečniku sa **binarnim** poređenjem (`letvarica` i `LETVARICA` su dva reda), dok kanonski saldo i istorijski čitalac porede bez obzira na velika slova (review `#421`, P2 #2, stavka 136). Posle stavke 135 ga zovu samo ovaj list, golden i dva test pomoćnika |
 | **badge "nesacuvano" na novoj formi** | `SelectModeCore` pise u polje broja POSLE `MarkClean` i `mLoading = False`, pa programski upis prodje kroz `MarkDirty` i prazna forma tvrdi da ima neupisanih izmena (review 08.10.2026, `P3`). Zatecen obrazac -- vazio je i pre P1 ispravke, za svaki rezim sa auto-brojem. Jedan premesten red, ali izmena `src-vba` obara compile i zeleni marker, a nov test (natpis u zaglavlju) trazi svoj dvosmeran dokaz; zato **svoj rez posle merge-a**, pre `ODL-24` |
-| **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a** |
+| **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a.** **Odluke 19.10.2026 (stavka 166): nova vrsta `POZAJMICA_PARTNERA` + `AMB-INV-13`; rez je u toku.** |
 | **nema kapije „modul ne sme da koristi tuđ `Private` simbol"** | VBA kompajlira **na zahtev**, pa `Sub or Function not defined` pukne tek kad neki test prvi put pozove baš tu proceduru — i to posle **600 s i ubijenog Excela**, uz poruku bez fajla i linije (06.10.2026: `MarkRowStornirano`, `Private` u `modStorno`, pozvan iz `modAmbalaza`). Ime **postoji** u projektu, samo nije vidljivo — pa ga nijedna jeftina kapija ne vidi. Jednokratni merač je napisan i dao **1 nalaz sa fajlom i linijom nad pokvarenim izvorom, 0 posle** — dvosmeran dokaz. Tri lažna nalaza prvog izdanja su i sama merenje: repni komentar, labela (`Resume CleanUp`) i **LF kopija iz git-a** (split po `
 ` dao je ceo fajl kao jedan red, pa je prvi „čist" prolaz bio lažan). Kao trajna kapija ide u `vba_check`, dakle **zaseban process PR** |
 | **nema kapije „nastavak reda je poslednji znak u redu"** | regex nad VBA izvorom ume da pojede **prelom reda** (`\s*` hvata i `\r\n`), pa `_` ostane usred linije — sintaksna greška koju nijedna jeftina kapija ne vidi. Cena je nesrazmerna: **585 s i ubijen Excel**, a poruka je samo „Compile error: Syntax error" bez mesta (06.10.2026, rez reversa). Jednokratni merač je napisan i dao **2 nalaza pre ispravke, 0 posle** — dvosmeran dokaz po konstrukciji, nad celim `src-vba`. Kao trajna kapija ide u `vba_check` i traži svoj dvosmerni dokaz, dakle **zaseban process PR** |

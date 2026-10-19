@@ -364,6 +364,7 @@ izvesti.
 | `PRENOS_INTERNO` | izmedju **sopstvenih** naloga: stanica <-> firma <-> **vozac** (v. 6.7a) |
 | `ULAZ_TUDJE_AMBALAZE` | partnerove gajbe ulaze u opticaj — **stvara obavezu** |
 | `VRACANJE_TUDJE_AMBALAZE` | firma vraca partneru njegove — **gasi obavezu** |
+| `POZAJMICA_PARTNERA` | kupac predaje **svoje** prazne gajbe vozaču, na pozajmicu (`AMB-10-ODL-24`, 6.12k); obavezu nosi njen `ULAZ_TUDJE_AMBALAZE` (`AMB-INV-13`) |
 | `NABAVKA` | nove gajbe ulaze u opticaj (firmine) |
 | `OTPIS` | lom, gubitak — izlaze iz opticaja |
 
@@ -371,6 +372,10 @@ Nema `OTKUP_*` ni `PRIJEMNICA_*` (to kaze `DokumentTIP`) ni
 `STANICA_KOOPERANT` (to kazu `Od`/`Na`).
 
 ### 6.7a Enum je ZATVOREN — odgovori operatera (28.09.2026)
+
+> **Od 19.10.2026 enum ima devet vrednosti:** `POZAJMICA_PARTNERA` je ušla odlukom
+> `AMB-10-ODL-24` (6.12k). Enum ostaje zatvoren — širi se samo odlukom, sa kapijama
+> potpunosti (`AmbMatricaNepotpuna`, `AmbProizvodnjaNepotpuna`).
 
 Tri pitanja koja su enum drzala otvorenim su odgovorena, i nijedno ne trazi desetu
 vrednost:
@@ -488,6 +493,7 @@ nepromenljiva. Razlog mora da stoji u registru.
 | `AMB-INV-10` | svi originalni redovi **jednog dokumenta**, izuzev generisanog pokrica, nose **jedan isti neuredjen par `{Od, Na}`** — sprovodjenje `AMB-10-ODL-3` |
 | `AMB-INV-11` | **`AmbID` je jedinstven u knjizi**, a `StornoOd` pokazuje na **tacno jedan** postojeci red |
 | `AMB-INV-12` | **`TipAmbalaze` postoji u `tblTipAmbalaze`** (`Trim$`, bez obzira na velika slova i na `Aktivan`) — kapija upisa, kao postojanje naloga; citalac je ne meri (6.13h) |
+| `AMB-INV-13` | **pozajmica unosi u opticaj tačno svoju količinu**: uz `POZAJMICA_PARTNERA` pisac na istom dokumentu, u istoj TX, upisuje `SpoljniSvet → partner` `ULAZ_TUDJE_AMBALAZE` iste količine i tipa — nezavisno od partnerovog salda i bez pitanja o manjku; saldo partnera se ne menja, obaveza raste za količinu (6.12k) |
 
 Zbir svih salda ostaje **sanity check nad oblikom**, ne dokaz ispravnosti: svaki
 prenos po konstrukciji daje `-x` i `+x`, pa je nula i kad je dogadjaj dupliran.
@@ -1162,8 +1168,9 @@ potpis: `AmbDokBrojOwnerKlasa` ostaje **po vrsti**, pa `AmbDokMatricaNepotpuna`
 obara svaku vrstu bez odgovora — nova putanja se ne može provući tiho. Da je po
 smeru, zaglavlje bi se upisivalo pre nego što se smer zna.
 
-`REVERS_PARTNERA` nosi **samo** `POVRAT_PRAZNE` (uz univerzalno `ULAZ_TUDJE_AMBALAZE`,
-koje je posledica `AMB-INV-07` a ne vrsta posla). `IZDATA_PRAZNA` tu **ne sme**: kad
+`REVERS_PARTNERA` nosi `POVRAT_PRAZNE` i, od `ODL-24`, `POZAJMICA_PARTNERA` (6.12k) — oba
+su kupčeva predaja vozaču (uz univerzalno `ULAZ_TUDJE_AMBALAZE`, koje je posledica, a ne
+vrsta posla). `IZDATA_PRAZNA` tu **ne sme**: kad
 mi izdajemo partneru, dokument je **naš**, dakle `REVERS`. Ni `PRENOS_INTERNO`:
 interno kretanje ne može imati partnerov papir kao povod.
 
@@ -2019,7 +2026,7 @@ tipom saldo nosili i drugi testovi, pa manjak ne bi bio ponovljivo 15 ·
 povrat) · sabotaže `amb-rvp-potvrda-se-ne-prosledjuje`,
 `amb-prj-povrat-samo-sa-klasom-i`. Katalog 697 → 699.
 
-### 6.12k Pozajmica ambalaže od kupca — `AMB-10-ODL-24` (**OTVORENO**)
+### 6.12k Pozajmica ambalaže od kupca — `AMB-10-ODL-24` (odluke 19.10.2026)
 
 > **Presuda operatera, 08.10.2026.** Kupci **često, pre početka sezone, predaju
 > svoju praznu ambalažu** — **njihove** gajbe, pozajmica nama, ne povrat naših.
@@ -2027,47 +2034,133 @@ povrat) · sabotaže `amb-rvp-potvrda-se-ne-prosledjuje`,
 > je to nazvao **recipročnim** smerom kupčevog reversa: „time se zaokružuje
 > celina".
 
-**Sposobnost danas POSTOJI — izmereno, ne pretpostavljeno.** Kupac bez naših
-gajbi preda 40 svojih; `UpisiReversPartnera_TX` sa potvrđenim manjkom 40 daje:
+**Zatečeno (izmereno 08.10.2026).** Pozajmica se knjižila kroz `UpisiReversPartnera_TX`
+sa potvrđenim manjkom. Kupac bez naših gajbi preda 40 svojih:
 
 ```
 SpoljniSvet -> Kupac   40   ULAZ_TUDJE_AMBALAZE    obaveza +40
 Kupac       -> Vozac   40   POVRAT_PRAZNE          obaveza   0
-                            saldo kupca 0, vozac +40
 ```
 
-Obaveza prema tom kupcu je **40**, po tipu ambalaže — `AmbObavezaPartneru` hvata
-red jer kupac stoji na **bilo kojoj** strani. **Ekonomija je tačna.**
+Brojke su tačne, ali **značenje nije**. Planirana pozajmica i **neobjašnjeno odstupanje**
+(kupac vrati 20, a knjiga kaže da drži 5) ostavljaju isti trag. Uz to operater za redovan
+posao dobija pitanje o **manjku**. Model je umeo da **vrati** tuđu ambalažu kao događaj
+(`VRACANJE_TUDJE_AMBALAZE` je zahtev), a da je **primi** samo kao sporedni efekat.
 
-**Rupa je u ZNAČENJU, ne u brojkama.** Planirana pozajmica i **neobjašnjeno
-odstupanje** (kupac vrati 20, a knjiga kaže da drži 5) ostavljaju **isti trag**,
-pa se posle ne mogu razlikovati. Uz to operater za redovan posao dobija pitanje
-o **manjku** — „nalog nema 40, manjak ulazi u opticaj kao tuđa ambalaža".
+**Jedan red ne može da nosi pozajmicu (pre-flight 19.10.2026).** Polazna skica je bila
+jedan red `PARTNER → SOPSTVENI` koji diže obavezu. Kupčeve gajbe nisu u opticaju, pa red
+`Kupac → Vozac N` spušta kupca ispod nule. Pisac zato po `AMB-INV-07` ionako dopiše
+`SpoljniSvet → Kupac N` (`ULAZ_TUDJE`, obaveza +N). Ako bi i nov red nosio +N, obaveza bi
+bila **2N**. Gajbe ulaze u opticaj samo iz `SpoljniSvet` (6.3), pa pozajmica nosi **dva
+reda**. Pitanje je samo koji od njih nosi značenje.
 
-**Šta košta da postane svoj događaj:** izmena **ugovora** u `10a`, ne samo pisca.
+> **`AMB-10-ODL-24` (odluke operatera 19.10.2026, sve po preporuci).**
+>
+> | Pitanje | Odluka |
+> |---|---|
+> | (a) model | nova `VrstaKretanja` **`POZAJMICA_PARTNERA`** (deveta), klase `PARTNER → SOPSTVENI`, doprinos obavezi **0**. Uz nju pisac upisuje `ULAZ_TUDJE_AMBALAZE` **iste količine** (`AMB-INV-13`), koji obavezu nosi kao i do sada. |
+> | (b) ulaz | F7, **šesti segment „Pozajmica"**, istog oblika kao „Povrat kupca": kupac, vozač i kupčev broj (obavezan, ne predlaže se). |
+> | (e) dokument i papir | **kupčev dokument**: `REVERS_PARTNERA`, vlasnik broja `(Kupac, KupacID)`, niz `(Kupac, KupacID, dan)` po `ODL-20`. **Ne štampa se**, jer `ODL-32` važi i za pozajmicu. |
+> | (c) mešovit slučaj | pozajmica **ne gleda kupčev saldo**: operater izjavljuje da su gajbe kupčeve. Kupac koji drži 5 naših i preda 40 svojih i dalje drži 5 naših. Kad su gajbe zaista izmešane, operater unosi **dva dokumenta**: povrat (smer 5) i pozajmicu (smer 6). Pisac ne deli sam, jer ne zna čije su koje gajbe. |
+> | (f) pitanje o manjku | pozajmica **ne pita**: manjka nema, jer u opticaj ulazi cela količina. Povrat pitanje zadržava, i ono od sada znači stvarno odstupanje. |
+> | (d) storno, ispravka, vraćanje | storno ide postojećim `StornirajAmbDokument_TX`, kontra-stavom oba reda. `AMB-INV-07` ga odbija ako je vozač gajbe već predao dalje, a `AMB-INV-09` ako je pozajmica već vraćena. Ispravke nema, kao ni za kupčev revers: storno i nov unos. **Vraćanje pozajmice kupcu je van reza** (`KI-024`). |
 
-| Šta se dira | Zašto |
+**Čvor `AMB-INV-04` je rešen time što `ULAZ_TUDJE` OSTAJE posledica.** Zahtev je
+`POZAJMICA_PARTNERA`, pa idempotencija (`ZbirZahteva` nad `AmbVrsteZahteva`) meri samo
+njene redove. `ULAZ_TUDJE` nikad nije zahtev (`AmbVrstaJeZahtev` se ne menja). Ponovljen
+poziv vraća postojeći red i ne dopisuje drugi ulaz, a ista vrsta sa **drugom količinom** je
+`HARD CONFLICT`. Dokument sa pozajmicom ne nosi povrat (jedan zahtev po kupčevom dokumentu,
+odluka (c)), pa na njemu pokriće deficita ne nastaje. Kad bi ga neko ipak upisao, drugi
+`ULAZ_TUDJE` istog tipa na istom dokumentu pada na `IdentitetZauzeo` kao `HARD CONFLICT` —
+glasno, a ne kao tiho gutanje — i transakcija vraća ceo dokument (izmereno, review `#434`).
+
+> **Idempotencija ima dva nivoa, i to je ugovor (review `#434`).** Ponavljanje
+> **knjiženja** nad postojećim dokumentom je idempotentno (`PrenesiAmbalazu`: ista količina
+> vraća isti red). Ponovno **kreiranje** dokumenta javnim piscem (`UpisiPozajmicuKupca_TX`)
+> nije replay nego nov dokument, pa je **fail-closed**: isti kupčev broj u opsegu
+> `(Kupac, KupacID, dan)` je zauzet (`ODL-20`). Za ručno unet kupčev broj to je tačno
+> ponašanje, jer drugi dokument sa istim brojem nije isti papir. Telo pisca je isto kao kod
+> povrata, pa to meri `Test_RVP_BrojJeKupcevINePredlazeSe`.
+
+> **`AMB-INV-13`.** Pozajmica unosi u opticaj **tačno svoju količinu**. Uz
+> `POZAJMICA_PARTNERA` pisac na istom dokumentu, u istoj transakciji, upisuje
+> `SpoljniSvet → partner` `ULAZ_TUDJE_AMBALAZE` iste količine i tipa. To radi nezavisno od
+> partnerovog salda i bez pitanja o manjku. Saldo partnera se ne menja, vozač dobija
+> količinu, a obaveza prema partneru raste za količinu.
+>
+> Vlasnik je **pisac** (`PrenesiAmbalazu`), a pravilo „ova vrsta sama unosi svoju
+> količinu" čita iz ugovora. Čitalac ga ne meri, iz istog razloga kao `AMB-INV-12`: oba
+> reda nastaju jednim pozivom, a storno ih vraća zajedno.
+
+```
+kupac drzi 5 nasih, pozajmi 40 svojih
+
+SpoljniSvet -> Kupac   40   ULAZ_TUDJE_AMBALAZE    obaveza +40
+Kupac       -> Vozac   40   POZAJMICA_PARTNERA     obaveza   0
+                            kupac 5 (nepromenjeno), vozac +40
+```
+
+**Gde živi pravilo:**
+
+| Pravilo | Gde |
 |---|---|
-| `AmbVrsteSve` + `AmbKlaseVrste` | `VrstaKretanja` je **zatvoren** enum sa kapijama potpunosti; par i klase pozajmice su `PARTNER → SOPSTVENI`, **identični** povratu — razlika je samo čije su gajbe |
-| `AmbDoprinosObavezi` (`AMB-INV-09`) | pozajmica diže obavezu; povrat je ne dira |
-| `AmbDokDozvoljavaKretanje`, `AmbDokKretanjeProblem` | kupčev dokument (`REVERS_PARTNERA`) nosio bi **dve** vrste |
-| čitaoci u `10c` | svaki koji grupiše po vrsti kretanja |
+| vrsta i njene klase | `modAmbalazaUgovor.AmbVrsteSve`, `AmbKlaseVrste` |
+| ulaz u opticaj = količina | `AmbVrstaUnosiUOpticaj` (ugovor) → `modAmbalaza.PrenesiAmbalazu` |
+| samo kupčev dokument | `AmbDokDozvoljavaKretanje`: `REVERS_PARTNERA` nosi povrat i pozajmicu, naš `REVERS` ne nosi pozajmicu |
+| samo na kupčevom dokumentu, od kupca, na vozača, uz kupčev broj | `AmbDokKretanjeProblem`. Pozajmica na bilo kom drugom dokumentu pada imenom `ODL-24`: na robnom (prijemnica sa kupčevim brojem, otkup kooperanta, koga bi matrica pustila kao `PARTNER`) i na našem reversu. Na kupčevom dokumentu grana `REVERS_PARTNERA` traži kupca, vozača i kupčev broj. Obrnuta kapija `ODL-9/-10` zato ostaje nad povratom: pozajmica do nje ne stiže (review `#434`, P2). |
+| pisac | `UpisiPozajmicuKupca_TX` deli telo sa `UpisiReversPartnera_TX` (jedna implementacija) |
+| ulaz sa ekrana | `modNovacUnos`: smer 6 (`SMER_REV_POZAJMICA_KUP`); `RevSmerJeKupcev` odlučuje za oba kupčeva smera |
+| prikaz u listi | `modScrDokumenti.AmbKretanjeNaziv` („Pozajmica") |
 
-> **ČVOR KOJI SE MORA REŠITI PRE KODA.** Eksplicitan ulaz tuđe ambalaže bi sa
-> **pokrićem deficita** delio **par i vrstu** na istom dokumentu — a to je tačno
-> razlog zbog kog `ULAZ_TUDJE_AMBALAZE` i **nije** zahtev nego posledica
-> (`AmbVrstaJeZahtev` → `False`, par uvek `SpoljniSvet → nalog`, i ne ulazi u par
-> dokumenta — `DodajStranu`). Rešenje nije „pustiti ULAZ_TUDJE kao zahtev" nego
-> odluka šta tačno nosi koji red; bez nje bi jedan događaj tiho progutao drugi
-> kao „idempotentno ponavljanje".
+**Netaknuto:**
+- `AmbDoprinosObavezi`: obaveza i dalje dolazi samo od `ULAZ` i `VRACANJE`;
+- `AmbVrstaJeZahtev(ULAZ_TUDJE) = False`, `AMB-INV-04` i `AMB-INV-10`;
+- povrat kupca (smer 5) sa pitanjem o manjku;
+- četiri naša smera, prijemnica, otkup;
+- PWA ne zna za `VrstaKretanja` (grep `src/` je prazan).
 
-**Asimetrija koju je ovo otkrilo** vredi zapisati i sama po sebi: model ume da
-**vrati** tuđu ambalažu kao događaj (`VRACANJE_TUDJE_AMBALAZE` **jeste** zahtev),
-ali da je **primi** samo kao sporedni efekat.
+**Čitaoci vrste (popis 19.10.2026, stavka 166):**
+- matrica sa kapijama potpunosti, a preko nje integritet knjige (`KnjigaRedProblem`) i
+  inverzna provera storna;
+- `AmbDokDozvoljavaKretanje` i `AmbDokKretanjeProblem`;
+- `DodajStranu` (`AMB-INV-10`) i `ZbirZahteva`/`AmbVrsteZahteva` (`AMB-INV-04`);
+- `AmbDoprinosObavezi` (`AMB-INV-09`);
+- `PoslovniRedDokumenta`, preko koga čitaju lista F7 i ekran Storno;
+- `AmbKretanjeNaziv`.
 
-**Redosled je operaterov (08.10.2026):** prvo `10c` (ekran Storno, merge
-blocker), pozajmica **posle merge-a**. Do tada se knjiži kroz potvrdu manjka —
-ispravno po brojkama, nedovoljno po značenju.
+Pozajmica u svima njima prolazi bez nove grane, osim prikaza naziva.
+`AmbObavezaPartneru` nema produkcionog čitaoca van pisca i storna.
+
+**Prikaz pokrića na papiru** (6.13g, stavka 135) bio je predviđen „uz `ODL-24`". Za
+pozajmicu ga nema šta prikazati, jer se kupčev dokument ne štampa (`ODL-32`). Za
+kooperantski revers prikaz ostaje otvoren u „Dug sa imenom" i ne ulazi u ovaj rez.
+
+*Provera (stavke 167–168):*
+- **reprodukcija pre ispravke** je bila crvena po imenu: BFP 10 tvrdnji i test 256 (stavka
+  167). Uža kapija posle review-a: 2 tvrdnje, robni dokument u ugovoru i prijemnica kroz
+  jezgro (stavka 168);
+- BFP `Test_ODL24_UgovorPozajmice` (13 tvrdnji): tablica istinitosti ugovora, svaka tvrdnja
+  uz svoju kontra-tvrdnju. Strana, odredište i vlasnik broja mere se na kupčevom
+  dokumentu, a robni dokument pada imenom `ODL-24`;
+- BFP `Test_ODL24_PozajmicaJeSvojDogadjaj` (26 tvrdnji), kroz jezgro:
+  - pozajmica na prijemnicu se odbija imenom `ODL-24`;
+  - pozajmica 40 kupca koji drži 5: jedan red `POZAJMICA_PARTNERA` i nijedan povrat;
+  - ulaz 40, a ne manjak 35; kupac ostaje na 5, vozač dobija +40, obaveza +40 (ne 80);
+  - ponovljen zahtev vraća isti red, a druga količina je `HARD CONFLICT` koji vraća ceo dokument;
+  - storno upisuje dva kontra-stava;
+  - kontra-tvrdnja: povrat istog kupca i dalje pita za manjak 15;
+  - mešovit dokument (povrat sa pokrićem, pa pozajmica) pada glasno na drugom `ULAZ_TUDJE`,
+    a pad drugog reda vraća ceo dokument i kupčev saldo;
+- `modTest` 256 `T_ODL24_F7PozajmicaKupca`, kroz `Scr_Save` F7 smer 6. Količina je
+  `saldo + 3`, pa bi povrat iste količine pitao. Meri se:
+  - bez pitanja;
+  - kupčev dokument i red pozajmice;
+  - kupčev saldo ostaje isti;
+  - bez papira i bez upozorenja;
+  - broj se ne predlaže;
+  - partner koji nije kupac se odbija uz polje;
+- premisa `Test_Amb_UgovorPrenosa`: osam vrednosti → devet;
+- sabotaže `odl24-*` (14), katalog 827 → 841.
 
 ### 6.12l `10c` prvi rez — lista i storno reversa (`P2 #1` iz review-a)
 

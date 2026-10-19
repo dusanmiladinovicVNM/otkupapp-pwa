@@ -2638,6 +2638,9 @@ End Function
 '
 ' STORNO JE VEC POKRIVEN: StornirajAmbDokument_TX radi nad svakim ambalaznim
 ' dokumentom, pa ova vrsta ne trazi svoju putanju.
+'
+' Telo deli sa pozajmicom (UpisiKupcevDokument_TX): isti papir, isti broj, isti
+' par -- razlikuje se samo vrsta kretanja.
 Public Function UpisiReversPartnera_TX(ByVal datum As Date, ByVal broj As String, _
                                        ByVal kupacID As String, _
                                        ByVal vozacID As String, _
@@ -2645,8 +2648,46 @@ Public Function UpisiReversPartnera_TX(ByVal datum As Date, ByVal broj As String
                                        ByVal kolicina As Double, _
                                        Optional ByVal napomena As String = "", _
                                        Optional ByVal potvrdaDeficita As Double = -1) As String
-    Const SRC As String = "modAmbalaza.UpisiReversPartnera_TX"
+    UpisiReversPartnera_TX = UpisiKupcevDokument_TX(AMB_VK_POVRAT_PRAZNE, datum, broj, _
+                                                    kupacID, vozacID, tipAmb, kolicina, _
+                                                    napomena, potvrdaDeficita, _
+                                                    "modAmbalaza.UpisiReversPartnera_TX")
+End Function
 
+' POZAJMICA AMBALAZE OD KUPCA -- KUPCEV DOKUMENT (AMB-10-ODL-24, odluke operatera
+' 19.10.2026).
+'
+' Kupci pre sezone predaju SVOJE prazne gajbe vozacu. Papir je kupcev, kao kod
+' povrata (REVERS_PARTNERA, njegov broj, par kupac -> vozac), a red nosi vrstu
+' POZAJMICA_PARTNERA. Jezgro uz nju upisuje ULAZ_TUDJE iste kolicine
+' (AMB-INV-13), pa kupcev saldo ostaje isti, a obaveza raste za kolicinu.
+'
+' POTVRDE MANJKA NEMA, i to je odluka (ODL-24 (f)): pozajmica ne gleda kupcev
+' saldo, pa ni manjka nema. Zato ni parametra za nju nema.
+Public Function UpisiPozajmicuKupca_TX(ByVal datum As Date, ByVal broj As String, _
+                                       ByVal kupacID As String, _
+                                       ByVal vozacID As String, _
+                                       ByVal tipAmb As String, _
+                                       ByVal kolicina As Double, _
+                                       Optional ByVal napomena As String = "") As String
+    UpisiPozajmicuKupca_TX = UpisiKupcevDokument_TX(AMB_VK_POZAJMICA, datum, broj, _
+                                                    kupacID, vozacID, tipAmb, kolicina, _
+                                                    napomena, -1, _
+                                                    "modAmbalaza.UpisiPozajmicuKupca_TX")
+End Function
+
+' JEDNO TELO ZA OBA KUPCEVA DOKUMENTA -- povrat (ODL-23) i pozajmicu (ODL-24).
+' Pravila su ista jer je papir isti; vrstu kretanja bira javni ulaz, a sve ostalo
+' sudi jezgro (AmbDokDozvoljavaKretanje, AmbDokKretanjeProblem, PrenesiAmbalazu).
+Private Function UpisiKupcevDokument_TX(ByVal vrstaKretanja As String, _
+                                        ByVal datum As Date, ByVal broj As String, _
+                                        ByVal kupacID As String, _
+                                        ByVal vozacID As String, _
+                                        ByVal tipAmb As String, _
+                                        ByVal kolicina As Double, _
+                                        ByVal napomena As String, _
+                                        ByVal potvrdaDeficita As Double, _
+                                        ByVal SRC As String) As String
     Dim tx As clsTransaction
     Dim dokID As String, brojK As String
     Dim errNum As Long, errDesc As String
@@ -2655,7 +2696,7 @@ Public Function UpisiReversPartnera_TX(ByVal datum As Date, ByVal broj As String
 
     If kolicina <= 0 Then
         Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
-                  "Povrat praznih od kupca trazi pozitivnu kolicinu."
+                  "Kupcev dokument trazi pozitivnu kolicinu."
     End If
 
     ' BROJ JE OBAVEZAN I NE PREDLAZE SE -- to je jedino pravilo koje je ovde, i
@@ -2673,11 +2714,11 @@ Public Function UpisiReversPartnera_TX(ByVal datum As Date, ByVal broj As String
     ' vlasnika broja, bez vozaca nema odredista lanca.
     If Len(Trim$(kupacID)) = 0 Then
         Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
-                  "Povrat od kupca trazi nalog Kupac -- on je i vlasnik broja."
+                  "Kupcev dokument trazi nalog Kupac -- on je i vlasnik broja."
     End If
     If Len(Trim$(vozacID)) = 0 Then
         Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
-                  "Povrat od kupca trazi nalog Vozac -- lanac ide kupac -> vozac."
+                  "Kupcev dokument trazi nalog Vozac -- lanac ide kupac -> vozac."
     End If
 
     Set tx = New clsTransaction
@@ -2692,13 +2733,13 @@ Public Function UpisiReversPartnera_TX(ByVal datum As Date, ByVal broj As String
     PrenesiAmbalazu tx, datum, tipAmb, kolicina, _
                     AMB_NALOG_KUPAC, Trim$(kupacID), _
                     AMB_NALOG_VOZAC, Trim$(vozacID), _
-                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID, _
+                    vrstaKretanja, DOK_TIP_AMBALAZA_DOKUMENT, dokID, _
                     potvrdaDeficita
 
     tx.CommitTx
     Set tx = Nothing
 
-    UpisiReversPartnera_TX = dokID
+    UpisiKupcevDokument_TX = dokID
     Exit Function
 
 EH:
@@ -2908,8 +2949,9 @@ Public Function PrenesiAmbalazu(ByVal tx As clsTransaction, _
     modAmbalazaUgovor.RequireAmbPrenos odTip, odID, naTip, naID, kolicina, tipAmb, vrsta, SRC
 
     ' ULAZ_TUDJE_AMBALAZE nije zahtev nego POSLEDICA -- generise je ovaj pisac kao
-    ' pokrice deficita. Da je i zahtev, pokrice i eksplicitan zahtev nad istim
-    ' dokumentom delili bi par i vrstu, pa bi jedan progutao drugi.
+    ' pokrice deficita i kao ulaz pozajmice (AMB-INV-13). Da je i zahtev, pokrice
+    ' i eksplicitan zahtev nad istim dokumentom delili bi par i vrstu, pa bi
+    ' jedan progutao drugi.
     If Not modAmbalazaUgovor.AmbVrstaJeZahtev(vrsta) Then
         Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
                   "'" & Trim$(vrsta) & "' nije zahtev nego posledica -- pisac je generise sam."
@@ -2972,7 +3014,15 @@ Public Function PrenesiAmbalazu(ByVal tx As clsTransaction, _
 
     ' AMB-INV-07: nijedan realan nalog ne sme posle commit-a biti ispod nule.
     Dim deficit As Double, pokriceZaUpis As Double
-    deficit = AmbDeficitZaPrenos(odTip, odID, tipAmb, kolicina)
+    If modAmbalazaUgovor.AmbVrstaUnosiUOpticaj(vrstaK) Then
+        ' AMB-INV-13 (ODL-24): pozajmica unosi u opticaj TACNO svoju kolicinu,
+        ' bez obzira na partnerov saldo. Deficita zato nema, pa ni pitanja: saldo
+        ' partnera ostaje kakav je bio. Ulaz se upisuje POSLE trazenog reda, istim
+        ' putem kao pokrice -- AMB-INV-10 trazi zakljucan par pre njega.
+        pokriceZaUpis = kolicina
+    Else
+        deficit = AmbDeficitZaPrenos(odTip, odID, tipAmb, kolicina)
+    End If
 
     If deficit > 0 Then
         Dim pokrice As String

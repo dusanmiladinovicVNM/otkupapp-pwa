@@ -350,6 +350,7 @@ Public Sub RunAllTests()
     RunOne 253
     RunOne 254
     RunOne 255
+    RunOne 256
     RunOne 13
     RunOne 14
     RunOne 15
@@ -889,6 +890,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 253: TestName = "T_KI021_ValidatoriTraziSifarnik"
         Case 254: TestName = "T_KI021_ComboTipaJeSifarnik"
         Case 255: TestName = "T_KI023_KatalogCuvaVodeciApostrof"
+        Case 256: TestName = "T_ODL24_F7PozajmicaKupca"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1152,6 +1154,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 253: T_KI021_ValidatoriTraziSifarnik
         Case 254: T_KI021_ComboTipaJeSifarnik
         Case 255: T_KI023_KatalogCuvaVodeciApostrof
+        Case 256: T_ODL24_F7PozajmicaKupca
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -9589,6 +9592,124 @@ CleanUp:
     AssertEq Poruka("OTKUI_BTN_MAT_NOVI"), "+ Nova stavka", _
              "preduslov: tekst koji pocinje sa + katalog cuva netaknut"
     AssertEq losi, "", "katalog cuva vodeci apostrof: tekst sa imenom ostaje pod navodnicima"
+End Sub
+
+' 256. ODL-24: POZAJMICA KUPCA -- SESTI SMER NA F7 (odluke operatera 19.10.2026).
+'
+' Kupci pre sezone predaju SVOJE prazne gajbe vozacu (presuda 08.10.2026). Do
+' ODL-24 je to isao smer 5 (povrat) uz pitanje o "manjku", pa su pozajmica i
+' odstupanje ostavljali isti trag. Sada je to smer 6: kupcev dokument
+' (REVERS_PARTNERA, njegov broj), red POZAJMICA_PARTNERA kupac -> vozac i ULAZ_TUDJE
+' iste kolicine (AMB-INV-13) -- bez pitanja i bez papira (ODL-32).
+'
+' Ide kroz Scr_Save (SaveRevers -> ReversValidiraj -> ReversUpisi), kao klik
+' operatera. Smer je BROJ 6, a vrsta LITERAL: test se kompajlira i nad kodom koji
+' sesti smer ne zna, pa je reprodukcija crvena po imenu (stavka 166).
+' KOLICINA JE TRI VISE NEGO STO KUPAC DRZI: povrat te kolicine bi PITAO za manjak
+' (to meri 248), pa je "bez pitanja" stvarno merenje pravila, a ne posledica
+' srecnog salda u fixture-u. Kupcev saldo meri ULAZ posredno, ali tacno: red
+' kupac -> vozac skida kolicinu, pa saldo ostaje isti samo ako je ulaz BAS ta
+' kolicina, a ne manjak.
+' Redosled tvrdnji je nosec: modTest staje na prvom padu, pa pitanje stoji PRE
+' tvrdnji o dokumentu -- odbijen upis posle pitanja inace pada kao "nema
+' dokumenta", a ne kao pitanje koje ne sme da postoji.
+' SABOTAZE: odl24-f7-smer-van-opsega, odl24-f7-predlaze-broj,
+' odl24-f7-ide-kroz-povrat, odl24-pisac-pise-povrat, odl24-f7-stampa
+' (tvrdnje imenuje tools/sabotaza.py).
+Private Sub T_ODL24_F7PozajmicaKupca()
+    Const SMER_POZ As Long = 6
+    Const VK_POZ As String = "POZAJMICA_PARTNERA"
+    Dim p As Object, fokus As String, broj As String, res As String, kol As Long
+    Dim kupPre As Double, vozPre As Double, kupPosle As Double, vozPosle As Double
+    Dim nPre As Long, nPosle As Long, dokID As String, pitanje As String
+    Dim redovi As Collection, red As Variant, opis As String
+    Dim modePre As String, pdfPre As Long, pdfPosle As Long, upozorenje As String
+    Dim javio As String, errNum As Long, errDesc As String
+
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    upozorenje = Poruka("NOVUNOS_MSG_STAMPA_NIJE")
+
+    ' Pogresan partner: kooperant na sestom smeru se odbija uz POLJE partnera.
+    Set p = modNovacUnos.NoviReversUnos()
+    p("stanicaID") = FX_STANICA
+    p("partnerID") = FX_KOOPERANT
+    p("partnerTip") = "KOOP"
+    p("partnerTekst") = FX_KOOPERANT
+    p("vozacID") = FX_VOZAC
+    p("vrsta") = FX_VRSTA
+    p("brDok") = "X256"
+    p("tipAmb") = FX_TIP_AMB
+    p("kolAmb") = 40
+    p("smerRev") = SMER_POZ
+    Call modNovacUnos.ReversValidiraj(p, fokus)
+
+    kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, FX_KUPAC, FX_TIP_AMB)
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, FX_TIP_AMB)
+    kol = CLng(kupPre) + 3
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    On Error GoTo CleanUp
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+
+    broj = "KUP256-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    pdfPre = BrojPdfReversa(broj)
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F7"))
+    p("stanicaID") = FX_STANICA
+    p("stanicaTekst") = FX_STANICA
+    p("kooperantID") = FX_KUPAC
+    p("partnerTip") = "KUP"
+    p("partnerTekst") = FX_KUPAC_NAZIV
+    p("vozacID") = FX_VOZAC
+    p("vrsta") = FX_VRSTA
+    p("brDok") = broj
+    p("tipAmb") = FX_TIP_AMB
+    p("kolAmb") = kol
+    p("smerRev") = SMER_POZ
+    nPre = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+    modOtkupUnos.PitanjeManjkaTestReset
+    res = modScrDokumenti.Scr_Save(p)
+    pitanje = modOtkupUnos.PitanjeManjkaTest()
+    pdfPosle = BrojPdfReversa(broj)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modOtkupUnos.PitanjeManjkaTestReset
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_ODL24_F7PozajmicaKupca", errDesc
+
+    nPosle = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+    kupPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, FX_KUPAC, FX_TIP_AMB)
+    vozPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, FX_TIP_AMB)
+    dokID = AmbDokIDPoBroju(broj, FX_KUPAC)
+    Set redovi = modAmbalaza.AmbDokPoslovniRedovi(dokID)
+    If redovi.count = 1 Then
+        red = redovi(1)
+        opis = CStr(red(0)) & "|" & CStr(red(2)) & "|" & CStr(red(3)) & ">" & CStr(red(5))
+    Else
+        opis = "redova:" & CStr(redovi.count) & " || " & res
+    End If
+
+    AssertEq modNovacUnos.RevSmerPredlazeBroj(SMER_POZ), False, _
+             "F7 pozajmica: broj je kupcev i ne predlaze se"
+    AssertEq fokus, "partnerID", _
+             "F7 pozajmica: partner koji nije kupac se odbija uz polje partnera"
+    AssertEq pitanje, "", "F7 pozajmica: operater ne dobija pitanje o manjku"
+    AssertEq nPosle - nPre, 1, "F7 pozajmica: snimanje pravi kupcev dokument"
+    AssertEq NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokID, COL_AMBD_VRSTA)), _
+             AMB_DOK_REVERS_PARTNERA, "F7 pozajmica: dokument je kupcev (REVERS_PARTNERA)"
+    AssertEq opis, VK_POZ & "|" & CStr(kol) & "|" & AMB_NALOG_KUPAC & ">" & AMB_NALOG_VOZAC, _
+             "F7 pozajmica: poslovni red je pozajmica kupac -> vozac, ne povrat"
+    AssertEq CStr(kupPosle - kupPre) & "|" & CStr(vozPosle - vozPre), "0|" & CStr(kol), _
+             "F7 pozajmica: kupcev saldo ostaje, vozac dobija celu kolicinu"
+    ' Papir za kupcev revers i ne bi nastao (nema red za stanicu), ali bi stiglo
+    ' upozorenje o padu stampe -- zato se meri i tisina, kao u 233.
+    javio = IIf(InStr(1, NzToText(p("poruke")), upozorenje, vbBinaryCompare) > 0, "javio", "tiho")
+    AssertEq CStr(pdfPosle - pdfPre) & "|" & javio, "0|tiho", _
+             "F7 pozajmica: kupcev dokument se ne stampa i ne javlja kvar (ODL-32)"
 End Sub
 
 ' KI-015: "da || <tekst>" kad poruka odbijenog upisa POCINJE tekstom kljuca
