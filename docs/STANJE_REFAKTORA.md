@@ -5569,6 +5569,34 @@
        Predlog ručne provere je u opisu `#432`.
      - Posle kapija `src-vba` i `tools` nisu menjani; ova stavka je samo docs.
 
+162. **Ručna provera `#432` — 5/5 za `KI-021`, compile potvrđen, uz nov nalaz `KI-023`** (19.10.2026).
+
+     **Sveska:** `tests/fixtures/rucna_provera_ki021_kod.xlsm` (`run_vba --compile-only --keep` nad `ed9e4472`;
+     izvor `941c599cf1b7`, isti kao u stavci 161). Operater je uvezao `modVbaTools.bas`, a `Debug → Compile`
+     je prošao. Potvrda je upisana kao `vba_gate --mark-compile`, i `--require-green --require-compile`
+     prolazi.
+
+     | # | Scenario | Šta je operater video | Ocena |
+     |---|---|---|---|
+     | 1 | F1 otkup, 30 gajbi, tip samo NBSP | „Izaberite tip ambalaže!", bez pitanja o manjku | OK |
+     | 2 | F1 otkup, tip `12/2` | „Tip ambalaže '12/2 ne postoji u šifarniku ambalaže", bez pitanja | OK za `KI-021`, nalaz `KI-023` |
+     | 3 | F7 revers `12/2`, „Izdato koop." i „Povrat kupca" | ista poruka | OK |
+     | 4 | `12/2` dodat u Matične podatke | otkup sa `12/2` ide do pitanja o manjku; kontrola `12/1`: pitanje „manjak 12", „Ne" → odbijanje | OK |
+     | 5 | combo TIP AMBALAŽE | `12/1`, `Letvarica`, `12/2`, bez `6/1` | OK |
+
+     - **Nalaz `KI-023`** (u tačkama 2 i 3 nedostaje zatvarajući apostrof posle tipa):
+       - `modPoruke.UpsertRow` piše `Range.Value = tekst`, a Excel vodeći apostrof tumači kao oznaku
+         teksta (prefiks), pa se ne čuva;
+       - ista klasa postoji u još 5 ključeva: `DOK_MSG_NEMA_UNETU_TEZINU` (poruka o tari),
+         `LIC_MSG_PROPUSTAM_VEZANU_MASINU`, `AUTH_MSG_VEC_POSTOJI`, `AUTH_MSG_ADMIN_KREIRAN` i
+         `KOR_MSG_VEC_POSTOJI`;
+       - test 253 ga ne hvata, jer obe strane poređenja prolaze kroz isti `Poruka()`.
+     - **Odluka operatera (19.10.2026, po preporuci):** klasa ide u poseban rez (`KI-023`). Popravka je na
+       jednom mestu (`UpsertRow`), uz test koji meri doslovan apostrof. `#432` ostaje kakav je, jer bi izmena
+       izvora poništila izvršne kapije iz stavke 161.
+     - Posle kapija `src-vba` i `tools` nisu menjani; ova stavka je samo docs.
+     - **Ostaje za `#432`:** reviewer GO za merge i zapis merge-a (`KI-021` → `CLOSED`).
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
