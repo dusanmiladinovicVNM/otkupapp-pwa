@@ -5129,6 +5129,19 @@
        je bio pun, a za worktree treba 5,4 GB. Posle njega idu `ODL-24` pa S6; `KI-017` i `KI-018` su svaki svoj
        rez nižeg prioriteta.
 
+152. **Merge `#428` — na izričit zahtev operatera, na tačnom head-u posle zelenog static CI** (19.10.2026).
+     Zapis ide ovde, a ne u `#428`. Obrazac su stavke 141, 144, 147 i 150.
+
+     - `#428` menja samo docs (`docs/KNOWN_ISSUES.md` i `docs/STANJE_REFAKTORA.md`): stavka 150 je zapis
+       merge-a `#427`, a stavka 151 `KI-016` → `CLOSED`, sa ostatkom (a)–(c) u novom `KI-018`.
+     - Merge-ovano 19.10.2026 (06:32 UTC) kao `db528e03`, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `b9bdc00d` (static CI `success`, run 39210393032).
+     - **Review nije tražen:** rez menja samo docs, a `src-vba`, `tools` i `.claude/` su netaknuti.
+     - **Ispravka stavke 151:** grana `#428` je `claude/ki016-zatvaranje`, a ne `claude/ki016-posle-427`
+       (izmereno: `gh pr view 428`, `headRefName`).
+     - Sledeći rez je `KI-015` (stavke 153+), na grani `claude/ki015-poruke-dokumenta` sa `db528e03`. Disk C:
+       je 19.10.2026 imao 2,4 GB slobodno, pa rez ide u operaterovom klonu, bez worktree-ja.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
