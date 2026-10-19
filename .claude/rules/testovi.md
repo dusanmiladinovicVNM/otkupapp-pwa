@@ -9,6 +9,9 @@ paths:
   - "src-vba/modMaticniEkran.bas"
   - "src-vba/modPodesavanja.bas"
   - "src-vba/modPrint.bas"
+  - "src-vba/modOtkupUnos.bas"
+  - "src-vba/modNovacUnos.bas"
+  - "src-vba/modDokUnos.bas"
   - "tools/vba_check.py"
   - "tools/run_vba.py"
   - "tools/vba_parity_check.py"
@@ -29,6 +32,9 @@ paths:
      Iz istog razloga i modUiScreens / modUiPanel / modMaticniEkran /
      modPodesavanja / modPrint: seam-ovi i tumac ishoda Run-a iz KI-011 i
      KI-014, a u modUiScreens i seam i kanal pada iz KI-016 (§4).
+     modOtkupUnos / modNovacUnos / modDokUnos: seam pitanja o manjku iz KI-015
+     zivi u prvom, a pozivna mesta koja biraju stranu u sva tri (§4) -- agent
+     koji menja pozivno mesto mora da zna da tu MsgBox ne sme da se vrati.
      frmOtkup.frm je otisao odavde sa formom (korak 2, §27.10).
 
      tests/golden/* trenutno ne pogadja nijedan fajl: jedini golden je bio snimak
@@ -201,8 +207,9 @@ Ne pokreće se na Linux/macOS — ni u web sesiji ni u CI. Tamo se testovi pona�
 ## 4) Test seam-ovi koje produkcioni kod nosi
 
 Ako menjaš `modOtkupUI`, bilo koji `modScr*`, `modUiScreens`, `modUiPanel`,
-`modMaticniEkran`, `modPodesavanja` ili `modPrint`, znaj da ovo postoji i zašto —
-inače ćeš ih „počistiti":
+`modMaticniEkran`, `modPodesavanja`, `modPrint` ili module unosa (`modOtkupUnos`,
+`modNovacUnos`, `modDokUnos`), znaj da ovo postoji i zašto — inače ćeš ih
+„počistiti":
 
 - `ClearForm` / `ParseDatum` / `ParcelaID` su **`Public`**, ne `Private` — test ih
   zove direktno, bez vožnje celog upisa.
@@ -273,6 +280,32 @@ pre čišćenja ostavi seam upaljen i obori tuđi test.
   tamo gde je kvar nastao — posle foldera, pre izvoza. `"curi"` radi ono što je
   `LogSetup` radio pre KI-011: greška pod `Resume Next`, izlaz van handlera, koji
   je ne briše. Gasi ga `ResetSeamova` (`StampaTestSet ""`).
+
+### Seam pitanja o manjku ambalaže (KI-015)
+
+- **`modOtkupUnos.PotvrdiManjakAmbalaze(nalogTip, manjak)` je JEDINO mesto
+  pitanja o manjku** (protokol potvrde deficita, AMB-10-ODL-8). Zovu ga tri pisca
+  sa potvrdom: otkup (`AMB_NALOG_KOOPERANT`), kupčev revers i prijemnica
+  (`AMB_NALOG_KUPAC`). **Stranu bira pozivno mesto**, a funkcija po njoj bira
+  tekst; nepoznat nalog diže grešku. Do KI-015 je svako mesto sastavljalo svoj
+  `MsgBox`, pa je i kupac dobijao pitanje o kooperantu.
+- **U test režimu pitanje BELEŽI i UVEK vraća „Ne"** — seam samo posmatra i
+  zabranjuje, ne upisuje. `IsTestMode()` se pita pri svakom pozivu. Tekst čita
+  `PitanjeManjkaTest`, a gasi ga `PitanjeManjkaTestReset`, koji je i u
+  `ResetSeamova` (seam nosi stanje).
+- **Ne vraćaj `MsgBox` na pozivno mesto i ne dodaj nov pored ovoga.** `MsgBox` u
+  putanji pisca u `run_vba` prolazu visi do timeout-a i ostavlja Excel u `[break]`
+  (red „Dug sa imenom" u `docs/STANJE_REFAKTORA.md`). Novo pitanje u putanji pisca
+  ide istim obrascem: tvrdo gejtovano, beleži i odbija.
+- **`RunBusinessFlowProSuite` test režim NE pali.** BFP test koji ulazi u granu
+  pitanja pali ga sam i vraća ga i na putu greške
+  (`Test_AMB_PitanjeManjkaOtkupImenujeKooperanta`). Bez toga seam otvori `MsgBox`
+  i suite visi.
+- Meri ga 248 (kupčev revers kroz `Scr_Save`, prijemnica kroz `PrijemnicaUpisi`) i
+  BFP kontrola na otkupu. Sabotaže `ki015-revkupca-pita-kooperanta`,
+  `ki015-prij-pita-kooperanta` i `ki015-otkup-pita-kupca` kvare **pozivno mesto**,
+  a `ki015-seam-odgovara-da` pušta seam da odgovori „Da" (odbijen revers tada
+  pravi dokument).
 
 ### Seam-ovi zaostatka u ugovoru ekrana (KI-014)
 
