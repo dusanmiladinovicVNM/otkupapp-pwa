@@ -311,7 +311,7 @@ EH:
     ' Resume Next, koji cisti Err.
     errDesc = Err.description
     LogErr "modNovacUnos.IsplataValidiraj"
-    IsplataValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    IsplataValidiraj = Poruka("NOVUNOS_ERR_GRESKA_UNOS_ISPL") & errDesc
 End Function
 
 Public Function IsplataUpisi(ByVal p As Object, ByRef poruke As String) As String
@@ -336,7 +336,7 @@ Public Function IsplataUpisi(ByVal p As Object, ByRef poruke As String) As Strin
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.IsplataUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("NOVUNOS_ERR_GRESKA_UNOS_ISPL") & errDesc
 End Function
 
 '=====================================================================
@@ -400,7 +400,7 @@ Public Function UplataValidiraj(ByVal p As Object, ByRef fokus As String) As Str
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.UplataValidiraj"
-    UplataValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    UplataValidiraj = Poruka("NOVUNOS_ERR_GRESKA_UNOS_UPL") & errDesc
 End Function
 
 Public Function UplataUpisi(ByVal p As Object, ByRef poruke As String) As String
@@ -424,7 +424,7 @@ Public Function UplataUpisi(ByVal p As Object, ByRef poruke As String) As String
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.UplataUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("NOVUNOS_ERR_GRESKA_UNOS_UPL") & errDesc
 End Function
 
 '=====================================================================
@@ -537,7 +537,7 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.ReversValidiraj"
-    ReversValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    ReversValidiraj = Poruka("NOVUNOS_ERR_GRESKA_UNOS_REV") & errDesc
 End Function
 
 
@@ -661,7 +661,7 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.ReversUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("NOVUNOS_ERR_GRESKA_UNOS_REV") & errDesc
 End Function
 
 
@@ -674,9 +674,9 @@ End Function
 ' radi za otkup od 03.10.2026: ekran ZADRZAVA podatke, pa operater ne unosi
 ' nista ponovo.
 '
-' NIJEDAN TEST NE SME DA UDJE U OVU GRANU: MsgBox u run_vba prolazu visi do
-' timeout-a i ostavlja Excel u [break]. Zato testovi mere pisca (gde protokol i
-' zivi), a dijalog ide u operatersku cek-listu.
+' Pitanje ide kroz modOtkupUnos.PotvrdiManjakAmbalaze (KI-015), koje u test
+' rezimu tekst BELEZI i odgovara "Ne" -- pa test sme da udje u ovu granu. Do
+' tada je ovde stajao MsgBox, koji u run_vba prolazu visi do timeout-a.
 Private Function RevKupcaUpisi(ByVal p As Object, ByRef poruke As String) As String
     Dim res As String, greska As String, errNum As Long, manjak As Double
 
@@ -688,18 +688,14 @@ Private Function RevKupcaUpisi(ByVal p As Object, ByRef poruke As String) As Str
         manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KUPAC, S(p, "partnerID"), _
                                                 S(p, "tipAmb"), CDbl(L(p, "kolAmb")))
         If manjak > 0 Then
-            If MsgBox(Poruka("AMB_ASK_DEFICIT_1") & vbCrLf & _
-                      Poruka("AMB_ASK_DEFICIT_2") & " " & _
-                      Format$(manjak, "#,##0") & vbCrLf & vbCrLf & _
-                      Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE"), _
-                      vbExclamation + vbYesNo, APP_NAME) = vbYes Then
+            If modOtkupUnos.PotvrdiManjakAmbalaze(AMB_NALOG_KUPAC, manjak) Then
                 res = RevKupcaPisac(p, manjak, errNum, greska)
             End If
         End If
     End If
 
     If Len(res) = 0 Then
-        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        poruke = poruke & Poruka("NOVUNOS_ERR_GRESKA_UNOS_REV") & greska
     End If
     RevKupcaUpisi = res
 End Function

@@ -2117,7 +2117,7 @@ Private Function SnimiZbirnu(ByVal polja As Object) As String
     ' Otvorena izmena nacrta: snimanje MENJA taj nacrt, ne pravi nov.
     If Len(mIzmenaZbrID) > 0 Then
         If Not modDokUnos.ZbirnaIzmeniNacrt(mIzmenaZbrID, p, poruke) Then
-            SnimiZbirnu = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+            SnimiZbirnu = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU_3") & _
                                                            " " & poruke)
             Exit Function
         End If
@@ -2131,7 +2131,7 @@ Private Function SnimiZbirnu(ByVal polja As Object) As String
 
     res = modDokUnos.ZbirnaUpisi(p, poruke)
     If Len(res) = 0 Then
-        SnimiZbirnu = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+        SnimiZbirnu = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU_3") & _
                                                        " " & poruke)
         Exit Function
     End If
@@ -2174,7 +2174,7 @@ Private Function SavePrijemnica(ByVal polja As Object) As String
 
     res = modDokUnos.PrijemnicaUpisi(p, poruke)
     If Len(res) = 0 Then
-        SavePrijemnica = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+        SavePrijemnica = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU_4") & _
                                                           " " & poruke)
         Exit Function
     End If
@@ -2213,7 +2213,7 @@ Private Function SaveIsplata(ByVal polja As Object) As String
 
     res = modNovacUnos.IsplataUpisi(p, poruke)
     If Len(res) = 0 Then
-        SaveIsplata = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+        SaveIsplata = modTxState.PorukaIshodaRollbacka(Poruka("NOVUNOS_MSG_GRESKA_CUVANJE_ISPL") & _
                                                        " " & poruke)
         Exit Function
     End If
@@ -2247,7 +2247,7 @@ Private Function SaveUplata(ByVal polja As Object) As String
 
     res = modNovacUnos.UplataUpisi(p, poruke)
     If Len(res) = 0 Then
-        SaveUplata = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+        SaveUplata = modTxState.PorukaIshodaRollbacka(Poruka("NOVUNOS_MSG_GRESKA_CUVANJE_UPL") & _
                                                       " " & poruke)
         Exit Function
     End If
@@ -2287,7 +2287,7 @@ Private Function SaveRevers(ByVal polja As Object) As String
     ' Otvorena ispravka (10d): snimanje pravi ZAMENU tog reversa, ne nov dokument.
     res = modNovacUnos.ReversUpisi(p, poruke, mIspravkaAmbDokID)
     If Len(res) = 0 Then
-        SaveRevers = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+        SaveRevers = modTxState.PorukaIshodaRollbacka(Poruka("NOVUNOS_MSG_GRESKA_CUVANJE_REV") & _
                                                       " " & poruke)
         Exit Function
     End If

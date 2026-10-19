@@ -39,6 +39,10 @@ Option Explicit
 
 Public Const OTKUNOS_BUILD As String = "v6-ui-114"
 
+' Tekst poslednjeg pitanja o manjku ambalaze, zabelezen u test rezimu (seam
+' PotvrdiManjakAmbalaze, KI-015). "" = pitanja nije bilo.
+Private mPitanjeManjkaTest As String
+
 '--------------------------------------------------------------- ULAZ
 ' Prazan recnik sa svim kljucevima - da pozivalac ne mora da pamti spisak.
 Public Function NoviOtkupUnos() As Object
@@ -397,11 +401,7 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
     If ambErrNum = AMB_ERR_POTVRDA_DEFICITA Then
         ambDeficit = modOtkup.OtkupDeficitKooperanta(h, stavke)
         If ambDeficit > 0 Then
-            If MsgBox(Poruka("AMB_ASK_DEFICIT_1") & vbCrLf & _
-                      Poruka("AMB_ASK_DEFICIT_2") & " " & _
-                      Format$(ambDeficit, "#,##0") & vbCrLf & vbCrLf & _
-                      Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE"), _
-                      vbExclamation + vbYesNo, APP_NAME) = vbYes Then
+            If PotvrdiManjakAmbalaze(AMB_NALOG_KOOPERANT, ambDeficit) Then
                 greska = ""
                 ambErrNum = 0
                 If Len(Trim$(ispravljaOtkupID)) > 0 Then
@@ -460,3 +460,61 @@ EH:
     LogErr "modOtkupUnos.OtkupUpisi"
     poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
+
+' PITANJE O MANJKU AMBALAZE (protokol potvrde deficita, AMB-10-ODL-8, 6.5).
+'
+' Jedno mesto za pitanje koje postavljaju sva tri pisca sa potvrdom: otkup
+' (kooperant donosi svoje gajbe), kupcev revers i prijemnica (kupac vraca vise
+' nego sto drzi). Do KI-015 je svako mesto sastavljalo isti MsgBox po svom.
+'
+' nalogTip je nalog kome fali, i pitanje imenuje BAS tu stranu: kooperant donosi
+' svoje gajbe, kupac vraca vise nego sto drzi. Smer duga je isti -- pokrice je
+' ULAZ_TUDJE na nalog partnera, pa firma duguje partneru (AMBALAZA.md 6.4). Do
+' KI-015 je i kupac dobijao tekst o kooperantu. manjak je SVEZE izracunat manjak
+' -- pozivalac ga cita neposredno pre pitanja.
+'
+' Druga strana nema pitanje: stanica i vozac manjak NE pokrivaju ulazom tudje
+' ambalaze (AMB-10-ODL-8), pa ih pisac odbija pre pitanja. Nepoznat nalog je
+' kvar pozivaoca i dize gresku -- pitanje o pogresnoj strani je bas ono sto je
+' KI-015 bio.
+'
+' TEST SEAM, tvrdo gejtovan (.claude/rules/testovi.md S4): u test rezimu se
+' pitanje BELEZI umesto da se otvori, a odgovor je UVEK "Ne" -- seam samo
+' posmatra i zabranjuje, ne upisuje. MsgBox u nevidljivom Excelu visi do
+' timeout-a i ostavlja Excel u [break]. Zabelezen tekst cita PitanjeManjkaTest,
+' a gasi ga ResetSeamova (PitanjeManjkaTestReset).
+Public Function PotvrdiManjakAmbalaze(ByVal nalogTip As String, _
+                                      ByVal manjak As Double) As Boolean
+    Dim txt As String, k1 As String, k2 As String
+    Select Case nalogTip
+        Case AMB_NALOG_KOOPERANT
+            k1 = "AMB_ASK_DEFICIT_1": k2 = "AMB_ASK_DEFICIT_2"
+        Case AMB_NALOG_KUPAC
+            k1 = "AMB_ASK_DEFICIT_KUP_1": k2 = "AMB_ASK_DEFICIT_KUP_2"
+        Case Else
+            Err.Raise vbObjectError + 1590, "modOtkupUnos.PotvrdiManjakAmbalaze", _
+                      "Pitanje o manjku za nalog '" & nalogTip & "' ne postoji."
+    End Select
+    txt = Poruka(k1) & vbCrLf & _
+          Poruka(k2) & " " & _
+          Format$(manjak, "#,##0") & vbCrLf & vbCrLf & _
+          Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE")
+    If IsTestMode() Then
+        mPitanjeManjkaTest = txt
+        Exit Function
+    End If
+    PotvrdiManjakAmbalaze = (MsgBox(txt, vbExclamation + vbYesNo, APP_NAME) = vbYes)
+End Function
+
+' TEST SEAM: tekst poslednjeg pitanja o manjku ("" = nije postavljeno). Tvrdo
+' gejtovan.
+Public Function PitanjeManjkaTest() As String
+    If Not IsTestMode() Then Exit Function
+    PitanjeManjkaTest = mPitanjeManjkaTest
+End Function
+
+' TEST SEAM: brise zabelezeno pitanje -- test pre poteza, i ResetSeamova.
+Public Sub PitanjeManjkaTestReset()
+    If Not IsTestMode() Then Exit Sub
+    mPitanjeManjkaTest = ""
+End Sub

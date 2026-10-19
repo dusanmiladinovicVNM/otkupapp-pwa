@@ -8240,6 +8240,128 @@ SABOTAZE = {
         "T_KI016_PadUsredGradnje",
         "brana pokriva gradnju i posle Resume Next segmenta",
     ),
+    # KI-015: odbijen upis imenuje SVOJ dokument. Svaka sabotaza vraca jedno
+    # mesto na kljuc koji je tu stajao do KI-015 (otpremnica / otkup), a meri je
+    # tvrdnja te vrste -- tekst poruke, ne postojanje kljuca.
+    "ki015-revers-cuvanje": (
+        "modScrDokumenti.bas",
+        "        SaveRevers = modTxState.PorukaIshodaRollbacka(Poruka(\"NOVUNOS_MSG_GRESKA_CUVANJE_REV\") & _\n",
+        "        SaveRevers = modTxState.PorukaIshodaRollbacka(Poruka(\"DOK_MSG_GRESKA_PRI_CUVANJU\") & _\n",
+        "T_KI015_OdbijenReversImenujeRevers",
+        "nas revers: poruka cuvanja imenuje revers",
+    ),
+    "ki015-revers-unos": (
+        "modNovacUnos.bas",
+        "    LogErr \"modNovacUnos.ReversUpisi\"\n"
+        "    poruke = poruke & Poruka(\"NOVUNOS_ERR_GRESKA_UNOS_REV\") & errDesc\n",
+        "    LogErr \"modNovacUnos.ReversUpisi\"\n"
+        "    poruke = poruke & Poruka(\"OTKUP_ERR_GRESKA_PRI_UNOSU\") & errDesc\n",
+        "T_KI015_OdbijenReversImenujeRevers",
+        "nas revers: razlog nosi unos reversa",
+    ),
+    "ki015-isplata-cuvanje": (
+        "modScrDokumenti.bas",
+        "        SaveIsplata = modTxState.PorukaIshodaRollbacka(Poruka(\"NOVUNOS_MSG_GRESKA_CUVANJE_ISPL\") & _\n",
+        "        SaveIsplata = modTxState.PorukaIshodaRollbacka(Poruka(\"DOK_MSG_GRESKA_PRI_CUVANJU\") & _\n",
+        "T_KI015_NovacImenujeSvojuVrstu",
+        "isplata: poruka cuvanja imenuje isplatu",
+    ),
+    "ki015-isplata-unos": (
+        "modNovacUnos.bas",
+        "    LogErr \"modNovacUnos.IsplataUpisi\"\n"
+        "    poruke = poruke & Poruka(\"NOVUNOS_ERR_GRESKA_UNOS_ISPL\") & errDesc\n",
+        "    LogErr \"modNovacUnos.IsplataUpisi\"\n"
+        "    poruke = poruke & Poruka(\"OTKUP_ERR_GRESKA_PRI_UNOSU\") & errDesc\n",
+        "T_KI015_NovacImenujeSvojuVrstu",
+        "isplata: razlog nosi unos isplate",
+    ),
+    "ki015-uplata-cuvanje": (
+        "modScrDokumenti.bas",
+        "        SaveUplata = modTxState.PorukaIshodaRollbacka(Poruka(\"NOVUNOS_MSG_GRESKA_CUVANJE_UPL\") & _\n",
+        "        SaveUplata = modTxState.PorukaIshodaRollbacka(Poruka(\"DOK_MSG_GRESKA_PRI_CUVANJU\") & _\n",
+        "T_KI015_NovacImenujeSvojuVrstu",
+        "uplata: poruka cuvanja imenuje uplatu",
+    ),
+    "ki015-uplata-unos": (
+        "modNovacUnos.bas",
+        "    LogErr \"modNovacUnos.UplataUpisi\"\n"
+        "    poruke = poruke & Poruka(\"NOVUNOS_ERR_GRESKA_UNOS_UPL\") & errDesc\n",
+        "    LogErr \"modNovacUnos.UplataUpisi\"\n"
+        "    poruke = poruke & Poruka(\"OTKUP_ERR_GRESKA_PRI_UNOSU\") & errDesc\n",
+        "T_KI015_NovacImenujeSvojuVrstu",
+        "uplata: razlog nosi unos uplate",
+    ),
+    "ki015-otp-validator": (
+        "modDokUnos.bas",
+        "    OtpremnicaValidiraj = Poruka(\"DOKUNOS_ERR_GRESKA_UNOS_OTP\") & errDesc\n",
+        "    OtpremnicaValidiraj = Poruka(\"OTKUP_ERR_GRESKA_PRI_UNOSU\") & errDesc\n",
+        "T_KI015_ValidatorImenujeSvojDokument",
+        "otpremnica: izuzetak u validatoru imenuje otpremnicu",
+    ),
+    "ki015-zbr-validator": (
+        "modDokUnos.bas",
+        "    ZbirnaValidiraj = Poruka(\"DOKUNOS_ERR_GRESKA_UNOS_ZBR\") & errDesc\n",
+        "    ZbirnaValidiraj = Poruka(\"OTKUP_ERR_GRESKA_PRI_UNOSU\") & errDesc\n",
+        "T_KI015_ValidatorImenujeSvojDokument",
+        "zbirna: izuzetak u validatoru imenuje zbirnu",
+    ),
+    "ki015-rev-validator": (
+        "modNovacUnos.bas",
+        "    ReversValidiraj = Poruka(\"NOVUNOS_ERR_GRESKA_UNOS_REV\") & errDesc\n",
+        "    ReversValidiraj = Poruka(\"OTKUP_ERR_GRESKA_PRI_UNOSU\") & errDesc\n",
+        "T_KI015_ValidatorImenujeSvojDokument",
+        "revers: izuzetak u validatoru imenuje revers",
+    ),
+    "ki015-prij-unos": (
+        "modDokUnos.bas",
+        "    LogErr \"modDokUnos.PrijemnicaUpisi\"\n"
+        "    poruke = poruke & Poruka(\"DOKUNOS_ERR_GRESKA_UNOS_PRIJ\") & errDesc\n",
+        "    LogErr \"modDokUnos.PrijemnicaUpisi\"\n"
+        "    poruke = poruke & Poruka(\"OTKUP_ERR_GRESKA_PRI_UNOSU\") & errDesc\n",
+        "T_KI015_ValidatorImenujeSvojDokument",
+        "prijemnica: izuzetak u upisu imenuje prijemnicu",
+    ),
+    # KI-015: pitanje o manjku imenuje stranu kojoj fali. Pozivno mesto bira
+    # stranu -- sabotaza je na POZIVU, ne u funkciji pitanja.
+    "ki015-revkupca-pita-kooperanta": (
+        "modNovacUnos.bas",
+        "            If modOtkupUnos.PotvrdiManjakAmbalaze(AMB_NALOG_KUPAC, manjak) Then\n",
+        "            If modOtkupUnos.PotvrdiManjakAmbalaze(AMB_NALOG_KOOPERANT, manjak) Then\n",
+        "T_KI015_PitanjeManjkaImenujeKupca",
+        "kupcev revers: pitanje o manjku imenuje kupca",
+    ),
+    "ki015-prij-pita-kooperanta": (
+        "modDokUnos.bas",
+        "            If modOtkupUnos.PotvrdiManjakAmbalaze(AMB_NALOG_KUPAC, manjak) Then\n",
+        "            If modOtkupUnos.PotvrdiManjakAmbalaze(AMB_NALOG_KOOPERANT, manjak) Then\n",
+        "T_KI015_PitanjeManjkaImenujeKupca",
+        "prijemnica: pitanje o manjku imenuje kupca",
+    ),
+    "ki015-revkupca-unos": (
+        "modNovacUnos.bas",
+        "        poruke = poruke & Poruka(\"NOVUNOS_ERR_GRESKA_UNOS_REV\") & greska\n",
+        "        poruke = poruke & Poruka(\"OTKUP_ERR_GRESKA_PRI_UNOSU\") & greska\n",
+        "T_KI015_PitanjeManjkaImenujeKupca",
+        "kupcev revers: razlog nosi unos reversa",
+    ),
+    # KI-015: seam pitanja SAMO posmatra i zabranjuje. Kad bi odgovorio "Da",
+    # test bi upisao revers sa potvrdjenim manjkom (ULAZ_TUDJE).
+    "ki015-seam-odgovara-da": (
+        "modOtkupUnos.bas",
+        "        mPitanjeManjkaTest = txt\n",
+        "        mPitanjeManjkaTest = txt\n"
+        "        PotvrdiManjakAmbalaze = True   ' SABOTAZA: seam odgovara Da\n",
+        "T_KI015_PitanjeManjkaImenujeKupca",
+        "pitanje u test rezimu odgovara Ne: odbijen revers ne pravi dokument",
+    ),
+    # KI-015 kontrola (BFP): otkup i posle izdvajanja pitanja imenuje kooperanta.
+    "ki015-otkup-pita-kupca": (
+        "modOtkupUnos.bas",
+        "            If PotvrdiManjakAmbalaze(AMB_NALOG_KOOPERANT, ambDeficit) Then\n",
+        "            If PotvrdiManjakAmbalaze(AMB_NALOG_KUPAC, ambDeficit) Then\n",
+        "Test_AMB_PitanjeManjkaOtkupImenujeKooperanta",
+        "KI015 otkup: pitanje o manjku imenuje kooperanta",
+    ),
 }
 
 
