@@ -349,6 +349,7 @@ Public Sub RunAllTests()
     RunOne 252
     RunOne 253
     RunOne 254
+    RunOne 255
     RunOne 13
     RunOne 14
     RunOne 15
@@ -887,6 +888,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 252: TestName = "T_KI021_OtkupTipVanSifarnika"
         Case 253: TestName = "T_KI021_ValidatoriTraziSifarnik"
         Case 254: TestName = "T_KI021_ComboTipaJeSifarnik"
+        Case 255: TestName = "T_KI023_KatalogCuvaVodeciApostrof"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1149,6 +1151,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 252: T_KI021_OtkupTipVanSifarnika
         Case 253: T_KI021_ValidatoriTraziSifarnik
         Case 254: T_KI021_ComboTipaJeSifarnik
+        Case 255: T_KI023_KatalogCuvaVodeciApostrof
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -9528,6 +9531,40 @@ CleanUp:
     AssertEq Left$(izvoz, 1), "1", "preduslov: genericki izvestaj trazi otvaranje PDF-a"
     AssertEq Mid$(izvoz, 3, 1), "0", "genericki izvestaj: test prolaz ne otvara PDF"
     AssertEq Mid$(izvoz, 5, 1), "R", "genericki izvestaj ide kroz granu Range"
+End Sub
+
+' 252. KI-023: KATALOG PORUKA CUVA VODECI APOSTROF.
+'
+' Rucna provera #432 (19.10.2026): "Tip ambalaze '12/2 ne postoji u sifarniku"
+' -- bez zatvarajuceg apostrofa. Katalog pise Range.Value = tekst, a Excel vodeci
+' apostrof tumaci kao prefiks teksta (PrefixCharacter) i ne cuva ga: "' nema
+' unetu tezinu" postane " nema unetu tezinu". Izmereno sondom nad pravim Excelom:
+' svih pet kljuceva ispod gube apostrof, a tekst koji pocinje sa "+" ili "-" ostaje
+' netaknut (kontrola).
+'
+' Tvrdnja je iz pravila, ne iz izlaza: Poruka() mora da POCINJE doslovnim
+' apostrofom. Poredjenje sa drugim Poruka() pozivom ne bi merilo nista -- obe strane
+' bi izgubile isti znak (zato ga test 253/KI-021 nije uhvatio).
+' Kljuc DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU (#432) se dodaje u spisak kad se KI-021 i
+' ovaj rez sretnu na main-u.
+' SABOTAZA: ki023-katalog-guta-apostrof -> "katalog cuva vodeci apostrof: ...".
+Private Sub T_KI023_KatalogCuvaVodeciApostrof()
+    Dim kljucevi As Variant, i As Long, k As String, losi As String
+
+    kljucevi = Array("DOK_MSG_NEMA_UNETU_TEZINU", "LIC_MSG_PROPUSTAM_VEZANU_MASINU", _
+                     "AUTH_MSG_VEC_POSTOJI", "AUTH_MSG_ADMIN_KREIRAN", "KOR_MSG_VEC_POSTOJI")
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    For i = LBound(kljucevi) To UBound(kljucevi)
+        k = CStr(kljucevi(i))
+        If PorukaNedostaje(k) Or Left$(Poruka(k), 1) <> "'" Then
+            losi = losi & k & "=[" & Poruka(k) & "] "
+        End If
+    Next i
+
+    AssertEq Poruka("OTKUI_BTN_MAT_NOVI"), "+ Nova stavka", _
+             "preduslov: tekst koji pocinje sa + katalog cuva netaknut"
+    AssertEq losi, "", "katalog cuva vodeci apostrof: tekst sa imenom ostaje pod navodnicima"
 End Sub
 
 ' KI-015: "da || <tekst>" kad poruka odbijenog upisa POCINJE tekstom kljuca
