@@ -5434,6 +5434,64 @@
      - BFP seed registruje `TEST_TIP_AMB`/`_B`/`_C` i `"G"`;
      - sintetički tipovi i `-DRUGI` se registruju na mestu nastanka.
 
+159. **`KI-021` — rez: reprodukcija, ispravka i PR `#432` na review-u** (19.10.2026). Grana
+     `claude/ki021-tip-ambalaze`, worktree `.claude/worktrees/ki021`, sopstveni fixture iz `make_fixture`.
+
+     **Rez A (`12c6dfec`), ponašanje kao `main`:**
+     - testovi 249–251 i BFP `Test_AMB_TipVanSifarnikaPisacOdbija`;
+     - ključ `DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU` u katalogu, bez produkcionog pozivaoca;
+     - `TestHook_ValidatePWAOtkupDatum` dobija opcioni tip i gajbe.
+
+     **Reprodukcija** (`RunOne` nad kopijom iz `run_vba --compile-only --keep`, posle `EnsureRuntimeSchema`;
+     skripte `repro_ki021.py` i `sonda_ki021.py` u scratchpad-u sesije d5497217):
+     - **249** je crven po imenu, sa NBSP tačno kao na snimku operatera: „Nalog Kooperant … nema 30 ' '" i
+       pitanje „manjak 30";
+     - **250** je crven po imenu: validator otpremnice vraća `""` za `12/2`;
+     - **251** je crven po imenu i vraća `12/1|6/1`;
+     - **BFP** ima 4 crvene tvrdnje i 3 zelene kontrole;
+     - delove koje prvi pad zaklanja izmerila je sonda: otkup `12/2` stiže do pitanja „manjak 30", naš
+       revers propušta `12/2` i NBSP, a kupčev revers prolazi proveru tipa i staje tek na broju;
+     - nijedan test nije visio.
+
+     **Usput ispravljen test pre crvenog prolaza:** prvi crveni 250 je pao na „Broj dokumenta je obavezan"
+     (stroga validacija otpremnice), a sonda kupčevog reversa na „izaberi vozača". Crveno tada ne bi značilo
+     „tip je prošao". Otpremnica je zato dobila broj, a kupčev revers vozača.
+
+     **Rez B (`914c1492`), ispravka:**
+     - `modAmbalazaUgovor.AmbTipPrazan`/`AmbTipProblem`, a `AmbPrenosProblem` ih zove posle postojanja
+       naloga (`AMB-INV-12`);
+     - `modOtkupUnos.TipAmbalazePoruka` daje poruku uz polje za otkup, otpremnicu, prijemnicu i revers;
+     - `ValidatePWAOtkup` vraća razlog pisca;
+     - `GetTipAmbalazeOptions` je bez rezervnih tipova, a `AMB_12_1`/`AMB_6_1` su obrisani;
+     - premise testova: fixture (`Letvarica`, težina 0) i BFP (seed, 12 sintetičkih tipova, `-DRUGI`);
+     - 10 sabotaža `ki021-*` (811 → 821);
+     - AMBALAZA.md 6.9 i 6.13h, `KI-022` (PWA spisak tipova) otvoren.
+
+     **Ciljano posle ispravke** (isti postupak, to nije izvršna kapija): 249–251, 235, 245–248 **8/0**. BFP
+     **71/0**: novi test, `Test_Amb_UgovorPrenosa` (`"G"`), `Test_PWA_KonfliktPoParceliITipu` (`-DRUGI`),
+     `Test_PRJ_LanacSeOdmotavaObrnuto` (sintetički tip) i `Test_AMB_PitanjeManjkaOtkupImenujeKooperanta`.
+
+     **Kapije:**
+     - **Jeftine, sve zelene (26):** ceo skup iz `static.yml` osim JS suite, plus `popis_citalaca --check`
+       i `sabotaza`/`dokaz --self-test`.
+     - **`tests/js/pokreni.js` nije pokrenut:** na mašini nema `npm`, CI je jedini izvršilac, a JS nije
+       diran.
+     - **Čeka reviewer GO:** `run_vba` 12/12, `dokaz.py ki021` (10), compile i ručna provera.
+
+     **Očekivani brojevi** (iz diff-a):
+     - RunAllTests 251/0 (+3);
+     - BFP 2439/0 (+7);
+     - Banka 241/0 i Storno 111/0 bez promene;
+     - katalog 821, `POZNATI_NALAZI` 9;
+     - fixture `d3d3ff6d` → `b9e6fd8a` (izmereno u worktree-ju).
+
+     **Popis ostalih suita, statički:**
+     - Storno seje dokumente sa „SVT-A" bez redova knjige, pa storno nema kontra-stav i kapija se ne
+       aktivira;
+     - Golden piše kroz pisca `12/1`, koji je u šifarniku fixture-a;
+     - Palete seju svoj tip u šifarnik;
+     - čitalački testovi (`IZVT-Letvarica`) seju knjigu direktno.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
