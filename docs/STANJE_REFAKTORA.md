@@ -5259,6 +5259,38 @@
 
      **Van reza:** pravilo o novom seam-u u `.claude/rules/testovi.md` §4 ide kroz zaseban process PR.
 
+155. **Ručna provera `#429` — 3/3 za `KI-015`, uz nov nalaz `KI-021`** (19.10.2026). Process PR `#430`
+     (`testovi.md` §4) je otvoren i ide u merge posle `#429`.
+
+     **Sveska:** `tests/fixtures/rucna_provera_ki015_kod.xlsm` (`run_vba --compile-only --keep` nad `66a569ce`).
+     Postupak: operater uvozi `modVbaTools.bas`, radi Compile, pa restart. Fixture: stanica drži 42 gajbe
+     `12/1`, kooperant 18, kupac 50.
+
+     | # | Scenario | Šta je operater video | Ocena |
+     |---|---|---|---|
+     | 1 | naš revers 100 („Izdato koop.") | „…čuvanju **reversa**… unosu **reversa**:Deficit naloga Stanica… Manjak: 58 '12/1'", bez upisa | OK |
+     | 2 | kupčev revers 60 („Povrat kupca") | pitanje „**Kupac** nema toliko naših gajbi… duguje **kupcu**: 10"; Ne → „…čuvanju reversa… unosu reversa:Nalog Kupac… Manjak 10"; Da → „Revers sačuvan: KUP-RP-1", red u listi | OK |
+     | 3 | otkup, 30 gajbi | pitanje „**Kooperant**… duguje **kooperantu**"; Ne → „…čuvanju **otkupa**… unosu **otkupa**: …" (nepromenjeno) | OK za `KI-015` |
+
+     - `MsgBox` gubi č/ć (ANSI 1252), a š, ž, Đ i crtica se vide; traka je ispravna. To je staro ponašanje,
+       nije iz `#429`.
+     - **Anomalija u scenariju 3:** manjak je bio 30 umesto 12, a poruka pisca „nema 30 ' '". Operater: u
+       polju TIP AMBALAŽE je bio „razmak".
+     - **Sonda** (`sonda_nbsp.py` nad kopijom ručne sveske, kroz `Scr_Save` F1, polja `Trim$`-ovana kao u
+       `SkupiPolja`):
+       - **običan razmak** validator odbija („Izaberite tip ambalaže!");
+       - **NBSP** (`ChrW(160)`) prolazi do pitanja: manjak 30, „nema 30 ' '" — isto kao na snimku;
+       - **nepostojeći `12/2`** prolazi isto, sa manjkom 30;
+       - `12/1` daje manjak 12.
+     - Uzrok: tip ambalaže se ne proverava protiv `tblTipAmbalaze` ni u validatoru ni u piscu → `KI-021`.
+       Kako je znak ušao u polje **nije utvrđeno**.
+     - Anomalija nije iz `#429`: put tipa (`fgTipAmb` → `Scr_Save` → pisac) rez ne dira.
+     - **Prvi pokušaj** je rađen nad operaterovom radnom sveskom (`AgriX_DEV_nova.xlsm`) i stao je na „Red 1: ne
+       dotiče knjigu". Sveska nosi 10 redova starog modela ambalaže (12.09.2026, pročitano iz kopije sa
+       ugašenim makroima), a to je od 10e-3 kvar knjige, ne kvar reza.
+     - Potvrda compile-a (`vba_gate --mark-compile`) **nije upisana**.
+     - **Ostaje:** reviewer GO, `run_vba` 12/12 i dokaz `ki015` (15 sabotaža).
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
