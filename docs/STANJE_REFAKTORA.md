@@ -5291,6 +5291,35 @@
      - Potvrda compile-a (`vba_gate --mark-compile`) **nije upisana**.
      - **Ostaje:** reviewer GO, `run_vba` 12/12 i dokaz `ki015` (15 sabotaža).
 
+156. **Review `#429` (`cae524c4`): `CODE GO`, `P0 0`, `P1 0`, `P2 0`, `P3 1`, 9,2/10; izvršne kapije zelene**
+     (19.10.2026). Static CI #1001 `SUCCESS` na tačnom head-u. Reviewer je dao `MERGE HOLD` dok ne prođu
+     izvršne kapije i compile. Process PR `#430`: `CONTENT GO`, 9,5/10, bez nalaza; merge posle `#429`, uz
+     proveru na novoj bazi.
+
+     - **`P3-1` (odložen, odluka operatera 19.10.2026: „za kasnije, trenutno nije važno"):** EH novog BFP
+       testa `Test_AMB_PitanjeManjkaOtkupImenujeKooperanta` zove `PitanjeManjkaTestReset` i `SetTestMode`
+       PRE `LogFatal`, pa pad testa može da izgubi originalni `Err`. Popravka: sačuvati
+       `Err.Number`/`Err.Description` na ulazu u EH. Ne menja ponašanje produkcije ni zeleni prolaz; menja
+       dijagnostiku kad test padne.
+     - **Compile:** operater je posle uvoza `modVbaTools` i Compile-a radio ručnu proveru (stavka 155).
+       Potvrda je upisana kao `vba_gate --mark-compile` nad izvorom `24728470dfcc`, isti izvor kao `66a569ce`
+       (posle njega su samo docs).
+     - **Izvršni prolaz** (head `cae524c4`, izvor `24728470dfcc`, ugovor `8ed619bdd7db`, sveska `ea9195e2`):
+       **12/12 ZELENO**, marker upisan, `--require-green --require-compile` prolazi.
+
+       ```
+       RunAllTests              248 / 0      (244 + 245-248)
+       RunBusinessFlowProSuite 2432 / 0      (2427 + 5, BFP kontrola KI-015)
+       RunBankaImportTestSuite  241 / 0      RunStornoTestSuite 111 / 0
+       ostalih 8 suita OK
+       ```
+
+       Brojevi se poklapaju sa onima izvedenim iz diff-a (stavka 154).
+     - **Dokaz** (`dokaz.py ki015 --grupe`, bazno 248/0 i 2432/0): **15/15 crvenih**, svaka sabotaža po svom
+       imenu. Izvor je pre i posle identičan (`45d85d8b1e558837`). Grupno je izmereno 14 od 15, a BFP
+       `ki015-otkup-pita-kupca` sama.
+     - Posle kapija `src-vba` i `tools` nisu menjani; ova stavka je samo docs.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
