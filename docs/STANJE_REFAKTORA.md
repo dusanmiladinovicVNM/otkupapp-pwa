@@ -5350,6 +5350,90 @@
        worktree-ju `.claude/worktrees/ki021`. Disk C: je imao 1,8 GB slobodno, a worktree praćenih fajlova
        zauzima oko 40 MB uz fixture od 1 MB. Procena od 5,4 GB (stavke 151–152) ne važi za ovakav worktree.
 
+158. **`KI-021` — `pre-flight`, popis ulaza, odluke operatera i plan merenja, PRE koda** (19.10.2026). Grana
+     `claude/ki021-tip-ambalaze`.
+
+     **Verdikt.** Sve je pročitano, ništa nije izmereno dinamički.
+     - **DOMAIN — bio je GAP, zatvoren odlukom ispod.** AMBALAZA.md 6.13g je tvrdio da pisac traži samo
+       neprazan tip, pa knjiga sme da nosi slobodan tekst. I fixture ga tako modeluje: `AMB_LETVA =
+       "Letvarica"` je „slobodan unos kao u pogonu", u knjizi, bez reda u `tblTipAmbalaze`. Zatvoren skup je
+       zato nova odluka, a ne ispravka.
+     - **WRITERS — PROVEN.** `tblAmbalaza` piše samo `modAmbalaza` (`WRITE_OWNERSHIP.json`), a jedini
+       mutator je `UpisiRedKnjige` (`AppendRow`). Svaki red, pa i storno kontra-stav, ide kroz
+       `RequireAmbPrenos` → `AmbPrenosProblem`.
+     - **Ulazi u pisca:**
+       - **otkup:** `KnjiziOtkupAmbalazu` ← `CreateOtkup`; zovu ga `OtkupUpisi` (ekran), `IspravkaOtkupa_TX`
+         i `ImportRowToTblOtkup` (sync iz PWA);
+       - **otpremnica:** `OtpKnjiziAmbalazu` ← `OtpIzdaj`, koji vode ekran, auto-otpremnica iz synca
+         (`AutoOtpremnicaUpis`) i `AutoLanacHladnjaca`;
+       - **reversi:** naš kroz `UpisiReversUTx` (unos i `IspravkaReversa_TX`), kupčev kroz
+         `UpisiReversPartnera_TX`;
+       - **prijemnica:** `SavePrijemnica` (F4 pauziran do S6);
+       - **nabavka:** `NabaviAmbalazu_TX` (danas ga zovu samo testovi);
+       - **storno:** `StornirajAmbalazuDokumenta` ← storno otkupa, otpremnice, prijemnice i ambalažnog
+         dokumenta.
+     - **Ko legitimno šalje tip van šifarnika:**
+       - PWA ima tvrdo upisan spisak `['12/1','6/1','2/1']` (`otkup-form.js:1`), a šifarnik ne dobija;
+       - `GetTipAmbalazeOptions` nudi rezervne `12/1` i `6/1` kad je šifarnik prazan;
+       - fixture (`Letvarica`) i testovi: BFP `TEST_TIP_AMB`/`_B`/`_C`, literal `"G"` (oko 20 tvrdnji
+         `AmbPrenosProblem`), sintetički tipovi po scenariju (`"TIPL-" & scenario` i slični, 11 mesta, plus
+         `tipT2`) i `TEST_TIP_AMB & "-DRUGI"`. Čitalački testovi (`IZVT-Letvarica`) seju knjigu direktno i
+         pisca ne zovu.
+     - **Storno je bezbedan** ako se meri postojanje reda, a ne status. PK tipa je zaključan
+       (`modMaticniUnos.PkNepromenjen`), a redovi šifarnika se ne brišu. Isti obrazac drži nalog
+       (`AmbNalogProblem`, koji takođe ide i za kontra-stav).
+     - **Sync gubi razlog:** kad pisac odbije red, `ImportRowToTblOtkup_RowTX` vrati `""`, a Sheet dobije
+       „ERROR:AppendRow failed". Red sa statusom ERROR se posle toga **trajno** preskače. Imenovan razlog
+       može da da samo `ValidatePWAOtkup`.
+     - **FALSE-GREEN rizik:** BFP „PWA tip" (`TEST_TIP_AMB & "-DRUGI"` pod istim CRID-om) tvrdi da drugi tip
+       odbija samo kapija jednakosti. Kad tip nije u šifarniku, odbila bi ga i nova kapija, pa bi tvrdnja bila
+       zelena iz pogrešnog razloga. Zato se taj tip u testu registruje.
+
+     **Odluke operatera (19.10.2026), sve po preporuci:**
+     1. **Tip je zatvoren skup** (`AMB-INV-12`, `AMB-10-ODL-33`). Kapija je u piscu (`AmbPrenosProblem`,
+        posle postojanja naloga), a poruka uz polje je u validatorima. Pravilo je jedno: tip postoji u
+        `tblTipAmbalaze`, poređenje ide preko `Trim$` i bez obzira na velika slova (kao `IstiTipAmb`), a
+        status `Aktivan` se ne gleda.
+     2. **NBSP i ostali nevidljivi znakovi se odbijaju, ne normalizuju.** Tip od samih nevidljivih znakova
+        dobija postojeću poruku „Izaberite tip ambalaže!". Sve ostalo mora da se poklopi sa šifarnikom, a pisac
+        upisuje tačno ono što je prošlo.
+     3. **Poruku dobijaju svi ulazi:** otkup, otpremnica, revers (oba smera), prijemnica (statički do S6) i
+        `ValidatePWAOtkup`.
+     4. **Rezervni tipovi se brišu** iz `GetTipAmbalazeOptions`: combo pokazuje samo šifarnik. PWA spisak iz
+        matičnih podataka je **poseban rez**. Do tada PWA red sa tipom van šifarnika dobija imenovan ERROR u
+        Sheet-u i ne uvozi se.
+
+     **Acceptance contract:**
+     - **Šta važi kad se završi:**
+       - pisac odbija svaki red (original i kontra-stav) čiji tip nema red u šifarniku i navodi tip;
+       - validatori vraćaju poruku uz polje `tipAmb`;
+       - `ValidatePWAOtkup` vraća imenovan razlog kad je `KolAmbalaze > 0`;
+       - combo je tačno šifarnik.
+     - **Šta ostaje netaknuto:**
+       - čitalac knjige (`KnjigaRedProblem`) ne gleda šifarnik;
+       - poređenje tipa ostaje bez obzira na velika slova (235 i dalje važi);
+       - pitanje o manjku i ključevi `KI-015`;
+       - poruka „nema unetu težinu" za tip koji je u šifarniku, a nema težinu;
+       - redosled ostalih kapija pisca (struktura, nalog).
+     - **Edge case:** varijanta velikih slova postojećeg tipa prolazi, a neaktivan tip prolazi kroz pisca
+       (povrat gajbi koje se više ne izdaju).
+     - **Negativni slučajevi:** sam NBSP, nepostojeći `12/2` i `12/1`+NBSP se odbijaju.
+     - **Čime se meri:**
+       - **249** — otkup kroz `Scr_Save` F1, sa NBSP i sa `12/2`: poruka validatora, bez pitanja o manjku i
+         bez reda;
+       - **250** — validatori otpremnice i reversa (oba smera), direktno. Kroz `Scr_Save` bi nacrt
+         otpremnice danas bio upisan, pa bi crveni prolaz prljao svesku;
+       - **251** — combo bez rezervnih tipova nad šifarnikom bez aktivnog reda (u transakciji);
+       - **BFP** — `AmbPrenosProblem` (nepostojeći tip, NBSP, varijanta slova), pisac u transakciji i
+         `ValidatePWAOtkup` kroz postojeći hook;
+       - svaka tvrdnja ima svoju sabotažu `ki021-*`.
+     - **Statički:** `PrijemnicaValidiraj` (pauza je pre svega).
+
+     **Prateće izmene testova (premisa, ne ponašanje):**
+     - fixture dobija `Letvarica` u šifarniku, sa težinom 0 (`GetTezinaGajbice` ostaje 0, kao i bez reda);
+     - BFP seed registruje `TEST_TIP_AMB`/`_B`/`_C` i `"G"`;
+     - sintetički tipovi i `-DRUGI` se registruju na mestu nastanka.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
