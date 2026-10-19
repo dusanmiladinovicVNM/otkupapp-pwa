@@ -61,6 +61,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblKulture` | 0 | _(samo testovi)_ |
 | `tblKupci` | 0 | _(samo testovi)_ |
 | `tblKutije` | 0 | _(samo testovi)_ |
+| `tblPoruke` | 0 | _(samo testovi)_ |
 | `tblStanice` | 0 | _(samo testovi)_ |
 | `tblTipAmbalaze` | 0 | _(samo testovi)_ |
 
@@ -133,6 +134,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblKulture`: `modGoldenTests`, `modTest`, `modTestPalete`
 - `tblKupci`: `modGoldenTests`, `modTestBanka`
 - `tblKutije`: `modTest`
+- `tblPoruke`: `modTest`
 - `tblStanice`: `modGoldenTests`, `modTest`, `modTestBanka`
 - `tblTipAmbalaze`: `modBusinessFlowProTests`, `modTest`, `modTestPalete`
 

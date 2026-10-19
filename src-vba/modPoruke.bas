@@ -2207,17 +2207,32 @@ Private Sub UpsertPoruke12(lo As ListObject, existing As Object)
 End Sub
 
 
+' Poredi se sa onim sto se CITA (CStr(Value)), a pise kroz TekstZaCeliju -- pa red
+' koji je vec ispravan ne prepisuje se na svakom EnsurePoruke.
 Private Sub UpsertRow(lo As ListObject, existing As Object, _
                       ByVal kljuc As String, ByVal tekst As String)
     If existing.Exists(kljuc) Then
         If CStr(lo.ListRows(existing(kljuc)).Range(2).Value) <> tekst Then
-            lo.ListRows(existing(kljuc)).Range(2).Value = tekst
+            lo.ListRows(existing(kljuc)).Range(2).Value = TekstZaCeliju(tekst)
         End If
     Else
         Dim r As ListRow
         Set r = lo.ListRows.Add
         r.Range(1).Value = kljuc
-        r.Range(2).Value = tekst
+        r.Range(2).Value = TekstZaCeliju(tekst)
         existing(kljuc) = r.Index
     End If
 End Sub
+
+' KI-023: Excel vodeci apostrof u Range.Value tumaci kao prefiks teksta
+' (PrefixCharacter) i ne cuva ga -- "' ne postoji" postane " ne postoji", pa
+' poruka "Tip ambalaze '" & tip & "' ne postoji" ostane bez zatvarajuceg
+' navodnika. Udvojen apostrof cuva jedan (izmereno sondom 19.10.2026). Tekst koji
+' pocinje sa "+" ili "-" Excel cuva netaknut, pa se ne dira.
+Private Function TekstZaCeliju(ByVal tekst As String) As String
+    If Left$(tekst, 1) = "'" Then
+        TekstZaCeliju = "'" & tekst
+    Else
+        TekstZaCeliju = tekst
+    End If
+End Function

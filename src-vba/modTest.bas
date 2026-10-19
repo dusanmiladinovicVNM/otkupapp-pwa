@@ -9547,12 +9547,24 @@ End Sub
 ' bi izgubile isti znak (zato ga test 253/KI-021 nije uhvatio).
 ' Kljuc DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU (#432) se dodaje u spisak kad se KI-021 i
 ' ovaj rez sretnu na main-u.
+'
+' Redovi se PRE EnsurePoruke zastarevaju: UpsertRow ne prepisuje red koji je vec
+' ispravan, pa bi nad katalogom koji je neko ranije popravio test merio zatecen
+' sadrzaj, a ne pisca -- i sabotaza pisca bi prosla zelena.
 ' SABOTAZA: ki023-katalog-guta-apostrof -> "katalog cuva vodeci apostrof: ...".
 Private Sub T_KI023_KatalogCuvaVodeciApostrof()
     Dim kljucevi As Variant, i As Long, k As String, losi As String
+    Dim redovi As Collection
 
     kljucevi = Array("DOK_MSG_NEMA_UNETU_TEZINU", "LIC_MSG_PROPUSTAM_VEZANU_MASINU", _
                      "AUTH_MSG_VEC_POSTOJI", "AUTH_MSG_ADMIN_KREIRAN", "KOR_MSG_VEC_POSTOJI")
+    modSetup.EnsurePoruke
+    For i = LBound(kljucevi) To UBound(kljucevi)
+        Set redovi = FindRows(TBL_PORUKE, COL_POR_KLJUC, CStr(kljucevi(i)))
+        If redovi.count > 0 Then
+            RequireUpdateCell TBL_PORUKE, redovi(1), COL_POR_TEKST, "KI023-ZASTARELO", "modTest"
+        End If
+    Next i
     modSetup.EnsurePoruke
     modPoruke.InvalidateCache
     For i = LBound(kljucevi) To UBound(kljucevi)
