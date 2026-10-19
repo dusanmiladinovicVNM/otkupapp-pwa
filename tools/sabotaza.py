@@ -8492,6 +8492,15 @@ SABOTAZE = {
         "Test_AMB_TipVanSifarnikaPisacOdbija",
         "KI021 PWA: red sa tipom van sifarnika dobija imenovan razlog",
     ),
+    # KI-023: katalog poruka pise vodeci apostrof bez udvajanja -> Excel ga
+    # tumaci kao prefiks teksta i ne cuva.
+    "ki023-katalog-guta-apostrof": (
+        "modPoruke.bas",
+        "        TekstZaCeliju = \"'\" & tekst\n",
+        "        TekstZaCeliju = tekst   ' SABOTAZA: apostrof se ne udvaja\n",
+        "T_KI023_KatalogCuvaVodeciApostrof",
+        "katalog cuva vodeci apostrof: tekst sa imenom ostaje pod navodnicima",
+    ),
 }
 
 
