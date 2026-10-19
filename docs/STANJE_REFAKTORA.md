@@ -5076,8 +5076,8 @@
      **Ručna provera, tačka 1 ✅** (operater, 19.10.2026, snimci 07:20 i 07:21, internet isključen):
      - pad liste Unosa dokumenata daje traku „Učitavanje mreže nije uspelo na koraku: modScrDokumenti.Scr_Rows
        [modUiScreens.ScrPadAkoTest[modScrDokumenti.Scr_Rows]] -> 9 …";
-     - zatim „Sinhronizuj", pa crvena „Sinhronizacija nije uspela — vidi Immediate/log." **ostaje** na ekranu,
-       a panel sinhronizacije kaže „Sinhronizacija nije uspela";
+     - zatim „Sinhronizuj", pa crvena „Sinhronizacija nije uspela — vidi Immediate/log." **ostaje** na ekranu i
+       posle 10 s (potvrda operatera), a panel sinhronizacije kaže „Sinhronizacija nije uspela";
      - bez dijaloga.
 
      **Uočeno uz tačku 1, nije istraženo:** posle Sync-a zaglavlje prelazi sa „Sve izmene sačuvane" na
@@ -5085,7 +5085,17 @@
      put iz duga „badge nesacuvano na novoj formi". Kandidat je ponovno punjenje combo-a (`FillZbirneCombo`,
      `RefillMaticniCombos`) koje okida `MarkDirty`, ali to nije provereno. Ide uz taj dug, ne uz ovaj rez.
 
-     **Otvoreno.** Tačka 2 ručne provere i compile (operater), pa merge na izričit zahtev.
+     **Ručna provera, tačka 2 ✅** (operater, 19.10.2026, snimci 07:49 i 07:50, Unos dokumenata u režimu
+     Otpremnica):
+     - seam uključen, pa klik na drugu listu: crvena „Učitavanje mreže nije uspelo na koraku:
+       modScrDokumenti.Scr_Rows […]";
+     - seam ugašen, pa klik na „Sve": lista se učita (27 otpremnica) i crvena traka **nestane**;
+     - bez druge poruke između i bez dijaloga.
+
+     **Compile ✅** (operater, 19.10.2026, `rucna_provera_ki016f_kod.xlsm`, kod sa `360f8b6b`): `vba_gate
+     --mark-compile`, pa `--require-green --require-compile` daje RC=0 nad izvorom `c259577ff714`.
+
+     **Otvoreno.** Merge na izričit zahtev, posle zelenog CI na tačnom head-u.
 
 ## Dug sa imenom (posle S5-5b)
 
