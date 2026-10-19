@@ -5067,7 +5067,25 @@
      1. `DoSync` posle pada liste: crvena poruka o neuspelom sync-u ostaje i posle 10 s;
      2. pad liste, pa uspelo čitanje bez druge poruke: crvena poruka mreže nestaje.
 
-     **Otvoreno.** Compile i ručna provera (operater), pa merge na izričit zahtev.
+     **Ispravka postupka tačke 1 (19.10.2026).** Prvo izdanje je tražilo pad liste na Fakturama, pa Sync. To se
+     ne može izvesti: dugme Sync postoji samo u desnom panelu ekrana Unos dokumenata (`zRight`, vidljiv samo
+     na tom ekranu). Prelazak tamo ponovo učita mrežu, a to uredno ugasi poruku mreže i njenu zastavicu, pa Sync
+     ne bi merio ništa. Pad liste zato ide baš na Unosu dokumenata, kroz seam
+     (`ScrPadTestSet "modScrDokumenti.Scr_Rows"`). Zatim se seam i test režim gase, pa sledi Sync bez interneta.
+
+     **Ručna provera, tačka 1 ✅** (operater, 19.10.2026, snimci 07:20 i 07:21, internet isključen):
+     - pad liste Unosa dokumenata daje traku „Učitavanje mreže nije uspelo na koraku: modScrDokumenti.Scr_Rows
+       [modUiScreens.ScrPadAkoTest[modScrDokumenti.Scr_Rows]] -> 9 …";
+     - zatim „Sinhronizuj", pa crvena „Sinhronizacija nije uspela — vidi Immediate/log." **ostaje** na ekranu,
+       a panel sinhronizacije kaže „Sinhronizacija nije uspela";
+     - bez dijaloga.
+
+     **Uočeno uz tačku 1, nije istraženo:** posle Sync-a zaglavlje prelazi sa „Sve izmene sačuvane" na
+     „Nesačuvan unos", iako je forma prazna. `RefreshFromData` ne zove `SelectModeCore`, pa to nije doslovno
+     put iz duga „badge nesacuvano na novoj formi". Kandidat je ponovno punjenje combo-a (`FillZbirneCombo`,
+     `RefillMaticniCombos`) koje okida `MarkDirty`, ali to nije provereno. Ide uz taj dug, ne uz ovaj rez.
+
+     **Otvoreno.** Tačka 2 ručne provere i compile (operater), pa merge na izričit zahtev.
 
 ## Dug sa imenom (posle S5-5b)
 
