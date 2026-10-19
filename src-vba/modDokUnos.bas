@@ -1155,17 +1155,14 @@ Public Function PrijemnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
     ' Manjak se meri na NOZI POVRATA: puna noga polazi od vozaca, a njegov manjak
     ' je po ODL-8 tvrdo odbijen i potvrda tamo ne postoji.
     '
-    ' NIJEDAN TEST NE SME DA UDJE U OVU GRANU -- MsgBox u run_vba prolazu visi.
+    ' Pitanje ide kroz modOtkupUnos.PotvrdiManjakAmbalaze (KI-015): u test
+    ' rezimu ga belezi i odgovara "Ne", pa MsgBox u run_vba prolazu vise ne visi.
     If Len(res) = 0 And ambErrNum = AMB_ERR_POTVRDA_DEFICITA Then
         manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KUPAC, S(p, "kupacID"), _
                                                 S(p, "tipAmb"), _
                                                 CDbl(L(p, "kolAmbVracena")))
         If manjak > 0 Then
-            If MsgBox(Poruka("AMB_ASK_DEFICIT_1") & vbCrLf & _
-                      Poruka("AMB_ASK_DEFICIT_2") & " " & _
-                      Format$(manjak, "#,##0") & vbCrLf & vbCrLf & _
-                      Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE"), _
-                      vbExclamation + vbYesNo, APP_NAME) = vbYes Then
+            If modOtkupUnos.PotvrdiManjakAmbalaze(AMB_NALOG_KUPAC, manjak) Then
                 res = PrjUpisPoziv(p, manjak, ambErrNum)
             End If
         End If

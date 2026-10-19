@@ -39,6 +39,10 @@ Option Explicit
 
 Public Const OTKUNOS_BUILD As String = "v6-ui-114"
 
+' Tekst poslednjeg pitanja o manjku ambalaze, zabelezen u test rezimu (seam
+' PotvrdiManjakAmbalaze, KI-015). "" = pitanja nije bilo.
+Private mPitanjeManjkaTest As String
+
 '--------------------------------------------------------------- ULAZ
 ' Prazan recnik sa svim kljucevima - da pozivalac ne mora da pamti spisak.
 Public Function NoviOtkupUnos() As Object
@@ -397,11 +401,7 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
     If ambErrNum = AMB_ERR_POTVRDA_DEFICITA Then
         ambDeficit = modOtkup.OtkupDeficitKooperanta(h, stavke)
         If ambDeficit > 0 Then
-            If MsgBox(Poruka("AMB_ASK_DEFICIT_1") & vbCrLf & _
-                      Poruka("AMB_ASK_DEFICIT_2") & " " & _
-                      Format$(ambDeficit, "#,##0") & vbCrLf & vbCrLf & _
-                      Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE"), _
-                      vbExclamation + vbYesNo, APP_NAME) = vbYes Then
+            If PotvrdiManjakAmbalaze(AMB_NALOG_KOOPERANT, ambDeficit) Then
                 greska = ""
                 ambErrNum = 0
                 If Len(Trim$(ispravljaOtkupID)) > 0 Then
@@ -460,3 +460,46 @@ EH:
     LogErr "modOtkupUnos.OtkupUpisi"
     poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
+
+' PITANJE O MANJKU AMBALAZE (protokol potvrde deficita, AMB-10-ODL-8, 6.5).
+'
+' Jedno mesto za pitanje koje postavljaju sva tri pisca sa potvrdom: otkup
+' (kooperant donosi svoje gajbe), kupcev revers i prijemnica (kupac vraca vise
+' nego sto drzi). Do KI-015 je svako mesto sastavljalo isti MsgBox po svom.
+'
+' nalogTip je nalog kome fali (AMB_NALOG_KOOPERANT / AMB_NALOG_KUPAC); manjak je
+' SVEZE izracunat manjak -- pozivalac ga cita neposredno pre pitanja.
+'
+' KI-015 REPRODUKCIJA: tekst je jos isti za obe strane (kao pre izdvajanja).
+'
+' TEST SEAM, tvrdo gejtovan (.claude/rules/testovi.md S4): u test rezimu se
+' pitanje BELEZI umesto da se otvori, a odgovor je UVEK "Ne" -- seam samo
+' posmatra i zabranjuje, ne upisuje. MsgBox u nevidljivom Excelu visi do
+' timeout-a i ostavlja Excel u [break]. Zabelezen tekst cita PitanjeManjkaTest,
+' a gasi ga ResetSeamova (PitanjeManjkaTestReset).
+Public Function PotvrdiManjakAmbalaze(ByVal nalogTip As String, _
+                                      ByVal manjak As Double) As Boolean
+    Dim txt As String
+    txt = Poruka("AMB_ASK_DEFICIT_1") & vbCrLf & _
+          Poruka("AMB_ASK_DEFICIT_2") & " " & _
+          Format$(manjak, "#,##0") & vbCrLf & vbCrLf & _
+          Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE")
+    If IsTestMode() Then
+        mPitanjeManjkaTest = txt
+        Exit Function
+    End If
+    PotvrdiManjakAmbalaze = (MsgBox(txt, vbExclamation + vbYesNo, APP_NAME) = vbYes)
+End Function
+
+' TEST SEAM: tekst poslednjeg pitanja o manjku ("" = nije postavljeno). Tvrdo
+' gejtovan.
+Public Function PitanjeManjkaTest() As String
+    If Not IsTestMode() Then Exit Function
+    PitanjeManjkaTest = mPitanjeManjkaTest
+End Function
+
+' TEST SEAM: brise zabelezeno pitanje -- test pre poteza, i ResetSeamova.
+Public Sub PitanjeManjkaTestReset()
+    If Not IsTestMode() Then Exit Sub
+    mPitanjeManjkaTest = ""
+End Sub

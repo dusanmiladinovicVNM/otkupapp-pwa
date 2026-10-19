@@ -674,9 +674,9 @@ End Function
 ' radi za otkup od 03.10.2026: ekran ZADRZAVA podatke, pa operater ne unosi
 ' nista ponovo.
 '
-' NIJEDAN TEST NE SME DA UDJE U OVU GRANU: MsgBox u run_vba prolazu visi do
-' timeout-a i ostavlja Excel u [break]. Zato testovi mere pisca (gde protokol i
-' zivi), a dijalog ide u operatersku cek-listu.
+' Pitanje ide kroz modOtkupUnos.PotvrdiManjakAmbalaze (KI-015), koje u test
+' rezimu tekst BELEZI i odgovara "Ne" -- pa test sme da udje u ovu granu. Do
+' tada je ovde stajao MsgBox, koji u run_vba prolazu visi do timeout-a.
 Private Function RevKupcaUpisi(ByVal p As Object, ByRef poruke As String) As String
     Dim res As String, greska As String, errNum As Long, manjak As Double
 
@@ -688,11 +688,7 @@ Private Function RevKupcaUpisi(ByVal p As Object, ByRef poruke As String) As Str
         manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KUPAC, S(p, "partnerID"), _
                                                 S(p, "tipAmb"), CDbl(L(p, "kolAmb")))
         If manjak > 0 Then
-            If MsgBox(Poruka("AMB_ASK_DEFICIT_1") & vbCrLf & _
-                      Poruka("AMB_ASK_DEFICIT_2") & " " & _
-                      Format$(manjak, "#,##0") & vbCrLf & vbCrLf & _
-                      Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE"), _
-                      vbExclamation + vbYesNo, APP_NAME) = vbYes Then
+            If modOtkupUnos.PotvrdiManjakAmbalaze(AMB_NALOG_KUPAC, manjak) Then
                 res = RevKupcaPisac(p, manjak, errNum, greska)
             End If
         End If

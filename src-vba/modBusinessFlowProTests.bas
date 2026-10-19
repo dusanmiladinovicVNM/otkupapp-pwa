@@ -338,6 +338,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_RVP_BrojJeKupcevINePredlazeSe
     Test_RVP_DeficitSePotvrdjuje
     Test_PRJ_PovratIdeSaKlasomKojaPostoji
+    Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -6394,6 +6395,64 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_PRJ_PovratIdeSaKlasomKojaPostoji", Err.Number, Err.description
+End Sub
+
+' KI-015, KONTROLA: PITANJE O MANJKU NA OTKUPU I DALJE IMENUJE KOOPERANTA.
+'
+' Sva tri pisca sa potvrdom deficita (otkup, kupcev revers, prijemnica) pitaju
+' kroz modOtkupUnos.PotvrdiManjakAmbalaze, koje u test rezimu tekst BELEZI i
+' odgovara "Ne" -- pa test sme da udje u granu u kojoj je do KI-015 stajao
+' MsgBox. Kupca meri modTest 248; ovo je kontrola iz suprotnog smera: na otkupu,
+' gde je tekst bio tacan, pitanje i posle izdvajanja imenuje kooperanta, a
+' odbijen otkup i dalje nosi "unos otkupa".
+'
+' RunBusinessFlowProSuite test rezim NE pali (v. Test_PR3_PrazanHeaderIDNeProlazi),
+' a bez njega bi seam otvorio MsgBox i suite bi visila. Rezim se vraca i na
+' putu greske.
+' SABOTAZA: ki015-otkup-pita-kupca -> pukne
+' "KI015 otkup: pitanje o manjku imenuje kooperanta".
+Private Sub Test_AMB_PitanjeManjkaOtkupImenujeKooperanta()
+    Dim prevMode As Boolean
+    prevMode = IsTestMode()
+    On Error GoTo EH
+
+    Dim scenario As String, p As Object, poruke As String, res As String
+    Dim pitanje As String, saldo As Double, n0 As Long
+
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    scenario = NewScenarioCode("KI015K")
+    ' Kooperant donosi 3 gajbe vise nego sto drzi: manjak je tacno 3.
+    saldo = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)
+    Set p = OtkEkranParam(TEST_PREFIX & "-KI015K-" & scenario)
+    p("kolicinaI") = 400#
+    p("cenaI") = 50#
+    p("kolAmb") = CLng(saldo) + 3
+
+    n0 = Pr3BrojRedova(TBL_OTKUP)
+    SetTestMode True
+    modOtkupUnos.PitanjeManjkaTestReset
+    res = modOtkupUnos.OtkupUpisi(p, poruke)
+    pitanje = modOtkupUnos.PitanjeManjkaTest()
+    modOtkupUnos.PitanjeManjkaTestReset
+    SetTestMode prevMode
+
+    AssertTrue Len(pitanje) > 0, "KI015 otkup: kooperant iznad salda dobija pitanje o manjku"
+    AssertEquals "", res, "KI015 otkup: odgovor Ne ne upisuje otkup"
+    AssertEquals CStr(n0), CStr(Pr3BrojRedova(TBL_OTKUP)), "KI015 otkup: odbijen otkup ne pravi red"
+    AssertTrue PorukaPostoji("AMB_ASK_DEFICIT_1") And PorukaPostoji("AMB_ASK_DEFICIT_2") And _
+               InStr(1, pitanje, Poruka("AMB_ASK_DEFICIT_1"), vbBinaryCompare) > 0 And _
+               InStr(1, pitanje, Poruka("AMB_ASK_DEFICIT_2") & " 3", vbBinaryCompare) > 0 And _
+               InStr(1, pitanje, "kooperant", vbTextCompare) > 0 And _
+               InStr(1, pitanje, "kup", vbTextCompare) = 0, _
+               "KI015 otkup: pitanje o manjku imenuje kooperanta"
+    AssertTrue InStr(1, poruke, Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU"), vbBinaryCompare) > 0, _
+               "KI015 otkup: odbijen otkup i dalje nosi unos otkupa"
+    Exit Sub
+EH:
+    modOtkupUnos.PitanjeManjkaTestReset
+    SetTestMode prevMode
+    LogFatal "Test_AMB_PitanjeManjkaOtkupImenujeKooperanta", Err.Number, Err.description
 End Sub
 
 ' Pisac kupcevog reversa SA potvrdom manjka -- odvojen helper, da pozivi bez

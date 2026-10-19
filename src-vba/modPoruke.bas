@@ -974,6 +974,10 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUNOS_ASK_PARCELA_2", "ne odgovara izabranoj vrsti"
     UpsertRow lo, existing, "AMB_ASK_DEFICIT_1", "Kooperant nema toliko na" & ChrW(353) & "ih gajbi."
     UpsertRow lo, existing, "AMB_ASK_DEFICIT_2", "Manjak ulazi u opticaj kao TU" & ChrW(272) & "A ambala" & ChrW(382) & "a " & ChrW(8212) & " firma ga duguje kooperantu:"
+    ' KI-015: isto pitanje za KUPCA (kupcev revers, prijemnica) -- ogledalo
+    ' kooperanta, AMBALAZA.md 6.4: manjak pokriva ULAZ_TUDJE na nalog kupca.
+    UpsertRow lo, existing, "AMB_ASK_DEFICIT_KUP_1", "Kupac nema toliko na" & ChrW(353) & "ih gajbi."
+    UpsertRow lo, existing, "AMB_ASK_DEFICIT_KUP_2", "Manjak ulazi u opticaj kao TU" & ChrW(272) & "A ambala" & ChrW(382) & "a " & ChrW(8212) & " firma ga duguje kupcu:"
     UpsertRow lo, existing, "OTKUNOS_MSG_NIJE_HLADNJACA", "Napomena: ovaj unos nije autohladnja" & ChrW(269) & "a lanac " & ChrW(8212) & " palete stornirane prijemnice NISU prevezane:"
     UpsertRow lo, existing, "OTKUNOS_ERR_BROJ_ZAUZET", "Taj broj otkupnog lista je ve" & ChrW(263) & " izdat na ovom otkupnom mestu tog dana. Storno ne osloba" & ChrW(273) & "a broj " & ChrW(8212) & " ispravka dobija NOV broj. Postoje" & ChrW(263) & "i dokument:"
     UpsertRow lo, existing, "OTKUNOS_ERR_KULTURA", "Izabrana vrsta i sorta se ne prevode u ta" & ChrW(269) & "no jednu kulturu iz " & ChrW(353) & "ifarnika:"
@@ -1034,6 +1038,11 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ASK_DUPLA_PRIJ_3", "Pravilo je 1 zbirna = 1 prijemnica, pa ovo li" & ChrW(269) & "i na DUPLI UNOS. Ipak snimiti?"
     UpsertRow lo, existing, "DOKUNOS_MSG_UPISANA_ZBR", ChrW(10003) & " Zbirna sa" & ChrW(269) & "uvana:"
     UpsertRow lo, existing, "DOKUNOS_MSG_UPISANA_PRIJ", ChrW(10003) & " Prijemnica sa" & ChrW(269) & "uvana:"
+    ' KI-015: neuspeh upisa po vrsti, kao uspeh iznad (PorukaUpisano). Otkup
+    ' ostaje OTKUP_ERR_GRESKA_PRI_UNOSU.
+    UpsertRow lo, existing, "DOKUNOS_ERR_GRESKA_UNOS_OTP", "Gre" & ChrW(353) & "ka pri unosu otpremnice:"
+    UpsertRow lo, existing, "DOKUNOS_ERR_GRESKA_UNOS_ZBR", "Gre" & ChrW(353) & "ka pri unosu zbirne:"
+    UpsertRow lo, existing, "DOKUNOS_ERR_GRESKA_UNOS_PRIJ", "Gre" & ChrW(353) & "ka pri unosu prijemnice:"
     ' --- unos novca i ambalaze (modNovacUnos): isplate F5, uplate F6, reversi F7 ---
     UpsertRow lo, existing, "NOVUNOS_ERR_NOVAC", ChrW(10007) & " Unesi iznos ve" & ChrW(263) & "i od nule"
     UpsertRow lo, existing, "NOVUNOS_ERR_KOL_AMB", ChrW(10007) & " Unesi koli" & ChrW(269) & "inu ambala" & ChrW(382) & "e"
@@ -1066,6 +1075,14 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "NOVUNOS_MSG_UPISANA_ISPL", ChrW(10003) & " Isplata sa" & ChrW(269) & "uvana:"
     UpsertRow lo, existing, "NOVUNOS_MSG_UPISANA_UPL", ChrW(10003) & " Uplata sa" & ChrW(269) & "uvana:"
     UpsertRow lo, existing, "NOVUNOS_MSG_UPISAN_REV", ChrW(10003) & " Revers sa" & ChrW(269) & "uvan:"
+    ' KI-015: neuspeh upisa po vrsti. Do KI-015 su sve tri vrste javljale
+    ' "cuvanju otpremnice" i "unosu otkupa".
+    UpsertRow lo, existing, "NOVUNOS_MSG_GRESKA_CUVANJE_ISPL", "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju isplate. Promene su vra" & ChrW(263) & "ene."
+    UpsertRow lo, existing, "NOVUNOS_MSG_GRESKA_CUVANJE_UPL", "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju uplate. Promene su vra" & ChrW(263) & "ene."
+    UpsertRow lo, existing, "NOVUNOS_MSG_GRESKA_CUVANJE_REV", "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju reversa. Promene su vra" & ChrW(263) & "ene."
+    UpsertRow lo, existing, "NOVUNOS_ERR_GRESKA_UNOS_ISPL", "Gre" & ChrW(353) & "ka pri unosu isplate:"
+    UpsertRow lo, existing, "NOVUNOS_ERR_GRESKA_UNOS_UPL", "Gre" & ChrW(353) & "ka pri unosu uplate:"
+    UpsertRow lo, existing, "NOVUNOS_ERR_GRESKA_UNOS_REV", "Gre" & ChrW(353) & "ka pri unosu reversa:"
     UpsertRow lo, existing, "NOVUNOS_MSG_STAMPA_NIJE", ChrW(10007) & " Revers je sa" & ChrW(269) & "uvan, ali papir nije napravljen " & ChrW(8212) & " NE unosi ga ponovo. Razlog:"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_REDA", ChrW(10007) & " Prvo izaberi red u listi"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_DOK", ChrW(10007) & " Nema nestorniranog dokumenta broj"

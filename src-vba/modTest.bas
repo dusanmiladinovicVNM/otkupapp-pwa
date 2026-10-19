@@ -338,6 +338,10 @@ Public Sub RunAllTests()
     RunOne 242
     RunOne 243
     RunOne 244
+    RunOne 245
+    RunOne 246
+    RunOne 247
+    RunOne 248
     RunOne 13
     RunOne 14
     RunOne 15
@@ -615,6 +619,9 @@ Private Sub ResetSeamova()
     ' tog clana oborio; kanal se prazni da tudji pad ne ostane sledecem citaocu.
     modUiScreens.ScrPadTestSet ""
     modUiScreens.ScrPadPreuzmi
+    ' Zabelezeno pitanje o manjku (245-248): zaostao tekst bi sledecem testu
+    ' izgledao kao pitanje koje je SAM postavio.
+    modOtkupUnos.PitanjeManjkaTestReset
     Err.Clear
 End Sub
 
@@ -860,6 +867,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 242: TestName = "T_KI016_PadGradnjeJeJavljen"
         Case 243: TestName = "T_KI016_PadUsredGradnje"
         Case 244: TestName = "T_KI016_PorukaMrezeNeGasiTudju"
+        Case 245: TestName = "T_KI015_OdbijenReversImenujeRevers"
+        Case 246: TestName = "T_KI015_NovacImenujeSvojuVrstu"
+        Case 247: TestName = "T_KI015_ValidatorImenujeSvojDokument"
+        Case 248: TestName = "T_KI015_PitanjeManjkaImenujeKupca"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1112,6 +1123,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 242: T_KI016_PadGradnjeJeJavljen
         Case 243: T_KI016_PadUsredGradnje
         Case 244: T_KI016_PorukaMrezeNeGasiTudju
+        Case 245: T_KI015_OdbijenReversImenujeRevers
+        Case 246: T_KI015_NovacImenujeSvojuVrstu
+        Case 247: T_KI015_ValidatorImenujeSvojDokument
+        Case 248: T_KI015_PitanjeManjkaImenujeKupca
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -9059,6 +9074,301 @@ CleanUp:
     AssertEq ekran4 & "|" & toastTudja, "ANALIZA|KI016 tudja poruka", _
              "uspelo citanje ne gasi poruku koja je zamenila poruku mreze"
 End Sub
+
+' 245. KI-015: ODBIJEN REVERS IMENUJE REVERS -- ceo potez operatera.
+'
+' Rucna provera #419 (13.10.2026): revers koji stanica ne moze da pokrije javio
+' je "Greska pri cuvanju OTPREMNICE. Promene su vracene. Greska pri unosu
+' OTKUPA: ..." -- razlog tacan, a dokument koji operater nije ni unosio. Uzrok je
+' migracija (korak 2): ljuskini Save* su prepisali kljuc otpremnice, a moduli
+' unosa kljuc otkupa.
+'
+' Uslovi su iz 227 (stanica izdaje vise nego sto drzi), a put je CommitDokument
+' -- isti kojim ide klik na "Sacuvaj". Meri se TEKST dijaloga: pocinje cuvanjem
+' reversa (PocinjeKljucem), a razlog nosi unos reversa (NosiKljuc). Nista se ne
+' upisuje, pa test ne menja knjigu.
+' SABOTAZE: ki015-revers-cuvanje -> pukne "nas revers: poruka cuvanja imenuje
+' revers"; ki015-revers-unos -> pukne "nas revers: razlog nosi unos reversa".
+Private Sub T_KI015_OdbijenReversImenujeRevers()
+    Dim f As frmOtkupUI, zf As Object, broj As String
+    Dim nDokPre As Long, nDokPosle As Long, dijalog As String, kol As String
+    Dim errNum As Long, errDesc As String
+
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    On Error GoTo CleanUp
+    broj = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date)
+
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F7"
+    modOtkupUI.GridTestLoad "DOKUMENTI"
+    modOtkupUI.ApplyPrefill SpecReversaKI011(broj, 999999)
+    nDokPre = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+    modOtkupUI.CommitDokumentTest False
+    dijalog = modOtkupUI.DijalogTest()
+    kol = Polje(zf, "fgKolAmb")
+    nDokPosle = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI015_OdbijenReversImenujeRevers", errDesc
+
+    AssertEq nDokPosle - nDokPre, 0, "preduslov: odbijen revers ne pravi dokument"
+    AssertEq kol, "999999", "preduslov: odbijen revers ostavlja formu popunjenu"
+    AssertEq PocinjeKljucem(dijalog, "NOVUNOS_MSG_GRESKA_CUVANJE_REV", "reversa"), _
+             "da || " & dijalog, "nas revers: poruka cuvanja imenuje revers"
+    AssertEq NosiKljuc(dijalog, "NOVUNOS_ERR_GRESKA_UNOS_REV", "reversa"), _
+             "da || " & dijalog, "nas revers: razlog nosi unos reversa"
+End Sub
+
+' 246. KI-015: ODBIJENA ISPLATA I UPLATA IMENUJU SVOJU VRSTU.
+'
+' Isti kvar kao 245, za dva gotovinska rezima. Pisac isplate i uplate razlog
+' odbijanja GUTA (SaveOMUlaz_TX / SaveKupciIzlaz_TX vrate False, KI-020), a
+' validator ponavlja njegove kapije -- pa podatak koji validator pusti a pisac
+' odbije ne postoji. Do poruke zato vodi izuzetak u modulu unosa: datum koji
+' ljuska ne salje (CommitDokument ga proverava sam) pukne na CDate u *Upisi --
+' POSLE validatora, a PRE pisca, pa se nista ne upisuje. EH tog reda je isti za
+' svaki izuzetak, a prefiks cuvanja je isti red kojim se javlja i odbijen upis
+' pisca. Ide kroz Scr_Save, clan ugovora ekrana koji sastavlja oba prefiksa.
+' SABOTAZE: ki015-isplata-cuvanje / -unos i ki015-uplata-cuvanje / -unos ->
+' pukne tvrdnja cuvanja odnosno razloga svoje vrste.
+Private Sub T_KI015_NovacImenujeSvojuVrstu()
+    Dim p As Object, isplata As String, uplata As String
+    Dim nPre As Long, nPosle As Long
+
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    nPre = BrojRedovaTabele(TBL_NOVAC)
+
+    ' Avans kooperantu (bez bloka): najkraci put kroz IsplataValidiraj.
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F5"))
+    p("datum") = "KI015-nije-datum"
+    p("stanicaID") = FX_STANICA
+    p("stanicaTekst") = FX_STANICA
+    p("vrsta") = FX_VRSTA
+    p("kooperantID") = FX_KOOPERANT
+    p("partnerTip") = "KOOP"
+    p("partnerTekst") = FX_KOOPERANT
+    p("brDok") = FX_BROJ_NOVAC
+    p("novac") = 1
+    isplata = modScrDokumenti.Scr_Save(p)
+
+    ' Avans kupca (bez fakture).
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F6"))
+    p("datum") = "KI015-nije-datum"
+    p("kooperantID") = FX_KUPAC
+    p("partnerTekst") = FX_KUPAC
+    p("vrsta") = FX_VRSTA
+    p("brDok") = FX_BROJ_NOVAC
+    p("novac") = 1
+    uplata = modScrDokumenti.Scr_Save(p)
+    nPosle = BrojRedovaTabele(TBL_NOVAC)
+
+    AssertEq nPosle - nPre, 0, "preduslov: odbijen novac ne pravi red"
+    AssertEq PocinjeKljucem(isplata, "NOVUNOS_MSG_GRESKA_CUVANJE_ISPL", "isplate"), _
+             "da || " & isplata, "isplata: poruka cuvanja imenuje isplatu"
+    AssertEq NosiKljuc(isplata, "NOVUNOS_ERR_GRESKA_UNOS_ISPL", "isplate"), _
+             "da || " & isplata, "isplata: razlog nosi unos isplate"
+    AssertEq PocinjeKljucem(uplata, "NOVUNOS_MSG_GRESKA_CUVANJE_UPL", "uplate"), _
+             "da || " & uplata, "uplata: poruka cuvanja imenuje uplatu"
+    AssertEq NosiKljuc(uplata, "NOVUNOS_ERR_GRESKA_UNOS_UPL", "uplate"), _
+             "da || " & uplata, "uplata: razlog nosi unos uplate"
+End Sub
+
+' 247. KI-015: IZUZETAK U VALIDATORU IMENUJE SVOJ DOKUMENT.
+'
+' Validator otpremnice, zbirne i reversa ima svoj EH, a on je do KI-015 javljao
+' "Greska pri unosu OTKUPA" -- i otpremnica, cija je poruka cuvanja tacna. Okidac
+' je isti kao u 246: datum koji ljuska ne salje pukne na CDate u proveri broja.
+' Validator poruku vraca SAM (bez prefiksa cuvanja), pa se meri samo unos.
+' Prijemnica je pauzirana do S6 (PrijemnicaValidiraj vraca pauzu pre svega), pa
+' se njen EH meri kroz PrijemnicaUpisi direktno -- to je produkcioni red, samo
+' danas nedostizan iz ekrana.
+' SABOTAZE: ki015-otp-validator, ki015-zbr-validator, ki015-rev-validator,
+' ki015-prij-unos -> pukne tvrdnja svoje vrste.
+Private Sub T_KI015_ValidatorImenujeSvojDokument()
+    Dim p As Object, otp As String, zbr As String, rev As String
+    Dim prij As String, poruke As String
+
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F2"))
+    p("datum") = "KI015-nije-datum"
+    p("stanicaID") = FX_STANICA
+    p("vozacID") = FX_VOZAC
+    p("vrsta") = FX_VRSTA
+    p("sorta") = FX_SORTA
+    p("tipAmb") = FX_TIP_AMB
+    p("kolicinaI") = 100#
+    p("cenaI") = 50#
+    p("kolAmb") = 10&
+    p("brDok") = "KI015-OTP"
+    otp = modScrDokumenti.Scr_Save(p)
+
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F3"))
+    p("datum") = "KI015-nije-datum"
+    p("vozacID") = FX_VOZAC
+    p("kooperantID") = FX_KUPAC
+    p("brDok") = "KI015-ZBR"
+    p("kolicinaI") = 100#
+    p("kolAmb") = 10&
+    zbr = modScrDokumenti.Scr_Save(p)
+
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F7"))
+    p("datum") = "KI015-nije-datum"
+    p("stanicaID") = FX_STANICA
+    p("vrsta") = FX_VRSTA
+    p("brDok") = "KI015-REV"
+    p("smerRev") = modNovacUnos.SMER_REV_IZD_KOOP
+    rev = modScrDokumenti.Scr_Save(p)
+
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("datum") = "KI015-nije-datum"
+    prij = modDokUnos.PrijemnicaUpisi(p, poruke)
+
+    ' Validator i upis prijemnice vracaju poruku SAMI, bez prefiksa cuvanja --
+    ' pa poruka mora i da POCINJE unosom svoje vrste.
+    AssertEq PocinjeKljucem(otp, "DOKUNOS_ERR_GRESKA_UNOS_OTP", "otpremnice"), _
+             "da || " & otp, "otpremnica: izuzetak u validatoru imenuje otpremnicu"
+    AssertEq PocinjeKljucem(zbr, "DOKUNOS_ERR_GRESKA_UNOS_ZBR", "zbirne"), _
+             "da || " & zbr, "zbirna: izuzetak u validatoru imenuje zbirnu"
+    AssertEq PocinjeKljucem(rev, "NOVUNOS_ERR_GRESKA_UNOS_REV", "reversa"), _
+             "da || " & rev, "revers: izuzetak u validatoru imenuje revers"
+    AssertEq prij, "", "preduslov: prijemnica sa losim datumom nije upisana"
+    AssertEq PocinjeKljucem(poruke, "DOKUNOS_ERR_GRESKA_UNOS_PRIJ", "prijemnice"), _
+             "da || " & poruke, "prijemnica: izuzetak u upisu imenuje prijemnicu"
+End Sub
+
+' 248. KI-015: PITANJE O MANJKU NA KUPCEVOM REVERSU I PRIJEMNICI IMENUJE KUPCA.
+'
+' Rucna provera #421 (14.10.2026): kupac koji vraca vise gajbi nego sto drzi
+' dobio je pitanje "Kooperant nema toliko nasih gajbi... firma ga duguje
+' kooperantu". Domen je ogledalo kooperanta (AMBALAZA.md 6.4): manjak pokriva
+' ULAZ_TUDJE na nalog KUPCA, pa firma duguje kupcu.
+'
+' Pitanje je MsgBox u putanji pisca, pa ga je do KI-015 merila samo rucna
+' provera: test koji udje u granu visi do timeout-a. Sada sva tri mesta pitaju
+' kroz modOtkupUnos.PotvrdiManjakAmbalaze, koje u test rezimu tekst BELEZI i
+' odgovara "Ne" -- pa test ide kroz pravi poziv: kupcev revers kroz Scr_Save
+' (SaveRevers -> RevKupcaUpisi), prijemnica kroz PrijemnicaUpisi (F4 je
+' pauziran, v. 247). Odgovor "Ne" je potpuno odbijanje: nema dokumenta, a
+' odbijen revers imenuje revers. Kontrolu sa strane kooperanta (otkup) drzi BFP
+' Test_AMB_PitanjeManjkaOtkupImenujeKooperanta.
+' SABOTAZE: ki015-revkupca-pita-kooperanta -> "kupcev revers: pitanje o manjku
+' imenuje kupca"; ki015-prij-pita-kooperanta -> "prijemnica: pitanje o manjku
+' imenuje kupca"; ki015-seam-odgovara-da -> "pitanje u test rezimu odgovara Ne:
+' odbijen revers ne pravi dokument"; ki015-revkupca-unos -> "kupcev revers:
+' razlog nosi unos reversa".
+Private Sub T_KI015_PitanjeManjkaImenujeKupca()
+    Dim p As Object, kupSaldo As Double, nPre As Long, nPosle As Long
+    Dim odbijen As String, pitanjeRev As String, pitanjePrij As String
+    Dim prij As String, poruke As String, nPrijPre As Long, nPrijPosle As Long
+
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    kupSaldo = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, FX_KUPAC, FX_TIP_AMB)
+
+    ' Kupcev revers: kupac vraca 3 vise nego sto drzi.
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F7"))
+    p("stanicaID") = FX_STANICA
+    p("stanicaTekst") = FX_STANICA
+    p("kooperantID") = FX_KUPAC
+    p("partnerTip") = "KUP"
+    p("partnerTekst") = FX_KUPAC_NAZIV
+    p("vozacID") = FX_VOZAC
+    p("vrsta") = FX_VRSTA
+    p("brDok") = "KUP248-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    p("tipAmb") = FX_TIP_AMB
+    p("kolAmb") = CLng(kupSaldo) + 3
+    p("smerRev") = modNovacUnos.SMER_REV_POVRAT_KUP
+    nPre = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+    modOtkupUnos.PitanjeManjkaTestReset
+    odbijen = modScrDokumenti.Scr_Save(p)
+    pitanjeRev = modOtkupUnos.PitanjeManjkaTest()
+    nPosle = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+
+    ' Prijemnica: bez pune noge (kolAmb = 0), povrat 3 vise nego sto kupac drzi.
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("datum") = Date
+    p("brDok") = "PR248-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    p("kolAmb") = 0
+    p("kolAmbVracena") = CLng(kupSaldo) + 3
+    nPrijPre = BrojRedovaTabele(TBL_PRIJEMNICA)
+    modOtkupUnos.PitanjeManjkaTestReset
+    prij = modDokUnos.PrijemnicaUpisi(p, poruke)
+    pitanjePrij = modOtkupUnos.PitanjeManjkaTest()
+    nPrijPosle = BrojRedovaTabele(TBL_PRIJEMNICA)
+    modOtkupUnos.PitanjeManjkaTestReset
+
+    AssertEq (Len(pitanjeRev) > 0), True, "preduslov: kupac iznad salda dobija pitanje o manjku"
+    AssertEq nPosle - nPre, 0, "pitanje u test rezimu odgovara Ne: odbijen revers ne pravi dokument"
+    AssertEq NazivPitanja(pitanjeRev, 3), "kupac=da kooperant=ne || " & pitanjeRev, _
+             "kupcev revers: pitanje o manjku imenuje kupca"
+    AssertEq PocinjeKljucem(odbijen, "NOVUNOS_MSG_GRESKA_CUVANJE_REV", "reversa"), _
+             "da || " & odbijen, "kupcev revers: poruka cuvanja imenuje revers"
+    AssertEq NosiKljuc(odbijen, "NOVUNOS_ERR_GRESKA_UNOS_REV", "reversa"), _
+             "da || " & odbijen, "kupcev revers: razlog nosi unos reversa"
+    AssertEq (Len(pitanjePrij) > 0), True, "preduslov: prijemnica iznad salda kupca dobija pitanje"
+    AssertEq prij & "|" & CStr(nPrijPosle - nPrijPre), "|0", _
+             "pitanje u test rezimu odgovara Ne: prijemnica nije upisana"
+    AssertEq NazivPitanja(pitanjePrij, 3), "kupac=da kooperant=ne || " & pitanjePrij, _
+             "prijemnica: pitanje o manjku imenuje kupca"
+End Sub
+
+' KI-015: "da || <tekst>" kad poruka odbijenog upisa POCINJE tekstom kljuca
+' (prefiks cuvanja), inace "ne || <tekst>". Tekst ide u vrednost namerno -- kad
+' tvrdnja pukne, izlaz pokazuje i poruku koju je operater video.
+' Kljuc koga nema u katalogu je "ne": Poruka() bi dala "[KLJUC]", pa bi
+' poredjenje sa njom proslo i nad praznim katalogom (testovi.md S2). Tekst kljuca
+' mora i da nosi naziv vrste -- inace bi kljuc sa tudjim tekstom bio "da".
+Private Function PocinjeKljucem(ByVal tekst As String, ByVal kljuc As String, _
+                                ByVal naziv As String) As String
+    Dim s As String, r As String
+    s = Poruka(kljuc)
+    r = "ne"
+    If Not PorukaNedostaje(kljuc) And InStr(1, s, naziv, vbTextCompare) > 0 Then
+        If Left$(tekst, Len(s)) = s Then r = "da"
+    End If
+    PocinjeKljucem = r & " || " & tekst
+End Function
+
+' KI-015: isto, kad poruka NOSI tekst kljuca bilo gde (razlog posle prefiksa).
+Private Function NosiKljuc(ByVal tekst As String, ByVal kljuc As String, _
+                           ByVal naziv As String) As String
+    Dim s As String, r As String
+    s = Poruka(kljuc)
+    r = "ne"
+    If Not PorukaNedostaje(kljuc) And InStr(1, s, naziv, vbTextCompare) > 0 Then
+        If InStr(1, tekst, s, vbBinaryCompare) > 0 Then r = "da"
+    End If
+    NosiKljuc = r & " || " & tekst
+End Function
+
+' KI-015: "kupac=da kooperant=ne || <pitanje>". kupac=da kad pitanje nosi oba
+' reda teksta kupca i tacan manjak; kooperant=da kad pominje kooperanta. Kljuc
+' koga nema u katalogu je "ne" (isti razlog kao u NazivPoruke).
+Private Function NazivPitanja(ByVal pitanje As String, ByVal manjak As Double) As String
+    Dim k As String, s1 As String, s2 As String
+    s1 = Poruka("AMB_ASK_DEFICIT_KUP_1")
+    s2 = Poruka("AMB_ASK_DEFICIT_KUP_2")
+    k = "ne"
+    If Not PorukaNedostaje("AMB_ASK_DEFICIT_KUP_1") And _
+       Not PorukaNedostaje("AMB_ASK_DEFICIT_KUP_2") Then
+        If InStr(1, pitanje, s1, vbBinaryCompare) > 0 And _
+           InStr(1, pitanje, s2 & " " & Format$(manjak, "#,##0"), vbBinaryCompare) > 0 Then k = "da"
+    End If
+    NazivPitanja = "kupac=" & k & " kooperant=" & _
+                   IIf(InStr(1, pitanje, "ooperant", vbTextCompare) > 0, "da", "ne") & _
+                   " || " & pitanje
+End Function
 
 ' Postoji li kontrola datog imena u zoni ekrana (243).
 Private Function ZonaImaKontrolu(ByVal kljuc As String, ByVal ime As String) As Boolean
