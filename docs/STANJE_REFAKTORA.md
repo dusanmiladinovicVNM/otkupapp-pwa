@@ -5502,6 +5502,42 @@
      - Palete seju svoj tip u šifarnik;
      - čitalački testovi (`IZVT-Letvarica`) seju knjigu direktno.
 
+160. **Review `#432` (`bbeb588a`): `CODE GO` 9,1/10 uz `P3`, `MERGE HOLD` zbog integracionog `P1` sa `#431`**
+     (19.10.2026). Static CI #1010 `SUCCESS` je na tačnom head-u (run 39234473922, izmereno). Review je
+     prenela sesija `KI-015`.
+
+     - **Integracioni `P1`:** `#431` (PDF u test prolazu) i `#432` zauzimaju iste ID-eve testova 249–251. Odluka
+       je sledeća:
+       - `#431` se merge-uje prvi (merge-ovan je 19.10.2026 kao `2dae09e0`);
+       - `#432` se zatim prebacuje na novi `main` i prenumeriše svoje testove u **252–254**. Prenumeracija
+         ide u sva tri registra, u zaglavlja i komentare testova i u `tools/sabotaza.py`;
+       - rebase i `push --force-with-lease` idu tek po izričitom odobrenju operatera, posle pokazanog
+         rezultata (CLAUDE.md §6).
+     - **`P3` (zatvoren ovde):** povrat praznih bez tipa na prijemnici nije dobijao poruku uz polje. Provera
+       praznog tipa je gledala samo pune gajbe, i to samo uz strogu validaciju. Pisac je i dalje odbijao, a
+       F4 je pauziran.
+       - **Rez A′** (commit „test(ki021): review #432 P3 …"; SHA se menja rebase-om): pravilo je izdvojeno
+         u `modDokUnos.PrijemnicaTipPoruka`, sa nepromenjenim
+         ponašanjem. Telo `PrijemnicaValidiraj` je do S6 iza bezuslovnog `Exit Function`, a seam koji bi
+         zaobišao pauzu nije dozvoljen. Test 250 zato meri funkciju, a poziv ostaje statički.
+       - **Reprodukcija:** 250 je crven po imenu („prijemnica povrat bez tipa: …", dobijeno `""`), a ranije
+         tvrdnje istog testa su zelene.
+       - **Ispravka:** povrat praznih traži tip uvek. Posle nje su 249–251 i 247–248 zeleni (5/0).
+         Dodate su sabotaže `ki021-prij-bez-sifarnika` i `ki021-prij-povrat-bez-tipa` (821 → 823).
+     - **`KI-022`** mora biti zatvoren pre puštanja PWA otkupa u redovnu upotrebu (upisano u `KI-022` i u
+       AMBALAZA.md 6.13h).
+     - **Pohvaljeno:**
+       - `AMB-INV-12` je u ugovoru pisca;
+       - istorijski čitalac nije vezan za današnji šifarnik;
+       - neaktivan tip ostaje dozvoljen (povrat, storno);
+       - PWA dobija imenovanu grešku;
+       - rezervni tipovi su uklonjeni.
+     - **Kapije posle rebase-a, nad kombinovanim kodom:** compile (operater), 12 suita, nove sabotaže i ručni
+       acceptance.
+     - **Očekivani brojevi:** reviewer je izveo RunAllTests 254/0, BFP 2439/0, Banka 241/0, Storno 111/0 i
+       katalog 824. Sa dve nove sabotaže `P3` katalog je 815 (`#431`) + 12 = **827**. Broj `#431` je prenet
+       iz njegove sesije, pa se meri posle rebase-a.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

@@ -2597,10 +2597,12 @@ grupiše binarno; zove ga samo grupni otkupni list, pa ide uz S6.
 - **Combo je tačno šifarnik.** Rezervni `12/1` i `6/1` nad praznim šifarnikom su obrisani.
 - **Otvoreno:** PWA nudi tvrdo upisan spisak (`12/1`, `6/1`, `2/1`) i šifarnik ne dobija. Do
   posebnog reza (`KI-022`) red sa tipom van šifarnika dobija imenovan ERROR i ne uvozi se.
+  **`KI-022` mora biti zatvoren pre puštanja PWA otkupa u redovnu upotrebu** (review `#432`).
 
 *Provera:* `modTest` 249 (`T_KI021_OtkupTipVanSifarnika`), 250
 (`T_KI021_ValidatoriTraziSifarnik`), 251 (`T_KI021_ComboTipaJeSifarnik`), BFP
-`Test_AMB_TipVanSifarnikaPisacOdbija`; sabotaže `ki021-*` (10).
+`Test_AMB_TipVanSifarnikaPisacOdbija`; sabotaže `ki021-*` (12). Prijemnica se meri kroz
+`modDokUnos.PrijemnicaTipPoruka`; poziv iz `PrijemnicaValidiraj` je statički do S6.
 
 ### 6.14 Sta model sada ume da odgovori
 

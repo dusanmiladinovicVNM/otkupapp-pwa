@@ -8418,6 +8418,22 @@ SABOTAZE = {
         "T_KI021_ValidatoriTraziSifarnik",
         "otpremnica: tip van sifarnika staje na polju",
     ),
+    # Prijemnica (review #432, P3): pravilo je u PrijemnicaTipPoruka, poziv je
+    # staticki do S6 (pauza je pre svega).
+    "ki021-prij-bez-sifarnika": (
+        "modDokUnos.bas",
+        "    ElseIf pune Or povrat Then\n",
+        "    ElseIf False Then\n",
+        "T_KI021_ValidatoriTraziSifarnik",
+        "prijemnica: tip van sifarnika staje na polju",
+    ),
+    "ki021-prij-povrat-bez-tipa": (
+        "modDokUnos.bas",
+        "        If (pune And strogo) Or povrat Then PrijemnicaTipPoruka = Poruka(\"DOK_MSG_IZABERITE_TIP_AMBALAZE\")\n",
+        "        If pune And strogo Then PrijemnicaTipPoruka = Poruka(\"DOK_MSG_IZABERITE_TIP_AMBALAZE\")\n",
+        "T_KI021_ValidatoriTraziSifarnik",
+        "prijemnica povrat bez tipa: trazi tip i bez stroge validacije",
+    ),
     "ki021-rev-bez-sifarnika": (
         "modNovacUnos.bas",
         "    ReversValidiraj = modOtkupUnos.TipAmbalazePoruka(S(p, \"tipAmb\"))\n",

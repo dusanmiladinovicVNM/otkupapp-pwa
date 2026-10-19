@@ -1023,7 +1023,9 @@ End Function
 
 ' KI-021: poruka uz polje tipa ambalaze prijemnice; "" kad je tip valjan ili ga ne
 ' treba. Pune gajbe (I i II) traze PRAZAN tip samo uz strogu validaciju, kao
-' otpremnica; otkucan tip mora biti u sifarniku uvek (AMB-INV-12).
+' otpremnica. Povrat praznih ga trazi UVEK: pisac ga knjizi po tipu, a prijemnica
+' sa samo povratom ranije nije dobijala poruku uz polje (review #432, P3).
+' Otkucan tip mora biti u sifarniku uvek (AMB-INV-12).
 '
 ' Public zbog testa: PrijemnicaValidiraj je do S6 iza pauze, pa pozivno mesto nije
 ' dostizno -- test (250) meri ovu funkciju, a poziv je staticki. Seam koji bi
@@ -1034,7 +1036,7 @@ Public Function PrijemnicaTipPoruka(ByVal p As Object, ByVal strogo As Boolean) 
     pune = (L(p, "kolAmb") > 0 Or L(p, "kolAmbII") > 0)
     povrat = (L(p, "kolAmbVracena") > 0)
     If modAmbalazaUgovor.AmbTipPrazan(tip) Then
-        If pune And strogo Then PrijemnicaTipPoruka = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE")
+        If (pune And strogo) Or povrat Then PrijemnicaTipPoruka = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE")
     ElseIf pune Or povrat Then
         PrijemnicaTipPoruka = modOtkupUnos.TipAmbalazePoruka(tip)
     End If
