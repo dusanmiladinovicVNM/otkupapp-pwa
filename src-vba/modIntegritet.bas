@@ -159,8 +159,13 @@ End Sub
 Private Sub Chk_A2_ManjakAnomalije()
     On Error GoTo EH
 
-    Dim zbrDict As Object: Set zbrDict = AggByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_KOLICINA)
-    Dim prijDict As Object: Set prijDict = AggByBroj(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, COL_PRJ_KOLICINA)
+    ' S6 KORAK 3 (stavka 178, odluka 7): kg OBA dokumenta se cita iz STAVKI.
+    ' Zaglavlje zbirne od PR3 i zaglavlje prijemnice od S6 koraka 2 ne nose
+    ' kolicinu, pa je provera za kanonske dokumente poredila 0 sa 0 i cutala.
+    ' Citanje je STROGO unutar provere (obrazac B7): kvar stavki daje red GRESKA
+    ' za A2, a ne izmisljenu nulu koja bi lagala "nista primljeno".
+    Dim zbrDict As Object: Set zbrDict = ZbirStavkiPoBroju(TBL_ZBIRNA, 0, False)
+    Dim prijDict As Object: Set prijDict = ZbirStavkiPoBroju(TBL_PRIJEMNICA, 0, False)
 
     Dim bad As Collection: Set bad = New Collection
     Dim kk As Variant
@@ -244,7 +249,8 @@ Private Sub Chk_B4_DanglingBrojZbirne()
 
     WriteBlock "B4b", "Prijemnice sa BrojZbirne koji ne postoji u tblZbirna", _
                Array("PrijemnicaID", "BrojPrijemnice", "BrojZbirne", "Kolicina"), _
-               DanglingDocs(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, COL_PRJ_KOLICINA, zbrSet)
+               DanglingDocs(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, "", zbrSet, _
+                            modDokumenta.ZbirStavkiPoPrijemniciMeko())
     Exit Sub
 
 EH:
@@ -259,7 +265,8 @@ Private Sub Chk_B5_PrijemnicaBezZbirne()
     On Error GoTo EH
     WriteBlock "B5", "Prijemnice bez BrojZbirne (obavezna veza)", _
                Array("PrijemnicaID", "BrojPrijemnice", "Kolicina"), _
-               DocsBezZbirne(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, COL_PRJ_KOLICINA)
+               DocsBezZbirne(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, "", _
+                             modDokumenta.ZbirStavkiPoPrijemniciMeko())
     Exit Sub
 
 EH:
@@ -584,8 +591,10 @@ Private Sub Chk_C1_C4_StavkaPrijemnica()
 
     ' C4 dokumentni tok: prijemnica -> zbirna (Sigma kg/amb) -> OM + proizvodjaci.
     Dim prijZbr As Object: Set prijZbr = PrijemnicaZbirnaMap()
-    Dim zbrKg As Object: Set zbrKg = AggByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_KOLICINA)
-    Dim zbrAmb As Object: Set zbrAmb = AggByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_KOL_AMB)
+    ' Kg i gajbe zbirne su na STAVKAMA (PR3; S6 korak 3). Ovde su samo prikaz uz
+    ' nalaz, pa se citaju MEKO: kvar stavki zbirne ne sme da sakrije C1/C4.
+    Dim zbrKg As Object: Set zbrKg = ZbirStavkiPoBroju(TBL_ZBIRNA, 0, True)
+    Dim zbrAmb As Object: Set zbrAmb = ZbirStavkiPoBroju(TBL_ZBIRNA, 2, True)
     Dim omByZbr As Object: Set omByZbr = OtkupnoMestoByZbirna()
     Dim przByZbr As Object: Set przByZbr = ProizvodjacByZbirna()
 
@@ -769,31 +778,75 @@ EH:
 End Sub
 
 ' ============================================================
-' CHECK A3: Sigma paleta-stavke NetoKg vs prijemnica.Kolicina
+' CHECK A3: Sigma paleta-stavke NetoKg vs Kolicina STAVKE prijemnice, po liniji
 ' ============================================================
-' Samo paletizovane prijemnice (koje imaju bar jednu aktivnu stavku).
+' Samo paletizovane linije aktivnih prijemnica (bar jedna aktivna paletna
+' stavka).
+'
+' S6 KORAK 3 (stavka 178): linija je (dokument, klasa) -- jedna stavka po klasi.
+' Do koraka 3 je neto paleta sabiran po PrijemnicaID i poredjen sa Kolicinom
+' ZAGLAVLJA; od koraka 2 obe klase dele ID dokumenta, a zaglavlje kolicinu ne
+' nosi, pa je svaki ispravan dokument bio nalaz. Linija se prepoznaje po
+' PrijemnicaID + Klasa paletne stavke, a ne po PrijemnicaStavkaID: redovi
+' starog oblika (fixture, rucni seed-ovi) kljuc stavke nemaju, a klasa ih
+' razlikuje isto tako. Stavke se citaju STROGO (obrazac B7).
 
 Private Sub Chk_A3_StavkeVsPrijemnica()
     On Error GoTo EH
 
-    Dim stByPrij As Object: Set stByPrij = AggByBroj(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, COL_PALS_NETO)
-    Dim prijKol As Object: Set prijKol = AggByBroj(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_KOLICINA)
+    ' (PrijemnicaID|Klasa) -> Sigma NetoKg aktivnih paletnih stavki
+    Dim stByLin As Object: Set stByLin = CreateObject("Scripting.Dictionary")
+    stByLin.CompareMode = vbTextCompare
+    Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
+    If IsArray(ps) Then ps = ExcludeStornirano(ps, TBL_PALETA_STAVKA)
+    Dim i As Long, k As String
+    If IsArray(ps) Then
+        Dim cP As Long, cK As Long, cN As Long
+        cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "modIntegritet.A3")
+        cK = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA, "modIntegritet.A3")
+        cN = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, "modIntegritet.A3")
+        For i = 1 To UBound(ps, 1)
+            If Len(Trim$(NzToText(ps(i, cP)))) > 0 Then
+                k = Trim$(NzToText(ps(i, cP))) & "|" & KlasaOrDefault(ps(i, cK))
+                If IsNumeric(ps(i, cN)) Then
+                    stByLin(k) = CDbl(stByLin(k)) + CDbl(ps(i, cN))
+                Else
+                    stByLin(k) = CDbl(stByLin(k))
+                End If
+            End If
+        Next i
+    End If
+
+    ' (PrijemnicaID|Klasa) -> Kolicina stavke, samo za AKTIVNE prijemnice
+    Dim actPrij As Object: Set actPrij = IdSet(TBL_PRIJEMNICA, COL_PRJ_ID, True)
+    Dim linKol As Object: Set linKol = CreateObject("Scripting.Dictionary")
+    linKol.CompareMode = vbTextCompare
+    Dim s As Variant: s = modDokumenta.StavkePrijemniceRedovi()
+    If IsArray(s) Then
+        For i = 1 To UBound(s, 1)
+            If actPrij.Exists(CStr(s(i, 1))) Then
+                linKol(CStr(s(i, 1)) & "|" & KlasaOrDefault(s(i, 3))) = CDbl(s(i, 4))
+            End If
+        Next i
+    End If
 
     Dim bad As Collection: Set bad = New Collection
-    Dim kk As Variant, sumSt As Double, kol As Double, diff As Double
-    For Each kk In stByPrij.keys
-        If prijKol.Exists(kk) Then
-            sumSt = stByPrij(kk)
-            kol = prijKol(kk)
+    Dim kk As Variant, sumSt As Double, kol As Double, diff As Double, delovi As Variant
+    For Each kk In stByLin.keys
+        If linKol.Exists(kk) Then
+            sumSt = stByLin(kk)
+            kol = linKol(kk)
             diff = sumSt - kol
             If Abs(diff) > 0.5 Then
-                bad.Add Array(CStr(kk), sumSt, kol, diff)
+                delovi = Split(CStr(kk), "|")
+                bad.Add Array(CStr(delovi(0)), CStr(delovi(1)), sumSt, kol, diff)
             End If
         End If
     Next kk
 
-    WriteBlock "A3", "Paleta-stavke (Sigma NetoKg) vs prijemnica.Kolicina", _
-               Array("PrijemnicaID", "SumaStavkeKg", "PrijemnicaKg", "RazlikaKg"), CollToArray(bad, 4)
+    WriteBlock "A3", "Paleta-stavke (Sigma NetoKg) vs Kolicina stavke prijemnice, po klasi", _
+               Array("PrijemnicaID", "Klasa", "SumaStavkeKg", "PrijemnicaKg", "RazlikaKg"), _
+               CollToArray(bad, 5)
     Exit Sub
 
 EH:
@@ -1018,6 +1071,57 @@ Private Sub CollectBrojZbirne(ByRef dict As Object, ByVal tbl As String, ByVal c
         End If
     Next i
 End Sub
+
+' Zbir STAVKI aktivnih dokumenata po broju zbirne (S6 korak 3): kljuc je
+' BrojZbirne (za zbirnu njen broj, za prijemnicu broj zbirne na koju je
+' vezana), vrednost je pozicija idx iz zbira stavki dokumenta -- 0 = kg,
+' 2 = gajbe (oblik ZbirStavkiPoZbirni / ZbirStavkiPoPrijemnici). Kljuc postoji
+' i kad je zbir 0, isto kao AggByBroj, jer provere iteriraju kljuceve.
+'
+' meko = False: strog citalac, kvar stavki ide u handler provere (red GRESKA).
+' meko = True: samo za PRIKAZ uz nalaz -- kvar daje prazan recnik, pa kolona
+' ostaje prazna umesto da sakrije nalaz.
+Private Function ZbirStavkiPoBroju(ByVal tbl As String, ByVal idx As Long, _
+                                   ByVal meko As Boolean) As Object
+    Const SRC As String = "modIntegritet.ZbirStavkiPoBroju"
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    Set ZbirStavkiPoBroju = d
+
+    If meko Then On Error GoTo MekoPad
+
+    Dim colID As String, colBroj As String, zbir As Object
+    If tbl = TBL_ZBIRNA Then
+        colID = COL_ZBR_ID: colBroj = COL_ZBR_BROJ
+        Set zbir = modDokumenta.ZbirStavkiPoZbirni()
+    Else
+        colID = COL_PRJ_ID: colBroj = COL_PRJ_BROJ_ZBIRNE
+        Set zbir = modDokumenta.ZbirStavkiPoPrijemnici()
+    End If
+
+    Dim data As Variant: data = GetTableData(tbl)
+    If IsArray(data) Then data = ExcludeStornirano(data, tbl)
+    If Not IsArray(data) Then Exit Function
+
+    Dim cId As Long, cB As Long, i As Long, k As String, z As Variant
+    cId = RequireColumnIndex(tbl, colID, SRC)
+    cB = RequireColumnIndex(tbl, colBroj, SRC)
+    For i = 1 To UBound(data, 1)
+        k = Trim$(NzToText(data(i, cB)))
+        If Len(k) > 0 Then
+            If tbl = TBL_ZBIRNA Then
+                z = modDokumenta.ZbirStavkiZaZbirnu(zbir, CStr(data(i, cId)), SRC)
+            Else
+                z = modDokumenta.ZbirStavkiZaPrijemnicu(zbir, CStr(data(i, cId)), SRC)
+            End If
+            d(k) = CDbl(d(k)) + CDbl(z(idx))
+        End If
+    Next i
+    Exit Function
+
+MekoPad:
+    Set ZbirStavkiPoBroju = CreateObject("Scripting.Dictionary")
+End Function
 
 ' Agregat kg po BrojZbirne (bez storniranih). Vraca Dictionary(broj -> Double).
 Private Function AggByBroj(ByVal tbl As String, ByVal brojCol As String, ByVal kgCol As String) As Object

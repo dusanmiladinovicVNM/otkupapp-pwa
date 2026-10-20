@@ -2245,40 +2245,47 @@ Public Function ReportPrijemniceKupca(ByVal kupacID As String, _
     data = GetPrijemniceByKupac(kupacID, datumOd, datumDo, False)
     If IsEmpty(data) Or Not IsArray(data) Then Exit Function
 
-    Dim cDat As Long, cBr As Long, cZb As Long, cVr As Long, cKl As Long
-    Dim cKol As Long, cCe As Long, cId As Long
+    Dim cDat As Long, cBr As Long, cZb As Long, cVr As Long, cId As Long
     cDat = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM, SRC)
     cBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
     cZb = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
     cVr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, SRC)
-    cKl = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, SRC)
-    cKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, SRC)
-    cCe = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, SRC)
     cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
     Dim cSor As Long
     cSor = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA, SRC)
 
+    ' RED IZVESTAJA = STAVKA DOKUMENTA (S6 korak 3): klasa, kolicina i cena su na
+    ' tblPrijemnicaStavke. Do koraka 3 je red bio red zaglavlja, a ono od koraka
+    ' 2 ne nosi linijska polja -- dvoklasan dokument je bio jedan red od 0 kg.
+    Dim poDok As Object
+    Set poDok = modDokumenta.StavkePrijemnicePoDokumentu()
+
     Dim n As Long, i As Long, kg As Double, cena As Double
-    Dim totKg As Double, totVr As Double
-    n = UBound(data, 1)
+    Dim totKg As Double, totVr As Double, st As Variant
+    For i = 1 To UBound(data, 1)
+        n = n + modDokumenta.StavkeZaPrijemnicu(poDok, CStr(data(i, cId)), SRC).count
+    Next i
     Dim result() As Variant
     ReDim result(1 To n + 1, 1 To 10)
-    For i = 1 To n
-        kg = 0: cena = 0
-        If IsNumeric(data(i, cKol)) Then kg = CDbl(data(i, cKol))
-        If IsNumeric(data(i, cCe)) Then cena = CDbl(data(i, cCe))
-        result(i, 1) = data(i, cDat)
-        result(i, 2) = Trim$(CStr(data(i, cBr)))
-        result(i, 3) = Trim$(CStr(data(i, cZb)))
-        result(i, 4) = Trim$(CStr(data(i, cVr)))
-        result(i, 5) = Trim$(CStr(data(i, cKl)))
-        result(i, 6) = kg
-        result(i, 7) = cena
-        result(i, 8) = kg * cena
-        result(i, 9) = Trim$(CStr(data(i, cId)))
-        result(i, 10) = Trim$(CStr(data(i, cSor)))
-        totKg = totKg + kg
-        totVr = totVr + kg * cena
+    n = 0
+    For i = 1 To UBound(data, 1)
+        For Each st In modDokumenta.StavkeZaPrijemnicu(poDok, CStr(data(i, cId)), SRC)
+            n = n + 1
+            kg = CDbl(st(4))
+            cena = CDbl(st(5))
+            result(n, 1) = data(i, cDat)
+            result(n, 2) = Trim$(CStr(data(i, cBr)))
+            result(n, 3) = Trim$(CStr(data(i, cZb)))
+            result(n, 4) = Trim$(CStr(data(i, cVr)))
+            result(n, 5) = CStr(st(3))
+            result(n, 6) = kg
+            result(n, 7) = cena
+            result(n, 8) = kg * cena
+            result(n, 9) = Trim$(CStr(data(i, cId)))
+            result(n, 10) = Trim$(CStr(data(i, cSor)))
+            totKg = totKg + kg
+            totVr = totVr + kg * cena
+        Next st
     Next i
     result(n + 1, 2) = "UKUPNO"
     result(n + 1, 6) = totKg
@@ -2320,28 +2327,31 @@ Public Function ReportSaldoKupci(ByVal kupacID As String, _
             prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)
             
             If IsArray(prijData) Then
-                Dim colVrsta As Long, colKol As Long, colCena As Long, colAmb As Long
+                Dim colVrsta As Long, colPid As Long
                 colVrsta = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, "modIzvestaj.ReportSaldoKupci")
-                colKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "modIzvestaj.ReportSaldoKupci")
-                colCena = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, "modIzvestaj.ReportSaldoKupci")
-                colAmb = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB, "modIzvestaj.ReportSaldoKupci")
-                
+                colPid = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "modIzvestaj.ReportSaldoKupci")
+
+                ' Kolicina, cena i gajbe su na STAVKAMA (S6 korak 3); vrednost je
+                ' zbir kol x cena PO STAVCI, a "Cena (letzte)" cena poslednje
+                ' stavke, kao sto je ranije bila cena poslednjeg reda.
+                Dim poDok As Object, st As Variant
+                Set poDok = modDokumenta.StavkePrijemnicePoDokumentu()
+
                 For i = 1 To UBound(prijData, 1)
                     Dim key As String
                     key = CStr(prijData(i, colVrsta))
                     If key = "" Then key = "(Nepoznato)"
-                    
+
                     If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#, 0#, 0#)
-                    
+
                     vals = dict(key)
-                    
-                    If IsNumeric(prijData(i, colKol)) Then vals(0) = vals(0) + CDbl(prijData(i, colKol))
-                    If IsNumeric(prijData(i, colCena)) Then vals(1) = CDbl(prijData(i, colCena))
-                    If IsNumeric(prijData(i, colKol)) And IsNumeric(prijData(i, colCena)) Then
-                        vals(2) = vals(2) + CDbl(prijData(i, colKol)) * CDbl(prijData(i, colCena))
-                    End If
-                    If IsNumeric(prijData(i, colAmb)) Then vals(3) = vals(3) + CLng(prijData(i, colAmb))
-                    
+                    For Each st In modDokumenta.StavkeZaPrijemnicu(poDok, _
+                                       CStr(prijData(i, colPid)), "modIzvestaj.ReportSaldoKupci")
+                        vals(0) = vals(0) + CDbl(st(4))
+                        vals(1) = CDbl(st(5))
+                        vals(2) = vals(2) + CDbl(st(4)) * CDbl(st(5))
+                        vals(3) = vals(3) + CLng(st(6))
+                    Next st
                     dict(key) = vals
                 Next i
             End If
@@ -2938,11 +2948,15 @@ Private Function ReportOtkupRobaKupac(ByVal kupacID As String, _
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
     
-    Dim colVrsta As Long, colKol As Long, colCena As Long
-    colVrsta = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, "modIzvestaj.ReportOtkupRobaKupac")
-    colKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "modIzvestaj.ReportOtkupRobaKupac")
-    colCena = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, "modIzvestaj.ReportOtkupRobaKupac")
-    
+    Dim colVrsta As Long, colPid As Long
+    colVrsta = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, SRC)
+    colPid = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+
+    ' Kg i vrednost dokumenta su zbir STAVKI (S6 korak 3); vrednost je kol x cena
+    ' po stavci, jer klase nose svoju cenu.
+    Dim zbir As Object, z As Variant
+    Set zbir = modDokumenta.ZbirStavkiPoPrijemnici()
+
     Dim i As Long
     For i = 1 To UBound(prijData, 1)
         Dim key As String
@@ -2951,10 +2965,9 @@ Private Function ReportOtkupRobaKupac(ByVal kupacID As String, _
         If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#)
         Dim vals As Variant
         vals = dict(key)
-        If IsNumeric(prijData(i, colKol)) Then vals(0) = vals(0) + CDbl(prijData(i, colKol))
-        If IsNumeric(prijData(i, colKol)) And IsNumeric(prijData(i, colCena)) Then
-            vals(1) = vals(1) + CDbl(prijData(i, colKol)) * CDbl(prijData(i, colCena))
-        End If
+        z = modDokumenta.ZbirStavkiZaPrijemnicu(zbir, CStr(prijData(i, colPid)), SRC)
+        vals(0) = vals(0) + CDbl(z(0))
+        vals(1) = vals(1) + CDbl(z(1))
         dict(key) = vals
     Next i
     
@@ -3411,23 +3424,25 @@ Public Function ReportProsecnaCena(ByVal entitetTip As String, _
         Dim vrstaCache As Object
         Set vrstaCache = BuildZbirnaVrstaCache()
         
-        Dim colBrZbr As Long, colPrijKol As Long, colPrijCena As Long
-        colBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "modIzvestaj.ReportProsecnaCena")
-        colPrijKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "modIzvestaj.ReportProsecnaCena")
-        colPrijCena = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, "modIzvestaj.ReportProsecnaCena")
-        
+        Dim colBrZbr As Long, colPrijID As Long
+        colBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+        colPrijID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+
+        ' Kg i vrednost dokumenta su zbir STAVKI (S6 korak 3).
+        Dim zbirPrj As Object, zp As Variant
+        Set zbirPrj = modDokumenta.ZbirStavkiPoPrijemnici()
+
         For i = 1 To UBound(prijData, 1)
             Dim vrsta As String
             vrsta = GetVrstaFromCache(vrstaCache, CStr(prijData(i, colBrZbr)))
             If vrsta = "" Then vrsta = "(Nepoznato)"
-            
+
             If Not dict.Exists(vrsta) Then dict.Add vrsta, Array(0#, 0#)
             Dim vals As Variant
             vals = dict(vrsta)
-            If IsNumeric(prijData(i, colPrijKol)) Then vals(0) = vals(0) + CDbl(prijData(i, colPrijKol))
-            If IsNumeric(prijData(i, colPrijKol)) And IsNumeric(prijData(i, colPrijCena)) Then
-                vals(1) = vals(1) + CDbl(prijData(i, colPrijKol)) * CDbl(prijData(i, colPrijCena))
-            End If
+            zp = modDokumenta.ZbirStavkiZaPrijemnicu(zbirPrj, CStr(prijData(i, colPrijID)), SRC)
+            vals(0) = vals(0) + CDbl(zp(0))
+            vals(1) = vals(1) + CDbl(zp(1))
             dict(vrsta) = vals
         Next i
 
@@ -3583,15 +3598,19 @@ Public Function ReportManjak(ByVal entitetTip As String, _
     Dim manjakDict As Object
     Set manjakDict = BuildManjakDict()
 
-    ' Zbirna-Daten
-    Dim colBroj As Long, colZbrKol As Long, colZbrAmb As Long
-    Dim colZbrVoz As Long, colZbrKup As Long, colZbrKla As Long
+    ' Zbirna-Daten. Kilaza, gajbe i klase zbirne su na STAVKAMA (PR3) -- S6
+    ' korak 3, odluka 7: zaglavlje ih ne nosi, pa je izvestaj za kanonsku
+    ' zbirnu prijavljivao 0 kg. Vlasnik reda (broj, vozac, kupac) ostaje sa
+    ' zaglavlja.
+    Dim colBroj As Long, colZbrID As Long
+    Dim colZbrVoz As Long, colZbrKup As Long
     colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIzvestaj.ReportManjak")
-    colZbrKol = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA, "modIzvestaj.ReportManjak")
-    colZbrAmb = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOL_AMB, "modIzvestaj.ReportManjak")
+    colZbrID = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "modIzvestaj.ReportManjak")
     colZbrVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, "modIzvestaj.ReportManjak")
     colZbrKup = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, "modIzvestaj.ReportManjak")
-    colZbrKla = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KLASA, "modIzvestaj.ReportManjak")
+
+    Dim stavkeZbr As Object
+    Set stavkeZbr = modDokumenta.StavkeZbirnePoDokumentu()
 
     ' Zbirne aggregieren po VLASNIKU (broj|vozac|kupac), ne po broju: dve aktivne
     ' zbirne mogu deliti isti poslovni broj. Klasa I i II istog dokumenta ostaju
@@ -3617,20 +3636,22 @@ Public Function ReportManjak(ByVal entitetTip As String, _
         If Not zbrDict.Exists(vlKey) Then
             zbrDict.Add vlKey, Array(0#, 0#, brZbr)
         End If
-        Dim zv As Variant
-        zv = zbrDict(vlKey)
-        If IsNumeric(filtered(i, colZbrKol)) Then zv(0) = zv(0) + CDbl(filtered(i, colZbrKol))
-        If IsNumeric(filtered(i, colZbrAmb)) Then zv(1) = zv(1) + CLng(filtered(i, colZbrAmb))
-        zbrDict(vlKey) = zv
-
         If Not klasePoVlasniku.Exists(vlKey) Then
             klasePoVlasniku.Add vlKey, CreateObject("Scripting.Dictionary")
         End If
         Dim klSet As Object
         Set klSet = klasePoVlasniku(vlKey)
-        Dim thisKlasa As String
-        thisKlasa = KlasaOrDefault(filtered(i, colZbrKla))
-        If Not klSet.Exists(thisKlasa) Then klSet.Add thisKlasa, True
+
+        Dim zv As Variant, zs As Variant, thisKlasa As String
+        zv = zbrDict(vlKey)
+        For Each zs In modDokumenta.StavkeZaZbirnu(stavkeZbr, _
+                           CStr(filtered(i, colZbrID)), "modIzvestaj.ReportManjak")
+            zv(0) = zv(0) + CDbl(zs(4))
+            zv(1) = zv(1) + CLng(zs(5))
+            thisKlasa = KlasaOrDefault(zs(3))
+            If Not klSet.Exists(thisKlasa) Then klSet.Add thisKlasa, True
+        Next zs
+        zbrDict(vlKey) = zv
     Next i
 
     ' Ergebnis
@@ -3897,27 +3918,29 @@ Private Function ReportZbirniKupac(ByVal datumOd As Date, _
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
     
-    Dim colKupac As Long, colKol As Long, colCena As Long, colBrZbr As Long
-    colKupac = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, "modIzvestaj.ReportZbirniKupac")
-    colKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "modIzvestaj.ReportZbirniKupac")
-    colCena = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, "modIzvestaj.ReportZbirniKupac")
-    colBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "modIzvestaj.ReportZbirniKupac")
-    
+    Dim colKupac As Long, colPid As Long, colBrZbr As Long
+    colKupac = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, SRC)
+    colPid = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+    colBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+
+    ' Kg i vrednost dokumenta su zbir STAVKI (S6 korak 3).
+    Dim zbir As Object, z As Variant
+    Set zbir = modDokumenta.ZbirStavkiPoPrijemnici()
+
     Dim i As Long
     For i = 1 To UBound(filtered, 1)
         Dim vrsta As String
         vrsta = GetVrstaFromCache(vrstaCache, CStr(filtered(i, colBrZbr)))
         If vrsta = "" Then vrsta = "(Nepoznato)"
-        
+
         Dim key As String
         key = CStr(filtered(i, colKupac)) & "|" & vrsta
         If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#)
         Dim vals As Variant
         vals = dict(key)
-        If IsNumeric(filtered(i, colKol)) Then vals(0) = vals(0) + CDbl(filtered(i, colKol))
-        If IsNumeric(filtered(i, colKol)) And IsNumeric(filtered(i, colCena)) Then
-            vals(1) = vals(1) + CDbl(filtered(i, colKol)) * CDbl(filtered(i, colCena))
-        End If
+        z = modDokumenta.ZbirStavkiZaPrijemnicu(zbir, CStr(filtered(i, colPid)), SRC)
+        vals(0) = vals(0) + CDbl(z(0))
+        vals(1) = vals(1) + CDbl(z(1))
         dict(key) = vals
     Next i
     
@@ -4000,11 +4023,14 @@ Private Function ReportZbirniVozac(ByVal datumOd As Date, _
         prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)
     End If
     
-    Dim colPBrZbr As Long, colPAmbVr As Long, colPKol As Long
+    ' Kg prijema je zbir STAVKI dokumenta (S6 korak 3); vracene gajbe su
+    ' cinjenica DOKUMENTA i ostaju na zaglavlju.
+    Dim colPBrZbr As Long, colPAmbVr As Long, colPid As Long, zbirPrj As Object
     If IsArray(prijData) And Not IsEmpty(prijData) Then
         colPBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "modIzvestaj.ReportZbirniVozac")
         colPAmbVr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA, "modIzvestaj.ReportZbirniVozac")
-        colPKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "modIzvestaj.ReportZbirniVozac")
+        colPid = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "modIzvestaj.ReportZbirniVozac")
+        Set zbirPrj = modDokumenta.ZbirStavkiPoPrijemnici()
     End If
     
     ' Prijemnice aggregieren po BrojZbirne:
@@ -4032,9 +4058,8 @@ Private Function ReportZbirniVozac(ByVal datumOd As Date, _
                     prijAggVals(0) = prijAggVals(0) + CLng(prijData(j, colPAmbVr))
                 End If
                 
-                If IsNumeric(prijData(j, colPKol)) Then
-                    prijAggVals(1) = prijAggVals(1) + CDbl(prijData(j, colPKol))
-                End If
+                prijAggVals(1) = prijAggVals(1) + CDbl(modDokumenta.ZbirStavkiZaPrijemnicu( _
+                                     zbirPrj, CStr(prijData(j, colPid)), SRC)(0))
                 
                 prijAgg(pBrZbrAgg) = prijAggVals
             End If

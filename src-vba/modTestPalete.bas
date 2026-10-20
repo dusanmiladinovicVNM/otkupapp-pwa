@@ -94,6 +94,7 @@ Public Sub RunPaleteTestSuite()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
     tx.AddTableSnapshot TBL_KULTURE
@@ -406,9 +407,12 @@ Private Sub T09_AdjustBlokPreradjena()
     Dim palRow As Long: palRow = FindRows(TBL_PALETA, COL_PAL_ID, CStr(st(1, 2))).item(1)
     RequireUpdateCell TBL_PALETA, palRow, COL_PAL_PRERADJENO, "Da", "modTestPalete.T09"
 
-    ' dokument menja gajbice 5 -> 7 (direktan upis, kao ispravka)
-    Dim prjRow As Long: prjRow = FindRows(TBL_PRIJEMNICA, COL_PRJ_BROJ, "TST-P12").item(1)
-    RequireUpdateCell TBL_PRIJEMNICA, prjRow, COL_PRJ_KOL_AMB, 7, "modTestPalete.T09"
+    ' dokument menja gajbice 5 -> 7 (direktan upis, kao ispravka). Gajbe
+    ' dokumenta od S6 koraka 3 nosi STAVKA, pa se menja ona -- izmena na
+    ' zaglavlju vise ne bi bila izmena dokumenta.
+    Dim stRow As Long: stRow = FindRows(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, _
+                                        "TSTPRJ-18").item(1)
+    RequireUpdateCell TBL_PRIJEMNICA_STAVKE, stRow, COL_PRS_KOL_AMB, 7, "modTestPalete.T09"
 
     Dim info As String
     ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TST-P12", "", info), ADJ_BLOCKED, _
@@ -533,6 +537,10 @@ Private Sub TstAppend(ByVal tblName As String, ByVal cols As Variant, ByVal vals
     End If
 End Sub
 
+' Seed pise ZAGLAVLJE I STAVKU (S6 korak 3, presedan S3b-1): linije dokumenta
+' (klasa, kolicina, gajbe) motor paleta cita iz tblPrijemnicaStavke, kroz
+' kanonski citalac, koji zaglavlje bez stavke odbija po imenu. Linijska polja
+' zaglavlja ostaju popunjena do koraka 8 (iste brojke), jer ih jos cita storno.
 Private Function MakePrij(ByVal id As String, ByVal broj As String, ByVal zbirna As String, _
                           ByVal klasa As String, ByVal kolKg As Double, ByVal gajb As Long, _
                           ByVal sorta As String) As String
@@ -543,6 +551,10 @@ Private Function MakePrij(ByVal id As String, ByVal broj As String, ByVal zbirna
         Array(id, broj, Date, klasa, kolKg, _
               gajb, zbirna, TST_VRSTA, sorta, _
               TST_AMB, 0, "")
+    TstAppend TBL_PRIJEMNICA_STAVKE, _
+        Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
+              COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _
+        Array("PRS-" & id, id, 1, klasa, kolKg, 0, gajb)
     MakePrij = id
 End Function
 

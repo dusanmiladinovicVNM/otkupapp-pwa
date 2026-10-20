@@ -1111,14 +1111,15 @@ End Sub
 ' GRUPNI OTKUPNI LIST (malina mod) - isti obrazac kao otkupni list (dva primerka,
 ' 1/3 A4), ali podaci se citaju iz PRIJEMNICE, a umesto proizvodjaca (kooperant +
 ' BPG + TR) stoji otkupno mesto (stanica = vozac u malina modu). Cena s prijemnice
-' je BRUTO (kao otkup) -> prikaz neto + PDV nadoknada. Ambalaza = saldo na nivou
-' stanice (entitet "Stanica"). Izlaz po CFG_OTKUP_PRINT_MODE (kao otkupni list).
-' Okida frmDokumenta.btnUnosPrij posle snimanja prijemnice (samo u malina modu).
-' prijemnicaIDs = rezultat SavePrijemnicaMulti_TX ("PRJ-1" ili "PRJ-1 + PRJ-2").
+' je BRUTO (kao otkup) -> prikaz neto + PDV nadoknada. Ambalaza = stanje naloga
+' VOZAC oko reda knjige ove prijemnice (S6 korak 3, AMBALAZA.md 6.13g). Izlaz po
+' CFG_OTKUP_PRINT_MODE (kao otkupni list). Okida F4 (modDokUnos.PrijemnicaUpisi)
+' posle snimanja prijemnice, samo u malina modu. prijemnicaID = rezultat
+' SavePrijemnicaMulti_TX: od S6 koraka 2 JEDAN ID i za dve klase.
 ' ============================================================
 
 ' Glavni ulaz. Best-effort: greska se loguje, ne prekida tok prijemnice.
-Public Sub OutputGrupniOtkupniList(ByVal prijemnicaIDs As String)
+Public Sub OutputGrupniOtkupniList(ByVal prijemnicaID As String)
     On Error GoTo EH
     ' Zaseban kljuc; prazno -> prati otkupni list (CFG_OTKUP_PRINT_MODE).
     Dim raw As String: raw = Trim$(GetConfigValue(CFG_GRUPNI_OTKUP_PRINT_MODE))
@@ -1127,10 +1128,10 @@ Public Sub OutputGrupniOtkupniList(ByVal prijemnicaIDs As String)
 
     Select Case mode
         Case "PRINT", "PREVIEW"
-            Dim ws As Worksheet: Set ws = FillGrupniOtkupSablon(prijemnicaIDs)
+            Dim ws As Worksheet: Set ws = FillGrupniOtkupSablon(prijemnicaID)
             If Not ws Is Nothing Then DocPrintWs ws, mode
         Case "PDF"
-            ExportGrupniOtkupniListPDF prijemnicaIDs, True   ' default (prazno) -> tihi PDF
+            ExportGrupniOtkupniListPDF prijemnicaID, True   ' default (prazno) -> tihi PDF
         ' OFF -> bez izlaza
     End Select
     Exit Sub
@@ -1139,13 +1140,13 @@ EH:
 End Sub
 
 ' PDF grupnog otkupnog lista -> <workbook>\Otkupni listovi\GrupniOtkupniList_<brPrij>.pdf
-Public Function ExportGrupniOtkupniListPDF(ByVal prijemnicaIDs As String, _
+Public Function ExportGrupniOtkupniListPDF(ByVal prijemnicaID As String, _
                                            Optional ByVal openAfter As Boolean = True) As String
     On Error GoTo EH
-    Dim ws As Worksheet: Set ws = FillGrupniOtkupSablon(prijemnicaIDs)
+    Dim ws As Worksheet: Set ws = FillGrupniOtkupSablon(prijemnicaID)
     If ws Is Nothing Then Exit Function
 
-    Dim suff As String: suff = Replace(Replace(prijemnicaIDs, " + ", "_"), "/", "-")
+    Dim suff As String: suff = Replace(prijemnicaID, "/", "-")
     Dim pdfPath As String: pdfPath = EnsureDocFolder(PDF_DIR_OTKUPNI) & "\GrupniOtkupniList_" & suff & ".pdf"
 
     DocExportPdf ws, pdfPath, openAfter
@@ -1156,7 +1157,10 @@ EH:
 End Function
 
 ' Popuni GrupniOtkupSablon iz podataka prijemnice. Vraca sheet (ili Nothing).
-Private Function FillGrupniOtkupSablon(ByVal prijemnicaIDs As String) As Worksheet
+'
+' S6 KORAK 3: jedan ID dokumenta, linije iz tblPrijemnicaStavke (red papira =
+' stavka). Kvar stavki ili knjige ide u handler: papir ne nastaje (AMB-10-ODL-31).
+Private Function FillGrupniOtkupSablon(ByVal prijemnicaID As String) As Worksheet
     On Error GoTo EH
     Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
 
@@ -1171,76 +1175,72 @@ Private Function FillGrupniOtkupSablon(ByVal prijemnicaIDs As String) As Workshe
     If IsEmpty(d) Then Exit Function
 
     Dim iID As Long, iDat As Long, iVoz As Long, iBr As Long
-    Dim iVr As Long, iSo As Long, iKl As Long, iKol As Long, iCe As Long, iTip As Long
-    Dim iKolAmb As Long, iKolAmbV As Long, iBruto As Long
+    Dim iVr As Long, iSo As Long, iTip As Long, iKolAmbV As Long
     iID = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
     iDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
     iVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
     iBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
     iVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
     iSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
-    iKl = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
-    iKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
-    iCe = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA)
     iTip = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
-    iKolAmb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
     iKolAmbV = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA)
-    iBruto = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BRUTO)
 
-    Dim ids() As String: ids = Split(prijemnicaIDs, " + ")
-    Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 6)
-    Dim cnt As Long: cnt = 0
+    Dim wantID As String: wantID = Trim$(prijemnicaID)
+    If Len(wantID) = 0 Then Exit Function
+    Dim r As Long, fr As Long
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(d(r, iID))) = wantID Then
+            fr = r
+            Exit For
+        End If
+    Next r
+    If fr = 0 Then Exit Function
+
+    Dim vozID As String, brPrij As String, datum As String, proizvod As String
+    Dim tipAmb As String, kolAmb As Double, kolAmbVr As Double
+    vozID = CStr(d(fr, iVoz))
+    brPrij = CStr(d(fr, iBr))
+    datum = Format$(d(fr, iDat), "dd.mm.yyyy")
+    tipAmb = CStr(d(fr, iTip))
+    proizvod = Trim$(CStr(d(fr, iVr)) & " " & CStr(d(fr, iSo)))
+    If iKolAmbV > 0 Then kolAmbVr = PrNz(d(fr, iKolAmbV))
+
+    Dim linije As Collection
+    Set linije = modDokumenta.StavkeZaPrijemnicu(modDokumenta.StavkePrijemnicePoDokumentu(), _
+                                                 wantID, "modPrint.FillGrupniOtkupSablon")
+    Dim cnt As Long: cnt = linije.count
+    Dim stavke() As Variant: ReDim stavke(0 To cnt - 1, 0 To 6)
     Dim osnovica As Double: osnovica = 0
     ' Cena na prijemnici je BRUTO (sadrzi PDV nadoknadu), kao na otkupu: prikazujemo
     ' NETO cenu/vrednost, a PDV nadoknadu kao posebnu stavku.
     Dim stopa As Double: stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
     If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
-    Dim vozID As String, brPrij As String, datum As String
-    Dim tipAmb As String, kolAmb As Double, kolAmbVr As Double
-    Dim j As Long, r As Long
-    For j = 0 To UBound(ids)
-        Dim wantID As String: wantID = Trim$(ids(j))
-        If wantID <> "" Then
-            For r = 1 To UBound(d, 1)
-                If CStr(d(r, iID)) = wantID Then
-                    Dim kol As Double: kol = PrNz(d(r, iKol))
-                    Dim cenBruto As Double: cenBruto = PrNz(d(r, iCe))
-                    Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
-                    ' Bruto: zamrznut iz unosa (BrutoKg) ako postoji, inace izvedeno iz
-                    ' tare gajbice (fallback za neto redove). Isto kao otkupni list.
-                    Dim storedBruto As Double: storedBruto = 0
-                    If iBruto > 0 Then storedBruto = PrNz(d(r, iBruto))
-                    Dim kolBruto As Double
-                    If storedBruto > 0 Then
-                        kolBruto = storedBruto
-                    Else
-                        Dim crateW As Double
-                        crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, CStr(d(r, iTip)), COL_TAMB_TEZINA))
-                        kolBruto = kol + PrNz(d(r, iKolAmb)) * crateW
-                    End If
-                    stavke(cnt, 0) = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
-                    stavke(cnt, 1) = CStr(d(r, iKl))
-                    stavke(cnt, 2) = cenNeto        ' Cena bez PDV
-                    stavke(cnt, 3) = cenBruto       ' Cena s PDV
-                    stavke(cnt, 4) = kol            ' Kolicina neto
-                    stavke(cnt, 5) = kolBruto       ' Kolicina bruto
-                    stavke(cnt, 6) = kol * cenNeto  ' Vrednost neto
-                    osnovica = osnovica + kol * cenNeto
-                    kolAmb = kolAmb + PrNz(d(r, iKolAmb))   ' primljeno (sve klase)
-                    If cnt = 0 Then
-                        vozID = CStr(d(r, iVoz))
-                        brPrij = CStr(d(r, iBr))
-                        datum = Format$(d(r, iDat), "dd.mm.yyyy")
-                        tipAmb = CStr(d(r, iTip))
-                        If iKolAmbV > 0 Then kolAmbVr = PrNz(d(r, iKolAmbV))
-                    End If
-                    cnt = cnt + 1
-                    Exit For
-                End If
-            Next r
+    Dim crateW As Double
+    crateW = PrNz(LookupValue(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tipAmb, COL_TAMB_TEZINA))
+    Dim j As Long, red As Variant
+    For j = 1 To cnt
+        red = linije(j)
+        Dim kol As Double: kol = CDbl(red(4))
+        Dim cenBruto As Double: cenBruto = CDbl(red(5))
+        Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
+        ' Bruto: zamrznut iz unosa (BrutoKg stavke) ako postoji, inace izvedeno iz
+        ' tare gajbice (fallback za neto stavke). Isto kao otkupni list.
+        Dim kolBruto As Double
+        If IsNumeric(red(8)) And Len(CStr(red(8))) > 0 Then
+            kolBruto = CDbl(red(8))
+        Else
+            kolBruto = kol + CDbl(red(6)) * crateW
         End If
+        stavke(j - 1, 0) = proizvod
+        stavke(j - 1, 1) = CStr(red(3))
+        stavke(j - 1, 2) = cenNeto        ' Cena bez PDV
+        stavke(j - 1, 3) = cenBruto       ' Cena s PDV
+        stavke(j - 1, 4) = kol            ' Kolicina neto
+        stavke(j - 1, 5) = kolBruto       ' Kolicina bruto
+        stavke(j - 1, 6) = kol * cenNeto  ' Vrednost neto
+        osnovica = osnovica + kol * cenNeto
+        kolAmb = kolAmb + CDbl(red(6))    ' primljeno (sve klase)
     Next j
-    If cnt = 0 Then Exit Function
 
     Dim h As Object: Set h = CreateObject("Scripting.Dictionary")
     h("name") = GetConfigValue("SELLER_NAME")
@@ -1274,19 +1274,33 @@ Private Function FillGrupniOtkupSablon(ByVal prijemnicaIDs As String) As Workshe
     h("stanica") = stanicaNaziv
     h("koop") = "": h("bpg") = "": h("ra" & ChrW(269) & "un") = ""
 
-    ' Ambalaza - saldo na nivou stanice (entitet "Stanica"): Pocetno = saldo gajbica
-    ' stanice iz tblAmbalaza (prijemnica pise "Kupac" stranu, ne pomera "Stanica");
-    ' Primljeno/Izdato sa prijemnice; Saldo = Pocetno + Izdato - Primljeno (ista
-    ' formula kao otkupni list).
-    ' S6 (AMBALAZA.md 6.13g): list je danas nedostizan (unos prijemnice je
-    ' pauziran), a prijemnica od 10b-2 pomera nalog Vozac, ne Stanica:<VozacID>.
-    ' Ovde se menja samo politika greske: kvar knjige vise ne daje 0 nego papir
-    ' ne nastaje (handler lista), AMB-10-ODL-31.
-    Dim ambPoc As Long: ambPoc = GetStanicaAmbSaldo(vozID, tipAmb)
-    h("ambPocetno") = tipAmb & " x " & CStr(ambPoc)
+    ' Ambalaza: stanje naloga VOZAC oko reda knjige OVE prijemnice (S6 korak 3,
+    ' AMBALAZA.md 6.13g, AMB-10-ODL-31). Prijemnica od 10b-2 pomera bas taj nalog
+    ' (pune gajbe Vozac -> Kupac, povrat Kupac -> Vozac); do koraka 3 je list
+    ' citao Stanica:<VozacID>, i to DANASNJI saldo, pa ponovna stampa nije bila
+    ' ista kao prva. Pravilo je pravilo reversa i otpremnice: saldo = stanje posle
+    ' dokumenta po redosledu upisa, pocetno = saldo + primljeno - izdato.
+    ' Dokument bez gajbi nema svoj red knjige, pa po ODL-27 stampa "-". Kvar
+    ' knjige ide u handler lista: papir ne nastaje, umesto izmisljene nule.
+    Dim prjPosle As Long, prjPoznato As Boolean
+    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_VOZAC, vozID, tipAmb, _
+                                      DOK_TIP_PRIJEMNICA, wantID, prjPoznato, prjPosle
     h("ambPrijem") = tipAmb & " x " & CStr(CLng(kolAmb))
     h("ambIzdavanje") = tipAmb & " x " & CStr(CLng(kolAmbVr))
-    h("ambSaldo") = tipAmb & " x " & CStr(CLng(ambPoc + kolAmbVr - kolAmb))
+    If prjPoznato Then
+        h("ambPocetno") = tipAmb & " x " & CStr(prjPosle + CLng(kolAmb) - CLng(kolAmbVr))
+        h("ambSaldo") = tipAmb & " x " & CStr(prjPosle)
+    ElseIf kolAmb > 0 Or kolAmbVr > 0 Then
+        ' Prijemnica SA gajbama uvek ima svoj red knjige (SavePrijemnicaDokument
+        ' knjizi punu nogu i povrat u istoj transakciji). Bez njega je veza
+        ' pokidana -- narusen integritet, ne "nepoznato stanje" (obrazac 7693).
+        Err.Raise vbObjectError + 7694, "modPrint.FillGrupniOtkupSablon", _
+                  "Prijemnica '" & wantID & "' nosi gajbe, a nema svoj red knjige " & _
+                  "ambalaze -- papir se ne pravi."
+    Else
+        h("ambPocetno") = tipAmb & " x -"
+        h("ambSaldo") = tipAmb & " x -"
+    End If
 
     h("stopa") = stopa
     h("osnovica") = osnovica
@@ -1367,23 +1381,23 @@ End Sub
 ' ============================================================
 ' PRIJEMNICA -- PrijemnicaSablon, jedan A4 portrait dokument (prijem robe na
 ' hladnjacu). Izlaz po CFG_PRIJEMNICA_PRINT_MODE: OFF/prazno (DEFAULT, bez
-' izlaza -- kao do sada) | PDF | PRINT | PREVIEW. Auto-izlaz okida
-' frmDokumenta.btnUnosPrij posle snimanja. prijemnicaIDs = rezultat
-' SavePrijemnicaMulti_TX ("PRJ-1" ili "PRJ-1 + PRJ-2" za dve klase).
+' izlaza -- kao do sada) | PDF | PRINT | PREVIEW. Auto-izlaz okida F4
+' (modDokUnos.PrijemnicaUpisi) posle snimanja. prijemnicaID = rezultat
+' SavePrijemnicaMulti_TX: od S6 koraka 2 JEDAN ID i za dve klase.
 ' ============================================================
 
 ' Glavni ulaz (zove se posle SavePrijemnicaMulti_TX). Best-effort: greska se loguje.
-Public Sub OutputPrijemnica(ByVal prijemnicaIDs As String)
+Public Sub OutputPrijemnica(ByVal prijemnicaID As String)
     On Error GoTo EH
     Dim mode As String
     mode = DocResolveMode(GetConfigValue(CFG_PRIJEMNICA_PRINT_MODE), "OFF")
 
     Select Case mode
         Case "PRINT", "PREVIEW"
-            Dim ws As Worksheet: Set ws = FillPrijemnicaSablon(prijemnicaIDs)
+            Dim ws As Worksheet: Set ws = FillPrijemnicaSablon(prijemnicaID)
             If Not ws Is Nothing Then DocPrintWs ws, mode
         Case "PDF"
-            ExportPrijemnicaPDF prijemnicaIDs, True
+            ExportPrijemnicaPDF prijemnicaID, True
         ' OFF / prazno (DEFAULT) -> bez izlaza; ponasanje kao do sada.
     End Select
     Exit Sub
@@ -1398,10 +1412,10 @@ Public Sub PrintPrijemnica(ByVal prijemnicaID As String)
 End Sub
 
 ' PDF prijemnice -> <workbook>\Prijemnice\Prijemnica_<brPrij>.pdf. Vraca putanju.
-Public Function ExportPrijemnicaPDF(ByVal prijemnicaIDs As String, _
+Public Function ExportPrijemnicaPDF(ByVal prijemnicaID As String, _
                                     Optional ByVal openAfter As Boolean = True) As String
     On Error GoTo EH
-    Dim ws As Worksheet: Set ws = FillPrijemnicaSablon(prijemnicaIDs)
+    Dim ws As Worksheet: Set ws = FillPrijemnicaSablon(prijemnicaID)
     If ws Is Nothing Then
         MsgBox "PDF prijemnice nije napravljen: priprema lista (PrijemnicaSablon) " & _
                "nije uspela. Proveri da li su podaci prijemnice kompletni.", _
@@ -1410,7 +1424,7 @@ Public Function ExportPrijemnicaPDF(ByVal prijemnicaIDs As String, _
     End If
 
     Dim folder As String: folder = EnsureDocFolder(PDF_DIR_PRIJEMNICE)
-    Dim suff As String: suff = Replace(Replace(prijemnicaIDs, " + ", "_"), "/", "-")
+    Dim suff As String: suff = Replace(prijemnicaID, "/", "-")
     ' Vremenski pecat u imenu -> nema "file in use" (1004) ako je prethodni PDF otvoren.
     Dim pdfPath As String
     pdfPath = folder & "\Prijemnica_" & suff & "_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
@@ -1425,9 +1439,15 @@ EH:
 End Function
 
 ' Popuni PrijemnicaSablon (zaglavlje firme + podaci + stavke + potpisi). Vraca sheet
-' (ili Nothing). Klasa I [+ Klasa II] = po jedan red u tabeli stavki; zaglavlje
-' (datum/kupac/vozac/brojevi) se cita iz prvog reda.
-Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Worksheet
+' (ili Nothing). Jedan red tabele = jedna STAVKA dokumenta (klasa); zaglavlje
+' (datum/kupac/vozac/brojevi) je jedno.
+'
+' S6 KORAK 3: dokument je JEDAN ID (od koraka 2), a linije su u
+' tblPrijemnicaStavke. Do koraka 3 je papir delio "PRJ-I + PRJ-II" i za svaki
+' ID citao klasu i kolicinu sa zaglavlja -- nad novim oblikom jedan prazan red.
+' Kvar stavki (zaglavlje bez stavki, dve stavke iste klase) ide u handler: papir
+' ne nastaje, umesto papira sa izmisljenom nulom.
+Private Function FillPrijemnicaSablon(ByVal prijemnicaID As String) As Worksheet
     On Error GoTo EH
     Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
 
@@ -1442,8 +1462,7 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     If IsEmpty(d) Then Exit Function
 
     Dim iID As Long, iDat As Long, iKup As Long, iVoz As Long, iBr As Long, iBrZbr As Long
-    Dim iVr As Long, iSo As Long, iKl As Long, iKol As Long, iCe As Long, iTip As Long
-    Dim iKolAmb As Long, iKolAmbV As Long
+    Dim iVr As Long, iSo As Long, iTip As Long, iKolAmbV As Long
     iID = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
     iDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
     iKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
@@ -1452,52 +1471,51 @@ Private Function FillPrijemnicaSablon(ByVal prijemnicaIDs As String) As Workshee
     iBrZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
     iVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
     iSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
-    iKl = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
-    iKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
-    iCe = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA)
     iTip = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
-    iKolAmb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
     iKolAmbV = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA)
     Dim iIsp As Long: iIsp = GetColumnIndex(TBL_PRIJEMNICA, COL_TRACE_ISPRAVKA_OD)   ' Faza 7: sledljivost
 
-    Dim ids() As String: ids = Split(prijemnicaIDs, " + ")
-    Dim stavke() As Variant: ReDim stavke(0 To UBound(ids), 0 To 5)
-    Dim cnt As Long: cnt = 0
+    Dim wantID As String: wantID = Trim$(prijemnicaID)
+    If Len(wantID) = 0 Then Exit Function
+    Dim r As Long, fr As Long
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(d(r, iID))) = wantID Then
+            fr = r
+            Exit For
+        End If
+    Next r
+    If fr = 0 Then Exit Function
+
     Dim kupID As String, vozID As String, brPrij As String, brZbr As String
     Dim ispPrij As String: ispPrij = ""
-    Dim datum As String
-    Dim ukKg As Double, ukVred As Double, ukAmb As Double, ambV As Double
-    Dim j As Long, r As Long
-    For j = 0 To UBound(ids)
-        Dim wantID As String: wantID = Trim$(ids(j))
-        If wantID <> "" Then
-            For r = 1 To UBound(d, 1)
-                If CStr(d(r, iID)) = wantID Then
-                    Dim pkol As Double: pkol = PrNz(d(r, iKol))
-                    Dim pcen As Double: pcen = PrNz(d(r, iCe))
-                    stavke(cnt, 0) = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
-                    stavke(cnt, 1) = CStr(d(r, iKl))
-                    stavke(cnt, 2) = pkol
-                    stavke(cnt, 3) = pcen
-                    stavke(cnt, 4) = CStr(d(r, iTip))
-                    stavke(cnt, 5) = PrNz(d(r, iKolAmb))
-                    ukKg = ukKg + pkol
-                    ukVred = ukVred + pkol * pcen
-                    ukAmb = ukAmb + PrNz(d(r, iKolAmb))
-                    If cnt = 0 Then
-                        kupID = CStr(d(r, iKup)): vozID = CStr(d(r, iVoz))
-                        brPrij = CStr(d(r, iBr)): brZbr = CStr(d(r, iBrZbr))
-                        datum = Format$(d(r, iDat), "dd.mm.yyyy")
-                        ambV = PrNz(d(r, iKolAmbV))
-                        If iIsp > 0 Then ispPrij = Trim$(CStr(d(r, iIsp)))
-                    End If
-                    cnt = cnt + 1
-                    Exit For
-                End If
-            Next r
-        End If
+    Dim datum As String, proizvod As String, tipAmb As String
+    kupID = CStr(d(fr, iKup)): vozID = CStr(d(fr, iVoz))
+    brPrij = CStr(d(fr, iBr)): brZbr = CStr(d(fr, iBrZbr))
+    datum = Format$(d(fr, iDat), "dd.mm.yyyy")
+    proizvod = Trim$(CStr(d(fr, iVr)) & " " & CStr(d(fr, iSo)))
+    tipAmb = CStr(d(fr, iTip))
+    Dim ambV As Double: ambV = PrNz(d(fr, iKolAmbV))
+    If iIsp > 0 Then ispPrij = Trim$(CStr(d(fr, iIsp)))
+
+    Dim linije As Collection
+    Set linije = modDokumenta.StavkeZaPrijemnicu(modDokumenta.StavkePrijemnicePoDokumentu(), _
+                                                 wantID, "modPrint.FillPrijemnicaSablon")
+    Dim cnt As Long: cnt = linije.count
+    Dim stavke() As Variant: ReDim stavke(0 To cnt - 1, 0 To 5)
+    Dim ukKg As Double, ukVred As Double, ukAmb As Double
+    Dim j As Long, red As Variant
+    For j = 1 To cnt
+        red = linije(j)
+        stavke(j - 1, 0) = proizvod
+        stavke(j - 1, 1) = CStr(red(3))
+        stavke(j - 1, 2) = CDbl(red(4))
+        stavke(j - 1, 3) = CDbl(red(5))
+        stavke(j - 1, 4) = tipAmb
+        stavke(j - 1, 5) = CDbl(red(6))
+        ukKg = ukKg + CDbl(red(4))
+        ukVred = ukVred + CDbl(red(4)) * CDbl(red(5))
+        ukAmb = ukAmb + CDbl(red(6))
     Next j
-    If cnt = 0 Then Exit Function
 
     Dim kupNaziv As String, vozNaziv As String
     kupNaziv = CStr(LookupValue(TBL_KUPCI, COL_KUP_ID, kupID, COL_KUP_NAZIV))

@@ -370,35 +370,9 @@ Public Function AmbStanjeOkoDokumenta(ByVal nalogTip As String, _
     AmbStanjeOkoDokumenta = saldo
 End Function
 
-' ============================================================
-' READ: entitetski saldo gajbica STANICE (OM) za dati tip ambalaze, DANAS.
-'
-' Ceo trenutni saldo (Ulaz +, Izlaz -), ne stanje oko dokumenta. Jedini
-' pozivalac je grupni otkupni list, koji je danas nedostizan (unos prijemnice je
-' pauziran do S6) i cita Stanica:<VozacID>, dok prijemnica od 10b-2 pomera nalog
-' Vozac -- njegovo pravilo ide u S6 (AMBALAZA.md 6.13g). Otpremnica od stavke
-' 135 cita AmbStanjeOkoDokumenta.
-'
-' 0 ako nema pokreta. BEZ HANDLERA (AMB-10-ODL-31): kvar knjige je ranije davao
-' 0, pa je papir nosio izmisljenu nulu; sada ide pozivaocu.
-' ============================================================
-Public Function GetStanicaAmbSaldo(ByVal stanicaID As String, _
-                                   ByVal tipAmb As String) As Long
-    GetStanicaAmbSaldo = 0
-    If Len(Trim$(stanicaID)) = 0 Or Len(Trim$(tipAmb)) = 0 Then Exit Function
-
-    Dim st As Variant
-    st = GetAmbalazeStanje(stanicaID, "Stanica")
-    If Not IsArray(st) Then Exit Function
-
-    Dim i As Long
-    For i = LBound(st, 1) To UBound(st, 1)
-        If AmbText(st(i, 1)) = Trim$(tipAmb) Then
-            If IsNumeric(st(i, 2)) Then GetStanicaAmbSaldo = CLng(st(i, 2))
-            Exit Function
-        End If
-    Next i
-End Function
+' GetStanicaAmbSaldo (DANASNJI saldo Stanica:<ID>) je obrisan u S6 koraku 3
+' (stavka 178): jedini pozivalac je bio grupni otkupni list, koji sada cita
+' nalog VOZAC oko svog reda kroz AmbStanjeOkoDokumenta (AMBALAZA.md 6.13g).
 
 ' ============================================================
 ' READ: opcije za "Tip ambalaze" combo
@@ -815,7 +789,7 @@ End Function
 ' IZVOR. Storno je kontra-stav sa zamenjenim stranama, pa se gasi istim pravilom
 ' -- bez posebnog slucaja i bez kolone Stornirano.
 '
-' NEMA "On Error -> vrati 0". Zatecen GetStanicaAmbSaldo tako radi i to je
+' NEMA "On Error -> vrati 0". Nekadasnji GetStanicaAmbSaldo je tako radio i to je
 ' fail-open koji ovde ne sme da postoji: na ovaj broj se oslanja kapija deficita,
 ' pa bi progutana greska proizvela upis BEZ pokrica -- tj. negativan saldo.
 Public Function AmbSaldoNaloga(ByVal tip As String, ByVal id As String, _

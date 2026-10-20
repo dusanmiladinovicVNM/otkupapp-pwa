@@ -320,8 +320,20 @@ End Sub
 
 ' AUD-011 / FM-0034 #2: dva aktivna reda sa istim PrijemnicaID -> Count=1 guard
 ' mora da pukne umesto da tiho uzme prvi pogodak.
+' S6 korak 3: test radi u SVOJOJ transakciji i vraca se rollback-om. Dupli
+' PrijemnicaID je sinteticka anomalija (pisac je ne pravi), a strog citalac
+' stavki je odbija nad CELOM tabelom -- ostavljena u svesci oborila bi svaki
+' citalac prijemnice u suite-ovima koji idu posle ove.
 Private Sub Test_CreateFakturaBlocksDuplicatePrijemnicaID()
+    Dim tx As clsTransaction
     On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
 
     Dim code As String
     code = NewFakturaTestCode("DUPID")
@@ -354,7 +366,8 @@ Private Sub Test_CreateFakturaBlocksDuplicatePrijemnicaID()
 
 CleanExit:
     On Error Resume Next
-    MarkTestPrijemnicaStornirano prijemnicaID
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
     On Error GoTo 0
     Exit Sub
 
@@ -760,6 +773,22 @@ Private Sub AppendTestPrijemnicaRow(ByVal prijemnicaID As String, _
     values.Add COL_STORNIRANO, stornirano
 
     AppendFakturaTestRowByColumnMap TBL_PRIJEMNICA, values, SRC
+
+    ' Stavka uz zaglavlje (S6 korak 3, presedan S3b-1): citaoci linija
+    ' prijemnice (izvestaji, palete, manjak) citaju tblPrijemnicaStavke kroz
+    ' strog citalac, koji zaglavlje bez stavke odbija po imenu -- a ova suite
+    ' svoje redove ostavlja u svesci za sledece. Faktura (korak 5) i dalje cita
+    ' zaglavlje, pa ono nosi iste brojke.
+    Dim st As Object
+    Set st = CreateObject("Scripting.Dictionary")
+    st.Add COL_PRS_ID, "PRS-" & prijemnicaID & "-" & brojPrijemnice
+    st.Add COL_PRS_PRIJEMNICA_ID, prijemnicaID
+    st.Add COL_PRS_RB, 1
+    st.Add COL_PRS_KLASA, klasa
+    st.Add COL_PRS_KOLICINA, kolicina
+    st.Add COL_PRS_CENA, cena
+    st.Add COL_PRS_KOL_AMB, 0
+    AppendFakturaTestRowByColumnMap TBL_PRIJEMNICA_STAVKE, st, SRC
 End Sub
 
 Private Sub AppendTestFakturaRow(ByVal fakturaID As String, _

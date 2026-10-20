@@ -1465,36 +1465,30 @@ Private Function GetTezinaPalete(ByVal tip As String) As Double
     GetTezinaPalete = NzD(LookupValue(TBL_TIP_PALETE, COL_TPAL_TIP, tip, COL_TPAL_TEZINA))
 End Function
 
-' Linije DOKUMENTA prijemnice po klasi (S6 korak 2): za svaku stavku upise ID
-' dokumenta, ID stavke, neto i gajbe pod njenom klasom. Vraca broj nadjenih
-' stavki -- 0 znaci red STAROG oblika (bez stavki), koji je sam svoja linija.
-' stavke je vec procitana tblPrijemnicaStavke (cita se jednom po pozivu writer-a).
-Private Function PrijemnicaLinijePoKlasi(ByVal stavke As Variant, _
+' Linije DOKUMENTA prijemnice po klasi: za svaku stavku upise ID dokumenta, ID
+' stavke, neto i gajbe pod njenom klasom.
+'
+' S6 KORAK 3 (stavka 178): ovo vise NE cita tabelu stavki sama -- adapter je nad
+' kanonskim citaocem (modDokumenta.StavkeZaPrijemnicu), pa vazi isti ugovor
+' stavke (Kolicina > 0, klasa kroz kapiju pisca, jedna stavka po klasi).
+' Dokument bez stavki je GRESKA, ne "red starog oblika koji je sam svoja
+' linija": fixture i seed-ovi od koraka 3 pisu i stavku, a pisac zaglavlje bez
+' stavke ne pravi. Zovu ga Reassign, Adjust i Evaluate. poDok je vec ucitan
+' modDokumenta.StavkePrijemnicePoDokumentu (jednom po pozivu).
+Private Function PrijemnicaLinijePoKlasi(ByVal poDok As Object, _
                                          ByVal prijemnicaID As String, _
                                          ByVal byId As Object, ByVal byStavka As Object, _
                                          ByVal neto As Object, ByVal gajb As Object, _
                                          ByVal SRC As String) As Long
-    If Not IsArray(stavke) Then Exit Function
-    If Len(prijemnicaID) = 0 Then Exit Function
-
-    Dim cP As Long, cId As Long, cK As Long, cKol As Long, cAmb As Long
-    cP = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, SRC)
-    cId = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, SRC)
-    cK = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, SRC)
-    cKol = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, SRC)
-    cAmb = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOL_AMB, SRC)
-
-    Dim i As Long, kl As String, n As Long
-    For i = 1 To UBound(stavke, 1)
-        If Trim$(NzToText(stavke(i, cP))) = prijemnicaID Then
-            kl = Trim$(NzToText(stavke(i, cK)))
-            byId(kl) = prijemnicaID
-            byStavka(kl) = Trim$(NzToText(stavke(i, cId)))
-            neto(kl) = NzD(stavke(i, cKol))
-            gajb(kl) = NzL(stavke(i, cAmb))
-            n = n + 1
-        End If
-    Next i
+    Dim st As Variant, kl As String, n As Long
+    For Each st In modDokumenta.StavkeZaPrijemnicu(poDok, prijemnicaID, SRC)
+        kl = Trim$(CStr(st(3)))
+        byId(kl) = Trim$(prijemnicaID)
+        byStavka(kl) = CStr(st(7))
+        neto(kl) = CDbl(st(4))
+        gajb(kl) = CLng(st(6))
+        n = n + 1
+    Next st
     PrijemnicaLinijePoKlasi = n
 End Function
 
@@ -1564,14 +1558,11 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
 
     Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
     If IsEmpty(prj) Then Exit Function
-    ' Stavke dokumenata (S6 korak 2): linije cilja se citaju odavde.
-    Dim prjSt As Variant: prjSt = GetTableData(TBL_PRIJEMNICA_STAVKE)
-    Dim pcBr As Long, pcId As Long, pcKl As Long, pcKol As Long, pcAmb As Long, pcZbr As Long, pcSt As Long
+    ' Linije cilja su STAVKE dokumenta, kroz kanonski citalac (S6 korak 3).
+    Dim prjSt As Object: Set prjSt = modDokumenta.StavkePrijemnicePoDokumentu()
+    Dim pcBr As Long, pcId As Long, pcZbr As Long, pcSt As Long
     pcBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
     pcId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
-    pcKl = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, SRC)
-    pcKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, SRC)
-    pcAmb = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB, SRC)
     pcZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
     pcSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
     ' identitet nove prijemnice (za relabel-u-mestu; svi redovi broja dele isti)
@@ -1642,18 +1633,10 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
             Dim stN As Boolean: stN = False
             If pcSt > 0 Then stN = (UCase$(Trim$(CStr(prj(r, pcSt)))) = "DA")
             If Not stN Then
-                ' S6 korak 2: dokument novog oblika nosi linije u STAVKAMA, a
-                ' zaglavlje mu je bez klase i kolicine. Red bez stavki je STARI
-                ' oblik (fixture, rucni redovi) i sam je svoja linija.
-                If PrijemnicaLinijePoKlasi(prjSt, Trim$(CStr(prj(r, pcId))), newById, _
-                                           newStavka, newNeto, newGajb, SRC) = 0 Then
-                    Dim kl As String: kl = Trim$(CStr(prj(r, pcKl)))
-                    If Len(kl) = 0 Then kl = "I"
-                    newById(kl) = Trim$(CStr(prj(r, pcId)))
-                    newStavka(kl) = ""
-                    newNeto(kl) = NzD(prj(r, pcKol))
-                    newGajb(kl) = NzL(prj(r, pcAmb))
-                End If
+                ' Linije cilja su STAVKE dokumenta (S6 korak 2/3); zaglavlje je
+                ' bez klase i kolicine.
+                PrijemnicaLinijePoKlasi prjSt, Trim$(CStr(prj(r, pcId))), newById, _
+                                        newStavka, newNeto, newGajb, SRC
                 If Len(newBrZbr) = 0 Then
                     newBrZbr = Trim$(CStr(prj(r, pcZbr)))
                     ' Labela mora da opisuje BAS izabrani dokument: kad generacija
@@ -2029,22 +2012,28 @@ Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
     Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
     If IsEmpty(prj) Then Exit Function
     Dim pId As Long: pId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
-    Dim pBr As Long, pKl As Long, pVr As Long, pSo As Long, pTa As Long, pAmb As Long, pStt As Long
+    Dim pBr As Long, pVr As Long, pSo As Long, pTa As Long, pStt As Long
     pBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
-    pKl = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
     pVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
     pSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
     pTa = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
-    pAmb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
     pStt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
     If pBr = 0 Then Exit Function
+    ' Gajbe NOVE po klasi su na STAVKAMA dokumenta (S6 korak 3), kroz kanonski
+    ' citalac; zaglavlje ih od koraka 2 ne nosi.
+    Dim poDok As Object: Set poDok = modDokumenta.StavkePrijemnicePoDokumentu()
+    Dim nId As Object: Set nId = CreateObject("Scripting.Dictionary")
+    Dim nSt As Object: Set nSt = CreateObject("Scripting.Dictionary")
+    Dim nNeto As Object: Set nNeto = CreateObject("Scripting.Dictionary")
+    Dim nGajb As Object: Set nGajb = CreateObject("Scripting.Dictionary")
+    nGajb.CompareMode = vbTextCompare
 
     ' NOVA: identitet (prvi aktivni red) + gajbice PO KLASI. STARA: identitet (prvi red).
     Dim nVr As String, nSo As String, nTa As String, haveNew As Boolean
     Dim oVr As String, oSo As String, oTa As String, haveOldId As Boolean
     Dim newGajb As Object: Set newGajb = CreateObject("Scripting.Dictionary")
     newGajb.CompareMode = vbTextCompare
-    Dim r As Long, kl As String
+    Dim r As Long, kl As String, kv As Variant
     Dim pk As String
     For r = 1 To UBound(prj, 1)
         Dim b As String: b = Trim$(CStr(SafeCell(prj, r, pBr)))
@@ -2058,8 +2047,13 @@ Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
                     If pTa > 0 Then nTa = Trim$(NzToText(SafeCell(prj, r, pTa)))
                     haveNew = True
                 End If
-                kl = Trim$(CStr(SafeCell(prj, r, pKl))): If Len(kl) = 0 Then kl = "I"
-                newGajb(kl) = NzL(newGajb(kl)) + NzL(SafeCell(prj, r, pAmb))
+                Set nGajb = CreateObject("Scripting.Dictionary")
+                nGajb.CompareMode = vbTextCompare
+                PrijemnicaLinijePoKlasi poDok, pk, nId, nSt, nNeto, nGajb, _
+                                        "modPaletniList.EvaluatePaletaReassign"
+                For Each kv In nGajb.keys
+                    newGajb(CStr(kv)) = NzL(newGajb(CStr(kv))) + CLng(nGajb(kv))
+                Next kv
             End If
         ElseIf PripadaDokumentu(b, oldBroj, pk, srcIds) Then
             If Not haveOldId Then
@@ -2273,32 +2267,33 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal brojPrij As String, _
     ' --- Dokument (aktivni redovi prijemnice) po klasi ---
     Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
     If IsEmpty(prj) Then AdjustPaletaGajbiceZaPrijemnicu_TX = ADJ_BLOCKED: Exit Function
-    Dim pBr As Long, pKl As Long, pId As Long, pKol As Long, pAmb As Long, pStt As Long
+    Dim pBr As Long, pId As Long, pStt As Long
     Dim pVr As Long, pSo As Long, pTa As Long, pZbr As Long
     pBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
-    pKl = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, SRC)
     pId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
-    pKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, SRC)
-    pAmb = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB, SRC)
     pZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
     pVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
     pSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
     pTa = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
     pStt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
 
-    Dim docId As Object, docNeto As Object, docGajb As Object
+    ' Linije dokumenta su STAVKE (S6 korak 3), kroz kanonski citalac. Do koraka 3
+    ' je klasa, neto i gajbe citao sa zaglavlja: nad dokumentom novog oblika to
+    ' je "klasa I, 0 gajbi", pa bi palete te klase svukao na nulu, a klasu II
+    ' proglasio viskom. docStavka nosi kljuc linije do SpillGajbice.
+    Dim docId As Object, docNeto As Object, docGajb As Object, docStavka As Object
     Set docId = CreateObject("Scripting.Dictionary"): docId.CompareMode = vbTextCompare
     Set docNeto = CreateObject("Scripting.Dictionary"): docNeto.CompareMode = vbTextCompare
     Set docGajb = CreateObject("Scripting.Dictionary"): docGajb.CompareMode = vbTextCompare
+    Set docStavka = CreateObject("Scripting.Dictionary"): docStavka.CompareMode = vbTextCompare
+    Dim poDok As Object: Set poDok = modDokumenta.StavkePrijemnicePoDokumentu()
     Dim dVr As String, dSo As String, dTa As String, dZbr As String
     Dim r As Long, kl As String
     For r = 1 To UBound(prj, 1)
         If Trim$(CStr(SafeCell(prj, r, pBr))) = brojPrij Then
             If Not (pStt > 0 And UCase$(Trim$(CStr(SafeCell(prj, r, pStt)))) = "DA") Then
-                kl = Trim$(CStr(SafeCell(prj, r, pKl))): If Len(kl) = 0 Then kl = "I"
-                docId(kl) = Trim$(CStr(SafeCell(prj, r, pId)))
-                docNeto(kl) = NzD(SafeCell(prj, r, pKol))
-                docGajb(kl) = NzL(SafeCell(prj, r, pAmb))
+                PrijemnicaLinijePoKlasi poDok, Trim$(CStr(SafeCell(prj, r, pId))), docId, _
+                                        docStavka, docNeto, docGajb, SRC
                 If Len(dZbr) = 0 Then
                     dZbr = Trim$(NzToText(SafeCell(prj, r, pZbr)))
                     dVr = Trim$(NzToText(SafeCell(prj, r, pVr)))
@@ -2443,7 +2438,8 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal brojPrij As String, _
             If Not stRows.Exists(kl) Then
                 ' nova klasa bez stavki -> sveza paletizacija te klase
                 SpillGajbice CStr(docId(kl)), brojPrij, dZbr, kl, dVr, dSo, dTa, _
-                             delta, NzD(docNeto(kl)) / NzL(docGajb(kl)), crateW, touched, SRC
+                             delta, NzD(docNeto(kl)) / NzL(docGajb(kl)), crateW, touched, SRC, _
+                             prijemnicaStavkaID:=CStr(docStavka(kl))
                 changedKl = True
             Else
                 Dim lp As String: lp = CStr(SafeCell(s, stRows(kl)(stRows(kl).count), sPal))
@@ -2470,7 +2466,8 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal brojPrij As String, _
                     End If
                     If lpR > 0 Then ClosePaleta lpR, SRC   ' puna -> zatvori pre trazenja sledece
                     SpillGajbice CStr(docId(kl)), brojPrij, dZbr, kl, dVr, dSo, dTa, _
-                                 delta - fillN, NzD(docNeto(kl)) / NzL(docGajb(kl)), crateW, touched, SRC
+                                 delta - fillN, NzD(docNeto(kl)) / NzL(docGajb(kl)), crateW, touched, SRC, _
+                                 prijemnicaStavkaID:=CStr(docStavka(kl))
                     infoTxt = infoTxt & "Klasa " & kl & ": +" & fillN & " na " & PaletaLabel(lp) & _
                               ", +" & (delta - fillN) & " preliveno na sledecu paletu. "
                     changedKl = True

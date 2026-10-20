@@ -2533,7 +2533,7 @@ Public Function ColKlasa(ByVal m As String) As String
         Case "OTKUP":                ColKlasa = COL_OKS_KLASA        ' stavka (ovStav)
         Case "OTPREMNICA":           ColKlasa = COL_OPS_KLASA        ' stavka (ovStav)
         Case "ZBIRNA":               ColKlasa = COL_ZBS_KLASA        ' stavka (ovStav)
-        Case "PRIJEMNICA":           ColKlasa = COL_PRJ_KLASA
+        Case "PRIJEMNICA":           ColKlasa = COL_PRS_KLASA        ' stavka (ovStav)
     End Select
 End Function
 
@@ -2542,7 +2542,7 @@ Public Function ColKolicina(ByVal m As String) As String
         Case "OTKUP":                ColKolicina = COL_OKS_KOLICINA  ' stavka (ovStav)
         Case "OTPREMNICA":           ColKolicina = COL_OPS_KOLICINA  ' stavka (ovStav)
         Case "ZBIRNA":               ColKolicina = COL_ZBS_KOLICINA  ' stavka (ovStav)
-        Case "PRIJEMNICA":           ColKolicina = COL_PRJ_KOLICINA
+        Case "PRIJEMNICA":           ColKolicina = COL_PRS_KOLICINA  ' stavka (ovStav)
     End Select
 End Function
 
@@ -2551,7 +2551,7 @@ Public Function ColKolAmb(ByVal m As String) As String
         Case "OTKUP":                ColKolAmb = COL_OKS_KOL_AMB     ' stavka (ovStav)
         Case "OTPREMNICA":           ColKolAmb = COL_OPS_KOL_AMB     ' stavka (ovStav)
         Case "ZBIRNA":               ColKolAmb = COL_ZBS_KOL_AMB     ' stavka (ovStav)
-        Case "PRIJEMNICA":           ColKolAmb = COL_PRJ_KOL_AMB
+        Case "PRIJEMNICA":           ColKolAmb = COL_PRS_KOL_AMB     ' stavka (ovStav)
     End Select
 End Function
 
@@ -2574,7 +2574,7 @@ End Function
 Public Function ColCena(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColCena = COL_OKS_CENA          ' stavka (ovStav)
-        Case "PRIJEMNICA":           ColCena = COL_PRJ_CENA
+        Case "PRIJEMNICA":           ColCena = COL_PRS_CENA          ' stavka (ovStav)
     End Select
 End Function
 
@@ -2990,7 +2990,9 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     ' odakle dolazi kilaza reda.
     Dim otkStav As Boolean, dStav As Object, ovStav() As String, iStavID As Long
     ReDim ovStav(0 To colN - 1)
-    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "ZBIRNA")
+    ' PRIJEMNICA od S6 koraka 3: zaglavlje od koraka 2 ne nosi linijska polja,
+    ' pa je red dokumenta novog oblika pokazivao 0 kg, praznu klasu i vrednost 0.
+    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "ZBIRNA" Or mk = "PRIJEMNICA")
     If otkStav Then
         mStep = "stavke dokumenta"
         If mk = "OTKUP" Then
@@ -2999,6 +3001,9 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
         ElseIf mk = "OTPREMNICA" Then
             Set dStav = modDokumenta.ZbirStavkiPoOtpremnici()
             iStavID = ColIdx(tblName, COL_OTP_ID)
+        ElseIf mk = "PRIJEMNICA" Then
+            Set dStav = modDokumenta.ZbirStavkiPoPrijemnici()
+            iStavID = ColIdx(tblName, COL_PRJ_ID)
         Else
             Set dStav = modDokumenta.ZbirStavkiPoZbirni()
             iStavID = ColIdx(tblName, COL_ZBR_ID)
@@ -3117,6 +3122,9 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                             "modScrDokumenti.RedoviZaTip")
             ElseIf mk = "OTPREMNICA" Then
                 zStav = modDokumenta.ZbirStavkiZaOtpremnicu(dStav, CellS(src, r, iStavID), _
+                            "modScrDokumenti.RedoviZaTip")
+            ElseIf mk = "PRIJEMNICA" Then
+                zStav = modDokumenta.ZbirStavkiZaPrijemnicu(dStav, CellS(src, r, iStavID), _
                             "modScrDokumenti.RedoviZaTip")
             Else
                 zStav = modDokumenta.ZbirStavkiZaZbirnu(dStav, CellS(src, r, iStavID), _

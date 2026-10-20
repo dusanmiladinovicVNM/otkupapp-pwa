@@ -241,7 +241,7 @@ End Function
 '
 ' Nepoznata tabela nije ni jedno ni drugo, i tu razliku mora da pravi IZVRSAVANJE,
 ' ne samo staticka provera: ona namerno preskace pozive sa promenljivim imenom
-' tabele (modIntegritet.CollectBrojZbirne, modDokumenta.SumByBroj i slicni), pa
+' tabele (modIntegritet.CollectBrojZbirne i slicni), pa
 ' bi bez ove kapije "TabelaNosiStorno = False" opet znacilo dve stvari --
 ' "eksplicitno BEZ_STORNA" i "niko je nije klasifikovao". To je ista bolest zbog
 ' koje je ceo ovaj posao i nastao, samo jedan nivo dalje.

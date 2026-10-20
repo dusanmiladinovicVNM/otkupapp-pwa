@@ -1222,10 +1222,11 @@ Public Function PrijemnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
         On Error GoTo EH
     End If
 
-    ' Status palete (Klasa I = prvi token rezultata) - citanje vec iskomitovanih
-    ' tabela, pa ide u napomene uz potvrdu upisa.
+    ' Status palete DOKUMENTA (od S6 koraka 2 pisac vraca jedan ID, a palete
+    ' svih klasa stoje pod njim) - citanje vec iskomitovanih tabela, pa ide u
+    ' napomene uz potvrdu upisa.
     On Error Resume Next
-    palStatus = GetPaletaStatusForPrijemnica(Split(res, " + ")(0))
+    palStatus = GetPaletaStatusForPrijemnica(res)
     Err.Clear
     On Error GoTo EH
     If Len(palStatus) > 0 Then poruke = poruke & palStatus & vbCrLf
@@ -1297,7 +1298,7 @@ Private Sub PreveziPaleteIspravke(ByVal p As Object, ByVal res As String, _
     noviBroj = Trim$(S(p, "brDok"))
     If Len(noviBroj) = 0 Then _
         noviBroj = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
-                   Trim$(Split(res, " + ")(0)), COL_PRJ_BROJ)))
+                   Trim$(res), COL_PRJ_BROJ)))
 
     ' IZVOR SE SALJE PO IDENTITETU. Correction context nosi PK stornirane
     ' prijemnice; iz njega se cita njena GENERACIJA, pa writer bira bas njene
@@ -1313,7 +1314,7 @@ Private Sub PreveziPaleteIspravke(ByVal p As Object, ByVal res As String, _
     ' CILJ SE TAKODJE SALJE PO IDENTITETU. Nova prijemnica je upravo upisana, pa
     ' joj je PK poznat -- nema razloga da se cilj trazi po broju koji je labela.
     Dim noviGen As String
-    noviGen = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(Split(res, " + ")(0)))
+    noviGen = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(res))
 
     relOk = ReassignPaleteToPrijemnica_TX(stariBroj, noviBroj, relWarn, True, gajbDiff, _
                                           stariGen, noviGen)

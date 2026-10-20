@@ -6324,6 +6324,165 @@
      - **Čeka:** kratku ručnu proveru operatera, pa merge — samo na izričit zahtev, sa `--match-head-commit`,
        posle zelenog CI-ja.
 
+177. **Merge `#436`, S6 korak 2/8 zatvoren** (20.10.2026). Zapis ide ovde, a ne u `#436`, po obrascu stavki 169
+     i 173.
+
+     - **Ručna provera:** operater je javio „ručna provera ok“ nad `rucna_provera_s6_korak2.xlsm`, posle reviewer
+       GO i potvrđenog compile-a (stavka 176).
+     - **Merge** 20.10.2026 (10:42:31 UTC) kao **`5afde431`**, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `904ba433`.
+       - Static CI je `success` na tom head-u.
+       - Stablo `main`-a posle merge-a jednako je stablu `904ba433` (`6badc0bb`).
+       - Grana `claude/s6-korak2-pisac` nije obrisana.
+     - **Bazni brojevi na `main` = `5afde431`:**
+       - RunAllTests 258/0, BFP 2473/0, Banka 241/0, Storno 111/0, Palete 97;
+       - katalog sabotaža 855;
+       - otisak šeme `106AC27A` (48 tabela, 665 kolona).
+     - **Sledeći brojevi:** test 259 · stavka 178 · KI-032.
+     - **Sledeći je S6 korak 3 (čitaoci)**, na grani `claude/s6-korak3-citaoci` sa `5afde431`, u svojoj sesiji
+       (§14.55, red koraka 3, i spisak iz „Korak 2“):
+       - `split_plus` 5 → 0;
+       - štampa, izveštaji, izvoz (`modStammdatenSync:1299`), integritet, oporavak, grupni otkupni list;
+       - `CalculateManjakPreview`, uz povratak testa `Test_ManjakPreviewJeZbirnaMinusPrijem` i sabotaže
+         `manjak-preview-bez-druge-klase`;
+       - `AdjustPaletaGajbiceZaPrijemnicu_TX` i `EvaluatePaletaReassign` (prelaze u korak 3 ili 4).
+     - **Otvoreno, sa svojim korakom:**
+       - `KI-028` (fixture), svoj rez pre koraka 6;
+       - `KI-031` (`PonistiZbirnaChain_TX`), korak 4;
+       - kapija koraka 6: F4 se ne odmrzava pre zatvorenih koraka 3, 4 i 5.
+
+178. **S6 korak 3 — pre-flight nad `5afde431`, odluke 1–7, PRE koda** (20.10.2026). Grana
+     `claude/s6-korak3-citaoci` nad stavkom 177 (`c59fefbc`). Plan, ugovor čitaoca, obim po celinama i
+     acceptance contract su u §14.55, podsekcija „Korak 3".
+
+     - **Verdikt:** blokirajućeg GAP-a nema. `CAPABILITY` ostaje GAP (F4), kao izlazni uslov reza.
+     - **Izmereno:**
+       - linijska polja zaglavlja čita **37 PROD procedura** (66 mesta); korak 3 nosi 27 (47 mesta);
+       - `split_plus` je 5 živih;
+       - papir prijemnice je **danas dostižan** kroz ponovnu štampu iz Izveštaja i nad novim oblikom daje
+         prazan red.
+     - **Tri nalaza koja menjaju obim:**
+       - zbirnina strana manjka čita **zaglavlje** zbirne, koje je od PR3 prazno, pa F4 linija manjka za
+         kanonsku zbirnu ne crta ništa. S4-1 je ovo odložio u S6, uz prosek gajbe;
+       - `Adjust` bi nad novim oblikom svukao palete na nulu i pisao bez `PrijemnicaStavkaID`;
+       - `run_vba` deli svesku između suite-ova, a Faktura i BFP ne vraćaju seed-ove.
+     - **Odluke operatera (20.10.2026), sve po preporuci:**
+
+       | # | Pitanje | Odluka |
+       |---|---|---|
+       | 1 | kanonski čitalac | jedan strogi čitalac u `modDokumenta`; `PrijemnicaLinijePoKlasi` se briše |
+       | 2 | red starog oblika | **(a) samo stavke**: fixture izvodi stavku, seed-ovi pišu i stavku; fixture u ovom rezu, ne uz `KI-028` |
+       | 3 | grupni otkupni list | ovde; saldo **naloga Vozač** oko svog reda (`AmbStanjeOkoDokumenta`); `GetStanicaAmbSaldo` se briše |
+       | 4 | `Adjust` / `Evaluate` | korak 3 |
+       | 5 | mrtav kod | brišu se `GetAktivnePrijemnice`, `BuildChainIndex`, `GetStanicaAmbSaldo` i `PrijemnicaLinijePoKlasi`; `EvaluatePaletaReassign` ostaje i čita stavke |
+       | 6 | prag | `split_plus` = 0 sada; `zbr_linija` 17 → 4 |
+       | 7 | zbirnina strana manjka | obe strane manjka ovde, uz prosek gajbe; vraćen test ide nad kanonskom zbirnom |
+
+     - **Sledeće:** kod po §14.55 „Korak 3", crven test pre ispravke, pa PR na review. `run_vba` FULL i
+       `dokaz.py` čekaju reviewer GO.
+
+179. **S6 korak 3 — čitaoci prijemnice čitaju stavke dokumenta; PR na review** (20.10.2026). Kod je nad
+     stavkom 178 i prati §14.55 „Korak 3". Ispravke plana nastale tokom koda su tamo, pod „Ispravke plana
+     tokom koda".
+
+     - **Kanonski čitalac (`modDokumenta`).**
+       - Novi: `StavkePrijemniceRedovi`, `ZbirStavkiPoPrijemnici` / `ZbirStavkiZaPrijemnicu` i
+         `StavkePrijemnicePoDokumentu` / `StavkeZaPrijemnicu`.
+       - Meki omotači su `ZbirStavkiPoPrijemniciMeko` i `KgPrijemniceMeko`.
+       - Ugovor je isti kao kod pisca, a greške su `1970–1977`.
+     - **Čitaoci (svi PROD čitaoci linijskih polja iz obima koraka 3):**
+       - štampa: papir prijemnice i grupni list (nalog Vozač oko svog reda, `7694` bez veze);
+       - šest izveštaja kupca i vozača, `BuildManjakDict` i `ReportManjak` (obe strane);
+       - `CalculateManjakPreview` (obe strane) i prosek gajbe;
+       - integritet: A2/A3 strogo u handleru, B1/B4/B5/C4 meko;
+       - oporavak, F4 lista, izvoz (`PredatoPoKupcuRedovi`), detalj izveštaja;
+       - palete (`Adjust` sa ključem stavke, `Evaluate`, `Reassign` bez fallback-a).
+     - **`split_plus` 5 → 0, `zbr_linija` 17 → 4.** Pragovi su u `PRAGOVI`. Linijska polja zaglavlja i dalje
+       čitaju samo faktura (korak 5), storno, impact i prefill (korak 4) i `modSetup` (korak 8).
+     - **Obrisano:** `GetAktivnePrijemnice`, `BuildChainIndex`, `DictAppend`, `GetStanicaAmbSaldo`, `SumByBroj`
+       i grana „kilaža sa zaglavlja" u Oporavku.
+     - **Fixture i seed-ovi.**
+       - `make_fixture` izvodi `tblPrijemnicaStavke` (29 stavki); potpis je `27f6230a5e8ca5be`.
+       - Seed-ovi Palete, Storno, Izveštaji, Faktura i BFP pišu i stavku, a njihove transakcije je snimaju.
+       - Test fakture sa duplim `PrijemnicaID` se vraća rollback-om.
+     - **Usputni nalaz → `KI-032`** (`ReportZbirniVozac` dvaput broji prijem kad dva vozača nose isti broj
+       zbirne). Pročitan, nije reprodukovan, nije uveden ovim rezom.
+     - **Reprodukcija, kroz produkcioni put** (sveska iz `run_vba --compile-only --keep`, posle
+       `EnsureRuntimeSchema`):
+       - **Crveno, pre ispravke** (commit `60308847`, testovi bez ispravke koda):
+         - 259 pada po imenu na „papir prijemnice ima red po stavci…" (`[:0:0:0|UKUPNO:0:0]`);
+         - sonda za tvrdnje koje taj pad zaklanja (`sonda_259`): svaki sledeći čitalac nad dokumentom novog
+           oblika daje 0 ili prazno, a izvoz daje ključ sa praznom klasom;
+         - BFP: 18 padova po imenu u vraćenom testu manjka i tri nova testa.
+         - **Ograda:** crveni prolaz je pušten pre ispravke formata u 259 (`"0.00"` → `"0"`, decimalni znak
+           zavisi od lokala), pa poruka commit-a `60308847` ovde nije sasvim tačna. Prva tvrdnja (papir) tom
+           ispravkom nije menjana. BFP test ugovora čitaoca napisan je posle crvenog prolaza i nije pokazan
+           crven pre ispravke: meri čitalac koji tada nije postojao. To da obara po imenu meri njegove dve
+           sabotaže (`dokaz.py` posle GO).
+       - **Zeleno:** prvi prolaz je dao `modTest` 18/19. 259 je pao na „izveštaj manjka", sa očekivanih 420 i
+         dobijenih 300 — greška u tvrdnji, ne u kodu (§14.55, ispravka 3). BFP podskup je dao 185/0 nad 19
+         testova.
+     - **TARGETED** nad izvorom `2c7e3069e074` (= `src-vba` commit-a `06a5d474`), sa regenerisanim fixture-om:
+       **RunAllTests 259/0, BFP 2522/0, Storno 111/0, Palete 97**, a Izveštaji, Faktura i StornoCentar su OK.
+       BFP 2522 = 2473 + 14 + 4 + 13 + 8 + 10, što je tačno broj izveden iz diff-a.
+     - **Sabotaže:** katalog **855 → 883**.
+       - Dodato je 28 `s6k3-*`, vraćena je `manjak-preview-bez-druge-klase`, a skinuta
+         `saldo-stanica-guta-kvar`. Presidrena je `zbr-lista-cita-zaglavlje`.
+       - Statička sonda: 30/30 se primenjuje, pravila nad fajlovima ostaju čista, a `--vrati` vraća izvor
+         bit-identično (otisak `a3a8af016f3a1f92` pre i posle).
+       - Da svaka obara SVOJU tvrdnju **nije izmereno**; to meri `dokaz.py` posle GO.
+     - **Jeftine kapije:** ceo `static.yml` (bez `npm ci` i JS harness-a), `popis_citalaca --check`, oba
+       `who_writes`, `gen_schema_module --check` i `sabotaza --proveri-sidra` su exit 0. `WHO_WRITES.md` je
+       regenerisan, a novi pisci su samo test moduli.
+     - **Sveska za compile:** `tests/fixtures/rucna_provera_s6_korak3.xlsm` (gitignored). Provereno je: ZIP
+       OK, 112 XML članova, otvaranje u sopstvenoj instanci, 199 komponenti, novi kod je prisutan, a
+       `modVbaTools` namerno nije unutra.
+     - **Čeka:** reviewer GO → `run_vba` FULL i `dokaz.py s6k3- manjak-preview-bez-druge-klase
+       zbr-lista-cita-zaglavlje --grupe`. Compile i ručnu proveru radi operater.
+
+180. **S6 korak 3 — review `#437`, krug 1: identitet stavke i bruto 0, pa izvršne kapije** (20.10.2026).
+     Presuda review-a je `CODE GO uz dopunu` (9,1/10), a merge je `HOLD` dok dopuna i izvršne kapije ne prođu.
+     Nalazi: P0 = 0, P1 = 0, P2 = 1, P3 = 1. Plan je u §14.55, „Review #437, krug 1".
+
+     - **P2 — čitalac nije proveravao `PrijemnicaStavkaID`.** Potvrđeno čitanjem: ID se samo prenosio u izlaz
+       (`res(n, 7)`).
+       - Sada prazan ID daje `1978`, a ID koji se ponavlja bilo gde u tabeli daje `1979` (ugovor, tačka 5).
+       - Kapija je globalna, ne po dokumentu, jer pisac ID uzima iz `NewEntityID`.
+     - **P3 — `BrutoKg` = 0 je prolazio.** Kod je odbijao samo `< 0`, a ugovor kaže „prazno ili > 0". Sada je
+       nula `1977`.
+     - **Isti nedostatak kod braće → `KI-033`, van reza.** Otkup, otpremnica i zbirna ne proveravaju ID
+       stavke, a otkup uz to pušta bruto 0.
+     - **Reprodukcija:**
+       - **crveno:** `eda06412` (samo test). BFP ima 2526 ukupno i 3 palo — tačno tri nove tvrdnje, po imenu.
+         Preduslov „postoji stavka drugog dokumenta" je prošao;
+       - **zeleno:** `4b8dc3bb` (ispravka i tri sabotaže).
+     - **FULL 12/12 ZELENO** nad izvorom `be16ed85b895` (head `4b8dc3bb`). Marker je upisan, `SCHEMA OK`:
+       - RunAllTests **259/0**, BFP **2526/0** (= 2522 + 4, kako je izvedeno iz diff-a);
+       - Banka **241/0**, Storno **111/0**, Palete **97**;
+       - Faktura 35/35, Agrohemija 25/25, SheetsJson 72.
+     - **Sabotaže:** katalog **883 → 886**:
+       - nove su `s6k3-citalac-pusta-stavku-bez-id`, `s6k3-citalac-id-stavke-po-dokumentu` (meri razliku
+         „globalno / po dokumentu") i `s6k3-citalac-pusta-bruto-nula`;
+       - statička sonda je 3/3 (otisak `fc23b5c8c7acc719` pre i posle).
+     - **Dokaz:** `dokaz.py s6k3- manjak-preview-bez-druge-klase zbr-lista-cita-zaglavlje --grupe` daje
+       **33/33 crveno**, svaka sabotaža po SVOJOJ tvrdnji: 18 prolaza, 20/33 izmereno u grupi.
+       - Bazno: RunAllTests 259/0 i BFP 2526/0.
+       - Izvor (potpis alata) je pre i posle `fc23b5c8c7acc719`, identičan.
+       - Svih 31 `s6k3-*` (28 iz prvog kruga i tri iz review-a), vraćena `manjak-preview-bez-druge-klase` i
+         presidrena `zbr-lista-cita-zaglavlje` su crveni.
+       - Pojedinačan dokaz za 20 grupnih je isti poziv bez `--grupe`; nije pušten.
+     - **Sveska za compile je zamenjena.** `tests/fixtures/rucna_provera_s6_korak3.xlsm` je sada nad izvorom
+       `4b8dc3bb`; ranija je bila nad `06a5d474`. Provereno je: ZIP OK, 112 XML članova, 199 komponenti, nov kod
+       je prisutan, a `modVbaTools` namerno nije unutra.
+     - **Compile:**
+       - operater je javio „compile ok" posle zamene sveske;
+       - `vba_gate --mark-compile` je upisan nad `be16ed85b895`;
+       - `--require-green --require-compile` daje „dokazano".
+     - **Čeka:**
+       - ručna provera operatera;
+       - merge — samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
+     - **Sledeći brojevi:** test 260 · stavka 181 · KI-034.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
@@ -6332,7 +6491,7 @@
 | **`dokaz.py` ne dosegne `modIzvestajTests`** | kapija kataloga sabotaža priznaje samo `modTest`, `modTestBanka` i `modBusinessFlowProTests`, pa tvrdnja iz `modIzvestajTests` **ne može da se obori** — a tamo živi najdetaljnije merenje ambalažnog pregleda. Posledica je izmerena u `10c-2`: tvrdnja o identitetu dokumenta je **preseljena** u `#204`, a tvrdnja o spajanju dve vrste istog dokumenta ostala **bez sabotaže**. Proširenje kapije dira sam alat, pa ide **zaseban process PR** sa svojim dvosmernim dokazom |
 | **kanonska knjiga nema PUNU integritetnu proveru** | `modIntegritet` ima **nula** referenci na `Od_Tip` / `Na_Tip` / `VrstaKretanja` / `tblAmbalazaDokument` (merenje 08.10.2026). Posle cutovera proverava samo legacy redove, koje produkcija ne piše — pa operateru kaže „nema nalaza" ne pogledavši kanonsku knjigu. Kandidati za provere: noga bez zaglavlja, zaglavlje bez noge, `StornoOd` koji ne pokazuje nigde, par koji nije neuređen (`AMB-INV-10`), obaveza partneru < 0 (`AMB-INV-09`). Od stavke 113 ugovor reda, dupli `AmbID` i `StornoOd` meri `Chk_AMB_KnjigaIntegritet`; od `10e-3` (stavka 129) i red koji ne dotiče knjigu (red starog oblika) je nalaz po imenu, jer „legacy" stanja više nema. Ostali kandidati (noga bez zaglavlja, zaglavlje bez noge, par koji nije neuređen, obaveza < 0) su i dalje otvoreni. `Chk_B10_ReversBezID` je obrisan u `10e-1` |
 | **`GetAmbalazeStanje` guta grešku i vraća prazno** | `On Error GoTo EH → LogErr → Empty` je fail-open na putanji **štampe i izveštaja**: saldo koji tiho postane 0 je netačna tvrdnja operateru, ne odsustvo podatka. Komentar uz `AmbSaldoNaloga` to već imenuje („zatečen `GetStanicaAmbSaldo` tako radi i to je fail-open koji ovde ne sme da postoji"). Nije dirano u `10c-2` jer je to politika greške, ne model podatka — promena bi oborila štampu tamo gde danas štampa nulu; traži svoj rez i odluku šta operater vidi kad knjiga ne može da se pročita. **Odluka operatera (13.10.2026): sledeći korak posle `KI-012`/`KI-013` (stavka 133)**, zajedno sa `GetStanicaAmbSaldo` i istorijskim početnim stanjem na ponovljenom papiru reversa. **Odluke operatera za taj rez (13.10.2026, stavka 135), sve po preporuci:** (1) kad knjiga ne može da se pročita, papir **ne nastaje** (fail-closed, kao otkupni list po ODL-27), a oba čitaoca gube handler; (2) istorijsko stanje dobijaju **revers i otpremnica**, a grupni otkupni list ide u S6 (danas je nedostižan i čita pogrešan nalog); (3) kod pokrića deficita važi **pravilo reversa** (novo = stanje posle dokumenta, početno = novo − kretanje), a prikaz pokrića ide uz `ODL-24`; (4) **kupčev revers se iz F7 ne štampa**, kao iz liste (7507) |
-| **grupni otkupni list čita pogrešan nalog** | `FillGrupniOtkupSablon` čita `GetStanicaAmbSaldo(VozacID)`, dakle `Stanica:<VozacID>`, i to današnji saldo, dok prijemnica od 10b-2 pomera nalog `Vozac`. Danas je nedostižan (štampa se samo posle upisa prijemnice, a unos je pauziran do S6), pa se u stavci 135 menja samo politika greške. Koji je nosilac salda na tom papiru i da li dobija stanje oko svog reda odlučuje **S6** (`AMBALAZA.md` 6.13g). Uz to ide i `GetAmbalazeStanje`, koji tip grupiše u rečniku sa **binarnim** poređenjem (`letvarica` i `LETVARICA` su dva reda), dok kanonski saldo i istorijski čitalac porede bez obzira na velika slova (review `#421`, P2 #2, stavka 136). Posle stavke 135 ga zovu samo ovaj list, golden i dva test pomoćnika |
+| **grupni otkupni list čita pogrešan nalog** | `FillGrupniOtkupSablon` čita `GetStanicaAmbSaldo(VozacID)`, dakle `Stanica:<VozacID>`, i to današnji saldo, dok prijemnica od 10b-2 pomera nalog `Vozac`. Danas je nedostižan (štampa se samo posle upisa prijemnice, a unos je pauziran do S6), pa se u stavci 135 menja samo politika greške. Koji je nosilac salda na tom papiru i da li dobija stanje oko svog reda odlučuje **S6** (`AMBALAZA.md` 6.13g). Uz to ide i `GetAmbalazeStanje`, koji tip grupiše u rečniku sa **binarnim** poređenjem (`letvarica` i `LETVARICA` su dva reda), dok kanonski saldo i istorijski čitalac porede bez obzira na velika slova (review `#421`, P2 #2, stavka 136). Posle stavke 135 ga zovu samo ovaj list, golden i dva test pomoćnika. **ZATVOREN u S6 koraku 3 (stavke 178–179, odluka 3):** list čita nalog **Vozač** oko svog reda kroz `AmbStanjeOkoDokumenta` (saldo = posle, početno = posle + primljeno − izdato), a linije su stavke dokumenta. `GetStanicaAmbSaldo` je obrisan. `GetAmbalazeStanje` posle toga nema PROD pozivaoca (zovu ga golden i test pomoćnici), pa njegovo binarno grupisanje tipa više ne stiže do operatera; ispravka ili brisanje ide uz prvi rez koji ga dira |
 | **badge "nesacuvano" na novoj formi** | `SelectModeCore` pise u polje broja POSLE `MarkClean` i `mLoading = False`, pa programski upis prodje kroz `MarkDirty` i prazna forma tvrdi da ima neupisanih izmena (review 08.10.2026, `P3`). Zatecen obrazac -- vazio je i pre P1 ispravke, za svaki rezim sa auto-brojem. Jedan premesten red, ali izmena `src-vba` obara compile i zeleni marker, a nov test (natpis u zaglavlju) trazi svoj dvosmeran dokaz; zato **svoj rez posle merge-a**, pre `ODL-24` |
 | **`AMB-10-ODL-24`: pozajmica ambalaže od kupca nema svoj događaj** | Operater (08.10.2026): kupci **često** pre sezone predaju **svoje** prazne gajbe. Brojke su danas tačne — kroz potvrdu manjka nastaje `ULAZ_TUDJE` (obaveza +N) i `POVRAT_PRAZNE` — ali **planirana pozajmica i neobjašnjeno odstupanje ostavljaju isti trag**, pa se posle ne razlikuju; operater za redovan posao dobija pitanje o „manjku". Da postane svoj događaj traži izmenu **zatvorenog** `VrstaKretanja` enuma, formule obaveze (`AMB-INV-09`) i čitalaca u `10c` — i rešenje čvora: eksplicitan ulaz tuđe ambalaže bi sa **pokrićem deficita** delio par i vrstu na istom dokumentu. Puna merenja: `AMBALAZA.md` 6.12k. **Redosled je operaterov: posle `10c` i merge-a.** **Odluke 19.10.2026 (stavka 166): nova vrsta `POZAJMICA_PARTNERA` + `AMB-INV-13`; rez je u toku.** **ZATVOREN merge-om `#434` (`6dc32710`, 20.10.2026, stavka 169).** |
 | **nema kapije „modul ne sme da koristi tuđ `Private` simbol"** | VBA kompajlira **na zahtev**, pa `Sub or Function not defined` pukne tek kad neki test prvi put pozove baš tu proceduru — i to posle **600 s i ubijenog Excela**, uz poruku bez fajla i linije (06.10.2026: `MarkRowStornirano`, `Private` u `modStorno`, pozvan iz `modAmbalaza`). Ime **postoji** u projektu, samo nije vidljivo — pa ga nijedna jeftina kapija ne vidi. Jednokratni merač je napisan i dao **1 nalaz sa fajlom i linijom nad pokvarenim izvorom, 0 posle** — dvosmeran dokaz. Tri lažna nalaza prvog izdanja su i sama merenje: repni komentar, labela (`Resume CleanUp`) i **LF kopija iz git-a** (split po `

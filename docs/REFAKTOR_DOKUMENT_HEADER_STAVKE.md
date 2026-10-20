@@ -8068,6 +8068,211 @@ briše i stavke.
   - dopuna `T_IspravkaPrijemnice_SkipIRelink`;
   - sabotaže `s6k2-*`.
 
+#### Korak 3 — pre-flight nad `5afde431` i odluke (20.10.2026, stavka 178)
+
+Verdikt iz tabele gore važi i nad `5afde431`. Ova ponovna merenja je dodaju (popis grep-om po
+procedurama i kroz `popis_citalaca --procedura`):
+
+- **Linijska polja zaglavlja i dalje čita 37 PROD procedura** (66 mesta, bez keša fakture). Od toga korak 3
+  nosi 27 procedura (47 mesta); ostalo su faktura (korak 5), storno, impact i prefill (korak 4) i `modSetup`
+  (korak 8).
+- **`split_plus` je 5 živih:** `modDokUnos:1228`, `:1300`, `:1316`; `modPrint:1190`, `:1463`. Uz to postoji
+  jedno TEST mesto, `modGoldenTests:960`, koje se ne broji.
+- **Papir prijemnice je DANAS dostižan.** Ponovna štampa iz Izveštaja ide kroz `PrintPrijemnica`
+  (`modScrIzvestaji:2755`, `:2777`). Nad dokumentom novog oblika daje jedan prazan red. Grupni otkupni list
+  je dostižan samo iz pauziranog F4 i nema nijedan test.
+- **Zbirnina strana manjka čita ZAGLAVLJE zbirne.** `CalculateManjakPreview`, `BuildManjakDict`,
+  `ReportManjak`, `Chk_A2` i prikaz u `C4` čitaju `COL_ZBR_KOLICINA` / `KLASA` / `KOL_AMB`, a kanonska
+  zbirna ih od PR3 ostavlja prazne. F4 linija manjka zato za kanonsku zbirnu ne crta ništa (`ManjakLinija`:
+  `zbrKg <= 0`). S4-1 je ovo izričito odložio u S6 („Šta NIJE u S4-1", zajedno sa prosekom gajbe). To je 9
+  od 17 živih mesta grupe `zbr_linija`, a uz prosek gajbe (4) ukupno 13.
+- **`AdjustPaletaGajbiceZaPrijemnicu_TX` je živ** (Oporavak `:382`, Alt+F8). Nad dokumentom novog oblika
+  prazno zaglavlje čita kao „klasa I, 0 gajbi", pa bi palete te klase svukao na nulu. Novu raspodelu piše
+  BEZ `PrijemnicaStavkaID` (`SpillGajbice` bez ključa, `:2445`, `:2472`).
+- **`run_vba` vrti sve suite nad JEDNOM sveskom.** Palete, Storno, StornoCentar i Izveštaji vraćaju svoje
+  seed-ove rollback-om; Faktura i BFP ne. Seed starog oblika bi zato oborio strog čitalac u tuđoj suite.
+- **Mrtvo** (`popis_citalaca --procedura`): `GetAktivnePrijemnice` i `BuildChainIndex` imaju 0 PROD i 0
+  test pozivalaca. `EvaluatePaletaReassign` je `SAMO_TEST`: zovu ga pet testova, a služi i kao instrument
+  sabotaže `verdikt-po-broju`.
+- **Integritet: nijedna od A2, A3, B1, B4, B5, C1 i C4 nema test ni sabotažu.** Testovi koji zovu
+  `GetIntegritetRows` tvrde samo AMB1, B8 i B9.
+
+⚠ **IDENTITY RISK, imenovan, van obima:** manjak i izveštaji spajaju prijemnicu i zbirnu po `BrojZbirne` i
+vlasniku, a ne po `ZbirnaRoditeljID`. `Adjust` i `Evaluate` biraju dokument po broju. Korak 3 menja izvor
+količine, ne ključ spoja.
+
+**Odluke operatera (20.10.2026, stavka 178), sve po preporuci:**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | kanonski čitalac | **jedan strogi čitalac** u `modDokumenta`: `StavkePrijemniceRedovi`, `ZbirStavkiPoPrijemnici` / `ZbirStavkiZaPrijemnicu`, `StavkePrijemnicePoDokumentu` / `StavkeZaPrijemnicu`. `PrijemnicaLinijePoKlasi` se briše |
+| 2 | red starog oblika | **(a) samo stavke**, presedan S1, S3b-1 i S4-1. `make_fixture` izvodi po jednu stavku iz svakog zaglavlja, a seed-ovi pišu zaglavlje + stavku. Fixture ide u ovaj rez, ne uz `KI-028` |
+| 3 | grupni otkupni list | **ovde**: linije iz stavki, a saldo **naloga Vozač** oko svog reda kroz `AmbStanjeOkoDokumenta`. `GetStanicaAmbSaldo` se briše; `GetAmbalazeStanje` ostaje samo za golden i test |
+| 4 | `Adjust` / `Evaluate` | **korak 3** |
+| 5 | mrtav kod | brišu se `GetAktivnePrijemnice`, `BuildChainIndex`, `GetStanicaAmbSaldo` i `PrijemnicaLinijePoKlasi`. `EvaluatePaletaReassign` ostaje i čita stavke |
+| 6 | prag `split_plus` | **0 sada**; `zbr_linija` se spušta na izmereno |
+| 7 | zbirnina strana manjka i prosek gajbe | **obe strane manjka ovde**, uz prosek gajbe. Vraćen test ide nad **kanonskom** zbirnom |
+
+**Ugovor čitaoca (odluka 1).** Dokumentski, kao kod otkupa, otpremnice i zbirne. Kapije su iste koje pisac
+drži (`SavePrijemnicaDokument`, `ValidatePrijemnicaInput`):
+
+1. svaka stavka ima neprazan `PrijemnicaID` i zaglavlje TAČNO JEDNOM;
+2. svako zaglavlje ima bar jednu stavku (pisac: `1303`, rollback celog dokumenta);
+3. `Kolicina` je broj veći od nule, `Cena` broj ≥ 0 (pisac dozvoljava nulu, `:7921`), `KolAmbalaze` ceo broj
+   ≥ 0 (prazno je 0), a `BrutoKg` je prazan ili broj > 0;
+4. klasa prolazi kroz istu kapiju kao kod pisca (`RequireValidDocumentClass`), i to najviše jedna stavka po
+   klasi (`1432`);
+5. `PrijemnicaStavkaID` je neprazan i jedinstven u CELOJ tabeli: to je identitet linije, ključ palete i, od
+   koraka 5, fakture, a pisac ga uzima iz `NewEntityID` (dopuna po review-u #437, stavka 180).
+
+Pozicije reda su `1 PrijemnicaID | 2 RedniBroj | 3 Klasa | 4 Kolicina | 5 Cena | 6 KolAmbalaze |
+7 PrijemnicaStavkaID | 8 BrutoKg`, isto kao `StavkeOtkupaRedovi`. Zbir po dokumentu je `Array(kg, vrednost,
+gajbe, klase)`, a vrednost je Σ `Kolicina × Cena` po stavci. **Integritet čita meko** (obrazac
+`ZbirOtpremnicaMeko`, presedan S3b-1): audit postoji da nabroji pokvarene redove, pa kvar čitaoca daje praznu
+kolonu, ne pad provere. Greške su `1970–1979` (`1978` i `1979` su dodate po review-u #437).
+
+**Obim po celinama:**
+
+- **`split_plus` 5 → 0.** `modDokUnos` tri mesta, jer pisac vraća jedan ID. Oba papira primaju JEDAN
+  `PrijemnicaID`.
+- **Štampa.**
+  - `FillPrijemnicaSablon`: jedan red po stavci.
+  - `FillGrupniOtkupSablon`: linije iz stavki. Saldo je nalog Vozač (`VozacID`; u malina modu je to
+    `StanicaID`) kroz `AmbStanjeOkoDokumenta`. Saldo je stanje posle, a početno = posle + primljeno −
+    izdato. Gajbe bez svog reda knjige → papir ne nastaje (obrazac `7693`); bez gajbi → „-" (ODL-27).
+  - `GetStanicaAmbSaldo` se briše, a s njim i njegova tvrdnja u testu 234 i sabotaža `saldo-stanica-guta-kvar`.
+    Ugovor „kvar knjige ne daje papir" nosi `AmbStanjeOkoDokumenta`, koji je bez handlera.
+- **Izveštaji.** `ReportPrijemniceKupca` daje red po stavci. `ReportSaldoKupci`, `ReportOtkupRobaKupac`,
+  `ReportProsecnaCena`, `ReportZbirniKupac` i `ReportZbirniVozac` daju zbir stavki. U Izveštajima
+  `DodajPrijemniceZbirne` i `IzDetaljPrijemnice` daju kg i gajbe dokumenta.
+- **Izvoz.** `ExportPredatoPoKupcu` sabira po stavci. Agregacija je izdvojena u čistu funkciju, jer upis ide
+  u Google tabelu: test meri agregaciju, a sam upis ostaje nemeren.
+- **Manjak** (odluka 7). `CalculateManjakPreview`, `BuildManjakDict`, `ReportManjak` i `Chk_A2` čitaju
+  stavke OBA dokumenta. Spoj ostaje po broju i vlasniku. `CalculateProsekGajbeByZbirna` čita stavke zbirne.
+- **Integritet** (meko). B1, B4 i B5 uzimaju kg dokumenta. A3 poredi neto paleta po `PrijemnicaStavkaID` sa
+  `Kolicinom` stavke. C4 prikazuje kg i gajbe zbirne iz stavki.
+- **Oporavak.** `GetOsirocenePrijemnice` daje kg dokumenta (do sada kg prvog reda), a `RowsAktivnePrijemnice`
+  šalje `kgPoDok`.
+- **F4 lista.** PRIJEMNICA ulazi u granu stavki (`otkStav`), a `Col*` vraćaju `COL_PRS_*`.
+- **Palete.** `Adjust` i `Evaluate` čitaju linije dokumenta tog broja iz kanonskog čitaoca. `SpillGajbice` iz
+  `Adjust` nosi `PrijemnicaStavkaID`. `ReassignPaleteToPrijemnica_TX` čita isti čitalac, bez starog
+  fallback-a.
+- **Fixture i seed-ovi.**
+  - `make_fixture` izvodi `tblPrijemnicaStavke`.
+  - Seed-ovi pišu i stavku: `MakePrij`, `SeedPrijemnica`, seed-ovi `modTestStornoCentar`, `IzvSeed`
+    prijemnice, `AppendTestPrijemnicaRow` i `ZbrSejPrijemnicuSaRoditeljem`.
+  - Testovi sa svojom transakcijom dodaju snimak `tblPrijemnicaStavke`.
+- **Prag.** `split_plus` 0 i `zbr_linija` 17 → 4. Ostaju `ValidateZbirna` (2), `GetActiveDocumentsForStorno`
+  (korak 4) i `EnsureDoradeSchema` (korak 8).
+
+**Imenovano van obima:**
+
+- čitaoci `Fakturisano`/`FakturaID` (korak 5; `IzDetaljPrijemnice` i dalje prikazuje keš sa zaglavlja);
+- storno lista, impact i prefill (korak 4);
+- `EnsureDoradeSchema` (korak 8);
+- test-strana proračuna u `T_Izv_*` i `GldZbirna` čita zaglavlje fixture-a, koje nosi iste brojeve kao
+  stavka; prelazi u koraku 8, kad kolone nestanu;
+- spoj po broju umesto `ZbirnaRoditeljID` (IDENTITY RISK gore).
+
+**Testovi čija se premisa menja:**
+
+| Test | Šta je tvrdio | Šta biva |
+|---|---|---|
+| 133 `T_Izv_TabKontekstRobaKupacSaldo` | redova u mreži = fizičkih redova `tblPrijemnica` | redova = stavki; nad fixture-om je broj isti (jedna stavka po zaglavlju) |
+| 234 `T_SaldoPapir_KvarKnjigeNijeNula` | `GetStanicaAmbSaldo` diže grešku | ta tvrdnja odlazi sa čitaocem; ostaje tvrdnja nad `GetAmbalazeStanje` |
+| `Test_ManjakPreviewJeZbirnaMinusPrijem` | zbirna = zbir redova zaglavlja | **vraća se** nad kanonskom zbirnom (stavke) i dvoklasnom prijemnicom kroz pisca |
+| Palete T02–T11 (`MakePrij`) | linije sa zaglavlja seed-a | seed piše i stavku; tvrdnje važe |
+
+**ACCEPTANCE CONTRACT koraka 3 — plan dokaza, ne dokaz:**
+
+- **važi:**
+  - **linija:** dvoklasni dokument (I 300 kg × 50 i II 120 kg × 40, RAZLIČITE količine i cene) daje na
+    papiru prijemnice dva reda stavki i UKUPNO 420 kg / 19 800;
+  - **dokument:** F4 lista, ciljna lista Oporavka i detalj izveštaja vide JEDAN red sa 420 kg, vrednošću
+    19 800 i klasama „I, II";
+  - **poslovni broj:** izveštaji, izvoz i manjak dobijaju DELTU dokumenta (pre i posle) jednaku zbiru
+    stavki, a vrednost kao Σ po stavci — ne prvu stavku i ne prosek;
+  - **manjak:** kanonska zbirna (I 400 + II 150 = 550) minus prijemnica 420 = 130, a neupisani kilogrami
+    obe klase ulaze u preview;
+  - **grupni list:** početno je stanje vozača pre dokumenta, a saldo stanje posle; ponovna štampa posle
+    kasnijeg dokumenta je ista;
+  - **palete:** `Adjust` nad ispravnim dokumentom novog oblika ne menja nijednu paletu, a nova raspodela nosi
+    `PrijemnicaStavkaID`; A3 nad tim dokumentom nema nalaz;
+  - **prag:** `split_plus` = 0 kroz `popis_citalaca --check`;
+- **netaknuto:** pisac koraka 2; brojevi fixture-a (stavka = zaglavlje); čitaoci fakture i storna; ostatak
+  `zbr_linija`; ključ izvoza u PWA (kupac, vrsta, klasa) i značenje kolona;
+- **edge:** jednoklasni dokument (samo II) daje jedan red klase II; grupni list bez gajbi pokazuje „-";
+  storniran dokument ne ulazi ni u jedan zbir;
+- **negativno:**
+  - zaglavlje bez stavki obara strog čitalac po imenu: papir ne nastaje, a integritet ostaje bez kolone,
+    ne pada;
+  - dve stavke iste klase obaraju čitalac;
+  - grupni list sa gajbama bez svog reda knjige ne nastaje;
+- **čime:**
+  - `modTest` 259, kroz `PrijemnicaUpisi` i bez ambalaže (`KI-028` ne ulazi);
+  - BFP: vraćen `Test_ManjakPreviewJeZbirnaMinusPrijem` i nov test grupnog lista sa svežim tipom;
+  - sabotaže `s6k3-*` i vraćena `manjak-preview-bez-druge-klase`;
+  - `popis_citalaca --check` sa novim pragovima.
+
+**Ispravke plana tokom koda (stavka 179) — svaka izmerena, ne pretpostavljena:**
+
+1. **`PrijemnicaLinijePoKlasi` nije obrisan.** Postao je tanak adapter nad
+   `modDokumenta.StavkeZaPrijemnicu`: više ne čita tabelu sam i nema fallback na zaglavlje. Zovu ga tri
+   procedure (`Reassign`, `Adjust`, `Evaluate`), a svima treba isti raspored po klasi. Čitalac je jedan, kako
+   kaže odluka 1. Odstupa samo reč „briše se" iz odluka 1 i 5.
+2. **Proračun `T_Izv_*` (126, 133, 135, 138) prelazi na stavke OVDE, ne u koraku 8.**
+   - `RunAllTests` ne ide numeričkim redom: 258 (i sada 259) se vrti pre testova 13–138, a njihov dokument
+     novog oblika ima istog kupca, zbirnu i datum kao fixture.
+   - Izveštaj taj dokument broji iz stavki, a proračun sa zaglavlja ga ne vidi.
+   - Proračun je ručni prolaz kroz `tblPrijemnicaStavke` (`IzvPrjStavkeZbir`, obrazac `IzvStavkeZbir`),
+     nezavisan od čitaoca koji se meri.
+3. **Izveštaj manjka sabira prijem PO KLASAMA koje red zbirne nosi** (zatečeno pravilo `ReportManjak`). Fixture
+   zbirna `ZB-TEST-1` nosi samo klasu I, pa test 259 očekuje +300, a ne +420. Razliku između „zbira" i „prve
+   stavke" meri BFP nad zbirnom sa obe klase (550 / 420). Prvi zeleni prolaz je ovu tvrdnju oborio sa
+   „očekivano 420, dobijeno 300". To je bila greška u tvrdnji, ne u kodu.
+4. **Seed-ovi `modTestStornoCentar` ne pišu stavku.**
+   - Služe proverama koraka 4 (impact, lista za storno, kaskada).
+   - Svaki test ih vraća rollback-om.
+   - Neki nemaju ni količinu, pa bi stavka morala da izmisli broj.
+   - Da li ih neki strog čitalac ipak dotiče, meri suite `Test_StornoCentar_All` (TARGETED pre review-a, FULL posle GO).
+5. **Test fakture sa duplim `PrijemnicaID`** (`Test_CreateFakturaBlocksDuplicatePrijemnicaID`) radi u svojoj
+   transakciji i vraća se rollback-om.
+   - Suite fakture svoje redove ostavlja u svesci, a dupli ID je sintetička anomalija koju strog čitalac
+     odbija nad CELOM tabelom (1975).
+   - Ostavljen, oborio bi svaki čitalac prijemnice u suite-ovima koji idu posle.
+   - Ostali seed-ovi te suite pišu zaglavlje i stavku.
+6. **`T09_AdjustBlokPreradjena` menja gajbe na STAVCI, ne na zaglavlju.** `Adjust` od koraka 3 čita stavku, pa
+   izmena zaglavlja više nije izmena dokumenta (promena premise testa).
+7. **Integritet:** A2 i A3 RAČUNAJU, pa čitaju strogo unutar svog handlera (obrazac B7). Kvar stavki tada daje
+   red „GRESKA" za tu proveru, a ne lažan nalaz. B1, B4, B5 i C4 samo PRIKAZUJU kg, pa čitaju meko
+   (`ZbirStavkiPoPrijemniciMeko`, `KgPrijemniceMeko`).
+8. **Obrisano, mrtvo posle izmene:**
+   - `SumByBroj` (jedini korisnik je bio prosek gajbe);
+   - `DictAppend` (jedini korisnik je bio `BuildChainIndex`);
+   - grana „kilaža sa zaglavlja" u `modScrOporavak.KgDokumenta`, zajedno sa parametrom `colKol` iz
+     `RowsAktivni` (oba tipa šalju rečnik stavki).
+
+   `DictGet` je bio mrtav i pre ovog reza i nije diran.
+9. **Grupni list:** dokument sa gajbama bez svog reda knjige diže `7694` (obrazac `7693` otpremnice), a papir
+   ne nastaje.
+10. **Izvoz:** agregacija taba `PredatoPoKupcu` je izdvojena u `PredatoPoKupcuRedovi` (obrazac
+    `OtkupPoOMRedovi`), pa se meri bez mreže. Sam upis u Google tabelu ostaje nemeren.
+
+**Review #437, krug 1 (stavka 180) — dopuna ugovora čitaoca, bez širenja obima:**
+
+- **P2 — identitet stavke.** Čitalac je `PrijemnicaStavkaID` samo prenosio u izlaz (`res(n, 7)`), bez ikakve
+  provere. Sada odbija prazan ID (`1978`) i ID koji se ponavlja bilo gde u tabeli (`1979`) — ugovor tačka 5.
+  - Kapija je globalna, a ne po dokumentu, jer je ID iz `NewEntityID` globalan.
+  - Zato test stavlja isti ID na DRUGI dokument (klasa II, nova za taj dokument, da je kapija klase ne
+    presretne).
+  - Sabotaža `s6k3-citalac-id-stavke-po-dokumentu` meri baš razliku „globalno / po dokumentu".
+- **P3 — `BrutoKg` = 0.** Ugovor (tačka 3) je tražio „prazno ili > 0", a kod je odbijao samo negativan bruto.
+  Sada je i nula `1977`. Plan je bio tačan, a kod nije.
+- **Isti nedostatak kod braće je van ovog reza → `KI-033`.** Ni `StavkeOtkupaRedovi`, ni
+  `StavkeOtpremniceRedovi`, ni `StavkeZbirneRedovi` ne proveravaju ID stavke. Čitalac otkupa uz to pušta
+  `BrutoKg` = 0 (`modOtkup.RequireBrutoStavke` odbija samo negativan). Review je tražio lokalnu ispravku
+  ugovora prijemnice, bez širenja obima.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
