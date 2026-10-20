@@ -7036,12 +7036,14 @@ End Sub
 ' obara citaoca PO IMENU, papir tada ne nastaje, a audit (integritet) ne pada
 ' nego kvar imenuje.
 '
-' Sve cetiri anomalije su SINTETICKE -- pisac ih ne pravi (jedna stavka po
-' klasi, 1432; Kolicina > 0; rollback CELOG dokumenta). Prave se u transakciji
-' koja se vraca, pa se posle vracanja meri da je citalac opet cist. Obrazac je
+' Sve anomalije su SINTETICKE -- pisac ih ne pravi (jedna stavka po klasi,
+' 1432; Kolicina > 0; ID stavke iz NewEntityID; BrutoKg samo kad je > 0;
+' rollback CELOG dokumenta). Prave se u transakciji koja se vraca, pa se posle
+' vracanja meri da je citalac opet cist. Obrazac je
 ' Test_ZBR_CitalacStavkiDrziUgovor.
 ' SABOTAZE: s6k3-citalac-pusta-dve-iste-klase,
-' s6k3-citalac-pusta-zaglavlje-bez-stavki.
+' s6k3-citalac-pusta-zaglavlje-bez-stavki, s6k3-citalac-pusta-stavku-bez-id,
+' s6k3-citalac-id-stavke-po-dokumentu, s6k3-citalac-pusta-bruto-nula.
 Private Sub Test_S6_CitalacStavkiPrijemniceDrziUgovor()
     Const SRC As String = "Test_S6_CitalacStavkiPrijemniceDrziUgovor"
     Dim tx As clsTransaction
@@ -7102,6 +7104,46 @@ Private Sub Test_S6_CitalacStavkiPrijemniceDrziUgovor()
     tx.RollbackTx
     Set tx = Nothing
 
+    ' --- (5) stavka bez svog ID-a (review #437, P2): PrijemnicaStavkaID je
+    '     kljuc palete (i fakture, korak 5), pa linija bez njega nije
+    '     upotrebljiva ni kad su joj klasa i kolicina ispravne ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    S6DodajStavku "", prj, 2, KLASA_II, 10#, SRC
+    AssertTrue InStr(1, S6CitalacGreska(), "bez PrijemnicaStavkaID", vbTextCompare) > 0, _
+               "S6 ugovor: stavka bez svog ID-a obara citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- (6) isti ID stavke na DRUGOM dokumentu: identitet linije je globalan
+    '     (NewEntityID), pa ga kapija po dokumentu ne bi videla. Klasa II je
+    '     nova za ovaj dokument, da kapija klase ne presretne tvrdnju ---
+    Dim tudjiID As String
+    tudjiID = S6TudjiStavkaID(prj)
+    AssertTrue Len(tudjiID) > 0, "S6 ugovor: preduslov -- postoji stavka drugog dokumenta"
+    If Len(tudjiID) > 0 Then
+        Set tx = New clsTransaction
+        tx.BeginTx
+        tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+        S6DodajStavku tudjiID, prj, 2, KLASA_II, 10#, SRC
+        AssertTrue InStr(1, S6CitalacGreska(), "PrijemnicaStavkaID se ponavlja", vbTextCompare) > 0, _
+                   "S6 ugovor: isti ID stavke na dva dokumenta obara citaoca po imenu"
+        tx.RollbackTx
+        Set tx = Nothing
+    End If
+
+    ' --- (7) BrutoKg = 0 (review #437, P3): pisac ga upisuje samo kad je > 0,
+    '     a prazno znaci unet neto; nula nije ni jedno ni drugo ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    S6DodajStavku prj & "-BRUTO0", prj, 2, KLASA_II, 10#, SRC, 0#
+    AssertTrue InStr(1, S6CitalacGreska(), "BrutoKg stavke mora biti veci od nule", vbTextCompare) > 0, _
+               "S6 ugovor: BrutoKg nula obara citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
     ' --- (4) zaglavlje bez stavki: citalac pada, papir ne nastaje, audit
     '     imenuje kvar. Merenje ide PRE vracanja, tvrdnje posle njega. ---
     Dim greska As String, papir As String, nalazi As Variant
@@ -7144,7 +7186,8 @@ End Function
 
 Private Sub S6DodajStavku(ByVal stavkaID As String, ByVal prijemnicaID As String, _
                           ByVal rb As Long, ByVal klasa As String, _
-                          ByVal kol As Double, ByVal src As String)
+                          ByVal kol As Double, ByVal src As String, _
+                          Optional ByVal bruto As Variant)
     Dim rowData As Variant
     rowData = BlankRow(TBL_PRIJEMNICA_STAVKE)
     SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, stavkaID
@@ -7153,8 +7196,30 @@ Private Sub S6DodajStavku(ByVal stavkaID As String, ByVal prijemnicaID As String
     SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, klasa
     SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, kol
     SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA, 0#
+    If Not IsMissing(bruto) Then
+        SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_BRUTO, bruto
+    End If
     RequireAppend TBL_PRIJEMNICA_STAVKE, rowData, src
 End Sub
+
+' ID prve stavke DRUGOG dokumenta (prazno ako je nema) -- za isti ID stavke na
+' dva dokumenta.
+Private Function S6TudjiStavkaID(ByVal prj As String) As String
+    Dim d As Variant
+    d = GetTableData(TBL_PRIJEMNICA_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cP As Long, cId As Long, i As Long, sid As String
+    cP = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, "S6TudjiStavkaID")
+    cId = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, "S6TudjiStavkaID")
+    For i = 1 To UBound(d, 1)
+        sid = Trim$(nz(d(i, cId), ""))
+        If Trim$(nz(d(i, cP), "")) <> prj And Len(sid) > 0 Then
+            S6TudjiStavkaID = sid
+            Exit Function
+        End If
+    Next i
+End Function
 
 Private Sub S6ObrisiStavke(ByVal prijemnicaID As String)
     Dim redovi As Collection
