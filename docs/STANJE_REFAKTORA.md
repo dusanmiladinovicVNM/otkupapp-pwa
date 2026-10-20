@@ -6187,6 +6187,45 @@
        lokalne `claude/s6-preflight`, `claude/s6-prijemnica-stavke` (baza `4a1aea08`, zamenjene stavkama
        170–172).
 
+174. **S6 korak 2 — pre-flight nad `c3301527`, odluke 1–6, PRE koda** (20.10.2026). Grana
+     `claude/s6-korak2-pisac` nad stavkom 173 (`92171982`). Plan, ugovor pisca, popis testova i acceptance
+     contract: §14.55, podsekcija „Korak 2“.
+
+     - **Verdikt:** blokirajućeg GAP-a nema. `CAPABILITY` ostaje GAP (F4), kao izlazni uslov reza. Izmereno:
+       - **Dokument novog oblika operater ne može da napravi do koraka 6.** Jedini proizvođač redova
+         `tblPrijemnica` je jezgro `SavePrijemnica` (`modDokumenta:6933`), a njegova jedina PROD putanja ide
+         kroz F4, pauziran bezuslovno (`modDokUnos:827`). Auto-prijemnica hladnjače ne postoji u kodu.
+       - Linijska polja zaglavlja čitaju **72 PROD reference u ~40 procedura**: faktura, izveštaji,
+         integritet, štampa, storno lista, prefill, prevezivanje paleta, izvoz.
+       - `AMB-INV-04` meri ponavljanje **zbirom** (`modAmbalaza:2999–3013`). Kod 10 + 10 pod istim ID-jem
+         druga noga vrati već upisan red, pa je **tiho progutana** (nalaz 1 potvrđen u kodu).
+       - Pisci ključa palete su **tri**: `AddStavka` (`modPaletniList:1357`), STEP2 u
+         `ReassignPaleteToPrijemnica_TX` (`:1792`) i `AdjustPaletaGajbiceZaPrijemnicu_TX` kroz `SpillGajbice`
+         (`:2379`, `:2406`). `PalAppendRow` nepoznatu kolonu **tiho preskače** (`:1392`).
+       - Storno dokumenta ostaje ispravan i nad novim oblikom: `StornoPrijemnica` (`modStorno:446–504`)
+         stornira zaglavlje jednom, a `StornirajAmbalazuDokumenta` vraća sve noge pod `DokumentID` jednom.
+     - **Ispravka plana — generacija zaglavlja.** Pisac dobija **`ApplyNovaGeneracijaID`**, a ne
+       `ApplyGeneracijaID` kako su pisali §14.55 i zadatak.
+       - Komentar `modDokumenta:6169–6177` kaže da pisac koji dokument piše kao jedan red ne sme da
+         nasleđuje generaciju.
+       - Sa nasleđivanjem bi dva dokumenta istog broja i kupca delila generaciju, pa bi storno po generaciji
+         (`modStorno:117–131`) oborio oba.
+     - **Usputni nalaz → `KI-031`:** `PonistiZbirnaChain_TX` subjekt-prijemnicu stornira bez snapshota
+       `tblPrijemnica` kad lanac nije naš. Mehanizam je pročitan, **nije reprodukovan**.
+     - **Odluke operatera (20.10.2026):**
+
+       | # | Pitanje | Odluka |
+       |---|---|---|
+       | 1 | linijska polja zaglavlja u međustanju | **prazna**, bez nove grupe u `popis_citalaca` („nebitno, niko ne koristi program trenutno“) |
+       | 2 | `SavePrijemnica_TX` i javno jezgro | **omotač sada** nad jednim jezgrom dokumenta; brišu se u koraku 8 |
+       | 3 | `split_plus` i štampa | **do koraka 3**, uz kapiju: korak 6 ne sme pre zatvorenih koraka 3, 4 i 5 |
+       | 4 | generacija i prevezivanje paleta | **najmanje premošćavanja**: `ApplyNovaGeneracijaID`; `Reassign` sada, jer ga `T_IspravkaPrijemnice_SkipIRelink` vozi nad novim oblikom; `Adjust` i `Evaluate` u korak 3/4 |
+       | 5 | storno | **jedna tvrdnja sada** (10 + 10 → dva kontra-stava, salda vraćena); ostalo u korak 4 |
+       | 6 | `KI-028` | **posle koraka 2**, kao svoj rez pre koraka 6; do tada novi testovi rade sa svežim tipom ili bez ambalaže |
+
+     - **Sledeće:** kod po ugovoru iz §14.55 „Korak 2“, pa PR na review. `run_vba` FULL i `dokaz.py` čekaju
+       reviewer GO.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
