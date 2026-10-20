@@ -8467,6 +8467,16 @@ knjige (`RequireAmbTxIzvorniDokument` odbije) i SVAKI kasniji pad u Fazi A (npr.
   jezgru šalje prazan `docID`, a jezgro ga odbija samo. Sabotaža je presidrena na REŠI KASNIJE (#33), gde je
   razrešavač jedina brana.
 
+**Ručna provera #438 (stavka 185) — dve rupe između jezgra i operatera:**
+
+- **N1 — razlog odbijanja ide do ekrana.** Odbijenice ovog koraka (prerađena paleta, paleta koje nema, pad
+  kontra-stava) jezgro imenuje, a `StornoPrijemnica_TX` ih je gutala u `False`. Sada razlog vraća kroz
+  `outRazlog`, očišćen od `Source=... |` prefiksa, a okvir ispravke, F8 i kaskada ga prikazuju.
+- **N2 — uvid ne obećava ono što jezgro odbija.** Lanac posledica za fakturisanu prijemnicu (odluka 1) i robu
+  na prerađenoj paleti (odluka 3) kaže „storno se ODBIJA", umesto „oslobađa se" i „odvezuju se sa palete".
+- Zatečeni nalazi iz iste provere ne šire obim: `KI-037` („?" u `MsgBox`-u) i `KI-038` (lista i kapija čitaju
+  fakturisanost iz različitih polja; zatvara ga korak 5).
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
