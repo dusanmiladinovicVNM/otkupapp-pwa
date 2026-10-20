@@ -354,6 +354,7 @@ Public Sub RunAllTests()
     RunOne 257
     RunOne 258
     RunOne 259
+    RunOne 260
     RunOne 13
     RunOne 14
     RunOne 15
@@ -897,6 +898,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 257: TestName = "T_S6_KanonStavkePrijemnice"
         Case 258: TestName = "T_S6_PrijemnicaJedanDokument"
         Case 259: TestName = "T_S6_CitaociStavkiPrijemnice"
+        Case 260: TestName = "T_S6K4_StornoCitaStavkeIIdentitet"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1164,6 +1166,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 257: T_S6_KanonStavkePrijemnice
         Case 258: T_S6_PrijemnicaJedanDokument
         Case 259: T_S6_CitaociStavkiPrijemnice
+        Case 260: T_S6K4_StornoCitaStavkeIIdentitet
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -9930,6 +9933,84 @@ Private Function KanonImaKolonu(ByVal kolone As Collection, ByVal ime As String)
             Exit Function
         End If
     Next k
+End Function
+
+' 260. S6 KORAK 4: STORNO PRIJEMNICE CITA STAVKE I NOSI PrijemnicaID (plan
+' 14.55 "Korak 4", stavka 182; R5 i odluka 2).
+'
+' Storno je mesto gde operater odlucuje nad cim radi, pa uvid, lista za storno i
+' prefill ispravke ne smeju da citaju PRAZNO zaglavlje dokumenta novog oblika:
+' prazno polje tamo znaci "dokument je bio prazan", ne "citam pogresno mesto".
+' Najvaznija tvrdnja je prva (AssertEq prekida test): prefill nosi kolicinu I
+' cenu svake stavke. Dokument je isti kao u 259 (I 300 x 50, II 120 x 40), kroz
+' F4 put i bez ambalaze, pa KI-028 ne ulazi. Identitet je onaj koji nosi red F8.
+' SABOTAZE: s6k4-prefill-sa-zaglavlja, s6k4-uvid-kg-sa-zaglavlja,
+' s6k4-lista-kg-sa-zaglavlja, s6k4-f8-identitet-generacija.
+Private Sub T_S6K4_StornoCitaStavkeIIdentitet()
+    Dim p As Object, res As String, poruke As String, broj As String
+    Dim uvid As Object, ident As String, kgUvid As String
+
+    broj = "T-S6K4-" & Format$(Now, "yyyymmddhhnnss")
+    Set p = NoviPrijemnicaUnos()
+    PopuniPrijemnicuS6 p, broj
+    res = modDokUnos.PrijemnicaUpisi(p, poruke)
+    AssertEq (Len(res) > 0), True, "S6K4 storno: preduslov -- dvoklasna prijemnica je upisana"
+    ident = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, res, _
+                                 modScrDokumenti.IdKolonaTipa(STIP_PRIJEMNICA)))
+
+    ' --- PREFILL ISPRAVKE: OldDocID iz konteksta je PrijemnicaID ---
+    AssertEq S6K4SpecVrednosti(modStornoDok.PrefillIzStorniranog(STIP_PRIJEMNICA, broj, res), _
+                               "kol1|cena|kol2|cena2|dveklase"), "300|50|120|40|2", _
+             "S6K4 storno: prefill ispravke nosi kolicinu i cenu SVAKE stavke"
+
+    ' --- UVID: kg dokumenta je zbir stavki ---
+    Set uvid = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, broj, "", ident, True)
+    kgUvid = "nema"
+    If uvid.Exists("header") Then kgUvid = CStr(uvid("header")("kolicina"))
+    AssertEq CStr(uvid("greska")) & "|" & kgUvid, "|420", _
+             "S6K4 storno: uvid -- kg dokumenta je zbir stavki"
+
+    ' --- LISTA ZA STORNO: red dokumenta nosi kg stavki ---
+    AssertEq S6K4KgUListiStorna(broj), modStornoDok.KgTekst(420#), _
+             "S6K4 storno: lista za storno -- kg dokumenta je zbir stavki"
+
+    ' --- F8 IDENTITET: skrivena kolona nosi PrijemnicaID ---
+    AssertEq ident, res, "S6K4 storno: red F8 nosi PrijemnicaID dokumenta"
+End Sub
+
+' Vrednosti datih kljuceva iz prefill spec-a ("k=v|k=v"), redom kljuceva,
+' spojene sa "|". Kljuc kog nema daje prazno mesto.
+Private Function S6K4SpecVrednosti(ByVal spec As String, ByVal kljucevi As String) As String
+    Dim k As Variant, deo As Variant, v As String, s As String, prvi As Boolean
+    prvi = True
+    For Each k In Split(kljucevi, "|")
+        v = ""
+        For Each deo In Split(spec, "|")
+            If InStr(1, CStr(deo), CStr(k) & "=", vbBinaryCompare) = 1 Then
+                v = Mid$(CStr(deo), Len(CStr(k)) + 2)
+            End If
+        Next deo
+        If Not prvi Then s = s & "|"
+        s = s & v
+        prvi = False
+    Next k
+    S6K4SpecVrednosti = s
+End Function
+
+' Kolona kolicine reda dokumenta u listi za storno (GetActiveDocumentsForStorno,
+' red 0..7, kolicina je 7). "nema" kad red tog broja nije u listi.
+Private Function S6K4KgUListiStorna(ByVal broj As String) As String
+    Dim c As Collection, i As Long, r As Variant
+    S6K4KgUListiStorna = "nema"
+    Set c = modStornoFlow.GetActiveDocumentsForStorno(FLOW_DOC_PRIJEMNICA, broj)
+    If c Is Nothing Then Exit Function
+    For i = 1 To c.count
+        r = c(i)
+        If CStr(r(1)) = broj Then
+            S6K4KgUListiStorna = CStr(r(7))
+            Exit Function
+        End If
+    Next i
 End Function
 
 ' 259. S6 KORAK 3: CITAOCI PRIJEMNICE CITAJU STAVKE DOKUMENTA (plan 14.55
