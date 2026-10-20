@@ -6893,12 +6893,12 @@ Private Sub Test_S6K4_PreradjenaPaletaObaraStorno()
 
     AssertTrue S6K4Gajbe(testDate, scenario, tipT), _
                "S6K4 preradjena: preduslov -- vozac drzi gajbe svezeg tipa"
-    Dim brZbr As String, prj As String
+    Dim brZbr As String, prj As String, brPrj As String
     brZbr = TEST_PREFIX & "-ZK4R-" & scenario
+    brPrj = TEST_PREFIX & "-PK4R-" & scenario
     AssertTrue Len(S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)) > 0, _
                "S6K4 preradjena: preduslov -- zbirna je snimljena"
-    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, TEST_PREFIX & "-PK4R-" & scenario, _
-                         brZbr, tipT, 10, 10, 4)
+    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, brPrj, brZbr, tipT, 10, 10, 4)
     AssertTrue Len(prj) > 0 And Len(S6K4PaleteDokumenta(prj)) > 0, _
                "S6K4 preradjena: preduslov -- dokument je na paletama"
     If Len(prj) = 0 Then GoTo Kraj
@@ -6907,12 +6907,21 @@ Private Sub Test_S6K4_PreradjenaPaletaObaraStorno()
     prevPre = NzToText(LookupValue(TBL_PALETA, COL_PAL_ID, prvaPal, COL_PAL_PRERADJENO))
     S6K4Postavi TBL_PALETA, COL_PAL_ID, prvaPal, COL_PAL_PRERADJENO, "DA"
 
-    Dim prosao As Boolean
+    ' Tri ulaza, ista odbijenica. Review #438 (rucna provera): operater je na
+    ' ekranu dobijao samo "Storno prijemnice nije uspeo" -- RAZLOG (preradjena
+    ' paleta) je ostajao u logu. Okvir i F8 moraju da ga prenesu.
+    Dim prosao As Boolean, resD As Object, okF8 As Boolean, msgF8 As String
     prosao = modStorno.StornoPrijemnica_TX(prj)
+    Set resD = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_DUPLI, True, False, S6K4Ident(prj))
+    okF8 = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, brPrj, "", msgF8, S6K4Ident(prj))
     S6K4Postavi TBL_PALETA, COL_PAL_ID, prvaPal, COL_PAL_PRERADJENO, prevPre
     prvaPal = ""
-    AssertTrue Not prosao, _
+    AssertTrue Not prosao And Not CBool(resD("success")) And Not okF8, _
                "S6K4 preradjena: storno dokumenta sa robom na preradjenoj paleti je ODBIJEN"
+    AssertTrue InStr(1, CStr(resD("message")), "preradjenoj paleti", vbTextCompare) > 0, _
+               "S6K4 preradjena: okvir ispravke (DUPLI) prikazuje RAZLOG, ne samo neuspeh"
+    AssertTrue InStr(1, msgF8, "preradjenoj paleti", vbTextCompare) > 0, _
+               "S6K4 preradjena: ekran Storno prikazuje RAZLOG, ne samo neuspeh"
     AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
                "S6K4 preradjena: dokument ostaje aktivan"
     AssertEquals "20", CStr(S6GajbiNaPaletama(prj, "")), _
@@ -7098,6 +7107,8 @@ Private Sub Test_S6K4_PadPosleSvihUpisaVracaSve()
     AssertEquals otisakPre, S6K4Otisak(prj, zbrID, palete), _
                  "S6K4 pad: posle pada kaskade sve tabele matrice su kao pre"
     AssertTrue Not CBool(res("success")), "S6K4 pad: kaskada sa padom posle upisa vraca neuspeh"
+    AssertTrue InStr(1, CStr(res("message")), "namerna greska", vbTextCompare) > 0, _
+               "S6K4 pad: kaskada prenosi RAZLOG pada do okvira"
     AssertEquals CStr(vezePre + 1), CStr(S6K4Redova(TBL_STORNO_VEZE)), _
                  "S6K4 pad: neuspela kaskada ostavlja TACNO jedan zapis neuspele ispravke"
 Kraj:

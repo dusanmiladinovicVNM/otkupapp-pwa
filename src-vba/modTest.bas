@@ -355,6 +355,7 @@ Public Sub RunAllTests()
     RunOne 258
     RunOne 259
     RunOne 260
+    RunOne 261
     RunOne 13
     RunOne 14
     RunOne 15
@@ -902,6 +903,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 258: TestName = "T_S6_PrijemnicaJedanDokument"
         Case 259: TestName = "T_S6_CitaociStavkiPrijemnice"
         Case 260: TestName = "T_S6K4_StornoCitaStavkeIIdentitet"
+        Case 261: TestName = "T_S6K4_UvidKazeOdbijanje"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1170,6 +1172,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 258: T_S6_PrijemnicaJedanDokument
         Case 259: T_S6_CitaociStavkiPrijemnice
         Case 260: T_S6K4_StornoCitaStavkeIIdentitet
+        Case 261: T_S6K4_UvidKazeOdbijanje
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -10020,6 +10023,45 @@ Private Function S6K4KgUListiStorna(ByVal broj As String) As String
         r = c(i)
         If CStr(r(1)) = broj Then
             S6K4KgUListiStorna = CStr(r(7))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' 261. S6 KORAK 4, REVIEW #438: UVID POSLEDICA NE OBECAVA ONO STO STORNO NE RADI.
+'
+' Rucna provera je pokazala da lanac u uvidu za fakturisanu prijemnicu kaze
+' "faktura se oslobadja; stavke ostaju osirotele", a za robu na preradjenoj paleti
+' "odvezuju se sa palete" -- dok jezgro oba slucaja ODBIJA (odluke 1 i 3).
+' Operater bi odlucivao nad posledicom koja se nece desiti. Fixture: 20/150326
+' (PRJ-FAK-1, kes Fakturisano = Da) i 37/150326 (PRJ-SLED-G na PAL-SLED-G,
+' Preradjeno = Da) -- normalno stanje fixture-a, samo se cita.
+' SABOTAZE: s6k4-uvid-faktura-oslobadja, s6k4-uvid-preradjena-odvezuje.
+Private Sub T_S6K4_UvidKazeOdbijanje()
+    Dim nap As String
+
+    nap = S6K4NapomenaLanca("20/150326", "PRJ-FAK-1", "Faktura")
+    AssertEq (InStr(1, nap, "ODBIJA", vbBinaryCompare) > 0 And _
+              InStr(1, nap, Poruka("STEF_FAK_OSLOB"), vbBinaryCompare) = 0), True, _
+             "S6K4 uvid: fakturisana prijemnica -- lanac kaze ODBIJA, ne oslobadja fakturu"
+
+    nap = S6K4NapomenaLanca("37/150326", "PRJ-SLED-G", "Paletne stavke")
+    AssertEq (InStr(1, nap, "ODBIJA", vbBinaryCompare) > 0 And _
+              InStr(1, nap, Poruka("STEF_PAL_ODVEZ"), vbBinaryCompare) = 0), True, _
+             "S6K4 uvid: roba na preradjenoj paleti -- lanac kaze ODBIJA, ne skida sa palete"
+End Sub
+
+' Napomena (efekat) reda lanca uvida za dati dokument; "nema" kad reda nema.
+Private Function S6K4NapomenaLanca(ByVal broj As String, ByVal prjID As String, _
+                                   ByVal dok As String) As String
+    Dim ch As Collection, i As Long, r As Variant
+    S6K4NapomenaLanca = "nema"
+    Set ch = modStornoFlow.GetStornoChainRows(FLOW_DOC_PRIJEMNICA, broj, "", prjID, True)
+    If ch Is Nothing Then Exit Function
+    For i = 1 To ch.count
+        r = ch(i)
+        If CStr(r(0)) = dok Then
+            S6K4NapomenaLanca = CStr(r(2))
             Exit Function
         End If
     Next i
