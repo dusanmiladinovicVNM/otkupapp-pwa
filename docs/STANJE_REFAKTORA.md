@@ -6290,6 +6290,12 @@
        - Banka 241/0, Storno 111/0, Palete 97 — suite nisu dirane, a Palete ručne redove starog oblika vidi
          kao liniju sa praznom stavkom;
        - dokaz `s6k2-` **10/10**; uz to `amb-prj-` za dve presidrene.
+     - **Sveska za compile:** `run_vba --compile-only --keep` nad `d787d91c` (`REZULTAT: PALO` uz
+       `COMPILE NEJASNO` je očekivan), premeštena u `tests/fixtures/rucna_provera_s6_korak2.xlsm` (gitignored).
+       - Provera: ZIP `testzip` OK, 110 XML članova, `vbaProject.bin` prisutan.
+       - Otvorena je u sopstvenoj instanci (`AutomationSecurity=1`, `EnableEvents=False`): 198 komponenti, a
+         `SavePrijemnicaDokument`, `PrijemnicaLinijePoKlasi` i `T_S6_PrijemnicaJedanDokument` su prisutni.
+       - `modVbaTools` namerno nije u svesci: operater ga uvozi pre `Debug → Compile`.
      - **Čeka:** reviewer GO → `run_vba` FULL, `dokaz.py s6k2- --grupe` i `dokaz.py amb-prj- --grupe`. Compile
        i ručnu proveru radi operater.
 
