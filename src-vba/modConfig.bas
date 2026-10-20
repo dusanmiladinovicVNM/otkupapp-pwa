@@ -49,6 +49,7 @@ Public Const TBL_ZBIRNA_STAVKE As String = "tblZbirnaStavke"
 Public Const TBL_AMBALAZA_DOKUMENT As String = "tblAmbalazaDokument"
 Public Const TBL_ZBIRNA_IZVORI As String = "tblZbirnaIzvori"
 Public Const TBL_PRIJEMNICA As String = "tblPrijemnica"
+Public Const TBL_PRIJEMNICA_STAVKE As String = "tblPrijemnicaStavke"
 Public Const TBL_FAKTURE As String = "tblFakture"
 Public Const TBL_FAKTURA_STAVKE As String = "tblFakturaStavke"
 Public Const TBL_NOVAC As String = "tblNovac"
@@ -362,6 +363,30 @@ Public Const COL_AMBD_DATUM As String = "Datum"
 Public Const COL_AMBD_BROJ_OWNER_TIP As String = "BrojOwnerTip"
 Public Const COL_AMBD_BROJ_OWNER_ID As String = "BrojOwnerID"
 Public Const COL_AMBD_NAPOMENA As String = "Napomena"
+
+' --- tblPrijemnicaStavke (S6: dokument = header + stavke; plan 14.55) ---
+'
+' Oblik je tblOtkupStavke: isti raspored, i Cena -- ne PredlogCena kao kod
+' otpremnice. Prijemnica nosi STVARNU cenu prijema, a CreateFaktura je cita iz
+' reda.
+'
+' Na stavci namerno NEMA cinjenica dokumenta:
+'   TipAmbalaze, KolAmbVracena -- jedan tip i JEDAN povrat po dokumentu; pisac
+'     povrat daje klasi koja postoji (SavePrijemnicaMulti_TX), ne svakoj klasi;
+'   Fakturisano, FakturaID -- odluka operatera (b), 20.10.2026: status se izvodi
+'     iz aktivnog reda tblFakturaStavke, ne kesira se;
+'   Stornirano -- line-level storno ne postoji, status drzi header, pa je tabela
+'     u modSchemaGuard.BEZ_STORNA;
+'   GeneracijaID, BrojZbirne -- identitet i veza su dokumentovi.
+' Meri ih modTest 257 (T_S6_KanonStavkePrijemnice).
+Public Const COL_PRS_ID As String = "PrijemnicaStavkaID"
+Public Const COL_PRS_PRIJEMNICA_ID As String = "PrijemnicaID"
+Public Const COL_PRS_RB As String = "RedniBroj"
+Public Const COL_PRS_KLASA As String = "Klasa"
+Public Const COL_PRS_KOLICINA As String = "Kolicina"
+Public Const COL_PRS_CENA As String = "Cena"
+Public Const COL_PRS_KOL_AMB As String = "KolAmbalaze"
+Public Const COL_PRS_BRUTO As String = "BrutoKg"
 
 ' --- Spaltennamen tblPrijemnica (NEU) ---
 Public Const COL_PRJ_ID As String = "PrijemnicaID"

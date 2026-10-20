@@ -41,7 +41,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "24456ABF"
+Public Const SCHEMA_FINGERPRINT As String = "05A01275"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -885,6 +885,7 @@ Private Function BuildRegistry() As Object
     SpecPreradaStavka reg
     SpecPrevoznici reg
     SpecPrijemnica reg
+    SpecPrijemnicaStavke reg
     SpecSEFConfig reg
     SpecSEFEventLog reg
     SpecSEFSubmission reg
@@ -1577,6 +1578,24 @@ Private Sub SpecPrijemnica(ByVal reg As Object)
     k.Add "GeneracijaID"
     k.Add "ZbirnaRoditeljID"
     RegistrujTabelu reg, TBL_PRIJEMNICA, "Prijemnica", k
+End Sub
+
+Private Sub SpecPrijemnicaStavke(ByVal reg As Object)
+    Dim k As Collection
+    Set k = New Collection
+    k.Add "PrijemnicaStavkaID"
+    k.Add "PrijemnicaID"
+    k.Add "RedniBroj"
+    k.Add "Klasa"
+    k.Add "Kolicina"
+    k.Add "Cena"
+    k.Add "KolAmbalaze"
+    k.Add "BrutoKg"
+    k.Add "CreatedAt"
+    k.Add "CreatedBy"
+    k.Add "ModifiedAt"
+    k.Add "ModifiedBy"
+    RegistrujTabelu reg, TBL_PRIJEMNICA_STAVKE, "PrijemnicaStavke", k
 End Sub
 
 Private Sub SpecSEFConfig(ByVal reg As Object)

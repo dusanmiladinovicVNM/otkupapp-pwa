@@ -8639,6 +8639,64 @@ SABOTAZE = {
         "Test_ODL24_PozajmicaJeSvojDogadjaj",
         "ODL-24: pozajmica na dokumentu sa pokricem je glasan sudar, ne tiho gutanje",
     ),
+    # --- S6 KORAK 1: KANON STAVKE PRIJEMNICE (plan 14.55, stavka 171) -------
+    #
+    # Povrat ambalaze se spusti na stavku: kanon bi trazio povrat PO KLASI, a on je
+    # jedan dogadjaj dokumenta (pisac ga daje klasi koja postoji).
+    "s6-stavka-nosi-povrat": (
+        "modSchema.bas",
+        "    k.Add \"PrijemnicaStavkaID\"\n"
+        "    k.Add \"PrijemnicaID\"\n",
+        "    k.Add \"PrijemnicaStavkaID\"\n"
+        "    k.Add \"PrijemnicaID\"\n"
+        "    k.Add \"KolAmbVracena\"   ' SABOTAZA: povrat na stavci\n",
+        "T_S6_KanonStavkePrijemnice",
+        "S6 kanon: stavka prijemnice ne nosi cinjenice dokumenta ni kes fakture",
+    ),
+    # Kontra-tvrdnja: povrat nestane i sa zaglavlja. "Nema ga na stavci" je tada
+    # i dalje tacno -- zato postoji druga tvrdnja.
+    "s6-zaglavlje-gubi-povrat": (
+        "modSchema.bas",
+        "    k.Add \"KolAmbVracena\"\n",
+        "    k.Add \"KolAmbVracenaS6\"   ' SABOTAZA: povrat nije na zaglavlju\n",
+        "T_S6_KanonStavkePrijemnice",
+        "S6 kanon: TipAmbalaze i KolAmbVracena ostaju na zaglavlju prijemnice",
+    ),
+    # Dve kolone zamene mesta: AppendRow pise poziciono, pa bi kolicina otisla u
+    # cenu. Skup kolona je isti -- meri se REDOSLED.
+    "s6-stavka-pomeren-red": (
+        "modSchema.bas",
+        "    k.Add \"PrijemnicaID\"\n"
+        "    k.Add \"RedniBroj\"\n"
+        "    k.Add \"Klasa\"\n"
+        "    k.Add \"Kolicina\"\n"
+        "    k.Add \"Cena\"\n",
+        "    k.Add \"PrijemnicaID\"\n"
+        "    k.Add \"RedniBroj\"\n"
+        "    k.Add \"Klasa\"\n"
+        "    k.Add \"Cena\"   ' SABOTAZA: pomeren red\n"
+        "    k.Add \"Kolicina\"\n",
+        "T_S6_KanonStavkePrijemnice",
+        "S6 kanon: tblPrijemnicaStavke je oblika tblOtkupStavke, istim redom",
+    ),
+    # Konstanta imenuje kolonu otpremnice: pisac iz koraka 2 bi cenu trazio u
+    # koloni koje na stavci prijemnice nema.
+    "s6-konstanta-mimo-kanona": (
+        "modConfig.bas",
+        "Public Const COL_PRS_CENA As String = \"Cena\"\n",
+        "Public Const COL_PRS_CENA As String = \"PredlogCena\"   ' SABOTAZA: konstanta mimo kanona\n",
+        "T_S6_KanonStavkePrijemnice",
+        "S6 kanon: COL_PRS_* imenuju kolone kanona, njegovim redom",
+    ),
+    # Tabela ispadne iz BEZ_STORNA: registar je ne zna, pa bi filter storniranih
+    # nad njom pao umesto da prodje. Bez komentara posle `_` (zamka 4).
+    "s6-stavka-van-registra-storna": (
+        "modSchemaGuard.bas",
+        "    \"|\" & TBL_PRIJEMNICA_STAVKE & _\n",
+        "    \"|\" & \"S6_SABOTAZA_VAN_REGISTRA\" & _\n",
+        "T_S6_KanonStavkePrijemnice",
+        "S6 kanon: registar storna zna stavku prijemnice kao BEZ_STORNA",
+    ),
 }
 
 
