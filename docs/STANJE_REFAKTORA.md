@@ -6508,6 +6508,34 @@
      - **Sledeći je S6 korak 4** (storno prijemnice na nivou dokumenta, `KI-031` kao kapija), na grani
        `claude/s6-korak4-storno` sa `8e970d99`. Reviewer: „START GO, posebno stroga transakciona provera".
 
+182. **S6 korak 4 — pre-flight nad `8e970d99`, odluke 1–4, PRE koda** (20.10.2026). Pun zapis je u §14.55,
+     „Korak 4" (verdikt, BUSINESS EVENTS, matrica „menja / snima", ugovor, obim, acceptance contract).
+
+     - **Verdikt:** `IDENTITY` i `DOWNSTREAM` su bili `GAP`, a zatvaraju ih odluke 2, odnosno 1 i 3. Ostale
+       ose su `PROVEN`, osim `PLATFORM`, koja je `N/A`.
+     - **`KI-031` je potvrđen čitanjem, sa DVA okidača:**
+       - prijemnica sa nogama knjige (`RequireAmbTxIzvorniDokument`);
+       - svaki kasniji pad u Fazi A.
+
+       Reprodukcija ide u kod, kroz pravu kaskadu sa subjektom.
+     - **Nalazi merenja:**
+       - palete se u svim putanjama storna skidaju **posle commit-a, u zasebnoj TX i po broju** (DUPLI,
+         PONIŠTENJE, Faza B kaskade);
+       - F8 šalje `GeneracijaID`, a fixture ga nema, pa storno pada na broj;
+       - subjekat kaskade se bira po broju;
+       - `ByBroj` bez generacije obara sve dokumente istog broja i kupca;
+       - uvid, prefill i lista za storno čitaju količinu, klasu i cenu sa praznog zaglavlja;
+       - `RunSimpleStornoPrijemnica` je mrtav.
+     - **Odluke operatera, sve po preporuci:**
+       1. fakturisana prijemnica se **odbija po imenu**; osirotelost ide u korak 5;
+       2. identitet je **`PrijemnicaID` od reda do pisca**; `ByBroj` se briše;
+       3. palete se skidaju **u jezgru, u istoj TX, po ID-u**; prerađena paleta obara storno;
+       4. iz §14.14 se ovde vraćaju `GuardNaSvimPutanjama`, `GuardUKaskadi` i prefill; vlasnička grana ide u
+          korak 7, a `GetPrijemniceByKupac` u korak 5.
+     - **Usput:** `KI-034` (`StornoTestFailPosleRelease` ne poštuje §4 — kuka bez `IsTestMode()`, van
+       `ResetSeamova`).
+     - **Sledeći brojevi:** stavka 183 (kod) · test 260 · KI-035.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

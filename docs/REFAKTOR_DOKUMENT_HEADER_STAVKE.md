@@ -8273,6 +8273,148 @@ kolonu, ne pad provere. Greške su `1970–1979` (`1978` i `1979` su dodate po r
   `BrutoKg` = 0 (`modOtkup.RequireBrutoStavke` odbija samo negativan). Review je tražio lokalnu ispravku
   ugovora prijemnice, bez širenja obima.
 
+#### Korak 4 — storno na nivou dokumenta, `KI-031` kao kapija (pre-flight nad `8e970d99`, stavka 182)
+
+Reviewer: „START GO, posebno stroga transakciona provera". Prelazi se sa ČITANJA na PONIŠTAVANJE poslovnih
+događaja, pa je `KI-031` obavezna kapija ovog koraka, a ne dug.
+
+**Verdikt po osama** (linije su sa `8e970d99`):
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | od koraka 2 je dokument JEDAN red `tblPrijemnica` + 1..2 stavke (`SavePrijemnicaDokument`); `tblPrijemnicaStavke` je `BEZ_STORNA`, pa je storno činjenica dokumenta, ne stavke |
+| `EVENTS` | **PROVEN** | tri, tabela ispod |
+| `IDENTITY` | **GAP → odluka 2** | F8 šalje `GeneracijaID` (`modScrDokumenti:2357`), a redovi fixture-a ga nemaju, pa storno pada na broj; subjekat kaskade se bira po BROJU (`modStornoFlow:1790`); palete se skidaju po BROJU (`modPaletniList:2184`); `ByBroj` bez generacije obara SVE dokumente istog broja i kupca, jer `RequireJedanVlasnikPoBroju` broji vlasnike, ne dokumente (`modStorno:534`) |
+| `CARDINALITY` | **PROVEN** | 1 dokument : 1..2 stavke; 1 stavka : N paleta-stavki; 1 zbirna : N prijemnica |
+| `INVARIANTS/OWNER` | **PROVEN** | `AMB-INV-07/-08` (`StornirajAmbalazuDokumenta`, `modAmbalaza:1749`; `RequireAmbTxIzvorniDokument`, `:2868`); `AMB-10-ODL-15` (zaglavlje, pa `bind`, pa knjiga); A9 |
+| `WRITERS` | **PROVEN** | `Stornirano` piše samo `modStorno:480`; palete `modPaletniList` (`DetachOsirocenePaletaStavke_TX`); keš i osirotelost fakture `modStorno:487-492`; `tblStornoVeze` `modStornoContext` (svoja TX po pozivu); `tblStornoZurnal` se u stornu prijemnice ne piše |
+| `DOWNSTREAM` | **GAP → odluke 1 i 3** | matrica ispod |
+| `CAPABILITY` | **PROVEN** | modovi ostaju (obican, ISPRAVKA, DUPLI uz „ne diraj palete", PONIŠTENJE, REŠI KASNIJE); `RunSimpleStornoPrijemnica` je mrtav (0 pozivalaca) |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | ispod |
+| `PLATFORM` | **N/A** | nema novog Excel/COM ponašanja |
+| `LANDING` | **PROVEN** | grana `claude/s6-korak4-storno` = `8e970d99` + docs |
+
+**BUSINESS EVENTS** (storno poništava sva tri):
+
+| Događaj | Datum / status | Tabela | Šta sme bez sledećeg |
+|---|---|---|---|
+| fizički — roba i gajbe kod kupca | `Datum` dokumenta | knjiga `tblAmbalaza` (`UZ_ROBU` + `POVRAT_PRAZNE`); palete `tblPaleta`/`tblPaletaStavka` | prijemnica bez paleta i bez knjige |
+| poslovni — dokument prijema | `Stornirano` na zaglavlju | `tblPrijemnica` (+ stavke, bez storna) | dokument bez fakture |
+| finansijski — potraživanje | aktivna stavka fakture | `tblFakturaStavke` po `PrijemnicaID` (+ keš `Fakturisano`/`FakturaID`, piše ga `CreateFaktura`, `modFaktura:360/363`) | faktura ne sme da ostane nad storniranim dokumentom bez traga |
+
+**Matrica „menja / snima" po putanji** (svaka tabela koja se menja, a ne snima, je nalaz):
+
+| Putanja | Snima | Menja bez snimka | Palete |
+|---|---|---|---|
+| `StornoPrijemnica_TX` (samo testovi) | prijemnica, fakture, stavke fakture, knjiga | — | ne dira |
+| `ByBroj_TX` (F8 obican; ISPRAVKA, DUPLI, PONIŠTENJE bez zbirne) | isto | — | DUPLI/PONIŠTENJE: **zasebna TX posle commit-a, po broju** |
+| kaskada, `ownsChain = True` | zbirna, otpremnica, knjiga, otkup, prijemnica, fakture, stavke fakture | — | Faza B: zasebna TX po broju |
+| kaskada, `ownsChain = False` (subjekat) | zbirna, otpremnica, knjiga, otkup | **`tblPrijemnica`, `tblFakture`, `tblFakturaStavke` — `KI-031`** | pozivalac skida u zasebnoj TX, po broju |
+
+`KI-031` ima dva okidača, oba ista posledica (`Stornirano = Da` preživi rollback): prijemnica sa nogama
+knjige (`RequireAmbTxIzvorniDokument` odbije) i SVAKI kasniji pad u Fazi A (npr. `AMB-INV-07` na otpremnici).
+
+**Čitaoci (R5):** `ImpactHeader` čita kg sa zaglavlja (`modStornoImpact:155-158`, `SumActiveNum`);
+`PrefillIzStorniranog` čita klasu, količinu, gajbe i cenu sa zaglavlja (`modStornoDok:715-726`); lista
+`GetActiveDocumentsForStorno` čita `Kolicina` sa zaglavlja za prijemnicu I zbirnu i spaja redove po BROJU
+(`modStornoFlow:1152-1168`) — to je četvrto živo mesto grupe `zbr_linija`.
+
+**Testovi iz §14.14 (red „Storno kaskada lanca")** su obrisani u `bf04e3e0` (S3b-1); danas ih nema u `src-vba`.
+`Test_GeneracijaNePrelaziVlasnika` o `PickPrefillRows` ima samo komentar (`BFP:2517`).
+
+**`KI-028` ne ulazi:** F8 testovi #33/#35/#39 idu nad redovima fixture-a bez knjige (`PRJ-TEST-Z*`, `-I*`,
+`KASK-1`), a novi testovi koriste svež tip (`RegistrujTipTesta`) i vozača `VOZ-90001`.
+
+**Seam za pad posle mutacije:** nijedan postojeći ne gađa storno prijemnice (`StornoTestFailPosleRelease` je u
+`StornoFaktura`). Nov seam po `testovi.md` §4.
+
+**Odluke operatera (20.10.2026, stavka 182), sve po preporuci:**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | storno ↔ faktura | **blokada po imenu**: aktivna stavka fakture za taj `PrijemnicaID` ili keš `Fakturisano = DA` odbija storno PRE ijedne mutacije („prvo storniraj fakturu"). Osirotelost po `PrijemnicaStavkaID` ide u korak 5 |
+| 2 | identitet | **`PrijemnicaID` od reda do pisca**: skrivena kolona F8 nosi `PrijemnicaID`; par broj–ID se proverava jednom; prazan ID se odbija. `StornoPrijemnicaByBroj_TX` i `RunSimpleStornoPrijemnica` se brišu; subjekat kaskade je JEDAN `PrijemnicaID` |
+| 3 | palete | **u jezgru, ista TX, po `PrijemnicaID`**; stavka na prerađenoj paleti obara ceo storno po imenu; Faza B kaskade i zasebni `Detach` pozivi se brišu. Izričit izbor ostaje izuzetak: ISPRAVKA (palete čekaju novu prijemnicu) i DUPLI „ne diraj palete" (MANUAL recovery) |
+| 4 | §14.14 | **ovde:** `GuardNaSvimPutanjama` i `GuardUKaskadi` (deo prijemnice) i prefill iz `Test_GeneracijaNePrelaziVlasnika`; `KaskadaScopePoLancu` (vlasnička grana) → korak 7; `ReadHelpersExcludeStornirano` (`GetPrijemniceByKupac`) → korak 5 |
+
+**Ugovor storna prijemnice posle koraka 4** — jedno jezgro, `modStorno.StornoPrijemnica(id, tx, skiniPalete)`:
+
+1. **Snimci pre prve mutacije.** Jezgro TRAŽI (`tx.ImaSnapshot`) svaku tabelu koju menja: `tblPrijemnica`,
+   `tblAmbalaza`, `tblPaleta`, `tblPaletaStavka`. Nedostaje li ijedna, pada po imenu PRE upisa. `KI-031`
+   time postaje nemoguć po konstrukciji, ne samo zakrpljen na jednom pozivaocu (invarijanta ide u jezgro).
+   Pozivaoci snimaju kroz JEDAN skup (`SnimiZaStornoPrijemnice`), koji uz to snima i stavke prijemnice,
+   fakture i stavke fakture.
+2. **Provere pre mutacije:** red postoji tačno jednom i nije storniran; faktura (odluka 1); prerađena paleta
+   (odluka 3).
+3. **Redosled upisa:** palete → `Stornirano` → `BindSourceDocument` → kontra-stav knjige. `Stornirano` se ne
+   postavlja pre nego što su posledice van knjige poništene (R4), a knjiga ide posle `bind`-a jer to traži
+   `AMB-10-ODL-15`. Pad bilo gde vraća SVE rollback-om pozivaoca.
+4. **Jezgro ne piše fakturu ni keš** — posle odluke 1 grana osirotelosti je nedostižna i briše se
+   (`MarkFakturaOrphaned`, `MarkFakturaStavkeOrphaned`).
+5. **Palete:** paletni motor bez sopstvene TX (`modPaletniList`), po `PrijemnicaID`; prazna paleta se
+   stornira (`StornoPaleta`). `DetachOsirocenePaletaStavke_TX` (po broju) ostaje samo za Oporavak
+   (`modScrDokumenti:1212`) i deli isto telo.
+
+**Obim po celinama:**
+
+- **jezgro** (`modStorno`): gore; `StornoPrijemnica_TX(id, skiniPalete)`; seam `StornoPrijemnicePadniTest` na
+  kraju jezgra, posle svih upisa (gejt pri svakom pozivu, `ResetSeamova`);
+- **kaskada** (`PonistiZbirnaChain_TX`): subjekat je `PrijemnicaID`, `PodeliPrijemnice` po ID-u; Faza A snima
+  ceo skup bez obzira na `ownsChain`; palete idu kroz jezgro, Faza B se briše; test seam
+  `PonistiZbirnaChain_Test` dobija subjekat i gejt test režima (seam sme samo da kvari, zabrani ili
+  posmatra — danas dodaje pristup);
+- **okvir i F8** (`modStornoFlow`, `modStornoDok`, `modScrDokumenti`): `IdKolonaTipa("PRIJEMNICA") =
+  PrijemnicaID`; `ScanPrijemnica` po ID-u uz proveru para; `StornoIzvrsi` po ID-u (obrazac zbirne:
+  aktivna + par); ISPRAVKA bez skidanja paleta; DUPLI po izboru; PONIŠTENJE kroz jezgro;
+- **čitaoci** (R5): uvid (zaglavlje po ID-u, kg iz stavki, palete po ID-u, faktura kroz isti predikat kao
+  kapija); prefill prijemnice iz stavki (obrazac otpremnice); lista za storno jedan red po DOKUMENTU, kg iz
+  stavki za prijemnicu i zbirnu → prag `zbr_linija` 4 → 3.
+
+**Imenovano van obima:**
+
+- osirotelost fakture po `PrijemnicaStavkaID` i `GetPrijemniceByKupac` — korak 5;
+- vlasnička grana kaskade (`ownsChain = True`) dobija test u koraku 7 — traži config hladnjače;
+- palete osirotele PRE ovog koraka (stavke stornirane prijemnice koje su ostale) više ne skida Faza B; vidi ih
+  Oporavak, kao i do sada za sve putanje van kaskade;
+- `StornoTestFailPosleRelease` (`StornoFaktura`) ne pita `IsTestMode()` u kuki i nije u `ResetSeamova` → `KI-034`.
+
+**Testovi čija se premisa menja:**
+
+| Test | Šta je tvrdio | Šta biva |
+|---|---|---|
+| `T_F8_IzabranRedOstajeIzabran` (#33), `T_IspravkaPrijemnice_PodKolizijomBroja` (#35) | identitet je generacija (`StampGeneraciju`) | identitet je `PrijemnicaID`; tvrdnje važe |
+| `T_ZbirnaKaskada_StajeNaDvosmislenom` (#39) | PONIŠTENJE bez identiteta stiže do kapije zbirne | šalje `PRJ-KASK-1`; tvrdnja važi |
+| `Test_StornoPoBrojuOdbijaDvaVlasnika` | `ByBroj` odbija dva vlasnika | prelazi na F8 ulaz: bez ID-a i sa tuđim parom odbijeno |
+| `Test_PRJ_EksternaPrijemnicaBlokiraPonistenje` | seam bez test režima | pali test režim; tvrdnje važe |
+| `Test_S6_DveKlaseJedanDokument` | storno ne dira palete | storno skida palete obe klase (nova tvrdnja) |
+| BFP nad `PickPrefillRows` | prefill sa zaglavlja | prijemnica iz stavki; zaglavlje ostaje samo izvor `base` reda |
+
+**ACCEPTANCE CONTRACT koraka 4 — plan dokaza, ne dokaz:**
+
+- **važi:**
+  - **R1:** dvoklasna prijemnica (I 100 × 120, II 50 × 80, gajbe 10 + 10, povrat 4) se stornira JEDNIM pozivom
+    nad jednim `PrijemnicaID`: zaglavlje storno, oba kontra-stava, palete obe klase skinute;
+  - **R2:** kaskada sa subjektom (`ownsChain = False`) nad prijemnicom sa nogama knjige PROLAZI, a pad posle
+    mutacije vraća sve tabele matrice: broj redova i ključna polja (`Stornirano`, gajbe na paleti, broj redova
+    knjige), ne samo `Stornirano`;
+  - **R3:** palete, knjiga i dokument u ISTOJ transakciji; nema zasebnog `Detach`-a ni Faze B;
+  - **R4:** posle podmetnutog pada (seam na kraju jezgra) `Stornirano` je prazno, a knjiga i palete netaknute —
+    i za direktan storno i za kaskadu;
+  - **R5:** uvid, prefill i lista za storno čitaju stavke: 150 kg (100 + 50), klase I/II, cene 120/80;
+- **netaknuto:** pisac koraka 2; `AMB-10-ODL-15`; `AMB-INV-07/-08`; A9; Oporavak (`Detach` po broju); storno
+  ostalih tipova; ISPRAVKA ostavlja palete za prevezivanje;
+- **edge:** jednoklasna prijemnica; prijemnica bez ambalaže i bez paleta; DUPLI „ne diraj palete" ostavlja palete
+  i pravi MANUAL;
+- **negativno (R6), svako odbijeno PO IMENU, stanje netaknuto:**
+  - dve generacije istog broja (isti kupac): storno po ID-u obara samo izabran; kaskada sa subjektom ne obara
+    drugi dokument istog broja (blokira ga kao „ostalu" prijemnicu);
+  - dva vlasnika istog broja: F8 bez ID-a i sa parom broj–ID tuđeg dokumenta odbijen;
+  - neuspeo kontra-stav ambalaže (`AMB-INV-07`: kupac je gajbe vratio kupčevim reversom);
+  - fakturisana prijemnica (odluka 1); paleta prerađena (odluka 3); transakcija bez snimka paleta;
+- **čime:** BFP `Test_S6K4_*` nad svežim tipom; `modTest` 260 (F8, uvid, prefill, lista, kroz
+  `PrijemnicaUpisi` bez ambalaže); vraćeni testovi §14.14; sabotaže `s6k4-*`; `popis_citalaca --check`
+  (`zbr_linija` 3).
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
