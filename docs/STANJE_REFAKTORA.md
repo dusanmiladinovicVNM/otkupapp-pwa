@@ -6299,6 +6299,31 @@
      - **Čeka:** reviewer GO → `run_vba` FULL, `dokaz.py s6k2- --grupe` i `dokaz.py amb-prj- --grupe`. Compile
        i ručnu proveru radi operater.
 
+176. **S6 korak 2 — izvršne kapije posle reviewer GO** (20.10.2026). Operater je javio reviewer GO i potvrdio
+     compile. Sve je pušteno nad izvorom **`7bd73476e4d0`** (head `61443e07`; posle `d787d91c` su samo
+     dokumenti, a `src-vba` nije diran).
+
+     - **FULL 12/12 ZELENO**, marker je upisan, `SCHEMA OK`, a potpis fixture-a je važeći (regeneracija nije
+       trebala):
+       - RunAllTests **258/0** (`T_S6_PrijemnicaJedanDokument` i `T_S6_KanonStavkePrijemnice` su OK);
+       - BFP **2473/0**, Banka **241/0**, Storno **111/0**, Palete **97**;
+       - Faktura 35/35, Agrohemija 25/25, SheetsJson 72/72.
+     - **Očekivano iz stavke 175 = izmereno**, broj po broj, uključujući BFP 2473 (2478 − 27 − 3 − 1 + 26).
+     - **Compile:**
+       - operater je potvrdio `Debug → Compile` nad `rucna_provera_s6_korak2.xlsm`;
+       - `vba_gate --mark-compile` je upisan nad `7bd73476e4d0`;
+       - `--require-green --require-compile` daje „dokazano“.
+     - **Dokaz:** `dokaz.py s6k2- amb-prj-povrat-samo-sa-klasom-i amb-prj-puna-noga-nosi-vracene --grupe` daje
+       **12/12 crveno**, svaka sabotaža po SVOJOJ tvrdnji: 7 prolaza, 8/12 izmereno u grupi.
+       - Izvor (potpis alata) je pre i posle `4b857f37b9440461`, identičan. I otisak `vba_gate` je posle isti
+         (`7bd73476e4d033f8`).
+       - `amb-prj-povrat-samo-sa-klasom-i` u grupi 1 nije oborio svoj test: uz njega je bio
+         `amb-prj-puna-noga-nosi-vracene`, pa je noga punih od 0 gajbi (`err 4450`) oborila upis pre tvrdnje.
+         Ponovljen sam, oborio je svoju tvrdnju. To je smetnja dve sabotaže nad istim piscem, a ne placebo.
+     - **CI:** static check na `61443e07` je `success`; PR je `MERGEABLE`/`CLEAN`.
+     - **Čeka:** kratku ručnu proveru operatera, pa merge — samo na izričit zahtev, sa `--match-head-commit`,
+       posle zelenog CI-ja.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
