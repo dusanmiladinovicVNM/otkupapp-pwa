@@ -9126,7 +9126,7 @@ SABOTAZE = {
         "        If Len(subj) > 0 Then   ' SABOTAZA: svaka prijemnica lanca je subjekat\n",
         "Test_S6K4_KaskadaSubjekatJeDokument",
         "S6K4 kaskada subjekat: DRUGI dokument istog broja ostaje aktivan",
-    ),
+    ),
     # Meri se na RESI KASNIJE kroz okvir (T_F8, #33), gde je razresavac JEDINA brana:
     # u StornoIzvrsi jezgro dobija prazan docID i odbija ga samo (RequireStornoAllowed),
     # pa je tvrdnja u Test_S6K4_F8IdentitetDokumenta bila zaklonjena (dokaz: NE OBARA NISTA).
