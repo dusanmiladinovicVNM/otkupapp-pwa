@@ -723,6 +723,25 @@
       ]
     },
     {
+      "table": "tblPrijemnicaStavke",
+      "const": "TBL_PRIJEMNICA_STAVKE",
+      "sheet": "PrijemnicaStavke",
+      "columns": [
+        "PrijemnicaStavkaID",
+        "PrijemnicaID",
+        "RedniBroj",
+        "Klasa",
+        "Kolicina",
+        "Cena",
+        "KolAmbalaze",
+        "BrutoKg",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ]
+    },
+    {
       "table": "tblSEFConfig",
       "const": "TBL_SEF_CONFIG",
       "sheet": "SEFConfig",

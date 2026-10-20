@@ -351,6 +351,7 @@ Public Sub RunAllTests()
     RunOne 254
     RunOne 255
     RunOne 256
+    RunOne 257
     RunOne 13
     RunOne 14
     RunOne 15
@@ -891,6 +892,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 254: TestName = "T_KI021_ComboTipaJeSifarnik"
         Case 255: TestName = "T_KI023_KatalogCuvaVodeciApostrof"
         Case 256: TestName = "T_ODL24_F7PozajmicaKupca"
+        Case 257: TestName = "T_S6_KanonStavkePrijemnice"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1155,6 +1157,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 254: T_KI021_ComboTipaJeSifarnik
         Case 255: T_KI023_KatalogCuvaVodeciApostrof
         Case 256: T_ODL24_F7PozajmicaKupca
+        Case 257: T_S6_KanonStavkePrijemnice
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -9711,6 +9714,87 @@ CleanUp:
     AssertEq CStr(pdfPosle - pdfPre) & "|" & javio, "0|tiho", _
              "F7 pozajmica: kupcev dokument se ne stampa i ne javlja kvar (ODL-32)"
 End Sub
+
+' 257. S6 KORAK 1: KANON STAVKE PRIJEMNICE (plan 14.55, odluke 20.10.2026).
+'
+' Prijemnica postaje header + stavke. Korak 1 ne pise nijedan red, pa se meri
+' MODEL koji kanon deklarise -- od koraka 2 ga pisac, citaoci i storno uzimaju
+' kao dat:
+'   - stavka NE nosi cinjenice dokumenta ni kes fakture: TipAmbalaze i
+'     KolAmbVracena (jedan tip i jedan povrat po dokumentu), Fakturisano i
+'     FakturaID (odluka b: izvodi se iz tblFakturaStavke), Stornirano (storno
+'     linije ne postoji), GeneracijaID i BrojZbirne (identitet i veza dokumenta);
+'   - KONTRA-TVRDNJA: TipAmbalaze i KolAmbVracena su na zaglavlju. Bez nje bi
+'     "nema ih na stavci" bilo tacno i kad ih nema nigde;
+'   - oblik je tblOtkupStavke, istim redom (AppendRow pise poziciono).
+'     Ocekivanje se IZVODI iz tblOtkupStavke zamenom kljuceva, ne prepisuje se
+'     iz izlaza;
+'   - COL_PRS_* imenuju bas te kolone, njihovim redom;
+'   - registar storna zna tabelu, i zna da storno NEMA (BEZ_STORNA).
+' Da sveska tabelu stvarno ima meri T_Sema_SveskaOdgovaraKanonu (VerifySchema).
+' Redosled tvrdnji je nosec: modTest staje na prvom padu, a cinjenica dokumenta
+' dodata na stavku obara i oblik -- zato oblik stoji POSLE nje.
+' SABOTAZE: s6-stavka-nosi-povrat, s6-zaglavlje-gubi-povrat,
+' s6-stavka-pomeren-red, s6-konstanta-mimo-kanona,
+' s6-stavka-van-registra-storna (tvrdnje imenuje tools/sabotaza.py).
+Private Sub T_S6_KanonStavkePrijemnice()
+    Dim stavka As Collection, zaglavlje As Collection, otkStavka As Collection
+    Dim k As Variant, ime As String, i As Long
+    Dim naStavci As String, naZaglavlju As String
+    Dim ocekivano As String, kanon As String, konst As String
+
+    Set stavka = modSchema.SchemaTableColumns(TBL_PRIJEMNICA_STAVKE)
+    Set zaglavlje = modSchema.SchemaTableColumns(TBL_PRIJEMNICA)
+    Set otkStavka = modSchema.SchemaTableColumns(TBL_OTKUP_STAVKE)
+
+    For Each k In Array(COL_PRJ_TIP_AMB, COL_PRJ_KOL_AMB_VRACENA, _
+                        COL_PRJ_FAKTURISANO, COL_PRJ_FAKTURA_ID, COL_STORNIRANO, _
+                        COL_GENERACIJA_ID, COL_PRJ_BROJ_ZBIRNE)
+        If KanonImaKolonu(stavka, CStr(k)) Then naStavci = naStavci & "|" & CStr(k)
+    Next k
+
+    For Each k In Array(COL_PRJ_TIP_AMB, COL_PRJ_KOL_AMB_VRACENA)
+        If KanonImaKolonu(zaglavlje, CStr(k)) Then naZaglavlju = naZaglavlju & "|" & CStr(k)
+    Next k
+
+    For i = 1 To otkStavka.count
+        ime = CStr(otkStavka(i))
+        If ime = COL_OKS_ID Then ime = COL_PRS_ID
+        If ime = COL_OKS_OTKUP_ID Then ime = COL_PRS_PRIJEMNICA_ID
+        ocekivano = ocekivano & "|" & ime
+    Next i
+    For i = 1 To stavka.count
+        kanon = kanon & "|" & CStr(stavka(i))
+    Next i
+
+    konst = "|" & COL_PRS_ID & "|" & COL_PRS_PRIJEMNICA_ID & "|" & COL_PRS_RB & _
+            "|" & COL_PRS_KLASA & "|" & COL_PRS_KOLICINA & "|" & COL_PRS_CENA & _
+            "|" & COL_PRS_KOL_AMB & "|" & COL_PRS_BRUTO
+
+    AssertEq naStavci, "", _
+             "S6 kanon: stavka prijemnice ne nosi cinjenice dokumenta ni kes fakture"
+    AssertEq naZaglavlju, "|" & COL_PRJ_TIP_AMB & "|" & COL_PRJ_KOL_AMB_VRACENA, _
+             "S6 kanon: TipAmbalaze i KolAmbVracena ostaju na zaglavlju prijemnice"
+    AssertEq kanon, ocekivano, _
+             "S6 kanon: tblPrijemnicaStavke je oblika tblOtkupStavke, istim redom"
+    AssertEq Left$(kanon, Len(konst)), konst, _
+             "S6 kanon: COL_PRS_* imenuju kolone kanona, njegovim redom"
+    AssertEq CStr(modSchemaGuard.StornoRegistarZna(TBL_PRIJEMNICA_STAVKE)) & "|" & _
+             CStr(modSchemaGuard.TabelaNosiStorno(TBL_PRIJEMNICA_STAVKE)), _
+             CStr(True) & "|" & CStr(False), _
+             "S6 kanon: registar storna zna stavku prijemnice kao BEZ_STORNA"
+End Sub
+
+' Da li kanonski spisak kolona (modSchema.SchemaTableColumns) nosi to ime.
+Private Function KanonImaKolonu(ByVal kolone As Collection, ByVal ime As String) As Boolean
+    Dim k As Variant
+    For Each k In kolone
+        If StrComp(CStr(k), ime, vbTextCompare) = 0 Then
+            KanonImaKolonu = True
+            Exit Function
+        End If
+    Next k
+End Function
 
 ' KI-015: "da || <tekst>" kad poruka odbijenog upisa POCINJE tekstom kljuca
 ' (prefiks cuvanja), inace "ne || <tekst>". Tekst ide u vrednost namerno -- kad
