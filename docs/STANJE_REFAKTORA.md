@@ -6324,6 +6324,33 @@
      - **Čeka:** kratku ručnu proveru operatera, pa merge — samo na izričit zahtev, sa `--match-head-commit`,
        posle zelenog CI-ja.
 
+177. **Merge `#436`, S6 korak 2/8 zatvoren** (20.10.2026). Zapis ide ovde, a ne u `#436`, po obrascu stavki 169
+     i 173.
+
+     - **Ručna provera:** operater je javio „ručna provera ok“ nad `rucna_provera_s6_korak2.xlsm`, posle reviewer
+       GO i potvrđenog compile-a (stavka 176).
+     - **Merge** 20.10.2026 (10:42:31 UTC) kao **`5afde431`**, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `904ba433`.
+       - Static CI je `success` na tom head-u.
+       - Stablo `main`-a posle merge-a jednako je stablu `904ba433` (`6badc0bb`).
+       - Grana `claude/s6-korak2-pisac` nije obrisana.
+     - **Bazni brojevi na `main` = `5afde431`:**
+       - RunAllTests 258/0, BFP 2473/0, Banka 241/0, Storno 111/0, Palete 97;
+       - katalog sabotaža 855;
+       - otisak šeme `106AC27A` (48 tabela, 665 kolona).
+     - **Sledeći brojevi:** test 259 · stavka 178 · KI-032.
+     - **Sledeći je S6 korak 3 (čitaoci)**, na grani `claude/s6-korak3-citaoci` sa `5afde431`, u svojoj sesiji
+       (§14.55, red koraka 3, i spisak iz „Korak 2“):
+       - `split_plus` 5 → 0;
+       - štampa, izveštaji, izvoz (`modStammdatenSync:1299`), integritet, oporavak, grupni otkupni list;
+       - `CalculateManjakPreview`, uz povratak testa `Test_ManjakPreviewJeZbirnaMinusPrijem` i sabotaže
+         `manjak-preview-bez-druge-klase`;
+       - `AdjustPaletaGajbiceZaPrijemnicu_TX` i `EvaluatePaletaReassign` (prelaze u korak 3 ili 4).
+     - **Otvoreno, sa svojim korakom:**
+       - `KI-028` (fixture), svoj rez pre koraka 6;
+       - `KI-031` (`PonistiZbirnaChain_TX`), korak 4;
+       - kapija koraka 6: F4 se ne odmrzava pre zatvorenih koraka 3, 4 i 5.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
