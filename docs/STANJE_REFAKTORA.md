@@ -6351,6 +6351,36 @@
        - `KI-031` (`PonistiZbirnaChain_TX`), korak 4;
        - kapija koraka 6: F4 se ne odmrzava pre zatvorenih koraka 3, 4 i 5.
 
+178. **S6 korak 3 — pre-flight nad `5afde431`, odluke 1–7, PRE koda** (20.10.2026). Grana
+     `claude/s6-korak3-citaoci` nad stavkom 177 (`c59fefbc`). Plan, ugovor čitaoca, obim po celinama i
+     acceptance contract su u §14.55, podsekcija „Korak 3".
+
+     - **Verdikt:** blokirajućeg GAP-a nema. `CAPABILITY` ostaje GAP (F4), kao izlazni uslov reza.
+     - **Izmereno:**
+       - linijska polja zaglavlja čita **37 PROD procedura** (66 mesta); korak 3 nosi 27 (47 mesta);
+       - `split_plus` je 5 živih;
+       - papir prijemnice je **danas dostižan** kroz ponovnu štampu iz Izveštaja i nad novim oblikom daje
+         prazan red.
+     - **Tri nalaza koja menjaju obim:**
+       - zbirnina strana manjka čita **zaglavlje** zbirne, koje je od PR3 prazno, pa F4 linija manjka za
+         kanonsku zbirnu ne crta ništa. S4-1 je ovo odložio u S6, uz prosek gajbe;
+       - `Adjust` bi nad novim oblikom svukao palete na nulu i pisao bez `PrijemnicaStavkaID`;
+       - `run_vba` deli svesku između suite-ova, a Faktura i BFP ne vraćaju seed-ove.
+     - **Odluke operatera (20.10.2026), sve po preporuci:**
+
+       | # | Pitanje | Odluka |
+       |---|---|---|
+       | 1 | kanonski čitalac | jedan strogi čitalac u `modDokumenta`; `PrijemnicaLinijePoKlasi` se briše |
+       | 2 | red starog oblika | **(a) samo stavke**: fixture izvodi stavku, seed-ovi pišu i stavku; fixture u ovom rezu, ne uz `KI-028` |
+       | 3 | grupni otkupni list | ovde; saldo **naloga Vozač** oko svog reda (`AmbStanjeOkoDokumenta`); `GetStanicaAmbSaldo` se briše |
+       | 4 | `Adjust` / `Evaluate` | korak 3 |
+       | 5 | mrtav kod | brišu se `GetAktivnePrijemnice`, `BuildChainIndex`, `GetStanicaAmbSaldo` i `PrijemnicaLinijePoKlasi`; `EvaluatePaletaReassign` ostaje i čita stavke |
+       | 6 | prag | `split_plus` = 0 sada; `zbr_linija` 17 → 4 |
+       | 7 | zbirnina strana manjka | obe strane manjka ovde, uz prosek gajbe; vraćen test ide nad kanonskom zbirnom |
+
+     - **Sledeće:** kod po §14.55 „Korak 3", crven test pre ispravke, pa PR na review. `run_vba` FULL i
+       `dokaz.py` čekaju reviewer GO.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
