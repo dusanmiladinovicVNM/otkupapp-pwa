@@ -7697,76 +7697,129 @@ operater video), posle popravke **kanon jednak**.
 **Repo ima tacno jednu takvu instancu** -- ovu. Provereno grep-om nad svim `.bas` i
 `.cls`; ostali pogoci su nastavci reda (izrazna pozicija), ne naredbe.
 
-### 14.55) Pre-flight S6 -- prijemnica kao header + stavke (27.09.2026)
+### 14.55) Pre-flight S6 -- prijemnica kao header + stavke (27.09.2026; ponovo izmereno 20.10.2026)
+
+> **Ova sekcija je ponovo izmerena 20.10.2026 nad `main` = `6dc32710`** (posle celog
+> AMB-10 i `ODL-24`) i **zamenjena u mestu**. Prvi verdikt (27.09.2026) je pisan nad
+> `4a1aea08`, PRE AMB-10 -- a prenet verdikt nije merenje. Original je u git istoriji
+> grane `claude/s6-prijemnica` (`0de43b62` + `3fd418e0`; izvorno `583308e2` +
+> `37f8b78a`). Svi brojevi linija ispod vaze za `6dc32710`. Odluke operatera su iz
+> 20.10.2026 (`docs/STANJE_REFAKTORA.md`, stavka 170).
 
 Rez: `tblPrijemnicaStavke` u kanon, `tblPrijemnica` gubi linijska polja, F4 se
-odmrzava. Isti oblik kao S1 (otkup) i S3 (otpremnica), ali sa **cetiri** nizvodna
-potrosaca umesto jednog.
+odmrzava, hladnjacin lanac se zavrsava do PRJ. Isti oblik kao S1 (otkup) i S3
+(otpremnica), ali sa **pet** nizvodnih potrosaca umesto jednog: faktura, palete,
+knjiga ambalaze, stampa i izvestaji, storno.
 
-#### Verdikt po osama -- svaka sa dokazom
+#### Verdikt po osama -- svaka sa dokazom (nad `6dc32710`)
 
 | Osa | Status | Dokaz |
 |---|---|---|
-| `DOMAIN` | **PROVEN** | `docs/DOMEN/README.md:13` lanac, `:26` "prijem robe na odredistu", `:66` "Prijemnica postaje kanonska tek u **S6**" |
-| `EVENTS` | **PROVEN** | tri razdvojena, v. nize |
-| `IDENTITY` | **PROVEN** | danas: logicka prijemnica = red**ovi** sa istim `GeneracijaID` (`ApplyGeneracijaID TBL_PRIJEMNICA`, `modDokumenta:6847`; `IdoviGeneracije`, `:8418`), fizicki red = **jedna klasa**; pisac vraca `"PRJ-I + PRJ-II"` |
-| `CARDINALITY` | **PROVEN** | 1 dokument : **1..2** klase (`hasKlasaII` je `Optional`, `modDokumenta:6548`); 1 zbirna : N prijemnica; 1 prijemnica : N paleta-stavki |
-| `INVARIANTS/OWNER` | **PROVEN** | `PoveziDeteNaZbirnu` je **jedini put** za vezu na zbirnu (`modConfig:1083`, ZBR-CHILD-01); storno vlasnik `modStorno:419`; broj `GenerateBrojPrijemnice` |
-| `WRITERS` | **PROVEN** | cetiri pisca, **jedan ziv ulaz** -- v. tabelu nize |
-| `DOWNSTREAM` | **PROVEN** | `tblFakturaStavke` (`PrijemnicaID`+`Klasa`), `tblPaletaStavka` (`PrijemnicaID`+`Klasa`), `modPrint` 2 mesta, `modDokUnos` 3 mesta |
-| `CAPABILITY` | **GAP** | F4 je **pauziran** (`modDokUnos:820`), a dva zapisa o tome su **zastarela** -- v. nize |
-| `ACCEPTANCE CONTRACT` | **PROVEN** | plan dokaza nize |
-| `PLATFORM` | **N/A** | nema novog Excel/COM ponasanja; nova tabela ide kroz postojeci `EnsureAllTables` |
-| `LANDING` | **PROVEN** | `main` cist na `4a1aea08`, nista u vazduhu; `tools/` PR sa tri staticka pravila ne dira `schema/` |
+| `DOMAIN` | **PROVEN** | `docs/DOMEN/README.md` lanac; `docs/DOMEN/DOCUMENT_HEADER_LINES.md` §4.4: grain stavke je "jedna klasa jednog prijema" |
+| `EVENTS` | **PROVEN** | **cetiri**, ne tri -- v. nize |
+| `IDENTITY` | **PROVEN**, dva imenovana rizika | danas: logicka prijemnica = redovi istog `GeneracijaID` (`ApplyGeneracijaID`, `modDokumenta:6949`), fizicki red = jedna klasa, pisac vraca `"PRJ-I + PRJ-II"` (`:6701`) |
+| `CARDINALITY` | **PROVEN** | 1 dokument : **1..2** klase (`hasKlasaII` je `Optional`, `:6594`; klasa I je opciona, `:6626`); 1 zbirna : N prijemnica; 1 stavka : N paleta-stavki; 1 stavka : 0..1 aktivna faktura-stavka (`DOCUMENT_HEADER_LINES` §3) |
+| `INVARIANTS/OWNER` | **PROVEN** | ZBR-CHILD-01 (`PoveziDeteNaZbirnu`, `:6947`); `AMB-INV-04/-07/-08/-10` (`modAmbalaza.PrenesiAmbalazu`, `:2938`); A9 (`modBrojevi.GenerateBrojPrijemnice`, `:213`); storno `modStorno.StornoPrijemnica` (`:446`) |
+| `WRITERS` | **PROVEN** | sest pisaca, **jedan ziv ulaz, zamrznut** -- v. tabelu nize |
+| `DOWNSTREAM` | **PROVEN**, prosireno AMB-10-om | v. tabelu nize |
+| `CAPABILITY` | **GAP** (izlazni uslov, ne blokira) | F4 je pauziran pre svih provera (`modDokUnos:827-828`) |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | nize, za korak 1 i za ceo rez |
+| `PLATFORM` | **N/A** | nova tabela ide kroz postojeci `EnsureAllTables`; nema novog Excel/COM ponasanja |
+| `LANDING` | **PROVEN** | grana `claude/s6-prijemnica` = `6dc32710` + docs; otvoreni PR-ovi (#410 docs, #42, #7) ne diraju kanon |
 
-`CAPABILITY GAP` ne blokira rez (nije na blokirajucoj listi) -- ali je **izlazni
-uslov**: rez koji ne odmrzne F4 nije zavrsen.
+`CAPABILITY GAP` ne blokira rez -- ali je **izlazni uslov**: rez koji ne odmrzne F4
+nije zavrsen.
 
-#### BUSINESS EVENTS -- tri, ne jedan
+#### BUSINESS EVENTS -- cetiri, ne tri
 
 | Dogadjaj | Datum / status | Tabela | Sta moze bez sledeceg |
 |---|---|---|---|
 | **fizicki** -- roba stize na odrediste | `Datum` | `tblPrijemnica` | prijemnica moze postojati bez fakture |
-| **poslovni** -- nastaje dokument prijema | `BrojPrijemnice`, `IzdatoStatus` | `tblPrijemnica` | dokument moze postojati bez paleta (paletizacija je best-effort u istoj TX) |
-| **finansijski** -- nastaje potrazivanje | `Fakturisano`, `FakturaID` | danas **zaglavlje**, istina u `tblFakturaStavke` | faktura moze pokriti **jednu klasu a ne drugu** |
+| **poslovni** -- nastaje dokument prijema | `BrojPrijemnice` (kupcev broj, `AMB-10-ODL-22`), `IzdatoStatus` | `tblPrijemnica` | dokument moze postojati bez paleta (paletizacija je best-effort u istoj TX) |
+| **ambalazni** -- pune gajbe vozac -> kupac, prazne kupac -> vozac | `Datum` dokumenta (knjiga je dnevna) | `tblAmbalaza`, `AMBALAZA_UZ_ROBU` + `POVRAT_PRAZNE` (`AMBALAZA.md` 6.12g) | jedna noga bez druge; manjak na povratu je **pitanje**, ne greska (6.12j, `outErrNum`) |
+| **finansijski** -- nastaje potrazivanje | faktura | `tblFakturaStavke` (danas kes `Fakturisano`/`FakturaID` na redu klase) | faktura moze pokriti **jednu klasu a ne drugu** |
 
-Zadnji red je mereno, ne pretpostavljeno: `CreateFaktura` prima **listu
-`PrijemnicaID`-jeva od pozivaoca** i sve ostalo izvodi iz reda
-(`modFaktura:188-190`, "Business module trusts only PrijemnicaID from caller").
-Posto je danas jedan `PrijemnicaID` = **jedna klasa**, delimicno fakturisanje je
-strukturno moguce -- dakle `Fakturisano` je cinjenica **linije**, ne dokumenta.
-**Posledica za rez:** ako bi posle cutover-a ostalo na zaglavlju, fakturisanje
-klase I obelezilo bi ceo dokument. To je regresija semantike i rez je ne sme uvesti.
+Ambalazni dogadjaj deli datum sa fizickim jer je to **isti fizicki cin** -- gajbe
+stizu sa robom i zamenjuju se pri prijemu (6.12g). To je poslovno pravilo, ne
+pogodnost implementacije.
 
-#### WRITERS -- cetiri pisca, jedan ziv ulaz
+`CreateFaktura` (`modFaktura:108`, upis `:360/:363`) prima listu
+`PrijemnicaID`-jeva od pozivaoca (`:190`, "Business module trusts only PrijemnicaID
+from caller"). Danas je jedan `PrijemnicaID` = jedna klasa, pa je delimicno
+fakturisanje strukturno moguce: `Fakturisano` je cinjenica **linije**, ne dokumenta.
+
+#### Sta je AMB-10 promenio -- nalazi ponovnog merenja
+
+1. **⚠ FALSE-GREEN RISK -- `AMB-INV-04` i dve klase pod jednim ID-jem.** Danas svaka
+   klasa knjizi svoju `UZ_ROBU` nogu pod **svojim** `PrijemnicaID`-jem (`:7000`,
+   `DokumentID = newID`). Identitet efekta je `(DokumentTIP, DokumentID,
+   VrstaKretanja, TipAmbalaze)`, a ponavljanje se meri **zbirom** (6.9). Kad obe
+   klase podele ID zaglavlja, dve noge sa istim tipom se sudaraju:
+   **isti broj gajbi (10 + 10) se tiho proguta kao ponavljanje -- knjiga dobije 10,
+   ne 20**, a razlicit broj daje `HARD CONFLICT`, pa dvoklasna prijemnica ne moze da
+   se snimi. **Pravilo za korak 2:** jedna `UZ_ROBU` noga po dokumentu = Σ
+   `KolAmbalaze` stavki, isto kao otpremnica (`modDokumenta:5013`, `ukupno`). Povrat
+   je vec jedan po dokumentu.
+2. **Povrat ide uz klasu koja postoji** (`:6642-6646`, od 07.10.2026), a ne "klasi I,
+   klasi II salje 0" kako je pisalo 27.09. (`:6597` vs `:6620` nad `4a1aea08`).
+   Obrazlozenje ispravke je time zastarelo, a zakljucak je jaci: `KolAmbVracena` je
+   cinjenica **dokumenta** i ostaje na zaglavlju, uz `TipAmbalaze`.
+3. **Knjiga razresava izvor prijemnice preko zaglavlja.** `modAmbalazaUgovor:581` i
+   `:751` mapiraju `DOK_TIP_PRIJEMNICA -> tblPrijemnica.PrijemnicaID`, a
+   `AmbRobniZaglavlje` odatle cita vlasnika broja (`ODL-22`). Posle reza `DokumentID`
+   pokazuje na dokument -- to je ciljni model (`DOCUMENT_HEADER_LINES` §4.6), ali je i
+   **promena znacenja** i ulazi sa testom.
+4. **Storno ambalaze je kontra-stav po `DokumentID`-u** (`modStorno:497`,
+   `StornirajAmbalazuDokumenta`), danas po redu klase. Posle reza: jedan poziv po
+   dokumentu.
+5. **Odluke o kljucu linije trebaju vec u koraku 2, ne u koraku 5.** Pisac sam
+   paletizuje (`:6712`, `:6720` -> kapija `modPaletniList:163`) i sam prevezuje
+   fakturu (`RelinkFakturaStavke`, `:7012`).
+6. **`KI-028`:** fixture drzi `VOZ-TEST-1` na -10 za `12/1`, pa svaki S6 test nad tim
+   vozacem i tipom pada na `AMB-INV-07`. Testovi od koraka 2 koriste svez tip
+   (obrazac `Test_RVP_DeficitSePotvrdjuje`).
+
+#### Zastareli zapisi -- ponovo izmereni
+
+1. `docs/DOMEN/README.md:63-64` (*"`ZbirnaID` im nije strani kljuc nigde u semi"*) --
+   **i dalje netacno**: `tblPrijemnica.ZbirnaRoditeljID` je u kanonu, a
+   `PoveziDeteNaZbirnu TBL_PRIJEMNICA` (`modDokumenta:6947`, i `:8536` pri
+   prevezivanju) ga puni kanonskim `ZbirnaID`-om, fail-closed. **Ispravljeno uz ovaj
+   zapis**, jer odluka 5 stoji na toj premisi.
+2. `modAutoHladnjaca.bas:67` (*"F3/F4 su pauzirani"*) -- i dalje stoji, a F3 pauzu
+   nema (`modDokUnos.ZbirnaValidiraj`, prva provera je vozac). Ispravlja se u
+   **koraku 7**, koji tu datoteku ionako prepisuje.
+3. `DOCUMENT_HEADER_LINES.md` §4.4 stavlja `Fakturisano`/`FakturaID` na stavku --
+   **oboreno odlukom 1 (b)**; ispravljeno uz ovaj zapis.
+4. "Korak 1/8" (STANJE) prema **7** koraka ove sekcije: spisak od 7 je izostavio
+   hladnjacin lanac (§14.20). Ponovo izmeren plan ima **8** koraka (nize).
+
+#### WRITERS -- sest pisaca, jedan ziv ulaz
 
 | Pisac | Sta pise | Stanje |
 |---|---|---|
-| `modDokumenta.SavePrijemnicaMulti_TX` | ceo dokument (1-2 klase) | jedini PROD ulaz, iz F4 -- **pauziran** |
-| `modDokumenta.SavePrijemnica_TX` | jedna klasa | **nema PROD pozivaoca** -- samo testovi (mereno grep-om nad `src-vba/`) |
-| `modFaktura.CreateFaktura` | `Fakturisano`, `FakturaID` | ziv |
-| `modStorno` / `modStornoFlow` | `Stornirano`, cisti faktura polja | ziv, radi nad **redom klase**, ne nad dokumentom (`modStorno:419,446`) |
+| `modDokumenta.SavePrijemnicaMulti_TX` (`:6582`) -> core `SavePrijemnica` (`:6901`) | ceo dokument (1-2 reda klase), noge knjige po redu klase, palete | jedini PROD ulaz, iz F4 (`modDokUnos:1248`) -- **pauziran** |
+| `modDokumenta.SavePrijemnica_TX` (`:6794`) | jedna klasa | **nema PROD pozivaoca** -- 18 poziva, svi u `modBusinessFlowProTests` |
+| `modDokumenta.RelinkFakturaStavke` (`:7623`, upis `:7697/:7700`) | `Fakturisano`/`FakturaID` nove prijemnice pri ispravci | ziv, iz core pisca (`:7012`) |
+| `modDokumenta.ReassignPrijemnicaToZbirna_TX` (`:8380`) | veza na zbirnu (`:8536`) | ziv |
+| `modFaktura.CreateFaktura` (`:108`, upis `:360/:363`) | `Fakturisano`/`FakturaID` | ziv |
+| `modStorno.StornoPrijemnica` (`:446`; `:480`, `:487`, `:497`), `StornoPrijemnicaByBroj_TX` (`:508`), `ReleasePrijemnicaFromFaktura` (`:1736`, upis `:1754`) | `Stornirano`, cisti faktura kes, kontra-stav knjige | ziv, radi nad **redom klase** |
 
-`modPaletniList.PaletizePrijemnica` nije pisac prijemnice, ali se vrti **unutar**
-obe transakcije pre commit-a i kljuca stavku po `PrijemnicaID`
-(`modPaletniList:19-21`) -- dakle menja mu se znacenje kljuca.
+`modPaletniList.PaletizePrijemnica` (`:134`) nije pisac prijemnice, ali se vrti
+**unutar** obe transakcije pre commit-a i kapija mu je po `PrijemnicaID` (`:163` ->
+`:181`).
 
-To je **bitno laksi teren nego S1 ili S3**: ziva ulazna tacka starog pisca je
-jedna, i jos je zamrznuta.
+#### DOWNSTREAM -- ko zavisi od cinjenice koju pisac upisuje
 
-#### Dva zastarela zapisa (nadjena merenjem, ne citanjem)
-
-1. **`docs/DOMEN/README.md:63`**: *"zbirnu vezuju prijemnice -- kolonom `BrojZbirne`,
-   jer `ZbirnaID` im nije strani kljuc nigde u semi"*. **Netacno od S4-3c.**
-   `PoveziDeteNaZbirnu TBL_PRIJEMNICA` (`modDokumenta:6845`) upisuje
-   `ZbirnaRoditeljID` i vrednost je `ZbirnaIDZaBroj(brojZbirne)` =
-   `id.selectedZbirnaID` (`:6153-6160`), dakle **kanonski `ZbirnaID`**, fail-closed
-   (prazno kad broj nije jednoznacan). Na toj netacnoj premisi stoji obrazlozenje
-   da ispravka zbirne ceka S6 -- premisa se ispravlja, odluka ostaje operaterova.
-2. **`modAutoHladnjaca.bas:67`**: *"F3/F4 su pauzirani"*. **F3 vise nije** --
-   `ZbirnaValidiraj` (`modDokUnos:491`) nema pauzu, S4 ju je uklonio. `UI_MIGRACIJA_KATALOG`
-   redovi 211/259 kazu za F4 "upis IMA (v6-ui-116)" -- to opisuje **prenos
-   sposobnosti u ljusku**, ne da je danas dostupna. Oba zapisa se ispravljaju u rezu.
+| Potrosac | Danas | Posle reza (odluke 1-3) |
+|---|---|---|
+| `tblFakturaStavke` | `PrijemnicaID` = red klase | `PrijemnicaStavkaID`, nova kolona **na kraju** (korak 5); `PrijemnicaID` = dokument, labela |
+| `tblPaletaStavka` | `PrijemnicaID` = red klase, kapija `modPaletniList:163` | `PrijemnicaStavkaID`, nova kolona **na kraju** (korak 2); `PrijemnicaID` = dokument |
+| `tblAmbalaza` | `DokumentID` = red klase, `UZ_ROBU` po klasi | `DokumentID` = dokument; jedna `UZ_ROBU` = Σ stavki, jedan `POVRAT_PRAZNE` |
+| citaoci `Fakturisano`/`FakturaID` | `modDokumenta:7128, :8113`; `modFaktura:919, :1060`; `modScrDokumenti:2653, :3079`; `modScrIzvestaji:2304`; `modStornoFlow:833`; `modStornoImpact:300`; `modProductionHealthCheck:322` | izvedeno iz aktivnog reda `tblFakturaStavke` (odluka 1 b) |
+| `split_plus` | **5 PROD**: `modDokUnos:1228, :1300, :1316`; `modPrint:1190, :1463` (+1 TEST, `modGoldenTests:960`) | **0** (korak 3) |
+| citaoci `GeneracijaID` | `modDokUnos.PreveziPaleteIspravke` (`GeneracijaPoID`), `StornoPrijemnicaByBroj_TX(generacijaID)` | ID dokumenta; kolona se brise u koraku 8 |
+| stampa, izvestaji, prefill | `modPrint` (prijemnica `:1458`, grupni otkupni list `:1185`), `modIzvestaj:4006`, `modScrIzvestaji:2301`, `modStornoDok:1023, :1076` | zaglavlje + stavke (korak 3) |
 
 #### IDENTITY contract posle reza
 
@@ -7774,106 +7827,124 @@ jedna, i jos je zamrznuta.
 |---|---|---|
 | dokument | skup redova sa istim `GeneracijaID` | **`PrijemnicaID`** (jedan red) |
 | linija | `PrijemnicaID` (red klase) | **`PrijemnicaStavkaID`** |
-| veza na zbirnu | `ZbirnaRoditeljID` (vec hranjen) + `BrojZbirne` (labela) | isto, nepromenjeno |
-| `GeneracijaID` | grupise klase | **brise se** -- isti potez kao kod zbirne u S4 |
+| veza na zbirnu | `ZbirnaRoditeljID` (vec hranjen) + `BrojZbirne` (labela) | `ZbirnaRoditeljID`; `BrojZbirne` ostaje labela |
+| izvor u knjizi ambalaze | `DokumentID` = red klase | `DokumentID` = dokument |
+| `GeneracijaID` | grupise klase | **brise se** (korak 8) -- isti potez kao kod zbirne u S4 |
 
-⚠ **IDENTITY RISK, imenovan:** `tblFakturaStavke.PrijemnicaID` i
-`tblPaletaStavka.PrijemnicaID` danas pokazuju na **red klase**. Posle reza isti
-naziv pokazuje na **dokument**. Oba reda nose i `Klasa`, pa razresenje ostaje
-moguce -- ali to je **tiha promena znacenja** i mora da udje u rez svesno, sa
-testom, a ne da se otkrije u S7.
+⚠ **IDENTITY RISK 1** (imenovan 27.09, razresen odlukama 2 i 3): `PrijemnicaID` u
+`tblFakturaStavke` i `tblPaletaStavka` danas znaci red klase, a posle reza dokument.
+Tacna linija putuje kao `PrijemnicaStavkaID`.
 
-#### Predlog kanona (za potvrdu, ne kao gotova stvar)
+⚠ **IDENTITY RISK 2** (nov, AMB-10): `tblAmbalaza.DokumentID` prijemnice menja
+znacenje na isti nacin, a `AMB-INV-04` ga cini nosecim (nalaz 1).
 
-`tblPrijemnicaStavke`, po obrascu `tblOtpremnicaStavke`:
+⚠ **display -> lookup**: veza na zbirnu se razresava iz BROJA
+(`ZbirnaIDZaBroj(brojZbirne)`, `:6948`), fail-closed. F4 bira zbirnu po broju, i S6
+to ne menja -- imenovano, van obima.
+
+#### Odluke operatera (20.10.2026, stavka 170)
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | `Fakturisano` / `FakturaID` | **(b)** brisu se sa zaglavlja i izvode iz aktivnog reda `tblFakturaStavke` za tu stavku -- presedan S1d. Prvi put odluceno 27.09. (taj zapis nije stigao na `main`), potvrdjeno 20.10. `DOCUMENT_HEADER_LINES` §4.4 ispravljen |
+| 2 | kljuc paletizacije | **`PrijemnicaStavkaID`** na `tblPaletaStavka`, kolona na kraju (korak 2) |
+| 3 | znacenje `PrijemnicaID` u faktura- i paleta-stavci | **ID dokumenta** (labela za citaoce); kanonska linija je `PrijemnicaStavkaID` -- `DOCUMENT_HEADER_LINES` §4.5, §4.6 i §16 "Faktura stavka zna tacnu `PrijemnicaStavkaID`" |
+| 4 | hladnjacin lanac | **B, nastavljiv**: svaki korak je idempotentan po kanonskom roditelju (OTP po otkupu, ZBR po clanstvu, PRJ po `ZbirnaRoditeljID`). Ishod "OTP i ZBR uspeli, PRJ pao" ostavlja blok **vidljiv**, a "Ponovi auto-lanac" nastavlja od PRJ. Malina batch se zatvara istim jezgrom (§15). **`AUTO_PRIJEMNICA_HLADNJACA` se brise** -- stanica je jedini autoritet |
+| 5 | ispravka zbirne | **van S6**: F8 ostaje `DUPLI` / `PONISTENJE`; `IspravkaZbirne_TX` je svoj rez posle S6 i KI-025/026 |
+| 6 | redosled i prvi PR | **8 koraka** (nize); PR = samo korak 1; svaki sledeci korak u svojoj sesiji |
+
+#### Kanon za korak 1
+
+`tblPrijemnicaStavke` dobija oblik **`tblOtkupStavke`**: 12 kolona, isti raspored, i
+`Cena`, a ne `PredlogCena` kao `tblOtpremnicaStavke`. Prijemnica nosi stvarnu cenu
+prijema, i `CreateFaktura` je cita iz reda.
 
 ```
 PrijemnicaStavkaID | PrijemnicaID | RedniBroj | Klasa | Kolicina | Cena |
 KolAmbalaze | BrutoKg | CreatedAt | CreatedBy | ModifiedAt | ModifiedBy
 ```
 
-> **ISPRAVKA OVOG PREDLOGA, pre koda (korak 1).** Predlog je `KolAmbVracena`
-> stavljao na **stavku**. Citanje pisca to je oborilo: `SavePrijemnicaMulti_TX`
-> prosledjuje vracenu ambalazu **klasi I**, a klasi II salje **`0`**
-> (`modDokumenta:6597` vs `:6620`). Dakle to nije cinjenica linije nego cinjenica
-> **dokumenta parkirana na red klase I** -- i ostaje na zaglavlju. Isto vazi za
-> `TipAmbalaze` (jedan `tipAmb` za obe klase). Tabela je time tacno 12 kolona,
-> kao `tblOtpremnicaStavke`.
+Namerno **NEMA**:
+- `KolAmbVracena` i `TipAmbalaze` -- cinjenice dokumenta, ostaju na zaglavlju
+  (nalaz 2);
+- `Fakturisano` / `FakturaID` -- odluka 1 (b);
+- `Stornirano` -- storno linije ne postoji u domenu, pa tabela ide u `BEZ_STORNA`;
+- `GeneracijaID` i `BrojZbirne`.
 
-`tblPrijemnica` 28 -> gubi `Kolicina`, `Cena`, `KolAmbalaze`, `Klasa`, `BrutoKg`,
-`GeneracijaID` (+ `Fakturisano`, `FakturaID` po odluci **(b)**). `TipAmbalaze` i
-`KolAmbVracena` **ostaju na zaglavlju** -- isti razlog kao `TIP_AMB` kod
-otpremnice (`popis_citalaca.py:102`).
+`tblPrijemnica` u koraku 1 ostaje **netaknut** (28 kolona). Linijska polja odlaze u
+koraku 8, kao u S1d i S3-ostatku: kolona obrisana iz sredine pomera sve iza sebe, a
+`AppendRow` pise poziciono.
 
-#### Jedna odluka koja menja velicinu reza
+#### Redosled koraka (8)
 
-`Fakturisano` / `FakturaID` su kes izvedenog statusa. Dve opcije:
-
-| | Sta znaci | Cena |
-|---|---|---|
-| **(a)** preseliti ih na stavku | mehanicki, cuva danasnju semantiku | mali rez |
-| **(b) preporuka** -- obrisati ih, izvoditi iz `tblFakturaStavke` | presedan **S1d**: `Isplaceno`/`DatumIsplate` su obrisani jer "istina o isplatama zivi u `tblNovac`" | dira `modFaktura` i `modStorno` (koji ih danas cisti) |
-
-Preporuka je **(b)**, jer je cilj idealan VBA model, a kes koji se rucno cisti u
-stornu je tacno ono sto je S1d uklonio. Odluka je operaterova.
+1. **kanon**: `tblPrijemnicaStavke` + regenerisan `modSchema` + `WRITE_OWNERSHIP` +
+   `BEZ_STORNA` + test 257 + sabotaza -- **prvi PR**;
+2. **pisac**: `SavePrijemnicaMulti_TX` pravi zaglavlje + stavke i vraca **jedan** ID;
+   jedna `UZ_ROBU` noga = Σ stavki i jedan povrat (nalaz 1); paletizacija po
+   `PrijemnicaStavkaID`; `RelinkFakturaStavke` po stavci;
+3. **citaoci**: `split_plus` 5 -> 0; stampa, izvestaji, izvoz; grupni otkupni list
+   (nalog i stanje oko svog reda, `AMBALAZA.md` 6.13g, i `GetAmbalazeStanje` iz "Duga
+   sa imenom");
+4. **storno** na nivou dokumenta (`StornoPrijemnica`, `ByBroj`, kaskada zbirne,
+   `modStornoFlow`, `modStornoImpact`) + vraceni testovi kaskade (§14.14);
+5. **faktura** po `PrijemnicaStavkaID` (`tblFakturaStavke`, kolona na kraju);
+   `Fakturisano` izveden;
+6. **F4 odmrznut** + vraceni testovi iz §14.14 (redosled provera F4, bruto -> neto,
+   vezivanje samo na jednoznacnu zbirnu);
+7. **hladnjacin lanac B** (`CreateAutoZbirnaIzOtpremnice_TX`,
+   `CreateAutoPrijemnicaIzZbirne_TX`), jednakost po klasi na cetiri nivoa, granica
+   malina batch-a, brisanje `AUTO_PRIJEMNICA_HLADNJACA`, komentar `modAutoHladnjaca:67`;
+8. **zavrsni**: brisanje linijskih polja `tblPrijemnica` (i `Fakturisano`,
+   `FakturaID`, `GeneracijaID`, `BrojZbirne` kao veze); `SavePrijemnica_TX` (testovi
+   prelaze na Multi); golden lanac do fakture.
 
 #### ACCEPTANCE CONTRACT -- plan dokaza, ne dokaz
 
-**Sta ce vaziti kad se zavrsi:**
-- jedna prijemnica sa dve klase je **jedan** red u `tblPrijemnica` i **dva** u `tblPrijemnicaStavke`;
-- `split_plus` = **0** -- nijedno mesto ne razresava dokument iz `" + "` niza;
-- `GeneracijaID` na prijemnici ne postoji ni u kanonu ni u kodu;
-- storno prima **`PrijemnicaID` dokumenta** i obara ceo dokument, ne jednu klasu;
-- F4 je **odmrznut** i upisuje po novom modelu.
+**Korak 1:**
+- **vazi:** `tblPrijemnicaStavke` je u kanonu sa tacno 12 kolona gornjim redom; sveska
+  je dobija kroz `EnsureAllTables` (`VerifySchema` prazno, otisak sveske = kanon);
+  registar storna je zna kao `BEZ_STORNA`; `WRITE_OWNERSHIP` daje red `modDokumenta`, a
+  semu `modSchema`;
+- **netaknuto:** `tblPrijemnica` (28 kolona, isti raspored); nijedan pisac ni citalac
+  se ne menja -- korak 1 ne pise nijedan red;
+- **edge:** stavka NE nosi cinjenice dokumenta, a zaglavlje ih i dalje nosi
+  (kontra-tvrdnja);
+- **negativno:** tabela van registra storna pada (`StornoRegistarZna`); vec meri
+  `T_StornoFilter_NedostajucaKolonaNijeTisina` (3), a nova tvrdnja meri da je bas ova
+  tabela klasifikovana;
+- **cime:** test 257 u `modTest` + sabotaza; `gen_schema_module --check`,
+  `who_writes --check` i `--check-ownership`, `vba_check` (`SEMA_REGISTAR`,
+  `STORNO_REGISTAR`).
 
-**Sta mora ostati netaknuto:** paletizacija u istoj transakciji pre commit-a;
-`ZbirnaRoditeljID` veza i njen fail-closed karakter; brojevi (`GenerateBrojPrijemnice`,
-A9 -- storno ne oslobadja broj).
+**Ceo S6:**
+- **vazi:** jedna prijemnica sa dve klase je **jedan** red u `tblPrijemnica` i **dva** u
+  `tblPrijemnicaStavke`; `split_plus` = 0; `GeneracijaID` na prijemnici ne postoji ni
+  u kanonu ni u kodu; storno prima ID dokumenta i obara ceo dokument; F4 upisuje po
+  novom modelu;
+- **knjiga:** 10 + 10 gajbi daje **jednu** `UZ_ROBU` nogu od 20. Test mora imati
+  **jednak** broj gajbi u obe klase, jer je bas to slucaj iz nalaza 1;
+- **netaknuto:** paletizacija u istoj transakciji pre commit-a; `ZbirnaRoditeljID` i
+  njen fail-closed karakter; A9 (storno ne oslobadja broj); protokol potvrde manjka na
+  povratu (6.12j, `outErrNum`, seam `PotvrdiManjakAmbalaze`);
+- **edge:** jedna klasa (samo I ili samo II, povrat uz onu koja postoji) -- manifest
+  razlikuje "stavka fali" od "dokument ima jednu stavku";
+- **negativno:** zaglavlje bez ijedne stavke (siroce, v. `rollback-vraca-ceo-dokument`);
+  faktura nad storniranom stavkom; druga faktura nad istom stavkom;
+- **cime:** `RunBusinessFlowProSuite` kroz pisca, `modTest` kroz `Scr_Save`,
+  `RunPaleteTestSuite` kao ograda, `popis_citalaca --check` sa pragom `split_plus` = 0,
+  i nove sabotaze nad manifestom stavki, Σ nogom knjige, storno nivoom i kljucem linije.
 
-**Edge case koji mora proci:** prijemnica sa **jednom** klasom (manifest razlikuje
-"stavka fali" od "dokument ima jednu stavku" -- isti obrazac kao `StavkeCount` u S5-5b).
-
-**Negativan slucaj koji mora biti odbijen:** upis prijemnice **bez ijedne stavke**
-(zaglavlje bez linija je sirote, v. `rollback-vraca-ceo-dokument`), i faktura nad
-storniranom stavkom.
-
-**Cime se dokazuje:** `RunBusinessFlowProSuite` (prijemnica + palete + faktura
-lanac), `RunPaleteTestSuite` 97/97 kao regresiona ograda, `popis_citalaca --check`
-sa pragom `split_plus` = 0, i **nove sabotaze** nad: manifestom stavki, storno
-nivoom (dokument vs klasa) i znacenjem `PrijemnicaID` u `tblFakturaStavke`.
-
-#### Nalaz koji korak 1 izbacuje za korak 2: paletizacija ima kapiju po `PrijemnicaID`
+#### Nalaz iz 27.09 za korak 2: paletizacija ima kapiju po `PrijemnicaID`
 
 `PaletizePrijemnica` se zove **dvaput**, jednom po klasi, i svaki put dobija
-`PrijemnicaID` **te klase** (`modDokumenta:6644` i `:6652`). Unutra stoji
-`EnsurePrijemnicaNotAlreadyPaletized prijemnicaID` (`modPaletniList:162`).
+`PrijemnicaID` **te klase** (`modDokumenta:6712` i `:6720`). Unutra stoji
+`EnsurePrijemnicaNotAlreadyPaletized prijemnicaID` (`modPaletniList:163` -> `:181`).
 
 Danas prolazi zato sto dve klase imaju **razlicite** ID-jeve. Cim obe podele ID
-**zaglavlja**, druga klasa udara u tu kapiju i paletizacija joj se odbija --
-a to je tiho gubljenje paleta klase II, ne pad. Kapija radi tacno ono za sta je
-pisana; menja se **znacenje kljuca** ispod nje.
-
-Dve mogucnosti, i razlikuju se po velicini:
-
-| | Kljuc | Cena |
-|---|---|---|
-| **(1)** | `PrijemnicaID` + `Klasa` -- `tblPaletaStavka` obe kolone **vec nosi** | mala izmena u kapiji |
-| **(2)** | `PrijemnicaStavkaID` -- nova kolona na `tblPaletaStavka` | tacniji model; dira i `ReassignPaleteToPrijemnica_TX` (re-point pri ispravci) i `modStornoFlow` |
-
-**(2)** je ideal ("paletna linija zna tacnu liniju dokumenta", isto kao sto
-`Definicija gotovog` trazi za fakturu), **(1)** je dovoljan dok je po klasi tacno
-jedna stavka -- sto danas jeste, jer je `hasKlasaII` bulov. Odluka ide uz korak 5,
-gde se ionako odlucuje sta `PrijemnicaID` znaci za fakturu i palete.
-
-#### Redosled koraka
-
-1. ~~kanon: `tblPrijemnicaStavke` + `modSchema` regeneracija~~ **URADJENO** (`f4de3b1c`): 47 tabela, 650 kolona, otisak `8C488AA1` -> `8FAE2F03`; `BEZ_STORNA` i `WRITE_OWNERSHIP` dopunjeni;
-2. pisac: `SavePrijemnicaMulti_TX` pravi zaglavlje + stavke, vraca **jedan** ID;
-3. citaoci: `modPrint` (2), `modDokUnos` (3) -- `split_plus` na nulu;
-4. storno na nivou dokumenta;
-5. faktura i palete: znacenje `PrijemnicaID`, po odluci (a)/(b);
-6. F4 odmrznut + dva zastarela zapisa ispravljena;
-7. `SavePrijemnica_TX` (bez PROD pozivaoca) -- brisanje ili prelazak testova na Multi.
+**zaglavlja**, druga klasa udara u tu kapiju i paletizacija joj se odbija -- tiho
+gubljenje paleta klase II, ne pad. Kapija radi tacno ono za sta je pisana; menja se
+**znacenje kljuca** ispod nje. **Odluka 2:** kljuc je `PrijemnicaStavkaID`, i kapija
+prelazi na stavku u koraku 2.
 
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 

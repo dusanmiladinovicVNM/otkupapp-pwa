@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ merge-ovano `#416` (ručna provera ✅ 13.10.2026, stavka 126) · `10e-2` stari storno, undo i ispravka reversa ✅ merge-ovano `#417` (stavke 127–128) · `10e-3` pisac, dvomodelni čitalac, šema i fixture ✅ merge-ovano `#418` (stavke 129–130); `KI-011` ✅ `#419`; `KI-012`/`KI-013` ✅ `#420` · **čitaoci salda na papiru ⏳** (stavka 135); `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏸ **parkiran na koraku 1/8** (grana `claude/s6-prijemnica-stavke`) -- nastavlja se posle AMB-10 |
+| **S6 prijemnica** | ⏳ **u toku** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1/8 (kanon) na grani `claude/s6-prijemnica` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -6021,6 +6021,54 @@
      - **Sledeći je S6** (prijemnica), na grani `claude/s6-prijemnica` sa `6dc32710`.
        - Pre prvog skupog prolaza: na C: obezbediti nekoliko GB (review `#434`, tačka 5).
        - Fixture regenerisati ako `run_vba` prijavi potpis.
+
+170. **S6 — pre-flight ponovo izmeren nad `main`-om, odluke 1–6, PRE koda** (20.10.2026). Grana
+     `claude/s6-prijemnica`, prvi commit `4d1d0d96` (stavka 169). Plan: §14.55, zamenjen u mestu.
+
+     - **Grana — odluka operatera B.** Nastavlja se `claude/s6-prijemnica`, bez prepisivanja grana i bez
+       force-push-a. Tri stara S6 commita (baza `4a1aea08`, 339 iza `main`-a):
+       - `583308e2` → `0de43b62`, cherry-pick; jedini konflikt je rešen tako da §14.55 stoji pre §14.56;
+       - `37f8b78a` → `3fd418e0`, **bez dela za ovaj fajl**, jer je broj 51 na `main`-u zapis AMB-10
+         (28.09.2026), koji je S6 i parkirao;
+       - `f4de3b1c` (korak 1) se pravi **iznova** nad današnjim kanonom. Otisak je danas `24456ABF`
+         (47 tabela, 652 kolone), a ne `8C488AA1`, pa stari diff ne staje bez regeneracije.
+       - Lokalne grane `claude/s6-preflight` i `claude/s6-prijemnica-stavke` ostaju netaknute.
+     - **Zapis koji nikad nije stigao na `main`** (stara stavka 51 sa `37f8b78a`, 27.09.2026). Prenosi se
+       ovde, uz napomenu da su njeni brojevi mereni nad `4a1aea08` i za `main` ne važe:
+       - odluka **(b)** za `Fakturisano`/`FakturaID`;
+       - korak 1 (`f4de3b1c`, BFP 2077/2077);
+       - dve ispravke plana (`KolAmbVracena` ostaje na zaglavlju; kapija paletizacije po `PrijemnicaID`).
+     - **Verdikt nad `6dc32710`:** blokirajućeg GAP-a nema. `CAPABILITY` je GAP (F4, `modDokUnos:827`), ali
+       je izlazni uslov reza. Šest nalaza AMB-10 stoji u §14.55, a tri menjaju plan:
+       - **⚠ FALSE-GREEN rizik:** kad dve klase dele `PrijemnicaID`, dve `UZ_ROBU` noge istog tipa se
+         sudaraju na `AMB-INV-04`. **10 + 10 gajbi se tiho proguta kao ponavljanje** (knjiga 10, ne 20),
+         a različit broj daje `HARD CONFLICT`. Korak 2 zato knjiži **jednu** nogu = Σ stavki, kao
+         otpremnica (`modDokumenta:5013`), a test mora imati jednak broj gajbi u obe klase;
+       - odluke o ključu linije trebaju već u **koraku 2**, ne u 5: pisac sam paletizuje
+         (`modPaletniList:163`) i sam prevezuje fakturu (`modDokumenta:7012`);
+       - plan ima **8** koraka, ne 7: spisak od 7 je izostavio hladnjačin lanac (§14.20). „1/8“ iz ovog
+         fajla je bio tačan broj.
+     - **Zastareli zapisi:**
+       - `docs/DOMEN/README.md:63-64` („`ZbirnaID` im nije strani ključ nigde u šemi“) **ispravljen** --
+         `ZbirnaRoditeljID` je kanonska veza od S4-3c;
+       - `DOCUMENT_HEADER_LINES.md` §4.4–§4.5 **ispravljen** po odluci 1 (b);
+       - komentar `modAutoHladnjaca:67` („F3/F4 su pauzirani“) ide u korak 7, koji tu datoteku prepisuje.
+     - **Odluke operatera (20.10.2026), sve po preporuci:**
+
+       | # | Pitanje | Odluka |
+       |---|---|---|
+       | 1 | `Fakturisano`/`FakturaID` | **(b)** brišu se i izvode iz aktivnog reda `tblFakturaStavke` (potvrda odluke od 27.09.) |
+       | 2 | ključ paletizacije | **`PrijemnicaStavkaID`** na `tblPaletaStavka`, kolona na kraju (korak 2) |
+       | 3 | `PrijemnicaID` u faktura- i paleta-stavci | **ID dokumenta** (labela); kanonska linija je `PrijemnicaStavkaID` (faktura: korak 5) |
+       | 4 | hladnjačin lanac | **B, nastavljiv**, idempotentan po kanonskom roditelju; „Ponovi auto-lanac“ nastavlja od mesta pada; **`AUTO_PRIJEMNICA_HLADNJACA` se briše** |
+       | 5 | ispravka zbirne | **van S6**: F8 ostaje `DUPLI`/`PONIŠTENJE`; `IspravkaZbirne_TX` je svoj rez posle S6 i KI-025/026 |
+       | 6 | redosled | **8 koraka** (§14.55); prvi PR = samo korak 1; svaki sledeći korak u svojoj sesiji |
+
+     - **Sledeće:** korak 1 na ovoj grani:
+       - kanon `tblPrijemnicaStavke` (oblik `tblOtkupStavke`, 12 kolona), regenerisan `modSchema`,
+         `WRITE_OWNERSHIP`, `BEZ_STORNA`;
+       - test 257 i sabotaža;
+       - PR na review. `run_vba` FULL i `dokaz.py` čekaju reviewer GO.
 
 ## Dug sa imenom (posle S5-5b)
 

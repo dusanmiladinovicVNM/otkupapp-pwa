@@ -60,16 +60,26 @@ A13 već drži za otpremnicu (S3c).
 > `CompleteZbirnaIspravka`, relink po broju, `Test_ZbirnaRecalcInPlace_Auto`).
 >
 > **Ali zamena još ne postoji, i to je namerno.** Jedan potez za zbirnu traži da
-> se sa starog dokumenta prenesu i **deca**, a zbirnu vezuju **prijemnice** —
-> kolonom `BrojZbirne`, jer `ZbirnaID` im nije strani ključ nigde u šemi. Nova
-> zbirna dobija **nov broj** (storno ne oslobađa broj, A9), pa bi svaka
-> prijemnica ostala siroče. Prijemnica postaje kanonska tek u **S6**.
+> se sa starog dokumenta prenesu i **deca**, a zbirnu vezuju **prijemnice**. Nova
+> zbirna dobija **nov broj** (storno ne oslobađa broj, A9), pa svaka prijemnica
+> mora da se preveže na novi dokument, inače ostaje siroče. Prijemnica postaje
+> jedan dokument (header + stavke) tek u **S6**.
+>
+> *Ispravljeno 20.10.2026 (pre-flight S6, plan §14.55):* ovde je stajalo da
+> prijemnice zbirnu vezuju „kolonom `BrojZbirne`, jer `ZbirnaID` im nije strani
+> ključ nigde u šemi“. To je netačno od S4-3c: `tblPrijemnica.ZbirnaRoditeljID` je
+> u kanonu, a `PoveziDeteNaZbirnu` ga puni kanonskim `ZbirnaID`-om, fail-closed
+> (prazno kad broj nije jednoznačan). `BrojZbirne` je labela.
 >
 > **Odluka operatera (22.09.2026): ispravka zbirne se ODLAŽE do S6**, umesto da
 > se sada piše relink po broju koji S6 odmah briše. Do tada F8 nad zbirnom nudi
 > `DUPLI` (razveži otpremnice, one prežive) i `PONIŠTENJE` (obori lanac) — obe
-> imenovane radnje, nijedna polovična. `IspravkaZbirne_TX` se gradi u S6, po
-> ogledalu `IspravkaOtpremnice_TX`.
+> imenovane radnje, nijedna polovična.
+>
+> **Odluka operatera (20.10.2026, odluka 5 u §14.55): ispravka zbirne NIJE deo
+> S6.** F8 i posle S6 nudi `DUPLI` i `PONIŠTENJE`. `IspravkaZbirne_TX`, po ogledalu
+> `IspravkaOtpremnice_TX`, je svoj rez **posle** S6 i KI-025/026 — tada je
+> prijemnica jedan dokument sa kanonskom vezom, pa je prevezivanje dece mali posao.
 
 **ZBR-KANON-04 — izvedena činjenica živi tačno koliko i njen izvor (odluka
 operatera, 22.09.2026).** `VrstaVoca`, `SortaVoca` i `TipAmbalaze` na nacrtu

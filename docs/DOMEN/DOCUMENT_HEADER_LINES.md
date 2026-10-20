@@ -800,23 +800,33 @@ trace ×4, audit ×4.
 
 **`tblPrijemnicaStavke`** — grain: **jedna klasa jednog prijema**
 `PrijemnicaStavkaID` (PK `PRS-`), `PrijemnicaID` →, `RedniBroj`, `Klasa`,
-`Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg`, **`Fakturisano`**, **`FakturaID`**.
+`Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg`, audit ×4 — isti oblik kao
+`tblOtkupStavke`. Kanon: `schema/schema.json` (S6, korak 1).
 
-> `Fakturisano`/`FakturaID` su **line-level**, i to je jedini izuzetak od pravila
-> „polje iz potpisa". Razlog je ponašanje: `GetPrijemniceByKupac(samoNefakturisano)`
-> (`modDokumenta.bas:2288`) filtrira po redu, dakle po klasi — korisnik danas
-> fakturiše Klasu I bez Klase II. Na headeru bi se delimična fakturisanost tiho
-> izgubila.
+> **Ispravljeno 20.10.2026 (S6, plan §14.55, odluka 1 (b)).** Ovde je stajalo da
+> `Fakturisano`/`FakturaID` prelaze na stavku kao jedini izuzetak od pravila „polje
+> iz potpisa“. Ostaje tačno da je fakturisanost činjenica **linije**:
+> `GetPrijemniceByKupac(samoNefakturisano)` filtrira po redu, dakle po klasi, i
+> korisnik danas fakturiše Klasu I bez Klase II, pa bi se na headeru delimična
+> fakturisanost tiho izgubila.
+>
+> Odluka je ipak da se **ne keširaju ni na stavci**. Brišu se, a status se izvodi
+> iz aktivnog reda `tblFakturaStavke` sa tom `PrijemnicaStavkaID` (§4.5). Presedan
+> je S1d: `Isplaceno`/`DatumIsplate` su obrisani jer istina o isplatama živi u
+> `tblNovac`. Keš koji storno ručno čisti je drugi izvor iste istine.
 
-**Vlasnik upisa:** `modDokumenta` + `modFaktura` (samo `Fakturisano`/`FakturaID`,
-kroz imenovani API). Danas 4 pisca.
+**Vlasnik upisa:** `modDokumenta`. `modFaktura` i `modStorno` gube upis u
+prijemnicu kad se kolone obrišu (S6, korak 8; danas pišu `Fakturisano`/`FakturaID`
+na redu klase).
 
 ---
 
 ### 4.5 `tblFakturaStavke` — jedina izmena
 
 Dodaje se `PrijemnicaStavkaID` → kao **kanonski** izvor. `PrijemnicaID` ostaje
-denormalizovan (read-modeli, poruke, SEF mapiranje).
+denormalizovan (read-modeli, poruke, SEF mapiranje) i posle S6 znači **dokument**,
+ne red klase (odluka 3, plan §14.55). Kolona ide **na kraj**, u S6 koraku 5;
+na `tblPaletaStavka` (§4.6) u koraku 2.
 
 Količina/cena/klasa ostaju snapshot na stavci — faktura mora biti istorijski
 stabilan dokument.
