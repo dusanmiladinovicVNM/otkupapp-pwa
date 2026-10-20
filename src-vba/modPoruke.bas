@@ -1193,6 +1193,13 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "STEF_NEPROM_MN", "ostaju nepromenjene"
     UpsertRow lo, existing, "STEF_PAL_ODVEZ", "odvezuju se sa palete"
     UpsertRow lo, existing, "STEF_FAK_OSLOB", "osloba" & ChrW(273) & "a se; stavke ostaju osirotele"
+    ' S6 korak 4 (odluke 1 i 3): fakturisana prijemnica i roba na preradjenoj paleti
+    ' se NE storniraju -- uvid to kaze umesto da obeca oslobadjanje ili skidanje.
+    UpsertRow lo, existing, "STEF_FAK_ODBIJA", "storno se ODBIJA " & ChrW(8212) & " prvo stornirajte fakturu"
+    UpsertRow lo, existing, "STEF_PAL_PRER_DUP", "storno se ODBIJA " & ChrW(8212) & " roba je na prera" & ChrW(273) & _
+              "enoj paleti (prolazi samo uz 'Ne diraj palete')"
+    UpsertRow lo, existing, "STEF_PAL_PRER_PON", "storno se ODBIJA " & ChrW(8212) & " roba je na prera" & ChrW(273) & _
+              "enoj paleti; prvo stornirajte preradu"
     UpsertRow lo, existing, "STEF_BLOK_SAM", "evidentiraju se zasebno; storniraju se samo po izboru iz liste"
     ' Red o blokovima je JEDINI u tabeli posledica koji trazi odluku operatera, a
     ' odluka se donosi na drugom mestu (lista Blokovi). Zato taj red ne stoji kao

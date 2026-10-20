@@ -402,7 +402,11 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
                 End If
                 Exit Function
             End If
-            ok = StornoPrijemnica_TX(Trim$(docID))
+            ' Razlog odbijanja ide operateru (review #438), ne samo "nije uspeo".
+            Dim razlogPrj As String
+            ok = StornoPrijemnica_TX(Trim$(docID), , , razlogPrj)
+            If Not ok And Len(razlogPrj) > 0 Then _
+                poruka = modPoruke.Poruka("STORNO_ERR_NEUSPEH") & " " & broj & ": " & razlogPrj
 
         Case STIP_FAKTURA
             ' Identitet fakture JE njen PK -- kad ga ekran posalje, ne trazi se

@@ -500,9 +500,10 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 "Ispravka prijemnice: storno stare, ceka snimanje nove (palete se prevezu).")
             If Len(cid) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
             ' Palete se NE skidaju: cekaju novu prijemnicu (ReassignPaleteToPrijemnica_TX).
-            If Not StornoPrijemnica_TX(prijID, False) Then
-                FailCorrectionContext cid, "Storno stare prijemnice nije uspeo."
-                r("correctionID") = cid: r("message") = "Storno prijemnice nije uspeo."
+            Dim razlogI As String
+            If Not StornoPrijemnica_TX(prijID, False, , razlogI) Then
+                FailCorrectionContext cid, "Storno stare prijemnice nije uspeo. " & razlogI
+                r("correctionID") = cid: r("message") = Trim$("Storno prijemnice nije uspeo. " & razlogI)
                 Exit Function
             End If
             r("correctionID") = cid
@@ -520,9 +521,10 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
             If Len(cidD) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
             r("correctionID") = cidD
             Dim detD As Long
-            If Not StornoPrijemnica_TX(prijID, Not skipPalete, detD) Then
-                FailCorrectionContext cidD, "Storno prijemnice (dupli) nije uspeo."
-                r("message") = "Storno prijemnice nije uspeo.": Exit Function
+            Dim razlogD As String
+            If Not StornoPrijemnica_TX(prijID, Not skipPalete, detD, razlogD) Then
+                FailCorrectionContext cidD, "Storno prijemnice (dupli) nije uspeo. " & razlogD
+                r("message") = Trim$("Storno prijemnice nije uspeo. " & razlogD): Exit Function
             End If
             CompletePrijemnicaByDetach cidD, CBool(s("hasPalete")), skipPalete, _
                 detD, "Prijemnica stornirana (dupli)", r
@@ -595,9 +597,10 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 ' Nema zbirne (prijemnica bez BrojZbirne) -> leaf: storno prijemnice
                 ' sa paletama, u jednoj transakciji.
                 Dim detP As Long
-                If Not StornoPrijemnica_TX(prijID, True, detP) Then
-                    FailCorrectionContext cidP, "Storno prijemnice (ponistenje) nije uspeo."
-                    r("message") = "Storno prijemnice nije uspeo.": Exit Function
+                Dim razlogL As String
+                If Not StornoPrijemnica_TX(prijID, True, detP, razlogL) Then
+                    FailCorrectionContext cidP, "Storno prijemnice (ponistenje) nije uspeo. " & razlogL
+                    r("message") = Trim$("Storno prijemnice nije uspeo. " & razlogL): Exit Function
                 End If
                 CompletePrijemnicaByDetach cidP, CBool(s("hasPalete")), False, _
                     detP, "Prijemnica ponistena", r
@@ -1006,8 +1009,18 @@ Public Function GetStornoChainRows(ByVal docType As String, ByVal broj As String
                 AddChainRow result, "Zbirna", CStr(sp("brojZbirne")), ChainEff(Poruka("STEF_NEPROM"), Poruka("STEF_ZBR_NULA"))
             If CLng(sp("otpCount")) > 0 Then _
                 AddChainRow result, "Otpremnice", "(" & CStr(sp("otpCount")) & ")", ChainEff(Poruka("STEF_NEPROM_MN"), Poruka("STEF_STORNIRAJU"))
-            If CBool(sp("fakturisano")) Then AddChainRow result, "Faktura", "(vezana)", ChainEff(Poruka("STEF_FAK_OSLOB"), Poruka("STEF_FAK_OSLOB"))
-            If CBool(sp("hasPalete")) Then AddChainRow result, "Paletne stavke", "(" & CStr(sp("paleteCount")) & ")", ChainEff(Poruka("STEF_PAL_ODVEZ"), Poruka("STEF_PAL_ODVEZ"))
+            ' S6 korak 4 (odluke 1 i 3): fakturisana prijemnica i roba na preradjenoj
+            ' paleti se NE storniraju (jezgro odbija). Uvid je to obecavao kao
+            ' "faktura se oslobadja" i "odvezuju se sa palete" -- sada kaze odbijanje.
+            ' DUPLI uz "Ne diraj palete" palete ne dira, pa tada prolazi.
+            If CBool(sp("fakturisano")) Then AddChainRow result, "Faktura", "(vezana)", ChainEff(Poruka("STEF_FAK_ODBIJA"), Poruka("STEF_FAK_ODBIJA"))
+            If CBool(sp("hasPalete")) Then
+                If PrijemnicaNaPreradjenojPaleti(CStr(sp("prijID")), strict) Then
+                    AddChainRow result, "Paletne stavke", "(" & CStr(sp("paleteCount")) & ")", ChainEff(Poruka("STEF_PAL_PRER_DUP"), Poruka("STEF_PAL_PRER_PON"))
+                Else
+                    AddChainRow result, "Paletne stavke", "(" & CStr(sp("paleteCount")) & ")", ChainEff(Poruka("STEF_PAL_ODVEZ"), Poruka("STEF_PAL_ODVEZ"))
+                End If
+            End If
             AddChainRow result, "Otkupni blokovi", "(" & CStr(sp("blockCount")) & ")", SAM_BLOK
     End Select
     Exit Function
@@ -1047,6 +1060,25 @@ End Function
 ' 1.8 ms po redu; ovde su tabele manje pa se ne vidi, ali je greska ista.
 Private Function NzTxC(ByRef data As Variant, ByVal r As Long, ByVal c As Long) As String
     If c > 0 Then NzTxC = NzTx(data(r, c))
+End Function
+
+' Da li je roba dokumenta na PRERADJENOJ paleti (S6 korak 4, odluka 3) -- za uvid.
+' Cita postojeci citac uticaja paleta (modPaletniList.GetPaleteImpactByField, isto
+' polje "preradjena" koje uvid vec prikazuje), po PrijemnicaID-u kao i jezgro
+' storna, pa uvid i kapija ne mogu da vide razlicite palete.
+Private Function PrijemnicaNaPreradjenojPaleti(ByVal prijemnicaID As String, _
+                                               ByVal strict As Boolean) As Boolean
+    If Len(Trim$(prijemnicaID)) = 0 Then Exit Function
+    Dim ids As Object, pal As Collection, p As Variant
+    Set ids = CreateObject("Scripting.Dictionary")
+    ids.Add Trim$(prijemnicaID), 1
+    Set pal = modPaletniList.GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, "", ids, strict)
+    For Each p In pal
+        If CBool(p("preradjena")) Then
+            PrijemnicaNaPreradjenojPaleti = True
+            Exit Function
+        End If
+    Next p
 End Function
 
 ' ============================================================
@@ -2096,8 +2128,13 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
     res("ok") = True
     Exit Function
 EH:
+    ' RAZLOG pada ide do operatera (review #438): okvir ga cita iz res("message")
+    ' (razlogP u RunPrijemnicaCorrection). Opis se cita PRE rollback-a i LogErr-a.
+    Dim errDescK As String
+    errDescK = Err.description
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr SRC
+    res("message") = modStorno.StornoRazlogOperateru(errDescK)
 End Function
 
 ' Distinktni OtpremnicaID-jevi za dati BrojOtpremnice (ukljucuje i stornirane,

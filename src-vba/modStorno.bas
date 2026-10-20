@@ -394,9 +394,14 @@ End Function
 ' skiniPalete = False samo kad operater to IZRICITO bira: ISPRAVKA (palete cekaju
 ' novu prijemnicu) i DUPLI "ne diraj palete" (MANUAL recovery). Neuspeh nikad ne
 ' vodi u tu granu -- tada pada ceo storno (R3).
+'
+' outRazlog: ZASTO je storno odbijen, citljivo operateru (review #438: ekran je
+' javljao samo "Storno prijemnice nije uspeo", pa operater nije znao da je, npr.,
+' paleta preradjena). Prazno kad je storno prosao.
 Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String, _
                                     Optional ByVal skiniPalete As Boolean = True, _
-                                    Optional ByRef outPaletnihStavki As Long) As Boolean
+                                    Optional ByRef outPaletnihStavki As Long, _
+                                    Optional ByRef outRazlog As String) As Boolean
     Const SRC As String = "StornoPrijemnica_TX"
 
     Dim tx As clsTransaction
@@ -405,6 +410,7 @@ Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String, _
     On Error GoTo EH
 
     outPaletnihStavki = 0
+    outRazlog = ""
     tx.BeginTx
     SnimiZaStornoPrijemnice tx
 
@@ -423,8 +429,22 @@ Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String, _
 
 EH:
     outPaletnihStavki = 0
+    outRazlog = StornoRazlogOperateru(Err.description)
     HandleStornoTxError SRC, "Prijemnica", prijemnicaID, tx
     StornoPrijemnica_TX = False
+End Function
+
+' Poruka greske za operatera: LogAndReraise na svakom nivou dodaje prefiks
+' "Source=<procedura> | ", pa je izvorni razlog posle POSLEDNJEG " | ". Prazan
+' opis ostaje prazan -- pozivalac tada javlja samo neuspeh.
+Public Function StornoRazlogOperateru(ByVal opis As String) As String
+    Dim k As Long
+    k = InStrRev(opis, " | ")
+    If k > 0 Then
+        StornoRazlogOperateru = Trim$(Mid$(opis, k + 3))
+    Else
+        StornoRazlogOperateru = Trim$(opis)
+    End If
 End Function
 
 ' JEDAN skup snimaka za SVAKOG pozivaoca storna prijemnice (S6 korak 4, KI-031).

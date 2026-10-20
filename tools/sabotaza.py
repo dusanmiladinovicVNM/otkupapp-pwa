@@ -9188,6 +9188,43 @@ SABOTAZE = {
         "Test_S6K4_PaletnaStavkaBezPaleteObaraStorno",
         "S6K4 bez palete: storno je ODBIJEN po imenu (stavka pokazuje na paletu koje nema)",
     ),
+    # Rucna provera #438 (N1): razlog odbijanja mora da stigne do operatera.
+    "s6k4-f8-guta-razlog": (
+        "modStornoDok.bas",
+        "                poruka = modPoruke.Poruka(\"STORNO_ERR_NEUSPEH\") & \" \" & broj & \": \" & razlogPrj\n",
+        "                poruka = \"\"   ' SABOTAZA: F8 guta razlog odbijanja\n",
+        "Test_S6K4_PreradjenaPaletaObaraStorno",
+        "S6K4 preradjena: ekran Storno prikazuje RAZLOG, ne samo neuspeh",
+    ),
+    "s6k4-okvir-guta-razlog": (
+        "modStornoFlow.bas",
+        "                r(\"message\") = Trim$(\"Storno prijemnice nije uspeo. \" & razlogD): Exit Function\n",
+        "                r(\"message\") = \"Storno prijemnice nije uspeo.\": Exit Function   ' SABOTAZA: okvir guta razlog\n",
+        "Test_S6K4_PreradjenaPaletaObaraStorno",
+        "S6K4 preradjena: okvir ispravke (DUPLI) prikazuje RAZLOG, ne samo neuspeh",
+    ),
+    "s6k4-kaskada-guta-razlog": (
+        "modStornoFlow.bas",
+        "    res(\"message\") = modStorno.StornoRazlogOperateru(errDescK)\n",
+        "    res(\"message\") = \"\"   ' SABOTAZA: kaskada guta razlog pada\n",
+        "Test_S6K4_PadPosleSvihUpisaVracaSve",
+        "S6K4 pad: kaskada prenosi RAZLOG pada do okvira",
+    ),
+    # Rucna provera #438 (N2): uvid ne obecava ono sto jezgro odbija.
+    "s6k4-uvid-faktura-oslobadja": (
+        "modStornoFlow.bas",
+        "            If CBool(sp(\"fakturisano\")) Then AddChainRow result, \"Faktura\", \"(vezana)\", ChainEff(Poruka(\"STEF_FAK_ODBIJA\"), Poruka(\"STEF_FAK_ODBIJA\"))\n",
+        "            If CBool(sp(\"fakturisano\")) Then AddChainRow result, \"Faktura\", \"(vezana)\", ChainEff(Poruka(\"STEF_FAK_OSLOB\"), Poruka(\"STEF_FAK_OSLOB\"))   ' SABOTAZA: uvid obecava oslobadjanje fakture\n",
+        "T_S6K4_UvidKazeOdbijanje",
+        "S6K4 uvid: fakturisana prijemnica -- lanac kaze ODBIJA, ne oslobadja fakturu",
+    ),
+    "s6k4-uvid-preradjena-odvezuje": (
+        "modStornoFlow.bas",
+        "                If PrijemnicaNaPreradjenojPaleti(CStr(sp(\"prijID\")), strict) Then\n",
+        "                If False Then   ' SABOTAZA: uvid ne vidi preradjenu paletu\n",
+        "T_S6K4_UvidKazeOdbijanje",
+        "S6K4 uvid: roba na preradjenoj paleti -- lanac kaze ODBIJA, ne skida sa palete",
+    ),
 }
 
 
