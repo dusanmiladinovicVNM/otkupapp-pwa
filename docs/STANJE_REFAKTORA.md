@@ -6624,11 +6624,17 @@
          novi kod koraka 4 i P2 prisutan, `StornoPrijemnicaByBroj_TX` nestao, `modVbaTools` namerno nije unutra.
        - **Usput:** prvi pokušaj otvaranja sa ugašenim makroima (`AutomationSecurity = 3`) je visio na dijalogu
          iz `KI-030`. Ugasio sam samo svoju instancu, a zatečenu (10892) nisam dirao.
+     - **Compile:** operater je javio „compiles". `vba_gate --mark-compile` je upisan nad `39ff117f6088`.
+       - Prva provera `--require-green --require-compile` je pala: BFP je bio „dokazan nad DRUGIM izvorom"
+         (`969349bba59e`). Taj izvor nije čist; najverovatnije ga je ostavio prolaz `dokaz.py` nad sabotiranim
+         izvorom (koji tačno, nije provereno) → `KI-036`.
+       - BFP je ponovljen nad čistim izvorom: **2602/0**. Sada je `--require-green --require-compile` =
+         **„dokazano: izvor 39ff117f6088"**.
      - **Čeka:**
-       - operater: `Debug → Compile` (posle uvoza `modVbaTools.bas`), pa `vba_gate --mark-compile`;
-       - ručna provera F8: ispravka, dupli unos, poništenje, odbijanje fakturisane prijemnice;
+       - ručna provera F8: ispravka, dupli unos (sa i bez „ne diraj palete"), poništenje, odbijanje fakturisane
+         prijemnice. Koraci su dati operateru nad `rucna_provera_s6_korak4.xlsm`;
        - merge — samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
-     - **Sledeći brojevi:** stavka 185 · test 261 · KI-036.
+     - **Sledeći brojevi:** stavka 185 · test 261 · KI-037.
 
 ## Dug sa imenom (posle S5-5b)
 
