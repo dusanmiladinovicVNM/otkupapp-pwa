@@ -353,6 +353,7 @@ Public Sub RunAllTests()
     RunOne 256
     RunOne 257
     RunOne 258
+    RunOne 259
     RunOne 13
     RunOne 14
     RunOne 15
@@ -895,6 +896,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 256: TestName = "T_ODL24_F7PozajmicaKupca"
         Case 257: TestName = "T_S6_KanonStavkePrijemnice"
         Case 258: TestName = "T_S6_PrijemnicaJedanDokument"
+        Case 259: TestName = "T_S6_CitaociStavkiPrijemnice"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1161,6 +1163,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 256: T_ODL24_F7PozajmicaKupca
         Case 257: T_S6_KanonStavkePrijemnice
         Case 258: T_S6_PrijemnicaJedanDokument
+        Case 259: T_S6_CitaociStavkiPrijemnice
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -9930,6 +9933,257 @@ Private Function KanonImaKolonu(ByVal kolone As Collection, ByVal ime As String)
             Exit Function
         End If
     Next k
+End Function
+
+' 259. S6 KORAK 3: CITAOCI PRIJEMNICE CITAJU STAVKE DOKUMENTA (plan 14.55
+' "Korak 3", stavka 178).
+'
+' Od koraka 2 zaglavlje prijemnice NE nosi Kolicinu, Cenu, Klasu ni gajbe -- one
+' su na stavkama, a zaglavlje ih ostavlja prazne do koraka 8. Citalac koji ih i
+' dalje uzima sa zaglavlja nad dokumentom novog oblika vidi PRAZNO: papir daje
+' prazan red, a izvestaj nulu, bez ijedne greske.
+'
+' Dokument pravi PISAC, kroz F4 put (PrijemnicaUpisi; validator je pauziran do
+' koraka 6, isto kao 258), BEZ ambalaze, pa KI-028 ne ulazi. Klase nose
+' RAZLICITE kolicine i cene (I 300 x 50, II 120 x 40). Zbir (420 / 19800),
+' prva stavka (300 / 15000) i prosek tada daju razlicite brojeve, pa tacna
+' vrednost u tvrdnji odbija i citaoca koji uzme samo jednu stavku.
+'
+' Nivo merenja je imenovan po tvrdnji:
+'   LINIJA        -- papir i izvestaj kupca: red po stavci;
+'   DOKUMENT      -- F4 lista i ciljna lista Oporavka: jedan red, zbir stavki;
+'   POSLOVNI BROJ -- izvestaji, manjak i izvoz: RAZLIKA pre i posle dokumenta je
+'                    zbir stavki. Fixture deli kupca, zbirnu i datum, pa se meri
+'                    razlika, ne apsolutni broj.
+' AssertEq staje na prvom padu, pa je redosled tvrdnji redosled citalaca:
+' sabotaza jednog citaoca obara SVOJU tvrdnju, jer su prethodne zelene.
+' SABOTAZE: s6k3-papir-po-zaglavlju, s6k3-izv-kupca-po-zaglavlju,
+' s6k3-f4-lista-mimo-stavki, s6k3-cilj-prij-bez-kg, s6k3-saldo-kupca-po-zaglavlju,
+' s6k3-roba-kupca-po-zaglavlju, s6k3-prosek-kupca-po-zaglavlju,
+' s6k3-zbirni-kupac-po-zaglavlju, s6k3-zbirni-vozac-po-zaglavlju,
+' s6k3-manjak-dict-po-zaglavlju, s6k3-preview-po-zaglavlju,
+' s6k3-izvoz-po-zaglavlju (tvrdnje imenuje tools/sabotaza.py).
+Private Sub T_S6_CitaociStavkiPrijemnice()
+    Dim p As Object, res As String, poruke As String, broj As String
+    Dim od As Date, doD As Date
+    Dim saldoPre As String, robaPre As String, prosekPre As String
+    Dim zbKupPre As String, zbVozPre As String, izvozPre As String
+    Dim manjakPre As Double, previewPre As Double
+
+    od = IzvOdD()
+    doD = IzvDoD()
+    broj = "T-S6C3-" & Format$(Now, "yyyymmddhhnnss")
+
+    ' --- stanje pre dokumenta ---
+    saldoPre = S6K3Red(ReportSaldoKupci(FX_KUPAC, od, doD), 0, 2, 4)
+    robaPre = S6K3Red(ReportOtkupRoba("Kupac", FX_KUPAC, od, doD), 0, 3, 4)
+    prosekPre = S6K3Red(ReportProsecnaCena("Kupac", FX_KUPAC, od, doD), -1, 2, 3)
+    zbKupPre = S6K3Red(ReportZbirni("Kupac", od, doD), 0, 3, 4)
+    zbVozPre = S6K3Red(ReportZbirni("Vozac", od, doD), 0, 4, 4)
+    manjakPre = S6K3ManjakPrijem(od, doD)
+    previewPre = CDbl(CalculateManjakPreview(FX_ZBIRNA, 0#, 0#)(1))
+    izvozPre = S6K3Izvoz()
+
+    Set p = NoviPrijemnicaUnos()
+    PopuniPrijemnicuS6 p, broj
+    res = modDokUnos.PrijemnicaUpisi(p, poruke)
+    AssertEq (Len(res) > 0), True, "S6 citaoci: preduslov -- dvoklasna prijemnica je upisana"
+
+    ' --- LINIJA ---
+    AssertEq S6K3Papir(res), "I:300:50:15000|II:120:40:4800|UKUPNO:420:19800", _
+             "S6 citaoci: papir prijemnice ima red po stavci, a UKUPNO je zbir stavki"
+    AssertEq S6K3IzvestajKupca(res, od, doD), "I:300:50:15000|II:120:40:4800", _
+             "S6 citaoci: izvestaj kupca daje red po stavci dokumenta"
+
+    ' --- DOKUMENT ---
+    AssertEq S6K3F4Red(broj), "420|19800|I, II", _
+             "S6 citaoci: F4 lista -- red dokumenta nosi zbir stavki i obe klase"
+    AssertEq S6K3CiljPrij(broj), "420", _
+             "S6 citaoci: ciljna lista Oporavka -- kg dokumenta je zbir stavki"
+
+    ' --- POSLOVNI BROJ: razlika pre i posle dokumenta ---
+    AssertEq S6K3Razlika(saldoPre, S6K3Red(ReportSaldoKupci(FX_KUPAC, od, doD), 0, 2, 4)), _
+             "420|19800", "S6 citaoci: saldo kupca -- dokument dodaje zbir stavki"
+    AssertEq S6K3Razlika(robaPre, S6K3Red(ReportOtkupRoba("Kupac", FX_KUPAC, od, doD), 0, 3, 4)), _
+             "420|19800", "S6 citaoci: roba kupca -- dokument dodaje zbir stavki"
+    AssertEq S6K3Razlika(prosekPre, S6K3Red(ReportProsecnaCena("Kupac", FX_KUPAC, od, doD), -1, 2, 3)), _
+             "420|19800", "S6 citaoci: prosecna cena kupca -- dokument dodaje zbir stavki"
+    AssertEq S6K3Razlika(zbKupPre, S6K3Red(ReportZbirni("Kupac", od, doD), 0, 3, 4)), _
+             "420|19800", "S6 citaoci: zbirni po kupcu -- dokument dodaje zbir stavki"
+    AssertEq S6K3Razlika(zbVozPre, S6K3Red(ReportZbirni("Vozac", od, doD), 0, 4, 4)), _
+             "-420|-420", "S6 citaoci: zbirni po vozacu -- manjak pada za zbir stavki"
+    AssertEq Format$(S6K3ManjakPrijem(od, doD) - manjakPre, "0"), "420", _
+             "S6 citaoci: izvestaj manjka -- prijem zbirne raste za zbir stavki"
+    AssertEq Format$(CDbl(CalculateManjakPreview(FX_ZBIRNA, 0#, 0#)(1)) - previewPre, "0"), _
+             "420", "S6 citaoci: preview manjka F4 -- prijem zbirne raste za zbir stavki"
+    AssertEq S6K3RazlikaIzvoza(izvozPre, S6K3Izvoz()), _
+             "I:300:15000:1|II:120:4800:1", _
+             "S6 citaoci: izvoz predato po kupcu -- svaka klasa dobija svoju stavku"
+End Sub
+
+' "kg|vrednost" jednog reda izvestaja. red = 0: poslednji red (UKUPNO);
+' red = -1: zbir svih redova (izvestaj bez reda UKUPNO). Nije niz -> "nema".
+Private Function S6K3Red(ByVal arr As Variant, ByVal red As Long, _
+                         ByVal cKg As Long, ByVal cVr As Long) As String
+    Dim kg As Double, vr As Double, i As Long
+    If Not IsArray(arr) Then
+        S6K3Red = "0|0"
+        Exit Function
+    End If
+    If red = -1 Then
+        For i = LBound(arr, 1) To UBound(arr, 1)
+            If IsNumeric(arr(i, cKg)) Then kg = kg + CDbl(arr(i, cKg))
+            If IsNumeric(arr(i, cVr)) Then vr = vr + CDbl(arr(i, cVr))
+        Next i
+    Else
+        i = UBound(arr, 1)
+        If IsNumeric(arr(i, cKg)) Then kg = CDbl(arr(i, cKg))
+        If IsNumeric(arr(i, cVr)) Then vr = CDbl(arr(i, cVr))
+    End If
+    S6K3Red = CStr(kg) & "|" & CStr(vr)
+End Function
+
+' Razlika dva "a|b" para, formatirana "0.00|0.00".
+Private Function S6K3Razlika(ByVal pre As String, ByVal posle As String) As String
+    Dim a As Variant, b As Variant
+    a = Split(pre & "|0", "|")
+    b = Split(posle & "|0", "|")
+    S6K3Razlika = Format$(CDbl(b(0)) - CDbl(a(0)), "0") & "|" & _
+                  Format$(CDbl(b(1)) - CDbl(a(1)), "0")
+End Function
+
+' Redovi stavki sa papira prijemnice: "klasa:kg:cena:vrednost|...|UKUPNO:kg:vr".
+' Fill je Private, pa ide kroz Application.Run (kao 230). Prazno = papir se
+' nije popunio.
+Private Function S6K3Papir(ByVal prjID As String) As String
+    Dim ws As Object, r As Long, poslednji As Long, s As String, uTabeli As Boolean
+    On Error Resume Next
+    Set ws = Application.Run("modPrint.FillPrijemnicaSablon", prjID)
+    Err.Clear
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+
+    poslednji = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    For r = 1 To poslednji
+        If uTabeli Then
+            If NzToText(ws.cells(r, 2).value) = "UKUPNO" Then
+                s = s & "|UKUPNO:" & CStr(ws.cells(r, 4).value) & ":" & CStr(ws.cells(r, 6).value)
+                Exit For
+            End If
+            If Len(s) > 0 Then s = s & "|"
+            s = s & NzToText(ws.cells(r, 3).value) & ":" & CStr(ws.cells(r, 4).value) & ":" & _
+                CStr(ws.cells(r, 5).value) & ":" & CStr(ws.cells(r, 6).value)
+        ElseIf NzToText(ws.cells(r, 1).value) = "Rb" Then
+            uTabeli = True
+        End If
+    Next r
+    S6K3Papir = s
+End Function
+
+' Redovi izvestaja kupca koji pripadaju dokumentu: "klasa:kg:cena:vrednost|...".
+Private Function S6K3IzvestajKupca(ByVal prjID As String, ByVal od As Date, _
+                                   ByVal doD As Date) As String
+    Dim d As Variant, i As Long, s As String
+    d = ReportPrijemniceKupca(FX_KUPAC, od, doD)
+    If Not IsArray(d) Then Exit Function
+    For i = 1 To UBound(d, 1)
+        If NzToText(d(i, 9)) = prjID Then
+            If Len(s) > 0 Then s = s & "|"
+            s = s & NzToText(d(i, 5)) & ":" & CStr(d(i, 6)) & ":" & CStr(d(i, 7)) & ":" & _
+                CStr(d(i, 8))
+        End If
+    Next i
+    S6K3IzvestajKupca = s
+End Function
+
+' Red dokumenta u F4 listi -- ISTI poziv koji crta ekran (obrazac BFP
+' OtkMrezaRed): "kg|vrednost|klase". Prazno = red nije tacno jedan.
+Private Function S6K3F4Red(ByVal broj As String) As String
+    Dim d As Variant, cols As Variant, redovi As Variant, c As Long
+    Dim iKg As Long, iVr As Long, iKl As Long
+
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip("PRIJEMNICA", "", broj)
+    If Not IsArray(d) Then Exit Function
+    If CLng(d(2)) <> 1 Then Exit Function
+
+    cols = d(0)
+    redovi = d(1)
+    For c = 0 To UBound(cols)
+        Select Case modScrDokumenti.ColF(CStr(cols(c)), 2)
+            Case "kg":   iKg = c + 1
+            Case "mult": iVr = c + 1
+        End Select
+        If modScrDokumenti.ColF(CStr(cols(c)), 1) = modScrDokumenti.ColKlasa("PRIJEMNICA") Then iKl = c + 1
+    Next c
+    If iKg = 0 Or iVr = 0 Or iKl = 0 Then Exit Function
+
+    S6K3F4Red = Format$(CDbl(redovi(1, iKg)), "0") & "|" & _
+                Format$(CDbl(redovi(1, iVr)), "0") & "|" & NzToText(redovi(1, iKl))
+End Function
+
+' kg reda dokumenta u ciljnoj listi Oporavka (CILJPRIJ), nadjenog po broju.
+Private Function S6K3CiljPrij(ByVal broj As String) As String
+    Dim d As Variant, redovi As Variant, i As Long
+    modUiData.ResetCache
+    modScrOporavak.Scr_OpoTestSet "CILJPRIJ", "", ""
+    d = modScrOporavak.Scr_Rows("sve", broj)
+    If Not IsArray(d) Then Exit Function
+    redovi = d(1)
+    For i = 1 To CLng(d(2))
+        If NzToText(redovi(i, 1)) = broj Then
+            S6K3CiljPrij = Format$(CDbl(redovi(i, 6)), "0")
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Prijem zbirne FX_ZBIRNA u izvestaju manjka (kolona PrijKg).
+Private Function S6K3ManjakPrijem(ByVal od As Date, ByVal doD As Date) As Double
+    Dim d As Variant, i As Long
+    d = ReportManjak("", "", od, doD)
+    If Not IsArray(d) Then Exit Function
+    For i = 1 To UBound(d, 1)
+        If NzToText(d(i, 1)) = FX_ZBIRNA Then
+            If IsNumeric(d(i, 3)) Then S6K3ManjakPrijem = S6K3ManjakPrijem + CDbl(d(i, 3))
+        End If
+    Next i
+End Function
+
+' Izvoz "predato po kupcu" za FX_KUPAC i FX_VRSTA: "kgI|vrI|nI|kgII|vrII|nII".
+' Kolona 1 taba nosi NAZIV kupca (ugovor taba za PWA), ne KupacID.
+Private Function S6K3Izvoz() As String
+    Dim d As Variant, i As Long, kl As String, kupac As String
+    Dim kg(1 To 2) As Double, vr(1 To 2) As Double, n(1 To 2) As Double
+    kupac = NzToText(LookupValue(TBL_KUPCI, "KupacID", FX_KUPAC, "Naziv"))
+    If Len(kupac) = 0 Then kupac = FX_KUPAC
+    d = modStammdatenSync.PredatoPoKupcuRedovi()
+    If IsArray(d) Then
+        For i = 2 To UBound(d, 1)
+            If NzToText(d(i, 1)) = kupac And NzToText(d(i, 2)) = FX_VRSTA Then
+                kl = NzToText(d(i, 3))
+                If kl = KLASA_I Or kl = KLASA_II Then
+                    kg(IIf(kl = KLASA_I, 1, 2)) = CDbl(d(i, 4))
+                    vr(IIf(kl = KLASA_I, 1, 2)) = CDbl(d(i, 6))
+                    n(IIf(kl = KLASA_I, 1, 2)) = CDbl(d(i, 7))
+                End If
+            End If
+        Next i
+    End If
+    S6K3Izvoz = CStr(kg(1)) & "|" & CStr(vr(1)) & "|" & CStr(n(1)) & "|" & _
+                CStr(kg(2)) & "|" & CStr(vr(2)) & "|" & CStr(n(2))
+End Function
+
+Private Function S6K3RazlikaIzvoza(ByVal pre As String, ByVal posle As String) As String
+    Dim a As Variant, b As Variant
+    a = Split(pre, "|")
+    b = Split(posle, "|")
+    S6K3RazlikaIzvoza = "I:" & Format$(CDbl(b(0)) - CDbl(a(0)), "0") & ":" & _
+                        Format$(CDbl(b(1)) - CDbl(a(1)), "0") & ":" & _
+                        CStr(CDbl(b(2)) - CDbl(a(2))) & "|II:" & _
+                        Format$(CDbl(b(3)) - CDbl(a(3)), "0") & ":" & _
+                        Format$(CDbl(b(4)) - CDbl(a(4)), "0") & ":" & _
+                        CStr(CDbl(b(5)) - CDbl(a(5)))
 End Function
 
 ' KI-015: "da || <tekst>" kad poruka odbijenog upisa POCINJE tekstom kljuca

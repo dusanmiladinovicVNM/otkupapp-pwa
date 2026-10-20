@@ -133,6 +133,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_RF28_NevalidanDatumJeSyncError
 
     ' RF-05 (frmDokumenta unos + storno set)
+    Test_ManjakPreviewJeZbirnaMinusPrijem
     Test_PrefillBiraPoslednjuGeneraciju
     Test_GeneracijaNePrelaziVlasnika
     Test_StornoPoBrojuOdbijaDvaVlasnika
@@ -337,6 +338,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_PRJ_PovratIdeSaKlasomKojaPostoji
     Test_S6_DveKlaseJedanDokument
     Test_S6_JednaKlasaJednaStavka
+    Test_S6_ManjakObeStraneIzStavki
+    Test_S6_GrupniListStanjeVozaca
+    Test_S6_PaleteCitajuStavke
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
     Test_AMB_TipVanSifarnikaPisacOdbija
     Test_ODL24_UgovorPozajmice
@@ -1872,10 +1876,113 @@ End Sub
 '   R12 kaskade mutiraju samo redove razresenog lanca (scope), fail-closed bez parenta
 ' ============================================================
 
-' Test_ManjakPreviewJeZbirnaMinusPrijem (MIG-004) je obrisan u S6 koraku 2
-' (stavka 174): CalculateManjakPreview sabira kolicinu sa zaglavlja prijemnice,
-' a ono je od koraka 2 ne nosi. Vraca ga korak 3, sa sabotazom
-' manjak-preview-bez-druge-klase (plan 14.55 "Korak 2").
+' MIG-004. Manjak koji F4 crta nije novi racun nego CalculateManjakPreview. Ovo
+' meri BAS NJU, nad pravim redovima: da sabira po broju zbirne, da dodaje
+' NEUPISANE kilograme iz forme, i da stornirane dokumente ne broji ni sa jedne
+' strane. Bez toga bi ekran mogao da pokaze zelenu nulu nad podacima koji se ne
+' slazu.
+'
+' S6 KORAK 3 (stavka 178): test je obrisan u koraku 2 i vraca se nad DOKUMENTIMA
+' NOVOG OBLIKA sa obe strane. Zbirna je kanonska (CreateZbirna_TX, dve izdate
+' otpremnice), pa joj je zaglavlje PRAZNO -- do koraka 3 je preview zbirnu
+' sabirao sa zaglavlja i za nju video nulu. Prijemnica je dvoklasna, kroz pisca.
+' Ranije je zbirna bila ZbrZateceniRed, koji pise i zaglavlje, pa bi ta laz
+' ostala skrivena.
+' SABOTAZA: manjak-preview-bez-druge-klase -> pukne "Manjak: neupisane kg obe
+' klase ulaze u prijemnicu".
+Private Sub Test_ManjakPreviewJeZbirnaMinusPrijem()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("MANJAK")
+
+    Dim broj As String, zbr As String, datZbr As Date, prj As String
+    prj = S6K3ZbirnaIPrijemnica(scenario, broj, zbr, datZbr)
+    AssertTrue Len(zbr) > 0, "Manjak: kanonska zbirna I+II kreirana"
+    AssertTrue Len(prj) > 0, "Manjak: dvoklasna prijemnica kreirana kroz pisca"
+
+    ' Zbirna 550 kg u dve stavke (400 + 150), prijemnica 420 (300 + 120) ->
+    ' manjak 130 kg = 23,64% zbirne.
+    Dim m As Variant
+    m = CalculateManjakPreview(broj, 0#, 0#)
+    AssertTrue IsArray(m), "Manjak: preview vraca niz"
+    AssertDoubleNear 550#, CDbl(m(0)), 0.01, "Manjak: zbirna je ZBIR svojih stavki"
+    AssertDoubleNear 420#, CDbl(m(1)), 0.01, "Manjak: prijemnica je ZBIR svojih stavki"
+    AssertDoubleNear 130#, CDbl(m(2)), 0.01, "Manjak: manjak je zbirna minus prijemnica"
+    AssertDoubleNear 23.6364, CDbl(m(3)), 0.01, "Manjak: procenat je udeo u ZBIRNOJ"
+
+    ' NEUPISANI kilogrami iz forme ulaze u prijemnicu -- to je cela svrha
+    ' "Preview" varijante: operater vidi manjak PRE snimanja, ne posle.
+    m = CalculateManjakPreview(broj, 50#, 25#)
+    AssertDoubleNear 495#, CDbl(m(1)), 0.01, "Manjak: neupisane kg obe klase ulaze u prijemnicu"
+    AssertDoubleNear 55#, CDbl(m(2)), 0.01, "Manjak: manjak pada za neupisane kilograme"
+
+    ' Stornirana prijemnica NE ulazi -- inace bi ispravka dokumenta izgledala
+    ' kao da je roba stigla dvaput.
+    If Len(prj) > 0 Then MarkTestRowStornirano TBL_PRIJEMNICA, COL_PRJ_ID, prj
+    m = CalculateManjakPreview(broj, 0#, 0#)
+    AssertDoubleNear 0#, CDbl(m(1)), 0.01, "Manjak: stornirana prijemnica se NE broji"
+    AssertDoubleNear 550#, CDbl(m(2)), 0.01, "Manjak: posle storna fali cela zbirna"
+
+    ' Ista uzica na drugoj strani: stornirana zbirna se ne ocekuje.
+    If Len(zbr) > 0 Then MarkTestRowStornirano TBL_ZBIRNA, COL_ZBR_ID, zbr
+    m = CalculateManjakPreview(broj, 0#, 0#)
+    AssertDoubleNear 0#, CDbl(m(0)), 0.01, "Manjak: stornirana zbirna se NE broji"
+
+    ' Broj koji ne postoji nije "sve se slaze" nego NEMA ZBIRNE: zbirna ostaje
+    ' nula, i bas po toj nuli ekran zna da liniju ne sme da nacrta.
+    m = CalculateManjakPreview(TEST_PREFIX & "-ZBR-NEMA-" & scenario, 40#, 0#)
+    AssertDoubleNear 0#, CDbl(m(0)), 0.01, "Manjak: nepostojeca zbirna daje nula kg"
+    AssertDoubleNear 40#, CDbl(m(1)), 0.01, "Manjak: neupisane kg se i tada vide"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_ManjakPreviewJeZbirnaMinusPrijem", Err.Number, Err.description
+End Sub
+
+' KANONSKA ZBIRNA I DVOKLASNA PRIJEMNICA NA NJOJ (S6 korak 3).
+'
+' Zbirna: I 400 kg / 20 gajbi + II 150 kg / 10, iz dve izdate otpremnice, kroz
+' CreateZbirna_TX -- zaglavlje joj je PRAZNO (PR3), pa citalac zaglavlja vidi
+' nulu. Prijemnica: I 300 x 50 + II 120 x 40, kroz pisca, BEZ ambalaze. Klase
+' nose RAZLICITE kolicine i cene, pa zbir, prva stavka i prosek daju razlicit
+' broj. Vraca PrijemnicaID ("" kad upis nije uspeo; tvrdnje to prijave po imenu).
+Private Function S6K3ZbirnaIPrijemnica(ByVal scenario As String, _
+                                       ByRef brojZbirne As String, _
+                                       ByRef zbrID As String, _
+                                       ByRef datumZbr As Date) As String
+    Dim otpI As String, otpII As String, ocek As Collection
+    Dim h As Object, razlog As String
+
+    otpI = Pr3Otpremnica(TEST_PREFIX & "-OTP-S6K3I-" & scenario, KLASA_I, 400#, 20)
+    otpII = Pr3Otpremnica(TEST_PREFIX & "-OTP-S6K3II-" & scenario, KLASA_II, 150#, 10)
+
+    Set ocek = New Collection
+    ocek.Add Pr3Ocekivano(KLASA_I, 400#, 20)
+    ocek.Add Pr3Ocekivano(KLASA_II, 150#, 10)
+
+    brojZbirne = TEST_PREFIX & "-ZBR-S6K3-" & scenario
+    Set h = Pr3Header(brojZbirne)
+    datumZbr = CDate(h("Datum"))
+    zbrID = CreateZbirna_TX(h, Pr3Izvor(otpI, otpII), ocek, razlog)
+    If Len(zbrID) = 0 Then Exit Function
+
+    Dim errNum As Long
+    On Error Resume Next
+    S6K3ZbirnaIPrijemnica = SavePrijemnicaMulti_TX( _
+        datum:=datumZbr, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+        brojPrij:=TEST_PREFIX & "-PRJ-S6K3-" & scenario, brojZbirne:=brojZbirne, _
+        vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+        kolicinaI:=300#, cenaI:=50#, tipAmb:="", kolAmb:=0, kolAmbVracena:=0, _
+        hasKlasaII:=True, kolicinaII:=120#, cenaII:=40#, kolAmbII:=0, _
+        outErrNum:=errNum)
+    If Err.Number <> 0 Then
+        S6K3ZbirnaIPrijemnica = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Function
 
 ' Test_OpenFaktureExcludeStornirano je obrisan u S6 koraku 2 (stavka 174): pravi
 ' fakturu nad prijemnicom, a faktura cita kolicinu sa zaglavlja koje je od koraka
@@ -6554,6 +6661,389 @@ Private Function S6GajbiNaPaletama(ByVal prj As String, ByVal stavkaID As String
                 If Trim$(nz(d(i, cS), "")) = stavkaID Then _
                     S6GajbiNaPaletama = S6GajbiNaPaletama + CLng(Val(nz(d(i, cG), 0)))
             End If
+        End If
+    Next i
+End Function
+
+' ============================================================
+' S6 KORAK 3 -- CITAOCI PRIJEMNICE CITAJU STAVKE (plan 14.55 "Korak 3", stavka 178)
+'
+' Od koraka 2 zaglavlje prijemnice NE nosi Kolicinu, Cenu, Klasu ni gajbe. Citalac
+' koji ih uzima sa zaglavlja nad dokumentom novog oblika vidi PRAZNO, bez greske.
+' Ovi testovi mere citaoce kojima treba svez tip ambalaze ili kanonska zbirna;
+' ostale meri modTest 259, kroz F4 put.
+' ============================================================
+
+' ZBIRNINA I PRIJEMNICKA STRANA MANJKA IZ STAVKI (odluka 7).
+'
+' S4-1 je manjak ostavio na zaglavlju zbirne, sa obrazlozenjem da ga S6 prevodi
+' zajedno sa prijemnicom. Kanonska zbirna zaglavlje NE puni, pa su izvestaj
+' manjka, integritet A2 i prosek gajbe za nju videli nulu. Nivo: POSLOVNI BROJ
+' zbirne (spoj ostaje po broju i vlasniku -- imenovan rizik, van obima).
+' Vrednosti su iz pravila: 550 = 400 + 150 (stavke zbirne), 420 = 300 + 120
+' (stavke prijemnice), prosek gajbe = 550 / (20 + 10).
+' SABOTAZE: s6k3-manjak-izv-zbirna-po-zaglavlju, s6k3-a2-po-zaglavlju,
+' s6k3-prosek-gajbe-po-zaglavlju.
+Private Sub Test_S6_ManjakObeStraneIzStavki()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("S6MAN")
+
+    Dim broj As String, zbr As String, datZbr As Date, prj As String
+    prj = S6K3ZbirnaIPrijemnica(scenario, broj, zbr, datZbr)
+    AssertTrue Len(zbr) > 0 And Len(prj) > 0, _
+               "S6 manjak: preduslov -- kanonska zbirna i prijemnica su upisane"
+
+    AssertEquals "550|420", S6K3ManjakRed(broj, datZbr), _
+                 "S6 manjak: izvestaj manjka cita stavke zbirne i prijemnice"
+    AssertEquals "550|420|130", S6K3NalazA2(broj), _
+                 "S6 manjak: integritet A2 vidi zbirnu i prijemnicu iz stavki"
+    AssertDoubleNear 550# / 30#, CalculateProsekGajbeByZbirna(broj), 0.001, _
+                     "S6 manjak: prosek gajbe je zbir kg stavki zbirne kroz zbir gajbi"
+    Exit Sub
+
+EH:
+    LogFatal "Test_S6_ManjakObeStraneIzStavki", Err.Number, Err.description
+End Sub
+
+' "ZbirnaKg|PrijKg" reda zbirne u izvestaju manjka; prazno = reda nema.
+Private Function S6K3ManjakRed(ByVal broj As String, ByVal dan As Date) As String
+    Dim d As Variant, i As Long
+    If Len(broj) = 0 Then Exit Function
+    d = ReportManjak("", "", dan, dan)
+    If Not IsArray(d) Then Exit Function
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, 1), "")) = broj Then
+            ' Kolona prijema moze nositi oznaku "nema prijema" -- tada ide tekst.
+            S6K3ManjakRed = S6Broj(d(i, 2)) & "|" & S6Broj(d(i, 3))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Polja ZbirnaKg|PrijemnicaKg|ManjakKg nalaza A2 za dati broj zbirne; prazno =
+' nalaza nema. Procenat se ne poredi (decimalni znak zavisi od lokala).
+Private Function S6K3NalazA2(ByVal broj As String) As String
+    Dim rows As Variant, i As Long, tekuca As String, polja As Variant
+    If Len(broj) = 0 Then Exit Function
+    rows = modIntegritet.GetIntegritetRows()
+    If Not IsArray(rows) Then Exit Function
+    For i = 1 To UBound(rows, 1)
+        If Len(Trim$(nz(rows(i, 1), ""))) > 0 Then tekuca = Trim$(nz(rows(i, 1), ""))
+        If tekuca = "A2" Then
+            polja = Split(nz(rows(i, 2), ""), "|")
+            If UBound(polja) >= 3 Then
+                If Trim$(polja(0)) = broj Then
+                    S6K3NalazA2 = Trim$(polja(1)) & "|" & Trim$(polja(2)) & "|" & Trim$(polja(3))
+                    Exit Function
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' GRUPNI OTKUPNI LIST NOSI STANJE VOZACA OKO SVOG REDA KNJIGE (odluka 3, 6.13g).
+'
+' Papir je citao GetStanicaAmbSaldo(VozacID) -- nalog Stanica:<VozacID>, i to
+' DANASNJI saldo -- dok prijemnica od 10b-2 pomera nalog VOZAC (pune gajbe
+' Vozac -> Kupac, povrat Kupac -> Vozac). Pravilo je isto kao na reversu i
+' otpremnici: saldo = stanje vozaca posle ovog dokumenta po redosledu upisa,
+' pocetno = saldo + primljeno - izdato. Linije su stavke dokumenta, ne red
+' zaglavlja.
+'
+' Svez tip (obrazac Test_S6_DveKlaseJedanDokument): vozac preuzme 50, prijemnica
+' da 10 + 10 i vrati 4, pa je stanje 50 -> 34. Kontrole: ponovna stampa posle
+' kasnijeg dokumenta je ista; dokument bez gajbi stampa "-" (ODL-27); dokument sa
+' gajbama bez svog reda knjige ne daje papir (obrazac 7693).
+' SABOTAZE: s6k3-grupni-danasnji-saldo, s6k3-grupni-linije-po-zaglavlju,
+' s6k3-grupni-bez-veze-stampa.
+Private Sub Test_S6_GrupniListStanjeVozaca()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6GRL")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS6G-" & scenario)
+
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABS6G-" & scenario, "test S6 grupni list"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S6 grupni list: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrZateceniRed(testDate, TEST_VOZ_ID, brZbr, TEST_KUP_ID, _
+                   "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                   150#, tipT, 20, KLASA_I)) > 0, _
+               "S6 grupni list: preduslov -- zbirna je snimljena"
+
+    Dim vozPre As Long, vozPosle As Long
+    vozPre = CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT))
+
+    Dim prj As String, prjBez As String, errNum As Long
+    On Error Resume Next
+    prj = SavePrijemnicaMulti_TX( _
+              datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+              brojPrij:=TEST_PREFIX & "-S6GRL-" & scenario, brojZbirne:=brZbr, _
+              vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+              kolicinaI:=100#, cenaI:=120#, tipAmb:=tipT, _
+              kolAmb:=10, kolAmbVracena:=4, _
+              hasKlasaII:=True, kolicinaII:=50#, cenaII:=80#, kolAmbII:=10, _
+              outErrNum:=errNum)
+    If Err.Number <> 0 Then prj = "": Err.Clear
+    prjBez = SavePrijemnicaMulti_TX( _
+                 datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+                 brojPrij:=TEST_PREFIX & "-S6GRL0-" & scenario, brojZbirne:=brZbr, _
+                 vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+                 kolicinaI:=30#, cenaI:=100#, tipAmb:=tipT, _
+                 kolAmb:=0, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then prjBez = "": Err.Clear
+    On Error GoTo EH
+    vozPosle = CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT))
+
+    AssertTrue Len(prj) > 0 And Len(prjBez) > 0, _
+               "S6 grupni list: preduslov -- obe prijemnice su snimljene"
+    AssertTrue vozPre - vozPosle = 16, _
+               "S6 grupni list: preduslov -- vozacu je ostalo 16 manje (20 dato, 4 vraceno)"
+
+    Dim prvi As String, delovi As Variant
+    prvi = S6GrupniStanje(prj)
+    delovi = Split(prvi & "||", "|")
+    AssertEquals tipT & " x " & CStr(vozPre), CStr(delovi(0)), _
+                 "S6 grupni list: pocetno stanje je stanje vozaca pre prijemnice"
+    AssertEquals tipT & " x " & CStr(vozPosle), CStr(delovi(1)), _
+                 "S6 grupni list: saldo ambalaze je stanje vozaca posle prijemnice"
+    AssertEquals "I:100|II:50", S6GrupniLinije(prj), _
+                 "S6 grupni list: red po stavci dokumenta"
+
+    ' Kasniji dokument istog vozaca i istog tipa, pa ponovna stampa.
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(NextTestDate(), "", TEST_ST_ID, _
+                   tipT, 7#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S6 grupni list: preduslov -- kasniji revers vozacu je upisan"
+    AssertEquals prvi, S6GrupniStanje(prj), _
+                 "S6 grupni list: ponovna stampa posle kasnijeg dokumenta je ista"
+
+    ' Dokument BEZ gajbi nema svoj red knjige po pravilu (ODL-27).
+    AssertEquals tipT & " x -|" & tipT & " x -", S6GrupniStanje(prjBez), _
+                 "S6 grupni list bez gajbi: stampa nepoznato stanje (ODL-27), ne odbija se"
+
+    ' Dokument SA gajbama bez svog reda knjige: veza je pokidana, papir ne
+    ' nastaje. Oba reda (puna noga i povrat) se kidaju i vracaju pre tvrdnje;
+    ' izmedju kvara i vracanja nista ne sme da iskoci u EH.
+    Dim redovi As Collection, k As Long, papirBezVeze As String, vraceno As Boolean
+    Set redovi = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, prj)
+    AssertEquals "2", CStr(redovi.count), _
+                 "S6 grupni list bez veze: preduslov -- prijemnica ima dva reda knjige"
+    On Error Resume Next
+    For k = 1 To redovi.count
+        RequireUpdateCell TBL_AMBALAZA, CLng(redovi(k)), COL_AMB_DOK_ID, prj & "-BEZVEZE", _
+                          "Test_S6_GrupniListStanjeVozaca"
+    Next k
+    papirBezVeze = S6GrupniStanje(prj)
+    Err.Clear
+    vraceno = True
+    For k = 1 To redovi.count
+        RequireUpdateCell TBL_AMBALAZA, CLng(redovi(k)), COL_AMB_DOK_ID, prj, _
+                          "Test_S6_GrupniListStanjeVozaca"
+        vraceno = vraceno And (Err.Number = 0)
+        Err.Clear
+    Next k
+    On Error GoTo EH
+
+    AssertTrue vraceno, "S6 grupni list bez veze: preduslov -- pokidani redovi su vraceni"
+    AssertEquals "", papirBezVeze, _
+                 "S6 grupni list bez veze: prijemnica sa gajbama se ne popunjava"
+    Exit Sub
+
+EH:
+    LogFatal "Test_S6_GrupniListStanjeVozaca", Err.Number, Err.description
+End Sub
+
+' Stanje ambalaze sa grupnog otkupnog lista, prvi primerak: "pocetno|saldo".
+' Isti raspored kao otpremnica (modPrint.WriteOtkupCopy), pa isti citac kao
+' OtpStanjePapira. Fill je Private -> Application.Run. Prazno = list se nije
+' popunio.
+Private Function S6GrupniStanje(ByVal prj As String) As String
+    Dim ws As Object, r As Long, poslednji As Long, t As String
+    Dim poc As String, sal As String, imaPoc As Boolean, imaSal As Boolean
+
+    If Len(prj) = 0 Then Exit Function
+    On Error Resume Next
+    Set ws = Application.Run("modPrint.FillGrupniOtkupSablon", prj)
+    Err.Clear
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+
+    poslednji = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    For r = 1 To poslednji
+        t = NzToText(ws.cells(r, 1).value)
+        If Not imaPoc And t = "Pocetno stanje:" Then
+            poc = NzToText(ws.cells(r, 4).value)
+            imaPoc = True
+        End If
+        If Not imaSal And InStr(1, t, "Saldo ambala", vbBinaryCompare) = 1 Then
+            sal = NzToText(ws.cells(r, 4).value)
+            imaSal = True
+        End If
+    Next r
+    If imaPoc Or imaSal Then S6GrupniStanje = poc & "|" & sal
+End Function
+
+' Linije grupnog lista, prvi primerak: "klasa:kg neto|...". Linije su redovi
+' posle zaglavlja tabele ("Rb") sa rednim brojem u koloni 1.
+Private Function S6GrupniLinije(ByVal prj As String) As String
+    Dim ws As Object, r As Long, poslednji As Long, s As String, uTabeli As Boolean
+
+    If Len(prj) = 0 Then Exit Function
+    On Error Resume Next
+    Set ws = Application.Run("modPrint.FillGrupniOtkupSablon", prj)
+    Err.Clear
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+
+    poslednji = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    For r = 1 To poslednji
+        If uTabeli Then
+            If Not IsNumeric(ws.cells(r, 1).value) Or IsEmpty(ws.cells(r, 1).value) Then Exit For
+            If Len(s) > 0 Then s = s & "|"
+            s = s & NzToText(ws.cells(r, 3).value) & ":" & CStr(ws.cells(r, 6).value)
+        ElseIf NzToText(ws.cells(r, 1).value) = "Rb" Then
+            uTabeli = True
+        End If
+    Next r
+    S6GrupniLinije = s
+End Function
+
+' PALETE I INTEGRITET A3 CITAJU LINIJE DOKUMENTA (odluka 4).
+'
+' AdjustPaletaGajbiceZaPrijemnicu_TX je ziv (Oporavak, Alt+F8). Do koraka 3 je
+' dokument citao sa zaglavlja: nad novim oblikom to je "klasa I, 0 gajbi", pa
+' bi palete te klase svukao na nulu, a klasu II proglasio viskom. A3 je
+' neto paleta poredio sa Kolicinom zaglavlja (prazno = 0) i prijavljivao svaki
+' ispravan dokument.
+'
+' Nivo: LINIJA (dokument + klasa). Dokument 10 + 10 gajbi, palete po stavci.
+' Kontra-tvrdnje: A3 i dalje vidi STVARNO odstupanje neta (+5 kg na paleti
+' klase II), a Adjust i dalje ispravlja STVARNO odstupanje gajbi (-3 na paleti
+' klase II -> vraca na 10, pod kljucem stavke II). Oba kvara se prave na
+' paletnoj stavci, ne na dokumentu.
+' SABOTAZE: s6k3-a3-po-zaglavlju, s6k3-adjust-po-zaglavlju.
+Private Sub Test_S6_PaleteCitajuStavke()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String, prevPal As String
+    scenario = NewScenarioCode("S6PAL")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS6P-" & scenario)
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABS6P-" & scenario, "test S6 palete"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S6 palete: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrZateceniRed(testDate, TEST_VOZ_ID, brZbr, TEST_KUP_ID, _
+                   "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                   150#, tipT, 20, KLASA_I)) > 0, _
+               "S6 palete: preduslov -- zbirna je snimljena"
+
+    Dim prj As String, brojPrij As String, errNum As Long
+    brojPrij = TEST_PREFIX & "-S6PAL-" & scenario
+    On Error Resume Next
+    prj = SavePrijemnicaMulti_TX( _
+              datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+              brojPrij:=brojPrij, brojZbirne:=brZbr, _
+              vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+              kolicinaI:=100#, cenaI:=120#, tipAmb:=tipT, _
+              kolAmb:=10, kolAmbVracena:=0, _
+              hasKlasaII:=True, kolicinaII:=50#, cenaII:=80#, kolAmbII:=10, _
+              outErrNum:=errNum)
+    If Err.Number <> 0 Then prj = "": Err.Clear
+    On Error GoTo EH
+
+    Dim stI As String, stII As String
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    AssertTrue Len(stI) > 0 And Len(stII) > 0 And _
+               S6GajbiNaPaletama(prj, stI) = 10 And S6GajbiNaPaletama(prj, stII) = 10, _
+               "S6 palete: preduslov -- obe klase su paletizovane pod svojom stavkom"
+
+    ' --- A3 nad ispravnim dokumentom nema nalaz ---
+    AssertTrue Len(prj) > 0 And Not modTest.NalazSadrzi(modIntegritet.GetIntegritetRows(), "A3", prj), _
+               "S6 palete: A3 nema nalaz nad ispravnim dokumentom"
+
+    ' --- A3 kontra: +5 kg na paletnoj stavci klase II je nalaz ---
+    Dim rII As Long, netoPre As Variant, a3Kvar As Boolean, netoVracen As Boolean
+    Dim ps As Variant
+    rII = S6PaletnaStavkaRed(prj, stII)
+    If rII > 0 Then
+        ps = GetTableData(TBL_PALETA_STAVKA)
+        netoPre = ps(rII, RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, _
+                                             "Test_S6_PaleteCitajuStavke"))
+        On Error Resume Next
+        RequireUpdateCell TBL_PALETA_STAVKA, rII, COL_PALS_NETO, CDbl(netoPre) + 5#, _
+                          "Test_S6_PaleteCitajuStavke"
+        a3Kvar = modTest.NalazSadrzi(modIntegritet.GetIntegritetRows(), "A3", prj)
+        Err.Clear
+        RequireUpdateCell TBL_PALETA_STAVKA, rII, COL_PALS_NETO, netoPre, _
+                          "Test_S6_PaleteCitajuStavke"
+        netoVracen = (Err.Number = 0)
+        Err.Clear
+        On Error GoTo EH
+    End If
+    AssertTrue netoVracen, "S6 palete: preduslov -- neto paletne stavke je vracen"
+    AssertTrue a3Kvar, "S6 palete: A3 vidi stvarno odstupanje neta na liniji"
+
+    ' --- Adjust nad ispravnim dokumentom ne menja nista ---
+    Dim info As String, rez As Long
+    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "", info)
+    AssertEquals "0|10|10", CStr(rez) & "|" & CStr(S6GajbiNaPaletama(prj, stI)) & "|" & _
+                            CStr(S6GajbiNaPaletama(prj, stII)), _
+                 "S6 palete: Adjust nad ispravnim dokumentom ne menja nijednu paletu"
+
+    ' --- Adjust kontra: -3 gajbe na paleti klase II vraca na 10, pod kljucem II ---
+    If rII > 0 Then
+        RequireUpdateCell TBL_PALETA_STAVKA, rII, COL_PALS_BR_GAJBICA, 7, _
+                          "Test_S6_PaleteCitajuStavke"
+    End If
+    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "", info)
+    AssertEquals "1|10|10", CStr(rez) & "|" & CStr(S6GajbiNaPaletama(prj, stI)) & "|" & _
+                            CStr(S6GajbiNaPaletama(prj, stII)), _
+                 "S6 palete: Adjust vraca klasu II na gajbe njene stavke, pod njenim kljucem"
+
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6_PaleteCitajuStavke", Err.Number, Err.description
+    On Error Resume Next
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' Red AKTIVNE paletne stavke dokumenta pod datim kljucem stavke (prvi; 0 = nema).
+Private Function S6PaletnaStavkaRed(ByVal prj As String, ByVal stavkaID As String) As Long
+    If Len(prj) = 0 Or Len(stavkaID) = 0 Then Exit Function
+    Dim d As Variant
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cP As Long, cS As Long, cSt As Long, i As Long
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S6PaletnaStavkaRed")
+    cS = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID, "S6PaletnaStavkaRed")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S6PaletnaStavkaRed")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = prj And Trim$(nz(d(i, cS), "")) = stavkaID And _
+           UCase$(Trim$(nz(d(i, cSt), ""))) <> "DA" Then
+            S6PaletnaStavkaRed = i
+            Exit Function
         End If
     Next i
 End Function

@@ -1278,33 +1278,49 @@ EH:
 End Function
 
 Private Function ExportPredatoPoKupcu(ByVal sheetID As String) As Boolean
-    Dim data As Variant
-    Dim colKupac As Long, colVrsta As Long, colKlasa As Long
-    Dim colKolicina As Long, colAmb As Long, colCena As Long
-    Dim i As Long
-    
     On Error GoTo EH
-    
-    data = GetTableData(TBL_PRIJEMNICA)
-    If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_PRIJEMNICA)
-    If IsEmpty(data) Then
+
+    ' Sadrzaj taba racuna PredatoPoKupcuRedovi (obrazac OtkupPoOMRedovi): upis
+    ' ide u Google tabelu, pa test meri sadrzaj bez mreze.
+    Dim result As Variant
+    result = PredatoPoKupcuRedovi()
+    If UBound(result, 1) < 2 Then
         ExportPredatoPoKupcu = WriteHeaderOnly(sheetID, "PredatoPoKupcu", _
             "KupacID", "VrstaVoca", "Klasa", "Koli" & ChrW(269) & "ina", _
             "Ambala" & ChrW(382) & "a", "Vrednost", "BrojPrijemnica")
         Exit Function
     End If
-    
+
+    ExportPredatoPoKupcu = WriteSheetData(sheetID, "PredatoPoKupcu", result)
+    Exit Function
+EH:
+    LogErr "ExportPredatoPoKupcu"
+    ExportPredatoPoKupcu = False
+End Function
+
+' Tab PredatoPoKupcu: zbir po Kupac + Vrsta + Klasa. Red 1 su naslovi; bez
+' prijemnica je to jedini red.
+Public Function PredatoPoKupcuRedovi() As Variant
+    Dim data As Variant
+    Dim colKupac As Long, colVrsta As Long, colKlasa As Long
+    Dim colKolicina As Long, colAmb As Long, colCena As Long
+    Dim i As Long
+
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    data = GetTableData(TBL_PRIJEMNICA)
+    If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_PRIJEMNICA)
+    If IsEmpty(data) Then GoTo Naslovi
+
     colKupac = GetColumnIndex(TBL_PRIJEMNICA, "KupacID")
     colVrsta = GetColumnIndex(TBL_PRIJEMNICA, "VrstaVoca")
     colKlasa = GetColumnIndex(TBL_PRIJEMNICA, "Klasa")
     colKolicina = GetColumnIndex(TBL_PRIJEMNICA, "Kolicina")
     colAmb = GetColumnIndex(TBL_PRIJEMNICA, "KolAmbalaze")
     colCena = GetColumnIndex(TBL_PRIJEMNICA, "Cena")
-    
+
     ' Aggregieren per Kupac + Vrsta + Klasa
-    Dim dict As Object
-    Set dict = CreateObject("Scripting.Dictionary")
-    
     For i = 1 To UBound(data, 1)
         Dim key As String
         key = CStr(data(i, colKupac)) & "|" & CStr(data(i, colVrsta)) & "|" & CStr(data(i, colKlasa))
@@ -1318,14 +1334,8 @@ Private Function ExportPredatoPoKupcu(ByVal sheetID As String) As Boolean
         vals(3) = vals(3) + 1
         dict(key) = vals
     Next i
-    
-    If dict.count = 0 Then
-        ExportPredatoPoKupcu = WriteHeaderOnly(sheetID, "PredatoPoKupcu", _
-            "KupacID", "VrstaVoca", "Klasa", "Koli" & ChrW(269) & "ina", _
-            "Ambala" & ChrW(382) & "a", "Vrednost", "BrojPrijemnica")
-        Exit Function
-    End If
-    
+
+Naslovi:
     Dim result() As Variant
     ReDim result(1 To dict.count + 1, 1 To 7)
     result(1, 1) = "KupacID"
@@ -1355,12 +1365,8 @@ Private Function ExportPredatoPoKupcu(ByVal sheetID As String) As Boolean
         result(r + 2, 6) = CStr(vals(2))
         result(r + 2, 7) = CStr(vals(3))
     Next r
-    
-    ExportPredatoPoKupcu = WriteSheetData(sheetID, "PredatoPoKupcu", result)
-    Exit Function
-EH:
-    LogErr "ExportPredatoPoKupcu"
-    ExportPredatoPoKupcu = False
+
+    PredatoPoKupcuRedovi = result
 End Function
 
 Private Function ExportSaldoOM(ByVal sheetID As String) As Boolean
