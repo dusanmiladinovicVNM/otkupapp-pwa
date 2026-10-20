@@ -6113,6 +6113,41 @@
          (`make_fixture.py --donor ... --force`).
      - **Čeka:** reviewer GO → `run_vba` FULL i `dokaz.py s6- --grupe`; compile i ručnu proveru radi operater.
 
+172. **S6 korak 1 — izvršne kapije posle reviewer GO** (20.10.2026). Review `#435`: `CODE GO`, `TEST GO`,
+     `MERGE HOLD` do Excel dokaza, `P0`/`P1` = 0. Sve je pušteno nad HEAD-om `b9b92747`; `src-vba` posle toga
+     nije diran (ovaj commit je samo dokumentacija).
+
+     - **FULL 12/12 ZELENO** (izvor `d13fca1ebc87`, marker upisan):
+       - RunAllTests **257/0** (`T_S6_KanonStavkePrijemnice` i `T_Sema_SveskaOdgovaraKanonu` OK);
+       - BFP **2478/0**, Banka **241/0**, Storno **111/0**, Palete 97, Faktura 35/35, Agrohemija 25/25,
+         SheetsJson 72/72;
+       - `SCHEMA OK`, potpis fixture-a važeći (regeneracija nije trebala).
+     - **`dokaz.py s6- --grupe`: 5/5 crveno, svaka sabotaža po SVOJOJ tvrdnji.** Izvor pre i posle je
+       `3d984067263416e9`, identičan. Uz tri sabotaže nad `modSchema` pala su još 2–3 testa; alat njihova
+       imena ne ispisuje, pa **nije provereno** koji su.
+     - **Očekivano iz stavke 171 = izmereno**, broj po broj.
+     - **Reviewerova provera („`EnsureRuntimeSchema` pravi tabelu bez promene postojećih“)** — prolaz
+       `run_vba --suite RunIzvestajTests --keep`, pa poređenje XML definicija tabela sa fixture-om:
+       - 47 → **48** tabela; jedina nova je `tblPrijemnicaStavke`, sa tačno 12 kanonskih kolona i prazna
+         (`A1:L2`);
+       - četiri tabele se od fixture-a razlikuju (`tblOtkup`, `tblOtpremnica`, `tblPaletaStavka`,
+         `tblPrijemnica`), i sve su **zatečena lečenja ranijih rezova**: rename `ZbirnaGeneracijaID` →
+         `ZbirnaRoditeljID` (S4-3c, `modSetup:1207`), brisanje starih linijskih kolona (S1d, S3-ostatak),
+         `PredajaID`;
+       - diff ovog PR-a ne dira nijedno pravilo lečenja (0 pogodaka po `PreimenujKolonuAko`,
+         `ObrisiKolonuAko`, `EnsureColumnOnTable`, `EnsureRuntimeSchema`); `tblPrijemnica` zadržava svojih
+         30 redova.
+     - **Sveska za compile:** `run_vba --compile-only --keep`. `REZULTAT: PALO` uz `COMPILE NEJASNO` je
+       očekivan.
+       - Provera: ZIP `testzip` OK, 198 komponenti, nov kod prisutan; `modVbaTools` nije u svesci, i to je
+         namerno.
+       - Premeštena je u `tests/fixtures/rucna_provera_s6_korak1.xlsm`, u worktree-ju `ki021` (gitignored).
+       - **Otvaranje u sopstvenoj instanci:** u konvenciji alata (`AutomationSecurity=1`, `EnableEvents=False`)
+         nema dijaloga. Sa **ugašenim** makroima (`=3`) iskače *„An error occurred while loading 'modLogo'“*,
+         a `modLogo` se učita **odsečen** (205 od 397 linija) → **`KI-030`**, bez popravke u ovom rezu.
+     - **Čeka operatera:** compile nad sveskom pa `python tools/vba_gate.py --mark-compile`, kratka ručna
+       provera, pa merge — samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
