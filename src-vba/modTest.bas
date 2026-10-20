@@ -609,6 +609,9 @@ Private Sub ResetSeamova()
     ' Podmetnut pad ispravke reversa (221): zaostao seam bi oborio svaku
     ' sledecu ispravku.
     modAmbalaza.IspravkaReversaPadniTest False
+    ' Podmetnut pad na kraju storna prijemnice (S6 korak 4): zaostao seam bi
+    ' oborio svaki sledeci storno prijemnice.
+    modStorno.StornoPrijemnicePadniTest False
     modUiScreens.ScrSekcijuZabraniTest ""
     modUiScreens.ScrGradnjuOboriTest False
     modUiScreens.ScrResetCache
@@ -2781,7 +2784,7 @@ Private Sub T_Zbirna_NemaIspravku()
 
     ' Prijemnica: isti izbor koji T_StornoBezUvida_NemaAkcije vec dokazuje kao
     ' razresiv, da kontrolna strana ne padne iz nekog treceg razloga.
-    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-IMP-2", ""
+    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "PRJ-TEST-Z2", ""
     prij = modScrStorno.Scr_AkcijeKljucevi()
 
     AssertEq (Len(zbr) > 1), True, _
@@ -3426,7 +3429,7 @@ Private Sub T_F8_IzabranRedOstajeIzabran()
 
     ' SA identitetom: zapis postoji i pokazuje na bas taj dokument.
     Set res = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "", _
-                                           SV_MODE_RESI_KASNIJE, False, False, "GEN-F8-2")
+                                           SV_MODE_RESI_KASNIJE, False, False, "PRJ-TEST-Z2")
     cid = Trim$(NzToText(res("correctionID")))
     AssertEq (Len(cid) > 0), True, "sa identitetom se recovery zapis pravi"
 
@@ -3473,7 +3476,7 @@ Private Sub T_IspravkaPrijemnice_PodKolizijomBroja()
              "preduslov: broj nose dva dokumenta"
 
     Set res = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, FX_PRIJ_ISPRAVKA, "", _
-                                           SV_MODE_ISPRAVKA, False, True, "GEN-ISP-1")
+                                           SV_MODE_ISPRAVKA, False, True, "PRJ-TEST-I1")
     AssertEq (Not res Is Nothing), True, "framework je vratio rezultat"
     AssertEq CBool(res("needsForm")), True, _
              "ISPRAVKA pod kolizijom broja PROLAZI kad je identitet poznat"
@@ -3577,8 +3580,10 @@ Private Sub T_ZbirnaKaskada_StajeNaDvosmislenom()
                              False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 2, _
              "preduslov: broj nose dva aktivna dokumenta"
 
+    ' Identitet je PrijemnicaID izabranog reda (S6 korak 4); bez njega okvir
+    ' dokument ne nalazi, pa do kapije zbirne ne bi ni stigao.
     Set res = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, "2/150326", "", _
-                                           SV_MODE_PONISTENJE, True, False, "")
+                                           SV_MODE_PONISTENJE, True, False, "PRJ-KASK-1")
     AssertEq (Not res Is Nothing), True, "framework je vratio rezultat"
     AssertEq CBool(res("success")), False, _
              "ponistenje lanca staje dok broj nose dva aktivna dokumenta"
@@ -3881,7 +3886,9 @@ Private Sub T_StornoEkran_KolonaIdentiteta()
     ' NAJVAZNIJE PRVO: kolona identiteta MORA biti tu kad se trazi.
     cols = modScrDokumenti.GridCols(STIP_PRIJEMNICA, True)
     poslednja = modScrDokumenti.ColF(CStr(cols(UBound(cols))), 1)
-    AssertEq poslednja, COL_GENERACIJA_ID, _
+    ' Od S6 koraka 4 identitet prijemnice je PrijemnicaID (odluka 2), ne
+    ' generacija -- tvrdnja meri isti spoj, sa novim imenom kolone.
+    AssertEq poslednja, COL_PRJ_ID, _
              "opis kolona za Storno nosi kolonu identiteta, i to POSLEDNJU"
 
     ' I mora biti NEVIDLJIVA: prioritet 4, dok petlja vidljivosti ide 3 -> 1.
@@ -3893,7 +3900,7 @@ Private Sub T_StornoEkran_KolonaIdentiteta()
     ' bezuslovno dodavanje menjalo i mrezu unosa.
     cols = modScrDokumenti.GridCols(STIP_PRIJEMNICA, False)
     For i = 0 To UBound(cols)
-        If modScrDokumenti.ColF(CStr(cols(i)), 1) = COL_GENERACIJA_ID Then ima = True
+        If modScrDokumenti.ColF(CStr(cols(i)), 1) = COL_PRJ_ID Then ima = True
     Next i
     AssertEq ima, False, "unosni rezim NE dobija kolonu identiteta"
 
@@ -3920,8 +3927,8 @@ Private Sub T_StornoEkran_KolonaIdentiteta()
     AssertEq ima, True, "revers nosi AmbDokID kao kolonu identiteta"
 
     ' I na kraju: ono sto ekran zapamti pri izboru reda je ono sto salje nizvodno.
-    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-F8-2", ""
-    AssertEq modScrStorno.Scr_IzabranDocID(), "GEN-F8-2", _
+    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "PRJ-TEST-Z2", ""
+    AssertEq modScrStorno.Scr_IzabranDocID(), "PRJ-TEST-Z2", _
              "ekran nosi identitet izabranog reda, ne samo broj"
 End Sub
 
@@ -4043,7 +4050,7 @@ Private Sub T_StornoImpact_PoIdentitetu()
 
     ' NAJVAZNIJE: sa identitetom uvid nosi SAMO palete izabranog dokumenta.
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
-                                             "", "GEN-IMP-2")
+                                             "", "PRJ-TEST-Z2")
     Set pal = m("palete")
     AssertEq pal.count, 1, "sa identitetom uvid nosi SAMO palete izabranog dokumenta"
 
@@ -4117,7 +4124,7 @@ Private Sub T_StornoBezUvida_NemaAkcije()
     ' Kontrola u suprotnom smeru: ISTI dokument sa razresivim identitetom uvid
     ' dobija, pa radnje postoje. Bez ovoga bi tvrdnja iznad prolazila i kad bi
     ' kapija bila zaglavljena na nuli.
-    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-IMP-2", ""
+    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "PRJ-TEST-Z2", ""
     AssertEq (modScrStorno.Scr_BrojAkcija() > 0), True, _
              "sa valjanim uvidom radnje POSTOJE -- kapija nije zaglavljena"
 
@@ -4229,7 +4236,7 @@ Private Sub T_StornoImpact_SchemaDriftJeInvalidan()
     ' POZITIVNA KONTROLA: nad zdravom semom uvid je valjan i ima palete. Bez nje
     ' bi test prosao i kad BuildStornoImpact uvek vraca valid = False.
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
-                                             "", "GEN-IMP-2", True)
+                                             "", "PRJ-TEST-Z2", True)
     AssertEq CBool(m("valid")), True, "pozitivna kontrola: zdrava sema daje valjan uvid"
     imaoPalete = (m("palete").count > 0)
     AssertEq imaoPalete, True, "pozitivna kontrola: dokument stvarno ima paletu"
@@ -4238,7 +4245,7 @@ Private Sub T_StornoImpact_SchemaDriftJeInvalidan()
     On Error GoTo VRATI
     lo.ListColumns(COL_PALS_PRIJEMNICA_ID).name = COL_PALS_PRIJEMNICA_ID & "_DRIFT"
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
-                                             "", "GEN-IMP-2", True)
+                                             "", "PRJ-TEST-Z2", True)
     validPodDriftom = CBool(m("valid"))
 VRATI:
     On Error Resume Next
@@ -4260,7 +4267,7 @@ VRATI:
     On Error GoTo VRATI_PAL
     lo.ListColumns(COL_PALS_PALETA_ID).name = COL_PALS_PALETA_ID & "_DRIFT"
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
-                                             "", "GEN-IMP-2", True)
+                                             "", "PRJ-TEST-Z2", True)
     validPodPalDriftom = CBool(m("valid"))
 VRATI_PAL:
     On Error Resume Next
@@ -4304,28 +4311,31 @@ Private Sub T_StornoImpact_IdentitetNeDegradira()
 
     ' GENERACIJA KOJA PRIPADA DRUGOM BROJU.
     '
-    ' Prethodna tvrdnja meri kapiju u modStornoFlow.PkPoIdentitetu: generacija
-    ' koje NEMA nigde. Ova meri kapiju u modStornoImpact.ImpactPalete, i to je
-    ' druga kapija -- jer se dva trazenja razlikuju:
-    '
-    '   IdoviGeneracije          trazi generaciju kroz CELU tabelu
-    '   PrijemniceIDPoIdentitetu trazi broj I generaciju
-    '
-    ' GEN-IMP-1 postoji (na PRJ-TEST-Z1, broj 6/150326), pa ga prvo trazenje
-    ' razresi i uvid ide dalje. Drugo ga ne nadje pod brojem 1/150326 -- i bez
-    ' kapije bi palete bile procitane PO BROJU, dakle tudje, unutar modela koji
-    ' se posle oznacava kao valid. Tacno degradacija zbog koje je nastao 198.
+    ' Prethodna tvrdnja meri identitet koga NEMA nigde. Ova meri identitet koji
+    ' postoji, ali pod DRUGIM brojem: PRJ-TEST-Z1 nosi broj 6/150326, a uvid je
+    ' trazen pod 1/150326. Od S6 koraka 4 to je provera PARA u
+    ' modStornoFlow.PrijemnicaIDZaStorno (do tada: generacija trazena kroz celu
+    ' tabelu, pa broj I generacija u ImpactPalete). Bez kapije bi palete bile
+    ' procitane PO BROJU, dakle tudje, unutar modela koji se posle oznacava kao
+    ' valid. Tacno degradacija zbog koje je nastao 198.
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_BROJ, _
-                                             "", "GEN-IMP-1", True)
+                                             "", "PRJ-TEST-Z1", True)
     AssertEq CBool(m("valid")), False, _
              "generacija koja pripada DRUGOM broju ne tumaci ovaj dokument"
 
-    ' Bez identiteta uvid i dalje radi po broju -- zatecen zapis nema generaciju,
-    ' pa je broj sve sto postoji. Kapija ne sme da zakljuca ni taj slucaj.
+    ' Bez identiteta STROG uvid pada (S6 korak 4, odluka 2). Do tada je ovde
+    ' stajalo "zatecen zapis nema generaciju, pa je broj sve sto postoji" -- a od
+    ' koraka 4 identitet je PrijemnicaID, koji nosi SVAKI red, pa zatecenog zapisa
+    ' bez identiteta nema. Broj ovog dokumenta nose dva kupca: uvid po njemu bi
+    ' opisao dva dokumenta pod oznakom jednog.
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
                                              "", "", True)
-    AssertEq CBool(m("valid")), True, _
-             "bez identiteta uvid i dalje radi po broju (zatecen zapis)"
+    AssertEq CBool(m("valid")), False, _
+             "bez identiteta strog uvid pada -- broj se ne razresava u dokument"
+    ' Van strict-a (test hook, zatecen pozivalac bez ID-a) palete i dalje idu po
+    ' broju, i tada legitimno vide oba dokumenta tog broja.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "")
     AssertEq m("palete").count, 2, "i tada legitimno vidi oba dokumenta tog broja"
 End Sub
 ' ============================================================
@@ -4723,7 +4733,7 @@ Private Sub T_ImpactPalete_ZaglavljeIzPraveVrste()
     StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
 
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
-                                             "", "GEN-IMP-2")
+                                             "", "PRJ-TEST-Z2")
     Set pal = m("palete")
 
     ' PREDUSLOV: tacno jedna paleta, i to njegova. Bez ovoga bi tvrdnje ispod
@@ -9963,6 +9973,11 @@ Private Sub T_S6K4_StornoCitaStavkeIIdentitet()
                                "kol1|cena|kol2|cena2|dveklase"), "300|50|120|40|2", _
              "S6K4 storno: prefill ispravke nosi kolicinu i cenu SVAKE stavke"
 
+    ' --- F8 IDENTITET: skrivena kolona nosi PrijemnicaID ---
+    ' Ide PRE uvida: uvid se zove tim identitetom, pa bi kvar identiteta
+    ' inace oborio tvrdnju uvida, a ne svoju.
+    AssertEq ident, res, "S6K4 storno: red F8 nosi PrijemnicaID dokumenta"
+
     ' --- UVID: kg dokumenta je zbir stavki ---
     Set uvid = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, broj, "", ident, True)
     kgUvid = "nema"
@@ -9973,9 +9988,6 @@ Private Sub T_S6K4_StornoCitaStavkeIIdentitet()
     ' --- LISTA ZA STORNO: red dokumenta nosi kg stavki ---
     AssertEq S6K4KgUListiStorna(broj), modStornoDok.KgTekst(420#), _
              "S6K4 storno: lista za storno -- kg dokumenta je zbir stavki"
-
-    ' --- F8 IDENTITET: skrivena kolona nosi PrijemnicaID ---
-    AssertEq ident, res, "S6K4 storno: red F8 nosi PrijemnicaID dokumenta"
 End Sub
 
 ' Vrednosti datih kljuceva iz prefill spec-a ("k=v|k=v"), redom kljuceva,

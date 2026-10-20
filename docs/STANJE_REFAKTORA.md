@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 3/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · **korak 4 (storno na nivou dokumenta, `KI-031` kao kapija) je sledeći**, grana `claude/s6-korak4-storno` |
+| **S6 prijemnica** | ⏳ **u toku, 3/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · **korak 4 (storno na nivou dokumenta, `KI-031` kao kapija) na review-u** (stavke 182–183), grana `claude/s6-korak4-storno` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -6535,6 +6535,49 @@
      - **Usput:** `KI-034` (`StornoTestFailPosleRelease` ne poštuje §4 — kuka bez `IsTestMode()`, van
        `ResetSeamova`).
      - **Sledeći brojevi:** stavka 183 (kod) · test 260 · KI-035.
+
+183. **S6 korak 4 — storno prijemnice na nivou dokumenta, `KI-031` zatvoren; PR na review** (20.10.2026). Plan i
+     ispravke plana tokom koda su u §14.55, „Korak 4".
+
+     - **Reprodukcija:**
+       - **crveno** `a1aef441` (samo testovi, nad postojećim API-jem). BFP 2572 = 2526 + 46: palo je 24, svih 24
+         su nove `S6K4` tvrdnje, po imenu. `KI-031` kroz pravu kaskadu: subjekat storniran, 0 kontra-stavova,
+         zbirna vraćena, palete 20. Usput je izmereno i da `ByBroj` sa generacijom ignoriše broj. RunAllTests
+         260/1: 260 pada na prefill-u (`||||1`), a ostale tri tvrdnje 260 zaklanja prvi pad;
+       - **zeleno:** kod ispravke + tri testa koji traže nov API (seam, jezgro bez snimka, `AMB-INV-07`).
+     - **Ugovor:** jedno jezgro `modStorno.StornoPrijemnica(id, tx, skiniPalete)`:
+       - pre prvog upisa TRAŽI snimke tabela koje menja (prijemnica, knjiga, palete);
+       - odbija fakturisanu prijemnicu (keš ili aktivna stavka fakture, isti predikat kao uvid) i paletu koja je
+         prerađena;
+       - redosled upisa je palete → `Stornirano` → `bind` → kontra-stav.
+
+       Svi pozivaoci snimaju kroz `SnimiZaStornoPrijemnice`, kaskada bez obzira na `ownsChain`. Identitet je
+       `PrijemnicaID` od reda F8 do pisca, kroz jedan razrešavač (`PrijemnicaIDZaStorno`, par broj–ID).
+     - **TARGETED nad izvorom `7114a4fca5c0`** (marker upisan):
+       - RunAllTests **260/0**;
+       - BFP **2596/0** (= 2526 + 46 + 24, tačno izvedeno iz diff-a);
+       - Storno **111/0**, StornoCentar OK, Palete **97**.
+
+       Prvi zeleni prolaz je dao tri pada u testovima čija se premisa menja (57, T17, StornoCentar „distinct po
+       broju"), a ne u kodu; ispravljeni su u testu i prolaz je ponovljen.
+     - **Sabotaže:** katalog **886 → 903** (`POZNATI_NALAZI` 9):
+       - 17 novih `s6k4-*`;
+       - presidrene su `kapija-i-uz-identitet` i `f8-identitet-po-broju` (kod pod njima je obrisan, regresija se
+         sada meri u razrešavaču);
+       - statička sonda 19/19, otisak `c40ba16c31f2d7f1` pre i posle. Da svaka obara SVOJU tvrdnju **nije
+         izmereno** — to meri `dokaz.py` posle GO.
+     - **Jeftine kapije:**
+       - `vba_check`, `sabotaza --proveri-sidra`, `who_writes --check` i `--check-ownership`,
+         `gen_schema_module --check` (otisak `106AC27A`, nepromenjen) i `popis_citalaca --check`
+         (`zbr_linija` **4 → 3**) su exit 0;
+       - `WHO_WRITES.md` je regenerisan: `modStorno` više ne piše `tblFakturaStavke`, pa je unos skinut iz
+         `WRITE_OWNERSHIP.json`.
+     - **Zatvoreno u istom rezu:** `KI-031` → `CLOSED`. `MAPA_SPOSOBNOSTI` B-016 → ZAMENJENO (odluka 1).
+     - **Usput → `KI-035`:** `PonistiZbirnaChain_Test` ne pita `IsTestMode()`.
+     - **Compile:** `run_vba` javlja `COMPILE NEJASNO`, kao i do sada. Ručni compile čeka sveska posle GO.
+     - **Čeka reviewer GO:** `run_vba` FULL, `dokaz.py s6k4- kapija-i-uz-identitet f8-identitet-po-broju --grupe`,
+       sveska za compile i ručna provera.
+     - **Sledeći brojevi:** stavka 184 · test 261 · KI-036.
 
 ## Dug sa imenom (posle S5-5b)
 

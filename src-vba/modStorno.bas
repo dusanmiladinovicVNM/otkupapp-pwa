@@ -35,6 +35,12 @@ Private Const ERR_STORNO_BASE As Long = vbObjectError + 2400
 ' u produkciji uvek False.
 Private mTestFailPosleRelease As Boolean
 
+' TEST SEAM (S6 korak 4, R2/R4): namerna greska na KRAJU jezgra storna
+' prijemnice, posle SVIH upisa (palete, zaglavlje, knjiga) -- jedini nacin da test
+' dokaze da rollback pozivaoca vraca ceo dokument. Postavljac ga pali samo u test
+' rezimu, kuka ponovo pita IsTestMode(), a gasi ga modTest.ResetSeamova.
+Private mTestPrjStornoPadni As Boolean
+
 ' ============================================================
 ' OTKUP
 ' ============================================================
@@ -102,32 +108,6 @@ Public Function StornoOtkup_TX(ByVal otkupID As String) As Boolean
 EH:
     HandleStornoTxError SRC, "Otkup", otkupID, tx
     StornoOtkup_TX = False
-End Function
-
-' ============================================================
-' Pripada li red IZABRANOM dokumentu
-' ============================================================
-' Po GeneracijaID kad je poznat, inace po broju. Broj je labela: BrojPrijemnice
-' se racuna PO KUPCU, BrojDokumenta otkupa PO OTKUPNOM MESTU -- prosirenje
-' operacije na sve redove tog broja moze da zahvati tudji dokument.
-'
-' Kad je generacija zadata a kolone nema (zatecena instalacija pre
-' EnsureSledljivostSchema), staje se glasno: pozivalac je rekao BAS TAJ
-' dokument, pa tihi pad na broj znaci da se dira nesto drugo.
-Private Function RedJeIzabranogDokumenta(ByRef data As Variant, ByVal i As Long, _
-                                         ByVal colBroj As Long, ByVal colGen As Long, _
-                                         ByVal broj As String, ByVal gen As String, _
-                                         ByVal sourceName As String) As Boolean
-    If Len(Trim$(gen)) = 0 Then
-        RedJeIzabranogDokumenta = (Trim$(CStr(data(i, colBroj))) = Trim$(broj))
-        Exit Function
-    End If
-    If colGen = 0 Then
-        Err.Raise ERR_STORNO_BASE + 13, sourceName, _
-                  "Zadata je generacija dokumenta, a tabela nema kolonu " & _
-                  COL_GENERACIJA_ID & ". Pokreni EnsureRuntimeSchema pa ponovi."
-    End If
-    RedJeIzabranogDokumenta = (Trim$(NzToText(data(i, colGen))) = Trim$(gen))
 End Function
 
 ' tx je OBAVEZAN, ne opcion: storno knjige je kontra-stav koji mora da legne u
@@ -405,7 +385,18 @@ End Function
 ' PRIJEMNICA
 ' ============================================================
 
-Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String) As Boolean
+' STORNO PRIJEMNICE IDE PO PrijemnicaID-u (S6 korak 4, odluka 2) -- jedini ulaz.
+'
+' Od koraka 2 je dokument JEDAN red zaglavlja sa 1..2 stavke, pa "svih redova
+' broja" vise nema; StornoPrijemnicaByBroj_TX je obrisan. Broj nose dva kupca i
+' dva dokumenta istog kupca, a sa generacijom je stari ulaz broj ignorisao.
+'
+' skiniPalete = False samo kad operater to IZRICITO bira: ISPRAVKA (palete cekaju
+' novu prijemnicu) i DUPLI "ne diraj palete" (MANUAL recovery). Neuspeh nikad ne
+' vodi u tu granu -- tada pada ceo storno (R3).
+Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String, _
+                                    Optional ByVal skiniPalete As Boolean = True, _
+                                    Optional ByRef outPaletnihStavki As Long) As Boolean
     Const SRC As String = "StornoPrijemnica_TX"
 
     Dim tx As clsTransaction
@@ -413,13 +404,11 @@ Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String) As Boolean
 
     On Error GoTo EH
 
+    outPaletnihStavki = 0
     tx.BeginTx
-    tx.AddTableSnapshot TBL_PRIJEMNICA
-    tx.AddTableSnapshot TBL_FAKTURE
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    SnimiZaStornoPrijemnice tx
 
-    If Not StornoPrijemnica(prijemnicaID, tx) Then
+    If Not StornoPrijemnica(prijemnicaID, tx, skiniPalete, outPaletnihStavki) Then
         Err.Raise ERR_STORNO_BASE + 4, SRC, _
                   "StornoPrijemnica nije uspeo. PrijemnicaID=" & prijemnicaID
     End If
@@ -433,49 +422,68 @@ Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String) As Boolean
     Exit Function
 
 EH:
+    outPaletnihStavki = 0
     HandleStornoTxError SRC, "Prijemnica", prijemnicaID, tx
     StornoPrijemnica_TX = False
 End Function
 
-' STORNO PRIJEMNICE: tx je OBAVEZAN (isti razlog kao StornoOtkup/StornoOtpremnica).
+' JEDAN skup snimaka za SVAKOG pozivaoca storna prijemnice (S6 korak 4, KI-031).
 '
-' Od 10b-2 storno upisuje KONTRA-STAV u knjigu (AMB-10-ODL-16), pa knjiga i
-' dokument moraju da dele rollback (AMB-INV-08). Sva tri pozivna mesta
-' (StornoPrijemnica_TX, StornoPrijemnicaByBroj_TX, PonistiZbirnaChain_TX) tx vec
-' imaju i snapshotuju tblPrijemnica I tblAmbalaza -- izmereno pre koda.
+' Kaskada zbirne je tblPrijemnica snimala samo u jednoj grani, a subjekat je
+' stornirala u drugoj -- rollback je vracao sve osim zaglavlja. Skup je SIRI od
+' onoga sto jezgro pise (stavke prijemnice, faktura i njene stavke): rollback
+' vraca ceo dokument i njegovu okolinu, a jezgro posebno TRAZI ono sto samo menja
+' (RequireSnimakZaStornoPrijemnice), pa pozivalac koji preskoci ovaj poziv pada
+' glasno, pre prvog upisa. AddTableSnapshot preskace vec snimljenu tabelu.
+Public Sub SnimiZaStornoPrijemnice(ByVal tx As clsTransaction)
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+End Sub
+
+' JEZGRO STORNA PRIJEMNICE (S6 korak 4). Storno ponistava TRI dogadjaja --
+' palete, dokument i knjigu -- i svi padaju ZAJEDNO ili nijedan (R3):
+'
+'   1) snimci     tx MORA da snima svaku tabelu koju jezgro menja (KI-031);
+'   2) provere    red postoji jednom i nije storniran; dokument nije fakturisan
+'                 (odluka 1); preradjena paleta se proverava u paletnom motoru,
+'                 pre njegove prve mutacije (odluka 3);
+'   3) upisi      palete -> Stornirano -> bind -> kontra-stav knjige.
+'
+' Stornirano ne ide pre posledica van knjige (R4), a knjiga ide POSLE bind-a, jer
+' AMB-10-ODL-15 trazi da dokument vezuje samo pisac koji ga je u ovoj transakciji
+' stvarno promenio. Pad bilo gde vraca SVE rollback-om pozivaoca: zato tacka 1.
+'
+' Faktura se ovde vise ne pise: fakturisana prijemnica se odbija, pa je stara
+' grana osirotelosti (MarkFakturaOrphaned) postala nedostizna i obrisana je.
 Public Function StornoPrijemnica(ByVal prijemnicaID As String, _
-                                 ByVal tx As clsTransaction) As Boolean
+                                 ByVal tx As clsTransaction, _
+                                 Optional ByVal skiniPalete As Boolean = True, _
+                                 Optional ByRef outPaletnihStavki As Long) As Boolean
     Const SRC As String = "StornoPrijemnica"
 
     On Error GoTo EH
 
+    outPaletnihStavki = 0
+    RequireSnimakZaStornoPrijemnice tx, SRC
+
     Dim rowPrij As Long
     rowPrij = RequireStornoAllowed(TBL_PRIJEMNICA, prijemnicaID, COL_PRJ_ID, SRC)
 
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC
-    RequireColumnIndex TBL_FAKTURE, COL_FAK_ID, SRC
-    RequireColumnIndex TBL_FAKTURE, COL_OSIROCENO_OD, SRC
-    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC
-    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC
-    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD, SRC
-
-    Dim prijData As Variant
-    prijData = GetTableData(TBL_PRIJEMNICA)
-
-    If IsEmpty(prijData) Then
-        Err.Raise ERR_STORNO_BASE + 30, SRC, _
-                  "Tabela prijemnica je prazna."
+    Dim fakID As String
+    If PrijemnicaJeFakturisana(prijemnicaID, fakID) Then
+        Err.Raise ERR_STORNO_BASE + 74, SRC, _
+                  "Prijemnica " & Trim$(prijemnicaID) & " je fakturisana (faktura " & _
+                  fakID & "). Prvo stornirajte fakturu, pa prijemnicu."
     End If
 
-    Dim colFakturisano As Long
-    Dim colFakturaID As Long
-    Dim fakturaID As String
-
-    colFakturisano = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC)
-    colFakturaID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC)
-
-    fakturaID = Trim$(CStr(prijData(rowPrij, colFakturaID)))
+    If skiniPalete Then
+        outPaletnihStavki = modPaletniList.SkiniPaleteZaStornoPrijemnice(tx, prijemnicaID, SRC)
+    End If
 
     MarkRowStornirano TBL_PRIJEMNICA, rowPrij, SRC
 
@@ -483,97 +491,91 @@ Public Function StornoPrijemnica(ByVal prijemnicaID As String, _
     ' dokument stvarno promenila, pa sme da tvrdi da ga poseduje.
     tx.BindSourceDocument DOK_TIP_PRIJEMNICA, prijemnicaID
 
-    If UCase$(Trim$(CStr(prijData(rowPrij, colFakturisano)))) = "DA" Then
-        RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURISANO, "", SRC
-        RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURA_ID, "", SRC
-
-        If Len(fakturaID) > 0 Then
-            MarkFakturaOrphaned fakturaID, prijemnicaID
-            MarkFakturaStavkeOrphaned fakturaID, prijemnicaID
-        End If
-    End If
-
     ' Storno ambalaze je kontra-stav u knjizi (AMB-10-ODL-16), kao kod otkupa.
     modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_PRIJEMNICA, prijemnicaID
+
+    If mTestPrjStornoPadni Then
+        If IsTestMode() Then
+            Err.Raise ERR_STORNO_BASE + 75, SRC, _
+                      "TEST: namerna greska posle svih upisa storna prijemnice (rollback dokaz)"
+        End If
+    End If
 
     StornoPrijemnica = True
     Exit Function
 
 EH:
+    outPaletnihStavki = 0
     LogAndReraise SRC
 End Function
 
-' Storniraj SVE aktivne redove prijemnice za dati BrojPrijemnice (Klasa I i II
-' dele isti broj, zaseban red po klasi). Mirror StornoOtkupByBrDok_TX.
-Public Function StornoPrijemnicaByBroj_TX(ByVal brBroj As String, _
-                                          Optional ByVal generacijaID As String = "") As Boolean
-    Const SRC As String = "StornoPrijemnicaByBroj_TX"
+' KI-031 PO KONSTRUKCIJI: jezgro TRAZI snimak svake tabele koju menja, pre prvog
+' upisa. Zakrpa jednog pozivaoca bi ostavila sledeceg otvorenog -- invarijanta
+' ide u jezgro, ne u omotac.
+Private Sub RequireSnimakZaStornoPrijemnice(ByVal tx As clsTransaction, _
+                                           ByVal sourceName As String)
+    If tx Is Nothing Then
+        Err.Raise ERR_STORNO_BASE + 73, sourceName, _
+                  "Storno prijemnice trazi aktivnu transakciju."
+    End If
+    Dim t As Variant
+    For Each t In Array(TBL_PRIJEMNICA, TBL_AMBALAZA, TBL_PALETA, TBL_PALETA_STAVKA)
+        If Not tx.ImaSnapshot(CStr(t)) Then
+            Err.Raise ERR_STORNO_BASE + 73, sourceName, _
+                      "Storno prijemnice: transakcija ne snima " & CStr(t) & _
+                      " -- rollback ne bi vratio ceo dokument (KI-031). " & _
+                      "Pozivalac snima kroz SnimiZaStornoPrijemnice."
+        End If
+    Next t
+End Sub
 
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
+' FAKTURISANA PRIJEMNICA (S6 korak 4, odluka 1). JEDAN predikat za kapiju storna i
+' za uvid (modStornoImpact, modStornoFlow) -- dva tela bi se razisla.
+'
+' Dva izvora, jer ni jedan sam nije istina: kes Fakturisano/FakturaID na zaglavlju
+' pise CreateFaktura (modFaktura:360/363), a stavka fakture nosi PrijemnicaID (korak
+' 5 je prevodi na PrijemnicaStavkaID). Aktivna stavka = nije stornirana. Kes "DA"
+' bez FakturaID-a je i dalje fakturisan dokument; outFakturaID je tada prazan.
+Public Function PrijemnicaJeFakturisana(ByVal prijemnicaID As String, _
+                                        Optional ByRef outFakturaID As String) As Boolean
+    Const SRC As String = "PrijemnicaJeFakturisana"
+    Dim pid As String, rows As Collection
+    outFakturaID = ""
+    pid = Trim$(prijemnicaID)
+    RequireNonBlank pid, "PrijemnicaID", SRC
 
-    On Error GoTo EH
-
-    RequireNonBlank brBroj, "BrojPrijemnice", SRC
-
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_PRIJEMNICA
-    tx.AddTableSnapshot TBL_FAKTURE
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
-
-    Dim data As Variant
-    data = GetTableData(TBL_PRIJEMNICA)
-    If IsEmpty(data) Then
-        Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_PRIJEMNICA
+    Dim cKes As Long, cKesID As Long
+    cKes = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC)
+    cKesID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC)
+    Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, pid)
+    If Not rows Is Nothing Then
+        If rows.count = 1 Then
+            Dim p As Variant
+            p = GetTableData(TBL_PRIJEMNICA)
+            If UCase$(Trim$(NzToText(p(CLng(rows(1)), cKes)))) = "DA" Then
+                outFakturaID = Trim$(NzToText(p(CLng(rows(1)), cKesID)))
+                PrijemnicaJeFakturisana = True
+                Exit Function
+            End If
+        End If
     End If
 
-    ' Sa generacijom se dokument bira po identitetu, pa kapija nad brojem nije
-    ' potrebna -- bez ovoga bi kapija obarala potpuno legitimnu operaciju nad
-    ' jednim od dva dokumenta istog broja.
-    If Len(Trim$(generacijaID)) = 0 Then _
-        RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brBroj, SRC, COL_PRJ_KUPAC
-
-    Dim colBr As Long, colID As Long, colStorno As Long
-    colBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
-    Dim colGen As Long: colGen = GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID)
-    colID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
-    colStorno = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
-
-    Dim ids As Collection: Set ids = New Collection
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If RedJeIzabranogDokumenta(data, i, colBr, colGen, brBroj, generacijaID, SRC) Then
-            If Not IsStorniranoValue(data(i, colStorno)) Then
-                ids.Add Trim$(CStr(data(i, colID)))
+    Dim d As Variant
+    d = GetTableData(TBL_FAKTURA_STAVKE)
+    If IsEmpty(d) Then Exit Function
+    Dim cP As Long, cF As Long, cSt As Long, i As Long
+    cP = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
+    cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    cSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC)
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cP))), pid, vbTextCompare) = 0 Then
+            If Not IsStorniranoValue(d(i, cSt)) Then
+                outFakturaID = Trim$(NzToText(d(i, cF)))
+                PrijemnicaJeFakturisana = True
+                Exit Function
             End If
         End If
     Next i
-
-    If ids.count = 0 Then
-        Err.Raise ERR_STORNO_BASE + 9, SRC, _
-                  "Nema aktivne prijemnice za broj: " & brBroj
-    End If
-
-    Dim k As Long
-    For k = 1 To ids.count
-        If Not StornoPrijemnica(CStr(ids(k)), tx) Then
-            Err.Raise ERR_STORNO_BASE + 4, SRC, _
-                      "StornoPrijemnica nije uspeo. PrijemnicaID=" & CStr(ids(k))
-        End If
-    Next k
-
-    tx.CommitTx
-
-    StornoPrijemnicaByBroj_TX = True
-    MonitorStornoSuccess SRC, "Prijemnica", brBroj
-
-    Set tx = Nothing
-    Exit Function
-
-EH:
-    HandleStornoTxError SRC, "Prijemnica", brBroj, tx
-    StornoPrijemnicaByBroj_TX = False
 End Function
 
 ' ============================================================
@@ -662,6 +664,14 @@ End Function
 Public Sub StornoTestFailPosleRelease(ByVal fail As Boolean)
     If Not IsTestMode() Then Exit Sub
     mTestFailPosleRelease = fail
+End Sub
+
+' Pali/gasi namernu gresku na kraju jezgra storna prijemnice (v.
+' mTestPrjStornoPadni). Paljenje van test rezima ne radi nista; gasenje radi
+' uvek, da ga ResetSeamova ugasi bez obzira na rezim.
+Public Sub StornoPrijemnicePadniTest(ByVal pali As Boolean)
+    If pali And Not IsTestMode() Then Exit Sub
+    mTestPrjStornoPadni = pali
 End Sub
 
 ' ============================================================
@@ -1755,51 +1765,10 @@ Private Sub ReleasePrijemnicaFromFaktura(ByVal prijemnicaID As String, _
     RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURA_ID, "", SRC
 End Sub
 
-Private Sub MarkFakturaOrphaned(ByVal fakturaID As String, _
-                                ByVal prijemnicaID As String)
-    Const SRC As String = "MarkFakturaOrphaned"
-
-    Dim rows As Collection
-    Set rows = FindRows(TBL_FAKTURE, COL_FAK_ID, fakturaID)
-
-    If rows Is Nothing Then Exit Sub
-    If rows.count = 0 Then Exit Sub
-
-    If rows.count > 1 Then
-        Err.Raise ERR_STORNO_BASE + 51, SRC, _
-                  "Dupla FakturaID vrednost: " & fakturaID
-    End If
-
-    RequireUpdateCell TBL_FAKTURE, CLng(rows(1)), COL_OSIROCENO_OD, _
-                      prijemnicaID, SRC
-End Sub
-
-
-Private Sub MarkFakturaStavkeOrphaned(ByVal fakturaID As String, _
-                                      ByVal prijemnicaID As String)
-    Const SRC As String = "MarkFakturaStavkeOrphaned"
-
-    Dim stavkeData As Variant
-    stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
-
-    If IsEmpty(stavkeData) Then Exit Sub
-
-    Dim colFakID As Long
-    Dim colPrijID As Long
-
-    colFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
-    colPrijID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
-
-    Dim i As Long
-
-    For i = 1 To UBound(stavkeData, 1)
-        If Trim$(CStr(stavkeData(i, colPrijID))) = Trim$(prijemnicaID) And _
-           Trim$(CStr(stavkeData(i, colFakID))) = Trim$(fakturaID) Then
-            RequireUpdateCell TBL_FAKTURA_STAVKE, i, COL_OSIROCENO_OD, _
-                              prijemnicaID, SRC
-        End If
-    Next i
-End Sub
+' MarkFakturaOrphaned / MarkFakturaStavkeOrphaned su obrisani u S6 koraku 4:
+' storno fakturisane prijemnice se odbija (odluka 1), pa je grana osirotelosti
+' nedostizna. Osirotelost po PrijemnicaStavkaID-u, ako ostane pravilo, vraca
+' korak 5.
 
 Private Sub ResetNovacFakturaLink(ByVal fakturaID As String)
     Const SRC As String = "ResetNovacFakturaLink"

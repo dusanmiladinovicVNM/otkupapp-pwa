@@ -348,6 +348,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6K4_PreradjenaPaletaObaraStorno
     Test_S6K4_F8IdentitetDokumenta
     Test_S6K4_KaskadaSubjekatJeDokument
+    Test_S6K4_PadPosleSvihUpisaVracaSve
+    Test_S6K4_JezgroTraziSnimak
+    Test_S6K4_KontraStavPadneDokumentOstaje
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
     Test_AMB_TipVanSifarnikaPisacOdbija
     Test_ODL24_UgovorPozajmice
@@ -2087,8 +2090,10 @@ Private Sub Test_StornoPoBrojuOdbijaDvaVlasnika()
     AssertTrue Len(prjA) > 0 And Len(prjB) > 0, _
                "Storno guard: obe prijemnice (isti broj, dva kupca) kreirane"
 
-    ' Dvosmislen number-only storno mora pasti...
-    AssertFalse StornoPrijemnicaByBroj_TX(brojPrij), _
+    ' Dvosmislen number-only storno mora pasti... (S6 korak 4: ulaz po broju
+    ' je obrisan; ekran Storno bez identiteta dokument ne razresava po broju.)
+    Dim msgSt As String
+    AssertFalse modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, brojPrij, "", msgSt, ""), _
                 "Storno guard: storno po broju sa dva vlasnika je ODBIJEN"
 
     ' ...i ne sme ostaviti nijedan storniran red (rollback / nista nije dirano).
@@ -2116,7 +2121,7 @@ Private Sub Test_StornoPoBrojuOdbijaDvaVlasnika()
                 outErrNum:=errNum)
     AssertTrue Len(okDok) > 0, "Storno guard: dvoklasni dokument jednog vlasnika kreiran"
 
-    AssertTrue StornoPrijemnicaByBroj_TX(brojPrijOK), _
+    AssertTrue modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, brojPrijOK, "", msgSt, okDok), _
                "Storno guard: jedinstven broj (jedan vlasnik) i dalje prolazi"
     AssertTrue RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, okDok), _
                "Storno guard: dvoklasni dokument je storniran CEO (jedno zaglavlje)"
@@ -7029,7 +7034,247 @@ EH:
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
 End Sub
 
+' R2 + R4: PAD POSLE SVIH UPISA VRACA CEO DOKUMENT -- direktno i kroz kaskadu.
+'
+' Seam (modStorno.StornoPrijemnicePadniTest) pada na KRAJU jezgra, posle paleta,
+' zaglavlja i kontra-stava knjige. Tvrdi se povratak SVIH tabela matrice (stavka
+' 182) kroz otisak: broj redova i kljucna polja (Stornirano, kontra-stavovi, gajbe
+' na paletama, storno paleta, zbirna), ne samo Stornirano. tblStornoVeze nije u
+' transakciji storna (svaki poziv konteksta ima svoju): neuspela kaskada tamo
+' ostavlja TACNO jedan zapis neuspele ispravke, i to se tvrdi posebno.
+' SABOTAZE: s6k4-seam-ne-pada, s6k4-kaskada-ne-snima-prijemnicu.
+Private Sub Test_S6K4_PadPosleSvihUpisaVracaSve()
+    Dim prevPal As String, prevKupac As String, prevMode As Boolean
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4PAD")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4D-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    prevMode = IsTestMode()
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP2_ID
+    SetTestMode True
+
+    AssertTrue S6K4Gajbe(testDate, scenario, tipT), _
+               "S6K4 pad: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim brZbr As String, brPrj As String, zbrID As String, prj As String, palete As String
+    brZbr = TEST_PREFIX & "-ZK4D-" & scenario
+    brPrj = TEST_PREFIX & "-PK4D-" & scenario
+    zbrID = S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)
+    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, brPrj, brZbr, tipT, 10, 10, 4)
+    palete = S6K4PaleteDokumenta(prj)
+    AssertTrue Len(zbrID) > 0 And Len(prj) > 0 And Len(palete) > 0, _
+               "S6K4 pad: preduslov -- dokument sa knjigom i paletama"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    Dim otisakPre As String, vezePre As Long, prosao As Boolean
+    otisakPre = S6K4Otisak(prj, zbrID, palete)
+    vezePre = S6K4Redova(TBL_STORNO_VEZE)
+
+    ' --- direktan storno ---
+    modStorno.StornoPrijemnicePadniTest True
+    prosao = modStorno.StornoPrijemnica_TX(prj)
+    modStorno.StornoPrijemnicePadniTest False
+    AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K4 pad: posle pada direktnog storna Stornirano je PRAZNO"
+    AssertEquals otisakPre, S6K4Otisak(prj, zbrID, palete), _
+                 "S6K4 pad: posle pada direktnog storna sve tabele matrice su kao pre"
+    AssertTrue Not prosao, "S6K4 pad: direktan storno sa padom posle upisa vraca neuspeh"
+    AssertEquals CStr(vezePre), CStr(S6K4Redova(TBL_STORNO_VEZE)), _
+                 "S6K4 pad: direktan storno ne pise veze ispravke"
+
+    ' --- kaskada sa subjektom (pravi ulaz) ---
+    Dim res As Object
+    modStorno.StornoPrijemnicePadniTest True
+    Set res = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_PONISTENJE, True, False, _
+                                                    S6K4Ident(prj))
+    modStorno.StornoPrijemnicePadniTest False
+    AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj) And _
+               Not S6K4Stornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "S6K4 pad: posle pada kaskade ni subjekat ni zbirna nisu stornirani"
+    AssertEquals otisakPre, S6K4Otisak(prj, zbrID, palete), _
+                 "S6K4 pad: posle pada kaskade sve tabele matrice su kao pre"
+    AssertTrue Not CBool(res("success")), "S6K4 pad: kaskada sa padom posle upisa vraca neuspeh"
+    AssertEquals CStr(vezePre + 1), CStr(S6K4Redova(TBL_STORNO_VEZE)), _
+                 "S6K4 pad: neuspela kaskada ostavlja TACNO jedan zapis neuspele ispravke"
+Kraj:
+    modStorno.StornoPrijemnicePadniTest False
+    SetTestMode prevMode
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_PadPosleSvihUpisaVracaSve", Err.Number, Err.description
+    On Error Resume Next
+    modStorno.StornoPrijemnicePadniTest False
+    SetTestMode prevMode
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+End Sub
+
+' KI-031 PO KONSTRUKCIJI: JEZGRO TRAZI SNIMAK SVAKE TABELE KOJU MENJA -- dva sloja.
+'
+' Transakcija koja snima prijemnicu i knjigu, ali NE palete, mora da padne PO
+' IMENU pre prvog upisa: inace bi skinute palete prezivele rollback dokumenta.
+' Prvi sloj je jezgro storna (poruka nosi "KI-031"), drugi je paletni primitiv,
+' koji se meri ZASEBNO -- jer ga prvi sloj inace zaklanja, pa bi sabotaza drugog
+' bila placebo.
+' SABOTAZE: s6k4-jezgro-ne-trazi-snimak, s6k4-palete-ne-traze-snimak.
+Private Sub Test_S6K4_JezgroTraziSnimak()
+    Dim prevPal As String, tx As clsTransaction
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4SNM")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4N-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    AssertTrue S6K4Gajbe(testDate, scenario, tipT), _
+               "S6K4 snimak: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim brZbr As String, prj As String
+    brZbr = TEST_PREFIX & "-ZK4N-" & scenario
+    AssertTrue Len(S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)) > 0, _
+               "S6K4 snimak: preduslov -- zbirna je snimljena"
+    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, TEST_PREFIX & "-PK4N-" & scenario, _
+                         brZbr, tipT, 10, 10, 4)
+    AssertTrue Len(prj) > 0 And S6GajbiNaPaletama(prj, "") = 20, _
+               "S6K4 snimak: preduslov -- dokument je na paletama"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    Dim razlogJezgra As String, razlogPaleta As String
+    ' --- prvi sloj: jezgro storna ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_AMBALAZA
+    On Error Resume Next
+    modStorno.StornoPrijemnica prj, tx
+    razlogJezgra = Err.description
+    Err.Clear
+    ' --- drugi sloj: paletni primitiv, direktno ---
+    modPaletniList.SkiniPaleteZaStornoPrijemnice tx, prj, "Test_S6K4_JezgroTraziSnimak"
+    razlogPaleta = Err.description
+    Err.Clear
+    On Error GoTo EH
+    tx.RollbackTx
+    Set tx = Nothing
+
+    AssertTrue InStr(1, razlogJezgra, "KI-031", vbTextCompare) > 0, _
+               "S6K4 snimak: jezgro storna odbija transakciju bez snimka paleta PO IMENU"
+    AssertTrue InStr(1, razlogPaleta, "Storno paleta: transakcija ne snima", vbTextCompare) > 0, _
+               "S6K4 snimak: paletni primitiv odbija transakciju bez snimka PO IMENU"
+    AssertEquals "20", CStr(S6GajbiNaPaletama(prj, "")), _
+                 "S6K4 snimak: palete su netaknute posle odbijanja"
+    AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K4 snimak: dokument ostaje aktivan posle odbijanja"
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_JezgroTraziSnimak", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' R6: NEUSPEO KONTRA-STAV AMBALAZE OBARA CEO STORNO.
+'
+' Kupac je gajbe dokumenta vec vratio (kupcev revers), pa bi kontra-stav
+' prijemnice ostavio kupca u minusu: AMB-INV-07 odbija. Dokument, palete i knjiga
+' ostaju netaknuti, a palete su SKINUTE pre knjige -- pa se ovde meri i da ih
+' rollback vraca. Razlog se cita iz jezgra (StornoPrijemnica_TX ga samo loguje).
+' SABOTAZE: s6k4-tx-ne-snima-palete.
+Private Sub Test_S6K4_KontraStavPadneDokumentOstaje()
+    Dim prevPal As String, tx As clsTransaction
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4KON")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4O-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    AssertTrue S6K4Gajbe(testDate, scenario, tipT), _
+               "S6K4 kontra-stav: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim brZbr As String, prj As String, zbrID As String, palete As String, razlog As String
+    brZbr = TEST_PREFIX & "-ZK4O-" & scenario
+    zbrID = S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)
+    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, TEST_PREFIX & "-PK4O-" & scenario, _
+                         brZbr, tipT, 10, 10, 0)
+    palete = S6K4PaleteDokumenta(prj)
+    AssertTrue Len(prj) > 0 And Len(palete) > 0, _
+               "S6K4 kontra-stav: preduslov -- dokument sa 20 punih gajbi i paletama"
+    If Len(prj) = 0 Then GoTo Kraj
+    AssertTrue Len(RvpUpisi(testDate, "KUPK4-" & scenario, TEST_KUP_ID, TEST_VOZ_ID, _
+                            tipT, 20#, razlog)) > 0, _
+               "S6K4 kontra-stav: preduslov -- kupac je vratio svih 20 gajbi"
+
+    Dim otisakPre As String, razlogJezgra As String
+    otisakPre = S6K4Otisak(prj, zbrID, palete)
+    Set tx = New clsTransaction
+    tx.BeginTx
+    modStorno.SnimiZaStornoPrijemnice tx
+    On Error Resume Next
+    modStorno.StornoPrijemnica prj, tx
+    razlogJezgra = Err.description
+    Err.Clear
+    On Error GoTo EH
+    tx.RollbackTx
+    Set tx = Nothing
+    AssertTrue InStr(1, razlogJezgra, "AMB-INV-07", vbTextCompare) > 0, _
+               "S6K4 kontra-stav: storno je ODBIJEN po imenu (AMB-INV-07)"
+    AssertEquals otisakPre, S6K4Otisak(prj, zbrID, palete), _
+                 "S6K4 kontra-stav: dokument, palete i knjiga su netaknuti"
+    AssertTrue Not modStorno.StornoPrijemnica_TX(prj), _
+               "S6K4 kontra-stav: ni javni ulaz ne prolazi"
+    AssertEquals otisakPre, S6K4Otisak(prj, zbrID, palete), _
+                 "S6K4 kontra-stav: ni javni ulaz ne ostavlja trag"
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_KontraStavPadneDokumentOstaje", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
 ' --- S6K4 pomocnici ---
+
+' Otisak svih tabela matrice storna (stavka 182) za jedan dokument: broj redova i
+' kljucna polja. Dva otiska su jednaka samo ako se nista nije promenilo -- ni
+' Stornirano, ni knjiga, ni gajbe na paletama, ni storno paleta, ni zbirna.
+Private Function S6K4Otisak(ByVal prj As String, ByVal zbrID As String, _
+                            ByVal palete As String) As String
+    S6K4Otisak = "PRJ=" & S6K4Redova(TBL_PRIJEMNICA) & ":" & _
+                 CStr(S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj)) & _
+                 "|PRS=" & S6K4Redova(TBL_PRIJEMNICA_STAVKE) & _
+                 "|AMB=" & S6K4Redova(TBL_AMBALAZA) & ":" & S6AmbKontraStavova(prj) & _
+                 "|PAL=" & S6K4Redova(TBL_PALETA) & ":" & S6K4GajbiNaPaletamaUkupno(palete) & _
+                 ":" & S6K4StorniranihPaleta(palete) & _
+                 "|PALS=" & S6K4Redova(TBL_PALETA_STAVKA) & ":" & S6GajbiNaPaletama(prj, "") & _
+                 "|FAK=" & S6K4Redova(TBL_FAKTURE) & "|FS=" & S6K4Redova(TBL_FAKTURA_STAVKE) & _
+                 "|ZUR=" & S6K4Redova(TBL_STORNO_ZURNAL) & _
+                 "|ZBR=" & CStr(S6K4Stornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID))
+End Function
+
+Private Function S6K4Redova(ByVal tbl As String) As Long
+    Dim d As Variant
+    d = GetTableData(tbl)
+    If IsArray(d) Then S6K4Redova = UBound(d, 1)
+End Function
+
+Private Function S6K4StorniranihPaleta(ByVal palete As String) As Long
+    If Len(palete) = 0 Then Exit Function
+    Dim p As Variant
+    For Each p In Split(palete, "|")
+        If S6K4Stornirano(TBL_PALETA, COL_PAL_ID, CStr(p)) Then _
+            S6K4StorniranihPaleta = S6K4StorniranihPaleta + 1
+    Next p
+End Function
 
 ' Identitet koji nosi red F8 za ovu prijemnicu: skrivena kolona tipa
 ' (modScrDokumenti.IdKolonaTipa). Test ga cita odande, a ne pretpostavlja.

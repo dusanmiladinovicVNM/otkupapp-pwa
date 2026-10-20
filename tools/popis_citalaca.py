@@ -190,7 +190,10 @@ PRAGOVI = collections.OrderedDict([
     # stavke zbirne -- S4-1 ih je izricito odlozio u S6. Ostaju ValidateZbirna
     # (2), GetActiveDocumentsForStorno (S6 korak 4) i EnsureDoradeSchema (format
     # kolone, S6 korak 8 / S4-3).
-    ("zbr_linija", 4),
+    # S6 korak 4 (stavka 183): 4 -> 3. Lista za storno (GetActiveDocumentsForStorno)
+    # uzima kg zbirne i prijemnice iz stavki. Ostaju ValidateZbirna (2) i
+    # EnsureDoradeSchema.
+    ("zbr_linija", 3),
     ("zbr_stari_pisac", 0),
     # S6 korak 3 (stavka 178, odluka 6): pisac prijemnice od koraka 2 vraca
     # JEDAN ID, pa "PRJ-I + PRJ-II" vise ne postoji. Pet zivih Split(... " + ")

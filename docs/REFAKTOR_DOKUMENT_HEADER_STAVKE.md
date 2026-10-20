@@ -8415,6 +8415,47 @@ knjige (`RequireAmbTxIzvorniDokument` odbije) i SVAKI kasniji pad u Fazi A (npr.
   `PrijemnicaUpisi` bez ambalaže); vraćeni testovi §14.14; sabotaže `s6k4-*`; `popis_citalaca --check`
   (`zbr_linija` 3).
 
+**Ispravke plana tokom koda (stavka 183) — svaka izmerena, ne pretpostavljena:**
+
+1. **`PonistiZbirnaChain_Test` je ostao netaknut.** Kaskada sa subjektom se vozi kroz PRAVI ulaz
+   (`RunPrijemnicaCorrection`, PONIŠTENJE), pa seam-u subjekat ne treba. Gejt test režima je zatečen nalaz po
+   §4 (seam dodaje pristup) → `KI-035`. Zato `Test_PRJ_EksternaPrijemnicaBlokiraPonistenje` nije menjan.
+2. **Jedan razrešavač identiteta umesto tri provere.** `modStornoFlow.PrijemnicaIDZaStorno` (ID tačno jednom,
+   nestorniran, par sa brojem) zovu okvir (`ScanPrijemnica`, `ActiveBlocksForFlow`), uvid i `StornoIzvrsi` /
+   `StornoRazlog`. Brisanjem su otišli `PkPoIdentitetu`, `AktivanPoIdentitetu`, `RedJeIzabranogDokumenta`.
+3. **Mrtav kod obrisan uz pozivaoce:** `StornoPrijemnicaByBroj_TX`, `RunSimpleStornoPrijemnica`,
+   `MarkFakturaOrphaned`, `MarkFakturaStavkeOrphaned`, `SumActiveNum`, `SafeDblZ`, `KolicinaReda`, `CeliBrojD`
+   i četiri `Col*ZaPrefill` čitača kolona zaglavlja. `modStorno` time više ne piše `tblFakturaStavke`: unos je
+   skinut iz `WRITE_OWNERSHIP.json` (mrtav unos), a `WHO_WRITES.md` je regenerisan.
+4. **Lista za storno daje jedan red po dokumentu za SVA tri tipa**, ne samo za prijemnicu — spajanje po broju
+   je postojalo zbog redova po klasi. Posledica van prijemnice: dve otpremnice istog broja (dve stanice) su
+   sada dva reda.
+5. **Uvid formatira kg kroz `modStornoDok.KgTekst`**, isti formater kao lista: VBA `Format(420, "#,##0.##")`
+   vraća „420." (zadrži decimalni separator).
+6. **Spisak posledica PONIŠTENJA prijemnice dobija identitet** (`BuildPonistenjePosledice(..., docID)`): bez
+   pada na broj bio bi prazan.
+7. **`MAPA_SPOSOBNOSTI` B-016 → ZAMENJENO** (odluka 1): put je storno fakture (B-017), pa prijemnice.
+8. **Nove poruke:** `STORNO_ERR_PRJ_PAR` i `STORNO_ERR_PRJ_FAKTURISANA` (preflight ekrana imenuje razlog pre
+   potvrde). Nov ključ traži restart sveske (`EnsurePoruke` ne menja već ispisan natpis).
+9. **Testovi čija se premisa menja, a nisu bili u tabeli gore** (nađeni prvim zelenim prolazom ili pretragom
+   po pozivu):
+   - `modTest` 57 `T_StornoEkran_KolonaIdentiteta`: kolona identiteta je `PrijemnicaID`;
+   - `modTest` `T_StornoImpact_IdentitetNeDegradira`: bez identiteta STROG uvid pada (svaki red nosi ID, pa
+     „zatečenog zapisa bez identiteta" nema); van strict-a palete i dalje po broju;
+   - `modTest` testovi uvida i ekrana nad `PRJ-TEST-Z1/Z2` (`GEN-IMP-*`, `GEN-F8-2`) šalju `PrijemnicaID`;
+     testovi prevezivanja paleta ostaju na generaciji (korak 8);
+   - StornoCentar: `Test_ImpactHeaderSum_Auto` i `Test_BuildStornoImpact_Auto` seju dokument SA stavkama i
+     šalju ID; `Test_PonistenjePrijemniceKaskada_Auto` šalje ID; `Test_GetActiveDocumentsForStorno_Auto`: dva
+     reda istog broja su dva dokumenta (2×), ne dve klase (1×);
+   - Storno T17: paletne stavke seed-a nose `PrijemnicaID` (kao produkcioni pisac), jer ih storno bira po
+     njemu;
+   - `Test_StornoPoBrojuOdbijaDvaVlasnika` ide kroz `StornoIzvrsi`.
+10. **`Test_S6_DveKlaseJedanDokument` nije dobio tvrdnju o paletama** — meri je
+    `Test_S6K4_StornoSkidaPaleteUIstojTx`.
+11. **Redosled tvrdnji u 260 je promenjen posle crvenog prolaza:** identitet ide pre uvida, jer se uvid zove
+    tim identitetom (sabotaža identiteta bi inače oborila tvrdnju uvida). Prva tvrdnja (prefill), koja je
+    pala u crvenom prolazu, nije dirana.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

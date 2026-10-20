@@ -2353,8 +2353,10 @@ Public Function IdKolonaTipa(ByVal tk As String) As String
         ' Kanonski pisac GeneracijaID ne upisuje, pa bi skrivena kolona kod
         ' kanonskog dokumenta bila prazna -- a radnja bi pala nazad na broj.
         Case "ZBIRNA":                                      IdKolonaTipa = COL_ZBR_ID
-        ' Prijemnica ostaje na generaciji do S6: njen pisac je jos stari model.
-        Case "PRIJEMNICA":                                  IdKolonaTipa = COL_GENERACIJA_ID
+        ' Prijemnica od S6 koraka 4: identitet je PrijemnicaID. Generacija je bila
+        ' prazna na redovima bez nje (fixture), pa je F8 storno padao na broj, a
+        ' zadata generacija je broj ignorisala.
+        Case "PRIJEMNICA":                                  IdKolonaTipa = COL_PRJ_ID
         Case "FAKTURA":                                     IdKolonaTipa = COL_FAK_ID
         Case "AMB_ISPLATE", "AMB_UPLATE":                   IdKolonaTipa = COL_NOV_ID
         ' Identitet reversa je AmbDokID (AMB-10-ODL-16/-17): dokument, ne noga.
