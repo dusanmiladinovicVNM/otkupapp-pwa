@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 13.10.2026 (red AMB-10: `10e-3` merge-ovan `#418`, stavka 130; `KI-011` merge-ovan `#419`, stavka 132; `KI-012`/`KI-013` merge-ovani `#420`, stavka 134; čitaoci salda na papiru od stavke 135).
+**Ažurirano:** 20.10.2026 (stavka 181: merge `#437`, S6 je 3/8; red AMB-10 zatvoren posle provere svih podkoraka).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,8 +33,8 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ merge-ovano `#416` (ručna provera ✅ 13.10.2026, stavka 126) · `10e-2` stari storno, undo i ispravka reversa ✅ merge-ovano `#417` (stavke 127–128) · `10e-3` pisac, dvomodelni čitalac, šema i fixture ✅ merge-ovano `#418` (stavke 129–130); `KI-011` ✅ `#419`; `KI-012`/`KI-013` ✅ `#420` · **čitaoci salda na papiru ⏳** (stavka 135); `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1/8 (kanon) ✅ merge-ovano `#435` (`c3301527`, stavka 173) · **korak 2 (pisac) je sledeći**, grana `claude/s6-korak2-pisac` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
+| **S6 prijemnica** | ⏳ **u toku, 3/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · **korak 4 (storno na nivou dokumenta, `KI-031` kao kapija) je sledeći**, grana `claude/s6-korak4-storno` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -6482,6 +6482,31 @@
        - ručna provera operatera;
        - merge — samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
      - **Sledeći brojevi:** test 260 · stavka 181 · KI-034.
+
+181. **Merge `#437`, S6 korak 3/8 zatvoren** (20.10.2026). Zapis ide ovde, a ne u `#437`, po obrascu stavki 169,
+     173 i 177.
+
+     - **Ručna provera:** operater je javio „ok" (20.10.2026) nad `rucna_provera_s6_korak3.xlsm`, posle potvrđenog
+       compile-a (stavka 180).
+     - **Merge** 20.10.2026 (15:12:43 UTC) kao **`8e970d99`**, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `94c0035d`.
+       - Static CI je `success` na tom head-u (run 39445856827, izmereno).
+       - Stablo `main`-a posle merge-a jednako je stablu `94c0035d` (`85020236`, izmereno).
+       - Grana `claude/s6-korak3-citaoci` nije obrisana.
+     - **Review posle merge-a:** 9,5/10, `CLOSED/MERGED`. Ograda reviewera: dokaz je bio „20/33 grupno, ne 33
+       izolovana prolaza" — pojedinačan prolaz za 20 grupnih nije pušten (stavka 180).
+     - **Bazni brojevi na `main` = `8e970d99`** (FULL 12/12 nad izvorom `be16ed85b895`; posle njega su ušli samo docs):
+       - RunAllTests 259/0, BFP 2526/0, Banka 241/0, Storno 111/0, Palete 97;
+       - Faktura 35/35, Agrohemija 25/25, SheetsJson 72;
+       - katalog sabotaža 886 (`POZNATI_NALAZI` 9);
+       - otisak šeme `106AC27A`; potpis fixture-a `27f6230a5e8ca5be` (drugi potpis → `make_fixture` PRE trijaže).
+     - **Tabela „Gde smo" je ispravljena u istom commitu** — bila je zastarela:
+       - S6 je 3/8, sledeći je korak 4;
+       - AMB-10 je zatvoren. Pre upisa je izmereno (`gh pr list`) da su `#397`–`#400`, `#408`, `#409`, `#411`,
+         `#414`–`#421` i `#434` svi `MERGED`, a `KI-010` je `CLOSED` od stavke 139.
+     - **Sledeći brojevi:** stavka 182 (pre-flight koraka 4) · stavka 183 (kod) · test 260 · KI-034.
+     - **Sledeći je S6 korak 4** (storno prijemnice na nivou dokumenta, `KI-031` kao kapija), na grani
+       `claude/s6-korak4-storno` sa `8e970d99`. Reviewer: „START GO, posebno stroga transakciona provera".
 
 ## Dug sa imenom (posle S5-5b)
 
