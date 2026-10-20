@@ -185,8 +185,19 @@ PRAGOVI = collections.OrderedDict([
     # clanstvo i okvir ispravke (modStornoFlow, modDokumentInvariant) -- njih
     # brise S4-3, pa prag tamo ide na nulu. Stari pisac ostaje samo iza pauze
     # F3; nulu dostize u S4-2, kad F3 predje na CreateZbirna_TX.
-    ("zbr_linija", 17),
+    # S6 korak 3 (stavka 178, odluka 7): 17 -> 4. Manjak (CalculateManjakPreview,
+    # BuildManjakDict, ReportManjak, Chk_A2), prikaz C4 i prosek gajbe citaju
+    # stavke zbirne -- S4-1 ih je izricito odlozio u S6. Ostaju ValidateZbirna
+    # (2), GetActiveDocumentsForStorno (S6 korak 4) i EnsureDoradeSchema (format
+    # kolone, S6 korak 8 / S4-3).
+    ("zbr_linija", 4),
     ("zbr_stari_pisac", 0),
+    # S6 korak 3 (stavka 178, odluka 6): pisac prijemnice od koraka 2 vraca
+    # JEDAN ID, pa "PRJ-I + PRJ-II" vise ne postoji. Pet zivih Split(... " + ")
+    # (modDokUnos x3, modPrint x2) je skinuto; prag 0 je acceptance celog S6 i
+    # cuva da se lepljeni ID ne vrati. TEST mesto (modGoldenTests.GldDodaj) se
+    # ne broji.
+    ("split_plus", 0),
 ])
 
 # Linijska polja zaglavlja -- prag dual READ.

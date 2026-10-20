@@ -8356,21 +8356,22 @@ CleanUp:
              "kupcev revers: F7 ne pravi papir i ne javlja kvar (kao lista, 7507)"
 End Sub
 
-' 234. KVAR KNJIGE: CITAOCI SALDA NA PAPIRU DIZU GRESKU (stavka 135).
+' 234. KVAR KNJIGE: CITALAC SALDA NA PAPIRU DIZE GRESKU (stavka 135).
 '
-' GetAmbalazeStanje je kvar knjige gutao (LogErr -> Empty), a GetStanicaAmbSaldo
-' ga je pretvarao u 0, pa je papir nosio izmisljenu nulu umesto da ne nastane.
-' Odluka operatera 13.10.2026: papir ne nastaje, isti sud koji otkupni list ima
-' od #415 (ODL-27, test 224) -- kvar ide pozivaocu. Kvar je na redu koji NIJE red
-' trazenog naloga: integritet je sud nad celom knjigom. Pozitivna kontrola ide
-' PRE kvara.
-' SABOTAZE: saldo-citac-guta-kvar -> pukne "kvar knjige: GetAmbalazeStanje dize
-' gresku, ne vraca prazno"; saldo-stanica-guta-kvar -> pukne "kvar knjige:
-' GetStanicaAmbSaldo dize gresku, ne vraca nulu".
+' GetAmbalazeStanje je kvar knjige gutao (LogErr -> Empty), pa je papir nosio
+' izmisljenu nulu umesto da ne nastane. Odluka operatera 13.10.2026: papir ne
+' nastaje, isti sud koji otkupni list ima od #415 (ODL-27, test 224) -- kvar ide
+' pozivaocu. Kvar je na redu koji NIJE red trazenog naloga: integritet je sud nad
+' celom knjigom. Pozitivna kontrola ide PRE kvara.
+' GetStanicaAmbSaldo (i tvrdnja o njemu) je obrisan u S6 koraku 3: grupni
+' otkupni list cita AmbStanjeOkoDokumenta, a njegov kvar knjige meri BFP
+' Test_S6_GrupniListStanjeVozaca.
+' SABOTAZA: saldo-citac-guta-kvar -> pukne "kvar knjige: GetAmbalazeStanje dize
+' gresku, ne vraca prazno".
 Private Sub T_SaldoPapir_KvarKnjigeNijeNula()
     Dim stCista As Variant, revDok As String, revBroj As String
     Dim ambID As String, naTipPre As String
-    Dim dignuto1 As Boolean, razlog1 As String, dignuto2 As Boolean, v As Long
+    Dim dignuto1 As Boolean, razlog1 As String
 
     stCista = modAmbalaza.GetAmbalazeStanje(FX_KOOPERANT, AMB_NALOG_KOOPERANT)
 
@@ -8384,9 +8385,6 @@ Private Sub T_SaldoPapir_KvarKnjigeNijeNula()
     dignuto1 = (Err.Number <> 0)
     razlog1 = Err.description
     Err.Clear
-    v = modAmbalaza.GetStanicaAmbSaldo(FX_STANICA, FX_TIP_AMB)
-    dignuto2 = (Err.Number <> 0)
-    Err.Clear
     On Error GoTo 0
 
     ' Fixture se vraca PRE tvrdnji.
@@ -8398,7 +8396,6 @@ Private Sub T_SaldoPapir_KvarKnjigeNijeNula()
     AssertEq dignuto1, True, "kvar knjige: GetAmbalazeStanje dize gresku, ne vraca prazno"
     AssertEq (InStr(1, razlog1, "Red knjige ", vbTextCompare) > 0), True, _
              "kvar knjige: greska citaoca stanja dolazi iz ugovora knjige"
-    AssertEq dignuto2, True, "kvar knjige: GetStanicaAmbSaldo dize gresku, ne vraca nulu"
 End Sub
 
 ' 235. TIP AMBALAZE NA PAPIRU JE ISTI TIP KAO U SALDU, BEZ OBZIRA NA VELIKA SLOVA
@@ -9957,12 +9954,11 @@ End Function
 '                    razlika, ne apsolutni broj.
 ' AssertEq staje na prvom padu, pa je redosled tvrdnji redosled citalaca:
 ' sabotaza jednog citaoca obara SVOJU tvrdnju, jer su prethodne zelene.
-' SABOTAZE: s6k3-papir-po-zaglavlju, s6k3-izv-kupca-po-zaglavlju,
-' s6k3-f4-lista-mimo-stavki, s6k3-cilj-prij-bez-kg, s6k3-saldo-kupca-po-zaglavlju,
-' s6k3-roba-kupca-po-zaglavlju, s6k3-prosek-kupca-po-zaglavlju,
-' s6k3-zbirni-kupac-po-zaglavlju, s6k3-zbirni-vozac-po-zaglavlju,
-' s6k3-manjak-dict-po-zaglavlju, s6k3-preview-po-zaglavlju,
-' s6k3-izvoz-po-zaglavlju (tvrdnje imenuje tools/sabotaza.py).
+' SABOTAZE: s6k3-papir-prva-stavka, s6k3-izv-kupca-prva-stavka,
+' s6k3-f4-lista-mimo-stavki, s6k3-cilj-prij-bez-stavki,
+' s6k3-saldo-kupca-prva-stavka, s6k3-roba-kupca-nula, s6k3-prosek-kupca-nula,
+' s6k3-zbirni-kupac-nula, s6k3-zbirni-vozac-nula, s6k3-manjak-dict-prijem-nula,
+' s6k3-preview-prijem-nula, s6k3-izvoz-nula (tvrdnje imenuje tools/sabotaza.py).
 Private Sub T_S6_CitaociStavkiPrijemnice()
     Dim p As Object, res As String, poruke As String, broj As String
     Dim od As Date, doD As Date
@@ -10012,8 +10008,13 @@ Private Sub T_S6_CitaociStavkiPrijemnice()
              "420|19800", "S6 citaoci: zbirni po kupcu -- dokument dodaje zbir stavki"
     AssertEq S6K3Razlika(zbVozPre, S6K3Red(ReportZbirni("Vozac", od, doD), 0, 4, 4)), _
              "-420|-420", "S6 citaoci: zbirni po vozacu -- manjak pada za zbir stavki"
-    AssertEq Format$(S6K3ManjakPrijem(od, doD) - manjakPre, "0"), "420", _
-             "S6 citaoci: izvestaj manjka -- prijem zbirne raste za zbir stavki"
+    ' Izvestaj manjka sabira prijem PO KLASAMA koje red zbirne nosi (pravilo
+    ' ReportManjak). Fixture zbirna ZB-TEST-1 nosi samo klasu I, pa se stavka
+    ' klase II toj zbirni ne pripisuje: raste za 300, ne za 420. Da je to zbir
+    ' po klasi a ne "prva stavka", meri BFP Test_S6_ManjakObeStraneIzStavki nad
+    ' zbirnom sa obe klase.
+    AssertEq Format$(S6K3ManjakPrijem(od, doD) - manjakPre, "0"), "300", _
+             "S6 citaoci: izvestaj manjka -- prijem zbirne raste za stavku njene klase"
     AssertEq Format$(CDbl(CalculateManjakPreview(FX_ZBIRNA, 0#, 0#)(1)) - previewPre, "0"), _
              "420", "S6 citaoci: preview manjka F4 -- prijem zbirne raste za zbir stavki"
     AssertEq S6K3RazlikaIzvoza(izvozPre, S6K3Izvoz()), _
@@ -15575,7 +15576,7 @@ Private Sub T_StornoFilter_NedostajucaKolonaNijeTisina()
     ' Bez ove kapije "TabelaNosiStorno = False" opet znaci dve stvari: eksplicitno
     ' BEZ_STORNA i "niko je nije klasifikovao". Staticka provera to ne zatvara,
     ' jer namerno preskace pozive sa promenljivim imenom tabele -- a takvih ima
-    ' (modIntegritet.CollectBrojZbirne, modDokumenta.SumByBroj).
+    ' (modIntegritet.CollectBrojZbirne).
     BeginTableCache
     dataDok = GetTableData(TBL_OTKUP)
     On Error Resume Next
@@ -16404,6 +16405,54 @@ Private Function IzvStavkeZbir(ByVal stanica As String, ByVal kooperant As Strin
     Next i
 End Function
 
+' RUCNI prolaz kroz tblPrijemnicaStavke za izvestajne testove -- nezavisan od
+' modDokumenta citaoca koji izvestaji koriste (obrazac IzvStavkeZbir). Dokument
+' ulazi kad je nestorniran, u opsegu IzvOdD..IzvDoD i (kad je zadato) kod kupca
+' i u sorti. Vraca broj STAVKI tih dokumenata (red liste "roba za kupca" je
+' stavka); kg i vrednost (kg x cena po stavci) idu kroz ByRef.
+'
+' Stavke, ne zaglavlje (S6 korak 3): pisac zaglavlje prijemnice od koraka 2
+' ostavlja bez linijskih polja, a 258 i 259 prave takav dokument za FX_KUPAC
+' pre ovih testova -- proracun sa zaglavlja bi ga promasio.
+Private Function IzvPrjStavkeZbir(ByVal kupac As String, ByVal sorta As String, _
+                                  ByRef kg As Double, ByRef vr As Double) As Long
+    Dim prj As Variant, st As Variant, i As Long, docs As Object
+    Dim cId As Long, cKup As Long, cSor As Long, cDat As Long, cStorno As Long
+    Dim sId As Long, sKol As Long, sCena As Long
+
+    kg = 0: vr = 0
+    Set docs = CreateObject("Scripting.Dictionary")
+    prj = GetTableData(TBL_PRIJEMNICA)
+    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+    cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
+    cSor = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
+    cDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
+    cStorno = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    For i = 1 To UBound(prj, 1)
+        If CStr(prj(i, cStorno)) <> "Da" And IsDate(prj(i, cDat)) Then
+            If CDate(prj(i, cDat)) >= IzvOdD() And CDate(prj(i, cDat)) <= IzvDoD() Then
+                If (Len(kupac) = 0 Or Trim$(CStr(prj(i, cKup))) = kupac) And _
+                   (Len(sorta) = 0 Or StrComp(Trim$(CStr(prj(i, cSor))), sorta, vbTextCompare) = 0) Then
+                    docs(Trim$(CStr(prj(i, cId)))) = True
+                End If
+            End If
+        End If
+    Next i
+
+    st = GetTableData(TBL_PRIJEMNICA_STAVKE)
+    If Not IsArray(st) Then Exit Function
+    sId = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID)
+    sKol = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA)
+    sCena = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA)
+    For i = 1 To UBound(st, 1)
+        If docs.Exists(Trim$(CStr(st(i, sId)))) Then
+            IzvPrjStavkeZbir = IzvPrjStavkeZbir + 1
+            kg = kg + CDbl(st(i, sKol))
+            vr = vr + CDbl(st(i, sKol)) * CDbl(st(i, sCena))
+        End If
+    Next i
+End Function
+
 ' Broj stavki dokumenta u tblOtkupStavke -- rucni prolaz za izvestajne testove.
 Private Function IzvBrojStavki(ByVal otkupID As String) As Long
     Dim st As Variant, i As Long, sId As Long
@@ -16960,22 +17009,11 @@ Private Sub T_Izv_SlaganjeKupacVozac()
              "zbirni kg = suma pojedinacnih po svakom kupcu"
     AssertEq Format$(vrZ, "0.00"), Format$(vr1 + vr2, "0.00"), _
              "zbirni vrednost = suma pojedinacnih po svakom kupcu"
-    prij = GetTableData(TBL_PRIJEMNICA)
-    cDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
-    cKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
-    cStorno = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
-    nzKg = 0
-    For i = 1 To UBound(prij, 1)
-        If CStr(prij(i, cStorno)) <> "Da" Then
-            If IsDate(prij(i, cDat)) Then
-                If CDate(prij(i, cDat)) >= IzvOdD() And CDate(prij(i, cDat)) <= IzvDoD() Then
-                    If IsNumeric(prij(i, cKol)) Then nzKg = nzKg + CDbl(prij(i, cKol))
-                End If
-            End If
-        End If
-    Next i
+    ' Stavke, ne zaglavlje (S6 korak 3): dokument novog oblika (258, 259) nosi
+    ' kolicinu samo na stavci.
+    IzvPrjStavkeZbir "", "", nzKg, nzVr
     AssertEq Format$(kgZ, "0.00"), Format$(nzKg, "0.00"), _
-             "zbirni kupci kg = rucni prolaz kroz tblPrijemnica"
+             "zbirni kupci kg = rucni prolaz kroz stavke prijemnica"
 
     ' (2) SALDO KUPCA i PROSECNA CENA vide ISTE prijemnice -- vrstu odredjuju
     ' na DVA nacina (kolona prijemnice / vrsta zbirne), pa se porede SUME.
@@ -17695,28 +17733,11 @@ Private Sub T_Izv_TabKontekstRobaKupacSaldo()
     d = modScrIzvestaji.Scr_Rows("", "")
     n = CLng(d(2)): sumKg = CDbl(d(3)): sumVal = CDbl(d(4))
     redovi = d(1)
-    Dim pd As Variant, cKup As Long, cDat As Long, cKol As Long, cCen As Long
-    Dim cSt As Long, rn As Long, rKg As Double, rVal As Double, dv As Date
-    pd = GetTableData(TBL_PRIJEMNICA)
-    cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
-    cDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
-    cKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
-    cCen = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA)
-    cSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
-    For i = 1 To UBound(pd, 1)
-        If Trim$(CStr(pd(i, cKup))) = FX_KUPAC And CStr(pd(i, cSt)) <> "Da" Then
-            If IsDate(pd(i, cDat)) Then
-                dv = CDate(pd(i, cDat))
-                If dv >= IzvOdD() And dv <= IzvDoD() Then
-                    rn = rn + 1
-                    rKg = rKg + CDbl(pd(i, cKol))
-                    rVal = rVal + CDbl(pd(i, cKol)) * CDbl(pd(i, cCen))
-                End If
-            End If
-        End If
-    Next i
+    ' Red liste je STAVKA dokumenta (S6 korak 3), pa rucni prolaz broji stavke.
+    Dim rn As Long, rKg As Double, rVal As Double
+    rn = IzvPrjStavkeZbir(FX_KUPAC, "", rKg, rVal)
     AssertEq (rn > 1), True, "vozilo: kupac ima vise prijemnica u opsegu"
-    AssertEq n, rn, "roba za kupca broji prijemnice kao rucni prolaz"
+    AssertEq n, rn, "roba za kupca broji stavke prijemnica kao rucni prolaz"
     AssertEq Format$(sumKg, "0.00"), Format$(rKg, "0.00"), _
              "kg robe kupca = rucni zbir prijemnica"
     AssertEq Format$(sumVal, "0.00"), Format$(rVal, "0.00"), _
@@ -17973,22 +17994,9 @@ Private Sub T_Izv_ZbirniSadrzaj()
     d = modScrIzvestaji.Scr_Rows("", "")
     n = CLng(d(2))
     redovi = d(1)
-    Dim rpKg As Double
-    Dim prj2 As Variant, cK2 As Long, cD2 As Long, cQ2 As Long, cS2 As Long
-    prj2 = GetTableData(TBL_PRIJEMNICA)
-    cK2 = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
-    cD2 = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
-    cQ2 = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
-    cS2 = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
-    For i = 1 To UBound(prj2, 1)
-        If Trim$(CStr(prj2(i, cK2))) = FX_KUPAC And CStr(prj2(i, cS2)) <> "Da" Then
-            If IsDate(prj2(i, cD2)) Then
-                If CDate(prj2(i, cD2)) >= IzvOdD() And CDate(prj2(i, cD2)) <= IzvDoD() Then
-                    rpKg = rpKg + CDbl(prj2(i, cQ2))
-                End If
-            End If
-        End If
-    Next i
+    ' Stavke, ne zaglavlje (S6 korak 3).
+    Dim rpKg As Double, rpVr As Double
+    IzvPrjStavkeZbir FX_KUPAC, "", rpKg, rpVr
     nasla = False
     For i = 1 To n
         If InStr(1, CStr(redovi(i, 4)), FX_KUPAC, vbTextCompare) > 0 Then
@@ -18213,25 +18221,11 @@ Private Sub T_Izv_CipoviVrstaSorta()
     modScrIzvestaji.Scr_IzTestSet "ROBA", "Kupac", False, FX_KUPAC, IzvOdS(), IzvDoS()
     d = modScrIzvestaji.Scr_Rows("so" & FX_SORTA, "")
     n = CLng(d(2))
-    Dim prj As Variant, cKup As Long, cSor As Long, cQ As Long, cS2 As Long, cD2 As Long
-    Dim rs As Long
-    prj = GetTableData(TBL_PRIJEMNICA)
-    cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
-    cSor = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
-    cQ = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
-    cS2 = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
-    cD2 = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
-    For i = 1 To UBound(prj, 1)
-        If Trim$(CStr(prj(i, cKup))) = FX_KUPAC And CStr(prj(i, cS2)) <> "Da" Then
-            If StrComp(Trim$(CStr(prj(i, cSor))), FX_SORTA, vbTextCompare) = 0 Then
-                If IsDate(prj(i, cD2)) Then
-                    If CDate(prj(i, cD2)) >= IzvOdD() And CDate(prj(i, cD2)) <= IzvDoD() Then rs = rs + 1
-                End If
-            End If
-        End If
-    Next i
+    ' Red liste je STAVKA dokumenta (S6 korak 3), pa rucni prolaz broji stavke.
+    Dim rs As Long, rsKg As Double, rsVr As Double
+    rs = IzvPrjStavkeZbir(FX_KUPAC, FX_SORTA, rsKg, rsVr)
     AssertEq (rs > 0), True, "vozilo: kupac ima prijemnice te sorte"
-    AssertEq n, rs, "cip sorte filtrira = rucni prolaz kroz tblPrijemnica"
+    AssertEq n, rs, "cip sorte filtrira = rucni prolaz kroz stavke prijemnica"
     modScrIzvestaji.Scr_IzTestReset
 End Sub
 

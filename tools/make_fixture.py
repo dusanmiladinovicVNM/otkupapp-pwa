@@ -2328,6 +2328,38 @@ SEED["tblZbirnaStavke"] = [
     for red in SEED["tblZbirna"]
 ]
 
+# tblPrijemnicaStavke SE IZVODI IZ tblPrijemnica -- isti razlog, cetvrti
+# dokument (S6 korak 3, plan 14.55, odluka 2).
+#
+# Od S6 koraka 2 klasa, kolicina, cena i gajbe prijemnice zive na stavkama, a
+# pisac ih na zaglavlju ostavlja prazne. Citaoci (stampa, izvestaji, F4 lista,
+# manjak, integritet, oporavak, izvoz, palete) ih od koraka 3 odatle i citaju, a
+# strog citalac zaglavlje bez stavki odbija PO IMENU -- dakle fixture sa
+# zaglavljem bez stavke ne bi oborio jedan test nego svaki koji dodirne bilo
+# kog od tih citalaca.
+#
+# JEDNA STAVKA PO ZAGLAVLJU, ne spajanje po broju: zatecen fixture drzi vise
+# redova istog BrojPrijemnice kao VISE dokumenata (PRJ-TEST-A/B: isti broj, dva
+# kupca; I1/I2, Z1/Z2, C1/C2, D1/D2) i scenariji se oslanjaju bas na to.
+#
+# Linijske kolone ZAGLAVLJA (Kolicina/Cena/Klasa/KolAmbalaze) se NE brisu --
+# odlaze u koraku 8, a do tada ih citaju jos faktura (korak 5) i storno lista,
+# impact i prefill (korak 4). Do tada fixture nosi iste brojeve na oba mesta, a
+# merodavna je stavka.
+SEED["tblPrijemnicaStavke"] = [
+    {
+        "PrijemnicaStavkaID": "PRS-" + str(red["PrijemnicaID"]),
+        "PrijemnicaID": red["PrijemnicaID"],
+        "RedniBroj": 1,
+        "Klasa": red.get("Klasa") or "I",
+        "Kolicina": red["Kolicina"],
+        "Cena": red.get("Cena", 0),
+        "KolAmbalaze": red.get("KolAmbalaze", 0),
+        "BrutoKg": "",
+    }
+    for red in SEED["tblPrijemnica"]
+]
+
 # tblOtpremnicaIzvori SE IZVODI IZ STARE VEZE Otkup.OtpremnicaID (review #362).
 #
 # Od #362 operativni citaoci (roba po vozacu, roba po otkupnom mestu, stampa)
@@ -2487,6 +2519,13 @@ ENSURE_TABLES = {
                         ["ZbirnaStavkaID", "ZbirnaID", "RedniBroj", "Klasa",
                          "Kolicina", "KolAmbalaze", "CreatedAt", "CreatedBy",
                          "ModifiedAt", "ModifiedBy"]),
+    # Prijemnica: header + stavke (S6 korak 3). Isti razlog -- fixture seje i
+    # stavke. Kolone i redosled su iz kanona (schema/schema.json,
+    # tblPrijemnicaStavke, oblik tblOtkupStavke); AppendRow pise poziciono.
+    "tblPrijemnicaStavke": ("PrijemnicaStavke",
+                            ["PrijemnicaStavkaID", "PrijemnicaID", "RedniBroj",
+                             "Klasa", "Kolicina", "Cena", "KolAmbalaze", "BrutoKg",
+                             "CreatedAt", "CreatedBy", "ModifiedAt", "ModifiedBy"]),
 }
 
 # tblLocalConfig (Kljuc | Vrednost | Opis)

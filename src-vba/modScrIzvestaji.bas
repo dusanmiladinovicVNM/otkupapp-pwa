@@ -2250,25 +2250,30 @@ End Function
 Private Sub DodajPrijemniceZbirne(ByVal linije As Collection, _
                                   ByVal brZb As String, ByVal vozId As String)
     Dim d As Variant, i As Long, krug As Long, nasao As Boolean
-    Dim cZb As Long, cVoz As Long, cBr As Long, cKol As Long, cStorno As Long
-    Dim cKup As Long, s As String
+    Dim cZb As Long, cVoz As Long, cBr As Long, cId As Long, cStorno As Long
+    Dim cKup As Long, s As String, zbir As Object, kg As Variant
     On Error Resume Next
     d = GetTableData(TBL_PRIJEMNICA)
     If Not IsArray(d) Then Exit Sub
     cZb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
     cVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
     cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
-    cKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
     cStorno = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
     cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
+    ' Kg dokumenta je zbir STAVKI (S6 korak 3), citan meko: detalj je prikaz,
+    ' pa nepoznata kolicina (kvar stavki) izostaje iz linije, ne pise se kao 0.
+    Set zbir = modDokumenta.ZbirStavkiPoPrijemniciMeko()
     For krug = 1 To 2
         For i = 1 To UBound(d, 1)
             If NzS(d(i, cZb)) = brZb Then
                 If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
                     If krug = 2 Or NzS(d(i, cVoz)) = vozId Then
-                        s = Poruka("OTKUI_IZ_DET_PRIJEMNICA") & " " & _
-                            NzS(d(i, cBr)) & "  " & ChrW(183) & "  " & _
-                            FmtKolicina(NzD(d(i, cKol))) & " kg"
+                        s = Poruka("OTKUI_IZ_DET_PRIJEMNICA") & " " & NzS(d(i, cBr))
+                        kg = modDokumenta.KgPrijemniceMeko(zbir, NzS(d(i, cId)))
+                        If Len(CStr(kg)) > 0 Then
+                            s = s & "  " & ChrW(183) & "  " & FmtKolicina(CDbl(kg)) & " kg"
+                        End If
                         If Len(NzS(d(i, cKup))) > 0 Then
                             s = s & "  " & ChrW(183) & "  " & _
                                 EntitetNaziv("Kupac", NzS(d(i, cKup)), False)
@@ -2289,8 +2294,8 @@ End Sub
 Public Function IzDetaljPrijemnice(ByVal prjID As String) As Variant
     Dim d As Variant, i As Long
     Dim cId As Long, cVoz As Long, cSor As Long, cTipA As Long
-    Dim cKolA As Long, cVrac As Long, cFakt As Long, cFid As Long
-    Dim linije As Collection
+    Dim cVrac As Long, cFakt As Long, cFid As Long
+    Dim linije As Collection, zbir As Object, gajbeTxt As String
     On Error GoTo EH
 
     d = GetTableData(TBL_PRIJEMNICA)
@@ -2299,8 +2304,10 @@ Public Function IzDetaljPrijemnice(ByVal prjID As String) As Variant
     cVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
     cSor = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
     cTipA = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
-    cKolA = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
     cVrac = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA)
+    ' Primljene gajbe su zbir STAVKI dokumenta (S6 korak 3); vracene su
+    ' cinjenica dokumenta i ostaju na zaglavlju.
+    Set zbir = modDokumenta.ZbirStavkiPoPrijemniciMeko()
     cFakt = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO)
     cFid = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID)
 
@@ -2313,8 +2320,14 @@ Public Function IzDetaljPrijemnice(ByVal prjID As String) As Variant
                 linije.Add Poruka("OTKUI_IZ_DET_SORTA") & " " & NzS(d(i, cSor))
             End If
             If Len(NzS(d(i, cTipA))) > 0 Then
+                ' Nepoznate gajbe (kvar stavki) su "-", ne 0.
+                gajbeTxt = "-"
+                If Not zbir Is Nothing Then
+                    If zbir.Exists(Trim$(prjID)) Then _
+                        gajbeTxt = Format$(CDbl(zbir(Trim$(prjID))(2)), "#,##0")
+                End If
                 linije.Add Poruka("OTKUI_IZ_DET_AMB") & " " & NzS(d(i, cTipA)) & _
-                           " x " & Format$(NzD(d(i, cKolA)), "#,##0") & _
+                           " x " & gajbeTxt & _
                            "  (" & Poruka("OTKUI_IZ_DET_AMB_VRAC") & " " & _
                            Format$(NzD(d(i, cVrac)), "#,##0") & ")"
             End If

@@ -79,6 +79,7 @@ Public Sub RunIzvestajTests()
         tx.AddTableSnapshot TBL_ZBIRNA
         tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
         tx.AddTableSnapshot TBL_PRIJEMNICA
+        tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
         tx.AddTableSnapshot TBL_OTPREMNICA
         tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
         tx.AddTableSnapshot TBL_OTKUP
@@ -547,10 +548,12 @@ Private Sub T_E2E_KlasaIiIINeMesajuPrijem()
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
               COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_KLASA), _
         Array("IZVT-PRJ-K1", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup, 900#, KLASA_I)
+    IzvSeedPrijemnicaStavka "IZVT-PRJ-K1", KLASA_I, 900#, 0#
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
               COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_KLASA), _
         Array("IZVT-PRJ-K2", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup, 150#, KLASA_II)
+    IzvSeedPrijemnicaStavka "IZVT-PRJ-K2", KLASA_II, 150#, 0#
 
     IzvSeedOtpremnica "IZVT-OTP-K", IZVT_STANICA2, voz, brDok
     IzvSeedOtpStavka "IZVT-OTP-K", 1, KLASA_I, 1000#
@@ -607,6 +610,18 @@ Private Sub IzvSeedZbirnaStavka(ByVal zbrID As String, ByVal klasa As String, _
         Array(zbrID & "-S1", zbrID, 1, klasa, kg, amb)
 End Sub
 
+' Stavka uz zaglavlje prijemnice (S6 korak 3) -- isti razlog kao kod zbirne:
+' citaoci linija prijemnice citaju tblPrijemnicaStavke, a strog citalac
+' zaglavlje bez stavke odbija po imenu. Linijska polja zaglavlja seed i dalje
+' popunjava (iste brojke) -- odlaze u koraku 8.
+Private Sub IzvSeedPrijemnicaStavka(ByVal prjID As String, ByVal klasa As String, _
+                                    ByVal kg As Double, ByVal cena As Double)
+    IzvSeed TBL_PRIJEMNICA_STAVKE, _
+        Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
+              COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _
+        Array("PRS-" & prjID, prjID, 1, klasa, kg, cena, 0)
+End Sub
+
 ' Dve aktivne zbirne sa ISTIM BrojZbirne, razliciti vozac+kupac, svaka sa
 ' svojom prijemnicom. Poziva se unutar transakcije pozivaoca.
 Private Sub SeedDveZbirneIstogBroja()
@@ -627,12 +642,14 @@ Private Sub SeedDveZbirneIstogBroja()
               COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA), _
         Array("IZVT-PRJ-A", "IZVT-PRJ-A", IZVT_DATUM, IZVT_BROJ, _
               IZVT_VOZAC_A, IZVT_KUPAC_A, 900#)
+    IzvSeedPrijemnicaStavka "IZVT-PRJ-A", KLASA_I, 900#, 0#
 
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
               COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA), _
         Array("IZVT-PRJ-B", "IZVT-PRJ-B", IZVT_DATUM, IZVT_BROJ, _
               IZVT_VOZAC_B, IZVT_KUPAC_B, 1500#)
+    IzvSeedPrijemnicaStavka "IZVT-PRJ-B", KLASA_I, 1500#, 0#
 End Sub
 
 ' Append reda PO IMENU kolone (preskace kolone kojih nema u semi).
@@ -863,11 +880,13 @@ Private Sub T_E2E_ProsecnaCenaZbirniKupac()
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
               COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_CENA), _
         Array("IZVT-PC-A", "IZVT-PC-A", d, IZVT_BROJ, IZVT_KUPAC_A, 1000#, 100#)
+    IzvSeedPrijemnicaStavka "IZVT-PC-A", KLASA_I, 1000#, 100#
 
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
               COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_CENA), _
         Array("IZVT-PC-B", "IZVT-PC-B", d, IZVT_BROJ, IZVT_KUPAC_B, 2000#, 200#)
+    IzvSeedPrijemnicaStavka "IZVT-PC-B", KLASA_I, 2000#, 200#
 
     ' Pojedinacno (entitetID popunjen) izvestaj RADI -- seed je validan i grana
     ' nije mrtva; prazan rezultat ispod je posledica bas praznog entitetID-a.

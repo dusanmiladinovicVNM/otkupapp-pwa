@@ -341,6 +341,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6_ManjakObeStraneIzStavki
     Test_S6_GrupniListStanjeVozaca
     Test_S6_PaleteCitajuStavke
+    Test_S6_CitalacStavkiPrijemniceDrziUgovor
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
     Test_AMB_TipVanSifarnikaPisacOdbija
     Test_ODL24_UgovorPozajmice
@@ -1862,7 +1863,7 @@ End Sub
 
 ' ============================================================
 ' RF-05 -- frmDokumenta unos + storno set (regresija)
-'   R01 prosek gajbe ne racuna stornirane redove (SumByBroj)
+'   R01 prosek gajbe ne racuna stornirane redove (CalculateProsekGajbeByZbirna)
 '   R02 stornirana faktura ne ulazi u listu za placanje/avans (FillOpenFakture)
 '   R03 izvor sa Klasom II blokira zbirnu bez "Dve klase" (ZbirnaIzvorImaKlasuII)
 '   R04 prefill bira POSLEDNJU GENERACIJU (GeneracijaID, ne datum/ID kontinuitet)
@@ -1888,8 +1889,9 @@ End Sub
 ' sabirao sa zaglavlja i za nju video nulu. Prijemnica je dvoklasna, kroz pisca.
 ' Ranije je zbirna bila ZbrZateceniRed, koji pise i zaglavlje, pa bi ta laz
 ' ostala skrivena.
-' SABOTAZA: manjak-preview-bez-druge-klase -> pukne "Manjak: neupisane kg obe
-' klase ulaze u prijemnicu".
+' SABOTAZE: manjak-preview-bez-druge-klase -> pukne "Manjak: neupisane kg obe
+' klase ulaze u prijemnicu"; s6k3-preview-zbirna-nula -> "Manjak: zbirna je
+' ZBIR svojih stavki".
 Private Sub Test_ManjakPreviewJeZbirnaMinusPrijem()
     On Error GoTo EH
 
@@ -6682,8 +6684,8 @@ End Function
 ' zbirne (spoj ostaje po broju i vlasniku -- imenovan rizik, van obima).
 ' Vrednosti su iz pravila: 550 = 400 + 150 (stavke zbirne), 420 = 300 + 120
 ' (stavke prijemnice), prosek gajbe = 550 / (20 + 10).
-' SABOTAZE: s6k3-manjak-izv-zbirna-po-zaglavlju, s6k3-a2-po-zaglavlju,
-' s6k3-prosek-gajbe-po-zaglavlju.
+' SABOTAZE: s6k3-manjak-izv-zbirna-nula, s6k3-a2-prijem-gajbe,
+' s6k3-prosek-gajbe-nula.
 Private Sub Test_S6_ManjakObeStraneIzStavki()
     On Error GoTo EH
 
@@ -6756,8 +6758,9 @@ End Function
 ' da 10 + 10 i vrati 4, pa je stanje 50 -> 34. Kontrole: ponovna stampa posle
 ' kasnijeg dokumenta je ista; dokument bez gajbi stampa "-" (ODL-27); dokument sa
 ' gajbama bez svog reda knjige ne daje papir (obrazac 7693).
-' SABOTAZE: s6k3-grupni-danasnji-saldo, s6k3-grupni-linije-po-zaglavlju,
-' s6k3-grupni-bez-veze-stampa.
+' SABOTAZE: s6k3-grupni-pocetno-bez-kretanja, s6k3-grupni-saldo-dvostruko,
+' s6k3-grupni-danasnji-saldo, s6k3-grupni-linije-prva-stavka,
+' s6k3-grupni-bez-gajbi-nula, s6k3-grupni-bez-veze-stampa.
 Private Sub Test_S6_GrupniListStanjeVozaca()
     On Error GoTo EH
 
@@ -6930,7 +6933,8 @@ End Function
 ' klase II), a Adjust i dalje ispravlja STVARNO odstupanje gajbi (-3 na paleti
 ' klase II -> vraca na 10, pod kljucem stavke II). Oba kvara se prave na
 ' paletnoj stavci, ne na dokumentu.
-' SABOTAZE: s6k3-a3-po-zaglavlju, s6k3-adjust-po-zaglavlju.
+' SABOTAZE: s6k3-a3-linija-bez-klase, s6k3-a3-slepa, s6k3-adjust-gajbe-iz-neta,
+' s6k3-adjust-ne-dopunjuje.
 Private Sub Test_S6_PaleteCitajuStavke()
     On Error GoTo EH
 
@@ -7027,6 +7031,151 @@ EH:
     On Error Resume Next
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
+
+' UGOVOR CITAOCA STAVKI PRIJEMNICE JE DOKUMENTSKI (odluka 1): pokvaren dokument
+' obara citaoca PO IMENU, papir tada ne nastaje, a audit (integritet) ne pada
+' nego kvar imenuje.
+'
+' Sve cetiri anomalije su SINTETICKE -- pisac ih ne pravi (jedna stavka po
+' klasi, 1432; Kolicina > 0; rollback CELOG dokumenta). Prave se u transakciji
+' koja se vraca, pa se posle vracanja meri da je citalac opet cist. Obrazac je
+' Test_ZBR_CitalacStavkiDrziUgovor.
+' SABOTAZE: s6k3-citalac-pusta-dve-iste-klase,
+' s6k3-citalac-pusta-zaglavlje-bez-stavki.
+Private Sub Test_S6_CitalacStavkiPrijemniceDrziUgovor()
+    Const SRC As String = "Test_S6_CitalacStavkiPrijemniceDrziUgovor"
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, brZbr As String
+    scenario = NewScenarioCode("S6UG")
+    testDate = NextTestDate()
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrZateceniRed(testDate, TEST_VOZ_ID, brZbr, TEST_KUP_ID, _
+                   "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                   150#, TEST_TIP_AMB, 0, KLASA_I)) > 0, _
+               "S6 ugovor: preduslov -- zbirna je snimljena"
+
+    Dim prj As String, errNum As Long
+    On Error Resume Next
+    prj = SavePrijemnicaMulti_TX( _
+              datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+              brojPrij:=TEST_PREFIX & "-S6UG-" & scenario, brojZbirne:=brZbr, _
+              vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+              kolicinaI:=100#, cenaI:=50#, tipAmb:="", kolAmb:=0, kolAmbVracena:=0, _
+              outErrNum:=errNum)
+    If Err.Number <> 0 Then prj = "": Err.Clear
+    On Error GoTo EH
+    AssertTrue Len(prj) > 0, "S6 ugovor: preduslov -- prijemnica je snimljena"
+    If Len(prj) = 0 Then Exit Sub
+
+    AssertEquals "", S6CitalacGreska(), "S6 ugovor: ispravan dokument prolazi"
+
+    ' --- (1) dve stavke iste klase ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    S6DodajStavku prj & "-DUPLA", prj, 2, KLASA_I, 10#, SRC
+    AssertTrue InStr(1, S6CitalacGreska(), "Dve stavke iste klase", vbTextCompare) > 0, _
+               "S6 ugovor: dve stavke iste klase obaraju citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- (2) kolicina nula ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    S6DodajStavku prj & "-NULA", prj, 2, KLASA_II, 0#, SRC
+    AssertTrue InStr(1, S6CitalacGreska(), "veca od nule", vbTextCompare) > 0, _
+               "S6 ugovor: kolicina nula obara citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- (3) stavka bez zaglavlja ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    S6DodajStavku prj & "-SIROCE", prj & "-NEMA-GA", 1, KLASA_I, 10#, SRC
+    AssertTrue InStr(1, S6CitalacGreska(), "Zaglavlje prijemnice ne postoji", vbTextCompare) > 0, _
+               "S6 ugovor: stavka bez zaglavlja obara citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- (4) zaglavlje bez stavki: citalac pada, papir ne nastaje, audit
+    '     imenuje kvar. Merenje ide PRE vracanja, tvrdnje posle njega. ---
+    Dim greska As String, papir As String, nalazi As Variant
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    S6ObrisiStavke prj
+    greska = S6CitalacGreska()
+    papir = S6PapirPrijemnice(prj)
+    nalazi = modIntegritet.GetIntegritetRows()
+    tx.RollbackTx
+    Set tx = Nothing
+    AssertTrue InStr(1, greska, "nema nijednu stavku", vbTextCompare) > 0, _
+               "S6 ugovor: zaglavlje bez stavki obara citaoca po imenu"
+    AssertEquals "", papir, "S6 ugovor: nad zaglavljem bez stavki papir ne nastaje"
+    AssertTrue modTest.NalazSadrzi(nalazi, "A2", "nema nijednu stavku"), _
+               "S6 ugovor: integritet ne pada nego imenuje kvar (A2 GRESKA)"
+
+    AssertEquals "", S6CitalacGreska(), "S6 ugovor: na kraju je citalac cist"
+    Exit Sub
+
+EH:
+    Dim eNo As Long, eOpis As String
+    eNo = Err.Number: eOpis = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal SRC, eNo, eOpis
+End Sub
+
+' Greska strogog citaoca stavki prijemnice; prazno = citalac prolazi.
+Private Function S6CitalacGreska() As String
+    Dim s As Variant
+    On Error Resume Next
+    s = modDokumenta.StavkePrijemniceRedovi()
+    If Err.Number <> 0 Then S6CitalacGreska = Err.description
+    Err.Clear
+End Function
+
+Private Sub S6DodajStavku(ByVal stavkaID As String, ByVal prijemnicaID As String, _
+                          ByVal rb As Long, ByVal klasa As String, _
+                          ByVal kol As Double, ByVal src As String)
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_PRIJEMNICA_STAVKE)
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, stavkaID
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, prijemnicaID
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_RB, rb
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, klasa
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, kol
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA, 0#
+    RequireAppend TBL_PRIJEMNICA_STAVKE, rowData, src
+End Sub
+
+Private Sub S6ObrisiStavke(ByVal prijemnicaID As String)
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, prijemnicaID)
+    If redovi Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = redovi.count To 1 Step -1
+        DeleteRow TBL_PRIJEMNICA_STAVKE, CLng(redovi(i))
+    Next i
+End Sub
+
+' "<papir>" kad se papir prijemnice popunio, prazno kad nije. Fill je Private,
+' pa ide kroz Application.Run (kao 230).
+Private Function S6PapirPrijemnice(ByVal prj As String) As String
+    Dim ws As Object
+    On Error Resume Next
+    Set ws = Application.Run("modPrint.FillPrijemnicaSablon", prj)
+    Err.Clear
+    On Error GoTo 0
+    If Not ws Is Nothing Then S6PapirPrijemnice = "<papir>"
+End Function
 
 ' Red AKTIVNE paletne stavke dokumenta pod datim kljucem stavke (prvi; 0 = nema).
 Private Function S6PaletnaStavkaRed(ByVal prj As String, ByVal stavkaID As String) As Long
@@ -8956,6 +9105,7 @@ Private Sub Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira()
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
     tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     tx.AddTableSnapshot TBL_STORNO_VEZE
@@ -9044,6 +9194,19 @@ Private Sub ZbrSejPrijemnicuSaRoditeljem(ByVal prijID As String, ByVal broj As S
     SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_KOLICINA, 100#
 
     RequireAppend TBL_PRIJEMNICA, rowData, "ZbrSejPrijemnicuSaRoditeljem"
+
+    ' Stavka uz zaglavlje (S6 korak 3): citaoci linija prijemnice citaju
+    ' tblPrijemnicaStavke kroz strog citalac, koji zaglavlje bez stavke odbija
+    ' po imenu. Transakcija pozivaoca snima i ovu tabelu.
+    Dim st As Variant
+    st = BlankRow(TBL_PRIJEMNICA_STAVKE)
+    SetRequiredField st, TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, "PRS-" & prijID
+    SetRequiredField st, TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, prijID
+    SetRequiredField st, TBL_PRIJEMNICA_STAVKE, COL_PRS_RB, 1
+    SetRequiredField st, TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, KLASA_I
+    SetRequiredField st, TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, 100#
+    SetOptionalField st, TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA, 0#
+    RequireAppend TBL_PRIJEMNICA_STAVKE, st, "ZbrSejPrijemnicuSaRoditeljem"
 End Sub
 
 ' VLASNISTVO NIZVODNOG LANCA IDE PO IDENTITETU (review #389, P1).

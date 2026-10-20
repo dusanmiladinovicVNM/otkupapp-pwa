@@ -1298,41 +1298,54 @@ EH:
     ExportPredatoPoKupcu = False
 End Function
 
-' Tab PredatoPoKupcu: zbir po Kupac + Vrsta + Klasa. Red 1 su naslovi; bez
-' prijemnica je to jedini red.
+' Tab PredatoPoKupcu: zbir po Kupac + Vrsta + Klasa STAVKE. Red 1 su naslovi;
+' bez prijemnica je to jedini red.
+'
+' S6 KORAK 3: klasa, kolicina, cena i gajbe su na tblPrijemnicaStavke (zaglavlje
+' ih od koraka 2 ne nosi), pa se zbir pravi po stavci aktivnog dokumenta, isto
+' kao OtkupPoOMRedovi. Kljuc i kolone taba za PWA su nepromenjeni.
+' "BrojPrijemnica" je broj DOKUMENATA po kljucu; dokument ima najvise jednu
+' stavku po klasi, pa je to i broj stavki.
 Public Function PredatoPoKupcuRedovi() As Variant
+    Const SRC As String = "PredatoPoKupcuRedovi"
     Dim data As Variant
-    Dim colKupac As Long, colVrsta As Long, colKlasa As Long
-    Dim colKolicina As Long, colAmb As Long, colCena As Long
+    Dim colKupac As Long, colVrsta As Long, colID As Long
     Dim i As Long
 
-    Dim dict As Object
+    Dim dict As Object, brojani As Object
     Set dict = CreateObject("Scripting.Dictionary")
+    Set brojani = CreateObject("Scripting.Dictionary")
 
     data = GetTableData(TBL_PRIJEMNICA)
     If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_PRIJEMNICA)
     If IsEmpty(data) Then GoTo Naslovi
 
-    colKupac = GetColumnIndex(TBL_PRIJEMNICA, "KupacID")
-    colVrsta = GetColumnIndex(TBL_PRIJEMNICA, "VrstaVoca")
-    colKlasa = GetColumnIndex(TBL_PRIJEMNICA, "Klasa")
-    colKolicina = GetColumnIndex(TBL_PRIJEMNICA, "Kolicina")
-    colAmb = GetColumnIndex(TBL_PRIJEMNICA, "KolAmbalaze")
-    colCena = GetColumnIndex(TBL_PRIJEMNICA, "Cena")
+    colKupac = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, SRC)
+    colVrsta = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, SRC)
+    colID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+
+    Dim poDok As Object, st As Variant, pid As String
+    Set poDok = modDokumenta.StavkePrijemnicePoDokumentu()
 
     ' Aggregieren per Kupac + Vrsta + Klasa
     For i = 1 To UBound(data, 1)
-        Dim key As String
-        key = CStr(data(i, colKupac)) & "|" & CStr(data(i, colVrsta)) & "|" & CStr(data(i, colKlasa))
-        
-        If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#, 0#, 0#) ' Kg, Amb, Vrednost, BrojPrijemnica
-        Dim vals As Variant
-        vals = dict(key)
-        vals(0) = vals(0) + CDbl(data(i, colKolicina))
-        vals(1) = vals(1) + CDbl(nz(data(i, colAmb), 0))
-        vals(2) = vals(2) + CDbl(data(i, colKolicina)) * CDbl(data(i, colCena))
-        vals(3) = vals(3) + 1
-        dict(key) = vals
+        pid = Trim$(NzToText(data(i, colID)))
+        For Each st In modDokumenta.StavkeZaPrijemnicu(poDok, pid, SRC)
+            Dim key As String
+            key = CStr(data(i, colKupac)) & "|" & CStr(data(i, colVrsta)) & "|" & CStr(st(3))
+
+            If Not dict.Exists(key) Then dict.Add key, Array(0#, 0#, 0#, 0#) ' Kg, Amb, Vrednost, BrojPrijemnica
+            Dim vals As Variant
+            vals = dict(key)
+            vals(0) = vals(0) + CDbl(st(4))
+            vals(1) = vals(1) + CDbl(st(6))
+            vals(2) = vals(2) + CDbl(st(4)) * CDbl(st(5))
+            If Not brojani.Exists(key & "|" & pid) Then
+                brojani.Add key & "|" & pid, True
+                vals(3) = vals(3) + 1
+            End If
+            dict(key) = vals
+        Next st
     Next i
 
 Naslovi:

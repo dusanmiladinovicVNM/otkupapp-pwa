@@ -750,8 +750,8 @@ SABOTAZE = {
     ),
     "zbr-lista-cita-zaglavlje": (
         "modScrDokumenti.bas",
-        '    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "ZBIRNA")\n',
-        '    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA")   \' SABOTAZA\n',
+        '    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "ZBIRNA" Or mk = "PRIJEMNICA")\n',
+        '    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "PRIJEMNICA")   \' SABOTAZA\n',
         "Test_ZBR_SadrzajCitaStavkeNeZaglavlje",
         "ZBR sadrzaj: mreza F8 pokazuje 1000 kg sa stavki",
     ),
@@ -6149,10 +6149,27 @@ SABOTAZE = {
         "T_Manjak_LinijaIPragSuSamoF4",
         "izlazak iz F4 vraca natpis polja gajbi",
     ),
-    # manjak-preview-bez-druge-klase je SKINUT u S6 koraku 2 (stavka 174): test
-    # Test_ManjakPreviewJeZbirnaMinusPrijem je obrisan, jer CalculateManjakPreview
-    # sabira kolicinu sa zaglavlja prijemnice, a ono je od koraka 2 ne nosi. Vraca
-    # ga korak 3, zajedno sa testom (telo je u git istoriji, commit pre stavke 175).
+    # Cela svrha "Preview" varijante je da NEUPISANI kilogrami iz forme udju u
+    # racun -- inace operater vidi manjak stanja PRE svog unosa i snima
+    # dokument po pogresnoj slici. Sabotaza gasi drugu klasu: prva i dalje
+    # ulazi, pa greska prolazi kroz svaki jednoklasni scenario.
+    # Obara DVE tvrdnje istog testa (prijemnica 470 umesto 495, manjak 80
+    # umesto 55) i to nije zamka 5/6: Assert* u modBusinessFlowProTests
+    # BELEZI pa nastavlja (LogPass/LogFail), pa se obe prijave po imenu.
+    # Skinuta u S6 koraku 2 (stavka 174) zajedno sa testom, vracena u koraku 3
+    # (stavka 178) nad kanonskom zbirnom i dvoklasnom prijemnicom kroz pisca.
+    #
+    # PROVERA IDE NAD DRUGOM SUITOM: tvrdnja trazi upis, pa zivi u
+    # RunBusinessFlowProSuite. Dokaz:
+    #   python tools/sabotaza.py manjak-preview-bez-druge-klase
+    #   python tools/run_vba.py --suite RunBusinessFlowProSuite   # ocekuj FAIL
+    "manjak-preview-bez-druge-klase": (
+        "modDokumenta.bas",
+        "    prijKg = prijKg + pendingKgKlI + pendingKgKlII\n",
+        "    prijKg = prijKg + pendingKgKlI   \' SABOTAZA: druga klasa ne ulazi\n",
+        "Test_ManjakPreviewJeZbirnaMinusPrijem",
+        "Manjak: neupisane kg obe klase ulaze u prijemnicu",
+    ),
     # MIG-005a. Picker koji nudi ono sto writer odbija je gori od praznog:
     # operater to otkrije tek na snimanju, nad dokumentom koji je vec popunio.
     # Filtar je isti (ExcludeStornirano) koji zove i ZbirnaPostoji -- zato se
@@ -7959,17 +7976,10 @@ SABOTAZE = {
         "T_SaldoPapir_KvarKnjigeNijeNula",
         "kvar knjige: GetAmbalazeStanje dize gresku, ne vraca prazno",
     ),
-    # Saldo stanice opet pretvara kvar knjige u 0.
-    "saldo-stanica-guta-kvar": (
-        "modAmbalaza.bas",
-        "    st = GetAmbalazeStanje(stanicaID, \"Stanica\")\n",
-        "    On Error Resume Next   ' SABOTAZA: saldo stanice guta kvar knjige\n"
-        "    st = GetAmbalazeStanje(stanicaID, \"Stanica\")\n"
-        "    Err.Clear\n"
-        "    On Error GoTo 0\n",
-        "T_SaldoPapir_KvarKnjigeNijeNula",
-        "kvar knjige: GetStanicaAmbSaldo dize gresku, ne vraca nulu",
-    ),
+    # saldo-stanica-guta-kvar je SKINUT u S6 koraku 3 (stavka 178): obrisan je
+    # GetStanicaAmbSaldo, jer je njegov jedini pozivalac (grupni otkupni list)
+    # presao na AmbStanjeOkoDokumenta nad nalogom Vozac. Kvar knjige na tom
+    # papiru meri s6k3-grupni-bez-veze-stampa.
     # Otpremnica ponovo stampa stanje POSLE sebe kao "pocetno" (zatecen kvar:
     # izdavanje je vec knjizilo Stanica -> Vozac).
     "saldo-otp-dvostruko": (
@@ -8782,6 +8792,237 @@ SABOTAZE = {
         "            ' SABOTAZA: prevezivanje ne nosi kljuc linije\n",
         "T_IspravkaPrijemnice_SkipIRelink",
         "prevezena paletna stavka nosi PrijemnicaStavkaID nove prijemnice",
+    ),
+    # ---- S6 korak 3 (stavka 178): citaoci prijemnice citaju stavke. ----
+    # Papir prijemnice: red po STAVCI. Sabotaza vraca jedan red (prva stavka), sto
+    # je oblik koji je papir imao dok je delio 'PRJ-I + PRJ-II'.
+    "s6k3-papir-prva-stavka": (
+        "modPrint.bas",
+        "    Dim cnt As Long: cnt = linije.count\n    Dim stavke() As Variant: ReDim stavke(0 To cnt - 1, 0 To 5)\n",
+        "    Dim cnt As Long: cnt = 1   ' SABOTAZA: papir uzima samo prvu stavku\n    Dim stavke() As Variant: ReDim stavke(0 To cnt - 1, 0 To 5)\n",
+        "T_S6_CitaociStavkiPrijemnice",
+        "S6 citaoci: papir prijemnice ima red po stavci, a UKUPNO je zbir stavki",
+    ),
+    # Izvestaj kupca: red po stavci dokumenta, ne po zaglavlju.
+    "s6k3-izv-kupca-prva-stavka": (
+        "modIzvestaj.bas",
+        "            totVr = totVr + kg * cena\n        Next st\n",
+        "            totVr = totVr + kg * cena\n            Exit For   ' SABOTAZA: samo prva stavka dokumenta\n        Next st\n",
+        "T_S6_CitaociStavkiPrijemnice",
+        "S6 citaoci: izvestaj kupca daje red po stavci dokumenta",
+    ),
+    # F4 lista: prijemnica je u grani stavki; bez nje red cita prazno zaglavlje.
+    "s6k3-f4-lista-mimo-stavki": (
+        "modScrDokumenti.bas",
+        "    otkStav = (mk = \"OTKUP\" Or mk = \"OTPREMNICA\" Or mk = \"ZBIRNA\" Or mk = \"PRIJEMNICA\")\n",
+        "    otkStav = (mk = \"OTKUP\" Or mk = \"OTPREMNICA\" Or mk = \"ZBIRNA\")   ' SABOTAZA: prijemnica cita zaglavlje\n",
+        "T_S6_CitaociStavkiPrijemnice",
+        "S6 citaoci: F4 lista -- red dokumenta nosi zbir stavki i obe klase",
+    ),
+    # Ciljna lista Oporavka: kg dokumenta iz recnika stavki. Prazan recnik obara
+    # listu (strog lookup), pa red nema kilazu.
+    "s6k3-cilj-prij-bez-stavki": (
+        "modScrOporavak.bas",
+        "                                        modDokumenta.ZbirStavkiPoPrijemnici(), COL_PRJ_ID)\n",
+        "                                        CreateObject(\"Scripting.Dictionary\"), COL_PRJ_ID)   ' SABOTAZA: prazan recnik stavki\n",
+        "T_S6_CitaociStavkiPrijemnice",
+        "S6 citaoci: ciljna lista Oporavka -- kg dokumenta je zbir stavki",
+    ),
+    # Saldo kupca: zbir SVIH stavki dokumenta, ne prve.
+    "s6k3-saldo-kupca-prva-stavka": (
+        "modIzvestaj.bas",
+        "                        vals(3) = vals(3) + CLng(st(6))\n                    Next st\n",
+        "                        vals(3) = vals(3) + CLng(st(6))\n                        Exit For   ' SABOTAZA: samo prva stavka dokumenta\n                    Next st\n",
+        "T_S6_CitaociStavkiPrijemnice",
+        "S6 citaoci: saldo kupca -- dokument dodaje zbir stavki",
+    ),
+    # Roba kupca: kg dokumenta iz zbira stavki (sabotaza = prazno zaglavlje).
+    "s6k3-roba-kupca-nula": (
+        "modIzvestaj.bas",
+        "        z = modDokumenta.ZbirStavkiZaPrijemnicu(zbir, CStr(prijData(i, colPid)), SRC)\n        vals(0) = vals(0) + CDbl(z(0))\n",
+        "        z = modDokumenta.ZbirStavkiZaPrijemnicu(zbir, CStr(prijData(i, colPid)), SRC)\n        vals(0) = vals(0) + 0   ' SABOTAZA: kg sa praznog zaglavlja\n",
+        "T_S6_CitaociStavkiPrijemnice",
+        "S6 citaoci: roba kupca -- dokument dodaje zbir stavki",
+    ),
+    # Prosecna cena kupca: kg dokumenta iz zbira stavki.
+    "s6k3-prosek-kupca-nula": (
+        "modIzvestaj.bas",
+        "            zp = modDokumenta.ZbirStavkiZaPrijemnicu(zbirPrj, CStr(prijData(i, colPrijID)), SRC)\n            vals(0) = vals(0) + CDbl(zp(0))\n",
+        "            zp = modDokumenta.ZbirStavkiZaPrijemnicu(zbirPrj, CStr(prijData(i, colPrijID)), SRC)\n            vals(0) = vals(0) + 0   ' SABOTAZA: kg sa praznog zaglavlja\n",
+        "T_S6_CitaociStavkiPrijemnice",
+        "S6 citaoci: prosecna cena kupca -- dokument dodaje zbir stavki",
+    ),
+    # Zbirni po kupcu: kg dokumenta iz zbira stavki.
+    "s6k3-zbirni-kupac-nula": (
+        "modIzvestaj.bas",
+        "        z = modDokumenta.ZbirStavkiZaPrijemnicu(zbir, CStr(filtered(i, colPid)), SRC)\n        vals(0) = vals(0) + CDbl(z(0))\n",
+        "        z = modDokumenta.ZbirStavkiZaPrijemnicu(zbir, CStr(filtered(i, colPid)), SRC)\n        vals(0) = vals(0) + 0   ' SABOTAZA: kg sa praznog zaglavlja\n",
+        "T_S6_CitaociStavkiPrijemnice",
+        "S6 citaoci: zbirni po kupcu -- dokument dodaje zbir stavki",
+    ),
+    # Zbirni po vozacu: prijem po broju zbirne iz zbira stavki.
+    "s6k3-zbirni-vozac-nula": (
+        "modIzvestaj.bas",
+        "                prijAggVals(1) = prijAggVals(1) + CDbl(modDokumenta.ZbirStavkiZaPrijemnicu( _\n                                     zbirPrj, CStr(prijData(j, colPid)), SRC)(0))\n",
+        "                prijAggVals(1) = prijAggVals(1) + 0   ' SABOTAZA: kg sa praznog zaglavlja\n",
+        "T_S6_CitaociStavkiPrijemnice",
+        "S6 citaoci: zbirni po vozacu -- manjak pada za zbir stavki",
+    ),
+    # Manjak (BuildManjakDict): prijem po klasi iz stavke prijemnice.
+    "s6k3-manjak-dict-prijem-nula": (
+        "modHelpers.bas",
+        "            pKg = CDbl(ps(4))\n",
+        "            pKg = 0   ' SABOTAZA: kg sa praznog zaglavlja\n",
+        "T_S6_CitaociStavkiPrijemnice",
+        "S6 citaoci: izvestaj manjka -- prijem zbirne raste za stavku njene klase",
+    ),
+    # Preview manjka F4: prijemnicka strana iz stavki.
+    "s6k3-preview-prijem-nula": (
+        "modDokumenta.bas",
+        "                prijKg = prijKg + CDbl(ZbirStavkiZaPrijemnicu(zbirPrj, _\n                             CStr(prijData(i, colPid)), SRC)(0))\n",
+        "                prijKg = prijKg + 0   ' SABOTAZA: kg sa praznog zaglavlja\n",
+        "T_S6_CitaociStavkiPrijemnice",
+        "S6 citaoci: preview manjka F4 -- prijem zbirne raste za zbir stavki",
+    ),
+    # Izvoz predato po kupcu: kg po stavci (kljuc kupac|vrsta|klasa stavke).
+    "s6k3-izvoz-nula": (
+        "modStammdatenSync.bas",
+        "            vals(0) = vals(0) + CDbl(st(4))\n            vals(1) = vals(1) + CDbl(st(6))\n",
+        "            vals(0) = vals(0) + 0   ' SABOTAZA: kg sa praznog zaglavlja\n            vals(1) = vals(1) + CDbl(st(6))\n",
+        "T_S6_CitaociStavkiPrijemnice",
+        "S6 citaoci: izvoz predato po kupcu -- svaka klasa dobija svoju stavku",
+    ),
+    # Preview manjka: zbirnina strana iz STAVKI (kanonska zbirna zaglavlje ne puni).
+    "s6k3-preview-zbirna-nula": (
+        "modDokumenta.bas",
+        "                zbirnaKg = zbirnaKg + CDbl(ZbirStavkiZaZbirnu(zbirZbr, _\n                               CStr(zbrData(i, colZid)), SRC)(0))\n",
+        "                zbirnaKg = zbirnaKg + 0   ' SABOTAZA: kg zbirne sa praznog zaglavlja\n",
+        "Test_ManjakPreviewJeZbirnaMinusPrijem",
+        "Manjak: zbirna je ZBIR svojih stavki",
+    ),
+    # Izvestaj manjka: kg zbirne iz njenih stavki.
+    "s6k3-manjak-izv-zbirna-nula": (
+        "modIzvestaj.bas",
+        "            zv(0) = zv(0) + CDbl(zs(4))\n",
+        "            zv(0) = zv(0) + 0   ' SABOTAZA: kg zbirne sa praznog zaglavlja\n",
+        "Test_S6_ManjakObeStraneIzStavki",
+        "S6 manjak: izvestaj manjka cita stavke zbirne i prijemnice",
+    ),
+    # Integritet A2: prijem po broju zbirne je kg stavki (idx 0), ne gajbe.
+    "s6k3-a2-prijem-gajbe": (
+        "modIntegritet.bas",
+        "    Dim prijDict As Object: Set prijDict = ZbirStavkiPoBroju(TBL_PRIJEMNICA, 0, False)\n",
+        "    Dim prijDict As Object: Set prijDict = ZbirStavkiPoBroju(TBL_PRIJEMNICA, 2, False)   ' SABOTAZA: gajbe umesto kg\n",
+        "Test_S6_ManjakObeStraneIzStavki",
+        "S6 manjak: integritet A2 vidi zbirnu i prijemnicu iz stavki",
+    ),
+    # Prosek gajbe: kg zbirne iz stavki.
+    "s6k3-prosek-gajbe-nula": (
+        "modDokumenta.bas",
+        "            kol = kol + CDbl(z(0))\n",
+        "            kol = kol + 0   ' SABOTAZA: kg zbirne sa praznog zaglavlja\n",
+        "Test_S6_ManjakObeStraneIzStavki",
+        "S6 manjak: prosek gajbe je zbir kg stavki zbirne kroz zbir gajbi",
+    ),
+    # Grupni list: pocetno = posle + primljeno - izdato (pravilo reversa).
+    "s6k3-grupni-pocetno-bez-kretanja": (
+        "modPrint.bas",
+        "        h(\"ambPocetno\") = tipAmb & \" x \" & CStr(prjPosle + CLng(kolAmb) - CLng(kolAmbVr))\n",
+        "        h(\"ambPocetno\") = tipAmb & \" x \" & CStr(prjPosle)   ' SABOTAZA: pocetno = posle\n",
+        "Test_S6_GrupniListStanjeVozaca",
+        "S6 grupni list: pocetno stanje je stanje vozaca pre prijemnice",
+    ),
+    # Grupni list: saldo je stanje POSLE dokumenta; sabotaza oduzima gajbe dvaput
+    # (kvar koji je otpremnica imala do stavke 135).
+    "s6k3-grupni-saldo-dvostruko": (
+        "modPrint.bas",
+        "        h(\"ambSaldo\") = tipAmb & \" x \" & CStr(prjPosle)\n",
+        "        h(\"ambSaldo\") = tipAmb & \" x \" & CStr(prjPosle - CLng(kolAmb))   ' SABOTAZA: gajbe oduzete dvaput\n",
+        "Test_S6_GrupniListStanjeVozaca",
+        "S6 grupni list: saldo ambalaze je stanje vozaca posle prijemnice",
+    ),
+    # Grupni list: stanje oko SVOG reda, ne danasnji saldo -- ponovna stampa posle
+    # kasnijeg dokumenta mora biti ista. Prva stampa je ista i sa sabotazom.
+    "s6k3-grupni-danasnji-saldo": (
+        "modPrint.bas",
+        "        h(\"ambSaldo\") = tipAmb & \" x \" & CStr(prjPosle)\n",
+        "        h(\"ambSaldo\") = tipAmb & \" x \" & CStr(CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, vozID, tipAmb)))   ' SABOTAZA: danasnji saldo\n",
+        "Test_S6_GrupniListStanjeVozaca",
+        "S6 grupni list: ponovna stampa posle kasnijeg dokumenta je ista",
+    ),
+    # Grupni list: red po stavci dokumenta.
+    "s6k3-grupni-linije-prva-stavka": (
+        "modPrint.bas",
+        "    Dim cnt As Long: cnt = linije.count\n    Dim stavke() As Variant: ReDim stavke(0 To cnt - 1, 0 To 6)\n",
+        "    Dim cnt As Long: cnt = 1   ' SABOTAZA: list uzima samo prvu stavku\n    Dim stavke() As Variant: ReDim stavke(0 To cnt - 1, 0 To 6)\n",
+        "Test_S6_GrupniListStanjeVozaca",
+        "S6 grupni list: red po stavci dokumenta",
+    ),
+    # Grupni list bez gajbi: '-' (ODL-27), ne izmisljena nula.
+    "s6k3-grupni-bez-gajbi-nula": (
+        "modPrint.bas",
+        "                  \"ambalaze -- papir se ne pravi.\"\n    Else\n        h(\"ambPocetno\") = tipAmb & \" x -\"\n",
+        "                  \"ambalaze -- papir se ne pravi.\"\n    Else\n        h(\"ambPocetno\") = tipAmb & \" x 0\"   ' SABOTAZA: bez gajbi stampa 0\n",
+        "Test_S6_GrupniListStanjeVozaca",
+        "S6 grupni list bez gajbi: stampa nepoznato stanje (ODL-27), ne odbija se",
+    ),
+    # Grupni list: dokument SA gajbama bez svog reda knjige ne daje papir (obrazac 7693).
+    "s6k3-grupni-bez-veze-stampa": (
+        "modPrint.bas",
+        "    ElseIf kolAmb > 0 Or kolAmbVr > 0 Then\n",
+        "    ElseIf False Then   ' SABOTAZA: pokidana veza stampa nepoznato stanje\n",
+        "Test_S6_GrupniListStanjeVozaca",
+        "S6 grupni list bez veze: prijemnica sa gajbama se ne popunjava",
+    ),
+    # A3: linija je (dokument, klasa). Bez klase sve palete idu na klasu I i ispravan
+    # dvoklasni dokument postaje nalaz.
+    "s6k3-a3-linija-bez-klase": (
+        "modIntegritet.bas",
+        "                k = Trim$(NzToText(ps(i, cP))) & \"|\" & KlasaOrDefault(ps(i, cK))\n",
+        "                k = Trim$(NzToText(ps(i, cP))) & \"|\" & KLASA_I   ' SABOTAZA: linija bez klase\n",
+        "Test_S6_PaleteCitajuStavke",
+        "S6 palete: A3 nema nalaz nad ispravnim dokumentom",
+    ),
+    # A3 kontra-tvrdnja: provera i dalje vidi STVARNO odstupanje neta.
+    "s6k3-a3-slepa": (
+        "modIntegritet.bas",
+        "            If Abs(diff) > 0.5 Then\n                delovi = Split(CStr(kk), \"|\")\n",
+        "            If False Then   ' SABOTAZA: A3 ne vidi odstupanje\n                delovi = Split(CStr(kk), \"|\")\n",
+        "Test_S6_PaleteCitajuStavke",
+        "S6 palete: A3 vidi stvarno odstupanje neta na liniji",
+    ),
+    # Adjust: gajbe linije iz stavke. Zamenjeni neto i gajbe daju 'dokument nosi 100
+    # gajbi', pa Adjust menja palete ispravnog dokumenta.
+    "s6k3-adjust-gajbe-iz-neta": (
+        "modPaletniList.bas",
+        "                                        docStavka, docNeto, docGajb, SRC\n",
+        "                                        docStavka, docGajb, docNeto, SRC   ' SABOTAZA: neto i gajbe zamenjeni\n",
+        "Test_S6_PaleteCitajuStavke",
+        "S6 palete: Adjust nad ispravnim dokumentom ne menja nijednu paletu",
+    ),
+    # Adjust kontra-tvrdnja: STVARAN manjak gajbi na paleti se dopunjuje.
+    "s6k3-adjust-ne-dopunjuje": (
+        "modPaletniList.bas",
+        "        ElseIf delta > 0 Then\n",
+        "        ElseIf False Then   ' SABOTAZA: manjak gajbi se ne dopunjuje\n",
+        "Test_S6_PaleteCitajuStavke",
+        "S6 palete: Adjust vraca klasu II na gajbe njene stavke, pod njenim kljucem",
+    ),
+    # Ugovor citaoca: jedna stavka po klasi po dokumentu (pisac: 1432).
+    "s6k3-citalac-pusta-dve-iste-klase": (
+        "modDokumenta.bas",
+        "            If parKlasa.Exists(kParKl) Then\n                Err.Raise vbObjectError + 1974, SRC, _\n",
+        "            If False Then   ' SABOTAZA: dve stavke iste klase prolaze\n                Err.Raise vbObjectError + 1974, SRC, _\n",
+        "Test_S6_CitalacStavkiPrijemniceDrziUgovor",
+        "S6 ugovor: dve stavke iste klase obaraju citaoca po imenu",
+    ),
+    # Ugovor citaoca: zaglavlje bez stavki nije dokument kolicine nula.
+    "s6k3-citalac-pusta-zaglavlje-bez-stavki": (
+        "modDokumenta.bas",
+        "    RequireZaglavljaPrijemniceSaStavkama zagl, imaStavku, SRC\n",
+        "    ' SABOTAZA: prijemnica bez stavki prolazi kao dokument\n",
+        "Test_S6_CitalacStavkiPrijemniceDrziUgovor",
+        "S6 ugovor: zaglavlje bez stavki obara citaoca po imenu",
     ),
 }
 
