@@ -351,6 +351,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6K4_PadPosleSvihUpisaVracaSve
     Test_S6K4_JezgroTraziSnimak
     Test_S6K4_KontraStavPadneDokumentOstaje
+    Test_S6K4_PaletnaStavkaBezPaleteObaraStorno
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
     Test_AMB_TipVanSifarnikaPisacOdbija
     Test_ODL24_UgovorPozajmice
@@ -7242,7 +7243,95 @@ EH:
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
 
+' REVIEW #438 P2: PALETNA STAVKA KOJA POKAZUJE NA PALETU KOJE NEMA OBARA STORNO.
+'
+' DecrementPaletaForStavka nad nepostojecom paletom TIHO izlazi (palRow = 0), a
+' telo skidanja posle toga ipak oznaci stavku kao storniranu -- pa bi storno koji
+' obecava "palete, dokument i knjiga zajedno ili nista" prosao, a zaglavlje palete
+' ostalo nedirnuto. Fixture: SINTETICKA ANOMALIJA (fault injection) -- jedna
+' stavka dokumenta preusmerena na nepostojeci PaletaID, i vracena na kraju; pisac
+' takvu stavku ne pravi. Razlog se cita iz jezgra (javni ulaz ga samo loguje).
+' SABOTAZE: s6k4-paleta-bez-zaglavlja-prolazi.
+Private Sub Test_S6K4_PaletnaStavkaBezPaleteObaraStorno()
+    Dim prevPal As String, tx As clsTransaction, stavka As String, pravaPal As String
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4BPL")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4B-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    AssertTrue S6K4Gajbe(testDate, scenario, tipT), _
+               "S6K4 bez palete: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim brZbr As String, prj As String, zbrID As String, palete As String
+    brZbr = TEST_PREFIX & "-ZK4B-" & scenario
+    zbrID = S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)
+    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, TEST_PREFIX & "-PK4B-" & scenario, _
+                         brZbr, tipT, 10, 10, 4)
+    stavka = S6K4PrvaPaletnaStavka(prj, pravaPal)
+    AssertTrue Len(prj) > 0 And Len(stavka) > 0 And Len(pravaPal) > 0, _
+               "S6K4 bez palete: preduslov -- dokument je na paletama"
+    If Len(stavka) = 0 Then GoTo Kraj
+    S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka, COL_PALS_PALETA_ID, "PAL-NEMA-" & scenario
+
+    Dim otisakPre As String, razlogJezgra As String
+    palete = S6K4PaleteDokumenta(prj)
+    otisakPre = S6K4Otisak(prj, zbrID, palete)
+    Set tx = New clsTransaction
+    tx.BeginTx
+    modStorno.SnimiZaStornoPrijemnice tx
+    On Error Resume Next
+    modStorno.StornoPrijemnica prj, tx
+    razlogJezgra = Err.description
+    Err.Clear
+    On Error GoTo EH
+    tx.RollbackTx
+    Set tx = Nothing
+    AssertTrue InStr(1, razlogJezgra, "paletu koje nema", vbTextCompare) > 0, _
+               "S6K4 bez palete: storno je ODBIJEN po imenu (stavka pokazuje na paletu koje nema)"
+    AssertEquals otisakPre, S6K4Otisak(prj, zbrID, palete), _
+                 "S6K4 bez palete: dokument, palete i knjiga su netaknuti"
+    AssertTrue Not modStorno.StornoPrijemnica_TX(prj), _
+               "S6K4 bez palete: ni javni ulaz ne prolazi"
+    AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K4 bez palete: dokument ostaje aktivan"
+Kraj:
+    If Len(stavka) > 0 And Len(pravaPal) > 0 Then _
+        S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka, COL_PALS_PALETA_ID, pravaPal
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_PaletnaStavkaBezPaleteObaraStorno", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    If Len(stavka) > 0 And Len(pravaPal) > 0 Then _
+        S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka, COL_PALS_PALETA_ID, pravaPal
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
 ' --- S6K4 pomocnici ---
+
+' Prva AKTIVNA paletna stavka dokumenta: vraca njen ID, a outPaleta njenu paletu.
+Private Function S6K4PrvaPaletnaStavka(ByVal prj As String, ByRef outPaleta As String) As String
+    outPaleta = ""
+    If Len(prj) = 0 Then Exit Function
+    Dim d As Variant
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(d) Then Exit Function
+    Dim cP As Long, cId As Long, cPal As Long, cSt As Long, i As Long
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S6K4PrvaPaletnaStavka")
+    cId = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, "S6K4PrvaPaletnaStavka")
+    cPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, "S6K4PrvaPaletnaStavka")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S6K4PrvaPaletnaStavka")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = prj And UCase$(Trim$(nz(d(i, cSt), ""))) <> "DA" Then
+            outPaleta = Trim$(nz(d(i, cPal), ""))
+            S6K4PrvaPaletnaStavka = Trim$(nz(d(i, cId), ""))
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' Otisak svih tabela matrice storna (stavka 182) za jedan dokument: broj redova i
 ' kljucna polja. Dva otiska su jednaka samo ako se nista nije promenilo -- ni
