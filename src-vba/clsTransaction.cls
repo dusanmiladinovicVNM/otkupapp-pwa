@@ -25,8 +25,10 @@ Private mStatusBarText As Variant
 ' obe snapshotovati tblAmbalaza, pa dokument commit-ovati u jednoj a knjigu u
 ' drugoj -- i rollback dokumenta ostavi ambalazu.
 '
-' SKUP, ne jedna vrednost: SavePrijemnicaMulti_TX upisuje vise prijemnica u
-' jednoj transakciji, pa bi jedna vrednost priznala samo prvu.
+' SKUP, ne jedna vrednost: jedna transakcija sme da veze vise izvornih
+' dokumenata, pa bi jedna vrednost priznala samo prvi. Do S6 koraka 2 je
+' SavePrijemnicaMulti_TX bas tako upisivao prijemnicu PO KLASI; od tada je
+' prijemnica jedan dokument i vezuje se jednom.
 Private mIzvorniDok As Object
 
 ' Imena tabela koje rollback NIJE uspeo da vrati. Prazno = rollback potpun.

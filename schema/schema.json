@@ -571,7 +571,8 @@
         "CreatedBy",
         "ModifiedAt",
         "ModifiedBy",
-        "ZbirnaRoditeljID"
+        "ZbirnaRoditeljID",
+        "PrijemnicaStavkaID"
       ]
     },
     {

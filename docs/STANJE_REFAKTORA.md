@@ -6226,6 +6226,73 @@
      - **Sledeće:** kod po ugovoru iz §14.55 „Korak 2“, pa PR na review. `run_vba` FULL i `dokaz.py` čekaju
        reviewer GO.
 
+175. **S6 korak 2 — pisac prijemnice: zaglavlje + stavke, jedna noga knjige, palete po stavci; PR na review**
+     (20.10.2026). Kod je nad stavkom 174 i prati ugovor iz §14.55 „Korak 2“.
+
+     - **Pisac (`modDokumenta`):**
+       - `SavePrijemnicaMulti_TX` gradi 1..2 stavke i zove **jedno** jezgro. Potpis mu je netaknut, a vraća
+         jedan ID.
+       - Novo privatno jezgro `SavePrijemnicaDokument` piše zaglavlje bez linijskih polja i bez keša fakture,
+         pa stavke (`PRS-` + `NewEntityID`).
+       - Knjiga dobija **jednu** `UZ_ROBU` = Σ `KolAmbalaze` i jedan povrat, pod ID-jem dokumenta.
+       - Generacija je `ApplyNovaGeneracijaID`.
+       - `RelinkFakturaStavke` radi po klasi koju dokument ima i više ne piše keš na zaglavlje.
+         `FindPrijemnicaRowByIDAndKlasa` je ostao bez pozivaoca i obrisan je.
+       - Jezgro proverava `tx.ImaSnapshot(tblPrijemnicaStavke)` i odbija duplu klasu (`1432`).
+       - `SavePrijemnica_TX` i javni `SavePrijemnica(tx, …)` su tanki omotači.
+     - **Palete (`modPaletniList`):**
+       - Kolona `tblPaletaStavka.PrijemnicaStavkaID` je dodata na kraj. Otisak je `05A01275` → `106AC27A`
+         (48 tabela, 665 kolona).
+       - Ključ linije putuje kroz `PaletizePrijemnica` → `SpillGajbice` → `AddStavka`.
+       - Kapija meri par (`PrijemnicaID`, `PrijemnicaStavkaID`).
+       - Nova kolona je u `RequirePaletaStavkaSchema`.
+       - `ReassignPaleteToPrijemnica_TX` čita cilj iz stavki preko `PrijemnicaLinijePoKlasi` (red bez stavki
+         je sam svoja linija), a STEP2 upisuje i ključ linije.
+       - `Adjust` i `Evaluate` nisu dirani (korak 3/4).
+     - **Alat:** u `tools/vba_check.py`, u `AMB_BIND_DOZVOLJENI`, unos `SavePrijemnica` je zamenjen unosom
+       `SavePrijemnicaDokument` (kanonski pisac je sada jezgro). Dokaz u oba smera je zabeležen tokom rada:
+       hook je jezgro prijavio **po imenu** (`AMB_BIND_VLASNIK`), a posle izmene je čist.
+     - **Reprodukcija, kroz produkcioni put**, nad svežom sveskom iz `run_vba --compile-only --keep`, posle
+       `EnsureRuntimeSchema`:
+       - **Pre ispravke (crveno po imenu):**
+         - 258 pada na „S6 F4: dve klase su JEDAN dokument (jedan ID)“ (dobijeno 10, pozicija `" + "`);
+         - 26 pada na „ispravka ima stavku klase I“;
+         - BFP ima 19 padova: jedan ID, zaglavlje i stavke, Σ noga, palete po stavci, storno, generacija
+           drugog dokumenta i storno dvoklasnog dokumenta.
+       - **Posle ispravke (zeleno):**
+         - `modTest` 8/8 (8, 9, 26, 27, 247, 248, 257, 258);
+         - BFP **199/0** nad 21 pogođenim testom: novi, prepisani, svi `Test_PRJ_*`, `Test_RVP_*`,
+           `Test_ODL24_*`, `Test_ZBR_PaletaNasledjuje*`, `Invalid*Prijemnica*`.
+       - Ovo je reprodukcija, ne izvršna kapija.
+     - **Testovi:**
+       - BFP, novi: `Test_S6_DveKlaseJedanDokument` (19 tvrdnji, 10 + 10 gajbi) i
+         `Test_S6_JednaKlasaJednaStavka` (7);
+       - BFP, prepisani: `Test_GeneracijaNePrelaziVlasnika` (9 → 6) i `Test_StornoPoBrojuOdbijaDvaVlasnika`
+         (9 → 8);
+       - BFP, obrisani po spisku iz §14.55 (27 tvrdnji na zelenom putu): `Test_DuplicateFakturaIsBlocked`,
+         `Test_ManjakPreviewJeZbirnaMinusPrijem` i `Test_OpenFaktureExcludeStornirano`;
+       - `modTest`: nov **258** `T_S6_PrijemnicaJedanDokument`, a 26 dobija dve tvrdnje o ključu linije.
+     - **Sabotaže:** katalog **846 → 855**.
+       - Dodato je deset `s6k2-*`: `noga-bez-zbira`, `kapija-palete-po-dokumentu`, `paleta-bez-kljuca-stavke`,
+         `zaglavlje-nosi-klasu`, `storno-dokumenta-bez-kontrastava`, `generacija-nasledjena`,
+         `druga-klasa-kao-prva`, `stavka-bez-id`, `stavke-van-snimka` i `prevezivanje-bez-kljuca-stavke`.
+       - Presidrene su dve: `amb-prj-povrat-samo-sa-klasom-i` i `amb-prj-puna-noga-nosi-vracene`.
+       - Skinuta je `manjak-preview-bez-druge-klase`, jer je njen test parkiran za korak 3.
+       - **Statička sonda, bez Excela:** sve 13 se primenjuju, `vba_check` ostaje čist, a `--vrati` vraća
+         izvor bit-identično.
+       - Da svaka obara **svoju** tvrdnju **nije izmereno**; to meri `dokaz.py` posle GO.
+     - **Jeftine kapije:** ceo `static.yml` bez `npm ci` i JS harness-a, plus `popis_citalaca --check` i
+       `sabotaza --proveri-sidra`. Sve su exit 0 posle regeneracije `WHO_WRITES.md`, u kome je jedini nov red
+       `tblPrijemnicaStavke` ← `modDokumenta`.
+     - **Očekivani brojevi, izvedeni iz diff-a — NIJE izmereno:**
+       - RunAllTests **258/0**;
+       - BFP **2473/0** (2478 − 27 − 3 − 1 + 26);
+       - Banka 241/0, Storno 111/0, Palete 97 — suite nisu dirane, a Palete ručne redove starog oblika vidi
+         kao liniju sa praznom stavkom;
+       - dokaz `s6k2-` **10/10**; uz to `amb-prj-` za dve presidrene.
+     - **Čeka:** reviewer GO → `run_vba` FULL, `dokaz.py s6k2- --grupe` i `dokaz.py amb-prj- --grupe`. Compile
+       i ručnu proveru radi operater.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

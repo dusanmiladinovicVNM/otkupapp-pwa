@@ -46,6 +46,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblPrerada` | 1 | `modPaletniList` |
 | `tblPreradaStavka` | 1 | `modPaletniList` |
 | `tblPrevoznici` | 1 | `modUtovar` |
+| `tblPrijemnicaStavke` | 1 | `modDokumenta` |
 | `tblSEFConfig` | 1 | `modConfig` |
 | `tblSEFEventLog` | 1 | `modSEFPersistance` |
 | `tblSEFSubmission` | 1 | `modSEFPersistance` |
@@ -90,6 +91,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblPartnerMap`: `modBankaMapiranje`
 - `tblPrerada`: `modPaletniList`, `modStorno`
 - `tblPreradaStavka`: `modPaletniList`, `modStorno`
+- `tblPrijemnicaStavke`: `modDokumenta`
 - `tblSEFEventLog`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
 - `tblSEFSubmission`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
 - `tblStornoVeze`: `modAmbalaza`, `modOtkup`, `modStornoContext`
@@ -120,6 +122,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblOtpremnicaStavke`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTest`, `modTestStorno`
 - `tblPaletaStavka`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPartnerMap`: `modTestBanka`
+- `tblPrijemnicaStavke`: `modBusinessFlowProTests`
 - `tblSEFConfig`: `modTestStorno`
 - `tblSEFEventLog`: `modSEFTests`
 - `tblSEFSubmission`: `modSEFTests`
