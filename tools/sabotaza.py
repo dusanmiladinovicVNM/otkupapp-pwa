@@ -9024,6 +9024,31 @@ SABOTAZE = {
         "Test_S6_CitalacStavkiPrijemniceDrziUgovor",
         "S6 ugovor: zaglavlje bez stavki obara citaoca po imenu",
     ),
+    # Review #437 P2: ID stavke je identitet linije (kljuc palete, fakture).
+    "s6k3-citalac-pusta-stavku-bez-id": (
+        "modDokumenta.bas",
+        "            If Len(sid) = 0 Then\n                Err.Raise vbObjectError + 1978, SRC, _\n",
+        "            If False Then   ' SABOTAZA: stavka bez ID-a prolazi\n                Err.Raise vbObjectError + 1978, SRC, _\n",
+        "Test_S6_CitalacStavkiPrijemniceDrziUgovor",
+        "S6 ugovor: stavka bez svog ID-a obara citaoca po imenu",
+    ),
+    # Review #437 P2: jedinstvenost je GLOBALNA (NewEntityID). Kapija po
+    # dokumentu pusta isti ID na drugom dokumentu -- test mora tu razliku da vidi.
+    "s6k3-citalac-id-stavke-po-dokumentu": (
+        "modDokumenta.bas",
+        "            kId = UCase$(sid)\n",
+        "            kId = UCase$(pid & \"|\" & sid)   ' SABOTAZA: ID stavke jedinstven samo po dokumentu\n",
+        "Test_S6_CitalacStavkiPrijemniceDrziUgovor",
+        "S6 ugovor: isti ID stavke na dva dokumenta obara citaoca po imenu",
+    ),
+    # Review #437 P3: pisac upisuje bruto samo kad je > 0; nula nije ni prazno ni bruto.
+    "s6k3-citalac-pusta-bruto-nula": (
+        "modDokumenta.bas",
+        "        If CDbl(bruto) <= 0 Then\n",
+        "        If CDbl(bruto) < 0 Then   ' SABOTAZA: BrutoKg nula prolazi\n",
+        "Test_S6_CitalacStavkiPrijemniceDrziUgovor",
+        "S6 ugovor: BrutoKg nula obara citaoca po imenu",
+    ),
 }
 
 

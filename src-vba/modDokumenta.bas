@@ -7133,7 +7133,11 @@ End Function
 '      KolAmbalaze ceo broj >= 0 (prazno = 0 gajbi); BrutoKg prazan ili broj > 0
 '      (pisac ga upisuje samo kad je > 0);
 '   4) Klasa kroz istu kapiju koju pisac zove (RequireValidDocumentClass), i
-'      najvise JEDNA stavka po klasi po dokumentu (pisac: 1432).
+'      najvise JEDNA stavka po klasi po dokumentu (pisac: 1432);
+'   5) PrijemnicaStavkaID neprazan i JEDINSTVEN U CELOJ TABELI (review #437,
+'      P2) -- identitet linije, kljuc palete i (korak 5) fakture. Pisac ga
+'      uzima iz NewEntityID, pa je globalan: kapija po dokumentu ne bi videla
+'      isti ID na dva dokumenta.
 '
 ' Linijska polja ZAGLAVLJA se ovde ne citaju ni ne proveravaju: fixture ih do
 ' koraka 8 nosi uz izvedenu stavku (iste brojke), a merodavna je stavka.
@@ -7172,11 +7176,27 @@ Public Function StavkePrijemniceRedovi() As Variant
 
         Dim parKlasa As Object, kParKl As String
         Set parKlasa = CreateObject("Scripting.Dictionary")
+        Dim idStavke As Object, sid As String, kId As String
+        Set idStavke = CreateObject("Scripting.Dictionary")
 
         For i = 1 To UBound(d, 1)
             pid = Trim$(NzToText(d(i, cPrj)))
             RequirePrsStavkaUgovor zagl, pid, d(i, cKl), d(i, cKol), d(i, cCena), _
                                    d(i, cAmb), d(i, cBruto), i, SRC
+            sid = Trim$(NzToText(d(i, cId)))
+            If Len(sid) = 0 Then
+                Err.Raise vbObjectError + 1978, SRC, _
+                          "Stavka prijemnice bez PrijemnicaStavkaID-a: PrijemnicaID=" & pid & _
+                          ", red " & CStr(i) & ". ID stavke je kljuc palete -- linija " & _
+                          "bez njega se ne moze citati."
+            End If
+            kId = UCase$(sid)
+            If idStavke.Exists(kId) Then
+                Err.Raise vbObjectError + 1979, SRC, _
+                          "PrijemnicaStavkaID se ponavlja: " & sid & " (PrijemnicaID=" & _
+                          CStr(idStavke(kId)) & " i " & pid & "). ID stavke je identitet linije."
+            End If
+            idStavke.Add kId, pid
             kParKl = UCase$(pid) & "|" & UCase$(Trim$(NzToText(d(i, cKl))))
             If parKlasa.Exists(kParKl) Then
                 Err.Raise vbObjectError + 1974, SRC, _
@@ -7312,15 +7332,17 @@ Private Sub RequirePrsStavkaUgovor(ByVal zagl As Object, ByVal pid As String, _
                        sourceName
     End If
 
-    ' Bruto: pisac ga upisuje samo kad je > 0, prazno znaci unet neto.
+    ' Bruto: pisac ga upisuje samo kad je > 0, prazno znaci unet neto. Nula nije
+    ' ni jedno ni drugo (review #437, P3).
     If Len(Trim$(NzToText(bruto))) > 0 Then
         If Not IsNumeric(bruto) Then
             Err.Raise vbObjectError + 1977, sourceName, _
                       "BrutoKg stavke nije brojcan: PrijemnicaID=" & pid & "."
         End If
-        If CDbl(bruto) < 0 Then
+        If CDbl(bruto) <= 0 Then
             Err.Raise vbObjectError + 1977, sourceName, _
-                      "BrutoKg stavke ne sme biti negativan: PrijemnicaID=" & pid & "."
+                      "BrutoKg stavke mora biti veci od nule (prazno = unet neto): " & _
+                      "PrijemnicaID=" & pid & "."
         End If
     End If
 
