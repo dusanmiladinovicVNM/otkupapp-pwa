@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ merge-ovano `#416` (ručna provera ✅ 13.10.2026, stavka 126) · `10e-2` stari storno, undo i ispravka reversa ✅ merge-ovano `#417` (stavke 127–128) · `10e-3` pisac, dvomodelni čitalac, šema i fixture ✅ merge-ovano `#418` (stavke 129–130); `KI-011` ✅ `#419`; `KI-012`/`KI-013` ✅ `#420` · **čitaoci salda na papiru ⏳** (stavka 135); `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1/8 (kanon) na grani `claude/s6-prijemnica` |
+| **S6 prijemnica** | ⏳ **u toku** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1/8 (kanon) ✅ merge-ovano `#435` (`c3301527`, stavka 173) · **korak 2 (pisac) je sledeći**, grana `claude/s6-korak2-pisac` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -6147,6 +6147,45 @@
          a `modLogo` se učita **odsečen** (205 od 397 linija) → **`KI-030`**, bez popravke u ovom rezu.
      - **Čeka operatera:** compile nad sveskom pa `python tools/vba_gate.py --mark-compile`, kratka ručna
        provera, pa merge — samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
+
+173. **Merge `#435`, S6 korak 1/8 zatvoren** (20.10.2026). Zapis ide ovde, a ne u `#435`. Obrazac su
+     stavke 165 i 169.
+
+     - **Review `#435`** (head `b9b92747`): `CODE GO`, `TEST GO`, `MERGE HOLD` do Excel dokaza; `P0`/`P1` = 0.
+       - Posle review-a je ušao jedan commit **samo sa dokumentacijom** (`345905f1`: stavka 172 i `KI-030`;
+         `src-vba`, `tools` i šema nedirnuti).
+       - **Uslov reviewera za kasnije:** `KI-028` (fixture drži vozača na −10) mora biti rešen pre **punog**
+         S6 acceptance-a. Svež tip ambalaže u ciljanim testovima je izolacija, ne rešenje. Kada, odlučuje
+         operater.
+       - Korak 2 ide pod naročito strog review: tu se istovremeno menjaju identitet prijemnice, ambalažni
+         događaj i identitet paletne stavke.
+     - **Izvršne kapije** nad izvorom `d13fca1ebc87` (head `b9b92747`, stavka 172):
+       - 12/12 ZELENO: 257/0, BFP 2478/0, Banka 241/0, Storno 111/0;
+       - dokaz `s6-` 5/5;
+       - `EnsureRuntimeSchema` pravi samo novu tabelu.
+     - **Compile:**
+       - Operater je potvrdio `Debug → Compile` nad `rucna_provera_s6_korak1.xlsm`, posle uvoza
+         `modVbaTools.bas`. Bez njega sveska se ne kompajlira, što je očekivano: `run_vba` taj modul namerno
+         preskače. Operater je u svesci video `tblPrijemnicaStavke`.
+       - `vba_gate --mark-compile` je upisan nad `d13fca1ebc87`; `--require-green --require-compile` daje
+         „dokazano“.
+     - **Merge** 20.10.2026 (08:04:47 UTC) kao **`c3301527`**, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `345905f1`.
+       - Static CI #1031 `success` (run 39388757396) na tom head-u; #1030 `success` na `b9b92747`.
+       - Stablo `main`-a posle merge-a jednako je stablu `345905f1` (`9c314e23`).
+     - **Bazni brojevi na `main` = `c3301527`:**
+       - RunAllTests 257/0, BFP 2478/0, Banka 241/0, Storno 111/0;
+       - katalog sabotaža 846;
+       - otisak šeme `05A01275` (48 tabela, 664 kolone).
+     - **Sledeći brojevi:** test 258 · stavka 174 · KI-031.
+     - **Sledeći je S6 korak 2** (pisac), na grani `claude/s6-korak2-pisac` sa `c3301527`, u svojoj sesiji:
+       - `SavePrijemnicaMulti_TX` pravi zaglavlje + stavke i vraća **jedan** ID;
+       - jedna `UZ_ROBU` noga = Σ stavki, a test ima jednak broj gajbi u obe klase (§14.55, nalaz 1);
+       - paletizacija po `PrijemnicaStavkaID`, nova kolona na kraju `tblPaletaStavka` (odluka 2, nalaz 5);
+       - `RelinkFakturaStavke` po stavci.
+     - **Grane koje mogu da se obrišu, samo na izričit zahtev:** `claude/s6-prijemnica` (merge-ovana) i
+       lokalne `claude/s6-preflight`, `claude/s6-prijemnica-stavke` (baza `4a1aea08`, zamenjene stavkama
+       170–172).
 
 ## Dug sa imenom (posle S5-5b)
 
