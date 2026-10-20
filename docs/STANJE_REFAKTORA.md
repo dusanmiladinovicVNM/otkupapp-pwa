@@ -6440,6 +6440,49 @@
      - **Čeka:** reviewer GO → `run_vba` FULL i `dokaz.py s6k3- manjak-preview-bez-druge-klase
        zbr-lista-cita-zaglavlje --grupe`. Compile i ručnu proveru radi operater.
 
+180. **S6 korak 3 — review `#437`, krug 1: identitet stavke i bruto 0, pa izvršne kapije** (20.10.2026).
+     Presuda review-a je `CODE GO uz dopunu` (9,1/10), a merge je `HOLD` dok dopuna i izvršne kapije ne prođu.
+     Nalazi: P0 = 0, P1 = 0, P2 = 1, P3 = 1. Plan je u §14.55, „Review #437, krug 1".
+
+     - **P2 — čitalac nije proveravao `PrijemnicaStavkaID`.** Potvrđeno čitanjem: ID se samo prenosio u izlaz
+       (`res(n, 7)`).
+       - Sada prazan ID daje `1978`, a ID koji se ponavlja bilo gde u tabeli daje `1979` (ugovor, tačka 5).
+       - Kapija je globalna, ne po dokumentu, jer pisac ID uzima iz `NewEntityID`.
+     - **P3 — `BrutoKg` = 0 je prolazio.** Kod je odbijao samo `< 0`, a ugovor kaže „prazno ili > 0". Sada je
+       nula `1977`.
+     - **Isti nedostatak kod braće → `KI-033`, van reza.** Otkup, otpremnica i zbirna ne proveravaju ID
+       stavke, a otkup uz to pušta bruto 0.
+     - **Reprodukcija:**
+       - **crveno:** `eda06412` (samo test). BFP ima 2526 ukupno i 3 palo — tačno tri nove tvrdnje, po imenu.
+         Preduslov „postoji stavka drugog dokumenta" je prošao;
+       - **zeleno:** `4b8dc3bb` (ispravka i tri sabotaže).
+     - **FULL 12/12 ZELENO** nad izvorom `be16ed85b895` (head `4b8dc3bb`). Marker je upisan, `SCHEMA OK`:
+       - RunAllTests **259/0**, BFP **2526/0** (= 2522 + 4, kako je izvedeno iz diff-a);
+       - Banka **241/0**, Storno **111/0**, Palete **97**;
+       - Faktura 35/35, Agrohemija 25/25, SheetsJson 72.
+     - **Sabotaže:** katalog **883 → 886**:
+       - nove su `s6k3-citalac-pusta-stavku-bez-id`, `s6k3-citalac-id-stavke-po-dokumentu` (meri razliku
+         „globalno / po dokumentu") i `s6k3-citalac-pusta-bruto-nula`;
+       - statička sonda je 3/3 (otisak `fc23b5c8c7acc719` pre i posle).
+     - **Dokaz:** `dokaz.py s6k3- manjak-preview-bez-druge-klase zbr-lista-cita-zaglavlje --grupe` daje
+       **33/33 crveno**, svaka sabotaža po SVOJOJ tvrdnji: 18 prolaza, 20/33 izmereno u grupi.
+       - Bazno: RunAllTests 259/0 i BFP 2526/0.
+       - Izvor (potpis alata) je pre i posle `fc23b5c8c7acc719`, identičan.
+       - Svih 31 `s6k3-*` (28 iz prvog kruga i tri iz review-a), vraćena `manjak-preview-bez-druge-klase` i
+         presidrena `zbr-lista-cita-zaglavlje` su crveni.
+       - Pojedinačan dokaz za 20 grupnih je isti poziv bez `--grupe`; nije pušten.
+     - **Sveska za compile je zamenjena.** `tests/fixtures/rucna_provera_s6_korak3.xlsm` je sada nad izvorom
+       `4b8dc3bb`; ranija je bila nad `06a5d474`. Provereno je: ZIP OK, 112 XML članova, 199 komponenti, nov kod
+       je prisutan, a `modVbaTools` namerno nije unutra.
+     - **Compile:**
+       - operater je javio „compile ok" posle zamene sveske;
+       - `vba_gate --mark-compile` je upisan nad `be16ed85b895`;
+       - `--require-green --require-compile` daje „dokazano".
+     - **Čeka:**
+       - ručna provera operatera;
+       - merge — samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
+     - **Sledeći brojevi:** test 260 · stavka 181 · KI-034.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

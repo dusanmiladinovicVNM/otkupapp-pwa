@@ -8121,13 +8121,15 @@ drži (`SavePrijemnicaDokument`, `ValidatePrijemnicaInput`):
 3. `Kolicina` je broj veći od nule, `Cena` broj ≥ 0 (pisac dozvoljava nulu, `:7921`), `KolAmbalaze` ceo broj
    ≥ 0 (prazno je 0), a `BrutoKg` je prazan ili broj > 0;
 4. klasa prolazi kroz istu kapiju kao kod pisca (`RequireValidDocumentClass`), i to najviše jedna stavka po
-   klasi (`1432`).
+   klasi (`1432`);
+5. `PrijemnicaStavkaID` je neprazan i jedinstven u CELOJ tabeli: to je identitet linije, ključ palete i, od
+   koraka 5, fakture, a pisac ga uzima iz `NewEntityID` (dopuna po review-u #437, stavka 180).
 
 Pozicije reda su `1 PrijemnicaID | 2 RedniBroj | 3 Klasa | 4 Kolicina | 5 Cena | 6 KolAmbalaze |
 7 PrijemnicaStavkaID | 8 BrutoKg`, isto kao `StavkeOtkupaRedovi`. Zbir po dokumentu je `Array(kg, vrednost,
 gajbe, klase)`, a vrednost je Σ `Kolicina × Cena` po stavci. **Integritet čita meko** (obrazac
 `ZbirOtpremnicaMeko`, presedan S3b-1): audit postoji da nabroji pokvarene redove, pa kvar čitaoca daje praznu
-kolonu, ne pad provere. Greške su `1970–1977`.
+kolonu, ne pad provere. Greške su `1970–1979` (`1978` i `1979` su dodate po review-u #437).
 
 **Obim po celinama:**
 
@@ -8255,6 +8257,21 @@ kolonu, ne pad provere. Greške su `1970–1977`.
    ne nastaje.
 10. **Izvoz:** agregacija taba `PredatoPoKupcu` je izdvojena u `PredatoPoKupcuRedovi` (obrazac
     `OtkupPoOMRedovi`), pa se meri bez mreže. Sam upis u Google tabelu ostaje nemeren.
+
+**Review #437, krug 1 (stavka 180) — dopuna ugovora čitaoca, bez širenja obima:**
+
+- **P2 — identitet stavke.** Čitalac je `PrijemnicaStavkaID` samo prenosio u izlaz (`res(n, 7)`), bez ikakve
+  provere. Sada odbija prazan ID (`1978`) i ID koji se ponavlja bilo gde u tabeli (`1979`) — ugovor tačka 5.
+  - Kapija je globalna, a ne po dokumentu, jer je ID iz `NewEntityID` globalan.
+  - Zato test stavlja isti ID na DRUGI dokument (klasa II, nova za taj dokument, da je kapija klase ne
+    presretne).
+  - Sabotaža `s6k3-citalac-id-stavke-po-dokumentu` meri baš razliku „globalno / po dokumentu".
+- **P3 — `BrutoKg` = 0.** Ugovor (tačka 3) je tražio „prazno ili > 0", a kod je odbijao samo negativan bruto.
+  Sada je i nula `1977`. Plan je bio tačan, a kod nije.
+- **Isti nedostatak kod braće je van ovog reza → `KI-033`.** Ni `StavkeOtkupaRedovi`, ni
+  `StavkeOtpremniceRedovi`, ni `StavkeZbirneRedovi` ne proveravaju ID stavke. Čitalac otkupa uz to pušta
+  `BrutoKg` = 0 (`modOtkup.RequireBrutoStavke` odbija samo negativan). Review je tražio lokalnu ispravku
+  ugovora prijemnice, bez širenja obima.
 
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
