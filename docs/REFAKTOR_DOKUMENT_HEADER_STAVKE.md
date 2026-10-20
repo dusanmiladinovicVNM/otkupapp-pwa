@@ -8456,6 +8456,17 @@ knjige (`RequireAmbTxIzvorniDokument` odbije) i SVAKI kasniji pad u Fazi A (npr.
     tim identitetom (sabotaža identiteta bi inače oborila tvrdnju uvida). Prva tvrdnja (prefill), koja je
     pala u crvenom prolazu, nije dirana.
 
+**Review #438, krug 1 (stavka 184) — P2, bez širenja obima:**
+
+- **Paletna stavka koja pokazuje na paletu koje nema** obara storno po imenu, na putanji storna
+  (`SkiniPaleteZaStornoPrijemnice`), pre prve mutacije. `DecrementPaletaForStavka` je nad nepostojećom paletom
+  tiho izlazio. Do ispravke je storno padao samo SLUČAJNO (`StornoPaleta` nad „praznom" nepostojećom paletom),
+  a sa su-stanarom drugog dokumenta na istoj nepostojećoj paleti tiho je prolazio — test meri baš taj slučaj.
+  Paletni motor i Oporavak nisu dirani (review: „ne tražim opšti refaktor paletnog motora").
+- **Dokaz je otkrio dvoslojnu kapiju:** `s6k4-f8-prazan-id-po-broju` nije obarala BFP tvrdnju, jer `StornoIzvrsi`
+  jezgru šalje prazan `docID`, a jezgro ga odbija samo. Sabotaža je presidrena na REŠI KASNIJE (#33), gde je
+  razrešavač jedina brana.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

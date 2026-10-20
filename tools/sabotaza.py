@@ -9126,14 +9126,17 @@ SABOTAZE = {
         "        If Len(subj) > 0 Then   ' SABOTAZA: svaka prijemnica lanca je subjekat\n",
         "Test_S6K4_KaskadaSubjekatJeDokument",
         "S6K4 kaskada subjekat: DRUGI dokument istog broja ostaje aktivan",
-    ),
+    ),
+    # Meri se na RESI KASNIJE kroz okvir (T_F8, #33), gde je razresavac JEDINA brana:
+    # u StornoIzvrsi jezgro dobija prazan docID i odbija ga samo (RequireStornoAllowed),
+    # pa je tvrdnja u Test_S6K4_F8IdentitetDokumenta bila zaklonjena (dokaz: NE OBARA NISTA).
     "s6k4-f8-prazan-id-po-broju": (
         "modStornoFlow.bas",
         "    pid = Trim$(prijID)\n",
         "    pid = Trim$(prijID)\n"
         "    If Len(pid) = 0 Then pid = LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_ID)   ' SABOTAZA: prazan ID se trazi po broju\n",
-        "Test_S6K4_F8IdentitetDokumenta",
-        "S6K4 F8: dva vlasnika -- storno bez identiteta je ODBIJEN",
+        "T_F8_IzabranRedOstajeIzabran",
+        "bez identiteta se NE pravi recovery zapis nad dvosmislenim brojem",
     ),
     "s6k4-f8-bez-provere-para": (
         "modStornoFlow.bas",
