@@ -1317,7 +1317,10 @@ AMB_BIND_DOZVOLJENI = {
     # MarkRowStornirano. Prijemnica je jedini robni dokument koji je I SAM
     # partnerov (AMB-10-ODL-22), pa joj vlasnika broja daje zatvorena mapa
     # AmbRobniVlasniciBroja -- ne ovaj pisac o sebi.
-    ("modDokumenta", "SavePrijemnica"),
+    # S6 korak 2 (stavka 174): kanonski pisac je JEZGRO dokumenta
+    # (zaglavlje + stavke), a SavePrijemnica je postao jednoklasni omotac koji
+    # ne vezuje -- pa unos prati jezgro, kao kod StornirajAmbDokument ispod.
+    ("modDokumenta", "SavePrijemnicaDokument"),
     ("modStorno", "StornoPrijemnica"),
     # Ambalazni dokument (revers/nabavka/otpis) dobija svoj storno u 10b-2:
     # oznaci zaglavlje, pa vezi, pa kontra-stav -- isti redosled kao tri robna

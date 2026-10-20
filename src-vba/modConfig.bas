@@ -371,8 +371,8 @@ Public Const COL_AMBD_NAPOMENA As String = "Napomena"
 ' reda.
 '
 ' Na stavci namerno NEMA cinjenica dokumenta:
-'   TipAmbalaze, KolAmbVracena -- jedan tip i JEDAN povrat po dokumentu; pisac
-'     povrat daje klasi koja postoji (SavePrijemnicaMulti_TX), ne svakoj klasi;
+'   TipAmbalaze, KolAmbVracena -- jedan tip i JEDAN povrat po dokumentu; od S6
+'     koraka 2 povrat stoji na zaglavlju i knjizi se jednom, pod ID-jem dokumenta;
 '   Fakturisano, FakturaID -- odluka operatera (b), 20.10.2026: status se izvodi
 '     iz aktivnog reda tblFakturaStavke, ne kesira se;
 '   Stornirano -- line-level storno ne postoji, status drzi header, pa je tabela
@@ -451,6 +451,9 @@ Public Const COL_PALS_BR_GAJBICA As String = "BrojGajbica"
 Public Const COL_PALS_NETO As String = "NetoKg"
 Public Const COL_PALS_AMBALAZA As String = "AmbalazaKg"
 Public Const COL_PALS_PRIJEMNICA_ID As String = "PrijemnicaID"
+' S6 korak 2 (plan 14.55, odluka 2): KLJUC LINIJE prijemnice. PrijemnicaID gore
+' od tada znaci DOKUMENT (labela); tacna klasa je stavka. Kolona je na KRAJU tabele.
+Public Const COL_PALS_PRIJEMNICA_STAVKA_ID As String = "PrijemnicaStavkaID"
 Public Const COL_PALS_KLASA As String = "Klasa"
 Public Const COL_PALS_VRSTA As String = "VrstaVoca"
 Public Const COL_PALS_SORTA As String = "SortaVoca"

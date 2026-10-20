@@ -352,6 +352,7 @@ Public Sub RunAllTests()
     RunOne 255
     RunOne 256
     RunOne 257
+    RunOne 258
     RunOne 13
     RunOne 14
     RunOne 15
@@ -893,6 +894,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 255: TestName = "T_KI023_KatalogCuvaVodeciApostrof"
         Case 256: TestName = "T_ODL24_F7PozajmicaKupca"
         Case 257: TestName = "T_S6_KanonStavkePrijemnice"
+        Case 258: TestName = "T_S6_PrijemnicaJedanDokument"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1158,6 +1160,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 255: T_KI023_KatalogCuvaVodeciApostrof
         Case 256: T_ODL24_F7PozajmicaKupca
         Case 257: T_S6_KanonStavkePrijemnice
+        Case 258: T_S6_PrijemnicaJedanDokument
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -3131,8 +3134,68 @@ Private Sub T_IspravkaPrijemnice_SkipIRelink()
     ' Recnik se TROSI: ponovljen poziv ne sme da prevezuje drugi put.
     AssertEq CStr(p("ispravkaID")), "", "ispravka je potrosena iz recnika"
 
+    ' S6 KORAK 2: prevezana stavka nosi KLJUC LINIJE nove prijemnice (stavku
+    ' klase I), ne samo njen dokument. Bez toga bi paleta visila na liniji
+    ' storniranog dokumenta, a kapija paletizacije po stavci bi novu liniju
+    ' videla kao nepaletizovanu. Prva tvrdnja cuva drugu od vakuuma: dva
+    ' prazna kljuca bi bila "jednaka".
+    ' SABOTAZA: s6k2-prevezivanje-bez-kljuca-stavke.
+    Dim stavkaI As String
+    stavkaI = StavkaPrijemniceKlase(res, KLASA_I)
+    AssertEq (Len(stavkaI) > 0), True, "ispravka ima stavku klase I"
+    AssertEq KljucStavkePaleteZaPrijemnicu("T-ISPR-1"), stavkaI, _
+             "prevezena paletna stavka nosi PrijemnicaStavkaID nove prijemnice"
+
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
+
+' ID stavke date klase na dokumentu prijemnice; prazno ako je nema.
+Private Function StavkaPrijemniceKlase(ByVal prijemnicaID As String, _
+                                       ByVal klasa As String) As String
+    Dim d As Variant, i As Long, cP As Long, cK As Long, cId As Long
+    If Len(prijemnicaID) = 0 Then Exit Function
+    d = GetTableData(TBL_PRIJEMNICA_STAVKE)
+    If IsEmpty(d) Then Exit Function
+    cP = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID)
+    cK = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA)
+    cId = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_ID)
+    If cP = 0 Or cK = 0 Or cId = 0 Then Exit Function
+    For i = 1 To UBound(d, 1)
+        If Trim$(NzToText(d(i, cP))) = prijemnicaID And _
+           Trim$(NzToText(d(i, cK))) = klasa Then
+            StavkaPrijemniceKlase = Trim$(NzToText(d(i, cId)))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Kljuc linije (PrijemnicaStavkaID) na AKTIVNIM paletnim stavkama datog broja.
+' Razliciti kljucevi se spajaju sa "|", pa "jedan kljuc" i "dva kljuca" nisu ista
+' vrednost.
+Private Function KljucStavkePaleteZaPrijemnicu(ByVal brojPrij As String) As String
+    Dim d As Variant, i As Long, cBr As Long, cSt As Long, cKl As Long
+    Dim k As String, acc As String, aktivan As Boolean
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(d) Then Exit Function
+    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    cKl = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID)
+    If cBr = 0 Or cKl = 0 Then Exit Function
+    For i = 1 To UBound(d, 1)
+        If Trim$(NzToText(d(i, cBr))) = brojPrij Then
+            aktivan = True
+            If cSt > 0 Then aktivan = (UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA")
+            If aktivan Then
+                k = Trim$(NzToText(d(i, cKl)))
+                If InStr("|" & acc & "|", "|" & k & "|") = 0 Or Len(acc) = 0 Then
+                    If Len(acc) > 0 Then acc = acc & "|"
+                    acc = acc & k
+                End If
+            End If
+        End If
+    Next i
+    KljucStavkePaleteZaPrijemnicu = acc
+End Function
 
 ' Zajednicka polja za oba upisa iz gornjeg testa. Kolicine i gajbice su iste
 ' kao na storniranoj prijemnici (400 kg / 40 gajbica) - v. napomenu o
@@ -9784,6 +9847,79 @@ Private Sub T_S6_KanonStavkePrijemnice()
              CStr(True) & "|" & CStr(False), _
              "S6 kanon: registar storna zna stavku prijemnice kao BEZ_STORNA"
 End Sub
+
+' 258. S6 KORAK 2: F4 PISE JEDAN DOKUMENT, A PAD STAVKE VRACA CEO DOKUMENT
+' (plan 14.55 "Korak 2", stavka 174).
+'
+' Put je produkcioni: PrijemnicaUpisi -> PrjUpisPoziv -> SavePrijemnicaMulti_TX.
+' Validator F4 je pauziran do koraka 6 (vraca pauzu pre svih provera), pa se
+' upis zove direktno -- isto kao 248.
+'
+' BEZ AMBALAZE, namerno: knjigu (jedna noga = zbir stavki) i palete po stavci
+' meri BFP (Test_S6_DveKlaseJedanDokument), sa svezim tipom. Ovde bi fixture
+' vozac, koji za 12/1 stoji na -10 (KI-028), oborio upis pre ijedne tvrdnje.
+'
+' Nivo merenja je imenovan: A meri LOGICKI dokument (jedan ID) i FIZICKE redove
+' (jedno zaglavlje, dve stavke); B meri da pad ID-ja DRUGE stavke ne ostavlja
+' nista -- ni zaglavlje, ni stavku klase I. Prva stavka je tada vec upisana, pa
+' se vidi da rollback vraca CEO dokument, a ne samo red koji je pao.
+' SABOTAZE: s6k2-stavka-bez-id, s6k2-stavke-van-snimka.
+Private Sub T_S6_PrijemnicaJedanDokument()
+    Dim p As Object, res As String, poruke As String, oznaka As String
+    Dim prePrj As Long, preSt As Long
+
+    oznaka = Format$(Now, "yyyymmddhhnnss")
+
+    ' --- A) dve klase kroz F4: jedan dokument ---
+    Set p = NoviPrijemnicaUnos()
+    PopuniPrijemnicuS6 p, "T-S6A-" & oznaka
+    res = modDokUnos.PrijemnicaUpisi(p, poruke)
+    AssertEq (Len(res) > 0), True, "S6 F4: dvoklasna prijemnica je upisana"
+    AssertEq InStr(res, " + "), 0, "S6 F4: dve klase su JEDAN dokument (jedan ID)"
+    AssertEq BrojRedovaPoKoloni(TBL_PRIJEMNICA, COL_PRJ_ID, res), 1, _
+             "S6 F4: dokument je JEDAN red zaglavlja"
+    AssertEq BrojRedovaPoKoloni(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, res), 2, _
+             "S6 F4: dokument ima dve stavke, po jednu za klasu"
+
+    ' --- B) pad ID-ja druge stavke: nista ne ostaje ---
+    prePrj = BrojRedovaTabele(TBL_PRIJEMNICA)
+    preSt = BrojRedovaTabele(TBL_PRIJEMNICA_STAVKE)
+    Set p = NoviPrijemnicaUnos()
+    PopuniPrijemnicuS6 p, "T-S6B-" & oznaka
+    modDataAccess.NewEntityIDPadniTest True, 1
+    res = modDokUnos.PrijemnicaUpisi(p, poruke)
+    modDataAccess.NewEntityIDPadniTest False
+    AssertEq res, "", "S6 F4: pad druge stavke obara upis"
+    AssertEq BrojRedovaTabele(TBL_PRIJEMNICA) - prePrj, 0, _
+             "S6 F4: pad druge stavke ne ostavlja zaglavlje"
+    AssertEq BrojRedovaTabele(TBL_PRIJEMNICA_STAVKE) - preSt, 0, _
+             "S6 F4: pad druge stavke ne ostavlja stavku klase I"
+End Sub
+
+' Dvoklasna prijemnica bez ambalaze, nad fixture zbirnom (v. 258).
+Private Sub PopuniPrijemnicuS6(ByVal p As Object, ByVal broj As String)
+    p("datum") = CDate(FX_DATUM)
+    p("kupacID") = FX_KUPAC
+    p("vozacID") = FX_VOZAC
+    p("brDok") = broj
+    p("brojZbirne") = FX_ZBIRNA
+    p("vrsta") = FX_VRSTA
+    p("sorta") = FX_SORTA
+    p("kolicinaI") = 300
+    p("cenaI") = 50
+    p("dveKlase") = True
+    p("kolicinaII") = 120
+    p("cenaII") = 40
+End Sub
+
+' Koliko redova tabele nosi datu vrednost u datoj koloni (fizicki redovi).
+Private Function BrojRedovaPoKoloni(ByVal tbl As String, ByVal kol As String, _
+                                    ByVal vrednost As String) As Long
+    Dim rows As Collection
+    If Len(vrednost) = 0 Then Exit Function
+    Set rows = FindRows(tbl, kol, vrednost)
+    If Not rows Is Nothing Then BrojRedovaPoKoloni = rows.count
+End Function
 
 ' Da li kanonski spisak kolona (modSchema.SchemaTableColumns) nosi to ime.
 Private Function KanonImaKolonu(ByVal kolone As Collection, ByVal ime As String) As Boolean
@@ -20420,9 +20556,10 @@ End Sub
 '   kapija linije   -- bez zbirne linija NE POSTOJI; nula bi lagala da se slaze
 '   obim            -- linija i "prosek gajbe" postoje SAMO u F4
 '
-' Da racun stvarno sabira prave redove meri
+' Da racun stvarno sabira prave redove merio je
 ' modBusinessFlowProTests.Test_ManjakPreviewJeZbirnaMinusPrijem -- ta karika
-' trazi upis, a ovaj modul ne pise u tabele.
+' trazi upis, a ovaj modul ne pise u tabele. Test je obrisan u S6 koraku 2
+' (racun cita kolicinu sa zaglavlja prijemnice), a vraca ga korak 3.
 ' ============================================================
 Private Sub T_Manjak_LinijaIPragSuSamoF4()
     Dim f As frmOtkupUI, zf As Object, fr As Object

@@ -6149,25 +6149,10 @@ SABOTAZE = {
         "T_Manjak_LinijaIPragSuSamoF4",
         "izlazak iz F4 vraca natpis polja gajbi",
     ),
-    # Cela svrha "Preview" varijante je da NEUPISANI kilogrami iz forme udju u
-    # racun -- inace operater vidi manjak stanja PRE svog unosa i snima
-    # dokument po pogresnoj slici. Sabotaza gasi drugu klasu: prva i dalje
-    # ulazi, pa greska prolazi kroz svaki jednoklasni scenario.
-    # Obara DVE tvrdnje istog testa (prijemnica 250 umesto 275, manjak 50
-    # umesto 25) i to nije zamka 5/6: Assert* u modBusinessFlowProTests
-    # BELEZI pa nastavlja (LogPass/LogFail), pa se obe prijave po imenu.
-    #
-    # PROVERA IDE NAD DRUGOM SUITOM: tvrdnja trazi upis, pa zivi u
-    # RunBusinessFlowProSuite. Dokaz:
-    #   python tools/sabotaza.py manjak-preview-bez-druge-klase
-    #   python tools/run_vba.py --suite RunBusinessFlowProSuite   # ocekuj FAIL
-    "manjak-preview-bez-druge-klase": (
-        "modDokumenta.bas",
-        "    prijKg = prijKg + pendingKgKlI + pendingKgKlII\n",
-        "    prijKg = prijKg + pendingKgKlI   \' SABOTAZA: druga klasa ne ulazi\n",
-        "Test_ManjakPreviewJeZbirnaMinusPrijem",
-        "Manjak: neupisane kg obe klase ulaze u prijemnicu",
-    ),
+    # manjak-preview-bez-druge-klase je SKINUT u S6 koraku 2 (stavka 174): test
+    # Test_ManjakPreviewJeZbirnaMinusPrijem je obrisan, jer CalculateManjakPreview
+    # sabira kolicinu sa zaglavlja prijemnice, a ono je od koraka 2 ne nosi. Vraca
+    # ga korak 3, zajedno sa testom (telo je u git istoriji, commit pre stavke 175).
     # MIG-005a. Picker koji nudi ono sto writer odbija je gori od praznog:
     # operater to otkrije tek na snimanju, nad dokumentom koji je vec popunio.
     # Filtar je isti (ExcludeStornirano) koji zove i ZbirnaPostoji -- zato se
@@ -7297,14 +7282,13 @@ SABOTAZE = {
     # Noga povrata se vraca na "samo sa Klasom I". Prijemnica se SNIMI (roba legne),
     # pa tvrdnja o ishodu ostaje zelena -- crveni se tvrdnja da je povrat knjizen.
     # Tacno taj oblik je kvar i bio: tiho, bez ijedne poruke.
+    #
+    # S6 korak 2 (stavka 174): povrat vise ne ide "uz klasu" nego uz DOKUMENT,
+    # pa sabotaza kvari prenos povrata u jezgro -- i dalje samo kad Klase I nema.
     "amb-prj-povrat-samo-sa-klasom-i": (
         "modDokumenta.bas",
-        "    Else\n"
-        "        vracenaII = kolAmbVracena\n"
-        "    End If\n",
-        "    Else\n"
-        "        vracenaII = 0   ' SABOTAZA: povrat zavisi od Klase I\n"
-        "    End If\n",
+        "                                   kolAmbVracena, stavke, potvrdaDeficita, stavkaIDs)\n",
+        "                                   IIf(hasKlasaI, kolAmbVracena, 0), stavke, potvrdaDeficita, stavkaIDs)   ' SABOTAZA: povrat zavisi od Klase I\n",
         "Test_PRJ_PovratIdeSaKlasomKojaPostoji",
         "PRJ klasa II: povrat praznih JE knjizen i bez Klase I",
     ),
@@ -7385,7 +7369,7 @@ SABOTAZE = {
     # koji da vrati. Drugi red para naloga pripada samo prvoj nozi.
     "amb-prj-puna-noga-nosi-vracene": (
         "modDokumenta.bas",
-        "        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, CDbl(kolAmb), _\n"
+        "        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, CDbl(ukupnoAmb), _\n"
         "                    AMB_NALOG_VOZAC, vozacID, AMB_NALOG_KUPAC, kupacID, _\n",
         "        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, CDbl(kolAmbVracena), _\n"
         "                    AMB_NALOG_VOZAC, vozacID, AMB_NALOG_KUPAC, kupacID, _\n",
@@ -8696,6 +8680,108 @@ SABOTAZE = {
         "    \"|\" & \"S6_SABOTAZA_VAN_REGISTRA\" & _\n",
         "T_S6_KanonStavkePrijemnice",
         "S6 kanon: registar storna zna stavku prijemnice kao BEZ_STORNA",
+    ),
+    # --- S6 KORAK 2: PISAC PRIJEMNICE, ZAGLAVLJE + STAVKE (plan 14.55, stavka 174)
+    #
+    # Noga punih nosi samo POSLEDNJU stavku -- vidljiv ishod je isti kao kad bi
+    # se dve noge iste vrste pod ID-jem dokumenta sudarile na AMB-INV-04: druga
+    # bi bila tiho progutana kao ponavljanje (knjiga 10, ne 20). Bas zato test
+    # ima JEDNAK broj gajbi u obe klase (nalaz 1).
+    "s6k2-noga-bez-zbira": (
+        "modDokumenta.bas",
+        "        ukupnoAmb = ukupnoAmb + CLng(s(3))\n",
+        "        ukupnoAmb = CLng(s(3))   ' SABOTAZA: noga nosi samo poslednju stavku\n",
+        "Test_S6_DveKlaseJedanDokument",
+        "S6 PRJ: noga punih nosi zbir stavki (10 + 10 = 20)",
+    ),
+    # Kapija paletizacije se vraca na DOKUMENT: obe klase dele PrijemnicaID, pa
+    # paletizacija klase II pada na "vec paletizovana" i ceo upis se vraca.
+    # Do koraka 2 je isti kljuc znacio tihi gubitak paleta klase II (nalaz 5).
+    # Bez komentara posle `_` (zamka 4).
+    "s6k2-kapija-palete-po-dokumentu": (
+        "modPaletniList.bas",
+        "           And Trim$(CStr(d(r, iStavka))) = Trim$(prijemnicaStavkaID) _\n",
+        "           And (Len(\"S6K2_SABOTAZA_KAPIJA_PO_DOKUMENTU\") > 0) _\n",
+        "Test_S6_DveKlaseJedanDokument",
+        "S6 PRJ: obe klase dobijaju palete (20 gajbi pod dokumentom)",
+    ),
+    # Paletna stavka ne nosi kljuc linije: palete postoje i stoje pod dokumentom,
+    # ali kapija po paru ih vise ne vidi kao paletizovanu liniju.
+    "s6k2-paleta-bez-kljuca-stavke": (
+        "modPaletniList.bas",
+        "              genRoditelja, prijemnicaStavkaID)\n",
+        "              genRoditelja, \"\")   ' SABOTAZA: paletna stavka bez kljuca linije\n",
+        "Test_S6_DveKlaseJedanDokument",
+        "S6 PRJ: paletna stavka nosi PrijemnicaStavkaID svoje klase",
+    ),
+    # Zaglavlje dobije klasu prve stavke: dvoklasni dokument bi tada lagao da je
+    # klase I, a faktura bi ga tiho fakturisala kao takvog (odluka 1).
+    "s6k2-zaglavlje-nosi-klasu": (
+        "modDokumenta.bas",
+        "    tx.BindSourceDocument DOK_TIP_PRIJEMNICA, newID\n",
+        "    tx.BindSourceDocument DOK_TIP_PRIJEMNICA, newID\n"
+        "    UpdateCell TBL_PRIJEMNICA, appendedRow, COL_PRJ_KLASA, KLASA_I   ' SABOTAZA: zaglavlje nosi klasu\n",
+        "Test_S6_DveKlaseJedanDokument",
+        "S6 PRJ: zaglavlje ne nosi linijska polja ni kes fakture",
+    ),
+    # Storno dokumenta ostaje na zastavici. Isto sidro kao
+    # amb-prj-storno-bez-kontrastava, ali tvrdnja je o dokumentu NOVOG oblika:
+    # jedna noga punih (zbir) i jedan povrat -> tacno dva kontra-stava.
+    "s6k2-storno-dokumenta-bez-kontrastava": (
+        "modStorno.bas",
+        "    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_PRIJEMNICA, prijemnicaID\n",
+        "    ' SABOTAZA: storno dokumenta bez kontra-stava\n",
+        "Test_S6_DveKlaseJedanDokument",
+        "S6 PRJ: storno dokumenta daje TACNO dva kontra-stava (puna i povrat)",
+    ),
+    # Generacija se opet NASLEDJUJE: drugi dokument istog broja i kupca dobije
+    # generaciju prvog, a storno po generaciji bi oborio oba.
+    "s6k2-generacija-nasledjena": (
+        "modDokumenta.bas",
+        "    ApplyNovaGeneracijaID TBL_PRIJEMNICA, appendedRow\n",
+        "    ApplyGeneracijaID TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ, brojPrij, COL_PRJ_KUPAC, kupacID   ' SABOTAZA: generacija nasledjena\n",
+        "Test_GeneracijaNePrelaziVlasnika",
+        "Vlasnik scope: drugi dokument istog broja i kupca ima SVOJU generaciju",
+    ),
+    # Stavka klase II dobije klasu I: dokument samo sa klasom II tada ima stavku
+    # koju nema. Manifest razlikuje "stavka fali" od "dokument ima jednu stavku".
+    "s6k2-druga-klasa-kao-prva": (
+        "modDokumenta.bas",
+        "    If hasKlasaII Then stavke.Add Array(KLASA_II, kolicinaII, cenaII, kolAmbII, brutoKgII)\n",
+        "    If hasKlasaII Then stavke.Add Array(KLASA_I, kolicinaII, cenaII, kolAmbII, brutoKgII)   ' SABOTAZA: druga klasa kao prva\n",
+        "Test_S6_JednaKlasaJednaStavka",
+        "S6 PRJ jedna klasa: dokument samo sa klasom II ima JEDNU stavku, klase II",
+    ),
+    # Prazan ID stavke prolazi: pad generatora ID-a ne obara upis, pa nastaje
+    # dokument sa stavkom bez identiteta umesto da se vrati CEO dokument.
+    "s6k2-stavka-bez-id": (
+        "modDokumenta.bas",
+        "        If stavkaID = \"\" Then\n"
+        "            modSchemaGuard.RaiseSistemski 27, SRC, _\n",
+        "        If False Then   ' SABOTAZA: prazan ID stavke prolazi\n"
+        "            modSchemaGuard.RaiseSistemski 27, SRC, _\n",
+        "T_S6_PrijemnicaJedanDokument",
+        "S6 F4: pad druge stavke obara upis",
+    ),
+    # Pisac ne snima tblPrijemnicaStavke. Jezgro to proverava (tx.ImaSnapshot)
+    # i odbija upis GLASNO -- bez provere bi pad posle prve stavke ostavio
+    # stavku bez zaglavlja (rollback-vraca-ceo-dokument).
+    "s6k2-stavke-van-snimka": (
+        "modDokumenta.bas",
+        "    tx.AddTableSnapshot TBL_PRIJEMNICA\n"
+        "    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE\n",
+        "    tx.AddTableSnapshot TBL_PRIJEMNICA   ' SABOTAZA: stavke van snimka\n",
+        "T_S6_PrijemnicaJedanDokument",
+        "S6 F4: dvoklasna prijemnica je upisana",
+    ),
+    # Prevezivanje paleta posle ispravke menja dokument, a ne i liniju: paleta
+    # ostaje na stavci storniranog dokumenta.
+    "s6k2-prevezivanje-bez-kljuca-stavke": (
+        "modPaletniList.bas",
+        "            RequireUpdateCell TBL_PALETA_STAVKA, i, COL_PALS_PRIJEMNICA_STAVKA_ID, CStr(newStavka(kl3)), SRC\n",
+        "            ' SABOTAZA: prevezivanje ne nosi kljuc linije\n",
+        "T_IspravkaPrijemnice_SkipIRelink",
+        "prevezena paletna stavka nosi PrijemnicaStavkaID nove prijemnice",
     ),
 }
 

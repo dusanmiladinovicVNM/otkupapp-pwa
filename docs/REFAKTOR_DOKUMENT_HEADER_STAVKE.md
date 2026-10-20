@@ -7950,6 +7950,124 @@ gubljenje paleta klase II, ne pad. Kapija radi tacno ono za sta je pisana; menja
 **znacenje kljuca** ispod nje. **Odluka 2:** kljuc je `PrijemnicaStavkaID`, i kapija
 prelazi na stavku u koraku 2.
 
+#### Korak 2 — pre-flight nad `c3301527` i odluke (20.10.2026, stavka 174)
+
+Verdikt iz tabele gore važi i nad `c3301527`. Ponovno merenje dodaje ovo:
+
+- **Međustanje nije dostižno za operatera.** Jedini proizvođač redova `tblPrijemnica` je jezgro
+  `SavePrijemnica` (`modDokumenta:6933`). Njegova jedina PROD putanja ide kroz F4, koji je pauziran
+  bezuslovno (`modDokUnos:827`). `CreateAutoPrijemnicaIzZbirne_TX` ne postoji u kodu.
+- **Linijska polja zaglavlja čitaju 72 PROD reference u ~40 procedura.** Najbitnije:
+  - `CreateFaktura` (`modFaktura:145–185`): nad praznim zaglavljem pada glasno (`:247`, `:267`), a nad
+    zaglavljem sa klasom I tiho fakturiše manje;
+  - izveštaji (`modIzvestaj`), integritet (`Chk_A2`, `Chk_A3`, `B1`, `B4`, `B5`) i štampa (`modPrint:1190`,
+    `:1463`);
+  - storno lista i impact (`modStornoFlow:1114`, `modStornoImpact:158`) i prefill ispravke
+    (`modStornoDok:996–1067`);
+  - prevezivanje i korekcija paleta (`modPaletniList:1514`, `:1968`, `:2213`) i izvoz
+    (`modStammdatenSync:1299`).
+- **`AMB-INV-04` je potvrđen u kodu:** `ZbirZahteva` (`modAmbalaza:2999–3013`) vraća već upisan red kad se
+  zbir poklopi. Kod 10 + 10 pod istim ID-jem druga noga se zato tiho proguta.
+- **Pisci ključa palete su tri, ne jedan:**
+  - `AddStavka` (`modPaletniList:1357`);
+  - STEP2 u `ReassignPaleteToPrijemnica_TX` (`:1792`);
+  - `AdjustPaletaGajbiceZaPrijemnicu_TX` kroz `SpillGajbice` (`:2379`, `:2406`).
+
+  `PalAppendRow` nepoznatu kolonu **tiho preskače** (`:1392`).
+- **Generacija — ispravka ovog plana.** Zaglavlje dobija `ApplyNovaGeneracijaID`, ne `ApplyGeneracijaID`.
+  Komentar `modDokumenta:6169–6177` to traži za pisca koji dokument piše kao jedan red. Nasleđivanje bi dva
+  dokumenta istog broja i kupca spojilo u jednu generaciju, a storno po generaciji
+  (`modStorno:117–131`) bi tada oborio oba.
+
+**Odluke operatera (20.10.2026, stavka 174):**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | linijska polja i keš fakture na zaglavlju u koracima 2–7 | **prazna**; bez nove grupe u `popis_citalaca` |
+| 2 | `SavePrijemnica_TX` i javno jezgro `SavePrijemnica` | **omotač sada** nad jednim jezgrom dokumenta; brišu se u koraku 8 |
+| 3 | `split_plus` i štampa | **korak 3**; kapija: korak 6 (F4) ne sme pre zatvorenih 3, 4 i 5 |
+| 4 | generacija i prevezivanje paleta | `ApplyNovaGeneracijaID`; `ReassignPaleteToPrijemnica_TX` prelazi sada, `Adjust`/`Evaluate` u korak 3/4 — najmanje premošćavanja |
+| 5 | storno | jedna tvrdnja sada; ostalo korak 4 |
+| 6 | `KI-028` | posle koraka 2, svoj rez pre koraka 6 |
+
+**Ugovor pisca posle koraka 2:**
+
+1. **Ulaz.** `SavePrijemnicaMulti_TX` gradi 1..2 stavke i zove **jedno** jezgro dokumenta, a vraća **jedan**
+   `PrijemnicaID`. Potpis ostaje netaknut, jer ga `PrjUpisPoziv` i BFP zovu imenovanim argumentima.
+2. **Jezgro `SavePrijemnicaDokument`** (privatno) radi ovim redom:
+   - validacija po stavci (`ValidatePrijemnicaInput`), uz pravilo da klasa sme najviše jednom;
+   - zaglavlje (`PRJ-`) **bez** linijskih polja i bez keša fakture;
+   - `BindSourceDocument` jednom, pa `PoveziDeteNaZbirnu` i `ApplyNovaGeneracijaID`;
+   - stavke: `PRS-` + `NewEntityID`, `RedniBroj` 1..n, `BrutoKg` po stavci;
+   - **jedna** `AMBALAZA_UZ_ROBU` = Σ `KolAmbalaze` stavki, pa **jedan** `POVRAT_PRAZNE`. Redosled nogu je
+     noseći (6.12g);
+   - `RelinkFakturaStavke` po klasi koju dokument ima, bez keša na zaglavlju.
+
+   Transakcija mora da snima `tblPrijemnicaStavke`. Jezgro to proverava (`tx.ImaSnapshot`), pa test sa
+   sopstvenom transakcijom pada **glasno**, umesto da ostavi siroče.
+3. **Paletizacija** ide po stavci, u istoj transakciji. Kapija meri par (`PrijemnicaID`,
+   `PrijemnicaStavkaID`). Red starog oblika (prazna stavka) je sam svoja linija; takve redove imaju ručno
+   posejani redovi suite-a Palete i fixture.
+4. **`tblPaletaStavka.PrijemnicaStavkaID`** je kolona na kraju (kanon, pa `gen_schema_module`). Ide i u
+   `RequirePaletaStavkaSchema`, pa je upis fail-closed.
+5. **`ReassignPaleteToPrijemnica_TX`:** cilj po klasi čita iz stavki dokumenta (red bez stavki je sam svoja
+   linija), a STEP2 upisuje i `PrijemnicaStavkaID`.
+6. **`SavePrijemnica_TX` i `SavePrijemnica(tx, …)`** su tanki omotači: jedna klasa daje jednu stavku.
+
+**Imenovano van obima, sa korakom koji ga zatvara:**
+
+- **Čitaoci linijskih polja i `Fakturisano`/`FakturaID`:**
+  - korak 3: izveštaji, štampa, `split_plus`, manjak, integritet, izvoz, oporavak;
+  - korak 4: storno lista, impact, `PrefillIzStorniranog`;
+  - korak 5: faktura.
+- **`AdjustPaletaGajbiceZaPrijemnicu_TX` i `EvaluatePaletaReassign`** biraju red po broju i klasi
+  (`:2213–2235`, `:1968`). Prelaze u korak 3/4; dok je F4 pauziran, nad novim oblikom su nedostižni.
+- **Storno relinkovane fakture.** `StornoPrijemnica` siroči stavke fakture samo kad je `Fakturisano = DA`
+  na zaglavlju (`modStorno:486–493`), a keš se više ne piše. Zatvara ga korak 5, kroz izveden status.
+- **`KI-031`** (`PonistiZbirnaChain_TX` bez snapshota `tblPrijemnica`) — korak 4.
+
+**Testovi čija se premisa menja:**
+
+| Test | Šta je tvrdio | Šta biva |
+|---|---|---|
+| `Test_StornoPoBrojuOdbijaDvaVlasnika` | dva `_TX` istog broja su jedan dvoklasni dokument | prepisuje se na jedan `Multi` poziv |
+| `Test_GeneracijaNePrelaziVlasnika` | Kl.II nasleđuje generaciju Kl.I | prepisuje se: isti kupac i broj dvaput = dva dokumenta, dve generacije; deo o `PickPrefillRows` → korak 4 |
+| `Test_PRJ_PovratIdeSaKlasomKojaPostoji` | povrat ide sa klasom koja postoji | tvrdnje važe; sabotaža `amb-prj-povrat-samo-sa-klasom-i` dobija novo sidro |
+| `T_IspravkaPrijemnice_SkipIRelink` | prevezivanje paleta posle ispravke | dobija tvrdnju o ključu stavke na prevezanoj paleti |
+| `Test_ManjakPreviewJeZbirnaMinusPrijem` (+ `manjak-preview-bez-druge-klase`) | manjak = zbirna − prijem | **briše se**, vraća ga korak 3 |
+| `Test_DuplicateFakturaIsBlocked`, `Test_OpenFaktureExcludeStornirano` | faktura nad prijemnicom | **brišu se**, vraća ih korak 5 |
+
+Testovi sa sopstvenom transakcijom koji zovu jezgro dodaju snapshot `tblPrijemnicaStavke`:
+`PrjUpisiSaRazlogom` i `Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice`. `HardDeleteBusinessFlowTestRows`
+briše i stavke.
+
+**ACCEPTANCE CONTRACT koraka 2:**
+
+- **važi:**
+  - dve klase daju jedan red zaglavlja i dve stavke, sa jednim ID-jem bez `" + "` (logički dokument);
+  - 10 + 10 gajbi daje **jednu** `UZ_ROBU` nogu od 20 (poslovni događaj), i povrat je jedan;
+  - obe klase dobijaju palete, svaka pod svojim `PrijemnicaStavkaID`;
+  - isti broj i kupac dvaput daju dve generacije;
+  - storno dokumenta daje dva kontra-stava, a salda se vraćaju;
+- **netaknuto:**
+  - protokol potvrde deficita (`outErrNum`, `AMB_ERR_POTVRDA_DEFICITA`, `PotvrdiManjakAmbalaze`);
+  - paletizacija u istoj transakciji, pre commit-a;
+  - `ZbirnaRoditeljID` i njegov fail-closed karakter;
+  - A9;
+  - potpis `SavePrijemnicaMulti_TX`;
+- **edge:** samo klasa I i samo klasa II daju po jednu stavku prave klase, a povrat stoji pod ID-jem
+  dokumenta;
+- **negativno:**
+  - pad druge stavke (`NewEntityIDPadniTest`) ne ostavlja ni zaglavlje, ni stavke, ni knjigu;
+  - zaglavlje ne nosi linijska polja, pa ne laže o klasi;
+- **čime:**
+  - BFP: `Test_S6_DveKlaseJedanDokument`, `Test_S6_JednaKlasaJednaStavka` i prepisani
+    `Test_GeneracijaNePrelaziVlasnika`;
+  - `modTest` 258 `T_S6_PrijemnicaJedanDokument`, kroz `PrijemnicaUpisi` i bez ambalaže, pa `KI-028` ne
+    ulazi;
+  - dopuna `T_IspravkaPrijemnice_SkipIRelink`;
+  - sabotaže `s6k2-*`.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
