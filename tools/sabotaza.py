@@ -9177,6 +9177,14 @@ SABOTAZE = {
         "T_S6K4_StornoCitaStavkeIIdentitet",
         "S6K4 storno: red F8 nosi PrijemnicaID dokumenta",
     ),
+    # Review #438 P2: paletna stavka koja pokazuje na paletu koje NEMA.
+    "s6k4-paleta-bez-zaglavlja-prolazi": (
+        "modPaletniList.bas",
+        "        If Len(pal) = 0 Or FindRowIndexByID(TBL_PALETA, COL_PAL_ID, pal) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: stavka bez palete ne obara storno\n",
+        "Test_S6K4_PaletnaStavkaBezPaleteObaraStorno",
+        "S6K4 bez palete: storno je ODBIJEN po imenu (stavka pokazuje na paletu koje nema)",
+    ),
 }
 
 

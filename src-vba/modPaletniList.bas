@@ -2222,13 +2222,13 @@ Public Function SkiniPaleteZaStornoPrijemnice(ByVal tx As clsTransaction, _
     Dim pid As String
     pid = Trim$(prijemnicaID)
     If Len(pid) = 0 Then
-        Err.Raise vbObjectError + 7340, SRC, "Storno paleta trazi PrijemnicaID (" & sourceName & ")."
+        Err.Raise vbObjectError + 7360, SRC, "Storno paleta trazi PrijemnicaID (" & sourceName & ")."
     End If
     If tx Is Nothing Then
-        Err.Raise vbObjectError + 7341, SRC, "Storno paleta trazi transakciju pozivaoca (" & sourceName & ")."
+        Err.Raise vbObjectError + 7361, SRC, "Storno paleta trazi transakciju pozivaoca (" & sourceName & ")."
     End If
     If Not tx.ImaSnapshot(TBL_PALETA) Or Not tx.ImaSnapshot(TBL_PALETA_STAVKA) Then
-        Err.Raise vbObjectError + 7341, SRC, _
+        Err.Raise vbObjectError + 7361, SRC, _
                   "Storno paleta: transakcija ne snima " & TBL_PALETA & " i " & _
                   TBL_PALETA_STAVKA & " -- skidanje bi prezivelo rollback dokumenta."
     End If
@@ -2248,11 +2248,24 @@ Public Function SkiniPaleteZaStornoPrijemnice(ByVal tx As clsTransaction, _
     Next r
     If rowsC.count = 0 Then Exit Function
 
-    Dim k As Long, pal As String
+    Dim k As Long, pal As String, sId As Long
+    sId = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, SRC)
     For k = 1 To rowsC.count
         pal = Trim$(CStr(SafeCell(s, CLng(rowsC(k)), sPal)))
+        ' REVIEW #438 P2: stavka koja pokazuje na paletu koje NEMA obara storno.
+        ' DecrementPaletaForStavka nad nepostojecom paletom tiho izlazi, a telo
+        ' skidanja stavku ipak stornira -- zaglavlje palete ostaje nedirnuto. Do
+        ' ovoga je storno padao samo SLUCAJNO (StornoPaleta nad "praznom"
+        ' nepostojecom paletom), i to ne kad na nju pokazuje i su-stanar.
+        If Len(pal) = 0 Or FindRowIndexByID(TBL_PALETA, COL_PAL_ID, pal) = 0 Then
+            Err.Raise vbObjectError + 7363, SRC, _
+                      "Prijemnica " & pid & ": paletna stavka " & _
+                      Trim$(CStr(SafeCell(s, CLng(rowsC(k)), sId))) & _
+                      " pokazuje na paletu koje nema ('" & pal & "'). Storno bi skinuo " & _
+                      "robu sa palete koja ne postoji -- popravite paletnu stavku pa ponovite."
+        End If
         If IsPaletaPreradjena(pal) Then
-            Err.Raise vbObjectError + 7342, SRC, _
+            Err.Raise vbObjectError + 7362, SRC, _
                       "Prijemnica " & pid & " ima robu na preradjenoj paleti " & _
                       PaletaLabel(pal) & ". Prvo stornirajte preradu, pa prijemnicu."
         End If
