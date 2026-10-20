@@ -7246,14 +7246,19 @@ End Sub
 ' REVIEW #438 P2: PALETNA STAVKA KOJA POKAZUJE NA PALETU KOJE NEMA OBARA STORNO.
 '
 ' DecrementPaletaForStavka nad nepostojecom paletom TIHO izlazi (palRow = 0), a
-' telo skidanja posle toga ipak oznaci stavku kao storniranu -- pa bi storno koji
-' obecava "palete, dokument i knjiga zajedno ili nista" prosao, a zaglavlje palete
-' ostalo nedirnuto. Fixture: SINTETICKA ANOMALIJA (fault injection) -- jedna
-' stavka dokumenta preusmerena na nepostojeci PaletaID, i vracena na kraju; pisac
-' takvu stavku ne pravi. Razlog se cita iz jezgra (javni ulaz ga samo loguje).
+' telo skidanja posle toga ipak oznaci stavku kao storniranu. Do ispravke je
+' storno ipak padao, ali SLUCAJNO: "prazna" nepostojeca paleta je isla u
+' StornoPaleta, koji je pao sa "Stavka nije pronadjena" (izmereno, prvi crveni
+' prolaz: 1 pad, ne 3). Ta odbrana ne vazi cim na istu nepostojecu paletu
+' pokazuje i stavka DRUGOG dokumenta (su-stanar): paleta nije "prazna", storno
+' tiho prolazi -- pa test pravi bas taj slucaj. Fixture: SINTETICKA ANOMALIJA
+' (fault injection) -- po jedna stavka dva dokumenta preusmerena na isti
+' nepostojeci PaletaID, i vracena na kraju; pisac takvu stavku ne pravi. Razlog
+' se cita iz jezgra (javni ulaz ga samo loguje).
 ' SABOTAZE: s6k4-paleta-bez-zaglavlja-prolazi.
 Private Sub Test_S6K4_PaletnaStavkaBezPaleteObaraStorno()
     Dim prevPal As String, tx As clsTransaction, stavka As String, pravaPal As String
+    Dim stavka2 As String, pravaPal2 As String
     On Error GoTo EH
     Dim scenario As String, testDate As Date, tipT As String
     scenario = NewScenarioCode("S6K4BPL")
@@ -7270,10 +7275,15 @@ Private Sub Test_S6K4_PaletnaStavkaBezPaleteObaraStorno()
     prj = S6K4Prijemnica(testDate, TEST_KUP_ID, TEST_PREFIX & "-PK4B-" & scenario, _
                          brZbr, tipT, 10, 10, 4)
     stavka = S6K4PrvaPaletnaStavka(prj, pravaPal)
-    AssertTrue Len(prj) > 0 And Len(stavka) > 0 And Len(pravaPal) > 0, _
-               "S6K4 bez palete: preduslov -- dokument je na paletama"
-    If Len(stavka) = 0 Then GoTo Kraj
+    stavka2 = S6K4PrvaPaletnaStavka(S6K4Prijemnica(testDate, TEST_KUP_ID, _
+                                    TEST_PREFIX & "-PK4B2-" & scenario, brZbr, tipT, 10, 10, 4), _
+                                    pravaPal2)
+    AssertTrue Len(prj) > 0 And Len(stavka) > 0 And Len(pravaPal) > 0 And _
+               Len(stavka2) > 0 And Len(pravaPal2) > 0, _
+               "S6K4 bez palete: preduslov -- dokument i su-stanar su na paletama"
+    If Len(stavka) = 0 Or Len(stavka2) = 0 Then GoTo Kraj
     S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka, COL_PALS_PALETA_ID, "PAL-NEMA-" & scenario
+    S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka2, COL_PALS_PALETA_ID, "PAL-NEMA-" & scenario
 
     Dim otisakPre As String, razlogJezgra As String
     palete = S6K4PaleteDokumenta(prj)
@@ -7299,6 +7309,8 @@ Private Sub Test_S6K4_PaletnaStavkaBezPaleteObaraStorno()
 Kraj:
     If Len(stavka) > 0 And Len(pravaPal) > 0 Then _
         S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka, COL_PALS_PALETA_ID, pravaPal
+    If Len(stavka2) > 0 And Len(pravaPal2) > 0 Then _
+        S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka2, COL_PALS_PALETA_ID, pravaPal2
     SetConfigValue CFG_PALETIRANJE, prevPal
     Exit Sub
 EH:
@@ -7307,6 +7319,8 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     If Len(stavka) > 0 And Len(pravaPal) > 0 Then _
         S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka, COL_PALS_PALETA_ID, pravaPal
+    If Len(stavka2) > 0 And Len(pravaPal2) > 0 Then _
+        S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka2, COL_PALS_PALETA_ID, pravaPal2
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
 
