@@ -7877,8 +7877,10 @@ koraku 8, kao u S1d i S3-ostatku: kolona obrisana iz sredine pomera sve iza sebe
 
 #### Redosled koraka (8)
 
-1. **kanon**: `tblPrijemnicaStavke` + regenerisan `modSchema` + `WRITE_OWNERSHIP` +
-   `BEZ_STORNA` + test 257 + sabotaza -- **prvi PR**;
+1. **kanon**: `tblPrijemnicaStavke` + regenerisan `modSchema` + `BEZ_STORNA` +
+   test 257 + sabotaze -- **prvi PR**. `WRITE_OWNERSHIP` se NE menja: unos za
+   `tblPrijemnicaStavke` postoji od #302 (`2f45c96a`), sa vlasnikom koji treba
+   (mereno u koraku 1, stavka 171);
 2. **pisac**: `SavePrijemnicaMulti_TX` pravi zaglavlje + stavke i vraca **jedan** ID;
    jedna `UZ_ROBU` noga = Σ stavki i jedan povrat (nalaz 1); paletizacija po
    `PrijemnicaStavkaID`; `RelinkFakturaStavke` po stavci;
@@ -7903,8 +7905,8 @@ koraku 8, kao u S1d i S3-ostatku: kolona obrisana iz sredine pomera sve iza sebe
 **Korak 1:**
 - **vazi:** `tblPrijemnicaStavke` je u kanonu sa tacno 12 kolona gornjim redom; sveska
   je dobija kroz `EnsureAllTables` (`VerifySchema` prazno, otisak sveske = kanon);
-  registar storna je zna kao `BEZ_STORNA`; `WRITE_OWNERSHIP` daje red `modDokumenta`, a
-  semu `modSchema`;
+  registar storna je zna kao `BEZ_STORNA`; `WRITE_OWNERSHIP` (zatecen od #302) daje red
+  `modDokumenta`, a semu `modSchema`;
 - **netaknuto:** `tblPrijemnica` (28 kolona, isti raspored); nijedan pisac ni citalac
   se ne menja -- korak 1 ne pise nijedan red;
 - **edge:** stavka NE nosi cinjenice dokumenta, a zaglavlje ih i dalje nosi
@@ -7912,9 +7914,11 @@ koraku 8, kao u S1d i S3-ostatku: kolona obrisana iz sredine pomera sve iza sebe
 - **negativno:** tabela van registra storna pada (`StornoRegistarZna`); vec meri
   `T_StornoFilter_NedostajucaKolonaNijeTisina` (3), a nova tvrdnja meri da je bas ova
   tabela klasifikovana;
-- **cime:** test 257 u `modTest` + sabotaza; `gen_schema_module --check`,
-  `who_writes --check` i `--check-ownership`, `vba_check` (`SEMA_REGISTAR`,
-  `STORNO_REGISTAR`).
+- **cime:** test 257 u `modTest` + pet sabotaza; `gen_schema_module --check`,
+  `who_writes --check` i `--check-ownership`, `vba_check` (`SEMA_REGISTAR`).
+  `STORNO_REGISTAR` klasifikaciju nove tabele NE meri -- gleda samo pozive
+  `ExcludeStornirano`, a nad stavkom ih nema -- pa je tvrdnja testa 257 jedina brana
+  (mereno u koraku 1).
 
 **Ceo S6:**
 - **vazi:** jedna prijemnica sa dve klase je **jedan** red u `tblPrijemnica` i **dva** u

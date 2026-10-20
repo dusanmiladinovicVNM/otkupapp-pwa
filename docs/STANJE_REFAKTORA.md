@@ -6070,6 +6070,49 @@
        - test 257 i sabotaža;
        - PR na review. `run_vba` FULL i `dokaz.py` čekaju reviewer GO.
 
+171. **S6 korak 1 — kanon `tblPrijemnicaStavke`, test 257, pet sabotaža; PR na review** (20.10.2026).
+     Kod je `5d90f307`, nad stavkom 170. Samo dodavanje: korak 1 ne piše nijedan red, a `tblPrijemnica`
+     ostaje 28 kolona.
+
+     - **Kanon:** 12 kolona oblika `tblOtkupStavke` (`Cena`, ne `PredlogCena`), abecedno posle
+       `tblPrijemnica`.
+       - Otisak `24456ABF` → `05A01275` (48 tabela, 664 kolone); `modSchema` je regenerisan.
+       - `modConfig`: `TBL_PRIJEMNICA_STAVKE` i `COL_PRS_*`; `modSchemaGuard.BEZ_STORNA` dopunjen.
+     - **Tri razlike od starog `f4de3b1c`, sve izmerene:**
+       - **`WRITE_OWNERSHIP` se ne menja.** Unos za `tblPrijemnicaStavke` postoji od #302 (`2f45c96a`),
+         sa vlasnikom koji treba. `f4de3b1c` ga je dodao **drugi put** (duplikat ključa u JSON-u), a
+         `who_writes.py` čita golim `json.load`, koji duplikat tiho prima → **`KI-029`**;
+       - **`STORNO_REGISTAR` klasifikaciju nove tabele ne meri**: gleda samo pozive `ExcludeStornirano`,
+         a nad stavkom ih nema. Jedina brana je tvrdnja testa 257. Rečenica iz `f4de3b1c` („inače
+         pravilo STORNO_REGISTAR pada“) danas ne važi;
+       - **BFP inventar nije diran**: `RequireColumnsExist` diže grešku umesto da broji tvrdnju, a da
+         sveska ima tabelu meri `T_Sema_SveskaOdgovaraKanonu` (`VerifySchema`).
+     - **Test 257 `T_S6_KanonStavkePrijemnice`.** Tvrdnje idu ovim redom, jer `AssertEq` staje na prvom
+       padu, a činjenica dokumenta dodata na stavku obara i oblik:
+
+       | # | Tvrdnja | Sabotaža |
+       |---|---|---|
+       | 1 | stavka ne nosi činjenice dokumenta ni keš fakture | `s6-stavka-nosi-povrat` |
+       | 2 | **kontra:** `TipAmbalaze` i `KolAmbVracena` su na zaglavlju | `s6-zaglavlje-gubi-povrat` |
+       | 3 | oblik je `tblOtkupStavke` istim redom — očekivanje se **izvodi** zamenom ključeva, ne prepisuje | `s6-stavka-pomeren-red` |
+       | 4 | `COL_PRS_*` imenuju kolone kanona, njegovim redom | `s6-konstanta-mimo-kanona` |
+       | 5 | registar storna zna stavku kao `BEZ_STORNA` | `s6-stavka-van-registra-storna` |
+
+     - **Sabotaže:** katalog 841 → **846**.
+       - Statička sonda (scratchpad, **bez Excela**): svaka sabotaža obara SVOJU tvrdnju kao prvu, a
+         `--vrati` vraća izvor bit-identično.
+       - Nije izvršeno: `dokaz.py s6- --grupe` čeka reviewer GO.
+     - **Jeftine kapije: 27/27 exit 0** — ceo `static.yml` bez `npm ci` i JS harness-a (lokalno padaju na
+       `fake-indexeddb`; JS nije diran, izvršava ih CI), plus `popis_citalaca --check`,
+       `sabotaza --proveri-sidra` i `--self-test`.
+     - **Očekivani brojevi, izvedeni iz diff-a — NIJE izmereno:**
+       - RunAllTests **257/0** (jedan nov test);
+       - BFP 2478/0, Banka 241/0, Storno 111/0 — te suite nisu dirane;
+       - dokaz `s6-` **5/5**.
+       - Kanon se promenio, pa `run_vba` može tražiti regeneraciju potpisa fixture-a
+         (`make_fixture.py --donor ... --force`).
+     - **Čeka:** reviewer GO → `run_vba` FULL i `dokaz.py s6- --grupe`; compile i ručnu proveru radi operater.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
