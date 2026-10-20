@@ -8212,6 +8212,50 @@ kolonu, ne pad provere. Greške su `1970–1977`.
   - sabotaže `s6k3-*` i vraćena `manjak-preview-bez-druge-klase`;
   - `popis_citalaca --check` sa novim pragovima.
 
+**Ispravke plana tokom koda (stavka 179) — svaka izmerena, ne pretpostavljena:**
+
+1. **`PrijemnicaLinijePoKlasi` nije obrisan.** Postao je tanak adapter nad
+   `modDokumenta.StavkeZaPrijemnicu`: više ne čita tabelu sam i nema fallback na zaglavlje. Zovu ga tri
+   procedure (`Reassign`, `Adjust`, `Evaluate`), a svima treba isti raspored po klasi. Čitalac je jedan, kako
+   kaže odluka 1. Odstupa samo reč „briše se" iz odluka 1 i 5.
+2. **Proračun `T_Izv_*` (126, 133, 135, 138) prelazi na stavke OVDE, ne u koraku 8.**
+   - `RunAllTests` ne ide numeričkim redom: 258 (i sada 259) se vrti pre testova 13–138, a njihov dokument
+     novog oblika ima istog kupca, zbirnu i datum kao fixture.
+   - Izveštaj taj dokument broji iz stavki, a proračun sa zaglavlja ga ne vidi.
+   - Proračun je ručni prolaz kroz `tblPrijemnicaStavke` (`IzvPrjStavkeZbir`, obrazac `IzvStavkeZbir`),
+     nezavisan od čitaoca koji se meri.
+3. **Izveštaj manjka sabira prijem PO KLASAMA koje red zbirne nosi** (zatečeno pravilo `ReportManjak`). Fixture
+   zbirna `ZB-TEST-1` nosi samo klasu I, pa test 259 očekuje +300, a ne +420. Razliku između „zbira" i „prve
+   stavke" meri BFP nad zbirnom sa obe klase (550 / 420). Prvi zeleni prolaz je ovu tvrdnju oborio sa
+   „očekivano 420, dobijeno 300". To je bila greška u tvrdnji, ne u kodu.
+4. **Seed-ovi `modTestStornoCentar` ne pišu stavku.**
+   - Služe proverama koraka 4 (impact, lista za storno, kaskada).
+   - Svaki test ih vraća rollback-om.
+   - Neki nemaju ni količinu, pa bi stavka morala da izmisli broj.
+   - Da li ih neki strog čitalac ipak dotiče, meri suite `Test_StornoCentar_All` (TARGETED pre review-a, FULL posle GO).
+5. **Test fakture sa duplim `PrijemnicaID`** (`Test_CreateFakturaBlocksDuplicatePrijemnicaID`) radi u svojoj
+   transakciji i vraća se rollback-om.
+   - Suite fakture svoje redove ostavlja u svesci, a dupli ID je sintetička anomalija koju strog čitalac
+     odbija nad CELOM tabelom (1975).
+   - Ostavljen, oborio bi svaki čitalac prijemnice u suite-ovima koji idu posle.
+   - Ostali seed-ovi te suite pišu zaglavlje i stavku.
+6. **`T09_AdjustBlokPreradjena` menja gajbe na STAVCI, ne na zaglavlju.** `Adjust` od koraka 3 čita stavku, pa
+   izmena zaglavlja više nije izmena dokumenta (promena premise testa).
+7. **Integritet:** A2 i A3 RAČUNAJU, pa čitaju strogo unutar svog handlera (obrazac B7). Kvar stavki tada daje
+   red „GRESKA" za tu proveru, a ne lažan nalaz. B1, B4, B5 i C4 samo PRIKAZUJU kg, pa čitaju meko
+   (`ZbirStavkiPoPrijemniciMeko`, `KgPrijemniceMeko`).
+8. **Obrisano, mrtvo posle izmene:**
+   - `SumByBroj` (jedini korisnik je bio prosek gajbe);
+   - `DictAppend` (jedini korisnik je bio `BuildChainIndex`);
+   - grana „kilaža sa zaglavlja" u `modScrOporavak.KgDokumenta`, zajedno sa parametrom `colKol` iz
+     `RowsAktivni` (oba tipa šalju rečnik stavki).
+
+   `DictGet` je bio mrtav i pre ovog reza i nije diran.
+9. **Grupni list:** dokument sa gajbama bez svog reda knjige diže `7694` (obrazac `7693` otpremnice), a papir
+   ne nastaje.
+10. **Izvoz:** agregacija taba `PredatoPoKupcu` je izdvojena u `PredatoPoKupcuRedovi` (obrazac
+    `OtkupPoOMRedovi`), pa se meri bez mreže. Sam upis u Google tabelu ostaje nemeren.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
