@@ -2015,6 +2015,10 @@ Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_KPI_IZ_SALDO", "Saldo (kraj perioda)"
     UpsertRow lo, existing, "OTKUI_KPI_IZ_SALDOAMB", "Saldo amb. (gajbe)"
     UpsertRow lo, existing, "OTKUI_MSG_IZ_PRVO_PRIKAZI", ChrW(10007) & " Izve" & ChrW(353) & "taj jo" & ChrW(353) & " nije prikazan " & ChrW(8212) & " izaberi entitet i period pa poku" & ChrW(353) & "aj ponovo"
+    ' Kartica (KARTICA, AMBKARTICA): klik na zaglavlje ne preuredjuje redove --
+    ' tekuci saldo vazi samo hronoloskim redom (KART-HRON-01).
+    UpsertRow lo, existing, "OTKUI_MSG_KART_HRONOLOGIJA", "Kartica ostaje u hronolo" & ChrW(353) & "kom redosledu " & ChrW(8212) & " saldo va" & ChrW(382) & "i samo tim redom"
+    UpsertRow lo, existing, "OTKUI_KART_STORNO", "storno"
     UpsertRow lo, existing, "OTKUI_ERR_IZ_PRAZNO", ChrW(10007) & " Nema podataka za " & ChrW(353) & "tampu"
     UpsertRow lo, existing, "OTKUI_ERR_IZ_NEMA_DOK", ChrW(10007) & " Red nema dokument iza sebe " & ChrW(8212) & " agregat se ne " & ChrW(353) & "tampa po redu"
     UpsertRow lo, existing, "OTKUI_ERR_IZ_STAMPA_NEDOSTUPNA", "Za ovu vrstu reda " & ChrW(353) & "tampa nije dostupna iz ovog pregleda"
