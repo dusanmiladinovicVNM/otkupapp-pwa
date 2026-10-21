@@ -1266,6 +1266,36 @@ Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
         Exit Function
     End If
 
+    ' DokumentID -> poslovni broj, jednim prolazom (bez per-row LookupValue).
+    ' Dve mape jer su dva izvora broja: otkup ga nosi na svom zaglavlju,
+    ' ambalazni dokument na svom.
+    ReportKarticaAmbalaze = KarticaAmbIzKretanja(ambData, datumOd, datumDo, _
+                                                 BuildOtkupBrojDokDict(), _
+                                                 modAmbalaza.AmbDokPrikazMapa())
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' KARTICA AMBALAZE IZ VEC PROCITANIH KRETANJA -- cist ulaz, cist izlaz.
+'
+' Telo ReportKarticaAmbalaze bez citanja tabela: kretanja su oblik
+' AmbKretanjaNaloga, a mape prevode DokumentID u poslovni broj (otkup sa svog
+' zaglavlja, ambalazni dokument sa svog). Izdvojeno da bi se redosled kartice
+' mogao meriti nad ZADATIM fizickim rasporedom redova -- kroz tabelu test ne
+' bira kojim redom knjiga vraca redove.
+' Returns: isto sto i ReportKarticaAmbalaze.
+Public Function KarticaAmbIzKretanja(ByVal ambData As Variant, _
+                                     ByVal datumOd As Date, _
+                                     ByVal datumDo As Date, _
+                                     ByVal brDokDict As Object, _
+                                     ByVal ambDokMapa As Object) As Variant
+    If Not IsArray(ambData) Then
+        KarticaAmbIzKretanja = Empty
+        Exit Function
+    End If
+
     Dim colDat As Long, colTip As Long
     Dim colKol As Long, colDokID As Long, colDokTip As Long
     colDat = 1
@@ -1273,14 +1303,6 @@ Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
     colDokTip = 3
     colTip = 4
     colKol = 5
-
-    ' DokumentID -> poslovni broj, jednim prolazom (bez per-row LookupValue).
-    ' Dve mape jer su dva izvora broja: otkup ga nosi na svom zaglavlju,
-    ' ambalazni dokument na svom.
-    Dim brDokDict As Object
-    Set brDokDict = BuildOtkupBrojDokDict()
-    Dim ambDokMapa As Object
-    Set ambDokMapa = modAmbalaza.AmbDokPrikazMapa()
 
     Dim moves As New Collection
     Dim pocetniSaldo As Double
@@ -1331,7 +1353,7 @@ NextAmbKartRed:
     Next i
 
     If moves.count = 0 And pocetniSaldo = 0 Then
-        ReportKarticaAmbalaze = Empty
+        KarticaAmbIzKretanja = Empty
         Exit Function
     End If
 
@@ -1353,11 +1375,7 @@ NextAmbKartRed:
         arr = SortArray(tmpArr, 1, True, 2)
     End If
 
-    ReportKarticaAmbalaze = KarticaAmbRezultatSaPocetnim(arr, pocetniSaldo)
-    Exit Function
-
-EH:
-    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+    KarticaAmbIzKretanja = KarticaAmbRezultatSaPocetnim(arr, pocetniSaldo)
 End Function
 
 ' Mapa: DokumentID (otkupID) -> BrojDok, jednim prolazom kroz tblOtkup.
