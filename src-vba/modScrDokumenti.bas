@@ -2805,23 +2805,6 @@ Private Sub AmbProtivpartner(ByVal rec As Variant, ByRef tip As String, ByRef id
     End If
 End Sub
 
-' Naziv vrste kretanja za mrezu. Nepoznata vrsta vraca SVOJ KOD, ne prazno:
-' prazna celija bi izgledala kao da reda nema, a kod kaze sta je zateceno.
-Private Function AmbKretanjeNaziv(ByVal vk As String) As String
-    AmbKretanjeNaziv = Trim$(vk)
-    Select Case Trim$(vk)
-        Case AMB_VK_IZDATA_PRAZNA:   AmbKretanjeNaziv = Poruka("OTKUI_VK_IZDATA")
-        Case AMB_VK_POVRAT_PRAZNE:   AmbKretanjeNaziv = Poruka("OTKUI_VK_POVRAT")
-        Case AMB_VK_PRENOS_INTERNO:  AmbKretanjeNaziv = Poruka("OTKUI_VK_INTERNO")
-        Case AMB_VK_UZ_ROBU:         AmbKretanjeNaziv = Poruka("OTKUI_VK_UZ_ROBU")
-        Case AMB_VK_ULAZ_TUDJE:      AmbKretanjeNaziv = Poruka("OTKUI_VK_ULAZ_TUDJE")
-        Case AMB_VK_VRACANJE_TUDJE:  AmbKretanjeNaziv = Poruka("OTKUI_VK_VRACANJE_TUDJE")
-        Case AMB_VK_NABAVKA:         AmbKretanjeNaziv = Poruka("OTKUI_VK_NABAVKA")
-        Case AMB_VK_OTPIS:           AmbKretanjeNaziv = Poruka("OTKUI_VK_OTPIS")
-        Case AMB_VK_POZAJMICA:       AmbKretanjeNaziv = Poruka("OTKUI_VK_POZAJMICA")
-    End Select
-End Function
-
 ' Ime naloga za kolonu PARTNER. Vozac je dodat uz rez 10b-2: tada je prestao
 ' da bude zig (kolona uz red) i postao NALOG, pa se u listi pojavljuje kao
 ' protivpartner -- bez mape bi stajao go ID.
@@ -3248,7 +3231,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                     cell = modAmbalazaUgovor.AmbVrstaDokNaziv(CellS(src, r, iDokTip))
                     hay = hay & "|" & cell
                 Case "ambsmer"
-                    cell = AmbKretanjeNaziv(AmbRecPolje(ambRec, 0))
+                    cell = modAmbalazaUgovor.AmbKretanjeNaziv(AmbRecPolje(ambRec, 0))
                     hay = hay & "|" & cell
                 Case "ambtip"
                     cell = AmbRecPolje(ambRec, 1)

@@ -9454,6 +9454,122 @@ SABOTAZE = {
         "Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka",
         "S6K5 zajednicka: detalj izvestaja kaze da je faktura zajednicka",
     ),
+    # KART-HRON-01 (P1, 21.10.2026): kartica racuna tekuci saldo redom kojim su
+    # redovi poredjani. Vracen stari sort (datum + broj kao tekst, QuickSort)
+    # mesa dva kretanja istog otkupa -- tacno prijava: 17 i -13.
+    "kart-hron-amb-sortira-tekstom": (
+        "modIzvestaj.bas",
+        "        arr = SortArrayPoKljucu(tmpArr, 6)\n",
+        "        arr = SortArray(tmpArr, 1, True, 2)   ' SABOTAZA: kartica ambalaze po tekstu\n",
+        "T_KartHron_RedosledIzKretanja",
+        "isti dokument: izdata prazna pa uz robu, saldo 30 pa 17",
+    ),
+    # Isto na kartici kooperanta: broj -10 ide pre -9.
+    "kart-hron-kooperant-sortira-tekstom": (
+        "modIzvestaj.bas",
+        "        arr = SortArrayPoKljucu(tmpArr, 9)\n",
+        "        arr = SortArray(tmpArr, 1, True, 2)   ' SABOTAZA: kartica kooperanta po tekstu\n",
+        "T_KartHron_IzvestajPratiBroj",
+        "kartica kooperanta: manji broj istog niza ide pre veceg",
+    ),
+    # Redni broj bez duzine ispred: "10" je tekstualno manje od "9".
+    "kart-hron-broj-kao-tekst": (
+        "modIzvestaj.bas",
+        "    KarticaCifre = Format$(Len(cifre), \"00\") & cifre\n",
+        "    KarticaCifre = cifre   ' SABOTAZA: cifre kao tekst\n",
+        "T_KartHron_RedosledIzKretanja",
+        "brojevi istog niza idu po broju, ne po tekstu",
+    ),
+    # Unutar dokumenta izlaz pre ulaza -- uz robu 13 pa izdata 30: -13 pa 17.
+    # Pada i 260 (A); ovde se meri ugovor kljuca, da tvrdnje ostanu razlicite.
+    "kart-hron-izlaz-pre-ulaza": (
+        "modIzvestaj.bas",
+        "    KarticaKretanjeKljuc = IIf(jeKontra, \"1\", \"0\") & IIf(kolicina < 0, \"1\", \"0\") & _\n",
+        "    KarticaKretanjeKljuc = IIf(jeKontra, \"1\", \"0\") & IIf(kolicina < 0, \"0\", \"1\") & _\n",
+        "T_KartHron_KljucISortEkrana",
+        "u dokumentu: original pre storna, ulaz (i pokrice) pre izlaza",
+    ),
+    # Kontra-stav se vise ne razlikuje od originala: storno se mesa sa njim.
+    "kart-hron-storno-bez-reda": (
+        "modIzvestaj.bas",
+        "    KarticaKretanjeKljuc = IIf(jeKontra, \"1\", \"0\") & IIf(kolicina < 0, \"1\", \"0\") & _\n",
+        "    KarticaKretanjeKljuc = IIf(jeKontra, \"0\", \"0\") & IIf(kolicina < 0, \"1\", \"0\") & _\n",
+        "T_KartHron_RedosledIzKretanja",
+        "storno: kontra-stavovi idu posle originala svog dokumenta",
+    ),
+    # Opis bez vrste kretanja: dva reda istog otkupa opet imaju isti tekst.
+    "kart-hron-opis-bez-vrste": (
+        "modIzvestaj.bas",
+        "    If Len(vkNaziv) > 0 Then s = s & \": \" & vkNaziv\n",
+        "    If False Then s = s & \": \" & vkNaziv   ' SABOTAZA: opis bez vrste\n",
+        "T_KartHron_RedosledIzKretanja",
+        "opis imenuje vrstu kretanja, ne samo vrstu dokumenta",
+    ),
+    "kart-hron-opis-bez-storna": (
+        "modIzvestaj.bas",
+        "    If jeKontra Then s = s & \", \" & Poruka(\"OTKUI_KART_STORNO\")\n",
+        "    If False Then s = s & \", \" & Poruka(\"OTKUI_KART_STORNO\")   ' SABOTAZA: storno bez oznake\n",
+        "T_KartHron_RedosledIzKretanja",
+        "opis imenuje kontra-stav kao storno, a original ne",
+    ),
+    # Isti dan, drugi izvor: novac skoci ispred otkupa.
+    "kart-hron-izvor-rang": (
+        "modIzvestaj.bas",
+        "        Case LCase$(KART_IZVOR_NOVAC):          KarticaIzvorRang = 6\n",
+        "        Case LCase$(KART_IZVOR_NOVAC):          KarticaIzvorRang = 0   ' SABOTAZA: novac pre otkupa\n",
+        "T_KartHron_KljucISortEkrana",
+        "isti dan: otkup, ambalazni dokument, agrohemija, novac; dan ide pre izvora",
+    ),
+    # Ugovor knjige bez vrste kretanja: kartica ne ume da imenuje kretanje.
+    "kart-hron-knjiga-bez-vrste": (
+        "modAmbalaza.bas",
+        "        res(n, 9) = AmbText(data(ri, cVK))\n",
+        "        res(n, 9) = \"\"   ' SABOTAZA: knjiga ne vraca vrstu kretanja\n",
+        "T_KartHron_IzvestajPratiBroj",
+        "kartica ambalaze imenuje vrstu kretanja reversa",
+    ),
+    # Pravi uzrok P1: ljuska ponovo sortira karticu ("druga kolona opadajuce").
+    "kart-hron-ljuska-sortira-karticu": (
+        "modOtkupUI.bas",
+        "    If mViewN > 0 And Not RedosledJePoslovni() Then\n",
+        "    If mViewN > 0 Then   ' SABOTAZA: ljuska sortira i karticu\n",
+        "T_KartHron_MrezaNePreuredjuje",
+        "mreza kartice ambalaze nosi redosled izvestaja, ne svoj sort",
+    ),
+    # Mreza veruje STANJU sorta umesto ugovoru ekrana: zaostao sort druge
+    # liste (ista lista, pa se aktivacija ne ponavlja) preuredi karticu.
+    "kart-hron-mreza-veruje-stanju": (
+        "modOtkupUI.bas",
+        "    If mViewN > 0 And Not RedosledJePoslovni() Then\n",
+        "    If mViewN > 0 And mSortCol > 0 Then   ' SABOTAZA: mreza veruje zaostalom sortu\n",
+        "T_KartHron_MrezaNePreuredjuje",
+        "zaostao sort ne preuredjuje karticu",
+    ),
+    # Klik na zaglavlje kartice cuti. Redove i dalje cuva LoadGridFromScreen,
+    # pa pada samo tvrdnja o poruci -- dve brane, dve tvrdnje.
+    "kart-hron-klik-cuti": (
+        "modOtkupUI.bas",
+        "        If RedosledJePoslovni() Then\n",
+        "        If False Then   ' SABOTAZA: klik na karticu bez poruke\n",
+        "T_KartHron_MrezaNePreuredjuje",
+        "klik na zaglavlje kartice kaze da redosled ostaje hronoloski",
+    ),
+    # Ekran prestane da trazi poslovni redosled za kartice.
+    "kart-hron-ekran-bez-ugovora": (
+        "modScrIzvestaji.bas",
+        "        Case IZ_KART, IZ_AMBK: Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
+        "        Case \"SABOTAZA\": Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
+        "T_KartHron_KljucISortEkrana",
+        "kartica ambalaze trazi poslovni redosled",
+    ),
+    # Aktivacija kartice ostavi kolonu sorta (strelica nad karticom).
+    "kart-hron-aktivacija-ostavlja-kolonu": (
+        "modOtkupUI.bas",
+        "        mSortCol = 0\n",
+        "        mSortCol = 2   ' SABOTAZA: kartica dobija kolonu sorta\n",
+        "T_KartHron_KljucISortEkrana",
+        "aktivacija kartice ne ostavlja kolonu sorta",
+    ),
 }
 
 

@@ -3200,6 +3200,14 @@ End Sub
 Private Sub PrimeniSortZaListu(ByVal kljuc As String)
     Dim spec As String, p() As String
     spec = modUiScreens.ScrSort(mScreen)
+    ' Lista sa poslovnim redosledom nema kolonu sorta: 0 znaci "redosled
+    ' ekrana", pa zaglavlje ne crta strelicu (KART-HRON-01).
+    If spec = modUiScreens.SCR_SORT_POSLOVNI Then
+        mSortCol = 0
+        mSortAsc = True
+        mSortLista = kljuc
+        Exit Sub
+    End If
     If Len(spec) > 0 Then
         p = Split(spec, ":")
         If UBound(p) >= 1 Then
@@ -3214,6 +3222,14 @@ Private Sub PrimeniSortZaListu(ByVal kljuc As String)
     SortZaListu kljuc, mSortCol, mSortAsc
     mSortLista = kljuc
 End Sub
+
+' Da li aktivna lista nosi POSLOVNI redosled (kartica sa tekucim saldom).
+' Pita se ekran u trenutku upotrebe, ne stanje sorta: zaostao mSortCol --
+' druga lista, test seam, buduci put koji zaobidje PrimeniSortZaListu -- ne
+' sme da preuredi karticu (KART-HRON-01).
+Private Function RedosledJePoslovni() As Boolean
+    RedosledJePoslovni = (modUiScreens.ScrSort(mScreen) = modUiScreens.SCR_SORT_POSLOVNI)
+End Function
 
 ' TEST SEAM: postavi sort kao da ga je ostavio DRUGI ekran (aktivacioni
 ' lifecycle test) i izvrsi aktivacioni korak -- ista procedura koju zove
@@ -4030,7 +4046,8 @@ Private Sub RefreshSortGlyphs()
         Else
             If mSortCol = i + 1 Then
                 g = IIf(mSortAsc, ChrW(9650), ChrW(9660))
-            ElseIf mHoverHd = i Then
+            ElseIf mHoverHd = i And mSortCol > 0 Then
+                ' mSortCol = 0: poslovni redosled, zaglavlje ne nudi sort
                 g = ChrW(8597)
             Else
                 g = "  "
@@ -4354,6 +4371,13 @@ Private Sub UiClickCore(ByVal tag As String)
         Exit Sub
     End If
     If Left$(tag, 2) = "hd" And Len(tag) = 3 Then
+        ' Kartica nosi tekuci saldo: preuredjen red bi pokazao saldo drugog
+        ' toka (KART-HRON-01). Klik zato ne sortira, ali to i kaze -- tih klik
+        ' bi izgledao kao kvar.
+        If RedosledJePoslovni() Then
+            ShowToast Poruka("OTKUI_MSG_KART_HRONOLOGIJA"), False
+            Exit Sub
+        End If
         c = CLng(Mid$(tag, 3)) + 1
         If mSortCol = c Then
             mSortAsc = Not mSortAsc
@@ -6659,9 +6683,12 @@ Private Sub LoadGridFromScreen()
     ' ih niko nije prerasporedjivao. Zato ide ovde, nad onim sto ekran vrati.
     ' Kopija u tipizirani niz je obavezna - SortedView prima a() As Variant,
     ' a d(1) je Variant koji SADRZI niz.
+    '
+    ' Lista sa POSLOVNIM redosledom (kartica) se ne sortira: ekran je redove vec
+    ' poredjao i po tom redu izracunao tekuci saldo (KART-HRON-01).
     Dim tmp() As Variant
     tmp = d(1)
-    If mViewN > 0 Then
+    If mViewN > 0 And Not RedosledJePoslovni() Then
         mView = SortedView(tmp, mViewN, mColN, mSortCol, mSortAsc)
     Else
         mView = tmp

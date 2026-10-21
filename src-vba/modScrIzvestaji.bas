@@ -235,6 +235,16 @@ Public Function Scr_Lista() As String
     Scr_Lista = mLista
 End Function
 
+' Kartice nose TEKUCI SALDO, izracunat redom koji je dao izvestaj
+' (KART-HRON-01). Ljuskino "druga kolona opadajuce" je nad njima redjalo broj
+' dokumenta kao tekst, a saldo je ostajao iz drugog reda -- P1 sa saldima 17 i
+' -13. Ostale liste nemaju misljenje i ostaju na pravilu ljuske.
+Public Function Scr_Sort() As String
+    Select Case Scr_Lista()
+        Case IZ_KART, IZ_AMBK: Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI
+    End Select
+End Function
+
 ' Prvi cip je svuda "sve" -- ljuska na njega pada kad zatecen filter ne
 ' pripada listi (RefreshChipsForScreen). Liste bez prirodnog status-filtera
 ' NEMAJU cipove (prazno = ljuska ih krije): entitet, rezim i opseg su polja

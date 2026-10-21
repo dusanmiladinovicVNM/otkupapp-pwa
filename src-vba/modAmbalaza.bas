@@ -914,14 +914,19 @@ End Function
 ' saldo. Do 10c su to vadile same, kroz Smer -- pa je svaka nosila SVOJU kopiju
 ' pravila znaka, i svaka svoj lifecycle (ExcludeStornirano).
 '
-' Vraca 2D niz (1 To n, 1 To 8):
+' Vraca 2D niz (1 To n, 1 To 11):
 '   1 = Datum   2 = DokumentID   3 = DokumentTip   4 = TipAmbalaze
 '   5 = Kolicina SA ZNAKOM: pozitivna kad nalog PRIMA, negativna kad daje (6.8)
 '   6 = Otkazano: True za kontra-stav I za original na koji pokazuje
 '   7 = ProtivpartnerTip   8 = ProtivpartnerID
+'   9 = VrstaKretanja   10 = AmbID   11 = StornoOd (prazno kod originala)
 '
 ' Kolone 6-8 su IDENTITET, ne prikaz: ko je druga strana i da li par jos
 ' stoji. Kako se to imenuje coveku ostaje na citaocu.
+'
+' Kolone 9-11 su dodate na KRAJ (KART-HRON-01): kartica po njima redja i
+' imenuje kretanja istog dokumenta -- vrsta kaze ZASTO je kretanje nastalo, a
+' StornoOd koji red je kontra-stav. Citaoci kolona 1-8 se ne menjaju.
 '
 ' Prazno kad nalog nema ni jedno kretanje -- isti ugovor kao GetAmbalazeStanje, pa
 ' pozivaoci koji vrte IsArray ostaju nedirnuti.
@@ -946,8 +951,9 @@ Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Va
 
     Dim cDat As Long, cDokID As Long, cDokTip As Long, cTipA As Long, cKol As Long
     Dim cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
-    Dim cStorno As Long, cAmbID As Long
+    Dim cStorno As Long, cAmbID As Long, cVK As Long
     cStorno = kolIdx(COL_AMB_STORNO_OD)
+    cVK = kolIdx(COL_AMB_VRSTA_KRETANJA)
     cAmbID = kolIdx(COL_AMB_ID)
     cDat = kolIdx(COL_AMB_DATUM)
     cDokID = kolIdx(COL_AMB_DOK_ID)
@@ -1003,7 +1009,7 @@ Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Va
     If poz.count = 0 Then Exit Function
 
     Dim res() As Variant
-    ReDim res(1 To poz.count, 1 To 8)
+    ReDim res(1 To poz.count, 1 To 11)
 
     Dim n As Long, ri As Long, par As Variant
     For n = 1 To poz.count
@@ -1025,6 +1031,9 @@ Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Va
             res(n, 7) = AmbText(data(ri, cNaTip))
             res(n, 8) = AmbText(data(ri, cNaID))
         End If
+        res(n, 9) = AmbText(data(ri, cVK))
+        res(n, 10) = AmbText(data(ri, cAmbID))
+        res(n, 11) = AmbText(data(ri, cStorno))
     Next n
 
     AmbKretanjaNaloga = res
