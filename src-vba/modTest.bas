@@ -385,6 +385,7 @@ Public Sub RunAllTests()
     RunOne 279
     RunOne 280
     RunOne 281
+    RunOne 282
     RunOne 13
     RunOne 14
     RunOne 15
@@ -961,6 +962,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 279: TestName = "T_KartHron_RedosledIzKretanja"
         Case 280: TestName = "T_KartHron_IzvestajPratiBroj"
         Case 281: TestName = "T_KartHron_MrezaNePreuredjuje"
+        Case 282: TestName = "T_KartHron_KljucISortEkrana"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1250,6 +1252,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 279: T_KartHron_RedosledIzKretanja
         Case 280: T_KartHron_IzvestajPratiBroj
         Case 281: T_KartHron_MrezaNePreuredjuje
+        Case 282: T_KartHron_KljucISortEkrana
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -12302,6 +12305,8 @@ End Function
 '      stanje iz kretanja pre opsega, otkup pre reversa istog dana;
 '   D) storno: kontra-stavovi posle originala, i opis ih imenuje;
 '   E) opis razlikuje VRSTU kretanja istog dokumenta.
+' SABOTAZE: kart-hron-amb-sortira-tekstom, kart-hron-broj-kao-tekst,
+' kart-hron-storno-bez-reda, kart-hron-opis-bez-vrste, kart-hron-opis-bez-storna.
 Private Sub T_KartHron_RedosledIzKretanja()
     Dim d0 As Date, d1 As Date, d2 As Date, otk As Object, amb As Object
     Dim izd As Variant, uzr As Variant, r As Variant, dog As Variant
@@ -12402,6 +12407,7 @@ End Sub
 ' ReportKarticaAmbalaze i ReportKarticaKooperanta nad pravom knjigom.
 ' Fixture: normal production state (pravi pisci, broj zadat kao sto ga zadaje
 ' operater).
+' SABOTAZE: kart-hron-kooperant-sortira-tekstom, kart-hron-knjiga-bez-vrste.
 Private Sub T_KartHron_IzvestajPratiBroj()
     Dim bManji As String, bVeci As String, r As Variant
     Dim iManji As Long, iVeci As Long
@@ -12438,6 +12444,8 @@ End Sub
 ' ponovno ucitavanje, zaostao sort, odlazak na drugi ekran i povratak, kartica
 ' kooperanta i pretraga. Paginacija i stampa citaju isti niz mreze, pa tvrdnja
 ' nad celom mrezom pokriva svaku stranu.
+' SABOTAZE: kart-hron-ljuska-sortira-karticu, kart-hron-mreza-veruje-stanju,
+' kart-hron-klik-cuti.
 Private Sub T_KartHron_MrezaNePreuredjuje()
     Dim f As frmOtkupUI, bManji As String, bVeci As String
     Dim ocekAmb As String, ocekKart As String, ekran As String
@@ -12524,6 +12532,85 @@ CleanUp:
     AssertEq saldoPretraga, saldoIzvestaj, _
              "pretraga kartice pokazuje istorijski saldo reda, ne saldo isecka"
 End Sub
+
+' ============================================================
+' 282. KART-HRON-01: UGOVOR KLJUCA HRONOLOGIJE I SORTA EKRANA.
+' ============================================================
+' Kartica kooperanta mesa cetiri izvora istog dana (otkup, ambalazni dokument,
+' agrohemija, novac), a brojevi novca i agrohemije nisu kanonski. Brojevi
+' RAZLICITIH nizova ne kazu sta je bilo pre, pa je poredak izvora dokumentovana
+' konvencija -- ovde se tvrdi da je potpun i da se ne menja tiho. Uz to ugovor
+' ekrana: kartice traze poslovni redosled, ostale liste nemaju misljenje, a
+' aktivacija liste ne ostavlja kolonu sorta.
+' SABOTAZE: kart-hron-izvor-rang, kart-hron-izlaz-pre-ulaza,
+' kart-hron-ekran-bez-ugovora, kart-hron-aktivacija-ostavlja-kolonu.
+Private Sub T_KartHron_KljucISortEkrana()
+    Dim d1 As Date, d2 As Date, col As Long, asc As Boolean
+
+    d1 = DateSerial(2026, 6, 8)
+    d2 = DateSerial(2026, 6, 9)
+
+    ' Broj kao broj: kanon po (vlasnik, dan, redni broj), ostalo prirodno.
+    AssertEq (KartPre(modIzvestaj.KarticaBrojKljuc("1/080626-9"), _
+                      modIzvestaj.KarticaBrojKljuc("1/080626-10")) And _
+              KartPre(modIzvestaj.KarticaBrojKljuc("1/080626"), _
+                      modIzvestaj.KarticaBrojKljuc("1/080626-2")) And _
+              KartPre(modIzvestaj.KarticaBrojKljuc("IS-9"), _
+                      modIzvestaj.KarticaBrojKljuc("IS-10")) And _
+              KartPre(modIzvestaj.KarticaBrojKljuc("99/080626-5"), _
+                      modIzvestaj.KarticaBrojKljuc("IS-1"))), True, _
+             "broj dokumenta se poredi kao broj, kanon pre broja van kanona"
+    AssertEq modIzvestaj.KarticaBrojKljuc("023/080626-3"), _
+             modIzvestaj.KarticaBrojKljuc("23/080626-3"), _
+             "vodece nule vlasnika ne menjaju mesto dokumenta"
+
+    ' Izvori istog dana: otkup, ambalazni dokument, agrohemija, novac -- a dan
+    ' odlucuje pre izvora.
+    AssertEq (KartPre(modIzvestaj.KarticaDokKljuc(d1, DOK_TIP_OTKUP, "1/080626-9", "OTK-9"), _
+                      modIzvestaj.KarticaDokKljuc(d1, DOK_TIP_AMBALAZA_DOKUMENT, "1/080626", "ADK-1")) And _
+              KartPre(modIzvestaj.KarticaDokKljuc(d1, DOK_TIP_AMBALAZA_DOKUMENT, "1/080626", "ADK-1"), _
+                      modIzvestaj.KarticaDokKljuc(d1, "MAG", "1", "MAG-1")) And _
+              KartPre(modIzvestaj.KarticaDokKljuc(d1, "MAG", "1", "MAG-1"), _
+                      modIzvestaj.KarticaDokKljuc(d1, "NOV", "1", "NOV-1")) And _
+              KartPre(modIzvestaj.KarticaDokKljuc(d1, "NOV", "999", "NOV-9"), _
+                      modIzvestaj.KarticaDokKljuc(d2, DOK_TIP_OTKUP, "1/090626", "OTK-1"))), True, _
+             "isti dan: otkup, ambalazni dokument, agrohemija, novac; dan ide pre izvora"
+    AssertEq KartPre(modIzvestaj.KarticaDokKljuc(d1, "NOV", "5", "NOV-A"), _
+                     modIzvestaj.KarticaDokKljuc(d1, "NOV", "5", "NOV-B")), True, _
+             "isti broj u istom izvoru: identitet dokumenta razdvaja, ne fizicki red"
+
+    ' Unutar dokumenta: original pre kontra-stava, ulaz pre izlaza.
+    AssertEq (KartPre(modIzvestaj.KarticaKretanjeKljuc(False, -5, AMB_VK_UZ_ROBU, FX_TIP_AMB, "AMB-9"), _
+                      modIzvestaj.KarticaKretanjeKljuc(True, 5, AMB_VK_UZ_ROBU, FX_TIP_AMB, "AMB-1")) And _
+              KartPre(modIzvestaj.KarticaKretanjeKljuc(False, 3, AMB_VK_ULAZ_TUDJE, FX_TIP_AMB, "AMB-9"), _
+                      modIzvestaj.KarticaKretanjeKljuc(False, -13, AMB_VK_UZ_ROBU, FX_TIP_AMB, "AMB-1"))), True, _
+             "u dokumentu: original pre storna, ulaz (i pokrice) pre izlaza"
+
+    ' Ugovor ekrana i ljuske.
+    modScrIzvestaji.Scr_IzTestSet "AMBKARTICA", "Kooperant", False, FX_KOOPERANT, 0, 0
+    AssertEq modScrIzvestaji.Scr_Sort(), modUiScreens.SCR_SORT_POSLOVNI, _
+             "kartica ambalaze trazi poslovni redosled"
+    modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, FX_KOOPERANT, 0, 0
+    AssertEq modScrIzvestaji.Scr_Sort(), modUiScreens.SCR_SORT_POSLOVNI, _
+             "kartica kooperanta trazi poslovni redosled"
+    modScrIzvestaji.Scr_IzTestSet "SALDO", "Kooperant", False, FX_KOOPERANT, 0, 0
+    AssertEq modScrIzvestaji.Scr_Sort(), "", "lista bez salda nema misljenje o sortu"
+
+    modScrIzvestaji.Scr_IzTestSet "AMBKARTICA", "Kooperant", False, FX_KOOPERANT, 0, 0
+    modOtkupUI.GridScreenSetTest "IZVESTAJI"
+    modOtkupUI.GridSortSetTest 2, False, ""
+    modOtkupUI.GridSortAktivacijaTest
+    AssertEq modOtkupUI.GridSortTest(col, asc), True, "sort seam radi u test modu"
+    modOtkupUI.GridScreenSetTest ""
+    modScrIzvestaji.Scr_IzTestReset
+    AssertEq col, 0, "aktivacija kartice ne ostavlja kolonu sorta"
+End Sub
+
+' Kljuc a ide STROGO pre kljuca b, binarno -- isto poredjenje kao
+' modArrayUtils.SortArrayPoKljucu.
+Private Function KartPre(ByVal a As String, ByVal b As String) As Boolean
+    KartPre = (StrComp(a, b, vbBinaryCompare) < 0)
+End Function
 
 ' Red knjige u obliku modAmbalaza.AmbKretanjaNaloga: 1 Datum, 2 DokumentID,
 ' 3 DokumentTip, 4 TipAmbalaze, 5 Kolicina SA ZNAKOM, 6 Otkazano, 7-8

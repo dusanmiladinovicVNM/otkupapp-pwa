@@ -204,6 +204,41 @@ nema u registru. Suprotan smer — tabela u svesci bez konstante — hvata gener
 domen-tabele. Lista je zamrznuto zatečeno stanje — račna, ne cilj; skraćuje se
 kroz PR-ove.
 
+**KART-HRON-01 — kartica je hronologija, a tekući saldo pripada njenom redosledu
+(P1, 21.10.2026).** Kartica kooperanta (`KARTICA`) i kartica ambalaže
+(`AMBKARTICA`) računaju tekući saldo redom kojim su redovi poređani, pa za svaki
+prikazani red važi `Saldo(i) = Saldo(i-1) + Ulaz(i) - Izlaz(i)` — i na ekranu, i u
+PDF-u, i u izvozu za PWA. Pre ispravke je ljuska redove kartice **ponovo
+sortirala** („druga kolona opadajuće" = broj dokumenta kao tekst; klik na
+zaglavlje = bilo koja kolona), a saldo je ostajao iz drugog reda: dva kretanja
+istog otkupa (izdata prazna 30, uz robu 13) imala su salde 17 i −13.
+
+- **Ljuska ne sortira karticu.** Ekran to izjavljuje kroz `Scr_Sort` =
+  `SCR_SORT_POSLOVNI` (`modScrIzvestaji`), a ljuska pita ekran u trenutku upotrebe
+  (`modOtkupUI.RedosledJePoslovni`) — zaostao sort druge liste ne preuređuje
+  karticu. Klik na zaglavlje ne sortira, nego javlja `OTKUI_MSG_KART_HRONOLOGIJA`.
+- **Redosled određuje izveštaj, ključem** (`modIzvestaj.KarticaDokKljuc` +
+  `KarticaKretanjeKljuc`, stabilno binarno sortiranje
+  `modArrayUtils.SortArrayPoKljucu`): dan → izvor → broj u nizu **kao broj** →
+  identitet dokumenta → unutar dokumenta: original pre kontra-stava, ulaz pre
+  izlaza, vrsta kretanja, tip gajbe, `AmbID`. Fizički redosled redova tabele ne
+  ulazi nigde, pa isti događaji daju istu karticu bez obzira na poreklo upisa.
+- **Šta je konvencija, a šta podatak.** Broj `x/ddmmyy[-rb]` je niz po (vlasnik,
+  dan) i ide +1, pa unutar niza redosled **jeste** podatak. Brojevi različitih
+  nizova (otkup ↔ revers, novac, agrohemija) ne kažu šta je bilo pre: istog dana
+  ide otkup → otpremnica → prijemnica → ambalažni dokument → agrohemija → novac.
+  Redosled kretanja unutar transakcije knjiga ne nosi (`AMBALAZA.md` §6.13:
+  „slobodan"), pa je „ulaz pre izlaza" konvencija; uz nju međusaldo dokumenta ne
+  pada ispod manjeg od stanja pre i posle dokumenta. Promena konvencije je jedan
+  `Select Case` (`KarticaIzvorRang`) ili jedan znak u ključu.
+- **Pretraga** ne preračunava saldo isečka: red zadržava svoj istorijski saldo, a
+  red početnog stanja se pod pretragom ne prikazuje (zatečeno pravilo).
+- **Opis** imenuje vrstu kretanja (`modAmbalazaUgovor.AmbKretanjeNaziv`) i storno
+  (`OTKUI_KART_STORNO`) — `AmbKretanjaNaloga` zato vraća i `VrstaKretanja`,
+  `AmbID` i `StornoOd` (kolone 9–11, dodate na kraj).
+
+Mere ga `modTest` 279–282 (`T_KartHron_*`), sabotaže `kart-hron-*`.
+
 ## 3) Ko šta piše
 
 `WHO_WRITES.md` u ovom folderu — generisana mapa vlasništva nad tabelama

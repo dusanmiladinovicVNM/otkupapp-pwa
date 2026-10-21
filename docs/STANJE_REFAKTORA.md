@@ -8021,6 +8021,48 @@
      - **Ostaje:** merge samo na izričit zahtev operatera. Tačka 12 je nedostižna sa ekrana, pa nije propust.
      - **Sledeći brojevi:** stavka 218 · test 279 (pazi `#441`) · KI-064.
 
+218. **P1 — kartica: tekući saldo ne prati prikazani redosled (`KART-HRON-01`)** (21.10.2026). Grana
+     `claude/trusting-hawking-2cw6z1`. Prijava: dva kretanja istog otkupa (izdata prazna 30, uz robu 13) imala
+     su na kartici ambalaže salde 17 i −13. Odluka i pravilo: `docs/DOMEN/README.md` §2, `KART-HRON-01`.
+
+     - **Uzrok, dva kvara koja se sabiraju** (izmereno portom VBA sortiranja, ne kroz Excel):
+       - **ljuska** je redove kartice ponovo sortirala: `modScrIzvestaji` nije imao `Scr_Sort`, pa je važilo
+         „druga kolona opadajuće" — broj dokumenta kao tekst — a klik na zaglavlje je sortirao bilo koju
+         kolonu. Saldo je ostajao iz reda izveštaja. `QSortIdx` uz to nije stabilan, pa ni klik na „Datum"
+         nije pomagao. Prijava je tačno ovo: izveštaj 30 → 17, mreža obrnula redove;
+       - **izveštaj** je sortirao `SortArray(…, 1, True, 2)`: datum pa broj **kao tekst** (`-10` pre `-2`),
+         QuickSort nestabilan, pa je redosled kretanja istog dokumenta zavisio od fizičkog rasporeda redova
+         (24 rasporeda istih događaja → 6 različitih kartica, isti završni saldo).
+     - **Ispravka:**
+       - `modUiScreens.SCR_SORT_POSLOVNI`; `modScrIzvestaji.Scr_Sort` ga vraća za `KARTICA`/`AMBKARTICA`;
+         `modOtkupUI` ne sortira takvu listu (pita ekran u trenutku upotrebe, `RedosledJePoslovni`), klik na
+         zaglavlje javlja `OTKUI_MSG_KART_HRONOLOGIJA`, aktivacija ostavlja `mSortCol = 0`;
+       - `modIzvestaj.KarticaDokKljuc` / `KarticaKretanjeKljuc` / `KarticaBrojKljuc` +
+         `modArrayUtils.SortArrayPoKljucu` (stabilno, binarno) u obe kartice;
+       - `modAmbalaza.AmbKretanjaNaloga` vraća i `VrstaKretanja`, `AmbID`, `StornoOd` (kolone 9–11, na kraju);
+       - opis imenuje vrstu kretanja i storno; `AmbKretanjeNaziv` preseljen iz `modScrDokumenti` (privatan) u
+         `modAmbalazaUgovor`, isti razlog kao `AmbVrstaDokNaziv` u 10c-2.
+     - **Nije dirano:** knjiga, pisci, storno, šema, identiteti, `SortArray` i sort ostalih lista.
+     - **Testovi:** `modTest` 279–282 (`T_KartHron_*`; ranije 260–263, 262–265, 263–266, 272–275, pa 275–278
+       — v. LANDING). Crveni pre ispravke: 279–281 u commitu „test(kart)…" (samo test i izdvajanje šava
+       bez promene ponašanja); 282 meri simbole nove ispravke. **Sabotaže:** 14 `kart-hron-*` (katalog na
+       `b91df251` 1011 → 1025), sidra i
+       primena/vraćanje provereni mehanički.
+     - **NEVERIFIKOVANO:** `run_vba` u web sesiji ne radi — ni crveno pre ni zeleno posle nije pušteno kroz
+       Excel; očekivanja testa 279 potvrđena portom nove logike (svih 120 rasporeda scenarija C). Treba:
+       `python tools/run_vba.py --suite RunAllTests`, pa `python tools/dokaz.py kart-hron- --grupe`, pa compile.
+     - **LANDING:** prvo rebase na `992e1f45` (posle `#438`: testovi 260–263 → 262–265, stavka 181 → 188),
+       pa na `4958f68b` (posle `#439`, koji je uzeo test 262 i stavke 188–191): testovi 262–265 → 263–266,
+       stavka 188 → 192, pa na `e21830c5` (posle `#440`, koji je uzeo testove 263–271 i stavke 192–198):
+       testovi 263–266 → 272–275, stavka 192 → 199, pa na `376a3d3e` (posle `#442`, koji je uzeo testove
+       272–274 i stavke 199–205): testovi 272–275 → 275–278, stavka 199 → 206, pa na `b91df251` (posle
+       `#443` i `#445`, koji su uzeli testove 275–278 i stavke 206–217): testovi 275–278 → 279–282,
+       stavka 206 → 218.
+     - **Van reza, nije reprodukovano:** red knjige bez datuma ili bez `DokumentID` kartica preskače i u
+       početnom stanju i u periodu (završni saldo tada odstupa od kanonskog); `ReportOtkupListe` i dalje
+       redja broj kao tekst (lista bez salda).
+     - **Sledeći brojevi:** test 283 · stavka 219 · KI-064.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
