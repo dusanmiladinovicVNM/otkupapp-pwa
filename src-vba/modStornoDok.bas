@@ -79,32 +79,10 @@ Public Const STIP_IZVOD      As String = "IZVOD"
 ' dolazi gotova iz modStorno (ResolveNovacForStorno, ResolveIzvodZaStorno,
 ' GetIzvodStornoBlokade), jer je tamo i pravilo koje ih pravi.
 '=====================================================================
-' docID: KANONSKI IDENTITET reda koji je operater izabrao u F8 --
-' GeneracijaID za robna dokumenta, PK za novac i fakturu. Kad je poznat,
-' dokument se NE trazi ponovo po broju. Opcion je zbog legacy forme i
-' zatecenih zapisa bez generacije; tada vazi kapija nad jednoznacnoscu broja.
-' Postoji li AKTIVAN dokument koji je operater izabrao?
-'
-' Sa docID se pita za BAS TAJ dokument. Bez njega ostaje provera po broju --
-' ista koju je preflight oduvek radio.
-'
-' Zasto je bitno: preflight je do sada primao identitet pa ga ignorisao, i za
-' novac je i dalje govorio "broj je dvosmislen, treba NovacID" iako mu je F8
-' NovacID upravo poslao. StornoIzvrsi nize je vec bio ispravan, ali se do njega
-' nije stizalo -- kapija iznad je zaustavljala operaciju.
-Private Function AktivanPoIdentitetu(ByVal tblName As String, ByVal brojCol As String, _
-                                     ByVal idCol As String, ByVal broj As String, _
-                                     ByVal docID As String) As Boolean
-    On Error Resume Next
-    If Len(Trim$(docID)) = 0 Then
-        AktivanPoIdentitetu = (Len(LookupActiveID(tblName, brojCol, broj, idCol)) > 0)
-        Exit Function
-    End If
-    Dim ids As Object: Set ids = IdoviGeneracije(tblName, idCol, docID)
-    If ids.count = 0 Then Exit Function
-    AktivanPoIdentitetu = (UCase$(Trim$(NzToText( _
-        LookupValue(tblName, idCol, CStr(ids.Keys()(0)), COL_STORNIRANO)))) <> "DA")
-End Function
+' docID: KANONSKI IDENTITET reda koji je operater izabrao u F8 -- PK dokumenta
+' za sve tipove (prijemnica od S6 koraka 4: PrijemnicaID, ne generacija). Kad je
+' poznat, dokument se NE trazi ponovo po broju. AktivanPoIdentitetu (docID kao
+' generacija) je obrisan sa poslednjim pozivaocem.
 
 ' Otpremnica po PK: postoji TACNO jednom i nije stornirana. Prazan ID = False
 ' (fail-closed) -- dokument se ne pogadja po broju (review #362).
@@ -251,8 +229,19 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
             End If
 
         Case STIP_PRIJEMNICA
-            If Not AktivanPoIdentitetu(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_ID, broj, docID) Then _
-                StornoRazlog = NijePronadjen(broj)
+            ' Jedan dokument = jedno zaglavlje = jedan PrijemnicaID (S6 korak 4).
+            ' Isti razresavac koji koriste okvir i uvid; prazan ID se ne trazi po
+            ' broju. Fakturisana se odbija vec ovde, da operater vidi ZASTO.
+            Dim prjRaz As String, prjFak As String
+            If Len(modStornoFlow.PrijemnicaIDZaStorno(broj, docID, False, prjRaz)) = 0 Then
+                If prjRaz = "PAR" Then
+                    StornoRazlog = modPoruke.Poruka("STORNO_ERR_PRJ_PAR")
+                Else
+                    StornoRazlog = NijePronadjen(broj)
+                End If
+            ElseIf modStorno.PrijemnicaJeFakturisana(Trim$(docID), prjFak) Then
+                StornoRazlog = modPoruke.Poruka("STORNO_ERR_PRJ_FAKTURISANA") & " " & prjFak
+            End If
 
         Case STIP_FAKTURA
             ' Identitet fakture JE njen PK, pa se proverava direktno.
@@ -399,7 +388,25 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             End If
 
         Case STIP_PRIJEMNICA
-            ok = StornoPrijemnicaByBroj_TX(broj, docID)
+            ' Jedan dokument = jedno zaglavlje = jedan PrijemnicaID (S6 korak 4,
+            ' obrazac zbirne). Prazan ID se NE razresava po broju: broj nose dva
+            ' kupca i dva dokumenta istog kupca, a stari ulaz po generaciji je
+            ' broj ignorisao. Par broj-ID se proverava, jer je izbor mogao da
+            ' zastari izmedju liste i potvrde.
+            Dim prjRazI As String
+            If Len(modStornoFlow.PrijemnicaIDZaStorno(broj, docID, False, prjRazI)) = 0 Then
+                If prjRazI = "PAR" Then
+                    poruka = modPoruke.Poruka("STORNO_ERR_PRJ_PAR")
+                Else
+                    poruka = NijePronadjen(broj)
+                End If
+                Exit Function
+            End If
+            ' Razlog odbijanja ide operateru (review #438), ne samo "nije uspeo".
+            Dim razlogPrj As String
+            ok = StornoPrijemnica_TX(Trim$(docID), , , razlogPrj)
+            If Not ok And Len(razlogPrj) > 0 Then _
+                poruka = modPoruke.Poruka("STORNO_ERR_NEUSPEH") & " " & broj & ": " & razlogPrj
 
         Case STIP_FAKTURA
             ' Identitet fakture JE njen PK -- kad ga ekran posalje, ne trazi se
@@ -624,7 +631,6 @@ Public Function PrefillIzStorniranog(ByVal tip As String, ByVal brStorn As Strin
     Dim tbl As String, d As Variant, rI As Long, rII As Long, base As Long
     Dim cBroj As Long, cKlasa As Long, cId As Long, cGen As Long
     Dim cDat As Long, cVr As Long, cSo As Long, cTip As Long, cZbr As Long
-    Dim cKol As Long, cCena As Long, cAmb As Long, cBruto As Long
     Dim res As String, brutoMode As Boolean
     On Error GoTo EH
 
@@ -658,10 +664,6 @@ Public Function PrefillIzStorniranog(ByVal tip As String, ByVal brStorn As Strin
     cSo = GetColumnIndex(tbl, ColSortaZaPrefill(tip))
     cTip = GetColumnIndex(tbl, ColTipAmbZaPrefill(tip))
     cZbr = GetColumnIndex(tbl, ColBrojZbirneZaPrefill(tip))
-    cKol = GetColumnIndex(tbl, ColKolicinaZaPrefill(tip))
-    cCena = GetColumnIndex(tbl, ColCenaZaPrefill(tip))
-    cAmb = GetColumnIndex(tbl, ColKolAmbZaPrefill(tip))
-    cBruto = GetColumnIndex(tbl, ColBrutoZaPrefill(tip))
     brutoMode = OtkupBrutoUnos()
 
     ' Datum PRVI: predlog broja dokumenta zavisi od njega.
@@ -712,18 +714,12 @@ Public Function PrefillIzStorniranog(ByVal tip As String, ByVal brStorn As Strin
         Exit Function
     End If
 
-    res = Spoji(res, "dveklase", IIf(rII > 0, "2", "1"))
-    If rI > 0 Then
-        res = Spoji(res, "kol1", BrojUTekst(KolicinaReda(d, rI, cKol, cBruto, brutoMode)))
-        res = Spoji(res, "amb1", BrojUTekst(CeliBroj(d, rI, cAmb)))
-        res = Spoji(res, "cena", BrojUTekst(CeliBrojD(d, rI, cCena)))
-        res = Spoji(res, "ambpr", BrojUTekst(CeliBroj(d, rI, GetColumnIndex(tbl, ColAmbPrZaPrefill(tip)))))
-    End If
-    If rII > 0 Then
-        res = Spoji(res, "kol2", BrojUTekst(KolicinaReda(d, rII, cKol, cBruto, brutoMode)))
-        res = Spoji(res, "amb2", BrojUTekst(CeliBroj(d, rII, cAmb)))
-        res = Spoji(res, "cena2", BrojUTekst(CeliBrojD(d, rII, cCena)))
-    End If
+    ' Prijemnica od S6 koraka 4 (R5): klasa, kolicina, cena i gajbe su na
+    ' STAVKAMA (korak 2), a zaglavlje ih ne nosi -- citanje sa njega je davalo
+    ' praznu ispravku. Povrat praznih (KolAmbVracena) je cinjenica DOKUMENTA i
+    ' ostaje sa zaglavlja (base red).
+    res = StavkePrijemniceZaPrefill(res, CelijaAko(d, base, cId), brutoMode)
+    res = Spoji(res, "ambpr", BrojUTekst(CeliBroj(d, base, GetColumnIndex(tbl, ColAmbPrZaPrefill(tip)))))
 
     ' Partner je popunjen, pa fokus ide na kolicinu - to je polje koje se
     ' pri ispravci najcesce menja. (Kod prefilla sa otpremnice u F1 partner
@@ -745,7 +741,7 @@ End Function
 ' ne vraca nista.
 '
 ' Bruto rezim: StavkeOtkupaRedovi ne nosi BrutoKg, pa se u bruto rezimu cita
-' kolona stavke po redu -- isto pravilo kao KolicinaReda (bruto kad postoji).
+' kolona stavke po redu -- isto pravilo kao kod prijemnice (bruto kad postoji).
 Private Function StavkeOtkupaZaPrefill(ByVal res As String, ByVal otkupID As String, _
                                        ByVal brutoMode As Boolean) As String
     Const SRC As String = "modStornoDok.StavkeOtkupaZaPrefill"
@@ -892,6 +888,43 @@ Private Function StavkeOtpremniceZaPrefill(ByVal res As String, _
     StavkeOtpremniceZaPrefill = Spoji(res, "dveklase", IIf(nII > 0, "2", "1"))
 End Function
 
+' Stavke stornirane prijemnice u spec prefill-a, isto kao za otpremnicu: klasa
+' I -> kol1/amb1/cena, klasa II -> kol2/amb2/cena2, dveklase po broju klasa.
+' Cita KANONSKI citalac (modDokumenta.StavkeZaPrijemnicu), ne sirovu tabelu: on
+' vec obara zaglavlje bez stavki, nevazecu klasu i dve stavke iste klase, pa se
+' ta pravila ovde ne prepisuju. Dokument bez stavki PADA po imenu -- delimican
+' spec bi izgledao kao legitimna prazna ispravka. U bruto rezimu ide BrutoKg
+' stavke (8) kad ga ima.
+Private Function StavkePrijemniceZaPrefill(ByVal res As String, ByVal prijemnicaID As String, _
+                                           ByVal brutoMode As Boolean) As String
+    Const SRC As String = "modStornoDok.StavkePrijemniceZaPrefill"
+    Dim c As Collection, red As Variant, kol As Double, nII As Long
+
+    If Len(prijemnicaID) = 0 Then _
+        Err.Raise vbObjectError + 1939, SRC, "Prazan PrijemnicaID zaglavlja."
+    Set c = modDokumenta.StavkeZaPrijemnicu(modDokumenta.StavkePrijemnicePoDokumentu(), _
+                                            prijemnicaID, SRC)
+    For Each red In c
+        kol = CDbl(red(4))
+        If brutoMode Then
+            If IsNumeric(red(8)) Then
+                If CDbl(red(8)) > 0 Then kol = CDbl(red(8))
+            End If
+        End If
+        If CStr(red(3)) = KLASA_II Then
+            nII = nII + 1
+            res = Spoji(res, "kol2", BrojUTekst(kol))
+            res = Spoji(res, "amb2", BrojUTekst(CDbl(red(6))))
+            res = Spoji(res, "cena2", BrojUTekst(CDbl(red(5))))
+        Else
+            res = Spoji(res, "kol1", BrojUTekst(kol))
+            res = Spoji(res, "amb1", BrojUTekst(CDbl(red(6))))
+            res = Spoji(res, "cena", BrojUTekst(CDbl(red(5))))
+        End If
+    Next red
+    StavkePrijemniceZaPrefill = Spoji(res, "dveklase", IIf(nII > 0, "2", "1"))
+End Function
+
 ' BrutoKg stavke (otkup, redni broj) kad postoji i > 0; inace neto.
 Private Function BrutoStavkeIliNeto(ByVal otkupID As String, ByVal rb As Variant, _
                                     ByVal neto As Double) As Double
@@ -1033,41 +1066,6 @@ Private Function ColBrojZbirneZaPrefill(ByVal tip As String) As String
     End Select
 End Function
 
-' PAZNJA: zbirna ne zove ovo "Kolicina" nego "UkupnoKolicina".
-Private Function ColKolicinaZaPrefill(ByVal tip As String) As String
-    Select Case tip
-        ' STIP_OTKUP i STIP_OTPREMNICA: sa stavki (Stavke*ZaPrefill)
-        Case STIP_PRIJEMNICA: ColKolicinaZaPrefill = COL_PRJ_KOLICINA
-    End Select
-End Function
-
-' PAZNJA: zbirna ne zove ovo "KolAmbalaze" nego "UkupnoAmbalaze".
-Private Function ColKolAmbZaPrefill(ByVal tip As String) As String
-    Select Case tip
-        ' STIP_OTKUP i STIP_OTPREMNICA: sa stavki (Stavke*ZaPrefill)
-        Case STIP_PRIJEMNICA: ColKolAmbZaPrefill = COL_PRJ_KOL_AMB
-    End Select
-End Function
-
-' Zbirna NEMA cenu (tblZbirna nema tu kolonu) - zbirna je zbir vec
-' obracunatih otpremnica.
-Private Function ColCenaZaPrefill(ByVal tip As String) As String
-    Select Case tip
-        ' STIP_OTKUP i STIP_OTPREMNICA: sa stavki (Stavke*ZaPrefill)
-        Case STIP_PRIJEMNICA: ColCenaZaPrefill = COL_PRJ_CENA
-    End Select
-End Function
-
-' Zbirna NEMA BrutoKg - ona zbraja vec netirane otpremnice.
-Private Function ColBrutoZaPrefill(ByVal tip As String) As String
-    Select Case tip
-        ' STIP_OTKUP: sa stavki (StavkeOtkupaZaPrefill)
-        ' STIP_OTPREMNICA: bruto rezim je polje OTKUPA -- otpremnica se u njemu
-        ' ne unosi, pa joj prefill uzima kolicinu, ne bruto (S3b).
-        Case STIP_PRIJEMNICA: ColBrutoZaPrefill = COL_PRJ_BRUTO
-    End Select
-End Function
-
 ' Prazna ambalaza: uz otkup se IZDAJE, uz prijemnicu se VRACA. Otpremnica
 ' i zbirna je ne dodiruju - isto pravilo koje drzi modOtkupUI.ApplyFormFields.
 Private Function ColAmbPrZaPrefill(ByVal tip As String) As String
@@ -1084,30 +1082,13 @@ End Function
 ' 1.8 ms po redu za citanje dva polja iz niza koji je vec u memoriji.
 '
 ' Funkcija niz samo CITA, nikad ne pise, pa je razlika iskljucivo u tome sto se
-' niz ne umnozava.
-Private Function KolicinaReda(ByRef d As Variant, ByVal r As Long, _
-                              ByVal cKol As Long, ByVal cBruto As Long, _
-                              ByVal brutoMode As Boolean) As Double
-    If brutoMode And cBruto > 0 Then
-        If NzD(d(r, cBruto)) > 0 Then
-            KolicinaReda = NzD(d(r, cBruto))
-            Exit Function
-        End If
-    End If
-    If cKol > 0 Then KolicinaReda = NzD(d(r, cKol))
-End Function
-
-' ByRef iz istog razloga kao KolicinaReda: ByVal bi kopirao ceo niz po pozivu.
+' niz ne umnozava. (KolicinaReda i CeliBrojD, citaci kolicine i cene sa
+' ZAGLAVLJA prijemnice, obrisani su u S6 koraku 4 -- prefill cita stavke.)
 Private Function CeliBroj(ByRef d As Variant, ByVal r As Long, ByVal c As Long) As Double
     If c > 0 Then CeliBroj = NzL(d(r, c))
 End Function
 
-' ByRef iz istog razloga kao KolicinaReda: ByVal bi kopirao ceo niz po pozivu.
-Private Function CeliBrojD(ByRef d As Variant, ByVal r As Long, ByVal c As Long) As Double
-    If c > 0 Then CeliBrojD = NzD(d(r, c))
-End Function
-
-' ByRef iz istog razloga kao KolicinaReda: ByVal bi kopirao ceo niz po pozivu.
+' ByRef iz istog razloga kao CeliBroj: ByVal bi kopirao ceo niz po pozivu.
 Private Function CelijaAko(ByRef d As Variant, ByVal r As Long, ByVal c As Long) As String
     If c > 0 Then CelijaAko = Trim$(NzToText(d(r, c)))
 End Function

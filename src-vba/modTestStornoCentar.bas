@@ -50,21 +50,26 @@ Public Sub Test_StornoCentar_All()
     End If
 End Sub
 
-' #6: impact header kolicina = SUMA aktivnih Klasa I+II (ranije citao samo prvu klasu
-' -> potceni dvoklasni dokument u uvidu pre potvrde). Storniran red se ne broji.
+' #6: impact header kolicina = SUMA STAVKI dokumenta (I + II). Ranije je citao prvi
+' red klase, pa je potcenio dvoklasni dokument u uvidu pre potvrde. Od S6 koraka 4
+' dokument je jedno zaglavlje sa stavkama, a uvid ga bira po PrijemnicaID-u:
+' storniran dokument istog broja ne ulazi, jer ga identitet ne bira.
 Public Sub Test_ImpactHeaderSum_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_KOLICINA), Array("SVT-IH-1", "SVT-IH-P", "I", 100)
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_KOLICINA), Array("SVT-IH-2", "SVT-IH-P", "II", 50)
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_KOLICINA, COL_STORNIRANO), Array("SVT-IH-3", "SVT-IH-P", "I", 999, "Da")
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ), Array("SVT-IH-1", "SVT-IH-P")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_STORNIRANO), Array("SVT-IH-3", "SVT-IH-P", "Da")
+    TcSeedStavkaPrijemnice "SVT-IH-1", 1, "I", 100
+    TcSeedStavkaPrijemnice "SVT-IH-1", 2, "II", 50
+    TcSeedStavkaPrijemnice "SVT-IH-3", 1, "I", 999
 
-    Dim m As Object: Set m = BuildStornoImpact(FLOW_DOC_PRIJEMNICA, "SVT-IH-P")
+    Dim m As Object: Set m = BuildStornoImpact(FLOW_DOC_PRIJEMNICA, "SVT-IH-P", "", "SVT-IH-1")
     Dim h As Object: Set h = m("header")
-    TcChk Val(NzS(h("kolicina"))) = 150, "impact header kolicina = suma aktivnih Klasa I+II (100+50), storniran izuzet"
+    TcChk Val(NzS(h("kolicina"))) = 150, "impact header kolicina = suma stavki dokumenta (100+50), storniran istog broja izuzet"
 
     tx.RollbackTx: Set tx = Nothing
     Exit Sub
@@ -299,7 +304,9 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
               Array("SVT-KA-PID", "SVT-KA-P", "I", "SVT-KA-Z")
 
-    Dim rA As Object: Set rA = RunPrijemnicaCorrection("SVT-KA-P", SV_MODE_PONISTENJE, True)
+    ' Identitet je PrijemnicaID izabranog reda (S6 korak 4) -- bez njega okvir
+    ' dokument ne nalazi.
+    Dim rA As Object: Set rA = RunPrijemnicaCorrection("SVT-KA-P", SV_MODE_PONISTENJE, True, False, "SVT-KA-PID")
     TcChk CBool(rA("success")), "PONISTENJE prijemnice -> success"
     TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-KA-Z") = 0, "zbirna stornirana (uzvodna kaskada)"
     TcChk TcOtpAktivnihUZbirni("SVT-KA-ZID") = 0, "otpremnica te zbirne stornirana"
@@ -313,7 +320,7 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
               Array("SVT-KB-PID", "SVT-KB-P", "I", "SVT-KB-Z")
 
-    Dim rB As Object: Set rB = RunPrijemnicaCorrection("SVT-KB-P", SV_MODE_DUPLI, True)
+    Dim rB As Object: Set rB = RunPrijemnicaCorrection("SVT-KB-P", SV_MODE_DUPLI, True, False, "SVT-KB-PID")
     TcChk CBool(rB("success")), "DUPLI prijemnica -> success"
     TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-KB-Z") = 1, "DUPLI: zbirna ostaje AKTIVNA (list, ne kaskada)"
     TcChk TcOtpAktivnihUZbirni("SVT-KB-ZID") = 1, "DUPLI: otpremnica ostaje AKTIVNA"
@@ -390,10 +397,13 @@ Public Sub Test_BuildStornoImpact_Auto()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_BROJ_ZBIRNE), _
-              Array("SVT-BI-ID", "SVT-BI-P1", "I", "SVT-BI-KUP", 123, "SVT-BI-Z1")
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KUPAC, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-BI-ID", "SVT-BI-P1", "SVT-BI-KUP", "SVT-BI-Z1")
+    TcSeedStavkaPrijemnice "SVT-BI-ID", 1, "I", 123
 
-    Dim m As Object: Set m = BuildStornoImpact(FLOW_DOC_PRIJEMNICA, "SVT-BI-P1")
+    ' Identitet je PrijemnicaID izabranog reda (S6 korak 4), kolicina sa stavki.
+    Dim m As Object: Set m = BuildStornoImpact(FLOW_DOC_PRIJEMNICA, "SVT-BI-P1", "", "SVT-BI-ID")
     Dim h As Object: Set h = m("header")
     Dim sm As Object: Set sm = m("summary")
     TcChk NzS(h("partnerID")) = "SVT-BI-KUP", "impact header partnerID iz reda"
@@ -408,15 +418,20 @@ EH:
     Debug.Print "FAIL Test_BuildStornoImpact_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
-' Browse: distinct po broju (2 klase -> 1x), filter tip, iskljuci stornirano.
+' Browse: JEDAN RED PO DOKUMENTU, filter tip, iskljuci stornirano.
+'
+' Do S6 koraka 4 je lista spajala redove PO BROJU, jer su dva reda istog broja
+' bila dve KLASE jednog dokumenta. Od koraka 2 je dokument jedno zaglavlje, pa
+' su dva reda istog broja dva DOKUMENTA (dva kupca) -- i spajanje po broju je
+' jedan od njih precutalo. Promena premise testa, ne samo tvrdnje.
 Public Sub Test_GetActiveDocumentsForStorno_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA), Array("SVT-GA-1", "SVT-GA-P1", "I")
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA), Array("SVT-GA-2", "SVT-GA-P1", "II")   ' isti broj
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KUPAC), Array("SVT-GA-1", "SVT-GA-P1", "SVT-GA-KUP1")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KUPAC), Array("SVT-GA-2", "SVT-GA-P1", "SVT-GA-KUP2")   ' isti broj, drugi kupac
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA), Array("SVT-GA-3", "SVT-GA-P2", "I")
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_STORNIRANO), Array("SVT-GA-4", "SVT-GA-P3", "I", "Da")
 
@@ -430,7 +445,7 @@ Public Sub Test_GetActiveDocumentsForStorno_Auto()
             If br = "SVT-GA-P3" Then nP3 = nP3 + 1
         Next i
     End If
-    TcChk nP1 = 1, "distinct po broju: P1 (2 klase) -> 1x"
+    TcChk nP1 = 2, "jedan red po dokumentu: P1 (dva kupca, isti broj) -> 2x"
     TcChk nP2 = 1, "P2 aktivan -> 1x"
     TcChk nP3 = 0, "stornirana P3 -> iskljucena"
 
@@ -561,6 +576,16 @@ Private Sub TcSeedZbirna(ByVal zbrID As String, ByVal broj As String, _
               Array(COL_ZBS_ID, COL_ZBS_ZBIRNA_ID, COL_ZBS_RB, COL_ZBS_KLASA, _
                     COL_ZBS_KOLICINA, COL_ZBS_KOL_AMB), _
               Array(zbrID & "-S1", zbrID, 1, klasa, kg, amb)
+End Sub
+
+' Stavka prijemnice uz seed zaglavlja (S6 korak 4): uvid cita stavke, a strogi
+' citalac stavki trazi neprazan ID, kolicinu > 0 i cenu kao broj.
+Private Sub TcSeedStavkaPrijemnice(ByVal prijemnicaID As String, ByVal rb As Long, _
+                                   ByVal klasa As String, ByVal kolicina As Double)
+    TcSeedRow TBL_PRIJEMNICA_STAVKE, _
+              Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
+                    COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _
+              Array(prijemnicaID & "-S" & CStr(rb), prijemnicaID, rb, klasa, kolicina, 0, 0)
 End Sub
 
 Private Sub TcSeedRow(ByVal tbl As String, ByVal cols As Variant, ByVal vals As Variant)

@@ -2170,12 +2170,8 @@ Public Function DetachOsirocenePaletaStavke_TX(ByVal oldBroj As String, _
 
     Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(s) Then Exit Function
-    Dim sBr As Long, sPal As Long, sGa As Long, sNe As Long, sAmb As Long, sStt As Long
+    Dim sBr As Long, sStt As Long
     sBr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, SRC)
-    sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
-    sGa = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, SRC)
-    sNe = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, SRC)
-    sAmb = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA, SRC)
     sStt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
 
     Dim rowsC As Collection: Set rowsC = New Collection
@@ -2194,33 +2190,8 @@ Public Function DetachOsirocenePaletaStavke_TX(ByVal oldBroj As String, _
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
-    Dim touched As Object: Set touched = CreateObject("Scripting.Dictionary")
-    Dim k As Long, cnt As Long
-    For k = 1 To rowsC.count
-        r = rowsC(k)
-        DecrementPaletaForStavka CStr(SafeCell(s, r, sPal)), NzL(SafeCell(s, r, sGa)), _
-                                 NzD(SafeCell(s, r, sNe)), NzD(SafeCell(s, r, sAmb)), SRC
-        RequireUpdateCell TBL_PALETA_STAVKA, r, COL_STORNIRANO, "Da", SRC
-        touched(CStr(SafeCell(s, r, sPal))) = True
-        PaletaLog CStr(SafeCell(s, r, sPal)), "DETACH", "prij=" & oldBroj & " gajb=" & NzL(SafeCell(s, r, sGa))
-        cnt = cnt + 1
-    Next k
-
-    ' Fantom palete: dodirnuta paleta bez ijedne preostale aktivne stavke -> storno
-    ' kroz kanonski modStorno.StornoPaleta (kompozicija u nasem TX, kao sto
-    ' StornoOtkupByBrDok_TX komponuje StornoOtkup). Preradjena se preskace uz napomenu.
-    Dim emptied As String
-    Dim v As Variant
-    For Each v In touched.Keys
-        If IsEmpty(GetPaletaStavkeForGrid(CStr(v))) Then      ' nema aktivnih stavki
-            If IsPaletaPreradjena(CStr(v)) Then
-                emptied = emptied & PaletaLabel(CStr(v)) & " (preradjena - NIJE stornirana!) "
-            ElseIf StornoPaleta(CStr(v)) Then
-                PaletaLog CStr(v), "STORNO_PRAZNA", "detach prij=" & oldBroj
-                emptied = emptied & PaletaLabel(CStr(v)) & " "
-            End If
-        End If
-    Next v
+    Dim emptied As String, cnt As Long
+    cnt = SkiniPaletneStavke(s, rowsC, oldBroj, SRC, emptied)
 
     tx.CommitTx
     Set tx = Nothing
@@ -2232,6 +2203,149 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr SRC
     DetachOsirocenePaletaStavke_TX = 0
+End Function
+
+' STORNO PRIJEMNICE SKIDA SVOJE PALETNE STAVKE U SVOJOJ TRANSAKCIJI (S6 korak 4,
+' odluka 3). Zove ga samo jezgro storna (modStorno.StornoPrijemnica), POSLE svojih
+' provera i PRE Stornirano.
+'
+' Bira po PrijemnicaID-u, ne po broju: broj nose dva kupca i dva dokumenta istog
+' kupca, pa je Detach po broju skidao i tudju robu. Stavka na PRERADJENOJ paleti
+' obara CEO storno pre prve mutacije -- roba je vec proizvod, a Detach bi menjao
+' preradjenu paletu i samo napisao napomenu. Transakcija pozivaoca mora da snima
+' obe tabele (fail-closed): skidanje bez snimka bi prezivelo rollback dokumenta.
+' Vraca broj skinutih stavki.
+Public Function SkiniPaleteZaStornoPrijemnice(ByVal tx As clsTransaction, _
+                                              ByVal prijemnicaID As String, _
+                                              ByVal sourceName As String) As Long
+    Const SRC As String = "modPaletniList.SkiniPaleteZaStornoPrijemnice"
+    Dim pid As String
+    pid = Trim$(prijemnicaID)
+    If Len(pid) = 0 Then
+        Err.Raise vbObjectError + 7360, SRC, "Storno paleta trazi PrijemnicaID (" & sourceName & ")."
+    End If
+    If tx Is Nothing Then
+        Err.Raise vbObjectError + 7361, SRC, "Storno paleta trazi transakciju pozivaoca (" & sourceName & ")."
+    End If
+    If Not tx.ImaSnapshot(TBL_PALETA) Or Not tx.ImaSnapshot(TBL_PALETA_STAVKA) Then
+        Err.Raise vbObjectError + 7361, SRC, _
+                  "Storno paleta: transakcija ne snima " & TBL_PALETA & " i " & _
+                  TBL_PALETA_STAVKA & " -- skidanje bi prezivelo rollback dokumenta."
+    End If
+
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim sPid As Long, sPal As Long, sStt As Long
+    sPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
+    sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+    sStt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+
+    Dim rowsC As Collection: Set rowsC = New Collection
+    Dim r As Long
+    For r = 1 To UBound(s, 1)
+        If StrComp(Trim$(CStr(SafeCell(s, r, sPid))), pid, vbTextCompare) = 0 _
+           And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> "DA" Then rowsC.Add r
+    Next r
+    If rowsC.count = 0 Then Exit Function
+
+    Dim k As Long, pal As String, sId As Long
+    sId = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, SRC)
+    For k = 1 To rowsC.count
+        pal = Trim$(CStr(SafeCell(s, CLng(rowsC(k)), sPal)))
+        ' REVIEW #438 P2: stavka koja pokazuje na paletu koje NEMA obara storno.
+        ' DecrementPaletaForStavka nad nepostojecom paletom tiho izlazi, a telo
+        ' skidanja stavku ipak stornira -- zaglavlje palete ostaje nedirnuto. Do
+        ' ovoga je storno padao samo SLUCAJNO (StornoPaleta nad "praznom"
+        ' nepostojecom paletom), i to ne kad na nju pokazuje i su-stanar.
+        If Len(pal) = 0 Or FindRowIndexByID(TBL_PALETA, COL_PAL_ID, pal) = 0 Then
+            Err.Raise vbObjectError + 7363, SRC, _
+                      "Prijemnica " & pid & ": paletna stavka " & _
+                      Trim$(CStr(SafeCell(s, CLng(rowsC(k)), sId))) & _
+                      " pokazuje na paletu koje nema ('" & pal & "'). Storno bi skinuo " & _
+                      "robu sa palete koja ne postoji -- popravite paletnu stavku pa ponovite."
+        End If
+        If IsPaletaPreradjena(pal) Then
+            Err.Raise vbObjectError + 7362, SRC, RazlogPreradjena(pid, pal)
+        End If
+    Next k
+
+    Dim emptied As String
+    SkiniPaleteZaStornoPrijemnice = SkiniPaletneStavke(s, rowsC, pid, SRC, emptied)
+End Function
+
+' Razlog odbijanja storna zbog robe na PRERADJENOJ paleti (odluka 3), ili "" kad
+' je nema. Bira ISTO sto i jezgro (aktivne stavke po PrijemnicaID-u) i daje ISTI
+' tekst, pa okvir ispravke odbija tacno ono sto bi jezgro odbilo -- samo ranije:
+' pre dijaloga posledica i pre zapisa ispravke (ponovljena rucna provera #438).
+' Samo cita. Kapija jezgra ostaje u SkiniPaleteZaStornoPrijemnice.
+Public Function PreradjenaPaletaRazlog(ByVal prijemnicaID As String) As String
+    Const SRC As String = "modPaletniList.PreradjenaPaletaRazlog"
+    Dim pid As String
+    pid = Trim$(prijemnicaID)
+    If Len(pid) = 0 Then Exit Function
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim sPid As Long, sPal As Long, sStt As Long, r As Long, pal As String
+    sPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
+    sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+    sStt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+    For r = 1 To UBound(s, 1)
+        If StrComp(Trim$(CStr(SafeCell(s, r, sPid))), pid, vbTextCompare) = 0 _
+           And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> "DA" Then
+            pal = Trim$(CStr(SafeCell(s, r, sPal)))
+            If Len(pal) > 0 And IsPaletaPreradjena(pal) Then
+                PreradjenaPaletaRazlog = RazlogPreradjena(pid, pal)
+                Exit Function
+            End If
+        End If
+    Next r
+End Function
+
+Private Function RazlogPreradjena(ByVal pid As String, ByVal pal As String) As String
+    RazlogPreradjena = "Prijemnica " & pid & " ima robu na preradjenoj paleti " & _
+                       PaletaLabel(pal) & ". Prvo stornirajte preradu, pa prijemnicu."
+End Function
+
+' JEDNO TELO skidanja izabranih paletnih stavki -- za Oporavak (Detach po broju,
+' sopstvena TX) i za storno prijemnice (po ID-u, TX pozivaoca). Pozivalac je vec
+' snimio tblPaleta i tblPaletaStavka. Per-stavka: su-stanari na istoj paleti ostaju
+' netaknuti. Paleta bez ijedne preostale aktivne stavke (fantom) se stornira kroz
+' kanonski modStorno.StornoPaleta; preradjena se preskace uz napomenu (do nje
+' storno prijemnice ne stize -- odbija je pre poziva). Vraca broj skinutih.
+Private Function SkiniPaletneStavke(ByRef s As Variant, ByVal rowsC As Collection, _
+                                    ByVal oznaka As String, ByVal sourceName As String, _
+                                    ByRef outPrazne As String) As Long
+    Dim sPal As Long, sGa As Long, sNe As Long, sAmb As Long
+    sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, sourceName)
+    sGa = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, sourceName)
+    sNe = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, sourceName)
+    sAmb = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA, sourceName)
+
+    Dim touched As Object: Set touched = CreateObject("Scripting.Dictionary")
+    Dim k As Long, r As Long, cnt As Long
+    For k = 1 To rowsC.count
+        r = rowsC(k)
+        DecrementPaletaForStavka CStr(SafeCell(s, r, sPal)), NzL(SafeCell(s, r, sGa)), _
+                                 NzD(SafeCell(s, r, sNe)), NzD(SafeCell(s, r, sAmb)), sourceName
+        RequireUpdateCell TBL_PALETA_STAVKA, r, COL_STORNIRANO, "Da", sourceName
+        touched(CStr(SafeCell(s, r, sPal))) = True
+        PaletaLog CStr(SafeCell(s, r, sPal)), "DETACH", "prij=" & oznaka & " gajb=" & NzL(SafeCell(s, r, sGa))
+        cnt = cnt + 1
+    Next k
+
+    Dim v As Variant
+    outPrazne = ""
+    For Each v In touched.Keys
+        If IsEmpty(GetPaletaStavkeForGrid(CStr(v))) Then      ' nema aktivnih stavki
+            If IsPaletaPreradjena(CStr(v)) Then
+                outPrazne = outPrazne & PaletaLabel(CStr(v)) & " (preradjena - NIJE stornirana!) "
+            ElseIf StornoPaleta(CStr(v)) Then
+                PaletaLog CStr(v), "STORNO_PRAZNA", "detach prij=" & oznaka
+                outPrazne = outPrazne & PaletaLabel(CStr(v)) & " "
+            End If
+        End If
+    Next v
+    SkiniPaletneStavke = cnt
 End Function
 
 ' ============================================================

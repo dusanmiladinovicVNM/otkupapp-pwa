@@ -20,9 +20,9 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 | Tabela | Mutatora | Moduli koji MENJAJU redove |
 |---|---|---|
-| `tblFakturaStavke` | 4 | `modDokumenta`, `modFaktura`, `modStorno`, `modUtovar` |
 | `tblFakture` | 4 | `modFaktura`, `modSEFPersistance`, `modStorno`, `modUtovar` |
 | `tblBankaImport` | 3 | `modBankaImport`, `modBankaMapiranje`, `modStorno` |
+| `tblFakturaStavke` | 3 | `modDokumenta`, `modFaktura`, `modUtovar` |
 | `tblKorisnici` | 3 | `modAuth`, `modMaticniKorisnici`, `modSetup` |
 | `tblNovac` | 3 | `modBankaMapiranje`, `modNovac`, `modStorno` |
 | `tblOtkup` | 3 | `modDokumenta`, `modOtkup`, `modStornoFlow` |
@@ -68,13 +68,13 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 ## Ucesnici transakcije (snapshot, NE vlasnistvo)
 
-- `tblFakturaStavke`: `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`, `modUtovar`
-- `tblFakture`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator`, `modStorno`, `modStornoFlow`, `modUtovar`
+- `tblFakture`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator`, `modStorno`, `modUtovar`
 - `tblBankaImport`: `modBankaImport`, `modBankaMapiranje`, `modStorno`
+- `tblFakturaStavke`: `modDokumenta`, `modFaktura`, `modStorno`, `modUtovar`
 - `tblKorisnici`: `modMaticniKorisnici`
 - `tblNovac`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modOtkup`, `modStorno`, `modUtovar`
 - `tblOtkup`: `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`
-- `tblPrijemnica`: `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow`
+- `tblPrijemnica`: `modDokumenta`, `modFaktura`, `modStorno`
 - `tblPaleta`: `modDokumenta`, `modPaletniList`, `modStorno`
 - `tblParcele`: `modGeoParcele`, `modMasterSync`
 - `tblUtovar`: `modStorno`, `modUtovar`
@@ -91,7 +91,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblPartnerMap`: `modBankaMapiranje`
 - `tblPrerada`: `modPaletniList`, `modStorno`
 - `tblPreradaStavka`: `modPaletniList`, `modStorno`
-- `tblPrijemnicaStavke`: `modDokumenta`
+- `tblPrijemnicaStavke`: `modDokumenta`, `modStorno`
 - `tblSEFEventLog`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
 - `tblSEFSubmission`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
 - `tblStornoVeze`: `modAmbalaza`, `modOtkup`, `modStornoContext`
@@ -102,9 +102,9 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 ## Test moduli po tabeli
 
-- `tblFakturaStavke`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modTest`, `modTestStorno`
 - `tblFakture`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modSEFTests`, `modTest`, `modTestBanka`, `modTestStorno`
 - `tblBankaImport`: `modTestBanka`, `modTestStorno`
+- `tblFakturaStavke`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modTest`, `modTestStorno`
 - `tblNovac`: `modBusinessFlowProTests`, `modGoldenTests`, `modNovacTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblOtkup`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblPrijemnica`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
@@ -122,7 +122,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblOtpremnicaStavke`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTest`, `modTestStorno`
 - `tblPaletaStavka`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPartnerMap`: `modTestBanka`
-- `tblPrijemnicaStavke`: `modBusinessFlowProTests`, `modFakturaTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`
+- `tblPrijemnicaStavke`: `modBusinessFlowProTests`, `modFakturaTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblSEFConfig`: `modTestStorno`
 - `tblSEFEventLog`: `modSEFTests`
 - `tblSEFSubmission`: `modSEFTests`
@@ -151,7 +151,7 @@ tabela kroz jedan ulaz). Stoje ovde da mapa ne izgleda potpunija nego sto
 jeste -- kapija koja precuti sopstvenu granicu je gora od one koja je
 imenuje.
 
-- `modBusinessFlowProTests`: 4
+- `modBusinessFlowProTests`: 5
 - `modDokumentInvariant`: 1
 - `modDokumenta`: 4
 - `modFakturaTests`: 1
@@ -167,7 +167,7 @@ imenuje.
 - `modTest`: 1
 - `modTestPalete`: 1
 
-Ukupno: 31 poziva u 15 modula.
+Ukupno: 32 poziva u 15 modula.
 
 ## Sta ovo NE pokriva
 

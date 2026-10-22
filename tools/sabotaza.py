@@ -1716,11 +1716,13 @@ SABOTAZE = {
     ),
     # Kapija nad brojem koja se primenjuje i kad je identitet poznat. Storno je
     # tada bezbedan, ali legitimna ispravka pada -- feature ne radi.
+    # S6 korak 4: ByBroj je obrisan; ista regresija (kapija nad brojem i uz
+    # zadat identitet) sada se meri u jedinom razresavacu, PrijemnicaIDZaStorno.
     "kapija-i-uz-identitet": (
-        "modStorno.bas",
-        "    If Len(Trim$(generacijaID)) = 0 Then _\n"
-        "        RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brBroj, SRC, COL_PRJ_KUPAC\n",
-        "    RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brBroj, SRC, COL_PRJ_KUPAC\n",
+        "modStornoFlow.bas",
+        "    If Len(outRazlog) = 0 Then\n",
+        "    If Len(outRazlog) = 0 And VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, SRC, False, Array(COL_PRJ_KUPAC)).count > 1 Then outRazlog = \"NEMA\"   ' SABOTAZA: kapija nad brojem i uz identitet\n"
+        "    If Len(outRazlog) = 0 Then\n",
         "T_IspravkaPrijemnice_PodKolizijomBroja",
         "ISPRAVKA pod kolizijom broja prolazi kad je identitet poznat",
     ),
@@ -1739,12 +1741,14 @@ SABOTAZE = {
     # F8: identitet kliknutog reda. Bez njega correction context pokazuje na
     # prvi dokument tog broja -- a kod RESI KASNIJE se guarded writer uopste ne
     # zove, pa gresku nista ne prijavljuje.
+    # S6 korak 4: PkPoIdentitetu je zamenjen razresavacem PrijemnicaIDZaStorno.
+    # Zadat ID se ignorise: identitetska grana je mrtva, kao u starom obliku
+    # (v. POZNATI_NALAZI_DOKAZ -- obara preduslov, ne ciljanu tvrdnju).
     "f8-identitet-po-broju": (
         "modStornoFlow.bas",
-        "    If Len(Trim$(gen)) > 0 Then\n"
-        "        Dim ids As Object: Set ids = IdoviGeneracije(tblName, idCol, gen)\n",
-        "    If False Then   ' SABOTAZA: identitet se ignorise -- ide se po broju\n"
-        "        Dim ids As Object: Set ids = IdoviGeneracije(tblName, idCol, gen)\n",
+        "    If Len(pid) > 0 Then Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, pid)\n",
+        "    pid = \"\"   ' SABOTAZA: identitet se ignorise -- ide se po broju\n"
+        "    If Len(pid) > 0 Then Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, pid)\n",
         "T_F8_IzabranRedOstajeIzabran",
         "recovery zapis pokazuje na IZABRAN dokument",
     ),
@@ -9049,6 +9053,208 @@ SABOTAZE = {
         "Test_S6_CitalacStavkiPrijemniceDrziUgovor",
         "S6 ugovor: BrutoKg nula obara citaoca po imenu",
     ),
+    "s6k4-kaskada-ne-snima-prijemnicu": (
+        "modStornoFlow.bas",
+        "    modStorno.SnimiZaStornoPrijemnice tx\n",
+        "    tx.AddTableSnapshot TBL_FAKTURE   ' SABOTAZA: kaskada ne snima prijemnicu ni palete\n",
+        "Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu",
+        "S6K4 kaskada: ponistenje prijemnice sa nogama knjige PROLAZI kroz pravu kaskadu",
+    ),
+    "s6k4-snimak-bez-paleta": (
+        "modStorno.bas",
+        "    tx.AddTableSnapshot TBL_PALETA\n"
+        "    tx.AddTableSnapshot TBL_PALETA_STAVKA\n"
+        "    tx.AddTableSnapshot TBL_FAKTURE\n",
+        "    tx.AddTableSnapshot TBL_PALETA\n"
+        "    ' SABOTAZA: skup snimaka storna prijemnice bez paletnih stavki\n"
+        "    tx.AddTableSnapshot TBL_FAKTURE\n",
+        "Test_S6K4_StornoSkidaPaleteUIstojTx",
+        "S6K4 storno: dvoklasni dokument se stornira JEDNIM pozivom",
+    ),
+    "s6k4-jezgro-ne-trazi-snimak": (
+        "modStorno.bas",
+        "    RequireSnimakZaStornoPrijemnice tx, SRC\n",
+        "    If tx Is Nothing Then Exit Function   ' SABOTAZA: jezgro ne trazi snimak\n",
+        "Test_S6K4_JezgroTraziSnimak",
+        "S6K4 snimak: jezgro storna odbija transakciju bez snimka paleta PO IMENU",
+    ),
+    "s6k4-palete-ne-traze-snimak": (
+        "modPaletniList.bas",
+        "    If Not tx.ImaSnapshot(TBL_PALETA) Or Not tx.ImaSnapshot(TBL_PALETA_STAVKA) Then\n",
+        "    If False Then   ' SABOTAZA: paletni primitiv ne trazi snimak\n",
+        "Test_S6K4_JezgroTraziSnimak",
+        "S6K4 snimak: paletni primitiv odbija transakciju bez snimka PO IMENU",
+    ),
+    "s6k4-jezgro-ne-skida-palete": (
+        "modStorno.bas",
+        "        outPaletnihStavki = modPaletniList.SkiniPaleteZaStornoPrijemnice(tx, prijemnicaID, SRC)\n",
+        "        outPaletnihStavki = 0   ' SABOTAZA: jezgro ne skida palete\n",
+        "Test_S6K4_StornoSkidaPaleteUIstojTx",
+        "S6K4 storno: paletne stavke OBE klase padaju sa dokumentom",
+    ),
+    "s6k4-faktura-kapija-u-jezgru": (
+        "modStorno.bas",
+        "    If PrijemnicaJeFakturisana(prijemnicaID, fakID) Then\n",
+        "    If False Then   ' SABOTAZA: jezgro ne pita za fakturu\n",
+        "Test_S6K4_FakturisanaSeOdbija",
+        "S6K4 faktura: odbijena (kes) ostaje aktivna",
+    ),
+    "s6k4-faktura-kes-prolazi": (
+        "modStorno.bas",
+        "            If UCase$(Trim$(NzToText(p(CLng(rows(1)), cKes)))) = \"DA\" Then\n",
+        "            If False Then   ' SABOTAZA: kes Fakturisano se ne gleda\n",
+        "Test_S6K4_FakturisanaSeOdbija",
+        "S6K4 faktura: prijemnica sa kesom Fakturisano je ODBIJENA",
+    ),
+    "s6k4-faktura-stavka-prolazi": (
+        "modStorno.bas",
+        "        If StrComp(Trim$(NzToText(d(i, cP))), pid, vbTextCompare) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: stavka fakture se ne gleda\n",
+        "Test_S6K4_FakturisanaSeOdbija",
+        "S6K4 faktura: prijemnica pod aktivnom stavkom fakture je ODBIJENA",
+    ),
+    "s6k4-preradjena-paleta-prolazi": (
+        "modPaletniList.bas",
+        "        If IsPaletaPreradjena(pal) Then\n",
+        "        If False Then   ' SABOTAZA: preradjena paleta ne obara storno\n",
+        "Test_S6K4_PreradjenaPaletaObaraStorno",
+        "S6K4 preradjena: storno dokumenta sa robom na preradjenoj paleti je ODBIJEN",
+    ),
+    "s6k4-subjekat-po-broju": (
+        "modStornoFlow.bas",
+        "        If Len(subj) > 0 And StrComp(Trim$(CStr(ids(k))), subj, vbTextCompare) = 0 Then\n",
+        "        If Len(subj) > 0 Then   ' SABOTAZA: svaka prijemnica lanca je subjekat\n",
+        "Test_S6K4_KaskadaSubjekatJeDokument",
+        "S6K4 kaskada subjekat: DRUGI dokument istog broja ostaje aktivan",
+    ),
+    # Meri se na RESI KASNIJE kroz okvir (T_F8, #33), gde je razresavac JEDINA brana:
+    # u StornoIzvrsi jezgro dobija prazan docID i odbija ga samo (RequireStornoAllowed),
+    # pa je tvrdnja u Test_S6K4_F8IdentitetDokumenta bila zaklonjena (dokaz: NE OBARA NISTA).
+    "s6k4-f8-prazan-id-po-broju": (
+        "modStornoFlow.bas",
+        "    pid = Trim$(prijID)\n",
+        "    pid = Trim$(prijID)\n"
+        "    If Len(pid) = 0 Then pid = LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_ID)   ' SABOTAZA: prazan ID se trazi po broju\n",
+        "T_F8_IzabranRedOstajeIzabran",
+        "bez identiteta se NE pravi recovery zapis nad dvosmislenim brojem",
+    ),
+    "s6k4-f8-bez-provere-para": (
+        "modStornoFlow.bas",
+        "        If Len(Trim$(broj)) > 0 And StrComp(kanon, Trim$(broj), vbTextCompare) <> 0 Then\n",
+        "        If False Then   ' SABOTAZA: par broj-ID se ne proverava\n",
+        "Test_S6K4_F8IdentitetDokumenta",
+        "S6K4 F8: identitet jednog dokumenta pod brojem drugog je ODBIJEN",
+    ),
+    "s6k4-seam-ne-pada": (
+        "modStorno.bas",
+        "    If mTestPrjStornoPadni Then\n",
+        "    If False Then   ' SABOTAZA: seam ne pada\n",
+        "Test_S6K4_PadPosleSvihUpisaVracaSve",
+        "S6K4 pad: posle pada direktnog storna Stornirano je PRAZNO",
+    ),
+    "s6k4-prefill-sa-zaglavlja": (
+        "modStornoDok.bas",
+        "    res = StavkePrijemniceZaPrefill(res, CelijaAko(d, base, cId), brutoMode)\n",
+        "    res = Spoji(res, \"dveklase\", \"1\")   ' SABOTAZA: prefill prijemnice ne cita stavke\n",
+        "T_S6K4_StornoCitaStavkeIIdentitet",
+        "S6K4 storno: prefill ispravke nosi kolicinu i cenu SVAKE stavke",
+    ),
+    "s6k4-uvid-kg-sa-zaglavlja": (
+        "modStornoImpact.bas",
+        "            h(\"kolicina\") = PrijemnicaKgZaUvid(prjUvid, strict)\n",
+        "            h(\"kolicina\") = HLP(COL_PRJ_KOLICINA, prjUvid)   ' SABOTAZA: kg uvida sa zaglavlja\n",
+        "T_S6K4_StornoCitaStavkeIIdentitet",
+        "S6K4 storno: uvid -- kg dokumenta je zbir stavki",
+    ),
+    "s6k4-lista-kg-sa-zaglavlja": (
+        "modStornoFlow.bas",
+        "            COL_PRJ_BROJ_ZBIRNE, COL_PRJ_KUPAC, COL_PRJ_VOZAC, \"\", tf, kupci, vozaci, stByZbr, _\n",
+        "            COL_PRJ_BROJ_ZBIRNE, COL_PRJ_KUPAC, COL_PRJ_VOZAC, COL_PRJ_KOLICINA, tf, kupci, vozaci, stByZbr, _\n",
+        "T_S6K4_StornoCitaStavkeIIdentitet",
+        "S6K4 storno: lista za storno -- kg dokumenta je zbir stavki",
+    ),
+    "s6k4-f8-identitet-generacija": (
+        "modScrDokumenti.bas",
+        "        Case \"PRIJEMNICA\":                                  IdKolonaTipa = COL_PRJ_ID\n",
+        "        Case \"PRIJEMNICA\":                                  IdKolonaTipa = COL_GENERACIJA_ID   ' SABOTAZA: F8 nosi generaciju\n",
+        "T_S6K4_StornoCitaStavkeIIdentitet",
+        "S6K4 storno: red F8 nosi PrijemnicaID dokumenta",
+    ),
+    # Review #438 P2: paletna stavka koja pokazuje na paletu koje NEMA.
+    "s6k4-paleta-bez-zaglavlja-prolazi": (
+        "modPaletniList.bas",
+        "        If Len(pal) = 0 Or FindRowIndexByID(TBL_PALETA, COL_PAL_ID, pal) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: stavka bez palete ne obara storno\n",
+        "Test_S6K4_PaletnaStavkaBezPaleteObaraStorno",
+        "S6K4 bez palete: storno je ODBIJEN po imenu (stavka pokazuje na paletu koje nema)",
+    ),
+    # Rucna provera #438 (N1): razlog odbijanja mora da stigne do operatera.
+    "s6k4-f8-guta-razlog": (
+        "modStornoDok.bas",
+        "                poruka = modPoruke.Poruka(\"STORNO_ERR_NEUSPEH\") & \" \" & broj & \": \" & razlogPrj\n",
+        "                poruka = \"\"   ' SABOTAZA: F8 guta razlog odbijanja\n",
+        "Test_S6K4_PreradjenaPaletaObaraStorno",
+        "S6K4 preradjena: ekran Storno prikazuje RAZLOG, ne samo neuspeh",
+    ),
+    "s6k4-okvir-guta-razlog": (
+        "modStornoFlow.bas",
+        "                r(\"message\") = Trim$(\"Storno prijemnice nije uspeo. \" & razlogD): Exit Function\n",
+        "                r(\"message\") = \"Storno prijemnice nije uspeo.\": Exit Function   ' SABOTAZA: okvir guta razlog\n",
+        "Test_S6K4_PaletnaStavkaBezPaleteObaraStorno",
+        "S6K4 bez palete: okvir ispravke (DUPLI) prikazuje RAZLOG jezgra",
+    ),
+    "s6k4-kaskada-guta-razlog": (
+        "modStornoFlow.bas",
+        "    res(\"message\") = modStorno.StornoRazlogOperateru(errDescK)\n",
+        "    res(\"message\") = \"\"   ' SABOTAZA: kaskada guta razlog pada\n",
+        "Test_S6K4_PadPosleSvihUpisaVracaSve",
+        "S6K4 pad: kaskada prenosi RAZLOG pada do okvira",
+    ),
+    # Rucna provera #438 (N2): uvid ne obecava ono sto jezgro odbija.
+    "s6k4-uvid-faktura-oslobadja": (
+        "modStornoFlow.bas",
+        "            If CBool(sp(\"fakturisano\")) Then AddChainRow result, \"Faktura\", \"(vezana)\", ChainEff(Poruka(\"STEF_FAK_ODBIJA\"), Poruka(\"STEF_FAK_ODBIJA\"))\n",
+        "            If CBool(sp(\"fakturisano\")) Then AddChainRow result, \"Faktura\", \"(vezana)\", ChainEff(Poruka(\"STEF_FAK_OSLOB\"), Poruka(\"STEF_FAK_OSLOB\"))   ' SABOTAZA: uvid obecava oslobadjanje fakture\n",
+        "T_S6K4_UvidKazeOdbijanje",
+        "S6K4 uvid: fakturisana prijemnica -- lanac kaze ODBIJA, ne oslobadja fakturu",
+    ),
+    "s6k4-uvid-preradjena-odvezuje": (
+        "modStornoFlow.bas",
+        "                If PrijemnicaNaPreradjenojPaleti(CStr(sp(\"prijID\")), strict) Then\n",
+        "                If False Then   ' SABOTAZA: uvid ne vidi preradjenu paletu\n",
+        "T_S6K4_UvidKazeOdbijanje",
+        "S6K4 uvid: roba na preradjenoj paleti -- lanac kaze ODBIJA, ne skida sa palete",
+    ),
+    # Ponovljena rucna provera #438 (N5): preradjena paleta se odbija PRE dijaloga
+    # i PRE zapisa ispravke; dijalog PONISTENJA ne obecava odbijeno (N2 ostatak).
+    "s6k4-okvir-pusta-preradjenu": (
+        "modStornoFlow.bas",
+        "        If Len(razlogPre) > 0 Then\n",
+        "        If False Then   ' SABOTAZA: okvir pusta preradjenu paletu do jezgra\n",
+        "Test_S6K4_PreradjenaPaletaObaraStorno",
+        "S6K4 preradjena: odbijen pokusaj NE ostavlja zapis ispravke (Oporavak)",
+    ),
+    "s6k4-okvir-preradjena-uz-ne-diraj": (
+        "modStornoFlow.bas",
+        "    If mode = SV_MODE_PONISTENJE Or (mode = SV_MODE_DUPLI And Not skipPalete) Then\n",
+        "    If mode = SV_MODE_PONISTENJE Or mode = SV_MODE_DUPLI Then   ' SABOTAZA: provera ne pita 'Ne diraj palete'\n",
+        "Test_S6K4_PreradjenaPaletaObaraStorno",
+        "S6K4 preradjena: uz 'Ne diraj palete' DUPLI prolazi -- provera ne obara izbor operatera",
+    ),
+    "s6k4-dijalog-faktura-oslobadja": (
+        "modStornoFlow.bas",
+        "            m = m & \" - faktura: \" & IIf(CBool(sp(\"fakturisano\")), Poruka(\"STEF_FAK_ODBIJA\"), \"(nije fakturisana)\") & vbCrLf\n",
+        "            m = m & \" - faktura: \" & IIf(CBool(sp(\"fakturisano\")), \"oslobadja se (stavke osirocene)\", \"(nije fakturisana)\") & vbCrLf   ' SABOTAZA: dijalog obecava oslobadjanje fakture\n",
+        "T_S6K4_UvidKazeOdbijanje",
+        "S6K4 dijalog PONISTENJA: fakturisana -- kaze ODBIJA, ne oslobadja fakturu",
+    ),
+    "s6k4-dijalog-preradjena-skida": (
+        "modStornoFlow.bas",
+        "                If PrijemnicaNaPreradjenojPaleti(CStr(sp(\"prijID\")), True) Then\n",
+        "                If False Then   ' SABOTAZA: dijalog ne vidi preradjenu paletu\n",
+        "T_S6K4_UvidKazeOdbijanje",
+        "S6K4 dijalog PONISTENJA: preradjena paleta -- kaze ODBIJA, ne skida sa palete",
+    ),
 }
 
 
@@ -9232,11 +9438,12 @@ POZNATI_NALAZI_DOKAZ = {
     "ljuska-rez-bez-potvrde": "NE OBARA NISTA",
 
     # Obara PREDUSLOV ("sa identitetom se recovery zapis pravi"): gasi celu
-    # identitetsku granu, pa zapis ne nastane i ciljana tvrdnja ne dodje na
-    # red. Uza varijanta (razresi po broju umesto po generaciji) ne obara
-    # NISTA -- mereno: u fixture-u je izabran dokument bas prvi aktivan tog
-    # broja, pa LookupActiveID vrati isti PK. Razdvajanje trazi ili drugi
-    # fixture red ili novu tvrdnju u T_F8_IzabranRedOstajeIzabran.
+    # identitetsku granu (od S6 koraka 4 u PrijemnicaIDZaStorno), pa zapis ne
+    # nastane i ciljana tvrdnja ne dodje na red. Uza varijanta (razresi po broju
+    # umesto po identitetu) ne obara NISTA -- mereno: u fixture-u je izabran
+    # dokument bas prvi aktivan tog broja, pa LookupActiveID vrati isti PK.
+    # Razdvajanje trazi ili drugi fixture red ili novu tvrdnju u
+    # T_F8_IzabranRedOstajeIzabran.
     "f8-identitet-po-broju":
         "PALA DRUGA TVRDNJA: sa identitetom se recovery zapis pravi",
 

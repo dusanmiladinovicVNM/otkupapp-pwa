@@ -301,9 +301,11 @@ Private Sub T17_PonistenjeZbirnaHladnjacaKaskada()
     ' i paleta koja sadrzi SAMO nasu robu (tip PAL-00151) -> posle skidanja prazna.
     SeedPaleta "SVT-PAL17A", 100, 200, 20, 100, PAL_STATUS_ZATVORENA
     SeedPaleta "SVT-PAL17B", 50, 100, 10, 50, PAL_STATUS_ZATVORENA
-    SeedPaletaStavka "SVT-PS17A", "SVT-P17", "SVT-Z17", "I", 100, 10, "SVT-PAL17A", 50
-    SeedPaletaStavka "SVT-PS17X", "SVT-P17X", "SVT-Z17X", "I", 100, 10, "SVT-PAL17A", 50
-    SeedPaletaStavka "SVT-PS17B", "SVT-P17", "SVT-Z17", "I", 100, 10, "SVT-PAL17B", 50
+    ' Stavke nose PrijemnicaID (SeedPrijemnica: broj & "-ID-" & klasa), kao sto ga
+    ' produkcioni pisac upisuje -- storno ih od S6 koraka 4 bira po njemu.
+    SeedPaletaStavka "SVT-PS17A", "SVT-P17", "SVT-Z17", "I", 100, 10, "SVT-PAL17A", 50, "SVT-P17-ID-I"
+    SeedPaletaStavka "SVT-PS17X", "SVT-P17X", "SVT-Z17X", "I", 100, 10, "SVT-PAL17A", 50, "SVT-P17X-ID-I"
+    SeedPaletaStavka "SVT-PS17B", "SVT-P17", "SVT-Z17", "I", 100, 10, "SVT-PAL17B", 50, "SVT-P17-ID-I"
 
     Dim res As Object
     Set res = modStornoFlow.RunZbirnaCorrection("SVT-Z17", SV_MODE_PONISTENJE, True)
@@ -800,15 +802,19 @@ End Sub
 
 ' paletaID/gajbe opciono: postave se kad test ide kroz paletni motor (DetachOsiroce
 ' u PONISTENJE kaskadi). Kad su prazni (ISPRAVKA testovi) stavka je "bez palete".
+' prijemnicaID opciono: od S6 koraka 4 storno skida palete po PrijemnicaID-u (kao
+' sto ga produkcioni paletni pisac i upisuje), pa ga test koji meri skidanje daje.
 Private Sub SeedPaletaStavka(ByVal stavkaID As String, ByVal brojPrij As String, _
                              ByVal brojZbirne As String, ByVal klasa As String, _
                              ByVal kg As Double, ByVal amb As Long, _
                              Optional ByVal paletaID As String = "", _
-                             Optional ByVal gajbe As Long = 0)
+                             Optional ByVal gajbe As Long = 0, _
+                             Optional ByVal prijemnicaID As String = "")
     SvAppend TBL_PALETA_STAVKA, _
         Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, _
-              COL_PALS_KLASA, COL_PALS_BR_GAJBICA, COL_PALS_NETO, COL_PALS_AMBALAZA), _
-        Array(stavkaID, paletaID, brojPrij, brojZbirne, klasa, gajbe, kg, amb)
+              COL_PALS_KLASA, COL_PALS_BR_GAJBICA, COL_PALS_NETO, COL_PALS_AMBALAZA, _
+              COL_PALS_PRIJEMNICA_ID), _
+        Array(stavkaID, paletaID, brojPrij, brojZbirne, klasa, gajbe, kg, amb, prijemnicaID)
 End Sub
 
 ' Minimalna realna paleta (header) da DetachOsirocenePaletaStavke_TX radi end-to-end:

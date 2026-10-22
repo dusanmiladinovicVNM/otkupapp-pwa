@@ -67,7 +67,6 @@
     "row_owner": [
       "modDokumenta",
       "modFaktura",
-      "modStorno",
       "modUtovar"
     ],
     "schema_owner": [],

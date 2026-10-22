@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 13.10.2026 (red AMB-10: `10e-3` merge-ovan `#418`, stavka 130; `KI-011` merge-ovan `#419`, stavka 132; `KI-012`/`KI-013` merge-ovani `#420`, stavka 134; čitaoci salda na papiru od stavke 135).
+**Ažurirano:** 20.10.2026 (stavka 181: merge `#437`, S6 je 3/8; red AMB-10 zatvoren posle provere svih podkoraka).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -33,8 +33,8 @@
 | S1–S4 (otkup, banka, otpremnica, zbirna) | ✅ |
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
-| **AMB-10 ambalaza kao knjiga prenosa** | ⏳ **ide PRED S6** -- model ✅ · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` čeka ručni smoke papira) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · **`10e` brisanje starog modela ⏳** (stavka 125; `10e-1` čitaoci ✅ merge-ovano `#416` (ručna provera ✅ 13.10.2026, stavka 126) · `10e-2` stari storno, undo i ispravka reversa ✅ merge-ovano `#417` (stavke 127–128) · `10e-3` pisac, dvomodelni čitalac, šema i fixture ✅ merge-ovano `#418` (stavke 129–130); `KI-011` ✅ `#419`; `KI-012`/`KI-013` ✅ `#420` · **čitaoci salda na papiru ⏳** (stavka 135); `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1/8 (kanon) ✅ merge-ovano `#435` (`c3301527`, stavka 173) · **korak 2 (pisac) je sledeći**, grana `claude/s6-korak2-pisac` |
+| **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
+| **S6 prijemnica** | ⏳ **u toku, 3/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · **korak 4 (storno na nivou dokumenta, `KI-031` kao kapija) na review-u** (`#438`, stavke 182–186: dve ručne provere, nalazi N1, N2 i N5 zatvoreni u istom PR-u, FULL 12/12, compile potvrđen; čeka merge), grana `claude/s6-korak4-storno` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -6482,6 +6482,310 @@
        - ručna provera operatera;
        - merge — samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
      - **Sledeći brojevi:** test 260 · stavka 181 · KI-034.
+
+181. **Merge `#437`, S6 korak 3/8 zatvoren** (20.10.2026). Zapis ide ovde, a ne u `#437`, po obrascu stavki 169,
+     173 i 177.
+
+     - **Ručna provera:** operater je javio „ok" (20.10.2026) nad `rucna_provera_s6_korak3.xlsm`, posle potvrđenog
+       compile-a (stavka 180).
+     - **Merge** 20.10.2026 (15:12:43 UTC) kao **`8e970d99`**, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `94c0035d`.
+       - Static CI je `success` na tom head-u (run 39445856827, izmereno).
+       - Stablo `main`-a posle merge-a jednako je stablu `94c0035d` (`85020236`, izmereno).
+       - Grana `claude/s6-korak3-citaoci` nije obrisana.
+     - **Review posle merge-a:** 9,5/10, `CLOSED/MERGED`. Ograda reviewera: dokaz je bio „20/33 grupno, ne 33
+       izolovana prolaza" — pojedinačan prolaz za 20 grupnih nije pušten (stavka 180).
+     - **Bazni brojevi na `main` = `8e970d99`** (FULL 12/12 nad izvorom `be16ed85b895`; posle njega su ušli samo docs):
+       - RunAllTests 259/0, BFP 2526/0, Banka 241/0, Storno 111/0, Palete 97;
+       - Faktura 35/35, Agrohemija 25/25, SheetsJson 72;
+       - katalog sabotaža 886 (`POZNATI_NALAZI` 9);
+       - otisak šeme `106AC27A`; potpis fixture-a `27f6230a5e8ca5be` (drugi potpis → `make_fixture` PRE trijaže).
+     - **Tabela „Gde smo" je ispravljena u istom commitu** — bila je zastarela:
+       - S6 je 3/8, sledeći je korak 4;
+       - AMB-10 je zatvoren. Pre upisa je izmereno (`gh pr list`) da su `#397`–`#400`, `#408`, `#409`, `#411`,
+         `#414`–`#421` i `#434` svi `MERGED`, a `KI-010` je `CLOSED` od stavke 139.
+     - **Sledeći brojevi:** stavka 182 (pre-flight koraka 4) · stavka 183 (kod) · test 260 · KI-034.
+     - **Sledeći je S6 korak 4** (storno prijemnice na nivou dokumenta, `KI-031` kao kapija), na grani
+       `claude/s6-korak4-storno` sa `8e970d99`. Reviewer: „START GO, posebno stroga transakciona provera".
+
+182. **S6 korak 4 — pre-flight nad `8e970d99`, odluke 1–4, PRE koda** (20.10.2026). Pun zapis je u §14.55,
+     „Korak 4" (verdikt, BUSINESS EVENTS, matrica „menja / snima", ugovor, obim, acceptance contract).
+
+     - **Verdikt:** `IDENTITY` i `DOWNSTREAM` su bili `GAP`, a zatvaraju ih odluke 2, odnosno 1 i 3. Ostale
+       ose su `PROVEN`, osim `PLATFORM`, koja je `N/A`.
+     - **`KI-031` je potvrđen čitanjem, sa DVA okidača:**
+       - prijemnica sa nogama knjige (`RequireAmbTxIzvorniDokument`);
+       - svaki kasniji pad u Fazi A.
+
+       Reprodukcija ide u kod, kroz pravu kaskadu sa subjektom.
+     - **Nalazi merenja:**
+       - palete se u svim putanjama storna skidaju **posle commit-a, u zasebnoj TX i po broju** (DUPLI,
+         PONIŠTENJE, Faza B kaskade);
+       - F8 šalje `GeneracijaID`, a fixture ga nema, pa storno pada na broj;
+       - subjekat kaskade se bira po broju;
+       - `ByBroj` bez generacije obara sve dokumente istog broja i kupca;
+       - uvid, prefill i lista za storno čitaju količinu, klasu i cenu sa praznog zaglavlja;
+       - `RunSimpleStornoPrijemnica` je mrtav.
+     - **Odluke operatera, sve po preporuci:**
+       1. fakturisana prijemnica se **odbija po imenu**; osirotelost ide u korak 5;
+       2. identitet je **`PrijemnicaID` od reda do pisca**; `ByBroj` se briše;
+       3. palete se skidaju **u jezgru, u istoj TX, po ID-u**; prerađena paleta obara storno;
+       4. iz §14.14 se ovde vraćaju `GuardNaSvimPutanjama`, `GuardUKaskadi` i prefill; vlasnička grana ide u
+          korak 7, a `GetPrijemniceByKupac` u korak 5.
+     - **Usput:** `KI-034` (`StornoTestFailPosleRelease` ne poštuje §4 — kuka bez `IsTestMode()`, van
+       `ResetSeamova`).
+     - **Sledeći brojevi:** stavka 183 (kod) · test 260 · KI-035.
+
+183. **S6 korak 4 — storno prijemnice na nivou dokumenta, `KI-031` zatvoren; PR na review** (20.10.2026). Plan i
+     ispravke plana tokom koda su u §14.55, „Korak 4".
+
+     - **Reprodukcija:**
+       - **crveno** `a1aef441` (samo testovi, nad postojećim API-jem). BFP 2572 = 2526 + 46: palo je 24, svih 24
+         su nove `S6K4` tvrdnje, po imenu. `KI-031` kroz pravu kaskadu: subjekat storniran, 0 kontra-stavova,
+         zbirna vraćena, palete 20. Usput je izmereno i da `ByBroj` sa generacijom ignoriše broj. RunAllTests
+         260/1: 260 pada na prefill-u (`||||1`), a ostale tri tvrdnje 260 zaklanja prvi pad;
+       - **zeleno:** kod ispravke + tri testa koji traže nov API (seam, jezgro bez snimka, `AMB-INV-07`).
+     - **Ugovor:** jedno jezgro `modStorno.StornoPrijemnica(id, tx, skiniPalete)`:
+       - pre prvog upisa TRAŽI snimke tabela koje menja (prijemnica, knjiga, palete);
+       - odbija fakturisanu prijemnicu (keš ili aktivna stavka fakture, isti predikat kao uvid) i paletu koja je
+         prerađena;
+       - redosled upisa je palete → `Stornirano` → `bind` → kontra-stav.
+
+       Svi pozivaoci snimaju kroz `SnimiZaStornoPrijemnice`, kaskada bez obzira na `ownsChain`. Identitet je
+       `PrijemnicaID` od reda F8 do pisca, kroz jedan razrešavač (`PrijemnicaIDZaStorno`, par broj–ID).
+     - **TARGETED nad izvorom `7114a4fca5c0`** (marker upisan):
+       - RunAllTests **260/0**;
+       - BFP **2596/0** (= 2526 + 46 + 24, tačno izvedeno iz diff-a);
+       - Storno **111/0**, StornoCentar OK, Palete **97**.
+
+       Prvi zeleni prolaz je dao tri pada u testovima čija se premisa menja (57, T17, StornoCentar „distinct po
+       broju"), a ne u kodu; ispravljeni su u testu i prolaz je ponovljen.
+     - **Sabotaže:** katalog **886 → 903** (`POZNATI_NALAZI` 9):
+       - 17 novih `s6k4-*`;
+       - presidrene su `kapija-i-uz-identitet` i `f8-identitet-po-broju` (kod pod njima je obrisan, regresija se
+         sada meri u razrešavaču);
+       - statička sonda 19/19, otisak `c40ba16c31f2d7f1` pre i posle. Da svaka obara SVOJU tvrdnju **nije
+         izmereno** — to meri `dokaz.py` posle GO.
+     - **Jeftine kapije:**
+       - `vba_check`, `sabotaza --proveri-sidra`, `who_writes --check` i `--check-ownership`,
+         `gen_schema_module --check` (otisak `106AC27A`, nepromenjen) i `popis_citalaca --check`
+         (`zbr_linija` **4 → 3**) su exit 0;
+       - `WHO_WRITES.md` je regenerisan: `modStorno` više ne piše `tblFakturaStavke`, pa je unos skinut iz
+         `WRITE_OWNERSHIP.json`.
+     - **Zatvoreno u istom rezu:** `KI-031` → `CLOSED`. `MAPA_SPOSOBNOSTI` B-016 → ZAMENJENO (odluka 1).
+     - **Usput → `KI-035`:** `PonistiZbirnaChain_Test` ne pita `IsTestMode()`.
+     - **Compile:** `run_vba` javlja `COMPILE NEJASNO`, kao i do sada. Ručni compile čeka sveska posle GO.
+     - **Čeka reviewer GO:** `run_vba` FULL, `dokaz.py s6k4- kapija-i-uz-identitet f8-identitet-po-broju --grupe`,
+       sveska za compile i ručna provera.
+     - **Sledeći brojevi:** stavka 184 · test 261 · KI-036.
+
+184. **S6 korak 4 — review `#438`, krug 1: P2 zatvoren, pa izvršne kapije** (20.10.2026). Presuda review-a je
+     `CODE GO uz usku proveru` (9,4/10), merge `HOLD` do izvršnih kapija. Nalazi: P0 = 0, P1 = 0, P2 = 1. Oba P1
+     iz prethodnog review-a (`KI-031`, Faza B paleta) su rešena u kodu. Operater je javio reviewer GO.
+
+     - **P2 — paletna stavka koja pokazuje na paletu koje nema.** `DecrementPaletaForStavka` nad nepostojećom
+       paletom tiho izlazi (`palRow = 0`), a telo skidanja stavku ipak stornira.
+       - **Merenje ispravilo moju pretpostavku:** prvi crveni prolaz (`1c22c0b1`) je dao 2602 / **1** palo, a ne
+         3 kako sam izveo. Storno je slučaj već odbijao, ali **slučajno i pod pogrešnim imenom**: „prazna"
+         nepostojeća paleta je išla u `StornoPaleta`, koji je pao sa „Stavka nije pronađena".
+       - Ta odbrana ne važi sa **su-stanarom** (stavka drugog dokumenta na istoj nepostojećoj paleti): paleta
+         nije „prazna", pa storno **tiho prolazi**. Test je pojačan baš tim slučajem (`0837f484`), a crveno je
+         **2602 / 3**, po imenu, tačno izvedeno.
+       - **Ispravka** (`81c948c6`): na putanji storna (`SkiniPaleteZaStornoPrijemnice`), pre prve mutacije,
+         aktivna stavka čiji `PaletaID` nije u `tblPaleta` (ili je prazan) obara storno po imenu. Paletni
+         motor i Oporavak (Detach po broju) nisu dirani.
+       - Usput su kodovi grešaka tog primitiva pomereni sa 7340–7342 na **7360–7363**: sudarali su se sa
+         zatečenim kodovima prerade u istom modulu.
+       - Nova sabotaža `s6k4-paleta-bez-zaglavlja-prolazi`; katalog **903 → 904**.
+       - Fixture je izmeren pre koda: nijedna paletna stavka ne pokazuje na paletu koje nema, pa kapija ne menja
+         premisu nijednog postojećeg testa.
+     - **FULL 12/12 ZELENO** nad izvorom `39ff117f6088` (head `81c948c6`), marker upisan, `SCHEMA OK`:
+       - RunAllTests **260/0**, BFP **2602/0** (= 2596 + 6, tačno izvedeno);
+       - Banka **241/0**, Storno **111/0**, Palete **97**;
+       - Faktura 35/35, Agrohemija 25/25, SheetsJson 72;
+       - StornoCentar, Izveštaji, Golden i License OK.
+     - **Dokaz:** `dokaz.py s6k4- kapija-i-uz-identitet f8-identitet-po-broju --grupe` daje 8 prolaza nad 20
+       sabotaža; izvor je identičan pre i posle (`236b0502410aea3b`).
+       - **19/20 crveno**: 12 u grupi, 3 u jednočlanim grupama, 3 ponovljene same, i 1 priznata
+         (`f8-identitet-po-broju`, „PALA DRUGA TVRDNJA", isti poznati nalaz kao pre koraka 4).
+       - **`s6k4-f8-prazan-id-po-broju`: NE OBARA NIŠTA** — dvoslojna kapija. `StornoIzvrsi` jezgru šalje prazan
+         `docID`, a jezgro ga odbija samo (`RequireStornoAllowed`). Druga brana je zaklanjala prvu, pa tvrdnja u
+         `Test_S6K4_F8IdentitetDokumenta` nije merila razrešavač.
+       - Presidrana je (samo katalog) na tvrdnju #33 „bez identiteta se NE pravi recovery zapis nad
+         dvosmislenim brojem". Tu je razrešavač JEDINA brana, jer REŠI KASNIJE jezgro ne zove. Pojedinačni
+         dokaz: **DOKAZANO**, izvor identičan.
+       - **Ukupno 20/20.** Grupno je izmereno 12/20; pojedinačan dokaz za tih 12 je isti poziv bez `--grupe`, i
+         nije pušten.
+       - `tools/sabotaza.py` nije u ugovoru markera (`run_vba`, `make_fixture`, `vba_gate`), pa marker FULL-a
+         ostaje važeći.
+     - **Sveska za compile:** `tests/fixtures/rucna_provera_s6_korak4.xlsm` (gitignored), nad izvorom
+       `81c948c6`.
+       - Provereno: ZIP OK, 112 XML članova, otvaranje u sopstvenoj instanci (događaji ugašeni), 199 komponenti,
+         novi kod koraka 4 i P2 prisutan, `StornoPrijemnicaByBroj_TX` nestao, `modVbaTools` namerno nije unutra.
+       - **Usput:** prvi pokušaj otvaranja sa ugašenim makroima (`AutomationSecurity = 3`) je visio na dijalogu
+         iz `KI-030`. Ugasio sam samo svoju instancu, a zatečenu (10892) nisam dirao.
+     - **Compile:** operater je javio „compiles". `vba_gate --mark-compile` je upisan nad `39ff117f6088`.
+       - Prva provera `--require-green --require-compile` je pala: BFP je bio „dokazan nad DRUGIM izvorom"
+         (`969349bba59e`). Taj izvor nije čist; najverovatnije ga je ostavio prolaz `dokaz.py` nad sabotiranim
+         izvorom (koji tačno, nije provereno) → `KI-036`.
+       - BFP je ponovljen nad čistim izvorom: **2602/0**. Sada je `--require-green --require-compile` =
+         **„dokazano: izvor 39ff117f6088"**.
+     - **Čeka:**
+       - ručna provera F8: ispravka, dupli unos (sa i bez „ne diraj palete"), poništenje, odbijanje fakturisane
+         prijemnice. Koraci su dati operateru nad `rucna_provera_s6_korak4.xlsm`;
+       - merge — samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
+     - **Sledeći brojevi:** stavka 185 · test 261 · KI-037.
+185. **S6 korak 4 — ručna provera `#438`: N1 i N2 zatvoreni u istom PR-u** (20.10.2026). Operater je javio
+     „compiles" nad `rucna_provera_s6_korak4.xlsm` (stavka 184) i prošao ručnu proveru F8 nad tom sveskom
+     (11 snimaka ekrana).
+
+     - **Rezultati:**
+       1. **Fakturisana prijemnica** (20/150326, 21/150326): ✅ odbijena pre ikakve izmene, poruka imenuje
+          fakturu. Kod 21/150326 je broj fakture prazan, kako je i očekivano (keš „Da" bez `FakturaID`).
+       2. **ISPRAVKA 6/150326, Test kupac 2:** ✅ stornirana je samo prijemnica kupca 2, a prijemnica kupca 1 je
+          ostala aktivna. Prefill nosi vrednosti iz stavke (200 kg, 50 RSD, 20 gajbi, zbirna ZB-TEST-4, datum),
+          a broj prijemnice je prazan. U Oporavku je zapis PENDING, a „Osiroć. palete" pokazuje 6/150326 sa 20
+          gajbi u jednoj stavci: palete su ostale i čekaju novu prijemnicu.
+       3. **DUPLI 37/150326 bez „ne diraj palete":** odbijeno, i to ispravno, ali je ekran rekao samo „Storno
+          prijemnice nije uspeo." (→ N1). **Očekivanje u mojim koracima je bilo pogrešno:** paleta 50/2026
+          (`PAL-SLED-G`) je u fixture-u prerađena, pa storno pada po odluci 3.
+       4. **DUPLI 37/150326 sa „ne diraj palete":** ✅ prijemnica stornirana, palete ostavljene i upisane za
+          Oporavak.
+       5. **PONIŠTENJE 39/150326:** dijalog posledica nosi stvarne podatke; ishod posle „Yes" nije bio na
+          snimku. I paleta 70/2026 (`PAL-SLED-K`) je prerađena, pa je tačan ishod odbijanje (ista greška u
+          koracima kao u 3).
+     - **Nalazi:**
+       - **N1 — razlog odbijanja ne stiže do ekrana.** Jezgro grešku imenuje (prerađena paleta, paleta koje
+         nema, pad kontra-stava), a `StornoPrijemnica_TX` je proguta i vrati samo `False`. Okvir ispravke, F8 i
+         kaskada javljaju samo „nije uspeo". Isti mehanizam kao `KI-027`, ali su ove odbijenice nove u rezu.
+       - **N2 — uvid posledica obećava ono što jezgro odbija.** Za fakturisanu prijemnicu piše „Faktura (vezana)
+         — oslobađa se" (`STEF_FAK_OSLOB`), a storno se po odluci 1 odbija. Za robu na prerađenoj paleti piše
+         „odvezuju se sa palete", a storno se po odluci 3 odbija.
+       - **N3** — „?" umesto „✗" na početku poruke u `MsgBox`-u; zatečeno, kozmetika → `KI-037`.
+       - **N4** — lista prikazuje 21/150326 kao „Nefakturisano", a kapija je odbija → `KI-038`. Lista čita
+         `FakturaID` (`modScrDokumenti.bas:3086`), a kapija keš `Fakturisano` ili aktivan red
+         `tblFakturaStavke`; zatvara ga korak 5 (izveden status).
+     - **Odluka operatera:** N1 i N2 se zatvaraju u `#438`.
+     - **Crveno** (`a084e49b`): BFP **2605 / 3** i RunAllTests **261 / 1**, po imenu, tačno izvedeno iz diff-a.
+       - BFP: `Test_S6K4_PreradjenaPaletaObaraStorno` drži prerađenu paletu kroz tri ulaza (jezgro, okvir
+         DUPLI, F8) i traži RAZLOG na okviru i na F8; `Test_S6K4_PadPosleSvihUpisaVracaSve` traži razlog pada
+         iz kaskade.
+       - RunAllTests: nov test 261 `T_S6K4_UvidKazeOdbijanje` (lanac uvida nad 20/150326 i 37/150326).
+     - **Ispravka** (`17fc30fd`):
+       - N1: `StornoPrijemnica_TX` vraća razlog kroz `outRazlog`, bez `Source=... |` prefiksa
+         (`StornoRazlogOperateru`). Okvir ispravke (ISPRAVKA, DUPLI, PONIŠTENJE), F8 i kaskada ga prikazuju.
+       - N2: lanac uvida za ta dva slučaja kaže „storno se ODBIJA" (ključevi `STEF_FAK_ODBIJA`,
+         `STEF_PAL_PRER_DUP`, `STEF_PAL_PRER_PON`). Prerađenost čita postojeći `GetPaleteImpactByField`.
+       - Pet novih sabotaža (`s6k4-f8-guta-razlog`, `s6k4-okvir-guta-razlog`, `s6k4-kaskada-guta-razlog`,
+         `s6k4-uvid-faktura-oslobadja`, `s6k4-uvid-preradjena-odvezuje`); katalog **904 → 909**, statička
+         sonda 5/5.
+     - **FULL 12/12 ZELENO** nad `17fc30fd` (izvor `b954df8e4921`), marker upisan, `SCHEMA OK`:
+       - RunAllTests **261/0**, BFP **2605/0** (= 2602 + 3);
+       - Banka **241/0**, Storno **111/0**, Palete **97**;
+       - Faktura 35/35, Agrohemija 25/25, SheetsJson 72;
+       - StornoCentar, Izveštaji, Golden i License OK.
+     - **Dokaz:** `dokaz.py` nad pet novih sabotaža i dve čiji su testovi dirani (`s6k4-preradjena-paleta-prolazi`,
+       `s6k4-seam-ne-pada`), `--grupe`: 5 prolaza, **7/7 crveno** po imenu, izvor identičan pre i posle
+       (`c696e11c49341679`). Grupno je izmereno 4/7; pojedinačan dokaz za te četiri nije pušten.
+       - Posle dokaza `vba_gate --require-green` = „dokazano: izvor b954df8e4921" — `KI-036` se ovaj put nije
+         pokazao, pa nijedna suite nije ponavljana.
+     - **Sveska za compile:** `tests/fixtures/rucna_provera_s6_korak4_n1n2.xlsm` (gitignored), nad `17fc30fd`.
+       Novo ime, jer je stara sveska otvorena u operaterovom Excelu.
+       - Provereno: ZIP OK, 112 XML članova, 199 komponenti, kod N1 i N2 prisutan, `modVbaTools` namerno nije
+         unutra.
+       - Pretraga po kodu je jednom „promašila" `Poruka("STEF_FAK_ODBIJA")`: VBE ujednačava veličinu slova
+         identifikatora u celom projektu (`poruka` je i promenljiva). Bez obzira na veličinu slova kod je tu.
+     - **Čeka:**
+       - compile nad novom sveskom (uvoz `modVbaTools.bas`, pa `Debug → Compile`), pa `vba_gate --mark-compile`;
+       - kratka ponovljena provera: razlog odbijanja na ekranu (DUPLI, PONIŠTENJE) i „storno se ODBIJA" u uvidu;
+       - merge — samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
+     - **Sledeći brojevi:** stavka 186 · test 262 · KI-039.
+186. **S6 korak 4 — ponovljena ručna provera `#438`: ostatak N2 i N5 zatvoreni u istom PR-u** (22.10.2026).
+     Provera nad `rucna_provera_s6_korak4_n1n2.xlsm` (snimci ekrana, 22.10.2026).
+
+     - **Rezultati:**
+       - 37/150326 (paleta 50/2026 prerađena): ✅ tabela posledica kaže „storno se ODBIJA …"; DUPLI daje
+         „Storno prijemnice nije uspeo. Prijemnica PRJ-SLED-G ima robu na preradjenoj paleti 50/2026. Prvo
+         stornirajte preradu, pa prijemnicu."; red ostaje.
+       - 39/150326 PONIŠTENJE: ✅ posle „Yes" stiže razlog (paleta 70/2026). ⚠ Dijalog **pre** potvrde i dalje
+         kaže „paletne stavke: 1 (skidaju se sa paleta; prazna paleta stornirana)".
+       - 6/150326 kupac 1 (paleta 11): ✅ „Prijemnica stornirana (dupli). Paletne stavke skinute: 1."; red kupca 2
+         ostaje, ukupno 3.810 → 3.710 kg.
+       - Korak 1 (20/150326) nije na snimcima — nije potvrđen.
+     - **Nalazi:**
+       - **N2, ostatak — moj propust.** Ispravka N2 je pokrila lanac uvida (`GetStornoChainRows`), ali ne i dijalog
+         potvrde PONIŠTENJA (`BuildPonistenjePosledice`), koji tekst drži doslovno u kodu. Tražio sam po ključevima
+         poruka (`STEF_*`), pa ga nisam našao. Isti dijalog je fakturisanu prijemnicu opisivao sa „faktura:
+         oslobadja se". Iz F8 se to ne vidi, jer `StornoRazlog` fakturisanu odbija pre dijaloga
+         (`modScrStorno.bas:1157`), ali tekst je bio netačan.
+       - **N5 — odbijen pokušaj ostavlja zapis u Oporavku.** Brojač Oporavka je skočio sa 6 na 8. Kad jezgro
+         odbije, okvir zove `FailCorrectionContext`, a taj upisuje FAILED zapis sa `NeedsRecovery = Da`. Takav
+         zapis Oporavak broji kao nedovršen, iako se ništa nije promenilo: poslovno odbijanje se beleži kao
+         sistemski pad. Zapis uz to sakriva osirotele palete istog broja (`GetNedovrseno`, dedup po broju). To je
+         izvedeno iz koda; ekran Oporavka nije bio na snimku.
+     - **Odluka operatera:** jedna provera u `#438`. Okvir prijemnice odbija prerađenu paletu pre dijaloga i pre
+       zapisa ispravke, a tekst dijaloga se ispravlja.
+     - **Crveno** (`936c709e`): BFP **2608 / 2** i RunAllTests **261 / 1**, po imenu, tačno izvedeno iz diff-a.
+       - BFP: „PONIŠTENJE odbija PRE dijaloga posledica, sa RAZLOGOM" i „odbijen pokušaj NE ostavlja zapis
+         ispravke (Oporavak)". Kontra-tvrdnja „uz 'Ne diraj palete' DUPLI prolazi" je zelena i pre ispravke, kako
+         i treba.
+       - RunAllTests: test 261 pada na dijalogu PONIŠTENJA za fakturisanu prijemnicu. Tvrdnja za prerađenu paletu
+         je iza nje, pa ju je prvi pad zaklonio (`AssertEq` prekida test).
+     - **Ispravka** (`cd407315`):
+       - `modPaletniList.PreradjenaPaletaRazlog` bira isto što i jezgro (aktivne stavke po `PrijemnicaID`-u) i
+         daje isti tekst (`RazlogPreradjena`, koji koristi i kapija jezgra). Samo čita.
+       - `RunPrijemnicaCorrection` ga pita pre `Select Case`, za PONIŠTENJE i za DUPLI bez „Ne diraj palete".
+         Odbijen pokušaj tako nema ni dijalog ni zapis ispravke. Jezgro zadržava svoju kapiju.
+       - `BuildPonistenjePosledice` za fakturisanu prijemnicu i robu na prerađenoj paleti kaže „storno se ODBIJA"
+         (`STEF_FAK_ODBIJA`, `STEF_PAL_PRER_PON`).
+       - **Dvoslojna kapija:** u testu prerađene palete DUPLI više ne stiže do grane „jezgro odbilo → razlog", pa
+         bi `s6k4-okvir-guta-razlog` postala placebo. Presidrena je na P2 test (paleta koje nema zna samo
+         jezgro), sa novom tvrdnjom „okvir ispravke (DUPLI) prikazuje RAZLOG jezgra".
+       - Četiri nove sabotaže (`s6k4-okvir-pusta-preradjenu`, `s6k4-okvir-preradjena-uz-ne-diraj`,
+         `s6k4-dijalog-faktura-oslobadja`, `s6k4-dijalog-preradjena-skida`); katalog **909 → 913**. Statička
+         sonda je 5/5 (četiri nove i presidrena): svaka se primenjuje, pravila nad fajlovima ostaju čista, a
+         `--vrati` vraća izvor bit-identično (`16dceeb16f86221a`).
+       - **`KI-039`:** isti obrazac postoji na PONIŠTENJU zbirne čija prijemnica ima robu na prerađenoj paleti.
+         Ostavljen je van reza, po izboru operatera (samo okvir prijemnice).
+     - **FULL 12/12 ZELENO** nad `cd407315` (izvor `3fc553d25481`), marker upisan, `SCHEMA OK`:
+       - RunAllTests **261/0**, BFP **2609/0** (= 2608 + 1 tvrdnja P2 testa, tačno izvedeno);
+       - Banka **241/0**, Storno **111/0**, Palete **97**;
+       - Faktura 35/35, Agrohemija 25/25, SheetsJson 72;
+       - StornoCentar, Izveštaji, Golden i License OK.
+       - Otisak ugovora markera se promenio (`f1fe559a1849` → `c14b1dbd9b4a`) jer je izvor deo ugovora
+         (`vba_gate.py:54`); `run_vba`, `make_fixture` i `vba_gate` nisu dirani.
+     - **Dokaz:** `dokaz.py` nad četiri nove sabotaže, presidranom `s6k4-okvir-guta-razlog` i tri čiji su testovi
+       dirani (`s6k4-preradjena-paleta-prolazi`, `s6k4-f8-guta-razlog`, `s6k4-paleta-bez-zaglavlja-prolazi`),
+       `--grupe`: 6 prolaza, **8/8 crveno** po imenu, izvor identičan pre i posle (`5f955b85465f4584`). Grupno je
+       izmereno 4/8; pojedinačan dokaz za te četiri nije pušten.
+       - `s6k4-preradjena-paleta-prolazi` (kapija jezgra) i dalje grize: direktan poziv jezgra i F8 idu mimo nove
+         provere u okviru.
+       - Posle dokaza `vba_gate --require-green` = „dokazano: izvor 3fc553d25481".
+     - **Sveska za compile:** `tests/fixtures/rucna_provera_s6_korak4_n5.xlsm` (gitignored), nad `cd407315`.
+       Provereno: ZIP OK, 112 XML članova, 199 komponenti, kod N5 prisutan, `modVbaTools` namerno nije unutra.
+       Moje Excel instance su se ugasile; operaterova (sveska `_n1n2`) nije dirana.
+     - **Kratka provera N5** (snimci ekrana, 22.10.2026, nad `rucna_provera_s6_korak4_n5.xlsm`):
+       - 39/150326 PONIŠTENJE: ✅ odmah „Prijemnica PRJ-SLED-K ima robu na preradjenoj paleti 70/2026. Prvo
+         stornirajte preradu, pa prijemnicu.", bez dijaloga „Pogodjeno …";
+       - 37/150326 DUPLI bez „ne diraj": ✅ odmah ista odbijenica (paleta 50/2026);
+       - 37/150326 DUPLI uz „ne diraj": ✅ „Prijemnica stornirana (dupli). Palete ostavljene osirocene …"; red
+         nestaje iz liste, ukupno 3.810 → 3.730 kg;
+       - Oporavak **6 → 7**: novi je samo zapis za ručno prevezivanje paleta. Pre ispravke bi bilo 9.
+     - **Compile:** operater je javio „compiles". `vba_gate --mark-compile` je upisan nad `3fc553d25481`, a
+       `--require-green --require-compile` = „dokazano: izvor 3fc553d25481".
+     - **CI** nad `75a78521`: zelen, PR `CLEAN`.
+     - **Nezavisni review, krug posle ručne provere** (22.10.2026): `CODE GO` i `MERGE GO` (9,6/10). P0 = 0, P1 = 0,
+       P2 = 1, neblokirajući.
+       - **P2:** `RunPrijemnicaCorrection` nad fakturisanom prijemnicom prvo napravi zapis ispravke, pa ga posle
+         odbijanja jezgra ostavi kao FAILED. Prerađena paleta je premeštena pre zapisa (N5), fakturisanost nije.
+       - Proverio sam u kodu: tačno je za API, a iz aplikacije nedostižno. Jedini produkcioni pozivalac je F8, a
+         `PokreniAkciju` fakturisanu odbija pre svega (`modScrStorno.bas:1157`).
+       - **Odluka operatera:** `KI-040`, zatvara ga korak 5. Taj korak menja i sam čitač fakturisanosti
+         (`KI-038`), pa bi provera dodata sada čitala izvor koji korak 5 briše. Zatim merge.
+     - **Čeka:** merge (operater ga je izričito zatražio) — posle zelenog CI-ja, sa `--match-head-commit`.
+     - **Usput:** na disku C: je bilo 467–923 MB slobodno. Po merenju iz `#434` lažni padovi kreću ispod
+       ~150 MB.
+     - **Sledeći brojevi:** stavka 187 (zapis merge-a, na grani koraka 5) · test 262 · KI-041.
 
 ## Dug sa imenom (posle S5-5b)
 
