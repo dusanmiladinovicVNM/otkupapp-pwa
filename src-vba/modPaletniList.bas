@@ -2265,14 +2265,45 @@ Public Function SkiniPaleteZaStornoPrijemnice(ByVal tx As clsTransaction, _
                       "robu sa palete koja ne postoji -- popravite paletnu stavku pa ponovite."
         End If
         If IsPaletaPreradjena(pal) Then
-            Err.Raise vbObjectError + 7362, SRC, _
-                      "Prijemnica " & pid & " ima robu na preradjenoj paleti " & _
-                      PaletaLabel(pal) & ". Prvo stornirajte preradu, pa prijemnicu."
+            Err.Raise vbObjectError + 7362, SRC, RazlogPreradjena(pid, pal)
         End If
     Next k
 
     Dim emptied As String
     SkiniPaleteZaStornoPrijemnice = SkiniPaletneStavke(s, rowsC, pid, SRC, emptied)
+End Function
+
+' Razlog odbijanja storna zbog robe na PRERADJENOJ paleti (odluka 3), ili "" kad
+' je nema. Bira ISTO sto i jezgro (aktivne stavke po PrijemnicaID-u) i daje ISTI
+' tekst, pa okvir ispravke odbija tacno ono sto bi jezgro odbilo -- samo ranije:
+' pre dijaloga posledica i pre zapisa ispravke (ponovljena rucna provera #438).
+' Samo cita. Kapija jezgra ostaje u SkiniPaleteZaStornoPrijemnice.
+Public Function PreradjenaPaletaRazlog(ByVal prijemnicaID As String) As String
+    Const SRC As String = "modPaletniList.PreradjenaPaletaRazlog"
+    Dim pid As String
+    pid = Trim$(prijemnicaID)
+    If Len(pid) = 0 Then Exit Function
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim sPid As Long, sPal As Long, sStt As Long, r As Long, pal As String
+    sPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
+    sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+    sStt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+    For r = 1 To UBound(s, 1)
+        If StrComp(Trim$(CStr(SafeCell(s, r, sPid))), pid, vbTextCompare) = 0 _
+           And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> "DA" Then
+            pal = Trim$(CStr(SafeCell(s, r, sPal)))
+            If Len(pal) > 0 And IsPaletaPreradjena(pal) Then
+                PreradjenaPaletaRazlog = RazlogPreradjena(pid, pal)
+                Exit Function
+            End If
+        End If
+    Next r
+End Function
+
+Private Function RazlogPreradjena(ByVal pid As String, ByVal pal As String) As String
+    RazlogPreradjena = "Prijemnica " & pid & " ima robu na preradjenoj paleti " & _
+                       PaletaLabel(pal) & ". Prvo stornirajte preradu, pa prijemnicu."
 End Function
 
 ' JEDNO TELO skidanja izabranih paletnih stavki -- za Oporavak (Detach po broju,

@@ -6880,7 +6880,8 @@ End Sub
 ' preradjenu paletu (stari Detach je to radio i samo pisao napomenu). Storno staje
 ' PRE ijedne mutacije: dokument, knjiga i palete ostaju netaknuti. Oznaka
 ' preradjenosti je sinteticka i vraca se odmah posle poziva.
-' SABOTAZE: s6k4-preradjena-paleta-prolazi.
+' SABOTAZE: s6k4-preradjena-paleta-prolazi, s6k4-f8-guta-razlog,
+' s6k4-okvir-pusta-preradjenu, s6k4-okvir-preradjena-uz-ne-diraj.
 Private Sub Test_S6K4_PreradjenaPaletaObaraStorno()
     Dim prevPal As String, prvaPal As String, prevPre As String
     On Error GoTo EH
@@ -7286,7 +7287,7 @@ End Sub
 ' (fault injection) -- po jedna stavka dva dokumenta preusmerena na isti
 ' nepostojeci PaletaID, i vracena na kraju; pisac takvu stavku ne pravi. Razlog
 ' se cita iz jezgra (javni ulaz ga samo loguje).
-' SABOTAZE: s6k4-paleta-bez-zaglavlja-prolazi.
+' SABOTAZE: s6k4-paleta-bez-zaglavlja-prolazi, s6k4-okvir-guta-razlog.
 Private Sub Test_S6K4_PaletnaStavkaBezPaleteObaraStorno()
     Dim prevPal As String, tx As clsTransaction, stavka As String, pravaPal As String
     Dim stavka2 As String, pravaPal2 As String
@@ -7335,6 +7336,15 @@ Private Sub Test_S6K4_PaletnaStavkaBezPaleteObaraStorno()
                  "S6K4 bez palete: dokument, palete i knjiga su netaknuti"
     AssertTrue Not modStorno.StornoPrijemnica_TX(prj), _
                "S6K4 bez palete: ni javni ulaz ne prolazi"
+    ' Ponovljena rucna provera #438: preradjenu paletu okvir ispravke odbija PRE
+    ' jezgra, pa je ovo jedini test u kome DUPLI stize do grane "jezgro odbilo ->
+    ' razlog". Paleta koje nema je odbijenica koju zna samo jezgro.
+    Dim resD As Object
+    Set resD = modStornoFlow.RunPrijemnicaCorrection(TEST_PREFIX & "-PK4B-" & scenario, _
+                                                     SV_MODE_DUPLI, True, False, S6K4Ident(prj))
+    AssertTrue Not CBool(resD("success")) And _
+               InStr(1, CStr(resD("message")), "paletu koje nema", vbTextCompare) > 0, _
+               "S6K4 bez palete: okvir ispravke (DUPLI) prikazuje RAZLOG jezgra"
     AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
                "S6K4 bez palete: dokument ostaje aktivan"
 Kraj:

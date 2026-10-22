@@ -9200,8 +9200,8 @@ SABOTAZE = {
         "modStornoFlow.bas",
         "                r(\"message\") = Trim$(\"Storno prijemnice nije uspeo. \" & razlogD): Exit Function\n",
         "                r(\"message\") = \"Storno prijemnice nije uspeo.\": Exit Function   ' SABOTAZA: okvir guta razlog\n",
-        "Test_S6K4_PreradjenaPaletaObaraStorno",
-        "S6K4 preradjena: okvir ispravke (DUPLI) prikazuje RAZLOG, ne samo neuspeh",
+        "Test_S6K4_PaletnaStavkaBezPaleteObaraStorno",
+        "S6K4 bez palete: okvir ispravke (DUPLI) prikazuje RAZLOG jezgra",
     ),
     "s6k4-kaskada-guta-razlog": (
         "modStornoFlow.bas",
@@ -9224,6 +9224,36 @@ SABOTAZE = {
         "                If False Then   ' SABOTAZA: uvid ne vidi preradjenu paletu\n",
         "T_S6K4_UvidKazeOdbijanje",
         "S6K4 uvid: roba na preradjenoj paleti -- lanac kaze ODBIJA, ne skida sa palete",
+    ),
+    # Ponovljena rucna provera #438 (N5): preradjena paleta se odbija PRE dijaloga
+    # i PRE zapisa ispravke; dijalog PONISTENJA ne obecava odbijeno (N2 ostatak).
+    "s6k4-okvir-pusta-preradjenu": (
+        "modStornoFlow.bas",
+        "        If Len(razlogPre) > 0 Then\n",
+        "        If False Then   ' SABOTAZA: okvir pusta preradjenu paletu do jezgra\n",
+        "Test_S6K4_PreradjenaPaletaObaraStorno",
+        "S6K4 preradjena: odbijen pokusaj NE ostavlja zapis ispravke (Oporavak)",
+    ),
+    "s6k4-okvir-preradjena-uz-ne-diraj": (
+        "modStornoFlow.bas",
+        "    If mode = SV_MODE_PONISTENJE Or (mode = SV_MODE_DUPLI And Not skipPalete) Then\n",
+        "    If mode = SV_MODE_PONISTENJE Or mode = SV_MODE_DUPLI Then   ' SABOTAZA: provera ne pita 'Ne diraj palete'\n",
+        "Test_S6K4_PreradjenaPaletaObaraStorno",
+        "S6K4 preradjena: uz 'Ne diraj palete' DUPLI prolazi -- provera ne obara izbor operatera",
+    ),
+    "s6k4-dijalog-faktura-oslobadja": (
+        "modStornoFlow.bas",
+        "            m = m & \" - faktura: \" & IIf(CBool(sp(\"fakturisano\")), Poruka(\"STEF_FAK_ODBIJA\"), \"(nije fakturisana)\") & vbCrLf\n",
+        "            m = m & \" - faktura: \" & IIf(CBool(sp(\"fakturisano\")), \"oslobadja se (stavke osirocene)\", \"(nije fakturisana)\") & vbCrLf   ' SABOTAZA: dijalog obecava oslobadjanje fakture\n",
+        "T_S6K4_UvidKazeOdbijanje",
+        "S6K4 dijalog PONISTENJA: fakturisana -- kaze ODBIJA, ne oslobadja fakturu",
+    ),
+    "s6k4-dijalog-preradjena-skida": (
+        "modStornoFlow.bas",
+        "                If PrijemnicaNaPreradjenojPaleti(CStr(sp(\"prijID\")), True) Then\n",
+        "                If False Then   ' SABOTAZA: dijalog ne vidi preradjenu paletu\n",
+        "T_S6K4_UvidKazeOdbijanje",
+        "S6K4 dijalog PONISTENJA: preradjena paleta -- kaze ODBIJA, ne skida sa palete",
     ),
 }
 

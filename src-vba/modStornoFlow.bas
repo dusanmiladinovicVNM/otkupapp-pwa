@@ -206,9 +206,19 @@ Public Function BuildPonistenjePosledice(ByVal docType As String, ByVal broj As 
             m = m & " - zbirna: " & IIf(Len(CStr(sp("brojZbirne"))) > 0, CStr(sp("brojZbirne")), "(nema)") & _
                     " (rekalk; storno ako kg padne na 0)" & vbCrLf
             m = m & " - otpremnice te zbirne (storniraju se): " & CStr(sp("otpCount")) & vbCrLf
-            m = m & " - faktura: " & IIf(CBool(sp("fakturisano")), "oslobadja se (stavke osirocene)", "(nije fakturisana)") & vbCrLf
-            m = m & " - paletne stavke: " & CStr(sp("paleteCount")) & _
-                    IIf(CBool(sp("hasPalete")), " (skidaju se sa paleta; prazna paleta stornirana)", "") & vbCrLf
+            ' Fakturisanu i robu na preradjenoj paleti storno ODBIJA (odluke 1 i 3).
+            ' Ponovljena rucna provera #438: ovaj dijalog je i dalje obecavao
+            ' "oslobadja se" i "skidaju se sa paleta" -- isti nalaz kao N2 u
+            ' lancu uvida, samo u svom tekstu.
+            m = m & " - faktura: " & IIf(CBool(sp("fakturisano")), Poruka("STEF_FAK_ODBIJA"), "(nije fakturisana)") & vbCrLf
+            Dim palTekst As String
+            If CBool(sp("hasPalete")) Then
+                palTekst = " (skidaju se sa paleta; prazna paleta stornirana)"
+                If PrijemnicaNaPreradjenojPaleti(CStr(sp("prijID")), True) Then
+                    palTekst = " (" & Poruka("STEF_PAL_PRER_PON") & ")"
+                End If
+            End If
+            m = m & " - paletne stavke: " & CStr(sp("paleteCount")) & palTekst & vbCrLf
             m = m & " - otkupni blokovi (samostalni; NE diraju se osim cekiranih za storno): " & CStr(sp("blockCount"))
         Case Else
             m = "PONISTENJE dokumenta " & broj & "."
@@ -485,6 +495,21 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
     End If
     Dim parentZbirna As String: parentZbirna = CStr(s("brojZbirne"))
     Dim prijID As String: prijID = CStr(s("prijID"))
+
+    ' Roba na PRERADJENOJ paleti (odluka 3) obara storno koji skida palete. Pita
+    ' se OVDE, pre dijaloga posledica i pre zapisa ispravke (ponovljena rucna
+    ' provera #438): do tada je PONISTENJE obecavalo "skidaju se sa paleta", a
+    ' svaki odbijen pokusaj je ostavljao FAILED zapis u Oporavku, iako se nista
+    ' nije promenilo. Ista provera kao u jezgru, samo ranije -- jezgro je
+    ' zadrzava. ISPRAVKA i DUPLI uz "Ne diraj palete" palete ne skidaju.
+    If mode = SV_MODE_PONISTENJE Or (mode = SV_MODE_DUPLI And Not skipPalete) Then
+        Dim razlogPre As String
+        razlogPre = modPaletniList.PreradjenaPaletaRazlog(prijID)
+        If Len(razlogPre) > 0 Then
+            r("message") = razlogPre
+            Exit Function
+        End If
+    End If
 
     Select Case mode
         Case SV_MODE_RESI_KASNIJE
