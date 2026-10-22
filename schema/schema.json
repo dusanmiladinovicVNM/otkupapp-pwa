@@ -163,7 +163,8 @@
         "ModifiedBy",
         "PreradaID",
         "BrojPrerade",
-        "UtovarID"
+        "UtovarID",
+        "PrijemnicaStavkaID"
       ]
     },
     {

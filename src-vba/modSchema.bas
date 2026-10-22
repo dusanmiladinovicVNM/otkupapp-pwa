@@ -41,7 +41,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "106AC27A"
+Public Const SCHEMA_FINGERPRINT As String = "4A418441"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -1046,6 +1046,7 @@ Private Sub SpecFakturaStavke(ByVal reg As Object)
     k.Add "PreradaID"
     k.Add "BrojPrerade"
     k.Add "UtovarID"
+    k.Add "PrijemnicaStavkaID"
     RegistrujTabelu reg, TBL_FAKTURA_STAVKE, "FakturaStavke", k
 End Sub
 

@@ -356,6 +356,7 @@ Public Sub RunAllTests()
     RunOne 259
     RunOne 260
     RunOne 261
+    RunOne 262
     RunOne 13
     RunOne 14
     RunOne 15
@@ -904,6 +905,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 259: TestName = "T_S6_CitaociStavkiPrijemnice"
         Case 260: TestName = "T_S6K4_StornoCitaStavkeIIdentitet"
         Case 261: TestName = "T_S6K4_UvidKazeOdbijanje"
+        Case 262: TestName = "T_S6K5_FakturisanostJedanIzvor"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1173,6 +1175,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 259: T_S6_CitaociStavkiPrijemnice
         Case 260: T_S6K4_StornoCitaStavkeIIdentitet
         Case 261: T_S6K4_UvidKazeOdbijanje
+        Case 262: T_S6K5_FakturisanostJedanIzvor
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -10066,7 +10069,98 @@ Private Sub T_S6K4_UvidKazeOdbijanje()
     AssertEq (InStr(1, dlg, "ODBIJA", vbBinaryCompare) > 0 And _
               InStr(1, dlg, "skidaju se sa paleta", vbTextCompare) = 0), True, _
              "S6K4 dijalog PONISTENJA: preradjena paleta -- kaze ODBIJA, ne skida sa palete"
+
+    ' S6 korak 5: i PREGLED lanca (BuildStornoPreview) ima svoj tekst. Za
+    ' fakturisanu je obecavao "(faktura/stavke se oslobadjaju)" -- ista klasa kao
+    ' N2, nadjena pretragom po recima (plan 14.55 "Korak 5").
+    dlg = modStornoDok.StornoPregledLanca(STIP_PRIJEMNICA, "20/150326", "", "PRJ-FAK-1")
+    AssertEq (InStr(1, dlg, "ODBIJA", vbBinaryCompare) > 0 And _
+              InStr(1, dlg, "oslobadja", vbTextCompare) = 0), True, _
+             "S6K5 pregled lanca: fakturisana -- kaze ODBIJA, ne oslobadja fakturu"
 End Sub
+
+' 262. S6 KORAK 5: FAKTURISANOST JE JEDNA ISTINA (plan 14.55 "Korak 5", R1, R4,
+' KI-038).
+'
+' Kapija storna, lista dokumenata (pilula), mreza Fakturisanja (red po STAVCI) i
+' detalj izvestaja pitaju se nad ISTIM fixture redovima. Do koraka 5 su lista i
+' kapija citale dva polja: PRJ-FAK-2 (21/150326) nosi kes "Da" bez FakturaID-a,
+' pa je lista kazala "Nefakturisano", a storno ga je odbijao kao fakturisan. Od
+' koraka 5 kes niko ne cita: PRJ-FAK-2 je nefakturisana SVUDA, a PRJ-FAK-1
+' fakturisana SVUDA, kroz liniju koju fixture izvodi (make_fixture, odluka 3).
+'
+' Prva tvrdnja je KI-038; AssertEq staje na prvom padu, pa je ona namerno prva.
+' SABOTAZE: s6k5-citac-gleda-kes, s6k5-lista-cita-fakturaid, s6k5-detalj-cita-kes,
+' s6k5-mreza-po-dokumentu.
+Private Sub T_S6K5_FakturisanostJedanIzvor()
+    Dim det As String
+
+    AssertEq PrijemnicaJeFakturisana(FX_PRJ_FAK2), False, _
+             "S6K5: PRJ-FAK-2 (kes 'Da' bez linije) NIJE fakturisana -- kapija (KI-038)"
+    AssertEq S6K5F4Pilula("21/150326"), PAY_NEFAKT, _
+             "S6K5: PRJ-FAK-2 -- lista kaze 'Nefakturisano', isto kao kapija"
+    AssertEq S6K5ZafaktDostupna("PRS-" & FX_PRJ_FAK2), "1", _
+             "S6K5: PRJ-FAK-2 -- mreza Fakturisanja nudi njenu stavku"
+    det = S6K5DetaljTekst(FX_PRJ_FAK2)
+    AssertEq (InStr(1, det, Poruka("OTKUI_IZ_DET_NEFAKT"), vbTextCompare) > 0), True, _
+             "S6K5: PRJ-FAK-2 -- detalj izvestaja kaze da nije fakturisana"
+
+    AssertEq PrijemnicaJeFakturisana(FX_PRJ_FAK1), True, _
+             "S6K5: PRJ-FAK-1 (linija na FAK-TEST-P) je fakturisana -- kapija"
+    AssertEq S6K5F4Pilula("20/150326"), PAY_PLACENO, _
+             "S6K5: PRJ-FAK-1 -- lista pokazuje placanje njene fakture"
+    AssertEq S6K5ZafaktDostupna("PRS-" & FX_PRJ_FAK1), "", _
+             "S6K5: PRJ-FAK-1 -- mreza ne nudi fakturisanu stavku"
+    det = S6K5DetaljTekst(FX_PRJ_FAK1)
+    AssertEq (InStr(1, det, FX_FAK_PLAC, vbTextCompare) > 0), True, _
+             "S6K5: PRJ-FAK-1 -- detalj izvestaja imenuje fakturu"
+
+    AssertEq PrijemnicaJeFakturisana(FX_PRJ_FAK3), False, _
+             "S6K5: PRJ-FAK-3 (slobodna) nije fakturisana -- kapija"
+    AssertEq S6K5F4Pilula("22/150326"), PAY_NEFAKT, _
+             "S6K5: PRJ-FAK-3 -- lista kaze 'Nefakturisano'"
+    AssertEq S6K5ZafaktDostupna("PRS-" & FX_PRJ_FAK3), "1", _
+             "S6K5: PRJ-FAK-3 -- mreza nudi njenu stavku"
+    modScrFakture.Scr_FkKorpaTestReset
+End Sub
+
+' Sifra pilule placanja reda prijemnice u listi F4 -- ISTI poziv koji crta ekran
+' (obrazac S6K3F4Red); -1 = red nije tacno jedan.
+Private Function S6K5F4Pilula(ByVal broj As String) As Long
+    Dim d As Variant, cols As Variant, redovi As Variant, c As Long, iPill As Long
+    S6K5F4Pilula = -1
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip("PRIJEMNICA", "", broj)
+    If Not IsArray(d) Then Exit Function
+    If CLng(d(2)) <> 1 Then Exit Function
+    cols = d(0)
+    redovi = d(1)
+    For c = 0 To UBound(cols)
+        If modScrDokumenti.ColF(CStr(cols(c)), 2) = "paypill" Then iPill = c + 1
+    Next c
+    If iPill = 0 Then Exit Function
+    S6K5F4Pilula = CLng(redovi(1, iPill))
+End Function
+
+' Dostupnost reda stavke u mrezi Fakturisanja kupca FX_KUPAC, kroz pravi Scr_Rows:
+' "1" / "" (kolona 11); "<nema reda>" kad stavke nema u mrezi.
+Private Function S6K5ZafaktDostupna(ByVal stavkaID As String) As String
+    Dim d As Variant, redovi As Variant, r As Long
+    S6K5ZafaktDostupna = "<nema reda>"
+    modScrFakture.Scr_FkKupacTestSet FX_KUPAC
+    modScrFakture.Scr_FkListaTestSet "ZAFAKT"
+    d = modScrFakture.Scr_Rows("sve", "")
+    If Not IsArray(d) Then Exit Function
+    redovi = d(1)
+    r = RedSaVrednoscu(redovi, 10, stavkaID)
+    If r > 0 Then S6K5ZafaktDostupna = CStr(redovi(r, 11))
+End Function
+
+Private Function S6K5DetaljTekst(ByVal prjID As String) As String
+    Dim d As Variant
+    d = modScrIzvestaji.IzDetaljPrijemnice(prjID)
+    If IsArray(d) Then S6K5DetaljTekst = Join(d, "|")
+End Function
 
 ' Napomena (efekat) reda lanca uvida za dati dokument; "nema" kad reda nema.
 Private Function S6K4NapomenaLanca(ByVal broj As String, ByVal prjID As String, _

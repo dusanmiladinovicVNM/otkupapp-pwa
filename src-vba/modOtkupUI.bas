@@ -202,6 +202,9 @@ Public Const PAY_PLACENO As Long = 10
 Public Const PAY_DELIM   As Long = 11
 Public Const PAY_NEPLAC  As Long = 12
 Public Const PAY_NEFAKT  As Long = 13
+' S6 korak 5 (odluka 5): prijemnica cija je bar jedna stavka na fakturi, ali ne
+' sve. Ima prednost nad placanjem -- na dokumentu jos ima sta da se fakturise.
+Public Const PAY_DELIM_FAKT As Long = 14
 Private Const POP_MAX     As Long = 14       ' stavki u sopstvenom dropdown-u
 Private Const POP_ITEM_H  As Single = 21
 Private Const FLT_W       As Single = 236     ' panel "Filteri"
