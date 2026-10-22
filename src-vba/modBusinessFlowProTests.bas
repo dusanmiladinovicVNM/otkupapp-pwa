@@ -6910,10 +6910,26 @@ Private Sub Test_S6K4_PreradjenaPaletaObaraStorno()
     ' Tri ulaza, ista odbijenica. Review #438 (rucna provera): operater je na
     ' ekranu dobijao samo "Storno prijemnice nije uspeo" -- RAZLOG (preradjena
     ' paleta) je ostajao u logu. Okvir i F8 moraju da ga prenesu.
+    '
+    ' Ponovljena rucna provera #438: okvir ispravke odbija PRE dijaloga posledica
+    ' i PRE zapisa ispravke. Do tada je PONISTENJE obecavalo "skidaju se sa
+    ' paleta", a svaki odbijen pokusaj je ostavljao FAILED zapis u Oporavku, iako
+    ' se nista nije promenilo. Uz "Ne diraj palete" DUPLI palete ne skida, pa mora
+    ' da prode -- zato ide poslednji, posle merenja stanja odbijenih pokusaja.
     Dim prosao As Boolean, resD As Object, okF8 As Boolean, msgF8 As String
+    Dim resP As Object, resPF As Object, resN As Object
+    Dim vezaPre As Long, vezaPosle As Long, aktivan As Boolean, gajbi As String, kontra As String
+    vezaPre = S6K4Redova(TBL_STORNO_VEZE)
     prosao = modStorno.StornoPrijemnica_TX(prj)
     Set resD = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_DUPLI, True, False, S6K4Ident(prj))
     okF8 = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, brPrj, "", msgF8, S6K4Ident(prj))
+    Set resP = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_PONISTENJE, False, False, S6K4Ident(prj))
+    Set resPF = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_PONISTENJE, True, False, S6K4Ident(prj))
+    vezaPosle = S6K4Redova(TBL_STORNO_VEZE)
+    aktivan = Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj)
+    gajbi = CStr(S6GajbiNaPaletama(prj, ""))
+    kontra = CStr(S6AmbKontraStavova(prj))
+    Set resN = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_DUPLI, True, True, S6K4Ident(prj))
     S6K4Postavi TBL_PALETA, COL_PAL_ID, prvaPal, COL_PAL_PRERADJENO, prevPre
     prvaPal = ""
     AssertTrue Not prosao And Not CBool(resD("success")) And Not okF8, _
@@ -6922,12 +6938,16 @@ Private Sub Test_S6K4_PreradjenaPaletaObaraStorno()
                "S6K4 preradjena: okvir ispravke (DUPLI) prikazuje RAZLOG, ne samo neuspeh"
     AssertTrue InStr(1, msgF8, "preradjenoj paleti", vbTextCompare) > 0, _
                "S6K4 preradjena: ekran Storno prikazuje RAZLOG, ne samo neuspeh"
-    AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
-               "S6K4 preradjena: dokument ostaje aktivan"
-    AssertEquals "20", CStr(S6GajbiNaPaletama(prj, "")), _
-                 "S6K4 preradjena: paletne stavke ostaju na paletama"
-    AssertEquals "0", CStr(S6AmbKontraStavova(prj)), _
-                 "S6K4 preradjena: knjiga nema nijedan kontra-stav"
+    AssertTrue Not CBool(resP("blocked")) And Not CBool(resP("success")) And _
+               InStr(1, CStr(resP("message")), "preradjenoj paleti", vbTextCompare) > 0, _
+               "S6K4 preradjena: PONISTENJE odbija PRE dijaloga posledica, sa RAZLOGOM"
+    AssertTrue Not CBool(resPF("success")) And vezaPosle = vezaPre, _
+               "S6K4 preradjena: odbijen pokusaj NE ostavlja zapis ispravke (Oporavak)"
+    AssertTrue aktivan, "S6K4 preradjena: dokument ostaje aktivan"
+    AssertEquals "20", gajbi, "S6K4 preradjena: paletne stavke ostaju na paletama"
+    AssertEquals "0", kontra, "S6K4 preradjena: knjiga nema nijedan kontra-stav"
+    AssertTrue CBool(resN("success")) And S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K4 preradjena: uz 'Ne diraj palete' DUPLI prolazi -- provera ne obara izbor operatera"
 Kraj:
     SetConfigValue CFG_PALETIRANJE, prevPal
     Exit Sub

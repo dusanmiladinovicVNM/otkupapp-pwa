@@ -10036,9 +10036,16 @@ End Function
 ' Operater bi odlucivao nad posledicom koja se nece desiti. Fixture: 20/150326
 ' (PRJ-FAK-1, kes Fakturisano = Da) i 37/150326 (PRJ-SLED-G na PAL-SLED-G,
 ' Preradjeno = Da) -- normalno stanje fixture-a, samo se cita.
-' SABOTAZE: s6k4-uvid-faktura-oslobadja, s6k4-uvid-preradjena-odvezuje.
+'
+' Dijalog potvrde PONISTENJA ima SVOJ tekst (BuildPonistenjePosledice), mimo
+' lanca. Ponovljena rucna provera ga je zatekla kako za 39/150326 obecava
+' "skidaju se sa paleta". Meri se direktno: okvir ispravke ga za preradjenu
+' paletu vise ni ne prikazuje (odbija pre dijaloga), a fakturisanu F8 odbija pre
+' okvira -- tekst mora biti tacan i kad ga ekran ne dosegne.
+' SABOTAZE: s6k4-uvid-faktura-oslobadja, s6k4-uvid-preradjena-odvezuje,
+' s6k4-dijalog-faktura-oslobadja, s6k4-dijalog-preradjena-skida.
 Private Sub T_S6K4_UvidKazeOdbijanje()
-    Dim nap As String
+    Dim nap As String, dlg As String
 
     nap = S6K4NapomenaLanca("20/150326", "PRJ-FAK-1", "Faktura")
     AssertEq (InStr(1, nap, "ODBIJA", vbBinaryCompare) > 0 And _
@@ -10049,6 +10056,16 @@ Private Sub T_S6K4_UvidKazeOdbijanje()
     AssertEq (InStr(1, nap, "ODBIJA", vbBinaryCompare) > 0 And _
               InStr(1, nap, Poruka("STEF_PAL_ODVEZ"), vbBinaryCompare) = 0), True, _
              "S6K4 uvid: roba na preradjenoj paleti -- lanac kaze ODBIJA, ne skida sa palete"
+
+    dlg = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_PRIJEMNICA, "20/150326", "", "PRJ-FAK-1")
+    AssertEq (InStr(1, dlg, "ODBIJA", vbBinaryCompare) > 0 And _
+              InStr(1, dlg, "oslobadja", vbTextCompare) = 0), True, _
+             "S6K4 dijalog PONISTENJA: fakturisana -- kaze ODBIJA, ne oslobadja fakturu"
+
+    dlg = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_PRIJEMNICA, "37/150326", "", "PRJ-SLED-G")
+    AssertEq (InStr(1, dlg, "ODBIJA", vbBinaryCompare) > 0 And _
+              InStr(1, dlg, "skidaju se sa paleta", vbTextCompare) = 0), True, _
+             "S6K4 dijalog PONISTENJA: preradjena paleta -- kaze ODBIJA, ne skida sa palete"
 End Sub
 
 ' Napomena (efekat) reda lanca uvida za dati dokument; "nema" kad reda nema.
