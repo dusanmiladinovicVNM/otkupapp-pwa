@@ -7776,8 +7776,10 @@ Private Sub Test_S6K5_KesNeOdlucuje()
     AssertTrue Len(prj) > 0, "S6K5 kes: preduslov -- dokument kroz pravi pisac"
     stI = S6StavkaID(prj, KLASA_I)
     kesFak = "FAK-K5-KES-" & scenario
-    S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_FAKTURISANO, "Da"
-    S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_FAKTURA_ID, kesFak
+    If Len(prj) > 0 Then
+        S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_FAKTURISANO, "Da"
+        S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_FAKTURA_ID, kesFak
+    End If
 
     AssertTrue Len(prj) > 0 And Not PrijemnicaJeFakturisana(prj), _
                "S6K5 kes: kes 'Da' bez linije NE cini dokument fakturisanim (kapija)"
@@ -7870,7 +7872,12 @@ Private Sub Test_S6K5_StornoFakturePaPrijemnice()
     AssertTrue Not okPre And Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
                "S6K5 storno: F8 ODBIJA storno fakturisane prijemnice"
 
-    okFak = modStornoDok.StornoIzvrsi(STIP_FAKTURA, S6K5BrojFakture(fid), "", poruka, fid)
+    ' Bez fakture se F8 NE zove: prazan ID i prazan broj bi se razresili na prvu
+    ' aktivnu fakturu praznog broja (FAK-TEST-0 u fixture-u) i stornirali tudji
+    ' dokument -- izmereno u crvenom prolazu (KI-041).
+    If Len(fid) > 0 Then
+        okFak = modStornoDok.StornoIzvrsi(STIP_FAKTURA, S6K5BrojFakture(fid), "", poruka, fid)
+    End If
     AssertTrue okFak, "S6K5 storno: F8 stornira fakturu"
     AssertTrue Len(fid) > 0 And Not PrijemnicaJeFakturisana(prj), _
                "S6K5 storno: posle storna fakture dokument je NEFAKTURISAN"
