@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 20.10.2026 (stavka 181: merge `#437`, S6 je 3/8; red AMB-10 zatvoren posle provere svih podkoraka).
+**Ažurirano:** 22.10.2026 (stavka 187: merge `#438`, S6 je 4/8; sledeći je korak 5).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 3/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · **korak 4 (storno na nivou dokumenta, `KI-031` kao kapija) na review-u** (`#438`, stavke 182–186: dve ručne provere, nalazi N1, N2 i N5 zatvoreni u istom PR-u, FULL 12/12, compile potvrđen; čeka merge), grana `claude/s6-korak4-storno` |
+| **S6 prijemnica** | ⏳ **u toku, 4/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · **sledeći: korak 5** (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` kao kapije), grana `claude/s6-korak5-faktura` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -6786,6 +6786,31 @@
      - **Usput:** na disku C: je bilo 467–923 MB slobodno. Po merenju iz `#434` lažni padovi kreću ispod
        ~150 MB.
      - **Sledeći brojevi:** stavka 187 (zapis merge-a, na grani koraka 5) · test 262 · KI-041.
+187. **Merge `#438`, S6 korak 4/8 zatvoren** (22.10.2026). Zapis ide ovde, a ne u `#438`, po obrascu stavki 173,
+     177 i 181.
+
+     - **Ručne provere:** dva kruga (stavke 185 i 186) i kratka provera N5 na ekranu (Oporavak 6 → 7, stavka 186).
+     - **Compile:** operater je javio „compiles" (22.10.2026); `vba_gate --require-green --require-compile` =
+       „dokazano: izvor 3fc553d25481".
+     - **Merge** 22.10.2026 (10:51:41 UTC) kao **`992e1f45`**, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `68d21c24`.
+       - Static CI je `success` na tom head-u (check run 119781791238, izmereno).
+       - Stablo `main`-a posle merge-a jednako je stablu `68d21c24` (`6957db5e`, izmereno).
+       - Grana `claude/s6-korak4-storno` nije obrisana (izmereno).
+     - **Nezavisni review posle ručne provere:** `CODE GO` i `MERGE GO`, 9,6/10, P0 = 0, P1 = 0. Jedini P2 je postao
+       `KI-040`; odluka operatera je da ga zatvara korak 5 (stavka 186).
+     - **Bazni brojevi na `main` = `992e1f45`** (FULL 12/12 nad izvorom `3fc553d25481`; posle njega su ušli samo docs):
+       - RunAllTests 261/0, BFP 2609/0, Banka 241/0, Storno 111/0, Palete 97;
+       - Faktura 35/35, Agrohemija 25/25, SheetsJson 72;
+       - katalog sabotaža 913 (`POZNATI_NALAZI` 9);
+       - otisak šeme `106AC27A`; potpis fixture-a `27f6230a5e8ca5be` (drugi potpis → `make_fixture` PRE trijaže).
+     - **Tabela „Gde smo" je ažurirana u istom commitu:** S6 je 4/8, sledeći je korak 5.
+     - **Usput, okruženje:** u 13:09 je `git checkout -b claude/s6-korak5-faktura` ostavio `.git/HEAD`, ref grane i
+       njen reflog pune NUL bajtova (disk C: pun u trenutku upisa). Vraćeni su na vrednosti koje beleži reflog
+       `HEAD`-a (grana sa `992e1f45`); `git fsck --connectivity-only` je čist, radno stablo netaknuto.
+     - **Sledeći brojevi:** stavka 188 (pre-flight koraka 5) · stavka 189 (kod) · test 262 · KI-041.
+     - **Sledeći je S6 korak 5** (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` kao
+       kapije), na grani `claude/s6-korak5-faktura` sa `992e1f45`.
 
 ## Dug sa imenom (posle S5-5b)
 
