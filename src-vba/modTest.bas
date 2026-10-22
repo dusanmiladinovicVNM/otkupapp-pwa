@@ -98,10 +98,17 @@ Private Const FX_SEFLOG_TIP_DRUGI As String = "STATUS"
 Private Const FX_FAK_PLAC_IZNOS As Double = 4000
 Private Const FX_FAK_STORNO As String = "FAK-TEST-X"   ' ne sme da se pojavi u listi
 ' Prijemnice ekrana Fakturisanje, sve tri kupca FX_KUPAC:
-'   FAK1 uredno fakturisana | FAK2 obelezena ali BEZ FakturaID | FAK3 slobodna
+'   FAK1 fakturisana (linija na FAK-TEST-P, izvedena u make_fixture) |
+'   FAK2 kes "Da" BEZ FakturaID i bez linije -- od S6 koraka 5 slobodna, jer kes
+'   ne odlucuje (KI-038) | FAK3 slobodna
 Private Const FX_PRJ_FAK1 As String = "PRJ-FAK-1"
 Private Const FX_PRJ_FAK2 As String = "PRJ-FAK-2"
 Private Const FX_PRJ_FAK3 As String = "PRJ-FAK-3"
+' Njihove stavke (make_fixture: jedna stavka po zaglavlju, PRS-<PrijemnicaID>).
+' Od S6 koraka 5 je red mreze Fakturisanja i identitet korpe STAVKA.
+Private Const FX_PRS_FAK1 As String = "PRS-PRJ-FAK-1"
+Private Const FX_PRS_FAK2 As String = "PRS-PRJ-FAK-2"
+Private Const FX_PRS_FAK3 As String = "PRS-PRJ-FAK-3"
 
 ' EKRAN IZVESTAJI (Faza E/19). PRAVA druga stanica iz fixture-a -- za razliku
 ' od FX_STANICA2 ("STA-DRUGO"), koja je namerno nepostojeca. Vozila isplate
@@ -614,6 +621,9 @@ Private Sub ResetSeamova()
     ' Podmetnut pad na kraju storna prijemnice (S6 korak 4): zaostao seam bi
     ' oborio svaki sledeci storno prijemnice.
     modStorno.StornoPrijemnicePadniTest False
+    ' Podmetnut pad na kraju jezgra fakture (S6 korak 5): zaostao seam bi oborio
+    ' svaku sledecu fakturu.
+    modFaktura.CreateFakturaPadniTest False
     modUiScreens.ScrSekcijuZabraniTest ""
     modUiScreens.ScrGradnjuOboriTest False
     modUiScreens.ScrResetCache
@@ -10037,7 +10047,8 @@ End Function
 ' "faktura se oslobadja; stavke ostaju osirotele", a za robu na preradjenoj paleti
 ' "odvezuju se sa palete" -- dok jezgro oba slucaja ODBIJA (odluke 1 i 3).
 ' Operater bi odlucivao nad posledicom koja se nece desiti. Fixture: 20/150326
-' (PRJ-FAK-1, kes Fakturisano = Da) i 37/150326 (PRJ-SLED-G na PAL-SLED-G,
+' (PRJ-FAK-1, od S6 koraka 5 fakturisana kroz liniju koju make_fixture izvodi --
+' kes se ne cita) i 37/150326 (PRJ-SLED-G na PAL-SLED-G,
 ' Preradjeno = Da) -- normalno stanje fixture-a, samo se cita.
 '
 ' Dijalog potvrde PONISTENJA ima SVOJ tekst (BuildPonistenjePosledice), mimo
@@ -13213,42 +13224,65 @@ Private Sub T_Fak_IdentitetURedu_NeCrtaSe()
     modScrFakture.Scr_FkListaTestSet "ZAFAKT"
 End Sub
 
-' DOSTUPNOST SE PRENOSI U REDU, ne izvodi se iz prikaza. Prijemnica
-' obelezena kao fakturisana a BEZ FakturaID iz prikaza izgleda slobodna
-' (kolona broja fakture je prazna), a CreateFaktura je odbija. Ko dostupnost
-' cita iz onoga sto se vidi, ponudi je operateru pa padne u transakciji.
+' DOSTUPNOST SE PRENOSI U REDU, ne izvodi se iz prikaza. Od S6 koraka 5 je red
+' mreze STAVKA prijemnice, a dostupnost je izvedena iz aktivnih linija fakture
+' (FAK-LIN-03) -- kes na zaglavlju ne odlucuje (FAK2, KI-038). Prikaz (broj
+' fakture) i pravilo i dalje mogu da se razidju: linija na fakturu cijeg zaglavlja
+' nema zauzima stavku, a broja nema odakle da se procita. Taj red se PODMECE
+' (fault injection, svoja transakcija, rollback). Ko dostupnost cita iz onoga sto
+' se vidi, ponudi takvu stavku operateru pa padne u pisacu.
+' Nalazi se skupljaju i tvrde POSLE rollback-a: AssertEq staje na prvom padu, a
+' podmetnut red ne sme da ostane u svesci.
 Private Sub T_Fak_DostupnostSePrenosiURedu()
-    Dim src As Variant, r As Long, d As Variant, redovi As Variant, i As Long
-    Dim greska As String
+    Dim src As Variant, r As Long, d As Variant, redovi As Variant
+    Dim greska As String, tx As clsTransaction, rowFs As Long
+    Dim prikaz As String, pravilo As Boolean, kol11Fak2 As String, kol11Fak3 As String
+    Dim cekaFak2 As Long, cekaFak3 As Long, korpaPosle As Long
 
-    ' PRAVILO, samo po sebi. Jedno mesto -- deli ga i kapija
-    ' IsPrijemnicaAvailableForFaktura i citac mreze.
-    AssertEq modFaktura.PrijemnicaDostupna("", "", ""), True, _
-             "neobelezena prijemnica sme u fakturu"
-    AssertEq modFaktura.PrijemnicaDostupna("Da", "", ""), False, _
-             "stornirana ne sme"
-    AssertEq modFaktura.PrijemnicaDostupna("", "Da", ""), False, _
-             "obelezena kao fakturisana ne sme -- i kad FakturaID nedostaje"
-    AssertEq modFaktura.PrijemnicaDostupna("", "", "FAK-1"), False, _
-             "vezana za fakturu ne sme -- i kad oznaka nedostaje"
+    ' PRAVILO, samo po sebi. Jedno mesto -- deli ga citac mreze, a pisac pita
+    ' isti recnik linija (modFaktura.FakturaLinijePoStavci).
+    AssertEq modFaktura.PrijemnicaDostupna("", ""), True, _
+             "nefakturisana stavka sme u fakturu"
+    AssertEq modFaktura.PrijemnicaDostupna("Da", ""), False, _
+             "stavka stornirane prijemnice ne sme"
+    AssertEq modFaktura.PrijemnicaDostupna("", "FAK-1"), False, _
+             "stavka na aktivnoj liniji fakture ne sme"
 
-    ' NAD PRAVIM REDOVIMA. FAK2 je red zbog koga ovaj test postoji.
+    ' NAD PRAVIM REDOVIMA fixture-a.
     src = modFaktura.GetPrijemniceZaFakturisanjeForGrid(FX_KUPAC)
-    AssertEq IsArray(src), True, "citac vraca prijemnice kupca"
+    AssertEq IsArray(src), True, "citac vraca stavke prijemnica kupca"
 
-    r = RedSaVrednoscu(src, 1, FX_PRJ_FAK1)
-    AssertEq (r > 0), True, "preduslov: uredno fakturisana prijemnica je u listi"
-    AssertEq CBool(src(r, 9)), False, "uredno fakturisana nije dostupna"
-    AssertEq CStr(src(r, 10)), "3/2026", "uredno fakturisana pokazuje svoj broj fakture"
+    r = RedSaVrednoscu(src, 1, FX_PRS_FAK1)
+    AssertEq (r > 0), True, "preduslov: fakturisana stavka je u listi"
+    AssertEq CBool(src(r, 9)), False, "fakturisana stavka nije dostupna"
+    AssertEq CStr(src(r, 10)), "3/2026", "fakturisana stavka pokazuje svoj broj fakture"
 
-    r = RedSaVrednoscu(src, 1, FX_PRJ_FAK2)
-    AssertEq (r > 0), True, "preduslov: nepotpuno obelezena prijemnica je u listi"
-    AssertEq CStr(src(r, 10)), "", "PRIKAZ je prazan -- iz njega izgleda slobodna"
-    AssertEq CBool(src(r, 9)), False, "PRAVILO kaze da nije slobodna"
+    r = RedSaVrednoscu(src, 1, FX_PRS_FAK2)
+    AssertEq (r > 0), True, "preduslov: stavka prijemnice sa kesom bez linije je u listi"
+    AssertEq CBool(src(r, 9)), True, "kes 'Da' bez linije NE zauzima stavku (KI-038)"
 
-    r = RedSaVrednoscu(src, 1, FX_PRJ_FAK3)
-    AssertEq (r > 0), True, "preduslov: slobodna prijemnica je u listi"
-    AssertEq CBool(src(r, 9)), True, "slobodna prijemnica je dostupna"
+    r = RedSaVrednoscu(src, 1, FX_PRS_FAK3)
+    AssertEq (r > 0), True, "preduslov: slobodna stavka je u listi"
+    AssertEq CBool(src(r, 9)), True, "slobodna stavka je dostupna"
+
+    ' RAZLAZ PRIKAZA I PRAVILA, podmetnut: aktivna linija na fakturu koje nema.
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    rowFs = AppendRow(TBL_FAKTURA_STAVKE, Array( _
+        "FST-K5-NEMA", "FAK-NEMA-K5", FX_PRJ_FAK2, 100, 40#, "I", "21/150326", "", ""))
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowFs, COL_FS_PRIJEMNICA_STAVKA_ID, FX_PRS_FAK2, _
+                      "T_Fak_DostupnostSePrenosiURedu"
+
+    src = modFaktura.GetPrijemniceZaFakturisanjeForGrid(FX_KUPAC)
+    r = RedSaVrednoscu(src, 1, FX_PRS_FAK2)
+    If r > 0 Then
+        prikaz = CStr(src(r, 10))
+        pravilo = CBool(src(r, 9))
+    Else
+        prikaz = "<nema reda>"
+        pravilo = True
+    End If
 
     ' Red mreze mora da PRENESE dostupnost -- inace je ekran u trenutku klika
     ' nema odakle da procita.
@@ -13256,28 +13290,36 @@ Private Sub T_Fak_DostupnostSePrenosiURedu()
     modScrFakture.Scr_FkListaTestSet "ZAFAKT"
     d = modScrFakture.Scr_Rows("sve", "")
     redovi = d(1)
-    r = RedSaVrednoscu(redovi, 10, FX_PRJ_FAK2)
-    AssertEq (r > 0), True, "red nepotpuno obelezene prijemnice je u mrezi"
-    AssertEq CStr(redovi(r, 11)), "", "red NOSI 'nije dostupna' u koloni 11"
-    r = RedSaVrednoscu(redovi, 10, FX_PRJ_FAK3)
-    AssertEq CStr(redovi(r, 11)), "1", "red slobodne prijemnice nosi '1'"
+    kol11Fak2 = "<nema reda>": kol11Fak3 = "<nema reda>"
+    r = RedSaVrednoscu(redovi, 10, FX_PRS_FAK2)
+    If r > 0 Then kol11Fak2 = CStr(redovi(r, 11))
+    r = RedSaVrednoscu(redovi, 10, FX_PRS_FAK3)
+    If r > 0 Then kol11Fak3 = CStr(redovi(r, 11))
 
     ' Cip 'ceka' propusta tacno one koje pravilo pusta.
     d = modScrFakture.Scr_Rows("ceka", "")
     redovi = d(1)
-    AssertEq RedSaVrednoscu(redovi, 10, FX_PRJ_FAK2), 0, _
-             "cip 'za fakturisanje' ne pokazuje nepotpuno obelezenu"
-    AssertEq (RedSaVrednoscu(redovi, 10, FX_PRJ_FAK3) > 0), True, _
-             "cip 'za fakturisanje' pokazuje slobodnu"
+    cekaFak2 = RedSaVrednoscu(redovi, 10, FX_PRS_FAK2)
+    cekaFak3 = RedSaVrednoscu(redovi, 10, FX_PRS_FAK3)
 
-    ' I kapija korpe. Nedostupna prijemnica se ODBIJA porukom, ne tiho.
+    ' I kapija korpe. Nedostupna stavka se ODBIJA porukom, ne tiho.
     modScrFakture.Scr_FkKorpaTestReset
     modScrFakture.Scr_FkKupacTestSet FX_KUPAC
-    greska = modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK2, "21/150326", 100, 40, False)
-    AssertEq (Len(greska) > 0), True, "nedostupna prijemnica ne ulazi u korpu"
-    AssertEq modScrFakture.Scr_FkKorpaBroj(), 0, "korpa je posle odbijanja prazna"
+    greska = modScrFakture.Scr_FkKorpaTestDodaj(FX_PRS_FAK2, "21/150326", 100, 40, False)
+    korpaPosle = modScrFakture.Scr_FkKorpaBroj()
 
+    tx.RollbackTx
+    Set tx = Nothing
     modScrFakture.Scr_FkKorpaTestReset
+
+    AssertEq prikaz, "", "PRIKAZ je prazan -- iz njega izgleda slobodna"
+    AssertEq pravilo, False, "PRAVILO kaze da nije slobodna"
+    AssertEq kol11Fak2, "", "red NOSI 'nije dostupna' u koloni 11"
+    AssertEq kol11Fak3, "1", "red slobodne stavke nosi '1'"
+    AssertEq cekaFak2, 0, "cip 'za fakturisanje' ne pokazuje zauzetu stavku"
+    AssertEq (cekaFak3 > 0), True, "cip 'za fakturisanje' pokazuje slobodnu"
+    AssertEq (Len(greska) > 0), True, "nedostupna stavka ne ulazi u korpu"
+    AssertEq korpaPosle, 0, "korpa je posle odbijanja prazna"
 End Sub
 
 ' KORPA, ZNACKA I TRAKA. Korpa NIJE podatak u tabeli, pa "podaci su promenjeni"
@@ -13294,7 +13336,7 @@ Private Sub T_Fak_KorpaZnackaITraka()
     AssertEq modScrFakture.Scr_Lista(), "FAKTURE", "preduslov: prikazana lista nije korpa"
     AssertEq modScrFakture.Scr_FkZnackaTest(), 0, "prazna korpa -> znacka je nula"
 
-    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True), "", _
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRS_FAK3, "22/150326", 100, 40, True), "", _
              "preduslov: slobodna prijemnica je usla u korpu"
     AssertEq modScrFakture.Scr_FkKorpaBroj(), 1, "korpa ima jednu stavku"
     AssertEq modScrFakture.Scr_FkZnackaTest(), 1, _
@@ -13303,22 +13345,22 @@ Private Sub T_Fak_KorpaZnackaITraka()
              "znacka je dobila ono sto ljuska cita iz Scr_Brojac"
 
     ' Ista prijemnica dvaput je ista prijemnica -- fakturisala bi se dvaput.
-    AssertEq (Len(modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True)) > 0), _
+    AssertEq (Len(modScrFakture.Scr_FkKorpaTestDodaj(FX_PRS_FAK3, "22/150326", 100, 40, True)) > 0), _
              True, "ista prijemnica ne moze dvaput u korpu"
     AssertEq modScrFakture.Scr_FkKorpaBroj(), 1, "odbijeno dodavanje ne menja korpu"
 
     ' Druga stavka, pa uklanjanje PO IDENTITETU. Prikaz je namerno isti
     ' (isti broj, ista kolicina, ista cena): po prikazu se ova dva reda ne bi
     ' razlikovala, a to je bas greska koju je Agrohemija vec platila (P1, 7.9).
-    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK1, "22/150326", 100, 40, True), "", _
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRS_FAK1, "22/150326", 100, 40, True), "", _
              "preduslov: druga -- u prikazu identicna -- stavka je usla"
     AssertEq modScrFakture.Scr_FkKorpaBroj(), 2, "u korpi su dve stavke"
     AssertEq modScrFakture.Scr_FkZnackaTest(), 2, "znacka prati i drugu stavku"
 
-    AssertEq modScrFakture.Scr_FkUkloniStavkuTest(FX_PRJ_FAK1), True, _
+    AssertEq modScrFakture.Scr_FkUkloniStavkuTest(FX_PRS_FAK1), True, _
              "uklanjanje po identitetu je proslo"
     AssertEq modScrFakture.Scr_FkKorpaBroj(), 1, "ostala je jedna stavka"
-    AssertEq modScrFakture.Scr_FkStavkaIdTest(1), FX_PRJ_FAK3, _
+    AssertEq modScrFakture.Scr_FkStavkaIdTest(1), FX_PRS_FAK3, _
              "ostala je bas ona koja NIJE pokazana"
     AssertEq modScrFakture.Scr_FkZnackaTest(), 1, "znacka prati uklanjanje"
 
@@ -13459,9 +13501,9 @@ Private Sub T_Fak_NerazresenKupacNeDiraKorpu()
     modScrFakture.Scr_FkKupacTestSet FX_KUPAC
     AssertEq modScrFakture.Scr_FkKupacUnosTest(FX_KUPAC), True, _
              "preduslov: kupac je izabran"
-    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True), "", _
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRS_FAK3, "22/150326", 100, 40, True), "", _
              "preduslov: prva stavka je usla u korpu"
-    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK1, "20/150326", 100, 40, True), "", _
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRS_FAK1, "20/150326", 100, 40, True), "", _
              "preduslov: druga stavka je usla u korpu"
     AssertEq modScrFakture.Scr_FkKorpaBroj(), 2, "preduslov: u korpi su dve stavke"
 
@@ -13623,7 +13665,7 @@ Private Sub T_Fak_GpListaIKorpa()
              "vrednost GP stavke = kg * uneta cena"
     AssertEq (Len(modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 120, True)) > 0), _
              True, "ista prerada ne moze dvaput u korpu"
-    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True), _
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRS_FAK3, "22/150326", 100, 40, True), _
              Poruka("OTKUI_ERR_FK_MESANJE"), "prijemnica ne ulazi u GP korpu"
     AssertEq modScrFakture.Scr_FkKorpaBroj(), 1, "odbijeno mesanje ne menja korpu"
 
@@ -13632,7 +13674,7 @@ Private Sub T_Fak_GpListaIKorpa()
     AssertEq modScrFakture.Scr_FkKorpaBroj(), 0, "korpa je prazna"
 
     ' Obrnut smer: PRJ korpa odbija GP stavku istom porukom.
-    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True), _
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRS_FAK3, "22/150326", 100, 40, True), _
              "", "preduslov: prijemnica je usla u praznu korpu"
     AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 120, True), _
              Poruka("OTKUI_ERR_FK_MESANJE"), "GP stavka ne ulazi u PRJ korpu"

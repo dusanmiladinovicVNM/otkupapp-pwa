@@ -2647,16 +2647,13 @@ Public Function modeKey(ByVal mode As String) As String
 End Function
 
 ' Rezimi bez pojma "zbirne" - cipovi "Bez zbirne" / "Nefakturisane" se skrivaju.
-' Faktura postoji SAMO nad prijemnicom (tblPrijemnica.FakturaID). Nad otkupnim
-' listom pojam "fakturisano" nema smisla - otkup je nabavka, ne prodaja - pa se
-' cip tamo i ne prikazuje. Ranije je "Nefakturisane" bio doslovan duplikat cipa
-' "Bez zbirne": isti brojac i isti izraz u MatchFilterFast.
-Public Function ColFakturaID(ByVal mk As String) As String
-    If mk = "PRIJEMNICA" Then ColFakturaID = COL_PRJ_FAKTURA_ID
-End Function
-
+' Faktura postoji SAMO nad prijemnicom. Nad otkupnim listom pojam "fakturisano"
+' nema smisla - otkup je nabavka, ne prodaja - pa se cip tamo i ne prikazuje.
+' Ranije je "Nefakturisane" bio doslovan duplikat cipa "Bez zbirne": isti brojac
+' i isti izraz u MatchFilterFast. Od S6 koraka 5 se fakturisanost prijemnice ne
+' cita iz kolone zaglavlja nego IZVODI (modFaktura.FakturisanostPoPrijemnici).
 Public Function ModeHasFaktura(ByVal mode As String) As Boolean
-    ModeHasFaktura = (Len(ColFakturaID(modeKey(mode))) > 0)
+    ModeHasFaktura = (modeKey(mode) = "PRIJEMNICA")
 End Function
 
 ' Pojam "bez zbirne" postoji samo tamo gde dokument NOSI broj zbirne.
@@ -2844,6 +2841,21 @@ Public Function RevPartner(ByVal entTip As String, ByVal entID As String, _
     If d.Exists(entID) Then RevPartner = d(entID)
 End Function
 
+' Izvedena fakturisanost reda prijemnice: Array(stanje, fakture) iz
+' modFaktura.FakturisanostPoPrijemnici (S6 korak 5). Red koga u recniku nema je
+' KVAR, ne "nije fakturisan": recnik nosi SVAKO zaglavlje (strog citac stavki).
+Private Function FaktRecPrijemnice(ByVal dFakt As Object, ByVal prjID As String) As Variant
+    If dFakt Is Nothing Then
+        Err.Raise ERR_UI_BASE + 41, "modScrDokumenti.FaktRecPrijemnice", _
+                  "Fakturisanost prijemnica nije ucitana."
+    End If
+    If Not dFakt.Exists(prjID) Then
+        Err.Raise ERR_UI_BASE + 41, "modScrDokumenti.FaktRecPrijemnice", _
+                  "Prijemnica bez izvedene fakturisanosti: " & prjID
+    End If
+    FaktRecPrijemnice = dFakt(prjID)
+End Function
+
 Public Function PayCode(ByVal duguje As Double, ByVal placeno As Double) As Long
     If duguje <= 0 Then
         PayCode = IIf(placeno > 0, PAY_PLACENO, PAY_NEPLAC)
@@ -2915,7 +2927,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     Dim cOtk As Long, cBez As Long, cNef As Long
     Dim fltV As String, fltP As String
     Dim ix() As Long, kind() As String
-    Dim iStorno As Long, iZbir As Long, iKg As Long, iDokTip As Long, iFakt As Long
+    Dim iStorno As Long, iZbir As Long, iKg As Long, iDokTip As Long
     Dim iTip As Long, iNap As Long, iEntTip As Long, iBrojCol As Long
     Dim iKoopID As Long, iPartID As Long, iOtkID As Long
     Dim mKoop As Object, mStan As Object, mKup As Object
@@ -3036,7 +3048,12 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     mStep = "indeksi kolona"
     iStorno = ColIdx(tblName, COL_STORNIRANO)
     iZbir = ColIdx(tblName, ColBrojZbirne(mk))
-    If Len(ColFakturaID(mk)) > 0 Then iFakt = ColIdx(tblName, ColFakturaID(mk))
+    ' Fakturisanost prijemnice je IZVEDENA (S6 korak 5, FAK-LIN-03) -- isti recnik
+    ' koji pitaju kapija storna i mreza Fakturisanja. Do tada je lista citala
+    ' FakturaID zaglavlja, a kapija kes Fakturisano ili liniju, pa su o istom
+    ' dokumentu govorile suprotno (KI-038).
+    Dim dFakt As Object
+    If mk = "PRIJEMNICA" Then Set dFakt = modFaktura.FakturisanostPoPrijemnici()
 
     rev = (mk = "REVERSI")
     If rev Then
@@ -3081,9 +3098,10 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             Set dPay = modNovac.BuildIsplataDictByOtkup()
             iPayID = ColIdx(tblName, COL_OTK_ID)
         Else
+            ' Prijemnica placanje nosi preko SVOJIH faktura (izvedenih, gore).
             Set dPay = modNovac.BuildUplataDictByFaktura()
             Set dFakIzn = FakturaIznosMap()
-            iPayID = ColIdx(tblName, COL_PRJ_FAKTURA_ID)
+            iPayID = ColIdx(tblName, COL_PRJ_ID)
         End If
         If dPay Is Nothing Then pay = False
     End If
@@ -3136,8 +3154,10 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
         If iKg >= 0 Then vKgRow = CellD(src, r, ix(iKg))
 
         Dim pCode As Long, pRest As Double, duguje As Double, placeno As Double
-        Dim payKey As String
+        Dim payKey As String, fRec As Variant, fk As Variant
         pCode = 0: pRest = 0
+        fRec = Empty
+        If mk = "PRIJEMNICA" Then fRec = FaktRecPrijemnice(dFakt, CellS(src, r, iStavID))
         If pay Then
             duguje = 0: placeno = 0
             payKey = CellS(src, r, iPayID)
@@ -3145,13 +3165,21 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                 duguje = CDbl(zStav(1))
                 If dPay.Exists(payKey) Then placeno = CDbl(dPay(payKey))
                 pCode = PayCode(duguje, placeno)
-            ElseIf Len(payKey) = 0 Then
-                pCode = PAY_NEFAKT              ' prijemnica jos nije na fakturi
+            ElseIf CLng(fRec(0)) = FAKT_NE Then
+                pCode = PAY_NEFAKT              ' nijedna stavka nije na fakturi
+            ElseIf CLng(fRec(0)) = FAKT_DELIM Then
+                ' Odluka 5: delimicno fakturisan ima PREDNOST nad placanjem -- na
+                ' dokumentu jos ima sta da se fakturise.
+                pCode = PAY_DELIM_FAKT
             Else
-                If Not dFakIzn Is Nothing Then
-                    If dFakIzn.Exists(payKey) Then duguje = CDbl(dFakIzn(payKey))
-                End If
-                If dPay.Exists(payKey) Then placeno = CDbl(dPay(payKey))
+                ' Placanje SVIH faktura dokumenta zajedno (klasa I i II mogu biti na
+                ' dve fakture); stanje se i dalje cita na nivou fakture.
+                For Each fk In fRec(1)
+                    If Not dFakIzn Is Nothing Then
+                        If dFakIzn.Exists(CStr(fk)) Then duguje = duguje + CDbl(dFakIzn(CStr(fk)))
+                    End If
+                    If dPay.Exists(CStr(fk)) Then placeno = placeno + CDbl(dPay(CStr(fk)))
+                Next fk
                 pCode = PayCode(duguje, placeno)
             End If
             pRest = duguje - placeno
@@ -3247,8 +3275,9 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
         bezZbirne = (Len(vZbir) = 0)
         hay = hay & "|" & vZbir
 
+        ' "Nefakturisane" = na dokumentu jos ima sta da se fakturise (NE ili DELIM).
         bezFakture = False
-        If iFakt > 0 Then bezFakture = (Len(CellS(src, r, iFakt)) = 0)
+        If Not IsEmpty(fRec) Then bezFakture = (CLng(fRec(0)) <> FAKT_DA)
 
         ' brojaci cipova - isti prolaz, bez zasebnog skena po cipu.
         ' "Bez zbirne" i "Nefakturisane" su RAZLICITI uslovi i broje se odvojeno.

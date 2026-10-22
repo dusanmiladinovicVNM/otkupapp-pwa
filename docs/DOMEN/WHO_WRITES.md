@@ -22,11 +22,10 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 |---|---|---|
 | `tblFakture` | 4 | `modFaktura`, `modSEFPersistance`, `modStorno`, `modUtovar` |
 | `tblBankaImport` | 3 | `modBankaImport`, `modBankaMapiranje`, `modStorno` |
-| `tblFakturaStavke` | 3 | `modDokumenta`, `modFaktura`, `modUtovar` |
 | `tblKorisnici` | 3 | `modAuth`, `modMaticniKorisnici`, `modSetup` |
 | `tblNovac` | 3 | `modBankaMapiranje`, `modNovac`, `modStorno` |
 | `tblOtkup` | 3 | `modDokumenta`, `modOtkup`, `modStornoFlow` |
-| `tblPrijemnica` | 3 | `modDokumenta`, `modFaktura`, `modStorno` |
+| `tblFakturaStavke` | 2 | `modFaktura`, `modUtovar` |
 | `tblPaleta` | 2 | `modPaletniList`, `modStorno` |
 | `tblParcele` | 2 | `modGeoParcele`, `modMasterSync` |
 | `tblUtovar` | 2 | `modStorno`, `modUtovar` |
@@ -46,6 +45,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblPrerada` | 1 | `modPaletniList` |
 | `tblPreradaStavka` | 1 | `modPaletniList` |
 | `tblPrevoznici` | 1 | `modUtovar` |
+| `tblPrijemnica` | 1 | `modDokumenta` |
 | `tblPrijemnicaStavke` | 1 | `modDokumenta` |
 | `tblSEFConfig` | 1 | `modConfig` |
 | `tblSEFEventLog` | 1 | `modSEFPersistance` |
@@ -70,11 +70,10 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 - `tblFakture`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator`, `modStorno`, `modUtovar`
 - `tblBankaImport`: `modBankaImport`, `modBankaMapiranje`, `modStorno`
-- `tblFakturaStavke`: `modDokumenta`, `modFaktura`, `modStorno`, `modUtovar`
 - `tblKorisnici`: `modMaticniKorisnici`
 - `tblNovac`: `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modOtkup`, `modStorno`, `modUtovar`
 - `tblOtkup`: `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow`
-- `tblPrijemnica`: `modDokumenta`, `modFaktura`, `modStorno`
+- `tblFakturaStavke`: `modFaktura`, `modStorno`, `modUtovar`
 - `tblPaleta`: `modDokumenta`, `modPaletniList`, `modStorno`
 - `tblParcele`: `modGeoParcele`, `modMasterSync`
 - `tblUtovar`: `modStorno`, `modUtovar`
@@ -91,6 +90,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblPartnerMap`: `modBankaMapiranje`
 - `tblPrerada`: `modPaletniList`, `modStorno`
 - `tblPreradaStavka`: `modPaletniList`, `modStorno`
+- `tblPrijemnica`: `modDokumenta`, `modStorno`
 - `tblPrijemnicaStavke`: `modDokumenta`, `modStorno`
 - `tblSEFEventLog`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
 - `tblSEFSubmission`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
@@ -104,10 +104,9 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 - `tblFakture`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modSEFTests`, `modTest`, `modTestBanka`, `modTestStorno`
 - `tblBankaImport`: `modTestBanka`, `modTestStorno`
-- `tblFakturaStavke`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modTest`, `modTestStorno`
 - `tblNovac`: `modBusinessFlowProTests`, `modGoldenTests`, `modNovacTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblOtkup`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
-- `tblPrijemnica`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
+- `tblFakturaStavke`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modTest`, `modTestStorno`
 - `tblPaleta`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblParcele`: `modAgrohemijaTests`
 - `tblZbirna`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
@@ -122,6 +121,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblOtpremnicaStavke`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTest`, `modTestStorno`
 - `tblPaletaStavka`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPartnerMap`: `modTestBanka`
+- `tblPrijemnica`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPrijemnicaStavke`: `modBusinessFlowProTests`, `modFakturaTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblSEFConfig`: `modTestStorno`
 - `tblSEFEventLog`: `modSEFTests`

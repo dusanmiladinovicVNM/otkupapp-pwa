@@ -299,67 +299,26 @@ EH:
 End Sub
 
 ' ============================================================
-' CHECK 4: PRIJEMNICA <-> FAKTURA FLAGS
+' CHECK 4: LINIJE FAKTURE NAD PRIJEMNICOM (S6 korak 5, FAK-LIN-01/-02)
 ' ============================================================
-
+'
+' Do S6 koraka 5 je ova provera merila kes Fakturisano/FakturaID na zaglavlju
+' prijemnice. Kes se od tada ne cita ni ne pise -- fakturisanost je izvedena iz
+' aktivnih linija tblFakturaStavke -- pa provera meri UGOVOR LINIJE, i to kroz
+' ISTI citac koji koriste kapija storna, pisac fakture i lista: linija nosi
+' stavku, stavka postoji i pripada dokumentu linije, i nije na dve aktivne
+' fakture. Read-only.
 Private Sub Check_PrijemnicaFakturaFlags()
     On Error GoTo EH
 
-    Dim data As Variant
-    data = GetTableData(TBL_PRIJEMNICA)
+    Dim d As Object
+    Set d = modFaktura.FakturisanostPoPrijemnici()
 
-    If IsEmpty(data) Then
-        HealthWarn "Prijemnica faktura flags", "tblPrijemnica is empty."
-        Exit Sub
-    End If
-
-    Dim colID As Long
-    Dim colFakturisano As Long
-    Dim colFakturaID As Long
-    Dim colStorno As Long
-
-    colID = RequireColumnIndex(TBL_PRIJEMNICA, "PrijemnicaID", "Check_PrijemnicaFakturaFlags")
-    colFakturisano = RequireColumnIndex(TBL_PRIJEMNICA, "Fakturisano", "Check_PrijemnicaFakturaFlags")
-    colFakturaID = RequireColumnIndex(TBL_PRIJEMNICA, "FakturaID", "Check_PrijemnicaFakturaFlags")
-    colStorno = RequireColumnIndex(TBL_PRIJEMNICA, "Stornirano", "Check_PrijemnicaFakturaFlags")
-
-    Dim i As Long
-    Dim badCount As Long
-    Dim prijID As String
-    Dim fakturisano As String
-    Dim fakturaID As String
-
-    For i = 1 To UBound(data, 1)
-
-        If IsStorniranoValue(data(i, colStorno)) Then GoTo NextRow
-
-        prijID = Trim$(CStr(data(i, colID)))
-        fakturisano = UCase$(Trim$(CStr(data(i, colFakturisano))))
-        fakturaID = Trim$(CStr(data(i, colFakturaID)))
-
-        If fakturisano = "DA" And Len(fakturaID) = 0 Then
-            badCount = badCount + 1
-            HealthFail "Prijemnica Fakturisano=Da without FakturaID", _
-                       "PrijemnicaID=" & prijID
-        End If
-
-        If Len(fakturaID) > 0 And Not ActiveRowExists(TBL_FAKTURE, "FakturaID", fakturaID) Then
-            badCount = badCount + 1
-            HealthFail "Prijemnica points to missing/stornirana faktura", _
-                       "PrijemnicaID=" & prijID & " FakturaID=" & fakturaID
-        End If
-
-NextRow:
-    Next i
-
-    If badCount = 0 Then
-        HealthOk "Prijemnica faktura flags are valid", ""
-    End If
-
+    HealthOk "Faktura linije prijemnica are valid", CStr(d.count) & " prijemnica"
     Exit Sub
 
 EH:
-    HealthFail "Prijemnica faktura flag check failed", FormatHealthErr()
+    HealthFail "Faktura linija prijemnice krsi ugovor (FAK-LIN-01/-02)", FormatHealthErr()
 End Sub
 
 ' ============================================================
@@ -704,14 +663,18 @@ EH:
 End Sub
 
 ' ============================================================
-' CHECK 6c: FAKTURA IZNOS <-> tblPrijemnica RECONCILIATION (Q2)
+' CHECK 6c: FAKTURA IZNOS <-> STAVKE PRIJEMNICE RECONCILIATION (Q2)
 ' ============================================================
 '
 ' tblFakture.Iznos is a denormalized header total, frozen at CreateFaktura
-' as Sum(Prijemnica.Kolicina * Cena). If a linked prijemnica is later
-' edited or stornirano, Iznos no longer matches the canonical source
-' (tblPrijemnica). This recomputes the live sum per FakturaID and flags
-' drift, separating value edits from post-invoicing storno. Read-only.
+' as Sum(PrijemnicaStavka.Kolicina * Cena) over its lines. If a linked stavka is
+' later edited or its prijemnica stornirano, Iznos no longer matches the
+' canonical source. This recomputes the live sum per FakturaID and flags drift,
+' separating value edits from post-invoicing storno. Read-only.
+'
+' S6 korak 5: izvor je STAVKA prijemnice preko PrijemnicaStavkaID linije
+' fakture (FAK-LIN-02). Do tada su se citali kes FakturaID i linijska polja
+' ZAGLAVLJA prijemnice -- a zaglavlje ih od koraka 2 ne nosi.
 
 Private Sub Check_FakturaIznosReconciliation()
     On Error GoTo EH
@@ -724,32 +687,51 @@ Private Sub Check_FakturaIznosReconciliation()
         Exit Sub
     End If
 
-    ' Live prijemnica sums per FakturaID: Array(allLinked, activeOnly).
-    Dim prijData As Variant
-    prijData = GetTableData(TBL_PRIJEMNICA)
-
+    ' Live sums per FakturaID: Array(allLinked, activeOnly).
     Dim liveDict As Object: Set liveDict = CreateObject("Scripting.Dictionary")
 
-    If Not IsEmpty(prijData) Then
-        Dim pFak As Long, pKol As Long, pCena As Long, pStorno As Long
-        pFak = RequireColumnIndex(TBL_PRIJEMNICA, "FakturaID", "Check_FakturaIznosReconciliation")
-        pKol = RequireColumnIndex(TBL_PRIJEMNICA, "Kolicina", "Check_FakturaIznosReconciliation")
-        pCena = RequireColumnIndex(TBL_PRIJEMNICA, "Cena", "Check_FakturaIznosReconciliation")
-        pStorno = RequireColumnIndex(TBL_PRIJEMNICA, "Stornirano", "Check_FakturaIznosReconciliation")
+    Dim fsData As Variant
+    fsData = GetTableData(TBL_FAKTURA_STAVKE)
+
+    If Not IsEmpty(fsData) Then
+        ' Stavka prijemnice -> Array(kolicina, cena, PrijemnicaID), iz strogog citaoca.
+        Dim poStavci As Object: Set poStavci = CreateObject("Scripting.Dictionary")
+        Dim st As Variant, k As Long
+        st = modDokumenta.StavkePrijemniceRedovi()
+        If IsArray(st) Then
+            For k = 1 To UBound(st, 1)
+                poStavci(UCase$(CStr(st(k, 7)))) = Array(CDbl(st(k, 4)), CDbl(st(k, 5)), CStr(st(k, 1)))
+            Next k
+        End If
+        Dim stornPrj As Object
+        Set stornPrj = BuildLookupDict(TBL_PRIJEMNICA, COL_PRJ_ID, COL_STORNIRANO)
+
+        Dim fFak As Long, fSt As Long
+        fFak = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, "Check_FakturaIznosReconciliation")
+        fSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_STAVKA_ID, "Check_FakturaIznosReconciliation")
 
         Dim p As Long
-        Dim fid As String
+        Dim fid As String, sid As String, prjID As String
         Dim pv As Double
-        Dim acc As Variant
-        For p = 1 To UBound(prijData, 1)
-            fid = Trim$(CStr(prijData(p, pFak)))
-            If Len(fid) > 0 Then
-                pv = HealthNumeric(prijData(p, pKol)) * HealthNumeric(prijData(p, pCena))
-                If Not liveDict.Exists(fid) Then liveDict.Add fid, Array(0#, 0#)
-                acc = liveDict(fid)
-                acc(0) = acc(0) + pv
-                If Not IsStorniranoValue(prijData(p, pStorno)) Then acc(1) = acc(1) + pv
-                liveDict(fid) = acc
+        Dim acc As Variant, rec As Variant
+        For p = 1 To UBound(fsData, 1)
+            fid = Trim$(CStr(fsData(p, fFak)))
+            sid = UCase$(Trim$(CStr(fsData(p, fSt))))
+            If Len(fid) > 0 And Len(sid) > 0 Then
+                If poStavci.Exists(sid) Then
+                    rec = poStavci(sid)
+                    pv = CDbl(rec(0)) * CDbl(rec(1))
+                    prjID = CStr(rec(2))
+                    If Not liveDict.Exists(fid) Then liveDict.Add fid, Array(0#, 0#)
+                    acc = liveDict(fid)
+                    acc(0) = acc(0) + pv
+                    If Not stornPrj Is Nothing Then
+                        If stornPrj.Exists(prjID) Then
+                            If Not IsStorniranoValue(stornPrj(prjID)) Then acc(1) = acc(1) + pv
+                        End If
+                    End If
+                    liveDict(fid) = acc
+                End If
             End If
         Next p
     End If
@@ -1003,10 +985,10 @@ Private Sub Check_DocumentSoftDeleteReferences()
         TBL_OTPREMNICA, "OtpremnicaID", _
         "Active otkup references stornirana otpremnica")
 
-    badCount = badCount + CountActiveReferencesToStornirano( _
-        TBL_PRIJEMNICA, "PrijemnicaID", "FakturaID", _
-        TBL_FAKTURE, "FakturaID", _
-        "Active prijemnica references stornirana faktura")
+    ' Prijemnica -> faktura vise nije veza na zaglavlju (S6 korak 5): kes
+    ' FakturaID se ne cita, a fakturisanost je izvedena iz aktivnih linija --
+    ' storno fakture linije stornira, pa aktivna veza na storniranu fakturu ne
+    ' moze da nastane. Provera je zato skinuta, ne prepisana.
 
     badCount = badCount + CountActiveReferencesToStornirano( _
         TBL_FAKTURA_STAVKE, "StavkaID", "PrijemnicaID", _

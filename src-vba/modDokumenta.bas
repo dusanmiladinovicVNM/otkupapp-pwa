@@ -6612,15 +6612,14 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     ' transakciju koja se odmah rollback-uje.
     modSchema.SchemaReadyOrFail "SavePrijemnicaMulti_TX", _
         TBL_PRIJEMNICA & "|" & TBL_PRIJEMNICA_STAVKE & "|" & TBL_AMBALAZA & _
-        "|" & TBL_FAKTURA_STAVKE & "|" & TBL_FAKTURE & "|" & TBL_PALETA & _
-        "|" & TBL_PALETA_STAVKA
+        "|" & TBL_PALETA & "|" & TBL_PALETA_STAVKA
 
+    ' Fakture i njihove linije se ne snimaju: od S6 koraka 5 pisac prijemnice ih
+    ' ne dira (prevezivanje osirotelih linija, RelinkFakturaStavke, je obrisano).
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
     tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
-    tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
@@ -6994,13 +6993,10 @@ Private Function SavePrijemnicaDokument(ByVal tx As clsTransaction, _
                     potvrdaDeficita
     End If
 
-    ' Prevezivanje osirocenih stavki fakture (ispravka fakturisane prijemnice),
-    ' po klasi koju dokument IMA -- stavka fakture klase koje nova prijemnica
-    ' nema ostaje osirocena, kao i do koraka 2.
-    For i = 1 To stavke.count
-        s = stavke(i)
-        RelinkFakturaStavke newID, brojPrij, Trim$(CStr(s(0)))
-    Next i
+    ' Prevezivanja osirotelih linija fakture vise NEMA (S6 korak 5, odluka 4):
+    ' fakturisana prijemnica se ne stornira (korak 4, odluka 1), pa se ni ne
+    ' ispravlja -- linija fakture nikad ne ostaje nad storniranom prijemnicom.
+    ' Kapiju meri Test_S6K4_FakturisanaSeOdbija.
 
     SavePrijemnicaDokument = newID
     Exit Function
@@ -7503,10 +7499,12 @@ Public Function KgPrijemniceMeko(ByVal zbir As Object, ByVal prijemnicaID As Str
     KgPrijemniceMeko = CDbl(zbir(Trim$(prijemnicaID))(0))
 End Function
 
+' Parametar samoNefakturisano je obrisan u S6 koraku 5: filtrirao je po kesu
+' Fakturisano na zaglavlju, a nijedan pozivalac ga nije palio. Fakturisanost je
+' izvedena (modFaktura.FakturisanostPoPrijemnici) i cinjenica je STAVKE, ne reda.
 Public Function GetPrijemniceByKupac(ByVal kupacID As String, _
                                       Optional ByVal datumOd As Date = 0, _
-                                      Optional ByVal datumDo As Date = 0, _
-                                      Optional ByVal samoNefakturisano As Boolean = False) As Variant
+                                      Optional ByVal datumDo As Date = 0) As Variant
     On Error GoTo EH
 
     Dim data As Variant
@@ -7536,13 +7534,6 @@ Public Function GetPrijemniceByKupac(ByVal kupacID As String, _
         Set fp = New clsFilterParam
         fp.Init RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM, _
                 "modDokumenta.GetPrijemniceByKupac"), "BETWEEN", datumOd, datumDo
-        filters.Add fp
-    End If
-
-    If samoNefakturisano Then
-        Set fp = New clsFilterParam
-        fp.Init RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, _
-                "modDokumenta.GetPrijemniceByKupac"), "<>", "Da"
         filters.Add fp
     End If
 
@@ -8029,93 +8020,6 @@ EH:
     LogErr "modDokumenta.GetVerwaistePrijemnice"
     GetVerwaistePrijemnice = Empty
 End Function
-
-Public Sub RelinkFakturaStavke(ByVal newPrijemnicaID As String, _
-                               ByVal brojPrijemnice As String, _
-                               Optional ByVal klasaFilter As String = "")
-    ' Sucht verwaiste FakturaStavke die auf eine stornierte Prijemnica
-    ' mit gleichem BrojPrijemnice zeigen, und verlinkt sie auf die neue.
-    On Error GoTo EH
-
-    If Trim$(newPrijemnicaID) = "" Or Trim$(brojPrijemnice) = "" Then Exit Sub
-
-    Dim stavkeData As Variant
-    stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
-
-    If IsEmpty(stavkeData) Then Exit Sub
-
-    Dim colPrijID As Long
-    Dim colOsir As Long
-    Dim colFakID As Long
-    Dim colFsKlasa As Long
-
-    colPrijID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, _
-                                   "modDokumenta.RelinkFakturaStavke")
-    colOsir = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD, _
-                                 "modDokumenta.RelinkFakturaStavke")
-    colFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, _
-                                  "modDokumenta.RelinkFakturaStavke")
-    colFsKlasa = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KLASA, _
-                                "modDokumenta.RelinkFakturaStavke")
-
-    Dim i As Long
-    Dim oldPrijID As String
-    Dim oldBroj As String
-    Dim fakID As String
-
-    For i = 1 To UBound(stavkeData, 1)
-    
-        Dim stavkaKlasa As String
-        stavkaKlasa = Trim$(NzToText(stavkeData(i, colFsKlasa)))
-        If Len(Trim$(klasaFilter)) > 0 Then
-            If UCase$(stavkaKlasa) <> UCase$(Trim$(klasaFilter)) Then GoTo NextStavka
-        End If
-
-        If Trim$(NzToText(stavkeData(i, colOsir))) = "" Then GoTo NextStavka
-
-        oldPrijID = Trim$(NzToText(stavkeData(i, colPrijID)))
-
-        If oldPrijID = "" Then GoTo NextStavka
-
-        oldBroj = CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, oldPrijID, COL_PRJ_BROJ))
-
-        If oldBroj = brojPrijemnice Then
-            fakID = Trim$(NzToText(stavkeData(i, colFakID)))
-            
-            If Len(Trim$(fakID)) = 0 Then
-            Err.Raise vbObjectError + 7413, "modDokumenta.RelinkFakturaStavke", _
-                    "FakturaStavka nema FakturaID za relink. BrojPrijemnice=" & _
-                    brojPrijemnice & "; Klasa=" & stavkaKlasa
-            End If
-
-            RequireUpdateCell TBL_FAKTURA_STAVKE, i, COL_FS_PRIJEMNICA_ID, _
-                              newPrijemnicaID, "modDokumenta.RelinkFakturaStavke"
-
-            RequireUpdateCell TBL_FAKTURA_STAVKE, i, COL_OSIROCENO_OD, _
-                              "", "modDokumenta.RelinkFakturaStavke"
-
-            ' S6 KORAK 2: kes Fakturisano/FakturaID se na zaglavlje vise NE pise
-            ' (stavka 174, odluka 1 b). Do koraka 2 se upisivao na red KLASE
-            ' (FindPrijemnicaRowByIDAndKlasa); zaglavlje dokumenta nema klasu, a
-            ' fakturisanost je cinjenica linije -- izvodi se iz aktivnog reda
-            ' tblFakturaStavke (korak 5). PrijemnicaID stavke fakture od sada
-            ' znaci DOKUMENT (odluka 3); tacna linija dolazi u koraku 5.
-
-            If Len(Trim$(fakID)) > 0 Then
-                UpdateFakturaStatus fakID
-            End If
-
-        End If
-
-NextStavka:
-    Next i
-
-    Exit Sub
-
-EH:
-    LogErr "modDokumenta.RelinkFakturaStavke"
-    Err.Raise Err.Number, "modDokumenta.RelinkFakturaStavke", Err.description
-End Sub
 
 ' ============================================================
 ' HELPER - Vozac-Report (ersetzt alten modTransport)

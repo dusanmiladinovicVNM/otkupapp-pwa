@@ -312,13 +312,13 @@ Private Function ImpactFaktura(ByVal docType As String, ByVal broj As String, _
     f("hasFaktura") = False: f("fakturaID") = ""
     On Error GoTo EH
     If docType = FLOW_DOC_PRIJEMNICA Then
-        ' ISTI predikat kao kapija storna (S6 korak 4, odluka 1): kes ILI aktivna
-        ' stavka fakture. Uvid koji kaze "nije fakturisana" nad dokumentom koji
-        ' kapija odbija bio bi gori od uvida koga nema.
+        ' ISTI predikat kao kapija storna (S6 korak 4, odluka 1): izveden iz
+        ' aktivnih linija fakture (S6 korak 5, FAK-LIN-03). Uvid koji kaze "nije
+        ' fakturisana" nad dokumentom koji kapija odbija bio bi gori od uvida koga nema.
         Dim prjF As String, fakF As String
         prjF = modStornoFlow.PrijemnicaIDZaStorno(broj, docID, strict)
         If Len(prjF) > 0 Then
-            f("hasFaktura") = modStorno.PrijemnicaJeFakturisana(prjF, fakF)
+            f("hasFaktura") = modFaktura.PrijemnicaJeFakturisana(prjF, fakF)
             f("fakturaID") = fakF
         End If
     End If

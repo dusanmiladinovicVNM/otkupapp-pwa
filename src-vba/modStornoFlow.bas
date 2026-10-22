@@ -119,8 +119,11 @@ Optional ByVal docID As String = "") As String
         Exit Function
     End If
     m = m & "Broj zbirne: " & IIf(Len(CStr(s("brojZbirne"))) > 0, CStr(s("brojZbirne")), "(nema)") & vbCrLf
+    ' Fakturisanu storno ODBIJA (S6 korak 4, odluka 1). Ovaj pregled je i posle
+    ' N2 obecavao "(faktura/stavke se oslobadjaju)" -- nadjeno pretragom po
+    ' recima u S6 koraku 5.
     m = m & "Fakturisana: " & YesNo(CBool(s("fakturisano"))) & _
-            IIf(CBool(s("fakturisano")), " (faktura/stavke se oslobadjaju)", "") & vbCrLf
+            IIf(CBool(s("fakturisano")), " (" & Poruka("STEF_FAK_ODBIJA") & ")", "") & vbCrLf
     m = m & "Palete preko prijemnice: " & YesNo(CBool(s("hasPalete"))) & _
             " (" & CStr(s("paleteCount")) & ")" & vbCrLf
     m = m & "Otkupni blokovi (preko zbirne, samostalni): " & CStr(s("blockCount")) & vbCrLf
@@ -450,7 +453,8 @@ End Function
 
 ' ============================================================
 ' PRIJEMNICA - dispatch po modu. Prijemnica je skoro-list: nizvodni tok = paletne
-' stavke (DetachOsirocenePaletaStavke) + faktura (oslobadja se u StornoPrijemnica).
+' stavke (skida ih jezgro storna) + faktura (fakturisanu ODBIJA i okvir i jezgro --
+' prvo storno fakture; S6 koraci 4 i 5).
 ' Otkupni blokovi su SAMOSTALNI (vezani preko BrojZbirne) -> NE diraju se automatski;
 ' dodatni storno blokova je obrisan u S1e (StornoSelectedBlocks_TX; vraca S3).
 ' ISPRAVKA: storno + needsForm; prevezivanje paleta radi save-putanja prijemnice
@@ -495,6 +499,19 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
     End If
     Dim parentZbirna As String: parentZbirna = CStr(s("brojZbirne"))
     Dim prijID As String: prijID = CStr(s("prijID"))
+
+    ' FAKTURISANA prijemnica (odluka 1, i delimicno fakturisana) se odbija OVDE,
+    ' pre dijaloga posledica i pre zapisa ispravke (KI-040, S6 korak 5). Do tada
+    ' je zapis nastajao pre nego sto jezgro odbije, pa je ostajao FAILED u
+    ' Oporavku iako se nista nije promenilo -- poslovno pravilo upisano kao
+    ' sistemski pad. Isti tekst kao jezgro (FakturisanaPrijemnicaRazlog), koje
+    ' kapiju zadrzava. RESI KASNIJE ne stornira nego samo parkira, pa sme.
+    Dim razlogFak As String
+    If mode <> SV_MODE_RESI_KASNIJE Then razlogFak = modStorno.FakturisanaPrijemnicaRazlog(prijID)
+    If Len(razlogFak) > 0 Then
+        r("message") = razlogFak
+        Exit Function
+    End If
 
     ' Roba na PRERADJENOJ paleti (odluka 3) obara storno koji skida palete. Pita
     ' se OVDE, pre dijaloga posledica i pre zapisa ispravke (ponovljena rucna
@@ -822,9 +839,9 @@ Private Function ScanPrijemnica(ByVal broj As String, _
     d("brojZbirne") = bz
     ' Otpremnice te zbirne (PONISTENJE prijemnice ih stornira; zbirna se rekalk/storno).
     d("otpCount") = OtpCountZbirnePoBroju(bz, strict)
-    ' Isti predikat kao kapija storna (kes ILI aktivna stavka fakture), da uvid i
-    ' kapija ne kazu dve razlicite stvari o istom dokumentu.
-    d("fakturisano") = modStorno.PrijemnicaJeFakturisana(prijID)
+    ' Isti izvedeni status kao kapija storna (aktivne linije fakture, S6 korak 5,
+    ' FAK-LIN-03), da uvid i kapija ne kazu dve razlicite stvari o istom dokumentu.
+    d("fakturisano") = modFaktura.PrijemnicaJeFakturisana(prijID)
     ' Palete se broje po PrijemnicaID kad je dokument razresen: broj bi uracunao
     ' i palete tudjeg dokumenta iste oznake, pa bi pregled lagao operatera.
     Dim palc As Long

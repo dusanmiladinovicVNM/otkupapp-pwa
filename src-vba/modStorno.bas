@@ -17,10 +17,11 @@ Option Explicit
 ' - Svaki dokument se stornira pojedinacno.
 ' - Nema automatske kaskade izmedju dokumenata.
 ' - Ambalaza se stornira za dokument gde postoji.
-' - Faktura: stavke se storniraju, prijemnice se oslobadjaju,
-'   novac se odvezuje od fakture.
-' - Prijemnica: ako je bila fakturisana, oslobadja se i faktura/stavke
-'   se oznacavaju kao osirocene.
+' - Faktura: stavke se storniraju, novac se odvezuje od fakture. Prijemnica
+'   se time oslobadja SAMA: njena fakturisanost je izvedena iz aktivnih
+'   linija (S6 korak 5, FAK-LIN-03), pa se nista na njoj ne pise.
+' - Prijemnica: fakturisana (i delimicno) se ODBIJA -- prvo storno fakture
+'   (S6 korak 4, odluka 1).
 ' ============================================================
 
 Private Const MOD_NAME As String = "modStorno"
@@ -494,11 +495,10 @@ Public Function StornoPrijemnica(ByVal prijemnicaID As String, _
     Dim rowPrij As Long
     rowPrij = RequireStornoAllowed(TBL_PRIJEMNICA, prijemnicaID, COL_PRJ_ID, SRC)
 
-    Dim fakID As String
-    If PrijemnicaJeFakturisana(prijemnicaID, fakID) Then
-        Err.Raise ERR_STORNO_BASE + 74, SRC, _
-                  "Prijemnica " & Trim$(prijemnicaID) & " je fakturisana (faktura " & _
-                  fakID & "). Prvo stornirajte fakturu, pa prijemnicu."
+    Dim razlogFak As String
+    razlogFak = FakturisanaPrijemnicaRazlog(prijemnicaID)
+    If Len(razlogFak) > 0 Then
+        Err.Raise ERR_STORNO_BASE + 74, SRC, razlogFak
     End If
 
     If skiniPalete Then
@@ -549,53 +549,20 @@ Private Sub RequireSnimakZaStornoPrijemnice(ByVal tx As clsTransaction, _
     Next t
 End Sub
 
-' FAKTURISANA PRIJEMNICA (S6 korak 4, odluka 1). JEDAN predikat za kapiju storna i
-' za uvid (modStornoImpact, modStornoFlow) -- dva tela bi se razisla.
+' FAKTURISANA PRIJEMNICA SE NE STORNIRA (S6 korak 4, odluka 1). Razlog odbijanja,
+' citljiv operateru; prazno = dokument nije fakturisan. JEDAN tekst za jezgro
+' storna i okvir ispravke (KI-040) -- dva teksta bi se razisla. Delimicno
+' fakturisan dokument se odbija kao fakturisan.
 '
-' Dva izvora, jer ni jedan sam nije istina: kes Fakturisano/FakturaID na zaglavlju
-' pise CreateFaktura (modFaktura:360/363), a stavka fakture nosi PrijemnicaID (korak
-' 5 je prevodi na PrijemnicaStavkaID). Aktivna stavka = nije stornirana. Kes "DA"
-' bez FakturaID-a je i dalje fakturisan dokument; outFakturaID je tada prazan.
-Public Function PrijemnicaJeFakturisana(ByVal prijemnicaID As String, _
-                                        Optional ByRef outFakturaID As String) As Boolean
-    Const SRC As String = "PrijemnicaJeFakturisana"
-    Dim pid As String, rows As Collection
-    outFakturaID = ""
-    pid = Trim$(prijemnicaID)
-    RequireNonBlank pid, "PrijemnicaID", SRC
-
-    Dim cKes As Long, cKesID As Long
-    cKes = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC)
-    cKesID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC)
-    Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, pid)
-    If Not rows Is Nothing Then
-        If rows.count = 1 Then
-            Dim p As Variant
-            p = GetTableData(TBL_PRIJEMNICA)
-            If UCase$(Trim$(NzToText(p(CLng(rows(1)), cKes)))) = "DA" Then
-                outFakturaID = Trim$(NzToText(p(CLng(rows(1)), cKesID)))
-                PrijemnicaJeFakturisana = True
-                Exit Function
-            End If
-        End If
-    End If
-
-    Dim d As Variant
-    d = GetTableData(TBL_FAKTURA_STAVKE)
-    If IsEmpty(d) Then Exit Function
-    Dim cP As Long, cF As Long, cSt As Long, i As Long
-    cP = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
-    cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
-    cSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC)
-    For i = 1 To UBound(d, 1)
-        If StrComp(Trim$(NzToText(d(i, cP))), pid, vbTextCompare) = 0 Then
-            If Not IsStorniranoValue(d(i, cSt)) Then
-                outFakturaID = Trim$(NzToText(d(i, cF)))
-                PrijemnicaJeFakturisana = True
-                Exit Function
-            End If
-        End If
-    Next i
+' Fakturisanost se ne racuna ovde: od S6 koraka 5 je izvedena iz aktivnih linija
+' fakture u JEDNOM telu, modFaktura.PrijemnicaJeFakturisana (FAK-LIN-03), koje
+' pitaju i lista, mreza i uvid. Do tada je ovde stajao drugi predikat (kes
+' Fakturisano ILI linija), a lista je citala treci izvor (KI-038).
+Public Function FakturisanaPrijemnicaRazlog(ByVal prijemnicaID As String) As String
+    Dim fak As String
+    If Not modFaktura.PrijemnicaJeFakturisana(prijemnicaID, fak) Then Exit Function
+    FakturisanaPrijemnicaRazlog = "Prijemnica " & Trim$(prijemnicaID) & _
+        " je fakturisana (faktura " & fak & "). Prvo stornirajte fakturu, pa prijemnicu."
 End Function
 
 ' ============================================================
@@ -610,10 +577,11 @@ Public Function StornoFaktura_TX(ByVal fakturaID As String) As Boolean
 
     On Error GoTo EH
 
+    ' Prijemnica se ne snima: od S6 koraka 5 je storno fakture ne pise --
+    ' oslobadja se sama, jer joj je fakturisanost izvedena iz linija.
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
-    tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_NOVAC
     ' R3/krug 5 (revizija #248): GP grana oslobadja UTOVAR
     ' (ReleaseUtovarFromFaktura pise tblUtovar) -- bez snapshota bi
@@ -656,14 +624,11 @@ Public Function StornoFaktura(ByVal fakturaID As String) As Boolean
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_ID, SRC
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC
 
     MarkRowStornirano TBL_FAKTURE, rowFak, SRC
     RequireUpdateCell TBL_FAKTURE, rowFak, COL_FAK_STATUS, STATUS_STORNIRANO, SRC
 
-    StornoFakturaStavkeAndReleasePrijemnice fakturaID
+    StornoFakturaStavke fakturaID
     ' R3 rollback dokaz: tacka je POSLE oslobadjanja prijemnica/prerada
     ' a PRE kraja -- pukne li ovde, TX mora da vrati i tblPrerada.
     If mTestFailPosleRelease Then
@@ -1669,8 +1634,12 @@ End Function
 ' PRIVATE BUSINESS HELPERS
 ' ============================================================
 
-Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
-    Const SRC As String = "StornoFakturaStavkeAndReleasePrijemnice"
+' Linije fakture se storniraju. Prijemnica se time OSLOBADJA SAMA -- njena
+' fakturisanost je izvedena iz aktivnih linija (S6 korak 5, FAK-LIN-03), pa se na
+' njoj nista ne pise. Do koraka 5 je ovde stajao ReleasePrijemnicaFromFaktura,
+' koji je brisao kes Fakturisano/FakturaID na zaglavlju.
+Private Sub StornoFakturaStavke(ByVal fakturaID As String)
+    Const SRC As String = "StornoFakturaStavke"
 
     Dim stavkeData As Variant
     stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
@@ -1678,10 +1647,8 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
     If IsEmpty(stavkeData) Then Exit Sub
 
     Dim colFakID As Long
-    Dim colPrijID As Long
 
     colFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
-    colPrijID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
 
     Dim i As Long
 
@@ -1702,13 +1669,6 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
         If Trim$(CStr(stavkeData(i, colFakID))) = Trim$(fakturaID) Then
             MarkRowStornirano TBL_FAKTURA_STAVKE, i, SRC
 
-            Dim prijID As String
-            prijID = Trim$(CStr(stavkeData(i, colPrijID)))
-
-            If Len(prijID) > 0 Then
-                ReleasePrijemnicaFromFaktura prijID, fakturaID
-            End If
-
             If colUtID > 0 Then
                 Dim utID As String
                 utID = Trim$(CStr(nz(stavkeData(i, colUtID))))
@@ -1723,8 +1683,8 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
     Next i
 End Sub
 
-' GP par ReleasePrijemnicaFromFaktura (krug 5): storno GP fakture
-' oslobadja UTOVAR -- fail-closed na dupli ID, isti obrazac.
+' GP grana (krug 5): storno GP fakture oslobadja UTOVAR (njegov marker je
+' cinjenica utovara, ne izvedena) -- fail-closed na dupli ID.
 Private Sub ReleaseUtovarFromFaktura(ByVal utovarID As String, _
                                      ByVal fakturaID As String)
     Const SRC As String = "ReleaseUtovarFromFaktura"
@@ -1763,32 +1723,10 @@ Private Sub ReleaseUtovarFromFaktura(ByVal utovarID As String, _
     RequireUpdateCell TBL_UTOVAR, rowUt, COL_UT_FAKTURA_ID, "", SRC
 End Sub
 
-Private Sub ReleasePrijemnicaFromFaktura(ByVal prijemnicaID As String, _
-                                         ByVal fakturaID As String)
-    Const SRC As String = "ReleasePrijemnicaFromFaktura"
-
-    Dim rows As Collection
-    Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID)
-
-    If rows Is Nothing Then Exit Sub
-    If rows.count = 0 Then Exit Sub
-
-    If rows.count > 1 Then
-        Err.Raise ERR_STORNO_BASE + 50, SRC, _
-                  "Dupla PrijemnicaID vrednost: " & prijemnicaID
-    End If
-
-    Dim rowPrij As Long
-    rowPrij = CLng(rows(1))
-
-    RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURISANO, "", SRC
-    RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURA_ID, "", SRC
-End Sub
-
 ' MarkFakturaOrphaned / MarkFakturaStavkeOrphaned su obrisani u S6 koraku 4:
 ' storno fakturisane prijemnice se odbija (odluka 1), pa je grana osirotelosti
-' nedostizna. Osirotelost po PrijemnicaStavkaID-u, ako ostane pravilo, vraca
-' korak 5.
+' nedostizna. Korak 5 je nije vratio: put je storno fakture (linije se storniraju,
+' prijemnica postaje nefakturisana sama), pa storno prijemnice.
 
 Private Sub ResetNovacFakturaLink(ByVal fakturaID As String)
     Const SRC As String = "ResetNovacFakturaLink"

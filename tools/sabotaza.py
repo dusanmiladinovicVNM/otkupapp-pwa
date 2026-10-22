@@ -2485,15 +2485,9 @@ SABOTAZE = {
         "T_Fak_DostupnostSePrenosiURedu",
         "red NOSI 'nije dostupna' u koloni 11",
     ),
-    # Pravilo zivi na jednom mestu i deli ga kapija IsPrijemnicaAvailableForFaktura
-    # sa citacem mreze. Ovde gubi jedan uslov -- i dve strane pocnu da se razilaze.
-    "fakture-dostupnost-bez-oznake": (
-        "modFaktura.bas",
-        '    If Trim$(fakturisano) = "Da" Then Exit Function\n',
-        "    ' SABOTAZA: oznaka 'fakturisano' se vise ne gleda\n",
-        "T_Fak_DostupnostSePrenosiURedu",
-        "obelezena kao fakturisana ne sme -- i kad FakturaID nedostaje",
-    ),
+    # fakture-dostupnost-bez-oznake je POVUCEN u S6 koraku 5: oznaka (kes
+    # Fakturisano) vise nije deo pravila -- odluka 1 koraka 5. Pravilo dostupnosti
+    # gubi uslov linije u s6k5-dostupnost-bez-linije.
     # Korpa NIJE podatak u tabeli. Ljuska brojace pita samo kroz RefreshFromData,
     # a nju zove tek na "podaci su promenjeni" -- pa bez svog kanala znacka pise
     # nulu dok operater gleda listu faktura i puni korpu.
@@ -2511,7 +2505,7 @@ SABOTAZE = {
     # jer red koji nestane izgleda isto kao onaj koji je trebalo da nestane.
     "fakture-korpa-uklanja-prvu": (
         "modScrFakture.bas",
-        "    i = UKorpi(prijemnicaID)\n",
+        "    i = UKorpi(stavkaID)\n",
         "    i = IIf(Korpa().count > 0, 1, 0)   ' SABOTAZA: uklanja prvu\n",
         "T_Fak_KorpaZnackaITraka",
         "ostala je bas ona koja NIJE pokazana",
@@ -9092,26 +9086,27 @@ SABOTAZE = {
         "Test_S6K4_StornoSkidaPaleteUIstojTx",
         "S6K4 storno: paletne stavke OBE klase padaju sa dokumentom",
     ),
+    # S6 korak 5: kapija jezgra pita zajednicki razlog (FakturisanaPrijemnicaRazlog).
+    # Presidreno na liniju -- kesa vise nema u odluci; test zove jezgro DIREKTNO,
+    # gde je jezgro jedina brana (okvir ispravke ima svoju, KI-040).
     "s6k4-faktura-kapija-u-jezgru": (
         "modStorno.bas",
-        "    If PrijemnicaJeFakturisana(prijemnicaID, fakID) Then\n",
+        "    If Len(razlogFak) > 0 Then\n",
         "    If False Then   ' SABOTAZA: jezgro ne pita za fakturu\n",
         "Test_S6K4_FakturisanaSeOdbija",
-        "S6K4 faktura: odbijena (kes) ostaje aktivna",
-    ),
-    "s6k4-faktura-kes-prolazi": (
-        "modStorno.bas",
-        "            If UCase$(Trim$(NzToText(p(CLng(rows(1)), cKes)))) = \"DA\" Then\n",
-        "            If False Then   ' SABOTAZA: kes Fakturisano se ne gleda\n",
-        "Test_S6K4_FakturisanaSeOdbija",
-        "S6K4 faktura: prijemnica sa kesom Fakturisano je ODBIJENA",
-    ),
-    "s6k4-faktura-stavka-prolazi": (
-        "modStorno.bas",
-        "        If StrComp(Trim$(NzToText(d(i, cP))), pid, vbTextCompare) = 0 Then\n",
-        "        If False Then   ' SABOTAZA: stavka fakture se ne gleda\n",
-        "Test_S6K4_FakturisanaSeOdbija",
         "S6K4 faktura: prijemnica pod aktivnom stavkom fakture je ODBIJENA",
+    ),
+    # s6k4-faktura-kes-prolazi je POVUCEN u S6 koraku 5: grana kesa je obrisana
+    # po odluci (kes niko ne cita, FAK-LIN-03). Obrnutu tvrdnju -- kes NE odbija
+    # -- meri s6k5-citac-gleda-kes.
+    # Presidreno u S6 koraku 5 na citac linija (modFaktura): linija koju recnik
+    # ne vidi je fakturisana stavka koju ne vidi niko.
+    "s6k4-faktura-stavka-prolazi": (
+        "modFaktura.bas",
+        "                d.Add k, Array(fid, pid, sid)\n",
+        "                ' SABOTAZA: aktivna linija se ne upisuje u recnik\n",
+        "Test_S6K5_DveKlaseIzStavki",
+        "S6K5 faktura: dokument je fakturisan -- izveden iz linija",
     ),
     "s6k4-preradjena-paleta-prolazi": (
         "modPaletniList.bas",
@@ -9254,6 +9249,169 @@ SABOTAZE = {
         "                If False Then   ' SABOTAZA: dijalog ne vidi preradjenu paletu\n",
         "T_S6K4_UvidKazeOdbijanje",
         "S6K4 dijalog PONISTENJA: preradjena paleta -- kaze ODBIJA, ne skida sa palete",
+    ),
+    # ---- S6 korak 5: faktura po PrijemnicaStavkaID, fakturisanost izvedena ----
+    # (plan 14.55 "Korak 5"; FAK-LIN-01..03). Citac, pisac, okvir, lista, mreza,
+    # detalj, storno fakture i TX.
+    # R1/KI-038: citac koji dopusti kesu da odlucuje -- PRJ-FAK-2 (kes "Da" bez
+    # linije) postaje fakturisana u kapiji, a lista je i dalje vidi slobodnom.
+    "s6k5-citac-gleda-kes": (
+        "modFaktura.bas",
+        "    PrijemnicaJeFakturisana = (PrijemnicaFakturisanost(prijemnicaID, outFakturaID) <> FAKT_NE)\n",
+        "    PrijemnicaJeFakturisana = (PrijemnicaFakturisanost(prijemnicaID, outFakturaID) <> FAKT_NE) Or (UCase$(Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_FAKTURISANO)))) = \"DA\")   ' SABOTAZA: kes odlucuje\n",
+        "T_S6K5_FakturisanostJedanIzvor",
+        "S6K5: PRJ-FAK-2 (kes 'Da' bez linije) NIJE fakturisana -- kapija (KI-038)",
+    ),
+    # Lista koja ne cita izveden status: svaki dokument je "Nefakturisano".
+    "s6k5-lista-bez-izvedenog": (
+        "modScrDokumenti.bas",
+        "            ElseIf CLng(fRec(0)) = FAKT_NE Then\n",
+        "            ElseIf True Then   ' SABOTAZA: lista ne cita izveden status\n",
+        "T_S6K5_FakturisanostJedanIzvor",
+        "S6K5: PRJ-FAK-1 -- lista pokazuje placanje njene fakture",
+    ),
+    # Detalj izvestaja koji cita kes zaglavlja umesto izvedenog statusa.
+    "s6k5-detalj-cita-kes": (
+        "modScrIzvestaji.bas",
+        "            stanjeFak = modFaktura.PrijemnicaFakturisanost(Trim$(prjID), faktureTxt)\n",
+        "            stanjeFak = IIf(UCase$(NzS(d(i, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO)))) = \"DA\", FAKT_DA, FAKT_NE)   ' SABOTAZA: detalj cita kes\n",
+        "T_S6K5_FakturisanostJedanIzvor",
+        "S6K5: PRJ-FAK-2 -- detalj izvestaja kaze da nije fakturisana",
+    ),
+    # Red mreze Fakturisanja nosi DOKUMENT umesto stavke (stanje pre koraka 5).
+    "s6k5-mreza-po-dokumentu": (
+        "modFaktura.bas",
+        "            outA(n, 1) = IdIliPrazno(brojac, sid)\n",
+        "            outA(n, 1) = IdIliPrazno(brojac, iD)   ' SABOTAZA: red mreze nosi dokument\n",
+        "T_S6K5_FakturisanostJedanIzvor",
+        "S6K5: PRJ-FAK-2 -- mreza Fakturisanja nudi njenu stavku",
+    ),
+    # Pregled lanca (BuildStornoPreview) ponovo obecava oslobadjanje fakture.
+    "s6k5-pregled-oslobadja": (
+        "modStornoFlow.bas",
+        "            IIf(CBool(s(\"fakturisano\")), \" (\" & Poruka(\"STEF_FAK_ODBIJA\") & \")\", \"\") & vbCrLf\n",
+        "            IIf(CBool(s(\"fakturisano\")), \" (faktura/stavke se oslobadjaju)\", \"\") & vbCrLf   ' SABOTAZA: pregled obecava oslobadjanje\n",
+        "T_S6K4_UvidKazeOdbijanje",
+        "S6K5 pregled lanca: fakturisana -- kaze ODBIJA, ne oslobadja fakturu",
+    ),
+    # R2: pisac cita kolicinu sa ZAGLAVLJA (stanje pre koraka 5) -- dokument pravog
+    # pisca tada nema sta da fakturise.
+    "s6k5-faktura-sa-zaglavlja": (
+        "modFaktura.bas",
+        "        kol = CDbl(red(4))\n",
+        "        kol = FakD(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_KOLICINA))   ' SABOTAZA: kolicina sa zaglavlja\n",
+        "Test_S6K5_DveKlaseIzStavki",
+        "S6K5 faktura: dvoklasni dokument se fakturise iz STAVKI",
+    ),
+    "s6k5-linija-bez-stavke": (
+        "modFaktura.bas",
+        "        RequireUpdateCell TBL_FAKTURA_STAVKE, fsRow, COL_FS_PRIJEMNICA_STAVKA_ID, CStr(v(0)), \"CreateFaktura\"\n",
+        "        ' SABOTAZA: linija ne nosi PrijemnicaStavkaID\n",
+        "Test_S6K5_DveKlaseIzStavki",
+        "S6K5 faktura: linija po stavci, sa PrijemnicaStavkaID-em i brojkama stavke",
+    ),
+    # FAK-LIN-03: pisac koji opet pise kes na zaglavlje prijemnice.
+    "s6k5-pisac-pise-kes": (
+        "modFaktura.bas",
+        "    ApplyAvansToFaktura kupacID, fakturaID\n",
+        "    ApplyAvansToFaktura kupacID, fakturaID: RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURA_ID, fakturaID, \"CreateFaktura\"   ' SABOTAZA: pisac pise kes\n",
+        "Test_S6K5_DveKlaseIzStavki",
+        "S6K5 faktura: zaglavlje prijemnice ne dobija kes fakture",
+    ),
+    # R3 / FAK-LIN-01: druga faktura nad istom stavkom.
+    "s6k5-druga-faktura-prolazi": (
+        "modFaktura.bas",
+        "        If linije.Exists(kStavke) Then\n",
+        "        If False Then   ' SABOTAZA: vec fakturisana stavka prolazi\n",
+        "Test_DuplicateFakturaIsBlocked",
+        "Duplicate faktura attempt returns empty",
+    ),
+    "s6k5-storno-prolazi": (
+        "modFaktura.bas",
+        "        If UCase$(Trim$(NzToText(prijData(rowPrij, colPrjStorno)))) = \"DA\" Then\n",
+        "        If False Then   ' SABOTAZA: stornirana prijemnica prolazi\n",
+        "Test_S6K5_FakturaOdbijaNevazeceStavke",
+        "S6K5 negativno: faktura nad storniranom prijemnicom je ODBIJENA",
+    ),
+    "s6k5-tudji-kupac-prolazi": (
+        "modFaktura.bas",
+        "        If prjKupac <> Trim$(kupacID) Then\n",
+        "        If False Then   ' SABOTAZA: stavka tudjeg kupca prolazi\n",
+        "Test_S6K5_FakturaOdbijaNevazeceStavke",
+        "S6K5 negativno: stavka dokumenta drugog kupca je ODBIJENA",
+    ),
+    # Nepostojeca stavka i dupla stavka u izboru NEMAJU sabotazu: obe kapije su
+    # dvoslojne po konstrukciji (recnik bez kljuca pada na red(1), a Dictionary.Add
+    # na dupli kljuc), pa bi gasenje kapije bilo placebo. Tvrdnje stoje u
+    # Test_S6K5_FakturaOdbijaNevazeceStavke, uz KONTROLU koja prolazi.
+    # R2 / odluka 5: delimicno fakturisan dokument.
+    "s6k5-delim-kao-fakturisan": (
+        "modFaktura.bas",
+        "        ElseIf nFak < c.count Then\n",
+        "        ElseIf False Then   ' SABOTAZA: delimicno je potpuno\n",
+        "Test_S6K5_DelimicnoFakturisanje",
+        "S6K5 delimicno: detalj izvestaja kaze da je dokument delimicno fakturisan",
+    ),
+    "s6k5-lista-bez-delim": (
+        "modScrDokumenti.bas",
+        "                pCode = PAY_DELIM_FAKT\n",
+        "                pCode = PAY_NEFAKT   ' SABOTAZA: delimicno se prikazuje kao nefakturisano\n",
+        "Test_S6K5_DelimicnoFakturisanje",
+        "S6K5 delimicno: lista dokumenata kaze 'Delim. fakturisano'",
+    ),
+    "s6k5-cip-bez-delim": (
+        "modScrDokumenti.bas",
+        "        If Not IsEmpty(fRec) Then bezFakture = (CLng(fRec(0)) <> FAKT_DA)\n",
+        "        If Not IsEmpty(fRec) Then bezFakture = (CLng(fRec(0)) = FAKT_NE)   ' SABOTAZA: cip ne vidi delimicno\n",
+        "Test_S6K5_DelimicnoFakturisanje",
+        "S6K5 delimicno: cip 'Nefakturisane' ukljucuje delimicno fakturisan dokument",
+    ),
+    # Pravilo dostupnosti stavke gubi uslov linije.
+    "s6k5-dostupnost-bez-linije": (
+        "modFaktura.bas",
+        "    If Trim$(fakturaID) <> \"\" Then Exit Function\n",
+        "    ' SABOTAZA: linija fakture se ne gleda\n",
+        "T_Fak_DostupnostSePrenosiURedu",
+        "stavka na aktivnoj liniji fakture ne sme",
+    ),
+    # R5 / KI-040: okvir ispravke pusta fakturisanu do zapisa ispravke.
+    "s6k5-okvir-pusta-fakturisanu": (
+        "modStornoFlow.bas",
+        "    If mode <> SV_MODE_RESI_KASNIJE Then razlogFak = modStorno.FakturisanaPrijemnicaRazlog(prijID)\n",
+        "    ' SABOTAZA: okvir ne pita za fakturu\n",
+        "Test_S6K5_OkvirOdbijaFakturisanuPreZapisa",
+        "S6K5 okvir: odbijen pokusaj NE ostavlja zapis ispravke (KI-040)",
+    ),
+    "s6k5-okvir-odbija-resi-kasnije": (
+        "modStornoFlow.bas",
+        "    If mode <> SV_MODE_RESI_KASNIJE Then razlogFak = modStorno.FakturisanaPrijemnicaRazlog(prijID)\n",
+        "    razlogFak = modStorno.FakturisanaPrijemnicaRazlog(prijID)   ' SABOTAZA: i RESI KASNIJE se odbija\n",
+        "Test_S6K5_OkvirOdbijaFakturisanuPreZapisa",
+        "S6K5 okvir: RESI KASNIJE i dalje pravi zapis",
+    ),
+    # R6: storno fakture koji ne stornira linije ostavlja dokument fakturisan.
+    "s6k5-storno-fakture-ne-gasi-linije": (
+        "modStorno.bas",
+        "            MarkRowStornirano TBL_FAKTURA_STAVKE, i, SRC\n",
+        "            ' SABOTAZA: storno fakture ne stornira linije\n",
+        "Test_S6K5_StornoFakturePaPrijemnice",
+        "S6K5 storno: posle storna fakture dokument je NEFAKTURISAN",
+    ),
+    # TX: transakcija fakture bez snimka linija -- pad ostavlja linije bez zaglavlja.
+    "s6k5-tx-bez-snimka-linija": (
+        "modFaktura.bas",
+        "    tx.AddTableSnapshot TBL_FAKTURA_STAVKE\n",
+        "    ' SABOTAZA: TX ne snima linije fakture\n",
+        "Test_S6K5_PadPosleUpisaVracaFakturu",
+        "S6K5 TX: rollback vraca zaglavlje, linije i novac",
+    ),
+    # Seam koji ne kvari: test rollback-a bi merio uspeh, ne povratak.
+    "s6k5-seam-inertan": (
+        "modFaktura.bas",
+        "    If mTestFakturaPadni Then\n",
+        "    If False Then   ' SABOTAZA: seam ne kvari\n",
+        "Test_S6K5_PadPosleUpisaVracaFakturu",
+        "S6K5 TX: pad posle svih upisa obara fakturu",
     ),
 }
 

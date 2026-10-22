@@ -5,8 +5,22 @@ Option Explicit
 ' ============================================================
 ' modFaktura v2.1 - Rechnungserstellung
 ' GEAeNDERT: Basiert auf tblPrijemnica statt tblIsporuka
-' Faktura-Betrag = Prijemnica.Kolicina x Prijemnica.Cena
+' Od S6 koraka 5: iznos = zbir STAVKI prijemnice (Kolicina x Cena po stavci),
+' a linija fakture nosi PrijemnicaStavkaID (FAK-LIN-02).
 ' ============================================================
+
+' FAKTURISANOST DOKUMENTA PRIJEMNICE (S6 korak 5, FAK-LIN-03). Izvodi se iz
+' AKTIVNIH linija tblFakturaStavke; kes Fakturisano/FakturaID na zaglavlju niko
+' ne cita ni pise (kolone ostaju do koraka 8). NE = nijedna stavka na fakturi,
+' DELIM = bar jedna ali ne sve, DA = sve.
+Public Const FAKT_NE As Long = 0
+Public Const FAKT_DELIM As Long = 1
+Public Const FAKT_DA As Long = 2
+
+' Test seam (testovi.md par. 4): podmetnut pad na KRAJU jezgra fakture, posle
+' zaglavlja, linija i avansa -- dokaz da rollback vraca ceo dokument. Paljenje van
+' test rezima ne radi nista, kuka ponovo pita IsTestMode(), a ResetSeamova ga gasi.
+Private mTestFakturaPadni As Boolean
 
 Public Function CreateFaktura_TX(ByVal kupacID As String, _
                                   ByVal stavke As Collection) As String
@@ -23,12 +37,13 @@ Public Function CreateFaktura_TX(ByVal kupacID As String, _
     ' transakciju koja se odmah rollback-uje.
     modSchema.SchemaReadyOrFail "CreateFaktura_TX", _
         TBL_FAKTURE & "|" & TBL_FAKTURA_STAVKE & "|" & TBL_PRIJEMNICA & _
-        "|" & TBL_NOVAC
+        "|" & TBL_PRIJEMNICA_STAVKE & "|" & TBL_NOVAC
 
+    ' Snima se ono sto jezgro MENJA: zaglavlje i linije fakture i novac (avans).
+    ' Prijemnicu od S6 koraka 5 ne dira -- kes fakturisanosti se ne pise.
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
-    tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_NOVAC
 
     CreateFaktura_TX = CreateFaktura(kupacID, stavke)
@@ -103,8 +118,12 @@ End Function
 
 ' Base funkcija -- NE zovi je spolja. Jedini ulaz je CreateFaktura_TX, koji drzi
 ' snapshot transakciju; direktan poziv bi kod greske ostavio pola upisa
-' (faktura header bez stavki, prijemnice markirane bez fakture) -- AUD-011 /
-' FM-0034 #3.
+' (faktura header bez linija) -- AUD-011 / FM-0034 #3.
+'
+' IZBOR JE STAVKA PRIJEMNICE (S6 korak 5, odluka 2): stavka(0) =
+' PrijemnicaStavkaID. Do koraka 5 je to bio PrijemnicaID, a kolicina, cena i
+' klasa su citane sa ZAGLAVLJA prijemnice -- koje ih od koraka 2 ne nosi, pa je
+' faktura dokumenta pravog pisca padala na "Kolicina mora biti veca od nule".
 Private Function CreateFaktura(ByVal kupacID As String, _
                                ByVal stavke As Collection) As String
     On Error GoTo EH
@@ -139,16 +158,7 @@ Private Function CreateFaktura(ByVal kupacID As String, _
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_CENA, "CreateFaktura"
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_KLASA, "CreateFaktura"
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRIJEMNICE, "CreateFaktura"
-
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_ID, "CreateFaktura"
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_KUPAC, "CreateFaktura"
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, "CreateFaktura"
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, "CreateFaktura"
-    RequireColumnIndex TBL_PRIJEMNICA, COL_STORNIRANO, "CreateFaktura"
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "CreateFaktura"
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_CENA, "CreateFaktura"
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_KLASA, "CreateFaktura"
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_BROJ, "CreateFaktura"
+    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_STAVKA_ID, "CreateFaktura"
 
     Dim fakturaID As String
     fakturaID = GetNextID(TBL_FAKTURE, COL_FAK_ID, "FAK-")
@@ -165,8 +175,8 @@ Private Function CreateFaktura(ByVal kupacID As String, _
         Err.Raise vbObjectError + 1706, "CreateFaktura", _
                   "GenerateBrojFakture nije vratio broj fakture."
     End If
-    
-        Dim prijData As Variant
+
+    Dim prijData As Variant
     prijData = GetTableData(TBL_PRIJEMNICA)
 
     If IsEmpty(prijData) Then
@@ -174,63 +184,77 @@ Private Function CreateFaktura(ByVal kupacID As String, _
                   "Tabela prijemnica je prazna."
     End If
 
-    Dim colPrjKol As Long
-    Dim colPrjCena As Long
-    Dim colPrjKlasa As Long
     Dim colPrjBroj As Long
     Dim colPrjKupac As Long
+    Dim colPrjStorno As Long
 
-    colPrjKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "CreateFaktura")
-    colPrjCena = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, "CreateFaktura")
-    colPrjKlasa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, "CreateFaktura")
     colPrjBroj = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, "CreateFaktura")
     colPrjKupac = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, "CreateFaktura")
+    colPrjStorno = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, "CreateFaktura")
 
-    ' Pre-validacija svih prijemnica pre bilo kog upisa.
-    ' Business module trusts only PrijemnicaID from caller.
-    ' Kolicina/Cena/Klasa/BrojPrijemnice are derived from tblPrijemnica.
+    ' Pre-validacija SVIH stavki pre bilo kog upisa (FAK-LIN-01/-02). Pozivalac
+    ' salje samo PrijemnicaStavkaID. Klasa, kolicina i cena se citaju sa STAVKE --
+    ' strog citac StavkePrijemniceRedovi drzi njen ugovor (kolicina > 0, cena >= 0,
+    ' klasa, jedinstven ID) -- a broj, kupac i storno sa zaglavlja njenog dokumenta.
+    ' Da li je stavka vec na fakturi pita ISTI recnik koji koriste kapija storna,
+    ' lista i mreza (FakturaLinijePoStavci), ne kes zaglavlja.
+    Dim poStavci As Object
+    Set poStavci = StavkePrijemnicePoID()
+
+    Dim linije As Object
+    Set linije = FakturaLinijePoStavci()
+
+    Dim izbor As Object
+    Set izbor = CreateObject("Scripting.Dictionary")
+
     Dim s As Variant
+    Dim stavkaID As String
+    Dim kStavke As String
     Dim prijemnicaID As String
+    Dim red As Variant
     Dim rows As Collection
-    Dim prijRows As Object
-    Dim prijValues As Object
-
-    Set prijRows = CreateObject("Scripting.Dictionary")
-    Set prijValues = CreateObject("Scripting.Dictionary")
+    Dim rowPrij As Long
+    Dim prjKupac As String
+    Dim kol As Double
+    Dim cena As Double
 
     For Each s In stavke
 
-        prijemnicaID = GetPrijemnicaIDFromFakturaStavka(s, "CreateFaktura")
+        stavkaID = GetStavkaIDFromFakturaStavka(s, "CreateFaktura")
+        kStavke = UCase$(stavkaID)
 
+        If izbor.Exists(kStavke) Then
+            Err.Raise vbObjectError + 1710, "CreateFaktura", _
+                      "Dupla stavka u izboru: " & stavkaID
+        End If
+
+        If Not poStavci.Exists(kStavke) Then
+            Err.Raise vbObjectError + 1708, "CreateFaktura", _
+                      "Stavka prijemnice nije pronadena: " & stavkaID
+        End If
+
+        red = poStavci(kStavke)
+        prijemnicaID = CStr(red(1))
+
+        ' Fail-closed kod duplog PrijemnicaID: bez ovoga se tiho uzima prvi
+        ' pogodak, pa bi se kupac i storno citali sa pogresnog reda (AUD-011 /
+        ' FM-0034 #2). Isti obrazac kao RequireSingleFakturaRow nad tblFakture.
         Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID)
-
-        If rows Is Nothing Or rows.count = 0 Then
+        If rows Is Nothing Then
             Err.Raise vbObjectError + 1708, "CreateFaktura", _
                       "Prijemnica nije pronadena: " & prijemnicaID
         End If
-
-        If prijRows.Exists(prijemnicaID) Then
-            Err.Raise vbObjectError + 1710, "CreateFaktura", _
-                      "Dupla prijemnica u izboru: " & prijemnicaID
-        End If
-
-        ' Fail-closed kod duplog PrijemnicaID: bez ovoga se tiho uzima prvi
-        ' pogodak, pa se fakturise kolicina/cena pogresnog reda (AUD-011 /
-        ' FM-0034 #2). Isti obrazac kao RequireSingleFakturaRow nad tblFakture.
-        If rows.count > 1 Then
+        If rows.count <> 1 Then
             Err.Raise vbObjectError + 1707, "CreateFaktura", _
                       "Duplikat PrijemnicaID=" & prijemnicaID & _
                       "; Count=" & CStr(rows.count)
         End If
-
-        Dim rowPrijValidate As Long
-        rowPrijValidate = CLng(rows(1))
+        rowPrij = CLng(rows(1))
 
         ' Vlasnistvo: prijemnica mora da pripada kupcu fakture. Bez ove provere
         ' se prijemnica drugog kupca moze zavuci u fakturu (UI filter po kupcu
         ' nije sigurnosna granica) -- AUD-011 / FM-0034 #1.
-        Dim prjKupac As String
-        prjKupac = Trim$(CStr(prijData(rowPrijValidate, colPrjKupac)))
+        prjKupac = Trim$(CStr(prijData(rowPrij, colPrjKupac)))
 
         If prjKupac <> Trim$(kupacID) Then
             Err.Raise vbObjectError + 1721, "CreateFaktura", _
@@ -239,54 +263,35 @@ Private Function CreateFaktura(ByVal kupacID As String, _
                       "; Faktura.KupacID=" & Trim$(kupacID)
         End If
 
-        If Not IsPrijemnicaAvailableForFaktura(rowPrijValidate, prijemnicaID) Then
+        If UCase$(Trim$(NzToText(prijData(rowPrij, colPrjStorno)))) = "DA" Then
             Err.Raise vbObjectError + 1709, "CreateFaktura", _
-                      "Prijemnica je ve" & ChrW(263) & " fakturisana ili stornirana: " & prijemnicaID
+                      "Prijemnica je stornirana: " & prijemnicaID
         End If
 
-        If Not IsNumeric(prijData(rowPrijValidate, colPrjKol)) Then
-            Err.Raise vbObjectError + 1711, "CreateFaktura", _
-                      "Koli" & ChrW(269) & "ina nije numericka za prijemnicu: " & prijemnicaID
+        If linije.Exists(kStavke) Then
+            Err.Raise vbObjectError + 1709, "CreateFaktura", _
+                      "Stavka prijemnice je ve" & ChrW(263) & " fakturisana: " & stavkaID & _
+                      " (faktura " & CStr(linije(kStavke)(0)) & ")"
         End If
 
-        If Not IsNumeric(prijData(rowPrijValidate, colPrjCena)) Then
-            Err.Raise vbObjectError + 1711, "CreateFaktura", _
-                      "Cena nije numericka za prijemnicu: " & prijemnicaID
-        End If
+        ' Brojke su STAVKE (red 4 = Kolicina, 5 = Cena), nikad zaglavlja.
+        kol = CDbl(red(4))
+        cena = CDbl(red(5))
 
-        Dim prjKolicina As Double
-        Dim prjCena As Double
-        Dim prjKlasa As String
-        Dim prjBroj As String
-
-        prjKolicina = CDbl(prijData(rowPrijValidate, colPrjKol))
-        prjCena = CDbl(prijData(rowPrijValidate, colPrjCena))
-        prjKlasa = CStr(prijData(rowPrijValidate, colPrjKlasa))
-        prjBroj = CStr(prijData(rowPrijValidate, colPrjBroj))
-
-        If prjKolicina <= 0 Then
-            Err.Raise vbObjectError + 1712, "CreateFaktura", _
-                      "Koli" & ChrW(269) & "ina mora biti veca od nule. PrijemnicaID=" & prijemnicaID
-        End If
-
-        If prjCena < 0 Then
-            Err.Raise vbObjectError + 1713, "CreateFaktura", _
-                      "Cena ne sme biti negativna. PrijemnicaID=" & prijemnicaID
-        End If
-
-        prijRows.Add prijemnicaID, rowPrijValidate
-        prijValues.Add prijemnicaID, Array(prjKolicina, prjCena, prjKlasa, prjBroj)
+        ' 0 PrijemnicaStavkaID | 1 PrijemnicaID | 2 Kolicina | 3 Cena | 4 Klasa | 5 Broj
+        izbor.Add kStavke, Array(stavkaID, prijemnicaID, kol, cena, _
+                                 CStr(red(3)), CStr(prijData(rowPrij, colPrjBroj)))
 
     Next s
 
-    ' Ukupan iznos se racuna iz canonical tblPrijemnica vrednosti.
+    ' Ukupan iznos se racuna iz canonical vrednosti STAVKI prijemnice.
     Dim ukupno As Double
     Dim key As Variant
-    Dim prjVals As Variant
+    Dim v As Variant
 
-    For Each key In prijValues.keys
-        prjVals = prijValues(CStr(key))
-        ukupno = ukupno + (CDbl(prjVals(0)) * CDbl(prjVals(1)))
+    For Each key In izbor.keys
+        v = izbor(key)
+        ukupno = ukupno + (CDbl(v(2)) * CDbl(v(3)))
     Next key
 
     If ukupno <= 0 Then
@@ -325,49 +330,51 @@ Private Function CreateFaktura(ByVal kupacID As String, _
                   "AppendRow fehlgeschlagen fuer tblFakture."
     End If
 
-    ' Faktura stavke + markiranje prijemnica
-    Dim stavkaID As String
+    ' Linije fakture, po jedna za stavku, redom izbora. Kes Fakturisano/FakturaID
+    ' na zaglavlju prijemnice se vise NE pise: fakturisanost je izvedena iz ovih
+    ' linija (FAK-LIN-03).
     Dim stavkaNum As Long
-    Dim stavkaRow As Variant
-    Dim rowPrij As Long
+    Dim fsID As String
+    Dim fsRow As Long
 
-    For Each s In stavke
+    For Each key In izbor.keys
+        v = izbor(key)
         stavkaNum = stavkaNum + 1
-        stavkaID = fakturaID & "-" & Format$(stavkaNum, "00")
+        fsID = fakturaID & "-" & Format$(stavkaNum, "00")
 
-        prijemnicaID = GetPrijemnicaIDFromFakturaStavka(s, "CreateFaktura")
-        rowPrij = CLng(prijRows(prijemnicaID))
-
-        prjVals = prijValues(prijemnicaID)
-
-        stavkaRow = Array( _
-            stavkaID, _
+        fsRow = AppendRow(TBL_FAKTURA_STAVKE, Array( _
+            fsID, _
             fakturaID, _
-            prijemnicaID, _
-            CDbl(prjVals(0)), _
-            CDbl(prjVals(1)), _
-            CStr(prjVals(2)), _
-            CStr(prjVals(3)), _
+            CStr(v(1)), _
+            CDbl(v(2)), _
+            CDbl(v(3)), _
+            CStr(v(4)), _
+            CStr(v(5)), _
             "", _
             "" _
-        )
+        ))
 
-        If AppendRow(TBL_FAKTURA_STAVKE, stavkaRow) <= 0 Then
+        If fsRow <= 0 Then
             Err.Raise vbObjectError + 1716, "CreateFaktura", _
                       "AppendRow fehlgeschlagen fuer tblFakturaStavke."
         End If
 
-        RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURISANO, _
-                          "Da", "CreateFaktura"
-
-        RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURA_ID, _
-                          fakturaID, "CreateFaktura"
-    Next s
+        ' Kanonska linija (FAK-LIN-02): kolona je na KRAJU tabele, pa se pise po
+        ' imenu -- isti obrazac kao GP linija u modUtovar.
+        RequireUpdateCell TBL_FAKTURA_STAVKE, fsRow, COL_FS_PRIJEMNICA_STAVKA_ID, CStr(v(0)), "CreateFaktura"
+    Next key
 
     ' Avans automatisch verrechnen.
     ' Ovo mora biti base funkcija, ne ApplyAvansToFaktura_TX,
     ' jer CreateFaktura_TX vec drzi siru transakciju.
     ApplyAvansToFaktura kupacID, fakturaID
+
+    If mTestFakturaPadni Then
+        If IsTestMode() Then
+            Err.Raise vbObjectError + 1765, "CreateFaktura", _
+                      "TEST: namerna greska posle svih upisa fakture (rollback dokaz)"
+        End If
+    End If
 
     CreateFaktura = fakturaID
     Exit Function
@@ -388,6 +395,14 @@ EH:
     Err.Raise errNum, "CreateFaktura", _
               "Source=" & errSrc & " | " & errDesc
 End Function
+
+' Pali/gasi namernu gresku na kraju jezgra fakture (v. mTestFakturaPadni).
+' Paljenje van test rezima ne radi nista; gasenje radi uvek, da ga ResetSeamova
+' ugasi bez obzira na rezim.
+Public Sub CreateFakturaPadniTest(ByVal pali As Boolean)
+    If pali And Not IsTestMode() Then Exit Sub
+    mTestFakturaPadni = pali
+End Sub
 
 ' GP lista za ekran Fakturisanje: NESTORNIRANE prerade. 1-bazirano:
 '   1 PreradaID | 2 Broj (b/g) | 3 TipGP | 4 Datum | 5 NetoIzlazKg
@@ -903,58 +918,188 @@ Private Function RequireSingleFakturaRow(ByVal fakturaID As String, _
     RequireSingleFakturaRow = CLng(rows(1))
 End Function
 
-Private Function IsPrijemnicaAvailableForFaktura(ByVal rowIndex As Long, _
-                                                 ByVal prijemnicaID As String) As Boolean
+Private Function GetStavkaIDFromFakturaStavka(ByVal stavka As Variant, _
+                                              ByVal sourceName As String) As String
     On Error GoTo EH
 
-    Dim data As Variant
-    data = GetTableData(TBL_PRIJEMNICA)
+    GetStavkaIDFromFakturaStavka = Trim$(CStr(stavka(0)))
 
-    If IsEmpty(data) Then Exit Function
-
-    Dim colFakturisano As Long
-    Dim colFakturaID As Long
-    Dim colStorno As Long
-
-    colFakturisano = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, _
-                                        "IsPrijemnicaAvailableForFaktura")
-    colFakturaID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, _
-                                      "IsPrijemnicaAvailableForFaktura")
-    colStorno = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, _
-                                   "IsPrijemnicaAvailableForFaktura")
-
-    If rowIndex <= 0 Or rowIndex > UBound(data, 1) Then Exit Function
-
-    ' Pravilo je JEDNO i zivi u PrijemnicaDostupna. Do v6-ui-175 je stajalo
-    ' samo ovde, pa ga citac mreze novog UI-ja nije imao odakle da uzme -- a
-    ' prepisana kopija u ekranu bi se razisla sa kapijom koja stvarno odlucuje.
-    IsPrijemnicaAvailableForFaktura = PrijemnicaDostupna( _
-        CStr(data(rowIndex, colStorno)), _
-        CStr(data(rowIndex, colFakturisano)), _
-        CStr(data(rowIndex, colFakturaID)))
-    Exit Function
-
-EH:
-    LogErr "IsPrijemnicaAvailableForFaktura"
-    IsPrijemnicaAvailableForFaktura = False
-End Function
-
-Private Function GetPrijemnicaIDFromFakturaStavka(ByVal stavka As Variant, _
-                                                  ByVal sourceName As String) As String
-    On Error GoTo EH
-
-    GetPrijemnicaIDFromFakturaStavka = Trim$(CStr(stavka(0)))
-
-    If Len(GetPrijemnicaIDFromFakturaStavka) = 0 Then
+    If Len(GetStavkaIDFromFakturaStavka) = 0 Then
         Err.Raise vbObjectError + 1718, sourceName, _
-                  "Stavka nema PrijemnicaID."
+                  "Stavka nema PrijemnicaStavkaID."
     End If
 
     Exit Function
 
 EH:
     Err.Raise vbObjectError + 1719, sourceName, _
-              "Neispravan oblik stavke fakture. Ocekuje se da stavka(0) bude PrijemnicaID."
+              "Neispravan oblik stavke fakture. Ocekuje se da stavka(0) bude PrijemnicaStavkaID."
+End Function
+
+' Stavke prijemnice po ID-u: UCase(PrijemnicaStavkaID) -> red (1..8) iz strogog
+' citaoca StavkePrijemniceRedovi (1 PrijemnicaID, 3 Klasa, 4 Kolicina, 5 Cena,
+' 7 PrijemnicaStavkaID). Citac vec garantuje jedinstven ID stavke.
+Private Function StavkePrijemnicePoID() As Object
+    Dim d As Object, s As Variant, i As Long, j As Long, red As Variant
+    Set d = CreateObject("Scripting.Dictionary")
+    Set StavkePrijemnicePoID = d
+    s = modDokumenta.StavkePrijemniceRedovi()
+    If Not IsArray(s) Then Exit Function
+    For i = 1 To UBound(s, 1)
+        ReDim red(1 To 8)
+        For j = 1 To 8
+            red(j) = s(i, j)
+        Next j
+        d.Add UCase$(CStr(s(i, 7))), red
+    Next i
+End Function
+
+' ============================================================
+' FAKTURISANOST PRIJEMNICE JE IZVEDENA (S6 korak 5, plan 14.55 "Korak 5";
+' FAK-LIN-01..03, docs/DOMEN/DOCUMENT_HEADER_LINES.md 6.6)
+'
+' JEDAN odgovor za sve koji pitaju: kapija storna i okvir ispravke, F8, uvid i
+' dijalog, mreza Fakturisanja, pisac fakture, lista dokumenata, detalj izvestaja
+' i health check. Do koraka 5 su lista i kapija citale dva polja -- FakturaID
+' zaglavlja i kes Fakturisano -- pa su o istom dokumentu govorile suprotno
+' (KI-038). Kes na zaglavlju se ovde NE cita.
+' ============================================================
+
+' AKTIVNE LINIJE PRIJEMNICE PO STAVCI: UCase(PrijemnicaStavkaID) ->
+' Array(FakturaID, PrijemnicaID, PrijemnicaStavkaID). Linija prijemnice je red
+' tblFakturaStavke sa nepraznim PrijemnicaID; GP linija (prerada, utovar) ga nema i
+' ovde ne ulazi. Aktivna = Stornirano <> Da.
+'
+' FAIL-CLOSED, jer na ovom recniku stoje kapija pisca i kapija storna: aktivna
+' linija bez PrijemnicaStavkaID-a (FAK-LIN-02) i stavka na dve aktivne linije
+' (FAK-LIN-01) su KVAR i dizu gresku po imenu. Starog oblika nema (nema
+' produkcionih podataka), pa "preskoci red koji ne razumem" ovde ne postoji --
+' preskocen red bi bio fakturisana stavka koju niko ne vidi.
+Public Function FakturaLinijePoStavci() As Object
+    Const SRC As String = "FakturaLinijePoStavci"
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set FakturaLinijePoStavci = d
+
+    Dim fs As Variant
+    fs = GetTableData(TBL_FAKTURA_STAVKE)
+    If Not IsArray(fs) Then Exit Function
+
+    Dim cF As Long, cP As Long, cS As Long, cSt As Long
+    cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    cP = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
+    cS = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_STAVKA_ID, SRC)
+    cSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC)
+
+    Dim i As Long, pid As String, sid As String, fid As String, k As String
+    For i = 1 To UBound(fs, 1)
+        pid = Trim$(NzToText(fs(i, cP)))
+        If Len(pid) > 0 Then
+            If UCase$(Trim$(NzToText(fs(i, cSt)))) <> "DA" Then
+                fid = Trim$(NzToText(fs(i, cF)))
+                sid = Trim$(NzToText(fs(i, cS)))
+                If Len(sid) = 0 Then
+                    Err.Raise vbObjectError + 1760, SRC, _
+                              "Aktivna linija fakture bez PrijemnicaStavkaID-a: FakturaID=" & fid & _
+                              ", PrijemnicaID=" & pid & ". Linija prijemnice nosi svoju stavku (FAK-LIN-02)."
+                End If
+                k = UCase$(sid)
+                If d.Exists(k) Then
+                    Err.Raise vbObjectError + 1761, SRC, _
+                              "Stavka prijemnice je na dve aktivne fakture: " & sid & " (" & _
+                              CStr(d(k)(0)) & " i " & fid & "). Stavka se fakturise najvise jednom (FAK-LIN-01)."
+                End If
+                d.Add k, Array(fid, pid, sid)
+            End If
+        End If
+    Next i
+End Function
+
+' FAKTURISANOST SVAKOG DOKUMENTA PRIJEMNICE: PrijemnicaID -> Array(stanje, fakture),
+' gde je stanje FAKT_NE / FAKT_DELIM / FAKT_DA, a fakture 0-bazirani niz RAZLICITIH
+' FakturaID-ova njegovih linija (prazan niz kad ih nema).
+'
+' Linija na stavku koje nema, ili na stavku DRUGOG dokumenta, je KVAR (FAK-LIN-02):
+' pisac je ne pravi, a tiho preskocena bi bila faktura bez robe.
+Public Function FakturisanostPoPrijemnici() As Object
+    Const SRC As String = "FakturisanostPoPrijemnici"
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set FakturisanostPoPrijemnici = res
+
+    Dim poDok As Object, linije As Object, videne As Object
+    Set poDok = modDokumenta.StavkePrijemnicePoDokumentu()
+    Set linije = FakturaLinijePoStavci()
+    Set videne = CreateObject("Scripting.Dictionary")
+
+    Dim pid As Variant, c As Collection, red As Variant, k As String
+    Dim nFak As Long, stanje As Long, fakture As Object
+    For Each pid In poDok.keys
+        Set c = poDok(pid)
+        nFak = 0
+        Set fakture = CreateObject("Scripting.Dictionary")
+        For Each red In c
+            k = UCase$(CStr(red(7)))
+            If linije.Exists(k) Then
+                If StrComp(CStr(linije(k)(1)), CStr(pid), vbTextCompare) <> 0 Then
+                    Err.Raise vbObjectError + 1762, SRC, _
+                              "Linija fakture " & CStr(linije(k)(0)) & " nosi PrijemnicaID " & _
+                              CStr(linije(k)(1)) & ", a njena stavka " & CStr(red(7)) & _
+                              " pripada dokumentu " & CStr(pid) & " (FAK-LIN-02)."
+                End If
+                nFak = nFak + 1
+                fakture(CStr(linije(k)(0))) = True
+                videne(k) = True
+            End If
+        Next red
+        If nFak = 0 Then
+            stanje = FAKT_NE
+        ElseIf nFak < c.count Then
+            stanje = FAKT_DELIM
+        Else
+            stanje = FAKT_DA
+        End If
+        res.Add CStr(pid), Array(stanje, fakture.keys)
+    Next pid
+
+    Dim lk As Variant
+    For Each lk In linije.keys
+        If Not videne.Exists(CStr(lk)) Then
+            Err.Raise vbObjectError + 1763, SRC, _
+                      "Linija fakture " & CStr(linije(lk)(0)) & " pokazuje na stavku prijemnice " & _
+                      "koje nema: " & CStr(linije(lk)(2)) & " (FAK-LIN-02)."
+        End If
+    Next lk
+End Function
+
+' Fakturisanost JEDNOG dokumenta; outFakture = njegove fakture ("FAK-1, FAK-2"),
+' za poruku operateru. Nepoznat dokument je greska: svaki pozivalac ga pre toga
+' razresava (RequireStornoAllowed, PrijemnicaIDZaStorno, red izvestaja).
+Public Function PrijemnicaFakturisanost(ByVal prijemnicaID As String, _
+                                        Optional ByRef outFakture As String) As Long
+    Const SRC As String = "PrijemnicaFakturisanost"
+    Dim pid As String, sve As Object, rec As Variant
+    outFakture = ""
+    pid = Trim$(prijemnicaID)
+    If Len(pid) = 0 Then
+        Err.Raise vbObjectError + 1764, SRC, "PrijemnicaID je obavezan."
+    End If
+    Set sve = FakturisanostPoPrijemnici()
+    If Not sve.Exists(pid) Then
+        Err.Raise vbObjectError + 1764, SRC, "Prijemnica nije pronadena: " & pid
+    End If
+    rec = sve(pid)
+    PrijemnicaFakturisanost = CLng(rec(0))
+    outFakture = Join(rec(1), ", ")
+End Function
+
+' FAKTURISANA PRIJEMNICA za kapiju storna i uvid (S6 korak 4, odluka 1):
+' fakturisan je i DELIMICNO fakturisan dokument -- storno bi ostavio aktivnu
+' liniju nad storniranom robom. outFakturaID su fakture dokumenta, za poruku.
+Public Function PrijemnicaJeFakturisana(ByVal prijemnicaID As String, _
+                                        Optional ByRef outFakturaID As String) As Boolean
+    PrijemnicaJeFakturisana = (PrijemnicaFakturisanost(prijemnicaID, outFakturaID) <> FAKT_NE)
 End Function
 
 ' ============================================================
@@ -971,14 +1116,13 @@ End Function
 ' porukom operateru umesto sa greskom transakcije.
 ' ============================================================
 
-' Pravilo "sme li ova prijemnica u fakturu", izdvojeno iz
-' IsPrijemnicaAvailableForFaktura da bi ga imao i citac mreze. Prima VREDNOSTI
-' celija, ne red -- pa ne mora da cita tabelu po redu (citac je vec ima).
+' Pravilo "sme li ova STAVKA u fakturu" (S6 korak 5): dokument nije storniran i
+' stavka nije na aktivnoj liniji. fakturaID je IZVEDEN (FakturaLinijePoStavci),
+' ne kes zaglavlja -- kes "Da" bez linije stavku ne zauzima (KI-038). Prima
+' VREDNOSTI, ne red -- citac mreze ih vec ima, a pisac pita isti recnik.
 Public Function PrijemnicaDostupna(ByVal stornirano As String, _
-                                   ByVal fakturisano As String, _
                                    ByVal fakturaID As String) As Boolean
     If Trim$(stornirano) = "Da" Then Exit Function
-    If Trim$(fakturisano) = "Da" Then Exit Function
     If Trim$(fakturaID) <> "" Then Exit Function
     PrijemnicaDostupna = True
 End Function
@@ -1024,13 +1168,17 @@ Private Function FakD(ByVal v As Variant) As Double
     If IsNumeric(v) Then FakD = CDbl(v)
 End Function
 
-' NEFAKTURISANE PRIJEMNICE JEDNOG KUPCA -- korpa ovog ekrana.
-' Filter po kupcu radi POSTOJECI modDokumenta.GetPrijemniceByKupac (on vec
-' izbacuje stornirane); ovde se samo prevodi u redove mreze.
+' STAVKE PRIJEMNICA JEDNOG KUPCA -- korpa ovog ekrana, RED PO STAVCI (S6 korak 5,
+' odluka 2): dvoklasni dokument su dva reda, pa se klasa fakturise zasebno, a
+' dokument moze biti delimicno fakturisan. Zaglavlja daje POSTOJECI
+' modDokumenta.GetPrijemniceByKupac (on vec izbacuje stornirane), stavke strog
+' citac, a fakturisanost ISTI recnik koji pita pisac (FakturaLinijePoStavci).
+' Do koraka 5 je red bio zaglavlje sa njegovim linijskim poljima -- koja od
+' koraka 2 ne nosi, pa je dokument novog oblika imao 0 kg.
 '
-'   1 PrijemnicaID (identitet) | 2 BrojPrijemnice | 3 BrojZbirne | 4 Datum
+'   1 PrijemnicaStavkaID (identitet) | 2 BrojPrijemnice | 3 BrojZbirne | 4 Datum
 '   5 Klasa | 6 Kolicina | 7 Cena | 8 Vrednost | 9 Dostupna (Boolean)
-'   10 BrojFakture (prazno kad nije fakturisana)
+'   10 BrojFakture (prazno kad stavka nije fakturisana)
 Public Function GetPrijemniceZaFakturisanjeForGrid(ByVal kupacID As String) As Variant
     On Error GoTo EH
 
@@ -1048,55 +1196,63 @@ Public Function GetPrijemniceZaFakturisanjeForGrid(ByVal kupacID As String) As V
 
     Const SRC As String = "GetPrijemniceZaFakturisanjeForGrid"
 
-    Dim cID As Long, cBroj As Long, cZb As Long, cDat As Long, cKlasa As Long
-    Dim cKol As Long, cCena As Long, cFakt As Long, cFakID As Long, cStorno As Long
+    Dim cID As Long, cBroj As Long, cZb As Long, cDat As Long, cStorno As Long
     cID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
     cBroj = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
     cZb = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
     cDat = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM, SRC)
-    cKlasa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, SRC)
-    cKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, SRC)
-    cCena = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, SRC)
-    cFakt = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC)
-    cFakID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC)
     cStorno = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
 
+    Dim poDok As Object, linije As Object
+    Set poDok = modDokumenta.StavkePrijemnicePoDokumentu()
+    Set linije = FakturaLinijePoStavci()
+
     Dim brojac As Object
-    Set brojac = BrojacIdova(TBL_PRIJEMNICA, COL_PRJ_ID)
+    Set brojac = BrojacIdova(TBL_PRIJEMNICA_STAVKE, COL_PRS_ID)
 
     Dim brFak As Object
     Set brFak = BuildLookupDict(TBL_FAKTURE, COL_FAK_ID, COL_FAK_BROJ)
 
-    Dim outA() As Variant, i As Long, n As Long, iD As String, fakID As String
-    ReDim outA(1 To UBound(data, 1), 1 To 10)
+    ' Prvi prolaz broji stavke -- red mreze je stavka, ne zaglavlje.
+    Dim i As Long, n As Long, iD As String, ukupno As Long
+    For i = 1 To UBound(data, 1)
+        iD = Trim$(CStr(data(i, cID)))
+        ukupno = ukupno + modDokumenta.StavkeZaPrijemnicu(poDok, iD, SRC).count
+    Next i
+    If ukupno = 0 Then
+        GetPrijemniceZaFakturisanjeForGrid = Empty
+        Exit Function
+    End If
+
+    Dim outA() As Variant, red As Variant, sid As String, fakID As String
+    ReDim outA(1 To ukupno, 1 To 10)
 
     For i = 1 To UBound(data, 1)
         iD = Trim$(CStr(data(i, cID)))
-        fakID = Trim$(CStr(data(i, cFakID)))
-        n = n + 1
-        outA(n, 1) = IdIliPrazno(brojac, iD)
-        outA(n, 2) = CStr(data(i, cBroj))
-        outA(n, 3) = CStr(data(i, cZb))
-        outA(n, 4) = data(i, cDat)
-        outA(n, 5) = CStr(data(i, cKlasa))
-        outA(n, 6) = FakD(data(i, cKol))
-        outA(n, 7) = FakD(data(i, cCena))
-        outA(n, 8) = FakD(data(i, cKol)) * FakD(data(i, cCena))
-        outA(n, 9) = PrijemnicaDostupna(CStr(data(i, cStorno)), _
-                                        CStr(data(i, cFakt)), fakID)
-        outA(n, 10) = ""
-        If Len(fakID) > 0 Then
-            If Not brFak Is Nothing Then
-                If brFak.Exists(fakID) Then outA(n, 10) = CStr(brFak(fakID))
+        For Each red In modDokumenta.StavkeZaPrijemnicu(poDok, iD, SRC)
+            sid = Trim$(CStr(red(7)))
+            fakID = ""
+            If linije.Exists(UCase$(sid)) Then fakID = CStr(linije(UCase$(sid))(0))
+            n = n + 1
+            outA(n, 1) = IdIliPrazno(brojac, sid)
+            outA(n, 2) = CStr(data(i, cBroj))
+            outA(n, 3) = CStr(data(i, cZb))
+            outA(n, 4) = data(i, cDat)
+            outA(n, 5) = CStr(red(3))
+            outA(n, 6) = FakD(red(4))
+            outA(n, 7) = FakD(red(5))
+            outA(n, 8) = FakD(red(4)) * FakD(red(5))
+            outA(n, 9) = PrijemnicaDostupna(CStr(data(i, cStorno)), fakID)
+            outA(n, 10) = ""
+            If Len(fakID) > 0 Then
+                If Not brFak Is Nothing Then
+                    If brFak.Exists(fakID) Then outA(n, 10) = CStr(brFak(fakID))
+                End If
             End If
-        End If
+        Next red
     Next i
 
-    If n = 0 Then
-        GetPrijemniceZaFakturisanjeForGrid = Empty
-    Else
-        GetPrijemniceZaFakturisanjeForGrid = outA
-    End If
+    GetPrijemniceZaFakturisanjeForGrid = outA
     Exit Function
 
 EH:

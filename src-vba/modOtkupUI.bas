@@ -6777,6 +6777,8 @@ Private Sub PaintPayPill(lbl As Object, ByVal code As Long)
             cap = Poruka("OTKUI_PAY_DELIMICNO"): fc = C_AMBER
         Case PAY_NEFAKT
             cap = Poruka("OTKUI_PAY_NEFAKT"): fc = C_DISABLED_FG
+        Case PAY_DELIM_FAKT
+            cap = Poruka("OTKUI_PAY_DELIM_FAKT"): fc = C_AMBER
         Case Else
             cap = Poruka("OTKUI_PAY_NEPLACENO"): fc = C_RUST
     End Select

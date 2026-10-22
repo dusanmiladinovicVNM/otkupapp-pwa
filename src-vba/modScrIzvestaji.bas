@@ -2294,8 +2294,9 @@ End Sub
 Public Function IzDetaljPrijemnice(ByVal prjID As String) As Variant
     Dim d As Variant, i As Long
     Dim cId As Long, cVoz As Long, cSor As Long, cTipA As Long
-    Dim cVrac As Long, cFakt As Long, cFid As Long
+    Dim cVrac As Long
     Dim linije As Collection, zbir As Object, gajbeTxt As String
+    Dim stanjeFak As Long, faktureTxt As String
     On Error GoTo EH
 
     d = GetTableData(TBL_PRIJEMNICA)
@@ -2308,8 +2309,6 @@ Public Function IzDetaljPrijemnice(ByVal prjID As String) As Variant
     ' Primljene gajbe su zbir STAVKI dokumenta (S6 korak 3); vracene su
     ' cinjenica dokumenta i ostaju na zaglavlju.
     Set zbir = modDokumenta.ZbirStavkiPoPrijemniciMeko()
-    cFakt = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO)
-    cFid = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID)
 
     For i = 1 To UBound(d, 1)
         If Trim$(CStr(d(i, cId))) = Trim$(prjID) Then
@@ -2331,11 +2330,18 @@ Public Function IzDetaljPrijemnice(ByVal prjID As String) As Variant
                            "  (" & Poruka("OTKUI_IZ_DET_AMB_VRAC") & " " & _
                            Format$(NzD(d(i, cVrac)), "#,##0") & ")"
             End If
-            If CStr(d(i, cFakt)) = "Da" Then
-                linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & NzS(d(i, cFid))
-            Else
+            ' Fakturisanost je IZVEDENA iz aktivnih linija fakture (S6 korak 5,
+            ' FAK-LIN-03) -- isti odgovor koji daju lista i kapija storna. Do tada
+            ' je detalj citao kes Fakturisano/FakturaID sa zaglavlja.
+            stanjeFak = modFaktura.PrijemnicaFakturisanost(Trim$(prjID), faktureTxt)
+            If stanjeFak = FAKT_NE Then
                 linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & _
                            Poruka("OTKUI_IZ_DET_NEFAKT")
+            ElseIf stanjeFak = FAKT_DELIM Then
+                linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & faktureTxt & " " & _
+                           Poruka("OTKUI_IZ_DET_DELIMFAKT")
+            Else
+                linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & faktureTxt
             End If
 
             Dim res() As String, n As Long
