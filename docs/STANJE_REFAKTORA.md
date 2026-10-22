@@ -6811,6 +6811,46 @@
      - **Sledeći brojevi:** stavka 188 (pre-flight koraka 5) · stavka 189 (kod) · test 262 · KI-041.
      - **Sledeći je S6 korak 5** (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` kao
        kapije), na grani `claude/s6-korak5-faktura` sa `992e1f45`.
+188. **S6 korak 5 — pre-flight nad `992e1f45`, odluke 1–7, PRE koda** (22.10.2026). Pun zapis je u §14.55,
+     „Korak 5" (verdikt, BUSINESS EVENTS, pisci i čitaoci pre i posle, ugovor izvedenog statusa, obim, acceptance
+     contract).
+
+     - **Verdikt:** `IDENTITY` i `DOWNSTREAM` su bili `GAP`, a zatvaraju ih odluke 2, odnosno 1, 5 i 6. Ostale ose su
+       `PROVEN`, osim `PLATFORM`, koja je `N/A`. `CARDINALITY` nosi ⚠ edge case: dokument na dve fakture.
+     - **Najveći nalaz — izmeren sondom** (sveska iz `run_vba --compile-only --keep`, pravi pisac):
+       - fakturisanje dokumenta koji pravi `SavePrijemnicaMulti_TX` je danas POKVARENO;
+       - `CreateFaktura` čita količinu, cenu i klasu sa zaglavlja, a ono je od koraka 2 prazno. Ishod je „Kolicina mora
+         biti veca od nule", bez ijednog upisa;
+       - mreža Fakturisanja isti dokument prikazuje kao slobodan, sa 0 kg;
+       - Faktura suite je zelena (35/35) samo zato što seje zaglavlje sa brojkama.
+     - **`KI-038` reprodukovan:** `PRJ-FAK-2` (keš „Da" bez `FakturaID`). Kapija storna kaže „fakturisana", a lista
+       „Nefakturisano".
+     - **`KI-040` reprodukovan kroz API:** `RunPrijemnicaCorrection(ISPRAVKA, PRJ-FAK-1)` je odbijen sa razlogom, ali
+       je ostavio `tblStornoVeze +1`.
+     - **Ostali nalazi:**
+       - `RelinkFakturaStavke` je neuhranjen i nedostižan: `OsirocenoOd` niko ne puni, a fakturisana prijemnica se ne
+         stornira;
+       - `GetPrijemniceByKupac(samoNefakturisano)` nijedan pozivalac ne zove sa `True`;
+       - health check 4, 6c i 9 čitaju keš i linijska polja zaglavlja;
+       - `PreviewPrijemnica` i dalje obećava „(faktura/stavke se oslobadjaju)";
+       - SEF, izvod i uplata keš prijemnice ne čitaju.
+     - **Testovi koje korak vraća:** danas ih nema u `src-vba/`, osim komentara (izmereno):
+       - `Test_DuplicateFakturaIsBlocked` (BFP `:626`, komentar);
+       - `Test_OpenFaktureExcludeStornirano` (`:1999`, komentar);
+       - `Test_DokumentaReadHelpersExcludeStornirano` (nijedan trag u kodu).
+
+       Tela su pročitana iz `d787d91c^` i `bf04e3e0^`.
+     - **Odluke operatera** (22.10.2026), sve po preporuci:
+       1. keš niko ne čita ni piše;
+       2. ulaz je `PrijemnicaStavkaID`, a red mreže je stavka;
+       3. fixture izvodi linije iz keša;
+       4. relink se briše;
+       5. nova pilula „Delim. fakturisano";
+       6. health check prelazi na izveden status;
+       7. `KI-039` ostaje van.
+     - **Usput (okruženje):** u 13:09 je disk C: bio pun u trenutku upisa, pa su `.git/HEAD`, ref grane i reflog
+       ostali puni NUL bajtova (stavka 187). Pri merenju je bilo 4,6–5,6 GB slobodno.
+     - **Sledeći brojevi:** stavka 189 (kod) · test 262 · KI-041.
 
 ## Dug sa imenom (posle S5-5b)
 

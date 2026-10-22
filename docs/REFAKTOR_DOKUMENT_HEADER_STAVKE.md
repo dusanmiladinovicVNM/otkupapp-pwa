@@ -8487,6 +8487,191 @@ knjige (`RequireAmbTxIzvorniDokument` odbije) i SVAKI kasniji pad u Fazi A (npr.
   jezgro zadržava svoju kapiju.
 - Ista klasa na PONIŠTENJU zbirne (`RunZbirnaCorrection`) je `KI-039`, van ovog koraka.
 
+#### Korak 5 — faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden (pre-flight nad `992e1f45`, stavka 188)
+
+Prelazi se sa PONIŠTAVANJA na FINANSIJSKI događaj: nastaje potraživanje, a ono ide u SEF, izvod i uplatu.
+Uslov reviewera posle `#438` je glavna invarijanta koraka: **fakturisanje, lista dokumenata i storno koriste ISTI
+izvedeni status iz aktivnih stavki fakture, bez nezavisnog keša koji može da tvrdi suprotno.** `KI-038` i `KI-040`
+su kapije koraka, ne dug.
+
+**Iz čega faktura danas računa — izmereno** (sonda nad sveskom iz `run_vba --compile-only --keep`, pravi pisac,
+22.10.2026):
+
+- `SavePrijemnicaMulti_TX` (I 100 × 120, II 50 × 80) daje `PRJ-00001`; zaglavlje `Kolicina`/`Cena`/`Klasa` je prazno.
+- Mreža Fakturisanja (`GetPrijemniceZaFakturisanjeForGrid`) za taj dokument: klasa „", 0 kg, cena 0, vrednost 0,
+  `dostupna = True`. Operater ga vidi kao slobodnu prijemnicu od 0 kg.
+- `CreateFaktura_TX` vraća prazno. U logu stoji „Kolicina mora biti veca od nule. PrijemnicaID=PRJ-00001"
+  (`modFaktura:267`: prazno zaglavlje → `CDbl(Empty) = 0`). Promena je `tblFakture +0`, `tblFakturaStavke +0`.
+- **Fakturisanje dokumenta koji pravi produkcioni pisac je danas pokvareno.** Radi samo nad fixture redovima
+  starog oblika, čije zaglavlje nosi brojke (`PRJ-FAK-3`). Faktura suite je 35/35 jer `AppendTestPrijemnicaRow`
+  seje zaglavlje sa brojkama (`modFakturaTests:768-770`) — zeleno nad oblikom koji pisac više ne pravi.
+- Komentar „Business module trusts only PrijemnicaID from caller" (`modFaktura:190`) je pisan dok je `PrijemnicaID`
+  bio red klase. Od koraka 2 je to dokument, pa jedna stavka korpe znači ceo dokument, a linija se ne zna.
+- Iz F4 je to danas nedostižno: F4 je pauziran (`modDokUnos:827`), pa operater novih prijemnica nema. Nalaz je
+  ipak kapija koraka, jer bi korak 6 (F4 odmrznut) pustio dokumente koji se ne mogu fakturisati.
+
+**Verdikt po osama** (linije su sa `992e1f45`):
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | `DOCUMENT_HEADER_LINES` §3 (PrijemnicaStavka → FakturaStavka **1:1, puna količina**), §4.4 (fakturisanost je činjenica LINIJE, keš se ne drži ni na stavci), §4.5 (`PrijemnicaStavkaID` na kraj `tblFakturaStavke`), §6.6 (četiri pravila linije fakture) |
+| `EVENTS` | **PROVEN** | tri, tabela ispod |
+| `IDENTITY` | **GAP → odluka 2** | identitet koji putuje je `PrijemnicaID` DOKUMENTA: skrivena kolona 10 mreže (`modScrFakture:103`, `RedoviPrijemnice:1197`) → korpa `prijemnicaID` (`FkDodaj:626`) → `stavke.Add Array(prijemnicaID)` (`:895`) → `CreateFaktura` `stavka(0)` (`modFaktura:203`); linija (`PrijemnicaStavkaID`) ne stiže nigde, a `tblFakturaStavke` je nema |
+| `CARDINALITY` | **PROVEN** + ⚠ ARCHITECTURAL EDGE CASE | 1 dokument : 1..2 stavke (korak 2); 1 stavka : 0..1 aktivna linija fakture (§6.6); 1 faktura : N linija iz N dokumenata jednog kupca; **1 dokument : 0..2 fakture** — delimično fakturisan dokument. Lista dokumenata ima jednu kolonu plaćanja po `FakturaID` zaglavlja (`modScrDokumenti:3086`, `:3143-3156`), pa ga ne može prikazati → odluka 5 |
+| `INVARIANTS/OWNER` | **PROVEN** | §6.6 nosi pravila; vlasnici posle reza: pisac `CreateFaktura` (kapija pre upisa), čitač `modFaktura.FakturisanostPoPrijemnici` (fail-closed), health check 4. Imena: `FAK-LIN-01` (stavka na najviše jednoj aktivnoj liniji), `FAK-LIN-02` (linija nosi postojeću stavku svog dokumenta), `FAK-LIN-03` (status je izveden; keš se ne čita ni piše) |
+| `WRITERS` | **PROVEN** | matrica ispod |
+| `DOWNSTREAM` | **GAP → odluke 1, 5, 6** | matrica ispod; dva čitača iste činjenice čitaju dva polja (`KI-038`) |
+| `CAPABILITY` | **PROVEN** | D-001 i D-002 (`MAPA_SPOSOBNOSTI`) su danas pokvareni nad novim oblikom (merenje gore) → **MIGRATED** (red po stavci); delimično fakturisanje je danas strukturno nemoguće, posle reza je izbor reda; B-007 → MIGRATED (izveden status); SEF, izvod i uplata nisu dirani |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | ispod |
+| `PLATFORM` | **N/A** | nema novog Excel/COM ponašanja |
+| `LANDING` | **PROVEN** | grana `claude/s6-korak5-faktura` = `992e1f45` + docs (`941d5712`); Excel je bio slobodan |
+
+**BUSINESS EVENTS:**
+
+| Događaj | Datum / status | Tabela | Šta sme bez sledećeg |
+|---|---|---|---|
+| fizički — roba primljena kod kupca | `Datum` prijemnice | `tblPrijemnica` + `tblPrijemnicaStavke` | **prijemnica bez fakture** — legitimno i trajno (hladnjača: paleta → prerada → GP faktura) |
+| poslovni/pravni — faktura izdata | `tblFakture.Datum` = dan izdavanja (`Date`, `modFaktura:302`), ne datum prijema; `Status` `Neplaceno` → `Placeno`, storno `Stornirano = Da` + `Status = STORNIRANO` | `tblFakture` + linije `tblFakturaStavke` (snapshot količine, cene i klase stavke) | **faktura koja pokriva jednu klasu, a drugu ne** — dokument je tada `DELIMIČNO`, a druga klasa ostaje slobodna za drugu fakturu |
+| finansijski — potraživanje | nastaje izdavanjem (`Iznos`, isti datum); naplata je zaseban događaj sa svojim datumom (`tblNovac.FakturaID`); SEF je zaseban događaj (`SEFSentAt`, `SEFWorkflowState`) | `tblFakture`, `tblNovac`, `tblSEF*` | **faktura bez SEF-a i bez uplate** — `LOCAL_FINALIZED` (`modFaktura:309`), `Neplaceno`; storno fakture odvezuje uplate (`ResetNovacFakturaLink`) |
+
+Datum fakture i datum prijema su dva datuma i ostaju dva — nijedan nije izjednačen zbog implementacije.
+`OsirocenoOd` na fakturi i liniji danas **niko ne puni**: pisac osirotelosti je obrisan u koraku 4, jer se
+fakturisana prijemnica ne stornira. Kolona ostaje (čita je SEF), a imenovana je van obima.
+
+**Pisci fakturisanosti — pre i posle:**
+
+| Pisac | Prima | Piše danas | TX / snima | Posle reza |
+|---|---|---|---|---|
+| `modFaktura.CreateFaktura` (`:108`) | `kupacID`, `stavka(0)` = `PrijemnicaID` | zaglavlje (`:323`); linija sa brojkama SA ZAGLAVLJA prijemnice (`:343-355`); keš `Fakturisano`/`FakturaID` na zaglavlje prijemnice (`:360`, `:363`) | `CreateFaktura_TX`: fakture, linije, prijemnica, novac | prima `PrijemnicaStavkaID`; brojke iz STAVKE (`StavkePrijemniceRedovi`); linija nosi `PrijemnicaStavkaID` (kolona na kraju, upis po imenu); **keš se ne piše**; snima fakture, linije i novac |
+| `modUtovar.CreateUtovarSaFakturom_TX` / GP (`:1603`) | `PreradaID` | GP linija bez `PrijemnicaID` | svoja TX | netaknut (nova kolona ostaje prazna) |
+| `modStorno.StornoFaktura` (`:647`) | `FakturaID` | linije `Stornirano` (`:1703`); keš na prijemnici se briše (`ReleasePrijemnicaFromFaktura`, `:1784-1785`) | `StornoFaktura_TX`: fakture, linije, prijemnica, novac, utovar | linije `Stornirano` (time je dokument sam nefakturisan); `ReleasePrijemnicaFromFaktura` se briše, a sa njim i snimak prijemnice |
+| `modDokumenta.RelinkFakturaStavke` (`:8033`, poziv `:7002`) | nova prijemnica, broj, klasa | linija `PrijemnicaID` + briše `OsirocenoOd` (`:8091`, `:8094`); `UpdateFakturaStatus` | TX pisca prijemnice | **briše se** (odluka 4): uslov `OsirocenoOd <> ""` (`:8074`) niko ne puni, a fakturisana prijemnica se ne stornira (korak 4, odluka 1), pa ni ne ispravlja — nedostižno. Kapiju meri `Test_S6K4_FakturisanaSeOdbija` |
+| fixture `make_fixture` | — | keš na zaglavlju (`PRJ-FAK-1`, `-2`, `PRJ-SLED-*`), **nijedna** linija fakture nad prijemnicom | — | linija se IZVODI iz keša (odluka 3), kao `tblPrijemnicaStavke` u koraku 3 |
+
+**Čitaoci fakturisanosti — pre i posle** (svi idu kroz JEDAN čitač, `FAK-LIN-03`):
+
+| Čitač | Danas čita | Posle |
+|---|---|---|
+| kapija storna `modStorno.PrijemnicaJeFakturisana` (`:559`; jezgro `:498`, F8 `modStornoDok:242`, okvir `modStornoFlow:827`, uvid `modStornoImpact:321`) | keš `DA` ILI aktivna linija po `PrijemnicaID` | telo seli u `modFaktura` (vlasnik činjenice), izvedeno iz linija; svi pozivi na isto telo |
+| okvir ispravke `RunPrijemnicaCorrection` (`modStornoFlow:481`) | ništa pre `CreateCorrectionContext` (`KI-040`) | ista provera PRE zapisa ispravke (osim REŠI KASNIJE), tekst kao jezgro |
+| mreža Fakturisanja `GetPrijemniceZaFakturisanjeForGrid` (`modFaktura:1034`) + `PrijemnicaDostupna` (`:977`) | red po zaglavlju; linijska polja i keš sa zaglavlja (`:1057-1061`) | red po STAVCI, brojke sa stavke, dostupnost = dokument nije storniran i stavka nije na aktivnoj liniji |
+| kapija pisca `IsPrijemnicaAvailableForFaktura` (`modFaktura:906`) | keš | briše se; pisac pita isti čitač po stavci |
+| lista dokumenata F4 (`modScrDokumenti:3039`, `:3086`, `:3143-3156`, `:3251`) | `FakturaID` zaglavlja (pilula i čip „Nefakturisane") — `KI-038` | izveden status dokumenta: `NE` → „Nefakturisano", `DELIMIČNO` → nova pilula „Delim. fakturisano" (odluka 5), `DA` → plaćanje svih njegovih faktura zajedno; čip uključuje `NE` i `DELIMIČNO` |
+| detalj izveštaja `modScrIzvestaji.IzDetaljPrijemnice` (`:2311-2340`) | keš | izveden status, sa oznakom delimičnosti |
+| `modDokumenta.GetPrijemniceByKupac(samoNefakturisano)` (`:7542-7547`) | keš | parametar se briše: nijedan pozivalac ne šalje `True` (izmereno) |
+| health check 4, 6c i 9 (`modProductionHealthCheck:305`, `:716`, `:1006`) | keš, linijska polja zaglavlja | odluka 6: 4 = ugovor linije kroz isti čitač; 6c = iznos iz stavki; 9 bez veze preko keša |
+| SEF (`modSEFMapper`, `modSEFValidator`), uplata (`UplataFakturaProblem`), izvod (`modBankaImport`) | samo fakturu i njene linije | **netaknuti** — linija sada nosi tačnu klasu i količinu, pa SEF dobija dve linije umesto jedne |
+| PWA izvoz linija (`modStammdatenSync:2849`) | linija bez stavke | netaknut; nova kolona je nizvodni zahtev PWA-u (VBA vodi, PWA prati) |
+
+**Tekst koji obećava posledicu, tražen po rečima** („oslobadja", „fakturisan", „Nefakturisano"):
+`PreviewPrijemnica` (`modStornoFlow:122-123`) i dalje kaže „Fakturisana: Da (faktura/stavke se oslobadjaju)", iako
+storno fakturisanu odbija. Ispravlja se na `STEF_FAK_ODBIJA`. Komentari koji tvrde isto (`modStorno:20-22`,
+`modStornoFlow:453`) ispravljaju se u istom rezu.
+
+**Odluke operatera (22.10.2026, stavka 188), sve po preporuci:**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | keš do koraka 8 | **niko ne čita ni piše**; kolone ostaju u šemi do koraka 8 |
+| 2 | ulaz `CreateFaktura` | **`PrijemnicaStavkaID`, red mreže po stavci**; delimično fakturisanje je izbor reda |
+| 3 | fixture | **`make_fixture` izvodi linije iz keša**; `PRJ-FAK-2` (keš „Da" bez `FakturaID`) liniju ne dobija |
+| 4 | `RelinkFakturaStavke` | **briše se** (neuhranjena i nedostižna) |
+| 5 | delimično fakturisan dokument u listi | **nova pilula „Delim. fakturisano"**, prednost nad plaćanjem; čip „Nefakturisane" ga uključuje |
+| 6 | health check | **prepisati na izveden status** |
+| 7 | `KI-039` | **ostaje van** (svoj rez posle S6) |
+
+**Ugovor izvedenog statusa** (`FAK-LIN-01..03`), jedno telo u `modFaktura`:
+
+1. **Aktivna linija prijemnice** = red `tblFakturaStavke` sa nepraznim `PrijemnicaID` i `Stornirano <> Da`. GP linija
+   (bez `PrijemnicaID`) nije linija prijemnice.
+2. **Ugovor linije, fail-closed:** aktivna linija bez `PrijemnicaStavkaID`-a, linija na stavku koje nema, linija
+   čiji `PrijemnicaID` nije dokument te stavke i stavka na dve aktivne linije su KVAR i dižu grešku po imenu.
+   Starog oblika nema (nema produkcionih podataka), pa „preskoči nepoznat red" ne postoji.
+3. **Stavka** je fakturisana ⇔ ima aktivnu liniju. **Dokument** je `NE` (nijedna stavka), `DELIMIČNO` (bar jedna,
+   ne sve) ili `DA` (sve); uz stanje idu različite fakture njegovih linija.
+4. **Ko pita:** kapija storna i okvir ispravke (`NE` pušta, ostalo odbija), uvid, lanac, dijalog, F8, mreža
+   Fakturisanja (po stavci), lista dokumenata, detalj izveštaja, health check 4. Keš sa zaglavlja niko ne čita.
+5. **Pisac** (`CreateFaktura`): svaka stavka izbora postoji, nije u izboru dvaput, njen dokument je jednom u
+   tabeli, nije storniran i pripada kupcu fakture, a stavka nije na aktivnoj liniji. Sve se proverava PRE prvog
+   upisa. Brojke idu sa stavke. Zaglavlje fakture i linije su u istoj TX, a pad posle upisa vraća sve
+   (zaglavlje, linije, avans).
+
+**Obim po celinama:**
+
+- **kanon:** `tblFakturaStavke.PrijemnicaStavkaID` na kraj (`schema.json` → `gen_schema_module`), `COL_FS_PRIJEMNICA_STAVKA_ID`;
+- **čitač** (`modFaktura`): linije po stavci, status po dokumentu, `PrijemnicaJeFakturisana` (selidba iz
+  `modStorno`), dostupnost stavke; konstante stanja na vrhu modula;
+- **pisac** (`modFaktura.CreateFaktura`, `_TX`): gore; seam pada na kraju jezgra po `testovi.md` §4
+  (`CreateFakturaPadniTest`, gejt pri svakom pozivu, `ResetSeamova`);
+- **storno** (`modStorno`): telo `PrijemnicaJeFakturisana` odlazi; `ReleasePrijemnicaFromFaktura` i snimak
+  prijemnice u `StornoFaktura_TX` odlaze; jezgro storna prijemnice i okvir dele tekst odbijanja;
+- **okvir** (`modStornoFlow`): `KI-040`; `PreviewPrijemnica` tekst;
+- **ekrani**: Fakturisanje (red po stavci, korpa po stavci), lista dokumenata (pilula, čip), detalj izveštaja;
+- **pisac prijemnice** (`modDokumenta`): `RelinkFakturaStavke` i poziv odlaze; snimak faktura i linija u
+  `SavePrijemnicaMulti_TX` odlazi, jer ih više ne piše; `GetPrijemniceByKupac` bez `samoNefakturisano`;
+- **health check**: 4, 6c, 9;
+- **fixture**: linije prijemnica izvedene iz keša;
+- **`WRITE_OWNERSHIP`**: `tblFakturaStavke` bez `modDokumenta`, `tblPrijemnica` bez `modFaktura`; `WHO_WRITES` se
+  regeneriše.
+
+**Imenovano van obima:**
+
+- `KI-039` (PONIŠTENJE zbirne) — svoj rez posle S6 (odluka 7);
+- brisanje kolona `Fakturisano`/`FakturaID` (i linijskih polja) sa zaglavlja — korak 8; do tada postoje, a niko
+  ih ne čita ni piše;
+- `OsirocenoOd` na fakturi i liniji bez pisca (gore) — van S6; SEF ga i dalje čita kao isključenje;
+- prefill iz zaglavlja (`modStornoDok.ColKlasaZaPrefill`, `:1026`) — korak 4 ga je ostavio za `base` red, briše
+  ga korak 8;
+- mrtve konstante sledljivosti u `modIzvestaj` (`SLED_*`, komentar „prijemnica -> faktura ide po denorm FakturaID",
+  `:60`) — ekran je obrisan ranije; ne čitaju ništa, pa ne ulaze;
+- PWA prikaz `PrijemnicaStavkaID` — nizvodni zahtev.
+
+**Testovi čija se premisa menja:**
+
+| Test | Šta je tvrdio | Šta biva |
+|---|---|---|
+| Faktura suite: šest `Test_CreateFaktura*` (`modFakturaTests:67-378`) | zaglavlje nosi brojke; pisac piše keš | seme kao pisac: zaglavlje bez brojki i keša, stavka nosi brojke; ulaz je `PrijemnicaStavkaID`; tvrdnja o kešu postaje „keš ostaje prazan" + izveden status |
+| `T_Fak_DostupnostSePrenosiURedu` (`modTest:13126`) | `PrijemnicaDostupna(storn, fakt, fakID)`; FAK2 (keš bez ID-a) nije dostupna | dva parametra; FAK2 JE dostupna (R4); razlika prikaz/pravilo se meri nad podmetnutom linijom na fakturu koje nema (fault injection, rollback) |
+| `T_Fak_KorpaZnackaITraka` i ostali testovi korpe (`modTest:13194`, `:13368`, `:13532`) | identitet korpe je `PrijemnicaID` | identitet je `PrijemnicaStavkaID` (`PRS-PRJ-FAK-*`); tvrdnje važe |
+| `Test_S6K4_FakturisanaSeOdbija` (BFP `:6823`) | keš `DA` odbija storno; sintetička linija odbija | keš više NE odbija (`FAK-LIN-03`, nova tvrdnja); linija nosi `PrijemnicaStavkaID` |
+| `T_S6K4_UvidKazeOdbijanje` (`modTest:10037`) | `PRJ-FAK-1` fakturisana kroz keš | fakturisana kroz izvedenu liniju fixture-a; tvrdnje važe |
+| `IzDetaljPrijemnice` test (`modTest:17900`) | keš | izveden status; tvrdnja važi |
+
+Vraćaju se po imenu (obrisani u koraku 2, odnosno u S3b-1): `Test_DuplicateFakturaIsBlocked`,
+`Test_OpenFaktureExcludeStornirano` i deo `GetPrijemniceByKupac` iz `Test_DokumentaReadHelpersExcludeStornirano`
+(odluka 4 koraka 4). Ostali delovi tog testa (`GetOtpremniceByZbirna`, `GetZbirnaByKupac`) mere funkcije koje
+korak 5 ne dira — ostaju van, uz ime.
+
+**ACCEPTANCE CONTRACT koraka 5 — plan dokaza, ne dokaz:**
+
+- **važi:**
+  - **R1:** jedan čitač; lista, F8, okvir, uvid, dijalog, Fakturisanje i detalj kažu isto nad svakim stanjem;
+    sabotaža „čitač gleda keš" obara test po imenu;
+  - **R2:** dvoklasni dokument (I 100 × 120, II 50 × 80) fakturisan iz stavki daje dve linije, svaka sa svojim
+    `PrijemnicaStavkaID`, klasom, količinom i cenom, i iznos 16.000; faktura samo klase I ostavlja dokument
+    `DELIMIČNO` (pilula „Delim. fakturisano", čip „Nefakturisane"), a klasa II ostaje slobodna i ide na drugu fakturu;
+  - **R4 (`KI-038`):** `PRJ-FAK-2` (keš „Da" bez linije) je nefakturisana i u listi i u kapiji; `PRJ-FAK-1` je
+    fakturisana i u listi i u kapiji;
+  - **R5 (`KI-040`):** `RunPrijemnicaCorrection` nad fakturisanom (ISPRAVKA, DUPLI, PONIŠTENJE) odbija sa razlogom,
+    bez novog reda `tblStornoVeze`; REŠI KASNIJE i dalje pravi zapis;
+  - **R6:** storno fakture kroz F8 ulaz, pa je dokument nefakturisan bez ijednog upisa u keš, pa storno prijemnice
+    kroz F8 ulaz prolazi;
+  - **TX:** pad na kraju jezgra fakture (seam) vraća zaglavlje, linije i avans; test snima fakture, linije,
+    prijemnicu i novac;
+- **netaknuto:** GP faktura i utovar; SEF, uplata, izvod; avans u istoj TX (D-003); storno fakture ostalih
+  vrsta; pisac prijemnice (osim brisanja relink-a); keš kolone u šemi;
+- **edge:** jednoklasni dokument; dva dokumenta istog kupca na jednoj fakturi; faktura druge klase posle prve;
+- **negativno (R3), svako PO IMENU, stanje netaknuto (broj faktura, broj linija, status stavke):**
+  - druga faktura nad istom stavkom (`Test_DuplicateFakturaIsBlocked`, vraćen);
+  - faktura nad storniranom prijemnicom;
+  - linija za nepostojeću stavku prijemnice;
+  - faktura nad dokumentom drugog kupca;
+  - dupla stavka u izboru;
+- **čime:** BFP `Test_S6K5_*` nad svežim kupcem i dokumentima bez ambalaže (`KI-028` ne ulazi); vraćeni testovi;
+  `modTest` 262 nad fixture-om (lista, kapija, mreža, detalj — `PRJ-FAK-1/2/3`); prepisana Faktura suite;
+  sabotaže `s6k5-*` i presidrene `s6k4-faktura-*` / `fakture-dostupnost-*`; `who_writes --check-ownership`,
+  `gen_schema_module --check`.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
