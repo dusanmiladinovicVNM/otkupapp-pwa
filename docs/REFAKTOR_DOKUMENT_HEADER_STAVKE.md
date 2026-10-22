@@ -8477,6 +8477,16 @@ knjige (`RequireAmbTxIzvorniDokument` odbije) i SVAKI kasniji pad u Fazi A (npr.
 - Zatečeni nalazi iz iste provere ne šire obim: `KI-037` („?" u `MsgBox`-u) i `KI-038` (lista i kapija čitaju
   fakturisanost iz različitih polja; zatvara ga korak 5).
 
+**Ponovljena ručna provera #438 (stavka 186) — odbijanje pre dijaloga i bez zapisa ispravke:**
+
+- **Ostatak N2:** dijalog potvrde PONIŠTENJA (`BuildPonistenjePosledice`) ima svoj tekst, mimo lanca uvida. I
+  on sada za fakturisanu prijemnicu i robu na prerađenoj paleti kaže „storno se ODBIJA".
+- **N5:** okvir ispravke prijemnice prerađenu paletu odbija **pre** dijaloga posledica i **pre**
+  `CreateCorrectionContext` (PONIŠTENJE i DUPLI bez „Ne diraj palete"). Pita `modPaletniList.PreradjenaPaletaRazlog`,
+  koji bira isto što i jezgro i vraća isti tekst. Odbijen pokušaj više ne ostavlja FAILED zapis u Oporavku, a
+  jezgro zadržava svoju kapiju.
+- Ista klasa na PONIŠTENJU zbirne (`RunZbirnaCorrection`) je `KI-039`, van ovog koraka.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
