@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 22.10.2026 (stavka 187: merge `#438`, S6 je 4/8; sledeći je korak 5).
+**Ažurirano:** 22.10.2026 (stavka 189: S6 korak 5 na review-u; `KI-038` i `KI-040` zatvoreni).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 4/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · **sledeći: korak 5** (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` kao kapije), grana `claude/s6-korak5-faktura` |
+| **S6 prijemnica** | ⏳ **u toku, 4/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · **korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) na review-u** (stavke 188–189; jeftine kapije zelene, izvršne čekaju reviewer GO), grana `claude/s6-korak5-faktura` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -6851,6 +6851,64 @@
      - **Usput (okruženje):** u 13:09 je disk C: bio pun u trenutku upisa, pa su `.git/HEAD`, ref grane i reflog
        ostali puni NUL bajtova (stavka 187). Pri merenju je bilo 4,6–5,6 GB slobodno.
      - **Sledeći brojevi:** stavka 189 (kod) · test 262 · KI-041.
+189. **S6 korak 5 — kod: faktura po `PrijemnicaStavkaID`, fakturisanost izvedena; `KI-038` i `KI-040` zatvoreni**
+     (22.10.2026). Grana `claude/s6-korak5-faktura`, ispravke plana su u §14.55, „Korak 5".
+
+     - **Crveno** (`e322bd4f`, test `f621e2d6`) je tačno izvedeno iz diff-a: BFP **2670 / 34** i RunAllTests
+       **262 / 2** (261 i 262), po imenu.
+       - BFP: 34 od 61 nove tvrdnje:
+         - `Test_DuplicateFakturaIsBlocked` 4, `Test_OpenFaktureExcludeStornirano` 3;
+         - `DveKlaseIzStavki` 5, `DelimicnoFakturisanje` 9;
+         - `FakturaOdbijaNevazeceStavke` 1 (samo KONTROLA: odbijanja su zelena i pre ispravke);
+         - `KesNeOdlucuje` 5, `OkvirOdbijaFakturisanuPreZapisa` 1 (`KI-040`: `tblStornoVeze +3`);
+         - `StornoFakturePaPrijemnice` 6;
+         - deo `GetPrijemniceByKupac` je zelen.
+       - RunAllTests: 261 pada na novoj tvrdnji pregleda lanca, a 262 na prvoj tvrdnji (`KI-038`).
+       - Prvi crveni prolaz je dao 33, a ne 34. Razlika je izmerena i objašnjena: kvar testa iz §14.55 „Korak 5",
+         ispravka 1. Usput je `KI-041`.
+     - **Ispravka** (`8130b6f5`):
+       - **Čitač izvedenog statusa.** Jedno telo, `modFaktura.FakturisanostPoPrijemnici` i
+         `PrijemnicaJeFakturisana` (`FAK-LIN-01..03`, fail-closed). Pitaju ga:
+         - kapija storna (jezgro, F8, okvir, uvid, pregled lanca);
+         - mreža Fakturisanja (red po STAVCI) i pisac;
+         - lista dokumenata (pilula „Delim. fakturisano", čip „Nefakturisane");
+         - detalj izveštaja i health check 4.
+
+         Keš sa zaglavlja niko ne čita ni piše: ostaje samo kao konstanta u `modConfig` (grep).
+       - **Pisac.** `CreateFaktura` prima `PrijemnicaStavkaID`, a brojke čita sa stavke. Linija nosi stavku
+         (`tblFakturaStavke.PrijemnicaStavkaID`, kolona na kraju, otisak šeme `4A418441`). Transakcija snima
+         fakture, linije i novac. Seam `CreateFakturaPadniTest` stoji na kraju jezgra i ide u `ResetSeamova`.
+       - **`KI-040`:** okvir odbija fakturisanu pre `CreateCorrectionContext` (osim REŠI KASNIJE), istim tekstom
+         kao jezgro (`modStorno.FakturisanaPrijemnicaRazlog`).
+       - **Storno fakture** više ne piše prijemnicu: `ReleasePrijemnicaFromFaktura` je obrisan, a prijemnica
+         postaje nefakturisana sama.
+       - **Obrisano:** `RelinkFakturaStavke` (odluka 4), `IsPrijemnicaAvailableForFaktura`, parametar
+         `samoNefakturisano`, `ColFakturaID` i `S6K4SejStavkuFakture`.
+       - **Fixture** izvodi 5 linija iz keša (odluka 3). Potpis je **`49f55dfc03b134b3`** (bio je
+         `27f6230a5e8ca5be`); stari fixture je sačuvan kao `tests/fixtures/otkup_test_pre_k5.xlsm`.
+       - **`WRITE_OWNERSHIP`:** `tblFakturaStavke` bez `modDokumenta`, `tblPrijemnica` bez `modFaktura`.
+         `WHO_WRITES` je regenerisan.
+       - **Testovi čija se premisa menja:** Faktura suite (6 testova), `T_Fak_DostupnostSePrenosiURedu` (razlaz
+         prikaz/pravilo nad podmetnutom linijom), testovi korpe (identitet `PRS-…`) i
+         `Test_S6K4_FakturisanaSeOdbija`. Nov je `Test_S6K5_PadPosleUpisaVracaFakturu`.
+     - **Sabotaže:** katalog **913 → 931**.
+       - 20 novih `s6k5-*`;
+       - presidrene `s6k4-faktura-kapija-u-jezgru`, `s6k4-faktura-stavka-prolazi` i `fakture-korpa-uklanja-prvu`;
+       - povučene `s6k4-faktura-kes-prolazi` i `fakture-dostupnost-bez-oznake` (grana keša je obrisana po odluci).
+
+       Statička sonda je **23/23**: svaka se primenjuje, pravila nad fajlovima ostaju čista, a `--vrati` vraća
+       izvor bit-identično (`98cb69e09fe56943`).
+     - **Jeftine kapije: sve zelene.** Ceo `static.yml` bez `npm ci` i JS harness-a (JS nije diran), plus
+       `popis_citalaca --check` i `sabotaza --proveri-sidra` / `--self-test`.
+     - **Očekivani brojevi, izvedeni iz diff-a — NIJE izmereno** (`run_vba` čeka reviewer GO):
+       - RunAllTests **262/0**;
+       - BFP **2676/0** (2609 + 70 novih tvrdnji − 3 iz bloka keša u `Test_S6K4_FakturisanaSeOdbija`);
+       - Faktura **39/39** (35 + 3 u testu kanonskih vrednosti + 1 preduslov u testu već fakturisane);
+       - Banka 241, Storno 111, Palete 97, Agrohemija 25, SheetsJson 72 — nedirane suite, ali fixture ima 5 novih
+         linija fakture, pa je to pretpostavka, ne merenje;
+       - dokaz: 20 novih, 3 presidrene i one čiji je test diran.
+     - **Čeka:** reviewer GO → `run_vba` FULL i `dokaz.py … --grupe`; posle toga sveska za compile i ručna provera.
+     - **Sledeći brojevi:** stavka 190 · test 263 · KI-042.
 
 ## Dug sa imenom (posle S5-5b)
 

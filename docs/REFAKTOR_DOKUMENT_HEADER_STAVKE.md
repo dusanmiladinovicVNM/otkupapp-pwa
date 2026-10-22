@@ -8672,6 +8672,31 @@ korak 5 ne dira — ostaju van, uz ime.
   sabotaže `s6k5-*` i presidrene `s6k4-faktura-*` / `fakture-dostupnost-*`; `who_writes --check-ownership`,
   `gen_schema_module --check`.
 
+**Ispravke plana tokom koda (stavka 189) — svaka izmerena, ne pretpostavljena:**
+
+1. **Crveni prolaz je otkrio kvar testa, ne koda.** Prvi prolaz je dao BFP 33 umesto izvedenih 34 crvenih:
+   `Test_S6K5_StornoFakturePaPrijemnice` je bez fakture zvao `StornoIzvrsi(STIP_FAKTURA, "", …)`, a ulaz je
+   prazan broj razrešio na `FAK-TEST-0` i stornirao je. Zato je pao i tuđi `T_UplataGuard_VecPlacenaFaktura`.
+   Test je ispravljen (`f621e2d6`), a ulaz koji prazan broj ne odbija je `KI-041` (van koraka).
+2. **Dve kapije pisca nemaju sabotažu**, jer su dvoslojne po konstrukciji. Nepostojeću stavku hvata i rečnik
+   bez ključa (`red(1)` pada), a duplu stavku u izboru i `Dictionary.Add`. Gašenje kapije bi bilo placebo.
+   Tvrdnje stoje u `Test_S6K5_FakturaOdbijaNevazeceStavke`, uz KONTROLU koja prolazi.
+3. **`Test_S6K4_FakturisanaSeOdbija` gubi blok keša:**
+   - keš više ne odbija storno — obrnuto meri `Test_S6K5_KesNeOdlucuje`;
+   - sintetička linija nosi stavku klase I, pa je dokument DELIMIČNO fakturisan i jezgro ga odbija;
+   - `S6K4SejStavkuFakture` je obrisan, a zamenjuje ga `S6K5SejLiniju`.
+4. **Snimci po onome što se stvarno menja.** Snimak prijemnice je skinut iz `CreateFaktura_TX` i
+   `StornoFaktura_TX`, a snimak faktura i linija iz `SavePrijemnicaMulti_TX` (relink je obrisan).
+   `SnimiZaStornoPrijemnice` ostaje širi skup, kakav je bio.
+5. **Health check 9** (aktivna prijemnica → stornirana faktura) je skinut, a ne prepisan: veza preko keša ne
+   postoji, a storno fakture stornira linije.
+6. **`s6k4-faktura-stavka-prolazi`** je presidrena na izveden status u `Test_S6K5_DveKlaseIzStavki`. U testu
+   koraka 4 je delila tvrdnju sa kapijom jezgra, pa je test ne bi razlikovao.
+7. **Delimičnost se vidi i u detalju izveštaja** (`OTKUI_IZ_DET_DELIMFAKT`). Nova tvrdnja nosi sabotažu
+   `s6k5-delim-kao-fakturisan`, jer lista i čitač inače dele istu tvrdnju.
+8. **Tekst ekrana Fakturisanja** (`OTKUI_LBL_FK_HINT`) kaže da je red klasa prijemnice. Nov tekst se vidi tek
+   posle restarta sveske.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
