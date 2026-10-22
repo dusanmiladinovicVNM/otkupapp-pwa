@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 3/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · **korak 4 (storno na nivou dokumenta, `KI-031` kao kapija) na review-u** (`#438`, stavke 182–186: dve ručne provere, nalazi N1, N2 i N5 zatvoreni u istom PR-u, FULL 12/12; čeka compile i kratku proveru N5), grana `claude/s6-korak4-storno` |
+| **S6 prijemnica** | ⏳ **u toku, 3/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · **korak 4 (storno na nivou dokumenta, `KI-031` kao kapija) na review-u** (`#438`, stavke 182–186: dve ručne provere, nalazi N1, N2 i N5 zatvoreni u istom PR-u, FULL 12/12, compile potvrđen; čeka merge), grana `claude/s6-korak4-storno` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -6764,11 +6764,17 @@
      - **Sveska za compile:** `tests/fixtures/rucna_provera_s6_korak4_n5.xlsm` (gitignored), nad `cd407315`.
        Provereno: ZIP OK, 112 XML članova, 199 komponenti, kod N5 prisutan, `modVbaTools` namerno nije unutra.
        Moje Excel instance su se ugasile; operaterova (sveska `_n1n2`) nije dirana.
-     - **Čeka:**
-       - compile nad novom sveskom, pa `vba_gate --mark-compile`;
-       - kratka provera: 39/150326 PONIŠTENJE i 37/150326 DUPLI bez „ne diraj" odbijeni odmah, bez dijaloga;
-         Oporavak ne raste; 37/150326 DUPLI uz „ne diraj" prolazi;
-       - merge — samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
+     - **Kratka provera N5** (snimci ekrana, 22.10.2026, nad `rucna_provera_s6_korak4_n5.xlsm`):
+       - 39/150326 PONIŠTENJE: ✅ odmah „Prijemnica PRJ-SLED-K ima robu na preradjenoj paleti 70/2026. Prvo
+         stornirajte preradu, pa prijemnicu.", bez dijaloga „Pogodjeno …";
+       - 37/150326 DUPLI bez „ne diraj": ✅ odmah ista odbijenica (paleta 50/2026);
+       - 37/150326 DUPLI uz „ne diraj": ✅ „Prijemnica stornirana (dupli). Palete ostavljene osirocene …"; red
+         nestaje iz liste, ukupno 3.810 → 3.730 kg;
+       - Oporavak **6 → 7**: novi je samo zapis za ručno prevezivanje paleta. Pre ispravke bi bilo 9.
+     - **Compile:** operater je javio „compiles". `vba_gate --mark-compile` je upisan nad `3fc553d25481`, a
+       `--require-green --require-compile` = „dokazano: izvor 3fc553d25481".
+     - **CI** nad `75a78521`: zelen, PR `CLEAN`.
+     - **Čeka:** merge — samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
      - **Usput:** na disku C: je bilo 467–923 MB slobodno. Po merenju iz `#434` lažni padovi kreću ispod
        ~150 MB.
      - **Sledeći brojevi:** stavka 187 · test 262 · KI-040.
