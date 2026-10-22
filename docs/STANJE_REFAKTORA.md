@@ -6774,10 +6774,18 @@
      - **Compile:** operater je javio „compiles". `vba_gate --mark-compile` je upisan nad `3fc553d25481`, a
        `--require-green --require-compile` = „dokazano: izvor 3fc553d25481".
      - **CI** nad `75a78521`: zelen, PR `CLEAN`.
-     - **Čeka:** merge — samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
+     - **Nezavisni review, krug posle ručne provere** (22.10.2026): `CODE GO` i `MERGE GO` (9,6/10). P0 = 0, P1 = 0,
+       P2 = 1, neblokirajući.
+       - **P2:** `RunPrijemnicaCorrection` nad fakturisanom prijemnicom prvo napravi zapis ispravke, pa ga posle
+         odbijanja jezgra ostavi kao FAILED. Prerađena paleta je premeštena pre zapisa (N5), fakturisanost nije.
+       - Proverio sam u kodu: tačno je za API, a iz aplikacije nedostižno. Jedini produkcioni pozivalac je F8, a
+         `PokreniAkciju` fakturisanu odbija pre svega (`modScrStorno.bas:1157`).
+       - **Odluka operatera:** `KI-040`, zatvara ga korak 5. Taj korak menja i sam čitač fakturisanosti
+         (`KI-038`), pa bi provera dodata sada čitala izvor koji korak 5 briše. Zatim merge.
+     - **Čeka:** merge (operater ga je izričito zatražio) — posle zelenog CI-ja, sa `--match-head-commit`.
      - **Usput:** na disku C: je bilo 467–923 MB slobodno. Po merenju iz `#434` lažni padovi kreću ispod
        ~150 MB.
-     - **Sledeći brojevi:** stavka 187 · test 262 · KI-040.
+     - **Sledeći brojevi:** stavka 187 (zapis merge-a, na grani koraka 5) · test 262 · KI-041.
 
 ## Dug sa imenom (posle S5-5b)
 
