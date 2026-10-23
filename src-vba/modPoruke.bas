@@ -1980,6 +1980,7 @@ Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_IZ_DET_FAKTURA", "Faktura:"
     UpsertRow lo, existing, "OTKUI_IZ_DET_NEFAKT", "nije fakturisana"
     UpsertRow lo, existing, "OTKUI_IZ_DET_DELIMFAKT", "(delimi" & ChrW(269) & "no -- ne sve stavke)"
+    UpsertRow lo, existing, "OTKUI_IZ_DET_ZAJEDNICKA", "(zajedni" & ChrW(269) & "ka sa drugim prijemnicama -- ostatak se vodi na fakturi)"
     UpsertRow lo, existing, "OTKUI_IZ_BEZ_GRANICE", "po" & ChrW(269) & "etak"
     UpsertRow lo, existing, "OTKUI_IZ_PRETRAGA", "pretraga:"
     UpsertRow lo, existing, "OTKUI_IZ_FILTER", "filter:"

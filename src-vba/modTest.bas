@@ -13227,8 +13227,10 @@ End Sub
 ' DOSTUPNOST SE PRENOSI U REDU, ne izvodi se iz prikaza. Od S6 koraka 5 je red
 ' mreze STAVKA prijemnice, a dostupnost je izvedena iz aktivnih linija fakture
 ' (FAK-LIN-03) -- kes na zaglavlju ne odlucuje (FAK2, KI-038). Prikaz (broj
-' fakture) i pravilo i dalje mogu da se razidju: linija na fakturu cijeg zaglavlja
-' nema zauzima stavku, a broja nema odakle da se procita. Taj red se PODMECE
+' fakture) i pravilo i dalje mogu da se razidju: linija na fakturu BEZ BROJA
+' (fixture FAK-TEST-0: postoji i aktivna je) zauzima stavku, a broja nema odakle
+' da se procita. Linija na fakturu koje NEMA od review-a #439 obara citac po imenu
+' (FAK-LIN-02), pa vise nije razlaz nego kvar. Taj red se PODMECE
 ' (fault injection, svoja transakcija, rollback). Ko dostupnost cita iz onoga sto
 ' se vidi, ponudi takvu stavku operateru pa padne u pisacu.
 ' Nalazi se skupljaju i tvrde POSLE rollback-a: AssertEq staje na prvom padu, a
@@ -13265,12 +13267,12 @@ Private Sub T_Fak_DostupnostSePrenosiURedu()
     AssertEq (r > 0), True, "preduslov: slobodna stavka je u listi"
     AssertEq CBool(src(r, 9)), True, "slobodna stavka je dostupna"
 
-    ' RAZLAZ PRIKAZA I PRAVILA, podmetnut: aktivna linija na fakturu koje nema.
+    ' RAZLAZ PRIKAZA I PRAVILA, podmetnut: aktivna linija na fakturu bez broja.
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     rowFs = AppendRow(TBL_FAKTURA_STAVKE, Array( _
-        "FST-K5-NEMA", "FAK-NEMA-K5", FX_PRJ_FAK2, 100, 40#, "I", "21/150326", "", ""))
+        "FST-K5-BEZBROJA", "FAK-TEST-0", FX_PRJ_FAK2, 100, 40#, "I", "21/150326", "", ""))
     RequireUpdateCell TBL_FAKTURA_STAVKE, rowFs, COL_FS_PRIJEMNICA_STAVKA_ID, FX_PRS_FAK2, _
                       "T_Fak_DostupnostSePrenosiURedu"
 

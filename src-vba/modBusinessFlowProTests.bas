@@ -362,6 +362,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6K5_OkvirOdbijaFakturisanuPreZapisa
     Test_S6K5_StornoFakturePaPrijemnice
     Test_S6K5_PadPosleUpisaVracaFakturu
+    Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka
+    Test_S6K5_LinijaBezFaktureJeKvar
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
     Test_AMB_TipVanSifarnikaPisacOdbija
     Test_ODL24_UgovorPozajmice
@@ -6926,7 +6928,7 @@ End Sub
 '
 ' S6 korak 5: fakturisanost je IZVEDENA iz aktivnih linija (FAK-LIN-03), pa kes
 ' vise ne odbija nista -- to meri Test_S6K5_KesNeOdlucuje. Ovde ostaje linija:
-' sinteticka (fault injection, rollback), na stavci KLASE I dvoklasnog dokumenta.
+' PRAVA faktura (rollback), na stavci KLASE I dvoklasnog dokumenta.
 ' Dokument je time DELIMICNO fakturisan, i jezgro ga odbija kao fakturisan.
 ' Direktan poziv jezgra -- jezgro je ovde JEDINA brana (okvir ispravke ima svoju,
 ' KI-040, pa sabotaza jezgra kroz okvir ne bi grizla).
@@ -6948,16 +6950,22 @@ Private Sub Test_S6K4_FakturisanaSeOdbija()
     AssertTrue Len(prjS) > 0, "S6K4 faktura: preduslov -- prijemnica bez gajbi"
     If Len(prjS) = 0 Then Exit Sub
 
-    ' --- aktivna linija fakture na stavci klase I, bez kesa ---
-    Dim odbijenaS As Boolean, aktivnaS As Boolean
+    ' --- PRAVA faktura nad stavkom klase I (dokument je delimicno fakturisan) ---
+    ' Do review-a #439 je ovde stajala sinteticka linija na fakturu koje nema; od
+    ' P2-2 takvu liniju citac odbija po imenu (FAK-LIN-02), pa bi storno pao iz
+    ' DRUGOG razloga. Faktura i avans se vracaju rollback-om.
+    Dim odbijenaS As Boolean, aktivnaS As Boolean, fidK4 As String
     Set txSeme = New clsTransaction
     txSeme.BeginTx
+    txSeme.AddTableSnapshot TBL_FAKTURE
     txSeme.AddTableSnapshot TBL_FAKTURA_STAVKE
-    S6K5SejLiniju prjS, S6StavkaID(prjS, KLASA_I), "FAK-K4S-" & scenario
+    txSeme.AddTableSnapshot TBL_NOVAC
+    fidK4 = S6K5Fakturisi(TEST_KUP_ID, S6StavkaID(prjS, KLASA_I))
     odbijenaS = Not modStorno.StornoPrijemnica_TX(prjS)
     aktivnaS = Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjS)
     txSeme.RollbackTx
     Set txSeme = Nothing
+    AssertTrue Len(fidK4) > 0, "S6K4 faktura: preduslov -- stavka klase I je fakturisana kroz pravi pisac"
     AssertTrue odbijenaS, _
                "S6K4 faktura: prijemnica pod aktivnom stavkom fakture je ODBIJENA"
     AssertTrue aktivnaS, "S6K4 faktura: odbijena (stavka) ostaje aktivna"
@@ -7782,9 +7790,10 @@ End Sub
 ' Do koraka 5 je zapis nastajao pre nego sto jezgro odbije, pa je ostajao FAILED
 ' u Oporavku iako je dokument netaknut. RESI KASNIJE je izuzetak -- ono SAMO pravi
 ' zapis, pa mora i dalje da ga pravi.
-' Linija je sinteticka (fault injection, S6K5SejLiniju): fakturu nad
-' dokumentom ovaj test ne meri. Cela izmena se vraca rollback-om, i zapisi
-' ispravke (svoja TX po pozivu) sa njom.
+' Faktura je PRAVA (pisac, stavka klase I); do review-a #439 je ovde bila
+' sinteticka linija na fakturu koje nema, a nju od P2-2 citac odbija po imenu.
+' Cela izmena se vraca rollback-om -- faktura, avans i zapisi ispravke (svoja TX
+' po pozivu) sa njom.
 ' SABOTAZE: s6k5-okvir-pusta-fakturisanu, s6k5-okvir-odbija-resi-kasnije.
 Private Sub Test_S6K5_OkvirOdbijaFakturisanuPreZapisa()
     Dim tx As clsTransaction
@@ -7801,7 +7810,9 @@ Private Sub Test_S6K5_OkvirOdbijaFakturisanuPreZapisa()
     tx.AddTableSnapshot TBL_STORNO_VEZE
     tx.AddTableSnapshot TBL_ZBIRNA
     tx.AddTableSnapshot TBL_OTPREMNICA
-    If Len(prj) > 0 Then S6K5SejLiniju prj, S6StavkaID(prj, KLASA_I), "FAK-K5-OKV-" & scenario
+    tx.AddTableSnapshot TBL_NOVAC
+    Dim fidOkv As String
+    If Len(prj) > 0 Then fidOkv = S6K5Fakturisi(TEST_KUP_ID, S6StavkaID(prj, KLASA_I))
 
     Dim svPre As Long, svPosle As Long, svResi As Long
     Dim rI As Object, rD As Object, rP As Object, rR As Object, aktivna As Boolean
@@ -7816,6 +7827,7 @@ Private Sub Test_S6K5_OkvirOdbijaFakturisanuPreZapisa()
     tx.RollbackTx
     Set tx = Nothing
 
+    AssertTrue Len(fidOkv) > 0, "S6K5 okvir: preduslov -- stavka klase I je fakturisana kroz pravi pisac"
     AssertTrue S6K5OdbijenoFakturisana(rI) And S6K5OdbijenoFakturisana(rD) And _
                S6K5OdbijenoFakturisana(rP), _
                "S6K5 okvir: ISPRAVKA, DUPLI i PONISTENJE fakturisane su odbijeni sa razlogom"
@@ -7926,7 +7938,178 @@ EH:
     SetTestMode prevMode
 End Sub
 
+' P2-1 (review #439, stavka 190): ZAJEDNICKA faktura -- dve prijemnice na jednoj
+' fakturi. Do ispravke je svaki red liste F4 pokazivao CEO ostatak fakture (dva reda
+' po 32.000 za jedan racun od 32.000); zateceno od pre koraka 5, a korak 5 ga je
+' prosirio sabiranjem preko faktura. Odluka operatera: pilula pokazuje placanje
+' faktura, a ostatak se NE pripisuje dokumentu kad je faktura zajednicka -- dug
+' pripada fakturi i vidi se u listi Fakture. KONTROLA: prijemnica sa SVOJOM fakturom
+' pokazuje ostatak jednak ostatku te fakture u listi Fakture.
+' SABOTAZE: s6k5-ostatak-zajednicke, s6k5-zajednicka-se-ne-vidi.
+Private Sub Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka()
+    On Error GoTo EH
+    Dim scenario As String, prjA As String, prjB As String, prjC As String
+    Dim brA As String, brB As String, brC As String, fidAB As String, fidC As String
+    Dim pil As Long, ostC As Double
+    scenario = NewScenarioCode("S6K5ZAJ")
+    prjA = S6K5Dokument(scenario & "-A", TEST_KUP_ID, brA)
+    prjB = S6K5Dokument(scenario & "-B", TEST_KUP_ID, brB)
+    prjC = S6K5Dokument(scenario & "-C", TEST_KUP_ID, brC)
+    AssertTrue Len(prjA) > 0 And Len(prjB) > 0 And Len(prjC) > 0, _
+               "S6K5 zajednicka: preduslov -- tri dokumenta kroz pravi pisac"
+
+    fidAB = S6K5Fakturisi(TEST_KUP_ID, S6StavkaID(prjA, KLASA_I), S6StavkaID(prjA, KLASA_II), _
+                          S6StavkaID(prjB, KLASA_I), S6StavkaID(prjB, KLASA_II))
+    fidC = S6K5Fakturisi(TEST_KUP_ID, S6StavkaID(prjC, KLASA_I), S6StavkaID(prjC, KLASA_II))
+    AssertTrue Len(fidAB) > 0 And Len(fidC) > 0, _
+               "S6K5 zajednicka: preduslov -- zajednicka faktura A+B i sopstvena faktura C"
+
+    AssertEquals "0", S6Broj(S6K5Ostatak(brA)), _
+                 "S6K5 zajednicka: prijemnica A ne nosi ostatak zajednicke fakture"
+    AssertEquals "0", S6Broj(S6K5Ostatak(brB)), _
+                 "S6K5 zajednicka: prijemnica B ne nosi ostatak zajednicke fakture"
+    pil = S6K5Pilula(brA)
+    AssertTrue pil = PAY_NEPLAC Or pil = PAY_DELIM Or pil = PAY_PLACENO, _
+               "S6K5 zajednicka: pilula pokazuje placanje zajednicke fakture"
+    AssertTrue Len(prjA) > 0 And InStr(1, S6K5Detalj(prjA), Poruka("OTKUI_IZ_DET_ZAJEDNICKA"), _
+                                       vbTextCompare) > 0, _
+               "S6K5 zajednicka: detalj izvestaja kaze da je faktura zajednicka"
+    AssertTrue S6K5PreostaloFakture(fidAB) > 0, _
+               "S6K5 zajednicka: ostatak se vodi na fakturi (lista Fakture)"
+
+    ostC = S6K5Ostatak(brC)
+    AssertTrue ostC > 0 And Abs(ostC - S6K5PreostaloFakture(fidC)) < 0.005, _
+               "S6K5 zajednicka: KONTROLA -- sopstvena faktura daje ostatak jednak ostatku fakture"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka", Err.Number, Err.description
+End Sub
+
+' P2-2 (review #439, stavka 190): AKTIVNA linija prijemnice nosi FakturaID fakture
+' koja postoji TACNO jednom i nije stornirana (FAK-LIN-02). Do ispravke je linija sa
+' praznim FakturaID-em zauzimala stavku za pisca, a mreza ju je nudila kao slobodnu.
+' Tri pokvarena oblika (fault injection), svaki u SVOJOJ transakciji: citac ih odbija
+' PO IMENU, a mreza stavku ne nudi. Nalazi se skupljaju i tvrde POSLE rollback-a --
+' pokvaren red obara svako sledece citanje. KONTROLA: posle rollback-a citac je cist.
+' SABOTAZE: s6k5-linija-bez-fakture-prolazi, s6k5-linija-na-nepostojecu-fakturu,
+' s6k5-linija-nad-storniranom-fakturom.
+Private Sub Test_S6K5_LinijaBezFaktureJeKvar()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Dim scenario As String, prj As String, stI As String, stII As String, fid As String
+    Dim gBez As String, gNema As String, gStorn As String, gPosle As String, mreza As String
+    scenario = NewScenarioCode("S6K5KVAR")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID)
+    AssertTrue Len(prj) > 0, "S6K5 kvar: preduslov -- dokument kroz pravi pisac"
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+
+    ' 1) aktivna linija bez FakturaID-a
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    If Len(stI) > 0 Then S6K5SejLiniju prj, stI, ""
+    gBez = S6K5GreskaCitaca()
+    mreza = S6K5MrezaNudi(TEST_KUP_ID, stI)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 2) aktivna linija na fakturu koje nema
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    If Len(stI) > 0 Then S6K5SejLiniju prj, stI, "FAK-NEMA-" & scenario
+    gNema = S6K5GreskaCitaca()
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 3) aktivna linija nad STORNIRANOM fakturom (zaglavlje storno, linija ne)
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_NOVAC
+    If Len(stII) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stII)
+    If Len(fid) > 0 Then MarkTestRowStornirano TBL_FAKTURE, COL_FAK_ID, fid
+    gStorn = S6K5GreskaCitaca()
+    tx.RollbackTx
+    Set tx = Nothing
+    gPosle = S6K5GreskaCitaca()
+
+    AssertTrue Len(fid) > 0, "S6K5 kvar: preduslov -- faktura nad stavkom klase II kroz pravi pisac"
+    AssertTrue InStr(1, gBez, "bez FakturaID", vbTextCompare) > 0, _
+               "S6K5 kvar: aktivna linija bez FakturaID-a obara citac PO IMENU"
+    AssertEquals "<greska>", mreza, _
+                 "S6K5 kvar: mreza Fakturisanja ne nudi stavku pod linijom bez fakture"
+    AssertTrue InStr(1, gNema, "fakturu koje nema", vbTextCompare) > 0, _
+               "S6K5 kvar: linija na fakturu koje nema obara citac PO IMENU"
+    AssertTrue InStr(1, gStorn, "nad storniranom fakturom", vbTextCompare) > 0, _
+               "S6K5 kvar: aktivna linija nad storniranom fakturom obara citac PO IMENU"
+    AssertEquals "", gPosle, "S6K5 kvar: KONTROLA -- posle rollback-a citac je cist"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K5_LinijaBezFaktureJeKvar", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
 ' --- pomocnici S6 koraka 5 -- nad praznim ID-jem vracaju prazno ---
+
+' Opis greske citaca linija ("" kad je citanje proslo).
+Private Function S6K5GreskaCitaca() As String
+    Dim d As Object
+    On Error Resume Next
+    Err.Clear
+    Set d = modFaktura.FakturaLinijePoStavci()
+    If Err.Number <> 0 Then S6K5GreskaCitaca = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' Kao S6K5MrezaRed, ali greska citaca je ishod, ne pad testa: "<greska>".
+Private Function S6K5MrezaNudi(ByVal kupacID As String, ByVal sid As String) As String
+    Dim r As String
+    On Error Resume Next
+    Err.Clear
+    r = S6K5MrezaRed(kupacID, sid)
+    If Err.Number <> 0 Then r = "<greska>"
+    Err.Clear
+    On Error GoTo 0
+    S6K5MrezaNudi = r
+End Function
+
+' OSTATAK reda prijemnice u listi F4 (kolona "rest") -- isti poziv koji crta ekran;
+' -1 = red nije tacno jedan.
+Private Function S6K5Ostatak(ByVal broj As String) As Double
+    Dim d As Variant, cols As Variant, redovi As Variant, c As Long, iRest As Long
+    S6K5Ostatak = -1
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip("PRIJEMNICA", "", broj)
+    If Not IsArray(d) Then Exit Function
+    If CLng(d(2)) <> 1 Then Exit Function
+    cols = d(0)
+    redovi = d(1)
+    For c = 0 To UBound(cols)
+        If modScrDokumenti.ColF(CStr(cols(c)), 2) = "rest" Then iRest = c + 1
+    Next c
+    If iRest = 0 Then Exit Function
+    S6K5Ostatak = CDbl(redovi(1, iRest))
+End Function
+
+' Preostalo FAKTURE u listi Fakture (GetFaktureForGrid, kolona 7); -1 = nema reda.
+Private Function S6K5PreostaloFakture(ByVal fid As String) As Double
+    Dim g As Variant, i As Long
+    S6K5PreostaloFakture = -1
+    If Len(fid) = 0 Then Exit Function
+    g = modFaktura.GetFaktureForGrid()
+    If Not IsArray(g) Then Exit Function
+    For i = 1 To UBound(g, 1)
+        If CStr(g(i, 1)) = fid Then
+            S6K5PreostaloFakture = CDbl(g(i, 7))
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' Zbir OTVORENIH avansa kupca: avans u kasi bez fakture, nestorniran -- isti oblik
 ' koji ApplyAvansToFaktura zatvara.
