@@ -8760,6 +8760,14 @@ korak 5 ne dira — ostaju van, uz ime.
 
   Bez prve brane linija bez `FakturaID` padne na drugoj (`1767`), pa tvrdnja meri **ime** razloga, ne samo
   pad. Statička sonda 6/6: pravila nad fajlovima čista, `--vrati` vraća izvor identičan kopiji.
+- **FULL je našao premisu testa koju je promenio korak 5, ne ova ispravka:** `Test_StornoCentar_All`
+  (`Test_PonistenjePrijemniceKaskada_Auto`). Test je sejao prijemnicu samo kao zaglavlje, a kapija storna od
+  koraka 5 čita stavke strogim čitačem: „Prijemnica nema nijednu stavku". Seme sada nosi stavku
+  (`TcSeedStavkaPrijemnice`), a test snima i `tblPrijemnicaStavke`.
+- **Dokaz je našao tvrdnju koju nova brana zaklanja:** `s6k5-storno-fakture-ne-gasi-linije`. Storno bez storna
+  linija ostavlja liniju nad storniranom fakturom, a čitač je sada odbija (`1768`). Zbog toga je poziv u tvrdnji
+  oborio test pre tvrdnje. Tvrdnja sada čita stanje kao ishod (`S6K5Fakturisanost`); pojedinačan dokaz je
+  DOKAZANO.
 
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
