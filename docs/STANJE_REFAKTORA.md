@@ -6971,6 +6971,22 @@
        Storno **111**, Palete **97**, Faktura **39/39**, Agrohemija **25/25**, SheetsJson **72**, uz zelene
        StornoCentar, Licencu, Golden i Izveštaje. `vba_gate --require-green`: **dokazano, izvor `4091a1588470`**.
        Compile kroz `run_vba` je `NEJASNO`, kao i uvek, pa ide ručno.
+     - **Sveska za compile i ručnu proveru:** `tests/fixtures/rucna_provera_s6_korak5.xlsm` (gitignored,
+       `40c7d9dc5ab1da3d`). To je BFP prolaz sa `--keep` nad istim izvorom (2694/0).
+       - **Zašto ne golo `--compile-only`:** F4 je pauziran, a fixture nema nijednu dvoklasnu prijemnicu.
+         Delimično fakturisanje se zato iz aplikacije ne može napraviti. Dokumente u sveski je napravio pravi
+         pisac: `…S6K5KVAR…` je nefakturisan, `…S6K5ZAJ…-A/-B` dele fakturu `21/2026`, a `…DUPFAK…` je
+         delimično fakturisan.
+       - **Provereno u sopstvenoj instanci:** ZIP OK, 204 komponente, `modVbaTools` nije unutra, nov kod i
+         novi ključevi poruka su prisutni. Otvorenog avansa kupca `KUP-90001` nema.
+       - VBE je u sveski ujednačio `pRest` → `preSt`. To je veličina slova u celom projektu, zatečeno i pre
+         koraka 5, a ne razlika u kodu.
+     - **Opis `#439`** je ažuriran (`gh api -X PATCH`, proveren grep-om). U njemu je i checklista ručne
+       provere (11 koraka).
+     - **Čeka:**
+       - operater: Compile (`Import modVbaTools.bas` → `Debug → Compile`), pa ručna provera nad sveskom;
+       - `--mark-compile` tek na javljeno „compiles";
+       - merge samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
      - **Sledeći brojevi:** stavka 192 · test 263 · KI-043.
 
 ## Dug sa imenom (posle S5-5b)
