@@ -7875,8 +7875,11 @@ Private Sub Test_S6K5_StornoFakturePaPrijemnice()
         okFak = modStornoDok.StornoIzvrsi(STIP_FAKTURA, S6K5BrojFakture(fid), "", poruka, fid)
     End If
     AssertTrue okFak, "S6K5 storno: F8 stornira fakturu"
-    AssertTrue Len(fid) > 0 And Not PrijemnicaJeFakturisana(prj), _
-               "S6K5 storno: posle storna fakture dokument je NEFAKTURISAN"
+    ' Storno koji ne stornira linije ostavlja aktivnu liniju nad storniranom fakturom,
+    ' a citac to odbija po imenu (1768) -- pa se stanje cita kao ishod, ne kroz poziv
+    ' koji bi test oborio PRE tvrdnje.
+    AssertEquals "NE", IIf(Len(fid) > 0, S6K5Fakturisanost(prj), "<bez fakture>"), _
+                 "S6K5 storno: posle storna fakture dokument je NEFAKTURISAN"
     AssertEquals "", S6ZaglavljeLinija(prj), _
                  "S6K5 storno: storno fakture ne pise kes na zaglavlje prijemnice"
     AssertEquals "True|", S6K5MrezaRed(TEST_KUP_ID, stI), _
@@ -8068,6 +8071,27 @@ Private Function S6K5GreskaCitaca() As String
     Err.Clear
     Set d = modFaktura.FakturaLinijePoStavci()
     If Err.Number <> 0 Then S6K5GreskaCitaca = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' Izvedena fakturisanost dokumenta: "NE" / "DELIM" / "DA"; greska citaca je ishod
+' ("<greska> opis"), ne pad testa.
+Private Function S6K5Fakturisanost(ByVal prj As String) As String
+    Dim st As Long
+    If Len(prj) = 0 Then Exit Function
+    On Error Resume Next
+    Err.Clear
+    st = modFaktura.PrijemnicaFakturisanost(prj)
+    If Err.Number <> 0 Then
+        S6K5Fakturisanost = "<greska> " & Err.description
+    ElseIf st = FAKT_NE Then
+        S6K5Fakturisanost = "NE"
+    ElseIf st = FAKT_DELIM Then
+        S6K5Fakturisanost = "DELIM"
+    Else
+        S6K5Fakturisanost = "DA"
+    End If
     Err.Clear
     On Error GoTo 0
 End Function
