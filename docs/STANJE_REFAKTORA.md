@@ -6909,6 +6909,19 @@
        - dokaz: 20 novih, 3 presidrene i one čiji je test diran.
      - **Čeka:** reviewer GO → `run_vba` FULL i `dokaz.py … --grupe`; posle toga sveska za compile i ručna provera.
      - **Sledeći brojevi:** stavka 190 · test 263 · KI-042.
+190. **S6 korak 5 — review `#439`, krug 1: dva P2, uzak rez u istom PR-u** (23.10.2026). Pun zapis je u §14.55,
+     „Review #439, krug 1".
+
+     - **Review:** arhitektura GO (9,5/10), kod 9,0/10, merge HOLD. P0 = 0, P1 = 0, P2 = 2. Static CI #1050 je
+       PASS na `6ef0b77b`.
+     - **P2-1** (ostatak zajedničke fakture dvostruko). Izmereno je da je zatečeno od pre koraka 5 (`992e1f45`),
+       a korak 5 ga je proširio. Odluka operatera: pristup 1 — status fakture, a ostatak se ne pripisuje dokumentu
+       kad je faktura zajednička.
+     - **P2-2** (linija bez `FakturaID` izgleda slobodna): ugovor `FAK-LIN-02` se proširuje na neprazan `FakturaID`
+       i zaglavlje tačno jednom, nestornirano.
+     - **Odluka operatera:** izvršne kapije (FULL, dokaz, sveska za compile) idu ODMAH posle ove ispravke, po
+       redosledu iz review-a.
+     - **Sledeći brojevi:** stavka 191 · test 263 · KI-042.
 
 ## Dug sa imenom (posle S5-5b)
 

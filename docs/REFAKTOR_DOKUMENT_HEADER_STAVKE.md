@@ -8697,6 +8697,39 @@ korak 5 ne dira — ostaju van, uz ime.
 8. **Tekst ekrana Fakturisanja** (`OTKUI_LBL_FK_HINT`) kaže da je red klasa prijemnice. Nov tekst se vidi tek
    posle restarta sveske.
 
+**Review #439, krug 1 (stavka 190) — dva P2, uzak rez u istom PR-u, PRE koda:**
+
+- **P2-1 — zajednička faktura se dvostruko prikazuje.** Lista F4 za prijemnicu računa ostatak kao ceo iznos
+  svake njene fakture minus uplate. Dve prijemnice na jednoj fakturi od 16.000 tako pokazuju po 16.000.
+  - **Izmereno: nije uvedeno korakom 5.** Na `992e1f45` je ostatak = `Iznos` fakture − uplate za svaki red sa
+    tim `FakturaID`, a stari pisac je takođe dozvoljavao više prijemnica na fakturi. Korak 5 je obrazac
+    proširio sabiranjem preko više faktura dokumenta.
+  - Zbirni red liste ostatak ne sabira (`sumKg`, `sumVal`), pa je greška u prikazu reda, ne u zbiru.
+  - **Odluka operatera (23.10.2026), pristup 1 iz review-a:**
+    - pilula pokazuje plaćanje faktura dokumenta;
+    - OSTATAK ostaje prazan čim je bar jedna faktura dokumenta ZAJEDNIČKA sa drugom prijemnicom, jer taj dug
+      pripada fakturi i vidi se u listi Fakture;
+    - detalj izveštaja kaže „zajednička";
+    - kad su sve fakture samo tog dokumenta, ostatak je njihov ostatak.
+
+    Raspodela uplata po udelu (pristup 2) se ne uvodi.
+  - Čitač nosi i oznaku zajedničke fakture: zapis dokumenta je `Array(stanje, fakture, zajednicka)`.
+- **P2-2 — linija bez fakture izgleda slobodna.** `FakturaLinijePoStavci` je tražio `PrijemnicaStavkaID`, ali
+  ne i `FakturaID`. Aktivna linija sa praznim `FakturaID` je stavku zauzimala za pisca, a mreža ju je nudila
+  kao slobodnu.
+  - **Ugovor linije se proširuje (`FAK-LIN-02`):** aktivna linija prijemnice nosi neprazan `FakturaID`, a
+    zaglavlje te fakture postoji TAČNO jednom i nije stornirano. Inače čitač pada po imenu.
+  - Saglasnost kupca fakture i prijemnice drži pisac (`1721`); čitač je ne ponavlja.
+- **Testovi čija se premisa menja:** testovi koji su sejali sintetičku liniju na fakturu koje nema prelaze na
+  pravu fakturu kroz pisac (`Test_S6K5_OkvirOdbijaFakturisanuPreZapisa`, `Test_S6K4_FakturisanaSeOdbija`).
+  `T_Fak_DostupnostSePrenosiURedu` razlaz prikaza i pravila meri nad fakturom bez broja (`FAK-TEST-0`,
+  postoji i aktivna je), jer linija na fakturu koje nema sada pada po imenu.
+- **Čime:** BFP `Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka` (dve prijemnice na jednoj fakturi; kontrola:
+  prijemnica sa svojom fakturom ima ostatak jednak ostatku te fakture u listi Fakture) i
+  `Test_S6K5_LinijaBezFaktureJeKvar` (prazan `FakturaID`, faktura koje nema, stornirana faktura sa aktivnom
+  linijom — svaki po imenu, uz kontrolu posle rollback-a); sabotaže `s6k5-*`.
+- **Van obima, po review-u:** `KI-039`, `KI-041`.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
