@@ -10141,6 +10141,7 @@ Private Function S6K5F4Pilula(ByVal broj As String) As Long
     Dim d As Variant, cols As Variant, redovi As Variant, c As Long, iPill As Long
     S6K5F4Pilula = -1
     modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache   ' izvedene mape liste (FakturaIznosMap) -- kao RefreshFromData
     d = modScrDokumenti.RedoviZaTip("PRIJEMNICA", "", broj)
     If Not IsArray(d) Then Exit Function
     If CLng(d(2)) <> 1 Then Exit Function

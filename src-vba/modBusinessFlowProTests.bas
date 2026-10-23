@@ -8084,6 +8084,7 @@ Private Function S6K5Ostatak(ByVal broj As String) As Double
     Dim d As Variant, cols As Variant, redovi As Variant, c As Long, iRest As Long
     S6K5Ostatak = -1
     modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache   ' izvedene mape liste (FakturaIznosMap) -- kao RefreshFromData
     d = modScrDokumenti.RedoviZaTip("PRIJEMNICA", "", broj)
     If Not IsArray(d) Then Exit Function
     If CLng(d(2)) <> 1 Then Exit Function
@@ -8231,6 +8232,7 @@ Private Function S6K5Pilula(ByVal broj As String, Optional ByVal filter As Strin
     Dim d As Variant, cols As Variant, redovi As Variant, c As Long, iPill As Long
     S6K5Pilula = -1
     modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache   ' izvedene mape liste (FakturaIznosMap) -- kao RefreshFromData
     d = modScrDokumenti.RedoviZaTip("PRIJEMNICA", filter, broj)
     If Not IsArray(d) Then Exit Function
     If CLng(d(2)) <> 1 Then Exit Function
