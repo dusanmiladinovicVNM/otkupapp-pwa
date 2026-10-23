@@ -2296,7 +2296,7 @@ Public Function IzDetaljPrijemnice(ByVal prjID As String) As Variant
     Dim cId As Long, cVoz As Long, cSor As Long, cTipA As Long
     Dim cVrac As Long
     Dim linije As Collection, zbir As Object, gajbeTxt As String
-    Dim stanjeFak As Long, faktureTxt As String
+    Dim stanjeFak As Long, faktureTxt As String, zajednicka As Boolean, zajTxt As String
     On Error GoTo EH
 
     d = GetTableData(TBL_PRIJEMNICA)
@@ -2333,15 +2333,19 @@ Public Function IzDetaljPrijemnice(ByVal prjID As String) As Variant
             ' Fakturisanost je IZVEDENA iz aktivnih linija fakture (S6 korak 5,
             ' FAK-LIN-03) -- isti odgovor koji daju lista i kapija storna. Do tada
             ' je detalj citao kes Fakturisano/FakturaID sa zaglavlja.
-            stanjeFak = modFaktura.PrijemnicaFakturisanost(Trim$(prjID), faktureTxt)
+            ' Zajednicka faktura (i druge prijemnice na istom racunu): ostatak se vodi
+            ' na fakturi, ne na dokumentu -- lista F4 ga zato ne pokazuje (P2-1).
+            stanjeFak = modFaktura.PrijemnicaFakturisanost(Trim$(prjID), faktureTxt, zajednicka)
+            zajTxt = ""
+            If zajednicka Then zajTxt = " " & Poruka("OTKUI_IZ_DET_ZAJEDNICKA")
             If stanjeFak = FAKT_NE Then
                 linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & _
                            Poruka("OTKUI_IZ_DET_NEFAKT")
             ElseIf stanjeFak = FAKT_DELIM Then
                 linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & faktureTxt & " " & _
-                           Poruka("OTKUI_IZ_DET_DELIMFAKT")
+                           Poruka("OTKUI_IZ_DET_DELIMFAKT") & zajTxt
             Else
-                linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & faktureTxt
+                linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & faktureTxt & zajTxt
             End If
 
             Dim res() As String, n As Long

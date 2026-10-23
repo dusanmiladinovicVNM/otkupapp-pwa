@@ -9273,7 +9273,7 @@ SABOTAZE = {
     # Detalj izvestaja koji cita kes zaglavlja umesto izvedenog statusa.
     "s6k5-detalj-cita-kes": (
         "modScrIzvestaji.bas",
-        "            stanjeFak = modFaktura.PrijemnicaFakturisanost(Trim$(prjID), faktureTxt)\n",
+        "            stanjeFak = modFaktura.PrijemnicaFakturisanost(Trim$(prjID), faktureTxt, zajednicka)\n",
         "            stanjeFak = IIf(UCase$(NzS(d(i, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO)))) = \"DA\", FAKT_DA, FAKT_NE)   ' SABOTAZA: detalj cita kes\n",
         "T_S6K5_FakturisanostJedanIzvor",
         "S6K5: PRJ-FAK-2 -- detalj izvestaja kaze da nije fakturisana",
@@ -9412,6 +9412,47 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: seam ne kvari\n",
         "Test_S6K5_PadPosleUpisaVracaFakturu",
         "S6K5 TX: pad posle svih upisa obara fakturu",
+    ),
+    # ---- Review #439, krug 1 (stavka 190) ----
+    # P2-2 / FAK-LIN-02: aktivna linija pripada fakturi koja postoji tacno jednom i
+    # nije stornirana. Prva brana pada PO IMENU; bez nje linija bez FakturaID-a
+    # padne na drugoj (1767), pa tvrdnja meri IME razloga, ne samo pad.
+    "s6k5-linija-bez-fakture-prolazi": (
+        "modFaktura.bas",
+        "                If Len(fid) = 0 Then\n",
+        "                If False Then   ' SABOTAZA: linija bez FakturaID-a prolazi\n",
+        "Test_S6K5_LinijaBezFaktureJeKvar",
+        "S6K5 kvar: aktivna linija bez FakturaID-a obara citac PO IMENU",
+    ),
+    "s6k5-linija-na-nepostojecu-fakturu": (
+        "modFaktura.bas",
+        "                If nFak <> 1 Then\n",
+        "                If False Then   ' SABOTAZA: linija na fakturu koje nema prolazi\n",
+        "Test_S6K5_LinijaBezFaktureJeKvar",
+        "S6K5 kvar: linija na fakturu koje nema obara citac PO IMENU",
+    ),
+    "s6k5-linija-nad-storniranom-fakturom": (
+        "modFaktura.bas",
+        "                If UCase$(Trim$(NzToText(stornoFak(fid)))) = \"DA\" Then\n",
+        "                If False Then   ' SABOTAZA: linija nad storniranom fakturom prolazi\n",
+        "Test_S6K5_LinijaBezFaktureJeKvar",
+        "S6K5 kvar: aktivna linija nad storniranom fakturom obara citac PO IMENU",
+    ),
+    # P2-1: zajednicka faktura -- lista pripise ceo ostatak racuna svakom dokumentu.
+    "s6k5-ostatak-zajednicke": (
+        "modScrDokumenti.bas",
+        "                If CBool(fRec(2)) Then pRest = 0\n",
+        "                ' SABOTAZA: zajednicka faktura -- svaki red nosi ceo ostatak\n",
+        "Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka",
+        "S6K5 zajednicka: prijemnica A ne nosi ostatak zajednicke fakture",
+    ),
+    # Citac koji ne vidi da faktura nosi i druge prijemnice.
+    "s6k5-zajednicka-se-ne-vidi": (
+        "modFaktura.bas",
+        "            If fakDok(CStr(fk)).count > 1 Then zajednicka = True\n",
+        "            ' SABOTAZA: citac ne vidi zajednicku fakturu\n",
+        "Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka",
+        "S6K5 zajednicka: detalj izvestaja kaze da je faktura zajednicka",
     ),
 }
 

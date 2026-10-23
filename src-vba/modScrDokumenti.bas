@@ -2841,7 +2841,7 @@ Public Function RevPartner(ByVal entTip As String, ByVal entID As String, _
     If d.Exists(entID) Then RevPartner = d(entID)
 End Function
 
-' Izvedena fakturisanost reda prijemnice: Array(stanje, fakture) iz
+' Izvedena fakturisanost reda prijemnice: Array(stanje, fakture, zajednicka) iz
 ' modFaktura.FakturisanostPoPrijemnici (S6 korak 5). Red koga u recniku nema je
 ' KVAR, ne "nije fakturisan": recnik nosi SVAKO zaglavlje (strog citac stavki).
 Private Function FaktRecPrijemnice(ByVal dFakt As Object, ByVal prjID As String) As Variant
@@ -3184,6 +3184,12 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             End If
             pRest = duguje - placeno
             If pRest < 0 Then pRest = 0
+            ' Zajednicka faktura (vise prijemnica na jednom racunu): ostatak pripada
+            ' fakturi, ne dokumentu -- inace svaki red nosi CEO dug racuna (review
+            ' #439 P2-1). Dug se vidi u listi Fakture, a detalj kaze "zajednicka".
+            If mk = "PRIJEMNICA" Then
+                If CBool(fRec(2)) Then pRest = 0
+            End If
         End If
 
         If rev Then

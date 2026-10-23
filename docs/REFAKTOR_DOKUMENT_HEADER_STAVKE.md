@@ -8730,6 +8730,37 @@ korak 5 ne dira — ostaju van, uz ime.
   linijom — svaki po imenu, uz kontrolu posle rollback-a); sabotaže `s6k5-*`.
 - **Van obima, po review-u:** `KI-039`, `KI-041`.
 
+**Ispravka (stavka 191):**
+
+- **Crveno pre ispravke**, tačno izvedeno: BFP **2693 / 7**, i to sedam tvrdnji po imenu. A i B pokazuju po
+  32.000 za jedan račun od 32.000; detalj ne kaže „zajednička"; četiri tvrdnje kvara linije prolaze (mreža je
+  stavku pod linijom bez fakture nudila kao `True|`). RunAllTests 262/0.
+- **P2-2, čitač `FakturaLinijePoStavci`:** aktivna linija prijemnice pada po imenu u tri slučaja:
+  - `1766` — bez `FakturaID`;
+  - `1767` — faktura koje nema ili je dvosmislena (`BrojacIdova` nad sirovom tabelom, kao `FindRows`);
+  - `1768` — nad storniranom fakturom.
+
+  Storno fakture ne čita linije između storna zaglavlja i storna linija, pa nova kapija ne obara sopstveni
+  storno (pročitano: `StornoFaktura` → `StornoFakturaStavke`). Fixture nema nijednu takvu liniju (sonda:
+  5 aktivnih linija, 12 faktura).
+- **P2-1:** zapis dokumenta je `Array(stanje, fakture, zajednicka)`. Faktura je zajednička kad njene linije
+  nose više od jednog `PrijemnicaID`.
+  - **Lista F4:** ostatak je 0 (prazno) kad je bar jedna faktura dokumenta zajednička; pilula ostaje
+    plaćanje faktura.
+  - **Detalj:** red fakture dobija „(zajednička sa drugim prijemnicama -- ostatak se vodi na fakturi)".
+  - `PrijemnicaFakturisanost` vraća oznaku kroz `outZajednicka`.
+- **Premisa testa koju menja nova kapija:** `Test_OpenFaktureExcludeStornirano` (vraćen u koraku 5) je
+  stornirao SAMO zaglavlje fakture (`MarkTestRowStornirano`). Aktivna linija nad storniranom fakturom je baš
+  kvar `1768`, a ostaje u svesci, pa bi oborila svaki kasniji BFP test koji čita linije. Test sada stornira
+  kroz pravi pisac (`StornoFaktura_TX`, zaglavlje i linije), uz imenovan preduslov (+1 tvrdnja).
+- **Sabotaže 931 → 936:**
+  - nove: `s6k5-linija-bez-fakture-prolazi`, `s6k5-linija-na-nepostojecu-fakturu`,
+    `s6k5-linija-nad-storniranom-fakturom`, `s6k5-ostatak-zajednicke`, `s6k5-zajednicka-se-ne-vidi`;
+  - presidrena: `s6k5-detalj-cita-kes` (poziv nosi `zajednicka`).
+
+  Bez prve brane linija bez `FakturaID` padne na drugoj (`1767`), pa tvrdnja meri **ime** razloga, ne samo
+  pad. Statička sonda 6/6: pravila nad fajlovima čista, `--vrati` vraća izvor identičan kopiji.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

@@ -307,7 +307,8 @@ End Sub
 ' aktivnih linija tblFakturaStavke -- pa provera meri UGOVOR LINIJE, i to kroz
 ' ISTI citac koji koriste kapija storna, pisac fakture i lista: linija nosi
 ' stavku, stavka postoji i pripada dokumentu linije, i nije na dve aktivne
-' fakture. Read-only.
+' fakture; aktivna linija pripada fakturi koja postoji tacno jednom i nije
+' stornirana. Read-only.
 Private Sub Check_PrijemnicaFakturaFlags()
     On Error GoTo EH
 

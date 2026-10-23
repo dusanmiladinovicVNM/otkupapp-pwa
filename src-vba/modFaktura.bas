@@ -970,11 +970,16 @@ End Function
 ' tblFakturaStavke sa nepraznim PrijemnicaID; GP linija (prerada, utovar) ga nema i
 ' ovde ne ulazi. Aktivna = Stornirano <> Da.
 '
-' FAIL-CLOSED, jer na ovom recniku stoje kapija pisca i kapija storna: aktivna
-' linija bez PrijemnicaStavkaID-a (FAK-LIN-02) i stavka na dve aktivne linije
-' (FAK-LIN-01) su KVAR i dizu gresku po imenu. Starog oblika nema (nema
-' produkcionih podataka), pa "preskoci red koji ne razumem" ovde ne postoji --
-' preskocen red bi bio fakturisana stavka koju niko ne vidi.
+' FAIL-CLOSED, jer na ovom recniku stoje kapija pisca i kapija storna, a mreza po
+' njemu nudi stavke. KVAR koji dize gresku po imenu:
+'   - aktivna linija bez PrijemnicaStavkaID-a (FAK-LIN-02);
+'   - stavka na dve aktivne linije (FAK-LIN-01);
+'   - aktivna linija bez FakturaID-a, na fakturu koje nema (ili je dvosmislena), ili
+'     nad STORNIRANOM fakturom (FAK-LIN-02, review #439 P2-2) -- takva linija bi
+'     stavku zauzimala za pisca, a mreza bi je nudila kao slobodnu.
+' Starog oblika nema (nema produkcionih podataka), pa "preskoci red koji ne
+' razumem" ovde ne postoji -- preskocen red bi bio fakturisana stavka koju niko ne
+' vidi.
 Public Function FakturaLinijePoStavci() As Object
     Const SRC As String = "FakturaLinijePoStavci"
     Dim d As Object
@@ -991,7 +996,14 @@ Public Function FakturaLinijePoStavci() As Object
     cS = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_STAVKA_ID, SRC)
     cSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC)
 
+    ' Zaglavlja faktura: koliko puta se ID javlja (sirova tabela, kao FindRows) i
+    ' da li je storniran.
+    Dim brojFak As Object, stornoFak As Object
+    Set brojFak = BrojacIdova(TBL_FAKTURE, COL_FAK_ID)
+    Set stornoFak = BuildLookupDict(TBL_FAKTURE, COL_FAK_ID, COL_STORNIRANO)
+
     Dim i As Long, pid As String, sid As String, fid As String, k As String
+    Dim nFak As Long
     For i = 1 To UBound(fs, 1)
         pid = Trim$(NzToText(fs(i, cP)))
         If Len(pid) > 0 Then
@@ -1002,6 +1014,23 @@ Public Function FakturaLinijePoStavci() As Object
                     Err.Raise vbObjectError + 1760, SRC, _
                               "Aktivna linija fakture bez PrijemnicaStavkaID-a: FakturaID=" & fid & _
                               ", PrijemnicaID=" & pid & ". Linija prijemnice nosi svoju stavku (FAK-LIN-02)."
+                End If
+                If Len(fid) = 0 Then
+                    Err.Raise vbObjectError + 1766, SRC, _
+                              "Aktivna linija fakture bez FakturaID-a: PrijemnicaStavkaID=" & sid & _
+                              ", PrijemnicaID=" & pid & ". Linija prijemnice pripada fakturi (FAK-LIN-02)."
+                End If
+                nFak = 0
+                If brojFak.Exists(fid) Then nFak = CLng(brojFak(fid))
+                If nFak <> 1 Then
+                    Err.Raise vbObjectError + 1767, SRC, _
+                              "Linija fakture pokazuje na fakturu koje nema ili je dvosmislena: FakturaID=" & _
+                              fid & " (zaglavlja: " & CStr(nFak) & "), PrijemnicaStavkaID=" & sid & " (FAK-LIN-02)."
+                End If
+                If UCase$(Trim$(NzToText(stornoFak(fid)))) = "DA" Then
+                    Err.Raise vbObjectError + 1768, SRC, _
+                              "Aktivna linija fakture nad storniranom fakturom: FakturaID=" & fid & _
+                              ", PrijemnicaStavkaID=" & sid & ". Storno fakture stornira i linije (FAK-LIN-02)."
                 End If
                 k = UCase$(sid)
                 If d.Exists(k) Then
@@ -1015,9 +1044,12 @@ Public Function FakturaLinijePoStavci() As Object
     Next i
 End Function
 
-' FAKTURISANOST SVAKOG DOKUMENTA PRIJEMNICE: PrijemnicaID -> Array(stanje, fakture),
-' gde je stanje FAKT_NE / FAKT_DELIM / FAKT_DA, a fakture 0-bazirani niz RAZLICITIH
-' FakturaID-ova njegovih linija (prazan niz kad ih nema).
+' FAKTURISANOST SVAKOG DOKUMENTA PRIJEMNICE: PrijemnicaID ->
+' Array(stanje, fakture, zajednicka), gde je stanje FAKT_NE / FAKT_DELIM / FAKT_DA,
+' fakture 0-bazirani niz RAZLICITIH FakturaID-ova njegovih linija (prazan niz kad ih
+' nema), a zajednicka = bar jedna od tih faktura nosi linije i DRUGE prijemnice.
+' Zajednicka faktura je jedan racun za vise dokumenata: njen ostatak pripada
+' fakturi, ne dokumentu (review #439 P2-1, stavka 190).
 '
 ' Linija na stavku koje nema, ili na stavku DRUGOG dokumenta, je KVAR (FAK-LIN-02):
 ' pisac je ne pravi, a tiho preskocena bi bila faktura bez robe.
@@ -1033,8 +1065,18 @@ Public Function FakturisanostPoPrijemnici() As Object
     Set linije = FakturaLinijePoStavci()
     Set videne = CreateObject("Scripting.Dictionary")
 
-    Dim pid As Variant, c As Collection, red As Variant, k As String
-    Dim nFak As Long, stanje As Long, fakture As Object
+    ' Faktura -> dokumenti njenih linija (kljucevi su PrijemnicaID-ovi).
+    Dim fakDok As Object, dokFak As Object, lk As Variant, fidL As String
+    Set fakDok = CreateObject("Scripting.Dictionary")
+    For Each lk In linije.keys
+        fidL = CStr(linije(lk)(0))
+        If Not fakDok.Exists(fidL) Then fakDok.Add fidL, CreateObject("Scripting.Dictionary")
+        Set dokFak = fakDok(fidL)
+        dokFak(UCase$(CStr(linije(lk)(1)))) = True
+    Next lk
+
+    Dim pid As Variant, c As Collection, red As Variant, k As String, fk As Variant
+    Dim nFak As Long, stanje As Long, fakture As Object, zajednicka As Boolean
     For Each pid In poDok.keys
         Set c = poDok(pid)
         nFak = 0
@@ -1060,10 +1102,13 @@ Public Function FakturisanostPoPrijemnici() As Object
         Else
             stanje = FAKT_DA
         End If
-        res.Add CStr(pid), Array(stanje, fakture.keys)
+        zajednicka = False
+        For Each fk In fakture.keys
+            If fakDok(CStr(fk)).count > 1 Then zajednicka = True
+        Next fk
+        res.Add CStr(pid), Array(stanje, fakture.keys, zajednicka)
     Next pid
 
-    Dim lk As Variant
     For Each lk In linije.keys
         If Not videne.Exists(CStr(lk)) Then
             Err.Raise vbObjectError + 1763, SRC, _
@@ -1074,13 +1119,16 @@ Public Function FakturisanostPoPrijemnici() As Object
 End Function
 
 ' Fakturisanost JEDNOG dokumenta; outFakture = njegove fakture ("FAK-1, FAK-2"),
-' za poruku operateru. Nepoznat dokument je greska: svaki pozivalac ga pre toga
-' razresava (RequireStornoAllowed, PrijemnicaIDZaStorno, red izvestaja).
+' za poruku operateru; outZajednicka = bar jedna je zajednicka sa drugom
+' prijemnicom. Nepoznat dokument je greska: svaki pozivalac ga pre toga razresava
+' (RequireStornoAllowed, PrijemnicaIDZaStorno, red izvestaja).
 Public Function PrijemnicaFakturisanost(ByVal prijemnicaID As String, _
-                                        Optional ByRef outFakture As String) As Long
+                                        Optional ByRef outFakture As String, _
+                                        Optional ByRef outZajednicka As Boolean) As Long
     Const SRC As String = "PrijemnicaFakturisanost"
     Dim pid As String, sve As Object, rec As Variant
     outFakture = ""
+    outZajednicka = False
     pid = Trim$(prijemnicaID)
     If Len(pid) = 0 Then
         Err.Raise vbObjectError + 1764, SRC, "PrijemnicaID je obavezan."
@@ -1092,6 +1140,7 @@ Public Function PrijemnicaFakturisanost(ByVal prijemnicaID As String, _
     rec = sve(pid)
     PrijemnicaFakturisanost = CLng(rec(0))
     outFakture = Join(rec(1), ", ")
+    outZajednicka = CBool(rec(2))
 End Function
 
 ' FAKTURISANA PRIJEMNICA za kapiju storna i uvid (S6 korak 4, odluka 1):

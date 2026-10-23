@@ -2092,7 +2092,13 @@ Private Sub Test_OpenFaktureExcludeStornirano()
     AssertTrue OpenFaktureImaDatum(TEST_KUP_ID, fakID), _
                "GetOpenFakture vraca i Datum (6. kolona za prikaz u formi)"
 
-    If Len(fakID) > 0 Then MarkTestRowStornirano TBL_FAKTURE, COL_FAK_ID, fakID
+    ' Storno kroz PRAVI pisac: zaglavlje I linije. Samo zaglavlje bi ostavilo
+    ' aktivnu liniju nad storniranom fakturom -- kvar koji citac linija odbija
+    ' (FAK-LIN-02, review #439 P2-2), pa bi pao svaki kasniji test koji ga cita.
+    If Len(fakID) > 0 Then
+        AssertTrue modStorno.StornoFaktura_TX(fakID), _
+                   "Storno faktura: storno kroz pravi pisac prolazi"
+    End If
 
     ' Stornirana faktura NIJE "Placeno" -- stari filter forme (Status <> Placeno)
     ' bi je pustio nazad u listu.
