@@ -289,12 +289,17 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_STORNO_VEZE
     tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    ' Prijemnica se seje u NOVOM obliku, zaglavlje + stavka (S6 korak 5): kapija
+    ' storna pita izvedenu fakturisanost, a ona cita stavke strogim citacem, koji
+    ' zaglavlje bez stavke odbija (invarijanta dokumenta iz koraka 3).
 
     ' --- Lanac A: PONISTENJE -> uzvodna kaskada ---
     TcSeedZbirna "SVT-KA-ZID", "SVT-KA-Z", "I", 100, 10
@@ -303,6 +308,7 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     TcSeedClanstvo "SVT-KA-ZID", "SVT-KA-OID"
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
               Array("SVT-KA-PID", "SVT-KA-P", "I", "SVT-KA-Z")
+    TcSeedStavkaPrijemnice "SVT-KA-PID", 1, "I", 100
 
     ' Identitet je PrijemnicaID izabranog reda (S6 korak 4) -- bez njega okvir
     ' dokument ne nalazi.
@@ -319,6 +325,7 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     TcSeedClanstvo "SVT-KB-ZID", "SVT-KB-OID"
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
               Array("SVT-KB-PID", "SVT-KB-P", "I", "SVT-KB-Z")
+    TcSeedStavkaPrijemnice "SVT-KB-PID", 1, "I", 100
 
     Dim rB As Object: Set rB = RunPrijemnicaCorrection("SVT-KB-P", SV_MODE_DUPLI, True, False, "SVT-KB-PID")
     TcChk CBool(rB("success")), "DUPLI prijemnica -> success"
