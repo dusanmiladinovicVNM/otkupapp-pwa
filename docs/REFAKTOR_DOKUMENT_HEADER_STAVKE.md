@@ -8931,6 +8931,26 @@ a ne BLOK (komentar u `fc06fa77`), pa bi grana „zbirne nema" otvorila `MsgBox`
   čitanjem `otkup_test.xlsm`). F4 nad golim fixture-om zato uvek staje na `PRJ-ZBR-01`, a ručna provera traži
   svesku sa izdatom zbirnom (BFP `--keep`, kao u koraku 5).
 
+**Review #440, krug 1 (stavka 195) — dva nalaza, oba potvrđena; plan je bio pogrešan na jednom mestu:**
+
+- **P1 — „samo izdata zbirna" nije bila bezuslovna.** Pod „netaknuto" iznad stoji „politika
+  `PRIJEMNICA_ZBIRNA_PROVERA` za ‚zbirne nema'", a isto je pisalo i u `PRJ-ZBR-01`. To se kosi sa odlukom 2:
+  uz `UPOZORENJE` validator pita „Ipak snimiti?", a posle „Da" preskače kapiju identiteta i kapiju IZDATE zbirne.
+  Pisac postojanje proverava samo uz BLOK. **Reprodukovano sondom** nad kopijom sveske sa `d3de4abf`: nastala je
+  aktivna prijemnica sa brojem nepostojeće zbirne i praznim `ZbirnaRoditeljID`. Test nad starim kodom bi visio
+  na `MsgBox`-u, pa je crveno ovde merenje sa priloženim izlazom.
+  **Odluka operatera (24.10.2026):** F4 uvek odbija; polje se sklanja iz Podešavanja; konstanta i blaža grana
+  pisca ostaju do koraka 8 (dosežu ih samo testovi, jedini produkcioni pozivalac pisca je F4).
+- **P2 — čitaoci po golom broju.** Odluka 6 (broj po kupcu) prvi put omogućava da F4 napravi isti broj kod dva
+  kupca, a pre-flight nije popisao ko prijemnicu traži po broju — to je bila `DOWNSTREAM` rupa verdikta. Popis
+  (~45 mesta): većina ide po ID-u ili ima kapiju koja na više vlasnika odbija. Ostala su četiri:
+  - **`StampIspravkaTrace` je upisivao trag ispravke po broju** i na aktivnu prijemnicu drugog kupca (papir taj
+    trag štampa), a do njega se stiže kroz ispravku u F4 sa promenjenim brojem. Ovaj nalaz nije bio u review-u.
+    **Odluka:** prelazi na `PrijemnicaID` u ovom PR-u;
+  - datum reda Oporavka (`GetPrijemniceSaOsirocenimPaletama`), paletni prikaz i `DetachOsirocenePaletaStavke_TX`
+    po broju → **`KI-046`**, kapija pre koraka 7. Poslednja dva su danas nedostižna: jedini pozivalac čita
+    `tblOtkup.BrojZbirne`, a tu kolonu niko ne piše.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
