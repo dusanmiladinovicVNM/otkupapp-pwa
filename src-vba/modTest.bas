@@ -10534,6 +10534,9 @@ Private Sub T_KartHron_RedosledIzKretanja()
 
     ' C) Isti dogadjaji, vise fizickih rasporeda. Kretanje pre opsega (d0) je
     '    pocetno stanje; revers je DRUGI niz (tblAmbalazaDokument) istog dana.
+    '    Seam ne filtrira: red ULAZ_TUDJE ovde meri samo rang vrste unutar
+    '    dokumenta. Kartice ga u produkciji ne dobijaju -- citaju poslovnu
+    '    projekciju knjige (AMB-POSL-01, test 267).
     otk.RemoveAll
     otk("OTK-0") = "1/070626"
     otk("OTK-A") = "1/080626-2"
@@ -10943,8 +10946,8 @@ Private Sub T_KartOpis_VrstaSortaKlasa()
     End If
 
     AssertEq (n > 0), True, "preduslov: kartica kooperanta ima redove otkupa"
-    AssertEq losih & " " & prvi, "0 ", "opis otkupa je vrsta, sorta, klase i kolicina sa razmakom pre kg"
     AssertEq saPrefiksom, 0, "nijedan opis otkupa ne pocinje recju Otkup"
+    AssertEq losih & " " & prvi, "0 ", "opis otkupa je vrsta, sorta, klase i kolicina sa razmakom pre kg"
     AssertEq vrednostRazlika, 0, "opis ne menja zaduzenje: vrednost reda = zbir stavki"
 End Sub
 
@@ -17631,18 +17634,6 @@ Private Function IzvDoS() As Double
     IzvDoS = CDbl(IzvDoD())
 End Function
 
-' Kanonski ambalazni saldo entiteta: zbir preko SVIH tipova ambalaze
-' (GetAmbalazeStanje vraca 2D niz tip -> saldo).
-Private Function IzvAmbSaldo(ByVal iD As String, ByVal tip As String) As Double
-    Dim st As Variant, i As Long
-    st = modAmbalaza.GetAmbalazeStanje(iD, tip)
-    If IsEmpty(st) Then Exit Function
-    If Not IsArray(st) Then Exit Function
-    For i = 1 To UBound(st, 1)
-        If IsNumeric(st(i, 2)) Then IzvAmbSaldo = IzvAmbSaldo + CDbl(st(i, 2))
-    Next i
-End Function
-
 ' Nezavisan zbir jedne kolone tblNovac pod filterima (opseg + storno + tip +
 ' vlasnik) -- rucni prolaz, bez ijedne Report* funkcije.
 Private Function IzvNovacSuma(ByVal kolona As String, ByVal filterKoop As String, _
@@ -18087,7 +18078,8 @@ Private Sub T_Izv_SlaganjeOtkupOM()
 
     ' (4) SALDO OM: po svakom redu Saldo = Vrednost - Isplaceno - Agro;
     ' 'Isplaceno' kooperanta = rucni prolaz sa NovacRedPripadaStanici;
-    ' ambalaza kolona = KANONSKI saldo (GetAmbalazeStanje).
+    ' ambalaza kolona = POSLOVNI saldo kooperanta prema OVOJ stanici na datumDo
+    ' (AMB-POSL-02) -- ne fizicki globalni GetAmbalazeStanje.
     sal = ReportSaldoOM(FX_STANICA, IzvOdD(), IzvDoD())
     nasao = False
     For i = 1 To UBound(sal, 1)
@@ -18111,8 +18103,9 @@ Private Sub T_Izv_SlaganjeOtkupOM()
             AssertEq Format$(CDbl(sal(i, 4)), "0.00"), Format$(nzVr, "0.00"), _
                      "isplaceno KOOP-TEST-1 = rucni zbir tblNovac (maticna stanica)"
             AssertEq Format$(CDbl(sal(i, 7)), "0"), _
-                     Format$(IzvAmbSaldo(FX_KOOPERANT, "Kooperant"), "0"), _
-                     "ambalaza KOOP-TEST-1 = kanonski saldo iz ledgera"
+                     Format$(KartAmbPoslovniOracle(FX_KOOPERANT, AMB_NALOG_STANICA, _
+                                                   FX_STANICA, IzvDoD()), "0"), _
+                     "ambalaza KOOP-TEST-1 = poslovni saldo prema stanici iz knjige"
             Exit For
         End If
     Next i
@@ -18304,8 +18297,8 @@ Private Sub T_Izv_SlaganjeKartica()
     AssertEq Format$(CDbl(kk(n, 7)), "0.00"), Format$(runS, "0.00"), _
              "zavrsni saldo = pocetno (0) + promet"
     AssertEq Format$(CDbl(kk(n, 8)), "0"), _
-             Format$(IzvAmbSaldo(FX_KOOPERANT, "Kooperant"), "0"), _
-             "zavrsni ambalazni saldo kartice = kanonski saldo iz ledgera"
+             Format$(KartAmbPoslovniOracle(FX_KOOPERANT, "", "", IzvDoD()), "0"), _
+             "zavrsni ambalazni saldo kartice = poslovni saldo iz knjige"
     AssertEq (CDbl(kk(n, 8)) <> 0), True, "vozilo: ambalazni saldo != 0"
 
     ' (2) Zbir zaduzenja = rucni prolaz kroz tblOtkupStavke (kg x cena).
@@ -18320,7 +18313,8 @@ Private Sub T_Izv_SlaganjeKartica()
     AssertEq Format$(CDbl(rr(UBound(rr, 1), 4)), "0.00"), Format$(nzKg, "0.00"), _
              "rekap kg = rucni zbir kg iz tblOtkupStavke"
 
-    ' (4) KARTICA AMBALAZE: running po redu; zavrsni saldo = kanonski.
+    ' (4) KARTICA AMBALAZE: running po redu; zavrsni saldo = poslovni saldo
+    ' knjige (bez tehnickog pokrica, AMB-POSL-01).
     ka = ReportKarticaAmbalaze(FX_KOOPERANT, IzvOdD(), IzvDoD())
     AssertEq IsArray(ka), True, "kartica ambalaze postoji"
     n = UBound(ka, 1)
@@ -18340,8 +18334,8 @@ Private Sub T_Izv_SlaganjeKartica()
     AssertEq (totU > 0), True, "vozilo: amb kartica ima ulaz"
     AssertEq (totI > 0), True, "vozilo: amb kartica ima izlaz"
     AssertEq Format$(CDbl(ka(n, 6)), "0"), _
-             Format$(IzvAmbSaldo(FX_KOOPERANT, "Kooperant"), "0"), _
-             "zavrsni saldo amb kartice = kanonski saldo iz ledgera"
+             Format$(KartAmbPoslovniOracle(FX_KOOPERANT, "", "", IzvDoD()), "0"), _
+             "zavrsni saldo amb kartice = poslovni saldo iz knjige"
 
     ' (5) POCETNO STANJE: kartica se slaze SAMA SA SOBOM preko komplementarnih
     ' granica -- zavrsni saldo opsega (1.1-31.3) mora biti TACNO pocetno
@@ -18911,7 +18905,7 @@ Private Sub T_Izv_TabKontekstRobaKupacSaldo()
 
     ' (4) Zavrsni saldo kartica zivi u zoni: novcana kartica = running
     ' poslednjeg hronoloskog reda (dva puta kroz ekran, jedan izvor); amb
-    ' kartica preko PUNOG opsega = kanonski entitetski saldo kooperanta.
+    ' kartica preko PUNOG opsega = poslovni saldo kooperanta (AMB-POSL-01).
     modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, FX_KOOPERANT, 0, 0
     d = modScrIzvestaji.Scr_Rows("", "")
     n = CLng(d(2))
@@ -18921,13 +18915,13 @@ Private Sub T_Izv_TabKontekstRobaKupacSaldo()
              Format$(CDbl(redovi(n, 6)), "0.00"), _
              "zona saldo = zavrsni running saldo kartice"
     AssertEq Format$(NzD2(modScrIzvestaji.Scr_IzZonaBrojkaTest("kartsaldoamb")), "0"), _
-             Format$(IzvAmbSaldo(FX_KOOPERANT, "Kooperant"), "0"), _
-             "zona amb saldo kartice = kanonski saldo kooperanta"
+             Format$(KartAmbPoslovniOracle(FX_KOOPERANT, "", "", 0), "0"), _
+             "zona amb saldo kartice = poslovni saldo kooperanta"
     modScrIzvestaji.Scr_IzTestSet "AMBKARTICA", "Kooperant", False, FX_KOOPERANT, 0, 0
     d = modScrIzvestaji.Scr_Rows("", "")
     AssertEq Format$(NzD2(modScrIzvestaji.Scr_IzZonaBrojkaTest("kartsaldo")), "0"), _
-             Format$(IzvAmbSaldo(FX_KOOPERANT, "Kooperant"), "0"), _
-             "amb kartica zona saldo = kanonski saldo kooperanta"
+             Format$(KartAmbPoslovniOracle(FX_KOOPERANT, "", "", 0), "0"), _
+             "amb kartica zona saldo = poslovni saldo kooperanta"
     modScrIzvestaji.Scr_IzTestReset
 End Sub
 

@@ -4372,8 +4372,9 @@ Private Sub UiClickCore(ByVal tag As String)
     End If
     If Left$(tag, 2) = "hd" And Len(tag) = 3 Then
         ' Kartica nosi tekuci saldo: preuredjen red bi pokazao saldo drugog
-        ' toka (KART-HRON-01). Klik zato ne sortira, ali to i kaze -- tih klik
-        ' bi izgledao kao kvar.
+        ' toka (KART-HRON-01); dokumentna lista je slozena po broju kao broju
+        ' (DOC-SORT-01). Klik zato ne sortira, ali to i kaze -- tih klik bi
+        ' izgledao kao kvar.
         If RedosledJePoslovni() Then
             ShowToast Poruka("OTKUI_MSG_KART_HRONOLOGIJA"), False
             Exit Sub
