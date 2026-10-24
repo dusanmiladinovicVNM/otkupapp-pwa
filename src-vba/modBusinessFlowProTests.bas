@@ -234,7 +234,6 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_EkranNerazresivaKulturaPada
     Test_OTK_UpisNeVodiLanac
     Test_OTK_PrintNetoUnosNeRekonstruiseBruto
-    Test_OTK_IspravkaPauziranaNeTrosiPending
     Test_OTK_BrojJedinstvenPoStaniciIDanu
     Test_OTK_VrednostBezStavkiPada
     Test_OTK_VrednostPunUgovor
@@ -365,6 +364,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka
     Test_S6K5_LinijaBezFaktureJeKvar
     Test_S6K6_F4DokumentProlaziLanac
+    Test_S6K7_OsirocenePaleteDatumPoDokumentu
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
     Test_AMB_TipVanSifarnikaPisacOdbija
     Test_ODL24_UgovorPozajmice
@@ -8174,6 +8174,117 @@ EH:
     LogFatal "Test_S6K6_F4DokumentProlaziLanac", Err.Number, Err.description
     On Error Resume Next
     S6K6StatusIspravki parkirane, SV_STATUS_PENDING
+End Sub
+
+' S6 KORAK 7, KI-046 (1): RED OPORAVKA NOSI DATUM SVOG DOKUMENTA.
+'
+' Dva kupca smeju isti broj prijemnice (S6 korak 6, odluka 6), a kupcev broj ne
+' nosi datum. Lista osirotelih paleta grupise po generaciji, ali je DATUM citala
+' po broju -- pa je red drugog kupca nosio datum prvog dokumenta tog broja. Nivo:
+' logicki dokument (generacija). Palete ostaju osirocene kao posle F8 ISPRAVKA
+' (StornoPrijemnica_TX sa skiniPalete = False), a na kraju ih skida jezgro
+' skidanja, da ne ostanu u tudjoj listi Oporavka.
+' SABOTAZE: s6k7-osir-datum-po-broju.
+Private Sub Test_S6K7_OsirocenePaleteDatumPoDokumentu()
+    Dim prevPal As String, prevMode As Boolean, rezimPostavljen As Boolean
+    Dim prjA As String, prjB As String
+    On Error GoTo EH
+    Dim scenario As String, d1 As Date, d2 As Date, tipT As String
+    scenario = NewScenarioCode("S6K7OSIR")
+    d1 = NextTestDate()
+    d2 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK7O-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    AssertTrue S6K4Gajbe(d1, scenario, tipT), _
+               "S6K7 osirotele: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim brPrj As String, zbr1 As String, zbr2 As String
+    brPrj = TEST_PREFIX & "-PK7O-" & scenario
+    zbr1 = TEST_PREFIX & "-ZK7O1-" & scenario
+    zbr2 = TEST_PREFIX & "-ZK7O2-" & scenario
+    AssertTrue Len(S6K4Zbirna(d1, zbr1, TEST_KUP_ID, tipT)) > 0, _
+               "S6K7 osirotele: preduslov -- zbirna prvog kupca"
+    AssertTrue Len(S6K4Zbirna(d2, zbr2, TEST_KUP2_ID, tipT)) > 0, _
+               "S6K7 osirotele: preduslov -- zbirna drugog kupca"
+    prjA = S6K4Prijemnica(d1, TEST_KUP_ID, brPrj, zbr1, tipT, 5, 5, 0)
+    prjB = S6K4Prijemnica(d2, TEST_KUP2_ID, brPrj, zbr2, tipT, 5, 5, 0)
+    AssertTrue Len(prjA) > 0 And Len(prjB) > 0, _
+               "S6K7 osirotele: preduslov -- dva kupca, isti broj prijemnice"
+    If Len(prjA) = 0 Or Len(prjB) = 0 Then GoTo Kraj
+    AssertTrue modStorno.StornoPrijemnica_TX(prjA, False), _
+               "S6K7 osirotele: preduslov -- prva stornirana, palete ostaju"
+    AssertTrue modStorno.StornoPrijemnica_TX(prjB, False), _
+               "S6K7 osirotele: preduslov -- druga stornirana, palete ostaju"
+
+    ' Lista se cita kroz ekran Oporavak (Scr_Rows), isti put kojim je vidi
+    ' operater. Izbor liste je seam ekrana, tvrdo gejtovan test rezimom.
+    Dim d As Variant
+    prevMode = IsTestMode()
+    SetTestMode True
+    rezimPostavljen = True
+    modScrOporavak.Scr_OpoTestSet "PALETE", "", ""
+    d = modScrOporavak.Scr_Rows("sve", brPrj)
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    SetTestMode prevMode
+    rezimPostavljen = False
+
+    Dim genA As String, genB As String, datA As String, datB As String
+    Dim redovi As Variant, n As Long, i As Long, nasih As Long
+    genA = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, prjA)
+    genB = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, prjB)
+    If IsArray(d) Then
+        n = CLng(d(2))
+        redovi = d(1)
+    End If
+    For i = 1 To n
+        If CStr(redovi(i, 1)) = brPrj Then
+            nasih = nasih + 1
+            If CStr(redovi(i, 7)) = genA Then datA = S6K7DatumTekst(redovi(i, 2))
+            If CStr(redovi(i, 7)) = genB Then datB = S6K7DatumTekst(redovi(i, 2))
+        End If
+    Next i
+    AssertEquals "2", CStr(nasih), _
+                 "S6K7 osirotele: dva dokumenta istog broja su dva reda Oporavka"
+    AssertEquals Format$(d1, "yyyy-mm-dd"), datA, _
+                 "S6K7 osirotele: red prvog kupca nosi datum svog dokumenta"
+    AssertEquals Format$(d2, "yyyy-mm-dd"), datB, _
+                 "S6K7 osirotele: red drugog kupca nosi datum SVOG dokumenta, ne prvog istog broja"
+Kraj:
+    S6K7SkiniPalete prjA
+    S6K7SkiniPalete prjB
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6K7_OsirocenePaleteDatumPoDokumentu", Err.Number, Err.description
+    On Error Resume Next
+    If rezimPostavljen Then SetTestMode prevMode
+    S6K7SkiniPalete prjA
+    S6K7SkiniPalete prjB
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' Celija datuma iz mreze kao "yyyy-mm-dd"; prazno ako nije datum.
+Private Function S6K7DatumTekst(ByVal v As Variant) As String
+    If IsDate(v) Then S6K7DatumTekst = Format$(CDate(v), "yyyy-mm-dd")
+End Function
+
+' Test sklanja svoje osirocene palete kroz jezgro skidanja (po PrijemnicaID-u),
+' u svojoj transakciji -- inace ostaju u listi Oporavka za sledeci test (KI-045).
+Private Sub S6K7SkiniPalete(ByVal prj As String)
+    Dim tx As clsTransaction
+    If Len(prj) = 0 Then Exit Sub
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    modPaletniList.SkiniPaleteZaStornoPrijemnice tx, prj, "S6K7SkiniPalete"
+    tx.CommitTx
+    Exit Sub
+EH:
+    LogFatal "S6K7SkiniPalete", Err.Number, Err.description
+    If Not tx Is Nothing Then tx.RollbackTx
 End Sub
 
 ' Ispravke prijemnice na cekanju (ISPRAVKA, PENDING), "|"-spojeni ID-jevi -- isti
@@ -25489,52 +25600,6 @@ Private Sub Test_OTK_PrintNetoUnosNeRekonstruiseBruto()
 
 EH:
     LogFatal "Test_OTK_PrintNetoUnosNeRekonstruiseBruto", Err.Number, Err.description
-End Sub
-
-' Ispravka hladnjackog dokumenta je FAIL-CLOSED dok je lanac pauziran.
-'
-' Bez ove kapije bi nastao nov otkup, pending bi bio POTROSEN, a operater bi
-' dobio samo "nema prijemnice" -- pola ispravke, i to nepovratno.
-Private Sub Test_OTK_IspravkaPauziranaNeTrosiPending()
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("OTKIP")
-
-    Dim stariPending As String
-    stariPending = GetHladnjacaRelinkPending()
-    SetHladnjacaRelinkPending TEST_PREFIX & "-PRJ-STARA-" & scenario
-
-    Dim p As Object
-    Set p = OtkEkranParam(TEST_PREFIX & "-OTK-IP-" & scenario)
-    p("stanicaID") = TEST_HLAD_ST_ID
-    p("kolicinaI") = 400#
-    p("cenaI") = 50#
-    p("kolAmb") = 20&
-
-    Dim preH As Long
-    preH = OtkBrojRedova(TBL_OTKUP)
-
-    Dim poruke As String
-    Dim res As String
-    res = modOtkupUnos.OtkupUpisi(p, poruke)
-
-    Dim pendingPosle As String
-    pendingPosle = GetHladnjacaRelinkPending()
-    SetHladnjacaRelinkPending stariPending          ' vrati stanje pre tvrdnji
-
-    AssertEquals "", res, "OTK ispravka: otkup NIJE nastao"
-    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
-                 "OTK ispravka: nijedan red nije upisan"
-    AssertEquals TEST_PREFIX & "-PRJ-STARA-" & scenario, pendingPosle, _
-                 "OTK ispravka: pending NIJE potrosen"
-    AssertTrue InStr(1, poruke, "nedostupna", vbTextCompare) > 0, _
-               "OTK ispravka: operater je obavesten (bilo: " & poruke & ")"
-
-    Exit Sub
-
-EH:
-    LogFatal "Test_OTK_IspravkaPauziranaNeTrosiPending", Err.Number, Err.description
 End Sub
 
 ' Broj otkupnog lista je jedinstven po STANICI I DANU -- i to cuva PISAC.

@@ -18,20 +18,6 @@ Option Explicit
 ' i vezu Otkup.OtpremnicaID (oba obrisana u S3b-1).
 ' ============================================================
 
-' Ispravka autohladnjace: posle storna otkupa-hladnjace ceo lanac
-' (otpremnica+zbirna+prijemnica) je oboren, a palete su OSIROCENE. Kad operater
-' izabere "Uneti ispravku", ekran zapamti broj te (stornirane) prijemnice ovde.
-' Relink aparat je NEDOSTIZAN dok auto-lanca nema (modOtkupUnos).
-Private mPendingRelinkOldPrij As String
-
-Public Sub SetHladnjacaRelinkPending(ByVal oldPrijBroj As String)
-    mPendingRelinkOldPrij = Trim$(oldPrijBroj)
-End Sub
-
-Public Function GetHladnjacaRelinkPending() As String
-    GetHladnjacaRelinkPending = mPendingRelinkOldPrij
-End Function
-
 ' Da li je stanica oznacena kao hladnjaca (tblStanice.JeHladnjaca = "Da").
 Public Function IsHladnjacaStanica(ByVal stanicaID As String) As Boolean
     On Error Resume Next

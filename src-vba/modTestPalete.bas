@@ -368,6 +368,10 @@ End Sub
 ' Detach: dve prijemnice na ISTOJ paleti (su-stanari). Skidanje prve ne dira
 ' drugu ni paletu; skidanje i druge prazni paletu -> paleta se stornira
 ' (kanonski StornoPaleta) + Istorija STORNO_PRAZNA.
+'
+' S6 korak 7 (KI-046): skida JEZGRO po PrijemnicaID-u (SkiniPoID), isto koje
+' zove storno prijemnice. Detach po broju je obrisan, a sa njim i njegov tekst
+' za operatera -- sud o su-stanaru i fantom paleti je ostao isti.
 Private Sub T08_DetachSuStanarFantom()
     Const S As String = "T08 detach su-stanar+fantom: "
     MakePrij "TSTPRJ-16", "TST-P10", "TST-Z8", "I", 40, 4, "TST-S08"
@@ -381,8 +385,7 @@ Private Sub T08_DetachSuStanarFantom()
     ChkEq CStr(stB(1, 2)), palID, S & "obe prijemnice na istoj paleti"
 
     MarkStornoPrij "TST-P10"
-    Dim info As String
-    ChkEq DetachOsirocenePaletaStavke_TX("TST-P10", info), 1, S & "skinuta 1 stavka"
+    ChkEq SkiniPoID("TSTPRJ-16"), 1, S & "skinuta 1 stavka"
     ChkEq StCnt("TST-P10"), 0, S & "P10 bez aktivnih stavki"
     ChkEq StCnt("TST-P11"), 1, S & "su-stanar P11 netaknut"
     Dim pi As Variant: pi = PalInfo(palID)
@@ -390,11 +393,10 @@ Private Sub T08_DetachSuStanarFantom()
     ChkEq pi(1), 3, S & "header 3 gajbice (samo P11)"
 
     MarkStornoPrij "TST-P11"
-    ChkEq DetachOsirocenePaletaStavke_TX("TST-P11", info), 1, S & "skinuta i P11 stavka"
+    ChkEq SkiniPoID("TSTPRJ-17"), 1, S & "skinuta i P11 stavka"
     pi = PalInfo(palID)
     ChkEq UCase$(CStr(pi(6))), "DA", S & "prazna fantom paleta stornirana"
     Chk InStr(CStr(pi(8)), "STORNO_PRAZNA") > 0, S & "Istorija sadrzi STORNO_PRAZNA"
-    Chk InStr(info, "stornirane") > 0, S & "outInfo javlja storniranu paletu"
 End Sub
 
 ' Preradjena paleta: korekcija kolicina je blokirana (ADJ_BLOCKED), bez izmena.
@@ -498,10 +500,30 @@ Private Sub T11_RelabelBlokNaDeljenojPaleti()
     ChkEq pi(1), 7, S & "header gajbice ostao 7 (4+3)"
 
     ' Bezbedan izlaz postoji: skini stavke stare pa nov unos (detach ne dira su-stanara).
-    Dim info As String
-    ChkEq DetachOsirocenePaletaStavke_TX("TST-P14", info), 1, S & "detach kao bezbedan izlaz radi"
+    ChkEq SkiniPoID("TSTPRJ-20"), 1, S & "detach kao bezbedan izlaz radi"
     ChkEq StCnt("TST-P15"), 1, S & "su-stanar i posle detach-a netaknut"
 End Sub
+
+' Skidanje paletnih stavki jedne prijemnice kroz JEZGRO (po PrijemnicaID-u), u
+' sopstvenoj transakciji koja snima obe tabele paleta -- jezgro to trazi. Suite
+' ionako sve vraca svojom spoljnom transakcijom.
+Private Function SkiniPoID(ByVal prijemnicaID As String) As Long
+    Dim t As clsTransaction
+    Dim errNum As Long, errDesc As String
+    On Error GoTo EH
+    Set t = New clsTransaction
+    t.BeginTx
+    t.AddTableSnapshot TBL_PALETA
+    t.AddTableSnapshot TBL_PALETA_STAVKA
+    SkiniPoID = SkiniPaleteZaStornoPrijemnice(t, prijemnicaID, "modTestPalete.SkiniPoID")
+    t.CommitTx
+    Exit Function
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    If Not t Is Nothing Then t.RollbackTx
+    Err.Raise errNum, "modTestPalete.SkiniPoID", errDesc
+End Function
 
 ' ============================================================
 ' SEED + DATA HELPERI (privatni za test; TST- identitet, snapshot-ovane tabele)

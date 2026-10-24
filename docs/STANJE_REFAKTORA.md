@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 24.10.2026 (stavka 200: S6 korak 7 — pre-flight i odluke 1–10; kod sledi, prvo `KI-046`).
+**Ažurirano:** 24.10.2026 (stavka 201: S6 korak 7, deo 1 — `KI-046` zatvoren; sledi deo 2, sam lanac).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; kapija `KI-046`): u toku**, grana `claude/s6-korak7-lanac-b` |
+| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ): u toku** — pre-flight i odluke 1–10 (stavka 200), deo 1 `KI-046` zatvoren (stavka 201), deo 2 (sam lanac) sledi; grana `claude/s6-korak7-lanac-b` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7313,6 +7313,30 @@
      - **DOMEN:** nova invarijanta `HLD-LANAC-01` (`docs/DOMEN/README.md`).
      - **Acceptance contract R1–R12** sa sabotažom uz svaku tvrdnju i imenovano van obima: §14.55, „Korak 7".
      - **Sledeći brojevi:** stavka 201 (kod `KI-046`) · test 272 (proveriti `#441` pred prvim testom) · KI-051.
+201. **S6 korak 7, deo 1 — `KI-046`: datum Oporavka po ID-u, nedostižna hladnjačka grana obrisana** (24.10.2026).
+     Tok je u §14.55, „Korak 7", odeljak „Tok koda, deo 1".
+
+     - **Crveno, tačno izvedeno pre puštanja:** BFP 2717 / 1, na „S6K7 osirotele: red drugog kupca nosi datum SVOG
+       dokumenta, ne prvog istog broja" (dobijen datum prvog dokumenta tog broja).
+     - **Kod:**
+       - `GetPrijemniceSaOsirocenimPaletama` čita datum po `PrijemnicaID`-u grupe;
+       - obrisani su `HladnjacaLanac` / `PonudiHladnjacaIspravku` (i grana u storno radnji),
+         `GetPaleteInfoForPrijemnicaBroj`, `DetachOsirocenePaletaStavke_TX` i relink-pending;
+       - obrisano je i 11 ključeva poruka.
+     - **Testovi:**
+       - nov BFP `Test_S6K7_OsirocenePaleteDatumPoDokumentu`;
+       - obrisan `Test_OTK_IspravkaPauziranaNeTrosiPending`;
+       - Palete T08 i T11 rade kroz jezgro skidanja po ID-u.
+     - **Zeleno, tačno izvedeno:** RunAllTests 271 / 0, BFP 2713 / 0, Palete 96 / 0. Izvor `6a0857506cd4`, fixture
+       `49f55dfc03b134b3`.
+     - **Sabotaže:** katalog 961 → 962 (`s6k7-osir-datum-po-broju`), sidra 962 / 0; statička sonda 1/1.
+     - **Jeftine kapije:** 22/22 zelene nad radnim stanjem pre commita.
+     - **Dokumenti:**
+       - `KI-046` je CLOSED, uz ispravku zapisa iz stavke 195: (2) i (3) su bili nedostižni, ne neuhranjeni;
+       - MAPA A-017: REPLACED;
+       - nov `KI-051` (F4 i stornirani broj hladnjača-kupca prema A2 t. 4).
+     - **Nije urađeno:** deo 2 (sam lanac, R2–R12), FULL, `dokaz.py`, sveska i compile — sve čeka kraj koda i reviewer GO.
+     - **Sledeći brojevi:** stavka 202 (deo 2: lanac) · test 272 (proveriti `#441`) · KI-052.
 
 ## Dug sa imenom (posle S5-5b)
 

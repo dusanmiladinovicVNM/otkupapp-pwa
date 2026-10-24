@@ -983,13 +983,8 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     ' kooperanta, AMBALAZA.md 6.4: manjak pokriva ULAZ_TUDJE na nalog kupca.
     UpsertRow lo, existing, "AMB_ASK_DEFICIT_KUP_1", "Kupac nema toliko na" & ChrW(353) & "ih gajbi."
     UpsertRow lo, existing, "AMB_ASK_DEFICIT_KUP_2", "Manjak ulazi u opticaj kao TU" & ChrW(272) & "A ambala" & ChrW(382) & "a " & ChrW(8212) & " firma ga duguje kupcu:"
-    UpsertRow lo, existing, "OTKUNOS_MSG_NIJE_HLADNJACA", "Napomena: ovaj unos nije autohladnja" & ChrW(269) & "a lanac " & ChrW(8212) & " palete stornirane prijemnice NISU prevezane:"
     UpsertRow lo, existing, "OTKUNOS_ERR_BROJ_ZAUZET", "Taj broj otkupnog lista je ve" & ChrW(263) & " izdat na ovom otkupnom mestu tog dana. Storno ne osloba" & ChrW(273) & "a broj " & ChrW(8212) & " ispravka dobija NOV broj. Postoje" & ChrW(263) & "i dokument:"
     UpsertRow lo, existing, "OTKUNOS_ERR_KULTURA", "Izabrana vrsta i sorta se ne prevode u ta" & ChrW(269) & "no jednu kulturu iz " & ChrW(353) & "ifarnika:"
-    UpsertRow lo, existing, "OTKUNOS_MSG_ISPRAVKA_PAUZIRANA", "Ispravka hladnja" & ChrW(269) & "kog dokumenta je privremeno nedostupna: nizvodni lanac je pauziran, pa palete ne bi imale gde da se prevezu. Otkup NIJE unet. Storniran dokument:"
-    UpsertRow lo, existing, "OTKUNOS_MSG_NEMA_PRIJEMNICE", "Novi lanac nije kreirao prijemnicu " & ChrW(8212) & " palete NISU prevezane."
-    UpsertRow lo, existing, "OTKUNOS_MSG_PALETE_PREVEZANE", "Palete prevezane:"
-    UpsertRow lo, existing, "OTKUNOS_MSG_PALETE_NISU", ChrW(10007) & " Auto-prevezivanje paleta nije uspelo:"
     UpsertRow lo, existing, "OTKUI_ASK_PREKORACENJE_1", "Blok prelazi ostatak otpremnice za"
     UpsertRow lo, existing, "OTKUI_ASK_PREKORACENJE_2", ChrW(8212) & " ipak upisati?"
     UpsertRow lo, existing, "OTKUNOS_MSG_UPISAN", ChrW(10003) & " Otkupni list sa" & ChrW(269) & "uvan:"
@@ -1289,18 +1284,6 @@ Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ERR_BROJ_DVOSMISLEN2", "Prevezivanje paleta ide PO BROJU, pa se ne zna na koji dokument." & vbCrLf & _
               "Palete su ostale na staroj prijemnici " & ChrW(8212) & " prevezi ih ru" & ChrW(269) & "no kroz Oporavak, " & _
               "posle ispravke broja."
-    ' --- hladnjaca ispravka posle storna otkupa (F1) ---
-    UpsertRow lo, existing, "OTKUI_MSG_HLAD_LANAC", "Otkup storniran (autohladnja" & ChrW(269) & "a: ceo lanac oboren)."
-    UpsertRow lo, existing, "OTKUI_MSG_HLAD_PALETE", "Paletizovana prijemnica:"
-    UpsertRow lo, existing, "OTKUI_ASK_HLAD", ChrW(352) & "ta dalje sa paletama?" & vbCrLf & vbCrLf & _
-              "DA = ISPRAVKA: izmeni gre" & ChrW(353) & "ku, palete idu na nov lanac" & vbCrLf & _
-              "NE = DUPLI UNOS: nije primljeno 2x, skini stavke" & vbCrLf & _
-              "OTKAZI = ni" & ChrW(353) & "ta sada (palete ostaju osiro" & ChrW(263) & "ene)"
-    UpsertRow lo, existing, "OTKUI_MSG_HLAD_ISPRAVKA", ChrW(10003) & " Polja popunjena iz storniranog " & ChrW(8212) & _
-              " izmeni gre" & ChrW(353) & "ku pa snimi"
-    UpsertRow lo, existing, "OTKUI_MSG_HLAD_NISTA", "Ni" & ChrW(353) & "ta nije skinuto."
-    UpsertRow lo, existing, "OTKUI_MSG_HLAD_OSIROCENE", "Palete su osiro" & ChrW(263) & "ene (i dalje broje robu)." & vbCrLf & _
-              "Re" & ChrW(353) & "i ru" & ChrW(269) & "no: Oporavak " & ChrW(8594) & " Palete."
     ' --- ekran Oporavak (Faza D/14) ---
     UpsertRow lo, existing, "OTKUI_NAV_OPORAVAK", "Oporavak"
     UpsertRow lo, existing, "OTKUI_HDO_CID", "CID"

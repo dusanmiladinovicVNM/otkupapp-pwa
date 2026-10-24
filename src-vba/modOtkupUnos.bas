@@ -312,26 +312,10 @@ End Function
 ' ambalaza i poruke operateru su isti posao u oba slucaja.
 Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
                            Optional ByVal ispravljaOtkupID As String = "") As String
-    Dim res As String, hlPending As String, hlNewPrij As String, hlWarn As String
-    Dim doHlRelink As Boolean, hlRelWarn As String, hlGajbDiff As Boolean
+    Dim res As String
     Dim errDesc As String
     On Error GoTo EH
     poruke = ""
-
-    ' ISPRAVKA HLADNJACKOG LANCA JE FAIL-CLOSED DOK LANAC STOJI.
-    '
-    ' Pending relink znaci: operater je stornirao stari hladnjacki dokument i
-    ' izabrao "Uneti ispravku". Ispravka nije samo nov otkup -- ona trazi i nov
-    ' nizvodni lanac, da bi se palete stare prijemnice imale gde prevezati.
-    '
-    ' Lanac je pauziran do PR7, pa se taj drugi deo ne moze izvrsiti. Zato se
-    ' STAJE PRE PISCA: bez ovoga bi nastao nov otkup, pending bi bio POTROSEN, a
-    ' operater bi dobio samo "nema prijemnice" -- pola ispravke, i to nepovratno.
-    If Len(GetHladnjacaRelinkPending()) > 0 Then
-        poruke = poruke & Poruka("OTKUNOS_MSG_ISPRAVKA_PAUZIRANA") & " " & _
-                 GetHladnjacaRelinkPending() & vbCrLf
-        Exit Function
-    End If
 
     ' KANONSKI PISAC. Sta vise NE ide u upis, i zasto:
     '
@@ -433,32 +417,16 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
     ' u ovom trenutku blok jos nije ponudjen radnom stolu, pa bi lanac pretekao
     ' operaterov izbor. Pravilo ("blok koji je vec u aktivnoj otpremnici ne
     ' dobija svoju") zivi u modAutoHladnjaca.AutoLanacHladnjaca, ne u pozivaocu.
-    SetPaletizeSkip False        ' toggle se vraca i kad lanac nije ni pokrenut
-
-    ' Relink aparat je NEDOSTIZAN dok je lanac pauziran: pending se hvata iznad,
-    ' pre pisca, pa dovde nikad ne stigne sa vrednoscu. Ostaje netaknut da ga PR7
-    ' vrati u pogon zajedno sa lancem.
-    If doHlRelink Then
-        SetHladnjacaRelinkPending ""         ' potrosi (idempotentno)
-        If Len(hlNewPrij) = 0 Then
-            poruke = poruke & Poruka("OTKUNOS_MSG_NEMA_PRIJEMNICE") & vbCrLf
-        ElseIf ReassignPaleteToPrijemnica_TX(hlPending, hlNewPrij, hlRelWarn, True, hlGajbDiff) Then
-            poruke = poruke & Poruka("OTKUNOS_MSG_PALETE_PREVEZANE") & " " & _
-                     hlPending & " " & ChrW(8594) & " " & hlNewPrij & vbCrLf
-            If Len(hlRelWarn) > 0 Then poruke = poruke & hlRelWarn & vbCrLf
-            If hlGajbDiff Then poruke = poruke & PaletaAdjustPrompt(hlNewPrij) & vbCrLf
-        Else
-            LogRelinkFailure hlPending, hlNewPrij, hlRelWarn
-            poruke = poruke & Poruka("OTKUNOS_MSG_PALETE_NISU") & " " & hlRelWarn & vbCrLf
-        End If
-    End If
+    '
+    ' Prevezivanja paleta stare hladnjacke prijemnice ovde VISE NEMA (S6 korak 7,
+    ' KI-046): jedini izvor mu je bila ponuda posle storna bloka, a ona je bila
+    ' nedostizna (A13). Prevezivanje siroce paleta je u Oporavku ("Prevezi").
 
     OtkupUpisi = res
     Exit Function
 EH:
     ' isto pravilo: opis pre logovanja (LogErr / Poruka cuvaju svoj Err)
     errDesc = Err.description
-    SetPaletizeSkip False        ' toggle ne sme da ostane ukljucen ni na gresci
     LogErr "modOtkupUnos.OtkupUpisi"
     poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function

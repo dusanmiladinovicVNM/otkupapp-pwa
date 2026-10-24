@@ -9706,6 +9706,19 @@ SABOTAZE = {
         "T_S6K6_FokusPosleGreske",
         "kontrola: -5 kg vodi fokus na kg klase I",
     ),
+    # S6 korak 7, KI-046 (1): datum reda Oporavka (osirotele palete) opet se cita
+    # po BROJU prijemnice, pa red drugog kupca istog broja nosi datum prvog
+    # dokumenta. Grupisanje ostaje po generaciji -- kvari se samo datum.
+    "s6k7-osir-datum-po-broju": (
+        "modDokumenta.bas",
+        "        rows.Add Array(CStr(brD(k2)), _\n"
+        "                       LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, CStr(pidD(k2)), COL_PRJ_DATUM), _\n",
+        "        ' SABOTAZA: datum reda Oporavka opet po broju\n"
+        "        rows.Add Array(CStr(brD(k2)), _\n"
+        "                       LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, CStr(brD(k2)), COL_PRJ_DATUM), _\n",
+        "Test_S6K7_OsirocenePaleteDatumPoDokumentu",
+        "S6K7 osirotele: red drugog kupca nosi datum SVOG dokumenta, ne prvog istog broja",
+    ),
 }
 
 

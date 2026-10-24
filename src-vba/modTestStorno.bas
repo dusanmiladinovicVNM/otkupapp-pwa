@@ -817,7 +817,7 @@ Private Sub SeedPaletaStavka(ByVal stavkaID As String, ByVal brojPrij As String,
         Array(stavkaID, paletaID, brojPrij, brojZbirne, klasa, gajbe, kg, amb, prijemnicaID)
 End Sub
 
-' Minimalna realna paleta (header) da DetachOsirocenePaletaStavke_TX radi end-to-end:
+' Minimalna realna paleta (header) da jezgro skidanja paleta radi end-to-end:
 ' skida gajbe/neto/amb, reopen ispod kapaciteta, storno kad ostane prazna.
 Private Sub SeedPaleta(ByVal palID As String, ByVal gajbe As Long, ByVal neto As Double, _
                        ByVal amb As Double, ByVal kapacitet As Long, ByVal status As String)

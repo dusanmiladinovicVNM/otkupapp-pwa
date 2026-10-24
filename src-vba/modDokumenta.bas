@@ -8498,6 +8498,10 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
     Dim soD As Object: Set soD = CreateObject("Scripting.Dictionary"): soD.CompareMode = vbTextCompare
     Dim brD As Object: Set brD = CreateObject("Scripting.Dictionary"): brD.CompareMode = vbTextCompare
     Dim genD As Object: Set genD = CreateObject("Scripting.Dictionary"): genD.CompareMode = vbTextCompare
+    ' Dokument grupe (PrijemnicaID), iz kog se cita DATUM -- ne broj (KI-046 (1)):
+    ' dva kupca nose isti broj, pa je LookupValue po broju davao datum PRVOG
+    ' dokumenta tog broja i redu drugog kupca.
+    Dim pidD As Object: Set pidD = CreateObject("Scripting.Dictionary"): pidD.CompareMode = vbTextCompare
     Dim order As Collection: Set order = New Collection
     Dim i As Long
     For i = 1 To UBound(ps, 1)
@@ -8512,7 +8516,7 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
                 If Not gSum.Exists(kl) Then
                     gSum(kl) = 0&: sCnt(kl) = 0&: order.Add kl
                     vrD(kl) = Trim$(NzToText(ps(i, cVr))): soD(kl) = Trim$(NzToText(ps(i, cSo)))
-                    brD(kl) = br: genD(kl) = gen
+                    brD(kl) = br: genD(kl) = gen: pidD(kl) = pid
                 End If
                 If IsNumeric(ps(i, cGajb)) Then gSum(kl) = CLng(gSum(kl)) + CLng(ps(i, cGajb))
                 sCnt(kl) = CLng(sCnt(kl)) + 1
@@ -8526,7 +8530,7 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
         Dim k2 As String: k2 = CStr(v)
         ' 7. kolona je GENERACIJA - na KRAJ, pa legacy panel (cita 1..6) ostaje.
         rows.Add Array(CStr(brD(k2)), _
-                       LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, CStr(brD(k2)), COL_PRJ_DATUM), _
+                       LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, CStr(pidD(k2)), COL_PRJ_DATUM), _
                        CStr(vrD(k2)), CStr(soD(k2)), CLng(gSum(k2)), CLng(sCnt(k2)), CStr(genD(k2)))
     Next v
     GetPrijemniceSaOsirocenimPaletama = StornoRowsTo2D(rows, 7)

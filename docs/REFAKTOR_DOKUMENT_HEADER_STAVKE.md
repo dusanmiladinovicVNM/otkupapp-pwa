@@ -9112,6 +9112,31 @@ prekidač `AUTO_PRIJEMNICA_HLADNJACA` nestaje. Danas lanac pravi samo otpremnicu
 - `KI-028` (odluka 5), `KI-047`–`KI-050` (UX lanca unosa, posle S6–S9);
 - sync smoke suite (mreža) — korak orkestratora se meri direktno, ne kroz Google.
 
+**Tok koda, deo 1 — `KI-046` (stavka 201):**
+
+- **Crveno izvedeno iz diff-a pre puštanja** (test bez ispravke): BFP 2708 → 2717 tvrdnji, 1 pad, na „S6K7 osirotele:
+  red drugog kupca nosi datum SVOG dokumenta, ne prvog istog broja". **Izmereno tačno tako:** 2717 / 1, dobijen datum
+  prvog dokumenta tog broja (`2091-03-24` umesto `2091-03-25`).
+- **Ispravka (1):** `GetPrijemniceSaOsirocenimPaletama` pamti `PrijemnicaID` grupe i datum čita po njemu.
+- **Brisanje (2), (3) i ponude:** `modScrDokumenti.HladnjacaLanac` / `PonudiHladnjacaIspravku` i njihova grana u
+  `RowAction` „storno" (storno bloka sada samo javlja „storniran"); `modPaletniList.GetPaleteInfoForPrijemnicaBroj` i
+  `DetachOsirocenePaletaStavke_TX`; relink-pending (`modAutoHladnjaca` stanje, `modOtkupUnos` kapija pre pisca i grana
+  posle upisa, sa dva `SetPaletizeSkip False` koji su postojali samo zbog nje); 11 ključeva poruka koje više niko ne
+  zove (10 iz ponude i relink-a, plus `OTKUNOS_MSG_NIJE_HLADNJACA`, koji je bio siroče i pre ovog reza).
+- **Testovi:** nov BFP `Test_S6K7_OsirocenePaleteDatumPoDokumentu` (kroz `modScrOporavak.Scr_Rows`, lista PALETE; test
+  sklanja svoje palete kroz jezgro skidanja, da ne ostanu u tuđoj listi); obrisan BFP
+  `Test_OTK_IspravkaPauziranaNeTrosiPending` (4 tvrdnje, premisa nestala); Palete T08 i T11 skidaju kroz
+  `SkiniPaleteZaStornoPrijemnice` po `PrijemnicaID`-u (isto jezgro `SkiniPaletneStavke`), a tvrdnja o tekstu
+  obrisane funkcije („outInfo javlja storniranu paletu") otišla je sa njom.
+- **Zeleno, tačno izvedeno:** RunAllTests **271 / 0**, BFP **2713 / 0** (2717 − 4), Palete **96 / 0** (97 − 1); izvor
+  `6a0857506cd4`, ugovor `f42660755039`, fixture `49f55dfc03b134b3` (nepromenjen).
+- **Sabotaža:** `s6k7-osir-datum-po-broju` (katalog 961 → 962); `--proveri-sidra` 962 / 0; statička sonda: pravila
+  čista, katalog javlja samo nju, `--vrati` vraća `src-vba` bajt-identičan kopiji.
+- **Trag brisanja (R2)** ulazi sa testom lanca u delu 2 (traži kompletan lanac); do tada kapiju meri zatečeni
+  `Test_STO_BlokUSastavuOtpremniceSeNeStornira`.
+- **Usput, samo `KNOWN_ISSUES`:** `KI-051` — F4 ne broji stornirane ni za hladnjača-kupca, a A2 t. 4 kaže da storno ne
+  oslobađa broj prijemnice hladnjače (nađeno čitanjem, nije reprodukovano; mesto je korak 8).
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
