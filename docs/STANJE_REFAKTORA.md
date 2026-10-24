@@ -8063,6 +8063,43 @@
        redja broj kao tekst (lista bez salda).
      - **Sledeći brojevi:** test 283 · stavka 219 · KI-064.
 
+219. **Izveštaji: poslovna ambalaža, pregled po OM, opis otkupa i redosled dokumentnih lista**
+     (`AMB-POSL-01/02`, `DOC-SORT-01`, `REPORT-DESC-01`, 24.10.2026). Grana `claude/trusting-hawking-2cw6z1`,
+     posle stavke 218. Odluke i pravila: `docs/DOMEN/README.md` §2, `docs/DOMEN/AMBALAZA.md` §6.6a.
+
+     - **Uzroci (iz koda, ne iz Excela):**
+       - kartice, PDF otkupnog lista i kolona Ambalaža u pregledu po OM čitali su **fizičku** knjigu, pa je
+         pokriće deficita (`ULAZ_TUDJE_AMBALAZE`) izgledalo kao ulaz kooperanta: povrat 23 uz pokriće 12 → −11
+         umesto −23; u prijavi PDF početno stanje 491 umesto 461 (nije mereno nad tom sveskom);
+       - `ReportSaldoOM` je uzimao `AmbSaldoPoNalogu(Kooperant)`: današnji i globalni saldo, pa je pregled za
+         prošlost nosio današnje stanje, a kooperant sa dve stanice ulazio je u zbirni pregled dvaput;
+       - dokumentne liste: `ReportOtkupListe` je broj poredio kao tekst, pregled ambalaže je išao redom prvog
+         upisa u knjigu (fizički), a ljuska je sve to ponovo sortirala drugom kolonom kao tekstom;
+       - opis otkupa „Otkup Malina I 108,40kg": prefiks, bez sorte, kg slepljen za broj.
+     - **Ispravka:**
+       - `modAmbalaza`: opcioni `samoPoslovno` u `AmbKretanjaNaloga`, `AmbSaldoPoNalogu` (uz `datumDo` i
+         protivnalog) i `AmbStanjeOkoDokumenta`; predikat `AmbRedJeTehnicki` (kontra-stav po vrsti originala).
+         `GetKooperantAmbOpening` čita poslovno; svi ostali pozivi ostaju fizički (podrazumevano `False`);
+       - `modIzvestaj`: obe kartice poslovno; `ReportSaldoOM` poslovno, po stanici, na `datumDo`;
+         `KarticaOtkupOpis`; `IzvSortTelo` + `KarticaDokKljuc` u `ReportOtkupListe`, `ReportPrijemniceKupca`,
+         `ReportOtkupRobaOM`, `ReportAmbalazePojedinacni`; agregati (`ReportSaldoOM`, `ReportIsplata`,
+         `ReportSaldoOMZbirni`, `ReportAmbalazaZbirnoSvi`) po nazivu pa ID-u (`IzvNazivKljuc`);
+       - `modScrIzvestaji.Scr_Sort`: `SCR_SORT_POSLOVNI` i za `OTKLISTE`, `ROBA` (OM, Kupac; ne zbirno) i
+         `AMBALAZA` (ne zbirno); tekst `OTKUI_MSG_KART_HRONOLOGIJA` uopšten (ključ isti).
+     - **Nije dirano:** `tblAmbalaza`, pisci, storno, šema, `AmbSaldoNaloga`, `GetAmbalazeStanje`,
+       `AmbObavezaPartneru`, fizički `ReportAmbalaza("OM")`, ostali papiri (`AmbStanjeOkoDokumenta` bez opcije).
+     - **Testovi:** 283–286 crveni pre ispravke (commit „test(amb): crvene tvrdnje 283-286…"). Premise pet
+       zatečenih tvrdnji (`T_Izv_*`: kolona Ambalaža OM, završni saldo obe kartice, saldo u zoni) prebačene sa
+       fizičkog `GetAmbalazeStanje` na nezavisan poslovni prolaz kroz knjigu (`KartAmbPoslovniOracle`);
+       `IzvAmbSaldo` ostao bez poziva i uklonjen. U 285 tvrdnja o prefiksu ide pre tvrdnje o celom opisu, da
+       svaka sabotaža obori svoju. **Sabotaže:** 9 novih (`amb-posl-*` 5, `kart-opis-*` 2, `doc-sort-*` 2),
+       katalog 1025 → 1034; `kart-hron-ekran-bez-ugovora` dobila novo sidro. Sidra i primena/vraćanje provereni
+       mehanički.
+     - **NEVERIFIKOVANO:** `run_vba` u web sesiji ne radi. Treba: `python tools/run_vba.py --suite RunAllTests`,
+       pa `python tools/dokaz.py amb-posl- kart-opis- doc-sort- kart-hron-ekran --grupe`, pa compile, pa
+       ručna provera PDF otkupnog lista i pregleda po OM nad pravim podacima.
+     - **Sledeći brojevi:** test 287 · stavka 220 · KI-064.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

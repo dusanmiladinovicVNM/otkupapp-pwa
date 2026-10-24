@@ -239,6 +239,55 @@ istog otkupa (izdata prazna 30, uz robu 13) imala su salde 17 i −13.
 
 Mere ga `modTest` 279–282 (`T_KartHron_*`), sabotaže `kart-hron-*`.
 
+**AMB-POSL-01 — poslovni saldo ambalaže je treći broj iz iste knjige
+(24.10.2026).** `ULAZ_TUDJE_AMBALAZE` nije zahtev (`AmbVrstaJeZahtev`) nego
+posledica koju pisac dopisuje sam: pokriće deficita (`AMB-INV-07`) i ulaz
+pozajmice (`AMB-INV-13`). To su partnerove sopstvene gajbe — fizički ih drži,
+ali firma ga njima nije zadužila. Zato iz iste knjige postoje tri broja:
+
+| Broj | Šta znači | Ko ga čita |
+|---|---|---|
+| fizički saldo | gde su gajbe | `AmbSaldoNaloga`, `GetAmbalazeStanje`, `ReportAmbalaza` (pregled kretanja), provere |
+| poslovni saldo | šta je firma partneru izdala minus šta je vratio | kartica kooperanta, kartica ambalaže, PDF otkupnog lista, kolona Ambalaža u pregledu po OM |
+| obaveza | koliko tuđe ambalaže firma duguje | `AmbObavezaPartneru` (`AMB-INV-09`) |
+
+Primer A: kooperant drži 11, vraća 23 → pokriće 12; fizički 0, poslovno −23 na
+tom dokumentu. Primer B: drži 0, vraća 3 → pokriće 3; poslovno −3.
+
+- Projekcija je **izbor čitaoca, ne nov pisac**: `AmbKretanjaNaloga`,
+  `AmbSaldoPoNalogu` i `AmbStanjeOkoDokumenta` dobijaju opcioni
+  `samoPoslovno` (podrazumevano `False` = zatečeno fizičko ponašanje). Knjiga,
+  pisci, storno i šema se ne menjaju.
+- **Kontra-stav se sudi po vrsti originala** (`AmbRedJeTehnicki`, preko
+  `StornoOd`): storno pokrića je i sam tehnički, storno pravog prenosa poslovni.
+- **PDF otkupnog lista** čita poslovno početno stanje
+  (`GetKooperantAmbOpening`); granica (`ODL-26/31`), stabilnost ponovne štampe i
+  `outPoznato` (`ODL-27`) ostaju iste. Ostali papiri čitaju fizičko stanje istog
+  jezgra.
+
+**AMB-POSL-02 — kolona Ambalaža u pregledu po OM je poslovni saldo prema TOJ
+stanici, na `datumDo`.** Bila je fizički, današnji i globalni saldo kooperanta:
+pokriće se brojalo kao zaduženje, pregled za prošlost je nosio današnje stanje, a
+kooperant sa dve stanice je u `ReportSaldoOMZbirni` ulazio dvaput. Svaki red
+knjige imenuje obe strane, pa je pripadnost stanici podatak, ne alokacija — nema
+prelivanja. Fizički pregled stanice ostaje `ReportAmbalaza("OM")`.
+
+**DOC-SORT-01 — dokumentna lista ide po danu i broju kao broju.** Otkupni
+listovi, roba OM (otpremnice), roba kupca (prijemnice) i pojedinačan pregled
+ambalaže slaže izveštaj ključem `KarticaDokKljuc` (`x/080726` → `-2` → `-3` →
+`-10` → `x/090726`), a ekran to izjavljuje kroz `Scr_Sort` = `SCR_SORT_POSLOVNI`
+kao i kartice. Stavke istog dokumenta zadržavaju redosled papira; `UKUPNO` i
+kontrolni redovi ostaju na kraju (`IzvSortTelo`). Agregati (saldo OM, isplata,
+zbirni, roba vozača po vrsti) broja nemaju: izveštaj ih slaže po nazivu pa ID-u
+(`IzvNazivKljuc`), a ljuska ih i dalje sme sortirati.
+
+**REPORT-DESC-01 — opis reda otkupa na kartici kooperanta** je
+`vrsta sorta klase količina kg` („Malina Willamette I 108,40 kg"), bez reči
+„Otkup" (`KarticaOtkupOpis`). Prazan deo se preskače, pa nema duplog razmaka.
+Ekran i PDF čitaju isti `ReportKarticaKooperanta`.
+
+Mere ih `modTest` 283–286, sabotaže `amb-posl-*`, `kart-opis-*`, `doc-sort-*`.
+
 ## 3) Ko šta piše
 
 `WHO_WRITES.md` u ovom folderu — generisana mapa vlasništva nad tabelama
