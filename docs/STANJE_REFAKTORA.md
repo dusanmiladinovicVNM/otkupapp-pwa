@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 5/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · **korak 6 (F4 odmrznut + vraćeni testovi iz §14.14): pre-flight i odluke 1–8 (stavka 193), kod crveno → zeleno (stavka 194), review krug 1 ispravljen (stavka 195: P1 `UPOZORENJE`, trag ispravke po ID-u), krug 2 CODE GO; FULL 12/12, dokaz 33/33, `vba_gate` dokazano (stavka 196); compile i ručna provera, fokus posle greške ispravljen (stavka 197); **čeka compile nove sveske i proveru fokusa**, grana `claude/s6-korak6-f4` |
+| **S6 prijemnica** | ⏳ **u toku, 5/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · **korak 6 (F4 odmrznut + vraćeni testovi iz §14.14): pre-flight i odluke 1–8 (stavka 193), kod crveno → zeleno (stavka 194), review krug 1 ispravljen (stavka 195: P1 `UPOZORENJE`, trag ispravke po ID-u), krug 2 CODE GO; FULL 12/12, dokaz 33/33, `vba_gate` dokazano (stavka 196); compile i ručna provera (stavka 197); compile nove sveske dokazan nad `f35e93337bef`, fokus na ekranu odložen u UX lanca unosa (`KI-050`, stavka 198); **spreman za merge na izričit zahtev**, grana `claude/s6-korak6-f4` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7243,6 +7243,25 @@
      - **Čeka operatera:** compile nove sveske; fokus na ekranu (bez kupca → KUPAC; `NEMA-1` → BROJ ZBIRNE; povrat
        1,5 → POVRAT AMBALAŽE); po želji koraci 1, 7 (papir) i 9 koje prvi niz nije pokrio.
      - **Sledeći brojevi:** stavka 198 · test 272 · KI-050.
+198. **Compile nove sveske ✅; fokus na ekranu ✗ — tvrdnja ispravljena, kod odložen za UX lanca unosa**
+     (24.10.2026).
+
+     - **Compile:** operater je javio „COMPILES" za `rucna_provera_s6_korak6_fokus.xlsm` → `vba_gate --mark-compile`;
+       `--require-green --require-compile` = **dokazano nad `f35e93337bef`**.
+     - **Fokus na ekranu ne radi:** u sva tri slučaja (bez kupca, `NEMA-1`, povrat 1,5) kursor je u BROJ PRIJEMNICE
+       (operater). Uzrok, nađen čitanjem koda: `UiClick` prvo izvrši akciju (`CommitDokument` → `FokusNaPolje`), pa
+       za svaki klik koji nije izuzet zove `KeepKeys`, koji vraća fokus u broj dokumenta (F-tasteri posle klika na
+       Label) i pregazi polje greške. Zatečeno u svim režimima koji čuvaju klikom → **`KI-050`**.
+     - **Ispravka tvrdnje (stavka 197 je rekla više nego što je izmereno):** test 271 meri da ljuska BIRA pravu
+       kontrolu, ne da fokus na njoj OSTANE posle klika. Grane `kupacID`/`brojZbirne` su tačne i ostaju; „sa fokusom"
+       iz R3/R5/R6 na ekranu još nije isporučeno. Tekstovi tvrdnji 271 i `KeepKeys` idu u UX prolaz.
+     - **Odluka operatera (24.10.2026):** fokus sada nije bitan; ide u UX prolaz **celog lanca unosa dokumenata**.
+       Kod se zbog toga ne menja u #440.
+     - **Ručna provera:** koraci 2–8 potvrđeni (stavka 197); 1, papir iz 7 i 9 nisu viđeni — operater ih nije
+       tražio za ovaj rez.
+     - **#440 je spreman za merge sa strane kapija:** FULL 12/12, dokaz (33 + 4), `vba_gate` sa compile-om
+       dokazano nad `f35e93337bef`. Merge samo na izričit zahtev operatera.
+     - **Sledeći brojevi:** stavka 199 · test 272 · KI-051.
 
 ## Dug sa imenom (posle S5-5b)
 

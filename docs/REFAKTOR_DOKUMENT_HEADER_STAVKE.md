@@ -8955,6 +8955,9 @@ a ne BLOK (komentar u `fc06fa77`), pa bi grana „zbirne nema" otvorila `MsgBox`
 koji ekran vrati, a ljuska (`FokusNaPolje`) nije znala `kupacID` ni `brojZbirne`. Posle operaterovih snimaka:
 seam koji beleži izabrano polje u test režimu, test 271 kroz ceo potez (crveno 271/1), dve grane, četiri sabotaže.
 Vrsta/sorta prijemnice prema zbirnoj (`KI-047`) i tekst razloga pisca (`KI-048`) su ostali van reza.
+**Ispravka (stavka 198):** to je dokazalo samo IZBOR kontrole. Na ekranu fokus i dalje završi u BROJ dokumenta, jer
+`UiClick` posle akcije zove `KeepKeys` (`KI-050`). Operater je fokus odložio za UX prolaz celog lanca unosa, pa
+„sa fokusom" iz R3/R5/R6 u ovom rezu ostaje neisporučeno na ekranu.
 
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
