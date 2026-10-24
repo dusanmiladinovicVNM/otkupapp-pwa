@@ -177,6 +177,7 @@ Private Const FX_BIM_OBRADJENIH As Long = 5 ' DA + dva dvojnika + prosli ciklus 
 Private Const FX_BROJ_NOVAC As String = "NOVUNOS-TEST-1"
 Private Const FX_VRSTA As String = "TESTVOCE"
 Private Const FX_SORTA As String = "TESTSORTA"
+Private Const FX_KULTURA As String = "KUL-TEST-1"  ' make_fixture: kultura sa FX_VRSTA / FX_SORTA
 Private Const FX_TIP_AMB As String = "12/1"         ' make_fixture AMB_12_1, TezinaGajbiceKg = 1
 Private Const FX_TIP_LETVA As String = "Letvarica"  ' make_fixture AMB_LETVA, drugi tip na ADK-IZV-1
 Private Const FX_TIP_NEMA As String = "12/2"        ' KI-021: tip koga NEMA u sifarniku fixture-a
@@ -390,6 +391,7 @@ Public Sub RunAllTests()
     RunOne 284
     RunOne 285
     RunOne 286
+    RunOne 287
     RunOne 13
     RunOne 14
     RunOne 15
@@ -971,6 +973,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 284: TestName = "T_AmbPoslovno_SaldoPoOM"
         Case 285: TestName = "T_KartOpis_VrstaSortaKlasa"
         Case 286: TestName = "T_DocSort_DokumentneListe"
+        Case 287: TestName = "T_AmbPoslovno_OtkupniListKaoKartica"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1265,6 +1268,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 284: T_AmbPoslovno_SaldoPoOM
         Case 285: T_KartOpis_VrstaSortaKlasa
         Case 286: T_DocSort_DokumentneListe
+        Case 287: T_AmbPoslovno_OtkupniListKaoKartica
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -12644,8 +12648,10 @@ End Function
 '   izdavanje 5                                fizicki  5, poslovno -10
 '   storno povrata 3 (upisan POSLE)            fizicki  5, poslovno -7
 ' Fixture: normal production state (pravi pisci; pokrice kroz potvrdu manjka).
+' Stanje posle izdavanja 5 je slucaj iz prijave (Bajic): pokrica +12 i +3 su
+' tehnicka, pa je poslovno -10, a fizicki +5.
 ' SABOTAZE: amb-posl-kartica-fizicki, amb-posl-pokrice-po-vrsti,
-' amb-posl-pdf-fizicki.
+' amb-posl-pdf-fizicki, amb-posl-jezgro-stanja-fizicki.
 Private Sub T_AmbPoslovno_PokriceNijeZaduzenje()
     Dim tip As String, dI1 As String, dP As String, dI2 As String
     Dim dA As String, dB As String, dL As String
@@ -12653,6 +12659,7 @@ Private Sub T_AmbPoslovno_PokriceNijeZaduzenje()
     Dim netoA As Double, netoB As Double, netoBPosle As Double
     Dim pocL As Long, pocLPosle As Long, poznato As Boolean, poznatoPosle As Boolean
     Dim redovaPokrica As Long, ka As Variant, kk As Variant, oracle As Double
+    Dim posleL As Long, fizPosleL As Long, pp As Boolean
 
     tip = KartNoviTipAmb("POSL")
     modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tip, 40, "NAB-" & tip, "preduslov AMB-POSL-01"
@@ -12667,6 +12674,8 @@ Private Sub T_AmbPoslovno_PokriceNijeZaduzenje()
     netoA = KartNetoBroja(r, bA)
     netoB = KartNetoBroja(r, bB)
     pocL = modAmbalaza.GetKooperantAmbOpening(FX_KOOPERANT, tip, dL, poznato)
+    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip, "", dL, pp, posleL, True
+    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip, "", dL, pp, fizPosleL
 
     modAmbalaza.StornirajAmbDokument_TX dB
     r = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, Date, Date)
@@ -12682,6 +12691,8 @@ Private Sub T_AmbPoslovno_PokriceNijeZaduzenje()
               Len(dB) > 0 And Len(dL) > 0), True, "preduslov: svih sest reversa je upisano"
     AssertEq netoA, -23, "primer A: povrat 23 uz pokrice 12 je poslovno -23, ne -11"
     AssertEq netoB, -3, "primer B: povrat 3 uz pokrice 3 je poslovno -3, ne 0"
+    AssertEq posleL & "|" & fizPosleL, "-10|5", _
+             "slucaj Bajic: posle pokrica +12 i +3 i izdavanja 5 stanje je poslovno -10, fizicki 5"
     AssertEq pocL & "|" & IIf(poznato, "1", "0"), "-15|1", _
              "PDF pocetno stanje je poslovno: pokrice ne uvecava stanje pre dokumenta"
     AssertEq pocLPosle & "|" & IIf(poznatoPosle, "1", "0"), "-15|1", _
@@ -12811,6 +12822,49 @@ Private Sub T_DocSort_DokumentneListe()
              "pregled ambalaze: manji broj istog niza ide pre veceg, bez obzira na upis"
 End Sub
 
+' ============================================================
+' 287. AMB-POSL-01: OTKUPNI LIST KAZE ISTO STO I KARTICA (PARITET PAPIRA).
+' ============================================================
+' Prijava: na dokumentu 1/250626-12 papir je stampao FIZICKO stanje (pocetno
+' 491, zavrsno 437), a poslovno je 461 i 407 -- razlika je pokrice deficita
+' (30). Papir i kartica moraju da kazu isto: pocetno = poslovno stanje pre
+' dokumenta, zavrsno = pocetno + izdato - primljeno = poslovno stanje posle
+' dokumenta iz knjige, a promet otkupa na kartici = promet papira.
+' Tok (kooperant, nov tip T, stanica FX_STANICA):
+'   izdavanje 30, povrat 40 uz pokrice 10      fizicki 0, poslovno -10
+'   otkup: primljeno 5 uz pokrice 5            fizicki 0, poslovno -15
+' Otkup ide kroz pravog pisca uz potvrdu manjka, isto kao golden scenario.
+' Fixture: normal production state.
+' SABOTAZE: amb-posl-pdf-zavrsno-bez-prijema, amb-posl-stanje-posle-fizicki.
+Private Sub T_AmbPoslovno_OtkupniListKaoKartica()
+    Dim tip As String, dI As String, dP As String, bP As String
+    Dim otkID As String, otkBroj As String, ws As Worksheet
+    Dim posle As Long, fizPosle As Long, pp As Boolean, r As Variant
+
+    tip = KartNoviTipAmb("PDF")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tip, 50, "NAB-" & tip, "preduslov paritet papira"
+    dI = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 30, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    dP = KartPovratSaPokricem(tip, 40, bP)
+    otkID = KartOtkupSaPokricem(tip, 5, otkBroj)
+
+    Set ws = modPrint.FillOtkupSablon(otkID)
+    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip, "", otkID, pp, posle, True
+    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip, "", otkID, pp, fizPosle
+    r = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, Date, Date)
+
+    AssertEq (Len(dI) > 0 And Len(dP) > 0 And Len(otkID) > 0 And Not ws Is Nothing), True, _
+             "preduslov: reversi i otkup su upisani, otkupni list je popunjen"
+    AssertEq KartListSadrzi(ws, tip & " x -10"), True, _
+             "otkupni list: pocetno stanje je poslovno (-10), pokrice ne ulazi"
+    AssertEq KartListSadrzi(ws, tip & " x -15"), True, _
+             "otkupni list: zavrsno = pocetno + izdato - primljeno (-10 - 5 = -15)"
+    AssertEq posle & "|" & fizPosle, "-15|0", _
+             "knjiga posle otkupa: poslovno -15 kao na papiru, fizicki 0 sa pokricem"
+    AssertEq KartNetoBroja(r, otkBroj), -5, _
+             "kartica ambalaze: promet otkupa je -5, isti kao na papiru"
+End Sub
+
+
 ' "P" kad lista trazi poslovni redosled, "-" kad nema misljenje.
 Private Function KartSortListe(ByVal lista As String, ByVal tip As String, _
                                ByVal zbirni As Boolean) As String
@@ -12868,6 +12922,55 @@ EH:
     tx.RollbackTx
     On Error GoTo 0
     Err.Raise errNum, "modTest.KartPovratSaPokricem", errDesc
+End Function
+
+' Otkup kooperanta FX_KOOPERANT na FX_STANICA koji PRIMA vise gajbi nego sto
+' kooperant drzi: pisac dopisuje pokrice uz potvrdu manjka. Potvrdu racuna
+' JAVNI racun pisca (OtkupDeficitKooperanta), isto kao golden scenario.
+' Vraca OtkupID; outBroj je poslovni broj dokumenta.
+Private Function KartOtkupSaPokricem(ByVal tip As String, ByVal gajbi As Double, _
+                                     ByRef outBroj As String) As String
+    Dim h As Object, s As Object, stavke As Collection, greska As String
+    outBroj = modBrojevi.GenerateBrojDokumenta(FX_STANICA, Date)
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", Date
+    h.Add "KooperantID", FX_KOOPERANT
+    h.Add "StanicaID", FX_STANICA
+    h.Add "KulturaID", FX_KULTURA
+    h.Add "VrstaVoca", FX_VRSTA
+    h.Add "SortaVoca", FX_SORTA
+    h.Add "TipAmbalaze", tip
+    h.Add "BrojDokumenta", outBroj
+    h.Add "ParcelaID", FX_PARCELA
+    Set s = CreateObject("Scripting.Dictionary")
+    s.Add "Klasa", KLASA_I
+    s.Add "Kolicina", 10#
+    s.Add "Cena", 50#
+    s.Add "KolAmbalaze", gajbi
+    Set stavke = New Collection
+    stavke.Add s
+    KartOtkupSaPokricem = modOtkup.CreateOtkup_TX(h, stavke, greska, _
+                                                  modOtkup.OtkupDeficitKooperanta(h, stavke))
+    If Len(KartOtkupSaPokricem) = 0 Then
+        Err.Raise vbObjectError + 9271, "modTest.KartOtkupSaPokricem", _
+                  "CreateOtkup_TX nije vratio ID: " & greska
+    End If
+End Function
+
+' Da li popunjen list igde nosi TACNO taj tekst celije. Prisustvo, ne
+' geometrija: tvrdnja je o tome sta papir kaze, pa ne puca kad se sablon
+' preuredi (isti obrazac kao PrintListSadrzi u BFP).
+Private Function KartListSadrzi(ByVal ws As Worksheet, ByVal tekst As String) As Boolean
+    Dim c As Range
+    If ws Is Nothing Then Exit Function
+    For Each c In ws.UsedRange
+        If Not IsError(c.value) Then
+            If Trim$(CStr(c.value)) = tekst Then
+                KartListSadrzi = True
+                Exit Function
+            End If
+        End If
+    Next c
 End Function
 
 ' Neto (ulaz - izlaz) svih redova kartice ambalaze sa tim poslovnim brojem.
