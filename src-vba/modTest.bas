@@ -386,6 +386,10 @@ Public Sub RunAllTests()
     RunOne 280
     RunOne 281
     RunOne 282
+    RunOne 283
+    RunOne 284
+    RunOne 285
+    RunOne 286
     RunOne 13
     RunOne 14
     RunOne 15
@@ -963,6 +967,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 280: TestName = "T_KartHron_IzvestajPratiBroj"
         Case 281: TestName = "T_KartHron_MrezaNePreuredjuje"
         Case 282: TestName = "T_KartHron_KljucISortEkrana"
+        Case 283: TestName = "T_AmbPoslovno_PokriceNijeZaduzenje"
+        Case 284: TestName = "T_AmbPoslovno_SaldoPoOM"
+        Case 285: TestName = "T_KartOpis_VrstaSortaKlasa"
+        Case 286: TestName = "T_DocSort_DokumentneListe"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1253,6 +1261,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 280: T_KartHron_IzvestajPratiBroj
         Case 281: T_KartHron_MrezaNePreuredjuje
         Case 282: T_KartHron_KljucISortEkrana
+        Case 283: T_AmbPoslovno_PokriceNijeZaduzenje
+        Case 284: T_AmbPoslovno_SaldoPoOM
+        Case 285: T_KartOpis_VrstaSortaKlasa
+        Case 286: T_DocSort_DokumentneListe
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -12610,6 +12622,336 @@ End Sub
 ' modArrayUtils.SortArrayPoKljucu.
 Private Function KartPre(ByVal a As String, ByVal b As String) As Boolean
     KartPre = (StrComp(a, b, vbBinaryCompare) < 0)
+End Function
+
+' ============================================================
+' 283. AMB-POSL-01: TEHNICKO POKRICE NIJE POSLOVNO ZADUZENJE.
+' ============================================================
+' ULAZ_TUDJE_AMBALAZE je pokrice deficita (AMB-INV-07): pisac ga generise sam
+' kad partner preda gajbe koje knjiga ne vidi kod njega -- to su NJEGOVE gajbe
+' koje ulaze u opticaj. Kooperantu time nista nije izdato. Kartice, PDF
+' otkupnog lista i pregled po OM su POSLOVNI pogled i pokrice ne smeju da
+' racunaju kao ulaz; fizicki saldo i obaveza (AMB-INV-09) ostaju kakvi jesu.
+'
+' Nov tip ambalaze samo za ovaj test, pa su salda po tipu deterministicka.
+' Tok (kooperant, tip T, stanica FX_STANICA):
+'   izdavanje 10, povrat 4, izdavanje 5        fizicki 11, poslovno 11
+'   povrat 23 uz pokrice 12      (primer A)    fizicki  0, poslovno -12
+'   povrat 3 uz pokrice 3        (primer B)    fizicki  0, poslovno -15
+'   izdavanje 5                                fizicki  5, poslovno -10
+'   storno povrata 3 (upisan POSLE)            fizicki  5, poslovno -7
+' Fixture: normal production state (pravi pisci; pokrice kroz potvrdu manjka).
+' SABOTAZE: amb-posl-kartica-fizicki, amb-posl-pokrice-po-vrsti,
+' amb-posl-pdf-fizicki.
+Private Sub T_AmbPoslovno_PokriceNijeZaduzenje()
+    Dim tip As String, dI1 As String, dP As String, dI2 As String
+    Dim dA As String, dB As String, dL As String
+    Dim bA As String, bB As String, r As Variant
+    Dim netoA As Double, netoB As Double, netoBPosle As Double
+    Dim pocL As Long, pocLPosle As Long, poznato As Boolean, poznatoPosle As Boolean
+    Dim redovaPokrica As Long, ka As Variant, kk As Variant, oracle As Double
+
+    tip = KartNoviTipAmb("POSL")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tip, 40, "NAB-" & tip, "preduslov AMB-POSL-01"
+    dI1 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 10, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    dP = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 4, REV_SMER_PRIJEM, FX_KOOPERANT, "")
+    dI2 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 5, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    dA = KartPovratSaPokricem(tip, 23, bA)
+    dB = KartPovratSaPokricem(tip, 3, bB)
+    dL = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 5, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+
+    r = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, Date, Date)
+    netoA = KartNetoBroja(r, bA)
+    netoB = KartNetoBroja(r, bB)
+    pocL = modAmbalaza.GetKooperantAmbOpening(FX_KOOPERANT, tip, dL, poznato)
+
+    modAmbalaza.StornirajAmbDokument_TX dB
+    r = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, Date, Date)
+    netoBPosle = KartNetoBroja(r, bB)
+    redovaPokrica = KartRedovaSaOpisom(r, Poruka("OTKUI_VK_ULAZ_TUDJE"))
+    pocLPosle = modAmbalaza.GetKooperantAmbOpening(FX_KOOPERANT, tip, dL, poznatoPosle)
+
+    ka = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, IzvOdD(), IzvDoD())
+    kk = modIzvestaj.ReportKarticaKooperanta(FX_KOOPERANT, IzvOdD(), IzvDoD())
+    oracle = KartAmbPoslovniOracle(FX_KOOPERANT, "", "", 0)
+
+    AssertEq (Len(dI1) > 0 And Len(dP) > 0 And Len(dI2) > 0 And Len(dA) > 0 And _
+              Len(dB) > 0 And Len(dL) > 0), True, "preduslov: svih sest reversa je upisano"
+    AssertEq netoA, -23, "primer A: povrat 23 uz pokrice 12 je poslovno -23, ne -11"
+    AssertEq netoB, -3, "primer B: povrat 3 uz pokrice 3 je poslovno -3, ne 0"
+    AssertEq pocL & "|" & IIf(poznato, "1", "0"), "-15|1", _
+             "PDF pocetno stanje je poslovno: pokrice ne uvecava stanje pre dokumenta"
+    AssertEq pocLPosle & "|" & IIf(poznatoPosle, "1", "0"), "-15|1", _
+             "storno upisan posle dokumenta ne menja papir (ODL-26)"
+    AssertEq netoBPosle, 0, "storno povrata gasi i poslovni promet tog dokumenta"
+    AssertEq redovaPokrica, 0, "kartica ambalaze ne prikazuje red tehnickog pokrica"
+    AssertEq modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip), 5, _
+             "fizicki saldo ostaje fizicki: pokrice je u njemu"
+    AssertEq modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip), 12, _
+             "obaveza za tudju ambalazu ostaje izvedena iz knjige"
+    AssertEq Format$(KartZavrsni(ka, 3, 6), "0") & "|" & Format$(KartZavrsni(kk, 4, 8), "0"), _
+             Format$(oracle, "0") & "|" & Format$(oracle, "0"), _
+             "kartica ambalaze i kartica kooperanta daju isti poslovni saldo"
+End Sub
+
+' ============================================================
+' 284. AMB-POSL-02: AMBALAZA U PREGLEDU PO OM JE POSLOVNA, ZA TU STANICU, NA DAN.
+' ============================================================
+' ReportSaldoOM je uzimao AmbSaldoPoNalogu(Kooperant): FIZICKI, DANASNJI i
+' GLOBALNI saldo kooperanta. Pokrice se tako racunalo kao zaduzenje, pregled
+' za proslost je pokazivao danasnje stanje, a kooperant sa dve stanice ulazio
+' je u zbir obe (ReportSaldoOMZbirni sabira UKUPNO po stanici). Svaki red
+' knjige imenuje obe strane, pa je pripadnost stanici PODATAK, ne alokacija.
+' Fixture: normal production state.
+' SABOTAZE: amb-posl-om-globalno, amb-posl-om-bez-datuma.
+Private Sub T_AmbPoslovno_SaldoPoOM()
+    Dim tip As String, bP As String, dI As String, dP As String, dB As String
+    Dim pre As Double, posle As Double, juceP As Double, juceK As Double
+    Dim naziv As String
+
+    naziv = "Prvi Testni"     ' KOOP-TEST-1, isti oslonac kao T_Izv_SlaganjeKartica
+    pre = KartOmAmb(FX_STANICA, Date, naziv)
+    juceP = KartOmAmb(FX_STANICA, Date - 1, naziv)
+
+    tip = KartNoviTipAmb("OM")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tip, 20, "NAB-" & tip, "preduslov AMB-POSL-02"
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA_B, tip, 5, "NAB-B-" & tip, "preduslov AMB-POSL-02"
+    dI = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 8, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    dP = KartPovratSaPokricem(tip, 10, bP)
+    dB = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA_B, tip, 3, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+
+    posle = KartOmAmb(FX_STANICA, Date, naziv)
+    juceK = KartOmAmb(FX_STANICA, Date - 1, naziv)
+
+    AssertEq (Len(dI) > 0 And Len(dP) > 0 And Len(dB) > 0 And pre > -999999), True, _
+             "preduslov: reversi su upisani i pregled OM ima red kooperanta"
+    AssertEq posle - pre, -2, _
+             "pregled OM: izdavanje 8 i povrat 10 uz pokrice 2 su poslovno -2, druga stanica ne ulazi"
+    AssertEq juceK, juceP, "pregled OM je na dan datumDo: danasnji promet ne menja jucerasnji pregled"
+    AssertEq Format$(KartOmAmb(FX_STANICA, IzvDoD(), naziv), "0"), _
+             Format$(KartAmbPoslovniOracle(FX_KOOPERANT, AMB_NALOG_STANICA, FX_STANICA, IzvDoD()), "0"), _
+             "pregled OM = poslovni saldo kooperanta prema toj stanici (nezavisan prolaz kroz knjigu)"
+End Sub
+
+' ============================================================
+' 285. REPORT-DESC-01: OPIS OTKUPA JE VRSTA SORTA KLASA KOLICINA kg.
+' ============================================================
+' Kartica kooperanta je pisala "Otkup Malina I 108,40kg": prefiks je suvisan
+' (kartica je sva o poslu sa kooperantom), sorte nije bilo, a kg je bio slepljen
+' za broj. PDF kartice (PrintKarticaPDF) cita isti ReportKarticaKooperanta, pa
+' ovo meri i papir. Ocekivanje se sastavlja iz ZAGLAVLJA otkupa (vrsta, sorta)
+' i agregata stavki (klase, kolicina) -- iste cinjenice, drugi put do njih.
+' Fixture: normal production state.
+' SABOTAZE: kart-opis-bez-sorte, kart-opis-prefiks.
+Private Sub T_KartOpis_VrstaSortaKlasa()
+    Dim kk As Variant, i As Long, id As String, n As Long, losih As Long
+    Dim saPrefiksom As Long, zbir As Object, z As Variant, ocek As String
+    Dim prvi As String, vrednostRazlika As Long
+
+    kk = modIzvestaj.ReportKarticaKooperanta(FX_KOOPERANT, IzvOdD(), IzvDoD())
+    Set zbir = modOtkup.ZbirStavkiPoOtkupu()
+    If IsArray(kk) Then
+        For i = 1 To UBound(kk, 1)
+            If Left$(NzToText(kk(i, 9)), 4) = "OTK|" Then
+                n = n + 1
+                id = Mid$(NzToText(kk(i, 9)), 5)
+                z = modOtkup.ZbirStavkiZaOtkup(zbir, id, "modTest.T_KartOpis_VrstaSortaKlasa")
+                ocek = KartSpoji(Array(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, id, COL_OTK_VRSTA)), _
+                                       NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, id, COL_OTK_SORTA)), _
+                                       CStr(z(3)), FmtKolicina(CDbl(z(0))) & " kg"))
+                If NzToText(kk(i, 4)) <> ocek Then
+                    losih = losih + 1
+                    If Len(prvi) = 0 Then prvi = NzToText(kk(i, 4)) & " <> " & ocek
+                End If
+                If Left$(NzToText(kk(i, 4)), 6) = "Otkup " Then saPrefiksom = saPrefiksom + 1
+                If Abs(NzD2(kk(i, 5)) - CDbl(z(1))) > 0.001 Then vrednostRazlika = vrednostRazlika + 1
+            End If
+        Next i
+    End If
+
+    AssertEq (n > 0), True, "preduslov: kartica kooperanta ima redove otkupa"
+    AssertEq losih & " " & prvi, "0 ", "opis otkupa je vrsta, sorta, klase i kolicina sa razmakom pre kg"
+    AssertEq saPrefiksom, 0, "nijedan opis otkupa ne pocinje recju Otkup"
+    AssertEq vrednostRazlika, 0, "opis ne menja zaduzenje: vrednost reda = zbir stavki"
+End Sub
+
+' ============================================================
+' 286. DOC-SORT-01: DOKUMENTNE LISTE IDU PO POSLOVNOM BROJU.
+' ============================================================
+' Liste dokumenata na Izvestajima (otkupni listovi, roba OM i kupca, pregled
+' ambalaze) imaju poslovni redosled koji odredjuje izvestaj, a ljuska ih je
+' ponovo sortirala "drugom kolonom opadajuce" -- broj kao tekst. Zbirni oblici
+' i agregati nemaju broj dokumenta pa ostaju na sortu ljuske. Uz ugovor ekrana
+' meri se i sam izvestaj: dva reversa preko granice cifara, upisana obrnuto.
+' Fixture: normal production state.
+' SABOTAZE: doc-sort-ekran-bez-dokumenata, doc-sort-pregled-amb-tekst.
+Private Sub T_DocSort_DokumentneListe()
+    Dim bManji As String, bVeci As String, r As Variant
+    Dim iManji As Long, iVeci As Long, zakljucane As String, slobodne As String
+
+    zakljucane = KartSortListe("OTKLISTE", "OM", False) & KartSortListe("ROBA", "OM", False) & _
+                 KartSortListe("ROBA", "Kupac", False) & KartSortListe("AMBALAZA", "OM", False) & _
+                 KartSortListe("AMBALAZA", "Kooperant", False)
+    slobodne = KartSortListe("SALDO", "OM", False) & KartSortListe("ISPLATA", "OM", False) & _
+               KartSortListe("ZBIRNI", "OM", False) & KartSortListe("AMBALAZA", "OM", True) & _
+               KartSortListe("ROBA", "Kooperant", False) & KartSortListe("RANG", "Kooperant", False)
+    modScrIzvestaji.Scr_IzTestReset
+
+    KartSejParReversa bManji, bVeci
+    r = modIzvestaj.ReportAmbalaza("OM", FX_STANICA, Date, Date, False)
+    iManji = KartIndeksBroja(r, 4, bManji)
+    iVeci = KartIndeksBroja(r, 4, bVeci)
+
+    AssertEq zakljucane, String$(5, "P"), "dokumentne liste traze poslovni redosled ekrana"
+    AssertEq slobodne, String$(6, "-"), "zbirni oblici i agregati ostaju na sortu ljuske"
+    AssertEq (iManji > 0 And iManji < iVeci), True, _
+             "pregled ambalaze: manji broj istog niza ide pre veceg, bez obzira na upis"
+End Sub
+
+' "P" kad lista trazi poslovni redosled, "-" kad nema misljenje.
+Private Function KartSortListe(ByVal lista As String, ByVal tip As String, _
+                               ByVal zbirni As Boolean) As String
+    modScrIzvestaji.Scr_IzTestSet lista, tip, zbirni, FX_STANICA, 0, 0
+    If modScrIzvestaji.Scr_Sort() = modUiScreens.SCR_SORT_POSLOVNI Then
+        KartSortListe = "P"
+    Else
+        KartSortListe = "-"
+    End If
+End Function
+
+' Nov tip ambalaze samo za jedan test: salda PO TIPU tada ne zavise od onoga sto
+' su fixture ili raniji testovi vec upisali. Sifarnik je zatvoren skup (KI-021,
+' AmbTipProblem), pa tip mora da postoji pre prvog upisa -- obrazac 12290.
+Private Function KartNoviTipAmb(ByVal oznaka As String) As String
+    Dim red() As Variant, iAkt As Long, tip As String
+    tip = "KH-" & oznaka & "-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    ReDim red(1 To GetTable(TBL_TIP_AMBALAZE).ListColumns.count)
+    red(RequireColumnIndex(TBL_TIP_AMBALAZE, COL_TAMB_TIP, "modTest")) = tip
+    iAkt = GetColumnIndex(TBL_TIP_AMBALAZE, "Aktivan")
+    If iAkt > 0 Then red(iAkt) = "Aktivan"
+    AppendRow TBL_TIP_AMBALAZE, red
+    KartNoviTipAmb = tip
+End Function
+
+' Revers POVRATA kooperanta FX_STANICA koji je veci od onoga sto kooperant drzi:
+' pisac tada trazi potvrdu manjka i dopisuje pokrice (ULAZ_TUDJE) -- isti put
+' kao otkup uz potvrdjen manjak. Potvrda se racuna JAVNIM racunom pisca.
+' Vraca AmbDokID; outBroj je poslovni broj dokumenta.
+Private Function KartPovratSaPokricem(ByVal tip As String, ByVal kol As Double, _
+                                      ByRef outBroj As String) As String
+    Dim tx As clsTransaction, dokID As String, manjak As Double
+    Dim errNum As Long, errDesc As String
+
+    outBroj = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date)
+    manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip, kol)
+
+    Set tx = New clsTransaction
+    On Error GoTo EH
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, outBroj, Date, _
+                                         AMB_NALOG_STANICA, FX_STANICA, "povrat uz pokrice")
+    modAmbalaza.PrenesiAmbalazu tx, Date, tip, kol, _
+                                AMB_NALOG_KOOPERANT, FX_KOOPERANT, AMB_NALOG_STANICA, FX_STANICA, _
+                                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID, manjak
+    tx.CommitTx
+    KartPovratSaPokricem = dokID
+    Exit Function
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.KartPovratSaPokricem", errDesc
+End Function
+
+' Neto (ulaz - izlaz) svih redova kartice ambalaze sa tim poslovnim brojem.
+Private Function KartNetoBroja(ByRef r As Variant, ByVal broj As String) As Double
+    Dim i As Long
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If NzToText(r(i, 2)) = broj Then
+            KartNetoBroja = KartNetoBroja + KartNum(r(i, 4)) - KartNum(r(i, 5))
+        End If
+    Next i
+End Function
+
+Private Function KartRedovaSaOpisom(ByRef r As Variant, ByVal deo As String) As Long
+    Dim i As Long
+    If Not IsArray(r) Then Exit Function
+    If Len(deo) = 0 Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If InStr(1, NzToText(r(i, 3)), deo, vbTextCompare) > 0 Then
+            KartRedovaSaOpisom = KartRedovaSaOpisom + 1
+        End If
+    Next i
+End Function
+
+' Zavrsni saldo kartice: kolona cSaldo reda UKUPNO.
+Private Function KartZavrsni(ByRef r As Variant, ByVal cOpis As Long, ByVal cSaldo As Long) As Double
+    Dim i As Long
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If NzToText(r(i, cOpis)) = "UKUPNO" Then
+            KartZavrsni = KartNum(r(i, cSaldo))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' NEZAVISAN poslovni saldo kooperanta: FIZICKI citalac knjige (kolone 1-11), pa
+' se izostave redovi tehnickog pokrica -- original i kontra-stav nose istu vrstu.
+' protivTip/protivID suzavaju na kretanja sa tim nalogom, doDatuma > 0 na dan.
+' Ne zove ni jedan izvestaj, pa ga ispravka izvestaja ne moze "uskladiti".
+Private Function KartAmbPoslovniOracle(ByVal koopID As String, ByVal protivTip As String, _
+                                       ByVal protivID As String, ByVal doDatuma As Date) As Double
+    Dim k As Variant, i As Long
+    k = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, koopID)
+    If Not IsArray(k) Then Exit Function
+    For i = 1 To UBound(k, 1)
+        If StrComp(NzToText(k(i, 9)), AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0 _
+           And Len(NzToText(k(i, 2))) > 0 And IsDate(k(i, 1)) Then
+            If Len(protivTip) = 0 Or _
+               (StrComp(NzToText(k(i, 7)), protivTip, vbTextCompare) = 0 And _
+                StrComp(NzToText(k(i, 8)), protivID, vbTextCompare) = 0) Then
+                If doDatuma = 0 Or Int(CDbl(CDate(k(i, 1)))) <= Int(CDbl(doDatuma)) Then
+                    KartAmbPoslovniOracle = KartAmbPoslovniOracle + KartNum(k(i, 5))
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' Kolona Ambalaza reda kooperanta u pregledu po OM (pun opseg do datumDo);
+' -1000000 kad reda nema.
+Private Function KartOmAmb(ByVal stanicaID As String, ByVal datumDo As Date, _
+                           ByVal naziv As String) As Double
+    Dim s As Variant, i As Long
+    KartOmAmb = -1000000
+    s = modIzvestaj.ReportSaldoOM(stanicaID, IzvOdD(), datumDo)
+    If Not IsArray(s) Then Exit Function
+    For i = 1 To UBound(s, 1)
+        If NzToText(s(i, 1)) = naziv Then
+            KartOmAmb = KartNum(s(i, 7))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Delovi opisa razmakom, bez praznih delova -- nema dvostrukog razmaka kad
+' sorte ili klase nema.
+Private Function KartSpoji(ByVal delovi As Variant) As String
+    Dim i As Long, s As String, d As String
+    For i = LBound(delovi) To UBound(delovi)
+        d = Trim$(CStr(delovi(i)))
+        If Len(d) > 0 Then
+            If Len(s) > 0 Then s = s & " "
+            s = s & d
+        End If
+    Next i
+    KartSpoji = s
 End Function
 
 ' Red knjige u obliku modAmbalaza.AmbKretanjaNaloga: 1 Datum, 2 DokumentID,
