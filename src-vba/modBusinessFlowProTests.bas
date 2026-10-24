@@ -8074,11 +8074,15 @@ End Sub
 ' F8 storno odbijen dok je dokument fakturisan, pa storno fakture i storno
 ' prijemnice kroz F8 (kontra-stav obe noge, palete skinute).
 ' Ispravka prijemnice na cekanju bi otvorila pitanje u validatoru (MsgBox, odluka
-' 3): preduslov se tvrdi, i tada se potez ne pusta.
+' 3). Ostavlja je modTest 35 (ISPRAVKA stornira staru i ceka novu), koji se vrti
+' pre BFP u istoj svesci -- izmereno u crvenom prolazu (stavka 194). Test je zato
+' PARKIRA samo dok traje potez i vraca je, i na putu greske; preduslov tvrdi da
+' posle parkiranja nijedna ne ceka, a bez toga se potez ne pusta.
 Private Sub Test_S6K6_F4DokumentProlaziLanac()
     On Error GoTo EH
     Dim scenario As String, otpI As String, otpII As String, ocek As Collection
     Dim h As Object, razlog As String, zbrID As String, brZbr As String, nPend As Long
+    Dim parkirane As String
     Dim pf As Object, res As String, broj As String, prj As String, rod As String
     Dim stI As String, stII As String, fid As String, poruka As String
     Dim okPre As Boolean, okFak As Boolean, okPrj As Boolean
@@ -8092,6 +8096,8 @@ Private Sub Test_S6K6_F4DokumentProlaziLanac()
     brZbr = TEST_PREFIX & "-ZBR-S6K6-" & scenario
     Set h = Pr3Header(brZbr)
     zbrID = CreateZbirna_TX(h, Pr3Izvor(otpI, otpII), ocek, razlog)
+    parkirane = S6K6IspravkeNaCekanjuIDs()
+    S6K6StatusIspravki parkirane, "TEST-PARKIRANO"
     nPend = modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_PRIJEMNICA, SV_MODE_ISPRAVKA)
 
     AssertTrue Len(zbrID) > 0 And modDokumenta.ZbirnaJeIzdata(zbrID), _
@@ -8124,6 +8130,8 @@ Private Sub Test_S6K6_F4DokumentProlaziLanac()
     Else
         res = "<potez nije pusten>"
     End If
+    S6K6StatusIspravki parkirane, SV_STATUS_PENDING
+    parkirane = ""
     prj = Trim$(nz(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_ID), ""))
     If Len(prj) > 0 Then
         rod = Trim$(nz(GetValueByKey(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_DETE_ZBIRNA_ROD), ""))
@@ -8164,6 +8172,35 @@ Private Sub Test_S6K6_F4DokumentProlaziLanac()
     Exit Sub
 EH:
     LogFatal "Test_S6K6_F4DokumentProlaziLanac", Err.Number, Err.description
+    On Error Resume Next
+    S6K6StatusIspravki parkirane, SV_STATUS_PENDING
+End Sub
+
+' Ispravke prijemnice na cekanju (ISPRAVKA, PENDING), "|"-spojeni ID-jevi -- isti
+' kriterijum kao modStornoContext.CountPendingCorrectionsByDocType.
+Private Function S6K6IspravkeNaCekanjuIDs() As String
+    Dim c As Collection, i As Long, d As Object, s As String
+    Set c = modStornoContext.GetPendingCorrections()
+    If c Is Nothing Then Exit Function
+    For i = 1 To c.count
+        Set d = c(i)
+        If UCase$(CStr(d("status"))) = UCase$(SV_STATUS_PENDING) _
+           And StrComp(CStr(d("oldDocType")), FLOW_DOC_PRIJEMNICA, vbTextCompare) = 0 _
+           And StrComp(CStr(d("mode")), SV_MODE_ISPRAVKA, vbTextCompare) = 0 Then
+            If Len(s) > 0 Then s = s & "|"
+            s = s & CStr(d("id"))
+        End If
+    Next i
+    S6K6IspravkeNaCekanjuIDs = s
+End Function
+
+' Status datih ispravki ("|"-spojeni ID-jevi); prazan spisak ne radi nista.
+Private Sub S6K6StatusIspravki(ByVal ids As String, ByVal st As String)
+    Dim k As Variant
+    If Len(ids) = 0 Then Exit Sub
+    For Each k In Split(ids, "|")
+        S6K4Postavi TBL_STORNO_VEZE, COL_SV_ID, CStr(k), COL_SV_STATUS, st
+    Next k
 End Sub
 
 ' --- pomocnici S6 koraka 5 -- nad praznim ID-jem vracaju prazno ---

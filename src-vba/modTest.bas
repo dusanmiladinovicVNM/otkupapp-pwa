@@ -10224,9 +10224,10 @@ End Function
 ' SINTETICKO STANJE, namerno: izdata zbirna bez izvora ne nastaje u produkciji
 ' (izdavanje trazi pokrivenu najavu), ali kapija F4 cita SAMO status razresenog
 ' dokumenta. Pravi lanac (otkup -> otpremnica -> izdata zbirna) meri BFP
-' Test_S6K6_F4DokumentProlaziLanac. Test status VRACA u nacrt pre tvrdnji
-' (S6K6Nacrt): izdata zbirna bez izvora bi oborila tudji test koji izdate zbirne
-' cita strogim citaocem.
+' Test_S6K6_F4DokumentProlaziLanac. Test zbirnu SKLANJA pre tvrdnji (S6K6Skloni:
+' nazad u nacrt, pa storno) -- izmereno u crvenom prolazu (stavka 194): ostavljena
+' zbirna je usla u tudje merenje (T_Izv_SlaganjeKupacVozac, gajbe vozaca 90
+' umesto 40).
 '
 ' Sveza, a ne fixture zbirna: na ZB-TEST-1 drugi testovi upisuju prijemnice, a
 ' druga prijemnica iste zbirne otvara pitanje "dupla prijemnica" (MsgBox u
@@ -10260,10 +10261,12 @@ Private Function S6K6Zbirna(ByVal oznaka As String, ByVal izdata As Boolean, _
     S6K6Zbirna = zid
 End Function
 
-' Vraca sinteticki izdatu zbirnu u stanje koje je pisac napravio (nacrt).
-Private Sub S6K6Nacrt(ByVal zbirnaID As String)
+' Sklanja zbirnu testa: nazad u nacrt (stanje pisca), pa storno -- izlazi iz
+' svakog agregata, pa ne ulazi u tudje merenje.
+Private Sub S6K6Skloni(ByVal zbirnaID As String)
     If Len(zbirnaID) = 0 Then Exit Sub
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_TRACE_IZDATO_STATUS, IZDATO_DRAFT
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_STORNIRANO, "Da"
 End Sub
 
 ' Ispravka prijemnice na cekanju otvara pitanje u validatoru (MsgBox). Preduslov
@@ -10401,7 +10404,7 @@ CleanUp:
     errDesc = Err.description
     On Error Resume Next
     SetConfigValue CFG_OTKUP_BRUTO_UNOS, prevBruto
-    S6K6Nacrt zid
+    S6K6Skloni zid
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_BrutoNeto_PoRezimu", errDesc
 
@@ -10436,7 +10439,7 @@ Private Sub T_Prijemnica_VezujeSeSamoNaJednoznacnu()
     Dim rDobar As String, rNacrt As String, rNema As String, rDvosmislen As String
     Dim rTudj As String, rIstorija As String
     Dim pD1 As String, pD2 As String, pTgtB As String, pTgtA As String, prevZbr As String
-    Dim brIzdata As String, brNacrt As String, zidIzdata As String
+    Dim brIzdata As String, brNacrt As String, zidIzdata As String, zidNacrt As String
     Dim errNum As Long, errDesc As String
 
     AssertEq S6K6IspravkeNaCekanju(), 0, "preduslov: nema ispravke prijemnice na cekanju"
@@ -10448,7 +10451,7 @@ Private Sub T_Prijemnica_VezujeSeSamoNaJednoznacnu()
 
     On Error GoTo CleanUp
     zidIzdata = S6K6Zbirna("VEZI", True, brIzdata)
-    S6K6Zbirna "VEZN", False, brNacrt
+    zidNacrt = S6K6Zbirna("VEZN", False, brNacrt)
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, ""
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, ""
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO, ""
@@ -10492,7 +10495,8 @@ CleanUp:
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO, pTgtB
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, pTgtA
     SetConfigValue CFG_PRIJEMNICA_ZBIRNA_PROVERA, prevZbr
-    S6K6Nacrt zidIzdata
+    S6K6Skloni zidIzdata
+    S6K6Skloni zidNacrt
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_Prijemnica_VezujeSeSamoNaJednoznacnu", errDesc
 
@@ -10533,6 +10537,7 @@ Private Sub T_S6K6_F4UpisKrozPotez()
     Dim zid1 As String, zid2 As String, prj1 As String, prj2 As String
     Dim nPre As Long, nPosle As Long, lazna As String, dijalog As String, toast As String
     Dim kgPosle As String, brPosle As String, prevBruto As String
+    Dim stavke1 As String, zaglavlje1 As String, bruto2 As String
     Dim errNum As Long, errDesc As String
 
     AssertEq S6K6IspravkeNaCekanju(), 0, "preduslov: nema ispravke prijemnice na cekanju"
@@ -10565,33 +10570,40 @@ Private Sub T_S6K6_F4UpisKrozPotez()
     modOtkupUI.ApplyPrefill S6K6Spec(br2, zbr2, "110", "10", "50", "55", "5", "40", "0")
     modOtkupUI.CommitDokumentTest False
 
+    ' Nalazi se citaju PRE ciscenja: posle njega su dokumenti stornirani.
+    prj1 = NzToText(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, br1, COL_PRJ_ID))
+    prj2 = NzToText(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, br2, COL_PRJ_ID))
+    stavke1 = S6K6Stavke(prj1)
+    zaglavlje1 = S6K6Zaglavlje(prj1)
+    bruto2 = S6K6Stavke(prj2, "bruto")
+
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     On Error Resume Next
     If Not f Is Nothing Then ReleaseOtkupUIForm f
     SetConfigValue CFG_OTKUP_BRUTO_UNOS, prevBruto
-    S6K6Nacrt zid1
-    S6K6Nacrt zid2
+    ' Dokumenti testa se storniraju kroz pravi pisac (kontra-stav knjige, palete
+    ' skinute), pa zbirne odlaze -- nista od ovoga ne ulazi u tudje merenje.
+    If Len(prj1) > 0 Then modStorno.StornoPrijemnica_TX prj1, True
+    If Len(prj2) > 0 Then modStorno.StornoPrijemnica_TX prj2, True
+    S6K6Skloni zid1
+    S6K6Skloni zid2
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K6_F4UpisKrozPotez", errDesc
-
-    prj1 = NzToText(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, br1, COL_PRJ_ID))
-    prj2 = NzToText(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, br2, COL_PRJ_ID))
 
     AssertEq lazna, "", "F4: uspesan upis se ne prijavljuje kao neuspeh"
     AssertEq nPosle - nPre, 1, "F4 kroz potez pravi jedno zaglavlje"
     AssertEq dijalog, "", "F4: uspesan upis ne otvara dijalog"
-    AssertEq S6K6Stavke(prj1), "I:300x50/30|II:120x40/12", _
+    AssertEq stavke1, "I:300x50/30|II:120x40/12", _
              "F4: stavke nose tacno unete klase, kilazu, cene i gajbe"
-    AssertEq S6K6Zaglavlje(prj1), FX_KUPAC & "|" & FX_VOZAC & "|" & FX_TIP_AMB & "|5|" & zid1, _
+    AssertEq zaglavlje1, FX_KUPAC & "|" & FX_VOZAC & "|" & FX_TIP_AMB & "|5|" & zid1, _
              "F4: zaglavlje nosi kupca, vozaca, tip, povrat i vezu na izabranu zbirnu"
     AssertEq (Len(prj1) > 0 And InStr(1, toast, br1, vbBinaryCompare) > 0 And _
               InStr(1, toast, prj1, vbBinaryCompare) = 0), True, _
              "F4: poruka posle upisa nosi broj prijemnice, ne interni ID"
     AssertEq kgPosle & "|" & brPosle, "|", "F4: forma je ociscena posle upisa"
-    AssertEq S6K6Stavke(prj2, "bruto"), "I:100/110|II:50/55", _
-             "F4 bruto: stavka nosi neto i uneti bruto"
+    AssertEq bruto2, "I:100/110|II:50/55", "F4 bruto: stavka nosi neto i uneti bruto"
 End Sub
 
 ' 266. ULAZ F4 NE MENJA PODATAK (S6 korak 6, R6, odluka 5; obrazac ZbirnaValidiraj,
@@ -10654,7 +10666,7 @@ CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     On Error Resume Next
-    S6K6Nacrt zid
+    S6K6Skloni zid
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K6_UlazNeMenjaPodatak", errDesc
 
@@ -10740,9 +10752,9 @@ CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     On Error Resume Next
-    S6K6Nacrt z1
-    S6K6Nacrt z2
-    S6K6Nacrt z3
+    S6K6Skloni z1
+    S6K6Skloni z2
+    S6K6Skloni z3
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K6_BrojJedinstvenPoKupcu", errDesc
 
@@ -10797,7 +10809,7 @@ CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     On Error Resume Next
-    S6K6Nacrt zid
+    S6K6Skloni zid
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K6_RazlogPiscaStizeDoEkrana", errDesc
 
@@ -11236,7 +11248,7 @@ Private Sub T_KI021_ValidatoriTraziSifarnik()
     Set p = S6K6Unos(brZbr, "KI021")
     p("tipAmb") = FX_TIP_NEMA
     prijValid = S6K6Validiraj(p)
-    S6K6Nacrt zid
+    S6K6Skloni zid
 
     AssertEq otp, PorukaTipVanSifarnika(FX_TIP_NEMA) & "|tipAmb", _
              "otpremnica: tip van sifarnika staje na polju"
