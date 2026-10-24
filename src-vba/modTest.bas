@@ -372,6 +372,7 @@ Public Sub RunAllTests()
     RunOne 268
     RunOne 269
     RunOne 270
+    RunOne 271
     RunOne 13
     RunOne 14
     RunOne 15
@@ -932,6 +933,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 268: TestName = "T_S6K6_RazlogPiscaStizeDoEkrana"
         Case 269: TestName = "T_S6K6_PodesavanjaBezPolitikeZbirne"
         Case 270: TestName = "T_S6K6_TragIspravkePoID"
+        Case 271: TestName = "T_S6K6_FokusPosleGreske"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1210,6 +1212,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 268: T_S6K6_RazlogPiscaStizeDoEkrana
         Case 269: T_S6K6_PodesavanjaBezPolitikeZbirne
         Case 270: T_S6K6_TragIspravkePoID
+        Case 271: T_S6K6_FokusPosleGreske
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -10956,6 +10959,78 @@ CleanUp:
     AssertEq tragB, "", "trag ispravke ne dira prijemnicu drugog kupca istog broja"
     AssertEq tragNovi, stariBroj & "|" & cid, "ispravka nosi trag stare prijemnice i svoj CorrectionID"
     AssertEq zamStari, broj, "stornirana prijemnica nosi broj svoje zamene"
+End Sub
+
+' 271. FOKUS POSLE GRESKE STIZE NA POLJE (review #440, ishod rucne provere; R3,
+' R5, R6).
+'
+' Validator vraca LOGICKI kljuc polja, a ljuska (FokusNaPolje) ga prevodi u
+' kontrolu. Testovi su merili samo kljuc (p("fokus") posle Scr_Save), pa im je
+' bilo nevidljivo da ljuska "kupacID" i "brojZbirne" ne poznaje: operater dobije
+' poruku, a kursor ne ode nikud. Ovde ide ceo potez (CommitDokumentTest), a
+' FokusTest kaze koju bi kontrolu ljuska fokusirala.
+' KONTROLE: -5 kg i 1,5 vracenih gajbi -- grane koje su postojale, pa dokazuju da
+' beleska radi i bez novih grana. "Bez kupca" ide nad SVEZOM formom: prazan
+' partnerid u prepisu kupca ne brise. F3 deli kljuc kupacID (zatecen propust).
+' SABOTAZE: s6k6-fokus-bez-kupca -> "F4: posle 'Izaberi kupca' fokus je na
+' kupcu"; s6k6-fokus-bez-zbirne -> "F4: posle greske zbirne fokus je na broju
+' zbirne"; s6k6-fokus-beleska-gluva -> "kontrola: -5 kg vodi fokus na kg klase I".
+Private Sub T_S6K6_FokusPosleGreske()
+    Dim f As frmOtkupUI, brZbr As String, zid As String, br As String, spec As String
+    Dim fKupac As String, fZbirna As String, fKol As String, fPovrat As String, fF3 As String
+    Dim errNum As Long, errDesc As String
+
+    AssertEq S6K6IspravkeNaCekanju(), 0, "preduslov: nema ispravke prijemnice na cekanju"
+    br = "PR-S6K6-FOK-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+
+    On Error GoTo CleanUp
+    zid = S6K6Zbirna("FOK", True, brZbr)
+
+    Set f = NewOtkupUIForm()
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F4"
+    spec = S6K6Spec(br, brZbr, "300", "30", "50", "120", "12", "40", "5")
+
+    modOtkupUI.ApplyPrefill Replace(spec, "|partnerid=" & FX_KUPAC, "")
+    modOtkupUI.CommitDokumentTest False
+    fKupac = modOtkupUI.FokusTest()
+
+    modOtkupUI.ApplyPrefill Replace(spec, "|brzbirne=" & brZbr, "|brzbirne=ZB-NE-POSTOJI-FOK")
+    modOtkupUI.CommitDokumentTest False
+    fZbirna = modOtkupUI.FokusTest()
+
+    modOtkupUI.ApplyPrefill S6K6Spec(br, brZbr, "-5", "30", "50", "50", "12", "40", "5")
+    modOtkupUI.CommitDokumentTest False
+    fKol = modOtkupUI.FokusTest()
+
+    modOtkupUI.ApplyPrefill S6K6Spec(br, brZbr, "300", "30", "50", "120", "12", "40", "1,5")
+    modOtkupUI.CommitDokumentTest False
+    fPovrat = modOtkupUI.FokusTest()
+
+    ReleaseOtkupUIForm f
+    Set f = NewOtkupUIForm()
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F3"
+    modOtkupUI.ApplyPrefill "datum=" & Format$(Date, "dd.mm.yyyy") & "|vozacid=" & FX_VOZAC & _
+        "|brdok=ZB-S6K6-FOK-" & Format$(Now, "hhnnss") & "|vrsta=" & FX_VRSTA & _
+        "|sorta=" & FX_SORTA & "|tipamb=" & FX_TIP_AMB & "|kol1=100|amb1=5"
+    modOtkupUI.CommitDokumentTest False
+    fF3 = modOtkupUI.FokusTest()
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    S6K6Skloni zid
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K6_FokusPosleGreske", errDesc
+
+    AssertEq fKol, "fgKgIT", "kontrola: -5 kg vodi fokus na kg klase I"
+    AssertEq fPovrat, "fgAmbPrT", "kontrola: 1,5 vracenih gajbi vodi fokus na polje vracenih gajbi"
+    AssertEq fKupac, "cbKupac", "F4: posle 'Izaberi kupca' fokus je na kupcu"
+    AssertEq fZbirna, "fgBrZbirT", "F4: posle greske zbirne fokus je na broju zbirne"
+    AssertEq fF3, "cbKupac", "F3: posle 'Izaberi kupca' fokus je na kupcu"
 End Sub
 
 ' Napomena (efekat) reda lanca uvida za dati dokument; "nema" kad reda nema.

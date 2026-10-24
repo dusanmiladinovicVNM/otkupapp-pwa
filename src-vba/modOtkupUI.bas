@@ -487,6 +487,9 @@ Private mLoading As Boolean          ' program puni polja - to NIJE izmena koris
 ' (v. Dijalog). KI-011: ishod upisa mora da se izmeri, a MsgBox u nevidljivom
 ' Excelu visi do timeout-a.
 Private mDijalogTest As String
+' Polje na koje bi CommitDokument dao fokus -- belezi se SAMO u test rezimu
+' (v. FokusNaPolje): SetFocus u nevidljivom Excelu visi, kao i MsgBox.
+Private mFokusTest As String
 '=====================================================================
 ' BUILD
 '=====================================================================
@@ -8418,6 +8421,7 @@ End Sub
 Public Sub CommitDokumentTest(ByVal alsoPrint As Boolean)
     If Not IsTestMode() Then Exit Sub
     mDijalogTest = ""
+    mFokusTest = ""
     CommitDokument alsoPrint
 End Sub
 
@@ -8426,6 +8430,13 @@ End Sub
 Public Function DijalogTest() As String
     If Not IsTestMode() Then Exit Function
     DijalogTest = mDijalogTest
+End Function
+
+' TEST SEAM: ime kontrole na koju bi poslednji CommitDokumentTest dao fokus
+' ("" = nijedna -- kljuc bez grane ili uspeh). Tvrdo gejtovan.
+Public Function FokusTest() As String
+    If Not IsTestMode() Then Exit Function
+    FokusTest = mFokusTest
 End Function
 
 ' Tekst poruke bez oznake za rutiranje. Oznaka (ChrW(10007)) kaze SLOJU IZNAD da
@@ -8554,35 +8565,50 @@ End Function
 
 ' Fokus na polje koje je ekran prijavio kao sporno. Imena su LOGICKA, ista ona
 ' koja ekran koristi u recniku.
+'
+' Polje se prvo ODREDI, pa mu se da fokus. U test rezimu se polje BELEZI umesto
+' fokusa (FokusTest): SetFocus u nevidljivom Excelu ne puca nego visi -- isti
+' razlog kao za Dijalog. Bez beleske je test merio samo kljuc koji ekran vrati,
+' ne i da ga ljuska ume da primeni (review #440, ishod rucne provere).
 Private Sub FokusNaPolje(ByVal kljuc As String)
+    Dim c As Object
     On Error Resume Next
     If Len(kljuc) = 0 Then Exit Sub
     Select Case kljuc
-        Case "stanicaID":    mFrm.Controls("zCtx").Controls("cbOM").SetFocus
-        ' isto polje, dva imena: robni dokumenti ga zovu kooperantID, gotovinski
-        ' rezimi i reversi partnerID (tamo partner ne mora biti kooperant)
-        Case "kooperantID", "partnerID": mFrm.Controls("zCtx").Controls("cbKupac").SetFocus
-        Case "novac":        mFrm.Controls("zForm").Controls("fgNovac").Controls("fgNovacT").SetFocus
-        Case "otkupID":      mFrm.Controls("zForm").Controls("fgBlok").Controls("fgBlokT").SetFocus
-        Case "fakturaID":    mFrm.Controls("zForm").Controls("fgFaktura").Controls("fgFakturaT").SetFocus
+        Case "stanicaID":    Set c = mFrm.Controls("zCtx").Controls("cbOM")
+        ' isto polje, tri imena: robni dokumenti ga zovu kooperantID, gotovinski
+        ' rezimi i reversi partnerID (tamo partner ne mora biti kooperant), a
+        ' zbirna i prijemnica kupacID (F3, F4)
+        Case "kooperantID", "partnerID", "kupacID": Set c = mFrm.Controls("zCtx").Controls("cbKupac")
+        Case "novac":        Set c = mFrm.Controls("zForm").Controls("fgNovac").Controls("fgNovacT")
+        Case "otkupID":      Set c = mFrm.Controls("zForm").Controls("fgBlok").Controls("fgBlokT")
+        Case "fakturaID":    Set c = mFrm.Controls("zForm").Controls("fgFaktura").Controls("fgFakturaT")
         ' "smerRev" ovde NEMA granu i to nije propust: segmenti su Label-i
         ' (modUiKit.BoxText), a Label ne prima fokus. Poruka o gresci sama kaze
         ' sta se bira, pa kursor ostaje gde jeste umesto da odleti na tudje polje.
-        Case "vrsta":        mFrm.Controls("zCtx").Controls("cbVrsta").SetFocus
-        Case "sorta":        mFrm.Controls("zCtx").Controls("cbSorta").SetFocus
-        Case "brDok":        mFrm.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT").SetFocus
-        Case "kolicinaI":    mFrm.Controls("zForm").Controls("fgKgI").Controls("fgKgIT").SetFocus
-        Case "kolicinaII":   mFrm.Controls("zForm").Controls("fgKgII").Controls("fgKgIIT").SetFocus
-        Case "cenaI":        mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena1T").SetFocus
-        Case "cenaII":       mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena2T").SetFocus
-        Case "kolAmb":       mFrm.Controls("zForm").Controls("fgKolAmb").Controls("fgKolAmbT").SetFocus
-        Case "kolAmbII":     mFrm.Controls("zForm").Controls("fgKolAmbII").Controls("fgKolAmbIIT").SetFocus
+        Case "vrsta":        Set c = mFrm.Controls("zCtx").Controls("cbVrsta")
+        Case "sorta":        Set c = mFrm.Controls("zCtx").Controls("cbSorta")
+        Case "brDok":        Set c = mFrm.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT")
+        ' broj zbirne na koju se prijemnica vezuje (F4: nema je, nije izdata, tudja)
+        Case "brojZbirne":   Set c = mFrm.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT")
+        Case "kolicinaI":    Set c = mFrm.Controls("zForm").Controls("fgKgI").Controls("fgKgIT")
+        Case "kolicinaII":   Set c = mFrm.Controls("zForm").Controls("fgKgII").Controls("fgKgIIT")
+        Case "cenaI":        Set c = mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena1T")
+        Case "cenaII":       Set c = mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena2T")
+        Case "kolAmb":       Set c = mFrm.Controls("zForm").Controls("fgKolAmb").Controls("fgKolAmbT")
+        Case "kolAmbII":     Set c = mFrm.Controls("zForm").Controls("fgKolAmbII").Controls("fgKolAmbIIT")
         ' polje izdate ambalaze; u F4 znaci VRACENA (S6 korak 6: validator prijemnice)
-        Case "kolAmbIzdata": mFrm.Controls("zForm").Controls("fgAmbPr").Controls("fgAmbPrT").SetFocus
-        Case "tipAmb":       mFrm.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT").SetFocus
-        Case "parcelaID":    mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT").SetFocus
-        Case "vozacID":      mFrm.Controls("zCtx").Controls("cbVozac").SetFocus
+        Case "kolAmbIzdata": Set c = mFrm.Controls("zForm").Controls("fgAmbPr").Controls("fgAmbPrT")
+        Case "tipAmb":       Set c = mFrm.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT")
+        Case "parcelaID":    Set c = mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT")
+        Case "vozacID":      Set c = mFrm.Controls("zCtx").Controls("cbVozac")
     End Select
+    If c Is Nothing Then Exit Sub
+    If IsTestMode() Then
+        mFokusTest = c.Name
+        Exit Sub
+    End If
+    c.SetFocus
 End Sub
 
 ' KONTEKST OTKUPNOG MESTA I DATUMA (Z3 + Z14).

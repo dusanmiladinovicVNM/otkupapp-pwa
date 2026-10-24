@@ -9674,6 +9674,38 @@ SABOTAZE = {
         "T_S6K6_TragIspravkePoID",
         "trag ispravke ne dira prijemnicu drugog kupca istog broja",
     ),
+    # --- ishod rucne provere #440 (stavka 197): fokus posle greske ------------
+    # Ljuska prevodi logicki kljuc polja u kontrolu (FokusNaPolje); test 271 ide
+    # kroz CommitDokumentTest i cita FokusTest. Beleska je test infrastruktura,
+    # pa i ona ima svoju sabotazu (kontrola mora da padne kad beleska ogluvi).
+    "s6k6-fokus-bez-kupca": (
+        "modOtkupUI.bas",
+        '        Case "kooperantID", "partnerID", "kupacID": Set c = mFrm.Controls("zCtx").Controls("cbKupac")\n',
+        '        Case "kooperantID", "partnerID": Set c = mFrm.Controls("zCtx").Controls("cbKupac")   \' SABOTAZA: kupacID bez grane\n',
+        "T_S6K6_FokusPosleGreske",
+        "F4: posle 'Izaberi kupca' fokus je na kupcu",
+    ),
+    "s6k6-fokus-bez-zbirne": (
+        "modOtkupUI.bas",
+        '        Case "brojZbirne":   Set c = mFrm.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT")\n',
+        "        ' SABOTAZA: brojZbirne bez grane\n",
+        "T_S6K6_FokusPosleGreske",
+        "F4: posle greske zbirne fokus je na broju zbirne",
+    ),
+    "s6k6-fokus-bez-povrata": (
+        "modOtkupUI.bas",
+        '        Case "kolAmbIzdata": Set c = mFrm.Controls("zForm").Controls("fgAmbPr").Controls("fgAmbPrT")\n',
+        "        ' SABOTAZA: kolAmbIzdata bez grane\n",
+        "T_S6K6_FokusPosleGreske",
+        "kontrola: 1,5 vracenih gajbi vodi fokus na polje vracenih gajbi",
+    ),
+    "s6k6-fokus-beleska-gluva": (
+        "modOtkupUI.bas",
+        "        mFokusTest = c.Name\n",
+        "        mFokusTest = \"\"   ' SABOTAZA: beleska ne pamti polje\n",
+        "T_S6K6_FokusPosleGreske",
+        "kontrola: -5 kg vodi fokus na kg klase I",
+    ),
 }
 
 
