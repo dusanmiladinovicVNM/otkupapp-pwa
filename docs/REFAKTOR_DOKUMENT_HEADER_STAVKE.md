@@ -8895,6 +8895,42 @@ a ne BLOK (komentar u `fc06fa77`), pa bi grana „zbirne nema" otvorila `MsgBox`
 - zbirna po broju (display → lookup) — imenovan rizik iz §14.55, i dalje van;
 - `.claude/rules/otkup-i-dokumenta.md` §5 („pet testova" upisa zbirne i prijemnice) — samo process PR.
 
+**Tok koda (stavka 194) — gde je plan ispravljen dok se pisalo:**
+
+- **Crveno je izvedeno iz diff-a pre puštanja** (`ae66ef52`): RunAllTests 268 / 9 (8, 9, 253, 263–268, svaki na
+  prvoj tvrdnji), BFP 11 tvrdnji S6K6 posle tri preduslova.
+- **Prvi crveni prolaz nije se poklopio** (RunAllTests 10 umesto 9, BFP 12 umesto 11). Obe razlike su izmerene, i
+  obe su bile u testovima, ne u kodu (`73d6391c`):
+  - sintetička zbirna testa 268 (vozač `VOZ-TEST-2`, 50 gajbi na stavci) ušla je u izveštaj vozača, pa je
+    `T_Izv_SlaganjeKupacVozac` dobio 90 umesto 40. Sintetičke zbirne se od tada **sklanjaju** (nacrt + storno), a
+    265 stornira svoje prijemnice kroz pisca. Isti test je otkrio i zatečen kvar: `ReportZbirniVozac` broji nacrt
+    zbirne, a ručni zbir testa čita zaglavlje koje kanonski pisac ostavlja prazno → **`KI-045`** (van reza);
+  - `modTest` 35 ostavlja ispravku prijemnice na čekanju, a `run_vba` vrti BFP posle njega **u istoj svesci**.
+    BFP test tu ispravku parkira samo dok traje potez i vraća je i na putu greške.
+  - Drugi crveni prolaz se poklopio tačno: 268 / 9 i BFP 2708 / 11.
+- **Duplikat po kupcu bez nove kopije provere:** `modDataAccess.CheckDuplicate` je dobio opcioni opseg (kolona +
+  vrednost vlasnika) umesto drugog duplikat-čitača. Postojeći pozivi ne prosleđuju opseg i ponašaju se kao pre;
+  kolona opsega koje nema poredi globalno (strože, ne tiše). Tekst postojeće poruke staje, pa nov ključ za
+  duplikat nije trebao — dodat je samo `DOKUNOS_ERR_ZBR_P_NIJE_IZDATA`, a `DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA` je
+  obrisan sa pauzom.
+- **Razlog pisca bez tehničkog prefiksa:** jezgro dokumenta pri ponovnom dizanju lepi `Source=<procedura> | `
+  ispred opisa, pa `SavePrijemnicaMulti_TX` taj prefiks skida (`RazlogBezIzvora`) pre nego što razlog ode u
+  `outGreska`. Bez toga bi operater čitao ime procedure.
+- **Fokus na vraćenu ambalažu nije postojao:** `modOtkupUI.FokusNaPolje` nije znao ključ `kolAmbIzdata` (u F4 je
+  to polje vraćenih gajbi), pa bi odbijanje 1,5 vraćenih gajbi ostalo bez fokusa. Dodat je jedan `Case`.
+- **`bruto-zbirna` je presidrena:** sidro iz `fc06fa77` (komentar „Hard-blokada" u `ZbirnaValidiraj`) više ne
+  postoji, jer je kapija „zbirna = zbir otpremnica" u S4 prešla na izdavanje. Sabotaža sada ubacuje bruto → neto
+  posle čitanja datuma u `ZbirnaValidiraj`, a tvrdnja je ista.
+- **Sabotaže: 18, ne 16.** Uz 16 iz acceptance contract-a dodate su `s6k6-f4-pauza-vracena-lanac` (pauza obara i
+  BFP lanac, po imenu) i `ruta-prijemnica` (ruta F4 u `Scr_Save`, sestra `ruta-zbirna`/`ruta-isplata`). Sidra
+  `If kolI < 0` i `If kolAmb <> Int(kolAmb)` postoje i u `ZbirnaValidiraj`, pa sabotaže prijemnice nose i
+  naredni red (sa `PrijemnicaValidiraj`) da bi bile jedinstvene. Katalog 936 → 954.
+- **Edge iz contract-a koji test NE meri:** hladnjača sa predlogom broja (Z3a) i povrat bez punih gajbi. Oba idu
+  u ručnu proveru; jednoklasna (samo I, samo II) je u 265/266.
+- **Fixture nema nijednu izdatu zbirnu** (`IzdatoStatus` je prazan u svih 24 reda `tblZbirna`; izmereno
+  čitanjem `otkup_test.xlsm`). F4 nad golim fixture-om zato uvek staje na `PRJ-ZBR-01`, a ručna provera traži
+  svesku sa izdatom zbirnom (BFP `--keep`, kao u koraku 5).
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

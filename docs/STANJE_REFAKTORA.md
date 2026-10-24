@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 5/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · **korak 6 (F4 odmrznut + vraćeni testovi iz §14.14): pre-flight i odluke 1–8 gotovi, kod sledi** (stavka 193), grana `claude/s6-korak6-f4` |
+| **S6 prijemnica** | ⏳ **u toku, 5/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · **korak 6 (F4 odmrznut + vraćeni testovi iz §14.14): pre-flight i odluke 1–8 (stavka 193), kod crveno → zeleno (stavka 194; RunAllTests 268/0, BFP 2708/0, Faktura 39/39), u review-u; FULL i dokaz posle GO**, grana `claude/s6-korak6-f4` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7069,6 +7069,47 @@
      - **Acceptance contract R1–R9** i sabotaže: §14.55, „Korak 6". Testovi `modTest` 8 (premisa), 263–268, 253,
        ruta; BFP `Test_S6K6_F4DokumentProlaziLanac` nad pravom izdatom zbirnom.
      - **Sledeći brojevi:** stavka 194 (kod) · test 263 · KI-045.
+194. **S6 korak 6 — kod: F4 odmrznut, crveno → zeleno** (24.10.2026). Plan i odluke su u stavci 193; tok koda i
+     ispravke plana su u §14.55, „Korak 6", odeljak „Tok koda".
+
+     - **Crveno pre ispravke, izvedeno iz diff-a** (`ae66ef52`, pa higijena testova `73d6391c`):
+
+       | Prolaz | RunAllTests | BFP | Šta |
+       |---|---|---|---|
+       | crveni 1 | 268 / **10** | 2708 / **12** | višak od po jednog pada, oba izmerena: `T_Izv_SlaganjeKupacVozac` (sintetička zbirna testa 268 u izveštaju vozača, 90 umesto 40) i BFP preduslov (ispravka prijemnice na čekanju iz `modTest` 35, ista sveska). Kvar je bio u testovima; zatečeni deo je `KI-045` |
+       | crveni 2 | 268 / **9** | 2708 / **11** | tačno izvedeno: 8, 9, 253, 263–268, svaki na prvoj tvrdnji; BFP 11 tvrdnji S6K6 posle tri preduslova |
+       | **zeleni** | **268 / 0** | **2708 / 0** | Faktura **39/39**; izvor `898192e5f2b7`, ugovor `449eb44b5722`, fixture `49f55dfc03b134b3` (nepromenjen) |
+
+       BFP je u zelenom izvršio istih 2708 tvrdnji kao u crvenom (14 tvrdnji S6K6: 3 preduslova + 11), pa nijedna
+       nije ćutke preskočena.
+     - **Kod** (bez novog pisca i bez izmene šeme):
+       - `modDokUnos.PrijemnicaValidiraj`: pauza je otišla; kapija IZDATE zbirne posle kapije identiteta
+         (`PRJ-ZBR-01`, poruka `DOKUNOS_ERR_ZBR_P_NIJE_IZDATA`, fokus `brojZbirne`); negativna kilaža (I, II) i
+         negativne/decimalne gajbe (I, II, povrat) se odbijaju sa fokusom; duplikat broja po kupcu;
+       - `modDataAccess.CheckDuplicate`: opcioni opseg (kolona + vrednost vlasnika); stari pozivi su netaknuti;
+       - `modDokumenta.SavePrijemnicaMulti_TX`: `Optional ByRef outGreska` na kraju potpisa, puni se u EH, bez
+         prefiksa `Source=… | ` (`RazlogBezIzvora`); `PrijemnicaUpisi`/`PrjUpisPoziv` ga stavljaju u poruku
+         (`KI-020`, deo prijemnice, ZATVOREN);
+       - `modScrDokumenti.SavePrijemnica`: rezultat je broj prijemnice (kao zbirna);
+       - `modOtkupUI.FokusNaPolje`: `Case "kolAmbIzdata"` (polje vraćenih gajbi);
+       - `modPoruke`: ključ pauze obrisan; ključ nove kapije je ušao još u `ae66ef52`.
+     - **Sabotaže: katalog 936 → 954** (18). Vraćene iz `fc06fa77`: `prijemnica-kupac`, `bruto-prijemnica`,
+       `bruto-prijemnica-neto`, `zbirna-f4-nije-vezan`, `zbirna-f4-pusta-tudjeg-vlasnika`; presidrena `bruto-zbirna`;
+       nove `s6k6-*` (11) i `ruta-prijemnica`. `--proveri-sidra`: 954, nalaza 0 (+9 poznatih); `--self-test` 43.
+       **Statička sonda 18/18:** primena menja tačno jedan fajl, pravila nad fajlovima su čista (katalog javlja samo
+       tu sabotažu i sestru sa istim sidrom), `--vrati` vraća `src-vba` bajt-identičan kopiji.
+     - **Jeftine kapije, sve zelene** nad radnim stanjem pre commita: `vba_check` (191) + `--self-test` 152,
+       `vba_parity_check`, `vba_selfupdate_gates`, `vba_hard_census`, `vba_import_marker_gate` (svaki +
+       `--self-test`), `who_writes --check` / `--check-ownership` / `--self-test`, `gen_schema_module --check`
+       (otisak `4A418441`) / `--self-test`, `run_vba --self-test`, `vba_gate --popis` / `--self-test`,
+       `js_sintaksa` 65/0 + `--self-test` 13/0, `popis_citalaca --check`.
+     - **Dokumenti:** MAPA A-031 → MIGRATED; `KI-020` (deo prijemnice ZATVOREN); nov `KI-045`; `AMBALAZA.md` 6.13g;
+       `UI_MIGRACIJA_KATALOG` uz F4.
+     - **Nije urađeno (čeka reviewer GO):** FULL, `dokaz.py` nad 18 novih/presidrenih i sabotažama testova koji su
+       dirani, `vba_gate --require-green`, sveska za compile i ručnu proveru, compile. Compile je i dalje
+       `NEJASNO` iz `run_vba` — ručna kapija.
+     - **Tabela „Gde smo" je ažurirana u istom commitu:** korak 6 je u review-u.
+     - **Sledeći brojevi:** stavka 195 · test 269 · KI-046.
 
 ## Dug sa imenom (posle S5-5b)
 
