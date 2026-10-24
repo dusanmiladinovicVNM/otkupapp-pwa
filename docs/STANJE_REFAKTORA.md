@@ -7000,9 +7000,11 @@
          (`FAK-00009 (zajednička …)`), a ne brojem `21/2026`, kako je pisalo u checklisti (vidi `KI-044`).
        - Usput: tekst pretrage sa drugog ekrana ostaje u F4 preko placeholdera, a lista nije filtrirana →
          **`KI-043`**.
+     - **Compile:** operater je javio „compiles" nad `rucna_provera_s6_korak5.xlsm` (24.10.2026).
+       `vba_gate --mark-compile` je upisan nad izvorom `4091a1588470`, a `--require-green --require-compile`
+       kaže **dokazano** (izvor `4091a1588470`, ugovor `3cff745c513f`).
      - **Čeka:**
-       - operater: Compile (`Import modVbaTools.bas` → `Debug → Compile`) — još nije javljen;
-       - `--mark-compile` tek na javljeno „compiles";
+       - operater: koraci 2 i 7 ručne provere (detalj u Izveštajima);
        - merge samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
      - **Sledeći brojevi:** stavka 192 · test 263 · KI-045.
 
