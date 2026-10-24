@@ -8769,6 +8769,132 @@ korak 5 ne dira — ostaju van, uz ime.
   oborio test pre tvrdnje. Tvrdnja sada čita stanje kao ishod (`S6K5Fakturisanost`); pojedinačan dokaz je
   DOKAZANO.
 
+#### Korak 6 — F4 odmrznut + vraćeni testovi iz §14.14 (pre-flight nad `4958f68b`, stavka 193)
+
+Izlazni uslov S6 (`CAPABILITY GAP`, A-031). Glavna invarijanta koraka: **F4 pravi prijemnicu isključivo kroz
+kanonski pisac, a dokument koji F4 napravi prolazi sve što je posle njega** — fakturu po stavci, storno, čitaoce,
+palete i knjigu ambalaže. Pauza stoji u `modDokUnos.PrijemnicaValidiraj` (`:822-828`) pre svih provera, od S3b-1.
+
+**Sonda pre koda** (24.10.2026, kopija sveske iz `run_vba --compile-only --keep`, pauza uklonjena SAMO u kopiji,
+sopstvena Excel instanca, potez „Sačuvaj" kroz `modOtkupUI.CommitDokumentTest`, bez ijednog dijaloga):
+
+| Šta | Izmereno |
+|---|---|
+| F4, I 300 × 50 / 30 gajbi, II 120 × 40 / 12, povrat 5, zbirna `ZB-TEST-1` | jedno zaglavlje bez linijskih polja; dve stavke; `ZbirnaRoditeljID = ZBI-TEST-1`; nova `GeneracijaID`; **jedna** `UZ_ROBU` = 42 i **jedan** `POVRAT_PRAZNE` = 5; palete po stavci, sa `PrijemnicaStavkaID` |
+| faktura nad stavkom I (`CreateFaktura_TX`) | linija nosi `PrijemnicaStavkaID`; status `DELIM` |
+| storno fakturisane prijemnice | odbijen po imenu („…je fakturisana (faktura FAK-00001)…") |
+| storno fakture, pa storno prijemnice | `NE`; storno prolazi, 2 paletne stavke skinute, 2 kontra-reda knjige |
+| bruto režim (I 110 / 10 gajbi, II 55 / 5, tara 1 kg) | stavka I 100 kg i `BrutoKg` 110; stavka II 50 i 55 |
+| redosled provera; zbirne nema uz BLOK | „Izaberi kupca" → `kupacID`; „Zbirna … ne postoji" → `brojZbirne` |
+| zbirna koja NIJE izdata (nacrt) | prolazi |
+| −5 kg u klasi I uz klasu II | prolazi; klasa I **tiho nestaje** (pisac: `kolicinaI > 0`, `modDokumenta:6627`) |
+| 20,5 gajbi | prolazi; upiše se **20** (`L()` → `CLng`, `modDokUnos:107`) |
+| broj `12/TEST` koji drži **drugi** kupac | **odbijen**: „Dokument '12/TEST' već postoji" (`CheckDuplicate` je globalan, `modDataAccess:565`) |
+| poruka posle upisa | „Prijemnica sačuvana: **PRJ-00001**" — interni ID (`modScrDokumenti:2183`) |
+
+Premisa parkiranog testa je izmerena kao netačna: fixture od donora nosi `PRIJEMNICA_ZBIRNA_PROVERA = UPOZORENJE`,
+a ne BLOK (komentar u `fc06fa77`), pa bi grana „zbirne nema" otvorila `MsgBox` i suite bi visio. U istom prolazu:
+`VALIDACIJA_UNOSA = YES`, `PALETIRANJE = YES`, `MALINA_DEFAULT_KUPAC` prazno (nema auto-štampe).
+
+**Verdikt po osama** (linije su sa `4958f68b`):
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **GAP → odluka 2** | `ZbirnaPostoji` (`modDokumenta:168`) pušta i NACRT; zbirna je prevozni spisak tek kad je izdata (`IzdajZbirnu_TX`, `:1638`) |
+| `EVENTS` | **PROVEN** | fizički i poslovni nose `Datum` sa ekrana; ambalažni je isti čin (jedna noga + povrat, sonda); finansijskog nema |
+| `IDENTITY` | **GAP → odluka 6** | broj prijemnice se proverava preko svih kupaca; zbirna po broju → `ZbirnaID` (validator sa opsegom, pisac `ZbirnaIDZaBroj` bez opsega, isti ishod pod kapijom) ostaje imenovan rizik |
+| `CARDINALITY` | **PROVEN** | 1 dokument : 1..2 stavke (sonda); „1 zbirna = 1 prijemnica" je pitanje operateru (`:1009-1016`), ne zabrana |
+| `INVARIANTS/OWNER` | **PROVEN** | `AMB-INV-04/07`, `FAK-LIN-01..03`, ZBR-CHILD-01 drže pisac i čitači; storno fakturisane odbijen (sonda) |
+| `WRITERS` | **PROVEN** | bez novog pisca: F4 → `PrijemnicaUpisi` → `PrjUpisPoziv` → `SavePrijemnicaMulti_TX` (`modDokUnos:1249`) |
+| `DOWNSTREAM` | **PROVEN** + odluka 7 | faktura, storno, palete, knjiga (sonda); poruka nosi interni ID |
+| `CAPABILITY` | **GAP → odluke 4 i 5** | A-031 se vraća, ali pisac guta razlog odbijanja (`KI-020`), a ulaz tiho menja −5 kg i 20,5 gajbi |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | ispod |
+| `PLATFORM` | **GAP → odluka 3** | tri `MsgBox`-a u validatoru (`:856`, `:1010`, `:1129`/`:1137`); `UPOZORENJE` u fixture-u |
+| `LANDING` | **PROVEN** | grana `claude/s6-korak6-f4` sa `4958f68b`; Excel instanca operatera netaknuta |
+
+**Odluke operatera (24.10.2026, stavka 193), sve po preporuci:**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | `KI-028` (vozač na −10 za `12/1`) | **posle koraka 6**, svoj rez pre golden lanca (korak 8); testovi seju gajbe vozaču (`ZasejOpticajVozacu`) |
+| 2 | prijemnica na NACRT zbirne | **samo IZDATA** zbirna: kapija u validatoru F4 sada, posle kapije identiteta (`PRJ-ZBR-01`); pisac je dobija u koraku 8, kad testovi pređu na Multi |
+| 3 | `MsgBox` u validatoru | **preduslovi u testu**: BLOK, nema ispravke na čekanju, zbirna bez aktivne prijemnice — preduslov se tvrdi PRE poteza (prekršen = crveno po imenu, ne visenje); produkcioni kod se ne menja |
+| 4 | `KI-020` za prijemnicu | **u koraku 6**: pisac vraća razlog (`Optional ByRef outGreska`, obrazac `CreateOtkup_TX`), a `PrijemnicaUpisi` ga stavlja u poruku; isplata i uplata ostaju u `KI-020` |
+| 5 | ulaz F4 | **kao kod zbirne** (review #375): negativna kilaža se odbija po imenu i sa fokusom; gajbe (I, II, povrat) se čitaju kao `Double`, decimala se odbija |
+| 6 | duplikat broja prijemnice | **jedinstven po kupcu** među aktivnima (stornirani se ne broje, pa ispravka zadržava broj); A2 u ugovoru dobija vlasnika niza |
+| 7 | poruka posle upisa | **broj prijemnice** (rezultat ekrana = broj, kao F3); `KI-044` ostaje svoj rez |
+| 8 | `KI-042`, `KI-043`, `KI-039`, `KI-041` | **svi van**; imenuju se u checklisti ručne provere |
+
+**Obim po celinama:**
+
+- **validator** (`modDokUnos.PrijemnicaValidiraj`): pauza odlazi; kapija IZDATE zbirne (nova poruka uz polje
+  `brojZbirne`); negativna kilaža i decimalne/negativne gajbe (I, II, povrat) se odbijaju, sa fokusom na polje;
+  provera duplikata broja po kupcu; komentari „staticki do S6" (`:933`, `:1030-1032`) se ispravljaju;
+- **pisac** (`modDokumenta.SavePrijemnicaMulti_TX`): `Optional ByRef outGreska As String` na kraju potpisa (13
+  poziva sa imenovanim argumentima ostaju ispravni, grep pre suite); razlog se puni u EH, ne za potvrdu manjka;
+- **unos** (`modDokUnos.PrijemnicaUpisi` / `PrjUpisPoziv`): razlog pisca ide u `poruke`;
+- **ekran** (`modScrDokumenti.SavePrijemnica`): `rezultat` = broj prijemnice;
+- **poruke** (`modPoruke`): ključ za „zbirna nije izdata" (i za duplikat po kupcu, ako postojeći tekst ne staje);
+- **testovi**, sabotaže i dokumenti (MAPA A-031, `KI-020`, `AMBALAZA.md` 6.13g „nedostižan", `UI_MIGRACIJA_KATALOG`).
+
+**Testovi čija se premisa menja:**
+
+| Test | Šta je tvrdio | Šta biva |
+|---|---|---|
+| `T_PrijemnicaUnos_PauziranDoS6` (`modTest` 8) | pauza pre svih provera | **`T_PrijemnicaValidiraj_TraziKupca`** na istom mestu, telo iz `fc06fa77` |
+| `T_ScrSave_RutaPoRezimu` (F4 deo) | ruta se dokazuje porukom pauze | porukom `DOKUNOS_ERR_KUPAC` i fokusom `kupacID` |
+| `T_KI021_ValidatoriTraziSifarnik` (253) | prijemnica meri pomoćnik, poziv je statičan | + tvrdnja kroz validator (tip van šifarnika → fokus `tipAmb`) |
+| 247, 258, 259 | „validator je pauziran" u komentaru | samo komentar; tvrdnje ostaju |
+
+**ACCEPTANCE CONTRACT koraka 6 — plan dokaza, ne dokaz:**
+
+- **važi:**
+  - **R1 (F4 kroz potez):** dvoklasna prijemnica kroz `CommitDokumentTest` daje jedno zaglavlje i dve stavke sa
+    tačnim klasama, količinama, cenama i gajbama; nema dijaloga ni lažne greške; forma je očišćena po ugovoru;
+    poruka nosi **broj** prijemnice (odluka 7). U bruto režimu stavka nosi neto i `BrutoKg` sa ekrana. *Čime:*
+    `modTest` 265; sabotaže `s6k6-f4-pauza-vracena`, `s6k6-poruka-nosi-id`, `s6k6-f4-bruto-ne-stize`.
+  - **R2 (lanac posle F4):** dokument napravljen kroz `Scr_Save` nad PRAVOM izdatom zbirnom (otkup → otpremnica →
+    zbirna kroz pisce) ima `ZbirnaRoditeljID` te zbirne, jednu `UZ_ROBU` = Σ gajbi i jedan povrat, palete po stavci;
+    faktura nad jednom stavkom ga čini `DELIM`; storno ga tada odbija; posle storna fakture storno prolazi i
+    skida palete. *Čime:* BFP `Test_S6K6_F4DokumentProlaziLanac`; nizvodno ponašanje već mere sabotaže koraka 2–5.
+  - **R3 (redosled):** kupac, pa vozač, pa broj, pa broj zbirne, svaki sa svojim fokusom. *Čime:* `modTest` 8;
+    sabotaža `prijemnica-kupac` (vraćena).
+  - **R4 (bruto → neto):** prijemnica zamrzava bruto i u količinu daje neto, po klasi; zbirna bruto NEMA i
+    količinu ne dira. *Čime:* `modTest` 263 (`T_BrutoNeto_PoRezimu`, vraćen); sabotaže `bruto-prijemnica`,
+    `bruto-prijemnica-neto` (vraćene) i `bruto-zbirna` (nov oblik: konverzija ubačena u `ZbirnaValidiraj`).
+  - **R5 (roditelj, `PRJ-ZBR-01`):** dvosmislena zbirna, zbirna drugog vlasnika, broj sa istorijom dva vlasnika i
+    **nacrt** se odbijaju po imenu; jednoznačna izdata prolazi kapiju; „zbirne nema" uz BLOK daje staru poruku.
+    *Čime:* `modTest` 264 (`T_Prijemnica_VezujeSeSamoNaJednoznacnu`, vraćen, BLOK postavlja sam); sabotaže
+    `zbirna-f4-nije-vezan`, `zbirna-f4-pusta-tudjeg-vlasnika` (vraćene), `s6k6-f4-pusta-nacrt-zbirne` (nova).
+  - **R6 (ulaz):** −5 kg (I uz II, i II) i 20,5 / −3 gajbe (I, II, povrat) se odbijaju po imenu sa fokusom na
+    polje; 0 kg u klasi I uz klasu II prolazi (II-only je legitimna). *Čime:* `modTest` 266; sabotaže
+    `s6k6-negativna-kilaza-prolazi`, `s6k6-decimalne-gajbe-prolaze`.
+  - **R7 (broj po kupcu):** broj koji drži drugi kupac prolazi; isti broj istog kupca se odbija; storniran broj
+    istog kupca ne blokira. *Čime:* `modTest` 267; sabotaže `s6k6-broj-globalno`, `s6k6-broj-isti-kupac-prolazi`.
+  - **R8 (`KI-020`):** kad pisac odbije iz razloga koji validator ne vidi (manjak vozača, `AMB-INV-07`), poruka
+    ekrana nosi razlog pisca, a dokument ne nastaje. *Čime:* `modTest` 268; sabotaža `s6k6-razlog-pisca-se-guta`.
+  - **R9 (`KI-021` poziv):** tip van šifarnika staje u validatoru F4 na polju `tipAmb`. *Čime:* 253 (+ tvrdnja);
+    sabotaža `s6k6-prij-validator-bez-tipa`.
+- **netaknuto:** pisac prijemnice i njegov oblik (osim razloga u EH); knjiga ambalaže i protokol potvrde manjka
+  (`PotvrdiManjakAmbalaze`); palete; faktura; storno; čitaoci; ispravka posle storna (prevezivanje paleta, 26, 35);
+  politika `PRIJEMNICA_ZBIRNA_PROVERA` za „zbirne nema"; „1 zbirna = 1 prijemnica" kao pitanje;
+- **edge:** jednoklasna (samo I, samo II uz povrat); povrat bez punih gajbi; hladnjača sa predlogom broja (Z3a);
+- **negativno:** svaki odbijeni unos ne piše ni zaglavlje, ni stavku, ni nogu knjige (broj redova pre i posle);
+- **preduslovi testova (odluka 3):** BLOK, nema ispravke prijemnice na čekanju, zbirna bez aktivne prijemnice —
+  tvrde se PRE poteza. Izdata zbirna u `modTest` je **sintetička** (nacrt kroz `CreateZbirnaDraft_TX`, status
+  postavljen u testu i vraćen pre tvrdnji): kapija čita samo status. Pravi lanac je u BFP (R2);
+- **čime, ukupno:** `modTest` 8, 263–268, 253 i ruta; BFP `Test_S6K6_*`; ciljani BFP, RunAllTests i Faktura;
+  jeftine kapije; `popis_citalaca --check`; `sabotaza --proveri-sidra` i statička sonda.
+
+**Imenovano van obima:**
+
+- kapija IZDATE zbirne i broja po kupcu u **piscu** — korak 8 (testovi prelaze na Multi, golden lanac);
+- `KI-028` — svoj rez posle koraka 6 (odluka 1);
+- `KI-042`, `KI-043`, `KI-039`, `KI-041`, `KI-044` — svoji rezovi (odluke 7 i 8);
+- tri pitanja validatora (`MsgBox`) bez testa, kao i do sada (odluka 3);
+- zbirna po broju (display → lookup) — imenovan rizik iz §14.55, i dalje van;
+- `.claude/rules/otkup-i-dokumenta.md` §5 („pet testova" upisa zbirne i prijemnice) — samo process PR.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

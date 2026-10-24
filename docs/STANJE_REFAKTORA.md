@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 24.10.2026 (stavka 192: merge `#439`, S6 korak 5/8 zatvoren; sledeći je korak 6).
+**Ažurirano:** 24.10.2026 (stavka 193: S6 korak 6 — pre-flight, sonda i odluke 1–8; kod sledi).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 5/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · **korak 6 (F4 odmrznut + vraćeni testovi iz §14.14) u pre-flight-u** (stavka 193), grana `claude/s6-korak6-f4` |
+| **S6 prijemnica** | ⏳ **u toku, 5/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · **korak 6 (F4 odmrznut + vraćeni testovi iz §14.14): pre-flight i odluke 1–8 gotovi, kod sledi** (stavka 193), grana `claude/s6-korak6-f4` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7038,6 +7038,37 @@
      - **Sledeći brojevi:** stavka 193 (pre-flight koraka 6) · stavka 194 (kod) · test 263 · KI-045.
      - **Sledeći je S6 korak 6** (F4 odmrznut: unos prijemnice kroz ljusku + vraćeni testovi iz §14.14), na grani
        `claude/s6-korak6-f4` sa `4958f68b`.
+193. **S6 korak 6 — pre-flight nad `4958f68b`, sonda, odluke 1–8, PRE koda** (24.10.2026). Pun zapis je u §14.55,
+     „Korak 6".
+
+     - **Sonda** (kopija sveske, pauza uklonjena SAMO u kopiji, potez „Sačuvaj" kroz `CommitDokumentTest`):
+       - F4 pravi kanonski dokument: jedno zaglavlje, dve stavke, jedna `UZ_ROBU` = Σ, jedan povrat, palete po
+         stavci, `ZbirnaRoditeljID`;
+       - taj dokument prolazi fakturu po stavci (`DELIM`), storno ga odbija dok je fakturisan, a posle storna
+         fakture storno prolazi;
+       - bruto stiže na stavku.
+     - **Nalazi sonde** (svaki je postao odluka):
+       - nacrt zbirne prolazi;
+       - −5 kg tiho nestaje, a 20,5 gajbi postaje 20;
+       - broj drugog kupca se odbija (provera je globalna);
+       - poruka posle upisa nosi interni ID;
+       - fixture nosi `PRIJEMNICA_ZBIRNA_PROVERA = UPOZORENJE`, a ne BLOK, pa bi parkiran test 176 visio na `MsgBox`-u.
+     - **Usput:** prvi pokušaj sonde je pao na sopstvenoj grešci sonde (promenljiva `iS` = rezervisana reč `Is`).
+       Moja instanca je ugašena po isteku; instanca operatera nije dirana.
+     - **Odluke operatera (24.10.2026), sve po preporuci:**
+       1. `KI-028` posle koraka 6;
+       2. samo IZDATA zbirna (`PRJ-ZBR-01`, kapija u validatoru; pisac u koraku 8);
+       3. `MsgBox` validatora: preduslovi u testu;
+       4. `KI-020` za prijemnicu u koraku 6;
+       5. ulaz kao kod zbirne;
+       6. broj jedinstven po kupcu;
+       7. poruka nosi broj;
+       8. `KI-042/043/039/041` van.
+     - **DOMEN:** nova invarijanta `PRJ-ZBR-01` (`docs/DOMEN/README.md`); A2 dobija vlasnika niza za kupčev broj
+       (`ARCHITECTURE_CONTRACT.md`).
+     - **Acceptance contract R1–R9** i sabotaže: §14.55, „Korak 6". Testovi `modTest` 8 (premisa), 263–268, 253,
+       ruta; BFP `Test_S6K6_F4DokumentProlaziLanac` nad pravom izdatom zbirnom.
+     - **Sledeći brojevi:** stavka 194 (kod) · test 263 · KI-045.
 
 ## Dug sa imenom (posle S5-5b)
 

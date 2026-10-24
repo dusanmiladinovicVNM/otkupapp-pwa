@@ -33,7 +33,7 @@ generatora:
 | OTP | `StanicaID` | `x/ddmmyy[-n]` | |
 | ZBR | `VozacID` | `x/ddmmyy[-n]` ili `Sx/ddmmyy[-n]` | u malina modu je vozač mirror stanice (`VozacID` je **isti string** kao `StanicaID`) → `S` prefiks, a zbirna nasleđuje broj otpremnice jer je otpremnica = zbirna. To je **namera**, ne propust. |
 | PRJ (hladnjača) | kupac = `MALINA_DEFAULT_KUPAC` | `1/ddmmyy[-n]` | `x` je **fiksno `1`**, NE izvedeno iz `KupacID` |
-| PRJ (eksterni kupac) | — | kupčev broj | slobodan unos, nije naš niz |
+| PRJ (eksterni kupac) | `KupacID` | kupčev broj | slobodan unos, nije naš niz. Jedinstven **po kupcu** među aktivnim prijemnicama, bez dana (kupčev broj ne nosi datum): dva kupca smeju isti broj, a storniran broj se ne broji, pa ispravka zadržava broj (odluka operatera 24.10.2026, S6 korak 6). Do tada je provera duplikata bila globalna. |
 | REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza`. Dokument su dve noge (Kooperant + Stanica) istog broja i tipa; broj zauzima **noga Stanica**, jer samo ona nosi vlasnika niza. Četiri smera dele jedan niz. Niz je (stanica, dan) za **sva četiri** smera, sa storniranima — i za KOOP smerove: isti (broj, smer, dan) na drugoj stanici je legalan, i za istog kooperanta, jer noge jednog reversa povezuje `ReversID` (REV-IDENT-01, Faza 2b). |
 | NOV (F5 isplata / F6 uplata) | — | slobodan unos | broj **nije** jedinstven po konstrukciji: uvoz izvoda upisuje sve stavke pod istim brojem, a split avansa nasleđuje broj originalne stavke. **Nema provere duplikata** i ne deli prostor sa reversom (odluka 14.09.2026). Jedini jedinstven ključ je `NovacID`. |
 
