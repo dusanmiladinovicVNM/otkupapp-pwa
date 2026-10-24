@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 4/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · **korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) na review-u** (stavke 188–191; review krug 1: arhitektura GO, dva P2 ispravljena u istom PR-u, izvršne kapije u toku), grana `claude/s6-korak5-faktura` |
+| **S6 prijemnica** | ⏳ **u toku, 4/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · **korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) na review-u** (stavke 188–191; review krug 1: arhitektura GO, dva P2 ispravljena u istom PR-u; FULL 12/12, dokaz 42/42, compile i ručna provera prošli; čeka merge), grana `claude/s6-korak5-faktura` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -6996,16 +6996,24 @@
          umesto 16.000. To je zatečeni **`KI-042`** (zastarela mapa iznosa; na `main`-u ista keš mapa), sada viđen
          na ekranu. Potvrda ponovnim otvaranjem sveske nije urađena.
        - ✅ 11: posle storna `24/2026` ponovo „Delim. fakturisano", čip 58.
-       - Nisu snimljeni: 2 i 7 (detalj izveštaja). **Ispravka checkliste:** detalj imenuje fakturu ID-jem
-         (`FAK-00009 (zajednička …)`), a ne brojem `21/2026`, kako je pisalo u checklisti (vidi `KI-044`).
+       - ✅ 2 i 7 (Izveštaji → Kupci → Pojedinačno → TEST KUPAC DOO → Roba → klik na red):
+         - `…ZAJ…-A` i `-B`: „Faktura: FAK-00009 (zajednička sa drugim prijemnicama -- ostatak se vodi na
+           fakturi)";
+         - `…-C`: „Faktura: FAK-00010", bez oznake;
+         - `S6K5KVAR`: „Faktura: FAK-00011 (delimično -- ne sve stavke)";
+         - kontrole: `S6K5KES` „nije fakturisana", `DUPFAK` „FAK-00001 (delimično …)".
+
+         Tekst zajedničke se u traci detalja odseca na desnoj ivici (zagrada); dopisano u `KI-044`.
+         **Ispravka checkliste:** detalj imenuje fakturu ID-jem (`FAK-00009`), a ne brojem `21/2026`, kako je
+         pisalo u prvom izdanju (`KI-044`).
        - Usput: tekst pretrage sa drugog ekrana ostaje u F4 preko placeholdera, a lista nije filtrirana →
          **`KI-043`**.
      - **Compile:** operater je javio „compiles" nad `rucna_provera_s6_korak5.xlsm` (24.10.2026).
        `vba_gate --mark-compile` je upisan nad izvorom `4091a1588470`, a `--require-green --require-compile`
        kaže **dokazano** (izvor `4091a1588470`, ugovor `3cff745c513f`).
-     - **Čeka:**
-       - operater: koraci 2 i 7 ručne provere (detalj u Izveštajima);
-       - merge samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
+     - **Ručna provera je završena:** svih 11 koraka. Odstupanje je samo korak 10 (ostatak prazan), a to je
+       zatečeni `KI-042`.
+     - **Čeka:** merge samo na izričit zahtev operatera, sa `--match-head-commit`, posle zelenog CI-ja.
      - **Sledeći brojevi:** stavka 192 · test 263 · KI-045.
 
 ## Dug sa imenom (posle S5-5b)
