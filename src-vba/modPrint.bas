@@ -759,10 +759,11 @@ Public Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
                 CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, "Prezime")))
     h("bpg") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_BPG))
     h("racun") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_TEKUCI_RACUN))
-    ' Saldo ambalaze = entitetski saldo kooperanta (koliko gajbica drzi/duguje):
-    ' pocetno stanje pre bloka (Ulaz +, Izlaz -) + izdato (Kooperant Ulaz)
-    ' - primljeno (Kooperant Izlaz). Pocetno se cita iz ledgera po redosledu
-    ' upisa, pa je ispravno i kod ponovne stampe starijeg bloka.
+    ' Saldo ambalaze = POSLOVNI saldo kooperanta (AMB-POSL-01: koliko mu je firma
+    ' izdala minus koliko je vratio; pokrice deficita ne ulazi): pocetno stanje
+    ' pre bloka (Ulaz +, Izlaz -) + izdato (Kooperant Ulaz) - primljeno
+    ' (Kooperant Izlaz). Pocetno se cita iz ledgera po redosledu upisa, pa je
+    ' ispravno i kod ponovne stampe starijeg bloka.
     ' Jedan dokument -> jedan ID. Helper prima i niz i "ID1 + ID2" string, pa mu
     ' se prosledjuje sam OtkupID (ranije: Split rezultat obe klase).
     ' AMB-10-ODL-27: dokument bez SVOG reda knjige (otkup bez gajbi) nema tacku od
