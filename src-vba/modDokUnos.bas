@@ -812,21 +812,18 @@ End Function
 ' zamrznuti uneti bruto (kad je OTKUP_BRUTO_UNOS ON).
 Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As String
     Dim kolI As Double, cenI As Double, kolII As Double, cenII As Double
-    Dim kolAmb As Long, kolAmbII As Long
+    ' AMBALAZA JE DOUBLE, NE LONG (S6 korak 6, odluka 5; isti razlog kao review
+    ' #375 kod zbirne). Kao Long bi je L() kroz CLng zaokruzio JOS OVDE, pa bi
+    ' 20.5 gajbi postalo 20 pre ijedne provere.
+    Dim kolAmb As Double, kolAmbII As Double, kolAmbVr As Double
     Dim imaKlasaI As Boolean, dveKl As Boolean, strogo As Boolean
     Dim tara As Double, taraII As Double
     Dim postojeca As String, errDesc As String
     On Error GoTo EH
     fokus = ""
 
-    ' F4 JE PAUZIRAN DO S6 (Prijemnica cutover; review #362) -- ne do S4: S4 vraca
-    ' zbirnu, a prijemnica dobija svoj header + stavke + izvore tek u S6. Razlog
-    ' pauze je isti kao kod F3 (ZbirnaValidiraj): prijemnica
-    ' trazi postojecu zbirnu, a zbirna se od S3a ne moze napraviti. Operater
-    ' dobija razlog umesto poruke o zbirnoj koja "ne postoji".
-    PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA")
-    Exit Function
-
+    ' Pauza F4 (S3b-1 do S6) je otisla u S6 koraku 6: prijemnica je zaglavlje +
+    ' stavke (koraci 1-5), a zbirna se od S4 pravi i izdaje.
     strogo = IsValidacijaUnosa()
 
     If Len(S(p, "kupacID")) = 0 Then
@@ -884,6 +881,16 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
             PrijemnicaValidiraj = ZbirnaRoditeljPoruka(rodRazlog)
             Exit Function
         End If
+
+        ' PRJ-ZBR-01 (S6 korak 6, odluka 2): zbirna je prevozni spisak tek kad je
+        ' IZDATA. Nacrt je najava -- manjak bi se merio prema neproverenoj najavi, a
+        ' nacrt se posle sme menjati. Kapija stoji POSLE kapije identiteta: status
+        ' se cita sa razresenog dokumenta, ne po broju.
+        If Not modDokumenta.ZbirnaJeIzdata(zbrRod.selectedZbirnaID) Then
+            fokus = "brojZbirne"
+            PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_P_NIJE_IZDATA")
+            Exit Function
+        End If
     End If
 
     If strogo And Len(S(p, "vrsta")) = 0 Then
@@ -897,10 +904,44 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
     cenI = D(p, "cenaI")
     kolII = D(p, "kolicinaII")
     cenII = D(p, "cenaII")
-    kolAmb = L(p, "kolAmb")
-    kolAmbII = L(p, "kolAmbII")
+    kolAmb = D(p, "kolAmb")
+    kolAmbII = D(p, "kolAmbII")
+    kolAmbVr = D(p, "kolAmbVracena")
     dveKl = B(p, "dveKlase")
     imaKlasaI = (kolI > 0)
+
+    ' NULA I MINUS NISU ISTO STANJE (S6 korak 6, odluka 5; isto pravilo i poruka
+    ' kao ZbirnaValidiraj, review #375). 0 kg znaci "te klase nema" -- II-only
+    ' prijemnica je legitimna. -5 kg je NEVALIDAN podatak: pisac klasu I uzima
+    ' samo kad je > 0, pa bi minus tiho nestao i operater bi dobio dokument koji
+    ' nije uneo (sonda, stavka 193).
+    If kolI < 0 Then
+        fokus = "kolicinaI": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA"): Exit Function
+    End If
+    If dveKl And kolII < 0 Then
+        fokus = "kolicinaII": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA"): Exit Function
+    End If
+
+    ' GAJBE SU KOMADI: minus i decimala se odbijaju, ne zaokruzuju. Povrat ima
+    ' svoje polje na ekranu (kolAmbIzdata -- isto polje, u F4 znaci VRACENA).
+    If kolAmb < 0 Then
+        fokus = "kolAmb": PrijemnicaValidiraj = Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE"): Exit Function
+    End If
+    If kolAmb <> Int(kolAmb) Then
+        fokus = "kolAmb": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO"): Exit Function
+    End If
+    If dveKl And kolAmbII < 0 Then
+        fokus = "kolAmbII": PrijemnicaValidiraj = Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE"): Exit Function
+    End If
+    If dveKl And kolAmbII <> Int(kolAmbII) Then
+        fokus = "kolAmbII": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO"): Exit Function
+    End If
+    If kolAmbVr < 0 Then
+        fokus = "kolAmbIzdata": PrijemnicaValidiraj = Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE"): Exit Function
+    End If
+    If kolAmbVr <> Int(kolAmbVr) Then
+        fokus = "kolAmbIzdata": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO"): Exit Function
+    End If
 
     If Not imaKlasaI Then
         If Not dveKl Then
@@ -930,7 +971,6 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
     End If
 
     ' KI-021: tip ambalaze prijemnice (AMB-INV-12); pravilo je u PrijemnicaTipPoruka.
-    ' Staticki do S6: pauza je pre svega.
     PrijemnicaValidiraj = PrijemnicaTipPoruka(p, strogo)
     If Len(PrijemnicaValidiraj) > 0 Then fokus = "tipAmb": Exit Function
 
@@ -984,8 +1024,13 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         p("kolicinaII") = kolII
     End If
 
+    ' BROJ JE JEDINSTVEN PO KUPCU (S6 korak 6, odluka 6; A2): broj prijemnice je
+    ' kupcev (ODL-22), pa dva kupca smeju isti broj. Do koraka 6 je provera bila
+    ' globalna i odbijala legitiman broj drugog kupca. Stornirani se ne broje, pa
+    ' ispravka zadrzava broj.
     Dim dup As String
-    dup = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, S(p, "brDok"), COL_PRJ_DATUM)
+    dup = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, S(p, "brDok"), COL_PRJ_DATUM, _
+                         COL_PRJ_KUPAC, S(p, "kupacID"))
     If Len(dup) > 0 Then
         fokus = "brDok": PrijemnicaValidiraj = dup: Exit Function
     End If
@@ -1027,9 +1072,8 @@ End Function
 ' sa samo povratom ranije nije dobijala poruku uz polje (review #432, P3).
 ' Otkucan tip mora biti u sifarniku uvek (AMB-INV-12).
 '
-' Public zbog testa: PrijemnicaValidiraj je do S6 iza pauze, pa pozivno mesto nije
-' dostizno -- test (253) meri ovu funkciju, a poziv je staticki. Seam koji bi
-' zaobisao pauzu nije dozvoljen (testovi.md 4: seam ne dodaje pristup).
+' Public zbog testa: 253 meri i ovo pravilo i, od S6 koraka 6, njegov poziv iz
+' PrijemnicaValidiraj (pauza F4 je otisla, pa poziv vise nije staticki).
 Public Function PrijemnicaTipPoruka(ByVal p As Object, ByVal strogo As Boolean) As String
     Dim tip As String, pune As Boolean, povrat As Boolean
     tip = S(p, "tipAmb")
@@ -1163,7 +1207,7 @@ End Function
 ' (osirocene palete) i jednom pod novom.
 Public Function PrijemnicaUpisi(ByVal p As Object, ByRef poruke As String) As String
     Dim res As String, defHlad As String, palStatus As String, errDesc As String
-    Dim ispravka As Boolean
+    Dim ispravka As Boolean, greska As String
     Dim ambErrNum As Long, manjak As Double
     On Error GoTo EH
     poruke = ""
@@ -1171,7 +1215,7 @@ Public Function PrijemnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
     ispravka = (Len(S(p, "ispravkaID")) > 0)
     If ispravka Then SetPaletizeSkip True
 
-    res = PrjUpisPoziv(p, -1, ambErrNum)
+    res = PrjUpisPoziv(p, -1, ambErrNum, greska)
 
     ' POTVRDA DEFICITA: pitanje operateru, ne greska (6.5, AMB-10-ODL-8).
     '
@@ -1193,7 +1237,7 @@ Public Function PrijemnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
                                                 CDbl(L(p, "kolAmbVracena")))
         If manjak > 0 Then
             If modOtkupUnos.PotvrdiManjakAmbalaze(AMB_NALOG_KUPAC, manjak) Then
-                res = PrjUpisPoziv(p, manjak, ambErrNum)
+                res = PrjUpisPoziv(p, manjak, ambErrNum, greska)
             End If
         End If
     End If
@@ -1204,7 +1248,15 @@ Public Function PrijemnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
     ' ista roba i drugi poziv ne sme da je paletizuje.
     SetPaletizeSkip False
 
-    If Len(res) = 0 Then Exit Function
+    ' KI-020 (S6 korak 6, odluka 4): pisac koji odbije iz razloga koji validator
+    ' ne vidi (npr. vozac nema gajbe, AMB-INV-07) vraca RAZLOG. Do koraka 6 je
+    ' poruke ostajao prazan, pa je operater video samo "Greska pri cuvanju" bez
+    ' ijednog "zasto". Odbijena potvrda manjka razlog ne nosi: to je izbor
+    ' operatera, ne kvar.
+    If Len(res) = 0 Then
+        If Len(greska) > 0 Then poruke = poruke & greska
+        Exit Function
+    End If
 
     ' Prevezivanje paleta ide ODMAH posle upisa, pre stampe: stampa je
     ' best-effort i sme da padne, a palete ne smeju da ostanu osirocene.
@@ -1243,9 +1295,9 @@ End Function
 
 ' Jedan poziv pisca prijemnice. Postoji zato da protokol potvrde deficita ne
 ' duplira osamnaest imenovanih argumenata -- ponovljen poziv se razlikuje SAMO po
-' potvrdjenom manjku.
+' potvrdjenom manjku. outGreska je razlog odbijanja pisca (KI-020).
 Private Function PrjUpisPoziv(ByVal p As Object, ByVal potvrda As Double, _
-                              ByRef outErrNum As Long) As String
+                              ByRef outErrNum As Long, ByRef outGreska As String) As String
     PrjUpisPoziv = SavePrijemnicaMulti_TX( _
         datum:=CDate(p("datum")), _
         kupacID:=S(p, "kupacID"), _
@@ -1266,7 +1318,8 @@ Private Function PrjUpisPoziv(ByVal p As Object, ByVal potvrda As Double, _
         brutoKgI:=D(p, "brutoKgI"), _
         brutoKgII:=D(p, "brutoKgII"), _
         potvrdaDeficita:=potvrda, _
-        outErrNum:=outErrNum)
+        outErrNum:=outErrNum, _
+        outGreska:=outGreska)
 End Function
 
 ' Nova prijemnica preuzima palete stare (bez ponovne paletizacije - ista

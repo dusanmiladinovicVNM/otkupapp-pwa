@@ -9351,9 +9351,9 @@ End Sub
 ' "Greska pri unosu OTKUPA" -- i otpremnica, cija je poruka cuvanja tacna. Okidac
 ' je isti kao u 246: datum koji ljuska ne salje pukne na CDate u proveri broja.
 ' Validator poruku vraca SAM (bez prefiksa cuvanja), pa se meri samo unos.
-' Prijemnica je pauzirana do S6 (PrijemnicaValidiraj vraca pauzu pre svega), pa
-' se njen EH meri kroz PrijemnicaUpisi direktno -- to je produkcioni red, samo
-' danas nedostizan iz ekrana.
+' Za prijemnicu se meri EH upisa, kroz PrijemnicaUpisi direktno -- produkcioni
+' red. (Do S6 koraka 6 je bio nedostizan iz ekrana jer je validator F4 bio
+' pauziran; validator prijemnice ne cita datum, pa ga okidac iz 246 ne gadja.)
 ' SABOTAZE: ki015-otp-validator, ki015-zbr-validator, ki015-rev-validator,
 ' ki015-prij-unos -> pukne tvrdnja svoje vrste.
 Private Sub T_KI015_ValidatorImenujeSvojDokument()
@@ -9421,8 +9421,8 @@ End Sub
 ' provera: test koji udje u granu visi do timeout-a. Sada sva tri mesta pitaju
 ' kroz modOtkupUnos.PotvrdiManjakAmbalaze, koje u test rezimu tekst BELEZI i
 ' odgovara "Ne" -- pa test ide kroz pravi poziv: kupcev revers kroz Scr_Save
-' (SaveRevers -> RevKupcaUpisi), prijemnica kroz PrijemnicaUpisi (F4 je
-' pauziran, v. 247). Odgovor "Ne" je potpuno odbijanje: nema dokumenta, a
+' (SaveRevers -> RevKupcaUpisi), prijemnica kroz PrijemnicaUpisi (napisano dok
+' je F4 bio pauziran, v. 247). Odgovor "Ne" je potpuno odbijanje: nema dokumenta, a
 ' odbijen revers imenuje revers. Kontrolu sa strane kooperanta (otkup) drzi BFP
 ' Test_AMB_PitanjeManjkaOtkupImenujeKooperanta.
 ' SABOTAZE: ki015-revkupca-pita-kooperanta -> "kupcev revers: pitanje o manjku
@@ -9921,8 +9921,8 @@ End Sub
 ' (plan 14.55 "Korak 2", stavka 174).
 '
 ' Put je produkcioni: PrijemnicaUpisi -> PrjUpisPoziv -> SavePrijemnicaMulti_TX.
-' Validator F4 je pauziran do koraka 6 (vraca pauzu pre svih provera), pa se
-' upis zove direktno -- isto kao 248.
+' Upis se zove direktno, mimo validatora -- isto kao 248 (napisano dok je validator
+' F4 bio pauziran; potez kroz ekran od S6 koraka 6 meri 265).
 '
 ' BEZ AMBALAZE, namerno: knjigu (jedna noga = zbir stavki) i palete po stavci
 ' meri BFP (Test_S6_DveKlaseJedanDokument), sa svezim tipom. Ovde bi fixture
@@ -10844,8 +10844,8 @@ End Function
 ' dalje uzima sa zaglavlja nad dokumentom novog oblika vidi PRAZNO: papir daje
 ' prazan red, a izvestaj nulu, bez ijedne greske.
 '
-' Dokument pravi PISAC, kroz F4 put (PrijemnicaUpisi; validator je pauziran do
-' koraka 6, isto kao 258), BEZ ambalaze, pa KI-028 ne ulazi. Klase nose
+' Dokument pravi PISAC, kroz F4 put (PrijemnicaUpisi, mimo validatora, isto kao
+' 258), BEZ ambalaze, pa KI-028 ne ulazi. Klase nose
 ' RAZLICITE kolicine i cene (I 300 x 50, II 120 x 40). Zbir (420 / 19800),
 ' prva stavka (300 / 15000) i prosek tada daju razlicite brojeve, pa tacna
 ' vrednost u tvrdnji odbija i citaoca koji uzme samo jednu stavku.

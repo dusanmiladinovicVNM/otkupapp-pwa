@@ -1002,7 +1002,6 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_ISPRAVKA_PAUZIRANA", "Napomena: ISPRAVKA otpremnice je PAUZIRANA dok otpremnica ne pre" & ChrW(273) & "e na nov model. Ova otpremnica NIJE vezana za storniranu " & ChrW(8212) & " ispravka i dalje " & ChrW(269) & "eka na ekranu Oporavak."
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_NACRT", "Otpremnica je otvorena kao NACRT. Izda" & ChrW(263) & "e se kad joj se vezu otkupni blokovi."
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_NACRT_IZMENJEN", "Nacrt otpremnice je izmenjen."
-    UpsertRow lo, existing, "DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA", "Unos prijemnice je PAUZIRAN dok prijemnica ne pre" & ChrW(273) & "e na nov model. Prijemnica tra" & ChrW(382) & "i zbirnu, a zbirna se jo" & ChrW(353) & " ne mo" & ChrW(382) & "e uneti."
     UpsertRow lo, existing, "PRINT_OTP_NIJE_IZDATA", "Otpremnica jo" & ChrW(353) & " nije izdata " & ChrW(8212) & " nacrt se ne " & ChrW(353) & "tampa. Otpremnica se " & ChrW(353) & "tampa kad je izdata, sa cenama njenih otkupnih blokova."
     UpsertRow lo, existing, "STORNO_ERR_OTP_IZVOR_ZBIRNE", "Otpremnica je izvor aktivne zbirne " & ChrW(8212) & " storno je pauziran dok zbirna ne pre" & ChrW(273) & "e na nov model. Zbirna:"
     UpsertRow lo, existing, "STORNO_ERR_OTK_IZVOR_OTP", "Otkup je u sastavu aktivne otpremnice " & ChrW(8212) & " storno izvora nije dozvoljen dok je otkup u njenom sastavu. Otpremnica:"

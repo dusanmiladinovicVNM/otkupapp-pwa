@@ -6598,9 +6598,14 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                                        Optional ByVal brutoKgI As Double = 0, _
                                        Optional ByVal brutoKgII As Double = 0, _
                                        Optional ByVal potvrdaDeficita As Double = -1, _
-                                       Optional ByRef outErrNum As Long) As String
+                                       Optional ByRef outErrNum As Long, _
+                                       Optional ByRef outGreska As String) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
+
+    ' outGreska: RAZLOG odbijanja za operatera (KI-020, S6 korak 6; obrazac
+    ' CreateOtkup_TX). Potvrda manjka razlog ne nosi -- ona je pitanje, ne kvar.
+    outGreska = ""
 
     On Error GoTo EH
 
@@ -6736,8 +6741,23 @@ EH:
     On Error GoTo 0
 
     SavePrijemnicaMulti_TX = ""
+    outGreska = RazlogBezIzvora(errDesc)
 
     PrintTxFailure "SavePrijemnicaMulti_TX", errSrc, errNum, errDesc
+End Function
+
+' Razlog za operatera bez tehnickog prefiksa izvora: jezgro dokumenta pri
+' ponovnom dizanju lepi "Source=<procedura> | " ispred opisa (v.
+' SavePrijemnicaDokument), a operateru treba samo recenica koja kaze ZASTO.
+Private Function RazlogBezIzvora(ByVal opis As String) As String
+    Dim s As String, k As Long
+    s = Trim$(opis)
+    Do While Left$(s, 7) = "Source="
+        k = InStr(1, s, " | ", vbBinaryCompare)
+        If k = 0 Then Exit Do
+        s = Trim$(Mid$(s, k + 3))
+    Loop
+    RazlogBezIzvora = s
 End Function
 
 Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, _

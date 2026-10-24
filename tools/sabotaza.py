@@ -9454,6 +9454,190 @@ SABOTAZE = {
         "Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka",
         "S6K5 zajednicka: detalj izvestaja kaze da je faktura zajednicka",
     ),
+    # --- S6 korak 6: F4 odmrznut (plan 14.55 "Korak 6") --------------------
+    # Vraceno iz 14.14 (tela u fc06fa77): redosled provera F4, bruto -> neto i
+    # vezivanje samo na jednoznacnu zbirnu. Sidra su ista kao tada, osim
+    # bruto-zbirna: kapija "zbirna = zbir otpremnica" je u S4 presla na
+    # izdavanje, pa sabotaza sada UBACUJE bruto->neto u validator zbirne.
+    "prijemnica-kupac": (
+        "modDokUnos.bas",
+        '    If Len(S(p, "kupacID")) = 0 Then\n'
+        '        fokus = "kupacID": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_KUPAC"): Exit Function\n'
+        "    End If\n",
+        "    ' SABOTAZA: prijemnica vise ne trazi kupca\n",
+        "T_PrijemnicaValidiraj_TraziKupca",
+        "prijemnica bez kupca se odbija",
+    ),
+    "bruto-prijemnica": (
+        "modDokUnos.bas",
+        '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
+        '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
+        "            Exit Function\n"
+        "        End If\n"
+        '        p("brutoKgI") = kolI\n'
+        "        kolI = kolI - tara\n"
+        '        p("kolicinaI") = kolI\n',
+        '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
+        '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
+        "            Exit Function\n"
+        "        End If\n"
+        "        ' SABOTAZA: bruto se ne zamrzava\n"
+        "        kolI = kolI - tara\n"
+        '        p("kolicinaI") = kolI\n',
+        "T_BrutoNeto_PoRezimu",
+        "uneti bruto Kl.I se zamrzava u BrutoKg",
+    ),
+    "bruto-prijemnica-neto": (
+        "modDokUnos.bas",
+        '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
+        '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
+        "            Exit Function\n"
+        "        End If\n"
+        '        p("brutoKgI") = kolI\n'
+        "        kolI = kolI - tara\n"
+        '        p("kolicinaI") = kolI\n',
+        '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
+        '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
+        "            Exit Function\n"
+        "        End If\n"
+        '        p("brutoKgI") = kolI\n'
+        "        ' SABOTAZA: tara se ne oduzima\n"
+        '        p("kolicinaI") = kolI\n',
+        "T_BrutoNeto_PoRezimu",
+        "u Kolicinu Kl.I ide neto (bruto - tara)",
+    ),
+    "bruto-zbirna": (
+        "modDokUnos.bas",
+        '    datum = CDate(p("datum"))\n',
+        '    datum = CDate(p("datum")): If OtkupBrutoUnos() Then p("kolicinaI") = kolI - kolAmb   '
+        "' SABOTAZA: zbirna dobija bruto->neto\n",
+        "T_BrutoNeto_PoRezimu",
+        "zbirna se NE preracunava iz bruta",
+    ),
+    "zbirna-f4-nije-vezan": (
+        "modDokUnos.bas",
+        "        If Len(rodRazlog) > 0 Then\n",
+        "        If Len(rodRazlog) < 0 Then   ' SABOTAZA: F4 ne proverava roditelja\n",
+        "T_Prijemnica_VezujeSeSamoNaJednoznacnu",
+        "dva aktivna dokumenta pod istim brojem zaustavljaju prijemnicu",
+    ),
+    "zbirna-f4-pusta-tudjeg-vlasnika": (
+        "modDokumenta.bas",
+        "        Case ZBR_RES_OWNER_MISMATCH\n"
+        "            ZbirnaRoditeljRazlog = ZBR_PARENT_TUDJ\n",
+        "        Case ZBR_RES_OWNER_MISMATCH\n"
+        "            ' SABOTAZA: tudj vlasnik prolazi kao roditelj\n",
+        "T_Prijemnica_VezujeSeSamoNaJednoznacnu",
+        "zbirna drugog vlasnika zaustavlja prijemnicu",
+    ),
+    # Nove u koraku 6. Svaka pusta ceo validator do kraja nad SVEZOM zbirnom bez
+    # prijemnice i bez ispravke na cekanju (preduslov testa), pa ni jedna ne
+    # stize do pitanja u validatoru (MsgBox) -- crveno, ne visenje.
+    "s6k6-f4-pauza-vracena": (
+        "modDokUnos.bas",
+        "    strogo = IsValidacijaUnosa()\n"
+        "\n"
+        '    If Len(S(p, "kupacID")) = 0 Then\n',
+        '    PrijemnicaValidiraj = "SABOTAZA: F4 opet pauziran": Exit Function\n'
+        "\n"
+        '    If Len(S(p, "kupacID")) = 0 Then\n',
+        "T_S6K6_F4UpisKrozPotez",
+        "F4 kroz potez pravi jedno zaglavlje",
+    ),
+    "s6k6-f4-pauza-vracena-lanac": (
+        "modDokUnos.bas",
+        "    strogo = IsValidacijaUnosa()\n"
+        "\n"
+        '    If Len(S(p, "kupacID")) = 0 Then\n',
+        '    PrijemnicaValidiraj = "SABOTAZA: F4 pauziran pred lancem": Exit Function\n'
+        "\n"
+        '    If Len(S(p, "kupacID")) = 0 Then\n',
+        "Test_S6K6_F4DokumentProlaziLanac",
+        "S6K6 F4: upis kroz ekran F4 prolazi",
+    ),
+    "s6k6-f4-pusta-nacrt-zbirne": (
+        "modDokUnos.bas",
+        "        If Not modDokumenta.ZbirnaJeIzdata(zbrRod.selectedZbirnaID) Then\n",
+        "        If False Then   ' SABOTAZA: nacrt zbirne prolazi kao roditelj\n",
+        "T_Prijemnica_VezujeSeSamoNaJednoznacnu",
+        "nacrt zbirne zaustavlja prijemnicu (PRJ-ZBR-01)",
+    ),
+    "s6k6-poruka-nosi-id": (
+        "modScrDokumenti.bas",
+        "    ' jednoj listi (isti razred kao KI-044).\n"
+        '    polja("rezultat") = CStr(polja("brDok"))\n',
+        "    ' jednoj listi (isti razred kao KI-044).\n"
+        '    polja("rezultat") = res   \' SABOTAZA: poruka opet nosi interni ID\n',
+        "T_S6K6_F4UpisKrozPotez",
+        "F4: poruka posle upisa nosi broj prijemnice, ne interni ID",
+    ),
+    "s6k6-f4-bruto-ne-stize": (
+        "modDokUnos.bas",
+        "    res = PrjUpisPoziv(p, -1, ambErrNum, greska)\n",
+        '    p("brutoKgI") = 0#: res = PrjUpisPoziv(p, -1, ambErrNum, greska)   '
+        "' SABOTAZA: bruto ne stize do pisca\n",
+        "T_S6K6_F4UpisKrozPotez",
+        "F4 bruto: stavka nosi neto i uneti bruto",
+    ),
+    "s6k6-negativna-kilaza-prolazi": (
+        "modDokUnos.bas",
+        "    If kolI < 0 Then\n"
+        '        fokus = "kolicinaI": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA"): Exit Function\n',
+        "    If False Then   ' SABOTAZA: negativna kilaza klase I tiho prolazi\n"
+        '        fokus = "kolicinaI": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA"): Exit Function\n',
+        "T_S6K6_UlazNeMenjaPodatak",
+        "-5 kg u klasi I uz klasu II se odbija na polju",
+    ),
+    "s6k6-decimalne-gajbe-prolaze": (
+        "modDokUnos.bas",
+        "    If kolAmb <> Int(kolAmb) Then\n"
+        '        fokus = "kolAmb": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO"): Exit Function\n',
+        "    If False Then   ' SABOTAZA: decimalne gajbe klase I prolaze\n"
+        '        fokus = "kolAmb": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO"): Exit Function\n',
+        "T_S6K6_UlazNeMenjaPodatak",
+        "20,5 gajbi klase I se odbija na polju",
+    ),
+    "s6k6-broj-globalno": (
+        "modDokUnos.bas",
+        '    dup = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, S(p, "brDok"), COL_PRJ_DATUM, _\n'
+        '                         COL_PRJ_KUPAC, S(p, "kupacID"))\n',
+        '    dup = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, S(p, "brDok"), COL_PRJ_DATUM)\n'
+        "    ' SABOTAZA: broj se opet proverava preko svih kupaca\n",
+        "T_S6K6_BrojJedinstvenPoKupcu",
+        "broj koji drzi drugi kupac prolazi",
+    ),
+    "s6k6-broj-isti-kupac-prolazi": (
+        "modDokUnos.bas",
+        "    If Len(dup) > 0 Then\n"
+        '        fokus = "brDok": PrijemnicaValidiraj = dup: Exit Function\n',
+        "    If False Then   ' SABOTAZA: isti broj istog kupca prolazi\n"
+        '        fokus = "brDok": PrijemnicaValidiraj = dup: Exit Function\n',
+        "T_S6K6_BrojJedinstvenPoKupcu",
+        "isti broj istog kupca se odbija",
+    ),
+    "s6k6-razlog-pisca-se-guta": (
+        "modDokUnos.bas",
+        "        If Len(greska) > 0 Then poruke = poruke & greska\n",
+        "        ' SABOTAZA: razlog pisca se guta (KI-020)\n",
+        "T_S6K6_RazlogPiscaStizeDoEkrana",
+        "F4: poruka neuspelog upisa nosi razlog pisca",
+    ),
+    "s6k6-prij-validator-bez-tipa": (
+        "modDokUnos.bas",
+        "    PrijemnicaValidiraj = PrijemnicaTipPoruka(p, strogo)\n",
+        '    PrijemnicaValidiraj = ""   \' SABOTAZA: validator F4 ne pita za tip\n',
+        "T_KI021_ValidatoriTraziSifarnik",
+        "prijemnica kroz validator: tip van sifarnika staje na polju",
+    ),
+    "ruta-prijemnica": (
+        "modScrDokumenti.bas",
+        '        Case "PRIJEMNICA"\n'
+        "            Scr_Save = SavePrijemnica(polja)\n"
+        "            Exit Function\n",
+        "        ' SABOTAZA: prijemnica vise nije vezana na svoj upis\n",
+        "T_ScrSave_RutaPoRezimu",
+        "prijemnica ide u modDokUnos.PrijemnicaValidiraj",
+    ),
 }
 
 

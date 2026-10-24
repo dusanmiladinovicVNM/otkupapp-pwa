@@ -8577,6 +8577,8 @@ Private Sub FokusNaPolje(ByVal kljuc As String)
         Case "cenaII":       mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena2T").SetFocus
         Case "kolAmb":       mFrm.Controls("zForm").Controls("fgKolAmb").Controls("fgKolAmbT").SetFocus
         Case "kolAmbII":     mFrm.Controls("zForm").Controls("fgKolAmbII").Controls("fgKolAmbIIT").SetFocus
+        ' polje izdate ambalaze; u F4 znaci VRACENA (S6 korak 6: validator prijemnice)
+        Case "kolAmbIzdata": mFrm.Controls("zForm").Controls("fgAmbPr").Controls("fgAmbPrT").SetFocus
         Case "tipAmb":       mFrm.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT").SetFocus
         Case "parcelaID":    mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT").SetFocus
         Case "vozacID":      mFrm.Controls("zCtx").Controls("cbVozac").SetFocus
