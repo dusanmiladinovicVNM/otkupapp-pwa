@@ -364,6 +364,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6K5_PadPosleUpisaVracaFakturu
     Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka
     Test_S6K5_LinijaBezFaktureJeKvar
+    Test_S6K6_F4DokumentProlaziLanac
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
     Test_AMB_TipVanSifarnikaPisacOdbija
     Test_ODL24_UgovorPozajmice
@@ -8060,6 +8061,109 @@ EH:
     LogFatal "Test_S6K5_LinijaBezFaktureJeKvar", Err.Number, Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' S6 KORAK 6 (R2, plan 14.55 "Korak 6"): DOKUMENT KOJI F4 NAPRAVI PROLAZI SVE STO
+' JE POSLE NJEGA.
+'
+' Zbirna je PRAVA: otkup -> izdata otpremnica -> izdata zbirna, sve kroz pisce
+' (CreateZbirna_TX je odmah izdaje). Prijemnica ide kroz EKRAN F4
+' (modScrDokumenti.Scr_Save -> PrijemnicaValidiraj -> PrijemnicaUpisi), dakle i
+' kroz kapiju PRJ-ZBR-01. Posle toga: knjiga (jedna noga punih = zbir gajbi
+' stavki, jedan povrat), palete po stavci, faktura nad jednom stavkom (DELIM),
+' F8 storno odbijen dok je dokument fakturisan, pa storno fakture i storno
+' prijemnice kroz F8 (kontra-stav obe noge, palete skinute).
+' Ispravka prijemnice na cekanju bi otvorila pitanje u validatoru (MsgBox, odluka
+' 3): preduslov se tvrdi, i tada se potez ne pusta.
+Private Sub Test_S6K6_F4DokumentProlaziLanac()
+    On Error GoTo EH
+    Dim scenario As String, otpI As String, otpII As String, ocek As Collection
+    Dim h As Object, razlog As String, zbrID As String, brZbr As String, nPend As Long
+    Dim pf As Object, res As String, broj As String, prj As String, rod As String
+    Dim stI As String, stII As String, fid As String, poruka As String
+    Dim okPre As Boolean, okFak As Boolean, okPrj As Boolean
+
+    scenario = NewScenarioCode("S6K6F4")
+    otpI = Pr3Otpremnica(TEST_PREFIX & "-OTP-S6K6I-" & scenario, KLASA_I, 400#, 20)
+    otpII = Pr3Otpremnica(TEST_PREFIX & "-OTP-S6K6II-" & scenario, KLASA_II, 150#, 10)
+    Set ocek = New Collection
+    ocek.Add Pr3Ocekivano(KLASA_I, 400#, 20)
+    ocek.Add Pr3Ocekivano(KLASA_II, 150#, 10)
+    brZbr = TEST_PREFIX & "-ZBR-S6K6-" & scenario
+    Set h = Pr3Header(brZbr)
+    zbrID = CreateZbirna_TX(h, Pr3Izvor(otpI, otpII), ocek, razlog)
+    nPend = modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_PRIJEMNICA, SV_MODE_ISPRAVKA)
+
+    AssertTrue Len(zbrID) > 0 And modDokumenta.ZbirnaJeIzdata(zbrID), _
+               "S6K6 F4: preduslov -- zbirna je izdata kroz pravi lanac"
+    AssertEquals "0", CStr(nPend), "S6K6 F4: preduslov -- nema ispravke prijemnice na cekanju"
+    AssertTrue IsPaletiranjeEnabled(), "S6K6 F4: preduslov -- paletiranje je ukljuceno"
+
+    broj = TEST_PREFIX & "-PRJ-S6K6-" & scenario
+    Set pf = CreateObject("Scripting.Dictionary")
+    pf.CompareMode = vbTextCompare
+    pf("rezim") = "PRIJEMNICA"
+    pf("datum") = CDate(h("Datum"))
+    pf("kooperantID") = TEST_KUP_ID
+    pf("vozacID") = TEST_VOZ_ID
+    pf("brDok") = broj
+    pf("brojZbirne") = brZbr
+    pf("vrsta") = TEST_VRSTA
+    pf("sorta") = TEST_SORTA
+    pf("tipAmb") = TEST_TIP_AMB
+    pf("kolicinaI") = 380#
+    pf("cenaI") = 50#
+    pf("kolAmb") = 20&
+    pf("kolAmbIzdata") = 5&
+    pf("dveKlase") = True
+    pf("kolicinaII") = 140#
+    pf("cenaII") = 40#
+    pf("kolAmbII") = 10&
+    If Len(zbrID) > 0 And nPend = 0 Then
+        res = modScrDokumenti.Scr_Save(pf)
+    Else
+        res = "<potez nije pusten>"
+    End If
+    prj = Trim$(nz(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_ID), ""))
+    If Len(prj) > 0 Then
+        rod = Trim$(nz(GetValueByKey(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_DETE_ZBIRNA_ROD), ""))
+        stI = S6StavkaID(prj, KLASA_I)
+        stII = S6StavkaID(prj, KLASA_II)
+    End If
+
+    AssertEquals "", res, "S6K6 F4: upis kroz ekran F4 prolazi"
+    AssertEquals "True|" & zbrID, CStr(Len(prj) > 0) & "|" & rod, _
+                 "S6K6 F4: prijemnica je vezana na izdatu zbirnu iz lanca"
+    AssertEquals "I,II", S6StavkeKlase(prj), "S6K6 F4: dokument ima dve stavke, I pa II"
+    AssertEquals "1|30|1|5", CStr(S6AmbBroj(prj, AMB_VK_UZ_ROBU)) & "|" & _
+                 CStr(S6AmbKolicina(prj, AMB_VK_UZ_ROBU)) & "|" & _
+                 CStr(S6AmbBroj(prj, AMB_VK_POVRAT_PRAZNE)) & "|" & _
+                 CStr(S6AmbKolicina(prj, AMB_VK_POVRAT_PRAZNE)), _
+                 "S6K6 F4: knjiga ima jednu nogu punih = zbir gajbi stavki i jedan povrat"
+    AssertEquals "20|10", CStr(S6GajbiNaPaletama(prj, stI)) & "|" & CStr(S6GajbiNaPaletama(prj, stII)), _
+                 "S6K6 F4: palete nose gajbe svake stavke pod njenim kljucem"
+
+    ' Faktura nad stavkom klase I -- bez dokumenta se ne zove (prazan ID bi se
+    ' razresio po broju, KI-041).
+    If Len(stI) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stI)
+    AssertEquals "DELIM", S6K5Fakturisanost(prj), _
+                 "S6K6 F4: faktura nad stavkom I cini dokument delimicno fakturisanim"
+
+    If Len(prj) > 0 Then okPre = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, broj, "", poruka, S6K4Ident(prj))
+    AssertTrue Len(prj) > 0 And Not okPre And Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K6 F4: F8 odbija storno fakturisane prijemnice iz F4"
+    If Len(fid) > 0 Then okFak = modStornoDok.StornoIzvrsi(STIP_FAKTURA, S6K5BrojFakture(fid), "", poruka, fid)
+    AssertTrue okFak, "S6K6 F4: F8 stornira fakturu"
+    If Len(prj) > 0 And okFak Then okPrj = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, broj, "", poruka, S6K4Ident(prj))
+    AssertTrue okPrj And S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K6 F4: storno prijemnice posle storna fakture prolazi kroz F8"
+    AssertEquals "True|0", CStr(Len(prj) > 0) & "|" & CStr(S6GajbiNaPaletama(prj, "")), _
+                 "S6K6 F4: storno skida gajbe sa paleta"
+    AssertEquals "2", CStr(S6AmbKontraStavova(prj)), _
+                 "S6K6 F4: storno stavlja kontra-stav obe noge knjige"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K6_F4DokumentProlaziLanac", Err.Number, Err.description
 End Sub
 
 ' --- pomocnici S6 koraka 5 -- nad praznim ID-jem vracaju prazno ---

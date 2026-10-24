@@ -364,6 +364,12 @@ Public Sub RunAllTests()
     RunOne 260
     RunOne 261
     RunOne 262
+    RunOne 263
+    RunOne 264
+    RunOne 265
+    RunOne 266
+    RunOne 267
+    RunOne 268
     RunOne 13
     RunOne 14
     RunOne 15
@@ -683,7 +689,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 5: TestName = "T_ParcelaID_IzSkriveneKolone"
         Case 6: TestName = "T_ClearForm_Ugovor"
         Case 7: TestName = "T_ZbirnaUnos_ValidatorRadi"
-        Case 8: TestName = "T_PrijemnicaUnos_PauziranDoS6"
+        Case 8: TestName = "T_PrijemnicaValidiraj_TraziKupca"
         Case 9: TestName = "T_ScrSave_RutaPoRezimu"
         Case 10: TestName = "T_IsplataValidiraj_TipNovcaPoIzboru"
         Case 11: TestName = "T_UplataValidiraj_FakturaOdlucujeTip"
@@ -916,6 +922,12 @@ Private Function TestName(ByVal idx As Long) As String
         Case 260: TestName = "T_S6K4_StornoCitaStavkeIIdentitet"
         Case 261: TestName = "T_S6K4_UvidKazeOdbijanje"
         Case 262: TestName = "T_S6K5_FakturisanostJedanIzvor"
+        Case 263: TestName = "T_BrutoNeto_PoRezimu"
+        Case 264: TestName = "T_Prijemnica_VezujeSeSamoNaJednoznacnu"
+        Case 265: TestName = "T_S6K6_F4UpisKrozPotez"
+        Case 266: TestName = "T_S6K6_UlazNeMenjaPodatak"
+        Case 267: TestName = "T_S6K6_BrojJedinstvenPoKupcu"
+        Case 268: TestName = "T_S6K6_RazlogPiscaStizeDoEkrana"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -955,7 +967,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 5: T_ParcelaID_IzSkriveneKolone
         Case 6: T_ClearForm_Ugovor
         Case 7: T_ZbirnaUnos_ValidatorRadi
-        Case 8: T_PrijemnicaUnos_PauziranDoS6
+        Case 8: T_PrijemnicaValidiraj_TraziKupca
         Case 9: T_ScrSave_RutaPoRezimu
         Case 10: T_IsplataValidiraj_TipNovcaPoIzboru
         Case 11: T_UplataValidiraj_FakturaOdlucujeTip
@@ -1186,6 +1198,12 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 260: T_S6K4_StornoCitaStavkeIIdentitet
         Case 261: T_S6K4_UvidKazeOdbijanje
         Case 262: T_S6K5_FakturisanostJedanIzvor
+        Case 263: T_BrutoNeto_PoRezimu
+        Case 264: T_Prijemnica_VezujeSeSamoNaJednoznacnu
+        Case 265: T_S6K6_F4UpisKrozPotez
+        Case 266: T_S6K6_UlazNeMenjaPodatak
+        Case 267: T_S6K6_BrojJedinstvenPoKupcu
+        Case 268: T_S6K6_RazlogPiscaStizeDoEkrana
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -2094,25 +2112,44 @@ Private Sub T_ZbirnaUnos_ValidatorRadi()
              "F3: unos bez vrste i sorte i dalje prolazi"
 End Sub
 
-' F4 JE PAUZIRAN DO S6 (Prijemnica cutover), ne do S4: S4 vraca samo zbirnu.
-' Razlog je isti kao kod F3 -- prijemnica trazi postojecu zbirnu.
-Private Sub T_PrijemnicaUnos_PauziranDoS6()
+' F4 -- REDOSLED PROVERA (vraceno iz 14.14, S6 korak 6, R3). Prijemnica je prijem
+' kod kupca: bez kupca ne postoji, pa je on prva provera; zatim vozac, broj i broj
+' zbirne, svaki sa svojim poljem (redosled nije stil nego navika operatera).
+' Do koraka 6 je ovde stajao T_PrijemnicaUnos_PauziranDoS6 -- pauza pre svih
+' provera. Pauza je otisla, pa se premisa menja.
+' Unos je inace ispravan, a svaki slucaj staje PRE provera zbirne: nijedan ne
+' stize do pitanja u validatoru (MsgBox).
+' SABOTAZE: prijemnica-kupac i s6k6-f4-pauza-vracena -> "prijemnica bez kupca se
+' odbija".
+Private Sub T_PrijemnicaValidiraj_TraziKupca()
     Dim p As Object, fokus As String, res As String
 
     modSetup.EnsurePoruke
 
     Set p = PrijemnicaUnosKojiProlazi()
-    res = modDokUnos.PrijemnicaValidiraj(p, fokus)
-    AssertEq res, Poruka("DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA"), _
-             "F4: prijemnica je pauzirana i to se kaze"
-    AssertEq (InStr(1, res, "[", vbBinaryCompare) = 1), False, _
-             "F4: poruka pauze postoji u katalogu"
-
-    Set p = PrijemnicaUnosKojiProlazi()
     p("kupacID") = ""
     res = modDokUnos.PrijemnicaValidiraj(p, fokus)
-    AssertEq res, Poruka("DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA"), _
-             "F4: pauza je pre provere kupca"
+    AssertEq res, Poruka("DOKUNOS_ERR_KUPAC"), "prijemnica bez kupca se odbija"
+    AssertEq fokus, "kupacID", "fokus se vraca na kupca"
+
+    ' Obrnut smer + red provera: sa kupcem prijemnica staje tek na vozacu.
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("vozacID") = ""
+    res = modDokUnos.PrijemnicaValidiraj(p, fokus)
+    AssertEq res, Poruka("DOKUNOS_ERR_VOZAC"), "sa kupcem prijemnica staje tek na vozacu"
+    AssertEq fokus, "vozacID", "fokus se vraca na vozaca"
+
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brDok") = ""
+    res = modDokUnos.PrijemnicaValidiraj(p, fokus)
+    AssertEq res, Poruka("OTKUI_ERR_BROJ"), "sa vozacem prijemnica staje tek na broju"
+    AssertEq fokus, "brDok", "fokus se vraca na broj prijemnice"
+
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brojZbirne") = ""
+    res = modDokUnos.PrijemnicaValidiraj(p, fokus)
+    AssertEq res, Poruka("DOKUNOS_ERR_BROJ_ZBIRNE"), "prijemnica bez broja zbirne se odbija"
+    AssertEq fokus, "brojZbirne", "fokus se vraca na broj zbirne"
 End Sub
 
 
@@ -2147,9 +2184,12 @@ Private Sub T_ScrSave_RutaPoRezimu()
     AssertEq modScrDokumenti.Scr_Save(p), Poruka("DOKUNOS_ERR_BROJ_ZBIRNE"), _
              "zbirna ide u modDokUnos.ZbirnaValidiraj"
 
+    ' F4: od S6 koraka 6 pauze nema, pa ruta se dokazuje prvim pravilom
+    ' prijemnice -- kupac, sa fokusom na kupca.
     Set p = PoljaEkrana(modScrDokumenti.modeKey("F4"))
-    AssertEq modScrDokumenti.Scr_Save(p), Poruka("DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA"), _
+    AssertEq modScrDokumenti.Scr_Save(p), Poruka("DOKUNOS_ERR_KUPAC"), _
              "prijemnica ide u modDokUnos.PrijemnicaValidiraj"
+    AssertEq CStr(p("fokus")), "kupacID", "prijemnica: ekran vraca fokus na kupca"
 
     ' F5: iznos veci od neisplacenog ostatka bloka -- pravilo koje postoji SAMO
     ' na putu isplate. Isplata nema proveru duplikata broja (A2 red NOV), pa
@@ -10174,6 +10214,600 @@ Private Function S6K5DetaljTekst(ByVal prjID As String) As String
     If IsArray(d) Then S6K5DetaljTekst = Join(d, "|")
 End Function
 
+'=====================================================================
+' S6 KORAK 6: F4 ODMRZNUT (plan 14.55 "Korak 6", stavka 193)
+'=====================================================================
+
+' SVEZA ZBIRNA ZA F4 (odluka 2, PRJ-ZBR-01). Nacrt nastaje kroz PRAVI pisac
+' (CreateZbirnaDraft_TX), a status IZDATO postavlja test.
+'
+' SINTETICKO STANJE, namerno: izdata zbirna bez izvora ne nastaje u produkciji
+' (izdavanje trazi pokrivenu najavu), ali kapija F4 cita SAMO status razresenog
+' dokumenta. Pravi lanac (otkup -> otpremnica -> izdata zbirna) meri BFP
+' Test_S6K6_F4DokumentProlaziLanac. Test status VRACA u nacrt pre tvrdnji
+' (S6K6Nacrt): izdata zbirna bez izvora bi oborila tudji test koji izdate zbirne
+' cita strogim citaocem.
+'
+' Sveza, a ne fixture zbirna: na ZB-TEST-1 drugi testovi upisuju prijemnice, a
+' druga prijemnica iste zbirne otvara pitanje "dupla prijemnica" (MsgBox u
+' validatoru, odluka 3) -- headless run bi tada visio.
+Private Function S6K6Zbirna(ByVal oznaka As String, ByVal izdata As Boolean, _
+                            ByRef outBroj As String, _
+                            Optional ByVal vozacID As String = FX_VOZAC, _
+                            Optional ByVal kupacID As String = FX_KUPAC) As String
+    Dim h As Object, st As Object, ocek As Collection, g As String, zid As String
+
+    outBroj = "ZB-S6K6-" & oznaka & "-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", CDate(FX_DATUM)
+    h.Add "VozacID", vozacID
+    h.Add "BrojZbirne", outBroj
+    h.Add "KupacID", kupacID
+    h.Add "Hladnjaca", ""
+    h.Add "Pogon", ""
+    Set st = CreateObject("Scripting.Dictionary")
+    st.Add "Klasa", KLASA_I
+    st.Add "Kolicina", 500#
+    st.Add "KolAmbalaze", 50#
+    Set ocek = New Collection
+    ocek.Add st
+
+    zid = modDokumenta.CreateZbirnaDraft_TX(h, ocek, g)
+    If Len(zid) = 0 Then
+        Err.Raise ERR_ASSERT, "modTest.S6K6Zbirna", "preduslov: nacrt zbirne nije napravljen: " & g
+    End If
+    If izdata Then PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zid, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO
+    S6K6Zbirna = zid
+End Function
+
+' Vraca sinteticki izdatu zbirnu u stanje koje je pisac napravio (nacrt).
+Private Sub S6K6Nacrt(ByVal zbirnaID As String)
+    If Len(zbirnaID) = 0 Then Exit Sub
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_TRACE_IZDATO_STATUS, IZDATO_DRAFT
+End Sub
+
+' Ispravka prijemnice na cekanju otvara pitanje u validatoru (MsgBox). Preduslov
+' se zato tvrdi PRE poteza (odluka 3): prekrsen daje crveno po imenu, ne visenje.
+Private Function S6K6IspravkeNaCekanju() As Long
+    S6K6IspravkeNaCekanju = modStornoContext.CountPendingCorrectionsByDocType( _
+                                FLOW_DOC_PRIJEMNICA, SV_MODE_ISPRAVKA)
+End Function
+
+' Prijemnica koja prolazi sve provere nad datom (sveze izdatom) zbirnom.
+Private Function S6K6Unos(ByVal brojZbirne As String, ByVal oznaka As String) As Object
+    Dim p As Object
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brojZbirne") = brojZbirne
+    p("brDok") = "PR-S6K6-" & oznaka & "-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    Set S6K6Unos = p
+End Function
+
+' Ishod validatora kao "poruka|fokus".
+Private Function S6K6Validiraj(ByVal p As Object) As String
+    Dim fokus As String, r As String
+    r = modDokUnos.PrijemnicaValidiraj(p, fokus)
+    S6K6Validiraj = r & "|" & fokus
+End Function
+
+Private Function S6K6Num(ByVal v As Variant) As String
+    If IsNumeric(v) And Not IsEmpty(v) Then
+        S6K6Num = CStr(CDbl(v))
+    Else
+        S6K6Num = Trim$(NzToText(v))
+    End If
+End Function
+
+' Stavke dokumenta redom po RedniBroj. sta = "linija" daje "I:300x50/30" (klasa,
+' kolicina, cena, gajbe), sta = "bruto" daje "I:100/110" (kolicina, BrutoKg).
+Private Function S6K6Stavke(ByVal prjID As String, Optional ByVal sta As String = "linija") As String
+    Dim d As Variant, i As Long, rb As Long, s As String, deo As String
+    Dim cP As Long, cR As Long, cK As Long, cKol As Long, cC As Long, cA As Long, cB As Long
+    If Len(prjID) = 0 Then
+        S6K6Stavke = "<nema dokumenta>"
+        Exit Function
+    End If
+    d = GetTableData(TBL_PRIJEMNICA_STAVKE)
+    If Not IsArray(d) Then Exit Function
+    cP = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID)
+    cR = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_RB)
+    cK = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA)
+    cKol = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA)
+    cC = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA)
+    cA = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOL_AMB)
+    cB = GetColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_BRUTO)
+    For rb = 1 To 9
+        For i = 1 To UBound(d, 1)
+            If Trim$(NzToText(d(i, cP))) = prjID And S6K6Num(d(i, cR)) = CStr(rb) Then
+                If sta = "bruto" Then
+                    deo = S6K6Num(d(i, cKol)) & "/" & S6K6Num(d(i, cB))
+                Else
+                    deo = S6K6Num(d(i, cKol)) & "x" & S6K6Num(d(i, cC)) & "/" & S6K6Num(d(i, cA))
+                End If
+                If Len(s) > 0 Then s = s & "|"
+                s = s & Trim$(NzToText(d(i, cK))) & ":" & deo
+            End If
+        Next i
+    Next rb
+    S6K6Stavke = s
+End Function
+
+' Zaglavlje: kupac|vozac|tip|povrat|ZbirnaRoditeljID.
+Private Function S6K6Zaglavlje(ByVal prjID As String) As String
+    If Len(prjID) = 0 Then
+        S6K6Zaglavlje = "<nema dokumenta>"
+        Exit Function
+    End If
+    S6K6Zaglavlje = _
+        NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, COL_PRJ_KUPAC)) & "|" & _
+        NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, COL_PRJ_VOZAC)) & "|" & _
+        NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, COL_PRJ_TIP_AMB)) & "|" & _
+        S6K6Num(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, COL_PRJ_KOL_AMB_VRACENA)) & "|" & _
+        NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, COL_DETE_ZBIRNA_ROD))
+End Function
+
+' Prefill F4 istim recnikom kojim formu puni "Zamena" (ApplyPrefill).
+Private Function S6K6Spec(ByVal broj As String, ByVal brZbr As String, _
+                          ByVal kg1 As String, ByVal amb1 As String, ByVal cena1 As String, _
+                          ByVal kg2 As String, ByVal amb2 As String, ByVal cena2 As String, _
+                          ByVal ambPr As String) As String
+    S6K6Spec = "datum=" & Format$(Date, "dd.mm.yyyy") & _
+               "|partnerid=" & FX_KUPAC & "|vozacid=" & FX_VOZAC & _
+               "|brdok=" & broj & "|brzbirne=" & brZbr & _
+               "|vrsta=" & FX_VRSTA & "|sorta=" & FX_SORTA & "|tipamb=" & FX_TIP_AMB & _
+               "|dveklase=2|kol1=" & kg1 & "|amb1=" & amb1 & "|cena=" & cena1 & _
+               "|kol2=" & kg2 & "|amb2=" & amb2 & "|cena2=" & cena2 & "|ambpr=" & ambPr
+End Function
+
+' 263. BRUTO -> NETO PO REZIMU (vraceno iz 14.14, S6 korak 6, R4).
+'
+'   PRIJEMNICA zamrzava uneti bruto u BrutoKg, a u Kolicinu daje neto -- po
+'   klasi, jer su gajbice po klasi zasebne.
+'   ZBIRNA bruto NEMA i ne sme da ga dobije: zbir je SVOJIH otpremnica, a one su
+'   vec u netu. Kapija "zbirna = zbir otpremnica" iz 14.14 je u S4 presla na
+'   izdavanje, pa se ovde meri samo da validator zbirne kolicinu ne dira.
+'
+' Prijemnica mora da PRODJE ceo validator (""), pa joj treba sveza izdata zbirna
+' (PRJ-ZBR-01) i nijedna ispravka na cekanju (odluka 3). Podesavanje i status
+' zbirne se vracaju PRE tvrdnji.
+' SABOTAZE: bruto-prijemnica -> "uneti bruto Kl.I se zamrzava u BrutoKg";
+' bruto-prijemnica-neto -> "u Kolicinu Kl.I ide neto (bruto - tara)";
+' bruto-zbirna -> "zbirna se NE preracunava iz bruta".
+Private Sub T_BrutoNeto_PoRezimu()
+    Dim pp As Object, pz As Object, fokus As String, resP As String
+    Dim prevBruto As String, brZbr As String, zid As String
+    Dim errNum As Long, errDesc As String
+
+    AssertEq S6K6IspravkeNaCekanju(), 0, "preduslov: nema ispravke prijemnice na cekanju"
+    prevBruto = NzToText(GetConfigValue(CFG_OTKUP_BRUTO_UNOS))
+
+    On Error GoTo CleanUp
+    zid = S6K6Zbirna("BRT", True, brZbr)
+    SetConfigValue CFG_OTKUP_BRUTO_UNOS, "DA"
+
+    Set pp = S6K6Unos(brZbr, "BRT")
+    pp("kolicinaI") = 110               ' bruto = 100 kg voca + 10 gajbica po 1 kg
+    pp("kolAmb") = 10
+    pp("dveKlase") = True
+    pp("kolicinaII") = 55               ' bruto = 50 kg + 5 gajbica
+    pp("cenaII") = 40
+    pp("kolAmbII") = 5
+    resP = modDokUnos.PrijemnicaValidiraj(pp, fokus)
+
+    Set pz = ZbirnaUnosKojiSeSlaze()
+    modDokUnos.ZbirnaValidiraj pz, fokus
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    SetConfigValue CFG_OTKUP_BRUTO_UNOS, prevBruto
+    S6K6Nacrt zid
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_BrutoNeto_PoRezimu", errDesc
+
+    AssertEq pp("brutoKgI"), 110, "uneti bruto Kl.I se zamrzava u BrutoKg"
+    AssertEq pp("kolicinaI"), 100, "u Kolicinu Kl.I ide neto (bruto - tara)"
+    AssertEq pp("brutoKgII"), 55, "uneti bruto Kl.II se zamrzava u BrutoKg"
+    AssertEq pp("kolicinaII"), 50, "u Kolicinu Kl.II ide neto (bruto - tara)"
+    AssertEq resP, "", "prijemnica sa ispravnim bruto unosom prolazi provere"
+
+    AssertEq pz("kolicinaI"), FX_ZBIRNA_KG, "zbirna se NE preracunava iz bruta"
+    AssertEq pz.Exists("brutoKgI"), False, "zbirna nema BrutoKg (nema ga ni tabela)"
+End Sub
+
+' 264. PRIJEMNICA SE VEZUJE SAMO NA IZDATU, JEDNOZNACNU ZBIRNU (vraceno iz 14.14,
+' S6 korak 6, R5; ZBR_IDENTITET.md par.6 -- A13, A14; PRJ-ZBR-01).
+'
+' Meri se kroz PRAVI validator. Legitiman slucaj (sveza izdata zbirna istog
+' vlasnika) mora da prodje CEO validator -- bez toga bi test bio zelen i kad
+' kapija odbija sve. Odbijeni slucajevi staju na kapiji, pre pitanja u
+' validatoru.
+'
+' PRIJEMNICA_ZBIRNA_PROVERA se postavlja na BLOK: fixture od donora nosi
+' UPOZORENJE (izmereno, stavka 193), a uz njega grana "zbirne nema" otvara
+' MsgBox i headless run visi. Stanje fixture-a se POSTAVLJA, ne pretpostavlja, i
+' vraca pre tvrdnji.
+' SABOTAZE: zbirna-f4-nije-vezan -> "dva aktivna dokumenta pod istim brojem
+' zaustavljaju prijemnicu"; zbirna-f4-pusta-tudjeg-vlasnika -> "zbirna drugog
+' vlasnika zaustavlja prijemnicu"; s6k6-f4-pusta-nacrt-zbirne -> "nacrt zbirne
+' zaustavlja prijemnicu (PRJ-ZBR-01)".
+Private Sub T_Prijemnica_VezujeSeSamoNaJednoznacnu()
+    Dim p As Object, fokus As String
+    Dim rDobar As String, rNacrt As String, rNema As String, rDvosmislen As String
+    Dim rTudj As String, rIstorija As String
+    Dim pD1 As String, pD2 As String, pTgtB As String, pTgtA As String, prevZbr As String
+    Dim brIzdata As String, brNacrt As String, zidIzdata As String
+    Dim errNum As Long, errDesc As String
+
+    AssertEq S6K6IspravkeNaCekanju(), 0, "preduslov: nema ispravke prijemnice na cekanju"
+    pD1 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO))
+    pD2 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO))
+    pTgtB = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO))
+    pTgtA = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO))
+    prevZbr = NzToText(GetConfigValue(CFG_PRIJEMNICA_ZBIRNA_PROVERA))
+
+    On Error GoTo CleanUp
+    zidIzdata = S6K6Zbirna("VEZI", True, brIzdata)
+    S6K6Zbirna "VEZN", False, brNacrt
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, "Da"
+    SetConfigValue CFG_PRIJEMNICA_ZBIRNA_PROVERA, "BLOK"
+
+    ' 1) LEGITIMNO: sveza izdata zbirna istog vlasnika prolazi CEO validator.
+    rDobar = S6K6Validiraj(S6K6Unos(brIzdata, "VEZOK"))
+
+    ' 2) PRJ-ZBR-01: nacrt istog vlasnika -- jednoznacan, ali nije izdat.
+    rNacrt = S6K6Validiraj(S6K6Unos(brNacrt, "VEZNACRT"))
+
+    ' 3) A13: zbirne pod tim brojem NEMA -- uz BLOK stara poruka, bez dijaloga.
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brojZbirne") = "ZB-NE-POSTOJI"
+    rNema = modDokUnos.PrijemnicaValidiraj(p, fokus)
+
+    ' 4) DVOSMISLEN: dva aktivna dokumenta pod istim brojem.
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brojZbirne") = FX_ZBIRNA_SLDD
+    p("kupacID") = FX_KUPAC2
+    rDvosmislen = modDokUnos.PrijemnicaValidiraj(p, fokus)
+
+    ' 5) TUDJ: aktivna zbirna postoji, ali pripada drugom vozacu.
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brojZbirne") = FX_ZBIRNA_MIRNA
+    p("vozacID") = FX_VOZAC2
+    rTudj = modDokUnos.PrijemnicaValidiraj(p, fokus)
+
+    ' 6) ISTORIJA: danas jednoznacan, ali su ga IKAD drzala dva vlasnika.
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brojZbirne") = FX_ZBIRNA_TGT
+    rIstorija = modDokUnos.PrijemnicaValidiraj(p, fokus)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, pD1
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, pD2
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B", COL_STORNIRANO, pTgtB
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A", COL_STORNIRANO, pTgtA
+    SetConfigValue CFG_PRIJEMNICA_ZBIRNA_PROVERA, prevZbr
+    S6K6Nacrt zidIzdata
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_Prijemnica_VezujeSeSamoNaJednoznacnu", errDesc
+
+    AssertEq rDobar, "|", "jednoznacna izdata zbirna istog vlasnika prolazi validator"
+    AssertEq rNacrt, Poruka("DOKUNOS_ERR_ZBR_P_NIJE_IZDATA") & "|brojZbirne", _
+             "nacrt zbirne zaustavlja prijemnicu (PRJ-ZBR-01)"
+    AssertEq rDvosmislen, Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN"), _
+             "dva aktivna dokumenta pod istim brojem zaustavljaju prijemnicu"
+    AssertEq rTudj, Poruka("DOKUNOS_ERR_ZBR_P_TUDJ"), _
+             "zbirna drugog vlasnika zaustavlja prijemnicu"
+    AssertEq rIstorija, Poruka("DOKUNOS_ERR_ZBR_P_ISTORIJA"), _
+             "broj koji su IKAD drzala dva vlasnika zaustavlja prijemnicu"
+    AssertEq (InStr(1, rNema, Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")) > 0), True, _
+             "A13: kad zbirne nema, poruka ostaje postojeca -- I2 tu ne dira politiku"
+    AssertEq (rNema = Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN")), False, _
+             "A13: 'nema zbirne' se ne prijavljuje kao dvosmislenost"
+End Sub
+
+' 265. F4 KROZ POTEZ "SACUVAJ" (S6 korak 6, R1).
+'
+' Ceo potez operatera kroz CommitDokument (CommitDokumentTest), ne pomocnik:
+' forma se puni istim prepisom kojim je puni "Zamena" (ApplyPrefill), pa se
+' klikne "Sacuvaj". Tvrdi se ono sto operater i knjiga vide: jedno zaglavlje,
+' dve stavke sa tacno unetim brojkama, povrat i veza na izabranu izdatu zbirnu na
+' zaglavlju, poruka sa BROJEM prijemnice (odluka 7), bez dijaloga i bez lazne
+' greske, ociscena forma. U bruto rezimu stavka nosi neto i uneti bruto.
+'
+' Dve sveze izdate zbirne: druga prijemnica iste zbirne otvara pitanje "dupla
+' prijemnica" (MsgBox, odluka 3). Vozac dobija gajbe kroz ZasejOpticajVozacu
+' (KI-028, odluka 1). Nalazi se skupljaju pa tvrde posle Unload-a.
+' SABOTAZE: s6k6-f4-pauza-vracena -> "F4 kroz potez pravi jedno zaglavlje";
+' s6k6-poruka-nosi-id -> "F4: poruka posle upisa nosi broj prijemnice, ne
+' interni ID"; s6k6-f4-bruto-ne-stize -> "F4 bruto: stavka nosi neto i uneti
+' bruto".
+Private Sub T_S6K6_F4UpisKrozPotez()
+    Dim f As frmOtkupUI, zf As Object
+    Dim br1 As String, br2 As String, zbr1 As String, zbr2 As String
+    Dim zid1 As String, zid2 As String, prj1 As String, prj2 As String
+    Dim nPre As Long, nPosle As Long, lazna As String, dijalog As String, toast As String
+    Dim kgPosle As String, brPosle As String, prevBruto As String
+    Dim errNum As Long, errDesc As String
+
+    AssertEq S6K6IspravkeNaCekanju(), 0, "preduslov: nema ispravke prijemnice na cekanju"
+    br1 = "PR-S6K6-F4-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    br2 = br1 & "-B"
+    prevBruto = NzToText(GetConfigValue(CFG_OTKUP_BRUTO_UNOS))
+
+    On Error GoTo CleanUp
+    ZasejOpticajVozacu
+    zid1 = S6K6Zbirna("F4", True, zbr1)
+    zid2 = S6K6Zbirna("F4B", True, zbr2)
+    SetConfigValue CFG_OTKUP_BRUTO_UNOS, "NO"
+
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F4"
+    modOtkupUI.ApplyPrefill S6K6Spec(br1, zbr1, "300", "30", "50", "120", "12", "40", "5")
+    nPre = BrojRedovaTabele(TBL_PRIJEMNICA)
+    modOtkupUI.CommitDokumentTest False
+    nPosle = BrojRedovaTabele(TBL_PRIJEMNICA)
+    lazna = modUiScreens.ScrLastErr
+    dijalog = modOtkupUI.DijalogTest()
+    toast = ToastTekst(f)
+    kgPosle = Polje(zf, "fgKgI")
+    brPosle = Polje(zf, "fgBrOtpr")
+
+    ' BRUTO: drugi dokument, druga zbirna (tara 12/1 je 1 kg po gajbi).
+    SetConfigValue CFG_OTKUP_BRUTO_UNOS, "DA"
+    modOtkupUI.ApplyPrefill S6K6Spec(br2, zbr2, "110", "10", "50", "55", "5", "40", "0")
+    modOtkupUI.CommitDokumentTest False
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    SetConfigValue CFG_OTKUP_BRUTO_UNOS, prevBruto
+    S6K6Nacrt zid1
+    S6K6Nacrt zid2
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K6_F4UpisKrozPotez", errDesc
+
+    prj1 = NzToText(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, br1, COL_PRJ_ID))
+    prj2 = NzToText(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, br2, COL_PRJ_ID))
+
+    AssertEq lazna, "", "F4: uspesan upis se ne prijavljuje kao neuspeh"
+    AssertEq nPosle - nPre, 1, "F4 kroz potez pravi jedno zaglavlje"
+    AssertEq dijalog, "", "F4: uspesan upis ne otvara dijalog"
+    AssertEq S6K6Stavke(prj1), "I:300x50/30|II:120x40/12", _
+             "F4: stavke nose tacno unete klase, kilazu, cene i gajbe"
+    AssertEq S6K6Zaglavlje(prj1), FX_KUPAC & "|" & FX_VOZAC & "|" & FX_TIP_AMB & "|5|" & zid1, _
+             "F4: zaglavlje nosi kupca, vozaca, tip, povrat i vezu na izabranu zbirnu"
+    AssertEq (Len(prj1) > 0 And InStr(1, toast, br1, vbBinaryCompare) > 0 And _
+              InStr(1, toast, prj1, vbBinaryCompare) = 0), True, _
+             "F4: poruka posle upisa nosi broj prijemnice, ne interni ID"
+    AssertEq kgPosle & "|" & brPosle, "|", "F4: forma je ociscena posle upisa"
+    AssertEq S6K6Stavke(prj2, "bruto"), "I:100/110|II:50/55", _
+             "F4 bruto: stavka nosi neto i uneti bruto"
+End Sub
+
+' 266. ULAZ F4 NE MENJA PODATAK (S6 korak 6, R6, odluka 5; obrazac ZbirnaValidiraj,
+' review #375).
+'
+' Sonda (stavka 193): -5 kg u klasi I uz klasu II je PROLAZIO, a pisac je klasu I
+' tiho izbacivao (uzima je samo kad je > 0); 20,5 gajbi je prolazilo i upisivalo
+' se kao 20 (L() -> CLng). Nula i minus nisu isto stanje: 0 kg znaci "te klase
+' nema" (II-only je legitimna), a -5 je nevalidan podatak. Gajbe su komadi.
+' Validator se zove direktno, nad svezom izdatom zbirnom; svaki slucaj staje na
+' svom polju, pre pitanja u validatoru. Kontrola (II-only) prolazi ceo validator.
+' SABOTAZE: s6k6-negativna-kilaza-prolazi -> "-5 kg u klasi I uz klasu II se
+' odbija na polju"; s6k6-decimalne-gajbe-prolaze -> "20,5 gajbi klase I se
+' odbija na polju".
+Private Sub T_S6K6_UlazNeMenjaPodatak()
+    Dim brZbr As String, zid As String, p As Object
+    Dim rNegI As String, rNegII As String, rDecI As String, rDecII As String
+    Dim rDecPov As String, rNegAmb As String, rSamoII As String
+    Dim errNum As Long, errDesc As String
+
+    AssertEq S6K6IspravkeNaCekanju(), 0, "preduslov: nema ispravke prijemnice na cekanju"
+
+    On Error GoTo CleanUp
+    zid = S6K6Zbirna("ULZ", True, brZbr)
+
+    Set p = S6K6UnosSamoII(brZbr, "NEG1")
+    p("kolicinaI") = -5
+    rNegI = S6K6Validiraj(p)
+
+    Set p = S6K6Unos(brZbr, "NEG2")
+    p("dveKlase") = True
+    p("kolicinaII") = -5
+    p("cenaII") = 40
+    p("kolAmbII") = 5
+    rNegII = S6K6Validiraj(p)
+
+    Set p = S6K6Unos(brZbr, "DEC1")
+    p("kolAmb") = 20.5
+    rDecI = S6K6Validiraj(p)
+
+    Set p = S6K6Unos(brZbr, "DEC2")
+    p("dveKlase") = True
+    p("kolicinaII") = 50
+    p("cenaII") = 40
+    p("kolAmbII") = 2.5
+    rDecII = S6K6Validiraj(p)
+
+    Set p = S6K6Unos(brZbr, "DECP")
+    p("kolAmbVracena") = 1.5
+    rDecPov = S6K6Validiraj(p)
+
+    Set p = S6K6Unos(brZbr, "NEGA")
+    p("kolAmb") = -3
+    rNegAmb = S6K6Validiraj(p)
+
+    ' KONTROLA: 0 kg u klasi I uz klasu II je II-only prijemnica.
+    rSamoII = S6K6Validiraj(S6K6UnosSamoII(brZbr, "SAMO2"))
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    S6K6Nacrt zid
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K6_UlazNeMenjaPodatak", errDesc
+
+    AssertEq rNegI, Poruka("DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA") & "|kolicinaI", _
+             "-5 kg u klasi I uz klasu II se odbija na polju"
+    AssertEq rNegII, Poruka("DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA") & "|kolicinaII", _
+             "-5 kg u klasi II se odbija na polju"
+    AssertEq rDecI, Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO") & "|kolAmb", _
+             "20,5 gajbi klase I se odbija na polju"
+    AssertEq rDecII, Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO") & "|kolAmbII", _
+             "2,5 gajbi klase II se odbija na polju"
+    AssertEq rDecPov, Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO") & "|kolAmbIzdata", _
+             "1,5 vracenih gajbi se odbija na polju"
+    AssertEq rNegAmb, Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE") & "|kolAmb", _
+             "-3 gajbe klase I se odbijaju na polju"
+    AssertEq rSamoII, "|", "kontrola: 0 kg u klasi I uz klasu II je II-only prijemnica i prolazi"
+End Sub
+
+' II-only prijemnica nad datom zbirnom: klasa I prazna, klasa II 50 x 40 / 5.
+Private Function S6K6UnosSamoII(ByVal brojZbirne As String, ByVal oznaka As String) As Object
+    Dim p As Object
+    Set p = S6K6Unos(brojZbirne, oznaka)
+    p("kolicinaI") = 0
+    p("cenaI") = 0
+    p("kolAmb") = 0
+    p("dveKlase") = True
+    p("kolicinaII") = 50
+    p("cenaII") = 40
+    p("kolAmbII") = 5
+    Set S6K6UnosSamoII = p
+End Function
+
+' 267. BROJ PRIJEMNICE JE JEDINSTVEN PO KUPCU (S6 korak 6, R7, odluka 6; A2).
+'
+' Broj je kupcev (ODL-22), pa dva kupca smeju isti broj. Provera duplikata je do
+' koraka 6 gledala SVE kupce: sonda je izmerila da broj drugog kupca odbija
+' prijemnicu. Isti kupac i dalje ne sme dvaput, a storniran broj se ne broji
+' (ispravka zadrzava broj).
+'
+' Postojeci dokument pravi PRAVI pisac (SavePrijemnicaMulti_TX), za drugog kupca,
+' bez ambalaze (KI-028 ne ulazi), nad SVOJOM zbirnom. Validator se zove nad
+' drugim svezim izdatim zbirnama, bez prijemnice, pa ni sabotaza koja provera
+' pusti ne stize do pitanja "dupla prijemnica".
+' SABOTAZE: s6k6-broj-globalno -> "broj koji drzi drugi kupac prolazi";
+' s6k6-broj-isti-kupac-prolazi -> "isti broj istog kupca se odbija".
+Private Sub T_S6K6_BrojJedinstvenPoKupcu()
+    Dim brZ1 As String, brZ2 As String, brZ3 As String
+    Dim z1 As String, z2 As String, z3 As String, broj As String, prj As String
+    Dim p As Object, rDrugi As String, rIsti As String, rStorn As String
+    Dim okSt As Boolean, det As Long, razlog As String, errN As Long
+    Dim errNum As Long, errDesc As String
+
+    AssertEq S6K6IspravkeNaCekanju(), 0, "preduslov: nema ispravke prijemnice na cekanju"
+    broj = "PR-S6K6-BRJ-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+
+    On Error GoTo CleanUp
+    z1 = S6K6Zbirna("BRJ1", True, brZ1)
+    z2 = S6K6Zbirna("BRJ2", True, brZ2, FX_VOZAC, FX_KUPAC2)
+    z3 = S6K6Zbirna("BRJ3", True, brZ3, FX_VOZAC, FX_KUPAC2)
+
+    prj = modDokumenta.SavePrijemnicaMulti_TX( _
+        datum:=CDate(FX_DATUM), kupacID:=FX_KUPAC2, vozacID:=FX_VOZAC, _
+        brojPrij:=broj, brojZbirne:=brZ3, vrstaVoca:=FX_VRSTA, sortaVoca:=FX_SORTA, _
+        kolicinaI:=100#, cenaI:=50#, tipAmb:="", kolAmb:=0, kolAmbVracena:=0, _
+        outErrNum:=errN)
+
+    Set p = S6K6Unos(brZ1, "BRJD")
+    p("brDok") = broj
+    rDrugi = S6K6Validiraj(p)
+
+    Set p = S6K6Unos(brZ2, "BRJI")
+    p("brDok") = broj
+    p("kupacID") = FX_KUPAC2
+    rIsti = S6K6Validiraj(p)
+
+    If Len(prj) > 0 Then okSt = modStorno.StornoPrijemnica_TX(prj, True, det, razlog)
+    Set p = S6K6Unos(brZ2, "BRJS")
+    p("brDok") = broj
+    p("kupacID") = FX_KUPAC2
+    rStorn = S6K6Validiraj(p)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    S6K6Nacrt z1
+    S6K6Nacrt z2
+    S6K6Nacrt z3
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K6_BrojJedinstvenPoKupcu", errDesc
+
+    AssertEq (Len(prj) > 0), True, "preduslov: dokument drugog kupca je upisan kroz pravi pisac"
+    AssertEq rDrugi, "|", "broj koji drzi drugi kupac prolazi"
+    AssertEq (InStr(1, rIsti, "'" & broj & "'", vbBinaryCompare) > 0) & "|" & _
+             Mid$(rIsti, InStrRev(rIsti, "|") + 1), "True|brDok", _
+             "isti broj istog kupca se odbija"
+    AssertEq okSt, True, "preduslov: storno dokumenta drugog kupca"
+    AssertEq rStorn, "|", "storniran broj istog kupca ne blokira (ispravka zadrzava broj)"
+End Sub
+
+' 268. RAZLOG ODBIJANJA PISCA STIZE DO EKRANA (S6 korak 6, R8, odluka 4; KI-020).
+'
+' Pisac prijemnice odbija i iz razloga koje validator ne vidi -- npr. vozac nema
+' gajbe koje bi predao kupcu (AMB-INV-07; manjak SOPSTVENOG naloga se ne pokriva,
+' AMB-10-ODL-8). Do koraka 6 je PrijemnicaUpisi tada vracao prazno sa PRAZNIM
+' porukama, pa je operater video samo "Greska pri cuvanju prijemnice" bez ijednog
+' "zasto" (sonda 19.10.2026, stavka 154).
+' Ide kroz Scr_Save (ekran -> validator -> upis). Vozac je FX_VOZAC2, kome test
+' gajbe ne seje -- preduslov to tvrdi.
+' SABOTAZA: s6k6-razlog-pisca-se-guta -> "F4: poruka neuspelog upisa nosi razlog
+' pisca".
+Private Sub T_S6K6_RazlogPiscaStizeDoEkrana()
+    Dim brZbr As String, zid As String, p As Object, res As String
+    Dim nPre As Long, nPosle As Long, saldo As Double
+    Dim errNum As Long, errDesc As String
+
+    AssertEq S6K6IspravkeNaCekanju(), 0, "preduslov: nema ispravke prijemnice na cekanju"
+    saldo = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC2, FX_TIP_AMB)
+    AssertEq (saldo < 10), True, "preduslov: vozac nema 10 gajbi tog tipa"
+
+    On Error GoTo CleanUp
+    zid = S6K6Zbirna("RZL", True, brZbr, FX_VOZAC2, FX_KUPAC)
+
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F4"))
+    p("kooperantID") = FX_KUPAC
+    p("vozacID") = FX_VOZAC2
+    p("brDok") = "PR-S6K6-RZL-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    p("brojZbirne") = brZbr
+    p("vrsta") = FX_VRSTA
+    p("sorta") = FX_SORTA
+    p("tipAmb") = FX_TIP_AMB
+    p("kolicinaI") = 100#
+    p("cenaI") = 50#
+    p("kolAmb") = 10&
+    nPre = BrojRedovaTabele(TBL_PRIJEMNICA)
+    res = modScrDokumenti.Scr_Save(p)
+    nPosle = BrojRedovaTabele(TBL_PRIJEMNICA)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    S6K6Nacrt zid
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K6_RazlogPiscaStizeDoEkrana", errDesc
+
+    AssertEq nPosle - nPre, 0, "F4: odbijen upis ne pravi dokument"
+    AssertEq (InStr(1, res, Poruka("DOK_MSG_GRESKA_PRI_CUVANJU_4"), vbBinaryCompare) = 1), True, _
+             "F4: neuspeh upisa imenuje prijemnicu"
+    AssertEq (InStr(1, res, "Manjak:", vbBinaryCompare) > 0), True, _
+             "F4: poruka neuspelog upisa nosi razlog pisca"
+End Sub
+
 ' Napomena (efekat) reda lanca uvida za dati dokument; "nema" kad reda nema.
 Private Function S6K4NapomenaLanca(ByVal broj As String, ByVal prjID As String, _
                                    ByVal dok As String) As String
@@ -10544,19 +11178,23 @@ End Sub
 ' nepostojecim tipom pre ispravke bila upisana kao nacrt (ambalazu knjizi tek
 ' izdavanje), pa bi crveni prolaz prljao svesku. Scr_Save validator zove pre
 ' pisca, kao i za otkup (252). Revers se meri u oba smera: provera tipa stoji
-' pre smera, pa bi je pogresno mesto preskocilo u jednom od njih. Prijemnica je
-' pauzirana do S6 (PrijemnicaValidiraj vraca pauzu pre svega), pa se meri njeno
-' pravilo -- modDokUnos.PrijemnicaTipPoruka; poziv iz validatora je staticki.
+' pre smera, pa bi je pogresno mesto preskocilo u jednom od njih. Za prijemnicu
+' se meri njeno pravilo (modDokUnos.PrijemnicaTipPoruka) i, od S6 koraka 6 (R9),
+' i POZIV iz validatora: pauza F4 je otisla, pa poziv vise nije staticki.
+' Validator ide kroz kapije zbirne, pa mu treba sveza izdata zbirna; staje na
+' tipu, pre pitanja u validatoru.
 ' Povrat praznih se knjizi po tipu, pa tip trazi i bez stroge validacije
 ' (review #432, P3).
 ' SABOTAZE: ki021-otp-bez-sifarnika -> "otpremnica: ..."; ki021-rev-bez-
 ' sifarnika -> "nas revers: ..."; ki021-prij-bez-sifarnika -> "prijemnica: tip
 ' van sifarnika ..."; ki021-prij-povrat-bez-tipa -> "prijemnica povrat bez
-' tipa: ...".
+' tipa: ..."; s6k6-prij-validator-bez-tipa -> "prijemnica kroz validator: tip
+' van sifarnika staje na polju".
 Private Sub T_KI021_ValidatoriTraziSifarnik()
     Dim p As Object, fokus As String, otp As String
     Dim revK As String, revP As String, revN As String
     Dim prijBez As String, prijNema As String, prijPovrat As String
+    Dim prijValid As String, zid As String, brZbr As String
 
     modSetup.EnsurePoruke
     modPoruke.InvalidateCache
@@ -10592,6 +11230,14 @@ Private Sub T_KI021_ValidatoriTraziSifarnik()
     p("tipAmb") = ""
     prijPovrat = modDokUnos.PrijemnicaTipPoruka(p, False)
 
+    ' Poziv iz validatora (R9): pune gajbe, tip van sifarnika.
+    AssertEq S6K6IspravkeNaCekanju(), 0, "preduslov: nema ispravke prijemnice na cekanju"
+    zid = S6K6Zbirna("KI021", True, brZbr)
+    Set p = S6K6Unos(brZbr, "KI021")
+    p("tipAmb") = FX_TIP_NEMA
+    prijValid = S6K6Validiraj(p)
+    S6K6Nacrt zid
+
     AssertEq otp, PorukaTipVanSifarnika(FX_TIP_NEMA) & "|tipAmb", _
              "otpremnica: tip van sifarnika staje na polju"
     AssertEq revK, PorukaTipVanSifarnika(FX_TIP_NEMA) & "|tipAmb", _
@@ -10605,6 +11251,8 @@ Private Sub T_KI021_ValidatoriTraziSifarnik()
              "prijemnica: tip van sifarnika staje na polju"
     AssertEq prijPovrat, Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"), _
              "prijemnica povrat bez tipa: trazi tip i bez stroge validacije"
+    AssertEq prijValid, PorukaTipVanSifarnika(FX_TIP_NEMA) & "|tipAmb", _
+             "prijemnica kroz validator: tip van sifarnika staje na polju"
 End Sub
 
 ' 254. KI-021: COMBO TIPA AMBALAZE JE TACNO SIFARNIK, BEZ REZERVNIH TIPOVA.

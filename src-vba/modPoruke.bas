@@ -1038,6 +1038,8 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_DVOSMISLEN", ChrW(10007) & " Pod tim brojem postoji vi" & ChrW(353) & "e aktivnih zbirnih " & ChrW(8212) & " ne mo" & ChrW(382) & "e se utvrditi na koju se prijemnica ve" & ChrW(382) & "e."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_TUDJ", ChrW(10007) & " Zbirna pod tim brojem pripada drugom voza" & ChrW(269) & "u ili kupcu " & ChrW(8212) & " proveri broj zbirne."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_ISTORIJA", ChrW(10007) & " Taj broj su ranije dr" & ChrW(382) & "ala dva vlasnika " & ChrW(8212) & " vezivanje po broju bi moglo da zahvati tu" & ChrW(273) & "i dokument."
+    ' PRJ-ZBR-01 (S6 korak 6): prijemnica se vezuje samo na IZDATU zbirnu.
+    UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_NIJE_IZDATA", ChrW(10007) & " Zbirna pod tim brojem jo" & ChrW(353) & " nije izdata " & ChrW(8212) & " izdaj je u F3, pa unesi prijemnicu."
     UpsertRow lo, existing, "DOKUNOS_ASK_DUPLA_PRIJ_1", "PA" & ChrW(381) & "NJA: zbirna"
     UpsertRow lo, existing, "DOKUNOS_ASK_DUPLA_PRIJ_2", "ve" & ChrW(263) & " ima aktivnu prijemnicu"
     UpsertRow lo, existing, "DOKUNOS_ASK_DUPLA_PRIJ_3", "Pravilo je 1 zbirna = 1 prijemnica, pa ovo li" & ChrW(269) & "i na DUPLI UNOS. Ipak snimiti?"
