@@ -216,7 +216,8 @@ zbirni, roba vozača po vrsti) broja nemaju: izveštaj ih slaže po nazivu pa ID
 „Otkup" (`KarticaOtkupOpis`). Prazan deo se preskače, pa nema duplog razmaka.
 Ekran i PDF čitaju isti `ReportKarticaKooperanta`.
 
-Mere ih `modTest` 267–270, sabotaže `amb-posl-*`, `kart-opis-*`, `doc-sort-*`.
+Mere ih `modTest` 267–271 (271: otkupni list i kartica kažu isti broj), sabotaže `amb-posl-*`,
+`kart-opis-*`, `doc-sort-*`.
 
 ## 3) Ko šta piše
 

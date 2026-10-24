@@ -9645,6 +9645,32 @@ SABOTAZE = {
         "T_DocSort_DokumentneListe",
         "pregled ambalaze: manji broj istog niza ide pre veceg, bez obzira na upis",
     ),
+    # Jezgro stanja oko dokumenta racuna stanje PRE dokumenta fizicki: slucaj
+    # Bajic (pokrica +12 i +3) daje +5 umesto poslovnih -10.
+    "amb-posl-jezgro-stanja-fizicki": (
+        "modAmbalaza.bas",
+        "            If samoPoslovno Then\n                If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0\n",
+        "            If False Then   ' SABOTAZA: stanje pre dokumenta fizicki\n                If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0\n",
+        "T_AmbPoslovno_PokriceNijeZaduzenje",
+        "slucaj Bajic: posle pokrica +12 i +3 i izdavanja 5 stanje je poslovno -10, fizicki 5",
+    ),
+    # Otkupni list racuna zavrsno stanje bez primljenih gajbi (pocetno + izdato).
+    "amb-posl-pdf-zavrsno-bez-prijema": (
+        "modPrint.bas",
+        "        h(\"ambSaldo\") = tipAmb & \" x \" & CStr(CLng(ambPoc + kolAmbIzd - kolAmb))\n",
+        "        h(\"ambSaldo\") = tipAmb & \" x \" & CStr(CLng(ambPoc + kolAmbIzd))   ' SABOTAZA: zavrsno bez primljenog\n",
+        "T_AmbPoslovno_OtkupniListKaoKartica",
+        "otkupni list: zavrsno = pocetno + izdato - primljeno (-10 - 5 = -15)",
+    ),
+    # Stanje POSLE dokumenta broji pokrice samog dokumenta: knjiga i papir se
+    # razidju (-10 u knjizi, -15 na papiru).
+    "amb-posl-stanje-posle-fizicki": (
+        "modAmbalaza.bas",
+        "                    If samoPoslovno Then\n                        If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0\n",
+        "                    If False Then   ' SABOTAZA: stanje posle dokumenta fizicki\n                        If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0\n",
+        "T_AmbPoslovno_OtkupniListKaoKartica",
+        "knjiga posle otkupa: poslovno -15 kao na papiru, fizicki 0 sa pokricem",
+    ),
 }
 
 

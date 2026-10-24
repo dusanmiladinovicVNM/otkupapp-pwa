@@ -7085,10 +7085,20 @@
        svaka sabotaža obori svoju. **Sabotaže:** 9 novih (`amb-posl-*` 5, `kart-opis-*` 2, `doc-sort-*` 2),
        katalog 950 → 959; `kart-hron-ekran-bez-ugovora` dobila novo sidro. Sidra i primena/vraćanje provereni
        mehanički.
+     - **Dopuna po pregledu (24.10.2026).** Pregled je ocenio staru udaljenu granu (`8a890554`, testovi
+       260–263), pa je sve iz ove stavke video kao „NE". Iz njega su ostale dve opravdane rupe u testovima:
+       - 267 tvrdi i slučaj iz prijave (Bajić) **eksplicitno**: posle pokrića +12 i +3 i izdavanja 5 stanje je
+         poslovno −10, a fizički +5 (`AmbStanjeOkoDokumenta`, stanje posle dokumenta);
+       - **271** `T_AmbPoslovno_OtkupniListKaoKartica` — paritet papira kroz pravi otkup uz potvrđen manjak
+         (`CreateOtkup_TX` + `OtkupDeficitKooperanta`, kao golden) i pravi `FillOtkupSablon`: početno −10
+         (fizički bi bilo 0), završno −10 − 5 = −15, knjiga posle dokumenta −15 (fizički 0), promet na kartici
+         −5. Isti oblik kao 1/250626-12 (461 − 54 = 407), sa brojevima koje fixture može da napravi.
+       - Sabotaže: `amb-posl-jezgro-stanja-fizicki` (267), `amb-posl-pdf-zavrsno-bez-prijema` i
+         `amb-posl-stanje-posle-fizicki` (271); katalog 959 → 962.
      - **NEVERIFIKOVANO:** `run_vba` u web sesiji ne radi. Treba: `python tools/run_vba.py --suite RunAllTests`,
-       pa `python tools/dokaz.py amb-posl- kart-opis- doc-sort- kart-hron-ekran --grupe`, pa compile, pa
+       pa `python tools/dokaz.py amb-posl- kart-opis- doc-sort- kart-hron- --grupe`, pa compile, pa
        ručna provera PDF otkupnog lista i pregleda po OM nad pravim podacima.
-     - **Sledeći brojevi:** test 271 · stavka 194 · KI-045.
+     - **Sledeći brojevi:** test 272 · stavka 194 · KI-045.
 
 ## Dug sa imenom (posle S5-5b)
 
