@@ -354,6 +354,16 @@ su fizicki isti potez (`Stanica -> Kooperant`):
 istim `Od`, `Na` i `Kolicina` nose suprotno poslovno znacenje. Iz para se ne moze
 izvesti.
 
+### 6.6a Poslovni saldo — treći broj iz iste knjige (`AMB-POSL-01`, 24.10.2026)
+
+Fizički saldo kaže gde su gajbe, obaveza koliko tuđih firma duguje. Kooperantu
+na kartici i na otkupnom listu treba treće: **koliko mu je firma izdala, minus
+koliko je vratio**. To je fizički saldo bez redova koje pisac dopisuje sam —
+`ULAZ_TUDJE_AMBALAZE` (pokriće deficita i ulaz pozajmice). Kontra-stav se sudi po
+vrsti originala. Projekcija je opcioni `samoPoslovno` u čitaocima
+(`AmbKretanjaNaloga`, `AmbSaldoPoNalogu`, `AmbStanjeOkoDokumenta`); pisci, knjiga
+i storno se ne menjaju. Ko koji broj čita: `README.md` §2, `AMB-POSL-01/02`.
+
 ### 6.7 `VrstaKretanja` — domenski pojmovi, ne spisak call-site-ova
 
 | Vrednost | Znacenje |
