@@ -6983,11 +6983,28 @@
          koraka 5, a ne razlika u kodu.
      - **Opis `#439`** je ažuriran (`gh api -X PATCH`, proveren grep-om). U njemu je i checklista ručne
        provere (11 koraka).
+     - **Ručna provera (operater, 24.10.2026, snimci ekrana nad `rucna_provera_s6_korak5.xlsm`):**
+       - ✅ 1: `…S6K5ZAJ…` A i B „Neplaćeno" sa praznim ostatkom, C ostatak 16.000.
+       - ✅ 3: lista Fakture `21/2026` 32.000, `22/2026` 16.000.
+       - ✅ 4: `…S6K5KVAR…` „Nefakturisano".
+       - ✅ 5 i 8: faktura `23/2026` samo nad klasom I. Klasa II ostaje slobodna (za fakturisanje 51 → 50,
+         neplaćeno +12.000).
+       - ✅ 6: pilula „Delim. fakturisano", ostatak prazan, čip „Nefakturisane" je i dalje uključuje (58).
+       - ✅ 9: F8 storno prijemnice ODBIJA, a uvid kaže „storno se ODBIJA — prvo stornirajte fakturu". Faktura je
+         imenovana internim ID-jem (`FAK-00011`), ne brojem `23/2026` — zatečeno → **`KI-044`**.
+       - ⚠ 10: faktura `24/2026` nad klasom II je napravljena, a pilula je „Neplaćeno", ali **OSTATAK je prazan**
+         umesto 16.000. To je zatečeni **`KI-042`** (zastarela mapa iznosa; na `main`-u ista keš mapa), sada viđen
+         na ekranu. Potvrda ponovnim otvaranjem sveske nije urađena.
+       - ✅ 11: posle storna `24/2026` ponovo „Delim. fakturisano", čip 58.
+       - Nisu snimljeni: 2 i 7 (detalj izveštaja). **Ispravka checkliste:** detalj imenuje fakturu ID-jem
+         (`FAK-00009 (zajednička …)`), a ne brojem `21/2026`, kako je pisalo u checklisti (vidi `KI-044`).
+       - Usput: tekst pretrage sa drugog ekrana ostaje u F4 preko placeholdera, a lista nije filtrirana →
+         **`KI-043`**.
      - **Čeka:**
-       - operater: Compile (`Import modVbaTools.bas` → `Debug → Compile`), pa ručna provera nad sveskom;
+       - operater: Compile (`Import modVbaTools.bas` → `Debug → Compile`) — još nije javljen;
        - `--mark-compile` tek na javljeno „compiles";
        - merge samo na izričit zahtev, sa `--match-head-commit`, posle zelenog CI-ja.
-     - **Sledeći brojevi:** stavka 192 · test 263 · KI-043.
+     - **Sledeći brojevi:** stavka 192 · test 263 · KI-045.
 
 ## Dug sa imenom (posle S5-5b)
 
