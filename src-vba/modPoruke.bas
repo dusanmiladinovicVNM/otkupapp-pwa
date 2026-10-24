@@ -1019,7 +1019,6 @@ End Sub
 Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBIRNA_NEMA_1", ChrW(10007) & " Zbirna"
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBIRNA_NEMA_2", "ne postoji u sistemu " & ChrW(8212) & " prvo unesi zbirnu otpremnicu."
-    UpsertRow lo, existing, "DOKUNOS_ASK_ZBIRNA_NEMA", "Ipak snimiti prijemnicu sa ovim brojem zbirne?"
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_AKTIVNA", ChrW(10007) & " Pod tim brojem ve" & ChrW(263) & " postoji aktivna zbirna " & ChrW(8212) & " storniraj je pa unesi ispravku."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_TUDJ", ChrW(10007) & " Taj broj je ve" & ChrW(263) & " pripadao drugom voza" & ChrW(269) & "u ili kupcu " & ChrW(8212) & " izaberi drugi broj."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_STORNIRAN", ChrW(10007) & " Taj broj je ve" & ChrW(263) & " izdat pa storniran " & ChrW(8212) & " storno ne osloba" & ChrW(273) & "a broj. Ispravku unesi pod NOVIM brojem."

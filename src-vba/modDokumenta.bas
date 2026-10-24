@@ -517,9 +517,9 @@ Public Function ZbirnaRoditeljRazlog(ByRef id As ZbirnaIdent) As String
             ZbirnaRoditeljRazlog = ZBR_PARENT_TUDJ
         Case Else
             ' NONE: pod tim brojem nema aktivnog dokumenta, pa nema ni roditelja.
-            ' Politiku za taj slucaj (BLOK ili UPOZORENJE, po
-            ' PRIJEMNICA_ZBIRNA_PROVERA) drzi ZbirnaPostoji u validatoru IZNAD
-            ' ove kapije -- ovde stoji samo da funkcija ne laze kad se pozove sama.
+            ' F4 taj slucaj odbija vec na ZbirnaPostoji u validatoru IZNAD ove
+            ' kapije (PRJ-ZBR-01) -- ovde stoji samo da funkcija ne laze kad se
+            ' pozove sama.
             ZbirnaRoditeljRazlog = ZBR_PARENT_NEMA
     End Select
 End Function
@@ -8213,8 +8213,9 @@ Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _
     End If
 
     ' Referencijalni integritet: broj zbirne mora da postoji u tblZbirna.
-    ' Samo u BLOK modu -- u UPOZORENJE modu forma trazi potvrdu, pa backend ne
-    ' sme tvrdo da padne. Ujedno je bezbedna mreza i za ne-form pozivaoce.
+    ' Samo u BLOK modu. F4 nepostojecu zbirnu odbija uvek (PRJ-ZBR-01, review
+    ' #440), pa blazu granu dosezu samo testovi; pisac dobija bezuslovnu kapiju u
+    ' S6 koraku 8, zajedno sa kapijom IZDATE zbirne.
     If PrijemnicaZbirnaBlokira() Then
         If Not ZbirnaPostoji(brojZbirne) Then
             Err.Raise vbObjectError + 1428, SRC, _

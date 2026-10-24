@@ -497,6 +497,7 @@ EH:
 End Sub
 
 ' Sledljivost: novi red nosi IspravkaOd + CorrectionID; stari (storniran) nosi ZamenjenSa.
+' Red se bira po ID-u (review #440); broj je samo vrednost traga.
 Public Sub Test_StampIspravkaTrace_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -509,7 +510,8 @@ Public Sub Test_StampIspravkaTrace_Auto()
     TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA), _
               Array("SVT-ST-NEW", "SVT-ST-B2", "I")                ' novi, aktivan
 
-    StampIspravkaTrace TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-ST-B2", "SVT-ST-B1", "SVT-CID-1"
+    StampIspravkaTrace TBL_ZBIRNA, COL_ZBR_ID, "SVT-ST-NEW", "SVT-ST-OLD", _
+                       "SVT-ST-B2", "SVT-ST-B1", "SVT-CID-1"
 
     TcChk NzS(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-ST-B2", COL_TRACE_ISPRAVKA_OD)) = "SVT-ST-B1", _
           "novi red IspravkaOd = stari broj"

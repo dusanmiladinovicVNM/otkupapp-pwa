@@ -370,6 +370,8 @@ Public Sub RunAllTests()
     RunOne 266
     RunOne 267
     RunOne 268
+    RunOne 269
+    RunOne 270
     RunOne 13
     RunOne 14
     RunOne 15
@@ -928,6 +930,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 266: TestName = "T_S6K6_UlazNeMenjaPodatak"
         Case 267: TestName = "T_S6K6_BrojJedinstvenPoKupcu"
         Case 268: TestName = "T_S6K6_RazlogPiscaStizeDoEkrana"
+        Case 269: TestName = "T_S6K6_PodesavanjaBezPolitikeZbirne"
+        Case 270: TestName = "T_S6K6_TragIspravkePoID"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1204,6 +1208,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 266: T_S6K6_UlazNeMenjaPodatak
         Case 267: T_S6K6_BrojJedinstvenPoKupcu
         Case 268: T_S6K6_RazlogPiscaStizeDoEkrana
+        Case 269: T_S6K6_PodesavanjaBezPolitikeZbirne
+        Case 270: T_S6K6_TragIspravkePoID
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -10426,18 +10432,20 @@ End Sub
 ' kapija odbija sve. Odbijeni slucajevi staju na kapiji, pre pitanja u
 ' validatoru.
 '
-' PRIJEMNICA_ZBIRNA_PROVERA se postavlja na BLOK: fixture od donora nosi
-' UPOZORENJE (izmereno, stavka 193), a uz njega grana "zbirne nema" otvara
-' MsgBox i headless run visi. Stanje fixture-a se POSTAVLJA, ne pretpostavlja, i
-' vraca pre tvrdnji.
+' "Zbirne nema" se meri pod OBE vrednosti PRIJEMNICA_ZBIRNA_PROVERA (fixture od
+' donora nosi UPOZORENJE, stavka 193): od review-a #440 (krug 1) F4 odbija i uz
+' UPOZORENJE, bez pitanja. Pre ispravke je ta grana otvarala MsgBox (headless run
+' bi visio), pa je crveno izmereno sondom (stavka 195). Stanje fixture-a se
+' POSTAVLJA, ne pretpostavlja, i vraca pre tvrdnji.
 ' SABOTAZE: zbirna-f4-nije-vezan -> "dva aktivna dokumenta pod istim brojem
 ' zaustavljaju prijemnicu"; zbirna-f4-pusta-tudjeg-vlasnika -> "zbirna drugog
 ' vlasnika zaustavlja prijemnicu"; s6k6-f4-pusta-nacrt-zbirne -> "nacrt zbirne
-' zaustavlja prijemnicu (PRJ-ZBR-01)".
+' zaustavlja prijemnicu (PRJ-ZBR-01)"; s6k6-upozorenje-pusta-nepostojecu ->
+' "nepostojeca zbirna se odbija i uz UPOZORENJE (PRJ-ZBR-01)".
 Private Sub T_Prijemnica_VezujeSeSamoNaJednoznacnu()
     Dim p As Object, fokus As String
     Dim rDobar As String, rNacrt As String, rNema As String, rDvosmislen As String
-    Dim rTudj As String, rIstorija As String
+    Dim rTudj As String, rIstorija As String, rNemaUpoz As String
     Dim pD1 As String, pD2 As String, pTgtB As String, pTgtA As String, prevZbr As String
     Dim brIzdata As String, brNacrt As String, zidIzdata As String, zidNacrt As String
     Dim errNum As Long, errDesc As String
@@ -10468,6 +10476,14 @@ Private Sub T_Prijemnica_VezujeSeSamoNaJednoznacnu()
     Set p = PrijemnicaUnosKojiProlazi()
     p("brojZbirne") = "ZB-NE-POSTOJI"
     rNema = modDokUnos.PrijemnicaValidiraj(p, fokus)
+
+    ' 3b) PRJ-ZBR-01: zbirne NEMA ni uz UPOZORENJE -- isti ishod, isto polje.
+    SetConfigValue CFG_PRIJEMNICA_ZBIRNA_PROVERA, "UPOZORENJE"
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brojZbirne") = "ZB-NE-POSTOJI"
+    fokus = ""
+    rNemaUpoz = modDokUnos.PrijemnicaValidiraj(p, fokus) & "|" & fokus
+    SetConfigValue CFG_PRIJEMNICA_ZBIRNA_PROVERA, "BLOK"
 
     ' 4) DVOSMISLEN: dva aktivna dokumenta pod istim brojem.
     Set p = PrijemnicaUnosKojiProlazi()
@@ -10513,6 +10529,9 @@ CleanUp:
              "A13: kad zbirne nema, poruka ostaje postojeca -- I2 tu ne dira politiku"
     AssertEq (rNema = Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN")), False, _
              "A13: 'nema zbirne' se ne prijavljuje kao dvosmislenost"
+    AssertEq rNemaUpoz, Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_1") & " 'ZB-NE-POSTOJI' " & _
+             Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2") & "|brojZbirne", _
+             "nepostojeca zbirna se odbija i uz UPOZORENJE (PRJ-ZBR-01)"
 End Sub
 
 ' 265. F4 KROZ POTEZ "SACUVAJ" (S6 korak 6, R1).
@@ -10818,6 +10837,125 @@ CleanUp:
              "F4: neuspeh upisa imenuje prijemnicu"
     AssertEq (InStr(1, res, "Manjak:", vbBinaryCompare) > 0), True, _
              "F4: poruka neuspelog upisa nosi razlog pisca"
+End Sub
+
+' 269. PODESAVANJA NE NUDE POLITIKU NEPOSTOJECE ZBIRNE (review #440, krug 1, P1;
+' PRJ-ZBR-01).
+'
+' F4 posle review-a UVEK odbija broj zbirne koje nema u sistemu: uz UPOZORENJE je
+' operater potvrdom pravio prijemnicu bez roditelja (sonda, stavka 195). Polje u
+' Podesavanjima koje bi i dalje nudilo UPOZORENJE tvrdilo bi nesto sto ne vazi.
+' Konstanta i grana u piscu ostaju do koraka 8 (pisac dobija kapiju), a dosezu ih
+' samo testovi -- jedini produkcioni pozivalac pisca je F4.
+' Kontrola: isti prolaz kroz registar nalazi susedno polje, pa "nije nadjeno" nije
+' posledica praznog ili necitljivog registra.
+' SABOTAZA: s6k6-podesavanje-nudi-upozorenje -> "Podesavanja ne nude politiku
+' nepostojece zbirne (PRJ-ZBR-01)".
+Private Sub T_S6K6_PodesavanjaBezPolitikeZbirne()
+    Dim f As Variant, i As Long, nadjeno As Boolean, kontrola As Boolean
+
+    f = modPodesavanja.ConfigEditorFields()
+    For i = LBound(f) To UBound(f)
+        If StrComp(CStr(f(i)(1)), CFG_PRIJEMNICA_ZBIRNA_PROVERA, vbTextCompare) = 0 Then nadjeno = True
+        If StrComp(CStr(f(i)(1)), CFG_VALIDACIJA_UNOSA, vbTextCompare) = 0 Then kontrola = True
+    Next i
+
+    AssertEq kontrola, True, "kontrola: registar Podesavanja nosi susedno polje VALIDACIJA_UNOSA"
+    AssertEq nadjeno, False, "Podesavanja ne nude politiku nepostojece zbirne (PRJ-ZBR-01)"
+End Sub
+
+' 270. TRAG ISPRAVKE PRIJEMNICE IDE PO ID-u (review #440, krug 1, popis citalaca
+' po broju).
+'
+' Broj prijemnice je kupcev (odluka 6), pa isti broj legitimno nose dva kupca.
+' StampIspravkaTrace je red birao PO BROJU: ispravka sa promenjenim brojem upisala
+' bi "ispravka od" i na AKTIVNU prijemnicu DRUGOG kupca sa tim brojem, a papir
+' prijemnice taj trag stampa (modPrint.FillPrijemnicaSablon).
+' Ide kroz pravi put ispravke -- PrijemnicaUpisi sa ispravkaID, obrazac
+' T_IspravkaPrijemnice_SkipIRelink -- nad starim dokumentom koji NOSI paletu: bez
+' nje prevezivanje ne uspe, pa se trag i ne upisuje (preduslov to tvrdi). Oba
+' dokumenta koja test pravi se storniraju pre tvrdnji, zbirne se sklanjaju.
+' SABOTAZA: s6k6-trag-ispravke-po-broju -> "trag ispravke ne dira prijemnicu
+' drugog kupca istog broja".
+Private Sub T_S6K6_TragIspravkePoID()
+    Dim zA As String, zB As String, brZA As String, brZB As String, sfx As String
+    Dim broj As String, stariBroj As String, prjB As String, prjA As String, res As String
+    Dim p As Object, poruke As String, cid As String, prevPal As String
+    Dim okSt As Boolean, det As Long, razlog As String, errN As Long
+    Dim tragB As String, tragNovi As String, zamStari As String, statusCid As String
+    Dim kolonaTraga As Boolean
+    Dim errNum As Long, errDesc As String
+
+    AssertEq S6K6IspravkeNaCekanju(), 0, "preduslov: nema ispravke prijemnice na cekanju"
+    kolonaTraga = (GetColumnIndex(TBL_PRIJEMNICA, COL_TRACE_ISPRAVKA_OD) > 0)
+    AssertEq kolonaTraga, True, "preduslov: prijemnica nosi kolonu traga ispravke"
+    ZasejOpticajVozacu
+    prevPal = NzToText(GetConfigValue(CFG_PALETIRANJE))
+    sfx = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    broj = "PR-S6K6-TRG-" & sfx
+    stariBroj = "PR-S6K6-TRGS-" & sfx
+
+    On Error GoTo CleanUp
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    zA = S6K6Zbirna("TRGA", True, brZA)
+    zB = S6K6Zbirna("TRGB", True, brZB, FX_VOZAC, FX_KUPAC2)
+
+    ' Tudj dokument: drugi kupac, aktivan, sa ISTIM brojem koji ce ispravka dobiti.
+    prjB = modDokumenta.SavePrijemnicaMulti_TX( _
+        datum:=CDate(FX_DATUM), kupacID:=FX_KUPAC2, vozacID:=FX_VOZAC, _
+        brojPrij:=broj, brojZbirne:=brZB, vrstaVoca:=FX_VRSTA, sortaVoca:=FX_SORTA, _
+        kolicinaI:=100#, cenaI:=50#, tipAmb:="", kolAmb:=0, kolAmbVracena:=0, _
+        outErrNum:=errN)
+
+    ' Stari dokument kupca A sa paletom; storno OSTAVLJA palete (ISPRAVKA).
+    Set p = S6K6Unos(brZA, "TRGS")
+    p("brDok") = stariBroj
+    prjA = modDokUnos.PrijemnicaUpisi(p, poruke)
+    If Len(prjA) > 0 Then okSt = modStorno.StornoPrijemnica_TX(prjA, False, det, razlog)
+    If okSt Then
+        cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, _
+                  FLOW_DOC_PRIJEMNICA, prjA, stariBroj, _
+                  FLOW_DOC_PRIJEMNICA, , , FLOW_DOC_ZBIRNA, , brZA, _
+                  "test 270: trag ispravke po ID-u")
+    End If
+
+    ' Ispravka istog kupca A, sa NOVIM brojem = broj drugog kupca.
+    If Len(cid) > 0 Then
+        Set p = S6K6Unos(brZA, "TRGN")
+        p("brDok") = broj
+        p("ispravkaID") = cid
+        p("ispravkaStariBroj") = stariBroj
+        res = modDokUnos.PrijemnicaUpisi(p, poruke)
+        statusCid = NzToText(modStornoContext.GetCorrectionField(cid, COL_SV_STATUS))
+    End If
+
+    If Len(prjB) > 0 Then tragB = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_TRACE_ISPRAVKA_OD))
+    If Len(res) > 0 Then
+        tragNovi = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, res, COL_TRACE_ISPRAVKA_OD)) & "|" & _
+                   NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, res, COL_TRACE_CORRECTION_ID))
+    End If
+    If Len(prjA) > 0 Then zamStari = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_TRACE_ZAMENJEN_SA))
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Len(res) > 0 Then modStorno.StornoPrijemnica_TX res, True, det, razlog
+    If Len(prjB) > 0 Then modStorno.StornoPrijemnica_TX prjB, True, det, razlog
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    S6K6Skloni zA
+    S6K6Skloni zB
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K6_TragIspravkePoID", errDesc
+
+    AssertEq (Len(prjB) > 0) & "|" & (Len(prjA) > 0) & "|" & okSt & "|" & (Len(cid) > 0), _
+             "True|True|True|True", _
+             "preduslov: tudj dokument, stari storniran sa paletom i kontekst ispravke"
+    AssertEq (Len(res) > 0), True, "preduslov: upis ispravke je prosao"
+    AssertEq statusCid, SV_STATUS_COMPLETED, "preduslov: palete su prevezane, pa je trag upisan"
+    AssertEq tragB, "", "trag ispravke ne dira prijemnicu drugog kupca istog broja"
+    AssertEq tragNovi, stariBroj & "|" & cid, "ispravka nosi trag stare prijemnice i svoj CorrectionID"
+    AssertEq zamStari, broj, "stornirana prijemnica nosi broj svoje zamene"
 End Sub
 
 ' Napomena (efekat) reda lanca uvida za dati dokument; "nema" kad reda nema.

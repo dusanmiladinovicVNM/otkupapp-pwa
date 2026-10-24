@@ -841,22 +841,15 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         fokus = "brojZbirne": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_BROJ_ZBIRNE"): Exit Function
     End If
 
-    ' Zbirna mora da postoji u sistemu. Ponasanje po PRIJEMNICA_ZBIRNA_PROVERA:
-    ' BLOK = prekid; UPOZORENJE = potvrda pa nastavak.
+    ' Zbirna mora da postoji u sistemu -- UVEK (PRJ-ZBR-01; review #440, krug 1).
+    ' Do tada je PRIJEMNICA_ZBIRNA_PROVERA = UPOZORENJE nudio potvrdu, a posle "Da"
+    ' preskakao kapiju identiteta i kapiju IZDATE zbirne ispod: nastajala je
+    ' prijemnica bez roditelja (sonda, stavka 195). Podesavanje F4 vise ne cita.
     If Not ZbirnaPostoji(S(p, "brojZbirne")) Then
         fokus = "brojZbirne"
-        If PrijemnicaZbirnaBlokira() Then
-            PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_1") & " '" & _
-                                  S(p, "brojZbirne") & "' " & Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")
-            Exit Function
-        End If
-        If MsgBox(Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_1") & " '" & S(p, "brojZbirne") & "' " & _
-                  Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2") & vbCrLf & vbCrLf & _
-                  Poruka("DOKUNOS_ASK_ZBIRNA_NEMA"), _
-                  vbQuestion + vbYesNo, APP_NAME) <> vbYes Then
-            PrijemnicaValidiraj = " ": Exit Function
-        End If
-        fokus = ""            ' operater je potvrdio - polje vise nije sporno
+        PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_1") & " '" & _
+                              S(p, "brojZbirne") & "' " & Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")
+        Exit Function
     Else
         ' I2 (docs/DOMEN/ZBR_IDENTITET.md par.6): "postoji" NIJE isto sto i
         ' "jednoznacna". ZbirnaPostoji odgovara samo na prvo -- vraca True cim
@@ -868,10 +861,8 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         ' je broj IKAD imao dva vlasnika -- isto pravilo koje drzi
         ' modStorno.RequireJedanVlasnikIkadPoBroju.
         '
-        ' Ovo je TVRDA blokada, ne UPOZORENJE: PRIJEMNICA_ZBIRNA_PROVERA bira
-        ' politiku za "zbirne nema" -- stanje koje operater moze da zna unapred.
-        ' Dvosmislen ili tudj dokument nije to; tu potvrda ne pomaze jer ekran ne
-        ' moze ni da ponudi koji je pravi.
+        ' Ovo je TVRDA blokada: potvrda ne pomaze jer ekran ne moze ni da ponudi
+        ' koji je dokument pravi.
         Dim zbrRod As ZbirnaIdent
         Dim rodRazlog As String
         zbrRod = ZbirnaIdentResolve(S(p, "brojZbirne"), S(p, "vozacID"), S(p, "kupacID"))
@@ -1379,7 +1370,8 @@ Private Sub PreveziPaleteIspravke(ByVal p As Object, ByVal res As String, _
         If Len(cid) > 0 Then
             modStornoContext.CompleteCorrectionContext cid, "", noviBroj, _
                 "Ispravka prijemnice: palete prevezane na " & noviBroj & "."
-            StampIspravkaTrace TBL_PRIJEMNICA, COL_PRJ_BROJ, noviBroj, stariBroj, cid
+            StampIspravkaTrace TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(res), _
+                               modStornoDok.StorniraniDocID(cid), noviBroj, stariBroj, cid
         End If
     Else
         LogRelinkFailure stariBroj, noviBroj, relWarn

@@ -1422,15 +1422,22 @@ End Function
 ' STORNIRANOM starom redu. Best-effort, guarded na postojanje kolona (schema-drift
 ' safe). NIJE agregat -> ne menja ponasanje; samo vidljiv audit trag NA dokumentu.
 ' newBroj == oldBroj (in-place, bez zamene) -> nema sta da se utisne.
+'
+' Red se bira po ID-u (idCol + newID/oldID), ne po broju (review #440, krug 1):
+' broj prijemnice je kupcev, pa ga legitimno nose dokumenti dva kupca, a izbor po
+' broju je trag upisivao i na tudji aktivan dokument. Broj ostaje samo VREDNOST
+' traga (ono sto papir stampa).
 ' ============================================================
-Public Sub StampIspravkaTrace(ByVal tbl As String, ByVal brojCol As String, _
+Public Sub StampIspravkaTrace(ByVal tbl As String, ByVal idCol As String, _
+        ByVal newID As String, ByVal oldID As String, _
         ByVal newBroj As String, ByVal oldBroj As String, ByVal correctionID As String)
     On Error GoTo EH
+    newID = Trim$(newID): oldID = Trim$(oldID)
     newBroj = Trim$(newBroj): oldBroj = Trim$(oldBroj)
-    If Len(newBroj) = 0 Then Exit Sub
+    If Len(newID) = 0 Or Len(newBroj) = 0 Then Exit Sub
     If StrComp(newBroj, oldBroj, vbTextCompare) = 0 Then Exit Sub
-    Dim cBr As Long: cBr = GetColumnIndex(tbl, brojCol)
-    If cBr = 0 Then Exit Sub
+    Dim cId As Long: cId = GetColumnIndex(tbl, idCol)
+    If cId = 0 Then Exit Sub
     Dim cIsp As Long: cIsp = GetColumnIndex(tbl, COL_TRACE_ISPRAVKA_OD)
     Dim cZam As Long: cZam = GetColumnIndex(tbl, COL_TRACE_ZAMENJEN_SA)
     Dim cCid As Long: cCid = GetColumnIndex(tbl, COL_TRACE_CORRECTION_ID)
@@ -1440,13 +1447,13 @@ Public Sub StampIspravkaTrace(ByVal tbl As String, ByVal brojCol As String, _
     If IsEmpty(data) Then Exit Sub
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        Dim b As String: b = Trim$(CStr(data(i, cBr)))
+        Dim rid As String: rid = Trim$(CStr(data(i, cId)))
         Dim isStorno As Boolean
         isStorno = (cSt > 0 And UCase$(Trim$(CStr(data(i, cSt)))) = "DA")
-        If b = newBroj And Not isStorno Then
+        If StrComp(rid, newID, vbTextCompare) = 0 And Not isStorno Then
             If cIsp > 0 And Len(oldBroj) > 0 Then UpdateCell tbl, i, COL_TRACE_ISPRAVKA_OD, oldBroj
             If cCid > 0 And Len(correctionID) > 0 Then UpdateCell tbl, i, COL_TRACE_CORRECTION_ID, correctionID
-        ElseIf b = oldBroj And isStorno Then
+        ElseIf Len(oldID) > 0 And StrComp(rid, oldID, vbTextCompare) = 0 And isStorno Then
             If cZam > 0 Then UpdateCell tbl, i, COL_TRACE_ZAMENJEN_SA, newBroj
         End If
     Next i

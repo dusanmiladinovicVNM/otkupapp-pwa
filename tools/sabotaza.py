@@ -9638,6 +9638,42 @@ SABOTAZE = {
         "T_ScrSave_RutaPoRezimu",
         "prijemnica ide u modDokUnos.PrijemnicaValidiraj",
     ),
+    # --- review #440, krug 1 (stavka 195) ------------------------------------
+    # UPOZORENJE opet pusta nepostojecu zbirnu -- ali BEZ MsgBox-a koji je tu
+    # stajao pre ispravke: sabotaza sa dijalogom bi u headless run-u visila, pa
+    # bi dokaz.py zabelezio TIMEOUT umesto crvenog po imenu.
+    "s6k6-upozorenje-pusta-nepostojecu": (
+        "modDokUnos.bas",
+        '                              S(p, "brojZbirne") & "\' " & Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")\n'
+        "        Exit Function\n",
+        '                              S(p, "brojZbirne") & "\' " & Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")\n'
+        "        If PrijemnicaZbirnaBlokira() Then Exit Function\n"
+        "        PrijemnicaValidiraj = \"\": fokus = \"\"   ' SABOTAZA: UPOZORENJE pusta nepostojecu zbirnu\n",
+        "T_Prijemnica_VezujeSeSamoNaJednoznacnu",
+        "nepostojeca zbirna se odbija i uz UPOZORENJE (PRJ-ZBR-01)",
+    ),
+    # Sidro ne sme biti podniz zamene (obrnuta zamka 8): katalog tada nad
+    # sabotiranim izvorom vidi i sidro i zamenu, pa ne ume da kaze "zatecen
+    # sabotiran". Zato red sidra u zameni nosi oznaku.
+    "s6k6-podesavanje-nudi-upozorenje": (
+        "modPodesavanja.bas",
+        '    CfgAdd c, "Otkup / dokumenta", "VALIDACIJA_UNOSA", "Kompletna validacija unosa (obavezna polja pre snimanja)", "bool"\n',
+        '    CfgAdd c, "Otkup / dokumenta", "VALIDACIJA_UNOSA", "Kompletna validacija unosa (obavezna polja pre snimanja)", "bool"   \' SABOTAZA: vracen red ispod\n'
+        '    CfgAdd c, "Otkup / dokumenta", "PRIJEMNICA_ZBIRNA_PROVERA", "Prijemnica: kad zbirna nije u sistemu", "list:BLOK;UPOZORENJE"\n',
+        "T_S6K6_PodesavanjaBezPolitikeZbirne",
+        "Podesavanja ne nude politiku nepostojece zbirne (PRJ-ZBR-01)",
+    ),
+    # Oznaka ide u red IZNAD poziva: posle `_` komentar obara compile (zamka 4).
+    "s6k6-trag-ispravke-po-broju": (
+        "modDokUnos.bas",
+        "            StampIspravkaTrace TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(res), _\n"
+        "                               modStornoDok.StorniraniDocID(cid), noviBroj, stariBroj, cid\n",
+        "            ' SABOTAZA: trag ispravke opet bira red po broju\n"
+        "            StampIspravkaTrace TBL_PRIJEMNICA, COL_PRJ_BROJ, noviBroj, _\n"
+        "                               stariBroj, noviBroj, stariBroj, cid\n",
+        "T_S6K6_TragIspravkePoID",
+        "trag ispravke ne dira prijemnicu drugog kupca istog broja",
+    ),
 }
 
 
