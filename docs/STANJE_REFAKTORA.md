@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 24.10.2026 (stavka 199: merge `#440`, S6 korak 6/8 zatvoren; sledi korak 7).
+**Ažurirano:** 24.10.2026 (stavka 200: S6 korak 7 — pre-flight i odluke 1–10; kod sledi, prvo `KI-046`).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -7286,6 +7286,33 @@
      - **Sledeći brojevi:** stavka 200 · test 272 · KI-051.
      - **Sledeći je S6 korak 7** (hladnjačin lanac B: OTK → OTP → ZBR → PRJ), na grani `claude/s6-korak7-lanac-b` sa
        `e21830c5`.
+200. **S6 korak 7 — pre-flight nad `e21830c5`, odluke 1–10, PRE koda** (24.10.2026). Pun zapis je u §14.55,
+     „Korak 7".
+
+     - **Sonde nema:** odluka 1 bira B (nastavljiv), a B ide kroz postojeće transakcije pisaca (`PLATFORM` PROVEN).
+     - **Nalazi pre-flight-a** (svaki je postao odluka):
+       - jezgro malina auto-zbirne je zatvoreno iza `IsMalinaMode()` i van maline vraća `""` bez razloga — lanac bi
+         tiho stao posle otpremnice;
+       - pisac prijemnice vezuje roditelja **po broju** (`ZbirnaIDZaBroj`);
+       - cena auto-prijemnice nema izvor u zbirnoj;
+       - nedovršen lanac (OTP bez ZBR/PRJ) ne vidi nijedna lista;
+       - PWA malina batch grupiše i hladnjačke blokove, a F2 veže hladnjačku otpremnicu u ručnu zbirnu.
+     - **`KI-046` je ispravljen u zapisu:** (2) i (3) nisu neuhranjeni nego **nedostižni** (A13 na svakom nivou lanca;
+       obrazac S5-3b), pa se brišu umesto da se prevode na ID. (1) je dostižan i čita datum po ID-u.
+     - **Odluke operatera (24.10.2026), sve po preporuci:**
+       1. B nastavljiv (potvrda odluke 4 od 20.10);
+       2. prekidač se briše;
+       3. malina batch: isto jezgro;
+       4. `KI-046`: brisanje (2)(3) + ponude + relink-pending, (1) po ID-u, prvi deo ovog PR-a;
+       5. `KI-028` posle koraka 7;
+       6. cena = cena izvornog otkupa;
+       7. opcioni `zbirnaRoditeljID` u piscu prijemnice;
+       8. nedovršen lanac u Oporavku („Nedovršeno", red `LANAC`);
+       9. PWA: batch preskače hladnjačke blokove, sync ih vodi kroz lanac;
+       10. kapija u `DodajZbirnaIzvor_TX`.
+     - **DOMEN:** nova invarijanta `HLD-LANAC-01` (`docs/DOMEN/README.md`).
+     - **Acceptance contract R1–R12** sa sabotažom uz svaku tvrdnju i imenovano van obima: §14.55, „Korak 7".
+     - **Sledeći brojevi:** stavka 201 (kod `KI-046`) · test 272 (proveriti `#441` pred prvim testom) · KI-051.
 
 ## Dug sa imenom (posle S5-5b)
 

@@ -8959,6 +8959,159 @@ Vrsta/sorta prijemnice prema zbirnoj (`KI-047`) i tekst razloga pisca (`KI-048`)
 `UiClick` posle akcije zove `KeepKeys` (`KI-050`). Operater je fokus odložio za UX prolaz celog lanca unosa, pa
 „sa fokusom" iz R3/R5/R6 u ovom rezu ostaje neisporučeno na ekranu.
 
+#### Korak 7 — hladnjačin lanac B, `KI-046` kao prvi deo (pre-flight nad `e21830c5`, stavka 200)
+
+Izlazni uslov S6 iz §14.20: hladnjački blok sam pravi ceo lanac `OTK → OTP → ZBR → PRJ`, 1:1 po klasi, a
+prekidač `AUTO_PRIJEMNICA_HLADNJACA` nestaje. Danas lanac pravi samo otpremnicu i stoji iza prekidača
+(`modAutoHladnjaca:241`, `:264`). Sonde nema: odluka 1 bira B, a B ide kroz postojeće transakcije pisaca.
+
+**Verdikt po osama** (linije su sa `e21830c5`):
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **GAP → odluka 6** | cena stavke auto-prijemnice nema izvor u roditelju: `tblZbirnaStavke` nema `Cena` (kanon), a `CreateFaktura` čita cenu sa stavke prijemnice; legacy pravilo je bilo „Cena = cena iz otkupa" (`bf04e3e0^:modAutoHladnjaca.bas:13`) |
+| `EVENTS` | **PROVEN** | fizički: merenje pri prijemu u hladnjaču je isti čin kao otkup (§14.20, operater 20.09.2026), pa svi dokumenti nose datum otkupa (OTP `modAutoHladnjaca:273`, ZBR čita datum OTP-a `modMasterSync:1090`); poslovni: četiri dokumenta; ambalažni: OTP stanica → ogledalo (`modDokumenta:5013`), PRJ ogledalo → kupac (`:7004`), ZBR ne knjiži; finansijskog nema do fakture |
+| `IDENTITY` | **GAP → odluka 7** | OTP ← OTK i ZBR ← OTP po ID-u (članstvo; `modMasterSync:1148`); **PRJ ← ZBR po BROJU** (`ZbirnaIDZaBroj(brojZbirne)`, `modDokumenta:6926-6927`), a nejednoznačan broj daje PRJ bez roditelja. Broj PRJ hladnjače je **naš niz** `1/ddmmyy[-n]` (A2, `modBrojevi:213`); MaxSeq gleda i stornirane, pa storno ne oslobađa broj (A2 t. 4). „Jedinstven po kupcu" iz koraka 6 je pravilo F4 za eksternog kupca |
+| `CARDINALITY` | **GAP → odluke 8 i 9** | lanac drži 1 blok = 1 lanac (`modAutoHladnjaca:294`), ali PWA malina batch grupiše i hladnjačke blokove (`GrupeZaAutoOtpremnicu`, `modMasterSync:1283-1291`, bez filtera); F2 veže svaku izdatu nevezanu otpremnicu u ručnu zbirnu (`DodajZbirnaIzvor_TX`, `modDokumenta:1567`); F4 „1 zbirna = 1 prijemnica" samo pita (`modDokUnos:1040-1051`) |
+| `INVARIANTS/OWNER` | **PROVEN** | `PRJ-ZBR-01`: auto-zbirna nastaje IZDATA (`modDokumenta:694`); `AMB-INV-07`: ogledalo prima Σ gajbi na OTP i daje isti Σ na PRJ, ZBR ne knjiži; `ZBR-CHILD-01` drži `PoveziDeteNaZbirnu` (uslov: odluka 7); nova `HLD-LANAC-01` (`docs/DOMEN/README.md`) |
+| `WRITERS` | **PROVEN, bez novog pisca** | OTP `CreateOtpremnicaIzIzvora_TX` (`:3448`), ZBR malina jezgro `AutoZbirnaUpis` → `CreateZbirnaIzIzvora_TX` (`modMasterSync:1078`, `:1153`), PRJ `SavePrijemnicaMulti_TX` (`:6582`). **Izmereno:** `AutoZbirnaZaOtpremnicu` je zatvoren iza `IsMalinaMode()` (`:1021-1023`, `:1043`) i van maline vraća `""` bez razloga — ugovor jezgra to čita kao „nije bilo posla", pa bi lanac tiho stao. Imena `CreateAutoZbirnaIzOtpremnice_TX` / `CreateAutoPrijemnicaIzZbirne_TX` iz §14.20 nisu potrebna |
+| `DOWNSTREAM` | **GAP → odluke 4 i 5** | palete i faktura po stavci, kaskada PONIŠTENJA i malina batch nad istim jezgrom su pokriveni; nedovršen lanac se ne vidi (lista „Bez otpremnice" čita `NevezaniOtkupi`, `modScrDokumenti:3716`, koji hrani i PWA batch, `modMasterSync:1291`); `KI-046` ispod |
+| `CAPABILITY` | **GAP → odluka 4** | A-014 (aktivacija), A-017 (palete posle storna), ispravka hladnjačkog otkupa |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | ispod |
+| `PLATFORM` | **PROVEN za B** | svaki pisac drži svoju TX (`modDokumenta:764-793`, `:6603-6680`); A bi tražio tri jezgra u tuđoj TX i sondu (`CommitTx` zakazuje Save, `clsTransaction:104`) — nije izabran |
+| `LANDING` | **PROVEN uz rizik** | grana `claude/s6-korak7-lanac-b` sa `e21830c5`; `#441` (OPEN) dira `modScrDokumenti`, `modPoruke`, `modTest`, `tools/sabotaza.py`, `docs/STANJE_REFAKTORA.md`, `docs/DOMEN/README.md` — serijski; broj testa se uzima pred prvim testom |
+
+**`KI-046` — izmereno, i ispravka zapisa iz stavke 195:**
+
+- (1) `GetPrijemniceSaOsirocenimPaletama` je **dostižan**: siročad paleta nastaju u F8 ISPRAVKA i DUPLI „ne diraj
+  palete" (`modStornoFlow:546`, `:567` → `StornoPrijemnica` sa `skiniPalete = False`). Red se grupiše po
+  generaciji, ali datum čita po broju (`modDokumenta:8529`).
+- (2) `GetPaleteInfoForPrijemnicaBroj` i (3) `DetachOsirocenePaletaStavke_TX` **nisu neuhranjeni nego
+  NEDOSTIŽNI** (obrazac S5-3b). Jedini produkcioni pozivalac je `HladnjacaLanac` / `PonudiHladnjacaIspravku`,
+  a ponuda ide tek kad `StornoOtkup_TX` prođe (`modScrDokumenti:1298-1303`). Jezgro odbija blok u sastavu aktivne
+  otpremnice (`modStorno:139`, A13), a aktivna PRJ povlači aktivnu ZBR, a ona aktivnu OTP — A13 važi na svakom
+  nivou. Korak 7 `tblOtkup.BrojZbirne` ne hrani (kanon je članstvo). Prehranjena, grana bi i dalje bila mrtva.
+- Isti razred: relink-pending aparat (`modOtkupUnos:330-334`, `:438-455`; `modAutoHladnjaca:21-33`) koji je
+  „čekao PR7" — njegov jedini izvor je ista ponuda.
+- Zamena već postoji: F8 nad prijemnicom/zbirnom nudi ISPRAVKA (palete čekaju novu prijemnicu), DUPLI (skida ili
+  ostavlja) i PONIŠTENJE (obara lanac, skida palete), a Oporavak „Prevezi" pomera siročad na aktivnu prijemnicu
+  (`modScrOporavak:160`, `:302`).
+
+**Odluke operatera (24.10.2026), sve po preporuci:**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | idempotencija i oporavak | **B, nastavljiv** (potvrda odluke 4 od 20.10): OTP po otkupu, ZBR po članstvu, PRJ po `ZbirnaRoditeljID`; preduslovi (ogledalo, `MALINA_DEFAULT_KUPAC`, brojevi) pre prvog upisa; „Ponovi auto-lanac" nastavlja od prvog koraka koji fali |
+| 2 | `AUTO_PRIJEMNICA_HLADNJACA` | **briše se**: stanica (`JeHladnjaca`) je jedini autoritet |
+| 3 | granica malina batch-a | **isto jezgro**: kapija `AutoZbirnaZaOtpremnicu` pušta i hladnjačku otpremnicu van maline; preklapanje rešava idempotencija (`NevezaneOtpremnice`) |
+| 4 | `KI-046` | **prvi deo ovog PR-a**: (2), (3), ponuda i relink-pending se BRIŠU (A-017 → REPLACED: F8 + Oporavak); (1) čita datum po `PrijemnicaID`; trag brisanja je tvrdnja da storno hladnjačkog bloka u lancu odbija A13 |
+| 5 | `KI-028` | **posle koraka 7**, pre golden lanca (korak 8); korak 7 ne dira `VOZ-TEST-1` (lanac ide kroz ogledalo BFP hladnjačkih stanica) |
+| 6 | cena stavke auto-prijemnice | **cena izvornog otkupa**, po klasi, kroz lanac po ID-u (ZBR → izvor OTP → izvor OTK); lanac nosi tačno jedan blok |
+| 7 | roditelj auto-prijemnice | **opcioni `zbirnaRoditeljID` u piscu** (na kraju potpisa `SavePrijemnicaMulti_TX`): kad je dat, pisac proverava da je zbirna aktivna i da joj je broj jednak `brojZbirne`, pa upisuje baš taj ID, pre commit-a; F4 ostaje po broju |
+| 8 | vidljivost nedovršenog lanca | **Oporavak, „Nedovršeno"**: red vrste `LANAC` sa `OtkupID` u nevidljivoj koloni i radnjom „Ponovi auto-lanac"; radnja „ponovi" u F1 ostaje za blok kome je pala već OTP |
+| 9 | PWA hladnjački blokovi | **isključi + lanac iz sync-a**: malina batch otpremnica preskače hladnjačke blokove, a isti sync korak ih vodi kroz `AutoLanacHladnjaca`, blok po blok; pad bloka se imenuje i ne obara ostale |
+| 10 | ručni put nad hladnjačkim dokumentom | **kapija u `DodajZbirnaIzvor_TX`**: hladnjačka otpremnica se ne veže ručno u zbirnu (kao `VeziZaAktivnu` za blok, review #367); F4 ostaje, jer ga F8 ISPRAVKA auto-prijemnice traži |
+
+**Obim po celinama:**
+
+- **`KI-046` (prvi commit-i):** brišu se `modScrDokumenti.HladnjacaLanac` / `PonudiHladnjacaIspravku` i njihova
+  grana u `RowAction` „storno", `modPaletniList.GetPaleteInfoForPrijemnicaBroj` i
+  `DetachOsirocenePaletaStavke_TX`, relink-pending u `modOtkupUnos` i `modAutoHladnjaca`, ključevi poruka koje
+  niko više ne zove; `modDokumenta.GetPrijemniceSaOsirocenimPaletama` čita datum po `PrijemnicaID`;
+- **lanac** (`modAutoHladnjaca.AutoLanacHladnjaca`): preduslovi pre prvog upisa; koraci OTP → ZBR → PRJ, svaki
+  idempotentan po kanonskom roditelju; PRJ izvodi stavke iz zbirne (`StavkeZbirneRedovi`) i cenu iz izvornog
+  otkupa; izveštaj nosi brojeve sva tri dokumenta ili korak koji je pao; zastareo komentar zaglavlja i komentar
+  „F3/F4 su pauzirani" (`:65-68`) odlaze; ugovor povratka: `PrijemnicaID` = lanac je kompletiran ovim pozivom,
+  `""` + prazan izveštaj = nije bilo posla, `""` + izveštaj = korak nije uspeo;
+- **prekidač:** `modConfig.CFG_AUTO_PRIJEMNICA_HLADNJACA`, `IsAutoPrijemnicaHladnjaca`, `LanacUkljucen`, red u
+  `modPodesavanja`, uslov radnje „ponovi" u `Scr_Radnje`;
+- **jezgro zbirne** (`modMasterSync.AutoZbirnaZaOtpremnicu`): kapija „malina ILI hladnjačka otpremnica"
+  (strogo, isti primitiv kao razvodnica);
+- **pisac prijemnice:** `Optional zbirnaRoditeljID` u `SavePrijemnicaMulti_TX` → `SavePrijemnicaDokument`;
+- **ručni put:** `DodajZbirnaIzvor_TX` odbija hladnjačku otpremnicu;
+- **PWA:** `GrupeZaAutoOtpremnicu` preskače hladnjačke blokove; nov sync korak (orkestrator) vodi nevezane
+  hladnjačke blokove kroz lanac, po obrascu `AutoCreateOtpremniceFromPWA_TX` (broj napravljenih + imenovani
+  razlozi);
+- **Oporavak:** `modStornoRecovery.GetNedovrseno` dobija red `LANAC`, `modScrOporavak` radnju „ponovi";
+- **poruke** (`modPoruke`), testovi, sabotaže, dokumenti (MAPA A-014/A-017, `KI-046`, `HLD-LANAC-01`).
+
+**Testovi čija se premisa menja:**
+
+| Test | Šta je tvrdio | Šta biva |
+|---|---|---|
+| BFP `Test_HLD_AutoLanacOtpremnica` §0 | isključen prekidač ne pušta blok u lanac | briše se (prekidača nema) |
+| BFP `Test_HLD_AutoLanacOtpremnica` §1 | lanac pravi izdatu otpremnicu; „ponovljen poziv ne pravi drugu otpremnicu" | ceo lanac 1:1 po klasi (R4); ponovljen poziv nad kompletnim lancem ne pravi ništa, nad nedovršenim nastavlja (R6); test postavlja `MALINA_DEFAULT_KUPAC` i vraća ga |
+| BFP `Test_OTK_RutaPosleUpisa` | prekidač „Da" je preduslov | preduslova nema |
+| BFP `Test_OTK_IspravkaPauziranaNeTrosiPending` | relink-pending se ne troši dok je lanac pauziran | briše se sa aparatom (odluka 4) |
+| Palete `T08_DetachSuStanarFantom`, test 14 (RELABEL, „bezbedan izlaz") | `DetachOsirocenePaletaStavke_TX` po broju | isti sud nad jezgrom skidanja po `PrijemnicaID` (`SkiniPaleteZaStornoPrijemnice`) |
+| sabotaže `lanac-bez-prekidaca`, `lanac-dupli-poziv`, `lanac-storniran-blok` | prekidač; izlazak na postojećoj OTP; sidro sa komentarom | prva se briše; druge dve se presidravaju |
+
+**ACCEPTANCE CONTRACT koraka 7 — plan dokaza, ne dokaz:**
+
+- **važi:**
+  - **R1 (`KI-046` (1)):** dve stornirane prijemnice dva kupca istog broja, svaka sa aktivnom paletnom stavkom,
+    daju u Oporavku (lista PALETE, kroz `Scr_Rows`) dva reda, i svaki nosi datum SVOG dokumenta. *Čime:* BFP;
+    sabotaža `s6k7-osir-datum-po-broju`.
+  - **R2 (`KI-046` (2)(3), trag brisanja):** storno hladnjačkog bloka čiji je lanac kompletan se odbija (A13), sa
+    razlogom koji imenuje otpremnicu; ništa se ne stornira. *Čime:* test lanca (R4) + zatečeni
+    `Test_STO_BlokUSastavuOtpremniceSeNeStornira`; sabotaža `s6k7-storno-bloka-u-lancu-prolazi`.
+  - **R3 (`HLD-LANAC-01`, jezgro):** dvoklasni blok (I 70 kg / 7, II 25 kg / 3) na hladnjačkoj stanici daje
+    IZDATU OTP (vozač ogledalo), IZDATU ZBR (kupac `MALINA_DEFAULT_KUPAC`, članstvo = ta OTP, broj iz niza
+    ogledala) i PRJ (isti kupac, vozač ogledalo, `ZbirnaRoditeljID` = ta ZBR, broj `1/ddmmyy`); kilaža i gajbe po
+    klasi jednake na sva četiri nivoa; cena stavke PRJ = cena stavke otkupa te klase; datum sva četiri = datum
+    otkupa; knjiga: jedna `UZ_ROBU` noga OTP (stanica → ogledalo) i jedna PRJ (ogledalo → kupac), saldo ogledala
+    za taj tip posle lanca = pre lanca. *Čime:* BFP `Test_HLD_AutoLanacOtpremnica` (proširen); sabotaže
+    `s6k7-lanac-staje-posle-otp`, `s6k7-prj-kolicina-ne-iz-zbirne`, `s6k7-cena-nije-iz-otkupa`,
+    `s6k7-prj-roditelj-po-broju`.
+  - **R4 (ekran, najviši ulaz):** F1 snimanje bloka na hladnjačkoj stanici kroz `CommitDokumentTest` pravi ceo
+    lanac, bez dijaloga; poruka nosi brojeve OTP, ZBR i PRJ. Ono što headless ne vidi (toast na ekranu) ide u
+    ručnu proveru. *Čime:* `modTest` (prvi slobodan broj); sabotaža `s6k7-poruka-bez-prijemnice`.
+  - **R5 (nastavljivost, odluka 1):** (a) ponovljen poziv nad kompletnim lancem ne pravi ništa (`""`, prazan
+    izveštaj); (b) blok sa OTP-om bez ZBR → poziv pravi ZBR i PRJ, ne drugu OTP; (c) OTP i ZBR bez PRJ → poziv pravi
+    samo PRJ. Međustanja grade postojeći pisci (isti koraci koje lanac zove), ne seam. *Čime:* BFP; sabotaže
+    `lanac-dupli-poziv` (presidrena: vraćen izlazak na postojećoj OTP), `s6k7-dupla-prijemnica`.
+  - **R6 (preduslovi pre prvog upisa):** bez `MALINA_DEFAULT_KUPAC` lanac ne pravi ni OTP; izveštaj imenuje ključ;
+    blok ostaje nevezan. *Čime:* BFP; sabotaža `s6k7-kupac-proveren-kasno`.
+  - **R7 (prekidač obrisan, odluka 2):** hladnjačka stanica ide u lanac bez ikakve konfiguracije; Podešavanja ne
+    nude `AUTO_PRIJEMNICA_HLADNJACA` (uz kontrolu susednog polja, obrazac 269); radnja „ponovi" u „Bez
+    otpremnice" postoji uvek. *Čime:* `modTest`; sabotaža `s6k7-podesavanje-nudi-prekidac`.
+  - **R8 (isto jezgro, odluka 3):** van maline `AutoZbirnaZaOtpremnicu` pravi zbirnu nad hladnjačkom otpremnicom,
+    a nad običnom ne (kontrola); u malini batch nad hladnjačkom OTP-om bez zbirne napravi zbirnu, pa lanac pravi
+    samo PRJ nad TOM zbirnom. *Čime:* BFP; sabotaža `s6k7-jezgro-zbirne-samo-malina`.
+  - **R9 (vidljivost, odluka 8):** blok sa OTP-om bez ZBR ili PRJ je u Oporavku „Nedovršeno" kao red `LANAC`;
+    „ponovi" nad njim kompletira lanac i red nestaje; radnja čita `OtkupID` iz nevidljive kolone, ne broj; red druge
+    vrste je odbija po imenu; kompletan lanac nije u listi. *Čime:* `modTest` kroz `Scr_Rows` / `UiEvent` Oporavka;
+    sabotaže `s6k7-nedovrsen-lanac-nevidljiv`, `s6k7-ponovi-bira-po-broju`.
+  - **R10 (PWA, odluka 9):** dva hladnjačka bloka iste stanice i dana ne završe u jednoj malina otpremnici; sync
+    korak svakom napravi svoj lanac; pad jednog bloka je imenovan i ne obara drugi. *Čime:* BFP, direktno nad
+    funkcijom koraka i `AutoCreateOtpremniceFromPWA_TX`; sabotaže `s6k7-pwa-batch-guta-hladnjacke`,
+    `s6k7-sync-bez-lanca`.
+  - **R11 (ručni put, odluka 10):** `DodajZbirnaIzvor_TX` odbija hladnjačku otpremnicu sa razlogom, izvor nije
+    upisan; obična prolazi (kontrola). *Čime:* BFP; sabotaža `s6k7-rucna-zbirna-prima-hladnjacku`.
+  - **R12 (nizvodno):** auto-prijemnica prolazi fakturu po stavci (jedna stavka → `DELIM`, cena = otkup) i ima
+    palete po stavci; F8 PONIŠTENJE nad njom obara ZBR i OTP i oslobađa blok. *Čime:* BFP test lanca; ponašanje
+    pisaca nizvodno već mere sabotaže koraka 2–5.
+- **netaknuto:** razvodnica (`LanacVaziZaStanicu` / `LanacVaziZaBlok`, fail-closed) i `VeziZaAktivnu`;
+  `RutaPosleUpisa`; malina auto-zbirna za obične otpremnice; F4 i njegove kapije (`PRJ-ZBR-01`, broj po kupcu,
+  zbirna po broju); knjiga ambalaže i protokol potvrde manjka (auto-prijemnica nema povrata, pa nema ni pitanja);
+  paletizacija; faktura; storno i F8;
+- **edge:** jednoklasni blok (samo II); blok bez gajbi (bez nogu i bez paleta); drugi blok iste stanice istog dana
+  (drugi lanac, brojevi `-2`); stanica bez ogledala (lanac ga pravi, zatečeno);
+- **negativno:** obična stanica, storniran blok, nepoznata stanica (razlog, ne tiho `False`), bez kupca (R6),
+  ručno vezivanje bloka (zatečeno) i otpremnice (R11) — nijedno ne piše ni dokument ni nogu knjige;
+- **čime, ukupno:** BFP (`Test_HLD_*`, R1), `modTest` (R4, R7, R9), Palete (T08/14 preneti), ciljani BFP,
+  RunAllTests, Faktura i Palete; jeftine kapije; `sabotaza --proveri-sidra` i statička sonda.
+
+**Imenovano van obima:**
+
+- ispravka hladnjačkog otkupa sa **prevezivanjem starih paleta na nov lanac** (legacy „DA" iz A-017): danas je
+  put F8 PONIŠTENJE + ponovni lanac (nove palete) ili DUPLI „ne diraj palete" + Oporavak „Prevezi"; sopstven rez
+  posle S6, uz `IspravkaZbirne_TX` (odluka 5 od 20.10);
+- F4 nad hladnjačkom zbirnom (pitanje „1 zbirna = 1 prijemnica" ostaje pitanje);
+- kapije `PRJ-ZBR-01` i broja po kupcu u piscu — korak 8;
+- `KI-028` (odluka 5), `KI-047`–`KI-050` (UX lanca unosa, posle S6–S9);
+- sync smoke suite (mreža) — korak orkestratora se meri direktno, ne kroz Google.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

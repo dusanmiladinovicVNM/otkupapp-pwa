@@ -105,6 +105,22 @@ grana pisca ostaju do koraka 8 i dosežu ih samo testovi (jedini produkcioni poz
 pisca je F4).
 Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 6".
 
+**HLD-LANAC-01 — hladnjački blok je jedan lanac, 1:1 po klasi na četiri nivoa
+(specifikacija operatera 20.09.2026; odluke 24.10.2026, S6 korak 7).** Blok upisan na
+stanici sa `JeHladnjaca = Da` sam pravi `OTK → OTP → ZBR → PRJ`: kilaža i gajbe po
+klasi jednake su na sva četiri dokumenta, svaki dokument izvodi stavke iz svog
+kanonskog roditelja i vezuje se za njega **po ID-u**, a jedan blok je tačno jedan
+lanac. Roba se meri pri prijemu u hladnjaču, pa sva četiri dokumenta nose datum
+otkupa; vozač je ogledalo stanice; kupac je `MALINA_DEFAULT_KUPAC`; cena stavke
+prijemnice je cena stavke otkupa te klase. Automatika je **obavezna**: stanica je
+jedini autoritet (prekidač `AUTO_PRIJEMNICA_HLADNJACA` se briše), a ručni putevi ne
+primaju hladnjački blok ni hladnjačku otpremnicu. Lanac je **nastavljiv**: svaki
+korak je idempotentan po kanonskom roditelju, pa „Ponovi auto-lanac" kreće od prvog
+koraka koji fali. Vlasnik: `modAutoHladnjaca.AutoLanacHladnjaca`; kapije ručnih puteva
+`modScrDokumenti.VeziZaAktivnu` i `modDokumenta.DodajZbirnaIzvor_TX`.
+Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 7" (do koda,
+sve osim prvog reda je PLAN).
+
 **Storno nije brisanje.** Dokument-tabele imaju `Stornirano` kolonu; storniran red
 ostaje u tabeli i izlazi iz svih agregata. Zato „aktivan" nije isto što i
 „postoji". Kaskade (šta storno jednog dokumenta povlači nizvodno) su opisane u
