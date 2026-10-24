@@ -564,10 +564,17 @@ End Function
 
 Public Function CheckDuplicate(ByVal tblName As String, ByVal colName As String, _
                                ByVal searchValue As String, _
-                               ByVal datumColName As String) As String
+                               ByVal datumColName As String, _
+                               Optional ByVal scopeColName As String = "", _
+                               Optional ByVal scopeValue As String = "") As String
     ' Prueft ob searchValue in colName bereits existiert
     ' Returns: "" wenn kein Duplikat, sonst Fehlermeldung mit Datum
-    
+    '
+    ' OPSEG (S6 korak 6): broj koji je jedinstven samo u okviru vlasnika (A2;
+    ' prijemnica: kupcev broj) prosledjuje kolonu i vrednost vlasnika, pa se
+    ' porede samo redovi tog vlasnika. Kolona opsega koje nema NE gasi proveru:
+    ' tada se poredi globalno, sto je strozije, a ne tise.
+
     If searchValue = "" Then
         CheckDuplicate = ""
         Exit Function
@@ -580,11 +587,12 @@ Public Function CheckDuplicate(ByVal tblName As String, ByVal colName As String,
         Exit Function
     End If
     
-    Dim colIdx As Long, datumIdx As Long, colStorno As Long
+    Dim colIdx As Long, datumIdx As Long, colStorno As Long, scopeIdx As Long
     colIdx = GetColumnIndex(tblName, colName)
     datumIdx = GetColumnIndex(tblName, datumColName)
     colStorno = GetColumnIndex(tblName, COL_STORNIRANO)
-    
+    If Len(scopeColName) > 0 Then scopeIdx = GetColumnIndex(tblName, scopeColName)
+
     If colIdx = 0 Then
         CheckDuplicate = ""
         Exit Function
@@ -596,7 +604,10 @@ Public Function CheckDuplicate(ByVal tblName As String, ByVal colName As String,
         If colStorno > 0 Then
             If CStr(data(i, colStorno)) = "Da" Then GoTo NextRow
         End If
-            
+        If scopeIdx > 0 Then
+            If StrComp(Trim$(CStr(data(i, scopeIdx))), Trim$(scopeValue), vbTextCompare) <> 0 Then GoTo NextRow
+        End If
+
         If CStr(data(i, colIdx)) = searchValue Then
             Dim datumStr As String
             If datumIdx > 0 And IsDate(data(i, datumIdx)) Then

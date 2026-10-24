@@ -91,6 +91,20 @@ na vrstu koju operater nikad nije izabrao niti je na ekranu vidi. Dok ima **bar
 jednog** člana se ne diraju — izvor ih i dalje pokriva, a svaki sledeći se meri
 prema njima (`ZbrRequireIstiAko`).
 
+**PRJ-ZBR-01 — prijemnica se vezuje samo na IZDATU, jednoznačnu zbirnu (odluka
+operatera, 24.10.2026, S6 korak 6).** Zbirna je prevozni spisak tek kad je izdata
+(`IzdajZbirnu_TX`): nacrt je najava, pa bi manjak prijemnice bio meren prema
+neproverenoj najavi, a nacrt se posle sme menjati. Vlasnik: validator F4
+(`modDokUnos.PrijemnicaValidiraj`), posle kapije identiteta (dvosmislena, tuđa,
+istorija dva vlasnika). Pisac (`SavePrijemnicaDokument`) je dobija u koraku 8, kad
+testovi pređu na Multi. Pravilo važi i kad zbirne pod tim brojem uopšte nema: F4 tada
+**uvek** odbija (review #440, krug 1). Do tada je uz `PRIJEMNICA_ZBIRNA_PROVERA =
+UPOZORENJE` operater potvrdom pravio prijemnicu bez roditelja (`ZbirnaRoditeljID`
+prazan; sonda, stavka 195). Podešavanje je sklonjeno iz Podešavanja; konstanta i blaža
+grana pisca ostaju do koraka 8 i dosežu ih samo testovi (jedini produkcioni pozivalac
+pisca je F4).
+Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 6".
+
 **Storno nije brisanje.** Dokument-tabele imaju `Stornirano` kolonu; storniran red
 ostaje u tabeli i izlazi iz svih agregata. Zato „aktivan" nije isto što i
 „postoji". Kaskade (šta storno jednog dokumenta povlači nizvodno) su opisane u

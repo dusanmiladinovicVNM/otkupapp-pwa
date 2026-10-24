@@ -98,7 +98,6 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
     CfgAdd c, "Otkup / dokumenta", "PRACENJE_PARCELA", "Pracenje parcela (unos parcele u otkupu)", "bool"
     CfgAdd c, "Otkup / dokumenta", "VALIDACIJA_UNOSA", "Kompletna validacija unosa (obavezna polja pre snimanja)", "bool"
-    CfgAdd c, "Otkup / dokumenta", "PRIJEMNICA_ZBIRNA_PROVERA", "Prijemnica: kad zbirna nije u sistemu", "list:BLOK;UPOZORENJE"
 
     ' --- Stampa (centralni izlazni dispecer; DocResolveMode cita ove kljuceve) ---
     ' Po dokumentu: PDF | PRINT | PREVIEW | OFF (prazno -> default tog dokumenta).

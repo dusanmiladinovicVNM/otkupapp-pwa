@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 22.10.2026 (stavka 189: S6 korak 5 na review-u; `KI-038` i `KI-040` zatvoreni).
+**Ažurirano:** 24.10.2026 (stavka 193: S6 korak 6 — pre-flight, sonda i odluke 1–8; kod sledi).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 4/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · **korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) na review-u** (stavke 188–191; review krug 1: arhitektura GO, dva P2 ispravljena u istom PR-u; FULL 12/12, dokaz 42/42, compile i ručna provera prošli; čeka merge), grana `claude/s6-korak5-faktura` |
+| **S6 prijemnica** | ⏳ **u toku, 5/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · **korak 6 (F4 odmrznut + vraćeni testovi iz §14.14): pre-flight i odluke 1–8 (stavka 193), kod crveno → zeleno (stavka 194), review krug 1 ispravljen (stavka 195: P1 `UPOZORENJE`, trag ispravke po ID-u), krug 2 CODE GO; FULL 12/12, dokaz 33/33, `vba_gate` dokazano (stavka 196); compile i ručna provera (stavka 197); compile nove sveske dokazan nad `f35e93337bef`, fokus na ekranu odložen u UX lanca unosa (`KI-050`, stavka 198); **spreman za merge na izričit zahtev**, grana `claude/s6-korak6-f4` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7015,6 +7015,253 @@
        zatečeni `KI-042`.
      - **Čeka:** merge samo na izričit zahtev operatera, sa `--match-head-commit`, posle zelenog CI-ja.
      - **Sledeći brojevi:** stavka 192 · test 263 · KI-045.
+192. **Merge `#439`, S6 korak 5/8 zatvoren** (24.10.2026). Zapis ide ovde, a ne u `#439`, po obrascu stavki 173,
+     177, 181 i 187. Brojevi FULL-a, dokaza, compile-a i ručne provere su u stavci 191.
+
+     - **Merge** 24.10.2026 (08:27:08 UTC) kao **`4958f68b`**, sa naloga `dusanmiladinovicVNM`, nad head-om
+       `8f447d72`.
+       - Static CI je `success` na tom head-u (check run 120821928041, izmereno).
+       - Stablo `main`-a posle merge-a jednako je stablu `8f447d72` (`9a2efeb0`, izmereno).
+       - Grana `claude/s6-korak5-faktura` nije obrisana (izmereno, `git ls-remote`).
+       - Da li je merge pušten sa `--match-head-commit` iz ove sesije se ne vidi: nije provereno.
+     - **Komentara ni review-a na `#439` posle merge-a nema** (izmereno, `gh api`).
+     - **Bazni brojevi na `main` = `4958f68b`** (FULL 12/12 nad izvorom `4091a1588470`; posle njega su ušli samo docs):
+       - RunAllTests 262/0, BFP 2694/0, Banka 241/0, Storno 111/0, Palete 97;
+       - Faktura 39/39, Agrohemija 25/25, SheetsJson 72, StornoCentar zeleno;
+       - katalog sabotaža 936 (`POZNATI_NALAZI` 9; izmereno `sabotaza --lista`);
+       - otisak šeme `4A418441` (izmereno u `modSchema`); potpis fixture-a `49f55dfc03b134b3` (izmereno: kod =
+         fixture). Drugi potpis → `make_fixture` PRE trijaže.
+     - **Tabela „Gde smo" je ažurirana u istom commitu:** S6 je 5/8, sledeći je korak 6.
+     - **Otvoreno, nasleđeno iz koraka 5:** `KI-042` (zastarela mapa iznosa u F4, viđena na ekranu), `KI-043`
+       (pretraga sa drugog ekrana preko placeholdera) i `KI-044` (faktura imenovana internim ID-jem). Uz njih
+       `KI-028`, `KI-039` i `KI-041`. Šta od toga je kapija koraka 6 odlučuje operater u stavci 193.
+     - **Sledeći brojevi:** stavka 193 (pre-flight koraka 6) · stavka 194 (kod) · test 263 · KI-045.
+     - **Sledeći je S6 korak 6** (F4 odmrznut: unos prijemnice kroz ljusku + vraćeni testovi iz §14.14), na grani
+       `claude/s6-korak6-f4` sa `4958f68b`.
+193. **S6 korak 6 — pre-flight nad `4958f68b`, sonda, odluke 1–8, PRE koda** (24.10.2026). Pun zapis je u §14.55,
+     „Korak 6".
+
+     - **Sonda** (kopija sveske, pauza uklonjena SAMO u kopiji, potez „Sačuvaj" kroz `CommitDokumentTest`):
+       - F4 pravi kanonski dokument: jedno zaglavlje, dve stavke, jedna `UZ_ROBU` = Σ, jedan povrat, palete po
+         stavci, `ZbirnaRoditeljID`;
+       - taj dokument prolazi fakturu po stavci (`DELIM`), storno ga odbija dok je fakturisan, a posle storna
+         fakture storno prolazi;
+       - bruto stiže na stavku.
+     - **Nalazi sonde** (svaki je postao odluka):
+       - nacrt zbirne prolazi;
+       - −5 kg tiho nestaje, a 20,5 gajbi postaje 20;
+       - broj drugog kupca se odbija (provera je globalna);
+       - poruka posle upisa nosi interni ID;
+       - fixture nosi `PRIJEMNICA_ZBIRNA_PROVERA = UPOZORENJE`, a ne BLOK, pa bi parkiran test 176 visio na `MsgBox`-u.
+     - **Usput:** prvi pokušaj sonde je pao na sopstvenoj grešci sonde (promenljiva `iS` = rezervisana reč `Is`).
+       Moja instanca je ugašena po isteku; instanca operatera nije dirana.
+     - **Odluke operatera (24.10.2026), sve po preporuci:**
+       1. `KI-028` posle koraka 6;
+       2. samo IZDATA zbirna (`PRJ-ZBR-01`, kapija u validatoru; pisac u koraku 8);
+       3. `MsgBox` validatora: preduslovi u testu;
+       4. `KI-020` za prijemnicu u koraku 6;
+       5. ulaz kao kod zbirne;
+       6. broj jedinstven po kupcu;
+       7. poruka nosi broj;
+       8. `KI-042/043/039/041` van.
+     - **DOMEN:** nova invarijanta `PRJ-ZBR-01` (`docs/DOMEN/README.md`); A2 dobija vlasnika niza za kupčev broj
+       (`ARCHITECTURE_CONTRACT.md`).
+     - **Acceptance contract R1–R9** i sabotaže: §14.55, „Korak 6". Testovi `modTest` 8 (premisa), 263–268, 253,
+       ruta; BFP `Test_S6K6_F4DokumentProlaziLanac` nad pravom izdatom zbirnom.
+     - **Sledeći brojevi:** stavka 194 (kod) · test 263 · KI-045.
+194. **S6 korak 6 — kod: F4 odmrznut, crveno → zeleno** (24.10.2026). Plan i odluke su u stavci 193; tok koda i
+     ispravke plana su u §14.55, „Korak 6", odeljak „Tok koda".
+
+     - **Crveno pre ispravke, izvedeno iz diff-a** (`ae66ef52`, pa higijena testova `73d6391c`):
+
+       | Prolaz | RunAllTests | BFP | Šta |
+       |---|---|---|---|
+       | crveni 1 | 268 / **10** | 2708 / **12** | višak od po jednog pada, oba izmerena: `T_Izv_SlaganjeKupacVozac` (sintetička zbirna testa 268 u izveštaju vozača, 90 umesto 40) i BFP preduslov (ispravka prijemnice na čekanju iz `modTest` 35, ista sveska). Kvar je bio u testovima; zatečeni deo je `KI-045` |
+       | crveni 2 | 268 / **9** | 2708 / **11** | tačno izvedeno: 8, 9, 253, 263–268, svaki na prvoj tvrdnji; BFP 11 tvrdnji S6K6 posle tri preduslova |
+       | **zeleni** | **268 / 0** | **2708 / 0** | Faktura **39/39**; izvor `898192e5f2b7`, ugovor `449eb44b5722`, fixture `49f55dfc03b134b3` (nepromenjen) |
+
+       BFP je u zelenom izvršio istih 2708 tvrdnji kao u crvenom (14 tvrdnji S6K6: 3 preduslova + 11), pa nijedna
+       nije ćutke preskočena.
+     - **Kod** (bez novog pisca i bez izmene šeme):
+       - `modDokUnos.PrijemnicaValidiraj`: pauza je otišla; kapija IZDATE zbirne posle kapije identiteta
+         (`PRJ-ZBR-01`, poruka `DOKUNOS_ERR_ZBR_P_NIJE_IZDATA`, fokus `brojZbirne`); negativna kilaža (I, II) i
+         negativne/decimalne gajbe (I, II, povrat) se odbijaju sa fokusom; duplikat broja po kupcu;
+       - `modDataAccess.CheckDuplicate`: opcioni opseg (kolona + vrednost vlasnika); stari pozivi su netaknuti;
+       - `modDokumenta.SavePrijemnicaMulti_TX`: `Optional ByRef outGreska` na kraju potpisa, puni se u EH, bez
+         prefiksa `Source=… | ` (`RazlogBezIzvora`); `PrijemnicaUpisi`/`PrjUpisPoziv` ga stavljaju u poruku
+         (`KI-020`, deo prijemnice, ZATVOREN);
+       - `modScrDokumenti.SavePrijemnica`: rezultat je broj prijemnice (kao zbirna);
+       - `modOtkupUI.FokusNaPolje`: `Case "kolAmbIzdata"` (polje vraćenih gajbi);
+       - `modPoruke`: ključ pauze obrisan; ključ nove kapije je ušao još u `ae66ef52`.
+     - **Sabotaže: katalog 936 → 954** (18). Vraćene iz `fc06fa77`: `prijemnica-kupac`, `bruto-prijemnica`,
+       `bruto-prijemnica-neto`, `zbirna-f4-nije-vezan`, `zbirna-f4-pusta-tudjeg-vlasnika`; presidrena `bruto-zbirna`;
+       nove `s6k6-*` (11) i `ruta-prijemnica`. `--proveri-sidra`: 954, nalaza 0 (+9 poznatih); `--self-test` 43.
+       **Statička sonda 18/18:** primena menja tačno jedan fajl, pravila nad fajlovima su čista (katalog javlja samo
+       tu sabotažu i sestru sa istim sidrom), `--vrati` vraća `src-vba` bajt-identičan kopiji.
+     - **Jeftine kapije, sve zelene** nad radnim stanjem pre commita: `vba_check` (191) + `--self-test` 152,
+       `vba_parity_check`, `vba_selfupdate_gates`, `vba_hard_census`, `vba_import_marker_gate` (svaki +
+       `--self-test`), `who_writes --check` / `--check-ownership` / `--self-test`, `gen_schema_module --check`
+       (otisak `4A418441`) / `--self-test`, `run_vba --self-test`, `vba_gate --popis` / `--self-test`,
+       `js_sintaksa` 65/0 + `--self-test` 13/0, `popis_citalaca --check`.
+     - **Dokumenti:** MAPA A-031 → MIGRATED; `KI-020` (deo prijemnice ZATVOREN); nov `KI-045`; `AMBALAZA.md` 6.13g;
+       `UI_MIGRACIJA_KATALOG` uz F4.
+     - **Nije urađeno (čeka reviewer GO):** FULL, `dokaz.py` nad 18 novih/presidrenih i sabotažama testova koji su
+       dirani, `vba_gate --require-green`, sveska za compile i ručnu proveru, compile. Compile je i dalje
+       `NEJASNO` iz `run_vba` — ručna kapija.
+     - **Tabela „Gde smo" je ažurirana u istom commitu:** korak 6 je u review-u.
+     - **Sledeći brojevi:** stavka 195 · test 269 · KI-046.
+195. **Review #440, krug 1 — P1 i P2 potvrđeni, ispravka u istom PR-u** (24.10.2026). Nalazi su bili iz koda;
+     ovde su oba izmerena. Pun zapis je u §14.55, „Korak 6", odeljak „Review #440, krug 1".
+
+     - **P1 — `UPOZORENJE` je puštao nepostojeću zbirnu.** Reprodukovano **sondom** (kopija sveske sa `d3de4abf`,
+       sopstvena instanca, čuvar dijaloga odgovara „Da"): validator pita „Ipak snimiti prijemnicu sa ovim brojem
+       zbirne?", posle „Da" vraća `""`, a pisac pravi **aktivnu `PRJ-00001` sa brojem nepostojeće zbirne i praznim
+       `ZbirnaRoditeljID`** (redova 29 → 30). Test nad starim kodom bi visio na `MsgBox`-u, pa je ovo crveno.
+       Moja greška iz pre-flight-a: u §14.55 i u `PRJ-ZBR-01` sam ovu politiku ostavio kao „netaknuto".
+     - **P2 — popis čitalaca prijemnice po golom broju** (~45 mesta): dostižan upis po broju je samo
+       `StampIspravkaTrace` (moj nalaz; nije bio u review-u). Datum reda Oporavka, paletni prikaz i
+       `DetachOsirocenePaletaStavke_TX` idu u **`KI-046`**, kapija pre koraka 7.
+     - **Odluke operatera (24.10.2026), sve po preporuci:** (1) F4 uvek odbija; polje se sklanja iz Podešavanja, a
+       konstanta i blaža grana pisca ostaju do koraka 8; (2) samo trag ispravke ide u ovaj PR; (3) crveno za P1 je sonda.
+     - **Kod:**
+       - `modDokUnos.PrijemnicaValidiraj`: „zbirne nema" se odbija bez uslova i bez pitanja;
+       - `modPodesavanja`: red `PRIJEMNICA_ZBIRNA_PROVERA` uklonjen; `modPoruke`: `DOKUNOS_ASK_ZBIRNA_NEMA` (više ga
+         niko ne zove) uklonjen;
+       - `modStornoFlow.StampIspravkaTrace` bira red po ID-u (`idCol`, `newID`, `oldID`); pozivalac
+         `PreveziPaleteIspravke` šalje `res` i `StorniraniDocID(cid)`;
+       - test Storno centra (`Test_StampIspravkaTrace_Auto`) prelazi na nov potpis. `ARNOST` ga je uhvatio pre suite;
+       - komentari u `modConfig`, `modDokumenta` (dva) i `modDokUnos` više ne obećavaju `UPOZORENJE`.
+     - **Testovi:** 264 dobija slučaj `UPOZORENJE` (tvrdnja „nepostojeca zbirna se odbija i uz UPOZORENJE
+       (PRJ-ZBR-01)"); nov 269 `T_S6K6_PodesavanjaBezPolitikeZbirne` (uz kontrolu susednog polja); nov 270
+       `T_S6K6_TragIspravkePoID`, kroz pravi put ispravke (`PrijemnicaUpisi` sa `ispravkaID`, stari dokument sa
+       paletom).
+     - **Crveno → zeleno:**
+
+       | Prolaz | RunAllTests | BFP | Faktura | Storno centar | Šta |
+       |---|---|---|---|---|---|
+       | crveni (testovi 269 i 270, bez ispravke) | 270 / **2** | — | — | — | tačno izvedeno: 269 na „Podesavanja ne nude…", 270 na „trag ispravke ne dira prijemnicu drugog kupca istog broja" (dobijeno `PR-S6K6-TRGS-…` na tuđem dokumentu) |
+       | **zeleni** | **270 / 0** | **2708 / 0** | **39 / 39** | OK | izvor `9d60e099c971`, ugovor `3233e23ab969`, fixture `49f55dfc03b134b3` |
+
+       Slučaj `UPOZORENJE` u 264 nije bio u crvenom prolazu: nad starim kodom bi visio. Njegovo crveno je sonda
+       iznad, a pokazivanje po imenu daje sabotaža. Broj provera Storno centra ide u Immediate, ne u log; suite je
+       `gate` i nije pala, ali broj nije izmeren.
+     - **Sabotaže: katalog 954 → 957.** Nove su `s6k6-upozorenje-pusta-nepostojecu` (uslov vraćen **bez** `MsgBox`-a,
+       inače bi dokaz visio), `s6k6-podesavanje-nudi-upozorenje` i `s6k6-trag-ispravke-po-broju`. `--proveri-sidra`:
+       957 sabotaža, 0 nalaza. Statička sonda: 3/3. Prvi oblik druge sabotaže je pao na sondi: sidro je bilo podniz
+       zamene, pa katalog nad sabotiranim izvorom nije umeo da kaže „zatečen sabotiran". Ispravljen pre commita.
+     - **Jeftine kapije:** svih 22 zelene nad radnim stanjem pre commita (isti skup kao u stavci 194).
+     - **Dokumenti:** `PRJ-ZBR-01` (`docs/DOMEN/README.md`) bez izuzetka; MAPA A-031 (i F-064 kao referenca);
+       nov `KI-046`.
+     - **Nije urađeno (čeka reviewer GO):** FULL, `dokaz.py`, `vba_gate --require-green`, sveska za compile i ručnu
+       proveru, compile.
+     - **Sledeći brojevi:** stavka 196 · test 271 · KI-047.
+196. **Review #440, krug 2 — CODE GO; skupe kapije pa sveska za compile i ručnu proveru** (24.10.2026).
+
+     - **Review krug 2:** novog P1/P2 u #440 nema; P1 i trag ispravke su ocenjeni kao zatvoreni u kodu; `KI-046`
+       ostaje obavezna kapija pre koraka 7. Ocena: „CODE GO, MERGE HOLD do završnih kapija". Static CI na
+       `c4d0234e`: **success** (check run 120896196285, izmereno).
+     - **Sudar sa #441** (`claude/trusting-hawking-2cw6z1`, druga sesija): izmereno iz diff-a — #441 registruje testove
+       **263–271** u sva tri registra, a #440 drži 263–270; oba diraju i `modScrDokumenti`, `modPoruke`,
+       `tools/sabotaza.py`, `docs/DOMEN/README.md` i ovaj fajl. To je integracioni posao **#441** (posle merge-a #440:
+       rebase, prenumeracija od 271, sidra), ne kvar #440. Ovde se ništa ne menja.
+     - **FULL 12/12 ZELENO** nad `c4d0234e` (izvor `9d60e099c971`, ugovor `3233e23ab969`): RunAllTests 270/0, BFP
+       2708/0, Banka 241/0, Storno 111/0, Faktura 39/39, Agrohemija 25/25; Izveštaji, SheetsJson, Storno centar,
+       Licenca, Palete i Golden OK (ovaj log broj ne ispisuje). Fixture `49f55dfc03b134b3`.
+       - **Prvi pokušaj je bio moj promašaj:** `run_vba --all` vrti svih 18 suita iz kataloga, a FULL je podrazumevani
+         skup (bez argumenata). U tom prolazu je svih 12 FULL suita bilo zeleno, a pale su `RunGoogleSyncSmokeSuite`
+         i `RunMasterSyncSmokeSuite`, koje su van FULL-a jer traže mrežu (`run_vba:74`); `RunProductionHealthCheck`
+         je `blind` (Fail=37). Da li padaju isto i na `main`-u nije izmereno. Marker tada nije upisan, pa je FULL
+         pušten ponovo pravom komandom.
+     - **`vba_gate --require-green`: dokazano** (izvor `9d60e099c971`, ugovor `3233e23ab969`).
+     - **`dokaz.py --grupe 6`, 33 sabotaže, 13 prolaza: crvenih 33/33, izvor IDENTIČAN** (`377d1995b5865583`).
+       - Obim (iz koda, skripta u scratchpad-u): 21 nova/presidrena + 6 čiji je test diran (`ki021-*` ×4,
+         `ruta-zbirna`, `ruta-isplata`) + 6 kojima test ide kroz izmenjen upis (`T_IspravkaPrijemnice_SkipIRelink`
+         ×4, `ki015-prij-*` ×2). 30 sabotaža koje idu samo kroz neizmenjen uspešan put upisa čekaju pun katalog
+         pred release.
+       - Grupno 25, pojedinačno 8. `s6k6-razlog-pisca-se-guta` je u grupi sa `s6k6-f4-pauza-vracena` pala na DRUGOJ
+         tvrdnji (pauza obori upis pre razloga pisca); sama je pala po imenu. Uticaj grupe, ne kvar.
+       - Čistoća izmerena i mimo `dokaz.py`: `git status` prazan, `--proveri-sidra` 957/0, otisak svih 192 fajla i
+         bajt-kopija `src-vba` identični stanju pre dokaza.
+     - **Sveska za compile i ručnu proveru:** `tests/fixtures/rucna_provera_s6_korak6.xlsm` (gitignored, otisak
+       `04464dd4aa8e79ac`) = BFP 2708/0 sa `--keep` nad izvorom `9d60e099c971`.
+       - Izmereno čitanjem: 31 IZDATA zbirna bez aktivne prijemnice (npr. `90001/300391`, `90001/261190`), nacrt
+         `90001/181190`; nijedna ispravka prijemnice na čekanju; `PRIJEMNICA_ZBIRNA_PROVERA = UPOZORENJE` upisan
+         (baš stanje u kome F4 mora da odbija); `VOZ-90001` ima 21.769 „Test Gajba".
+       - Izmereno u sopstvenoj instanci (makroi ugašeni, samo čitanje): kod reza je u svesci (7/7 igala),
+         `modVbaTools` namerno nije, ključ kapije je u `tblPoruke`. Stari ključ `DOKUNOS_ASK_ZBIRNA_NEMA` ostaje kao
+         red u `tblPoruke` (`EnsurePoruke` ne briše) — bezopasno.
+       - Otvaranje sa ugašenim makroima je dalo dijalog o `modLogo`: zatečeni **`KI-030`**, ne nov nalaz.
+     - **Čeka operatera:** compile („compiles" → `vba_gate --mark-compile`), ručna provera po checklisti u #440,
+       merge samo na izričit zahtev.
+     - **Sledeći brojevi:** stavka 197 · test 271 · KI-047.
+197. **Compile i ručna provera #440 — fokus posle greške ispravljen u istom PR-u** (24.10.2026).
+
+     - **Compile:** operater je javio „SVESKA COMPILES" (`rucna_provera_s6_korak6.xlsm`, izvor `9d60e099c971`) →
+       `vba_gate --mark-compile`; `--require-green --require-compile` = **dokazano** nad `9d60e099c971`. Izvor se
+       posle toga promenio (fokus, ispod), pa compile treba ponoviti nad novom sveskom.
+     - **Ručna provera (operater, dva niza snimaka, 24.10.2026):**
+
+       | Korak | Ishod |
+       |---|---|
+       | 2 `NEMA-1` uz `UPOZORENJE` | ✅ „Zbirna 'NEMA-1' ne postoji u sistemu…", bez pitanja |
+       | 3 nacrt `90001/181190` | ✅ „Zbirna pod tim brojem još nije izdata…" |
+       | 4 −5 kg · 20,5 gajbi · povrat 1,5 | ✅ tri poruke tačne |
+       | 5 srećan put | prvi pokušaj (tip 12/1, vozač ih nema): ✅ razlog pisca na ekranu, „Promene su vraćene", dokument ne nastaje (`KI-020`); drugi (tip „Test Gajba"): ✅ „Prijemnica sačuvana: S6K6-R-1", palete 117 i 118/2026 |
+       | 6 isti broj, isti kupac | ✅ „Dokument 'S6K6-R-1' već postoji!", kursor u BROJ PRIJEMNICE (fokus `brDok` radi u produkciji) |
+       | 7 ispravka sa novim brojem | ✅ pitanje o ispravci → „Palete prevezane: S6K6-R-1 → S6K6-R-2"; **papir „ispravka od" nije viđen** |
+       | 8 faktura → F8 → storno | ✅ 24/2026 samo za klasu I → „Delim. fakturisano"; F8 odbija; storno fakture; poništenje celog toka prolazi |
+       | 1 Podešavanja · 9 edge | nije viđeno |
+
+       Viđeni zatečeni: `KI-037` (oznaka „?" i gubitak č/ć u `MsgBox`-u: „SLEDECE", „cuvanju"), `KI-043` (tekst
+       pretrage preko placeholdera), `KI-044` (`FAK-00012` umesto 24/2026).
+     - **Nalaz 1 — fokus posle greške (ugovor #440, R3/R5/R6), ispravljen ovde po odluci operatera:**
+       `modOtkupUI.FokusNaPolje` nije poznavao `brojZbirne` (sve četiri greške zbirne u F4) ni `kupacID` (F4, i od
+       ranije F3), pa kursor posle tih poruka nije išao nikud. Testovi su merili samo ključ koji ekran vrati
+       (`p("fokus")`), ne i da ga ljuska ume da primeni.
+       - **Seam (samo posmatra):** `FokusNaPolje` prvo odredi kontrolu; u test režimu je BELEŽI (`FokusTest`)
+         umesto `SetFocus` (koji u nevidljivom Excelu visi), a u produkciji joj daje fokus kao i pre.
+         `CommitDokumentTest` prazni belešku, kao i `DijalogTest`.
+       - **Test 271 `T_S6K6_FokusPosleGreske`** kroz ceo potez: kontrole (−5 kg → `fgKgIT`, povrat 1,5 →
+         `fgAmbPrT`), pa F4 bez kupca → `cbKupac`, nepostojeća zbirna → `fgBrZbirT`, F3 bez kupca → `cbKupac`.
+       - **Crveno pre ispravke, tačno izvedeno:** RunAllTests 271 / **1** — 271 na „F4: posle 'Izaberi kupca'
+         fokus je na kupcu" (dobijeno `""`), obe kontrole prošle.
+       - **Ispravka:** dve grane (`kupacID` uz `kooperantID`/`partnerID`; `brojZbirne` → `fgBrZbirT`).
+       - **Sabotaže 957 → 961:** `s6k6-fokus-bez-kupca`, `s6k6-fokus-bez-zbirne`, `s6k6-fokus-bez-povrata` (grana
+         povrata iz koraka 6 do sada nije bila merena kroz ljusku) i `s6k6-fokus-beleska-gluva` (seam je test
+         infrastruktura). Statička sonda 4/4.
+     - **Nalazi 2 i 3 → samo `KNOWN_ISSUES` (odluka operatera):** `KI-047` (vrsta/sorta prijemnice se ne poredi sa
+       zbirnom — čeka poslovnu odluku), `KI-048` (razlog pisca je tehnički tekst; dopunjeno: gubitak č/ć u dijalogu
+       je `KI-037`). Uz to `KI-049` (pilula „Delim. fakturisano" odsečena na poslednjem slovu, kozmetika).
+     - **Kapije nad novim izvorom `f35e93337bef`:** jeftine 22/22; **FULL 12/12 ZELENO** (RunAllTests 271/0, BFP
+       2708/0, Banka 241/0, Storno 111/0, Faktura 39/39, Agrohemija 25/25, ostale OK); `vba_gate --require-green`
+       dokazano.
+     - **Dokaz za 4 nove sabotaže: crvenih 4/4**, izvor IDENTIČAN (`5569438d8941fa41`); sve četiri gađaju test 271,
+       pa su išle pojedinačno. Čistoća izmerena i mimo `dokaz.py` (otisak, bajt-kopija, sidra 961/0).
+     - **Nova sveska za compile i proveru fokusa:** `tests/fixtures/rucna_provera_s6_korak6_fokus.xlsm`
+       (gitignored, otisak `4a42acc7a327bc50`) = BFP 2708/0 sa `--keep` nad `f35e93337bef`; kod reza je u njoj
+       (7/7 igala, sopstvena instanca, samo čitanje). Podaci su isti kao u prethodnoj svesci (BFP seme).
+     - **Čeka operatera:** compile nove sveske; fokus na ekranu (bez kupca → KUPAC; `NEMA-1` → BROJ ZBIRNE; povrat
+       1,5 → POVRAT AMBALAŽE); po želji koraci 1, 7 (papir) i 9 koje prvi niz nije pokrio.
+     - **Sledeći brojevi:** stavka 198 · test 272 · KI-050.
+198. **Compile nove sveske ✅; fokus na ekranu ✗ — tvrdnja ispravljena, kod odložen za UX lanca unosa**
+     (24.10.2026).
+
+     - **Compile:** operater je javio „COMPILES" za `rucna_provera_s6_korak6_fokus.xlsm` → `vba_gate --mark-compile`;
+       `--require-green --require-compile` = **dokazano nad `f35e93337bef`**.
+     - **Fokus na ekranu ne radi:** u sva tri slučaja (bez kupca, `NEMA-1`, povrat 1,5) kursor je u BROJ PRIJEMNICE
+       (operater). Uzrok, nađen čitanjem koda: `UiClick` prvo izvrši akciju (`CommitDokument` → `FokusNaPolje`), pa
+       za svaki klik koji nije izuzet zove `KeepKeys`, koji vraća fokus u broj dokumenta (F-tasteri posle klika na
+       Label) i pregazi polje greške. Zatečeno u svim režimima koji čuvaju klikom → **`KI-050`**.
+     - **Ispravka tvrdnje (stavka 197 je rekla više nego što je izmereno):** test 271 meri da ljuska BIRA pravu
+       kontrolu, ne da fokus na njoj OSTANE posle klika. Grane `kupacID`/`brojZbirne` su tačne i ostaju; „sa fokusom"
+       iz R3/R5/R6 na ekranu još nije isporučeno. Tekstovi tvrdnji 271 i `KeepKeys` idu u UX prolaz.
+     - **Odluka operatera (24.10.2026):** fokus sada nije bitan; ide u UX prolaz **celog lanca unosa dokumenata**.
+       Kod se zbog toga ne menja u #440.
+     - **Ručna provera:** koraci 2–8 potvrđeni (stavka 197); 1, papir iz 7 i 9 nisu viđeni — operater ih nije
+       tražio za ovaj rez.
+     - **#440 je spreman za merge sa strane kapija:** FULL 12/12, dokaz (33 + 4), `vba_gate` sa compile-om
+       dokazano nad `f35e93337bef`. Merge samo na izričit zahtev operatera.
+     - **Sledeći brojevi:** stavka 199 · test 272 · KI-051.
 
 ## Dug sa imenom (posle S5-5b)
 

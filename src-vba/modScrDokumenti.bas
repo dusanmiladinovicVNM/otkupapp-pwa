@@ -2180,7 +2180,10 @@ Private Function SavePrijemnica(ByVal polja As Object) As String
     End If
 
     Scr_ResetCache
-    polja("rezultat") = res
+    ' Rezultat je BROJ prijemnice (S6 korak 6, odluka 7), kao kod zbirne: poruka
+    ' posle upisa ga prikazuje, a interni PrijemnicaID operater ne nalazi ni u
+    ' jednoj listi (isti razred kao KI-044).
+    polja("rezultat") = CStr(polja("brDok"))
     polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
 End Function
 

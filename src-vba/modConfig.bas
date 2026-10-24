@@ -1338,6 +1338,11 @@ End Function
 '   True  = blokiraj (tvrda greska)  [default, bezbedno]
 '   False = samo upozori (operater moze da potvrdi i nastavi)
 ' Cita CFG_PRIJEMNICA_ZBIRNA_PROVERA: "UPOZORENJE" -> False; sve ostalo -> True.
+'
+' Od review-a #440 (krug 1) ovo cita SAMO pisac (ValidatePrijemnicaInput): F4
+' nepostojecu zbirnu odbija uvek (PRJ-ZBR-01), a polje je sklonjeno iz
+' Podesavanja. Jedini produkcioni pozivalac pisca je F4, pa blazu granu dosezu
+' samo testovi. Brise se u S6 koraku 8, kad pisac dobije kapiju.
 Public Function PrijemnicaZbirnaBlokira() As Boolean
     Dim v As String
     v = UCase$(Trim$(GetConfigValue(CFG_PRIJEMNICA_ZBIRNA_PROVERA)))

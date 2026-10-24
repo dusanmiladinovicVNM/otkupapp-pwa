@@ -465,7 +465,9 @@ vreme upisa); filtriranje kooperanata po otkupnom mestu je urađeno u v6-ui-113
    kroz `modDokUnos.ZbirnaUpisi` / `ZbirnaIzmeniNacrt`; pauza skinuta. Ostaje
    pokrivanje nacrta izvorima (F2 radni sto, S4-2c/2b-2b). `SaveZbirnaMulti_TX` i `modDokUnos.ZbirnaUpisi` više ne postoje;
    `SnimiZbirnu` samo validira, a `ZbirnaValidiraj` je pauziran od S3a. F4 upis
-   (`SavePrijemnicaMulti_TX`) je netaknut — prijemnica ide u S6.
+   (`SavePrijemnicaMulti_TX`) je netaknut — prijemnica ide u S6. *Dopuna:* od S6
+   koraka 6 F4 upisuje kroz `PrijemnicaValidiraj` → `PrijemnicaUpisi` (pauza skinuta,
+   plan §14.55 „Korak 6").
 9. ~~F5/F6/F7 → `SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`, novac.~~ **URAĐENO**
    (v6-ui-117, `modNovacUnos`). Uz upis su došla i dva polja bez kojih upis ne
    bi bio tačan: prekidač „ISPLATA IZ" sa avans saldom OM (F5) i lista

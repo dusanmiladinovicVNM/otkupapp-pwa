@@ -2617,7 +2617,7 @@ Zatečeno stanje (merenje stavke 135):
 |---|---|---|---|
 | revers (F7 i lista) | kooperant, a FIRMA → stanica | današnji saldo; početno = današnji − dokument | ponovljen papir `1/IZV` nosi −10 → 20 |
 | otpremnica (samo iz liste) | stanica | današnji saldo stanice kao „početno", pa saldo = početno − gajbe | **pogrešno pri svakoj štampi**: izdavanje je već knjižilo `Stanica → Vozač`, pa se gajbe oduzimaju dvaput |
-| grupni otkupni list | `Stanica:<VozacID>` | današnji saldo | danas **nedostižan** (unos prijemnice je pauziran do S6), a prijemnica od 10b-2 pomera nalog `Vozac`; ide u S6 |
+| grupni otkupni list | `Stanica:<VozacID>` | današnji saldo | danas **nedostižan** (unos prijemnice je pauziran do S6), a prijemnica od 10b-2 pomera nalog `Vozac`; ide u S6. *Dopuna:* od S6 koraka 3 list čita nalog Vozač oko svog reda, a od S6 koraka 6 je dostižan (F4 odmrznut; štampa ide samo za podrazumevanu hladnjaču, u malina režimu) |
 
 **Čitalac je jedan** (`modAmbalaza.AmbStanjeOkoDokumenta`): granica je prvi red
 dokumenta koji dotiče nalog, „pre" je zbir redova naloga i tipa pre granice, a „posle"

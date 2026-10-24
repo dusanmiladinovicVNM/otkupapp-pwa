@@ -1002,7 +1002,6 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_ISPRAVKA_PAUZIRANA", "Napomena: ISPRAVKA otpremnice je PAUZIRANA dok otpremnica ne pre" & ChrW(273) & "e na nov model. Ova otpremnica NIJE vezana za storniranu " & ChrW(8212) & " ispravka i dalje " & ChrW(269) & "eka na ekranu Oporavak."
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_NACRT", "Otpremnica je otvorena kao NACRT. Izda" & ChrW(263) & "e se kad joj se vezu otkupni blokovi."
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_NACRT_IZMENJEN", "Nacrt otpremnice je izmenjen."
-    UpsertRow lo, existing, "DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA", "Unos prijemnice je PAUZIRAN dok prijemnica ne pre" & ChrW(273) & "e na nov model. Prijemnica tra" & ChrW(382) & "i zbirnu, a zbirna se jo" & ChrW(353) & " ne mo" & ChrW(382) & "e uneti."
     UpsertRow lo, existing, "PRINT_OTP_NIJE_IZDATA", "Otpremnica jo" & ChrW(353) & " nije izdata " & ChrW(8212) & " nacrt se ne " & ChrW(353) & "tampa. Otpremnica se " & ChrW(353) & "tampa kad je izdata, sa cenama njenih otkupnih blokova."
     UpsertRow lo, existing, "STORNO_ERR_OTP_IZVOR_ZBIRNE", "Otpremnica je izvor aktivne zbirne " & ChrW(8212) & " storno je pauziran dok zbirna ne pre" & ChrW(273) & "e na nov model. Zbirna:"
     UpsertRow lo, existing, "STORNO_ERR_OTK_IZVOR_OTP", "Otkup je u sastavu aktivne otpremnice " & ChrW(8212) & " storno izvora nije dozvoljen dok je otkup u njenom sastavu. Otpremnica:"
@@ -1020,7 +1019,6 @@ End Sub
 Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBIRNA_NEMA_1", ChrW(10007) & " Zbirna"
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBIRNA_NEMA_2", "ne postoji u sistemu " & ChrW(8212) & " prvo unesi zbirnu otpremnicu."
-    UpsertRow lo, existing, "DOKUNOS_ASK_ZBIRNA_NEMA", "Ipak snimiti prijemnicu sa ovim brojem zbirne?"
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_AKTIVNA", ChrW(10007) & " Pod tim brojem ve" & ChrW(263) & " postoji aktivna zbirna " & ChrW(8212) & " storniraj je pa unesi ispravku."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_TUDJ", ChrW(10007) & " Taj broj je ve" & ChrW(263) & " pripadao drugom voza" & ChrW(269) & "u ili kupcu " & ChrW(8212) & " izaberi drugi broj."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_STORNIRAN", ChrW(10007) & " Taj broj je ve" & ChrW(263) & " izdat pa storniran " & ChrW(8212) & " storno ne osloba" & ChrW(273) & "a broj. Ispravku unesi pod NOVIM brojem."
@@ -1038,6 +1036,8 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_DVOSMISLEN", ChrW(10007) & " Pod tim brojem postoji vi" & ChrW(353) & "e aktivnih zbirnih " & ChrW(8212) & " ne mo" & ChrW(382) & "e se utvrditi na koju se prijemnica ve" & ChrW(382) & "e."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_TUDJ", ChrW(10007) & " Zbirna pod tim brojem pripada drugom voza" & ChrW(269) & "u ili kupcu " & ChrW(8212) & " proveri broj zbirne."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_ISTORIJA", ChrW(10007) & " Taj broj su ranije dr" & ChrW(382) & "ala dva vlasnika " & ChrW(8212) & " vezivanje po broju bi moglo da zahvati tu" & ChrW(273) & "i dokument."
+    ' PRJ-ZBR-01 (S6 korak 6): prijemnica se vezuje samo na IZDATU zbirnu.
+    UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_NIJE_IZDATA", ChrW(10007) & " Zbirna pod tim brojem jo" & ChrW(353) & " nije izdata " & ChrW(8212) & " izdaj je u F3, pa unesi prijemnicu."
     UpsertRow lo, existing, "DOKUNOS_ASK_DUPLA_PRIJ_1", "PA" & ChrW(381) & "NJA: zbirna"
     UpsertRow lo, existing, "DOKUNOS_ASK_DUPLA_PRIJ_2", "ve" & ChrW(263) & " ima aktivnu prijemnicu"
     UpsertRow lo, existing, "DOKUNOS_ASK_DUPLA_PRIJ_3", "Pravilo je 1 zbirna = 1 prijemnica, pa ovo li" & ChrW(269) & "i na DUPLI UNOS. Ipak snimiti?"

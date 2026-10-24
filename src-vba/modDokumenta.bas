@@ -517,9 +517,9 @@ Public Function ZbirnaRoditeljRazlog(ByRef id As ZbirnaIdent) As String
             ZbirnaRoditeljRazlog = ZBR_PARENT_TUDJ
         Case Else
             ' NONE: pod tim brojem nema aktivnog dokumenta, pa nema ni roditelja.
-            ' Politiku za taj slucaj (BLOK ili UPOZORENJE, po
-            ' PRIJEMNICA_ZBIRNA_PROVERA) drzi ZbirnaPostoji u validatoru IZNAD
-            ' ove kapije -- ovde stoji samo da funkcija ne laze kad se pozove sama.
+            ' F4 taj slucaj odbija vec na ZbirnaPostoji u validatoru IZNAD ove
+            ' kapije (PRJ-ZBR-01) -- ovde stoji samo da funkcija ne laze kad se
+            ' pozove sama.
             ZbirnaRoditeljRazlog = ZBR_PARENT_NEMA
     End Select
 End Function
@@ -6598,9 +6598,14 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                                        Optional ByVal brutoKgI As Double = 0, _
                                        Optional ByVal brutoKgII As Double = 0, _
                                        Optional ByVal potvrdaDeficita As Double = -1, _
-                                       Optional ByRef outErrNum As Long) As String
+                                       Optional ByRef outErrNum As Long, _
+                                       Optional ByRef outGreska As String) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
+
+    ' outGreska: RAZLOG odbijanja za operatera (KI-020, S6 korak 6; obrazac
+    ' CreateOtkup_TX). Potvrda manjka razlog ne nosi -- ona je pitanje, ne kvar.
+    outGreska = ""
 
     On Error GoTo EH
 
@@ -6736,8 +6741,23 @@ EH:
     On Error GoTo 0
 
     SavePrijemnicaMulti_TX = ""
+    outGreska = RazlogBezIzvora(errDesc)
 
     PrintTxFailure "SavePrijemnicaMulti_TX", errSrc, errNum, errDesc
+End Function
+
+' Razlog za operatera bez tehnickog prefiksa izvora: jezgro dokumenta pri
+' ponovnom dizanju lepi "Source=<procedura> | " ispred opisa (v.
+' SavePrijemnicaDokument), a operateru treba samo recenica koja kaze ZASTO.
+Private Function RazlogBezIzvora(ByVal opis As String) As String
+    Dim s As String, k As Long
+    s = Trim$(opis)
+    Do While Left$(s, 7) = "Source="
+        k = InStr(1, s, " | ", vbBinaryCompare)
+        If k = 0 Then Exit Do
+        s = Trim$(Mid$(s, k + 3))
+    Loop
+    RazlogBezIzvora = s
 End Function
 
 Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, _
@@ -8193,8 +8213,9 @@ Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _
     End If
 
     ' Referencijalni integritet: broj zbirne mora da postoji u tblZbirna.
-    ' Samo u BLOK modu -- u UPOZORENJE modu forma trazi potvrdu, pa backend ne
-    ' sme tvrdo da padne. Ujedno je bezbedna mreza i za ne-form pozivaoce.
+    ' Samo u BLOK modu. F4 nepostojecu zbirnu odbija uvek (PRJ-ZBR-01, review
+    ' #440), pa blazu granu dosezu samo testovi; pisac dobija bezuslovnu kapiju u
+    ' S6 koraku 8, zajedno sa kapijom IZDATE zbirne.
     If PrijemnicaZbirnaBlokira() Then
         If Not ZbirnaPostoji(brojZbirne) Then
             Err.Raise vbObjectError + 1428, SRC, _
