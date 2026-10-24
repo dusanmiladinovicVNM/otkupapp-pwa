@@ -10306,8 +10306,8 @@ SABOTAZE = {
     # Ekran prestane da trazi poslovni redosled za kartice.
     "kart-hron-ekran-bez-ugovora": (
         "modScrIzvestaji.bas",
-        "        Case IZ_KART, IZ_AMBK: Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
-        "        Case \"SABOTAZA\": Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
+        "        Case IZ_KART, IZ_AMBK, IZ_OTKL\n",
+        "        Case \"SABOTAZA\"\n",
         "T_KartHron_KljucISortEkrana",
         "kartica ambalaze trazi poslovni redosled",
     ),
@@ -10318,6 +10318,81 @@ SABOTAZE = {
         "        mSortCol = 2   ' SABOTAZA: kartica dobija kolonu sorta\n",
         "T_KartHron_KljucISortEkrana",
         "aktivacija kartice ne ostavlja kolonu sorta",
+    ),
+    # Kartica ambalaze cita FIZICKU knjigu: pokrice deficita (ULAZ_TUDJE)
+    # postaje ulaz kooperanta i povrat 23 uz pokrice 12 izgleda kao -11.
+    "amb-posl-kartica-fizicki": (
+        "modIzvestaj.bas",
+        "    ambData = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, Trim$(kooperantID), True)\n    If Not IsArray(ambData) Then\n",
+        "    ambData = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, Trim$(kooperantID), False)\n    If Not IsArray(ambData) Then\n",
+        "T_AmbPoslovno_PokriceNijeZaduzenje",
+        "primer A: povrat 23 uz pokrice 12 je poslovno -23, ne -11",
+    ),
+    # Kontra-stav se ne sudi po vrsti ORIGINALA: svaki storno postaje
+    # tehnicki, pa storno povrata ne gasi poslovni promet dokumenta.
+    "amb-posl-pokrice-po-vrsti": (
+        "modAmbalaza.bas",
+        "        If vrsteDok.Exists(orig) Then vrsta = CStr(vrsteDok(orig))\n",
+        "        vrsta = \"\"   ' SABOTAZA: kontra-stav bez vrste originala\n",
+        "T_AmbPoslovno_PokriceNijeZaduzenje",
+        "storno povrata gasi i poslovni promet tog dokumenta",
+    ),
+    # PDF otkupnog lista cita FIZICKO stanje pre dokumenta.
+    "amb-posl-pdf-fizicki": (
+        "modAmbalaza.bas",
+        "                                                   samoPoslovno:=True)\n",
+        "                                                   samoPoslovno:=False)\n",
+        "T_AmbPoslovno_PokriceNijeZaduzenje",
+        "PDF pocetno stanje je poslovno: pokrice ne uvecava stanje pre dokumenta",
+    ),
+    # Pregled po OM uzima saldo kooperanta prema SVIM stanicama.
+    "amb-posl-om-globalno": (
+        "modIzvestaj.bas",
+        "                                                   AMB_NALOG_STANICA, Trim$(stanicaID))\n",
+        "                                                   \"\", \"\")   ' SABOTAZA: saldo prema svim stanicama\n",
+        "T_AmbPoslovno_SaldoPoOM",
+        "pregled OM: izdavanje 8 i povrat 10 uz pokrice 2 su poslovno -2, druga stanica ne ulazi",
+    ),
+    # Pregled po OM nosi DANASNJE stanje i za pregled u proslosti.
+    "amb-posl-om-bez-datuma": (
+        "modIzvestaj.bas",
+        "    Set koopAmbDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT, True, datumDo, _\n",
+        "    Set koopAmbDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT, True, 0, _\n",
+        "T_AmbPoslovno_SaldoPoOM",
+        "pregled OM je na dan datumDo: danasnji promet ne menja jucerasnji pregled",
+    ),
+    # Opis otkupa bez sorte (stari oblik: samo vrsta i klase).
+    "kart-opis-bez-sorte": (
+        "modIzvestaj.bas",
+        "                                                    NzToText(otkData(i, colOtkSorta)), _\n",
+        "                                                    \"\", _\n",
+        "T_KartOpis_VrstaSortaKlasa",
+        "opis otkupa je vrsta, sorta, klase i kolicina sa razmakom pre kg",
+    ),
+    # Opis otkupa ponovo pocinje recju "Otkup".
+    "kart-opis-prefiks": (
+        "modIzvestaj.bas",
+        "    delovi = Array(vrsta, sorta, klase, FmtKolicina(kolicina) & \" kg\")\n",
+        "    delovi = Array(\"Otkup \" & vrsta, sorta, klase, FmtKolicina(kolicina) & \" kg\")\n",
+        "T_KartOpis_VrstaSortaKlasa",
+        "nijedan opis otkupa ne pocinje recju Otkup",
+    ),
+    # Pojedinacan pregled ambalaze prestane da trazi poslovni redosled ekrana:
+    # ljuska ga opet sortira drugom kolonom kao tekstom.
+    "doc-sort-ekran-bez-dokumenata": (
+        "modScrIzvestaji.bas",
+        "        Case IZ_AMB\n            If Not mZbirni Then Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
+        "        Case \"SABOTAZA-AMB\"\n            If Not mZbirni Then Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
+        "T_DocSort_DokumentneListe",
+        "dokumentne liste traze poslovni redosled ekrana",
+    ),
+    # Pregled ambalaze slaze broj dokumenta KAO TEKST: x/ddmmyy-10 pre -9.
+    "doc-sort-pregled-amb-tekst": (
+        "modIzvestaj.bas",
+        "        kljuc(r + 1) = KarticaDokKljuc(rr(0), CStr(rr(6)), CStr(result(r + 1, 4)), CStr(rr(3))) & _\n",
+        "        kljuc(r + 1) = CStr(result(r + 1, 4)) & Chr$(1) & _\n",
+        "T_DocSort_DokumentneListe",
+        "pregled ambalaze: manji broj istog niza ide pre veceg, bez obzira na upis",
     ),
 }
 

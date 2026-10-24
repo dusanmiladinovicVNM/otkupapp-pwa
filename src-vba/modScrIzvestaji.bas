@@ -238,10 +238,26 @@ End Function
 ' Kartice nose TEKUCI SALDO, izracunat redom koji je dao izvestaj
 ' (KART-HRON-01). Ljuskino "druga kolona opadajuce" je nad njima redjalo broj
 ' dokumenta kao tekst, a saldo je ostajao iz drugog reda -- P1 sa saldima 17 i
-' -13. Ostale liste nemaju misljenje i ostaju na pravilu ljuske.
+' -13.
+'
+' DOKUMENTNE LISTE (DOC-SORT-01) -- otkupni listovi, roba OM (otpremnice),
+' roba kupca (prijemnice) i pojedinacan pregled ambalaze -- red je dokument,
+' a izvestaj ih slaze po danu i broju KAO BROJU. Isti tekstualni sort ljuske
+' bi x/080726-10 stavio pre x/080726-2. Zbirni oblici i agregati (saldo,
+' isplata, zbirni, roba vozaca po vrsti) broj dokumenta nemaju i ostaju na
+' pravilu ljuske.
 Public Function Scr_Sort() As String
     Select Case Scr_Lista()
-        Case IZ_KART, IZ_AMBK: Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI
+        Case IZ_KART, IZ_AMBK, IZ_OTKL
+            Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI
+        Case IZ_AMB
+            If Not mZbirni Then Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI
+        Case IZ_ROBA
+            If Not mZbirni Then
+                Select Case TrenutniTip()
+                    Case "OM", "Kupac": Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI
+                End Select
+            End If
     End Select
 End Function
 
