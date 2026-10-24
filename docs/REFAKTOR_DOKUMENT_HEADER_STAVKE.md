@@ -8951,6 +8951,11 @@ a ne BLOK (komentar u `fc06fa77`), pa bi grana „zbirne nema" otvorila `MsgBox`
     po broju → **`KI-046`**, kapija pre koraka 7. Poslednja dva su danas nedostižna: jedini pozivalac čita
     `tblOtkup.BrojZbirne`, a tu kolonu niko ne piše.
 
+**Ručna provera (stavka 197) — „sa fokusom" iz R3/R5/R6 nije bilo isporučeno do kraja:** testovi su merili ključ
+koji ekran vrati, a ljuska (`FokusNaPolje`) nije znala `kupacID` ni `brojZbirne`. Posle operaterovih snimaka:
+seam koji beleži izabrano polje u test režimu, test 271 kroz ceo potez (crveno 271/1), dve grane, četiri sabotaže.
+Vrsta/sorta prijemnice prema zbirnoj (`KI-047`) i tekst razloga pisca (`KI-048`) su ostali van reza.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
