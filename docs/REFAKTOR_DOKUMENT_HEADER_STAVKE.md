@@ -9137,6 +9137,72 @@ prekidač `AUTO_PRIJEMNICA_HLADNJACA` nestaje. Danas lanac pravi samo otpremnicu
 - **Usput, samo `KNOWN_ISSUES`:** `KI-051` — F4 ne broji stornirane ni za hladnjača-kupca, a A2 t. 4 kaže da storno ne
   oslobađa broj prijemnice hladnjače (nađeno čitanjem, nije reprodukovano; mesto je korak 8).
 
+**Tok koda, deo 2 — lanac, R2–R12 (stavka 202):**
+
+- **Crveno izvedeno iz diff-a pre puštanja** (testovi + stubovi potpisa: `zbirnaRoditeljID` ignorisan,
+  `AutoLanacZaNevezaneBlokove` vraća 0, `NED_COL_OTK` bez kolone; prekidač je u fixture-u prazan, pa stari lanac ne radi
+  ništa):
+  - **BFP 2713 → 2741 tvrdnji, 54 pada**, prva „Lanac: hladnjacki blok ide u lanac". **Izmereno tačno tako** (2741 / 54,
+    ista prva). Po testu: `Test_HLD_AutoLanacOtpremnica` 57 / 35, `Test_OTK_RutaPosleUpisa` 13 / 5, `Test_S6K7_*` 26 / 14.
+  - **RunAllTests 271 → 274, 4 pada** (71, 272, 273, 274). Prvi prolaz: 4 pada, ali 272 i 274 na drugoj tački —
+    **izmereno, kvar testa, ne koda:** (1) 272 „blok je upisan" sa porukom „Izaberi ili unesi kooperanta" — lista
+    kooperanata je suzena po OM (`KOOP_FILTER_BY_OM`), a utišan prepis je ne puni; test sada bira OM, puni listu
+    produkcionim `RefreshPartnerLista`, pa prepisuje ostatak; (2) 274 „Subscript out of range" na koraku „lista posle
+    radnje" — normalan tok je ušao u `CleanUp` sa ZAOSTALIM `Err` 9 iz `GridCell` (kolona 7 ne postoji u crvenom);
+    test radi `Err.Clear` pre labele (obrazac je u `KI-053`). Ponovljeno crveno: **274 / 4, sva četiri na predviđenoj
+    tvrdnji**.
+- **Kod** (bez novog pisca i bez izmene šeme):
+  - `modAutoHladnjaca.AutoLanacHladnjaca`: OTP → ZBR → PRJ, nastavljiv; stanje po kanonskom roditelju (članstvo bloka,
+    članstvo otpremnice, `ZbirnaRoditeljID`); preduslovi pre prvog upisa (kupac, ogledalo, broj otpremnice, broj zbirne,
+    broj prijemnice); PRJ izvodi zaglavlje i kilažu/gajbe po klasi iz zbirne (`ZbirnaPoKlasi`), cenu iz otkupa
+    (`StavkeOtkupaRedovi`) kroz lanac koji nosi tačno jedan blok (`IzvoriZbirne` → `IzvoriOtpremnice`); izveštaj nosi
+    brojeve ili korak koji je pao i šta je već napravljeno; ugovor povratka kao gore. `OtpremnicaJeHladnjacka` (strogo,
+    `HladnjacaStrogo`), `HladnjackeStanice` (skup za mnogo blokova), `AutoLanacZaNevezaneBlokove` (sync),
+    `NedovrseniLanci` (Oporavak);
+  - prekidač obrisan: `CFG_AUTO_PRIJEMNICA_HLADNJACA`, `IsAutoPrijemnicaHladnjaca`, `LanacUkljucen`, red u
+    Podešavanjima; radnja „ponovi" u F1 postoji uvek (i uz grešku čita listu ponovo — koraci pre pada su upisani);
+  - `modMasterSync.AutoZbirnaZaOtpremnicu`: kapija „malina ILI hladnjačka otpremnica"; `GrupeZaAutoOtpremnicu`
+    preskače blokove hladnjačkih stanica;
+  - `modDokumenta`: `SavePrijemnicaMulti_TX` → `SavePrijemnicaDokument` sa `zbirnaRoditeljID` na kraju potpisa
+    (`ZbirnaRoditeljPrijemnice`: tačno jedna, aktivna, isti broj — pre ijednog upisa); `AktivnoClanstvoZbirni` (javni
+    čitač, isti ugovor kao `AktivnaZbirnaZaOtpremnicu`); `DodajZbirnaIzvor_TX` odbija hladnjačku otpremnicu POSLE kapija
+    izvora (otpremnica koje nema ili koja nije izdata i dalje dobija svoj razlog);
+  - `modGoogleSyncOrchestrator`: korak 3a, u svakom režimu (broj kompletiranih + imenovani razlozi; pad prolaza obara
+    ciklus);
+  - Oporavak: `modStornoRecovery.GetNedovrseno` dobija red `LANAC` (OtkupID u zapisu), `modScrOporavak` kolonu 7
+    (`NED_COL_OTK`, nevidljiva) i radnju „ponovi" (`PonoviLanac`, po OtkupID-u; red druge vrste se odbija imenom);
+  - poruke (`modPoruke`): ključevi lanca i Oporavka, `OTKUI_MSG_LANAC_OTP` obrisan.
+- **Odstupanja od teksta plana, sa razlogom:**
+  - nastavak PRJ ne ide kroz `modStorno.LookupActiveID` nego kroz strog čitač `AktivnePrijemnicePoZbirni` (isti za
+    Oporavak): `LookupActiveID` grešku guta i vraća `""`, pa bi pad čitanja napravio DRUGU prijemnicu;
+  - skup hladnjačkih stanica je jedan primitiv za batch, sync i Oporavak (`HladnjackeStanice`). Stanica koje nema nije u
+    skupu: njen blok ide malina batch-u, gde ga pisac otpremnice odbija po imenu stanice (zatečeni
+    `Test_OTP_AutoKvarGrupeNeObaraOstale` to traži);
+  - sync korak uzima samo blok koji NIKAD nije bio u otpremnici: blok koji je F8 PONIŠTENJE oslobodio je odluka
+    operatera (Oporavak ga nosi kao izgubljen blok), pa ga sync ne vraća u lanac sam;
+  - `modTest` brojevi su **272–274**, ne „iza `#441`": `#441` (OPEN) sada drži 272–280, a `vba_check` (`REGISTAR`)
+    ne pušta rupu u numeraciji — koji PR uđe drugi, prenumeriše se.
+- **Testovi:** BFP `Test_HLD_AutoLanacOtpremnica` (§0 obrisan; R2, R3, R5a, R12 + ivice: samo II, drugi blok istog dana
+  `-2`, blok bez gajbi), `Test_OTK_RutaPosleUpisa` (bez prekidača), novi `Test_S6K7_LanacNastavljiv` (R5b, R5c, odluka 7;
+  dvosmislen broj zbirne pravi uvoz sa terena istog ogledala, KR-001), `Test_S6K7_LanacBezKupcaNePise` (R6),
+  `Test_S6K7_JezgroZbirneHladnjacka` (R8), `Test_S6K7_PwaHladnjackiBlokovi` (R10), `Test_S6K7_RucnaZbirnaOdbijaHladnjacku`
+  (R11) — svi u transakciji testa koja se vraća (KI-045); `modTest` 71 (premisa: poslednja kolona je OtkupID), 272 (R4,
+  F1 kroz `CommitDokumentTest`), 273 (R7), 274 (R9, sa mamcem istog broja na drugoj stanici).
+- **Zeleno, tačno izvedeno:** RunAllTests **274 / 0**, BFP **2741 / 0** (isti broj tvrdnji kao crveni — nijedna nije
+  ćutke preskočena), Palete **96 / 0**, Faktura **39 / 0**; izvor `4421cb5b4cac`, ugovor `0132efee3512`, fixture
+  `49f55dfc03b134b3` (nepromenjen).
+- **Sabotaže:** katalog 962 → **976** (−`lanac-bez-prekidaca`, +15 `s6k7-*`); presidrene `lanac-dupli-poziv` (vraćen
+  izlazak na postojećoj OTP), `lanac-storniran-blok` (sidro bez komentara; tvrdnja „ne javlja nista" — lanac posle
+  sabotaže vraća `""`, odaje ga izveštaj), `oporavak-cid-kolona-vidljiva`, `amb-prj-povrat-samo-sa-klasom-i` (nov
+  argument), `oporavak-cid-kolona-drift` (tvrdnja). `--proveri-sidra` 976 / 0 (+9 poznatih), `--self-test` 43; statička
+  sonda **20/20** (primena menja tačno jedan fajl, pravila čista, `--vrati` vraća `src-vba` bajt-identičan;
+  `s6k7-storno-bloka-u-lancu-prolazi` deli sidro sa dve sestre).
+- **Jeftine kapije:** 22/22 + `sabotaza --proveri-sidra` / `--self-test`; `WHO_WRITES.md` regenerisan (BFP piše i
+  `tblStanice` — test modul, van A11).
+- **Imenovano, samo `KNOWN_ISSUES`:** `KI-052` (sync ne razlikuje sistemski pad unutar lanca jednog bloka), `KI-053`
+  (`CleanUp` na normalnom toku čita zaostali `Err`).
+- **Čeka reviewer GO:** FULL, `dokaz.py s6k7` + presidrene, sveska za compile i ručnu proveru, compile.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

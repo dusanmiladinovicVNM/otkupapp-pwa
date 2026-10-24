@@ -1499,11 +1499,24 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ASK_ISPRAVI2", "? Stara se stornira, a nova nastaje kao NACRT sa istim blokovima, istim o" & ChrW(269) & "ekivanjem i NOVIM brojem."
     UpsertRow lo, existing, "OTKUI_MSG_ISPRAVLJENA", "Nova otpremnica (nacrt):"
     UpsertRow lo, existing, "OTKUI_ERR_ISPRAVI", ChrW(10007) & " Ispravka nije uspela:"
-    ' --- S3d: auto-lanac hladnjace, korak otpremnice (A-014) ---
-    UpsertRow lo, existing, "OTKUI_MSG_LANAC_OTP", ChrW(183) & " Hladnja" & ChrW(269) & "a: izdata otpremnica"
-    UpsertRow lo, existing, "OTKUI_ERR_LANAC", ChrW(10007) & " Otpremnica hladnja" & ChrW(269) & "e nije napravljena:"
+    ' --- S6 korak 7: hladnjacki lanac OTK -> OTP -> ZBR -> PRJ (HLD-LANAC-01) ---
+    ' Uspeh nosi oznaku 183 (toast), pad oznaku 10007 (toast + dijalog posle upisa).
+    UpsertRow lo, existing, "OTKUI_MSG_LANAC", ChrW(183) & " Hladnja" & ChrW(269) & "a: lanac kompletan " & ChrW(8212)
+    UpsertRow lo, existing, "OTKUI_LANAC_OTP", "otpremnica"
+    UpsertRow lo, existing, "OTKUI_LANAC_ZBR", "zbirna"
+    UpsertRow lo, existing, "OTKUI_LANAC_PRJ", "prijemnica"
+    UpsertRow lo, existing, "OTKUI_LANAC_BLOK", "blok"
+    UpsertRow lo, existing, "OTKUI_LANAC_VEC", "Ve" & ChrW(263) & " napravljeno (nastavak: Oporavak, lista Nedovr" & ChrW(353) & "eno):"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC", ChrW(10007) & " Hladnja" & ChrW(269) & "ki lanac nije zavr" & ChrW(353) & "en:"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_KORAK_OTP", "otpremnica nije napravljena " & ChrW(8212)
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_KORAK_ZBR", "zbirna nije napravljena " & ChrW(8212)
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_KORAK_PRJ", "prijemnica nije napravljena " & ChrW(8212)
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_KUPAC", "nije postavljen kupac hladnja" & ChrW(269) & "e (MALINA_DEFAULT_KUPAC u Pode" & ChrW(353) & "avanjima) " & ChrW(8212) & " nijedan dokument nije napravljen; blok " & ChrW(269) & "eka u listi Bez otpremnice."
     UpsertRow lo, existing, "OTKUI_ERR_LANAC_MIRROR", "stanica nema vozaca-ogledalo (VozacID = StanicaID):"
     UpsertRow lo, existing, "OTKUI_ERR_LANAC_BROJ", "broj otpremnice nije generisan za stanicu"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_BROJ_ZBR", "broj zbirne nije generisan (auto-broj dokumenta u Pode" & ChrW(353) & "avanjima) za voza" & ChrW(269) & "a"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_BROJ_PRJ", "broj prijemnice nije generisan za kupca"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_ZBR_TIHO", "jezgro zbirne nije prihvatilo otpremnicu (nije izdata ili je ve" & ChrW(263) & " u zbirnoj)."
     UpsertRow lo, existing, "OTKUI_BTN_RED_PONOVI", "Ponovi auto-lanac"
     ' --- S3d-2: ispravka bloka (B-040) ---
     UpsertRow lo, existing, "OTKUI_BTN_RED_ISPRAVI_BLOK", "Ispravi"
@@ -1522,6 +1535,17 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_OPO_BLOK_AKCIJA", "Otkup (F1), lista Bez otpremnice: Ve" & ChrW(382) & "i za otpremnicu"
     UpsertRow lo, existing, "OTKUI_OPO_BLOK_GRESKA", ChrW(268) & "lanstvo otpremnica se ne mo" & ChrW(382) & "e pro" & ChrW(269) & "itati:"
     UpsertRow lo, existing, "OTKUI_OPO_BLOK_AKCIJA_GRESKA", "Popravi " & ChrW(269) & "lanstvo, pa osve" & ChrW(382) & "i listu"
+    ' --- S6 korak 7: nedovrsen hladnjacki lanac na ekranu OPORAVAK (odluka 8) ---
+    UpsertRow lo, existing, "OTKUI_HDO_OTK", "OtkupID"
+    UpsertRow lo, existing, "OTKUI_OPO_LANAC_OPIS_OTP", "Hladnja" & ChrW(269) & "ki lanac je stao posle otpremnice (nema zbirne):"
+    UpsertRow lo, existing, "OTKUI_OPO_LANAC_OPIS_ZBR", "Hladnja" & ChrW(269) & "ki lanac je stao posle zbirne (nema prijemnice):"
+    UpsertRow lo, existing, "OTKUI_OPO_LANAC_AKCIJA", "Ovde: Ponovi auto-lanac"
+    UpsertRow lo, existing, "OTKUI_OPO_LANAC_GRESKA", ChrW(268) & "itanje hladnja" & ChrW(269) & "kih lanaca nije uspelo:"
+    UpsertRow lo, existing, "OTKUI_OPO_LANAC_AKCIJA_GRESKA", "Popravi podatke lanca, pa osve" & ChrW(382) & "i listu"
+    UpsertRow lo, existing, "OTKUI_OPO_PONOVI_NIJE_LANAC", ChrW(10007) & " Ovaj red nije nedovr" & ChrW(353) & "en hladnja" & ChrW(269) & "ki lanac " & ChrW(8212) & " Ponovi auto-lanac radi samo nad redom vrste LANAC."
+    UpsertRow lo, existing, "OTKUI_OPO_PONOVI_NEMA_POSLA", ChrW(10003) & " Lanac je ve" & ChrW(263) & " kompletan " & ChrW(8212) & " nema " & ChrW(353) & "ta da se ponovi."
+    ' --- S6 korak 7: rucna zbirna ne prima hladnjacku otpremnicu (odluka 10) ---
+    UpsertRow lo, existing, "DOK_ERR_ZBR_HLADNJACKA_OTP", ChrW(10007) & " Hladnja" & ChrW(269) & "ka otpremnica ide u svoj lanac " & ChrW(8212) & " ru" & ChrW(269) & "no vezivanje u zbirnu nije dozvoljeno:"
     ' --- ekran Agrohemija (Faza E/15, v6-ui-171) ---
     UpsertRow lo, existing, "OTKUI_SCRAG_SUB", "Magacin " & ChrW(8212) & " izdavanje kooperantu i prijem od dobavlja" & ChrW(269) & "a"
     UpsertRow lo, existing, "OTKUI_SCRAG_LISTA", "Korpa"

@@ -213,12 +213,14 @@ Public Function Scr_Radnje() As String
             ' Hladnjacki blok se NE vezuje rucno: njemu je oporavak ponavljanje
             ' auto-lanca. Obe radnje stoje u redu radnji, a svaka na svojoj
             ' granici odbija blok koji joj ne pripada -- red jos ne moze da nosi
-            ' svoje radnje (ugovor ljuske, v. plan 15).
+            ' svoje radnje (ugovor ljuske, v. plan 15). "Ponovi" postoji UVEK:
+            ' lanac nema prekidac, stanica je jedini autoritet (S6 korak 7,
+            ' odluka 2). Ovde je za blok kome je pala vec otpremnica; lanac koji
+            ' je stao kasnije nastavlja se iz Oporavka (odluka 8).
             Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1"
             If Len(mOtpID) > 0 Then _
                 Scr_Radnje = Scr_Radnje & "|vezi:OTKUI_BTN_RED_VEZI:132:soft:1"
-            If modAutoHladnjaca.LanacUkljucen() Then _
-                Scr_Radnje = Scr_Radnje & "|ponovi:OTKUI_BTN_RED_PONOVI:140:soft:1"
+            Scr_Radnje = Scr_Radnje & "|ponovi:OTKUI_BTN_RED_PONOVI:140:soft:1"
     End Select
 End Function
 
@@ -1253,6 +1255,11 @@ Private Function RowAction(ByVal tag As String) As Boolean
                 Exit Function
             End If
             If Len(modAutoHladnjaca.AutoLanacHladnjaca(otkupID, ponPoruka)) = 0 Then
+                ' Korak koji je pao ne ponistava korake pre njega (lanac je
+                ' nastavljiv, S6 korak 7): blok je mozda dobio otpremnicu i
+                ' izasao iz ove liste, pa se lista cita ponovo i uz gresku.
+                Scr_ResetCache
+                RowAction = True
                 modOtkupUI.ShowToast IIf(Len(ponPoruka) > 0, ponPoruka, _
                                          Poruka("OTKUI_ERR_LANAC")), True
                 Exit Function

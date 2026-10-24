@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 24.10.2026 (stavka 201: S6 korak 7, deo 1 — `KI-046` zatvoren; sledi deo 2, sam lanac).
+**Ažurirano:** 25.10.2026 (stavka 202: S6 korak 7, deo 2 — hladnjački lanac OTK → OTP → ZBR → PRJ, crveno → zeleno; PR čeka review).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ): u toku** — pre-flight i odluke 1–10 (stavka 200), deo 1 `KI-046` zatvoren (stavka 201), deo 2 (sam lanac) sledi; grana `claude/s6-korak7-lanac-b` |
+| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ): u toku** — pre-flight i odluke 1–10 (stavka 200), deo 1 `KI-046` zatvoren (stavka 201), deo 2 (sam lanac, R2–R12) crveno → zeleno (stavka 202), PR otvoren i čeka review; grana `claude/s6-korak7-lanac-b` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7337,6 +7337,39 @@
        - nov `KI-051` (F4 i stornirani broj hladnjača-kupca prema A2 t. 4).
      - **Nije urađeno:** deo 2 (sam lanac, R2–R12), FULL, `dokaz.py`, sveska i compile — sve čeka kraj koda i reviewer GO.
      - **Sledeći brojevi:** stavka 202 (deo 2: lanac) · test 272 (proveriti `#441`) · KI-052.
+202. **S6 korak 7, deo 2 — hladnjački lanac OTK → OTP → ZBR → PRJ, prekidač obrisan** (25.10.2026). Tok je u §14.55,
+     „Korak 7", odeljak „Tok koda, deo 2".
+
+     - **Crveno, tačno izvedeno pre puštanja:**
+
+       | Prolaz | RunAllTests | BFP | Šta |
+       |---|---|---|---|
+       | crveni 1 | 274 / **4** | 2741 / **54** | BFP tačno izveden (prva pala „Lanac: hladnjacki blok ide u lanac"); RunAllTests tačan broj, ali 272 i 274 na drugoj tački — izmereno, kvar testa: lista kooperanata po OM se ne puni utišanim prepisom; `CleanUp` na normalnom toku pročitao zaostali `Err` iz `GridCell` (`KI-053`) |
+       | crveni 2 | 274 / **4** | — | sva četiri (71, 272, 273, 274) na predviđenoj tvrdnji |
+       | **zeleni** | **274 / 0** | **2741 / 0** | Palete **96 / 0**, Faktura **39 / 0**; izvor `4421cb5b4cac`, ugovor `0132efee3512`, fixture `49f55dfc03b134b3` (nepromenjen) |
+
+       BFP je u zelenom izvršio istih 2741 tvrdnji kao u crvenom, pa nijedna nije ćutke preskočena.
+     - **Kod** (bez novog pisca, bez izmene šeme):
+       - `modAutoHladnjaca.AutoLanacHladnjaca` je nastavljiv lanac (odluka 1): stanje po kanonskom roditelju, preduslovi
+         pre prvog upisa, PRJ iz zbirne sa cenom otkupa (odluka 6), izveštaj sa brojevima ili korakom koji je pao;
+       - prekidač `AUTO_PRIJEMNICA_HLADNJACA` obrisan (odluka 2), „ponovi" u F1 uvek;
+       - jezgro zbirne: „malina ILI hladnjačka otpremnica" (odluka 3);
+       - pisac prijemnice: `zbirnaRoditeljID` na kraju potpisa (odluka 7);
+       - `DodajZbirnaIzvor_TX` odbija hladnjačku otpremnicu (odluka 10);
+       - PWA: malina batch preskače hladnjačke blokove, sync korak 3a ih vodi kroz lanac (odluka 9);
+       - Oporavak: red `LANAC` i radnja „ponovi" po OtkupID-u (odluka 8).
+     - **Odstupanja od plana** (sa razlogom u §14.55): nastavak PRJ kroz strog čitač umesto `LookupActiveID` (koji
+       grešku guta); jedan skup hladnjačkih stanica za batch, sync i Oporavak; sync ne vraća u lanac blok koji je
+       PONIŠTENJE oslobodilo; `modTest` brojevi **272–274** (`#441` sada drži 272–280, `REGISTAR` ne pušta rupu — drugi
+       PR koji uđe prenumeriše).
+     - **Sabotaže:** katalog 962 → **976** (−1, +15 `s6k7-*`), presidrene 5; `--proveri-sidra` 976 / 0; statička sonda
+       20/20.
+     - **Jeftine kapije:** 22/22 zelene nad radnim stanjem pre commita; `WHO_WRITES.md` regenerisan.
+     - **Dokumenti:** MAPA A-014 → **MIGRATED**; `HLD-LANAC-01` sa plana na kod; nov `KI-052` (sync ne razlikuje
+       sistemski pad unutar lanca bloka) i `KI-053` (`CleanUp` čita zaostali `Err`).
+     - **Nije urađeno (čeka reviewer GO):** FULL, `dokaz.py` nad 15 novih i 5 presidrenih, sveska za compile i ručnu
+       proveru, compile (`run_vba`: `NEJASNO`).
+     - **Sledeći brojevi:** stavka 203 · test 275 (pazi `#441`) · KI-054.
 
 ## Dug sa imenom (posle S5-5b)
 

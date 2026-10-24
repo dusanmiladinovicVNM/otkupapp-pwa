@@ -52,6 +52,10 @@ Public Const SCROPO_BUILD As String = "v6-ui-144"
 ' je zato sto test tvrdi da bas TU stoji identitet: da je privatan, radnja bi
 ' mogla da procita drugu kolonu a da opis kolona i dalje izgleda ispravno.
 Public Const NED_COL_CID As Long = 6
+' Kolona koja nosi OtkupID nedovrsenog hladnjackog lanca (S6 korak 7, odluka 8).
+' Isti razlog kao NED_COL_CID: radnja "Ponovi auto-lanac" mora da pogodi TACAN
+' blok, a broj bloka je labela stanice -- nosi ga i blok druge stanice.
+Public Const NED_COL_OTK As Long = 7
 
 ' Izvor za log. Radnje nad redom su jedino mesto na ekranu koje MENJA podatke,
 ' pa im svaki ishod -- i odbijanje -- ide u log pod istim imenom.
@@ -154,6 +158,10 @@ Public Function Scr_Radnje() As String
             ' Radnja MENJA podatke i tesko se poziva nazad -- otud danger stil,
             ' isto kao "Vrati storno".
             Scr_Radnje = "odbaci:OTKUI_BTN_OPO_ODBACI:150:danger:1"
+            ' Nedovrsen hladnjacki lanac (S6 korak 7, odluka 8): radnja ga
+            ' nastavlja od prvog koraka koji fali. Nad redom druge vrste se
+            ' odbija imenom, isto kao "Odbaci" nad redom koji nije context.
+            Scr_Radnje = Scr_Radnje & "|ponovi:OTKUI_BTN_RED_PONOVI:140:soft:1"
         Case "PRIJEMNICE"
             Scr_Radnje = "prevezipri:OTKUI_BTN_OPO_PREVEZI:96:soft:1"
         Case "PALETE"
@@ -302,6 +310,7 @@ Private Function OpoAkcija(ByVal tag As String) As Boolean
         Case "prevezipal": OpoAkcija = PreveziPalete(kljuc, GenIzReda(red, 7))
         Case "vrati":      OpoAkcija = VratiStorno(kljuc, red)
         Case "odbaci":     OpoAkcija = OdbaciIspravku(red)
+        Case "ponovi":     OpoAkcija = PonoviLanac(red)
         Case Else
             LogWarn MOD_TRAG, "Nepoznata radnja '" & p(0) & "' za listu '" & Scr_Lista() & "'."
             modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & p(0), True
@@ -464,10 +473,11 @@ EH:
 End Function
 
 '--- NEDOVRSENO: jedan pregled svega sto ceka -------------------------
-' Poslednja kolona je NEVIDLJIVA (prioritet 4) i nosi CorrectionID. Isti obrazac
-' koji ekran Storno koristi za GeneracijaID: broj je ono sto operater vidi, a
-' radnja mora da pogodi TACAN zapis -- vise contexta moze da deli isti broj
-' dokumenta (storno, pa opet storno istog broja).
+' Poslednje dve kolone su NEVIDLJIVE (prioritet 4) i nose identitet: CorrectionID
+' i OtkupID nedovrsenog lanca. Isti obrazac koji ekran Storno koristi za
+' GeneracijaID: broj je ono sto operater vidi, a radnja mora da pogodi TACAN
+' zapis -- vise contexta moze da deli isti broj dokumenta (storno, pa opet storno
+' istog broja), a broj bloka nosi i blok druge stanice.
 Private Function NedGridCols() As Variant
     NedGridCols = Array( _
         "OTKUI_HDO_REF||txt|120|1", _
@@ -475,7 +485,8 @@ Private Function NedGridCols() As Variant
         "OTKUI_HD_STATUS||txt|92|1", _
         "OTKUI_HDO_OPIS||part|0|1", _
         "OTKUI_HDO_AKCIJA||txt|210|2", _
-        "OTKUI_HDO_CID||txt|0|4")
+        "OTKUI_HDO_CID||txt|0|4", _
+        "OTKUI_HDO_OTK||txt|0|4")
 End Function
 
 Private Function RowsNedovrseno(ByVal q As String) As Variant
@@ -492,7 +503,7 @@ Private Function RowsNedovrseno(ByVal q As String) As Variant
         Exit Function
     End If
 
-    ReDim outA(1 To mBrNedovrseno, 1 To NED_COL_CID)
+    ReDim outA(1 To mBrNedovrseno, 1 To NED_COL_OTK)
     For i = 1 To src.count
         Set d = src(i)
         hay = CStr(d("ref")) & "|" & CStr(d("kind")) & "|" & CStr(d("status")) & "|" & CStr(d("opis"))
@@ -506,6 +517,7 @@ Private Function RowsNedovrseno(ByVal q As String) As Variant
         outA(n, 4) = CStr(d("opis"))
         outA(n, 5) = CStr(d("akcija"))
         outA(n, NED_COL_CID) = CStr(d("correctionID"))
+        outA(n, NED_COL_OTK) = CStr(d("otkupID"))
 Sledeci:
     Next i
 
@@ -571,6 +583,44 @@ Private Function OdbaciIspravku(ByVal red As Long) As Boolean
 EH:
     errDesc = Err.description
     LogErr "modScrOporavak.OdbaciIspravku"
+    Err.Clear
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
+End Function
+
+' Ponovi auto-lanac nad redom vrste LANAC (S6 korak 7, odluka 8). Blok se bira
+' po OtkupID-u iz nevidljive kolone, ne po broju iz prve: broj bloka je labela
+' stanice, pa ga legitimno nosi i blok druge stanice. Red druge vrste OtkupID
+' nema -- radnja ga odbija imenom i ne radi nista.
+'
+' Lanac je nastavljiv: nastavlja od prvog koraka koji fali. I kad korak padne,
+' lista se cita ponovo -- koraci pre njega su upisani (npr. zbirna jeste
+' napravljena, a prijemnica nije), pa red menja opis.
+Private Function PonoviLanac(ByVal red As Long) As Boolean
+    Dim otkupID As String, izvestaj As String, errDesc As String
+    On Error GoTo EH
+    otkupID = Trim$(CStr(modOtkupUI.GridCell(red, NED_COL_OTK)))
+    If Len(otkupID) = 0 Then
+        LogWarn MOD_TRAG, "Red " & red & " nema OtkupID u koloni " & NED_COL_OTK & _
+                "; vrsta problema: '" & Trim$(CStr(modOtkupUI.GridCell(red, 2))) & "'."
+        modOtkupUI.ShowToast Poruka("OTKUI_OPO_PONOVI_NIJE_LANAC"), True
+        Exit Function
+    End If
+    LogInfo MOD_TRAG, "Ponovi auto-lanac za blok " & otkupID & " (red " & red & ")."
+
+    If Len(modAutoHladnjaca.AutoLanacHladnjaca(otkupID, izvestaj)) > 0 Then
+        modOtkupUI.ShowToast izvestaj, False
+    ElseIf Len(izvestaj) > 0 Then
+        modOtkupUI.ShowToast izvestaj, True
+    Else
+        ' Nije bilo posla: lanac je u medjuvremenu dovrsen (npr. iz F1).
+        modOtkupUI.ShowToast Poruka("OTKUI_OPO_PONOVI_NEMA_POSLA"), False
+    End If
+    Scr_ResetCache
+    PonoviLanac = True
+    Exit Function
+EH:
+    errDesc = Err.description
+    LogErr "modScrOporavak.PonoviLanac"
     Err.Clear
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
 End Function

@@ -1396,6 +1396,16 @@ Public Function AktivnaZbirnaZaOtpremnicu(ByVal otpremnicaID As String) As Strin
     If mapa.Exists(kljuc) Then AktivnaZbirnaZaOtpremnicu = CStr(mapa(kljuc))
 End Function
 
+' Kanonsko clanstvo SVIH aktivnih zbirnih: UCase(OtpremnicaID) -> ZbirnaID.
+'
+' Javni ulaz za citaoce koji pitaju za MNOGO otpremnica odjednom (Oporavak,
+' nedovrseni hladnjacki lanci, S6 korak 7): AktivnaZbirnaZaOtpremnicu po
+' otpremnici bi za svaku prosao celu tabelu clanstva. Isti ugovor kao
+' AktivnaZbirnaZaOtpremnicu -- dva aktivna zapisa za istu otpremnicu padaju.
+Public Function AktivnoClanstvoZbirni() As Object
+    Set AktivnoClanstvoZbirni = AktivnoClanstvoPoKanonu("AktivnoClanstvoZbirni")
+End Function
+
 ' Kanonsko clanstvo: UCase(OtpremnicaID) -> ZbirnaID, samo za AKTIVNE zbirne.
 '
 ' Posle A13 ista otpremnica sme da ima VISE zapisa clanstva -- po jedan za svaku
@@ -1586,6 +1596,18 @@ Public Function DodajZbirnaIzvor_TX(ByVal zbirnaID As String, _
     tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
 
     ZbrRequireIzvorValjan zbirnaID, Trim$(otpremnicaID), "ZbrDodajIzvor", True
+
+    ' HLADNJACKA OTPREMNICA SE NE VEZUJE RUCNO (S6 korak 7, odluka 10;
+    ' HLD-LANAC-01). Ima svoj lanac, pa bi je rucna zbirna oduzela lancu -- isto
+    ' pravilo koje VeziZaAktivnu drzi za blok (review #367). Kapija je u piscu:
+    ' kroz njega ide svaki ulaz. Ide POSLE kapija izvora, pa otpremnica koje nema
+    ' ili koja nije izdata i dalje dobija svoj, tacniji razlog.
+    If modAutoHladnjaca.OtpremnicaJeHladnjacka(Trim$(otpremnicaID)) Then
+        Err.Raise vbObjectError + 1967, "ZbrDodajIzvor", _
+                  Poruka("DOK_ERR_ZBR_HLADNJACKA_OTP") & " " & _
+                  Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, Trim$(otpremnicaID), COL_OTP_BROJ)))
+    End If
+
     ZbrPreuzmiCinjeniceZaIzvor zbirnaID, Trim$(otpremnicaID), "ZbrDodajIzvor"
     ZbrUpisiClanstvo zbirnaID, Trim$(otpremnicaID), "ZbrDodajIzvor"
 
@@ -6599,7 +6621,8 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                                        Optional ByVal brutoKgII As Double = 0, _
                                        Optional ByVal potvrdaDeficita As Double = -1, _
                                        Optional ByRef outErrNum As Long, _
-                                       Optional ByRef outGreska As String) As String
+                                       Optional ByRef outGreska As String, _
+                                       Optional ByVal zbirnaRoditeljID As String = "") As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -6653,7 +6676,8 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     Dim docID As String, stavkaIDs As Collection
     docID = SavePrijemnicaDokument(tx, datum, kupacID, vozacID, brojPrij, brojZbirne, _
                                    vrstaVoca, sortaVoca, tipAmb, _
-                                   kolAmbVracena, stavke, potvrdaDeficita, stavkaIDs)
+                                   kolAmbVracena, stavke, potvrdaDeficita, stavkaIDs, _
+                                   zbirnaRoditeljID)
     If docID = "" Then
         Err.Raise vbObjectError + 1301, "SavePrijemnicaMulti_TX", _
                   "SavePrijemnicaDokument nije vratio PrijemnicaID."
@@ -6744,6 +6768,29 @@ EH:
     outGreska = RazlogBezIzvora(errDesc)
 
     PrintTxFailure "SavePrijemnicaMulti_TX", errSrc, errNum, errDesc
+End Function
+
+' Zadat roditelj prijemnice (S6 korak 7, odluka 7): zbirna mora da postoji TACNO
+' JEDNOM, da je AKTIVNA i da nosi bas broj koji prijemnica pise na zaglavlje.
+' Inace dize gresku -- pisac ne vezuje dete za zbirnu koja mu protivreci. Vraca
+' ID kakav stoji u tabeli.
+Private Function ZbirnaRoditeljPrijemnice(ByVal zbirnaID As String, _
+                                          ByVal brojZbirne As String, _
+                                          ByVal src As String) As String
+    Dim brojRoditelja As String
+
+    RequireTacnoJedan TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, "ZbirnaID (roditelj prijemnice)", src
+    If ZbirnaJeStornirana(zbirnaID) Then
+        Err.Raise vbObjectError + 1433, src, _
+                  "Zbirna " & zbirnaID & " je stornirana -- prijemnica je ne sme imati za roditelja."
+    End If
+    brojRoditelja = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_BROJ)))
+    If Not BrojJednak(brojRoditelja, brojZbirne) Then
+        Err.Raise vbObjectError + 1434, src, _
+                  "Zbirna " & zbirnaID & " nosi broj '" & brojRoditelja & _
+                  "', a prijemnica pise broj zbirne '" & brojZbirne & "'."
+    End If
+    ZbirnaRoditeljPrijemnice = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_ID)))
 End Function
 
 ' Razlog za operatera bez tehnickog prefiksa izvora: jezgro dokumenta pri
@@ -6846,6 +6893,13 @@ End Function
 ' KolAmbalaze, BrutoKg i kes fakture (Fakturisano, FakturaID) ostaju PRAZNI do
 ' koraka 8, kada se kolone brisu. Dvoklasno zaglavlje sa klasom I bi lagalo:
 ' CreateFaktura bi tiho fakturisao samo nju. Prazno pada glasno (Kolicina > 0).
+'
+' zbirnaRoditeljID: roditelj PO ID-u (S6 korak 7, odluka 7). Pozivalac koji ZNA
+' svoju zbirnu (hladnjacki lanac) predaje je po identitetu: broj zbirne je
+' labela i ume da bude dvosmislen (KR-001), a dete vezano po broju tada ostaje
+' bez roditelja. Pisac proverava da je zbirna tacno jedna, aktivna i da nosi
+' bas taj broj -- PRE ijednog upisa -- i vezuje nju. Prazan = po broju (F4, koji
+' ID ne zna).
 Private Function SavePrijemnicaDokument(ByVal tx As clsTransaction, _
                                         ByVal datum As Date, _
                                         ByVal kupacID As String, _
@@ -6858,7 +6912,8 @@ Private Function SavePrijemnicaDokument(ByVal tx As clsTransaction, _
                                         ByVal kolAmbVracena As Long, _
                                         ByVal stavke As Collection, _
                                         ByVal potvrdaDeficita As Double, _
-                                        ByRef outStavkaIDs As Collection) As String
+                                        ByRef outStavkaIDs As Collection, _
+                                        Optional ByVal zbirnaRoditeljID As String = "") As String
     Const SRC As String = "SavePrijemnicaDokument"
     On Error GoTo EH
 
@@ -6897,6 +6952,15 @@ Private Function SavePrijemnicaDokument(ByVal tx As clsTransaction, _
         ukupnoAmb = ukupnoAmb + CLng(s(3))
     Next i
 
+    ' Roditelj se razresava PRE ijednog upisa: zadat ID mora da bude ziva zbirna
+    ' bas tog broja, inace pisac staje (odluka 7). Bez njega ide po broju.
+    Dim roditeljID As String
+    If Len(Trim$(zbirnaRoditeljID)) > 0 Then
+        roditeljID = ZbirnaRoditeljPrijemnice(Trim$(zbirnaRoditeljID), brojZbirne, SRC)
+    Else
+        roditeljID = ZbirnaIDZaBroj(brojZbirne)
+    End If
+
     Dim newID As String
     newID = GetNextID(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-")
 
@@ -6924,7 +6988,7 @@ Private Function SavePrijemnicaDokument(ByVal tx As clsTransaction, _
     ' ZBR-CHILD-01: generacija roditeljske zbirne (v. isti komentar u
     ' SaveOtpremnica). Prijemnica roditelja obicno IMA, pa je ovde retko prazna.
     PoveziDeteNaZbirnu TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ_ZBIRNE, brojZbirne, _
-                       ZbirnaIDZaBroj(brojZbirne), "modDokumenta.SavePrijemnica"
+                       roditeljID, "modDokumenta.SavePrijemnica"
 
     ' Generacija je NOVA, ne nasledjena (stavka 174, ispravka plana 14.55).
     ' Dokument je od koraka 2 JEDAN red, a ApplyGeneracijaID nasledjuje

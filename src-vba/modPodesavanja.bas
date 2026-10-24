@@ -124,7 +124,6 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, ChrW(352) & "tampa", "PDF_OTVORI_POSLE", "Otvori PDF posle izrade", "bool"
 
     CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
-    CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "AUTO_PRIJEMNICA_HLADNJACA", "Auto otpremnica+zbirna+prijemnica (OM=hladnjaca)", "bool"
     CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_DEFAULT_KUPAC", "Podrazumevani kupac/hladnjaca (KupacID)", "list:" & LookupCSV(TBL_KUPCI, COL_KUP_ID, False)
 
     CfgAdd c, "Management / Klijent", "MGMT_USER_1", "Management korisnik 1", "text"

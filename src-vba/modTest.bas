@@ -573,6 +573,11 @@ Public Sub RunAllTests()
     RunOne 197
     RunOne 198
     RunOne 199
+    ' S6 korak 7: hladnjacki lanac. MUTIRAJU (blok, lanac, oznaka stanice) i
+    ' sve sklanjaju sami -- idu POSLE svih citanja, kao 141.
+    RunOne 272
+    RunOne 273
+    RunOne 274
     RunOne 38
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
@@ -934,6 +939,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 269: TestName = "T_S6K6_PodesavanjaBezPolitikeZbirne"
         Case 270: TestName = "T_S6K6_TragIspravkePoID"
         Case 271: TestName = "T_S6K6_FokusPosleGreske"
+        Case 272: TestName = "T_S6K7_F1PraviCeoLanac"
+        Case 273: TestName = "T_S6K7_LanacBezPrekidaca"
+        Case 274: TestName = "T_S6K7_OporavakNedovrsenLanac"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1213,6 +1221,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 269: T_S6K6_PodesavanjaBezPolitikeZbirne
         Case 270: T_S6K6_TragIspravkePoID
         Case 271: T_S6K6_FokusPosleGreske
+        Case 272: T_S6K7_F1PraviCeoLanac
+        Case 273: T_S6K7_LanacBezPrekidaca
+        Case 274: T_S6K7_OporavakNedovrsenLanac
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -4673,15 +4684,19 @@ Private Sub T_Oporavak_OdbaciIspravku_PoIdentitetu()
     AssertEq IsArray(d), True, "Nedovrseno vraca niz"
     cols = d(0)
 
-    ' Kolona identiteta je POSLEDNJA i NEVIDLJIVA. Prioritet 4 nikad ne prolazi
-    ' petlju vidljivosti (ide 3 -> 1), pa je operater ne vidi, a GridCell je cita
-    ' iz mView -- sirina kolone ne dira podatak.
-    AssertEq (UBound(cols) + 1), modScrOporavak.NED_COL_CID, _
+    ' Kolone identiteta su POSLEDNJE i NEVIDLJIVE: CorrectionID, a od S6 koraka 7
+    ' iza nje OtkupID nedovrsenog lanca (radnja "Ponovi", odluka 8). Prioritet 4
+    ' nikad ne prolazi petlju vidljivosti (ide 3 -> 1), pa ih operater ne vidi, a
+    ' GridCell ih cita iz mView -- sirina kolone ne dira podatak.
+    AssertEq (UBound(cols) + 1), modScrOporavak.NED_COL_OTK, _
              "opis kolona se zavrsava BAS na koloni koju radnja cita"
     AssertEq Split(CStr(cols(modScrOporavak.NED_COL_CID - 1)), "|")(0), "OTKUI_HDO_CID", _
              "na toj koloni stoji CorrectionID"
-    AssertEq modScrDokumenti.ColF(CStr(cols(UBound(cols))), 4), "4", _
+    AssertEq modScrDokumenti.ColF(CStr(cols(modScrOporavak.NED_COL_CID - 1)), 4), "4", _
              "kolona CID je prioriteta 4 -- nikad vidljiva"
+    AssertEq Split(CStr(cols(modScrOporavak.NED_COL_OTK - 1)), "|")(0) & "|" & _
+             modScrDokumenti.ColF(CStr(cols(modScrOporavak.NED_COL_OTK - 1)), 4), "OTKUI_HDO_OTK|4", _
+             "poslednja kolona nosi OtkupID nedovrsenog lanca i nikad nije vidljiva"
 
     ' PREDUSLOV: fixture stvarno ima ispravke na cekanju. Bez ovoga bi petlja
     ' ispod prosla nad nula redova i test bi bio zelen ne merivsi nista.
@@ -11032,6 +11047,363 @@ CleanUp:
     AssertEq fZbirna, "fgBrZbirT", "F4: posle greske zbirne fokus je na broju zbirne"
     AssertEq fF3, "cbKupac", "F3: posle 'Izaberi kupca' fokus je na kupcu"
 End Sub
+
+'=====================================================================
+' S6 KORAK 7: HLADNJACKI LANAC B (plan 14.55 "Korak 7", HLD-LANAC-01)
+'=====================================================================
+
+' 272. F1 NA HLADNJACKOJ STANICI PRAVI CEO LANAC (S6 korak 7, R4).
+'
+' Ceo potez operatera kroz CommitDokument (CommitDokumentTest), ne pomocnik:
+' forma se puni prepisom (ApplyPrefill), pa se klikne "Sacuvaj". Blok na stanici
+' sa JeHladnjaca = "Da" sam dobija otpremnicu, zbirnu i prijemnicu, bez dijaloga,
+' a poruka operateru nosi BROJEVE sva tri dokumenta -- po njima ih trazi u
+' listama. Toast na pravom ekranu je rucna provera (forma se ovde gradi bez
+' .Show).
+'
+' Fixture nema hladnjacku stanicu ni kupca hladnjace: test oznacava STA-TEST-1
+' i postavlja MALINA_DEFAULT_KUPAC, pa oba vraca PRE tvrdnji. Kooperant mora da
+' drzi gajbe koje donosi (protokol manjka u test rezimu odgovara "Ne"), pa ih
+' dobija reversom izdavanja. Lanac se sklanja kroz prave pisce storna (KI-045).
+' Nalazi se skupljaju pa tvrde posle Unload-a.
+' SABOTAZA: s6k7-poruka-bez-prijemnice -> "F1 hladnjaca: poruka nosi brojeve
+' otpremnice, zbirne i prijemnice".
+Private Sub T_S6K7_F1PraviCeoLanac()
+    Dim f As frmOtkupUI, zf As Object, broj As String
+    Dim prevHlad As String, prevKupac As String
+    Dim lazna As String, dijalog As String, toast As String, kgPosle As String
+    Dim blok As String, otp As String, zbr As String, prj As String
+    Dim brOtp As String, brZbr As String, brPrj As String
+    Dim errNum As Long, errDesc As String
+
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    broj = "OTK-S6K7-F1-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    prevHlad = NzToText(LookupValue(TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA))
+    prevKupac = NzToText(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
+
+    On Error GoTo CleanUp
+    modScrDokumenti.Scr_OtpTestReset
+    S6K7ZasejKooperantu 7
+    PostaviPoljePoPK TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA, "Da"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, FX_KUPAC
+
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F1"
+    modOtkupUI.GridTestLoad "DOKUMENTI"
+    ' Lista kooperanata je suzena na izabrano OM (KOOP_FILTER_BY_OM), a prepis
+    ' je utisan -- OM se zato bira PRVO i lista se puni produkcionim putem, pa
+    ' tek onda ide ostatak prepisa (izmereno: bez toga "Izaberi kooperanta").
+    modOtkupUI.ApplyPrefill "omid=" & FX_STANICA
+    modOtkupUI.RefreshPartnerLista
+    modOtkupUI.ApplyPrefill "datum=" & Format$(Date, "dd.mm.yyyy") & "|omid=" & FX_STANICA & _
+                            "|partnerid=" & FX_KOOPERANT & "|brdok=" & broj & _
+                            "|vrsta=" & FX_VRSTA & "|sorta=" & FX_SORTA & "|tipamb=" & FX_TIP_AMB & _
+                            "|kol1=70|amb1=7|cena=100"
+    modOtkupUI.CommitDokumentTest False
+    lazna = modUiScreens.ScrLastErr
+    dijalog = modOtkupUI.DijalogTest()
+    toast = ToastTekst(f)
+    kgPosle = Polje(zf, "fgKgI")
+
+    ' Nalazi se citaju PRE ciscenja: posle njega su dokumenti stornirani.
+    blok = NzToText(LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID))
+    S6K7Lanac blok, otp, zbr, prj
+    brOtp = S6K7Broj(TBL_OTPREMNICA, COL_OTP_ID, otp, COL_OTP_BROJ)
+    brZbr = S6K7Broj(TBL_ZBIRNA, COL_ZBR_ID, zbr, COL_ZBR_BROJ)
+    brPrj = S6K7Broj(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_BROJ)
+    Err.Clear   ' zaostatak pomocnika pod Resume Next nije pad testa (v. 274)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    S6K7SkloniLanac blok, otp, zbr, prj
+    PostaviPoljePoPK TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA, prevHlad
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K7_F1PraviCeoLanac", errDesc
+
+    AssertEq lazna, "", "F1 hladnjaca: uspesan upis se ne prijavljuje kao neuspeh"
+    AssertEq dijalog, "", "F1 hladnjaca: upis i lanac ne otvaraju dijalog"
+    ' Stvarna vrednost nosi poruku ekrana -- odbijen upis bez dijaloga (polje sa
+    ' fokusom) inace ne bi rekao ZASTO.
+    AssertEq IIf(Len(blok) > 0, "da", "ne -- " & toast), "da", "F1 hladnjaca: blok je upisan"
+    AssertEq (Len(otp) > 0 And Len(zbr) > 0 And Len(prj) > 0), True, _
+             "F1 hladnjaca: jedan klik pravi otpremnicu, zbirnu i prijemnicu"
+    AssertEq (S6K7NosiDokument(toast, "OTKUI_LANAC_OTP", brOtp) And _
+              S6K7NosiDokument(toast, "OTKUI_LANAC_ZBR", brZbr) And _
+              S6K7NosiDokument(toast, "OTKUI_LANAC_PRJ", brPrj)), True, _
+             "F1 hladnjaca: poruka nosi brojeve otpremnice, zbirne i prijemnice"
+    AssertEq kgPosle, "", "F1 hladnjaca: forma je ociscena posle upisa"
+End Sub
+
+' 273. HLADNJACKI LANAC NEMA PREKIDAC (S6 korak 7, R7, odluka 2).
+'
+' Stanica (JeHladnjaca) je jedini autoritet. Zatecen kljuc
+' AUTO_PRIJEMNICA_HLADNJACA se zato namerno postavlja na "Ne": razvodnica mora i
+' dalje da posalje hladnjacku stanicu u lanac. Podesavanja kljuc ne nude
+' (kontrola: isti prolaz kroz registar nalazi susedno polje MALINA_DEFAULT_KUPAC,
+' obrazac 269), a radnja "Ponovi auto-lanac" u listi "Bez otpremnice" postoji
+' uvek -- do sada je visila o prekidacu. Stanje se vraca PRE tvrdnji.
+' SABOTAZA: s6k7-podesavanje-nudi-prekidac -> "Podesavanja ne nude prekidac
+' hladnjackog lanca (odluka 2)".
+Private Sub T_S6K7_LanacBezPrekidaca()
+    Const STARI_KLJUC As String = "AUTO_PRIJEMNICA_HLADNJACA"
+    Dim prevHlad As String, prevKljuc As String, prevMode As String
+    Dim vaziHlad As Boolean, vaziObicna As Boolean, gH As String, gO As String
+    Dim f As Variant, i As Long, nudi As Boolean, kontrola As Boolean, radnje As String
+    Dim errNum As Long, errDesc As String
+
+    prevHlad = NzToText(LookupValue(TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA))
+    prevKljuc = NzToText(GetConfigValue(STARI_KLJUC))
+    prevMode = modOtkupUI.ActiveMode
+
+    On Error GoTo CleanUp
+    SetConfigValue STARI_KLJUC, "Ne"
+    PostaviPoljePoPK TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA, "Da"
+    gH = "x"
+    gO = "x"
+    vaziHlad = modAutoHladnjaca.LanacVaziZaStanicu(FX_STANICA, gH)
+    vaziObicna = modAutoHladnjaca.LanacVaziZaStanicu(FX_IZV_STANICA2, gO)
+
+    modOtkupUI.ActiveMode = "F1"
+    modScrDokumenti.Scr_OtpTestReset
+    Call modScrDokumenti.Scr_Event("lsNEVEZANI", "Click")
+    radnje = modScrDokumenti.Scr_Radnje()
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    PostaviPoljePoPK TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA, prevHlad
+    SetConfigValue STARI_KLJUC, prevKljuc
+    modScrDokumenti.Scr_OtpTestReset
+    modOtkupUI.ActiveMode = prevMode
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K7_LanacBezPrekidaca", errDesc
+
+    f = modPodesavanja.ConfigEditorFields()
+    For i = LBound(f) To UBound(f)
+        If StrComp(CStr(f(i)(1)), STARI_KLJUC, vbTextCompare) = 0 Then nudi = True
+        If StrComp(CStr(f(i)(1)), CFG_MALINA_DEFAULT_KUPAC, vbTextCompare) = 0 Then kontrola = True
+    Next i
+
+    AssertEq gH & "|" & gO, "|", "preduslov: razvodnica daje pouzdan odgovor za obe stanice"
+    AssertEq vaziObicna, False, "kontrola: obicna stanica ne ide u lanac"
+    AssertEq vaziHlad, True, "hladnjacka stanica ide u lanac i kad je zatecen prekidac 'Ne' (odluka 2)"
+    AssertEq kontrola, True, "kontrola: registar Podesavanja nosi susedno polje MALINA_DEFAULT_KUPAC"
+    AssertEq nudi, False, "Podesavanja ne nude prekidac hladnjackog lanca (odluka 2)"
+    AssertEq (InStr(1, radnje, "ponovi:", vbTextCompare) > 0), True, _
+             "radnja 'Ponovi auto-lanac' u listi Bez otpremnice postoji bez prekidaca"
+End Sub
+
+' 274. NEDOVRSEN LANAC JE U OPORAVKU, A RADNJA GA DOVRSAVA (S6 korak 7, R9,
+' odluka 8).
+'
+' Blok kome je lanac stao posle otpremnice ne vidi nijedna lista: "Bez
+' otpremnice" cita nevezane blokove, a ovaj je vezan. Oporavak ga zato nosi kao
+' red vrste LANAC, sa OtkupID-em u nevidljivoj koloni -- radnja mora da pogodi
+' TACAN blok, a broj bloka je labela stanice: ovde ga nosi i blok DRUGE stanice
+' (mamac), upisan posle nasega. "Ponovi auto-lanac" nad redom LANAC kompletira
+' lanac i red nestaje; nad redom druge vrste (context ispravke iz fixture-a) radnja
+' se odbija i ne dira nista.
+'
+' Medjustanje gradi isti pisac koji lanac zove (CreateOtpremnicaIzIzvora_TX), na
+' STA-TEST-1 oznacenoj kao hladnjaca, sa kupcem hladnjace; blok je bez gajbi, pa
+' knjiga nema nogu. Sve se vraca pre tvrdnji, a lanac i mamac se sklanjaju kroz
+' prave pisce storna (KI-045).
+' SABOTAZE: s6k7-nedovrsen-lanac-nevidljiv -> "nedovrsen lanac je u Oporavku
+' (lista Nedovrseno)"; s6k7-ponovi-bira-po-broju -> "Ponovi auto-lanac iz
+' Oporavka kompletira lanac".
+Private Sub T_S6K7_OporavakNedovrsenLanac()
+    Dim prevHlad As String, prevKupac As String, broj As String
+    Dim blok As String, mamac As String, otp As String, zbr As String, prj As String, g As String
+    Dim red As Long, redDrugi As Long, redPosle As Long, vrsta As String, zbrPosleDrugog As String
+    Dim errNum As Long, errDesc As String, korak As String
+
+    broj = "OTK-S6K7-OP-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    prevHlad = NzToText(LookupValue(TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA))
+    prevKupac = NzToText(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
+
+    On Error GoTo CleanUp
+    PostaviPoljePoPK TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA, "Da"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, FX_KUPAC
+
+    korak = "blok"
+    blok = S6K7Blok(broj, FX_STANICA)
+    mamac = S6K7Blok(broj, FX_IZV_STANICA2)
+    korak = "otpremnica"
+    otp = S6K7OtpremnicaLanca(blok, g)
+
+    korak = "lista"
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    modOtkupUI.GridTestLoad "OPORAVAK"
+    red = S6K7RedLanca(blok)
+    vrsta = Trim$(CStr(modOtkupUI.GridCell(red, 2)))
+    redDrugi = S6K7RedBezBloka()
+
+    ' Radnja nad redom DRUGE vrste: odbija se, lanac ostaje netaknut.
+    korak = "radnja nad drugim redom"
+    If redDrugi > 0 Then Call modScrOporavak.Scr_Event("act:ponovi:" & CStr(redDrugi), "Click")
+    If Len(otp) > 0 Then zbrPosleDrugog = modDokumenta.AktivnaZbirnaZaOtpremnicu(otp)
+
+    ' Radnja nad redom LANAC.
+    korak = "radnja nad redom LANAC"
+    If red > 0 Then Call modScrOporavak.Scr_Event("act:ponovi:" & CStr(red), "Click")
+    S6K7Lanac blok, otp, zbr, prj
+
+    korak = "lista posle radnje"
+    modOtkupUI.GridTestLoad "OPORAVAK"
+    redPosle = S6K7RedLanca(blok)
+    ' Normalan tok ulazi u CleanUp sa ZAOSTALIM Err-om pomocnika koji gresku
+    ' guta (GridCell pod Resume Next) -- to nije pad testa (izmereno u crvenom).
+    Err.Clear
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modOtkupUI.GridTestLoad ""
+    S6K7SkloniLanac blok, otp, zbr, prj
+    If Len(mamac) > 0 Then modStorno.StornoOtkup_TX mamac
+    PostaviPoljePoPK TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA, prevHlad
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K7_OporavakNedovrsenLanac", _
+                                  errDesc & " [korak: " & korak & "]"
+
+    AssertEq (Len(blok) > 0 And Len(mamac) > 0 And Len(otp) > 0), True, _
+             "preduslov: blok ima otpremnicu bez zbirne, a mamac nosi isti broj na drugoj stanici"
+    AssertEq (redDrugi > 0), True, "preduslov: lista Nedovrseno ima red druge vrste"
+    AssertEq (red > 0), True, "nedovrsen lanac je u Oporavku (lista Nedovrseno)"
+    AssertEq vrsta, "LANAC", "red nedovrsenog lanca je vrste LANAC"
+    AssertEq zbrPosleDrugog, "", "radnja Ponovi nad redom druge vrste se odbija -- lanac nije diran"
+    AssertEq (Len(zbr) > 0 And Len(prj) > 0), True, "Ponovi auto-lanac iz Oporavka kompletira lanac"
+    AssertEq redPosle, 0, "kompletan lanac nije u listi Nedovrseno"
+End Sub
+
+' --- pomocnici S6 koraka 7 -- nad praznim ID-jem vracaju prazno ---
+
+' Kooperant mora da drzi gajbe koje donosi u otkup (ODL-8): NASE gajbe ulaze u
+' opticaj nabavkom, a do kooperanta stizu reversom izdavanja.
+Private Sub S6K7ZasejKooperantu(ByVal kol As Long)
+    Dim oznaka As String
+    If modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, FX_TIP_AMB) >= kol Then Exit Sub
+    oznaka = "S6K7-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, kol, "NAB-" & oznaka, _
+                                  "preduslov testa S6 koraka 7"
+    modAmbalaza.UpisiReversAmbalaze_TX Date, "", FX_STANICA, FX_TIP_AMB, kol, _
+                                       REV_SMER_IZDAVANJE, FX_KOOPERANT, ""
+End Sub
+
+' Blok bez gajbi kroz kanonski pisac otkupa, na datoj stanici, danasnjeg dana.
+' Kultura se razresava produkcionim razresivacem, kao na ekranu.
+Private Function S6K7Blok(ByVal broj As String, ByVal stanicaID As String) As String
+    Dim h As Object, s As Object, stavke As Collection, detalj As String
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", Date
+    h.Add "KooperantID", FX_KOOPERANT
+    h.Add "StanicaID", stanicaID
+    h.Add "KulturaID", modOtkup.RazresiKulturuIzVrsteSorte(FX_VRSTA, FX_SORTA, detalj)
+    h.Add "VrstaVoca", FX_VRSTA
+    h.Add "SortaVoca", FX_SORTA
+    h.Add "TipAmbalaze", FX_TIP_AMB
+    h.Add "BrojDokumenta", broj
+    Set s = CreateObject("Scripting.Dictionary")
+    s.Add "Klasa", KLASA_I
+    s.Add "Kolicina", 40#
+    s.Add "Cena", 100#
+    s.Add "KolAmbalaze", 0#
+    Set stavke = New Collection
+    stavke.Add s
+    S6K7Blok = modOtkup.CreateOtkup_TX(h, stavke)
+End Function
+
+' Otpremnica bloka -- isti pisac i isto zaglavlje koje pravi lanac.
+Private Function S6K7OtpremnicaLanca(ByVal otkupID As String, ByRef outG As String) As String
+    Dim h As Object, izvori As Collection, stanica As String, datum As Date
+    If Len(otkupID) = 0 Then Exit Function
+    stanica = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA))
+    datum = CDate(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM))
+    Set h = CreateObject("Scripting.Dictionary")
+    h("Datum") = datum
+    h("StanicaID") = stanica
+    h("VozacID") = modMalina.VozacOgledaloZaStanicu(stanica)
+    h("KulturaID") = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_KULTURA))
+    h("TipAmbalaze") = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_TIP_AMB))
+    h("BrojOtpremnice") = modBrojevi.GenerateBrojOtpremnice(stanica, datum)
+    Set izvori = New Collection
+    izvori.Add otkupID
+    S6K7OtpremnicaLanca = modDokumenta.CreateOtpremnicaIzIzvora_TX(h, izvori, outG)
+End Function
+
+' Dokumenti lanca bloka, po kanonskom roditelju (clanstvo i ZbirnaRoditeljID).
+Private Sub S6K7Lanac(ByVal blok As String, ByRef otp As String, ByRef zbr As String, _
+                      ByRef prj As String)
+    otp = ""
+    zbr = ""
+    prj = ""
+    If Len(blok) > 0 Then otp = modDokumenta.OtpremnicaZaOtkup(blok)
+    If Len(otp) > 0 Then zbr = modDokumenta.AktivnaZbirnaZaOtpremnicu(otp)
+    If Len(zbr) > 0 Then prj = NzToText(LookupActiveID(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD, zbr, COL_PRJ_ID))
+End Sub
+
+Private Function S6K7Broj(ByVal tbl As String, ByVal idCol As String, ByVal id As String, _
+                          ByVal col As String) As String
+    If Len(id) = 0 Then Exit Function
+    S6K7Broj = Trim$(NzToText(LookupValue(tbl, idCol, id, col)))
+End Function
+
+' Lanac testa se sklanja kroz prave pisce storna, odozgo nadole -- svaki nivo
+' pusta storno tek kad je roditelj pao. Pad ciscenja se ne guta u tvrdnju, ali
+' ni ne obara test: ostatak je na kraju suite i vidi se u logu.
+Private Sub S6K7SkloniLanac(ByVal blok As String, ByVal otp As String, ByVal zbr As String, _
+                            ByVal prj As String)
+    On Error Resume Next
+    If Len(prj) > 0 Then modStorno.StornoPrijemnica_TX prj, True
+    If Len(zbr) > 0 Then modStorno.StornoZbirna_TX zbr
+    If Len(otp) > 0 Then modStorno.StornoOtpremnica_TX otp
+    If Len(blok) > 0 Then modStorno.StornoOtkup_TX blok
+    Err.Clear
+End Sub
+
+' Red liste Nedovrseno (ucitane mreze) ciji OtkupID je dati blok; 0 = nema ga.
+Private Function S6K7RedLanca(ByVal blok As String) As Long
+    Dim i As Long
+    If Len(blok) = 0 Then Exit Function
+    For i = 1 To modOtkupUI.GridBrojRedova()
+        If StrComp(Trim$(CStr(modOtkupUI.GridCell(i, modScrOporavak.NED_COL_OTK))), blok, _
+                   vbTextCompare) = 0 Then
+            S6K7RedLanca = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Prvi red liste Nedovrseno koji NE nosi OtkupID (druga vrsta problema).
+Private Function S6K7RedBezBloka() As Long
+    Dim i As Long
+    For i = 1 To modOtkupUI.GridBrojRedova()
+        If Len(Trim$(CStr(modOtkupUI.GridCell(i, modScrOporavak.NED_COL_OTK)))) = 0 Then
+            S6K7RedBezBloka = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Da li poruka nosi dokument kao "<oznaka> <broj>". Sam broj nije dovoljan: na
+' STA-TEST-1 otpremnica dobija "1/ddmmyy", a prijemnica hladnjace iz SVOG niza
+' isti tekst -- tvrdnja po broju bi prosla i bez prijemnice u poruci.
+Private Function S6K7NosiDokument(ByVal tekst As String, ByVal kljucOznake As String, _
+                                  ByVal broj As String) As Boolean
+    If Len(broj) = 0 Then Exit Function
+    S6K7NosiDokument = (InStr(1, tekst, Poruka(kljucOznake) & " " & broj, vbTextCompare) > 0)
+End Function
 
 ' Napomena (efekat) reda lanca uvida za dati dokument; "nema" kad reda nema.
 Private Function S6K4NapomenaLanca(ByVal broj As String, ByVal prjID As String, _

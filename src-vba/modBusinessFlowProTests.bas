@@ -431,6 +431,11 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_KapijaBlokaPoKanonu
     Test_OPO_IzgubljenBlok
     Test_HLD_AutoLanacOtpremnica
+    Test_S6K7_LanacNastavljiv
+    Test_S6K7_LanacBezKupcaNePise
+    Test_S6K7_JezgroZbirneHladnjacka
+    Test_S6K7_PwaHladnjackiBlokovi
+    Test_S6K7_RucnaZbirnaOdbijaHladnjacku
     Test_OTK_IspravkaBlokaUNacrtu
     Test_OTK_RutaPosleUpisa
     Test_OTP_ClanstvoBulkStrogo
@@ -14912,159 +14917,201 @@ EH:
 End Sub
 
 ' ============================================================
-' S3d -- AUTO-LANAC HLADNJACE, korak otpremnice (A-014).
+' S6 KORAK 7 -- HLADNJACKI LANAC, CEO (HLD-LANAC-01, A-014; plan 14.55
+' "Korak 7", R2, R3, R5a, R12).
 '
 ' Roba koju proizvodjac doveze DIREKTNO u hladnjacu meri se na prijemu, pa je
-' otpremnica 1:1 sa otkupnim listom -- po KLASI, ne samo u totalu -- i nema sta
-' da ceka: nastaje i izdaje se odmah, sa vozacem-ogledalom stanice kao proxyjem
-' (taj prevoz nema firminog vozaca).
+' lanac OTK -> OTP -> ZBR -> PRJ 1:1 po KLASI, ne samo u totalu: svaki nivo
+' izvodi stavke iz svog kanonskog roditelja i vezuje se za njega po ID-u. Vozac
+' je ogledalo stanice (taj prevoz nema firminog vozaca), kupac je hladnjaca
+' (MALINA_DEFAULT_KUPAC), cena prijemnice je cena otkupa te klase, a sva cetiri
+' dokumenta nose datum otkupa. Knjiga: noga punih na otpremnici (stanica ->
+' ogledalo) i na prijemnici (ogledalo -> kupac), pa je saldo ogledala posle
+' lanca isti kao pre njega.
+'
+' Prekidaca nema (odluka 2): fixture nosi prazan AUTO_PRIJEMNICA_HLADNJACA, a
+' lanac mora da radi. Fixture nema ni MALINA_DEFAULT_KUPAC: test ga postavlja i
+' vraca. Sve ide u transakciji testa koja se na kraju vraca -- sinteticki lanac
+' ne sme da ostane u tudjem merenju (KI-045).
+'
+' Nizvodno (R12): prijemnica ima palete po stavci, faktura nad jednom stavkom je
+' cini DELIMICNO fakturisanom sa cenom otkupa, a F8 PONISTENJE (posle storna
+' fakture) obara prijemnicu, zbirnu i otpremnicu i oslobadja blok. Pre toga se
+' meri trag brisanja KI-046 (R2): storno bloka iz kompletnog lanca odbija A13,
+' sa razlogom koji imenuje otpremnicu.
 '
 ' Meri se i sta lanac NE sme:
-'   - da radi dok prekidac nije ukljucen (jedan autoritet nad aktivacijom);
-'   - da ga aktivan RUCNI nacrt presretne -- hladnjacki blok je obavezan da ide
-'     u svoj lanac, inace bi zavrsio kao clan tudje otpremnice sa drugom kilazom;
-'   - da se pokrene dvaput za isti blok (zastita od dupliranja);
-'   - da dira obicnu stanicu ili storniran blok.
+'   - da ga aktivan RUCNI nacrt presretne;
+'   - da se ponovi nad kompletnim lancem (ponovljen poziv je tih, R5a);
+'   - da dira obicnu stanicu ili storniran blok;
+'   - da pusti hladnjacki blok u rucno vezivanje.
+' SABOTAZE: s6k7-lanac-staje-posle-otp, s6k7-prj-kolicina-ne-iz-zbirne,
+' s6k7-cena-nije-iz-otkupa, s6k7-storno-bloka-u-lancu-prolazi,
+' s6k7-dupla-prijemnica, lanac-storniran-blok, lanac-i-na-obicnoj-stanici,
+' lanac-put-tiho-false, veza-hladnjackog-bloka-rucno.
 ' ============================================================
 Private Sub Test_HLD_AutoLanacOtpremnica()
+    Dim tx As clsTransaction, prevKupac As String, prevPal As String, prevAkt As String
     On Error GoTo EH
 
-    Dim scenario As String, izvestaj As String, g As String, prevCfg As String
+    Dim scenario As String, izvestaj As String, g As String, r As String
     scenario = NewScenarioCode("HLDLAN")
-    prevCfg = GetConfigValue(CFG_AUTO_PRIJEMNICA_HLADNJACA)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    prevAkt = modOtkupUI.ActiveMode
 
-    ' --- 0) PREKIDAC JE JEDAN AUTORITET -----------------------------------
-    ' Dok je iskljucen (default do S6), hladnjacki blok ide radnim stolom kao i
-    ' svaki drugi: ni lanca ni poruke. Stanica kaze KOJI blok, prekidac DA LI.
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, "Ne"
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    SetConfigValue CFG_PALETIRANJE, "DA"
 
-    Dim ugasen As String
-    ugasen = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLD0-" & scenario, TEST_HLAD_ST_ID), _
-                            OtkStavke(30#, 100#, 3, 0#, 0#, 0))
-    AssertTrue Len(ugasen) > 0, "Lanac: blok za provereni prekidac upisan"
-    AssertTrue Not modAutoHladnjaca.LanacVaziZaBlok(ugasen), _
-               "Lanac: iskljucen prekidac ne pusta blok u lanac"
-    izvestaj = "x"
-    AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(ugasen, izvestaj), _
-                 "Lanac: iskljucen prekidac ne pravi otpremnicu"
-    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(ugasen), _
-                 "Lanac: blok ostaje nevezan dok je prekidac iskljucen"
-
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, "Da"
-
-    ' --- 1) hladnjacka stanica -> izdata otpremnica 1:1 -------------------
-    Dim blok As String, otpID As String
-    blok = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDA-" & scenario, TEST_HLAD_ST_ID), _
-                          OtkStavke(70#, 100#, 7, 0#, 0#, 0))
-    AssertTrue Len(blok) > 0, "Lanac: blok na hladnjackoj stanici upisan"
-    If Len(blok) = 0 Then GoTo Kraj
-
+    ' --- 1) DVOKLASNI BLOK: CEO LANAC, 1:1 PO KLASI (R3) -------------------
+    Dim datum As Date, blok As String, prj As String, otpID As String, zbrID As String
+    Dim brOtp As String, brZbr As String, brPrj As String, ogPre As Double
+    datum = NextTestDate()
+    blok = HldBlok("HLDA-" & scenario, TEST_HLAD_ST_ID, datum, 70#, 100#, 7, 25#, 90#, 3)
+    AssertTrue Len(blok) > 0, "Lanac: dvoklasni blok na hladnjackoj stanici upisan"
     AssertTrue modAutoHladnjaca.LanacVaziZaBlok(blok), "Lanac: hladnjacki blok ide u lanac"
-    otpID = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
-    AssertTrue Len(otpID) > 0, "Lanac: otpremnica je napravljena (" & izvestaj & ")"
-    If Len(otpID) = 0 Then GoTo Kraj
+    ogPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_HLAD_ST_ID, TEST_TIP_AMB)
 
-    AssertEquals IZDATO_IZDATO, OtpPolje(otpID, COL_TRACE_IZDATO_STATUS), _
-                 "Lanac: otpremnica je odmah IZDATA"
-    AssertEquals TEST_HLAD_ST_ID, OtpPolje(otpID, COL_OTP_VOZAC), _
-                 "Lanac: vozac je ogledalo stanice"
-    AssertEquals TEST_HLAD_ST_ID, OtpPolje(otpID, COL_OTP_STANICA), _
-                 "Lanac: otpremnica je na stanici bloka"
-    AssertEquals otpID, modDokumenta.OtpremnicaZaOtkup(blok), _
-                 "Lanac: blok je izvor te otpremnice"
+    izvestaj = ""
+    If Len(blok) > 0 Then prj = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    otpID = HldOtp(blok)
+    zbrID = HldZbr(otpID)
+    brOtp = HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)
+    brZbr = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)
+    brPrj = HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_BROJ)
 
-    Dim prog As Object, kl As Object
-    Set prog = modDokumenta.GetOtpremnicaProgress(otpID)
-    AssertTrue prog.Exists(KLASA_I), "Lanac: otpremnica ima klasu I"
-    If prog.Exists(KLASA_I) Then
-        Set kl = prog(KLASA_I)
-        AssertEquals "70", CStr(kl("ocekivano")), "Lanac: kilaza je 1:1 sa blokom"
-        AssertEquals "7", CStr(kl("ocekivanoAmb")), "Lanac: ambalaza je 1:1 sa blokom"
-        AssertEquals "0", CStr(kl("preostalo")), "Lanac: nema ostatka (nema sta da se dovezuje)"
-    End If
+    AssertEquals "True|" & UCase$(prj), CStr(Len(prj) > 0) & "|" & UCase$(HldPrj(zbrID)), _
+                 "Lanac: jedan poziv kompletira lanac i vraca PrijemnicaID"
+    AssertEquals IZDATO_IZDATO & "|" & TEST_HLAD_ST_ID & "|" & TEST_HLAD_ST_ID, _
+                 HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_TRACE_IZDATO_STATUS) & "|" & _
+                 HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA) & "|" & _
+                 HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VOZAC), _
+                 "Lanac: otpremnica je IZDATA, na stanici bloka, vozac je ogledalo"
+    AssertEquals "True|" & TEST_KUP_ID & "|" & TEST_HLAD_ST_ID & "|" & UCase$(otpID), _
+                 HldZbrIzdata(zbrID) & "|" & _
+                 HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_KUPAC) & "|" & _
+                 HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_VOZAC) & "|" & _
+                 HldIzvorZbirne(zbrID), _
+                 "Lanac: zbirna je IZDATA, kupac hladnjace, vozac ogledalo, clan je ta otpremnica"
+    AssertEquals "True|" & TEST_KUP_ID & "|" & TEST_HLAD_ST_ID & "|" & UCase$(zbrID) & "|" & brZbr, _
+                 CStr(Len(zbrID) > 0) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_KUPAC) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_VOZAC) & "|" & _
+                 UCase$(HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_DETE_ZBIRNA_ROD)) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_BROJ_ZBIRNE), _
+                 "Lanac: prijemnica -- kupac hladnjace, vozac ogledalo, roditelj je ta zbirna po ID-u"
+    AssertEquals modBrojevi.FormatBroj(TEST_HLAD_ST_ID, datum, 1) & "|" & _
+                 modBrojevi.ApplyMirrorPrefix(TEST_HLAD_ST_ID, _
+                                              modBrojevi.FormatBroj(TEST_HLAD_ST_ID, datum, 1)) & "|" & _
+                 modBrojevi.FormatBroj("1", datum, 1), _
+                 brOtp & "|" & brZbr & "|" & brPrj, _
+                 "Lanac: broj otpremnice iz niza stanice, zbirne iz niza ogledala, prijemnice iz niza hladnjace"
+    AssertEquals "I:70/7|II:25/3", HldKlaseOtp(otpID), "Lanac: otpremnica je 1:1 po klasi sa blokom"
+    AssertEquals "I:70/7|II:25/3", HldKlaseZbr(zbrID), "Lanac: zbirna je 1:1 po klasi sa otpremnicom"
+    AssertEquals "I:70/7|II:25/3", HldKlasePrj(prj), "Lanac: prijemnica je 1:1 po klasi sa zbirnom"
+    AssertEquals "I:100|II:90", HldCenePrj(prj), "Lanac: cena stavke prijemnice je cena otkupa te klase"
+    AssertEquals "|" & Format$(datum, "yyyy-mm-dd") & "|" & Format$(datum, "yyyy-mm-dd") & "|" & _
+                 Format$(datum, "yyyy-mm-dd") & "|" & Format$(datum, "yyyy-mm-dd") & "|", _
+                 "|" & HldDatum(TBL_OTKUP, COL_OTK_ID, blok, COL_OTK_DATUM) & "|" & _
+                 HldDatum(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM) & "|" & _
+                 HldDatum(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_DATUM) & "|" & _
+                 HldDatum(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_DATUM) & "|", _
+                 "Lanac: sva cetiri dokumenta nose datum otkupa"
+    AssertEquals "1|10|1|10", HldNoga(otpID, DOK_TIP_OTPREMNICA) & "|" & HldNoga(prj, DOK_TIP_PRIJEMNICA), _
+                 "Lanac: knjiga -- jedna noga punih na otpremnici i jedna na prijemnici, po 10 gajbi"
+    AssertEquals CStr(ogPre), CStr(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_HLAD_ST_ID, TEST_TIP_AMB)), _
+                 "Lanac: saldo ogledala posle lanca je isti kao pre njega"
+    AssertTrue Len(brOtp) > 0 And Len(brZbr) > 0 And Len(brPrj) > 0 And _
+               HldImaBroj(izvestaj, brOtp) And HldImaBroj(izvestaj, brZbr) And HldImaBroj(izvestaj, brPrj), _
+               "Lanac: izvestaj nosi brojeve otpremnice, zbirne i prijemnice"
 
-    ' Zastita od dupliranja: ponovljen poziv nad istim blokom ne pravi drugu.
+    ' --- 2) PONOVLJEN POZIV NAD KOMPLETNIM LANCEM JE TIH (R5a) --------------
+    Dim nOtp As Long, nZbr As Long, nPrj As Long, ponovo As String
+    nOtp = Pr3BrojRedova(TBL_OTPREMNICA)
+    nZbr = Pr3BrojRedova(TBL_ZBIRNA)
+    nPrj = Pr3BrojRedova(TBL_PRIJEMNICA)
     izvestaj = "x"
-    AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj), _
-                 "Lanac: ponovljen poziv ne pravi drugu otpremnicu"
+    ponovo = "x"
+    If Len(blok) > 0 Then ponovo = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertEquals "||0|0|0", ponovo & "|" & izvestaj & "|" & _
+                 CStr(Pr3BrojRedova(TBL_OTPREMNICA) - nOtp) & "|" & _
+                 CStr(Pr3BrojRedova(TBL_ZBIRNA) - nZbr) & "|" & _
+                 CStr(Pr3BrojRedova(TBL_PRIJEMNICA) - nPrj), _
+                 "Lanac: ponovljen poziv nad kompletnim lancem ne pravi nista i ne javlja nista"
 
-    ' --- 2) OBAVEZNOST: rucni nacrt NE presrece hladnjacki blok -----------
-    ' Ovo je jezgro odluke: da je blok prvo ponudjen radnom stolu, zavrsio bi kao
-    ' clan tudje otpremnice sa sasvim drugom kilazom, a lanac se ne bi pokrenuo.
-    Dim nacrt As String, blok2 As String, otp2 As String, prev As String
-    prev = modOtkupUI.ActiveMode
+    ' --- 3) DRUGI BLOK ISTE STANICE ISTOG DANA, SAMO KLASA II ---------------
+    ' Jedan blok = jedan lanac: drugi blok istog dana je drugi lanac, pa nosi
+    ' sledeci broj u nizu stanice i u nizu hladnjace.
+    Dim blokII As String, prjII As String
+    blokII = HldBlok("HLDK-" & scenario, TEST_HLAD_ST_ID, datum, 0#, 0#, 0, 25#, 90#, 3)
+    If Len(blokII) > 0 Then prjII = modAutoHladnjaca.AutoLanacHladnjaca(blokII, izvestaj)
+    AssertEquals "II:25/3", HldKlasePrj(prjII), _
+                 "Lanac: jednoklasni blok (samo II) daje prijemnicu samo sa klasom II"
+    AssertEquals modBrojevi.FormatBroj(TEST_HLAD_ST_ID, datum, 2) & "|" & modBrojevi.FormatBroj("1", datum, 2), _
+                 HldPolje(TBL_OTPREMNICA, COL_OTP_ID, HldOtp(blokII), COL_OTP_BROJ) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjII, COL_PRJ_BROJ), _
+                 "Lanac: drugi blok iste stanice istog dana je drugi lanac (brojevi -2)"
+
+    ' --- 4) BLOK BEZ GAJBI: lanac bez nogu knjige i bez paleta --------------
+    Dim blokG As String, prjG As String
+    blokG = HldBlok("HLDG-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 12#, 100#, 0, 0#, 0#, 0)
+    If Len(blokG) > 0 Then prjG = modAutoHladnjaca.AutoLanacHladnjaca(blokG, izvestaj)
+    AssertEquals "True|0|0", CStr(Len(prjG) > 0) & "|" & CStr(S6AmbBroj(prjG, AMB_VK_UZ_ROBU)) & "|" & _
+                 CStr(S6GajbiNaPaletama(prjG, "")), _
+                 "Lanac: blok bez gajbi daje lanac bez nogu knjige i bez paleta"
+
+    ' --- 5) OBAVEZNOST: rucni nacrt NE presrece hladnjacki blok -------------
+    ' Da je blok prvo ponudjen radnom stolu, zavrsio bi kao clan tudje
+    ' otpremnice sa sasvim drugom kilazom, a lanac se ne bi pokrenuo.
+    Dim nacrt As String, blok2 As String, prj2 As String, otp2 As String, aktiv As String
     modOtkupUI.ActiveMode = "F1"
     nacrt = CreateOtpremnicaDraft_TX(OtpHeaderNaStanici(TEST_PREFIX & "-OTP-HLDN-" & scenario, TEST_HLAD_ST_ID), _
                                      OtpOcek(1500#, 150#, 0#, 0#), g)
-    AssertTrue Len(nacrt) > 0, "Lanac: rucni nacrt napravljen (" & g & ")"
-    If Len(nacrt) > 0 Then
-        AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(nacrt), "Lanac: rucni nacrt je aktivan"
-        blok2 = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDB-" & scenario, TEST_HLAD_ST_ID), _
-                               OtkStavke(40#, 100#, 4, 0#, 0#, 0))
-        AssertTrue modAutoHladnjaca.LanacVaziZaBlok(blok2), _
-                   "Lanac: hladnjacki blok ide u lanac i kad je rucni nacrt aktivan"
-        otp2 = modAutoHladnjaca.AutoLanacHladnjaca(blok2, izvestaj)
-        AssertTrue Len(otp2) > 0, "Lanac: blok dobija svoj lanac uprkos aktivnom nacrtu (" & izvestaj & ")"
-        AssertTrue otp2 <> nacrt, "Lanac: to je sopstvena otpremnica, ne rucni nacrt"
-        AssertEquals otp2, modDokumenta.OtpremnicaZaOtkup(blok2), _
-                     "Lanac: blok je u svojoj otpremnici, ne u nacrtu"
-    End If
+    aktiv = "<nema nacrta>"
+    If Len(nacrt) > 0 Then aktiv = modScrDokumenti.AktivirajOtpremnicu(nacrt)
+    AssertEquals "", aktiv, "Lanac: rucni nacrt je aktivan"
+    blok2 = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDB-" & scenario, TEST_HLAD_ST_ID), _
+                           OtkStavke(40#, 100#, 4, 0#, 0#, 0))
+    AssertTrue modAutoHladnjaca.LanacVaziZaBlok(blok2), _
+               "Lanac: hladnjacki blok ide u lanac i kad je rucni nacrt aktivan"
+    If Len(blok2) > 0 Then prj2 = modAutoHladnjaca.AutoLanacHladnjaca(blok2, izvestaj)
+    otp2 = HldOtp(blok2)
+    AssertTrue Len(prj2) > 0 And Len(otp2) > 0 And otp2 <> nacrt, _
+               "Lanac: blok dobija svoj lanac uprkos aktivnom nacrtu, ne rucni nacrt"
     RadniStoPocetno
-    modOtkupUI.ActiveMode = prev
+    modOtkupUI.ActiveMode = prevAkt
 
-    ' --- 3) DVE KLASE: raspodela po klasi je ista, ne samo total ----------
-    Dim dveKlase As String, otp3 As String
-    dveKlase = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDF-" & scenario, TEST_HLAD_ST_ID), _
-                              OtkStavke(70#, 100#, 7, 25#, 90#, 3))
-    otp3 = modAutoHladnjaca.AutoLanacHladnjaca(dveKlase, izvestaj)
-    AssertTrue Len(otp3) > 0, "Lanac: dvoklasni blok je dobio otpremnicu (" & izvestaj & ")"
-    If Len(otp3) > 0 Then
-        Set prog = modDokumenta.GetOtpremnicaProgress(otp3)
-        AssertTrue prog.Exists(KLASA_I) And prog.Exists(KLASA_II), _
-                   "Lanac: otpremnica nosi obe klase"
-        If prog.Exists(KLASA_I) Then
-            Set kl = prog(KLASA_I)
-            AssertEquals "70", CStr(kl("ocekivano")), "Lanac: klasa I je 1:1 sa blokom"
-            AssertEquals "7", CStr(kl("ocekivanoAmb")), "Lanac: ambalaza klase I je 1:1"
-        End If
-        If prog.Exists(KLASA_II) Then
-            Set kl = prog(KLASA_II)
-            AssertEquals "25", CStr(kl("ocekivano")), "Lanac: klasa II je 1:1 sa blokom"
-            AssertEquals "3", CStr(kl("ocekivanoAmb")), "Lanac: ambalaza klase II je 1:1"
-        End If
-    End If
-
-    ' --- 4) obicna stanica se ne dira -------------------------------------
+    ' --- 6) obicna stanica se ne dira -------------------------------------
     Dim obican As String
     obican = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-HLDC-" & scenario), _
                             OtkStavke(20#, 100#, 2, 0#, 0#, 0))
     izvestaj = "x"
     AssertTrue Not modAutoHladnjaca.LanacVaziZaBlok(obican), "Lanac: obicna stanica nema auto-lanac"
-    AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(obican, izvestaj), _
-                 "Lanac: obicna stanica ne dobija otpremnicu"
-    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(obican), _
-                 "Lanac: blok obicne stanice ostaje nevezan"
+    r = "x"
+    If Len(obican) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(obican, izvestaj)
+    AssertEquals "|", r & "|" & izvestaj, "Lanac: obicna stanica ne dobija lanac i ne javlja nista"
+    AssertEquals "", HldOtp(obican), "Lanac: blok obicne stanice ostaje nevezan"
 
-    ' --- 5) hladnjaca BEZ ogledala: lanac ga napravi, ne staje -----------
+    ' --- 7) hladnjaca BEZ ogledala: lanac ga napravi, ne staje -------------
     ' Ogledalo nije podatak o coveku nego proxy za stanicu, pa ga lanac trazi
     ' kanonskim idempotentnim upisom. Van malina rezima ovo je JEDINI put koji ga
     ' za hladnjacu pravi -- bez toga bi lanac tamo uvek stajao.
-    Dim bezOgledala As String, otp5 As String
+    Dim bezOgledala As String, prj5 As String
     AssertTrue Not modMalina.IsManagedStationMirror(TEST_HLAD2_ST_ID), _
                "Lanac: druga hladnjacka stanica pocinje bez ogledala"
     bezOgledala = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDD-" & scenario, TEST_HLAD2_ST_ID), _
                                  OtkStavke(10#, 100#, 1, 0#, 0#, 0))
-    izvestaj = ""
-    otp5 = modAutoHladnjaca.AutoLanacHladnjaca(bezOgledala, izvestaj)
-    AssertTrue Len(otp5) > 0, "Lanac: ogledalo nastaje kroz lanac (" & izvestaj & ")"
+    If Len(bezOgledala) > 0 Then prj5 = modAutoHladnjaca.AutoLanacHladnjaca(bezOgledala, izvestaj)
+    AssertTrue Len(prj5) > 0, "Lanac: ogledalo nastaje kroz lanac i lanac se kompletira"
     AssertTrue modMalina.IsManagedStationMirror(TEST_HLAD2_ST_ID), _
                "Lanac: posle lanca stanica ima svoje ogledalo"
-    If Len(otp5) > 0 Then
-        AssertEquals TEST_HLAD2_ST_ID, OtpPolje(otp5, COL_OTP_VOZAC), _
-                     "Lanac: vozac je ogledalo bas te stanice"
-    End If
+    AssertEquals TEST_HLAD2_ST_ID, HldPolje(TBL_OTPREMNICA, COL_OTP_ID, HldOtp(bezOgledala), COL_OTP_VOZAC), _
+                 "Lanac: vozac je ogledalo bas te stanice"
 
-    ' --- 6) storniran blok nema sta da nosi -------------------------------
+    ' --- 8) storniran blok nema sta da nosi -------------------------------
     Dim stornirani As String
     stornirani = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDE-" & scenario, TEST_HLAD_ST_ID), _
                                 OtkStavke(15#, 100#, 1, 0#, 0#, 0))
@@ -15076,7 +15123,7 @@ Private Sub Test_HLD_AutoLanacOtpremnica()
                  "Lanac: storniran blok ne pokrece lanac"
     AssertEquals "", izvestaj, "Lanac: storniran blok ne javlja nista"
 
-    ' --- 7) "NE ZNAM" NIJE "NIJE HLADNJACA" -------------------------------
+    ' --- 9) "NE ZNAM" NIJE "NIJE HLADNJACA" -------------------------------
     ' Razvodnica bira izmedju OBAVEZNOG lanca i rucnog toka, pa neizvesnost ne
     ' sme da padne na rucnu stranu: hladnjacki blok bi tiho zavrsio u tudjem
     ' nacrtu. Stanica bloka se kvari MIMO pisca, pa se vraca -- kontrola posle
@@ -15105,11 +15152,9 @@ Private Sub Test_HLD_AutoLanacOtpremnica()
         End If
     End If
 
-    ' --- 8) ROUTER PO STANICI: odluka PRE nego sto blok postoji -----------
+    ' --- 10) ROUTER PO STANICI: odluka PRE nego sto blok postoji ----------
     ' Ekran ovim grana pre potvrde prekoracenja: hladnjacki blok ne podleze
     ' ogranicenju tudjeg rucnog nacrta, pa mu se to pitanje i ne postavlja.
-    ' (Da se pitalo, operater bi na "Ne" izgubio ceo upis zbog dokumenta sa
-    ' kojim blok nema veze.)
     Dim stGreska As String
     stGreska = "x"
     AssertTrue modAutoHladnjaca.LanacVaziZaStanicu(TEST_HLAD_ST_ID, stGreska), _
@@ -15127,47 +15172,94 @@ Private Sub Test_HLD_AutoLanacOtpremnica()
     AssertTrue Len(stGreska) > 0, _
                "Lanac: nepoznata stanica vraca RAZLOG i u routeru po stanici"
 
-    ' --- 9) HLADNJACKI BLOK SE NE VEZUJE RUCNO ----------------------------
+    ' --- 11) HLADNJACKI BLOK SE NE VEZUJE RUCNO ---------------------------
     ' Oporavak posle pale automatike je "otkloni uzrok pa PONOVI lanac", a ne
     ' "veze ga za prvu otvorenu otpremnicu" -- inace se obavezan lanac zaobilazi
     ' jednim klikom iz liste "Bez otpremnice". Kapija je na granici radnje.
     Dim rucni As String, hldSlobodan As String, obicanSlobodan As String, razlog As String
-    prev = modOtkupUI.ActiveMode
+    Dim prjSlob As String
     modOtkupUI.ActiveMode = "F1"
     rucni = CreateOtpremnicaDraft_TX(OtpHeaderNaStanici(TEST_PREFIX & "-OTP-HLDR-" & scenario, TEST_ST_ID), _
                                      OtpOcek(100#, 10#, 0#, 0#), g)
-    AssertTrue Len(rucni) > 0, "Lanac: rucni nacrt za vezivanje napravljen (" & g & ")"
-    If Len(rucni) > 0 Then
-        AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(rucni), _
-                     "Lanac: rucni nacrt je aktivan (vezivanje)"
+    aktiv = "<nema nacrta>"
+    If Len(rucni) > 0 Then aktiv = modScrDokumenti.AktivirajOtpremnicu(rucni)
+    AssertEquals "", aktiv, "Lanac: rucni nacrt je aktivan (vezivanje)"
 
-        hldSlobodan = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDI-" & scenario, TEST_HLAD2_ST_ID), _
-                                     OtkStavke(8#, 100#, 1, 0#, 0#, 0))
-        razlog = modScrDokumenti.VeziZaAktivnu(hldSlobodan)
-        AssertTrue Len(razlog) > 0, "Lanac: hladnjacki blok se ne vezuje rucno"
-        AssertEquals "", modDokumenta.OtpremnicaZaOtkup(hldSlobodan), _
-                     "Lanac: odbijen blok nije zavrsio u rucnom nacrtu"
+    hldSlobodan = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDI-" & scenario, TEST_HLAD2_ST_ID), _
+                                 OtkStavke(8#, 100#, 1, 0#, 0#, 0))
+    razlog = modScrDokumenti.VeziZaAktivnu(hldSlobodan)
+    AssertTrue Len(razlog) > 0, "Lanac: hladnjacki blok se ne vezuje rucno"
+    AssertEquals "", HldOtp(hldSlobodan), "Lanac: odbijen blok nije zavrsio u rucnom nacrtu"
 
-        ' Kontrola: obican blok se vezuje normalno -- kapija gadja bas hladnjacu.
-        obicanSlobodan = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-HLDJ-" & scenario), _
-                                        OtkStavke(9#, 100#, 1, 0#, 0#, 0))
-        AssertEquals "", modScrDokumenti.VeziZaAktivnu(obicanSlobodan), _
-                     "Lanac: obican blok se i dalje vezuje rucno"
+    ' Kontrola: obican blok se vezuje normalno -- kapija gadja bas hladnjacu.
+    obicanSlobodan = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-HLDJ-" & scenario), _
+                                    OtkStavke(9#, 100#, 1, 0#, 0#, 0))
+    AssertEquals "", modScrDokumenti.VeziZaAktivnu(obicanSlobodan), _
+                 "Lanac: obican blok se i dalje vezuje rucno"
 
-        ' Oporavak: ponavljanje lanca nad tim istim blokom uspeva.
-        izvestaj = ""
-        AssertTrue Len(modAutoHladnjaca.AutoLanacHladnjaca(hldSlobodan, izvestaj)) > 0, _
-                   "Lanac: odbijen blok se oporavlja ponavljanjem lanca (" & izvestaj & ")"
-    End If
+    ' Oporavak: ponavljanje lanca nad tim istim blokom uspeva.
+    izvestaj = ""
+    If Len(hldSlobodan) > 0 Then prjSlob = modAutoHladnjaca.AutoLanacHladnjaca(hldSlobodan, izvestaj)
+    AssertTrue Len(prjSlob) > 0, "Lanac: odbijen blok se oporavlja ponavljanjem lanca"
     RadniStoPocetno
-    modOtkupUI.ActiveMode = prev
+    modOtkupUI.ActiveMode = prevAkt
 
-Kraj:
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
+    ' --- 12) NIZVODNO (R12) I TRAG BRISANJA KI-046 (R2) --------------------
+    Dim stI As String, stII As String, fid As String
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    AssertEquals "7|3", CStr(S6GajbiNaPaletama(prj, stI)) & "|" & CStr(S6GajbiNaPaletama(prj, stII)), _
+                 "Lanac: palete nose gajbe svake stavke prijemnice"
+    If Len(stI) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stI)
+    AssertEquals "DELIM", S6K5Fakturisanost(prj), _
+                 "Lanac: faktura nad stavkom I cini prijemnicu delimicno fakturisanom"
+    AssertEquals stI & "|I|70|100", S6K5Linije(fid), _
+                 "Lanac: linija fakture nosi kolicinu i cenu otkupa klase I"
+
+    ' A13: blok iz kompletnog lanca se ne stornira. Razlog daje jezgro storna
+    ' (StornoOtkup) u transakciji koja se vraca; pravi ulaz (StornoOtkup_TX) se
+    ' zove samo nad blokom koji JE u otpremnici.
+    Dim razlogA13 As String, storniran As Boolean
+    razlogA13 = HldRazlogStornaBloka(blok)
+    If Len(otpID) > 0 Then storniran = StornoOtkup_TX(blok)
+    AssertTrue Len(otpID) > 0 And Not storniran And Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, blok), _
+               "Lanac: storno bloka iz kompletnog lanca je odbijen, blok ostaje aktivan (A13)"
+    AssertTrue Len(otpID) > 0 And InStr(1, razlogA13, otpID, vbTextCompare) > 0, _
+               "Lanac: razlog odbijenog storna bloka imenuje otpremnicu lanca"
+
+    ' F8 PONISTENJE: fakturisana prijemnica se ne stornira, pa faktura ide prva.
+    Dim okFak As Boolean, poruka As String, res As Object, uspeh As Boolean
+    If Len(fid) > 0 Then okFak = modStornoDok.StornoIzvrsi(STIP_FAKTURA, S6K5BrojFakture(fid), "", poruka, fid)
+    AssertTrue okFak, "Lanac: faktura auto-prijemnice se stornira (preduslov ponistenja)"
+    If okFak Then
+        Set res = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_PONISTENJE, True, False, _
+                                                        S6K4Ident(prj))
+        uspeh = CBool(res("success"))
+    End If
+    AssertTrue uspeh, "Lanac: F8 PONISTENJE auto-prijemnice prolazi"
+    AssertEquals "Da|Da|Da", HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_STORNIRANO) & "|" & _
+                 HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_STORNIRANO) & "|" & _
+                 HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_STORNIRANO), _
+                 "Lanac: PONISTENJE obara prijemnicu, zbirnu i otpremnicu"
+    AssertTrue Len(otpID) > 0 And Len(HldOtp(blok)) = 0 And Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, blok), _
+               "Lanac: posle PONISTENJA blok je slobodan i aktivan"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_PALETIRANJE, prevPal
     Exit Sub
 EH:
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
-    LogFatal "Test_HLD_AutoLanacOtpremnica", Err.Number, Err.description
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    RadniStoPocetno
+    modOtkupUI.ActiveMode = prevAkt
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    On Error GoTo 0
+    LogFatal "Test_HLD_AutoLanacOtpremnica", eN, eD
 End Sub
 
 ' ============================================================
@@ -15310,17 +15402,16 @@ End Sub
 ' Posle upisa blok ide u hladnjacki lanac, u aktivan rucni nacrt, ili nigde.
 ' Ispravka nije nov unos, pa joj pravila rucnog nacrta ne vaze -- ali OBAVEZNI
 ' hladnjacki lanac vazi i njoj. Merilo je ovde, a ne u Scr_Save, jer Scr_Save
-' povlaci stampu i formu.
+' povlaci stampu i formu. Prekidaca vise nema (S6 korak 7, odluka 2): stanica
+' sama bira lanac, bez ikakve konfiguracije.
 ' ============================================================
 Private Sub Test_OTK_RutaPosleUpisa()
     On Error GoTo EH
 
-    Dim scenario As String, g As String, greska As String, prevCfg As String, prev As String
+    Dim scenario As String, g As String, greska As String, prev As String
     scenario = NewScenarioCode("OTKRUT")
-    prevCfg = GetConfigValue(CFG_AUTO_PRIJEMNICA_HLADNJACA)
     prev = modOtkupUI.ActiveMode
     modOtkupUI.ActiveMode = "F1"
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, "Da"
 
     Dim obican As String, hladni As String, nacrt As String
     obican = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-RUTA-" & scenario), _
@@ -15383,15 +15474,632 @@ Private Sub Test_OTK_RutaPosleUpisa()
 
 Kraj:
     RadniStoPocetno
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
     modOtkupUI.ActiveMode = prev
     Exit Sub
 EH:
     RadniStoPocetno
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
     modOtkupUI.ActiveMode = prev
     LogFatal "Test_OTK_RutaPosleUpisa", Err.Number, Err.description
 End Sub
+
+' ============================================================
+' S6 KORAK 7, R5 + odluka 7: LANAC JE NASTAVLJIV, A PRIJEMNICA SE VEZUJE PO ID-u.
+'
+' Medjustanja grade ISTI pisci koje lanac zove (CreateOtpremnicaIzIzvora_TX,
+' jezgro auto-zbirne), ne seam:
+'   (b) blok sa otpremnicom bez zbirne -- poziv pravi zbirnu i prijemnicu, ne
+'       drugu otpremnicu;
+'   (c) blok sa otpremnicom i zbirnom bez prijemnice -- poziv pravi samo
+'       prijemnicu.
+' U (c) se broj zbirne namerno ne moze razresiti u jedan dokument: druga zbirna
+' ISTOG ogledala nosi isti broj (KR-001, uvoz sa terena -- brojSaTerena).
+' Prijemnica vezana po broju tada ostaje bez roditelja (nalaz pre-flight-a);
+' vezana po ID-u dobija SVOJU. Pisac sa zadatim roditeljem odbija zbirnu koje
+' nema i zbirnu drugog broja, i ne ostavlja nista.
+' SABOTAZE: lanac-dupli-poziv, s6k7-prj-roditelj-po-broju.
+' ============================================================
+Private Sub Test_S6K7_LanacNastavljiv()
+    Dim tx As clsTransaction, prevKupac As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, izvestaj As String, datum As Date, vozacOg As String
+    scenario = NewScenarioCode("S6K7NAS")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    vozacOg = modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID)
+
+    ' --- (b) OTPREMNICA BEZ ZBIRNE ----------------------------------------
+    Dim blokB As String, otpB As String, zbrB As String, prjB As String
+    datum = NextTestDate()
+    blokB = HldBlok("NASB-" & scenario, TEST_HLAD_ST_ID, datum, 30#, 100#, 3, 0#, 0#, 0)
+    otpB = HldOtpremnicaLanca(blokB, vozacOg, g)
+    AssertTrue Len(otpB) > 0 And Len(HldZbr(otpB)) = 0, _
+               "S6K7 nastavak: preduslov -- blok ima otpremnicu bez zbirne"
+    izvestaj = ""
+    If Len(blokB) > 0 Then prjB = modAutoHladnjaca.AutoLanacHladnjaca(blokB, izvestaj)
+    zbrB = HldZbr(otpB)
+    AssertEquals "True|" & UCase$(otpB) & "|True", _
+                 CStr(Len(prjB) > 0) & "|" & UCase$(HldOtp(blokB)) & "|" & _
+                 CStr(Len(zbrB) > 0 And UCase$(prjB) = UCase$(HldPrj(zbrB))), _
+                 "S6K7 nastavak: blok sa otpremnicom bez zbirne dobija zbirnu i prijemnicu, ne drugu otpremnicu"
+
+    ' --- (c) OTPREMNICA I ZBIRNA BEZ PRIJEMNICE, BROJ ZBIRNE DVOSMISLEN -----
+    Dim blokA As String, otpA As String, zbrA As String, prjA As String, brA As String
+    Dim blokC As String, otpC As String, zbrC As String, prjC As String
+    datum = NextTestDate()
+    blokA = HldBlok("NASA-" & scenario, TEST_HLAD_ST_ID, datum, 40#, 100#, 4, 0#, 0#, 0)
+    otpA = HldOtpremnicaLanca(blokA, vozacOg, g)
+    If Len(otpA) > 0 Then zbrA = modMasterSync.AutoZbirnaZaOtpremnicu(otpA, g)
+    brA = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrA, COL_ZBR_BROJ)
+    blokC = HldBlok("NASC-" & scenario, TEST_HLAD_ST_ID, datum, 20#, 100#, 2, 0#, 0#, 0)
+    otpC = HldOtpremnicaLanca(blokC, vozacOg, g)
+    If Len(otpC) > 0 And Len(brA) > 0 Then zbrC = HldZbirnaSaTerena(otpC, vozacOg, brA, datum, g)
+    AssertTrue Len(zbrA) > 0 And Len(zbrC) > 0 And UCase$(zbrA) <> UCase$(zbrC) And _
+               HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrC, COL_ZBR_BROJ) = brA, _
+               "S6K7 nastavak: preduslov -- dve aktivne zbirne istog ogledala pod istim brojem"
+    AssertEquals "", modDokumenta.ZbirnaIDZaBroj(brA), _
+                 "S6K7 nastavak: preduslov -- broj zbirne se ne razresava u jedan dokument"
+
+    Dim nOtp As Long, nZbr As Long
+    nOtp = Pr3BrojRedova(TBL_OTPREMNICA)
+    nZbr = Pr3BrojRedova(TBL_ZBIRNA)
+    If Len(blokA) > 0 Then prjA = modAutoHladnjaca.AutoLanacHladnjaca(blokA, izvestaj)
+    If Len(blokC) > 0 Then prjC = modAutoHladnjaca.AutoLanacHladnjaca(blokC, izvestaj)
+    AssertEquals "True|True|0|0", CStr(Len(prjA) > 0) & "|" & CStr(Len(prjC) > 0) & "|" & _
+                 CStr(Pr3BrojRedova(TBL_OTPREMNICA) - nOtp) & "|" & CStr(Pr3BrojRedova(TBL_ZBIRNA) - nZbr), _
+                 "S6K7 nastavak: blok sa otpremnicom i zbirnom dobija samo prijemnicu"
+    AssertEquals "True|" & UCase$(zbrA) & "|" & UCase$(zbrC), _
+                 CStr(Len(zbrA) > 0 And Len(zbrC) > 0) & "|" & _
+                 UCase$(HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_DETE_ZBIRNA_ROD)) & "|" & _
+                 UCase$(HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjC, COL_DETE_ZBIRNA_ROD)), _
+                 "S6K7 nastavak: svaka prijemnica je vezana na SVOJU zbirnu po ID-u, i kad broj zbirne nije jednoznacan"
+
+    ' --- PISAC SA ZADATIM RODITELJEM (odluka 7) ----------------------------
+    Dim brB As String, nPrj As Long, prjNema As String, prjDrugi As String
+    brB = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrB, COL_ZBR_BROJ)
+    nPrj = Pr3BrojRedova(TBL_PRIJEMNICA)
+    prjNema = HldPrijemnicaPisca(datum, vozacOg, brA, "ZBR-NEMA-" & scenario, scenario & "-N", g)
+    prjDrugi = HldPrijemnicaPisca(datum, vozacOg, brB, zbrA, scenario & "-D", g)
+    AssertEquals "True||", CStr(Len(brA) > 0 And Len(brB) > 0) & "|" & prjNema & "|" & prjDrugi, _
+                 "S6K7 pisac: zadat roditelj koga nema ili cijeg broja nije broj zbirne se odbija"
+    AssertEquals "0", CStr(Pr3BrojRedova(TBL_PRIJEMNICA) - nPrj), _
+                 "S6K7 pisac: odbijen roditelj ne ostavlja prijemnicu"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_S6K7_LanacNastavljiv", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, R6: PREDUSLOVI SE PROVERAVAJU PRE PRVOG UPISA (odluka 1).
+'
+' Bez MALINA_DEFAULT_KUPAC lanac ne zna kome idu zbirna i prijemnica. Da se to
+' sazna tek na zbirnoj, blok bi ostao sa izdatom otpremnicom i bez puta napred
+' -- polovican lanac. Zato lanac staje PRE otpremnice, izvestaj imenuje kljuc, a
+' blok ostaje nevezan (ceka u "Bez otpremnice", sa radnjom "Ponovi").
+' Kontrola: sa kupcem isti blok prolazi ceo lanac.
+' SABOTAZA: s6k7-kupac-proveren-kasno.
+' ============================================================
+Private Sub Test_S6K7_LanacBezKupcaNePise()
+    Dim tx As clsTransaction, prevKupac As String
+    On Error GoTo EH
+
+    Dim scenario As String, izvestaj As String, blok As String, r As String, nOtp As Long
+    scenario = NewScenarioCode("S6K7KUP")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, ""
+
+    blok = HldBlok("KUP-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 20#, 100#, 2, 0#, 0#, 0)
+    nOtp = Pr3BrojRedova(TBL_OTPREMNICA)
+    izvestaj = ""
+    r = "x"
+    If Len(blok) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertEquals "", r, "S6K7 kupac: bez kupca hladnjace lanac ne vraca prijemnicu"
+    AssertTrue InStr(1, izvestaj, "MALINA_DEFAULT_KUPAC", vbTextCompare) > 0, _
+               "S6K7 kupac: izvestaj imenuje kljuc MALINA_DEFAULT_KUPAC"
+    AssertEquals "True|0|", CStr(Len(blok) > 0) & "|" & CStr(Pr3BrojRedova(TBL_OTPREMNICA) - nOtp) & "|" & _
+                 HldOtp(blok), _
+                 "S6K7 kupac: bez kupca se ne pravi ni otpremnica -- blok ostaje nevezan"
+
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    r = ""
+    If Len(blok) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertTrue Len(r) > 0, "S6K7 kupac: kontrola -- sa kupcem isti blok prolazi ceo lanac"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_S6K7_LanacBezKupcaNePise", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, R8: ISTO JEZGRO ZBIRNE ZA MALINU I HLADNJACU (odluka 3).
+'
+' Jezgro malina auto-zbirne (AutoZbirnaZaOtpremnicu) bilo je zatvoreno iza
+' IsMalinaMode i van maline vracalo "" BEZ razloga -- ugovor jezgra to cita kao
+' "nije bilo posla", pa bi lanac van maline tiho stao posle otpremnice. Kapija je
+' sada "malina ILI hladnjacka otpremnica", strogo, istim primitivom kao
+' razvodnica. Kontrola: obicna otpremnica van maline i dalje ne dobija zbirnu, i
+' to bez razloga (nije bilo posla).
+' U malini batch stigne prvi: zbirnu nad hladnjackom otpremnicom pravi batch,
+' pa lanac pravi samo prijemnicu nad TOM zbirnom.
+' SABOTAZA: s6k7-jezgro-zbirne-samo-malina.
+' ============================================================
+Private Sub Test_S6K7_JezgroZbirneHladnjacka()
+    Dim tx As clsTransaction, prevKupac As String, prevMode As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, izvestaj As String, vozacOg As String
+    scenario = NewScenarioCode("S6K7JZ")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    SetConfigValue CFG_KEY_MALINA_MODE, "NO"
+    vozacOg = modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID)
+
+    ' --- 1) van maline: hladnjacka otpremnica dobija zbirnu ---------------
+    Dim blok As String, otpH As String, zbrH As String, gH As String
+    blok = HldBlok("JZH-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 30#, 100#, 3, 0#, 0#, 0)
+    otpH = HldOtpremnicaLanca(blok, vozacOg, g)
+    AssertTrue Len(otpH) > 0, "S6K7 jezgro: preduslov -- izdata hladnjacka otpremnica"
+    gH = "x"
+    If Len(otpH) > 0 Then zbrH = modMasterSync.AutoZbirnaZaOtpremnicu(otpH, gH)
+    AssertEquals "True|" & UCase$(otpH), CStr(Len(zbrH) > 0) & "|" & HldIzvorZbirne(zbrH), _
+                 "S6K7 jezgro: van maline hladnjacka otpremnica dobija zbirnu"
+
+    ' --- 2) kontrola: obicna otpremnica van maline ------------------------
+    Dim otpO As String, zbrO As String, gO As String
+    otpO = ZbrIzdataOtp("K7JO-" & scenario, 50#, 5#)
+    gO = "x"
+    zbrO = "x"
+    If Len(otpO) > 0 Then zbrO = modMasterSync.AutoZbirnaZaOtpremnicu(otpO, gO)
+    AssertEquals "True||", CStr(Len(otpO) > 0) & "|" & zbrO & "|" & gO, _
+                 "S6K7 jezgro: kontrola -- obicna otpremnica van maline ne dobija zbirnu, bez razloga"
+
+    ' --- 3) malina: batch pravi zbirnu, lanac samo prijemnicu nad njom ----
+    Dim blokM As String, otpM As String, zbrM As String, prjM As String, nBatch As Long, nZbr As Long
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+    blokM = HldBlok("JZM-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 25#, 100#, 2, 0#, 0#, 0)
+    otpM = HldOtpremnicaLanca(blokM, vozacOg, g)
+    If Len(otpM) > 0 Then nBatch = modMasterSync.AutoCreateZbirnaFromOtpremnice_TX(otpM)
+    zbrM = HldZbr(otpM)
+    AssertEquals "1|True", CStr(nBatch) & "|" & CStr(Len(zbrM) > 0), _
+                 "S6K7 jezgro: u malini batch pravi zbirnu nad hladnjackom otpremnicom"
+    nZbr = Pr3BrojRedova(TBL_ZBIRNA)
+    If Len(blokM) > 0 Then prjM = modAutoHladnjaca.AutoLanacHladnjaca(blokM, izvestaj)
+    AssertEquals "True|0|" & UCase$(zbrM), CStr(Len(prjM) > 0) & "|" & _
+                 CStr(Pr3BrojRedova(TBL_ZBIRNA) - nZbr) & "|" & _
+                 UCase$(HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjM, COL_DETE_ZBIRNA_ROD)), _
+                 "S6K7 jezgro: posle batch-a lanac pravi samo prijemnicu nad TOM zbirnom"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_S6K7_JezgroZbirneHladnjacka", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, R10: PWA HLADNJACKI BLOKOVI IDU U SVOJ LANAC (odluka 9).
+'
+' Malina batch je grupisao nevezane izdate blokove po stanici i danu -- i
+' hladnjacke, pa bi dva hladnjacka bloka istog dana zavrsila u JEDNOJ otpremnici
+' (a lanac drzi 1 blok = 1 lanac). Batch ih sada preskace, a sync korak
+' (AutoLanacZaNevezaneBlokove) vodi svaki kroz AutoLanacHladnjaca. Pad jednog
+' bloka se imenuje i ne obara ostale: blok na hladnjackoj stanici bez cifara u
+' ID-u ne moze da dobije broj otpremnice, i ide PRVI u prolazu.
+' Prolaz je pun (bez suzavanja), u transakciji testa: zateceni nevezani
+' hladnjacki blokovi drugih testova dobijaju lanac i nestaju sa rollback-om, pa
+' se tvrdi "bar dva", ne tacan broj.
+' SABOTAZE: s6k7-pwa-batch-guta-hladnjacke, s6k7-sync-bez-lanca.
+' ============================================================
+Private Sub Test_S6K7_PwaHladnjackiBlokovi()
+    Const ST_BEZ_BROJA As String = "ST-HLADTEST-BEZBROJA"
+    Dim tx As clsTransaction, prevKupac As String, prevMode As String
+    On Error GoTo EH
+
+    Dim scenario As String, datum As Date
+    scenario = NewScenarioCode("S6K7PWA")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    tx.AddTableSnapshot TBL_STANICE
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+    HldStanicaBezBroja ST_BEZ_BROJA
+
+    Dim hlBad As String, hl1 As String, hl2 As String
+    datum = NextTestDate()
+    hlBad = HldBlok("PWAX-" & scenario, ST_BEZ_BROJA, datum, 10#, 100#, 1, 0#, 0#, 0)
+    hl1 = HldBlok("PWA1-" & scenario, TEST_HLAD_ST_ID, datum, 30#, 100#, 3, 0#, 0#, 0)
+    hl2 = HldBlok("PWA2-" & scenario, TEST_HLAD_ST_ID, datum, 20#, 100#, 2, 0#, 0#, 0)
+    AssertTrue Len(hlBad) > 0 And Len(hl1) > 0 And Len(hl2) > 0, _
+               "S6K7 PWA: preduslov -- tri nevezana hladnjacka bloka istog dana"
+
+    ' --- 1) malina batch preskace hladnjacke blokove ----------------------
+    Dim nB As Long, gB As String
+    gB = "x"
+    If Len(hl1) > 0 Then nB = modMasterSync.AutoCreateOtpremniceFromPWA_TX(hl1, gB)
+    AssertEquals "0|||", CStr(nB) & "|" & gB & "|" & HldOtp(hl1) & "|" & HldOtp(hl2), _
+                 "S6K7 PWA: malina batch ne pravi otpremnicu od hladnjackih blokova"
+
+    ' --- 2) sync korak: svaki blok svoj lanac, pad je imenovan ------------
+    Dim nS As Long, gS As String, o1 As String, o2 As String
+    nS = modAutoHladnjaca.AutoLanacZaNevezaneBlokove(gS)
+    o1 = HldOtp(hl1)
+    o2 = HldOtp(hl2)
+    AssertTrue nS >= 2, "S6K7 PWA: sync korak pravi lanac za nevezane hladnjacke blokove"
+    AssertEquals "True|True|True", CStr(Len(HldPrj(HldZbr(o1))) > 0) & "|" & _
+                 CStr(Len(HldPrj(HldZbr(o2))) > 0) & "|" & CStr(Len(o1) > 0 And o1 <> o2), _
+                 "S6K7 PWA: svaki hladnjacki blok dobija SVOJ lanac"
+    AssertTrue Len(hlBad) > 0 And InStr(1, gS, OtkPolje(hlBad, COL_OTK_BR_DOK), vbTextCompare) > 0, _
+               "S6K7 PWA: pad bloka je imenovan po broju bloka"
+    AssertEquals "", HldOtp(hlBad), "S6K7 PWA: blok koji je pao ostaje nevezan"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_S6K7_PwaHladnjackiBlokovi", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, R11: HLADNJACKA OTPREMNICA SE NE VEZUJE RUCNO U ZBIRNU (odluka 10).
+'
+' F2 veze svaku izdatu nevezanu otpremnicu u rucnu zbirnu (DodajZbirnaIzvor_TX).
+' Hladnjacka ima svoj lanac (HLD-LANAC-01), pa bi je rucno vezivanje oduzelo
+' lancu -- isto pravilo koje VeziZaAktivnu drzi za blok (review #367). Kapija je
+' u piscu: on je jedino mesto kroz koje svaki ulaz prolazi. Nacrt nosi vozaca-
+' ogledalo, pa je hladnjaca JEDINI razlog odbijanja. Kontrola: obicna otpremnica
+' ulazi u nacrt svog vozaca.
+' SABOTAZA: s6k7-rucna-zbirna-prima-hladnjacku.
+' ============================================================
+Private Sub Test_S6K7_RucnaZbirnaOdbijaHladnjacku()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, vozacOg As String, datum As Date
+    scenario = NewScenarioCode("S6K7RZ")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    vozacOg = modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID)
+
+    Dim blok As String, otpH As String, nacrtH As String, okH As Boolean, gH As String
+    datum = NextTestDate()
+    blok = HldBlok("RZH-" & scenario, TEST_HLAD_ST_ID, datum, 30#, 100#, 3, 0#, 0#, 0)
+    otpH = HldOtpremnicaLanca(blok, vozacOg, g)
+    nacrtH = CreateZbirnaDraft_TX(Pr3HeaderVozac(TEST_PREFIX & "-ZBR-RZH-" & scenario, vozacOg), _
+                                  ZbrOcek(KLASA_I, 30#, 3#), g)
+    AssertTrue Len(otpH) > 0 And Len(nacrtH) > 0, _
+               "S6K7 rucna zbirna: preduslov -- izdata hladnjacka otpremnica i nacrt zbirne ogledala"
+    okH = True
+    If Len(otpH) > 0 And Len(nacrtH) > 0 Then okH = DodajZbirnaIzvor_TX(nacrtH, otpH, gH)
+    AssertEquals "False|True|", CStr(okH) & "|" & CStr(Len(gH) > 0) & "|" & HldZbirnaClanstvo(otpH), _
+                 "S6K7 rucna zbirna: hladnjacka otpremnica se odbija sa razlogom, clanstvo nije upisano"
+
+    Dim otpO As String, nacrtO As String, okO As Boolean, gO As String
+    otpO = ZbrIzdataOtp("K7RZO-" & scenario, 50#, 5#)
+    nacrtO = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-RZO-" & scenario), _
+                                  ZbrOcek(KLASA_I, 50#, 5#), g)
+    If Len(otpO) > 0 And Len(nacrtO) > 0 Then okO = DodajZbirnaIzvor_TX(nacrtO, otpO, gO)
+    AssertTrue okO, "S6K7 rucna zbirna: kontrola -- obicna otpremnica ulazi u nacrt"
+
+    tx.RollbackTx
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_S6K7_RucnaZbirnaOdbijaHladnjacku", eN, eD
+End Sub
+
+' --- pomocnici S6 koraka 7 (hladnjacki lanac) -- nad praznim ID-jem vracaju
+'     prazno, da crveni prolaz izvrsi iste tvrdnje kao zeleni ---
+
+' Transakcija testa lanca: sve sto lanac, nizvodni pisci i F8 diraju. Rollback
+' vraca CEO lanac, pa sinteticki dokumenti ne ostaju u tudjem merenju (KI-045).
+Private Sub HldSnimak(ByVal tx As clsTransaction)
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+End Sub
+
+' Blok kroz kanonski pisac otkupa, na datoj stanici i danu; klasa sa kolicinom
+' 0 se izostavlja.
+Private Function HldBlok(ByVal oznaka As String, ByVal stanicaID As String, ByVal datum As Date, _
+                         ByVal kolI As Double, ByVal cenaI As Double, ByVal ambI As Double, _
+                         ByVal kolII As Double, ByVal cenaII As Double, ByVal ambII As Double) As String
+    Dim h As Object
+    Set h = OtkHeaderNaStanici(TEST_PREFIX & "-OTK-" & oznaka, stanicaID)
+    h("Datum") = datum
+    HldBlok = CreateOtkup_TX(h, OtkStavke(kolI, cenaI, ambI, kolII, cenaII, ambII))
+End Function
+
+' Otpremnica bloka -- ISTI pisac i isto zaglavlje koje pravi lanac, za
+' medjustanja (otpremnica bez zbirne, otpremnica sa zbirnom bez prijemnice).
+Private Function HldOtpremnicaLanca(ByVal otkupID As String, ByVal vozacID As String, _
+                                    ByRef outG As String) As String
+    Dim h As Object, izvori As Collection, stanica As String, datum As Date
+    If Len(otkupID) = 0 Or Len(vozacID) = 0 Then Exit Function
+    stanica = OtkPolje(otkupID, COL_OTK_STANICA)
+    datum = CDate(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM))
+    Set h = CreateObject("Scripting.Dictionary")
+    h("Datum") = datum
+    h("StanicaID") = stanica
+    h("VozacID") = vozacID
+    h("KulturaID") = OtkPolje(otkupID, COL_OTK_KULTURA)
+    h("TipAmbalaze") = OtkPolje(otkupID, COL_OTK_TIP_AMB)
+    h("BrojOtpremnice") = modBrojevi.GenerateBrojOtpremnice(stanica, datum)
+    Set izvori = New Collection
+    izvori.Add otkupID
+    HldOtpremnicaLanca = CreateOtpremnicaIzIzvora_TX(h, izvori, outG)
+End Function
+
+' Druga zbirna ISTOG vozaca pod ZADATIM brojem -- uvoz sa terena (KR-001,
+' brojSaTerena), kroz kanonski pisac.
+Private Function HldZbirnaSaTerena(ByVal otpID As String, ByVal vozacID As String, _
+                                   ByVal broj As String, ByVal datum As Date, _
+                                   ByRef outG As String) As String
+    Dim h As Object, izvori As Collection
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", datum
+    h.Add "VozacID", vozacID
+    h.Add "BrojZbirne", broj
+    h.Add "KupacID", TEST_KUP_ID
+    Set izvori = New Collection
+    izvori.Add otpID
+    HldZbirnaSaTerena = CreateZbirnaIzIzvora_TX(h, izvori, outG, True)
+End Function
+
+' Prijemnica kroz pisac sa zadatim roditeljem (odluka 7), bez gajbi.
+Private Function HldPrijemnicaPisca(ByVal datum As Date, ByVal vozacID As String, _
+                                    ByVal brZbr As String, ByVal roditelj As String, _
+                                    ByVal oznaka As String, ByRef outG As String) As String
+    Dim errN As Long
+    If Len(brZbr) = 0 Then Exit Function
+    HldPrijemnicaPisca = SavePrijemnicaMulti_TX(datum:=datum, kupacID:=TEST_KUP_ID, vozacID:=vozacID, _
+        brojPrij:=TEST_PREFIX & "-PK7W-" & oznaka, brojZbirne:=brZbr, vrstaVoca:=TEST_VRSTA, _
+        sortaVoca:=TEST_SORTA, kolicinaI:=1#, cenaI:=1#, tipAmb:="", kolAmb:=0, _
+        kolAmbVracena:=0, outErrNum:=errN, outGreska:=outG, zbirnaRoditeljID:=roditelj)
+End Function
+
+' Hladnjacka stanica bez cifara u ID-u: lanac ne moze da joj da broj otpremnice.
+Private Sub HldStanicaBezBroja(ByVal stanicaID As String)
+    Dim rowData As Variant
+    If RowExists(TBL_STANICE, "StanicaID", stanicaID) Then Exit Sub
+    rowData = BlankRow(TBL_STANICE)
+    SetRequiredField rowData, TBL_STANICE, "StanicaID", stanicaID
+    SetRequiredField rowData, TBL_STANICE, "Naziv", "TEST HLADNJACA BEZ BROJA"
+    SetOptionalField rowData, TBL_STANICE, "Mesto", "Test Mesto"
+    SetOptionalField rowData, TBL_STANICE, "Aktivan", "Aktivan"
+    SetOptionalField rowData, TBL_STANICE, COL_STA_JE_HLADNJACA, "Da"
+    RequireAppend TBL_STANICE, rowData, "HldStanicaBezBroja"
+End Sub
+
+Private Function HldOtp(ByVal otkupID As String) As String
+    If Len(otkupID) = 0 Then Exit Function
+    HldOtp = modDokumenta.OtpremnicaZaOtkup(otkupID)
+End Function
+
+Private Function HldZbr(ByVal otpID As String) As String
+    If Len(otpID) = 0 Then Exit Function
+    HldZbr = modDokumenta.AktivnaZbirnaZaOtpremnicu(otpID)
+End Function
+
+' Aktivna prijemnica cija je roditeljska zbirna (po ID-u) data.
+Private Function HldPrj(ByVal zbrID As String) As String
+    If Len(zbrID) = 0 Then Exit Function
+    HldPrj = Trim$(NzToText(LookupActiveID(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD, zbrID, COL_PRJ_ID)))
+End Function
+
+' Clanstvo otpremnice u bilo kojoj zbirnoj (i u NACRTU): "" = nije clan.
+Private Function HldZbirnaClanstvo(ByVal otpID As String) As String
+    Dim redovi As Collection
+    If Len(otpID) = 0 Then Exit Function
+    Set redovi = FindRows(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, otpID)
+    If redovi Is Nothing Then Exit Function
+    If redovi.count > 0 Then HldZbirnaClanstvo = CStr(redovi.count)
+End Function
+
+Private Function HldPolje(ByVal tbl As String, ByVal idCol As String, ByVal id As String, _
+                          ByVal col As String) As String
+    If Len(id) = 0 Then Exit Function
+    HldPolje = Trim$(NzToText(GetValueByKey(tbl, idCol, id, col)))
+End Function
+
+Private Function HldDatum(ByVal tbl As String, ByVal idCol As String, ByVal id As String, _
+                          ByVal col As String) As String
+    Dim v As Variant
+    If Len(id) = 0 Then Exit Function
+    v = GetValueByKey(tbl, idCol, id, col)
+    If IsDate(v) Then HldDatum = Format$(CDate(v), "yyyy-mm-dd")
+End Function
+
+Private Function HldZbrIzdata(ByVal zbrID As String) As String
+    If Len(zbrID) = 0 Then Exit Function
+    HldZbrIzdata = CStr(modDokumenta.ZbirnaJeIzdata(zbrID))
+End Function
+
+' Jedini izvor zbirne (UCase); vise ili nijedan je ishod, ne pad testa.
+Private Function HldIzvorZbirne(ByVal zbrID As String) As String
+    Dim c As Collection
+    If Len(zbrID) = 0 Then Exit Function
+    Set c = modDokumenta.IzvoriZbirne(zbrID)
+    If c.count = 1 Then
+        HldIzvorZbirne = UCase$(CStr(c(1)))
+    Else
+        HldIzvorZbirne = "<" & CStr(c.count) & " izvora>"
+    End If
+End Function
+
+' "I:kg/gajbe|II:kg/gajbe" iz read-modela otpremnice (ocekivanje = izvedeno iz izvora).
+Private Function HldKlaseOtp(ByVal otpID As String) As String
+    Dim prog As Object, k As Object, kl As Variant, s As String
+    If Len(otpID) = 0 Then Exit Function
+    Set prog = modDokumenta.GetOtpremnicaProgress(otpID)
+    For Each kl In Array(KLASA_I, KLASA_II)
+        If prog.Exists(CStr(kl)) Then
+            Set k = prog(CStr(kl))
+            If Len(s) > 0 Then s = s & "|"
+            s = s & CStr(kl) & ":" & CStr(k("ocekivano")) & "/" & CStr(k("ocekivanoAmb"))
+        End If
+    Next kl
+    HldKlaseOtp = s
+End Function
+
+' Isto, iz stavki zbirne (strog citac ZbirnaPoKlasi).
+Private Function HldKlaseZbr(ByVal zbrID As String) As String
+    Dim pk As Object, kl As Variant, s As String
+    If Len(zbrID) = 0 Then Exit Function
+    Set pk = modDokumenta.ZbirnaPoKlasi(zbrID)
+    For Each kl In Array(KLASA_I, KLASA_II)
+        If pk.Exists(UCase$(CStr(kl))) Then
+            If Len(s) > 0 Then s = s & "|"
+            s = s & CStr(kl) & ":" & CStr(pk(UCase$(CStr(kl)))(0)) & "/" & _
+                CStr(pk(UCase$(CStr(kl)))(1))
+        End If
+    Next kl
+    HldKlaseZbr = s
+End Function
+
+' Isto, iz stavki prijemnice.
+Private Function HldKlasePrj(ByVal prj As String) As String
+    Dim d As Variant, r As Long, kl As Variant, s As String
+    If Len(prj) = 0 Then Exit Function
+    For Each kl In Array(KLASA_I, KLASA_II)
+        r = S6StavkaRed(prj, CStr(kl), d)
+        If r > 0 Then
+            If Len(s) > 0 Then s = s & "|"
+            s = s & CStr(kl) & ":" & _
+                S6Broj(d(r, RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, "HldKlasePrj"))) & "/" & _
+                S6Broj(d(r, RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOL_AMB, "HldKlasePrj")))
+        End If
+    Next kl
+    HldKlasePrj = s
+End Function
+
+' "I:cena|II:cena" stavki prijemnice.
+Private Function HldCenePrj(ByVal prj As String) As String
+    Dim d As Variant, r As Long, kl As Variant, s As String
+    If Len(prj) = 0 Then Exit Function
+    For Each kl In Array(KLASA_I, KLASA_II)
+        r = S6StavkaRed(prj, CStr(kl), d)
+        If r > 0 Then
+            If Len(s) > 0 Then s = s & "|"
+            s = s & CStr(kl) & ":" & _
+                S6Broj(d(r, RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA, "HldCenePrj")))
+        End If
+    Next kl
+    HldCenePrj = s
+End Function
+
+' Noga punih dokumenta: "broj redova|kolicina"; prazan ID = "0|0".
+Private Function HldNoga(ByVal dokID As String, ByVal dokTip As String) As String
+    If Len(dokID) = 0 Then
+        HldNoga = "0|0"
+        Exit Function
+    End If
+    HldNoga = CStr(AmbNoviBrojRedova(dokID, dokTip, AMB_VK_UZ_ROBU)) & "|" & _
+              CStr(AmbNoviKolicina(dokID, dokTip, AMB_VK_UZ_ROBU))
+End Function
+
+' Da li je broj CEO token izvestaja. InStr ne valja: broj otpremnice ("90001/...")
+' je podniz broja zbirne ogledala ("S90001/..."), a broj prijemnice ("1/...")
+' podniz oba.
+Private Function HldImaBroj(ByVal tekst As String, ByVal broj As String) As Boolean
+    Dim t As Variant
+    If Len(broj) = 0 Then Exit Function
+    For Each t In Split(Replace(Replace(Replace(tekst, ",", " "), ";", " "), ":", " "), " ")
+        If StrComp(CStr(t), broj, vbTextCompare) = 0 Then
+            HldImaBroj = True
+            Exit Function
+        End If
+    Next t
+End Function
+
+' Razlog kojim JEZGRO storna odbija blok, u transakciji koja se odmah vraca:
+' "" = jezgro je pustilo storno (pa je i to vraceno).
+Private Function HldRazlogStornaBloka(ByVal otkupID As String) As String
+    Dim t As clsTransaction
+    If Len(otkupID) = 0 Then Exit Function
+    Set t = New clsTransaction
+    t.BeginTx
+    t.AddTableSnapshot TBL_OTKUP
+    t.AddTableSnapshot TBL_AMBALAZA
+    t.AddTableSnapshot TBL_NOVAC
+    t.AddTableSnapshot TBL_STORNO_ZURNAL
+    On Error Resume Next
+    modStorno.StornoOtkup otkupID, t
+    HldRazlogStornaBloka = Err.description
+    Err.Clear
+    On Error GoTo 0
+    t.RollbackTx
+End Function
 
 ' Red liste Nedovrseno za dati poslovni broj; Nothing = nije u listi.
 Private Function NedRedZaRef(ByVal ref As String) As Object

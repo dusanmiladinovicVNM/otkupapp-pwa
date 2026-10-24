@@ -117,9 +117,13 @@ jedini autoritet (prekidač `AUTO_PRIJEMNICA_HLADNJACA` se briše), a ručni put
 primaju hladnjački blok ni hladnjačku otpremnicu. Lanac je **nastavljiv**: svaki
 korak je idempotentan po kanonskom roditelju, pa „Ponovi auto-lanac" kreće od prvog
 koraka koji fali. Vlasnik: `modAutoHladnjaca.AutoLanacHladnjaca`; kapije ručnih puteva
-`modScrDokumenti.VeziZaAktivnu` i `modDokumenta.DodajZbirnaIzvor_TX`.
-Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 7" (do koda,
-sve osim prvog reda je PLAN).
+`modScrDokumenti.VeziZaAktivnu` i `modDokumenta.DodajZbirnaIzvor_TX`. Prijemnicu
+pisac vezuje za zbirnu po ID-u (`SavePrijemnicaMulti_TX`, `zbirnaRoditeljID`): broj
+zbirne ume da bude dvosmislen (KR-001). Nedovršen lanac (otpremnica bez zbirne ili
+zbirna bez prijemnice) vidi Oporavak, lista „Nedovršeno", red `LANAC`; PWA malina
+batch hladnjačke blokove preskače, a sync ih vodi kroz lanac blok po blok.
+Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 7" (kod:
+„Tok koda, deo 2", stavka 202 u `docs/STANJE_REFAKTORA.md`).
 
 **Storno nije brisanje.** Dokument-tabele imaju `Stornirano` kolonu; storniran red
 ostaje u tabeli i izlazi iz svih agregata. Zato „aktivan" nije isto što i

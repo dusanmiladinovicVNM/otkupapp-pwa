@@ -138,7 +138,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblKupci`: `modGoldenTests`, `modTestBanka`
 - `tblKutije`: `modTest`
 - `tblPoruke`: `modTest`
-- `tblStanice`: `modGoldenTests`, `modTest`, `modTestBanka`
+- `tblStanice`: `modBusinessFlowProTests`, `modGoldenTests`, `modTest`, `modTestBanka`
 - `tblTipAmbalaze`: `modBusinessFlowProTests`, `modTest`, `modTestPalete`
 
 ## Upisi koje mapa NE MOZE da pripise (tabela iz promenljive)
