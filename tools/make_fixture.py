@@ -2360,6 +2360,38 @@ SEED["tblPrijemnicaStavke"] = [
     for red in SEED["tblPrijemnica"]
 ]
 
+# LINIJE FAKTURE NAD PRIJEMNICOM SE IZVODE IZ KESA ZAGLAVLJA (S6 korak 5, plan
+# 14.55, odluka 3).
+#
+# Od koraka 5 je fakturisanost IZVEDENA: stavka je fakturisana kad ima aktivnu
+# liniju tblFakturaStavke sa svojim PrijemnicaStavkaID (FAK-LIN-03), a kes
+# Fakturisano/FakturaID na zaglavlju niko ne cita. Fixture je do sada fakturisanu
+# prijemnicu drzao SAMO u kesu, bez linije -- pa bi posle koraka 5 svaka postala
+# nefakturisana.
+#
+# Ista cinjenica, zapisana na drugom mestu: zaglavlje sa FakturaID POSTOJECE
+# fakture dobija liniju na svoju jedinu stavku (PRS-<PrijemnicaID>, gore), sa
+# brojkama te stavke. Red bez FakturaID-a (PRJ-FAK-2, kes "Da" bez veze) i red
+# koji pokazuje na fakturu koje nema (PRJ-SLED-F2 -> FAK-NEMA-GA) liniju NE
+# dobijaju: kes posle koraka 5 ne odlucuje nista (R4, KI-038). Kes kolone ostaju
+# do koraka 8 -- bas one su dokaz da ih niko ne cita.
+_FAK_STORNO = {r["FakturaID"]: r.get("Stornirano", "") for r in SEED["tblFakture"]}
+SEED["tblFakturaStavke"] = SEED["tblFakturaStavke"] + [
+    {
+        "StavkaID": "FST-PRS-" + str(red["PrijemnicaID"]),
+        "FakturaID": red["FakturaID"],
+        "PrijemnicaID": red["PrijemnicaID"],
+        "Kolicina": red["Kolicina"],
+        "Cena": red.get("Cena", 0),
+        "Klasa": red.get("Klasa") or "I",
+        "BrojPrijemnice": red["BrojPrijemnice"],
+        "Stornirano": _FAK_STORNO[red["FakturaID"]],
+        "PrijemnicaStavkaID": "PRS-" + str(red["PrijemnicaID"]),
+    }
+    for red in SEED["tblPrijemnica"]
+    if red.get("FakturaID") in _FAK_STORNO
+]
+
 # tblOtpremnicaIzvori SE IZVODI IZ STARE VEZE Otkup.OtpremnicaID (review #362).
 #
 # Od #362 operativni citaoci (roba po vozacu, roba po otkupnom mestu, stampa)
@@ -2423,7 +2455,10 @@ RENAME_COLS = {
 ENSURE_COLS = {
     "tblKorisnici": ["KorisnikID", "Username", "ImePrezime", "PIN", "Uloga",
                      "Aktivan", "StanicaID"] + KOR_OBLASTI,
-    "tblFakturaStavke": ["PreradaID", "BrojPrerade", "UtovarID"],
+    # S6 korak 5: PrijemnicaStavkaID je kanonska linija prijemnice, na KRAJU
+    # kanona, a donor (stari fixture) je nema. Sejanje linija izvedenih iz kesa
+    # (gore) ide po imenu, pa bi bez nje red pao.
+    "tblFakturaStavke": ["PreradaID", "BrojPrerade", "UtovarID", "PrijemnicaStavkaID"],
     # Revizija #13: snapshot roka na lotu (prazno u fixture-u =
     # fallback putanja RokIstekaZaTip, koju test 162 i tvrdi).
     "tblPrerada": ["DatumIsteka"],

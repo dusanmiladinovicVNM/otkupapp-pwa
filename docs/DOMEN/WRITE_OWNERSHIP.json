@@ -65,7 +65,6 @@
   },
   "tblFakturaStavke": {
     "row_owner": [
-      "modDokumenta",
       "modFaktura",
       "modUtovar"
     ],
@@ -222,7 +221,6 @@
   "tblPrijemnica": {
     "row_owner": [
       "modDokumenta",
-      "modFaktura",
       "modStorno"
     ],
     "schema_owner": [],

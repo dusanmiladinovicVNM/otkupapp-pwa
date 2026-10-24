@@ -2242,7 +2242,7 @@ Public Function ReportPrijemniceKupca(ByVal kupacID As String, _
     On Error GoTo EH
 
     Dim data As Variant
-    data = GetPrijemniceByKupac(kupacID, datumOd, datumDo, False)
+    data = GetPrijemniceByKupac(kupacID, datumOd, datumDo)
     If IsEmpty(data) Or Not IsArray(data) Then Exit Function
 
     Dim cDat As Long, cBr As Long, cZb As Long, cVr As Long, cId As Long

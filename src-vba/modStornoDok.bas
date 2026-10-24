@@ -239,7 +239,7 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
                 Else
                     StornoRazlog = NijePronadjen(broj)
                 End If
-            ElseIf modStorno.PrijemnicaJeFakturisana(Trim$(docID), prjFak) Then
+            ElseIf modFaktura.PrijemnicaJeFakturisana(Trim$(docID), prjFak) Then
                 StornoRazlog = modPoruke.Poruka("STORNO_ERR_PRJ_FAKTURISANA") & " " & prjFak
             End If
 

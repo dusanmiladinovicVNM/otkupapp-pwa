@@ -1741,8 +1741,8 @@ End Function
 ' Odluka "da li bi jaki kljucevi zavrsili ovaj red" je do sada zivela SAMO kao
 ' dve grane u petlji CountStrongKeyReadyBankaImport. Citac mreze (ekran Uvoz
 ' izvoda) trazi istu odluku po redu, pa bi je morao prepisati -- a prepisana
-' kopija se razidje. Isti obrazac kao PrijemnicaDostupna izdvojena iz
-' IsPrijemnicaAvailableForFaktura.
+' kopija se razidje. Isti obrazac kao modFaktura.PrijemnicaDostupna (jedno
+' pravilo koje pitaju i citac mreze i pisac).
 '
 ' Vraca 0-bazirano:
 '   0 smer      BIM_SMER_UPLATA | BIM_SMER_ISPLATA | BIM_SMER_NEJASAN

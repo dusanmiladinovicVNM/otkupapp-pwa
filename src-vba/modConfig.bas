@@ -847,6 +847,10 @@ Public Const COL_FS_BROJ_PRERADE As String = "BrojPrerade"
 ' Krug 5: stavka GP fakture nastaje IZ utovarne stavke -- UtovarID je
 ' canonical veza faktura <-> fizicka isporuka (SEF datum, storno).
 Public Const COL_FS_UTOVAR_ID As String = "UtovarID"
+' S6 korak 5: KANONSKA linija prijemnice (FAK-LIN-02). PrijemnicaID linije
+' znaci DOKUMENT; tacna klasa i kolicina su stavka koju ovaj kljuc imenuje.
+' GP linija ga nema. Kolona je na KRAJU tabele -- pisci upisuju po imenu.
+Public Const COL_FS_PRIJEMNICA_STAVKA_ID As String = "PrijemnicaStavkaID"
 
 ' --- Tipovi ambalaze ---
 ' Nema ugradjenih tipova: tip je zatvoren skup iz tblTipAmbalaze (AMB-INV-12,

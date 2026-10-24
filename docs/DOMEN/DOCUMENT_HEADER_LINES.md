@@ -816,8 +816,9 @@ trace ×4, audit ×4.
 > `tblNovac`. Keš koji storno ručno čisti je drugi izvor iste istine.
 
 **Vlasnik upisa:** `modDokumenta`. `modFaktura` i `modStorno` gube upis u
-prijemnicu kad se kolone obrišu (S6, korak 8; danas pišu `Fakturisano`/`FakturaID`
-na redu klase).
+prijemnicu u S6 koraku 5: status se od tada izvodi (`FAK-LIN-03`, §6.6), a kolone
+`Fakturisano`/`FakturaID` ostaju u šemi bez čitaoca i pisca do koraka 8, kada se
+brišu.
 
 ---
 
@@ -978,6 +979,25 @@ PrijemnicaStavka sme biti fakturisana najvise jednom
 FakturaStavka.PrijemnicaStavkaID mora postojati i biti aktivna
 Prijemnica.KupacID == Faktura.KupacID
 ```
+
+Imena (S6 korak 5, plan §14.55 „Korak 5"):
+
+- **`FAK-LIN-01`** — stavka prijemnice je na najviše jednoj AKTIVNOJ liniji fakture
+  (`Stornirano <> Da`). Drži ga pisac `CreateFaktura` pre prvog upisa, a čitač
+  `modFaktura.FakturisanostPoPrijemnici` ga proverava fail-closed.
+- **`FAK-LIN-02`** — aktivna linija prijemnice nosi `PrijemnicaStavkaID` postojeće
+  stavke, i to stavke dokumenta koji nosi njen `PrijemnicaID`. Nosi i neprazan
+  `FakturaID` fakture čije zaglavlje postoji **tačno jednom** i **nije stornirano**
+  (review `#439` P2-2): linija bez žive fakture bi stavku zauzimala za pisca, a
+  mreža bi je nudila kao slobodnu. GP linija (bez `PrijemnicaID`) nije linija
+  prijemnice.
+- **`FAK-LIN-03`** — fakturisanost se IZVODI iz aktivnih linija: stavka je
+  fakturisana ⇔ ima aktivnu liniju, a dokument je `NE` / `DELIMIČNO` / `DA`. Keš
+  na zaglavlju se ne čita ni piše; storno fakture time sam vraća dokument u `NE`.
+  **Zajednička faktura** (linije više prijemnica na jednom računu) je račun, ne
+  dokument: dug se vodi na fakturi. Lista dokumenata zato takvom dokumentu
+  pokazuje plaćanje fakture, ali ne i ostatak, a detalj kaže „zajednička"
+  (odluka operatera uz review `#439` P2-1).
 
 ### 6.7 Ambalaža je ledger
 

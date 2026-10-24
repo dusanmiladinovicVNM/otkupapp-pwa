@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 20.10.2026 (stavka 181: merge `#437`, S6 je 3/8; red AMB-10 zatvoren posle provere svih podkoraka).
+**Ažurirano:** 22.10.2026 (stavka 189: S6 korak 5 na review-u; `KI-038` i `KI-040` zatvoreni).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 3/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · **korak 4 (storno na nivou dokumenta, `KI-031` kao kapija) na review-u** (`#438`, stavke 182–186: dve ručne provere, nalazi N1, N2 i N5 zatvoreni u istom PR-u, FULL 12/12, compile potvrđen; čeka merge), grana `claude/s6-korak4-storno` |
+| **S6 prijemnica** | ⏳ **u toku, 4/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · **korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) na review-u** (stavke 188–191; review krug 1: arhitektura GO, dva P2 ispravljena u istom PR-u; FULL 12/12, dokaz 42/42, compile i ručna provera prošli; čeka merge), grana `claude/s6-korak5-faktura` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -6786,6 +6786,235 @@
      - **Usput:** na disku C: je bilo 467–923 MB slobodno. Po merenju iz `#434` lažni padovi kreću ispod
        ~150 MB.
      - **Sledeći brojevi:** stavka 187 (zapis merge-a, na grani koraka 5) · test 262 · KI-041.
+187. **Merge `#438`, S6 korak 4/8 zatvoren** (22.10.2026). Zapis ide ovde, a ne u `#438`, po obrascu stavki 173,
+     177 i 181.
+
+     - **Ručne provere:** dva kruga (stavke 185 i 186) i kratka provera N5 na ekranu (Oporavak 6 → 7, stavka 186).
+     - **Compile:** operater je javio „compiles" (22.10.2026); `vba_gate --require-green --require-compile` =
+       „dokazano: izvor 3fc553d25481".
+     - **Merge** 22.10.2026 (10:51:41 UTC) kao **`992e1f45`**, na **izričit zahtev operatera**, sa
+       `--match-head-commit` na head `68d21c24`.
+       - Static CI je `success` na tom head-u (check run 119781791238, izmereno).
+       - Stablo `main`-a posle merge-a jednako je stablu `68d21c24` (`6957db5e`, izmereno).
+       - Grana `claude/s6-korak4-storno` nije obrisana (izmereno).
+     - **Nezavisni review posle ručne provere:** `CODE GO` i `MERGE GO`, 9,6/10, P0 = 0, P1 = 0. Jedini P2 je postao
+       `KI-040`; odluka operatera je da ga zatvara korak 5 (stavka 186).
+     - **Bazni brojevi na `main` = `992e1f45`** (FULL 12/12 nad izvorom `3fc553d25481`; posle njega su ušli samo docs):
+       - RunAllTests 261/0, BFP 2609/0, Banka 241/0, Storno 111/0, Palete 97;
+       - Faktura 35/35, Agrohemija 25/25, SheetsJson 72;
+       - katalog sabotaža 913 (`POZNATI_NALAZI` 9);
+       - otisak šeme `106AC27A`; potpis fixture-a `27f6230a5e8ca5be` (drugi potpis → `make_fixture` PRE trijaže).
+     - **Tabela „Gde smo" je ažurirana u istom commitu:** S6 je 4/8, sledeći je korak 5.
+     - **Usput, okruženje:** u 13:09 je `git checkout -b claude/s6-korak5-faktura` ostavio `.git/HEAD`, ref grane i
+       njen reflog pune NUL bajtova (disk C: pun u trenutku upisa). Vraćeni su na vrednosti koje beleži reflog
+       `HEAD`-a (grana sa `992e1f45`); `git fsck --connectivity-only` je čist, radno stablo netaknuto.
+     - **Sledeći brojevi:** stavka 188 (pre-flight koraka 5) · stavka 189 (kod) · test 262 · KI-041.
+     - **Sledeći je S6 korak 5** (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` kao
+       kapije), na grani `claude/s6-korak5-faktura` sa `992e1f45`.
+188. **S6 korak 5 — pre-flight nad `992e1f45`, odluke 1–7, PRE koda** (22.10.2026). Pun zapis je u §14.55,
+     „Korak 5" (verdikt, BUSINESS EVENTS, pisci i čitaoci pre i posle, ugovor izvedenog statusa, obim, acceptance
+     contract).
+
+     - **Verdikt:** `IDENTITY` i `DOWNSTREAM` su bili `GAP`, a zatvaraju ih odluke 2, odnosno 1, 5 i 6. Ostale ose su
+       `PROVEN`, osim `PLATFORM`, koja je `N/A`. `CARDINALITY` nosi ⚠ edge case: dokument na dve fakture.
+     - **Najveći nalaz — izmeren sondom** (sveska iz `run_vba --compile-only --keep`, pravi pisac):
+       - fakturisanje dokumenta koji pravi `SavePrijemnicaMulti_TX` je danas POKVARENO;
+       - `CreateFaktura` čita količinu, cenu i klasu sa zaglavlja, a ono je od koraka 2 prazno. Ishod je „Kolicina mora
+         biti veca od nule", bez ijednog upisa;
+       - mreža Fakturisanja isti dokument prikazuje kao slobodan, sa 0 kg;
+       - Faktura suite je zelena (35/35) samo zato što seje zaglavlje sa brojkama.
+     - **`KI-038` reprodukovan:** `PRJ-FAK-2` (keš „Da" bez `FakturaID`). Kapija storna kaže „fakturisana", a lista
+       „Nefakturisano".
+     - **`KI-040` reprodukovan kroz API:** `RunPrijemnicaCorrection(ISPRAVKA, PRJ-FAK-1)` je odbijen sa razlogom, ali
+       je ostavio `tblStornoVeze +1`.
+     - **Ostali nalazi:**
+       - `RelinkFakturaStavke` je neuhranjen i nedostižan: `OsirocenoOd` niko ne puni, a fakturisana prijemnica se ne
+         stornira;
+       - `GetPrijemniceByKupac(samoNefakturisano)` nijedan pozivalac ne zove sa `True`;
+       - health check 4, 6c i 9 čitaju keš i linijska polja zaglavlja;
+       - `PreviewPrijemnica` i dalje obećava „(faktura/stavke se oslobadjaju)";
+       - SEF, izvod i uplata keš prijemnice ne čitaju.
+     - **Testovi koje korak vraća:** danas ih nema u `src-vba/`, osim komentara (izmereno):
+       - `Test_DuplicateFakturaIsBlocked` (BFP `:626`, komentar);
+       - `Test_OpenFaktureExcludeStornirano` (`:1999`, komentar);
+       - `Test_DokumentaReadHelpersExcludeStornirano` (nijedan trag u kodu).
+
+       Tela su pročitana iz `d787d91c^` i `bf04e3e0^`.
+     - **Odluke operatera** (22.10.2026), sve po preporuci:
+       1. keš niko ne čita ni piše;
+       2. ulaz je `PrijemnicaStavkaID`, a red mreže je stavka;
+       3. fixture izvodi linije iz keša;
+       4. relink se briše;
+       5. nova pilula „Delim. fakturisano";
+       6. health check prelazi na izveden status;
+       7. `KI-039` ostaje van.
+     - **Usput (okruženje):** u 13:09 je disk C: bio pun u trenutku upisa, pa su `.git/HEAD`, ref grane i reflog
+       ostali puni NUL bajtova (stavka 187). Pri merenju je bilo 4,6–5,6 GB slobodno.
+     - **Sledeći brojevi:** stavka 189 (kod) · test 262 · KI-041.
+189. **S6 korak 5 — kod: faktura po `PrijemnicaStavkaID`, fakturisanost izvedena; `KI-038` i `KI-040` zatvoreni**
+     (22.10.2026). Grana `claude/s6-korak5-faktura`, ispravke plana su u §14.55, „Korak 5".
+
+     - **Crveno** (`e322bd4f`, test `f621e2d6`) je tačno izvedeno iz diff-a: BFP **2670 / 34** i RunAllTests
+       **262 / 2** (261 i 262), po imenu.
+       - BFP: 34 od 61 nove tvrdnje:
+         - `Test_DuplicateFakturaIsBlocked` 4, `Test_OpenFaktureExcludeStornirano` 3;
+         - `DveKlaseIzStavki` 5, `DelimicnoFakturisanje` 9;
+         - `FakturaOdbijaNevazeceStavke` 1 (samo KONTROLA: odbijanja su zelena i pre ispravke);
+         - `KesNeOdlucuje` 5, `OkvirOdbijaFakturisanuPreZapisa` 1 (`KI-040`: `tblStornoVeze +3`);
+         - `StornoFakturePaPrijemnice` 6;
+         - deo `GetPrijemniceByKupac` je zelen.
+       - RunAllTests: 261 pada na novoj tvrdnji pregleda lanca, a 262 na prvoj tvrdnji (`KI-038`).
+       - Prvi crveni prolaz je dao 33, a ne 34. Razlika je izmerena i objašnjena: kvar testa iz §14.55 „Korak 5",
+         ispravka 1. Usput je `KI-041`.
+     - **Ispravka** (`8130b6f5`):
+       - **Čitač izvedenog statusa.** Jedno telo, `modFaktura.FakturisanostPoPrijemnici` i
+         `PrijemnicaJeFakturisana` (`FAK-LIN-01..03`, fail-closed). Pitaju ga:
+         - kapija storna (jezgro, F8, okvir, uvid, pregled lanca);
+         - mreža Fakturisanja (red po STAVCI) i pisac;
+         - lista dokumenata (pilula „Delim. fakturisano", čip „Nefakturisane");
+         - detalj izveštaja i health check 4.
+
+         Keš sa zaglavlja niko ne čita ni piše: ostaje samo kao konstanta u `modConfig` (grep).
+       - **Pisac.** `CreateFaktura` prima `PrijemnicaStavkaID`, a brojke čita sa stavke. Linija nosi stavku
+         (`tblFakturaStavke.PrijemnicaStavkaID`, kolona na kraju, otisak šeme `4A418441`). Transakcija snima
+         fakture, linije i novac. Seam `CreateFakturaPadniTest` stoji na kraju jezgra i ide u `ResetSeamova`.
+       - **`KI-040`:** okvir odbija fakturisanu pre `CreateCorrectionContext` (osim REŠI KASNIJE), istim tekstom
+         kao jezgro (`modStorno.FakturisanaPrijemnicaRazlog`).
+       - **Storno fakture** više ne piše prijemnicu: `ReleasePrijemnicaFromFaktura` je obrisan, a prijemnica
+         postaje nefakturisana sama.
+       - **Obrisano:** `RelinkFakturaStavke` (odluka 4), `IsPrijemnicaAvailableForFaktura`, parametar
+         `samoNefakturisano`, `ColFakturaID` i `S6K4SejStavkuFakture`.
+       - **Fixture** izvodi 5 linija iz keša (odluka 3). Potpis je **`49f55dfc03b134b3`** (bio je
+         `27f6230a5e8ca5be`); stari fixture je sačuvan kao `tests/fixtures/otkup_test_pre_k5.xlsm`.
+       - **`WRITE_OWNERSHIP`:** `tblFakturaStavke` bez `modDokumenta`, `tblPrijemnica` bez `modFaktura`.
+         `WHO_WRITES` je regenerisan.
+       - **Testovi čija se premisa menja:** Faktura suite (6 testova), `T_Fak_DostupnostSePrenosiURedu` (razlaz
+         prikaz/pravilo nad podmetnutom linijom), testovi korpe (identitet `PRS-…`) i
+         `Test_S6K4_FakturisanaSeOdbija`. Nov je `Test_S6K5_PadPosleUpisaVracaFakturu`.
+     - **Sabotaže:** katalog **913 → 931**.
+       - 20 novih `s6k5-*`;
+       - presidrene `s6k4-faktura-kapija-u-jezgru`, `s6k4-faktura-stavka-prolazi` i `fakture-korpa-uklanja-prvu`;
+       - povučene `s6k4-faktura-kes-prolazi` i `fakture-dostupnost-bez-oznake` (grana keša je obrisana po odluci).
+
+       Statička sonda je **23/23**: svaka se primenjuje, pravila nad fajlovima ostaju čista, a `--vrati` vraća
+       izvor bit-identično (`98cb69e09fe56943`).
+     - **Jeftine kapije: sve zelene.** Ceo `static.yml` bez `npm ci` i JS harness-a (JS nije diran), plus
+       `popis_citalaca --check` i `sabotaza --proveri-sidra` / `--self-test`.
+     - **Očekivani brojevi, izvedeni iz diff-a — NIJE izmereno** (`run_vba` čeka reviewer GO):
+       - RunAllTests **262/0**;
+       - BFP **2676/0** (2609 + 70 novih tvrdnji − 3 iz bloka keša u `Test_S6K4_FakturisanaSeOdbija`);
+       - Faktura **39/39** (35 + 3 u testu kanonskih vrednosti + 1 preduslov u testu već fakturisane);
+       - Banka 241, Storno 111, Palete 97, Agrohemija 25, SheetsJson 72 — nedirane suite, ali fixture ima 5 novih
+         linija fakture, pa je to pretpostavka, ne merenje;
+       - dokaz: 20 novih, 3 presidrene i one čiji je test diran.
+     - **Čeka:** reviewer GO → `run_vba` FULL i `dokaz.py … --grupe`; posle toga sveska za compile i ručna provera.
+     - **Sledeći brojevi:** stavka 190 · test 263 · KI-042.
+190. **S6 korak 5 — review `#439`, krug 1: dva P2, uzak rez u istom PR-u** (23.10.2026). Pun zapis je u §14.55,
+     „Review #439, krug 1".
+
+     - **Review:** arhitektura GO (9,5/10), kod 9,0/10, merge HOLD. P0 = 0, P1 = 0, P2 = 2. Static CI #1050 je
+       PASS na `6ef0b77b`.
+     - **P2-1** (ostatak zajedničke fakture dvostruko). Izmereno je da je zatečeno od pre koraka 5 (`992e1f45`),
+       a korak 5 ga je proširio. Odluka operatera: pristup 1 — status fakture, a ostatak se ne pripisuje dokumentu
+       kad je faktura zajednička.
+     - **P2-2** (linija bez `FakturaID` izgleda slobodna): ugovor `FAK-LIN-02` se proširuje na neprazan `FakturaID`
+       i zaglavlje tačno jednom, nestornirano.
+     - **Odluka operatera:** izvršne kapije (FULL, dokaz, sveska za compile) idu ODMAH posle ove ispravke, po
+       redosledu iz review-a.
+     - **Sledeći brojevi:** stavka 191 · test 263 · KI-042.
+191. **S6 korak 5 — ispravka review-a `#439`, krug 1** (23.10.2026, `d4274434`). Pun zapis je u §14.55,
+     „Ispravka (stavka 191)".
+
+     - **Crveno, tačno izvedeno:** BFP **2693 / 7**, svih sedam tvrdnji po imenu (A i B po 32.000 za jedan račun,
+       detalj bez „zajednička", četiri kvara linije prolaze). RunAllTests 262/0.
+       - Prvi crveni prolaz je dao 2693/6 i KONTROLU crvenu. BFP pomoćnici pred listom nisu brisali izvedene
+         mape liste (`modScrDokumenti.Scr_ResetCache`), pa je zastareo `#FAKIZN` dao ostatak 0 i za A i B:
+         zeleno iz pogrešnog razloga. Pomoćnici su ispravljeni (`61edbc63`); ista mapa u ljusci je **`KI-042`**.
+     - **Ispravka:**
+       - čitač linija pada po imenu na liniji bez `FakturaID` (`1766`), na fakturi koje nema (`1767`) i nad
+         storniranom fakturom (`1768`);
+       - zapis dokumenta nosi oznaku zajedničke fakture: lista F4 tada ne pripisuje ostatak, detalj kaže
+         „zajednička".
+     - **Premisa testa:** `Test_OpenFaktureExcludeStornirano` je stornirao samo zaglavlje fakture — to je kvar
+       `1768`, i ostaje u svesci. Sada stornira kroz `StornoFaktura_TX` (+1 tvrdnja).
+     - **Sabotaže 931 → 936** (5 novih, `s6k5-detalj-cita-kes` presidrena); statička sonda 6/6.
+     - **Zeleno (izmereno):** BFP **2694/0** (= 2693 + 1), RunAllTests **262/0**, Faktura **39/39**.
+     - **Prvi FULL (nad `d4274434`): 11/12.** Pao je `Test_StornoCentar_All`, sa 6 provera u
+       `Test_PonistenjePrijemniceKaskada_Auto`. Suite nije bila u merenju koraka 5 (FULL je čekao GO).
+       - **Uzrok je izmeren, ne pretpostavljen.** Dijagnostički prolaz (razlog upisan u ime provere, pa vraćeno)
+         je dao „Prijemnica nema nijednu stavku: SVT-KA-PID" iz `StavkePrijemniceRedovi`, i to u OBA lanca. Lanac
+         B je pao na dokumentu A, koji je posle neuspelog storna ostao u tabeli.
+       - **Uzrok je premisa testa, ne pravilo.** Test je sejao prijemnicu starog oblika, samo zaglavlje. Od koraka
+         5 kapija storna (okvir i jezgro) pita izvedenu fakturisanost, a ona čita stavke strogim čitačem, koji
+         zaglavlje bez stavke odbija (invarijanta dokumenta iz koraka 3, `#437`). Pisac takav dokument ne pravi,
+         a produkcionih podataka nema.
+       - **Ispravka (`1b70e676`):** seme dobija stavku kroz postojeći `TcSeedStavkaPrijemnice` (uveden u koraku 4
+         za uvid), a transakcija testa i snimak `tblPrijemnicaStavke`. Suite je zelena.
+       - Zatečena semena samo zaglavlja ostaju u `Test_GetNedovrseno_Auto` i `Test_GetActiveDocumentsForStorno_Auto`
+         istog modula.
+         Ti putevi strogi čitač ne pitaju i suite je zelena, pa nisu dirani (uzak rez).
+     - **Dokaz (`dokaz.py … --grupe`, nad `1b70e676`):** 42 sabotaže u 12 prolaza.
+       - Obim: 25 `s6k5-*`, 4 presidrene (`s6k4-faktura-kapija-u-jezgru`, `s6k4-faktura-stavka-prolazi`,
+         `fakture-korpa-uklanja-prvu`, `s6k5-detalj-cita-kes`) i 13 čiji je test diran u koraku 5. Izabrane su
+         poređenjem tela test procedura `main` ↔ grana.
+       - **Crvenih 42/42**, izvor pre/posle IDENTIČAN.
+       - **Dokazano 41:** 33 grupno, 3 u grupi od jednog, 5 ponovljenih pojedinačno.
+       - **Nalaz: `s6k5-storno-fakture-ne-gasi-linije` — NE OBARA SVOJ TEST.**
+         - Mehanizam: storno koji ne stornira linije ostavlja aktivnu liniju nad storniranom fakturom, a čitač to
+           od P2-2 odbija po imenu (`1768`). `PrijemnicaJeFakturisana` je zato u samoj tvrdnji digao grešku, pa je
+           test umro u `LogFatal` PRE tvrdnje.
+         - Nova brana je jača, a test je nije merio. Tvrdnja sada čita stanje kroz `S6K5Fakturisanost` (greška
+           čitača je ishod), uz isti tekst i isti broj tvrdnji (`b0535a06`).
+         - Pojedinačan dokaz: **DOKAZANO**, izvor identičan; bazno RunAllTests 262/0, BFP 2694/0.
+       - Pun pojedinačni dokaz za 33 grupna je isti poziv bez `--grupe` i nije pušten (pred release).
+     - **FULL nad `b0535a06`: 12/12 ZELENO** (izmereno). RunAllTests **262/0**, BFP **2694/0**, Banka **241**,
+       Storno **111**, Palete **97**, Faktura **39/39**, Agrohemija **25/25**, SheetsJson **72**, uz zelene
+       StornoCentar, Licencu, Golden i Izveštaje. `vba_gate --require-green`: **dokazano, izvor `4091a1588470`**.
+       Compile kroz `run_vba` je `NEJASNO`, kao i uvek, pa ide ručno.
+     - **Sveska za compile i ručnu proveru:** `tests/fixtures/rucna_provera_s6_korak5.xlsm` (gitignored,
+       `40c7d9dc5ab1da3d`). To je BFP prolaz sa `--keep` nad istim izvorom (2694/0).
+       - **Zašto ne golo `--compile-only`:** F4 je pauziran, a fixture nema nijednu dvoklasnu prijemnicu.
+         Delimično fakturisanje se zato iz aplikacije ne može napraviti. Dokumente u sveski je napravio pravi
+         pisac: `…S6K5KVAR…` je nefakturisan, `…S6K5ZAJ…-A/-B` dele fakturu `21/2026`, a `…DUPFAK…` je
+         delimično fakturisan.
+       - **Provereno u sopstvenoj instanci:** ZIP OK, 204 komponente, `modVbaTools` nije unutra, nov kod i
+         novi ključevi poruka su prisutni. Otvorenog avansa kupca `KUP-90001` nema.
+       - VBE je u sveski ujednačio `pRest` → `preSt`. To je veličina slova u celom projektu, zatečeno i pre
+         koraka 5, a ne razlika u kodu.
+     - **Opis `#439`** je ažuriran (`gh api -X PATCH`, proveren grep-om). U njemu je i checklista ručne
+       provere (11 koraka).
+     - **Ručna provera (operater, 24.10.2026, snimci ekrana nad `rucna_provera_s6_korak5.xlsm`):**
+       - ✅ 1: `…S6K5ZAJ…` A i B „Neplaćeno" sa praznim ostatkom, C ostatak 16.000.
+       - ✅ 3: lista Fakture `21/2026` 32.000, `22/2026` 16.000.
+       - ✅ 4: `…S6K5KVAR…` „Nefakturisano".
+       - ✅ 5 i 8: faktura `23/2026` samo nad klasom I. Klasa II ostaje slobodna (za fakturisanje 51 → 50,
+         neplaćeno +12.000).
+       - ✅ 6: pilula „Delim. fakturisano", ostatak prazan, čip „Nefakturisane" je i dalje uključuje (58).
+       - ✅ 9: F8 storno prijemnice ODBIJA, a uvid kaže „storno se ODBIJA — prvo stornirajte fakturu". Faktura je
+         imenovana internim ID-jem (`FAK-00011`), ne brojem `23/2026` — zatečeno → **`KI-044`**.
+       - ⚠ 10: faktura `24/2026` nad klasom II je napravljena, a pilula je „Neplaćeno", ali **OSTATAK je prazan**
+         umesto 16.000. To je zatečeni **`KI-042`** (zastarela mapa iznosa; na `main`-u ista keš mapa), sada viđen
+         na ekranu. Potvrda ponovnim otvaranjem sveske nije urađena.
+       - ✅ 11: posle storna `24/2026` ponovo „Delim. fakturisano", čip 58.
+       - ✅ 2 i 7 (Izveštaji → Kupci → Pojedinačno → TEST KUPAC DOO → Roba → klik na red):
+         - `…ZAJ…-A` i `-B`: „Faktura: FAK-00009 (zajednička sa drugim prijemnicama -- ostatak se vodi na
+           fakturi)";
+         - `…-C`: „Faktura: FAK-00010", bez oznake;
+         - `S6K5KVAR`: „Faktura: FAK-00011 (delimično -- ne sve stavke)";
+         - kontrole: `S6K5KES` „nije fakturisana", `DUPFAK` „FAK-00001 (delimično …)".
+
+         Tekst zajedničke se u traci detalja odseca na desnoj ivici (zagrada); dopisano u `KI-044`.
+         **Ispravka checkliste:** detalj imenuje fakturu ID-jem (`FAK-00009`), a ne brojem `21/2026`, kako je
+         pisalo u prvom izdanju (`KI-044`).
+       - Usput: tekst pretrage sa drugog ekrana ostaje u F4 preko placeholdera, a lista nije filtrirana →
+         **`KI-043`**.
+     - **Compile:** operater je javio „compiles" nad `rucna_provera_s6_korak5.xlsm` (24.10.2026).
+       `vba_gate --mark-compile` je upisan nad izvorom `4091a1588470`, a `--require-green --require-compile`
+       kaže **dokazano** (izvor `4091a1588470`, ugovor `3cff745c513f`).
+     - **Ručna provera je završena:** svih 11 koraka. Odstupanje je samo korak 10 (ostatak prazan), a to je
+       zatečeni `KI-042`.
+     - **Čeka:** merge samo na izričit zahtev operatera, sa `--match-head-commit`, posle zelenog CI-ja.
+     - **Sledeći brojevi:** stavka 192 · test 263 · KI-045.
 
 ## Dug sa imenom (posle S5-5b)
 
