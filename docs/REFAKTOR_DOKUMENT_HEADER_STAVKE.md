@@ -9236,7 +9236,9 @@ zatvaranje tri nalaza, bez novog refaktora. `KI-052` je prihvaćen kao P2 bez bl
   odbijeno bez mutacije; zbirna bez oznake — posledice bez tvrdnje, PONIŠTENJE staje, razlog imenuje kolonu; nacrt
   prati oznaku).
 - **Sabotaže:** +9 `s6k7-*`, presidrene 3; v. stavku 203.
-- **Čeka reviewer GO:** FULL, `dokaz.py`, compile, ručna provera.
+- **Drugi krug review-a (nad `a1cf945e`): CODE GO**, bez novih P1/P2; P3 (fail-open čitanje configa pri upisu
+  oznake) je `KI-054`. Izvršne kapije (stavka 204): FULL **12/12**, `dokaz.py --grupe` **31/31** (izvor identičan),
+  `vba_gate --require-green` dokazano. Čeka: compile i ručni acceptance.
 
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 

@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 25.10.2026 (stavka 203: S6 korak 7, review #442 — kupac nastavka, `ZBR-OWN-01`, strog čitač prijemnica; crveno → zeleno, PR čeka reviewer GO).
+**Ažurirano:** 25.10.2026 (stavka 204: S6 korak 7 — CODE GO nad `a1cf945e`; FULL 12/12, `dokaz.py` 31/31; čeka compile i ručni acceptance).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ): u toku** — pre-flight i odluke 1–10 (stavka 200), deo 1 `KI-046` zatvoren (stavka 201), deo 2 (sam lanac, R2–R12) crveno → zeleno (stavka 202), review #442 (P1-a kupac nastavka, P1-b trajna oznaka `ZBR-OWN-01`, P2 strog čitač) crveno → zeleno (stavka 203), PR čeka reviewer GO; grana `claude/s6-korak7-lanac-b` |
+| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ): u toku** — pre-flight i odluke 1–10 (stavka 200), deo 1 `KI-046` zatvoren (stavka 201), deo 2 (sam lanac, R2–R12) crveno → zeleno (stavka 202), review #442 (P1-a kupac nastavka, P1-b trajna oznaka `ZBR-OWN-01`, P2 strog čitač) crveno → zeleno (stavka 203), drugi krug **CODE GO**, FULL 12/12 i `dokaz.py` 31/31 (stavka 204) — čeka compile i ručni acceptance; grana `claude/s6-korak7-lanac-b` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7418,6 +7418,31 @@
        `oporavak-cid-kolona-drift`, `vlasnistvo-lanca-po-broju`), sveska za compile
        i ručnu proveru, compile (`run_vba`: `NEJASNO`).
      - **Sledeći brojevi:** stavka 204 · test 275 (pazi `#441`) · KI-054.
+204. **S6 korak 7 — izvršne kapije posle drugog kruga review-a #442** (25.10.2026). Review nad `a1cf945e`: **CODE GO**
+     (P1-a, P1-b, P2 zatvoreni, novih P1/P2 nema), TEST/MERGE HOLD do izvršnih kapija i ručnog acceptance-a. Kod nije menjan.
+
+     - **FULL 12/12 zelen** nad izvorom `94d75713ae4c` (ugovor `f4ecf7d28595`, sveska `otkup_test.xlsm/b4fbb0d5`, fixture
+       `29592b582ae58f69`): RunAllTests **274 / 0**, BFP **2760 / 0**, Banka **241 / 0**, Storno **111 / 0**, Palete 96,
+       Faktura 39, Agrohemija 25, StornoCentar, Golden, Izveštaji, JSON parser, Licenca. `vba_gate --require-green`:
+       **dokazano**.
+     - **`dokaz.py --grupe`, 31 sabotaža, 8 prolaza: crvenih 31/31, izvor IDENTIČAN** (`eb141b4ff3cd9108` pre i posle).
+       Obim: svih 25 `s6k7-*` + 6 presidrenih van prefiksa (`lanac-dupli-poziv`, `lanac-storniran-blok`,
+       `oporavak-cid-kolona-vidljiva`, `amb-prj-povrat-samo-sa-klasom-i`, `oporavak-cid-kolona-drift`,
+       `vlasnistvo-lanca-po-broju`). Svaka je u grupi oborila **svoju** tvrdnju, pa nijedna nije ponavljana sama. Baze
+       pre prve mutacije: RunAllTests 274 / 0, BFP 2760 / 0. Posle: `git status` bez izmena u `src-vba`, sidra 985 / 0,
+       otisak `src-vba` nepromenjen.
+     - **Sveska za compile i ručnu proveru:** `tests/fixtures/rucna_provera_s6_korak7_kod.xlsm` (gitignored, otisak
+       `59f3f639c4048166`) = `run_vba --compile-only --keep` nad `94d75713ae4c`. Izmereno u sopstvenoj instanci
+       (konvencija alata: makroi uključeni, eventi ugašeni, samo čitanje): kod reza je u svesci (**13/13 igala**),
+       `KupacHladnjaca` je poslednja (26.) kolona `tblZbirna`, svih 24 reda nose `Ne`. Prvo otvaranje sa **ugašenim**
+       makroima je dalo dijalog o `modLogo` — zatečeni `KI-030`, ne nov nalaz.
+     - **P3 iz review-a → `KI-054`** (bez merge blokade): `OznakaKupacHladnjaca` čita config kroz fail-open
+       `IsHladnjacaKupac`, pa tehnička greška čitanja postaje trajno „Ne". Recept: strogo čitanje u piscu oznake + BFP test
+       sa podmetnutim padom.
+     - **Nije urađeno:** `Debug → Compile` i `vba_gate --mark-compile` (operater), ručni acceptance (F1–F4, F8, Oporavak,
+       trajna oznaka), pa merge `#442` po izričitom zahtevu operatera; posle njega rebase `#441` i prenumeracija njegovih
+       testova 272–280 → **275–283** (preporuka review-a).
+     - **Sledeći brojevi:** stavka 205 · test 275 (pazi `#441`) · KI-055.
 
 ## Dug sa imenom (posle S5-5b)
 
