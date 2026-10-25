@@ -9203,6 +9203,41 @@ prekidač `AUTO_PRIJEMNICA_HLADNJACA` nestaje. Danas lanac pravi samo otpremnicu
   (`CleanUp` na normalnom toku čita zaostali `Err`).
 - **Čeka reviewer GO:** FULL, `dokaz.py s6k7` + presidrene, sveska za compile i ručnu proveru, compile.
 
+**Review #442 — kupac nastavka, trajna oznaka vlasništva, strog čitač (stavka 203):**
+
+Nezavisni review PR-a #442 (CODE HOLD / TEST HOLD / MERGE HOLD) je arhitekturu lanca prihvatio i tražio ciljano
+zatvaranje tri nalaza, bez novog refaktora. `KI-052` je prihvaćen kao P2 bez blokade.
+
+- **Pre-flight (nad `bd9486e3`):** `DOMAIN` PROVEN (prijemnica pripada kupcu zbirne; „interni hladnjački tok" je
+  činjenica zbirne u trenutku nastanka, ne današnjeg configa) · `IDENTITY` PROVEN (roditelj po ID-u već od odluke 7;
+  vlasnik = kupac + vozač zbirne) · `CARDINALITY` PROVEN (zbirna lanca : aktivna prijemnica = 1 : 1, `HLD-LANAC-01`;
+  obična zbirna sme 1 : N uz F4 potvrdu „dupla prijemnica") · `INVARIANTS/OWNER` nova `ZBR-OWN-01`, vlasnik pisac
+  zbirne · `WRITERS` jedan pisac zaglavlja zbirne (`BuildZbirnaHeaderRowData` za nastanak i nacrt, `ZbrIzmeniDraft` za
+  izmenu kupca) — nema trećeg puta koji pravi red · `DOWNSTREAM` tri čitača vlasništva (posledice, `RunZbirnaCorrection`,
+  `PonistiZbirnaChain_TX` — i uzvodna kaskada PONIŠTENJA prijemnice) · `PLATFORM` N/A · `LANDING` šema + fixture
+  (serijski), `#441` i dalje drži 272–280.
+- **Odluka operatera (25.10.2026), P1-b:** **trajna oznaka** (nova kolona na kraju `tblZbirna`, piše je pisac zbirne,
+  prazna = staje bez mutacije), u istom PR-u. Odbačeno: čitanje iz drugog izvora istine (nema ga — kupac zbirne je isti,
+  menja se samo config) i „zamrznut config" (sakriva promenu umesto da je beleži na dokumentu).
+- **Kod:**
+  - `modAutoHladnjaca.AutoLanacHladnjaca`: kupac = kupac **zbirne** kad ona postoji, config samo kad je lanac tek pravi;
+    nov `OznakaKupacHladnjaca` (pravilo `IsHladnjacaKupac`, jedno telo); `AktivnePrijemnicePoZbirni(outKvar)` vraća kvar
+    po zbirni, `PrijemnicaZaZbirnu` i `NedovrseniLanci` ga dižu (`8473`) sa imenom zbirne;
+  - `modDokumenta`: `BuildZbirnaHeaderRowData` i `ZbrIzmeniDraft` pišu `KupacHladnjaca`; `ZbirnaRoditeljPrijemnice`
+    dobija kupca i vozača prijemnice i odbija roditelja drugog vlasnika (`1435`);
+  - `modStornoFlow.ZbirnaOwnsExternalChain`: `Da` / `Ne` iz oznake, sve drugo `ERR_STORNO_FW_BASE + 71` sa imenom kolone;
+  - kanon: `tblZbirna.KupacHladnjaca` na kraju (otisak `06A00A5F`), `COL_ZBR_KUPAC_HLADNJACA`.
+- **Crveno → zeleno:** stavka 203 (BFP 2741 → 2760, crveno 15 tačno izvedeno; prvi zeleni prolaz pao na seed-ovima
+  bez oznake — izmereno, ne na kodu).
+- **Testovi:** BFP `Test_S6K7_NastavakNosiKupcaRoditelja` (R13: nastavak posle promene kupca + pisac sa roditeljem
+  drugog kupca ili vozača, kontrola istog vlasnika), `Test_S6K7_LanacJednaPrijemnica` (R14: dve aktivne, pa jedina
+  aktivna bez ID-a; Oporavak `GREŠKA`; kontrola: kompletan lanac tih), `Test_S6K7_VlasnistvoLancaNeCitaKonfig` (R15:
+  interni lanac posle promene configa — posledice i pravo PONIŠTENJE; eksterna zbirna kupca koji postane hladnjača —
+  odbijeno bez mutacije; zbirna bez oznake — posledice bez tvrdnje, PONIŠTENJE staje, razlog imenuje kolonu; nacrt
+  prati oznaku).
+- **Sabotaže:** +9 `s6k7-*`, presidrene 3; v. stavku 203.
+- **Čeka reviewer GO:** FULL, `dokaz.py`, compile, ručna provera.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

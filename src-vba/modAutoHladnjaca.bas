@@ -43,6 +43,21 @@ Public Function IsHladnjacaKupac(ByVal kupacID As String) As Boolean
     IsHladnjacaKupac = (StrComp(kupacID, h, vbTextCompare) = 0)
 End Function
 
+' Trajna oznaka zbirne (ZBR-OWN-01, review #442 P1-b): "Da" kad je kupac zbirne
+' U TRENUTKU UPISA kupac hladnjace, inace "Ne". Pise je samo pisac zbirne
+' (BuildZbirnaHeaderRowData, izmena kupca u nacrtu); posle toga je cinjenica
+' dokumenta, pa promena MALINA_DEFAULT_KUPAC ne menja pravilo storna starih
+' zbirni. Pravilo je isto kao IsHladnjacaKupac -- jedno telo, ne kopija. Njegov
+' fail-open smer daje "Ne", a "Ne" je smer koji ne obara tudje: PONISTENJE tada
+' aktivnu prijemnicu tretira kao eksternu i odbija se.
+Public Function OznakaKupacHladnjaca(ByVal kupacID As String) As String
+    If IsHladnjacaKupac(kupacID) Then
+        OznakaKupacHladnjaca = "Da"
+    Else
+        OznakaKupacHladnjaca = "Ne"
+    End If
+End Function
+
 ' Da li blokovi OVE STANICE idu u auto-lanac. Ista odluka kao LanacVaziZaBlok,
 ' samo pre nego sto blok postoji -- ekran je treba PRE svih pravila vezanih za
 ' aktivan rucni nacrt (potvrda prekoracenja, vezivanje), jer hladnjacki blok tim
@@ -260,7 +275,15 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
 
     ' --- PREDUSLOVI, PRE PRVOG UPISA ---------------------------------------
     korak = "preduslov"
-    kupacID = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
+    ' KUPAC NASTAVKA JE KUPAC RODITELJA (review #442, P1-a). Kad zbirna vec
+    ' postoji, njen kupac je cinjenica: prijemnica i noga knjige idu NJEMU. Config
+    ' odlucuje samo za lanac koji zbirnu tek pravi -- inace bi promena kupca
+    ' hladnjace izmedju prekida i "Ponovi" zbirnoj kupca A dala prijemnicu kupca B.
+    If Len(zbrID) > 0 Then
+        kupacID = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_KUPAC)))
+    Else
+        kupacID = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
+    End If
     If Len(kupacID) = 0 Then
         izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & Poruka("OTKUI_ERR_LANAC_KUPAC")
         Exit Function
@@ -442,24 +465,39 @@ Private Function CeneOtkupaPoKlasi(ByVal otkupID As String) As Object
 End Function
 
 ' Aktivna prijemnica ciji je roditelj (po ID-u) data zbirna; "" = nema je.
+' Zbirna ciji redovi ne daju TACNO JEDAN ID nije "ima prijemnicu" nego kvar
+' (HLD-LANAC-01): greska imenuje zbirnu, pa nastavak lanca staje sa razlogom
+' umesto da javi "nije bilo posla" (review #442, P2).
 Private Function PrijemnicaZaZbirnu(ByVal zbrID As String) As String
-    Dim mapa As Object
-    Set mapa = AktivnePrijemnicePoZbirni()
-    If mapa.Exists(UCase$(Trim$(zbrID))) Then PrijemnicaZaZbirnu = CStr(mapa(UCase$(Trim$(zbrID))))
+    Const SRC As String = "PrijemnicaZaZbirnu"
+    Dim mapa As Object, kvar As Object, rod As String
+    Set mapa = AktivnePrijemnicePoZbirni(kvar)
+    rod = UCase$(Trim$(zbrID))
+    If kvar.Exists(rod) Then Err.Raise vbObjectError + 8473, SRC, CStr(kvar(rod))
+    If mapa.Exists(rod) Then PrijemnicaZaZbirnu = CStr(mapa(rod))
 End Function
 
-' UCase(ZbirnaRoditeljID) -> PrijemnicaID, samo AKTIVNE prijemnice.
+' UCase(ZbirnaRoditeljID) -> PrijemnicaID, samo AKTIVNE prijemnice. outKvar:
+' UCase(ZbirnaRoditeljID) -> razlog, za zbirnu cije aktivne prijemnice ne daju
+' TACNO JEDAN ID (dve ili vise, ili prijemnica bez PrijemnicaID-a).
 '
 ' JEDNA definicija "zbirna ima prijemnicu" za nastavak lanca i za Oporavak.
 ' Strogo: nedostajuca kolona pada (RequireColumnIndex), jer bi citalac koji pad
 ' vrati kao "nema prijemnice" pustio lanac da napravi DRUGU (modStorno.
 ' LookupActiveID gresku guta i vraca "", pa ovde nije upotrebljen).
-Private Function AktivnePrijemnicePoZbirni() As Object
+'
+' Do review-a #442 (P2) je uzimao PRVI pogodak i precutao drugu prijemnicu. Kvar
+' se ipak ne dize ovde nego se vraca PO ZBIRNI: F4 sme da napravi drugu
+' prijemnicu obicne zbirne (potvrda "dupla prijemnica"), pa bi greska nad celom
+' tabelom oborila i lanac koji sa tom zbirnom nema veze. Pita se samo za
+' zbirnu lanca.
+Private Function AktivnePrijemnicePoZbirni(ByRef outKvar As Object) As Object
     Const SRC As String = "AktivnePrijemnicePoZbirni"
-    Dim mapa As Object, d As Variant, i As Long, rod As String
+    Dim mapa As Object, d As Variant, i As Long, rod As String, pid As String
     Dim cId As Long, cRod As Long, cSto As Long
 
     Set mapa = CreateObject("Scripting.Dictionary")
+    Set outKvar = CreateObject("Scripting.Dictionary")
     Set AktivnePrijemnicePoZbirni = mapa
 
     d = GetTableData(TBL_PRIJEMNICA)
@@ -471,7 +509,18 @@ Private Function AktivnePrijemnicePoZbirni() As Object
         rod = UCase$(Trim$(NzToText(d(i, cRod))))
         If Len(rod) > 0 Then
             If StrComp(Trim$(NzToText(d(i, cSto))), "Da", vbTextCompare) <> 0 Then
-                If Not mapa.Exists(rod) Then mapa.Add rod, Trim$(NzToText(d(i, cId)))
+                pid = Trim$(NzToText(d(i, cId)))
+                If Len(pid) = 0 Then
+                    If Not outKvar.Exists(rod) Then
+                        outKvar.Add rod, "Zbirna " & Trim$(NzToText(d(i, cRod))) & _
+                                         " ima aktivnu prijemnicu bez PrijemnicaID-a."
+                    End If
+                ElseIf Not mapa.Exists(rod) Then
+                    mapa.Add rod, pid
+                ElseIf Not outKvar.Exists(rod) Then
+                    outKvar.Add rod, "Zbirna " & Trim$(NzToText(d(i, cRod))) & _
+                                     " ima vise aktivnih prijemnica: " & CStr(mapa(rod)) & ", " & pid & "."
+                End If
             End If
         End If
     Next i
@@ -640,10 +689,10 @@ Public Function NedovrseniLanci() As Collection
     cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
     cSto = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, SRC)
 
-    Dim clanOtp As Object, clanZbr As Object, prjPoZbr As Object
+    Dim clanOtp As Object, clanZbr As Object, prjPoZbr As Object, prjKvar As Object
     Set clanOtp = modDokumenta.AktivnoClanstvoOtpremnica()
     Set clanZbr = modDokumenta.AktivnoClanstvoZbirni()
-    Set prjPoZbr = AktivnePrijemnicePoZbirni()
+    Set prjPoZbr = AktivnePrijemnicePoZbirni(prjKvar)
 
     Dim i As Long, oid As String, otpID As String, zbrID As String
     For i = 1 To UBound(otk, 1)
@@ -657,6 +706,11 @@ Public Function NedovrseniLanci() As Collection
                         If clanZbr.Exists(UCase$(otpID)) Then zbrID = CStr(clanZbr(UCase$(otpID)))
                         If Len(zbrID) = 0 Then
                             res.Add Array(oid, Trim$(NzToText(otk(i, cBr))), otpID, "")
+                        ElseIf prjKvar.Exists(UCase$(zbrID)) Then
+                            ' Zbirna lanca sa vise prijemnica (ili bez ID-a) nije
+                            ' ni "zavrsen" ni "nedovrsen" -- Oporavak je javlja
+                            ' kao gresku, ne precutkuje je (review #442, P2).
+                            Err.Raise vbObjectError + 8473, SRC, CStr(prjKvar(UCase$(zbrID)))
                         ElseIf Not prjPoZbr.Exists(UCase$(zbrID)) Then
                             res.Add Array(oid, Trim$(NzToText(otk(i, cBr))), otpID, zbrID)
                         End If

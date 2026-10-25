@@ -6584,8 +6584,8 @@ SABOTAZE = {
 
     "vlasnistvo-lanca-po-broju": (
         "modStornoFlow.bas",
-        "        NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC)))\n",
-        "        NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_BROJ)), COL_ZBR_KUPAC)))   ' SABOTAZA: vlasnistvo po broju\n",
+        "    oznaka = Trim$(NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC_HLADNJACA)))\n",
+        "    oznaka = Trim$(NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_BROJ)), COL_ZBR_KUPAC_HLADNJACA)))   ' SABOTAZA: vlasnistvo po broju\n",
         "Test_ZBR_VlasnistvoLancaIdePoIdentitetu",
         "ZBR VLA: dva dokumenta istog broja daju RAZLICITU odluku o vlasnistvu",
     ),
@@ -9746,7 +9746,8 @@ SABOTAZE = {
     # ID -- pod dvosmislenim brojem (KR-001) prijemnica ostaje bez roditelja.
     "s6k7-prj-roditelj-po-broju": (
         "modDokumenta.bas",
-        "        roditeljID = ZbirnaRoditeljPrijemnice(Trim$(zbirnaRoditeljID), brojZbirne, SRC)\n",
+        "        roditeljID = ZbirnaRoditeljPrijemnice(Trim$(zbirnaRoditeljID), brojZbirne, _\n"
+        "                                              kupacID, vozacID, SRC)\n",
         "        roditeljID = ZbirnaIDZaBroj(brojZbirne)   ' SABOTAZA: roditelj po broju\n",
         "Test_S6K7_LanacNastavljiv",
         "S6K7 nastavak: svaka prijemnica je vezana na SVOJU zbirnu po ID-u, i kad broj zbirne nije jednoznacan",
@@ -9776,9 +9777,9 @@ SABOTAZE = {
     # padne na zbirnoj (polovican lanac).
     "s6k7-kupac-proveren-kasno": (
         "modAutoHladnjaca.bas",
-        "    kupacID = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))\n"
+        "    End If\n"
         "    If Len(kupacID) = 0 Then\n",
-        "    kupacID = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))\n"
+        "    End If\n"
         "    If False Then   ' SABOTAZA: kupac se ne proverava pre prvog upisa\n",
         "Test_S6K7_LanacBezKupcaNePise",
         "S6K7 kupac: bez kupca se ne pravi ni otpremnica -- blok ostaje nevezan",
@@ -9849,6 +9850,89 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: rucna zbirna prima hladnjacku otpremnicu\n",
         "Test_S6K7_RucnaZbirnaOdbijaHladnjacku",
         "S6K7 rucna zbirna: hladnjacka otpremnica se odbija sa razlogom, clanstvo nije upisano",
+    ),
+    # Review #442, P1-a: nastavak lanca posle zbirne opet uzima kupca iz configa.
+    # Pisac prijemnice ga tada odbija (druga brana), pa lanac ne zavrsi.
+    "s6k7-nastavak-kupac-iz-konfiguracije": (
+        "modAutoHladnjaca.bas",
+        "        kupacID = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_KUPAC)))\n",
+        "        kupacID = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))   ' SABOTAZA: nastavak cita config\n",
+        "Test_S6K7_NastavakNosiKupcaRoditelja",
+        "S6K7 kupac lanca: nastavak posle promene kupca hladnjace pravi prijemnicu za kupca roditeljske zbirne",
+    ),
+    # Review #442, P1-a, druga brana: pisac prijemnice vezuje dete za zadatu
+    # zbirnu drugog vlasnika (kupac ili vozac). Meri se direktnim pozivom pisca --
+    # lanac sa ispravnim nastavkom ga sa tudjim kupcem ne zove.
+    "s6k7-pisac-pusta-tudjeg-roditelja": (
+        "modDokumenta.bas",
+        "    If StrComp(kupacRoditelja, Trim$(kupacID), vbTextCompare) <> 0 Or _\n"
+        "       StrComp(vozacRoditelja, Trim$(vozacID), vbTextCompare) <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: pisac pusta roditelja drugog vlasnika\n",
+        "Test_S6K7_NastavakNosiKupcaRoditelja",
+        "S6K7 pisac: roditelj drugog vlasnika (kupac ili vozac) se odbija i nista ne ostaje",
+    ),
+    # Review #442, P2: citac prijemnica po zbirni opet uzima PRVI pogodak, pa
+    # druga aktivna prijemnica zbirne lanca ostaje precutana.
+    "s6k7-citac-prijemnica-prvi-pogodak": (
+        "modAutoHladnjaca.bas",
+        "                ElseIf Not outKvar.Exists(rod) Then\n",
+        "                ElseIf False Then   ' SABOTAZA: prvi pogodak pobedjuje\n",
+        "Test_S6K7_LanacJednaPrijemnica",
+        "S6K7 jedna prijemnica: dve aktivne prijemnice zbirne lanca daju razlog koji imenuje zbirnu",
+    ),
+    # Review #442, P2: aktivna prijemnica bez PrijemnicaID-a se cita kao "nema
+    # prijemnice", pa nastavak pravi jos jednu.
+    "s6k7-citac-prijemnica-bez-id": (
+        "modAutoHladnjaca.bas",
+        "                If Len(pid) = 0 Then\n",
+        "                If False Then   ' SABOTAZA: prazan PrijemnicaID se ne prijavljuje\n",
+        "Test_S6K7_LanacJednaPrijemnica",
+        "S6K7 jedna prijemnica: jedina aktivna prijemnica bez ID-a daje razlog koji imenuje zbirnu i ne pravi drugu",
+    ),
+    # Review #442, P2: Oporavak zbirnu lanca sa dve prijemnice vidi kao zavrsen
+    # lanac. Citac nastavka ostaje strog, pa ga ova tvrdnja jedina razlikuje.
+    "s6k7-oporavak-precutkuje-dve-prijemnice": (
+        "modAutoHladnjaca.bas",
+        "                        ElseIf prjKvar.Exists(UCase$(zbrID)) Then\n",
+        "                        ElseIf False Then   ' SABOTAZA: Oporavak precutkuje kvar\n",
+        "Test_S6K7_LanacJednaPrijemnica",
+        "S6K7 jedna prijemnica: Oporavak pokazuje gresku lanca",
+    ),
+    # Review #442, P1-b (ZBR-OWN-01): vlasnistvo nizvodnog toka se opet racuna
+    # iz TRENUTNOG MALINA_DEFAULT_KUPAC, ne iz oznake zbirne.
+    "s6k7-vlasnistvo-iz-konfiguracije": (
+        "modStornoFlow.bas",
+        "        Case \"DA\": ZbirnaOwnsExternalChain = True\n",
+        "        Case \"DA\", \"NE\": ZbirnaOwnsExternalChain = IsHladnjacaKupac(NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC)))   ' SABOTAZA: vlasnistvo iz configa\n",
+        "Test_S6K7_VlasnistvoLancaNeCitaKonfig",
+        "S6K7 vlasnistvo: posle promene configa posledice internog lanca i dalje kazu da se prijemnica stornira",
+    ),
+    # Review #442, P1-b: prazna oznaka se cita kao "eksterni" (stari fail-open
+    # smer), pa posledice tvrde vlasnistvo koje se ne zna.
+    "s6k7-prazna-oznaka-pusta": (
+        "modStornoFlow.bas",
+        "        Case \"NE\": ZbirnaOwnsExternalChain = False\n",
+        "        Case \"NE\", \"\": ZbirnaOwnsExternalChain = False   ' SABOTAZA: prazna oznaka = eksterni\n",
+        "Test_S6K7_VlasnistvoLancaNeCitaKonfig",
+        "S6K7 vlasnistvo: posledice nad zbirnom bez oznake ne tvrde ni jedno vlasnistvo",
+    ),
+    # Review #442, P1-b: pisac zbirne ne upisuje oznaku pri nastanku.
+    "s6k7-pisac-zbirne-bez-oznake": (
+        "modDokumenta.bas",
+        "    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KUPAC_HLADNJACA, _\n"
+        "                        modAutoHladnjaca.OznakaKupacHladnjaca(kupacID), SRC\n",
+        "    ' SABOTAZA: pisac zbirne ne pise oznaku internog toka\n",
+        "Test_S6K7_VlasnistvoLancaNeCitaKonfig",
+        "S6K7 vlasnistvo: zbirna lanca nosi oznaku internog toka od nastanka",
+    ),
+    # Review #442, P1-b: izmena kupca u nacrtu zbirne ne prati oznaku.
+    "s6k7-nacrt-ne-prati-oznaku": (
+        "modDokumenta.bas",
+        "    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_KUPAC_HLADNJACA, _\n"
+        "                      modAutoHladnjaca.OznakaKupacHladnjaca(kupacID), SRC\n",
+        "    ' SABOTAZA: izmena nacrta ne prati oznaku internog toka\n",
+        "Test_S6K7_VlasnistvoLancaNeCitaKonfig",
+        "S6K7 vlasnistvo: izmena kupca u nacrtu zbirne prati oznaku internog toka",
     ),
 }
 

@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 25.10.2026 (stavka 202: S6 korak 7, deo 2 — hladnjački lanac OTK → OTP → ZBR → PRJ, crveno → zeleno; PR čeka review).
+**Ažurirano:** 25.10.2026 (stavka 203: S6 korak 7, review #442 — kupac nastavka, `ZBR-OWN-01`, strog čitač prijemnica; crveno → zeleno, PR čeka reviewer GO).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ): u toku** — pre-flight i odluke 1–10 (stavka 200), deo 1 `KI-046` zatvoren (stavka 201), deo 2 (sam lanac, R2–R12) crveno → zeleno (stavka 202), PR otvoren i čeka review; grana `claude/s6-korak7-lanac-b` |
+| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ): u toku** — pre-flight i odluke 1–10 (stavka 200), deo 1 `KI-046` zatvoren (stavka 201), deo 2 (sam lanac, R2–R12) crveno → zeleno (stavka 202), review #442 (P1-a kupac nastavka, P1-b trajna oznaka `ZBR-OWN-01`, P2 strog čitač) crveno → zeleno (stavka 203), PR čeka reviewer GO; grana `claude/s6-korak7-lanac-b` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7370,6 +7370,54 @@
      - **Nije urađeno (čeka reviewer GO):** FULL, `dokaz.py` nad 15 novih i 5 presidrenih, sveska za compile i ručnu
        proveru, compile (`run_vba`: `NEJASNO`).
      - **Sledeći brojevi:** stavka 203 · test 275 (pazi `#441`) · KI-054.
+203. **S6 korak 7 — review #442: kupac nastavka, trajna oznaka vlasništva zbirne, strog čitač prijemnica** (25.10.2026).
+     Nezavisni review (CODE HOLD) našao je dva P1 i jedan P2; odluka operatera za P1-b: **trajna oznaka** na zbirni. Tok
+     je u §14.55, „Korak 7", odeljak „Review #442".
+
+     - **Nalazi i ispravke:**
+       - **P1-a, kupac nastavka:** lanac prekinut posle zbirne, pa promenjen `MALINA_DEFAULT_KUPAC` → „Ponovi" je pravio
+         prijemnicu (i nogu knjige) kupca B pod zbirnom kupca A. Sada nastavak uzima kupca **roditeljske zbirne**, a pisac
+         prijemnice zadatog roditelja drugog vlasnika (kupac **ili** vozač) odbija pre ijednog upisa (`1435`).
+       - **P1-b, vlasništvo iz configa:** `ZbirnaOwnsExternalChain` je pitao „da li je kupac zbirne **danas**
+         `MALINA_DEFAULT_KUPAC`", pa je promena configa retroaktivno menjala pravilo PONIŠTENJA. Nova invarijanta
+         **`ZBR-OWN-01`**: `tblZbirna.KupacHladnjaca` (`Da`/`Ne`, nova kolona **na kraju** kanona) piše samo pisac zbirne
+         (nastanak + izmena kupca u nacrtu); storno čita nju; prazna/nepoznata = greška, PONIŠTENJE staje bez mutacije.
+       - **P2, prvi pogodak:** `AktivnePrijemnicePoZbirni` je za zbirnu sa dve aktivne prijemnice uzimao prvu. Sada vraća
+         kvar **po zbirni** (dve ili više, ili aktivna bez `PrijemnicaID`); nastavak ga diže sa imenom zbirne, Oporavak ga
+         javlja redom `GREŠKA`. Kvar se ne diže nad celom tabelom: F4 sme da napravi duplu prijemnicu obične zbirne.
+     - **Crveno, tačno izvedeno pre puštanja:** BFP 2741 → **2760 / 15** (P1-a 5/3, P2 5/3, P1-b 9/9), prva pala „S6K7
+       kupac lanca: nastavak posle promene kupca hladnjace pravi prijemnicu za kupca roditeljske zbirne" — **izmereno
+       tačno tako** (dobijeno `KUP-90002`, očekivano `KUP-90001`). RunAllTests bez novih testova — izvedeno 274 / 0,
+       u crvenom nije puštan.
+     - **Zeleno:**
+
+       | Prolaz | BFP | RunAllTests | Storno | StornoCentar | ostalo |
+       |---|---|---|---|---|---|
+       | zeleni 1 | 2760 / **7** | 274 / 0 | 111 / 0 | 52 / **4** | Palete 96 / 0, Faktura 39 / 0, Golden, Izveštaji |
+       | **zeleni 2** | **2760 / 0** | — | **111 / 0** | **zelen** | izvor `94d75713ae4c`, ugovor `f4ecf7d28595`, fixture `29592b582ae58f69` |
+
+       Zeleni 1 je pao **na seed-u, ne na kodu** (izmereno): PONIŠTENJE prijemnice kaskadira na zbirnu
+       (`PonistiZbirnaChain_TX`), a S6K4 (`ZbrZateceniRed`) i StornoCentar (`TcSeedZbirna`) seju zbirnu sirovo, bez
+       oznake. Produkcioni kod između dva prolaza nije menjan (izmenjeni su samo `modBusinessFlowProTests`,
+       `modTestStornoCentar` i katalog sabotaža), pa RunAllTests, Palete, Faktura, Golden i Izveštaji iz zelenog 1 važe
+       za isti produkcioni izvor; marker zelenog 2 pokriva BFP, Storno i StornoCentar. Premisa seed-a je „red kakav pravi pisac", a pisac sada uvek piše oznaku — pa je seed piše istim pravilom
+       (`OznakaKupacHladnjaca(kupac)`, odnosno `Ne` za zbirnu bez kupca). Isto `modTestStorno.SeedZbirna` (`HLAD_KUP` →
+       `Da`) i fixture (`make_fixture`: svi redovi `Ne` — donor nema kupca hladnjače; potpis **`29592b582ae58f69`**).
+       Tvrdnja „prijemnica bez ID-a" je pooštrena posle zelenog 1: prijemnica bez ID-a je sada **jedina** aktivna (prva se
+       obara direktnim upisom), inače slučaj hvata pravilo „dve prijemnice" i tvrdnja ne meri prazan ID.
+     - **Sabotaže:** katalog 976 → **985** (+9 `s6k7-*`: nastavak iz configa, pisac pušta tuđeg roditelja, prvi pogodak,
+       prazan ID, Oporavak prećutkuje, vlasništvo iz configa, prazna oznaka pušta, pisac bez oznake, nacrt ne prati
+       oznaku); presidrene 3 (`vlasnistvo-lanca-po-broju`, `s6k7-kupac-proveren-kasno`, `s6k7-prj-roditelj-po-broju`).
+       `--proveri-sidra` 985 / 0 (+9 poznatih), `--self-test` 43; statička sonda **12/12**.
+     - **Jeftine kapije:** 22/22; `gen_schema_module --check` (otisak `06A00A5F`), `who_writes --check` i
+       `--check-ownership` zeleni, `WHO_WRITES.md` ažuran.
+     - **Šema:** nova kolona `tblZbirna.KupacHladnjaca` (kraj kanona). Sveska je dobija kroz `EnsureAllTables` na startu;
+       zatečene zbirne ostaju bez oznake (nema produkcionih podataka) i nad njima PONIŠTENJE staje sa razlogom.
+     - **Nije urađeno (čeka reviewer GO):** FULL, `dokaz.py s6k7` (25 sabotaža koraka 7) + 6 presidrenih van prefiksa (`lanac-dupli-poziv`,
+       `lanac-storniran-blok`, `oporavak-cid-kolona-vidljiva`, `amb-prj-povrat-samo-sa-klasom-i`,
+       `oporavak-cid-kolona-drift`, `vlasnistvo-lanca-po-broju`), sveska za compile
+       i ručnu proveru, compile (`run_vba`: `NEJASNO`).
+     - **Sledeći brojevi:** stavka 204 · test 275 (pazi `#441`) · KI-054.
 
 ## Dug sa imenom (posle S5-5b)
 

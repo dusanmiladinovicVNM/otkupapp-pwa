@@ -436,6 +436,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6K7_JezgroZbirneHladnjacka
     Test_S6K7_PwaHladnjackiBlokovi
     Test_S6K7_RucnaZbirnaOdbijaHladnjacku
+    Test_S6K7_NastavakNosiKupcaRoditelja
+    Test_S6K7_LanacJednaPrijemnica
+    Test_S6K7_VlasnistvoLancaNeCitaKonfig
     Test_OTK_IspravkaBlokaUNacrtu
     Test_OTK_RutaPosleUpisa
     Test_OTP_ClanstvoBulkStrogo
@@ -15848,6 +15851,345 @@ EH:
     LogFatal "Test_S6K7_RucnaZbirnaOdbijaHladnjacku", eN, eD
 End Sub
 
+' ============================================================
+' S6 KORAK 7, review #442 P1-a (R13): NASTAVAK LANCA NOSI KUPCA RODITELJA.
+'
+' Lanac je stao posle zbirne (kupac A), pa je operater promenio kupca hladnjace
+' na B i ponovio lanac. Zbirna je vec cinjenica kupca A: prijemnica i noga
+' knjige moraju ici NJEMU, ne trenutnom configu -- inace zbirna kupca A dobija
+' prijemnicu kupca B. Druga brana je pisac: zadat roditelj drugog vlasnika
+' (kupac ILI vozac) se odbija i nista se ne upisuje. Kontrola: pisac sa istim
+' vlasnikom prolazi. Obe brane se mere odvojeno -- svaka na slucaju koji druga
+' pusta (lanac ne zove pisca sa tudjim kupcem; direktan poziv pisca ga zove).
+' SABOTAZE: s6k7-nastavak-kupac-iz-konfiguracije, s6k7-pisac-pusta-tudjeg-roditelja.
+' ============================================================
+Private Sub Test_S6K7_NastavakNosiKupcaRoditelja()
+    Dim tx As clsTransaction, prevKupac As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, izvestaj As String, datum As Date, vozacOg As String
+    scenario = NewScenarioCode("S6K7KR")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    vozacOg = modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID)
+
+    ' Dva bloka sa otpremnicom i zbirnom kupca A, bez prijemnice.
+    Dim blokA As String, otpA As String, zbrA As String
+    Dim blokB As String, otpB As String, zbrB As String, brB As String
+    datum = NextTestDate()
+    blokA = HldBlok("KRA-" & scenario, TEST_HLAD_ST_ID, datum, 30#, 100#, 3, 0#, 0#, 0)
+    otpA = HldOtpremnicaLanca(blokA, vozacOg, g)
+    If Len(otpA) > 0 Then zbrA = modMasterSync.AutoZbirnaZaOtpremnicu(otpA, g)
+    blokB = HldBlok("KRB-" & scenario, TEST_HLAD_ST_ID, datum, 20#, 100#, 0, 0#, 0#, 0)
+    otpB = HldOtpremnicaLanca(blokB, vozacOg, g)
+    If Len(otpB) > 0 Then zbrB = modMasterSync.AutoZbirnaZaOtpremnicu(otpB, g)
+    brB = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrB, COL_ZBR_BROJ)
+    AssertTrue Len(zbrA) > 0 And Len(zbrB) > 0, _
+               "S6K7 kupac lanca: preduslov -- dve zbirne kupca A bez prijemnice"
+
+    ' Operater menja kupca hladnjace, pa ponavlja lanac.
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP2_ID
+    Dim prjA As String
+    izvestaj = ""
+    If Len(blokA) > 0 Then prjA = modAutoHladnjaca.AutoLanacHladnjaca(blokA, izvestaj)
+    AssertEquals "True|" & TEST_KUP_ID & "|" & TEST_KUP_ID, _
+                 CStr(Len(prjA) > 0) & "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_PRJ_KUPAC) & "|" & _
+                 HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrA, COL_ZBR_KUPAC), _
+                 "S6K7 kupac lanca: nastavak posle promene kupca hladnjace pravi prijemnicu za kupca roditeljske zbirne"
+    AssertEquals "1|" & TEST_KUP_ID, CStr(S6AmbBroj(prjA, AMB_VK_UZ_ROBU)) & "|" & _
+                 HldNogaNa(prjA), _
+                 "S6K7 kupac lanca: noga punih prijemnice ide kupcu roditeljske zbirne"
+
+    ' Druga brana: pisac sa zadatim roditeljem drugog vlasnika.
+    Dim nPrj As Long, prjKupac As String, prjVozac As String, prjDobar As String
+    nPrj = Pr3BrojRedova(TBL_PRIJEMNICA)
+    prjKupac = HldPrijemnicaPisca(datum, vozacOg, brB, zbrB, scenario & "-K", g, TEST_KUP2_ID)
+    prjVozac = HldPrijemnicaPisca(datum, TEST_VOZ_ID, brB, zbrB, scenario & "-V", g, TEST_KUP_ID)
+    AssertEquals "True|||0", CStr(Len(brB) > 0) & "|" & prjKupac & "|" & prjVozac & "|" & _
+                 CStr(Pr3BrojRedova(TBL_PRIJEMNICA) - nPrj), _
+                 "S6K7 pisac: roditelj drugog vlasnika (kupac ili vozac) se odbija i nista ne ostaje"
+    prjDobar = HldPrijemnicaPisca(datum, vozacOg, brB, zbrB, scenario & "-D", g, TEST_KUP_ID)
+    AssertEquals "True|" & UCase$(zbrB), CStr(Len(prjDobar) > 0) & "|" & _
+                 UCase$(HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjDobar, COL_DETE_ZBIRNA_ROD)), _
+                 "S6K7 pisac: kontrola -- roditelj istog vlasnika se vezuje"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_S6K7_NastavakNosiKupcaRoditelja", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, review #442 P2 (R14): ZBIRNA LANCA NOSI TACNO JEDNU PRIJEMNICU.
+'
+' Citac koji je za zbirnu uzimao PRVU aktivnu prijemnicu precutao bi drugu, pa bi
+' nastavak lanca javio "nije bilo posla" nad stanjem koje krsi HLD-LANAC-01, a
+' Oporavak ga ne bi video. Druga prijemnica se ovde pravi istim pisacem (F4 je ume
+' da napravi uz potvrdu "dupla prijemnica"); posle toga ostaje JEDINA aktivna, i to
+' bez ID-a (kvar podatka). U oba slucaja nastavak vraca RAZLOG koji imenuje
+' zbirnu, a za dve prijemnice Oporavak ima red LANAC sa statusom GRESKA.
+' Kontrola: kompletan lanac sa jednom prijemnicom je tih.
+' SABOTAZE: s6k7-citac-prijemnica-prvi-pogodak, s6k7-citac-prijemnica-bez-id,
+' s6k7-oporavak-precutkuje-dve-prijemnice.
+' ============================================================
+Private Sub Test_S6K7_LanacJednaPrijemnica()
+    Dim tx As clsTransaction, prevKupac As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, izvestaj As String, datum As Date, vozacOg As String
+    scenario = NewScenarioCode("S6K7JP")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    vozacOg = modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID)
+
+    Dim blok As String, prj As String, zbrID As String, brZbr As String, r As String
+    datum = NextTestDate()
+    blok = HldBlok("JP-" & scenario, TEST_HLAD_ST_ID, datum, 30#, 100#, 0, 0#, 0#, 0)
+    If Len(blok) > 0 Then prj = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    zbrID = HldZbr(HldOtp(blok))
+    brZbr = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)
+    izvestaj = "x"
+    r = "x"
+    If Len(blok) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertEquals "True||", CStr(Len(prj) > 0) & "|" & r & "|" & izvestaj, _
+                 "S6K7 jedna prijemnica: kontrola -- kompletan lanac je tih"
+
+    ' Druga aktivna prijemnica istog roditelja.
+    Dim prj2 As String
+    prj2 = HldPrijemnicaPisca(datum, vozacOg, brZbr, zbrID, scenario & "-2", g, TEST_KUP_ID)
+    izvestaj = ""
+    r = "x"
+    If Len(blok) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertEquals "True|", CStr(Len(prj2) > 0) & "|" & r, _
+                 "S6K7 jedna prijemnica: preduslov -- druga prijemnica postoji, nastavak ne vraca ID"
+    AssertTrue Len(zbrID) > 0 And InStr(1, izvestaj, zbrID, vbTextCompare) > 0, _
+               "S6K7 jedna prijemnica: dve aktivne prijemnice zbirne lanca daju razlog koji imenuje zbirnu"
+    AssertTrue HldOporavakLanacGreska(), _
+               "S6K7 jedna prijemnica: Oporavak pokazuje gresku lanca"
+
+    ' Aktivna prijemnica bez PrijemnicaID-a (kvar podatka), i to JEDINA aktivna:
+    ' prva se obara direktnim upisom (fault injection). Sa dve aktivne bi slucaj
+    ' uhvatilo pravilo "vise prijemnica" iznad, pa tvrdnja ne bi merila prazan ID.
+    ' Bez tog pravila citalac vraca prazan ID kao "nema prijemnice", a nastavak
+    ' pravi jos jednu.
+    Dim redovi As Collection, nPrj As Long
+    If Len(prj) > 0 And Len(prj2) > 0 Then
+        Set redovi = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prj)
+        If Not redovi Is Nothing Then
+            If redovi.count = 1 Then
+                RequireUpdateCell TBL_PRIJEMNICA, CLng(redovi(1)), COL_STORNIRANO, "Da", _
+                                  "Test_S6K7_LanacJednaPrijemnica"
+            End If
+        End If
+        Set redovi = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prj2)
+        If Not redovi Is Nothing Then
+            If redovi.count = 1 Then
+                RequireUpdateCell TBL_PRIJEMNICA, CLng(redovi(1)), COL_PRJ_ID, "", _
+                                  "Test_S6K7_LanacJednaPrijemnica"
+            End If
+        End If
+    End If
+    nPrj = Pr3BrojRedova(TBL_PRIJEMNICA)
+    izvestaj = ""
+    If Len(blok) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertTrue Len(zbrID) > 0 And InStr(1, izvestaj, zbrID, vbTextCompare) > 0 And _
+               Pr3BrojRedova(TBL_PRIJEMNICA) = nPrj, _
+               "S6K7 jedna prijemnica: jedina aktivna prijemnica bez ID-a daje razlog koji imenuje zbirnu i ne pravi drugu"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_S6K7_LanacJednaPrijemnica", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, review #442 P1-b (R15): VLASNISTVO TOKA ZBIRNE NE CITA TRENUTNI CONFIG.
+'
+' PONISTENJE zbirne odlucuje sme li da stornira prijemnicu i palete po tome da li
+' je zbirna INTERNI hladnjacki tok. To je bilo pitanje "da li je kupac zbirne
+' DANAS MALINA_DEFAULT_KUPAC" -- pa je promena configa menjala pravilo storna
+' starih lanaca. Sada je cinjenica zbirne (KupacHladnjaca, ZBR-OWN-01), upisana
+' pri nastanku; prazna znaci "ne zna se" i PONISTENJE staje bez mutacije.
+'
+'   (a) interni lanac, config promenjen POSLE: posledice kazu "storniraju se",
+'       PONISTENJE prolazi i obara prijemnicu;
+'   (b) eksterna zbirna, njen kupac POSTANE hladnjaca: PONISTENJE se odbija zbog
+'       aktivne eksterne prijemnice, nista nije stornirano;
+'   (c) zbirna bez oznake: posledice ne tvrde vlasnistvo, PONISTENJE staje sa
+'       razlogom koji imenuje oznaku, nista nije stornirano;
+'   (d) izmena kupca u nacrtu zbirne prati oznaku.
+' SABOTAZE: s6k7-vlasnistvo-iz-konfiguracije, s6k7-prazna-oznaka-pusta,
+' s6k7-pisac-zbirne-bez-oznake, s6k7-nacrt-ne-prati-oznaku.
+' ============================================================
+Private Sub Test_S6K7_VlasnistvoLancaNeCitaKonfig()
+    Const OZNAKA As String = "KupacHladnjaca"
+    Dim tx As clsTransaction, prevKupac As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, izvestaj As String, poruka As String
+    scenario = NewScenarioCode("S6K7VL")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+
+    ' --- (a) interni lanac, config promenjen posle ---------------------------
+    Dim blokA As String, prjA As String, zbrA As String, brA As String, otpA As String
+    Dim posA As String, resA As Object, uspehA As Boolean
+    blokA = HldBlok("VLA-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 30#, 100#, 0, 0#, 0#, 0)
+    If Len(blokA) > 0 Then prjA = modAutoHladnjaca.AutoLanacHladnjaca(blokA, izvestaj)
+    otpA = HldOtp(blokA)
+    zbrA = HldZbr(otpA)
+    brA = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrA, COL_ZBR_BROJ)
+    AssertEquals "True|Da", CStr(Len(prjA) > 0) & "|" & HldPoljeAko(TBL_ZBIRNA, COL_ZBR_ID, zbrA, OZNAKA), _
+                 "S6K7 vlasnistvo: zbirna lanca nosi oznaku internog toka od nastanka"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP2_ID
+    If Len(zbrA) > 0 Then
+        posA = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, brA, "", zbrA)
+        Set resA = modStornoFlow.RunZbirnaCorrection(brA, SV_MODE_PONISTENJE, True, zbrA)
+        uspehA = CBool(resA("success"))
+    End If
+    AssertTrue InStr(1, posA, "prijemnice: 1 (storniraju se)", vbTextCompare) > 0, _
+               "S6K7 vlasnistvo: posle promene configa posledice internog lanca i dalje kazu da se prijemnica stornira"
+    AssertEquals "True|Da|Da", CStr(uspehA) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_STORNIRANO) & "|" & _
+                 HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_STORNIRANO), _
+                 "S6K7 vlasnistvo: PONISTENJE internog lanca posle promene configa obara i prijemnicu"
+
+    ' --- (b) eksterna zbirna, njen kupac POSTANE hladnjaca --------------------
+    ' Config je sada KUP2, pa zbirna kupca KUP nastaje kao EKSTERNA.
+    Dim otpB As String, zbrB As String, brB As String, prjB As String, resB As Object, uspehB As Boolean
+    Dim izvB As Collection
+    otpB = ZbrIzdataOtp("VLB-" & scenario, 40#, 0#)
+    brB = TEST_PREFIX & "-ZBR-VLB-" & scenario
+    Set izvB = New Collection
+    If Len(otpB) > 0 Then izvB.Add otpB
+    If izvB.count > 0 Then zbrB = CreateZbirnaIzIzvora_TX(Pr3Header(brB), izvB, g)
+    If Len(zbrB) > 0 Then
+        prjB = HldPrijemnicaPisca(CDate(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrB, COL_ZBR_DATUM)), _
+                                  TEST_VOZ_ID, brB, zbrB, scenario & "-B", g, TEST_KUP_ID)
+    End If
+    AssertEquals "True|Ne", CStr(Len(prjB) > 0) & "|" & HldPoljeAko(TBL_ZBIRNA, COL_ZBR_ID, zbrB, OZNAKA), _
+                 "S6K7 vlasnistvo: preduslov -- eksterna zbirna sa prijemnicom nosi oznaku Ne"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    If Len(zbrB) > 0 Then
+        Set resB = modStornoFlow.RunZbirnaCorrection(brB, SV_MODE_PONISTENJE, True, zbrB)
+        uspehB = CBool(resB("success"))
+    End If
+    AssertEquals "True|False||", CStr(Len(prjB) > 0) & "|" & CStr(uspehB) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_STORNIRANO) & "|" & _
+                 HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrB, COL_STORNIRANO), _
+                 "S6K7 vlasnistvo: kupac koji POSTANE hladnjaca ne cini eksternu prijemnicu nasom -- PONISTENJE se odbija, nista nije stornirano"
+
+    ' --- (c) zbirna bez oznake: staje bez mutacije ----------------------------
+    Dim blokC As String, prjC As String, zbrC As String, brC As String, posC As String
+    Dim resC As Object, uspehC As Boolean, porukaC As String, redovi As Collection, cOzn As Long
+    blokC = HldBlok("VLC-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 25#, 100#, 0, 0#, 0#, 0)
+    If Len(blokC) > 0 Then prjC = modAutoHladnjaca.AutoLanacHladnjaca(blokC, izvestaj)
+    zbrC = HldZbr(HldOtp(blokC))
+    brC = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrC, COL_ZBR_BROJ)
+    cOzn = GetColumnIndex(TBL_ZBIRNA, OZNAKA)
+    If Len(zbrC) > 0 And cOzn > 0 Then
+        Set redovi = FindRows(TBL_ZBIRNA, COL_ZBR_ID, zbrC)
+        If redovi.count = 1 Then RequireUpdateCell TBL_ZBIRNA, CLng(redovi(1)), OZNAKA, "", _
+                                                   "Test_S6K7_VlasnistvoLancaNeCitaKonfig"
+    End If
+    If Len(zbrC) > 0 Then
+        posC = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, brC, "", zbrC)
+        Set resC = modStornoFlow.RunZbirnaCorrection(brC, SV_MODE_PONISTENJE, True, zbrC)
+        uspehC = CBool(resC("success"))
+        porukaC = CStr(resC("message"))
+    End If
+    AssertTrue Len(posC) > 0 And InStr(1, posC, "storniraju se", vbTextCompare) = 0 And _
+               InStr(1, posC, "NETAKNUTE", vbTextCompare) = 0, _
+               "S6K7 vlasnistvo: posledice nad zbirnom bez oznake ne tvrde ni jedno vlasnistvo"
+    AssertEquals "True|False|||", CStr(Len(prjC) > 0) & "|" & CStr(uspehC) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjC, COL_STORNIRANO) & "|" & _
+                 HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrC, COL_STORNIRANO) & "|", _
+                 "S6K7 vlasnistvo: PONISTENJE zbirne bez oznake staje bez mutacije"
+    AssertTrue InStr(1, porukaC, OZNAKA, vbTextCompare) > 0, _
+               "S6K7 vlasnistvo: razlog zastoja imenuje oznaku vlasnistva"
+
+    ' --- (d) izmena kupca u nacrtu prati oznaku -------------------------------
+    Dim nacrt As String, hN As Object, okIzm As Boolean
+    Set hN = Pr3Header(TEST_PREFIX & "-ZBR-VLD-" & scenario)
+    hN("KupacID") = TEST_KUP2_ID
+    nacrt = CreateZbirnaDraft_TX(hN, ZbrOcek(KLASA_I, 10#, 1#), g)
+    Dim oznPre As String
+    oznPre = HldPoljeAko(TBL_ZBIRNA, COL_ZBR_ID, nacrt, OZNAKA)
+    hN("KupacID") = TEST_KUP_ID
+    If Len(nacrt) > 0 Then okIzm = UpdateZbirnaDraft_TX(nacrt, hN, ZbrOcek(KLASA_I, 10#, 1#), g)
+    AssertEquals "Ne|True|Da", oznPre & "|" & CStr(okIzm) & "|" & HldPoljeAko(TBL_ZBIRNA, COL_ZBR_ID, nacrt, OZNAKA), _
+                 "S6K7 vlasnistvo: izmena kupca u nacrtu zbirne prati oznaku internog toka"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_S6K7_VlasnistvoLancaNeCitaKonfig", eN, eD
+End Sub
+
+' Polje po imenu kolone koje mozda jos ne postoji (crveni prolaz): "" kad ga nema.
+Private Function HldPoljeAko(ByVal tbl As String, ByVal idCol As String, ByVal id As String, _
+                             ByVal col As String) As String
+    If Len(id) = 0 Then Exit Function
+    If GetColumnIndex(tbl, col) = 0 Then Exit Function
+    HldPoljeAko = Trim$(NzToText(GetValueByKey(tbl, idCol, id, col)))
+End Function
+
+' Kome ide noga punih prijemnice (NaNalogID); prazan ID = "".
+Private Function HldNogaNa(ByVal prj As String) As String
+    If Len(prj) = 0 Then Exit Function
+    HldNogaNa = AmbNoviPolje(prj, DOK_TIP_PRIJEMNICA, AMB_VK_UZ_ROBU, COL_AMB_NA_ID)
+End Function
+
+' Da li Oporavak (lista Nedovrseno) ima red LANAC sa statusom GRESKA.
+Private Function HldOporavakLanacGreska() As Boolean
+    Dim c As Collection, i As Long, d As Object
+    Set c = modStornoRecovery.GetNedovrseno()
+    If c Is Nothing Then Exit Function
+    For i = 1 To c.count
+        Set d = c(i)
+        If CStr(d("kind")) = "LANAC" And CStr(d("status")) = "GRESKA" Then
+            HldOporavakLanacGreska = True
+            Exit Function
+        End If
+    Next i
+End Function
+
 ' --- pomocnici S6 koraka 7 (hladnjacki lanac) -- nad praznim ID-jem vracaju
 '     prazno, da crveni prolaz izvrsi iste tvrdnje kao zeleni ---
 
@@ -15919,10 +16261,11 @@ End Function
 ' Prijemnica kroz pisac sa zadatim roditeljem (odluka 7), bez gajbi.
 Private Function HldPrijemnicaPisca(ByVal datum As Date, ByVal vozacID As String, _
                                     ByVal brZbr As String, ByVal roditelj As String, _
-                                    ByVal oznaka As String, ByRef outG As String) As String
+                                    ByVal oznaka As String, ByRef outG As String, _
+                                    Optional ByVal kupacID As String = TEST_KUP_ID) As String
     Dim errN As Long
     If Len(brZbr) = 0 Then Exit Function
-    HldPrijemnicaPisca = SavePrijemnicaMulti_TX(datum:=datum, kupacID:=TEST_KUP_ID, vozacID:=vozacID, _
+    HldPrijemnicaPisca = SavePrijemnicaMulti_TX(datum:=datum, kupacID:=kupacID, vozacID:=vozacID, _
         brojPrij:=TEST_PREFIX & "-PK7W-" & oznaka, brojZbirne:=brZbr, vrstaVoca:=TEST_VRSTA, _
         sortaVoca:=TEST_SORTA, kolicinaI:=1#, cenaI:=1#, tipAmb:="", kolAmb:=0, _
         kolAmbVracena:=0, outErrNum:=errN, outGreska:=outG, zbirnaRoditeljID:=roditelj)
@@ -16238,6 +16581,10 @@ Private Function ZbrZateceniRed(ByVal datum As Date, ByVal vozacID As String, _
     SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_VOZAC, vozacID
     SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne
     SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_KUPAC, kupacID
+    ' Oznaku internog toka (ZBR-OWN-01) pisac upisuje pri nastanku, istim
+    ' pravilom; bez nje PONISTENJE (i uzvodna kaskada prijemnice) staje.
+    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_KUPAC_HLADNJACA, _
+                     modAutoHladnjaca.OznakaKupacHladnjaca(kupacID)
     SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_HLADNJACA, hladnjaca
     SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_POGON, pogon
     SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_VRSTA, vrstaVoca

@@ -1336,6 +1336,10 @@ Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
     SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_VOZAC, vozacID, SRC
     SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC
     SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KUPAC, kupacID, SRC
+    ' ZBR-OWN-01: da li je zbirna interni hladnjacki tok je cinjenica NASTANKA
+    ' (review #442, P1-b) -- storno je posle cita odavde, ne iz trenutnog configa.
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KUPAC_HLADNJACA, _
+                        modAutoHladnjaca.OznakaKupacHladnjaca(kupacID), SRC
     SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_HLADNJACA, hladnjaca, SRC
     SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_POGON, pogon, SRC
     SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_VRSTA, vrstaVoca, SRC
@@ -1944,6 +1948,10 @@ Private Sub ZbrIzmeniDraft(ByVal zbirnaID As String, ByVal h As Object, _
     RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_VOZAC, vozacID, SRC
     RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_BROJ, brojZbirne, SRC
     RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_KUPAC, kupacID, SRC
+    ' Oznaka internog toka ide UZ kupca (ZBR-OWN-01): nacrt jos nije cinjenica,
+    ' pa nov kupac nacrta nosi i svoju oznaku.
+    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_KUPAC_HLADNJACA, _
+                      modAutoHladnjaca.OznakaKupacHladnjaca(kupacID), SRC
     RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_HLADNJACA, _
                       HdrOpcion(h, "Hladnjaca"), SRC
     RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_POGON, HdrOpcion(h, "Pogon"), SRC
@@ -6771,13 +6779,17 @@ EH:
 End Function
 
 ' Zadat roditelj prijemnice (S6 korak 7, odluka 7): zbirna mora da postoji TACNO
-' JEDNOM, da je AKTIVNA i da nosi bas broj koji prijemnica pise na zaglavlje.
-' Inace dize gresku -- pisac ne vezuje dete za zbirnu koja mu protivreci. Vraca
-' ID kakav stoji u tabeli.
+' JEDNOM, da je AKTIVNA, da nosi bas broj koji prijemnica pise na zaglavlje i da
+' je ISTOG VLASNIKA -- kupac i vozac zbirne su kupac i vozac prijemnice (review
+' #442, P1-a: nastavak lanca posle promene kupca hladnjace je pisao prijemnicu
+' kupca B pod zbirnom kupca A). Inace dize gresku -- pisac ne vezuje dete za
+' zbirnu koja mu protivreci. Vraca ID kakav stoji u tabeli.
 Private Function ZbirnaRoditeljPrijemnice(ByVal zbirnaID As String, _
                                           ByVal brojZbirne As String, _
+                                          ByVal kupacID As String, _
+                                          ByVal vozacID As String, _
                                           ByVal src As String) As String
-    Dim brojRoditelja As String
+    Dim brojRoditelja As String, kupacRoditelja As String, vozacRoditelja As String
 
     RequireTacnoJedan TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, "ZbirnaID (roditelj prijemnice)", src
     If ZbirnaJeStornirana(zbirnaID) Then
@@ -6789,6 +6801,15 @@ Private Function ZbirnaRoditeljPrijemnice(ByVal zbirnaID As String, _
         Err.Raise vbObjectError + 1434, src, _
                   "Zbirna " & zbirnaID & " nosi broj '" & brojRoditelja & _
                   "', a prijemnica pise broj zbirne '" & brojZbirne & "'."
+    End If
+    kupacRoditelja = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC)))
+    vozacRoditelja = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_VOZAC)))
+    If StrComp(kupacRoditelja, Trim$(kupacID), vbTextCompare) <> 0 Or _
+       StrComp(vozacRoditelja, Trim$(vozacID), vbTextCompare) <> 0 Then
+        Err.Raise vbObjectError + 1435, src, _
+                  "Zbirna " & zbirnaID & " je zbirna kupca '" & kupacRoditelja & "' i vozaca '" & _
+                  vozacRoditelja & "', a prijemnica pise kupca '" & Trim$(kupacID) & _
+                  "' i vozaca '" & Trim$(vozacID) & "'."
     End If
     ZbirnaRoditeljPrijemnice = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_ID)))
 End Function
@@ -6956,7 +6977,8 @@ Private Function SavePrijemnicaDokument(ByVal tx As clsTransaction, _
     ' bas tog broja, inace pisac staje (odluka 7). Bez njega ide po broju.
     Dim roditeljID As String
     If Len(Trim$(zbirnaRoditeljID)) > 0 Then
-        roditeljID = ZbirnaRoditeljPrijemnice(Trim$(zbirnaRoditeljID), brojZbirne, SRC)
+        roditeljID = ZbirnaRoditeljPrijemnice(Trim$(zbirnaRoditeljID), brojZbirne, _
+                                              kupacID, vozacID, SRC)
     Else
         roditeljID = ZbirnaIDZaBroj(brojZbirne)
     End If

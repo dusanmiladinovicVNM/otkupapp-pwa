@@ -984,7 +984,8 @@
         "ZamenjenSa",
         "CorrectionID",
         "IzdatoStatus",
-        "GeneracijaID"
+        "GeneracijaID",
+        "KupacHladnjaca"
       ]
     },
     {

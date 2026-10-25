@@ -122,8 +122,27 @@ pisac vezuje za zbirnu po ID-u (`SavePrijemnicaMulti_TX`, `zbirnaRoditeljID`): b
 zbirne ume da bude dvosmislen (KR-001). Nedovršen lanac (otpremnica bez zbirne ili
 zbirna bez prijemnice) vidi Oporavak, lista „Nedovršeno", red `LANAC`; PWA malina
 batch hladnjačke blokove preskače, a sync ih vodi kroz lanac blok po blok.
+Kupac je `MALINA_DEFAULT_KUPAC` **samo dok zbirna ne postoji**: nastavak posle zbirne
+uzima kupca **roditeljske zbirne**, a pisac prijemnice zadatog roditelja drugog
+vlasnika (kupac ili vozač) odbija (review #442, P1-a). Zbirna lanca nosi **tačno
+jednu** aktivnu prijemnicu: dve, ili aktivna bez `PrijemnicaID`, su kvar koji
+nastavak javlja razlogom sa imenom zbirne, a Oporavak redom `GREŠKA` — ne prvi
+pogodak (review #442, P2).
 Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 7" (kod:
-„Tok koda, deo 2", stavka 202 u `docs/STANJE_REFAKTORA.md`).
+„Tok koda, deo 2", stavka 202 u `docs/STANJE_REFAKTORA.md`; review #442: stavka 203).
+
+**ZBR-OWN-01 — da li je zbirna interni hladnjački tok je činjenica zbirne, upisana
+pri nastanku (review #442, P1-b; odluka operatera 25.10.2026).** `tblZbirna.KupacHladnjaca`
+(`Da`/`Ne`, poslednja kolona kanona) piše **samo pisac zbirne**
+(`BuildZbirnaHeaderRowData` pri nastanku, izmena kupca u nacrtu), po pravilu
+`IsHladnjacaKupac(kupac)` u tom trenutku. PONIŠTENJE zbirne po njoj odlučuje sme li da
+stornira prijemnicu i palete (`modStornoFlow.ZbirnaOwnsExternalChain`). Do review-a se
+to pitalo „da li je kupac zbirne **danas** `MALINA_DEFAULT_KUPAC`", pa je promena
+configa retroaktivno menjala pravilo storna: interni lanac je postajao „eksterni", a
+eksterna zbirna kupca koji postane hladnjača „naša". **Prazna ili nepoznata oznaka
+znači „ne zna se"** i PONIŠTENJE staje bez mutacije, sa razlogom koji imenuje kolonu;
+posledice javljaju „spisak posledica nedostupan". Zatečene zbirne bez oznake se ne
+dopunjavaju (nema produkcionih podataka). Dokaz: `Test_S6K7_VlasnistvoLancaNeCitaKonfig`.
 
 **Storno nije brisanje.** Dokument-tabele imaju `Stornirano` kolonu; storniran red
 ostaje u tabeli i izlazi iz svih agregata. Zato „aktivan" nije isto što i

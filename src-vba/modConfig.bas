@@ -258,6 +258,10 @@ Public Const COL_ZBR_KOL_AMB As String = "UkupnoAmbalaze"
 Public Const COL_ZBR_VRSTA As String = "VrstaVoca"
 Public Const COL_ZBR_SORTA As String = "SortaVoca"
 Public Const COL_ZBR_KLASA As String = "Klasa"
+' ZBR-OWN-01 (review #442, P1-b): da li je zbirna INTERNI hladnjacki tok
+' ("Da"/"Ne"), upisano pri nastanku. PONISTENJE po njoj odlucuje sme li da obori
+' prijemnicu i palete -- trenutni MALINA_DEFAULT_KUPAC to vise ne odlucuje.
+Public Const COL_ZBR_KUPAC_HLADNJACA As String = "KupacHladnjaca"
 
 ' --- tblZbirnaIzvori (PR3: verzionisano clanstvo) ---
 '
