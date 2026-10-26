@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 26.10.2026 (stavka 206: merge `#442` = `376a3d3e`, S6 korak 7/8 zatvoren; sledeći je korak 8).
+**Ažurirano:** 26.10.2026 (stavka 207: S6 korak 8 — pre-flight i odluke 1–4, pre koda).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 7/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — grana `claude/s6-korak8-zavrsni` sa `376a3d3e` |
+| **S6 prijemnica** | ⏳ **u toku, 7/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207); grana `claude/s6-korak8-zavrsni` sa `376a3d3e` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7540,6 +7540,28 @@
      - **Sledeći brojevi:** stavka 207 · test 275 (pazi `#441`) · KI-055.
      - **Sledeći je S6 korak 8** (završni: linijska i keš polja `tblPrijemnica`, `SavePrijemnica_TX`, golden lanac do
        fakture, kapije prijemnice u piscu), na grani `claude/s6-korak8-zavrsni` sa `376a3d3e`.
+207. **S6 korak 8 — pre-flight nad `376a3d3e`, odluke 1–4, PRE koda** (26.10.2026). Pun zapis je u §14.55,
+     „Korak 8".
+
+     - **Sonde nema:** nijedna osa nije `PLATFORM UNKNOWN`; self-heal brisanja je obrazac S1d i S3-ostatka.
+     - **Popis, izmeren** (kopija `popis_citalaca` sa šest grupa prijemnice): linijske kolone 4 živa PROD mesta
+       (`modSetup` ×3, prefill klase), keš fakture 0, generacija kao identitet 15 mesta u 5 procedura (Oporavak
+       „Prevezi", F4 ispravka paleta), stari pisac 0 živih, blaža grana 1, `BrojZbirne` 33 živa mesta u 13 modula.
+     - **Nalazi pre-flight-a** (svaki je postao odluka ili stavka obima):
+       - PRJ-ZBR-01 i broj po kupcu drži samo F4; pisac zbirnu proverava samo uz `PrijemnicaZbirnaBlokira()`, a broj
+         nikako (KI-051 i A2 t. 4);
+       - generacija je od koraka 2 1 : 1 sa `PrijemnicaID`, ali je i dalje identitet u Oporavku i F4 ispravci;
+       - `EnsureSledljivostSchema` bi obrisanu `GeneracijaID` vratila na kraj;
+       - od 11 starih goldena devet nosi ishod koji domen i danas tvrdi, a D2 premisu koju je korak 4 zabranio;
+       - `KI-028` nije preduslov golden lanca (golden ima sopstvene identitete), iako ga je odluka 5 koraka 7 stavila
+         ispred njega.
+     - **Odluke operatera (26.10.2026), sve po preporuci:**
+       1. `BrojZbirne` kao veza van S6, svoj rez za sva tri deteta zbirne; korak 8 dodaje prag 33;
+       2. golden: devet scenarija, goldeni iz `fc06fa77` bajt-identični, D2 se ne vraća;
+       3. KI-051: strogo čitanje configa, ista provera za F4 i pisac;
+       4. jedan PR, tri dela (kapije pisca + stari pisac; šema + generacija → ID; golden).
+     - **Acceptance contract R1–R10** sa sabotažom uz svaku tvrdnju i imenovano van obima: §14.55, „Korak 8".
+     - **Sledeći brojevi:** stavka 208 (deo 1) · test 275 (pazi `#441`) · KI-055.
 
 ## Dug sa imenom (posle S5-5b)
 
