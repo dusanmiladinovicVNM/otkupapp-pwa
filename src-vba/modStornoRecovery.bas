@@ -27,7 +27,8 @@ Private Const ERR_REC_BASE As Long = vbObjectError + 2900
 ' ============================================================
 ' Svaki red nosi PUN strukturirani zapis (ne samo tekst) -> panel moze da deluje po
 ' redu. Kljucevi: kind, ref (poslovni broj), status, opis, akcija (tekst), correctionID,
-' docType, newBroj, mode, actionCode (CONTEXT | PRIJ | PAL | BLOK -> UI dispecuje).
+' docType, newBroj, mode, actionCode (CONTEXT | PRIJ | PAL | BLOK | LANAC -> UI
+' dispecuje), otkupID (samo LANAC: identitet za radnju "Ponovi auto-lanac").
 ' Dedup: osirocene se izostave ako isti poslovni broj vec nosi PENDING/MANUAL context
 ' (isti problem se ne prikazuje dvaput).
 Public Function GetNedovrseno() As Collection
@@ -64,6 +65,8 @@ Public Function GetNedovrseno() As Collection
         "Prijemnica (palete)", "PAL", "Osiroceni dokumenti (Mod: Palete)", seen
     ' 3) Izgubljeni blokovi (B-041) -- KANON, ne stara veza.
     AddIzgubljeniBlokovi result
+    ' 4) Nedovrseni hladnjacki lanci (S6 korak 7, odluka 8).
+    AddNedovrseniLanci result
     Exit Function
 EH:
     LogErr MOD_NAME & ".GetNedovrseno"
@@ -123,6 +126,48 @@ EH:
         Poruka("OTKUI_OPO_BLOK_AKCIJA_GRESKA"), "", "Otkup", "", "", "BLOK"
 End Sub
 
+' Nedovrseni hladnjacki lanci (S6 korak 7, odluka 8, HLD-LANAC-01).
+'
+' Blok JE u otpremnici, a lancu fali zbirna ili prijemnica. Nijedna druga lista
+' ga ne vidi: "Bez otpremnice" cita nevezane blokove, a ovaj je vezan. Skup
+' racuna vlasnik lanca (modAutoHladnjaca.NedovrseniLanci), po kanonskom
+' roditelju -- ista pitanja koja lanac postavlja kad nastavlja.
+'
+' Red nosi OtkupID: radnja "Ponovi auto-lanac" bira blok po njemu, ne po broju
+' (broj bloka je labela stanice, pa ga nosi i blok druge stanice). Pad citanja
+' nije kraca lista nego red sa statusom GRESKA -- isti obrazac kao
+' AddIzgubljeniBlokovi.
+Private Sub AddNedovrseniLanci(ByRef result As Collection)
+    Dim lanci As Collection, i As Long, r As Variant
+    Dim ref As String, opis As String, errDesc As String
+
+    On Error GoTo EH
+
+    Set lanci = modAutoHladnjaca.NedovrseniLanci()
+    For i = 1 To lanci.count
+        r = lanci(i)
+        ref = Trim$(CStr(r(1)))
+        If Len(ref) = 0 Then ref = CStr(r(0))
+        If Len(CStr(r(3))) = 0 Then
+            opis = Poruka("OTKUI_OPO_LANAC_OPIS_OTP") & " " & _
+                   modAutoHladnjaca.LanacBrojDokumenta("OTP", CStr(r(2)))
+        Else
+            opis = Poruka("OTKUI_OPO_LANAC_OPIS_ZBR") & " " & _
+                   modAutoHladnjaca.LanacBrojDokumenta("ZBR", CStr(r(3)))
+        End If
+        AddNedRowFull result, "LANAC", ref, "NEDOVRSEN", opis, _
+            Poruka("OTKUI_OPO_LANAC_AKCIJA"), "", "Otkup", "", "", "LANAC", CStr(r(0))
+    Next i
+    Exit Sub
+EH:
+    ' Opis se cita PRE LogErr-a (LogErr usput brise stanje greske).
+    errDesc = Err.description
+    LogErr MOD_NAME & ".AddNedovrseniLanci"
+    AddNedRowFull result, "LANAC", "", "GRESKA", _
+        Poruka("OTKUI_OPO_LANAC_GRESKA") & " " & errDesc, _
+        Poruka("OTKUI_OPO_LANAC_AKCIJA_GRESKA"), "", "Otkup", "", "", "LANAC"
+End Sub
+
 ' UCase(OtkupID) -> BrojDokumenta, jednim prolazom kroz tabelu. NevezaniOtkupi
 ' vraca kljuceve u UCase, pa se i ovde tako kljuca; LookupValue po bloku bi bio
 ' jos jedan prolaz po svakom redu liste.
@@ -149,12 +194,14 @@ End Function
 Private Sub AddNedRowFull(ByRef col As Collection, ByVal kind As String, ByVal ref As String, _
                           ByVal status As String, ByVal opis As String, ByVal akcija As String, _
                           ByVal correctionID As String, ByVal docType As String, _
-                          ByVal newBroj As String, ByVal mode As String, ByVal actionCode As String)
+                          ByVal newBroj As String, ByVal mode As String, ByVal actionCode As String, _
+                          Optional ByVal otkupID As String = "")
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
     d("kind") = kind: d("ref") = ref: d("status") = status
     d("opis") = opis: d("akcija") = akcija
     d("correctionID") = correctionID: d("docType") = docType
     d("newBroj") = newBroj: d("mode") = mode: d("actionCode") = actionCode
+    d("otkupID") = otkupID
     col.Add d
 End Sub
 

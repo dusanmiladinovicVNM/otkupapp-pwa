@@ -105,6 +105,50 @@ grana pisca ostaju do koraka 8 i dosežu ih samo testovi (jedini produkcioni poz
 pisca je F4).
 Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 6".
 
+**HLD-LANAC-01 — hladnjački blok je jedan lanac, 1:1 po klasi na četiri nivoa
+(specifikacija operatera 20.09.2026; odluke 24.10.2026, S6 korak 7).** Blok upisan na
+stanici sa `JeHladnjaca = Da` sam pravi `OTK → OTP → ZBR → PRJ`: kilaža i gajbe po
+klasi jednake su na sva četiri dokumenta, svaki dokument izvodi stavke iz svog
+kanonskog roditelja i vezuje se za njega **po ID-u**, a jedan blok je tačno jedan
+lanac. Roba se meri pri prijemu u hladnjaču, pa sva četiri dokumenta nose datum
+otkupa; vozač je ogledalo stanice; kupac je `MALINA_DEFAULT_KUPAC`; cena stavke
+prijemnice je cena stavke otkupa te klase. Automatika je **obavezna**: stanica je
+jedini autoritet (prekidač `AUTO_PRIJEMNICA_HLADNJACA` se briše), a ručni putevi ne
+primaju hladnjački blok ni hladnjačku otpremnicu. Lanac je **nastavljiv**: svaki
+korak je idempotentan po kanonskom roditelju, pa „Ponovi auto-lanac" kreće od prvog
+koraka koji fali. Vlasnik: `modAutoHladnjaca.AutoLanacHladnjaca`; kapije ručnih puteva
+`modScrDokumenti.VeziZaAktivnu` i `modDokumenta.DodajZbirnaIzvor_TX`. Prijemnicu
+pisac vezuje za zbirnu po ID-u (`SavePrijemnicaMulti_TX`, `zbirnaRoditeljID`): broj
+zbirne ume da bude dvosmislen (KR-001). Nedovršen lanac (otpremnica bez zbirne ili
+zbirna bez prijemnice) vidi Oporavak, lista „Nedovršeno", red `LANAC`; PWA malina
+batch hladnjačke blokove preskače, a sync ih vodi kroz lanac blok po blok.
+Kupac je `MALINA_DEFAULT_KUPAC` **samo dok zbirna ne postoji**: nastavak posle zbirne
+uzima kupca **roditeljske zbirne**, a pisac prijemnice zadatog roditelja drugog
+vlasnika (kupac ili vozač) odbija (review #442, P1-a). Zbirna lanca nosi **tačno
+jednu** aktivnu prijemnicu: dve, ili aktivna bez `PrijemnicaID`, su kvar koji
+nastavak javlja razlogom sa imenom zbirne, a Oporavak redom `GREŠKA` — ne prvi
+pogodak (review #442, P2). **Otpremnica pripada lancu samo ako joj je vozač ogledalo
+stanice** (`VozacID = StanicaID`): oznaka stanice je trenutno stanje, pa ručna otpremnica
+(pravi vozač) stanice koja je posle označena kao hladnjača nije lanac — Oporavak je ne
+nudi, „Ponovi" je ne dira, a ručna F3 zbirna je prima (N1, ručna provera #442). Blok
+**bez** otpremnice i dalje ide po trenutnoj oznaci: to je odluka o dokumentu koji tek
+nastaje.
+Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 7" (kod:
+„Tok koda, deo 2", stavka 202 u `docs/STANJE_REFAKTORA.md`; review #442: stavka 203).
+
+**ZBR-OWN-01 — da li je zbirna interni hladnjački tok je činjenica zbirne, upisana
+pri nastanku (review #442, P1-b; odluka operatera 25.10.2026).** `tblZbirna.KupacHladnjaca`
+(`Da`/`Ne`, poslednja kolona kanona) piše **samo pisac zbirne**
+(`BuildZbirnaHeaderRowData` pri nastanku, izmena kupca u nacrtu), po pravilu
+`IsHladnjacaKupac(kupac)` u tom trenutku. PONIŠTENJE zbirne po njoj odlučuje sme li da
+stornira prijemnicu i palete (`modStornoFlow.ZbirnaOwnsExternalChain`). Do review-a se
+to pitalo „da li je kupac zbirne **danas** `MALINA_DEFAULT_KUPAC`", pa je promena
+configa retroaktivno menjala pravilo storna: interni lanac je postajao „eksterni", a
+eksterna zbirna kupca koji postane hladnjača „naša". **Prazna ili nepoznata oznaka
+znači „ne zna se"** i PONIŠTENJE staje bez mutacije, sa razlogom koji imenuje kolonu;
+posledice javljaju „spisak posledica nedostupan". Zatečene zbirne bez oznake se ne
+dopunjavaju (nema produkcionih podataka). Dokaz: `Test_S6K7_VlasnistvoLancaNeCitaKonfig`.
+
 **Storno nije brisanje.** Dokument-tabele imaju `Stornirano` kolonu; storniran red
 ostaje u tabeli i izlazi iz svih agregata. Zato „aktivan" nije isto što i
 „postoji". Kaskade (šta storno jednog dokumenta povlači nizvodno) su opisane u

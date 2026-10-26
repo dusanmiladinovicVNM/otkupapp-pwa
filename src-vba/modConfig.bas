@@ -258,6 +258,10 @@ Public Const COL_ZBR_KOL_AMB As String = "UkupnoAmbalaze"
 Public Const COL_ZBR_VRSTA As String = "VrstaVoca"
 Public Const COL_ZBR_SORTA As String = "SortaVoca"
 Public Const COL_ZBR_KLASA As String = "Klasa"
+' ZBR-OWN-01 (review #442, P1-b): da li je zbirna INTERNI hladnjacki tok
+' ("Da"/"Ne"), upisano pri nastanku. PONISTENJE po njoj odlucuje sme li da obori
+' prijemnicu i palete -- trenutni MALINA_DEFAULT_KUPAC to vise ne odlucuje.
+Public Const COL_ZBR_KUPAC_HLADNJACA As String = "KupacHladnjaca"
 
 ' --- tblZbirnaIzvori (PR3: verzionisano clanstvo) ---
 '
@@ -894,8 +898,8 @@ Public Const CFG_DEFAULT_VRSTA As String = "DEFAULT_VRSTA_VOCA"
 Public Const CFG_DEFAULT_SORTA As String = "DEFAULT_SORTA_VOCA"
 ' Filter kooperanata po otkupnom mestu u frmOtkup (default ON / prazno = ON).
 Public Const CFG_KOOP_FILTER_BY_OM As String = "KOOP_FILTER_BY_OM"
-' Auto otpremnica+zbirna+prijemnica kad je otkupno mesto hladnjaca (default OFF).
-Public Const CFG_AUTO_PRIJEMNICA_HLADNJACA As String = "AUTO_PRIJEMNICA_HLADNJACA"
+' AUTO_PRIJEMNICA_HLADNJACA vise ne postoji (S6 korak 7, odluka 2): hladnjacki
+' lanac je obavezan, a stanica (JeHladnjaca) je jedini autoritet -- HLD-LANAC-01.
 ' Automatsko generisanje brojeva dokumenata (forma prefill OTK/OTP/ZBR). Default
 ' ON (kao do sada). NO -> forma ne predlaze broj; operater unosi svoj.
 Public Const CFG_AUTO_BROJ_DOK As String = "AUTO_BROJ_DOKUMENTA"
@@ -1357,11 +1361,6 @@ End Function
 ' Filter kooperanata po otkupnom mestu u frmOtkup (default ON).
 Public Function KoopFilterByOM() As Boolean
     KoopFilterByOM = ConfigFlag(CFG_KOOP_FILTER_BY_OM, True)
-End Function
-
-' Auto otpremnica+zbirna+prijemnica kad je otkupno mesto hladnjaca (default OFF).
-Public Function IsAutoPrijemnicaHladnjaca() As Boolean
-    IsAutoPrijemnicaHladnjaca = ConfigFlag(CFG_AUTO_PRIJEMNICA_HLADNJACA, False)
 End Function
 
 ' Automatsko generisanje brojeva dokumenata (forma prefill OTK/OTP/ZBR). Default ON.

@@ -1601,6 +1601,20 @@ End Function
 ' "On Error Resume Next" je isti problem treci put: svaka greska u racunanju
 ' vlasnistva postajala je False, dakle "eksterni kupac". Fail-open odluka o tome
 ' CIJE podatke smes da obores nije oprez nego rizik -- sada se greska podize.
+'
+' VLASNISTVO JE CINJENICA ZBIRNE, NE CONFIGA (ZBR-OWN-01, review #442 P1-b).
+'
+' Odluka se citala kao "da li je kupac zbirne DANAS MALINA_DEFAULT_KUPAC", pa je
+' promena configa retroaktivno menjala pravilo storna: interni lanac je posle
+' promene postajao "eksterni" (PONISTENJE odbijeno nad sopstvenom prijemnicom), a
+' eksterna zbirna kupca koji POSTANE hladnjaca "nasa" (PONISTENJE obara tudju
+' prijemnicu i palete). Oznaku KupacHladnjaca upisuje pisac zbirne pri nastanku
+' (modAutoHladnjaca.OznakaKupacHladnjaca); ovde se samo cita.
+'
+' Prazna ili nepoznata oznaka znaci "ne zna se" i to je GRESKA, ne "eksterni" --
+' isti razlog kao gore. Pozivaoci je pretvaraju u zastoj bez mutacije:
+' RunZbirnaCorrection je racuna pre ikakvog upisa, a posledice javljaju "spisak
+' posledica nedostupan".
 Private Function ZbirnaOwnsExternalChain(ByVal zbirnaID As String) As Boolean
     Const SRC As String = MOD_NAME & ".ZbirnaOwnsExternalChain"
 
@@ -1611,9 +1625,19 @@ Private Function ZbirnaOwnsExternalChain(ByVal zbirnaID As String) As Boolean
     End If
 
     RequireTacnoJedan TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, "ZbirnaID", SRC
+    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_KUPAC_HLADNJACA, SRC
 
-    ZbirnaOwnsExternalChain = IsHladnjacaKupac( _
-        NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC)))
+    Dim oznaka As String
+    oznaka = Trim$(NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC_HLADNJACA)))
+    Select Case UCase$(oznaka)
+        Case "DA": ZbirnaOwnsExternalChain = True
+        Case "NE": ZbirnaOwnsExternalChain = False
+        Case Else
+            Err.Raise ERR_STORNO_FW_BASE + 71, SRC, _
+                      "Zbirna " & zbirnaID & " nema oznaku " & COL_ZBR_KUPAC_HLADNJACA & _
+                      " ('" & oznaka & "'): ne zna se da li su prijemnica i palete njene, " & _
+                      "pa ponistenje staje bez izmene."
+    End Select
 End Function
 
 ' KOJA JE ZBIRNA CILJ OPERACIJE -- jedna definicija za sva cetiri mesta.

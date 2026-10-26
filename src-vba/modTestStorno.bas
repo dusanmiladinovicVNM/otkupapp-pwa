@@ -723,13 +723,19 @@ End Sub
 ' dokument koji produkcija ne ume da stvori. Takav seed postoji SAMO za
 ' rekalkulaciju u mestu (T04/T05) -- postupak koji je odluka od 21.09.2026
 ' zamenila novom verzijom (A13), pa i on odlazi u S4-3.
+'
+' Oznaka internog toka (KupacHladnjaca, ZBR-OWN-01) je cinjenica koju pisac zbirne
+' upisuje pri nastanku, a PONISTENJE bez nje staje. Seed je zato pise sam, iz
+' istog pravila kao gore: HLAD_KUP -> "Da", svaki drugi kupac -> "Ne".
 Private Sub SeedZbirna(ByVal broj As String, ByVal klasa As String, _
                        ByVal kg As Double, ByVal amb As Long, _
                        Optional ByVal kupac As String = "")
     SvAppend TBL_ZBIRNA, _
         Array(COL_ZBR_ID, COL_ZBR_DATUM, COL_ZBR_BROJ, COL_ZBR_KUPAC, COL_ZBR_KOLICINA, _
-              COL_ZBR_TIP_AMB, COL_ZBR_KOL_AMB, COL_ZBR_VRSTA, COL_ZBR_SORTA, COL_ZBR_KLASA), _
-        Array(broj & "-ID-" & klasa, Date, broj, kupac, kg, "SVT-A", amb, "SVT-VOCE", "SVT-SORTA", klasa)
+              COL_ZBR_TIP_AMB, COL_ZBR_KOL_AMB, COL_ZBR_VRSTA, COL_ZBR_SORTA, COL_ZBR_KLASA, _
+              COL_ZBR_KUPAC_HLADNJACA), _
+        Array(broj & "-ID-" & klasa, Date, broj, kupac, kg, "SVT-A", amb, "SVT-VOCE", "SVT-SORTA", klasa, _
+              IIf(kupac = HLAD_KUP, "Da", "Ne"))
     If kg > 0 Then
         SvAppend TBL_ZBIRNA_STAVKE, _
             Array(COL_ZBS_ID, COL_ZBS_ZBIRNA_ID, COL_ZBS_RB, COL_ZBS_KLASA, _
@@ -817,7 +823,7 @@ Private Sub SeedPaletaStavka(ByVal stavkaID As String, ByVal brojPrij As String,
         Array(stavkaID, paletaID, brojPrij, brojZbirne, klasa, gajbe, kg, amb, prijemnicaID)
 End Sub
 
-' Minimalna realna paleta (header) da DetachOsirocenePaletaStavke_TX radi end-to-end:
+' Minimalna realna paleta (header) da jezgro skidanja paleta radi end-to-end:
 ' skida gajbe/neto/amb, reopen ispod kapaciteta, storno kad ostane prazna.
 Private Sub SeedPaleta(ByVal palID As String, ByVal gajbe As Long, ByVal neto As Double, _
                        ByVal amb As Double, ByVal kapacitet As Long, ByVal status As String)

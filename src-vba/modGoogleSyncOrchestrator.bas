@@ -70,6 +70,8 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
 
     Dim createdOtp As Long
     Dim otpGreske As String
+    Dim createdLanac As Long
+    Dim lanacGreske As String
     Dim createdZbr As Long
     Dim errNum As Long
     Dim errDesc As String
@@ -273,6 +275,48 @@ Private Function SyncPWAFullCycle_Core(ByVal showMessages As Boolean) As Boolean
         razlogDegradacije = "auto-Otpremnice rade samo u malina rezimu (E-019 do S5-3)"
         AppendStepPauza summary, _
             "Auto-create Otpremnice: van malina rezima jos nema izvora vozaca -- unesi rucno"
+    End If
+
+    ' 3a. HLADNJACA: auto-lanac za nevezane hladnjacke blokove (S6 korak 7,
+    ' odluka 9; HLD-LANAC-01).
+    '
+    ' Malina batch (korak 3) hladnjacke blokove PRESKACE: grupisao bi ih po
+    ' stanici i danu, a lanac drzi 1 blok = 1 lanac. Ovaj korak ih vodi kroz
+    ' AutoLanacHladnjaca, blok po blok, u SVAKOM rezimu -- lanac je obavezan, a
+    ' stanica je jedini autoritet. Ugovor je isti kao u koraku 3: delimican uspeh
+    ' nije pad (blok koji je pao se imenuje, ostali su upisani), a pad PROLAZA
+    ' obara ciklus pre outbound sync-a.
+    SyncProgress "Hladnjaca: auto-lanac za blokove iz PWA..."
+
+    On Error Resume Next
+    Err.Clear
+    createdLanac = modAutoHladnjaca.AutoLanacZaNevezaneBlokove(lanacGreske)
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error GoTo EH
+
+    If errNum <> 0 Then
+        okOtpremnice = False
+        AppendStep summary, False, "Hladnjaca auto-lanac | Error=" & errDesc
+        LogError ORCH_MODULE, "AutoLanacZaNevezaneBlokove failed: " & errDesc
+
+        Monitor_PWAFullCycle okGeo, okOtkup, okOtpremnice, okZbirne, _
+                             okStammdaten, okKartice, okMgmt, False
+
+        If showMessages Then MsgBox summary, vbExclamation, APP_NAME
+        GoTo CleanExit
+    End If
+
+    AppendStep summary, (Len(lanacGreske) = 0), _
+        "Hladnjaca auto-lanac (" & CStr(createdLanac) & " kompletirano)" & _
+        IIf(Len(lanacGreske) > 0, " | bez lanca: " & lanacGreske, "")
+
+    ' Ciklus se NE obara: otkupi su uvezeni, deo lanaca je napravljen.
+    If Len(lanacGreske) > 0 Then
+        okOtpremnice = False
+        degradirano = True
+        If Len(razlogDegradacije) > 0 Then razlogDegradacije = razlogDegradacije & "; "
+        razlogDegradacije = razlogDegradacije & "deo hladnjackih blokova je ostao bez lanca"
     End If
 
     ' 3b. MALINA: auto-zbirna iz otpremnice (1:1; u malini zamenjuje korak 4)

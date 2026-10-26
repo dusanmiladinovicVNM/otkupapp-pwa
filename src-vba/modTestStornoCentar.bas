@@ -576,11 +576,16 @@ End Sub
 ' modTestStorno.SeedZbirna -- strog citalac sadrzaja odbija zaglavlje bez
 ' stavki, pa bi golo zaglavlje oborilo svaki test koji dodirne liste, uvid ili
 ' prefill. Kolone zaglavlja ostaju popunjene dok ih okvir jos cita (S4-3).
+'
+' Oznaka internog toka (KupacHladnjaca, ZBR-OWN-01): zbirna bez kupca po pravilu
+' pisca nije interni hladnjacki tok, pa je "Ne". Bez oznake uzvodna kaskada
+' PONISTENJA prijemnice staje (prazna oznaka = "ne zna se").
 Private Sub TcSeedZbirna(ByVal zbrID As String, ByVal broj As String, _
                          ByVal klasa As String, ByVal kg As Double, _
                          ByVal amb As Long)
-    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
-              Array(zbrID, broj, klasa, kg, amb)
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB, _
+                                COL_ZBR_KUPAC_HLADNJACA), _
+              Array(zbrID, broj, klasa, kg, amb, "Ne")
     TcSeedRow TBL_ZBIRNA_STAVKE, _
               Array(COL_ZBS_ID, COL_ZBS_ZBIRNA_ID, COL_ZBS_RB, COL_ZBS_KLASA, _
                     COL_ZBS_KOLICINA, COL_ZBS_KOL_AMB), _

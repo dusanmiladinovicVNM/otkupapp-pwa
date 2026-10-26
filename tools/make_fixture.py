@@ -2316,6 +2316,15 @@ SEED["tblOtpremnicaStavke"] = [
 # nijedan citalac iz S4-1 ne cita, a izvodjenje iz Otpremnica.BrojZbirne bi za
 # dvosmislene brojeve iz fixture-a moralo da pogadja vlasnika. To je posao S4-2
 # (F3 bira izvore) i S4-3 (clanstvo i okvir), gde se i meri.
+
+# ZBR-OWN-01 (review #442, P1-b): svaki red tblZbirna nosi trajnu oznaku
+# internog hladnjackog toka. Pisac je racuna pri nastanku iz MALINA_DEFAULT_KUPAC,
+# a donor taj kljuc drzi PRAZAN -- nijedna zbirna ovde nije interni lanac, pa je
+# oznaka "Ne". Bez nje PONISTENJE fixture zbirne staje (prazna oznaka = "ne zna
+# se"), a to je stanje koje pisac ne moze da proizvede.
+for _red in SEED["tblZbirna"]:
+    _red.setdefault("KupacHladnjaca", "Ne")
+
 SEED["tblZbirnaStavke"] = [
     {
         "ZbirnaStavkaID": "ZBS-" + str(red["ZbirnaID"]),
@@ -2474,7 +2483,8 @@ ENSURE_COLS = {
     # Samo tblZbirna: EnsureSledljivostSchema je dodaje na sest tabela, ali
     # invarijanta se drzi zbirne -- tblOtpremnica namerno ima red bez generacije
     # (OTP-LEG-A), koji T_ZavrsetakIspravke_NeDegradiraOldDocID tvrdi kao preduslov.
-    "tblZbirna": ["GeneracijaID"],
+    # ZBR-OWN-01: KupacHladnjaca je na KRAJU kanona, a donor je nema (v. SEED).
+    "tblZbirna": ["GeneracijaID", "KupacHladnjaca"],
     # AMB-10c: kanonske kolone knjige -- kanon ih drzi, a donor (stari fixture) ih
     # nema, jer ih u aplikaciji dodaje modSetup.EnsureRuntimeSchema na startu. Bez
     # njih sejanje po imenu obara red, jer SEED od 08.10.2026 upisuje kanonski oblik

@@ -1023,8 +1023,16 @@ Public Function AutoZbirnaDostupna() As Boolean
 End Function
 
 ' JEZGRO: auto-zbirna za JEDNU otpremnicu. Vraca ZbirnaID, "" = nista nije
-' napravljeno (nije malina, otpremnica nije slobodna/izdata, ili je greska --
-' razlog je tada u outGreska).
+' napravljeno (nije malina ni hladnjacka otpremnica, otpremnica nije
+' slobodna/izdata, ili je greska -- razlog je tada u outGreska).
+'
+' KAPIJA: MALINA ILI HLADNJACKA OTPREMNICA (S6 korak 7, odluka 3). Do koraka 7
+' je jezgro bilo zatvoreno iza IsMalinaMode i van maline vracalo "" BEZ razloga
+' -- ugovor ispod to cita kao "nije bilo posla", pa bi hladnjacki lanac van
+' maline tiho stao posle otpremnice. Lanac zato zove ISTO jezgro kao malina
+' (isti kupac, isti niz broja vozaca-ogledala), a kapija pusta hladnjacku
+' otpremnicu u svakom rezimu. Pitanje je STROGO, isti primitiv kao razvodnica
+' bloka: otpremnica cija se stanica ne moze utvrditi je razlog, ne "nije posao".
 '
 ' ZASTO SE ODLUKA "DA LI SME" NE RACUNA OVDE: pita se
 ' modDokumenta.NevezaneOtpremnice, ISTA lista koju operater vidi u F2 radnom
@@ -1040,8 +1048,6 @@ Public Function AutoZbirnaZaOtpremnicu(ByVal otpremnicaID As String, _
     Const SRC As String = "AutoZbirnaZaOtpremnicu"
 
     outGreska = ""
-    If Not AutoZbirnaDostupna() Then Exit Function
-
     otpremnicaID = Trim$(otpremnicaID)
     If Len(otpremnicaID) = 0 Then Exit Function
 
@@ -1058,6 +1064,10 @@ Public Function AutoZbirnaZaOtpremnicu(ByVal otpremnicaID As String, _
     On Error GoTo EH
 
     Dim slobodne As Object
+    If Not AutoZbirnaDostupna() Then
+        If Not modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then Exit Function
+    End If
+
     Set slobodne = modDokumenta.NevezaneOtpremnice()
     If Not slobodne.Exists(UCase$(otpremnicaID)) Then Exit Function
 
@@ -1306,13 +1316,21 @@ Private Function GrupeZaAutoOtpremnicu(ByVal samoOtkupID As String) As Object
     Dim filterKljuc As String
     filterKljuc = ""
 
+    ' HLADNJACKI BLOK NE IDE U MALINA OTPREMNICU (S6 korak 7, odluka 9). Lanac
+    ' drzi 1 blok = 1 lanac, a grupa po stanici i danu bi dva hladnjacka bloka
+    ' spojila u jednu otpremnicu. Vodi ih sync korak
+    ' modAutoHladnjaca.AutoLanacZaNevezaneBlokove, blok po blok.
+    Dim hladne As Object
+    Set hladne = modAutoHladnjaca.HladnjackeStanice()
+
     Dim i As Long, oid As String, kljuc As String
     For i = 1 To UBound(otk, 1)
         oid = Trim$(NzToText(otk(i, cId)))
         If Len(oid) > 0 Then
             If slobodni.Exists(UCase$(oid)) Then
                 If modDokumenta.IzdatoStatusJeIzdato(otk(i, cIzd)) Then
-                    If IsDate(otk(i, cDat)) Then
+                    If IsDate(otk(i, cDat)) And _
+                       Not hladne.Exists(UCase$(Trim$(NzToText(otk(i, cSta))))) Then
                         kljuc = KljucGrupe(otk(i, cSta), otk(i, cDat), otk(i, cKul), _
                                            otk(i, cAmb))
                         If Not rez.Exists(kljuc) Then

@@ -1005,14 +1005,15 @@ SABOTAZE = {
         "Test_OTP_ClanstvoBulkStrogo",
         "Bulk clanstvo: lista nevezanih pada na clanstvo bez otpremnice",
     ),
-    # Zastita od dupliranja pada: ponovljen poziv (retry, dvoklik) pravi DRUGU
-    # otpremnicu nad istim blokom, pa isti teret stoji na dva dokumenta.
+    # Lanac opet izlazi na postojecoj otpremnici (presidreno u S6 koraku 7): dok
+    # je lanac bio samo OTK -> OTP, "otpremnica postoji" je znacilo "posao je
+    # gotov". Sada je to zamka -- blok kome je pala zbirna nikad se ne dovrsi.
     "lanac-dupli-poziv": (
         "modAutoHladnjaca.bas",
-        "    If Len(modDokumenta.OtpremnicaZaOtkup(otkupID)) > 0 Then Exit Function\n",
-        "    If False Then Exit Function   ' SABOTAZA: lanac se pokrece dvaput\n",
-        "Test_HLD_AutoLanacOtpremnica",
-        "Lanac: ponovljen poziv ne pravi drugu otpremnicu",
+        "    If Len(otpID) > 0 Then zbrID = modDokumenta.AktivnaZbirnaZaOtpremnicu(otpID)\n",
+        "    If Len(otpID) > 0 Then Exit Function   ' SABOTAZA: lanac staje na postojecoj otpremnici\n",
+        "Test_S6K7_LanacNastavljiv",
+        "S6K7 nastavak: blok sa otpremnicom bez zbirne dobija zbirnu i prijemnicu, ne drugu otpremnicu",
     ),
     # Rucno vezivanje opet prima hladnjacki blok: obavezan lanac se zaobilazi
     # jednim klikom iz liste "Bez otpremnice", pa blok zavrsi u tudjoj otpremnici.
@@ -1099,17 +1100,8 @@ SABOTAZE = {
         "Test_HLD_AutoLanacOtpremnica",
         "Lanac: neizvesnost vraca RAZLOG, ne tiho False",
     ),
-    # Prekidac prestaje da bude autoritet: lanac radi i kad je iskljucen, pa se
-    # parcijalna automatika pali pre nego sto ume da zavrsi ceo lanac.
-    "lanac-bez-prekidaca": (
-        "modAutoHladnjaca.bas",
-        "    If Len(otkupID) = 0 Then Exit Function\n"
-        "    If Not LanacUkljucen() Then Exit Function\n",
-        "    If Len(otkupID) = 0 Then Exit Function\n"
-        "    ' SABOTAZA: prekidac se ne pita\n",
-        "Test_HLD_AutoLanacOtpremnica",
-        "Lanac: iskljucen prekidac ne pravi otpremnicu",
-    ),
+    # lanac-bez-prekidaca: obrisana u S6 koraku 7 -- prekidaca vise nema
+    # (odluka 2), stanica je jedini autoritet.
     # Lanac se pali i na OBICNOJ stanici, gde roba nije merena na prijemu -- pa
     # otpremnica 1:1 nije istina, nego pretpostavka.
     "lanac-i-na-obicnoj-stanici": (
@@ -1119,20 +1111,20 @@ SABOTAZE = {
         "Test_HLD_AutoLanacOtpremnica",
         "Lanac: obicna stanica nema auto-lanac",
     ),
-    # Storniran blok ulazi u lanac: pisac ga odbije, ali operater dobije grešku
-    # za dokument koji je sam obrisao.
+    # Storniran blok ulazi u lanac: pisac otpremnice ga odbije, ali operater dobije
+    # gresku za dokument koji je sam obrisao. Presidreno u S6 koraku 7 na KOD (bez
+    # komentara): jezgro lanca cita stanicu pa storno, obrnuto od razvodnice, pa
+    # je par redova jedinstven. Lanac posle sabotaze vraca "" -- ono sto ga odaje
+    # je izvestaj (razlog pisca), ne povratna vrednost.
     "lanac-storniran-blok": (
         "modAutoHladnjaca.bas",
+        "    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), \"\"))\n"
         "    If StrComp(Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO), \"\")), _\n"
-        "               \"Da\", vbTextCompare) = 0 Then Exit Function\n"
-        "\n"
+        "               \"Da\", vbTextCompare) = 0 Then Exit Function\n",
         "    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), \"\"))\n"
-        "    ' STROGO, isti primitiv kao router: slabija kopija istog pravila (fail-open\n",
-        "    ' SABOTAZA: storniran blok prolazi u lanac\n"
-        "    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), \"\"))\n"
-        "    ' STROGO, isti primitiv kao router: slabija kopija istog pravila (fail-open\n",
+        "    ' SABOTAZA: storniran blok prolazi u lanac\n",
         "Test_HLD_AutoLanacOtpremnica",
-        "Lanac: storniran blok ne pokrece lanac",
+        "Lanac: storniran blok ne javlja nista",
     ),
     # OPORAVAK opet broji SVAKI nevezan blok (S3c-2): blok upisan bez otpremnice
     # nije nedovrsen posao nego normalno stanje, i vec se vidi na radnom stolu.
@@ -1924,8 +1916,10 @@ SABOTAZE = {
     # kolonu sa internim ID-jem preko pola mreze.
     "oporavak-cid-kolona-vidljiva": (
         "modScrOporavak.bas",
-        "        \"OTKUI_HDO_CID||txt|0|4\")\n",
-        "        \"OTKUI_HDO_CID||txt|90|1\")   ' SABOTAZA\n",
+        # Od S6 koraka 7 iza CID-a stoji OtkupID, pa red nosi nastavak; komentar
+        # posle `_` bi bio sintaksna greska (zamka 4), zato red bez oznake.
+        "        \"OTKUI_HDO_CID||txt|0|4\", _\n",
+        "        \"OTKUI_HDO_CID||txt|90|1\", _\n",
         "T_Oporavak_OdbaciIspravku_PoIdentitetu",
         "kolona CID je prioriteta 4 -- nikad vidljiva",
     ),
@@ -1941,13 +1935,14 @@ SABOTAZE = {
     ),
     # NED_COL_CID vezuje opis kolona, punjenje reda i radnju u JEDAN broj. Da je
     # radnja imala svoj indeks, drift bi bio nevidljiv: mreza bi izgledala
-    # ispravno, a radnja bi citala tudju kolonu.
+    # ispravno, a radnja bi citala tudju kolonu. Od S6 koraka 7 poslednja kolona
+    # je OtkupID (NED_COL_OTK), pa drift CID-a pukne na imenu kolone, ne na broju.
     "oporavak-cid-kolona-drift": (
         "modScrOporavak.bas",
         "Public Const NED_COL_CID As Long = 6\n",
         "Public Const NED_COL_CID As Long = 5   ' SABOTAZA\n",
         "T_Oporavak_OdbaciIspravku_PoIdentitetu",
-        "opis kolona se zavrsava BAS na koloni koju radnja cita",
+        "na toj koloni stoji CorrectionID",
     ),
     # Zaglavlje palete se od v6-ui-146 cita iz JEDNOG snimka tblPaleta, kroz recnik
     # ID -> red. Ako se red uzme mimo tog recnika, uvid prijavljuje tudju
@@ -6589,8 +6584,8 @@ SABOTAZE = {
 
     "vlasnistvo-lanca-po-broju": (
         "modStornoFlow.bas",
-        "        NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC)))\n",
-        "        NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_BROJ)), COL_ZBR_KUPAC)))   ' SABOTAZA: vlasnistvo po broju\n",
+        "    oznaka = Trim$(NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC_HLADNJACA)))\n",
+        "    oznaka = Trim$(NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_BROJ)), COL_ZBR_KUPAC_HLADNJACA)))   ' SABOTAZA: vlasnistvo po broju\n",
         "Test_ZBR_VlasnistvoLancaIdePoIdentitetu",
         "ZBR VLA: dva dokumenta istog broja daju RAZLICITU odluku o vlasnistvu",
     ),
@@ -7302,8 +7297,9 @@ SABOTAZE = {
     # pa sabotaza kvari prenos povrata u jezgro -- i dalje samo kad Klase I nema.
     "amb-prj-povrat-samo-sa-klasom-i": (
         "modDokumenta.bas",
-        "                                   kolAmbVracena, stavke, potvrdaDeficita, stavkaIDs)\n",
-        "                                   IIf(hasKlasaI, kolAmbVracena, 0), stavke, potvrdaDeficita, stavkaIDs)   ' SABOTAZA: povrat zavisi od Klase I\n",
+        "                                   kolAmbVracena, stavke, potvrdaDeficita, stavkaIDs, _\n",
+        # Bez oznake u redu (zamka 4): komentar posle `_` je sintaksna greska.
+        "                                   IIf(hasKlasaI, kolAmbVracena, 0), stavke, potvrdaDeficita, stavkaIDs, _\n",
         "Test_PRJ_PovratIdeSaKlasomKojaPostoji",
         "PRJ klasa II: povrat praznih JE knjizen i bez Klase I",
     ),
@@ -9705,6 +9701,266 @@ SABOTAZE = {
         "        mFokusTest = \"\"   ' SABOTAZA: beleska ne pamti polje\n",
         "T_S6K6_FokusPosleGreske",
         "kontrola: -5 kg vodi fokus na kg klase I",
+    ),
+    # S6 korak 7, KI-046 (1): datum reda Oporavka (osirotele palete) opet se cita
+    # po BROJU prijemnice, pa red drugog kupca istog broja nosi datum prvog
+    # dokumenta. Grupisanje ostaje po generaciji -- kvari se samo datum.
+    "s6k7-osir-datum-po-broju": (
+        "modDokumenta.bas",
+        "        rows.Add Array(CStr(brD(k2)), _\n"
+        "                       LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, CStr(pidD(k2)), COL_PRJ_DATUM), _\n",
+        "        ' SABOTAZA: datum reda Oporavka opet po broju\n"
+        "        rows.Add Array(CStr(brD(k2)), _\n"
+        "                       LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, CStr(brD(k2)), COL_PRJ_DATUM), _\n",
+        "Test_S6K7_OsirocenePaleteDatumPoDokumentu",
+        "S6K7 osirotele: red drugog kupca nosi datum SVOG dokumenta, ne prvog istog broja",
+    ),
+    # S6 korak 7, deo 2 (R2-R12): hladnjacki lanac OTK -> OTP -> ZBR -> PRJ.
+    #
+    # R3: lanac opet staje posle otpremnice -- tacno ono sto je jezgro zbirne
+    # zatvoreno iza IsMalinaMode radilo van maline.
+    "s6k7-lanac-staje-posle-otp": (
+        "modAutoHladnjaca.bas",
+        "        zbrID = modMasterSync.AutoZbirnaZaOtpremnicu(otpID, greska)\n",
+        "        zbrID = \"\"   ' SABOTAZA: lanac staje posle otpremnice\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: jedan poziv kompletira lanac i vraca PrijemnicaID",
+    ),
+    # R3: kilaza stavke prijemnice vise nije ona iz zbirne (kanonskog roditelja).
+    "s6k7-prj-kolicina-ne-iz-zbirne": (
+        "modAutoHladnjaca.bas",
+        "                kgI = CDbl(poKlasi(kl)(0))\n",
+        "                kgI = CDbl(poKlasi(kl)(0)) + 1   ' SABOTAZA: kilaza nije iz zbirne\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: prijemnica je 1:1 po klasi sa zbirnom",
+    ),
+    # R3, odluka 6: cena klase II se uzima od klase I, ne iz otkupa te klase.
+    "s6k7-cena-nije-iz-otkupa": (
+        "modAutoHladnjaca.bas",
+        "                cenaII = CDbl(cene(kl))\n",
+        "                cenaII = cenaI   ' SABOTAZA: cena nije iz otkupa te klase\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: cena stavke prijemnice je cena otkupa te klase",
+    ),
+    # Odluka 7: pisac prijemnice opet vezuje roditelja PO BROJU i kad mu je dat
+    # ID -- pod dvosmislenim brojem (KR-001) prijemnica ostaje bez roditelja.
+    "s6k7-prj-roditelj-po-broju": (
+        "modDokumenta.bas",
+        "        roditeljID = ZbirnaRoditeljPrijemnice(Trim$(zbirnaRoditeljID), brojZbirne, _\n"
+        "                                              kupacID, vozacID, SRC)\n",
+        "        roditeljID = ZbirnaIDZaBroj(brojZbirne)   ' SABOTAZA: roditelj po broju\n",
+        "Test_S6K7_LanacNastavljiv",
+        "S6K7 nastavak: svaka prijemnica je vezana na SVOJU zbirnu po ID-u, i kad broj zbirne nije jednoznacan",
+    ),
+    # R2 (trag brisanja KI-046): storno bloka iz kompletnog lanca prolazi, pa se
+    # lanac rusi odozdo. Isto sidro kao otk-storno-izvora-aktivne-otpremnice --
+    # sestra koja meri bas hladnjacki lanac.
+    "s6k7-storno-bloka-u-lancu-prolazi": (
+        "modStorno.bas",
+        "    If Len(otpID) > 0 Then\n"
+        "        Err.Raise ERR_STORNO_BASE + 72, SRC, _\n",
+        "    If False Then   ' SABOTAZA: blok iz lanca se stornira\n"
+        "        Err.Raise ERR_STORNO_BASE + 72, SRC, _\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: storno bloka iz kompletnog lanca je odbijen, blok ostaje aktivan (A13)",
+    ),
+    # R5a: prijemnica se ne trazi pre upisa, pa ponovljen poziv nad kompletnim
+    # lancem pravi DRUGU prijemnicu nad istom zbirnom.
+    "s6k7-dupla-prijemnica": (
+        "modAutoHladnjaca.bas",
+        "    If Len(zbrID) > 0 Then prjID = PrijemnicaZaZbirnu(zbrID)\n",
+        "    ' SABOTAZA: prijemnica se ne trazi pre upisa\n",
+        "Test_HLD_AutoLanacOtpremnica",
+        "Lanac: ponovljen poziv nad kompletnim lancem ne pravi nista i ne javlja nista",
+    ),
+    # R6: kupac se ne proverava pre prvog upisa -- lanac napravi otpremnicu, pa
+    # padne na zbirnoj (polovican lanac).
+    "s6k7-kupac-proveren-kasno": (
+        "modAutoHladnjaca.bas",
+        "    End If\n"
+        "    If Len(kupacID) = 0 Then\n",
+        "    End If\n"
+        "    If False Then   ' SABOTAZA: kupac se ne proverava pre prvog upisa\n",
+        "Test_S6K7_LanacBezKupcaNePise",
+        "S6K7 kupac: bez kupca se ne pravi ni otpremnica -- blok ostaje nevezan",
+    ),
+    # R4: poruka operateru ne nosi broj prijemnice.
+    "s6k7-poruka-bez-prijemnice": (
+        "modAutoHladnjaca.bas",
+        "    izvestaj = Poruka(\"OTKUI_MSG_LANAC\") & \" \" & LanacSpisak(otpID, zbrID, prjID)\n",
+        "    izvestaj = Poruka(\"OTKUI_MSG_LANAC\") & \" \" & LanacSpisak(otpID, zbrID, \"\")   ' SABOTAZA\n",
+        "T_S6K7_F1PraviCeoLanac",
+        "F1 hladnjaca: poruka nosi brojeve otpremnice, zbirne i prijemnice",
+    ),
+    # R7, odluka 2: Podesavanja opet nude prekidac koga kod vise ne pita. Zamena
+    # NE sme da nosi sidro (inace sabotiran izvor izgleda zdravo), pa prekidac
+    # zauzima red MALINA_MODE; kontrola testa je drugi red (MALINA_DEFAULT_KUPAC).
+    "s6k7-podesavanje-nudi-prekidac": (
+        "modPodesavanja.bas",
+        "    CfgAdd c, Poruka(\"CFG_MSG_MALINA_REZIM\"), \"MALINA_MODE\", \"Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)\", \"bool\"\n",
+        "    CfgAdd c, Poruka(\"CFG_MSG_MALINA_REZIM\"), \"AUTO_PRIJEMNICA_HLADNJACA\", \"SABOTAZA\", \"bool\"\n",
+        "T_S6K7_LanacBezPrekidaca",
+        "Podesavanja ne nude prekidac hladnjackog lanca (odluka 2)",
+    ),
+    # R8, odluka 3: jezgro zbirne opet radi samo u malini.
+    "s6k7-jezgro-zbirne-samo-malina": (
+        "modMasterSync.bas",
+        "        If Not modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then Exit Function\n",
+        "        Exit Function   ' SABOTAZA: jezgro zbirne samo u malini\n",
+        "Test_S6K7_JezgroZbirneHladnjacka",
+        "S6K7 jezgro: van maline hladnjacka otpremnica dobija zbirnu",
+    ),
+    # R9, odluka 8: nedovrsen lanac opet ne vidi nijedna lista.
+    "s6k7-nedovrsen-lanac-nevidljiv": (
+        "modStornoRecovery.bas",
+        "    AddNedovrseniLanci result\n",
+        "    ' SABOTAZA: nedovrsen lanac se ne vidi\n",
+        "T_S6K7_OporavakNedovrsenLanac",
+        "nedovrsen lanac je u Oporavku (lista Nedovrseno)",
+    ),
+    # R9: radnja bira blok po BROJU iz vidljive kolone -- broj nosi i mamac druge
+    # stanice, upisan posle, pa radnja pogodi njega.
+    "s6k7-ponovi-bira-po-broju": (
+        "modScrOporavak.bas",
+        "    otkupID = Trim$(CStr(modOtkupUI.GridCell(red, NED_COL_OTK)))\n",
+        "    otkupID = Trim$(NzToText(LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, Trim$(CStr(modOtkupUI.GridCell(red, 1))), COL_OTK_ID)))   ' SABOTAZA\n",
+        "T_S6K7_OporavakNedovrsenLanac",
+        "Ponovi auto-lanac iz Oporavka kompletira lanac",
+    ),
+    # R10, odluka 9: malina batch opet grupise i hladnjacke blokove.
+    "s6k7-pwa-batch-guta-hladnjacke": (
+        "modMasterSync.bas",
+        "                       Not hladne.Exists(UCase$(Trim$(NzToText(otk(i, cSta))))) Then\n",
+        "                       True Then   ' SABOTAZA: malina batch guta hladnjacke blokove\n",
+        "Test_S6K7_PwaHladnjackiBlokovi",
+        "S6K7 PWA: malina batch ne pravi otpremnicu od hladnjackih blokova",
+    ),
+    # R10: sync korak prolazi blokove, ali ih ne vodi kroz lanac.
+    "s6k7-sync-bez-lanca": (
+        "modAutoHladnjaca.bas",
+        "                            prj = AutoLanacHladnjaca(oid, izv)\n",
+        "                            prj = \"\"   ' SABOTAZA: sync korak ne vodi blok kroz lanac\n",
+        "Test_S6K7_PwaHladnjackiBlokovi",
+        "S6K7 PWA: sync korak pravi lanac za nevezane hladnjacke blokove",
+    ),
+    # R11, odluka 10: rucna zbirna opet prima hladnjacku otpremnicu.
+    "s6k7-rucna-zbirna-prima-hladnjacku": (
+        "modDokumenta.bas",
+        "    If modAutoHladnjaca.OtpremnicaJeHladnjacka(Trim$(otpremnicaID)) Then\n",
+        "    If False Then   ' SABOTAZA: rucna zbirna prima hladnjacku otpremnicu\n",
+        "Test_S6K7_RucnaZbirnaOdbijaHladnjacku",
+        "S6K7 rucna zbirna: hladnjacka otpremnica se odbija sa razlogom, clanstvo nije upisano",
+    ),
+    # Review #442, P1-a: nastavak lanca posle zbirne opet uzima kupca iz configa.
+    # Pisac prijemnice ga tada odbija (druga brana), pa lanac ne zavrsi.
+    "s6k7-nastavak-kupac-iz-konfiguracije": (
+        "modAutoHladnjaca.bas",
+        "        kupacID = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_KUPAC)))\n",
+        "        kupacID = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))   ' SABOTAZA: nastavak cita config\n",
+        "Test_S6K7_NastavakNosiKupcaRoditelja",
+        "S6K7 kupac lanca: nastavak posle promene kupca hladnjace pravi prijemnicu za kupca roditeljske zbirne",
+    ),
+    # Review #442, P1-a, druga brana: pisac prijemnice vezuje dete za zadatu
+    # zbirnu drugog vlasnika (kupac ili vozac). Meri se direktnim pozivom pisca --
+    # lanac sa ispravnim nastavkom ga sa tudjim kupcem ne zove.
+    "s6k7-pisac-pusta-tudjeg-roditelja": (
+        "modDokumenta.bas",
+        "    If StrComp(kupacRoditelja, Trim$(kupacID), vbTextCompare) <> 0 Or _\n"
+        "       StrComp(vozacRoditelja, Trim$(vozacID), vbTextCompare) <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: pisac pusta roditelja drugog vlasnika\n",
+        "Test_S6K7_NastavakNosiKupcaRoditelja",
+        "S6K7 pisac: roditelj drugog vlasnika (kupac ili vozac) se odbija i nista ne ostaje",
+    ),
+    # Review #442, P2: citac prijemnica po zbirni opet uzima PRVI pogodak, pa
+    # druga aktivna prijemnica zbirne lanca ostaje precutana.
+    "s6k7-citac-prijemnica-prvi-pogodak": (
+        "modAutoHladnjaca.bas",
+        "                ElseIf Not outKvar.Exists(rod) Then\n",
+        "                ElseIf False Then   ' SABOTAZA: prvi pogodak pobedjuje\n",
+        "Test_S6K7_LanacJednaPrijemnica",
+        "S6K7 jedna prijemnica: dve aktivne prijemnice zbirne lanca daju razlog koji imenuje zbirnu",
+    ),
+    # Review #442, P2: aktivna prijemnica bez PrijemnicaID-a se cita kao "nema
+    # prijemnice", pa nastavak pravi jos jednu.
+    "s6k7-citac-prijemnica-bez-id": (
+        "modAutoHladnjaca.bas",
+        "                If Len(pid) = 0 Then\n",
+        "                If False Then   ' SABOTAZA: prazan PrijemnicaID se ne prijavljuje\n",
+        "Test_S6K7_LanacJednaPrijemnica",
+        "S6K7 jedna prijemnica: jedina aktivna prijemnica bez ID-a daje razlog koji imenuje zbirnu i ne pravi drugu",
+    ),
+    # Review #442, P2: Oporavak zbirnu lanca sa dve prijemnice vidi kao zavrsen
+    # lanac. Citac nastavka ostaje strog, pa ga ova tvrdnja jedina razlikuje.
+    "s6k7-oporavak-precutkuje-dve-prijemnice": (
+        "modAutoHladnjaca.bas",
+        "                        ElseIf prjKvar.Exists(UCase$(zbrID)) Then\n",
+        "                        ElseIf False Then   ' SABOTAZA: Oporavak precutkuje kvar\n",
+        "Test_S6K7_LanacJednaPrijemnica",
+        "S6K7 jedna prijemnica: Oporavak pokazuje gresku lanca",
+    ),
+    # Review #442, P1-b (ZBR-OWN-01): vlasnistvo nizvodnog toka se opet racuna
+    # iz TRENUTNOG MALINA_DEFAULT_KUPAC, ne iz oznake zbirne.
+    "s6k7-vlasnistvo-iz-konfiguracije": (
+        "modStornoFlow.bas",
+        "        Case \"DA\": ZbirnaOwnsExternalChain = True\n",
+        "        Case \"DA\", \"NE\": ZbirnaOwnsExternalChain = IsHladnjacaKupac(NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC)))   ' SABOTAZA: vlasnistvo iz configa\n",
+        "Test_S6K7_VlasnistvoLancaNeCitaKonfig",
+        "S6K7 vlasnistvo: posle promene configa posledice internog lanca i dalje kazu da se prijemnica stornira",
+    ),
+    # Review #442, P1-b: prazna oznaka se cita kao "eksterni" (stari fail-open
+    # smer), pa posledice tvrde vlasnistvo koje se ne zna.
+    "s6k7-prazna-oznaka-pusta": (
+        "modStornoFlow.bas",
+        "        Case \"NE\": ZbirnaOwnsExternalChain = False\n",
+        "        Case \"NE\", \"\": ZbirnaOwnsExternalChain = False   ' SABOTAZA: prazna oznaka = eksterni\n",
+        "Test_S6K7_VlasnistvoLancaNeCitaKonfig",
+        "S6K7 vlasnistvo: posledice nad zbirnom bez oznake ne tvrde ni jedno vlasnistvo",
+    ),
+    # Review #442, P1-b: pisac zbirne ne upisuje oznaku pri nastanku.
+    "s6k7-pisac-zbirne-bez-oznake": (
+        "modDokumenta.bas",
+        "    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KUPAC_HLADNJACA, _\n"
+        "                        modAutoHladnjaca.OznakaKupacHladnjaca(kupacID), SRC\n",
+        "    ' SABOTAZA: pisac zbirne ne pise oznaku internog toka\n",
+        "Test_S6K7_VlasnistvoLancaNeCitaKonfig",
+        "S6K7 vlasnistvo: zbirna lanca nosi oznaku internog toka od nastanka",
+    ),
+    # Review #442, P1-b: izmena kupca u nacrtu zbirne ne prati oznaku.
+    "s6k7-nacrt-ne-prati-oznaku": (
+        "modDokumenta.bas",
+        "    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_KUPAC_HLADNJACA, _\n"
+        "                      modAutoHladnjaca.OznakaKupacHladnjaca(kupacID), SRC\n",
+        "    ' SABOTAZA: izmena nacrta ne prati oznaku internog toka\n",
+        "Test_S6K7_VlasnistvoLancaNeCitaKonfig",
+        "S6K7 vlasnistvo: izmena kupca u nacrtu zbirne prati oznaku internog toka",
+    ),
+    # N1 (rucna provera #442): otpremnica lanca se opet prepoznaje samo po
+    # TRENUTNOJ oznaci stanice, bez ogledala -- rucna otpremnica stanice koja je
+    # posle oznacena kao hladnjaca postaje hladnjacka.
+    "s6k7-ogledalo-ne-odlucuje": (
+        "modAutoHladnjaca.bas",
+        "    If Not VozacJeOgledalo(Trim$(nz(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_VOZAC), \"\")), _\n"
+        "                           stanicaID) Then Exit Function\n",
+        "    ' SABOTAZA: otpremnica lanca se ne pita za vozaca-ogledalo\n",
+        "Test_S6K7_LanacSamoOgledalo",
+        "S6K7 ogledalo: rucna otpremnica stanice oznacene posle nije otpremnica lanca",
+    ),
+    # N1: Oporavak opet nudi blok RUCNE otpremnice kao nedovrsen lanac.
+    "s6k7-oporavak-ne-pita-ogledalo": (
+        "modAutoHladnjaca.bas",
+        "                        ElseIf Not VozacJeOgledalo(CStr(otpVoz(UCase$(otpID))), NzToText(otk(i, cSta))) Then\n",
+        "                        ElseIf False Then   ' SABOTAZA: Oporavak ne pita za ogledalo\n",
+        "Test_S6K7_LanacSamoOgledalo",
+        "S6K7 ogledalo: Oporavak ne prikazuje blok rucne otpremnice kao nedovrsen lanac",
+    ),
+    # N1: nastavak lanca ne pita da li je otpremnica bloka otpremnica lanca, pa
+    # nad rucnom otpremnicom ide do jezgra zbirne i javlja zastoj.
+    "s6k7-ponovi-ne-pita-ogledalo": (
+        "modAutoHladnjaca.bas",
+        "        If Not OtpremnicaJeHladnjacka(otpID) Then Exit Function\n",
+        "        ' SABOTAZA: nastavak ne pita da li je otpremnica lanca\n",
+        "Test_S6K7_LanacSamoOgledalo",
+        "S6K7 ogledalo: Ponovi nad blokom rucne otpremnice ne pravi nista i ne javlja nista",
     ),
 }
 

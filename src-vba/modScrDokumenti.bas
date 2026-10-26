@@ -213,12 +213,14 @@ Public Function Scr_Radnje() As String
             ' Hladnjacki blok se NE vezuje rucno: njemu je oporavak ponavljanje
             ' auto-lanca. Obe radnje stoje u redu radnji, a svaka na svojoj
             ' granici odbija blok koji joj ne pripada -- red jos ne moze da nosi
-            ' svoje radnje (ugovor ljuske, v. plan 15).
+            ' svoje radnje (ugovor ljuske, v. plan 15). "Ponovi" postoji UVEK:
+            ' lanac nema prekidac, stanica je jedini autoritet (S6 korak 7,
+            ' odluka 2). Ovde je za blok kome je pala vec otpremnica; lanac koji
+            ' je stao kasnije nastavlja se iz Oporavka (odluka 8).
             Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1"
             If Len(mOtpID) > 0 Then _
                 Scr_Radnje = Scr_Radnje & "|vezi:OTKUI_BTN_RED_VEZI:132:soft:1"
-            If modAutoHladnjaca.LanacUkljucen() Then _
-                Scr_Radnje = Scr_Radnje & "|ponovi:OTKUI_BTN_RED_PONOVI:140:soft:1"
+            Scr_Radnje = Scr_Radnje & "|ponovi:OTKUI_BTN_RED_PONOVI:140:soft:1"
     End Select
 End Function
 
@@ -1162,68 +1164,6 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     End If
 End Function
 
-'---------------------------------------- HLADNJACA ISPRAVKA (Faza D/13)
-' Autohladnjaca: jedan otkupni list na hladnjaci povlaci ceo lanac
-' (otpremnica -> zbirna -> prijemnica -> palete). Storno tog otkupa obara
-' ceo lanac, ali PALETE ostaju - one su fizicke, roba je stvarno na njima.
-'
-' Zato se posle storna pita sta sa njima. Kontekst se cita PRE storna:
-' posle njega otkup vise nije aktivan pa se veza ka prijemnici gubi.
-' Prazan palInfo znaci "nema sta da se pita" (nije hladnjaca, nema zbirne
-' ili prijemnica nije paletizovana).
-Private Sub HladnjacaLanac(ByVal otkupID As String, ByRef prijBroj As String, _
-                           ByRef palInfo As String)
-    Dim stanica As String, zbirna As String
-    On Error Resume Next
-    prijBroj = "": palInfo = ""
-    stanica = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA))
-    zbirna = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BROJ_ZBIRNE))
-    If Len(zbirna) = 0 Then Exit Sub
-    If Not IsHladnjacaStanica(stanica) Then Exit Sub
-    prijBroj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, zbirna, COL_PRJ_BROJ))
-    If Len(prijBroj) = 0 Then Exit Sub
-    palInfo = GetPaleteInfoForPrijemnicaBroj(prijBroj)
-End Sub
-
-' Tri ishoda, isti kao u legacy modOtkupBlok.OfferHladnjacaIspravka:
-'   DA     ISPRAVKA - zapamti pending relink i prefiluj otkup iz storniranog;
-'          po Unosu se lanac gradi bez sveze paletizacije, a stare palete se
-'          prevezuju (posao vec radi modOtkupUnos.OtkupUpisi)
-'   NE     DUPLI UNOS - roba nije primljena dvaput, pa se fantomske stavke
-'          odmah skidaju; paleta koja ostane prazna se stornira
-'   OTKAZI nista - palete ostaju osirocene i dalje broje robu
-Private Sub PonudiHladnjacaIspravku(ByVal brDok As String, ByVal otkupID As String, _
-                                    ByVal prijBroj As String, ByVal palInfo As String)
-    Dim odg As VbMsgBoxResult, info As String, spec As String
-    On Error GoTo EH
-    odg = MsgBox(Poruka("OTKUI_MSG_HLAD_LANAC") & vbCrLf & _
-                 Poruka("OTKUI_MSG_HLAD_PALETE") & " " & prijBroj & " (" & palInfo & ")" & vbCrLf & vbCrLf & _
-                 Poruka("OTKUI_ASK_HLAD"), vbQuestion + vbYesNoCancel, APP_NAME)
-
-    If odg = vbYes Then
-        SetHladnjacaRelinkPending prijBroj
-        ' Prefill bez correction context-a: ovaj tok ne stvara zapis u
-        ' tblStornoVeza (veza se cuva kroz pending relink). Polazi se od
-        ' OtkupID-a storniranog reda, ne od broja (S1e).
-        spec = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, brDok, otkupID)
-        If Len(spec) > 0 Then modOtkupUI.ApplyPrefill spec
-        modOtkupUI.ShowToast Poruka("OTKUI_MSG_HLAD_ISPRAVKA"), False
-    ElseIf odg = vbNo Then
-        If DetachOsirocenePaletaStavke_TX(prijBroj, info) > 0 Then
-            MsgBox info, vbInformation, APP_NAME
-        Else
-            MsgBox Poruka("OTKUI_MSG_HLAD_NISTA") & IIf(Len(info) > 0, " " & info, ""), _
-                   vbExclamation, APP_NAME
-        End If
-    Else
-        MsgBox Poruka("OTKUI_MSG_HLAD_OSIROCENE"), vbInformation, APP_NAME
-    End If
-    Exit Sub
-EH:
-    LogErr "modScrDokumenti.PonudiHladnjacaIspravku"
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
-End Sub
-
 ' Vraca True ako je radnja PROMENILA podatke (pa mreza mora ponovo da se cita).
 ' Stampa vraca False - ona nista ne menja.
 '
@@ -1292,18 +1232,14 @@ Private Function RowAction(ByVal tag As String) As Boolean
             If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
                       Poruka("OTKUI_ASK_STORNO2"), vbQuestion + vbYesNo, _
                       APP_NAME) = vbNo Then Exit Function
-            ' Autohladnjaca: kontekst lanca se cita PRE storna - posle njega
-            ' otkup vise nije aktivan, pa se veza ka prijemnici ne bi nasla.
-            Dim hlPrij As String, hlPal As String
-            HladnjacaLanac otkupID, hlPrij, hlPal
+            ' Hladnjacke ponude paleta posle storna bloka VISE NEMA (S6 korak 7,
+            ' KI-046): bila je NEDOSTIZNA, jer StornoOtkup odbija blok u sastavu
+            ' aktivne otpremnice (A13), a blok ima zbirnu i prijemnicu samo preko
+            ' nje. Odluka o paletama je u F8 nad prijemnicom/zbirnom i u Oporavku.
             If modStorno.StornoOtkup_TX(otkupID) Then
                 Scr_ResetCache
                 RowAction = True
-                If Len(hlPal) > 0 Then
-                    PonudiHladnjacaIspravku broj, otkupID, hlPrij, hlPal
-                Else
-                    modOtkupUI.ShowToast Poruka("OTKUI_MSG_STORNIRANO") & " " & broj, False
-                End If
+                modOtkupUI.ShowToast Poruka("OTKUI_MSG_STORNIRANO") & " " & broj, False
             Else
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_STORNO") & " " & broj, True
             End If
@@ -1319,6 +1255,11 @@ Private Function RowAction(ByVal tag As String) As Boolean
                 Exit Function
             End If
             If Len(modAutoHladnjaca.AutoLanacHladnjaca(otkupID, ponPoruka)) = 0 Then
+                ' Korak koji je pao ne ponistava korake pre njega (lanac je
+                ' nastavljiv, S6 korak 7): blok je mozda dobio otpremnicu i
+                ' izasao iz ove liste, pa se lista cita ponovo i uz gresku.
+                Scr_ResetCache
+                RowAction = True
                 modOtkupUI.ShowToast IIf(Len(ponPoruka) > 0, ponPoruka, _
                                          Poruka("OTKUI_ERR_LANAC")), True
                 Exit Function
