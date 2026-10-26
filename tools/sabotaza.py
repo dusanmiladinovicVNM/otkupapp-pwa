@@ -9934,6 +9934,34 @@ SABOTAZE = {
         "Test_S6K7_VlasnistvoLancaNeCitaKonfig",
         "S6K7 vlasnistvo: izmena kupca u nacrtu zbirne prati oznaku internog toka",
     ),
+    # N1 (rucna provera #442): otpremnica lanca se opet prepoznaje samo po
+    # TRENUTNOJ oznaci stanice, bez ogledala -- rucna otpremnica stanice koja je
+    # posle oznacena kao hladnjaca postaje hladnjacka.
+    "s6k7-ogledalo-ne-odlucuje": (
+        "modAutoHladnjaca.bas",
+        "    If Not VozacJeOgledalo(Trim$(nz(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_VOZAC), \"\")), _\n"
+        "                           stanicaID) Then Exit Function\n",
+        "    ' SABOTAZA: otpremnica lanca se ne pita za vozaca-ogledalo\n",
+        "Test_S6K7_LanacSamoOgledalo",
+        "S6K7 ogledalo: rucna otpremnica stanice oznacene posle nije otpremnica lanca",
+    ),
+    # N1: Oporavak opet nudi blok RUCNE otpremnice kao nedovrsen lanac.
+    "s6k7-oporavak-ne-pita-ogledalo": (
+        "modAutoHladnjaca.bas",
+        "                        ElseIf Not VozacJeOgledalo(CStr(otpVoz(UCase$(otpID))), NzToText(otk(i, cSta))) Then\n",
+        "                        ElseIf False Then   ' SABOTAZA: Oporavak ne pita za ogledalo\n",
+        "Test_S6K7_LanacSamoOgledalo",
+        "S6K7 ogledalo: Oporavak ne prikazuje blok rucne otpremnice kao nedovrsen lanac",
+    ),
+    # N1: nastavak lanca ne pita da li je otpremnica bloka otpremnica lanca, pa
+    # nad rucnom otpremnicom ide do jezgra zbirne i javlja zastoj.
+    "s6k7-ponovi-ne-pita-ogledalo": (
+        "modAutoHladnjaca.bas",
+        "        If Not OtpremnicaJeHladnjacka(otpID) Then Exit Function\n",
+        "        ' SABOTAZA: nastavak ne pita da li je otpremnica lanca\n",
+        "Test_S6K7_LanacSamoOgledalo",
+        "S6K7 ogledalo: Ponovi nad blokom rucne otpremnice ne pravi nista i ne javlja nista",
+    ),
 }
 
 

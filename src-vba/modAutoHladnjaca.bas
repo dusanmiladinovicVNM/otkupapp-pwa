@@ -147,9 +147,17 @@ EH:
     LanacVaziZaBlok = False
 End Function
 
-' Da li je OTPREMNICA hladnjacka: njena stanica je hladnjaca. STROGO, isti
-' primitiv kao razvodnica bloka -- otpremnica koja ne postoji tacno jednom ili
-' nema stanicu DIZE gresku, jer "ne znam" nije "nije hladnjacka".
+' Da li je OTPREMNICA hladnjacka, tj. otpremnica LANCA: njena stanica je hladnjaca
+' I vozac joj je ogledalo te stanice. STROGO, isti primitiv kao razvodnica bloka --
+' otpremnica koja ne postoji tacno jednom ili nema stanicu DIZE gresku, jer "ne
+' znam" nije "nije hladnjacka".
+'
+' OGLEDALO JE POTPIS LANCA (N1, rucna provera #442). Sama oznaka stanice je
+' TRENUTNO stanje: rucna otpremnica (pravi vozac) stanice koja je POSLE oznacena
+' kao hladnjaca postajala je "hladnjacka", pa je Oporavak nudio njen blok kao
+' nedovrsen lanac, "Ponovi" joj je pravio zbirnu kupca hladnjace pod pravim
+' vozacem, a rucna zbirna je vise nije primala. Lanac izdaje otpremnicu na
+' ogledalo stanice (VozacID = StanicaID), rucna F2 na pravog vozaca.
 '
 ' Zovu je dva mesta sa suprotnim posledicama (S6 korak 7): jezgro auto-zbirne
 ' (odluka 3) hladnjacku otpremnicu PUSTA i van maline, a rucno vezivanje u zbirnu
@@ -174,7 +182,18 @@ Public Function OtpremnicaJeHladnjacka(ByVal otpremnicaID As String) As Boolean
                   "Otpremnica nema otkupno mesto: " & otpremnicaID
     End If
 
+    If Not VozacJeOgledalo(Trim$(nz(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_VOZAC), "")), _
+                           stanicaID) Then Exit Function
     OtpremnicaJeHladnjacka = HladnjacaStrogo(stanicaID)
+End Function
+
+' Vozac je ogledalo stanice: VozacID = StanicaID (modMalina.VozacOgledaloZaStanicu).
+' JEDNO telo za "ovu otpremnicu je izdao lanac" -- dele ga OtpremnicaJeHladnjacka
+' i NedovrseniLanci. Prazan vozac nije ogledalo.
+Private Function VozacJeOgledalo(ByVal vozacID As String, ByVal stanicaID As String) As Boolean
+    vozacID = Trim$(vozacID)
+    If Len(vozacID) = 0 Then Exit Function
+    VozacJeOgledalo = (StrComp(vozacID, Trim$(stanicaID), vbTextCompare) = 0)
 End Function
 
 ' Je li stanica hladnjaca -- STROGO. Stanica koja ne postoji ili postoji dvaput
@@ -269,6 +288,12 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
 
     ' --- GDE JE LANAC STAO: po kanonskom roditelju, po ID-u ----------------
     otpID = modDokumenta.OtpremnicaZaOtkup(otkupID)
+    ' N1 (rucna provera #442): blok u RUCNOJ otpremnici nije u lancu ni kad je
+    ' stanica posle oznacena kao hladnjaca. Nema posla -- lanac ne dopisuje zbirnu
+    ' i prijemnicu otpremnici koju nije izdao.
+    If Len(otpID) > 0 Then
+        If Not OtpremnicaJeHladnjacka(otpID) Then Exit Function
+    End If
     If Len(otpID) > 0 Then zbrID = modDokumenta.AktivnaZbirnaZaOtpremnicu(otpID)
     If Len(zbrID) > 0 Then prjID = PrijemnicaZaZbirnu(zbrID)
     If Len(prjID) > 0 Then Exit Function
@@ -689,10 +714,11 @@ Public Function NedovrseniLanci() As Collection
     cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
     cSto = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, SRC)
 
-    Dim clanOtp As Object, clanZbr As Object, prjPoZbr As Object, prjKvar As Object
+    Dim clanOtp As Object, clanZbr As Object, prjPoZbr As Object, prjKvar As Object, otpVoz As Object
     Set clanOtp = modDokumenta.AktivnoClanstvoOtpremnica()
     Set clanZbr = modDokumenta.AktivnoClanstvoZbirni()
     Set prjPoZbr = AktivnePrijemnicePoZbirni(prjKvar)
+    Set otpVoz = VozaciOtpremnica()
 
     Dim i As Long, oid As String, otpID As String, zbrID As String
     For i = 1 To UBound(otk, 1)
@@ -704,7 +730,12 @@ Public Function NedovrseniLanci() As Collection
                         otpID = CStr(clanOtp(UCase$(oid)))
                         zbrID = ""
                         If clanZbr.Exists(UCase$(otpID)) Then zbrID = CStr(clanZbr(UCase$(otpID)))
-                        If Len(zbrID) = 0 Then
+                        If Not otpVoz.Exists(UCase$(otpID)) Then
+                            Err.Raise vbObjectError + 8474, SRC, "Otpremnica clanstva ne postoji: " & otpID
+                        ElseIf Not VozacJeOgledalo(CStr(otpVoz(UCase$(otpID))), NzToText(otk(i, cSta))) Then
+                            ' N1 (rucna provera #442): RUCNA otpremnica (pravi vozac) nije
+                            ' lanac, i kad je stanica posle oznacena kao hladnjaca.
+                        ElseIf Len(zbrID) = 0 Then
                             res.Add Array(oid, Trim$(NzToText(otk(i, cBr))), otpID, "")
                         ElseIf prjKvar.Exists(UCase$(zbrID)) Then
                             ' Zbirna lanca sa vise prijemnica (ili bez ID-a) nije
@@ -718,6 +749,25 @@ Public Function NedovrseniLanci() As Collection
                 End If
             End If
         End If
+    Next i
+End Function
+
+' UCase(OtpremnicaID) -> VozacID svih otpremnica, za citaoca koji pita za MNOGO
+' blokova odjednom (Oporavak); OtpremnicaJeHladnjacka po bloku bi za svaki prosla
+' celu tabelu. Strogo: bez kolone se ne zna nista.
+Private Function VozaciOtpremnica() As Object
+    Const SRC As String = "VozaciOtpremnica"
+    Dim rez As Object, d As Variant, i As Long, cId As Long, cVoz As Long, oid As String
+    Set rez = CreateObject("Scripting.Dictionary")
+    Set VozaciOtpremnica = rez
+
+    d = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(d) Then Exit Function
+    cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+    cVoz = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
+    For i = 1 To UBound(d, 1)
+        oid = UCase$(Trim$(NzToText(d(i, cId))))
+        If Len(oid) > 0 Then rez(oid) = Trim$(NzToText(d(i, cVoz)))
     Next i
 End Function
 

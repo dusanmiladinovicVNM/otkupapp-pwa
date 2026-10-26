@@ -9240,6 +9240,30 @@ zatvaranje tri nalaza, bez novog refaktora. `KI-052` je prihvaćen kao P2 bez bl
   oznake) je `KI-054`. Izvršne kapije (stavka 204): FULL **12/12**, `dokaz.py --grupe` **31/31** (izvor identičan),
   `vba_gate --require-green` dokazano. Čeka: compile i ručni acceptance.
 
+**N1 iz ručne provere — otpremnica pripada lancu samo ako joj je vozač ogledalo stanice (stavka 205):**
+
+- **Nalaz:** svaka odluka lanca (`HladnjacaStrogo`) čitala je TRENUTNU oznaku stanice. Kad je ručna provera (korak 3)
+  označila stanicu fixture-a kao hladnjaču, Oporavak je pokazao 13 redova `LANAC` za njene blokove u ručnim
+  otpremnicama (pravi vozači `VOZ-TEST-2`, `VOZ-TEST-1`). Ista klasa kao P1-b, na nivou bloka.
+- **Odluka operatera (26.10.2026): opcija B, u `#442`.** Ogledalo stanice (`VozacID = StanicaID`) je potpis lanca:
+  lanac izdaje otpremnicu na ogledalo, ručna F2 na pravog vozača. Odbačeno: trajna oznaka na bloku (nova kolona
+  `tblOtkup`, više pisaca i mnogo seed-ova) i „KI pa merge".
+- **Pre-flight (nad `e2ee8849`):** DOMAIN/IDENTITY/CARDINALITY/INVARIANTS/WRITERS/DOWNSTREAM/CAPABILITY/LANDING PROVEN,
+  EVENTS i PLATFORM N/A; bez nove kolone i bez novog pisca. Predikat čitaju kapija pisca `DodajZbirnaIzvor_TX` i ruter
+  `AutoZbirnaZaOtpremnicu`; svi postojeći testovi hladnjačke otpremnice prave je sa ogledalom, pa im se premisa ne menja.
+- **Kod (`modAutoHladnjaca`):** `VozacJeOgledalo` (jedno telo); `OtpremnicaJeHladnjacka` = hladnjača i ogledalo;
+  `AutoLanacHladnjaca` ne nastavlja blok ručne otpremnice; `NedovrseniLanci` je preskače (mapa `VozaciOtpremnica`,
+  strogo; otpremnica članstva koje nema → `8474`).
+- **Crveno → zeleno:** stavka 205 (BFP 2760 → 2767, crveno 4 tačno izvedeno; crveni prolaz je izmerio i posledicu —
+  zbirnu i prijemnicu pod pravim vozačem).
+- **Test:** BFP `Test_S6K7_LanacSamoOgledalo` (R16): sopstvena stanica u transakciji testa, blok bez gajbi, otpremnica
+  na pravog vozača, pa oznaka stanice; kontrola: otpremnica ogledala bez zbirne je nedovršen lanac i „Ponovi" ga završava.
+- **Sabotaže:** `s6k7-ogledalo-ne-odlucuje`, `s6k7-oporavak-ne-pita-ogledalo`, `s6k7-ponovi-ne-pita-ogledalo` (988).
+- **Imenovani ostaci:** blok BEZ otpremnice ide po trenutnoj oznaci (odluka o dokumentu koji tek nastaje); malina
+  auto-otpremnica (takođe ogledalo) bez zbirne na stanici označenoj posle i dalje bi bila lanac; skidanje oznake izbacuje
+  nedovršene lance stanice iz Oporavka, a ručna F3 ih tada prima.
+- **Čeka reviewer GO nad ovim rezom:** FULL, `dokaz.py`, nov compile, merge.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

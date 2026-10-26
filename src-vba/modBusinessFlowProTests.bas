@@ -439,6 +439,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6K7_NastavakNosiKupcaRoditelja
     Test_S6K7_LanacJednaPrijemnica
     Test_S6K7_VlasnistvoLancaNeCitaKonfig
+    Test_S6K7_LanacSamoOgledalo
     Test_OTK_IspravkaBlokaUNacrtu
     Test_OTK_RutaPosleUpisa
     Test_OTP_ClanstvoBulkStrogo
@@ -16161,6 +16162,135 @@ EH:
     On Error GoTo 0
     LogFatal "Test_S6K7_VlasnistvoLancaNeCitaKonfig", eN, eD
 End Sub
+
+' ============================================================
+' S6 KORAK 7, rucna provera #442, N1 (R16): OTPREMNICA PRIPADA LANCU SAMO AKO JOJ
+' JE VOZAC OGLEDALO STANICE.
+'
+' Lanac je birao po TRENUTNOJ oznaci stanice. Blok koji je otisao u RUCNU
+' otpremnicu (pravi vozac), pa je stanica POSLE oznacena kao hladnjaca, postajao
+' je "nedovrsen lanac": Oporavak ga je nudio, "Ponovi" mu je pravio zbirnu kupca
+' hladnjace pod pravim vozacem, a rucna zbirna ga vise nije primala. Rucna
+' provera je tako dobila 13 laznih redova LANAC nad blokovima fixture-a.
+'
+' Stanje se pravi tacno tako: obican blok, izdata otpremnica sa pravim vozacem,
+' pa oznaka stanice. Kontrola: otpremnica lanca (ogledalo) bez zbirne je i dalje
+' nedovrsen lanac i "Ponovi" ga zavrsava.
+' SABOTAZE: s6k7-ogledalo-ne-odlucuje, s6k7-oporavak-ne-pita-ogledalo,
+' s6k7-ponovi-ne-pita-ogledalo.
+' ============================================================
+Private Sub Test_S6K7_LanacSamoOgledalo()
+    Dim tx As clsTransaction, prevKupac As String, prevMode As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, izvestaj As String, vozacOg As String
+    scenario = NewScenarioCode("S6K7OG")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    tx.AddTableSnapshot TBL_STANICE
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    SetConfigValue CFG_KEY_MALINA_MODE, "NO"
+
+    ' Obican blok u izdatoj RUCNOJ otpremnici, pa stanica postaje hladnjaca. Stanica
+    ' je SVOJA: oznaka nad deljenom test stanicom bi u Oporavak uvukla i tudje
+    ' zbirne, pa bi strog citac prijemnica mogao da padne pre tvrdnje. Blok je bez
+    ' gajbi, da otpremnica ne zavisi od stanja knjige nove stanice.
+    Const STA_OG As String = "ST-OGLTEST-90077"
+    Dim otpR As String, blokR As String, redSt As Collection
+    HldStanicaSaOznakom STA_OG, "Ne"
+    blokR = HldBlok("OGR-" & scenario, STA_OG, NextTestDate(), 40#, 100#, 0, 0#, 0#, 0)
+    otpR = HldOtpremnicaLanca(blokR, TEST_VOZ_ID, g)
+    Set redSt = FindRows(TBL_STANICE, "StanicaID", STA_OG)
+    If Not redSt Is Nothing Then
+        If redSt.count = 1 Then RequireUpdateCell TBL_STANICE, CLng(redSt(1)), COL_STA_JE_HLADNJACA, "Da", _
+                                                  "Test_S6K7_LanacSamoOgledalo"
+    End If
+    AssertTrue Len(blokR) > 0 And Len(otpR) > 0 And _
+               HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpR, COL_OTP_VOZAC) = TEST_VOZ_ID And _
+               HldPolje(TBL_STANICE, "StanicaID", STA_OG, COL_STA_JE_HLADNJACA) = "Da", _
+               "S6K7 ogledalo: preduslov -- blok u rucnoj otpremnici sa pravim vozacem, stanica posle oznacena kao hladnjaca"
+
+    Dim jeLanca As String
+    jeLanca = "x"
+    If Len(otpR) > 0 Then jeLanca = CStr(modAutoHladnjaca.OtpremnicaJeHladnjacka(otpR))
+    AssertEquals "False", jeLanca, _
+                 "S6K7 ogledalo: rucna otpremnica stanice oznacene posle nije otpremnica lanca"
+    AssertTrue Len(blokR) > 0 And Not HldNedovrsenLanac(blokR), _
+               "S6K7 ogledalo: Oporavak ne prikazuje blok rucne otpremnice kao nedovrsen lanac"
+
+    Dim r As String, nZbr As Long, nPrj As Long
+    nZbr = Pr3BrojRedova(TBL_ZBIRNA)
+    nPrj = Pr3BrojRedova(TBL_PRIJEMNICA)
+    izvestaj = "x"
+    r = "x"
+    If Len(blokR) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(blokR, izvestaj)
+    AssertEquals "||0|0", r & "|" & izvestaj & "|" & CStr(Pr3BrojRedova(TBL_ZBIRNA) - nZbr) & "|" & _
+                 CStr(Pr3BrojRedova(TBL_PRIJEMNICA) - nPrj), _
+                 "S6K7 ogledalo: Ponovi nad blokom rucne otpremnice ne pravi nista i ne javlja nista"
+
+    Dim nacrt As String, okR As Boolean, gR As String
+    nacrt = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-OGR-" & scenario), ZbrOcek(KLASA_I, 40#, 0#), g)
+    If Len(otpR) > 0 And Len(nacrt) > 0 Then okR = DodajZbirnaIzvor_TX(nacrt, otpR, gR)
+    AssertEquals "True|", CStr(okR) & "|" & gR, _
+                 "S6K7 ogledalo: rucna otpremnica stanice oznacene posle ulazi u rucnu zbirnu"
+
+    ' --- kontrola: otpremnica lanca (ogledalo) bez zbirne ----------------------
+    Dim blokH As String, otpH As String, prjH As String, izvH As String, jeH As String
+    vozacOg = modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID)
+    blokH = HldBlok("OGH-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 30#, 100#, 3, 0#, 0#, 0)
+    otpH = HldOtpremnicaLanca(blokH, vozacOg, g)
+    If Len(otpH) > 0 Then jeH = CStr(modAutoHladnjaca.OtpremnicaJeHladnjacka(otpH))
+    AssertEquals "True|True", jeH & "|" & CStr(Len(blokH) > 0 And HldNedovrsenLanac(blokH)), _
+                 "S6K7 ogledalo: kontrola -- otpremnica ogledala je otpremnica lanca i Oporavak je vidi kao nedovrsen lanac"
+    If Len(blokH) > 0 Then prjH = modAutoHladnjaca.AutoLanacHladnjaca(blokH, izvH)
+    AssertTrue Len(prjH) > 0, _
+               "S6K7 ogledalo: kontrola -- Ponovi zavrsava lanac otpremnice ogledala"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_S6K7_LanacSamoOgledalo", eN, eD
+End Sub
+
+' Test stanica sa cifrom u ID-u (niz broja otpremnice) i zadatom oznakom hladnjace.
+Private Sub HldStanicaSaOznakom(ByVal stanicaID As String, ByVal jeHladnjaca As String)
+    Dim rowData As Variant
+    If RowExists(TBL_STANICE, "StanicaID", stanicaID) Then Exit Sub
+    rowData = BlankRow(TBL_STANICE)
+    SetRequiredField rowData, TBL_STANICE, "StanicaID", stanicaID
+    SetRequiredField rowData, TBL_STANICE, "Naziv", "TEST STANICA " & stanicaID
+    SetOptionalField rowData, TBL_STANICE, "Mesto", "Test Mesto"
+    SetOptionalField rowData, TBL_STANICE, "Aktivan", "Aktivan"
+    SetOptionalField rowData, TBL_STANICE, COL_STA_JE_HLADNJACA, jeHladnjaca
+    RequireAppend TBL_STANICE, rowData, "HldStanicaSaOznakom"
+End Sub
+
+' Da li je blok u listi nedovrsenih lanaca (ono sto Oporavak prikazuje kao LANAC).
+Private Function HldNedovrsenLanac(ByVal otkupID As String) As Boolean
+    Dim c As Collection, i As Long, r As Variant
+    Set c = modAutoHladnjaca.NedovrseniLanci()
+    For i = 1 To c.count
+        r = c(i)
+        If StrComp(CStr(r(0)), otkupID, vbTextCompare) = 0 Then
+            HldNedovrsenLanac = True
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' Polje po imenu kolone koje mozda jos ne postoji (crveni prolaz): "" kad ga nema.
 Private Function HldPoljeAko(ByVal tbl As String, ByVal idCol As String, ByVal id As String, _

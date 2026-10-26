@@ -127,7 +127,12 @@ uzima kupca **roditeljske zbirne**, a pisac prijemnice zadatog roditelja drugog
 vlasnika (kupac ili vozač) odbija (review #442, P1-a). Zbirna lanca nosi **tačno
 jednu** aktivnu prijemnicu: dve, ili aktivna bez `PrijemnicaID`, su kvar koji
 nastavak javlja razlogom sa imenom zbirne, a Oporavak redom `GREŠKA` — ne prvi
-pogodak (review #442, P2).
+pogodak (review #442, P2). **Otpremnica pripada lancu samo ako joj je vozač ogledalo
+stanice** (`VozacID = StanicaID`): oznaka stanice je trenutno stanje, pa ručna otpremnica
+(pravi vozač) stanice koja je posle označena kao hladnjača nije lanac — Oporavak je ne
+nudi, „Ponovi" je ne dira, a ručna F3 zbirna je prima (N1, ručna provera #442). Blok
+**bez** otpremnice i dalje ide po trenutnoj oznaci: to je odluka o dokumentu koji tek
+nastaje.
 Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 7" (kod:
 „Tok koda, deo 2", stavka 202 u `docs/STANJE_REFAKTORA.md`; review #442: stavka 203).
 
