@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 26.10.2026 (stavka 205: S6 korak 7 — N1 zatvoren opcijom B, crveno → zeleno; čeka reviewer GO, FULL, `dokaz.py` i nov compile).
+**Ažurirano:** 26.10.2026 (stavka 205: S6 korak 7 — N1 zatvoren opcijom B; GO, FULL 12/12, `dokaz.py` 34/34; čeka nov compile).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ): u toku** — pre-flight i odluke 1–10 (stavka 200), deo 1 `KI-046` zatvoren (stavka 201), deo 2 (sam lanac, R2–R12) crveno → zeleno (stavka 202), review #442 (P1-a kupac nastavka, P1-b trajna oznaka `ZBR-OWN-01`, P2 strog čitač) crveno → zeleno (stavka 203), drugi krug **CODE GO**, FULL 12/12, `dokaz.py` 31/31, compile čist, ručna provera prošla (stavka 204), N1 zatvoren opcijom B (stavka 205) — čeka reviewer GO nad N1, FULL, `dokaz.py` i nov compile; grana `claude/s6-korak7-lanac-b` |
+| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ): u toku** — pre-flight i odluke 1–10 (stavka 200), deo 1 `KI-046` zatvoren (stavka 201), deo 2 (sam lanac, R2–R12) crveno → zeleno (stavka 202), review #442 (P1-a kupac nastavka, P1-b trajna oznaka `ZBR-OWN-01`, P2 strog čitač) crveno → zeleno (stavka 203), drugi krug **CODE GO**, FULL 12/12, `dokaz.py` 31/31, compile čist, ručna provera prošla (stavka 204), N1 zatvoren opcijom B, GO, FULL 12/12, `dokaz.py` 34/34 (stavka 205) — čeka nov compile, pa merge; grana `claude/s6-korak7-lanac-b` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7498,8 +7498,19 @@
      - **Imenovani ostaci:** blok **bez** otpremnice ide po trenutnoj oznaci (odluka o dokumentu koji tek nastaje); malina
        auto-otpremnica (takođe ogledalo) bez zbirne na stanici označenoj posle i dalje bi bila lanac; skidanje oznake sa
        stanice izbacuje njene nedovršene lance iz Oporavka (ručna F3 ih tada prima).
-     - **Nije urađeno (čeka reviewer GO nad ovim rezom):** FULL, `dokaz.py` (s6k7 + presidrene), nov `Debug → Compile`
-       nad novim izvorom (stari marker važi za `94d75713ae4c`), merge po izričitom zahtevu operatera.
+     - **Izvršne kapije posle reviewer GO-a nad `4216aded`:**
+       - **FULL 12/12 zelen** nad izvorom `e2fac85076a5` (ugovor `eca6e223e146`, fixture `29592b582ae58f69`):
+         RunAllTests **274 / 0**, BFP **2767 / 0**, Banka **241 / 0**, Storno **111 / 0**, Palete 96, Faktura 39,
+         Agrohemija 25, StornoCentar, Golden, Izveštaji, JSON parser, Licenca; `vba_gate --require-green`: **dokazano**.
+       - **`dokaz.py --grupe`, 34 sabotaže, 9 prolaza: crvenih 34/34, izvor IDENTIČAN** (`f5c255d47f210b48`); svih 28
+         `s6k7-*` + 6 presidrenih (`lanac-dupli-poziv`, `lanac-storniran-blok`, `oporavak-cid-kolona-vidljiva`,
+         `amb-prj-povrat-samo-sa-klasom-i`, `oporavak-cid-kolona-drift`, `vlasnistvo-lanca-po-broju`). Grupno 33,
+         `s6k7-ponovi-ne-pita-ogledalo` sama u poslednjoj grupi. Posle: `src-vba` bez izmena, sidra 988 / 0.
+       - **Sveska za compile:** `tests/fixtures/rucna_provera_s6_korak7_n1_kod.xlsm` (gitignored, otisak
+         `babde3f4ce675dbb`) = `run_vba --compile-only --keep` nad `e2fac85076a5`; u sopstvenoj instanci (konvencija
+         alata) kod reza je u svesci (**17/17 igala**), `KupacHladnjaca` je poslednja kolona.
+     - **Nije urađeno:** `Debug → Compile` nad novom sveskom i `vba_gate --mark-compile` (operater), pa merge `#442` po
+       izričitom zahtevu operatera; posle njega rebase `#441` i prenumeracija njegovih testova 272–280 → **275–283**.
      - **Sledeći brojevi:** stavka 206 · test 275 (pazi `#441`) · KI-055.
 
 ## Dug sa imenom (posle S5-5b)
