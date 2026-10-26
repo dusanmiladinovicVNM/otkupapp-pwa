@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 25.10.2026 (stavka 204: S6 korak 7 — CODE GO nad `a1cf945e`; FULL 12/12, `dokaz.py` 31/31; čeka compile i ručni acceptance).
+**Ažurirano:** 26.10.2026 (stavka 204: S6 korak 7 — CODE GO, FULL 12/12, `dokaz.py` 31/31, compile čist, ručna provera prošla; nalaz N1 čeka odluku).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ): u toku** — pre-flight i odluke 1–10 (stavka 200), deo 1 `KI-046` zatvoren (stavka 201), deo 2 (sam lanac, R2–R12) crveno → zeleno (stavka 202), review #442 (P1-a kupac nastavka, P1-b trajna oznaka `ZBR-OWN-01`, P2 strog čitač) crveno → zeleno (stavka 203), drugi krug **CODE GO**, FULL 12/12 i `dokaz.py` 31/31 (stavka 204) — čeka compile i ručni acceptance; grana `claude/s6-korak7-lanac-b` |
+| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ): u toku** — pre-flight i odluke 1–10 (stavka 200), deo 1 `KI-046` zatvoren (stavka 201), deo 2 (sam lanac, R2–R12) crveno → zeleno (stavka 202), review #442 (P1-a kupac nastavka, P1-b trajna oznaka `ZBR-OWN-01`, P2 strog čitač) crveno → zeleno (stavka 203), drugi krug **CODE GO**, FULL 12/12, `dokaz.py` 31/31, compile čist, ručna provera prošla (stavka 204) — nalaz ručne provere N1 čeka odluku; grana `claude/s6-korak7-lanac-b` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7439,9 +7439,37 @@
      - **P3 iz review-a → `KI-054`** (bez merge blokade): `OznakaKupacHladnjaca` čita config kroz fail-open
        `IsHladnjacaKupac`, pa tehnička greška čitanja postaje trajno „Ne". Recept: strogo čitanje u piscu oznake + BFP test
        sa podmetnutim padom.
-     - **Nije urađeno:** `Debug → Compile` i `vba_gate --mark-compile` (operater), ručni acceptance (F1–F4, F8, Oporavak,
-       trajna oznaka), pa merge `#442` po izričitom zahtevu operatera; posle njega rebase `#441` i prenumeracija njegovih
-       testova 272–280 → **275–283** (preporuka review-a).
+     - **Compile: čist** (operater, 26.10.2026); `vba_gate --mark-compile`, pa `--require-green --require-compile`:
+       **dokazano** nad `94d75713ae4c`.
+     - **Ručna provera** nad `rucna_provera_s6_korak7_kod.xlsm` (operater, 26.10.2026, snimci u sesiji):
+       - ✅ 1 compile · 2 Podešavanja bez prekidača · 3 stanica „Drugo Otkupno Mesto" označena kao hladnjača;
+       - ✅ 4–5 blok 2/261026-2 → „lanac kompletan — otpremnica 2/261026, zbirna S2/261026, prijemnica 1/261026", bez
+         dijaloga; F2 i F3 izdate (partner = stanica, kupac Test kupac 1), F4 100 kg × 100, paleta 10 gajbi;
+       - ✅ 6 sledeći lanac istog dana: otpremnica 2/261026-2, zbirna S2/261026-2, prijemnica 1/261026-2;
+       - ✅ 7 bez kupca hladnjače: dijalog sa ključem, blok u „Bez otpremnice"; „Ponovi" bez kupca odbijen istim razlogom;
+       - ✅ 8 storno bloka iz lanca odbijen imenom otpremnice;
+       - ✅ 9 PONIŠTENJE auto-prijemnice obara ceo tok (zbirna, otpremnica, paletna stavka) i oslobađa blok — izvedeno
+         dok je kupac hladnjače bio OBRISAN (blokovi u 09:41 i 09:43 staju na kupcu), pa je kaskadu odlučila oznaka zbirne;
+       - ✅ 10 Oporavak: red koji nije `LANAC` odbijen porukom;
+       - ✅ 12 `KupacHladnjaca` je poslednja kolona; zbirne lanca nose `Da`, zbirne fixture-a `Ne`;
+       - ✅ 13 PONIŠTENJE zbirne S2/261026-2: posledice „prijemnice: 1 (storniraju se)", potom ceo tok storniran
+         („otpremnice: 1, prijemnice: 1, paletne stavke: 1, blokovi oslobodjeni: 1");
+       - ✅ 14 `ZB-TEST-4` sa obrisanom oznakom: „Greska: Zbirna ZBI-TEST-4 nema oznaku KupacHladnjaca (''): … staje bez
+         izmene", zbirna ostala aktivna;
+       - preskočeno 11 (PWA, odluka operatera); nije prikazano: lanac sa dve klase i „Ponovi" posle vraćanja kupca (mere
+         ih BFP `Test_HLD_AutoLanacOtpremnica` i `modTest` 272/274);
+       - usput, nije iz ovog PR-a: blok 2/261026-3 je stao PRE otpremnice zbog manjka naših gajbi na stanici (pravilo
+         knjige AMB-10, traži nabavku; ništa nije upisano); u MsgBox-u nema č/ć (ANSI 1252, zatečeno).
+     - **Nalaz ručne provere N1 — čeka odluku operatera.** Lanac bira blokove po TRENUTNOJ oznaci stanice
+       (`HladnjacaStrogo`), ne po činjenici iz trenutka upisa. Posle koraka 3 Oporavak je pokazao 13 redova `LANAC` za
+       blokove fixture-a: izmereno, tačno 13 aktivnih blokova `STA-TEST-2` stoji u otpremnici bez zbirne (S1–S11, S21,
+       L2), sa pravim vozačima (`VOZ-TEST-2`, `VOZ-TEST-1`), ne sa ogledalom. Izvedeno iz koda, NIJE izmereno: „Ponovi"
+       nad takvim redom pravi auto-zbirnu kupca hladnjače pod pravim vozačem (i prijemnicu za otpremnicu sa jednim
+       blokom; kod 31/TEST sa dva bloka zbirna ostaje bez prijemnice); te otpremnice ne mogu u ručnu F3 zbirnu; sync
+       korak bi u lanac uveo 4 nevezana stara bloka stanice. Ista klasa kao P1-b, na nivou bloka. Predlog: P2; opcija B
+       — otpremnica pripada lancu samo ako joj je vozač ogledalo stanice.
+     - **Nije urađeno:** odluka o N1, pa merge `#442` po izričitom zahtevu operatera; posle njega rebase `#441` i
+       prenumeracija njegovih testova 272–280 → **275–283** (preporuka review-a).
      - **Sledeći brojevi:** stavka 205 · test 275 (pazi `#441`) · KI-055.
 
 ## Dug sa imenom (posle S5-5b)
