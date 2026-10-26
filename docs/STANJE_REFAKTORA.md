@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 26.10.2026 (stavka 205: S6 korak 7 — N1 zatvoren opcijom B; FULL 12/12, `dokaz.py` 34/34, compile čist; spremno za merge).
+**Ažurirano:** 26.10.2026 (stavka 206: merge `#442` = `376a3d3e`, S6 korak 7/8 zatvoren; sledeći je korak 8).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 6/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · **korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ): u toku** — pre-flight i odluke 1–10 (stavka 200), deo 1 `KI-046` zatvoren (stavka 201), deo 2 (sam lanac, R2–R12) crveno → zeleno (stavka 202), review #442 (P1-a kupac nastavka, P1-b trajna oznaka `ZBR-OWN-01`, P2 strog čitač) crveno → zeleno (stavka 203), drugi krug **CODE GO**, FULL 12/12, `dokaz.py` 31/31, compile čist, ručna provera prošla (stavka 204), N1 zatvoren opcijom B, FULL 12/12, `dokaz.py` 34/34, compile čist (stavka 205) — spremno za merge na zahtev operatera; grana `claude/s6-korak7-lanac-b` |
+| **S6 prijemnica** | ⏳ **u toku, 7/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — grana `claude/s6-korak8-zavrsni` sa `376a3d3e` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7514,6 +7514,32 @@
      - **Nije urađeno:** merge `#442` po izričitom zahtevu operatera; posle njega rebase `#441` i prenumeracija njegovih
        testova 272–280 → **275–283**.
      - **Sledeći brojevi:** stavka 206 · test 275 (pazi `#441`) · KI-055.
+206. **Merge `#442`, S6 korak 7/8 zatvoren** (26.10.2026). Zapis ide ovde, a ne u `#442`, po obrascu stavki 173,
+     177, 181, 187, 192 i 199. Brojevi FULL-a, dokaza i compile-a su u stavkama 204 i 205.
+
+     - **Merge** 26.10.2026 (14:31:34 UTC) kao **`376a3d3e`**, sa naloga `dusanmiladinovicVNM`, nad head-om
+       `90fc77eb`.
+       - Static CI je `success` na tom head-u (check run 121632060350, izmereno).
+       - Stablo `main`-a posle merge-a jednako je stablu `90fc77eb` (`f26b0f30`, izmereno).
+       - Grana `claude/s6-korak7-lanac-b` nije obrisana (izmereno, `git ls-remote`).
+       - Da li je merge pušten sa `--match-head-commit` se ne vidi: nije provereno.
+     - **Komentara ni review-a na `#442` na GitHub-u nema** (izmereno, `gh api`); oba kruga review-a i N1 su zapisani u
+       stavkama 203–205.
+     - **Bazni brojevi na `main` = `376a3d3e`** (FULL 12/12 nad izvorom `e2fac85076a5`; posle `4216aded` su ušli samo
+       docs, `src-vba`, `tools` i `schema` bez izmena — izmereno `git diff`; `vba_gate --require-green
+       --require-compile`: **dokazano** nad tim izvorom):
+       - RunAllTests 274/0, BFP 2767/0, Banka 241/0, Storno 111/0;
+       - Faktura 39/39, Agrohemija 25/25, Palete 96; Izveštaji, SheetsJson, Storno centar, Licenca i Golden OK;
+       - katalog sabotaža 988 (`POZNATI_NALAZI` 9);
+       - otisak šeme `06A00A5F`; potpis fixture-a `29592b582ae58f69`. Drugi potpis → `make_fixture` PRE trijaže.
+     - **Tabela „Gde smo" je ažurirana u istom commitu:** S6 je 7/8, sledeći je korak 8 (završni).
+     - **`#441`** (izveštaji, druga sesija) je i dalje `OPEN` nad `e21830c5` (izmereno) i drži testove 272–280; rebase na
+       `376a3d3e` i prenumeracija 272–280 → 275–283 su njegov integracioni posao.
+     - **Otvoreno van reza:** `KI-047` (čeka poslovnu odluku), `KI-048`–`KI-050` (UX lanca unosa, posle S6–S9),
+       `KI-052`–`KI-054`; **`KI-051` i `PRJ-ZBR-01` u piscu su obim koraka 8**.
+     - **Sledeći brojevi:** stavka 207 · test 275 (pazi `#441`) · KI-055.
+     - **Sledeći je S6 korak 8** (završni: linijska i keš polja `tblPrijemnica`, `SavePrijemnica_TX`, golden lanac do
+       fakture, kapije prijemnice u piscu), na grani `claude/s6-korak8-zavrsni` sa `376a3d3e`.
 
 ## Dug sa imenom (posle S5-5b)
 
