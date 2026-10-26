@@ -9263,7 +9263,8 @@ zatvaranje tri nalaza, bez novog refaktora. `KI-052` je prihvaćen kao P2 bez bl
   auto-otpremnica (takođe ogledalo) bez zbirne na stanici označenoj posle i dalje bi bila lanac; skidanje oznake izbacuje
   nedovršene lance stanice iz Oporavka, a ručna F3 ih tada prima.
 - **Reviewer GO nad `4216aded`:** FULL **12/12**, `dokaz.py --grupe` **34/34** (izvor identičan), `vba_gate
-  --require-green` dokazano; nova sveska za compile (17/17 igala). Čeka: compile, pa merge.
+  --require-green` dokazano; nova sveska za compile (17/17 igala); compile čist, `--require-compile` dokazano.
+  Čeka: merge na zahtev operatera.
 
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
