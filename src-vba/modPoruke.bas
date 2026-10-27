@@ -1034,7 +1034,7 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     ' PRJ-ZBR-01 (S6 korak 6): prijemnica se vezuje samo na IZDATU zbirnu.
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_NIJE_IZDATA", ChrW(10007) & " Zbirna pod tim brojem jo" & ChrW(353) & " nije izdata " & ChrW(8212) & " izdaj je u F3, pa unesi prijemnicu."
     ' A2 t. 4 (S6 korak 8, KI-051): broj prijemnice hladnjace je nas niz, storno ga ne oslobadja.
-    UpsertRow lo, existing, "DOKUNOS_ERR_PRJ_BROJ_STORNIRAN", ChrW(10007) & " Taj broj je nosila stornirana prijemnica hladnja" & ChrW(269) & "e " & ChrW(8212) & " storno ne oslob" & ChrW(273) & "a broj. Uzmi predlo" & ChrW(382) & "eni broj."
+    UpsertRow lo, existing, "DOKUNOS_ERR_PRJ_BROJ_STORNIRAN", ChrW(10007) & " Taj broj je nosila stornirana prijemnica hladnja" & ChrW(269) & "e " & ChrW(8212) & " storno ne osloba" & ChrW(273) & "a broj. Uzmi predlo" & ChrW(382) & "eni broj."
     ' PRJ-ZBR-02 (KI-047): vrednost zbirne se dopisuje iza teksta (PrijemnicaRobaRazlog).
     UpsertRow lo, existing, "DOKUNOS_ERR_PRJ_VRSTA_ZBIRNE", ChrW(10007) & " Vrsta vo" & ChrW(263) & "a prijemnice mora biti ista kao na zbirnoj:"
     UpsertRow lo, existing, "DOKUNOS_ERR_PRJ_SORTA_ZBIRNE", ChrW(10007) & " Sorta prijemnice mora biti ista kao na zbirnoj:"
