@@ -1303,23 +1303,19 @@ Private Sub PreveziPaleteIspravke(ByVal p As Object, ByVal res As String, _
                    Trim$(res), COL_PRJ_BROJ)))
 
     ' IZVOR SE SALJE PO IDENTITETU. Correction context nosi PK stornirane
-    ' prijemnice; iz njega se cita njena GENERACIJA, pa writer bira bas njene
-    ' paletne stavke. Bez toga bi izbor isao po broju - a broj se racuna po
-    ' kupcu, pa bi dokument drugog kupca istog broja bio zahvacen.
+    ' prijemnice, pa writer bira bas njene paletne stavke. Bez toga bi izbor isao
+    ' po broju - a broj se racuna po kupcu, pa bi dokument drugog kupca istog
+    ' broja bio zahvacen. Do S6 koraka 8 se iz PK-a citala generacija (1 : 1).
     '
     ' Kapija nad jednoznacnoscu broja vise nije ovde: ista provera sada stoji u
     ' writeru i vazi za svakog pozivaoca, ukljucujuci legacy formu.
-    Dim stariGen As String
-    stariGen = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, _
-                              modStornoDok.StorniraniDocID(cid))
+    Dim stariID As String
+    stariID = Trim$(modStornoDok.StorniraniDocID(cid))
 
     ' CILJ SE TAKODJE SALJE PO IDENTITETU. Nova prijemnica je upravo upisana, pa
     ' joj je PK poznat -- nema razloga da se cilj trazi po broju koji je labela.
-    Dim noviGen As String
-    noviGen = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(res))
-
     relOk = ReassignPaleteToPrijemnica_TX(stariBroj, noviBroj, relWarn, True, gajbDiff, _
-                                          stariGen, noviGen)
+                                          stariID, Trim$(res))
     If relOk Then
         poruke = poruke & Poruka("DOKUNOS_MSG_PALETE_PREVEZANE") & " " & _
                  stariBroj & " " & ChrW(8594) & " " & noviBroj & vbCrLf

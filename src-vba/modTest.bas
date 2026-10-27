@@ -3053,7 +3053,7 @@ End Sub
 ' jedan dokument.
 Private Sub T_Oporavak_CiljneListe()
     Dim d As Variant, redovi As Variant, n As Long, i As Long, nadjen As Long
-    Dim storniranih As Long, istiBroj As Long, vlasnici As String
+    Dim storniranih As Long, istiBroj As Long, vlasnici As String, idovi As String
 
     modScrOporavak.Scr_OpoTestSet "ZBIRNE", "", ""
     d = modScrOporavak.Scr_Rows("sve", "")
@@ -3103,6 +3103,7 @@ Private Sub T_Oporavak_CiljneListe()
         If CStr(redovi(i, 1)) = FX_PRIJ_BROJ Then
             istiBroj = istiBroj + 1
             vlasnici = vlasnici & "|" & CStr(redovi(i, 3))
+            idovi = idovi & "|" & CStr(redovi(i, 7)) & "|"
         End If
         AssertEq (CStr(redovi(i, 1)) = FX_PRIJ_STORNO), False, _
                  "stornirana prijemnica se NE nudi kao cilj"
@@ -3110,6 +3111,10 @@ Private Sub T_Oporavak_CiljneListe()
     AssertEq istiBroj, 2, "dva kupca sa istim brojem daju DVA ciljna dokumenta"
     AssertEq (InStr(vlasnici, FX_KUPAC) > 0), True, "prvi vlasnik je vidljiv u listi"
     AssertEq (InStr(vlasnici, FX_KUPAC2) > 0), True, "drugi vlasnik je vidljiv u listi"
+    ' S6 korak 8 (R8): identitet reda (kolona 7) je PrijemnicaID, ne generacija --
+    ' radnja "Prevezi palete" salje bas njega.
+    AssertEq (InStr(idovi, "|PRJ-TEST-A|") > 0 And InStr(idovi, "|PRJ-TEST-B|") > 0), True, _
+             "ciljna lista prijemnica nosi PrijemnicaID dokumenta (S6 korak 8)"
 
     ' Pretraga suzava istu listu.
     modScrOporavak.Scr_OpoTestSet "ZBIRNE", "", ""
@@ -3431,24 +3436,14 @@ End Function
 '
 ' Tako je i u produkciji: BrojPrijemnice se racuna PO KUPCU.
 '
-' Identitet nosi GeneracijaID - kolonu pravi EnsureSledljivostSchema na svakom
-' startu, a pecate je writeri. Fixture redovi su sejani mimo writera, pa im
-' test sam upisuje generacije: to je jedini nacin da dva dokumenta budu
-' razlucena bas onako kako bi ih razlucio pravi upis.
+' Identitet nosi PrijemnicaID (S6 korak 8; do tada generacija, 1 : 1 sa ID-om od
+' koraka 2). Ime testa je ostalo iz vremena generacije.
 Private Sub T_RelinkPoGeneraciji_NeDiraTudjDokument()
     Dim upoz As String, gajbDiff As Boolean, ok As Boolean
 
-    ' Preduslov: kolona postoji (Ensure je odradio svoje) i oba dokumenta nose
-    ' svoje palete pod ISTIM brojem.
-    AssertEq (GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID) > 0), True, _
-             "preduslov: EnsureSledljivostSchema je napravio GeneracijaID"
+    ' Preduslov: oba dokumenta nose svoje palete pod ISTIM brojem.
     AssertEq StavkiZaPrijemnicu(FX_PRIJ_KOLIZIJA), 2, _
              "preduslov: dva dokumenta istog broja nose dve paletne stavke"
-
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-C1", "GEN-TEST-A"
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-C2", "GEN-TEST-B"
-    AssertEq modDokumenta.GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-C1"), _
-             "GEN-TEST-A", "preduslov: generacija A je upisana"
 
     ' CILJ JE ISTO TAKO KOLIZIONO. Broj 1/150326 nose DVE AKTIVNE prijemnice,
     ' PRJ-TEST-A (kupac 1) i PRJ-TEST-B (kupac 2). Raniji oblik ovog testa je tu
@@ -3456,21 +3451,19 @@ Private Sub T_RelinkPoGeneraciji_NeDiraTudjDokument()
     ' birao po golom broju, pa je roba isla onom dokumentu koji je slucajno
     ' POSLEDNJI u tabeli. Izvor po identitetu a cilj po labeli i dalje moze da
     ' odnese palete pogresnom kupcu, samo na drugom kraju.
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-A", "GEN-CILJ-A"
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-B", "GEN-CILJ-B"
 
-    ' Prvo FAIL-CLOSED: bez generacije cilja broj je dvosmislen i writer odbija.
+    ' Prvo FAIL-CLOSED: bez identiteta cilja broj je dvosmislen i writer odbija.
     ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
-                                       gajbDiff, "GEN-TEST-A")
-    AssertEq ok, False, "bez generacije CILJA dvosmislen broj se odbija"
+                                       gajbDiff, "PRJ-TEST-C1")
+    AssertEq ok, False, "bez identiteta CILJA dvosmislen broj se odbija"
     AssertEq (Len(upoz) > 0), True, "odbijanje nosi razlog za operatera"
     AssertEq GajbicaZaDokument("PRJ-TEST-A"), 0, _
              "odbijeno prevezivanje nije nista pomerilo"
 
     ' Pa po identitetu, na dokument kupca 1.
     ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
-                                       gajbDiff, "GEN-TEST-A", "GEN-CILJ-A")
-    AssertEq ok, True, "prevezivanje po generaciji je proslo"
+                                       gajbDiff, "PRJ-TEST-C1", "PRJ-TEST-A")
+    AssertEq ok, True, "prevezivanje po identitetu je proslo"
 
     ' Tvrdnja na IZVORNOJ strani: dokument B se nije pomerio.
     AssertEq StavkiZaPrijemnicu(FX_PRIJ_KOLIZIJA), 1, _
@@ -3511,10 +3504,8 @@ End Sub
 '   sa identitetom  -> zapis postoji i pokazuje na izabran dokument
 ' Prva tvrdnja pada cim se identitet zaobidje, bez obzira na redosled redova.
 Private Sub T_F8_IzabranRedOstajeIzabran()
-    Dim res As Object, cid As String, ocekivan As String
+    Dim res As Object, cid As String
 
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-F8-1"
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-F8-2"
 
     ' Preduslov: broj je stvarno dvosmislen -- inace test ne meri nista.
     AssertEq VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ZBR_KOLIZIJA, _
@@ -3536,8 +3527,6 @@ Private Sub T_F8_IzabranRedOstajeIzabran()
     cid = Trim$(NzToText(res("correctionID")))
     AssertEq (Len(cid) > 0), True, "sa identitetom se recovery zapis pravi"
 
-    ocekivan = modDokumenta.GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2")
-    AssertEq ocekivan, "GEN-F8-2", "preduslov: generacija je upisana na Z2"
     AssertEq OldDocIDKonteksta(cid), "PRJ-TEST-Z2", _
              "recovery zapis pokazuje na IZABRAN dokument"
 End Sub
@@ -3572,8 +3561,6 @@ End Sub
 Private Sub T_IspravkaPrijemnice_PodKolizijomBroja()
     Dim res As Object
 
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-I1", "GEN-ISP-1"
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-I2", "GEN-ISP-2"
     AssertEq VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ISPRAVKA, _
                              "T_Isp", False, Array(COL_PRJ_KUPAC)).count, 2, _
              "preduslov: broj nose dva dokumenta"
@@ -4142,8 +4129,6 @@ End Sub
 Private Sub T_StornoImpact_PoIdentitetu()
     Dim m As Object, pal As Collection, sm As Object
 
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-IMP-1"
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
 
     ' PREDUSLOV: po golom broju uvid stvarno vidi palete OBA dokumenta -- inace
     ' test ne meri suzavanje nego prazan skup.
@@ -4334,7 +4319,6 @@ Private Sub T_StornoImpact_SchemaDriftJeInvalidan()
     Dim validPodDriftom As Boolean, semaVracena As Boolean, imaoPalete As Boolean
     Dim validPodPalDriftom As Boolean, palSemaVracena As Boolean
 
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
 
     ' POZITIVNA KONTROLA: nad zdravom semom uvid je valjan i ima palete. Bez nje
     ' bi test prosao i kad BuildStornoImpact uvek vraca valid = False.
@@ -4400,8 +4384,6 @@ End Sub
 Private Sub T_StornoImpact_IdentitetNeDegradira()
     Dim m As Object
 
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-IMP-1"
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
 
     ' Identitet KOJI NE POSTOJI. Sema je zdrava, kolona generacije je tu -- samo
     ' nijedan red tog broja ne nosi ovu generaciju. To je stanje u kome se sme
@@ -4836,8 +4818,6 @@ End Sub
 Private Sub T_ImpactPalete_ZaglavljeIzPraveVrste()
     Dim m As Object, pal As Collection, d As Object
 
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-IMP-1"
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
 
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
                                              "", "PRJ-TEST-Z2")
@@ -6353,7 +6333,7 @@ End Function
 ' 28. Prevezivanje prijemnice na zbirnu ne sme da povuce TUDJU paletu
 ' ============================================================
 ' Prvi deo ReassignPrijemnicaToZbirna_TX je birao redove tblPrijemnica po
-' generaciji -- tacno. Ali je zatim NOVU BrojZbirne propagirao u tblPaletaStavka
+' identitetu (generaciji; od S6 koraka 8 PrijemnicaID-u) -- tacno. Ali je zatim NOVU BrojZbirne propagirao u tblPaletaStavka
 ' po BrojPrijemnice, cime je ponistavao ceo taj izbor.
 '
 ' Posledica nije bila "prevezano malo vise" nego dokument koji SAM SEBI
@@ -6367,16 +6347,14 @@ End Function
 Private Sub T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu()
     Dim ok As Boolean
 
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-ZBR-1"
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-ZBR-2"
 
     AssertEq ZbirnaNaPrijemnici("PRJ-TEST-Z2"), FX_ZBIRNA_MIRNA, _
              "preduslov: tudji dokument pocinje na staroj zbirni"
     AssertEq ZbirnaNaStavci("PST-TEST-Z2"), FX_ZBIRNA_MIRNA, _
              "preduslov: tudja paleta pocinje na staroj zbirni"
 
-    ok = ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ZBR_KOLIZIJA, FX_ZBIRNA2, "GEN-ZBR-1")
-    AssertEq ok, True, "prevezivanje po generaciji je proslo"
+    ok = ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ZBR_KOLIZIJA, FX_ZBIRNA2, "PRJ-TEST-Z1")
+    AssertEq ok, True, "prevezivanje po identitetu je proslo"
 
     ' Svoj dokument -- oba reda, i prijemnica i njena paleta.
     AssertEq ZbirnaNaPrijemnici("PRJ-TEST-Z1"), FX_ZBIRNA2, _
@@ -6393,13 +6371,13 @@ Private Sub T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu()
 End Sub
 
 ' ============================================================
-' 29. Zadata generacija koje nema NIJE poziv na fallback po broju
+' 29. Zadat identitet koga nema NIJE poziv na fallback po broju
 ' ============================================================
 ' Prazan argument i zadat-ali-nepostojeci su dva razlicita stanja:
 '
 '   ""        pozivalac ne zna identitet (zatecen zapis) -> fallback po broju,
 '             ali tek kroz kapiju nad jednoznacnoscu
-'   "GEN-X"   pozivalac je rekao BAS TAJ dokument. Ako ga nema, pad na broj bi
+'   "PRJ-X"   pozivalac je rekao BAS TAJ dokument. Ako ga nema, pad na broj bi
 '             znacio da se dira NESTO DRUGO -- tise i gore od greske.
 Private Sub T_ZadataGeneracijaKojeNema_Staje()
     Dim ok As Boolean, upoz As String, gajbDiff As Boolean
@@ -6408,18 +6386,18 @@ Private Sub T_ZadataGeneracijaKojeNema_Staje()
     preZbirna = ZbirnaNaPrijemnici("PRJ-TEST-Z2")
     preStavki = StavkiZaPrijemnicu(FX_PRIJ_KOLIZIJA)
 
-    ok = ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ZBR_KOLIZIJA, FX_ZBIRNA2, "GEN-NE-POSTOJI")
-    AssertEq ok, False, "zadata generacija prijemnice koje nema zaustavlja upis"
+    ok = ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ZBR_KOLIZIJA, FX_ZBIRNA2, "PRJ-NE-POSTOJI")
+    AssertEq ok, False, "zadat identitet prijemnice koga nema zaustavlja upis"
     AssertEq ZbirnaNaPrijemnici("PRJ-TEST-Z2"), preZbirna, _
              "posle odbijanja nijedan dokument nije pomeren"
 
     ok = ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ZBR_KOLIZIJA, FX_ZBIRNA2, _
-                                       "GEN-ZBR-1", "GEN-ZBIRNE-NEMA")
+                                       "PRJ-TEST-Z1", "GEN-ZBIRNE-NEMA")
     AssertEq ok, False, "zadata generacija CILJNE zbirne koje nema zaustavlja upis"
 
     ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
-                                       gajbDiff, "GEN-NE-POSTOJI", "GEN-CILJ-A")
-    AssertEq ok, False, "zadata generacija izvora paleta koje nema zaustavlja upis"
+                                       gajbDiff, "PRJ-NE-POSTOJI", "PRJ-TEST-A")
+    AssertEq ok, False, "zadat identitet izvora paleta koga nema zaustavlja upis"
     AssertEq (Len(upoz) > 0), True, "odbijanje nosi razlog za operatera"
     AssertEq StavkiZaPrijemnicu(FX_PRIJ_KOLIZIJA), preStavki, _
              "posle odbijanja nijedna paletna stavka nije pomerena"
@@ -6428,7 +6406,7 @@ End Sub
 ' ============================================================
 ' 30. Presuda o RELABEL-u mora da opisuje BAS izabran dokument
 ' ============================================================
-' Writer je dokument birao po GeneracijaID, a onda zvao
+' Writer je dokument birao po identitetu, a onda zvao
 ' EvaluatePaletaReassign(oldBroj, newBroj), koja ga je PONOVO trazila po
 ' poslovnom broju i uzimala PRVI red. Kod kolizije je presuda opisivala drugi
 ' dokument.
@@ -6437,7 +6415,7 @@ End Sub
 ' RELABEL preskoci, pa paleta ostane oznacena starom robom.
 '
 '   PRJ-TEST-C1  TESTVOCE    <- prvi red broja 8/150326; ISTA vrsta kao cilj
-'   PRJ-TEST-C2  TESTVOCE2   <- stvarni izvor (GEN-TEST-B)
+'   PRJ-TEST-C2  TESTVOCE2   <- stvarni izvor
 '   cilj 1/150326            TESTVOCE
 '
 ' Presuda po broju vidi C1 i kaze CLEAN. Presuda po identitetu vidi C2 i mora
@@ -6445,12 +6423,12 @@ End Sub
 Private Sub T_VerdiktPoIdentitetu_RelabelSeNePreskace()
     Dim v As Variant, ok As Boolean, upoz As String, gajbDiff As Boolean
 
-    v = EvaluatePaletaReassign(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, "GEN-TEST-B", "GEN-CILJ-A")
+    v = EvaluatePaletaReassign(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, "PRJ-TEST-C2", "PRJ-TEST-A")
     AssertEq CStr(v(0)), "RELABEL", _
              "presuda po identitetu vidi razliku vrste izabranog dokumenta"
 
     ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
-                                       gajbDiff, "GEN-TEST-B", "GEN-CILJ-A")
+                                       gajbDiff, "PRJ-TEST-C2", "PRJ-TEST-A")
     AssertEq ok, True, "prevezivanje uz relabel je proslo"
 
     ' Ono zbog cega presuda uopste postoji: etiketa na stavci mora da prati robu
@@ -6480,9 +6458,6 @@ End Sub
 Private Sub T_DeljenaPaleta_SuStanarPoIdentitetu()
     Dim ok As Boolean, upoz As String, gajbDiff As Boolean
 
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-D1", "GEN-DEL-1"
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-D2", "GEN-DEL-2"
-    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-T2", "GEN-CILJ-V2"
 
     AssertEq VrstaNaPaleti("PAL-TEST-D"), FX_VRSTA, _
              "preduslov: deljena paleta pocinje sa starom robom"
@@ -6490,7 +6465,7 @@ Private Sub T_DeljenaPaleta_SuStanarPoIdentitetu()
     ' allowRelabel = True: potvrda relabela POSTOJI, a operacija se svejedno
     ' odbija -- deljena paleta se ne moze prelabelirati ni uz potvrdu.
     ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_DELJENA, FX_PRIJ_CILJ_V2, upoz, True, _
-                                       gajbDiff, "GEN-DEL-1", "GEN-CILJ-V2")
+                                       gajbDiff, "PRJ-TEST-D1", "PRJ-TEST-T2")
     AssertEq ok, False, "relabel deljene palete se odbija i uz potvrdu"
     AssertEq (InStr(upoz, "BLOKIRANO") > 0), True, "odbijanje kaze zasto"
 
@@ -6504,7 +6479,7 @@ Private Sub T_DeljenaPaleta_SuStanarPoIdentitetu()
 End Sub
 
 ' ============================================================
-' 32. Isti broj sa RAZLICITIM generacijama nije isti dokument
+' 32. Isti broj sa RAZLICITIM identitetom nije isti dokument
 ' ============================================================
 ' Ova kapija je popravljena u ekranu, a u writeru je ostala stara -- pravilo je
 ' time bilo samo preseljeno iz UI-ja u core. Writer se testira direktno, bez
@@ -6513,10 +6488,10 @@ Private Sub T_IstiBrojRazliciteGeneracije_NijeIstiDokument()
     Dim ok As Boolean, upoz As String, gajbDiff As Boolean
 
     ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_BROJ, FX_PRIJ_BROJ, upoz, True, _
-                                       gajbDiff, "GEN-CILJ-A", "GEN-CILJ-A")
-    AssertEq ok, False, "ista generacija sa obe strane je ISTI dokument -- odbija se"
+                                       gajbDiff, "PRJ-TEST-A", "PRJ-TEST-A")
+    AssertEq ok, False, "isti identitet sa obe strane je ISTI dokument -- odbija se"
 
-    ' Isti broj, druge generacije: dva dokumenta, operacija je legitimna.
+    ' Isti broj, drugi dokument: dva dokumenta, operacija je legitimna.
     '
     ' Meri se DELTA, ne apsolutan zbir: na PRJ-TEST-A stoji ono sto su tamo
     ' ostavili raniji testovi, a testovi dele svesku. Tvrdnja je "sve sto je bilo
@@ -6527,8 +6502,8 @@ Private Sub T_IstiBrojRazliciteGeneracije_NijeIstiDokument()
     AssertEq (preA > 0), True, "preduslov: izvorni dokument uopste nosi robu"
 
     ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_BROJ, FX_PRIJ_BROJ, upoz, True, _
-                                       gajbDiff, "GEN-CILJ-A", "GEN-CILJ-B")
-    AssertEq ok, True, "isti broj a razlicite generacije PROLAZI"
+                                       gajbDiff, "PRJ-TEST-A", "PRJ-TEST-B")
+    AssertEq ok, True, "isti broj a razliciti dokumenti PROLAZI"
     AssertEq GajbicaZaDokument("PRJ-TEST-B"), preB + preA, _
              "sva roba je presla na drugi dokument ISTOG broja"
     AssertEq GajbicaZaDokument("PRJ-TEST-A"), 0, _
@@ -9920,26 +9895,41 @@ End Sub
 '     iz izlaza;
 '   - COL_PRS_* imenuju bas te kolone, njihovim redom;
 '   - registar storna zna tabelu, i zna da storno NEMA (BEZ_STORNA).
+'   - S6 KORAK 8 (R6): zaglavlje nema nijednu od osam obrisanih kolona (linijska
+'     polja, kes fakture, generacija), ima 20 kolona, a veza na zbirnu ostaje
+'     (BrojZbirne kao labela, ZbirnaRoditeljID kao identitet). Kontra-tvrdnja
+'     drzi da prazan skup ne znaci "zaglavlje nema nista". Obrisane kolone su
+'     LITERALI -- konstante za njih ne postoje;
 ' Da sveska tabelu stvarno ima meri T_Sema_SveskaOdgovaraKanonu (VerifySchema).
 ' Redosled tvrdnji je nosec: modTest staje na prvom padu, a cinjenica dokumenta
 ' dodata na stavku obara i oblik -- zato oblik stoji POSLE nje.
 ' SABOTAZE: s6-stavka-nosi-povrat, s6-zaglavlje-gubi-povrat,
 ' s6-stavka-pomeren-red, s6-konstanta-mimo-kanona,
-' s6-stavka-van-registra-storna (tvrdnje imenuje tools/sabotaza.py).
+' s6-stavka-van-registra-storna, s6k8-kanon-vraca-generaciju (tvrdnje imenuje
+' tools/sabotaza.py).
 Private Sub T_S6_KanonStavkePrijemnice()
     Dim stavka As Collection, zaglavlje As Collection, otkStavka As Collection
     Dim k As Variant, ime As String, i As Long
     Dim naStavci As String, naZaglavlju As String
     Dim ocekivano As String, kanon As String, konst As String
+    Dim visak As String, veza As String
 
     Set stavka = modSchema.SchemaTableColumns(TBL_PRIJEMNICA_STAVKE)
     Set zaglavlje = modSchema.SchemaTableColumns(TBL_PRIJEMNICA)
     Set otkStavka = modSchema.SchemaTableColumns(TBL_OTKUP_STAVKE)
 
     For Each k In Array(COL_PRJ_TIP_AMB, COL_PRJ_KOL_AMB_VRACENA, _
-                        COL_PRJ_FAKTURISANO, COL_PRJ_FAKTURA_ID, COL_STORNIRANO, _
+                        "Fakturisano", "FakturaID", COL_STORNIRANO, _
                         COL_GENERACIJA_ID, COL_PRJ_BROJ_ZBIRNE)
         If KanonImaKolonu(stavka, CStr(k)) Then naStavci = naStavci & "|" & CStr(k)
+    Next k
+
+    For Each k In Array("Kolicina", "Cena", "KolAmbalaze", "Klasa", "Fakturisano", _
+                        "FakturaID", "BrutoKg", COL_GENERACIJA_ID)
+        If KanonImaKolonu(zaglavlje, CStr(k)) Then visak = visak & "|" & CStr(k)
+    Next k
+    For Each k In Array(COL_PRJ_BROJ_ZBIRNE, COL_DETE_ZBIRNA_ROD)
+        If KanonImaKolonu(zaglavlje, CStr(k)) Then veza = veza & "|" & CStr(k)
     Next k
 
     For Each k In Array(COL_PRJ_TIP_AMB, COL_PRJ_KOL_AMB_VRACENA)
@@ -9972,6 +9962,10 @@ Private Sub T_S6_KanonStavkePrijemnice()
              CStr(modSchemaGuard.TabelaNosiStorno(TBL_PRIJEMNICA_STAVKE)), _
              CStr(True) & "|" & CStr(False), _
              "S6 kanon: registar storna zna stavku prijemnice kao BEZ_STORNA"
+    AssertEq visak, "", _
+             "S6K8 kanon: zaglavlje prijemnice nema linijska polja, kes fakture ni generaciju"
+    AssertEq CStr(zaglavlje.count) & veza, "20|" & COL_PRJ_BROJ_ZBIRNE & "|" & COL_DETE_ZBIRNA_ROD, _
+             "S6K8 kanon: zaglavlje ima 20 kolona, a veza na zbirnu ostaje"
 End Sub
 
 ' 258. S6 KORAK 2: F4 PISE JEDAN DOKUMENT, A PAD STAVKE VRACA CEO DOKUMENT

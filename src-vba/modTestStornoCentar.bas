@@ -306,8 +306,8 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE), _
               Array("SVT-KA-OID", "SVT-KA-O", "SVT-KA-Z")
     TcSeedClanstvo "SVT-KA-ZID", "SVT-KA-OID"
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
-              Array("SVT-KA-PID", "SVT-KA-P", "I", "SVT-KA-Z")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-KA-PID", "SVT-KA-P", "SVT-KA-Z")
     TcSeedStavkaPrijemnice "SVT-KA-PID", 1, "I", 100
 
     ' Identitet je PrijemnicaID izabranog reda (S6 korak 4) -- bez njega okvir
@@ -323,8 +323,8 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE), _
               Array("SVT-KB-OID", "SVT-KB-O", "SVT-KB-Z")
     TcSeedClanstvo "SVT-KB-ZID", "SVT-KB-OID"
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
-              Array("SVT-KB-PID", "SVT-KB-P", "I", "SVT-KB-Z")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-KB-PID", "SVT-KB-P", "SVT-KB-Z")
     TcSeedStavkaPrijemnice "SVT-KB-PID", 1, "I", 100
 
     Dim rB As Object: Set rB = RunPrijemnicaCorrection("SVT-KB-P", SV_MODE_DUPLI, True, False, "SVT-KB-PID")
@@ -351,11 +351,15 @@ Public Sub Test_GetNedovrseno_Auto()
     tx.AddTableSnapshot TBL_STORNO_VEZE
 
     ' aktivna prijemnica cija zbirna ne postoji -> osirocena
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
-              Array("SVT-ND-PID", "SVT-ND-P1", "I", "SVT-ND-ZDEAD")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-ND-PID", "SVT-ND-P1", "SVT-ND-ZDEAD")
 
     ' pre context-a: SVT-ND-P1 vidljiv kao osiroce, bez CorrectionID
     TcChk NedRefCount("SVT-ND-P1") = 1, "osirocena prijemnica -> 1 red u Nedovrseno"
+    ' S6 korak 8 (R8): red Oporavka nosi PrijemnicaID u koloni 8 -- radnja
+    ' "Prevezi prijemnicu" salje bas njega, ne generaciju.
+    TcChk OsirPrijIdPoBroju("SVT-ND-P1") = "SVT-ND-PID", _
+          "osirocena prijemnica -> red nosi PrijemnicaID (kolona 8)"
     TcChk Len(NedRefCorrectionID("SVT-ND-P1")) = 0, "osirocen red nema CorrectionID"
 
     ' PENDING context za ISTI broj (RESI_KASNIJE, NeedsRecovery=Da)
@@ -374,6 +378,19 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Debug.Print "FAIL Test_GetNedovrseno_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
+
+' Kolona 8 (identitet) reda liste osirocenih prijemnica sa datim brojem.
+Private Function OsirPrijIdPoBroju(ByVal broj As String) As String
+    Dim v As Variant, i As Long
+    v = modDokumenta.GetOsirocenePrijemnice()
+    If Not IsArray(v) Then Exit Function
+    For i = 1 To UBound(v, 1)
+        If StrComp(Trim$(CStr(v(i, 1))), broj, vbTextCompare) = 0 Then
+            OsirPrijIdPoBroju = Trim$(CStr(v(i, 8)))
+            Exit Function
+        End If
+    Next i
+End Function
 
 Private Function NedRefCount(ByVal ref As String) As Long
     Dim c As Collection: Set c = GetNedovrseno()
@@ -439,8 +456,8 @@ Public Sub Test_GetActiveDocumentsForStorno_Auto()
     tx.AddTableSnapshot TBL_PRIJEMNICA
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KUPAC), Array("SVT-GA-1", "SVT-GA-P1", "SVT-GA-KUP1")
     TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KUPAC), Array("SVT-GA-2", "SVT-GA-P1", "SVT-GA-KUP2")   ' isti broj, drugi kupac
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA), Array("SVT-GA-3", "SVT-GA-P2", "I")
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_STORNIRANO), Array("SVT-GA-4", "SVT-GA-P3", "I", "Da")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ), Array("SVT-GA-3", "SVT-GA-P2")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_STORNIRANO), Array("SVT-GA-4", "SVT-GA-P3", "Da")
 
     Dim c As Collection: Set c = GetActiveDocumentsForStorno("Prijemnica", "SVT-GA-")
     Dim nP1 As Long, nP2 As Long, nP3 As Long, i As Long

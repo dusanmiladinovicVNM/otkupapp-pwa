@@ -153,7 +153,7 @@ imenuje.
 
 - `modBusinessFlowProTests`: 5
 - `modDokumentInvariant`: 1
-- `modDokumenta`: 4
+- `modDokumenta`: 3
 - `modFakturaTests`: 1
 - `modGoldenTests`: 1
 - `modMaticniUnos`: 8
@@ -167,7 +167,7 @@ imenuje.
 - `modTest`: 1
 - `modTestPalete`: 1
 
-Ukupno: 32 poziva u 15 modula.
+Ukupno: 31 poziva u 15 modula.
 
 ## Sta ovo NE pokriva
 

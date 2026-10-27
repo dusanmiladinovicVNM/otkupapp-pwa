@@ -139,13 +139,15 @@ Private Sub Test_CreateFakturaUsesCanonicalPrijemnicaValues()
     AssertFakturaTrue modFaktura.PrijemnicaJeFakturisana(prijemnicaID), _
                       "CreateFaktura: prijemnica je fakturisana -- izveden status"
 
-    AssertFakturaTextEquals "", _
-        CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_FAKTURISANO)), _
-        "CreateFaktura ne pise kes Fakturisano na zaglavlje (FAK-LIN-03)"
+    ' Od S6 koraka 8 kes kolona na zaglavlju NEMA (kanon), pa se meri odsustvo
+    ' kolone -- jace od "polje je prazno". Imena su literali: konstante ne postoje.
+    AssertFakturaTextEquals "0", _
+        CStr(GetColumnIndex(TBL_PRIJEMNICA, "Fakturisano")), _
+        "zaglavlje prijemnice nema kes Fakturisano (FAK-LIN-03, S6 korak 8)"
 
-    AssertFakturaTextEquals "", _
-        CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_FAKTURA_ID)), _
-        "CreateFaktura ne pise kes FakturaID na zaglavlje (FAK-LIN-03)"
+    AssertFakturaTextEquals "0", _
+        CStr(GetColumnIndex(TBL_PRIJEMNICA, "FakturaID")), _
+        "zaglavlje prijemnice nema kes FakturaID (FAK-LIN-03, S6 korak 8)"
 
     Exit Sub
 

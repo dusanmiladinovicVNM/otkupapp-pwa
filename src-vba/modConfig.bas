@@ -398,18 +398,16 @@ Public Const COL_PRJ_DATUM As String = "Datum"
 Public Const COL_PRJ_KUPAC As String = "KupacID"
 Public Const COL_PRJ_BROJ As String = "BrojPrijemnice"
 Public Const COL_PRJ_BROJ_ZBIRNE As String = "BrojZbirne"
-Public Const COL_PRJ_KOLICINA As String = "Kolicina"
-Public Const COL_PRJ_CENA As String = "Cena"
+' TipAmbalaze i KolAmbVracena OSTAJU: tip i povrat praznih su cinjenice
+' DOKUMENTA. Kolicina/Cena/KolAmbalaze/Klasa/BrutoKg su obrisane iz kanona --
+' zive na tblPrijemnicaStavke od S6 koraka 2 -- a s njima i kes fakture
+' (Fakturisano/FakturaID; fakturisanost je izvedena od koraka 5) i GeneracijaID
+' (identitet je PrijemnicaID). Sve u S6 koraku 8.
 Public Const COL_PRJ_TIP_AMB As String = "TipAmbalaze"
-Public Const COL_PRJ_KOL_AMB As String = "KolAmbalaze"
 Public Const COL_PRJ_KOL_AMB_VRACENA As String = "KolAmbVracena"
-Public Const COL_PRJ_BRUTO As String = "BrutoKg"                 ' bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS); prazno = neto
 Public Const COL_PRJ_VOZAC As String = "VozacID"
 Public Const COL_PRJ_VRSTA As String = "VrstaVoca"
 Public Const COL_PRJ_SORTA As String = "SortaVoca"
-Public Const COL_PRJ_KLASA As String = "Klasa"
-Public Const COL_PRJ_FAKTURISANO As String = "Fakturisano"
-Public Const COL_PRJ_FAKTURA_ID As String = "FakturaID"
 
 ' ============================================================
 ' Paletni list (Phase 2) -- kolone novih tabela

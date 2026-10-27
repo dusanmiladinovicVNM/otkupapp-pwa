@@ -546,13 +546,13 @@ Private Sub T_E2E_KlasaIiIINeMesajuPrijem()
     ' Klasa I i II dele BROJ prijemnice (kao u produkciji), ali su zasebni redovi.
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_KLASA), _
-        Array("IZVT-PRJ-K1", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup, 900#, KLASA_I)
+              COL_PRJ_VOZAC, COL_PRJ_KUPAC), _
+        Array("IZVT-PRJ-K1", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup)
     IzvSeedPrijemnicaStavka "IZVT-PRJ-K1", KLASA_I, 900#, 0#
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_KLASA), _
-        Array("IZVT-PRJ-K2", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup, 150#, KLASA_II)
+              COL_PRJ_VOZAC, COL_PRJ_KUPAC), _
+        Array("IZVT-PRJ-K2", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup)
     IzvSeedPrijemnicaStavka "IZVT-PRJ-K2", KLASA_II, 150#, 0#
 
     IzvSeedOtpremnica "IZVT-OTP-K", IZVT_STANICA2, voz, brDok
@@ -639,16 +639,16 @@ Private Sub SeedDveZbirneIstogBroja()
 
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA), _
+              COL_PRJ_VOZAC, COL_PRJ_KUPAC), _
         Array("IZVT-PRJ-A", "IZVT-PRJ-A", IZVT_DATUM, IZVT_BROJ, _
-              IZVT_VOZAC_A, IZVT_KUPAC_A, 900#)
+              IZVT_VOZAC_A, IZVT_KUPAC_A)
     IzvSeedPrijemnicaStavka "IZVT-PRJ-A", KLASA_I, 900#, 0#
 
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA), _
+              COL_PRJ_VOZAC, COL_PRJ_KUPAC), _
         Array("IZVT-PRJ-B", "IZVT-PRJ-B", IZVT_DATUM, IZVT_BROJ, _
-              IZVT_VOZAC_B, IZVT_KUPAC_B, 1500#)
+              IZVT_VOZAC_B, IZVT_KUPAC_B)
     IzvSeedPrijemnicaStavka "IZVT-PRJ-B", KLASA_I, 1500#, 0#
 End Sub
 
@@ -878,14 +878,14 @@ Private Sub T_E2E_ProsecnaCenaZbirniKupac()
     ' jedan produkcijski red ne moze da upadne u ovaj datumski opseg.
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_CENA), _
-        Array("IZVT-PC-A", "IZVT-PC-A", d, IZVT_BROJ, IZVT_KUPAC_A, 1000#, 100#)
+              COL_PRJ_KUPAC), _
+        Array("IZVT-PC-A", "IZVT-PC-A", d, IZVT_BROJ, IZVT_KUPAC_A)
     IzvSeedPrijemnicaStavka "IZVT-PC-A", KLASA_I, 1000#, 100#
 
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_CENA), _
-        Array("IZVT-PC-B", "IZVT-PC-B", d, IZVT_BROJ, IZVT_KUPAC_B, 2000#, 200#)
+              COL_PRJ_KUPAC), _
+        Array("IZVT-PC-B", "IZVT-PC-B", d, IZVT_BROJ, IZVT_KUPAC_B)
     IzvSeedPrijemnicaStavka "IZVT-PC-B", KLASA_I, 2000#, 200#
 
     ' Pojedinacno (entitetID popunjen) izvestaj RADI -- seed je validan i grana

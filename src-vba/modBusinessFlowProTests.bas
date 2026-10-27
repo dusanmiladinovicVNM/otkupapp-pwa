@@ -138,7 +138,6 @@ Public Sub RunBusinessFlowProSuite()
     Test_ManjakPreviewJeZbirnaMinusPrijem
     Test_OpenFaktureExcludeStornirano
     Test_PrefillBiraPoslednjuGeneraciju
-    Test_GeneracijaNePrelaziVlasnika
     Test_StornoPoBrojuOdbijaDvaVlasnika
     Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice
     Test_ZbirnaRowDataColumnMapped
@@ -357,7 +356,6 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6K5_DveKlaseIzStavki
     Test_S6K5_DelimicnoFakturisanje
     Test_S6K5_FakturaOdbijaNevazeceStavke
-    Test_S6K5_KesNeOdlucuje
     Test_S6K5_OkvirOdbijaFakturisanuPreZapisa
     Test_S6K5_StornoFakturePaPrijemnice
     Test_S6K5_PadPosleUpisaVracaFakturu
@@ -442,6 +440,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6K7_LanacSamoOgledalo
     Test_S6K8_PisacPrjZbr01
     Test_S6K8_BrojPrijemnicePoKupcu
+    Test_S6K8_PrijemnicaStareKoloneSelfHeal
     Test_OTK_IspravkaBlokaUNacrtu
     Test_OTK_RutaPosleUpisa
     Test_OTP_ClanstvoBulkStrogo
@@ -585,11 +584,18 @@ Private Sub Test_CoreTablesAndColumnsExist()
         "VrstaVoca", "SortaVoca", "UkupnoKolicina", "TipAmbalaze", _
         "UkupnoAmbalaze", "Klasa")
 
+    ' Prijemnica je zaglavlje + stavke (S6 korak 8): Kolicina, Cena, KolAmbalaze,
+    ' Klasa i BrutoKg su na stavci, kes fakture i GeneracijaID su obrisani iz
+    ' kanona. TipAmbalaze i KolAmbVracena ostaju -- cinjenice dokumenta.
     RequireColumnsExist TBL_PRIJEMNICA, Array( _
         "PrijemnicaID", "Datum", "KupacID", "VozacID", "BrojPrijemnice", _
-        "BrojZbirne", "VrstaVoca", "SortaVoca", "Kolicina", "Cena", _
-        "TipAmbalaze", "KolAmbalaze", "KolAmbVracena", "Klasa", _
-        "Fakturisano", "FakturaID")
+        "BrojZbirne", "VrstaVoca", "SortaVoca", "TipAmbalaze", "KolAmbVracena", _
+        COL_DETE_ZBIRNA_ROD)
+
+    RequireTableExists TBL_PRIJEMNICA_STAVKE
+    RequireColumnsExist TBL_PRIJEMNICA_STAVKE, Array( _
+        COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, COL_PRS_KOLICINA, _
+        COL_PRS_CENA, COL_PRS_KOL_AMB, COL_PRS_BRUTO)
 
     ' AMB-10b: knjiga nosi OBE strane dogadjaja, vrstu kretanja i vezu na storno.
     '
@@ -2610,63 +2616,6 @@ Private Sub Test_ZBR_StorniranBrojIstogVozacaOdbijen()
 EH:
     LogFatal "Test_ZBR_StorniranBrojIstogVozacaOdbijen", Err.Number, Err.description
 End Sub
-' Dva kupca mogu istog dana dobiti ISTI BrojPrijemnice (GenerateBrojPrijemnice
-' racuna sekvencu po kupcu). Generacije im moraju biti razlicite.
-Private Sub Test_GeneracijaNePrelaziVlasnika()
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("GENVLAS")
-
-    Dim testDate As Date
-    testDate = NextTestDate()
-
-    ' Zbirna po kupcu: prijemnica se vezuje samo na zbirnu svog vlasnika
-    ' (PRJ-ZBR-01, S6 korak 8).
-    Dim brojZbirne As String, brojZbirneB As String, brojPrij As String
-    brojZbirne = TEST_PREFIX & "-ZBR-VL-" & scenario
-    brojZbirneB = TEST_PREFIX & "-ZBR-VLB-" & scenario
-    brojPrij = TEST_PREFIX & "-PRJ-VL-" & scenario     ' ISTI broj za oba kupca
-
-    AssertTrue Len(ZbrIzdataPodPrijemnicu(testDate, brojZbirne, TEST_KUP_ID)) > 0 And _
-               Len(ZbrIzdataPodPrijemnicu(testDate, brojZbirneB, TEST_KUP2_ID)) > 0, _
-               "Vlasnik scope: fixture zbirna kreirana"
-
-    Dim prjA As String, prjB As String
-    prjA = PrjJednaKlasa(testDate, TEST_KUP_ID, brojPrij, brojZbirne, 100#, 100#, KLASA_I)
-    prjB = PrjJednaKlasa(testDate, TEST_KUP2_ID, brojPrij, brojZbirneB, 80#, 100#, KLASA_I)
-
-    AssertTrue Len(prjA) > 0 And Len(prjB) > 0, _
-               "Vlasnik scope: obe prijemnice (isti broj, razliciti kupci) kreirane"
-
-    Dim genA As String, genB As String
-    genA = DokGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, prjA)
-    genB = DokGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, prjB)
-
-    AssertTrue Len(genA) > 0 And Len(genB) > 0, "Vlasnik scope: obe prijemnice imaju generaciju"
-    AssertTrue genA <> genB, _
-               "Vlasnik scope: isti broj kod DVA kupca ne deli generaciju"
-
-    ' "Drugi dokument istog broja i ISTOG kupca" je ovde stajao od koraka 2 (nova,
-    ' ne nasledjena generacija). Od koraka 8 ga pisac ne pravi: broj prijemnice je
-    ' jedinstven po kupcu medju aktivnima i u piscu (A2), a to meri
-    ' Test_S6K8_BrojPrijemnicePoKupcu.
-
-    Exit Sub
-
-EH:
-    LogFatal "Test_GeneracijaNePrelaziVlasnika", Err.Number, Err.description
-End Sub
-
-' Generacija reda po ID-u. Prazan ID daje "" -> AssertEquals nad dva prazna bi
-' lazno prosao, pa pozivaoci uz poredjenje tvrde i da generacija NIJE prazna.
-Private Function DokGeneracija(ByVal tableName As String, ByVal idColumn As String, _
-                               ByVal idValue As String) As String
-    If Len(Trim$(idValue)) = 0 Then Exit Function
-
-    DokGeneracija = Trim$(CStr(nz(GetValueByKey(tableName, idColumn, idValue, _
-                                                COL_GENERACIJA_ID), "")))
-End Function
 
 Private Sub Test_PorukeKatalogPokrivaDokumenta()
     On Error GoTo EH
@@ -3169,35 +3118,6 @@ Private Function FindIDByTwoColumns(ByVal tableName As String, _
            Trim$(CStr(data(i, colKey2))) = Trim$(keyValue2) Then
 
             FindIDByTwoColumns = Trim$(CStr(data(i, colID)))
-            Exit Function
-        End If
-    Next i
-End Function
-
-' BrojPrijemnice za (BrojZbirne | Klasa | KupacID). FindPrijemnicaIDByBrojAndKlasa
-' ne moze ovde: trazi po BROJU prijemnice, a kod izolacije po kupcu dve prijemnice
-' dele isti BrojZbirne pa je kupac deo kljuca.
-Private Function FindPrijBrojByZbirnaKlasaKupac(ByVal brZbr As String, ByVal klasa As String, _
-                                                ByVal kupacID As String) As String
-    Const SRC As String = "FindPrijBrojByZbirnaKlasaKupac"
-    Dim data As Variant
-    data = GetTableData(TBL_PRIJEMNICA)
-    If IsEmpty(data) Then Exit Function
-    data = ExcludeStornirano(data, TBL_PRIJEMNICA)
-    If IsEmpty(data) Then Exit Function
-
-    Dim cZbr As Long, cKla As Long, cKup As Long, cBroj As Long
-    cZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
-    cKla = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, SRC)
-    cKup = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, SRC)
-    cBroj = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
-
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cZbr))) = Trim$(brZbr) And _
-           Trim$(CStr(data(i, cKla))) = Trim$(klasa) And _
-           StrComp(Trim$(CStr(data(i, cKup))), Trim$(kupacID), vbTextCompare) = 0 Then
-            FindPrijBrojByZbirnaKlasaKupac = Trim$(CStr(data(i, cBroj)))
             Exit Function
         End If
     Next i
@@ -6688,16 +6608,21 @@ Private Function S6StavkeKlase(ByVal prj As String) As String
     Next rb
 End Function
 
-' Linijska polja i kes fakture zaglavlja, spojena: prazno = zaglavlje ih ne nosi.
+' Linijska polja i kes fakture zaglavlja: prazno = zaglavlje ih ne nosi.
+'
+' Od S6 koraka 8 se meri ODSUSTVO KOLONE, ne prazna vrednost (obrazac
+' OtpLinijskeKoloneIndeksi): kolone su obrisane iz kanona, pa "polje je prazno"
+' vise nije najjace sto se moze tvrditi. Vraca imena kolona koje su ostale u
+' svesci. Imena su LITERALI -- konstante ne postoje.
 Private Function S6ZaglavljeLinija(ByVal prj As String) As String
     If S6BrojRedova(TBL_PRIJEMNICA, COL_PRJ_ID, prj) <> 1 Then
         S6ZaglavljeLinija = "<nema zaglavlja>"
         Exit Function
     End If
     Dim k As Variant, s As String
-    For Each k In Array(COL_PRJ_KOLICINA, COL_PRJ_CENA, COL_PRJ_KLASA, COL_PRJ_KOL_AMB, _
-                        COL_PRJ_BRUTO, COL_PRJ_FAKTURISANO, COL_PRJ_FAKTURA_ID)
-        s = s & Trim$(nz(GetValueByKey(TBL_PRIJEMNICA, COL_PRJ_ID, prj, CStr(k)), ""))
+    For Each k In Array("Kolicina", "Cena", "Klasa", "KolAmbalaze", "BrutoKg", _
+                        "Fakturisano", "FakturaID")
+        If GetColumnIndex(TBL_PRIJEMNICA, CStr(k)) > 0 Then s = s & "|" & CStr(k)
     Next k
     S6ZaglavljeLinija = s
 End Function
@@ -6888,8 +6813,8 @@ End Sub
 ' i prosao. Prijemnicu koju faktura pokriva STAVKOM (bez kesa) je stornirao bez
 ' ikakvog traga. Sada jezgro odbija PRE ijedne mutacije.
 '
-' S6 korak 5: fakturisanost je IZVEDENA iz aktivnih linija (FAK-LIN-03), pa kes
-' vise ne odbija nista -- to meri Test_S6K5_KesNeOdlucuje. Ovde ostaje linija:
+' S6 korak 5: fakturisanost je IZVEDENA iz aktivnih linija (FAK-LIN-03); kes je
+' od koraka 8 obrisan iz kanona. Ovde ostaje linija:
 ' PRAVA faktura (rollback), na stavci KLASE I dvoklasnog dokumenta.
 ' Dokument je time DELIMICNO fakturisan, i jezgro ga odbija kao fakturisan.
 ' Direktan poziv jezgra -- jezgro je ovde JEDINA brana (okvir ispravke ima svoju,
@@ -7600,12 +7525,6 @@ Private Sub S6K4Postavi(ByVal tbl As String, ByVal idCol As String, ByVal id As 
     RequireUpdateCell tbl, CLng(rows(1)), col, vrednost, "S6K4Postavi"
 End Sub
 
-Private Sub S6K4OcistiKesFakture(ByVal prj As String)
-    If Len(prj) = 0 Then Exit Sub
-    S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_FAKTURISANO, ""
-    S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_FAKTURA_ID, ""
-End Sub
-
 ' ============================================================
 ' S6 KORAK 5 -- FAKTURA PO PrijemnicaStavkaID, FAKTURISANOST IZVEDENA
 ' (plan 14.55 "Korak 5", stavka 188; FAK-LIN-01..03)
@@ -7729,44 +7648,6 @@ Private Sub Test_S6K5_FakturaOdbijaNevazeceStavke()
     Exit Sub
 EH:
     LogFatal "Test_S6K5_FakturaOdbijaNevazeceStavke", Err.Number, Err.description
-End Sub
-
-' KES NE ODLUCUJE (R1, R4, KI-038). Kes Fakturisano/FakturaID na zaglavlju je
-' podmetnut (fault injection: pravi pisac ga od koraka 2 ne pise), a linije nema.
-' Do koraka 5 su ga kapija storna i lista citale svaka po svom -- kapija je
-' odbijala storno, lista je pokazivala placanje nepostojece fakture. Sada ga niko
-' ne cita: kapija, F8, lista, mreza i detalj kazu isto -- nije fakturisan.
-' SABOTAZE: s6k5-citac-gleda-kes, s6k5-lista-cita-fakturaid, s6k5-detalj-cita-kes.
-Private Sub Test_S6K5_KesNeOdlucuje()
-    On Error GoTo EH
-    Dim scenario As String, prj As String, br As String, stI As String, kesFak As String
-    scenario = NewScenarioCode("S6K5KES")
-    prj = S6K5Dokument(scenario, TEST_KUP_ID, br)
-    AssertTrue Len(prj) > 0, "S6K5 kes: preduslov -- dokument kroz pravi pisac"
-    stI = S6StavkaID(prj, KLASA_I)
-    kesFak = "FAK-K5-KES-" & scenario
-    If Len(prj) > 0 Then
-        S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_FAKTURISANO, "Da"
-        S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_FAKTURA_ID, kesFak
-    End If
-
-    AssertTrue Len(prj) > 0 And Not PrijemnicaJeFakturisana(prj), _
-               "S6K5 kes: kes 'Da' bez linije NE cini dokument fakturisanim (kapija)"
-    AssertEquals "", modStornoDok.StornoRazlog(STIP_PRIJEMNICA, br, "", S6K4Ident(prj)), _
-                 "S6K5 kes: F8 ne odbija dokument zbog kesa"
-    AssertEquals CStr(PAY_NEFAKT), CStr(S6K5Pilula(br)), _
-                 "S6K5 kes: lista kaze 'Nefakturisano' -- ista istina kao kapija (KI-038)"
-    AssertEquals "True|", S6K5MrezaRed(TEST_KUP_ID, stI), _
-                 "S6K5 kes: mreza Fakturisanja nudi stavku -- kes je ne zauzima"
-    AssertTrue Len(prj) > 0 And InStr(1, S6K5Detalj(prj), kesFak, vbTextCompare) = 0, _
-               "S6K5 kes: detalj izvestaja ne prikazuje fakturu iz kesa"
-Kraj:
-    S6K4OcistiKesFakture prj
-    Exit Sub
-EH:
-    LogFatal "Test_S6K5_KesNeOdlucuje", Err.Number, Err.description
-    On Error Resume Next
-    S6K4OcistiKesFakture prj
 End Sub
 
 ' KI-040 (R5): okvir ispravke fakturisanu prijemnicu ODBIJA PRE zapisa ispravke.
@@ -8155,9 +8036,9 @@ End Sub
 ' S6 KORAK 7, KI-046 (1): RED OPORAVKA NOSI DATUM SVOG DOKUMENTA.
 '
 ' Dva kupca smeju isti broj prijemnice (S6 korak 6, odluka 6), a kupcev broj ne
-' nosi datum. Lista osirotelih paleta grupise po generaciji, ali je DATUM citala
+' nosi datum. Lista osirotelih paleta grupise po dokumentu, ali je DATUM citala
 ' po broju -- pa je red drugog kupca nosio datum prvog dokumenta tog broja. Nivo:
-' logicki dokument (generacija). Palete ostaju osirocene kao posle F8 ISPRAVKA
+' logicki dokument (PrijemnicaID; do S6 koraka 8 generacija). Palete ostaju osirocene kao posle F8 ISPRAVKA
 ' (StornoPrijemnica_TX sa skiniPalete = False), a na kraju ih skida jezgro
 ' skidanja, da ne ostanu u tudjoj listi Oporavka.
 ' SABOTAZE: s6k7-osir-datum-po-broju.
@@ -8205,10 +8086,10 @@ Private Sub Test_S6K7_OsirocenePaleteDatumPoDokumentu()
     SetTestMode prevMode
     rezimPostavljen = False
 
-    Dim genA As String, genB As String, datA As String, datB As String
+    ' 7. kolona reda je identitet dokumenta -- od S6 koraka 8 PrijemnicaID (do
+    ' tada generacija, 1 : 1 sa njim).
+    Dim datA As String, datB As String
     Dim redovi As Variant, n As Long, i As Long, nasih As Long
-    genA = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, prjA)
-    genB = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, prjB)
     If IsArray(d) Then
         n = CLng(d(2))
         redovi = d(1)
@@ -8216,8 +8097,8 @@ Private Sub Test_S6K7_OsirocenePaleteDatumPoDokumentu()
     For i = 1 To n
         If CStr(redovi(i, 1)) = brPrj Then
             nasih = nasih + 1
-            If CStr(redovi(i, 7)) = genA Then datA = S6K7DatumTekst(redovi(i, 2))
-            If CStr(redovi(i, 7)) = genB Then datB = S6K7DatumTekst(redovi(i, 2))
+            If CStr(redovi(i, 7)) = prjA Then datA = S6K7DatumTekst(redovi(i, 2))
+            If CStr(redovi(i, 7)) = prjB Then datB = S6K7DatumTekst(redovi(i, 2))
         End If
     Next i
     AssertEquals "2", CStr(nasih), _
@@ -11120,8 +11001,7 @@ Private Sub ZbrSejPrijemnicuSaRoditeljem(ByVal prijID As String, ByVal broj As S
     SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_VOZAC, TEST_VOZ_ID
     SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj
     SetOptionalField rowData, TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD, zbirnaID
-    SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_KLASA, KLASA_I
-    SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_KOLICINA, 100#
+    ' Klasa i kolicina su samo na stavci: zaglavlje ih od S6 koraka 8 nema.
 
     RequireAppend TBL_PRIJEMNICA, rowData, "ZbrSejPrijemnicuSaRoditeljem"
 
@@ -16401,6 +16281,157 @@ EH:
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
     On Error GoTo 0
     LogFatal "Test_S6K8_BrojPrijemnicePoKupcu", eN, eD
+End Sub
+
+' R7 (S6 KORAK 8): ZATECENA SVESKA GUBI STARE KOLONE ZAGLAVLJA PRIJEMNICE PO
+' IMENU, A VREDNOSTI OSTAJU SVOJE.
+'
+' Fixture se pravi BEZ osam kolona (make_fixture DROP_COLS), pa self-heal nad njim
+' nikad nema posla -- bez ovog testa bi put zatecene sveske meren samo rucnim
+' smoke-om. Obrazac je Test_Amb_StareKoloneSelfHeal: test FIZICKI vraca stari
+' raspored (stari kanon: 9, 10, 12, 14-16, 18 i 27), meri da kanonski prefiks
+' tada PADA (inace bi test bio vakuumski), pusta
+' modSetup.ObrisiStareKolonePrijemnice i meri: kolone su otisle, prefiks prolazi,
+' a prvi red nosi ISTE vrednosti po imenu u svakoj kanonskoj koloni.
+' Prva tvrdnja meri drugu polovinu R7: EnsureSledljivostSchema prijemnici vise ne
+' dodaje GeneracijaID (dodata bi se vratila NA KRAJ, gde je prefiks ne vidi).
+'
+' Bez transakcije: clsTransaction.RestoreTable pada na promenu broja kolona.
+' Ciscenje ide kroz genericki primitiv po imenu, i u EH grani.
+' SABOTAZE: s6k8-selfheal-ne-brise, s6k8-generacija-vraca-se.
+Private Sub Test_S6K8_PrijemnicaStareKoloneSelfHeal()
+    On Error GoTo EH
+
+    modSetup.EnsureSledljivostSchema
+    AssertEquals "0", CStr(GetColumnIndex(TBL_PRIJEMNICA, "GeneracijaID")), _
+                 "S6K8 self-heal: EnsureSledljivostSchema ne vraca GeneracijaID prijemnici"
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_PRIJEMNICA)
+    If lo Is Nothing Then
+        AssertTrue False, "S6K8 self-heal: tabela prijemnice postoji"
+        Exit Sub
+    End If
+    If lo.ListRows.count = 0 Then
+        AssertTrue False, "S6K8 self-heal: zaglavlje ima bar jedan red (svedok vrednosti)"
+        Exit Sub
+    End If
+
+    Dim stare As Variant, nadjene As String, k As Long
+    stare = PrjStareKolone()
+    For k = LBound(stare) To UBound(stare)
+        If GetColumnIndex(TBL_PRIJEMNICA, CStr(stare(k))) > 0 Then
+            nadjene = nadjene & CStr(stare(k)) & " "
+        End If
+    Next k
+    If Len(nadjene) > 0 Then
+        AssertTrue False, "S6K8 self-heal: polazna tabela je bez starih kolona"
+        Exit Sub
+    End If
+
+    Dim preKolona As Long
+    preKolona = lo.ListColumns.count
+
+    ' Svedok: prvi red, svaka kanonska kolona po imenu, PRE vracanja starog rasporeda.
+    Dim kanon As Collection, ime As String
+    Set kanon = modSchema.SchemaTableColumns(TBL_PRIJEMNICA)
+    Dim pre As Object
+    Set pre = CreateObject("Scripting.Dictionary")
+    For k = 1 To kanon.count
+        ime = CStr(kanon(k))
+        pre(ime) = CStr(nz(lo.ListColumns(GetColumnIndex(TBL_PRIJEMNICA, ime)) _
+                               .DataBodyRange.cells(1, 1).value, ""))
+    Next k
+
+    ' Stari raspored, redom po STAROJ poziciji -- svaka umetnuta kolona pomera ostale.
+    lo.ListColumns.Add(9).name = "Kolicina"
+    lo.ListColumns.Add(10).name = "Cena"
+    lo.ListColumns.Add(12).name = "KolAmbalaze"
+    lo.ListColumns.Add(14).name = "Klasa"
+    lo.ListColumns.Add(15).name = "Fakturisano"
+    lo.ListColumns.Add(16).name = "FakturaID"
+    lo.ListColumns.Add(18).name = "BrutoKg"
+    lo.ListColumns.Add(27).name = "GeneracijaID"
+    lo.ListColumns(GetColumnIndex(TBL_PRIJEMNICA, "Kolicina")).DataBodyRange.cells(1, 1).value = 123
+    lo.ListColumns(GetColumnIndex(TBL_PRIJEMNICA, "GeneracijaID")).DataBodyRange.cells(1, 1).value = _
+        "GEN-SELFHEAL"
+
+    Dim errNum As Long, errDesc As String
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail "Test_S6K8_PrijemnicaStareKoloneSelfHeal", TBL_PRIJEMNICA
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "S6K8 self-heal: stari raspored obara kanonski prefiks"
+
+    modSetup.ObrisiStareKolonePrijemnice
+
+    nadjene = ""
+    For k = LBound(stare) To UBound(stare)
+        If GetColumnIndex(TBL_PRIJEMNICA, CStr(stare(k))) > 0 Then
+            nadjene = nadjene & CStr(stare(k)) & " "
+        End If
+    Next k
+    AssertEquals "", Trim$(nadjene), _
+                 "S6K8 self-heal: nijedna stara kolona zaglavlja nije ostala"
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_PRIJEMNICA).ListColumns.count), _
+                 "S6K8 self-heal: tabela je vracena na kanonski broj kolona"
+
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail "Test_S6K8_PrijemnicaStareKoloneSelfHeal", TBL_PRIJEMNICA
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), _
+                 "S6K8 self-heal: posle brisanja kanonski prefiks prolazi"
+
+    Dim razlike As String
+    Set lo = GetTable(TBL_PRIJEMNICA)
+    For k = 1 To kanon.count
+        ime = CStr(kanon(k))
+        If CStr(nz(lo.ListColumns(GetColumnIndex(TBL_PRIJEMNICA, ime)) _
+                       .DataBodyRange.cells(1, 1).value, "")) <> CStr(pre(ime)) Then
+            razlike = razlike & ime & " "
+        End If
+    Next k
+    AssertEquals "", Trim$(razlike), _
+                 "S6K8 self-heal: prvi red nosi iste vrednosti po imenu"
+
+    ' Idempotentno: drugi prolaz nema sta da obrise.
+    modSetup.ObrisiStareKolonePrijemnice
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_PRIJEMNICA).ListColumns.count), _
+                 "S6K8 self-heal: drugi prolaz ne dira tabelu"
+
+    ' Ciscenje NE ide kroz primitiv koji test meri: pokvaren primitiv bi ostavio
+    ' staru kolonu u sredini, a ona obara SVAKI sledeci upis prijemnice.
+    PrjObrisiStareKoloneTest
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    ' Ciscenje i posle pada -- stara kolona ne sme da ostane iza testa.
+    On Error Resume Next
+    PrjObrisiStareKoloneTest
+    On Error GoTo 0
+    LogFatal "Test_S6K8_PrijemnicaStareKoloneSelfHeal", errNum, errDesc
+End Sub
+
+' Osam kolona starog zaglavlja prijemnice, po imenu (literali: konstante ne postoje).
+Private Function PrjStareKolone() As Variant
+    PrjStareKolone = Array("Kolicina", "Cena", "KolAmbalaze", "Klasa", "Fakturisano", _
+                           "FakturaID", "BrutoKg", "GeneracijaID")
+End Function
+
+' Brise stare kolone GENERICKIM primitivom, po imenu -- nezavisno od
+' modSetup.ObrisiStareKolonePrijemnice, koji Test_S6K8_PrijemnicaStareKoloneSelfHeal meri.
+Private Sub PrjObrisiStareKoloneTest()
+    Dim stare As Variant, k As Long
+    stare = PrjStareKolone()
+    For k = LBound(stare) To UBound(stare)
+        modSetup.ObrisiKolonuAko TBL_PRIJEMNICA, CStr(stare(k))
+    Next k
 End Sub
 
 ' Prijemnica S6K8 testa kroz pisac: jedna klasa sa gajbama (knjiga ima sta da

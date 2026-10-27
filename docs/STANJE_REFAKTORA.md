@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 27.10.2026 (stavka 208: S6 korak 8, deo 1 — kapije prijemnice u piscu, stari pisac napolje).
+**Ažurirano:** 27.10.2026 (stavka 209: S6 korak 8, deo 2 — šema zaglavlja prijemnice, identitet po `PrijemnicaID`-u).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 7/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208); grana `claude/s6-korak8-zavrsni` sa `376a3d3e` |
+| **S6 prijemnica** | ⏳ **u toku, 7/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209); grana `claude/s6-korak8-zavrsni` sa `376a3d3e` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7642,6 +7642,85 @@
        kolone). Pad nije podmetnut, pa za tu granu tvrdnja ne postoji.
      - **Sledeći je deo 2** (šema `tblPrijemnica` 28 → 20, generacija → `PrijemnicaID`, fixture).
      - **Sledeći brojevi:** stavka 209 · test 276 (pazi `#441`) · KI-055.
+
+209. **S6 korak 8, deo 2 — šema zaglavlja prijemnice i identitet po `PrijemnicaID`-u** (27.10.2026). Grana
+     `claude/s6-korak8-zavrsni`; plan i tok koda: §14.55, „Korak 8".
+
+     - **Šema (R6, R7):**
+       - kanon `tblPrijemnica` 28 → **20** kolona: obrisani su `Kolicina`, `Cena`, `KolAmbalaze`, `Klasa`,
+         `Fakturisano`, `FakturaID`, `BrutoKg` i `GeneracijaID`, ostale stoje istim redom. `modSchema` je
+         regenerisan, otisak `06A00A5F` → **`87AB4F9B`**;
+       - u `modConfig` je obrisano sedam `COL_PRJ_*` konstanti;
+       - self-heal: `modSetup.ObrisiStareKolonePrijemnice` ide PRE provere otiska (obrazac
+         `ObrisiStareKoloneAmbalaze`). `EnsureSledljivostSchema` prijemnici više ne dodaje `GeneracijaID`, a
+         `EnsureDoradeSchema` ne vraća `BrutoKg` i ne formatira `Kolicina` zaglavlja;
+       - fixture: `DROP_COLS` + `PRJ_SAMO_IZVOR` (ključevi zaglavlja posle izvođenja stavki i linija fakture).
+         Potpis `29592b58` → **`7eab17dc6aec0058`**.
+     - **Identitet (R8):**
+       - pisac više ne pečatira generaciju (`ApplyNovaGeneracijaID` je obrisan); `GeneracijaPoID` je zamenio
+         `modDokumenta.IdDokumentaSkup`, koji vraća skup PK-eva istog oblika kao `IdoviGeneracije`;
+       - Oporavak: lista osirotelih prijemnica ima jedan red po `PrijemnicaID`-u (kolona 8), lista osirotelih
+         paleta grupiše po dokumentu (kolona 7), a ciljna lista prijemnica nosi `PrijemnicaID`
+         (`RowsAktivni` dobija kolonu identiteta; zbirna ostaje po generaciji, `ZBR-IDENT-01`);
+       - `ReassignPrijemnicaToZbirna_TX`, `ReassignPaleteToPrijemnica_TX`, `EvaluatePaletaReassign` i F4
+         ispravka (`PreveziPaleteIspravke`) primaju `PrijemnicaID`;
+       - prefill ispravke ne traži kolonu klase (`ColKlasaZaPrefill` je obrisan, sve sa stavki).
+     - **Crveno pre ispravke** (testovi dela 2 nad produkcijom iz `f541520c`, stari fixture,
+       `--ignore-fixture-sig`), **tačno izvedeno**:
+       - RunAllTests **275 / 6**: 257 (R6, kanon nosi osam kolona); 27, 28, 30 i 31 (ID tumačen kao
+         generacija); 32 na preduslovu (27 nije prevezao robu — alternativa zapisana u izvodu);
+       - BFP **2765 / 5**: tri tvrdnje `S6ZaglavljeLinija` (kolone postoje) i dve
+         `Test_S6K7_OsirocenePaleteDatumPoDokumentu` (kolona 7 je generacija);
+       - Faktura **2 od 39** (kolone keša postoje).
+     - **Zeleno** nad fixture-om `7eab17dc`:
+       - RunAllTests **275 / 0**, Faktura 39 / 0, Palete, Storno **111 / 0**, Storno centar, Izveštaji,
+         Golden 2 / 0;
+       - BFP prvo **2772 / 1**, neočekivano: „Core tables and required columns exist" drži PREPISAN
+         spisak obaveznih kolona zaglavlja (isti nalaz kao u S3-ostatku). Crveno ga nije videlo jer je stari
+         fixture kolone još imao, a pretraga je tražila literal u istom redu kao `TBL_PRIJEMNICA`. Spisak je
+         sveden na kanon i dobio je stavke; šira pretraga (literal u prozoru od 7 redova, i kroz `tools/`,
+         `gas/`, `src/`) nije našla drugo mesto;
+       - BFP **2772 / 0 i GREEN marker**, izvor `3da5585ff7fe`.
+     - **Broj tvrdnji BFP 2775 → 2772 (−3)**, statički po proceduri:
+       - obrisani `Test_GeneracijaNePrelaziVlasnika` −4 (premisa generacije prijemnice nestala) i
+         `Test_S6K5_KesNeOdlucuje` −6 (keša nema);
+       - nov `Test_S6K8_PrijemnicaStareKoloneSelfHeal` +7 (R7; tri straže okidaju samo na padu).
+
+       RunAllTests ostaje 275 (257 +2 tvrdnje, `T_Oporavak_CiljneListe` +1; 27 i 33 bez tvrdnji o upisanoj
+       generaciji).
+     - **Premise testova prepravljene:**
+       - 20 pečatiranja generacije prijemnice (`StampGeneraciju`) je uklonjeno. Testovi 27–32 writeru šalju
+         `PrijemnicaID`, a tekstovi tvrdnji kažu „identitet" umesto „generacija" (imena testova ostaju zbog
+         registra i kataloga); 33, 35, 52, 55, 56 i 63 su F8/uvid već zvali po ID-u, pa im je pečat bio višak;
+       - sejači zaglavlja (Izveštaji ×6, Palete, Storno, Storno centar ×5, `ZbrSejPrijemnicuSaRoditeljem`)
+         su bez obrisanih kolona — liniju nosi stavka koju već prave;
+       - `S6ZaglavljeLinija` i dve Faktura tvrdnje mere ODSUSTVO kolone, a ne prazno polje;
+       - golden adapter `GldZbirna` čita primljeno po klasi sa stavki.
+     - **Sabotaže:** katalog 996 → 989 → **995**.
+       - Obrisano je 7 (`s6k2-zaglavlje-nosi-klasu`, `s6k4-uvid-kg-sa-zaglavlja`, `s6k4-lista-kg-sa-zaglavlja`,
+         `s6k5-citac-gleda-kes`, `s6k5-detalj-cita-kes`, `s6k5-faktura-sa-zaglavlja`, `s6k5-pisac-pise-kes`):
+         njihova zamena čita ili piše kolonu koje više nema, pa ne bi ni kompajlirala. Odsustvo drži kanon i
+         R6 tvrdnja.
+       - Novih je 6: `s6k8-kanon-vraca-generaciju` (R6), `s6k8-selfheal-ne-brise` i `s6k8-generacija-vraca-se`
+         (R7), `s6k8-prevezi-pri-bez-id`, `s6k8-osir-palete-bez-id` i `s6k8-oporavak-cilj-prij-generacija` (R8).
+       - Presidrene su 4 (`relink-ignorise-generaciju`, `relink-cilj-po-broju`, `writer-isti-broj-odbija`,
+         `s6k3-cilj-prij-bez-stavki`), a tvrdnja je preimenovana u 4 (`relink-ignorise-generaciju`,
+         `relink-cilj-bez-kapije`, `generacija-nema-pa-po-broju`, `writer-isti-broj-odbija`).
+       - `--proveri-sidra` 995 / 0 (+9 poznatih); statička sonda **14/14**. `dokaz.py` čeka reviewer GO.
+     - **Popis:** `prj_linija`, `prj_kes` i `prj_generacija` su na **0** (pragovi 4 i 15 → 0);
+       `prj_brojzbirne` 33. `WHO_WRITES.md` je regenerisan (`modDokumenta` 4 → 3 upisa).
+     - **Jeftine kapije 24/24.**
+     - **Imenovano, nije urađeno:**
+       - red 8 liste osirotelih prijemnica meri `TcChk` u `Test_GetNedovrseno_Auto`, bez sabotaže (katalog
+         ne gađa Storno centar);
+       - `EnsureDoradeSchema` u `MsgBox`-u i dalje navodi `BrutoKg: tblOtkup/tblPrijemnica` i `VremeUnosa`,
+         a ne dodaje nijedno. Zastareo tekst ručne Alt+F8 rutine, bez uticaja na podatke;
+       - fixture red `PRJ-FAK-2` i tvrdnja `T_S6K5_FakturisanostJedanIzvor` opisuju keš „Da" bez linije,
+         kog više nema. Tvrdnja i dalje važi (nema linije → nije fakturisana), ali joj je opis zastareo;
+       - imena testova sa „Generacij" (`T_RelinkPoGeneraciji_*`, `T_ZadataGeneracijaKojeNema_Staje`,
+         `T_IstiBrojRazliciteGeneracije_*`) ostaju zbog registra i kataloga.
+     - **Sledeći je deo 3** (golden lanac: 9 scenarija, goldeni iz `fc06fa77`).
+     - **Sledeći brojevi:** stavka 210 · test 276 (pazi `#441`) · KI-055.
 
 ## Dug sa imenom (posle S5-5b)
 

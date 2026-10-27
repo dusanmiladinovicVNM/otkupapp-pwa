@@ -649,7 +649,10 @@ Public Function PrefillIzStorniranog(ByVal tip As String, ByVal brStorn As Strin
     If IsEmpty(d) Then Exit Function
 
     cBroj = GetColumnIndex(tbl, ColBrojZaPrefill(tip))
-    cKlasa = GetColumnIndex(tbl, ColKlasaZaPrefill(tip))
+    ' Klasa nije na zaglavlju NIJEDNOG tipa: otkup, otpremnica, zbirna i (od S6
+    ' koraka 8) prijemnica je nose na stavkama (Stavke*ZaPrefill). Bez kolone
+    ' klase PickPrefillRows uzima sam anchor -- dokument je jedan red.
+    cKlasa = 0
     cId = GetColumnIndex(tbl, ColIdZaPrefill(tip))
     cGen = GetColumnIndex(tbl, COL_GENERACIJA_ID)
     If cBroj = 0 Then Exit Function
@@ -1020,13 +1023,6 @@ Private Function ColVozacZaPrefill(ByVal tip As String) As String
         Case STIP_OTPREMNICA: ColVozacZaPrefill = COL_OTP_VOZAC
         Case STIP_ZBIRNA:     ColVozacZaPrefill = COL_ZBR_VOZAC
         Case STIP_PRIJEMNICA: ColVozacZaPrefill = COL_PRJ_VOZAC
-    End Select
-End Function
-
-Private Function ColKlasaZaPrefill(ByVal tip As String) As String
-    Select Case tip
-        ' STIP_OTKUP, STIP_OTPREMNICA i STIP_ZBIRNA: sa stavki (Stavke*ZaPrefill)
-        Case STIP_PRIJEMNICA: ColKlasaZaPrefill = COL_PRJ_KLASA
     End Select
 End Function
 

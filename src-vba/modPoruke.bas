@@ -1344,6 +1344,7 @@ Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_OPO_UNDO", ChrW(10007) & " Vra" & ChrW(263) & "anje storna nije uspelo:"
     UpsertRow lo, existing, "OTKUI_HDO_VLASNIK", "VLASNIK"
     UpsertRow lo, existing, "OTKUI_HDO_GENERACIJA", "GENERACIJA"
+    UpsertRow lo, existing, "OTKUI_HDO_PRJ_ID", "PRIJEMNICA ID"
     UpsertRow lo, existing, "OTKUI_ERR_OPO_DVOSMISLEN", ChrW(10007) & " Ciljni broj nije jednozna" & ChrW(269) & "an " & _
               ChrW(8212) & " isti broj nose dokumenta VI" & ChrW(352) & "E vlasnika:"
     UpsertRow lo, existing, "OTKUI_ERR_OPO_DVOSMISLEN2", "Prevezivanje ide PO BROJU, pa se ne zna na koji dokument." & vbCrLf & _

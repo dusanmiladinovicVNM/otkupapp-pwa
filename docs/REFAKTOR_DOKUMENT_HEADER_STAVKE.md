@@ -9420,6 +9420,26 @@ kupca hladnjače nastaje ovde, ali oznaka zbirne ostaje svoj rez); `KI-052`, `KI
   `3b735bc48ecd`. Katalog 988 → 996, sidra 996 / 0, statička sonda 14/14, jeftine kapije 24/24.
 - **Imenovano, nije testirano:** `KupacJeHladnjacaStrogo` kad čitanje configa pukne.
 
+**Tok koda, deo 2 — šema zaglavlja, identitet po `PrijemnicaID`-u (stavka 209):**
+
+- **Crveno izvedeno iz diff-a pre puštanja** (testovi dela 2 nad produkcijom iz `f541520c`, stari fixture), pa
+  izmereno **tačno tako**: RunAllTests 275 / 6, BFP 2765 / 5, Faktura 2 / 39. Jedini pad u alternativi iz izvoda
+  je 32 (preduslov, jer 27 nije prevezao robu na deljenom fixture-u).
+- **Gde je plan ispravljen dok se pisalo:**
+  - **Self-heal ide PRE provere otiska**, kao `ObrisiStareKoloneAmbalaze` (10e-3), a ne u
+    `EnsureSledljivostSchema` kao u S3-ostatku: `EnsureAllTables` ume samo da dodaje, pa bi otisak do brisanja
+    prijavljivao drift. `EnsureSledljivostSchema` zadržava samo zabranu da prijemnici vrati `GeneracijaID`.
+  - **`EnsureDoradeSchema` je bio treći pisac kolone.** `EnsureColumnOnTable TBL_PRIJEMNICA, COL_PRJ_BRUTO` bi
+    obrisani `BrutoKg` vratio na kraj (popis ga je brojao kao čitaoca).
+  - **Sedam sabotaža je obrisano, ne presidreno:** njihova zamena čita ili piše kolonu kojoj nema ni konstante,
+    pa ne bi kompajlirala; kvar koji su merile više ne može da nastane.
+  - **Kolona identiteta je parametar `RowsAktivni`**, ne fallback na ID kad generacije nema: tiho prebacivanje
+    bi i zbirnu bez kolone generacije razrešilo po ZbirnaID-u, a da to niko ne izabere.
+  - **Neočekivan pad zelenog** (BFP „Core tables": prepisan spisak kolona) je izmeren pre ispravke; pretraga za
+    obrisanim kolonama sada ide i kroz literale u više redova.
+- **Zeleno:** RunAllTests **275 / 0**, BFP **2772 / 0 i GREEN marker**, Faktura 39, Palete, Storno 111, Storno centar,
+  Izveštaji, Golden 2; fixture `7eab17dc6aec0058`, otisak šeme `87AB4F9B`. Katalog 995, sidra 995 / 0, sonda 14/14.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

@@ -1327,19 +1327,19 @@ SABOTAZE = {
     ),
     "relink-ignorise-generaciju": (
         "modPaletniList.bas",
-        "    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, oldGeneracijaID)\n"
+        "    Dim srcIds As Object: Set srcIds = modDokumenta.IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, oldPrijemnicaID)\n"
         "    Dim srcDvosmislen As Boolean\n",
-        "    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, \"\")      ' SABOTAZA\n"
+        "    Dim srcIds As Object: Set srcIds = modDokumenta.IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, \"\")      ' SABOTAZA\n"
         "    Dim srcDvosmislen As Boolean\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
-        "prevezivanje po generaciji je proslo",
+        "prevezivanje po identitetu je proslo",
     ),
     # Cilj prevezivanja. Izvor po identitetu a cilj po labeli i dalje moze da
     # odnese palete pogresnom kupcu -- samo na drugom kraju.
     "relink-cilj-po-broju": (
         "modPaletniList.bas",
-        "        If Len(tgtGen) > 0 Then\n"
-        "            ciljni = (Trim$(NzToText(prj(r, pcGen))) = tgtGen)\n"
+        "        If Len(tgtID) > 0 Then\n"
+        "            ciljni = (Trim$(NzToText(prj(r, pcId))) = tgtID)\n"
         "        Else\n"
         "            ciljni = (Trim$(CStr(prj(r, pcBr))) = newBroj)\n"
         "        End If\n",
@@ -1353,7 +1353,7 @@ SABOTAZE = {
         "                                     Array(COL_PRJ_KUPAC)).count > 1)\n",
         "    tgtDvosmislen = False   ' SABOTAZA: dvosmislen cilj vise ne zaustavlja\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
-        "bez generacije CILJA dvosmislen broj se odbija",
+        "bez identiteta CILJA dvosmislen broj se odbija",
     ),
     # Propagacija BrojZbirne u paletne stavke. Izbor redova prijemnice je bio
     # tacan, pa je ovaj drugi upis po BROJU ponistavao ceo taj izbor.
@@ -1370,7 +1370,7 @@ SABOTAZE = {
         "        If srcIds.count = 0 Then Exit Function\n",
         "        If False Then Exit Function   ' SABOTAZA: pada na broj\n",
         "T_ZadataGeneracijaKojeNema_Staje",
-        "zadata generacija prijemnice koje nema zaustavlja upis",
+        "zadat identitet prijemnice koga nema zaustavlja upis",
     ),
     # Presuda o relabelu. Writer bira dokument po generaciji; ako presuda opet
     # trazi dokument po broju, opisuje tudji -- i relabel se tiho preskoci.
@@ -1769,12 +1769,12 @@ SABOTAZE = {
     # Kapija "isti broj" na ulazu u writer, pre razresavanja generacija.
     "writer-isti-broj-odbija": (
         "modPaletniList.bas",
-        "    If Len(Trim$(oldGeneracijaID)) > 0 And Len(Trim$(newGeneracijaID)) > 0 Then\n"
-        "        If StrComp(Trim$(oldGeneracijaID), Trim$(newGeneracijaID), vbTextCompare) = 0 Then\n",
+        "    If Len(Trim$(oldPrijemnicaID)) > 0 And Len(Trim$(newPrijemnicaID)) > 0 Then\n"
+        "        If StrComp(Trim$(oldPrijemnicaID), Trim$(newPrijemnicaID), vbTextCompare) = 0 Then\n",
         "    If False Then   ' SABOTAZA: opet se gleda samo broj\n"
-        "        If StrComp(Trim$(oldGeneracijaID), Trim$(newGeneracijaID), vbTextCompare) = 0 Then\n",
+        "        If StrComp(Trim$(oldPrijemnicaID), Trim$(newPrijemnicaID), vbTextCompare) = 0 Then\n",
         "T_IstiBrojRazliciteGeneracije_NijeIstiDokument",
-        "isti broj a razlicite generacije PROLAZI",
+        "isti broj a razliciti dokumenti PROLAZI",
     ),
     # Ciljna lista zbirnih: vlasnistvo je vozac + kupac, ne samo kupac.
     "zbirna-vlasnik-samo-kupac": (
@@ -8718,16 +8718,6 @@ SABOTAZE = {
         "Test_S6_DveKlaseJedanDokument",
         "S6 PRJ: paletna stavka nosi PrijemnicaStavkaID svoje klase",
     ),
-    # Zaglavlje dobije klasu prve stavke: dvoklasni dokument bi tada lagao da je
-    # klase I, a faktura bi ga tiho fakturisala kao takvog (odluka 1).
-    "s6k2-zaglavlje-nosi-klasu": (
-        "modDokumenta.bas",
-        "    tx.BindSourceDocument DOK_TIP_PRIJEMNICA, newID\n",
-        "    tx.BindSourceDocument DOK_TIP_PRIJEMNICA, newID\n"
-        "    UpdateCell TBL_PRIJEMNICA, appendedRow, COL_PRJ_KLASA, KLASA_I   ' SABOTAZA: zaglavlje nosi klasu\n",
-        "Test_S6_DveKlaseJedanDokument",
-        "S6 PRJ: zaglavlje ne nosi linijska polja ni kes fakture",
-    ),
     # Storno dokumenta ostaje na zastavici. Isto sidro kao
     # amb-prj-storno-bez-kontrastava, ali tvrdnja je o dokumentu NOVOG oblika:
     # jedna noga punih (zbir) i jedan povrat -> tacno dva kontra-stava.
@@ -8812,8 +8802,10 @@ SABOTAZE = {
     # listu (strog lookup), pa red nema kilazu.
     "s6k3-cilj-prij-bez-stavki": (
         "modScrOporavak.bas",
-        "                                        modDokumenta.ZbirStavkiPoPrijemnici(), COL_PRJ_ID)\n",
-        "                                        CreateObject(\"Scripting.Dictionary\"), COL_PRJ_ID)   ' SABOTAZA: prazan recnik stavki\n",
+        # Red nosi nastavak (`, _`), pa zamena nema komentar: komentar posle `_`
+        # je sintaksna greska (zamka 4).
+        "                                        modDokumenta.ZbirStavkiPoPrijemnici(), COL_PRJ_ID, _\n",
+        "                                        CreateObject(\"Scripting.Dictionary\"), COL_PRJ_ID, _\n",
         "T_S6_CitaociStavkiPrijemnice",
         "S6 citaoci: ciljna lista Oporavka -- kg dokumenta je zbir stavki",
     ),
@@ -9145,20 +9137,6 @@ SABOTAZE = {
         "T_S6K4_StornoCitaStavkeIIdentitet",
         "S6K4 storno: prefill ispravke nosi kolicinu i cenu SVAKE stavke",
     ),
-    "s6k4-uvid-kg-sa-zaglavlja": (
-        "modStornoImpact.bas",
-        "            h(\"kolicina\") = PrijemnicaKgZaUvid(prjUvid, strict)\n",
-        "            h(\"kolicina\") = HLP(COL_PRJ_KOLICINA, prjUvid)   ' SABOTAZA: kg uvida sa zaglavlja\n",
-        "T_S6K4_StornoCitaStavkeIIdentitet",
-        "S6K4 storno: uvid -- kg dokumenta je zbir stavki",
-    ),
-    "s6k4-lista-kg-sa-zaglavlja": (
-        "modStornoFlow.bas",
-        "            COL_PRJ_BROJ_ZBIRNE, COL_PRJ_KUPAC, COL_PRJ_VOZAC, \"\", tf, kupci, vozaci, stByZbr, _\n",
-        "            COL_PRJ_BROJ_ZBIRNE, COL_PRJ_KUPAC, COL_PRJ_VOZAC, COL_PRJ_KOLICINA, tf, kupci, vozaci, stByZbr, _\n",
-        "T_S6K4_StornoCitaStavkeIIdentitet",
-        "S6K4 storno: lista za storno -- kg dokumenta je zbir stavki",
-    ),
     "s6k4-f8-identitet-generacija": (
         "modScrDokumenti.bas",
         "        Case \"PRIJEMNICA\":                                  IdKolonaTipa = COL_PRJ_ID\n",
@@ -9244,15 +9222,6 @@ SABOTAZE = {
     # ---- S6 korak 5: faktura po PrijemnicaStavkaID, fakturisanost izvedena ----
     # (plan 14.55 "Korak 5"; FAK-LIN-01..03). Citac, pisac, okvir, lista, mreza,
     # detalj, storno fakture i TX.
-    # R1/KI-038: citac koji dopusti kesu da odlucuje -- PRJ-FAK-2 (kes "Da" bez
-    # linije) postaje fakturisana u kapiji, a lista je i dalje vidi slobodnom.
-    "s6k5-citac-gleda-kes": (
-        "modFaktura.bas",
-        "    PrijemnicaJeFakturisana = (PrijemnicaFakturisanost(prijemnicaID, outFakturaID) <> FAKT_NE)\n",
-        "    PrijemnicaJeFakturisana = (PrijemnicaFakturisanost(prijemnicaID, outFakturaID) <> FAKT_NE) Or (UCase$(Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_FAKTURISANO)))) = \"DA\")   ' SABOTAZA: kes odlucuje\n",
-        "T_S6K5_FakturisanostJedanIzvor",
-        "S6K5: PRJ-FAK-2 (kes 'Da' bez linije) NIJE fakturisana -- kapija (KI-038)",
-    ),
     # Lista koja ne cita izveden status: svaki dokument je "Nefakturisano".
     "s6k5-lista-bez-izvedenog": (
         "modScrDokumenti.bas",
@@ -9260,14 +9229,6 @@ SABOTAZE = {
         "            ElseIf True Then   ' SABOTAZA: lista ne cita izveden status\n",
         "T_S6K5_FakturisanostJedanIzvor",
         "S6K5: PRJ-FAK-1 -- lista pokazuje placanje njene fakture",
-    ),
-    # Detalj izvestaja koji cita kes zaglavlja umesto izvedenog statusa.
-    "s6k5-detalj-cita-kes": (
-        "modScrIzvestaji.bas",
-        "            stanjeFak = modFaktura.PrijemnicaFakturisanost(Trim$(prjID), faktureTxt, zajednicka)\n",
-        "            stanjeFak = IIf(UCase$(NzS(d(i, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO)))) = \"DA\", FAKT_DA, FAKT_NE)   ' SABOTAZA: detalj cita kes\n",
-        "T_S6K5_FakturisanostJedanIzvor",
-        "S6K5: PRJ-FAK-2 -- detalj izvestaja kaze da nije fakturisana",
     ),
     # Red mreze Fakturisanja nosi DOKUMENT umesto stavke (stanje pre koraka 5).
     "s6k5-mreza-po-dokumentu": (
@@ -9285,29 +9246,12 @@ SABOTAZE = {
         "T_S6K4_UvidKazeOdbijanje",
         "S6K5 pregled lanca: fakturisana -- kaze ODBIJA, ne oslobadja fakturu",
     ),
-    # R2: pisac cita kolicinu sa ZAGLAVLJA (stanje pre koraka 5) -- dokument pravog
-    # pisca tada nema sta da fakturise.
-    "s6k5-faktura-sa-zaglavlja": (
-        "modFaktura.bas",
-        "        kol = CDbl(red(4))\n",
-        "        kol = FakD(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_KOLICINA))   ' SABOTAZA: kolicina sa zaglavlja\n",
-        "Test_S6K5_DveKlaseIzStavki",
-        "S6K5 faktura: dvoklasni dokument se fakturise iz STAVKI",
-    ),
     "s6k5-linija-bez-stavke": (
         "modFaktura.bas",
         "        RequireUpdateCell TBL_FAKTURA_STAVKE, fsRow, COL_FS_PRIJEMNICA_STAVKA_ID, CStr(v(0)), \"CreateFaktura\"\n",
         "        ' SABOTAZA: linija ne nosi PrijemnicaStavkaID\n",
         "Test_S6K5_DveKlaseIzStavki",
         "S6K5 faktura: linija po stavci, sa PrijemnicaStavkaID-em i brojkama stavke",
-    ),
-    # FAK-LIN-03: pisac koji opet pise kes na zaglavlje prijemnice.
-    "s6k5-pisac-pise-kes": (
-        "modFaktura.bas",
-        "    ApplyAvansToFaktura kupacID, fakturaID\n",
-        "    ApplyAvansToFaktura kupacID, fakturaID: RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURA_ID, fakturaID, \"CreateFaktura\"   ' SABOTAZA: pisac pise kes\n",
-        "Test_S6K5_DveKlaseIzStavki",
-        "S6K5 faktura: zaglavlje prijemnice ne dobija kes fakture",
     ),
     # R3 / FAK-LIN-01: druga faktura nad istom stavkom.
     "s6k5-druga-faktura-prolazi": (
@@ -10047,6 +9991,62 @@ SABOTAZE = {
         "    ' SABOTAZA: broj se opet proverava preko svih kupaca (sestra kroz pisca)\n",
         "Test_S6K8_BrojPrijemnicePoKupcu",
         "S6K8 broj: isti broj drugog kupca prolazi",
+    ),
+    # ---- S6 korak 8, deo 2: sema zaglavlja prijemnice, identitet po ID-u ----
+    # (plan 14.55 "Korak 8", R6-R8). Kanon zaglavlja opet nosi generaciju (na
+    # KRAJU, pa start aplikacije kolonu samo dopise -- prefiks i pisci ostaju
+    # citavi, pada bas tvrdnja o kanonu).
+    "s6k8-kanon-vraca-generaciju": (
+        "modSchema.bas",
+        "    k.Add \"ZbirnaRoditeljID\"\n"
+        "    RegistrujTabelu reg, TBL_PRIJEMNICA, \"Prijemnica\", k\n",
+        "    k.Add \"ZbirnaRoditeljID\"\n"
+        "    k.Add \"GeneracijaID\"   ' SABOTAZA: kanon zaglavlja opet nosi generaciju\n"
+        "    RegistrujTabelu reg, TBL_PRIJEMNICA, \"Prijemnica\", k\n",
+        "T_S6_KanonStavkePrijemnice",
+        "S6K8 kanon: zaglavlje prijemnice nema linijska polja, kes fakture ni generaciju",
+    ),
+    # R7: self-heal zatecene sveske zaboravi jednu kolonu iz SREDINE.
+    "s6k8-selfheal-ne-brise": (
+        "modSetup.bas",
+        "    ObrisiKolonuAko TBL_PRIJEMNICA, \"Klasa\"\n",
+        "    ' SABOTAZA: Klasa ostaje u sredini zaglavlja\n",
+        "Test_S6K8_PrijemnicaStareKoloneSelfHeal",
+        "S6K8 self-heal: nijedna stara kolona zaglavlja nije ostala",
+    ),
+    # R7: EnsureSledljivostSchema opet dodaje GeneracijaID i prijemnici (na KRAJ).
+    "s6k8-generacija-vraca-se": (
+        "modSetup.bas",
+        "        If t <> TBL_PRIJEMNICA Then EnsureKolonaSaTragom t, COL_GENERACIJA_ID\n",
+        "        EnsureKolonaSaTragom t, COL_GENERACIJA_ID   ' SABOTAZA: prijemnica opet dobija generaciju\n",
+        "Test_S6K8_PrijemnicaStareKoloneSelfHeal",
+        "S6K8 self-heal: EnsureSledljivostSchema ne vraca GeneracijaID prijemnici",
+    ),
+    # R8: "Prevezi prijemnicu" -- izvor se ne razresava po PrijemnicaID-u.
+    "s6k8-prevezi-pri-bez-id": (
+        "modDokumenta.bas",
+        "    Set srcIds = IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID)\n",
+        "    Set srcIds = IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, \"\")   ' SABOTAZA: izvor bez ID-a\n",
+        "T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu",
+        "prevezivanje po identitetu je proslo",
+    ),
+    # R8: red liste osirotelih paleta ne nosi identitet dokumenta (kolona 7).
+    "s6k8-osir-palete-bez-id": (
+        "modDokumenta.bas",
+        "                       CStr(vrD(k2)), CStr(soD(k2)), CLng(gSum(k2)), CLng(sCnt(k2)), CStr(pidD(k2)))\n",
+        "                       CStr(vrD(k2)), CStr(soD(k2)), CLng(gSum(k2)), CLng(sCnt(k2)), \"\")   ' SABOTAZA: red bez ID-a\n",
+        "Test_S6K7_OsirocenePaleteDatumPoDokumentu",
+        "S6K7 osirotele: red prvog kupca nosi datum svog dokumenta",
+    ),
+    # R8: ciljna lista prijemnica opet nosi generaciju (kolone vise nema -> prazno).
+    "s6k8-oporavak-cilj-prij-generacija": (
+        "modScrOporavak.bas",
+        "                                        modDokumenta.ZbirStavkiPoPrijemnici(), COL_PRJ_ID, _\n"
+        "                                        COL_PRJ_ID)\n",
+        "                                        modDokumenta.ZbirStavkiPoPrijemnici(), COL_PRJ_ID, _\n"
+        "                                        COL_GENERACIJA_ID)   ' SABOTAZA: identitet cilja je generacija\n",
+        "T_Oporavak_CiljneListe",
+        "ciljna lista prijemnica nosi PrijemnicaID dokumenta (S6 korak 8)",
     ),
 }
 

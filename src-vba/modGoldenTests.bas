@@ -718,7 +718,8 @@ Private Function GldZbirna(ByVal brojZbirne As String) As String
     Dim s As String
     Dim prijI As Double, prijII As Double
     Dim data As Variant
-    Dim cBr As Long, cKlasa As Long, cKol As Long
+    Dim cBr As Long, cId As Long
+    Dim poDok As Object, st As Variant
     Dim i As Long
 
     s = "ZBIRNA" & vbLf
@@ -731,16 +732,21 @@ Private Function GldZbirna(ByVal brojZbirne As String) As String
     If IsArray(data) Then
         data = ExcludeStornirano(data, TBL_PRIJEMNICA)
         If IsArray(data) Then
+            ' Klasa i kolicina su na STAVKAMA (S6 korak 2); zaglavlje ih od koraka 8
+            ' nema. Citaju se kroz kanonski citalac, koji dokument bez stavke odbija.
             cBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "GldZbirna")
-            cKlasa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, "GldZbirna")
-            cKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "GldZbirna")
+            cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "GldZbirna")
+            Set poDok = modDokumenta.StavkePrijemnicePoDokumentu()
             For i = 1 To UBound(data, 1)
                 If StrComp(Trim$(NzToText(data(i, cBr))), brojZbirne, vbTextCompare) = 0 Then
-                    If UCase$(Trim$(NzToText(data(i, cKlasa)))) = "II" Then
-                        prijII = prijII + SafeD(data(i, cKol))
-                    Else
-                        prijI = prijI + SafeD(data(i, cKol))
-                    End If
+                    For Each st In modDokumenta.StavkeZaPrijemnicu(poDok, _
+                                       Trim$(NzToText(data(i, cId))), "GldZbirna")
+                        If UCase$(Trim$(CStr(st(3)))) = "II" Then
+                            prijII = prijII + SafeD(st(4))
+                        Else
+                            prijI = prijI + SafeD(st(4))
+                        End If
+                    Next st
                 End If
             Next i
         End If

@@ -561,18 +561,18 @@ End Sub
 
 ' Seed pise ZAGLAVLJE I STAVKU (S6 korak 3, presedan S3b-1): linije dokumenta
 ' (klasa, kolicina, gajbe) motor paleta cita iz tblPrijemnicaStavke, kroz
-' kanonski citalac, koji zaglavlje bez stavke odbija po imenu. Linijska polja
-' zaglavlja ostaju popunjena do koraka 8 (iste brojke), jer ih jos cita storno.
+' kanonski citalac, koji zaglavlje bez stavke odbija po imenu. Zaglavlje od S6
+' koraka 8 linijskih polja nema.
 Private Function MakePrij(ByVal id As String, ByVal broj As String, ByVal zbirna As String, _
                           ByVal klasa As String, ByVal kolKg As Double, ByVal gajb As Long, _
                           ByVal sorta As String) As String
     TstAppend TBL_PRIJEMNICA, _
-        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_KLASA, COL_PRJ_KOLICINA, _
-              COL_PRJ_KOL_AMB, COL_PRJ_BROJ_ZBIRNE, COL_PRJ_VRSTA, COL_PRJ_SORTA, _
-              COL_PRJ_TIP_AMB, COL_PRJ_CENA, COL_STORNIRANO), _
-        Array(id, broj, Date, klasa, kolKg, _
-              gajb, zbirna, TST_VRSTA, sorta, _
-              TST_AMB, 0, "")
+        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, _
+              COL_PRJ_BROJ_ZBIRNE, COL_PRJ_VRSTA, COL_PRJ_SORTA, _
+              COL_PRJ_TIP_AMB, COL_STORNIRANO), _
+        Array(id, broj, Date, _
+              zbirna, TST_VRSTA, sorta, _
+              TST_AMB, "")
     TstAppend TBL_PRIJEMNICA_STAVKE, _
         Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
               COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _

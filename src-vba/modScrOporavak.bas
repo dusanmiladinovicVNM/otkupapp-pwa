@@ -70,10 +70,11 @@ Private mLista As String          ' kljuc aktivne liste
 ' javlja umesto da preveze na nesto nasumicno.
 Private mCiljZbirna As String
 Private mCiljPrijemnica As String
-' Generacija izabranog CILJA. Drzi se uz broj, ne umesto njega: broj i dalje
-' ide u prikaz i u labele na stavkama, generacija samo bira dokument.
+' Identitet izabranog CILJA: generacija zbirne (ZBR-IDENT-01) i PrijemnicaID
+' prijemnice (S6 korak 8). Drzi se uz broj, ne umesto njega: broj i dalje ide u
+' prikaz i u labele na stavkama, identitet samo bira dokument.
 Private mCiljZbirnaGen As String
-Private mCiljPrijemnicaGen As String
+Private mCiljPrijemnicaID As String
 Private mStep As String           ' korak za poruku o gresci
 ' Brojke u zoni; racuna ih Scr_Rows u istom prolazu kroz podatke.
 Private mBrNedovrseno As Long
@@ -242,21 +243,21 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     ' mesto u listi.
     If Left$(tag, 4) = "row:" Then
         Select Case Scr_Lista()
-            ' Uz broj se pamti i GENERACIJA izabranog reda: broj je labela, a
+            ' Uz broj se pamti i IDENTITET izabranog reda: broj je labela, a
             ' radnja mora da posalje bas ovaj dokument. Kolona je poslednja i
             ' prioriteta 3 -- na uskom ekranu se sakrije, u podacima ostaje.
             Case "ZBIRNE"
                 broj = Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 1)))
                 If Len(broj) > 0 Then
                     mCiljZbirna = broj
-                    mCiljZbirnaGen = GenIzReda(CLng(Mid$(tag, 5)), 7)
+                    mCiljZbirnaGen = IdentitetIzReda(CLng(Mid$(tag, 5)), 7)
                     OsveziZonu
                 End If
             Case "CILJPRIJ"
                 broj = Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 1)))
                 If Len(broj) > 0 Then
                     mCiljPrijemnica = broj
-                    mCiljPrijemnicaGen = GenIzReda(CLng(Mid$(tag, 5)), 7)
+                    mCiljPrijemnicaID = IdentitetIzReda(CLng(Mid$(tag, 5)), 7)
                     OsveziZonu
                 End If
         End Select
@@ -273,11 +274,12 @@ EH:
 End Function
 
 ' Vraca True samo ako je radnja PROMENILA podatke (mreza se tada cita ponovo).
-' Generacija iz reda mreze. Kolona je prioriteta 3, pa se na uskom ekranu ne
-' CRTA - ali podatak ostaje u mView, a GridCell cita njega, ne sirinu.
-Private Function GenIzReda(ByVal red As Long, ByVal kolona As Long) As String
+' Identitet dokumenta iz reda mreze (generacija zbirne, PrijemnicaID). Kolona je
+' prioriteta 3, pa se na uskom ekranu ne CRTA - ali podatak ostaje u mView, a
+' GridCell cita njega, ne sirinu.
+Private Function IdentitetIzReda(ByVal red As Long, ByVal kolona As Long) As String
     On Error Resume Next
-    GenIzReda = Trim$(CStr(modOtkupUI.GridCell(red, kolona)))
+    IdentitetIzReda = Trim$(CStr(modOtkupUI.GridCell(red, kolona)))
 End Function
 
 Private Function OpoAkcija(ByVal tag As String) As Boolean
@@ -302,12 +304,12 @@ Private Function OpoAkcija(ByVal tag As String) As Boolean
     LogInfo MOD_TRAG, "Radnja '" & p(0) & "' nad redom " & red & " (" & kljuc & "), lista '" & _
             Scr_Lista() & "'."
 
-    ' GENERACIJA je poslednja kolona obe izvorne liste. Ona je identitet
-    ' dokumenta - broj je labela. Bez nje bi prevezivanje pogodilo i dokument
+    ' PrijemnicaID je poslednja kolona obe izvorne liste. On je identitet
+    ' dokumenta - broj je labela. Bez njega bi prevezivanje pogodilo i dokument
     ' drugog kupca koji deli broj.
     Select Case p(0)
-        Case "prevezipri": OpoAkcija = PreveziPrijemnicu(kljuc, GenIzReda(red, 8))
-        Case "prevezipal": OpoAkcija = PreveziPalete(kljuc, GenIzReda(red, 7))
+        Case "prevezipri": OpoAkcija = PreveziPrijemnicu(kljuc, IdentitetIzReda(red, 8))
+        Case "prevezipal": OpoAkcija = PreveziPalete(kljuc, IdentitetIzReda(red, 7))
         Case "vrati":      OpoAkcija = VratiStorno(kljuc, red)
         Case "odbaci":     OpoAkcija = OdbaciIspravku(red)
         Case "ponovi":     OpoAkcija = PonoviLanac(red)
@@ -325,7 +327,7 @@ End Function
 ' PrijemnicaID ostaje, pa faktura i palete ostaju ispravne. Ceo posao radi
 ' postojeci ReassignPrijemnicaToZbirna_TX, ukljucujuci proveru da je cilj
 ' aktivna zbirna.
-Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal gen As String) As Boolean
+Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal prijemnicaID As String) As Boolean
     On Error GoTo EH
     If Len(mCiljZbirna) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_NEMA_ZBIRNE"), True
@@ -335,7 +337,7 @@ Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal gen As String
               Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljZbirna & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
-    If ReassignPrijemnicaToZbirna_TX(brojPrij, mCiljZbirna, gen, mCiljZbirnaGen) Then
+    If ReassignPrijemnicaToZbirna_TX(brojPrij, mCiljZbirna, prijemnicaID, mCiljZbirnaGen) Then
         Scr_ResetCache
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & _
                              " " & ChrW(8594) & " " & mCiljZbirna, False
@@ -355,19 +357,19 @@ End Function
 ' namerno: ovaj ekran postoji bas da razresi slucajeve koje automatika nije
 ' umela, pa razlika u broju gajbica ne sme da bude kapija - prijavljuje se
 ' i koriguje u mestu (PaletaAdjustPrompt).
-Private Function PreveziPalete(ByVal brojPrij As String, ByVal gen As String) As Boolean
+Private Function PreveziPalete(ByVal brojPrij As String, ByVal prijemnicaID As String) As Boolean
     Dim upoz As String, gajbDiff As Boolean
     On Error GoTo EH
     If Len(mCiljPrijemnica) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_NEMA_PRIJ"), True
         Exit Function
     End If
-    ' "Isti dokument" se meri GENERACIJOM kad je obe strane imaju. Broj je labela
+    ' "Isti dokument" se meri IDENTITETOM kad ga obe strane imaju. Broj je labela
     ' i nastaje PO KUPCU, pa ispravka koja menja kupca lako dobije isti poslovni
     ' broj kao original -- a to su dva dokumenta i prevezivanje je legitimno.
     ' Poredjenje po broju bi tu odbilo potpuno ispravnu operaciju.
-    If Len(gen) > 0 And Len(mCiljPrijemnicaGen) > 0 Then
-        If StrComp(gen, mCiljPrijemnicaGen, vbTextCompare) = 0 Then
+    If Len(prijemnicaID) > 0 And Len(mCiljPrijemnicaID) > 0 Then
+        If StrComp(prijemnicaID, mCiljPrijemnicaID, vbTextCompare) = 0 Then
             modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_ISTA"), True
             Exit Function
         End If
@@ -383,7 +385,7 @@ Private Function PreveziPalete(ByVal brojPrij As String, ByVal gen As String) As
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
     If ReassignPaleteToPrijemnica_TX(brojPrij, mCiljPrijemnica, upoz, True, gajbDiff, _
-                                     gen, mCiljPrijemnicaGen) Then
+                                     prijemnicaID, mCiljPrijemnicaID) Then
         Scr_ResetCache
         MsgBox Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & " " & ChrW(8594) & _
                " " & mCiljPrijemnica & _
@@ -626,8 +628,8 @@ EH:
 End Function
 
 '--- OSIROTELE PRIJEMNICE --------------------------------------------
-' GetOsirocenePrijemnice, kolone 1..7:
-'   Broj | Datum | Vrsta | Sorta | Kolicina | StaraZbirna | Status
+' GetOsirocenePrijemnice, kolone 1..8:
+'   Broj | Datum | Vrsta | Sorta | Kolicina | StaraZbirna | Status | PrijemnicaID
 Private Function OsirPrijGridCols() As Variant
     OsirPrijGridCols = Array( _
         "OTKUI_HD_BROJ||txt|110|1", _
@@ -637,7 +639,7 @@ Private Function OsirPrijGridCols() As Variant
         "OTKUI_HD_KG||txt|72|1", _
         "OTKUI_HD_BROJ_ZBIRNE||txt|110|1", _
         "OTKUI_HD_STATUS||txt|132|1", _
-        "OTKUI_HDO_GENERACIJA||txt|110|3")
+        "OTKUI_HDO_PRJ_ID||txt|110|3")
 End Function
 
 Private Function RowsOsiroceninPrijemnica(ByVal q As String) As Variant
@@ -645,8 +647,8 @@ Private Function RowsOsiroceninPrijemnica(ByVal q As String) As Variant
 End Function
 
 '--- OSIROTELE PALETE -------------------------------------------------
-' GetPrijemniceSaOsirocenimPaletama, kolone 1..6:
-'   Broj | Datum | Vrsta | Sorta | Gajbica | Stavki
+' GetPrijemniceSaOsirocenimPaletama, kolone 1..7:
+'   Broj | Datum | Vrsta | Sorta | Gajbica | Stavki | PrijemnicaID
 Private Function OsirPalGridCols() As Variant
     OsirPalGridCols = Array( _
         "OTKUI_HD_BROJ||txt|110|1", _
@@ -655,7 +657,7 @@ Private Function OsirPalGridCols() As Variant
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HDP_GAJBICA||num|72|1", _
         "OTKUI_HD_STAVKI||num|72|1", _
-        "OTKUI_HDO_GENERACIJA||txt|110|3")
+        "OTKUI_HDO_PRJ_ID||txt|110|3")
 End Function
 
 Private Function RowsOsirocenePalete(ByVal q As String) As Variant
@@ -759,7 +761,8 @@ Private Function RowsAktivneZbirne(ByVal q As String) As Variant
                                     COL_ZBR_VRSTA, COL_ZBR_SORTA, _
                                     Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), _
                                     CiljZbirnaGridCols(), q, _
-                                    modDokumenta.ZbirStavkiPoZbirni(), COL_ZBR_ID)
+                                    modDokumenta.ZbirStavkiPoZbirni(), COL_ZBR_ID, _
+                                    COL_GENERACIJA_ID)
 End Function
 
 Private Function CiljPrijGridCols() As Variant
@@ -770,17 +773,20 @@ Private Function CiljPrijGridCols() As Variant
         "OTKUI_HD_VRSTA||txt|84|2", _
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HD_KG||kg|76|1", _
-        "OTKUI_HDO_GENERACIJA||txt|110|3")
+        "OTKUI_HDO_PRJ_ID||txt|110|3")
 End Function
 
 ' Kilaza dolazi sa STAVKI (S6 korak 3): zaglavlje prijemnice od koraka 2 ne nosi
 ' Kolicinu, pa je dokument novog oblika u listi cilja imao 0 kg -- a operater
 ' bira cilj prevezivanja paleta bas po kilazi.
+' Identitet reda je PrijemnicaID (S6 korak 8): dokument je jedan red, pa
+' generacije nema.
 Private Function RowsAktivnePrijemnice(ByVal q As String) As Variant
     RowsAktivnePrijemnice = RowsAktivni(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_DATUM, _
                                         COL_PRJ_VRSTA, COL_PRJ_SORTA, _
                                         COL_PRJ_KUPAC, CiljPrijGridCols(), q, _
-                                        modDokumenta.ZbirStavkiPoPrijemnici(), COL_PRJ_ID)
+                                        modDokumenta.ZbirStavkiPoPrijemnici(), COL_PRJ_ID, _
+                                        COL_PRJ_ID)
 End Function
 
 ' Liste kandidata za cilj: nestornirani redovi, jedan red po DOKUMENTU.
@@ -808,19 +814,22 @@ End Function
 ' praznu, a prijemnica od S6 koraka 2 Kolicinu, pa bi bez ovoga cela cilj lista
 ' pokazala 0 kg -- a operater bira CILJ ispravke bas po kilazi. Oba tipa salju
 ' recnik (S6 korak 3), pa ova funkcija ostaje JEDNA.
+' colIdentitet: kolona koja je IDENTITET dokumenta i ide u 7. kolonu reda --
+' GeneracijaID za zbirnu (ZBR-IDENT-01), PrijemnicaID za prijemnicu (S6 korak 8).
 Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
                              ByVal colDatum As String, ByVal colVrsta As String, _
                              ByVal colSorta As String, _
                              ByVal colVlasnik As Variant, _
                              ByVal cols As Variant, ByVal q As String, _
                              ByVal kgPoDok As Object, _
-                             ByVal colDokID As String) As Variant
+                             ByVal colDokID As String, _
+                             ByVal colIdentitet As String) As Variant
     Dim src As Variant, r As Long, n As Long, outA() As Variant
     Dim iBr As Long, iDat As Long, iVr As Long, iSo As Long
-    Dim iSt As Long, iGen As Long
+    Dim iSt As Long, iIdent As Long
     Dim vlCols As Variant, iVl() As Long, v As Long
     Dim broj As String, vlasnik As String, kljuc As String, hay As String, sumKg As Double
-    Dim gen As String
+    Dim ident As String
     Dim seen As Object
     On Error GoTo EH
     mStep = "cilj " & tbl
@@ -844,7 +853,7 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         iVl(v) = modUiData.ColIdx(tbl, CStr(vlCols(v)))
     Next v
     iSt = modUiData.ColIdx(tbl, COL_STORNIRANO)
-    iGen = modUiData.ColIdx(tbl, COL_GENERACIJA_ID)
+    iIdent = modUiData.ColIdx(tbl, colIdentitet)
     Dim iDokID As Long
     If Not kgPoDok Is Nothing Then
         iDokID = modUiData.ColIdx(tbl, colDokID)
@@ -884,13 +893,13 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
             End If
         Next v
 
-        ' Kljuc grupisanja: GENERACIJA kad postoji, inace broj + pun vlasnik.
-        ' Klase I i II istog dokumenta dele generaciju, pa se i dalje sabiraju u
-        ' jedan red; dva razlicita dokumenta je vise ne dele, pa se ne spajaju.
-        gen = ""
-        If iGen > 0 Then gen = modUiData.CellS(src, r, iGen)
-        If Len(gen) > 0 Then
-            kljuc = "g" & Chr$(1) & gen
+        ' Kljuc grupisanja: IDENTITET kad postoji, inace broj + pun vlasnik.
+        ' Redovi istog dokumenta dele identitet, pa se i dalje sabiraju u jedan
+        ' red; dva razlicita dokumenta ga ne dele, pa se ne spajaju.
+        ident = ""
+        If iIdent > 0 Then ident = modUiData.CellS(src, r, iIdent)
+        If Len(ident) > 0 Then
+            kljuc = "g" & Chr$(1) & ident
         Else
             kljuc = broj & Chr$(1) & vlasnik
         End If
@@ -917,7 +926,7 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         outA(n, 6) = kgReda
         ' Identitet ciljnog dokumenta ide u red: radnja mora da posalje BAS
         ' ovaj dokument, ne "prvi sa tim brojem".
-        outA(n, 7) = gen
+        outA(n, 7) = ident
         sumKg = sumKg + kgReda
 Sledeci:
     Next r
@@ -1040,11 +1049,11 @@ End Function
 Public Sub Scr_OpoTestSet(ByVal lista As String, ByVal ciljZbirna As String, _
                           ByVal ciljPrijemnica As String, _
                           Optional ByVal ciljZbirnaGen As String = "", _
-                          Optional ByVal ciljPrijemnicaGen As String = "")
+                          Optional ByVal ciljPrijemnicaID As String = "")
     If Not IsTestMode() Then Exit Sub
     mLista = lista
     mCiljZbirna = ciljZbirna
     mCiljPrijemnica = ciljPrijemnica
     mCiljZbirnaGen = ciljZbirnaGen
-    mCiljPrijemnicaGen = ciljPrijemnicaGen
+    mCiljPrijemnicaID = ciljPrijemnicaID
 End Sub

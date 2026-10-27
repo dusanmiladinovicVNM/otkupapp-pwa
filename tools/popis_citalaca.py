@@ -221,11 +221,12 @@ PRAGOVI = collections.OrderedDict([
     # obrisani; pisac drzi kapije koje je do tada drzao samo F4.
     ("prj_stari_pisac", 0),
     ("prj_zbr_cfg", 0),
-    # Deo 2 brise kolone: dotad ih drze modSetup (format, EnsureColumnOnTable) i
-    # prefill klase (4), a generaciju kao identitet Oporavak i F4 ispravka (15).
-    ("prj_linija", 4),
+    # Deo 2 (stavka 209): kolone su obrisane iz kanona, a identitet u Oporavku i
+    # F4 ispravci je PrijemnicaID. Konstanti vise nema, pa bi vraceno mesto
+    # palo i na compile-u; prag cuva i povratak generacije kao identiteta.
+    ("prj_linija", 0),
     ("prj_kes", 0),
-    ("prj_generacija", 15),
+    ("prj_generacija", 0),
     ("prj_brojzbirne", 33),
 ])
 

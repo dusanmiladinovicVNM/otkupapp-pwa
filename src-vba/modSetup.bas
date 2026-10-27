@@ -1213,6 +1213,7 @@ Public Sub EnsureRuntimeSchema()
     ' EnsureAllTables ume samo da DODA, pa bi stara kolona u sredini ostala i
     ' otisak bi prijavljivao drift koji self-heal ne leci.
     ObrisiStareKoloneAmbalaze
+    ObrisiStareKolonePrijemnice
 
     If Len(modSchema.SchemaCheckOnStart()) > 0 Then modSchema.EnsureAllTables
 
@@ -1364,7 +1365,9 @@ Public Sub EnsureSledljivostSchema()
         EnsureKolonaSaTragom t, COL_TRACE_IZDATO_STATUS
         ' Generacija upisa (Klasa I + II iz istog Multi_TX poziva dele vrednost).
         ' Prefill iz stornirane bira poslednju generaciju po ovoj koloni.
-        EnsureKolonaSaTragom t, COL_GENERACIJA_ID
+        ' Prijemnica je NEMA od S6 koraka 8: dokument je jedan red, a identitet
+        ' je PrijemnicaID. Dodata ovde, obrisana kolona bi se vratila NA KRAJ.
+        If t <> TBL_PRIJEMNICA Then EnsureKolonaSaTragom t, COL_GENERACIJA_ID
     Next i
     ' Faza 7 korak 5: denorm poslovni kljuc bloka -> otpremnica (stabilan kroz re-verziju).
     EnsureKolonaSaTragom TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
@@ -1425,6 +1428,28 @@ Public Sub ObrisiStareKoloneAmbalaze()
     ObrisiKolonuAko TBL_AMBALAZA, "VozacID"
     ObrisiKolonuAko TBL_AMBALAZA, "Stornirano"
     ObrisiKolonuAko TBL_AMBALAZA, "ReversID"
+End Sub
+
+' ZAGLAVLJE PRIJEMNICE GUBI LINIJSKA POLJA, KES FAKTURE I GENERACIJU (S6 korak 8).
+'
+' Kolicina, Cena, KolAmbalaze, Klasa i BrutoKg su cinjenice STAVKE i od S6 koraka 2
+' zive na tblPrijemnicaStavke; Fakturisano i FakturaID su kes koji od koraka 5
+' niko ne cita (fakturisanost je izvedena iz linija fakture); GeneracijaID je
+' identitet modela "red po klasi", a dokument je od koraka 2 jedan red sa svojim
+' PrijemnicaID-om. Osam kolona stoji u SREDINI starog kanona (9, 10, 12, 14-16, 18
+' i 27), pa kolona koja ostane u zatecenoj svesci pomera sve iza sebe. Brisu se
+' PO IMENU, bez obzira na sadrzaj -- citalaca nema, a migracije nema (nema
+' produkcionih podataka). Imena su LITERALI: konstante su obrisane i ne vracaju
+' se. Public jer ga meri test (Test_S6K8_PrijemnicaStareKoloneSelfHeal).
+Public Sub ObrisiStareKolonePrijemnice()
+    ObrisiKolonuAko TBL_PRIJEMNICA, "Kolicina"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "Cena"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "KolAmbalaze"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "Klasa"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "Fakturisano"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "FakturaID"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "BrutoKg"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "GeneracijaID"
 End Sub
 
 Public Sub ObrisiKolonuAko(ByVal tbl As String, ByVal ime As String)
@@ -1847,9 +1872,8 @@ Public Sub EnsureDoradeSchema()
     BackfillColumn TBL_STANICE, COL_STA_JE_HLADNJACA, "Ne"
 
     ' #5: decimalni format kolicine (vrednost je vec Double; samo prikaz).
-    ' Otpremnica vise nema Kolicina na zaglavlju -- nosi je stavka
-    ' (tblOtpremnicaStavke), i format se postavlja tamo.
-    SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "0.00"
+    ' Otpremnica i prijemnica vise nemaju Kolicina na zaglavlju -- nosi je
+    ' stavka (tblOtpremnicaStavke, tblPrijemnicaStavke), i format se postavlja tamo.
     SetColumnNumberFormat TBL_ZBIRNA, COL_ZBR_KOLICINA, "0.00"
 
     ' Izdata ambalaza (OM->kooperant uz otkup) -> kolona na tblOtkup za otkupni list.
@@ -1859,10 +1883,10 @@ Public Sub EnsureDoradeSchema()
     ' Bruto tezina (kad kupac unosi bruto -> sistem cuva neto u Kolicina, bruto ovde).
     ' Prazno = unet neto (bruto == neto). Otkup nosi bruto NA STAVCI (kanon,
     ' tblOtkupStavke), pa ovde vise nema reda za tblOtkup (S1c).
-    EnsureColumnOnTable TBL_PRIJEMNICA, COL_PRJ_BRUTO
-    SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_BRUTO, "0.00"
-    ' Otpremnica nosi bruto NA STAVCI (kanon, tblOtpremnicaStavke), pa ovde vise
-    ' nema reda za tblOtpremnica -- isto sto je S1c uradio za tblOtkup.
+    ' Otpremnica i prijemnica nose bruto NA STAVCI (kanon, tblOtpremnicaStavke i
+    ' tblPrijemnicaStavke), pa ovde nema reda ni za njih -- isto sto je S1c uradio
+    ' za tblOtkup. Vracen EnsureColumnOnTable bi obrisanu kolonu dodao NA KRAJ
+    ' zaglavlja prijemnice (S6 korak 8).
 
     LogSetup "OK", "EnsureDoradeSchema done"
     MsgBox "Dorade: seme su proverene/kreirane." & vbCrLf & vbCrLf & _
