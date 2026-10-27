@@ -7847,7 +7847,8 @@
        unosa). Izbor polja mere testovi 276 (`cbVrsta` / `cbSorta`) i 271.
      - **Nalazi:**
        - slovna greška u novoj poruci `DOKUNOS_ERR_PRJ_BROJ_STORNIRAN`: „oslobđa" (`modPoruke`, `ChrW(273)`
-         posle „oslob"). Ispravka je izmena `src-vba`, pa traži nov FULL i Compile. **Čeka odluku operatera.**
+         posle „oslob"). Ispravka je izmena `src-vba`, pa traži nov FULL i Compile. **Odluka operatera
+         (27.10.2026): ostaje za sledeći rez, `#443` ide u merge bez nje** — `KI-058`.
        - `KI-055`: neuspelo prevezivanje prijemnice kaže „proveri da li je ciljna zbirna aktivna". Za zbirnu
          druge robe (`PRJ-ZBR-02`, razlog koji uvodi ovaj rez) to nije tačno.
        - `KI-056`: potvrda „Prevezi palete" imenuje samo broj, a lista ima dva reda `8/150326`.
@@ -7855,7 +7856,7 @@
          `16c48e7e`.
      - **Status S6:** kod, automatske kapije, Compile i ručna provera su zeleni nad istim izvorom. Merge ide
        samo na izričit zahtev operatera.
-     - **Sledeći brojevi:** stavka 213 · test 277 (pazi `#441`) · KI-058.
+     - **Sledeći brojevi:** stavka 213 · test 277 (pazi `#441`) · KI-059.
 
 ## Dug sa imenom (posle S5-5b)
 
