@@ -9902,6 +9902,9 @@ SABOTAZE = {
     # --- S6 korak 8, deo 1 (stavka 208): kapije prijemnice u piscu ------------
     # Pisac vise ne pita kapiju roditelja po broju: prijemnica nastaje nad
     # zbirnom koje nema (R4) -- F4 i dalje odbija, pa sabotaza meri bas pisca.
+    # Od KI-047 (PRJ-ZBR-02) pisac i bez ove kapije odbija upis -- kapija robe
+    # nad praznim roditeljem javi "zbirna nema vrstu" -- pa "odbijena je" vise
+    # ne grize. Grize tvrdnja koja imenuje RAZLOG (dokaz 27.10.2026).
     "s6k8-pisac-pusta-bez-zbirne": (
         "modDokumenta.bas",
         "        If Len(razlog) > 0 Then\n"
@@ -9909,7 +9912,7 @@ SABOTAZE = {
         "        If Len(razlog) < 0 Then   ' SABOTAZA: pisac ne proverava roditelja\n"
         "            Err.Raise vbObjectError + 1436, SRC, PrijemnicaRoditeljPoruka(razlog, brojZbirne)\n",
         "Test_PrijemnicaMissingZbirnaDoesNotAppend",
-        "Prijemnica with missing zbirna is rejected (PRJ-ZBR-01)",
+        "Rejected prijemnica names the missing zbirna",
     ),
     # Sestra s6k6-f4-pusta-nacrt-zbirne: ista kapija, drugi pozivalac (R2).
     "s6k8-pisac-pusta-nacrt": (

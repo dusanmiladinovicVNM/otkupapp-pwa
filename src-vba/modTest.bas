@@ -10523,6 +10523,9 @@ End Sub
 ' zaustavljaju prijemnicu"; zbirna-f4-pusta-tudjeg-vlasnika -> "zbirna drugog
 ' vlasnika zaustavlja prijemnicu"; s6k6-f4-pusta-nacrt-zbirne -> "nacrt zbirne
 ' zaustavlja prijemnicu (PRJ-ZBR-01)".
+' Tvrdnja o dvosmislenom broju ide PRE tvrdnje o nacrtu: kapija proverava
+' identitet pre statusa, a F4 bez kapije pusti sve slucajeve -- pa bi pala na
+' nacrtu, koji je tvrdnja sestre nad samom kapijom (dokaz 27.10.2026).
 Private Sub T_Prijemnica_VezujeSeSamoNaJednoznacnu()
     Dim p As Object, fokus As String
     Dim rDobar As String, rNacrt As String, rNema As String, rDvosmislen As String
@@ -10590,10 +10593,10 @@ CleanUp:
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_Prijemnica_VezujeSeSamoNaJednoznacnu", errDesc
 
     AssertEq rDobar, "|", "jednoznacna izdata zbirna istog vlasnika prolazi validator"
-    AssertEq rNacrt, Poruka("DOKUNOS_ERR_ZBR_P_NIJE_IZDATA") & "|brojZbirne", _
-             "nacrt zbirne zaustavlja prijemnicu (PRJ-ZBR-01)"
     AssertEq rDvosmislen, Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN"), _
              "dva aktivna dokumenta pod istim brojem zaustavljaju prijemnicu"
+    AssertEq rNacrt, Poruka("DOKUNOS_ERR_ZBR_P_NIJE_IZDATA") & "|brojZbirne", _
+             "nacrt zbirne zaustavlja prijemnicu (PRJ-ZBR-01)"
     AssertEq rTudj, Poruka("DOKUNOS_ERR_ZBR_P_TUDJ"), _
              "zbirna drugog vlasnika zaustavlja prijemnicu"
     AssertEq rIstorija, Poruka("DOKUNOS_ERR_ZBR_P_ISTORIJA"), _
