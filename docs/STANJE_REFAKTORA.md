@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 27.10.2026 (stavka 211: S6 korak 8, dopuna `KI-047` — FULL 12/12, dokaz i Compile; čeka ručnu proveru i merge).
+**Ažurirano:** 27.10.2026 (stavka 212: S6 korak 8 — ručna provera `#443` 9/9; čeka merge).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 7/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) — čeka ručnu proveru i merge; `#443`, grana `claude/s6-korak8-zavrsni` sa `376a3d3e` |
+| **S6 prijemnica** | ⏳ **u toku, 7/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) — čeka merge; `#443`, grana `claude/s6-korak8-zavrsni` sa `376a3d3e` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7818,6 +7818,44 @@
      - **Status S6:** kod koraka 8 je završen (stavke 208–211), a automatske kapije i compile su zeleni nad istim
        izvorom. Ostaje ručna provera (checklista u `#443`). Merge ide samo na izričit zahtev operatera.
      - **Sledeći brojevi:** stavka 212 · test 277 (pazi `#441`) · KI-055.
+212. **S6 korak 8 — ručna provera `#443`: 9 / 9** (27.10.2026). Grana `claude/s6-korak8-zavrsni`, izvor
+     `2c9d1a14bdb6` — isti nad kojim su FULL, dokaz i Compile (stavka 211).
+
+     - **Sveska:** `tests/fixtures/rucna_provera_s6k8_kod.xlsm` (gitignored). To je sveska iz
+       `run_vba --compile-only --keep` sa `modVbaTools`, a podaci su upisani kroz prave pisce
+       (`CreateZbirnaDraft_TX`, `SavePrijemnicaMulti_TX`, `StornoPrijemnica_TX`). Status IZDATO i stornirana
+       `ZB-RP-STARA` su sintetički, kao u `modTest.S6K6Zbirna` / `S6K6Skloni`. `MALINA_DEFAULT_KUPAC` je
+       `KUP-TEST-1`. Ishod validatora za svih 9 slučajeva izmeren je suvim prolazom pre ručnog.
+     - **Ishod na ekranu (operater):**
+       1. zatečena sveska 28 → 20 kolona: prolazi;
+       2. hladnjača, broj stornirane `HL-STORNO-1`: odbijen (`DOKUNOS_ERR_PRJ_BROJ_STORNIRAN`);
+       3. eksterni kupac, broj stornirane `EKS-STORNO-1`: snimljen;
+       4. nepostojeća (`ZB-RP-NEMA`) i nacrt (`ZB-RP-NACRT`): odbijene, obe poruke tačne;
+       5. Oporavak: `PRIJEMNICA ID` u listama, „Prevezi" bez cilja odbija, obe radnje traže potvrdu;
+       6. druga vrsta: odbijena, „…ista kao na zbirnoj: TESTVOCE";
+       7. druga sorta: odbijena, „…ista kao na zbirnoj: TESTSORTA";
+       8. ista roba, I 60 + II 40: snimljen (`RP-T8-1`, klase I i II);
+       9. prevezivanje na zbirnu druge vrste odbijeno i prijemnica ostaje; na zbirnu iste vrste prevezana.
+     - **Tačke 3 i 8 su prvi put stale na nozi gajbi, ne na kapiji** („Deficit naloga Vozac … Manjak: 20
+       '12/1'"):
+       - uzrok je fixture: `VOZ-TEST-1` ima saldo 12/1 **−10** (+40 `OTP-TEST-1`, −10 `PRJ-FAK-3`,
+         −40 `PRJ-TEST-A`), a prijemnica traži još 10;
+       - kapije iz `#443` (roditelj, roba, broj) pisac proverava pre ijednog upisa, pa su obe prošle;
+       - posle F7 „Povrat kupca" (`KUP-RP-1`: Test kupac 1 vraća vozaču 30 gajbi) obe su snimljene. Isti
+         ishod je pre toga izmeren suvim prolazom nad kopijom sveske.
+     - **Fokus:** kursor posle odbijanja ostaje u broju prijemnice. To je `KI-050` (OPEN, UX prolaz lanca
+       unosa). Izbor polja mere testovi 276 (`cbVrsta` / `cbSorta`) i 271.
+     - **Nalazi:**
+       - slovna greška u novoj poruci `DOKUNOS_ERR_PRJ_BROJ_STORNIRAN`: „oslobđa" (`modPoruke`, `ChrW(273)`
+         posle „oslob"). Ispravka je izmena `src-vba`, pa traži nov FULL i Compile. **Čeka odluku operatera.**
+       - `KI-055`: neuspelo prevezivanje prijemnice kaže „proveri da li je ciljna zbirna aktivna". Za zbirnu
+         druge robe (`PRJ-ZBR-02`, razlog koji uvodi ovaj rez) to nije tačno.
+       - `KI-056`: potvrda „Prevezi palete" imenuje samo broj, a lista ima dva reda `8/150326`.
+       - `KI-057`: brojka „Osirotelo" je 0 dok ekran ne prikaže jednu od dve liste sirotih. Tako je od
+         `16c48e7e`.
+     - **Status S6:** kod, automatske kapije, Compile i ručna provera su zeleni nad istim izvorom. Merge ide
+       samo na izričit zahtev operatera.
+     - **Sledeći brojevi:** stavka 213 · test 277 (pazi `#441`) · KI-058.
 
 ## Dug sa imenom (posle S5-5b)
 
