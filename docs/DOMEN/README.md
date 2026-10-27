@@ -107,6 +107,16 @@ roditelja (`ZbirnaRoditeljID` prazan; sonda, stavka 195), a pisac mimo F4 veziva
 zatekne; podešavanje, konstanta i blaža grana pisca su obrisani u koraku 8.
 Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 6" i „Korak 8".
 
+**PRJ-ZBR-02 — prijemnica prima robu svoje zbirne (odluka operatera, 27.10.2026, S6
+korak 8, KI-047).** Vrsta i sorta prijemnice su vrsta i sorta zbirne na koju se vezuje;
+podela na I i II klasu sme da se razlikuje, jer je klasifikacija procena pri prijemu.
+Poredi se kao kod zbirne prema izvorima: bez razmaka na krajevima, bez razlike u veličini
+slova. Sorta sme da bude prazna (kultura bez sorte), i tada je prazna i na prijemnici;
+izdata zbirna bez vrste je kvar i odbija se. Vlasnik je jedna kapija,
+`modDokumenta.PrijemnicaRobaRazlog`, sa tri pozivaoca: F4 (poruka uz polje vrste ili
+sorte), pisac (`SavePrijemnicaDokument`, i za zadat roditelj lanca, greška pre ijednog
+upisa) i prevezivanje na drugu zbirnu (`ReassignPrijemnicaToZbirna_TX`, Oporavak).
+
 **HLD-LANAC-01 — hladnjački blok je jedan lanac, 1:1 po klasi na četiri nivoa
 (specifikacija operatera 20.09.2026; odluke 24.10.2026, S6 korak 7).** Blok upisan na
 stanici sa `JeHladnjaca = Da` sam pravi `OTK → OTP → ZBR → PRJ`: kilaža i gajbe po

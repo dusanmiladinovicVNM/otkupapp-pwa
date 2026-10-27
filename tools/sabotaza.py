@@ -10048,6 +10048,58 @@ SABOTAZE = {
         "T_Oporavak_CiljneListe",
         "ciljna lista prijemnica nosi PrijemnicaID dokumenta (S6 korak 8)",
     ),
+    # ---- S6 korak 8, dopuna: PRJ-ZBR-02 (KI-047) -- prijemnica prima robu zbirne ----
+    # Jedna kapija (PrijemnicaRobaRazlog), tri pozivaoca: pisac, prevezivanje, F4.
+    "s6k8-roba-ne-poredi-vrstu": (
+        "modDokumenta.bas",
+        "    ElseIf StrComp(Trim$(vrsta), zVrsta, vbTextCompare) <> 0 Then\n",
+        "    ElseIf False Then   ' SABOTAZA: vrsta se ne poredi\n",
+        "Test_S6K8_PrijemnicaRobaKaoZbirna",
+        "S6K8 roba: druga vrsta se odbija u piscu pre ijednog upisa (PRJ-ZBR-02)",
+    ),
+    "s6k8-roba-ne-poredi-sortu": (
+        "modDokumenta.bas",
+        "    ElseIf StrComp(Trim$(sorta), zSorta, vbTextCompare) <> 0 Then\n",
+        "    ElseIf False Then   ' SABOTAZA: sorta se ne poredi\n",
+        "Test_S6K8_PrijemnicaRobaKaoZbirna",
+        "S6K8 roba: druga sorta se odbija u piscu pre ijednog upisa (PRJ-ZBR-02)",
+    ),
+    # Sestra kroz F4: modTest staje na prvom padu, a vrstu i dalje odbija -- pa
+    # pada bas tvrdnja o sorti.
+    "s6k8-f4-roba-ne-poredi-sortu": (
+        "modDokumenta.bas",
+        "    ElseIf StrComp(Trim$(sorta), zSorta, vbTextCompare) <> 0 Then\n",
+        "    ElseIf 1 = 0 Then   ' SABOTAZA: sorta se ne poredi (sestra kroz F4)\n",
+        "T_S6K8_F4RobaKaoZbirna",
+        "F4: zbirna druge sorte zaustavlja upis uz polje sorte (PRJ-ZBR-02)",
+    ),
+    # Pisac bez kapije: F4 bi isti slucaj odbio, pa se meri direktno nad piscem.
+    "s6k8-pisac-bez-provere-robe": (
+        "modDokumenta.bas",
+        "    razlog = PrijemnicaRobaRazlog(roditeljID, vrstaVoca, sortaVoca)\n",
+        "    razlog = \"\"   ' SABOTAZA: pisac bez provere robe\n",
+        "Test_S6K8_PrijemnicaRobaKaoZbirna",
+        "S6K8 roba: zadat roditelj druge robe se odbija pre ijednog upisa (PRJ-ZBR-02)",
+    ),
+    "s6k8-prevezi-bez-provere-robe": (
+        "modDokumenta.bas",
+        "        If Len(robaRazlog) > 0 Then Err.Raise vbObjectError + 1440, SRC, robaRazlog\n",
+        "        ' SABOTAZA: prevezivanje bez provere robe\n",
+        "Test_S6K8_PrijemnicaRobaKaoZbirna",
+        "S6K8 roba: prevezivanje na zbirnu druge vrste se odbija bez izmene (PRJ-ZBR-02)",
+    ),
+    # F4 bez kapije: pisac i dalje odbija, pa test meri ono sto daje SAMO F4 --
+    # fokus na polju vrste (dvoslojna kapija: druga brana se meri na slucaju koji
+    # prva pusta).
+    "s6k8-f4-bez-provere-robe": (
+        "modDokUnos.bas",
+        "    If Len(robaRazlog) > 0 Then\n"
+        "        fokus = robaPolje: PrijemnicaValidiraj = robaRazlog: Exit Function\n",
+        "    If False Then   ' SABOTAZA: F4 bez provere robe\n"
+        "        fokus = robaPolje: PrijemnicaValidiraj = robaRazlog: Exit Function\n",
+        "T_S6K8_F4RobaKaoZbirna",
+        "F4: zbirna druge vrste zaustavlja upis uz polje vrste (PRJ-ZBR-02)",
+    ),
 }
 
 

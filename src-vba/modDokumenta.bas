@@ -623,6 +623,47 @@ Public Function PrijemnicaBrojRazlog(ByVal brojPrij As String, _
     Next i
 End Function
 
+' PRJ-ZBR-02 -- PRIJEMNICA PRIMA ROBU SVOJE ZBIRNE (KI-047, odluka operatera
+' 27.10.2026, S6 korak 8).
+'
+' Vrsta i sorta prijemnice su vrsta i sorta zbirne na koju se vezuje; podela na I
+' i II klasu sme da se razlikuje -- klasifikacija je procena pri prijemu. Jedna
+' implementacija, tri pozivaoca: F4 (poruka uz polje), pisac (greska pre ijednog
+' upisa) i prevezivanje na drugu zbirnu (ReassignPrijemnicaToZbirna_TX).
+'
+' Poredi se kao zbirna prema svojim izvorima (RequireIstoPolje): bez razmaka na
+' krajevima, bez razlike u velicini slova. Zbirna se cita po ID-u -- pozivalac ga
+' je vec razresio (PRJ-ZBR-01 ili zadat roditelj), broj se ovde ne gleda.
+'
+' Izdata zbirna BEZ VRSTE nije "nisam rekao" nego kvar: robu preuzima od prvog
+' izvora (ZBR-KANON-04), pa se takva zbirna odbija, ne propusta. Sorta sme da bude
+' prazna -- kultura bez sorte je legitimna -- i tada i prijemnica mora biti bez
+' sorte (prazno = prazno).
+'
+' Vraca "" kad je roba ista, inace tekst za operatera; outPolje je polje F4 za
+' fokus ("vrsta", "sorta" ili "brojZbirne").
+Public Function PrijemnicaRobaRazlog(ByVal zbirnaID As String, ByVal vrsta As String, _
+                                     ByVal sorta As String, _
+                                     Optional ByRef outPolje As String) As String
+    Dim zVrsta As String, zSorta As String
+    outPolje = ""
+
+    zVrsta = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, Trim$(zbirnaID), COL_ZBR_VRSTA)))
+    zSorta = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, Trim$(zbirnaID), COL_ZBR_SORTA)))
+
+    If Len(zVrsta) = 0 Then
+        outPolje = "brojZbirne"
+        PrijemnicaRobaRazlog = Poruka("DOKUNOS_ERR_PRJ_ZBIRNA_BEZ_ROBE")
+    ElseIf StrComp(Trim$(vrsta), zVrsta, vbTextCompare) <> 0 Then
+        outPolje = "vrsta"
+        PrijemnicaRobaRazlog = Poruka("DOKUNOS_ERR_PRJ_VRSTA_ZBIRNE") & " " & zVrsta
+    ElseIf StrComp(Trim$(sorta), zSorta, vbTextCompare) <> 0 Then
+        outPolje = "sorta"
+        PrijemnicaRobaRazlog = Poruka("DOKUNOS_ERR_PRJ_SORTA_ZBIRNE") & " " & _
+                               IIf(Len(zSorta) = 0, "(bez sorte)", zSorta)
+    End If
+End Function
+
 ' I1 -- KANONSKI READ-MODEL AKTIVNIH BROJEVA ZBIRNE (ugovor par.8).
 '
 ' Skup = normalizovani brojevi AKTIVNIH zbirnih UNIJA normalizovani BrojZbirne
@@ -7026,6 +7067,11 @@ Private Function SavePrijemnicaDokument(ByVal tx As clsTransaction, _
         End If
     End If
 
+    ' Roba zbirne (PRJ-ZBR-02, KI-047) -- nad razresenim roditeljem, i kad ga je
+    ' zadao lanac. Isto pravilo koje F4 pokazuje uz polje vrste ili sorte.
+    razlog = PrijemnicaRobaRazlog(roditeljID, vrstaVoca, sortaVoca)
+    If Len(razlog) > 0 Then Err.Raise vbObjectError + 1439, SRC, razlog
+
     ' Broj u kontekstu kupca (A2, KI-051) -- isto pravilo koje F4 pokazuje uz polje.
     razlog = PrijemnicaBrojRazlog(brojPrij, kupacID)
     If Len(razlog) > 0 Then Err.Raise vbObjectError + 1438, SRC, razlog
@@ -8791,6 +8837,29 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
         End If
     Next i
     If targetRows.count = 0 Then Exit Function                  ' nema aktivne prijemnice
+
+    ' PRJ-ZBR-02 (KI-047): cilj mora da nosi ISTU robu kao prijemnica koja se
+    ' prevezuje. Prevezivanje je druga ulazna tacka iste veze, pa prolazi kroz istu
+    ' kapiju kao pisac. Cilj se cita po ID-u: izabran (generacija) ili jedini
+    ' vlasnik broja, dokazan iznad. Odbijanje dize gresku -- EH je zapise i vrati
+    ' False, pre ijedne izmene.
+    Dim ciljID As String, robaRazlog As String, cVr As Long, cSo As Long
+    If tgtIds.count > 0 Then
+        ciljID = CStr(tId)
+    Else
+        ciljID = ZbirnaIDZaBroj(targetBrZbirne)
+        If Len(ciljID) = 0 Then
+            ciljID = Trim$(NzToText(LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, _
+                                                   targetBrZbirne, COL_ZBR_ID)))
+        End If
+    End If
+    cVr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, SRC)
+    cSo = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA, SRC)
+    For i = 1 To targetRows.count
+        robaRazlog = PrijemnicaRobaRazlog(ciljID, NzToText(data(targetRows(i), cVr)), _
+                                          NzToText(data(targetRows(i), cSo)))
+        If Len(robaRazlog) > 0 Then Err.Raise vbObjectError + 1440, SRC, robaRazlog
+    Next i
 
     ' ZBR-CHILD-01: generacija CILJA, jednom za sve redove.
     '

@@ -377,6 +377,7 @@ Public Sub RunAllTests()
     ' a 35 je ostavlja (PRJ-TEST-I1) -- zato ide pre njega. Config vraca i zbirne
     ' sklanja sam.
     RunOne 275
+    RunOne 276
     RunOne 13
     RunOne 14
     RunOne 15
@@ -947,6 +948,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 273: TestName = "T_S6K7_LanacBezPrekidaca"
         Case 274: TestName = "T_S6K7_OporavakNedovrsenLanac"
         Case 275: TestName = "T_S6K8_BrojHladnjacePosleStorna"
+        Case 276: TestName = "T_S6K8_F4RobaKaoZbirna"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1230,6 +1232,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 273: T_S6K7_LanacBezPrekidaca
         Case 274: T_S6K7_OporavakNedovrsenLanac
         Case 275: T_S6K8_BrojHladnjacePosleStorna
+        Case 276: T_S6K8_F4RobaKaoZbirna
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -10308,10 +10311,15 @@ End Function
 ' Sveza, a ne fixture zbirna: na ZB-TEST-1 drugi testovi upisuju prijemnice, a
 ' druga prijemnica iste zbirne otvara pitanje "dupla prijemnica" (MsgBox u
 ' validatoru, odluka 3) -- headless run bi tada visio.
+' vrsta/sorta: roba IZDATE zbirne. Nacrt je krece bez robe (robu donosi prvi
+' izvor, review #372), pa je seed upisuje uz status IZDATO -- izdata zbirna je
+' pisac nikad ne ostavlja bez vrste (PRJ-ZBR-02, S6 korak 8).
 Private Function S6K6Zbirna(ByVal oznaka As String, ByVal izdata As Boolean, _
                             ByRef outBroj As String, _
                             Optional ByVal vozacID As String = FX_VOZAC, _
-                            Optional ByVal kupacID As String = FX_KUPAC) As String
+                            Optional ByVal kupacID As String = FX_KUPAC, _
+                            Optional ByVal vrsta As String = FX_VRSTA, _
+                            Optional ByVal sorta As String = FX_SORTA) As String
     Dim h As Object, st As Object, ocek As Collection, g As String, zid As String
 
     outBroj = "ZB-S6K6-" & oznaka & "-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
@@ -10333,7 +10341,11 @@ Private Function S6K6Zbirna(ByVal oznaka As String, ByVal izdata As Boolean, _
     If Len(zid) = 0 Then
         Err.Raise ERR_ASSERT, "modTest.S6K6Zbirna", "preduslov: nacrt zbirne nije napravljen: " & g
     End If
-    If izdata Then PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zid, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO
+    If izdata Then
+        PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zid, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO
+        PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zid, COL_ZBR_VRSTA, vrsta
+        PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zid, COL_ZBR_SORTA, sorta
+    End If
     S6K6Zbirna = zid
 End Function
 
@@ -11403,6 +11415,90 @@ CleanUp:
              "F4 hladnjaca: broj stornirane prijemnice se odbija na polju broja (A2 t. 4, KI-051)"
     AssertEq rEks, "|", _
              "kontrola: isti storniran broj eksternog kupca prolazi (ispravka zadrzava kupcev broj)"
+End Sub
+
+' 276. F4: PRIJEMNICA PRIMA ROBU SVOJE ZBIRNE (PRJ-ZBR-02, KI-047; S6 korak 8, R11).
+'
+' Odluka operatera (27.10.2026): vrsta i sorta prijemnice su vrsta i sorta zbirne,
+' a podela na I i II klasu sme da se razlikuje (procena pri prijemu). Ceo potez kroz
+' CommitDokument (CommitDokumentTest), kao 265. Prijemnica nosi robu fixture-a
+' (S6K6Spec); zbirne se razlikuju samo u robi: jedna druge vrste, jedna druge
+' sorte, jedna iste robe sa drugom podelom na klase (kontrola). Kupac nije
+' hladnjaca, pa potez ne salje papir na stampac.
+'
+' Tvrdi se ono sto daje SAMO F4: fokus na polju vrste ili sorte. Pisac isti slucaj
+' odbija i sam (BFP Test_S6K8_PrijemnicaRobaKaoZbirna), pa bi tvrdnja samo o broju
+' zaglavlja ostala zelena i bez F4 kapije. Nalazi se skupljaju pa tvrde posle
+' Unload-a.
+' SABOTAZE: s6k8-f4-bez-provere-robe, s6k8-f4-roba-ne-poredi-vrstu ->
+' "F4: zbirna druge vrste zaustavlja upis uz polje vrste (PRJ-ZBR-02)".
+Private Sub T_S6K8_F4RobaKaoZbirna()
+    Dim f As frmOtkupUI
+    Dim br As String, brV As String, brS As String, brOk As String
+    Dim zV As String, zS As String, zOk As String, prjOk As String
+    Dim nPre As Long, nV As Long, nS As Long, nOk As Long
+    Dim fV As String, fS As String, pV As String, pS As String
+    Dim errNum As Long, errDesc As String
+
+    AssertEq S6K6IspravkeNaCekanju(), 0, "preduslov: nema ispravke prijemnice na cekanju"
+    br = "PR-S6K8-RB-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+
+    On Error GoTo CleanUp
+    ZasejOpticajVozacu
+    zV = S6K6Zbirna("RBV", True, brV, , , FX_VRSTA & "-DRUGA", FX_SORTA)
+    zS = S6K6Zbirna("RBS", True, brS, , , FX_VRSTA, FX_SORTA & "-DRUGA")
+    zOk = S6K6Zbirna("RBK", True, brOk)
+
+    Set f = NewOtkupUIForm()
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F4"
+
+    nPre = BrojRedovaTabele(TBL_PRIJEMNICA)
+    modOtkupUI.ApplyPrefill S6K6Spec(br & "-V", brV, "300", "30", "50", "120", "12", "40", "5")
+    modOtkupUI.CommitDokumentTest False
+    nV = BrojRedovaTabele(TBL_PRIJEMNICA)
+    fV = modOtkupUI.FokusTest()
+    pV = ToastTekst(f) & "|" & modOtkupUI.DijalogTest()
+
+    modOtkupUI.ApplyPrefill S6K6Spec(br & "-S", brS, "300", "30", "50", "120", "12", "40", "5")
+    modOtkupUI.CommitDokumentTest False
+    nS = BrojRedovaTabele(TBL_PRIJEMNICA)
+    fS = modOtkupUI.FokusTest()
+    pS = ToastTekst(f) & "|" & modOtkupUI.DijalogTest()
+
+    ' Kontrola: ista roba, a podela na klase nije ona sa zbirne (zbirna: I = 500).
+    modOtkupUI.ApplyPrefill S6K6Spec(br & "-K", brOk, "300", "30", "50", "120", "12", "40", "5")
+    modOtkupUI.CommitDokumentTest False
+    nOk = BrojRedovaTabele(TBL_PRIJEMNICA)
+    prjOk = NzToText(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, br & "-K", COL_PRJ_ID))
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    ' Bez kapije (crveno) bi i odbijeni slucajevi napravili dokument -- ne sme da
+    ' ostane aktivan nad zbirnom koju sklanjamo, inace postaje tudja sirotica.
+    Dim prjV As String, prjS As String
+    prjV = NzToText(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, br & "-V", COL_PRJ_ID))
+    prjS = NzToText(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, br & "-S", COL_PRJ_ID))
+    If Len(prjV) > 0 Then modStorno.StornoPrijemnica_TX prjV, True
+    If Len(prjS) > 0 Then modStorno.StornoPrijemnica_TX prjS, True
+    If Len(prjOk) > 0 Then modStorno.StornoPrijemnica_TX prjOk, True
+    S6K6Skloni zV
+    S6K6Skloni zS
+    S6K6Skloni zOk
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S6K8_F4RobaKaoZbirna", errDesc
+
+    AssertEq CStr(nV - nPre) & "|" & fV & "|" & CStr(InStr(1, pV, Poruka("DOKUNOS_ERR_PRJ_VRSTA_ZBIRNE"), vbBinaryCompare) > 0), _
+             "0|cbVrsta|True", _
+             "F4: zbirna druge vrste zaustavlja upis uz polje vrste (PRJ-ZBR-02)"
+    AssertEq CStr(nS - nV) & "|" & fS & "|" & CStr(InStr(1, pS, Poruka("DOKUNOS_ERR_PRJ_SORTA_ZBIRNE"), vbBinaryCompare) > 0), _
+             "0|cbSorta|True", _
+             "F4: zbirna druge sorte zaustavlja upis uz polje sorte (PRJ-ZBR-02)"
+    AssertEq CStr(nOk - nS) & "|" & CStr(Len(prjOk) > 0), "1|True", _
+             "F4 kontrola: ista roba uz drugu podelu na klase pravi jedno zaglavlje"
 End Sub
 
 ' --- pomocnici S6 koraka 7 -- nad praznim ID-jem vracaju prazno ---

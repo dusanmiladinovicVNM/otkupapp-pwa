@@ -9454,6 +9454,43 @@ kupca hladnjače nastaje ovde, ali oznaka zbirne ostaje svoj rez); `KI-052`, `KI
 - **Zeleno:** Golden 11 / 0; ručni dokaz grize u sva tri smera (A3, F2, `poslato`), a izvor je vraćen
   bajt-identičan.
 
+**Korak 8, dopuna — KI-047 (odluka 5, 27.10.2026; pre-flight pre koda):**
+
+Nezavisni pregled `#443` (27.10.2026) je KI-047 izdvojio kao stvarnu prazninu: prijemnica i roditeljska zbirna
+mogu nositi različitu robu. Odluka operatera: **vrsta i sorta prijemnice moraju biti iste kao vrsta i sorta
+zbirne; podela na I i II klasu sme da se razlikuje** (klasifikacija je procena pri prijemu). Kapija ide u `#443`,
+pre FULL-a.
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** (odluka) | prijemnica je prijem robe JEDNE zbirne; roba je činjenica zbirne (`ZBR-KANON-04`: zbirna preuzima vrstu i sortu od izvora, `RequireIstoPolje`); klasa je procena kupca |
+| `EVENTS` | **N/A** | kapija ne menja datum ni status nijednog dokumenta |
+| `IDENTITY` | **PROVEN** | zbirna se poredi po razrešenom ID-u (`PrijemnicaRoditeljRazlog` → `outZbirnaID`, zadat `zbirnaRoditeljID`, cilj prevezivanja), ne po broju |
+| `INVARIANTS/OWNER` | **PROVEN** | nova invarijanta `PRJ-ZBR-02`; vlasnik je jedna funkcija `modDokumenta.PrijemnicaRobaRazlog` |
+| `WRITERS` | **PROVEN** | vezu prijemnica → zbirna pišu `SavePrijemnicaDokument` (F4, lanac hladnjače) i `ReassignPrijemnicaToZbirna_TX` (Oporavak „Prevezi prijemnicu"); oba dobijaju kapiju. Ispravka zbirne ne postoji (S4-3a) |
+| `DOWNSTREAM` | **PROVEN** | manjak zbirne i fakturisanje po vrsti mere istu robu; lanac hladnjače nosi vrstu otkupa na sve četiri karike (isti izvor), pa kapija ne menja njegov ishod |
+| `CAPABILITY` | **N/A** | nijedna sposobnost se ne gubi; F4 dobija poruku uz polje vrste ili sorte |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | R11 ispod |
+| `PLATFORM` | **N/A** | — |
+| `LANDING` | **PROVEN** | ista grana; `modTest` dobija test 276 (`#441` drži 272–280 → 275–283, prenumeriše ko uđe drugi) |
+
+**R11 (PRJ-ZBR-02):**
+
+- **važi:** pisac odbija prijemnicu čija vrsta ili sorta nije ista kao na zbirnoj, pre ijednog upisa (zaglavlje,
+  stavke, knjiga). To važi i za zadat roditelj (lanac), a prevezivanje odbija cilj druge robe bez ijedne izmene.
+  F4 to pokazuje uz polje vrste ili sorte. Poređenje je kao kod zbirne prema izvorima: bez razmaka na krajevima,
+  bez razlike u veličini slova.
+- **kontrola:** ista vrsta i sorta, a druga podela na klase (zbirna I = 100, prijemnica I = 60, II = 40) prolazi.
+- **negativno:** izdata zbirna bez VRSTE je kvar, ne „nisam rekao" — odbija se. Sorta sme da bude prazna
+  (kultura bez sorte je legitimna, BFP `Test Dunja`), i tada i prijemnica mora biti bez sorte. Ovo je ispravljeno
+  dok se pisao test, pre ijednog prolaza: prva verzija kapije je odbijala i zbirnu bez sorte.
+- **čime:** BFP `Test_S6K8_PrijemnicaRobaKaoZbirna` (pisac, zadat roditelj, prevezivanje) i `modTest` 276 kroz F4
+  potez (`CommitDokumentTest`). Sabotaže: vrsta se ne poredi, sorta se ne poredi, pisac bez kapije, prevezivanje
+  bez kapije, F4 bez kapije.
+- **sejač:** `modTest.S6K6Zbirna` izdatoj zbirni upisuje robu fixture-a — nacrt je prazan, a izdata zbirna robu
+  uvek nosi. Bez toga bi kapija odbila svaki F4 test nad tim sejačem (memorija: fail-closed kapija obara sirove
+  sejače).
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

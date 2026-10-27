@@ -441,6 +441,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6K8_PisacPrjZbr01
     Test_S6K8_BrojPrijemnicePoKupcu
     Test_S6K8_PrijemnicaStareKoloneSelfHeal
+    Test_S6K8_PrijemnicaRobaKaoZbirna
     Test_OTK_IspravkaBlokaUNacrtu
     Test_OTK_RutaPosleUpisa
     Test_OTP_ClanstvoBulkStrogo
@@ -16418,6 +16419,98 @@ EH:
     LogFatal "Test_S6K8_PrijemnicaStareKoloneSelfHeal", errNum, errDesc
 End Sub
 
+' R11 (PRJ-ZBR-02, KI-047): PISAC I PREVEZIVANJE PRIMAJU SAMO ROBU ZBIRNE.
+'
+' Odluka operatera (27.10.2026): vrsta i sorta prijemnice su vrsta i sorta zbirne,
+' a podela na I i II klasu sme da se razlikuje. Mere se pisac mimo F4 (kao R1),
+' zadat roditelj (put hladnjackog lanca) i prevezivanje na drugu zbirnu (Oporavak
+' "Prevezi prijemnicu"). Odbijanje pisca je pre ijednog upisa (zaglavlje, stavke,
+' knjiga), a razlog je ISTI tekst koji F4 daje uz polje. Zbirna druge vrste je
+' kultura bez sorte (Test Dunja) -- legitimna roba, ne kvar.
+' SABOTAZE: s6k8-roba-ne-poredi-vrstu, s6k8-roba-ne-poredi-sortu,
+' s6k8-pisac-bez-provere-robe, s6k8-prevezi-bez-provere-robe.
+Private Sub Test_S6K8_PrijemnicaRobaKaoZbirna()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("S6K8R")
+    testDate = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    ZbrPodPrijemnicuSnimi tx
+
+    Dim brA As String, brB As String, brC As String
+    Dim zA As String, zB As String, zC As String
+    brA = TEST_PREFIX & "-ZK8RA-" & scenario
+    brB = TEST_PREFIX & "-ZK8RB-" & scenario
+    brC = TEST_PREFIX & "-ZK8RC-" & scenario
+    zA = ZbrIzdataPodPrijemnicu(testDate, brA, TEST_KUP_ID)
+    zB = ZbrIzdataPodPrijemnicu(testDate, brB, TEST_KUP_ID)
+    zC = ZbrIzdataPodPrijemnicu(testDate, brC, TEST_KUP_ID, kulturaID:=TEST_KUL_BEZ_SORTE_ID)
+    AssertTrue Len(zA) > 0 And Len(zB) > 0 And Len(zC) > 0 And _
+               HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zC, COL_ZBR_VRSTA) = TEST_VRSTA_BEZ_SORTE, _
+               "S6K8 roba: preduslov -- dve izdate zbirne iste robe i jedna druge vrste"
+
+    Dim r As String, g As String, pre As String
+
+    pre = S6K8Redova()
+    r = S6K8PisacRoba(testDate, "V-" & scenario, brA, "", "Test Kruska", TEST_SORTA, g)
+    AssertEquals "|" & Poruka("DOKUNOS_ERR_PRJ_VRSTA_ZBIRNE") & " " & TEST_VRSTA & "|" & pre, _
+                 r & "|" & g & "|" & S6K8Redova(), _
+                 "S6K8 roba: druga vrsta se odbija u piscu pre ijednog upisa (PRJ-ZBR-02)"
+
+    pre = S6K8Redova()
+    r = S6K8PisacRoba(testDate, "S-" & scenario, brA, "", TEST_VRSTA, "Druga Sorta", g)
+    AssertEquals "|" & Poruka("DOKUNOS_ERR_PRJ_SORTA_ZBIRNE") & " " & TEST_SORTA & "|" & pre, _
+                 r & "|" & g & "|" & S6K8Redova(), _
+                 "S6K8 roba: druga sorta se odbija u piscu pre ijednog upisa (PRJ-ZBR-02)"
+
+    ' Zadat roditelj (put hladnjackog lanca): zbirna je izdata i istog vlasnika,
+    ' samo roba nije ista.
+    pre = S6K8Redova()
+    r = S6K8PisacRoba(testDate, "R-" & scenario, brA, zA, "Test Kruska", TEST_SORTA, g)
+    AssertEquals "|" & Poruka("DOKUNOS_ERR_PRJ_VRSTA_ZBIRNE") & " " & TEST_VRSTA & "|" & pre, _
+                 r & "|" & g & "|" & S6K8Redova(), _
+                 "S6K8 roba: zadat roditelj druge robe se odbija pre ijednog upisa (PRJ-ZBR-02)"
+
+    ' Kontrola: ista roba, a podela na klase nije ona sa zbirne (zbirna: I = 100).
+    Dim brOk As String
+    brOk = TEST_PREFIX & "-PK8R-OK-" & scenario
+    r = S6K8PisacRoba(testDate, "OK-" & scenario, brA, "", TEST_VRSTA, TEST_SORTA, g, 60#, 40#)
+    AssertEquals "True|" & zA & "|", _
+                 CStr(Len(r) > 0) & "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_DETE_ZBIRNA_ROD) & "|" & g, _
+                 "S6K8 roba: kontrola -- ista roba uz drugu podelu na klase prolazi"
+
+    ' Prevezivanje (Oporavak "Prevezi prijemnicu"): cilj druge vrste se odbija bez
+    ' ijedne izmene, cilj iste robe prolazi.
+    Dim ok As Boolean
+    ok = ReassignPrijemnicaToZbirna_TX(brOk, brC, r)
+    AssertEquals "False|" & brA & "|" & zA, _
+                 CStr(ok) & "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_PRJ_BROJ_ZBIRNE) & _
+                 "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_DETE_ZBIRNA_ROD), _
+                 "S6K8 roba: prevezivanje na zbirnu druge vrste se odbija bez izmene (PRJ-ZBR-02)"
+
+    ok = ReassignPrijemnicaToZbirna_TX(brOk, brB, r)
+    AssertEquals "True|" & brB & "|" & zB, _
+                 CStr(ok) & "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_PRJ_BROJ_ZBIRNE) & _
+                 "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_DETE_ZBIRNA_ROD), _
+                 "S6K8 roba: kontrola -- prevezivanje na zbirnu iste robe prolazi"
+
+    tx.RollbackTx
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_S6K8_PrijemnicaRobaKaoZbirna", eN, eD
+End Sub
+
 ' Osam kolona starog zaglavlja prijemnice, po imenu (literali: konstante ne postoje).
 Private Function PrjStareKolone() As Variant
     PrjStareKolone = Array("Kolicina", "Cena", "KolAmbalaze", "Klasa", "Fakturisano", _
@@ -16445,6 +16538,23 @@ Private Function S6K8Pisac(ByVal datum As Date, ByVal kupacID As String, ByVal o
         brojPrij:=TEST_PREFIX & "-PK8-" & oznaka, brojZbirne:=brZbr, vrstaVoca:=TEST_VRSTA, _
         sortaVoca:=TEST_SORTA, kolicinaI:=100#, cenaI:=50#, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
         kolAmbVracena:=0, outErrNum:=errN, outGreska:=outG, zbirnaRoditeljID:=roditelj)
+End Function
+
+' Prijemnica R11 testa kroz pisac, sa zadatom robom. Kupac TEST_KUP_ID, broj
+' TEST_PREFIX & "-PK8R-" & oznaka. kolII > 0 dodaje klasu II (bez gajbi).
+Private Function S6K8PisacRoba(ByVal datum As Date, ByVal oznaka As String, _
+                               ByVal brZbr As String, ByVal roditelj As String, _
+                               ByVal vrsta As String, ByVal sorta As String, _
+                               ByRef outG As String, _
+                               Optional ByVal kolI As Double = 100#, _
+                               Optional ByVal kolII As Double = 0#) As String
+    Dim errN As Long
+    outG = ""
+    S6K8PisacRoba = SavePrijemnicaMulti_TX(datum:=datum, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+        brojPrij:=TEST_PREFIX & "-PK8R-" & oznaka, brojZbirne:=brZbr, vrstaVoca:=vrsta, _
+        sortaVoca:=sorta, kolicinaI:=kolI, cenaI:=50#, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
+        kolAmbVracena:=0, hasKlasaII:=(kolII > 0), kolicinaII:=kolII, cenaII:=30#, _
+        outErrNum:=errN, outGreska:=outG, zbirnaRoditeljID:=roditelj)
 End Function
 
 ' Broj redova zaglavlja, stavki i knjige -- "pre ijednog upisa" kao jedan otisak.
@@ -16874,14 +16984,15 @@ End Sub
 Private Function ZbrIzdataPodPrijemnicu(ByVal datum As Date, ByVal brojZbirne As String, _
                                         ByVal kupacID As String, _
                                         Optional ByVal vozacID As String = TEST_VOZ_ID, _
-                                        Optional ByVal kol As Double = 100#) As String
+                                        Optional ByVal kol As Double = 100#, _
+                                        Optional ByVal kulturaID As String = "") As String
     Const SRC As String = "ZbrIzdataPodPrijemnicu"
     Dim otp As String, h As Object, ocek As Collection, razlog As String
 
     ' Broj izvora nosi i vozaca: dve zbirne istog broja dva vozaca (dvosmislen
     ' broj) ne smeju da dele broj otpremnice ni otkupa.
     otp = Pr3OtpremnicaVozac(TEST_PREFIX & "-OTP-PZ-" & Replace(brojZbirne, "/", "-") & _
-                             "-" & vozacID, KLASA_I, kol, 0, vozacID)
+                             "-" & vozacID, KLASA_I, kol, 0, vozacID, kulturaID)
     If Len(otp) = 0 Then
         Err.Raise vbObjectError + 9312, SRC, _
                   "Izdata otpremnica za zbirnu " & brojZbirne & " nije napravljena."

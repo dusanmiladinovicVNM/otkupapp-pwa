@@ -848,6 +848,16 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         fokus = "sorta": PrijemnicaValidiraj = Poruka("OTKUNOS_ERR_SORTA"): Exit Function
     End If
 
+    ' PRJ-ZBR-02 (KI-047, odluka 27.10.2026): vrsta i sorta su roba izabrane
+    ' zbirne; podela na klase sme da se razlikuje. ISTA kapija koju pisac drzi
+    ' (modDokumenta.PrijemnicaRobaRazlog), nad zbirnom koju je PRJ-ZBR-01 upravo
+    ' razresio -- ovde kao poruka uz polje koje se ne slaze.
+    Dim robaRazlog As String, robaPolje As String
+    robaRazlog = modDokumenta.PrijemnicaRobaRazlog(rodID, S(p, "vrsta"), S(p, "sorta"), robaPolje)
+    If Len(robaRazlog) > 0 Then
+        fokus = robaPolje: PrijemnicaValidiraj = robaRazlog: Exit Function
+    End If
+
     kolI = D(p, "kolicinaI")
     cenI = D(p, "cenaI")
     kolII = D(p, "kolicinaII")
