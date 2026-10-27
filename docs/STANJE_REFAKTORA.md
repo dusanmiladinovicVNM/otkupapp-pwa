@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 27.10.2026 (stavka 215: rez `KI-025` + `KI-026` — kod i ciljane suite zelene, čeka reviewer GO).
+**Ažurirano:** 27.10.2026 (stavka 216: `#445` — reviewer GO, FULL 12/12, dokaz 16/16; čeka Compile i ručnu proveru).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -35,7 +35,7 @@
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
-| **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ⏳ **u toku** — grana `claude/amb-nabavka-otpis` sa `86fca63f` |
+| **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ⏳ **`#445`** — reviewer GO, FULL 12/12, dokaz 16/16 (stavka 216); čeka Compile i ručnu proveru |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7948,6 +7948,36 @@
      - **Novo van reza:** `KI-059` — prazna kolona „Mesto" u izveštaju `AMBALAZA` za nabavku i otpis.
      - **Mapa sposobnosti:** D-074 (nabavka), D-075 (otpis), D-076 (ponovna štampa zapisnika).
      - **Sledeći brojevi:** stavka 216 · test 279 (pazi `#441`) · KI-060.
+216. **Rez `KI-025` + `KI-026` — reviewer GO, FULL 12/12, dokaz 16/16; čeka Compile i ručnu proveru** (27.10.2026).
+     PR `#445`, grana `claude/amb-nabavka-otpis`, izvor `d8ca0e7c318f` (head `6666731f`; posle njega samo docs).
+
+     - **Nezavisan pregled (27.10.2026): CODE GO.** Arhitektura, pisci i pravila otpisa su GO. Merge je HOLD do završnih
+       kapija. Statički CI na `6666731f` je PASS. Jedan nalaz je upisan kao **`KI-060`**: ponovna štampa iz liste
+       `AMBALAZA` ne prijavljuje neuspeh papira u režimu PRINT/PREVIEW. Isto važi za revers od `10c-2`, pa to nije
+       regresija ovog reza.
+     - **FULL nad `d8ca0e7c318f`: 12 / 12 ZELENO**, GREEN marker (ugovor `b9be2bd9481d`, sveska
+       `otkup_test.xlsm/15e8625b`):
+       - RunAllTests 278/0, BFP 2801/0, Banka 241/0, Storno 111/0;
+       - Faktura 39/39, Agrohemija 25/25, Palete 96;
+       - Golden, Izveštaji, SheetsJson, Storno centar i Licenca OK.
+       - `vba_gate --require-green`: dokazano.
+     - **Dokaz** (`dokaz.py --grupe 6`, filteri `ki025 ki026 odl34 amb-10c-lista clear-zbirna revers-smer
+       amb-rvp-potvrda-se-ne-prosledjuje odl24-f7-smer-van-opsega`): **16 / 16 crveno** u 6 prolaza.
+       - Izvor pre i posle je identičan (`6339442f4319dd5c`).
+       - 14 sabotaža je izmereno grupno, 2 pojedinačno: `odl34-otpis-bez-papira` je u grupi oborila tuđu tvrdnju
+         (`odl24-f7-smer-van-opsega` je u istoj grupi odbijao smer 8), a sama obara svoju.
+     - **Sveska za Compile i ručnu proveru:** `tests/fixtures/rucna_provera_ki025_026_kod.xlsm` (gitignored), iz
+       `run_vba --compile-only --keep`.
+       - Operater prvo uvozi `modVbaTools.bas`.
+       - Salda tipa 12/1 u svesci (`openpyxl` sonda): stanica `STA-TEST-1` 42, kooperant `KOOP-TEST-1` 18, kupac 50,
+         vozač `VOZ-TEST-1` **−10**.
+       - Suvi prolaz do snimanja nad istim podacima su testovi 277 i 278 iz FULL-a (`Scr_Save` do upisa i papira).
+         Nad samom kopijom sveske nije vožen.
+     - **Ostaje:** ručni `Debug → Compile` (pa `vba_gate --mark-compile`), ručna provera po checklisti u `#445`, merge
+       samo na izričit zahtev operatera.
+     - **Redosled prema `#441`:** pregled predlaže da `#445` ide u merge prvi. Posle toga `#441` radi rebase i
+       prenumeriše svojih 9 testova na 279–287, uz usklađivanje zajedničkih modula i kataloga sabotaža.
+     - **Sledeći brojevi:** stavka 217 · test 279 (pazi `#441`) · KI-061.
 
 ## Dug sa imenom (posle S5-5b)
 
