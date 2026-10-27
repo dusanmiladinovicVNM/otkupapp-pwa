@@ -117,19 +117,19 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`
 - `tblOtkupStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestBanka`, `modTestStorno`
 - `tblOtpremnica`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
-- `tblOtpremnicaIzvori`: `modBusinessFlowProTests`, `modTestStornoCentar`
-- `tblOtpremnicaStavke`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTest`, `modTestStorno`
+- `tblOtpremnicaIzvori`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestStornoCentar`
+- `tblOtpremnicaStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestStorno`
 - `tblPaletaStavka`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPartnerMap`: `modTestBanka`
 - `tblPrijemnica`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
-- `tblPrijemnicaStavke`: `modBusinessFlowProTests`, `modFakturaTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
+- `tblPrijemnicaStavke`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblSEFConfig`: `modTestStorno`
 - `tblSEFEventLog`: `modSEFTests`
 - `tblSEFSubmission`: `modSEFTests`
 - `tblStornoVeze`: `modBusinessFlowProTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblStornoZurnal`: `modBusinessFlowProTests`, `modTest`, `modTestStornoCentar`
 - `tblVozaci`: `modBusinessFlowProTests`, `modGoldenTests`
-- `tblZbirnaIzvori`: `modBusinessFlowProTests`, `modTestStornoCentar`
+- `tblZbirnaIzvori`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestStornoCentar`
 - `tblZbirnaStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `TST_RB_A`: `modTest`
 - `TST_RB_B`: `modTest`
@@ -153,7 +153,7 @@ imenuje.
 
 - `modBusinessFlowProTests`: 5
 - `modDokumentInvariant`: 1
-- `modDokumenta`: 4
+- `modDokumenta`: 3
 - `modFakturaTests`: 1
 - `modGoldenTests`: 1
 - `modMaticniUnos`: 8
@@ -167,7 +167,7 @@ imenuje.
 - `modTest`: 1
 - `modTestPalete`: 1
 
-Ukupno: 32 poziva u 15 modula.
+Ukupno: 31 poziva u 15 modula.
 
 ## Sta ovo NE pokriva
 

@@ -798,6 +798,12 @@ hladnjača-kupca, oblik `1/ddmmyy[-n]` sa **fiksnim** `x = 1` — ne izveden iz
 `KolAmbVracena` (H — u potpisu stoji jednom), `ZbirnaID` →, `Stornirano`,
 trace ×4, audit ×4.
 
+> **S6 korak 8 (27.10.2026):** kanon zaglavlja je ovaj spisak — 20 kolona.
+> Linijska polja, keš fakture (`Fakturisano`/`FakturaID`) i `GeneracijaID` su
+> obrisani; identitet dokumenta je `PrijemnicaID`. `ZbirnaID →` je
+> `ZbirnaRoditeljID`, a `BrojZbirne` ostaje labela do svog reza (veza za sva tri
+> deteta zbirne, van S6).
+
 **`tblPrijemnicaStavke`** — grain: **jedna klasa jednog prijema**
 `PrijemnicaStavkaID` (PK `PRS-`), `PrijemnicaID` →, `RedniBroj`, `Klasa`,
 `Kolicina`, `Cena`, `KolAmbalaze`, `BrutoKg`, audit ×4 — isti oblik kao

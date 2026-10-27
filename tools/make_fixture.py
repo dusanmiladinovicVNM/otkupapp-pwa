@@ -2351,10 +2351,10 @@ SEED["tblZbirnaStavke"] = [
 # redova istog BrojPrijemnice kao VISE dokumenata (PRJ-TEST-A/B: isti broj, dva
 # kupca; I1/I2, Z1/Z2, C1/C2, D1/D2) i scenariji se oslanjaju bas na to.
 #
-# Linijske kolone ZAGLAVLJA (Kolicina/Cena/Klasa/KolAmbalaze) se NE brisu --
-# odlaze u koraku 8, a do tada ih citaju jos faktura (korak 5) i storno lista,
-# impact i prefill (korak 4). Do tada fixture nosi iste brojeve na oba mesta, a
-# merodavna je stavka.
+# Linijske kolone ZAGLAVLJA (Kolicina/Cena/Klasa/KolAmbalaze) su u SEED-u samo
+# IZVOR ovog izvodjenja: od S6 koraka 8 ih kanon nema, pa se posle izvodjenja
+# skidaju sa redova zaglavlja (PRJ_SAMO_IZVOR, ispod), a DROP_COLS ih brise iz
+# donora.
 SEED["tblPrijemnicaStavke"] = [
     {
         "PrijemnicaStavkaID": "PRS-" + str(red["PrijemnicaID"]),
@@ -2382,8 +2382,8 @@ SEED["tblPrijemnicaStavke"] = [
 # fakture dobija liniju na svoju jedinu stavku (PRS-<PrijemnicaID>, gore), sa
 # brojkama te stavke. Red bez FakturaID-a (PRJ-FAK-2, kes "Da" bez veze) i red
 # koji pokazuje na fakturu koje nema (PRJ-SLED-F2 -> FAK-NEMA-GA) liniju NE
-# dobijaju: kes posle koraka 5 ne odlucuje nista (R4, KI-038). Kes kolone ostaju
-# do koraka 8 -- bas one su dokaz da ih niko ne cita.
+# dobijaju: kes posle koraka 5 ne odlucuje nista (R4, KI-038). Od koraka 8 kes
+# kolona nema ni u kanonu ni u fixture-u (PRJ_SAMO_IZVOR, ispod).
 _FAK_STORNO = {r["FakturaID"]: r.get("Stornirano", "") for r in SEED["tblFakture"]}
 SEED["tblFakturaStavke"] = SEED["tblFakturaStavke"] + [
     {
@@ -2399,6 +2399,20 @@ SEED["tblFakturaStavke"] = SEED["tblFakturaStavke"] + [
     }
     for red in SEED["tblPrijemnica"]
     if red.get("FakturaID") in _FAK_STORNO
+]
+
+# ZAGLAVLJE PRIJEMNICE POSLE IZVODJENJA (S6 korak 8, plan 14.55 "Korak 8").
+#
+# Kanon tblPrijemnica nema linijska polja, kes fakture ni generaciju. Kljucevi
+# iznad su posluzili kao IZVOR za dve izvedene tabele (stavke, linije fakture);
+# na zaglavlju bi sejanje po imenu palo (add_row: donor nema kolonu), a da ih
+# DROP_COLS ne brise, ostale bi u SREDINI zaglavlja i pomerile pozicioni upis.
+# Isto radi modSetup.ObrisiStareKolonePrijemnice na startu aplikacije.
+PRJ_SAMO_IZVOR = ("Kolicina", "Cena", "KolAmbalaze", "Klasa", "Fakturisano",
+                  "FakturaID", "BrutoKg", "GeneracijaID")
+SEED["tblPrijemnica"] = [
+    {k: v for k, v in red.items() if k not in PRJ_SAMO_IZVOR}
+    for red in SEED["tblPrijemnica"]
 ]
 
 # tblOtpremnicaIzvori SE IZVODI IZ STARE VEZE Otkup.OtpremnicaID (review #362).
@@ -2453,6 +2467,11 @@ DROP_COLS = {
     # Test_Amb_StareKoloneSelfHeal.
     "tblAmbalaza": ["Smer", "EntitetID", "EntitetTip", "VozacID", "Stornirano",
                     "ReversID"],
+    # S6 korak 8: linijska polja, kes fakture i generacija zaglavlja prijemnice
+    # (stari kanon 9, 10, 12, 14-16, 18 i 27). Isto radi
+    # modSetup.ObrisiStareKolonePrijemnice; put zatecene sveske meri
+    # Test_S6K8_PrijemnicaStareKoloneSelfHeal.
+    "tblPrijemnica": list(PRJ_SAMO_IZVOR),
 }
 
 RENAME_COLS = {

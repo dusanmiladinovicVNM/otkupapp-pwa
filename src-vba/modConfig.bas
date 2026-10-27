@@ -398,18 +398,16 @@ Public Const COL_PRJ_DATUM As String = "Datum"
 Public Const COL_PRJ_KUPAC As String = "KupacID"
 Public Const COL_PRJ_BROJ As String = "BrojPrijemnice"
 Public Const COL_PRJ_BROJ_ZBIRNE As String = "BrojZbirne"
-Public Const COL_PRJ_KOLICINA As String = "Kolicina"
-Public Const COL_PRJ_CENA As String = "Cena"
+' TipAmbalaze i KolAmbVracena OSTAJU: tip i povrat praznih su cinjenice
+' DOKUMENTA. Kolicina/Cena/KolAmbalaze/Klasa/BrutoKg su obrisane iz kanona --
+' zive na tblPrijemnicaStavke od S6 koraka 2 -- a s njima i kes fakture
+' (Fakturisano/FakturaID; fakturisanost je izvedena od koraka 5) i GeneracijaID
+' (identitet je PrijemnicaID). Sve u S6 koraku 8.
 Public Const COL_PRJ_TIP_AMB As String = "TipAmbalaze"
-Public Const COL_PRJ_KOL_AMB As String = "KolAmbalaze"
 Public Const COL_PRJ_KOL_AMB_VRACENA As String = "KolAmbVracena"
-Public Const COL_PRJ_BRUTO As String = "BrutoKg"                 ' bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS); prazno = neto
 Public Const COL_PRJ_VOZAC As String = "VozacID"
 Public Const COL_PRJ_VRSTA As String = "VrstaVoca"
 Public Const COL_PRJ_SORTA As String = "SortaVoca"
-Public Const COL_PRJ_KLASA As String = "Klasa"
-Public Const COL_PRJ_FAKTURISANO As String = "Fakturisano"
-Public Const COL_PRJ_FAKTURA_ID As String = "FakturaID"
 
 ' ============================================================
 ' Paletni list (Phase 2) -- kolone novih tabela
@@ -887,11 +885,6 @@ Public Const CFG_KEY_MALINA_MODE As String = "MALINA_MODE"
 ' Default kupac (Hladnjaca) za auto-zbirnu u malina modu. KupacID iz tblKupci.
 Public Const CFG_MALINA_DEFAULT_KUPAC As String = "MALINA_DEFAULT_KUPAC"
 
-' Prijemnica: kontrola da uneti broj zbirne vec postoji u tblZbirna.
-'   "BLOK" (default) -> tvrda greska, snimanje prijemnice se prekida.
-'   "UPOZORENJE"     -> upozorenje sa potvrdom (operater moze da nastavi).
-Public Const CFG_PRIJEMNICA_ZBIRNA_PROVERA As String = "PRIJEMNICA_ZBIRNA_PROVERA"
-
 ' --- Dorade: podesavanja (UI: Maticni podaci -> Podesavanja) ---
 ' Default proizvod koji se auto-postavi pri otvaranju frmOtkup/frmDokumenta.
 Public Const CFG_DEFAULT_VRSTA As String = "DEFAULT_VRSTA_VOCA"
@@ -1335,26 +1328,6 @@ Public Function ConfigFlag(ByVal key As String, ByVal defaultOn As Boolean) As B
             ConfigFlag = False
         Case Else
             ConfigFlag = defaultOn
-    End Select
-End Function
-
-' Prijemnica: da li NEPOSTOJECA zbirna (broj nije u tblZbirna) BLOKIRA snimanje.
-'   True  = blokiraj (tvrda greska)  [default, bezbedno]
-'   False = samo upozori (operater moze da potvrdi i nastavi)
-' Cita CFG_PRIJEMNICA_ZBIRNA_PROVERA: "UPOZORENJE" -> False; sve ostalo -> True.
-'
-' Od review-a #440 (krug 1) ovo cita SAMO pisac (ValidatePrijemnicaInput): F4
-' nepostojecu zbirnu odbija uvek (PRJ-ZBR-01), a polje je sklonjeno iz
-' Podesavanja. Jedini produkcioni pozivalac pisca je F4, pa blazu granu dosezu
-' samo testovi. Brise se u S6 koraku 8, kad pisac dobije kapiju.
-Public Function PrijemnicaZbirnaBlokira() As Boolean
-    Dim v As String
-    v = UCase$(Trim$(GetConfigValue(CFG_PRIJEMNICA_ZBIRNA_PROVERA)))
-    Select Case v
-        Case "UPOZORENJE", "UPOZORI", "WARN", "WARNING", "NE", "NO", "0", "OFF"
-            PrijemnicaZbirnaBlokira = False
-        Case Else         ' "", "BLOK", "BLOCK", "DA", nepoznato -> blokiraj
-            PrijemnicaZbirnaBlokira = True
     End Select
 End Function
 

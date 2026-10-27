@@ -442,11 +442,16 @@ Private Sub T10_ZbirnaRepointStavke()
     ' transakciji koja se ponistava, pa danas ne curi u druge suite-e -- ali
     ' seed koji pravi dokument u obliku koji pisac ne moze da napravi je mina
     ' za prvi sledeci citalac koji se ovde zatekne.
-    TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO), _
-              Array("TSTZBR-A", "TST-Z10A", "")
+    ' Zbirna nosi ROBU prijemnice (vrsta i sorta): prevezivanje od S6 koraka 8
+    ' prima samo cilj iste robe (PRJ-ZBR-02), a zbirna bez vrste je kvar koji
+    ' pisac ne pravi.
+    TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO, _
+                                COL_ZBR_VRSTA, COL_ZBR_SORTA), _
+              Array("TSTZBR-A", "TST-Z10A", "", TST_VRSTA, "TST-S10")
     TstZbirnaStavka "TSTZBR-A", 50
-    TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO), _
-              Array("TSTZBR-B", "TST-Z10B", "")
+    TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO, _
+                                COL_ZBR_VRSTA, COL_ZBR_SORTA), _
+              Array("TSTZBR-B", "TST-Z10B", "", TST_VRSTA, "TST-S10")
     TstZbirnaStavka "TSTZBR-B", 50
 
     MakePrij "TSTPRJ-19", "TST-P13", "TST-Z10A", "I", 50, 5, "TST-S10"
@@ -561,18 +566,18 @@ End Sub
 
 ' Seed pise ZAGLAVLJE I STAVKU (S6 korak 3, presedan S3b-1): linije dokumenta
 ' (klasa, kolicina, gajbe) motor paleta cita iz tblPrijemnicaStavke, kroz
-' kanonski citalac, koji zaglavlje bez stavke odbija po imenu. Linijska polja
-' zaglavlja ostaju popunjena do koraka 8 (iste brojke), jer ih jos cita storno.
+' kanonski citalac, koji zaglavlje bez stavke odbija po imenu. Zaglavlje od S6
+' koraka 8 linijskih polja nema.
 Private Function MakePrij(ByVal id As String, ByVal broj As String, ByVal zbirna As String, _
                           ByVal klasa As String, ByVal kolKg As Double, ByVal gajb As Long, _
                           ByVal sorta As String) As String
     TstAppend TBL_PRIJEMNICA, _
-        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_KLASA, COL_PRJ_KOLICINA, _
-              COL_PRJ_KOL_AMB, COL_PRJ_BROJ_ZBIRNE, COL_PRJ_VRSTA, COL_PRJ_SORTA, _
-              COL_PRJ_TIP_AMB, COL_PRJ_CENA, COL_STORNIRANO), _
-        Array(id, broj, Date, klasa, kolKg, _
-              gajb, zbirna, TST_VRSTA, sorta, _
-              TST_AMB, 0, "")
+        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, _
+              COL_PRJ_BROJ_ZBIRNE, COL_PRJ_VRSTA, COL_PRJ_SORTA, _
+              COL_PRJ_TIP_AMB, COL_STORNIRANO), _
+        Array(id, broj, Date, _
+              zbirna, TST_VRSTA, sorta, _
+              TST_AMB, "")
     TstAppend TBL_PRIJEMNICA_STAVKE, _
         Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
               COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _

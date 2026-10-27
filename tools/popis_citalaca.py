@@ -93,6 +93,21 @@ GRUPE = collections.OrderedDict([
     ("zbr_stari_pisac", re.compile(r"\bSaveZbirna(Multi)?(_TX)?\b")),
     ("pauza", re.compile(r"\b(NapredakBlokaDostupan|IzvedeniLanacIzPwaDostupan)\b")),
     ("split_plus", re.compile(r"Split\([^)]*\"\s\+\s\"")),
+    # S6 korak 8 (plan 14.55 "Korak 8"): zaglavlje prijemnice gubi linijska polja
+    # i kes fakture, a generacija prestaje da bude identitet dokumenta. Grupe su
+    # podeljene po cilju, isto kao otp_linija / otp_zaglavlje: prag ima smisla
+    # samo nad grupom koja SME na nulu. prj_brojzbirne NE sme na nulu u S6 --
+    # BrojZbirne ostaje labela, a prevod veze na ZbirnaRoditeljID je svoj rez
+    # (odluka 1 koraka 8), pa prag samo brani rast.
+    ("prj_linija", re.compile(r"\bCOL_PRJ_(KOLICINA|CENA|KLASA|KOL_AMB|BRUTO)\b")),
+    ("prj_kes", re.compile(r"\bCOL_PRJ_(FAKTURISANO|FAKTURA_ID)\b")),
+    ("prj_brojzbirne", re.compile(r"\bCOL_PRJ_BROJ_ZBIRNE\b")),
+    ("prj_stari_pisac", re.compile(r"\b(SavePrijemnica_TX|modDokumenta\.SavePrijemnica)\b")),
+    ("prj_generacija", re.compile(r"\b(IdoviGeneracije|GeneracijaPoID)\s*\(\s*TBL_PRIJEMNICA"
+                                  r"|\b(oldGeneracijaID|newGeneracijaID|prijemnicaGeneracijaID)\b")),
+    # Literal kljuca je u grupi namerno: konstanta je obrisana, a red u
+    # Podesavanjima bi kljuc vratio kao golu nisku.
+    ("prj_zbr_cfg", re.compile(r"\bPrijemnicaZbirnaBlokira\b|PRIJEMNICA_ZBIRNA_PROVERA")),
 ])
 # Prosirene grupe: ono sto konstante ne vide (kriticar pokrivenosti, 15.09).
 GRUPE_X = collections.OrderedDict([
@@ -201,6 +216,18 @@ PRAGOVI = collections.OrderedDict([
     # cuva da se lepljeni ID ne vrati. TEST mesto (modGoldenTests.GldDodaj) se
     # ne broji.
     ("split_plus", 0),
+    # S6 korak 8, deo 1 (stavka 208): stari pisac (SavePrijemnica_TX i jezgro sa
+    # transakcijom pozivaoca) i blaza grana PRIJEMNICA_ZBIRNA_PROVERA su
+    # obrisani; pisac drzi kapije koje je do tada drzao samo F4.
+    ("prj_stari_pisac", 0),
+    ("prj_zbr_cfg", 0),
+    # Deo 2 (stavka 209): kolone su obrisane iz kanona, a identitet u Oporavku i
+    # F4 ispravci je PrijemnicaID. Konstanti vise nema, pa bi vraceno mesto
+    # palo i na compile-u; prag cuva i povratak generacije kao identiteta.
+    ("prj_linija", 0),
+    ("prj_kes", 0),
+    ("prj_generacija", 0),
+    ("prj_brojzbirne", 33),
 ])
 
 # Linijska polja zaglavlja -- prag dual READ.

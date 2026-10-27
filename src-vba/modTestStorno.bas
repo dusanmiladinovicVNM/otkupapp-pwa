@@ -793,13 +793,13 @@ End Sub
 
 ' Seed pise ZAGLAVLJE I STAVKU (S6 korak 3, presedan S3b-1): citaoci linija
 ' prijemnice citaju tblPrijemnicaStavke kroz strog kanonski citalac.
-' Linijska polja zaglavlja ostaju (iste brojke) -- storno ih cita do koraka 4.
+' Zaglavlje od S6 koraka 8 linijskih polja nema.
 Private Sub SeedPrijemnica(ByVal broj As String, ByVal brojZbirne As String, _
                            ByVal klasa As String, ByVal kg As Double, ByVal amb As Long)
     SvAppend TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_DATUM, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_KOLICINA, COL_PRJ_TIP_AMB, COL_PRJ_KOL_AMB, COL_PRJ_KLASA), _
-        Array(broj & "-ID-" & klasa, Date, broj, brojZbirne, kg, "SVT-A", amb, klasa)
+              COL_PRJ_TIP_AMB), _
+        Array(broj & "-ID-" & klasa, Date, broj, brojZbirne, "SVT-A")
     SvAppend TBL_PRIJEMNICA_STAVKE, _
         Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
               COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _

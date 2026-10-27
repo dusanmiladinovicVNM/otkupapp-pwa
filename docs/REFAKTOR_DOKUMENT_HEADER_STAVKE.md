@@ -9264,7 +9264,247 @@ zatvaranje tri nalaza, bez novog refaktora. `KI-052` je prihvaćen kao P2 bez bl
   nedovršene lance stanice iz Oporavka, a ručna F3 ih tada prima.
 - **Reviewer GO nad `4216aded`:** FULL **12/12**, `dokaz.py --grupe` **34/34** (izvor identičan), `vba_gate
   --require-green` dokazano; nova sveska za compile (17/17 igala); compile čist, `--require-compile` dokazano.
-  Čeka: merge na zahtev operatera.
+  Merge na zahtev operatera 26.10.2026: `#442` → `main` `376a3d3e` (stavka 206).
+
+#### Korak 8 — završni: kapije pisca, šema zaglavlja, golden lanac (pre-flight nad `376a3d3e`, stavka 207)
+
+Izlazni uslov S6: zaglavlje prijemnice nosi samo činjenice dokumenta, stari pisac ne postoji, a kapije koje
+danas drži samo F4 stoje i u piscu. Linije su sa `376a3d3e` (izvor `e2fac85076a5`). Sonde nema: nijedna osa nije
+`PLATFORM UNKNOWN` (`ObrisiKolonuAko` je dokazan obrazac S1d i S3-ostatka).
+
+**Popis, izmeren** (kopija `tools/popis_citalaca.py` sa šest novih grupa, pa iste grupe ulaze u alat u ovom
+koraku):
+
+| Grupa | Šta | PROD | TEST | Živa PROD mesta |
+|---|---|---|---|---|
+| `prj_linija` | `COL_PRJ_(KOLICINA\|CENA\|KLASA\|KOL_AMB\|BRUTO)` | 4 | 22 | `modSetup.EnsureDoradeSchema` ×3 (format, `EnsureColumnOnTable`), `modStornoDok.ColKlasaZaPrefill` |
+| `prj_kes` | `COL_PRJ_(FAKTURISANO\|FAKTURA_ID)` | 0 | 8 | — (korak 5 je čitaoce skinuo) |
+| `prj_generacija` | generacija kao identitet prijemnice | 21 | 4 | 15 u 5 procedura: `GetPrijemniceSaOsirocenimPaletama`, `ReassignPrijemnicaToZbirna_TX`, `modDokUnos.PreveziPaleteIspravke`, `modPaletniList.ReassignPaleteToPrijemnica_TX`; `EvaluatePaletaReassign` samo test |
+| `prj_stari_pisac` | `SavePrijemnica_TX`, `modDokumenta.SavePrijemnica` | 6 | 15 | nijedno (pet `SAMO_TEST` u telu omotača, jedno je ime izvora u `PoveziDeteNaZbirnu`) |
+| `prj_zbr_cfg` | `PrijemnicaZbirnaBlokira`, `CFG_PRIJEMNICA_ZBIRNA_PROVERA` | 1 | 10 | `ValidatePrijemnicaInput` (blaža grana pisca) |
+| `prj_brojzbirne` | `COL_PRJ_BROJ_ZBIRNE` | 34 | 32 | 33 u 13 modula (jedno `MRTAV`) |
+
+Generički čitaoci generacije koje regex ne vidi, jer tabelu dobijaju parametrom: `modScrOporavak.RowsAktivni`
+(lista cilja „Prevezi palete" — ključ grupisanja i identitet u koloni 7), `modStornoDok.PrefillIzStorniranog`
+(`PickPrefillRows` sa `cGen`), `modSetup.EnsureSledljivostSchema` (dodaje `GeneracijaID` svim dokument-tabelama,
+pa bi obrisanu kolonu vratio na kraj). `modStornoImpact.HLI` prijemnicu ne doseže (uvid ide kroz `HLP` po ID-u).
+Pisac zaglavlja piše po imenu (`BuildPrijemnicaRowData`), uz `PoveziDeteNaZbirnu` i `ApplyNovaGeneracijaID`.
+
+**Verdikt po osama:**
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | linijska polja su činjenice stavke (`DOCUMENT_HEADER_LINES` §4.4), keš fakture je izveden (odluka 1 b, korak 5), `GeneracijaID` je identitet modela „red po klasi" koji ne postoji od koraka 2 |
+| `EVENTS` | **N/A** za šemu · **PROVEN** za kapije | brisanje ne menja nijedan datum ni status; kapije čuvaju poslovni događaj nastanka dokumenta (PRJ-ZBR-01, A2 t. 4) |
+| `IDENTITY` | **GAP → odluka 1** | (1) generacija je i dalje identitet u Oporavku (kolone 7/8 mreže → `ReassignPaleteToPrijemnica_TX` / `ReassignPrijemnicaToZbirna_TX`) i u F4 ispravci (`PreveziPaleteIspravke`); od koraka 2 je 1 : 1 sa `PrijemnicaID` (`ApplyNovaGeneracijaID`), pa prelazi na ID bez promene ishoda. (2) `BrojZbirne` kao veza: 33 živa mesta — manjak (`CalculateManjakPreview`, `BuildManjakDict`), siročad (`GetVerwaistePrijemnice`, `GetOsirocenePrijemnice`), integritet B4–B6, izveštaji zbirni kupac/vozač, prosečna cena, palete, storno sken, F4 „1 zbirna = 1 prijemnica" (`LookupActiveID`), `modStornoDok:379`; manji deo je čista labela (pisac, štampa, kolona mreže, prefill) |
+| `CARDINALITY` | **PROVEN** | 1 dokument : 1..2 stavke (korak 2); zbirna lanca : aktivna prijemnica = 1 : 1 (`HLD-LANAC-01`) |
+| `INVARIANTS/OWNER` | **PROVEN uz odluku 3** | PRJ-ZBR-01 i broj po kupcu danas drži SAMO F4 (`PrijemnicaValidiraj`); pisac (`ValidatePrijemnicaInput`) zbirnu proverava samo uz `PrijemnicaZbirnaBlokira()`, a broj ne proverava (`:8305`). Lanac ide mimo F4 (`zbirnaRoditeljID`). KI-051: A2 t. 4 kaže da storno ne oslobađa broj hladnjače, a F4 ga ne gleda |
+| `WRITERS` | **PROVEN** | PROD `modDokumenta` (`SavePrijemnicaDokument`, `ReassignPrijemnicaToZbirna_TX`) i `modStorno` (`MarkRowStornirano`) — nijedan ne piše nijednu od 8 kolona osim `ApplyNovaGeneracijaID`; test sejači u 7 modula (`WHO_WRITES.md`) |
+| `DOWNSTREAM` | **PROVEN** | tabela gore; PWA/GAS kolone zaglavlja ne čitaju (`kupci.js` čita izvoz, koji je od koraka 3 iz stavki); fixture: `DROP_COLS` + seed bez 8 kolona + nov potpis |
+| `CAPABILITY` | **PROVEN** | Oporavak „Prevezi prijemnicu/palete" i F4 ispravka paleta: MIGRATED (identitet po ID-u); blaža grana F4 (`UPOZORENJE`): INTENTIONALLY REMOVED (sklonjena iz Podešavanja u reviewu `#440`, dosežu je samo testovi) |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | ispod |
+| `PLATFORM` | **N/A** | self-heal brisanja je obrazac S1d/S3-ostatka; jedini nov uslov je da `EnsureSledljivostSchema` prijemnici više ne dodaje `GeneracijaID` |
+| `LANDING` | **PROVEN uz rizik** | grana `claude/s6-korak8-zavrsni` sa `376a3d3e`; `#441` (OPEN, nad `e21830c5`) ne dira ove kolone (izmereno: 0 dodatih redova sa njima), ali dira `modTest`, `modIzvestaj`, `modPrint`, `modScrDokumenti` — serijski; `modTest` brojevi od 275, koji PR uđe drugi prenumeriše |
+
+**Golden, izmereno:** `fc06fa77:tests/golden/` drži 11 snimaka; danas su registrovana 2 (D3, G2). Devet (A1–A5, B2,
+B3, F2, G1) nose ishod koji domen i danas tvrdi; D2 („storno fakturisane prijemnice", `osirocena DA`) je pisan na
+premisu koju je korak 4 zabranio (fakturisana prijemnica se ne stornira, `Test_S6K4_FakturisanaSeOdbija`). Golden
+koristi sopstvene identitete (`VOZ-GLD-1`, `STA-GLD-1`, `modGoldenTests:43-45`), pa `KI-028` (`VOZ-TEST-1` na −10)
+nije preduslov golden lanca, iako ga je odluka 5 koraka 7 stavila „pre golden lanca".
+
+**Odluke operatera (26.10.2026), sve po preporuci:**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | `BrojZbirne` kao veza | **van S6, svoj rez**: kolona ostaje labela; korak 8 dodaje grupu `prj_brojzbirne` sa pragom 33 da ne raste; prevod na `ZbirnaRoditeljID` ide posle S6, za sva tri deteta zbirne odjednom (`otk_brojzbirne` 6, `otp_brojzbirne` 13, `prj_brojzbirne` 33) |
+| 2 | golden lanac | **9 scenarija** (A1–A5, B2, B3, F2, G1) kroz nove pisce, golden fajlovi iz `fc06fa77` **bajt-identični** (menja se samo adapter); D2 se ne vraća (domen promenjen u koraku 4) |
+| 3 | KI-051 u piscu | **strogo čitanje configa**: kupac hladnjače = `MALINA_DEFAULT_KUPAC`, a tehnička greška čitanja obara upis (ne postaje „eksterni"); isti predikat i ista provera broja za F4 i pisac (jedna implementacija, dva pozivaoca, `testovi.md` §5) |
+| 4 | isporuka | **jedan PR, tri dela**: deo 1 kapije pisca + stari pisac napolje; deo 2 šema + generacija → `PrijemnicaID`; deo 3 golden lanac. Svaki deo ima svoje crveno → zeleno; FULL, `dokaz.py` i compile jednom, na reviewer GO |
+
+**Obim po delovima:**
+
+- **Deo 1 — kapije pisca:** deljena kapija zbirne (PRJ-ZBR-01: postoji, jednoznačna, istog vlasnika, istorija jednog
+  vlasnika, IZDATA) i deljena provera broja (A2: eksterni kupac — aktivni istog kupca; hladnjača-kupac — i
+  stornirani), obe u `modDokumenta`; F4 ih zove i vraća poruku uz polje (tekstovi i fokus nepromenjeni), pisac ih
+  zove pre ijednog upisa i diže grešku. Zadat roditelj (`zbirnaRoditeljID`, lanac) dobija i kapiju IZDATE. Briše se
+  `CFG_PRIJEMNICA_ZBIRNA_PROVERA`, `PrijemnicaZbirnaBlokira` i blaža grana `ValidatePrijemnicaInput`; brišu se
+  `SavePrijemnica_TX` i `SavePrijemnica` (tx), a njihovih 18 test poziva prelazi na `SavePrijemnicaMulti_TX`.
+- **Deo 2 — šema:** kanon `tblPrijemnica` gubi `Kolicina`, `Cena`, `KolAmbalaze`, `Klasa`, `Fakturisano`,
+  `FakturaID`, `BrutoKg`, `GeneracijaID` (28 → 20 kolona, ostale istim redom); `modSchema` regenerisan; konstante
+  `COL_PRJ_*` tih kolona obrisane; self-heal `ObrisiKolonuAko` za tih osam u `EnsureSledljivostSchema`, koja
+  prijemnici više ne dodaje `GeneracijaID`; pisac bez `ApplyNovaGeneracijaID`; identitet u Oporavku i F4 ispravci
+  po `PrijemnicaID`; `EnsureDoradeSchema` i prefill bez linijskih kolona; test sejači i golden adapter na stavke;
+  fixture (`DROP_COLS`, seed, potpis).
+- **Deo 3 — golden lanac:** devet scenarija i njihovi goldeni; `RunGoldenSuite` 2 → 11.
+- **Alat:** šest grupa u `tools/popis_citalaca.py` sa pragovima (`prj_linija`, `prj_kes`, `prj_generacija`,
+  `prj_stari_pisac`, `prj_zbr_cfg` = 0; `prj_brojzbirne` = 33).
+
+**ACCEPTANCE CONTRACT koraka 8 — plan dokaza, ne dokaz:**
+
+- **važi:**
+  - **R1 (PRJ-ZBR-01 u piscu):** `SavePrijemnicaMulti_TX` bez zadatog roditelja nad (a) brojem bez zbirne, (b) NACRT
+    zbirnom, (c) dvosmislenim brojem, (d) zbirnom drugog vlasnika vraća `""`, a `outGreska` imenuje razlog; redova
+    zaglavlja, stavki i nogu knjige posle poziva je isto koliko pre. Kontrola: izdata, jednoznačna zbirna istog
+    vlasnika prolazi i `ZbirnaRoditeljID` = ta zbirna. (e) zadat roditelj u NACRTU se odbija. Test ide **direktno
+    nad piscem**, jer bi F4 isti slučaj odbio pre pisca — a pisac ima pozivaoce mimo F4 (lanac, testovi). *Čime:* BFP
+    `Test_S6K8_PisacPrjZbr01`; sabotaže `s6k8-pisac-pusta-bez-zbirne`, `s6k8-pisac-pusta-nacrt`,
+    `s6k8-pisac-pusta-dvosmislenu`, `s6k8-roditelj-id-pusta-nacrt`.
+  - **R2 (jedna implementacija):** F4 i pisac čitaju istu kapiju zbirne; poruke i fokus F4 ostaju (zatečeni testovi F4
+    zeleni bez izmene tvrdnji). *Čime:* sabotaža nad deljenom kapijom (`s6k8-deljena-kapija-pusta-nacrt`) obara i
+    F4 test (`modTest`) i BFP R1.
+  - **R3 (broj, A2 t. 4, KI-051):** (a) eksterni kupac: aktivan isti broj istog kupca se odbija; isti broj drugog
+    kupca prolazi; storniran isti broj istog kupca prolazi (ispravka zadržava kupčev broj); (b) hladnjača-kupac:
+    storniran isti broj se odbija, poruka kaže da storno ne oslobađa broj; (c) pisac to radi i mimo F4. *Čime:* BFP
+    `Test_S6K8_BrojPrijemnicePoKupcu` (pisac, oba kupca) i `modTest` 275 kroz F4 (`CommitDokumentTest`, najviši ulaz
+    operatera); sabotaže `s6k8-hladnjaca-ne-broji-stornirane`, `s6k8-eksterni-broji-stornirane`,
+    `s6k8-pisac-bez-provere-broja`, `s6k8-broj-bez-opsega-kupca`.
+  - **R4 (blaža grana obrisana):** pisac nepostojeću zbirnu odbija bez ikakvog configa; BFP test koji je palio
+    `BLOK` mod prelazi na bezuslovnu kapiju; `prj_zbr_cfg` = 0.
+  - **R5 (stari pisac):** `SavePrijemnica_TX` i `SavePrijemnica` (tx) ne postoje; `prj_stari_pisac` = 0; testovi
+    koji su ih zvali mere isto kroz Multi (broj tvrdnji se ne menja bez razloga u zapisu).
+  - **R6 (kanon):** `tblPrijemnica` = 20 kolona istim redom; `T_S6_KanonStavkePrijemnice` (257) dobija kontra-tvrdnju:
+    zaglavlje nema nijednu od 8 kolona, a `TipAmbalaze`, `KolAmbVracena`, `BrojZbirne` i `ZbirnaRoditeljID` ostaju.
+    *Čime:* `modTest` 257; `gen_schema_module --check`; sabotaža nad tvrdnjom.
+  - **R7 (self-heal):** zatečena sveska sa starim kolonama u sredini posle `EnsureSledljivostSchema` ima kanonski
+    raspored, a vrednosti preostalih kolona su na svojim mestima; `GeneracijaID` se ne vraća na kraj. *Čime:* test po
+    obrascu S3-ostatka / `Test_Amb_StareKoloneSelfHeal`; sabotaže `s6k8-selfheal-ne-brise`,
+    `s6k8-generacija-vraca-se`.
+  - **R8 (identitet po ID-u):** „Prevezi palete", „Prevezi prijemnicu" i F4 ispravka paleta nose `PrijemnicaID`; dva
+    dokumenta istog broja dva kupca — dira se samo izabrani. *Čime:* zatečeni testovi (Palete T08/T11, BFP S6K7
+    osirotele, testovi Oporavka) sa premisom prenetom sa generacije na ID; sabotaže `s6k8-cilj-po-broju`,
+    `s6k8-izvor-po-broju`.
+  - **R9 (popis):** `prj_linija`, `prj_kes`, `prj_generacija`, `prj_stari_pisac`, `prj_zbr_cfg` = 0;
+    `prj_brojzbirne` ≤ 33 (`popis_citalaca --check`).
+  - **R10 (golden):** A1–A5, B2, B3, F2, G1 kroz nove pisce (otkup → izdata otpremnica → izdata zbirna → prijemnica →
+    faktura gde je ima), snimak bajt-jednak goldenu iz `fc06fa77`; `RunGoldenSuite` 11 / 0. Golden koji ne može
+    bajt-jednako je **nalaz** (odluka operatera), ne izmena goldena. *Čime:* `RunGoldenSuite`; sabotaže iz §9
+    `GOLDEN_SCENARIJI.md` (kardinalnost A3, line-level F2).
+- **netaknuto:** auto-lanac (prijemnica po `zbirnaRoditeljID`, zbirna lanca nastaje IZDATA); F4 poruke, fokus i
+  redosled provera; faktura po stavci; storno i F8; palete po stavci; knjiga ambalaže i protokol potvrde manjka;
+  `BrojZbirne` kao labela i svih 33 mesta veze (odluka 1).
+- **edge:** jednoklasna prijemnica (samo II) kroz novog pisca; hladnjača-kupac sa aktivnom prijemnicom drugog dana
+  istog rednog broja (drugi broj, prolazi); eksterni kupac sa brojem koji ima i hladnjača (drugi opseg, prolazi).
+- **negativno:** svaki odbijen poziv pisca bez ijednog upisa (zaglavlje, stavka, noga knjige, paleta).
+- **čime, ukupno:** BFP, `modTest` (257, 275+), `RunGoldenSuite`, Palete, Faktura, Storno, RunAllTests; jeftine kapije
+  (+ `popis_citalaca --check` sa novim grupama); `sabotaza --proveri-sidra` i statička sonda.
+
+**Imenovano van obima:** `BrojZbirne` kao veza (odluka 1); `KI-028` (golden ne zavisi od fixture vozača —
+izmereno gore); D2 (domen) i D1 (A13 zabranjuje storno otpremnice u aktivnoj zbirni); `KI-054` (strog predikat
+kupca hladnjače nastaje ovde, ali oznaka zbirne ostaje svoj rez); `KI-052`, `KI-053`.
+
+**Tok koda, deo 1 — kapije pisca, stari pisac (stavka 208):**
+
+- **Crveno izvedeno iz diff-a pre puštanja** (testovi dela 1 nad starim produkcionim kodom): BFP 9 padova na R1, R3
+  i R4. Izmereno tačno tako: **2777 / 9** (`MissingZbirna` ×3, `PisacPrjZbr01` ×4, `BrojPrijemnicePoKupcu` ×2).
+- **RunAllTests 275 / 5, neočekivano.** Izmereno pre ispravke; uzroci su u sejačima, ne u produkciji:
+  - zbirna `S6K6Zbirna` je nacrt sa upisanim IZDATO, bez članstva, pa je strogi čitač izvora odbija (260), a izveštaj
+    manjka je ne vidi (259);
+  - test 26 je prevezao fixture paletu (pao je 113), a zaostali dokumenti 259/260 oborili su `T_Izv`;
+  - test 35 ostavlja ispravku na čekanju, pa 275 ide iza 271.
+
+  26, 259 i 260 sada rade u svojoj transakciji nad pravom IZDATOM zbirnom. Posle ispravke sejača: **275 / 1**, tačno
+  275 na F4 hladnjače.
+- **Gde je plan ispravljen dok se pisalo:**
+  - **Kapija broja u piscu menja premisu zatečenih testova.** Dva S6K4 testa i `Test_GeneracijaNePrelaziVlasnika`
+    gradila su dva dokumenta istog broja za istog kupca. To sada odbija pisac (A2), pa delovi „dve generacije istog
+    broja" odlaze (−4 tvrdnje), a preostali preduslovi uzimaju drugi broj (BFP 2768 / 2 → 2775 / 0).
+  - **R2 nema posebnu sabotažu.** Deljena kapija je jedno sidro, pa `s6k6-f4-pusta-nacrt-zbirne` (presidrena) obara
+    F4 test, a sestra `s6k8-pisac-pusta-nacrt` sa drugom zamenom obara pisca. Za broj važi isti par:
+    `s6k8-hladnjaca-ne-broji-stornirane` i `s6k8-f4-hladnjaca-ne-broji-stornirane`.
+  - **275 ide kroz validator F4, ne kroz `CommitDokumentTest`:** na kodu pre ispravke bi potez prijemnicu kupca
+    hladnjače poslao na štampač (`PrintOut`, bez seam-a), pa bi run visio umesto da padne po imenu.
+  - **Pomoćnik `ZbrIzdataPodPrijemnicu`** (otpremnica i zbirna kroz pisce, IZDATA) zamenjuje `ZbrZateceniRed` /
+    `ZbrStavkaUzZateceni`, čija zbirna nije prošla pisca. Pisac je sad odbija, a i ranije nije bila „red kakav pravi
+    pisac".
+- **Zeleno:** RunAllTests **275 / 0**, BFP **2775 / 0** (+8 tvrdnji, razloženo u stavci 208), GREEN marker nad
+  `3b735bc48ecd`. Katalog 988 → 996, sidra 996 / 0, statička sonda 14/14, jeftine kapije 24/24.
+- **Imenovano, nije testirano:** `KupacJeHladnjacaStrogo` kad čitanje configa pukne.
+
+**Tok koda, deo 2 — šema zaglavlja, identitet po `PrijemnicaID`-u (stavka 209):**
+
+- **Crveno izvedeno iz diff-a pre puštanja** (testovi dela 2 nad produkcijom iz `f541520c`, stari fixture), pa
+  izmereno **tačno tako**: RunAllTests 275 / 6, BFP 2765 / 5, Faktura 2 / 39. Jedini pad u alternativi iz izvoda
+  je 32 (preduslov, jer 27 nije prevezao robu na deljenom fixture-u).
+- **Gde je plan ispravljen dok se pisalo:**
+  - **Self-heal ide PRE provere otiska**, kao `ObrisiStareKoloneAmbalaze` (10e-3), a ne u
+    `EnsureSledljivostSchema` kao u S3-ostatku: `EnsureAllTables` ume samo da dodaje, pa bi otisak do brisanja
+    prijavljivao drift. `EnsureSledljivostSchema` zadržava samo zabranu da prijemnici vrati `GeneracijaID`.
+  - **`EnsureDoradeSchema` je bio treći pisac kolone.** `EnsureColumnOnTable TBL_PRIJEMNICA, COL_PRJ_BRUTO` bi
+    obrisani `BrutoKg` vratio na kraj (popis ga je brojao kao čitaoca).
+  - **Sedam sabotaža je obrisano, ne presidreno:** njihova zamena čita ili piše kolonu kojoj nema ni konstante,
+    pa ne bi kompajlirala; kvar koji su merile više ne može da nastane.
+  - **Kolona identiteta je parametar `RowsAktivni`**, ne fallback na ID kad generacije nema: tiho prebacivanje
+    bi i zbirnu bez kolone generacije razrešilo po ZbirnaID-u, a da to niko ne izabere.
+  - **Neočekivan pad zelenog** (BFP „Core tables": prepisan spisak kolona) je izmeren pre ispravke; pretraga za
+    obrisanim kolonama sada ide i kroz literale u više redova.
+- **Zeleno:** RunAllTests **275 / 0**, BFP **2772 / 0 i GREEN marker**, Faktura 39, Palete, Storno 111, Storno centar,
+  Izveštaji, Golden 2; fixture `7eab17dc6aec0058`, otisak šeme `87AB4F9B`. Katalog 995, sidra 995 / 0, sonda 14/14.
+
+**Tok koda, deo 3 — golden lanac (stavka 210):**
+
+- **Gde je plan ispravljen dok se pisalo:** R10 je tražio snimak bajt-jednak goldenu iz `fc06fa77`. Izmereno je
+  da to nije moguće ni za jedan od devet, i to iz tri razloga koje je doneo kasniji kod, a ne ovaj korak:
+  - S4-3a je skinuo red `invarijanta`;
+  - AMB-10 je promenio saldo kooperanta koji donese svoje gajbe;
+  - kanonska otpremnica nastaje iz celog bloka, pa A4 traži dva bloka.
+
+  Po odluci 2 to je išlo operateru; odluka je: svih 9, sa tri razlike (`GOLDEN_SCENARIJI.md` §13).
+- **Adapter je morao da pređe na članstvo:** kanonski pisac zbirne ne upisuje `BrojZbirne` na otpremnicu, pa
+  bi `SumOtpremniceByKlasa(broj)` i brojanje otpremnica po broju dali nulu za svaki kanonski lanac.
+- **Zeleno:** Golden 11 / 0; ručni dokaz grize u sva tri smera (A3, F2, `poslato`), a izvor je vraćen
+  bajt-identičan.
+
+**Korak 8, dopuna — KI-047 (odluka 5, 27.10.2026; pre-flight pre koda):**
+
+Nezavisni pregled `#443` (27.10.2026) je KI-047 izdvojio kao stvarnu prazninu: prijemnica i roditeljska zbirna
+mogu nositi različitu robu. Odluka operatera: **vrsta i sorta prijemnice moraju biti iste kao vrsta i sorta
+zbirne; podela na I i II klasu sme da se razlikuje** (klasifikacija je procena pri prijemu). Kapija ide u `#443`,
+pre FULL-a.
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** (odluka) | prijemnica je prijem robe JEDNE zbirne; roba je činjenica zbirne (`ZBR-KANON-04`: zbirna preuzima vrstu i sortu od izvora, `RequireIstoPolje`); klasa je procena kupca |
+| `EVENTS` | **N/A** | kapija ne menja datum ni status nijednog dokumenta |
+| `IDENTITY` | **PROVEN** | zbirna se poredi po razrešenom ID-u (`PrijemnicaRoditeljRazlog` → `outZbirnaID`, zadat `zbirnaRoditeljID`, cilj prevezivanja), ne po broju |
+| `INVARIANTS/OWNER` | **PROVEN** | nova invarijanta `PRJ-ZBR-02`; vlasnik je jedna funkcija `modDokumenta.PrijemnicaRobaRazlog` |
+| `WRITERS` | **PROVEN** | vezu prijemnica → zbirna pišu `SavePrijemnicaDokument` (F4, lanac hladnjače) i `ReassignPrijemnicaToZbirna_TX` (Oporavak „Prevezi prijemnicu"); oba dobijaju kapiju. Ispravka zbirne ne postoji (S4-3a) |
+| `DOWNSTREAM` | **PROVEN** | manjak zbirne i fakturisanje po vrsti mere istu robu; lanac hladnjače nosi vrstu otkupa na sve četiri karike (isti izvor), pa kapija ne menja njegov ishod |
+| `CAPABILITY` | **N/A** | nijedna sposobnost se ne gubi; F4 dobija poruku uz polje vrste ili sorte |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | R11 ispod |
+| `PLATFORM` | **N/A** | — |
+| `LANDING` | **PROVEN** | ista grana; `modTest` dobija test 276 (`#441` drži 272–280 → 275–283, prenumeriše ko uđe drugi) |
+
+**R11 (PRJ-ZBR-02):**
+
+- **važi:** pisac odbija prijemnicu čija vrsta ili sorta nije ista kao na zbirnoj, pre ijednog upisa (zaglavlje,
+  stavke, knjiga). To važi i za zadat roditelj (lanac), a prevezivanje odbija cilj druge robe bez ijedne izmene.
+  F4 to pokazuje uz polje vrste ili sorte. Poređenje je kao kod zbirne prema izvorima: bez razmaka na krajevima,
+  bez razlike u veličini slova.
+- **kontrola:** ista vrsta i sorta, a druga podela na klase (zbirna I = 100, prijemnica I = 60, II = 40) prolazi.
+- **negativno:** izdata zbirna bez VRSTE je kvar, ne „nisam rekao" — odbija se. Sorta sme da bude prazna
+  (kultura bez sorte je legitimna, BFP `Test Dunja`), i tada i prijemnica mora biti bez sorte. Ovo je ispravljeno
+  dok se pisao test, pre ijednog prolaza: prva verzija kapije je odbijala i zbirnu bez sorte.
+- **čime:** BFP `Test_S6K8_PrijemnicaRobaKaoZbirna` (pisac, zadat roditelj, prevezivanje) i `modTest` 276 kroz F4
+  potez (`CommitDokumentTest`). Sabotaže: vrsta se ne poredi, sorta se ne poredi, pisac bez kapije, prevezivanje
+  bez kapije, F4 bez kapije.
+- **sejač:** `modTest.S6K6Zbirna` izdatoj zbirni upisuje robu fixture-a — nacrt je prazan, a izdata zbirna robu
+  uvek nosi. Bez toga bi kapija odbila svaki F4 test nad tim sejačem (memorija: fail-closed kapija obara sirove
+  sejače).
+
+**Tok koda, dopuna KI-047 (stavka 211):**
+
+1. `60a7957d` — kapija i testovi. Crveno (testovi nad produkcijom iz `17a4d547`) tačno izvedeno: RunAllTests
+   276 / 1, BFP 2779 / 4.
+2. FULL nad `60a7957d`: **Palete 93 / 3**, neizvedeno. T10 seje zbirne prevezivanja sirovim redom bez robe, a
+   kapija prevezivanja ih odbija kao „zbirna bez robe". Isti obrazac kao sejač iz R11, ali u suite-i koju crveno
+   nije pokrivalo. Ispravka u testu: `8dcfd673` (seed nosi robu prijemnice).
+3. FULL nad `8dcfd673`: **12 / 12**, GREEN `a15c92c39b24`.
+4. Dokaz nad `8dcfd673`: 32 / 32 crveno, izvor identičan, ali dve tvrdnje kataloga nisu bile tačne.
+   `zbirna-f4-nije-vezan` je pao na nacrtu (kvar iz dela 1: kapija F4 i pisca je jedna i proverava identitet
+   pre statusa). `s6k8-pisac-pusta-bez-zbirne` više ne obara „odbijena je", jer kapija robe odbija i prazan
+   roditelj (KI-047). Ispravka je samo u testu i katalogu: `7bfd1651` (redosled tvrdnji u 264, tvrdnja
+   koja imenuje razlog).
+5. FULL i dokaz četiri pogođene sabotaže nad `7bfd1651`: stavka 211.
 
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
