@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 27.10.2026 (stavka 213: merge `#443`, S6 zatvoren 8/8; sledeći rez `KI-025` + `KI-026`).
+**Ažurirano:** 27.10.2026 (stavka 214: rez `KI-025` + `KI-026` — pre-flight i odluke `AMB-10-ODL-34`, pre koda).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -7882,6 +7882,31 @@
      - **Sledeći brojevi:** stavka 214 · test 277 (pazi `#441`) · KI-059.
      - **Sledeći je rez `KI-025` + `KI-026`** (nabavka i otpis ambalaže, prioritet posle S6 po odluci operatera
        20.10.2026), na grani `claude/amb-nabavka-otpis` sa `86fca63f`.
+214. **Rez `KI-025` + `KI-026` — pre-flight i odluke `AMB-10-ODL-34`, PRE koda** (27.10.2026). Grana
+     `claude/amb-nabavka-otpis` sa `86fca63f`. Pun zapis: `docs/DOMEN/AMBALAZA.md` 6.12m.
+
+     - **Pre-flight (skill `pre-flight`)**:
+       - DOMAIN: model **PROVEN** (6.3, 6.7, 6.12a, matrica `AmbKlaseVrste`), a poslovna pitanja su bila **GAP**
+         dok ih operater nije zatvorio;
+       - IDENTITY, CARDINALITY i WRITERS: **PROVEN** (`AmbDokID`, `AMB-INV-10`, oba vlasnika upisa su `modAmbalaza`);
+       - INVARIANTS: **GAP**. Otpis preko salda partnera prolazi kroz pokriće i pravi obavezu, pa se zatvara
+         novom kapijom u jezgru, `AMB-INV-14`;
+       - DOWNSTREAM: **GAP**. Lista F7 i lista Storno/Reversi ne vide nabavku ni otpis, pa storno nije dostupan
+         ni sa jednog ekrana. Zatvara se odlukom (i);
+       - LANDING RISK: `#441` (OPEN) dira `modAmbalaza`, `modAmbalazaUgovor`, `modScrDokumenti`, `modOtkupUI`,
+         `modPoruke`, `modTest` (272–280) i `sabotaza.py`.
+     - **Odluke operatera (deset pitanja u tri kruga, sve po preporuci osim štampe):**
+       - ulaz je F7, segmenti 7 „Nabavka" i 8 „Otpis";
+       - nabavka ide samo na stanicu; vlasnik broja je OM sa ekrana; cene nema;
+       - otpis je dozvoljen sa svakog realnog naloga, bez naknade, a preko salda se tvrdo odbija;
+       - **otpis se štampa** (šablon reversa, „Zapisnik o otpisu ambalaže"), nabavka ne;
+       - lista F7 i Storno/Reversi pokazuju sva četiri tipa;
+       - nalog otpisa je partner, inače vozač;
+       - polje „Napomena" je obavezno za otpis.
+     - **Ispravka zapisa:** `KI-025` je tvrdio da „lista i storno već rade nad svakim ambalažnim dokumentom". Za
+       listu to nije bilo tačno (izmereno `RedoviZaTip` → `AmbDokUListiReversa`).
+     - **Usput:** `KI-058` zatvoren (`4998e0df`, jedno slovo u `modPoruke`).
+     - **Sledeći brojevi:** stavka 215 · test 277 (pazi `#441`) · KI-059.
 
 ## Dug sa imenom (posle S5-5b)
 
