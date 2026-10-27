@@ -442,11 +442,16 @@ Private Sub T10_ZbirnaRepointStavke()
     ' transakciji koja se ponistava, pa danas ne curi u druge suite-e -- ali
     ' seed koji pravi dokument u obliku koji pisac ne moze da napravi je mina
     ' za prvi sledeci citalac koji se ovde zatekne.
-    TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO), _
-              Array("TSTZBR-A", "TST-Z10A", "")
+    ' Zbirna nosi ROBU prijemnice (vrsta i sorta): prevezivanje od S6 koraka 8
+    ' prima samo cilj iste robe (PRJ-ZBR-02), a zbirna bez vrste je kvar koji
+    ' pisac ne pravi.
+    TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO, _
+                                COL_ZBR_VRSTA, COL_ZBR_SORTA), _
+              Array("TSTZBR-A", "TST-Z10A", "", TST_VRSTA, "TST-S10")
     TstZbirnaStavka "TSTZBR-A", 50
-    TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO), _
-              Array("TSTZBR-B", "TST-Z10B", "")
+    TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO, _
+                                COL_ZBR_VRSTA, COL_ZBR_SORTA), _
+              Array("TSTZBR-B", "TST-Z10B", "", TST_VRSTA, "TST-S10")
     TstZbirnaStavka "TSTZBR-B", 50
 
     MakePrij "TSTPRJ-19", "TST-P13", "TST-Z10A", "I", 50, 5, "TST-S10"
