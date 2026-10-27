@@ -9491,6 +9491,21 @@ pre FULL-a.
   uvek nosi. Bez toga bi kapija odbila svaki F4 test nad tim sejačem (memorija: fail-closed kapija obara sirove
   sejače).
 
+**Tok koda, dopuna KI-047 (stavka 211):**
+
+1. `60a7957d` — kapija i testovi. Crveno (testovi nad produkcijom iz `17a4d547`) tačno izvedeno: RunAllTests
+   276 / 1, BFP 2779 / 4.
+2. FULL nad `60a7957d`: **Palete 93 / 3**, neizvedeno. T10 seje zbirne prevezivanja sirovim redom bez robe, a
+   kapija prevezivanja ih odbija kao „zbirna bez robe". Isti obrazac kao sejač iz R11, ali u suite-i koju crveno
+   nije pokrivalo. Ispravka u testu: `8dcfd673` (seed nosi robu prijemnice).
+3. FULL nad `8dcfd673`: **12 / 12**, GREEN `a15c92c39b24`.
+4. Dokaz nad `8dcfd673`: 32 / 32 crveno, izvor identičan, ali dve tvrdnje kataloga nisu bile tačne.
+   `zbirna-f4-nije-vezan` je pao na nacrtu (kvar iz dela 1: kapija F4 i pisca je jedna i proverava identitet
+   pre statusa). `s6k8-pisac-pusta-bez-zbirne` više ne obara „odbijena je", jer kapija robe odbija i prazan
+   roditelj (KI-047). Ispravka je samo u testu i katalogu: `7bfd1651` (redosled tvrdnji u 264, tvrdnja
+   koja imenuje razlog).
+5. FULL i dokaz četiri pogođene sabotaže nad `7bfd1651`: stavka 211.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

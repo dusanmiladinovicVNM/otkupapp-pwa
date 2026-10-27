@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 27.10.2026 (stavka 210: S6 korak 8, deo 3 — golden lanac; korak 8 čeka reviewer GO).
+**Ažurirano:** 27.10.2026 (stavka 211: S6 korak 8, dopuna `KI-047` — FULL 12/12 i dokaz; čeka Compile i merge).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 7/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) — čeka reviewer GO; grana `claude/s6-korak8-zavrsni` sa `376a3d3e` |
+| **S6 prijemnica** | ⏳ **u toku, 7/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`) i FULL 12/12 (stavka 211) — čeka Compile, ručnu proveru i merge; `#443`, grana `claude/s6-korak8-zavrsni` sa `376a3d3e` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7758,6 +7758,63 @@
 
        Merge ide samo na izričit zahtev operatera.
      - **Sledeći brojevi:** stavka 211 · test 276 (pazi `#441`) · KI-055.
+211. **S6 korak 8, dopuna — `PRJ-ZBR-02`: prijemnica prima robu svoje zbirne (`KI-047`); FULL i dokaz**
+     (27.10.2026). Grana `claude/s6-korak8-zavrsni`; plan: §14.55, „Korak 8, dopuna — KI-047" (verdikt, R11, tok
+     koda).
+
+     - **Ulaz:** nezavisni pregled `#443` (27.10.2026) je `KI-047` izdvojio kao stvarnu prazninu, a operater je
+       odlučio: **vrsta i sorta prijemnice moraju biti iste kao na zbirnoj; podela na I i II klasu sme da se
+       razlikuje** (klasifikacija je procena pri prijemu). Kapija ide u `#443`, pre FULL-a. Isti odgovor je GO
+       da se FULL, dokaz i sveska za compile puste jednom, nad novim HEAD-om.
+     - **Kod (`60a7957d`):**
+       - jedna funkcija, tri pozivaoca: `modDokumenta.PrijemnicaRobaRazlog`. F4 (`PrijemnicaValidiraj`) je
+         vraća uz polje vrste ili sorte, pisac (`SavePrijemnicaDokument`, i za zadat roditelj) je diže pre
+         ijednog upisa (`vbObjectError + 1439`), a prevezivanje (`ReassignPrijemnicaToZbirna_TX`) odbija cilj
+         druge robe pre ijedne izmene (`+ 1440`);
+       - poređenje je kao kod zbirne prema izvorima (`RequireIstoPolje`): Trim, bez razlike u veličini slova.
+         Izdata zbirna bez vrste je kvar; prazna sorta je legitimna (kultura bez sorte), i tada i prijemnica
+         mora biti bez sorte;
+       - tri nova ključa poruke (`DOKUNOS_ERR_PRJ_VRSTA_ZBIRNE`, `_SORTA_ZBIRNE`, `_ZBIRNA_BEZ_ROBE`);
+       - sejač `modTest.S6K6Zbirna` izdatoj zbirni upisuje robu fixture-a (izdata zbirna robu uvek nosi).
+     - **Crveno pre ispravke** (testovi nad produkcijom iz `17a4d547`), **tačno izvedeno**: RunAllTests
+       **276 / 1** (276, vrsta) i BFP **2779 / 4** (vrsta, sorta, zadat roditelj, prevezivanje); obe kontrole
+       zelene.
+     - **FULL nad `60a7957d`: Palete 93 / 3, neočekivano.** T10 seje zbirne prevezivanja sirovim redom bez
+       vrste i sorte, a nova kapija prevezivanja ih odbija kao „zbirna bez robe" — klasa iz memorije
+       („fail-closed kolona obara sirove sejače"); crveno izvedeno iz diff-a ga nije predvidelo. Uzrok je izmeren
+       pre ispravke, a ispravka je u testu (`8dcfd673`): seed nosi robu prijemnice; Palete **96 / 0**.
+     - **FULL nad `8dcfd673`: 12 / 12 ZELENO**, GREEN marker (izvor `a15c92c39b24`, ugovor `7d28182226b3`,
+       sveska `otkup_test.xlsm/0c1479ac`): RunAllTests **276 / 0**, BFP **2779 / 0**, Banka **241 / 0**,
+       Storno **111 / 0**, Palete 96, Faktura 39 / 39, Agrohemija 25 / 25, Golden 11, Izveštaji, SheetsJson,
+       StornoCentar, Licenca. COMPILE NEJASNO (ručna kapija).
+     - **Sabotaže:** katalog 995 → **1001** (šest `s6k8-*` za KI-047: vrsta, sorta, F4 sorta, pisac, prevezivanje,
+       F4 bez kapije); sidra 1001 / 0.
+     - **Dokaz nad `8dcfd673`** (`dokaz.py --grupe 6`, 32 sabotaže u 9 prolaza): **32 / 32 crveno**, izvor
+       pre i posle identičan (`a1dcff5f449f0cab`), 28 / 32 izmereno grupno. Verdikt je ipak **NIJE DOKAZANO**,
+       zbog dve tvrdnje u katalogu:
+       - `zbirna-f4-nije-vezan` je pao na tvrdnji o **nacrtu**, a to je tvrdnja sestre
+         `s6k6-f4-pusta-nacrt-zbirne`, ne njegova (dvosmislen broj). Kvar je iz dela 1, ne iz KI-047: od tada F4 i
+         pisac dele kapiju roditelja, koja proverava identitet pre statusa. F4 bez kapije zato pušta i nacrt, a
+         test 264 je nacrt tvrdio prvi. Komentar u testu je tvrdio staru podelu;
+       - `s6k8-pisac-pusta-bez-zbirne` više ne obara „is rejected", i to **jeste** posledica KI-047. Pisac i bez
+         kapije roditelja odbija upis: kapija robe nad praznim roditeljem javi „zbirna nema vrstu". Odbijanje
+         ostaje, ali sa pogrešnim razlogom. Ista klasa kao memorija „dvoslojna kapija: sabotaža ne grize".
+     - **Ispravka (`7bfd1651`, samo test i katalog):** u 264 tvrdnja o dvosmislenom broju ide pre tvrdnje o
+       nacrtu. Test meri iste vrednosti, a svaka od tri sabotaže dobija svoju tvrdnju (dvosmislen, nacrt,
+       tuđ). Tvrdnja `s6k8-pisac-pusta-bez-zbirne` je sada ona koja imenuje razlog („Rejected prijemnica names
+       the missing zbirna"). Jeftine kapije 24 / 24, sidra 1001 / 0 (+9 poznatih).
+     - **FULL nad `7bfd1651`: 12 / 12 ZELENO**, GREEN marker (izvor `2c9d1a14bdb6`, ugovor `a9a1f978695f`,
+       sveska `otkup_test.xlsm/0c1479ac`): RunAllTests **276 / 0**, BFP **2779 / 0**, Banka 241 / 0, Storno 111 / 0,
+       Palete 96, Faktura 39 / 39, Agrohemija 25 / 25, Golden, Izveštaji, SheetsJson, StornoCentar, Licenca.
+       COMPILE NEJASNO (ručna kapija).
+     - **Dokaz četiri pogođene sabotaže nad `7bfd1651`, pojedinačno** (bez `--grupe`): **DOKAZANO 4 / 4**
+       (`zbirna-f4-nije-vezan`, `zbirna-f4-pusta-tudjeg-vlasnika`, `s6k6-f4-pusta-nacrt-zbirne`,
+       `s6k8-pisac-pusta-bez-zbirne`), izvor pre i posle identičan; `vba_gate`: dokazano za izvor
+       `2c9d1a14bdb6`. Ostalih 28 je dokazano nad `8dcfd673`. Izmena posle toga dira samo redosled tvrdnji u
+       264 i tvrdnju jedne sabotaže, dakle samo ove četiri.
+     - **Status S6:** kod koraka 8 je završen (stavke 208–211). Ostaju ručni Compile i ručna provera (checklista
+       u `#443`). Merge ide samo na izričit zahtev operatera.
+     - **Sledeći brojevi:** stavka 212 · test 277 (pazi `#441`) · KI-055.
 
 ## Dug sa imenom (posle S5-5b)
 
