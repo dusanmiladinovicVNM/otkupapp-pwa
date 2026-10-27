@@ -1315,6 +1315,20 @@ Private Sub BuildForm(frm As Object)
     NewSegBtn fr, "segRev5", Poruka("OTKUI_SEG_REV_POVRAT_KUP"), 248, 17, 61, FIELD_H - 2, False
     NewSegBtn fr, "segRev6", Poruka("OTKUI_SEG_REV_POZAJMICA_KUP"), 310, 17, 60, FIELD_H - 2, False
 
+    ' NABAVKA I OTPIS (AMB-10-ODL-34 a) -- sedmi i osmi smer, u SVOM okviru ispod
+    ' reversa. Isti red bi suzio svih osam segmenata (LayoutSegs deli sirinu
+    ' okvira podjednako), pa bi natpisi od 12 znakova bili odseceni. Izbor je i
+    ' dalje jedan: SetSmerRev gasi segmente oba okvira.
+    Set fr = NewFrame(z, "fgSmerAmb", 0, 0, 180, FIELD_GRP_H, C_WHITE)
+    fr.tag = "fld:1:AMB"
+    NewLbl fr, "fgSmerAmbL", Poruka("OTKUI_FLD_SMER_AMB"), 0, 0, 170, 12, TS_LABEL, True, C_MUTED, -1
+    NewShell fr, "fgSmerAmb", 0, 16, 180, FIELD_H, C_BORDER_LT, C_WHITE
+    NewSegBtn fr, "segRev7", Poruka("OTKUI_SEG_REV_NABAVKA"), 1, 17, 88, FIELD_H - 2, False
+    NewSegBtn fr, "segRev8", Poruka("OTKUI_SEG_REV_OTPIS"), 91, 17, 88, FIELD_H - 2, False
+    ' NAPOMENA (ODL-34 k) -- samo uz nabavku i otpis; za otpis je razlog i ide na
+    ' zapisnik. Vidljivost prati smer (SetSmerRev), ne samo rezim.
+    NewFieldG z, "fgNapomena", Poruka("OTKUI_FLD_NAPOMENA"), "txt", "", 2, False, False, "AMB"
+
 
     ' VREDNOST - forest ploca (isti shell, druga ispuna). Ploca ne zauzima celo
     ' polje: levo od nje stoji racunica po klasi, pa se vidi ODAKLE iznos.
@@ -3554,6 +3568,8 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgHladnjaca", False
             FldShow z, "fgPogon", False
             FldShow z, "fgSmerRev", False
+            FldShow z, "fgSmerAmb", False
+            FldShow z, "fgNapomena", False
             FldShow z, "fgVrednost", False
             ' otvoreni blok i neisplaceni ostatak imaju smisla samo kod isplata
             FldShow z, "fgBlok", (mode = "F5")
@@ -3576,6 +3592,8 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgHladnjaca", False
             FldShow z, "fgPogon", False
             FldShow z, "fgSmerRev", True
+            FldShow z, "fgSmerAmb", True
+            FldShow z, "fgNapomena", modNovacUnos.RevSmerJeNabavkaIliOtpis(mSmerRev)
             FldShow z, "fgVrednost", False
             FldShow z, "fgBlok", False
             FldShow z, "fgOstatak", False
@@ -3613,6 +3631,8 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgHladnjaca", (mode = "F3")
             FldShow z, "fgPogon", (mode = "F3")
             FldShow z, "fgSmerRev", False
+            FldShow z, "fgSmerAmb", False
+            FldShow z, "fgNapomena", False
             ' Vrednost se racuna iz cene, koje zbirna nema -- prikaz bi uvek bio
             ' nula, a nula uz robu izgleda kao podatak.
             FldShow z, "fgVrednost", (mode <> "F3")
@@ -3658,19 +3678,33 @@ End Sub
 ' n = 0 gasi sve (stanje "nije izabrano", u koje se rezim i vraca).
 Private Sub SetSmerRev(ByVal n As Long)
     Dim z As Object, i As Long, sel As Boolean
-    Dim stariKupcev As Boolean, noviKupcev As Boolean
+    Dim stariKupcev As Boolean, noviKupcev As Boolean, zAmb As Object
     On Error Resume Next
     Set z = mFrm.Controls("zForm").Controls("fgSmerRev")
+    Set zAmb = mFrm.Controls("zForm").Controls("fgSmerAmb")
     ' Vlasnik niza se cita PRE dodele -- posle nje se stari smer vise ne zna.
     ' Kupcev je i povrat (5) i pozajmica (6): odluka je u modNovacUnos.
     stariKupcev = modNovacUnos.RevSmerJeKupcev(mSmerRev)
     noviKupcev = modNovacUnos.RevSmerJeKupcev(n)
     mSmerRev = n
     MarkDirty
-    For i = 1 To modNovacUnos.SMER_REV_POZAJMICA_KUP
+    For i = 1 To modNovacUnos.SMER_REV_OTPIS
         sel = (i = n)
-        BoxState z, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
+        ' Nabavka i otpis su u svom okviru (fgSmerAmb), ostali u okviru reversa.
+        If i > modNovacUnos.SMER_REV_POZAJMICA_KUP Then
+            BoxState zAmb, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
+        Else
+            BoxState z, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
+        End If
     Next i
+
+    ' NAPOMENA PRATI SMER (ODL-34 k): vidi se samo uz nabavku i otpis. Kad se
+    ' vidljivost promeni, polja se ponovo slazu -- osim dok rezim puni formu
+    ' (SelectModeCore sam slaze na kraju).
+    If FldVidljivo("fgNapomena") <> modNovacUnos.RevSmerJeNabavkaIliOtpis(n) Then
+        FldShow mFrm.Controls("zForm"), "fgNapomena", modNovacUnos.RevSmerJeNabavkaIliOtpis(n)
+        If Not mBuilding And Not mLoading Then LayoutOtkup mFrm
+    End If
 
     ' BROJ PRATI VLASNIKA NIZA, ne svaki smer.
     '
@@ -3712,6 +3746,12 @@ Private Sub FldShow(z As Object, ByVal nm As String, ByVal vis As Boolean)
     On Error Resume Next
     z.Controls(nm).Visible = vis
 End Sub
+
+' Da li je polje forme vidljivo; nepostojece polje nije.
+Private Function FldVidljivo(ByVal nm As String) As Boolean
+    On Error Resume Next
+    FldVidljivo = mFrm.Controls("zForm").Controls(nm).Visible
+End Function
 
 Private Sub ApplyAktivnaZbirna(frm As Object, ByVal mode As String)
     Dim fld As Object
@@ -4469,6 +4509,8 @@ Private Sub UiClickCore(ByVal tag As String)
         Case "segRev4": SetSmerRev 4
         Case "segRev5": SetSmerRev 5
         Case "segRev6": SetSmerRev 6
+        Case "segRev7": SetSmerRev 7
+        Case "segRev8": SetSmerRev 8
         Case "segAvans1": SetAvans 1
         Case "segAvans2": SetAvans 2
         Case "btnSacuvaj", "btnSacuvajPrint": CommitDokument (tag = "btnSacuvajPrint")
@@ -8505,6 +8547,10 @@ Private Function SkupiPolja(ByVal dat As Double, ByVal stampaj As Boolean) As Ob
     p("fakturaTekst") = Trim$(FldText("fgFaktura"))
     p("fakturaOstatak") = FakturaOstatak()
     p("smerRev") = mSmerRev
+    ' Napomena ide samo dok se VIDI (nabavka i otpis, ODL-34 k): tekst ostaje u
+    ' sakrivenom polju posle promene smera, pa se ne salje drugom dokumentu.
+    p("napomena") = ""
+    If FldVidljivo("fgNapomena") Then p("napomena") = Trim$(FldText("fgNapomena"))
     p("stampajUvek") = stampaj
     Set SkupiPolja = p
 End Function
@@ -8602,6 +8648,7 @@ Private Sub FokusNaPolje(ByVal kljuc As String)
         Case "tipAmb":       Set c = mFrm.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT")
         Case "parcelaID":    Set c = mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT")
         Case "vozacID":      Set c = mFrm.Controls("zCtx").Controls("cbVozac")
+        Case "napomena":     Set c = mFrm.Controls("zForm").Controls("fgNapomena").Controls("fgNapomenaT")
     End Select
     If c Is Nothing Then Exit Sub
     If IsTestMode() Then
@@ -9076,7 +9123,8 @@ Public Sub ClearForm()
     ' fgNovac je u istom spisku: iznos pripada JEDNOM dokumentu, a zatecen iznos
     ' u polju posle snimanja je najskuplja greska ovog rezima - sledeca potvrda
     ' bi isplatila isti novac drugi put.
-    nmv = Array("fgBrOtpr", "fgKgI", "fgKgII", "fgKolAmb", "fgAmbPr", "fgNovac")
+    ' fgNapomena: razlog otpisa pripada JEDNOM dokumentu (ODL-34 k).
+    nmv = Array("fgBrOtpr", "fgKgI", "fgKgII", "fgKolAmb", "fgAmbPr", "fgNovac", "fgNapomena")
     For i = 0 To UBound(nmv)
         mFrm.Controls("zForm").Controls(CStr(nmv(i))).Controls(CStr(nmv(i)) & "T").text = ""
     Next i

@@ -946,6 +946,22 @@ Public Function AmbPokriceProblem(ByVal tip As String, ByVal id As String) As St
     End If
 End Function
 
+' AMB-INV-14 (AMB-10-ODL-34 (g), odluka operatera 27.10.2026): KOJA VRSTA SME
+' DA SE POKRIJE.
+'
+' Pokrice deficita (ULAZ_TUDJE, 6.5) unosi partnerove gajbe u opticaj -- da bi
+' ih partner mogao PREDATI. Otpis ih ne predaje nikome, nego ih IZBACUJE iz
+' opticaja: pokriti otpis znaci uneti gajbe samo da bi se odmah otpisale, a
+' firma bi partneru dugovala bas te gajbe. Zato otpis preko salda nije pitanje
+' nego odbijanje, za svaki nalog (sopstveni i partnera).
+'
+' Spisak je NEGATIVAN namerno: svaka druga vrsta zadrzava ponasanje iz 6.5, a
+' izuzetak se uvodi odlukom, kao ovaj. Pisac (PrenesiAmbalazu) pravilo CITA
+' odavde, ne nosi svoju kopiju.
+Public Function AmbVrstaSmePokrice(ByVal vrsta As String) As Boolean
+    AmbVrstaSmePokrice = (StrComp(Trim$(vrsta), AMB_VK_OTPIS, vbTextCompare) <> 0)
+End Function
+
 ' ============================================================
 ' PROVERA PRENOSA -- AMB-INV-01, -02, -03 + granica
 ' ============================================================

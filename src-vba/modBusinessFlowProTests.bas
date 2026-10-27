@@ -367,6 +367,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_AMB_TipVanSifarnikaPisacOdbija
     Test_ODL24_UgovorPozajmice
     Test_ODL24_PozajmicaJeSvojDogadjaj
+    Test_AMBINV14_OtpisSeNePokriva
+    Test_KI026_OtpisPisacKapije
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -9495,6 +9497,265 @@ Kraj:
 EH:
     LogFatal "Test_ODL24_PozajmicaJeSvojDogadjaj", Err.Number, Err.description
 End Sub
+
+' AMB-INV-14 (AMB-10-ODL-34 (g), odluke 27.10.2026): OTPIS SE NE POKRIVA.
+'
+' Otpis veci od salda naloga se ODBIJA, bez protokola potvrde i bez
+' ULAZ_TUDJE_AMBALAZE -- za svaki realni nalog. Do ovog reza je jezgro otpis
+' preko salda PARTNERA vodilo kroz pokrice (6.5): bez potvrde je pitalo, a uz
+' potvrdu upisivalo ULAZ_TUDJE, pa bi firma partneru "dugovala" otpisane gajbe.
+' Kod sopstvenog naloga je odbijalo, ali sa tekstom "za njih ide NABAVKA".
+'
+' Meri se kroz JEZGRO (PrenesiAmbalazu u sopstvenoj TX, OtpisKrozJezgro), jer
+' je kapija tamo i vazi za svakog pozivaoca, ne samo za ekran. Vrsta je
+' LITERAL, pa se test kompajlira i nad kodom bez kapije -- reprodukcija je
+' crvena po imenu.
+'   - partner preko salda, bez potvrde: AMB-INV-14, ne pitanje o manjku;
+'   - partner preko salda, UZ potvrdu jednaku manjku: i dalje AMB-INV-14;
+'   - odbijanje ne ostavlja ni zaglavlje, ni red, ni obavezu;
+'   - sopstveni nalog (stanica) preko salda: AMB-INV-14, ne "ide NABAVKA";
+'   - KONTRA: povrat istog kooperanta preko salda i dalje PITA -- kapija je po
+'     vrsti, a ne opsta zabrana pokrica;
+'   - otpis tacno salda prolazi, spusta nalog na nulu i ne nosi ULAZ_TUDJE;
+'   - drugi nalog na istom dokumentu otpisa pada na AMB-INV-10 (ODL-3).
+Private Sub Test_AMBINV14_OtpisSeNePokriva()
+    Const VK_OTP As String = "OTPIS"
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("INV14")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPO-" & scenario)
+
+    ' Preduslov kroz prave pisce: nabavka 10, kooperantu 3, drugom kooperantu 1.
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 10#, _
+                                  "NABO-" & scenario, "test AMB-INV-14"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, tipT, 3#, _
+                   REV_SMER_IZDAVANJE, TEST_KOOP_ID, "")) > 0, _
+               "AMB-INV-14: preduslov -- kooperant drzi 3"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, tipT, 1#, _
+                   REV_SMER_IZDAVANJE, TEST_KOOP2_ID, "")) > 0, _
+               "AMB-INV-14: preduslov -- drugi kooperant drzi 1"
+
+    Dim nDok As Long, nAmb As Long, obPre As Double, razlog As String
+    nDok = CountRows(TBL_AMBALAZA_DOKUMENT)
+    nAmb = CountRows(TBL_AMBALAZA)
+    obPre = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)
+
+    Call OtpisKrozJezgro(testDate, "OTPA-" & scenario, TEST_ST_ID, AMB_NALOG_KOOPERANT, _
+                         TEST_KOOP_ID, tipT, 5#, -1#, razlog)
+    AssertTrue InStr(1, razlog, "AMB-INV-14", vbBinaryCompare) > 0, _
+               "AMB-INV-14: otpis preko salda partnera se odbija, ne pita za manjak"
+    Call OtpisKrozJezgro(testDate, "OTPB-" & scenario, TEST_ST_ID, AMB_NALOG_KOOPERANT, _
+                         TEST_KOOP_ID, tipT, 5#, 2#, razlog)
+    AssertTrue InStr(1, razlog, "AMB-INV-14", vbBinaryCompare) > 0, _
+               "AMB-INV-14: ni potvrda jednaka manjku ne pokriva otpis"
+    AssertEquals CStr(nDok) & "|" & CStr(nAmb) & "|" & CStr(obPre) & "|3", _
+                 CStr(CountRows(TBL_AMBALAZA_DOKUMENT)) & "|" & CStr(CountRows(TBL_AMBALAZA)) & "|" & _
+                 CStr(modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)) & "|" & _
+                 CStr(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)), _
+                 "AMB-INV-14: odbijen otpis ne ostavlja ni zaglavlje, ni red, ni obavezu"
+
+    Call OtpisKrozJezgro(testDate, "OTPC-" & scenario, TEST_ST_ID, AMB_NALOG_STANICA, _
+                         TEST_ST_ID, tipT, 100#, -1#, razlog)
+    AssertTrue InStr(1, razlog, "AMB-INV-14", vbBinaryCompare) > 0, _
+               "AMB-INV-14: otpis preko salda stanice se odbija imenom, a ne porukom o nabavci"
+
+    ' KONTRA: povrat istog kooperanta preko salda i dalje pita (6.5).
+    Dim errN As Long
+    On Error Resume Next
+    Call modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, tipT, 5#, _
+                                            REV_SMER_PRIJEM, TEST_KOOP_ID, "")
+    errN = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_POTVRDA_DEFICITA), CStr(errN), _
+                 "AMB-INV-14 kontra: povrat preko salda kooperanta i dalje trazi potvrdu manjka"
+
+    ' Otpis tacno salda prolazi.
+    Dim dok As String
+    dok = OtpisKrozJezgro(testDate, "OTPD-" & scenario, TEST_ST_ID, AMB_NALOG_KOOPERANT, _
+                          TEST_KOOP_ID, tipT, 3#, -1#, razlog)
+    AssertEquals "", razlog, "AMB-INV-14: otpis tacno salda partnera prolazi"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)) < 0.001, _
+               "AMB-INV-14: posle otpisa celog salda kooperant drzi 0"
+    AssertEquals "1|0", CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, VK_OTP)) & "|" & _
+                 CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, AMB_VK_ULAZ_TUDJE)), _
+                 "AMB-INV-14: otpis je jedan red OTPIS, bez ULAZ_TUDJE"
+
+    ' AMB-INV-10 (ODL-3): drugi nalog na istom dokumentu otpisa pada.
+    Call OtpisDvaNaloga(testDate, "OTPE-" & scenario, TEST_ST_ID, TEST_KOOP2_ID, tipT, razlog)
+    AssertTrue InStr(1, razlog, "AMB-INV-10", vbBinaryCompare) > 0, _
+               "AMB-INV-10: otpis pokriva jednog protivpartnera -- drugi nalog na istom dokumentu pada"
+
+    Exit Sub
+EH:
+    LogFatal "Test_AMBINV14_OtpisSeNePokriva", Err.Number, Err.description
+End Sub
+
+' KI-026 (AMB-10-ODL-34): KAPIJE PISCA OTPISA -- ulaz koji ekran ne bi pustio.
+'
+' OtpisiAmbalazu_TX ima pozivaoce mimo ekrana, pa svoje kapije nosi sam
+' (testovi.md par. 5). Svako odbijanje se meri zajedno sa tim da NIJE ostavilo
+' zaglavlje: pisac pada pre transakcije ili je vraca celu.
+'   - kolicina 0 i negativna;
+'   - prazan razlog (ODL-34 k) -- kapija i u piscu, ne samo na ekranu;
+'   - nepostojeci nalog (AMB-INV-03) i granica kao nalog (REALAN -> GRANICA);
+'   - broj zauzet u nizu stanice tog dana (ODL-20) -- i kad je prvi dokument
+'     nabavka: niz (Stanica, dan) je zajednicki za nase ambalazne dokumente;
+'   - ispravan otpis prolazi, a vlasnik broja je stanica (ODL-34 c).
+Private Sub Test_KI026_OtpisPisacKapije()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("KI026P")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK-" & scenario)
+
+    Dim brojNab As String
+    brojNab = "NABK-" & scenario
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 5#, brojNab, "test KI-026"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, tipT, 2#, _
+                   REV_SMER_IZDAVANJE, TEST_KOOP_ID, "")) > 0, _
+               "KI-026 pisac: preduslov -- kooperant drzi 2"
+
+    Dim nDok As Long, razlog As String, dok As String
+    nDok = CountRows(TBL_AMBALAZA_DOKUMENT)
+
+    razlog = OtpisPisac(testDate, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT, 0#, "lom", "", dok)
+    AssertTrue InStr(1, razlog, "trazi pozitivnu kolicinu", vbBinaryCompare) > 0, _
+               "KI-026 pisac: kolicina 0 se odbija"
+    razlog = OtpisPisac(testDate, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT, -1#, "lom", "", dok)
+    AssertTrue InStr(1, razlog, "trazi pozitivnu kolicinu", vbBinaryCompare) > 0, _
+               "KI-026 pisac: negativna kolicina se odbija"
+    razlog = OtpisPisac(testDate, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT, 1#, "   ", "", dok)
+    AssertTrue InStr(1, razlog, "AMB-10-ODL-34 (k)", vbBinaryCompare) > 0, _
+               "KI-026 pisac: otpis bez razloga se odbija i mimo ekrana"
+    razlog = OtpisPisac(testDate, AMB_NALOG_KOOPERANT, "KOOP-NEMA-" & scenario, tipT, 1#, _
+                        "lom", "", dok)
+    AssertTrue InStr(1, razlog, "ne postoji", vbBinaryCompare) > 0, _
+               "KI-026 pisac: nepostojeci nalog se odbija (AMB-INV-03)"
+    razlog = OtpisPisac(testDate, AMB_NALOG_SPOLJNI, "", tipT, 1#, "lom", "", dok)
+    AssertTrue Len(razlog) > 0, "KI-026 pisac: granica nije nalog otpisa"
+    razlog = OtpisPisac(testDate, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT, 1#, "lom", _
+                        brojNab, dok)
+    AssertTrue InStr(1, razlog, "vec zauzet", vbBinaryCompare) > 0, _
+               "KI-026 pisac: broj nabavke iste stanice i dana je zauzet i za otpis (ODL-20)"
+    AssertEquals CStr(nDok), CStr(CountRows(TBL_AMBALAZA_DOKUMENT)), _
+                 "KI-026 pisac: odbijen otpis ne ostavlja zaglavlje"
+
+    razlog = OtpisPisac(testDate, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT, 1#, "lom", "", dok)
+    AssertEquals "", razlog, "KI-026 pisac: ispravan otpis prolazi"
+    AssertEquals AMB_DOK_OTPIS & "|" & AMB_NALOG_STANICA & "|" & TEST_ST_ID & "|lom", _
+                 NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, COL_AMBD_VRSTA)) & "|" & _
+                 NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, COL_AMBD_BROJ_OWNER_TIP)) & "|" & _
+                 NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, COL_AMBD_BROJ_OWNER_ID)) & "|" & _
+                 NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, COL_AMBD_NAPOMENA)), _
+                 "KI-026 pisac: otpis je nas dokument -- broj stanice, razlog na zaglavlju"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT) - 1#) < 0.001, _
+               "KI-026 pisac: kooperant posle otpisa 1 drzi 1"
+
+    Exit Sub
+EH:
+    LogFatal "Test_KI026_OtpisPisacKapije", Err.Number, Err.description
+End Sub
+
+' Jedan poziv pisca otpisa uz stanicu testa. Vraca razlog odbijanja ("" =
+' upisano), a AmbDokID u outDok.
+Private Function OtpisPisac(ByVal d As Date, ByVal nalogTip As String, ByVal nalogID As String, _
+                            ByVal tipAmb As String, ByVal kol As Double, _
+                            ByVal razlog As String, ByVal broj As String, _
+                            ByRef outDok As String) As String
+    outDok = ""
+    On Error Resume Next
+    outDok = modAmbalaza.OtpisiAmbalazu_TX(d, TEST_ST_ID, nalogTip, nalogID, tipAmb, kol, razlog, broj)
+    If Err.Number <> 0 Then
+        OtpisPisac = Err.description
+        outDok = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Function
+
+' Otpis kroz JEZGRO: zaglavlje OTPIS (broj stanice) i jedan red nalog ->
+' SpoljniSvet u sopstvenoj TX. potvrda -1 znaci "nije data". Vraca AmbDokID, a
+' razlog odbijanja u outRazlog ("" = upisano). Vrsta je literal (v. test).
+Private Function OtpisKrozJezgro(ByVal d As Date, ByVal broj As String, _
+                                 ByVal stanicaID As String, _
+                                 ByVal nalogTip As String, ByVal nalogID As String, _
+                                 ByVal tipAmb As String, ByVal kol As Double, _
+                                 ByVal potvrda As Double, _
+                                 Optional ByRef outRazlog As String) As String
+    Const VK_OTP As String = "OTPIS"
+    Const DOK_OTP As String = "OTPIS"
+    Dim tx As clsTransaction, dokID As String
+
+    outRazlog = ""
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    dokID = modAmbalaza.UpisiAmbDokument(tx, DOK_OTP, broj, d, _
+                                         AMB_NALOG_STANICA, stanicaID, "test AMB-INV-14")
+    modAmbalaza.PrenesiAmbalazu tx, d, tipAmb, kol, nalogTip, nalogID, _
+                                AMB_NALOG_SPOLJNI, "", VK_OTP, _
+                                DOK_TIP_AMBALAZA_DOKUMENT, dokID, potvrda
+    tx.CommitTx
+    Set tx = Nothing
+
+    OtpisKrozJezgro = dokID
+    Exit Function
+EH:
+    outRazlog = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    OtpisKrozJezgro = ""
+End Function
+
+' Dva naloga na JEDNOM dokumentu otpisa: kooperant pa stanica. Drugi red nosi
+' drugi par {Od, Na}, pa mora pasti na AMB-INV-10 i vratiti ceo dokument.
+Private Function OtpisDvaNaloga(ByVal d As Date, ByVal broj As String, _
+                                ByVal stanicaID As String, ByVal koopID As String, _
+                                ByVal tipAmb As String, _
+                                Optional ByRef outRazlog As String) As String
+    Const VK_OTP As String = "OTPIS"
+    Const DOK_OTP As String = "OTPIS"
+    Dim tx As clsTransaction, dokID As String
+
+    outRazlog = ""
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    dokID = modAmbalaza.UpisiAmbDokument(tx, DOK_OTP, broj, d, _
+                                         AMB_NALOG_STANICA, stanicaID, "test AMB-INV-10")
+    modAmbalaza.PrenesiAmbalazu tx, d, tipAmb, 1#, AMB_NALOG_KOOPERANT, koopID, _
+                                AMB_NALOG_SPOLJNI, "", VK_OTP, _
+                                DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    modAmbalaza.PrenesiAmbalazu tx, d, tipAmb, 1#, AMB_NALOG_STANICA, stanicaID, _
+                                AMB_NALOG_SPOLJNI, "", VK_OTP, _
+                                DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    tx.CommitTx
+    Set tx = Nothing
+
+    OtpisDvaNaloga = dokID
+    Exit Function
+EH:
+    outRazlog = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    OtpisDvaNaloga = ""
+End Function
 
 Private Sub Test_OTP_StornoVracaGajbeVozacu()
     On Error GoTo EH
