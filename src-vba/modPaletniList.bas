@@ -16,7 +16,7 @@ Private Const PAL_PRAG_MS As Long = 400
 ' Paletizacija (ovde): PaletizePrijemnica (kapacitet-gajbica raspodela + rubna
 '   paleta preko vise prijemnica), PrintPaletniList (reuse _Print konvencija iz
 '   modPrint), PrintNepotpunePalete, kooperanti preko modSledljivost.TraceByZbirna.
-'   Poziva se UNUTAR modDokumenta.SavePrijemnica_TX / SavePrijemnicaMulti_TX,
+'   Poziva se UNUTAR modDokumenta.SavePrijemnicaMulti_TX,
 '   PRE CommitTx -> atomicno sa prijemnicom; print/PDF je post-commit side effect.
 '   Stavka se kljuca po PrijemnicaID; ista prijemnica se ne paletizuje dvaput.
 '
@@ -119,7 +119,7 @@ EH:
 End Function
 
 ' ============================================================
-' PUBLIC -- paletizacija iz modDokumenta.SavePrijemnica_TX / Multi_TX.
+' PUBLIC -- paletizacija iz modDokumenta.SavePrijemnicaMulti_TX.
 ' Poziva se UNUTAR transakcije, PRE CommitTx -> atomicno sa prijemnicom.
 ' (TX vec drzi Calculation=manual, pa nema poseban calc-guard ovde.)
 '

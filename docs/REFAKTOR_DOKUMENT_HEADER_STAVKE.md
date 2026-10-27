@@ -9392,6 +9392,34 @@ nije preduslov golden lanca, iako ga je odluka 5 koraka 7 stavila „pre golden 
 izmereno gore); D2 (domen) i D1 (A13 zabranjuje storno otpremnice u aktivnoj zbirni); `KI-054` (strog predikat
 kupca hladnjače nastaje ovde, ali oznaka zbirne ostaje svoj rez); `KI-052`, `KI-053`.
 
+**Tok koda, deo 1 — kapije pisca, stari pisac (stavka 208):**
+
+- **Crveno izvedeno iz diff-a pre puštanja** (testovi dela 1 nad starim produkcionim kodom): BFP 9 padova na R1, R3
+  i R4. Izmereno tačno tako: **2777 / 9** (`MissingZbirna` ×3, `PisacPrjZbr01` ×4, `BrojPrijemnicePoKupcu` ×2).
+- **RunAllTests 275 / 5, neočekivano.** Izmereno pre ispravke; uzroci su u sejačima, ne u produkciji:
+  - zbirna `S6K6Zbirna` je nacrt sa upisanim IZDATO, bez članstva, pa je strogi čitač izvora odbija (260), a izveštaj
+    manjka je ne vidi (259);
+  - test 26 je prevezao fixture paletu (pao je 113), a zaostali dokumenti 259/260 oborili su `T_Izv`;
+  - test 35 ostavlja ispravku na čekanju, pa 275 ide iza 271.
+
+  26, 259 i 260 sada rade u svojoj transakciji nad pravom IZDATOM zbirnom. Posle ispravke sejača: **275 / 1**, tačno
+  275 na F4 hladnjače.
+- **Gde je plan ispravljen dok se pisalo:**
+  - **Kapija broja u piscu menja premisu zatečenih testova.** Dva S6K4 testa i `Test_GeneracijaNePrelaziVlasnika`
+    gradila su dva dokumenta istog broja za istog kupca. To sada odbija pisac (A2), pa delovi „dve generacije istog
+    broja" odlaze (−4 tvrdnje), a preostali preduslovi uzimaju drugi broj (BFP 2768 / 2 → 2775 / 0).
+  - **R2 nema posebnu sabotažu.** Deljena kapija je jedno sidro, pa `s6k6-f4-pusta-nacrt-zbirne` (presidrena) obara
+    F4 test, a sestra `s6k8-pisac-pusta-nacrt` sa drugom zamenom obara pisca. Za broj važi isti par:
+    `s6k8-hladnjaca-ne-broji-stornirane` i `s6k8-f4-hladnjaca-ne-broji-stornirane`.
+  - **275 ide kroz validator F4, ne kroz `CommitDokumentTest`:** na kodu pre ispravke bi potez prijemnicu kupca
+    hladnjače poslao na štampač (`PrintOut`, bez seam-a), pa bi run visio umesto da padne po imenu.
+  - **Pomoćnik `ZbrIzdataPodPrijemnicu`** (otpremnica i zbirna kroz pisce, IZDATA) zamenjuje `ZbrZateceniRed` /
+    `ZbrStavkaUzZateceni`, čija zbirna nije prošla pisca. Pisac je sad odbija, a i ranije nije bila „red kakav pravi
+    pisac".
+- **Zeleno:** RunAllTests **275 / 0**, BFP **2775 / 0** (+8 tvrdnji, razloženo u stavci 208), GREEN marker nad
+  `3b735bc48ecd`. Katalog 988 → 996, sidra 996 / 0, statička sonda 14/14, jeftine kapije 24/24.
+- **Imenovano, nije testirano:** `KupacJeHladnjacaStrogo` kad čitanje configa pukne.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima

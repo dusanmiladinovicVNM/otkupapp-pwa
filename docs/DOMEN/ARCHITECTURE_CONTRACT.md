@@ -67,7 +67,9 @@ uvozu — oba PWA uvoza fail-closed. Kapija dokazuje samo **negativ** — da bro
 pripada drugom vlasniku ili drugom danu; string koji nije u kanonskom obliku te
 vrste se ne sudi. Ne proverava jedinstvenost (to je
 `modBrojevi.BrojZauzetUNizu` za OTK, OTP, ZBR i REV — po nizu, sa storniranima;
-`CheckDuplicate` još za prijemnicu) i ne sudi prijemnicu.
+za prijemnicu `modDokumenta.PrijemnicaBrojRazlog`, isti za F4 i pisca od S6 koraka 8:
+po kupcu, eksternom kupcu među aktivnima, kupcu hladnjače i među storniranima, t. 4)
+i ne sudi prijemnicu.
 
 > **ZAMENJENO (AMB-10, 13.10.2026).** Dva pasusa ispod (`ReversID`, REV-IDENT-01, i
 > „Granica dokumenta") opisuju **stari** model reversa (dve noge u `tblAmbalaza`) i

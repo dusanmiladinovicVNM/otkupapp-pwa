@@ -198,15 +198,18 @@ tabela zaštićena.
 | Stanje | Ishod |
 |---|---|
 | `INTEGRITY_ERROR` | hard block |
-| `NONE` | postojeći BLOK/UPOZORENJE (`ZbirnaPostoji` + `PrijemnicaZbirnaBlokira()`), bez izmene |
+| `NONE` | hard block, „zbirna ne postoji" (od review-a #440 uvek; podešavanje BLOK/UPOZORENJE obrisano u S6 koraku 8) |
 | `CURRENT_AMBIGUOUS` | hard block, **bez** traženja kanonskog roditelja |
 | `OWNER_MISMATCH` | hard block |
 | `UNIQUE` + `historicalOwnerCount > 1` | **hard block** |
 | `UNIQUE` + `historicalOwnerCount <= 1` | prolaz, `selectedGeneracijaID` je roditelj |
 
 Tabela živi na **jednom mestu** — `modDokumenta.ZbirnaRoditeljRazlog`;
-`ZbirnaRoditeljOK` je tanak omotač nad njom. Vraća **kod razloga**, a prevod u
-tekst je u `modDokUnos.ZbirnaRoditeljPoruka` — isti obrazac kao F3 kapija.
+`ZbirnaRoditeljOK` je tanak omotač nad njom. Vraća **kod razloga**. Od S6 koraka 8
+kapiju prijemnice (tabela + status IZDATA, PRJ-ZBR-01) drži
+`modDokumenta.PrijemnicaRoditeljRazlog` za F4 **i** pisca, a prevod u tekst je
+`modDokumenta.PrijemnicaRoditeljPoruka` (do tada `modDokUnos.ZbirnaRoditeljPoruka`):
+pisac diže isti razlog koji F4 pokazuje uz polje.
 
 **Zašto tvrda blokada, a ne `UPOZORENJE`.** `PRIJEMNICA_ZBIRNA_PROVERA` bira
 politiku za *„zbirne nema"* — stanje koje operater može da zna unapred (zbirna tek

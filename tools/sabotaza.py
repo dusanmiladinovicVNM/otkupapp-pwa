@@ -8738,15 +8738,10 @@ SABOTAZE = {
         "Test_S6_DveKlaseJedanDokument",
         "S6 PRJ: storno dokumenta daje TACNO dva kontra-stava (puna i povrat)",
     ),
-    # Generacija se opet NASLEDJUJE: drugi dokument istog broja i kupca dobije
-    # generaciju prvog, a storno po generaciji bi oborio oba.
-    "s6k2-generacija-nasledjena": (
-        "modDokumenta.bas",
-        "    ApplyNovaGeneracijaID TBL_PRIJEMNICA, appendedRow\n",
-        "    ApplyGeneracijaID TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ, brojPrij, COL_PRJ_KUPAC, kupacID   ' SABOTAZA: generacija nasledjena\n",
-        "Test_GeneracijaNePrelaziVlasnika",
-        "Vlasnik scope: drugi dokument istog broja i kupca ima SVOJU generaciju",
-    ),
+    # s6k2-generacija-nasledjena je obrisana u S6 koraku 8: "drugi dokument istog
+    # broja i kupca" pisac vise ne pravi (broj je jedinstven po kupcu i u piscu,
+    # A2), pa nasledjivanje generacije nema nad cim da se izmeri. Pravilo broja
+    # meri Test_S6K8_BrojPrijemnicePoKupcu.
     # Stavka klase II dobije klasu I: dokument samo sa klasom II tada ima stavku
     # koju nema. Manifest razlikuje "stavka fali" od "dokument ima jednu stavku".
     "s6k2-druga-klasa-kao-prva": (
@@ -9116,7 +9111,7 @@ SABOTAZE = {
         "        If Len(subj) > 0 And StrComp(Trim$(CStr(ids(k))), subj, vbTextCompare) = 0 Then\n",
         "        If Len(subj) > 0 Then   ' SABOTAZA: svaka prijemnica lanca je subjekat\n",
         "Test_S6K4_KaskadaSubjekatJeDokument",
-        "S6K4 kaskada subjekat: DRUGI dokument istog broja ostaje aktivan",
+        "S6K4 kaskada subjekat: DRUGI dokument iste zbirne ostaje aktivan",
     ),
     # Meri se na RESI KASNIJE kroz okvir (T_F8, #33), gde je razresavac JEDINA brana:
     # u StornoIzvrsi jezgro dobija prazan docID i odbija ga samo (RequireStornoAllowed),
@@ -9510,10 +9505,12 @@ SABOTAZE = {
         "T_BrutoNeto_PoRezimu",
         "zbirna se NE preracunava iz bruta",
     ),
+    # S6 korak 8: F4 roditelja pita DELJENU kapiju (PrijemnicaRoditeljRazlog) --
+    # sabotaza gasi bas poziv iz F4, pa pisac i dalje odbija (R2).
     "zbirna-f4-nije-vezan": (
         "modDokUnos.bas",
-        "        If Len(rodRazlog) > 0 Then\n",
-        "        If Len(rodRazlog) < 0 Then   ' SABOTAZA: F4 ne proverava roditelja\n",
+        "    If Len(rodRazlog) > 0 Then\n",
+        "    If Len(rodRazlog) < 0 Then   ' SABOTAZA: F4 ne proverava roditelja\n",
         "T_Prijemnica_VezujeSeSamoNaJednoznacnu",
         "dva aktivna dokumenta pod istim brojem zaustavljaju prijemnicu",
     ),
@@ -9551,10 +9548,12 @@ SABOTAZE = {
         "Test_S6K6_F4DokumentProlaziLanac",
         "S6K6 F4: upis kroz ekran F4 prolazi",
     ),
+    # Od S6 koraka 8 kapija IZDATE zbirne zivi u deljenom razresavacu, pa ista
+    # sabotaza obara i F4 i pisca (sestra: s6k8-pisac-pusta-nacrt).
     "s6k6-f4-pusta-nacrt-zbirne": (
-        "modDokUnos.bas",
-        "        If Not modDokumenta.ZbirnaJeIzdata(zbrRod.selectedZbirnaID) Then\n",
-        "        If False Then   ' SABOTAZA: nacrt zbirne prolazi kao roditelj\n",
+        "modDokumenta.bas",
+        "    If Not ZbirnaJeIzdata(id.selectedZbirnaID) Then\n",
+        "    If False Then   ' SABOTAZA: nacrt zbirne prolazi kao roditelj\n",
         "T_Prijemnica_VezujeSeSamoNaJednoznacnu",
         "nacrt zbirne zaustavlja prijemnicu (PRJ-ZBR-01)",
     ),
@@ -9593,11 +9592,14 @@ SABOTAZE = {
         "T_S6K6_UlazNeMenjaPodatak",
         "20,5 gajbi klase I se odbija na polju",
     ),
+    # Od S6 koraka 8 provera broja je deljena (PrijemnicaBrojRazlog) -- sestra
+    # s6k8-broj-bez-opsega-kupca meri isti kvar kroz pisca.
     "s6k6-broj-globalno": (
-        "modDokUnos.bas",
-        '    dup = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, S(p, "brDok"), COL_PRJ_DATUM, _\n'
-        '                         COL_PRJ_KUPAC, S(p, "kupacID"))\n',
-        '    dup = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, S(p, "brDok"), COL_PRJ_DATUM)\n'
+        "modDokumenta.bas",
+        "    PrijemnicaBrojRazlog = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, brojPrij, _\n"
+        "                                          COL_PRJ_DATUM, COL_PRJ_KUPAC, kupacID)\n",
+        "    PrijemnicaBrojRazlog = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, brojPrij, _\n"
+        "                                          COL_PRJ_DATUM)\n"
         "    ' SABOTAZA: broj se opet proverava preko svih kupaca\n",
         "T_S6K6_BrojJedinstvenPoKupcu",
         "broj koji drzi drugi kupac prolazi",
@@ -9635,19 +9637,10 @@ SABOTAZE = {
         "prijemnica ide u modDokUnos.PrijemnicaValidiraj",
     ),
     # --- review #440, krug 1 (stavka 195) ------------------------------------
-    # UPOZORENJE opet pusta nepostojecu zbirnu -- ali BEZ MsgBox-a koji je tu
-    # stajao pre ispravke: sabotaza sa dijalogom bi u headless run-u visila, pa
-    # bi dokaz.py zabelezio TIMEOUT umesto crvenog po imenu.
-    "s6k6-upozorenje-pusta-nepostojecu": (
-        "modDokUnos.bas",
-        '                              S(p, "brojZbirne") & "\' " & Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")\n'
-        "        Exit Function\n",
-        '                              S(p, "brojZbirne") & "\' " & Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")\n'
-        "        If PrijemnicaZbirnaBlokira() Then Exit Function\n"
-        "        PrijemnicaValidiraj = \"\": fokus = \"\"   ' SABOTAZA: UPOZORENJE pusta nepostojecu zbirnu\n",
-        "T_Prijemnica_VezujeSeSamoNaJednoznacnu",
-        "nepostojeca zbirna se odbija i uz UPOZORENJE (PRJ-ZBR-01)",
-    ),
+    # s6k6-upozorenje-pusta-nepostojecu je obrisana u S6 koraku 8: podesavanje
+    # PRIJEMNICA_ZBIRNA_PROVERA (BLOK / UPOZORENJE) ne postoji, pa nema "uz
+    # UPOZORENJE" stanja koje bi sabotaza vratila. Nepostojecu zbirnu u F4 i u
+    # piscu meri ista kapija (s6k8-pisac-pusta-bez-zbirne).
     # Sidro ne sme biti podniz zamene (obrnuta zamka 8): katalog tada nad
     # sabotiranim izvorom vidi i sidro i zamenu, pa ne ume da kaze "zatecen
     # sabotiran". Zato red sidra u zameni nosi oznaku.
@@ -9961,6 +9954,99 @@ SABOTAZE = {
         "        ' SABOTAZA: nastavak ne pita da li je otpremnica lanca\n",
         "Test_S6K7_LanacSamoOgledalo",
         "S6K7 ogledalo: Ponovi nad blokom rucne otpremnice ne pravi nista i ne javlja nista",
+    ),
+    # --- S6 korak 8, deo 1 (stavka 208): kapije prijemnice u piscu ------------
+    # Pisac vise ne pita kapiju roditelja po broju: prijemnica nastaje nad
+    # zbirnom koje nema (R4) -- F4 i dalje odbija, pa sabotaza meri bas pisca.
+    "s6k8-pisac-pusta-bez-zbirne": (
+        "modDokumenta.bas",
+        "        If Len(razlog) > 0 Then\n"
+        "            Err.Raise vbObjectError + 1436, SRC, PrijemnicaRoditeljPoruka(razlog, brojZbirne)\n",
+        "        If Len(razlog) < 0 Then   ' SABOTAZA: pisac ne proverava roditelja\n"
+        "            Err.Raise vbObjectError + 1436, SRC, PrijemnicaRoditeljPoruka(razlog, brojZbirne)\n",
+        "Test_PrijemnicaMissingZbirnaDoesNotAppend",
+        "Prijemnica with missing zbirna is rejected (PRJ-ZBR-01)",
+    ),
+    # Sestra s6k6-f4-pusta-nacrt-zbirne: ista kapija, drugi pozivalac (R2).
+    "s6k8-pisac-pusta-nacrt": (
+        "modDokumenta.bas",
+        "    If Not ZbirnaJeIzdata(id.selectedZbirnaID) Then\n",
+        "    If False Then   ' SABOTAZA: nacrt zbirne prolazi kao roditelj (sestra kroz pisca)\n",
+        "Test_S6K8_PisacPrjZbr01",
+        "S6K8 pisac: nacrt zbirne se odbija pre ijednog upisa (PRJ-ZBR-01)",
+    ),
+    # Dvosmislen broj vise nije razlog: razresavac pada na "nije izdata", pa
+    # tvrdnja koja imenuje DVOSMISLENOST puca po imenu.
+    "s6k8-pisac-pusta-dvosmislenu": (
+        "modDokumenta.bas",
+        "        Case ZBR_RES_AMBIGUOUS\n"
+        "            ZbirnaRoditeljRazlog = ZBR_PARENT_DVOSMISLEN\n",
+        "        Case ZBR_RES_AMBIGUOUS\n"
+        "            ' SABOTAZA: dvosmislen broj prolazi kao roditelj\n",
+        "Test_S6K8_PisacPrjZbr01",
+        "S6K8 pisac: dvosmislen broj zbirne se odbija pre ijednog upisa",
+    ),
+    # Sestra zbirna-f4-pusta-tudjeg-vlasnika, kroz pisca (R2).
+    "s6k8-pisac-pusta-tudju": (
+        "modDokumenta.bas",
+        "        Case ZBR_RES_OWNER_MISMATCH\n"
+        "            ZbirnaRoditeljRazlog = ZBR_PARENT_TUDJ\n",
+        "        Case ZBR_RES_OWNER_MISMATCH\n"
+        "            ' SABOTAZA: tudj vlasnik prolazi kao roditelj (sestra kroz pisca)\n",
+        "Test_S6K8_PisacPrjZbr01",
+        "S6K8 pisac: zbirna drugog kupca se odbija pre ijednog upisa",
+    ),
+    # Zadat roditelj (hladnjacki lanac) opet prolazi u nacrtu.
+    "s6k8-roditelj-id-pusta-nacrt": (
+        "modDokumenta.bas",
+        "    If Not ZbirnaJeIzdata(Trim$(zbirnaID)) Then\n",
+        "    If False Then   ' SABOTAZA: zadat roditelj u nacrtu prolazi\n",
+        "Test_S6K8_PisacPrjZbr01",
+        "S6K8 pisac: zadat roditelj u nacrtu se odbija pre ijednog upisa",
+    ),
+    # Pisac vise ne proverava broj -- F4 i dalje proverava, pa meri bas pisca.
+    "s6k8-pisac-bez-provere-broja": (
+        "modDokumenta.bas",
+        "    razlog = PrijemnicaBrojRazlog(brojPrij, kupacID)\n",
+        "    razlog = \"\"   ' SABOTAZA: pisac ne proverava broj prijemnice\n",
+        "Test_S6K8_BrojPrijemnicePoKupcu",
+        "S6K8 broj: aktivan isti broj istog kupca se odbija u piscu (A2)",
+    ),
+    # Kupac hladnjace opet broji samo aktivne (KI-051) -- kroz pisca.
+    "s6k8-hladnjaca-ne-broji-stornirane": (
+        "modDokumenta.bas",
+        "    If Not hladnjaca Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: hladnjaca ne broji stornirane\n",
+        "Test_S6K8_BrojPrijemnicePoKupcu",
+        "S6K8 broj: storniran broj hladnjace se ne oslobadja u piscu (A2 t. 4, KI-051)",
+    ),
+    # Ista sabotaza kroz F4 (modTest 275) -- jedna provera, dva pozivaoca.
+    "s6k8-f4-hladnjaca-ne-broji-stornirane": (
+        "modDokumenta.bas",
+        "    If Not hladnjaca Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: hladnjaca ne broji stornirane (sestra kroz F4)\n",
+        "T_S6K8_BrojHladnjacePosleStorna",
+        "F4 hladnjaca: broj stornirane prijemnice se odbija na polju broja (A2 t. 4, KI-051)",
+    ),
+    # Obrnut kvar: i eksterni kupac broji stornirane, pa ispravka ne moze da
+    # zadrzi kupcev broj (kontrola R3 a3).
+    "s6k8-eksterni-broji-stornirane": (
+        "modDokumenta.bas",
+        "    If Not hladnjaca Then Exit Function\n",
+        "    ' SABOTAZA: i eksterni kupac broji stornirane\n",
+        "Test_S6K8_BrojPrijemnicePoKupcu",
+        "S6K8 broj: storniran broj eksternog kupca prolazi (ispravka zadrzava kupcev broj)",
+    ),
+    # Sestra s6k6-broj-globalno, kroz pisca: broj drugog kupca se odbija.
+    "s6k8-broj-bez-opsega-kupca": (
+        "modDokumenta.bas",
+        "    PrijemnicaBrojRazlog = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, brojPrij, _\n"
+        "                                          COL_PRJ_DATUM, COL_PRJ_KUPAC, kupacID)\n",
+        "    PrijemnicaBrojRazlog = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, brojPrij, _\n"
+        "                                          COL_PRJ_DATUM)\n"
+        "    ' SABOTAZA: broj se opet proverava preko svih kupaca (sestra kroz pisca)\n",
+        "Test_S6K8_BrojPrijemnicePoKupcu",
+        "S6K8 broj: isti broj drugog kupca prolazi",
     ),
 }
 

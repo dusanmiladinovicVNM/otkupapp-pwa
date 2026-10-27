@@ -458,21 +458,6 @@ End Function
 
 ' Redosled provera je isti kao u frmDokumenta.btnUnosZbr_Click - to nije stil
 ' nego ponasanje: operater je navikao koje ga polje prvo zaustavi.
-' Kod razloga za RODITELJA -> korisnicki tekst. NEMA se prevodi u postojecu
-' poruku "zbirna ne postoji": do nje se kroz PrijemnicaValidiraj ne stize (kapija
-' je u Else grani, gde zbirna postoji), ali funkcija ne sme da vrati prazno i tako
-' izgleda kao prolaz.
-Private Function ZbirnaRoditeljPoruka(ByVal razlog As String) As String
-    Select Case razlog
-        Case ZBR_PARENT_DVOSMISLEN: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN")
-        Case ZBR_PARENT_TUDJ: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_TUDJ")
-        Case ZBR_PARENT_ISTORIJA: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_ISTORIJA")
-        Case ZBR_PARENT_NEMA: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_1") & " " & _
-                                                     Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")
-        Case Else: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_INTEGRITET")
-    End Select
-End Function
-
 ' VALIDACIJA UNOSA ZBIRNE NAD KANONSKIM MODELOM (S4-2c/2b-1).
 '
 ' Sta je NESTALO, i zasto:
@@ -818,7 +803,7 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
     Dim kolAmb As Double, kolAmbII As Double, kolAmbVr As Double
     Dim imaKlasaI As Boolean, dveKl As Boolean, strogo As Boolean
     Dim tara As Double, taraII As Double
-    Dim postojeca As String, errDesc As String
+    Dim postojeca As String, errDesc As String, rodRazlog As String, rodID As String
     On Error GoTo EH
     fokus = ""
 
@@ -841,47 +826,19 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         fokus = "brojZbirne": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_BROJ_ZBIRNE"): Exit Function
     End If
 
-    ' Zbirna mora da postoji u sistemu -- UVEK (PRJ-ZBR-01; review #440, krug 1).
-    ' Do tada je PRIJEMNICA_ZBIRNA_PROVERA = UPOZORENJE nudio potvrdu, a posle "Da"
-    ' preskakao kapiju identiteta i kapiju IZDATE zbirne ispod: nastajala je
-    ' prijemnica bez roditelja (sonda, stavka 195). Podesavanje F4 vise ne cita.
-    If Not ZbirnaPostoji(S(p, "brojZbirne")) Then
+    ' PRJ-ZBR-01: zbirna postoji, jednoznacna je, istog vlasnika, sa istorijom
+    ' jednog vlasnika, i IZDATA -- UVEK, bez pitanja (review #440, krug 1: uz
+    ' UPOZORENJE je potvrda pravila prijemnicu bez roditelja). Od S6 koraka 8 je
+    ' to ISTA kapija koju pisac drzi (modDokumenta.PrijemnicaRoditeljRazlog), i
+    ' isti tekst (PrijemnicaRoditeljPoruka): ovde ide kao poruka uz polje, tamo
+    ' kao greska. Status se cita sa razresenog dokumenta, ne po broju. Tvrda
+    ' blokada: ekran ne moze da ponudi koji je dokument pravi.
+    rodRazlog = modDokumenta.PrijemnicaRoditeljRazlog(S(p, "brojZbirne"), S(p, "vozacID"), _
+                                                      S(p, "kupacID"), rodID)
+    If Len(rodRazlog) > 0 Then
         fokus = "brojZbirne"
-        PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_1") & " '" & _
-                              S(p, "brojZbirne") & "' " & Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")
+        PrijemnicaValidiraj = modDokumenta.PrijemnicaRoditeljPoruka(rodRazlog, S(p, "brojZbirne"))
         Exit Function
-    Else
-        ' I2 (docs/DOMEN/ZBR_IDENTITET.md par.6): "postoji" NIJE isto sto i
-        ' "jednoznacna". ZbirnaPostoji odgovara samo na prvo -- vraca True cim
-        ' ijedan aktivan red nosi taj broj, pa bi se prijemnica vezala i kad pod
-        ' brojem stoje DVA dokumenta, ili dokument DRUGOG vlasnika.
-        '
-        ' Veza se upisuje kao GOLA LABELA (COL_PRJ_BROJ_ZBIRNE), pa nizvodne
-        ' operacije po broju mogu da zahvate tudje. Zato i UNIQUE danas pada ako
-        ' je broj IKAD imao dva vlasnika -- isto pravilo koje drzi
-        ' modStorno.RequireJedanVlasnikIkadPoBroju.
-        '
-        ' Ovo je TVRDA blokada: potvrda ne pomaze jer ekran ne moze ni da ponudi
-        ' koji je dokument pravi.
-        Dim zbrRod As ZbirnaIdent
-        Dim rodRazlog As String
-        zbrRod = ZbirnaIdentResolve(S(p, "brojZbirne"), S(p, "vozacID"), S(p, "kupacID"))
-        rodRazlog = ZbirnaRoditeljRazlog(zbrRod)
-        If Len(rodRazlog) > 0 Then
-            fokus = "brojZbirne"
-            PrijemnicaValidiraj = ZbirnaRoditeljPoruka(rodRazlog)
-            Exit Function
-        End If
-
-        ' PRJ-ZBR-01 (S6 korak 6, odluka 2): zbirna je prevozni spisak tek kad je
-        ' IZDATA. Nacrt je najava -- manjak bi se merio prema neproverenoj najavi, a
-        ' nacrt se posle sme menjati. Kapija stoji POSLE kapije identiteta: status
-        ' se cita sa razresenog dokumenta, ne po broju.
-        If Not modDokumenta.ZbirnaJeIzdata(zbrRod.selectedZbirnaID) Then
-            fokus = "brojZbirne"
-            PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_P_NIJE_IZDATA")
-            Exit Function
-        End If
     End If
 
     If strogo And Len(S(p, "vrsta")) = 0 Then
@@ -1017,11 +974,12 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
 
     ' BROJ JE JEDINSTVEN PO KUPCU (S6 korak 6, odluka 6; A2): broj prijemnice je
     ' kupcev (ODL-22), pa dva kupca smeju isti broj. Do koraka 6 je provera bila
-    ' globalna i odbijala legitiman broj drugog kupca. Stornirani se ne broje, pa
-    ' ispravka zadrzava broj.
+    ' globalna i odbijala legitiman broj drugog kupca. Eksternom kupcu se
+    ' stornirani ne broje (ispravka zadrzava broj), a kupcu hladnjace se broje:
+    ' njegov broj je nas niz i storno ga ne oslobadja (A2 t. 4, KI-051, S6 korak
+    ' 8). Pravilo je jedno za F4 i pisca (modDokumenta.PrijemnicaBrojRazlog).
     Dim dup As String
-    dup = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, S(p, "brDok"), COL_PRJ_DATUM, _
-                         COL_PRJ_KUPAC, S(p, "kupacID"))
+    dup = modDokumenta.PrijemnicaBrojRazlog(S(p, "brDok"), S(p, "kupacID"))
     If Len(dup) > 0 Then
         fokus = "brDok": PrijemnicaValidiraj = dup: Exit Function
     End If

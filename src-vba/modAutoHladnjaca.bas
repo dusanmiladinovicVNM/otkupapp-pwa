@@ -33,14 +33,34 @@ End Function
 ' Eksterni kupci -> False (za njih je zbirna poslednji interni dokument, a prijemnica
 ' eksterna -> storno framework ne kaskadira nizvodni tok). Prazan config / prazan
 ' kupac -> False.
+'
+' Fail-open: tehnicka greska citanja daje False. Ko iz odgovora pise ili sudi
+' (broj prijemnice, S6 korak 8) cita STROGO -- KupacJeHladnjacaStrogo, isto telo.
 Public Function IsHladnjacaKupac(ByVal kupacID As String) As Boolean
     On Error Resume Next
+    IsHladnjacaKupac = KupacJeHladnjacaStrogo(kupacID)
+End Function
+
+' Isto pravilo kao IsHladnjacaKupac, ali STROGO: config se cita iz tabele koja
+' mora da postoji sa svojim kolonama, a greska citanja se DIZE. Prazan kljuc
+' MALINA_DEFAULT_KUPAC je legitimno stanje (hladnjace nema), pa daje False.
+' Pisac prijemnice iz odgovora sudi broj (A2 t. 4, KI-051): broj hladnjace
+' storno ne oslobadja, pa bi fail-open citanje tiho pustilo broj stornirane
+' hladnjacke prijemnice.
+Public Function KupacJeHladnjacaStrogo(ByVal kupacID As String) As Boolean
+    Const SRC As String = "modAutoHladnjaca.KupacJeHladnjacaStrogo"
     kupacID = Trim$(kupacID)
     If Len(kupacID) = 0 Then Exit Function
+    If modDataAccess.GetTable(TBL_SEF_CONFIG) Is Nothing Then
+        Err.Raise vbObjectError + 8475, SRC, _
+                  "Tabela " & TBL_SEF_CONFIG & " ne postoji -- kupac hladnjace se ne moze procitati."
+    End If
+    RequireColumnIndex TBL_SEF_CONFIG, "ConfigKey", SRC
+    RequireColumnIndex TBL_SEF_CONFIG, "ConfigValue", SRC
     Dim h As String
     h = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
     If Len(h) = 0 Then Exit Function
-    IsHladnjacaKupac = (StrComp(kupacID, h, vbTextCompare) = 0)
+    KupacJeHladnjacaStrogo = (StrComp(kupacID, h, vbTextCompare) = 0)
 End Function
 
 ' Trajna oznaka zbirne (ZBR-OWN-01, review #442 P1-b): "Da" kad je kupac zbirne

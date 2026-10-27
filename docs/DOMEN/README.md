@@ -94,16 +94,18 @@ prema njima (`ZbrRequireIstiAko`).
 **PRJ-ZBR-01 — prijemnica se vezuje samo na IZDATU, jednoznačnu zbirnu (odluka
 operatera, 24.10.2026, S6 korak 6).** Zbirna je prevozni spisak tek kad je izdata
 (`IzdajZbirnu_TX`): nacrt je najava, pa bi manjak prijemnice bio meren prema
-neproverenoj najavi, a nacrt se posle sme menjati. Vlasnik: validator F4
-(`modDokUnos.PrijemnicaValidiraj`), posle kapije identiteta (dvosmislena, tuđa,
-istorija dva vlasnika). Pisac (`SavePrijemnicaDokument`) je dobija u koraku 8, kad
-testovi pređu na Multi. Pravilo važi i kad zbirne pod tim brojem uopšte nema: F4 tada
-**uvek** odbija (review #440, krug 1). Do tada je uz `PRIJEMNICA_ZBIRNA_PROVERA =
-UPOZORENJE` operater potvrdom pravio prijemnicu bez roditelja (`ZbirnaRoditeljID`
-prazan; sonda, stavka 195). Podešavanje je sklonjeno iz Podešavanja; konstanta i blaža
-grana pisca ostaju do koraka 8 i dosežu ih samo testovi (jedini produkcioni pozivalac
-pisca je F4).
-Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 6".
+neproverenoj najavi, a nacrt se posle sme menjati. Vlasnik je **jedna kapija**,
+`modDokumenta.PrijemnicaRoditeljRazlog` (identitet: postoji, jednoznačna, istog vlasnika,
+istorija jednog vlasnika; pa status, sa razrešenog dokumenta), sa dva pozivaoca:
+validator F4 (`modDokUnos.PrijemnicaValidiraj`, poruka uz polje) i pisac
+(`SavePrijemnicaDokument`, greška pre ijednog upisa) — od S6 koraka 8; tekst razloga je
+jedan (`PrijemnicaRoditeljPoruka`). Zadat roditelj po ID-u (hladnjački lanac) dobija istu
+kapiju IZDATE zbirne (`ZbirnaRoditeljPrijemnice`). Pravilo važi i kad zbirne pod tim
+brojem uopšte nema: odbija se **uvek** (review #440, krug 1). Do tada je uz
+`PRIJEMNICA_ZBIRNA_PROVERA = UPOZORENJE` operater potvrdom pravio prijemnicu bez
+roditelja (`ZbirnaRoditeljID` prazan; sonda, stavka 195), a pisac mimo F4 vezivao šta
+zatekne; podešavanje, konstanta i blaža grana pisca su obrisani u koraku 8.
+Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 6" i „Korak 8".
 
 **HLD-LANAC-01 — hladnjački blok je jedan lanac, 1:1 po klasi na četiri nivoa
 (specifikacija operatera 20.09.2026; odluke 24.10.2026, S6 korak 7).** Blok upisan na

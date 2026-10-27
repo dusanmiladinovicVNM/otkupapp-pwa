@@ -295,7 +295,7 @@ ambalaže, F7 nema polje iznosa (`ApplyFormFields`). Zato je i podeljen na dva.
 | Zbirna: izvor ima Kl.II a prekidač isključen → blokada | `ZbirnaValidiraj` → `ZbirnaIzvorImaKlasuII` | inače bi se Kl.II tiho izgubila |
 | Zbirna **nema** bruto→neto ni cenu | — | `tblZbirna` nema ni `BrutoKg` ni `Cena`; zbirna je zbir već netiranih otpremnica |
 | Zbirna: `Hladnjaca` / `Pogon` | `modOtkupUI` (`fgHladnjaca` / `fgPogon`) + `modScrDokumenti.SaveZbirna` | ~~novi UI nema ta polja (Z3b)~~ → **preneto u `v6-ui-215`** (MIG-001, §28.1b). Writer nije diran |
-| Prijemnica: kupac → vozač → broj → broj zbirne → zbirna postoji | `PrijemnicaValidiraj` | ponašanje po `PRIJEMNICA_ZBIRNA_PROVERA` (BLOK / UPOZORENJE) |
+| Prijemnica: kupac → vozač → broj → broj zbirne → zbirna postoji | `PrijemnicaValidiraj` | uvek tvrdo (PRJ-ZBR-01): izdata, jednoznačna zbirna istog vlasnika — ista kapija kao pisac (`modDokumenta.PrijemnicaRoditeljRazlog`, S6 korak 8); podešavanje `PRIJEMNICA_ZBIRNA_PROVERA` obrisano |
 | Prijemnica: bruto→neto po klasama, `BrutoKg` zamrznut | `PrijemnicaValidiraj` | isto kao otkup i otpremnica |
 | Prijemnica: 1 zbirna = 1 prijemnica (pitanje, ne greška) | `PrijemnicaValidiraj` → `LookupActiveID` | |
 | Prijemnica: auto-štampa + grupni otkupni list samo za hladnjaču | `PrijemnicaUpisi` | best-effort, ne obara potvrdu upisa |
