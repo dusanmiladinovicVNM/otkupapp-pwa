@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 27.10.2026 (stavka 214: rez `KI-025` + `KI-026` — pre-flight i odluke `AMB-10-ODL-34`, pre koda).
+**Ažurirano:** 27.10.2026 (stavka 215: rez `KI-025` + `KI-026` — kod i ciljane suite zelene, čeka reviewer GO).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -7907,6 +7907,47 @@
        listu to nije bilo tačno (izmereno `RedoviZaTip` → `AmbDokUListiReversa`).
      - **Usput:** `KI-058` zatvoren (`4998e0df`, jedno slovo u `modPoruke`).
      - **Sledeći brojevi:** stavka 215 · test 277 (pazi `#441`) · KI-059.
+215. **Rez `KI-025` + `KI-026` — kod, testovi i ciljane suite zelene; čeka reviewer GO** (27.10.2026). Grana
+     `claude/amb-nabavka-otpis`. Pun zapis: `docs/DOMEN/AMBALAZA.md` 6.12m („Urađeno", „Nizvodno").
+
+     - **Kod (po `AMB-10-ODL-34`):**
+       - jezgro: `AMB-INV-14` u `PrenesiAmbalazu` (`AmbVrstaSmePokrice`);
+       - pisac: `OtpisiAmbalazu_TX`, zajedničko telo sa nabavkom;
+       - unos: F7 smer 7 i 8, `OtpisNalog`, saldo i razlog nad snimkom;
+       - ljuska: okvir `fgSmerAmb` i polje `fgNapomena`;
+       - lista: četiri vrste, a granica nije protivpartner;
+       - papir: zapisnik o otpisu i ponovna štampa iz liste `AMBALAZA`.
+     - **Crveno pre ispravke** (testovi nad starim kodom, fixture `7eab17dc6aec0058`):
+       - RunAllTests **278 / 3**, svaki po imenu:
+         - 202 „lista REVERSI pokazuje i nabavku (ODL-34 i)";
+         - 277 „F7 nabavka: snimanje prolazi" (stari kod: „Izaberi smer reversa");
+         - 278 „…uz polje kolicine (AMB-INV-14)" (fokus je bio `smerRev`).
+       - BFP **2790 / 6**, svih šest u `Test_AMBINV14_OtpisSeNePokriva`. Najjači je dokaz kvara:
+         - uz potvrdu jednaku manjku, stari kod je upisao otpis i obavezu firme +2 za otpisane gajbe;
+         - očekivano `157|495|0|3`, dobijeno `158|497|2|0`.
+     - **Zeleno posle ispravke**, GREEN marker za izvor `d8ca0e7c318f`, ugovor `b9be2bd9481d`:
+       - RunAllTests **278 / 0**;
+       - BFP **2801 / 0**: 2779 + 11 (`AMB-INV-14`) + 11 (`Test_KI026_OtpisPisacKapije`), razlika objašnjena;
+       - Izveštaji i Storno centar OK.
+       - `COMPILE NEJASNO` (kao i do sada) — Compile je ručna kapija.
+     - **Jeftine kapije:** sve zelene.
+       - `vba_check`: katalog 1001 → **1011**.
+       - `who_writes --check` i `--check-ownership`: nema novih pisaca.
+       - `gen_schema_module --check`: šema nije dirana, otisak `87AB4F9B`.
+       - `popis_citalaca --check` i `sabotaza --self-test`.
+     - **Sabotaže:**
+       - deset novih: `ki025-*`, `ki026-*`, `odl34-*`;
+       - šest sidara popravljeno posle izmene koda: `clear-zbirna`, `revers-smer`, `amb-10c-lista-filtrira-po-nozi`,
+         `amb-10c-lista-prima-svaku-vrstu` (nova tvrdnja: kontra-tvrdnja zatvorenog spiska),
+         `amb-rvp-potvrda-se-ne-prosledjuje` (zamena dobila oznaku, jer je isti red sada i zdrav) i
+         `odl24-f7-smer-van-opsega`.
+     - **Premisa testa 202 promenjena** odlukom (i): „ne pokazuje nabavku" → „pokazuje i nabavku", uz kontra-tvrdnju
+       da nepoznata vrsta ne ulazi i tvrdnju da red nabavke nosi stanicu u koloni partnera.
+     - **Nije pušteno, čeka reviewer GO:** FULL (`run_vba.py`), `dokaz.py` nad 16 novih i diranih sabotaža, sveska za
+       Compile (`--compile-only --keep`) i ručna provera.
+     - **Novo van reza:** `KI-059` — prazna kolona „Mesto" u izveštaju `AMBALAZA` za nabavku i otpis.
+     - **Mapa sposobnosti:** D-074 (nabavka), D-075 (otpis), D-076 (ponovna štampa zapisnika).
+     - **Sledeći brojevi:** stavka 216 · test 279 (pazi `#441`) · KI-060.
 
 ## Dug sa imenom (posle S5-5b)
 

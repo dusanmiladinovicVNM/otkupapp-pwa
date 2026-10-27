@@ -2299,6 +2299,37 @@ ima 12 kolona). PWA ne zna za `VrstaKretanja` (grep `src/` i `gas/` je prazan).
 - lista F7 pokazuje nabavku i otpis, sa nalogom u koloni partnera (premisa 202);
 - netaknuto: šest smerova F7 (testovi 202, 248, 256), otkup, otpremnica, prijemnica.
 
+**Urađeno (stavka 215):**
+- **jezgro:** `AMB-INV-14` je u `PrenesiAmbalazu`, pre pokrića i pre potvrde. Pravilo čita iz
+  `modAmbalazaUgovor.AmbVrstaSmePokrice` (negativan spisak, samo `OTPIS`). Greška je
+  `AMB_ERR_DEFICIT_NEPOKRIV`, pa je nijedan pozivalac ne tumači kao pitanje o manjku;
+- **pisac:** `modAmbalaza.OtpisiAmbalazu_TX` i `NabaviAmbalazu_TX` dele jedno telo
+  (`UpisiNasJednoredni_TX`). Zaglavlje i red su u istom rollback-u, broj je iz niza stanice,
+  a razlog je obavezan kad je dokument otpis. Pisac nabavke se spolja ne menja (potpis i
+  poruke su isti);
+- **unos:** `modNovacUnos`, smer 7 (`SMER_REV_NABAVKA`) i 8 (`SMER_REV_OTPIS`).
+  `OtpisNalog` je jedno mesto za izbor naloga (j), a `RevSmerJeNabavkaIliOtpis` jedna odluka za
+  validator, ljusku i ispravku. Ispravka nabavke i otpisa se odbija porukom
+  (`NOVUNOS_ERR_ISPR_REV_NIJE_REVERS`). Vrsta voća se za njih ne traži, jer ide samo na papir
+  reversa;
+- **ljuska:** segmenti 7 i 8 su u svom okviru `fgSmerAmb`, ispod reversa. Isti red bi suzio
+  svih osam segmenata (`LayoutSegs` deli širinu podjednako), pa šest postojećih ostaje kakvo
+  je. Polje `fgNapomena` se vidi samo uz 7 i 8 i šalje se samo dok se vidi. Briše ga
+  `ClearForm`;
+- **lista:** `AmbDokUListiReversa` pušta četiri vrste. `AmbProtivpartner` preskače granicu, pa
+  nabavka nosi stanicu, a otpis svoj nalog;
+- **papir:** `modPrint` ima treću vrstu protivstrane, `"OTPIS"`: naslov „ZAPISNIK O OTPISU",
+  nalog sa reda dokumenta, red „Razlog", stanje naloga pre i posle i PDF `OtpisAmbalaze_*`.
+  `modIzvestaj.StampajAmbDokument` pušta `OTPIS` po beloj listi, a `NABAVKA` i dalje pada na 7510.
+
+**Nizvodno (popis 27.10.2026):**
+- saldo, obaveza (`OTPIS` = 0), kartica, `AmbStanjeOkoDokumenta` i integritet knjige
+  (`modIntegritet.Chk_AMB_KnjigaIntegritet` → `AmbKnjigaNalazi`) prolaze bez nove grane;
+- `modIntegritet` ne proverava da li se red slaže sa zaglavljem (`AmbDokDozvoljavaKretanje`),
+  ni da li `DokumentID` postoji. To je zatečeno stanje, ne posledica reza;
+- PWA i GAS ne čitaju ambalažnu knjigu;
+- izveštaj `AMBALAZA` pokazuje praznu kolonu „Mesto" za red nabavke i otpisa: `KI-059`.
+
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 
 1. **AMB-10a** — ugovor: nalozi + resolver, `SpoljniSvet`, `VrstaKretanja`, `INV-01..09`, protokol potvrde deficita, storno-svesna formula obaveze i njena donja granica. **Bez produkcionog cutovera.**
