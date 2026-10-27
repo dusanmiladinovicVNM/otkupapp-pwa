@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 27.10.2026 (stavka 209: S6 korak 8, deo 2 — šema zaglavlja prijemnice, identitet po `PrijemnicaID`-u).
+**Ažurirano:** 27.10.2026 (stavka 210: S6 korak 8, deo 3 — golden lanac; korak 8 čeka reviewer GO).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -34,7 +34,7 @@
 | **S3-ostatak** (mrtve linijske kolone zaglavlja otpremnice) + putanja rename-a kolone + KI-008 | ✅ #395 (`8eeca04c`) |
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
-| **S6 prijemnica** | ⏳ **u toku, 7/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209); grana `claude/s6-korak8-zavrsni` sa `376a3d3e` |
+| **S6 prijemnica** | ⏳ **u toku, 7/8** -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) — čeka reviewer GO; grana `claude/s6-korak8-zavrsni` sa `376a3d3e` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7721,6 +7721,43 @@
          `T_IstiBrojRazliciteGeneracije_*`) ostaju zbog registra i kataloga.
      - **Sledeći je deo 3** (golden lanac: 9 scenarija, goldeni iz `fc06fa77`).
      - **Sledeći brojevi:** stavka 210 · test 276 (pazi `#441`) · KI-055.
+
+210. **S6 korak 8, deo 3 — golden lanac do fakture; korak 8 čeka reviewer GO** (27.10.2026). Grana
+     `claude/s6-korak8-zavrsni`; plan: §14.55, „Korak 8"; spec: `docs/DOMEN/GOLDEN_SCENARIJI.md` §13.
+
+     - **Kod (samo `modGoldenTests`):**
+       - vraćeno je 9 scenarija (A1–A5, B2, B3, F2, G1); `RunGoldenSuite` 2 → **11**;
+       - lanac ide kroz kanonske pisce: `CreateOtkup_TX` → `CreateOtpremnicaIzIzvora_TX` →
+         `CreateZbirna_TX` → `SavePrijemnicaMulti_TX` → `CreateFaktura_TX` po `PrijemnicaStavkaID`;
+       - adapter: otpremnice scenarija kroz članstvo zbirne, `poslato` sa njihovih stavki (umesto
+         `SumOtpremniceByKlasa` po broju, koji kanonski pisac ne piše), fakturisanost po stavci kroz
+         `FakturaLinijePoStavci`;
+       - transakcija scenarija snima i stavke i članstvo; `GldDict` je obrisan (bez pozivaoca).
+     - **Merenje pre zaključavanja:** prvi prolaz bez 9 goldena upisao je stvarni izlaz, a D3 i G2 su ostali
+       zeleni. Razlika naspram `fc06fa77` je tačno tri klase, sve ostalo je bajt-jednako:
+       - red `invarijanta OK` — skinut u S4-3a (`2e381836`);
+       - saldo kooperanta `0` umesto `-50` / `-100` (8 snimaka) — AMB-10 pokriće sopstvenih gajbi;
+       - A4 `otkupa 2` — blok ide u tačno jednu otpremnicu (README §1).
+     - **Odluka operatera (27.10.2026):** svih 9, sa tri razlike (po preporuci). D2 se ne vraća (odluka 2).
+     - **Zeleno:** Golden **11 / 0**, GREEN marker (izvor `0301eeb301fe`).
+     - **Dokaz da adapter grize, ručno** (katalog i `dokaz.py` ne pokrivaju Golden suite), uz povratak
+       izvora bajt-identično (sha256) onom nad kojim je bio zelen:
+       - A3 sa dve otpremnice → pada samo A3, na `otpremnica 1/2`;
+       - fakturisanost na nivou dokumenta → pada samo F2, na `fakturisano I=DA  II=NE`;
+       - `poslato` mimo članstva → pada 9 od 11, na `poslato`; D3 i G2 ostaju zeleni.
+     - **Jeftine kapije 24/24** (`WHO_WRITES.md` regenerisan: `modGoldenTests` sada snima stavke i članstvo).
+     - **Imenovano:** golden sabotaže nisu u katalogu, jer `dokaz.py` ne zna Golden suite. Pun dokaz pred
+       release ih zato ne ponavlja; to je svoj mali rez nad alatom.
+     - **Status S6:** kod koraka 8 je završen u tri dela (stavke 208–210). Prema reviewer GO idu:
+       - FULL (`python tools/run_vba.py`);
+       - `python tools/dokaz.py --grupe s6k8 zbirna-f4-nije-vezan s6k6-f4-pusta-nacrt-zbirne
+         s6k6-broj-globalno s6k4-subjekat-po-broju relink-ignorise-generaciju relink-cilj-po-broju
+         writer-isti-broj-odbija s6k3-cilj-prij-bez-stavki relink-cilj-bez-kapije
+         generacija-nema-pa-po-broju` (26 sabotaža, 8 prolaza);
+       - sveska za compile (`run_vba --compile-only --keep`).
+
+       Merge ide samo na izričit zahtev operatera.
+     - **Sledeći brojevi:** stavka 211 · test 276 (pazi `#441`) · KI-055.
 
 ## Dug sa imenom (posle S5-5b)
 

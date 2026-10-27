@@ -9440,6 +9440,20 @@ kupca hladnjače nastaje ovde, ali oznaka zbirne ostaje svoj rez); `KI-052`, `KI
 - **Zeleno:** RunAllTests **275 / 0**, BFP **2772 / 0 i GREEN marker**, Faktura 39, Palete, Storno 111, Storno centar,
   Izveštaji, Golden 2; fixture `7eab17dc6aec0058`, otisak šeme `87AB4F9B`. Katalog 995, sidra 995 / 0, sonda 14/14.
 
+**Tok koda, deo 3 — golden lanac (stavka 210):**
+
+- **Gde je plan ispravljen dok se pisalo:** R10 je tražio snimak bajt-jednak goldenu iz `fc06fa77`. Izmereno je
+  da to nije moguće ni za jedan od devet, i to iz tri razloga koje je doneo kasniji kod, a ne ovaj korak:
+  - S4-3a je skinuo red `invarijanta`;
+  - AMB-10 je promenio saldo kooperanta koji donese svoje gajbe;
+  - kanonska otpremnica nastaje iz celog bloka, pa A4 traži dva bloka.
+
+  Po odluci 2 to je išlo operateru; odluka je: svih 9, sa tri razlike (`GOLDEN_SCENARIJI.md` §13).
+- **Adapter je morao da pređe na članstvo:** kanonski pisac zbirne ne upisuje `BrojZbirne` na otpremnicu, pa
+  bi `SumOtpremniceByKlasa(broj)` i brojanje otpremnica po broju dali nulu za svaki kanonski lanac.
+- **Zeleno:** Golden 11 / 0; ručni dokaz grize u sva tri smera (A3, F2, `poslato`), a izvor je vraćen
+  bajt-identičan.
+
 ### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
 
 Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
