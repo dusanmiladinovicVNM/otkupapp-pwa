@@ -393,6 +393,7 @@ Public Sub RunAllTests()
     RunOne 286
     RunOne 287
     RunOne 288
+    RunOne 289
     RunOne 13
     RunOne 14
     RunOne 15
@@ -976,6 +977,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 286: TestName = "T_DocSort_DokumentneListe"
         Case 287: TestName = "T_AmbPoslovno_OtkupniListKaoKartica"
         Case 288: TestName = "T_AmbPoslovno_OtpisUPregleduOM"
+        Case 289: TestName = "T_AmbPoslovno_ReversKooperantaPoslovno"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1272,6 +1274,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 286: T_DocSort_DokumentneListe
         Case 287: T_AmbPoslovno_OtkupniListKaoKartica
         Case 288: T_AmbPoslovno_OtpisUPregleduOM
+        Case 289: T_AmbPoslovno_ReversKooperantaPoslovno
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -12905,6 +12908,62 @@ Private Sub T_AmbPoslovno_OtpisUPregleduOM()
              "pregled OM: otpis na dokumentu druge stanice ne ulazi u pregled ove"
     AssertEq KartNetoBroja(r, brojA), -3, _
              "kartica ambalaze: isti otpis je isti poslovni promet kooperanta (-3)"
+End Sub
+
+' ============================================================
+' 289. AMB-POSL-03: REVERS KOOPERANTA NOSI POSLOVNO STANJE, KAO OTKUPNI LIST.
+' ============================================================
+' Pravilo reversa (stavka 135, odluka 3) ostaje: novo = stanje posle dokumenta,
+' pocetno = novo - kretanje. Do sada je stanje bilo FIZICKO, pa je pokrice
+' deficita -- red istog dokumenta -- ulazilo u novo i "naduvavalo" pocetno:
+' povrat 23 uz pokrice 12 stampao je 23 -> 0, a kooperant je pre povrata drzao
+' 11; sledeci povrat uz pokrice 3 pocinjao je od 3, ne od kraja prethodnog
+' papira. Kartica i otkupni list (AMB-POSL-01) za istog kooperanta kazu 11 ->
+' -12 -> -15. Revers firme (stanica) i zapisnik o otpisu ostaju fizicki.
+' Tok (kooperant, nov tip T, stanica FX_STANICA): izdavanje 10, povrat 4,
+' izdavanje 5 (drzi 11); povrat 23 uz pokrice 12; povrat 3 uz pokrice 3.
+' Fixture: normal production state.
+' SABOTAZE: amb-posl-revers-fizicki.
+Private Sub T_AmbPoslovno_ReversKooperantaPoslovno()
+    Dim tip As String, dI1 As String, dP As String, dI2 As String
+    Dim dA As String, dB As String, bA As String, bB As String
+    Dim papirA As String, papirB As String, gA As String, gB As String
+    Dim modePre As String, errNum As Long, errDesc As String
+
+    tip = KartNoviTipAmb("REV")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tip, 40, "NAB-" & tip, "preduslov AMB-POSL-03"
+    dI1 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 10, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    dP = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 4, REV_SMER_PRIJEM, FX_KOOPERANT, "")
+    dI2 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 5, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    dA = KartPovratSaPokricem(tip, 23, bA)
+    dB = KartPovratSaPokricem(tip, 3, bB)
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+    On Error Resume Next
+    OcistiList WS_IZDAMB_SABLON
+    modIzvestaj.StampajReversAmbalaze dA, DOK_TIP_AMBALAZA_DOKUMENT, tip
+    gA = Err.description
+    Err.Clear
+    papirA = ReversStanjePapira()
+    OcistiList WS_IZDAMB_SABLON
+    modIzvestaj.StampajReversAmbalaze dB, DOK_TIP_AMBALAZA_DOKUMENT, tip
+    gB = Err.description
+    Err.Clear
+    papirB = ReversStanjePapira()
+    errNum = Err.Number
+    errDesc = Err.description
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_AmbPoslovno_ReversKooperantaPoslovno", errDesc
+
+    AssertEq (Len(dI1) > 0 And Len(dP) > 0 And Len(dI2) > 0 And Len(dA) > 0 And Len(dB) > 0), True, _
+             "preduslov: svih pet reversa je upisano"
+    AssertEq gA & gB, "", "preduslov: oba papira su odstampana bez greske"
+    AssertEq papirA, "11 kom|-12 kom", _
+             "revers kooperanta uz pokrice: pocetno je stanje pre dokumenta, novo je poslovno"
+    AssertEq papirB, "-12 kom|-15 kom", _
+             "sledeci revers pocinje tamo gde je prethodni papir stao"
 End Sub
 
 
