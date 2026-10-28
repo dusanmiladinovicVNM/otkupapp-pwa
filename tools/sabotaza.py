@@ -10438,6 +10438,15 @@ SABOTAZE = {
         "T_AmbPoslovno_OtpisUPregleduOM",
         "pregled OM: otpis na dokumentu druge stanice ne ulazi u pregled ove",
     ),
+    # Revers kooperanta opet cita FIZICKO stanje: pokrice ulazi u novo i
+    # naduvava pocetno (povrat 23 uz pokrice 12 -> 23 -> 0 umesto 11 -> -12).
+    "amb-posl-revers-fizicki": (
+        "modPrint.bas",
+        "        poslovno = True\n",
+        "        poslovno = False   ' SABOTAZA: revers kooperanta fizicki\n",
+        "T_AmbPoslovno_ReversKooperantaPoslovno",
+        "revers kooperanta uz pokrice: pocetno je stanje pre dokumenta, novo je poslovno",
+    ),
 }
 
 

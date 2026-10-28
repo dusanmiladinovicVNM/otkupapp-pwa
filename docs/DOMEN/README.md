@@ -248,7 +248,7 @@ ali firma ga njima nije zadužila. Zato iz iste knjige postoje tri broja:
 | Broj | Šta znači | Ko ga čita |
 |---|---|---|
 | fizički saldo | gde su gajbe | `AmbSaldoNaloga`, `GetAmbalazeStanje`, `ReportAmbalaza` (pregled kretanja), provere |
-| poslovni saldo | šta je firma partneru izdala minus šta je vratio | kartica kooperanta, kartica ambalaže, PDF otkupnog lista, kolona Ambalaža u pregledu po OM |
+| poslovni saldo | šta je firma partneru izdala minus šta je vratio | kartica kooperanta, kartica ambalaže, PDF otkupnog lista, revers kooperantu (`AMB-POSL-03`), kolona Ambalaža u pregledu po OM |
 | obaveza | koliko tuđe ambalaže firma duguje | `AmbObavezaPartneru` (`AMB-INV-09`) |
 
 Primer A: kooperant drži 11, vraća 23 → pokriće 12; fizički 0, poslovno −23 na
@@ -294,6 +294,17 @@ Ekran i PDF čitaju isti `ReportKarticaKooperanta`.
 Mere ih `modTest` 283–288 (287: otkupni list i kartica kažu isti broj; 288: otpis u pregledu po OM),
 sabotaže `amb-posl-*`,
 `kart-opis-*`, `doc-sort-*`.
+
+**AMB-POSL-03 — revers kooperantu nosi poslovno stanje, kao otkupni list
+(odluka operatera 28.10.2026).** Pravilo reversa iz stavke 135 (odluka 3) ostaje:
+novo = stanje posle dokumenta, početno = novo − promet. Promet je i ranije bio
+poslovni red dokumenta (pokriće nije poslovni red), ali je stanje bilo fizičko —
+pa je pokriće ulazilo u novo i naduvavalo početno: povrat 23 uz pokriće 12
+štampao je 23 → 0, a kooperant je pre povrata držao 11; sledeći revers je počinjao
+od 3, ne od kraja prethodnog. Za kooperanta se stanje sada čita poslovno
+(`samoPoslovno`): 11 → −12, pa −12 → −15 — isto kao kartica i otkupni list, i
+papiri se nastavljaju. Revers firme (stanje OM-a) i zapisnik o otpisu ostaju
+fizički. Meri ga `modTest` 289, sabotaža `amb-posl-revers-fizicki`.
 
 ## 3) Ko šta piše
 
