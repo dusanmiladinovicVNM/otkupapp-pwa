@@ -6,7 +6,11 @@ FAZA 1 (ovo): `pregled` -- SAMO CITA staru svesku i pravi Excel pregled:
 
   * stara knjiga ambalaze prevedena u AMB-10 kretanja (u memoriji);
   * svaki kooperant, stanica, vozac i kupac: stavka po stavka, novi i stari
-    tekuci saldo, najmanji dnevni saldo i predlog preseka za novu sezonu;
+    tekuci saldo, najmanji dnevni saldo;
+  * --knjizenje ispravno (podrazumevano): dodato ULAZ_TUDJE za kooperante i
+    kupce i NABAVKA za stanice, tako da nijedan nalog ni jednog dana nije
+    ispod nule -- oblik u kome je nova sveska spremna za rad; --knjizenje
+    verno: tacno kao stara sveska, sa predlogom preseka na kraju;
   * sta ide ZA ODLUKU (red bez pravila, nespojena noga, storniran dokument...);
   * dokumenti sa vise redova (odluka 1) i tabele naspram kanona.
 
@@ -62,8 +66,6 @@ def komanda_pregled(a):
               "izaberi folder van repoa (--izlaz)." % izlaz, file=sys.stderr)
         return 2
     izuzeci_put = None if a.bez_izuzetaka else (a.izuzeci or IZUZECI)
-    partneri = {"kooperanti": ("Kooperant",), "partneri": ("Kooperant", "Kupac")}.get(
-        a.pokrice_duga, ())
 
     print("Citam: %s" % izvor)
     sha_pre = sha256_fajla(izvor)
@@ -77,7 +79,7 @@ def komanda_pregled(a):
 
     try:
         izuzeci = ambalaza.ucitaj_izuzetke(izuzeci_put)
-        rez = ambalaza.prevedi(tabele, izuzeci, politika_partneri=partneri)
+        rez = ambalaza.prevedi(tabele, izuzeci, knjizenje=a.knjizenje)
     except (ambalaza.GreskaAmbalaze, ValueError, OSError) as e:
         # ValueError pokriva i pokvaren izuzeci.json (json.JSONDecodeError).
         print("GRESKA: %s" % e, file=sys.stderr)
@@ -98,7 +100,7 @@ def komanda_pregled(a):
     izvor_info = dict(ime=os.path.basename(izvor), sha=sha_pre, nepromenjen=sha_pre == sha_posle,
                       vreme=time.strftime("%Y-%m-%d %H:%M:%S"))
     saz = pregled.napravi_izvestaj(xlsx, izvor_info, rez, salda, stavke, invarijante, pokrivenost,
-                                   popis, dok_sazetak, dok_grupe, oblik_dok, partneri)
+                                   popis, dok_sazetak, dok_grupe, oblik_dok)
     txt = os.path.join(izlaz, "sazetak.txt")
     with open(txt, "w", encoding="utf-8") as f:
         for k, v in saz:
@@ -133,9 +135,9 @@ def main(argv=None):
     pp.add_argument("--izlaz", help="folder za pregled (podrazumevano: pored izvora)")
     pp.add_argument("--izuzeci", help="izuzeci.json (podrazumevano: tools/migracija/izuzeci.json)")
     pp.add_argument("--bez-izuzetaka", action="store_true", help="ne primenjuj nijedan izuzetak")
-    pp.add_argument("--pokrice-duga", choices=("kooperanti", "partneri"),
-                    help="dopisi u istoriju pokrice duga po danu (MIG-16/17); "
-                         "podrazumevano NE -- istorija ostaje verna, sa negativnim saldima")
+    pp.add_argument("--knjizenje", choices=(ambalaza.ISPRAVNO, ambalaza.VERNO), default=ambalaza.ISPRAVNO,
+                    help="ispravno (podrazumevano): istorija + ULAZ_TUDJE za partnere i NABAVKA za "
+                         "stanice, nijedan nalog ispod nule; verno: tacno kao stara sveska")
     a = p.parse_args(argv)
     if a.self_test:
         return komanda_self_test()
