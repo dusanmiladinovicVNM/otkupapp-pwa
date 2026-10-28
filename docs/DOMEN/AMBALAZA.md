@@ -354,6 +354,16 @@ su fizicki isti potez (`Stanica -> Kooperant`):
 istim `Od`, `Na` i `Kolicina` nose suprotno poslovno znacenje. Iz para se ne moze
 izvesti.
 
+### 6.6a Poslovni saldo — treći broj iz iste knjige (`AMB-POSL-01`, 24.10.2026)
+
+Fizički saldo kaže gde su gajbe, obaveza koliko tuđih firma duguje. Kooperantu
+na kartici i na otkupnom listu treba treće: **koliko mu je firma izdala, minus
+koliko je vratio**. To je fizički saldo bez redova koje pisac dopisuje sam —
+`ULAZ_TUDJE_AMBALAZE` (pokriće deficita i ulaz pozajmice). Kontra-stav se sudi po
+vrsti originala. Projekcija je opcioni `samoPoslovno` u čitaocima
+(`AmbKretanjaNaloga`, `AmbSaldoPoNalogu`, `AmbStanjeOkoDokumenta`); pisci, knjiga
+i storno se ne menjaju. Ko koji broj čita: `README.md` §2, `AMB-POSL-01/02`.
+
 ### 6.7 `VrstaKretanja` — domenski pojmovi, ne spisak call-site-ova
 
 | Vrednost | Znacenje |
@@ -494,6 +504,7 @@ nepromenljiva. Razlog mora da stoji u registru.
 | `AMB-INV-11` | **`AmbID` je jedinstven u knjizi**, a `StornoOd` pokazuje na **tacno jedan** postojeci red |
 | `AMB-INV-12` | **`TipAmbalaze` postoji u `tblTipAmbalaze`** (`Trim$`, bez obzira na velika slova i na `Aktivan`) — kapija upisa, kao postojanje naloga; citalac je ne meri (6.13h) |
 | `AMB-INV-13` | **pozajmica unosi u opticaj tačno svoju količinu**: uz `POZAJMICA_PARTNERA` pisac na istom dokumentu, u istoj TX, upisuje `SpoljniSvet → partner` `ULAZ_TUDJE_AMBALAZE` iste količine i tipa — nezavisno od partnerovog salda i bez pitanja o manjku; saldo partnera se ne menja, obaveza raste za količinu (6.12k) |
+| `AMB-INV-14` | **otpis se ne pokriva**: zahtev `OTPIS` veći od salda naloga se odbija — bez protokola potvrde i bez `ULAZ_TUDJE_AMBALAZE`, za svaki realni nalog, sopstveni i partnera (`AMB-10-ODL-34` (g), 6.12m) |
 
 Zbir svih salda ostaje **sanity check nad oblikom**, ne dokaz ispravnosti: svaki
 prenos po konstrukciji daje `-x` i `+x`, pa je nula i kad je dogadjaj dupliran.
@@ -2215,6 +2226,119 @@ koje ekran reversu ne nudi). Tok **ispravke** ga od `10d` više ne zove: ispravk
 jedan potez nad `AmbDokID`-em (6.13a). Briše se u `10e`, po redosledu iz 6.13: stare
 strukture poslednje.
 **Obrisan u `10e-2` (6.13d).**
+
+### 6.12m Nabavka i otpis sa ekrana — `AMB-10-ODL-34` (KI-025, KI-026, odluke 27.10.2026)
+
+> **Zašto.** Na novoj instalaciji stanica počinje od nule, pa izdavanje praznih i predaja vozaču
+> padaju na `AMB-INV-07` dok gajbe ne uđu nabavkom (`KI-025`). Polomljena ili izgubljena gajba
+> ne može da izađe iz opticaja, pa saldo raste od stvarnog stanja sa svakim lomom (`KI-026`).
+> Ugovor je oba događaja znao od `10a` (6.7, 6.12a); falili su ulaz, pisac otpisa i test.
+
+**Zatečeno (izmereno 27.10.2026, `main` = `86fca63f`):**
+- `NabaviAmbalazu_TX` postoji, a zovu ga samo testovi. Nijedan pisac ne upisuje `OTPIS`.
+- Lista F7 i lista Storno/Reversi idu kroz `RedoviZaTip` i zatvoren spisak
+  `AmbDokUListiReversa` (REVERS, REVERS_PARTNERA). Nabavka i otpis zato nisu vidljivi, i
+  **storno im nije dostupan ni sa jednog ekrana**. `KI-025` je tvrdio suprotno.
+- Otpis veći od salda kod **partnera** ulazi u protokol potvrde (6.5). Posle „Da" pisac
+  upisuje `ULAZ_TUDJE_AMBALAZE`, pa firma partneru „duguje" gajbe koje su otpisane. Kod
+  sopstvenog naloga odbija, ali sa tekstom „za njih ide NABAVKA".
+- Niz `(Stanica, dan)` je zajednički za revers, nabavku i otpis (`AmbDokNizSken` ne gleda
+  vrstu). `ExtractSeqFromBroj` čita i slobodan broj, pa bi broj računa dobavljača
+  (`123/2026-7`) pomerio predlog sledećeg reversa.
+
+**Poslovni događaji (pre-flight §4).**
+
+| | Fizički | Poslovni | Finansijski |
+|---|---|---|---|
+| nabavka | nove gajbe stižu na stanicu; datum je dan prijema; red `SpoljniSvet → Stanica` | `tblAmbalazaDokument` `NABAVKA`, naš broj | račun dobavljača je van AgriX-a; nabavka postoji i bez njega |
+| otpis | gajba je polomljena ili izgubljena; datum je dan utvrđivanja; red `nalog → SpoljniSvet` | `tblAmbalazaDokument` `OTPIS`, naš broj | nema ga (odluka (f)); otpis postoji i bez naknade |
+
+> **`AMB-10-ODL-34` (odluke operatera 27.10.2026; sve po preporuci osim (h)).**
+>
+> | | Pitanje | Odluka |
+> |---|---|---|
+> | (a) | gde je ulaz | **F7, dva nova segmenta**: sedmi „Nabavka" i osmi „Otpis", uz šest postojećih smerova. Isti obrazac kao pozajmica (`ODL-24`). |
+> | (b) | nalog nabavke | **samo stanica** (OM sa ekrana). Nalog `Firma` nema nijedan tok koji iz njega izdaje, pa bi gajbe na njemu ostale zarobljene. |
+> | (c) | vlasnik broja | **izabrana stanica (OM)**, za nabavku i za otpis. Niz `(Stanica, dan)` je isti kao kod našeg reversa, i broj se predlaže isto. Broj računa dobavljača ide u napomenu, ne u broj. |
+> | (d) | cena nabavke | **nema je.** Ambalažni dokument ne nosi novac (`ODL-5`), pa se šema ne menja. |
+> | (e) | otpis kod partnera | **sa svakog realnog naloga**: stanica, vozač, kooperant i kupac. Matrica to već kaže (`REALAN → GRANICA`). |
+> | (f) | naknada partnera | **ne u ovom rezu.** Otpis nema finansijsku posledicu. Naknada bi bila zaseban novčani dokument (`ODL-5`) i svoj rez. |
+> | (g) | otpis veći od salda | **tvrdo odbijanje**, bez pitanja i bez pokrića. Kapija je u jezgru: `AMB-INV-14`. |
+> | (h) | papir | **otpis se štampa, nabavka ne.** Operater je ovde odstupio od preporuke („ne štampaju se"). |
+> | (i) | lista | **F7 i Storno/Reversi pokazuju sva četiri tipa** (REVERS, REVERS_PARTNERA, NABAVKA, OTPIS). Spisak ostaje zatvoren, samo proširen ovom odlukom. Premisa testa 202 se menja. |
+> | (j) | nalog otpisa na F7 | **partner, inače vozač.** Izabran partner (kooperant, OM ili kupac) je nalog. Ako je partner prazan, nalog je vozač. Ako su prazna oba, upis se odbija uz polje partnera. |
+> | (k) | napomena | **novo runtime polje „Napomena"**, vidljivo samo uz segmente 7 i 8, upisuje se u postojeću `tblAmbalazaDokument.Napomena`. Za otpis je **obavezna** (razlog: lom, gubitak) i ide na zapisnik. Za nabavku nije obavezna (dobavljač, broj računa). |
+> | (l) | izgled papira | **šablon reversa, nov naslov**: trećina A4, dva primerka, „Zapisnik o otpisu ambalaže". Nosi nalog, tip, otpisanu količinu, stanje naloga pre i posle, razlog i potpise. Pravi se posle snimanja, po istom podešavanju štampe kao revers, i ponovo iz liste `AMBALAZA`. |
+
+**Šta (e) i (g) znače za obavezu.** `AmbDoprinosObavezi(OTPIS) = 0`. Kad se otpišu gajbe kod
+partnera, njegov saldo pada, a obaveza firme prema njemu (ako je imao svoje gajbe u opticaju)
+ostaje. Bez (g) bi otpis preko salda partnera **stvorio** obavezu kroz pokriće (`AMB-INV-07`).
+Pogrešan je i znak i povod, pa (g) pravilo stavlja u jezgro, a ne u ekran.
+
+> **`AMB-INV-14`.** Otpis se ne pokriva. Zahtev `OTPIS` veći od salda naloga se odbija bez
+> protokola potvrde i bez `ULAZ_TUDJE_AMBALAZE`, za svaki realni nalog. Vlasnik je **pisac**
+> (`PrenesiAmbalazu`), a pravilo „ova vrsta ne trpi pokriće" čita iz ugovora. Ni potvrda
+> jednaka manjku ga ne zaobilazi, jer se pitanje ni ne postavlja. Modul unosa ga proverava
+> nad snimkom, radi poruke uz polje (`testovi.md` §5).
+
+**Gde živi pravilo (plan, pre koda):**
+
+| Pravilo | Gde |
+|---|---|
+| otpis se ne pokriva (`AMB-INV-14`) | `modAmbalazaUgovor` (vrsta bez pokrića) → `modAmbalaza.PrenesiAmbalazu` |
+| pisac otpisa | `modAmbalaza.OtpisiAmbalazu_TX` po obrascu `NabaviAmbalazu_TX`: zaglavlje i red u istom rollback-u (`AMB-INV-08`), jedan nalog po dokumentu (`ODL-3`). Razlog je obavezan i u piscu. |
+| ulaz sa ekrana | `modNovacUnos`: smer 7 i 8, nalog otpisa (j) na jednom mestu, saldo nad snimkom, napomena |
+| lista i storno | `modScrDokumenti.AmbDokUListiReversa` (i); `AmbProtivpartner` bira nalog koji nije granica. Storno ide kroz postojeći `StornirajAmbDokument_TX`. Ispravke nema: storno i nov unos (`IspravkaReversaRazlog` odbija sve osim REVERS). |
+| papir otpisa | `modPrint` (šablon reversa, treća vrsta protivpartnera); `modIzvestaj.StampajAmbDokument` pušta `OTPIS`, a `NABAVKA` i dalje odbija (7510) |
+
+**Netaknuto:** šest postojećih smerova F7, kupčev revers i pozajmica, otkup, otpremnica,
+prijemnica, `AmbDoprinosObavezi`, enum vrsta (devet vrednosti) i šema (`tblAmbalazaDokument`
+ima 12 kolona). PWA ne zna za `VrstaKretanja` (grep `src/` i `gas/` je prazan).
+
+**Ugovor prihvatanja (plan dokaza, pre koda):**
+- nabavka kroz `Scr_Save` (F7, smer 7): dokument `NABAVKA` i red `SpoljniSvet → Stanica`.
+  Saldo stanice raste tačno za N; meri se **delta**, jer suite deli fixture. A → B → A:
+  izdavanje koje je pre nabavke padalo na `AMB-INV-07` posle nje prolazi;
+- otpis kroz `Scr_Save` (F7, smer 8): dokument `OTPIS` i red `nalog → SpoljniSvet`, saldo
+  pada za N. Nalog se bira po (j). Napomena je na zaglavlju. Papir nastaje i ne javlja kvar;
+- odbijeno sa imenovanim razlogom: otpis veći od salda (uz polje i u jezgru, `AMB-INV-14`,
+  i uz potvrdu jednaku manjku), otpis bez razloga, otpis bez naloga, količina 0 ili
+  negativna, nepostojeći nalog, broj zauzet u nizu vlasnika (`ODL-20`), drugi
+  protivpartner u istom dokumentu (`AMB-INV-10`);
+- storno otpisa vraća saldo; storno nabavke čije su gajbe već izdate odbija `AMB-INV-07`;
+- lista F7 pokazuje nabavku i otpis, sa nalogom u koloni partnera (premisa 202);
+- netaknuto: šest smerova F7 (testovi 202, 248, 256), otkup, otpremnica, prijemnica.
+
+**Urađeno (stavka 215):**
+- **jezgro:** `AMB-INV-14` je u `PrenesiAmbalazu`, pre pokrića i pre potvrde. Pravilo čita iz
+  `modAmbalazaUgovor.AmbVrstaSmePokrice` (negativan spisak, samo `OTPIS`). Greška je
+  `AMB_ERR_DEFICIT_NEPOKRIV`, pa je nijedan pozivalac ne tumači kao pitanje o manjku;
+- **pisac:** `modAmbalaza.OtpisiAmbalazu_TX` i `NabaviAmbalazu_TX` dele jedno telo
+  (`UpisiNasJednoredni_TX`). Zaglavlje i red su u istom rollback-u, broj je iz niza stanice,
+  a razlog je obavezan kad je dokument otpis. Pisac nabavke se spolja ne menja (potpis i
+  poruke su isti);
+- **unos:** `modNovacUnos`, smer 7 (`SMER_REV_NABAVKA`) i 8 (`SMER_REV_OTPIS`).
+  `OtpisNalog` je jedno mesto za izbor naloga (j), a `RevSmerJeNabavkaIliOtpis` jedna odluka za
+  validator, ljusku i ispravku. Ispravka nabavke i otpisa se odbija porukom
+  (`NOVUNOS_ERR_ISPR_REV_NIJE_REVERS`). Vrsta voća se za njih ne traži, jer ide samo na papir
+  reversa;
+- **ljuska:** segmenti 7 i 8 su u svom okviru `fgSmerAmb`, ispod reversa. Isti red bi suzio
+  svih osam segmenata (`LayoutSegs` deli širinu podjednako), pa šest postojećih ostaje kakvo
+  je. Polje `fgNapomena` se vidi samo uz 7 i 8 i šalje se samo dok se vidi. Briše ga
+  `ClearForm`;
+- **lista:** `AmbDokUListiReversa` pušta četiri vrste. `AmbProtivpartner` preskače granicu, pa
+  nabavka nosi stanicu, a otpis svoj nalog;
+- **papir:** `modPrint` ima treću vrstu protivstrane, `"OTPIS"`: naslov „ZAPISNIK O OTPISU",
+  nalog sa reda dokumenta, red „Razlog", stanje naloga pre i posle i PDF `OtpisAmbalaze_*`.
+  `modIzvestaj.StampajAmbDokument` pušta `OTPIS` po beloj listi, a `NABAVKA` i dalje pada na 7510.
+
+**Nizvodno (popis 27.10.2026):**
+- saldo, obaveza (`OTPIS` = 0), kartica, `AmbStanjeOkoDokumenta` i integritet knjige
+  (`modIntegritet.Chk_AMB_KnjigaIntegritet` → `AmbKnjigaNalazi`) prolaze bez nove grane;
+- `modIntegritet` ne proverava da li se red slaže sa zaglavljem (`AmbDokDozvoljavaKretanje`),
+  ni da li `DokumentID` postoji. To je zatečeno stanje, ne posledica reza;
+- PWA i GAS ne čitaju ambalažnu knjigu;
+- izveštaj `AMBALAZA` pokazuje praznu kolonu „Mesto" za red nabavke i otpisa: `KI-059`.
 
 ### 6.13 Redosled — stare strukture se brisu POSLEDNJE
 

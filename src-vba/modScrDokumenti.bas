@@ -2220,6 +2220,8 @@ Private Function SaveRevers(ByVal polja As Object) As String
     p("tipAmb") = polja("tipAmb")
     p("kolAmb") = polja("kolAmb")
     p("smerRev") = polja("smerRev")
+    ' Razlog otpisa / dobavljac nabavke (ODL-34 k). Prazno za ostale smerove.
+    If polja.Exists("napomena") Then p("napomena") = polja("napomena")
 
     greska = modNovacUnos.ReversValidiraj(p, fokus)
     If Len(greska) > 0 Then
@@ -2651,9 +2653,11 @@ End Function
 '   revers firma <-> OM         -> noga otkupnog mesta (tada OM JESTE partner)
 ' KOJE VRSTE AMBALAZNOG DOKUMENTA ULAZE U LISTU "REVERSI".
 '
-' ZATVOREN SPISAK, a ne AmbDokVrstaPoznata: nabavka i otpis SU poznate vrste,
-' ali nisu reversi -- pustiti ih znacilo bi da F7 i Storno/Reversi pokazuju
-' dokumente koje taj ekran ne ume ni da napravi ni da stornira kao revers.
+' ZATVOREN SPISAK, a ne AmbDokVrstaPoznata: vrsta ulazi samo ODLUKOM. Do
+' AMB-10-ODL-34 su bila dva reversa -- nabavka i otpis nisu imali ulaz, pa ih F7
+' nije umeo ni da napravi ni da stornira. Od ODL-34 (i) su sedmi i osmi segment
+' F7, pa ih lista pokazuje: bez toga storno nabavke i otpisa nije dostupan ni sa
+' jednog ekrana (Storno/Reversi cita isti RedoviZaTip).
 '
 ' ZAMENILA JE RevRowVisible, i to je bio P1 (review 08.10.2026). Stari filter
 ' je sudio po TIPU DOKUMENTA NOGE (DOK_TIP_OM_*) i po entitetu reda. Posle
@@ -2663,7 +2667,7 @@ End Function
 ' 12/12 ZELENO bilo saglasno sa potpuno praznom listom.
 Public Function AmbDokUListiReversa(ByVal vrsta As String) As Boolean
     Select Case Trim$(vrsta)
-        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA
+        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA, AMB_DOK_NABAVKA, AMB_DOK_OTPIS
             AmbDokUListiReversa = True
     End Select
 End Function
@@ -2734,6 +2738,20 @@ Private Sub AmbProtivpartner(ByVal rec As Variant, ByRef tip As String, ByRef id
     naT = CStr(rec(5))
     naI = CStr(rec(6))
 
+    ' GRANICA NIJE PROTIVPARTNER (6.3): nabavka je SpoljniSvet -> Stanica, otpis
+    ' nalog -> SpoljniSvet. Prikazuje se realni nalog -- inace bi se izabrao
+    ' SpoljniSvet bez ID-a i celija bi bila prazna (ODL-34 i).
+    If modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_GRANICA, odT) Then
+        tip = naT
+        id = naI
+        Exit Sub
+    End If
+    If modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_GRANICA, naT) Then
+        tip = odT
+        id = odI
+        Exit Sub
+    End If
+
     If Not modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_SOPSTVENI, odT) Then
         tip = odT
         id = odI
@@ -2748,23 +2766,6 @@ Private Sub AmbProtivpartner(ByVal rec As Variant, ByRef tip As String, ByRef id
         id = naI
     End If
 End Sub
-
-' Naziv vrste kretanja za mrezu. Nepoznata vrsta vraca SVOJ KOD, ne prazno:
-' prazna celija bi izgledala kao da reda nema, a kod kaze sta je zateceno.
-Private Function AmbKretanjeNaziv(ByVal vk As String) As String
-    AmbKretanjeNaziv = Trim$(vk)
-    Select Case Trim$(vk)
-        Case AMB_VK_IZDATA_PRAZNA:   AmbKretanjeNaziv = Poruka("OTKUI_VK_IZDATA")
-        Case AMB_VK_POVRAT_PRAZNE:   AmbKretanjeNaziv = Poruka("OTKUI_VK_POVRAT")
-        Case AMB_VK_PRENOS_INTERNO:  AmbKretanjeNaziv = Poruka("OTKUI_VK_INTERNO")
-        Case AMB_VK_UZ_ROBU:         AmbKretanjeNaziv = Poruka("OTKUI_VK_UZ_ROBU")
-        Case AMB_VK_ULAZ_TUDJE:      AmbKretanjeNaziv = Poruka("OTKUI_VK_ULAZ_TUDJE")
-        Case AMB_VK_VRACANJE_TUDJE:  AmbKretanjeNaziv = Poruka("OTKUI_VK_VRACANJE_TUDJE")
-        Case AMB_VK_NABAVKA:         AmbKretanjeNaziv = Poruka("OTKUI_VK_NABAVKA")
-        Case AMB_VK_OTPIS:           AmbKretanjeNaziv = Poruka("OTKUI_VK_OTPIS")
-        Case AMB_VK_POZAJMICA:       AmbKretanjeNaziv = Poruka("OTKUI_VK_POZAJMICA")
-    End Select
-End Function
 
 ' Ime naloga za kolonu PARTNER. Vozac je dodat uz rez 10b-2: tada je prestao
 ' da bude zig (kolona uz red) i postao NALOG, pa se u listi pojavljuje kao
@@ -3192,7 +3193,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                     cell = modAmbalazaUgovor.AmbVrstaDokNaziv(CellS(src, r, iDokTip))
                     hay = hay & "|" & cell
                 Case "ambsmer"
-                    cell = AmbKretanjeNaziv(AmbRecPolje(ambRec, 0))
+                    cell = modAmbalazaUgovor.AmbKretanjeNaziv(AmbRecPolje(ambRec, 0))
                     hay = hay & "|" & cell
                 Case "ambtip"
                     cell = AmbRecPolje(ambRec, 1)

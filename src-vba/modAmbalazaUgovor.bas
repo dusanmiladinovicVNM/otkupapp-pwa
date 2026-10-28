@@ -132,6 +132,43 @@ Public Function AmbVrsteSve() As Variant
                         AMB_VK_NABAVKA, AMB_VK_OTPIS, AMB_VK_POZAJMICA)
 End Function
 
+' NAZIV VRSTE KRETANJA, za coveka. Nepoznata vrsta vraca SVOJ KOD, ne prazno:
+' prazna celija bi izgledala kao da reda nema, a kod kaze sta je zateceno.
+'
+' Zivi u ugovoru iz istog razloga kao AmbVrstaDokNaziv: do KART-HRON-01 ga je
+' imao samo ekran reversa (modScrDokumenti), a trebao je i kartici -- zavisnost
+' izvestaj -> ekran bi isla obrnuto.
+Public Function AmbKretanjeNaziv(ByVal vk As String) As String
+    AmbKretanjeNaziv = Trim$(vk)
+    Select Case Trim$(vk)
+        Case AMB_VK_IZDATA_PRAZNA:   AmbKretanjeNaziv = Poruka("OTKUI_VK_IZDATA")
+        Case AMB_VK_POVRAT_PRAZNE:   AmbKretanjeNaziv = Poruka("OTKUI_VK_POVRAT")
+        Case AMB_VK_PRENOS_INTERNO:  AmbKretanjeNaziv = Poruka("OTKUI_VK_INTERNO")
+        Case AMB_VK_UZ_ROBU:         AmbKretanjeNaziv = Poruka("OTKUI_VK_UZ_ROBU")
+        Case AMB_VK_ULAZ_TUDJE:      AmbKretanjeNaziv = Poruka("OTKUI_VK_ULAZ_TUDJE")
+        Case AMB_VK_VRACANJE_TUDJE:  AmbKretanjeNaziv = Poruka("OTKUI_VK_VRACANJE_TUDJE")
+        Case AMB_VK_NABAVKA:         AmbKretanjeNaziv = Poruka("OTKUI_VK_NABAVKA")
+        Case AMB_VK_OTPIS:           AmbKretanjeNaziv = Poruka("OTKUI_VK_OTPIS")
+        Case AMB_VK_POZAJMICA:       AmbKretanjeNaziv = Poruka("OTKUI_VK_POZAJMICA")
+    End Select
+End Function
+
+' POLOZAJ VRSTE u zatvorenom spisku (AmbVrsteSve), za DETERMINISTICKI redosled
+' kretanja istog dokumenta i istog smera na kartici (KART-HRON-01). Nije
+' poslovni prioritet: storno i smer (ulaz pre izlaza) odlucuju pre njega, a on
+' samo razdvaja ono sto je i dalje jednako. Nepoznata vrsta ide posle poznatih.
+Public Function AmbVrstaRang(ByVal vk As String) As Long
+    Dim sve As Variant, i As Long
+    sve = AmbVrsteSve()
+    AmbVrstaRang = 99
+    For i = LBound(sve) To UBound(sve)
+        If StrComp(CStr(sve(i)), Trim$(vk), vbTextCompare) = 0 Then
+            AmbVrstaRang = i
+            Exit Function
+        End If
+    Next i
+End Function
+
 Private Function UNizu(ByVal niz As Variant, ByVal vrednost As String) As Boolean
     Dim i As Long
     For i = LBound(niz) To UBound(niz)
@@ -944,6 +981,22 @@ Public Function AmbPokriceProblem(ByVal tip As String, ByVal id As String) As St
                             "ambalaze (pokrice trazi " & klasa & "): nase gajbe ne nastaju " & _
                             "iz vazduha, za njih ide NABAVKA."
     End If
+End Function
+
+' AMB-INV-14 (AMB-10-ODL-34 (g), odluka operatera 27.10.2026): KOJA VRSTA SME
+' DA SE POKRIJE.
+'
+' Pokrice deficita (ULAZ_TUDJE, 6.5) unosi partnerove gajbe u opticaj -- da bi
+' ih partner mogao PREDATI. Otpis ih ne predaje nikome, nego ih IZBACUJE iz
+' opticaja: pokriti otpis znaci uneti gajbe samo da bi se odmah otpisale, a
+' firma bi partneru dugovala bas te gajbe. Zato otpis preko salda nije pitanje
+' nego odbijanje, za svaki nalog (sopstveni i partnera).
+'
+' Spisak je NEGATIVAN namerno: svaka druga vrsta zadrzava ponasanje iz 6.5, a
+' izuzetak se uvodi odlukom, kao ovaj. Pisac (PrenesiAmbalazu) pravilo CITA
+' odavde, ne nosi svoju kopiju.
+Public Function AmbVrstaSmePokrice(ByVal vrsta As String) As Boolean
+    AmbVrstaSmePokrice = (StrComp(Trim$(vrsta), AMB_VK_OTPIS, vbTextCompare) <> 0)
 End Function
 
 ' ============================================================

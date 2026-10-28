@@ -759,10 +759,11 @@ Public Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
                 CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, "Prezime")))
     h("bpg") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_BPG))
     h("racun") = CStr(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_TEKUCI_RACUN))
-    ' Saldo ambalaze = entitetski saldo kooperanta (koliko gajbica drzi/duguje):
-    ' pocetno stanje pre bloka (Ulaz +, Izlaz -) + izdato (Kooperant Ulaz)
-    ' - primljeno (Kooperant Izlaz). Pocetno se cita iz ledgera po redosledu
-    ' upisa, pa je ispravno i kod ponovne stampe starijeg bloka.
+    ' Saldo ambalaze = POSLOVNI saldo kooperanta (AMB-POSL-01: koliko mu je firma
+    ' izdala minus koliko je vratio; pokrice deficita ne ulazi): pocetno stanje
+    ' pre bloka (Ulaz +, Izlaz -) + izdato (Kooperant Ulaz) - primljeno
+    ' (Kooperant Izlaz). Pocetno se cita iz ledgera po redosledu upisa, pa je
+    ' ispravno i kod ponovne stampe starijeg bloka.
     ' Jedan dokument -> jedan ID. Helper prima i niz i "ID1 + ID2" string, pa mu
     ' se prosledjuje sam OtkupID (ranije: Split rezultat obe klase).
     ' AMB-10-ODL-27: dokument bez SVOG reda knjige (otkup bez gajbi) nema tacku od
@@ -1766,7 +1767,9 @@ Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As
     If suff = "" Then suff = koopID
     suff = Replace(Replace(suff, " + ", "_"), "/", "-")
     Dim pref As String
-    If counterparty = "FIRMA" Then
+    If counterparty = "OTPIS" Then
+        pref = "OtpisAmbalaze_"
+    ElseIf counterparty = "FIRMA" Then
         pref = IIf(m_izdAmbPrijem, "PrijemAmbFirma_", "IzdavanjeAmbFirma_")
     Else
         pref = IIf(m_izdAmbPrijem, "PrijemAmbalaze_", "IzdavanjeAmbalaze_")
@@ -1885,6 +1888,13 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
         ' Firma revers prikazuje stanje praznih gajbi NA OM-u (Stanica saldo).
         nalogTip = AMB_NALOG_STANICA
         nalogID = omID
+    ElseIf counterparty = "OTPIS" Then
+        ' ZAPISNIK O OTPISU (AMB-10-ODL-34 h, l): nalog se cita SA REDA dokumenta,
+        ' ne sa ekrana -- otpis ide sa bilo kog realnog naloga, a red je cinjenica.
+        ' Razlog je napomena zaglavlja.
+        OtpisNalogDokumenta ambDokID, tipAmb, nalogTip, nalogID
+        h("razlog") = Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                                 ambDokID, COL_AMBD_NAPOMENA)))
     Else
         nalogTip = AMB_NALOG_KOOPERANT
         nalogID = koopID
@@ -1897,8 +1907,12 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
                   "Revers '" & ambDokID & "' nema svoj red knjige za nalog " & nalogTip & _
                   " '" & nalogID & "' i tip '" & tipAmb & "' -- papir se ne pravi."
     End If
+    h("nalogTip") = nalogTip
     Dim ambDelta As Long
-    If counterparty = "FIRMA" Then
+    If counterparty = "OTPIS" Then
+        ' Otpis je uvek izlaz sa naloga.
+        ambDelta = -kolAmb
+    ElseIf counterparty = "FIRMA" Then
         ' Perspektiva OM-a: prijem od firme +kol (Ulaz), izdavanje firmi -kol (Izlaz).
         If m_izdAmbPrijem Then ambDelta = kolAmb Else ambDelta = -kolAmb
     Else
@@ -1935,7 +1949,11 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     ' izmedju primeraka padaju na perforacije (99mm i 198mm); donja trecina prazna.
     Dim R0 As Long, lastRow As Long
     Dim copy2Lbl As String
-    copy2Lbl = IIf(counterparty = "FIRMA", "Primerak: firma (centrala)", "Primerak: kooperant")
+    Select Case counterparty
+        Case "FIRMA": copy2Lbl = "Primerak: firma (centrala)"
+        Case "OTPIS": copy2Lbl = "Primerak: nalog"
+        Case Else:    copy2Lbl = "Primerak: kooperant"
+    End Select
     R0 = WriteIzdavanjeCopy(ws, 1, "Primerak: OM (otkupno mesto)", h, _
                             OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
     lastRow = WriteIzdavanjeCopy(ws, R0, copy2Lbl, h, OL_THIRD_PT) - 1
@@ -1948,6 +1966,39 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
 EH:
     Application.ScreenUpdating = oldScreen
     LogErr "modPrint.FillIzdavanjeAmbalazeSablon"
+End Function
+
+' Nalog otpisa sa REDA dokumenta: poslovni red izabranog tipa, strana Od
+' (otpis je nalog -> SpoljniSvet). Bez reda papir ne nastaje -- kvar identiteta,
+' isto kao revers bez svog reda (ODL-27, 7692).
+Private Sub OtpisNalogDokumenta(ByVal ambDokID As String, ByVal tipAmb As String, _
+                                ByRef nalogTip As String, ByRef nalogID As String)
+    Dim redovi As Collection, k As Long, r As Variant
+    nalogTip = ""
+    nalogID = ""
+    Set redovi = modAmbalaza.AmbDokPoslovniRedovi(ambDokID)
+    For k = 1 To redovi.count
+        r = redovi(k)
+        If StrComp(Trim$(CStr(r(1))), Trim$(tipAmb), vbTextCompare) = 0 Then
+            nalogTip = Trim$(CStr(r(3)))
+            nalogID = Trim$(CStr(r(4)))
+            Exit Sub
+        End If
+    Next k
+    Err.Raise vbObjectError + 7693, "modPrint.OtpisNalogDokumenta", _
+              "Otpis '" & ambDokID & "' nema poslovni red tipa '" & tipAmb & _
+              "' -- zapisnik se ne pravi."
+End Sub
+
+' Natpis naloga na zapisniku o otpisu.
+Private Function OtpisNalogNatpis(ByVal nalogTip As String) As String
+    Select Case nalogTip
+        Case AMB_NALOG_KOOPERANT: OtpisNalogNatpis = "Kooperant"
+        Case AMB_NALOG_KUPAC:     OtpisNalogNatpis = "Kupac"
+        Case AMB_NALOG_VOZAC:     OtpisNalogNatpis = "Voza" & ChrW(269)
+        Case AMB_NALOG_STANICA:   OtpisNalogNatpis = "Otkupno mesto"
+        Case Else:                OtpisNalogNatpis = "Nalog"
+    End Select
 End Function
 
 ' Ispisuje jedan primerak reversa od reda R0 i dopunjava ga do tacno 1/3 A4
@@ -1963,6 +2014,7 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
 
     ' Naljepnice zavisne od protivpartnera (kooperant vs firma) i smera (h("prijem")).
     Dim isFirma As Boolean: isFirma = (UCase$(Trim$(CStr(h("ctype")))) = "FIRMA")
+    Dim isOtpis As Boolean: isOtpis = (UCase$(Trim$(CStr(h("ctype")))) = "OTPIS")
     Dim lblDescr As String, lblParty As String, lblKret As String
     Dim lblSigLeft As String, lblSigRight As String
     Dim lblPocetno As String, lblNovo As String
@@ -1974,6 +2026,16 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
         lblSigRight = IIf(h("prijem"), "Primio (OM):  ____________________", "Primio (voza" & ChrW(269) & "):  ____________________")
         lblPocetno = "Pocetno stanje na OM-u (tip " & CStr(h("tipAmb")) & "):"
         lblNovo = "Novo stanje na OM-u (saldo):"
+    ElseIf isOtpis Then
+        ' ZAPISNIK O OTPISU (AMB-10-ODL-34 h, l): isti list, nalog sa reda dokumenta.
+        lblDescr = "Otpis ambala" & ChrW(382) & "e (lom, gubitak) " & ChrW(8212) & _
+                   " gajbe izlaze iz opticaja"
+        lblParty = OtpisNalogNatpis(CStr(h("nalogTip"))) & ": " & CStr(h("koop"))
+        lblKret = "Otpisano:"
+        lblSigLeft = "Utvrdio (OM):  ____________________"
+        lblSigRight = "Potvrdio (nalog):  ____________________"
+        lblPocetno = "Stanje pre otpisa (tip " & CStr(h("tipAmb")) & "):"
+        lblNovo = "Stanje posle otpisa (saldo):"
     Else
         lblDescr = IIf(h("prijem"), "Prijem (povrat) prazne ambala" & ChrW(382) & "e od kooperanta", "Izdavanje prazne ambala" & ChrW(382) & "e kooperantu")
         lblParty = "Kooperant: " & CStr(h("koop"))
@@ -2044,7 +2106,7 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     rr = rr + 1
     ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
     With ws.cells(rr, 1)
-        .value = "REVERS  br. " & CStr(h("brDok"))
+        .value = IIf(isOtpis, "ZAPISNIK O OTPISU  br. ", "REVERS  br. ") & CStr(h("brDok"))
         .Font.Bold = True
         .Font.Size = 14
         .HorizontalAlignment = xlCenter
@@ -2086,6 +2148,14 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     ' --- vrsta voca (samo ako je uneta) ---
     If Len(CStr(h("vrsta"))) > 0 Then
         DocLabelVal ws, rr, 1, "Vrsta vo" & ChrW(263) & "a:", CStr(h("vrsta"))
+        ws.rows(rr).RowHeight = 12#
+        usedPt = usedPt + 12#
+        rr = rr + 1
+    End If
+
+    ' --- razlog otpisa (ODL-34 k) -- otpis vrstu voca nema, pa red staje u istu visinu ---
+    If isOtpis Then
+        DocLabelVal ws, rr, 1, "Razlog:", CStr(h("razlog"))
         ws.rows(rr).RowHeight = 12#
         usedPt = usedPt + 12#
         rr = rr + 1
