@@ -75,6 +75,12 @@ Ako `--cilj` ne postoji, pravi ga `tools/make_dev_workbook.py` iz gita (treba
 nalazom, piše samo u prazne tabele, pa svaku ćeliju poredi sa planom i salda
 ambalaže sa prevodom. Izveštaj: `<nova>_upis_izvestaj.txt`.
 
+Posle svake tabele, pre čuvanja, prvi i poslednji red se čitaju nazad iz
+Excela: pomeren datum ili tekst koji je Excel pretvorio zaustavlja upis dok je
+sveska još prazna (nije sačuvana — samo ponovi komandu). Ako izveštaj posle
+čuvanja prijavi razlike, sveska je sačuvana sa greškom: obriši je i ponovi
+komandu (alat pravi svežu iz gita).
+
 | Fajl | Šta radi |
 |---|---|
 | `cilj.py` | sve tabele nove sveske u memoriji (zaglavlje + stavka, izvori, statusi, podešavanja) |

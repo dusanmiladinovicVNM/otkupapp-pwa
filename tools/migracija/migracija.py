@@ -285,7 +285,8 @@ def komanda_upis(a):
         f.write("\nNalazi probe:\n")
         f.writelines("%s %s %s %s %s\n" % (n["tezina"], n["pravilo"], n["tabela"], n["id"], n["opis"])
                      for n in c.nalazi)
-    print("Razlike posle upisa: %d   salda ambalaze: %d razlika" % (len(razlike), len(amb_razlike)))
+    print("Razlike posle upisa: %d tabela   salda ambalaze: %d razlika"
+          % (len({r.split(" ", 1)[0].rstrip(":") for r in razlike}), len(amb_razlike)))
     print("Izvestaj: %s" % izv)
     if razlike or amb_razlike:
         print("UPIS NIJE TACAN -- ne koristi novu svesku; posalji izvestaj.", file=sys.stderr)

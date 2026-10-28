@@ -20,7 +20,8 @@ jednokratno punjenje PRAZNE sveske pre rada -- docs/DOMEN/MIGRACIJA_LEGACY.md.
 
 import os
 import re
-from datetime import date, datetime
+from collections import Counter
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from citac import procitaj_svesku, tabela
@@ -28,6 +29,7 @@ from cilj import TEKST_KOLONE
 
 XL_AUTOMATION_FORCE_DISABLE = 3
 DELOVI = 2000
+PRIMERA_PO_TABELI = 20
 
 # Tabele koje nova sveska vec nosi iz make_dev_workbook; ako su pune, ne diraju se.
 PRESKOCI_AKO_PUNA = {"tblKorisnici"}
@@ -38,16 +40,21 @@ def com_vrednost(v):
 
     Tekst koji bi Excel sam pretvorio u broj ili datum ("101", "2026-06-20 08:00",
     "012345") dobija apostrof -- Excel ga cuva kao tekst, a apostrof nije deo
-    vrednosti. Isto za tekst koji pocinje sa = + - @ (inace postaje formula).
+    vrednosti. Isto za tekst koji pocinje sa = + - @ # (formula ili greska) i za
+    TRUE/FALSE (inace postaje logicka vrednost).
+
+    Datum ide sa tzinfo=UTC: pywin32 svaki datetime pretvara u UTC (astimezone),
+    a naivni shvati kao LOKALNO vreme -- 2026-06-08 je upisan kao 2026-06-07
+    22:00 (CEST, upis 28.10.2026). Za UTC je pretvaranje prazno.
     """
     if v is None or (isinstance(v, str) and v == ""):
         return None
     if isinstance(v, bool):
         return v
     if isinstance(v, datetime):
-        return v
+        return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
     if isinstance(v, date):
-        return datetime(v.year, v.month, v.day)
+        return datetime(v.year, v.month, v.day, tzinfo=timezone.utc)
     if isinstance(v, Decimal):
         if v == v.to_integral_value() and abs(v) < 2 ** 53:
             return int(v)
@@ -55,7 +62,7 @@ def com_vrednost(v):
     if isinstance(v, (int, float)):
         return v
     s = str(v)
-    if re.search(r"\d", s) or s[:1] in ("=", "+", "-", "@"):
+    if re.search(r"\d", s) or s[:1] in ("=", "+", "-", "@", "#") or s.strip().casefold() in ("true", "false"):
         return "'" + s
     return s
 
@@ -109,7 +116,11 @@ def norm(v):
 
 def uporedi(c, putanja, preskocene=()):
     """Procitaj upisanu svesku i uporedi svaku celiju. Vrati listu razlika.
-    `preskocene`: tabele koje upis namerno nije dirao (vec pune u novoj svesci)."""
+    `preskocene`: tabele koje upis namerno nije dirao (vec pune u novoj svesci).
+
+    Svaka tabela i svaka kolona se meri do kraja; po tabeli ide najvise
+    PRIMERA_PO_TABELI primera, a kad ih ima vise, jos red sa zbirom po koloni --
+    da jedna masovna greska (pomeren datum) ne sakrije ostale tabele i kolone."""
     t = procitaj_svesku(putanja)
     razlike = []
     for ime, redovi in sorted(c.tabele.items()):
@@ -122,15 +133,20 @@ def uporedi(c, putanja, preskocene=()):
         if len(tb.redovi) != len(redovi):
             razlike.append("%s: upisano %d redova, ocekivano %d" % (ime, len(tb.redovi), len(redovi)))
             continue
+        po_koloni = Counter()
+        primeri = []
         for i, (ocek, proc) in enumerate(zip(redovi, tb.redovi), 1):
             for k, v in ocek.items():
                 a, b = norm(v), norm(proc.get(k.casefold(), ""))
                 if a != b:
-                    razlike.append("%s red %d, %s: ocekivano %r, upisano %r" % (ime, i, k, a, b))
-                    break
-        if len(razlike) > 200:
-            razlike.append("... (prekinuto posle 200 razlika)")
-            break
+                    po_koloni[k] += 1
+                    if len(primeri) < PRIMERA_PO_TABELI:
+                        primeri.append("%s red %d, %s: ocekivano %r, upisano %r" % (ime, i, k, a, b))
+        razlike.extend(primeri)
+        ukupno = sum(po_koloni.values())
+        if ukupno > len(primeri):
+            razlike.append("%s: ukupno %d razlika -- po koloni: %s"
+                           % (ime, ukupno, ", ".join("%s %d" % kv for kv in po_koloni.most_common())))
     return razlike
 
 
@@ -285,3 +301,22 @@ def _upisi_tabelu(lo, niz, kolone):
     if int(lo.ListRows.Count) != n:
         raise RuntimeError("posle upisa tabela ima %d redova podataka, ocekivano %d"
                            % (int(lo.ListRows.Count), n))
+    # Uzorak PRE cuvanja: pomeren datum ili Excelovo pretvaranje teksta zaustavi
+    # upis dok je sveska jos prazna (puno poredjenje ide posle cuvanja, uporedi).
+    for i in sorted({0, n - 1}):
+        v = _opseg(ws, r0 + 1 + i, c0, r0 + 1 + i, c0 + m - 1).Value
+        procitano = v[0] if isinstance(v, tuple) else (v,)
+        for k, a, b in zip(kolone, niz[i], procitano):
+            if _com_norm(a) != _com_norm(b):
+                raise RuntimeError("povratno citanje, red %d, %s: upisano %r, Excel vratio %r"
+                                   % (i + 1, k, a, b))
+
+
+def _com_norm(v):
+    # Apostrof nije deo vrednosti; broj se vraca kao float, a datum kao upisano
+    # vreme sa oznakom UTC (pywin32 ga ne pretvara pri citanju) -- oznaka se skida.
+    if isinstance(v, str) and v.startswith("'"):
+        v = v[1:]
+    if isinstance(v, datetime):
+        v = v.replace(tzinfo=None)
+    return norm(v)

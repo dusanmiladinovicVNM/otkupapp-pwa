@@ -594,15 +594,21 @@ class Upis(SaSveskom):
     """Ciste funkcije upisa (bez Excela): pretvaranje, redosled kolona, poredjenje."""
 
     def test_com_vrednost_cuva_smisao(self):
-        from datetime import datetime
+        from datetime import datetime, timezone
         self.assertIsNone(upis.com_vrednost(""))
         self.assertEqual(upis.com_vrednost("101"), "'101")              # ostaje tekst
         self.assertEqual(upis.com_vrednost("2026-06-20 08:00:00"), "'2026-06-20 08:00:00")
         self.assertEqual(upis.com_vrednost("=1+1"), "'=1+1")             # ne postaje formula
+        self.assertEqual(upis.com_vrednost("#N/A"), "'#N/A")             # ne postaje greska
+        self.assertEqual(upis.com_vrednost("TRUE"), "'TRUE")             # ne postaje logicka
         self.assertEqual(upis.com_vrednost("Pera"), "Pera")
         self.assertEqual(upis.com_vrednost(Decimal("100")), 100)
         self.assertEqual(upis.com_vrednost(Decimal("1.5")), 1.5)
-        self.assertEqual(upis.com_vrednost(D1), datetime(2026, 6, 20))
+        # datum sa oznakom UTC: pywin32 tada ne pomera vreme (pad 28.10.2026: -2 h)
+        d = upis.com_vrednost(D1)
+        self.assertEqual((d.replace(tzinfo=None), d.tzinfo), (datetime(2026, 6, 20), timezone.utc))
+        d = upis.com_vrednost(datetime(2026, 6, 20, 8, 30))
+        self.assertEqual((d.replace(tzinfo=None), d.tzinfo), (datetime(2026, 6, 20, 8, 30), timezone.utc))
 
     def test_niz_po_redosledu_kolona_u_svesci(self):
         redovi = [{"A": "x", "B": Decimal(2)}]
@@ -616,6 +622,8 @@ class Upis(SaSveskom):
     def test_upis_tabele_gradi_opseg_iz_ugaonih_celija(self):
         # Lazni Excel: Range postoji samo kao (r1, c1, r2, c2); nema Resize/Offset,
         # pa bi povratak na Range.Resize (pad 28.10.2026) ovde pao AttributeError-om.
+        from datetime import datetime, timedelta, timezone
+
         class Opseg:
             def __init__(self, r1, c1, r2, c2):
                 self.r1, self.c1, self.r2, self.c2 = r1, c1, r2, c2
@@ -623,26 +631,46 @@ class Upis(SaSveskom):
                 self.Columns = type("K", (), {"Count": c2 - c1 + 1})()
                 self.Address = "R%dC%d" % (r1, c1)
 
+        class Celije:
+            def __init__(self, lst, o):
+                self.__dict__.update(lst=lst, opseg=o)
+
+            def __setattr__(self, ime, v):
+                o, lst = self.opseg, self.lst
+                a = (o.r1, o.c1, o.r2, o.c2)
+                if ime == "NumberFormat":
+                    lst.formati.append((a, v))
+                    return
+                lst.upisi.append((a, v))
+                for i, red in enumerate(v):
+                    for j, x in enumerate(red):
+                        if isinstance(x, datetime):
+                            # kao pywin32: astimezone(UTC), naivno vreme = lokalno (CEST)
+                            x = (x - lst.lokalno if x.tzinfo is None else x.astimezone(timezone.utc))
+                            x = x.replace(tzinfo=None)
+                        elif isinstance(x, str) and x.startswith("'"):
+                            x = x[1:]
+                        lst.celije[(o.r1 + i, o.c1 + j)] = x
+
+            def __getattr__(self, ime):
+                if ime != "Value":
+                    raise AttributeError(ime)
+                o = self.opseg
+                # kao pywin32: datum se vraca kao upisano vreme sa oznakom UTC
+                v = tuple(tuple((lambda x: x.replace(tzinfo=timezone.utc) if isinstance(x, datetime) else x)(
+                    self.lst.celije.get((r, c))) for c in range(o.c1, o.c2 + 1)) for r in range(o.r1, o.r2 + 1))
+                return v[0][0] if len(v) == 1 and len(v[0]) == 1 else v
+
         class List:
             def __init__(self):
-                self.upisi, self.formati = [], []
+                self.upisi, self.formati, self.celije = [], [], {}
+                self.lokalno = timedelta(hours=2)
 
             def Cells(self, r, c):
                 return (r, c)
 
             def Range(self, a, b):
-                o = Opseg(a[0], a[1], b[0], b[1])
-                lst = self
-
-                class Cilj:
-                    def __setattr__(self, ime, v):
-                        if ime == "Value":
-                            lst.upisi.append(((o.r1, o.c1, o.r2, o.c2), v))
-                        elif ime == "NumberFormat":
-                            lst.formati.append(((o.r1, o.c1, o.r2, o.c2), v))
-                c = Cilj()
-                c.__dict__["opseg"] = o
-                return c
+                return Celije(self, Opseg(a[0], a[1], b[0], b[1]))
 
         class Tabela:
             # Kao Excel: tabela samo sa zaglavljem vec nosi jedan prazan red za unos,
@@ -667,31 +695,40 @@ class Upis(SaSveskom):
                 self.prosirenje = (o.r1, o.c1, o.r2, o.c2)
                 self.redova = o.r2 - o.r1
 
-        kolone = ["Naziv", "Kolicina", "BrojDokumenta"]
+        kolone = ["Naziv", "Kolicina", "BrojDokumenta", "Datum"]
         ws = List()
-        lo = Tabela(3, 2, 3)                                  # zaglavlje u B3:D3
-        niz = [("a%d" % i, i, "101") for i in range(5)]
+        lo = Tabela(3, 2, 4)                                  # zaglavlje u B3:E3
+        niz = upis.niz_za_tabelu([{"Naziv": "a%d" % i, "Kolicina": Decimal(i), "BrojDokumenta": "101",
+                                   "Datum": D1} for i in range(5)], kolone)
         stari = upis.DELOVI
         upis.DELOVI = 2
         try:
             upis._upisi_tabelu(lo, niz, kolone)
         finally:
             upis.DELOVI = stari
-        self.assertEqual(lo.prosirenje, (3, 2, 8, 4))        # zaglavlje + 5 redova
+        self.assertEqual(lo.prosirenje, (3, 2, 8, 5))        # zaglavlje + 5 redova
         self.assertEqual(ws.formati, [((4, 4, 8, 4), "@")])  # samo tekst kolona, ceo stub
-        self.assertEqual([a for a, _ in ws.upisi], [(4, 2, 5, 4), (6, 2, 7, 4), (8, 2, 8, 4)])
+        self.assertEqual([a for a, _ in ws.upisi], [(4, 2, 5, 5), (6, 2, 7, 5), (8, 2, 8, 5)])
         self.assertEqual([r for _, v in ws.upisi for r in v], niz)
+        self.assertEqual(ws.celije[(8, 5)], datetime(2026, 6, 20))   # datum bez pomaka
 
         ws = List()
-        lo = Tabela(1, 1, 3)
+        lo = Tabela(1, 1, 4)
         upis._upisi_tabelu(lo, niz[:1], kolone)               # jedan red: Resize je no-op
-        self.assertEqual([a for a, _ in ws.upisi], [(2, 1, 2, 3)])
+        self.assertEqual([a for a, _ in ws.upisi], [(2, 1, 2, 4)])
 
         ws = List()
-        lo = Tabela(1, 1, 3)
+        lo = Tabela(1, 1, 4)
         lo.Resize = lambda cilj: None                         # Excel ne prosiri tabelu
         with self.assertRaisesRegex(RuntimeError, "zauzima 2 redova sa zaglavljem, ocekivano 6"):
             upis._upisi_tabelu(lo, niz, kolone)
+
+        # Naivan datum (pre ispravke): Excel ga pomeri, uzorak zaustavi upis pre cuvanja.
+        ws = List()
+        lo = Tabela(1, 1, 4)
+        naivno = [r[:3] + (datetime(2026, 6, 8),) for r in niz]
+        with self.assertRaisesRegex(RuntimeError, "povratno citanje, red 1, Datum"):
+            upis._upisi_tabelu(lo, naivno, kolone)
 
     def napravi_paket(self, c):
         put = os.path.join(self.dir.name, "nova.xlsx")
@@ -713,6 +750,20 @@ class Upis(SaSveskom):
         r = upis.uporedi(c, paket)
         self.assertEqual(len(r), 1)
         self.assertIn("tblOtkupStavke red 1, Kolicina", r[0])
+        # Masovna greska u jednoj tabeli ne sakriva drugu, ni drugu kolonu istog reda.
+        from datetime import timedelta
+        for red in c.tabele["tblAmbalaza"]:
+            red["Datum"] = red["Datum"] + timedelta(days=1)
+        c.tabele["tblAmbalaza"][0]["Kolicina"] = Decimal(9999)
+        stari = upis.PRIMERA_PO_TABELI
+        upis.PRIMERA_PO_TABELI = 2
+        try:
+            r = upis.uporedi(c, paket)
+        finally:
+            upis.PRIMERA_PO_TABELI = stari
+        self.assertEqual(len([x for x in r if x.startswith("tblAmbalaza red")]), 2)
+        self.assertIn("tblAmbalaza: ukupno 11 razlika -- po koloni: Datum 10, Kolicina 1", r)
+        self.assertIn("tblOtkupStavke red 1, Kolicina", r[-1])
 
     def test_podesavanja_iz_stare_bez_aktivacije_licence(self):
         dodatno = {"tblSEFConfig": (["ConfigKey", "ConfigValue", "Aktivan"],
