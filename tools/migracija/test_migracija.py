@@ -337,6 +337,17 @@ class Izuzeci(SaSveskom):
         self.osnovne_tvrdnje(rez)
         self.assertEqual([n.ishod for n in rez.noge if n.redni == 13], ["IZUZETO"])
 
+    def test_nabavka_iz_izuzetka_ima_nabavka_dokument(self):
+        iz = self.izuzetak(kretanje={"Od": ["SpoljniSvet", ""], "Na": ["Stanica", "S1"],
+                                     "VrstaKretanja": "NABAVKA", "Dokument": "NABAVKA"})
+        rez = self.prevedi(normalno() + [self.OMU], izuzeci=[iz])
+        self.osnovne_tvrdnje(rez)
+        k = [x for x in rez.kretanja if x.pravilo == "IZUZETAK"][0]
+        z = rez.zaglavlja[k.dok_id]
+        self.assertEqual((k.vrsta, z["Vrsta"], z["BrojOwnerTip"], z["BrojOwnerID"]),
+                         ("NABAVKA", "NABAVKA", "Stanica", "S1"))
+        self.assertEqual(self.salda[("Stanica", "S1", "12/1")]["izuzeci"], Decimal(0))
+
     def test_isporuceni_izuzeci_su_ispravni(self):
         lista = ambalaza.ucitaj_izuzetke(migracija.IZUZECI)
         self.assertEqual(len(lista), 7)
@@ -419,6 +430,8 @@ class Komanda(SaSveskom):
         k1 = [r for r in tabela(t, "Salda").redovi if polje(r, "ID") == "K1"]
         self.assertEqual(polje(k1[0], "Naziv"), "Pera Peric")
         self.assertEqual(len(tabela(t, "Kretanja").redovi), 10)       # 7 + pokrice + vracanje + nabavka
+        with open(os.path.join(izlaz, "tabele.txt"), encoding="utf-8") as f:
+            self.assertIn("tblAmbalaza (12 redova): AmbID, Datum", f.read())
         with open(os.path.join(izlaz, "sazetak.txt"), encoding="utf-8") as f:
             saz = f.read()
         self.assertRegex(saz, r"Nijedan nalog ni jednog dana ispod nule \(AMB-INV-07\) +DA")
