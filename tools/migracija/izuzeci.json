@@ -1,0 +1,66 @@
+{
+  "_opis": [
+    "Rucne odluke za pojedinacne redove stare tblAmbalaza, po starom AmbID-ju.",
+    "Svaka odluka vazi SAMO dok red izgleda tacno kao u 'provera'; ako se red promeni,",
+    "alat ga vraca ZA ODLUKU (IZUZETAK_POTPIS_SE_NE_SLAZE) umesto da primeni staru odluku.",
+    "radnja: izuzmi | kretanje | za_odluku.",
+    "Izvor odluka: MIG-19.11 (OMUlaz) i MIG-19.12 (AMB-00700), grana chore/import-migration-tools."
+  ],
+  "izuzeci": [
+    {
+      "AmbID": "AMB-00700",
+      "radnja": "izuzmi",
+      "provera": {"Datum": "2026-06-22", "DokumentTip": "Otpremnica", "EntitetTip": "Stanica",
+                  "EntitetID": "ST-00004", "Smer": "Izlaz", "TipAmbalaze": "0,4kg", "Kolicina": 500},
+      "razlog": "Otpremnica je stornirana, a red ambalaze je ostao aktivan; ne ulazi u aktivnu knjigu (MIG-19.12)."
+    },
+    {
+      "AmbID": "AMB-02317",
+      "radnja": "kretanje",
+      "provera": {"Datum": "2026-06-27", "DokumentTip": "OMUlaz", "EntitetTip": "Stanica",
+                  "EntitetID": "ST-00005", "Smer": "Ulaz", "TipAmbalaze": "0,4kg", "Kolicina": 300},
+      "kretanje": {"Od": ["Stanica", "ST-00001"], "Na": ["Stanica", "ST-00005"],
+                   "VrstaKretanja": "PRENOS_INTERNO", "Dokument": "REVERS"},
+      "razlog": "OMUlaz: dokazan prenos sa ST-00001 (MIG-19.11)."
+    },
+    {
+      "AmbID": "AMB-03849",
+      "radnja": "kretanje",
+      "provera": {"Datum": "2026-06-28", "DokumentTip": "OMUlaz", "EntitetTip": "Stanica",
+                  "EntitetID": "ST-00005", "Smer": "Ulaz", "TipAmbalaze": "0,4kg", "Kolicina": 250},
+      "kretanje": {"Od": ["Stanica", "ST-00001"], "Na": ["Stanica", "ST-00005"],
+                   "VrstaKretanja": "PRENOS_INTERNO", "Dokument": "REVERS"},
+      "razlog": "OMUlaz: dokazan prenos sa ST-00001 (MIG-19.11)."
+    },
+    {
+      "AmbID": "AMB-03939",
+      "radnja": "kretanje",
+      "provera": {"Datum": "2026-06-29", "DokumentTip": "OMUlaz", "EntitetTip": "Stanica",
+                  "EntitetID": "ST-00002", "Smer": "Ulaz", "TipAmbalaze": "0,4kg", "Kolicina": 83},
+      "kretanje": {"Od": ["Stanica", "ST-00001"], "Na": ["Stanica", "ST-00002"],
+                   "VrstaKretanja": "PRENOS_INTERNO", "Dokument": "REVERS"},
+      "razlog": "OMUlaz: dokazan prenos sa ST-00001 (MIG-19.11)."
+    },
+    {
+      "AmbID": "AMB-01377",
+      "radnja": "za_odluku",
+      "provera": {"Datum": "2026-06-23", "DokumentTip": "OMUlaz", "EntitetTip": "Stanica",
+                  "EntitetID": "ST-00001", "Smer": "Ulaz", "TipAmbalaze": "0,4kg", "Kolicina": 5},
+      "razlog": "OMUlaz: izvor nepoznat (MIG-19.11 ga namerno nije popunio) -- odluka 4."
+    },
+    {
+      "AmbID": "AMB-07115",
+      "radnja": "za_odluku",
+      "provera": {"Datum": "2026-07-14", "DokumentTip": "OMUlaz", "EntitetTip": "Stanica",
+                  "EntitetID": "ST-00001", "Smer": "Ulaz", "TipAmbalaze": "0,4kg", "Kolicina": 10},
+      "razlog": "OMUlaz: izvor nepoznat (MIG-19.11 ga namerno nije popunio) -- odluka 4."
+    },
+    {
+      "AmbID": "AMB-07815",
+      "radnja": "za_odluku",
+      "provera": {"Datum": "2026-07-23", "DokumentTip": "OMUlaz", "EntitetTip": "Stanica",
+                  "EntitetID": "ST-00001", "Smer": "Ulaz", "TipAmbalaze": "0,4kg", "Kolicina": 3},
+      "razlog": "OMUlaz: izvor nepoznat (MIG-19.11 ga namerno nije popunio) -- odluka 4."
+    }
+  ]
+}
