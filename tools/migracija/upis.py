@@ -24,6 +24,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from citac import procitaj_svesku, tabela
+from cilj import TEKST_KOLONE
 
 XL_AUTOMATION_FORCE_DISABLE = 3
 DELOVI = 2000
@@ -64,6 +65,8 @@ def niz_za_tabelu(redovi, kolone_u_svesci):
 
     Kolona koja postoji u svesci a nema je u redu (npr. runtime kolona na kraju)
     ostaje prazna; vrednost reda bez kolone u svesci je greska -- ne gubi se tiho.
+    Tekstualna kolona (TEKST_KOLONE) dobija tekst BEZ apostrofa: _upisi_tabelu joj
+    pre upisa postavlja format "@" (isti koji trazi modSchema.SchemaReadyOrFail).
     """
     kf = {}
     for r in redovi[:1]:
@@ -72,9 +75,17 @@ def niz_za_tabelu(redovi, kolone_u_svesci):
     nema = [k for c, k in kf.items() if c not in u_svesci and any(r.get(k) not in ("", None) for r in redovi)]
     if nema:
         raise ValueError("kolone sa podacima kojih nema u tabeli nove sveske: " + ", ".join(nema))
+    tekst_kf = {k.casefold() for k in TEKST_KOLONE}
     out = []
     for r in redovi:
-        out.append(tuple(com_vrednost(r.get(kf.get(k.casefold(), k), "")) for k in kolone_u_svesci))
+        red = []
+        for k in kolone_u_svesci:
+            v = r.get(kf.get(k.casefold(), k), "")
+            if k.casefold() in tekst_kf and v not in ("", None):
+                red.append(str(v))
+            else:
+                red.append(com_vrednost(v))
+        out.append(tuple(red))
     return out
 
 
@@ -168,7 +179,7 @@ def upisi(putanja, c, log=print):
             plan.append((ime, lo, kolone, niz_za_tabelu(redovi, kolone)))
 
         for ime, lo, kolone, niz in plan:
-            _upisi_tabelu(lo, niz, len(kolone))
+            _upisi_tabelu(lo, niz, kolone)
             log("  %-28s %6d red." % (ime, len(niz)))
         for ime, parovi in sorted(c.podesavanja.items()):
             lo = lo_po_imenu.get(ime.casefold())
@@ -237,11 +248,16 @@ def _ima_podataka(lo):
     return any(any(x not in (None, "") for x in (r if isinstance(r, tuple) else (r,))) for r in redovi)
 
 
-def _upisi_tabelu(lo, niz, m):
-    n = len(niz)
+def _upisi_tabelu(lo, niz, kolone):
+    n, m = len(niz), len(kolone)
     zag = lo.HeaderRowRange
     lo.Resize(zag.Resize(n + 1, m))
     telo = lo.DataBodyRange
+    tekst_kf = {k.casefold() for k in TEKST_KOLONE}
+    for j, k in enumerate(kolone, 1):
+        if k.casefold() in tekst_kf:
+            # Format PRE upisa: posle bi "101" vec bio broj.
+            telo.Columns(j).NumberFormat = "@"
     for i in range(0, n, DELOVI):
         deo = niz[i:i + DELOVI]
         telo.Cells(i + 1, 1).Resize(len(deo), m).Value = tuple(deo)

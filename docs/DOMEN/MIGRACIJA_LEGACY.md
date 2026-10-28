@@ -19,6 +19,10 @@
 | **MIG-ODL-06** | Status: otpremnica i zbirna `IZDATO` (stari program nije imao nacrt, MIG-14). Otkup `IZDATO`, osim **aktivnog otkupa bez aktivne otpremnice** — ostaje prazan, jer bi ga sync sam stavio u automatsku otpremnicu (`modMasterSync.GrupeZaAutoOtpremnicu`, `modAutoHladnjaca.AutoLanacZaNevezaneBlokove`). Aktivna otpremnica bez dokazanog otkupa ostaje neizdata (izveštaji robe bi inače pali, `VrednostIzvoraZaOtpremnicu`). | `cilj._status_*`, `_otpremnice_bez_izvora` |
 | **MIG-ODL-07** | Podešavanja: vrednost iz stare sveske prepisuje test vrednost sveže sveske (`make_fixture`); aktivacija licence (`LICENSE_KEY/TOKEN/BOUND_PARTS/HWM/STATUS/NEXT_CHECK`, `TRIAL_START/HWM`) se ne prenosi — licenca se aktivira ponovo, kao `modMigracija` na drugoj mašini. | `cilj._podesavanja`, `upis.upisi_podesavanja` |
 | **MIG-ODL-08** | Ne prenosi se: `tblStornoVeze`, `tblStornoZurnal` (pokazuju na kolone starog modela), `tblPoruke` (katalog iz nove sveske). | `cilj.NE_PRENOSI` |
+| **MIG-ODL-09** | **Storniran otkup bez količine (0 kg) ne ide u novu svesku**: main ga ne ume da pročita (`modOtkup.RequireStavkaUgovor`, Kolicina > 0 važi i za storno), a storniran dokument ne ulazi ni u jedno saldo ni izveštaj — ostaje u staroj svesci kao arhivi. Aktivan otkup sa 0 kg i dalje BLOKIRA. Odluka operatera 28.10.2026 (umesto zakrpe MIG-10, grana `migration/mig10-cancelled-zero-readmodel`). | `cilj._izostavi_stornirane_bez_kolicine` |
+| **MIG-ODL-10** | Isplate kooperantu bez `OtkupID` (5 redova, `VirmanFirmaKoop`/`VirmanAvansKoop`) su **stvarni avansi** — ostaju bez veze, a prvi sledeći otkup kooperanta ih troši (`modNovac.JeAvansKooperanta`). Odluka operatera 28.10.2026. | — |
+| **MIG-ODL-11** | Otvorene palete stare sezone se **zatvaraju** (`Status = Zatvorena`), inače ih nova sezona puni gajbicama iste vrste/sorte/klase (`modPaletniList`). | `cilj._zatvori_otvorene_palete` |
+| **MIG-ODL-12** | Prihvaćeno nad sveskom s kraja sezone: 17 aktivnih otpremnica bez dokazivog otkupa ostaje neizdato (MIG-ODL-06), 3 aktivna otkupa bez otpremnice ostaju neizdata, aktivacija licence se ne prenosi (MIG-ODL-07). | — |
 
 ## MIG-WR-01 — izuzetak od vlasništva upisa
 
@@ -39,12 +43,7 @@ Uslovi koje alat drži:
 
 ## Otvoreno
 
-- **Storniran otkup sa 0 kg** (u snimku od 15.10 bio je jedan): main ga odbija na
-  čitanju (`modOtkup.RequireStavkaUgovor`). Zakrpa postoji na grani
-  `migration/mig10-cancelled-zero-readmodel`, status NO-GO. Ako ga proba nađe,
-  nalaz je BLOKIRA i traži odluku.
-- ODLUKA nalazi probe (isplata bez `OtkupID` = avans, stari `Isplaceno` bez
-  reda u `tblNovac`, otvorene palete, aktivni otkupi bez otpremnice) — operater
-  ih čita pre upisa.
+- Upis (COM) i provera u pravom Excelu (Compile, otvaranje ekrana, izveštaji)
+  — NEVERIFIKOVANO dok ga operater ne pokrene.
 - `docs/DOMEN/README.md` §1 još kaže da se otkup vezuje preko
   `OtpremnicaID`/`BrojOtpremnice`; kod ga vezuje preko `tblOtpremnicaIzvori`.

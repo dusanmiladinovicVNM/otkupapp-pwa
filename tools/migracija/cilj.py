@@ -111,6 +111,7 @@ class Cilj:
         self.stavka_za = {}           # (tabela dokumenta, ID.casefold()) -> ID stavke
         self.amb = None
         self.podesavanja = {}         # tabela -> [(kljuc, {kolona: vrednost})]
+        self.izostavljeni = set()     # (tabela, ID.casefold()) koji ne idu u novu svesku
 
     def kljuc_podesavanja(self, ime):
         return PODESAVANJA[ime][0]
@@ -152,6 +153,7 @@ def izgradi(tabele, kanon, izuzeci=(), knjizenje=ambalaza.ISPRAVNO, izuzeci_dok=
             c.nalaz("INFO", "NE_PRENOSI_SE", ime, "", "%d red. -- %s" % (len(t.redovi), razlog))
 
     _dokumenti(c, tabele)
+    _izostavi_stornirane_bez_kolicine(c)
     _clanstvo(c, tabele)
     _status_dokumenata(c)
     _popravi_veze(c, {kljuc(iz["OtpremnicaID"]): iz for iz in izuzeci_dok})
@@ -160,6 +162,7 @@ def izgradi(tabele, kanon, izuzeci=(), knjizenje=ambalaza.ISPRAVNO, izuzeci_dok=
     _prijemnica_roditelj(c, tabele)
     _kupac_hladnjaca(c, tabele)
     _stavke_nizvodno(c)
+    _zatvori_otvorene_palete(c)
     _ambalaza(c, tabele, izuzeci, knjizenje)
     _tekst_kolone(c)
     _podesavanja(c, tabele)
@@ -295,7 +298,7 @@ def _clanstvo(c, tabele):
     if otk_src is not None:
         for r in otk_src.redovi:
             oid, pid = tekst(polje(r, "OtkupID")), tekst(polje(r, "OtpremnicaID"))
-            if not pid:
+            if not pid or ("tblOtkup", kljuc(oid)) in c.izostavljeni:
                 continue
             if kljuc(pid) not in otp_ids:
                 c.nalaz("UPOZORENJE", "OTKUP_POKAZUJE_NA_NEPOSTOJECU_OTPREMNICU", "tblOtkup", oid,
@@ -546,6 +549,39 @@ def _kupac_hladnjaca(c, tabele):
     if not h:
         c.nalaz("INFO", "NEMA_MALINA_DEFAULT_KUPAC", "tblZbirna", "",
                 "u staroj svesci nema MALINA_DEFAULT_KUPAC -- sve zbirne dobijaju KupacHladnjaca=Ne")
+
+
+def _izostavi_stornirane_bez_kolicine(c):
+    """MIG-ODL-09: STORNIRAN otkup bez kolicine (0 kg) ne ide u novu svesku.
+
+    main takav red ne ume da procita (modOtkup.RequireStavkaUgovor: Kolicina > 0
+    vazi i za stornirana zaglavlja), a storniran dokument ne ulazi ni u jedno
+    saldo ni izvestaj; ostaje u staroj svesci kao arhivi. AKTIVAN otkup sa 0 kg
+    se ne izostavlja -- njega provera i dalje BLOKIRA.
+    """
+    stavke = {kljuc(s["OtkupID"]): s for s in c.tabele["tblOtkupStavke"]}
+    for z in list(c.tabele["tblOtkup"]):
+        oid = kljuc(z["OtkupID"])
+        kol = broj(stavke.get(oid, {}).get("Kolicina"))
+        if je_storno(_kf(z)) and (kol is None or kol <= 0):
+            c.izostavljeni.add(("tblOtkup", oid))
+            c.tabele["tblOtkup"].remove(z)
+            c.tabele["tblOtkupStavke"] = [s for s in c.tabele["tblOtkupStavke"] if kljuc(s["OtkupID"]) != oid]
+            c.stavka_za.pop(("tblOtkup", oid), None)
+            c.nalaz("ODLUKA", "STORNIRAN_OTKUP_BEZ_KOLICINE_IZOSTAVLJEN", "tblOtkup", z["OtkupID"],
+                    "broj %s, %s: ne ide u novu svesku (main ne cita 0 kg ni za storno); ostaje u staroj"
+                    % (z.get("BrojDokumenta", ""), _dan(z.get("Datum"))))
+
+
+def _zatvori_otvorene_palete(c):
+    """MIG-ODL-11: otvorena paleta stare sezone se zatvara -- inace je nova sezona
+    puni gajbicama iste vrste/sorte/klase (modPaletniList: Status = Otvorena)."""
+    for p in c.tabele.get("tblPaleta", []):
+        if (kljuc(p.get("Status")) == "otvorena" and not je_storno(_kf(p))
+                and kljuc(p.get("Preradjeno")) != "da"):
+            p["Status"] = "Zatvorena"
+            c.nalaz("INFO", "PALETA_ZATVORENA_PRI_MIGRACIJI", "tblPaleta", p.get("PaletaID"),
+                    "broj %s" % p.get("BrojPalete", ""))
 
 
 def _stavke_nizvodno(c):
