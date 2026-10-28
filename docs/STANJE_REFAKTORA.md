@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 28.10.2026 (stavka 217: `#445` — Compile potvrđen, ručna provera 10/12 izmereno; čeka storno nabavke i merge).
+**Ažurirano:** 28.10.2026 (stavka 217: `#445` — Compile potvrđen, ručna provera 11/12; čeka merge).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -35,7 +35,7 @@
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
-| **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ⏳ **`#445`** — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 10/12 (stavke 216–217); čeka storno nabavke i merge |
+| **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ⏳ **`#445`** — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217); čeka merge |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -7978,7 +7978,7 @@
      - **Redosled prema `#441`:** pregled predlaže da `#445` ide u merge prvi. Posle toga `#441` radi rebase i
        prenumeriše svojih 9 testova na 279–287, uz usklađivanje zajedničkih modula i kataloga sabotaža.
      - **Sledeći brojevi:** stavka 217 · test 279 (pazi `#441`) · KI-061.
-217. **`#445` — Compile potvrđen, ručna provera 10 / 12 izmereno; KI-061..063** (28.10.2026). Izvor `d8ca0e7c318f` (isti kao
+217. **`#445` — Compile potvrđen, ručna provera 11 / 12 (12. nedostižna); KI-061..063** (28.10.2026). Izvor `d8ca0e7c318f` (isti kao
      FULL i dokaz, stavka 216).
 
      - **Compile:** operater je ručno potvrdio `Debug → Compile VBAProject` nad `rucna_provera_ki025_026_kod.xlsm`.
@@ -8007,18 +8007,18 @@
        10. ponovna štampa iz liste `AMBALAZA` — ✅:
            - zapisnik `1/281026-5` još tri puta (09:35:53, 09:36:12, 09:39:42);
            - nabavka odbijena: „Vrsta 'NABAVKA' nema svoj sablon… Stampa odbijena." (7510);
-       11. storno — ✅ za otpis, ⏳ za nabavku:
+       11. storno — ✅:
            - otpis `1/281026-3` sa ekrana Storno/Reversi (lista nosi sve četiri vrste) je „Stornirano"; knjiga ima kontra-stav
              `SpoljniSvet → Kooperant 2` i kooperant je opet 68;
-           - **storno nabavke čije su gajbe izdate nije prikazan** (stanica je 0, pa `AMB-INV-07` treba da ga odbije);
+           - storno nabavke `1/281026` čije su gajbe izdate (stanica je 0) je **odbijen** (`AMB-INV-07`). To je izjava
+             operatera bez snimka (28.10.2026); u snimljenoj svesci (09:39) nabavka je aktivna i bez kontra-stava;
        12. ispravka nabavke i otpisa — **nije prikazano**; ekran Storno za otpis nudi samo „Storno bez zamene".
      - **Novi nalazi (samo KNOWN_ISSUES):**
        - `KI-061`: naziv OM-a je odsečen na papiru („Test Otkupn"); zatečeno i na reversu;
        - `KI-062`: F7 kaže „Sačuvaj revers" i „Revers sačuvan" i za nabavku i otpis (posledica `ODL-34` a, samo tekst);
        - `KI-063`: preklopljeni Ulaz i Izlaz u podnožju izveštaja Ambalaža, OM, Zbirno; zatečeno.
        - `KI-059` je potvrđen na snimku: prazno „Mesto" za nabavku i otpis i za fixture `4/IZV`.
-     - **Ostaje:** tačka 11 za nabavku (ili svesna odluka da je pokriva zajednički kontra-stav bez posebnog testa), pa merge
-       samo na izričit zahtev operatera.
+     - **Ostaje:** merge samo na izričit zahtev operatera. Tačka 12 je nedostižna sa ekrana, pa nije propust.
      - **Sledeći brojevi:** stavka 218 · test 279 (pazi `#441`) · KI-064.
 
 ## Dug sa imenom (posle S5-5b)
