@@ -271,6 +271,11 @@ pokriće se brojalo kao zaduženje, pregled za prošlost je nosio današnje stan
 kooperant sa dve stanice je u `ReportSaldoOMZbirni` ulazio dvaput. Svaki red
 knjige imenuje obe strane, pa je pripadnost stanici podatak, ne alokacija — nema
 prelivanja. Fizički pregled stanice ostaje `ReportAmbalaza("OM")`.
+Red prema granici (`SpoljniSvet`) nema drugu realnu stranu: otpis sa naloga
+kooperanta (`AMB-10-ODL-34`, #445) ide `Kooperant → SpoljniSvet`, a stanica je
+samo vlasnik dokumenta. Takav red pripada stanici koja je vlasnik ambalažnog
+dokumenta (`BrojOwnerTip/ID` sa zaglavlja, isti OM kao na zapisniku), i nijednoj
+drugoj — pa je zbir po stanicama jednak kartici.
 
 **DOC-SORT-01 — dokumentna lista ide po danu i broju kao broju.** Otkupni
 listovi, roba OM (otpremnice), roba kupca (prijemnice) i pojedinačan pregled
@@ -286,7 +291,8 @@ zbirni, roba vozača po vrsti) broja nemaju: izveštaj ih slaže po nazivu pa ID
 „Otkup" (`KarticaOtkupOpis`). Prazan deo se preskače, pa nema duplog razmaka.
 Ekran i PDF čitaju isti `ReportKarticaKooperanta`.
 
-Mere ih `modTest` 283–287 (287: otkupni list i kartica kažu isti broj), sabotaže `amb-posl-*`,
+Mere ih `modTest` 283–288 (287: otkupni list i kartica kažu isti broj; 288: otpis u pregledu po OM),
+sabotaže `amb-posl-*`,
 `kart-opis-*`, `doc-sort-*`.
 
 ## 3) Ko šta piše

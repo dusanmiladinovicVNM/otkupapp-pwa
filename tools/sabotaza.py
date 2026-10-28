@@ -10420,6 +10420,24 @@ SABOTAZE = {
         "T_AmbPoslovno_OtkupniListKaoKartica",
         "knjiga posle otkupa: poslovno -15 kao na papiru, fizicki 0 sa pokricem",
     ),
+    # Pregled po OM ne pripisuje red prema granici nikome: otpis sa naloga
+    # kooperanta (#445) ispada iz salda prema stanici vlasniku dokumenta.
+    "amb-posl-om-bez-otpisa": (
+        "modAmbalaza.bas",
+        "    ElseIf StrComp(Trim$(drugaTip), AMB_NALOG_SPOLJNI, vbTextCompare) = 0 Then\n",
+        "    ElseIf False Then   ' SABOTAZA: red prema granici ne pripada nikome\n",
+        "T_AmbPoslovno_OtpisUPregleduOM",
+        "pregled OM: otpis sa naloga kooperanta umanjuje saldo prema stanici vlasniku dokumenta",
+    ),
+    # Pregled po OM pripisuje red prema granici SVAKOJ stanici, ne vlasniku
+    # dokumenta -- otpis jedne stanice umanjuje pregled druge.
+    "amb-posl-om-otpis-svake-stanice": (
+        "modAmbalaza.bas",
+        "                RedPripadaProtivnalogu = IstiNalog(CStr(v(0)), CStr(v(1)), protivTip, protivID)\n",
+        "                RedPripadaProtivnalogu = True   ' SABOTAZA: otpis pripada svakoj stanici\n",
+        "T_AmbPoslovno_OtpisUPregleduOM",
+        "pregled OM: otpis na dokumentu druge stanice ne ulazi u pregled ove",
+    ),
 }
 
 

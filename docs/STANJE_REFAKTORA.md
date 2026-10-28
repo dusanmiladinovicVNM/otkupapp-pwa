@@ -8108,7 +8108,15 @@
      - **NEVERIFIKOVANO:** `run_vba` u web sesiji ne radi. Treba: `python tools/run_vba.py --suite RunAllTests`,
        pa `python tools/dokaz.py amb-posl- kart-opis- doc-sort- kart-hron- --grupe`, pa compile, pa
        ručna provera PDF otkupnog lista i pregleda po OM nad pravim podacima.
-     - **Sledeći brojevi:** test 288 · stavka 220 · KI-064.
+     - **Dopuna posle rebase-a na `b91df251` (28.10.2026): otpis iz `#445` u pregledu po OM.** Otpis sa naloga
+       kooperanta ide `Kooperant → SpoljniSvet`; stanica je samo vlasnik dokumenta (ODL-34 c). Pregled po OM
+       je brojao samo redove čija je druga strana ta stanica, pa otpis nije video: kartica 7, pregled 10.
+       - `modAmbalaza.AmbSaldoPoNalogu`: red prema granici pripada nalogu koji je vlasnik ambalažnog
+         dokumenta (`RedPripadaProtivnalogu`, `AmbDokVlasnikMapa`); poziv bez protivnaloga se ne menja;
+       - test **288** `T_AmbPoslovno_OtpisUPregleduOM` (crveno pre ispravke); kontrola u testovima
+         (`KartAmbPoslovniOracle`) dobija isto pravilo nezavisno, čitajući zaglavlje sama;
+       - sabotaže `amb-posl-om-bez-otpisa`, `amb-posl-om-otpis-svake-stanice`; katalog 1037 → 1039.
+     - **Sledeći brojevi:** test 289 · stavka 220 · KI-064.
 
 ## Dug sa imenom (posle S5-5b)
 

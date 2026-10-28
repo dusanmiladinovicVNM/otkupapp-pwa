@@ -902,6 +902,8 @@ End Function
 ' redovi kasnijeg datuma ne ulaze (pregled za proslost ne sme da nosi danasnje
 ' stanje). protivTip/protivID: samo kretanja sa TIM nalogom -- svaki red imenuje
 ' obe strane, pa je "saldo kooperanta prema stanici X" podatak, ne alokacija.
+' Red prema granici (otpis sa naloga kooperanta, #445) pripada nalogu koji je
+' vlasnik ambalaznog dokumenta (RedPripadaProtivnalogu).
 ' Bez opcija je ovo zatecen fizicki, danasnji, globalni saldo.
 Public Function AmbSaldoPoNalogu(ByVal tip As String, _
                                  Optional ByVal samoPoslovno As Boolean = False, _
@@ -939,7 +941,16 @@ Public Function AmbSaldoPoNalogu(ByVal tip As String, _
     cDat = kolIdx(COL_AMB_DATUM)
     saProtivnim = (Len(Trim$(protivTip)) > 0)
 
-    Dim i As Long, nid As String
+    Dim cDokTip As Long, cDokID As Long, vlasnik As Object
+    If saProtivnim Then
+        cDokTip = kolIdx(COL_AMB_DOK_TIP)
+        cDokID = kolIdx(COL_AMB_DOK_ID)
+        Set vlasnik = AmbDokVlasnikMapa()
+    End If
+
+    ' VBA Or ne prekida izracunavanje: predikat protivnaloga se zove SAMO kad je
+    ' protivnalog zadat (bez njega mapa vlasnika i kolone dokumenta ne postoje).
+    Dim i As Long, nid As String, pripada As Boolean
     For i = 1 To UBound(data, 1)
         If RedDoticeKnjigu(data, i, kolIdx) Then
             If samoPoslovno Then
@@ -949,8 +960,11 @@ Public Function AmbSaldoPoNalogu(ByVal tip As String, _
                 If Int(CDbl(CDate(data(i, cDat)))) > Int(CDbl(datumDo)) Then GoTo SledeciRedSalda
             End If
             If StrComp(AmbText(data(i, cNaTip)), Trim$(tip), vbTextCompare) = 0 Then
-                If Not saProtivnim Or IstiNalog(AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), _
-                                                protivTip, protivID) Then
+                pripada = True
+                If saProtivnim Then pripada = RedPripadaProtivnalogu(data, i, AmbText(data(i, cOdTip)), _
+                                                 AmbText(data(i, cOdID)), cDokTip, cDokID, _
+                                                 vlasnik, protivTip, protivID)
+                If pripada Then
                     nid = AmbText(data(i, cNaID))
                     If Len(nid) > 0 Then
                         If Not res.Exists(nid) Then res.Add nid, 0&
@@ -959,8 +973,11 @@ Public Function AmbSaldoPoNalogu(ByVal tip As String, _
                 End If
             End If
             If StrComp(AmbText(data(i, cOdTip)), Trim$(tip), vbTextCompare) = 0 Then
-                If Not saProtivnim Or IstiNalog(AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), _
-                                                protivTip, protivID) Then
+                pripada = True
+                If saProtivnim Then pripada = RedPripadaProtivnalogu(data, i, AmbText(data(i, cNaTip)), _
+                                                 AmbText(data(i, cNaID)), cDokTip, cDokID, _
+                                                 vlasnik, protivTip, protivID)
+                If pripada Then
                     nid = AmbText(data(i, cOdID))
                     If Len(nid) > 0 Then
                         If Not res.Exists(nid) Then res.Add nid, 0&
@@ -970,6 +987,59 @@ Public Function AmbSaldoPoNalogu(ByVal tip As String, _
             End If
         End If
 SledeciRedSalda:
+    Next i
+End Function
+
+' DA LI RED PRIPADA PROTIVNALOGU (AMB-POSL-02).
+'
+' Pripada kad je druga strana reda bas taj nalog. Red prema GRANICI (SpoljniSvet)
+' nema drugu realnu stranu: otpis sa naloga kooperanta (#445) ide Kooperant ->
+' SpoljniSvet, a stanica je samo VLASNIK dokumenta -- broj iz njenog niza
+' (AMB-10-ODL-34 c), isti OM koji stoji i na zapisniku. Takav red pripada nalogu
+' koji je vlasnik ambalaznog dokumenta, i nijednom drugom; bez toga bi pregled
+' po OM nosio otpisane gajbe kao dug.
+Private Function RedPripadaProtivnalogu(ByRef data As Variant, ByVal i As Long, _
+                                        ByVal drugaTip As String, ByVal drugaID As String, _
+                                        ByVal cDokTip As Long, ByVal cDokID As Long, _
+                                        ByVal vlasnik As Object, _
+                                        ByVal protivTip As String, _
+                                        ByVal protivID As String) As Boolean
+    Dim k As String, v As Variant
+    If IstiNalog(drugaTip, drugaID, protivTip, protivID) Then
+        RedPripadaProtivnalogu = True
+    ElseIf StrComp(Trim$(drugaTip), AMB_NALOG_SPOLJNI, vbTextCompare) = 0 Then
+        If StrComp(AmbText(data(i, cDokTip)), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) = 0 Then
+            k = AmbText(data(i, cDokID))
+            If vlasnik.Exists(k) Then
+                v = vlasnik(k)
+                RedPripadaProtivnalogu = IstiNalog(CStr(v(0)), CStr(v(1)), protivTip, protivID)
+            End If
+        End If
+    End If
+End Function
+
+' AmbDokID -> Array(BrojOwnerTip, BrojOwnerID), jednim prolazom kroz zaglavlja.
+' Storniran dokument ostaje u mapi: njegov original i kontra-stav pripadaju
+' istom vlasniku, pa se medjusobno potiru.
+Private Function AmbDokVlasnikMapa() As Object
+    Const SRC As String = "modAmbalaza.AmbDokVlasnikMapa"
+
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set AmbDokVlasnikMapa = res
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA_DOKUMENT)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cID As Long, cOwTip As Long, cOwID As Long, i As Long, k As String
+    cID = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, SRC)
+    cOwTip = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_TIP, SRC)
+    cOwID = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_ID, SRC)
+    For i = 1 To UBound(data, 1)
+        k = AmbText(data(i, cID))
+        If Len(k) > 0 Then res(k) = Array(AmbText(data(i, cOwTip)), AmbText(data(i, cOwID)))
     Next i
 End Function
 
