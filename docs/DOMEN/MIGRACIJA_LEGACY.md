@@ -41,9 +41,18 @@ Uslovi koje alat drži:
 - **posle upisa**: svaka ćelija se poredi sa planom, a salda ambalaže nove sveske
   sa saldima prevoda.
 
+## Stanje
+
+- **Upis 28.10.2026 nad sveskom C002 (SHA256 `d5e1f612…`): prošao.** 34 tabele
+  + podešavanja; povratno poređenje svake ćelije: 0 razlika; salda ambalaže nove
+  sveske naspram prevoda: 0 razlika. Usput nađene i ispravljene tri greške
+  samog upisa (pywin32 `Range.Resize`, tabela sa jednim redom, datum pomeren u
+  UTC) — svaka ima test.
+
 ## Otvoreno
 
-- Upis (COM) i provera u pravom Excelu (Compile, otvaranje ekrana, izveštaji)
-  — NEVERIFIKOVANO dok ga operater ne pokrene.
+- Provera u pravom Excelu nad novom sveskom (Compile, otvaranje ekrana,
+  kartice, izveštaji robe, aktivacija licence) — NEVERIFIKOVANO dok je operater
+  ne prođe.
 - `docs/DOMEN/README.md` §1 još kaže da se otkup vezuje preko
   `OtpremnicaID`/`BrojOtpremnice`; kod ga vezuje preko `tblOtpremnicaIzvori`.
