@@ -269,9 +269,11 @@ def _upisi_tabelu(lo, niz, kolone):
     if int(zag.Columns.Count) != m:
         raise RuntimeError("zaglavlje ima %d kolona, plan %d" % (int(zag.Columns.Count), m))
     lo.Resize(_opseg(ws, r0, c0, r0 + n, c0 + m - 1))
-    if int(lo.ListRows.Count) != n:
-        raise RuntimeError("posle prosirenja tabela ima %d redova, ocekivano %d"
-                           % (int(lo.ListRows.Count), n))
+    # Geometrija, ne ListRows: prazna tabela vec nosi jedan prazan red za unos
+    # (ListRows.Count = 0 dok se u njega ne upise), pa je za n = 1 Resize no-op.
+    if int(lo.Range.Rows.Count) != n + 1:
+        raise RuntimeError("posle prosirenja tabela zauzima %d redova sa zaglavljem, ocekivano %d"
+                           % (int(lo.Range.Rows.Count), n + 1))
     tekst_kf = {k.casefold() for k in TEKST_KOLONE}
     for j, k in enumerate(kolone):
         if k.casefold() in tekst_kf:
@@ -280,3 +282,6 @@ def _upisi_tabelu(lo, niz, kolone):
     for i in range(0, n, DELOVI):
         deo = niz[i:i + DELOVI]
         _opseg(ws, r0 + 1 + i, c0, r0 + i + len(deo), c0 + m - 1).Value = tuple(deo)
+    if int(lo.ListRows.Count) != n:
+        raise RuntimeError("posle upisa tabela ima %d redova podataka, ocekivano %d"
+                           % (int(lo.ListRows.Count), n))
