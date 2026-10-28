@@ -257,6 +257,7 @@ def komanda_upis(a):
         print("Upis trazi Windows + Excel + pywin32.", file=sys.stderr)
         return 2
     if not os.path.exists(meta):
+        os.makedirs(os.path.dirname(meta), exist_ok=True)
         print("Pravim svezu svesku iz gita: %s" % meta)
         sys.path.insert(0, os.path.join(KOREN_REPOA, "tools"))
         import make_dev_workbook

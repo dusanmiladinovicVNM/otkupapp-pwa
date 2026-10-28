@@ -457,12 +457,33 @@ class NovaSveska(SaSveskom):
         self.assertIn(("AKTIVAN_OTKUP_BEZ_OTPREMNICE", "OTK-3"), self.nalazi(c, "ODLUKA"))
         self.assertIn(("STARI_ISPLACENO_BEZ_NOVCA", "OTK-3"), self.nalazi(c, "ODLUKA"))
 
-    def test_storniran_otkup_sa_nula_kg_blokira(self):
+    def test_storniran_otkup_sa_nula_kg_se_izostavlja(self):
+        """MIG-ODL-09: storniran 0 kg ne ide u novu svesku (ni zaglavlje ni stavka)."""
         t = osnovne_tabele(normalno())
         kol, redovi = t["tblOtkup"]
         redovi[1][6] = 0
         c = self.sagradi(dodatno={"tblOtkup": (kol, redovi)})
-        self.assertIn(("KOLICINA_NIJE_POZITIVNA", "OTK-2"), self.nalazi(c, "BLOKIRA"))
+        self.assertEqual(self.nalazi(c, "BLOKIRA"), [])
+        self.assertIn(("STORNIRAN_OTKUP_BEZ_KOLICINE_IZOSTAVLJEN", "OTK-2"), self.nalazi(c, "ODLUKA"))
+        self.assertNotIn("OTK-2", [z["OtkupID"] for z in c.tabele["tblOtkup"]])
+        self.assertNotIn("OTK-2", [s["OtkupID"] for s in c.tabele["tblOtkupStavke"]])
+
+    def test_aktivan_otkup_sa_nula_kg_i_dalje_blokira(self):
+        t = osnovne_tabele(normalno())
+        kol, redovi = t["tblOtkup"]
+        redovi[2][6] = 0
+        c = self.sagradi(dodatno={"tblOtkup": (kol, redovi)})
+        self.assertIn(("KOLICINA_NIJE_POZITIVNA", "OTK-3"), self.nalazi(c, "BLOKIRA"))
+
+    def test_otvorena_paleta_se_zatvara(self):
+        t = osnovne_tabele(normalno())
+        kol, redovi = t["tblPaleta"]
+        redovi.append(["PAL-00002", "2", 2026, "Otvorena", "", ""])
+        c = self.sagradi(dodatno={"tblPaleta": (kol, redovi)})
+        st = {p["PaletaID"]: p["Status"] for p in c.tabele["tblPaleta"]}
+        self.assertEqual(st, {"PAL-00001": "Zatvorena", "PAL-00002": "Zatvorena"})
+        self.assertIn(("PALETA_ZATVORENA_PRI_MIGRACIJI", "PAL-00002"), self.nalazi(c, "INFO"))
+        self.assertNotIn("OTVORENA_PALETA", [p for p, _ in self.nalazi(c)])
 
     def test_klasa_iii_blokira(self):
         t = osnovne_tabele(normalno())
@@ -588,6 +609,9 @@ class Upis(SaSveskom):
         self.assertEqual(upis.niz_za_tabelu(redovi, ["B", "A", "Runtime"]), [(2, "x", None)])
         with self.assertRaisesRegex(ValueError, "kolone sa podacima"):
             upis.niz_za_tabelu(redovi, ["A"])
+        # tekstualna kolona: bez apostrofa (format "@" se postavlja pre upisa)
+        self.assertEqual(upis.niz_za_tabelu([{"BrojDokumenta": "101", "Napomena": "101"}],
+                                            ["BrojDokumenta", "Napomena"]), [("101", "'101")])
 
     def napravi_paket(self, c):
         put = os.path.join(self.dir.name, "nova.xlsx")
