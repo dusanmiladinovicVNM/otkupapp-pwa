@@ -49,6 +49,27 @@ Uslovi koje alat drži:
   samog upisa (pywin32 `Range.Resize`, tabela sa jednim redom, datum pomeren u
   UTC) — svaka ima test.
 
+## Usklađenost sa main-om posle #445 i #441
+
+Provereno nad kodom 28.10.2026 (main `7c12aa2e` = #445 + #441 sa glavom
+`7274598c`); šema se ni u jednom ne menja, pa `cilj.py`/`provere.py` važe bez
+izmene. Sveska za C002 se pravi iz ovog main-a.
+
+- **#445 (nabavka i otpis sa F7, AMB-10-ODL-34):** migraciona NABAVKA ima isti
+  oblik kao `NabaviAmbalazu_TX` — zaglavlje vrste `NABAVKA` čiji je vlasnik broja
+  nalog, red `SpoljniSvet → nalog`, `DokumentTip = AmbalazaDokument`. NABAVKA na
+  **vozača** (ako je stara sveska imala vozača u minusu) ugovor dozvoljava
+  (`AmbKlaseVrste`: GRANICA → SOPSTVENI), ali je ekran od ODL-34 (b) ne nudi —
+  to je zapis istorije, ne tok koji se nastavlja. Nova numeracija
+  (`AmbDokNizSken`) gleda samo isti nalog i isti dan, a `MIG-POC/...` čita kao
+  redni broj 0, bez greške.
+- **#441 (poslovna projekcija kartice, AMB-POSL-01/02):** kartica kooperanta i
+  otkupni list ne broje `ULAZ_TUDJE` (`AmbVrstaJeZahtev`). Migracioni
+  `VRACANJE_TUDJE` nije dodat red nego deo starog izdavanja (`primeni_politiku_duga`),
+  pa je **poslovni saldo partnera u novoj svesci jednak starom saldu** — ista
+  jednačina koju alat već meri (stari − van knjige + izuzeci + pokriće = novi;
+  pokriće partnera je samo `ULAZ_TUDJE`).
+
 ## Otvoreno
 
 - Provera u pravom Excelu nad novom sveskom (Compile, otvaranje ekrana,
