@@ -392,6 +392,7 @@ Public Sub RunAllTests()
     RunOne 285
     RunOne 286
     RunOne 287
+    RunOne 288
     RunOne 13
     RunOne 14
     RunOne 15
@@ -974,6 +975,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 285: TestName = "T_KartOpis_VrstaSortaKlasa"
         Case 286: TestName = "T_DocSort_DokumentneListe"
         Case 287: TestName = "T_AmbPoslovno_OtkupniListKaoKartica"
+        Case 288: TestName = "T_AmbPoslovno_OtpisUPregleduOM"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1269,6 +1271,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 285: T_KartOpis_VrstaSortaKlasa
         Case 286: T_DocSort_DokumentneListe
         Case 287: T_AmbPoslovno_OtkupniListKaoKartica
+        Case 288: T_AmbPoslovno_OtpisUPregleduOM
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -12864,6 +12867,46 @@ Private Sub T_AmbPoslovno_OtkupniListKaoKartica()
              "kartica ambalaze: promet otkupa je -5, isti kao na papiru"
 End Sub
 
+' ============================================================
+' 288. AMB-POSL-02 + AMB-10-ODL-34: OTPIS KOOPERANTA U PREGLEDU PO OM.
+' ============================================================
+' Otpis sa naloga kooperanta (#445) ide Kooperant -> SpoljniSvet; stanica je
+' VLASNIK dokumenta (broj iz njenog niza, ODL-34 c), a red je ne nosi. Pregled
+' po OM racuna saldo kooperanta prema TOJ stanici, pa je otpis ispadao: kartica
+' je govorila 7, pregled stanice 10. Red prema granici pripada stanici koja je
+' vlasnik dokumenta, i nijednoj drugoj.
+' Tok (kooperant, nov tip T): FX_STANICA izdaje 10; otpis 3 na dokumentu
+' FX_STANICA; otpis 2 na dokumentu FX_STANICA_B.
+' Fixture: normal production state.
+' SABOTAZE: amb-posl-om-bez-otpisa, amb-posl-om-otpis-svake-stanice.
+Private Sub T_AmbPoslovno_OtpisUPregleduOM()
+    Dim tip As String, naziv As String, dI As String, dA As String, dB As String
+    Dim pre As Double, sredina As Double, posle As Double, r As Variant, brojA As String
+
+    naziv = "Prvi Testni"     ' KOOP-TEST-1, isti oslonac kao T_AmbPoslovno_SaldoPoOM
+    tip = KartNoviTipAmb("OTP")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tip, 20, "NAB-" & tip, "preduslov otpis u pregledu OM"
+    dI = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 10, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    pre = KartOmAmb(FX_STANICA, Date, naziv)
+    dA = modAmbalaza.OtpisiAmbalazu_TX(Date, FX_STANICA, AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip, 3, _
+                                       "lom -- test 288")
+    sredina = KartOmAmb(FX_STANICA, Date, naziv)
+    dB = modAmbalaza.OtpisiAmbalazu_TX(Date, FX_STANICA_B, AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip, 2, _
+                                       "gubitak -- test 288")
+    posle = KartOmAmb(FX_STANICA, Date, naziv)
+    brojA = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dA, COL_AMBD_BROJ))
+    r = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, Date, Date)
+
+    AssertEq (Len(dI) > 0 And Len(dA) > 0 And Len(dB) > 0 And pre > -999999), True, _
+             "preduslov: revers i oba otpisa su upisani, pregled OM ima red kooperanta"
+    AssertEq sredina - pre, -3, _
+             "pregled OM: otpis sa naloga kooperanta umanjuje saldo prema stanici vlasniku dokumenta"
+    AssertEq posle - sredina, 0, _
+             "pregled OM: otpis na dokumentu druge stanice ne ulazi u pregled ove"
+    AssertEq KartNetoBroja(r, brojA), -3, _
+             "kartica ambalaze: isti otpis je isti poslovni promet kooperanta (-3)"
+End Sub
+
 
 ' "P" kad lista trazi poslovni redosled, "-" kad nema misljenje.
 Private Function KartSortListe(ByVal lista As String, ByVal tip As String, _
@@ -13009,25 +13052,49 @@ End Function
 
 ' NEZAVISAN poslovni saldo kooperanta: FIZICKI citalac knjige (kolone 1-11), pa
 ' se izostave redovi tehnickog pokrica -- original i kontra-stav nose istu vrstu.
-' protivTip/protivID suzavaju na kretanja sa tim nalogom, doDatuma > 0 na dan.
+' protivTip/protivID suzavaju na kretanja sa tim nalogom (KartRedPripadaNalogu),
+' doDatuma > 0 na dan.
 ' Ne zove ni jedan izvestaj, pa ga ispravka izvestaja ne moze "uskladiti".
 Private Function KartAmbPoslovniOracle(ByVal koopID As String, ByVal protivTip As String, _
                                        ByVal protivID As String, ByVal doDatuma As Date) As Double
-    Dim k As Variant, i As Long
+    Dim k As Variant, i As Long, pripada As Boolean
     k = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, koopID)
     If Not IsArray(k) Then Exit Function
     For i = 1 To UBound(k, 1)
         If StrComp(NzToText(k(i, 9)), AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0 _
            And Len(NzToText(k(i, 2))) > 0 And IsDate(k(i, 1)) Then
-            If Len(protivTip) = 0 Or _
-               (StrComp(NzToText(k(i, 7)), protivTip, vbTextCompare) = 0 And _
-                StrComp(NzToText(k(i, 8)), protivID, vbTextCompare) = 0) Then
+            ' VBA Or ne prekida izracunavanje -- predikat samo uz zadat protivnalog.
+            pripada = True
+            If Len(protivTip) > 0 Then pripada = KartRedPripadaNalogu(k, i, protivTip, protivID)
+            If pripada Then
                 If doDatuma = 0 Or Int(CDbl(CDate(k(i, 1)))) <= Int(CDbl(doDatuma)) Then
                     KartAmbPoslovniOracle = KartAmbPoslovniOracle + KartNum(k(i, 5))
                 End If
             End If
         End If
     Next i
+End Function
+
+' Red pripada protivnalogu: druga strana reda je on, ILI red ide prema granici
+' (SpoljniSvet) a ambalazni dokument je njegov po zaglavlju (BrojOwnerTip/ID).
+' Otpis sa naloga kooperanta (#445) ide Kooperant -> SpoljniSvet, a stanica je
+' samo vlasnik dokumenta. Nezavisan put do pravila AMB-POSL-02: cita zaglavlje
+' sam, ne kroz modAmbalaza.
+Private Function KartRedPripadaNalogu(ByRef k As Variant, ByVal i As Long, _
+                                      ByVal protivTip As String, ByVal protivID As String) As Boolean
+    Dim dok As String
+    If StrComp(NzToText(k(i, 7)), protivTip, vbTextCompare) = 0 And _
+       StrComp(NzToText(k(i, 8)), protivID, vbTextCompare) = 0 Then
+        KartRedPripadaNalogu = True
+    ElseIf StrComp(NzToText(k(i, 7)), AMB_NALOG_SPOLJNI, vbTextCompare) = 0 And _
+           StrComp(NzToText(k(i, 3)), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) = 0 Then
+        dok = NzToText(k(i, 2))
+        KartRedPripadaNalogu = _
+            (StrComp(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, COL_AMBD_BROJ_OWNER_TIP)), _
+                     protivTip, vbTextCompare) = 0) And _
+            (StrComp(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, COL_AMBD_BROJ_OWNER_ID)), _
+                     protivID, vbTextCompare) = 0)
+    End If
 End Function
 
 ' Kolona Ambalaza reda kooperanta u pregledu po OM (pun opseg do datumDo);
