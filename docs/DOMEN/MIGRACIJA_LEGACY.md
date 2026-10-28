@@ -48,6 +48,8 @@ Uslovi koje alat drži:
   sveske naspram prevoda: 0 razlika. Usput nađene i ispravljene tri greške
   samog upisa (pywin32 `Range.Resize`, tabela sa jednim redom, datum pomeren u
   UTC) — svaka ima test.
+- **Ponovljen isti dan nad svežom sveskom iz main-a `7c12aa2e` (#445 + #441):**
+  isti ishod — 0 razlika, salda 0. To je sveska za C002.
 
 ## Usklađenost sa main-om posle #445 i #441
 
