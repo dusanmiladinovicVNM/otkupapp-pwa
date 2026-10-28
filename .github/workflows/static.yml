@@ -190,6 +190,13 @@ jobs:
       - name: vba_gate self-test
         run: python3 tools/vba_gate.py --self-test
 
+      # Alat za migraciju stare sveske (tools/migracija/). Prevod stare knjige
+      # ambalaze u AMB-10 i pokrivenost reda su cist Python nad sintetickom
+      # sveskom, pa im je CI pravo mesto; sa pravom sveskom klijenta se pokrece
+      # samo lokalno (podaci ne ulaze u repo).
+      - name: migracija self-test
+        run: python3 tools/migracija/migracija.py --self-test
+
       # ----------------------------------------------------------------
       # PWA / GAS sloj
       # ----------------------------------------------------------------
