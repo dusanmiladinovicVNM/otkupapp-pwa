@@ -6,7 +6,7 @@ FAZA 1 (ovo): `pregled` -- SAMO CITA staru svesku i pravi Excel pregled:
 
   * stara knjiga ambalaze prevedena u AMB-10 kretanja (u memoriji);
   * svaki kooperant, stanica, vozac i kupac: stavka po stavka, novi i stari
-    tekuci saldo, pokrice tudje ambalaze, najmanji dnevni saldo;
+    tekuci saldo, najmanji dnevni saldo i predlog preseka za novu sezonu;
   * sta ide ZA ODLUKU (red bez pravila, nespojena noga, storniran dokument...);
   * dokumenti sa vise redova (odluka 1) i tabele naspram kanona.
 
@@ -62,7 +62,8 @@ def komanda_pregled(a):
               "izaberi folder van repoa (--izlaz)." % izlaz, file=sys.stderr)
         return 2
     izuzeci_put = None if a.bez_izuzetaka else (a.izuzeci or IZUZECI)
-    partneri = ("Kooperant", "Kupac") if a.kupci_kao_kooperanti else ("Kooperant",)
+    partneri = {"kooperanti": ("Kooperant",), "partneri": ("Kooperant", "Kupac")}.get(
+        a.pokrice_duga, ())
 
     print("Citam: %s" % izvor)
     sha_pre = sha256_fajla(izvor)
@@ -132,8 +133,9 @@ def main(argv=None):
     pp.add_argument("--izlaz", help="folder za pregled (podrazumevano: pored izvora)")
     pp.add_argument("--izuzeci", help="izuzeci.json (podrazumevano: tools/migracija/izuzeci.json)")
     pp.add_argument("--bez-izuzetaka", action="store_true", help="ne primenjuj nijedan izuzetak")
-    pp.add_argument("--kupci-kao-kooperanti", action="store_true",
-                    help="i dug prema kupcu prevedi kao ULAZ_TUDJE (odluka 3, varijanta a)")
+    pp.add_argument("--pokrice-duga", choices=("kooperanti", "partneri"),
+                    help="dopisi u istoriju pokrice duga po danu (MIG-16/17); "
+                         "podrazumevano NE -- istorija ostaje verna, sa negativnim saldima")
     a = p.parse_args(argv)
     if a.self_test:
         return komanda_self_test()

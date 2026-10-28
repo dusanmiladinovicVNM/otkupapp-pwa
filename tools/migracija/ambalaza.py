@@ -25,11 +25,15 @@ samo sazeta u jedan prolaz i bez SHA zakljucavanja:
 Stornirani redovi idu u arhivu, ne u knjigu (MIG-05.7/05.8). Aktivna noga
 storniranog dokumenta ide ZA ODLUKU (slucaj AMB-00700, MIG-19.12).
 
-Dug prema kooperantu (negativan stari saldo = firma drzi njegove gajbe) se
-prevodi po DNEVNOM ZAKLJUCKU (MIG-16/17): rast duga -> ULAZ_TUDJE_AMBALAZE
-(SpoljniSvet -> Kooperant) na kooperantovom izlaznom dokumentu tog dana; pad
-duga -> izdavanje praznih tog dana postaje VRACANJE_TUDJE_AMBALAZE. Redosled
-unutar dana se NE pretpostavlja.
+Istorija se prevodi VERNO: negativna stara salda ostaju negativna. Klijent nije
+unosio pocetno stanje stanica, a tudja ambalaza tada nije postojala kao pojam
+(odluka operatera 28.10.2026), pa se u istoriju nista ne dopisuje. Prelaz u
+novu sezonu (main ne pusta realan nalog ispod nule, AMB-INV-07) je zaseban
+dogadjaj na dan preseka -- pregled ga samo predlaze, iz salda na kraju.
+
+Na zahtev (--pokrice-duga) i dalje postoji politika MIG-16/17 po dnevnom
+zakljucku: rast duga prema partneru -> ULAZ_TUDJE_AMBALAZE na njegovom izlaznom
+dokumentu tog dana; pad duga -> izdavanje praznih postaje VRACANJE_TUDJE.
 
 Svaki stari red dobija TACNO JEDAN ishod: KRETANJE, STORNO, IZUZETO ili
 ZA_ODLUKU. To je osnovna tvrdnja i proverava je `proveri_pokrivenost`.
@@ -330,7 +334,7 @@ def _potpis_se_slaze(n, provera):
 # Glavni prolaz
 # ---------------------------------------------------------------------------
 
-def prevedi(tabele, izuzeci=(), politika_partneri=("Kooperant",)):
+def prevedi(tabele, izuzeci=(), politika_partneri=()):
     t = tabela(tabele, "tblAmbalaza")
     if t is None:
         raise GreskaAmbalaze("Sveska nema tabelu tblAmbalaza")

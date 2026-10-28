@@ -102,7 +102,7 @@ class SaSveskom(unittest.TestCase):
         self.dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.dir.cleanup)
 
-    def prevedi(self, amb_redovi, izuzeci=(), dodatno=None, partneri=("Kooperant",)):
+    def prevedi(self, amb_redovi, izuzeci=(), dodatno=None, partneri=()):
         put = os.path.join(self.dir.name, "stara.xlsx")
         snimi_svesku(put, osnovne_tabele(amb_redovi, dodatno))
         self.tabele = procitaj_svesku(put)
@@ -146,9 +146,7 @@ class NormalnoStanje(SaSveskom):
         self.assertEqual(vrste, sorted([
             ("OTKUP_PAR", "AMBALAZA_UZ_ROBU", "Kooperant", "Stanica"),
             ("OTKUP_IZDATE_PRAZNE", "IZDATA_PRAZNA", "Stanica", "Kooperant"),
-            ("POKRICE_DUGA", "ULAZ_TUDJE_AMBALAZE", "SpoljniSvet", "Kooperant"),
             ("REVERS_IZDATE_PRAZNE", "IZDATA_PRAZNA", "Stanica", "Kooperant"),
-            ("PODELA_VRACANJE_TUDJE", "VRACANJE_TUDJE_AMBALAZE", "Stanica", "Kooperant"),
             ("OTPREMNICA_VOZAC", "AMBALAZA_UZ_ROBU", "Stanica", "Vozac"),
             ("PRIJEMNICA_PUNE", "AMBALAZA_UZ_ROBU", "Vozac", "Kupac"),
             ("PRIJEMNICA_POVRAT", "POVRAT_PRAZNE", "Kupac", "Vozac"),
@@ -158,9 +156,19 @@ class NormalnoStanje(SaSveskom):
         self.assertEqual({k.dok_tip for k in rez.kretanja if k.pravilo.startswith("OTKUP")}, {"Otkup"})
         self.assertEqual(ambalaza.proveri_invarijante(rez), [])
 
-    def test_dug_kooperanta_po_dnevnom_zakljucku(self):
-        """MIG-16/17: dan 1 obaveza raste 6 (pokrice), dan 2 pada 6 (vracanje)."""
+    def test_istorija_je_verna_bez_dopisanog_pokrica(self):
+        """Podrazumevano (odluka 28.10.2026): stari minus ostaje, nista se ne dopisuje."""
         rez = self.prevedi(normalno())
+        self.assertFalse([k for k in rez.kretanja if k.generisano])
+        k1 = self.salda[("Kooperant", "K1", "12/1")]
+        self.assertEqual((k1["stari"], k1["novi"], k1["pokrice"]), (Decimal(2), Decimal(2), Decimal(0)))
+        self.assertEqual((k1["najmanji"], k1["najmanji_dan"]), (Decimal(-6), D1))
+
+    def test_dug_kooperanta_po_dnevnom_zakljucku_na_zahtev(self):
+        """MIG-16/17 (--pokrice-duga): dan 1 obaveza raste 6 (pokrice), dan 2 pada 6."""
+        rez = self.prevedi(normalno(), partneri=("Kooperant",))
+        self.assertIn(("PODELA_VRACANJE_TUDJE", Decimal(6)),
+                      [(k.pravilo, k.kolicina) for k in rez.kretanja])
         k1 = self.salda[("Kooperant", "K1", "12/1")]
         self.assertEqual((k1["stari"], k1["novi"], k1["pokrice"], k1["obaveza"]),
                          (Decimal(2), Decimal(8), Decimal(6), Decimal(0)))
@@ -170,13 +178,21 @@ class NormalnoStanje(SaSveskom):
         self.assertEqual([(k.kolicina, k.dok_tip, k.dok_id, k.datum) for k in pok],
                          [(Decimal(6), "Otkup", "OTK-1", D1)])
 
-    def test_stanica_u_minusu_dobija_predlog_nabavke(self):
+    def test_presek_iz_salda_na_kraju(self):
+        """Presek dovodi na nulu SALDO NA KRAJU (-5), ne najdublji dan (-12)."""
         self.prevedi(normalno())
         s1 = self.salda[("Stanica", "S1", "12/1")]
         self.assertEqual((s1["stari"], s1["novi"]), (Decimal(-5), Decimal(-5)))
         self.assertEqual((s1["najmanji"], s1["najmanji_dan"]), (Decimal(-12), D2))
-        predlog, iznos = pregled._predlog_pokrica(s1, ("Kooperant",))
-        self.assertEqual((predlog.split()[0], iznos), ("NABAVKA", Decimal(12)))
+        self.assertEqual(pregled._predlog_preseka(s1), ("NABAVKA", Decimal(5)))
+        k1 = self.salda[("Kooperant", "K1", "12/1")]
+        self.assertEqual(pregled._predlog_preseka(k1), ("", Decimal(0)))
+
+    def test_partner_u_minusu_na_kraju_dobija_ulaz_tudje(self):
+        self.prevedi(normalno() + [noga(13, D3, 9, "Izlaz", "C1", "Kupac", "D1", "KO-1", "Kupci-Otpremnica")])
+        c1 = self.salda[("Kupac", "C1", "12/1")]
+        self.assertEqual(c1["novi"], Decimal(-6))
+        self.assertEqual(pregled._predlog_preseka(c1), ("ULAZ_TUDJE_AMBALAZE", Decimal(6)))
 
     def test_vozac_je_ogledalo_starog_salda(self):
         self.prevedi(normalno())
@@ -362,7 +378,7 @@ class Komanda(SaSveskom):
             self.assertIsNotNone(tabela(t, ime), ime)
         k1 = [r for r in tabela(t, "Salda").redovi if polje(r, "ID") == "K1"]
         self.assertEqual(polje(k1[0], "Naziv"), "Pera Peric")
-        self.assertEqual(len(tabela(t, "Kretanja").redovi), 9)
+        self.assertEqual(len(tabela(t, "Kretanja").redovi), 7)
 
     def test_odbija_izlaz_u_repou(self):
         put = os.path.join(self.dir.name, "stara.xlsx")

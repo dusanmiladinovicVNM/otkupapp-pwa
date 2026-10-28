@@ -26,8 +26,13 @@ Pregled ide u `Migracija_pregled/` pored izvorne sveske (nikad u repo — nosi
 stvarne podatke). Listovi:
 
 - **Sazetak** — koliko redova, koji ishod, šta je za odluku, provere.
-- **Salda** — svaki nalog × tip ambalaže: stari i novi saldo, pokriće tuđe
-  ambalaže, obaveza firme, najmanji dnevni saldo, predlog pokrića.
+- **Salda** — svaki nalog × tip ambalaže: stari i novi saldo, najmanji dnevni
+  saldo i **predlog preseka**: događaj na dan prelaska koji nalog sa minusom
+  na kraju dovodi na nulu (stanica/vozač `NABAVKA`, kooperant/kupac
+  `ULAZ_TUDJE_AMBALAZE`). Istorija se prevodi verno — negativna stara salda
+  ostaju, jer klijent nije unosio početno stanje, a tuđa ambalaža tada nije
+  postojala kao pojam. Stara politika MIG-16/17 (pokriće po danu) postoji samo
+  na zahtev: `--pokrice-duga kooperanti`.
 - **Stavke** — svaki kooperant, stanica, vozač i kupac, stavka po stavka, sa
   tekućim novim i starim saldom. Filter na koloni *Naziv* ili *ID*.
 - **Kretanja** — nacrt nove knjige u redosledu kolona `tblAmbalaza`.
