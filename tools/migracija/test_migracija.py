@@ -645,24 +645,36 @@ class Upis(SaSveskom):
                 return c
 
         class Tabela:
+            # Kao Excel: tabela samo sa zaglavljem vec nosi jedan prazan red za unos,
+            # a ListRows.Count je 0 dok se u njega ne upise (pad tblKese, 1 red).
             def __init__(self, r0, c0, m):
-                self.Range = type("R", (), {"Worksheet": ws})()
                 self.HeaderRowRange = Opseg(r0, c0, r0, c0 + m - 1)
-                self.ListRows = type("L", (), {"Count": 0})()
+                self.redova = 1
                 self.prosirenje = None
+
+            @property
+            def Range(self):
+                return type("R", (), {"Worksheet": ws,
+                                      "Rows": type("K", (), {"Count": self.redova + 1})()})()
+
+            @property
+            def ListRows(self):
+                prazna = self.redova == 1 and not ws.upisi
+                return type("L", (), {"Count": 0 if prazna else self.redova})()
 
             def Resize(self, cilj):
                 o = cilj.__dict__["opseg"]
                 self.prosirenje = (o.r1, o.c1, o.r2, o.c2)
-                self.ListRows.Count = o.r2 - o.r1
+                self.redova = o.r2 - o.r1
 
+        kolone = ["Naziv", "Kolicina", "BrojDokumenta"]
         ws = List()
         lo = Tabela(3, 2, 3)                                  # zaglavlje u B3:D3
         niz = [("a%d" % i, i, "101") for i in range(5)]
         stari = upis.DELOVI
         upis.DELOVI = 2
         try:
-            upis._upisi_tabelu(lo, niz, ["Naziv", "Kolicina", "BrojDokumenta"])
+            upis._upisi_tabelu(lo, niz, kolone)
         finally:
             upis.DELOVI = stari
         self.assertEqual(lo.prosirenje, (3, 2, 8, 4))        # zaglavlje + 5 redova
@@ -670,10 +682,16 @@ class Upis(SaSveskom):
         self.assertEqual([a for a, _ in ws.upisi], [(4, 2, 5, 4), (6, 2, 7, 4), (8, 2, 8, 4)])
         self.assertEqual([r for _, v in ws.upisi for r in v], niz)
 
+        ws = List()
+        lo = Tabela(1, 1, 3)
+        upis._upisi_tabelu(lo, niz[:1], kolone)               # jedan red: Resize je no-op
+        self.assertEqual([a for a, _ in ws.upisi], [(2, 1, 2, 3)])
+
+        ws = List()
         lo = Tabela(1, 1, 3)
         lo.Resize = lambda cilj: None                         # Excel ne prosiri tabelu
-        with self.assertRaisesRegex(RuntimeError, "ima 0 redova, ocekivano 5"):
-            upis._upisi_tabelu(lo, niz, ["Naziv", "Kolicina", "BrojDokumenta"])
+        with self.assertRaisesRegex(RuntimeError, "zauzima 2 redova sa zaglavljem, ocekivano 6"):
+            upis._upisi_tabelu(lo, niz, kolone)
 
     def napravi_paket(self, c):
         put = os.path.join(self.dir.name, "nova.xlsx")
