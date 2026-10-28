@@ -102,11 +102,11 @@ class SaSveskom(unittest.TestCase):
         self.dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.dir.cleanup)
 
-    def prevedi(self, amb_redovi, izuzeci=(), dodatno=None, partneri=()):
+    def prevedi(self, amb_redovi, izuzeci=(), dodatno=None, partneri=None, knjizenje="verno"):
         put = os.path.join(self.dir.name, "stara.xlsx")
         snimi_svesku(put, osnovne_tabele(amb_redovi, dodatno))
         self.tabele = procitaj_svesku(put)
-        rez = ambalaza.prevedi(self.tabele, izuzeci, politika_partneri=partneri)
+        rez = ambalaza.prevedi(self.tabele, izuzeci, knjizenje=knjizenje, politika_partneri=partneri)
         self.salda = {(s["nalog_tip"], s["nalog_id"], s["tip"]): s for s in ambalaza.izracunaj_salda(rez)}
         return rez
 
@@ -165,7 +165,7 @@ class NormalnoStanje(SaSveskom):
         self.assertEqual((k1["najmanji"], k1["najmanji_dan"]), (Decimal(-6), D1))
 
     def test_dug_kooperanta_po_dnevnom_zakljucku_na_zahtev(self):
-        """MIG-16/17 (--pokrice-duga): dan 1 obaveza raste 6 (pokrice), dan 2 pada 6."""
+        """MIG-16/17: dan 1 obaveza raste 6 (pokrice), dan 2 pada 6 (vracanje)."""
         rez = self.prevedi(normalno(), partneri=("Kooperant",))
         self.assertIn(("PODELA_VRACANJE_TUDJE", Decimal(6)),
                       [(k.pravilo, k.kolicina) for k in rez.kretanja])
@@ -217,6 +217,46 @@ class NormalnoStanje(SaSveskom):
             s = next(v for k, v in self.salda.items() if ambalaza._kl(k) == kl)
             self.assertEqual(lst[-1]["saldo_novi"], s["novi"], kl)
             self.assertEqual(lst[-1]["saldo_stari"], s["stari"], kl)
+
+
+KUPAC_VRACA_VISE = noga(13, D3, 9, "Izlaz", "C1", "Kupac", "D1", "KO-1", "Kupci-Otpremnica")
+
+
+class Ispravno(SaSveskom):
+    """--knjizenje ispravno: sveska spremna za rad -- nijedan nalog ni dana ispod nule."""
+
+    def test_nijedan_nalog_ni_jednog_dana_ispod_nule(self):
+        rez = self.prevedi(normalno() + [KUPAC_VRACA_VISE], knjizenje="ispravno")
+        self.osnovne_tvrdnje(rez)
+        self.assertEqual([k for k, s in self.salda.items() if s["najmanji"] < 0], [])
+        self.assertEqual(ambalaza.proveri_invarijante(rez), [])
+
+    def test_stanica_dobija_jednu_nabavku_prvog_dana(self):
+        rez = self.prevedi(normalno(), knjizenje="ispravno")
+        nab = [k for k in rez.kretanja if k.vrsta == "NABAVKA"]
+        self.assertEqual([(k.na_tip, k.na_id, k.kolicina, k.datum) for k in nab],
+                         [("Stanica", "S1", Decimal(12), D1)])
+        z = rez.zaglavlja[nab[0].dok_id]
+        self.assertEqual((z["Vrsta"], z["BrojOwnerTip"], z["BrojOwnerID"]), ("NABAVKA", "Stanica", "S1"))
+        s1 = self.salda[("Stanica", "S1", "12/1")]
+        self.assertEqual((s1["stari"], s1["nabavka"], s1["novi"]), (Decimal(-5), Decimal(12), Decimal(7)))
+
+    def test_kupac_dobija_pokrice_u_trenutku_manjka(self):
+        rez = self.prevedi(normalno() + [KUPAC_VRACA_VISE], knjizenje="ispravno")
+        pok = [k for k in rez.kretanja if k.pravilo == "POKRICE_MANJKA"]
+        self.assertEqual(sum(k.kolicina for k in pok), Decimal(6))
+        self.assertTrue(all(k.na_tip == "Kupac" and k.od_tip == "SpoljniSvet" for k in pok))
+        c1 = self.salda[("Kupac", "C1", "12/1")]
+        self.assertEqual((c1["stari"], c1["pokrice"], c1["novi"], c1["obaveza"]),
+                         (Decimal(-6), Decimal(6), Decimal(0), Decimal(6)))
+
+    def test_bez_nabavke_provera_pada(self):
+        """Dvosmerni dokaz: bez NABAVKE stanica je u minusu i provera to vidi."""
+        staro = ambalaza.nabavka_na_pocetku
+        ambalaza.nabavka_na_pocetku = lambda rez, tipovi: []
+        self.addCleanup(setattr, ambalaza, "nabavka_na_pocetku", staro)
+        self.prevedi(normalno(), knjizenje="ispravno")
+        self.assertEqual([k for k, s in self.salda.items() if s["najmanji"] < 0], [("Stanica", "S1", "12/1")])
 
 
 class Anomalije(SaSveskom):
@@ -370,7 +410,7 @@ class Komanda(SaSveskom):
         snimi_svesku(put, osnovne_tabele(normalno()))
         pre = sha256_fajla(put)
         izlaz = os.path.join(self.dir.name, "out")
-        kod = tiho(["pregled", "--izvor", put, "--izlaz", izlaz, "--bez-izuzetaka"])
+        kod = tiho(["pregled", "--izvor", put, "--izlaz", izlaz, "--bez-izuzetaka"])   # ispravno
         self.assertEqual(kod, 0)
         self.assertEqual(sha256_fajla(put), pre)
         t = procitaj_svesku(os.path.join(izlaz, "pregled_migracije.xlsx"))
@@ -378,7 +418,11 @@ class Komanda(SaSveskom):
             self.assertIsNotNone(tabela(t, ime), ime)
         k1 = [r for r in tabela(t, "Salda").redovi if polje(r, "ID") == "K1"]
         self.assertEqual(polje(k1[0], "Naziv"), "Pera Peric")
-        self.assertEqual(len(tabela(t, "Kretanja").redovi), 7)
+        self.assertEqual(len(tabela(t, "Kretanja").redovi), 10)       # 7 + pokrice + vracanje + nabavka
+        with open(os.path.join(izlaz, "sazetak.txt"), encoding="utf-8") as f:
+            saz = f.read()
+        self.assertRegex(saz, r"Nijedan nalog ni jednog dana ispod nule \(AMB-INV-07\) +DA")
+        self.assertRegex(saz, r"dopisano NABAVKA \(stanica, vozac\) +1 dok\., 12 kom\.")
 
     def test_odbija_izlaz_u_repou(self):
         put = os.path.join(self.dir.name, "stara.xlsx")
