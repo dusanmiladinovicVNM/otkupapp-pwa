@@ -179,7 +179,12 @@ def upisi(putanja, c, log=print):
             plan.append((ime, lo, kolone, niz_za_tabelu(redovi, kolone)))
 
         for ime, lo, kolone, niz in plan:
-            _upisi_tabelu(lo, niz, kolone)
+            try:
+                _upisi_tabelu(lo, niz, kolone)
+            except Exception as e:
+                raise RuntimeError("Upis tabele %s (%d red. x %d kol., zaglavlje %s) nije uspeo -- "
+                                   "nista nije sacuvano: %s"
+                                   % (ime, len(niz), len(kolone), lo.HeaderRowRange.Address, e)) from e
             log("  %-28s %6d red." % (ime, len(niz)))
         for ime, parovi in sorted(c.podesavanja.items()):
             lo = lo_po_imenu.get(ime.casefold())
@@ -248,16 +253,30 @@ def _ima_podataka(lo):
     return any(any(x not in (None, "") for x in (r if isinstance(r, tuple) else (r,))) for r in redovi)
 
 
+def _opseg(ws, r1, c1, r2, c2):
+    # Ne Range.Resize/Offset: pywin32 svojstvo sa parametrima procita BEZ njih,
+    # pa (redovi, kolone) ode u _Default i vrati JEDNU celiju (pad upisa
+    # 28.10.2026: "doesn't align with the existing table"). Ugaone celije, kao
+    # tools/read_test_log.py.
+    return ws.Range(ws.Cells(r1, c1), ws.Cells(r2, c2))
+
+
 def _upisi_tabelu(lo, niz, kolone):
     n, m = len(niz), len(kolone)
+    ws = lo.Range.Worksheet
     zag = lo.HeaderRowRange
-    lo.Resize(zag.Resize(n + 1, m))
-    telo = lo.DataBodyRange
+    r0, c0 = int(zag.Row), int(zag.Column)
+    if int(zag.Columns.Count) != m:
+        raise RuntimeError("zaglavlje ima %d kolona, plan %d" % (int(zag.Columns.Count), m))
+    lo.Resize(_opseg(ws, r0, c0, r0 + n, c0 + m - 1))
+    if int(lo.ListRows.Count) != n:
+        raise RuntimeError("posle prosirenja tabela ima %d redova, ocekivano %d"
+                           % (int(lo.ListRows.Count), n))
     tekst_kf = {k.casefold() for k in TEKST_KOLONE}
-    for j, k in enumerate(kolone, 1):
+    for j, k in enumerate(kolone):
         if k.casefold() in tekst_kf:
             # Format PRE upisa: posle bi "101" vec bio broj.
-            telo.Columns(j).NumberFormat = "@"
+            _opseg(ws, r0 + 1, c0 + j, r0 + n, c0 + j).NumberFormat = "@"
     for i in range(0, n, DELOVI):
         deo = niz[i:i + DELOVI]
-        telo.Cells(i + 1, 1).Resize(len(deo), m).Value = tuple(deo)
+        _opseg(ws, r0 + 1 + i, c0, r0 + i + len(deo), c0 + m - 1).Value = tuple(deo)

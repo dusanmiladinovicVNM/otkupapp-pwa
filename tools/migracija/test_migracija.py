@@ -613,6 +613,68 @@ class Upis(SaSveskom):
         self.assertEqual(upis.niz_za_tabelu([{"BrojDokumenta": "101", "Napomena": "101"}],
                                             ["BrojDokumenta", "Napomena"]), [("101", "'101")])
 
+    def test_upis_tabele_gradi_opseg_iz_ugaonih_celija(self):
+        # Lazni Excel: Range postoji samo kao (r1, c1, r2, c2); nema Resize/Offset,
+        # pa bi povratak na Range.Resize (pad 28.10.2026) ovde pao AttributeError-om.
+        class Opseg:
+            def __init__(self, r1, c1, r2, c2):
+                self.r1, self.c1, self.r2, self.c2 = r1, c1, r2, c2
+                self.Row, self.Column = r1, c1
+                self.Columns = type("K", (), {"Count": c2 - c1 + 1})()
+                self.Address = "R%dC%d" % (r1, c1)
+
+        class List:
+            def __init__(self):
+                self.upisi, self.formati = [], []
+
+            def Cells(self, r, c):
+                return (r, c)
+
+            def Range(self, a, b):
+                o = Opseg(a[0], a[1], b[0], b[1])
+                lst = self
+
+                class Cilj:
+                    def __setattr__(self, ime, v):
+                        if ime == "Value":
+                            lst.upisi.append(((o.r1, o.c1, o.r2, o.c2), v))
+                        elif ime == "NumberFormat":
+                            lst.formati.append(((o.r1, o.c1, o.r2, o.c2), v))
+                c = Cilj()
+                c.__dict__["opseg"] = o
+                return c
+
+        class Tabela:
+            def __init__(self, r0, c0, m):
+                self.Range = type("R", (), {"Worksheet": ws})()
+                self.HeaderRowRange = Opseg(r0, c0, r0, c0 + m - 1)
+                self.ListRows = type("L", (), {"Count": 0})()
+                self.prosirenje = None
+
+            def Resize(self, cilj):
+                o = cilj.__dict__["opseg"]
+                self.prosirenje = (o.r1, o.c1, o.r2, o.c2)
+                self.ListRows.Count = o.r2 - o.r1
+
+        ws = List()
+        lo = Tabela(3, 2, 3)                                  # zaglavlje u B3:D3
+        niz = [("a%d" % i, i, "101") for i in range(5)]
+        stari = upis.DELOVI
+        upis.DELOVI = 2
+        try:
+            upis._upisi_tabelu(lo, niz, ["Naziv", "Kolicina", "BrojDokumenta"])
+        finally:
+            upis.DELOVI = stari
+        self.assertEqual(lo.prosirenje, (3, 2, 8, 4))        # zaglavlje + 5 redova
+        self.assertEqual(ws.formati, [((4, 4, 8, 4), "@")])  # samo tekst kolona, ceo stub
+        self.assertEqual([a for a, _ in ws.upisi], [(4, 2, 5, 4), (6, 2, 7, 4), (8, 2, 8, 4)])
+        self.assertEqual([r for _, v in ws.upisi for r in v], niz)
+
+        lo = Tabela(1, 1, 3)
+        lo.Resize = lambda cilj: None                         # Excel ne prosiri tabelu
+        with self.assertRaisesRegex(RuntimeError, "ima 0 redova, ocekivano 5"):
+            upis._upisi_tabelu(lo, niz, ["Naziv", "Kolicina", "BrojDokumenta"])
+
     def napravi_paket(self, c):
         put = os.path.join(self.dir.name, "nova.xlsx")
         sv = pregled.Sveska()
