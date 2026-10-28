@@ -494,10 +494,13 @@ def _primeni_izuzetke(rez, izuzeci):
             k = iz["kretanje"]
             od = (_kanon_nalog(k["Od"][0]), tekst(k["Od"][1]))
             na = (_kanon_nalog(k["Na"][0]), tekst(k["Na"][1]))
-            if k.get("Dokument", "REVERS") == "REVERS":
+            vrsta_dok = k.get("Dokument", "REVERS")
+            if vrsta_dok in ("REVERS", "NABAVKA"):
+                # Ambalazni dokument (tblAmbalazaDokument); vlasnik broja je
+                # sopstveni nalog -- za NABAVKU onaj koji gajbe prima.
                 vlasnik = od if od[0] in SOPSTVENI else na
                 broj_dok = n.dok_id or "MIG/" + _izvorni_kljuc(n)
-                dok_id = _zaglavlje(rez, "REVERS", vlasnik, n.datum, broj_dok, (od, na),
+                dok_id = _zaglavlje(rez, vrsta_dok, vlasnik, n.datum, broj_dok, (od, na),
                                     "Istorijski %s %s (izuzetak)" % (n.dok_tip, n.amb_id))
                 dok_tip = DOK_AMB
             else:

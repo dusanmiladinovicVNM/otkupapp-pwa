@@ -101,6 +101,11 @@ def komanda_pregled(a):
                       vreme=time.strftime("%Y-%m-%d %H:%M:%S"))
     saz = pregled.napravi_izvestaj(xlsx, izvor_info, rez, salda, stavke, invarijante, pokrivenost,
                                    popis, dok_sazetak, dok_grupe, oblik_dok)
+    # Samo nazivi tabela i kolona i broj redova -- bez ijednog podatka, pa se
+    # sme poslati dalje (ulaz za upis u novu svesku).
+    with open(os.path.join(izlaz, "tabele.txt"), "w", encoding="utf-8") as f:
+        for t in sorted(tabele.values(), key=lambda x: x.ime.casefold()):
+            f.write("%s (%d redova): %s\n" % (t.ime, len(t.redovi), ", ".join(t.kolone)))
     txt = os.path.join(izlaz, "sazetak.txt")
     with open(txt, "w", encoding="utf-8") as f:
         for k, v in saz:
