@@ -254,15 +254,21 @@ def _broj_dok(rez, dok_tip, dok_id):
     return rez.brojevi_dok.get((dok_tip, kljuc(dok_id)), "")
 
 
-def _predlog_pokrica(s, politika_partneri):
-    if s["najmanji"] >= 0:
+def _predlog_preseka(s):
+    """Dogadjaj na dan preseka koji nalog sa minusom na kraju dovodi na nulu.
+
+    Istorija se ne dira; main posle preseka ne pusta realan nalog ispod nule
+    (AMB-INV-07). Sopstveni nalog (stanica, vozac): NABAVKA. Partner (kooperant,
+    kupac): ULAZ_TUDJE -- firma drzi njegove gajbe, to je obaveza firme.
+    """
+    if s["novi"] >= 0:
         return "", Decimal(0)
-    manjak = -s["najmanji"]
+    manjak = -s["novi"]
     if s["nalog_tip"] in SOPSTVENI:
-        return "NABAVKA (odluka 2)", manjak
-    if s["nalog_tip"] in PARTNERI and s["nalog_tip"] not in politika_partneri:
-        return "ULAZ_TUDJE (odluka 3)", manjak
-    return "vidi ZaOdluku", manjak
+        return "NABAVKA", manjak
+    if s["nalog_tip"] in PARTNERI:
+        return "ULAZ_TUDJE_AMBALAZE", manjak
+    return "?", manjak
 
 
 def napravi_izvestaj(putanja, izvor, rez, salda, stavke, invarijante, pokrivenost,
@@ -273,10 +279,13 @@ def napravi_izvestaj(putanja, izvor, rez, salda, stavke, invarijante, pokrivenos
     vrste = Counter(k.vrsta for k in rez.kretanja)
     pokrica = [k for k in rez.kretanja if k.generisano and k.vrsta == ULAZ_TUDJE]
     minus = defaultdict(lambda: [0, Decimal(0)])
+    bio = Counter()
     for s in salda:
-        if s["najmanji"] < 0:
+        if s["novi"] < 0:
             minus[s["nalog_tip"]][0] += 1
-            minus[s["nalog_tip"]][1] += -s["najmanji"]
+            minus[s["nalog_tip"]][1] += -s["novi"]
+        elif s["najmanji"] < 0:
+            bio[s["nalog_tip"]] += 1
     razlike = [s for s in salda if s["razlika"] != 0]
     inv = Counter(x["inv"] for x in invarijante)
     pokr_ok = not any(pokrivenost.values())
@@ -300,16 +309,21 @@ def napravi_izvestaj(putanja, izvor, rez, salda, stavke, invarijante, pokrivenos
     ]
     saz += [("  " + v, c) for v, c in sorted(vrste.items())]
     saz += [
-        ("Pokrice duga partnera (ULAZ_TUDJE, generisano)", "%d red., %s kom."
-         % (len(pokrica), format(sum((k.kolicina for k in pokrica), Decimal(0)).normalize(), "f"))),
+        ("Pokrice duga dopisano u istoriju", "NE (verna istorija)" if not politika_partneri else
+         "%s: %d red., %s kom." % ("/".join(politika_partneri), len(pokrica),
+                                   format(sum((k.kolicina for k in pokrica), Decimal(0)).normalize(), "f"))),
         ("Zaglavlja reversa (nacrt)", len(rez.zaglavlja)),
         ("", ""),
         ("Naloga (nalog x tip ambalaze)", len(salda)),
     ]
     for t in ("Kooperant", "Stanica", "Vozac", "Kupac"):
         if t in minus:
-            saz.append(("  u minusu: %s" % t, "%d, ukupan manjak %s" % (
-                minus[t][0], format(minus[t][1].normalize(), "f"))))
+            saz.append(("  u minusu NA KRAJU: %s" % t, "%d, presek %s %s kom." % (
+                minus[t][0], "NABAVKA" if t in SOPSTVENI else "ULAZ_TUDJE",
+                format(minus[t][1].normalize(), "f"))))
+    for t in ("Kooperant", "Stanica", "Vozac", "Kupac"):
+        if bio[t]:
+            saz.append(("  bio u minusu tokom sezone, na kraju >= 0: %s" % t, bio[t]))
     saz += [
         ("Salda: stari - van knjige + izuzeci + pokrice = novi", "DA" if not razlike else
          "NE za %d naloga -- GRESKA ALATA" % len(razlike)),
@@ -339,21 +353,23 @@ def napravi_izvestaj(putanja, izvor, rez, salda, stavke, invarijante, pokrivenos
     # Salda
     red_s = []
     for s in salda:
-        predlog, manjak = _predlog_pokrica(s, politika_partneri)
+        predlog, manjak = _predlog_preseka(s)
         status = "OK"
         if s["razlika"] != 0:
             status = "RAZLIKA"
+        elif s["novi"] < 0:
+            status = "MINUS NA KRAJU"
         elif s["najmanji"] < 0:
-            status = "MINUS"
+            status = "BIO U MINUSU"
         red_s.append([s["nalog_tip"], s["nalog_id"], s["naziv"], s["tip"], s["stari"], s["novi"],
                       s["pokrice"], s["obaveza"] if s["nalog_tip"] in PARTNERI else "",
                       s["van_knjige"], s["izuzeci"], s["razlika"], s["najmanji"], s["najmanji_dan"],
                       predlog, manjak or "", status])
     sv.dodaj_list("Salda", ["Tip naloga", "ID", "Naziv", "Tip ambalaze", "Stari saldo", "Novi saldo",
                             "Pokrice tudje", "Obaveza firme", "Van knjige", "Izuzeci", "Razlika",
-                            "Najmanji dnevni saldo", "Dan najmanjeg", "Predlog pokrica",
-                            "Iznos predloga", "Status"],
-                  red_s, sirine=[11, 12, 28, 12, 11, 11, 12, 12, 11, 10, 9, 13, 13, 22, 12, 9],
+                            "Najmanji dnevni saldo", "Dan najmanjeg", "Presek: dogadjaj",
+                            "Presek: kolicina", "Status"],
+                  red_s, sirine=[11, 12, 28, 12, 11, 11, 12, 12, 11, 10, 9, 13, 13, 22, 12, 15],
                   tabela="Salda")
 
     # Stavke po nalogu
