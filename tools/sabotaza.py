@@ -10202,6 +10202,242 @@ SABOTAZE = {
         "T_KI026_F7OtpisSaNaloga",
         "lista F7 pokazuje otpis vozaca sa vozacem u koloni partnera (ODL-34 i)",
     ),
+    # KART-HRON-01 (P1, 21.10.2026): kartica racuna tekuci saldo redom kojim su
+    # redovi poredjani. Vracen stari sort (datum + broj kao tekst, QuickSort)
+    # mesa dva kretanja istog otkupa -- tacno prijava: 17 i -13.
+    "kart-hron-amb-sortira-tekstom": (
+        "modIzvestaj.bas",
+        "        arr = SortArrayPoKljucu(tmpArr, 6)\n",
+        "        arr = SortArray(tmpArr, 1, True, 2)   ' SABOTAZA: kartica ambalaze po tekstu\n",
+        "T_KartHron_RedosledIzKretanja",
+        "isti dokument: izdata prazna pa uz robu, saldo 30 pa 17",
+    ),
+    # Isto na kartici kooperanta: broj -10 ide pre -9.
+    "kart-hron-kooperant-sortira-tekstom": (
+        "modIzvestaj.bas",
+        "        arr = SortArrayPoKljucu(tmpArr, 9)\n",
+        "        arr = SortArray(tmpArr, 1, True, 2)   ' SABOTAZA: kartica kooperanta po tekstu\n",
+        "T_KartHron_IzvestajPratiBroj",
+        "kartica kooperanta: manji broj istog niza ide pre veceg",
+    ),
+    # Redni broj bez duzine ispred: "10" je tekstualno manje od "9".
+    "kart-hron-broj-kao-tekst": (
+        "modIzvestaj.bas",
+        "    KarticaCifre = Format$(Len(cifre), \"00\") & cifre\n",
+        "    KarticaCifre = cifre   ' SABOTAZA: cifre kao tekst\n",
+        "T_KartHron_RedosledIzKretanja",
+        "brojevi istog niza idu po broju, ne po tekstu",
+    ),
+    # Unutar dokumenta izlaz pre ulaza -- uz robu 13 pa izdata 30: -13 pa 17.
+    # Pada i T_KartHron_RedosledIzKretanja (A); ovde se meri ugovor kljuca, da
+    # tvrdnje ostanu razlicite.
+    "kart-hron-izlaz-pre-ulaza": (
+        "modIzvestaj.bas",
+        "    KarticaKretanjeKljuc = IIf(jeKontra, \"1\", \"0\") & IIf(kolicina < 0, \"1\", \"0\") & _\n",
+        "    KarticaKretanjeKljuc = IIf(jeKontra, \"1\", \"0\") & IIf(kolicina < 0, \"0\", \"1\") & _\n",
+        "T_KartHron_KljucISortEkrana",
+        "u dokumentu: original pre storna, ulaz (i pokrice) pre izlaza",
+    ),
+    # Kontra-stav se vise ne razlikuje od originala: storno se mesa sa njim.
+    "kart-hron-storno-bez-reda": (
+        "modIzvestaj.bas",
+        "    KarticaKretanjeKljuc = IIf(jeKontra, \"1\", \"0\") & IIf(kolicina < 0, \"1\", \"0\") & _\n",
+        "    KarticaKretanjeKljuc = IIf(jeKontra, \"0\", \"0\") & IIf(kolicina < 0, \"1\", \"0\") & _\n",
+        "T_KartHron_RedosledIzKretanja",
+        "storno: kontra-stavovi idu posle originala svog dokumenta",
+    ),
+    # Opis bez vrste kretanja: dva reda istog otkupa opet imaju isti tekst.
+    "kart-hron-opis-bez-vrste": (
+        "modIzvestaj.bas",
+        "    If Len(vkNaziv) > 0 Then s = s & \": \" & vkNaziv\n",
+        "    If False Then s = s & \": \" & vkNaziv   ' SABOTAZA: opis bez vrste\n",
+        "T_KartHron_RedosledIzKretanja",
+        "opis imenuje vrstu kretanja, ne samo vrstu dokumenta",
+    ),
+    "kart-hron-opis-bez-storna": (
+        "modIzvestaj.bas",
+        "    If jeKontra Then s = s & \", \" & Poruka(\"OTKUI_KART_STORNO\")\n",
+        "    If False Then s = s & \", \" & Poruka(\"OTKUI_KART_STORNO\")   ' SABOTAZA: storno bez oznake\n",
+        "T_KartHron_RedosledIzKretanja",
+        "opis imenuje kontra-stav kao storno, a original ne",
+    ),
+    # Isti dan, drugi izvor: novac skoci ispred otkupa.
+    "kart-hron-izvor-rang": (
+        "modIzvestaj.bas",
+        "        Case LCase$(KART_IZVOR_NOVAC):          KarticaIzvorRang = 6\n",
+        "        Case LCase$(KART_IZVOR_NOVAC):          KarticaIzvorRang = 0   ' SABOTAZA: novac pre otkupa\n",
+        "T_KartHron_KljucISortEkrana",
+        "isti dan: otkup, ambalazni dokument, agrohemija, novac; dan ide pre izvora",
+    ),
+    # Ugovor knjige bez vrste kretanja: kartica ne ume da imenuje kretanje.
+    "kart-hron-knjiga-bez-vrste": (
+        "modAmbalaza.bas",
+        "        res(n, 9) = AmbText(data(ri, cVK))\n",
+        "        res(n, 9) = \"\"   ' SABOTAZA: knjiga ne vraca vrstu kretanja\n",
+        "T_KartHron_IzvestajPratiBroj",
+        "kartica ambalaze imenuje vrstu kretanja reversa",
+    ),
+    # Pravi uzrok P1: ljuska ponovo sortira karticu ("druga kolona opadajuce").
+    "kart-hron-ljuska-sortira-karticu": (
+        "modOtkupUI.bas",
+        "    If mViewN > 0 And Not RedosledJePoslovni() Then\n",
+        "    If mViewN > 0 Then   ' SABOTAZA: ljuska sortira i karticu\n",
+        "T_KartHron_MrezaNePreuredjuje",
+        "mreza kartice ambalaze nosi redosled izvestaja, ne svoj sort",
+    ),
+    # Mreza veruje STANJU sorta umesto ugovoru ekrana: zaostao sort druge
+    # liste (ista lista, pa se aktivacija ne ponavlja) preuredi karticu.
+    "kart-hron-mreza-veruje-stanju": (
+        "modOtkupUI.bas",
+        "    If mViewN > 0 And Not RedosledJePoslovni() Then\n",
+        "    If mViewN > 0 And mSortCol > 0 Then   ' SABOTAZA: mreza veruje zaostalom sortu\n",
+        "T_KartHron_MrezaNePreuredjuje",
+        "zaostao sort ne preuredjuje karticu",
+    ),
+    # Klik na zaglavlje kartice cuti. Redove i dalje cuva LoadGridFromScreen,
+    # pa pada samo tvrdnja o poruci -- dve brane, dve tvrdnje.
+    "kart-hron-klik-cuti": (
+        "modOtkupUI.bas",
+        "        If RedosledJePoslovni() Then\n",
+        "        If False Then   ' SABOTAZA: klik na karticu bez poruke\n",
+        "T_KartHron_MrezaNePreuredjuje",
+        "klik na zaglavlje kartice kaze da redosled ostaje hronoloski",
+    ),
+    # Ekran prestane da trazi poslovni redosled za kartice.
+    "kart-hron-ekran-bez-ugovora": (
+        "modScrIzvestaji.bas",
+        "        Case IZ_KART, IZ_AMBK, IZ_OTKL\n",
+        "        Case \"SABOTAZA\"\n",
+        "T_KartHron_KljucISortEkrana",
+        "kartica ambalaze trazi poslovni redosled",
+    ),
+    # Aktivacija kartice ostavi kolonu sorta (strelica nad karticom).
+    "kart-hron-aktivacija-ostavlja-kolonu": (
+        "modOtkupUI.bas",
+        "        mSortCol = 0\n",
+        "        mSortCol = 2   ' SABOTAZA: kartica dobija kolonu sorta\n",
+        "T_KartHron_KljucISortEkrana",
+        "aktivacija kartice ne ostavlja kolonu sorta",
+    ),
+    # Kartica ambalaze cita FIZICKU knjigu: pokrice deficita (ULAZ_TUDJE)
+    # postaje ulaz kooperanta i povrat 23 uz pokrice 12 izgleda kao -11.
+    "amb-posl-kartica-fizicki": (
+        "modIzvestaj.bas",
+        "    ambData = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, Trim$(kooperantID), True)\n    If Not IsArray(ambData) Then\n",
+        "    ambData = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, Trim$(kooperantID), False)\n    If Not IsArray(ambData) Then\n",
+        "T_AmbPoslovno_PokriceNijeZaduzenje",
+        "primer A: povrat 23 uz pokrice 12 je poslovno -23, ne -11",
+    ),
+    # Kontra-stav se ne sudi po vrsti ORIGINALA: svaki storno postaje
+    # tehnicki, pa storno povrata ne gasi poslovni promet dokumenta.
+    "amb-posl-pokrice-po-vrsti": (
+        "modAmbalaza.bas",
+        "        If vrsteDok.Exists(orig) Then vrsta = CStr(vrsteDok(orig))\n",
+        "        vrsta = \"\"   ' SABOTAZA: kontra-stav bez vrste originala\n",
+        "T_AmbPoslovno_PokriceNijeZaduzenje",
+        "storno povrata gasi i poslovni promet tog dokumenta",
+    ),
+    # PDF otkupnog lista cita FIZICKO stanje pre dokumenta.
+    "amb-posl-pdf-fizicki": (
+        "modAmbalaza.bas",
+        "                                                   samoPoslovno:=True)\n",
+        "                                                   samoPoslovno:=False)\n",
+        "T_AmbPoslovno_PokriceNijeZaduzenje",
+        "PDF pocetno stanje je poslovno: pokrice ne uvecava stanje pre dokumenta",
+    ),
+    # Pregled po OM uzima saldo kooperanta prema SVIM stanicama.
+    "amb-posl-om-globalno": (
+        "modIzvestaj.bas",
+        "                                                   AMB_NALOG_STANICA, Trim$(stanicaID))\n",
+        "                                                   \"\", \"\")   ' SABOTAZA: saldo prema svim stanicama\n",
+        "T_AmbPoslovno_SaldoPoOM",
+        "pregled OM: izdavanje 8 i povrat 10 uz pokrice 2 su poslovno -2, druga stanica ne ulazi",
+    ),
+    # Pregled po OM nosi DANASNJE stanje i za pregled u proslosti.
+    "amb-posl-om-bez-datuma": (
+        "modIzvestaj.bas",
+        "    Set koopAmbDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT, True, datumDo, _\n",
+        "    Set koopAmbDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT, True, 0, _\n",
+        "T_AmbPoslovno_SaldoPoOM",
+        "pregled OM je na dan datumDo: danasnji promet ne menja jucerasnji pregled",
+    ),
+    # Opis otkupa bez sorte (stari oblik: samo vrsta i klase).
+    "kart-opis-bez-sorte": (
+        "modIzvestaj.bas",
+        "                                                    NzToText(otkData(i, colOtkSorta)), _\n",
+        "                                                    \"\", _\n",
+        "T_KartOpis_VrstaSortaKlasa",
+        "opis otkupa je vrsta, sorta, klase i kolicina sa razmakom pre kg",
+    ),
+    # Opis otkupa ponovo pocinje recju "Otkup".
+    "kart-opis-prefiks": (
+        "modIzvestaj.bas",
+        "    delovi = Array(vrsta, sorta, klase, FmtKolicina(kolicina) & \" kg\")\n",
+        "    delovi = Array(\"Otkup \" & vrsta, sorta, klase, FmtKolicina(kolicina) & \" kg\")\n",
+        "T_KartOpis_VrstaSortaKlasa",
+        "nijedan opis otkupa ne pocinje recju Otkup",
+    ),
+    # Pojedinacan pregled ambalaze prestane da trazi poslovni redosled ekrana:
+    # ljuska ga opet sortira drugom kolonom kao tekstom.
+    "doc-sort-ekran-bez-dokumenata": (
+        "modScrIzvestaji.bas",
+        "        Case IZ_AMB\n            If Not mZbirni Then Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
+        "        Case \"SABOTAZA-AMB\"\n            If Not mZbirni Then Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
+        "T_DocSort_DokumentneListe",
+        "dokumentne liste traze poslovni redosled ekrana",
+    ),
+    # Pregled ambalaze slaze broj dokumenta KAO TEKST: x/ddmmyy-10 pre -9.
+    "doc-sort-pregled-amb-tekst": (
+        "modIzvestaj.bas",
+        "        kljuc(r + 1) = KarticaDokKljuc(rr(0), CStr(rr(6)), CStr(result(r + 1, 4)), CStr(rr(3))) & _\n",
+        "        kljuc(r + 1) = CStr(result(r + 1, 4)) & Chr$(1) & _\n",
+        "T_DocSort_DokumentneListe",
+        "pregled ambalaze: manji broj istog niza ide pre veceg, bez obzira na upis",
+    ),
+    # Jezgro stanja oko dokumenta racuna stanje PRE dokumenta fizicki: slucaj
+    # Bajic (pokrica +12 i +3) daje +5 umesto poslovnih -10.
+    "amb-posl-jezgro-stanja-fizicki": (
+        "modAmbalaza.bas",
+        "            If samoPoslovno Then\n                If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0\n",
+        "            If False Then   ' SABOTAZA: stanje pre dokumenta fizicki\n                If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0\n",
+        "T_AmbPoslovno_PokriceNijeZaduzenje",
+        "slucaj Bajic: posle pokrica +12 i +3 i izdavanja 5 stanje je poslovno -10, fizicki 5",
+    ),
+    # Otkupni list racuna zavrsno stanje bez primljenih gajbi (pocetno + izdato).
+    "amb-posl-pdf-zavrsno-bez-prijema": (
+        "modPrint.bas",
+        "        h(\"ambSaldo\") = tipAmb & \" x \" & CStr(CLng(ambPoc + kolAmbIzd - kolAmb))\n",
+        "        h(\"ambSaldo\") = tipAmb & \" x \" & CStr(CLng(ambPoc + kolAmbIzd))   ' SABOTAZA: zavrsno bez primljenog\n",
+        "T_AmbPoslovno_OtkupniListKaoKartica",
+        "otkupni list: zavrsno = pocetno + izdato - primljeno (-10 - 5 = -15)",
+    ),
+    # Stanje POSLE dokumenta broji pokrice samog dokumenta: knjiga i papir se
+    # razidju (-10 u knjizi, -15 na papiru).
+    "amb-posl-stanje-posle-fizicki": (
+        "modAmbalaza.bas",
+        "                    If samoPoslovno Then\n                        If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0\n",
+        "                    If False Then   ' SABOTAZA: stanje posle dokumenta fizicki\n                        If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0\n",
+        "T_AmbPoslovno_OtkupniListKaoKartica",
+        "knjiga posle otkupa: poslovno -15 kao na papiru, fizicki 0 sa pokricem",
+    ),
+    # Pregled po OM ne pripisuje red prema granici nikome: otpis sa naloga
+    # kooperanta (#445) ispada iz salda prema stanici vlasniku dokumenta.
+    "amb-posl-om-bez-otpisa": (
+        "modAmbalaza.bas",
+        "    ElseIf StrComp(Trim$(drugaTip), AMB_NALOG_SPOLJNI, vbTextCompare) = 0 Then\n",
+        "    ElseIf False Then   ' SABOTAZA: red prema granici ne pripada nikome\n",
+        "T_AmbPoslovno_OtpisUPregleduOM",
+        "pregled OM: otpis sa naloga kooperanta umanjuje saldo prema stanici vlasniku dokumenta",
+    ),
+    # Pregled po OM pripisuje red prema granici SVAKOJ stanici, ne vlasniku
+    # dokumenta -- otpis jedne stanice umanjuje pregled druge.
+    "amb-posl-om-otpis-svake-stanice": (
+        "modAmbalaza.bas",
+        "                RedPripadaProtivnalogu = IstiNalog(CStr(v(0)), CStr(v(1)), protivTip, protivID)\n",
+        "                RedPripadaProtivnalogu = True   ' SABOTAZA: otpis pripada svakoj stanici\n",
+        "T_AmbPoslovno_OtpisUPregleduOM",
+        "pregled OM: otpis na dokumentu druge stanice ne ulazi u pregled ove",
+    ),
 }
 
 

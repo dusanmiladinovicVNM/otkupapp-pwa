@@ -96,6 +96,12 @@ Public Const SCR_RUN_PRAZNO As Long = 1  ' vratio Empty, Err = 0 (npr. ekran bez
 Public Const SCR_RUN_NEMA   As Long = 2  ' nije se izvrsio: 1004, clana nema
 Public Const SCR_RUN_PAO    As Long = 3  ' nije se izvrsio iz drugog razloga (npr. 449)
 
+' Vrednost Scr_Sort koja nije "kolona:smer" nego izjava: REDOSLED KOJI EKRAN
+' VRATI JE POSLOVNI, ljuska ga ne dira -- ni podrazumevano, ni na klik
+' zaglavlja, ni zaostalim sortom druge liste. Kartice racunaju tekuci saldo
+' tim redom, pa bi svaki drugi red pokazivao saldo tudjeg toka (KART-HRON-01).
+Public Const SCR_SORT_POSLOVNI As String = "poslovni"
+
 ' Kes odgovora "da li modul postoji" - Application.Run na nepostojeci modul
 ' baca gresku, a to je skupo raditi pri svakom crtanju sidebara.
 Private mHas As Object
@@ -653,6 +659,7 @@ End Function
 
 ' Podrazumevani sort AKTIVNE liste ekrana, oblika "kolona:asc" ili "kolona:desc".
 ' Prazno = ekran nema misljenje, pa ostaje pravilo ljuske (SortZaListu).
+' SCR_SORT_POSLOVNI = ljuska redove uopste ne sortira (KART-HRON-01).
 '
 ' Uvedeno zbog sifarnika: ljuskino pravilo je "druga kolona opadajuce", sto je
 ' datum dokumenta -- nad Stanicama to znaci nazive unazad. Ekran koji zna sta mu

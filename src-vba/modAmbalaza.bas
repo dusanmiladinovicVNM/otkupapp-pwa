@@ -174,6 +174,11 @@ End Function
 ' predaje i revers kao "blok". Granica, ODL-27 i to da kvar knjige ide pozivaocu
 ' zive u jezgru, jednom za sve papire (AMB-10-ODL-31).
 '
+' Stanje je POSLOVNO (AMB-POSL-01): otkupni list kooperantu kaze koliko gajbi
+' firme duguje, isto kao kartica -- pokrice deficita su njegove gajbe, ne nase.
+' Ostali papiri (stanica, vozac, revers) i dalje citaju FIZICKO stanje istog
+' jezgra, pa se jezgro ne menja nego dobija izbor.
+'
 ' blockOtkupIDs: niz (npr. Split rezultat) ili string "OTK-1 + OTK-2".
 ' Vraca Long (entitetski saldo: Ulaz = +Kolicina, Izlaz = -Kolicina).
 ' ============================================================
@@ -182,7 +187,8 @@ Public Function GetKooperantAmbOpening(ByVal koopID As String, _
                                        ByVal blockOtkupIDs As Variant, _
                                        Optional ByRef outPoznato As Boolean) As Long
     GetKooperantAmbOpening = AmbStanjeOkoDokumenta(AMB_NALOG_KOOPERANT, koopID, tipAmb, _
-                                                   "", blockOtkupIDs, outPoznato)
+                                                   "", blockOtkupIDs, outPoznato, _
+                                                   samoPoslovno:=True)
 End Function
 
 ' DA LI RED DOTICE NALOG, I SA KOJIM ZNAKOM.
@@ -231,6 +237,29 @@ Private Function IstiTipAmb(ByVal a As String, ByVal b As String) As Boolean
     IstiTipAmb = (StrComp(Trim$(a), Trim$(b), vbTextCompare) = 0)
 End Function
 
+' TEHNICKI RED -- ne ulazi u POSLOVNI saldo partnera (AMB-POSL-01).
+'
+' Poslovni dogadjaj je ono sto je pozivalac pisca TRAZIO (AmbVrstaJeZahtev).
+' ULAZ_TUDJE nije zahtev nego posledica koju pisac generise sam: pokrice
+' deficita (AMB-INV-07) i ulaz pozajmice (AMB-INV-13) -- partnerove SOPSTVENE
+' gajbe ulaze u opticaj. On ih fizicki drzi, pa ostaju u fizickom saldu; firma
+' ga njima nije zaduzila, pa ne ulaze u poslovni. Sta firma za njih duguje nosi
+' obaveza (AmbObavezaPartneru) -- treci, odvojen broj.
+'
+' Kontra-stav se sudi po vrsti ORIGINALA (vrsteDok: AmbID -> vrsta; integritet
+' knjige jemci da StornoOd pokazuje na postojeci red), pa je storno pokrica i
+' sam tehnicki, a storno pravog prenosa poslovni.
+Private Function AmbRedJeTehnicki(ByRef data As Variant, ByVal i As Long, _
+                                  ByVal kol As Object, ByVal vrsteDok As Object) As Boolean
+    Dim vrsta As String, orig As String
+    vrsta = AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA)))
+    orig = AmbText(data(i, kol(COL_AMB_STORNO_OD)))
+    If Len(orig) > 0 Then
+        If vrsteDok.Exists(orig) Then vrsta = CStr(vrsteDok(orig))
+    End If
+    AmbRedJeTehnicki = Not modAmbalazaUgovor.AmbVrstaJeZahtev(vrsta)
+End Function
+
 ' ============================================================
 ' READ: stanje NALOGA OKO JEDNOG DOKUMENTA, po redosledu upisa (AMB-10-ODL-31).
 '
@@ -261,6 +290,10 @@ End Function
 '
 ' dokIDs: niz ili string "ID1 + ID2". dokTip: tip dokumenta u knjizi (prazno =
 ' ne poredi se, v. RedJeDokumenta).
+'
+' samoPoslovno (AMB-POSL-01): oba zbira preskacu redove tehnickog pokrica
+' (AmbRedJeTehnicki). Granica ostaje ista -- prvi red dokumenta, bilo kog
+' oblika -- jer je granica TACKA u knjizi, a ne iznos.
 ' ============================================================
 Public Function AmbStanjeOkoDokumenta(ByVal nalogTip As String, _
                                       ByVal nalogID As String, _
@@ -268,7 +301,8 @@ Public Function AmbStanjeOkoDokumenta(ByVal nalogTip As String, _
                                       ByVal dokTip As String, _
                                       ByVal dokIDs As Variant, _
                                       Optional ByRef outPoznato As Boolean, _
-                                      Optional ByRef outPosle As Long) As Long
+                                      Optional ByRef outPosle As Long, _
+                                      Optional ByVal samoPoslovno As Boolean = False) As Long
     Const SRC As String = "modAmbalaza.AmbStanjeOkoDokumenta"
 
     AmbStanjeOkoDokumenta = 0
@@ -343,7 +377,10 @@ Public Function AmbStanjeOkoDokumenta(ByVal nalogTip As String, _
     For i = 1 To cutoff
         znak = NalogZnakReda(data, i, kolIdx, nalogTip, nalogID)
         If znak <> 0 And IstiTipAmb(AmbText(data(i, colTip)), tipAmb) Then
-            If IsNumeric(data(i, colKol)) Then
+            If samoPoslovno Then
+                If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0
+            End If
+            If znak <> 0 And IsNumeric(data(i, colKol)) Then
                 saldo = saldo + znak * CLng(data(i, colKol))
             End If
         End If
@@ -358,7 +395,10 @@ Public Function AmbStanjeOkoDokumenta(ByVal nalogTip As String, _
             If RedJeDokumenta(data, i, colDokTip, colDokID, dokTip, blk) Then
                 znak = NalogZnakReda(data, i, kolIdx, nalogTip, nalogID)
                 If znak <> 0 And IstiTipAmb(AmbText(data(i, colTip)), tipAmb) Then
-                    If IsNumeric(data(i, colKol)) Then
+                    If samoPoslovno Then
+                        If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0
+                    End If
+                    If znak <> 0 And IsNumeric(data(i, colKol)) Then
                         posle = posle + znak * CLng(data(i, colKol))
                     End If
                 End If
@@ -858,7 +898,18 @@ End Function
 '
 ' Suma je preko SVIH tipova ambalaze, kao i kolona koju izvestaj prikazuje. Kome
 ' treba po tipu, zove GetAmbalazeStanje (isto pravilo, drugi oblik).
-Public Function AmbSaldoPoNalogu(ByVal tip As String) As Object
+' samoPoslovno: bez tehnickih redova (AMB-POSL-01). datumDo > 0: stanje NA DAN --
+' redovi kasnijeg datuma ne ulaze (pregled za proslost ne sme da nosi danasnje
+' stanje). protivTip/protivID: samo kretanja sa TIM nalogom -- svaki red imenuje
+' obe strane, pa je "saldo kooperanta prema stanici X" podatak, ne alokacija.
+' Red prema granici (otpis sa naloga kooperanta, #445) pripada nalogu koji je
+' vlasnik ambalaznog dokumenta (RedPripadaProtivnalogu).
+' Bez opcija je ovo zatecen fizicki, danasnji, globalni saldo.
+Public Function AmbSaldoPoNalogu(ByVal tip As String, _
+                                 Optional ByVal samoPoslovno As Boolean = False, _
+                                 Optional ByVal datumDo As Date = 0, _
+                                 Optional ByVal protivTip As String = "", _
+                                 Optional ByVal protivID As String = "") As Object
     Const SRC As String = "modAmbalaza.AmbSaldoPoNalogu"
 
     Dim res As Object
@@ -886,24 +937,109 @@ Public Function AmbSaldoPoNalogu(ByVal tip As String) As Object
     cNaID = kolIdx(COL_AMB_NA_ID)
     cKol = kolIdx(COL_AMB_KOLICINA)
 
-    Dim i As Long, nid As String
+    Dim cDat As Long, saProtivnim As Boolean
+    cDat = kolIdx(COL_AMB_DATUM)
+    saProtivnim = (Len(Trim$(protivTip)) > 0)
+
+    Dim cDokTip As Long, cDokID As Long, vlasnik As Object
+    If saProtivnim Then
+        cDokTip = kolIdx(COL_AMB_DOK_TIP)
+        cDokID = kolIdx(COL_AMB_DOK_ID)
+        Set vlasnik = AmbDokVlasnikMapa()
+    End If
+
+    ' VBA Or ne prekida izracunavanje: predikat protivnaloga se zove SAMO kad je
+    ' protivnalog zadat (bez njega mapa vlasnika i kolone dokumenta ne postoje).
+    Dim i As Long, nid As String, pripada As Boolean
     For i = 1 To UBound(data, 1)
         If RedDoticeKnjigu(data, i, kolIdx) Then
+            If samoPoslovno Then
+                If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then GoTo SledeciRedSalda
+            End If
+            If datumDo <> 0 Then
+                If Int(CDbl(CDate(data(i, cDat)))) > Int(CDbl(datumDo)) Then GoTo SledeciRedSalda
+            End If
             If StrComp(AmbText(data(i, cNaTip)), Trim$(tip), vbTextCompare) = 0 Then
-                nid = AmbText(data(i, cNaID))
-                If Len(nid) > 0 Then
-                    If Not res.Exists(nid) Then res.Add nid, 0&
-                    res(nid) = CLng(res(nid)) + CLng(data(i, cKol))
+                pripada = True
+                If saProtivnim Then pripada = RedPripadaProtivnalogu(data, i, AmbText(data(i, cOdTip)), _
+                                                 AmbText(data(i, cOdID)), cDokTip, cDokID, _
+                                                 vlasnik, protivTip, protivID)
+                If pripada Then
+                    nid = AmbText(data(i, cNaID))
+                    If Len(nid) > 0 Then
+                        If Not res.Exists(nid) Then res.Add nid, 0&
+                        res(nid) = CLng(res(nid)) + CLng(data(i, cKol))
+                    End If
                 End If
             End If
             If StrComp(AmbText(data(i, cOdTip)), Trim$(tip), vbTextCompare) = 0 Then
-                nid = AmbText(data(i, cOdID))
-                If Len(nid) > 0 Then
-                    If Not res.Exists(nid) Then res.Add nid, 0&
-                    res(nid) = CLng(res(nid)) - CLng(data(i, cKol))
+                pripada = True
+                If saProtivnim Then pripada = RedPripadaProtivnalogu(data, i, AmbText(data(i, cNaTip)), _
+                                                 AmbText(data(i, cNaID)), cDokTip, cDokID, _
+                                                 vlasnik, protivTip, protivID)
+                If pripada Then
+                    nid = AmbText(data(i, cOdID))
+                    If Len(nid) > 0 Then
+                        If Not res.Exists(nid) Then res.Add nid, 0&
+                        res(nid) = CLng(res(nid)) - CLng(data(i, cKol))
+                    End If
                 End If
             End If
         End If
+SledeciRedSalda:
+    Next i
+End Function
+
+' DA LI RED PRIPADA PROTIVNALOGU (AMB-POSL-02).
+'
+' Pripada kad je druga strana reda bas taj nalog. Red prema GRANICI (SpoljniSvet)
+' nema drugu realnu stranu: otpis sa naloga kooperanta (#445) ide Kooperant ->
+' SpoljniSvet, a stanica je samo VLASNIK dokumenta -- broj iz njenog niza
+' (AMB-10-ODL-34 c), isti OM koji stoji i na zapisniku. Takav red pripada nalogu
+' koji je vlasnik ambalaznog dokumenta, i nijednom drugom; bez toga bi pregled
+' po OM nosio otpisane gajbe kao dug.
+Private Function RedPripadaProtivnalogu(ByRef data As Variant, ByVal i As Long, _
+                                        ByVal drugaTip As String, ByVal drugaID As String, _
+                                        ByVal cDokTip As Long, ByVal cDokID As Long, _
+                                        ByVal vlasnik As Object, _
+                                        ByVal protivTip As String, _
+                                        ByVal protivID As String) As Boolean
+    Dim k As String, v As Variant
+    If IstiNalog(drugaTip, drugaID, protivTip, protivID) Then
+        RedPripadaProtivnalogu = True
+    ElseIf StrComp(Trim$(drugaTip), AMB_NALOG_SPOLJNI, vbTextCompare) = 0 Then
+        If StrComp(AmbText(data(i, cDokTip)), DOK_TIP_AMBALAZA_DOKUMENT, vbTextCompare) = 0 Then
+            k = AmbText(data(i, cDokID))
+            If vlasnik.Exists(k) Then
+                v = vlasnik(k)
+                RedPripadaProtivnalogu = IstiNalog(CStr(v(0)), CStr(v(1)), protivTip, protivID)
+            End If
+        End If
+    End If
+End Function
+
+' AmbDokID -> Array(BrojOwnerTip, BrojOwnerID), jednim prolazom kroz zaglavlja.
+' Storniran dokument ostaje u mapi: njegov original i kontra-stav pripadaju
+' istom vlasniku, pa se medjusobno potiru.
+Private Function AmbDokVlasnikMapa() As Object
+    Const SRC As String = "modAmbalaza.AmbDokVlasnikMapa"
+
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set AmbDokVlasnikMapa = res
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA_DOKUMENT)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cID As Long, cOwTip As Long, cOwID As Long, i As Long, k As String
+    cID = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, SRC)
+    cOwTip = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_TIP, SRC)
+    cOwID = RequireColumnIndex(TBL_AMBALAZA_DOKUMENT, COL_AMBD_BROJ_OWNER_ID, SRC)
+    For i = 1 To UBound(data, 1)
+        k = AmbText(data(i, cID))
+        If Len(k) > 0 Then res(k) = Array(AmbText(data(i, cOwTip)), AmbText(data(i, cOwID)))
     Next i
 End Function
 
@@ -914,21 +1050,31 @@ End Function
 ' saldo. Do 10c su to vadile same, kroz Smer -- pa je svaka nosila SVOJU kopiju
 ' pravila znaka, i svaka svoj lifecycle (ExcludeStornirano).
 '
-' Vraca 2D niz (1 To n, 1 To 8):
+' Vraca 2D niz (1 To n, 1 To 11):
 '   1 = Datum   2 = DokumentID   3 = DokumentTip   4 = TipAmbalaze
 '   5 = Kolicina SA ZNAKOM: pozitivna kad nalog PRIMA, negativna kad daje (6.8)
 '   6 = Otkazano: True za kontra-stav I za original na koji pokazuje
 '   7 = ProtivpartnerTip   8 = ProtivpartnerID
+'   9 = VrstaKretanja   10 = AmbID   11 = StornoOd (prazno kod originala)
 '
 ' Kolone 6-8 su IDENTITET, ne prikaz: ko je druga strana i da li par jos
 ' stoji. Kako se to imenuje coveku ostaje na citaocu.
+'
+' Kolone 9-11 su dodate na KRAJ (KART-HRON-01): kartica po njima redja i
+' imenuje kretanja istog dokumenta -- vrsta kaze ZASTO je kretanje nastalo, a
+' StornoOd koji red je kontra-stav. Citaoci kolona 1-8 se ne menjaju.
 '
 ' Prazno kad nalog nema ni jedno kretanje -- isti ugovor kao GetAmbalazeStanje, pa
 ' pozivaoci koji vrte IsArray ostaju nedirnuti.
 '
 ' Kontra-stav se vraca kao OBICAN red, sa svojim znakom: kartica mora da pokaze i
 ' storno, a ne da ga sakrije. Saldo se tako sam vraca na pocetno.
-Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Variant
+'
+' samoPoslovno (AMB-POSL-01): bez tehnickih redova (AmbRedJeTehnicki) -- ono sto
+' citaju kartice. Bez njega je ovo fizicki tok, koji citaju pregled kretanja i
+' provere.
+Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String, _
+                                  Optional ByVal samoPoslovno As Boolean = False) As Variant
     Const SRC As String = "modAmbalaza.AmbKretanjaNaloga"
 
     Dim p As String
@@ -946,8 +1092,9 @@ Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Va
 
     Dim cDat As Long, cDokID As Long, cDokTip As Long, cTipA As Long, cKol As Long
     Dim cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
-    Dim cStorno As Long, cAmbID As Long
+    Dim cStorno As Long, cAmbID As Long, cVK As Long
     cStorno = kolIdx(COL_AMB_STORNO_OD)
+    cVK = kolIdx(COL_AMB_VRSTA_KRETANJA)
     cAmbID = kolIdx(COL_AMB_ID)
     cDat = kolIdx(COL_AMB_DATUM)
     cDokID = kolIdx(COL_AMB_DOK_ID)
@@ -996,6 +1143,9 @@ Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Va
             ElseIf IstiNalog(AmbText(data(i, cOdTip)), AmbText(data(i, cOdID)), tip, id) Then
                 znak = -1
             End If
+            If znak <> 0 And samoPoslovno Then
+                If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0
+            End If
             If znak <> 0 Then poz.Add Array(i, znak)
         End If
     Next i
@@ -1003,7 +1153,7 @@ Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Va
     If poz.count = 0 Then Exit Function
 
     Dim res() As Variant
-    ReDim res(1 To poz.count, 1 To 8)
+    ReDim res(1 To poz.count, 1 To 11)
 
     Dim n As Long, ri As Long, par As Variant
     For n = 1 To poz.count
@@ -1025,6 +1175,9 @@ Public Function AmbKretanjaNaloga(ByVal tip As String, ByVal id As String) As Va
             res(n, 7) = AmbText(data(ri, cNaTip))
             res(n, 8) = AmbText(data(ri, cNaID))
         End If
+        res(n, 9) = AmbText(data(ri, cVK))
+        res(n, 10) = AmbText(data(ri, cAmbID))
+        res(n, 11) = AmbText(data(ri, cStorno))
     Next n
 
     AmbKretanjaNaloga = res

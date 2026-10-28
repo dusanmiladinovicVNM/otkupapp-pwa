@@ -204,6 +204,97 @@ nema u registru. Suprotan smer — tabela u svesci bez konstante — hvata gener
 domen-tabele. Lista je zamrznuto zatečeno stanje — račna, ne cilj; skraćuje se
 kroz PR-ove.
 
+**KART-HRON-01 — kartica je hronologija, a tekući saldo pripada njenom redosledu
+(P1, 21.10.2026).** Kartica kooperanta (`KARTICA`) i kartica ambalaže
+(`AMBKARTICA`) računaju tekući saldo redom kojim su redovi poređani, pa za svaki
+prikazani red važi `Saldo(i) = Saldo(i-1) + Ulaz(i) - Izlaz(i)` — i na ekranu, i u
+PDF-u, i u izvozu za PWA. Pre ispravke je ljuska redove kartice **ponovo
+sortirala** („druga kolona opadajuće" = broj dokumenta kao tekst; klik na
+zaglavlje = bilo koja kolona), a saldo je ostajao iz drugog reda: dva kretanja
+istog otkupa (izdata prazna 30, uz robu 13) imala su salde 17 i −13.
+
+- **Ljuska ne sortira karticu.** Ekran to izjavljuje kroz `Scr_Sort` =
+  `SCR_SORT_POSLOVNI` (`modScrIzvestaji`), a ljuska pita ekran u trenutku upotrebe
+  (`modOtkupUI.RedosledJePoslovni`) — zaostao sort druge liste ne preuređuje
+  karticu. Klik na zaglavlje ne sortira, nego javlja `OTKUI_MSG_KART_HRONOLOGIJA`.
+- **Redosled određuje izveštaj, ključem** (`modIzvestaj.KarticaDokKljuc` +
+  `KarticaKretanjeKljuc`, stabilno binarno sortiranje
+  `modArrayUtils.SortArrayPoKljucu`): dan → izvor → broj u nizu **kao broj** →
+  identitet dokumenta → unutar dokumenta: original pre kontra-stava, ulaz pre
+  izlaza, vrsta kretanja, tip gajbe, `AmbID`. Fizički redosled redova tabele ne
+  ulazi nigde, pa isti događaji daju istu karticu bez obzira na poreklo upisa.
+- **Šta je konvencija, a šta podatak.** Broj `x/ddmmyy[-rb]` je niz po (vlasnik,
+  dan) i ide +1, pa unutar niza redosled **jeste** podatak. Brojevi različitih
+  nizova (otkup ↔ revers, novac, agrohemija) ne kažu šta je bilo pre: istog dana
+  ide otkup → otpremnica → prijemnica → ambalažni dokument → agrohemija → novac.
+  Redosled kretanja unutar transakcije knjiga ne nosi (`AMBALAZA.md` §6.13:
+  „slobodan"), pa je „ulaz pre izlaza" konvencija; uz nju međusaldo dokumenta ne
+  pada ispod manjeg od stanja pre i posle dokumenta. Promena konvencije je jedan
+  `Select Case` (`KarticaIzvorRang`) ili jedan znak u ključu.
+- **Pretraga** ne preračunava saldo isečka: red zadržava svoj istorijski saldo, a
+  red početnog stanja se pod pretragom ne prikazuje (zatečeno pravilo).
+- **Opis** imenuje vrstu kretanja (`modAmbalazaUgovor.AmbKretanjeNaziv`) i storno
+  (`OTKUI_KART_STORNO`) — `AmbKretanjaNaloga` zato vraća i `VrstaKretanja`,
+  `AmbID` i `StornoOd` (kolone 9–11, dodate na kraj).
+
+Mere ga `modTest` 279–282 (`T_KartHron_*`), sabotaže `kart-hron-*`.
+
+**AMB-POSL-01 — poslovni saldo ambalaže je treći broj iz iste knjige
+(24.10.2026).** `ULAZ_TUDJE_AMBALAZE` nije zahtev (`AmbVrstaJeZahtev`) nego
+posledica koju pisac dopisuje sam: pokriće deficita (`AMB-INV-07`) i ulaz
+pozajmice (`AMB-INV-13`). To su partnerove sopstvene gajbe — fizički ih drži,
+ali firma ga njima nije zadužila. Zato iz iste knjige postoje tri broja:
+
+| Broj | Šta znači | Ko ga čita |
+|---|---|---|
+| fizički saldo | gde su gajbe | `AmbSaldoNaloga`, `GetAmbalazeStanje`, `ReportAmbalaza` (pregled kretanja), provere |
+| poslovni saldo | šta je firma partneru izdala minus šta je vratio | kartica kooperanta, kartica ambalaže, PDF otkupnog lista, kolona Ambalaža u pregledu po OM |
+| obaveza | koliko tuđe ambalaže firma duguje | `AmbObavezaPartneru` (`AMB-INV-09`) |
+
+Primer A: kooperant drži 11, vraća 23 → pokriće 12; fizički 0, poslovno −23 na
+tom dokumentu. Primer B: drži 0, vraća 3 → pokriće 3; poslovno −3.
+
+- Projekcija je **izbor čitaoca, ne nov pisac**: `AmbKretanjaNaloga`,
+  `AmbSaldoPoNalogu` i `AmbStanjeOkoDokumenta` dobijaju opcioni
+  `samoPoslovno` (podrazumevano `False` = zatečeno fizičko ponašanje). Knjiga,
+  pisci, storno i šema se ne menjaju.
+- **Kontra-stav se sudi po vrsti originala** (`AmbRedJeTehnicki`, preko
+  `StornoOd`): storno pokrića je i sam tehnički, storno pravog prenosa poslovni.
+- **PDF otkupnog lista** čita poslovno početno stanje
+  (`GetKooperantAmbOpening`); granica (`ODL-26/31`), stabilnost ponovne štampe i
+  `outPoznato` (`ODL-27`) ostaju iste. Ostali papiri čitaju fizičko stanje istog
+  jezgra.
+
+**AMB-POSL-02 — kolona Ambalaža u pregledu po OM je poslovni saldo prema TOJ
+stanici, na `datumDo`.** Bila je fizički, današnji i globalni saldo kooperanta:
+pokriće se brojalo kao zaduženje, pregled za prošlost je nosio današnje stanje, a
+kooperant sa dve stanice je u `ReportSaldoOMZbirni` ulazio dvaput. Svaki red
+knjige imenuje obe strane, pa je pripadnost stanici podatak, ne alokacija — nema
+prelivanja. Fizički pregled stanice ostaje `ReportAmbalaza("OM")`.
+Red prema granici (`SpoljniSvet`) nema drugu realnu stranu: otpis sa naloga
+kooperanta (`AMB-10-ODL-34`, #445) ide `Kooperant → SpoljniSvet`, a stanica je
+samo vlasnik dokumenta. Takav red pripada stanici koja je vlasnik ambalažnog
+dokumenta (`BrojOwnerTip/ID` sa zaglavlja, isti OM kao na zapisniku), i nijednoj
+drugoj — pa je zbir po stanicama jednak kartici.
+
+**DOC-SORT-01 — dokumentna lista ide po danu i broju kao broju.** Otkupni
+listovi, roba OM (otpremnice), roba kupca (prijemnice) i pojedinačan pregled
+ambalaže slaže izveštaj ključem `KarticaDokKljuc` (`x/080726` → `-2` → `-3` →
+`-10` → `x/090726`), a ekran to izjavljuje kroz `Scr_Sort` = `SCR_SORT_POSLOVNI`
+kao i kartice. Stavke istog dokumenta zadržavaju redosled papira; `UKUPNO` i
+kontrolni redovi ostaju na kraju (`IzvSortTelo`). Agregati (saldo OM, isplata,
+zbirni, roba vozača po vrsti) broja nemaju: izveštaj ih slaže po nazivu pa ID-u
+(`IzvNazivKljuc`), a ljuska ih i dalje sme sortirati.
+
+**REPORT-DESC-01 — opis reda otkupa na kartici kooperanta** je
+`vrsta sorta klase količina kg` („Malina Willamette I 108,40 kg"), bez reči
+„Otkup" (`KarticaOtkupOpis`). Prazan deo se preskače, pa nema duplog razmaka.
+Ekran i PDF čitaju isti `ReportKarticaKooperanta`.
+
+Mere ih `modTest` 283–288 (287: otkupni list i kartica kažu isti broj; 288: otpis u pregledu po OM),
+sabotaže `amb-posl-*`,
+`kart-opis-*`, `doc-sort-*`.
+
 ## 3) Ko šta piše
 
 `WHO_WRITES.md` u ovom folderu — generisana mapa vlasništva nad tabelama

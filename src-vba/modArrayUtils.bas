@@ -133,6 +133,84 @@ Public Function SortArray(ByVal data As Variant, ByVal sortCol As Long, _
     SortArray = result
 End Function
 
+' Stabilno sortiranje 2D niza po TEKSTUALNOM kljucu, binarnim poredjenjem.
+'
+' SortArray NIJE stabilan: redovi jednakog kljuca izlaze redom koji zavisi od
+' podele niza, dakle od fizickog rasporeda ulaza. Izvestaju koji racuna TEKUCI
+' SALDO redosled je deo rezultata (KART-HRON-01), pa mu trebaju kljuc koji
+' pozivalac sastavi kao potpun poredak i sortiranje koje jednake kljuceve ne
+' mesa. Binarno, jer vbTextCompare ide kroz lokal i ne jemci poredak kontrolnih
+' znakova kojima pozivalac razdvaja delove kljuca.
+Public Function SortArrayPoKljucu(ByVal data As Variant, ByVal keyCol As Long) As Variant
+    If IsEmpty(data) Then
+        SortArrayPoKljucu = Empty
+        Exit Function
+    End If
+
+    Dim rowCount As Long, colCount As Long, i As Long, j As Long
+    rowCount = UBound(data, 1)
+    colCount = UBound(data, 2)
+
+    Dim idx() As Long, tmp() As Long, kljuc() As String
+    ReDim idx(1 To rowCount)
+    ReDim tmp(1 To rowCount)
+    ReDim kljuc(1 To rowCount)
+    For i = 1 To rowCount
+        idx(i) = i
+        kljuc(i) = CStr(data(i, keyCol))
+    Next i
+
+    MergeSortIndex idx, tmp, kljuc, 1, rowCount
+
+    Dim result() As Variant
+    ReDim result(1 To rowCount, 1 To colCount)
+    For i = 1 To rowCount
+        For j = 1 To colCount
+            result(i, j) = data(idx(i), j)
+        Next j
+    Next i
+
+    SortArrayPoKljucu = result
+End Function
+
+Private Sub MergeSortIndex(ByRef idx() As Long, ByRef tmp() As Long, _
+                           ByRef kljuc() As String, ByVal lo As Long, ByVal hi As Long)
+    If lo >= hi Then Exit Sub
+
+    Dim sred As Long, i As Long, j As Long, k As Long
+    sred = (lo + hi) \ 2
+    MergeSortIndex idx, tmp, kljuc, lo, sred
+    MergeSortIndex idx, tmp, kljuc, sred + 1, hi
+
+    i = lo
+    j = sred + 1
+    k = lo
+    Do While i <= sred And j <= hi
+        ' <= drzi stabilnost: od jednakih kljuceva levi (raniji) ide prvi.
+        If StrComp(kljuc(idx(i)), kljuc(idx(j)), vbBinaryCompare) <= 0 Then
+            tmp(k) = idx(i)
+            i = i + 1
+        Else
+            tmp(k) = idx(j)
+            j = j + 1
+        End If
+        k = k + 1
+    Loop
+    Do While i <= sred
+        tmp(k) = idx(i)
+        i = i + 1
+        k = k + 1
+    Loop
+    Do While j <= hi
+        tmp(k) = idx(j)
+        j = j + 1
+        k = k + 1
+    Loop
+    For k = lo To hi
+        idx(k) = tmp(k)
+    Next k
+End Sub
+
 Private Sub QuickSortIndex(ByRef idx() As Long, ByRef data As Variant, _
                            ByVal sortCol As Long, ByVal low As Long, _
                            ByVal high As Long, ByVal ascending As Boolean, _
