@@ -378,6 +378,10 @@ Public Sub RunAllTests()
     ' sklanja sam.
     RunOne 275
     RunOne 276
+    ' KI-025 / KI-026 (AMB-10-ODL-34): nabavka i otpis sa F7. Oba pisu kroz
+    ' prave pisce i mere DELTU salda, pa redosled prema ostalima nije nosec.
+    RunOne 277
+    RunOne 278
     RunOne 13
     RunOne 14
     RunOne 15
@@ -949,6 +953,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 274: TestName = "T_S6K7_OporavakNedovrsenLanac"
         Case 275: TestName = "T_S6K8_BrojHladnjacePosleStorna"
         Case 276: TestName = "T_S6K8_F4RobaKaoZbirna"
+        Case 277: TestName = "T_KI025_F7NabavkaOtvaraIzdavanje"
+        Case 278: TestName = "T_KI026_F7OtpisSaNaloga"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1233,6 +1239,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 274: T_S6K7_OporavakNedovrsenLanac
         Case 275: T_S6K8_BrojHladnjacePosleStorna
         Case 276: T_S6K8_F4RobaKaoZbirna
+        Case 277: T_KI025_F7NabavkaOtvaraIzdavanje
+        Case 278: T_KI026_F7OtpisSaNaloga
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -9882,6 +9890,285 @@ CleanUp:
              "F7 pozajmica: kupcev dokument se ne stampa i ne javlja kvar (ODL-32)"
 End Sub
 
+' 277. KI-025: NABAVKA SA F7 -- SEDMI SEGMENT (AMB-10-ODL-34 (a)-(d), odluke 27.10.2026).
+'
+' Na novoj instalaciji stanica pocinje od nule, pa izdavanje praznih pada na
+' AMB-INV-07 dok gajbe ne udju nabavkom. Test meri bas taj lanac, A -> B -> A,
+' kroz Scr_Save (SaveRevers -> ReversValidiraj -> ReversUpisi), kao klik
+' operatera:
+'   A  izdavanje kooperantu VECE od salda stanice se odbija (preduslov);
+'   B  nabavka sa F7 pravi dokument NABAVKA sa brojem iz niza STANICE
+'      (ODL-34 c), red SpoljniSvet -> Stanica i napomenu na zaglavlju;
+'   A' ISTO izdavanje posle nabavke prolazi.
+' Saldo se meri kao DELTA: suite deli fixture, pa apsolutna vrednost zavisi od
+' redosleda testova. Smer je BROJ 7, a vrsta LITERAL: test se kompajlira i nad
+' kodom koji sedmi smer ne zna, pa je reprodukcija crvena po imenu.
+' Nabavka se ne stampa (ODL-34 h); izdavanje bi stampalo, pa je izlaz ugasen
+' (OFF) -- ceo lanac se vrti, samo papir ne nastaje (isto kao 213).
+' Redosled tvrdnji je nosec: modTest staje na prvom padu, pa snimanje nabavke
+' stoji PRE tvrdnji o njenom dokumentu.
+Private Sub T_KI025_F7NabavkaOtvaraIzdavanje()
+    Const SMER_IZD As Long = 1
+    Const SMER_NAB As Long = 7
+    Const VK_NAB As String = "NABAVKA"
+    Const DOK_NAB As String = "NABAVKA"
+    Const NAPOMENA As String = "dobavljac 277, racun R-1"
+    Dim p As Object, resA As String, resB As String, resA2 As String
+    Dim s0 As Double, s1 As Double, s2 As Double, kolIzd As Long, kolNab As Long
+    Dim n0 As Long, nA As Long, broj As String, dokID As String
+    Dim redovi As Collection, red As Variant, opis As String, zag As String
+    Dim modePre As String, autoPre As String, porukeB As String
+    Dim errNum As Long, errDesc As String
+
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+
+    s0 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, FX_TIP_AMB)
+    kolIzd = 5
+    If s0 > 0 Then kolIzd = CLng(s0) + 5
+    kolNab = kolIzd - CLng(s0) + 2
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    autoPre = NzToText(GetConfigValue(CFG_AUTO_BROJ_DOK))
+    On Error GoTo CleanUp
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "OFF"
+    SetConfigValue CFG_AUTO_BROJ_DOK, "DA"
+
+    n0 = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+    Set p = PoljaF7Amb(SMER_IZD, kolIzd, "KOOP", FX_KOOPERANT, "", "")
+    resA = modScrDokumenti.Scr_Save(p)
+    nA = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+
+    Set p = PoljaF7Amb(SMER_NAB, kolNab, "", "", "", NAPOMENA)
+    resB = modScrDokumenti.Scr_Save(p)
+    porukeB = NzToText(p("poruke"))
+    broj = NzToText(p("rezultat"))
+    s1 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, FX_TIP_AMB)
+
+    Set p = PoljaF7Amb(SMER_IZD, kolIzd, "KOOP", FX_KOOPERANT, "", "")
+    resA2 = modScrDokumenti.Scr_Save(p)
+    s2 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, FX_TIP_AMB)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    SetConfigValue CFG_AUTO_BROJ_DOK, autoPre
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI025_F7NabavkaOtvaraIzdavanje", errDesc
+
+    dokID = AmbDokIDPoBroju(broj, FX_STANICA)
+    If Len(dokID) > 0 Then
+        zag = ZaglavljeAmbDok(dokID)
+        opis = PoslovniRedOpis(dokID)
+    End If
+
+    AssertEq CStr(Len(resA) > 0) & "|" & CStr(nA - n0), "True|0", _
+             "preduslov: izdavanje vece od salda stanice se odbija i ne pravi dokument"
+    AssertEq resB, "", "F7 nabavka: snimanje prolazi"
+    AssertEq (Len(dokID) > 0), True, "F7 nabavka: dokument nosi broj iz niza stanice"
+    AssertEq zag, DOK_NAB & "|" & AMB_NALOG_STANICA & "|" & FX_STANICA & "|" & NAPOMENA, _
+             "F7 nabavka: zaglavlje je NABAVKA, broj je stanicin, napomena je upisana"
+    AssertEq opis, VK_NAB & "|" & CStr(kolNab) & "|" & AMB_NALOG_SPOLJNI & ">" & AMB_NALOG_STANICA, _
+             "F7 nabavka: poslovni red je SpoljniSvet -> Stanica"
+    AssertEq CStr(s1 - s0), CStr(kolNab), "F7 nabavka: saldo stanice raste tacno za N"
+    AssertEq InStr(1, porukeB, Poruka("NOVUNOS_MSG_STAMPA_NIJE"), vbBinaryCompare), 0, _
+             "F7 nabavka: ne stampa se i ne javlja kvar stampe (ODL-34 h)"
+    AssertEq resA2, "", _
+             "F7 nabavka: posle nabavke prolazi izdavanje koje je pre nje padalo na AMB-INV-07"
+    AssertEq CStr(s1 - s2), CStr(kolIzd), _
+             "F7 nabavka: izdavanje skida tacno svoju kolicinu sa stanice"
+End Sub
+
+' 278. KI-026: OTPIS SA F7 -- OSMI SEGMENT (AMB-10-ODL-34 (e)-(l), odluke 27.10.2026).
+'
+' Polomljena ili izgubljena gajba izlazi iz opticaja dokumentom OTPIS, sa BILO
+' KOG realnog naloga. Kroz Scr_Save, kao klik operatera:
+'   - preko salda naloga: odbijen uz polje kolicine (AMB-INV-14 nad snimkom);
+'   - bez razloga: odbijen uz polje napomene (ODL-34 k);
+'   - bez naloga (ni partner ni vozac): odbijen uz polje partnera (ODL-34 j);
+'   - kooperant 2: dokument OTPIS sa brojem STANICE, red Kooperant ->
+'     SpoljniSvet, razlog na zaglavlju, kooperant -2 a stanica 0, zapisnik
+'     nastaje bez upozorenja (ODL-34 h, l);
+'   - vozac, kad je partner prazan: red Vozac -> SpoljniSvet, vozac -1 (j);
+'   - lista F7 pokazuje otpis vozaca sa VOZACEM u koloni partnera (i) -- red je
+'     Vozac -> SpoljniSvet, pa bez izbora strane mimo granice celija je prazna;
+'   - storno otpisa vraca saldo kooperanta.
+' Preduslove sprema PRAVIM piscima (nabavka, izdavanje, predaja vozacu), ne
+' sirovim redom. Vozac u fixture-u ume da bude u minusu (12/1), pa dobija
+' tacno onoliko koliko treba da drzi 2.
+' Smer je BROJ 8 i vrsta LITERAL, iz istog razloga kao u 277. Redosled je
+' nosec: odbijanja idu PRE upisa, jer bi upis posle propustenog odbijanja
+' pomerio salda ostalih tvrdnji.
+Private Sub T_KI026_F7OtpisSaNaloga()
+    Const SMER_OTP As Long = 8
+    Const VK_OTP As String = "OTPIS"
+    Const DOK_OTP As String = "OTPIS"
+    Const RAZLOG As String = "lom 278, polomljene u transportu"
+    Dim p As Object, fokusA As String, fokusB As String, fokusC As String
+    Dim resD As String, resE As String, porukeD As String, javio As String
+    Dim k0 As Double, k1 As Double, k2 As Double, kStorno As Double
+    Dim s0 As Double, s1 As Double, v0 As Double, v1 As Double, vTreba As Double
+    Dim sNab As Double, kolNab As Double
+    Dim n0 As Long, nC As Long, broj As String, brojV As String
+    Dim dokID As String, dokV As String, opis As String, opisV As String, zag As String
+    Dim pdfPre As Long, pdfPosle As Long, lista As Variant, redV As String
+    Dim modePre As String, autoPre As String, errNum As Long, errDesc As String
+    Dim ok As Boolean, vozIme As String
+
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+
+    ' PREDUSLOVI kroz prave pisce: stanica nabavi, izda kooperantu 4, preda
+    ' vozacu koliko mu treba da drzi 2.
+    sNab = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, FX_TIP_AMB)
+    v0 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, FX_TIP_AMB)
+    vTreba = 2
+    If v0 < 0 Then vTreba = 2 - v0
+    kolNab = 4 + vTreba + 3
+    If sNab < 0 Then kolNab = kolNab - sNab
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, FX_TIP_AMB, kolNab, "", "preduslov 278"
+    Call modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, 4, _
+                                            REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    Call modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, FX_TIP_AMB, vTreba, _
+                                            REV_SMER_PRIJEM_OD_OM, "", FX_VOZAC)
+
+    k0 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, FX_TIP_AMB)
+    s0 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, FX_TIP_AMB)
+    v0 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, FX_TIP_AMB)
+    vozIme = Trim$(NzToText(LookupValue(TBL_VOZACI, "VozacID", FX_VOZAC, "Ime")))
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    autoPre = NzToText(GetConfigValue(CFG_AUTO_BROJ_DOK))
+    On Error GoTo CleanUp
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+    SetConfigValue CFG_AUTO_BROJ_DOK, "DA"
+
+    n0 = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+    Set p = PoljaF7Amb(SMER_OTP, CLng(k0) + 1, "KOOP", FX_KOOPERANT, "", RAZLOG)
+    Call modScrDokumenti.Scr_Save(p)
+    fokusA = NzToText(p("fokus"))
+    Set p = PoljaF7Amb(SMER_OTP, 1, "KOOP", FX_KOOPERANT, "", "")
+    Call modScrDokumenti.Scr_Save(p)
+    fokusB = NzToText(p("fokus"))
+    Set p = PoljaF7Amb(SMER_OTP, 1, "", "", "", RAZLOG)
+    Call modScrDokumenti.Scr_Save(p)
+    fokusC = NzToText(p("fokus"))
+    nC = BrojRedovaTabele(TBL_AMBALAZA_DOKUMENT)
+
+    broj = "OTK278-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    pdfPre = BrojPdfReversa(broj)
+    Set p = PoljaF7Amb(SMER_OTP, 2, "KOOP", FX_KOOPERANT, "", RAZLOG)
+    p("brDok") = broj
+    resD = modScrDokumenti.Scr_Save(p)
+    porukeD = NzToText(p("poruke"))
+    pdfPosle = BrojPdfReversa(broj)
+    k1 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, FX_TIP_AMB)
+    s1 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, FX_TIP_AMB)
+
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "OFF"
+    brojV = "OTV278-" & Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    Set p = PoljaF7Amb(SMER_OTP, 1, "", "", FX_VOZAC, RAZLOG)
+    p("brDok") = brojV
+    resE = modScrDokumenti.Scr_Save(p)
+    v1 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, FX_TIP_AMB)
+    k2 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, FX_TIP_AMB)
+
+    modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache
+    lista = modScrDokumenti.RedoviZaTip("REVERSI", "sve", "")
+    redV = RedSaTekstom(lista, brojV)
+
+    dokID = AmbDokIDPoBroju(broj, FX_STANICA)
+    dokV = AmbDokIDPoBroju(brojV, FX_STANICA)
+    If Len(dokID) > 0 Then
+        zag = ZaglavljeAmbDok(dokID)
+        opis = PoslovniRedOpis(dokID)
+        ok = modAmbalaza.StornirajAmbDokument_TX(dokID)
+        kStorno = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, FX_TIP_AMB)
+    End If
+    If Len(dokV) > 0 Then opisV = PoslovniRedOpis(dokV)
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    SetConfigValue CFG_AUTO_BROJ_DOK, autoPre
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI026_F7OtpisSaNaloga", errDesc
+
+    AssertEq fokusA, "kolAmb", _
+             "F7 otpis: otpis preko salda naloga se odbija uz polje kolicine (AMB-INV-14)"
+    AssertEq fokusB, "napomena", _
+             "F7 otpis: otpis bez razloga se odbija uz polje napomene (ODL-34 k)"
+    AssertEq fokusC, "partnerID", _
+             "F7 otpis: bez partnera i bez vozaca nema naloga -- odbija se uz polje partnera (ODL-34 j)"
+    AssertEq CStr(nC - n0), "0", "F7 otpis: odbijen otpis ne pravi dokument"
+    AssertEq resD, "", "F7 otpis: otpis kooperanta se snima"
+    AssertEq zag, DOK_OTP & "|" & AMB_NALOG_STANICA & "|" & FX_STANICA & "|" & RAZLOG, _
+             "F7 otpis: zaglavlje je OTPIS, broj je stanicin, razlog je upisan"
+    AssertEq opis, VK_OTP & "|2|" & AMB_NALOG_KOOPERANT & ">" & AMB_NALOG_SPOLJNI, _
+             "F7 otpis: poslovni red je Kooperant -> SpoljniSvet"
+    AssertEq CStr(k0 - k1) & "|" & CStr(s1 - s0), "2|0", _
+             "F7 otpis: saldo kooperanta pada za 2, stanica se ne dira"
+    javio = IIf(InStr(1, porukeD, Poruka("NOVUNOS_MSG_STAMPA_NIJE"), vbBinaryCompare) > 0, _
+                "javio", "tiho")
+    AssertEq CStr(pdfPosle - pdfPre) & "|" & javio, "1|tiho", _
+             "F7 otpis: zapisnik o otpisu nastaje, bez upozorenja (ODL-34 h, l)"
+    AssertEq resE, "", "F7 otpis: otpis vozaca se snima kad je partner prazan (ODL-34 j)"
+    AssertEq opisV, VK_OTP & "|1|" & AMB_NALOG_VOZAC & ">" & AMB_NALOG_SPOLJNI, _
+             "F7 otpis: nalog je vozac -- red Vozac -> SpoljniSvet"
+    AssertEq CStr(v0 - v1) & "|" & CStr(k1 - k2), "1|0", _
+             "F7 otpis: vozac -1, kooperant se ne dira"
+    AssertEq (Len(vozIme) > 0 And InStr(1, redV, vozIme, vbTextCompare) > 0), True, _
+             "lista F7 pokazuje otpis vozaca sa vozacem u koloni partnera (ODL-34 i)"
+    AssertEq CStr(ok) & "|" & CStr(kStorno - k1), "True|2", _
+             "F7 otpis: storno otpisa vraca saldo kooperanta"
+End Sub
+
+' Polja ekrana F7 za ambalazni dokument. partnerTip je "KOOP" / "OM" / "KUP" ili
+' prazno; tekst partnera je njegov ID, pa izbor nije "ukucan a nerazresen".
+Private Function PoljaF7Amb(ByVal smer As Long, ByVal kol As Long, _
+                            ByVal partnerTip As String, ByVal partnerID As String, _
+                            ByVal vozacID As String, ByVal napomena As String) As Object
+    Dim p As Object
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F7"))
+    p("stanicaID") = FX_STANICA
+    p("stanicaTekst") = FX_STANICA
+    p("kooperantID") = partnerID
+    p("partnerTip") = partnerTip
+    p("partnerTekst") = partnerID
+    p("vozacID") = vozacID
+    p("vrsta") = FX_VRSTA
+    p("tipAmb") = FX_TIP_AMB
+    p("kolAmb") = kol
+    p("smerRev") = smer
+    p("napomena") = napomena
+    Set PoljaF7Amb = p
+End Function
+
+' "vrsta|vlasnikTip|vlasnikID|napomena" sa zaglavlja ambalaznog dokumenta.
+Private Function ZaglavljeAmbDok(ByVal dokID As String) As String
+    ZaglavljeAmbDok = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokID, COL_AMBD_VRSTA)) & "|" & _
+                      NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokID, COL_AMBD_BROJ_OWNER_TIP)) & "|" & _
+                      NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokID, COL_AMBD_BROJ_OWNER_ID)) & "|" & _
+                      NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokID, COL_AMBD_NAPOMENA))
+End Function
+
+' "vrsta|kolicina|odTip>naTip" JEDINOG poslovnog reda dokumenta; inace broj redova.
+Private Function PoslovniRedOpis(ByVal dokID As String) As String
+    Dim redovi As Collection, red As Variant
+    Set redovi = modAmbalaza.AmbDokPoslovniRedovi(dokID)
+    If redovi.count <> 1 Then
+        PoslovniRedOpis = "redova:" & CStr(redovi.count)
+        Exit Function
+    End If
+    red = redovi(1)
+    PoslovniRedOpis = CStr(red(0)) & "|" & CStr(red(2)) & "|" & CStr(red(3)) & ">" & CStr(red(5))
+End Function
+
 ' 257. S6 KORAK 1: KANON STAVKE PRIJEMNICE (plan 14.55, odluke 20.10.2026).
 '
 ' Prijemnica postaje header + stavke. Korak 1 ne pise nijedan red, pa se meri
@@ -12633,11 +12920,23 @@ Private Sub T_ReversiLista_CitaAmbalazniDokument()
     AssertEq (RedoviSadrze(res, revBroj)), True, _
              "lista REVERSI sadrzi nov ambalazni dokument"
 
-    ' ZATVOREN SPISAK VRSTA: nabavka JESTE ambalazni dokument i poznata vrsta,
-    ' ali nije revers. Da je filter samo "poznata vrsta", ovde bi se pojavila --
-    ' pa ova tvrdnja meri bas to, a ne postojanje liste.
-    AssertEq (RedoviSadrze(res, nabBroj)), False, _
-             "lista REVERSI ne pokazuje nabavku"
+    ' PREMISA PROMENJENA ODLUKOM OPERATERA (AMB-10-ODL-34 (i), 27.10.2026).
+    ' Do tada je ovde stajalo "lista REVERSI ne pokazuje nabavku": spisak je bio
+    ' zatvoren na dva reversa, jer F7 nabavku nije umeo ni da napravi ni da
+    ' stornira. Od ODL-34 je nabavka sedmi segment F7, pa je lista mora pokazati
+    ' -- inace je storno nabavke nedostizan sa ekrana. Spisak OSTAJE zatvoren
+    ' (kontra-tvrdnja: nepoznata vrsta ne ulazi), samo je prosiren odlukom.
+    AssertEq (RedoviSadrze(res, nabBroj)), True, _
+             "lista REVERSI pokazuje i nabavku (ODL-34 i)"
+    AssertEq modScrDokumenti.AmbDokUListiReversa("NEPOZNATA_VRSTA"), False, _
+             "spisak vrsta liste ostaje zatvoren: nepoznata vrsta ne ulazi"
+    ' Kolona partnera nosi STANICU, ne granicu: red nabavke je SpoljniSvet ->
+    ' Stanica, a SpoljniSvet nije partner (6.3). Bez izbora strane mimo granice
+    ' celija je prazna.
+    AssertEq (InStr(1, RedSaTekstom(res, nabBroj), _
+                    NzToText(LookupValue(TBL_STANICE, "StanicaID", FX_STANICA, "Naziv")), _
+                    vbTextCompare) > 0), True, _
+             "red nabavke u listi nosi stanicu u koloni partnera, ne praznu granicu"
 
     ' KUPCEV REVERS JE DRUGA VRSTA ISTE LISTE (AMB-10-ODL-23), pa se meri
     ' zasebno: docs tvrde da ekran vidi i nas i kupcev dokument, a tvrdnja nad
@@ -12664,6 +12963,30 @@ Private Sub T_ReversiLista_CitaAmbalazniDokument()
     AssertEq (RedoviSadrze(res, kupBroj)), True, _
              "lista REVERSI sadrzi i KUPCEV revers"
 End Sub
+
+' Sve celije PRVOG reda mreze koji ijednom celijom nosi trazen tekst, spojene
+' sa "|". Prazno kad takvog reda nema. Za tvrdnju o drugoj koloni istog reda
+' (npr. partner uz broj) -- redosled kolona i tu nije predmet tvrdnje.
+Private Function RedSaTekstom(ByVal res As Variant, ByVal tekst As String) As String
+    Dim outA As Variant, r As Long, c As Long, red As String, ima As Boolean
+    If Not IsArray(res) Then Exit Function
+    If UBound(res) < 2 Then Exit Function
+    If CLng(res(2)) <= 0 Then Exit Function
+    outA = res(1)
+    If Not IsArray(outA) Then Exit Function
+    For r = LBound(outA, 1) To UBound(outA, 1)
+        red = ""
+        ima = False
+        For c = LBound(outA, 2) To UBound(outA, 2)
+            red = red & "|" & NzToText(outA(r, c))
+            If InStr(1, NzToText(outA(r, c)), tekst, vbTextCompare) > 0 Then ima = True
+        Next c
+        If ima Then
+            RedSaTekstom = red
+            Exit Function
+        End If
+    Next r
+End Function
 
 ' Da li mreza ijednom celijom nosi trazen tekst. Trazi se po SVIM kolonama, jer
 ' redosled kolona nije predmet ove tvrdnje.
@@ -12893,6 +13216,7 @@ Private Function PoljaEkrana(ByVal rezim As String) As Object
     p("brojZbirne") = ""
     p("parcelaID") = ""
     p("tipAmb") = ""
+    p("napomena") = ""
     p("kolicinaI") = 0#
     p("cenaI") = 0#
     p("kolAmb") = 0&

@@ -4450,6 +4450,20 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
                   "samo evidentira."
     End If
 
+    ' ZAPISNIK O OTPISU (AMB-10-ODL-34 h, l) je pusten SVESNO, po beloj listi: isti
+    ' sablon, svoj naslov, nalog sa reda (strana Od). OM na papiru je VLASNIK
+    ' BROJA sa zaglavlja (ODL-34 c), jer red otpisa stanicu ne mora da nosi.
+    ' NABAVKA i dalje nema papir (ODL-34 h) i pada na 7510 ispod.
+    If StrComp(vrstaDok, AMB_DOK_OTPIS, vbTextCompare) = 0 Then
+        Dim vrstaOt As String, ownTip As String, ownID As String
+        modAmbalaza.AmbDokZaglavlje ambDokID, vrstaOt, ownTip, ownID
+        OutputIzdavanjeAmbalaze datum, broj, _
+                                CStr(LookupValue(TBL_STANICE, "StanicaID", ownID, "Naziv")), ownID, _
+                                ResolveEntitetName(odID, odTip), odID, _
+                                tipAmb, kolAmb, "", False, ambDokID, "OTPIS"
+        Exit Sub
+    End If
+
     If StrComp(vrstaDok, AMB_DOK_REVERS, vbTextCompare) <> 0 Then
         Err.Raise vbObjectError + 7510, SRC, _
                   "Vrsta '" & vrstaDok & "' nema svoj sablon -- sablon je " & _

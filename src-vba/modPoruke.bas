@@ -834,6 +834,11 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_SEG_REV_PRI_OM", "Prijem od OM"
     UpsertRow lo, existing, "OTKUI_SEG_REV_POVRAT_KUP", "Povrat kupca"
     UpsertRow lo, existing, "OTKUI_SEG_REV_POZAJMICA_KUP", "Pozajmica"
+    ' AMB-10-ODL-34: nabavka i otpis, u svom okviru ispod smerova reversa.
+    UpsertRow lo, existing, "OTKUI_FLD_SMER_AMB", "NABAVKA I OTPIS"
+    UpsertRow lo, existing, "OTKUI_SEG_REV_NABAVKA", "Nabavka"
+    UpsertRow lo, existing, "OTKUI_SEG_REV_OTPIS", "Otpis"
+    UpsertRow lo, existing, "OTKUI_FLD_NAPOMENA", "Napomena"
     UpsertRow lo, existing, "OTKUI_AMBD_REVERS", "Revers"
     UpsertRow lo, existing, "OTKUI_AMBD_REVERS_PART", "Revers kupca"
     UpsertRow lo, existing, "OTKUI_AMBD_NABAVKA", "Nabavka"
@@ -1034,7 +1039,7 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     ' PRJ-ZBR-01 (S6 korak 6): prijemnica se vezuje samo na IZDATU zbirnu.
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_NIJE_IZDATA", ChrW(10007) & " Zbirna pod tim brojem jo" & ChrW(353) & " nije izdata " & ChrW(8212) & " izdaj je u F3, pa unesi prijemnicu."
     ' A2 t. 4 (S6 korak 8, KI-051): broj prijemnice hladnjace je nas niz, storno ga ne oslobadja.
-    UpsertRow lo, existing, "DOKUNOS_ERR_PRJ_BROJ_STORNIRAN", ChrW(10007) & " Taj broj je nosila stornirana prijemnica hladnja" & ChrW(269) & "e " & ChrW(8212) & " storno ne oslob" & ChrW(273) & "a broj. Uzmi predlo" & ChrW(382) & "eni broj."
+    UpsertRow lo, existing, "DOKUNOS_ERR_PRJ_BROJ_STORNIRAN", ChrW(10007) & " Taj broj je nosila stornirana prijemnica hladnja" & ChrW(269) & "e " & ChrW(8212) & " storno ne osloba" & ChrW(273) & "a broj. Uzmi predlo" & ChrW(382) & "eni broj."
     ' PRJ-ZBR-02 (KI-047): vrednost zbirne se dopisuje iza teksta (PrijemnicaRobaRazlog).
     UpsertRow lo, existing, "DOKUNOS_ERR_PRJ_VRSTA_ZBIRNE", ChrW(10007) & " Vrsta vo" & ChrW(263) & "a prijemnice mora biti ista kao na zbirnoj:"
     UpsertRow lo, existing, "DOKUNOS_ERR_PRJ_SORTA_ZBIRNE", ChrW(10007) & " Sorta prijemnice mora biti ista kao na zbirnoj:"
@@ -1056,6 +1061,10 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KOOP", ChrW(10007) & " Za izdavanje/prijem ambala" & ChrW(382) & "e izaberi KOOPERANTA kao partnera."
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KUP", ChrW(10007) & " Povrat praznih od kupca tra" & ChrW(382) & "i KUPCA kao partnera."
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KUP_POZ", ChrW(10007) & " Pozajmica ambala" & ChrW(382) & "e od kupca tra" & ChrW(382) & "i KUPCA kao partnera."
+    ' Otpis (AMB-10-ODL-34): nalog, razlog i saldo; saldu se dopisuje broj iza teksta.
+    UpsertRow lo, existing, "NOVUNOS_ERR_OTPIS_NALOG", ChrW(10007) & " Otpis tra" & ChrW(382) & "i nalog " & ChrW(8212) & " izaberi partnera (kooperant, OM ili kupac) ili voza" & ChrW(269) & "a."
+    UpsertRow lo, existing, "NOVUNOS_ERR_OTPIS_RAZLOG", ChrW(10007) & " Upi" & ChrW(353) & "i razlog otpisa (lom, gubitak) " & ChrW(8212) & " ide na zapisnik."
+    UpsertRow lo, existing, "NOVUNOS_ERR_OTPIS_SALDO", ChrW(10007) & " Ne mo" & ChrW(382) & "e se otpisati vi" & ChrW(353) & "e nego " & ChrW(353) & "to nalog dr" & ChrW(382) & "i. Stanje naloga:"
     UpsertRow lo, existing, "NOVUNOS_ERR_BROJ_KUPCA", ChrW(10007) & " Upi" & ChrW(353) & "i broj kup" & ChrW(269) & "evog reversa " & ChrW(8212) & " na" & ChrW(353) & " se ne predla" & ChrW(382) & "e, jer je dokument njegov."
     UpsertRow lo, existing, "NOVUNOS_ERR_VOZAC_OM", ChrW(10007) & " Revers firma" & ChrW(8212) & "OM ide preko voza" & ChrW(269) & "a " & ChrW(8212) & " izaberi voza" & ChrW(269) & "a."
     UpsertRow lo, existing, "NOVUNOS_ERR_VECI_OD_OSTATKA", ChrW(10007) & " Iznos je ve" & ChrW(263) & "i od neispla" & ChrW(263) & "enog ostatka bloka:"
@@ -1532,6 +1541,7 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     ' --- 10d: ispravka naseg reversa u jednom potezu ---
     UpsertRow lo, existing, "OTKUI_MSG_ISPRAVKA_REVERSA", "Ispravka reversa " & ChrW(8212) & " snimanje pravi NOV revers sa novim brojem umesto:"
     UpsertRow lo, existing, "OTKUI_ERR_ISPRAVI_REVERS", ChrW(10007) & " Podaci reversa se ne mogu pro" & ChrW(269) & "itati za ispravku:"
+    UpsertRow lo, existing, "NOVUNOS_ERR_ISPR_REV_NIJE_REVERS", ChrW(10007) & " Ispravka postoji samo za na" & ChrW(353) & " revers " & ChrW(8212) & " nabavka i otpis se storniraju i unose ponovo."
     UpsertRow lo, existing, "NOVUNOS_ERR_ISPR_REV_KUPAC", ChrW(10007) & " Ispravka na" & ChrW(353) & "eg reversa ostaje na" & ChrW(353) & " revers " & ChrW(8212) & " izaberi jedan od " & ChrW(269) & "etiri na" & ChrW(353) & "a smera. Kup" & ChrW(269) & "ev revers se unosi kao nov dokument."
     UpsertRow lo, existing, "NOVUNOS_MSG_ISPR_REV_OK", ChrW(10003) & " Ispravka reversa: stari je storniran, a nov je snimljen sa novim brojem. Stari:"
     UpsertRow lo, existing, "OTKUI_ERR_VEZA_HLADNJACA", ChrW(10007) & " Hladnja" & ChrW(269) & "ki blok ide u svoj lanac " & ChrW(8212) & " ru" & ChrW(269) & "no vezivanje nije dozvoljeno; otkloni uzrok pa ponovi auto-lanac"

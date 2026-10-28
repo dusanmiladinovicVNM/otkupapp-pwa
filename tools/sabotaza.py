@@ -242,8 +242,8 @@ SABOTAZE = {
     ),
     "clear-zbirna": (
         "modOtkupUI.bas",
-        '    nmv = Array("fgBrOtpr", "fgKgI", "fgKgII", "fgKolAmb", "fgAmbPr", "fgNovac")\n',
-        '    nmv = Array("fgBrOtpr", "fgKgI", "fgKgII", "fgKolAmb", "fgAmbPr", "fgNovac", "fgBrZbir")\n',
+        '    nmv = Array("fgBrOtpr", "fgKgI", "fgKgII", "fgKolAmb", "fgAmbPr", "fgNovac", "fgNapomena")\n',
+        '    nmv = Array("fgBrOtpr", "fgKgI", "fgKgII", "fgKolAmb", "fgAmbPr", "fgNovac", "fgNapomena", "fgBrZbir")\n',
         "T_ClearForm_Ugovor",
         "broj zbirne je kontekst -- ne brise se posle snimanja",
     ),
@@ -310,7 +310,7 @@ SABOTAZE = {
     "revers-smer": (
         "modNovacUnos.bas",
         '    smer = L(p, "smerRev")\n'
-        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POZAJMICA_KUP Then\n"
+        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_OTPIS Then\n"
         '        fokus = "smerRev": ReversValidiraj = Poruka("NOVUNOS_ERR_SMER"): Exit Function\n'
         "    End If\n",
         '    smer = L(p, "smerRev")   \' SABOTAZA: smer vise nije obavezan\n',
@@ -7212,20 +7212,22 @@ SABOTAZE = {
     # ostaju zelene -- tacno stanje koje je P1 i proizvelo.
     "amb-10c-lista-filtrira-po-nozi": (
         "modScrDokumenti.bas",
-        '        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA\n',
+        '        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA, AMB_DOK_NABAVKA, AMB_DOK_OTPIS\n',
         '        Case "OM-Izlaz-Koop", "OM-Ulaz-Koop"   \' SABOTAZA: filter po nozi (literal: konstante tipova nogu obrisane u 10e-3)\n',
         "T_ReversiLista_CitaAmbalazniDokument",
         "lista REVERSI sadrzi nov ambalazni dokument",
     ),
-    # Spisak vrsta postaje otvoren: nabavka i otpis upadaju u listu reversa.
+    # Spisak vrsta postaje otvoren. Od AMB-10-ODL-34 (i) su nabavka i otpis U
+    # spisku po odluci, pa "ne pokazuje nabavku" vise nije tvrdnja; zatvorenost
+    # meri kontra-tvrdnja nad vrstom koju niko nije pustio.
     "amb-10c-lista-prima-svaku-vrstu": (
         "modScrDokumenti.bas",
-        '        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA\n'
+        '        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA, AMB_DOK_NABAVKA, AMB_DOK_OTPIS\n'
         '            AmbDokUListiReversa = True\n',
         '        Case Else\n'
         '            AmbDokUListiReversa = True   \' SABOTAZA: svaka vrsta je revers\n',
         "T_ReversiLista_CitaAmbalazniDokument",
-        "lista REVERSI ne pokazuje nabavku",
+        "spisak vrsta liste ostaje zatvoren: nepoznata vrsta ne ulazi",
     ),
     # 10c: LISTA REVERSA PRELAZI NA AMBALAZNI DOKUMENT -- dve sabotaze nad
     # mapom tipa, jer je ona jedini spoj ekrana i tabele.
@@ -7285,7 +7287,7 @@ SABOTAZE = {
         "modAmbalaza.bas",
         "                    vrstaKretanja, DOK_TIP_AMBALAZA_DOKUMENT, dokID, _\n"
         "                    potvrdaDeficita\n",
-        "                    vrstaKretanja, DOK_TIP_AMBALAZA_DOKUMENT, dokID\n",
+        "                    vrstaKretanja, DOK_TIP_AMBALAZA_DOKUMENT, dokID   ' SABOTAZA: potvrda se ne prosledjuje\n",
         "Test_RVP_DeficitSePotvrdjuje",
         "RVP deficit: potvrdjen manjak 15 PROLAZI",
     ),
@@ -8569,7 +8571,7 @@ SABOTAZE = {
     # pre nego sto stigne do partnera.
     "odl24-f7-smer-van-opsega": (
         "modNovacUnos.bas",
-        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POZAJMICA_KUP Then\n",
+        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_OTPIS Then\n",
         "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POVRAT_KUP Then   ' SABOTAZA: sesti smer van opsega\n",
         "T_ODL24_F7PozajmicaKupca",
         "F7 pozajmica: partner koji nije kupac se odbija uz polje partnera",
@@ -10102,6 +10104,103 @@ SABOTAZE = {
         "        fokus = robaPolje: PrijemnicaValidiraj = robaRazlog: Exit Function\n",
         "T_S6K8_F4RobaKaoZbirna",
         "F4: zbirna druge vrste zaustavlja upis uz polje vrste (PRJ-ZBR-02)",
+    ),
+    # --- KI-025 + KI-026: nabavka i otpis sa F7 (AMB-10-ODL-34) ------------
+    # AMB-INV-14 u jezgru: otpis se ponovo pokriva kao povrat. Ekran i dalje
+    # odbija nad snimkom, pa ovo meri SAMO kapija kroz jezgro (BFP).
+    "ki026-otpis-se-pokriva": (
+        "modAmbalazaUgovor.bas",
+        "    AmbVrstaSmePokrice = (StrComp(Trim$(vrsta), AMB_VK_OTPIS, vbTextCompare) <> 0)\n",
+        "    AmbVrstaSmePokrice = True   ' SABOTAZA: otpis se pokriva kao povrat\n",
+        "Test_AMBINV14_OtpisSeNePokriva",
+        "AMB-INV-14: otpis preko salda partnera se odbija, ne pita za manjak",
+    ),
+    # F7 pusti otpis preko salda. Pisac ga i dalje odbija (AMB-INV-14), pa test
+    # meri ono sto daje SAMO validator -- polje kolicine (dvoslojna kapija).
+    "ki026-f7-pusta-preko-salda": (
+        "modNovacUnos.bas",
+        "        If kolAmb > saldo Then\n"
+        '            fokus = "kolAmb"\n',
+        "        If False Then   ' SABOTAZA: F7 pusta otpis preko salda\n"
+        '            fokus = "kolAmb"\n',
+        "T_KI026_F7OtpisSaNaloga",
+        "F7 otpis: otpis preko salda naloga se odbija uz polje kolicine (AMB-INV-14)",
+    ),
+    # F7 pusti otpis bez razloga. Pisac ga odbija, pa se meri polje napomene.
+    "ki026-f7-razlog-nije-obavezan": (
+        "modNovacUnos.bas",
+        '        If Len(S(p, "napomena")) = 0 Then\n'
+        '            fokus = "napomena": ReversValidiraj = Poruka("NOVUNOS_ERR_OTPIS_RAZLOG"): Exit Function\n',
+        "        If False Then   ' SABOTAZA: F7 pusta otpis bez razloga\n"
+        '            fokus = "napomena": ReversValidiraj = Poruka("NOVUNOS_ERR_OTPIS_RAZLOG"): Exit Function\n',
+        "T_KI026_F7OtpisSaNaloga",
+        "F7 otpis: otpis bez razloga se odbija uz polje napomene (ODL-34 k)",
+    ),
+    # Pisac otpisa pusti prazan razlog: pozivalac mimo ekrana pravi zapisnik bez
+    # razloga.
+    "ki026-pisac-bez-razloga": (
+        "modAmbalaza.bas",
+        "    If napomenaObavezna And Len(Trim$(napomena)) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: pisac otpisa bez razloga\n",
+        "Test_KI026_OtpisPisacKapije",
+        "KI-026 pisac: otpis bez razloga se odbija i mimo ekrana",
+    ),
+    # Nalog otpisa ne zna vozaca (ODL-34 j): otpis sa vozaca se odbija kao
+    # "bez naloga".
+    "ki026-otpis-bez-vozaca": (
+        "modNovacUnos.bas",
+        '    ElseIf Len(S(p, "vozacID")) > 0 Then\n'
+        "        nalogTip = AMB_NALOG_VOZAC\n",
+        "    ElseIf False Then   ' SABOTAZA: otpis ne zna vozaca\n"
+        "        nalogTip = AMB_NALOG_VOZAC\n",
+        "T_KI026_F7OtpisSaNaloga",
+        "F7 otpis: otpis vozaca se snima kad je partner prazan (ODL-34 j)",
+    ),
+    # Zapisnik o otpisu se ne pravi (ODL-34 h, l).
+    "odl34-otpis-bez-papira": (
+        "modNovacUnos.bas",
+        "        poruke = poruke & StampajOtpis(p, revDokID, brDok, nTip, nID)\n",
+        "        ' SABOTAZA: zapisnik o otpisu se ne pravi\n",
+        "T_KI026_F7OtpisSaNaloga",
+        "F7 otpis: zapisnik o otpisu nastaje, bez upozorenja (ODL-34 h, l)",
+    ),
+    # Nabavka sa F7 ode piscu reversa, koji sedmi smer ne zna.
+    "ki025-f7-nabavka-bez-grane": (
+        "modNovacUnos.bas",
+        "    If smer = SMER_REV_NABAVKA Then\n"
+        "        revDokID = modAmbalaza.NabaviAmbalazu_TX( _\n",
+        "    If False Then   ' SABOTAZA: nabavka ide piscu reversa\n"
+        "        revDokID = modAmbalaza.NabaviAmbalazu_TX( _\n",
+        "T_KI025_F7NabavkaOtvaraIzdavanje",
+        "F7 nabavka: snimanje prolazi",
+    ),
+    # Lista ponovo ne pokazuje nabavku (premisa pre ODL-34 i).
+    "odl34-lista-bez-nabavke": (
+        "modScrDokumenti.bas",
+        "        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA, AMB_DOK_NABAVKA, AMB_DOK_OTPIS\n",
+        "        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA, AMB_DOK_OTPIS   ' SABOTAZA: lista bez nabavke\n",
+        "T_ReversiLista_CitaAmbalazniDokument",
+        "lista REVERSI pokazuje i nabavku (ODL-34 i)",
+    ),
+    # Granica (SpoljniSvet) postaje protivpartner nabavke: celija partnera prazna.
+    "odl34-protivpartner-granica-od": (
+        "modScrDokumenti.bas",
+        "    If modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_GRANICA, odT) Then\n"
+        "        tip = naT\n",
+        "    If False Then   ' SABOTAZA: granica kao protivpartner nabavke\n"
+        "        tip = naT\n",
+        "T_ReversiLista_CitaAmbalazniDokument",
+        "red nabavke u listi nosi stanicu u koloni partnera, ne praznu granicu",
+    ),
+    # Isto za otpis sa SOPSTVENOG naloga (vozac): bira se granica, celija prazna.
+    "odl34-protivpartner-granica-na": (
+        "modScrDokumenti.bas",
+        "    If modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_GRANICA, naT) Then\n"
+        "        tip = odT\n",
+        "    If False Then   ' SABOTAZA: granica kao protivpartner otpisa\n"
+        "        tip = odT\n",
+        "T_KI026_F7OtpisSaNaloga",
+        "lista F7 pokazuje otpis vozaca sa vozacem u koloni partnera (ODL-34 i)",
     ),
 }
 

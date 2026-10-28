@@ -2010,28 +2010,6 @@ Public Function AmbImaKontraStav(ByVal dokTip As String, _
     Next i
 End Function
 
-' ============================================================
-' NABAVKA -- jedini put kojim NASE gajbe ulaze u opticaj
-' ============================================================
-'
-' Postoji jer AMB-INV-07 i AMB-10-ODL-8 ne dozvoljavaju stanici da izda gajbe
-' koje nema: njen manjak nije "tudja ambalaza" nego SKRIVEN MANJAK, pa je put
-' NABAVKA, sa svojim dokumentom i svojom cenom. Na svezoj instalaciji svaka
-' stanica pocinje od nule, pa bi bez ovog ulaza prvo izdavanje praznih bilo
-' odbijeno -- cutover devet mesta bi blokirao rad. Odluka operatera 03.10.2026.
-'
-' VLASNIK BROJA JE STANICA, izvedeno a ne izmisljeno: AMB-10-ODL-3 trazi jedan
-' protivpartner po dokumentu, a 6.9 izricito kaze da bi "jedan NABAVKA dokument
-' nad dve stanice" tu invarijantu odmah prekrsio.
-'
-' NEMA PROTOKOLA POTVRDE: AmbDeficitZaPrenos vraca 0 za sve sto nije REALAN, a
-' SpoljniSvet je iz te klase iskljucen (6.3 -- granica nema fizicko stanje), pa
-' prenos IZ nje nikad nije u manjku.
-'
-' Broj se moze proslediti (operater prepisuje sa racuna) ili izracunati. Oba
-' puta idu kroz istu kapiju zaglavlja -- a ona od 03.10.2026 sudi i ZAUZETOST
-' u nizu (BrojOwnerTip, BrojOwnerID, dan), ne samo oblik. Zato prosledjen broj
-' nije povlasten: ako je zauzet, upis pada.
 ' STORNO AMBALAZNOG DOKUMENTA -- revers, nabavka, otpis.
 '
 ' Do ovog reza ga NIJE BILO: tblAmbalazaDokument je imao pisca i kolonu
@@ -2770,14 +2748,94 @@ Private Function ReversNalogID(ByVal nalogTip As String, ByVal stanicaID As Stri
     End If
 End Function
 
+' ============================================================
+' NABAVKA -- jedini put kojim NASE gajbe ulaze u opticaj
+' ============================================================
+'
+' Postoji jer AMB-INV-07 i AMB-10-ODL-8 ne dozvoljavaju stanici da izda gajbe
+' koje nema: njen manjak nije "tudja ambalaza" nego SKRIVEN MANJAK, pa je put
+' NABAVKA, sa svojim dokumentom. Na svezoj instalaciji svaka stanica pocinje od
+' nule, pa bi bez ovog ulaza prvo izdavanje praznih bilo odbijeno. Odluka
+' operatera 03.10.2026; ulaz sa ekrana (F7, sedmi segment) od AMB-10-ODL-34.
+' Cene nema (ODL-34 d): ambalazni dokument ne nosi novac (ODL-5).
+'
+' VLASNIK BROJA JE STANICA, izvedeno a ne izmisljeno: AMB-10-ODL-3 trazi jedan
+' protivpartner po dokumentu, a 6.9 izricito kaze da bi "jedan NABAVKA dokument
+' nad dve stanice" tu invarijantu odmah prekrsio. Nalog je samo stanica (ODL-34
+' b): Firma nema nijedan tok koji iz nje izdaje.
+'
+' NEMA PROTOKOLA POTVRDE: AmbDeficitZaPrenos vraca 0 za sve sto nije REALAN, a
+' SpoljniSvet je iz te klase iskljucen (6.3 -- granica nema fizicko stanje), pa
+' prenos IZ nje nikad nije u manjku.
+'
+' Broj se moze proslediti ili izracunati. Oba puta idu kroz istu kapiju
+' zaglavlja -- a ona od 03.10.2026 sudi i ZAUZETOST u nizu (BrojOwnerTip,
+' BrojOwnerID, dan), ne samo oblik. Zato prosledjen broj nije povlasten: ako je
+' zauzet, upis pada.
 Public Function NabaviAmbalazu_TX(ByVal datum As Date, _
                                   ByVal stanicaID As String, _
                                   ByVal tipAmb As String, _
                                   ByVal kolicina As Double, _
                                   Optional ByVal broj As String = "", _
                                   Optional ByVal napomena As String = "") As String
-    Const SRC As String = "modAmbalaza.NabaviAmbalazu_TX"
+    NabaviAmbalazu_TX = UpisiNasJednoredni_TX(AMB_DOK_NABAVKA, AMB_VK_NABAVKA, datum, stanicaID, _
+                                              AMB_NALOG_SPOLJNI, "", _
+                                              AMB_NALOG_STANICA, stanicaID, _
+                                              tipAmb, kolicina, broj, napomena, False, _
+                                              "Nabavka", "modAmbalaza.NabaviAmbalazu_TX")
+End Function
 
+' ============================================================
+' OTPIS -- jedini put kojim gajbe IZLAZE iz opticaja (KI-026)
+' ============================================================
+'
+' Polomljena ili izgubljena gajba ide nalog -> SpoljniSvet, sa BILO KOG realnog
+' naloga: stanice, vozaca, kooperanta ili kupca (AMB-10-ODL-34 e; matrica REALAN
+' -> GRANICA). Bez ovoga bi ostala na saldu zauvek, a "ukupno u opticaju" bi
+' raslo od stvarnog stanja sa svakim lomom. Zaobilaznica preko storna originala
+' je POGRESNA: menja istoriju dokumenta koji je bio tacan.
+'
+' Dokument je NAS: broj iz niza stanice (ODL-34 c), kao i nabavka. Naknade nema
+' (ODL-34 f): otpis nema finansijsku posledicu.
+'
+' RAZLOG JE OBAVEZAN I U PISCU (ODL-34 k), ne samo na ekranu: zapisnik bez
+' razloga nije dokument, a pisac ima i pozivaoce mimo ekrana.
+'
+' Otpis preko salda se ODBIJA u jezgru (AMB-INV-14), bez pitanja: zato ovde nema
+' parametra potvrde.
+Public Function OtpisiAmbalazu_TX(ByVal datum As Date, _
+                                  ByVal stanicaID As String, _
+                                  ByVal nalogTip As String, _
+                                  ByVal nalogID As String, _
+                                  ByVal tipAmb As String, _
+                                  ByVal kolicina As Double, _
+                                  ByVal razlog As String, _
+                                  Optional ByVal broj As String = "") As String
+    OtpisiAmbalazu_TX = UpisiNasJednoredni_TX(AMB_DOK_OTPIS, AMB_VK_OTPIS, datum, stanicaID, _
+                                              nalogTip, nalogID, _
+                                              AMB_NALOG_SPOLJNI, "", _
+                                              tipAmb, kolicina, broj, razlog, True, _
+                                              "Otpis", "modAmbalaza.OtpisiAmbalazu_TX")
+End Function
+
+' JEDNO TELO ZA NASA DVA JEDNOREDNA DOKUMENTA -- nabavku i otpis (ODL-34).
+' Oba su NASA (broj iz niza stanice) i nose tacno jedan red knjige jednog naloga
+' prema granici (ODL-3). Pravila prenosa sudi jezgro (PrenesiAmbalazu:
+' AMB-INV-07, -14), pa ovde zive samo kolicina, razlog i broj -- isti oblik kao
+' kupcev par u UpisiKupcevDokument_TX.
+Private Function UpisiNasJednoredni_TX(ByVal dokVrsta As String, _
+                                       ByVal vrstaKretanja As String, _
+                                       ByVal datum As Date, _
+                                       ByVal stanicaID As String, _
+                                       ByVal odTip As String, ByVal odID As String, _
+                                       ByVal naTip As String, ByVal naID As String, _
+                                       ByVal tipAmb As String, _
+                                       ByVal kolicina As Double, _
+                                       ByVal broj As String, _
+                                       ByVal napomena As String, _
+                                       ByVal napomenaObavezna As Boolean, _
+                                       ByVal naziv As String, _
+                                       ByVal SRC As String) As String
     Dim tx As clsTransaction
     Dim dokID As String, brojK As String
     Dim errNum As Long, errDesc As String
@@ -2786,7 +2844,12 @@ Public Function NabaviAmbalazu_TX(ByVal datum As Date, _
 
     If kolicina <= 0 Then
         Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
-                  "Nabavka trazi pozitivnu kolicinu."
+                  naziv & " trazi pozitivnu kolicinu."
+    End If
+
+    If napomenaObavezna And Len(Trim$(napomena)) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  naziv & " trazi razlog (lom, gubitak) -- AMB-10-ODL-34 (k)."
     End If
 
     brojK = Trim$(broj)
@@ -2794,7 +2857,7 @@ Public Function NabaviAmbalazu_TX(ByVal datum As Date, _
         brojK = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, stanicaID, datum)
         If Len(brojK) = 0 Then
             Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
-                      "Broj nabavke nije izracunat -- vidi Log."
+                      "Broj dokumenta (" & naziv & ") nije izracunat -- vidi Log."
         End If
     End If
 
@@ -2805,17 +2868,17 @@ Public Function NabaviAmbalazu_TX(ByVal datum As Date, _
     tx.AddTableSnapshot TBL_AMBALAZA
 
     ' UpisiAmbDokument sam vezuje dokument za ovu transakciju.
-    dokID = UpisiAmbDokument(tx, AMB_DOK_NABAVKA, brojK, datum, _
+    dokID = UpisiAmbDokument(tx, dokVrsta, brojK, datum, _
                              AMB_NALOG_STANICA, stanicaID, napomena)
 
     PrenesiAmbalazu tx, datum, tipAmb, kolicina, _
-                    AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, stanicaID, _
-                    AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+                    odTip, odID, naTip, naID, _
+                    vrstaKretanja, DOK_TIP_AMBALAZA_DOKUMENT, dokID
 
     tx.CommitTx
     Set tx = Nothing
 
-    NabaviAmbalazu_TX = dokID
+    UpisiNasJednoredni_TX = dokID
     Exit Function
 
 EH:
@@ -2999,6 +3062,17 @@ Public Function PrenesiAmbalazu(ByVal tx As clsTransaction, _
     End If
 
     If deficit > 0 Then
+        ' AMB-INV-14 (AMB-10-ODL-34 g): OTPIS SE NE POKRIVA. Pitanje o manjku i
+        ' ULAZ_TUDJE bi uneli gajbe samo da bi se otpisale, a firma bi ih partneru
+        ' dugovala. Odbija se PRE pokrica i PRE potvrde, pa ni potvrda jednaka
+        ' manjku ne prolazi. Pravilo je u ugovoru (AmbVrstaSmePokrice).
+        If Not modAmbalazaUgovor.AmbVrstaSmePokrice(vrstaK) Then
+            Err.Raise AMB_ERR_DEFICIT_NEPOKRIV, SRC, _
+                      "AMB-INV-14: " & vrstaK & " ne sme vise nego sto nalog drzi -- " & _
+                      Trim$(odTip) & " '" & Trim$(odID) & "' drzi " & CStr(kolicina - deficit) & _
+                      ", trazi se " & CStr(kolicina) & " '" & Trim$(tipAmb) & "'."
+        End If
+
         Dim pokrice As String
         pokrice = modAmbalazaUgovor.AmbPokriceProblem(odTip, odID)
         If Len(pokrice) > 0 Then
