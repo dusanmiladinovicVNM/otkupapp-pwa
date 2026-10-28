@@ -23,10 +23,13 @@ if OVDE not in sys.path:
     sys.path.insert(0, OVDE)
 
 import ambalaza  # noqa: E402
+import cilj  # noqa: E402
 import dokumenti  # noqa: E402
+import provere  # noqa: E402
+import upis  # noqa: E402
 import migracija  # noqa: E402
 import pregled  # noqa: E402
-from citac import datum, polje, procitaj_svesku, sha256_fajla, tabela  # noqa: E402
+from citac import datum, polje, procitaj_svesku, sha256_fajla, tabela, tekst  # noqa: E402
 
 D1, D2, D3 = date(2026, 6, 20), date(2026, 6, 21), date(2026, 6, 22)
 
@@ -69,21 +72,35 @@ def osnovne_tabele(amb_redovi, dodatno=None):
         "tblVozaci": (["VozacID", "Ime", "Prezime"], [["D1", "Vlada", "Vozac"]]),
         "tblTipAmbalaze": (["TipAmbalaze"], [["12/1"], ["6/1"]]),
         "tblOtkup": (["OtkupID", "Datum", "KooperantID", "StanicaID", "BrojDokumenta", "Klasa",
-                      "Kolicina", "Cena", "KolAmbalaze", "KolAmbIzdata", "TipAmbalaze", "Stornirano"],
-                     [["OTK-1", D1, "K1", "S1", "101", "I", 100, 80, 10, 4, "12/1", ""],
-                      ["OTK-2", D3, "K2", "S1", "102", "I", 50, 80, 5, 0, "12/1", "Da"],
-                      ["OTK-3", D3, "K2", "S1", "103", "I", 40, 80, 3, 0, "12/1", ""]]),
+                      "Kolicina", "Cena", "KolAmbalaze", "KolAmbIzdata", "TipAmbalaze", "Stornirano",
+                      "OtpremnicaID", "BrojZbirne", "Novac", "Isplaceno", "CreatedAt", "CreatedBy"],
+                     [["OTK-1", D1, "K1", "S1", "101", "I", 100, 80, 10, 4, "12/1", "", "OTP-1", "301",
+                       0, "", "2026-06-20 08:00:00", "op"],
+                      ["OTK-2", D3, "K2", "S1", "102", "I", 50, 80, 5, 0, "12/1", "Da", "", "", 0, "", "", ""],
+                      ["OTK-3", D3, "K2", "S1", "103", "I", 40, 80, 3, 0, "12/1", "", "", "", 0, "Da", "", ""]]),
         "tblOtpremnica": (["OtpremnicaID", "Datum", "StanicaID", "VozacID", "BrojOtpremnice", "Klasa",
-                           "Kolicina", "KolAmbalaze", "Stornirano", "GeneracijaID"],
-                          [["OTP-1", D2, "S1", "D1", "201", "I", 100, 10, "", "G-OTP-1"],
-                           ["OTP-9", D2, "S1", "D1", "209", "I", 30, 3, "Da", "G-OTP-9"]]),
-        "tblZbirna": (["ZbirnaID", "Datum", "VozacID", "BrojZbirne", "Klasa", "UkupnoKolicina",
-                       "Stornirano", "GeneracijaID"],
-                      [["ZBR-1", D2, "D1", "301", "I", 100, "", "G-ZBR-1"]]),
-        "tblPrijemnica": (["PrijemnicaID", "Datum", "KupacID", "VozacID", "BrojPrijemnice", "Klasa",
-                           "Kolicina", "KolAmbalaze", "KolAmbVracena", "Stornirano", "GeneracijaID"],
-                          [["PRJ-1", D3, "C1", "D1", "401", "I", 90, 10, 7, "", "G-PRJ-1"],
-                           ["PRJ-2", D3, "C1", "D1", "401", "II", 10, 0, 0, "", "G-PRJ-1"]]),
+                           "Kolicina", "KolAmbalaze", "Cena", "Stornirano", "GeneracijaID", "BrojZbirne"],
+                          [["OTP-1", D2, "S1", "D1", "201", "I", 100, 10, 0, "", "G-OTP-1", "301"],
+                           ["OTP-9", D2, "S1", "D1", "209", "I", 30, 3, 75, "Da", "G-OTP-9", ""]]),
+        "tblZbirna": (["ZbirnaID", "Datum", "VozacID", "KupacID", "BrojZbirne", "Klasa", "UkupnoKolicina",
+                       "UkupnoAmbalaze", "Stornirano", "GeneracijaID"],
+                      [["ZBR-1", D2, "D1", "C1", "301", "I", 100, 10, "", "G-ZBR-1"]]),
+        "tblPrijemnica": (["PrijemnicaID", "Datum", "KupacID", "VozacID", "BrojPrijemnice", "BrojZbirne",
+                           "Klasa", "Kolicina", "Cena", "KolAmbalaze", "KolAmbVracena", "Stornirano",
+                           "GeneracijaID", "Fakturisano"],
+                          [["PRJ-1", D3, "C1", "D1", "401", "301", "I", 90, 60, 10, 7, "", "G-PRJ-1", "Da"],
+                           ["PRJ-2", D3, "C1", "D1", "401", "301", "II", 10, 40, 0, 0, "", "G-PRJ-1", ""]]),
+        "tblNovac": (["NovacID", "Datum", "Tip", "KooperantID", "OtkupID", "Isplata", "Uplata", "Stornirano"],
+                     [["NOV-00001", D2, "VirmanFirmaKoop", "K1", "OTK-1", 8000, 0, ""]]),
+        "tblPaleta": (["PaletaID", "BrojPalete", "Godina", "Status", "Stornirano", "Preradjeno"],
+                      [["PAL-00001", "1", 2026, "Zatvorena", "", "Da"]]),
+        "tblPaletaStavka": (["StavkaID", "PaletaID", "PrijemnicaID", "BrojPrijemnice", "Klasa", "Stornirano"],
+                            [["PLS-00001", "PAL-00001", "PRJ-1", "401", "I", ""]]),
+        "tblFakture": (["FakturaID", "BrojFakture", "Datum", "KupacID", "Stornirano"],
+                       [["FAK-00001", "1/2026", D3, "C1", ""]]),
+        "tblFakturaStavke": (["StavkaID", "FakturaID", "PrijemnicaID", "Kolicina", "Cena", "Klasa", "Stornirano"],
+                             [["FST-00001", "FAK-00001", "PRJ-1", 90, 60, "I", ""]]),
+        "tblSEFConfig": (["ConfigKey", "ConfigValue"], [["MALINA_DEFAULT_KUPAC", "C1"]]),
         "tblAmbalaza": (AMB_KOL, amb_redovi),
     }
     t.update(dodatno or {})
@@ -352,6 +369,8 @@ class Izuzeci(SaSveskom):
         lista = ambalaza.ucitaj_izuzetke(migracija.IZUZECI)
         self.assertEqual(len(lista), 7)
         self.assertTrue(all(iz.get("provera") for iz in lista))
+        self.assertEqual([d["OtpremnicaID"] for d in cilj.ucitaj_izuzetke_dokumenata(migracija.IZUZECI)],
+                         ["OTP-00666"])
 
 
 class Dokumenti(SaSveskom):
@@ -381,6 +400,240 @@ class Amb10Oblik(SaSveskom):
         self.assertEqual(rez.oblik, "AMB10")
         self.assertEqual(self.salda[("Stanica", "S1", "12/1")]["novi"], Decimal(5))
         self.assertEqual(self.salda[("Stanica", "S1", "12/1")]["razlika"], 0)
+
+
+class NovaSveska(SaSveskom):
+    """Faza 2: nova sveska u memoriji (cilj.py) i provere pre upisa (provere.py)."""
+
+    def sagradi(self, amb=None, dodatno=None):
+        put = os.path.join(self.dir.name, "stara.xlsx")
+        snimi_svesku(put, osnovne_tabele(normalno() if amb is None else amb, dodatno))
+        self.tabele = procitaj_svesku(put)
+        c = cilj.izgradi(self.tabele, dokumenti.ucitaj_kanon())
+        provere.proveri(c)
+        provere.proveri_isplate_iz_starog(c, self.tabele)
+        return c
+
+    def nalazi(self, c, tezina=None):
+        return sorted((n["pravilo"], tekst(n["id"])) for n in c.nalazi if tezina in (None, n["tezina"]))
+
+    def test_zaglavlje_i_jedna_stavka_po_dokumentu(self):
+        c = self.sagradi()
+        self.assertEqual([z["OtkupID"] for z in c.tabele["tblOtkup"]], ["OTK-1", "OTK-2", "OTK-3"])
+        self.assertNotIn("Kolicina", c.tabele["tblOtkup"][0])
+        st = {s["OtkupID"]: s for s in c.tabele["tblOtkupStavke"]}
+        self.assertEqual((st["OTK-1"]["Klasa"], st["OTK-1"]["Kolicina"], st["OTK-1"]["Cena"]),
+                         ("I", Decimal(100), Decimal(80)))
+        self.assertTrue(st["OTK-1"]["OtkupStavkaID"].startswith("OKS-"))
+        self.assertEqual(len(st["OTK-1"]["OtkupStavkaID"]), 36)
+        self.assertEqual(c.tabele["tblOtkup"][0]["OtpremnicaID"], "")      # pisac ga ne pise
+        zst = c.tabele["tblZbirnaStavke"][0]
+        self.assertEqual((zst["Kolicina"], zst["KolAmbalaze"]), (Decimal(100), Decimal(10)))
+        self.assertEqual(c.tabele["tblZbirna"][0]["UkupnoKolicina"], "")
+        ost = {s["OtpremnicaID"]: s for s in c.tabele["tblOtpremnicaStavke"]}
+        self.assertEqual((ost["OTP-1"]["PredlogCena"], ost["OTP-9"]["PredlogCena"]), ("", Decimal(75)))
+        self.assertEqual(len(c.tabele["tblPrijemnicaStavke"]), 2)
+        self.assertNotIn("GeneracijaID", c.tabele["tblPrijemnica"][0])
+
+    def test_clanstvo_status_i_veze(self):
+        c = self.sagradi()
+        self.assertEqual([(v["OtkupID"], v["OtpremnicaID"]) for v in c.tabele["tblOtpremnicaIzvori"]],
+                         [("OTK-1", "OTP-1")])
+        self.assertEqual([(v["OtpremnicaID"], v["ZbirnaID"]) for v in c.tabele["tblZbirnaIzvori"]],
+                         [("OTP-1", "ZBR-1")])
+        status = {z["OtkupID"]: z["IzdatoStatus"] for z in c.tabele["tblOtkup"]}
+        self.assertEqual(status, {"OTK-1": "IZDATO", "OTK-2": "IZDATO", "OTK-3": ""})
+        self.assertEqual({z["IzdatoStatus"] for z in c.tabele["tblOtpremnica"]}, {"IZDATO"})
+        self.assertEqual({z["ZbirnaRoditeljID"] for z in c.tabele["tblPrijemnica"]}, {"ZBR-1"})
+        self.assertEqual(c.tabele["tblZbirna"][0]["KupacHladnjaca"], "Da")
+        sid = {s["PrijemnicaID"]: s["PrijemnicaStavkaID"] for s in c.tabele["tblPrijemnicaStavke"]}
+        self.assertEqual(c.tabele["tblPaletaStavka"][0]["PrijemnicaStavkaID"], sid["PRJ-1"])
+        self.assertEqual(c.tabele["tblFakturaStavke"][0]["PrijemnicaStavkaID"], sid["PRJ-1"])
+        self.assertTrue(c.tabele["tblAmbalaza"])
+
+    def test_normalna_sveska_nema_blokade(self):
+        c = self.sagradi()
+        self.assertEqual(self.nalazi(c, "BLOKIRA"), [])
+        self.assertIn(("AKTIVAN_OTKUP_BEZ_OTPREMNICE", "OTK-3"), self.nalazi(c, "ODLUKA"))
+        self.assertIn(("STARI_ISPLACENO_BEZ_NOVCA", "OTK-3"), self.nalazi(c, "ODLUKA"))
+
+    def test_storniran_otkup_sa_nula_kg_blokira(self):
+        t = osnovne_tabele(normalno())
+        kol, redovi = t["tblOtkup"]
+        redovi[1][6] = 0
+        c = self.sagradi(dodatno={"tblOtkup": (kol, redovi)})
+        self.assertIn(("KOLICINA_NIJE_POZITIVNA", "OTK-2"), self.nalazi(c, "BLOKIRA"))
+
+    def test_klasa_iii_blokira(self):
+        t = osnovne_tabele(normalno())
+        kol, redovi = t["tblOtkup"]
+        redovi[2][5] = "III"
+        c = self.sagradi(dodatno={"tblOtkup": (kol, redovi)})
+        self.assertIn(("KLASA_NIJE_I_II", "OTK-3"), self.nalazi(c, "BLOKIRA"))
+
+    def otp2(self, otkup_202=None, izuzeci_dok=()):
+        """OTP-2 (broj 202) bez veze; opciono otkup OTK-4 sa istim brojem i potpisom."""
+        t = osnovne_tabele(normalno())
+        okol, ored = t["tblOtkup"]
+        okol = okol + ["VrstaVoca", "SortaVoca"]
+        ored = [r + ["Malina", "Vilamet"] for r in ored]
+        if otkup_202:
+            ored.append(otkup_202)
+        pkol, pred = t["tblOtpremnica"]
+        pkol = pkol + ["VrstaVoca", "SortaVoca", "TipAmbalaze"]
+        pred = [r + ["Malina", "Vilamet", "12/1"] for r in pred]
+        pred.append(["OTP-2", D3, "S1", "D1", "202", "I", 20, 2, 0, "", "", "", "Malina", "Vilamet", "12/1"])
+        put = os.path.join(self.dir.name, "stara.xlsx")
+        snimi_svesku(put, osnovne_tabele(normalno(), {"tblOtkup": (okol, ored), "tblOtpremnica": (pkol, pred)}))
+        self.tabele = procitaj_svesku(put)
+        c = cilj.izgradi(self.tabele, dokumenti.ucitaj_kanon(), izuzeci_dok=izuzeci_dok)
+        provere.proveri(c)
+        return c
+
+    OTK4 = ["OTK-4", D3, "K1", "S1", "202", "I", 20, 80, 2, 0, "12/1", "", "", "", 0, "", "", "",
+            "Malina", "Vilamet"]
+
+    def test_otpremnica_bez_otkupa_ostaje_neizdata(self):
+        c = self.otp2()
+        self.assertEqual(self.nalazi(c, "BLOKIRA"), [])
+        self.assertIn(("OTPREMNICA_BEZ_OTKUPA_OSTAJE_NEIZDATA", "OTP-2"), self.nalazi(c, "ODLUKA"))
+        self.assertEqual({z["OtpremnicaID"]: z["IzdatoStatus"] for z in c.tabele["tblOtpremnica"]}["OTP-2"], "")
+
+    def test_veza_se_popravlja_kad_je_otkup_dokazan_1_1(self):
+        c = self.otp2(self.OTK4)
+        self.assertIn(("VEZA_POPRAVLJENA_MIG21", "OTP-2"), self.nalazi(c, "INFO"))
+        self.assertIn(("OTK-4", "OTP-2"), [(v["OtkupID"], v["OtpremnicaID"])
+                                           for v in c.tabele["tblOtpremnicaIzvori"]])
+        st = {z["OtkupID"]: z["IzdatoStatus"] for z in c.tabele["tblOtkup"]}
+        self.assertEqual(st["OTK-4"], "IZDATO")
+        self.assertEqual(self.nalazi(c, "BLOKIRA"), [])
+
+    def test_razlicita_kolicina_nije_dokaz(self):
+        drugi = list(self.OTK4)
+        drugi[6] = 21
+        c = self.otp2(drugi)
+        self.assertNotIn(("VEZA_POPRAVLJENA_MIG21", "OTP-2"), self.nalazi(c, "INFO"))
+        self.assertIn(("OTPREMNICA_BEZ_OTKUPA_OSTAJE_NEIZDATA", "OTP-2"), self.nalazi(c, "ODLUKA"))
+
+    def test_izuzetak_bez_popravke_veze(self):
+        c = self.otp2(self.OTK4, izuzeci_dok=[{"OtpremnicaID": "OTP-2", "radnja": "bez_popravke_veze",
+                                                "razlog": "test"}])
+        self.assertIn(("VEZA_SE_NE_POPRAVLJA_IZUZETAK", "OTP-2"), self.nalazi(c, "INFO"))
+        self.assertNotIn(("VEZA_POPRAVLJENA_MIG21", "OTP-2"), self.nalazi(c, "INFO"))
+
+    def test_izdata_otpremnica_bez_otkupa_blokira_u_proveri(self):
+        """Dvosmerni dokaz: provera i dalje hvata IZDATU otpremnicu bez izvora."""
+        c = self.otp2()
+        next(z for z in c.tabele["tblOtpremnica"] if z["OtpremnicaID"] == "OTP-2")["IzdatoStatus"] = "IZDATO"
+        c.nalazi = []
+        provere.proveri(c)
+        self.assertIn(("IZDATA_OTPREMNICA_BEZ_AKTIVNOG_OTKUPA", "OTP-2"), self.nalazi(c, "BLOKIRA"))
+
+    def test_broj_dokumenta_ide_kao_tekst(self):
+        t = osnovne_tabele(normalno())
+        kol, redovi = t["tblOtkup"]
+        redovi[0][4] = 101
+        c = self.sagradi(dodatno={"tblOtkup": (kol, redovi)})
+        self.assertEqual(c.tabele["tblOtkup"][0]["BrojDokumenta"], "101")
+
+    def test_isplata_bez_otkupa_je_avans(self):
+        t = osnovne_tabele(normalno())
+        kol, redovi = t["tblNovac"]
+        redovi.append(["NOV-00002", D3, "VirmanAvansKoop", "K2", "", 500, 0, ""])
+        c = self.sagradi(dodatno={"tblNovac": (kol, redovi)})
+        self.assertIn(("ISPLATA_BEZ_OTKUPA_POSTAJE_AVANS", "NOV-00002"), self.nalazi(c, "ODLUKA"))
+
+    def test_faktura_na_nepostojecu_prijemnicu_blokira(self):
+        t = osnovne_tabele(normalno())
+        kol, redovi = t["tblFakturaStavke"]
+        redovi.append(["FST-00002", "FAK-00001", "PRJ-9", 5, 60, "I", ""])
+        c = self.sagradi(dodatno={"tblFakturaStavke": (kol, redovi)})
+        self.assertIn(("FAKTURA_STAVKA_BEZ_STAVKE_PRIJEMNICE", "FST-00002"), self.nalazi(c, "BLOKIRA"))
+
+    def test_bez_stavke_provera_pada(self):
+        """Dvosmerni dokaz: zaglavlje bez stavke mora da BLOKIRA."""
+        c = self.sagradi()
+        c.tabele["tblOtkupStavke"] = [s for s in c.tabele["tblOtkupStavke"] if s["OtkupID"] != "OTK-1"]
+        c.nalazi = []
+        provere.proveri(c)
+        self.assertIn(("ZAGLAVLJE_BEZ_STAVKE", "OTK-1"), self.nalazi(c, "BLOKIRA"))
+
+    def test_proba_komanda_pravi_paket(self):
+        put = os.path.join(self.dir.name, "stara.xlsx")
+        snimi_svesku(put, osnovne_tabele(normalno()))
+        izlaz = os.path.join(self.dir.name, "proba")
+        self.assertEqual(tiho(["proba", "--izvor", put, "--izlaz", izlaz, "--bez-izuzetaka"]), 0)
+        t = procitaj_svesku(os.path.join(izlaz, "proba_upisa.xlsx"))
+        self.assertEqual(len(tabela(t, "tblOtkupStavke").redovi), 3)
+        self.assertEqual(datum(polje(tabela(t, "tblOtkup").redovi[0], "Datum")), D1)
+        self.assertIsNotNone(tabela(t, "Provere"))
+
+
+class Upis(SaSveskom):
+    """Ciste funkcije upisa (bez Excela): pretvaranje, redosled kolona, poredjenje."""
+
+    def test_com_vrednost_cuva_smisao(self):
+        from datetime import datetime
+        self.assertIsNone(upis.com_vrednost(""))
+        self.assertEqual(upis.com_vrednost("101"), "'101")              # ostaje tekst
+        self.assertEqual(upis.com_vrednost("2026-06-20 08:00:00"), "'2026-06-20 08:00:00")
+        self.assertEqual(upis.com_vrednost("=1+1"), "'=1+1")             # ne postaje formula
+        self.assertEqual(upis.com_vrednost("Pera"), "Pera")
+        self.assertEqual(upis.com_vrednost(Decimal("100")), 100)
+        self.assertEqual(upis.com_vrednost(Decimal("1.5")), 1.5)
+        self.assertEqual(upis.com_vrednost(D1), datetime(2026, 6, 20))
+
+    def test_niz_po_redosledu_kolona_u_svesci(self):
+        redovi = [{"A": "x", "B": Decimal(2)}]
+        self.assertEqual(upis.niz_za_tabelu(redovi, ["B", "A", "Runtime"]), [(2, "x", None)])
+        with self.assertRaisesRegex(ValueError, "kolone sa podacima"):
+            upis.niz_za_tabelu(redovi, ["A"])
+
+    def napravi_paket(self, c):
+        put = os.path.join(self.dir.name, "nova.xlsx")
+        sv = pregled.Sveska()
+        for ime, redovi in sorted(c.tabele.items()):
+            if redovi:
+                kol = c.kanon[ime]
+                sv.dodaj_list(ime[3:], kol, [[r.get(k, "") for k in kol] for r in redovi], tabela=ime)
+        sv.snimi(put)
+        return put
+
+    def test_poredjenje_posle_upisa(self):
+        put = os.path.join(self.dir.name, "stara.xlsx")
+        snimi_svesku(put, osnovne_tabele(normalno()))
+        c = cilj.izgradi(procitaj_svesku(put), dokumenti.ucitaj_kanon())
+        paket = self.napravi_paket(c)
+        self.assertEqual(upis.uporedi(c, paket), [])
+        c.tabele["tblOtkupStavke"][0]["Kolicina"] = Decimal(101)        # dvosmerni dokaz
+        r = upis.uporedi(c, paket)
+        self.assertEqual(len(r), 1)
+        self.assertIn("tblOtkupStavke red 1, Kolicina", r[0])
+
+    def test_podesavanja_iz_stare_bez_aktivacije_licence(self):
+        dodatno = {"tblSEFConfig": (["ConfigKey", "ConfigValue", "Aktivan"],
+                                    [["MALINA_DEFAULT_KUPAC", "C1", "Aktivan"], ["MALINA_MODE", "YES", ""],
+                                     ["LICENSE_KEY", "ABC", ""], ["LICENSE_ENABLED", "YES", ""]])}
+        put = os.path.join(self.dir.name, "stara.xlsx")
+        snimi_svesku(put, osnovne_tabele(normalno(), dodatno))
+        c = cilj.izgradi(procitaj_svesku(put), dokumenti.ucitaj_kanon())
+        kljucevi = [k for k, _ in c.podesavanja["tblSEFConfig"]]
+        self.assertEqual(kljucevi, ["MALINA_DEFAULT_KUPAC", "MALINA_MODE", "LICENSE_ENABLED"])
+        self.assertEqual(dict(c.podesavanja["tblSEFConfig"])["MALINA_DEFAULT_KUPAC"]["Aktivan"], "Aktivan")
+        self.assertIn("AKTIVACIJA_LICENCE_SE_NE_PRENOSI", [n["pravilo"] for n in c.nalazi])
+
+    def test_upis_odbija_blokadu_i_trazi_prihvatanje_odluka(self):
+        put = os.path.join(self.dir.name, "stara.xlsx")
+        snimi_svesku(put, osnovne_tabele(normalno()))
+        meta = os.path.join(self.dir.name, "nova.xlsm")
+        self.assertEqual(tiho(["upis", "--izvor", put, "--cilj", meta, "--bez-izuzetaka"]), 4)
+        t = osnovne_tabele(normalno())
+        kol, redovi = t["tblOtkup"]
+        redovi[0][5] = "III"
+        snimi_svesku(put, osnovne_tabele(normalno(), {"tblOtkup": (kol, redovi)}))
+        self.assertEqual(tiho(["upis", "--izvor", put, "--cilj", meta, "--bez-izuzetaka",
+                               "--prihvatam-odluke"]), 3)
+        self.assertFalse(os.path.exists(meta))
 
 
 class DvosmerniDokaz(SaSveskom):

@@ -3,7 +3,7 @@
     "Rucne odluke za pojedinacne redove stare tblAmbalaza, po starom AmbID-ju.",
     "Svaka odluka vazi SAMO dok red izgleda tacno kao u 'provera'; ako se red promeni,",
     "alat ga vraca ZA ODLUKU (IZUZETAK_POTPIS_SE_NE_SLAZE) umesto da primeni staru odluku.",
-    "radnja: izuzmi | kretanje | za_odluku.",
+    "radnja: izuzmi | kretanje | za_odluku. Sekcija 'dokumenti': otpremnice kojima alat NE popravlja vezu (MIG-21).",
     "Izvor odluka: MIG-19.11 (OMUlaz) i MIG-19.12 (AMB-00700), grana chore/import-migration-tools. OMUlaz bez izvora -> NABAVKA: odluka operatera 28.10.2026."
   ],
   "izuzeci": [
@@ -54,6 +54,13 @@
       "provera": {"Datum": "2026-07-23", "DokumentTip": "OMUlaz", "EntitetTip": "Stanica", "EntitetID": "ST-00001", "Smer": "Ulaz", "TipAmbalaze": "0,4kg", "Kolicina": 3},
       "kretanje": {"Od": ["SpoljniSvet", ""], "Na": ["Stanica", "ST-00001"], "VrstaKretanja": "NABAVKA", "Dokument": "NABAVKA"},
       "razlog": "OMUlaz: izvor nepoznat (MIG-19.11) -- knjizi se kao NABAVKA na ST-00001 (odluka operatera 28.10.2026)."
+    }
+  ],
+  "dokumenti": [
+    {
+      "OtpremnicaID": "OTP-00666",
+      "radnja": "bez_popravke_veze",
+      "razlog": "Poznat istorijski storno, rucno istrazen (MIG-21): otkup mu se nikad ne dodaje automatski."
     }
   ]
 }

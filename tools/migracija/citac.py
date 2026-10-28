@@ -184,8 +184,34 @@ def _deljeni_stringovi(z):
     return out
 
 
-def _vrednost_celije(c, deljeni):
-    """(vrednost, formula_bez_kesa)."""
+# Ugradjeni Excel formati koji su datum/vreme (ECMA-376 18.8.30).
+_DATUM_FORMATI = set(range(14, 23)) | set(range(27, 37)) | {45, 46, 47} | set(range(50, 59))
+
+
+def _datumski_stilovi(z):
+    """Skup indeksa cellXfs ciji je format datum/vreme.
+
+    Excel cuva datum kao broj dana; samo format celije kaze da je to datum.
+    Bez ovoga bi upis u novu svesku datum preneo kao goli broj (45200).
+    """
+    if "xl/styles.xml" not in z.namelist():
+        return set()
+    koren = ET.fromstring(z.read("xl/styles.xml"))
+    svoji = {}
+    for f in koren.findall("x:numFmts/x:numFmt", N):
+        kod = re.sub(r'"[^"]*"|\\.|\[[^\]]*\]', "", f.get("formatCode", ""))
+        svoji[int(f.get("numFmtId", "0"))] = bool(re.search(r"[dyh]", kod, re.I))
+    out = set()
+    for i, xf in enumerate(koren.findall("x:cellXfs/x:xf", N)):
+        fid = int(xf.get("numFmtId", "0"))
+        if fid in _DATUM_FORMATI or svoji.get(fid):
+            out.add(i)
+    return out
+
+
+def _vrednost_celije(c, deljeni, datumski=frozenset()):
+    """(vrednost, formula_bez_kesa). Tip se cuva: tekst -> str, broj -> Decimal,
+    broj sa datumskim formatom -> datetime (date kad nema vremena), bool -> bool."""
     typ = c.get("t", "")
     if typ == "inlineStr":
         el = c.find("x:is", N)
@@ -201,8 +227,19 @@ def _vrednost_celije(c, deljeni):
         except (ValueError, IndexError):
             raise GreskaCitanja("Pokvaren indeks u sharedStrings")
     if typ == "b":
-        return ("True" if v.text == "1" else "False"), False
-    return v.text, False
+        return v.text == "1", False
+    if typ in ("str", "e"):
+        return v.text, False
+    try:
+        d = Decimal(v.text)
+    except (InvalidOperation, ValueError):
+        return v.text, False
+    if c.get("s") and int(c.get("s")) in datumski and Decimal(0) < d < Decimal(2958466):
+        dt = EXCEL_NULA + timedelta(days=float(d))
+        if dt.hour == dt.minute == dt.second == dt.microsecond == 0:
+            return dt.date(), False
+        return dt.replace(microsecond=0), False
+    return d, False
 
 
 def procitaj_svesku(putanja):
@@ -228,6 +265,7 @@ def procitaj_svesku(putanja):
             if rid in rel_knjige:
                 listovi.append((sh.get("name", ""), rel_knjige[rid][1]))
         deljeni = _deljeni_stringovi(z)
+        datumski = _datumski_stilovi(z)
         tabele = {}
         for list_ime, list_deo in listovi:
             if list_deo not in z.namelist():
@@ -270,7 +308,7 @@ def procitaj_svesku(putanja):
                     else:
                         ci = prethodna_kol + 1
                     prethodna_kol = ci
-                    vrednost, nema_kes = _vrednost_celije(c, deljeni)
+                    vrednost, nema_kes = _vrednost_celije(c, deljeni, datumski)
                     celije[ci] = vrednost
                     if nema_kes:
                         bez_kesa.add(ci)

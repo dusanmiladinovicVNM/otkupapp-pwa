@@ -6,7 +6,7 @@ uvek od nule nad celom sveskom — nema delte.
 
 | Fajl | Šta radi |
 |---|---|
-| `migracija.py` | komanda (`pregled`, `--self-test`) |
+| `migracija.py` | komande `pregled`, `proba`, `upis`, `--self-test` |
 | `citac.py` | čita Excel tabele iz `.xlsm` bez Excela, samo za čitanje |
 | `ambalaza.py` | stara knjiga (noge Ulaz/Izlaz) → AMB-10 kretanja, dug kooperanta, salda |
 | `dokumenti.py` | tabele naspram `schema/schema.json`, dokumenti sa više redova |
@@ -49,7 +49,34 @@ Dva režima knjiženja (`--knjizenje`):
 Izvorna sveska se ne menja: SHA256 pre i posle čitanja mora biti isti, inače
 alat javi grešku.
 
-## Faza 2 — upis u novu svesku
+## Faza 2 — nova sveska
 
-Još ne postoji. Čeka odluke 1–5 (pre-flight: `main` je građen bez starih
-podataka — `DOCUMENT_HEADER_LINES.md`, AMB-INV-07/08).
+Pravila i odluke: `docs/DOMEN/MIGRACIJA_LEGACY.md`.
+
+**Korak 1 — proba (samo čita):**
+
+```bash
+python tools/migracija/migracija.py proba --izvor "C:/.../stara.xlsm"
+```
+
+Pravi `proba_upisa.xlsx`: svaka tabela nove sveske kao Excel tabela + list
+**Provere**. `BLOKIRA` = posle upisa bi main pao na čitanju cele tabele;
+`ODLUKA` = ishod zavisi od tebe; `UPOZORENJE` = akcija nad tim jednim
+dokumentom ne bi prošla.
+
+**Korak 2 — upis (Windows + Excel + pywin32):**
+
+```bash
+python tools/migracija/migracija.py upis --izvor "C:/.../stara.xlsm" --cilj "C:/.../nova.xlsm" --prihvatam-odluke
+```
+
+Ako `--cilj` ne postoji, pravi ga `tools/make_dev_workbook.py` iz gita (treba
+„Trust access to the VBA project object model”). Upis odbija probu sa BLOKIRA
+nalazom, piše samo u prazne tabele, pa svaku ćeliju poredi sa planom i salda
+ambalaže sa prevodom. Izveštaj: `<nova>_upis_izvestaj.txt`.
+
+| Fajl | Šta radi |
+|---|---|
+| `cilj.py` | sve tabele nove sveske u memoriji (zaglavlje + stavka, izvori, statusi, podešavanja) |
+| `provere.py` | ista pravila po kojima main čita — pre upisa |
+| `upis.py` | jedini deo koji piše (COM), plus poređenje posle upisa |
