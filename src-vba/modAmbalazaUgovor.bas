@@ -1022,10 +1022,14 @@ End Function
 '   PRENOS_INTERNO      prazne 6.7a / modDokumenta.OtpKnjiziAmbalazu: "za PRAZNE
 '                              gajbe izmedju sopstvenih naloga"
 '   VRACANJE_TUDJE      prazne partneru se vracaju njegove prazne
-'   OTPIS               knjiga ne kaze (lom pune ili prazne) -- racuna se kao
-'                              izlaz PRAZNIH: polomljenu punu stanica presipa u
-'                              praznu, pa prazna nestaje i tada. Strozije je
-'                              od suprotnog, a stanje se ne izmislja.
+'   OTPIS               prazne -- ODLUKA operatera 29.10.2026 (AMB-10-ODL-36):
+'                              otpis na stanici je lom PRAZNIH. Zapisnik ne
+'                              kaze pune/prazne, pa to knjiga sama ne zna;
+'                              polomljenu punu stanica presipa u praznu, pa
+'                              prazna nestaje i tada. Cena odluke (pregled
+'                              29.10.2026, P2): lom pune dok stanica nema
+'                              praznih spusta prazne ispod stvarnih, a izlaz je
+'                              nabavka ili povrat. Meri je test 304.
 '   ULAZ/IZLAZ_TUDJE,   --     ne dodiruju stanicu (GRANICA <-> PARTNER;
 '   POZAJMICA                  pozajmica ide kupac -> vozac, ODL-9)
 '

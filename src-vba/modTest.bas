@@ -408,6 +408,7 @@ Public Sub RunAllTests()
     RunOne 301
     RunOne 302
     RunOne 303
+    RunOne 304
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1006,6 +1007,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 301: TestName = "T_Prazne_MatricaOtkupa"
         Case 302: TestName = "T_Prazne_ReversRetroIStorno"
         Case 303: TestName = "T_Prazne_PredajaVozacu"
+        Case 304: TestName = "T_Prazne_OtpisNaStanici"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1317,6 +1319,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 301: T_Prazne_MatricaOtkupa
         Case 302: T_Prazne_ReversRetroIStorno
         Case 303: T_Prazne_PredajaVozacu
+        Case 304: T_Prazne_OtpisNaStanici
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -14025,6 +14028,50 @@ Private Sub T_Prazne_PredajaVozacu()
              "vozac -> stanica nije pod kapijom i stanici daje prazne"
 End Sub
 
+' ============================================================
+' 304. AMB-10-ODL-36: OTPIS NA STANICI JE LOM PRAZNIH.
+' ============================================================
+' Zapisnik o otpisu ne kaze da li je gajba bila puna ili prazna (pregled
+' 29.10.2026, P2). Odluka operatera: otpis na stanici je izlaz PRAZNIH --
+' polomljenu punu stanica presipa u praznu. Test fiksira odluku i njenu cenu:
+' (1) stanica sa 5 praznih i 10 punih otpise 2: prazne 3, ukupno 13;
+' (2) stanica sa samo 10 punih otpise 1 (ukupni saldo, AMB-INV-14, ga pusta):
+'     prazne -1. Nabavka 1 ih vraca na 0, pa je izdavanje 1 i dalje odbijeno;
+'     izlaz je jos jedna nabavka (ili povrat), posle koje izdavanje prolazi.
+' Semanticki nivo: KOMADI po (stanica, tip).
+' Fixture: normal production state.
+' SABOTAZE: prazne-otpis-nije-prazna.
+Private Sub T_Prazne_OtpisNaStanici()
+    Dim t1 As String, t2 As String, b As String, errNum As Long, greska As String
+    Dim prazne1 As Double, ukupno1 As Double, prazne2 As Double
+    Dim rev2 As String, err2 As Long, rev3 As String
+
+    t1 = KartNoviTipAmb("POT1")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, t1, 5, "NAB-" & t1, "preduslov ODL-36"
+    KartOtkup t1, 10, 0, b, errNum, greska
+    modAmbalaza.OtpisiAmbalazu_TX Date, FX_STANICA, AMB_NALOG_STANICA, FX_STANICA, t1, 2, "lom -- test 304"
+    prazne1 = modAmbalaza.AmbPrazneRaspolozive(FX_STANICA, t1, Date)
+    ukupno1 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, t1)
+
+    t2 = KartNoviTipAmb("POT2")
+    KartOtkup t2, 10, 0, b, errNum, greska
+    modAmbalaza.OtpisiAmbalazu_TX Date, FX_STANICA, AMB_NALOG_STANICA, FX_STANICA, t2, 1, "lom -- test 304"
+    prazne2 = modAmbalaza.AmbPrazneRaspolozive(FX_STANICA, t2, Date)
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, t2, 1, "NAB1-" & t2, "preduslov ODL-36"
+    On Error Resume Next
+    rev2 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t2, 1, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    err2 = Err.Number
+    Err.Clear
+    On Error GoTo 0
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, t2, 1, "NAB2-" & t2, "preduslov ODL-36"
+    rev3 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t2, 1, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+
+    AssertEq prazne1 & "|" & ukupno1, "3|13", _
+             "otpis na stanici je izlaz praznih (AMB-10-ODL-36): 5 praznih i 10 punih, otpis 2"
+    AssertEq prazne2 & "|" & err2 & "|" & (Len(rev2) = 0) & "|" & (Len(rev3) > 0), _
+             "-1|" & AMB_ERR_PRAZNE_NEMA & "|True|True", _
+             "cena odluke: lom kad stanica ima samo pune spusta prazne na -1; izlaz je nabavka"
+End Sub
 
 ' Kolona reda po partneru (AmbPartneriPodaci): 4 = drzi, 5 = tudje, 6 = neto;
 ' "" kad partner nema red za taj tip.

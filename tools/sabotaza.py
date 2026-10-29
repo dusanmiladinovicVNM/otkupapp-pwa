@@ -10713,6 +10713,17 @@ SABOTAZE = {
         "T_Prazne_PredajaVozacu",
         "predaja vozacu: stanica koja ima samo pune ne predaje prazne -- bez zaglavlja i reda knjige",
     ),
+    # Otpis na stanici se racuna kao lom PUNIH -- suprotno odluci AMB-10-ODL-36
+    # (otpis na stanici je lom praznih), pa stanica posle loma "ima" prazne koje
+    # je izgubila.
+    "prazne-otpis-nije-prazna": (
+        "modAmbalazaUgovor.bas",
+        "    AmbVrstaPuneGajbe = (StrComp(Trim$(vrsta), AMB_VK_UZ_ROBU, vbTextCompare) = 0)\n",
+        "    AmbVrstaPuneGajbe = (StrComp(Trim$(vrsta), AMB_VK_UZ_ROBU, vbTextCompare) = 0) Or "
+        "(StrComp(Trim$(vrsta), AMB_VK_OTPIS, vbTextCompare) = 0)   ' SABOTAZA: otpis nije izlaz praznih\n",
+        "T_Prazne_OtpisNaStanici",
+        "otpis na stanici je izlaz praznih (AMB-10-ODL-36): 5 praznih i 10 punih, otpis 2",
+    ),
 }
 
 
