@@ -12849,24 +12849,35 @@ End Sub
 '   izdavanje 30, povrat 40 uz pokrice 10      fizicki 0, poslovno -10
 '   otkup: primljeno 5 uz pokrice 5            fizicki 0, poslovno -15
 ' Otkup ide kroz pravog pisca uz potvrdu manjka, isto kao golden scenario.
-' Fixture: normal production state.
+' Kooperant je FX_KOOPERANT3, a NE FX_KOOPERANT: otkup primenjuje zatecen avans
+' kooperanta (ApplyAvansToOtkup), a fixture za FX_KOOPERANT nosi avans
+' NOV-TEST-D1 (1000) BEZ partnera -- red koji produkcioni pisac ne moze da
+' napravi (SaveNovac trazi partnera). Otkup od 500 ga deli, deoba nasledjuje
+' prazan partner i pada; RunAllTests nad #447 je tako javio 287 (stavka 224).
+' Papir ambalaze ne zavisi od novca, pa test bira kooperanta bez avansa i to
+' tvrdi kao preduslov.
+' Fixture: normal production state (FX_KOOPERANT3 nema nedodeljen avans).
 ' SABOTAZE: amb-posl-pdf-zavrsno-bez-prijema, amb-posl-stanje-posle-fizicki.
 Private Sub T_AmbPoslovno_OtkupniListKaoKartica()
     Dim tip As String, dI As String, dP As String, bP As String
     Dim otkID As String, otkBroj As String, ws As Worksheet
     Dim posle As Long, fizPosle As Long, pp As Boolean, r As Variant
+    Dim avans As Double
 
+    avans = modNovac.GetKooperantUnallocatedAvans(FX_KOOPERANT3)
     tip = KartNoviTipAmb("PDF")
     modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tip, 50, "NAB-" & tip, "preduslov paritet papira"
-    dI = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 30, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
-    dP = KartPovratSaPokricem(tip, 40, bP)
-    otkID = KartOtkupSaPokricem(tip, 5, otkBroj)
+    dI = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 30, REV_SMER_IZDAVANJE, FX_KOOPERANT3, "")
+    dP = KartPovratSaPokricem(tip, 40, bP, 0, FX_KOOPERANT3)
+    otkID = KartOtkupSaPokricem(tip, 5, otkBroj, FX_KOOPERANT3)
 
     Set ws = modPrint.FillOtkupSablon(otkID)
-    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip, "", otkID, pp, posle, True
-    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip, "", otkID, pp, fizPosle
-    r = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT, Date, Date)
+    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_KOOPERANT, FX_KOOPERANT3, tip, "", otkID, pp, posle, True
+    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_KOOPERANT, FX_KOOPERANT3, tip, "", otkID, pp, fizPosle
+    r = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT3, Date, Date)
 
+    AssertEq avans, 0, _
+             "preduslov: kooperant testa nema nedodeljen avans (papir ne sme da zavisi od novca)"
     AssertEq (Len(dI) > 0 And Len(dP) > 0 And Len(otkID) > 0 And Not ws Is Nothing), True, _
              "preduslov: reversi i otkup su upisani, otkupni list je popunjen"
     AssertEq KartListSadrzi(ws, tip & " x -10"), True, _
@@ -13290,16 +13301,18 @@ End Function
 ' Revers POVRATA kooperanta FX_STANICA koji je veci od onoga sto kooperant drzi:
 ' pisac tada trazi potvrdu manjka i dopisuje pokrice (ULAZ_TUDJE) -- isti put
 ' kao otkup uz potvrdjen manjak. Potvrda se racuna JAVNIM racunom pisca.
-' Vraca AmbDokID; outBroj je poslovni broj dokumenta. datum = 0 znaci danas.
+' Vraca AmbDokID; outBroj je poslovni broj dokumenta. datum = 0 znaci danas;
+' koopID je kooperant koji vraca (podrazumevano FX_KOOPERANT).
 Private Function KartPovratSaPokricem(ByVal tip As String, ByVal kol As Double, _
                                       ByRef outBroj As String, _
-                                      Optional ByVal datum As Date = 0) As String
+                                      Optional ByVal datum As Date = 0, _
+                                      Optional ByVal koopID As String = FX_KOOPERANT) As String
     Dim tx As clsTransaction, dokID As String, manjak As Double
     Dim errNum As Long, errDesc As String
 
     If datum = 0 Then datum = Date
     outBroj = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, datum)
-    manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip, kol)
+    manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KOOPERANT, koopID, tip, kol)
 
     Set tx = New clsTransaction
     On Error GoTo EH
@@ -13309,7 +13322,7 @@ Private Function KartPovratSaPokricem(ByVal tip As String, ByVal kol As Double, 
     dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, outBroj, datum, _
                                          AMB_NALOG_STANICA, FX_STANICA, "povrat uz pokrice")
     modAmbalaza.PrenesiAmbalazu tx, datum, tip, kol, _
-                                AMB_NALOG_KOOPERANT, FX_KOOPERANT, AMB_NALOG_STANICA, FX_STANICA, _
+                                AMB_NALOG_KOOPERANT, koopID, AMB_NALOG_STANICA, FX_STANICA, _
                                 AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID, manjak
     tx.CommitTx
     KartPovratSaPokricem = dokID
@@ -13323,24 +13336,27 @@ EH:
     Err.Raise errNum, "modTest.KartPovratSaPokricem", errDesc
 End Function
 
-' Otkup kooperanta FX_KOOPERANT na FX_STANICA koji PRIMA vise gajbi nego sto
-' kooperant drzi: pisac dopisuje pokrice uz potvrdu manjka. Potvrdu racuna
-' JAVNI racun pisca (OtkupDeficitKooperanta), isto kao golden scenario.
+' Otkup kooperanta (podrazumevano FX_KOOPERANT) na FX_STANICA koji PRIMA vise
+' gajbi nego sto kooperant drzi: pisac dopisuje pokrice uz potvrdu manjka.
+' Potvrdu racuna JAVNI racun pisca (OtkupDeficitKooperanta), isto kao golden
+' scenario. Parcela je opciona (OtkHdrOpcion) i ide samo uz FX_KOOPERANT --
+' FX_PARCELA je njegova (RequireParcelaKooperanta).
 ' Vraca OtkupID; outBroj je poslovni broj dokumenta.
 Private Function KartOtkupSaPokricem(ByVal tip As String, ByVal gajbi As Double, _
-                                     ByRef outBroj As String) As String
+                                     ByRef outBroj As String, _
+                                     Optional ByVal koopID As String = FX_KOOPERANT) As String
     Dim h As Object, s As Object, stavke As Collection, greska As String
     outBroj = modBrojevi.GenerateBrojDokumenta(FX_STANICA, Date)
     Set h = CreateObject("Scripting.Dictionary")
     h.Add "Datum", Date
-    h.Add "KooperantID", FX_KOOPERANT
+    h.Add "KooperantID", koopID
     h.Add "StanicaID", FX_STANICA
     h.Add "KulturaID", FX_KULTURA
     h.Add "VrstaVoca", FX_VRSTA
     h.Add "SortaVoca", FX_SORTA
     h.Add "TipAmbalaze", tip
     h.Add "BrojDokumenta", outBroj
-    h.Add "ParcelaID", FX_PARCELA
+    If StrComp(koopID, FX_KOOPERANT, vbTextCompare) = 0 Then h.Add "ParcelaID", FX_PARCELA
     Set s = CreateObject("Scripting.Dictionary")
     s.Add "Klasa", KLASA_I
     s.Add "Kolicina", 10#
