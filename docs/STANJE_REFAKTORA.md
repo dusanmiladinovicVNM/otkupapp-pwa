@@ -8192,6 +8192,19 @@
        `amb-posl-stanje` (287 je dirnut), compile.
      - **Sledeći brojevi:** test 293 · stavka 225 · KI-064.
 
+225. **#447, drugi Excel prolaz — zeleno** (29.10.2026). Operater posle `git pull` grane (glava `63889480`;
+     commit nije ispisan u izlazu prolaza, pa ga operater potvrđuje).
+
+     - **`RunAllTests` 292/0**, GREEN marker upisan. **Dokaz:** `amb-bil` 11/11 (6 pojedinačno, 5 grupno),
+       `amb-posl-pdf` 2/2 (`zavrsno-bez-prijema` je u grupi pao na drugoj tvrdnji i ponovljen sam — OK),
+       `amb-posl-stanje` 1/1; potpis izvora pre i posle identičan.
+     - **P2 drugog nezavisnog pregleda:** natpis „Neusklađeno (mora biti 0)" je tvrdio invarijantu koju niko ne
+       sprovodi (`AMB-BIL-02` je signal, test 291 namerno daje 12). Postaje „Neusklađeno (očekivano 0)" — jedan red
+       kataloga; ključ, račun i testovi isti.
+     - **Fixture avansi bez partnera** upisani kao `KI-064` (zamka za testove sa otkupom nad prva dva kooperanta).
+     - **Ostaje operateru:** ručni compile, prikaz i štampa liste „Bilans amb.".
+     - **Sledeći brojevi:** test 293 · stavka 226 · KI-065.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
