@@ -8336,6 +8336,23 @@
      - **NEVERIFIKOVANO:** `RunAllTests` nad novom glavom (očekivano 304/0), BFP, `dokaz.py`, compile.
      - **Sledeći brojevi:** test 305 · stavka 232 · KI-066.
 
+232. **Drugi Excel prolaz, nad `83a199ae` (29.10.2026, operater).** Pun `run_vba.py`:
+
+     - **Zeleno:** `RunAllTests` **304 / 0** (oba ispravljena testa i 303, 304), BFP **2801 / 0**, Banka 241 / 0,
+       Storno 111 / 0, Faktura 39 / 39, Palete 96, Agrohemija 25 / 25, JSON 72 / 72, Izveštaji, StornoCentar,
+       Licenca.
+     - **`RunGoldenSuite`: Excel pao** posle 6 s (`RPC failed`), zatim 600 s bez odgovora i proces ubijen
+       (break mode). Nije pala tvrdnja: pad golden scenarija stiže kao tekst „N od M golden scenarija palo".
+       Čitanjem koda nema veze sa ovom granom (golden ne izdaje prazne, nema obavezu za podelu; grana ne menja
+       `modGoldenTests`, `modDokumenta` ni fixture), ali to nije dokaz. U prvom prolazu (`310901a1`) isti pad je
+       pogodio BFP na kraju (2801 / 0 pa `RPC failed`), pa liči na nestabilnost Excela posle dugog niza suita.
+       **Otvoreno:** Golden sam, na grani i na `main`-u. Golden poslednji put zapisan zelen u stavci 216.
+     - **`dokaz.py` (20 sabotaža, `--grupe`):** bazni prolaz zelen (304 / 0, BFP 2801 / 0), prva grupa (BFP, 4
+       sabotaže) završila je kao `PREKID` = Ctrl+C (`KeyboardInterrupt`, `dokaz.py` §`_prolaz`), pa je alat
+       stao. **Ništa nije izmereno**; izvor pre i posle identičan.
+     - **NEVERIFIKOVANO:** Golden, `dokaz.py`, ručni compile, papir.
+     - **Sledeći brojevi:** test 305 · stavka 233 · KI-066.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
