@@ -313,7 +313,7 @@ entiteta, isto u oba režima. Tri odeljka, iz iste knjige, bez novog pisca:
 | Odeljak | Stavke | Pravilo |
 |---|---|---|
 | Gde su gajbe | otkupna mesta, vozači, kooperanti, kupci (Firma kad nije 0), ukupno u opticaju | fizički saldo po vrsti naloga na kraju perioda; opticaj = zbir realnih naloga (`AMBALAZA.md` 6.14) |
-| Čije su | naše, tuđe (i po partneru), neusklađeno | naše = nabavka − otpis (vrste na granici koje su zahtev); tuđe = obaveza (`AmbDoprinosObavezi`, `AMB-INV-09`) |
+| Čije su | sopstveni saldo, tuđe (i po partneru), neusklađeno | sopstveni saldo = nabavka − otpis (vrste na granici koje su zahtev) — **obračunski**, ne broj gajbi u vlasništvu: gajbe se ne vode po vlasniku, pa sme biti negativan (pozajmica 10, otpis 2 → −2: firma duguje više nego što drži); tuđe = obaveza (`AmbDoprinosObavezi`, `AMB-INV-09`) |
 | Ulaz i izlaz u periodu | početak, nabavka, tuđe: partner doneo svoje, tuđe: pozajmica kupca, otpis, kraj | kretanje preko `SpoljniSvet`; kraj = početak + kretanje = ukupno u opticaju |
 
 Red ulazi po svom danu, a kontra-stav nosi dan originala, pa je storno u svakom

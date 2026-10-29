@@ -2078,7 +2078,7 @@ Private Sub UpsertPoruke11(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_IZ_BIL_N_KUPAC", "Kupci"
     UpsertRow lo, existing, "OTKUI_IZ_BIL_N_FIRMA", "Firma"
     UpsertRow lo, existing, "OTKUI_IZ_BIL_OPTICAJ", "Ukupno u opticaju"
-    UpsertRow lo, existing, "OTKUI_IZ_BIL_NASE", "Na" & ChrW(353) & "e (nabavka - otpis)"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_NASE", "Sopstveni saldo, obra" & ChrW(269) & "unski (nabavka - otpis)"
     UpsertRow lo, existing, "OTKUI_IZ_BIL_TUDJE", "Tu" & ChrW(273) & "e (firma duguje partnerima)"
     UpsertRow lo, existing, "OTKUI_IZ_BIL_P_KOOPERANT", "Kooperant"
     UpsertRow lo, existing, "OTKUI_IZ_BIL_P_KUPAC", "Kupac"

@@ -13092,14 +13092,20 @@ End Sub
 '     menja premisu -- to je i namera.
 ' (3) Kvar knjige (red bez odredista, obrazac 224): bilans dize gresku ugovora
 '     knjige, a ne vraca brojeve.
+' (4) NASE je OBRACUNSKI saldo (P2 nezavisnog pregleda #447): tok samo sa
+'     pozajmicom kupca 10 vozacu i otpisom 2 kod vozaca (nov tip) daje opticaj
+'     8, tudje 10, nase -2 i neuskladjeno 0 -- firma duguje vise nego sto drzi.
+'     Negativan saldo nije kvar i ne sme se "ulepsati" na 0.
+'     Fixture: normal production state.
 ' SABOTAZE: amb-bil-stavka-bez-granice, amb-bil-neuskladjeno-nula,
-' amb-bil-kvar-progutan.
+' amb-bil-kvar-progutan, amb-bil-nase-bez-minusa.
 Private Sub T_AmbBilans_SignalIKvar()
     Dim tip As String, nepotpuno As String, bP As String, dP As String
     Dim tx As clsTransaction, dokVrac As String, ambID As String, naTipPre As String
     Dim obaveza As Double, r As Variant, neuskl As Double
     Dim dignuto As Boolean, razlog As String
     Dim errNum As Long, errDesc As String
+    Dim tipP As String, dPoz As String, dOtp As String, rP As Variant
 
     nepotpuno = modAmbalazaUgovor.AmbBilansGranicaNepotpuna()
 
@@ -13122,8 +13128,14 @@ Private Sub T_AmbBilans_SignalIKvar()
     On Error GoTo 0
 
     obaveza = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip)
+
+    tipP = KartNoviTipAmb("BIP")
+    dPoz = modAmbalaza.UpisiPozajmicuKupca_TX(Date, "POZ-" & tipP, FX_KUPAC, FX_VOZAC, tipP, 10, "test 291")
+    dOtp = modAmbalaza.OtpisiAmbalazu_TX(Date, FX_STANICA, AMB_NALOG_VOZAC, FX_VOZAC, tipP, 2, "lom -- test 291")
+
     r = modAmbalaza.AmbBilansPodaci(Date, Date)
     neuskl = BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_NEUSKLADJENO)
+    rP = r
 
     ' Kvar na redu ovog tipa; fixture se vraca PRE tvrdnji.
     ambID = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_DOK_ID, dokVrac, COL_AMB_ID))
@@ -13145,6 +13157,13 @@ Private Sub T_AmbBilans_SignalIKvar()
              "bilans: vracene tudje gajbe ostaju u opticaju -- neuskladjeno je 12 (KI-024)"
     AssertEq dignuto & "|" & (InStr(1, razlog, "Red knjige ", vbTextCompare) > 0), "True|True", _
              "kvar knjige: bilans dize gresku iz ugovora knjige, ne vraca brojeve"
+    AssertEq (Len(dPoz) > 0 And Len(dOtp) > 0), True, _
+             "preduslov: pozajmica i otpis kod vozaca su upisani"
+    AssertEq BilKol(rP, tipP, AMB_BIL_GDE, AMB_BIL_OPTICAJ) & "|" & _
+             BilKol(rP, tipP, AMB_BIL_CIJE, AMB_BIL_TUDJE) & "|" & _
+             BilKol(rP, tipP, AMB_BIL_CIJE, AMB_BIL_NASE) & "|" & _
+             BilKol(rP, tipP, AMB_BIL_CIJE, AMB_BIL_NEUSKLADJENO), "8|10|-2|0", _
+             "bilans: nase je obracunski saldo -- pozajmica 10 i otpis 2 daju -2, neuskladjeno 0"
     Exit Sub
 EH:
     errNum = Err.Number

@@ -2857,6 +2857,12 @@ GRANICA  POCETAK + nabavka + pokrice + pozajmica + otpis = KRAJ     u periodu
 - **Naše** su vrste na granici koje su zahtev (`AmbVrstaJeZahtev`): nabavka i
   otpis. Ulaz tuđe je posledica i ide u obavezu. Otpis tuđih gajbi umanjuje
   naše, a obaveza ostaje (6.12m: firma snosi lom).
+- **Naše je obračunski saldo, ne broj gajbi u vlasništvu** (P2 nezavisnog
+  pregleda `#447`). Knjiga ne vodi gajbe po vlasniku — komad je komad. Zato
+  „naše" sme biti negativno: pozajmica 10 i otpis 2 daju opticaj 8, tuđe 10,
+  naše −2 i neusklađeno 0. Firma tada duguje više nego što drži; da vrati
+  pozajmicu, mora da nabavi 2. Natpis na ekranu je „Sopstveni saldo,
+  obračunski", a negativan broj se ne „ulepšava" na 0 (test 291).
 - **`NEUSKLADJENO` je signal (`AMB-BIL-02`), ne invarijanta.** Danas je 0, jer
   `VRACANJE_TUDJE` nema pisca. Kad ga dobije, ostavlja gajbe na saldu partnera
   (`KI-024`), pa razlika postaje vidljiva upravo ovde.

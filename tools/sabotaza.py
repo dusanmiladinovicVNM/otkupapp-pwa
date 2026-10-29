@@ -10541,6 +10541,17 @@ SABOTAZE = {
         "T_AmbBilans_ListaIzvestaja",
         "bilans: redosled je izvestajev, ljuska ga ne sortira",
     ),
+    # Negativan sopstveni saldo se "ulepsa" na 0 -- najverovatnija pogresna
+    # popravka natpisa (P2 nezavisnog pregleda #447). Pozajmica 10 i otpis 2
+    # tada daju nase 0 i neuskladjeno -2 umesto -2 i 0.
+    "amb-bil-nase-bez-minusa": (
+        "modAmbalaza.bas",
+        "        nase = BilVrednost(acc, kt & sep & AMB_BIL_NASE)\n",
+        "        nase = BilVrednost(acc, kt & sep & AMB_BIL_NASE)\n"
+        "        If nase < 0 Then nase = 0   ' SABOTAZA: nase bez minusa\n",
+        "T_AmbBilans_SignalIKvar",
+        "bilans: nase je obracunski saldo -- pozajmica 10 i otpis 2 daju -2, neuskladjeno 0",
+    ),
 }
 
 

@@ -107,6 +107,9 @@ Public Const AMB_KLASA_REALAN As String = "REALAN"
 '            OPTICAJ je zbir realnih naloga (6.14)
 '   CIJE     NASE = nabavka - otpis (granica, vrste koje su ZAHTEV); TUDJE =
 '            obaveza firme prema partnerima (AMB-INV-09), i po partneru;
+'            NASE je OBRACUNSKI saldo, ne broj gajbi u vlasnistvu: gajbe se ne
+'            vode po vlasniku, pa sme biti negativan (firma duguje vise nego
+'            sto drzi -- pozajmica 10, otpis 2: NASE -2, TUDJE 10);
 '            NEUSKLADJENO = OPTICAJ - NASE - TUDJE (AMB-BIL-02, signal KI-024)
 '   GRANICA  kretanje preko SpoljniSvet U PERIODU: POCETAK + stavke = KRAJ
 '
