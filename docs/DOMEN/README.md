@@ -346,7 +346,10 @@ broja iz iste knjige:
 | Neto | poslovni saldo: + partner drži naše, − firma duguje | kartica ambalaže (`AMB-POSL-01`) |
 
 Zbir „Tuđe" je bilans „Tuđe", a zbir „Drži" je bilans „Gde su" za kooperante i
-kupce. Drži − Tuđe = Neto dok `VRACANJE_TUDJE` nema pisca (`KI-024`). Red bez
+kupce. Drži − Tuđe − Neto = zbir `VRACANJE_TUDJE` tog partnera (`KI-024`): u
+živom radu je 0, jer tu vrstu ne zove nijedan VBA pisac, a u migriranoj svesci
+nije — migracija je upisuje po pravilu MIG-16/17 (nađeno 29.10.2026: Bajić,
+0,4kg, 5 | 10 | −10, razlika 5 = vraćanje tuđe od 10.07). Red bez
 ijednog broja se ne prikazuje. Čitalac `modAmbalaza.AmbPartneriPodaci` (jedan
 prolaz; stranu partnera za obavezu bira isti `BilStranaDuga` kao bilans),
 izveštaj `ReportAmbalazaPoPartnerima` (po imenu, ljuska sme da sortira), podnožje

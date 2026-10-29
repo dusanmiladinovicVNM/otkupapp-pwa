@@ -2863,9 +2863,12 @@ GRANICA  POCETAK + nabavka + pokrice + pozajmica + otpis = KRAJ     u periodu
   naše −2 i neusklađeno 0. Firma tada duguje više nego što drži; da vrati
   pozajmicu, mora da nabavi 2. Natpis na ekranu je „Sopstveni saldo,
   obračunski", a negativan broj se ne „ulepšava" na 0 (test 291).
-- **`NEUSKLADJENO` je signal (`AMB-BIL-02`), ne invarijanta.** Danas je 0, jer
-  `VRACANJE_TUDJE` nema pisca. Kad ga dobije, ostavlja gajbe na saldu partnera
-  (`KI-024`), pa razlika postaje vidljiva upravo ovde.
+- **`NEUSKLADJENO` je signal (`AMB-BIL-02`), ne invarijanta.** Jednak je zbiru
+  `VRACANJE_TUDJE`: ta vrsta ostavlja gajbe na saldu partnera (`KI-024`), pa
+  razlika postaje vidljiva upravo ovde. U živom radu je 0, jer je ne zove
+  nijedan VBA pisac, ali je upisuje **migracija** (MIG-16/17: dan u kome
+  kooperantu pada obaveza prevodi izdate prazne u vraćanje tuđe). U migriranoj
+  svesci signal zato nije 0 (29.10.2026, operaterova sveska).
 - **Datum:** isto kao kartica (`ODL-26`). `KRAJ` (granica) i `OPTICAJ` (salda)
   računaju se odvojeno, a jednakost meri granicu perioda.
 
@@ -2877,6 +2880,13 @@ drži (fizički), tuđe (obaveza) i neto (poslovni saldo, kao kartica). Odluka
 operatera je **bruto + neto**, a ne samo neto razdvojen na „naše kod njega" i
 „firma duguje": tako zbir „Tuđe" ostaje jednak bilansu, a partner koji drži 30 i
 kome firma duguje 15 vidi se kao 30 | 15 | +15, ne kao 15 | 0.
+
+Drži − Tuđe − Neto je zbir `VRACANJE_TUDJE` tog partnera. Prvi pregled na
+migriranoj svesci (29.10.2026) to je i pokazao: Bajić, 0,4kg, 5 | 10 | −10.
+Migracija je 10.07 od 20 izdatih praznih 5 prevela u vraćanje tuđe, jer mu je
+tog dana obaveza pala 12 → 7. Neto (−10) i tuđe (10) su tačni; drži 5 su
+njegove gajbe, koje knjiga ostavlja u opticaju (`KI-024`). Kad ih donese,
+deficita nema, pa tuđe ostaje 10, a neto ide na −15.
 
 *Provera:* `modTest` 293–294 · sabotaže `amb-par-*`.
 

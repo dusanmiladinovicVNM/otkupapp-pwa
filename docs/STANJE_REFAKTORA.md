@@ -8233,6 +8233,24 @@
      - **NEVERIFIKOVANO:** `RunAllTests` (očekivano 294/0), `dokaz.py amb-par`, compile, prikaz i štampa.
      - **Sledeći brojevi:** test 295 · stavka 228 · KI-065.
 
+228. **`AMB-BIL-03` u Excelu, pa prvi pregled na migriranoj svesci** (29.10.2026). Grana
+     `claude/trusting-hawking-2cw6z1`.
+
+     - **Excel (operater):** `RunAllTests` 294 / 0 palo, BFP 2801 / 0; `dokaz.py amb-par --grupe` 9 / 9 crveno
+       (7 × `amb-par-*` + stare `amb-partner-*`), izvor pre/posle identičan. `amb-par-podnozje-bez-slotova` je u
+       grupi pao na drugoj tvrdnji, sam na svojoj.
+     - **Pregled na operaterovoj svesci (snimci ekrana):** Bajić (KOOP-00019), 0,4kg: „Amb. partneri" 5 | 10 | −10,
+       bilans „Čije su" 10, kartica −10. Drži − tuđe ≠ neto, a razlika 5 je red „Vraćanje tuđe (Revers)" od
+       10.07. **Izvor reda je migracija**, ne VBA pisac (operater: stara sveska → Python → nov kanon):
+       `tools/migracija/ambalaza.py`, MIG-16/17, prevodi izdate prazne u `VRACANJE_TUDJE` na dan pada obaveze
+       (12 → 7, pa 5 od 20). Proveren put: nijedna od 373 udaljene grane nema VBA pisca te vrste. **`KI-024` time
+       više nije latentan** — ažurirani su `KI-024`, `docs/DOMEN/README.md` (`AMB-BIL-03`), `AMBALAZA.md` 6.14a i
+       komentar čitaoca. Čitalac radi kako je zamišljen: razliku pokazuje, ne sakriva.
+     - **Otvoreno, svoj rez:** popravka `KI-024` (vraćene tuđe gajbe izlaze iz opticaja) mora da obuhvati i živi
+       ugovor i migraciju, pre konačnog prenosa. **NEVERIFIKOVANO:** ukupan obim u svesci (bilans, „Neusklađeno"
+       po tipu), ručni compile i štampa.
+     - **Sledeći brojevi:** test 295 · stavka 229 · KI-065.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
