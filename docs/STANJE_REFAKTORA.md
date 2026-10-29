@@ -8319,6 +8319,23 @@
      - **NEVERIFIKOVANO:** `RunAllTests` (očekivano 304/0), BFP, `dokaz.py prazne` / `ki024`, compile.
      - **Sledeći brojevi:** test 305 · stavka 231 · KI-066.
 
+231. **Prvi Excel prolaz stavke 229 — dva pada, oba u premisi testa** (29.10.2026). Operater, nad `310901a1`
+     (302 testa, pre stavke 230): `dokaz.py` za `ki024`, `prazne` i `amb-` je stao na baznom prolazu —
+     `RunAllTests` 302 / 2 palo, pa ništa nije sabotirano.
+
+     - **`T_KI025_F7NabavkaOtvaraIzdavanje` (277):** „posle nabavke prolazi izdavanje…" dobija `AMB-INV-16`
+       (raspoloživo 271, traži se 301, manjak 30). Test je nabavku računao od UKUPNOG salda stanice, a stanica u
+       suiti drži i pune iz ranijih otkupa. Kapija radi ispravno; **promenjena premisa:** nabavka se računa od
+       praznih (`AmbPrazneRaspolozive`). Preduslov (izdavanje veće od ukupnog salda pada na `AMB-INV-07`) isti.
+     - **`T_Prazne_ReversRetroIStorno` (302), treća tvrdnja:** dobijeno `False|5|`, očekivano `False|0|`. Storno
+       je odbijen ispravno; test je razliku redova knjige merio tek na kraju, posle dela (4), koji dodaje tačno 5
+       redova (dve nabavke, otkup + pokriće, revers). **Greška testa:** razlika se sada meri odmah posle storna.
+       Python model to nije uhvatio jer je razliku merio na pravom mestu — model proverava pravila, ne raspored
+       merenja u VBA testu.
+     - Pregledani ostali novi testovi (295–304): razlike redova se mere odmah posle radnje.
+     - **NEVERIFIKOVANO:** `RunAllTests` nad novom glavom (očekivano 304/0), BFP, `dokaz.py`, compile.
+     - **Sledeći brojevi:** test 305 · stavka 232 · KI-066.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
