@@ -8346,11 +8346,13 @@
        Čitanjem koda nema veze sa ovom granom (golden ne izdaje prazne, nema obavezu za podelu; grana ne menja
        `modGoldenTests`, `modDokumenta` ni fixture), ali to nije dokaz. U prvom prolazu (`310901a1`) isti pad je
        pogodio BFP na kraju (2801 / 0 pa `RPC failed`), pa liči na nestabilnost Excela posle dugog niza suita.
-       **Otvoreno:** Golden sam, na grani i na `main`-u. Golden poslednji put zapisan zelen u stavci 216.
+       **Razdvojeno (operater, isti dan):** `run_vba.py --suite RunGoldenSuite` je **zelen** i na grani
+       (`c215c0a3`, 9,5 s, GREEN marker) i na `main`-u (`5ad4668a`, 9,2 s). Pad nije od ove grane; uzrok pada u
+       punom prolazu (Excel posle ~10 min rada) ostaje neistražen i nije vezan za ovaj rez.
      - **`dokaz.py` (20 sabotaža, `--grupe`):** bazni prolaz zelen (304 / 0, BFP 2801 / 0), prva grupa (BFP, 4
        sabotaže) završila je kao `PREKID` = Ctrl+C (`KeyboardInterrupt`, `dokaz.py` §`_prolaz`), pa je alat
        stao. **Ništa nije izmereno**; izvor pre i posle identičan.
-     - **NEVERIFIKOVANO:** Golden, `dokaz.py`, ručni compile, papir.
+     - **NEVERIFIKOVANO:** `dokaz.py`, ručni compile, papir.
      - **Sledeći brojevi:** test 305 · stavka 233 · KI-066.
 
 ## Dug sa imenom (posle S5-5b)
