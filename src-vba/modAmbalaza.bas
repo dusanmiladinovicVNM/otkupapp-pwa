@@ -1381,6 +1381,284 @@ Public Function AmbDeficitZaPrenos(ByVal odTip As String, ByVal odID As String, 
 End Function
 
 ' ============================================================
+' READ: BILANS AMBALAZE -- pogled firme na celu knjigu (AMB-BIL-01)
+' ============================================================
+'
+' Tri odeljka po tipu ambalaze (sifre i znacenje: modAmbalazaUgovor, AMB_BIL_*):
+'
+'   GDE      fizicki saldo po VRSTI naloga na kraju perioda, i OPTICAJ (zbir)
+'   CIJE     NASE (nabavka - otpis), TUDJE (obaveza po partneru) i NEUSKLADJENO
+'   GRANICA  POCETAK + kretanje preko SpoljniSvet u periodu = KRAJ
+'
+' JEDAN PROLAZ, ISTA PRAVILA. Knjiga se cita kroz KnjigaZaCitanje (kvar ide
+' pozivaocu, izvestaj tada nema brojeva), storno se sudi po vrsti ORIGINALA, a
+' obaveza ide kroz AmbDoprinosObavezi -- isti doprinos kao AmbObavezaPartneru.
+' Postojeci citaoci nisu dovoljni: AmbSaldoPoNalogu sabira sve tipove, a
+' AmbObavezaPartneru je jedan partner, za danas. Paritet sa oba meri test 290.
+'
+' DATUM: red ulazi po svom danu, a kontra-stav nosi dan originala, pa je storno
+' u svakom periodu "kao da nije bilo" -- ista istorija kao kartica (ODL-26).
+' GDE i CIJE su stanje NA datumDo; POCETAK je stanje pre datumOd.
+'
+' KRAJ se racuna iz POCETKA i kretanja preko granice, a OPTICAJ iz salda naloga.
+' Isti broj, dva puta, dva prolaza po datumu -- granica perioda se tako meri.
+'
+' Vraca 2D niz (1..n, 1..6), Empty kad nema redova do datumDo:
+'   (1) TipAmbalaze  (2) Odeljak  (3) Stavka  (4) NalogTip  (5) NalogID
+'   (6) Kolicina
+' GDE: Stavka je vrsta naloga (Stanica, Vozac, Kooperant, Kupac; Firma samo kad
+' nije 0) ili OPTICAJ. CIJE/PARTNER nosi NalogTip i NalogID; partner sa
+' obavezom 0 se ne navodi.
+Public Function AmbBilansPodaci(ByVal datumOd As Date, ByVal datumDo As Date) As Variant
+    Const SRC As String = "modAmbalaza.AmbBilansPodaci"
+
+    Dim dOd As Long, dDo As Long
+    dOd = Int(CDbl(datumOd))
+    dDo = Int(CDbl(datumDo))
+    If dOd > dDo Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, "Period bilansa: pocetak je posle kraja."
+    End If
+
+    RequireKnjigaSchema SRC
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim kol As Object, vrste As Object
+    Set kol = KnjigaZaCitanje(data, SRC, vrste)
+
+    Dim cDat As Long, cTipA As Long, cKol As Long, cVK As Long, cSt As Long
+    Dim cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
+    Dim cDokT As Long, cDokI As Long
+    cDat = kol(COL_AMB_DATUM)
+    cTipA = kol(COL_AMB_TIP)
+    cKol = kol(COL_AMB_KOLICINA)
+    cVK = kol(COL_AMB_VRSTA_KRETANJA)
+    cSt = kol(COL_AMB_STORNO_OD)
+    cOdTip = kol(COL_AMB_OD_TIP)
+    cOdID = kol(COL_AMB_OD_ID)
+    cNaTip = kol(COL_AMB_NA_TIP)
+    cNaID = kol(COL_AMB_NA_ID)
+    cDokT = kol(COL_AMB_DOK_TIP)
+    cDokI = kol(COL_AMB_DOK_ID)
+
+    ' Dug ide samo na klasu koju matrica daje odredistu pokrica (AmbObavezaPartneru).
+    Dim klasaDuga As String
+    klasaDuga = modAmbalazaUgovor.AmbPokriceKlasa()
+    If Len(klasaDuga) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, "Klasa duga nije definisana u matrici."
+    End If
+
+    Dim sep As String
+    sep = Chr$(30)
+
+    ' 1) DOKUMENTI POZAJMICE -- ulaz tudje na njima je ulaz pozajmice (AMB-INV-13),
+    '    ne pokrice deficita. Identitet je (DokumentTIP, DokumentID, tip).
+    Dim pozDok As Object, i As Long
+    Set pozDok = CreateObject("Scripting.Dictionary")
+    pozDok.CompareMode = vbTextCompare
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kol) Then
+            If Len(AmbText(data(i, cSt))) = 0 Then
+                If StrComp(AmbText(data(i, cVK)), AMB_VK_POZAJMICA, vbTextCompare) = 0 Then
+                    pozDok(AmbText(data(i, cDokT)) & sep & AmbText(data(i, cDokI)) & sep & _
+                           AmbText(data(i, cTipA))) = True
+                End If
+            End If
+        End If
+    Next i
+
+    ' 2) GLAVNI PROLAZ
+    Dim tipovi As Object, acc As Object, partneri As Object
+    Set tipovi = CreateObject("Scripting.Dictionary")
+    tipovi.CompareMode = vbTextCompare
+    Set acc = CreateObject("Scripting.Dictionary")
+    acc.CompareMode = vbTextCompare
+    Set partneri = CreateObject("Scripting.Dictionary")
+    partneri.CompareMode = vbTextCompare
+
+    Dim d As Long, tip As String, kt As String, q As Double
+    Dim odTip As String, odID As String, naTip As String, naID As String
+    Dim st As String, vk As String, vrsta As String, vrstaOrig As String
+    Dim odGr As Boolean, naGr As Boolean, znak As Double, stavka As String
+    Dim dop As Double, pTip As String, pID As String
+
+    For i = 1 To UBound(data, 1)
+        If Not RedDoticeKnjigu(data, i, kol) Then GoTo SledeciRedBilansa
+        d = Int(CDbl(CDate(data(i, cDat))))
+        If d > dDo Then GoTo SledeciRedBilansa
+
+        tip = AmbText(data(i, cTipA))
+        If Not tipovi.Exists(tip) Then tipovi.Add tip, tip
+        kt = CStr(tipovi(tip))
+        q = CDbl(data(i, cKol))
+        odTip = AmbText(data(i, cOdTip))
+        odID = AmbText(data(i, cOdID))
+        naTip = AmbText(data(i, cNaTip))
+        naID = AmbText(data(i, cNaID))
+
+        vk = AmbText(data(i, cVK))
+        vrsta = vk
+        vrstaOrig = ""
+        st = AmbText(data(i, cSt))
+        If Len(st) > 0 Then
+            If Not vrste.Exists(st) Then
+                Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                          "StornoOd '" & st & "' ne pokazuje na red knjige."
+            End If
+            vrstaOrig = CStr(vrste(st))
+            vrsta = vrstaOrig
+        End If
+
+        odGr = (StrComp(odTip, AMB_NALOG_SPOLJNI, vbTextCompare) = 0)
+        naGr = (StrComp(naTip, AMB_NALOG_SPOLJNI, vbTextCompare) = 0)
+
+        ' GDE i POCETAK: realni nalozi, odrediste +, izvor -.
+        If Not naGr Then
+            BilDodaj acc, kt & sep & AMB_BIL_GDE & sep & naTip, q
+            If d < dOd Then BilDodaj acc, kt & sep & AMB_BIL_POCETAK, q
+        End If
+        If Not odGr Then
+            BilDodaj acc, kt & sep & AMB_BIL_GDE & sep & odTip, -q
+            If d < dOd Then BilDodaj acc, kt & sep & AMB_BIL_POCETAK, -q
+        End If
+
+        ' GRANICA: ulaz iz SpoljniSvet +, izlaz u SpoljniSvet -.
+        If odGr Or naGr Then
+            If odGr Then znak = q Else znak = -q
+            stavka = modAmbalazaUgovor.AmbBilansStavkaGranice(vrsta)
+            If Len(stavka) = 0 Then
+                Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                          "Vrsta '" & vrsta & "' prelazi granicu opticaja, a bilans " & _
+                          "je ne poznaje (AmbBilansStavkaGranice)."
+            End If
+            If stavka = AMB_BIL_POKRICE Then
+                If pozDok.Exists(AmbText(data(i, cDokT)) & sep & AmbText(data(i, cDokI)) & _
+                                 sep & tip) Then stavka = AMB_BIL_POZAJMICA
+            End If
+            If d >= dOd Then BilDodaj acc, kt & sep & AMB_BIL_GRANICA & sep & stavka, znak
+            ' NASE: granica vrstom koja je ZAHTEV (nabavka, otpis); ulaz tudje
+            ' je posledica i ide u obavezu, ne u nase.
+            If modAmbalazaUgovor.AmbVrstaJeZahtev(vrsta) Then
+                BilDodaj acc, kt & sep & AMB_BIL_NASE, znak
+            End If
+        End If
+
+        ' TUDJE: doprinos obavezi, pripisan strani reda koja je partner.
+        dop = modAmbalazaUgovor.AmbDoprinosObavezi(vk, q, vrstaOrig)
+        If dop <> 0 Then
+            If modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, naTip) Then
+                pTip = naTip
+                pID = naID
+            ElseIf modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, odTip) Then
+                pTip = odTip
+                pID = odID
+            Else
+                Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                          "Red sa doprinosom obavezi nema partnera ni na jednoj strani."
+            End If
+            BilDodaj partneri, kt & sep & pTip & sep & pID, dop
+        End If
+SledeciRedBilansa:
+    Next i
+
+    If tipovi.count = 0 Then Exit Function
+
+    ' 3) IZLAZ -- redovi sa kljucem poretka, pa stabilno sortiranje.
+    Dim redovi As Collection, t As Variant, pk As Variant, delovi() As String
+    Dim nalozi As Variant, j As Long, v As Double
+    Dim opticaj As Double, nase As Double, tudje As Double, kraj As Double
+    Dim stavkeGr As Variant
+    Set redovi = New Collection
+    nalozi = Array(AMB_NALOG_STANICA, AMB_NALOG_VOZAC, AMB_NALOG_KOOPERANT, _
+                   AMB_NALOG_KUPAC, AMB_NALOG_FIRMA)
+    stavkeGr = Array(AMB_BIL_NABAVKA, AMB_BIL_POKRICE, AMB_BIL_POZAJMICA, AMB_BIL_OTPIS)
+
+    For Each t In tipovi.Items
+        kt = CStr(t)
+
+        opticaj = 0
+        For j = LBound(nalozi) To UBound(nalozi)
+            v = BilVrednost(acc, kt & sep & AMB_BIL_GDE & sep & CStr(nalozi(j)))
+            opticaj = opticaj + v
+            If v <> 0 Or CStr(nalozi(j)) <> AMB_NALOG_FIRMA Then
+                BilRed redovi, kt, 1, AMB_BIL_GDE, j + 1, CStr(nalozi(j)), CStr(nalozi(j)), "", v
+            End If
+        Next j
+        BilRed redovi, kt, 1, AMB_BIL_GDE, 9, AMB_BIL_OPTICAJ, "", "", opticaj
+
+        nase = BilVrednost(acc, kt & sep & AMB_BIL_NASE)
+        tudje = 0
+        For Each pk In partneri.keys
+            delovi = Split(CStr(pk), sep)
+            If StrComp(delovi(0), kt, vbTextCompare) = 0 Then
+                v = CDbl(partneri(pk))
+                tudje = tudje + v
+                If v <> 0 Then BilRed redovi, kt, 2, AMB_BIL_CIJE, 3, AMB_BIL_PARTNER, _
+                                      delovi(1), delovi(2), v
+            End If
+        Next pk
+        BilRed redovi, kt, 2, AMB_BIL_CIJE, 1, AMB_BIL_NASE, "", "", nase
+        BilRed redovi, kt, 2, AMB_BIL_CIJE, 2, AMB_BIL_TUDJE, "", "", tudje
+        BilRed redovi, kt, 2, AMB_BIL_CIJE, 9, AMB_BIL_NEUSKLADJENO, "", "", _
+               opticaj - nase - tudje
+
+        kraj = BilVrednost(acc, kt & sep & AMB_BIL_POCETAK)
+        BilRed redovi, kt, 3, AMB_BIL_GRANICA, 0, AMB_BIL_POCETAK, "", "", kraj
+        For j = LBound(stavkeGr) To UBound(stavkeGr)
+            v = BilVrednost(acc, kt & sep & AMB_BIL_GRANICA & sep & CStr(stavkeGr(j)))
+            kraj = kraj + v
+            BilRed redovi, kt, 3, AMB_BIL_GRANICA, j + 1, CStr(stavkeGr(j)), "", "", v
+        Next j
+        BilRed redovi, kt, 3, AMB_BIL_GRANICA, 9, AMB_BIL_KRAJ, "", "", kraj
+    Next t
+
+    Dim arr() As Variant, n As Long, r As Variant
+    ReDim arr(1 To redovi.count, 1 To 7)
+    For Each r In redovi
+        n = n + 1
+        For j = 1 To 7
+            arr(n, j) = r(j - 1)
+        Next j
+    Next r
+
+    Dim sortirano As Variant, outA() As Variant
+    sortirano = modArrayUtils.SortArrayPoKljucu(arr, 7)
+    ReDim outA(1 To n, 1 To 6)
+    For i = 1 To n
+        For j = 1 To 6
+            outA(i, j) = sortirano(i, j)
+        Next j
+    Next i
+    AmbBilansPodaci = outA
+End Function
+
+Private Sub BilDodaj(ByVal acc As Object, ByVal k As String, ByVal v As Double)
+    If Not acc.Exists(k) Then acc.Add k, 0#
+    acc(k) = CDbl(acc(k)) + v
+End Sub
+
+Private Function BilVrednost(ByVal acc As Object, ByVal k As String) As Double
+    If acc.Exists(k) Then BilVrednost = CDbl(acc(k))
+End Function
+
+' Red bilansa uz kljuc poretka: tip, odeljak, polozaj stavke, pa partner. Kljuc
+' je velikim slovima jer SortArrayPoKljucu poredi binarno, a tip i nalog se u
+' knjizi porede bez obzira na velicinu slova.
+Private Sub BilRed(ByVal redovi As Collection, ByVal tip As String, _
+                   ByVal odeljakRed As Long, ByVal odeljak As String, _
+                   ByVal stavkaRed As Long, ByVal stavka As String, _
+                   ByVal nalogTip As String, ByVal nalogID As String, _
+                   ByVal kolicina As Double)
+    Dim sep As String
+    sep = Chr$(1)
+    redovi.Add Array(tip, odeljak, stavka, nalogTip, nalogID, kolicina, _
+                     UCase$(tip) & sep & CStr(odeljakRed) & sep & Format$(stavkaRed, "00") & _
+                     sep & UCase$(nalogTip) & sep & UCase$(nalogID))
+End Sub
+
+' ============================================================
 ' AMBALAZNI DOKUMENT -- zaglavlje (AMB-10-DOK)
 ' ============================================================
 

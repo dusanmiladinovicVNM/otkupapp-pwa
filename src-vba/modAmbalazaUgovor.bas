@@ -98,6 +98,39 @@ Public Const AMB_KLASA_PARTNER As String = "PARTNER"
 Public Const AMB_KLASA_REALAN As String = "REALAN"
 
 ' ============================================================
+' BILANS AMBALAZE (AMB-BIL-01) -- sifre odeljaka i stavki
+' ============================================================
+'
+' Pogled FIRME na celu knjigu, po tipu ambalaze. Tri odeljka, tri pitanja:
+'
+'   GDE      gde su gajbe na kraju perioda -- fizicki saldo po VRSTI naloga;
+'            OPTICAJ je zbir realnih naloga (6.14)
+'   CIJE     NASE = nabavka - otpis (granica, vrste koje su ZAHTEV); TUDJE =
+'            obaveza firme prema partnerima (AMB-INV-09), i po partneru;
+'            NASE je OBRACUNSKI saldo, ne broj gajbi u vlasnistvu: gajbe se ne
+'            vode po vlasniku, pa sme biti negativan (firma duguje vise nego
+'            sto drzi -- pozajmica 10, otpis 2: NASE -2, TUDJE 10);
+'            NEUSKLADJENO = OPTICAJ - NASE - TUDJE (AMB-BIL-02, signal KI-024)
+'   GRANICA  kretanje preko SpoljniSvet U PERIODU: POCETAK + stavke = KRAJ
+'
+' Sifre nisu natpisi: natpis bira izvestaj (Poruka), a citalac i test dele
+' sifru -- isti razlog kao kod VrstaKretanja.
+Public Const AMB_BIL_GDE As String = "GDE"
+Public Const AMB_BIL_CIJE As String = "CIJE"
+Public Const AMB_BIL_GRANICA As String = "GRANICA"
+Public Const AMB_BIL_OPTICAJ As String = "OPTICAJ"
+Public Const AMB_BIL_NASE As String = "NASE"
+Public Const AMB_BIL_TUDJE As String = "TUDJE"
+Public Const AMB_BIL_PARTNER As String = "PARTNER"
+Public Const AMB_BIL_NEUSKLADJENO As String = "NEUSKLADJENO"
+Public Const AMB_BIL_POCETAK As String = "POCETAK"
+Public Const AMB_BIL_NABAVKA As String = "NABAVKA"
+Public Const AMB_BIL_POKRICE As String = "POKRICE"
+Public Const AMB_BIL_POZAJMICA As String = "POZAJMICA"
+Public Const AMB_BIL_OTPIS As String = "OTPIS"
+Public Const AMB_BIL_KRAJ As String = "KRAJ"
+
+' ============================================================
 ' ZATVORENE LISTE -- jedan izvor, da se citalac i test ne razidju
 ' ============================================================
 
@@ -1210,4 +1243,51 @@ Public Function AmbDoprinosObavezi(ByVal vrsta As String, ByVal kolicina As Doub
         Case AMB_VK_VRACANJE_TUDJE:  AmbDoprinosObavezi = -kolicina
         Case Else:                   AmbDoprinosObavezi = 0
     End Select
+End Function
+
+' ============================================================
+' BILANS -- KOJA VRSTA PRELAZI GRANICU KAO KOJA STAVKA (AMB-BIL-01)
+' ============================================================
+'
+' Granicu opticaja prelaze samo vrste kojima matrica (AmbKlaseVrste) stavlja
+' GRANICA na jednu stranu: nabavka unosi nase gajbe, ulaz tudje unosi
+' partnerove, otpis izbacuje. Sifra stavke se CITA ovde, ne u citaocu, da bi
+' nova vrsta na granici pala na kapiji potpunosti umesto da je bilans tiho
+' izostavi.
+'
+' ULAZ_TUDJE je ovde POKRICE. Ulaz pozajmice (AMB-INV-13) je ista vrsta na
+' dokumentu koji nosi POZAJMICA_PARTNERA, pa ga citalac prepoznaje po
+' identitetu dokumenta -- ne po vrsti, koja je ista.
+'
+' Vrsta koja granicu ne prelazi vraca prazno.
+Public Function AmbBilansStavkaGranice(ByVal vrsta As String) As String
+    Select Case Trim$(vrsta)
+        Case AMB_VK_NABAVKA:    AmbBilansStavkaGranice = AMB_BIL_NABAVKA
+        Case AMB_VK_ULAZ_TUDJE: AmbBilansStavkaGranice = AMB_BIL_POKRICE
+        Case AMB_VK_OTPIS:      AmbBilansStavkaGranice = AMB_BIL_OTPIS
+    End Select
+End Function
+
+' KAPIJA POTPUNOSTI BILANSA -- isti oblik kao AmbMatricaNepotpuna, u oba smera:
+' vrsta koja prelazi granicu a nema stavku ("bez-stavke"), i stavka za vrstu
+' koja granicu ne prelazi ("stavka-bez-granice"). Vraca "" kad je potpuno.
+Public Function AmbBilansGranicaNepotpuna() As String
+    Dim sve As Variant, i As Long, klase As Variant, v As String, fale As String
+    Dim naGranici As Boolean
+    sve = AmbVrsteSve()
+    For i = LBound(sve) To UBound(sve)
+        v = CStr(sve(i))
+        klase = AmbKlaseVrste(v)
+        naGranici = False
+        If UBound(klase) >= 1 Then
+            naGranici = (StrComp(CStr(klase(0)), AMB_KLASA_GRANICA, vbTextCompare) = 0) Or _
+                        (StrComp(CStr(klase(1)), AMB_KLASA_GRANICA, vbTextCompare) = 0)
+        End If
+        If naGranici And Len(AmbBilansStavkaGranice(v)) = 0 Then
+            fale = fale & " " & v & ":bez-stavke"
+        ElseIf Not naGranici And Len(AmbBilansStavkaGranice(v)) > 0 Then
+            fale = fale & " " & v & ":stavka-bez-granice"
+        End If
+    Next i
+    AmbBilansGranicaNepotpuna = Trim$(fale)
 End Function

@@ -2377,6 +2377,42 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
+' BILANS AMBALAZE (AMB-BIL-01) -- pogled firme na celu knjigu, po tipu gajbe.
+'
+' Racun je u modAmbalaza.AmbBilansPodaci; ovde su samo natpisi: odeljak i
+' stavka iz kataloga poruka, partner po imenu. Red je isti, istim redosledom,
+' kao red citaoca -- test 292 poredi jedan sa drugim.
+' (1)=TipAmbalaze (2)=Odeljak (3)=Stavka (4)=Kolicina
+Public Function ReportBilansAmbalaze(ByVal datumOd As Date, ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportBilansAmbalaze"
+    On Error GoTo EH
+
+    Dim d As Variant
+    d = modAmbalaza.AmbBilansPodaci(datumOd, datumDo)
+    If IsEmpty(d) Then Exit Function
+
+    Dim outA() As Variant, i As Long, nm As String
+    ReDim outA(1 To UBound(d, 1), 1 To 4)
+    For i = 1 To UBound(d, 1)
+        outA(i, 1) = CStr(d(i, 1))
+        outA(i, 2) = Poruka("OTKUI_IZ_BIL_" & CStr(d(i, 2)))
+        If CStr(d(i, 3)) = AMB_BIL_PARTNER Then
+            nm = Trim$(ResolveEntitetName(CStr(d(i, 5)), CStr(d(i, 4))))
+            If Len(nm) = 0 Then nm = CStr(d(i, 5))
+            outA(i, 3) = Poruka("OTKUI_IZ_BIL_P_" & UCase$(CStr(d(i, 4)))) & ": " & nm
+        ElseIf CStr(d(i, 2)) = AMB_BIL_GDE And CStr(d(i, 3)) <> AMB_BIL_OPTICAJ Then
+            outA(i, 3) = Poruka("OTKUI_IZ_BIL_N_" & UCase$(CStr(d(i, 3))))
+        Else
+            outA(i, 3) = Poruka("OTKUI_IZ_BIL_" & CStr(d(i, 3)))
+        End If
+        outA(i, 4) = CDbl(d(i, 6))
+    Next i
+    ReportBilansAmbalaze = outA
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
 ' Naziv entiteta za zbirne redove: sifarnik sa fallback-om na ID.
 Private Function IzvEntNaziv(ByVal entitetTip As String, ByVal iD As String) As String
     Dim nm As String
