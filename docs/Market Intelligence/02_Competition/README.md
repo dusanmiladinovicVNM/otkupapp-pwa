@@ -1,8 +1,8 @@
 # 02 — Competition
 
 **Status:** Initial evidence set  
-**Poslednje ažuriranje:** 2026-07-23  
-**Izvori:** reference liste koje je osnivač AgriX-a dostavio iz javno prikazanih materijala konkurenata i founder-confirmed AgriX win/loss događaji. Javne reference nisu nezavisno proverene sa navedenim korisnicima.
+**Poslednje ažuriranje:** 2026-10-10  
+**Izvori:** reference liste koje je osnivač AgriX-a dostavio iz javno prikazanih materijala konkurenata, founder-confirmed AgriX win/loss događaji, zvanična korisnička dokumentacija konkurenata (AGROSOFT, SOFTEK) i screenshot-ovi žive SOFTEK aplikacije `Ver.20.2.4`. Javne reference nisu nezavisno proverene sa navedenim korisnicima.
 
 Konkurenti, alternative, interne Excel varijante, ERP sistemi, specijalizovani proizvodi, cene, funkcije, screenshotovi i win/loss dokazi pripadaju ovom direktorijumu.
 
@@ -11,6 +11,7 @@ Podaci o konkurenciji moraju imati datum, izvor i jasno odvojene činjenice od p
 ## 1. Vrste dokaza
 
 - `PUBLIC REFERENCE EVIDENCE` — firma ili projekat naveden u dostavljenoj konkurentskoj referentnoj listi;
+- `PRODUCT DOCUMENTATION EVIDENCE` — funkcija potvrđena u zvaničnoj dokumentaciji samog konkurenta (uputstvo, priručnik, specifikacija);
 - `CLASSIFIED REFERENCE EVIDENCE` — stavka izdvojena iz šire liste na osnovu naziva, lokacije i sektorskog signala;
 - `FOUNDER-CONFIRMED BUSINESS EVENT` — stvarni AgriX prodajni ili migracioni događaj koji je potvrdio osnivač;
 - `INFERENCE` — zaključak izveden iz više dokaza;
@@ -26,6 +27,12 @@ Podaci o konkurenciji moraju imati datum, izvor i jasno odvojene činjenice od p
 | `infosys_agro_references.csv` | 113 agro/prehrambenih stavki izdvojenih iz šire Infosys referentne liste |
 | `competitive_events.csv` | dva founder-confirmed prelaska sa Infosys-a na AgriX |
 | `infosys_agro_references_summary.md` | agregati, kategorije, geografija i prioriteti za Infosys replacement pool |
+| `AgroSoft-Korisnicko-Uputsvo.pdf` | korisničko uputstvo za AGROSOFT („DATA SOFT" Vrbas), 161 strana — jedina konkurentska **produkt-dokumentacija** u repou; sadržaj datiran ~2012–2013 (Windows 7/XP, sezone „rod 2011/2012") |
+| `agrosoft_feature_teardown.md` | feature-level poređenje AGROSOFT ↔ AgriX po deset oblasti, sa dokazima iz `src-vba/`, `src/` i `gas/` |
+| `SOFTEK_uputstvp_otkup_poljoproizvoda.pdf` | korisničko uputstvo za SOFTEK modul „Otkup poljoprivrednih proizvoda", 34 strane; PDF kreiran 2017-06-06 |
+| `Softek-otkup.pdf` | **uputstvo na koje sam program linkuje** (Pomoć), „Verzija 2.1", 16 strana; PDF kreiran 2014-05-28. Tanje od verzije iz 2017 i ne pominje funkcije viđene u aplikaciji v20.2.4 — in-app pomoć kasni za proizvodom |
+| `softek_feature_teardown.md` | feature-level poređenje SOFTEK ↔ AgriX; prvi dokumentovani **direktan** konkurent (malina, gajbice, PDV nadoknada 8%). §8 opisuje **živu aplikaciju `Ver.20.2.4`** iz ~20 screenshot-ova: kontna arhitektura, IOS i otvorene stavke, KEP, Access/Jet backend, šest uočenih defekata. §9 daje odgovor na „jesu li izjednačeni?" kroz tri opsega poređenja |
+| `Scripts/pdf_text.py` | izvlačenje teksta iz konkurentskih PDF uputstava bez spoljnih zavisnosti (nema `pdftotext` u web sesiji). Rešava ObjStm, Type0/Identity-H fontove i nepotpun/pogrešan `/ToUnicode`. Provereno na sva tri uputstva iz ovog foldera |
 
 ## 3. Sažetak javnih i klasifikovanih referenci
 
@@ -96,7 +103,13 @@ Signali:
 - vidljiv klaster Zapadne i Centralne Srbije;
 - lista uključuje privredna društva i trgovinske radnje.
 
-`INFERENCE`: SOFTEK verovatno pokriva širok raspon veličina kupaca, ali funkcije, cene i aktuelni status instalacija nisu potvrđeni.
+`PRODUCT DOCUMENTATION EVIDENCE`: uputstvo za modul „Otkup poljoprivrednih proizvoda" (34 strane, PDF iz 2017) je u ovom folderu. Radni primer kroz ceo dokument je `MALINA VILAMET I KLASA` sa ambalažom `GAJBICA MALINE`, neto se računa kao bruto minus gajbice, ambalaža ide kroz revers sa `ZADUŽENO/RAZDUŽENO/STANJE`, a uvod objašnjava PDV nadoknadu od 8%.
+
+`PRODUCT DOCUMENTATION EVIDENCE` (screenshot): oko 20 snimaka žive aplikacije `Ver.20.2.4` (poslovna godina 2021, demo firma podešena na Arilje). Oni pokazuju da otkup nije samostalan proizvod nego **vrsta dokumenta `381` u glavnoj knjizi** — dobavljač je analitika konta `4358`, magacin je konto `1311`, otkupno mesto je „mesto troška", a svaki dokument se zatvara `Knjiženjem`. Backend je Microsoft Access (Jet), ne server baza.
+
+`INFERENCE`: SOFTEK je **prvi dokumentovani direktan konkurent** — isti proizvod, isti kupac, ista regulativa i isti geografski klaster kao AgriX. Njegov ugao je knjigovodstvo (KEP, IOS, otvorene stavke, bruto bilans); AgriX-ov je teren i lanac posle otkupa. Prava linija razdvajanja je **ko sme da radi u programu**, ne spisak funkcija. Cene i aktuelni status instalacija i dalje nisu potvrđeni.
+
+Puna analiza: `softek_feature_teardown.md`.
 
 ## 6. KRUNET
 
@@ -112,7 +125,19 @@ Dostavljena lista `RUGE I KOOPERACIJE` sadrži 12 referenci u agraru, zemljoradn
 
 `INFERENCE`: Yuteam je posebno relevantan za buduće AgriX širenje prema ratarstvu, žitaricama, zadrugama i organizovanoj kooperaciji.
 
-## 8. Tržišne implikacije
+## 8. AGROSOFT — „DATA SOFT" Vrbas
+
+`PRODUCT DOCUMENTATION EVIDENCE`: kompletno korisničko uputstvo (161 strana) je u ovom folderu. To je jedini konkurent za koga postoji funkcionalni dokaz, a ne samo referentna lista.
+
+Ciljni segment po uputstvu: **zemljoradničke zadruge, agrokombinati i skladištenje žitarica i industrijskog bilja**. Jezgro proizvoda su kolska vaga preko serijskog porta, laboratorijski obračun kvaliteta sa formulama i intervalima, silosne ćelije, skladišna usluga (potvrda/ugovor o skladištenju, prenos vlasništva, kompenzacija) i ugovaranje proizvodnje sa naturalnim i finansijskim paritetima.
+
+`INFERENCE`: AGROSOFT i AgriX se **ne takmiče direktno** — različit segment (žito/silos vs voće/hladnjača). Preklapanje je samo u zajedničkom jezgru (partneri, prijem, dokument, kartica, isplata, prava korisnika).
+
+`LIMITATION`: sadržaj uputstva je datiran ~2012–2013; aktuelna verzija proizvoda nije proverena. DATA SOFT nema nijedan red u `competitor_references.csv` ni u `infosys_agro_references.csv` — broj instalacija je nepoznat.
+
+Puna analiza: `agrosoft_feature_teardown.md`.
+
+## 9. Tržišne implikacije
 
 1. Tržište nije greenfield.
 2. Infosys ima najjači trenutni replacement dokaz i najširi evidentirani agro/prehrambeni reference universe.
@@ -123,7 +148,7 @@ Dostavljena lista `RUGE I KOOPERACIJE` sadrži 12 referenci u agraru, zemljoradn
 7. Konkurentske reference mogu biti seed za replacement-market istraživanje, ali ne smeju se kontaktirati agresivno niti se pretpostaviti da su nezadovoljne.
 8. AgriX mora dokazati razliku kroz povezanost terena, managementa, logistike, finansija, Gazdinstva i GGAP-a, a ne samo kroz otkupni dokument.
 
-## 9. Sledeća validacija
+## 10. Sledeća validacija
 
 Za svaku javnu ili klasifikovanu referencu treba dopuniti:
 

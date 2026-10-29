@@ -33,7 +33,7 @@ generatora:
 | OTP | `StanicaID` | `x/ddmmyy[-n]` | |
 | ZBR | `VozacID` | `x/ddmmyy[-n]` ili `Sx/ddmmyy[-n]` | u malina modu je vozač mirror stanice (`VozacID` je **isti string** kao `StanicaID`) → `S` prefiks, a zbirna nasleđuje broj otpremnice jer je otpremnica = zbirna. To je **namera**, ne propust. |
 | PRJ (hladnjača) | kupac = `MALINA_DEFAULT_KUPAC` | `1/ddmmyy[-n]` | `x` je **fiksno `1`**, NE izvedeno iz `KupacID` |
-| PRJ (eksterni kupac) | — | kupčev broj | slobodan unos, nije naš niz |
+| PRJ (eksterni kupac) | `KupacID` | kupčev broj | slobodan unos, nije naš niz. Jedinstven **po kupcu** među aktivnim prijemnicama, bez dana (kupčev broj ne nosi datum): dva kupca smeju isti broj, a storniran broj se ne broji, pa ispravka zadržava broj (odluka operatera 24.10.2026, S6 korak 6). Do tada je provera duplikata bila globalna. |
 | REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza`. Dokument su dve noge (Kooperant + Stanica) istog broja i tipa; broj zauzima **noga Stanica**, jer samo ona nosi vlasnika niza. Četiri smera dele jedan niz. Niz je (stanica, dan) za **sva četiri** smera, sa storniranima — i za KOOP smerove: isti (broj, smer, dan) na drugoj stanici je legalan, i za istog kooperanta, jer noge jednog reversa povezuje `ReversID` (REV-IDENT-01, Faza 2b). |
 | NOV (F5 isplata / F6 uplata) | — | slobodan unos | broj **nije** jedinstven po konstrukciji: uvoz izvoda upisuje sve stavke pod istim brojem, a split avansa nasleđuje broj originalne stavke. **Nema provere duplikata** i ne deli prostor sa reversom (odluka 14.09.2026). Jedini jedinstven ključ je `NovacID`. |
 
@@ -67,7 +67,18 @@ uvozu — oba PWA uvoza fail-closed. Kapija dokazuje samo **negativ** — da bro
 pripada drugom vlasniku ili drugom danu; string koji nije u kanonskom obliku te
 vrste se ne sudi. Ne proverava jedinstvenost (to je
 `modBrojevi.BrojZauzetUNizu` za OTK, OTP, ZBR i REV — po nizu, sa storniranima;
-`CheckDuplicate` još za prijemnicu) i ne sudi prijemnicu.
+za prijemnicu `modDokumenta.PrijemnicaBrojRazlog`, isti za F4 i pisca od S6 koraka 8:
+po kupcu, eksternom kupcu među aktivnima, kupcu hladnjače i među storniranima, t. 4)
+i ne sudi prijemnicu.
+
+> **ZAMENJENO (AMB-10, 13.10.2026).** Dva pasusa ispod (`ReversID`, REV-IDENT-01, i
+> „Granica dokumenta") opisuju **stari** model reversa (dve noge u `tblAmbalaza`) i
+> ostaju kao istorija. Revers je od `10b-2` ambalažni dokument: identitet je
+> `tblAmbalazaDokument.AmbDokID` (AMB-10-ODL-16), broj je labela na zaglavlju, a red
+> knjige imenuje obe strane. Potrošači navedeni ispod (`StornoOMKoopByBrDok`,
+> `ReversIDRazresi`, `ReversRedoviRID`, `ReversIDGranica`, B10, štampa iz nogu) obrisani
+> su u `10e-1`/`10e-2`, a kolona `ReversID` i pisac `TrackAmbalaza` u `10e-3`
+> (`AMBALAZA.md` 6.13c–6.13e).
 
 **Revers: identitet je `ReversID`, broj je labela** (REV-IDENT-01, Faza 2a,
 15.09.2026; do tada je dokument bio ključ (broj, tip, stanica, dan)). Pošto isti
@@ -313,6 +324,76 @@ ume da vrati ovu tabelu", ne „ja sam pišem". Ciljna arhitektura ima koordinat
 koji snapshotuje tuđu tabelu i zove API njenog vlasnika. Kapija zato meri
 **mutatore** (`AppendRow` / `UpdateCell` / `RequireUpdateCell`), a učesnici
 transakcije se prikazuju odvojeno.
+
+**Rollback mora biti potpun ili prijavljen — ne sme biti ništa između.**
+`AddTableSnapshot` obećava da transakcija **ume** da vrati tabelu, ali je i sam
+rollback operacija koja može da padne: `RestoreTable` diže grešku na neusklađen
+broj kolona, a `GetTable` / `ListRows.Add` / `DataBodyRange.Value2 =` na zaštićen
+list ili nestalu tabelu. Dok je petlja u `RollbackTx` stajala na **prvoj** takvoj
+grešci, jedan pad je nosio tri posledice i sve tri su bile tihe: ostale tabele su
+ostajale nevraćene, `CleanUp` se nije izvršavao (pa je `Application.EnableEvents`
+ostajao `False` **do kraja sesije**, i svaki kasniji Workbook event prestajao da
+radi), a `mActive` je ostajao `True`.
+
+Pravilo: rollback pokušava **svaku** snapshot-ovanu tabelu, `CleanUp` se izvršava
+**uvek**, a nepotpun rollback je **čitljiva činjenica** (`RollbackNepotpun`,
+`NevraceneTabele`) i signal van trake (lokalni log + `Monitor_Critical`).
+Primitiv **ne diže** grešku: od 276 poziva `.RollbackTx` u izvoru 182 ne stoje pod
+`On Error Resume Next`, a većina je unutar aktivnog `EH` bloka — nov raise bi tamo
+zamenio originalnu poslovnu grešku. Pozivalac koji želi da eskalira čita stanje.
+
+**Nepotpun rollback nije nova normalna transakcija.** Property na `tx` objektu je
+signal za tog pozivaoca, **ne granica bezbednosti** — lokalni `tx` nestane kad
+pozivalac izađe iz procedure, a nekonzistentno stanje ostaje. Prva verzija ovog
+pravila je zato bila nedovoljna: posle nepotpunog rollback-a sistem se vraćao u
+**puno operativan** režim — nova transakcija dozvoljena, `AutoSaveAfterCommit`
+zakazan, a `ZatvoriAplikaciju` radi `Close SaveChanges:=True`. Operater koji samo
+zatvori program zabetonirao bi parcijalno vraćen podatak na disk, bez ijedne
+greške na ekranu.
+
+Granica je zato **globalna za sesiju** (`modTxState`, obrazac `modImportState`), i
+zatvara **svih pet** puteva:
+
+| put | ishod |
+|---|---|
+`clsTransaction.BeginTx` | nov upis **odbijen** (`UPIS ZATVOREN`) |
+`modJournaling.MarkDirtyAndSchedule` | AutoSave se **ne zakazuje** |
+`modJournaling.AutoSaveAfterCommit` | stvarni Save **preskočen** |
+`ThisWorkbook.Workbook_BeforeSave` | `Cancel` — jedina tačka kroz koju prolaze Ctrl+S, File > Save, Save As i `.Save` iz VBA |
+`modMain.ZatvoriAplikaciju` | `Close SaveChanges:=False` + poruka |
+
+Zadnja dva nisu suvišna jedno drugom: `Workbook_BeforeSave` je brana i kad bi
+izlaz zaboravio svoju proveru, ali bi tada `Close` bio **otkazan** usred gašenja —
+eksplicitna grana u `ZatvoriAplikaciju` postoji da se izađe uredno i sa razlogom.
+
+Dve odluke su obrnute od `modImportState` i obe su namerne: marker **nema
+registar** (živi samo u memoriji — recovery *je* reload, jer je Save zatvoren pa na
+disku stoji stanje pre transakcije), i **fail-closed** je bezbedan ovde jer nema
+čitanja koje može da pukne. Perzistiran marker bi svesku učinio trajno
+nesnimljivom bez izlaza iz aplikacije — šteta koju `ImportNijeDovrsen` izričito
+odbija da napravi. Marker se **ne briše** iz produkcionog koda.
+
+**Poruka o ishodu ide kroz jedno mesto, i POSLE rollback-a.** EH put ne sme da
+tvrdi „promene vraćene" dok ne zna ishod: posle nepotpunog rollback-a to je
+netačno, a operater iz te poruke zaključi da može da ponovi unos. Tekst ide kroz
+`modTxState.PorukaIshodaRollbacka`, koja čita **globalnu** branu — i to je tačno,
+ne približno, jer je `BeginTx` fail-closed pa marker može biti postavljen samo
+transakcijom koja se upravo odmotava.
+
+Prolazak kroz wrapper **nije** isto što i prolazak posle rollback-a: dva EH bloka
+u `modAgroUnos` su računala poruku pre `tx.RollbackTx`, pa je marker tada još bio
+prazan. `Err` se zato čuva **pre** rollback-a (rollback menja `Err` kontekst), a
+poruka računa **posle** njega.
+
+*Provera:* `T_TxRollback_NepotpunZatvaraUpisISnimanje` + **šest** sabotaža
+(`rollback-petlja-staje-na-padu`, `rollback-cleanup-samo-kad-prodje`,
+`rollback-nepotpun-nevidljiv`, `rollback-upis-ostaje-dozvoljen`,
+`rollback-save-ostaje-dozvoljen`, `rollback-poruka-tvrdi-vraceno`) — po jedna na
+svaku posledicu, na svaku od dve brane koje test meri kroz pravi seam, i na
+poruku. Statički: `vba_check` pravila **`ROLLBACK_TVRDNJA`** (tekst ide kroz
+wrapper; ključevi se čitaju iz `modPoruke`, ne hardkoduju) i
+**`ROLLBACK_TVRDNJA_RED`** (u proceduri koja sama poseduje `tx`, wrapper stoji
+posle zadnjeg `.RollbackTx`).
 
 **Oblik poziva ne sme da menja ishod.** `AppendRow` je funkcija i pola koda je
 zove kao funkciju (`newRow = AppendRow(TBL_ZBIRNA, rowData)`), pola kao naredbu

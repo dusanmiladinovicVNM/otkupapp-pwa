@@ -276,6 +276,9 @@ End Function
 ' Redovi za deljenu mrezu. Tipizirane liste dolaze iz istog citaca koji puni i
 ' unosni ekran -- odatle i nevidljiva kolona identiteta (True na kraju).
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrStorno.Scr_Rows"
     If Scr_Lista() = ST_LANAC Then
         Scr_Rows = RowsLanac(q)
         Exit Function
@@ -285,6 +288,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Exit Function
     End If
     Scr_Rows = modScrDokumenti.RedoviZaTip(Scr_Lista(), filter, q, True)
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrStorno.Scr_Rows"
 End Function
 
 ' OTKUPNI BLOKOVI IZABRANOG DOKUMENTA -- sa kolonom izbora.
@@ -440,6 +446,9 @@ End Function
 ' ISPOD sebe -- objasnjenje je ono sto je do sada zivelo u MsgBox tekstu.
 Public Sub Scr_Build(ByVal z As Object)
     Dim r As Long, c As Long, i As Long
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrStorno.Scr_Build"
 
     modUiKit.NewLbl z, "stCap", UCase$(Poruka("OTKUI_SCRST_IZBOR")), PAD, 6, 220, 11, _
                     TS_MICRO, True, C_MUTED, -1
@@ -475,6 +484,9 @@ Public Sub Scr_Build(ByVal z As Object)
     Next i
 
     modUiKit.NewLbl z, "stLnB", "", 0, ST_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
+    Exit Sub
+EH:
+    modUiScreens.ScrPadZabelezi "modScrStorno.Scr_Build"
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
@@ -735,10 +747,26 @@ Private Function AkcijeRacun() As Variant
         If Not CBool(mImpact("valid")) Then Exit Function
     End If
 
+    ' REVERS: STORNO, A NAS REVERS I ISPRAVKU (10d).
+    '
+    ' Od 10c do 10d revers je nudio samo storno: ISPRAVKA je isla kroz
+    ' RunReversCorrection -> ReversIDRazresi, koji ocekuje AmbID NOGE, a lista
+    ' salje AmbDokID -- radnja koja nad izabranim dokumentom ne moze da radi je
+    ' gora od radnje koje nema (review 08.10.2026, P2). Od 10d je ispravka JEDAN
+    ' POTEZ nad AmbDokID-em (modAmbalaza.IspravkaReversa_TX), pa se segment vraca.
+    '
+    ' Nudi se SAMO kad ga kapija ispravke pusta -- istim pitanjem koje postavlja i
+    ' pisac. Kupcev revers (REVERS_PARTNERA) i dalje ima samo storno. Raspored i
+    ' natpisi su oni od pre 10c: storno prvi, pa "Zamena reversa".
     If mSelTip = STIP_REVERSI Then
-        AkcijeRacun = Array( _
-            "|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger", _
-            SV_MODE_ISPRAVKA & "|OTKUI_SCRST_B_REV_ISPR|OTKUI_SCRST_H_REV_ISPR|secondary")
+        If Len(modAmbalaza.IspravkaReversaRazlog(mSelDocID)) = 0 Then
+            AkcijeRacun = Array( _
+                "|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger", _
+                SV_MODE_ISPRAVKA & "|OTKUI_SCRST_B_REV_ISPR|OTKUI_SCRST_H_REV_ISPR|secondary")
+        Else
+            AkcijeRacun = Array( _
+                "|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger")
+        End If
         Exit Function
     End If
 
@@ -1094,13 +1122,17 @@ End Function
 ' jedinstven tek u nizu (stanica, dan) -- pa ni broj ni "koji smer ima aktivan
 ' red pod brojem" ne kazu koji je dokument. Prazno kad red nema identitet ili
 ' nije revers: StornoRazlog tada odbija (STORNO_ERR_NEMA_SMERA), ne pogadja.
-Private Function ReversTipReda(ByVal ambID As String) As String
+' Od 10c je red liste DOKUMENT, pa se vrsta cita sa zaglavlja (REVERS /
+' REVERS_PARTNERA), a ne vise tip dokumenta sa noge knjige. Vrstu priznaje
+' UGOVOR (AmbDokVrstaPoznata), ne spisak imena ovde.
+Private Function ReversTipReda(ByVal ambDokID As String) As String
     Dim t As String
-    If Len(Trim$(ambID)) = 0 Then Exit Function
+    If Len(Trim$(ambDokID)) = 0 Then Exit Function
     On Error Resume Next
-    t = Trim$(NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, Trim$(ambID), COL_AMB_DOK_TIP)))
+    t = Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                   Trim$(ambDokID), COL_AMBD_VRSTA)))
     On Error GoTo 0
-    If ReversTipJe(t) Then ReversTipReda = t
+    If modAmbalazaUgovor.AmbDokVrstaPoznata(t) Then ReversTipReda = t
 End Function
 
 ' "broj/racun" - jednoznacan kljuc izvoda. Bez racuna se salje goli broj, pa
@@ -1151,13 +1183,12 @@ End Function
 ' Tekst potvrde storna izabranog dokumenta -- izdvojen da bi se merio (MsgBox u
 ' headless run-u visi). Za revers nosi stanicu i dan (DokumentOpis): revers nema
 ' uvid, a isti KOOP broj, smer i dan legalno nose reversi dve stanice (Faza 2b).
-' mode = SV_MODE_ISPRAVKA dodaje objasnjenje zamene reversa.
-Public Function StornoPotvrdaTekst(Optional ByVal mode As String = "") As String
-    Dim s As String
-    s = modPoruke.Poruka("STORNO_ASK") & " " & _
+'
+' Varijanta za ISPRAVKU reversa je otisla u 10d: ispravka vise ne stornira u
+' trenutku klika nego tek pri snimanju zamene, pa nema sta da se potvrdjuje.
+Public Function StornoPotvrdaTekst() As String
+    StornoPotvrdaTekst = modPoruke.Poruka("STORNO_ASK") & " " & _
         modStornoDok.DokumentOpis(mSelTip, mSelBroj, mSelOpcija, mSelDocID) & "?"
-    If mode = SV_MODE_ISPRAVKA Then s = s & vbCrLf & vbCrLf & modPoruke.Poruka("OTKUI_SCRST_H_REV_ISPR")
-    StornoPotvrdaTekst = s
 End Function
 
 ' Obican storno: bez framework-a ispravke. Posledice su vec u zoni, pa je
@@ -1223,11 +1254,14 @@ Private Function StornoPoModu(ByVal mode As String) As Boolean
     neDiraj = (mNeDiraj And mSelTip = STIP_PRIJEMNICA And _
                (mode = SV_MODE_DUPLI Or mode = SV_MODE_PONISTENJE))
 
-    ' Revers nema uvid, a ISPRAVKA odmah stornira stari revers -- potvrda pre toga
-    ' imenuje stanicu i dan, jer isti KOOP broj, smer i dan legalno nose reversi dve
-    ' stanice (REV-IDENT-01 Faza 2b). Drugi modovi reversu nisu ponudjeni.
+    ' ISPRAVKA REVERSA NE STORNIRA OVDE (10d). Otvara F7 popunjen starim
+    ' dokumentom; storno i zamena nastaju tek pri snimanju, u JEDNOJ transakciji
+    ' (modAmbalaza.IspravkaReversa_TX). Zato nema ni potvrde: dok se ne snimi,
+    ' nista se ne menja, a odustanak ne ostavlja trag.
+    ' Drugi modovi reversu nisu ponudjeni (AkcijeRacun) -- i ne izvrsavaju se.
     If mSelTip = STIP_REVERSI Then
-        If MsgBox(StornoPotvrdaTekst(mode), vbQuestion + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Function
+        If mode = SV_MODE_ISPRAVKA Then StornoPoModu = OtvoriIspravkuReversa()
+        Exit Function
     End If
 
     Set res = modStornoDok.StornoIzvrsiMod(mSelTip, mSelBroj, mSelOpcija, mode, _
@@ -1303,8 +1337,33 @@ Private Sub OtvoriIspravku(ByVal tip As String, ByVal broj As String, _
     Err.Clear
 End Sub
 
-' Rezim u kome se unosi zamenski dokument. Revers ide u F7; smer operater bira
-' sam, jer prefill reversa ne postoji ni u legacy.
+' ISPRAVKA NASEG REVERSA (10d): predji u F7 popunjen starim dokumentom; SLEDECE
+' snimanje pravi zamenu. Redosled je obavezan:
+'   1. kapija + forma (IspravkaReversaPripremi) -- PRE prelaska, da odbijanje
+'      ne izbaci operatera sa ekrana Storno;
+'   2. IdiNaEkran + IdiNaRezim -- prelazak gasi otvorenu ispravku i cisti formu;
+'   3. ClearForm -- kad je F7 vec bio aktivan rezim, IdiNaRezim ne radi NISTA, pa
+'      bi u formi ostao broj prethodnog unosa;
+'   4. ApplyPrefill;
+'   5. Scr_IspravkaReversaOtvori -- stanje TEK SADA: koraci 2 i 3 ga brisu.
+Private Function OtvoriIspravkuReversa() As Boolean
+    Dim spec As String, razlog As String, broj As String
+    razlog = modScrDokumenti.IspravkaReversaPripremi(mSelDocID, spec)
+    If Len(razlog) > 0 Then
+        MsgBox razlog, vbExclamation, APP_NAME
+        Exit Function
+    End If
+    modOtkupUI.IdiNaEkran "DOKUMENTI"
+    modOtkupUI.IdiNaRezim RezimZaTip(STIP_REVERSI)
+    modOtkupUI.ClearForm
+    modOtkupUI.ApplyPrefill spec
+    broj = modScrDokumenti.Scr_IspravkaReversaOtvori(mSelDocID)
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_ISPRAVKA_REVERSA") & " " & broj, False
+    OtvoriIspravkuReversa = True
+End Function
+
+' Rezim u kome se unosi zamenski dokument. Revers ide u F7; od 10d sa formom
+' starog reversa (OtvoriIspravkuReversa), ukljucujuci i smer.
 Private Function RezimZaTip(ByVal tip As String) As String
     Select Case tip
         Case STIP_OTKUP:      RezimZaTip = "F1"

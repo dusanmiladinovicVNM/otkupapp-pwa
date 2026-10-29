@@ -321,16 +321,20 @@ Configuration boundary:
 
 `SetupNewPC` / health-check flow should initialize or validate local requirements, including `PDFTOTEXT_EXE_PATH` for bank-statement parsing.
 
-`Setup-OtkupApp.ps1` is the clean-PC bootstrapper. Active responsibilities:
+`Setup-AgriX.ps1` is the clean-PC bootstrapper. Active responsibilities:
 
-- create `C:\OtkupApp` or the configured install root;
+- create `C:\AgriX` or the configured install root;
 - create core folders such as `Backups`, `Logs`, `Journal`, `Export`, `Temp`, `Secrets` and `Bank_Izvodi`;
-- copy `OtkupApp.xlsm`;
+- copy `AgriX.xlsm`;
 - unblock the workbook;
 - optionally install the VBA publisher certificate;
 - add the Excel trusted location;
 - create the desktop shortcut;
 - optionally copy bundled tools such as Poppler under `Tools\poppler\Library\bin\pdftotext.exe`.
+
+Folder layout and the step-by-step packaging/install procedure live in
+`docs/DESKTOP_SETUP_REFERENCE.md`; this section states the contract only, so the
+two do not drift.
 
 ### 4.6 AutoSave After Commit
 
@@ -504,7 +508,7 @@ Transport sheets, exports, caches and dashboards are read models unless explicit
 | `tblFakture` | invoice header | `FakturaID` | Operator / desktop | `Stornirano` | includes SEF workflow state |
 | `tblFakturaStavke` | invoice lines | `StavkaID` | Operator / desktop | `Stornirano` / orphanable | relink workflows may repair document-chain references |
 | `tblNovac` | money movement | `NovacID` | Operator / desktop | `Stornirano` | manual finance, avans and bank-mapping outputs |
-| `tblAmbalaza` | packaging movement ledger | `AmbalazaID` | Operator / desktop | `Stornirano` | strict `Ulaz` / `Izlaz` semantics |
+| `tblAmbalaza` | packaging movement ledger | `AmbID` | Operator / desktop | counter-row (`StornoOd`), no flag | transfer `OdNalog` -> `NaNalog` + `VrstaKretanja` (AMB-10; `docs/DOMEN/AMBALAZA.md`) |
 | `tblMagacin` | agrohemija warehouse movements | `MagacinID` | Operator / desktop | `Stornirano` | `MAG_ULAZ` and `MAG_IZLAZ` journal |
 | `tblBankaImport` | bank statement staging | `BankaImportID` | Operator/system via import | `Stornirano` | staging only; source bank facts are not overwritten |
 | `tblPartnerMap` | learned bank partner mapping | logical composite | Operator/system | n/a | helper table, not a business ledger |
@@ -550,7 +554,7 @@ Transaction tables record source business events or operational movements.
 |---|---|---|---|
 | `tblOtkup` | field procurement | PWA operational input, desktop canonical after import | append/import first; later document links update checked fields |
 | `tblNovac` | finance | desktop | finance movement facts, avans and bank-map outputs |
-| `tblAmbalaza` | packaging ledger | desktop | ledger semantics; no negative quantity; strict direction |
+| `tblAmbalaza` | packaging ledger | desktop | append-only transfer ledger; quantity > 0; storno is a counter-row (AMB-10) |
 | `tblMagacin` | agrohemija warehouse | desktop | movement journal; stock is derived from active movements |
 | `tblBankaImport` | bank staging | desktop/system import | staging source facts; mapping changes status/links, not raw bank facts |
 | role-specific Google sheets | field/PWA transport | PWA/GAS | operational sync queues before desktop import/export reconciliation |
@@ -835,7 +839,7 @@ The printed/PDF documents (otkupni list, prijemnica, paletni list, preradni list
 - `DocLabelVal` — "label + bold value" in one cell (rich-text bolding of the value part).
 - `DocLogoPath` / `DocDrawLogo` — optional logo from config `SELLER_LOGO_PATH`, else `<workbook>\logo.png` / `logo.jpg`; silently skipped if absent.
 - `DocConfigOr` and color helpers (`DocColHeaderFill` / `DocColGray` / `DocColRule`).
-- `DocExportPdf` — single worksheet → PDF with the shared export parameters (`Quality:=xlQualityStandard`, `IncludeDocProperties:=False`, `OpenAfterPublish`). Single home for every printed document's PDF export (modPrint / modPaletniList / modIzvestaj / modOtkupBlok / frmSledljivost); the `_Print` izveštaj sheet keeps its own `UsedRange` export.
+- `DocExportPdf` — worksheet (or `Range`: izveštaji export `UsedRange`) → PDF with the shared export parameters (`Quality:=xlQualityStandard`, `IncludeDocProperties:=False`, `OpenAfterPublish`). The **only** place in `src-vba/` that calls `ExportAsFixedFormat` — every printed document and both izveštaj exports (`PrintIzvestaj`, `PrintIzvestajHouse`) go through it; each branch (`Worksheet` / `Range`) uses an early-bound call with named arguments. The caller's `openAfter` is a request; `PDF_OTVORI_POSLE = NO` turns it off for all documents (the PDF is still written). The test fixture pins it to `NO`, so a suite run makes paper but never opens a viewer over the operator's work (test 249).
 - `DocPageSetupThirdA4` — shared 1/3-A4 1:1 page setup (`Zoom=100`, margins `0` / `0.31"`, `PrintArea` `A1:H<lastRow>`) for the two-up perforated documents (otkupni / grupni / otpremnica / revers ambalaže). The four formerly-identical `PageSetup` blocks now live here so the 99/198 mm geometry cannot drift. Fit-to-page documents (prijemnica / paletni / preradni) keep their own setup (different margins/columns).
 - `DocResolveMode(mode, defMode)` — normalizes a `*_PRINT_MODE` config value to `OFF` / `PRINT` / `PREVIEW` / `PDF`; empty or unrecognized → `defMode` (the document's default: `PDF` for otkupni/grupni/izdamb/kartica/sledljivost, `OFF` for prijemnica/paletni, `PRINT` for faktura). Centralizes the per-document default that used to be implicit in each dispatcher's `Case Else`.
 - `DocPrintWs(ws, mode)` — print or preview an already-filled sheet (`PREVIEW` → `PrintPreview`, else `PrintOut Copies:=1`). Lets every `Output*` dispatcher merge its `PRINT`/`PREVIEW` branches into one fill. The `PDF` branch still delegates to each document's `Export*PDF` (which owns its filename incl. folder/timestamp).
@@ -844,7 +848,7 @@ Sheet-name source of truth: template worksheet names are `Public Const WS_*_SABL
 
 > Beyond the four otkup-flow templates above, the same render-onto-worksheet pattern is reused by `GrupniOtkupSablon` / `OtpremnicaSablon` / `IzdAmbSablon` and the hidden `SpecifikacijaSablon` (modOtkupBlok). As of v6.43 the formerly **manual** templates `FakturaSablon`, `KarticaSablon` and `SledljivostSablon` are also **generated in `modPrint`** (`EnsureFakturaSablon` / `EnsureKarticaSablon` / `EnsureSledljivostSablon`, layout-version marker like `PaletaSablon` — `H1` for faktura/kartica, `N1` for the 12-column landscape sledljivost) with the shared house style, and filled by `FillFakturaSablon` / `FillKarticaSablon` / `FillSledljivostSablon`. The domain modules keep their data/guards and call the modPrint renderers: `modFaktura.PrintFaktura` (business guards: single-row, storno, duplicate-`FakturaID`), `modIzvestaj.PrintKarticaPDF` (`ReportKarticaKooperanta`), `frmSledljivost.PrintTracePDF` (`TraceByZbirna` + prijemnica reconciliation). No printable template errors-if-missing anymore; all auto-generate and auto-upgrade on layout-version change. (`PrintKarticaAmbalazePDF` is a separate code-built document on `_KartAmbPrint`, intentionally untouched.)
 
-Output mode is config-driven per document via `*_PRINT_MODE` keys (`OFF` / `PRINT` / `PREVIEW` / `PDF`, resolved through `DocResolveMode`): `OTKUP_PRINT_MODE` (otkupni + grupni), `PRIJEMNICA_PRINT_MODE`, `OM_IZDAVANJE_PRINT_MODE` (revers), `PALETA_PRINT_MODE`, plus `FAKTURA_PRINT_MODE` (default `PRINT`), `KARTICA_PRINT_MODE` and `SLEDLJIVOST_PRINT_MODE` (default `PDF`). Empty key → the document's default, so unset config preserves prior behavior.
+Output mode is config-driven per document via `*_PRINT_MODE` keys (`OFF` / `PRINT` / `PREVIEW` / `PDF`, resolved through `DocResolveMode`): `OTKUP_PRINT_MODE` (otkupni + grupni), `PRIJEMNICA_PRINT_MODE`, `OM_IZDAVANJE_PRINT_MODE` (revers), `PALETA_PRINT_MODE`, plus `FAKTURA_PRINT_MODE` (default `PRINT`), `KARTICA_PRINT_MODE` and `SLEDLJIVOST_PRINT_MODE` (default `PDF`). Empty key → the document's default, so unset config preserves prior behavior. Whether a `PDF` opens after it is written is one shared key, `PDF_OTVORI_POSLE` (`bool`, empty/`YES` = open, `NO` = write only).
 
 Domain rules:
 
@@ -1177,6 +1181,14 @@ Monitoring boundary:
 - Failure path emits `Monitor_Error` and `SLEDLJIVOST_AUTOLINK_FAIL` before rollback.
 
 ### 6.8 Ambalaža Ledger
+
+> **SUPERSEDED (AMB-10, 13.10.2026).** The rules below describe the OLD model (one-sided
+> rows with `Smer` / `EntitetID` / `EntitetTip` / `VozacID`, `Stornirano` flag, `ReversID`,
+> writer `TrackAmbalaza`). That model was deleted in `10e-1`..`10e-3`: the canonical
+> `tblAmbalaza` row is a transfer (`OdNalogTip/ID` -> `NaNalogTip/ID`, `VrstaKretanja`),
+> storno is a counter-row (`StornoOd`), the only writer is `modAmbalaza.PrenesiAmbalazu`
+> (by column name), and a non-empty row that does not touch the ledger is a named ledger
+> fault. Source of truth: `docs/DOMEN/AMBALAZA.md` (6.9, 6.13c-6.13e). Kept for history.
 
 `tblAmbalaza` is the packaging movement journal used by document side effects and packaging saldo reports.
 
@@ -1581,14 +1593,14 @@ Canonical rules:
 - Setup fallback may derive from `APP_ROOT_PATH`, for example:
 
 ```text
-C:\OtkupApp\Tools\poppler\Library\bin\pdftotext.exe
+C:\AgriX\Tools\poppler\Library\bin\pdftotext.exe
 ```
 
 Recommended local config row:
 
 ```text
 Kljuc: PDFTOTEXT_EXE_PATH
-Vrednost: C:\OtkupApp\Tools\poppler\Library\bin\pdftotext.exe
+Vrednost: C:\AgriX\Tools\poppler\Library\bin\pdftotext.exe
 Opis: Putanja do pdftotext.exe za PDF bankarske izvode
 ```
 
@@ -4972,7 +4984,7 @@ Rules:
 - `tblLocalConfig` owns local workstation settings such as `PDFTOTEXT_EXE_PATH`;
 - `tblConfig` remains Google/PWA config and must not become workstation-local config storage;
 - `tblSEFConfig` owns SEF and monitoring workbook/runtime configuration;
-- `Setup-OtkupApp.ps1` may create install folders, logs, temp, backups, secrets and tools directories, but executable/tool paths must still be validated;
+- `Setup-AgriX.ps1` may create install folders, logs, temp, backups, secrets and tools directories, but executable/tool paths must still be validated;
 - missing required tools such as `pdftotext.exe` must be reported by health/setup checks;
 - local PDF extraction uses unique temp output and deletes temp files before/after extraction to avoid stale-content leakage.
 

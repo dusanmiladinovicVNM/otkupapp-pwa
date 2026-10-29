@@ -259,7 +259,7 @@ specifikacija, storno, preuzimanje, prefill sa otpremnice.
 | Prijemnica | `btnUnosPrij_Click` | `SavePrijemnicaMulti_TX`, `GetPaletaStatusForPrijemnica`, `ReassignPaleteToPrijemnica_TX` | F4 — **upis IMA** (v6-ui-116) **osim ispravke posle storna** (relink paleta) |
 | OM ulaz — novac | `btnUnosOMUlaz_Click` | `SaveOMUlaz_TX`, `GetOMAvansSaldo`, `GetOpenOtkupi` | F5 — **upis IMA** (`modNovacUnos`, v6-ui-117) |
 | OM ulaz — ambalaža | `btnUnosOMUlaz_Click` | `SaveOMUlaz_TX` (`koopSmer`), `OutputIzdavanjeAmbalaze` | F7 — **upis IMA** (v6-ui-117) |
-| Kupci izlaz (uplate) | `btnUnosIzlaz_Click` | `SaveKupciIzlaz_TX`, `GetUplataForFaktura`, `GetOpenFakture` | F6 — **upis IMA** (v6-ui-117) |
+| Kupci izlaz (uplate) | `btnUnosIzlaz_Click` | `SaveKupciIzlaz_TX`, `GetUplataForFaktura`, `GetOpenFakture` | F6 — **upis IMA** (v6-ui-117); od 06.10.2026 je `SaveKupciIzlaz_TX` **samo kasa** (`AMB-10-ODL-5`, AMBALAZA.md 6.12i) |
 
 Jedan legacy handler (`btnUnosOMUlaz_Click`) pokriva **dva** režima novog UI-ja:
 novac i ambalaža su tamo mogli u isti dokument, ovde ne mogu — F5 nema polja
@@ -280,7 +280,7 @@ ambalaže, F7 nema polje iznosa (`ApplyFormFields`). Zato je i podeljen na dva.
 | Broj novca **nije** u zajedničkom prostoru sa reversom (od 14.09.2026) | `DuplBroj` | F5/F6 **nemaju** proveru duplikata broja — broj novca nije jedinstven (izvod, split; `ARCHITECTURE_CONTRACT.md` A2 red NOV). F7 revers proverava zauzetost po nizu (stanica, dan), sa storniranima — `modBrojevi.BrojZauzetUNizu` (`KIND_REV`), ista provera kao u piscu `SaveOMUlaz_TX`; `DuplBroj` je obrisan. KOOP smerovi nemaju dodatnu proveru: isti (broj, smer, dan) na drugoj stanici je legalan od REV-IDENT-01 Faze 2b (15.09.2026) — noge jednog reversa povezuje `ReversID`; ranija provera `ReversKoopBrojDrugde` je uklonjena, a potvrde storna i „Vrati storno" imenuju stanicu i dan |
 | **Vozač se za čist novac NE traži** | — | legacy ga traži uz `VALIDACIJA_UNOSA`, ali samo zbog ambalaže u istom dokumentu; `SaveNovac` ga nema, pa se odbacuje. U F7, gde ambalaža postoji, vozač je obavezan i **bez** `VALIDACIJA_UNOSA` (firma↔OM ide preko vozača) |
 | **F5: partner koji je otkupno mesto JESTE entitet novca** | `IsplataValidiraj` | polje se u F5 zove „Primalac". Legacy tu mogućnost nije imao — primalac je bio samo kooperant, a otkupno mesto se podrazumevalo iz konteksta forme. Kad je partner kooperant, entitet ostaje kontekst — tačno kao legacy |
-| **F7 ne prima kupca kao partnera** | `ReversValidiraj` | četiri smera idu isključivo kooperant ↔ OM ↔ firma; ambalaža kupca u legacy ide kroz prijemnicu (povrat) i kupci-izlaz, ne kroz revers |
+| **F7 PRIMA kupca — peti smer „Povrat kupca" (od 07.10.2026)** | `ReversValidiraj` | četiri smera idu isključivo kooperant ↔ OM ↔ firma; ambalaža kupca u legacy ide kroz prijemnicu (povrat) i kupci-izlaz, ne kroz revers. **Od 06.10.2026 ostaje samo prijemnica:** kupci-izlaz je prestao da knjiži ambalažu, a njegovo polje u novom UI-ju nikad nije postojalo (`kolAmb:=0` tvrdo upisano). Sposobnost „kupac vraća prazne **bez** dostave robe" time nema ni ulaz ni pisca — a presudom operatera (06.10.2026, `AMB-10-ODL-23`) **postoji i redovna je**, pa ovaj red prestaje da važi u svom rezu: dokument nosi **kupčev** broj (`REVERS_PARTNERA`, broj se unosi a ne predlaže), par je `Kupac → Vozac`. Peti smer **ne ide** u `AmbReversSmerovi` — svoj pisac (`modAmbalaza.UpisiReversPartnera_TX`, 6.12j), **i svoj ulaz od 07.10.2026**: peti segment na F7, partner mora biti kupac, vozač obavezan, a broj se **unosi i ne predlaže** (grana izlazi pre auto-broja; zauzetost se meri u opsegu `(Kupac, KupacID, dan)`). `SmerRevKljuc(5)` namerno vraća `""` — peti smer nije naš revers. Prekomeran povrat pita operatera i ponavlja poziv (isti protokol kao otkup i F4). **Od 19.10.2026 i šesti segment „Pozajmica" (`AMB-10-ODL-24`):** kupac predaje **svoje** prazne gajbe vozaču. Papir i pravila broja su isti kao kod povrata (`RevSmerJeKupcev` odlučuje za oba smera). Red nosi `POZAJMICA_PARTNERA` uz ulaz iste količine (`AMB-INV-13`), operater ne dobija pitanje o manjku, a papir se ne pravi (`ODL-32`). Pisac je `UpisiPozajmicuKupca_TX`. AMBALAZA.md 6.12i/6.12j/6.12k |
 | F5/F6: broj dokumenta je slobodan unos | Z3a | prazan je dozvoljen samo bez `VALIDACIJA_UNOSA`; tada upis vraća „(bez broja)", jer je prazan povratak rezervisan za neuspeh |
 | **Ukucan a nerazrešen izbor zaustavlja dokument** | `NerazresenIzbor` | combo dopušta kucanje, a ID dolazi iz skrivene kolone koja postoji samo uz stvarno izabranu stavku. Tekst bez ID-a bi tiho promenio značenje: partner → isplata otkupnom mestu, blok → avans kooperantu, faktura → avans kupca. Sve tri se knjiže kao **ispravan** dokument, samo pogrešan |
 | **Vlasništvo i trenutni ostatak proverava CORE** | `IsplataBlokProblem`, `UplataFakturaProblem` (`modNovac`) | blok mora pripadati tom kooperantu i tom otkupnom mestu, faktura tom kupcu; ostatak se čita **u trenutku upisa**, ne iz snimka koji je ekran poslao. Istu kapiju diže i `SaveOMUlaz_TX` / `SaveKupciIzlaz_TX`, pa važi i za legacy formu i za svakog drugog pozivaoca |
@@ -295,7 +295,7 @@ ambalaže, F7 nema polje iznosa (`ApplyFormFields`). Zato je i podeljen na dva.
 | Zbirna: izvor ima Kl.II a prekidač isključen → blokada | `ZbirnaValidiraj` → `ZbirnaIzvorImaKlasuII` | inače bi se Kl.II tiho izgubila |
 | Zbirna **nema** bruto→neto ni cenu | — | `tblZbirna` nema ni `BrutoKg` ni `Cena`; zbirna je zbir već netiranih otpremnica |
 | Zbirna: `Hladnjaca` / `Pogon` | `modOtkupUI` (`fgHladnjaca` / `fgPogon`) + `modScrDokumenti.SaveZbirna` | ~~novi UI nema ta polja (Z3b)~~ → **preneto u `v6-ui-215`** (MIG-001, §28.1b). Writer nije diran |
-| Prijemnica: kupac → vozač → broj → broj zbirne → zbirna postoji | `PrijemnicaValidiraj` | ponašanje po `PRIJEMNICA_ZBIRNA_PROVERA` (BLOK / UPOZORENJE) |
+| Prijemnica: kupac → vozač → broj → broj zbirne → zbirna postoji | `PrijemnicaValidiraj` | uvek tvrdo (PRJ-ZBR-01): izdata, jednoznačna zbirna istog vlasnika — ista kapija kao pisac (`modDokumenta.PrijemnicaRoditeljRazlog`, S6 korak 8); podešavanje `PRIJEMNICA_ZBIRNA_PROVERA` obrisano. Vrsta i sorta moraju biti iste kao na zbirnoj, a klase smeju da se razlikuju (PRJ-ZBR-02, `modDokumenta.PrijemnicaRobaRazlog`, ista kapija kao pisac i prevezivanje); poruka stoji uz polje vrste ili sorte |
 | Prijemnica: bruto→neto po klasama, `BrutoKg` zamrznut | `PrijemnicaValidiraj` | isto kao otkup i otpremnica |
 | Prijemnica: 1 zbirna = 1 prijemnica (pitanje, ne greška) | `PrijemnicaValidiraj` → `LookupActiveID` | |
 | Prijemnica: auto-štampa + grupni otkupni list samo za hladnjaču | `PrijemnicaUpisi` | best-effort, ne obara potvrdu upisa |
@@ -465,7 +465,9 @@ vreme upisa); filtriranje kooperanata po otkupnom mestu je urađeno u v6-ui-113
    kroz `modDokUnos.ZbirnaUpisi` / `ZbirnaIzmeniNacrt`; pauza skinuta. Ostaje
    pokrivanje nacrta izvorima (F2 radni sto, S4-2c/2b-2b). `SaveZbirnaMulti_TX` i `modDokUnos.ZbirnaUpisi` više ne postoje;
    `SnimiZbirnu` samo validira, a `ZbirnaValidiraj` je pauziran od S3a. F4 upis
-   (`SavePrijemnicaMulti_TX`) je netaknut — prijemnica ide u S6.
+   (`SavePrijemnicaMulti_TX`) je netaknut — prijemnica ide u S6. *Dopuna:* od S6
+   koraka 6 F4 upisuje kroz `PrijemnicaValidiraj` → `PrijemnicaUpisi` (pauza skinuta,
+   plan §14.55 „Korak 6").
 9. ~~F5/F6/F7 → `SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`, novac.~~ **URAĐENO**
    (v6-ui-117, `modNovacUnos`). Uz upis su došla i dva polja bez kojih upis ne
    bi bio tačan: prekidač „ISPLATA IZ" sa avans saldom OM (F5) i lista

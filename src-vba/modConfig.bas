@@ -9,7 +9,7 @@ Option Explicit
 ' ============================================================
 
 ' --- App Info ---
-Public Const APP_NAME As String = "OtkupApp"
+Public Const APP_NAME As String = "AgriX"
 Public Const APP_VERSION As String = "2.28.4"
 
 ' --- Self-update / backup (Drive folder ID-jevi; popuni jednokratno) ---
@@ -46,8 +46,10 @@ Public Const TBL_OTPREMNICA_STAVKE As String = "tblOtpremnicaStavke"
 Public Const TBL_OTPREMNICA_IZVORI As String = "tblOtpremnicaIzvori"
 Public Const TBL_ZBIRNA As String = "tblZbirna"
 Public Const TBL_ZBIRNA_STAVKE As String = "tblZbirnaStavke"
+Public Const TBL_AMBALAZA_DOKUMENT As String = "tblAmbalazaDokument"
 Public Const TBL_ZBIRNA_IZVORI As String = "tblZbirnaIzvori"
 Public Const TBL_PRIJEMNICA As String = "tblPrijemnica"
+Public Const TBL_PRIJEMNICA_STAVKE As String = "tblPrijemnicaStavke"
 Public Const TBL_FAKTURE As String = "tblFakture"
 Public Const TBL_FAKTURA_STAVKE As String = "tblFakturaStavke"
 Public Const TBL_NOVAC As String = "tblNovac"
@@ -229,19 +231,15 @@ Public Const COL_OTP_BROJ_ZBIRNE As String = "BrojZbirne"
 Public Const COL_OTP_KULTURA As String = "KulturaID"
 Public Const COL_OTP_VRSTA As String = "VrstaVoca"
 Public Const COL_OTP_SORTA As String = "SortaVoca"
-Public Const COL_OTP_KOLICINA As String = "Kolicina"
-Public Const COL_OTP_CENA As String = "Cena"
+' TipAmbalaze OSTAJE: tip je cinjenica ZAGLAVLJA (jedan tip po dokumentu), a
+' kolicina gajbi je cinjenica stavke. Kolicina/Cena/KolAmbalaze/Klasa/BrutoKg su
+' obrisane iz kanona -- zive na tblOtpremnicaStavke od S3a.
 Public Const COL_OTP_TIP_AMB As String = "TipAmbalaze"
 ' IDENTITET UTOVARA (S5-3, review #388 P1). Jedan klik otkupca u PWA ->
 ' jedna otpremnica. Bez trajnog traga je PredajaID zivela samo unutar jednog
 ' sync prolaza, pa je parcijalan uspeh (GAS obradjuje red po red) mogao isti
 ' utovar da razbije na DVE izdate otpremnice.
 Public Const COL_OTP_PREDAJA_ID As String = "PredajaID"
-Public Const COL_OTP_KOL_AMB As String = "KolAmbalaze"
-Public Const COL_OTP_KLASA As String = "Klasa"
-Public Const COL_OTP_BRUTO As String = "BrutoKg"                 ' bruto tezina (kad je OTKUP_BRUTO_UNOS); prazno = neto
-
-Public Const DOK_TIP_OM_ULAZ As String = "OMUlaz"
 
 ' --- Spaltennamen tblZbirna (NEU) ---
 Public Const COL_ZBR_ID As String = "ZbirnaID"
@@ -260,6 +258,10 @@ Public Const COL_ZBR_KOL_AMB As String = "UkupnoAmbalaze"
 Public Const COL_ZBR_VRSTA As String = "VrstaVoca"
 Public Const COL_ZBR_SORTA As String = "SortaVoca"
 Public Const COL_ZBR_KLASA As String = "Klasa"
+' ZBR-OWN-01 (review #442, P1-b): da li je zbirna INTERNI hladnjacki tok
+' ("Da"/"Ne"), upisano pri nastanku. PONISTENJE po njoj odlucuje sme li da obori
+' prijemnicu i palete -- trenutni MALINA_DEFAULT_KUPAC to vise ne odlucuje.
+Public Const COL_ZBR_KUPAC_HLADNJACA As String = "KupacHladnjaca"
 
 ' --- tblZbirnaIzvori (PR3: verzionisano clanstvo) ---
 '
@@ -332,24 +334,80 @@ Public Const COL_ZBS_KLASA As String = "Klasa"
 Public Const COL_ZBS_KOLICINA As String = "Kolicina"
 Public Const COL_ZBS_KOL_AMB As String = "KolAmbalaze"
 
+' --- tblAmbalazaDokument (AMB-10-DOK) ---
+'
+' Dokument za ambalazne dogadjaje koji nemaju svoj poslovni dokument: revers,
+' nabavka, otpis. Njegov AmbDokID ide u tblAmbalaza.DokumentID, cime ReversID
+' prestaje da bude drugi, paralelan identitet -- ne brise se nego POSTAJE ovo.
+'
+' DOKUMENT NIJE KNJIGA. Zaglavlje sme da nosi Stornirano i Modified*, jer je
+' zaglavlje; knjiga (tblAmbalaza) je append-only i storno joj je kontra-stav.
+' Dva razlicita ugovora u istoj temi, i zato stoje napisani jedan uz drugi.
+'
+' STRANE DOGADJAJA NISU OVDE. Njih nosi svaki red knjige (Od/Na), pa bi kopija
+' na zaglavlju bila DRUGA ISTINA koja moze da se razidje sa redovima.
+' AMB-10-ODL-3 (jedan dokument = jedan protivpartner) je zato invarijanta NAD
+' REDOVIMA i meri se u 10b, kad redovi postoje.
+'
+' VLASNIK NUMERICKOG NIZA (BrojOwnerTip/ID) JESTE cinjenica zaglavlja, i to je
+' razlika: strane dogadjaja se mogu PROCITATI iz redova, a vlasnik broja ne --
+' nijedan red ne kaze ciji je to niz. Broj bez vlasnika niza nije jedinstven.
+'
+' Zasto nije samo StanicaID (review #399, P2): stari OM revers broji po
+' (stanica, dan), ali revers KUPCA nema stanicu -- SaveKupciIzlaz_TX je nema u
+' potpisu. Da je zaglavlje ostalo na StanicaID, 10b bi morao ili da izmisli
+' stanicu, ili da pusti broj bez opsega, ili da menja tek upisanu strukturu.
+'
+' KOJI nalog je vlasnik po vrsti dokumenta odlucuje 10b, zajedno sa numeracijom;
+' ovde se zakljucava samo da vlasnik POSTOJI i da se razresava istom kapijom.
+Public Const COL_AMBD_ID As String = "AmbDokID"
+Public Const COL_AMBD_VRSTA As String = "Vrsta"
+Public Const COL_AMBD_BROJ As String = "BrojDokumenta"
+Public Const COL_AMBD_DATUM As String = "Datum"
+Public Const COL_AMBD_BROJ_OWNER_TIP As String = "BrojOwnerTip"
+Public Const COL_AMBD_BROJ_OWNER_ID As String = "BrojOwnerID"
+Public Const COL_AMBD_NAPOMENA As String = "Napomena"
+
+' --- tblPrijemnicaStavke (S6: dokument = header + stavke; plan 14.55) ---
+'
+' Oblik je tblOtkupStavke: isti raspored, i Cena -- ne PredlogCena kao kod
+' otpremnice. Prijemnica nosi STVARNU cenu prijema, a CreateFaktura je cita iz
+' reda.
+'
+' Na stavci namerno NEMA cinjenica dokumenta:
+'   TipAmbalaze, KolAmbVracena -- jedan tip i JEDAN povrat po dokumentu; od S6
+'     koraka 2 povrat stoji na zaglavlju i knjizi se jednom, pod ID-jem dokumenta;
+'   Fakturisano, FakturaID -- odluka operatera (b), 20.10.2026: status se izvodi
+'     iz aktivnog reda tblFakturaStavke, ne kesira se;
+'   Stornirano -- line-level storno ne postoji, status drzi header, pa je tabela
+'     u modSchemaGuard.BEZ_STORNA;
+'   GeneracijaID, BrojZbirne -- identitet i veza su dokumentovi.
+' Meri ih modTest 257 (T_S6_KanonStavkePrijemnice).
+Public Const COL_PRS_ID As String = "PrijemnicaStavkaID"
+Public Const COL_PRS_PRIJEMNICA_ID As String = "PrijemnicaID"
+Public Const COL_PRS_RB As String = "RedniBroj"
+Public Const COL_PRS_KLASA As String = "Klasa"
+Public Const COL_PRS_KOLICINA As String = "Kolicina"
+Public Const COL_PRS_CENA As String = "Cena"
+Public Const COL_PRS_KOL_AMB As String = "KolAmbalaze"
+Public Const COL_PRS_BRUTO As String = "BrutoKg"
+
 ' --- Spaltennamen tblPrijemnica (NEU) ---
 Public Const COL_PRJ_ID As String = "PrijemnicaID"
 Public Const COL_PRJ_DATUM As String = "Datum"
 Public Const COL_PRJ_KUPAC As String = "KupacID"
 Public Const COL_PRJ_BROJ As String = "BrojPrijemnice"
 Public Const COL_PRJ_BROJ_ZBIRNE As String = "BrojZbirne"
-Public Const COL_PRJ_KOLICINA As String = "Kolicina"
-Public Const COL_PRJ_CENA As String = "Cena"
+' TipAmbalaze i KolAmbVracena OSTAJU: tip i povrat praznih su cinjenice
+' DOKUMENTA. Kolicina/Cena/KolAmbalaze/Klasa/BrutoKg su obrisane iz kanona --
+' zive na tblPrijemnicaStavke od S6 koraka 2 -- a s njima i kes fakture
+' (Fakturisano/FakturaID; fakturisanost je izvedena od koraka 5) i GeneracijaID
+' (identitet je PrijemnicaID). Sve u S6 koraku 8.
 Public Const COL_PRJ_TIP_AMB As String = "TipAmbalaze"
-Public Const COL_PRJ_KOL_AMB As String = "KolAmbalaze"
 Public Const COL_PRJ_KOL_AMB_VRACENA As String = "KolAmbVracena"
-Public Const COL_PRJ_BRUTO As String = "BrutoKg"                 ' bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS); prazno = neto
 Public Const COL_PRJ_VOZAC As String = "VozacID"
 Public Const COL_PRJ_VRSTA As String = "VrstaVoca"
 Public Const COL_PRJ_SORTA As String = "SortaVoca"
-Public Const COL_PRJ_KLASA As String = "Klasa"
-Public Const COL_PRJ_FAKTURISANO As String = "Fakturisano"
-Public Const COL_PRJ_FAKTURA_ID As String = "FakturaID"
 
 ' ============================================================
 ' Paletni list (Phase 2) -- kolone novih tabela
@@ -395,6 +453,9 @@ Public Const COL_PALS_BR_GAJBICA As String = "BrojGajbica"
 Public Const COL_PALS_NETO As String = "NetoKg"
 Public Const COL_PALS_AMBALAZA As String = "AmbalazaKg"
 Public Const COL_PALS_PRIJEMNICA_ID As String = "PrijemnicaID"
+' S6 korak 2 (plan 14.55, odluka 2): KLJUC LINIJE prijemnice. PrijemnicaID gore
+' od tada znaci DOKUMENT (labela); tacna klasa je stavka. Kolona je na KRAJU tabele.
+Public Const COL_PALS_PRIJEMNICA_STAVKA_ID As String = "PrijemnicaStavkaID"
 Public Const COL_PALS_KLASA As String = "Klasa"
 Public Const COL_PALS_VRSTA As String = "VrstaVoca"
 Public Const COL_PALS_SORTA As String = "SortaVoca"
@@ -552,6 +613,11 @@ Public Const CFG_ISPLATA_SPEC_PRINT_MODE As String = "ISPLATA_SPEC_PRINT_MODE"
 Public Const CFG_OTPREMNICA_PRINT_MODE As String = "OTPREMNICA_PRINT_MODE"
 Public Const CFG_GRUPNI_OTKUP_PRINT_MODE As String = "GRUPNI_OTKUP_PRINT_MODE"
 Public Const CFG_PRERADA_PRINT_MODE As String = "PRERADA_PRINT_MODE"
+' Otvaranje PDF-a posle izvoza -- vazi za SVE obrasce (DocExportPdf), preko
+' rezima PDF iznad. Prazno/YES = otvori (kao do sada); NO = PDF se pravi, ali se
+' ne otvara. Test fixture ga pinuje na NO: suite se vrti dok operater radi na
+' istom racunaru, a svaki otvoren PDF mu uzme fokus (19.10.2026).
+Public Const CFG_PDF_OTVORI_POSLE As String = "PDF_OTVORI_POSLE"
 Public Const CFG_PDV_NADOKNADA_STOPA As String = "PDV_NADOKNADA_STOPA"
 Public Const PDV_NADOKNADA_DEFAULT As Double = 8
 
@@ -607,11 +673,23 @@ Public Const COL_OSIROCENO_OD As String = "OsirocenoOd"
 Public Const DOK_TIP_OTKUP As String = "Otkup"
 Public Const DOK_TIP_OTPREMNICA As String = "Otpremnica"
 Public Const DOK_TIP_PRIJEMNICA As String = "Prijemnica"
-Public Const DOK_TIP_IZLAZ_KUPCI As String = "Kupci-Otpremnica"
-Public Const DOK_TIP_OM_IZLAZ_KOOP As String = "OM-Izlaz-Koop"  ' OM izdaje (praznu) ambalazu kooperantu
-Public Const DOK_TIP_OM_ULAZ_KOOP As String = "OM-Ulaz-Koop"    ' kooperant vraca (praznu) ambalazu na OM (povrat)
-Public Const DOK_TIP_OM_IZLAZ_FIRMA As String = "OM-Izlaz-Firma" ' OM vraca (praznu) ambalazu firmi (centrala)
-Public Const DOK_TIP_OM_ULAZ_FIRMA As String = "OM-Ulaz-Firma"   ' firma (centrala) salje (praznu) ambalazu na OM
+' DOK_TIP_IZLAZ_KUPCI ("Kupci-Otpremnica") je OBRISAN 06.10.2026 uz red 8
+' matrice: njegov jedini pisac (SaveKupciIzlaz_TX) prestao je da knjizi
+' ambalazu, citaoca nije imao ni jednog, a povrat praznih od kupca nosi broj
+' prijemnice (AMB-10-ODL-9/-10). Tip dokumenta koji nijedan red vise ne nosi
+' ne ostaje kao ime.
+' DOK_TIP_OM_* (OM-Izlaz-Koop, OM-Ulaz-Koop, OM-Izlaz-Firma, OM-Ulaz-Firma, OMUlaz)
+' su OBRISANI u 10e-3: bili su tipovi NOGU starog reversa. Od 10b-2 nijedan pisac
+' ih ne upisuje, a od 10e-2 ih nijedan citalac ne cita (AMBALAZA.md 6.13c).
+
+' AMB-10-DOK: jedna tabela = JEDAN kanonski tip dokumenta.
+'
+' Vrsta posla (REVERS / NABAVKA / OTPIS) zivi na zaglavlju
+' (tblAmbalazaDokument.Vrsta), NE u DokumentTIP-u. Da je obrnuto, ista
+' klasifikacija bi stajala u dve kolone -- a AMB-INV-04 racuna identitet
+' efekta iz (DokumentTIP, DokumentID, VrstaKretanja, TipAmbalaze), pa bi
+' razilazenje te dve kolone tiho razdvojilo isti poslovni efekat.
+Public Const DOK_TIP_AMBALAZA_DOKUMENT As String = "AmbalazaDokument"
 
 ' --- Spaltennamen tblFakture ---
 Public Const COL_FAK_ID As String = "FakturaID"
@@ -627,15 +705,28 @@ Public Const COL_AMB_ID As String = "AmbID"
 Public Const COL_AMB_DATUM As String = "Datum"
 Public Const COL_AMB_TIP As String = "TipAmbalaze"
 Public Const COL_AMB_KOLICINA As String = "Kolicina"
-Public Const COL_AMB_SMER As String = "Smer"
-Public Const COL_AMB_ENTITET As String = "EntitetID"
-Public Const COL_AMB_ENTITET_TIP As String = "EntitetTip"
-Public Const COL_AMB_VOZAC As String = "VozacID"
 Public Const COL_AMB_DOK_ID As String = "DokumentID"
 Public Const COL_AMB_DOK_TIP As String = "DokumentTip"
-' REV-IDENT-01: identitet logickog reversa, isti na svim nogama jednog reversa;
-' prazno za kretanja koja nisu revers (otkup, otpremnica, prijemnica).
-Public Const COL_AMB_REVERS_ID As String = "ReversID"
+' Smer, EntitetID, EntitetTip, VozacID, Stornirano i ReversID (REV-IDENT-01) su
+' kolone STAROG modela i obrisane su iz kanona u 10e-3. Zatecena sveska ih gubi
+' kroz modSetup.ObrisiStareKoloneAmbalaze; konstante se ne vracaju.
+
+' --- KNJIGA AMBALAZE (AMB-10b) ---
+'
+' Dogadjaj je PRENOS: jedan red imenuje OBE strane, kolicina je uvek pozitivna,
+' smera kao podatka NEMA -- smer je par (Od -> Na). Zato ove kolone nisu zamenile
+' Smer/EntitetID/VozacID nego su ih UCINILE NEPOTREBNIM; stare su obrisane u
+' 10e-3 (docs/DOMEN/AMBALAZA.md 6.1, 6.13 i 6.13e).
+Public Const COL_AMB_OD_TIP As String = "OdNalogTip"
+Public Const COL_AMB_OD_ID As String = "OdNalogID"
+Public Const COL_AMB_NA_TIP As String = "NaNalogTip"
+Public Const COL_AMB_NA_ID As String = "NaNalogID"
+' ZASTO je prenos nastao. Nije izvedivo iz para: Stanica -> Kooperant je isti
+' fizicki potez i kad firma zaduzuje partnera i kad mu vraca njegove gajbe.
+Public Const COL_AMB_VRSTA_KRETANJA As String = "VrstaKretanja"
+' AmbID originala koji ovaj red ponistava; prazno za original. Knjiga je
+' APPEND-ONLY -- storno je kontra-stav, ne UPDATE kolone Stornirano.
+Public Const COL_AMB_STORNO_OD As String = "StornoOd"
 
 ' --- tblNovac ---
 Public Const COL_NOV_ID As String = "NovacID"
@@ -758,10 +849,15 @@ Public Const COL_FS_BROJ_PRERADE As String = "BrojPrerade"
 ' Krug 5: stavka GP fakture nastaje IZ utovarne stavke -- UtovarID je
 ' canonical veza faktura <-> fizicka isporuka (SEF datum, storno).
 Public Const COL_FS_UTOVAR_ID As String = "UtovarID"
+' S6 korak 5: KANONSKA linija prijemnice (FAK-LIN-02). PrijemnicaID linije
+' znaci DOKUMENT; tacna klasa i kolicina su stavka koju ovaj kljuc imenuje.
+' GP linija ga nema. Kolona je na KRAJU tabele -- pisci upisuju po imenu.
+Public Const COL_FS_PRIJEMNICA_STAVKA_ID As String = "PrijemnicaStavkaID"
 
-' --- Typen Ambalaze ---
-Public Const AMB_12_1 As String = "12/1"
-Public Const AMB_6_1 As String = "6/1"
+' --- Tipovi ambalaze ---
+' Nema ugradjenih tipova: tip je zatvoren skup iz tblTipAmbalaze (AMB-INV-12,
+' KI-021). Ovde su do KI-021 stajali 12/1 i 6/1 -- rezervni tipovi combo-a nad
+' praznim sifarnikom, koje bi pisac sada odbio.
 
 ' --- Klasa ---
 Public Const KLASA_I As String = "I"
@@ -789,19 +885,14 @@ Public Const CFG_KEY_MALINA_MODE As String = "MALINA_MODE"
 ' Default kupac (Hladnjaca) za auto-zbirnu u malina modu. KupacID iz tblKupci.
 Public Const CFG_MALINA_DEFAULT_KUPAC As String = "MALINA_DEFAULT_KUPAC"
 
-' Prijemnica: kontrola da uneti broj zbirne vec postoji u tblZbirna.
-'   "BLOK" (default) -> tvrda greska, snimanje prijemnice se prekida.
-'   "UPOZORENJE"     -> upozorenje sa potvrdom (operater moze da nastavi).
-Public Const CFG_PRIJEMNICA_ZBIRNA_PROVERA As String = "PRIJEMNICA_ZBIRNA_PROVERA"
-
 ' --- Dorade: podesavanja (UI: Maticni podaci -> Podesavanja) ---
 ' Default proizvod koji se auto-postavi pri otvaranju frmOtkup/frmDokumenta.
 Public Const CFG_DEFAULT_VRSTA As String = "DEFAULT_VRSTA_VOCA"
 Public Const CFG_DEFAULT_SORTA As String = "DEFAULT_SORTA_VOCA"
 ' Filter kooperanata po otkupnom mestu u frmOtkup (default ON / prazno = ON).
 Public Const CFG_KOOP_FILTER_BY_OM As String = "KOOP_FILTER_BY_OM"
-' Auto otpremnica+zbirna+prijemnica kad je otkupno mesto hladnjaca (default OFF).
-Public Const CFG_AUTO_PRIJEMNICA_HLADNJACA As String = "AUTO_PRIJEMNICA_HLADNJACA"
+' AUTO_PRIJEMNICA_HLADNJACA vise ne postoji (S6 korak 7, odluka 2): hladnjacki
+' lanac je obavezan, a stanica (JeHladnjaca) je jedini autoritet -- HLD-LANAC-01.
 ' Automatsko generisanje brojeva dokumenata (forma prefill OTK/OTP/ZBR). Default
 ' ON (kao do sada). NO -> forma ne predlaze broj; operater unosi svoj.
 Public Const CFG_AUTO_BROJ_DOK As String = "AUTO_BROJ_DOKUMENTA"
@@ -1240,29 +1331,9 @@ Public Function ConfigFlag(ByVal key As String, ByVal defaultOn As Boolean) As B
     End Select
 End Function
 
-' Prijemnica: da li NEPOSTOJECA zbirna (broj nije u tblZbirna) BLOKIRA snimanje.
-'   True  = blokiraj (tvrda greska)  [default, bezbedno]
-'   False = samo upozori (operater moze da potvrdi i nastavi)
-' Cita CFG_PRIJEMNICA_ZBIRNA_PROVERA: "UPOZORENJE" -> False; sve ostalo -> True.
-Public Function PrijemnicaZbirnaBlokira() As Boolean
-    Dim v As String
-    v = UCase$(Trim$(GetConfigValue(CFG_PRIJEMNICA_ZBIRNA_PROVERA)))
-    Select Case v
-        Case "UPOZORENJE", "UPOZORI", "WARN", "WARNING", "NE", "NO", "0", "OFF"
-            PrijemnicaZbirnaBlokira = False
-        Case Else         ' "", "BLOK", "BLOCK", "DA", nepoznato -> blokiraj
-            PrijemnicaZbirnaBlokira = True
-    End Select
-End Function
-
 ' Filter kooperanata po otkupnom mestu u frmOtkup (default ON).
 Public Function KoopFilterByOM() As Boolean
     KoopFilterByOM = ConfigFlag(CFG_KOOP_FILTER_BY_OM, True)
-End Function
-
-' Auto otpremnica+zbirna+prijemnica kad je otkupno mesto hladnjaca (default OFF).
-Public Function IsAutoPrijemnicaHladnjaca() As Boolean
-    IsAutoPrijemnicaHladnjaca = ConfigFlag(CFG_AUTO_PRIJEMNICA_HLADNJACA, False)
 End Function
 
 ' Automatsko generisanje brojeva dokumenata (forma prefill OTK/OTP/ZBR). Default ON.
@@ -1314,5 +1385,11 @@ End Function
 ' (frmOtkup) i "Br. otk. blk." (Ulaz OM, frmDokumenta).
 Public Function IsKesIsplate() As Boolean
     IsKesIsplate = ConfigFlag(CFG_KES_ISPLATE, True)
+End Function
+
+' PDF se otvara posle izvoza (CFG_PDF_OTVORI_POSLE). Default ON (kao do sada).
+' OFF -> DocExportPdf pravi PDF, ali ga ne otvara.
+Public Function IsPdfOtvoriPosle() As Boolean
+    IsPdfOtvoriPosle = ConfigFlag(CFG_PDF_OTVORI_POSLE, True)
 End Function
 

@@ -9,29 +9,26 @@ Option Explicit
 '   contexti (tblStornoVeze, strukturirano) + brojevi osirocenih (prijemnice /
 '   palete / izgubljeni blokovi; detalj i akcije su u recovery panelu).
 '
-' UndoStorno_TX (MUTIRA): reverzija soft-delete-a SAMO za SAMOSTALNE tipove ->
-'   Otkup (blok) i Revers (OM-koop ambalaza). Chain dokumenti (Otpremnica/Zbirna/
-'   Prijemnica/Faktura) se NAMERNO odbijaju -> koristi ISPRAVKA / ponovni unos.
-'   Za storna napravljena POSLE storno-zurnala (modStornoZurnal) prvo pokusava
-'   LOSSLESS put (UndoOperation_TX preko LatestOpFor) -> vraca i tblNovac.OtkupID i
-'   cilja bas tu operaciju. Stara storna (bez zurnala) padaju na legacy best-effort
-'   (ne vraca novac vezu) -> produkciono dugme to ODBIJA (LatestOpFor=""); legacy je
-'   dostupan jedino kroz Test_UndoStorno macro.
+' UndoStorno_TX (MUTIRA): "Vrati storno" po (tip, broj) -- SAMO zurnal-put:
+'   poslednja operacija za taj broj (LatestOpFor) ide kroz UndoOperation_TX, sa
+'   istim gardama kao ekran Oporavak. Zovu ga Alt+F8 hook Test_UndoStorno i testovi.
+'   Legacy put bez zurnala (Otkup i Revers po nogama) je obrisan u 10e-2: skidao je
+'   Stornirano bez provere kontra-stava u knjizi (AMB-10-ODL-25).
 '
-' UI dugme "Vrati storno" je uvezano (frmDokumenta, UNDO_UI_ENABLED) i cilja
-' konkretan OperationID; garde su fail-closed. Guard: UndoGuardReason (deljena).
+' Ekran Oporavak cilja konkretan OperationID (modScrOporavak.VratiStorno ->
+' modStornoZurnal.UndoOperation_TX); garde su fail-closed.
 ' ============================================================
 
 Private Const MOD_NAME As String = "modStornoRecovery"
 Private Const ERR_REC_BASE As Long = vbObjectError + 2900
-Private Const STORNO_DA As String = "Da"
 
 ' ============================================================
 ' NEDOVRSENO - ujedinjen read-only pregled.
 ' ============================================================
 ' Svaki red nosi PUN strukturirani zapis (ne samo tekst) -> panel moze da deluje po
 ' redu. Kljucevi: kind, ref (poslovni broj), status, opis, akcija (tekst), correctionID,
-' docType, newBroj, mode, actionCode (CONTEXT | PRIJ | PAL | BLOK -> UI dispecuje).
+' docType, newBroj, mode, actionCode (CONTEXT | PRIJ | PAL | BLOK | LANAC -> UI
+' dispecuje), otkupID (samo LANAC: identitet za radnju "Ponovi auto-lanac").
 ' Dedup: osirocene se izostave ako isti poslovni broj vec nosi PENDING/MANUAL context
 ' (isti problem se ne prikazuje dvaput).
 Public Function GetNedovrseno() As Collection
@@ -49,10 +46,8 @@ Public Function GetNedovrseno() As Collection
         For i = 1 To ctx.count
             Dim c As Object: Set c = ctx(i)
             Dim oB As String: oB = CStr(c("oldBroj"))
-            ' Ispravka reversa nosi i stanicu i dan (IspravkaReversOpis): dve ispravke
-            ' istog broja na dve stanice inace imaju isti red (REV-IDENT-01 Faza 2b).
             AddNedRowFull result, "CONTEXT/" & CStr(c("mode")), oB, CStr(c("status")), _
-                CStr(c("message")) & modStornoDok.IspravkaReversOpis(CStr(c("id"))), _
+                CStr(c("message")), _
                 CStr(c("recoveryAction")), _
                 CStr(c("id")), CStr(c("oldDocType")), CStr(c("newBroj")), CStr(c("mode")), "CONTEXT"
             ' brojevi koje context vec pokriva -> osirocene za njih preskoci (dedup).
@@ -70,6 +65,8 @@ Public Function GetNedovrseno() As Collection
         "Prijemnica (palete)", "PAL", "Osiroceni dokumenti (Mod: Palete)", seen
     ' 3) Izgubljeni blokovi (B-041) -- KANON, ne stara veza.
     AddIzgubljeniBlokovi result
+    ' 4) Nedovrseni hladnjacki lanci (S6 korak 7, odluka 8).
+    AddNedovrseniLanci result
     Exit Function
 EH:
     LogErr MOD_NAME & ".GetNedovrseno"
@@ -129,6 +126,48 @@ EH:
         Poruka("OTKUI_OPO_BLOK_AKCIJA_GRESKA"), "", "Otkup", "", "", "BLOK"
 End Sub
 
+' Nedovrseni hladnjacki lanci (S6 korak 7, odluka 8, HLD-LANAC-01).
+'
+' Blok JE u otpremnici, a lancu fali zbirna ili prijemnica. Nijedna druga lista
+' ga ne vidi: "Bez otpremnice" cita nevezane blokove, a ovaj je vezan. Skup
+' racuna vlasnik lanca (modAutoHladnjaca.NedovrseniLanci), po kanonskom
+' roditelju -- ista pitanja koja lanac postavlja kad nastavlja.
+'
+' Red nosi OtkupID: radnja "Ponovi auto-lanac" bira blok po njemu, ne po broju
+' (broj bloka je labela stanice, pa ga nosi i blok druge stanice). Pad citanja
+' nije kraca lista nego red sa statusom GRESKA -- isti obrazac kao
+' AddIzgubljeniBlokovi.
+Private Sub AddNedovrseniLanci(ByRef result As Collection)
+    Dim lanci As Collection, i As Long, r As Variant
+    Dim ref As String, opis As String, errDesc As String
+
+    On Error GoTo EH
+
+    Set lanci = modAutoHladnjaca.NedovrseniLanci()
+    For i = 1 To lanci.count
+        r = lanci(i)
+        ref = Trim$(CStr(r(1)))
+        If Len(ref) = 0 Then ref = CStr(r(0))
+        If Len(CStr(r(3))) = 0 Then
+            opis = Poruka("OTKUI_OPO_LANAC_OPIS_OTP") & " " & _
+                   modAutoHladnjaca.LanacBrojDokumenta("OTP", CStr(r(2)))
+        Else
+            opis = Poruka("OTKUI_OPO_LANAC_OPIS_ZBR") & " " & _
+                   modAutoHladnjaca.LanacBrojDokumenta("ZBR", CStr(r(3)))
+        End If
+        AddNedRowFull result, "LANAC", ref, "NEDOVRSEN", opis, _
+            Poruka("OTKUI_OPO_LANAC_AKCIJA"), "", "Otkup", "", "", "LANAC", CStr(r(0))
+    Next i
+    Exit Sub
+EH:
+    ' Opis se cita PRE LogErr-a (LogErr usput brise stanje greske).
+    errDesc = Err.description
+    LogErr MOD_NAME & ".AddNedovrseniLanci"
+    AddNedRowFull result, "LANAC", "", "GRESKA", _
+        Poruka("OTKUI_OPO_LANAC_GRESKA") & " " & errDesc, _
+        Poruka("OTKUI_OPO_LANAC_AKCIJA_GRESKA"), "", "Otkup", "", "", "LANAC"
+End Sub
+
 ' UCase(OtkupID) -> BrojDokumenta, jednim prolazom kroz tabelu. NevezaniOtkupi
 ' vraca kljuceve u UCase, pa se i ovde tako kljuca; LookupValue po bloku bi bio
 ' jos jedan prolaz po svakom redu liste.
@@ -155,12 +194,14 @@ End Function
 Private Sub AddNedRowFull(ByRef col As Collection, ByVal kind As String, ByVal ref As String, _
                           ByVal status As String, ByVal opis As String, ByVal akcija As String, _
                           ByVal correctionID As String, ByVal docType As String, _
-                          ByVal newBroj As String, ByVal mode As String, ByVal actionCode As String)
+                          ByVal newBroj As String, ByVal mode As String, ByVal actionCode As String, _
+                          Optional ByVal otkupID As String = "")
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
     d("kind") = kind: d("ref") = ref: d("status") = status
     d("opis") = opis: d("akcija") = akcija
     d("correctionID") = correctionID: d("docType") = docType
     d("newBroj") = newBroj: d("mode") = mode: d("actionCode") = actionCode
+    d("otkupID") = otkupID
     col.Add d
 End Sub
 
@@ -196,178 +237,34 @@ no:
 End Function
 
 ' ============================================================
-' VRATI STORNO - konzervativna reverzija (Otkup / Revers). MUTIRA.
+' VRATI STORNO PO BROJU -- samo zurnal-put. MUTIRA.
 ' ============================================================
-Public Function UndoStorno_TX(ByVal docType As String, ByVal broj As String, _
-                              Optional ByVal dokumentTip As String = "") As Boolean
+' Storno bez zurnal operacije se NE vraca. Legacy put (do 10e-2) je za Otkup
+' skidao Stornirano sa bloka i zastavicu sa reda knjige, a kontra-stav je ostajao
+' -- aktivan otkup bez ambalaze, protiv AMB-10-ODL-25. Dosezao ga je samo storno
+' bez zurnala, a StornoOtkup ga uvek otvara (BeginStornoOp). Revers vise nije u
+' zurnalu: storno mu je kontra-stav nad AmbDokID-em.
+Public Function UndoStorno_TX(ByVal docType As String, ByVal broj As String) As Boolean
     Const SRC As String = MOD_NAME & ".UndoStorno_TX"
-    Dim tx As clsTransaction
+    Dim opID As String
     On Error GoTo EH
     broj = Trim$(broj)
     If Len(broj) = 0 Then Err.Raise ERR_REC_BASE + 1, SRC, "Broj dokumenta je obavezan."
 
-    ' LOSSLESS put: ako postoji storno-zurnal operacija za (docType, broj) -> pravi
-    ' inverz preko zurnala (vraca i tblNovac.OtkupID + cilja bas tu generaciju).
-    ' Stara storna (pre zurnala) padaju na legacy best-effort ispod.
-    '
-    ' REVERS: broj je labela, pa broj sam ne kaze KOJI revers se vraca. ReversID se
-    ' trazi medju storniranim redovima (broj, tip); vise dokumenata = dvosmisleno ->
-    ' odbij (ekran Oporavak vraca po OperationID-u). I operacija se onda bira po TOM
-    ' ReversID-u (LatestOpForRevers), ne kao "poslednja po broju": noviji storno
-    ' reversa iste oznake na drugoj stanici, vec vracen, bio bi tudja operacija --
-    ' undo bi odbio ovaj revers porukom o tudjem.
-    Dim revID As String, revRaz As String
-    Dim opID As String
-    If ReversTipJe(docType) Then
-        revRaz = ReversIDRazresi("", broj, docType, revID, True)
-        If Len(revRaz) > 0 Then Err.Raise ERR_REC_BASE + 7, SRC, "Vrati storno reversa: " & revRaz
-        opID = LatestOpForRevers(docType, broj, revID)
-    Else
-        opID = LatestOpFor(docType, broj)
-    End If
-    If Len(opID) > 0 Then
-        UndoStorno_TX = UndoOperation_TX(opID)
-        Exit Function
-    End If
-
-    Select Case docType
-        Case DOK_TIP_OTKUP
-            ' Guard: ako vec postoji AKTIVAN otkup istog broja -> reverzija bi duplirala.
-            If Len(LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID)) > 0 Then
-                Err.Raise ERR_REC_BASE + 2, SRC, "Vec postoji AKTIVAN otkup " & broj & _
-                          " -> reverzija bi duplirala. Odbijeno."
-            End If
-            ' Guard (B3 - izgubljeni blok): ako je roditeljski lanac (otpremnica ILI
-            ' zbirna na koje je blok vezan) stornirano, reaktivacija bi napravila siroce
-            ' (aktivan blok bez ziveg roditelja). Kaskadni storno oslobodi SAMO aktivne
-            ' blokove -> vec-storniran blok zadrzi vezu ka mrtvom roditelju. Dup-guard to
-            ' ne hvata. Odbij; koristi ponovni unos / prevezivanje (Osiroceni dokumenti).
-            Dim deadParent As String: deadParent = OtkupBlockDeadParent(broj)
-            If Len(deadParent) > 0 Then
-                Err.Raise ERR_REC_BASE + 5, SRC, "Ne mogu da vratim storno otkupa " & broj & _
-                    ": roditeljski " & deadParent & " je storniran -> blok bi ostao siroce. " & _
-                    "Unesi blok ponovo ili ga prevezi (Osiroceni dokumenti)."
-            End If
-            Set tx = New clsTransaction
-            tx.BeginTx
-            tx.AddTableSnapshot TBL_OTKUP
-            tx.AddTableSnapshot TBL_AMBALAZA
-            Dim ids As Collection: Set ids = New Collection
-            Dim n As Long
-            n = UnmarkStorniranoCollect(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID, ids, SRC)
-            If n = 0 Then Err.Raise ERR_REC_BASE + 3, SRC, "Nema storniranog otkupa " & broj & "."
-            Dim k As Long
-            For k = 1 To ids.count
-                UnmarkAmbalazaByDokument CStr(ids(k)), DOK_TIP_OTKUP, SRC
-                UnmarkAmbalazaByDokument CStr(ids(k)), DOK_TIP_OM_IZLAZ_KOOP, SRC
-            Next k
-            tx.CommitTx: Set tx = Nothing
-            UndoStorno_TX = True
-            MonUndo SRC, "Otkup", broj, "Vraceno " & n & " redova + ambalaza."
-
-        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-            ' Revers je list (samo tblAmbalaza redovi). dokTip = docType; ReversID je
-            ' razresen iznad, medju storniranim redovima.
-            ' Guard (paralela otkup dup-guardu): ako isti broj u nizu (stanica, dan)
-            ' vec drzi AKTIVAN revers -> reverzija bi duplirala. Odbij. Aktivan revers
-            ' istog broja na drugoj stanici ili drugog dana nije duplikat (A2). Ista
-            ' garda kao na zurnal-putu. (Ranije je fantomski unmark-ovao sve
-            ' stornirane redove broja i bez ove provere.)
-            Dim revGarda As String: revGarda = UndoGuardReason(docType, broj, revID)
-            If Len(revGarda) > 0 Then Err.Raise ERR_REC_BASE + 6, SRC, revGarda
-            Set tx = New clsTransaction
-            tx.BeginTx
-            tx.AddTableSnapshot TBL_AMBALAZA
-            Dim m As Long: m = UnmarkAmbalazaByDokument(broj, docType, SRC, revID)
-            If m = 0 Then Err.Raise ERR_REC_BASE + 4, SRC, _
-                          "Nema storniranog reversa " & broj & " [" & docType & "]."
-            tx.CommitTx: Set tx = Nothing
-            UndoStorno_TX = True
-            MonUndo SRC, docType, broj, "Vracen revers (" & m & " redova)."
-
-        Case Else
-            Err.Raise ERR_REC_BASE + 9, SRC, "Vrati storno je podrzan SAMO za Otkup i Revers. " & _
-                      "Chain dokument (" & docType & ") -> koristi ISPRAVKA / ponovni unos."
-    End Select
+    opID = LatestOpFor(docType, broj)
+    If Len(opID) = 0 Then Err.Raise ERR_REC_BASE + 3, SRC, _
+        "Nema zurnal operacije storna za " & docType & " " & broj & " -> nema sta da se vrati."
+    UndoStorno_TX = UndoOperation_TX(opID)
     Exit Function
 EH:
-    If Not tx Is Nothing Then tx.RollbackTx
     LogErr SRC
     UndoStorno_TX = False
 End Function
 
-' Skini "Stornirano" sa svih redova gde keyCol=keyVal (a bilo je stornirano);
-' sakupi njihove idCol vrednosti u outIds. Vraca broj vracenih redova.
-Private Function UnmarkStorniranoCollect(ByVal tbl As String, ByVal keyCol As String, _
-        ByVal keyVal As String, ByVal idCol As String, ByRef outIds As Collection, _
-        ByVal SRC As String) As Long
-    Dim data As Variant: data = GetTableData(tbl)
-    If IsEmpty(data) Then Exit Function
-    Dim cKey As Long, cId As Long, cSt As Long
-    cKey = GetColumnIndex(tbl, keyCol)
-    cId = GetColumnIndex(tbl, idCol)
-    cSt = GetColumnIndex(tbl, COL_STORNIRANO)
-    If cKey = 0 Or cSt = 0 Then Exit Function
-    Dim i As Long, n As Long
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cKey))) = Trim$(keyVal) _
-           And UCase$(Trim$(CStr(data(i, cSt)))) = UCase$(STORNO_DA) Then
-            RequireUpdateCell tbl, i, COL_STORNIRANO, "", SRC
-            If cId > 0 Then outIds.Add Trim$(CStr(data(i, cId)))
-            n = n + 1
-        End If
-    Next i
-    UnmarkStorniranoCollect = n
-End Function
-
-' Da li bi reaktivacija storniranih blokova broja "broj" napravila siroce?
-' Za svaki storniran red proveri vezu: OtpremnicaID -> aktivna otpremnica?
-' BrojZbirne -> aktivna zbirna? Ako je bilo koja veza ka MRTVOM (stornirano/nema)
-' roditelju -> vrati opis (prvog) mrtvog roditelja; inace "". Unbound blok (bez
-' veze) i blok sa zivim roditeljem su bezbedni za undo.
-' FAIL-CLOSED: sada je deo produkcijske undo kapije -> na gresku/nedostajucu semu
-' vraca BLOKIRAJUCI marker (ne prazan string). "" znaci samo "roditelj je ziv/bezbedno".
-Public Function OtkupBlockDeadParent(ByVal broj As String) As String
-    On Error GoTo EH
-    Dim data As Variant: data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then Exit Function
-    Dim cBr As Long, cSt As Long, cOtp As Long, cZbr As Long
-    cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
-    cSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
-    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
-    cZbr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
-    If cBr = 0 Or cSt = 0 Then OtkupBlockDeadParent = "(provera roditelja nije moguca - sema)": Exit Function
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cBr))) = Trim$(broj) _
-           And UCase$(Trim$(CStr(data(i, cSt)))) = UCase$(STORNO_DA) Then
-            If cOtp > 0 Then
-                Dim otpID As String: otpID = Trim$(CStr(data(i, cOtp)))
-                If Len(otpID) > 0 Then
-                    If Len(LookupActiveID(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_ID)) = 0 Then
-                        OtkupBlockDeadParent = "otpremnica (ID " & otpID & ")": Exit Function
-                    End If
-                End If
-            End If
-            If cZbr > 0 Then
-                Dim brZbr As String: brZbr = Trim$(CStr(data(i, cZbr)))
-                If Len(brZbr) > 0 Then
-                    If Len(LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, brZbr, COL_ZBR_BROJ)) = 0 Then
-                        OtkupBlockDeadParent = "zbirna " & brZbr: Exit Function
-                    End If
-                End If
-            End If
-        End If
-    Next i
-    Exit Function
-EH:
-    LogErr MOD_NAME & ".OtkupBlockDeadParent"
-    OtkupBlockDeadParent = "(provera roditelja nije uspela)"     ' fail-closed -> blokira undo
-End Function
-
-' PER-RED verzija: mrtav roditelj za KONKRETAN OtkupID (ne svi redovi istog broja).
+' Mrtav roditelj PO REDU: za KONKRETAN OtkupID, ne za sve redove istog broja.
 ' Koristi je zurnal-put (UndoOperation_TX) da mrtav roditelj DRUGE, nepovezane
-' istorijske generacije istog broja ne preblokira undo bas ove operacije.
+' istorijske generacije istog broja ne preblokira undo bas ove operacije. Verzija
+' po broju je otisla u 10e-2, sa legacy granom UndoStorno_TX koja ju je jedina zvala.
 ' FAIL-CLOSED: greska/nedostajuca sema -> BLOKIRAJUCI marker. "" = bezbedno.
 Public Function OtkupBlockDeadParentByID(ByVal otkupID As String) As String
     On Error GoTo EH
@@ -406,103 +303,6 @@ EH:
     OtkupBlockDeadParentByID = "(provera roditelja nije uspela)"
 End Function
 
-' Reaktiviraj tblAmbalaza redove dokumenta (DokID + DokTip) koji su stornirani.
-' Sa ReversID-om -- samo REVERS -- vracaju se redovi TOG reversa (sve noge), ne
-' svi redovi broja: isti broj legalno nosi i revers druge stanice ili drugog dana
-' (A2). Bez njega ostaje po (DokID, DokTip): ambalaza uz otkup, gde je DokID
-' OtkupID i vec jedinstven.
-Private Function UnmarkAmbalazaByDokument(ByVal dokID As String, ByVal dokTip As String, _
-                                          ByVal SRC As String, _
-                                          Optional ByVal reversID As String = "") As Long
-    Dim n As Long
-    If Len(reversID) > 0 Then
-        Dim redovi As Collection, v As Variant
-        Set redovi = ReversRedoviRID(reversID, True)
-        For Each v In redovi
-            RequireUpdateCell TBL_AMBALAZA, CLng(v), COL_STORNIRANO, "", SRC
-            n = n + 1
-        Next v
-        UnmarkAmbalazaByDokument = n
-        Exit Function
-    End If
-
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If IsEmpty(data) Then Exit Function
-    Dim cDok As Long, cTip As Long, cSt As Long
-    cDok = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
-    cTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
-    cSt = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
-    If cDok = 0 Or cTip = 0 Or cSt = 0 Then Exit Function
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cDok))) = Trim$(dokID) _
-           And Trim$(CStr(data(i, cTip))) = Trim$(dokTip) _
-           And UCase$(Trim$(CStr(data(i, cSt)))) = UCase$(STORNO_DA) Then
-            RequireUpdateCell TBL_AMBALAZA, i, COL_STORNIRANO, "", SRC
-            n = n + 1
-        End If
-    Next i
-    UnmarkAmbalazaByDokument = n
-End Function
-
-' ZAJEDNICKA undo garda (i legacy put i zurnal-put UndoOperation_TX).
-' Vraca "" ako je bezbedno; inace razlog. Otkup: mrtav-roditelj (fail-closed).
-' Revers (OM): najpre granica dokumenta (ReversIDGranica), pa aktivan-dup broja u
-' nizu (stanica, dan) u BILO KOM od cetiri smera -- smerovi dele jedan niz
-' (#134). Dokument koji se
-' vraca bira ReversID; stanica i dan se citaju iz njegovih nogu Stanica
-' (ReversStanicaDan), jer je duplikat pitanje niza, ne identiteta. Aktivan revers
-' istog broja na drugoj stanici ili drugog dana NIJE duplikat (A2). Bez ReversID-a
-' garda ne zna sta pita -> odbija. ReversID daje pozivalac: zurnal-put iz
-' AmbID-eva operacije (modStornoZurnal.UndoGuardReasonZaOp), legacy put iz
-' storniranih redova (ReversIDRazresi). Provera postojanja je javna
-' modStorno.ActiveAmbalazaDokExists -- fail-closed, dize gresku.
-' Otkup active-dup se NE proverava ovde (bio je broj-level pa je preblokirao
-' parcijalni storno jedne klase) -> zurnal-put to radi PO REDU
-' (OtkupReissueDupExists po (broj,klasa)).
-' FAIL-CLOSED: greska u proveri -> blokirajuci razlog (ne dozvoli tih prolaz).
-Public Function UndoGuardReason(ByVal docType As String, ByVal broj As String, _
-                                Optional ByVal reversID As String = "") As String
-    Dim revSt As String, revDan As Long, revRaz As String
-    On Error GoTo EH
-    Select Case docType
-        Case DOK_TIP_OTKUP
-            ' Otkup: mrtav-roditelj se proverava PO REDU u UndoOperation_TX
-            ' (OtkupBlockDeadParentByID) da mrtav roditelj DRUGE generacije istog broja
-            ' ne preblokira ovu operaciju. Ovde nema broj-level otkup garde.
-        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-            If Len(Trim$(reversID)) = 0 Then
-                UndoGuardReason = "Revers " & broj & " [" & docType & "]: ReversID nije " & _
-                    "poznat -> undo se ne moze proveriti. Odbijeno (fail-closed)."
-                Exit Function
-            End If
-            revRaz = ReversIDGranica(reversID)
-            If Len(revRaz) = 0 Then revRaz = ReversStanicaDan(reversID, revSt, revDan)
-            If Len(revRaz) > 0 Then
-                UndoGuardReason = "Revers " & broj & " [" & docType & "]: " & revRaz
-            ElseIf ActiveAmbalazaDokExists(broj, "", revSt, revDan) Then
-                ' Cetiri smera dele jedan niz (stanica, dan): aktivan revers tog broja u
-                ' BILO KOM smeru je duplikat, ne samo u smeru koji se vraca.
-                UndoGuardReason = "Vec postoji AKTIVAN revers " & broj & " na istoj stanici istog dana " & _
-                    "(bilo koji od cetiri smera) -> undo bi duplirao. Odbijeno."
-            End If
-    End Select
-    Exit Function
-EH:
-    LogErr MOD_NAME & ".UndoGuardReason"
-    UndoGuardReason = "Greska pri proveri undo garde -> odbijeno (fail-closed)."
-End Function
-
-Private Sub MonUndo(ByVal procName As String, ByVal entityType As String, _
-                   ByVal entityID As String, ByVal msg As String)
-    On Error Resume Next
-    Monitor_Event _
-        eventType:="UNDO_STORNO_" & UCase$(entityType), severity:="INFO", _
-        message:="Vrati storno: " & entityType & " " & entityID & " -> " & msg, _
-        userId:="Operator", moduleName:=MOD_NAME, procedureName:=procName, _
-        entityType:=entityType, entityID:=entityID, correlationId:=entityID
-End Sub
-
 ' ============================================================
 ' TEST HOOK-ovi (Alt+F8) - verifikacija PRE vezivanja UI-a.
 ' ============================================================
@@ -521,8 +321,7 @@ End Sub
 
 Public Sub Test_UndoStorno()
     Dim tip As String
-    tip = Trim$(InputBox("Tip za reverziju:" & vbCrLf & _
-        "- 'Otkup'" & vbCrLf & "- revers dokTip: OM-Izlaz-Koop / OM-Ulaz-Koop / OM-Izlaz-Firma / OM-Ulaz-Firma", _
+    tip = Trim$(InputBox("Tip za reverziju (zurnal operacija, npr. 'Otkup'):", _
         "Vrati storno - TEST"))
     If Len(tip) = 0 Then Exit Sub
     Dim broj As String
@@ -534,7 +333,7 @@ Public Sub Test_UndoStorno()
         MsgBox "Vrati storno USPEO: " & tip & " " & broj, vbInformation, "Vrati storno"
     Else
         MsgBox "Vrati storno NIJE uspeo za " & tip & " " & broj & "." & vbCrLf & _
-               "(Guard/greska -> vidi Immediate / Monitor. Chain dokumenti se odbijaju.)", _
+               "(Guard/greska -> vidi Immediate / Monitor. Storno bez zurnala se ne vraca.)", _
                vbExclamation, "Vrati storno"
     End If
 End Sub

@@ -93,6 +93,21 @@ GRUPE = collections.OrderedDict([
     ("zbr_stari_pisac", re.compile(r"\bSaveZbirna(Multi)?(_TX)?\b")),
     ("pauza", re.compile(r"\b(NapredakBlokaDostupan|IzvedeniLanacIzPwaDostupan)\b")),
     ("split_plus", re.compile(r"Split\([^)]*\"\s\+\s\"")),
+    # S6 korak 8 (plan 14.55 "Korak 8"): zaglavlje prijemnice gubi linijska polja
+    # i kes fakture, a generacija prestaje da bude identitet dokumenta. Grupe su
+    # podeljene po cilju, isto kao otp_linija / otp_zaglavlje: prag ima smisla
+    # samo nad grupom koja SME na nulu. prj_brojzbirne NE sme na nulu u S6 --
+    # BrojZbirne ostaje labela, a prevod veze na ZbirnaRoditeljID je svoj rez
+    # (odluka 1 koraka 8), pa prag samo brani rast.
+    ("prj_linija", re.compile(r"\bCOL_PRJ_(KOLICINA|CENA|KLASA|KOL_AMB|BRUTO)\b")),
+    ("prj_kes", re.compile(r"\bCOL_PRJ_(FAKTURISANO|FAKTURA_ID)\b")),
+    ("prj_brojzbirne", re.compile(r"\bCOL_PRJ_BROJ_ZBIRNE\b")),
+    ("prj_stari_pisac", re.compile(r"\b(SavePrijemnica_TX|modDokumenta\.SavePrijemnica)\b")),
+    ("prj_generacija", re.compile(r"\b(IdoviGeneracije|GeneracijaPoID)\s*\(\s*TBL_PRIJEMNICA"
+                                  r"|\b(oldGeneracijaID|newGeneracijaID|prijemnicaGeneracijaID)\b")),
+    # Literal kljuca je u grupi namerno: konstanta je obrisana, a red u
+    # Podesavanjima bi kljuc vratio kao golu nisku.
+    ("prj_zbr_cfg", re.compile(r"\bPrijemnicaZbirnaBlokira\b|PRIJEMNICA_ZBIRNA_PROVERA")),
 ])
 # Prosirene grupe: ono sto konstante ne vide (kriticar pokrivenosti, 15.09).
 GRUPE_X = collections.OrderedDict([
@@ -175,14 +190,44 @@ KOLONE_STAROG_MODELA = re.compile(
 PRAGOVI = collections.OrderedDict([
     ("otp_stari_pisac", 0),
     ("otk_veza_otp", 11),
-    ("otp_linija", 3),
+    # S3-ostatak: pet linijskih kolona zaglavlja otpremnice je obrisano iz
+    # kanona, a self-heal ih brise iz zatecene sveske. Poslednja tri ziva
+    # mesta su bila u modSetup (format i EnsureColumnOnTable) -- ona su ta
+    # koja su kolone i drzala u zivotu.
+    ("otp_linija", 0),
     ("otp_cena", 0),
     # S4-1: citaoci SADRZAJA zbirne presli su na tblZbirnaStavke. Ostatak drze
     # clanstvo i okvir ispravke (modStornoFlow, modDokumentInvariant) -- njih
     # brise S4-3, pa prag tamo ide na nulu. Stari pisac ostaje samo iza pauze
     # F3; nulu dostize u S4-2, kad F3 predje na CreateZbirna_TX.
-    ("zbr_linija", 17),
+    # S6 korak 3 (stavka 178, odluka 7): 17 -> 4. Manjak (CalculateManjakPreview,
+    # BuildManjakDict, ReportManjak, Chk_A2), prikaz C4 i prosek gajbe citaju
+    # stavke zbirne -- S4-1 ih je izricito odlozio u S6. Ostaju ValidateZbirna
+    # (2), GetActiveDocumentsForStorno (S6 korak 4) i EnsureDoradeSchema (format
+    # kolone, S6 korak 8 / S4-3).
+    # S6 korak 4 (stavka 183): 4 -> 3. Lista za storno (GetActiveDocumentsForStorno)
+    # uzima kg zbirne i prijemnice iz stavki. Ostaju ValidateZbirna (2) i
+    # EnsureDoradeSchema.
+    ("zbr_linija", 3),
     ("zbr_stari_pisac", 0),
+    # S6 korak 3 (stavka 178, odluka 6): pisac prijemnice od koraka 2 vraca
+    # JEDAN ID, pa "PRJ-I + PRJ-II" vise ne postoji. Pet zivih Split(... " + ")
+    # (modDokUnos x3, modPrint x2) je skinuto; prag 0 je acceptance celog S6 i
+    # cuva da se lepljeni ID ne vrati. TEST mesto (modGoldenTests.GldDodaj) se
+    # ne broji.
+    ("split_plus", 0),
+    # S6 korak 8, deo 1 (stavka 208): stari pisac (SavePrijemnica_TX i jezgro sa
+    # transakcijom pozivaoca) i blaza grana PRIJEMNICA_ZBIRNA_PROVERA su
+    # obrisani; pisac drzi kapije koje je do tada drzao samo F4.
+    ("prj_stari_pisac", 0),
+    ("prj_zbr_cfg", 0),
+    # Deo 2 (stavka 209): kolone su obrisane iz kanona, a identitet u Oporavku i
+    # F4 ispravci je PrijemnicaID. Konstanti vise nema, pa bi vraceno mesto
+    # palo i na compile-u; prag cuva i povratak generacije kao identiteta.
+    ("prj_linija", 0),
+    ("prj_kes", 0),
+    ("prj_generacija", 0),
+    ("prj_brojzbirne", 33),
 ])
 
 # Linijska polja zaglavlja -- prag dual READ.

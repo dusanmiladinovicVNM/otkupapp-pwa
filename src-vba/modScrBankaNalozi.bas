@@ -1054,6 +1054,9 @@ End Function
 '=====================================================================
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     Dim rez As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrBankaNalozi.Scr_Rows"
     ' Zona se puni odavde, kao na ostalim ugovornim ekranima: gradi se jednom,
     ' a podaci za nju postoje tek kad se lista cita.
     OsveziZonu
@@ -1066,6 +1069,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     mDiagQ = q
     mDiagN = CLng(rez(2))
     Err.Clear
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrBankaNalozi.Scr_Rows"
 End Function
 
 ' Opis kolona PO KLJUCU LISTE -- da se pravilo "identitet je u redu i ne crta
@@ -1230,6 +1236,9 @@ End Sub
 '=====================================================================
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrBankaNalozi.Scr_Build"
 
     ' Bela podloga ispod reda polja. MORA da bude LABELA, ne Frame: Frame je
     ' prozorska kontrola i crta se IZNAD bezprozorskih bez obzira na z-order.
@@ -1276,6 +1285,9 @@ Public Sub Scr_Build(ByVal z As Object)
                   110, BN_BTN_H, "ghost"
 
     modUiKit.NewLbl z, "bnLnB", "", 0, BN_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
+    Exit Sub
+EH:
+    modUiScreens.ScrPadZabelezi "modScrBankaNalozi.Scr_Build"
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single

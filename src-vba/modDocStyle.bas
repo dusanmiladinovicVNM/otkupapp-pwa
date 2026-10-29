@@ -9,6 +9,12 @@ Option Explicit
 ' Funkcije su Public da bi ih delili modPrint i modPaletniList.
 ' ============================================================
 
+' TEST SEAM (posmatra): poslednji izvoz u PDF -- "zahtev|predato|grana": da li je
+' pozivalac trazio otvaranje (1/0), sta je DocExportPdf predao Excelu (1/0) i
+' kojom granom je izvoz otisao (R = Range, W = Worksheet). Pise se samo u test
+' rezimu; cita ga DocPdfTest, gasi DocPdfTestReset (i ResetSeamova).
+Private mPdfTest As String
+
 Public Function DocColHeaderFill() As Long
     DocColHeaderFill = RGB(217, 225, 242)
 End Function
@@ -150,15 +156,63 @@ Public Function DocTitleBlock(ByVal ws As Worksheet, ByVal atRow As Long, _
 End Function
 
 ' ------------------------------------------------------------
-' Zajednicki izlaz jednog sheeta u PDF (isti parametri za sve
-' stampane obrasce). Zamena za rasute ExportAsFixedFormat pozive
-' (modPrint / modPaletniList / modIzvestaj / modOtkupBlok / frmSledljivost).
+' Zajednicki izlaz u PDF (isti parametri za sve stampane obrasce) --
+' JEDINO mesto u kodu koje zove ExportAsFixedFormat. cilj je Worksheet
+' (obrasci) ili Range (izvestaji izvoze UsedRange).
+'
+' openAfter je ZAHTEV pozivaoca; PDF_OTVORI_POSLE = NO ga gasi za sve
+' obrasce. Fixture ga pinuje na NO: test prolaz i dalje pravi papir
+' (226-228 broje fajlove), ali ne otvara viewer koji operateru uzima
+' fokus dok radi na istom racunaru. Test rezim tu NIJE signal: BFP ga
+' pali samo u pojedinim testovima, a otkupni listovi iz Test_OTK_*
+' nastaju van njega (izmereno 19.10.2026, test 249).
+'
+' Izvoz ide RANO VEZANIM pozivom u svakoj grani, u istom obliku koji se
+' vec kompajlirao (ws. / UsedRange. sa imenovanim argumentima). Poziv
+' nad cilj As Object bi bio kasno vezan -- neproveren oblik (review #431,
+' P1). Pozicioni poziv nije uzet: jedan pomeren zarez bi OpenAfterPublish
+' tiho predao drugom parametru, a smer "otvara" test ne vozi kroz izvoz.
 ' ------------------------------------------------------------
-Public Sub DocExportPdf(ByVal ws As Worksheet, ByVal pdfPath As String, _
+Public Sub DocExportPdf(ByVal cilj As Object, ByVal pdfPath As String, _
                         ByVal openAfter As Boolean)
-    ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                           Quality:=xlQualityStandard, _
-                           IncludeDocProperties:=False, OpenAfterPublish:=openAfter
+    Dim otvori As Boolean, ws As Worksheet, rng As Range
+    Dim errNum As Long, errSrc As String, errDesc As String
+    ' Citanje kljuca ide kroz GetColumnIndex (On Error Resume Next), koji brise
+    ' Err -- i ZAOSTALU gresku pozivaoca. Izvoz je tako gutao zaostatak koji
+    ' ScrRunIshod treba da zabelezi (UI-ISHOD-01; test 227 crven 19.10.2026).
+    ' Err se zato posle citanja vraca kakav je bio: izvoz za njega ostaje proziran.
+    errNum = Err.Number: errSrc = Err.Source: errDesc = Err.description
+    otvori = openAfter And IsPdfOtvoriPosle()
+    If errNum <> 0 Then
+        Err.Number = errNum: Err.Source = errSrc: Err.description = errDesc
+    End If
+    If IsTestMode() Then mPdfTest = IIf(openAfter, "1", "0") & "|" & IIf(otvori, "1", "0")
+    If TypeOf cilj Is Range Then
+        If IsTestMode() Then mPdfTest = mPdfTest & "|R"
+        Set rng = cilj
+        rng.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                                Quality:=xlQualityStandard, _
+                                IncludeDocProperties:=False, OpenAfterPublish:=otvori
+    Else
+        If IsTestMode() Then mPdfTest = mPdfTest & "|W"
+        Set ws = cilj
+        ws.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                               Quality:=xlQualityStandard, _
+                               IncludeDocProperties:=False, OpenAfterPublish:=otvori
+    End If
+End Sub
+
+' TEST SEAM: "zahtev|predato|grana" poslednjeg izvoza ("" = nije bilo izvoza);
+' grana je R (Range) ili W (Worksheet). Tvrdo gejtovan.
+Public Function DocPdfTest() As String
+    If Not IsTestMode() Then Exit Function
+    DocPdfTest = mPdfTest
+End Function
+
+' TEST SEAM: brise zabelezen izvoz -- test pre poteza, i ResetSeamova.
+Public Sub DocPdfTestReset()
+    If Not IsTestMode() Then Exit Sub
+    mPdfTest = ""
 End Sub
 
 ' ------------------------------------------------------------

@@ -40,8 +40,321 @@ const COLUMNS = [
   'VozacID',
   'Napomena',
   'ReceivedAt',
-  'BrojDokumenta'   // ← DODATO
+  'BrojDokumenta',   // ← DODATO
+
+  // MANIFEST STAVKI (S5-5b). Zaglavlje kaze KOLIKO stavki pripada dokumentu, pa
+  // uvoz prepozna nekompletan dolazak i odbije ga -- umesto da napravi dokument
+  // od dela robe. Ide NA KRAJ: ensureSheetColumns dozidjuje samo na kraju, a
+  // svaka druga razlika je SCHEMA_DRIFT koji se namerno ne popravlja tiho.
+  'StavkeCount'
 ];
+
+// ============================================================
+// OTK_STAVKE -- STAVKE OTKUPA (S5-5b)
+//
+// Dokument je ZAGLAVLJE + STAVKE. Zaglavlje (Sheet1) nosi cinjenice dokumenta i
+// manifest; klasa, kolicina, cena i ambalaza su cinjenice STAVKE i od ovog reza
+// zive u svom tabu, red po klasi.
+//
+// TAB PISU DVA PISCA. Desktop push (modStanicaLock) puni OtkupStavkaID i OtkupID
+// a wire kolone ostavlja prazne; PWA obrnuto -- OtkupID ne zna, on nastaje u
+// masteru (CreateOtkup_TX). Zato red sa terena nosi SVOJ ClientRecordID i CRID
+// svog zaglavlja, i to je njegov jedini identitet.
+//
+// Raspored je DOSLOVNO modMasterSync.OtkStavkeKolone(). Citalac u VBA proverava
+// naslov kolonu po kolonu i pada po imenu -- "dovoljno blizu" ne postoji.
+// ============================================================
+const OTK_STAVKE_TAB = 'OTK_STAVKE';
+
+const OTK_STAVKE_COLUMNS = [
+  'OtkupStavkaID',
+  'OtkupID',
+  'RedniBroj',
+  'Klasa',
+  'Kolicina',
+  'Cena',
+  'KolAmbalaze',
+  'BrutoKg',
+  'ClientRecordID',
+  'OtkupClientRecordID'
+];
+
+// Ugovor kolona ZAGLAVLJA kao funkcija -- isti razlog kao za stavke: top-level
+// const se u vm kontekstu ne vidi izvan skripta, a funkcija se vidi.
+function otkupZaglavljeKoloneUgovor_() {
+  return COLUMNS.slice();
+}
+
+// KANONSKA POSLOVNA POLJA ZAGLAVLJA -- ono sto dokument TVRDI.
+//
+// Namerno NE ucestvuju:
+//   CreatedAtClient / UpdatedAtClient / UpdatedAtServer / ReceivedAt / DeviceID
+//        transportna metadata; ocekuje se da se razlikuje
+//   KooperantName
+//        izvedena labela, kanonski je KooperantID
+//   VozacID
+//        ima svoju enrichment semantiku (prazno polje se dopunjava), pa bi
+//        ulazak u immutable ugovor tu granu oborio
+//   BrojDokumenta
+//        USLOVAN, pa se poredi odvojeno -- v. otkupZaglavljeRazlika_
+function otkupZaglavljePoljaSadrzaja_() {
+  return [
+    'OtkupacID',
+    'Datum',
+    'KooperantID',
+    'VrstaVoca',
+    'SortaVoca',
+    'ParcelaID',
+    'TipAmbalaze',
+    'StavkeCount'
+  ];
+}
+
+// Vrednost polja zaglavlja, NORMALIZOVANA istim serijalizatorom koji koristi
+// read-model.
+//
+// Sirovo poredjenje ne radi: Sheets "6/1" u TipAmbalaze i datum ume da pretvori u
+// Date, pa bi String(Date) vs "2026-09-26" davao LAZAN konflikt na svakom retry-u.
+// serializeSheetCellForApi to vec resava za oba polja -- jedan normalizator, ne dva.
+function otkupZaglavljeVrednost_(ime, vrednost) {
+  const norm = serializeSheetCellForApi(ime, vrednost);
+  return norm === null || norm === undefined ? '' : String(norm).trim();
+}
+
+// KANONSKI SADRZAJ ZAGLAVLJA: '' kad je isti, inace TEKST razloga.
+//
+// Isti ClientRecordID sa drugom poslovnom tvrdnjom nije duplikat nego KONFLIKT --
+// doslovno ugovor koji master drzi u PwaIstiSadrzaj, i koji vec vazi za predaju
+// (PREDAJA_CONFLICT) i za zbirnu.
+//
+// Bez ove kapije promenjen retry NIKAD ne stigne do mastera: GAS vrati
+// existing/success, zaglavlje se ne prepise, pa master nema sta da detektuje.
+// Klijent misli da je poslao ispravku, server cuva staru tvrdnju, i niko ne sazna.
+//
+// BrojDokumenta je USLOVAN, doslovno kao u PwaIstiSadrzaj: prazan incoming broj
+// znaci da ga je master generisao lokalno, pa bi poredjenje prijavljivalo konflikt
+// tamo gde ga nema. Kad ga PWA izricito posalje, on JE deo tvrdnje.
+function otkupZaglavljeRazlika_(postojeci, idx, ulaz) {
+  const polja = otkupZaglavljePoljaSadrzaja_();
+
+  for (let i = 0; i < polja.length; i++) {
+    const ime = polja[i];
+    const bilo = otkupZaglavljeVrednost_(ime, getCell(postojeci, idx[ime], ''));
+    const stiglo = otkupZaglavljeVrednost_(ime, ulaz[ime]);
+
+    if (bilo !== stiglo) {
+      return ime + ': u listu ' + (bilo || '(prazno)') + ', stiglo ' + (stiglo || '(prazno)');
+    }
+  }
+
+  const brojUlaz = otkupZaglavljeVrednost_('BrojDokumenta', ulaz.BrojDokumenta);
+
+  if (brojUlaz) {
+    const brojBilo = otkupZaglavljeVrednost_(
+      'BrojDokumenta', getCell(postojeci, idx.BrojDokumenta, ''));
+
+    if (brojBilo !== brojUlaz) {
+      return 'BrojDokumenta: u listu ' + (brojBilo || '(prazno)') + ', stiglo ' + brojUlaz;
+    }
+  }
+
+  return '';
+}
+
+// Ugovor kolona kao FUNKCIJA, da bude dohvatljiv i van ovog skripta.
+//
+// Top-level `const` se u vm kontekstu (tests/js/harness.js) vezuje u leksicki
+// scope skripta i NE postaje svojstvo globalnog objekta -- funkcija postaje. Bez
+// ovoga bi test morao da prepise raspored kolona, pa bi preimenovana kolona
+// prosla kroz oba sita.
+function otkStavkeKoloneUgovor_() {
+  return OTK_STAVKE_COLUMNS.slice();
+}
+
+// Verdikt nad skupom stavki JEDNOG otkupa. Vraca normalizovane stavke ili baca
+// VALIDATION_ERROR koji imenuje razlog i broj stavke.
+//
+// RedniBroj se NE uzima od klijenta: master ga dodeljuje po KANONSKOM redu klasa
+// (CreateOtkup_TX), pa bi poslat broj bio drugi izvor istine za isti pojam. Ovde
+// je samo oznaka reda u kom su stavke stigle.
+//
+// Dve stavke iste klase su odbijene ovde, a ne tek u masteru: to je bas bug koji
+// header+stavke uklanja -- jedan logicki dokument rasut po redovima.
+function otkStavkeNormalizuj_(stavke, otkupClientRecordID) {
+  if (!Array.isArray(stavke) || stavke.length === 0) {
+    const err = new Error('Stavke missing: otkup bez stavki nije dokument');
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+
+  const roditelj = String(otkupClientRecordID || '').trim();
+  if (!roditelj) {
+    const err = new Error('OtkupClientRecordID is required for stavke');
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+
+  const izlaz = [];
+  const vidjeniCrid = {};
+  const vidjeneKlase = {};
+
+  for (let i = 0; i < stavke.length; i++) {
+    const s = stavke[i] || {};
+    const oznaka = 'stavka ' + (i + 1);
+
+    // IDENTITET REDA JE OBAVEZAN. Bez njega se ponovljen sync ne razlikuje od
+    // druge stavke, pa bi retry posle mreznog pada udvajao robu.
+    const crid = String(s.clientRecordID || '').trim();
+    if (!crid) {
+      const err = new Error('Stavka bez ClientRecordID (' + oznaka + ')');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    if (vidjeniCrid[crid]) {
+      const err = new Error('Dve stavke sa istim ClientRecordID: ' + crid);
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    vidjeniCrid[crid] = true;
+
+    const klasa = String(s.klasa || '').trim();
+    if (['I', 'II', 'III'].indexOf(klasa) === -1) {
+      const err = new Error('Klasa invalid: ' + klasa + ' (' + oznaka + ')');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    if (vidjeneKlase[klasa]) {
+      const err = new Error('Dve stavke iste klase: ' + klasa);
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    vidjeneKlase[klasa] = true;
+
+    izlaz.push({
+      clientRecordID: crid,
+      otkupClientRecordID: roditelj,
+      redniBroj: i + 1,
+      klasa: klasa,
+      kolicina: parsePositiveNumber(s.kolicina, 'Kolicina (' + oznaka + ')'),
+      cena: parsePositiveNumber(s.cena, 'Cena (' + oznaka + ')'),
+      kolAmbalaze: parseNonNegativeNumber(s.kolAmbalaze, 'KolAmbalaze (' + oznaka + ')', 0),
+      brutoKg: parseNonNegativeNumber(s.brutoKg, 'BrutoKg (' + oznaka + ')', 0)
+    });
+  }
+
+  return izlaz;
+}
+
+// Sadrzaj stavke kao tekst. Jedno mesto, pa se dve strane poredjenja ne razidju
+// -- ista odluka kao PwaStavkaKljuc u modMasterSync.
+function otkStavkaKljuc_(klasa, kolicina, cena, kolAmbalaze, brutoKg) {
+  return [
+    String(klasa || '').trim().toUpperCase(),
+    Number(kolicina || 0).toFixed(4),
+    Number(cena || 0).toFixed(4),
+    Number(kolAmbalaze || 0).toFixed(4),
+    Number(brutoKg || 0).toFixed(4)
+  ].join('|');
+}
+
+// USKLADJIVANJE SKUPA STAVKI SA TABOM: '' kad je upis dozvoljen, inace TEKST
+// razloga konflikta.
+//
+// JEDNA SEMANTIKA ZA OBA PUTA -- i kad zaglavlje postoji i kad ga jos nema
+// (review #394, P1). Dok su ta dva puta imala razlicitu idempotenciju, partial
+// upis je pravio HIBRIDNI dokument: prvi pokusaj upise S1=100 i padne pre
+// zaglavlja; retry posalje S1=120 i S2=60; upis je S1 preskocio SAMO po ID-u,
+// bez poredjenja sadrzaja, pa je u tabu ostalo 100+60 uz manifest 2 -- skup koji
+// NIJEDAN klijent nije poslao, a koji prolazi i StavkeCount kapiju u masteru.
+//
+// Indeks je GLOBALAN nad tabom, ne po roditelju (review #394, P2): VBA citalac
+// drzi jedan skup vidjenih item CRID-ova za ceo tab, pa isti item CRID pod dva
+// roditelja mora da padne OVDE. Inace GAS prihvati stanje koje VBA kasnije odbija
+// fail-closed -- i to nad CELIM listom stanice, ne nad jednim dokumentom.
+//
+//   isti item CRID + isti roditelj + isti sadrzaj   -> idempotentno, preskace se
+//   isti item CRID + isti roditelj + drugi sadrzaj  -> KONFLIKT
+//   isti item CRID + DRUGI roditelj                 -> KONFLIKT
+//   stavka u tabu pod ovim roditeljem koju ulaz ne nosi -> KONFLIKT
+//   stavka u ulazu koje u tabu nema                 -> DOZVOLJENO (recovery)
+//
+// Zadnje dvoje su namerno nesimetricne: dopisati sto fali je dovrsavanje istog
+// upisa, a zaboraviti sto postoji je druga tvrdnja o istom dokumentu.
+function otkStavkeUskladi_(indeks, stigle, otkupClientRecordID, dopustiDopunu) {
+  const roditelj = String(otkupClientRecordID || '').trim();
+  if (!roditelj) return 'OtkupClientRecordID nije zadat';
+
+  const ulaz = {};
+  for (let i = 0; i < stigle.length; i++) {
+    const s = stigle[i];
+    ulaz[s.clientRecordID] = otkStavkaKljuc_(
+      s.klasa, s.kolicina, s.cena, s.kolAmbalaze, s.brutoKg);
+  }
+
+  const uTabu = indeks || {};
+  const kljuceviTaba = Object.keys(uTabu);
+
+  for (let k = 0; k < kljuceviTaba.length; k++) {
+    const id = kljuceviTaba[k];
+    const unos = uTabu[id];
+
+    if (unos.parent !== roditelj) {
+      // Isti item CRID pod drugim roditeljem. Ne dira se sadrzaj: dva dokumenta
+      // ne smeju da dele identitet reda, jer ga master cita globalno.
+      if (ulaz[id] !== undefined) {
+        return 'stavka ' + id + ' vec pripada otkupu ' + unos.parent;
+      }
+      continue;
+    }
+
+    if (ulaz[id] === undefined) {
+      return 'stavka ' + id + ' postoji u tabu a nije stigla';
+    }
+    if (ulaz[id] !== unos.kljuc) {
+      return 'stavka ' + id + ': u tabu ' + unos.kljuc + ', stiglo ' + ulaz[id];
+    }
+  }
+
+  // ZAVRSEN DOKUMENT NE PRIMA NOVU STAVKU (review #394, drugi krug).
+  //
+  // Dopuna je legitimna SAMO pre completion marker-a: zaglavlje je oznaka
+  // zavrsenog upisa, pa dok ga nema, stavka koja fali znaci prekinut prolaz.
+  // Kad zaglavlje postoji, isti ClientRecordID je NEPROMENLJIV -- nova stavka
+  // je druga tvrdnja o dokumentu koji je master mozda vec uvezao.
+  //
+  // Bez ovog izlaza je zavrsen otkup na retry-u dobijao stavku, manifest je
+  // ostajao na starom broju, GAS je vracao success/existing, a uvoz je isti
+  // dokument posle toga odbijao kao neporavnat -- PWA bi mislila da je ispravka
+  // prihvacena, master je ne bi imao, i niko ne bi znao gde je razlika.
+  if (!dopustiDopunu) {
+    for (let i = 0; i < stigle.length; i++) {
+      const id = stigle[i].clientRecordID;
+      const unos = uTabu[id];
+
+      if (!unos || unos.parent !== roditelj) {
+        return 'stavka ' + id + ' nije deo zavrsenog dokumenta';
+      }
+    }
+  }
+
+  return '';
+}
+
+// ZAGLAVLJE JOS NE POSTOJI: prekinut upis se sme DOVRSITI.
+//
+// Postojeci podskup mora biti identican, a stavke koje u tabu fale smeju da se
+// dopisu. To je tacno stanje koje ostavi prolaz pao izmedju stavki i zaglavlja.
+function otkStavkeUskladiNedovrsen_(indeks, stigle, otkupClientRecordID) {
+  return otkStavkeUskladi_(indeks, stigle, otkupClientRecordID, true);
+}
+
+// ZAGLAVLJE POSTOJI: dokument je ZAVRSEN i skup je NEPROMENLJIV.
+//
+// Trazi se TACNA jednakost: isti identiteti i isti sadrzaj. Nema dopune, nema
+// brisanja, nema nove stavke -- samo doslovno isti payload je idempotentan.
+function otkStavkeUskladiZavrsen_(indeks, stigle, otkupClientRecordID) {
+  return otkStavkeUskladi_(indeks, stigle, otkupClientRecordID, false);
+}
 
 // PREDAJA JE SOPSTVEN DOGADJAJ, NE TRI KOLONE NA OTK REDU (review #390, P1).
 //
@@ -101,9 +414,17 @@ const ZBIRNA_COLUMNS = [
   'TipAmbalaze',
   'KolAmbalaze',
   'Klasa',
-  'OtkupRecordIDs',
+  'OtkupRecordIDs',        // MRTAV SLOT: niko ga vise ne pise ni ne cita (S5-4b-2)
   'ReceivedAt',
-  'BrojZbirne'
+  'BrojZbirne',
+
+  // IZVORI ZBIRNE SU OTPREMNICE (S5-4b-2).
+  //
+  // Kolona ide NA KRAJ, ne na mesto starog OtkupRecordIDs: obe strane citaju VOZ
+  // list POZICIONO (ovde redosled u nizu, u VBA VS_* konstante), a
+  // ensureSheetColumns dopisuje kolonu samo kad je zateceno zaglavlje PREFIKS
+  // kanonskog. Zamena u sredini bi oborila oboje.
+  'OtpremnicaIDs'
 ];
 
 const AGROMERE_COLUMNS = [
@@ -545,12 +866,11 @@ function handleAuthorizedRead(data, tokenData) {
     return jsonResponse(getFakturaStavke(fakturaID));
   }
 
-  if (action === 'getVozacOtkupi') {
+  if (action === 'getVozacOtpremnice') {
     if (tokenData.role !== 'Vozac') {
       return jsonResponse({ success: false, error: 'Nemate pristup', code: 403 });
     }
-    const vozacID = tokenData.entityID;
-    return jsonResponse(getOtkupiForVozac(vozacID));
+    return jsonResponse(getOtpremniceForVozac(tokenData.entityID));
   }
 
   if (action === 'getVozacZbirne') {
@@ -699,7 +1019,11 @@ function getMasterSyncStateInternal_(opts) {
     if (!sh) {
       var missingState = {
         success: true, locked: false, stale: false, missing: true,
-        updatedAt: '', ageMin: null, message: '', lockKind: ''
+        updatedAt: '', ageMin: null, message: '', lockKind: '',
+
+        // Bez kontrolnog taba nema ni dokaza o objavi -- citaoci read-modela
+        // to citaju kao "nije objavljeno" i odbijaju da serviraju.
+        cycleID: '', otpremniceCycleID: ''
       };
 
       if (allowCache) {
@@ -757,7 +1081,15 @@ function getMasterSyncStateInternal_(opts) {
       updatedAt: stanicaLocked.locked ? stanicaLocked.updatedAt : masterUpdated,
       ageMin: stanicaLocked.locked ? stanicaLocked.ageMin : masterLocked.ageMin,
       message: combinedMessage,
-      lockKind: lockKind
+      lockKind: lockKind,
+
+      // GENERACIJA OBJAVE (review #391, P1).
+      //
+      // cycleID je identitet TEKUCEG master ciklusa, otpremniceCycleID je
+      // identitet ciklusa koji je STVARNO objavio vozacev read-model. Jednaki su
+      // samo kad je poslednji ciklus zavrsio I izvoz uspeo.
+      cycleID: String(kv.MASTER_SYNC_CYCLE_ID || '').trim(),
+      otpremniceCycleID: String(kv.OTPREMNICE_PUBLISHED_CYCLE_ID || '').trim()
     };
 
     if (allowCache) {
@@ -773,6 +1105,8 @@ function getMasterSyncStateInternal_(opts) {
       success: false,
       locked: failClosed,
       unknown: true,
+      cycleID: '',
+      otpremniceCycleID: '',
       code: 'SYNC_STATE_UNKNOWN',
       error: 'Nije moguće proveriti master sync status.',
       message: failClosed
@@ -1578,15 +1912,38 @@ function mergeOtkupRows_(masterRows, liveRows) {
   masterRows = Array.isArray(masterRows) ? masterRows : [];
   liveRows = Array.isArray(liveRows) ? liveRows : [];
 
+  var bezIdentiteta = 0;
+
   masterRows.concat(liveRows).forEach(function(r) {
     var key = buildOtkupMergeKey_(r);
-    if (!key) return;
+
+    if (!key) {
+      // RED BEZ IDENTITETA SE ISPUSTA, ali se NE PRECUTKUJE (S5-5b).
+      //
+      // Od ovog reza buildOtkupMergeKey_ nema fallback na atribute, pa je prazan
+      // kljuc jedini ishod za red bez ServerRecordID/OtkupID I bez
+      // ClientRecordID. Takav red ne moze nastati -- oba pisca pisu identitet
+      // pre sadrzaja -- pa je njegova pojava DEFEKT. Tiho ispustanje bi ga
+      // sakrilo: lista bi bila kraca za jedan dokument i niko ne bi znao koji.
+      bezIdentiteta++;
+      return;
+    }
 
     if (seen[key]) return;
     seen[key] = true;
 
     merged.push(r);
   });
+
+  if (bezIdentiteta > 0) {
+    logError(
+      'GAS',
+      'mergeOtkupRows_',
+      'Ispusteno redova bez identiteta: ' + bezIdentiteta,
+      '',
+      ''
+    );
+  }
 
   return merged;
 }
@@ -1601,6 +1958,165 @@ function isTerminalSyncStatus(status) {
     s === 'Duplicate' ||
     s.indexOf('SyncError') === 0
   );
+}
+
+// Tab OTK_STAVKE u ISTOM fajlu u kom je OTK zaglavlje -- VBA ga cita istim
+// spreadsheetID-em (TryReadSheetData(spreadsheetID, OTK_STAVKE_TAB, ...)).
+//
+// ensureSheetColumns dozidjuje SAMO na kraju: kolona koja fali se dopise, a
+// svaka druga razlika ostaje SCHEMA_DRIFT i namerno se ne popravlja tiho.
+function otkStavkeTab_(ss) {
+  let sheet = ss.getSheetByName(OTK_STAVKE_TAB);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(OTK_STAVKE_TAB);
+    sheet.getRange(1, 1, 1, OTK_STAVKE_COLUMNS.length).setValues([OTK_STAVKE_COLUMNS]);
+    sheet.getRange(1, 1, 1, OTK_STAVKE_COLUMNS.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    return sheet;
+  }
+
+  ensureSheetColumns(sheet, OTK_STAVKE_COLUMNS);
+  return sheet;
+}
+
+// Stavke JEDNOG otkupa iz taba: ClientRecordID stavke -> kljuc sadrzaja.
+//
+// PRESKACE REDOVE DESKTOP PUSH-A. Oni nemaju OtkupClientRecordID (roditelj im je
+// pravi OtkupID), pa u pitanju "sta je PWA poslala za ovaj CRID" nemaju sta da
+// rade. Isto pravilo, u drugom smeru, drzi modStanicaLock.OtkStavkeIndeksIzTaba.
+function otkStavkeIndeksTaba_(sheet) {
+  const poslednjiRed = sheet.getLastRow();
+  if (poslednjiRed < 2) return {};
+
+  const headers = sheet
+    .getRange(1, 1, 1, sheet.getLastColumn())
+    .getValues()[0]
+    .map(h => String(h || '').trim());
+
+  const redovi = sheet
+    .getRange(2, 1, poslednjiRed - 1, sheet.getLastColumn())
+    .getValues();
+
+  return otkStavkeIndeksIzRedova_(headers, redovi);
+}
+
+// CIST DEO INDEKSA: naslov + redovi (bez naslovnog) -> {itemCRID: {parent, kljuc}}.
+//
+// Izdvojen iz mreznog dela da bi se PRAVILA mogla izmeriti bez SpreadsheetApp --
+// ista odluka kao kod otkStavkeNormalizuj_. Pravilo koje nema ko da izmeri je
+// tacno mesto gde se nalaz sakrije.
+//
+// Broj reda u poruci je r + 2, jer `redovi` pocinju od DRUGOG reda taba.
+function otkStavkeIndeksIzRedova_(headers, redovi) {
+  const izlaz = {};
+  if (!redovi || redovi.length === 0) return izlaz;
+
+  // TRAZI SE SVAKA KOLONA KOJA SE CITA, ne samo identitet.
+  //
+  // Kolona koja fali dala bi undefined indeks, getCell bi vratio default, i kljuc
+  // sadrzaja bi ispao "|0.0000|..." -- pa bi ponovljen sync izgledao kao
+  // OTKUP_CONFLICT. Tiha razlika je gora od glasnog drifta.
+  const idx = headerIndexMap(headers);
+  ['ClientRecordID', 'OtkupClientRecordID', 'Klasa', 'Kolicina', 'Cena',
+   'KolAmbalaze', 'BrutoKg'].forEach(function (ime) {
+    requireHeaderIndex(idx, ime, 'otkStavkeIndeksIzRedova_');
+  });
+
+  for (let r = 0; r < redovi.length; r++) {
+    const red = redovi[r];
+
+    // Red desktop push-a: nema OtkupClientRecordID, pa ne pripada ovom imenskom
+    // prostoru -- njegov identitet je OtkupStavkaID i njega master vec zna.
+    const parent = String(getCell(red, idx.OtkupClientRecordID, '') || '').trim();
+    if (!parent) continue;
+
+    // FAIL-CLOSED NAD POKVARENIM TABOM, doslovno kao VBA citalac.
+    //
+    // OtkPwaStavkeIzTaba oba ova stanja odbija PO IMENU i prekida uvoz celog
+    // lista. Dok je GAS prvo preskakao a drugo tiho prepisivao, isti tab je za
+    // GAS bio ispravan a za master neispravan -- dva citaoca istog ugovora sa
+    // razlicitom strogoscu, tacno ono sto ovaj rez inace uklanja.
+    //
+    // Kanonski pisci ovo ne proizvode: i PWA i push pisu identitet pre sadrzaja.
+    // Pojava je zato DEFEKT, i stoji fail-closed na obe strane.
+    const crid = String(getCell(red, idx.ClientRecordID, '') || '').trim();
+
+    if (!crid) {
+      const errBezId = new Error(
+        'Red ' + (r + 2) + ' taba ' + OTK_STAVKE_TAB +
+        ' ima OtkupClientRecordID ali nema svoj ClientRecordID');
+      errBezId.code = 'OTKUP_STAVKE_TAB_INVALID';
+      throw errBezId;
+    }
+
+    if (izlaz[crid] !== undefined) {
+      const errDupli = new Error(
+        'Dva reda sa istim ClientRecordID stavke u ' + OTK_STAVKE_TAB + ': ' + crid);
+      errDupli.code = 'OTKUP_STAVKE_TAB_INVALID';
+      throw errDupli;
+    }
+
+    izlaz[crid] = {
+      parent: parent,
+      kljuc: otkStavkaKljuc_(
+        getCell(red, idx.Klasa, ''),
+        getCell(red, idx.Kolicina, 0),
+        getCell(red, idx.Cena, 0),
+        getCell(red, idx.KolAmbalaze, 0),
+        getCell(red, idx.BrutoKg, 0)
+      )
+    };
+  }
+
+  return izlaz;
+}
+
+// Upisi stavke koje tab JOS NEMA. Idempotentno po ClientRecordID stavke: red
+// koji vec postoji se ne dira, pa ponovljen sync ne moze da udvoji robu.
+//
+// OtkupStavkaID i OtkupID ostaju PRAZNI -- njih pravi master. Pisati bilo sta u
+// njih znacilo bi izmisliti identitet koji master ne priznaje.
+function otkStavkeUpisi_(sheet, stavke, indeks) {
+  const headers = sheet
+    .getRange(1, 1, 1, sheet.getLastColumn())
+    .getValues()[0]
+    .map(h => String(h || '').trim());
+
+  let upisano = 0;
+
+  for (let i = 0; i < stavke.length; i++) {
+    const s = stavke[i];
+
+    // Preskace se SAMO stavka koju je otkStavkeUskladi_ vec potvrdio kao istu.
+    // Preskakanje po samom ID-u je bio P1 iz review-a #394: partial upis +
+    // izmenjen retry je tako pravio skup koji nijedan klijent nije poslao.
+    //
+    // ZAVISNOST REDOSLEDA, zapisana da se ne nasluci: indeks je GLOBALAN, pa nosi
+    // i stavke tudjih otkupa. Preskakanje je bezbedno samo zato sto
+    // otkStavkeUskladi_ isti item CRID pod drugim roditeljem vraca kao konflikt,
+    // pa se dovde ne dodje. Ko ikad razdvoji te dve funkcije, mora da prenese i
+    // ovaj uslov.
+    if (indeks && indeks[s.clientRecordID] !== undefined) continue;
+
+    const rowObj = {
+      OtkupStavkaID: '',
+      OtkupID: '',
+      RedniBroj: s.redniBroj,
+      Klasa: s.klasa,
+      Kolicina: s.kolicina,
+      Cena: s.cena,
+      KolAmbalaze: s.kolAmbalaze,
+      BrutoKg: s.brutoKg,
+      ClientRecordID: s.clientRecordID,
+      OtkupClientRecordID: s.otkupClientRecordID
+    };
+
+    sheet.appendRow(headers.map(h => (rowObj[h] !== undefined ? rowObj[h] : '')));
+    upisano++;
+  }
+
+  return upisano;
 }
 
 function processRecord(record, otkupacID) {
@@ -1638,7 +2154,44 @@ function processRecord(record, otkupacID) {
     }
 
     const clientRecordID = String(record.clientRecordID).trim();
+
+    // STAVKE SU DOKUMENT (S5-5b), pa se mere PRE svake odluke: i duplikat grana i
+    // upis pitaju isto -- koji je skup stavki ovaj CRID doneo. Dva merenja istog
+    // skupa bi se razisla.
+    const stavkeUlaz = otkStavkeNormalizuj_(record.stavke, clientRecordID);
+    const stavkeTab = otkStavkeTab_(ss);
+    const stavkeIndeks = otkStavkeIndeksTaba_(stavkeTab);
+
     const existingRow = findByColumn(sheet, idx.ClientRecordID, clientRecordID);
+
+    // JEDNA KAPIJA ZA OBA PUTA, ALI DVA UGOVORA -- i to je cela poenta.
+    //
+    // Prva verzija je proveru imala samo u grani "zaglavlje postoji", pa je retry
+    // posle partial upisa pravio hibridni dokument (review #394, P1). Druga je
+    // kapiju digla IZNAD grananja, pa je recovery pravilo pocelo da vazi i za VEC
+    // ZAVRSEN dokument -- zavrsen otkup je na retry-u dobijao novu stavku, a
+    // manifest ostajao na starom broju (review #394, drugi krug).
+    //
+    // ZAGLAVLJE JE COMPLETION MARKER. Dok ga nema, dopuna je dovrsavanje istog
+    // upisa. Cim postoji, skup je nepromenljiv i trazi se TACNA jednakost.
+    //
+    // Kapija je i granica IDENTITETA REDA (P2): isti item CRID pod drugim
+    // roditeljem pada u oba ugovora, jer ga master cita globalno nad celim tabom.
+    //
+    // Stoji PRE svakog upisa i pre citanja terminalnog statusa -- pa nijedan
+    // odbijen retry ne moze da ostavi trag u tabu.
+    const razlikaStavki = existingRow > 0
+      ? otkStavkeUskladiZavrsen_(stavkeIndeks, stavkeUlaz, clientRecordID)
+      : otkStavkeUskladiNedovrsen_(stavkeIndeks, stavkeUlaz, clientRecordID);
+
+    if (razlikaStavki) {
+      return {
+        clientRecordID: clientRecordID,
+        success: false,
+        code: 'OTKUP_CONFLICT',
+        error: 'Skup stavki se ne uklapa u tab ' + OTK_STAVKE_TAB + ': ' + razlikaStavki
+      };
+    }
 
     const canonicalOtkupacID = String(otkupacID || '').trim();
 
@@ -1662,7 +2215,46 @@ function processRecord(record, otkupacID) {
     // EXISTING RECORD -> idempotent return / light update
     // --------------------------------------------------
     if (existingRow > 0) {
+      // OVDE SE U TAB STAVKI NE PISE NISTA, i to je ugovor a ne izostavljanje.
+      //
+      // Zaglavlje postoji => dokument je zavrsen => uskladjivanje je gore vec
+      // trazilo TACNU jednakost skupa. Ako smo dosli dovde, u tabu je doslovno
+      // ono sto je stiglo, pa nema sta da se dopise. Ako nije bilo tako, vratio
+      // se OTKUP_CONFLICT -- pre ijednog upisa i pre citanja terminalnog statusa.
+      //
+      // Prethodna verzija je ovde dopisivala sto fali. Nad zavrsenim -- i cak nad
+      // Synced>Master -- dokumentom to je bila MUTACIJA kanonskog podatka.
+
       const existingValues = sheet.getRange(existingRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+      // DRUGA POLOVINA ISTOG IDENTITETA (review #394, treci krug).
+      //
+      // Stavke su gore uskladjene TACNO; ovde se zatvaraju cinjenice ZAGLAVLJA.
+      // Isti CRID sa drugim kooperantom, datumom, parcelom, proizvodom ili brojem
+      // je DRUGA TVRDNJA o dokumentu, ne ponovljen isti zapis.
+      //
+      // Stoji PRE svakog enrichment upisa: odbijen retry ne sme da ostavi ni
+      // UpdatedAtClient ni UpdatedAtServer na dokumentu koji je upravo odbio.
+      const razlikaZaglavlja = otkupZaglavljeRazlika_(existingValues, idx, {
+        OtkupacID: canonicalOtkupacID,
+        Datum: record.datum,
+        KooperantID: record.kooperantID,
+        VrstaVoca: record.vrstaVoca,
+        SortaVoca: record.sortaVoca,
+        ParcelaID: record.parcelaID,
+        TipAmbalaze: record.tipAmbalaze,
+        StavkeCount: stavkeUlaz.length,
+        BrojDokumenta: record.brojDokumenta
+      });
+
+      if (razlikaZaglavlja) {
+        return {
+          clientRecordID: clientRecordID,
+          success: false,
+          code: 'OTKUP_CONFLICT',
+          error: 'Isti ClientRecordID sa drugom tvrdnjom o zaglavlju: ' + razlikaZaglavlja
+        };
+      }
 
       const currentServerRecordID = String(getCell(existingValues, idx.ServerRecordID, '') || '').trim();
       const currentVozacID = String(getCell(existingValues, idx.VozacID, '') || '').trim();
@@ -1726,16 +2318,26 @@ function processRecord(record, otkupacID) {
     const kooperantID = requireNonEmptyString(record.kooperantID, 'KooperantID');
     const vrstaVoca = requireNonEmptyString(record.vrstaVoca, 'VrstaVoca');
 
-    const kolicina = parsePositiveNumber(record.kolicina, 'Kolicina');
-    const cena = parsePositiveNumber(record.cena, 'Cena');
-
-    const klasa = String(record.klasa || 'I').trim();
-    if (['I', 'II', 'III'].indexOf(klasa) === -1) {
-      const err = new Error('Klasa invalid: ' + klasa);
+    // TIP AMBALAZE JE CINJENICA ZAGLAVLJA, kolicina gajbi je po stavci -- zato se
+    // kapija postavlja nad ZBIROM: gajbe bez tipa nema kome da se knjize, na kojoj
+    // god stavci stoje. Ista kapija stoji i u masteru (ValidatePWAOtkup).
+    const tipAmbalaze = String(record.tipAmbalaze || '').trim();
+    let ukupnoAmbalaze = 0;
+    for (let ai = 0; ai < stavkeUlaz.length; ai++) {
+      ukupnoAmbalaze += stavkeUlaz[ai].kolAmbalaze;
+    }
+    if (ukupnoAmbalaze > 0 && !tipAmbalaze) {
+      const err = new Error('TipAmbalaze missing while KolAmbalaze > 0');
       err.code = 'VALIDATION_ERROR';
       throw err;
     }
-    const kolAmbalaze = parseNonNegativeNumber(record.kolAmbalaze, 'KolAmbalaze', 0);
+
+    // STAVKE PRVO, ZAGLAVLJE POSLE. Zaglavlje je oznaka ZAVRSENOG upisa: ako
+    // prolaz padne izmedju, sledeci nadje stavke (idempotentno se preskacu) i
+    // dopise zaglavlje. Obrnuto bi ostavilo zaglavlje bez stavki -- siroce koje
+    // uvoz odbija i koje se sa terena ne moze popraviti. Isti redosled kao
+    // desktop push (modStanicaLock.PosaljiStavkeOtkupa).
+    otkStavkeUpisi_(stavkeTab, stavkeUlaz, stavkeIndeks);
 
     const rowObj = {
       ClientRecordID: clientRecordID,
@@ -1751,16 +2353,23 @@ function processRecord(record, otkupacID) {
       KooperantName: record.kooperantName || '',
       VrstaVoca: vrstaVoca,
       SortaVoca: record.sortaVoca || '',
-      Klasa: klasa,
-      Kolicina: kolicina,
-      Cena: cena,
-      TipAmbalaze: record.tipAmbalaze || '',
-      KolAmbalaze: kolAmbalaze,
+
+      // CETIRI MRTVA SLOTA (S5-5b): Klasa, Kolicina, Cena i KolAmbalaze su
+      // cinjenice STAVKE i zive u tabu OTK_STAVKE. Kolone ostaju na zici jer
+      // ensureSheetColumns dozidjuje samo na kraju -- brisanje iz sredine bi
+      // pomerilo svaki pozicioni citalac u masteru (GS_* konstante).
+      Klasa: '',
+      Kolicina: '',
+      Cena: '',
+      TipAmbalaze: tipAmbalaze,
+      KolAmbalaze: '',
+
       ParcelaID: record.parcelaID || '',
       VozacID: record.vozacID || '',
       Napomena: record.napomena || '',
       ReceivedAt: nowIso,
-      BrojDokumenta: record.brojDokumenta || ''   // ← DODATO
+      BrojDokumenta: record.brojDokumenta || '',   // ← DODATO
+      StavkeCount: stavkeUlaz.length
     };
 
     const rowValues = headers.map(h => rowObj[h] !== undefined ? rowObj[h] : '');
@@ -1845,6 +2454,27 @@ function predajaRazlika(values, idx, novo) {
   }
 
   return '';
+}
+
+// Razlika DVA SKUPA izvora, bez obzira na redosled.
+//
+// Redosled u spisku nije tvrdnja -- isti dokumenti u drugom redu su isti
+// manifest. Vraca opis razlike ili '' kad su skupovi jednaki.
+function skupIzvoraRazlika_(staro, novo) {
+  function uSkup(s) {
+    return String(s || '')
+      .split(',')
+      .map(function (x) { return x.trim(); })
+      .filter(Boolean)
+      .sort();
+  }
+
+  var a = uSkup(staro);
+  var b = uSkup(novo);
+
+  if (a.join('|') === b.join('|')) return '';
+
+  return 'OtpremnicaIDs (bilo: "' + a.join(',') + '", stiglo: "' + b.join(',') + '")';
 }
 
 // ============================================================
@@ -2042,6 +2672,12 @@ function processZbirnaRecord(record, vozacID) {
 
     const clientRecordID = String(record.clientRecordID).trim();
 
+    // IZVORI SU OBAVEZNI NA VRATIMA (S5-4b-2).
+    //
+    // Zbirna bez izvora nije dokument. Ranije je to hvatala tek VBA validacija,
+    // pa je red prolazio ceo put do mastera da bi tamo bio odbijen.
+    const otpremnicaIDs = requireNonEmptyString(record.otpremnicaIDs, 'OtpremnicaIDs');
+
     const recordVozacID = String(record.vozacID || '').trim();
     if (recordVozacID && recordVozacID !== canonicalVozacID) {
       const err = new Error(
@@ -2064,6 +2700,46 @@ function processZbirnaRecord(record, vozacID) {
       const currentServerRecordID = String(getCell(existingValues, idx.ServerRecordID, '') || '').trim();
       const currentSyncStatus = String(getCell(existingValues, idx.SyncStatus, '') || '').trim();
       const isTerminal = isTerminalSyncStatus(currentSyncStatus);
+
+      // ISTI CRID + DRUGA TVRDNJA JE KONFLIKT, NE "existing" (review #392, P2).
+      //
+      // VBA to vec ume da imenuje -- PwaZbirnaRazlika kaze "isti CRID, drugi skup
+      // izvora je konflikt" -- ali mu GAS nije davao priliku da vidi drugu
+      // verziju: vracao je success/existing, pa druga tvrdnja nikad nije stigla
+      // do mastera. Ista klasa koju smo zatvorili kod PRED-a.
+      //
+      // Poredi se KANONSKI sadrzaj. Summary (kilaza po klasama, vrsta, sorta,
+      // ambalaza, klasa) NE ulazi: master ga izvodi iz izvora, pa razlika u
+      // njemu nije druga tvrdnja o dokumentu.
+      var zbrRazlika = predajaRazlika(existingValues, idx, {
+        VozacID: canonicalVozacID,
+        Datum: String(record.datum || '').trim(),
+        KupacID: String(record.kupacID || '').trim()
+      });
+
+      // Broj se poredi SAMO ako ga klijent salje: prazno znaci "generisi
+      // lokalno", pa nije razlika u tvrdnji. Isto pravilo vazi i u VBA.
+      if (!zbrRazlika && String(record.brojZbirne || '').trim()) {
+        zbrRazlika = predajaRazlika(existingValues, idx, {
+          BrojZbirne: String(record.brojZbirne).trim()
+        });
+      }
+
+      if (!zbrRazlika) {
+        zbrRazlika = skupIzvoraRazlika_(
+          getCell(existingValues, idx.OtpremnicaIDs, ''),
+          otpremnicaIDs
+        );
+      }
+
+      if (zbrRazlika) {
+        return {
+          clientRecordID: clientRecordID,
+          success: false,
+          code: 'ZBIRNA_CONFLICT',
+          error: 'Isti ClientRecordID sa drugom tvrdnjom o zbirnoj: ' + zbrRazlika
+        };
+      }
 
       // Only non-terminal records may receive light retry enrichment.
       if (!isTerminal) {
@@ -2136,9 +2812,21 @@ function processZbirnaRecord(record, vozacID) {
       TipAmbalaze: record.tipAmbalaze || '',
       KolAmbalaze: kolAmbalaze,
       Klasa: record.klasa || '',
-      OtkupRecordIDs: record.otkupRecordIDs || '',
+
+      // Mrtav slot ostaje prazan -- vrednost se vise ne prenosi ni odavde ni
+      // odozdo. Kapija koja ga je trazila je obrisana u VBA (ValidatePWAZbirna).
+      OtkupRecordIDs: '',
+
       ReceivedAt: nowIso,
-      BrojZbirne: record.brojZbirne || ''
+
+      // BROJ DODELJUJE MASTER (S5-4b-2).
+      //
+      // Klijent ga vise ne racuna: broj je labela dokumenta (A2), a labela koju
+      // dva uredjaja mogu smisliti nezavisno nije labela. Prazno znaci
+      // "generisi lokalno" -- to uvoz vec razume.
+      BrojZbirne: record.brojZbirne || '',
+
+      OtpremnicaIDs: otpremnicaIDs
     };
 
     const rowValues = headers.map(h => rowObj[h] !== undefined ? rowObj[h] : '');
@@ -2173,49 +2861,207 @@ function processZbirnaRecord(record, vozacID) {
   }
 }
 
-function getOtkupiForVozac(vozacID) {
+// VOZAC DOBIJA SVOJE OTPREMNICE, NE TUDJE OTKUPNE REDOVE (S5-4b-1).
+//
+// Do ovog reza je vozacu isao getOtkupiForVozac: OTK-* redovi filtrirani po
+// Otkup.VozacID. Tu vezu je S5-4a ukinuo -- ekran otpreme vise ne dira otkupni
+// zapis -- pa je citalac ostao bez pisca i spisak je bio prazan.
+//
+// Izvor je sada kanonski izvoz mastera: MgmtReports/OtpremniceAll (zaglavlja) +
+// OtpremniceAllStavke (stavke). Master izvozi SAMO nestornirane, izdate
+// otpremnice sa vozacem, pa ovde nema poslovnog filtriranja -- samo "moje".
+// DA LI JE VOZACEV READ-MODEL OBJAVLJEN I VALIDAN (review #391, P1).
+//
+// Lock sam po sebi nije dovoljan. MgmtReports se izvozi na KRAJU ciklusa, pa
+// postoje dva stanja u kojima je snimak zastareo:
+//
+//   1) ciklus upravo traje              -> locked
+//   2) ciklus je zavrsen, ali IZVOZ JE PAO -> lock skinut, snimak star
+//
+// Drugo je opasnije: traje sve do sledeceg uspesnog izvoza, a ne samo nekoliko
+// minuta. Zato se ne pita "je li zakljucano" nego "da li je OVAJ snimak objavio
+// tekuci ciklus": generacija objave mora biti jednaka generaciji ciklusa.
+//
+// Nepoznato je NE. Prazna generacija (nema kontrolnog taba, pad citanja) znaci
+// da objava ne moze da se dokaze -- a nedokazana objava je zastareo snimak.
+function vozacReadModelObjavljen_() {
+  var s = getMasterSyncStateForWriteBlock_();
+
+  if (!s || s.success !== true) {
+    return { ok: false, cycleID: '', code: 'READ_MODEL_UNKNOWN',
+             message: 'Stanje sinhronizacije nije dostupno.' };
+  }
+
+  if (s.locked === true) {
+    return { ok: false, cycleID: '', code: 'MASTER_SYNC_ACTIVE',
+             message: s.message || 'Master sync je u toku.' };
+  }
+
+  var ciklus = String(s.cycleID || '').trim();
+  var objavljen = String(s.otpremniceCycleID || '').trim();
+
+  if (!ciklus || !objavljen || ciklus !== objavljen) {
+    return { ok: false, cycleID: '', code: 'READ_MODEL_STALE',
+             message: 'Stanje voznji jos nije objavljeno iz poslednjeg ciklusa.' };
+  }
+
+  // Generacija se VRACA, jer ista mora biti izmerena i posle citanja izvora.
+  return { ok: true, cycleID: ciklus, code: '', message: '' };
+}
+
+// Uredan odgovor "stanje trenutno nije objavljivo".
+//
+// Isti oblik kao getOtkupi u #390: klijent zadrzava poslednje poznato umesto da
+// ga obrise praznim spiskom.
+function readModelSeMenja_(razlog) {
+  return {
+    success: true,
+    readModelChanging: true,
+    code: (razlog && razlog.code) || 'READ_MODEL_CHANGING',
+    message: (razlog && razlog.message) || 'Stanje voznji se trenutno menja.',
+    records: []
+  };
+}
+
+function getOtpremniceForVozac(vozacID) {
   try {
-    if (!vozacID) return { success: false, error: 'vozacID required' };
-    var registry = getSheetRegistry();
-    var otkKeys = Object.keys(registry).filter(function(k) { return k.startsWith('OTK-'); });
-    var allRecords = [];
+    var canonicalVozacID = String(vozacID || '').trim();
+    if (!canonicalVozacID) return { success: false, error: 'vozacID required' };
 
-    if (otkKeys.length > 0) {
-      for (var i = 0; i < otkKeys.length; i++) {
-        try {
-          var records = sheetToArray(SpreadsheetApp.openById(registry[otkKeys[i]]).getSheets()[0]);
-          records.forEach(function(r) {
-            if ((r.VozacID || r.VozaciID || '') === vozacID) {
-              r._source = otkKeys[i];
-              allRecords.push(r);
-            }
-          });
-        } catch (e) {}
-      }
-      return { success: true, records: allRecords };
+    // SNIMAK MORA DA BUDE IZ JEDNE GENERACIJE (review #391, drugi krug).
+    //
+    // Provera samo PRE citanja nije ograda nego najava: izmedju nje i poslednjeg
+    // procitanog reda moze POCETI (ili se ceo zavrsiti) nov master ciklus, pa se
+    // objavi mesavina C1 i C2 -- na primer otpremnica koju je C2 vec vezao za
+    // zbirnu, procitana kao slobodna.
+    //
+    // Zato se generacija meri PRE i POSLE, i objavljuje se samo ako je ISTA.
+    // GUID resava ABA problem koji timestamp ne bi -- ali samo ako se meri dvaput.
+    var pre = vozacReadModelObjavljen_();
+    if (!pre.ok) return readModelSeMenja_(pre);
+
+    // PAD CITANJA NIJE "NEMA VOZNJI" (review #391, P2).
+    //
+    // getMgmtReport na gresci vraca success:false. Da se to precuti, ispad
+    // Google-a bi vozacu izgledao kao prazan dan -- a to je tvrdnja o poslu,
+    // ne o vezi.
+    var zaglavlja = getMgmtReport('OtpremniceAll');
+    if (!zaglavlja || zaglavlja.success !== true || !Array.isArray(zaglavlja.records)) {
+      return {
+        success: false,
+        code: 'READ_MODEL_UNAVAILABLE',
+        error: 'Read-model otpremnica nije procitan.'
+      };
     }
 
-    // fallback: scan operational sheets folder ako SheetRegistry nema OTK-* zapise
-    var folder = getAgriXFolder_('SHEETS_OPERATIONAL');
-    var files = folder.getFiles();
-    while (files.hasNext()) {
-      var file = files.next();
-      var name = file.getName();
-      if (name.startsWith('OTK-')) {
-        var records2 = sheetToArray(SpreadsheetApp.open(file).getSheets()[0]);
-        records2.forEach(function(r) {
-          if ((r.VozacID || r.VozaciID || '') === vozacID) {
-            r._source = name;
-            allRecords.push(r);
-          }
+    var moje = zaglavlja.records.filter(function (r) {
+      return String((r && r.VozacID) || '').trim() === canonicalVozacID;
+    });
+
+    var records = [];
+
+    // PRAZAN SPISAK PROLAZI KROZ ISTU OGRADU.
+    //
+    // "Nemam nijednu voznju" je tvrdnja o poslu kao i svaka druga: procitana iz
+    // stare generacije, sakrila bi otpremnicu koju je novi ciklus upravo dodao.
+    // Zato se ovde ne izlazi ranije -- izlaz je jedan, posle druge mere.
+    if (moje.length) {
+      // Stavke se citaju JEDNOM i grupisu po OtpremnicaID -- inace bi svaka
+      // otpremnica povukla svoj prolaz kroz ceo tab.
+      var stavke = getMgmtReport('OtpremniceAllStavke');
+      if (!stavke || stavke.success !== true || !Array.isArray(stavke.records)) {
+        // Isto pravilo kao gore: bez stavki bi SVAKI dokument ispao "bez robe" i
+        // bio preskocen, pa bi pad citanja zavrsio kao uredan prazan spisak.
+        return {
+          success: false,
+          code: 'READ_MODEL_UNAVAILABLE',
+          error: 'Stavke otpremnica nisu procitane.'
+        };
+      }
+
+      var poDokumentu = {};
+
+      stavke.records.forEach(function (s) {
+        var oid = String((s && s.OtpremnicaID) || '').trim();
+        if (!oid) return;
+        if (!poDokumentu[oid]) poDokumentu[oid] = [];
+        poDokumentu[oid].push({
+          otpremnicaStavkaID: String(s.OtpremnicaStavkaID || '').trim(),
+          redniBroj: Number(s.RedniBroj) || 0,
+          klasa: String(s.Klasa || '').trim(),
+          kolicina: Number(s.Kolicina) || 0,
+          kolAmbalaze: Number(s.KolAmbalaze) || 0,
+          brutoKg: Number(s.BrutoKg) || 0
         });
-      }
+      });
+
+      moje.forEach(function (r) {
+        var oid = String(r.OtpremnicaID || '').trim();
+        var linije = oid ? poDokumentu[oid] : null;
+
+        // ZAGLAVLJE BEZ STAVKI SE NE SERVIRA.
+        //
+        // Dva taba se pisu u DVA poziva, pa mogu biti u raskoraku: zaglavlja
+        // osvezena, stavke stare (ili obrnuto). Otpremnica bez robe nije
+        // isporuka -- da je posaljemo, vozac bi u zbirnu uneo prazan dokument.
+        if (!linije || !linije.length) {
+          logError(
+            'GAS',
+            'getOtpremniceForVozac',
+            'Otpremnica bez stavki u izvozu, preskocena: ' + oid,
+            '',
+            canonicalVozacID
+          );
+          return;
+        }
+
+        records.push({
+          otpremnicaID: oid,
+          brojOtpremnice: String(r.BrojOtpremnice || '').trim(),
+          datum: r.Datum,
+          stanicaID: String(r.StanicaID || '').trim(),
+          vozacID: canonicalVozacID,
+          kulturaID: String(r.KulturaID || '').trim(),
+          vrstaVoca: String(r.VrstaVoca || '').trim(),
+          sortaVoca: String(r.SortaVoca || '').trim(),
+          tipAmbalaze: String(r.TipAmbalaze || '').trim(),
+          predajaID: String(r.PredajaID || '').trim(),
+
+          // PRAZNO ZNACI "SLOBODNA ZA ZBIRNU".
+          //
+          // Master racuna tekucu zbirnu iz clanstva (AktivnaZbirnaZaOtpremnicu),
+          // pa posle storna zbirne otpremnica sama ponovo postane slobodna --
+          // bez ijednog upisa u ovaj tab i bez kolone na detetu.
+          zbirnaID: String(r.ZbirnaID || '').trim(),
+
+          stavke: linije
+        });
+      });
     }
-    return { success: true, records: allRecords };
-  } catch (err) { 
-      logError('GAS', 'getOtkupiForVozac', err.message, err.stack || '', vozacID || '');
-      return { success: false, error: err.message }; 
+
+    // DRUGA MERA. Promena generacije znaci da je ciklus poceo ili se zavrsio
+    // USRED ovog zahteva, pa ono sto je procitano nije jedan snimak.
+    var posle = vozacReadModelObjavljen_();
+    if (!posle.ok) return readModelSeMenja_(posle);
+
+    if (posle.cycleID !== pre.cycleID) {
+      return readModelSeMenja_({
+        code: 'READ_MODEL_CHANGED',
+        message: 'Master ciklus je tekao tokom citanja -- stanje voznji nije konacno.'
+      });
     }
+
+    return { success: true, records: records };
+  } catch (err) {
+    logError(
+      'GAS',
+      'getOtpremniceForVozac',
+      err && err.message ? err.message : String(err),
+      err && err.stack ? err.stack : '',
+      vozacID || ''
+    );
+    return { success: false, error: err.message };
+  }
 }
 
 function getZbirneForVozac(vozacID) {
@@ -3123,6 +3969,145 @@ function masterSyncEpoha_() {
   }
 }
 
+// Stavke iz KANONSKOG IZVOZA mastera (MgmtReports/OtkupiAllStavke), grupisane po
+// OtkupID. Izvoz je u rasporedu modMasterSync.OtkStavkeKolone, isti kao zica.
+//
+// Baca kad se izvoz ne moze procitati: prazna mapa i neuspelo citanje se NE SMEJU
+// mesati -- prvo bi svaki dokument prikazalo kao nula kilograma.
+function otkupStavkeIzIzvoza_() {
+  var izvoz = getMgmtReport('OtkupiAllStavke');
+
+  if (!izvoz || izvoz.success !== true) {
+    var err = new Error('OtkupiAllStavke se ne moze procitati: ' +
+                        ((izvoz && izvoz.error) || 'nepoznat razlog'));
+    err.code = 'OTKUP_STAVKE_READ_FAILED';
+    throw err;
+  }
+
+  var mapa = {};
+  var redovi = Array.isArray(izvoz.records) ? izvoz.records : [];
+
+  for (var i = 0; i < redovi.length; i++) {
+    var r = redovi[i];
+    var kljuc = String(r.OtkupID || '').trim();
+    if (!kljuc) continue;
+
+    if (!mapa[kljuc]) mapa[kljuc] = [];
+    mapa[kljuc].push({
+      otkupStavkaID: String(r.OtkupStavkaID || '').trim(),
+      redniBroj: Number(r.RedniBroj || 0),
+      klasa: String(r.Klasa || '').trim(),
+      kolicina: Number(r.Kolicina || 0),
+      cena: Number(r.Cena || 0),
+      kolAmbalaze: Number(r.KolAmbalaze || 0),
+      brutoKg: Number(r.BrutoKg || 0)
+    });
+  }
+
+  return mapa;
+}
+
+// Stavke iz OPERATIVNOG lista, grupisane po ClientRecordID zaglavlja.
+//
+// Red desktop push-a se preskace: on ima OtkupID, pa ga nosi izvoz mastera.
+// Ovde se traze samo redovi sa terena, kojima master jos ne zna OtkupID.
+function otkupStavkeIzOperativnog_(otkupacID) {
+  var mapa = {};
+  var folder = getAgriXFolder_('SHEETS_OPERATIONAL');
+  var files = folder.getFilesByName('OTK-' + otkupacID);
+
+  if (!files.hasNext()) return mapa;
+
+  var ss = SpreadsheetApp.open(files.next());
+  var sheet = ss.getSheetByName(OTK_STAVKE_TAB);
+  if (!sheet) return mapa;
+
+  // JEDAN UGOVOR NAD TABOM. Validacija ide kroz ISTI indeks koji pisac koristi,
+  // pa read-model ne moze da prikaze stanje koje pisac i master odbijaju. Baca
+  // isto -- a pozivalac to vec pretvara u OTKUP_STAVKE_READ_FAILED, fail-closed.
+  otkStavkeIndeksTaba_(sheet);
+
+  var redovi = sheetToArray(sheet);
+
+  for (var i = 0; i < redovi.length; i++) {
+    var r = redovi[i];
+    var kljuc = String(r.OtkupClientRecordID || '').trim();
+    if (!kljuc) continue;
+
+    if (!mapa[kljuc]) mapa[kljuc] = [];
+    mapa[kljuc].push({
+      clientRecordID: String(r.ClientRecordID || '').trim(),
+      redniBroj: Number(r.RedniBroj || 0),
+      klasa: String(r.Klasa || '').trim(),
+      kolicina: Number(r.Kolicina || 0),
+      cena: Number(r.Cena || 0),
+      kolAmbalaze: Number(r.KolAmbalaze || 0),
+      brutoKg: Number(r.BrutoKg || 0)
+    });
+  }
+
+  return mapa;
+}
+
+// Zakaci stavke na svaki red read-modela. Prioritet kljuca je ISTI kao u
+// buildOtkupMergeKey_: ServerRecordID/OtkupID pa ClientRecordID -- inace bi red
+// koji je vec presao u master gledao u pogresnu mapu.
+//
+// Vraca { records, bezStavki }. Dokument BEZ stavki nije "dokument od nula
+// kilograma" nego znak da je citanje nepotpuno, pa pozivalac fail-closed staje.
+function projektujStavke_(records, poOtkupID, poCridu) {
+  var izlaz = [];
+  var bezStavki = '';
+
+  for (var i = 0; i < records.length; i++) {
+    var r = records[i];
+    var sid = String(r.ServerRecordID || r.OtkupID || '').trim();
+    var crid = String(r.ClientRecordID || '').trim();
+
+    var stavke = null;
+    if (sid && poOtkupID[sid]) stavke = poOtkupID[sid];
+    if (!stavke && crid && poCridu[crid]) stavke = poCridu[crid];
+
+    if (!stavke || stavke.length === 0) {
+      if (!bezStavki) bezStavki = sid || crid || '(red bez identiteta)';
+      stavke = [];
+    }
+
+    // RedniBroj je oznaka, ne identitet -- ali lista se prikazuje, pa ide sortirano.
+    stavke = stavke.slice().sort(function(a, b) {
+      return (a.redniBroj || 0) - (b.redniBroj || 0);
+    });
+
+    var kopija = Object.assign({}, r);
+    kopija.stavke = stavke;
+    kopija.stavkeCount = stavke.length;
+
+    // IZVEDENI ZBIROVI, ne drugi izvor istine.
+    //
+    // Menadzment ekrani citaju Kolicina / Cena / Klasa / KolAmbalaze sa reda.
+    // Te kolone su na zici PRAZNE od S5-5b, pa se ovde racunaju iz stavki --
+    // pri citanju, nigde se ne cuvaju. Canonical je `stavke`; ovo je projekcija.
+    //
+    // Cena postoji samo kad dokument ima TACNO JEDNU klasu: dvoklasni dokument
+    // ima dve cene, pa jedan broj tu ne postoji i prazno je tacnije od prve.
+    var zbirKg = 0, zbirAmb = 0, klase = [];
+    for (var s = 0; s < stavke.length; s++) {
+      zbirKg += Number(stavke[s].kolicina || 0);
+      zbirAmb += Number(stavke[s].kolAmbalaze || 0);
+      if (stavke[s].klasa) klase.push(String(stavke[s].klasa));
+    }
+
+    kopija.Kolicina = zbirKg;
+    kopija.KolAmbalaze = zbirAmb;
+    kopija.Klasa = klase.join(', ');
+    kopija.Cena = stavke.length === 1 ? Number(stavke[0].cena || 0) : '';
+
+    izlaz.push(kopija);
+  }
+
+  return { records: izlaz, bezStavki: bezStavki };
+}
+
 function getOtkupiForOtkupac(otkupacID) {
   try {
     var canonicalOtkupacID = String(otkupacID || '').trim();
@@ -3251,9 +4236,54 @@ function getOtkupiForOtkupac(otkupacID) {
       };
     }
 
+    // STAVKE SU DEO DOKUMENTA (S5-5b), pa ih read-model NOSI.
+    //
+    // FAIL-CLOSED, iz istog razloga kao predaje: red bez stavki izgleda kao
+    // dokument od NULA kilograma, a otkupac po toj listi radi -- predaje blok,
+    // gleda saldo. Bolje reci "ne znam" nego prikazati prazan otkup kao ceo.
+    var saStavkama;
+    try {
+      saStavkama = projektujStavke_(
+        projektujPredaju_(mergeOtkupRows_(masterRows, liveRows), uToku),
+        otkupStavkeIzIzvoza_(),
+        otkupStavkeIzOperativnog_(canonicalOtkupacID)
+      );
+    } catch (stErr) {
+      logError(
+        'GAS',
+        'getOtkupiForOtkupac.stavke',
+        stErr && stErr.message ? stErr.message : String(stErr || ''),
+        stErr && stErr.stack ? stErr.stack : '',
+        canonicalOtkupacID
+      );
+
+      return {
+        success: false,
+        code: 'OTKUP_STAVKE_READ_FAILED',
+        error: 'Stavke otkupa se ne mogu procitati, pa lista nije pouzdana.'
+      };
+    }
+
+    if (saStavkama.bezStavki) {
+      logError(
+        'GAS',
+        'getOtkupiForOtkupac.stavke',
+        'Dokument bez stavki u read-modelu: ' + saStavkama.bezStavki,
+        '',
+        canonicalOtkupacID
+      );
+
+      return {
+        success: false,
+        code: 'OTKUP_STAVKE_READ_FAILED',
+        error: 'Dokument bez stavki u read-modelu (' + saStavkama.bezStavki +
+               '), pa lista nije pouzdana.'
+      };
+    }
+
     return {
       success: true,
-      records: projektujPredaju_(mergeOtkupRows_(masterRows, liveRows), uToku)
+      records: saStavkama.records
     };
 
   } catch (err) {
@@ -3289,23 +4319,18 @@ function buildOtkupMergeKey_(r) {
 
   if (clientId) return 'CRID:' + clientId;
 
-  // 3) Fallback za stare/ručne zapise bez ID-jeva.
-  return [
-    r.OtkupacID || r.StanicaID || '',
-    r.Datum || '',
-    r.KooperantID || '',
-    r.VrstaVoca || '',
-    r.SortaVoca || '',
-    r.Klasa || '',
-    r.Kolicina || '',
-    r.Cena || '',
-    r.TipAmbalaze || '',
-    r.KolAmbalaze || '',
-    r.ParcelaID || '',
-    r.VozacID || ''
-  ].map(function(x) {
-    return String(x || '').trim();
-  }).join('|');
+  // 3) NEMA TRECE GRANE (S5-5b).
+  //
+  // Zatecen fallback je kljuc sklapao od atributa, medju njima Klasa, Kolicina,
+  // Cena i KolAmbalaze -- polja koja zaglavlje vise ne nosi. Kljuc bi od ovog
+  // reza za SVE takve redove bio isti tekst od samih praznina, pa bi dva razlicita
+  // otkupa bez ID-jeva izgledala kao jedan. To je gore od nemanja kljuca.
+  //
+  // Zapis bez ijednog identiteta u novom modelu ne moze nastati: i PWA i push
+  // pisu identitet pre sadrzaja. Prazan kljuc znaci "ne umem da ga adresiram", a
+  // mergeOtkupRows_ takav red ISPUSTA -- i to zapise u log, jer pojava takvog
+  // reda je defekt, ne rubni slucaj.
+  return '';
 }
 
 function getKarticaForKooperant(kooperantID) {

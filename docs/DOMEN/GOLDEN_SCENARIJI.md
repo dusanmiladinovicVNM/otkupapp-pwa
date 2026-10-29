@@ -145,7 +145,7 @@ FAKTURA
 
 ---
 
-## 4) Scenariji (12 registrovanih + D1 čeka cutover)
+## 4) Scenariji (11 registrovanih; D1 i D2 van — §10 i §13)
 
 ### A — Fresh Fruit Flow
 
@@ -154,7 +154,7 @@ FAKTURA
 | A1 | Jednoklasni otkup kroz ceo lanac do fakture | baseline; sve ostalo je odstupanje od njega |
 | A2 | **Dvoklasni** otkup kroz ceo lanac | scenario koji Otkup cutover najviše menja iznutra, a ishod mora ostati isti |
 | A3 | Više blokova → jedna otpremnica | N:1 kardinalitet |
-| A4 | Više otpremnica → jedna zbirna | agregat; §6.2 invarijanta |
+| A4 | Više otpremnica → jedna zbirna (svaka otpremnica iz svog bloka) | agregat; kardinalnost otpremnica |
 | A5 | Kalo: poslato 1200, primljeno 1175 | razlika je poslovna činjenica, ne greška |
 
 ### B — Novac
@@ -176,7 +176,7 @@ FAKTURA
 | # | Scenario | Šta hvata |
 |---|---|---|
 | D1 | Storno otpremnice → zbirna se rekalkuliše; prazna zbirna se stornira | **odluka pala, kod još ne — registruje ga Zbirna cutover (§10)** |
-| D2 | Storno prijemnice koja je fakturisana | kaskada |
+| D2 | Storno prijemnice koja je fakturisana | **nije registrovan** — od S6 koraka 4 se fakturisana prijemnica ne stornira (prvo faktura), pa scenario nema ishod (§13) |
 | D3 | Storno dvoklasnog otkupa | **jedan** logički dokument, obe klase; novac i ambalaža poništeni |
 
 ### F — Faktura
@@ -330,11 +330,11 @@ ne kroz `novac` parametar otkupa. B2 to i dokazuje: pun avans 50 000 daje
 | A1 | pun lanac do fakture: 1 dokument svake vrste, faktura 55000 |
 | A2 | dvoklasni: **1** logički otkup (ne 2), ishod isti kao jednoklasni |
 | A3 | 2 otkupa → **1** otpremnica; sabotaža sa 2×500 kg pada na kardinalnosti |
-| A4 | **2** otpremnice → 1 zbirna, invarijanta OK |
+| A4 | **2** otpremnice, svaka iz svog bloka → 1 zbirna (`otkupa 2`, `otpremnica 2`, `zbirnih 1`) |
 | A5 | kalo 25 kg je poslovna činjenica, ne greška |
 | B2 | pun avans 50 000 → `avansom 50000`, `isplaceno svi DA` |
 | B3 | delimičan avans 20 000 → `isplaceno svi NE` (prag nije dostignut) |
-| D2 | storno fakturisane prijemnice: faktura `osirocena DA`, `osirocenih stavki 1` — izdata faktura se ne briše, traži korekciju |
+| D2 | **nije registrovan** (S6 korak 4: fakturisana prijemnica se ne stornira — `Test_S6K4_FakturisanaSeOdbija`); ranija tvrdnja `osirocena DA` opisuje premisu koje više nema |
 | D3 | storno dvoklasnog otkupa gasi **jedan** logički dokument; novac ostaje u istoriji ali se **odvezuje**: `ukupno 56000 / vezano 0 / nealocirano 56000` |
 | F2 | fakturisano `I=DA / II=NE` — dokaz da je `Fakturisano` line-level |
 | G1 | samo Klasa II prolazi ceo lanac |
@@ -529,3 +529,46 @@ pokazivač ima test koji dokazuje da se poklapa sa članstvom
 Ono što nedostaje je sama propagacija — pravljenje nove verzije nizvodnih
 dokumenata pri ispravci izvora. To je Zbirna cutover.
 
+---
+
+## 13) S6 korak 8 — golden lanac kroz kanonske pisce (27.10.2026)
+
+Devet scenarija koje je S3b-1 obrisao (A1–A5, B2, B3, F2, G1) vraćeno je u
+`RunGoldenSuite` (2 → **11**). Lanac ide kroz **kanonske** pisce: `CreateOtkup_TX` →
+`CreateOtpremnicaIzIzvora_TX` (otpremnica iz izvornih blokova, izdata) →
+`CreateZbirna_TX` (operaterski put, očekivanje mora da se slaže sa izvorima) →
+`SavePrijemnicaMulti_TX` (vezuje se samo na izdatu, jednoznačnu zbirnu,
+`PRJ-ZBR-01`) → `CreateFaktura_TX` po `PrijemnicaStavkaID`.
+
+**Menjao se adapter, ne scenario:**
+
+- otpremnice scenarija se nalaze kroz **članstvo** zbirne (`tblZbirnaIzvori`), a
+  ne po `BrojZbirne` na otpremnici — kanonski pisac zbirne taj broj ne piše;
+- `poslato` su stavke tih otpremnica; do sada ga je davao `SumOtpremniceByKlasa`
+  po broju, koji bi za kanonski lanac vratio nulu;
+- `PRIJEM fakturisano` se čita po stavci, kroz `modFaktura.FakturaLinijePoStavci`
+  (isti čitač kao kapija storna); kolone `Fakturisano` više nema.
+
+**Golden fajlovi su `fc06fa77` + tri izmerene razlike** (odluka operatera,
+27.10.2026). Sve ostalo je bajt-jednako:
+
+| Razlika | Gde | Uzrok |
+|---|---|---|
+| red `invarijanta     OK` je skinut | svih 9 | S4-3a (`2e381836`) ga je skinuo iz adaptera i iz D3: merio je nule na obe strane. Ovi goldeni su obrisani pre toga (S3b-1), pa su ga još nosili |
+| `kooperant 12/1` je `0`, ne `-50` / `-100` | 8 (G1 je i ranije `0`) | AMB-10 knjiga prenosa: kooperant koji donese svoje gajbe uz potvrdu manjka dobija pokriće `ULAZ_TUDJE_AMBALAZE`, pa mu saldo ostaje 0 (AMB-10-ODL-8, -18) |
+| A4: `otkupa 2` i `otkup aktivnih 2` | A4 | blok ide u **tačno jednu** otpremnicu (README §1). „Jedan blok od 1000 kg → dve otpremnice" pravio je samo stari pisac, bez izvora; scenario sada ima dva bloka (400 + 600, drugi bez gajbi, da saldo kooperanta ostane isti) |
+
+**D2 nije vraćen** (odluka 2 koraka 8): fakturisana prijemnica se od koraka 4 ne
+stornira, pa „storno fakturisane prijemnice" nema ishod koji bi golden zaključao.
+
+**Dokaz da oracle grize (ručno, u oba smera).** `dokaz.py` i katalog sabotaža
+pokrivaju samo RunAllTests, BFP i Banka suite, pa je dokaz za adapter rađen ručno
+nad kopijom modula, a izvor je posle svakog koraka vraćen bajt-identičan (sha256)
+onom nad kojim je suite bio 11 / 0:
+
+- A3 sa dve otpremnice umesto jedne → pada **samo A3**, na
+  `otpremnica 1` naspram `2`;
+- fakturisanost na nivou dokumenta (klasa II prepisuje klasu I) → pada **samo F2**,
+  na `fakturisano I=DA  II=NE`;
+- `poslato` se ne čita iz članstva → pada **9 od 11**, na redu `poslato`; D3 i G2
+  ostaju zeleni.

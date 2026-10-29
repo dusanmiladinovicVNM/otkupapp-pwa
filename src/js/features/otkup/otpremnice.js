@@ -550,7 +550,7 @@ function renderOtpremaCard(row, showWarning, isAssigned) {
             <div class="otprema-card-main">
                 <div class="otprema-card-line">
                     ${escapeHtml(row.vrstaVoca || '-')}${row.sortaVoca ? ' / ' + escapeHtml(row.sortaVoca) : ''}
-                    <span class="otprema-card-class">Klasa ${escapeHtml(row.klasa || 'I')}</span>
+                    <span class="otprema-card-class">Klasa ${escapeHtml(row.klasaLabel || '')}</span>
                 </div>
 
                 <div class="otprema-card-line otprema-card-line--kg">
@@ -668,7 +668,7 @@ function renderOtpremaAssignCard(row, showWarning) {
                 <div class="otprema-card-main">
                     <div class="otprema-card-line">
                         ${escapeHtml(prod)}
-                        <span class="otprema-card-class">Klasa ${escapeHtml(row.klasa || 'I')}</span>
+                        <span class="otprema-card-class">Klasa ${escapeHtml(row.klasaLabel || '')}</span>
                     </div>
 
                     <div class="otprema-card-line otprema-card-line--kg">
@@ -1209,7 +1209,7 @@ function openOtpremaDetail(recordKey) {
             <div><strong>Datum:</strong> ${escapeHtml(row.datum || '-')}</div>
             <div><strong>Kooperant:</strong> ${escapeHtml(row.kooperantName || row.kooperantID || '-')}</div>
             <div><strong>Roba:</strong> ${escapeHtml(row.vrstaVoca || '-')} ${row.sortaVoca ? '/ ' + escapeHtml(row.sortaVoca) : ''}</div>
-            <div><strong>Klasa:</strong> ${escapeHtml(row.klasa || 'I')}</div>
+            <div><strong>Klasa:</strong> ${escapeHtml(row.klasaLabel || '')}</div>
             <div><strong>Količina:</strong> ${escapeHtml(formatOtpremaKg(row.kolicina))}</div>
             <div><strong>Ambalaža:</strong> ${escapeHtml(formatOtpremaAmbalaza(row))}</div>
             <div><strong>Vozač:</strong> ${escapeHtml(resolveVozacName(row.vozacID) || 'Nije dodeljen')}</div>
@@ -1287,11 +1287,15 @@ function normalizeLocalOtpremaRecord(r) {
         kooperantName: r.kooperantName || r.kooperantID || '',
         vrstaVoca: r.vrstaVoca || '',
         sortaVoca: r.sortaVoca || '',
-        klasa: r.klasa || 'I',
-        kolicina: parseFloat(r.kolicina) || 0,
-        cena: parseFloat(r.cena) || 0,
+        // STAVKE SU DOKUMENT (S5-5b): zapis ih nosi, a zbirovi se izvode OVDE,
+        // jednom. Ekrani otpremnice citaju izveden podatak, pa dve liste iste
+        // robe ne mogu da pokazu razlicit broj kilograma.
+        stavke: otkupStavke(r),
+        kolicina: otkupZbirKg(r),
+        kolAmbalaze: otkupZbirAmbalaze(r),
+        klasaLabel: otkupKlaseTekst(r),
+        cenaJedne: otkupCenaAkoJedna(r),
         tipAmbalaze: r.tipAmbalaze || '',
-        kolAmbalaze: parseInt(r.kolAmbalaze, 10) || 0,
         parcelaID: r.parcelaID || '',
         napomena: r.napomena || '',
         vozacID: r.vozacID || '',

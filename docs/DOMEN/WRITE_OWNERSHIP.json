@@ -24,11 +24,21 @@
   ],
   "tblAmbalaza": {
     "row_owner": [
-      "modAmbalaza",
-      "modStornoRecovery"
+      "modAmbalaza"
     ],
     "schema_owner": [],
     "cilj": []
+  },
+  "tblAmbalazaDokument": {
+    "row_owner": [
+      "modAmbalaza"
+    ],
+    "schema_owner": [
+      "modSchema"
+    ],
+    "cilj": [
+      "modAmbalaza"
+    ]
   },
   "tblArtikli": {
     "row_owner": [
@@ -55,9 +65,7 @@
   },
   "tblFakturaStavke": {
     "row_owner": [
-      "modDokumenta",
       "modFaktura",
-      "modStorno",
       "modUtovar"
     ],
     "schema_owner": [],
@@ -213,7 +221,6 @@
   "tblPrijemnica": {
     "row_owner": [
       "modDokumenta",
-      "modFaktura",
       "modStorno"
     ],
     "schema_owner": [],

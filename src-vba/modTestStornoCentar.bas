@@ -29,17 +29,11 @@ Public Sub Test_StornoCentar_All()
     Test_StampIspravkaTrace_Auto
     Test_BlockStornoDriftReason_Auto
     Test_DocIsIssued_Auto
-    Test_OtkupBlockDeadParent_Auto
     Test_BuildStornoImpact_Auto
     Test_GetActiveDocumentsForStorno_Auto
     Test_GetNedovrseno_Auto
-    Test_UndoReverseGuard_Auto
     Test_PonistenjePrijemniceKaskada_Auto
     Test_StornoJournalUndo_Auto
-    Test_StornoJournalReversGuard_Auto
-    Test_StornoReversPoStanici_Auto
-    Test_StornoReversGranicaRID_Auto
-    Test_StornoReversOpisStanice_Auto
     Test_StornoJournalUndoValidation_Auto
     Test_StornoJournalDrift_Auto
     Test_StornoJournalMixedOp_Auto
@@ -56,21 +50,26 @@ Public Sub Test_StornoCentar_All()
     End If
 End Sub
 
-' #6: impact header kolicina = SUMA aktivnih Klasa I+II (ranije citao samo prvu klasu
-' -> potceni dvoklasni dokument u uvidu pre potvrde). Storniran red se ne broji.
+' #6: impact header kolicina = SUMA STAVKI dokumenta (I + II). Ranije je citao prvi
+' red klase, pa je potcenio dvoklasni dokument u uvidu pre potvrde. Od S6 koraka 4
+' dokument je jedno zaglavlje sa stavkama, a uvid ga bira po PrijemnicaID-u:
+' storniran dokument istog broja ne ulazi, jer ga identitet ne bira.
 Public Sub Test_ImpactHeaderSum_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_KOLICINA), Array("SVT-IH-1", "SVT-IH-P", "I", 100)
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_KOLICINA), Array("SVT-IH-2", "SVT-IH-P", "II", 50)
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_KOLICINA, COL_STORNIRANO), Array("SVT-IH-3", "SVT-IH-P", "I", 999, "Da")
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ), Array("SVT-IH-1", "SVT-IH-P")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_STORNIRANO), Array("SVT-IH-3", "SVT-IH-P", "Da")
+    TcSeedStavkaPrijemnice "SVT-IH-1", 1, "I", 100
+    TcSeedStavkaPrijemnice "SVT-IH-1", 2, "II", 50
+    TcSeedStavkaPrijemnice "SVT-IH-3", 1, "I", 999
 
-    Dim m As Object: Set m = BuildStornoImpact(FLOW_DOC_PRIJEMNICA, "SVT-IH-P")
+    Dim m As Object: Set m = BuildStornoImpact(FLOW_DOC_PRIJEMNICA, "SVT-IH-P", "", "SVT-IH-1")
     Dim h As Object: Set h = m("header")
-    TcChk Val(NzS(h("kolicina"))) = 150, "impact header kolicina = suma aktivnih Klasa I+II (100+50), storniran izuzet"
+    TcChk Val(NzS(h("kolicina"))) = 150, "impact header kolicina = suma stavki dokumenta (100+50), storniran istog broja izuzet"
 
     tx.RollbackTx: Set tx = Nothing
     Exit Sub
@@ -121,7 +120,7 @@ Public Sub Test_StornoJournalDeadParentOtherGen_Auto()
     tx.AddTableSnapshot TBL_AMBALAZA: tx.AddTableSnapshot TBL_NOVAC: tx.AddTableSnapshot TBL_STORNO_ZURNAL
 
     ' gen A: VEC stornirana (bez zurnala), mrtav roditelj (stornirana otpremnica)
-    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA, COL_STORNIRANO), Array("SVT-DG-OTP", "SVT-DG-OB", "I", "Da")
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_STORNIRANO), Array("SVT-DG-OTP", "SVT-DG-OB", "Da")
     TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_OTPREMNICA_ID, COL_STORNIRANO), Array("SVT-DG-A", "SVT-DG-OTK", "SVT-DG-OTP", "Da")
     ' gen B: unbound aktivna -> storno (journaled)
     TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-DG-B", "SVT-DG-OTK")
@@ -215,6 +214,12 @@ End Sub
 ' Storno-zurnal: LOSSLESS "Vrati storno" za otkup -> storno obrise tblNovac.OtkupID,
 ' undo ga preko zurnala VRACA (glavni bug review #5). Egzekucija: StornoOtkup_TX ->
 ' UndoStorno_TX(Otkup, broj). Rollback-safe.
+'
+' Otkup je BEZ ambalaze, i to je pravilo, ne pojednostavljenje: undo otkupa bez
+' ambalaznog efekta prolazi, a otkup SA ambalazom je konacan (AMB-10-ODL-25) --
+' to meri BFP Test_Amb_UndoStornaOdbijenNadKnjigom. Do 10e-2 je test sejao red
+' STAROG oblika i tvrdio zastavicu Stornirano na njemu; zastavica je obrisana, a
+' red starog oblika posle 10e-3 nije ni valjan red knjige.
 Public Sub Test_StornoJournalUndo_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -228,22 +233,18 @@ Public Sub Test_StornoJournalUndo_Auto()
 
     TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), _
               Array("SVT-SJ-OID", "SVT-SJ-B")
-    TcSeedRow TBL_AMBALAZA, Array(COL_AMB_ID, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), _
-              Array("SVT-SJ-AID", "SVT-SJ-OID", DOK_TIP_OTKUP)
     TcSeedRow TBL_NOVAC, Array(COL_NOV_ID, COL_NOV_OTKUP_ID), _
               Array("SVT-SJ-NID", "SVT-SJ-OID")
 
     ' --- STORNO (journaled) ---
     TcChk StornoOtkup_TX("SVT-SJ-OID") = True, "StornoOtkup_TX -> True"
     TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SJ-OID", COL_STORNIRANO))) = "DA", "otkup stornirano"
-    TcChk UCase$(NzS(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-SJ-AID", COL_STORNIRANO))) = "DA", "ambalaza stornirana"
     TcChk NzS(LookupValue(TBL_NOVAC, COL_NOV_ID, "SVT-SJ-NID", COL_NOV_OTKUP_ID)) = "", "novac OtkupID obrisan (storno)"
     TcChk Len(LatestOpFor(DOK_TIP_OTKUP, "SVT-SJ-B")) > 0, "zurnal operacija zabelezena"
 
     ' --- UNDO (lossless preko zurnala) ---
     TcChk UndoStorno_TX(DOK_TIP_OTKUP, "SVT-SJ-B") = True, "UndoStorno_TX (zurnal) -> True"
     TcChk UCase$(NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, "SVT-SJ-OID", COL_STORNIRANO))) <> "DA", "otkup vracen (aktivan)"
-    TcChk UCase$(NzS(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-SJ-AID", COL_STORNIRANO))) <> "DA", "ambalaza vracena"
     TcChk NzS(LookupValue(TBL_NOVAC, COL_NOV_ID, "SVT-SJ-NID", COL_NOV_OTKUP_ID)) = "SVT-SJ-OID", "novac OtkupID VRACEN (lossless)"
 
     ' P2 7: ponovni undo iste op -> odbijen (drift guard: Stornirano je sada "" != NovaVrednost "Da")
@@ -254,411 +255,6 @@ Public Sub Test_StornoJournalUndo_Auto()
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Debug.Print "FAIL Test_StornoJournalUndo_Auto GRESKA: " & Err.description: mFail = mFail + 1
-End Sub
-
-' Blocker 2 fix: journaled revers undo NE zaobilazi #134 dup-gardu.
-Public Sub Test_StornoJournalReversGuard_Auto()
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_STORNO_ZURNAL
-
-    ' Redovi nose ReversID (identitet reversa) i nogu Stanica sa datumom: red bez
-    ' ReversID-a storno i undo odbijaju (fail-closed), a duplikat se meri u nizu
-    ' (stanica, dan).
-    ' aktivan revers -> storno (kreira zurnal op)
-    TcSeedRevNoga "SVT-RG-1", Date, "SVT-ST-RG", "Stanica", "SVT-RG-R", DOK_TIP_OM_IZLAZ_KOOP, NoviReversID()
-    TcChk StornoOMKoopByBrDok_TX("SVT-RG-R", DOK_TIP_OM_IZLAZ_KOOP) = True, "revers storno (journaled) -> True"
-    ' unesi NOVI aktivan revers istog broja, stanice i dana (drugi dokument)
-    TcSeedRevNoga "SVT-RG-2", Date, "SVT-ST-RG", "Stanica", "SVT-RG-R", DOK_TIP_OM_IZLAZ_KOOP, NoviReversID()
-    ' undo preko ZURNALA mora biti ODBIJEN (dup guard #134, ranije zaobidjen)
-    TcChk UndoStorno_TX(DOK_TIP_OM_IZLAZ_KOOP, "SVT-RG-R") = False, "journaled revers undo uz aktivan dup -> ODBIJEN"
-    TcChk UCase$(NzS(LookupValue(TBL_AMBALAZA, COL_AMB_ID, "SVT-RG-1", COL_STORNIRANO))) = "DA", "stari revers ostao storniran (nije dupliran)"
-
-    tx.RollbackTx: Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    Debug.Print "FAIL Test_StornoJournalReversGuard_Auto GRESKA: " & Err.description: mFail = mFail + 1
-End Sub
-
-' REVERS PO ReversID-u (REV-IDENT-01) -- ARCHITECTURE_CONTRACT A2 red REV.
-' Isti broj legalno nose reversi dve stanice istog dana, pa storno i undo biraju
-' po ReversID-u, nikad po (broj, tip), i bez uparivanja noge Kooperant sa nogom
-' Stanica preko (broj, dan).
-' Fixture: oblik nogu je produkcioni (SaveOMUlaz_TX: FIRMA = noga Stanica, KOOP =
-' noga Kooperant + noga Stanica, sve noge jednog dokumenta nose jedan ReversID iz
-' NoviReversID); seed u rollback-u. Fault injection su red bez ReversID-a i
-' ambalaza uz otkup SA ReversID-om -- oba storno mora da odbije. KOOP isti broj na
-' dve stanice istog dana od Faze 2b pravi i pisac (BFP
-' Test_BKTX_ReversKoopIstiBrojDveStanice); ovde se meri citalac nad seed-om.
-' Nivo merenja: fizicki red (koja noga je stornirana).
-'
-' SABOTAZE: u ReversRedoviRID ne poredi ReversID -> pukne "revers ISTOG broja na
-' drugoj stanici ostaje aktivan"; izbaci proveru uz-otkup u ReversIDRazresi ->
-' pukne "ambalaza uz otkup se ne stornira kao revers"; pusti prazan ReversID u
-' ReversIDRazresi I u ReversRedoviRID (dva sloja) -> pukne "red bez ReversID-a se
-' ne stornira"; UndoGuardReasonZaOp bez ReversID-a -> pukne "undo po operaciji";
-' UndoStorno_TX na LatestOpFor umesto LatestOpForRevers -> pukne "undo po broju:
-' bira operaciju reversa A".
-Public Sub Test_StornoReversPoStanici_Auto()
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_STORNO_ZURNAL
-    tx.AddTableSnapshot TBL_OTKUP
-
-    Dim d As Date: d = DateSerial(2031, 5, 7)
-    Dim ridA As String, ridB As String, ridK1 As String, ridK1d2 As String
-    Dim ridK2a As String, ridK2b As String, ridUA As String, ridUB As String, ridO As String
-    ridA = NoviReversID(): ridB = NoviReversID()
-    ridK1 = NoviReversID(): ridK1d2 = NoviReversID()
-    ridK2a = NoviReversID(): ridK2b = NoviReversID()
-    ridUA = NoviReversID(): ridUB = NoviReversID()
-    ridO = NoviReversID()
-
-    ' FIRMA: isti broj istog dana na dve stanice (samo noge Stanica).
-    TcSeedRevNoga "SVT-RS-A", d, "SVT-ST-A", "Stanica", "SVT-RS-F", DOK_TIP_OM_ULAZ_FIRMA, ridA
-    TcSeedRevNoga "SVT-RS-B", d, "SVT-ST-B", "Stanica", "SVT-RS-F", DOK_TIP_OM_ULAZ_FIRMA, ridB
-
-    TcChk StornoOMKoopByBrDok_TX("SVT-RS-F", DOK_TIP_OM_ULAZ_FIRMA) = False, _
-          "revers FIRMA: bez identiteta dvosmislen broj -> odbijen"
-    TcChk TcAmbStorno("SVT-RS-A") = "" And TcAmbStorno("SVT-RS-B") = "", _
-          "revers FIRMA: odbijen storno nije dirao nijednu nogu"
-    TcChk StornoOMKoopByBrDok_TX("SVT-RS-F", DOK_TIP_OM_ULAZ_FIRMA, "SVT-RS-A") = True, _
-          "revers FIRMA: storno po identitetu reda prolazi"
-    TcChk TcAmbStorno("SVT-RS-A") = "DA", "revers FIRMA: stornirana je izabrana stanica"
-    TcChk TcAmbStorno("SVT-RS-B") = "", "revers FIRMA: revers ISTOG broja na drugoj stanici ostaje aktivan"
-
-    ' Undo garda: ReversID bira dokument, duplikat je pitanje niza (stanica, dan).
-    TcChk Len(UndoGuardReason(DOK_TIP_OM_ULAZ_FIRMA, "SVT-RS-F", ridA)) = 0, _
-          "undo garda: aktivan revers druge stanice NIJE duplikat"
-    TcChk Len(UndoGuardReason(DOK_TIP_OM_ULAZ_FIRMA, "SVT-RS-F", ridB)) > 0, _
-          "undo garda: aktivan revers na stanici i danu tog reversa blokira"
-    TcChk Len(UndoGuardReason(DOK_TIP_OM_ULAZ_FIRMA, "SVT-RS-F")) > 0, _
-          "undo garda: revers bez ReversID-a se odbija (fail-closed)"
-    Dim opA As String: opA = LatestOpFor(DOK_TIP_OM_ULAZ_FIRMA, "SVT-RS-F")
-    TcChk UndoOperation_TX(opA) = True, _
-          "undo po operaciji: ReversID iz AmbID-eva op-a -- revers druge stanice ne blokira"
-    TcChk TcAmbStorno("SVT-RS-A") = "", "undo po operaciji: A je ponovo aktivan"
-
-    ' KOOP, jedna stanica: storno sa noge Kooperant stornira obe noge svog
-    ' ReversID-a, a revers istog broja iste stanice drugog dana ostaje.
-    TcSeedRevNoga "SVT-RK1-K", d, "SVT-KOOP-1", "Kooperant", "SVT-RS-K1", DOK_TIP_OM_ULAZ_KOOP, ridK1
-    TcSeedRevNoga "SVT-RK1-S", d, "SVT-ST-A", "Stanica", "SVT-RS-K1", DOK_TIP_OM_ULAZ_KOOP, ridK1
-    TcSeedRevNoga "SVT-RK1-K2", DateAdd("d", 1, d), "SVT-KOOP-1", "Kooperant", "SVT-RS-K1", _
-                  DOK_TIP_OM_ULAZ_KOOP, ridK1d2
-    TcSeedRevNoga "SVT-RK1-S2", DateAdd("d", 1, d), "SVT-ST-A", "Stanica", "SVT-RS-K1", _
-                  DOK_TIP_OM_ULAZ_KOOP, ridK1d2
-    TcChk StornoOMKoopByBrDok_TX("SVT-RS-K1", DOK_TIP_OM_ULAZ_KOOP, "SVT-RK1-K") = True, _
-          "revers KOOP: storno sa noge Kooperant prolazi"
-    TcChk TcAmbStorno("SVT-RK1-K") = "DA" And TcAmbStorno("SVT-RK1-S") = "DA", _
-          "revers KOOP: stornirane su obe noge izabranog reversa"
-    TcChk TcAmbStorno("SVT-RK1-K2") = "" And TcAmbStorno("SVT-RK1-S2") = "", _
-          "revers KOOP: isti broj iste stanice drugog dana ostaje aktivan"
-
-    ' KOOP, dve stanice istog dana: noga Kooperant nosi ReversID svog dokumenta, pa
-    ' se stornira TACNO on. Do Faze 2a ovo je bilo odbijeno kao nerazlucivo.
-    TcSeedRevNoga "SVT-RK2-K1", d, "SVT-KOOP-1", "Kooperant", "SVT-RS-K2", DOK_TIP_OM_IZLAZ_KOOP, ridK2a
-    TcSeedRevNoga "SVT-RK2-S1", d, "SVT-ST-A", "Stanica", "SVT-RS-K2", DOK_TIP_OM_IZLAZ_KOOP, ridK2a
-    TcSeedRevNoga "SVT-RK2-K2", d, "SVT-KOOP-2", "Kooperant", "SVT-RS-K2", DOK_TIP_OM_IZLAZ_KOOP, ridK2b
-    TcSeedRevNoga "SVT-RK2-S2", d, "SVT-ST-B", "Stanica", "SVT-RS-K2", DOK_TIP_OM_IZLAZ_KOOP, ridK2b
-    TcChk StornoOMKoopByBrDok_TX("SVT-RS-K2", DOK_TIP_OM_IZLAZ_KOOP) = False, _
-          "revers KOOP dve stanice: bez identiteta dvosmislen broj -> odbijen"
-    TcChk StornoOMKoopByBrDok_TX("SVT-RS-K2", DOK_TIP_OM_IZLAZ_KOOP, "SVT-RK2-K1") = True, _
-          "revers KOOP dve stanice: storno sa noge Kooperant prolazi po ReversID-u"
-    TcChk TcAmbStorno("SVT-RK2-K1") = "DA" And TcAmbStorno("SVT-RK2-S1") = "DA", _
-          "revers KOOP dve stanice: stornirane su obe noge izabranog reversa"
-    TcChk TcAmbStorno("SVT-RK2-K2") = "" And TcAmbStorno("SVT-RK2-S2") = "", _
-          "revers KOOP dve stanice: revers istog broja i dana na drugoj stanici ostaje aktivan"
-
-    ' Red bez ReversID-a (fault injection): identitet se ne pogadja ni po broju, ni
-    ' po stanici i danu.
-    TcSeedRevNoga "SVT-RN-S", d, "SVT-ST-C", "Stanica", "SVT-RS-N", DOK_TIP_OM_ULAZ_FIRMA, ""
-    TcChk StornoOMKoopByBrDok_TX("SVT-RS-N", DOK_TIP_OM_ULAZ_FIRMA, "SVT-RN-S") = False, _
-          "red bez ReversID-a se ne stornira (sa identitetom reda)"
-    TcChk StornoOMKoopByBrDok_TX("SVT-RS-N", DOK_TIP_OM_ULAZ_FIRMA) = False, _
-          "red bez ReversID-a se ne stornira (po broju)"
-    TcChk TcAmbStorno("SVT-RN-S") = "", "red bez ReversID-a se ne stornira -- nije dirnut"
-
-    ' Ambalaza uz otkup (DokumentID = OtkupID) nije revers -- ni kad bi nosila
-    ' ReversID (fault injection: pisac otkupa ga ne pise).
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-RS-OTK", "SVT-RS-OTKBR")
-    TcSeedRevNoga "SVT-RO-K", d, "SVT-KOOP-1", "Kooperant", "SVT-RS-OTK", DOK_TIP_OM_IZLAZ_KOOP, ridO
-    TcSeedRevNoga "SVT-RO-S", d, "SVT-ST-A", "Stanica", "SVT-RS-OTK", DOK_TIP_OM_IZLAZ_KOOP, ridO
-    TcChk StornoOMKoopByBrDok_TX("SVT-RS-OTK", DOK_TIP_OM_IZLAZ_KOOP, "SVT-RO-K") = False, _
-          "ambalaza uz otkup se ne stornira kao revers"
-    TcChk TcAmbStorno("SVT-RO-K") = "" And TcAmbStorno("SVT-RO-S") = "", _
-          "ambalaza uz otkup: nijedna noga nije dirnuta"
-
-    ' Undo po broju (UndoStorno_TX) bira operaciju ISTOG ReversID-a: noviji storno
-    ' reversa iste oznake na drugoj stanici, vec vracen po operaciji, nije ta.
-    TcSeedRevNoga "SVT-RU-A", d, "SVT-ST-A", "Stanica", "SVT-RS-U", DOK_TIP_OM_ULAZ_FIRMA, ridUA
-    TcSeedRevNoga "SVT-RU-B", DateAdd("d", 1, d), "SVT-ST-B", "Stanica", "SVT-RS-U", _
-                  DOK_TIP_OM_ULAZ_FIRMA, ridUB
-    TcChk StornoOMKoopByBrDok_TX("SVT-RS-U", DOK_TIP_OM_ULAZ_FIRMA, "SVT-RU-A") = True, _
-          "undo po broju: preduslov -- storno A"
-    TcChk StornoOMKoopByBrDok_TX("SVT-RS-U", DOK_TIP_OM_ULAZ_FIRMA, "SVT-RU-B") = True, _
-          "undo po broju: preduslov -- storno B (noviji)"
-    TcChk UndoOperation_TX(LatestOpFor(DOK_TIP_OM_ULAZ_FIRMA, "SVT-RS-U")) = True, _
-          "undo po broju: preduslov -- B vracen po operaciji"
-    TcChk UndoStorno_TX(DOK_TIP_OM_ULAZ_FIRMA, "SVT-RS-U") = True, _
-          "undo po broju: bira operaciju reversa A, ne noviju vracenu operaciju B"
-    TcChk TcAmbStorno("SVT-RU-A") = "" And TcAmbStorno("SVT-RU-B") = "", _
-          "undo po broju: A je vracen, B ostaje aktivan"
-
-    tx.RollbackTx: Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    Debug.Print "FAIL Test_StornoReversPoStanici_Auto GRESKA: " & Err.description: mFail = mFail + 1
-End Sub
-
-' REV-IDENT-01 GRANICA DOKUMENTA: ReversID bira redove za storno, undo i stampu, pa
-' svaki red koji ga nosi mora pripadati ISTOM reversu. Red tudjeg dokumenta sa
-' istim ReversID-om obara celu operaciju -- nijedan red se ne menja (fail-closed).
-' Fixture: fault injection (pisac ReversID pise samo na noge jednog reversa), seed u
-' rollback-u; svaki slucaj je ispravan revers + JEDAN los red. Negativne kontrole:
-' ispravan KOOP revers i FIRMA revers sa dve noge istog vozaca su cisti.
-' Nivo merenja: fizicki red (da li je ijedan red storniran) + razlog granice.
-'
-' SABOTAZE: u ReversIDGranica preskoci proveru tipa -> pukne "granica: ReversID samo
-' na redu koji nije revers" (uz nogu reversa tip hvata i provera smera -- zato taj
-' slucaj nema nogu reversa); proveru broja -> "granica: red drugog broja"; dana ->
-' "granica: red drugog dana"; vozaca -> "granica: noga drugog vozaca"; stanice ->
-' "granica: noga Stanica druge stanice"; kooperanta -> "granica: noga Kooperant
-' drugog kooperanta"; tipa entiteta -> "granica: red koji nije noga (Kupac)";
-' uz-otkup -> "granica: ReversID na ambalazi uz otkup"; izbaci poziv granice iz
-' ReversRedoviRID -> "storno: red koji nije revers sa istim ReversID-om -> storno
-' odbijen"; izbaci granicu iz UndoGuardReason -> "undo po operaciji: tudj red sa
-' istim ReversID-om -> undo odbijen" (zurnal-put nema drugi sloj; legacy undo po
-' broju hvata i ReversRedoviRID pri vracanju, pa "undo: tudj red ..." drze dva
-' sloja); izbaci B10 nalaz -> "B10: ReversID na redu koji nije revers prijavljen".
-Public Sub Test_StornoReversGranicaRID_Auto()
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_STORNO_ZURNAL
-    tx.AddTableSnapshot TBL_OTKUP
-
-    Dim d As Date: d = DateSerial(2031, 6, 11)
-    Dim rid As String, colsV As Variant
-    colsV = Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, _
-                  COL_AMB_DOK_ID, COL_AMB_DOK_TIP, COL_AMB_VOZAC, COL_AMB_REVERS_ID)
-
-    ' Negativne kontrole: granica ne sme da odbije legitiman dokument.
-    rid = TcSeedKoopRevers("SVT-GR-OK", d)
-    TcChk Len(ReversIDGranica(rid)) = 0, "granica: ispravan KOOP revers je cist"
-    rid = NoviReversID()
-    TcSeedRow TBL_AMBALAZA, colsV, Array("SVT-GR-V-S1", d, "SVT-ST-GR1", "Stanica", "SVT-GR-V", _
-                                         DOK_TIP_OM_ULAZ_FIRMA, "SVT-VOZ-GR1", rid)
-    TcSeedRow TBL_AMBALAZA, colsV, Array("SVT-GR-V-S2", d, "SVT-ST-GR1", "Stanica", "SVT-GR-V", _
-                                         DOK_TIP_OM_ULAZ_FIRMA, "SVT-VOZ-GR1", rid)
-    TcChk Len(ReversIDGranica(rid)) = 0, "granica: FIRMA revers sa dve noge istog vozaca je cist"
-    TcSeedRow TBL_AMBALAZA, colsV, Array("SVT-GR-V-S3", d, "SVT-ST-GR1", "Stanica", "SVT-GR-V", _
-                                         DOK_TIP_OM_ULAZ_FIRMA, "SVT-VOZ-GR2", rid)
-    TcChk Len(ReversIDGranica(rid)) > 0, "granica: noga drugog vozaca"
-
-    ' ReversID samo na redu koji nije revers (bez ijedne noge reversa): meri pravilo
-    ' tipa samo za sebe -- uz nogu reversa isti red odbija i provera smera.
-    rid = NoviReversID()
-    TcSeedRevNoga "SVT-GR-T-X", d, "SVT-ST-GR1", "Stanica", "SVT-GR-T", DOK_TIP_OTPREMNICA, rid
-    TcChk Len(ReversIDGranica(rid)) > 0, "granica: ReversID samo na redu koji nije revers"
-
-    ' Red koji nije revers (otpremnica) sa istim ReversID-om -- slucaj iz review-a.
-    rid = TcSeedKoopRevers("SVT-GR-A", d)
-    TcSeedRevNoga "SVT-GR-A-X", d, "SVT-ST-GR1", "Stanica", "SVT-GR-OTP", DOK_TIP_OTPREMNICA, rid
-    TcChk Len(ReversIDGranica(rid)) > 0, "granica: red koji nije revers (otpremnica) sa istim ReversID-om"
-    TcChk StornoOMKoopByBrDok_TX("SVT-GR-A", DOK_TIP_OM_IZLAZ_KOOP, "SVT-GR-A-K") = False, _
-          "storno: red koji nije revers sa istim ReversID-om -> storno odbijen"
-    TcChk StornoOMKoopByBrDok_TX("SVT-GR-A", DOK_TIP_OM_IZLAZ_KOOP) = False, _
-          "storno po broju: red koji nije revers sa istim ReversID-om -> storno odbijen"
-    TcChk TcAmbStorno("SVT-GR-A-K") = "" And TcAmbStorno("SVT-GR-A-S") = "" And _
-          TcAmbStorno("SVT-GR-A-X") = "", _
-          "storno odbijen na granici: nijedan red nije promenjen (ni red otpremnice)"
-    TcChk InStr(1, TcIntegritetSa("SVT-GR-A-X"), "ReversID na redu koji nije revers", vbBinaryCompare) > 0, _
-          "B10: ReversID na redu koji nije revers prijavljen"
-
-    ' Red drugog broja (isti smer) pod istim ReversID-om.
-    rid = TcSeedKoopRevers("SVT-GR-B", d)
-    TcSeedRevNoga "SVT-GR-B-X", d, "SVT-ST-GR1", "Stanica", "SVT-GR-B2", DOK_TIP_OM_IZLAZ_KOOP, rid
-    TcChk Len(ReversIDGranica(rid)) > 0, "granica: red drugog broja"
-    TcChk StornoOMKoopByBrDok_TX("SVT-GR-B", DOK_TIP_OM_IZLAZ_KOOP, "SVT-GR-B-K") = False, _
-          "storno: red drugog broja pod istim ReversID-om -> storno odbijen"
-    TcChk TcAmbStorno("SVT-GR-B-K") = "" And TcAmbStorno("SVT-GR-B-X") = "", _
-          "storno odbijen na granici: red drugog broja nije promenjen"
-
-    ' Red drugog dana pod istim ReversID-om.
-    rid = TcSeedKoopRevers("SVT-GR-C", d)
-    TcSeedRevNoga "SVT-GR-C-X", DateAdd("d", 1, d), "SVT-ST-GR1", "Stanica", "SVT-GR-C", DOK_TIP_OM_IZLAZ_KOOP, rid
-    TcChk Len(ReversIDGranica(rid)) > 0, "granica: red drugog dana"
-
-    ' Noga Stanica druge stanice.
-    rid = TcSeedKoopRevers("SVT-GR-D", d)
-    TcSeedRevNoga "SVT-GR-D-X", d, "SVT-ST-GR2", "Stanica", "SVT-GR-D", DOK_TIP_OM_IZLAZ_KOOP, rid
-    TcChk Len(ReversIDGranica(rid)) > 0, "granica: noga Stanica druge stanice"
-
-    ' Noga Kooperant drugog kooperanta.
-    rid = TcSeedKoopRevers("SVT-GR-E", d)
-    TcSeedRevNoga "SVT-GR-E-X", d, "SVT-KOOP-GR2", "Kooperant", "SVT-GR-E", DOK_TIP_OM_IZLAZ_KOOP, rid
-    TcChk Len(ReversIDGranica(rid)) > 0, "granica: noga Kooperant drugog kooperanta"
-
-    ' Red koji nije noga (Kupac) pod istim ReversID-om.
-    rid = TcSeedKoopRevers("SVT-GR-F", d)
-    TcSeedRevNoga "SVT-GR-F-X", d, "SVT-KUP-GR", "Kupac", "SVT-GR-F", DOK_TIP_OM_IZLAZ_KOOP, rid
-    TcChk Len(ReversIDGranica(rid)) > 0, "granica: red koji nije noga (Kupac)"
-
-    ' Ambalaza uz otkup sa ReversID-om.
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), Array("SVT-GR-OTK", "SVT-GR-OTKBR")
-    rid = TcSeedKoopRevers("SVT-GR-OTK", d)
-    TcChk Len(ReversIDGranica(rid)) > 0, "granica: ReversID na ambalazi uz otkup"
-
-    ' Undo: storniran revers + aktivan tudj red (otpremnica) sa istim ReversID-om.
-    rid = NoviReversID()
-    TcSeedRevNoga "SVT-GR-U-S", d, "SVT-ST-GR3", "Stanica", "SVT-GR-U", DOK_TIP_OM_ULAZ_FIRMA, rid, "Da"
-    TcSeedRevNoga "SVT-GR-U-X", d, "SVT-ST-GR3", "Stanica", "SVT-GR-OTPU", DOK_TIP_OTPREMNICA, rid
-    TcChk UndoStorno_TX(DOK_TIP_OM_ULAZ_FIRMA, "SVT-GR-U") = False, _
-          "undo: tudj red sa istim ReversID-om -> undo odbijen"
-    TcChk TcAmbStorno("SVT-GR-U-S") = "DA" And TcAmbStorno("SVT-GR-U-X") = "", _
-          "undo odbijen na granici: nijedan red nije promenjen"
-
-    ' Undo po OPERACIJI (zurnal-put, i ekran Oporavak): UndoOperation_TX vraca celije
-    ' po AmbID-u i ne zove ReversRedoviRID, pa je granica u UndoGuardReason tu JEDINA
-    ' kapija. Revers se stornira ispravan, a tudj red sa njegovim ReversID-om nastane
-    ' posle storna.
-    rid = NoviReversID()
-    TcSeedRevNoga "SVT-GR-J-S", d, "SVT-ST-GR4", "Stanica", "SVT-GR-J", DOK_TIP_OM_ULAZ_FIRMA, rid
-    TcChk StornoOMKoopByBrDok_TX("SVT-GR-J", DOK_TIP_OM_ULAZ_FIRMA, "SVT-GR-J-S") = True, _
-          "undo po operaciji: preduslov -- ispravan revers storniran kroz zurnal"
-    TcSeedRevNoga "SVT-GR-J-X", d, "SVT-ST-GR4", "Stanica", "SVT-GR-OTPJ", DOK_TIP_OTPREMNICA, rid
-    Dim opJ As String: opJ = LatestOpFor(DOK_TIP_OM_ULAZ_FIRMA, "SVT-GR-J")
-    TcChk Len(opJ) > 0, "undo po operaciji: preduslov -- operacija storna postoji"
-    TcChk Len(UndoGuardReason(DOK_TIP_OM_ULAZ_FIRMA, "SVT-GR-J", rid)) > 0, _
-          "undo garda: tudj red sa istim ReversID-om blokira"
-    TcChk Len(UndoGuardReasonZaOp(opJ, DOK_TIP_OM_ULAZ_FIRMA, "SVT-GR-J")) > 0, _
-          "undo garda po operaciji: tudj red sa istim ReversID-om blokira"
-    TcChk UndoOperation_TX(opJ) = False, _
-          "undo po operaciji: tudj red sa istim ReversID-om -> undo odbijen"
-    TcChk TcAmbStorno("SVT-GR-J-S") = "DA" And TcAmbStorno("SVT-GR-J-X") = "", _
-          "undo po operaciji odbijen na granici: nijedan red nije promenjen"
-
-    tx.RollbackTx: Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    Debug.Print "FAIL Test_StornoReversGranicaRID_Auto GRESKA: " & Err.description: mFail = mFail + 1
-End Sub
-
-' REV-IDENT-01 Faza 2b: isti KOOP broj, smer i dan legalno nose reversi DVE stanice,
-' i to istog kooperanta. Red liste Storno i red liste "Vrati storno" ih po (tip,
-' broj) ne razlikuju, pa opis koji operater potvrdjuje mora da imenuje stanicu i
-' dan. MsgBox se u headless run-u ne meri -- meri se tekst koji mu se predaje
-' (modStornoDok.DokumentOpis, modStornoZurnal.UndoOpisOperacije).
-' Fixture: produkcioni oblik nogu (Kooperant + Stanica, jedan ReversID), seed u
-' rollback-u. Nivo merenja: logicki dokument -- tekst potvrde po dokumentu.
-'
-' SABOTAZE: DokumentOpis bez ReversOpis-a -> pukne "storno opis: dva reversa istog
-' broja, smera i dana razlikuju se po stanici"; UndoOpisOperacije bez ReversOpis-a
-' -> pukne "undo opis: dve operacije istog broja razlikuju se po stanici";
-' UndoPotvrdaTekst po (tip, broj) -> pukne "undo potvrda: tekst MsgBox-a imenuje
-' stanicu"; izbaci ReversStanicaDan iz StornoRazlog -> pukne "storno kapija: revers
-' bez noge Stanica se odbija pre potvrde"; IspravkaReversOpis bez opisa -> pukne
-' "ispravka opis: dve ispravke istog broja razlikuju se po stanici"; izbaci
-' IspravkaReversOpis iz GetNedovrseno -> pukne "Nedovrseno: redovi dve ispravke
-' istog broja razlikuju se po stanici".
-Public Sub Test_StornoReversOpisStanice_Auto()
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_STORNO_ZURNAL
-    tx.AddTableSnapshot TBL_STORNO_VEZE
-
-    Dim d As Date: d = DateSerial(2031, 7, 9)
-    Dim ridA As String: ridA = NoviReversID()
-    Dim ridB As String: ridB = NoviReversID()
-    TcSeedRevNoga "SVT-OP-KA", d, "SVT-KOOP-OP", "Kooperant", "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, ridA
-    TcSeedRevNoga "SVT-OP-SA", d, "SVT-ST-OPA", "Stanica", "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, ridA
-    TcSeedRevNoga "SVT-OP-KB", d, "SVT-KOOP-OP", "Kooperant", "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, ridB
-    TcSeedRevNoga "SVT-OP-SB", d, "SVT-ST-OPB", "Stanica", "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, ridB
-
-    Dim opisA As String, opisB As String
-    opisA = modStornoDok.DokumentOpis(STIP_REVERSI, "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-KA")
-    opisB = modStornoDok.DokumentOpis(STIP_REVERSI, "SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-KB")
-    TcChk InStr(1, opisA, "SVT-ST-OPA", vbBinaryCompare) > 0 And _
-          InStr(1, opisB, "SVT-ST-OPB", vbBinaryCompare) > 0 And opisA <> opisB, _
-          "storno opis: dva reversa istog broja, smera i dana razlikuju se po stanici"
-    TcChk InStr(1, opisA, Format$(d, "dd.mm.yyyy"), vbBinaryCompare) > 0, "storno opis: nosi dan reversa"
-    TcChk InStr(1, opisA, "SVT-OP-7", vbBinaryCompare) > 0, "storno opis: i dalje nosi broj"
-
-    Dim opA As String, opB As String, uA As String, uB As String
-    TcChk StornoOMKoopByBrDok_TX("SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-KA") = True, _
-          "undo opis: preduslov -- storno reversa A"
-    opA = LatestOpFor(DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-7")
-    TcChk StornoOMKoopByBrDok_TX("SVT-OP-7", DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-KB") = True, _
-          "undo opis: preduslov -- storno reversa B"
-    opB = LatestOpFor(DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-7")
-    TcChk Len(opA) > 0 And Len(opB) > 0 And opA <> opB, "undo opis: preduslov -- dve operacije istog broja"
-    uA = UndoOpisOperacije(opA, DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-7")
-    uB = UndoOpisOperacije(opB, DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-7")
-    TcChk InStr(1, uA, "SVT-ST-OPA", vbBinaryCompare) > 0 And _
-          InStr(1, uB, "SVT-ST-OPB", vbBinaryCompare) > 0 And uA <> uB, _
-          "undo opis: dve operacije istog broja razlikuju se po stanici"
-    TcChk InStr(1, modScrOporavak.UndoPotvrdaTekst(opA, DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-7"), "SVT-ST-OPA", _
-                vbBinaryCompare) > 0, "undo potvrda: tekst MsgBox-a imenuje stanicu"
-
-    ' Dve otvorene ispravke reversa istog broja, smera i dana na dve stanice: u listi
-    ' Nedovrseno i u potvrdi "Odbaci" razlikuju ih stanica i dan (OldDocID = ReversID).
-    Dim ridD As String: ridD = NoviReversID()
-    Dim ridE As String: ridE = NoviReversID()
-    TcSeedRevNoga "SVT-OP-KD", d, "SVT-KOOP-OP", "Kooperant", "SVT-OP-9", DOK_TIP_OM_IZLAZ_KOOP, ridD
-    TcSeedRevNoga "SVT-OP-SD", d, "SVT-ST-OPD", "Stanica", "SVT-OP-9", DOK_TIP_OM_IZLAZ_KOOP, ridD
-    TcSeedRevNoga "SVT-OP-KE", d, "SVT-KOOP-OP", "Kooperant", "SVT-OP-9", DOK_TIP_OM_IZLAZ_KOOP, ridE
-    TcSeedRevNoga "SVT-OP-SE", d, "SVT-ST-OPE", "Stanica", "SVT-OP-9", DOK_TIP_OM_IZLAZ_KOOP, ridE
-    Dim resD As Object, resE As Object, cidD As String, cidE As String
-    Set resD = modStornoFlow.RunReversCorrection("SVT-OP-9", DOK_TIP_OM_IZLAZ_KOOP, SV_MODE_RESI_KASNIJE, "SVT-OP-KD")
-    Set resE = modStornoFlow.RunReversCorrection("SVT-OP-9", DOK_TIP_OM_IZLAZ_KOOP, SV_MODE_RESI_KASNIJE, "SVT-OP-KE")
-    cidD = CStr(resD("correctionID"))
-    cidE = CStr(resE("correctionID"))
-    TcChk Len(cidD) > 0 And Len(cidE) > 0 And cidD <> cidE, _
-          "ispravka opis: preduslov -- dve otvorene ispravke istog broja"
-    TcChk InStr(1, modStornoDok.IspravkaReversOpis(cidD), "SVT-ST-OPD", vbBinaryCompare) > 0 And _
-          InStr(1, modStornoDok.IspravkaReversOpis(cidE), "SVT-ST-OPE", vbBinaryCompare) > 0, _
-          "ispravka opis: dve ispravke istog broja razlikuju se po stanici"
-    ' Isto u redovima liste Nedovrseno (GetNedovrseno) -- iz njih operater bira.
-    Dim ned As Collection, nr As Long, opisD As String, opisE As String
-    Set ned = modStornoRecovery.GetNedovrseno()
-    For nr = 1 To ned.count
-        If CStr(ned(nr)("correctionID")) = cidD Then opisD = CStr(ned(nr)("opis"))
-        If CStr(ned(nr)("correctionID")) = cidE Then opisE = CStr(ned(nr)("opis"))
-    Next nr
-    TcChk InStr(1, opisD, "SVT-ST-OPD", vbBinaryCompare) > 0 And _
-          InStr(1, opisE, "SVT-ST-OPE", vbBinaryCompare) > 0, _
-          "Nedovrseno: redovi dve ispravke istog broja razlikuju se po stanici"
-
-    ' Revers bez noge Stanica (B10 nalaz): stanica i dan nisu poznati, pa ga kapija
-    ' storna odbija PRE potvrde -- potvrda bez stanice bila bi upravo dvosmislena.
-    Dim ridC As String: ridC = NoviReversID()
-    TcSeedRevNoga "SVT-OP-KC", d, "SVT-KOOP-OP", "Kooperant", "SVT-OP-8", DOK_TIP_OM_IZLAZ_KOOP, ridC
-    TcChk Len(modStornoDok.StornoRazlog(STIP_REVERSI, "SVT-OP-8", DOK_TIP_OM_IZLAZ_KOOP, "SVT-OP-KC")) > 0, _
-          "storno kapija: revers bez noge Stanica se odbija pre potvrde"
-
-    tx.RollbackTx: Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    Debug.Print "FAIL Test_StornoReversOpisStanice_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' P2 5: undo je SVE-ILI-NISTA -> zurnal red sa nepostojecim ciljem -> undo False, bez mutacije.
@@ -693,6 +289,7 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
     tx.AddTableSnapshot TBL_OTKUP
@@ -700,15 +297,22 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     tx.AddTableSnapshot TBL_STORNO_VEZE
     tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
 
+    ' Prijemnica se seje u NOVOM obliku, zaglavlje + stavka (S6 korak 5): kapija
+    ' storna pita izvedenu fakturisanost, a ona cita stavke strogim citacem, koji
+    ' zaglavlje bez stavke odbija (invarijanta dokumenta iz koraka 3).
+
     ' --- Lanac A: PONISTENJE -> uzvodna kaskada ---
     TcSeedZbirna "SVT-KA-ZID", "SVT-KA-Z", "I", 100, 10
-    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KLASA, COL_OTP_KOLICINA, COL_OTP_KOL_AMB), _
-              Array("SVT-KA-OID", "SVT-KA-O", "SVT-KA-Z", "I", 100, 10)
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE), _
+              Array("SVT-KA-OID", "SVT-KA-O", "SVT-KA-Z")
     TcSeedClanstvo "SVT-KA-ZID", "SVT-KA-OID"
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
-              Array("SVT-KA-PID", "SVT-KA-P", "I", "SVT-KA-Z")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-KA-PID", "SVT-KA-P", "SVT-KA-Z")
+    TcSeedStavkaPrijemnice "SVT-KA-PID", 1, "I", 100
 
-    Dim rA As Object: Set rA = RunPrijemnicaCorrection("SVT-KA-P", SV_MODE_PONISTENJE, True)
+    ' Identitet je PrijemnicaID izabranog reda (S6 korak 4) -- bez njega okvir
+    ' dokument ne nalazi.
+    Dim rA As Object: Set rA = RunPrijemnicaCorrection("SVT-KA-P", SV_MODE_PONISTENJE, True, False, "SVT-KA-PID")
     TcChk CBool(rA("success")), "PONISTENJE prijemnice -> success"
     TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-KA-Z") = 0, "zbirna stornirana (uzvodna kaskada)"
     TcChk TcOtpAktivnihUZbirni("SVT-KA-ZID") = 0, "otpremnica te zbirne stornirana"
@@ -716,13 +320,14 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
 
     ' --- Lanac B: DUPLI -> NAMERNO list (zbirna/otpremnica prezivljavaju) ---
     TcSeedZbirna "SVT-KB-ZID", "SVT-KB-Z", "I", 100, 10
-    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, COL_OTP_KLASA, COL_OTP_KOLICINA, COL_OTP_KOL_AMB), _
-              Array("SVT-KB-OID", "SVT-KB-O", "SVT-KB-Z", "I", 100, 10)
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE), _
+              Array("SVT-KB-OID", "SVT-KB-O", "SVT-KB-Z")
     TcSeedClanstvo "SVT-KB-ZID", "SVT-KB-OID"
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
-              Array("SVT-KB-PID", "SVT-KB-P", "I", "SVT-KB-Z")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-KB-PID", "SVT-KB-P", "SVT-KB-Z")
+    TcSeedStavkaPrijemnice "SVT-KB-PID", 1, "I", 100
 
-    Dim rB As Object: Set rB = RunPrijemnicaCorrection("SVT-KB-P", SV_MODE_DUPLI, True)
+    Dim rB As Object: Set rB = RunPrijemnicaCorrection("SVT-KB-P", SV_MODE_DUPLI, True, False, "SVT-KB-PID")
     TcChk CBool(rB("success")), "DUPLI prijemnica -> success"
     TcChk TcCountActive(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-KB-Z") = 1, "DUPLI: zbirna ostaje AKTIVNA (list, ne kaskada)"
     TcChk TcOtpAktivnihUZbirni("SVT-KB-ZID") = 1, "DUPLI: otpremnica ostaje AKTIVNA"
@@ -733,45 +338,6 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Debug.Print "FAIL Test_PonistenjePrijemniceKaskada_Auto GRESKA: " & Err.description: mFail = mFail + 1
-End Sub
-
-' #5 undo: reverse dup-guard -> ne vraca revers ako vec postoji AKTIVAN isti broj+tip.
-Public Sub Test_UndoReverseGuard_Auto()
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
-
-    ' Redovi nose ReversID (identitet reversa) i nogu Stanica sa datumom (duplikat
-    ' se meri u nizu (stanica, dan)); red bez ReversID-a undo odbija (fail-closed).
-    ' A: samo storniran revers (nema aktivnog) -> undo prolazi (reaktivira)
-    TcSeedRevNoga "SVT-UR-A1", Date, "SVT-ST-UR", "Stanica", "SVT-UR-RA", DOK_TIP_OM_IZLAZ_KOOP, NoviReversID(), "Da"
-    TcChk UndoStorno_TX(DOK_TIP_OM_IZLAZ_KOOP, "SVT-UR-RA") = True, "revers undo bez aktivnog -> prolazi"
-
-    ' B: AKTIVAN revers + storniran istog broja, stanice i dana -> guard odbija (bez ove garde bi duplirao)
-    TcSeedRevNoga "SVT-UR-B1", Date, "SVT-ST-UR", "Stanica", "SVT-UR-RB", DOK_TIP_OM_IZLAZ_KOOP, NoviReversID(), ""
-    TcSeedRevNoga "SVT-UR-B2", Date, "SVT-ST-UR", "Stanica", "SVT-UR-RB", DOK_TIP_OM_IZLAZ_KOOP, NoviReversID(), "Da"
-    TcChk UndoStorno_TX(DOK_TIP_OM_IZLAZ_KOOP, "SVT-UR-RB") = False, "revers undo uz AKTIVAN duplikat -> odbijeno"
-
-    ' C: cetiri smera dele jedan niz (stanica, dan) -- aktivan revers istog broja u
-    ' DRUGOM smeru je takodje duplikat (anomalija: pisac je ne pravi, a recovery je
-    ' fail-closed). SABOTAZA: u UndoGuardReason pitaj samo docType -> pukne "undo
-    ' garda: aktivan revers DRUGOG smera istog broja, stanice i dana blokira".
-    Dim ridUC As String: ridUC = NoviReversID()
-    TcSeedRevNoga "SVT-UR-C1", Date, "SVT-ST-UR", "Stanica", "SVT-UR-RC", DOK_TIP_OM_ULAZ_KOOP, ridUC, "Da"
-    TcSeedRevNoga "SVT-UR-C2", Date, "SVT-ST-UR", "Stanica", "SVT-UR-RC", DOK_TIP_OM_IZLAZ_FIRMA, NoviReversID(), ""
-    TcChk Len(UndoGuardReason(DOK_TIP_OM_ULAZ_KOOP, "SVT-UR-RC", ridUC)) > 0, _
-          "undo garda: aktivan revers DRUGOG smera istog broja, stanice i dana blokira"
-    TcChk UndoStorno_TX(DOK_TIP_OM_ULAZ_KOOP, "SVT-UR-RC") = False, _
-          "revers undo uz aktivan revers drugog smera -> odbijeno"
-    TcChk TcAmbStorno("SVT-UR-C1") = "DA", "revers undo drugog smera: storniran revers ostao storniran"
-
-    tx.RollbackTx: Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    Debug.Print "FAIL Test_UndoReverseGuard_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
 ' #4 objedinjeni recovery: GetNedovrseno nosi CorrectionID i DEDUPLIKUJE osirocene
@@ -785,11 +351,15 @@ Public Sub Test_GetNedovrseno_Auto()
     tx.AddTableSnapshot TBL_STORNO_VEZE
 
     ' aktivna prijemnica cija zbirna ne postoji -> osirocena
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_BROJ_ZBIRNE), _
-              Array("SVT-ND-PID", "SVT-ND-P1", "I", "SVT-ND-ZDEAD")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-ND-PID", "SVT-ND-P1", "SVT-ND-ZDEAD")
 
     ' pre context-a: SVT-ND-P1 vidljiv kao osiroce, bez CorrectionID
     TcChk NedRefCount("SVT-ND-P1") = 1, "osirocena prijemnica -> 1 red u Nedovrseno"
+    ' S6 korak 8 (R8): red Oporavka nosi PrijemnicaID u koloni 8 -- radnja
+    ' "Prevezi prijemnicu" salje bas njega, ne generaciju.
+    TcChk OsirPrijIdPoBroju("SVT-ND-P1") = "SVT-ND-PID", _
+          "osirocena prijemnica -> red nosi PrijemnicaID (kolona 8)"
     TcChk Len(NedRefCorrectionID("SVT-ND-P1")) = 0, "osirocen red nema CorrectionID"
 
     ' PENDING context za ISTI broj (RESI_KASNIJE, NeedsRecovery=Da)
@@ -808,6 +378,19 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     Debug.Print "FAIL Test_GetNedovrseno_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
+
+' Kolona 8 (identitet) reda liste osirocenih prijemnica sa datim brojem.
+Private Function OsirPrijIdPoBroju(ByVal broj As String) As String
+    Dim v As Variant, i As Long
+    v = modDokumenta.GetOsirocenePrijemnice()
+    If Not IsArray(v) Then Exit Function
+    For i = 1 To UBound(v, 1)
+        If StrComp(Trim$(CStr(v(i, 1))), broj, vbTextCompare) = 0 Then
+            OsirPrijIdPoBroju = Trim$(CStr(v(i, 8)))
+            Exit Function
+        End If
+    Next i
+End Function
 
 Private Function NedRefCount(ByVal ref As String) As Long
     Dim c As Collection: Set c = GetNedovrseno()
@@ -831,36 +414,6 @@ Private Function NedRefCorrectionID(ByVal ref As String) As String
     Next i
 End Function
 
-' Undo garda: blok sa storniranim roditeljem -> siroce (odbij); ziv roditelj/unbound -> ok.
-Public Sub Test_OtkupBlockDeadParent_Auto()
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_OTPREMNICA
-    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA), _
-              Array("SVT-DP-OTP-A", "SVT-DP-OA", "I")                          ' aktivna otpremnica
-    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA, COL_STORNIRANO), _
-              Array("SVT-DP-OTP-D", "SVT-DP-OD", "I", "Da")                    ' stornirana otpremnica
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_OTPREMNICA_ID, COL_STORNIRANO), _
-              Array("SVT-DP-K1", "SVT-DP-B1", "SVT-DP-OTP-A", "Da")            ' ziv roditelj
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_OTPREMNICA_ID, COL_STORNIRANO), _
-              Array("SVT-DP-K2", "SVT-DP-B2", "SVT-DP-OTP-D", "Da")            ' mrtav roditelj
-    TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_OTPREMNICA_ID, COL_STORNIRANO), _
-              Array("SVT-DP-K3", "SVT-DP-B3", "", "Da")                        ' unbound
-
-    TcChk Len(OtkupBlockDeadParent("SVT-DP-B1")) = 0, "blok sa ZIVOM otpremnicom -> undo dozvoljen"
-    TcChk Len(OtkupBlockDeadParent("SVT-DP-B2")) > 0, "blok sa STORNIRANOM otpremnicom -> mrtav roditelj (odbij)"
-    TcChk Len(OtkupBlockDeadParent("SVT-DP-B3")) = 0, "unbound blok -> undo dozvoljen"
-
-    tx.RollbackTx: Set tx = Nothing
-    Exit Sub
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    Debug.Print "FAIL Test_OtkupBlockDeadParent_Auto GRESKA: " & Err.description: mFail = mFail + 1
-End Sub
-
 ' Impact agregator: header + summary iz stvarnih (seed) redova.
 Public Sub Test_BuildStornoImpact_Auto()
     Dim tx As clsTransaction
@@ -868,10 +421,13 @@ Public Sub Test_BuildStornoImpact_Auto()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_BROJ_ZBIRNE), _
-              Array("SVT-BI-ID", "SVT-BI-P1", "I", "SVT-BI-KUP", 123, "SVT-BI-Z1")
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KUPAC, COL_PRJ_BROJ_ZBIRNE), _
+              Array("SVT-BI-ID", "SVT-BI-P1", "SVT-BI-KUP", "SVT-BI-Z1")
+    TcSeedStavkaPrijemnice "SVT-BI-ID", 1, "I", 123
 
-    Dim m As Object: Set m = BuildStornoImpact(FLOW_DOC_PRIJEMNICA, "SVT-BI-P1")
+    ' Identitet je PrijemnicaID izabranog reda (S6 korak 4), kolicina sa stavki.
+    Dim m As Object: Set m = BuildStornoImpact(FLOW_DOC_PRIJEMNICA, "SVT-BI-P1", "", "SVT-BI-ID")
     Dim h As Object: Set h = m("header")
     Dim sm As Object: Set sm = m("summary")
     TcChk NzS(h("partnerID")) = "SVT-BI-KUP", "impact header partnerID iz reda"
@@ -886,17 +442,22 @@ EH:
     Debug.Print "FAIL Test_BuildStornoImpact_Auto GRESKA: " & Err.description: mFail = mFail + 1
 End Sub
 
-' Browse: distinct po broju (2 klase -> 1x), filter tip, iskljuci stornirano.
+' Browse: JEDAN RED PO DOKUMENTU, filter tip, iskljuci stornirano.
+'
+' Do S6 koraka 4 je lista spajala redove PO BROJU, jer su dva reda istog broja
+' bila dve KLASE jednog dokumenta. Od koraka 2 je dokument jedno zaglavlje, pa
+' su dva reda istog broja dva DOKUMENTA (dva kupca) -- i spajanje po broju je
+' jedan od njih precutalo. Promena premise testa, ne samo tvrdnje.
 Public Sub Test_GetActiveDocumentsForStorno_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA), Array("SVT-GA-1", "SVT-GA-P1", "I")
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA), Array("SVT-GA-2", "SVT-GA-P1", "II")   ' isti broj
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA), Array("SVT-GA-3", "SVT-GA-P2", "I")
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KLASA, COL_STORNIRANO), Array("SVT-GA-4", "SVT-GA-P3", "I", "Da")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KUPAC), Array("SVT-GA-1", "SVT-GA-P1", "SVT-GA-KUP1")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_KUPAC), Array("SVT-GA-2", "SVT-GA-P1", "SVT-GA-KUP2")   ' isti broj, drugi kupac
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ), Array("SVT-GA-3", "SVT-GA-P2")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_STORNIRANO), Array("SVT-GA-4", "SVT-GA-P3", "Da")
 
     Dim c As Collection: Set c = GetActiveDocumentsForStorno("Prijemnica", "SVT-GA-")
     Dim nP1 As Long, nP2 As Long, nP3 As Long, i As Long
@@ -908,7 +469,7 @@ Public Sub Test_GetActiveDocumentsForStorno_Auto()
             If br = "SVT-GA-P3" Then nP3 = nP3 + 1
         Next i
     End If
-    TcChk nP1 = 1, "distinct po broju: P1 (2 klase) -> 1x"
+    TcChk nP1 = 2, "jedan red po dokumentu: P1 (dva kupca, isti broj) -> 2x"
     TcChk nP2 = 1, "P2 aktivan -> 1x"
     TcChk nP3 = 0, "stornirana P3 -> iskljucena"
 
@@ -953,6 +514,7 @@ EH:
 End Sub
 
 ' Sledljivost: novi red nosi IspravkaOd + CorrectionID; stari (storniran) nosi ZamenjenSa.
+' Red se bira po ID-u (review #440); broj je samo vrednost traga.
 Public Sub Test_StampIspravkaTrace_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -965,7 +527,8 @@ Public Sub Test_StampIspravkaTrace_Auto()
     TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA), _
               Array("SVT-ST-NEW", "SVT-ST-B2", "I")                ' novi, aktivan
 
-    StampIspravkaTrace TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-ST-B2", "SVT-ST-B1", "SVT-CID-1"
+    StampIspravkaTrace TBL_ZBIRNA, COL_ZBR_ID, "SVT-ST-NEW", "SVT-ST-OLD", _
+                       "SVT-ST-B2", "SVT-ST-B1", "SVT-CID-1"
 
     TcChk NzS(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, "SVT-ST-B2", COL_TRACE_ISPRAVKA_OD)) = "SVT-ST-B1", _
           "novi red IspravkaOd = stari broj"
@@ -990,8 +553,8 @@ Public Sub Test_BlockStornoDriftReason_Auto()
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
-    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_KLASA), _
-              Array("SVT-DR-OTP", "SVT-DR-O1", "I")                ' aktivna otpremnica
+    TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ), _
+              Array("SVT-DR-OTP", "SVT-DR-O1")                     ' aktivna otpremnica
     TcSeedRow TBL_OTKUP, Array(COL_OTK_ID, COL_OTK_BR_DOK), _
               Array("SVT-DR-BLK", "SVT-DR-BD")                     ' blok
     ' Pripadnost ide KANONOM (tblOtpremnicaIzvori), ne kolonom Otkup.OtpremnicaID:
@@ -1030,15 +593,30 @@ End Sub
 ' modTestStorno.SeedZbirna -- strog citalac sadrzaja odbija zaglavlje bez
 ' stavki, pa bi golo zaglavlje oborilo svaki test koji dodirne liste, uvid ili
 ' prefill. Kolone zaglavlja ostaju popunjene dok ih okvir jos cita (S4-3).
+'
+' Oznaka internog toka (KupacHladnjaca, ZBR-OWN-01): zbirna bez kupca po pravilu
+' pisca nije interni hladnjacki tok, pa je "Ne". Bez oznake uzvodna kaskada
+' PONISTENJA prijemnice staje (prazna oznaka = "ne zna se").
 Private Sub TcSeedZbirna(ByVal zbrID As String, ByVal broj As String, _
                          ByVal klasa As String, ByVal kg As Double, _
                          ByVal amb As Long)
-    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
-              Array(zbrID, broj, klasa, kg, amb)
+    TcSeedRow TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_KLASA, COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB, _
+                                COL_ZBR_KUPAC_HLADNJACA), _
+              Array(zbrID, broj, klasa, kg, amb, "Ne")
     TcSeedRow TBL_ZBIRNA_STAVKE, _
               Array(COL_ZBS_ID, COL_ZBS_ZBIRNA_ID, COL_ZBS_RB, COL_ZBS_KLASA, _
                     COL_ZBS_KOLICINA, COL_ZBS_KOL_AMB), _
               Array(zbrID & "-S1", zbrID, 1, klasa, kg, amb)
+End Sub
+
+' Stavka prijemnice uz seed zaglavlja (S6 korak 4): uvid cita stavke, a strogi
+' citalac stavki trazi neprazan ID, kolicinu > 0 i cenu kao broj.
+Private Sub TcSeedStavkaPrijemnice(ByVal prijemnicaID As String, ByVal rb As Long, _
+                                   ByVal klasa As String, ByVal kolicina As Double)
+    TcSeedRow TBL_PRIJEMNICA_STAVKE, _
+              Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
+                    COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _
+              Array(prijemnicaID & "-S" & CStr(rb), prijemnicaID, rb, klasa, kolicina, 0, 0)
 End Sub
 
 Private Sub TcSeedRow(ByVal tbl As String, ByVal cols As Variant, ByVal vals As Variant)
@@ -1065,42 +643,6 @@ End Sub
 
 Private Function NzS(ByVal v As Variant) As String
     If IsError(v) Or IsNull(v) Or IsEmpty(v) Then NzS = "" Else NzS = Trim$(CStr(v))
-End Function
-
-' Noga reversa u produkcionom obliku (SaveOMUlaz_TX): AmbID, datum, entitet, broj,
-' tip, ReversID (REV-IDENT-01; prazan = red bez identiteta, fault injection).
-Private Sub TcSeedRevNoga(ByVal ambID As String, ByVal d As Date, ByVal entID As String, _
-                          ByVal entTip As String, ByVal broj As String, ByVal dokTip As String, _
-                          ByVal rid As String, Optional ByVal stornirano As String = "")
-    TcSeedRow TBL_AMBALAZA, _
-        Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, _
-              COL_AMB_DOK_ID, COL_AMB_DOK_TIP, COL_STORNIRANO, COL_AMB_REVERS_ID), _
-        Array(ambID, d, entID, entTip, broj, dokTip, stornirano, rid)
-End Sub
-
-' Ispravan KOOP revers (izdavanje): noga Kooperant + noga Stanica pod jednim
-' ReversID-om iz produkcione fabrike. Vraca ReversID.
-Private Function TcSeedKoopRevers(ByVal broj As String, ByVal d As Date) As String
-    Dim rid As String: rid = NoviReversID()
-    TcSeedRevNoga broj & "-K", d, "SVT-KOOP-GR1", "Kooperant", broj, DOK_TIP_OM_IZLAZ_KOOP, rid
-    TcSeedRevNoga broj & "-S", d, "SVT-ST-GR1", "Stanica", broj, DOK_TIP_OM_IZLAZ_KOOP, rid
-    TcSeedKoopRevers = rid
-End Function
-
-' Redovi nalaza integriteta (modIntegritet) koji sadrze dati tekst, spojeni vbLf.
-Private Function TcIntegritetSa(ByVal sadrzi As String) As String
-    Dim nal As Variant, i As Long, spoj As String
-    nal = modIntegritet.GetIntegritetRows()
-    If Not IsArray(nal) Then Exit Function
-    For i = LBound(nal, 1) To UBound(nal, 1)
-        If InStr(1, CStr(nal(i, 2)), sadrzi, vbBinaryCompare) > 0 Then spoj = spoj & CStr(nal(i, 2)) & vbLf
-    Next i
-    TcIntegritetSa = spoj
-End Function
-
-' Oznaka storna reda ambalaze po AmbID-u, velikim slovima ("" = aktivan).
-Private Function TcAmbStorno(ByVal ambID As String) As String
-    TcAmbStorno = UCase$(NzS(LookupValue(TBL_AMBALAZA, COL_AMB_ID, ambID, COL_STORNIRANO)))
 End Function
 
 ' Broj AKTIVNIH (ne-storniranih) redova gde col=val (CountActive u modStornoFlow je Private).

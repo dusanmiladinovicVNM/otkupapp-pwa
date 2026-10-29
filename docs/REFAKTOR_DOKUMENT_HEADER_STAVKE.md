@@ -4880,15 +4880,23 @@ zbog toga privremeno ne radi, to se kaže glasno (pauza sa imenom), ne krpi.
 | `Otkup.VozacID` je živa veza koju treba migrirati | Pišu je **tačno dva mesta**, oba u `modMasterSync`, **oba pod pauzom**. Kolona je mrtva |
 | `PROSLEDJENO` kao izvor otpremnice je „obavezno pre S5“ | `IZDATO_PROSLEDJENO` **ne piše nijedan put**. Nije živ kvar nego dva odgovora na isto pitanje — zatvoreno jednim redom |
 
-#### Rez na četiri sesije
+#### Rez na četiri sesije — narastao na deset
+
+> **Osveženo 27.09.2026, posle #394.** Procena „četiri sesije“ je promašila, i to se ovde beleži
+> umesto da se prepiše: predaja je ispala sopstven događaj (S5-4a), žica vozača se razdvojila na
+> master i ekran (S5-4b-1/2), a otkup je zahtevao svoju JS kapiju pre nego što mu se dira oblik
+> (S5-5a) — pa onda i tri kruga review-a na jednoj granici (S5-5b). Deset PR-ova: #385–#394.
 
 | # | Sadržaj | Stanje |
 |---|---|---|
 | **S5-1** | malina auto-otpremnica nad kanonom (koraci 2b + 3 ciklusa) | ovaj rez |
 | **S5-2** | ~~VOZ/zbirna uvoz~~ → **predaja robe vozaču postaje otpremnica** (E-019, E-058). Redosled ispravljen — v. §14.38 |
-| **S5-3** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` i `ApplyNovaGeneracijaID` nestaju — posle toga `GeneracijaID` nema **nijednog** pisca; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ⏳ |
+| **S5-3** | VOZ/zbirna uvoz nad `CreateZbirnaIzIzvora_TX`; `LinkZbirnaToOtkupAndOtpremnica` i `ApplyNovaGeneracijaID` nestaju — posle toga `GeneracijaID` nema **nijednog** pisca; `IzvedeniLanacIzPwaDostupan` i „DEGRADIRANO“ grana obrisani; most preko starog backlinka u `ActiveOtpIDsByZbirna` umire | ✅ #388 · most u #389 · **ostatak:** `DEGRADIRANO` grana ciklusa još stoji na jednom mestu (`modGoogleSyncOrchestrator:384`) |
 | **S5-4a** | **predaja je sopstven događaj**: store `predaje` → `PRED-*` list (append-only) → `ImportOnePREDSheet`; retry se prepoznaje po utovaru, ne po vozaču | ovaj rez |
-| **S5-4b** | vozaču se servira **otpremnica po `Otpremnica.VozacID`**, a ne OTK red po `Otkup.VozacID` (E-044, E-058) — redizajn `transport.js`/`zbirna.js` | ⏳ |
+| **S5-4b-1** | **zica**: master izvozi otpremnice (zaglavlje + stavke) u `MgmtReports`; GAS servira vozaču otpremnice po `Otpremnica.VozacID` (E-044, E-058) | ovaj rez |
+| **S5-4b-2** | **ekran**: `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ✅ #392 (mereno: `OtpremniceIzOtkupRecordIDs` = 0) |
+| **S5-5a** | **JS kapija**: `tests/js/` harness nad produkcijskim fajlovima (`vm.Script`), sabotaža nad tekstom u memoriji | ✅ #393 |
+| **S5-5b** | **žica otkupa**: zaglavlje + stavke kroz VBA uvoz, GAS i PWA; `StavkeCount` kao manifest; četiri linijske kolone → mrtvi slotovi | ✅ #394 (`561fcad9`), §14.44–14.50 |
 
 #### Šta je S5-1 uradio
 
@@ -6005,6 +6013,3578 @@ dana padalo kroz drugi; i **~25 postojećih F3 tvrdnji** gradi zbirnu 2–5 dana
 pravilo je novo ograničenje i za desktop, pa traži svoj rez sa svojim fixture radom.
 
 
+### 14.40) S5-4b pre-flight — vozačev ekran je ostao na starom modelu (25.09.2026)
+
+**Nalaz koji menja prioritet reza: vozačev spisak blokova je na `main`-u PRAZAN.**
+
+`zbirna.js` zove `action=getVozacOtkupi` → `getOtkupiForVozac`, koji skenira `OTK-*` listove i filtrira
+po `r.VozacID`. Ko danas piše to polje:
+
+| Put | Stanje |
+|---|---|
+| ekran otpreme (`buildUpdatedOtpremaRecord`) | **obrisan u S5-4a** — otkupni zapis se više ne dira |
+| QR vozača pri unosu otkupa (`setVozac` → `fldVozacID`) | **mrtav UI**: `index.html` ima samo skriveni `fldVozacID`; nema dugmeta `start-vozac-qr-scan` ni `qr-reader-vozac` diva, pa `startVozacQRScan` izađe na prvoj liniji |
+| GAS `processRecord` | upisuje `VozacID: record.vozacID \|\| ''` — prazno, jer PWA više ne šalje to polje |
+
+Dakle **čitalac je ostao, a pisac je otišao**. Isti obrazac koji je u S3a ugasio F3, samo na drugom
+ekranu. Poslovne štete nema (program još nema korisnike), ali S5-4b nije doterivanje nego **zatvaranje
+prekida**.
+
+**Drugi nalaz: vozačev ekran je jedini koji je ostao na modelu pre S1.** `zbirna.js` čita `r.Kolicina`,
+`r.Cena`, `r.Klasa`, `r.KolAmbalaze` — kolone koje su iz `tblOtkup` **obrisane u S1d**. Živi samo zato
+što ih PWA još šalje na svom OTK listu.
+
+**Treći nalaz: identitet se gubi pa ponovo traži.** Zbirna iz PWA nosi `otkupRecordIDs` (spisak otkup
+CRID-ova). Master ih prevodi: `OtpremniceIzOtkupRecordIDs` → `OtkupPoClientRecordID` →
+`OtpremnicaZaOtkup` → dedup → `CreateZbirnaIzIzvora_TX`. Prevod radi tačno, ali je to baš obrazac
+„vrednost sa ekrana → ponovni lookup → kanonski ID" koji pre-flight imenuje kao rizik: kad vozač
+jednom dobije **otpremnice**, `OtpremnicaID` može da putuje direktno, a prevod se briše.
+
+#### Verdikt pre koda
+
+| Osa | Stanje | Dokaz |
+|---|---|---|
+| DOMAIN | **PROVEN** | `docs/DOMEN/README.md:23` — zbirna je agregat više otpremnica istom kupcu/hladnjači; lanac predaja → otpremnica → zbirna |
+| IDENTITY | **GAP** | PWA šalje `otkupRecordIDs`, kanon traži `OtpremnicaID` (`tblZbirnaIzvori`) |
+| CARDINALITY | **PROVEN** | `schema.json`: `tblZbirnaIzvori(ZbirnaIzvorID, ZbirnaID, OtpremnicaID)` — N otpremnica po zbirnoj |
+| INVARIANTS/OWNER | **PROVEN** | `CreateZbirnaIzIzvora_TX` je jedini pisac; `ImportVOZRow_RowTX` snima `TBL_ZBIRNA(_STAVKE,_IZVORI)` |
+| WRITERS | **GAP** | izvoz otpremnica u Google **ne postoji**: `ExportMgmtReports_Core` šalje samo `OtkupiAll` + `OtkupiAllStavke` |
+| DOWNSTREAM | **PROVEN** | uvoz je već kanonski (S5-3); menja se samo ŠTA mu stiže, ne šta radi |
+| CAPABILITY | **GAP — prekid** | vozačev spisak blokova bez pisca (gore) |
+| ACCEPTANCE CONTRACT | **GAP** | piše se uz S5-4b-1 |
+| PLATFORM | N/A | nema Excel/COM nepoznanice |
+| LANDING | **PROVEN** | grana iz svežeg `main`-a (`2cd86eb8`, merge #390) |
+
+`GAP` na IDENTITY, WRITERS i CAPABILITY → **nema produkcionog koda dok se rez ne razdvoji i ugovor ne
+napiše.** Zato:
+
+#### Dve odluke operatera (25.09.2026)
+
+**1. Rez se deli na žicu i ekran.**
+
+| # | Sadržaj | Stanje |
+|---|---|---|
+| **S5-4b-1** | VBA izvozi otpremnice (zaglavlje + stavke) u Google; GAS servira vozaču otpremnice po `Otpremnica.VozacID`, ne `OTK-*` redove po `Otkup.VozacID` | ✅ #391 |
+| **S5-4b-2** | `zbirna.js`/`transport.js` nad otpremnicama; zbirna šalje `ZbirnaID` + spisak `OtpremnicaID`; `OtpremniceIzOtkupRecordIDs` se briše | ✅ #392 (mereno: `OtpremniceIzOtkupRecordIDs` = 0) |
+
+**2. Broj zbirne ostaje na masteru.** PWA generiše `ZbirnaID` (kao `PredajaID` u S5-4a) i šalje spisak
+otpremnica; `BrojZbirne` dodeljuje desktop pri uvozu. To je i danas tačno na uvoznoj strani —
+`ImportVOZRow_RowTX` vraća `outBrojZbirne` iz `GetBrojZbirneForIDStrict` — pa se briše samo klijentski
+račun `vozacBroj/ddmmyy-seq` iz `zbirna.js`. Doslovno A2 (broj je labela) i A9 (storno ne oslobađa broj).
+
+### 14.41) S5-4b-1 — zica: otpremnice do vozača (25.09.2026)
+
+Master do ovog reza nije izvozio otpremnice **uopšte**. `ExportMgmtReports_Core` je slao samo
+`OtkupiAll` + `OtkupiAllStavke`, pa vozaču nije imalo šta ni da se servira osim tuđih otkupnih redova.
+Rez dodaje dva taba, po istom obrascu kao otkup — **dokument je zaglavlje + stavke, ne red**:
+
+```
+MgmtReports/OtpremniceAll         zaglavlja
+MgmtReports/OtpremniceAllStavke   stavke
+```
+
+**Šta ulazi u izvoz.** Nestornirana, `IzdatoStatus = IZDATO`, neprazan `VozacID`. Nacrt nije predat
+nikome; stornirana otpremnica nije više ničija obaveza.
+
+**`ZbirnaID` je tekuca istina, ne zabeležena.** Računa se iz članstva
+(`AktivnaZbirnaZaOtpremnicu`), pa posle storna zbirne otpremnica sama ponovo postane slobodna — bez
+ijednog upisa u izvoz i bez kolone na detetu. Da je bila zabeležena, vozač bi trajno izgubio
+otpremnicu čiju je zbirnu neko stornirao.
+
+**Cena se ne izvozi.** Vozač prevozi robu; `PredlogCena` je očekivanje dokumenta (review #362), ne
+vrednost, i nije mu potrebna ni za jednu njegovu radnju. `popis_citalaca` to i meri: `otp_cena = 0`.
+
+**Produkcioni seam, ne kopija za test.** `OtpremniceVozacaRedovi` / `OtpremniceVozacaStavkeRedovi`
+grade redove, a `ExportOtpremnice*` ih samo pišu u Google — isti rez koji je u S5-4a napravljen za
+`TekucaPredajaOtkupa`, i iz istog razloga: kroz mrežu test ne može da prođe.
+
+**GAS.** `getOtpremniceForVozac` + akcija `getVozacOtpremnice` čitaju oba taba i grupišu stavke u
+jednom prolazu. **Zaglavlje bez stavki se ne servira**: dva taba se pišu u DVA `WriteSheetData`
+poziva, pa mogu biti u raskoraku — otpremnica bez robe nije isporuka, a poslata bi vozaču dozvolila
+da u zbirnu unese prazan dokument. Preskok imenuje dokument u logu.
+
+**Ugovor prihvatanja — tri testa, 23 tvrdnje.**
+
+| Test | Šta mora da važi |
+|---|---|
+| `Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem` | izdata sa vozačem izlazi; **nacrt** ne izlazi; **stornirana** ispada |
+| `Test_OTPVOZ_ZbirnaIDJeTekucaIstina` | otpremnica u zbirnoj nosi njen `ZbirnaID`; posle storna zbirne polje je **opet prazno** |
+| `Test_OTPVOZ_StavkeIzKanonaBezCene` | kilaža i gajbe iz `tblOtpremnicaStavke`; **nijedna** kolona izvoza ne nosi cenu |
+
+Testovi traže kolone **po imenu iz zaglavlja**, ne po poziciji — inače bi prvo proširenje izvoza tiho
+pomerilo tvrdnju na susednu kolonu.
+
+**Verifikacija.** `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **1985 → 2008/0** (+23, tačno
+koliko nova tri testa tvrde). `dokaz.py otpvoz`: **5/5 crvenih**, potpis izvora identičan pre i posle
+(`241d1acc0cb84fc2`). Statičke kapije: `vba_check` (603 sabotaže, 0 nalaza) · schema · `who_writes`
+(obe) · `popis_citalaca`.
+
+Usput je `vba_check` uhvatio dve greške u samim sabotažama pre nego što su stigle dalje: komentar posle
+line-continuation `_` (VBA syntax error) i LF linije u `tools/sabotaza.py`.
+
+⚠ **GAS izmena je NEVERIFIKOVANA** — nema JS harness-a, `node` nije dostupan. Pročitana, ne proverena.
+
+**Šta još niko ne troši.** Vozačev ekran i dalje zove `getVozacOtkupi`; prelazak na `getVozacOtpremnice`
+i zbirna po `OtpremnicaID` su **S5-4b-2**.
+
+**Review #391, prvi krug — novi read-model je nasledio ceo model, ali ne i ogradu.**
+
+Domen je prošao bez primedbe; rupa je bila u **objavi**. `getOtpremniceForVozac` je čitao
+`MgmtReports` i vraćao ga kao authoritative stanje, a baš `ZbirnaID` je tekuća, promenljiva činjenica.
+
+Ključno zapažanje recenzenta nije bio običan race: `CleanExit` skida lock **i kad `okMgmt = False`**.
+Prozor zato nije „dok ciklus traje" nego **sve do sledećeg uspešnog izvoza**:
+
+```
+kanon:        OTP-1 -> ZBR-1
+MgmtReports:  OTP-1 -> ZbirnaID = ""      (izvoz pao)
+lock:         OFF
+endpoint:     success:true, zbirnaID:""   <- objavljena laz, i to trajno
+```
+
+S5-4b-2 bi iz toga legitimno zaključio „OTP-1 je slobodna" i ponudio još jednu zbirnu. Master bi drugo
+aktivno članstvo odbio, pa kanon ostaje zaštićen — ali korisnik je izveo komandu koju mu je sistem
+prikazao kao ispravnu. Po merilu iz #390 to je P1.
+
+**Generacija objave, ne timestamp.** Ista lekcija kao P3 iz #390, samo što je ovde odmah urađena kako
+treba:
+
+```
+MASTER_SYNC_CYCLE_ID          = CYC-<guid>   upisan pri zakljucavanju
+OTPREMNICE_PUBLISHED_CYCLE_ID = CYC-<guid>   SAMO kad je ciklus zavrsen I izvoz uspeo
+```
+
+Endpoint servira samo kad je `unlocked` **i** `cycleID && published === cycleID`; inače
+`readModelChanging` sa imenovanim razlogom (`MASTER_SYNC_ACTIVE` / `READ_MODEL_STALE` /
+`READ_MODEL_UNKNOWN`), pa klijent zadržava poslednje poznato umesto da ga obriše praznim spiskom.
+**Prazna generacija je NE**: nedokazana objava je zastareo snimak.
+
+`cycleID` nastaje **pre** lock-a; ako `NewEntityID` padne, ciklus se ne pokreće — bez identiteta se
+objava ne bi mogla dokazati, pa bi čitalac zauvek odbijao. Pri ranom `GoTo CleanExit` je `okMgmt`
+podrazumevano `False`, pa objavljena generacija ostaje prazna.
+
+**P2 — pad čitanja ostaje pad.** `getMgmtReport` na grešci vraća `success:false`, a endpoint je to
+prećutao i vraćao `success:true, records:[]`. Ispad Google-a je tako izgledao kao prazan dan — tvrdnja
+o poslu umesto o vezi. Sada oba taba traže `success === true`, inače
+`success:false, code:'READ_MODEL_UNAVAILABLE'`. Stavke su tu jednako važne kao zaglavlja: da im se pad
+progutao, **svaki** dokument bi ispao „bez robe" i bio preskočen, pa bi se opet dobio uredan prazan
+spisak.
+
+**Dokaz.** `MasterSyncControlRedovi(locked, message, cycleID, izvozUspeo)` je izdvojen kao produkcioni
+seam — sam upis ide u Google preko mreže. `Test_OTPVOZ_ObjavaSeDokazujeIzvozom` meri sva tri stanja:
+u toku · uspeo · **otključano ali pao izvoz**. Dve nove sabotaže gađaju tačno to pravilo:
+
+| Sabotaža | Tvrdnja koja mora da pukne |
+|---|---|
+| `otpvoz-otkljucano-znaci-objavljeno` | „otključano ali PAO izvoz -> objavljena generacija ostaje prazna" |
+| `otpvoz-objava-se-najavljuje` | „dok ciklus traje objavljena generacija je PRAZNA" |
+
+**Verifikacija.** `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **2008 → 2015/0** (+7, tačno
+koliko nov test tvrdi). `dokaz.py otpvoz-o`: **2/2 crvenih**, potpis izvora identičan
+(`11d4e4637ff9603e`). Statičke kapije: `vba_check` (605 sabotaža, 0 nalaza) · schema · `who_writes`
+(obe) · `popis_citalaca`.
+
+Pet starijih `otpvoz-*` sabotaža nije vrteno ponovo — gađaju `modStammdatenSync`, koji ovog kruga nije
+dirnut. Pun katalog ide pred release.
+
+⚠ **GAS izmena je NEVERIFIKOVANA** — nema JS harness-a, `node` nije dostupan.
+
+**Review #391, drugi krug — generacija je merena samo PRE citanja.**
+
+Model generacija je bio dobar, ali nije bio upotrebljen kao ograda. Provera samo pre citanja je
+**najava, ne ograda**: izmedju nje i poslednjeg procitanog reda moze početi — ili se ceo završiti —
+nov master ciklus.
+
+```
+pre-check      C1  ok
+  master C2 pocinje: lock ON, published = ""
+  ImportZbirne: OTP-1 -> ZBR-1
+citanje         OtpremniceAll (jos C1): OTP-1.zbirnaID = ""
+return          success:true         <- mesavina C1 i C2
+```
+
+Vozač je dobio „OTP-1 je slobodna" dok je kanon već imao `OTP-1 -> ZBR-1`. GUID rešava ABA problem
+koji timestamp ne bi — **ali samo ako se meri dvaput**. Sada:
+
+```
+pre  = vozacReadModelObjavljen_()      -> mora ok
+citanje zaglavlja i stavki
+posle = vozacReadModelObjavljen_()     -> mora ok I posle.cycleID === pre.cycleID
+```
+
+Nije dovoljna ni sama završna provera: `pre = C1`, čitanja preko granice, `posle = C2` — oba stanja
+pojedinačno mogu biti uredno objavljena, a snimak ipak nije iz jedne generacije. Zato se poredi
+**ista** generacija, ne samo „obe validne".
+
+**Prazan spisak prolazi kroz istu ogradu.** „Nemam nijednu vožnju" je tvrdnja o poslu kao i svaka
+druga: pročitana iz stare generacije, sakrila bi otpremnicu koju je novi ciklus upravo dodao. Raniji
+`if (!moje.length) return ...` je zato uklonjen — izlaz je jedan, posle druge mere.
+
+**Verifikacija.** Izmena je **samo `gas/Code.gs`** — `src-vba` i `tools` nisu dirnuti, pa suite-ovi
+stoje na merenju sa `dcf299d0`: `RunAllTests` **199/0**, `RunBusinessFlowProSuite` **2015/0**. Balans
+zagrada u `gas/Code.gs` isti kao pre izmene; 0 LF-only linija.
+
+⚠ **NEVERIFIKOVANO, i ovde bez ublazavanja:** ovaj krug je **iskljucivo** GAS, a GAS se u ovom
+okruzenju ne moze izvrsiti. Dvostruka ograda je pročitana i rezonovana, ne izmerena. Jedini alat koji
+bi je uhvatio bio bi JS harness — isti dug koji stoji od #390.
+
+### 14.42) S5-4b-2 pre-flight — zbirna se sastavlja od OTPREMNICA (25.09.2026)
+
+S5-4b-1 je postavio žicu: master izvozi otpremnice, GAS ih servira po `Otpremnica.VozacID`, uz ogradu
+generacije. **Niko ih još ne troši** — vozačev ekran i dalje zove `getVozacOtkupi`. Ovaj rez to
+zatvara.
+
+#### Izmereno pre koda — gde sve živi stari model
+
+| Sloj | Mesto | Šta radi danas |
+|---|---|---|
+| PWA | `zbirna.js:11` | `action=getVozacOtkupi` → OTK redovi po `Otkup.VozacID` |
+| PWA | `zbirna.js` payload | `otkupRecordIDs` = spisak otkup CRID-ova; `brojZbirne` računat na klijentu |
+| GAS | `ZBIRNA_COLUMNS` | kolona `OtkupRecordIDs` |
+| GAS | `processZbirnaRecord` | `OtkupRecordIDs: record.otkupRecordIDs` |
+| VBA | `ValidatePWAZbirna` | traži `OtkupRecordIDs`, inače „zbirna bez izvora nije dokument" |
+| VBA | `ImportRowToTblZbirna` | `OtpremniceIzOtkupRecordIDs(...)` → `CreateZbirnaIzIzvora_TX` |
+| VBA | `PwaZbirnaRazlika` | **drugi** pozivalac istog prevodioca — poređenje sadržaja pri CRID konfliktu |
+| VBA | `RequireVOZHeaderValue` | ugovor zaglavlja VOZ lista traži `OtkupRecordIDs` |
+| test | `modBusinessFlowProTests:1674` | tvrdnja „zbirna ima izvor razrešen iz otkupRecordIDs" |
+
+**Prevod radi tačno, ali je obrazac rizika:** `otkup CRID → OtkupPoClientRecordID → OtpremnicaZaOtkup
+→ dedup`. Kad vozač dobije otpremnice, `OtpremnicaID` može da putuje direktno i prevodilac se briše —
+zajedno sa oba pozivaoca.
+
+**Kolone VOZ lista se čitaju POZICIONO** (`VS_*` konstante u `modMasterSync` su indeksi), pa `OtpremnicaIDs`
+ide **na kraj** `ZBIRNA_COLUMNS` (indeks 21), nikako u sredinu. `ensureSheetColumns` dodaje kolonu samo
+kad je zatečeno zaglavlje **prefiks** kanonskog — zamena u sredini bi to oborila.
+
+#### Verdikt pre koda
+
+| Osa | Stanje | Dokaz |
+|---|---|---|
+| DOMAIN | **PROVEN** | `docs/DOMEN/README.md:23` — zbirna je agregat više otpremnica istom kupcu |
+| IDENTITY | **PROVEN kao cilj, GAP u kodu** | kanon traži `OtpremnicaID`; PWA šalje otkup CRID-ove |
+| CARDINALITY | **PROVEN** | `tblZbirnaIzvori(ZbirnaID, OtpremnicaID)`, N po zbirnoj |
+| INVARIANTS/OWNER | **PROVEN** | `CreateZbirnaIzIzvora_TX` ostaje jedini pisac; rez menja samo ŠTA mu stiže |
+| WRITERS | **N/A** | nov pisac se ne uvodi |
+| DOWNSTREAM | **GAP — dva pozivaoca, ne jedan** | `ImportRowToTblZbirna` **i** `PwaZbirnaRazlika`; zakrpa na jednom ostavlja drugi |
+| CAPABILITY | **GAP** | vozačev spisak je prazan od S5-4a; ovim rezom se vraća |
+| ACCEPTANCE CONTRACT | **v. ispod** | |
+| PLATFORM | N/A | |
+| LANDING | **PROVEN** | grana iz `main` posle merge-a #391 (`7c960aa5`) |
+
+⚠ **Premisa postojećeg regression testa se menja** (`modBusinessFlowProTests:1674`). Po kapiji to je
+signal za zastoj i verdikt — zato ovaj odeljak i postoji pre koda. Tvrdnja **preživljava**, ali se meri
+nad novim ulazom: izvor zbirne je `OtpremnicaID` koji je PWA poslala, ne CRID koji je master preveo.
+
+#### Ugovor prihvatanja — šta mora da važi kad se rez završi
+
+1. VOZ red sa `OtpremnicaIDs` pravi zbirnu čiji je `tblZbirnaIzvori` **tačno taj skup**.
+2. Nepoznat, storniran ili već potrošen `OtpremnicaID` **staje i imenuje razlog** — ne prećutkuje se
+   dedupom, kao što prevodilac danas može.
+3. Tuđa otpremnica (drugi `VozacID`) se **odbija** — dosad je granica bila implicitna, jer su izvori
+   dolazili iz vozačevih otkupa.
+4. Prazan `OtpremnicaIDs` je **greška**, sa istom porukom kao danas: zbirna bez izvora nije dokument.
+5. `OtkupRecordIDs` više **nijedan pisac ne šalje**, a `OtpremniceIzOtkupRecordIDs` i oba njegova
+   pozivaoca su **obrisani** — mrtva grana se briše, ne ostavlja (v. „neuhranjen nije nedostizan").
+6. `BrojZbirne` dodeljuje isključivo master (`GetBrojZbirneForIDStrict`); klijentski račun
+   `vozacBroj/ddmmyy-seq` nestaje iz `zbirna.js`.
+7. Vozačev ekran prikazuje **dokumente sa stavkama** (klasa, kilaža, gajbe iz `OtpremniceAllStavke`), a
+   ne otkupne redove; već potrošena otpremnica (`zbirnaID != ""`) se ne nudi za nov utovar.
+
+Dokaz: nove BFP tvrdnje sa sopstvenim sabotažama za tačke 1–4 i 6; tačka 5 se meri brisanjem (nema
+pozivaoca, `vba_check` + `popis_citalaca`); tačka 7 ostaje **neverifikovana** dok ne postoji JS harness.
+
+### 14.43) S5-4b-2 — ekran: zbirna se sastavlja od otpremnica (26.09.2026)
+
+Rez zatvara prekid koji je otvorio S5-4a: vozačev spisak je od tada bio prazan, jer je čitalac tražio
+`Otkup.VozacID` koji više niko ne piše. Sada vozač radi sa **otpremnicama**, a zbirna nosi njihove
+identitete.
+
+#### Šta je promenjeno, po slojevima
+
+| Sloj | Bilo | Sada |
+|---|---|---|
+| PWA | `getVozacOtkupi`, otkupni redovi | `getVozacOtpremnice`, dokumenti sa stavkama |
+| PWA | kilaža/gajbe sa zaglavlja otkupa | **iz stavki** (`otpKg`, `otpAmb`, `otpKgKlase`) |
+| PWA | potrošenost iz `otkupRecordIDs` svih poznatih zbirni | prazan `zbirnaID` sa servera |
+| PWA | `brojZbirne` računat na klijentu | **prazno** — broj dodeljuje master |
+| PWA | `otkupRecordIDs` u payload-u | `otpremnicaIDs` |
+| GAS | — | `OtpremnicaIDs` u `ZBIRNA_COLUMNS`, obavezan na vratima |
+| GAS | `getOtkupiForVozac` + ruta `getVozacOtkupi` | **obrisani** — nemaju pozivaoca |
+| VBA | `OtpremniceIzOtkupRecordIDs` (prevod CRID → otpremnica) | `OtpremniceIzIDs` (puko parsiranje) |
+
+#### Kapije se ne ponavljaju
+
+Nov čitač **ne** proverava ništa osim da spisak nije prazan. Sve ostalo već odbija kanonski pisac,
+svaku sa svojim razlogom: prazan ID (1225), isti dvaput (1226), nepoznat (`NadjiJedanRedOtpremnice`),
+nacrt ili storniran (`RequireOtpValidanIzvorZbirne`), već u aktivnoj zbirni (1228), tuđeg vozača
+(`RequireIstoPolje`). Druga kopija tih pravila u čitaču značila bi dve verzije jedne invarijante.
+
+**Nema više dedupa, i to je promena značenja.** Stari prevodilac ga je *morao* imati, jer dva otkupa
+legitimno pokazuju na JEDNU otpremnicu. Isti `OtpremnicaID` dvaput u spisku je greška klijenta i
+prijavljuje se (1226), ne ravna u tišini.
+
+#### Mrtav slot ostaje, kapija nad njim ne
+
+`OtpremnicaIDs` ide **na kraj** VOZ lista (`VS_OTPREMNICA_IDS = 21`): obe strane čitaju **poziciono**
+(VBA `VS_*`, GAS redosled u `ZBIRNA_COLUMNS`), a `ensureSheetColumns` dopisuje kolonu samo kad je
+zatečeno zaglavlje **prefiks** kanonskog. `VS_OTKUP_RECORD_IDS` zato ostaje kao rezervisan **prazan**
+slot, ali je kapija koja ga je tražila (`ValidatePWAZbirna`) obrisana — mrtav podatak se ne hrani.
+
+#### Šta je merenje uhvatilo, a plan nije
+
+Pre-flight je izlistao devet mesta starog modela. Prvi prolaz suite-ova je našao **deseto**:
+`TestHook_ValidatePWAZbirnaDatum` je treći seam koji gradi VOZ red, i ostao je na staroj širini
+(`ReDim ... 1 To VS_BROJ_ZBIRNE`), pa je validacija koja sada čita indeks 21 pukla sa *Subscript out of
+range*. Isti obrazac zbog kog rez i postoji — samo što je treći pozivalac bio **test seam**, a pre-flight
+je gledao produkcioni kod.
+
+#### Verifikacija
+
+`RunAllTests` **199/0** · `RunBusinessFlowProSuite` **2015 → 2025/0**. Razlika je objasnjena do kraja:
++10 novih tvrdnji (6 + 3 nova testa, +1 pojačana stara). Prvi, pali prolaz je pokazao 2018 — razlika od
+7 je bila izgubljeni ostatak RF-28 testa koji je pao u svoj `EH`, ne nestala tvrdnja.
+
+`dokaz.py zbr-ids`: **2/2 crvenih**, potpis izvora identičan (`ac8d08ba02f12105`).
+
+**Treća sabotaža je povučena, i to je nalaz sam po sebi.** `zbr-ids-cita-mrtav-slot` (indeks 21 → 18)
+obara **sedam** testova odjednom, pa je `dokaz.py` odbio da je prizna kao dokaz jedne tvrdnje — tacno.
+Pozicioni ugovor je pokriven širinom, ne preciznim sidrom; ako indeks odluta, crveno je odmah i glasno,
+ali to nije targetirani dokaz i ne piše se kao takav.
+
+Prazan spisak i tuđa otpremnica **namerno nemaju sabotažu u ovom rezu**: invarijante zive u kanonskom
+piscu, pa bi sabotaža čitača merila drugu branu — placebo.
+
+⚠ **PWA i GAS izmene su NEVERIFIKOVANE** — nema JS harness-a, `node` nije dostupan.
+
+**Zaostao dug:** pomoćnik je preimenovan u `ZbrPwaIzvorOtpremnica` i vraća `OtpremnicaID`, ali se
+lokalne promenljive na šest pozivnih mesta i dalje zovu `crid`. Semantika je tačna, imena su zaostala.
+
+**Review #392, prvi krug — model je bio tačan, lifecycle nije bio dovršen.**
+
+Cutover je prošao bez primedbe; tri rupe su bile u **životu** tog modela.
+
+**P1 — lokalna zbirna nije rezervisala svoje otpremnice.** Dostupnost se izvodila samo iz
+`Otpremnica.zbirnaID`, a to je **kanonska** istina koju server zna tek posle master ciklusa. Između
+klika i tog ciklusa zbirna postoji, a server još sasvim tačno kaže „slobodna":
+
+```
+ZBR-A -> OTP-1   (lokalno, GAS primio)
+master jos nije prosao
+server:  OTP-1.zbirnaID = ""
+ekran:   OTP-1 opet u izboru  ->  ZBR-B -> OTP-1
+```
+
+Master bi drugu odbio, ali korisniku je komanda već prikazana kao ispravna.
+
+Ključ popravke nije bio filter nego **signal**: `mapServerZbirnaRecord` je upisivao fiksno
+`syncStatus: 'synced'`, pa se masterov verdikt (`Synced>Master` / `Duplicate` / `SyncError`) gubio na
+putu. Sada se prenosi kao `masterStatus`, i dostupnost gleda **dve** istine — kanonsku i privremenu
+(lokalna zbirna koju master još nije razrešio). Bez tog signala rezervacija bi trajala zauvek: posle
+storna zbirne otpremnica se nikad ne bi vratila u izbor.
+
+**P1 — potvrda nije imala svežu authoritative proveru.** Drugi uređaj je mogao da potroši iste
+otpremnice dok ekran stoji otvoren; lock to ne hvata, jer master može da završi ciklus i lock padne, a
+ovaj uređaj i dalje drži stari snimak u memoriji. `startZbirnaCreation` sada snima **nameru** — spisak
+koji je vozač stvarno video — a `confirmZbirnaUnlocked` pre upisa traži svež `getVozacOtpremnice` i
+proverava da je **tačno ta namera** još izvodljiva. Namerno se **ne** uzima „sve što je sada slobodno":
+to bi tiho promenilo manifest koji je upravo pregledan.
+
+**P2 — GAS je gutao „isti CRID, druga tvrdnja".** `processZbirnaRecord` je vraćao `existing/success`
+bez poređenja sadržaja, pa druga verzija nikad nije stigla masteru — iako `PwaZbirnaRazlika` ume da je
+imenuje. Sada: `VozacID`, `Datum`, `KupacID`, `BrojZbirne` (samo ako je poslat) i **skup** izvora
+(`skupIzvoraRazlika_`, redosled nije tvrdnja) → `ZBIRNA_CONFLICT`. Summary ne odlučuje, jer ga master
+izvodi iz izvora.
+
+**Dva P3 su zatvorena jer su bila neslaganja koda i komentara**, a to je gore od običnog propusta:
+prazan token više se ne preskoče tiho nego stiže piscu koji ga odbija (1225), i `loadVozacData` više ne
+prazni spisak pre nego što obeća da ga zadržava. Treći (multiplicitet u `SkupIzvoraRazlika`) ostaje
+zapisan.
+
+**Verifikacija.** `RunAllTests` **199/0** · `RunBusinessFlowProSuite` **2025/0** — broj je nepromenjen,
+jer ovaj krug ne dodaje tvrdnje: dve ispravke su u GAS-u i PWA, a jedina VBA izmena ne menja nijednu
+postojeću tvrdnju. `dokaz.py zbr-ids` je pušten **ponovo** (sidro sabotaže se menjalo zajedno sa kodom
+koji ga gađa): **2/2 crvenih**, potpis izvora identičan (`5c992b26d0585c55`).
+
+⚠ **PWA i GAS izmene su NEVERIFIKOVANE** — rezervacija, komandna kapija i konflikt su pročitani i
+rezonovani, ne izvršeni.
+
+**Review #392, drugi krug — dve fineše lifecycle-a.**
+
+**P1 — kapija je pitala server, ali ne i sopstvenu bazu.** Sveža provera je gledala samo
+`getVozacOtpremnice`. Drugi **tab** (ista baza, isti uređaj) mogao je upravo da napravi zbirnu nad istim
+otpremnicama; master je još ne vidi, pa server sasvim tačno kaže „slobodna". `withSubmitLock` to ne
+hvata — brava živi samo u memoriji tog taba.
+
+Sada se na granici komande čita **oboje**: svež serverski spisak i sveže lokalne nerazrešene
+rezervacije (`rezervisaneOtpremnice(await getMergedZbirneForVozac())`).
+
+**Uz to: namera se razrešava tačno, ili se ne razrešava.** Payload se gradio `filter`-om nad lokalnim
+spiskom, bez provere broja — pa bi zbirna mogla nastati sa **manje** otpremnica nego što je korisnik
+pregledao, baš ono što komentar iznad tvrdi da se ne sme desiti. Sada se razrešen skup **broji** i mora
+biti jednak nameri.
+
+**P2 — odbijanje nije oslobađalo rezervaciju.** Komentar je obećavao da odbijen događaj oslobađa, ali
+`sync-engine` i transportni pad i poslovno odbijanje ostavlja kao `syncStatus: 'pending'`:
+
+```
+GAS: ZBIRNA_CONFLICT  ->  syncStatus = pending, lastServerStatus = failed
+rezervisaneOtpremnice ->  jos uvek rezervisano
+svaki retry           ->  isti ishod, otpremnica zakljucana zauvek
+```
+
+Nedostajao je **lifecycle signal**: `record.lastServerCode` se nigde nije čuvao. Sada se čuva, a
+rezervacija se otpušta samo na **trajno** odbijanje (`ZBIRNA_CONFLICT`, `VALIDATION_ERROR`,
+`CLIENT_RECORD_ID_MISSING`). Prazan kod znači transportni neuspeh — takav zapis je još na putu i
+rezervaciju **zadržava**, pa retry ostaje moguć.
+
+**Verifikacija.** Izmena je **samo PWA** (`zbirna.js`, `sync-engine.js`) — `src-vba`, `gas` i `tools`
+nisu dirnuti. Suite-ovi stoje na merenju sa `e655b1cb`: `RunAllTests` **199/0**,
+`RunBusinessFlowProSuite` **2025/0**. Balans zagrada u oba fajla **0/0/0**, **0** LF-only linija.
+
+⚠ **NEVERIFIKOVANO** — ceo krug je PWA: dvostruka kapija i lifecycle rezervacije su pročitani i
+rezonovani, ne izvršeni.
+
+**Review #392, treći krug — kapija je bila nada, ne kapija.**
+
+**P2, jednom linijom, ali ne trivijalan nalaz.** `lastServerCode` se od prošlog kruga **upisuje** u
+IndexedDB, ali ga `normalizeLocalZbirnaRecord` nije prenosio — pa do `rezervisaneOtpremnice` nikad nije
+stizao. Lifecycle signal je postojao u bazi i nestajao na putu do potrošača; trajno odbijena zbirna bi
+i dalje zauvek držala svoje otpremnice. Ista klasa kao P1 iz prvog kruga: popravka nije u pravilu nego
+u **signalu koji se gubi između slojeva**.
+
+**P1 — provera pa upis u dva poteza nisu kapija.** Dva taba dele istu bazu, pa oba mogu da pročitaju
+„slobodno" pre nego što ijedan upiše:
+
+```
+Tab A                    Tab B
+read local -> free
+                         read local -> free
+dbPut ZBR-A
+                         dbPut ZBR-B
+```
+
+`withSubmitLock` to ne rešava — brava živi u memoriji jednog taba. Uz to je `getMergedZbirneForVozac`
+**gutao** pad lokalnog čitanja (`local = []`), pa spoljašnji `catch` taj pad nikad nije ni video: dokaz
+o rezervaciji je mogao da nestane fail-open.
+
+Oboje zatvara **jedna readwrite transakcija**: `dbClaimInStore` čita rezervacije i upisuje zbirnu u
+istom potezu, pa ih baza serijalizuje među tabovima, a pad čitanja **baca** umesto da vrati prazno.
+Provera iznad ostaje — ali kao **upozorenje sa lepom porukom**, ne kao dokaz; prava kapija je claim.
+
+Dve stvari koje su u toj transakciji bitne, a lako se previde:
+
+- `proveri` **mora** biti sinhrona. Jedan `await` bi pustio event loop i transakcija bi se zatvorila pre
+  upisa — tiho, bez greške.
+- whitelist master-razrešenih zbirni računa se **pre** transakcije (unutar nje nema mesta za mrežu). Ako
+  se ne dobije, skup je prazan — a to znači **više** rezervacija, ne manje: degradacija je
+  konzervativna.
+
+**Verifikacija.** Izmena je **samo PWA** (`zbirna.js`, `db.js`) — `src-vba`, `gas` i `tools` nisu
+dirnuti, pa suite-ovi stoje na merenju sa `e655b1cb`: `RunAllTests` **199/0**,
+`RunBusinessFlowProSuite` **2025/0**. Balans zagrada u oba fajla **0/0/0**, **0** LF-only linija.
+
+⚠ **NEVERIFIKOVANO** — i ovo je PWA. Atomski claim je tačno ona vrsta koda koji bi test uhvatio a
+čitanje ne: ponasanje IndexedDB transakcije pod istovremenim tabovima se ne može dokazati čitanjem.
+
+### 14.44) Ostatak S5 — pre-flight i JS harness (26.09.2026)
+
+Rezovi S5-1…S5-4b su zatvorili **svih 13** sposobnosti iz §14.9 reda S5 (E-001, E-003, E-019…E-023,
+E-035, E-044, E-058, E-063…E-065; E-003 i E-064 kao *namerno ukinute* — „degradiran ciklus“ i
+klijentski račun broja zbirne). Ono što je ostalo iz tog reda je **prva tačka instrukcije §14.10**:
+PWA/GAS otkup kao zaglavlje + stavke. Ona nije doterivanje — bez nje dva pisca istog `OTK-*` lista
+nose dva modela.
+
+#### Izmereno pre koda — asimetrija je dvostruka, ne jednostruka
+
+| | zaglavlje | stavke | kako čita/piše |
+|---|---|---|---|
+| desktop push (S1c) | linijska polja **prazna** | `OTK_STAVKE` | **po imenu** (`OtkZaglavljeKolone`, `OtkStavkeKolone`) |
+| PWA → GAS `processRecord` | `Klasa/Kolicina/Cena/KolAmbalaze` **u redu** | nema | **po imenu** (`headerIndexMap`) |
+| uvoz u master `ImportRowToTblOtkup` | čita `GS_KLASA/KOLICINA/CENA/KOL_AMB` | **ne čita** `OTK_STAVKE` | **poziciono**, 23 konstante `GS_*` |
+
+Prva osa (dva modela) je bila u planu. Druga — **ime protiv pozicije** — nije: GAS piše po imenu, a
+uvoz čita po poziciji, pa je `ensureSheetColumns` (dodaje samo kad je zatečeni header **prefiks**
+kanonskog) jedina stvar koja danas drži pozicije na mestu. Isti pozicioni ugovor kao VOZ list.
+
+Ugovor je već zapisan na jednom mestu i sam kaže da je privremen —
+[`modMasterSync.bas:705`](../src-vba/modMasterSync.bas): *„Klasa, Kolicina, Cena i KolAmbalaze su u
+njemu još samo zato što PWA šalje jednu klasu po zapisu; VBA push ih ostavlja PRAZNE i piše stavke u
+OTK_STAVKE.“*
+
+**Dve stvari su izmerene kao ZATVORENE, a stajale su u backlogu kao otvorene:**
+
+- `IsDuplicateInMaster` **već** gleda zaglavlje (`RequireColumnIndex(TBL_OTKUP, "ClientRecordID")`,
+  `modMasterSync.bas:2945`). Backlog stavka „mora da se prepokaže na header tabelu — inače se svaki
+  PWA dokument reimportuje“ je posledica PR6 i nije više zahtev.
+- `TryUpdateVozacID` **ne postoji** — ime živi samo u komentarima. §14.9 red S5 ga nabraja u koloni
+  „Briše“; obrisan je u S5-4a.
+
+#### Verdikt pre koda
+
+| Osa | Stanje | Dokaz |
+|---|---|---|
+| DOMAIN | **PROVEN** | `tblOtkup` u `schema/schema.json` nema linijskih polja; `CreateOtkup_TX(h, stavke, greska)` prima kolekciju |
+| IDENTITY | **GAP → zatvoreno odlukom 1** | `ClientRecordID` je identitet dokumenta, `OtkupID` kuje master; stavka na žici nije imala ključ za idempotentan ponovni dolazak |
+| CARDINALITY | **PROVEN** | 1 : N, N ≥ 1 — pisac traži bar jednu klasu sa kilažom |
+| INVARIANTS/OWNER | **PROVEN** | `CreateOtkup_TX` jedini pisac (A11); duplikat se presuđuje na zaglavlju |
+| WRITERS | **GAP — predmet reza** | dva pisca istog lista, tabela iznad |
+| DOWNSTREAM | **GAP → zatvoreno odlukom 3** | `buildOtkupMergeKey_` grana 3 (`gas/Code.gs:3550`) ključa po `Klasa/Kolicina/Cena` — nad zaglavljem su prazni, pa bi ključ spajao različite dokumente |
+| CAPABILITY | **GAP — spisak se izvodi** | 13 sposobnosti iz §14.9 reda S5 su zatvorene; PWA otkup (forma, pregled, kartica, knjiga polja) nije u tom spisku i mora se izvesti iz mape pre S5-5b |
+| ACCEPTANCE CONTRACT | **PROVEN za S5-5a** (ispod) · **GAP za S5-5b** | — |
+| PLATFORM | **PROVEN (mereno)** | `node` i `npm` **ne postoje** na razvojnoj mašini; `.github/workflows/static.yml` je bio python-only. JS se može izvršiti **samo u CI-ju** |
+| LANDING | **PROVEN** | `main` čist na `06450970`; harness dira CI, pa ide **serijski i prvi** (§8 pravila pre-flight-a) |
+
+#### Četiri odluke
+
+**1. Stavka na žici nosi svoj `ClientRecordID`** (operater, 26.09.2026) — red u `OTK_STAVKE` dobija
+sopstveni `ClientRecordID` (identitet REDA), `OtkupClientRecordID` (roditelj) i `RedniBroj`; zaglavlje
+nosi **broj stavki** kao manifest, pa uvoz prepozna nekompletan dolazak. Doslovno obrazac `PRED` reda
+iz S5-4a. GAS time ponovo koristi `findByColumn` + postojeću idempotenciju, bez složenog ključa.
+
+**2. Obim: samo žica, N = 1** (operater, 26.09.2026) — PWA šalje `stavke[]` sa jednom stavkom, forma
+se ne dira. Druga klasa u formi je **sledeći** rez. Razlog: ceo lanac je dokaziv pre nego što forma
+može da proizvede N = 2, a ugovor žice se ne meša sa UX sposobnošću.
+
+**3. `buildOtkupMergeKey_` grana 3 se briše, ne uči o stavkama.** Nema legacy podataka (memo
+„nema produkcionih podataka“), pa grana za „stare/ručne zapise bez ID-jeva“ nema hranioca — a nad
+ispražnjenim linijskim poljima bi tiho spajala različite dokumente. Mrtva grana se briše, ne
+proširuje.
+
+**4. Harness ide prvi, kao svoj PR** (§8 LANDING: CI i test harness serijski) — pa izmena žice
+nastaje pod kapijom koja **već postoji**, a ne pored kapije koja se piše u istom diff-u.
+
+#### S5-5a — JS harness (ovaj rez)
+
+Do ovog reza PWA/GAS sloj nije imao **nijednu** automatsku proveru. §14.43 se završava rečenicom da
+se ponašanje IndexedDB transakcije pod istovremenim tabovima *ne može dokazati čitanjem*; ovo je
+odgovor na tu rečenicu.
+
+| Šta | Gde | Čemu |
+|---|---|---|
+| sintaksna kapija + self-test | `tools/js_sintaksa.js` | 62 fajlova (`src/js`, `gas`, `tools`, `tests/js`). `node --check` se **ne** koristi jer tip modula bira po ekstenziji i `.gs` ne ume; `vm.Script` parsira sadržaj bez obzira na ime |
+| učitavač produkcionog izvora | `tests/js/harness.js` | fajl se izvršava **kakav je**, u `vm` kontekstu sa lažnim `window`-om i Apps Script stub-ovima. Tvrdnja ide kroz produkcioni seam, ne kroz kopiju funkcije |
+| tvrdnje | `tests/js/suites/*.js` | 13 tvrdnji: `dbClaimInStore` (4), lifecycle rezervacije (5), `skupIzvoraRazlika_` (4) |
+| katalog sabotaža | `tests/js/sabotaze.js` | 7 unosa, ista šema kao `tools/dokaz.py`: (fajl, sidro, zamena, tvrdnja) |
+| pokretač | `tests/js/pokreni.js` | `node tests/js/pokreni.js` i `--self-test`, isti oblik izlaza kao python kapije |
+
+**Sabotaža ne dira disk.** `tools/dokaz.py` kvari fajl u radnom stablu i zato ne sme paralelno sa
+izmenama (memo „dokaz i izmene se ne mešaju“). Ovde se zamena primenjuje na **tekst u memoriji** pre
+`vm.Script`, pa dokaz sme da se vrti u istom prolazu kao i zelena kapija — i vrti se, u istom CI job-u.
+
+**Sidro koje ne pogodi tačno jednom je greška kataloga, ne „nije oborilo test“** — `SIDRO_ZASTARELO`
+puca pri učitavanju. Isto važi za unos koji imenuje fajl koji suite ne učitava.
+
+**Kraj reda je normalizovan pre sidra.** Radno stablo na Windows-u je CRLF (`core.autocrlf=true`), CI
+checkout na ubuntu-u je LF. Sidro pisano sa `\n` bi gađalo samo jednu od dve mašine — ista klasa koja
+je već tri puta ujela ovaj repo (`sed` nad `.bas`, CRLF u `.sh`, `eol=lf` nad `.frm`).
+
+**Šta harness NE dokazuje, i to se ne prećutkuje:**
+
+- `node` i `npm` ne postoje lokalno (mereno), pa **lokalnog verdikta za JS nema** — kao što ga za
+  `run_vba.py` nema u web sesiji. Sve JS tvrdnje su neizvršene do prvog CI prolaza.
+- 6 od 13 tvrdnji nema sabotažu. To je po pravilu „u rezu samo NOVE sabotaže“, ali pokretač ih
+  **imenuje** na kraju `--self-test` izlaza, pa rupa ne može da raste nečujno.
+- `.claude/rules/testovi.md` još ne zna za ovu kapiju. Izmene u `.claude/` idu isključivo kroz zaseban
+  process PR, pa je to **zapisan dug**, ne propust ovog reza.
+
+#### Review #393 — dva P1, i oba su bila u DOKAZU, ne u kodu
+
+Koncept nije dirnut. Sve tri primedbe su gađale sredstvo merenja, i to je najgora vrsta greške u
+harness PR-u: kapija koja je zelena jer meri pogrešnu stvar.
+
+**P1 — self-test je imao nelegalan „legalan JS“ fixture.** CI #809 je pao na
+`js_sintaksa --self-test`, pa `npm ci`, harness i dokaz **nisu ni pokrenuti**. Fixture je u fajlu
+stajao kao `'const a = /a\/b/g;'` sa **jednim** backslash-om; u JS stringu je `\/` samo `/`, pa je
+`vm.Script` dobio `/a/b/g`, gde `b` i `g` izgledaju kao flagovi. Kapija je ispravno prijavila
+sintaksnu grešku, a self-test je to protumačio kao lažni alarm.
+
+Uzrok nije JS nego **heredoc**: `<<'EOF'` je pojeo backslash pri pisanju fajla — treći put u istoj
+sesiji, posle `sed`-a nad `.bas` i Python skripte koja piše `\n`. Memo
+„heredoc lomi escape sekvence“ već kaže *piši Python u fajl pa ga pokreni*; ovde je isto pravilo
+trebalo i za JS.
+
+**Isti kvar na drugom mestu, koji review nije video:** `harness.js` je imao
+`.replace(/\n/g, '\n')` — no-op, jer je i tu pojeden backslash. Trebalo je `'\\n'`, da poruka
+`SIDRO_ZASTARELO` prikaže prelom reda kao dva znaka umesto da ga umetne. Nađeno merenjem **svih**
+backslash-eva u novim fajlovima, ne čitanjem.
+
+**P1 — centralna tvrdnja je merila jednu konekciju.** Oba claim-a su išla kroz **isti** `IDBDatabase`
+objekat, pa je tvrdnja dokazivala da se dve transakcije na jednoj konekciji serijalizuju — a
+`dbClaimInStore` postoji zbog **dva taba**, a tab ima svoju konekciju. Sada se ista baza otvara
+dvaput (`otvori(ime)` je razdvojen od `novaBaza()`), i tvrdnja nosi ime koje to kaže:
+`dve konekcije nad istom bazom: tacno jedan claim prolazi`.
+
+Uz to jedna tvrdnja **nad samim testom**: `assert.notStrictEqual(prva.db, druga)`. Ako bi
+implementacija ikad vratila keširanu konekciju, tvrdnja bi tiho skliznula nazad na slabiju verziju —
+a to je upravo klasa greške koju je ovaj review našao, pa se meri, ne pretpostavlja.
+
+**P2 — graf nije bio zaključan, i rešenje je bilo u korenu.** `fake-indexeddb` 4.0.2 vuče
+`realistic-structured-clone ^3.0.0`, pa prikovana **direktna** verzija nije determinizam — a taj
+paket simulira baš storage semantiku na kojoj stoji najvažnija tvrdnja. Merenjem registry-ja:
+**verzija 6.0.0 nema nijednu zavisnost** (koristi ugrađeni `structuredClone`, `engines >= 18`). Graf
+je time jedan paket, pa je `package-lock.json` **potpuno određen** — napisan je rukom, sa `integrity`
+hash-om pročitanim iz registry-ja, i korak je `npm ci`. `npm ci` odbija rad ako lock i
+`package.json` nisu u koraku, pa greška u ručno pisanom locku pada glasno i odmah, a ne tiho.
+
+**P3 — centralna tvrdnja je dobila svoj fault seam.** Sabotaža `claim-upis-van-transakcije` odlaže
+`store.put` u makrotask, pa upis izlazi iz transakcije koja ga je pročitala: obe konekcije vide
+prazan store, obe „uspeju“, nijedna ne upiše. Tačno kvar zbog kog `dbClaimInStore` postoji. Katalog
+je time na **7** unosa, a bez sabotaže ostaje 6 od 13 tvrdnji.
+
+**Pre-provera bez node-a** (jedino što se na ovoj mašini može izmeriti): balans zagrada u svih 7 JS
+fajlova 0 nalaza; svih 7 sidara pogađa **tačno jednom** i svako ima svoj unos u katalogu; `package.json`
+i `package-lock.json` se poklapaju u imenu, verziji i `devDependencies`. Tvrdnje same su i dalje
+**neizvršene** do CI prolaza.
+
+#### Review #393, drugi krug — prvi pravi prolaz, i sabotaza koja obara proces
+
+**CI #810 je prvo izvrsavanje harness-a uopste, i produkcione tvrdnje su zelene 13/13.**
+
+| Korak | Ishod |
+|---|---|
+| `js_sintaksa` | SUCCESS |
+| `js_sintaksa --self-test` | SUCCESS |
+| `npm ci` | SUCCESS |
+| **js harness** | **SUCCESS — 13/13** |
+| js harness `--self-test` | FAILURE |
+
+To je prvi merljiv odgovor na recenicu kojom se zavrsava S5-4b-2: **`dbClaimInStore` stvarno
+serijalizuje dve odvojene konekcije nad istom bazom.** Tvrdnja iz #392 vise nije procitana nego
+izmerena — dva taba ne mogu oba da uvedu istu otpremnicu u svoju zbirnu.
+
+**P1 — sabotaza je bila ilegalan API poziv, ne pokvarena semantika.** Odlozeni
+`setTimeout(function () { store.put(record); }, 0)` gadja `store` koji pripada transakciji koja se
+dotad **zavrsila**, pa je ishod bio `TransactionInactiveError` iz `Timeout._onTimeout` — izuzetak
+**izvan** `try/catch` oko tvrdnje. Umesto „imenovana tvrdnja je uredno postala crvena“ dobijao se
+mrtav Node proces. To nije dokaz nego pad harness-a.
+
+Popravka je ista ideja, legalno izvedena: upis ide u **svoju** ispravnu `readwrite` transakciju
+(`claim-upis-u-drugoj-transakciji`), pa se kvari tacno ona invarijanta koju tvrdnja meri —
+
+```
+TX A : read -> slobodno, commit      TX B : read -> slobodno, commit
+TX A': write                         TX B': write
+```
+
+— i obe konekcije javljaju uspeh nad istom otpremnicom. Sabotaza pritom obara **samo** cetvrtu
+tvrdnju: prva prolazi jer upis ipak stigne (write transakcija je napravljena pre citanja u `svi()`),
+druga ide kroz `abort` i uopste ne dolazi do upisa, treca pada na citanju.
+
+**Uzeto preko zahteva: runner vise ne umire od zakasnele greske.** Recenzent je trazio samo ispravku
+sabotaze, ali klasa ostaje: svaka buduca sabotaza koja proizvede async gresku posle zavrsetka tvrdnje
+ubila bi ceo dokaz. `pokreni.js` sada hvata `uncaughtException` i `unhandledRejection`, **pripisuje**
+ih tvrdnji koja je bila u toku i nastavlja prolaz — greska postaje imenovan pad
+(`pozadinska greska: ...`), ne mrtav proces. Handler nista ne sakriva; posle svake tvrdnje se ceka
+jedan makrotask da zakasnela greska ne bi zavrsila na tudjem imenu.
+
+**Sta je ovaj krug potvrdio kao zatvoreno:** regex fixture (`js_sintaksa` zelen u oba smera), dve
+konekcije u centralnoj tvrdnji, i zakljucan graf — `npm ci` je **CI-em potvrdio** da je rucno pisan
+`package-lock.json` sa `fake-indexeddb 6.0.0` ispravan.
+
+#### Review #393, treci krug — odbrana koja je nadzivela svoj povod
+
+CI #811 je **zelen u oba smera**: 13/13 tvrdnji i 7/7 sabotaza, a centralna sabotaza obara bas
+concurrency tvrdnju. Ostao je jedan P2, i bio je u onome sto sam dodao **preko zahteva**.
+
+**P2 — globalni `uncaughtException` handler je mogao da proguta ili pogresno pripise zakasnelu
+gresku.** Napisao sam da „handler ne sakriva nista“; nije tacno. Greska koja stigne posle poslednje
+tvrdnje zavrsi u nizu koji nikad nece biti procitan, a greska koja stigne tokom naredne tvrdnje bude
+pripisana **njoj** — cekanje jednog makrotaska ne pokriva `setTimeout(..., 50)`.
+
+Sustina nalaza nije mehanika nego **poreklo**: handler je dodat kao odbrana od sabotaze koja je
+gadjala mrtav `objectStore` — dakle od problema koji sam sam napravio, pa u istom krugu i uklonio.
+Kad je povod nestao, ostao je samo rizik. Za kapiju je „neocekivano -> crveno“ tacnije od pogadjanja
+cija je greska; suite kojem stvarno treba pozadinski posao mora da ceka njegov signal zavrsetka,
+eksplicitno.
+
+Mehanizam je uklonjen u celini (`process.on` nema, `uToku` i `pozadinske` nema, cekanje makrotaska
+nema) — 36 obrisanih linija za 11 dodatih. Na njegovom mestu stoji komentar koji zapisuje **odluku i
+njen razlog**, da se handler ne vrati sledeci put kad neka sabotaza pukne van tvrdnje.
+
+**Prihvaceno kako je, bez izmene:** sabotaza `claim-ne-prekida-transakciju` obara i concurrency
+tvrdnju pored svoje. To je posledica istog invarijanta — bez `abort`-a odbijen claim izgleda kao
+prihvacen i u jednom i u dva taba — a runner taj preklapajuci pad **imenuje** u izlazu. Nasilno
+razdvajanje bi trazilo da jedna od dve tvrdnje prestane da meri `abort`, sto je gubitak, ne dobitak.
+
+#### Review #393, cetvrti krug — isti kvar, treci mehanizam
+
+CI #812 je zelen u oba smera (13/13 i 7/7), i concurrency sabotaza obara bas svoju tvrdnju. Ostao je
+isti P2 kroz **treci** nosac.
+
+**P2 — `process.exit()` prekida event loop.** Prvo je kasnu async gresku gutao globalni handler; kad
+je on uklonjen, gutao ju je nasilan izlaz. Komentar koji sam upravo napisao — „neocekivano ->
+crveno“ — bio je time u protivrecnosti sa kodom ispod njega: `setTimeout(() => { throw ... }, 50)`
+nikad ne dobije priliku, jer `process.exit(0)` zatvori proces pre timera.
+
+Oba pokretaca sada postavljaju `process.exitCode` i puste Node da se zavrsi prirodno. Posledica je
+deo ugovora, ne nus-efekat: **suite koji otvori pravi pozadinski posao mora sam da ga doceka**, inace
+prolaz visi umesto da se zavrsi.
+
+**Isti poziv je stajao i u `tools/js_sintaksa.js`**, van prijave. Tamo je kod sinhron pa nije bilo sta
+da se izgubi, ali dve kapije u istom workflow-u ne smeju da imaju dva razlicita pravila o tome kako se
+zavrsavaju — to je razlika koja istruli neopazeno, kao spisak dozvola u `WRITE_OWNERSHIP.json` koji je
+tri modula nabrajao bez pisca.
+
+**Watchdog NIJE dodat, i to je namerno.** `exitCode` uvodi novu mogucnost: ako nesto drzi event loop,
+prolaz visi. Iskusenje je bilo dodati `unref()`-ovan timer koji posle N sekundi obori prolaz sa
+imenovanom porukom. Ali prosli krug je pokazao sta se dobija kad se odbrana napise **pre** merenja:
+handler dodat „za slucaj“ postao je nalaz. Ako CI visi, to je glasan i dijagnostikovan pad, i tada se
+watchdog dodaje sa dokazom da treba.
+
+**P3 — opis PR-a je bio zastareo** (tvrdio da nema lockfile-a i da 7 od 13 tvrdnji nema sabotazu).
+Usklađen: rezultat 13/13 i 7/7, lockfile potvrđen `npm ci`-em, 6 od 13 bez sabotaze, i tabela sva
+cetiri kruga review-a.
+
+**Obrazac kroz sva cetiri kruga:** nijedan nalaz nije bio u produkcionom kodu. Prvi je bio u fixture-u,
+drugi u sabotazi, treci i cetvrti u pokretacu. Sredstvo merenja je u ovom rezu bilo jedini izvor
+gresaka — i to je razlog zbog kog harness PR trazi review kao i svaki drugi: zelena kapija koja meri
+pogresnu stvar je gora od nikakve.
+
+#### Ugovor prihvatanja za S5-5b — žica otkupa
+
+Šta mora da važi kad se rez završi:
+
+1. PWA zapis otkupa nosi `stavke[]` (N = 1 u ovom rezu); `Klasa/Kolicina/Cena/KolAmbalaze` **nisu
+   više** na zaglavlju zapisa.
+2. GAS upisuje zaglavlje u `OTK-*` i stavke u `OTK_STAVKE`, **atomski po `ClientRecordID`**; red
+   stavke ima svoj `ClientRecordID`, `OtkupClientRecordID` i `RedniBroj`.
+3. Zaglavlje nosi broj stavki; uvoz koji nađe zaglavlje **bez** stavki ga odbija po imenu i beleži —
+   ne uvozi dokument od nula kilograma (ista tvrdnja kao `OtkStavkeRedoviPoOtkupu`).
+4. `ImportRowToTblOtkup` gradi `stavke` kolekciju **iz `OTK_STAVKE`**, ne iz `GS_*` linijskih polja;
+   `OtkZaglavljeKolone` gubi četiri linijske kolone, a `GS_*` konstante se pomeraju **samo** brisanjem
+   sa kraja ili dodavanjem na kraj.
+5. Isti `ClientRecordID` sa **drugim skupom stavki** je konflikt po imenu, ne `existing/success` —
+   isti obrazac koji je zatvoren za `PRED` i `ZBIRNA`.
+6. `buildOtkupMergeKey_` grana 3 je obrisana.
+7. Dokaz: JS harness dobija tvrdnje za oblik zapisa i za GAS upis (pod kapijom iz S5-5a);
+   `RunBusinessFlowProSuite` dobija tvrdnju da uvoz pravi dokument sa stavkama iz `OTK_STAVKE`, sa
+   sabotažom u `tools/dokaz.py`; `popis_citalaca.py --check` ostaje na pragovima.
+
+Šta mora ostati netaknuto: desktop push (`BulkPushPendingForStanica`) i izvoz `OtkupiAllStavke` — oni
+su **već** na novom obliku i rez ih ne dira.
+
+### 14.45) S5-5b — zica otkupa: zaglavlje + stavke (26.09.2026, U TOKU)
+
+Radi se po ugovoru prihvatanja iz §14.44. Grana `claude/s5-5b-otkup-zica`.
+
+#### Ispravka ugovora koju je merenje nalozilo
+
+Tacka 4 ugovora je trazila da `OtkZaglavljeKolone` **izgubi** cetiri linijske kolone. Mereno:
+`ensureSheetColumns` u GAS-u dozidjuje kolonu **samo na kraju**, a svaku drugu razliku prijavljuje kao
+`SCHEMA_DRIFT` koji se namerno ne popravlja tiho. Kolone su na pozicijama 14, 15, 16 i 18 — brisanje iz
+sredine bi oborilo sync na **svakom** zatecenom `OTK-*` listu i pomerilo sve `GS_*` konstante ispod
+sebe.
+
+**Ispravka:** cetiri kolone ostaju kao **mrtvi slotovi koji se pisu prazni**, `StavkeCount` ide na
+kraj. Doslovno precedent `VS_OTKUP_RECORD_IDS` iz S5-4b-1. Skidaju se sa zice kad nijedan citalac ne
+ostane — zasebno ciscenje, ne ovaj rez.
+
+#### Korak 1 — ugovor kolona (ZAVRSENO, `9789479b`)
+
+| Sta | Gde |
+|---|---|
+| `StavkeCount` na kraj zaglavlja | `OtkZaglavljeKolone` |
+| `ClientRecordID` + `OtkupClientRecordID` na kraj stavki | `OtkStavkeKolone` |
+| `GS_STAVKE_COUNT = 24`, cetiri slota oznacena mrtvim | `modMasterSync` deklaracije |
+| wire-only imena kolona | `OKS_WIRE_CRID`, `OKS_WIRE_OTKUP_CRID` |
+| push puni manifest | `BuildOTKSheetRowForOtkup` prima broj stavki od pozivaoca |
+| tvrdnja | „OTK push: zaglavlje nosi broj stavki“ |
+
+**PWA ne zna `OtkupID`** — on nastaje u `CreateOtkup_TX` — pa red stavke sa terena nosi **svoj**
+`ClientRecordID` i CRID svog zaglavlja (odluka 1 iz §14.44, obrazac `PRED` reda iz S5-4a). Desktop push
+ih ostavlja prazne: njegov identitet je `OtkupStavkaID`, roditelj pravi `OtkupID`. Dva pisca, dva puta
+identiteta, jedan tab — isto kao na zaglavlju sa `ServerRecordID`.
+
+Kapija 8142 („kolona OTK zaglavlja bez izvora“) je pukla na `StavkeCount` — to je i bio njen posao.
+
+#### Sta ostaje, i sta je pre-flight ovog reza izmerio o ceni
+
+| Korak | Obim (mereno) |
+|---|---|
+| 2 — uvoz cita `OTK_STAVKE` | nov citac taba **po imenu** (tab pisu dva pisca, oba po imenu); `ValidatePWAOtkup` meri skup stavki + poravnanje manifesta; `ImportRowToTblOtkup` gradi kolekciju; `PwaIstiSadrzaj` poredi **skup** stavki umesto `GS_KLASA` |
+| 2b — test seam-ovi | **~20 pozivnih mesta** `ImportRowToTblOtkup_RowTX` u `modBusinessFlowProTests`, sva kroz fixture `PwaRed`; plus `TestHook_ValidatePWAOtkupDatum` koji drzi `ReDim data(1 To GS_BROJ_DOKUMENTA)` — ista klasa koja je u S5-4b-2 ostavila treci seam na staroj sirini |
+| 3 — GAS | `COLUMNS` + `StavkeCount`, pisac taba `OTK_STAVKE` (stavke pa zaglavlje, zaglavlje je oznaka zavrsenog upisa — isti redosled kao desktop push), `OTKUP_CONFLICT` po skupu stavki, brisanje grane 3 `buildOtkupMergeKey_`, citaoci `getOtkupiForOtkupac` i menadzment na stavke |
+| 4 — PWA | `buildOtkupRecord` dobija `stavke[]`; **~45 citalaca** linijskih polja u 6 fajlova (`otkupni-list`, `otkup-pregled`, `otpremnice`, `sync`, `otkup-more`, `otkup-form`) |
+| 5 — dokaz | JS tvrdnje pod kapijom iz S5-5a + VBA tvrdnja da uvoz gradi dokument iz `OTK_STAVKE`, sa sabotazom u `tools/dokaz.py` |
+
+**Zasto rez ne moze da se podeli na dva PR-a bez pauze:** `sync-engine.js:312` salje zapise
+**verbatim** (`payload = { records: pending }`) — nema per-record transform hook-a. Oblik zice je zato
+oblik lokalnog zapisa, pa bi svaki medjukorak ili trazio nov transform sloj u deljenom sync engine-u
+(nova masinerija za privremeno stanje), ili ostavio uvoz otkupa pauziran jedan PR. Merenje, ne ukus.
+
+### 14.46) S5-5b korak 2 — VBA uvoz cita OTK_STAVKE (26.09.2026)
+
+Grana `claude/s5-5b-otkup-zica`. Ovo je **uvozna strana**: zaglavlje vise ne nosi
+linijska polja, nego manifest.
+
+#### Sta je promenjeno
+
+| Celina | Sadrzaj |
+|---|---|
+| `OtkStavkeNaslovIndeks` (nov, `modMasterSync`) | JEDAN validator naslova taba `OTK_STAVKE`, ime kolone -> indeks; dele ga **oba** citaoca |
+| `OtkPwaStavkeIzTaba` (nov, **Public**) | cist citalac: sadrzaj taba -> mapa `CRID zaglavlja -> Collection stavki`; meri se **bez Google-a** |
+| `OtkPwaStavkePoCridu` (nov) | mrezni deo, fail-closed kao `Sheet1` (AUD-001) |
+| `ValidateOTKSheetHeader` | trazi `StavkeCount`, minimalna sirina 22 -> 24 |
+| `ValidatePWAOtkup(data, row, stavke)` | prazan skup = greska; **manifest** mora da se poravna; plauzibilnost je **po stavci**, poruka imenuje koju; `TipAmbalaze` se poredi sa **zbirom** gajbi |
+| `ImportRowToTblOtkup(..., stavke)` | ne cita `GS_KLASA/KOLICINA/CENA/KOL_AMB`; stavke idu pisacu **kakve su dosle** |
+| `PwaIstiSadrzaj(..., stavke)` | poredi **ceo skup** stavki, klasa je kljuc, **neosetljivo na redosled** |
+| `ImportRowToTblOtkup_RowTX(..., stavke)` | isti potpis kroz transakciju |
+
+`RedniBroj` sa zice se **ne cita**, i to je merenje a ne propust: `CreateOtkup_TX`
+ga dodeljuje po **kanonskom redu klasa** (`modOtkup.bas:749`). Citanje poslatog
+broja bi bio drugi izvor istine za isti pojam. Zato redosled u `Collection`-u
+nista ne znaci — ni u uvozu, ni u poredjenju sadrzaja.
+
+`BrutoKg` se prenosi **samo kad ga zica nosi** (> 0): pisac bruto cuva samo kad je
+unos bio bruto, pa nula nije „bruto = 0" nego „nije bruto unos".
+
+#### Nalaz koji plan nije predvideo: tab OTK_STAVKE od sada ima DVA pisca
+
+`modStanicaLock.OtkStavkeIndeksIzTaba` gradi indeks idempotencije push-a po
+`OtkupStavkaID`. PWA red taj ID **ne zna** — on nastaje u masteru — pa je zatecen
+uslov takav red citao kao „red bez identiteta" i dizao `8145`.
+
+Posledica bi bila **trajno blokiran push te stanice**: naslov ispravan, podatak
+ispravan, a push pada fail-closed na svakom sledecem prolazu. Ispravka: red bez
+`OtkupStavkaID` **ali sa** `ClientRecordID` je tudji red i preskace se; red bez
+**oba** identiteta i dalje pada. Mereno tvrdnjom, ne komentarom.
+
+#### Kapija manifesta stoji na DVA mesta, i to je pravilo a ne udvajanje
+
+`ValidatePWAOtkup` je vraca kao `SyncError` koji operater vidi; `ImportRowToTblOtkup`
+je dize kao tvrdu gresku, jer direktan i test poziv validaciju preskacu. Isti
+obrazac kao datum (AUD-042b) i isto pravilo kao `.claude/rules/testovi.md` §5.
+
+#### Dokaz
+
+Tri nove tvrdnje, tri nove sabotaze (`610` u katalogu, bilo `607`):
+
+| Tvrdnja | Sabotaza |
+|---|---|
+| `Test_PWA_StavkeSaZiceIduPoCridu` — grupisanje po CRID-u, tudji red se preskace, red bez identiteta obara citanje | `uvoz-stavka-bez-identiteta-prolazi` |
+| `Test_PWA_ManifestNeporavnatNeUvozi` — zaglavlje tvrdi 2 uz 1 primljenu = nema dokumenta; **kontrola** da poravnat manifest prolazi | `uvoz-manifest-bez-poravnanja` |
+| `Test_OTK_PushIndeksPreskaceRedSaTerena` — PWA red ne obara indeks push-a; red bez oba identiteta pada po imenu | `push-indeks-ne-preskace-pwa-red` |
+
+Sidro `push-stavke-naslov-bez-provere` je **premesteno** u `modMasterSync`: provera
+naslova je izdvojena, a sabotaza prati provereni kod a ne fajl u kom je stajala.
+
+Tvrdnja o push indeksu **hvata izuzetak i meri ga kao tvrdnju**. Prva verzija ga
+nije hvatala, pa bi ugasena kapija pala u `EH` i prijavila `LogFatal` sa imenom
+**testa** — videlo bi se da je crveno, ali ne i **koja** tvrdnja je pala.
+
+`RunBusinessFlowProSuite`: **2043/2043, nula padova** (RunID=20260926202041-7792). Baseline BFP se time pomera sa 1837 (#384) na 2043.
+
+#### Cena koja je opet naplacena: ARNOST ne vidi poziv u izraznoj poziciji
+
+Prvi prolaz suite-a je pao kao `Compile error: Argument not optional` **posle 585
+sekundi** cekanja na Excel, uz `vba_check` zelen. Krivac: `PwaIstiSadrzaj(postojeci,
+data, row)` u NO-OP grani idempotencije — poziv u izraznoj poziciji, poznata rupa
+pravila `ARNOST` (`.claude/rules/testovi.md` §2).
+
+To je **cetvrti** slucaj iste klase u ovoj seriji. Zato je uz rez napisana provera
+arnosti nad svim izmenjenim potpisima (scratchpad `s55b_k6_noop.py`), i ona je
+pokazala nula preostalih. Pravilo za dalje: **posle izmene potpisa ide grep po
+imenu nad celim `src-vba/`, pre pokretanja suite** — ne posle.
+
+#### Sta OVAJ rez NE zatvara, i zasto PR ne sme da se merge-uje sam
+
+Zica sada **trazi** `StavkeCount` u naslovu `OTK-*` lista i stavke u tabu
+`OTK_STAVKE`. GAS ih jos ne pise, PWA ih jos ne salje. Dok koraci 3 i 4 ne legnu,
+`ValidateOTKSheetHeader` odbija svaki zatecen list kao `SCHEMA_DRIFT` — sto je
+tacno ponasanje ugovora, ali znaci da je **uvoz otkupa pauziran**.
+
+Mereno: `gas/Code.gs:20` (`COLUMNS` bez `StavkeCount`), `gas/Code.gs:1755`
+(`processRecord` ne zna za stavke), `sync-engine.js:312` (zapisi se salju
+**verbatim**, nema per-record transform hook-a). Rez se zato zatvara zajedno sa
+GAS i PWA stranom, u istom PR-u.
+
+### 14.47) S5-5b koraci 3 i 4 — GAS i PWA (26.09.2026)
+
+Ista grana. Redom: GAS pise stavke, PWA ih pravi i cita.
+
+#### Korak 3 — GAS
+
+| Celina | Sadrzaj |
+|---|---|
+| `COLUMNS` += `StavkeCount` | manifest na kraj; `ensureSheetColumns` dozidjuje samo na kraju |
+| `OTK_STAVKE_COLUMNS` | **doslovno** `modMasterSync.OtkStavkeKolone()` |
+| `otkStavkeNormalizuj_` (cist) | prazan skup, stavka bez `ClientRecordID`, dve iste klase, dva ista CRID-a, nevalidna klasa — svaki pada **po imenu** |
+| `otkStavkaKljuc_` / `otkStavkeRazlika_` (cisti) | sadrzaj stavke na **jednom** mestu; poredjenje **neosetljivo na redosled**; prazan tab **nije** razlika |
+| `otkStavkeTab_` / `otkStavkeIzTaba_` / `otkStavkeUpisi_` | tanak I/O; upis **idempotentan po CRID-u stavke** |
+| `processRecord` | **stavke pa zaglavlje**; mrtvi slotovi prazni; `StavkeCount` = duzina skupa |
+| `OTKUP_CONFLICT` | isti CRID + drugi skup stavki = konflikt, ne duplikat (obrazac `PREDAJA_CONFLICT`) |
+| `buildOtkupMergeKey_` | **treca grana obrisana** |
+| `getOtkupiForOtkupac` | read-model **nosi stavke**, fail-closed (`OTKUP_STAVKE_READ_FAILED`) |
+
+**Redosled upisa je odluka, ne stil.** Zaglavlje je oznaka **zavrsenog** upisa: ako
+prolaz padne izmedju, sledeci nadje stavke (idempotentno se preskacu) i dopise
+zaglavlje. Obrnuto bi ostavilo zaglavlje bez stavki — sirote koje uvoz odbija i
+koje se sa terena ne moze popraviti. Isti redosled kao desktop push.
+
+**Zatecen izvoz je vec bio spreman.** `modStammdatenSync.OtkupiAllStavkeRedovi`
+izvozi `MgmtReports/OtkupiAllStavke` u rasporedu `OtkStavkeKolone`, pa read-model
+ima odakle da uzme stavke za redove koji su vec u masteru. Nije trebalo praviti
+nov izvoz — trebalo je izmeriti da postoji.
+
+**Nalaz na sebi, dva puta:**
+
+1. Komentar u `buildOtkupMergeKey_` je tvrdio da pozivalac red sa praznim kljucem
+   „ne spaja ni sa cim". Kod ga **ispusta** — a to nije isto. Komentar je
+   ispravljen, a ispustanje prestalo da bude tiho (`logError` sa brojem redova).
+2. `otkStavkeIzTaba_` je trazio dva indeksa a citao sedam. Kolona koja fali dala
+   bi `undefined` indeks, `getCell` default, i kljuc sadrzaja `"|0.0000|..."` — pa
+   bi **ponovljen sync izgledao kao `OTKUP_CONFLICT`**. Tiha razlika umesto
+   glasnog drifta. Sada se trazi svaka kolona koja se cita.
+
+#### Korak 4 — PWA
+
+Odluka iz §14.44 vazi: **samo zica, N=1**. Forma i dalje unosi jednu klasu, ali
+zapis nosi `stavke[]` — jer `sync-engine` salje zapis **verbatim**, pa je oblik
+lokalnog zapisa oblik zice.
+
+| Fajl | Sta |
+|---|---|
+| `otkup-stavke.js` (nov) | `otkupStavke` / `otkupZbirKg` / `otkupZbirVrednosti` / `otkupZbirAmbalaze` / `otkupKlaseTekst` / `otkupCenaAkoJedna` / `otkupJednaStavka` / `novaStavkaOtkupa`; i `generateClientRecordID` se preselio ovamo |
+| `otkup-form.js` | `buildOtkupRecord` gradi `stavke: [novaStavkaOtkupa(...)]`; lokalni generator identiteta obrisan |
+| `otkupni-list.js` | prikaz i PDF na pristupnike; za **jednu** klasu ispis je identican, za vise ide red po klasi |
+| `otkup-pregled.js`, `otpremnice.js` | normalizacija izvodi zbirove **jednom**; ekrani citaju izveden podatak |
+| `sync.js`, `otkup-more.js` | red za sinhronizaciju cita lokalni zapis kroz pristupnike |
+| `index.html` | `otkup-stavke.js` se ucitava **pre** `otkup-form.js` |
+
+**Nijedan ekran ne sabira sam.** Dva mesta koja sabiraju istu robu se razidju, i
+to se vidi tek na iznosu koji neko isplacuje.
+
+**Cena postoji samo kad dokument ima tacno jednu klasu.** `otkupCenaAkoJedna`
+namerno vraca `null` za vise klasa: dvoklasni dokument ima dve cene, pa jedan broj
+tu ne postoji, a tiho uzimanje prve bilo bi **pogresan podatak na racunu**.
+
+#### Menadzment ekrani: projekcija, i jedna stvar koja NIJE resena
+
+`stanice.js` i `dispecer.js` citaju `r.Kolicina` / `r.Cena` / `r.Klasa` iz
+read-modela. Te kolone su na zici prazne, pa bi ekrani pokazali nula kilograma.
+
+Resenje je **projekcija u read-modelu** (`projektujStavke_` racuna `Kolicina`,
+`KolAmbalaze`, `Klasa` i `Cena` iz stavki, pri citanju, nigde se ne cuvaju), a ne
+drugi izvor istine.
+
+**NIJE reseno, i to se kaze naglas:** `dispecer.js` alokaciju radi nad **jednim**
+brojem po redu (`Kolicina` umanjena za `toSkip`). Sa vise klasa to nije ista
+operacija — raspodela po klasama je **poslovna** odluka, ne prevod. Dok je N=1
+ponasanje je identicno; kad forma dobije vise klasa, to je svoj rez.
+
+#### Dokaz
+
+| Sloj | Stanje |
+|---|---|
+| VBA | `RunBusinessFlowProSuite` **2043/2043**, tri nove sabotaze u `tools/sabotaza.py` |
+| JS (GAS + PWA) | dve nove suite (`gas-otk-stavke` 10 tvrdnji, `otkup-stavke` 7 tvrdnji) i **sedam** novih sabotaza u `tests/js/sabotaze.js` |
+
+**JS sloj je lokalno NEVERIFIKOVAN, i tako se prijavljuje.** `node` i `npm` na
+razvojnoj masini ne postoje (mereno), pa je CI jedini izvrsilac. Sto je moglo da
+se izmeri bez node-a — izmereno je: staticka provera da **svako** sidro JS
+kataloga pogadja tacno jednom (13/13), istom LF normalizacijom koju harness radi.
+
+### 14.48) Review S5-5b, prvi krug — jedna granica, dva nalaza (26.09.2026)
+
+Head `475ff325`. Verdikt NO-GO: 1 P1 + 1 P2, oba na istom mestu — **identitet reda
+u tabu `OTK_STAVKE`**. Model `zaglavlje + stavke` nije dirnut; pojacana je granica.
+
+#### P1 — partial upis + izmenjen retry pravi HIBRIDNI dokument
+
+Provera skupa stavki je stajala **samo** u grani „zaglavlje postoji". Put kojim ide
+retry posle prekinutog upisa — zaglavlje jos **ne** postoji — prolazio je bez
+ijednog poredjenja sadrzaja, jer je `otkStavkeUpisi_` postojecu stavku preskakao
+**po samom ID-u**:
+
+| Korak | Stanje taba |
+|---|---|
+| prvi pokusaj: `S1=100`, `S2=60`, manifest 2 | upise `S1=100`, padne pre `S2` i zaglavlja |
+| retry tvrdi: `S1=120`, `S2=60` | `S1` se preskoci (isti ID), `S2` se dopise, zaglavlje kaze 2 |
+| master | `StavkeCount 2 == 2` → **PASS**, uveze `100 + 60` |
+
+Uvezen je skup koji **nijedan klijent nije poslao**, i manifest ga ne hvata jer se
+broj poklapa. Prvi kompletan payload nikad nije ni stigao.
+
+#### P2 — item `ClientRecordID` je imao razlicit scope u GAS-u i VBA-u
+
+VBA citalac drzi **jedan** skup vidjenih item CRID-ova za **ceo** tab
+(`OtkPwaStavkeIzTaba`, `vidjeni`), i dva reda istog ID-a odbija bez obzira na
+roditelja. GAS je duplikate gledao samo u tekucem payload-u i samo nad redovima
+**tekuceg roditelja**, pa je prihvatao:
+
+```
+Otkup A -> stavka ITEM-X
+Otkup B -> stavka ITEM-X      (GAS: valid)
+```
+
+Master to kasnije odbija **fail-closed nad CELIM listom stanice** — jedan pogresan
+item CRID zaustavio bi uvoz **svih** otkupa te stanice, ne samo spornog.
+
+#### Ispravka: jedan globalan, content-aware indeks
+
+| Bilo | Sada |
+|---|---|
+| `otkStavkeIzTaba_(sheet, parentCRID)` → `{crid: kljuc}` | `otkStavkeIndeksTaba_(sheet)` → `{crid: {parent, kljuc}}`, **globalno** |
+| `otkStavkeRazlika_(uTabu, stigle)` | `otkStavkeUskladi_(indeks, stigle, parentCRID)` |
+| kapija samo u grani „zaglavlje postoji" | **jedna** kapija **iznad oba puta** |
+| upis preskace po ID-u | upis preskace samo ono sto je uskladjivanje potvrdilo |
+
+Semantika, izgovorena u celini:
+
+| Slucaj | Ishod |
+|---|---|
+| isti item CRID + isti roditelj + isti sadrzaj | idempotentno, preskace se |
+| isti item CRID + isti roditelj + **drugi** sadrzaj | **KONFLIKT** |
+| isti item CRID + **drugi** roditelj | **KONFLIKT** |
+| stavka u tabu pod ovim roditeljem koju ulaz ne nosi | **KONFLIKT** |
+| stavka u ulazu koje u tabu nema | **DOZVOLJENO** (recovery) |
+
+Zadnje dvoje su **namerno nesimetricne**: dopisati sto fali je dovrsavanje istog
+upisa, a zaboraviti sto postoji je druga tvrdnja o dokumentu.
+
+**Zapisana zavisnost redosleda:** upis preskace po **globalnom** indeksu, pa nosi i
+stavke tudjih otkupa. Bezbedno je **samo** zato sto uskladjivanje isti item CRID
+pod drugim roditeljem vraca kao konflikt, pa se dovde ne dodje. Ko razdvoji te dve
+funkcije mora da prenese i taj uslov — pa to stoji u komentaru, ne u pamcenju.
+
+#### Dokaz: stara tvrdnja je prolazila TACNO IZMEDJU dva nalaza
+
+To je i poenta review-a. Nijedna postojeca tvrdnja nije merila partial upis ni
+koliziju item CRID-a izmedju dva dokumenta. Dodato:
+
+| Tvrdnja | Sabotaza |
+|---|---|
+| `partial upis sa izmenjenim sadrzajem JE konflikt, i kad zaglavlja nema` | `otk-stavke-partial-bez-poredjenja` |
+| `isti item CRID pod drugim otkupom JE konflikt` | `otk-stavke-tudj-roditelj-prolazi` |
+| `stavka u tabu koju ulaz ne nosi JE razlika` | `otk-stavke-zaboravljena-prolazi` |
+| `stavka koja u tabu fali je RECOVERY, ne konflikt` | **nema svoju** — v. nize |
+| `stavke drugog otkupa ne ulaze u poredjenje` | pokrivena kroz `tudj-roditelj` |
+| `prazan tab NIJE razlika` | `otk-stavke-recovery-je-konflikt` (nov, stara linija ne postoji) |
+
+**Jedna tvrdnja namerno nema svoju sabotazu.** Recovery pravilo je **odsustvo**
+provere, pa bi mu seam trebalo **dodati** kod — a odbrana napisana pre merenja je u
+#393 vec postala nalaz. Kaze se naglas umesto da se zaobilazi.
+
+Katalog JS sabotaza: **17** unosa. Bez node-a je izmereno sto se moze: svako sidro
+pogadja **tacno jednom** (16/16 fajl-sidara), svaka sabotaza imenuje tvrdnju koja
+**stvarno postoji** u svojoj suite (17/17), i balans zagrada bez string literala je
+nepromenjen. `vba_check` cisto (189 fajlova, 610 VBA sabotaza).
+
+**Verifikaciona rupa ostaje, i to je struktura a ne propust:** CI
+(`.github/workflows/static.yml`) se pokrece na `pull_request` i na push u `main` —
+push feature grane ga **ne** pokrece. Dok PR ne postoji, JS kapije ovog head-a nisu
+izvrsene ni jednom.
+
+### 14.49) Review S5-5b, drugi krug — zaglavlje je completion marker (26.09.2026)
+
+Head `b062ee9b`. Verdikt NO-GO: 1 P1 + 1 P3. Prethodna dva nalaza su potvrdjena
+kao RESOLVED, ali **prva ispravka je proizvela drugu** — i to je glavni nalaz ovog
+kruga o mom radu, ne o modelu.
+
+#### P1 — moja regresija: recovery je vazio i za ZAVRSEN dokument
+
+Prvi krug je kapiju digao **iznad** grananja na `existingRow`, da oba puta dele
+semantiku. Time je i pravilo „stavka u ulazu koje u tabu nema je **dozvoljena**"
+pocelo da vazi za dokument koji je vec zavrsen:
+
+| Korak | Ishod |
+|---|---|
+| prvi sync: `O1` sa `S1`, zaglavlje `StavkeCount=1` | dokument zavrsen |
+| kasnije `O1` stigne kao `S1 + S2` | `S1` isti → OK, `S2` fali → **recovery dozvoljen** |
+| grana `existingRow > 0` | dopise `S2` **zavrsenom** dokumentu |
+| rezultat | tab `S1+S2`, zaglavlje jos kaze `1`, GAS vrati `success/existing` |
+| master | manifest `1` vs `2` stavke → **mismatch** |
+
+PWA misli da je ispravka prihvacena, GAS je mutirao zavrsen dokument, a master ga
+posle toga odbija. I to se desavalo **pre** citanja terminalnog statusa, pa je i
+`Synced>Master` red mogao da dobije stavku.
+
+#### Ispravka — granica je COMPLETION MARKER, ne postojanje stavki
+
+`existingRow` se utvrdjuje **prvi**, pa se bira ugovor:
+
+| Slucaj | Ugovor | Pravilo |
+|---|---|---|
+| zaglavlja **nema** | `otkStavkeUskladiNedovrsen_` | postojeci podskup mora biti identican; **sto fali sme da se dopise** |
+| zaglavlje **postoji** | `otkStavkeUskladiZavrsen_` | **TACNA jednakost skupa**: nema dopune, nema brisanja, nema nove stavke |
+
+Jedno jezgro (`otkStavkeUskladi_` + `dopustiDopunu`), dva **imenovana** ugovora —
+ne dve implementacije, jer bi se dve provere istog pojma razisle.
+
+**Grana sa zaglavljem od sada u tab stavki ne pise NISTA**, i to je ugovor a ne
+izostavljanje: ako se doslo dovde, u tabu je doslovno ono sto je stiglo. Time je i
+drugi zahtev review-a zadovoljen — odbijen retry nad `Synced>Master` dokumentom ne
+ostavlja **nikakav** upis, jer kapija stoji pre svakog pisanja i pre citanja
+statusa.
+
+Prethodna „dovrsi siroce" grana je time **obrisana**: nad zavrsenim dokumentom to
+je bila mutacija kanonskog podatka. Zaglavlje bez stavki je sada konflikt koji
+imenuje razlog.
+
+#### P3 — indeks nije bio fail-closed kao VBA citalac
+
+Review ga je oznacio kao dug koji ne blokira. Zatvoren je ipak, jer je cilj
+**doslovno isti wire invariant**, a razlika je bila u dva stanja koja VBA odbija po
+imenu: red sa roditeljem **bez** svog `ClientRecordID` (GAS ga je preskakao) i
+**dupli** item CRID (GAS ga je tiho prepisivao). Oba sada dizu
+`OTKUP_STAVKE_TAB_INVALID`.
+
+Uz to: **read-model citalac istog taba prolazi kroz ISTI indeks**, pa ne moze da
+prikaze stanje koje pisac i master odbijaju.
+
+#### Da ispravka ne bi bila samo tvrdjena
+
+Pravila indeksa su zivela u funkciji koja trazi `Sheet`, pa ih harness ne dohvata —
+a cela poenta ove serije je da se nalazi kriju tamo gde pravilo nema ko da izmeri.
+Zato je cist deo izdvojen: `otkStavkeIndeksIzRedova_(headers, redovi)`.
+
+**Nova medjujezicna kapija.** Kad test vec cita ugovor, meri ga i naspram VBA
+strane: `ugovor kolona je DOSLOVNO isti kao u VBA` cita `OtkStavkeKolone` iz
+`modMasterSync.bas`, razresava `COL_OKS_*` / `OKS_WIRE_*` iz `modConfig.bas`, i
+poredi redosled sa `OTK_STAVKE_COLUMNS`. „Jedan ugovor" prestaje da bude komentar.
+Izmereno i bez node-a, istom logikom u Python-u: **10 kolona, identican redosled**.
+
+#### Nalaz na instrumentu, opet
+
+`ctx.OTK_STAVKE_COLUMNS` bi bio `undefined`: top-level `const` se u `vm` kontekstu
+vezuje u **leksicki scope skripta** i ne postaje svojstvo globalnog objekta —
+`function` postaje. Cetiri nove tvrdnje bi pale u CI-ju na `TypeError`. Resenje je
+pristupnik `otkStavkeKoloneUgovor_()`, pa ugovor ostaje na jednom mestu.
+
+Uhvaceno rezonovanjem o mehanizmu, ne testom — i zato je zapisano kao memorija.
+
+I **merac balansa zagrada je i sam imao gresku**: citao je `"` UNUTAR regex
+literala kao pocetak stringa, pa je zdrav fajl prijavio kao nebalansiran. Popravljen
+heuristikom „`/` je regex kad pre njega stoji operator ili otvorena zagrada".
+
+#### Stanje kapija
+
+| Kapija | Stanje |
+|---|---|
+| `vba_check` | cisto, 189 fajlova, 610 VBA sabotaza |
+| JS katalog | **20** unosa, svako sidro pogadja **tacno jednom** |
+| JS tvrdnje | svaka sabotaza imenuje tvrdnju koja **postoji** (20/20) |
+| balans zagrada | nepromenjen, uz regex-aware merac |
+| medjujezicni ugovor kolona | **poklapa se** (10/10, isti redosled) |
+| JS harness u CI-ju | **jos nije izvrsen** — nema PR-a za ovaj head |
+
+### 14.50) Review S5-5b, treci krug — identitet obuhvata CEO payload (26.09.2026)
+
+Head `b7021d48`. P1 i P3 iz drugog kruga potvrdjeni kao RESOLVED, medjujezicna
+kapija prihvacena. Ostao jedan P2, na nivou **celog dokumenta**.
+
+#### P2 — isti CRID + iste stavke + DRUGO zaglavlje je vracalo `existing/success`
+
+S5-5b je stavke zatvorio strogo, ali isto pravilo nije bilo primenjeno na cinjenice
+**zaglavlja**. Retry sa doslovno istim stavkama a promenjenim `KooperantID`-em
+(ili datumom, parcelom, proizvodom, tipom ambalaze, brojem dokumenta) prolazio je
+kroz item kapiju, pao u granu `existingRow > 0` i vracao `success/existing`.
+
+Posledica nije teorijska: master **ima** pravi ugovor u `PwaIstiSadrzaj`, ali
+promenjen retry do njega **nikad ne stigne** — GAS ne prepisuje zaglavlje, pa master
+nema sta da detektuje. Klijent misli da je ispravka primljena, server cuva staru
+tvrdnju, i razlika se ne vidi nigde.
+
+Gore od toga: grana je pre bilo kakvog poredjenja upisivala `UpdatedAtClient` i
+`UpdatedAtServer`, pa je odbijeni retry ostavljao trag na dokumentu koji odbija.
+
+#### Ispravka — kanonski sadrzaj zaglavlja, pre svakog upisa
+
+`otkupZaglavljeRazlika_(postojeci, idx, ulaz)` stoji **odmah** posle citanja reda,
+pre svakog enrichment upisa i pre citanja terminalnog statusa.
+
+| Ucestvuje | Ne ucestvuje | Zasto ne |
+|---|---|---|
+| `OtkupacID` | `CreatedAtClient` | transportna metadata |
+| `Datum` | `UpdatedAtClient` | transportna metadata |
+| `KooperantID` | `UpdatedAtServer` | transportna metadata |
+| `VrstaVoca` | `ReceivedAt` | transportna metadata |
+| `SortaVoca` | `DeviceID` | transportna metadata |
+| `ParcelaID` | `KooperantName` | izvedena labela, kanonski je ID |
+| `TipAmbalaze` | `VozacID` | ima svoju enrichment semantiku |
+| `StavkeCount` | | |
+| `BrojDokumenta` **uslovno** | | prazan incoming = master ga generise |
+
+#### Dve zamke koje bi ovo pretvorile u LAZAN konflikt
+
+1. **Sheets ume da pretvori `TipAmbalaze` ("6/1") i `Datum` u `Date`.** Sirovo
+   poredjenje bi davalo `String(Date)` vs `"2026-09-26"` — konflikt na **svakom**
+   retry-u. Zato poredjenje ide kroz **postojeci** kanonski serijalizator
+   `serializeSheetCellForApi`, isti koji koristi read-model. Jedan normalizator,
+   ne dva.
+2. **Polje koje se poredi a nije u rasporedu kolona** dalo bi `undefined` indeks,
+   `getCell` bi vratio prazno, i svaki retry bi bio konflikt. Zato tvrdnja
+   `zaglavlje: sva poredjena polja postoje u ugovoru kolona` cita **produkcijski**
+   raspored (`otkupZaglavljeKoloneUgovor_`) i poredi ga sa listom polja.
+
+#### Namerna asimetrija prema masteru, izgovorena
+
+`PwaIstiSadrzaj` poredi **razreseni** `KulturaID`, a GAS poredi `VrstaVoca` +
+`SortaVoca` doslovno — GAS kulturu ne ume da razresi. GAS je time **strozi**: dva
+razlicita para (vrsta, sorta) koja se razresavaju u istu kulturu master bi primio
+kao isti sadrzaj, a GAS ih odbija. Za payload koji klijent ne bi smeo ni da menja
+to je bezbedan smer, i zapisano je da nije previd.
+
+#### Dokaz
+
+| Tvrdnja | Sabotaza |
+|---|---|
+| `zaglavlje: drugi kooperant pod istim CRID-om JE konflikt` | `otk-zaglavlje-kooperant-ne-ucestvuje` |
+| `zaglavlje: BrojDokumenta ucestvuje samo kad ga PWA posalje` | `otk-zaglavlje-broj-uvek-ucestvuje` |
+| `zaglavlje: iste cinjenice su idempotentne` | kontrola — bez nje bi gornje bile zelene i da ugovor odbija sve |
+| `zaglavlje: drugi manifest JE konflikt` | pokrivena kroz istu granu |
+| `zaglavlje: transportna metadata NE ucestvuje` | pokrivena kroz listu polja |
+| `zaglavlje: sva poredjena polja postoje u ugovoru kolona` | strukturna |
+
+Katalog JS sabotaza: **22** unosa. Bez node-a izmereno: svako sidro pogadja tacno
+jednom, svaka sabotaza imenuje tvrdnju koja postoji (23/23), balans nepromenjen,
+ugovor kolona `OTK_STAVKE` se poklapa sa VBA stranom (10/10), i **sest tvrdnji o
+zaglavlju je simulirano u Python-u** — sve zelene, 24 kolone, sva poredjena polja
+prisutna. `vba_check` cisto (189 fajlova, 610 VBA sabotaza).
+
+**JS harness ovog head-a jos nije izvrsen** — CI ide na `pull_request` i push u
+`main`, pa push feature grane ga ne pokrece.
+
+### 14.51) Pre-flight S1 — rez ne postoji; ispravka premise (27.09.2026)
+
+**Verdikt: NEMA REZA.** Pre-flight je pokrenut za „S1 — Otkup do kraja" i odbio ga
+je zato što je **S1 zatvoren još u #359**. Premisa na kojoj je predložen je bila
+moja greška u čitanju brojača, i beleži se ovde da je sledeća sesija ne ponovi.
+
+#### Šta je premisa tvrdila i šta je merenje pokazalo
+
+| Tvrdnja | Merenje |
+|---|---|
+| „`otk_linija` = 18 živih čitalaca drži linijska polja `tblOtkup` na životu" | **`tblOtkup` nema ta polja.** Kanon: 29 kolona, bez `Kolicina`/`Cena`/`Klasa`/`KolAmbalaze` — obrisane u S1d (#358). Nosi ih `tblOtkupStavke` (12 kolona) |
+| `otk_linija` je mera S1 | **Nije, i alat to sam kaže** (`tools/popis_citalaca.py:102–104`): *„`otk_linija` ostaje radi uporedivosti, ali nosi i `TIP_AMB` / `KOL_AMB_IZDATA`, koje su H (DOCUMENT_HEADER_LINES) i **ne silaze na nulu**"*. Mera S1 je **`x_otk_stavka`**, i on je **0** |
+| `otk_linija` nije ni pod kapijom | `PRAGOVI` (`popis_citalaca.py:175`) gejtuje **šest** grupa: `otp_stari_pisac` 0 · `otk_veza_otp` 11 · `otp_linija` 3 · `otp_cena` 0 · `zbr_linija` 17 · `zbr_stari_pisac` 0. `otk_linija` nije među njima |
+
+Uz to, brojevi koje sam prvo izgovorio su mešali **PROD ukupno** sa **živim**
+mestima: `zbr_linija` je 22 PROD ali **17 živih** (= prag), `otk_veza_otp` 14 PROD
+ali **11 živih** (= prag). Kapija je sve vreme bila zelena jer je merila pravu
+stvar.
+
+**Pouka je ista koju skill nosi u §6:** *red u katalogu je tvrdnja, ne dokaz.*
+Ovde je „katalog" bila tabela slajsova §14.9, a brojač koji sam uzeo kao meru
+nikad nije bio njena mera.
+
+#### Šta je merenje NAŠLO kao stvarno otvoreno
+
+**1. Mrtve linijske kolone zaglavlja OTPREMNICE — tačan analogon S1d.**
+
+Kanon `tblOtpremnica` još nosi `Kolicina`, `Cena`, `KolAmbalaze`, `Klasa`,
+`BrutoKg`, a `tblOtpremnicaStavke` nosi svoje. Tri **živa PROD** mesta ih drže u
+zatečenoj svesci kroz self-heal:
+
+| Mesto | Šta radi |
+|---|---|
+| `modSetup.bas:1475` | `SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_KOLICINA` |
+| `modSetup.bas:1488` | `EnsureColumnOnTable TBL_OTPREMNICA, COL_OTP_BRUTO` |
+| `modSetup.bas:1489` | `SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_BRUTO` |
+
+To su **ista tri mesta** koja čine prag `otp_linija` = 3. Rez ih spušta na **0**.
+Negativne tvrdnje već postoje i traže da polja budu prazna
+(`modBusinessFlowProTests:13331–13334`, „OTP header: Kolicina prazna" itd.), pa se
+merenje ne izmišlja nego nasleđuje.
+
+**2. S6 — prijemnica još nema stavke.**
+
+`tblPrijemnica` nosi 5 linijskih polja u zaglavlju, a **`tblPrijemnicaStavke` ne
+postoji u kanonu**. To nije čišćenje nego nova tabela, nov pisac i cutover F4
+(pauziran od #362). `split_plus` = 5.
+
+#### Verdikt po osama — za ODBIJEN rez
+
+| Osa | Status |
+|---|---|
+| `DOMAIN` | **N/A** — rez ne postoji; domen otkupa je zatvoren u S1a–S1e |
+| `IDENTITY` | **N/A** — `OtkupID` je identitet od S1e (#359) |
+| `CARDINALITY`, `INVARIANTS/OWNER`, `WRITERS`, `DOWNSTREAM` | **N/A** — nema izmene |
+| `CAPABILITY` | **N/A** |
+| `ACCEPTANCE CONTRACT` | **N/A** — nema šta da se prihvati |
+| `PLATFORM` | **N/A** |
+| `LANDING` | **PROVEN** — `main` je na `561fcad9`, nema nemergovane zavisnosti |
+
+`EVENTS: N/A` — nijedan poslovni tok nije dirnut; ovo je ispravka plana.
+
+#### Sledeći kandidati, sa merom umesto procene
+
+| Kandidat | Mera koja pada na nulu | Veličina |
+|---|---|---|
+| **S3-ostatak** — mrtve linijske kolone `tblOtpremnica` | `otp_linija` 3 → **0** | mali: kanon + `modSetup` + konstante; negativne tvrdnje postoje |
+| **S6** — prijemnica header + stavke + izvori + cutover | `split_plus` 5 → 0; nova tabela `tblPrijemnicaStavke` | veliki: nov pisac, F4 cutover, štampa i izvozi |
+
+Pre-flight za izabrani rez ide **posebno** — ovaj je potrošen na ispravku premise,
+i to je jedini posao koji je smeo da uradi.
+
+### 14.52) Pre-flight S3-ostatak — mrtve linijske kolone zaglavlja otpremnice (27.09.2026)
+
+Rez: `tblOtpremnica` gubi `Kolicina`, `Cena`, `KolAmbalaze`, `Klasa`, `BrutoKg`.
+Tačan analogon S1d (#358), samo drugi dokument.
+
+#### Verdikt po osama — svaka sa dokazom
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | `docs/DOMEN/DOCUMENT_HEADER_LINES.md:12` — otpremnica je dokument sa **specifikacijom**; klasa/količina/gajbe/bruto su činjenice **linije**, i od S3a žive na `tblOtpremnicaStavke` (12 kolona, kanon) |
+| `IDENTITY` | **N/A** | identitet je `OtpremnicaID` od S3b-2b (#363); rez ne dira ni jedan identitet |
+| `CARDINALITY` | **PROVEN** | zaglavlje 1:N stavke, nepromenjeno; brisanje mrtvih kolona zaglavlja ne menja nijednu kardinalnost |
+| `INVARIANTS/OWNER` | **PROVEN** | nijedan validator ne čita ta polja: grep `\bCOL_OTP_(KOLICINA\|CENA\|KLASA\|KOL_AMB\|BRUTO)\b` daje **samo** `modSetup` (3), `modConfig` (5 definicija), jedan komentar u `modDokumenta`, i testove. `modDokumentInvariant` i `modIntegritet` — nijedan pogodak |
+| `WRITERS` | **PROVEN** | pisac upisuje **PO IMENU**, ne pozicijom: `modDokumenta.bas:4315–4322` `SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_*`. Zato brisanje iz sredine ne pomera nijedan upis. `WHO_WRITES`: `tblOtpremnica` ima **1** vlasnika (`modDokumenta`); mutatori još u `modStorno`/`modStornoFlow`, svi po koloni |
+| `DOWNSTREAM` | **PROVEN** | nijedan izvoz, izveštaj, štampa, GAS ni read-model ne čita ta polja (isti grep). Izvoz otpremnica za vozača (#391) gradi iz **stavki**. Jedini živi potrošač je **self-heal** u `modSetup` |
+| `CAPABILITY` | **N/A** | ništa korisniku vidljivo ne odlazi — polja se od S3a pišu **prazna**, a testovi to i traže (`modBusinessFlowProTests:13331–13334`) |
+| `PLATFORM` | **MERLJIVO OVDE** | Windows + Excel su dostupni u ovoj sesiji, pa `make_fixture` i `run_vba` nisu pretpostavka. Presedan je S1d: `ObrisiKolonuAko` već briše 8 kolona `tblOtkup` (`modSetup.bas:1296–1309`) |
+| `ACCEPTANCE CONTRACT` | **ispod** | — |
+| `LANDING` | **PROVEN** | `main` na `561fcad9`; grana `claude/s3-ostatak-otp-kolone` ne zavisi ni od jedne nemergovane grane; nijedna druga sesija ne dira `schema.json` |
+
+`EVENTS: N/A` — nijedan poslovni događaj se ne menja. Roba, dokument i novac ostaju
+na istim datumima i statusima; briše se mrtva kolona koju nijedan pisac ne puni.
+
+#### ⚠ ARCHITECTURAL EDGE CASE — brisanje NIJE na kraju i NIJE neprekidno
+
+Pozicije u kanonu: **9** `Kolicina`, **10** `Cena`, **12** `KolAmbalaze`,
+**13** `Klasa`, **15** `BrutoKg` — a **14** je `Stornirano`, dakle **između** njih.
+Iza njih stoji 14 kolona (`CreatedAt` … `PredajaID`).
+
+Zato:
+
+1. Zatečena sveska ih **mora izgubiti pre prvog pozicionog upisa**, kao u S1d. Bez
+   toga bi `AppendRow` (koji piše poziciono) slao vrednosti u pogrešne kolone.
+2. Pisac otpremnice je bezbedan jer piše **po imenu** — ali to je merenje, ne
+   pretpostavka, i zato stoji u tabeli iznad sa `fajl:linija`.
+
+#### Ugovor prihvatanja — plan dokaza, ne dokaz
+
+**Šta će važiti kad se završi:**
+
+1. `schema/schema.json` — `tblOtpremnica` ima **24** kolone (bilo 29), bez pet
+   linijskih; `modSchema.bas` regenerisan, `gen_schema_module.py --check` zelen.
+2. `modConfig` — pet `COL_OTP_*` konstanti obrisano. `COL_OTP_TIP_AMB` **ostaje**:
+   tip ambalaže je činjenica **zaglavlja**.
+3. `modSetup` — tri živa mesta obrisana; nov `ObrisiKolonuAko` blok za
+   `TBL_OTPREMNICA` briše svih pet iz zatečene sveske.
+4. `popis_citalaca` — prag `otp_linija` **3 → 0**. Prag se menja u **istom**
+   commit-u, jer merenje ispod praga takođe pada.
+
+**Šta mora ostati netaknuto:**
+
+- `tblOtpremnicaStavke` i svi njeni čitaoci — merodavan izvor se ne dira.
+- `Stornirano` (pozicija 14) i sve iza njega: posle brisanja moraju nositi **iste
+  vrednosti** na novim pozicijama.
+- `COL_OTP_TIP_AMB`, `PredlogCena` na stavci, `tblOtpremnicaIzvori`.
+
+**Koji edge case mora proći:** zatečena sveska sa svih pet kolona → self-heal ih
+briše → prvi upis otpremnice posle toga nosi **tačne** vrednosti u `Stornirano`,
+`CreatedAt` i `PredajaID`. To je ceo rizik reza i meri se tvrdnjom, ne okom.
+
+**Koji negativan slučaj mora biti odbijen:** upis koji bi pokušao da postavi
+linijsko polje na zaglavlju mora pasti **po imenu** (`SetRowValueByColumn` diže
+grešku za nepoznatu kolonu), a ne da tiho prođe.
+
+**Čime se dokazuje:**
+
+| Šta | Merenje |
+|---|---|
+| kanon i modul u koraku | `gen_schema_module.py --check` |
+| nijedan živi čitalac | `popis_citalaca.py --check` sa pragom `otp_linija` = 0 |
+| vlasništvo upisa nepromenjeno | `who_writes.py --check` i `--check-ownership` |
+| pozicije iza brisanja | **nova VBA tvrdnja**: posle self-heal-a upiši otpremnicu i pročitaj `Stornirano`/`CreatedAt`/`PredajaID` **po imenu i po poziciji** — moraju se poklopiti |
+| ponašanje | `run_vba.py --suite RunBusinessFlowProSuite` i `Test_StornoCentar_All` (oba diraju `tblOtpremnica`), pa pun prolaz |
+| dvosmerni dokaz | nova sabotaža u `tools/sabotaza.py` nad self-heal blokom: ako se kolone ne obrišu, tvrdnja o pozicijama pada **po imenu** |
+| kompajlira se | ručna kapija `Alt+F11 → Debug → Compile VBAProject` |
+
+**Fixture se MORA regenerisati** — donor fizički nosi te kolone, a `add_row` diže
+`SchemaError` za ključ bez kolone, pa se ponašanje menja tek posle regeneracije.
+
+#### Ispravka obrazloženja, iz merenja posle koda (27.09.2026)
+
+Pre-flight je tvrdio pravu stvar iz **malo pogrešnog razloga**, i to se ispravlja
+umesto da se prepiše.
+
+Rečeno je: „pisac upisuje po imenu, pa brisanje iz sredine ne pomera nijedan
+upis". Tačno je jače od toga — pisac je **potpuno nezavisan od kanonskih
+pozicija**:
+
+| Mesto | Šta stvarno radi |
+|---|---|
+| `modDataAccess.SetRowValueByColumn` | `colIndex = RequireColumnIndex(tableName, columnName)` — indeks iz **SVESKE** |
+| `modDokumenta.bas:4313` | `ReDim rowData(0 To colCount - 1)` — širina iz **SVESKE** |
+| `modDataAccess.AppendRow` | piše `rowData(i)` u kolonu `i` **iste** sveske |
+
+Dakle niz se gradi i upisuje u istom (workbook) koordinatnom sistemu. Kanon tu ne
+učestvuje.
+
+**Onda šta `ObrisiKolonuAko` zaista štiti?** Otisak šeme i `VerifySchema`, koji
+drift prijavljuju **po poziciji** — to i S1d komentar kaže
+(`modSetup.bas:1293–1295`: *„modSchema to i prijavljuje po poziciji"*). Plus svaki
+pisac koji bi gradio goli `Array(...)` kanonske širine; za otpremnicu takvog nema,
+ali pravilo iz `CLAUDE.md` §3 zato i postoji.
+
+Posledica za rez je **nikakva** — brisanje je i dalje potrebno i i dalje ide pre
+prvog upisa. Menja se samo koja kapija se time čuva, i to je razlika koju vredi
+imati zapisanu.
+
+#### Dva nalaza iz prolaza
+
+**1. Zatečen test je nosio SVOJU kopiju ugovora o šemi.** BFP je pao jednom:
+
+```
+FAIL Core tables and required columns exist :: Missing column: tblOtpremnica.Kolicina
+```
+
+`RequireColumnsExist TBL_OTPREMNICA, Array(...)` u
+`modBusinessFlowProTests.bas:495` drži **prepisan** spisak obaveznih kolona, pa je
+tražio četiri kolone koje je kanon upravo izgubio. Kopija ugovora u testu je tačno
+ono što kanon treba da ukine. Spisak je skraćen, uz komentar odakle ugovor dolazi.
+
+**2. Sve tri nove tvrdnje su prošle iz prvog puta**, uključujući onu o pozicijama.
+Pre čitanja imena pale tvrdnje postojala je razumna hipoteza da je **ona** prestroga
+(traži poklapanje svake kanonske kolone, a otisak se namerno meri nad prefiksom).
+Hipoteza je bila pogrešna, i zato se ništa nije „popravilo" pre merenja — ispravka
+pre merenja je u ovoj seriji dva puta bila nalaz.
+
+Ime pale tvrdnje se ne čita iz izlaza `run_vba` nego iz `last_run_bfp.txt`, a taj
+fajl živi **pored temp kopije** sveske i briše se sa njom. Za trijažu ide
+`--keep`, pa čitanje iz `%TEMP%\vbatest_*`.
+
+#### Ishod — izmereno
+
+| Kapija | Rezultat |
+|---|---|
+| `vba_check` | čisto, 189 fajlova, **611** sabotaža |
+| `gen_schema --check` · `who_writes --check` · `--check-ownership` · `popis_citalaca --check` | exit 0 |
+| `otp_linija` · DUAL READ | **0** · **0 mesta** |
+| `RunBusinessFlowProSuite` | **2043/2043** |
+| `Test_StornoCentar_All` · `RunStornoTestSuite` | ZELENO · **163/0** |
+| `RunAgrohemijaSmokeSuite` | **25/25** |
+| **pun `run_vba`** | **ZELENO** |
+| `dokaz.py otp-self-heal` | **DOKAZANO**, izvor identičan pre i posle |
+
+Broj tvrdnji je ostao **2043** i to se poklapa sa računom: −4 obrisane (četiri
+„polje je prazno“), +1 zamena, +3 nove. Nema neobjašnjene razlike.
+
+**Sabotaža obara svoju tvrdnju i još 303 testa — i to je dokaz, ne šum.** Kad
+zatečena sveska zadrži kolone van kanona, drift se prijavi i upis staje **svuda**.
+To empirijski potvrđuje ispravku obrazloženja iznad: `ObrisiKolonuAko` štiti otisak
+šeme i `VerifySchema`, ne pisca. Imenovana tvrdnja zato ima vrednost — ona je
+jedina koja kaže **zašto**, a ne samo da je crveno.
+
+**Otisak šeme:** `88E04EC5` → **`8C488AA1`**.
+
+Na operateru ostaje dvoje: **regeneracija fixture-a** (izmena kanona je izmena
+podataka u njemu) i **ručni compile** (`Alt+F11 → Debug → Compile VBAProject`).
+
+#### Greppable trag
+
+Ovaj rez ne uvodi nov invariant ID: ne menja pravilo nego **sprovodi** postojeće
+(`DOCUMENT_HEADER_LINES.md`). Trag je prag `otp_linija` = 0 u `popis_citalaca.py`
+i nova sabotaža — oba exit kod, ne rečenica.
+
+### 14.53) Post-merge review #395, P2 -- oporavak je cuvao podatke ali ne poziciju (27.09.2026)
+
+Nalaz je tacan i **siri je nego sto je prijavljen**. Ista klasa kao P1 iz istog
+review-a: oporavak koji ne pokriva stanje koje je sam bug pravio.
+
+#### Sta je merenje pokazalo
+
+`VerifySchema` trazi da kanon bude **PREFIKS po INDEKSU**
+([modSchema.bas:294](../src-vba/modSchema.bas)) -- visak na kraju je dozvoljen, svako
+razilazenje pre kraja je `SCHEMA_DRIFT_REDOSLED`. `EnsureAllTables` redosled
+**NE popravlja**, i to pise u njemu. Dakle: obrisi staro iz SREDINE, ostavi novo
+na KRAJU, i sveska je trajno drift-ovana -- podaci sacuvani, upis blokiran
+fail-closed, bez izlaza. Isti oblik kvara kao P1, samo jednu ravan nize.
+
+Iz kanona, sest poziva helpera:
+
+| Poziv | Kolona | Pozicija | Iza nje u kanonu |
+|---|---|---|---|
+| `TBL_OTKUP` | `ZbirnaRoditeljID` | 28 / 29 | `SourceCreatedAt` |
+| `TBL_OTPREMNICA` | `ZbirnaRoditeljID` | **20 / 24** | `KulturaID`, `IspravkaOdID`, `ZamenjenSaID`, `PredajaID` |
+| `TBL_OTKUP` | **`IspravkaOdID`** | **22 / 29** | **sedam kanonskih kolona** |
+| `TBL_OTKUP` | **`ZamenjenSaID`** | **23 / 29** | **sest kanonskih kolona** |
+| `TBL_PRIJEMNICA` | `ZbirnaRoditeljID` | 28 / 28 | -- |
+| `TBL_PALETA_STAVKA` | `ZbirnaRoditeljID` | 17 / 17 | -- |
+
+**Dva trace rename-a review nije imenovao, a najizlozeniji su.** Zadnja dva prolaze
+**slucajno**: kolona je tamo zadnja u kanonu, pa golo brisanje starog daje tacan
+prefiks. Ista slucajnost je i u testu -- v. nize.
+
+#### Ispravka: mesto odlucuje kanon, sadrzaj odlucuju podaci
+
+Dve grane oporavka spojene su u **jednu**, jer se kanonska pozicija zna bez
+citanja kanona: visak je **uvek DOPISAN** (`ListColumns.Add` pise na kraj), pa je
+kanonska ona **levlja** od dve.
+
+```
+iZadrzi = min(iStaro, iNovo)     ' kanonska pozicija
+iVisak  = max(iStaro, iNovo)     ' dopisan visak
+sadrzaj: iVisak -> iZadrzi       ' FORMAT pre vrednosti
+obrisi iVisak                    ' desno od iZadrzi, pa ga ne pomera
+preimenuj iZadrzi ako treba
+```
+
+`PreseliSadrzajKolone` prenosi **format pa vrednosti**, u tom redu: ciljna kolona
+je do tada nosila staro ime, pa kanonski format (kljuc `formats`, po IMENU) nikad
+nije dobila -- ostala je General, a General tiho konvertuje **u trenutku upisa**
+(`donor-fixture-nosi-formate`, i sekcija FORMAT CELIJE u `modSchema`). Mereno:
+nijedna od ovih kolona danas nije u `formats`, pa je to zastita helpera za sledeci
+rename, ne popravka zivog kvara -- i tako se i kaze.
+
+#### Postcondition meri poziciju, ali SVOJU
+
+Uz ime se sada meri i pozicija koju je poziv **obecao da nece pomeriti**. Namerno
+se **ne** poredi sa kanonskim indeksom: indeks se razmesti i zbog kolone koja fali
+negde ispred, a to ovaj poziv nije napravio i ne moze da izleci. Redosled cele
+tabele ima svog vlasnika -- `VerifySchema` / `SCHEMA_DRIFT_REDOSLED` -- i drugi
+vlasnik iste invarijante prijavljivao bi tudji drift kao svoj pad.
+
+#### Zasto test nije video -- raspored je bio laksi
+
+Zateceni blok je gradio `... | NOVO | STARO`: tamo brisanje starog ostavlja novo
+na pravom mestu **slucajno**, isto kao na `tblPrijemnica`. Nov blok gradi raspored
+koji je bug stvarno pravio, **fizicki**:
+
+```
+... kanonske kolone ... | STARO | kolona iza njega | NOVO na kraju
+```
+
+podatak samo u NOVOM, pa se meri: staro nema, novo je **na starom mestu**, sadrzaj
+je presao, i **kolona iza je ostala neposredno iza**. Stari blok se ne menja --
+oba rasporeda su stvarna i helper mora oba da izleci.
+
+#### Verifikacija
+
+| Kapija | Rezultat |
+|---|---|
+| `vba_check` | cisto, 189 fajlova, **615** sabotaza |
+| cetiri Python kapije | exit 0 |
+| `RunBusinessFlowProSuite` | **2063 / 2063** (bilo 2055; +8 tvrdnji, bez neobjasnjene razlike) |
+| `RunAllTests` | **199 / 0** |
+| `dokaz.py migracija-` | **4 / 4 DOKAZANO**, izvor identican pre i posle |
+
+Sidro sabotaze `migracija-ne-brise-duplikat` je spajanjem grana **zastarelo** i
+osvezeno u istom rezu; sidro koje ne postoji nije provera nego tisina.
+
+### 14.54) Review #396, P2 -- "staro ime nema" nije dokaz da je migracija zavrsena (27.09.2026)
+
+Treci nalaz u istoj prici, i **prvi koji nije jos jedna instanca iste klase nego
+posledica nepotpunog ugovora**. Zato se ovde ne dodaje grana: ugovor funkcije se
+pravi **uniformnim**.
+
+#### Nalaz
+
+Helper je na ulazu imao:
+
+```vb
+If iStaro <= 0 Then Exit Function          ' vec migrirano, ili nema nijedne
+```
+
+`staro NE / novo DA` je time bilo **tiho** "vec migrirano" -- bez ijedne provere
+gde kolona stoji. A to stanje je mogla da ostavi **prethodna merge-ovana verzija
+ovog istog oporavka** (#395: obrisi prazno staro, ostavi novo gde je dopisano):
+
+```
+27 GeneracijaID | 28 SourceCreatedAt  | 29 ZbirnaRoditeljID   <- zateceno
+27 GeneracijaID | 28 ZbirnaRoditeljID | 29 SourceCreatedAt    <- kanon
+```
+
+Sledeci start tada izlazi na prvoj liniji i sveska ostaje **trajno neizleciva**.
+Fail-closed jeste -- tihe korupcije nema -- ali self-heal nije konvergentan
+**kroz istoriju sopstvenih verzija**. To je isti princip zbog kog su zatvorena
+prethodna dva nalaza.
+
+**Sire od prijavljenog:** isto stanje proizvodi i **cist rename** nad kolonom koja
+je i sama bila zalutala -- staro ime na pogresnom mestu da posle preimenovanja novo
+ime na pogresnom mestu, i postcondition iz §14.53 to **pusti**, jer meri da
+pozicija nije POMERENA, a ne da je KANONSKA. Zato ispravka ne pokriva samo granu iz
+review-a.
+
+#### Resenje: uniforman ugovor, ne peta grana
+
+Posle poziva je novo ime **na kanonskom mestu**, ili se vraca **imenovan razlog**.
+Istu proveru mesta vrte **sve** putanje, i ona bez imenskog posla. Trik iz §14.53
+("zadrzi levlju od dve pozicije") tu ne pomaze -- starog imena vise nema, pa se
+pozicija mora uzeti **iz kanona**.
+
+#### Zasto je ovde dozvoljeno ono sto `EnsureAllTables` odbija
+
+`modSchema` namerno **ne** popravlja redosled: *"premestanje kolone bi pomerilo
+podatke; pogresan redosled je nalaz za coveka"*. To pravilo **ostaje**. Razlika je
+**obim**: tamo pitanje "koja je od 638 kolona zalutala" nema odgovor, a ovde se zna
+jedno ime, njegov kanonski indeks i postoji merljiv postcondition.
+
+Zato je popravka **uslovna**: premesta se samo kad je sve **ispred** kanonskog mesta
+vec kanonsko -- tada je ta kolona jedina razlika. Inace se **nista ne dira** i vraca
+se imenovan razlog, pa redosled cele tabele ostaje nalaz za coveka.
+
+Provera prefiksa **nije nova**: to je `modSchema.PrefiksNeslaganje`, isti helper koji
+vrte `VerifySchema` i `SchemaReadyOrFail`, samo nad **skracenim** kanonom (prvih
+`N-1` imena). Postao je `Public` kroz **generator** (`modSchema.bas` je artefakt) --
+treca lokalna kopija tog poredjenja bila bi bas ono sto komentar iznad njega
+zabranjuje: *"dve kapije ne smeju da razviju razlicite definicije ispravnog
+prefiksa"*. Otisak kanona je nepromenjen (`8C488AA1`), jer `schema.json` nije diran.
+
+Premestanje ide **bez `Cut`/`Insert`**: dodaj kolonu na kanonsko mesto, prenesi
+sadrzaj, obrisi zalutalu, preimenuj. `Cut`/`Insert` bi bio jedan korak, ali njegovo
+ponasanje u nevidljivom Excelu **nije mereno** -- ove tri operacije modul vec vrti.
+
+#### Test mora nad PRAVOM kanonskom kolonom
+
+Sa pomocnim imenom (`ZZTestKolona*`) se ova grana **ne moze** izmeriti: kanon to ime
+ne zna, pa se kanonski indeks nikad ne bi ni procitao. `Test_Schema_ZalutalaKolonaSeVracaNaMesto`
+zato radi nad `tblOtkup` i `ZbirnaRoditeljID`, gradi post-#395 raspored **fizicki**,
+nosi sadrzaj sa sobom na svakom koraku, i meri **oba** ishoda:
+
+1. **kapija** -- prazna kolona ubacena ispred kanonskog mesta kvari prefiks, pa
+   premestanje mora da **stane** sa imenovanim razlogom i kolona **ne** sme da se
+   pomeri;
+2. **lecenje** -- posle uklanjanja tog drifta kolona se vraca na kanonsku poziciju,
+   kolona iza nje ostaje **neposredno iza**, sadrzaj je presao, i privremeno ime
+   nije ostalo.
+
+To je jedini test u suite-u koji dira **kanonsku** kolonu, pa ciscenje stoji i u
+`EH`: sveska ne sme da ostane drift-ovana za ostatak prolaza.
+
+#### Verifikacija
+
+| Kapija | Rezultat |
+|---|---|
+| `vba_check` | cisto, 189 fajlova, **617** sabotaza |
+| cetiri Python kapije | exit 0 (otisak sheme nepromenjen) |
+| `RunBusinessFlowProSuite` | **2077 / 2077** (bilo 2063; +14 tvrdnji, bez neobjasnjene razlike) |
+| `RunAllTests` | **199 / 0** |
+| pun `run_vba` | **ZELENO** |
+| `dokaz.py migracija-` | **6 / 6 DOKAZANO** |
+
+#### Posledica koju nije nasao nijedan test nego operater
+
+`ImportAllVBA` je nad radnom sveskom pao **dvaput, identicno**:
+
+```
+Zavrsna provera projekta NIJE prosla:
+  kod se razlikuje od izvora: modBusinessFlowProTests
+```
+
+**Mereno** (27.09.2026, nad **kopijom** backup-a, u zasebnoj instanci Excela, radna
+sveska nedirnuta): soft merge (`DeleteLines` + `AddFromString`) pa citanje nazad, pa
+kanon iz `modVbaTools` portovan 1:1. Od **20128** redova razlikovao se **tacno jedan**:
+
+```
+izvor : GetTable(TBL_OTKUP).ListColumns.Add(5)
+sveska: GetTable(TBL_OTKUP).ListColumns.Add (5)
+```
+
+VBE **preformatira poziv sa zagradama u poziciji NAREDBE** -- ubaci razmak pred
+`(`, jer zagrade tu nisu lista argumenata nego grupisanje. `LowerOutsideStrings`
+niz razmaka **sazima u jedan**, ali ga ne **uklanja**, pa razlika prezivi kanon i
+zavrsni drift pass je prijavi. Deterministicki, svaki put.
+
+**Tri stvari koje je merenje oborilo, a koje su delovale verovatno:**
+
+| Pretpostavka | Sta je mereno |
+|---|---|
+| skracivanje velikog modula (871 KB, najveci u repou) | broj redova **identican**, 20128 / 20128 -- nista nije izgubljeno |
+| prag velicine / OOM klasa iz 14.09 | nije taj potpis; nema greske, merge "uspe" pa provera padne |
+| "zelen pun prolaz dokazuje da se izvor uvozi cisto" | **NE dokazuje**: `run_vba` `.bas` module ubacuje kao `Remove` + `Import(fajl)`, a `ImportAllVBA` postojece module **soft-merge**-uje. To su dva razlicita puta, i ja sam tu tvrdnju izneo jace nego sto stoji |
+
+**Popravka** je jedan red: rezultat se hvata (`Set praznaKol = ...Add(5)`), cime
+poziv prelazi u **izraznu** poziciju, gde VBE nista ne preformatira. Uz red stoji i
+komentar zasto -- inace je to "suvisna promenljiva" koju ce neko pocistiti nazad.
+
+**Dokaz u oba smera, nad kopijom:** pre popravke 1 red razlike (tacno pad koji je
+operater video), posle popravke **kanon jednak**.
+
+**Repo ima tacno jednu takvu instancu** -- ovu. Provereno grep-om nad svim `.bas` i
+`.cls`; ostali pogoci su nastavci reda (izrazna pozicija), ne naredbe.
+
+### 14.55) Pre-flight S6 -- prijemnica kao header + stavke (27.09.2026; ponovo izmereno 20.10.2026)
+
+> **Ova sekcija je ponovo izmerena 20.10.2026 nad `main` = `6dc32710`** (posle celog
+> AMB-10 i `ODL-24`) i **zamenjena u mestu**. Prvi verdikt (27.09.2026) je pisan nad
+> `4a1aea08`, PRE AMB-10 -- a prenet verdikt nije merenje. Original je u git istoriji
+> grane `claude/s6-prijemnica` (`0de43b62` + `3fd418e0`; izvorno `583308e2` +
+> `37f8b78a`). Svi brojevi linija ispod vaze za `6dc32710`. Odluke operatera su iz
+> 20.10.2026 (`docs/STANJE_REFAKTORA.md`, stavka 170).
+
+Rez: `tblPrijemnicaStavke` u kanon, `tblPrijemnica` gubi linijska polja, F4 se
+odmrzava, hladnjacin lanac se zavrsava do PRJ. Isti oblik kao S1 (otkup) i S3
+(otpremnica), ali sa **pet** nizvodnih potrosaca umesto jednog: faktura, palete,
+knjiga ambalaze, stampa i izvestaji, storno.
+
+#### Verdikt po osama -- svaka sa dokazom (nad `6dc32710`)
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | `docs/DOMEN/README.md` lanac; `docs/DOMEN/DOCUMENT_HEADER_LINES.md` §4.4: grain stavke je "jedna klasa jednog prijema" |
+| `EVENTS` | **PROVEN** | **cetiri**, ne tri -- v. nize |
+| `IDENTITY` | **PROVEN**, dva imenovana rizika | danas: logicka prijemnica = redovi istog `GeneracijaID` (`ApplyGeneracijaID`, `modDokumenta:6949`), fizicki red = jedna klasa, pisac vraca `"PRJ-I + PRJ-II"` (`:6701`) |
+| `CARDINALITY` | **PROVEN** | 1 dokument : **1..2** klase (`hasKlasaII` je `Optional`, `:6594`; klasa I je opciona, `:6626`); 1 zbirna : N prijemnica; 1 stavka : N paleta-stavki; 1 stavka : 0..1 aktivna faktura-stavka (`DOCUMENT_HEADER_LINES` §3) |
+| `INVARIANTS/OWNER` | **PROVEN** | ZBR-CHILD-01 (`PoveziDeteNaZbirnu`, `:6947`); `AMB-INV-04/-07/-08/-10` (`modAmbalaza.PrenesiAmbalazu`, `:2938`); A9 (`modBrojevi.GenerateBrojPrijemnice`, `:213`); storno `modStorno.StornoPrijemnica` (`:446`) |
+| `WRITERS` | **PROVEN** | sest pisaca, **jedan ziv ulaz, zamrznut** -- v. tabelu nize |
+| `DOWNSTREAM` | **PROVEN**, prosireno AMB-10-om | v. tabelu nize |
+| `CAPABILITY` | **GAP** (izlazni uslov, ne blokira) | F4 je pauziran pre svih provera (`modDokUnos:827-828`) |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | nize, za korak 1 i za ceo rez |
+| `PLATFORM` | **N/A** | nova tabela ide kroz postojeci `EnsureAllTables`; nema novog Excel/COM ponasanja |
+| `LANDING` | **PROVEN** | grana `claude/s6-prijemnica` = `6dc32710` + docs; otvoreni PR-ovi (#410 docs, #42, #7) ne diraju kanon |
+
+`CAPABILITY GAP` ne blokira rez -- ali je **izlazni uslov**: rez koji ne odmrzne F4
+nije zavrsen.
+
+#### BUSINESS EVENTS -- cetiri, ne tri
+
+| Dogadjaj | Datum / status | Tabela | Sta moze bez sledeceg |
+|---|---|---|---|
+| **fizicki** -- roba stize na odrediste | `Datum` | `tblPrijemnica` | prijemnica moze postojati bez fakture |
+| **poslovni** -- nastaje dokument prijema | `BrojPrijemnice` (kupcev broj, `AMB-10-ODL-22`), `IzdatoStatus` | `tblPrijemnica` | dokument moze postojati bez paleta (paletizacija je best-effort u istoj TX) |
+| **ambalazni** -- pune gajbe vozac -> kupac, prazne kupac -> vozac | `Datum` dokumenta (knjiga je dnevna) | `tblAmbalaza`, `AMBALAZA_UZ_ROBU` + `POVRAT_PRAZNE` (`AMBALAZA.md` 6.12g) | jedna noga bez druge; manjak na povratu je **pitanje**, ne greska (6.12j, `outErrNum`) |
+| **finansijski** -- nastaje potrazivanje | faktura | `tblFakturaStavke` (danas kes `Fakturisano`/`FakturaID` na redu klase) | faktura moze pokriti **jednu klasu a ne drugu** |
+
+Ambalazni dogadjaj deli datum sa fizickim jer je to **isti fizicki cin** -- gajbe
+stizu sa robom i zamenjuju se pri prijemu (6.12g). To je poslovno pravilo, ne
+pogodnost implementacije.
+
+`CreateFaktura` (`modFaktura:108`, upis `:360/:363`) prima listu
+`PrijemnicaID`-jeva od pozivaoca (`:190`, "Business module trusts only PrijemnicaID
+from caller"). Danas je jedan `PrijemnicaID` = jedna klasa, pa je delimicno
+fakturisanje strukturno moguce: `Fakturisano` je cinjenica **linije**, ne dokumenta.
+
+#### Sta je AMB-10 promenio -- nalazi ponovnog merenja
+
+1. **⚠ FALSE-GREEN RISK -- `AMB-INV-04` i dve klase pod jednim ID-jem.** Danas svaka
+   klasa knjizi svoju `UZ_ROBU` nogu pod **svojim** `PrijemnicaID`-jem (`:7000`,
+   `DokumentID = newID`). Identitet efekta je `(DokumentTIP, DokumentID,
+   VrstaKretanja, TipAmbalaze)`, a ponavljanje se meri **zbirom** (6.9). Kad obe
+   klase podele ID zaglavlja, dve noge sa istim tipom se sudaraju:
+   **isti broj gajbi (10 + 10) se tiho proguta kao ponavljanje -- knjiga dobije 10,
+   ne 20**, a razlicit broj daje `HARD CONFLICT`, pa dvoklasna prijemnica ne moze da
+   se snimi. **Pravilo za korak 2:** jedna `UZ_ROBU` noga po dokumentu = Σ
+   `KolAmbalaze` stavki, isto kao otpremnica (`modDokumenta:5013`, `ukupno`). Povrat
+   je vec jedan po dokumentu.
+2. **Povrat ide uz klasu koja postoji** (`:6642-6646`, od 07.10.2026), a ne "klasi I,
+   klasi II salje 0" kako je pisalo 27.09. (`:6597` vs `:6620` nad `4a1aea08`).
+   Obrazlozenje ispravke je time zastarelo, a zakljucak je jaci: `KolAmbVracena` je
+   cinjenica **dokumenta** i ostaje na zaglavlju, uz `TipAmbalaze`.
+3. **Knjiga razresava izvor prijemnice preko zaglavlja.** `modAmbalazaUgovor:581` i
+   `:751` mapiraju `DOK_TIP_PRIJEMNICA -> tblPrijemnica.PrijemnicaID`, a
+   `AmbRobniZaglavlje` odatle cita vlasnika broja (`ODL-22`). Posle reza `DokumentID`
+   pokazuje na dokument -- to je ciljni model (`DOCUMENT_HEADER_LINES` §4.6), ali je i
+   **promena znacenja** i ulazi sa testom.
+4. **Storno ambalaze je kontra-stav po `DokumentID`-u** (`modStorno:497`,
+   `StornirajAmbalazuDokumenta`), danas po redu klase. Posle reza: jedan poziv po
+   dokumentu.
+5. **Odluke o kljucu linije trebaju vec u koraku 2, ne u koraku 5.** Pisac sam
+   paletizuje (`:6712`, `:6720` -> kapija `modPaletniList:163`) i sam prevezuje
+   fakturu (`RelinkFakturaStavke`, `:7012`).
+6. **`KI-028`:** fixture drzi `VOZ-TEST-1` na -10 za `12/1`, pa svaki S6 test nad tim
+   vozacem i tipom pada na `AMB-INV-07`. Testovi od koraka 2 koriste svez tip
+   (obrazac `Test_RVP_DeficitSePotvrdjuje`).
+
+#### Zastareli zapisi -- ponovo izmereni
+
+1. `docs/DOMEN/README.md:63-64` (*"`ZbirnaID` im nije strani kljuc nigde u semi"*) --
+   **i dalje netacno**: `tblPrijemnica.ZbirnaRoditeljID` je u kanonu, a
+   `PoveziDeteNaZbirnu TBL_PRIJEMNICA` (`modDokumenta:6947`, i `:8536` pri
+   prevezivanju) ga puni kanonskim `ZbirnaID`-om, fail-closed. **Ispravljeno uz ovaj
+   zapis**, jer odluka 5 stoji na toj premisi.
+2. `modAutoHladnjaca.bas:67` (*"F3/F4 su pauzirani"*) -- i dalje stoji, a F3 pauzu
+   nema (`modDokUnos.ZbirnaValidiraj`, prva provera je vozac). Ispravlja se u
+   **koraku 7**, koji tu datoteku ionako prepisuje.
+3. `DOCUMENT_HEADER_LINES.md` §4.4 stavlja `Fakturisano`/`FakturaID` na stavku --
+   **oboreno odlukom 1 (b)**; ispravljeno uz ovaj zapis.
+4. "Korak 1/8" (STANJE) prema **7** koraka ove sekcije: spisak od 7 je izostavio
+   hladnjacin lanac (§14.20). Ponovo izmeren plan ima **8** koraka (nize).
+
+#### WRITERS -- sest pisaca, jedan ziv ulaz
+
+| Pisac | Sta pise | Stanje |
+|---|---|---|
+| `modDokumenta.SavePrijemnicaMulti_TX` (`:6582`) -> core `SavePrijemnica` (`:6901`) | ceo dokument (1-2 reda klase), noge knjige po redu klase, palete | jedini PROD ulaz, iz F4 (`modDokUnos:1248`) -- **pauziran** |
+| `modDokumenta.SavePrijemnica_TX` (`:6794`) | jedna klasa | **nema PROD pozivaoca** -- 18 poziva, svi u `modBusinessFlowProTests` |
+| `modDokumenta.RelinkFakturaStavke` (`:7623`, upis `:7697/:7700`) | `Fakturisano`/`FakturaID` nove prijemnice pri ispravci | ziv, iz core pisca (`:7012`) |
+| `modDokumenta.ReassignPrijemnicaToZbirna_TX` (`:8380`) | veza na zbirnu (`:8536`) | ziv |
+| `modFaktura.CreateFaktura` (`:108`, upis `:360/:363`) | `Fakturisano`/`FakturaID` | ziv |
+| `modStorno.StornoPrijemnica` (`:446`; `:480`, `:487`, `:497`), `StornoPrijemnicaByBroj_TX` (`:508`), `ReleasePrijemnicaFromFaktura` (`:1736`, upis `:1754`) | `Stornirano`, cisti faktura kes, kontra-stav knjige | ziv, radi nad **redom klase** |
+
+`modPaletniList.PaletizePrijemnica` (`:134`) nije pisac prijemnice, ali se vrti
+**unutar** obe transakcije pre commit-a i kapija mu je po `PrijemnicaID` (`:163` ->
+`:181`).
+
+#### DOWNSTREAM -- ko zavisi od cinjenice koju pisac upisuje
+
+| Potrosac | Danas | Posle reza (odluke 1-3) |
+|---|---|---|
+| `tblFakturaStavke` | `PrijemnicaID` = red klase | `PrijemnicaStavkaID`, nova kolona **na kraju** (korak 5); `PrijemnicaID` = dokument, labela |
+| `tblPaletaStavka` | `PrijemnicaID` = red klase, kapija `modPaletniList:163` | `PrijemnicaStavkaID`, nova kolona **na kraju** (korak 2); `PrijemnicaID` = dokument |
+| `tblAmbalaza` | `DokumentID` = red klase, `UZ_ROBU` po klasi | `DokumentID` = dokument; jedna `UZ_ROBU` = Σ stavki, jedan `POVRAT_PRAZNE` |
+| citaoci `Fakturisano`/`FakturaID` | `modDokumenta:7128, :8113`; `modFaktura:919, :1060`; `modScrDokumenti:2653, :3079`; `modScrIzvestaji:2304`; `modStornoFlow:833`; `modStornoImpact:300`; `modProductionHealthCheck:322` | izvedeno iz aktivnog reda `tblFakturaStavke` (odluka 1 b) |
+| `split_plus` | **5 PROD**: `modDokUnos:1228, :1300, :1316`; `modPrint:1190, :1463` (+1 TEST, `modGoldenTests:960`) | **0** (korak 3) |
+| citaoci `GeneracijaID` | `modDokUnos.PreveziPaleteIspravke` (`GeneracijaPoID`), `StornoPrijemnicaByBroj_TX(generacijaID)` | ID dokumenta; kolona se brise u koraku 8 |
+| stampa, izvestaji, prefill | `modPrint` (prijemnica `:1458`, grupni otkupni list `:1185`), `modIzvestaj:4006`, `modScrIzvestaji:2301`, `modStornoDok:1023, :1076` | zaglavlje + stavke (korak 3) |
+
+#### IDENTITY contract posle reza
+
+| | Danas | Posle S6 |
+|---|---|---|
+| dokument | skup redova sa istim `GeneracijaID` | **`PrijemnicaID`** (jedan red) |
+| linija | `PrijemnicaID` (red klase) | **`PrijemnicaStavkaID`** |
+| veza na zbirnu | `ZbirnaRoditeljID` (vec hranjen) + `BrojZbirne` (labela) | `ZbirnaRoditeljID`; `BrojZbirne` ostaje labela |
+| izvor u knjizi ambalaze | `DokumentID` = red klase | `DokumentID` = dokument |
+| `GeneracijaID` | grupise klase | **brise se** (korak 8) -- isti potez kao kod zbirne u S4 |
+
+⚠ **IDENTITY RISK 1** (imenovan 27.09, razresen odlukama 2 i 3): `PrijemnicaID` u
+`tblFakturaStavke` i `tblPaletaStavka` danas znaci red klase, a posle reza dokument.
+Tacna linija putuje kao `PrijemnicaStavkaID`.
+
+⚠ **IDENTITY RISK 2** (nov, AMB-10): `tblAmbalaza.DokumentID` prijemnice menja
+znacenje na isti nacin, a `AMB-INV-04` ga cini nosecim (nalaz 1).
+
+⚠ **display -> lookup**: veza na zbirnu se razresava iz BROJA
+(`ZbirnaIDZaBroj(brojZbirne)`, `:6948`), fail-closed. F4 bira zbirnu po broju, i S6
+to ne menja -- imenovano, van obima.
+
+#### Odluke operatera (20.10.2026, stavka 170)
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | `Fakturisano` / `FakturaID` | **(b)** brisu se sa zaglavlja i izvode iz aktivnog reda `tblFakturaStavke` za tu stavku -- presedan S1d. Prvi put odluceno 27.09. (taj zapis nije stigao na `main`), potvrdjeno 20.10. `DOCUMENT_HEADER_LINES` §4.4 ispravljen |
+| 2 | kljuc paletizacije | **`PrijemnicaStavkaID`** na `tblPaletaStavka`, kolona na kraju (korak 2) |
+| 3 | znacenje `PrijemnicaID` u faktura- i paleta-stavci | **ID dokumenta** (labela za citaoce); kanonska linija je `PrijemnicaStavkaID` -- `DOCUMENT_HEADER_LINES` §4.5, §4.6 i §16 "Faktura stavka zna tacnu `PrijemnicaStavkaID`" |
+| 4 | hladnjacin lanac | **B, nastavljiv**: svaki korak je idempotentan po kanonskom roditelju (OTP po otkupu, ZBR po clanstvu, PRJ po `ZbirnaRoditeljID`). Ishod "OTP i ZBR uspeli, PRJ pao" ostavlja blok **vidljiv**, a "Ponovi auto-lanac" nastavlja od PRJ. Malina batch se zatvara istim jezgrom (§15). **`AUTO_PRIJEMNICA_HLADNJACA` se brise** -- stanica je jedini autoritet |
+| 5 | ispravka zbirne | **van S6**: F8 ostaje `DUPLI` / `PONISTENJE`; `IspravkaZbirne_TX` je svoj rez posle S6 i KI-025/026 |
+| 6 | redosled i prvi PR | **8 koraka** (nize); PR = samo korak 1; svaki sledeci korak u svojoj sesiji |
+
+#### Kanon za korak 1
+
+`tblPrijemnicaStavke` dobija oblik **`tblOtkupStavke`**: 12 kolona, isti raspored, i
+`Cena`, a ne `PredlogCena` kao `tblOtpremnicaStavke`. Prijemnica nosi stvarnu cenu
+prijema, i `CreateFaktura` je cita iz reda.
+
+```
+PrijemnicaStavkaID | PrijemnicaID | RedniBroj | Klasa | Kolicina | Cena |
+KolAmbalaze | BrutoKg | CreatedAt | CreatedBy | ModifiedAt | ModifiedBy
+```
+
+Namerno **NEMA**:
+- `KolAmbVracena` i `TipAmbalaze` -- cinjenice dokumenta, ostaju na zaglavlju
+  (nalaz 2);
+- `Fakturisano` / `FakturaID` -- odluka 1 (b);
+- `Stornirano` -- storno linije ne postoji u domenu, pa tabela ide u `BEZ_STORNA`;
+- `GeneracijaID` i `BrojZbirne`.
+
+`tblPrijemnica` u koraku 1 ostaje **netaknut** (28 kolona). Linijska polja odlaze u
+koraku 8, kao u S1d i S3-ostatku: kolona obrisana iz sredine pomera sve iza sebe, a
+`AppendRow` pise poziciono.
+
+#### Redosled koraka (8)
+
+1. **kanon**: `tblPrijemnicaStavke` + regenerisan `modSchema` + `BEZ_STORNA` +
+   test 257 + sabotaze -- **prvi PR**. `WRITE_OWNERSHIP` se NE menja: unos za
+   `tblPrijemnicaStavke` postoji od #302 (`2f45c96a`), sa vlasnikom koji treba
+   (mereno u koraku 1, stavka 171);
+2. **pisac**: `SavePrijemnicaMulti_TX` pravi zaglavlje + stavke i vraca **jedan** ID;
+   jedna `UZ_ROBU` noga = Σ stavki i jedan povrat (nalaz 1); paletizacija po
+   `PrijemnicaStavkaID`; `RelinkFakturaStavke` po stavci;
+3. **citaoci**: `split_plus` 5 -> 0; stampa, izvestaji, izvoz; grupni otkupni list
+   (nalog i stanje oko svog reda, `AMBALAZA.md` 6.13g, i `GetAmbalazeStanje` iz "Duga
+   sa imenom");
+4. **storno** na nivou dokumenta (`StornoPrijemnica`, `ByBroj`, kaskada zbirne,
+   `modStornoFlow`, `modStornoImpact`) + vraceni testovi kaskade (§14.14);
+5. **faktura** po `PrijemnicaStavkaID` (`tblFakturaStavke`, kolona na kraju);
+   `Fakturisano` izveden;
+6. **F4 odmrznut** + vraceni testovi iz §14.14 (redosled provera F4, bruto -> neto,
+   vezivanje samo na jednoznacnu zbirnu);
+7. **hladnjacin lanac B** (`CreateAutoZbirnaIzOtpremnice_TX`,
+   `CreateAutoPrijemnicaIzZbirne_TX`), jednakost po klasi na cetiri nivoa, granica
+   malina batch-a, brisanje `AUTO_PRIJEMNICA_HLADNJACA`, komentar `modAutoHladnjaca:67`;
+8. **zavrsni**: brisanje linijskih polja `tblPrijemnica` (i `Fakturisano`,
+   `FakturaID`, `GeneracijaID`, `BrojZbirne` kao veze); `SavePrijemnica_TX` (testovi
+   prelaze na Multi); golden lanac do fakture.
+
+#### ACCEPTANCE CONTRACT -- plan dokaza, ne dokaz
+
+**Korak 1:**
+- **vazi:** `tblPrijemnicaStavke` je u kanonu sa tacno 12 kolona gornjim redom; sveska
+  je dobija kroz `EnsureAllTables` (`VerifySchema` prazno, otisak sveske = kanon);
+  registar storna je zna kao `BEZ_STORNA`; `WRITE_OWNERSHIP` (zatecen od #302) daje red
+  `modDokumenta`, a semu `modSchema`;
+- **netaknuto:** `tblPrijemnica` (28 kolona, isti raspored); nijedan pisac ni citalac
+  se ne menja -- korak 1 ne pise nijedan red;
+- **edge:** stavka NE nosi cinjenice dokumenta, a zaglavlje ih i dalje nosi
+  (kontra-tvrdnja);
+- **negativno:** tabela van registra storna pada (`StornoRegistarZna`); vec meri
+  `T_StornoFilter_NedostajucaKolonaNijeTisina` (3), a nova tvrdnja meri da je bas ova
+  tabela klasifikovana;
+- **cime:** test 257 u `modTest` + pet sabotaza; `gen_schema_module --check`,
+  `who_writes --check` i `--check-ownership`, `vba_check` (`SEMA_REGISTAR`).
+  `STORNO_REGISTAR` klasifikaciju nove tabele NE meri -- gleda samo pozive
+  `ExcludeStornirano`, a nad stavkom ih nema -- pa je tvrdnja testa 257 jedina brana
+  (mereno u koraku 1).
+
+**Ceo S6:**
+- **vazi:** jedna prijemnica sa dve klase je **jedan** red u `tblPrijemnica` i **dva** u
+  `tblPrijemnicaStavke`; `split_plus` = 0; `GeneracijaID` na prijemnici ne postoji ni
+  u kanonu ni u kodu; storno prima ID dokumenta i obara ceo dokument; F4 upisuje po
+  novom modelu;
+- **knjiga:** 10 + 10 gajbi daje **jednu** `UZ_ROBU` nogu od 20. Test mora imati
+  **jednak** broj gajbi u obe klase, jer je bas to slucaj iz nalaza 1;
+- **netaknuto:** paletizacija u istoj transakciji pre commit-a; `ZbirnaRoditeljID` i
+  njen fail-closed karakter; A9 (storno ne oslobadja broj); protokol potvrde manjka na
+  povratu (6.12j, `outErrNum`, seam `PotvrdiManjakAmbalaze`);
+- **edge:** jedna klasa (samo I ili samo II, povrat uz onu koja postoji) -- manifest
+  razlikuje "stavka fali" od "dokument ima jednu stavku";
+- **negativno:** zaglavlje bez ijedne stavke (siroce, v. `rollback-vraca-ceo-dokument`);
+  faktura nad storniranom stavkom; druga faktura nad istom stavkom;
+- **cime:** `RunBusinessFlowProSuite` kroz pisca, `modTest` kroz `Scr_Save`,
+  `RunPaleteTestSuite` kao ograda, `popis_citalaca --check` sa pragom `split_plus` = 0,
+  i nove sabotaze nad manifestom stavki, Σ nogom knjige, storno nivoom i kljucem linije.
+
+#### Nalaz iz 27.09 za korak 2: paletizacija ima kapiju po `PrijemnicaID`
+
+`PaletizePrijemnica` se zove **dvaput**, jednom po klasi, i svaki put dobija
+`PrijemnicaID` **te klase** (`modDokumenta:6712` i `:6720`). Unutra stoji
+`EnsurePrijemnicaNotAlreadyPaletized prijemnicaID` (`modPaletniList:163` -> `:181`).
+
+Danas prolazi zato sto dve klase imaju **razlicite** ID-jeve. Cim obe podele ID
+**zaglavlja**, druga klasa udara u tu kapiju i paletizacija joj se odbija -- tiho
+gubljenje paleta klase II, ne pad. Kapija radi tacno ono za sta je pisana; menja se
+**znacenje kljuca** ispod nje. **Odluka 2:** kljuc je `PrijemnicaStavkaID`, i kapija
+prelazi na stavku u koraku 2.
+
+#### Korak 2 — pre-flight nad `c3301527` i odluke (20.10.2026, stavka 174)
+
+Verdikt iz tabele gore važi i nad `c3301527`. Ponovno merenje dodaje ovo:
+
+- **Međustanje nije dostižno za operatera.** Jedini proizvođač redova `tblPrijemnica` je jezgro
+  `SavePrijemnica` (`modDokumenta:6933`). Njegova jedina PROD putanja ide kroz F4, koji je pauziran
+  bezuslovno (`modDokUnos:827`). `CreateAutoPrijemnicaIzZbirne_TX` ne postoji u kodu.
+- **Linijska polja zaglavlja čitaju 72 PROD reference u ~40 procedura.** Najbitnije:
+  - `CreateFaktura` (`modFaktura:145–185`): nad praznim zaglavljem pada glasno (`:247`, `:267`), a nad
+    zaglavljem sa klasom I tiho fakturiše manje;
+  - izveštaji (`modIzvestaj`), integritet (`Chk_A2`, `Chk_A3`, `B1`, `B4`, `B5`) i štampa (`modPrint:1190`,
+    `:1463`);
+  - storno lista i impact (`modStornoFlow:1114`, `modStornoImpact:158`) i prefill ispravke
+    (`modStornoDok:996–1067`);
+  - prevezivanje i korekcija paleta (`modPaletniList:1514`, `:1968`, `:2213`) i izvoz
+    (`modStammdatenSync:1299`).
+- **`AMB-INV-04` je potvrđen u kodu:** `ZbirZahteva` (`modAmbalaza:2999–3013`) vraća već upisan red kad se
+  zbir poklopi. Kod 10 + 10 pod istim ID-jem druga noga se zato tiho proguta.
+- **Pisci ključa palete su tri, ne jedan:**
+  - `AddStavka` (`modPaletniList:1357`);
+  - STEP2 u `ReassignPaleteToPrijemnica_TX` (`:1792`);
+  - `AdjustPaletaGajbiceZaPrijemnicu_TX` kroz `SpillGajbice` (`:2379`, `:2406`).
+
+  `PalAppendRow` nepoznatu kolonu **tiho preskače** (`:1392`).
+- **Generacija — ispravka ovog plana.** Zaglavlje dobija `ApplyNovaGeneracijaID`, ne `ApplyGeneracijaID`.
+  Komentar `modDokumenta:6169–6177` to traži za pisca koji dokument piše kao jedan red. Nasleđivanje bi dva
+  dokumenta istog broja i kupca spojilo u jednu generaciju, a storno po generaciji
+  (`modStorno:117–131`) bi tada oborio oba.
+
+**Odluke operatera (20.10.2026, stavka 174):**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | linijska polja i keš fakture na zaglavlju u koracima 2–7 | **prazna**; bez nove grupe u `popis_citalaca` |
+| 2 | `SavePrijemnica_TX` i javno jezgro `SavePrijemnica` | **omotač sada** nad jednim jezgrom dokumenta; brišu se u koraku 8 |
+| 3 | `split_plus` i štampa | **korak 3**; kapija: korak 6 (F4) ne sme pre zatvorenih 3, 4 i 5 |
+| 4 | generacija i prevezivanje paleta | `ApplyNovaGeneracijaID`; `ReassignPaleteToPrijemnica_TX` prelazi sada, `Adjust`/`Evaluate` u korak 3/4 — najmanje premošćavanja |
+| 5 | storno | jedna tvrdnja sada; ostalo korak 4 |
+| 6 | `KI-028` | posle koraka 2, svoj rez pre koraka 6 |
+
+**Ugovor pisca posle koraka 2:**
+
+1. **Ulaz.** `SavePrijemnicaMulti_TX` gradi 1..2 stavke i zove **jedno** jezgro dokumenta, a vraća **jedan**
+   `PrijemnicaID`. Potpis ostaje netaknut, jer ga `PrjUpisPoziv` i BFP zovu imenovanim argumentima.
+2. **Jezgro `SavePrijemnicaDokument`** (privatno) radi ovim redom:
+   - validacija po stavci (`ValidatePrijemnicaInput`), uz pravilo da klasa sme najviše jednom;
+   - zaglavlje (`PRJ-`) **bez** linijskih polja i bez keša fakture;
+   - `BindSourceDocument` jednom, pa `PoveziDeteNaZbirnu` i `ApplyNovaGeneracijaID`;
+   - stavke: `PRS-` + `NewEntityID`, `RedniBroj` 1..n, `BrutoKg` po stavci;
+   - **jedna** `AMBALAZA_UZ_ROBU` = Σ `KolAmbalaze` stavki, pa **jedan** `POVRAT_PRAZNE`. Redosled nogu je
+     noseći (6.12g);
+   - `RelinkFakturaStavke` po klasi koju dokument ima, bez keša na zaglavlju.
+
+   Transakcija mora da snima `tblPrijemnicaStavke`. Jezgro to proverava (`tx.ImaSnapshot`), pa test sa
+   sopstvenom transakcijom pada **glasno**, umesto da ostavi siroče.
+3. **Paletizacija** ide po stavci, u istoj transakciji. Kapija meri par (`PrijemnicaID`,
+   `PrijemnicaStavkaID`). Red starog oblika (prazna stavka) je sam svoja linija; takve redove imaju ručno
+   posejani redovi suite-a Palete i fixture.
+4. **`tblPaletaStavka.PrijemnicaStavkaID`** je kolona na kraju (kanon, pa `gen_schema_module`). Ide i u
+   `RequirePaletaStavkaSchema`, pa je upis fail-closed.
+5. **`ReassignPaleteToPrijemnica_TX`:** cilj po klasi čita iz stavki dokumenta (red bez stavki je sam svoja
+   linija), a STEP2 upisuje i `PrijemnicaStavkaID`.
+6. **`SavePrijemnica_TX` i `SavePrijemnica(tx, …)`** su tanki omotači: jedna klasa daje jednu stavku.
+
+**Imenovano van obima, sa korakom koji ga zatvara:**
+
+- **Čitaoci linijskih polja i `Fakturisano`/`FakturaID`:**
+  - korak 3: izveštaji, štampa, `split_plus`, manjak, integritet, izvoz, oporavak;
+  - korak 4: storno lista, impact, `PrefillIzStorniranog`;
+  - korak 5: faktura.
+- **`AdjustPaletaGajbiceZaPrijemnicu_TX` i `EvaluatePaletaReassign`** biraju red po broju i klasi
+  (`:2213–2235`, `:1968`). Prelaze u korak 3/4; dok je F4 pauziran, nad novim oblikom su nedostižni.
+- **Storno relinkovane fakture.** `StornoPrijemnica` siroči stavke fakture samo kad je `Fakturisano = DA`
+  na zaglavlju (`modStorno:486–493`), a keš se više ne piše. Zatvara ga korak 5, kroz izveden status.
+- **`KI-031`** (`PonistiZbirnaChain_TX` bez snapshota `tblPrijemnica`) — korak 4.
+
+**Testovi čija se premisa menja:**
+
+| Test | Šta je tvrdio | Šta biva |
+|---|---|---|
+| `Test_StornoPoBrojuOdbijaDvaVlasnika` | dva `_TX` istog broja su jedan dvoklasni dokument | prepisuje se na jedan `Multi` poziv |
+| `Test_GeneracijaNePrelaziVlasnika` | Kl.II nasleđuje generaciju Kl.I | prepisuje se: isti kupac i broj dvaput = dva dokumenta, dve generacije; deo o `PickPrefillRows` → korak 4 |
+| `Test_PRJ_PovratIdeSaKlasomKojaPostoji` | povrat ide sa klasom koja postoji | tvrdnje važe; sabotaža `amb-prj-povrat-samo-sa-klasom-i` dobija novo sidro |
+| `T_IspravkaPrijemnice_SkipIRelink` | prevezivanje paleta posle ispravke | dobija tvrdnju o ključu stavke na prevezanoj paleti |
+| `Test_ManjakPreviewJeZbirnaMinusPrijem` (+ `manjak-preview-bez-druge-klase`) | manjak = zbirna − prijem | **briše se**, vraća ga korak 3 |
+| `Test_DuplicateFakturaIsBlocked`, `Test_OpenFaktureExcludeStornirano` | faktura nad prijemnicom | **brišu se**, vraća ih korak 5 |
+
+Testovi sa sopstvenom transakcijom koji zovu jezgro dodaju snapshot `tblPrijemnicaStavke`:
+`PrjUpisiSaRazlogom` i `Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice`. `HardDeleteBusinessFlowTestRows`
+briše i stavke.
+
+**ACCEPTANCE CONTRACT koraka 2:**
+
+- **važi:**
+  - dve klase daju jedan red zaglavlja i dve stavke, sa jednim ID-jem bez `" + "` (logički dokument);
+  - 10 + 10 gajbi daje **jednu** `UZ_ROBU` nogu od 20 (poslovni događaj), i povrat je jedan;
+  - obe klase dobijaju palete, svaka pod svojim `PrijemnicaStavkaID`;
+  - isti broj i kupac dvaput daju dve generacije;
+  - storno dokumenta daje dva kontra-stava, a salda se vraćaju;
+- **netaknuto:**
+  - protokol potvrde deficita (`outErrNum`, `AMB_ERR_POTVRDA_DEFICITA`, `PotvrdiManjakAmbalaze`);
+  - paletizacija u istoj transakciji, pre commit-a;
+  - `ZbirnaRoditeljID` i njegov fail-closed karakter;
+  - A9;
+  - potpis `SavePrijemnicaMulti_TX`;
+- **edge:** samo klasa I i samo klasa II daju po jednu stavku prave klase, a povrat stoji pod ID-jem
+  dokumenta;
+- **negativno:**
+  - pad druge stavke (`NewEntityIDPadniTest`) ne ostavlja ni zaglavlje, ni stavke, ni knjigu;
+  - zaglavlje ne nosi linijska polja, pa ne laže o klasi;
+- **čime:**
+  - BFP: `Test_S6_DveKlaseJedanDokument`, `Test_S6_JednaKlasaJednaStavka` i prepisani
+    `Test_GeneracijaNePrelaziVlasnika`;
+  - `modTest` 258 `T_S6_PrijemnicaJedanDokument`, kroz `PrijemnicaUpisi` i bez ambalaže, pa `KI-028` ne
+    ulazi;
+  - dopuna `T_IspravkaPrijemnice_SkipIRelink`;
+  - sabotaže `s6k2-*`.
+
+#### Korak 3 — pre-flight nad `5afde431` i odluke (20.10.2026, stavka 178)
+
+Verdikt iz tabele gore važi i nad `5afde431`. Ova ponovna merenja je dodaju (popis grep-om po
+procedurama i kroz `popis_citalaca --procedura`):
+
+- **Linijska polja zaglavlja i dalje čita 37 PROD procedura** (66 mesta, bez keša fakture). Od toga korak 3
+  nosi 27 procedura (47 mesta); ostalo su faktura (korak 5), storno, impact i prefill (korak 4) i `modSetup`
+  (korak 8).
+- **`split_plus` je 5 živih:** `modDokUnos:1228`, `:1300`, `:1316`; `modPrint:1190`, `:1463`. Uz to postoji
+  jedno TEST mesto, `modGoldenTests:960`, koje se ne broji.
+- **Papir prijemnice je DANAS dostižan.** Ponovna štampa iz Izveštaja ide kroz `PrintPrijemnica`
+  (`modScrIzvestaji:2755`, `:2777`). Nad dokumentom novog oblika daje jedan prazan red. Grupni otkupni list
+  je dostižan samo iz pauziranog F4 i nema nijedan test.
+- **Zbirnina strana manjka čita ZAGLAVLJE zbirne.** `CalculateManjakPreview`, `BuildManjakDict`,
+  `ReportManjak`, `Chk_A2` i prikaz u `C4` čitaju `COL_ZBR_KOLICINA` / `KLASA` / `KOL_AMB`, a kanonska
+  zbirna ih od PR3 ostavlja prazne. F4 linija manjka zato za kanonsku zbirnu ne crta ništa (`ManjakLinija`:
+  `zbrKg <= 0`). S4-1 je ovo izričito odložio u S6 („Šta NIJE u S4-1", zajedno sa prosekom gajbe). To je 9
+  od 17 živih mesta grupe `zbr_linija`, a uz prosek gajbe (4) ukupno 13.
+- **`AdjustPaletaGajbiceZaPrijemnicu_TX` je živ** (Oporavak `:382`, Alt+F8). Nad dokumentom novog oblika
+  prazno zaglavlje čita kao „klasa I, 0 gajbi", pa bi palete te klase svukao na nulu. Novu raspodelu piše
+  BEZ `PrijemnicaStavkaID` (`SpillGajbice` bez ključa, `:2445`, `:2472`).
+- **`run_vba` vrti sve suite nad JEDNOM sveskom.** Palete, Storno, StornoCentar i Izveštaji vraćaju svoje
+  seed-ove rollback-om; Faktura i BFP ne. Seed starog oblika bi zato oborio strog čitalac u tuđoj suite.
+- **Mrtvo** (`popis_citalaca --procedura`): `GetAktivnePrijemnice` i `BuildChainIndex` imaju 0 PROD i 0
+  test pozivalaca. `EvaluatePaletaReassign` je `SAMO_TEST`: zovu ga pet testova, a služi i kao instrument
+  sabotaže `verdikt-po-broju`.
+- **Integritet: nijedna od A2, A3, B1, B4, B5, C1 i C4 nema test ni sabotažu.** Testovi koji zovu
+  `GetIntegritetRows` tvrde samo AMB1, B8 i B9.
+
+⚠ **IDENTITY RISK, imenovan, van obima:** manjak i izveštaji spajaju prijemnicu i zbirnu po `BrojZbirne` i
+vlasniku, a ne po `ZbirnaRoditeljID`. `Adjust` i `Evaluate` biraju dokument po broju. Korak 3 menja izvor
+količine, ne ključ spoja.
+
+**Odluke operatera (20.10.2026, stavka 178), sve po preporuci:**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | kanonski čitalac | **jedan strogi čitalac** u `modDokumenta`: `StavkePrijemniceRedovi`, `ZbirStavkiPoPrijemnici` / `ZbirStavkiZaPrijemnicu`, `StavkePrijemnicePoDokumentu` / `StavkeZaPrijemnicu`. `PrijemnicaLinijePoKlasi` se briše |
+| 2 | red starog oblika | **(a) samo stavke**, presedan S1, S3b-1 i S4-1. `make_fixture` izvodi po jednu stavku iz svakog zaglavlja, a seed-ovi pišu zaglavlje + stavku. Fixture ide u ovaj rez, ne uz `KI-028` |
+| 3 | grupni otkupni list | **ovde**: linije iz stavki, a saldo **naloga Vozač** oko svog reda kroz `AmbStanjeOkoDokumenta`. `GetStanicaAmbSaldo` se briše; `GetAmbalazeStanje` ostaje samo za golden i test |
+| 4 | `Adjust` / `Evaluate` | **korak 3** |
+| 5 | mrtav kod | brišu se `GetAktivnePrijemnice`, `BuildChainIndex`, `GetStanicaAmbSaldo` i `PrijemnicaLinijePoKlasi`. `EvaluatePaletaReassign` ostaje i čita stavke |
+| 6 | prag `split_plus` | **0 sada**; `zbr_linija` se spušta na izmereno |
+| 7 | zbirnina strana manjka i prosek gajbe | **obe strane manjka ovde**, uz prosek gajbe. Vraćen test ide nad **kanonskom** zbirnom |
+
+**Ugovor čitaoca (odluka 1).** Dokumentski, kao kod otkupa, otpremnice i zbirne. Kapije su iste koje pisac
+drži (`SavePrijemnicaDokument`, `ValidatePrijemnicaInput`):
+
+1. svaka stavka ima neprazan `PrijemnicaID` i zaglavlje TAČNO JEDNOM;
+2. svako zaglavlje ima bar jednu stavku (pisac: `1303`, rollback celog dokumenta);
+3. `Kolicina` je broj veći od nule, `Cena` broj ≥ 0 (pisac dozvoljava nulu, `:7921`), `KolAmbalaze` ceo broj
+   ≥ 0 (prazno je 0), a `BrutoKg` je prazan ili broj > 0;
+4. klasa prolazi kroz istu kapiju kao kod pisca (`RequireValidDocumentClass`), i to najviše jedna stavka po
+   klasi (`1432`);
+5. `PrijemnicaStavkaID` je neprazan i jedinstven u CELOJ tabeli: to je identitet linije, ključ palete i, od
+   koraka 5, fakture, a pisac ga uzima iz `NewEntityID` (dopuna po review-u #437, stavka 180).
+
+Pozicije reda su `1 PrijemnicaID | 2 RedniBroj | 3 Klasa | 4 Kolicina | 5 Cena | 6 KolAmbalaze |
+7 PrijemnicaStavkaID | 8 BrutoKg`, isto kao `StavkeOtkupaRedovi`. Zbir po dokumentu je `Array(kg, vrednost,
+gajbe, klase)`, a vrednost je Σ `Kolicina × Cena` po stavci. **Integritet čita meko** (obrazac
+`ZbirOtpremnicaMeko`, presedan S3b-1): audit postoji da nabroji pokvarene redove, pa kvar čitaoca daje praznu
+kolonu, ne pad provere. Greške su `1970–1979` (`1978` i `1979` su dodate po review-u #437).
+
+**Obim po celinama:**
+
+- **`split_plus` 5 → 0.** `modDokUnos` tri mesta, jer pisac vraća jedan ID. Oba papira primaju JEDAN
+  `PrijemnicaID`.
+- **Štampa.**
+  - `FillPrijemnicaSablon`: jedan red po stavci.
+  - `FillGrupniOtkupSablon`: linije iz stavki. Saldo je nalog Vozač (`VozacID`; u malina modu je to
+    `StanicaID`) kroz `AmbStanjeOkoDokumenta`. Saldo je stanje posle, a početno = posle + primljeno −
+    izdato. Gajbe bez svog reda knjige → papir ne nastaje (obrazac `7693`); bez gajbi → „-" (ODL-27).
+  - `GetStanicaAmbSaldo` se briše, a s njim i njegova tvrdnja u testu 234 i sabotaža `saldo-stanica-guta-kvar`.
+    Ugovor „kvar knjige ne daje papir" nosi `AmbStanjeOkoDokumenta`, koji je bez handlera.
+- **Izveštaji.** `ReportPrijemniceKupca` daje red po stavci. `ReportSaldoKupci`, `ReportOtkupRobaKupac`,
+  `ReportProsecnaCena`, `ReportZbirniKupac` i `ReportZbirniVozac` daju zbir stavki. U Izveštajima
+  `DodajPrijemniceZbirne` i `IzDetaljPrijemnice` daju kg i gajbe dokumenta.
+- **Izvoz.** `ExportPredatoPoKupcu` sabira po stavci. Agregacija je izdvojena u čistu funkciju, jer upis ide
+  u Google tabelu: test meri agregaciju, a sam upis ostaje nemeren.
+- **Manjak** (odluka 7). `CalculateManjakPreview`, `BuildManjakDict`, `ReportManjak` i `Chk_A2` čitaju
+  stavke OBA dokumenta. Spoj ostaje po broju i vlasniku. `CalculateProsekGajbeByZbirna` čita stavke zbirne.
+- **Integritet** (meko). B1, B4 i B5 uzimaju kg dokumenta. A3 poredi neto paleta po `PrijemnicaStavkaID` sa
+  `Kolicinom` stavke. C4 prikazuje kg i gajbe zbirne iz stavki.
+- **Oporavak.** `GetOsirocenePrijemnice` daje kg dokumenta (do sada kg prvog reda), a `RowsAktivnePrijemnice`
+  šalje `kgPoDok`.
+- **F4 lista.** PRIJEMNICA ulazi u granu stavki (`otkStav`), a `Col*` vraćaju `COL_PRS_*`.
+- **Palete.** `Adjust` i `Evaluate` čitaju linije dokumenta tog broja iz kanonskog čitaoca. `SpillGajbice` iz
+  `Adjust` nosi `PrijemnicaStavkaID`. `ReassignPaleteToPrijemnica_TX` čita isti čitalac, bez starog
+  fallback-a.
+- **Fixture i seed-ovi.**
+  - `make_fixture` izvodi `tblPrijemnicaStavke`.
+  - Seed-ovi pišu i stavku: `MakePrij`, `SeedPrijemnica`, seed-ovi `modTestStornoCentar`, `IzvSeed`
+    prijemnice, `AppendTestPrijemnicaRow` i `ZbrSejPrijemnicuSaRoditeljem`.
+  - Testovi sa svojom transakcijom dodaju snimak `tblPrijemnicaStavke`.
+- **Prag.** `split_plus` 0 i `zbr_linija` 17 → 4. Ostaju `ValidateZbirna` (2), `GetActiveDocumentsForStorno`
+  (korak 4) i `EnsureDoradeSchema` (korak 8).
+
+**Imenovano van obima:**
+
+- čitaoci `Fakturisano`/`FakturaID` (korak 5; `IzDetaljPrijemnice` i dalje prikazuje keš sa zaglavlja);
+- storno lista, impact i prefill (korak 4);
+- `EnsureDoradeSchema` (korak 8);
+- test-strana proračuna u `T_Izv_*` i `GldZbirna` čita zaglavlje fixture-a, koje nosi iste brojeve kao
+  stavka; prelazi u koraku 8, kad kolone nestanu;
+- spoj po broju umesto `ZbirnaRoditeljID` (IDENTITY RISK gore).
+
+**Testovi čija se premisa menja:**
+
+| Test | Šta je tvrdio | Šta biva |
+|---|---|---|
+| 133 `T_Izv_TabKontekstRobaKupacSaldo` | redova u mreži = fizičkih redova `tblPrijemnica` | redova = stavki; nad fixture-om je broj isti (jedna stavka po zaglavlju) |
+| 234 `T_SaldoPapir_KvarKnjigeNijeNula` | `GetStanicaAmbSaldo` diže grešku | ta tvrdnja odlazi sa čitaocem; ostaje tvrdnja nad `GetAmbalazeStanje` |
+| `Test_ManjakPreviewJeZbirnaMinusPrijem` | zbirna = zbir redova zaglavlja | **vraća se** nad kanonskom zbirnom (stavke) i dvoklasnom prijemnicom kroz pisca |
+| Palete T02–T11 (`MakePrij`) | linije sa zaglavlja seed-a | seed piše i stavku; tvrdnje važe |
+
+**ACCEPTANCE CONTRACT koraka 3 — plan dokaza, ne dokaz:**
+
+- **važi:**
+  - **linija:** dvoklasni dokument (I 300 kg × 50 i II 120 kg × 40, RAZLIČITE količine i cene) daje na
+    papiru prijemnice dva reda stavki i UKUPNO 420 kg / 19 800;
+  - **dokument:** F4 lista, ciljna lista Oporavka i detalj izveštaja vide JEDAN red sa 420 kg, vrednošću
+    19 800 i klasama „I, II";
+  - **poslovni broj:** izveštaji, izvoz i manjak dobijaju DELTU dokumenta (pre i posle) jednaku zbiru
+    stavki, a vrednost kao Σ po stavci — ne prvu stavku i ne prosek;
+  - **manjak:** kanonska zbirna (I 400 + II 150 = 550) minus prijemnica 420 = 130, a neupisani kilogrami
+    obe klase ulaze u preview;
+  - **grupni list:** početno je stanje vozača pre dokumenta, a saldo stanje posle; ponovna štampa posle
+    kasnijeg dokumenta je ista;
+  - **palete:** `Adjust` nad ispravnim dokumentom novog oblika ne menja nijednu paletu, a nova raspodela nosi
+    `PrijemnicaStavkaID`; A3 nad tim dokumentom nema nalaz;
+  - **prag:** `split_plus` = 0 kroz `popis_citalaca --check`;
+- **netaknuto:** pisac koraka 2; brojevi fixture-a (stavka = zaglavlje); čitaoci fakture i storna; ostatak
+  `zbr_linija`; ključ izvoza u PWA (kupac, vrsta, klasa) i značenje kolona;
+- **edge:** jednoklasni dokument (samo II) daje jedan red klase II; grupni list bez gajbi pokazuje „-";
+  storniran dokument ne ulazi ni u jedan zbir;
+- **negativno:**
+  - zaglavlje bez stavki obara strog čitalac po imenu: papir ne nastaje, a integritet ostaje bez kolone,
+    ne pada;
+  - dve stavke iste klase obaraju čitalac;
+  - grupni list sa gajbama bez svog reda knjige ne nastaje;
+- **čime:**
+  - `modTest` 259, kroz `PrijemnicaUpisi` i bez ambalaže (`KI-028` ne ulazi);
+  - BFP: vraćen `Test_ManjakPreviewJeZbirnaMinusPrijem` i nov test grupnog lista sa svežim tipom;
+  - sabotaže `s6k3-*` i vraćena `manjak-preview-bez-druge-klase`;
+  - `popis_citalaca --check` sa novim pragovima.
+
+**Ispravke plana tokom koda (stavka 179) — svaka izmerena, ne pretpostavljena:**
+
+1. **`PrijemnicaLinijePoKlasi` nije obrisan.** Postao je tanak adapter nad
+   `modDokumenta.StavkeZaPrijemnicu`: više ne čita tabelu sam i nema fallback na zaglavlje. Zovu ga tri
+   procedure (`Reassign`, `Adjust`, `Evaluate`), a svima treba isti raspored po klasi. Čitalac je jedan, kako
+   kaže odluka 1. Odstupa samo reč „briše se" iz odluka 1 i 5.
+2. **Proračun `T_Izv_*` (126, 133, 135, 138) prelazi na stavke OVDE, ne u koraku 8.**
+   - `RunAllTests` ne ide numeričkim redom: 258 (i sada 259) se vrti pre testova 13–138, a njihov dokument
+     novog oblika ima istog kupca, zbirnu i datum kao fixture.
+   - Izveštaj taj dokument broji iz stavki, a proračun sa zaglavlja ga ne vidi.
+   - Proračun je ručni prolaz kroz `tblPrijemnicaStavke` (`IzvPrjStavkeZbir`, obrazac `IzvStavkeZbir`),
+     nezavisan od čitaoca koji se meri.
+3. **Izveštaj manjka sabira prijem PO KLASAMA koje red zbirne nosi** (zatečeno pravilo `ReportManjak`). Fixture
+   zbirna `ZB-TEST-1` nosi samo klasu I, pa test 259 očekuje +300, a ne +420. Razliku između „zbira" i „prve
+   stavke" meri BFP nad zbirnom sa obe klase (550 / 420). Prvi zeleni prolaz je ovu tvrdnju oborio sa
+   „očekivano 420, dobijeno 300". To je bila greška u tvrdnji, ne u kodu.
+4. **Seed-ovi `modTestStornoCentar` ne pišu stavku.**
+   - Služe proverama koraka 4 (impact, lista za storno, kaskada).
+   - Svaki test ih vraća rollback-om.
+   - Neki nemaju ni količinu, pa bi stavka morala da izmisli broj.
+   - Da li ih neki strog čitalac ipak dotiče, meri suite `Test_StornoCentar_All` (TARGETED pre review-a, FULL posle GO).
+5. **Test fakture sa duplim `PrijemnicaID`** (`Test_CreateFakturaBlocksDuplicatePrijemnicaID`) radi u svojoj
+   transakciji i vraća se rollback-om.
+   - Suite fakture svoje redove ostavlja u svesci, a dupli ID je sintetička anomalija koju strog čitalac
+     odbija nad CELOM tabelom (1975).
+   - Ostavljen, oborio bi svaki čitalac prijemnice u suite-ovima koji idu posle.
+   - Ostali seed-ovi te suite pišu zaglavlje i stavku.
+6. **`T09_AdjustBlokPreradjena` menja gajbe na STAVCI, ne na zaglavlju.** `Adjust` od koraka 3 čita stavku, pa
+   izmena zaglavlja više nije izmena dokumenta (promena premise testa).
+7. **Integritet:** A2 i A3 RAČUNAJU, pa čitaju strogo unutar svog handlera (obrazac B7). Kvar stavki tada daje
+   red „GRESKA" za tu proveru, a ne lažan nalaz. B1, B4, B5 i C4 samo PRIKAZUJU kg, pa čitaju meko
+   (`ZbirStavkiPoPrijemniciMeko`, `KgPrijemniceMeko`).
+8. **Obrisano, mrtvo posle izmene:**
+   - `SumByBroj` (jedini korisnik je bio prosek gajbe);
+   - `DictAppend` (jedini korisnik je bio `BuildChainIndex`);
+   - grana „kilaža sa zaglavlja" u `modScrOporavak.KgDokumenta`, zajedno sa parametrom `colKol` iz
+     `RowsAktivni` (oba tipa šalju rečnik stavki).
+
+   `DictGet` je bio mrtav i pre ovog reza i nije diran.
+9. **Grupni list:** dokument sa gajbama bez svog reda knjige diže `7694` (obrazac `7693` otpremnice), a papir
+   ne nastaje.
+10. **Izvoz:** agregacija taba `PredatoPoKupcu` je izdvojena u `PredatoPoKupcuRedovi` (obrazac
+    `OtkupPoOMRedovi`), pa se meri bez mreže. Sam upis u Google tabelu ostaje nemeren.
+
+**Review #437, krug 1 (stavka 180) — dopuna ugovora čitaoca, bez širenja obima:**
+
+- **P2 — identitet stavke.** Čitalac je `PrijemnicaStavkaID` samo prenosio u izlaz (`res(n, 7)`), bez ikakve
+  provere. Sada odbija prazan ID (`1978`) i ID koji se ponavlja bilo gde u tabeli (`1979`) — ugovor tačka 5.
+  - Kapija je globalna, a ne po dokumentu, jer je ID iz `NewEntityID` globalan.
+  - Zato test stavlja isti ID na DRUGI dokument (klasa II, nova za taj dokument, da je kapija klase ne
+    presretne).
+  - Sabotaža `s6k3-citalac-id-stavke-po-dokumentu` meri baš razliku „globalno / po dokumentu".
+- **P3 — `BrutoKg` = 0.** Ugovor (tačka 3) je tražio „prazno ili > 0", a kod je odbijao samo negativan bruto.
+  Sada je i nula `1977`. Plan je bio tačan, a kod nije.
+- **Isti nedostatak kod braće je van ovog reza → `KI-033`.** Ni `StavkeOtkupaRedovi`, ni
+  `StavkeOtpremniceRedovi`, ni `StavkeZbirneRedovi` ne proveravaju ID stavke. Čitalac otkupa uz to pušta
+  `BrutoKg` = 0 (`modOtkup.RequireBrutoStavke` odbija samo negativan). Review je tražio lokalnu ispravku
+  ugovora prijemnice, bez širenja obima.
+
+#### Korak 4 — storno na nivou dokumenta, `KI-031` kao kapija (pre-flight nad `8e970d99`, stavka 182)
+
+Reviewer: „START GO, posebno stroga transakciona provera". Prelazi se sa ČITANJA na PONIŠTAVANJE poslovnih
+događaja, pa je `KI-031` obavezna kapija ovog koraka, a ne dug.
+
+**Verdikt po osama** (linije su sa `8e970d99`):
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | od koraka 2 je dokument JEDAN red `tblPrijemnica` + 1..2 stavke (`SavePrijemnicaDokument`); `tblPrijemnicaStavke` je `BEZ_STORNA`, pa je storno činjenica dokumenta, ne stavke |
+| `EVENTS` | **PROVEN** | tri, tabela ispod |
+| `IDENTITY` | **GAP → odluka 2** | F8 šalje `GeneracijaID` (`modScrDokumenti:2357`), a redovi fixture-a ga nemaju, pa storno pada na broj; subjekat kaskade se bira po BROJU (`modStornoFlow:1790`); palete se skidaju po BROJU (`modPaletniList:2184`); `ByBroj` bez generacije obara SVE dokumente istog broja i kupca, jer `RequireJedanVlasnikPoBroju` broji vlasnike, ne dokumente (`modStorno:534`) |
+| `CARDINALITY` | **PROVEN** | 1 dokument : 1..2 stavke; 1 stavka : N paleta-stavki; 1 zbirna : N prijemnica |
+| `INVARIANTS/OWNER` | **PROVEN** | `AMB-INV-07/-08` (`StornirajAmbalazuDokumenta`, `modAmbalaza:1749`; `RequireAmbTxIzvorniDokument`, `:2868`); `AMB-10-ODL-15` (zaglavlje, pa `bind`, pa knjiga); A9 |
+| `WRITERS` | **PROVEN** | `Stornirano` piše samo `modStorno:480`; palete `modPaletniList` (`DetachOsirocenePaletaStavke_TX`); keš i osirotelost fakture `modStorno:487-492`; `tblStornoVeze` `modStornoContext` (svoja TX po pozivu); `tblStornoZurnal` se u stornu prijemnice ne piše |
+| `DOWNSTREAM` | **GAP → odluke 1 i 3** | matrica ispod |
+| `CAPABILITY` | **PROVEN** | modovi ostaju (obican, ISPRAVKA, DUPLI uz „ne diraj palete", PONIŠTENJE, REŠI KASNIJE); `RunSimpleStornoPrijemnica` je mrtav (0 pozivalaca) |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | ispod |
+| `PLATFORM` | **N/A** | nema novog Excel/COM ponašanja |
+| `LANDING` | **PROVEN** | grana `claude/s6-korak4-storno` = `8e970d99` + docs |
+
+**BUSINESS EVENTS** (storno poništava sva tri):
+
+| Događaj | Datum / status | Tabela | Šta sme bez sledećeg |
+|---|---|---|---|
+| fizički — roba i gajbe kod kupca | `Datum` dokumenta | knjiga `tblAmbalaza` (`UZ_ROBU` + `POVRAT_PRAZNE`); palete `tblPaleta`/`tblPaletaStavka` | prijemnica bez paleta i bez knjige |
+| poslovni — dokument prijema | `Stornirano` na zaglavlju | `tblPrijemnica` (+ stavke, bez storna) | dokument bez fakture |
+| finansijski — potraživanje | aktivna stavka fakture | `tblFakturaStavke` po `PrijemnicaID` (+ keš `Fakturisano`/`FakturaID`, piše ga `CreateFaktura`, `modFaktura:360/363`) | faktura ne sme da ostane nad storniranim dokumentom bez traga |
+
+**Matrica „menja / snima" po putanji** (svaka tabela koja se menja, a ne snima, je nalaz):
+
+| Putanja | Snima | Menja bez snimka | Palete |
+|---|---|---|---|
+| `StornoPrijemnica_TX` (samo testovi) | prijemnica, fakture, stavke fakture, knjiga | — | ne dira |
+| `ByBroj_TX` (F8 obican; ISPRAVKA, DUPLI, PONIŠTENJE bez zbirne) | isto | — | DUPLI/PONIŠTENJE: **zasebna TX posle commit-a, po broju** |
+| kaskada, `ownsChain = True` | zbirna, otpremnica, knjiga, otkup, prijemnica, fakture, stavke fakture | — | Faza B: zasebna TX po broju |
+| kaskada, `ownsChain = False` (subjekat) | zbirna, otpremnica, knjiga, otkup | **`tblPrijemnica`, `tblFakture`, `tblFakturaStavke` — `KI-031`** | pozivalac skida u zasebnoj TX, po broju |
+
+`KI-031` ima dva okidača, oba ista posledica (`Stornirano = Da` preživi rollback): prijemnica sa nogama
+knjige (`RequireAmbTxIzvorniDokument` odbije) i SVAKI kasniji pad u Fazi A (npr. `AMB-INV-07` na otpremnici).
+
+**Čitaoci (R5):** `ImpactHeader` čita kg sa zaglavlja (`modStornoImpact:155-158`, `SumActiveNum`);
+`PrefillIzStorniranog` čita klasu, količinu, gajbe i cenu sa zaglavlja (`modStornoDok:715-726`); lista
+`GetActiveDocumentsForStorno` čita `Kolicina` sa zaglavlja za prijemnicu I zbirnu i spaja redove po BROJU
+(`modStornoFlow:1152-1168`) — to je četvrto živo mesto grupe `zbr_linija`.
+
+**Testovi iz §14.14 (red „Storno kaskada lanca")** su obrisani u `bf04e3e0` (S3b-1); danas ih nema u `src-vba`.
+`Test_GeneracijaNePrelaziVlasnika` o `PickPrefillRows` ima samo komentar (`BFP:2517`).
+
+**`KI-028` ne ulazi:** F8 testovi #33/#35/#39 idu nad redovima fixture-a bez knjige (`PRJ-TEST-Z*`, `-I*`,
+`KASK-1`), a novi testovi koriste svež tip (`RegistrujTipTesta`) i vozača `VOZ-90001`.
+
+**Seam za pad posle mutacije:** nijedan postojeći ne gađa storno prijemnice (`StornoTestFailPosleRelease` je u
+`StornoFaktura`). Nov seam po `testovi.md` §4.
+
+**Odluke operatera (20.10.2026, stavka 182), sve po preporuci:**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | storno ↔ faktura | **blokada po imenu**: aktivna stavka fakture za taj `PrijemnicaID` ili keš `Fakturisano = DA` odbija storno PRE ijedne mutacije („prvo storniraj fakturu"). Osirotelost po `PrijemnicaStavkaID` ide u korak 5 |
+| 2 | identitet | **`PrijemnicaID` od reda do pisca**: skrivena kolona F8 nosi `PrijemnicaID`; par broj–ID se proverava jednom; prazan ID se odbija. `StornoPrijemnicaByBroj_TX` i `RunSimpleStornoPrijemnica` se brišu; subjekat kaskade je JEDAN `PrijemnicaID` |
+| 3 | palete | **u jezgru, ista TX, po `PrijemnicaID`**; stavka na prerađenoj paleti obara ceo storno po imenu; Faza B kaskade i zasebni `Detach` pozivi se brišu. Izričit izbor ostaje izuzetak: ISPRAVKA (palete čekaju novu prijemnicu) i DUPLI „ne diraj palete" (MANUAL recovery) |
+| 4 | §14.14 | **ovde:** `GuardNaSvimPutanjama` i `GuardUKaskadi` (deo prijemnice) i prefill iz `Test_GeneracijaNePrelaziVlasnika`; `KaskadaScopePoLancu` (vlasnička grana) → korak 7; `ReadHelpersExcludeStornirano` (`GetPrijemniceByKupac`) → korak 5 |
+
+**Ugovor storna prijemnice posle koraka 4** — jedno jezgro, `modStorno.StornoPrijemnica(id, tx, skiniPalete)`:
+
+1. **Snimci pre prve mutacije.** Jezgro TRAŽI (`tx.ImaSnapshot`) svaku tabelu koju menja: `tblPrijemnica`,
+   `tblAmbalaza`, `tblPaleta`, `tblPaletaStavka`. Nedostaje li ijedna, pada po imenu PRE upisa. `KI-031`
+   time postaje nemoguć po konstrukciji, ne samo zakrpljen na jednom pozivaocu (invarijanta ide u jezgro).
+   Pozivaoci snimaju kroz JEDAN skup (`SnimiZaStornoPrijemnice`), koji uz to snima i stavke prijemnice,
+   fakture i stavke fakture.
+2. **Provere pre mutacije:** red postoji tačno jednom i nije storniran; faktura (odluka 1); prerađena paleta
+   (odluka 3).
+3. **Redosled upisa:** palete → `Stornirano` → `BindSourceDocument` → kontra-stav knjige. `Stornirano` se ne
+   postavlja pre nego što su posledice van knjige poništene (R4), a knjiga ide posle `bind`-a jer to traži
+   `AMB-10-ODL-15`. Pad bilo gde vraća SVE rollback-om pozivaoca.
+4. **Jezgro ne piše fakturu ni keš** — posle odluke 1 grana osirotelosti je nedostižna i briše se
+   (`MarkFakturaOrphaned`, `MarkFakturaStavkeOrphaned`).
+5. **Palete:** paletni motor bez sopstvene TX (`modPaletniList`), po `PrijemnicaID`; prazna paleta se
+   stornira (`StornoPaleta`). `DetachOsirocenePaletaStavke_TX` (po broju) ostaje samo za Oporavak
+   (`modScrDokumenti:1212`) i deli isto telo.
+
+**Obim po celinama:**
+
+- **jezgro** (`modStorno`): gore; `StornoPrijemnica_TX(id, skiniPalete)`; seam `StornoPrijemnicePadniTest` na
+  kraju jezgra, posle svih upisa (gejt pri svakom pozivu, `ResetSeamova`);
+- **kaskada** (`PonistiZbirnaChain_TX`): subjekat je `PrijemnicaID`, `PodeliPrijemnice` po ID-u; Faza A snima
+  ceo skup bez obzira na `ownsChain`; palete idu kroz jezgro, Faza B se briše; test seam
+  `PonistiZbirnaChain_Test` dobija subjekat i gejt test režima (seam sme samo da kvari, zabrani ili
+  posmatra — danas dodaje pristup);
+- **okvir i F8** (`modStornoFlow`, `modStornoDok`, `modScrDokumenti`): `IdKolonaTipa("PRIJEMNICA") =
+  PrijemnicaID`; `ScanPrijemnica` po ID-u uz proveru para; `StornoIzvrsi` po ID-u (obrazac zbirne:
+  aktivna + par); ISPRAVKA bez skidanja paleta; DUPLI po izboru; PONIŠTENJE kroz jezgro;
+- **čitaoci** (R5): uvid (zaglavlje po ID-u, kg iz stavki, palete po ID-u, faktura kroz isti predikat kao
+  kapija); prefill prijemnice iz stavki (obrazac otpremnice); lista za storno jedan red po DOKUMENTU, kg iz
+  stavki za prijemnicu i zbirnu → prag `zbr_linija` 4 → 3.
+
+**Imenovano van obima:**
+
+- osirotelost fakture po `PrijemnicaStavkaID` i `GetPrijemniceByKupac` — korak 5;
+- vlasnička grana kaskade (`ownsChain = True`) dobija test u koraku 7 — traži config hladnjače;
+- palete osirotele PRE ovog koraka (stavke stornirane prijemnice koje su ostale) više ne skida Faza B; vidi ih
+  Oporavak, kao i do sada za sve putanje van kaskade;
+- `StornoTestFailPosleRelease` (`StornoFaktura`) ne pita `IsTestMode()` u kuki i nije u `ResetSeamova` → `KI-034`.
+
+**Testovi čija se premisa menja:**
+
+| Test | Šta je tvrdio | Šta biva |
+|---|---|---|
+| `T_F8_IzabranRedOstajeIzabran` (#33), `T_IspravkaPrijemnice_PodKolizijomBroja` (#35) | identitet je generacija (`StampGeneraciju`) | identitet je `PrijemnicaID`; tvrdnje važe |
+| `T_ZbirnaKaskada_StajeNaDvosmislenom` (#39) | PONIŠTENJE bez identiteta stiže do kapije zbirne | šalje `PRJ-KASK-1`; tvrdnja važi |
+| `Test_StornoPoBrojuOdbijaDvaVlasnika` | `ByBroj` odbija dva vlasnika | prelazi na F8 ulaz: bez ID-a i sa tuđim parom odbijeno |
+| `Test_PRJ_EksternaPrijemnicaBlokiraPonistenje` | seam bez test režima | pali test režim; tvrdnje važe |
+| `Test_S6_DveKlaseJedanDokument` | storno ne dira palete | storno skida palete obe klase (nova tvrdnja) |
+| BFP nad `PickPrefillRows` | prefill sa zaglavlja | prijemnica iz stavki; zaglavlje ostaje samo izvor `base` reda |
+
+**ACCEPTANCE CONTRACT koraka 4 — plan dokaza, ne dokaz:**
+
+- **važi:**
+  - **R1:** dvoklasna prijemnica (I 100 × 120, II 50 × 80, gajbe 10 + 10, povrat 4) se stornira JEDNIM pozivom
+    nad jednim `PrijemnicaID`: zaglavlje storno, oba kontra-stava, palete obe klase skinute;
+  - **R2:** kaskada sa subjektom (`ownsChain = False`) nad prijemnicom sa nogama knjige PROLAZI, a pad posle
+    mutacije vraća sve tabele matrice: broj redova i ključna polja (`Stornirano`, gajbe na paleti, broj redova
+    knjige), ne samo `Stornirano`;
+  - **R3:** palete, knjiga i dokument u ISTOJ transakciji; nema zasebnog `Detach`-a ni Faze B;
+  - **R4:** posle podmetnutog pada (seam na kraju jezgra) `Stornirano` je prazno, a knjiga i palete netaknute —
+    i za direktan storno i za kaskadu;
+  - **R5:** uvid, prefill i lista za storno čitaju stavke: 150 kg (100 + 50), klase I/II, cene 120/80;
+- **netaknuto:** pisac koraka 2; `AMB-10-ODL-15`; `AMB-INV-07/-08`; A9; Oporavak (`Detach` po broju); storno
+  ostalih tipova; ISPRAVKA ostavlja palete za prevezivanje;
+- **edge:** jednoklasna prijemnica; prijemnica bez ambalaže i bez paleta; DUPLI „ne diraj palete" ostavlja palete
+  i pravi MANUAL;
+- **negativno (R6), svako odbijeno PO IMENU, stanje netaknuto:**
+  - dve generacije istog broja (isti kupac): storno po ID-u obara samo izabran; kaskada sa subjektom ne obara
+    drugi dokument istog broja (blokira ga kao „ostalu" prijemnicu);
+  - dva vlasnika istog broja: F8 bez ID-a i sa parom broj–ID tuđeg dokumenta odbijen;
+  - neuspeo kontra-stav ambalaže (`AMB-INV-07`: kupac je gajbe vratio kupčevim reversom);
+  - fakturisana prijemnica (odluka 1); paleta prerađena (odluka 3); transakcija bez snimka paleta;
+- **čime:** BFP `Test_S6K4_*` nad svežim tipom; `modTest` 260 (F8, uvid, prefill, lista, kroz
+  `PrijemnicaUpisi` bez ambalaže); vraćeni testovi §14.14; sabotaže `s6k4-*`; `popis_citalaca --check`
+  (`zbr_linija` 3).
+
+**Ispravke plana tokom koda (stavka 183) — svaka izmerena, ne pretpostavljena:**
+
+1. **`PonistiZbirnaChain_Test` je ostao netaknut.** Kaskada sa subjektom se vozi kroz PRAVI ulaz
+   (`RunPrijemnicaCorrection`, PONIŠTENJE), pa seam-u subjekat ne treba. Gejt test režima je zatečen nalaz po
+   §4 (seam dodaje pristup) → `KI-035`. Zato `Test_PRJ_EksternaPrijemnicaBlokiraPonistenje` nije menjan.
+2. **Jedan razrešavač identiteta umesto tri provere.** `modStornoFlow.PrijemnicaIDZaStorno` (ID tačno jednom,
+   nestorniran, par sa brojem) zovu okvir (`ScanPrijemnica`, `ActiveBlocksForFlow`), uvid i `StornoIzvrsi` /
+   `StornoRazlog`. Brisanjem su otišli `PkPoIdentitetu`, `AktivanPoIdentitetu`, `RedJeIzabranogDokumenta`.
+3. **Mrtav kod obrisan uz pozivaoce:** `StornoPrijemnicaByBroj_TX`, `RunSimpleStornoPrijemnica`,
+   `MarkFakturaOrphaned`, `MarkFakturaStavkeOrphaned`, `SumActiveNum`, `SafeDblZ`, `KolicinaReda`, `CeliBrojD`
+   i četiri `Col*ZaPrefill` čitača kolona zaglavlja. `modStorno` time više ne piše `tblFakturaStavke`: unos je
+   skinut iz `WRITE_OWNERSHIP.json` (mrtav unos), a `WHO_WRITES.md` je regenerisan.
+4. **Lista za storno daje jedan red po dokumentu za SVA tri tipa**, ne samo za prijemnicu — spajanje po broju
+   je postojalo zbog redova po klasi. Posledica van prijemnice: dve otpremnice istog broja (dve stanice) su
+   sada dva reda.
+5. **Uvid formatira kg kroz `modStornoDok.KgTekst`**, isti formater kao lista: VBA `Format(420, "#,##0.##")`
+   vraća „420." (zadrži decimalni separator).
+6. **Spisak posledica PONIŠTENJA prijemnice dobija identitet** (`BuildPonistenjePosledice(..., docID)`): bez
+   pada na broj bio bi prazan.
+7. **`MAPA_SPOSOBNOSTI` B-016 → ZAMENJENO** (odluka 1): put je storno fakture (B-017), pa prijemnice.
+8. **Nove poruke:** `STORNO_ERR_PRJ_PAR` i `STORNO_ERR_PRJ_FAKTURISANA` (preflight ekrana imenuje razlog pre
+   potvrde). Nov ključ traži restart sveske (`EnsurePoruke` ne menja već ispisan natpis).
+9. **Testovi čija se premisa menja, a nisu bili u tabeli gore** (nađeni prvim zelenim prolazom ili pretragom
+   po pozivu):
+   - `modTest` 57 `T_StornoEkran_KolonaIdentiteta`: kolona identiteta je `PrijemnicaID`;
+   - `modTest` `T_StornoImpact_IdentitetNeDegradira`: bez identiteta STROG uvid pada (svaki red nosi ID, pa
+     „zatečenog zapisa bez identiteta" nema); van strict-a palete i dalje po broju;
+   - `modTest` testovi uvida i ekrana nad `PRJ-TEST-Z1/Z2` (`GEN-IMP-*`, `GEN-F8-2`) šalju `PrijemnicaID`;
+     testovi prevezivanja paleta ostaju na generaciji (korak 8);
+   - StornoCentar: `Test_ImpactHeaderSum_Auto` i `Test_BuildStornoImpact_Auto` seju dokument SA stavkama i
+     šalju ID; `Test_PonistenjePrijemniceKaskada_Auto` šalje ID; `Test_GetActiveDocumentsForStorno_Auto`: dva
+     reda istog broja su dva dokumenta (2×), ne dve klase (1×);
+   - Storno T17: paletne stavke seed-a nose `PrijemnicaID` (kao produkcioni pisac), jer ih storno bira po
+     njemu;
+   - `Test_StornoPoBrojuOdbijaDvaVlasnika` ide kroz `StornoIzvrsi`.
+10. **`Test_S6_DveKlaseJedanDokument` nije dobio tvrdnju o paletama** — meri je
+    `Test_S6K4_StornoSkidaPaleteUIstojTx`.
+11. **Redosled tvrdnji u 260 je promenjen posle crvenog prolaza:** identitet ide pre uvida, jer se uvid zove
+    tim identitetom (sabotaža identiteta bi inače oborila tvrdnju uvida). Prva tvrdnja (prefill), koja je
+    pala u crvenom prolazu, nije dirana.
+
+**Review #438, krug 1 (stavka 184) — P2, bez širenja obima:**
+
+- **Paletna stavka koja pokazuje na paletu koje nema** obara storno po imenu, na putanji storna
+  (`SkiniPaleteZaStornoPrijemnice`), pre prve mutacije. `DecrementPaletaForStavka` je nad nepostojećom paletom
+  tiho izlazio. Do ispravke je storno padao samo SLUČAJNO (`StornoPaleta` nad „praznom" nepostojećom paletom),
+  a sa su-stanarom drugog dokumenta na istoj nepostojećoj paleti tiho je prolazio — test meri baš taj slučaj.
+  Paletni motor i Oporavak nisu dirani (review: „ne tražim opšti refaktor paletnog motora").
+- **Dokaz je otkrio dvoslojnu kapiju:** `s6k4-f8-prazan-id-po-broju` nije obarala BFP tvrdnju, jer `StornoIzvrsi`
+  jezgru šalje prazan `docID`, a jezgro ga odbija samo. Sabotaža je presidrena na REŠI KASNIJE (#33), gde je
+  razrešavač jedina brana.
+
+**Ručna provera #438 (stavka 185) — dve rupe između jezgra i operatera:**
+
+- **N1 — razlog odbijanja ide do ekrana.** Odbijenice ovog koraka (prerađena paleta, paleta koje nema, pad
+  kontra-stava) jezgro imenuje, a `StornoPrijemnica_TX` ih je gutala u `False`. Sada razlog vraća kroz
+  `outRazlog`, očišćen od `Source=... |` prefiksa, a okvir ispravke, F8 i kaskada ga prikazuju.
+- **N2 — uvid ne obećava ono što jezgro odbija.** Lanac posledica za fakturisanu prijemnicu (odluka 1) i robu
+  na prerađenoj paleti (odluka 3) kaže „storno se ODBIJA", umesto „oslobađa se" i „odvezuju se sa palete".
+- Zatečeni nalazi iz iste provere ne šire obim: `KI-037` („?" u `MsgBox`-u) i `KI-038` (lista i kapija čitaju
+  fakturisanost iz različitih polja; zatvara ga korak 5).
+
+**Ponovljena ručna provera #438 (stavka 186) — odbijanje pre dijaloga i bez zapisa ispravke:**
+
+- **Ostatak N2:** dijalog potvrde PONIŠTENJA (`BuildPonistenjePosledice`) ima svoj tekst, mimo lanca uvida. I
+  on sada za fakturisanu prijemnicu i robu na prerađenoj paleti kaže „storno se ODBIJA".
+- **N5:** okvir ispravke prijemnice prerađenu paletu odbija **pre** dijaloga posledica i **pre**
+  `CreateCorrectionContext` (PONIŠTENJE i DUPLI bez „Ne diraj palete"). Pita `modPaletniList.PreradjenaPaletaRazlog`,
+  koji bira isto što i jezgro i vraća isti tekst. Odbijen pokušaj više ne ostavlja FAILED zapis u Oporavku, a
+  jezgro zadržava svoju kapiju.
+- Ista klasa na PONIŠTENJU zbirne (`RunZbirnaCorrection`) je `KI-039`, van ovog koraka.
+
+#### Korak 5 — faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden (pre-flight nad `992e1f45`, stavka 188)
+
+Prelazi se sa PONIŠTAVANJA na FINANSIJSKI događaj: nastaje potraživanje, a ono ide u SEF, izvod i uplatu.
+Uslov reviewera posle `#438` je glavna invarijanta koraka: **fakturisanje, lista dokumenata i storno koriste ISTI
+izvedeni status iz aktivnih stavki fakture, bez nezavisnog keša koji može da tvrdi suprotno.** `KI-038` i `KI-040`
+su kapije koraka, ne dug.
+
+**Iz čega faktura danas računa — izmereno** (sonda nad sveskom iz `run_vba --compile-only --keep`, pravi pisac,
+22.10.2026):
+
+- `SavePrijemnicaMulti_TX` (I 100 × 120, II 50 × 80) daje `PRJ-00001`; zaglavlje `Kolicina`/`Cena`/`Klasa` je prazno.
+- Mreža Fakturisanja (`GetPrijemniceZaFakturisanjeForGrid`) za taj dokument: klasa „", 0 kg, cena 0, vrednost 0,
+  `dostupna = True`. Operater ga vidi kao slobodnu prijemnicu od 0 kg.
+- `CreateFaktura_TX` vraća prazno. U logu stoji „Kolicina mora biti veca od nule. PrijemnicaID=PRJ-00001"
+  (`modFaktura:267`: prazno zaglavlje → `CDbl(Empty) = 0`). Promena je `tblFakture +0`, `tblFakturaStavke +0`.
+- **Fakturisanje dokumenta koji pravi produkcioni pisac je danas pokvareno.** Radi samo nad fixture redovima
+  starog oblika, čije zaglavlje nosi brojke (`PRJ-FAK-3`). Faktura suite je 35/35 jer `AppendTestPrijemnicaRow`
+  seje zaglavlje sa brojkama (`modFakturaTests:768-770`) — zeleno nad oblikom koji pisac više ne pravi.
+- Komentar „Business module trusts only PrijemnicaID from caller" (`modFaktura:190`) je pisan dok je `PrijemnicaID`
+  bio red klase. Od koraka 2 je to dokument, pa jedna stavka korpe znači ceo dokument, a linija se ne zna.
+- Iz F4 je to danas nedostižno: F4 je pauziran (`modDokUnos:827`), pa operater novih prijemnica nema. Nalaz je
+  ipak kapija koraka, jer bi korak 6 (F4 odmrznut) pustio dokumente koji se ne mogu fakturisati.
+
+**Verdikt po osama** (linije su sa `992e1f45`):
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | `DOCUMENT_HEADER_LINES` §3 (PrijemnicaStavka → FakturaStavka **1:1, puna količina**), §4.4 (fakturisanost je činjenica LINIJE, keš se ne drži ni na stavci), §4.5 (`PrijemnicaStavkaID` na kraj `tblFakturaStavke`), §6.6 (četiri pravila linije fakture) |
+| `EVENTS` | **PROVEN** | tri, tabela ispod |
+| `IDENTITY` | **GAP → odluka 2** | identitet koji putuje je `PrijemnicaID` DOKUMENTA: skrivena kolona 10 mreže (`modScrFakture:103`, `RedoviPrijemnice:1197`) → korpa `prijemnicaID` (`FkDodaj:626`) → `stavke.Add Array(prijemnicaID)` (`:895`) → `CreateFaktura` `stavka(0)` (`modFaktura:203`); linija (`PrijemnicaStavkaID`) ne stiže nigde, a `tblFakturaStavke` je nema |
+| `CARDINALITY` | **PROVEN** + ⚠ ARCHITECTURAL EDGE CASE | 1 dokument : 1..2 stavke (korak 2); 1 stavka : 0..1 aktivna linija fakture (§6.6); 1 faktura : N linija iz N dokumenata jednog kupca; **1 dokument : 0..2 fakture** — delimično fakturisan dokument. Lista dokumenata ima jednu kolonu plaćanja po `FakturaID` zaglavlja (`modScrDokumenti:3086`, `:3143-3156`), pa ga ne može prikazati → odluka 5 |
+| `INVARIANTS/OWNER` | **PROVEN** | §6.6 nosi pravila; vlasnici posle reza: pisac `CreateFaktura` (kapija pre upisa), čitač `modFaktura.FakturisanostPoPrijemnici` (fail-closed), health check 4. Imena: `FAK-LIN-01` (stavka na najviše jednoj aktivnoj liniji), `FAK-LIN-02` (linija nosi postojeću stavku svog dokumenta), `FAK-LIN-03` (status je izveden; keš se ne čita ni piše) |
+| `WRITERS` | **PROVEN** | matrica ispod |
+| `DOWNSTREAM` | **GAP → odluke 1, 5, 6** | matrica ispod; dva čitača iste činjenice čitaju dva polja (`KI-038`) |
+| `CAPABILITY` | **PROVEN** | D-001 i D-002 (`MAPA_SPOSOBNOSTI`) su danas pokvareni nad novim oblikom (merenje gore) → **MIGRATED** (red po stavci); delimično fakturisanje je danas strukturno nemoguće, posle reza je izbor reda; B-007 → MIGRATED (izveden status); SEF, izvod i uplata nisu dirani |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | ispod |
+| `PLATFORM` | **N/A** | nema novog Excel/COM ponašanja |
+| `LANDING` | **PROVEN** | grana `claude/s6-korak5-faktura` = `992e1f45` + docs (`941d5712`); Excel je bio slobodan |
+
+**BUSINESS EVENTS:**
+
+| Događaj | Datum / status | Tabela | Šta sme bez sledećeg |
+|---|---|---|---|
+| fizički — roba primljena kod kupca | `Datum` prijemnice | `tblPrijemnica` + `tblPrijemnicaStavke` | **prijemnica bez fakture** — legitimno i trajno (hladnjača: paleta → prerada → GP faktura) |
+| poslovni/pravni — faktura izdata | `tblFakture.Datum` = dan izdavanja (`Date`, `modFaktura:302`), ne datum prijema; `Status` `Neplaceno` → `Placeno`, storno `Stornirano = Da` + `Status = STORNIRANO` | `tblFakture` + linije `tblFakturaStavke` (snapshot količine, cene i klase stavke) | **faktura koja pokriva jednu klasu, a drugu ne** — dokument je tada `DELIMIČNO`, a druga klasa ostaje slobodna za drugu fakturu |
+| finansijski — potraživanje | nastaje izdavanjem (`Iznos`, isti datum); naplata je zaseban događaj sa svojim datumom (`tblNovac.FakturaID`); SEF je zaseban događaj (`SEFSentAt`, `SEFWorkflowState`) | `tblFakture`, `tblNovac`, `tblSEF*` | **faktura bez SEF-a i bez uplate** — `LOCAL_FINALIZED` (`modFaktura:309`), `Neplaceno`; storno fakture odvezuje uplate (`ResetNovacFakturaLink`) |
+
+Datum fakture i datum prijema su dva datuma i ostaju dva — nijedan nije izjednačen zbog implementacije.
+`OsirocenoOd` na fakturi i liniji danas **niko ne puni**: pisac osirotelosti je obrisan u koraku 4, jer se
+fakturisana prijemnica ne stornira. Kolona ostaje (čita je SEF), a imenovana je van obima.
+
+**Pisci fakturisanosti — pre i posle:**
+
+| Pisac | Prima | Piše danas | TX / snima | Posle reza |
+|---|---|---|---|---|
+| `modFaktura.CreateFaktura` (`:108`) | `kupacID`, `stavka(0)` = `PrijemnicaID` | zaglavlje (`:323`); linija sa brojkama SA ZAGLAVLJA prijemnice (`:343-355`); keš `Fakturisano`/`FakturaID` na zaglavlje prijemnice (`:360`, `:363`) | `CreateFaktura_TX`: fakture, linije, prijemnica, novac | prima `PrijemnicaStavkaID`; brojke iz STAVKE (`StavkePrijemniceRedovi`); linija nosi `PrijemnicaStavkaID` (kolona na kraju, upis po imenu); **keš se ne piše**; snima fakture, linije i novac |
+| `modUtovar.CreateUtovarSaFakturom_TX` / GP (`:1603`) | `PreradaID` | GP linija bez `PrijemnicaID` | svoja TX | netaknut (nova kolona ostaje prazna) |
+| `modStorno.StornoFaktura` (`:647`) | `FakturaID` | linije `Stornirano` (`:1703`); keš na prijemnici se briše (`ReleasePrijemnicaFromFaktura`, `:1784-1785`) | `StornoFaktura_TX`: fakture, linije, prijemnica, novac, utovar | linije `Stornirano` (time je dokument sam nefakturisan); `ReleasePrijemnicaFromFaktura` se briše, a sa njim i snimak prijemnice |
+| `modDokumenta.RelinkFakturaStavke` (`:8033`, poziv `:7002`) | nova prijemnica, broj, klasa | linija `PrijemnicaID` + briše `OsirocenoOd` (`:8091`, `:8094`); `UpdateFakturaStatus` | TX pisca prijemnice | **briše se** (odluka 4): uslov `OsirocenoOd <> ""` (`:8074`) niko ne puni, a fakturisana prijemnica se ne stornira (korak 4, odluka 1), pa ni ne ispravlja — nedostižno. Kapiju meri `Test_S6K4_FakturisanaSeOdbija` |
+| fixture `make_fixture` | — | keš na zaglavlju (`PRJ-FAK-1`, `-2`, `PRJ-SLED-*`), **nijedna** linija fakture nad prijemnicom | — | linija se IZVODI iz keša (odluka 3), kao `tblPrijemnicaStavke` u koraku 3 |
+
+**Čitaoci fakturisanosti — pre i posle** (svi idu kroz JEDAN čitač, `FAK-LIN-03`):
+
+| Čitač | Danas čita | Posle |
+|---|---|---|
+| kapija storna `modStorno.PrijemnicaJeFakturisana` (`:559`; jezgro `:498`, F8 `modStornoDok:242`, okvir `modStornoFlow:827`, uvid `modStornoImpact:321`) | keš `DA` ILI aktivna linija po `PrijemnicaID` | telo seli u `modFaktura` (vlasnik činjenice), izvedeno iz linija; svi pozivi na isto telo |
+| okvir ispravke `RunPrijemnicaCorrection` (`modStornoFlow:481`) | ništa pre `CreateCorrectionContext` (`KI-040`) | ista provera PRE zapisa ispravke (osim REŠI KASNIJE), tekst kao jezgro |
+| mreža Fakturisanja `GetPrijemniceZaFakturisanjeForGrid` (`modFaktura:1034`) + `PrijemnicaDostupna` (`:977`) | red po zaglavlju; linijska polja i keš sa zaglavlja (`:1057-1061`) | red po STAVCI, brojke sa stavke, dostupnost = dokument nije storniran i stavka nije na aktivnoj liniji |
+| kapija pisca `IsPrijemnicaAvailableForFaktura` (`modFaktura:906`) | keš | briše se; pisac pita isti čitač po stavci |
+| lista dokumenata F4 (`modScrDokumenti:3039`, `:3086`, `:3143-3156`, `:3251`) | `FakturaID` zaglavlja (pilula i čip „Nefakturisane") — `KI-038` | izveden status dokumenta: `NE` → „Nefakturisano", `DELIMIČNO` → nova pilula „Delim. fakturisano" (odluka 5), `DA` → plaćanje svih njegovih faktura zajedno; čip uključuje `NE` i `DELIMIČNO` |
+| detalj izveštaja `modScrIzvestaji.IzDetaljPrijemnice` (`:2311-2340`) | keš | izveden status, sa oznakom delimičnosti |
+| `modDokumenta.GetPrijemniceByKupac(samoNefakturisano)` (`:7542-7547`) | keš | parametar se briše: nijedan pozivalac ne šalje `True` (izmereno) |
+| health check 4, 6c i 9 (`modProductionHealthCheck:305`, `:716`, `:1006`) | keš, linijska polja zaglavlja | odluka 6: 4 = ugovor linije kroz isti čitač; 6c = iznos iz stavki; 9 bez veze preko keša |
+| SEF (`modSEFMapper`, `modSEFValidator`), uplata (`UplataFakturaProblem`), izvod (`modBankaImport`) | samo fakturu i njene linije | **netaknuti** — linija sada nosi tačnu klasu i količinu, pa SEF dobija dve linije umesto jedne |
+| PWA izvoz linija (`modStammdatenSync:2849`) | linija bez stavke | netaknut; nova kolona je nizvodni zahtev PWA-u (VBA vodi, PWA prati) |
+
+**Tekst koji obećava posledicu, tražen po rečima** („oslobadja", „fakturisan", „Nefakturisano"):
+`PreviewPrijemnica` (`modStornoFlow:122-123`) i dalje kaže „Fakturisana: Da (faktura/stavke se oslobadjaju)", iako
+storno fakturisanu odbija. Ispravlja se na `STEF_FAK_ODBIJA`. Komentari koji tvrde isto (`modStorno:20-22`,
+`modStornoFlow:453`) ispravljaju se u istom rezu.
+
+**Odluke operatera (22.10.2026, stavka 188), sve po preporuci:**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | keš do koraka 8 | **niko ne čita ni piše**; kolone ostaju u šemi do koraka 8 |
+| 2 | ulaz `CreateFaktura` | **`PrijemnicaStavkaID`, red mreže po stavci**; delimično fakturisanje je izbor reda |
+| 3 | fixture | **`make_fixture` izvodi linije iz keša**; `PRJ-FAK-2` (keš „Da" bez `FakturaID`) liniju ne dobija |
+| 4 | `RelinkFakturaStavke` | **briše se** (neuhranjena i nedostižna) |
+| 5 | delimično fakturisan dokument u listi | **nova pilula „Delim. fakturisano"**, prednost nad plaćanjem; čip „Nefakturisane" ga uključuje |
+| 6 | health check | **prepisati na izveden status** |
+| 7 | `KI-039` | **ostaje van** (svoj rez posle S6) |
+
+**Ugovor izvedenog statusa** (`FAK-LIN-01..03`), jedno telo u `modFaktura`:
+
+1. **Aktivna linija prijemnice** = red `tblFakturaStavke` sa nepraznim `PrijemnicaID` i `Stornirano <> Da`. GP linija
+   (bez `PrijemnicaID`) nije linija prijemnice.
+2. **Ugovor linije, fail-closed:** aktivna linija bez `PrijemnicaStavkaID`-a, linija na stavku koje nema, linija
+   čiji `PrijemnicaID` nije dokument te stavke i stavka na dve aktivne linije su KVAR i dižu grešku po imenu.
+   Starog oblika nema (nema produkcionih podataka), pa „preskoči nepoznat red" ne postoji.
+3. **Stavka** je fakturisana ⇔ ima aktivnu liniju. **Dokument** je `NE` (nijedna stavka), `DELIMIČNO` (bar jedna,
+   ne sve) ili `DA` (sve); uz stanje idu različite fakture njegovih linija.
+4. **Ko pita:** kapija storna i okvir ispravke (`NE` pušta, ostalo odbija), uvid, lanac, dijalog, F8, mreža
+   Fakturisanja (po stavci), lista dokumenata, detalj izveštaja, health check 4. Keš sa zaglavlja niko ne čita.
+5. **Pisac** (`CreateFaktura`): svaka stavka izbora postoji, nije u izboru dvaput, njen dokument je jednom u
+   tabeli, nije storniran i pripada kupcu fakture, a stavka nije na aktivnoj liniji. Sve se proverava PRE prvog
+   upisa. Brojke idu sa stavke. Zaglavlje fakture i linije su u istoj TX, a pad posle upisa vraća sve
+   (zaglavlje, linije, avans).
+
+**Obim po celinama:**
+
+- **kanon:** `tblFakturaStavke.PrijemnicaStavkaID` na kraj (`schema.json` → `gen_schema_module`), `COL_FS_PRIJEMNICA_STAVKA_ID`;
+- **čitač** (`modFaktura`): linije po stavci, status po dokumentu, `PrijemnicaJeFakturisana` (selidba iz
+  `modStorno`), dostupnost stavke; konstante stanja na vrhu modula;
+- **pisac** (`modFaktura.CreateFaktura`, `_TX`): gore; seam pada na kraju jezgra po `testovi.md` §4
+  (`CreateFakturaPadniTest`, gejt pri svakom pozivu, `ResetSeamova`);
+- **storno** (`modStorno`): telo `PrijemnicaJeFakturisana` odlazi; `ReleasePrijemnicaFromFaktura` i snimak
+  prijemnice u `StornoFaktura_TX` odlaze; jezgro storna prijemnice i okvir dele tekst odbijanja;
+- **okvir** (`modStornoFlow`): `KI-040`; `PreviewPrijemnica` tekst;
+- **ekrani**: Fakturisanje (red po stavci, korpa po stavci), lista dokumenata (pilula, čip), detalj izveštaja;
+- **pisac prijemnice** (`modDokumenta`): `RelinkFakturaStavke` i poziv odlaze; snimak faktura i linija u
+  `SavePrijemnicaMulti_TX` odlazi, jer ih više ne piše; `GetPrijemniceByKupac` bez `samoNefakturisano`;
+- **health check**: 4, 6c, 9;
+- **fixture**: linije prijemnica izvedene iz keša;
+- **`WRITE_OWNERSHIP`**: `tblFakturaStavke` bez `modDokumenta`, `tblPrijemnica` bez `modFaktura`; `WHO_WRITES` se
+  regeneriše.
+
+**Imenovano van obima:**
+
+- `KI-039` (PONIŠTENJE zbirne) — svoj rez posle S6 (odluka 7);
+- brisanje kolona `Fakturisano`/`FakturaID` (i linijskih polja) sa zaglavlja — korak 8; do tada postoje, a niko
+  ih ne čita ni piše;
+- `OsirocenoOd` na fakturi i liniji bez pisca (gore) — van S6; SEF ga i dalje čita kao isključenje;
+- prefill iz zaglavlja (`modStornoDok.ColKlasaZaPrefill`, `:1026`) — korak 4 ga je ostavio za `base` red, briše
+  ga korak 8;
+- mrtve konstante sledljivosti u `modIzvestaj` (`SLED_*`, komentar „prijemnica -> faktura ide po denorm FakturaID",
+  `:60`) — ekran je obrisan ranije; ne čitaju ništa, pa ne ulaze;
+- PWA prikaz `PrijemnicaStavkaID` — nizvodni zahtev.
+
+**Testovi čija se premisa menja:**
+
+| Test | Šta je tvrdio | Šta biva |
+|---|---|---|
+| Faktura suite: šest `Test_CreateFaktura*` (`modFakturaTests:67-378`) | zaglavlje nosi brojke; pisac piše keš | seme kao pisac: zaglavlje bez brojki i keša, stavka nosi brojke; ulaz je `PrijemnicaStavkaID`; tvrdnja o kešu postaje „keš ostaje prazan" + izveden status |
+| `T_Fak_DostupnostSePrenosiURedu` (`modTest:13126`) | `PrijemnicaDostupna(storn, fakt, fakID)`; FAK2 (keš bez ID-a) nije dostupna | dva parametra; FAK2 JE dostupna (R4); razlika prikaz/pravilo se meri nad podmetnutom linijom na fakturu koje nema (fault injection, rollback) |
+| `T_Fak_KorpaZnackaITraka` i ostali testovi korpe (`modTest:13194`, `:13368`, `:13532`) | identitet korpe je `PrijemnicaID` | identitet je `PrijemnicaStavkaID` (`PRS-PRJ-FAK-*`); tvrdnje važe |
+| `Test_S6K4_FakturisanaSeOdbija` (BFP `:6823`) | keš `DA` odbija storno; sintetička linija odbija | keš više NE odbija (`FAK-LIN-03`, nova tvrdnja); linija nosi `PrijemnicaStavkaID` |
+| `T_S6K4_UvidKazeOdbijanje` (`modTest:10037`) | `PRJ-FAK-1` fakturisana kroz keš | fakturisana kroz izvedenu liniju fixture-a; tvrdnje važe |
+| `IzDetaljPrijemnice` test (`modTest:17900`) | keš | izveden status; tvrdnja važi |
+
+Vraćaju se po imenu (obrisani u koraku 2, odnosno u S3b-1): `Test_DuplicateFakturaIsBlocked`,
+`Test_OpenFaktureExcludeStornirano` i deo `GetPrijemniceByKupac` iz `Test_DokumentaReadHelpersExcludeStornirano`
+(odluka 4 koraka 4). Ostali delovi tog testa (`GetOtpremniceByZbirna`, `GetZbirnaByKupac`) mere funkcije koje
+korak 5 ne dira — ostaju van, uz ime.
+
+**ACCEPTANCE CONTRACT koraka 5 — plan dokaza, ne dokaz:**
+
+- **važi:**
+  - **R1:** jedan čitač; lista, F8, okvir, uvid, dijalog, Fakturisanje i detalj kažu isto nad svakim stanjem;
+    sabotaža „čitač gleda keš" obara test po imenu;
+  - **R2:** dvoklasni dokument (I 100 × 120, II 50 × 80) fakturisan iz stavki daje dve linije, svaka sa svojim
+    `PrijemnicaStavkaID`, klasom, količinom i cenom, i iznos 16.000; faktura samo klase I ostavlja dokument
+    `DELIMIČNO` (pilula „Delim. fakturisano", čip „Nefakturisane"), a klasa II ostaje slobodna i ide na drugu fakturu;
+  - **R4 (`KI-038`):** `PRJ-FAK-2` (keš „Da" bez linije) je nefakturisana i u listi i u kapiji; `PRJ-FAK-1` je
+    fakturisana i u listi i u kapiji;
+  - **R5 (`KI-040`):** `RunPrijemnicaCorrection` nad fakturisanom (ISPRAVKA, DUPLI, PONIŠTENJE) odbija sa razlogom,
+    bez novog reda `tblStornoVeze`; REŠI KASNIJE i dalje pravi zapis;
+  - **R6:** storno fakture kroz F8 ulaz, pa je dokument nefakturisan bez ijednog upisa u keš, pa storno prijemnice
+    kroz F8 ulaz prolazi;
+  - **TX:** pad na kraju jezgra fakture (seam) vraća zaglavlje, linije i avans; test snima fakture, linije,
+    prijemnicu i novac;
+- **netaknuto:** GP faktura i utovar; SEF, uplata, izvod; avans u istoj TX (D-003); storno fakture ostalih
+  vrsta; pisac prijemnice (osim brisanja relink-a); keš kolone u šemi;
+- **edge:** jednoklasni dokument; dva dokumenta istog kupca na jednoj fakturi; faktura druge klase posle prve;
+- **negativno (R3), svako PO IMENU, stanje netaknuto (broj faktura, broj linija, status stavke):**
+  - druga faktura nad istom stavkom (`Test_DuplicateFakturaIsBlocked`, vraćen);
+  - faktura nad storniranom prijemnicom;
+  - linija za nepostojeću stavku prijemnice;
+  - faktura nad dokumentom drugog kupca;
+  - dupla stavka u izboru;
+- **čime:** BFP `Test_S6K5_*` nad svežim kupcem i dokumentima bez ambalaže (`KI-028` ne ulazi); vraćeni testovi;
+  `modTest` 262 nad fixture-om (lista, kapija, mreža, detalj — `PRJ-FAK-1/2/3`); prepisana Faktura suite;
+  sabotaže `s6k5-*` i presidrene `s6k4-faktura-*` / `fakture-dostupnost-*`; `who_writes --check-ownership`,
+  `gen_schema_module --check`.
+
+**Ispravke plana tokom koda (stavka 189) — svaka izmerena, ne pretpostavljena:**
+
+1. **Crveni prolaz je otkrio kvar testa, ne koda.** Prvi prolaz je dao BFP 33 umesto izvedenih 34 crvenih:
+   `Test_S6K5_StornoFakturePaPrijemnice` je bez fakture zvao `StornoIzvrsi(STIP_FAKTURA, "", …)`, a ulaz je
+   prazan broj razrešio na `FAK-TEST-0` i stornirao je. Zato je pao i tuđi `T_UplataGuard_VecPlacenaFaktura`.
+   Test je ispravljen (`f621e2d6`), a ulaz koji prazan broj ne odbija je `KI-041` (van koraka).
+2. **Dve kapije pisca nemaju sabotažu**, jer su dvoslojne po konstrukciji. Nepostojeću stavku hvata i rečnik
+   bez ključa (`red(1)` pada), a duplu stavku u izboru i `Dictionary.Add`. Gašenje kapije bi bilo placebo.
+   Tvrdnje stoje u `Test_S6K5_FakturaOdbijaNevazeceStavke`, uz KONTROLU koja prolazi.
+3. **`Test_S6K4_FakturisanaSeOdbija` gubi blok keša:**
+   - keš više ne odbija storno — obrnuto meri `Test_S6K5_KesNeOdlucuje`;
+   - sintetička linija nosi stavku klase I, pa je dokument DELIMIČNO fakturisan i jezgro ga odbija;
+   - `S6K4SejStavkuFakture` je obrisan, a zamenjuje ga `S6K5SejLiniju`.
+4. **Snimci po onome što se stvarno menja.** Snimak prijemnice je skinut iz `CreateFaktura_TX` i
+   `StornoFaktura_TX`, a snimak faktura i linija iz `SavePrijemnicaMulti_TX` (relink je obrisan).
+   `SnimiZaStornoPrijemnice` ostaje širi skup, kakav je bio.
+5. **Health check 9** (aktivna prijemnica → stornirana faktura) je skinut, a ne prepisan: veza preko keša ne
+   postoji, a storno fakture stornira linije.
+6. **`s6k4-faktura-stavka-prolazi`** je presidrena na izveden status u `Test_S6K5_DveKlaseIzStavki`. U testu
+   koraka 4 je delila tvrdnju sa kapijom jezgra, pa je test ne bi razlikovao.
+7. **Delimičnost se vidi i u detalju izveštaja** (`OTKUI_IZ_DET_DELIMFAKT`). Nova tvrdnja nosi sabotažu
+   `s6k5-delim-kao-fakturisan`, jer lista i čitač inače dele istu tvrdnju.
+8. **Tekst ekrana Fakturisanja** (`OTKUI_LBL_FK_HINT`) kaže da je red klasa prijemnice. Nov tekst se vidi tek
+   posle restarta sveske.
+
+**Review #439, krug 1 (stavka 190) — dva P2, uzak rez u istom PR-u, PRE koda:**
+
+- **P2-1 — zajednička faktura se dvostruko prikazuje.** Lista F4 za prijemnicu računa ostatak kao ceo iznos
+  svake njene fakture minus uplate. Dve prijemnice na jednoj fakturi od 16.000 tako pokazuju po 16.000.
+  - **Izmereno: nije uvedeno korakom 5.** Na `992e1f45` je ostatak = `Iznos` fakture − uplate za svaki red sa
+    tim `FakturaID`, a stari pisac je takođe dozvoljavao više prijemnica na fakturi. Korak 5 je obrazac
+    proširio sabiranjem preko više faktura dokumenta.
+  - Zbirni red liste ostatak ne sabira (`sumKg`, `sumVal`), pa je greška u prikazu reda, ne u zbiru.
+  - **Odluka operatera (23.10.2026), pristup 1 iz review-a:**
+    - pilula pokazuje plaćanje faktura dokumenta;
+    - OSTATAK ostaje prazan čim je bar jedna faktura dokumenta ZAJEDNIČKA sa drugom prijemnicom, jer taj dug
+      pripada fakturi i vidi se u listi Fakture;
+    - detalj izveštaja kaže „zajednička";
+    - kad su sve fakture samo tog dokumenta, ostatak je njihov ostatak.
+
+    Raspodela uplata po udelu (pristup 2) se ne uvodi.
+  - Čitač nosi i oznaku zajedničke fakture: zapis dokumenta je `Array(stanje, fakture, zajednicka)`.
+- **P2-2 — linija bez fakture izgleda slobodna.** `FakturaLinijePoStavci` je tražio `PrijemnicaStavkaID`, ali
+  ne i `FakturaID`. Aktivna linija sa praznim `FakturaID` je stavku zauzimala za pisca, a mreža ju je nudila
+  kao slobodnu.
+  - **Ugovor linije se proširuje (`FAK-LIN-02`):** aktivna linija prijemnice nosi neprazan `FakturaID`, a
+    zaglavlje te fakture postoji TAČNO jednom i nije stornirano. Inače čitač pada po imenu.
+  - Saglasnost kupca fakture i prijemnice drži pisac (`1721`); čitač je ne ponavlja.
+- **Testovi čija se premisa menja:** testovi koji su sejali sintetičku liniju na fakturu koje nema prelaze na
+  pravu fakturu kroz pisac (`Test_S6K5_OkvirOdbijaFakturisanuPreZapisa`, `Test_S6K4_FakturisanaSeOdbija`).
+  `T_Fak_DostupnostSePrenosiURedu` razlaz prikaza i pravila meri nad fakturom bez broja (`FAK-TEST-0`,
+  postoji i aktivna je), jer linija na fakturu koje nema sada pada po imenu.
+- **Čime:** BFP `Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka` (dve prijemnice na jednoj fakturi; kontrola:
+  prijemnica sa svojom fakturom ima ostatak jednak ostatku te fakture u listi Fakture) i
+  `Test_S6K5_LinijaBezFaktureJeKvar` (prazan `FakturaID`, faktura koje nema, stornirana faktura sa aktivnom
+  linijom — svaki po imenu, uz kontrolu posle rollback-a); sabotaže `s6k5-*`.
+- **Van obima, po review-u:** `KI-039`, `KI-041`.
+
+**Ispravka (stavka 191):**
+
+- **Crveno pre ispravke**, tačno izvedeno: BFP **2693 / 7**, i to sedam tvrdnji po imenu. A i B pokazuju po
+  32.000 za jedan račun od 32.000; detalj ne kaže „zajednička"; četiri tvrdnje kvara linije prolaze (mreža je
+  stavku pod linijom bez fakture nudila kao `True|`). RunAllTests 262/0.
+- **P2-2, čitač `FakturaLinijePoStavci`:** aktivna linija prijemnice pada po imenu u tri slučaja:
+  - `1766` — bez `FakturaID`;
+  - `1767` — faktura koje nema ili je dvosmislena (`BrojacIdova` nad sirovom tabelom, kao `FindRows`);
+  - `1768` — nad storniranom fakturom.
+
+  Storno fakture ne čita linije između storna zaglavlja i storna linija, pa nova kapija ne obara sopstveni
+  storno (pročitano: `StornoFaktura` → `StornoFakturaStavke`). Fixture nema nijednu takvu liniju (sonda:
+  5 aktivnih linija, 12 faktura).
+- **P2-1:** zapis dokumenta je `Array(stanje, fakture, zajednicka)`. Faktura je zajednička kad njene linije
+  nose više od jednog `PrijemnicaID`.
+  - **Lista F4:** ostatak je 0 (prazno) kad je bar jedna faktura dokumenta zajednička; pilula ostaje
+    plaćanje faktura.
+  - **Detalj:** red fakture dobija „(zajednička sa drugim prijemnicama -- ostatak se vodi na fakturi)".
+  - `PrijemnicaFakturisanost` vraća oznaku kroz `outZajednicka`.
+- **Premisa testa koju menja nova kapija:** `Test_OpenFaktureExcludeStornirano` (vraćen u koraku 5) je
+  stornirao SAMO zaglavlje fakture (`MarkTestRowStornirano`). Aktivna linija nad storniranom fakturom je baš
+  kvar `1768`, a ostaje u svesci, pa bi oborila svaki kasniji BFP test koji čita linije. Test sada stornira
+  kroz pravi pisac (`StornoFaktura_TX`, zaglavlje i linije), uz imenovan preduslov (+1 tvrdnja).
+- **Sabotaže 931 → 936:**
+  - nove: `s6k5-linija-bez-fakture-prolazi`, `s6k5-linija-na-nepostojecu-fakturu`,
+    `s6k5-linija-nad-storniranom-fakturom`, `s6k5-ostatak-zajednicke`, `s6k5-zajednicka-se-ne-vidi`;
+  - presidrena: `s6k5-detalj-cita-kes` (poziv nosi `zajednicka`).
+
+  Bez prve brane linija bez `FakturaID` padne na drugoj (`1767`), pa tvrdnja meri **ime** razloga, ne samo
+  pad. Statička sonda 6/6: pravila nad fajlovima čista, `--vrati` vraća izvor identičan kopiji.
+- **FULL je našao premisu testa koju je promenio korak 5, ne ova ispravka:** `Test_StornoCentar_All`
+  (`Test_PonistenjePrijemniceKaskada_Auto`). Test je sejao prijemnicu samo kao zaglavlje, a kapija storna od
+  koraka 5 čita stavke strogim čitačem: „Prijemnica nema nijednu stavku". Seme sada nosi stavku
+  (`TcSeedStavkaPrijemnice`), a test snima i `tblPrijemnicaStavke`.
+- **Dokaz je našao tvrdnju koju nova brana zaklanja:** `s6k5-storno-fakture-ne-gasi-linije`. Storno bez storna
+  linija ostavlja liniju nad storniranom fakturom, a čitač je sada odbija (`1768`). Zbog toga je poziv u tvrdnji
+  oborio test pre tvrdnje. Tvrdnja sada čita stanje kao ishod (`S6K5Fakturisanost`); pojedinačan dokaz je
+  DOKAZANO.
+
+#### Korak 6 — F4 odmrznut + vraćeni testovi iz §14.14 (pre-flight nad `4958f68b`, stavka 193)
+
+Izlazni uslov S6 (`CAPABILITY GAP`, A-031). Glavna invarijanta koraka: **F4 pravi prijemnicu isključivo kroz
+kanonski pisac, a dokument koji F4 napravi prolazi sve što je posle njega** — fakturu po stavci, storno, čitaoce,
+palete i knjigu ambalaže. Pauza stoji u `modDokUnos.PrijemnicaValidiraj` (`:822-828`) pre svih provera, od S3b-1.
+
+**Sonda pre koda** (24.10.2026, kopija sveske iz `run_vba --compile-only --keep`, pauza uklonjena SAMO u kopiji,
+sopstvena Excel instanca, potez „Sačuvaj" kroz `modOtkupUI.CommitDokumentTest`, bez ijednog dijaloga):
+
+| Šta | Izmereno |
+|---|---|
+| F4, I 300 × 50 / 30 gajbi, II 120 × 40 / 12, povrat 5, zbirna `ZB-TEST-1` | jedno zaglavlje bez linijskih polja; dve stavke; `ZbirnaRoditeljID = ZBI-TEST-1`; nova `GeneracijaID`; **jedna** `UZ_ROBU` = 42 i **jedan** `POVRAT_PRAZNE` = 5; palete po stavci, sa `PrijemnicaStavkaID` |
+| faktura nad stavkom I (`CreateFaktura_TX`) | linija nosi `PrijemnicaStavkaID`; status `DELIM` |
+| storno fakturisane prijemnice | odbijen po imenu („…je fakturisana (faktura FAK-00001)…") |
+| storno fakture, pa storno prijemnice | `NE`; storno prolazi, 2 paletne stavke skinute, 2 kontra-reda knjige |
+| bruto režim (I 110 / 10 gajbi, II 55 / 5, tara 1 kg) | stavka I 100 kg i `BrutoKg` 110; stavka II 50 i 55 |
+| redosled provera; zbirne nema uz BLOK | „Izaberi kupca" → `kupacID`; „Zbirna … ne postoji" → `brojZbirne` |
+| zbirna koja NIJE izdata (nacrt) | prolazi |
+| −5 kg u klasi I uz klasu II | prolazi; klasa I **tiho nestaje** (pisac: `kolicinaI > 0`, `modDokumenta:6627`) |
+| 20,5 gajbi | prolazi; upiše se **20** (`L()` → `CLng`, `modDokUnos:107`) |
+| broj `12/TEST` koji drži **drugi** kupac | **odbijen**: „Dokument '12/TEST' već postoji" (`CheckDuplicate` je globalan, `modDataAccess:565`) |
+| poruka posle upisa | „Prijemnica sačuvana: **PRJ-00001**" — interni ID (`modScrDokumenti:2183`) |
+
+Premisa parkiranog testa je izmerena kao netačna: fixture od donora nosi `PRIJEMNICA_ZBIRNA_PROVERA = UPOZORENJE`,
+a ne BLOK (komentar u `fc06fa77`), pa bi grana „zbirne nema" otvorila `MsgBox` i suite bi visio. U istom prolazu:
+`VALIDACIJA_UNOSA = YES`, `PALETIRANJE = YES`, `MALINA_DEFAULT_KUPAC` prazno (nema auto-štampe).
+
+**Verdikt po osama** (linije su sa `4958f68b`):
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **GAP → odluka 2** | `ZbirnaPostoji` (`modDokumenta:168`) pušta i NACRT; zbirna je prevozni spisak tek kad je izdata (`IzdajZbirnu_TX`, `:1638`) |
+| `EVENTS` | **PROVEN** | fizički i poslovni nose `Datum` sa ekrana; ambalažni je isti čin (jedna noga + povrat, sonda); finansijskog nema |
+| `IDENTITY` | **GAP → odluka 6** | broj prijemnice se proverava preko svih kupaca; zbirna po broju → `ZbirnaID` (validator sa opsegom, pisac `ZbirnaIDZaBroj` bez opsega, isti ishod pod kapijom) ostaje imenovan rizik |
+| `CARDINALITY` | **PROVEN** | 1 dokument : 1..2 stavke (sonda); „1 zbirna = 1 prijemnica" je pitanje operateru (`:1009-1016`), ne zabrana |
+| `INVARIANTS/OWNER` | **PROVEN** | `AMB-INV-04/07`, `FAK-LIN-01..03`, ZBR-CHILD-01 drže pisac i čitači; storno fakturisane odbijen (sonda) |
+| `WRITERS` | **PROVEN** | bez novog pisca: F4 → `PrijemnicaUpisi` → `PrjUpisPoziv` → `SavePrijemnicaMulti_TX` (`modDokUnos:1249`) |
+| `DOWNSTREAM` | **PROVEN** + odluka 7 | faktura, storno, palete, knjiga (sonda); poruka nosi interni ID |
+| `CAPABILITY` | **GAP → odluke 4 i 5** | A-031 se vraća, ali pisac guta razlog odbijanja (`KI-020`), a ulaz tiho menja −5 kg i 20,5 gajbi |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | ispod |
+| `PLATFORM` | **GAP → odluka 3** | tri `MsgBox`-a u validatoru (`:856`, `:1010`, `:1129`/`:1137`); `UPOZORENJE` u fixture-u |
+| `LANDING` | **PROVEN** | grana `claude/s6-korak6-f4` sa `4958f68b`; Excel instanca operatera netaknuta |
+
+**Odluke operatera (24.10.2026, stavka 193), sve po preporuci:**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | `KI-028` (vozač na −10 za `12/1`) | **posle koraka 6**, svoj rez pre golden lanca (korak 8); testovi seju gajbe vozaču (`ZasejOpticajVozacu`) |
+| 2 | prijemnica na NACRT zbirne | **samo IZDATA** zbirna: kapija u validatoru F4 sada, posle kapije identiteta (`PRJ-ZBR-01`); pisac je dobija u koraku 8, kad testovi pređu na Multi |
+| 3 | `MsgBox` u validatoru | **preduslovi u testu**: BLOK, nema ispravke na čekanju, zbirna bez aktivne prijemnice — preduslov se tvrdi PRE poteza (prekršen = crveno po imenu, ne visenje); produkcioni kod se ne menja |
+| 4 | `KI-020` za prijemnicu | **u koraku 6**: pisac vraća razlog (`Optional ByRef outGreska`, obrazac `CreateOtkup_TX`), a `PrijemnicaUpisi` ga stavlja u poruku; isplata i uplata ostaju u `KI-020` |
+| 5 | ulaz F4 | **kao kod zbirne** (review #375): negativna kilaža se odbija po imenu i sa fokusom; gajbe (I, II, povrat) se čitaju kao `Double`, decimala se odbija |
+| 6 | duplikat broja prijemnice | **jedinstven po kupcu** među aktivnima (stornirani se ne broje, pa ispravka zadržava broj); A2 u ugovoru dobija vlasnika niza |
+| 7 | poruka posle upisa | **broj prijemnice** (rezultat ekrana = broj, kao F3); `KI-044` ostaje svoj rez |
+| 8 | `KI-042`, `KI-043`, `KI-039`, `KI-041` | **svi van**; imenuju se u checklisti ručne provere |
+
+**Obim po celinama:**
+
+- **validator** (`modDokUnos.PrijemnicaValidiraj`): pauza odlazi; kapija IZDATE zbirne (nova poruka uz polje
+  `brojZbirne`); negativna kilaža i decimalne/negativne gajbe (I, II, povrat) se odbijaju, sa fokusom na polje;
+  provera duplikata broja po kupcu; komentari „staticki do S6" (`:933`, `:1030-1032`) se ispravljaju;
+- **pisac** (`modDokumenta.SavePrijemnicaMulti_TX`): `Optional ByRef outGreska As String` na kraju potpisa (13
+  poziva sa imenovanim argumentima ostaju ispravni, grep pre suite); razlog se puni u EH, ne za potvrdu manjka;
+- **unos** (`modDokUnos.PrijemnicaUpisi` / `PrjUpisPoziv`): razlog pisca ide u `poruke`;
+- **ekran** (`modScrDokumenti.SavePrijemnica`): `rezultat` = broj prijemnice;
+- **poruke** (`modPoruke`): ključ za „zbirna nije izdata" (i za duplikat po kupcu, ako postojeći tekst ne staje);
+- **testovi**, sabotaže i dokumenti (MAPA A-031, `KI-020`, `AMBALAZA.md` 6.13g „nedostižan", `UI_MIGRACIJA_KATALOG`).
+
+**Testovi čija se premisa menja:**
+
+| Test | Šta je tvrdio | Šta biva |
+|---|---|---|
+| `T_PrijemnicaUnos_PauziranDoS6` (`modTest` 8) | pauza pre svih provera | **`T_PrijemnicaValidiraj_TraziKupca`** na istom mestu, telo iz `fc06fa77` |
+| `T_ScrSave_RutaPoRezimu` (F4 deo) | ruta se dokazuje porukom pauze | porukom `DOKUNOS_ERR_KUPAC` i fokusom `kupacID` |
+| `T_KI021_ValidatoriTraziSifarnik` (253) | prijemnica meri pomoćnik, poziv je statičan | + tvrdnja kroz validator (tip van šifarnika → fokus `tipAmb`) |
+| 247, 258, 259 | „validator je pauziran" u komentaru | samo komentar; tvrdnje ostaju |
+
+**ACCEPTANCE CONTRACT koraka 6 — plan dokaza, ne dokaz:**
+
+- **važi:**
+  - **R1 (F4 kroz potez):** dvoklasna prijemnica kroz `CommitDokumentTest` daje jedno zaglavlje i dve stavke sa
+    tačnim klasama, količinama, cenama i gajbama; nema dijaloga ni lažne greške; forma je očišćena po ugovoru;
+    poruka nosi **broj** prijemnice (odluka 7). U bruto režimu stavka nosi neto i `BrutoKg` sa ekrana. *Čime:*
+    `modTest` 265; sabotaže `s6k6-f4-pauza-vracena`, `s6k6-poruka-nosi-id`, `s6k6-f4-bruto-ne-stize`.
+  - **R2 (lanac posle F4):** dokument napravljen kroz `Scr_Save` nad PRAVOM izdatom zbirnom (otkup → otpremnica →
+    zbirna kroz pisce) ima `ZbirnaRoditeljID` te zbirne, jednu `UZ_ROBU` = Σ gajbi i jedan povrat, palete po stavci;
+    faktura nad jednom stavkom ga čini `DELIM`; storno ga tada odbija; posle storna fakture storno prolazi i
+    skida palete. *Čime:* BFP `Test_S6K6_F4DokumentProlaziLanac`; nizvodno ponašanje već mere sabotaže koraka 2–5.
+  - **R3 (redosled):** kupac, pa vozač, pa broj, pa broj zbirne, svaki sa svojim fokusom. *Čime:* `modTest` 8;
+    sabotaža `prijemnica-kupac` (vraćena).
+  - **R4 (bruto → neto):** prijemnica zamrzava bruto i u količinu daje neto, po klasi; zbirna bruto NEMA i
+    količinu ne dira. *Čime:* `modTest` 263 (`T_BrutoNeto_PoRezimu`, vraćen); sabotaže `bruto-prijemnica`,
+    `bruto-prijemnica-neto` (vraćene) i `bruto-zbirna` (nov oblik: konverzija ubačena u `ZbirnaValidiraj`).
+  - **R5 (roditelj, `PRJ-ZBR-01`):** dvosmislena zbirna, zbirna drugog vlasnika, broj sa istorijom dva vlasnika i
+    **nacrt** se odbijaju po imenu; jednoznačna izdata prolazi kapiju; „zbirne nema" uz BLOK daje staru poruku.
+    *Čime:* `modTest` 264 (`T_Prijemnica_VezujeSeSamoNaJednoznacnu`, vraćen, BLOK postavlja sam); sabotaže
+    `zbirna-f4-nije-vezan`, `zbirna-f4-pusta-tudjeg-vlasnika` (vraćene), `s6k6-f4-pusta-nacrt-zbirne` (nova).
+  - **R6 (ulaz):** −5 kg (I uz II, i II) i 20,5 / −3 gajbe (I, II, povrat) se odbijaju po imenu sa fokusom na
+    polje; 0 kg u klasi I uz klasu II prolazi (II-only je legitimna). *Čime:* `modTest` 266; sabotaže
+    `s6k6-negativna-kilaza-prolazi`, `s6k6-decimalne-gajbe-prolaze`.
+  - **R7 (broj po kupcu):** broj koji drži drugi kupac prolazi; isti broj istog kupca se odbija; storniran broj
+    istog kupca ne blokira. *Čime:* `modTest` 267; sabotaže `s6k6-broj-globalno`, `s6k6-broj-isti-kupac-prolazi`.
+  - **R8 (`KI-020`):** kad pisac odbije iz razloga koji validator ne vidi (manjak vozača, `AMB-INV-07`), poruka
+    ekrana nosi razlog pisca, a dokument ne nastaje. *Čime:* `modTest` 268; sabotaža `s6k6-razlog-pisca-se-guta`.
+  - **R9 (`KI-021` poziv):** tip van šifarnika staje u validatoru F4 na polju `tipAmb`. *Čime:* 253 (+ tvrdnja);
+    sabotaža `s6k6-prij-validator-bez-tipa`.
+- **netaknuto:** pisac prijemnice i njegov oblik (osim razloga u EH); knjiga ambalaže i protokol potvrde manjka
+  (`PotvrdiManjakAmbalaze`); palete; faktura; storno; čitaoci; ispravka posle storna (prevezivanje paleta, 26, 35);
+  politika `PRIJEMNICA_ZBIRNA_PROVERA` za „zbirne nema"; „1 zbirna = 1 prijemnica" kao pitanje;
+- **edge:** jednoklasna (samo I, samo II uz povrat); povrat bez punih gajbi; hladnjača sa predlogom broja (Z3a);
+- **negativno:** svaki odbijeni unos ne piše ni zaglavlje, ni stavku, ni nogu knjige (broj redova pre i posle);
+- **preduslovi testova (odluka 3):** BLOK, nema ispravke prijemnice na čekanju, zbirna bez aktivne prijemnice —
+  tvrde se PRE poteza. Izdata zbirna u `modTest` je **sintetička** (nacrt kroz `CreateZbirnaDraft_TX`, status
+  postavljen u testu i vraćen pre tvrdnji): kapija čita samo status. Pravi lanac je u BFP (R2);
+- **čime, ukupno:** `modTest` 8, 263–268, 253 i ruta; BFP `Test_S6K6_*`; ciljani BFP, RunAllTests i Faktura;
+  jeftine kapije; `popis_citalaca --check`; `sabotaza --proveri-sidra` i statička sonda.
+
+**Imenovano van obima:**
+
+- kapija IZDATE zbirne i broja po kupcu u **piscu** — korak 8 (testovi prelaze na Multi, golden lanac);
+- `KI-028` — svoj rez posle koraka 6 (odluka 1);
+- `KI-042`, `KI-043`, `KI-039`, `KI-041`, `KI-044` — svoji rezovi (odluke 7 i 8);
+- tri pitanja validatora (`MsgBox`) bez testa, kao i do sada (odluka 3);
+- zbirna po broju (display → lookup) — imenovan rizik iz §14.55, i dalje van;
+- `.claude/rules/otkup-i-dokumenta.md` §5 („pet testova" upisa zbirne i prijemnice) — samo process PR.
+
+**Tok koda (stavka 194) — gde je plan ispravljen dok se pisalo:**
+
+- **Crveno je izvedeno iz diff-a pre puštanja** (`ae66ef52`): RunAllTests 268 / 9 (8, 9, 253, 263–268, svaki na
+  prvoj tvrdnji), BFP 11 tvrdnji S6K6 posle tri preduslova.
+- **Prvi crveni prolaz nije se poklopio** (RunAllTests 10 umesto 9, BFP 12 umesto 11). Obe razlike su izmerene, i
+  obe su bile u testovima, ne u kodu (`73d6391c`):
+  - sintetička zbirna testa 268 (vozač `VOZ-TEST-2`, 50 gajbi na stavci) ušla je u izveštaj vozača, pa je
+    `T_Izv_SlaganjeKupacVozac` dobio 90 umesto 40. Sintetičke zbirne se od tada **sklanjaju** (nacrt + storno), a
+    265 stornira svoje prijemnice kroz pisca. Isti test je otkrio i zatečen kvar: `ReportZbirniVozac` broji nacrt
+    zbirne, a ručni zbir testa čita zaglavlje koje kanonski pisac ostavlja prazno → **`KI-045`** (van reza);
+  - `modTest` 35 ostavlja ispravku prijemnice na čekanju, a `run_vba` vrti BFP posle njega **u istoj svesci**.
+    BFP test tu ispravku parkira samo dok traje potez i vraća je i na putu greške.
+  - Drugi crveni prolaz se poklopio tačno: 268 / 9 i BFP 2708 / 11.
+- **Duplikat po kupcu bez nove kopije provere:** `modDataAccess.CheckDuplicate` je dobio opcioni opseg (kolona +
+  vrednost vlasnika) umesto drugog duplikat-čitača. Postojeći pozivi ne prosleđuju opseg i ponašaju se kao pre;
+  kolona opsega koje nema poredi globalno (strože, ne tiše). Tekst postojeće poruke staje, pa nov ključ za
+  duplikat nije trebao — dodat je samo `DOKUNOS_ERR_ZBR_P_NIJE_IZDATA`, a `DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA` je
+  obrisan sa pauzom.
+- **Razlog pisca bez tehničkog prefiksa:** jezgro dokumenta pri ponovnom dizanju lepi `Source=<procedura> | `
+  ispred opisa, pa `SavePrijemnicaMulti_TX` taj prefiks skida (`RazlogBezIzvora`) pre nego što razlog ode u
+  `outGreska`. Bez toga bi operater čitao ime procedure.
+- **Fokus na vraćenu ambalažu nije postojao:** `modOtkupUI.FokusNaPolje` nije znao ključ `kolAmbIzdata` (u F4 je
+  to polje vraćenih gajbi), pa bi odbijanje 1,5 vraćenih gajbi ostalo bez fokusa. Dodat je jedan `Case`.
+- **`bruto-zbirna` je presidrena:** sidro iz `fc06fa77` (komentar „Hard-blokada" u `ZbirnaValidiraj`) više ne
+  postoji, jer je kapija „zbirna = zbir otpremnica" u S4 prešla na izdavanje. Sabotaža sada ubacuje bruto → neto
+  posle čitanja datuma u `ZbirnaValidiraj`, a tvrdnja je ista.
+- **Sabotaže: 18, ne 16.** Uz 16 iz acceptance contract-a dodate su `s6k6-f4-pauza-vracena-lanac` (pauza obara i
+  BFP lanac, po imenu) i `ruta-prijemnica` (ruta F4 u `Scr_Save`, sestra `ruta-zbirna`/`ruta-isplata`). Sidra
+  `If kolI < 0` i `If kolAmb <> Int(kolAmb)` postoje i u `ZbirnaValidiraj`, pa sabotaže prijemnice nose i
+  naredni red (sa `PrijemnicaValidiraj`) da bi bile jedinstvene. Katalog 936 → 954.
+- **Edge iz contract-a koji test NE meri:** hladnjača sa predlogom broja (Z3a) i povrat bez punih gajbi. Oba idu
+  u ručnu proveru; jednoklasna (samo I, samo II) je u 265/266.
+- **Fixture nema nijednu izdatu zbirnu** (`IzdatoStatus` je prazan u svih 24 reda `tblZbirna`; izmereno
+  čitanjem `otkup_test.xlsm`). F4 nad golim fixture-om zato uvek staje na `PRJ-ZBR-01`, a ručna provera traži
+  svesku sa izdatom zbirnom (BFP `--keep`, kao u koraku 5).
+
+**Review #440, krug 1 (stavka 195) — dva nalaza, oba potvrđena; plan je bio pogrešan na jednom mestu:**
+
+- **P1 — „samo izdata zbirna" nije bila bezuslovna.** Pod „netaknuto" iznad stoji „politika
+  `PRIJEMNICA_ZBIRNA_PROVERA` za ‚zbirne nema'", a isto je pisalo i u `PRJ-ZBR-01`. To se kosi sa odlukom 2:
+  uz `UPOZORENJE` validator pita „Ipak snimiti?", a posle „Da" preskače kapiju identiteta i kapiju IZDATE zbirne.
+  Pisac postojanje proverava samo uz BLOK. **Reprodukovano sondom** nad kopijom sveske sa `d3de4abf`: nastala je
+  aktivna prijemnica sa brojem nepostojeće zbirne i praznim `ZbirnaRoditeljID`. Test nad starim kodom bi visio
+  na `MsgBox`-u, pa je crveno ovde merenje sa priloženim izlazom.
+  **Odluka operatera (24.10.2026):** F4 uvek odbija; polje se sklanja iz Podešavanja; konstanta i blaža grana
+  pisca ostaju do koraka 8 (dosežu ih samo testovi, jedini produkcioni pozivalac pisca je F4).
+- **P2 — čitaoci po golom broju.** Odluka 6 (broj po kupcu) prvi put omogućava da F4 napravi isti broj kod dva
+  kupca, a pre-flight nije popisao ko prijemnicu traži po broju — to je bila `DOWNSTREAM` rupa verdikta. Popis
+  (~45 mesta): većina ide po ID-u ili ima kapiju koja na više vlasnika odbija. Ostala su četiri:
+  - **`StampIspravkaTrace` je upisivao trag ispravke po broju** i na aktivnu prijemnicu drugog kupca (papir taj
+    trag štampa), a do njega se stiže kroz ispravku u F4 sa promenjenim brojem. Ovaj nalaz nije bio u review-u.
+    **Odluka:** prelazi na `PrijemnicaID` u ovom PR-u;
+  - datum reda Oporavka (`GetPrijemniceSaOsirocenimPaletama`), paletni prikaz i `DetachOsirocenePaletaStavke_TX`
+    po broju → **`KI-046`**, kapija pre koraka 7. Poslednja dva su danas nedostižna: jedini pozivalac čita
+    `tblOtkup.BrojZbirne`, a tu kolonu niko ne piše.
+
+**Ručna provera (stavka 197) — „sa fokusom" iz R3/R5/R6 nije bilo isporučeno do kraja:** testovi su merili ključ
+koji ekran vrati, a ljuska (`FokusNaPolje`) nije znala `kupacID` ni `brojZbirne`. Posle operaterovih snimaka:
+seam koji beleži izabrano polje u test režimu, test 271 kroz ceo potez (crveno 271/1), dve grane, četiri sabotaže.
+Vrsta/sorta prijemnice prema zbirnoj (`KI-047`) i tekst razloga pisca (`KI-048`) su ostali van reza.
+**Ispravka (stavka 198):** to je dokazalo samo IZBOR kontrole. Na ekranu fokus i dalje završi u BROJ dokumenta, jer
+`UiClick` posle akcije zove `KeepKeys` (`KI-050`). Operater je fokus odložio za UX prolaz celog lanca unosa, pa
+„sa fokusom" iz R3/R5/R6 u ovom rezu ostaje neisporučeno na ekranu.
+
+#### Korak 7 — hladnjačin lanac B, `KI-046` kao prvi deo (pre-flight nad `e21830c5`, stavka 200)
+
+Izlazni uslov S6 iz §14.20: hladnjački blok sam pravi ceo lanac `OTK → OTP → ZBR → PRJ`, 1:1 po klasi, a
+prekidač `AUTO_PRIJEMNICA_HLADNJACA` nestaje. Danas lanac pravi samo otpremnicu i stoji iza prekidača
+(`modAutoHladnjaca:241`, `:264`). Sonde nema: odluka 1 bira B, a B ide kroz postojeće transakcije pisaca.
+
+**Verdikt po osama** (linije su sa `e21830c5`):
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **GAP → odluka 6** | cena stavke auto-prijemnice nema izvor u roditelju: `tblZbirnaStavke` nema `Cena` (kanon), a `CreateFaktura` čita cenu sa stavke prijemnice; legacy pravilo je bilo „Cena = cena iz otkupa" (`bf04e3e0^:modAutoHladnjaca.bas:13`) |
+| `EVENTS` | **PROVEN** | fizički: merenje pri prijemu u hladnjaču je isti čin kao otkup (§14.20, operater 20.09.2026), pa svi dokumenti nose datum otkupa (OTP `modAutoHladnjaca:273`, ZBR čita datum OTP-a `modMasterSync:1090`); poslovni: četiri dokumenta; ambalažni: OTP stanica → ogledalo (`modDokumenta:5013`), PRJ ogledalo → kupac (`:7004`), ZBR ne knjiži; finansijskog nema do fakture |
+| `IDENTITY` | **GAP → odluka 7** | OTP ← OTK i ZBR ← OTP po ID-u (članstvo; `modMasterSync:1148`); **PRJ ← ZBR po BROJU** (`ZbirnaIDZaBroj(brojZbirne)`, `modDokumenta:6926-6927`), a nejednoznačan broj daje PRJ bez roditelja. Broj PRJ hladnjače je **naš niz** `1/ddmmyy[-n]` (A2, `modBrojevi:213`); MaxSeq gleda i stornirane, pa storno ne oslobađa broj (A2 t. 4). „Jedinstven po kupcu" iz koraka 6 je pravilo F4 za eksternog kupca |
+| `CARDINALITY` | **GAP → odluke 8 i 9** | lanac drži 1 blok = 1 lanac (`modAutoHladnjaca:294`), ali PWA malina batch grupiše i hladnjačke blokove (`GrupeZaAutoOtpremnicu`, `modMasterSync:1283-1291`, bez filtera); F2 veže svaku izdatu nevezanu otpremnicu u ručnu zbirnu (`DodajZbirnaIzvor_TX`, `modDokumenta:1567`); F4 „1 zbirna = 1 prijemnica" samo pita (`modDokUnos:1040-1051`) |
+| `INVARIANTS/OWNER` | **PROVEN** | `PRJ-ZBR-01`: auto-zbirna nastaje IZDATA (`modDokumenta:694`); `AMB-INV-07`: ogledalo prima Σ gajbi na OTP i daje isti Σ na PRJ, ZBR ne knjiži; `ZBR-CHILD-01` drži `PoveziDeteNaZbirnu` (uslov: odluka 7); nova `HLD-LANAC-01` (`docs/DOMEN/README.md`) |
+| `WRITERS` | **PROVEN, bez novog pisca** | OTP `CreateOtpremnicaIzIzvora_TX` (`:3448`), ZBR malina jezgro `AutoZbirnaUpis` → `CreateZbirnaIzIzvora_TX` (`modMasterSync:1078`, `:1153`), PRJ `SavePrijemnicaMulti_TX` (`:6582`). **Izmereno:** `AutoZbirnaZaOtpremnicu` je zatvoren iza `IsMalinaMode()` (`:1021-1023`, `:1043`) i van maline vraća `""` bez razloga — ugovor jezgra to čita kao „nije bilo posla", pa bi lanac tiho stao. Imena `CreateAutoZbirnaIzOtpremnice_TX` / `CreateAutoPrijemnicaIzZbirne_TX` iz §14.20 nisu potrebna |
+| `DOWNSTREAM` | **GAP → odluke 4 i 5** | palete i faktura po stavci, kaskada PONIŠTENJA i malina batch nad istim jezgrom su pokriveni; nedovršen lanac se ne vidi (lista „Bez otpremnice" čita `NevezaniOtkupi`, `modScrDokumenti:3716`, koji hrani i PWA batch, `modMasterSync:1291`); `KI-046` ispod |
+| `CAPABILITY` | **GAP → odluka 4** | A-014 (aktivacija), A-017 (palete posle storna), ispravka hladnjačkog otkupa |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | ispod |
+| `PLATFORM` | **PROVEN za B** | svaki pisac drži svoju TX (`modDokumenta:764-793`, `:6603-6680`); A bi tražio tri jezgra u tuđoj TX i sondu (`CommitTx` zakazuje Save, `clsTransaction:104`) — nije izabran |
+| `LANDING` | **PROVEN uz rizik** | grana `claude/s6-korak7-lanac-b` sa `e21830c5`; `#441` (OPEN) dira `modScrDokumenti`, `modPoruke`, `modTest`, `tools/sabotaza.py`, `docs/STANJE_REFAKTORA.md`, `docs/DOMEN/README.md` — serijski; broj testa se uzima pred prvim testom |
+
+**`KI-046` — izmereno, i ispravka zapisa iz stavke 195:**
+
+- (1) `GetPrijemniceSaOsirocenimPaletama` je **dostižan**: siročad paleta nastaju u F8 ISPRAVKA i DUPLI „ne diraj
+  palete" (`modStornoFlow:546`, `:567` → `StornoPrijemnica` sa `skiniPalete = False`). Red se grupiše po
+  generaciji, ali datum čita po broju (`modDokumenta:8529`).
+- (2) `GetPaleteInfoForPrijemnicaBroj` i (3) `DetachOsirocenePaletaStavke_TX` **nisu neuhranjeni nego
+  NEDOSTIŽNI** (obrazac S5-3b). Jedini produkcioni pozivalac je `HladnjacaLanac` / `PonudiHladnjacaIspravku`,
+  a ponuda ide tek kad `StornoOtkup_TX` prođe (`modScrDokumenti:1298-1303`). Jezgro odbija blok u sastavu aktivne
+  otpremnice (`modStorno:139`, A13), a aktivna PRJ povlači aktivnu ZBR, a ona aktivnu OTP — A13 važi na svakom
+  nivou. Korak 7 `tblOtkup.BrojZbirne` ne hrani (kanon je članstvo). Prehranjena, grana bi i dalje bila mrtva.
+- Isti razred: relink-pending aparat (`modOtkupUnos:330-334`, `:438-455`; `modAutoHladnjaca:21-33`) koji je
+  „čekao PR7" — njegov jedini izvor je ista ponuda.
+- Zamena već postoji: F8 nad prijemnicom/zbirnom nudi ISPRAVKA (palete čekaju novu prijemnicu), DUPLI (skida ili
+  ostavlja) i PONIŠTENJE (obara lanac, skida palete), a Oporavak „Prevezi" pomera siročad na aktivnu prijemnicu
+  (`modScrOporavak:160`, `:302`).
+
+**Odluke operatera (24.10.2026), sve po preporuci:**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | idempotencija i oporavak | **B, nastavljiv** (potvrda odluke 4 od 20.10): OTP po otkupu, ZBR po članstvu, PRJ po `ZbirnaRoditeljID`; preduslovi (ogledalo, `MALINA_DEFAULT_KUPAC`, brojevi) pre prvog upisa; „Ponovi auto-lanac" nastavlja od prvog koraka koji fali |
+| 2 | `AUTO_PRIJEMNICA_HLADNJACA` | **briše se**: stanica (`JeHladnjaca`) je jedini autoritet |
+| 3 | granica malina batch-a | **isto jezgro**: kapija `AutoZbirnaZaOtpremnicu` pušta i hladnjačku otpremnicu van maline; preklapanje rešava idempotencija (`NevezaneOtpremnice`) |
+| 4 | `KI-046` | **prvi deo ovog PR-a**: (2), (3), ponuda i relink-pending se BRIŠU (A-017 → REPLACED: F8 + Oporavak); (1) čita datum po `PrijemnicaID`; trag brisanja je tvrdnja da storno hladnjačkog bloka u lancu odbija A13 |
+| 5 | `KI-028` | **posle koraka 7**, pre golden lanca (korak 8); korak 7 ne dira `VOZ-TEST-1` (lanac ide kroz ogledalo BFP hladnjačkih stanica) |
+| 6 | cena stavke auto-prijemnice | **cena izvornog otkupa**, po klasi, kroz lanac po ID-u (ZBR → izvor OTP → izvor OTK); lanac nosi tačno jedan blok |
+| 7 | roditelj auto-prijemnice | **opcioni `zbirnaRoditeljID` u piscu** (na kraju potpisa `SavePrijemnicaMulti_TX`): kad je dat, pisac proverava da je zbirna aktivna i da joj je broj jednak `brojZbirne`, pa upisuje baš taj ID, pre commit-a; F4 ostaje po broju |
+| 8 | vidljivost nedovršenog lanca | **Oporavak, „Nedovršeno"**: red vrste `LANAC` sa `OtkupID` u nevidljivoj koloni i radnjom „Ponovi auto-lanac"; radnja „ponovi" u F1 ostaje za blok kome je pala već OTP |
+| 9 | PWA hladnjački blokovi | **isključi + lanac iz sync-a**: malina batch otpremnica preskače hladnjačke blokove, a isti sync korak ih vodi kroz `AutoLanacHladnjaca`, blok po blok; pad bloka se imenuje i ne obara ostale |
+| 10 | ručni put nad hladnjačkim dokumentom | **kapija u `DodajZbirnaIzvor_TX`**: hladnjačka otpremnica se ne veže ručno u zbirnu (kao `VeziZaAktivnu` za blok, review #367); F4 ostaje, jer ga F8 ISPRAVKA auto-prijemnice traži |
+
+**Obim po celinama:**
+
+- **`KI-046` (prvi commit-i):** brišu se `modScrDokumenti.HladnjacaLanac` / `PonudiHladnjacaIspravku` i njihova
+  grana u `RowAction` „storno", `modPaletniList.GetPaleteInfoForPrijemnicaBroj` i
+  `DetachOsirocenePaletaStavke_TX`, relink-pending u `modOtkupUnos` i `modAutoHladnjaca`, ključevi poruka koje
+  niko više ne zove; `modDokumenta.GetPrijemniceSaOsirocenimPaletama` čita datum po `PrijemnicaID`;
+- **lanac** (`modAutoHladnjaca.AutoLanacHladnjaca`): preduslovi pre prvog upisa; koraci OTP → ZBR → PRJ, svaki
+  idempotentan po kanonskom roditelju; PRJ izvodi stavke iz zbirne (`StavkeZbirneRedovi`) i cenu iz izvornog
+  otkupa; izveštaj nosi brojeve sva tri dokumenta ili korak koji je pao; zastareo komentar zaglavlja i komentar
+  „F3/F4 su pauzirani" (`:65-68`) odlaze; ugovor povratka: `PrijemnicaID` = lanac je kompletiran ovim pozivom,
+  `""` + prazan izveštaj = nije bilo posla, `""` + izveštaj = korak nije uspeo;
+- **prekidač:** `modConfig.CFG_AUTO_PRIJEMNICA_HLADNJACA`, `IsAutoPrijemnicaHladnjaca`, `LanacUkljucen`, red u
+  `modPodesavanja`, uslov radnje „ponovi" u `Scr_Radnje`;
+- **jezgro zbirne** (`modMasterSync.AutoZbirnaZaOtpremnicu`): kapija „malina ILI hladnjačka otpremnica"
+  (strogo, isti primitiv kao razvodnica);
+- **pisac prijemnice:** `Optional zbirnaRoditeljID` u `SavePrijemnicaMulti_TX` → `SavePrijemnicaDokument`;
+- **ručni put:** `DodajZbirnaIzvor_TX` odbija hladnjačku otpremnicu;
+- **PWA:** `GrupeZaAutoOtpremnicu` preskače hladnjačke blokove; nov sync korak (orkestrator) vodi nevezane
+  hladnjačke blokove kroz lanac, po obrascu `AutoCreateOtpremniceFromPWA_TX` (broj napravljenih + imenovani
+  razlozi);
+- **Oporavak:** `modStornoRecovery.GetNedovrseno` dobija red `LANAC`, `modScrOporavak` radnju „ponovi";
+- **poruke** (`modPoruke`), testovi, sabotaže, dokumenti (MAPA A-014/A-017, `KI-046`, `HLD-LANAC-01`).
+
+**Testovi čija se premisa menja:**
+
+| Test | Šta je tvrdio | Šta biva |
+|---|---|---|
+| BFP `Test_HLD_AutoLanacOtpremnica` §0 | isključen prekidač ne pušta blok u lanac | briše se (prekidača nema) |
+| BFP `Test_HLD_AutoLanacOtpremnica` §1 | lanac pravi izdatu otpremnicu; „ponovljen poziv ne pravi drugu otpremnicu" | ceo lanac 1:1 po klasi (R4); ponovljen poziv nad kompletnim lancem ne pravi ništa, nad nedovršenim nastavlja (R6); test postavlja `MALINA_DEFAULT_KUPAC` i vraća ga |
+| BFP `Test_OTK_RutaPosleUpisa` | prekidač „Da" je preduslov | preduslova nema |
+| BFP `Test_OTK_IspravkaPauziranaNeTrosiPending` | relink-pending se ne troši dok je lanac pauziran | briše se sa aparatom (odluka 4) |
+| Palete `T08_DetachSuStanarFantom`, test 14 (RELABEL, „bezbedan izlaz") | `DetachOsirocenePaletaStavke_TX` po broju | isti sud nad jezgrom skidanja po `PrijemnicaID` (`SkiniPaleteZaStornoPrijemnice`) |
+| sabotaže `lanac-bez-prekidaca`, `lanac-dupli-poziv`, `lanac-storniran-blok` | prekidač; izlazak na postojećoj OTP; sidro sa komentarom | prva se briše; druge dve se presidravaju |
+
+**ACCEPTANCE CONTRACT koraka 7 — plan dokaza, ne dokaz:**
+
+- **važi:**
+  - **R1 (`KI-046` (1)):** dve stornirane prijemnice dva kupca istog broja, svaka sa aktivnom paletnom stavkom,
+    daju u Oporavku (lista PALETE, kroz `Scr_Rows`) dva reda, i svaki nosi datum SVOG dokumenta. *Čime:* BFP;
+    sabotaža `s6k7-osir-datum-po-broju`.
+  - **R2 (`KI-046` (2)(3), trag brisanja):** storno hladnjačkog bloka čiji je lanac kompletan se odbija (A13), sa
+    razlogom koji imenuje otpremnicu; ništa se ne stornira. *Čime:* test lanca (R4) + zatečeni
+    `Test_STO_BlokUSastavuOtpremniceSeNeStornira`; sabotaža `s6k7-storno-bloka-u-lancu-prolazi`.
+  - **R3 (`HLD-LANAC-01`, jezgro):** dvoklasni blok (I 70 kg / 7, II 25 kg / 3) na hladnjačkoj stanici daje
+    IZDATU OTP (vozač ogledalo), IZDATU ZBR (kupac `MALINA_DEFAULT_KUPAC`, članstvo = ta OTP, broj iz niza
+    ogledala) i PRJ (isti kupac, vozač ogledalo, `ZbirnaRoditeljID` = ta ZBR, broj `1/ddmmyy`); kilaža i gajbe po
+    klasi jednake na sva četiri nivoa; cena stavke PRJ = cena stavke otkupa te klase; datum sva četiri = datum
+    otkupa; knjiga: jedna `UZ_ROBU` noga OTP (stanica → ogledalo) i jedna PRJ (ogledalo → kupac), saldo ogledala
+    za taj tip posle lanca = pre lanca. *Čime:* BFP `Test_HLD_AutoLanacOtpremnica` (proširen); sabotaže
+    `s6k7-lanac-staje-posle-otp`, `s6k7-prj-kolicina-ne-iz-zbirne`, `s6k7-cena-nije-iz-otkupa`,
+    `s6k7-prj-roditelj-po-broju`.
+  - **R4 (ekran, najviši ulaz):** F1 snimanje bloka na hladnjačkoj stanici kroz `CommitDokumentTest` pravi ceo
+    lanac, bez dijaloga; poruka nosi brojeve OTP, ZBR i PRJ. Ono što headless ne vidi (toast na ekranu) ide u
+    ručnu proveru. *Čime:* `modTest` (prvi slobodan broj); sabotaža `s6k7-poruka-bez-prijemnice`.
+  - **R5 (nastavljivost, odluka 1):** (a) ponovljen poziv nad kompletnim lancem ne pravi ništa (`""`, prazan
+    izveštaj); (b) blok sa OTP-om bez ZBR → poziv pravi ZBR i PRJ, ne drugu OTP; (c) OTP i ZBR bez PRJ → poziv pravi
+    samo PRJ. Međustanja grade postojeći pisci (isti koraci koje lanac zove), ne seam. *Čime:* BFP; sabotaže
+    `lanac-dupli-poziv` (presidrena: vraćen izlazak na postojećoj OTP), `s6k7-dupla-prijemnica`.
+  - **R6 (preduslovi pre prvog upisa):** bez `MALINA_DEFAULT_KUPAC` lanac ne pravi ni OTP; izveštaj imenuje ključ;
+    blok ostaje nevezan. *Čime:* BFP; sabotaža `s6k7-kupac-proveren-kasno`.
+  - **R7 (prekidač obrisan, odluka 2):** hladnjačka stanica ide u lanac bez ikakve konfiguracije; Podešavanja ne
+    nude `AUTO_PRIJEMNICA_HLADNJACA` (uz kontrolu susednog polja, obrazac 269); radnja „ponovi" u „Bez
+    otpremnice" postoji uvek. *Čime:* `modTest`; sabotaža `s6k7-podesavanje-nudi-prekidac`.
+  - **R8 (isto jezgro, odluka 3):** van maline `AutoZbirnaZaOtpremnicu` pravi zbirnu nad hladnjačkom otpremnicom,
+    a nad običnom ne (kontrola); u malini batch nad hladnjačkom OTP-om bez zbirne napravi zbirnu, pa lanac pravi
+    samo PRJ nad TOM zbirnom. *Čime:* BFP; sabotaža `s6k7-jezgro-zbirne-samo-malina`.
+  - **R9 (vidljivost, odluka 8):** blok sa OTP-om bez ZBR ili PRJ je u Oporavku „Nedovršeno" kao red `LANAC`;
+    „ponovi" nad njim kompletira lanac i red nestaje; radnja čita `OtkupID` iz nevidljive kolone, ne broj; red druge
+    vrste je odbija po imenu; kompletan lanac nije u listi. *Čime:* `modTest` kroz `Scr_Rows` / `UiEvent` Oporavka;
+    sabotaže `s6k7-nedovrsen-lanac-nevidljiv`, `s6k7-ponovi-bira-po-broju`.
+  - **R10 (PWA, odluka 9):** dva hladnjačka bloka iste stanice i dana ne završe u jednoj malina otpremnici; sync
+    korak svakom napravi svoj lanac; pad jednog bloka je imenovan i ne obara drugi. *Čime:* BFP, direktno nad
+    funkcijom koraka i `AutoCreateOtpremniceFromPWA_TX`; sabotaže `s6k7-pwa-batch-guta-hladnjacke`,
+    `s6k7-sync-bez-lanca`.
+  - **R11 (ručni put, odluka 10):** `DodajZbirnaIzvor_TX` odbija hladnjačku otpremnicu sa razlogom, izvor nije
+    upisan; obična prolazi (kontrola). *Čime:* BFP; sabotaža `s6k7-rucna-zbirna-prima-hladnjacku`.
+  - **R12 (nizvodno):** auto-prijemnica prolazi fakturu po stavci (jedna stavka → `DELIM`, cena = otkup) i ima
+    palete po stavci; F8 PONIŠTENJE nad njom obara ZBR i OTP i oslobađa blok. *Čime:* BFP test lanca; ponašanje
+    pisaca nizvodno već mere sabotaže koraka 2–5.
+- **netaknuto:** razvodnica (`LanacVaziZaStanicu` / `LanacVaziZaBlok`, fail-closed) i `VeziZaAktivnu`;
+  `RutaPosleUpisa`; malina auto-zbirna za obične otpremnice; F4 i njegove kapije (`PRJ-ZBR-01`, broj po kupcu,
+  zbirna po broju); knjiga ambalaže i protokol potvrde manjka (auto-prijemnica nema povrata, pa nema ni pitanja);
+  paletizacija; faktura; storno i F8;
+- **edge:** jednoklasni blok (samo II); blok bez gajbi (bez nogu i bez paleta); drugi blok iste stanice istog dana
+  (drugi lanac, brojevi `-2`); stanica bez ogledala (lanac ga pravi, zatečeno);
+- **negativno:** obična stanica, storniran blok, nepoznata stanica (razlog, ne tiho `False`), bez kupca (R6),
+  ručno vezivanje bloka (zatečeno) i otpremnice (R11) — nijedno ne piše ni dokument ni nogu knjige;
+- **čime, ukupno:** BFP (`Test_HLD_*`, R1), `modTest` (R4, R7, R9), Palete (T08/14 preneti), ciljani BFP,
+  RunAllTests, Faktura i Palete; jeftine kapije; `sabotaza --proveri-sidra` i statička sonda.
+
+**Imenovano van obima:**
+
+- ispravka hladnjačkog otkupa sa **prevezivanjem starih paleta na nov lanac** (legacy „DA" iz A-017): danas je
+  put F8 PONIŠTENJE + ponovni lanac (nove palete) ili DUPLI „ne diraj palete" + Oporavak „Prevezi"; sopstven rez
+  posle S6, uz `IspravkaZbirne_TX` (odluka 5 od 20.10);
+- F4 nad hladnjačkom zbirnom (pitanje „1 zbirna = 1 prijemnica" ostaje pitanje);
+- kapije `PRJ-ZBR-01` i broja po kupcu u piscu — korak 8;
+- `KI-028` (odluka 5), `KI-047`–`KI-050` (UX lanca unosa, posle S6–S9);
+- sync smoke suite (mreža) — korak orkestratora se meri direktno, ne kroz Google.
+
+**Tok koda, deo 1 — `KI-046` (stavka 201):**
+
+- **Crveno izvedeno iz diff-a pre puštanja** (test bez ispravke): BFP 2708 → 2717 tvrdnji, 1 pad, na „S6K7 osirotele:
+  red drugog kupca nosi datum SVOG dokumenta, ne prvog istog broja". **Izmereno tačno tako:** 2717 / 1, dobijen datum
+  prvog dokumenta tog broja (`2091-03-24` umesto `2091-03-25`).
+- **Ispravka (1):** `GetPrijemniceSaOsirocenimPaletama` pamti `PrijemnicaID` grupe i datum čita po njemu.
+- **Brisanje (2), (3) i ponude:** `modScrDokumenti.HladnjacaLanac` / `PonudiHladnjacaIspravku` i njihova grana u
+  `RowAction` „storno" (storno bloka sada samo javlja „storniran"); `modPaletniList.GetPaleteInfoForPrijemnicaBroj` i
+  `DetachOsirocenePaletaStavke_TX`; relink-pending (`modAutoHladnjaca` stanje, `modOtkupUnos` kapija pre pisca i grana
+  posle upisa, sa dva `SetPaletizeSkip False` koji su postojali samo zbog nje); 11 ključeva poruka koje više niko ne
+  zove (10 iz ponude i relink-a, plus `OTKUNOS_MSG_NIJE_HLADNJACA`, koji je bio siroče i pre ovog reza).
+- **Testovi:** nov BFP `Test_S6K7_OsirocenePaleteDatumPoDokumentu` (kroz `modScrOporavak.Scr_Rows`, lista PALETE; test
+  sklanja svoje palete kroz jezgro skidanja, da ne ostanu u tuđoj listi); obrisan BFP
+  `Test_OTK_IspravkaPauziranaNeTrosiPending` (4 tvrdnje, premisa nestala); Palete T08 i T11 skidaju kroz
+  `SkiniPaleteZaStornoPrijemnice` po `PrijemnicaID`-u (isto jezgro `SkiniPaletneStavke`), a tvrdnja o tekstu
+  obrisane funkcije („outInfo javlja storniranu paletu") otišla je sa njom.
+- **Zeleno, tačno izvedeno:** RunAllTests **271 / 0**, BFP **2713 / 0** (2717 − 4), Palete **96 / 0** (97 − 1); izvor
+  `6a0857506cd4`, ugovor `f42660755039`, fixture `49f55dfc03b134b3` (nepromenjen).
+- **Sabotaža:** `s6k7-osir-datum-po-broju` (katalog 961 → 962); `--proveri-sidra` 962 / 0; statička sonda: pravila
+  čista, katalog javlja samo nju, `--vrati` vraća `src-vba` bajt-identičan kopiji.
+- **Trag brisanja (R2)** ulazi sa testom lanca u delu 2 (traži kompletan lanac); do tada kapiju meri zatečeni
+  `Test_STO_BlokUSastavuOtpremniceSeNeStornira`.
+- **Usput, samo `KNOWN_ISSUES`:** `KI-051` — F4 ne broji stornirane ni za hladnjača-kupca, a A2 t. 4 kaže da storno ne
+  oslobađa broj prijemnice hladnjače (nađeno čitanjem, nije reprodukovano; mesto je korak 8).
+
+**Tok koda, deo 2 — lanac, R2–R12 (stavka 202):**
+
+- **Crveno izvedeno iz diff-a pre puštanja** (testovi + stubovi potpisa: `zbirnaRoditeljID` ignorisan,
+  `AutoLanacZaNevezaneBlokove` vraća 0, `NED_COL_OTK` bez kolone; prekidač je u fixture-u prazan, pa stari lanac ne radi
+  ništa):
+  - **BFP 2713 → 2741 tvrdnji, 54 pada**, prva „Lanac: hladnjacki blok ide u lanac". **Izmereno tačno tako** (2741 / 54,
+    ista prva). Po testu: `Test_HLD_AutoLanacOtpremnica` 57 / 35, `Test_OTK_RutaPosleUpisa` 13 / 5, `Test_S6K7_*` 26 / 14.
+  - **RunAllTests 271 → 274, 4 pada** (71, 272, 273, 274). Prvi prolaz: 4 pada, ali 272 i 274 na drugoj tački —
+    **izmereno, kvar testa, ne koda:** (1) 272 „blok je upisan" sa porukom „Izaberi ili unesi kooperanta" — lista
+    kooperanata je suzena po OM (`KOOP_FILTER_BY_OM`), a utišan prepis je ne puni; test sada bira OM, puni listu
+    produkcionim `RefreshPartnerLista`, pa prepisuje ostatak; (2) 274 „Subscript out of range" na koraku „lista posle
+    radnje" — normalan tok je ušao u `CleanUp` sa ZAOSTALIM `Err` 9 iz `GridCell` (kolona 7 ne postoji u crvenom);
+    test radi `Err.Clear` pre labele (obrazac je u `KI-053`). Ponovljeno crveno: **274 / 4, sva četiri na predviđenoj
+    tvrdnji**.
+- **Kod** (bez novog pisca i bez izmene šeme):
+  - `modAutoHladnjaca.AutoLanacHladnjaca`: OTP → ZBR → PRJ, nastavljiv; stanje po kanonskom roditelju (članstvo bloka,
+    članstvo otpremnice, `ZbirnaRoditeljID`); preduslovi pre prvog upisa (kupac, ogledalo, broj otpremnice, broj zbirne,
+    broj prijemnice); PRJ izvodi zaglavlje i kilažu/gajbe po klasi iz zbirne (`ZbirnaPoKlasi`), cenu iz otkupa
+    (`StavkeOtkupaRedovi`) kroz lanac koji nosi tačno jedan blok (`IzvoriZbirne` → `IzvoriOtpremnice`); izveštaj nosi
+    brojeve ili korak koji je pao i šta je već napravljeno; ugovor povratka kao gore. `OtpremnicaJeHladnjacka` (strogo,
+    `HladnjacaStrogo`), `HladnjackeStanice` (skup za mnogo blokova), `AutoLanacZaNevezaneBlokove` (sync),
+    `NedovrseniLanci` (Oporavak);
+  - prekidač obrisan: `CFG_AUTO_PRIJEMNICA_HLADNJACA`, `IsAutoPrijemnicaHladnjaca`, `LanacUkljucen`, red u
+    Podešavanjima; radnja „ponovi" u F1 postoji uvek (i uz grešku čita listu ponovo — koraci pre pada su upisani);
+  - `modMasterSync.AutoZbirnaZaOtpremnicu`: kapija „malina ILI hladnjačka otpremnica"; `GrupeZaAutoOtpremnicu`
+    preskače blokove hladnjačkih stanica;
+  - `modDokumenta`: `SavePrijemnicaMulti_TX` → `SavePrijemnicaDokument` sa `zbirnaRoditeljID` na kraju potpisa
+    (`ZbirnaRoditeljPrijemnice`: tačno jedna, aktivna, isti broj — pre ijednog upisa); `AktivnoClanstvoZbirni` (javni
+    čitač, isti ugovor kao `AktivnaZbirnaZaOtpremnicu`); `DodajZbirnaIzvor_TX` odbija hladnjačku otpremnicu POSLE kapija
+    izvora (otpremnica koje nema ili koja nije izdata i dalje dobija svoj razlog);
+  - `modGoogleSyncOrchestrator`: korak 3a, u svakom režimu (broj kompletiranih + imenovani razlozi; pad prolaza obara
+    ciklus);
+  - Oporavak: `modStornoRecovery.GetNedovrseno` dobija red `LANAC` (OtkupID u zapisu), `modScrOporavak` kolonu 7
+    (`NED_COL_OTK`, nevidljiva) i radnju „ponovi" (`PonoviLanac`, po OtkupID-u; red druge vrste se odbija imenom);
+  - poruke (`modPoruke`): ključevi lanca i Oporavka, `OTKUI_MSG_LANAC_OTP` obrisan.
+- **Odstupanja od teksta plana, sa razlogom:**
+  - nastavak PRJ ne ide kroz `modStorno.LookupActiveID` nego kroz strog čitač `AktivnePrijemnicePoZbirni` (isti za
+    Oporavak): `LookupActiveID` grešku guta i vraća `""`, pa bi pad čitanja napravio DRUGU prijemnicu;
+  - skup hladnjačkih stanica je jedan primitiv za batch, sync i Oporavak (`HladnjackeStanice`). Stanica koje nema nije u
+    skupu: njen blok ide malina batch-u, gde ga pisac otpremnice odbija po imenu stanice (zatečeni
+    `Test_OTP_AutoKvarGrupeNeObaraOstale` to traži);
+  - sync korak uzima samo blok koji NIKAD nije bio u otpremnici: blok koji je F8 PONIŠTENJE oslobodio je odluka
+    operatera (Oporavak ga nosi kao izgubljen blok), pa ga sync ne vraća u lanac sam;
+  - `modTest` brojevi su **272–274**, ne „iza `#441`": `#441` (OPEN) sada drži 272–280, a `vba_check` (`REGISTAR`)
+    ne pušta rupu u numeraciji — koji PR uđe drugi, prenumeriše se.
+- **Testovi:** BFP `Test_HLD_AutoLanacOtpremnica` (§0 obrisan; R2, R3, R5a, R12 + ivice: samo II, drugi blok istog dana
+  `-2`, blok bez gajbi), `Test_OTK_RutaPosleUpisa` (bez prekidača), novi `Test_S6K7_LanacNastavljiv` (R5b, R5c, odluka 7;
+  dvosmislen broj zbirne pravi uvoz sa terena istog ogledala, KR-001), `Test_S6K7_LanacBezKupcaNePise` (R6),
+  `Test_S6K7_JezgroZbirneHladnjacka` (R8), `Test_S6K7_PwaHladnjackiBlokovi` (R10), `Test_S6K7_RucnaZbirnaOdbijaHladnjacku`
+  (R11) — svi u transakciji testa koja se vraća (KI-045); `modTest` 71 (premisa: poslednja kolona je OtkupID), 272 (R4,
+  F1 kroz `CommitDokumentTest`), 273 (R7), 274 (R9, sa mamcem istog broja na drugoj stanici).
+- **Zeleno, tačno izvedeno:** RunAllTests **274 / 0**, BFP **2741 / 0** (isti broj tvrdnji kao crveni — nijedna nije
+  ćutke preskočena), Palete **96 / 0**, Faktura **39 / 0**; izvor `4421cb5b4cac`, ugovor `0132efee3512`, fixture
+  `49f55dfc03b134b3` (nepromenjen).
+- **Sabotaže:** katalog 962 → **976** (−`lanac-bez-prekidaca`, +15 `s6k7-*`); presidrene `lanac-dupli-poziv` (vraćen
+  izlazak na postojećoj OTP), `lanac-storniran-blok` (sidro bez komentara; tvrdnja „ne javlja nista" — lanac posle
+  sabotaže vraća `""`, odaje ga izveštaj), `oporavak-cid-kolona-vidljiva`, `amb-prj-povrat-samo-sa-klasom-i` (nov
+  argument), `oporavak-cid-kolona-drift` (tvrdnja). `--proveri-sidra` 976 / 0 (+9 poznatih), `--self-test` 43; statička
+  sonda **20/20** (primena menja tačno jedan fajl, pravila čista, `--vrati` vraća `src-vba` bajt-identičan;
+  `s6k7-storno-bloka-u-lancu-prolazi` deli sidro sa dve sestre).
+- **Jeftine kapije:** 22/22 + `sabotaza --proveri-sidra` / `--self-test`; `WHO_WRITES.md` regenerisan (BFP piše i
+  `tblStanice` — test modul, van A11).
+- **Imenovano, samo `KNOWN_ISSUES`:** `KI-052` (sync ne razlikuje sistemski pad unutar lanca jednog bloka), `KI-053`
+  (`CleanUp` na normalnom toku čita zaostali `Err`).
+- **Čeka reviewer GO:** FULL, `dokaz.py s6k7` + presidrene, sveska za compile i ručnu proveru, compile.
+
+**Review #442 — kupac nastavka, trajna oznaka vlasništva, strog čitač (stavka 203):**
+
+Nezavisni review PR-a #442 (CODE HOLD / TEST HOLD / MERGE HOLD) je arhitekturu lanca prihvatio i tražio ciljano
+zatvaranje tri nalaza, bez novog refaktora. `KI-052` je prihvaćen kao P2 bez blokade.
+
+- **Pre-flight (nad `bd9486e3`):** `DOMAIN` PROVEN (prijemnica pripada kupcu zbirne; „interni hladnjački tok" je
+  činjenica zbirne u trenutku nastanka, ne današnjeg configa) · `IDENTITY` PROVEN (roditelj po ID-u već od odluke 7;
+  vlasnik = kupac + vozač zbirne) · `CARDINALITY` PROVEN (zbirna lanca : aktivna prijemnica = 1 : 1, `HLD-LANAC-01`;
+  obična zbirna sme 1 : N uz F4 potvrdu „dupla prijemnica") · `INVARIANTS/OWNER` nova `ZBR-OWN-01`, vlasnik pisac
+  zbirne · `WRITERS` jedan pisac zaglavlja zbirne (`BuildZbirnaHeaderRowData` za nastanak i nacrt, `ZbrIzmeniDraft` za
+  izmenu kupca) — nema trećeg puta koji pravi red · `DOWNSTREAM` tri čitača vlasništva (posledice, `RunZbirnaCorrection`,
+  `PonistiZbirnaChain_TX` — i uzvodna kaskada PONIŠTENJA prijemnice) · `PLATFORM` N/A · `LANDING` šema + fixture
+  (serijski), `#441` i dalje drži 272–280.
+- **Odluka operatera (25.10.2026), P1-b:** **trajna oznaka** (nova kolona na kraju `tblZbirna`, piše je pisac zbirne,
+  prazna = staje bez mutacije), u istom PR-u. Odbačeno: čitanje iz drugog izvora istine (nema ga — kupac zbirne je isti,
+  menja se samo config) i „zamrznut config" (sakriva promenu umesto da je beleži na dokumentu).
+- **Kod:**
+  - `modAutoHladnjaca.AutoLanacHladnjaca`: kupac = kupac **zbirne** kad ona postoji, config samo kad je lanac tek pravi;
+    nov `OznakaKupacHladnjaca` (pravilo `IsHladnjacaKupac`, jedno telo); `AktivnePrijemnicePoZbirni(outKvar)` vraća kvar
+    po zbirni, `PrijemnicaZaZbirnu` i `NedovrseniLanci` ga dižu (`8473`) sa imenom zbirne;
+  - `modDokumenta`: `BuildZbirnaHeaderRowData` i `ZbrIzmeniDraft` pišu `KupacHladnjaca`; `ZbirnaRoditeljPrijemnice`
+    dobija kupca i vozača prijemnice i odbija roditelja drugog vlasnika (`1435`);
+  - `modStornoFlow.ZbirnaOwnsExternalChain`: `Da` / `Ne` iz oznake, sve drugo `ERR_STORNO_FW_BASE + 71` sa imenom kolone;
+  - kanon: `tblZbirna.KupacHladnjaca` na kraju (otisak `06A00A5F`), `COL_ZBR_KUPAC_HLADNJACA`.
+- **Crveno → zeleno:** stavka 203 (BFP 2741 → 2760, crveno 15 tačno izvedeno; prvi zeleni prolaz pao na seed-ovima
+  bez oznake — izmereno, ne na kodu).
+- **Testovi:** BFP `Test_S6K7_NastavakNosiKupcaRoditelja` (R13: nastavak posle promene kupca + pisac sa roditeljem
+  drugog kupca ili vozača, kontrola istog vlasnika), `Test_S6K7_LanacJednaPrijemnica` (R14: dve aktivne, pa jedina
+  aktivna bez ID-a; Oporavak `GREŠKA`; kontrola: kompletan lanac tih), `Test_S6K7_VlasnistvoLancaNeCitaKonfig` (R15:
+  interni lanac posle promene configa — posledice i pravo PONIŠTENJE; eksterna zbirna kupca koji postane hladnjača —
+  odbijeno bez mutacije; zbirna bez oznake — posledice bez tvrdnje, PONIŠTENJE staje, razlog imenuje kolonu; nacrt
+  prati oznaku).
+- **Sabotaže:** +9 `s6k7-*`, presidrene 3; v. stavku 203.
+- **Drugi krug review-a (nad `a1cf945e`): CODE GO**, bez novih P1/P2; P3 (fail-open čitanje configa pri upisu
+  oznake) je `KI-054`. Izvršne kapije (stavka 204): FULL **12/12**, `dokaz.py --grupe` **31/31** (izvor identičan),
+  `vba_gate --require-green` dokazano. Čeka: compile i ručni acceptance.
+
+**N1 iz ručne provere — otpremnica pripada lancu samo ako joj je vozač ogledalo stanice (stavka 205):**
+
+- **Nalaz:** svaka odluka lanca (`HladnjacaStrogo`) čitala je TRENUTNU oznaku stanice. Kad je ručna provera (korak 3)
+  označila stanicu fixture-a kao hladnjaču, Oporavak je pokazao 13 redova `LANAC` za njene blokove u ručnim
+  otpremnicama (pravi vozači `VOZ-TEST-2`, `VOZ-TEST-1`). Ista klasa kao P1-b, na nivou bloka.
+- **Odluka operatera (26.10.2026): opcija B, u `#442`.** Ogledalo stanice (`VozacID = StanicaID`) je potpis lanca:
+  lanac izdaje otpremnicu na ogledalo, ručna F2 na pravog vozača. Odbačeno: trajna oznaka na bloku (nova kolona
+  `tblOtkup`, više pisaca i mnogo seed-ova) i „KI pa merge".
+- **Pre-flight (nad `e2ee8849`):** DOMAIN/IDENTITY/CARDINALITY/INVARIANTS/WRITERS/DOWNSTREAM/CAPABILITY/LANDING PROVEN,
+  EVENTS i PLATFORM N/A; bez nove kolone i bez novog pisca. Predikat čitaju kapija pisca `DodajZbirnaIzvor_TX` i ruter
+  `AutoZbirnaZaOtpremnicu`; svi postojeći testovi hladnjačke otpremnice prave je sa ogledalom, pa im se premisa ne menja.
+- **Kod (`modAutoHladnjaca`):** `VozacJeOgledalo` (jedno telo); `OtpremnicaJeHladnjacka` = hladnjača i ogledalo;
+  `AutoLanacHladnjaca` ne nastavlja blok ručne otpremnice; `NedovrseniLanci` je preskače (mapa `VozaciOtpremnica`,
+  strogo; otpremnica članstva koje nema → `8474`).
+- **Crveno → zeleno:** stavka 205 (BFP 2760 → 2767, crveno 4 tačno izvedeno; crveni prolaz je izmerio i posledicu —
+  zbirnu i prijemnicu pod pravim vozačem).
+- **Test:** BFP `Test_S6K7_LanacSamoOgledalo` (R16): sopstvena stanica u transakciji testa, blok bez gajbi, otpremnica
+  na pravog vozača, pa oznaka stanice; kontrola: otpremnica ogledala bez zbirne je nedovršen lanac i „Ponovi" ga završava.
+- **Sabotaže:** `s6k7-ogledalo-ne-odlucuje`, `s6k7-oporavak-ne-pita-ogledalo`, `s6k7-ponovi-ne-pita-ogledalo` (988).
+- **Imenovani ostaci:** blok BEZ otpremnice ide po trenutnoj oznaci (odluka o dokumentu koji tek nastaje); malina
+  auto-otpremnica (takođe ogledalo) bez zbirne na stanici označenoj posle i dalje bi bila lanac; skidanje oznake izbacuje
+  nedovršene lance stanice iz Oporavka, a ručna F3 ih tada prima.
+- **Reviewer GO nad `4216aded`:** FULL **12/12**, `dokaz.py --grupe` **34/34** (izvor identičan), `vba_gate
+  --require-green` dokazano; nova sveska za compile (17/17 igala); compile čist, `--require-compile` dokazano.
+  Merge na zahtev operatera 26.10.2026: `#442` → `main` `376a3d3e` (stavka 206).
+
+#### Korak 8 — završni: kapije pisca, šema zaglavlja, golden lanac (pre-flight nad `376a3d3e`, stavka 207)
+
+Izlazni uslov S6: zaglavlje prijemnice nosi samo činjenice dokumenta, stari pisac ne postoji, a kapije koje
+danas drži samo F4 stoje i u piscu. Linije su sa `376a3d3e` (izvor `e2fac85076a5`). Sonde nema: nijedna osa nije
+`PLATFORM UNKNOWN` (`ObrisiKolonuAko` je dokazan obrazac S1d i S3-ostatka).
+
+**Popis, izmeren** (kopija `tools/popis_citalaca.py` sa šest novih grupa, pa iste grupe ulaze u alat u ovom
+koraku):
+
+| Grupa | Šta | PROD | TEST | Živa PROD mesta |
+|---|---|---|---|---|
+| `prj_linija` | `COL_PRJ_(KOLICINA\|CENA\|KLASA\|KOL_AMB\|BRUTO)` | 4 | 22 | `modSetup.EnsureDoradeSchema` ×3 (format, `EnsureColumnOnTable`), `modStornoDok.ColKlasaZaPrefill` |
+| `prj_kes` | `COL_PRJ_(FAKTURISANO\|FAKTURA_ID)` | 0 | 8 | — (korak 5 je čitaoce skinuo) |
+| `prj_generacija` | generacija kao identitet prijemnice | 21 | 4 | 15 u 5 procedura: `GetPrijemniceSaOsirocenimPaletama`, `ReassignPrijemnicaToZbirna_TX`, `modDokUnos.PreveziPaleteIspravke`, `modPaletniList.ReassignPaleteToPrijemnica_TX`; `EvaluatePaletaReassign` samo test |
+| `prj_stari_pisac` | `SavePrijemnica_TX`, `modDokumenta.SavePrijemnica` | 6 | 15 | nijedno (pet `SAMO_TEST` u telu omotača, jedno je ime izvora u `PoveziDeteNaZbirnu`) |
+| `prj_zbr_cfg` | `PrijemnicaZbirnaBlokira`, `CFG_PRIJEMNICA_ZBIRNA_PROVERA` | 1 | 10 | `ValidatePrijemnicaInput` (blaža grana pisca) |
+| `prj_brojzbirne` | `COL_PRJ_BROJ_ZBIRNE` | 34 | 32 | 33 u 13 modula (jedno `MRTAV`) |
+
+Generički čitaoci generacije koje regex ne vidi, jer tabelu dobijaju parametrom: `modScrOporavak.RowsAktivni`
+(lista cilja „Prevezi palete" — ključ grupisanja i identitet u koloni 7), `modStornoDok.PrefillIzStorniranog`
+(`PickPrefillRows` sa `cGen`), `modSetup.EnsureSledljivostSchema` (dodaje `GeneracijaID` svim dokument-tabelama,
+pa bi obrisanu kolonu vratio na kraj). `modStornoImpact.HLI` prijemnicu ne doseže (uvid ide kroz `HLP` po ID-u).
+Pisac zaglavlja piše po imenu (`BuildPrijemnicaRowData`), uz `PoveziDeteNaZbirnu` i `ApplyNovaGeneracijaID`.
+
+**Verdikt po osama:**
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | linijska polja su činjenice stavke (`DOCUMENT_HEADER_LINES` §4.4), keš fakture je izveden (odluka 1 b, korak 5), `GeneracijaID` je identitet modela „red po klasi" koji ne postoji od koraka 2 |
+| `EVENTS` | **N/A** za šemu · **PROVEN** za kapije | brisanje ne menja nijedan datum ni status; kapije čuvaju poslovni događaj nastanka dokumenta (PRJ-ZBR-01, A2 t. 4) |
+| `IDENTITY` | **GAP → odluka 1** | (1) generacija je i dalje identitet u Oporavku (kolone 7/8 mreže → `ReassignPaleteToPrijemnica_TX` / `ReassignPrijemnicaToZbirna_TX`) i u F4 ispravci (`PreveziPaleteIspravke`); od koraka 2 je 1 : 1 sa `PrijemnicaID` (`ApplyNovaGeneracijaID`), pa prelazi na ID bez promene ishoda. (2) `BrojZbirne` kao veza: 33 živa mesta — manjak (`CalculateManjakPreview`, `BuildManjakDict`), siročad (`GetVerwaistePrijemnice`, `GetOsirocenePrijemnice`), integritet B4–B6, izveštaji zbirni kupac/vozač, prosečna cena, palete, storno sken, F4 „1 zbirna = 1 prijemnica" (`LookupActiveID`), `modStornoDok:379`; manji deo je čista labela (pisac, štampa, kolona mreže, prefill) |
+| `CARDINALITY` | **PROVEN** | 1 dokument : 1..2 stavke (korak 2); zbirna lanca : aktivna prijemnica = 1 : 1 (`HLD-LANAC-01`) |
+| `INVARIANTS/OWNER` | **PROVEN uz odluku 3** | PRJ-ZBR-01 i broj po kupcu danas drži SAMO F4 (`PrijemnicaValidiraj`); pisac (`ValidatePrijemnicaInput`) zbirnu proverava samo uz `PrijemnicaZbirnaBlokira()`, a broj ne proverava (`:8305`). Lanac ide mimo F4 (`zbirnaRoditeljID`). KI-051: A2 t. 4 kaže da storno ne oslobađa broj hladnjače, a F4 ga ne gleda |
+| `WRITERS` | **PROVEN** | PROD `modDokumenta` (`SavePrijemnicaDokument`, `ReassignPrijemnicaToZbirna_TX`) i `modStorno` (`MarkRowStornirano`) — nijedan ne piše nijednu od 8 kolona osim `ApplyNovaGeneracijaID`; test sejači u 7 modula (`WHO_WRITES.md`) |
+| `DOWNSTREAM` | **PROVEN** | tabela gore; PWA/GAS kolone zaglavlja ne čitaju (`kupci.js` čita izvoz, koji je od koraka 3 iz stavki); fixture: `DROP_COLS` + seed bez 8 kolona + nov potpis |
+| `CAPABILITY` | **PROVEN** | Oporavak „Prevezi prijemnicu/palete" i F4 ispravka paleta: MIGRATED (identitet po ID-u); blaža grana F4 (`UPOZORENJE`): INTENTIONALLY REMOVED (sklonjena iz Podešavanja u reviewu `#440`, dosežu je samo testovi) |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | ispod |
+| `PLATFORM` | **N/A** | self-heal brisanja je obrazac S1d/S3-ostatka; jedini nov uslov je da `EnsureSledljivostSchema` prijemnici više ne dodaje `GeneracijaID` |
+| `LANDING` | **PROVEN uz rizik** | grana `claude/s6-korak8-zavrsni` sa `376a3d3e`; `#441` (OPEN, nad `e21830c5`) ne dira ove kolone (izmereno: 0 dodatih redova sa njima), ali dira `modTest`, `modIzvestaj`, `modPrint`, `modScrDokumenti` — serijski; `modTest` brojevi od 275, koji PR uđe drugi prenumeriše |
+
+**Golden, izmereno:** `fc06fa77:tests/golden/` drži 11 snimaka; danas su registrovana 2 (D3, G2). Devet (A1–A5, B2,
+B3, F2, G1) nose ishod koji domen i danas tvrdi; D2 („storno fakturisane prijemnice", `osirocena DA`) je pisan na
+premisu koju je korak 4 zabranio (fakturisana prijemnica se ne stornira, `Test_S6K4_FakturisanaSeOdbija`). Golden
+koristi sopstvene identitete (`VOZ-GLD-1`, `STA-GLD-1`, `modGoldenTests:43-45`), pa `KI-028` (`VOZ-TEST-1` na −10)
+nije preduslov golden lanca, iako ga je odluka 5 koraka 7 stavila „pre golden lanca".
+
+**Odluke operatera (26.10.2026), sve po preporuci:**
+
+| # | Pitanje | Odluka |
+|---|---|---|
+| 1 | `BrojZbirne` kao veza | **van S6, svoj rez**: kolona ostaje labela; korak 8 dodaje grupu `prj_brojzbirne` sa pragom 33 da ne raste; prevod na `ZbirnaRoditeljID` ide posle S6, za sva tri deteta zbirne odjednom (`otk_brojzbirne` 6, `otp_brojzbirne` 13, `prj_brojzbirne` 33) |
+| 2 | golden lanac | **9 scenarija** (A1–A5, B2, B3, F2, G1) kroz nove pisce, golden fajlovi iz `fc06fa77` **bajt-identični** (menja se samo adapter); D2 se ne vraća (domen promenjen u koraku 4) |
+| 3 | KI-051 u piscu | **strogo čitanje configa**: kupac hladnjače = `MALINA_DEFAULT_KUPAC`, a tehnička greška čitanja obara upis (ne postaje „eksterni"); isti predikat i ista provera broja za F4 i pisac (jedna implementacija, dva pozivaoca, `testovi.md` §5) |
+| 4 | isporuka | **jedan PR, tri dela**: deo 1 kapije pisca + stari pisac napolje; deo 2 šema + generacija → `PrijemnicaID`; deo 3 golden lanac. Svaki deo ima svoje crveno → zeleno; FULL, `dokaz.py` i compile jednom, na reviewer GO |
+
+**Obim po delovima:**
+
+- **Deo 1 — kapije pisca:** deljena kapija zbirne (PRJ-ZBR-01: postoji, jednoznačna, istog vlasnika, istorija jednog
+  vlasnika, IZDATA) i deljena provera broja (A2: eksterni kupac — aktivni istog kupca; hladnjača-kupac — i
+  stornirani), obe u `modDokumenta`; F4 ih zove i vraća poruku uz polje (tekstovi i fokus nepromenjeni), pisac ih
+  zove pre ijednog upisa i diže grešku. Zadat roditelj (`zbirnaRoditeljID`, lanac) dobija i kapiju IZDATE. Briše se
+  `CFG_PRIJEMNICA_ZBIRNA_PROVERA`, `PrijemnicaZbirnaBlokira` i blaža grana `ValidatePrijemnicaInput`; brišu se
+  `SavePrijemnica_TX` i `SavePrijemnica` (tx), a njihovih 18 test poziva prelazi na `SavePrijemnicaMulti_TX`.
+- **Deo 2 — šema:** kanon `tblPrijemnica` gubi `Kolicina`, `Cena`, `KolAmbalaze`, `Klasa`, `Fakturisano`,
+  `FakturaID`, `BrutoKg`, `GeneracijaID` (28 → 20 kolona, ostale istim redom); `modSchema` regenerisan; konstante
+  `COL_PRJ_*` tih kolona obrisane; self-heal `ObrisiKolonuAko` za tih osam u `EnsureSledljivostSchema`, koja
+  prijemnici više ne dodaje `GeneracijaID`; pisac bez `ApplyNovaGeneracijaID`; identitet u Oporavku i F4 ispravci
+  po `PrijemnicaID`; `EnsureDoradeSchema` i prefill bez linijskih kolona; test sejači i golden adapter na stavke;
+  fixture (`DROP_COLS`, seed, potpis).
+- **Deo 3 — golden lanac:** devet scenarija i njihovi goldeni; `RunGoldenSuite` 2 → 11.
+- **Alat:** šest grupa u `tools/popis_citalaca.py` sa pragovima (`prj_linija`, `prj_kes`, `prj_generacija`,
+  `prj_stari_pisac`, `prj_zbr_cfg` = 0; `prj_brojzbirne` = 33).
+
+**ACCEPTANCE CONTRACT koraka 8 — plan dokaza, ne dokaz:**
+
+- **važi:**
+  - **R1 (PRJ-ZBR-01 u piscu):** `SavePrijemnicaMulti_TX` bez zadatog roditelja nad (a) brojem bez zbirne, (b) NACRT
+    zbirnom, (c) dvosmislenim brojem, (d) zbirnom drugog vlasnika vraća `""`, a `outGreska` imenuje razlog; redova
+    zaglavlja, stavki i nogu knjige posle poziva je isto koliko pre. Kontrola: izdata, jednoznačna zbirna istog
+    vlasnika prolazi i `ZbirnaRoditeljID` = ta zbirna. (e) zadat roditelj u NACRTU se odbija. Test ide **direktno
+    nad piscem**, jer bi F4 isti slučaj odbio pre pisca — a pisac ima pozivaoce mimo F4 (lanac, testovi). *Čime:* BFP
+    `Test_S6K8_PisacPrjZbr01`; sabotaže `s6k8-pisac-pusta-bez-zbirne`, `s6k8-pisac-pusta-nacrt`,
+    `s6k8-pisac-pusta-dvosmislenu`, `s6k8-roditelj-id-pusta-nacrt`.
+  - **R2 (jedna implementacija):** F4 i pisac čitaju istu kapiju zbirne; poruke i fokus F4 ostaju (zatečeni testovi F4
+    zeleni bez izmene tvrdnji). *Čime:* sabotaža nad deljenom kapijom (`s6k8-deljena-kapija-pusta-nacrt`) obara i
+    F4 test (`modTest`) i BFP R1.
+  - **R3 (broj, A2 t. 4, KI-051):** (a) eksterni kupac: aktivan isti broj istog kupca se odbija; isti broj drugog
+    kupca prolazi; storniran isti broj istog kupca prolazi (ispravka zadržava kupčev broj); (b) hladnjača-kupac:
+    storniran isti broj se odbija, poruka kaže da storno ne oslobađa broj; (c) pisac to radi i mimo F4. *Čime:* BFP
+    `Test_S6K8_BrojPrijemnicePoKupcu` (pisac, oba kupca) i `modTest` 275 kroz F4 (`CommitDokumentTest`, najviši ulaz
+    operatera); sabotaže `s6k8-hladnjaca-ne-broji-stornirane`, `s6k8-eksterni-broji-stornirane`,
+    `s6k8-pisac-bez-provere-broja`, `s6k8-broj-bez-opsega-kupca`.
+  - **R4 (blaža grana obrisana):** pisac nepostojeću zbirnu odbija bez ikakvog configa; BFP test koji je palio
+    `BLOK` mod prelazi na bezuslovnu kapiju; `prj_zbr_cfg` = 0.
+  - **R5 (stari pisac):** `SavePrijemnica_TX` i `SavePrijemnica` (tx) ne postoje; `prj_stari_pisac` = 0; testovi
+    koji su ih zvali mere isto kroz Multi (broj tvrdnji se ne menja bez razloga u zapisu).
+  - **R6 (kanon):** `tblPrijemnica` = 20 kolona istim redom; `T_S6_KanonStavkePrijemnice` (257) dobija kontra-tvrdnju:
+    zaglavlje nema nijednu od 8 kolona, a `TipAmbalaze`, `KolAmbVracena`, `BrojZbirne` i `ZbirnaRoditeljID` ostaju.
+    *Čime:* `modTest` 257; `gen_schema_module --check`; sabotaža nad tvrdnjom.
+  - **R7 (self-heal):** zatečena sveska sa starim kolonama u sredini posle `EnsureSledljivostSchema` ima kanonski
+    raspored, a vrednosti preostalih kolona su na svojim mestima; `GeneracijaID` se ne vraća na kraj. *Čime:* test po
+    obrascu S3-ostatka / `Test_Amb_StareKoloneSelfHeal`; sabotaže `s6k8-selfheal-ne-brise`,
+    `s6k8-generacija-vraca-se`.
+  - **R8 (identitet po ID-u):** „Prevezi palete", „Prevezi prijemnicu" i F4 ispravka paleta nose `PrijemnicaID`; dva
+    dokumenta istog broja dva kupca — dira se samo izabrani. *Čime:* zatečeni testovi (Palete T08/T11, BFP S6K7
+    osirotele, testovi Oporavka) sa premisom prenetom sa generacije na ID; sabotaže `s6k8-cilj-po-broju`,
+    `s6k8-izvor-po-broju`.
+  - **R9 (popis):** `prj_linija`, `prj_kes`, `prj_generacija`, `prj_stari_pisac`, `prj_zbr_cfg` = 0;
+    `prj_brojzbirne` ≤ 33 (`popis_citalaca --check`).
+  - **R10 (golden):** A1–A5, B2, B3, F2, G1 kroz nove pisce (otkup → izdata otpremnica → izdata zbirna → prijemnica →
+    faktura gde je ima), snimak bajt-jednak goldenu iz `fc06fa77`; `RunGoldenSuite` 11 / 0. Golden koji ne može
+    bajt-jednako je **nalaz** (odluka operatera), ne izmena goldena. *Čime:* `RunGoldenSuite`; sabotaže iz §9
+    `GOLDEN_SCENARIJI.md` (kardinalnost A3, line-level F2).
+- **netaknuto:** auto-lanac (prijemnica po `zbirnaRoditeljID`, zbirna lanca nastaje IZDATA); F4 poruke, fokus i
+  redosled provera; faktura po stavci; storno i F8; palete po stavci; knjiga ambalaže i protokol potvrde manjka;
+  `BrojZbirne` kao labela i svih 33 mesta veze (odluka 1).
+- **edge:** jednoklasna prijemnica (samo II) kroz novog pisca; hladnjača-kupac sa aktivnom prijemnicom drugog dana
+  istog rednog broja (drugi broj, prolazi); eksterni kupac sa brojem koji ima i hladnjača (drugi opseg, prolazi).
+- **negativno:** svaki odbijen poziv pisca bez ijednog upisa (zaglavlje, stavka, noga knjige, paleta).
+- **čime, ukupno:** BFP, `modTest` (257, 275+), `RunGoldenSuite`, Palete, Faktura, Storno, RunAllTests; jeftine kapije
+  (+ `popis_citalaca --check` sa novim grupama); `sabotaza --proveri-sidra` i statička sonda.
+
+**Imenovano van obima:** `BrojZbirne` kao veza (odluka 1); `KI-028` (golden ne zavisi od fixture vozača —
+izmereno gore); D2 (domen) i D1 (A13 zabranjuje storno otpremnice u aktivnoj zbirni); `KI-054` (strog predikat
+kupca hladnjače nastaje ovde, ali oznaka zbirne ostaje svoj rez); `KI-052`, `KI-053`.
+
+**Tok koda, deo 1 — kapije pisca, stari pisac (stavka 208):**
+
+- **Crveno izvedeno iz diff-a pre puštanja** (testovi dela 1 nad starim produkcionim kodom): BFP 9 padova na R1, R3
+  i R4. Izmereno tačno tako: **2777 / 9** (`MissingZbirna` ×3, `PisacPrjZbr01` ×4, `BrojPrijemnicePoKupcu` ×2).
+- **RunAllTests 275 / 5, neočekivano.** Izmereno pre ispravke; uzroci su u sejačima, ne u produkciji:
+  - zbirna `S6K6Zbirna` je nacrt sa upisanim IZDATO, bez članstva, pa je strogi čitač izvora odbija (260), a izveštaj
+    manjka je ne vidi (259);
+  - test 26 je prevezao fixture paletu (pao je 113), a zaostali dokumenti 259/260 oborili su `T_Izv`;
+  - test 35 ostavlja ispravku na čekanju, pa 275 ide iza 271.
+
+  26, 259 i 260 sada rade u svojoj transakciji nad pravom IZDATOM zbirnom. Posle ispravke sejača: **275 / 1**, tačno
+  275 na F4 hladnjače.
+- **Gde je plan ispravljen dok se pisalo:**
+  - **Kapija broja u piscu menja premisu zatečenih testova.** Dva S6K4 testa i `Test_GeneracijaNePrelaziVlasnika`
+    gradila su dva dokumenta istog broja za istog kupca. To sada odbija pisac (A2), pa delovi „dve generacije istog
+    broja" odlaze (−4 tvrdnje), a preostali preduslovi uzimaju drugi broj (BFP 2768 / 2 → 2775 / 0).
+  - **R2 nema posebnu sabotažu.** Deljena kapija je jedno sidro, pa `s6k6-f4-pusta-nacrt-zbirne` (presidrena) obara
+    F4 test, a sestra `s6k8-pisac-pusta-nacrt` sa drugom zamenom obara pisca. Za broj važi isti par:
+    `s6k8-hladnjaca-ne-broji-stornirane` i `s6k8-f4-hladnjaca-ne-broji-stornirane`.
+  - **275 ide kroz validator F4, ne kroz `CommitDokumentTest`:** na kodu pre ispravke bi potez prijemnicu kupca
+    hladnjače poslao na štampač (`PrintOut`, bez seam-a), pa bi run visio umesto da padne po imenu.
+  - **Pomoćnik `ZbrIzdataPodPrijemnicu`** (otpremnica i zbirna kroz pisce, IZDATA) zamenjuje `ZbrZateceniRed` /
+    `ZbrStavkaUzZateceni`, čija zbirna nije prošla pisca. Pisac je sad odbija, a i ranije nije bila „red kakav pravi
+    pisac".
+- **Zeleno:** RunAllTests **275 / 0**, BFP **2775 / 0** (+8 tvrdnji, razloženo u stavci 208), GREEN marker nad
+  `3b735bc48ecd`. Katalog 988 → 996, sidra 996 / 0, statička sonda 14/14, jeftine kapije 24/24.
+- **Imenovano, nije testirano:** `KupacJeHladnjacaStrogo` kad čitanje configa pukne.
+
+**Tok koda, deo 2 — šema zaglavlja, identitet po `PrijemnicaID`-u (stavka 209):**
+
+- **Crveno izvedeno iz diff-a pre puštanja** (testovi dela 2 nad produkcijom iz `f541520c`, stari fixture), pa
+  izmereno **tačno tako**: RunAllTests 275 / 6, BFP 2765 / 5, Faktura 2 / 39. Jedini pad u alternativi iz izvoda
+  je 32 (preduslov, jer 27 nije prevezao robu na deljenom fixture-u).
+- **Gde je plan ispravljen dok se pisalo:**
+  - **Self-heal ide PRE provere otiska**, kao `ObrisiStareKoloneAmbalaze` (10e-3), a ne u
+    `EnsureSledljivostSchema` kao u S3-ostatku: `EnsureAllTables` ume samo da dodaje, pa bi otisak do brisanja
+    prijavljivao drift. `EnsureSledljivostSchema` zadržava samo zabranu da prijemnici vrati `GeneracijaID`.
+  - **`EnsureDoradeSchema` je bio treći pisac kolone.** `EnsureColumnOnTable TBL_PRIJEMNICA, COL_PRJ_BRUTO` bi
+    obrisani `BrutoKg` vratio na kraj (popis ga je brojao kao čitaoca).
+  - **Sedam sabotaža je obrisano, ne presidreno:** njihova zamena čita ili piše kolonu kojoj nema ni konstante,
+    pa ne bi kompajlirala; kvar koji su merile više ne može da nastane.
+  - **Kolona identiteta je parametar `RowsAktivni`**, ne fallback na ID kad generacije nema: tiho prebacivanje
+    bi i zbirnu bez kolone generacije razrešilo po ZbirnaID-u, a da to niko ne izabere.
+  - **Neočekivan pad zelenog** (BFP „Core tables": prepisan spisak kolona) je izmeren pre ispravke; pretraga za
+    obrisanim kolonama sada ide i kroz literale u više redova.
+- **Zeleno:** RunAllTests **275 / 0**, BFP **2772 / 0 i GREEN marker**, Faktura 39, Palete, Storno 111, Storno centar,
+  Izveštaji, Golden 2; fixture `7eab17dc6aec0058`, otisak šeme `87AB4F9B`. Katalog 995, sidra 995 / 0, sonda 14/14.
+
+**Tok koda, deo 3 — golden lanac (stavka 210):**
+
+- **Gde je plan ispravljen dok se pisalo:** R10 je tražio snimak bajt-jednak goldenu iz `fc06fa77`. Izmereno je
+  da to nije moguće ni za jedan od devet, i to iz tri razloga koje je doneo kasniji kod, a ne ovaj korak:
+  - S4-3a je skinuo red `invarijanta`;
+  - AMB-10 je promenio saldo kooperanta koji donese svoje gajbe;
+  - kanonska otpremnica nastaje iz celog bloka, pa A4 traži dva bloka.
+
+  Po odluci 2 to je išlo operateru; odluka je: svih 9, sa tri razlike (`GOLDEN_SCENARIJI.md` §13).
+- **Adapter je morao da pređe na članstvo:** kanonski pisac zbirne ne upisuje `BrojZbirne` na otpremnicu, pa
+  bi `SumOtpremniceByKlasa(broj)` i brojanje otpremnica po broju dali nulu za svaki kanonski lanac.
+- **Zeleno:** Golden 11 / 0; ručni dokaz grize u sva tri smera (A3, F2, `poslato`), a izvor je vraćen
+  bajt-identičan.
+
+**Korak 8, dopuna — KI-047 (odluka 5, 27.10.2026; pre-flight pre koda):**
+
+Nezavisni pregled `#443` (27.10.2026) je KI-047 izdvojio kao stvarnu prazninu: prijemnica i roditeljska zbirna
+mogu nositi različitu robu. Odluka operatera: **vrsta i sorta prijemnice moraju biti iste kao vrsta i sorta
+zbirne; podela na I i II klasu sme da se razlikuje** (klasifikacija je procena pri prijemu). Kapija ide u `#443`,
+pre FULL-a.
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** (odluka) | prijemnica je prijem robe JEDNE zbirne; roba je činjenica zbirne (`ZBR-KANON-04`: zbirna preuzima vrstu i sortu od izvora, `RequireIstoPolje`); klasa je procena kupca |
+| `EVENTS` | **N/A** | kapija ne menja datum ni status nijednog dokumenta |
+| `IDENTITY` | **PROVEN** | zbirna se poredi po razrešenom ID-u (`PrijemnicaRoditeljRazlog` → `outZbirnaID`, zadat `zbirnaRoditeljID`, cilj prevezivanja), ne po broju |
+| `INVARIANTS/OWNER` | **PROVEN** | nova invarijanta `PRJ-ZBR-02`; vlasnik je jedna funkcija `modDokumenta.PrijemnicaRobaRazlog` |
+| `WRITERS` | **PROVEN** | vezu prijemnica → zbirna pišu `SavePrijemnicaDokument` (F4, lanac hladnjače) i `ReassignPrijemnicaToZbirna_TX` (Oporavak „Prevezi prijemnicu"); oba dobijaju kapiju. Ispravka zbirne ne postoji (S4-3a) |
+| `DOWNSTREAM` | **PROVEN** | manjak zbirne i fakturisanje po vrsti mere istu robu; lanac hladnjače nosi vrstu otkupa na sve četiri karike (isti izvor), pa kapija ne menja njegov ishod |
+| `CAPABILITY` | **N/A** | nijedna sposobnost se ne gubi; F4 dobija poruku uz polje vrste ili sorte |
+| `ACCEPTANCE CONTRACT` | **PROVEN** (plan) | R11 ispod |
+| `PLATFORM` | **N/A** | — |
+| `LANDING` | **PROVEN** | ista grana; `modTest` dobija test 276 (`#441` drži 272–280 → 275–283, prenumeriše ko uđe drugi) |
+
+**R11 (PRJ-ZBR-02):**
+
+- **važi:** pisac odbija prijemnicu čija vrsta ili sorta nije ista kao na zbirnoj, pre ijednog upisa (zaglavlje,
+  stavke, knjiga). To važi i za zadat roditelj (lanac), a prevezivanje odbija cilj druge robe bez ijedne izmene.
+  F4 to pokazuje uz polje vrste ili sorte. Poređenje je kao kod zbirne prema izvorima: bez razmaka na krajevima,
+  bez razlike u veličini slova.
+- **kontrola:** ista vrsta i sorta, a druga podela na klase (zbirna I = 100, prijemnica I = 60, II = 40) prolazi.
+- **negativno:** izdata zbirna bez VRSTE je kvar, ne „nisam rekao" — odbija se. Sorta sme da bude prazna
+  (kultura bez sorte je legitimna, BFP `Test Dunja`), i tada i prijemnica mora biti bez sorte. Ovo je ispravljeno
+  dok se pisao test, pre ijednog prolaza: prva verzija kapije je odbijala i zbirnu bez sorte.
+- **čime:** BFP `Test_S6K8_PrijemnicaRobaKaoZbirna` (pisac, zadat roditelj, prevezivanje) i `modTest` 276 kroz F4
+  potez (`CommitDokumentTest`). Sabotaže: vrsta se ne poredi, sorta se ne poredi, pisac bez kapije, prevezivanje
+  bez kapije, F4 bez kapije.
+- **sejač:** `modTest.S6K6Zbirna` izdatoj zbirni upisuje robu fixture-a — nacrt je prazan, a izdata zbirna robu
+  uvek nosi. Bez toga bi kapija odbila svaki F4 test nad tim sejačem (memorija: fail-closed kapija obara sirove
+  sejače).
+
+**Tok koda, dopuna KI-047 (stavka 211):**
+
+1. `60a7957d` — kapija i testovi. Crveno (testovi nad produkcijom iz `17a4d547`) tačno izvedeno: RunAllTests
+   276 / 1, BFP 2779 / 4.
+2. FULL nad `60a7957d`: **Palete 93 / 3**, neizvedeno. T10 seje zbirne prevezivanja sirovim redom bez robe, a
+   kapija prevezivanja ih odbija kao „zbirna bez robe". Isti obrazac kao sejač iz R11, ali u suite-i koju crveno
+   nije pokrivalo. Ispravka u testu: `8dcfd673` (seed nosi robu prijemnice).
+3. FULL nad `8dcfd673`: **12 / 12**, GREEN `a15c92c39b24`.
+4. Dokaz nad `8dcfd673`: 32 / 32 crveno, izvor identičan, ali dve tvrdnje kataloga nisu bile tačne.
+   `zbirna-f4-nije-vezan` je pao na nacrtu (kvar iz dela 1: kapija F4 i pisca je jedna i proverava identitet
+   pre statusa). `s6k8-pisac-pusta-bez-zbirne` više ne obara „odbijena je", jer kapija robe odbija i prazan
+   roditelj (KI-047). Ispravka je samo u testu i katalogu: `7bfd1651` (redosled tvrdnji u 264, tvrdnja
+   koja imenuje razlog).
+5. FULL i dokaz četiri pogođene sabotaže nad `7bfd1651`: stavka 211.
+
+### 14.56) AMB-10 — ambalaza kao knjiga prenosa; ubacuje se PRED S6 (28.09.2026)
+
+Rez nije planiran. Nastao je iz jednog pitanja operatera — „kakve veze ima
+`KolAmbVracena` sa klasama?" — i ispao je veci od S6. Pun model: `docs/DOMEN/AMBALAZA.md`.
+
+#### Kako je nastao
+
+Pre-flight S6 je predlagao da `KolAmbVracena` ide na stavku prijemnice. Citanje
+pisca to je oborilo (pisac je daje klasi I, klasi II salje 0), pa je predlog
+ispravljen na „ostaje na zaglavlju". **Operater je oborio i to:** povrat ambalaze
+je efektivno revers, njegovo mesto je `tblAmbalaza`, a kolona postoji i na
+`tblOtkup` i na `tblPrijemnica`.
+
+Merenje je potvrdilo i prosirilo: obe kolone su kes noge koja **vec postoji** u
+knjizi, sa `DokumentID`-em i storno-svesna. Pitanje „ima li jos toga" otvorilo je
+holisticki pregled — devet mesta knjizenja preko pet dokumenata.
+
+#### Sta je model pokazao
+
+`tblAmbalaza` je **jednostrana, entitetski-relativna** knjiga: vozac se **izvodi**
+(`VozacAmbEffectiveSmer`), ne upisuje. Jedno pravilo objasnjava svih devet mesta —
+red se upisuje za svakog **nosioca salda**; protivpartner dobija red samo ako je i
+sam nosilac, vozac se izvodi, firma se ne vodi. Otud dve noge kod otkupa i jedna
+kod otpremnice: **nije nedoslednost**.
+
+Ciljni model (`AMB-10`): dogadjaj je **jedan red koji imenuje obe strane**
+(`Od -> Na`), knjiga je **append-only**, storno je **kontra-stav**, a vozac je
+obican **nalog**. Dve noge nisu cilj nego simptom reda koji ume da imenuje samo
+jednu stranu.
+
+#### Dva kruga dizajn review-a
+
+Prvi krug je nasao **dve moje greske**: „zbir salda je konstantan" je bila
+**tautologija** (svaki prenos po konstrukciji daje `-x` i `+x`), a
+`ModifiedAt`/`ModifiedBy` nad **nepromenljivom** knjigom su bili unutrasnja
+protivrecnost spec-a. Obe ispravljene.
+
+Drugi krug je doneo ono sto je model zaokruzilo: **nijedan realni nalog ne sme
+zavrsiti sa negativnim saldom**, a tudja ambalaza ulazi u opticaj **eksplicitnim
+dogadjajem** (`SpoljniSvet -> partner`, `ULAZ_TUDJE_AMBALAZE`) umesto cutanjem.
+Obaveza firme prema partneru je time **izveden** read-model, bez ijedne mutabilne
+kolone.
+
+Na jednoj tacki sam uzvratio merenjem: review je trazio `OperationID` za retry.
+**Zahtev je prihvacen, mehanizam odbijen** — svih devet knjizenja su unutar
+dokumentove transakcije koja snapshot-uje `tblAmbalaza`, pa red knjige ne moze
+preziveti neuspeo upis dokumenta. Stabilan identitet efekta vec postoji:
+identitet iz **`AMB-INV-04`** (`docs/DOMEN/AMBALAZA.md` §6.9; ovde se namerno ne prepisuje). Uslov pod kojim to pada zapisan je
+unapred, i dobija **staticku kapiju** umesto komentara.
+
+#### Odluke operatera
+
+| Pitanje | Odluka (28.09.2026) |
+|---|---|
+| stampa storniranog dokumenta | prikazuje **ono sto je vazilo pre storna** — sa kontra-stavom to prestaje da bude odluka i postaje upit |
+| `KupciIzlaz` identitet | **oboreno sopstvenom ispravkom operatera:** to je **revers od kupca + uplata**, ne dokument. Mereno: nema nijedne kolicine robe, zove ga F6 (unos novca), novac vec ide po `fakturaID` |
+| `POCETNO_STANJE` | **iskljucivo firmina** ambalaza zatecena kod entiteta — zaduzuje ga, **ne** stvara obavezu; partnerove sopstvene gajbe idu kao `ULAZ_TUDJE_AMBALAZE` i na dan uvodjenja |
+| `AMB-INV-07` | vazi za **sve** realne naloge, bez izuzetka |
+| `Firma` nalozi | **jedan jedini** nalog; magacini se ne razdvajaju |
+| `POCETNO_STANJE` | dobija **dokument** — a odgovor je izvukao nalaz da **ni revers nema tabelu**, pa svi dogadjaji bez svog dokumenta dobijaju `tblAmbalazaDokument`; `ReversID` postaje njegov identitet |
+
+#### Zasto pred S6, a ne posle
+
+S6 u zavrsnom koraku skida linijska polja sa `tblPrijemnica`, a `AMB-10e` skida
+`KolAmbVracena` — **iste citaoce** (`modPrint`, `modIzvestaj`, `modScrIzvestaji`,
+`modStornoDok`). Redom AMB-10 pa S6, ti citaoci se diraju jednom. Obrnutim redom
+dvaput, i drugi put nad kodom koji je prvi put vec menjan.
+
+#### Stanje
+
+`S6 je parkiran na koraku 1/8` (grana `claude/s6-prijemnica-stavke`, kanon
+`tblPrijemnicaStavke` upisan, BFP 2077/2077). Nastavlja se posle AMB-10.
+
+Redosled AMB-10: `10a` ugovor · `10-DOK` `tblAmbalazaDokument` (revers za sve parove, pocetno stanje, nabavka, otpis) · `10b` pisac ·
+`10c` citaoci · `10d` storno · `10e` brisanje starog. **Cetiri dokaza pre `10b`:**
+zatvoren enum `VrstaKretanja`, `AmbDokID` na **svim** revers putanjama (ukljucujuci kupca), tacan protokol
+potvrde deficita, i test da pozajmljena ambalaza moze **uci -> kretati se ->
+biti vracena vlasniku** bez ijednog negativnog realnog salda.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
@@ -6034,6 +9614,7 @@ pravilo je novo ograničenje i za desktop, pa traži svoj rez sa svojim fixture 
 | **PWA mora da pošalje `PredajaID` i `PredatoAt`** (nizvodni zahtev iz S5-2) | predaja robe vozaču je poslovni događaj i mora da nosi **svoj identitet**: jedan klik otkupca = jedan `PredajaID` na svim čekiranim redovima, plus `PredatoAt` (ISO) kao vreme utovara. VBA ih od S5-2 **traži** i bez njih predaju glasno odbija — identitet se ne rekonstruiše iz atributa robe. Kolone se čitaju **po imenu**, pa zatečen list sa 23 kolone i dalje radi za uvoz otkupa; staje samo predaja. Potrebno: dve kolone u `gas/Code.gs` `COLUMNS` i u `OtkZaglavljeKolone()`, i PWA da ih popuni u `confirmOtpremaAssign`. **Namerno van ovog reza** (odluka operatera: idealan VBA je must, PWA i GAS se prilagođavaju kasnije) |
 | ~~**`CDate` nad ISO stringom — pogadja li uvoz otkupa**~~ (**izmereno 23.09.2026: NE**) | `Test_PWA_IsoDatumStizeKaoString` šalje datum **kao ISO string** — produkcioni oblik, jer `TryReadSheetData` parsira JSON, a JSON nema tip za datum — kroz `ImportRowToTblOtkup_RowTX`, i otkup nosi **tačan** datum. Dotad je tu granu testirao samo `PwaRed`, koji šalje pravi `Date`. **Ispravka ranije tvrdnje:** zapisao sam ovo kao „P1 dok se ne izmeri“ — nije P1, nema živog kvara. Zamka je uža: greši **`CStr(Date)` → `CDate(String)`** povratak u ovom lokalu (uhvatio me u tvrdnji, gde `OtpPolje` vraća `String`), ne ISO string iz PWA. `IsoUDatum` ostaje za datum predaje, jer tamo ISO stiže direktno i parser bez lokala je tačnija stvar bez obzira na to |
 | **`vba_check` pusta PODNIZ tamo gde `dokaz.py` trazi TACAN tekst** (nalaz 23.09.2026) | katalog sabotaza za BFP mora da nosi **doslovan** tekst tvrdnje, jer ta suite ispisuje naziv tvrdnje umesto imena Sub-a — tvrdnja je jedina adresa. `vba_check` proverava samo da je tvrdnja **podniz** nekog literala u imenovanom testu, pa je pet novih unosa proslo za 5 sekundi, a pun dokaz ih je posle ~20 minuta prijavio kao `NE OBARA SVOJ TEST` — iako je svih pet bilo crveno i svih pet na pravoj tvrdnji. Jeftina kapija pusta ono sto skupa odbija, pa povratna informacija stize dvadeset minuta kasnije. Rez: za suite sa `result_file`-om `vba_check` da trazi **tacan i staticki** tekst (tvrdnja sa `&` u sebi nije adresa). Ide uz PR nad `tools/` zajedno sa pravilom vidljivosti, ne uz feature |
+| **`vba_check` ne vidi POZIV SA ZAGRADAMA u poziciji naredbe** (nalaz 27.09.2026) | VBE ga preformatira (`Add(5)` -> `Add (5)`), `CanonCode` razmak sazima ali ne uklanja, pa zavrsni drift pass `ImportAllVBA` obori uvoz sa "kod se razlikuje od izvora". Simptom ne pokazuje na krivca: operater dobije poruku o CELOM modulu od 20k redova, mora da zatvori svesku bez snimanja, i to se ponavlja dok se red ne nadje rucno. Nasao ga je operater, dvaput, a nijedan test ni kapija nisu ni mogli -- `run_vba` ide drugim putem (`Remove` + `Import`). Rez: pravilo koje obori red ciji se *strip* zavrsava na `)` a pocinje pozivom metode sa argumentima (bez `=`, bez `Call`, van nastavka reda). Ide u ISTI PR nad `tools/` sa pravilom vidljivosti i tacnim tekstom tvrdnje, ne uz feature |
 | **`vba_check` ne vidi VIDLJIVOST pozvanog imena** (nalaz 22.09.2026) | treći compile-pad u jednoj sesiji koji statička kapija propusti: #371 preimenovan parametar, #374 obrisane javne funkcije koje se još zovu, #376 poziv **`Private` procedure iz drugog modula** (`GetValueByKey` je privatan u `modBusinessFlowProTests`). Svaki put ishod nije pad nego **Excel koji visi do timeout-a** (`run-vba visi = compile greska`), pa je dijagnoza skupa. Rez: pravilo koje za svako `Ime(` proveri da je ime u istom modulu ili `Public` negde; filtriranje lokalnih deklaracija i komentara je obavezno, inache je šum neupotrebljiv (mereno: 20 lažnih pogodaka bez filtera). Ide kao svoj mali PR nad `tools/`, ne uz feature |
 | **`modOtkup.VrednostOtkupa` ne drži ceo ugovor stavki** (review #363, drugi krug) | čitač vrednosti JEDNOG otkupa (banka, novac) proverava samo kg i cenu > 0, ne klasu, jedinstvenost klase ni gajbe. Otpremnica ga ne koristi. Uskladiti sa `StavkeOtkupaRedovi` kad se dira novac |
 

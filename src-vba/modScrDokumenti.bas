@@ -80,6 +80,10 @@ Public Const RUTA_LANAC As String = "LANAC"
 Public Const RUTA_NACRT As String = "NACRT"
 Private mIspravkaOtkupID As String
 Private mIspravkaBroj As String
+' Otvorena ISPRAVKA NASEG REVERSA (10d): sledece snimanje F7 pravi ZAMENU ovog
+' ambalaznog dokumenta -- stari storniran, nov sa novim brojem, u jednom potezu.
+Private mIspravkaAmbDokID As String
+Private mIspravkaRevBroj As String
 Private mIzmenaBroj As String
 
 ' Isto za F3: ZbirnaID nacrta koji je otvoren za izmenu, i njegov broj za
@@ -209,12 +213,14 @@ Public Function Scr_Radnje() As String
             ' Hladnjacki blok se NE vezuje rucno: njemu je oporavak ponavljanje
             ' auto-lanca. Obe radnje stoje u redu radnji, a svaka na svojoj
             ' granici odbija blok koji joj ne pripada -- red jos ne moze da nosi
-            ' svoje radnje (ugovor ljuske, v. plan 15).
+            ' svoje radnje (ugovor ljuske, v. plan 15). "Ponovi" postoji UVEK:
+            ' lanac nema prekidac, stanica je jedini autoritet (S6 korak 7,
+            ' odluka 2). Ovde je za blok kome je pala vec otpremnica; lanac koji
+            ' je stao kasnije nastavlja se iz Oporavka (odluka 8).
             Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1"
             If Len(mOtpID) > 0 Then _
                 Scr_Radnje = Scr_Radnje & "|vezi:OTKUI_BTN_RED_VEZI:132:soft:1"
-            If modAutoHladnjaca.LanacUkljucen() Then _
-                Scr_Radnje = Scr_Radnje & "|ponovi:OTKUI_BTN_RED_PONOVI:140:soft:1"
+            Scr_Radnje = Scr_Radnje & "|ponovi:OTKUI_BTN_RED_PONOVI:140:soft:1"
     End Select
 End Function
 
@@ -413,10 +419,59 @@ Public Function RutaPosleUpisa(ByVal otkupID As String, _
 End Function
 
 ' Otkazuje ispravku bloka -- sledece snimanje opet pravi NOV dokument.
+'
+' Gasi i ispravku reversa (10d), iz istog razloga i istom kukom: forma je
+' popunjena starim dokumentom, pa bi posle praznjenja ili promene rezima sledeci
+' "nov" unos tiho postao zamena -- stari storniran, a operater misli da je uneo
+' nov dokument.
 Public Sub Scr_IspravkaOtkazi()
     mIspravkaOtkupID = ""
     mIspravkaBroj = ""
+    mIspravkaAmbDokID = ""
+    mIspravkaRevBroj = ""
 End Sub
+
+' PRIPREMA ISPRAVKE NASEG REVERSA (10d): kapija + forma starog, BEZ stanja.
+' "" = moze, a `spec` je forma za ApplyPrefill; inace razlog.
+'
+' Kapije se NE prepisuju ovde: pita se modAmbalaza.IspravkaReversaRazlog, isti
+' izvor pravila koji pisac dize kao gresku -- obrazac OtvoriIspravkuBloka.
+'
+' STANJE SE OVDE NE POSTAVLJA, i to je razlika od OtvoriIspravkuBloka. Ispravka
+' reversa stize sa ekrana Storno, pa ljuska prvo prelazi u F7 -- a promena
+' rezima gasi otvorenu ispravku (OtkaziIzmenuNacrta -> Scr_IspravkaOtkazi).
+' Stanje upisano pre prelaska bilo bi obrisano pre nego sto operater vidi
+' formu, pa bi snimanje napravilo NOV revers uz stari koji je ostao aktivan.
+' Pozivalac zato zove Scr_IspravkaReversaOtvori tek POSLE prelaska i prefill-a.
+Public Function IspravkaReversaPripremi(ByVal ambDokID As String, _
+                                        Optional ByRef spec As String) As String
+    spec = ""
+    On Error GoTo EH
+    ambDokID = Trim$(ambDokID)
+    IspravkaReversaPripremi = modAmbalaza.IspravkaReversaRazlog(ambDokID)
+    If Len(IspravkaReversaPripremi) > 0 Then Exit Function
+
+    spec = modStornoDok.PrefillIzStorniranog(modStornoDok.STIP_REVERSI, "", ambDokID)
+    If Len(spec) = 0 Then IspravkaReversaPripremi = Poruka("OTKUI_ERR_ISPRAVI_REVERS") & " " & ambDokID
+    Exit Function
+EH:
+    spec = ""
+    IspravkaReversaPripremi = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
+End Function
+
+' Otvara ispravku reversa: SLEDECE snimanje F7 pravi zamenu ovog dokumenta.
+' Vraca broj starog reversa -- za poruku operateru, ne za identitet.
+Public Function Scr_IspravkaReversaOtvori(ByVal ambDokID As String) As String
+    mIspravkaAmbDokID = Trim$(ambDokID)
+    mIspravkaRevBroj = Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                                  mIspravkaAmbDokID, COL_AMBD_BROJ)))
+    Scr_IspravkaReversaOtvori = mIspravkaRevBroj
+End Function
+
+' AmbDokID reversa koji je otvoren za ispravku ("" = nema).
+Public Function Scr_IspravkaReversaID() As String
+    Scr_IspravkaReversaID = mIspravkaAmbDokID
+End Function
 
 ' OtkupID bloka koji je otvoren za ispravku ("" = nema).
 Public Function Scr_IspravkaOtkupID() As String
@@ -1109,68 +1164,6 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     End If
 End Function
 
-'---------------------------------------- HLADNJACA ISPRAVKA (Faza D/13)
-' Autohladnjaca: jedan otkupni list na hladnjaci povlaci ceo lanac
-' (otpremnica -> zbirna -> prijemnica -> palete). Storno tog otkupa obara
-' ceo lanac, ali PALETE ostaju - one su fizicke, roba je stvarno na njima.
-'
-' Zato se posle storna pita sta sa njima. Kontekst se cita PRE storna:
-' posle njega otkup vise nije aktivan pa se veza ka prijemnici gubi.
-' Prazan palInfo znaci "nema sta da se pita" (nije hladnjaca, nema zbirne
-' ili prijemnica nije paletizovana).
-Private Sub HladnjacaLanac(ByVal otkupID As String, ByRef prijBroj As String, _
-                           ByRef palInfo As String)
-    Dim stanica As String, zbirna As String
-    On Error Resume Next
-    prijBroj = "": palInfo = ""
-    stanica = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA))
-    zbirna = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BROJ_ZBIRNE))
-    If Len(zbirna) = 0 Then Exit Sub
-    If Not IsHladnjacaStanica(stanica) Then Exit Sub
-    prijBroj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, zbirna, COL_PRJ_BROJ))
-    If Len(prijBroj) = 0 Then Exit Sub
-    palInfo = GetPaleteInfoForPrijemnicaBroj(prijBroj)
-End Sub
-
-' Tri ishoda, isti kao u legacy modOtkupBlok.OfferHladnjacaIspravka:
-'   DA     ISPRAVKA - zapamti pending relink i prefiluj otkup iz storniranog;
-'          po Unosu se lanac gradi bez sveze paletizacije, a stare palete se
-'          prevezuju (posao vec radi modOtkupUnos.OtkupUpisi)
-'   NE     DUPLI UNOS - roba nije primljena dvaput, pa se fantomske stavke
-'          odmah skidaju; paleta koja ostane prazna se stornira
-'   OTKAZI nista - palete ostaju osirocene i dalje broje robu
-Private Sub PonudiHladnjacaIspravku(ByVal brDok As String, ByVal otkupID As String, _
-                                    ByVal prijBroj As String, ByVal palInfo As String)
-    Dim odg As VbMsgBoxResult, info As String, spec As String
-    On Error GoTo EH
-    odg = MsgBox(Poruka("OTKUI_MSG_HLAD_LANAC") & vbCrLf & _
-                 Poruka("OTKUI_MSG_HLAD_PALETE") & " " & prijBroj & " (" & palInfo & ")" & vbCrLf & vbCrLf & _
-                 Poruka("OTKUI_ASK_HLAD"), vbQuestion + vbYesNoCancel, APP_NAME)
-
-    If odg = vbYes Then
-        SetHladnjacaRelinkPending prijBroj
-        ' Prefill bez correction context-a: ovaj tok ne stvara zapis u
-        ' tblStornoVeza (veza se cuva kroz pending relink). Polazi se od
-        ' OtkupID-a storniranog reda, ne od broja (S1e).
-        spec = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, brDok, otkupID)
-        If Len(spec) > 0 Then modOtkupUI.ApplyPrefill spec
-        modOtkupUI.ShowToast Poruka("OTKUI_MSG_HLAD_ISPRAVKA"), False
-    ElseIf odg = vbNo Then
-        If DetachOsirocenePaletaStavke_TX(prijBroj, info) > 0 Then
-            MsgBox info, vbInformation, APP_NAME
-        Else
-            MsgBox Poruka("OTKUI_MSG_HLAD_NISTA") & IIf(Len(info) > 0, " " & info, ""), _
-                   vbExclamation, APP_NAME
-        End If
-    Else
-        MsgBox Poruka("OTKUI_MSG_HLAD_OSIROCENE"), vbInformation, APP_NAME
-    End If
-    Exit Sub
-EH:
-    LogErr "modScrDokumenti.PonudiHladnjacaIspravku"
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
-End Sub
-
 ' Vraca True ako je radnja PROMENILA podatke (pa mreza mora ponovo da se cita).
 ' Stampa vraca False - ona nista ne menja.
 '
@@ -1239,18 +1232,14 @@ Private Function RowAction(ByVal tag As String) As Boolean
             If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
                       Poruka("OTKUI_ASK_STORNO2"), vbQuestion + vbYesNo, _
                       APP_NAME) = vbNo Then Exit Function
-            ' Autohladnjaca: kontekst lanca se cita PRE storna - posle njega
-            ' otkup vise nije aktivan, pa se veza ka prijemnici ne bi nasla.
-            Dim hlPrij As String, hlPal As String
-            HladnjacaLanac otkupID, hlPrij, hlPal
+            ' Hladnjacke ponude paleta posle storna bloka VISE NEMA (S6 korak 7,
+            ' KI-046): bila je NEDOSTIZNA, jer StornoOtkup odbija blok u sastavu
+            ' aktivne otpremnice (A13), a blok ima zbirnu i prijemnicu samo preko
+            ' nje. Odluka o paletama je u F8 nad prijemnicom/zbirnom i u Oporavku.
             If modStorno.StornoOtkup_TX(otkupID) Then
                 Scr_ResetCache
                 RowAction = True
-                If Len(hlPal) > 0 Then
-                    PonudiHladnjacaIspravku broj, otkupID, hlPrij, hlPal
-                Else
-                    modOtkupUI.ShowToast Poruka("OTKUI_MSG_STORNIRANO") & " " & broj, False
-                End If
+                modOtkupUI.ShowToast Poruka("OTKUI_MSG_STORNIRANO") & " " & broj, False
             Else
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_STORNO") & " " & broj, True
             End If
@@ -1266,6 +1255,11 @@ Private Function RowAction(ByVal tag As String) As Boolean
                 Exit Function
             End If
             If Len(modAutoHladnjaca.AutoLanacHladnjaca(otkupID, ponPoruka)) = 0 Then
+                ' Korak koji je pao ne ponistava korake pre njega (lanac je
+                ' nastavljiv, S6 korak 7): blok je mozda dobio otpremnicu i
+                ' izasao iz ove liste, pa se lista cita ponovo i uz gresku.
+                Scr_ResetCache
+                RowAction = True
                 modOtkupUI.ShowToast IIf(Len(ponPoruka) > 0, ponPoruka, _
                                          Poruka("OTKUI_ERR_LANAC")), True
                 Exit Function
@@ -1801,7 +1795,8 @@ Public Function Scr_Save(ByVal polja As Object) As String
 
     res = modOtkupUnos.OtkupUpisi(p, poruke, ispravkaID)
     If Len(res) = 0 Then
-        Scr_Save = Poruka("OTKUP_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        Scr_Save = modTxState.PorukaIshodaRollbacka(Poruka("OTKUP_MSG_GRESKA_PRI_CUVANJU") & _
+                                                    " " & poruke)
         Exit Function
     End If
 
@@ -1876,7 +1871,8 @@ Private Function SnimiOtpremnicu(ByVal polja As Object) As String
     ' Otvorena izmena nacrta: snimanje MENJA taj nacrt, ne pravi nov.
     If Len(mIzmenaOtpID) > 0 Then
         If Not modDokUnos.OtpremnicaIzmeniNacrt(mIzmenaOtpID, p, poruke) Then
-            SnimiOtpremnicu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+            SnimiOtpremnicu = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+                                                               " " & poruke)
             Exit Function
         End If
         Scr_ResetCache
@@ -1889,7 +1885,8 @@ Private Function SnimiOtpremnicu(ByVal polja As Object) As String
 
     res = modDokUnos.OtpremnicaUpisi(p, poruke)
     If Len(res) = 0 Then
-        SnimiOtpremnicu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SnimiOtpremnicu = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & _
+                                                           " " & poruke)
         Exit Function
     End If
 
@@ -2061,7 +2058,8 @@ Private Function SnimiZbirnu(ByVal polja As Object) As String
     ' Otvorena izmena nacrta: snimanje MENJA taj nacrt, ne pravi nov.
     If Len(mIzmenaZbrID) > 0 Then
         If Not modDokUnos.ZbirnaIzmeniNacrt(mIzmenaZbrID, p, poruke) Then
-            SnimiZbirnu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+            SnimiZbirnu = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU_3") & _
+                                                           " " & poruke)
             Exit Function
         End If
         Scr_ResetCache
@@ -2074,7 +2072,8 @@ Private Function SnimiZbirnu(ByVal polja As Object) As String
 
     res = modDokUnos.ZbirnaUpisi(p, poruke)
     If Len(res) = 0 Then
-        SnimiZbirnu = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SnimiZbirnu = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU_3") & _
+                                                       " " & poruke)
         Exit Function
     End If
 
@@ -2116,12 +2115,16 @@ Private Function SavePrijemnica(ByVal polja As Object) As String
 
     res = modDokUnos.PrijemnicaUpisi(p, poruke)
     If Len(res) = 0 Then
-        SavePrijemnica = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SavePrijemnica = modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_GRESKA_PRI_CUVANJU_4") & _
+                                                          " " & poruke)
         Exit Function
     End If
 
     Scr_ResetCache
-    polja("rezultat") = res
+    ' Rezultat je BROJ prijemnice (S6 korak 6, odluka 7), kao kod zbirne: poruka
+    ' posle upisa ga prikazuje, a interni PrijemnicaID operater ne nalazi ni u
+    ' jednoj listi (isti razred kao KI-044).
+    polja("rezultat") = CStr(polja("brDok"))
     polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
 End Function
 
@@ -2154,7 +2157,8 @@ Private Function SaveIsplata(ByVal polja As Object) As String
 
     res = modNovacUnos.IsplataUpisi(p, poruke)
     If Len(res) = 0 Then
-        SaveIsplata = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SaveIsplata = modTxState.PorukaIshodaRollbacka(Poruka("NOVUNOS_MSG_GRESKA_CUVANJE_ISPL") & _
+                                                       " " & poruke)
         Exit Function
     End If
 
@@ -2187,7 +2191,8 @@ Private Function SaveUplata(ByVal polja As Object) As String
 
     res = modNovacUnos.UplataUpisi(p, poruke)
     If Len(res) = 0 Then
-        SaveUplata = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SaveUplata = modTxState.PorukaIshodaRollbacka(Poruka("NOVUNOS_MSG_GRESKA_CUVANJE_UPL") & _
+                                                      " " & poruke)
         Exit Function
     End If
 
@@ -2215,6 +2220,8 @@ Private Function SaveRevers(ByVal polja As Object) As String
     p("tipAmb") = polja("tipAmb")
     p("kolAmb") = polja("kolAmb")
     p("smerRev") = polja("smerRev")
+    ' Razlog otpisa / dobavljac nabavke (ODL-34 k). Prazno za ostale smerove.
+    If polja.Exists("napomena") Then p("napomena") = polja("napomena")
 
     greska = modNovacUnos.ReversValidiraj(p, fokus)
     If Len(greska) > 0 Then
@@ -2223,11 +2230,17 @@ Private Function SaveRevers(ByVal polja As Object) As String
         Exit Function
     End If
 
-    res = modNovacUnos.ReversUpisi(p, poruke)
+    ' Otvorena ispravka (10d): snimanje pravi ZAMENU tog reversa, ne nov dokument.
+    res = modNovacUnos.ReversUpisi(p, poruke, mIspravkaAmbDokID)
     If Len(res) = 0 Then
-        SaveRevers = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        SaveRevers = modTxState.PorukaIshodaRollbacka(Poruka("NOVUNOS_MSG_GRESKA_CUVANJE_REV") & _
+                                                      " " & poruke)
         Exit Function
     End If
+
+    ' Ispravka je uspela -- sledece snimanje je opet nov dokument. Gasi se TEK
+    ' posle uspeha: na gresku operater popravi polja i snimi ponovo.
+    If Len(mIspravkaAmbDokID) > 0 Then Scr_IspravkaOtkazi
 
     Scr_ResetCache
     polja("rezultat") = res
@@ -2268,11 +2281,10 @@ End Function
 ' Klasa I i II iz istog upisa dele vrednost, sto je tacno "jedan logicki
 ' dokument". Novac i faktura su jednoredni, pa im je identitet sopstveni PK.
 '
-' Revers je dve noge (Kooperant + Stanica) istog broja, a broj je jedinstven tek
-' u nizu (stanica, dan) -- ni broj ni broj + smer ne razlucuju dokument. Identitet
-' reda je AmbID kliknute noge; ReversID dokumenta se iz nje cita nizvodno
-' (modStorno.ReversIDRazresi). Izvod nije ovde: ide uz BROJ RACUNA, kompozit
-' koji vec razlucuje dokument.
+' Revers je od 10c ambalazni dokument: identitet je AmbDokID zaglavlja
+' (tblAmbalazaDokument), a broj je jedinstven tek u nizu (stanica, dan). Stari
+' identitet po nogama (AmbID + ReversID) je obrisan u 10e-2. Izvod nije ovde: ide
+' uz BROJ RACUNA, kompozit koji vec razlucuje dokument.
 Public Function IdKolonaTipa(ByVal tk As String) As String
     Select Case tk
         ' Otkup je JEDNO zaglavlje po dokumentu (S1e): identitet je OtkupID.
@@ -2287,11 +2299,16 @@ Public Function IdKolonaTipa(ByVal tk As String) As String
         ' Kanonski pisac GeneracijaID ne upisuje, pa bi skrivena kolona kod
         ' kanonskog dokumenta bila prazna -- a radnja bi pala nazad na broj.
         Case "ZBIRNA":                                      IdKolonaTipa = COL_ZBR_ID
-        ' Prijemnica ostaje na generaciji do S6: njen pisac je jos stari model.
-        Case "PRIJEMNICA":                                  IdKolonaTipa = COL_GENERACIJA_ID
+        ' Prijemnica od S6 koraka 4: identitet je PrijemnicaID. Generacija je bila
+        ' prazna na redovima bez nje (fixture), pa je F8 storno padao na broj, a
+        ' zadata generacija je broj ignorisala.
+        Case "PRIJEMNICA":                                  IdKolonaTipa = COL_PRJ_ID
         Case "FAKTURA":                                     IdKolonaTipa = COL_FAK_ID
         Case "AMB_ISPLATE", "AMB_UPLATE":                   IdKolonaTipa = COL_NOV_ID
-        Case "REVERSI":                                     IdKolonaTipa = COL_AMB_ID
+        ' Identitet reversa je AmbDokID (AMB-10-ODL-16/-17): dokument, ne noga.
+        ' Stari COL_AMB_ID je bio red knjige, pa je storno morao da ga razresava
+        ' u (broj, smer) -- plutajuci identitet koji je rez 10b-2 uklonio.
+        Case "REVERSI":                                     IdKolonaTipa = COL_AMBD_ID
         Case Else:                                          IdKolonaTipa = ""
     End Select
 End Function
@@ -2347,13 +2364,17 @@ Public Function GridCols(ByVal mk As String, Optional ByVal saIdentitetom As Boo
             c.Add "OTKUI_HD_KANAL||kanal|82|1"
             c.Add "OTKUI_HD_VREDNOST|" & COL_NOV_UPLATA & "|rsd|110|1"
         Case "REVERSI"
-            ' OSNOV nosi najduzi tekst u mrezi ("Revers " & em-dash & " OM prijem",
-            ' 18 znakova) - 112pt ga je seklo. 150pt prima i najduzu varijantu sa
-            ' rezervom, a mesta ima: ovaj rezim ima samo 7 kolona.
-            c.Add "OTKUI_HD_SMER|" & COL_AMB_SMER & "|txt|62|1"
-            c.Add "OTKUI_HD_OSNOV||osnov|150|1"
-            c.Add "OTKUI_HD_TIP_AMB|" & COL_AMB_TIP & "|txt|96|2"
-            c.Add "OTKUI_HD_KOMADA|" & COL_AMB_KOLICINA & "|sum0|80|1"
+            ' CETIRI CELIJE DOLAZE SA REDA KNJIGE, NE SA ZAGLAVLJA.
+            '
+            ' Zaglavlje ambalaznog dokumenta nosi broj, datum, vrstu i vlasnika
+            ' niza -- ali ni strane dogadjaja ni tip ambalaze ni kolicinu
+            ' (AMB-10-ODL-3). Zato su izvorne kolone prazne, a vrednost puni
+            ' citalac poslovnog reda (modAmbalaza.AmbDokRedMapa) u RedoviZaTip.
+            ' Isti obrazac kao kolona OSNOV, koja je i dosad bila izvedena.
+            c.Add "OTKUI_HD_SMER||ambsmer|62|1"
+            c.Add "OTKUI_HD_OSNOV||ambosnov|150|1"
+            c.Add "OTKUI_HD_TIP_AMB||ambtip|96|2"
+            c.Add "OTKUI_HD_KOMADA||ambkol|80|1"
         Case "FAKTURA"
             ' Faktura nema ni robu ni ambalazu - nosi iznos i svoj status.
             c.Add "OTKUI_HD_IZNOS|" & COL_FAK_IZNOS & "|rsd|110|1"
@@ -2405,7 +2426,7 @@ Public Function ColBroj(ByVal m As String) As String
         Case "ZBIRNA":                  ColBroj = COL_ZBR_BROJ
         Case "PRIJEMNICA":              ColBroj = COL_PRJ_BROJ
         Case "AMB_ISPLATE", "AMB_UPLATE": ColBroj = COL_NOV_BROJ_DOK
-        Case "REVERSI":                 ColBroj = COL_AMB_DOK_ID
+        Case "REVERSI":                 ColBroj = COL_AMBD_BROJ
         Case "FAKTURA":                 ColBroj = COL_FAK_BROJ
     End Select
 End Function
@@ -2417,7 +2438,7 @@ Public Function ColDatum(ByVal m As String) As String
         Case "ZBIRNA":                  ColDatum = COL_ZBR_DATUM
         Case "PRIJEMNICA":              ColDatum = COL_PRJ_DATUM
         Case "AMB_ISPLATE", "AMB_UPLATE": ColDatum = COL_NOV_DATUM
-        Case "REVERSI":                 ColDatum = COL_AMB_DATUM
+        Case "REVERSI":                 ColDatum = COL_AMBD_DATUM
         Case "FAKTURA":                 ColDatum = COL_FAK_DATUM
     End Select
 End Function
@@ -2429,7 +2450,10 @@ Public Function ColPartner(ByVal m As String) As String
         Case "ZBIRNA":                  ColPartner = COL_ZBR_KUPAC
         Case "PRIJEMNICA":              ColPartner = COL_PRJ_KUPAC
         Case "AMB_ISPLATE", "AMB_UPLATE": ColPartner = COL_NOV_PARTNER
-        Case "REVERSI":                 ColPartner = COL_AMB_ENTITET
+        ' Zaglavlje NEMA protivpartnera (AMB-10-ODL-3: strane dogadjaja zive na
+        ' redu knjige, kopija na zaglavlju bila bi druga istina), pa celiju puni
+        ' citalac reda -- v. kind "part" uz `rev` u RedoviZaTip.
+        Case "REVERSI":                 ColPartner = ""
         Case "FAKTURA":                 ColPartner = COL_FAK_KUPAC
     End Select
 End Function
@@ -2457,7 +2481,7 @@ Public Function ColKlasa(ByVal m As String) As String
         Case "OTKUP":                ColKlasa = COL_OKS_KLASA        ' stavka (ovStav)
         Case "OTPREMNICA":           ColKlasa = COL_OPS_KLASA        ' stavka (ovStav)
         Case "ZBIRNA":               ColKlasa = COL_ZBS_KLASA        ' stavka (ovStav)
-        Case "PRIJEMNICA":           ColKlasa = COL_PRJ_KLASA
+        Case "PRIJEMNICA":           ColKlasa = COL_PRS_KLASA        ' stavka (ovStav)
     End Select
 End Function
 
@@ -2466,7 +2490,7 @@ Public Function ColKolicina(ByVal m As String) As String
         Case "OTKUP":                ColKolicina = COL_OKS_KOLICINA  ' stavka (ovStav)
         Case "OTPREMNICA":           ColKolicina = COL_OPS_KOLICINA  ' stavka (ovStav)
         Case "ZBIRNA":               ColKolicina = COL_ZBS_KOLICINA  ' stavka (ovStav)
-        Case "PRIJEMNICA":           ColKolicina = COL_PRJ_KOLICINA
+        Case "PRIJEMNICA":           ColKolicina = COL_PRS_KOLICINA  ' stavka (ovStav)
     End Select
 End Function
 
@@ -2475,7 +2499,7 @@ Public Function ColKolAmb(ByVal m As String) As String
         Case "OTKUP":                ColKolAmb = COL_OKS_KOL_AMB     ' stavka (ovStav)
         Case "OTPREMNICA":           ColKolAmb = COL_OPS_KOL_AMB     ' stavka (ovStav)
         Case "ZBIRNA":               ColKolAmb = COL_ZBS_KOL_AMB     ' stavka (ovStav)
-        Case "PRIJEMNICA":           ColKolAmb = COL_PRJ_KOL_AMB
+        Case "PRIJEMNICA":           ColKolAmb = COL_PRS_KOL_AMB     ' stavka (ovStav)
     End Select
 End Function
 
@@ -2498,7 +2522,7 @@ End Function
 Public Function ColCena(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColCena = COL_OKS_CENA          ' stavka (ovStav)
-        Case "PRIJEMNICA":           ColCena = COL_PRJ_CENA
+        Case "PRIJEMNICA":           ColCena = COL_PRS_CENA          ' stavka (ovStav)
     End Select
 End Function
 
@@ -2548,7 +2572,7 @@ Public Function TabelaTipa(ByVal tk As String) As String
         Case "ZBIRNA":      TabelaTipa = TBL_ZBIRNA
         Case "PRIJEMNICA":  TabelaTipa = TBL_PRIJEMNICA
         Case "AMB_ISPLATE", "AMB_UPLATE": TabelaTipa = TBL_NOVAC
-        Case "REVERSI":     TabelaTipa = TBL_AMBALAZA
+        Case "REVERSI":     TabelaTipa = TBL_AMBALAZA_DOKUMENT
         Case "FAKTURA":     TabelaTipa = TBL_FAKTURE
         Case "IZVOD":       TabelaTipa = TBL_BANKA_IMPORT
         Case Else:          TabelaTipa = TBL_OTKUP
@@ -2569,16 +2593,13 @@ Public Function modeKey(ByVal mode As String) As String
 End Function
 
 ' Rezimi bez pojma "zbirne" - cipovi "Bez zbirne" / "Nefakturisane" se skrivaju.
-' Faktura postoji SAMO nad prijemnicom (tblPrijemnica.FakturaID). Nad otkupnim
-' listom pojam "fakturisano" nema smisla - otkup je nabavka, ne prodaja - pa se
-' cip tamo i ne prikazuje. Ranije je "Nefakturisane" bio doslovan duplikat cipa
-' "Bez zbirne": isti brojac i isti izraz u MatchFilterFast.
-Public Function ColFakturaID(ByVal mk As String) As String
-    If mk = "PRIJEMNICA" Then ColFakturaID = COL_PRJ_FAKTURA_ID
-End Function
-
+' Faktura postoji SAMO nad prijemnicom. Nad otkupnim listom pojam "fakturisano"
+' nema smisla - otkup je nabavka, ne prodaja - pa se cip tamo i ne prikazuje.
+' Ranije je "Nefakturisane" bio doslovan duplikat cipa "Bez zbirne": isti brojac
+' i isti izraz u MatchFilterFast. Od S6 koraka 5 se fakturisanost prijemnice ne
+' cita iz kolone zaglavlja nego IZVODI (modFaktura.FakturisanostPoPrijemnici).
 Public Function ModeHasFaktura(ByVal mode As String) As Boolean
-    ModeHasFaktura = (Len(ColFakturaID(modeKey(mode))) > 0)
+    ModeHasFaktura = (modeKey(mode) = "PRIJEMNICA")
 End Function
 
 ' Pojam "bez zbirne" postoji samo tamo gde dokument NOSI broj zbirne.
@@ -2630,12 +2651,24 @@ End Function
 ' Zato se po tipu dokumenta bira SAMO noga koja nosi znacenje:
 '   revers/otkup ka kooperantu  -> noga kooperanta
 '   revers firma <-> OM         -> noga otkupnog mesta (tada OM JESTE partner)
-Public Function RevRowVisible(ByVal dokTip As String, ByVal entTip As String) As Boolean
-    Select Case Trim$(dokTip)
-        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, DOK_TIP_OTKUP
-            RevRowVisible = (Trim$(entTip) = "Kooperant")
-        Case DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-            RevRowVisible = (Trim$(entTip) = "Stanica")
+' KOJE VRSTE AMBALAZNOG DOKUMENTA ULAZE U LISTU "REVERSI".
+'
+' ZATVOREN SPISAK, a ne AmbDokVrstaPoznata: vrsta ulazi samo ODLUKOM. Do
+' AMB-10-ODL-34 su bila dva reversa -- nabavka i otpis nisu imali ulaz, pa ih F7
+' nije umeo ni da napravi ni da stornira. Od ODL-34 (i) su sedmi i osmi segment
+' F7, pa ih lista pokazuje: bez toga storno nabavke i otpisa nije dostupan ni sa
+' jednog ekrana (Storno/Reversi cita isti RedoviZaTip).
+'
+' ZAMENILA JE RevRowVisible, i to je bio P1 (review 08.10.2026). Stari filter
+' je sudio po TIPU DOKUMENTA NOGE (DOK_TIP_OM_*) i po entitetu reda. Posle
+' 10c je red mreze DOKUMENT, pa je `Vrsta` sa zaglavlja ("REVERS") padala u
+' Case Else -> False -> svaki nov revers je ISPADAO iz liste. Mapa tipa je
+' bila presecena, filter reda nije -- i nijedan test nije zvao citaoca, pa je
+' 12/12 ZELENO bilo saglasno sa potpuno praznom listom.
+Public Function AmbDokUListiReversa(ByVal vrsta As String) As Boolean
+    Select Case Trim$(vrsta)
+        Case AMB_DOK_REVERS, AMB_DOK_REVERS_PARTNERA, AMB_DOK_NABAVKA, AMB_DOK_OTPIS
+            AmbDokUListiReversa = True
     End Select
 End Function
 
@@ -2674,18 +2707,98 @@ End Function
 ' Kod reversa EntitetID pokazuje u RAZLICITU tabelu zavisno od EntitetTip
 ' (modAmbalaza koristi "Kooperant" / "Stanica" / "Kupac"), pa se partner ne moze
 ' razresiti jednim recnikom kao kod ostalih rezima.
+
+' Polje pakovanog reda ambalaznog dokumenta (v. modAmbalaza.AmbDokRedMapa).
+' Prazno za dokument bez poslovnog reda -- lista tada pokazuje zaglavlje bez
+' detalja, a ne puca: mreza nije kapija integriteta.
+Private Function AmbRecPolje(ByVal rec As Variant, ByVal i As Long) As String
+    If Not IsArray(rec) Then Exit Function
+    If i < LBound(rec) Or i > UBound(rec) Then Exit Function
+    AmbRecPolje = CStr(rec(i))
+End Function
+
+' KOGA KOLONA PARTNER POKAZUJE kod ambalaznog dokumenta.
+'
+' Red knjige imenuje OBE strane, pa "partner" nije podatak nego IZBOR prikaza:
+' pokazuje se strana koja NIJE nasa (kooperant ili kupac). Kad su obe nase --
+' vozac i stanica, PRENOS_INTERNO po AMB-10-ODL-7 -- pokazuje se ona koja nije
+' stanica: stanica je kontekst ekrana i ne kaze nista novo.
+'
+' Ko je "nas" cita se iz UGOVORA (AmbNalogUKlasi), ne iz spiska imena ovde --
+' dva spiska bi se razisla prvom izmenom naloga.
+Private Sub AmbProtivpartner(ByVal rec As Variant, ByRef tip As String, ByRef id As String)
+    tip = ""
+    id = ""
+    If Not IsArray(rec) Then Exit Sub
+    If UBound(rec) < 6 Then Exit Sub
+
+    Dim odT As String, odI As String, naT As String, naI As String
+    odT = CStr(rec(3))
+    odI = CStr(rec(4))
+    naT = CStr(rec(5))
+    naI = CStr(rec(6))
+
+    ' GRANICA NIJE PROTIVPARTNER (6.3): nabavka je SpoljniSvet -> Stanica, otpis
+    ' nalog -> SpoljniSvet. Prikazuje se realni nalog -- inace bi se izabrao
+    ' SpoljniSvet bez ID-a i celija bi bila prazna (ODL-34 i).
+    If modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_GRANICA, odT) Then
+        tip = naT
+        id = naI
+        Exit Sub
+    End If
+    If modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_GRANICA, naT) Then
+        tip = odT
+        id = odI
+        Exit Sub
+    End If
+
+    If Not modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_SOPSTVENI, odT) Then
+        tip = odT
+        id = odI
+    ElseIf Not modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_SOPSTVENI, naT) Then
+        tip = naT
+        id = naI
+    ElseIf StrComp(odT, AMB_NALOG_STANICA, vbTextCompare) <> 0 Then
+        tip = odT
+        id = odI
+    Else
+        tip = naT
+        id = naI
+    End If
+End Sub
+
+' Ime naloga za kolonu PARTNER. Vozac je dodat uz rez 10b-2: tada je prestao
+' da bude zig (kolona uz red) i postao NALOG, pa se u listi pojavljuje kao
+' protivpartner -- bez mape bi stajao go ID.
 Public Function RevPartner(ByVal entTip As String, ByVal entID As String, _
-                            mKoop As Object, mStan As Object, mKup As Object) As String
+                            mKoop As Object, mStan As Object, mKup As Object, _
+                            Optional mVoz As Object) As String
     Dim d As Object
     RevPartner = entID
     Select Case Trim$(entTip)
         Case "Kooperant": Set d = mKoop
         Case "Stanica":   Set d = mStan
         Case "Kupac":     Set d = mKup
+        Case "Vozac":     Set d = mVoz
         Case Else:        Exit Function
     End Select
     If d Is Nothing Then Exit Function
     If d.Exists(entID) Then RevPartner = d(entID)
+End Function
+
+' Izvedena fakturisanost reda prijemnice: Array(stanje, fakture, zajednicka) iz
+' modFaktura.FakturisanostPoPrijemnici (S6 korak 5). Red koga u recniku nema je
+' KVAR, ne "nije fakturisan": recnik nosi SVAKO zaglavlje (strog citac stavki).
+Private Function FaktRecPrijemnice(ByVal dFakt As Object, ByVal prjID As String) As Variant
+    If dFakt Is Nothing Then
+        Err.Raise ERR_UI_BASE + 41, "modScrDokumenti.FaktRecPrijemnice", _
+                  "Fakturisanost prijemnica nije ucitana."
+    End If
+    If Not dFakt.Exists(prjID) Then
+        Err.Raise ERR_UI_BASE + 41, "modScrDokumenti.FaktRecPrijemnice", _
+                  "Prijemnica bez izvedene fakturisanosti: " & prjID
+    End If
+    FaktRecPrijemnice = dFakt(prjID)
 End Function
 
 Public Function PayCode(ByVal duguje As Double, ByVal placeno As Double) As Long
@@ -2709,6 +2822,9 @@ End Function
 ' (mView, mViewN, mSumKg, mCnt*), pa je mreza mogla da sluzi samo njega.
 ' Sada vraca - i mreza je time postala neutralna. Sortiranje radi ljuska.
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrDokumenti.Scr_Rows"
     ' F1: rang kooperanata je svoja lista; ostalo je lista dokumenata rezima.
     Select Case Scr_Lista()
         Case "OTPREMNICE": Scr_Rows = RowsOtpremnice(filter, q): Exit Function
@@ -2729,6 +2845,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     Dim mk As String: mk = modeKey(ActiveMode)
     Scr_Rows = RedoviZaTip(mk, filter, q, _
                            (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "ZBIRNA"))
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrDokumenti.Scr_Rows"
 End Function
 
 ' Lista dokumenata JEDNOG TIPA. Javna i parametrizovana tipom, jer je ista
@@ -2753,11 +2872,13 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     Dim cOtk As Long, cBez As Long, cNef As Long
     Dim fltV As String, fltP As String
     Dim ix() As Long, kind() As String
-    Dim iStorno As Long, iZbir As Long, iKg As Long, iDokTip As Long, iFakt As Long
+    Dim iStorno As Long, iZbir As Long, iKg As Long, iDokTip As Long
     Dim iTip As Long, iNap As Long, iEntTip As Long, iBrojCol As Long
     Dim iKoopID As Long, iPartID As Long, iOtkID As Long
     Dim mKoop As Object, mStan As Object, mKup As Object
     Dim rev As Boolean, kanal As Boolean
+    Dim mAmbRed As Object, mVoz As Object, iAmbDokID As Long
+    Dim ambRec As Variant
 
     ' Izvod nije red tabele nego GRUPA redova (jedan izvod = mnogo stavki), pa
     ' se ne moze prikazati kroz listu dokumenata (koja je red = dokument).
@@ -2828,7 +2949,9 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     ' odakle dolazi kilaza reda.
     Dim otkStav As Boolean, dStav As Object, ovStav() As String, iStavID As Long
     ReDim ovStav(0 To colN - 1)
-    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "ZBIRNA")
+    ' PRIJEMNICA od S6 koraka 3: zaglavlje od koraka 2 ne nosi linijska polja,
+    ' pa je red dokumenta novog oblika pokazivao 0 kg, praznu klasu i vrednost 0.
+    otkStav = (mk = "OTKUP" Or mk = "OTPREMNICA" Or mk = "ZBIRNA" Or mk = "PRIJEMNICA")
     If otkStav Then
         mStep = "stavke dokumenta"
         If mk = "OTKUP" Then
@@ -2837,6 +2960,9 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
         ElseIf mk = "OTPREMNICA" Then
             Set dStav = modDokumenta.ZbirStavkiPoOtpremnici()
             iStavID = ColIdx(tblName, COL_OTP_ID)
+        ElseIf mk = "PRIJEMNICA" Then
+            Set dStav = modDokumenta.ZbirStavkiPoPrijemnici()
+            iStavID = ColIdx(tblName, COL_PRJ_ID)
         Else
             Set dStav = modDokumenta.ZbirStavkiPoZbirni()
             iStavID = ColIdx(tblName, COL_ZBR_ID)
@@ -2867,13 +2993,23 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     mStep = "indeksi kolona"
     iStorno = ColIdx(tblName, COL_STORNIRANO)
     iZbir = ColIdx(tblName, ColBrojZbirne(mk))
-    If Len(ColFakturaID(mk)) > 0 Then iFakt = ColIdx(tblName, ColFakturaID(mk))
+    ' Fakturisanost prijemnice je IZVEDENA (S6 korak 5, FAK-LIN-03) -- isti recnik
+    ' koji pitaju kapija storna i mreza Fakturisanja. Do tada je lista citala
+    ' FakturaID zaglavlja, a kapija kes Fakturisano ili liniju, pa su o istom
+    ' dokumentu govorile suprotno (KI-038).
+    Dim dFakt As Object
+    If mk = "PRIJEMNICA" Then Set dFakt = modFaktura.FakturisanostPoPrijemnici()
 
     rev = (mk = "REVERSI")
     If rev Then
-        iBrojCol = ColIdx(tblName, COL_AMB_DOK_ID)
-        iDokTip = ColIdx(tblName, COL_AMB_DOK_TIP)
-        iEntTip = ColIdx(tblName, COL_AMB_ENTITET_TIP)
+        ' RED MREZE JE DOKUMENT, pa genericki builder i dalje odgovara -- za
+        ' razliku od izvoda, kome je red GRUPA redova i zato ima svoj builder.
+        ' Sa zaglavlja dolaze broj, datum i vrsta; tip ambalaze, kolicina i
+        ' strane dogadjaja dolaze sa POSLOVNOG REDA, kroz jednu mapu i jedan
+        ' prolaz (po redu bi bio sken po redu).
+        iAmbDokID = ColIdx(tblName, COL_AMBD_ID)
+        iDokTip = ColIdx(tblName, COL_AMBD_VRSTA)
+        Set mAmbRed = modAmbalaza.AmbDokRedMapa()
     End If
     kanal = (mk = "AMB_ISPLATE" Or mk = "AMB_UPLATE")
     If kanal Then
@@ -2889,6 +3025,9 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     If rev Or kanal Then
         Set mKoop = PartnerMap(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
         Set mStan = PartnerMap(TBL_STANICE, "StanicaID", "Naziv", "")
+        ' Vozac je od reza 10b-2 NALOG, ne zig -- pa se u listi pojavljuje kao
+        ' protivpartner i mora da ima ime, a ne go ID.
+        Set mVoz = PartnerMap(TBL_VOZACI, "VozacID", "Ime", "Prezime")
         Set mKup = PartnerMap(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV, "")
     End If
 
@@ -2904,9 +3043,10 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             Set dPay = modNovac.BuildIsplataDictByOtkup()
             iPayID = ColIdx(tblName, COL_OTK_ID)
         Else
+            ' Prijemnica placanje nosi preko SVOJIH faktura (izvedenih, gore).
             Set dPay = modNovac.BuildUplataDictByFaktura()
             Set dFakIzn = FakturaIznosMap()
-            iPayID = ColIdx(tblName, COL_PRJ_FAKTURA_ID)
+            iPayID = ColIdx(tblName, COL_PRJ_ID)
         End If
         If dPay Is Nothing Then pay = False
     End If
@@ -2928,7 +3068,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
 
         ' reversi su podskup tblAmbalaza - ostalo iz te knjige ne ulazi
         If rev Then
-            If Not RevRowVisible(CellS(src, r, iDokTip), CellS(src, r, iEntTip)) Then GoTo NextRow
+            If Not AmbDokUListiReversa(CellS(src, r, iDokTip)) Then GoTo NextRow
         End If
 
         vDatK = 0
@@ -2948,6 +3088,9 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             ElseIf mk = "OTPREMNICA" Then
                 zStav = modDokumenta.ZbirStavkiZaOtpremnicu(dStav, CellS(src, r, iStavID), _
                             "modScrDokumenti.RedoviZaTip")
+            ElseIf mk = "PRIJEMNICA" Then
+                zStav = modDokumenta.ZbirStavkiZaPrijemnicu(dStav, CellS(src, r, iStavID), _
+                            "modScrDokumenti.RedoviZaTip")
             Else
                 zStav = modDokumenta.ZbirStavkiZaZbirnu(dStav, CellS(src, r, iStavID), _
                             "modScrDokumenti.RedoviZaTip")
@@ -2956,8 +3099,10 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
         If iKg >= 0 Then vKgRow = CellD(src, r, ix(iKg))
 
         Dim pCode As Long, pRest As Double, duguje As Double, placeno As Double
-        Dim payKey As String
+        Dim payKey As String, fRec As Variant, fk As Variant
         pCode = 0: pRest = 0
+        fRec = Empty
+        If mk = "PRIJEMNICA" Then fRec = FaktRecPrijemnice(dFakt, CellS(src, r, iStavID))
         If pay Then
             duguje = 0: placeno = 0
             payKey = CellS(src, r, iPayID)
@@ -2965,17 +3110,41 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                 duguje = CDbl(zStav(1))
                 If dPay.Exists(payKey) Then placeno = CDbl(dPay(payKey))
                 pCode = PayCode(duguje, placeno)
-            ElseIf Len(payKey) = 0 Then
-                pCode = PAY_NEFAKT              ' prijemnica jos nije na fakturi
+            ElseIf CLng(fRec(0)) = FAKT_NE Then
+                pCode = PAY_NEFAKT              ' nijedna stavka nije na fakturi
+            ElseIf CLng(fRec(0)) = FAKT_DELIM Then
+                ' Odluka 5: delimicno fakturisan ima PREDNOST nad placanjem -- na
+                ' dokumentu jos ima sta da se fakturise.
+                pCode = PAY_DELIM_FAKT
             Else
-                If Not dFakIzn Is Nothing Then
-                    If dFakIzn.Exists(payKey) Then duguje = CDbl(dFakIzn(payKey))
-                End If
-                If dPay.Exists(payKey) Then placeno = CDbl(dPay(payKey))
+                ' Placanje SVIH faktura dokumenta zajedno (klasa I i II mogu biti na
+                ' dve fakture); stanje se i dalje cita na nivou fakture.
+                For Each fk In fRec(1)
+                    If Not dFakIzn Is Nothing Then
+                        If dFakIzn.Exists(CStr(fk)) Then duguje = duguje + CDbl(dFakIzn(CStr(fk)))
+                    End If
+                    If dPay.Exists(CStr(fk)) Then placeno = placeno + CDbl(dPay(CStr(fk)))
+                Next fk
                 pCode = PayCode(duguje, placeno)
             End If
             pRest = duguje - placeno
             If pRest < 0 Then pRest = 0
+            ' Zajednicka faktura (vise prijemnica na jednom racunu): ostatak pripada
+            ' fakturi, ne dokumentu -- inace svaki red nosi CEO dug racuna (review
+            ' #439 P2-1). Dug se vidi u listi Fakture, a detalj kaze "zajednicka".
+            If mk = "PRIJEMNICA" Then
+                If CBool(fRec(2)) Then pRest = 0
+            End If
+        End If
+
+        If rev Then
+            ambRec = Empty
+            If iAmbDokID > 0 And Not mAmbRed Is Nothing Then
+                Dim dokKljuc As String
+                dokKljuc = CellS(src, r, iAmbDokID)
+                If mAmbRed.Exists(dokKljuc) Then _
+                    ambRec = mAmbRed(dokKljuc)
+            End If
         End If
 
         For c = 0 To colN - 1
@@ -2986,7 +3155,9 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                 Case "part"
                     cell = CellS(src, r, ix(c))
                     If rev Then
-                        cell = RevPartner(CellS(src, r, iEntTip), CStr(cell), mKoop, mStan, mKup)
+                        Dim pTip As String, pID As String
+                        AmbProtivpartner ambRec, pTip, pID
+                        cell = RevPartner(pTip, pID, mKoop, mStan, mKup, mVoz)
                     ElseIf kanal Then
                         cell = NovacPartner(CellS(src, r, iEntTip), CellS(src, r, iKoopID), _
                                             CellS(src, r, iPartID), CellS(src, r, iOtkID), _
@@ -3016,9 +3187,19 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                     Else
                         cell = 0
                     End If
-                Case "osnov"
-                    cell = OsnovNaziv(CellS(src, r, iDokTip), CellS(src, r, iBrojCol))
+                Case "ambosnov"
+                    ' OSNOV reversa je VRSTA DOKUMENTA sa zaglavlja (REVERS /
+                    ' REVERS_PARTNERA), a ne vise tip dokumenta sa noge knjige.
+                    cell = modAmbalazaUgovor.AmbVrstaDokNaziv(CellS(src, r, iDokTip))
                     hay = hay & "|" & cell
+                Case "ambsmer"
+                    cell = modAmbalazaUgovor.AmbKretanjeNaziv(AmbRecPolje(ambRec, 0))
+                    hay = hay & "|" & cell
+                Case "ambtip"
+                    cell = AmbRecPolje(ambRec, 1)
+                    hay = hay & "|" & cell
+                Case "ambkol"
+                    cell = Val(AmbRecPolje(ambRec, 2))
                 Case "kanal"
                     cell = KanalNaziv(KanalCode(CellS(src, r, iTip), CellS(src, r, iNap)))
                     hay = hay & "|" & cell
@@ -3045,8 +3226,9 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
         bezZbirne = (Len(vZbir) = 0)
         hay = hay & "|" & vZbir
 
+        ' "Nefakturisane" = na dokumentu jos ima sta da se fakturise (NE ili DELIM).
         bezFakture = False
-        If iFakt > 0 Then bezFakture = (Len(CellS(src, r, iFakt)) = 0)
+        If Not IsEmpty(fRec) Then bezFakture = (CLng(fRec(0)) <> FAKT_DA)
 
         ' brojaci cipova - isti prolaz, bez zasebnog skena po cipu.
         ' "Bez zbirne" i "Nefakturisane" su RAZLICITI uslovi i broje se odvojeno.
@@ -3099,28 +3281,6 @@ Public Function MatchFilterFast(ByVal filter As String, ByVal vDatK As Double, _
         Case "nedelja":   MatchFilterFast = (Not isStorno) And (vDatK >= mToday - 6)
         Case "mesec":     MatchFilterFast = (Not isStorno) And (vDatK >= mMonthStart)
         Case Else:        MatchFilterFast = Not isStorno
-    End Select
-End Function
-
-' Citljiv osnov reda. DOK_TIP_OTKUP je tu jer kooperant i pri predaji PUNIH
-' gajbi ima izlaz ambalaze - to nije revers, ali jeste njegovo kretanje.
-Public Function OsnovNaziv(ByVal dokTip As String, ByVal dokID As String) As String
-    Dim izOtkupa As Boolean
-    On Error Resume Next
-    izOtkupa = OtkupKoopMap().Exists(Trim$(dokID))
-    Select Case Trim$(dokTip)
-        Case DOK_TIP_OM_IZLAZ_KOOP
-            ' Prazne gajbe uz otkup se knjize ISTIM tipom kao pravi revers
-            ' (modOtkup.bas:611), samo im je DokumentID = OtkupID. Bez ove
-            ' razlike bi dva reda istog otkupa nosila razlicit osnov: jedan
-            ' "Uz otkup", drugi "Revers" - a revers dokument ne postoji.
-            OsnovNaziv = IIf(izOtkupa, Poruka("OTKUI_OSN_OTKUP_PRAZNE"), _
-                                       Poruka("OTKUI_OSN_REV_IZDATO"))
-        Case DOK_TIP_OM_ULAZ_KOOP:   OsnovNaziv = Poruka("OTKUI_OSN_REV_POVRAT")
-        Case DOK_TIP_OM_IZLAZ_FIRMA: OsnovNaziv = Poruka("OTKUI_OSN_REV_OM_IZDATO")
-        Case DOK_TIP_OM_ULAZ_FIRMA:  OsnovNaziv = Poruka("OTKUI_OSN_REV_OM_PRIJEM")
-        Case DOK_TIP_OTKUP:          OsnovNaziv = Poruka("OTKUI_OSN_OTKUP_PUNE")
-        Case Else:                   OsnovNaziv = dokTip
     End Select
 End Function
 

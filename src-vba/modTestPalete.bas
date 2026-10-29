@@ -94,6 +94,7 @@ Public Sub RunPaleteTestSuite()
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
     tx.AddTableSnapshot TBL_KULTURE
@@ -367,6 +368,10 @@ End Sub
 ' Detach: dve prijemnice na ISTOJ paleti (su-stanari). Skidanje prve ne dira
 ' drugu ni paletu; skidanje i druge prazni paletu -> paleta se stornira
 ' (kanonski StornoPaleta) + Istorija STORNO_PRAZNA.
+'
+' S6 korak 7 (KI-046): skida JEZGRO po PrijemnicaID-u (SkiniPoID), isto koje
+' zove storno prijemnice. Detach po broju je obrisan, a sa njim i njegov tekst
+' za operatera -- sud o su-stanaru i fantom paleti je ostao isti.
 Private Sub T08_DetachSuStanarFantom()
     Const S As String = "T08 detach su-stanar+fantom: "
     MakePrij "TSTPRJ-16", "TST-P10", "TST-Z8", "I", 40, 4, "TST-S08"
@@ -380,8 +385,7 @@ Private Sub T08_DetachSuStanarFantom()
     ChkEq CStr(stB(1, 2)), palID, S & "obe prijemnice na istoj paleti"
 
     MarkStornoPrij "TST-P10"
-    Dim info As String
-    ChkEq DetachOsirocenePaletaStavke_TX("TST-P10", info), 1, S & "skinuta 1 stavka"
+    ChkEq SkiniPoID("TSTPRJ-16"), 1, S & "skinuta 1 stavka"
     ChkEq StCnt("TST-P10"), 0, S & "P10 bez aktivnih stavki"
     ChkEq StCnt("TST-P11"), 1, S & "su-stanar P11 netaknut"
     Dim pi As Variant: pi = PalInfo(palID)
@@ -389,11 +393,10 @@ Private Sub T08_DetachSuStanarFantom()
     ChkEq pi(1), 3, S & "header 3 gajbice (samo P11)"
 
     MarkStornoPrij "TST-P11"
-    ChkEq DetachOsirocenePaletaStavke_TX("TST-P11", info), 1, S & "skinuta i P11 stavka"
+    ChkEq SkiniPoID("TSTPRJ-17"), 1, S & "skinuta i P11 stavka"
     pi = PalInfo(palID)
     ChkEq UCase$(CStr(pi(6))), "DA", S & "prazna fantom paleta stornirana"
     Chk InStr(CStr(pi(8)), "STORNO_PRAZNA") > 0, S & "Istorija sadrzi STORNO_PRAZNA"
-    Chk InStr(info, "stornirane") > 0, S & "outInfo javlja storniranu paletu"
 End Sub
 
 ' Preradjena paleta: korekcija kolicina je blokirana (ADJ_BLOCKED), bez izmena.
@@ -406,9 +409,12 @@ Private Sub T09_AdjustBlokPreradjena()
     Dim palRow As Long: palRow = FindRows(TBL_PALETA, COL_PAL_ID, CStr(st(1, 2))).item(1)
     RequireUpdateCell TBL_PALETA, palRow, COL_PAL_PRERADJENO, "Da", "modTestPalete.T09"
 
-    ' dokument menja gajbice 5 -> 7 (direktan upis, kao ispravka)
-    Dim prjRow As Long: prjRow = FindRows(TBL_PRIJEMNICA, COL_PRJ_BROJ, "TST-P12").item(1)
-    RequireUpdateCell TBL_PRIJEMNICA, prjRow, COL_PRJ_KOL_AMB, 7, "modTestPalete.T09"
+    ' dokument menja gajbice 5 -> 7 (direktan upis, kao ispravka). Gajbe
+    ' dokumenta od S6 koraka 3 nosi STAVKA, pa se menja ona -- izmena na
+    ' zaglavlju vise ne bi bila izmena dokumenta.
+    Dim stRow As Long: stRow = FindRows(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, _
+                                        "TSTPRJ-18").item(1)
+    RequireUpdateCell TBL_PRIJEMNICA_STAVKE, stRow, COL_PRS_KOL_AMB, 7, "modTestPalete.T09"
 
     Dim info As String
     ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TST-P12", "", info), ADJ_BLOCKED, _
@@ -436,11 +442,16 @@ Private Sub T10_ZbirnaRepointStavke()
     ' transakciji koja se ponistava, pa danas ne curi u druge suite-e -- ali
     ' seed koji pravi dokument u obliku koji pisac ne moze da napravi je mina
     ' za prvi sledeci citalac koji se ovde zatekne.
-    TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO), _
-              Array("TSTZBR-A", "TST-Z10A", "")
+    ' Zbirna nosi ROBU prijemnice (vrsta i sorta): prevezivanje od S6 koraka 8
+    ' prima samo cilj iste robe (PRJ-ZBR-02), a zbirna bez vrste je kvar koji
+    ' pisac ne pravi.
+    TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO, _
+                                COL_ZBR_VRSTA, COL_ZBR_SORTA), _
+              Array("TSTZBR-A", "TST-Z10A", "", TST_VRSTA, "TST-S10")
     TstZbirnaStavka "TSTZBR-A", 50
-    TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO), _
-              Array("TSTZBR-B", "TST-Z10B", "")
+    TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO, _
+                                COL_ZBR_VRSTA, COL_ZBR_SORTA), _
+              Array("TSTZBR-B", "TST-Z10B", "", TST_VRSTA, "TST-S10")
     TstZbirnaStavka "TSTZBR-B", 50
 
     MakePrij "TSTPRJ-19", "TST-P13", "TST-Z10A", "I", 50, 5, "TST-S10"
@@ -494,10 +505,30 @@ Private Sub T11_RelabelBlokNaDeljenojPaleti()
     ChkEq pi(1), 7, S & "header gajbice ostao 7 (4+3)"
 
     ' Bezbedan izlaz postoji: skini stavke stare pa nov unos (detach ne dira su-stanara).
-    Dim info As String
-    ChkEq DetachOsirocenePaletaStavke_TX("TST-P14", info), 1, S & "detach kao bezbedan izlaz radi"
+    ChkEq SkiniPoID("TSTPRJ-20"), 1, S & "detach kao bezbedan izlaz radi"
     ChkEq StCnt("TST-P15"), 1, S & "su-stanar i posle detach-a netaknut"
 End Sub
+
+' Skidanje paletnih stavki jedne prijemnice kroz JEZGRO (po PrijemnicaID-u), u
+' sopstvenoj transakciji koja snima obe tabele paleta -- jezgro to trazi. Suite
+' ionako sve vraca svojom spoljnom transakcijom.
+Private Function SkiniPoID(ByVal prijemnicaID As String) As Long
+    Dim t As clsTransaction
+    Dim errNum As Long, errDesc As String
+    On Error GoTo EH
+    Set t = New clsTransaction
+    t.BeginTx
+    t.AddTableSnapshot TBL_PALETA
+    t.AddTableSnapshot TBL_PALETA_STAVKA
+    SkiniPoID = SkiniPaleteZaStornoPrijemnice(t, prijemnicaID, "modTestPalete.SkiniPoID")
+    t.CommitTx
+    Exit Function
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    If Not t Is Nothing Then t.RollbackTx
+    Err.Raise errNum, "modTestPalete.SkiniPoID", errDesc
+End Function
 
 ' ============================================================
 ' SEED + DATA HELPERI (privatni za test; TST- identitet, snapshot-ovane tabele)
@@ -533,16 +564,24 @@ Private Sub TstAppend(ByVal tblName As String, ByVal cols As Variant, ByVal vals
     End If
 End Sub
 
+' Seed pise ZAGLAVLJE I STAVKU (S6 korak 3, presedan S3b-1): linije dokumenta
+' (klasa, kolicina, gajbe) motor paleta cita iz tblPrijemnicaStavke, kroz
+' kanonski citalac, koji zaglavlje bez stavke odbija po imenu. Zaglavlje od S6
+' koraka 8 linijskih polja nema.
 Private Function MakePrij(ByVal id As String, ByVal broj As String, ByVal zbirna As String, _
                           ByVal klasa As String, ByVal kolKg As Double, ByVal gajb As Long, _
                           ByVal sorta As String) As String
     TstAppend TBL_PRIJEMNICA, _
-        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_KLASA, COL_PRJ_KOLICINA, _
-              COL_PRJ_KOL_AMB, COL_PRJ_BROJ_ZBIRNE, COL_PRJ_VRSTA, COL_PRJ_SORTA, _
-              COL_PRJ_TIP_AMB, COL_PRJ_CENA, COL_STORNIRANO), _
-        Array(id, broj, Date, klasa, kolKg, _
-              gajb, zbirna, TST_VRSTA, sorta, _
-              TST_AMB, 0, "")
+        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, _
+              COL_PRJ_BROJ_ZBIRNE, COL_PRJ_VRSTA, COL_PRJ_SORTA, _
+              COL_PRJ_TIP_AMB, COL_STORNIRANO), _
+        Array(id, broj, Date, _
+              zbirna, TST_VRSTA, sorta, _
+              TST_AMB, "")
+    TstAppend TBL_PRIJEMNICA_STAVKE, _
+        Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
+              COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _
+        Array("PRS-" & id, id, 1, klasa, kolKg, 0, gajb)
     MakePrij = id
 End Function
 

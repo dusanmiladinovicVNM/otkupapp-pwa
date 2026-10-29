@@ -2,35 +2,23 @@ Attribute VB_Name = "modAutoHladnjaca"
 Option Explicit
 
 ' ============================================================
-' modAutoHladnjaca -- oznake hladnjace (stanica, kupac) i relink stanje.
+' modAutoHladnjaca -- hladnjacki lanac (HLD-LANAC-01) i oznake hladnjace.
 '
-' S3b-1: AUTO-LANAC JE OBRISAN. AutoChainHladnjaca je od Otkup cutover-a bio
-' pauziran (modOtkupUnos ga ne zove), a pravio je lanac PO KLASI kroz stari
-' pisac otpremnice (SaveOtpremnica_TX) i vezu Otkup.OtpremnicaID -- oba su
-' obrisana. Sa njim su otisli i backfill prijemnica hladnjace (F-090, u mapi
-' "nije sposobnost") i test seam ArmHladnjacaTestFail.
+' Blok upisan na stanici sa JeHladnjaca = "Da" sam pravi ceo lanac
+' OTK -> OTP -> ZBR -> PRJ, 1:1 po klasi (S6 korak 7, odluke operatera
+' 24.10.2026). Stanica je JEDINI autoritet: prekidac AUTO_PRIJEMNICA_HLADNJACA
+' je obrisan (odluka 2), pa ne postoji konfiguracija koja bi hladnjacki blok
+' pustila u rucni tok.
 '
-' S3d: LANAC SE VRACA U KORACIMA, nad kanonom. Prvi korak je otpremnica
-' (AutoLanacHladnjaca ispod). Zbirna (S4) i prijemnica (S6) dodaju se u ISTU
-' funkciju kad ti dokumenti predju na kanon -- ne u nov orkestrator.
-'
-' Stari lanac se NIJE prevodio: delio je dokument po klasi kroz SaveOtpremnica_TX
-' i vezu Otkup.OtpremnicaID (oba obrisana u S3b-1).
+' Lanac NIJE jedna transakcija nego niz postojecih pisaca, svaki u svojoj
+' (odluka 1, B): CreateOtpremnicaIzIzvora_TX, jezgro auto-zbirne
+' (modMasterSync.AutoZbirnaZaOtpremnicu -- isto kao malina, odluka 3) i
+' SavePrijemnicaMulti_TX sa roditeljem po ID-u (odluka 7). Zato je NASTAVLJIV:
+' svaki korak je idempotentan po kanonskom roditelju, a ponovljen poziv krece
+' od prvog koraka koji fali. Nedovrsen lanac (otpremnica bez zbirne ili zbirna
+' bez prijemnice) vidi Oporavak (NedovrseniLanci, odluka 8); blok kome je pala
+' vec otpremnica ceka u F1 "Bez otpremnice".
 ' ============================================================
-
-' Ispravka autohladnjace: posle storna otkupa-hladnjace ceo lanac
-' (otpremnica+zbirna+prijemnica) je oboren, a palete su OSIROCENE. Kad operater
-' izabere "Uneti ispravku", ekran zapamti broj te (stornirane) prijemnice ovde.
-' Relink aparat je NEDOSTIZAN dok auto-lanca nema (modOtkupUnos).
-Private mPendingRelinkOldPrij As String
-
-Public Sub SetHladnjacaRelinkPending(ByVal oldPrijBroj As String)
-    mPendingRelinkOldPrij = Trim$(oldPrijBroj)
-End Sub
-
-Public Function GetHladnjacaRelinkPending() As String
-    GetHladnjacaRelinkPending = mPendingRelinkOldPrij
-End Function
 
 ' Da li je stanica oznacena kao hladnjaca (tblStanice.JeHladnjaca = "Da").
 Public Function IsHladnjacaStanica(ByVal stanicaID As String) As Boolean
@@ -45,29 +33,49 @@ End Function
 ' Eksterni kupci -> False (za njih je zbirna poslednji interni dokument, a prijemnica
 ' eksterna -> storno framework ne kaskadira nizvodni tok). Prazan config / prazan
 ' kupac -> False.
+'
+' Fail-open: tehnicka greska citanja daje False. Ko iz odgovora pise ili sudi
+' (broj prijemnice, S6 korak 8) cita STROGO -- KupacJeHladnjacaStrogo, isto telo.
 Public Function IsHladnjacaKupac(ByVal kupacID As String) As Boolean
     On Error Resume Next
+    IsHladnjacaKupac = KupacJeHladnjacaStrogo(kupacID)
+End Function
+
+' Isto pravilo kao IsHladnjacaKupac, ali STROGO: config se cita iz tabele koja
+' mora da postoji sa svojim kolonama, a greska citanja se DIZE. Prazan kljuc
+' MALINA_DEFAULT_KUPAC je legitimno stanje (hladnjace nema), pa daje False.
+' Pisac prijemnice iz odgovora sudi broj (A2 t. 4, KI-051): broj hladnjace
+' storno ne oslobadja, pa bi fail-open citanje tiho pustilo broj stornirane
+' hladnjacke prijemnice.
+Public Function KupacJeHladnjacaStrogo(ByVal kupacID As String) As Boolean
+    Const SRC As String = "modAutoHladnjaca.KupacJeHladnjacaStrogo"
     kupacID = Trim$(kupacID)
     If Len(kupacID) = 0 Then Exit Function
+    If modDataAccess.GetTable(TBL_SEF_CONFIG) Is Nothing Then
+        Err.Raise vbObjectError + 8475, SRC, _
+                  "Tabela " & TBL_SEF_CONFIG & " ne postoji -- kupac hladnjace se ne moze procitati."
+    End If
+    RequireColumnIndex TBL_SEF_CONFIG, "ConfigKey", SRC
+    RequireColumnIndex TBL_SEF_CONFIG, "ConfigValue", SRC
     Dim h As String
     h = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
     If Len(h) = 0 Then Exit Function
-    IsHladnjacaKupac = (StrComp(kupacID, h, vbTextCompare) = 0)
+    KupacJeHladnjacaStrogo = (StrComp(kupacID, h, vbTextCompare) = 0)
 End Function
 
-
-' Da li je hladnjacki auto-lanac UKLJUCEN. Jedan autoritet, jedno mesto.
-'
-' Stanica (JeHladnjaca) kaze KOJI blok ide u lanac; ovaj prekidac kaze DA LI
-' lanac uopste radi. Do sada su postojala dva gospodara: prekidac u Podesavanjima
-' koji nijedan red koda nije citao, i nov put koji ga je ignorisao.
-'
-' Default je OFF i tako ostaje do S6: lanac sme da se upali tek kad ume da
-' zavrsi ceo OTK -> OTP -> ZBR -> PRJ. Polovican lanac je gori od nikakvog --
-' zbirna i prijemnica se danas ne mogu doraditi ni rucno (F3/F4 su pauzirani),
-' pa bi operater ostao sa izdatom otpremnicom i bez ijednog puta napred.
-Public Function LanacUkljucen() As Boolean
-    LanacUkljucen = IsAutoPrijemnicaHladnjaca()
+' Trajna oznaka zbirne (ZBR-OWN-01, review #442 P1-b): "Da" kad je kupac zbirne
+' U TRENUTKU UPISA kupac hladnjace, inace "Ne". Pise je samo pisac zbirne
+' (BuildZbirnaHeaderRowData, izmena kupca u nacrtu); posle toga je cinjenica
+' dokumenta, pa promena MALINA_DEFAULT_KUPAC ne menja pravilo storna starih
+' zbirni. Pravilo je isto kao IsHladnjacaKupac -- jedno telo, ne kopija. Njegov
+' fail-open smer daje "Ne", a "Ne" je smer koji ne obara tudje: PONISTENJE tada
+' aktivnu prijemnicu tretira kao eksternu i odbija se.
+Public Function OznakaKupacHladnjaca(ByVal kupacID As String) As String
+    If IsHladnjacaKupac(kupacID) Then
+        OznakaKupacHladnjaca = "Da"
+    Else
+        OznakaKupacHladnjaca = "Ne"
+    End If
 End Function
 
 ' Da li blokovi OVE STANICE idu u auto-lanac. Ista odluka kao LanacVaziZaBlok,
@@ -83,8 +91,6 @@ Public Function LanacVaziZaStanicu(ByVal stanicaID As String, _
 
     outGreska = ""
     On Error GoTo EH
-
-    If Not LanacUkljucen() Then Exit Function
 
     stanicaID = Trim$(stanicaID)
     If Len(stanicaID) = 0 Then Exit Function
@@ -124,8 +130,6 @@ Public Function LanacVaziZaBlok(ByVal otkupID As String, _
     outGreska = ""
     On Error GoTo EH
 
-    If Not LanacUkljucen() Then Exit Function
-
     otkupID = Trim$(otkupID)
     If Len(otkupID) = 0 Then Exit Function
 
@@ -163,6 +167,55 @@ EH:
     LanacVaziZaBlok = False
 End Function
 
+' Da li je OTPREMNICA hladnjacka, tj. otpremnica LANCA: njena stanica je hladnjaca
+' I vozac joj je ogledalo te stanice. STROGO, isti primitiv kao razvodnica bloka --
+' otpremnica koja ne postoji tacno jednom ili nema stanicu DIZE gresku, jer "ne
+' znam" nije "nije hladnjacka".
+'
+' OGLEDALO JE POTPIS LANCA (N1, rucna provera #442). Sama oznaka stanice je
+' TRENUTNO stanje: rucna otpremnica (pravi vozac) stanice koja je POSLE oznacena
+' kao hladnjaca postajala je "hladnjacka", pa je Oporavak nudio njen blok kao
+' nedovrsen lanac, "Ponovi" joj je pravio zbirnu kupca hladnjace pod pravim
+' vozacem, a rucna zbirna je vise nije primala. Lanac izdaje otpremnicu na
+' ogledalo stanice (VozacID = StanicaID), rucna F2 na pravog vozaca.
+'
+' Zovu je dva mesta sa suprotnim posledicama (S6 korak 7): jezgro auto-zbirne
+' (odluka 3) hladnjacku otpremnicu PUSTA i van maline, a rucno vezivanje u zbirnu
+' (DodajZbirnaIzvor_TX, odluka 10) je ODBIJA. Pozivalac gresku vraca kao razlog.
+Public Function OtpremnicaJeHladnjacka(ByVal otpremnicaID As String) As Boolean
+    Dim redovi As Collection, stanicaID As String
+
+    otpremnicaID = Trim$(otpremnicaID)
+    Set redovi = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID)
+    If redovi Is Nothing Then
+        Err.Raise vbObjectError + 8466, "OtpremnicaJeHladnjacka", _
+                  "Citanje otpremnica nije uspelo: " & otpremnicaID
+    End If
+    If redovi.count <> 1 Then
+        Err.Raise vbObjectError + 8467, "OtpremnicaJeHladnjacka", _
+                  "Otpremnica ne postoji tacno jednom (" & redovi.count & "): " & otpremnicaID
+    End If
+
+    stanicaID = Trim$(nz(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_STANICA), ""))
+    If Len(stanicaID) = 0 Then
+        Err.Raise vbObjectError + 8468, "OtpremnicaJeHladnjacka", _
+                  "Otpremnica nema otkupno mesto: " & otpremnicaID
+    End If
+
+    If Not VozacJeOgledalo(Trim$(nz(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_VOZAC), "")), _
+                           stanicaID) Then Exit Function
+    OtpremnicaJeHladnjacka = HladnjacaStrogo(stanicaID)
+End Function
+
+' Vozac je ogledalo stanice: VozacID = StanicaID (modMalina.VozacOgledaloZaStanicu).
+' JEDNO telo za "ovu otpremnicu je izdao lanac" -- dele ga OtpremnicaJeHladnjacka
+' i NedovrseniLanci. Prazan vozac nije ogledalo.
+Private Function VozacJeOgledalo(ByVal vozacID As String, ByVal stanicaID As String) As Boolean
+    vozacID = Trim$(vozacID)
+    If Len(vozacID) = 0 Then Exit Function
+    VozacJeOgledalo = (StrComp(vozacID, Trim$(stanicaID), vbTextCompare) = 0)
+End Function
+
 ' Je li stanica hladnjaca -- STROGO. Stanica koja ne postoji ili postoji dvaput
 ' nije "nije hladnjaca" nego nepoznato stanje, i to se dize kao greska.
 Private Function HladnjacaStrogo(ByVal stanicaID As String) As Boolean
@@ -189,48 +242,53 @@ Private Function HladnjacaStrogo(ByVal stanicaID As String) As Boolean
 End Function
 
 ' ============================================================
-' AUTO-LANAC HLADNJACE -- korak otpremnice (A-014, S3d).
+' AUTO-LANAC HLADNJACE -- OTK -> OTP -> ZBR -> PRJ (A-014, HLD-LANAC-01).
 '
-' Roba na hladnjackoj stanici se MERI PRI PRIJEMU u hladnjacu, pa otpremnica
-' nosi tacno ono sto i otkupni list: kilaza i ambalaza su 1:1, bez odstupanja.
-' Zato otpremnica nema sta da ceka -- nastaje i IZDAJE se odmah, iz tog jednog
-' bloka, u jednoj transakciji (CreateOtpremnicaIzIzvora_TX izvodi ocekivanje iz
-' izvora, pa je "povezano = ocekivano" zadovoljeno samim nastankom).
+' Roba na hladnjackoj stanici se MERI PRI PRIJEMU u hladnjacu, pa je ceo lanac
+' 1:1 sa otkupnim listom, po klasi, i nosi datum otkupa. Nijedan dokument nema
+' sta da ceka: otpremnica i zbirna nastaju IZDATE, a prijemnica odmah posle.
 '
 ' Vozac je OGLEDALO stanice (VozacID = StanicaID), i to nije podatak o coveku
 ' nego PROXY za samu hladnjacu: robu do hladnjace kooperant dovozi SAM, pa taj
-' prevoz nema firminog vozaca. Zato je ogledalo na hladnjackoj stanici OBAVEZNO
-' bez obzira na rezim -- malina rezim je zaseban razlog, i tice se ogledala na
-' OSTALIM stanicama.
+' prevoz nema firminog vozaca. Lanac ga trazi kroz modMalina.VozacOgledaloZaStanicu
+' -- JEDNO telo koje dele hladnjacki lanac i malina auto-otpremnica (S5-1).
+' Kupac zbirne i prijemnice je hladnjaca (MALINA_DEFAULT_KUPAC).
 '
-' Lanac ga trazi kroz modMalina.VozacOgledaloZaStanicu -- JEDNO telo koje dele
-' hladnjacki lanac i malina auto-otpremnica (S5-1). Pravilo je "odlucuje
-' ponovljena provera para, ne povratna vrednost Ensure-a"; ako ogledala ni tada
-' nema, lanac staje i kaze na kojoj stanici.
+' SVAKI NIVO IZVODI STAVKE IZ SVOG KANONSKOG RODITELJA I VEZUJE SE ZA NJEGA PO
+' ID-u -- ne prima prepisane brojeve. 1:1 je tada posledica modela, a ne tri
+' kopirane vrednosti koje mogu da se raziju. Izuzetak je cena: zbirna je nema, pa
+' prijemnica nosi cenu IZVORNOG otkupa te klase (odluka 6), nadjenog po ID-u kroz
+' lanac koji nosi tacno jedan blok.
+'
+' NASTAVLJIV (odluka 1, B). Stanje se cita po kanonskom roditelju: otpremnica po
+' clanstvu bloka, zbirna po clanstvu otpremnice, prijemnica po ZbirnaRoditeljID.
+' Korak koji postoji se preskace, pa ponovljen poziv nad kompletnim lancem ne
+' radi nista, a nad nedovrsenim krece od prvog koraka koji fali. Preduslovi
+' (kupac hladnjace, ogledalo, brojevi) se proveravaju PRE PRVOG UPISA -- da se to
+' sazna tek na zbirnoj, blok bi ostao sa izdatom otpremnicom i bez puta napred.
 '
 ' AUTOMATIKA JE OBAVEZNA, NE PONUDA: hladnjacki blok ne ide na radni sto nego u
-' SVOJ lanac. Zato ekran grana PRE rucnog vezivanja (LanacVaziZaBlok), a ne posle
-' njega -- aktivan rucni nacrt bi inace progutao blok i lanac se ne bi ni pokrenuo,
-' a blok bi zavrsio kao jedan od clanova tudjeg dokumenta sa sasvim drugom kilazom.
-'
-' Provera clanstva ispod je zato ZASTITA OD DUPLIRANJA (ponovljen poziv, retry),
-' a ne nacin da rucni tok pobedi automatiku.
+' SVOJ lanac. Zato ekran grana PRE rucnog vezivanja (LanacVaziZaBlok), a rucni
+' putevi ne primaju ni blok (VeziZaAktivnu) ni otpremnicu (DodajZbirnaIzvor_TX).
 '
 ' Otkup je vec upisan svojom transakcijom. Ako lanac padne, blok OSTAJE -- ne
-' brise se i ne stornira. Operater dobija razlog i blok vidi na radnom stolu
-' (lista "Bez otpremnice"). Tiho preskakanje bi znacilo da misli da je lanac
-' odradjen.
+' brise se i ne stornira. Oporavak je "otkloni uzrok pa PONOVI": blok bez
+' otpremnice u F1 ("Bez otpremnice"), nedovrsen lanac u Oporavku ("Nedovrseno").
 '
-' OPORAVAK NIJE RUCNO VEZIVANJE: taj blok ne sme da zavrsi u obicnoj otpremnici
-' (kapija je u modScrDokumenti.VeziZaAktivnu). Put je "otkloni uzrok pa PONOVI
-' auto-lanac" -- radnja "Ponovi auto-lanac" u listi "Bez otpremnice".
-'
-' Vraca OtpremnicaID ("" = nije pravljena); `izvestaj` je ono sto operater cita.
+' UGOVOR POVRATKA (plan 14.55 "Korak 7"):
+'   PrijemnicaID         lanac je kompletiran OVIM pozivom; izvestaj nosi brojeve
+'                        otpremnice, zbirne i prijemnice;
+'   "" + prazan izvestaj nije bilo posla (nije hladnjaca, storniran blok, lanac
+'                        vec kompletan);
+'   "" + izvestaj        korak nije uspeo; izvestaj kaze koji i sta je vec
+'                        napravljeno.
 ' ============================================================
 Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
                                    ByRef izvestaj As String) As String
-    Dim stanicaID As String, kulturaID As String, tipAmb As String, broj As String
-    Dim datum As Date, greska As String, errDesc As String
+    Dim stanicaID As String, kupacID As String, vozacID As String
+    Dim otpID As String, zbrID As String, prjID As String
+    Dim brOtp As String, brPrj As String, datum As Date
+    Dim korak As String, greska As String, errDesc As String
     Dim h As Object, izvori As Collection
 
     izvestaj = ""
@@ -238,32 +296,44 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
 
     otkupID = Trim$(otkupID)
     If Len(otkupID) = 0 Then Exit Function
-    If Not LanacUkljucen() Then Exit Function
 
+    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), ""))
     If StrComp(Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO), "")), _
                "Da", vbTextCompare) = 0 Then Exit Function
 
-    stanicaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA), ""))
     ' STROGO, isti primitiv kao router: slabija kopija istog pravila (fail-open
     ' IsHladnjacaStanica) bila bi kandidat za drift -- jedan bi rekao "ne znam",
     ' drugi "nije hladnjaca".
     If Not HladnjacaStrogo(stanicaID) Then Exit Function
 
-    ' TVRDA KAPIJA ZA S6 -- OVAJ RED SE MORA PREISPITATI PRE PALJENJA LANCA.
-    '
-    ' Dok je lanac samo OTK -> OTP, "otpremnica vec postoji" znaci "posao je
-    ' gotov" i izlazak je tacan. Cim lanac dobije ZBR i PRJ, isti red postaje
-    ' zamka: posle ishoda "OTP uspeo, ZBR pao" ponovljen poziv bi izasao ODMAH i
-    ' lanac se nikad ne bi dovrsio.
-    '
-    ' Pre S6 se bira JEDNO:
-    '   A) ceo lanac je jedna atomska transakcija (nema polovicnog stanja), ili
-    '   B) lanac je nastavljiv: OTP postoji -> proveri/nastavi ZBR, ZBR postoji
-    '      -> proveri/nastavi PRJ.
-    ' Izbor je izlazni uslov S6 (plan 14.20), ne stvar ukusa.
-    If Len(modDokumenta.OtpremnicaZaOtkup(otkupID)) > 0 Then Exit Function
+    ' --- GDE JE LANAC STAO: po kanonskom roditelju, po ID-u ----------------
+    otpID = modDokumenta.OtpremnicaZaOtkup(otkupID)
+    ' N1 (rucna provera #442): blok u RUCNOJ otpremnici nije u lancu ni kad je
+    ' stanica posle oznacena kao hladnjaca. Nema posla -- lanac ne dopisuje zbirnu
+    ' i prijemnicu otpremnici koju nije izdao.
+    If Len(otpID) > 0 Then
+        If Not OtpremnicaJeHladnjacka(otpID) Then Exit Function
+    End If
+    If Len(otpID) > 0 Then zbrID = modDokumenta.AktivnaZbirnaZaOtpremnicu(otpID)
+    If Len(zbrID) > 0 Then prjID = PrijemnicaZaZbirnu(zbrID)
+    If Len(prjID) > 0 Then Exit Function
 
-    Dim vozacID As String
+    ' --- PREDUSLOVI, PRE PRVOG UPISA ---------------------------------------
+    korak = "preduslov"
+    ' KUPAC NASTAVKA JE KUPAC RODITELJA (review #442, P1-a). Kad zbirna vec
+    ' postoji, njen kupac je cinjenica: prijemnica i noga knjige idu NJEMU. Config
+    ' odlucuje samo za lanac koji zbirnu tek pravi -- inace bi promena kupca
+    ' hladnjace izmedju prekida i "Ponovi" zbirnoj kupca A dala prijemnicu kupca B.
+    If Len(zbrID) > 0 Then
+        kupacID = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_KUPAC)))
+    Else
+        kupacID = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
+    End If
+    If Len(kupacID) = 0 Then
+        izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & Poruka("OTKUI_ERR_LANAC_KUPAC")
+        Exit Function
+    End If
+
     vozacID = modMalina.VozacOgledaloZaStanicu(stanicaID)
     If Len(vozacID) = 0 Then
         izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & Poruka("OTKUI_ERR_LANAC_MIRROR") & " " & stanicaID
@@ -271,44 +341,488 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
     End If
 
     datum = CDate(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM))
-    kulturaID = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_KULTURA), ""))
-    tipAmb = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_TIP_AMB), ""))
 
-    ' Broj ide iz niza STANICE, kao i svaka druga otpremnica; mirror prefiks je
-    ' pravilo broja ZBIRNE (modBrojevi.ApplyMirrorPrefix) i ovde se ne primenjuje.
-    broj = modBrojevi.GenerateBrojOtpremnice(stanicaID, datum)
-    If Len(broj) = 0 Then
-        izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & Poruka("OTKUI_ERR_LANAC_BROJ") & " " & stanicaID
+    ' Broj otpremnice ide iz niza STANICE, kao i svaka druga otpremnica; mirror
+    ' prefiks je pravilo broja ZBIRNE (modBrojevi.ApplyMirrorPrefix).
+    If Len(otpID) = 0 Then
+        brOtp = modBrojevi.GenerateBrojOtpremnice(stanicaID, datum)
+        If Len(brOtp) = 0 Then
+            izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & Poruka("OTKUI_ERR_LANAC_BROJ") & " " & stanicaID
+            Exit Function
+        End If
+    End If
+    ' Broj zbirne racuna jezgro (niz vozaca-ogledala, bez Google-a); ovde se samo
+    ' proverava da ga ima -- prazan znaci ugasen auto-broj, a lanac nema
+    ' operatera koji bi ga ukucao.
+    If Len(zbrID) = 0 Then
+        If Len(modBrojevi.SuggestNextBroj(KIND_ZBR, vozacID, datum, False)) = 0 Then
+            izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & Poruka("OTKUI_ERR_LANAC_BROJ_ZBR") & " " & vozacID
+            Exit Function
+        End If
+    End If
+    brPrj = modBrojevi.GenerateBrojPrijemnice(kupacID, datum)
+    If Len(brPrj) = 0 Then
+        izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & Poruka("OTKUI_ERR_LANAC_BROJ_PRJ") & " " & kupacID
         Exit Function
     End If
 
-    Set h = CreateObject("Scripting.Dictionary")
-    h("Datum") = datum
-    h("StanicaID") = stanicaID
-    h("VozacID") = vozacID
-    h("KulturaID") = kulturaID
-    h("TipAmbalaze") = tipAmb
-    h("BrojOtpremnice") = broj
+    ' --- OTPREMNICA: iz bloka, odmah IZDATA --------------------------------
+    If Len(otpID) = 0 Then
+        korak = "OTP"
+        Set h = CreateObject("Scripting.Dictionary")
+        h("Datum") = datum
+        h("StanicaID") = stanicaID
+        h("VozacID") = vozacID
+        h("KulturaID") = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_KULTURA), ""))
+        h("TipAmbalaze") = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_TIP_AMB), ""))
+        h("BrojOtpremnice") = brOtp
+        Set izvori = New Collection
+        izvori.Add otkupID
 
-    Set izvori = New Collection
-    izvori.Add otkupID
+        otpID = modDokumenta.CreateOtpremnicaIzIzvora_TX(h, izvori, greska)
+        If Len(otpID) = 0 Then
+            izvestaj = LanacStao(korak, greska, "", "")
+            Exit Function
+        End If
+    End If
 
-    AutoLanacHladnjaca = modDokumenta.CreateOtpremnicaIzIzvora_TX(h, izvori, greska)
-    If Len(AutoLanacHladnjaca) = 0 Then
-        izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & greska
+    ' --- ZBIRNA: isto jezgro kao malina (odluka 3) -------------------------
+    If Len(zbrID) = 0 Then
+        korak = "ZBR"
+        zbrID = modMasterSync.AutoZbirnaZaOtpremnicu(otpID, greska)
+        If Len(zbrID) = 0 Then
+            ' "" bez razloga znaci da jezgro nije videlo posao -- za otpremnicu
+            ' koju je lanac upravo napravio to je kvar, ne "nista".
+            If Len(greska) = 0 Then greska = Poruka("OTKUI_ERR_LANAC_ZBR_TIHO")
+            izvestaj = LanacStao(korak, greska, otpID, "")
+            Exit Function
+        End If
+    End If
+
+    ' --- PRIJEMNICA: stavke iz zbirne, cena iz otkupa, roditelj po ID-u -----
+    korak = "PRJ"
+    prjID = LanacPrijemnica(otkupID, zbrID, kupacID, brPrj, greska)
+    If Len(prjID) = 0 Then
+        izvestaj = LanacStao(korak, greska, otpID, zbrID)
         Exit Function
     End If
 
-    ' Zbirna (S4) i prijemnica (S6) se dodaju OVDE, i svaka izvodi stavke iz svog
-    ' kanonskog roditelja -- ne prima prepisane brojeve. 1:1 je tada posledica
-    ' modela, a ne tri kopirane vrednosti koje mogu da se raziju.
-    izvestaj = Poruka("OTKUI_MSG_LANAC_OTP") & " " & broj
+    izvestaj = Poruka("OTKUI_MSG_LANAC") & " " & LanacSpisak(otpID, zbrID, prjID)
+    AutoLanacHladnjaca = prjID
     Exit Function
 
 EH:
     ' Opis se cita PRE LogErr-a (LogErr usput brise stanje greske).
     errDesc = Err.description
-    LogErr "modAutoHladnjaca.AutoLanacHladnjaca"
-    izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & errDesc
+    LogErr "modAutoHladnjaca.AutoLanacHladnjaca", "korak=" & korak & " otkup=" & otkupID
+    izvestaj = LanacStao(korak, errDesc, otpID, zbrID)
     AutoLanacHladnjaca = ""
+End Function
+
+' Prijemnica lanca. Zaglavlje (datum, vozac-ogledalo, broj, vrsta, sorta, tip) i
+' kilaza/gajbe po klasi dolaze iz ZBIRNE -- kanonskog roditelja. Cena dolazi iz
+' IZVORNOG OTKUPA te klase (odluka 6): zbirna cenu nema, a do otkupa se ide po
+' ID-u, nivo po nivo, kroz lanac koji mora da nosi TACNO JEDAN blok -- inace
+' "cena izvornog otkupa" ne bi bila jedna.
+'
+' Roditelj se predaje piscu PO ID-u (odluka 7): broj zbirne ume da bude
+' dvosmislen (KR-001), a prijemnica vezana po broju tada ostaje bez roditelja.
+Private Function LanacPrijemnica(ByVal otkupID As String, ByVal zbrID As String, _
+                                 ByVal kupacID As String, ByVal brPrj As String, _
+                                 ByRef outGreska As String) As String
+    Const SRC As String = "LanacPrijemnica"
+    Dim izvZbr As Collection, izvOtp As Collection, poKlasi As Object, cene As Object
+    Dim kl As Variant, kgI As Double, ambI As Long, cenaI As Double
+    Dim kgII As Double, ambII As Long, cenaII As Double, imaII As Boolean, errNum As Long
+
+    outGreska = ""
+
+    Set izvZbr = modDokumenta.IzvoriZbirne(zbrID)
+    If izvZbr.count <> 1 Then
+        Err.Raise vbObjectError + 8469, SRC, _
+                  "Zbirna lanca " & zbrID & " ne nosi tacno jednu otpremnicu (" & izvZbr.count & ")."
+    End If
+    Set izvOtp = modDokumenta.IzvoriOtpremnice(CStr(izvZbr(1)))
+    If izvOtp.count <> 1 Then
+        Err.Raise vbObjectError + 8470, SRC, _
+                  "Otpremnica lanca " & CStr(izvZbr(1)) & " ne nosi tacno jedan blok (" & izvOtp.count & ")."
+    End If
+    If StrComp(CStr(izvOtp(1)), otkupID, vbTextCompare) <> 0 Then
+        Err.Raise vbObjectError + 8470, SRC, _
+                  "Otpremnica lanca " & CStr(izvZbr(1)) & " ne nosi blok " & otkupID & "."
+    End If
+
+    Set poKlasi = modDokumenta.ZbirnaPoKlasi(zbrID)
+    Set cene = CeneOtkupaPoKlasi(otkupID)
+    For Each kl In poKlasi.Keys
+        If Not cene.Exists(CStr(kl)) Then
+            Err.Raise vbObjectError + 8471, SRC, _
+                      "Otkup " & otkupID & " nema stavku klase " & CStr(kl) & " koju nosi zbirna " & zbrID & "."
+        End If
+        Select Case CStr(kl)
+            Case UCase$(KLASA_I)
+                kgI = CDbl(poKlasi(kl)(0))
+                ambI = CLng(poKlasi(kl)(1))
+                cenaI = CDbl(cene(kl))
+            Case UCase$(KLASA_II)
+                imaII = True
+                kgII = CDbl(poKlasi(kl)(0))
+                ambII = CLng(poKlasi(kl)(1))
+                cenaII = CDbl(cene(kl))
+            Case Else
+                Err.Raise vbObjectError + 8472, SRC, _
+                          "Zbirna " & zbrID & " nosi nepoznatu klasu: " & CStr(kl) & "."
+        End Select
+    Next kl
+
+    LanacPrijemnica = modDokumenta.SavePrijemnicaMulti_TX( _
+        datum:=CDate(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_DATUM)), _
+        kupacID:=kupacID, _
+        vozacID:=Trim$(nz(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_VOZAC), "")), _
+        brojPrij:=brPrj, _
+        brojZbirne:=Trim$(nz(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ), "")), _
+        vrstaVoca:=Trim$(nz(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_VRSTA), "")), _
+        sortaVoca:=Trim$(nz(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_SORTA), "")), _
+        kolicinaI:=kgI, cenaI:=cenaI, _
+        tipAmb:=Trim$(nz(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_TIP_AMB), "")), _
+        kolAmb:=ambI, kolAmbVracena:=0, _
+        hasKlasaII:=imaII, kolicinaII:=kgII, cenaII:=cenaII, kolAmbII:=ambII, _
+        outErrNum:=errNum, outGreska:=outGreska, zbirnaRoditeljID:=zbrID)
+    If Len(LanacPrijemnica) = 0 And Len(outGreska) = 0 Then
+        outGreska = "pisac prijemnice nije vratio PrijemnicaID (greska " & CStr(errNum) & ")"
+    End If
+End Function
+
+' Cena stavke otkupa po klasi: UCase(klasa) -> Cena. Strog citac stavki
+' (StavkeOtkupaRedovi) -- pokvarena stavka pada, ne postaje cena nula.
+Private Function CeneOtkupaPoKlasi(ByVal otkupID As String) As Object
+    Dim rez As Object, s As Variant, i As Long
+    Set rez = CreateObject("Scripting.Dictionary")
+    Set CeneOtkupaPoKlasi = rez
+
+    s = modOtkup.StavkeOtkupaRedovi()
+    If Not IsArray(s) Then Exit Function
+    For i = 1 To UBound(s, 1)
+        If StrComp(CStr(s(i, 1)), otkupID, vbTextCompare) = 0 Then
+            rez(UCase$(Trim$(CStr(s(i, 3))))) = CDbl(s(i, 5))
+        End If
+    Next i
+End Function
+
+' Aktivna prijemnica ciji je roditelj (po ID-u) data zbirna; "" = nema je.
+' Zbirna ciji redovi ne daju TACNO JEDAN ID nije "ima prijemnicu" nego kvar
+' (HLD-LANAC-01): greska imenuje zbirnu, pa nastavak lanca staje sa razlogom
+' umesto da javi "nije bilo posla" (review #442, P2).
+Private Function PrijemnicaZaZbirnu(ByVal zbrID As String) As String
+    Const SRC As String = "PrijemnicaZaZbirnu"
+    Dim mapa As Object, kvar As Object, rod As String
+    Set mapa = AktivnePrijemnicePoZbirni(kvar)
+    rod = UCase$(Trim$(zbrID))
+    If kvar.Exists(rod) Then Err.Raise vbObjectError + 8473, SRC, CStr(kvar(rod))
+    If mapa.Exists(rod) Then PrijemnicaZaZbirnu = CStr(mapa(rod))
+End Function
+
+' UCase(ZbirnaRoditeljID) -> PrijemnicaID, samo AKTIVNE prijemnice. outKvar:
+' UCase(ZbirnaRoditeljID) -> razlog, za zbirnu cije aktivne prijemnice ne daju
+' TACNO JEDAN ID (dve ili vise, ili prijemnica bez PrijemnicaID-a).
+'
+' JEDNA definicija "zbirna ima prijemnicu" za nastavak lanca i za Oporavak.
+' Strogo: nedostajuca kolona pada (RequireColumnIndex), jer bi citalac koji pad
+' vrati kao "nema prijemnice" pustio lanac da napravi DRUGU (modStorno.
+' LookupActiveID gresku guta i vraca "", pa ovde nije upotrebljen).
+'
+' Do review-a #442 (P2) je uzimao PRVI pogodak i precutao drugu prijemnicu. Kvar
+' se ipak ne dize ovde nego se vraca PO ZBIRNI: F4 sme da napravi drugu
+' prijemnicu obicne zbirne (potvrda "dupla prijemnica"), pa bi greska nad celom
+' tabelom oborila i lanac koji sa tom zbirnom nema veze. Pita se samo za
+' zbirnu lanca.
+Private Function AktivnePrijemnicePoZbirni(ByRef outKvar As Object) As Object
+    Const SRC As String = "AktivnePrijemnicePoZbirni"
+    Dim mapa As Object, d As Variant, i As Long, rod As String, pid As String
+    Dim cId As Long, cRod As Long, cSto As Long
+
+    Set mapa = CreateObject("Scripting.Dictionary")
+    Set outKvar = CreateObject("Scripting.Dictionary")
+    Set AktivnePrijemnicePoZbirni = mapa
+
+    d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+    cRod = RequireColumnIndex(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD, SRC)
+    cSto = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
+    For i = 1 To UBound(d, 1)
+        rod = UCase$(Trim$(NzToText(d(i, cRod))))
+        If Len(rod) > 0 Then
+            If StrComp(Trim$(NzToText(d(i, cSto))), "Da", vbTextCompare) <> 0 Then
+                pid = Trim$(NzToText(d(i, cId)))
+                If Len(pid) = 0 Then
+                    If Not outKvar.Exists(rod) Then
+                        outKvar.Add rod, "Zbirna " & Trim$(NzToText(d(i, cRod))) & _
+                                         " ima aktivnu prijemnicu bez PrijemnicaID-a."
+                    End If
+                ElseIf Not mapa.Exists(rod) Then
+                    mapa.Add rod, pid
+                ElseIf Not outKvar.Exists(rod) Then
+                    outKvar.Add rod, "Zbirna " & Trim$(NzToText(d(i, cRod))) & _
+                                     " ima vise aktivnih prijemnica: " & CStr(mapa(rod)) & ", " & pid & "."
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' Izvestaj o koraku koji nije uspeo: koji korak, zasto, i sta je VEC napravljeno
+' -- operater mora da zna da otpremnica postoji i bez zbirne.
+Private Function LanacStao(ByVal korak As String, ByVal razlog As String, _
+                           ByVal otpID As String, ByVal zbrID As String) As String
+    Dim s As String
+    s = Poruka("OTKUI_ERR_LANAC")
+    Select Case korak
+        Case "OTP": s = s & " " & Poruka("OTKUI_ERR_LANAC_KORAK_OTP")
+        Case "ZBR": s = s & " " & Poruka("OTKUI_ERR_LANAC_KORAK_ZBR")
+        Case "PRJ": s = s & " " & Poruka("OTKUI_ERR_LANAC_KORAK_PRJ")
+    End Select
+    s = s & " " & razlog
+    If Len(otpID) > 0 Then s = s & " " & Poruka("OTKUI_LANAC_VEC") & " " & LanacSpisak(otpID, zbrID, "")
+    LanacStao = s
+End Function
+
+' "otpremnica <broj>, zbirna <broj>, prijemnica <broj>" -- BROJEVI, po kojima ih
+' operater trazi u listama; ID je za masinu.
+Private Function LanacSpisak(ByVal otpID As String, ByVal zbrID As String, _
+                             ByVal prjID As String) As String
+    Dim s As String
+    On Error Resume Next
+    If Len(otpID) > 0 Then s = Poruka("OTKUI_LANAC_OTP") & " " & _
+        Trim$(nz(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ), ""))
+    If Len(zbrID) > 0 Then s = s & ", " & Poruka("OTKUI_LANAC_ZBR") & " " & _
+        Trim$(nz(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ), ""))
+    If Len(prjID) > 0 Then s = s & ", " & Poruka("OTKUI_LANAC_PRJ") & " " & _
+        Trim$(nz(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, COL_PRJ_BROJ), ""))
+    LanacSpisak = s
+End Function
+
+' ============================================================
+' SYNC KORAK: NEVEZANI HLADNJACKI BLOKOVI IZ PWA (S6 korak 7, odluka 9).
+'
+' Malina batch (modMasterSync.AutoCreateOtpremniceFromPWA_TX) hladnjacke blokove
+' PRESKACE: grupisao bi ih po stanici i danu, a lanac drzi 1 blok = 1 lanac. Ovaj
+' korak ih vodi kroz AutoLanacHladnjaca, BLOK PO BLOK, po obrascu batch-a:
+'
+'   povratna vrednost  = broj STVARNO kompletiranih lanaca
+'   outGreske          = imenovani razlozi ("blok <broj>: <izvestaj>"), "; "
+'
+' Pad jednog bloka ne obara ostale: svaki korak lanca je svoja transakcija, pa
+' ono sto je proslo JESTE upisano. Pad PROLAZA (citanje tabela) ide gore kao
+' greska -- orkestrator ga razlikuje od delimicnog uspeha.
+'
+' Uzima samo blok koji NIKAD nije bio u otpremnici. Blok koji je storno
+' otpremnice oslobodio je odluka operatera (F8 PONISTENJE) i ceka u Oporavku
+' kao izgubljen blok -- sync koji bi mu sam napravio nov lanac ponistio bi tu
+' odluku. Isto vazi za neizdat blok (filter malina batch-a).
+'
+' Sistemski pad unutar lanca jednog bloka (pisac, sema) izlazi kao razlog tog
+' bloka, ne kao pad prolaza: AutoLanacHladnjaca ne nosi tu razliku (imenovano
+' ogranicenje, plan 14.55 "Korak 7", tok koda deo 2).
+' ============================================================
+Public Function AutoLanacZaNevezaneBlokove(Optional ByRef outGreske As String) As Long
+    Const SRC As String = "AutoLanacZaNevezaneBlokove"
+
+    outGreske = ""
+    On Error GoTo EH
+
+    Dim nevezani As Object
+    Set nevezani = modDokumenta.NevezaniOtkupi()
+    If nevezani.count = 0 Then Exit Function
+
+    Dim otk As Variant
+    otk = GetTableData(TBL_OTKUP)
+    If Not IsArray(otk) Then Exit Function
+
+    Dim cId As Long, cSta As Long, cBr As Long, cIzd As Long
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cSta = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+    cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    cIzd = RequireColumnIndex(TBL_OTKUP, COL_TRACE_IZDATO_STATUS, SRC)
+
+    Dim hladne As Object, greske As Collection
+    Set hladne = HladnjackeStanice()
+    If hladne.count = 0 Then Exit Function
+    Set greske = New Collection
+
+    Dim i As Long, oid As String, prj As String
+    Dim izv As String, n As Long
+    For i = 1 To UBound(otk, 1)
+        oid = Trim$(NzToText(otk(i, cId)))
+        If Len(oid) > 0 Then
+            If nevezani.Exists(UCase$(oid)) Then
+                If Len(CStr(nevezani(UCase$(oid)))) = 0 Then
+                    If modDokumenta.IzdatoStatusJeIzdato(otk(i, cIzd)) Then
+                        If hladne.Exists(UCase$(Trim$(NzToText(otk(i, cSta))))) Then
+                            izv = ""
+                            prj = AutoLanacHladnjaca(oid, izv)
+                            If Len(prj) > 0 Then
+                                n = n + 1
+                            ElseIf Len(izv) > 0 Then
+                                greske.Add Poruka("OTKUI_LANAC_BLOK") & " " & _
+                                           Trim$(NzToText(otk(i, cBr))) & ": " & izv
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next i
+
+    AutoLanacZaNevezaneBlokove = n
+    outGreske = SpojiRazlogeLanca(greske)
+    If n > 0 Then LogInfo SRC, "Hladnjacki lanac kompletiran za blokova: " & CStr(n)
+    If Len(outGreske) > 0 Then LogWarn SRC, "Blokovi bez lanca: " & outGreske
+    Exit Function
+
+EH:
+    ' Broj, opis i izvor PRE LogErr-a -- LogErr usput brise stanje greske.
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+    LogErr SRC
+    AutoLanacZaNevezaneBlokove = 0
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
+Private Function SpojiRazlogeLanca(ByVal c As Collection) As String
+    Dim i As Long, s As String
+    For i = 1 To c.count
+        If Len(s) > 0 Then s = s & "; "
+        s = s & CStr(c(i))
+    Next i
+    SpojiRazlogeLanca = s
+End Function
+
+' ============================================================
+' NEDOVRSEN LANAC ZA OPORAVAK (S6 korak 7, odluka 8).
+'
+' Aktivan blok na hladnjackoj stanici koji JE u aktivnoj otpremnici, a otpremnica
+' nema aktivnu zbirnu ili zbirna nema aktivnu prijemnicu. Takav blok ne vidi
+' nijedna druga lista: "Bez otpremnice" cita nevezane blokove, a ovaj je vezan.
+' Blok BEZ otpremnice nije ovde -- on je u F1 "Bez otpremnice", sa radnjom
+' "Ponovi".
+'
+' Vraca Collection od Array(OtkupID, BrojDokumenta, OtpremnicaID, ZbirnaID).
+' Clanstvo i prijemnice se citaju JEDNOM, kroz recnike -- lista se cita na svaku
+' promenu podataka (brojac menija), pa citanje po bloku ne dolazi u obzir.
+' Citaoci su strogi i greska izlazi gore: pozivalac je prikazuje kao red.
+' ============================================================
+Public Function NedovrseniLanci() As Collection
+    Const SRC As String = "NedovrseniLanci"
+    Dim res As Collection
+    Set res = New Collection
+    Set NedovrseniLanci = res
+
+    Dim hladne As Object
+    Set hladne = HladnjackeStanice()
+    If hladne.count = 0 Then Exit Function
+
+    Dim otk As Variant
+    otk = GetTableData(TBL_OTKUP)
+    If Not IsArray(otk) Then Exit Function
+
+    Dim cId As Long, cSta As Long, cBr As Long, cSto As Long
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cSta = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+    cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    cSto = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, SRC)
+
+    Dim clanOtp As Object, clanZbr As Object, prjPoZbr As Object, prjKvar As Object, otpVoz As Object
+    Set clanOtp = modDokumenta.AktivnoClanstvoOtpremnica()
+    Set clanZbr = modDokumenta.AktivnoClanstvoZbirni()
+    Set prjPoZbr = AktivnePrijemnicePoZbirni(prjKvar)
+    Set otpVoz = VozaciOtpremnica()
+
+    Dim i As Long, oid As String, otpID As String, zbrID As String
+    For i = 1 To UBound(otk, 1)
+        oid = Trim$(NzToText(otk(i, cId)))
+        If Len(oid) > 0 Then
+            If StrComp(Trim$(NzToText(otk(i, cSto))), "Da", vbTextCompare) <> 0 Then
+                If hladne.Exists(UCase$(Trim$(NzToText(otk(i, cSta))))) Then
+                    If clanOtp.Exists(UCase$(oid)) Then
+                        otpID = CStr(clanOtp(UCase$(oid)))
+                        zbrID = ""
+                        If clanZbr.Exists(UCase$(otpID)) Then zbrID = CStr(clanZbr(UCase$(otpID)))
+                        If Not otpVoz.Exists(UCase$(otpID)) Then
+                            Err.Raise vbObjectError + 8474, SRC, "Otpremnica clanstva ne postoji: " & otpID
+                        ElseIf Not VozacJeOgledalo(CStr(otpVoz(UCase$(otpID))), NzToText(otk(i, cSta))) Then
+                            ' N1 (rucna provera #442): RUCNA otpremnica (pravi vozac) nije
+                            ' lanac, i kad je stanica posle oznacena kao hladnjaca.
+                        ElseIf Len(zbrID) = 0 Then
+                            res.Add Array(oid, Trim$(NzToText(otk(i, cBr))), otpID, "")
+                        ElseIf prjKvar.Exists(UCase$(zbrID)) Then
+                            ' Zbirna lanca sa vise prijemnica (ili bez ID-a) nije
+                            ' ni "zavrsen" ni "nedovrsen" -- Oporavak je javlja
+                            ' kao gresku, ne precutkuje je (review #442, P2).
+                            Err.Raise vbObjectError + 8473, SRC, CStr(prjKvar(UCase$(zbrID)))
+                        ElseIf Not prjPoZbr.Exists(UCase$(zbrID)) Then
+                            res.Add Array(oid, Trim$(NzToText(otk(i, cBr))), otpID, zbrID)
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' UCase(OtpremnicaID) -> VozacID svih otpremnica, za citaoca koji pita za MNOGO
+' blokova odjednom (Oporavak); OtpremnicaJeHladnjacka po bloku bi za svaki prosla
+' celu tabelu. Strogo: bez kolone se ne zna nista.
+Private Function VozaciOtpremnica() As Object
+    Const SRC As String = "VozaciOtpremnica"
+    Dim rez As Object, d As Variant, i As Long, cId As Long, cVoz As Long, oid As String
+    Set rez = CreateObject("Scripting.Dictionary")
+    Set VozaciOtpremnica = rez
+
+    d = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(d) Then Exit Function
+    cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+    cVoz = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
+    For i = 1 To UBound(d, 1)
+        oid = UCase$(Trim$(NzToText(d(i, cId))))
+        If Len(oid) > 0 Then rez(oid) = Trim$(NzToText(d(i, cVoz)))
+    Next i
+End Function
+
+' Broj otpremnice / zbirne za opis reda Oporavka.
+Public Function LanacBrojDokumenta(ByVal tip As String, ByVal id As String) As String
+    On Error Resume Next
+    If Len(id) = 0 Then Exit Function
+    Select Case tip
+        Case "OTP": LanacBrojDokumenta = Trim$(nz(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, id, COL_OTP_BROJ), ""))
+        Case "ZBR": LanacBrojDokumenta = Trim$(nz(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, id, COL_ZBR_BROJ), ""))
+    End Select
+End Function
+
+' UCase(StanicaID) svih stanica oznacenih kao hladnjaca -- za citaoce koji pitaju
+' za MNOGO blokova odjednom (sync korak, malina batch, Oporavak); HladnjacaStrogo
+' po bloku bi za svaki prosao celu tabelu stanica. Kolona JeHladnjaca je obavezna
+' (RequireColumnIndex): bez nje se ne zna nista.
+'
+' Stanica koja ne postoji NIJE u skupu: njen blok ide malina batch-u, a pisac
+' otpremnice ga tamo odbija po imenu stanice (Test_OTP_AutoKvarGrupeNeObaraOstale).
+' Stanica upisana dvaput sa "Da" JESTE u skupu, pa njen blok ide u lanac, gde ga
+' HladnjacaStrogo odbija imenovanim razlogom -- ne zavrsava u malina otpremnici.
+Public Function HladnjackeStanice() As Object
+    Const SRC As String = "HladnjackeStanice"
+    Dim rez As Object, d As Variant, i As Long, cId As Long, cH As Long
+    Set rez = CreateObject("Scripting.Dictionary")
+    Set HladnjackeStanice = rez
+
+    d = GetTableData(TBL_STANICE)
+    If Not IsArray(d) Then Exit Function
+    cId = RequireColumnIndex(TBL_STANICE, "StanicaID", SRC)
+    cH = RequireColumnIndex(TBL_STANICE, COL_STA_JE_HLADNJACA, SRC)
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cH))), "Da", vbTextCompare) = 0 Then
+            rez(UCase$(Trim$(NzToText(d(i, cId))))) = True
+        End If
+    Next i
 End Function

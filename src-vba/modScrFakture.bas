@@ -127,7 +127,8 @@ Private mSefFakBroj As String
 
 ' KORPA: prijemnice koje cekaju da postanu faktura. Ovo NIJE podatak u tabeli
 ' nego prolazno stanje ekrana, pa ima svoj kanal ka znacki -- v. KorpaPromenjena.
-' Svaka stavka je recnik: prijemnicaID / broj / kolicina / cena / vrednost.
+' Svaka stavka je recnik: stavkaID (PrijemnicaStavkaID, S6 korak 5) / broj /
+' kolicina / cena / vrednost.
 '
 ' Korpa NE nosi poslovno pravilo i zato ne zivi u domenskom modulu (za razliku
 ' od agro korpe): CreateFaktura veruje SAMO PrijemnicaID-u i sve ostalo iznova
@@ -579,13 +580,13 @@ Private Sub KorpaPromenjena()
     modOtkupUI.OsveziNavBrojace
 End Sub
 
-Private Function UKorpi(ByVal prijemnicaID As String) As Long
+Private Function UKorpi(ByVal stavkaID As String) As Long
     Dim i As Long
     If mKorpa Is Nothing Then Exit Function
-    If Len(prijemnicaID) = 0 Then Exit Function
+    If Len(stavkaID) = 0 Then Exit Function
     For i = 1 To mKorpa.count
-        If mKorpa(i).Exists("prijemnicaID") Then
-            If CStr(mKorpa(i)("prijemnicaID")) = prijemnicaID Then
+        If mKorpa(i).Exists("stavkaID") Then
+            If CStr(mKorpa(i)("stavkaID")) = stavkaID Then
                 UKorpi = i
                 Exit Function
             End If
@@ -620,14 +621,15 @@ Private Function KorpaTip() As String
     End If
 End Function
 
-' Dodavanje ide preko ID-a, a sve ostale vrednosti reda stizu iz mreze -- iz
-' istog reda iz kog je i ID. Sluze SAMO prikazu (traka i zbir); fakturu racuna
-' CreateFaktura iznova iz tblPrijemnica.
-Public Function FkDodaj(ByVal prijemnicaID As String, ByVal broj As String, _
+' Dodavanje ide preko ID-a STAVKE prijemnice (S6 korak 5, odluka 2: red mreze je
+' stavka, pa se klasa fakturise zasebno), a sve ostale vrednosti reda stizu iz
+' mreze -- iz istog reda iz kog je i ID. Sluze SAMO prikazu (traka i zbir);
+' fakturu racuna CreateFaktura iznova iz tblPrijemnicaStavke.
+Public Function FkDodaj(ByVal stavkaID As String, ByVal broj As String, _
                         ByVal kolicina As Double, ByVal cena As Double, _
                         ByVal dostupna As Boolean) As String
     Dim red As Object
-    If Len(Trim$(prijemnicaID)) = 0 Then
+    If Len(Trim$(stavkaID)) = 0 Then
         FkDodaj = Poruka("OTKUI_ERR_FK_DVOSMISLEN")
         Exit Function
     End If
@@ -635,7 +637,7 @@ Public Function FkDodaj(ByVal prijemnicaID As String, ByVal broj As String, _
         FkDodaj = Poruka("OTKUI_ERR_FK_NIJE_DOSTUPNA")
         Exit Function
     End If
-    If UKorpi(prijemnicaID) > 0 Then
+    If UKorpi(stavkaID) > 0 Then
         FkDodaj = Poruka("OTKUI_ERR_FK_VEC_U_KORPI")
         Exit Function
     End If
@@ -644,7 +646,7 @@ Public Function FkDodaj(ByVal prijemnicaID As String, ByVal broj As String, _
         Exit Function
     End If
     Set red = CreateObject("Scripting.Dictionary")
-    red("prijemnicaID") = prijemnicaID
+    red("stavkaID") = stavkaID
     red("broj") = broj
     red("kolicina") = kolicina
     red("cena") = cena
@@ -697,9 +699,9 @@ Public Function FkUkloniGP(ByVal preradaID As String) As Boolean
 End Function
 
 ' Uklanjanje po IDENTITETU, ne po prikazu. Vraca True kad je nesto izbaceno.
-Public Function FkUkloni(ByVal prijemnicaID As String) As Boolean
+Public Function FkUkloni(ByVal stavkaID As String) As Boolean
     Dim i As Long
-    i = UKorpi(prijemnicaID)
+    i = UKorpi(stavkaID)
     If i = 0 Then Exit Function
     Korpa().Remove i
     FkUkloni = True
@@ -893,7 +895,7 @@ Private Function IzradiFakturu() As Boolean
         fakturaID = modUtovar.CreateUtovarSaFakturom_TX(kupID, stavke)
     Else
         For i = 1 To mKorpa.count
-            stavke.Add Array(CStr(mKorpa(i)("prijemnicaID")))
+            stavke.Add Array(CStr(mKorpa(i)("stavkaID")))
         Next i
         fakturaID = modFaktura.CreateFaktura_TX(kupID, stavke)
     End If
@@ -1100,6 +1102,9 @@ End Function
 ' REDOVI MREZE
 '=====================================================================
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrFakture.Scr_Rows"
     ' Zona se puni odavde, kao i na ekranima Palete i Agrohemija: gradi se
     ' jednom, a podaci za nju postoje tek kad se lista cita.
     OsveziZonu
@@ -1111,6 +1116,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Case FK_UTOVARI: Scr_Rows = RedoviUtovara(filter, q): Exit Function
     End Select
     Scr_Rows = RedoviPrijemnice(filter, q)
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrFakture.Scr_Rows"
 End Function
 
 ' Opis kolona PO KLJUCU LISTE. Postoji da bi se pravilo "identitet je u redu
@@ -1149,7 +1157,8 @@ Private Function PrijemniceKolone() As Variant
 End Function
 
 ' Citac vraca 1-bazirano:
-'   1 PrijemnicaID | 2 Broj | 3 BrojZbirne | 4 Datum | 5 Klasa | 6 Kolicina
+'   1 PrijemnicaStavkaID (red je STAVKA, S6 korak 5) | 2 Broj | 3 BrojZbirne
+'   4 Datum | 5 Klasa | 6 Kolicina
 '   7 Cena | 8 Vrednost | 9 Dostupna | 10 BrojFakture
 Private Function RedoviPrijemnice(ByVal filter As String, ByVal q As String) As Variant
     Dim src As Variant, i As Long, n As Long, outA() As Variant
@@ -1750,6 +1759,9 @@ End Function
 '=====================================================================
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrFakture.Scr_Build"
 
     ' Bela podloga ispod reda polja. Zona je krem, a polja su bela -- bez
     ' podloge se izmedju njih vidi pozadina zone. MORA da bude LABELA, ne
@@ -1849,6 +1861,9 @@ Public Sub Scr_Build(ByVal z As Object)
                   148, FK_BTN_H, "soft"
 
     modUiKit.NewLbl z, "fkLnB", "", 0, FK_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
+    Exit Sub
+EH:
+    modUiScreens.ScrPadZabelezi "modScrFakture.Scr_Build"
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
@@ -2201,7 +2216,8 @@ Private Sub OsveziBrojke(ByVal z As Object)
     z.Controls("fkKV3").caption = Format$(CDbl(kpi(1)), "#,##0")
 End Sub
 
-' Broj prijemnica koje cekaju fakturu i ukupno neotplaceno -- oboje za JEDNOG
+' Broj STAVKI prijemnica koje cekaju fakturu (od S6 koraka 5 red mreze je
+' stavka) i ukupno neotplaceno -- oboje za JEDNOG
 ' kupca. Neplaceno racuna modNovac.GetOpenFakture: to je jedini read-model
 ' otvorenih faktura kupca (izbacuje stornirane, trazi status Neplaceno, racuna
 ' stvarno uplaceno) i ovde se NE ponavlja.
@@ -2273,19 +2289,19 @@ End Function
 ' Sta seam NE pokriva: da je bas DodajRedUKorpu ta koja je zove. To se vidi u
 ' kodu (na svim mestima gde se korpa menja stoji KorpaPromenjena, nigde goli
 ' OsveziZonu) i mereno je sabotazom.
-Public Function Scr_FkKorpaTestDodaj(ByVal prijemnicaID As String, _
+Public Function Scr_FkKorpaTestDodaj(ByVal stavkaID As String, _
                                    ByVal broj As String, _
                                    ByVal kolicina As Double, _
                                    ByVal cena As Double, _
                                    ByVal dostupna As Boolean) As String
     If Not IsTestMode() Then Exit Function
-    Scr_FkKorpaTestDodaj = FkDodaj(prijemnicaID, broj, kolicina, cena, dostupna)
+    Scr_FkKorpaTestDodaj = FkDodaj(stavkaID, broj, kolicina, cena, dostupna)
     If Len(Scr_FkKorpaTestDodaj) = 0 Then KorpaPromenjena
 End Function
 
-Public Function Scr_FkUkloniStavkuTest(ByVal prijemnicaID As String) As Boolean
+Public Function Scr_FkUkloniStavkuTest(ByVal stavkaID As String) As Boolean
     If Not IsTestMode() Then Exit Function
-    Scr_FkUkloniStavkuTest = FkUkloni(prijemnicaID)
+    Scr_FkUkloniStavkuTest = FkUkloni(stavkaID)
     If Scr_FkUkloniStavkuTest Then KorpaPromenjena
 End Function
 
@@ -2311,7 +2327,7 @@ Public Function Scr_FkStavkaIdTest(ByVal i As Long) As String
     On Error Resume Next
     If mKorpa Is Nothing Then Exit Function
     If i < 1 Or i > mKorpa.count Then Exit Function
-    Scr_FkStavkaIdTest = CStr(mKorpa(i)("prijemnicaID"))
+    Scr_FkStavkaIdTest = CStr(mKorpa(i)("stavkaID"))
 End Function
 
 ' Poslednji broj koji je znacka dobila. Vidi KorpaPromenjena.

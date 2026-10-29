@@ -24,10 +24,11 @@ Public Const ERR_SIS_DO As Long = 9899
 Private Const STORNO_TABELE As String = "|" & TBL_OTKUP & "|" & TBL_NOVAC & _
     "|" & TBL_OTPREMNICA & "|" & TBL_ZBIRNA & "|" & TBL_PRIJEMNICA & _
     "|" & TBL_FAKTURE & "|" & TBL_FAKTURA_STAVKE & "|" & TBL_MAGACIN & _
-    "|" & TBL_BANKA_IMPORT & "|" & TBL_AMBALAZA & "|" & TBL_CENOVNIK & _
+    "|" & TBL_BANKA_IMPORT & "|" & TBL_CENOVNIK & _
     "|" & TBL_PALETA & "|" & TBL_PALETA_STAVKA & "|" & TBL_PRERADA & _
     "|" & TBL_PRERADA_STAVKA & _
-    "|" & TBL_UTOVAR & "|" & TBL_UTOVAR_STAVKE & "|"
+    "|" & TBL_UTOVAR & "|" & TBL_UTOVAR_STAVKE & _
+    "|" & TBL_AMBALAZA_DOKUMENT & "|"
 
 ' Tabele koje storno pojam NEMAJU. Prolaz kroz filter je za njih tacan ishod,
 ' ne propust, i navedene su izricito da se "nije u spisku" ne bi moglo
@@ -50,11 +51,21 @@ Private Const STORNO_TABELE As String = "|" & TBL_OTKUP & "|" & TBL_NOVAC & _
 '      ili ukloni), a posle izdavanja storno verzije ne brise njen sastav --
 '      nova verzija dobija svoje redove. Filtrirati ih po stornu znacilo bi
 '      izgubiti bas ono zbog cega tabela postoji.
+'
+' NAMERNO VAN OBA SPISKA: tblAmbalaza (odluka operatera 13.10.2026, AMB-10-ODL-29,
+' AMBALAZA.md 6.13e). Knjiga ambalaze storno IMA, ali kao RED -- kontra-stav sa
+' StornoOd (ODL-25) -- a ne kao kolonu; Stornirano je obrisan iz kanona u 10e-3.
+' Zato ne sme u STORNO_TABELE (kolone nema), a ni u BEZ_STORNA (storno postoji, a
+' prolaz bez filtera bi se citao kao "tacan ishod"). Neklasifikovana tabela je
+' fail-closed: ExcludeStornirano nad knjigom pada i u izvrsavanju
+' (RequireStornoKlasifikaciju) i staticki (vba_check STORNO_REGISTAR). Knjiga se
+' cita samo kroz modAmbalaza, gde se original i kontra-stav sabiraju.
 Private Const BEZ_STORNA As String = "|" & TBL_KOOPERANTI & "|" & TBL_KUPCI & _
     "|" & TBL_VOZACI & "|" & TBL_STANICE & "|" & TBL_PARCELE & _
     "|" & TBL_ARTIKLI & "|" & TBL_PREVOZNICI & _
     "|" & TBL_ZBIRNA_STAVKE & "|" & TBL_ZBIRNA_IZVORI & _
     "|" & TBL_OTKUP_STAVKE & "|" & TBL_OTPREMNICA_STAVKE & _
+    "|" & TBL_PRIJEMNICA_STAVKE & _
     "|" & TBL_OTPREMNICA_IZVORI & "|"
 
 ' PRAZNA TABELA I NEPOSTOJECA TABELA NISU ISTI ISHOD.
@@ -230,7 +241,7 @@ End Function
 '
 ' Nepoznata tabela nije ni jedno ni drugo, i tu razliku mora da pravi IZVRSAVANJE,
 ' ne samo staticka provera: ona namerno preskace pozive sa promenljivim imenom
-' tabele (modIntegritet.CollectBrojZbirne, modDokumenta.SumByBroj i slicni), pa
+' tabele (modIntegritet.CollectBrojZbirne i slicni), pa
 ' bi bez ove kapije "TabelaNosiStorno = False" opet znacilo dve stvari --
 ' "eksplicitno BEZ_STORNA" i "niko je nije klasifikovao". To je ista bolest zbog
 ' koje je ceo ovaj posao i nastao, samo jedan nivo dalje.

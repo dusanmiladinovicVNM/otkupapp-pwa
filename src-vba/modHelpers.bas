@@ -291,9 +291,15 @@ Public Function BuildManjakDict() As Object
     ' zbirne mogu deliti isti broj (razliciti vozac/kupac). Posledica je bila
     ' sabiranje tudje prijemne kolicine, pa pogresan manjak i procenat.
     '
-    ' Granularnost je STAVKA (vlasnik + Klasa), ne dokument: Klasa I i II dele
-    ' broj/vozaca/kupca ali imaju zasebnu otpremnicu, zbirnu i prijemnicu, pa bi
-    ' kljuc bez Klase sabrao prijem obe klase i taj zbir dodelio svakoj ponaosob.
+    ' Granularnost je STAVKA (vlasnik + Klasa), ne dokument: kljuc bez Klase bi
+    ' sabrao prijem obe klase i taj zbir dodelio svakoj ponaosob.
+    '
+    ' S6 KORAK 3 (stavka 178, odluka 7): kolicina i klasa se citaju iz STAVKI oba
+    ' dokumenta (tblZbirnaStavke, tblPrijemnicaStavke). Zaglavlje zbirne od PR3 i
+    ' zaglavlje prijemnice od S6 koraka 2 ih NE nose, pa je manjak kanonskih
+    ' dokumenata bio 0 prema 0. Vlasnik (broj, vozac, kupac) ostaje sa zaglavlja.
+    ' Brojaci "#C" i vals(2) broje STAVKE prijemnice -- isto sto su ranije brojali
+    ' redove klase (jedna stavka po klasi po dokumentu).
     '
     ' Returns: Dictionary sa dve vrste kljuceva
     '   <stavkaKljuc>               -> Array(ZbirnaKg, PrijemnicaKg, CntPrijem)
@@ -334,13 +340,15 @@ Public Function BuildManjakDict() As Object
         Exit Function
     End If
 
-    Dim colBroj As Long, colZbrKol As Long, colZbrVoz As Long, colZbrKup As Long
-    Dim colZbrKla As Long
+    Const SRC As String = "modHelpers.BuildManjakDict"
+    Dim colBroj As Long, colZbrVoz As Long, colZbrKup As Long, colZbrID As Long
     colBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
-    colZbrKol = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA)
     colZbrVoz = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC)
     colZbrKup = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC)
-    colZbrKla = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KLASA)
+    colZbrID = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)
+
+    Dim stavkeZbr As Object
+    Set stavkeZbr = modDokumenta.StavkeZbirnePoDokumentu()
 
     ' broj -> Dictionary(vlasnikKljuc -> vozacID); sluzi za brojanje VLASNIKA
     ' (bez klase!) i za razresenje po vozacu (otpremnica nema KupacID).
@@ -352,25 +360,24 @@ Public Function BuildManjakDict() As Object
         Dim brZbr As String
         brZbr = Trim$(NzToText(zbrData(z, colBroj)))
 
-        Dim zVoz As String, zKup As String, zKla As String
+        Dim zVoz As String, zKup As String
         zVoz = ""
         zKup = ""
-        zKla = KLASA_I
         If colZbrVoz > 0 Then zVoz = Trim$(NzToText(zbrData(z, colZbrVoz)))
         If colZbrKup > 0 Then zKup = Trim$(NzToText(zbrData(z, colZbrKup)))
-        If colZbrKla > 0 Then zKla = KlasaOrDefault(zbrData(z, colZbrKla))
 
         Dim vk As String
         vk = ZbirnaVlasnikKljuc(brZbr, zVoz, zKup)
 
-        Dim sk As String
-        sk = ZbirnaStavkaKljuc(vk, zKla)
-
-        If Not dict.Exists(sk) Then dict.Add sk, Array(0#, 0#, 0&)
-        Dim vals As Variant
-        vals = dict(sk)
-        If IsNumeric(zbrData(z, colZbrKol)) Then vals(0) = vals(0) + CDbl(zbrData(z, colZbrKol))
-        dict(sk) = vals
+        Dim sk As String, vals As Variant, zs As Variant
+        For Each zs In modDokumenta.StavkeZaZbirnu(stavkeZbr, _
+                           CStr(zbrData(z, colZbrID)), SRC)
+            sk = ZbirnaStavkaKljuc(vk, CStr(zs(3)))
+            If Not dict.Exists(sk) Then dict.Add sk, Array(0#, 0#, 0&)
+            vals = dict(sk)
+            vals(0) = vals(0) + CDbl(zs(4))
+            dict(sk) = vals
+        Next zs
 
         If Not vlasniciPoBroju.Exists(brZbr) Then
             vlasniciPoBroju.Add brZbr, CreateObject("Scripting.Dictionary")
@@ -426,13 +433,14 @@ Public Function BuildManjakDict() As Object
         Exit Function
     End If
 
-    Dim colPBrZbr As Long, colPKol As Long, colPVoz As Long, colPKup As Long
-    Dim colPKla As Long
+    Dim colPBrZbr As Long, colPVoz As Long, colPKup As Long, colPID As Long
     colPBrZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
-    colPKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
     colPVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
     colPKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
-    colPKla = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
+    colPID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+
+    Dim stavkePrj As Object
+    Set stavkePrj = modDokumenta.StavkePrijemnicePoDokumentu()
 
     Dim p As Long
     For p = 1 To UBound(prijData, 1)
@@ -444,40 +452,40 @@ Public Function BuildManjakDict() As Object
         Dim pVoz As String, pKup As String, pKla As String
         pVoz = ""
         pKup = ""
-        pKla = KLASA_I
         If colPVoz > 0 Then pVoz = Trim$(NzToText(prijData(p, colPVoz)))
         If colPKup > 0 Then pKup = Trim$(NzToText(prijData(p, colPKup)))
-        If colPKla > 0 Then pKla = KlasaOrDefault(prijData(p, colPKla))
 
-        Dim pKg As Double
-        pKg = 0
-        If IsNumeric(prijData(p, colPKol)) Then pKg = CDbl(prijData(p, colPKol))
+        Dim pKg As Double, ps As Variant, bkKey As String, psk As String
+        For Each ps In modDokumenta.StavkeZaPrijemnicu(stavkePrj, _
+                           CStr(prijData(p, colPID)), SRC)
+            pKla = KlasaOrDefault(ps(3))
+            pKg = CDbl(ps(4))
 
-        ' Agregat po (broj, klasa) bez vlasnika -- validan samo kad broj ima
-        ' jednog vlasnika. Klasa MORA biti u kljucu, inace se prijem Klase I i II
-        ' sabere pa taj zbir dodeli svakoj klasi ponaosob.
-        Dim bkKey As String
-        bkKey = pZbr & "|" & pKla
-        If Not dict.Exists("#C|" & bkKey) Then dict.Add "#C|" & bkKey, 0&
-        dict("#C|" & bkKey) = CLng(dict("#C|" & bkKey)) + 1
-        If Not dict.Exists("#K|" & bkKey) Then dict.Add "#K|" & bkKey, 0#
-        dict("#K|" & bkKey) = CDbl(dict("#K|" & bkKey)) + pKg
+            ' Agregat po (broj, klasa) bez vlasnika -- validan samo kad broj ima
+            ' jednog vlasnika. Klasa MORA biti u kljucu, inace se prijem Klase I i
+            ' II sabere pa taj zbir dodeli svakoj klasi ponaosob.
+            bkKey = pZbr & "|" & pKla
+            If Not dict.Exists("#C|" & bkKey) Then dict.Add "#C|" & bkKey, 0&
+            dict("#C|" & bkKey) = CLng(dict("#C|" & bkKey)) + 1
+            If Not dict.Exists("#K|" & bkKey) Then dict.Add "#K|" & bkKey, 0#
+            dict("#K|" & bkKey) = CDbl(dict("#K|" & bkKey)) + pKg
 
-        ' Prijemnica bez kompletnog vlasnika se NE sme pripisati nijednoj zbirnoj
-        ' kad broj nosi vise vlasnika -- broji se posebno kao fail-closed signal.
-        If Len(pVoz) = 0 Or Len(pKup) = 0 Then
-            If Not dict.Exists("#N|" & pZbr) Then dict.Add "#N|" & pZbr, 0&
-            dict("#N|" & pZbr) = CLng(dict("#N|" & pZbr)) + 1
-        End If
+            ' Prijemnica bez kompletnog vlasnika se NE sme pripisati nijednoj
+            ' zbirnoj kad broj nosi vise vlasnika -- broji se posebno kao
+            ' fail-closed signal.
+            If Len(pVoz) = 0 Or Len(pKup) = 0 Then
+                If Not dict.Exists("#N|" & pZbr) Then dict.Add "#N|" & pZbr, 0&
+                dict("#N|" & pZbr) = CLng(dict("#N|" & pZbr)) + 1
+            End If
 
-        Dim psk As String
-        psk = ZbirnaStavkaKljuc(ZbirnaVlasnikKljuc(pZbr, pVoz, pKup), pKla)
-        If dict.Exists(psk) Then
-            vals = dict(psk)
-            vals(1) = vals(1) + pKg
-            vals(2) = CLng(vals(2)) + 1
-            dict(psk) = vals
-        End If
+            psk = ZbirnaStavkaKljuc(ZbirnaVlasnikKljuc(pZbr, pVoz, pKup), pKla)
+            If dict.Exists(psk) Then
+                vals = dict(psk)
+                vals(1) = vals(1) + pKg
+                vals(2) = CLng(vals(2)) + 1
+                dict(psk) = vals
+            End If
+        Next ps
 NextPrijem:
     Next p
 

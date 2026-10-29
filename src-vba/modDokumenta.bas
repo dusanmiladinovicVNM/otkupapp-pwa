@@ -54,6 +54,8 @@ Public Const ZBR_PARENT_NEMA As String = "NEMA"
 Public Const ZBR_PARENT_DVOSMISLEN As String = "DVOSMISLEN"
 Public Const ZBR_PARENT_TUDJ As String = "TUDJ_VLASNIK"
 Public Const ZBR_PARENT_ISTORIJA As String = "ISTORIJA"
+' PRJ-ZBR-01 (S6 korak 8): roditelj postoji i jednoznacan je, ali nije IZDAT.
+Public Const ZBR_PARENT_NIJE_IZDATA As String = "NIJE_IZDATA"
 
 ' SIMULACIJA SISTEMSKOG PADA PRIMITIVA -- SAMO U TEST MODU (review #385, P2).
 '
@@ -517,9 +519,8 @@ Public Function ZbirnaRoditeljRazlog(ByRef id As ZbirnaIdent) As String
             ZbirnaRoditeljRazlog = ZBR_PARENT_TUDJ
         Case Else
             ' NONE: pod tim brojem nema aktivnog dokumenta, pa nema ni roditelja.
-            ' Politiku za taj slucaj (BLOK ili UPOZORENJE, po
-            ' PRIJEMNICA_ZBIRNA_PROVERA) drzi ZbirnaPostoji u validatoru IZNAD
-            ' ove kapije -- ovde stoji samo da funkcija ne laze kad se pozove sama.
+            ' F4 i pisac ga kroz PrijemnicaRoditeljRazlog prevode u "zbirna ne
+            ' postoji" (PRJ-ZBR-01).
             ZbirnaRoditeljRazlog = ZBR_PARENT_NEMA
     End Select
 End Function
@@ -527,6 +528,140 @@ End Function
 ' Tanak omotac nad JEDNOM tabelom iznad -- da druga kopija pravila ne odluta.
 Public Function ZbirnaRoditeljOK(ByRef id As ZbirnaIdent) As Boolean
     ZbirnaRoditeljOK = (Len(ZbirnaRoditeljRazlog(id)) = 0)
+End Function
+
+' PRJ-ZBR-01 -- RODITELJ PRIJEMNICE PO BROJU, JEDNA KAPIJA ZA F4 I PISCA (S6 korak 8).
+'
+' Do koraka 8 je pravilo drzao samo F4 (modDokUnos.PrijemnicaValidiraj). Pisac
+' je zbirnu proveravao samo uz PRIJEMNICA_ZBIRNA_PROVERA = BLOK, a roditelja
+' vezivao kroz ZbirnaIDZaBroj, koji za sve sto nije jednoznacno vraca PRAZNO --
+' pa je pozivalac mimo F4 pravio prijemnicu nad nacrtom, nad tudjom zbirnom ili
+' bez roditelja. Pravilo je jedno, pozivaoca dva (.claude/rules/testovi.md
+' SS5): F4 razlog vraca kao poruku uz polje, pisac ga dize kao gresku.
+'
+' Redosled je redosled F4: identitet (postoji, jednoznacna, istog vlasnika,
+' istorija jednog vlasnika -- ZbirnaRoditeljRazlog), pa status. Status se cita
+' sa RAZRESENOG dokumenta, ne po broju.
+'
+' Vraca "" i outZbirnaID kad sme; inace kod (ZBR_PARENT_*, ZBR_GATE_INTEGRITET).
+Public Function PrijemnicaRoditeljRazlog(ByVal brojZbirne As String, _
+                                         ByVal vozacID As String, _
+                                         ByVal kupacID As String, _
+                                         ByRef outZbirnaID As String) As String
+    Dim id As ZbirnaIdent
+    outZbirnaID = ""
+    id = ZbirnaIdentResolve(brojZbirne, vozacID, kupacID)
+    PrijemnicaRoditeljRazlog = ZbirnaRoditeljRazlog(id)
+    If Len(PrijemnicaRoditeljRazlog) > 0 Then Exit Function
+    If Not ZbirnaJeIzdata(id.selectedZbirnaID) Then
+        PrijemnicaRoditeljRazlog = ZBR_PARENT_NIJE_IZDATA
+        Exit Function
+    End If
+    outZbirnaID = id.selectedZbirnaID
+End Function
+
+' Kod razloga za RODITELJA -> tekst za operatera. JEDNO mesto prevoda za F4 i
+' pisca (S6 korak 8): pisac dize isti razlog koji F4 pokazuje uz polje, pa se
+' tekstovi ne mogu raziici (presedan: DOK_ERR_ZBR_HLADNJACKA_OTP u piscu
+' zbirne). Do koraka 8 je ovo bilo modDokUnos.ZbirnaRoditeljPoruka, a poruku
+' "zbirne nema" sa brojem je F4 sastavljao sam.
+Public Function PrijemnicaRoditeljPoruka(ByVal razlog As String, _
+                                         ByVal brojZbirne As String) As String
+    Select Case razlog
+        Case ZBR_PARENT_NEMA
+            PrijemnicaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_1") & " '" & _
+                                       brojZbirne & "' " & Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")
+        Case ZBR_PARENT_DVOSMISLEN: PrijemnicaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN")
+        Case ZBR_PARENT_TUDJ: PrijemnicaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_TUDJ")
+        Case ZBR_PARENT_ISTORIJA: PrijemnicaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_ISTORIJA")
+        Case ZBR_PARENT_NIJE_IZDATA: PrijemnicaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_NIJE_IZDATA")
+        Case Else: PrijemnicaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_INTEGRITET")
+    End Select
+End Function
+
+' A2 -- BROJ PRIJEMNICE U SVOM KONTEKSTU, JEDNA PROVERA ZA F4 I PISCA (S6 korak 8,
+' KI-051).
+'
+' Vlasnik niza je KUPAC (A2, ODL-22): dva kupca smeju isti broj. Unutar kupca:
+'   - eksterni kupac: broj je kupcev, pa ga drzi samo AKTIVNA prijemnica --
+'     ispravka naseg pogresnog unosa zadrzava kupcev broj (A2 t. 4, izuzetak);
+'   - hladnjaca-kupac (MALINA_DEFAULT_KUPAC): broj je NAS niz 1/ddmmyy[-n], a
+'     storno ga ne oslobadja (A2 t. 4), pa se broji i storniran.
+' Do koraka 8 je F4 proveravao samo prvo, za oba kupca, a pisac nista.
+'
+' Kupac hladnjace se cita STROGO: greska citanja configa dize, ne postaje
+' "eksterni" -- fail-open bi tiho pustio broj stornirane hladnjacke prijemnice
+' (klasa KI-054). Tekst duplikata je zatecen (CheckDuplicate), pa F4 poruka za
+' aktivan duplikat ostaje ista. Broj se poredi kao u CheckDuplicate (tacno).
+'
+' Vraca "" kad je broj slobodan, inace tekst za operatera.
+Public Function PrijemnicaBrojRazlog(ByVal brojPrij As String, _
+                                     ByVal kupacID As String) As String
+    Const SRC As String = "modDokumenta.PrijemnicaBrojRazlog"
+    Dim hladnjaca As Boolean
+    hladnjaca = modAutoHladnjaca.KupacJeHladnjacaStrogo(kupacID)
+
+    PrijemnicaBrojRazlog = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, brojPrij, _
+                                          COL_PRJ_DATUM, COL_PRJ_KUPAC, kupacID)
+    If Len(PrijemnicaBrojRazlog) > 0 Then Exit Function
+    If Not hladnjaca Then Exit Function
+
+    Dim d As Variant, cBr As Long, cKup As Long, cSt As Long, i As Long
+    d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    cBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+    cKup = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, SRC)
+    cSt = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
+    For i = 1 To UBound(d, 1)
+        If CStr(d(i, cBr)) = brojPrij Then
+            If StrComp(Trim$(CStr(d(i, cKup))), Trim$(kupacID), vbTextCompare) = 0 And _
+               UCase$(Trim$(NzToText(d(i, cSt)))) = "DA" Then
+                PrijemnicaBrojRazlog = Poruka("DOKUNOS_ERR_PRJ_BROJ_STORNIRAN")
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+' PRJ-ZBR-02 -- PRIJEMNICA PRIMA ROBU SVOJE ZBIRNE (KI-047, odluka operatera
+' 27.10.2026, S6 korak 8).
+'
+' Vrsta i sorta prijemnice su vrsta i sorta zbirne na koju se vezuje; podela na I
+' i II klasu sme da se razlikuje -- klasifikacija je procena pri prijemu. Jedna
+' implementacija, tri pozivaoca: F4 (poruka uz polje), pisac (greska pre ijednog
+' upisa) i prevezivanje na drugu zbirnu (ReassignPrijemnicaToZbirna_TX).
+'
+' Poredi se kao zbirna prema svojim izvorima (RequireIstoPolje): bez razmaka na
+' krajevima, bez razlike u velicini slova. Zbirna se cita po ID-u -- pozivalac ga
+' je vec razresio (PRJ-ZBR-01 ili zadat roditelj), broj se ovde ne gleda.
+'
+' Izdata zbirna BEZ VRSTE nije "nisam rekao" nego kvar: robu preuzima od prvog
+' izvora (ZBR-KANON-04), pa se takva zbirna odbija, ne propusta. Sorta sme da bude
+' prazna -- kultura bez sorte je legitimna -- i tada i prijemnica mora biti bez
+' sorte (prazno = prazno).
+'
+' Vraca "" kad je roba ista, inace tekst za operatera; outPolje je polje F4 za
+' fokus ("vrsta", "sorta" ili "brojZbirne").
+Public Function PrijemnicaRobaRazlog(ByVal zbirnaID As String, ByVal vrsta As String, _
+                                     ByVal sorta As String, _
+                                     Optional ByRef outPolje As String) As String
+    Dim zVrsta As String, zSorta As String
+    outPolje = ""
+
+    zVrsta = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, Trim$(zbirnaID), COL_ZBR_VRSTA)))
+    zSorta = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, Trim$(zbirnaID), COL_ZBR_SORTA)))
+
+    If Len(zVrsta) = 0 Then
+        outPolje = "brojZbirne"
+        PrijemnicaRobaRazlog = Poruka("DOKUNOS_ERR_PRJ_ZBIRNA_BEZ_ROBE")
+    ElseIf StrComp(Trim$(vrsta), zVrsta, vbTextCompare) <> 0 Then
+        outPolje = "vrsta"
+        PrijemnicaRobaRazlog = Poruka("DOKUNOS_ERR_PRJ_VRSTA_ZBIRNE") & " " & zVrsta
+    ElseIf StrComp(Trim$(sorta), zSorta, vbTextCompare) <> 0 Then
+        outPolje = "sorta"
+        PrijemnicaRobaRazlog = Poruka("DOKUNOS_ERR_PRJ_SORTA_ZBIRNE") & " " & _
+                               IIf(Len(zSorta) = 0, "(bez sorte)", zSorta)
+    End If
 End Function
 
 ' I1 -- KANONSKI READ-MODEL AKTIVNIH BROJEVA ZBIRNE (ugovor par.8).
@@ -1336,6 +1471,10 @@ Private Function BuildZbirnaHeaderRowData(ByVal zbirnaID As String, _
     SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_VOZAC, vozacID, SRC
     SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC
     SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KUPAC, kupacID, SRC
+    ' ZBR-OWN-01: da li je zbirna interni hladnjacki tok je cinjenica NASTANKA
+    ' (review #442, P1-b) -- storno je posle cita odavde, ne iz trenutnog configa.
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KUPAC_HLADNJACA, _
+                        modAutoHladnjaca.OznakaKupacHladnjaca(kupacID), SRC
     SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_HLADNJACA, hladnjaca, SRC
     SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_POGON, pogon, SRC
     SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_VRSTA, vrstaVoca, SRC
@@ -1394,6 +1533,16 @@ Public Function AktivnaZbirnaZaOtpremnicu(ByVal otpremnicaID As String) As Strin
     Dim kljuc As String
     kljuc = UCase$(Trim$(otpremnicaID))
     If mapa.Exists(kljuc) Then AktivnaZbirnaZaOtpremnicu = CStr(mapa(kljuc))
+End Function
+
+' Kanonsko clanstvo SVIH aktivnih zbirnih: UCase(OtpremnicaID) -> ZbirnaID.
+'
+' Javni ulaz za citaoce koji pitaju za MNOGO otpremnica odjednom (Oporavak,
+' nedovrseni hladnjacki lanci, S6 korak 7): AktivnaZbirnaZaOtpremnicu po
+' otpremnici bi za svaku prosao celu tabelu clanstva. Isti ugovor kao
+' AktivnaZbirnaZaOtpremnicu -- dva aktivna zapisa za istu otpremnicu padaju.
+Public Function AktivnoClanstvoZbirni() As Object
+    Set AktivnoClanstvoZbirni = AktivnoClanstvoPoKanonu("AktivnoClanstvoZbirni")
 End Function
 
 ' Kanonsko clanstvo: UCase(OtpremnicaID) -> ZbirnaID, samo za AKTIVNE zbirne.
@@ -1586,6 +1735,18 @@ Public Function DodajZbirnaIzvor_TX(ByVal zbirnaID As String, _
     tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
 
     ZbrRequireIzvorValjan zbirnaID, Trim$(otpremnicaID), "ZbrDodajIzvor", True
+
+    ' HLADNJACKA OTPREMNICA SE NE VEZUJE RUCNO (S6 korak 7, odluka 10;
+    ' HLD-LANAC-01). Ima svoj lanac, pa bi je rucna zbirna oduzela lancu -- isto
+    ' pravilo koje VeziZaAktivnu drzi za blok (review #367). Kapija je u piscu:
+    ' kroz njega ide svaki ulaz. Ide POSLE kapija izvora, pa otpremnica koje nema
+    ' ili koja nije izdata i dalje dobija svoj, tacniji razlog.
+    If modAutoHladnjaca.OtpremnicaJeHladnjacka(Trim$(otpremnicaID)) Then
+        Err.Raise vbObjectError + 1967, "ZbrDodajIzvor", _
+                  Poruka("DOK_ERR_ZBR_HLADNJACKA_OTP") & " " & _
+                  Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, Trim$(otpremnicaID), COL_OTP_BROJ)))
+    End If
+
     ZbrPreuzmiCinjeniceZaIzvor zbirnaID, Trim$(otpremnicaID), "ZbrDodajIzvor"
     ZbrUpisiClanstvo zbirnaID, Trim$(otpremnicaID), "ZbrDodajIzvor"
 
@@ -1922,6 +2083,10 @@ Private Sub ZbrIzmeniDraft(ByVal zbirnaID As String, ByVal h As Object, _
     RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_VOZAC, vozacID, SRC
     RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_BROJ, brojZbirne, SRC
     RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_KUPAC, kupacID, SRC
+    ' Oznaka internog toka ide UZ kupca (ZBR-OWN-01): nacrt jos nije cinjenica,
+    ' pa nov kupac nacrta nosi i svoju oznaku.
+    RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_KUPAC_HLADNJACA, _
+                      modAutoHladnjaca.OznakaKupacHladnjaca(kupacID), SRC
     RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_HLADNJACA, _
                       HdrOpcion(h, "Hladnjaca"), SRC
     RequireUpdateCell TBL_ZBIRNA, rZbr, COL_ZBR_POGON, HdrOpcion(h, "Pogon"), SRC
@@ -3426,7 +3591,7 @@ Public Function IzdajOtpremnicu_TX(ByVal otpremnicaID As String, _
     ' sa stanice, a otpremnicu neizdatu.
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    OtpIzdaj otpremnicaID
+    OtpIzdaj otpremnicaID, tx
 
     tx.CommitTx
     Set tx = Nothing
@@ -3490,7 +3655,7 @@ Public Function CreateOtpremnicaIzIzvora_TX(ByVal h As Object, _
     Next i
 
     OtpUpisiOcekivanjeIzIzvora CreateOtpremnicaIzIzvora_TX
-    OtpIzdaj CreateOtpremnicaIzIzvora_TX
+    OtpIzdaj CreateOtpremnicaIzIzvora_TX, tx
 
     tx.CommitTx
     Set tx = Nothing
@@ -3547,7 +3712,7 @@ Public Function IspravkaOtpremnice_TX(ByVal otpremnicaID As String, _
     ' Storno stare vraca gajbe koje je njeno izdavanje knjizilo (OtpIzdaj).
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    IspravkaOtpremnice_TX = OtpIspravi(otpremnicaID)
+    IspravkaOtpremnice_TX = OtpIspravi(otpremnicaID, tx)
 
     tx.CommitTx
     Set tx = Nothing
@@ -4326,8 +4491,8 @@ Private Function BuildOtpremnicaHeaderRowData(ByVal otpID As String, _
     SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_OTP_SORTA, _
         Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, kulturaID, COL_KUL_SORTA))), SRC
 
-    ' COL_OTP_CENA se NE pise od S3a: predlog cene je po klasi, na stavci.
-    ' Kolona ostaje u kanonu do S3e, kad odu i linijska polja zaglavlja.
+    ' Cena se NE pise od S3a: predlog cene je po klasi, na stavci. Od S3-ostatka
+    ' kolone na zaglavlju vise NEMA -- ni u kanonu ni u svesci.
     SetRowValueByColumn rowData, TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, _
                         IZDATO_DRAFT, SRC
 
@@ -4717,7 +4882,10 @@ Private Sub OtpUkloniIzvor(ByVal otpremnicaID As String, ByVal otkupID As String
 End Sub
 
 ' --- core: izdavanje --------------------------------------------------------
-Private Sub OtpIzdaj(ByVal otpremnicaID As String)
+' tx je OBAVEZAN: izdavanje knjizi gajbe, a AMB-INV-08 trazi da knjiga i izvorni
+' dokument dele rollback. Opcion tx bio bi fail-open seam -- pozivalac koji ga
+' zaboravi tiho preskoci vezivanje, a kapija bi pala na nejasnoj poruci.
+Private Sub OtpIzdaj(ByVal otpremnicaID As String, ByVal tx As clsTransaction)
     Const SRC As String = "OtpIzdaj"
 
     Dim rOtp As Long
@@ -4782,13 +4950,31 @@ Private Sub OtpIzdaj(ByVal otpremnicaID As String)
         End If
     Next i
 
-    OtpKnjiziAmbalazu otpremnicaID, rOtp, ocekAmb, SRC
-
+    ' REDOSLED: OZNACI IZDATO -> VEZI -> KNJIZI.
+    '
+    ' Knjizenje je stajalo PRE izmene zaglavlja, a AMB-10-ODL-15 trazi da
+    ' BindSourceDocument stoji POSLE sto je ova transakcija dokument stvarno
+    ' promenila. Oba poteza su u istoj transakciji, pa rollback i dalje povlaci
+    ' oba -- menja se samo sta se cime dokazuje.
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO, SRC
+    tx.BindSourceDocument DOK_TIP_OTPREMNICA, otpremnicaID
+    OtpKnjiziAmbalazu tx, otpremnicaID, rOtp, ocekAmb, SRC
 End Sub
 
 ' --- core: ispravka izdate -------------------------------------------------
-Private Function OtpIspravi(ByVal staraID As String) As String
+' tx je OBAVEZAN, i to NIJE kozmetika: ispravka stornira staru otpremnicu, a
+' njen storno od 10b-2 upisuje kontra-stav u knjigu -- AMB-INV-08 trazi da
+' knjiga i izvorni dokument dele rollback. Vlasnik transakcije je
+' IspravkaOtpremnice_TX (snapshot tblOtpremnica + tblAmbalaza), pa se tx
+' PROVLACI; nova transakcija ovde bi razdvojila rollback granice.
+'
+' Prvi pokusaj je zvao modStorno.StornoOtpremnica(staraID, tx) bez ovog
+' parametra. U VBA lokalna promenljiva POZIVAOCA nije vidljiva pozvanoj
+' proceduri, pa je uz Option Explicit to compile error -- a arity sweep je bio
+' zelen, jer je broj argumenata tacan. Nedeklarisana promenljiva je semantika,
+' ne arnost (review 04.10.2026, P1).
+Private Function OtpIspravi(ByVal staraID As String, _
+                            ByVal tx As clsTransaction) As String
     Const SRC As String = "OtpIspravi"
 
     Dim rStara As Long
@@ -4828,7 +5014,7 @@ Private Function OtpIspravi(ByVal staraID As String) As String
     ' Storno stare IDE PRE nego sto nova primi izvore: izvor sme da bude u
     ' tacno jednoj aktivnoj otpremnici (OtpRequireIzvorValjan), pa bi obrnut
     ' redosled sam sebe odbio. Jezgro nosi i kapiju izvora aktivne zbirne.
-    If Not modStorno.StornoOtpremnica(staraID) Then
+    If Not modStorno.StornoOtpremnica(staraID, tx) Then
         Err.Raise vbObjectError + 1340, SRC, _
                   "Storno stare otpremnice nije uspeo: " & staraID
     End If
@@ -4928,7 +5114,23 @@ End Function
 '
 ' Zato je i kolicina ZBIR STAVKI izdate otpremnice, a ne broj sa zaglavlja: posle
 ' S1/S3a zaglavlje kolicinu ambalaze vise i ne nosi.
-Private Sub OtpKnjiziAmbalazu(ByVal otpremnicaID As String, ByVal rOtp As Long, _
+' JEDAN DOGADJAJ: Stanica -> Vozac, uz robu (AMB-10b-2, cutover).
+'
+' Stari red je nosio Smer=Izlaz i Entitet=Stanica, a VozacID je bio ZIGOSAN --
+' saldo vozaca se racunao inverzijom smera (VozacAmbEffectiveSmer), sto 6.8
+' zove fail-open: citalac koji inverziju zaboravi dobija POGRESAN ZNAK, ne
+' gresku. Nov red imenuje OBE strane, pa vozac prestaje da bude labela i
+' postaje nalog.
+'
+' VRSTA JE ZAPISANA, NE IZVEDENA: 6.7 imenuje AMBALAZA_UZ_ROBU za otkup,
+' OTPREMNICU, prijemnicu i izlaz kupcu; PRENOS_INTERNO je za PRAZNE gajbe
+' izmedju sopstvenih naloga (6.7a). Otpremnica nosi robu, pa nosi UZ_ROBU.
+'
+' NEMA PROTOKOLA POTVRDE DEFICITA, i to je razlika od otkupa: izvor je Stanica,
+' dakle SOPSTVENI nalog, pa se po AMB-10-ODL-8 njen manjak NE pokriva tudjom
+' ambalazom nego je TVRDO odbijen. Gajbe stanica dobija otkupom.
+Private Sub OtpKnjiziAmbalazu(ByVal tx As clsTransaction, _
+                              ByVal otpremnicaID As String, ByVal rOtp As Long, _
                               ByVal ocekAmb As Object, ByVal src As String)
     Dim ukupno As Double
     Dim kljuc As Variant
@@ -4966,8 +5168,17 @@ Private Sub OtpKnjiziAmbalazu(ByVal otpremnicaID As String, ByVal rOtp As Long, 
                   Fmt2Zbr(ukupno) & " gajbi."
     End If
 
-    TrackAmbalaza datum, tipAmb, CLng(ukupno), "Izlaz", stanicaID, "Stanica", _
-                  vozacID, otpremnicaID, DOK_TIP_OTPREMNICA
+    ' Vozac je sada STRANA, ne zig: bez njega red ne bi imao odrediste.
+    If Len(vozacID) = 0 Then
+        Err.Raise vbObjectError + 1338, src, _
+                  "Otpremnica " & otpremnicaID & " nema vozaca, a izdaje " & _
+                  Fmt2Zbr(ukupno) & " gajbi -- gajbe ne mogu da odu NIKOME."
+    End If
+
+    modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, ukupno, _
+                AMB_NALOG_STANICA, stanicaID, _
+                AMB_NALOG_VOZAC, vozacID, _
+                AMB_VK_UZ_ROBU, DOK_TIP_OTPREMNICA, otpremnicaID
 End Sub
 
 Private Sub OtpRequireJednakost(ByVal otpremnicaID As String, _
@@ -6294,18 +6505,6 @@ Public Function SuziDecuNaZbirnu(ByVal tableName As String, ByRef data As Varian
     Set SuziDecuNaZbirnu = suzeno
 End Function
 
-Public Sub ApplyNovaGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long)
-    Const SRC As String = "modDokumenta.ApplyNovaGeneracijaID"
-
-    If rowIndex <= 0 Then
-        Err.Raise vbObjectError + 1018, SRC, _
-                  "Neispravan red za upis generacije (" & tableName & ")."
-    End If
-
-    RequireUpdateCell tableName, rowIndex, COL_GENERACIJA_ID, _
-                      NewGeneracijaID(tableName), SRC
-End Sub
-
 ' Bira redove dokumenta za prefill ispravke (frmDokumenta.Prefill*FromStornirana).
 '
 ' Polazi od ANCHOR reda -- konkretnog PK-a stornirane (OldDocID iz correction
@@ -6326,17 +6525,18 @@ End Sub
 ' Broj dokumenta je LABELA, ne identitet: BrojPrijemnice se racuna po kupcu
 ' (GenerateBrojPrijemnice), broj zbirne po vozacu. Dva dokumenta lako dele broj.
 '
-' Identitet logickog dokumenta (Klasa I + II zajedno) je GeneracijaID -- kolonu
-' pravi modSetup.EnsureSledljivostSchema na SVAKOM startu, a pecate je svi
-' writer-i kroz ApplyGeneracijaID, sa vec tacnim kompozitnim vlasnistvom po
-' tipu (otpremnica StanicaID, prijemnica KupacID, zbirna VozacID + KupacID).
+' Identitet logickog dokumenta zbirne je GeneracijaID (ZBR-IDENT-01) -- kolonu
+' pravi modSetup.EnsureSledljivostSchema na SVAKOM startu, a pecate je pisci
+' kroz ApplyGeneracijaID, sa kompozitnim vlasnistvom (zbirna VozacID + KupacID).
+' Prijemnica od S6 koraka 8 generaciju NEMA: dokument je jedan red, pa je
+' identitet sam PrijemnicaID (IdDokumentaSkup).
 '
 ' Rutine prevezivanja su do sada primale samo broj i skenirale tabelu po njemu.
-' Ove dve funkcije im daju identitet.
+' Ove funkcije im daju identitet.
 ' ============================================================
 
-' Da li red tabele pripada izvornom dokumentu. Sa poznatom generacijom odlucuje
-' iskljucivo PK; bez nje broj (pozivalac je pre toga dokazao jednoznacnost).
+' Da li red tabele pripada izvornom dokumentu. Sa poznatim identitetom odlucuje
+' iskljucivo PK; bez njega broj (pozivalac je pre toga dokazao jednoznacnost).
 ' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
 Public Function PripadaIzvoru(ByRef data As Variant, ByVal rowIdx As Long, _
                               ByVal cBroj As Long, ByVal cId As Long, _
@@ -6352,14 +6552,23 @@ Public Function PripadaIzvoru(ByRef data As Variant, ByVal rowIdx As Long, _
     If cBroj > 0 Then PripadaIzvoru = (Trim$(NzToText(data(rowIdx, cBroj))) = Trim$(broj))
 End Function
 
-' GeneracijaID dokumenta kome pripada dati red (po PK-u). Prazno = red ne
-' postoji ili nema generaciju (stari zapis, pre uvodjenja kolone).
-Public Function GeneracijaPoID(ByVal tableName As String, ByVal idCol As String, _
-                               ByVal docID As String) As String
-    On Error Resume Next
+' Skup PK-eva dokumenta koji je JEDAN red (prijemnica od S6 koraka 2): sam ID,
+' ako red sa njim postoji. Isti oblik kao IdoviGeneracije, pa ga PripadaIzvoru i
+' kapije "zadat identitet koji se ne razresava" citaju bez izmene.
+'
+' Prazan ID vraca prazan recnik, NE sve redove: pozivalac tada mora da padne na
+' kapiju nad brojem. Zadat ID koga nema takodje vraca prazan recnik -- pozivalac
+' to cita kao gresku, ne kao poziv na fallback po broju.
+Public Function IdDokumentaSkup(ByVal tableName As String, ByVal idCol As String, _
+                                ByVal docID As String) As Object
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set IdDokumentaSkup = res
+
     docID = Trim$(docID)
     If Len(docID) = 0 Then Exit Function
-    GeneracijaPoID = Trim$(NzToText(LookupValue(tableName, idCol, docID, COL_GENERACIJA_ID)))
+    If FindRows(tableName, idCol, docID).count > 0 Then res(docID) = True
 End Function
 
 ' Svi PK-evi koji pripadaju datoj generaciji. To je "koji su redovi OVAJ
@@ -6550,9 +6759,17 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                                        Optional ByVal cenaII As Double = 0, _
                                        Optional ByVal kolAmbII As Long = 0, _
                                        Optional ByVal brutoKgI As Double = 0, _
-                                       Optional ByVal brutoKgII As Double = 0) As String
+                                       Optional ByVal brutoKgII As Double = 0, _
+                                       Optional ByVal potvrdaDeficita As Double = -1, _
+                                       Optional ByRef outErrNum As Long, _
+                                       Optional ByRef outGreska As String, _
+                                       Optional ByVal zbirnaRoditeljID As String = "") As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
+
+    ' outGreska: RAZLOG odbijanja za operatera (KI-020, S6 korak 6; obrazac
+    ' CreateOtkup_TX). Potvrda manjka razlog ne nosi -- ona je pitanje, ne kvar.
+    outGreska = ""
 
     On Error GoTo EH
 
@@ -6563,14 +6780,15 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     ' Ide PRE BeginTx: kapija sme da digne gresku, a nema smisla otvarati
     ' transakciju koja se odmah rollback-uje.
     modSchema.SchemaReadyOrFail "SavePrijemnicaMulti_TX", _
-        TBL_PRIJEMNICA & "|" & TBL_AMBALAZA & "|" & TBL_FAKTURA_STAVKE & _
-        "|" & TBL_FAKTURE & "|" & TBL_PALETA & "|" & TBL_PALETA_STAVKA
+        TBL_PRIJEMNICA & "|" & TBL_PRIJEMNICA_STAVKE & "|" & TBL_AMBALAZA & _
+        "|" & TBL_PALETA & "|" & TBL_PALETA_STAVKA
 
+    ' Fakture i njihove linije se ne snimaju: od S6 koraka 5 pisac prijemnice ih
+    ' ne dira (prevezivanje osirotelih linija, RelinkFakturaStavke, je obrisano).
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
     tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
-    tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
@@ -6581,79 +6799,48 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                   "Mora postojati bar jedna klasa (I ili II)."
     End If
 
-    Dim resultI As String
-    If hasKlasaI Then
-        resultI = SavePrijemnica( _
-            datum, _
-            kupacID, _
-            vozacID, _
-            brojPrij, _
-            brojZbirne, _
-            vrstaVoca, _
-            sortaVoca, _
-            kolicinaI, _
-            cenaI, _
-            tipAmb, _
-            kolAmb, _
-            kolAmbVracena, _
-            KLASA_I, _
-            brutoKgI)
+    ' S6 KORAK 2: JEDAN DOKUMENT, STAVKA PO KLASI (plan 14.55 "Korak 2").
+    '
+    ' Do koraka 2 je ovde stajao poziv jezgra PO KLASI: dva reda tblPrijemnica,
+    ' dva ID-ja, "PRJ-I + PRJ-II". Sada jezgro pise JEDNO zaglavlje i stavke, i
+    ' vraca JEDAN ID. Stavke idu kanonskim redom klasa (I pa II).
+    '
+    ' Povrat praznih je cinjenica DOKUMENTA i ide jednom, uz zaglavlje. Do
+    ' 07.10.2026 je isao samo uz Klasu I (prijemnica sa samo Klasom II ga je
+    ' tiho gubila), pa "uz klasu koja postoji" do koraka 2 -- sada vise nema
+    ' klase uz koju bi isao.
+    Dim stavke As Collection
+    Set stavke = New Collection
+    If hasKlasaI Then stavke.Add Array(KLASA_I, kolicinaI, cenaI, kolAmb, brutoKgI)
+    If hasKlasaII Then stavke.Add Array(KLASA_II, kolicinaII, cenaII, kolAmbII, brutoKgII)
 
-        If resultI = "" Then
-            Err.Raise vbObjectError + 1301, "SavePrijemnicaMulti_TX", _
-                      "SavePrijemnica Klasa I fehlgeschlagen"
-        End If
+    Dim docID As String, stavkaIDs As Collection
+    docID = SavePrijemnicaDokument(tx, datum, kupacID, vozacID, brojPrij, brojZbirne, _
+                                   vrstaVoca, sortaVoca, tipAmb, _
+                                   kolAmbVracena, stavke, potvrdaDeficita, stavkaIDs, _
+                                   zbirnaRoditeljID)
+    If docID = "" Then
+        Err.Raise vbObjectError + 1301, "SavePrijemnicaMulti_TX", _
+                  "SavePrijemnicaDokument nije vratio PrijemnicaID."
     End If
+    SavePrijemnicaMulti_TX = docID
 
-    Dim resultII As String
-    If hasKlasaII Then
-        resultII = SavePrijemnica( _
-            datum, _
-            kupacID, _
-            vozacID, _
-            brojPrij, _
-            brojZbirne, _
-            vrstaVoca, _
-            sortaVoca, _
-            kolicinaII, _
-            cenaII, _
-            tipAmb, _
-            kolAmbII, _
-            0, _
-            KLASA_II, _
-            brutoKgII)
-
-        If resultII = "" Then
-            Err.Raise vbObjectError + 1302, "SavePrijemnicaMulti_TX", _
-                      "SavePrijemnica Klasa II fehlgeschlagen"
-        End If
-    End If
-
-    If hasKlasaI And hasKlasaII Then
-        SavePrijemnicaMulti_TX = resultI & " + " & resultII
-    ElseIf hasKlasaI Then
-        SavePrijemnicaMulti_TX = resultI
-    Else
-        SavePrijemnicaMulti_TX = resultII
-    End If
-
-    ' Paletizacija Klase I UNUTAR transakcije -> atomicno sa prijemnicom.
+    ' Paletizacija PO STAVCI, UNUTAR transakcije -> atomicno sa prijemnicom.
+    ' Kljuc je LINIJA (PrijemnicaStavkaID, odluka 2): obe klase dele ID
+    ' dokumenta, pa bi kapija po dokumentu odbila palete klase II.
     Dim closedPal As Collection
     Set closedPal = New Collection
-    If hasKlasaI And kolAmb > 0 Then
-        PaletizePrijemnica prijemnicaID:=resultI, brojPrij:=brojPrij, _
-            brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
-            klasa:=KLASA_I, netoKg:=kolicinaI, brGajbica:=kolAmb, tipAmb:=tipAmb, _
-            closedPalIDs:=closedPal
-    End If
-
-    ' Paletizacija Klase II (zasebne gajbe) -> u istu kolekciju zatvorenih paleta.
-    If hasKlasaII And kolAmbII > 0 Then
-        PaletizePrijemnica prijemnicaID:=resultII, brojPrij:=brojPrij, _
-            brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
-            klasa:=KLASA_II, netoKg:=kolicinaII, brGajbica:=kolAmbII, tipAmb:=tipAmb, _
-            closedPalIDs:=closedPal
-    End If
+    Dim i As Long, s As Variant
+    For i = 1 To stavke.count
+        s = stavke(i)
+        If CLng(s(3)) > 0 Then
+            PaletizePrijemnica prijemnicaID:=docID, brojPrij:=brojPrij, _
+                brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
+                klasa:=CStr(s(0)), netoKg:=CDbl(s(1)), brGajbica:=CLng(s(3)), _
+                tipAmb:=tipAmb, closedPalIDs:=closedPal, _
+                prijemnicaStavkaID:=CStr(stavkaIDs(i))
+        End If
+    Next i
 
     tx.CommitTx
 
@@ -6673,6 +6860,21 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
+    outErrNum = errNum
+
+    ' POTVRDA DEFICITA NIJE KVAR NEGO PITANJE POZIVAOCU (6.5), pa izlazi PRE
+    ' loga i monitora -- isti obrazac kao CreateOtkup_TX. Bez ovoga bi F4 imao
+    ' tekst greske ali ne i BROJ, a broj je ugovor: tekst je prevodiv i menja
+    ' se. Rollback i prazan povratak OSTAJU -- dokument stvarno nije nastao, pa
+    ' pozivalac ponavlja poziv sa potvrdjenim manjkom.
+    If errNum = AMB_ERR_POTVRDA_DEFICITA Then
+        If Not tx Is Nothing Then tx.RollbackTx
+        Set tx = Nothing
+        On Error GoTo 0
+        SavePrijemnicaMulti_TX = ""
+        Exit Function
+    End If
+
     LogError "SavePrijemnicaMulti_TX", errDesc, errNum
     Monitor_Error _
         moduleName:="modDokumenta", _
@@ -6704,169 +6906,295 @@ EH:
     On Error GoTo 0
 
     SavePrijemnicaMulti_TX = ""
+    outGreska = RazlogBezIzvora(errDesc)
 
     PrintTxFailure "SavePrijemnicaMulti_TX", errSrc, errNum, errDesc
 End Function
 
-Public Function SavePrijemnica_TX(ByVal datum As Date, ByVal kupacID As String, _
-                                   ByVal vozacID As String, ByVal brojPrij As String, _
-                                   ByVal brojZbirne As String, ByVal vrstaVoca As String, _
-                                   ByVal sortaVoca As String, ByVal kolicina As Double, _
-                                   ByVal cena As Double, ByVal tipAmb As String, _
-                                   ByVal kolAmb As Long, ByVal kolAmbVracena As Long, _
-                                   Optional ByVal klasa As String = "I", _
-                                   Optional ByVal brutoKg As Double = 0) As String
-    Dim tx As New clsTransaction
+' Zadat roditelj prijemnice (S6 korak 7, odluka 7): zbirna mora da postoji TACNO
+' JEDNOM, da je AKTIVNA, da nosi bas broj koji prijemnica pise na zaglavlje, da
+' je ISTOG VLASNIKA -- kupac i vozac zbirne su kupac i vozac prijemnice (review
+' #442, P1-a: nastavak lanca posle promene kupca hladnjace je pisao prijemnicu
+' kupca B pod zbirnom kupca A) -- i da je IZDATA (PRJ-ZBR-01, S6 korak 8; isto
+' pravilo koje PrijemnicaRoditeljRazlog drzi za roditelja po broju). Inace dize
+' gresku -- pisac ne vezuje dete za zbirnu koja mu protivreci. Vraca ID kakav
+' stoji u tabeli.
+Private Function ZbirnaRoditeljPrijemnice(ByVal zbirnaID As String, _
+                                          ByVal brojZbirne As String, _
+                                          ByVal kupacID As String, _
+                                          ByVal vozacID As String, _
+                                          ByVal src As String) As String
+    Dim brojRoditelja As String, kupacRoditelja As String, vozacRoditelja As String
 
-    On Error GoTo EH
-
-        ' Sema pre upisa: AppendRow pise POZICIONO (v. CreateOtkup_TX).
-    modSchema.SchemaReadyOrFail "SavePrijemnica_TX", _
-        TBL_PRIJEMNICA & "|" & TBL_AMBALAZA
-
-tx.BeginTx
-    tx.AddTableSnapshot TBL_PRIJEMNICA
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
-    tx.AddTableSnapshot TBL_FAKTURE
-    tx.AddTableSnapshot TBL_PALETA
-    tx.AddTableSnapshot TBL_PALETA_STAVKA
-
-    SavePrijemnica_TX = SavePrijemnica(datum, kupacID, vozacID, brojPrij, _
-                                        brojZbirne, vrstaVoca, sortaVoca, _
-                                        kolicina, cena, tipAmb, kolAmb, _
-                                        kolAmbVracena, klasa, brutoKg)
-
-    If SavePrijemnica_TX = "" Then
-        Err.Raise vbObjectError + 1011, "SavePrijemnica_TX", _
-                  "SavePrijemnica fehlgeschlagen"
+    RequireTacnoJedan TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, "ZbirnaID (roditelj prijemnice)", src
+    If ZbirnaJeStornirana(zbirnaID) Then
+        Err.Raise vbObjectError + 1433, src, _
+                  "Zbirna " & zbirnaID & " je stornirana -- prijemnica je ne sme imati za roditelja."
     End If
-
-    ' Paletizacija UNUTAR transakcije -> atomicno sa prijemnicom (gajbice bilo koje klase).
-    Dim closedPal As Collection
-    Set closedPal = New Collection
-    If kolAmb > 0 Then
-        PaletizePrijemnica prijemnicaID:=SavePrijemnica_TX, brojPrij:=brojPrij, _
-            brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
-            klasa:=klasa, netoKg:=kolicina, brGajbica:=kolAmb, tipAmb:=tipAmb, _
-            closedPalIDs:=closedPal
+    brojRoditelja = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_BROJ)))
+    If Not BrojJednak(brojRoditelja, brojZbirne) Then
+        Err.Raise vbObjectError + 1434, src, _
+                  "Zbirna " & zbirnaID & " nosi broj '" & brojRoditelja & _
+                  "', a prijemnica pise broj zbirne '" & brojZbirne & "'."
     End If
-
-    tx.CommitTx
-
-    ' Print/PDF zatvorenih paleta = post-commit side effect (bez rollback rizika).
-    PaletniListOutputClosed closedPal
-
-    Exit Function
-
-EH:
-    Dim errNum As Long
-    Dim errDesc As String
-    Dim errSrc As String
-
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-
-    On Error Resume Next
-    LogError "SavePrijemnica_TX", errDesc, errNum
-    Monitor_Error _
-        moduleName:="modDokumenta", _
-        procedureName:="SavePrijemnica_TX", _
-        entityType:="Prijemnica", _
-        entityID:=SavePrijemnica_TX, _
-        correlationId:=brojPrij, _
-        errorNumber:=errNum, _
-        errorDescription:=errDesc, _
-        errorSource:=errSrc
-
-    Monitor_Event _
-        eventType:="DOKUMENT_SAVE_FAIL", _
-        severity:="ERROR", _
-        message:="SavePrijemnica_TX failed. BrojPrij=" & brojPrij & _
-             "; BrojZbirne=" & brojZbirne & _
-             "; KupacID=" & kupacID & _
-             "; VozacID=" & vozacID & _
-             "; Error=" & errDesc, _
-        userId:="Operator", _
-        moduleName:="modDokumenta", _
-        procedureName:="SavePrijemnica_TX", _
-        entityType:="Prijemnica", _
-        entityID:=SavePrijemnica_TX, _
-        correlationId:=brojPrij
-
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-
-    SavePrijemnica_TX = ""
-
-    PrintTxFailure "SavePrijemnica_TX", errSrc, errNum, errDesc
+    kupacRoditelja = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_KUPAC)))
+    vozacRoditelja = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_VOZAC)))
+    If StrComp(kupacRoditelja, Trim$(kupacID), vbTextCompare) <> 0 Or _
+       StrComp(vozacRoditelja, Trim$(vozacID), vbTextCompare) <> 0 Then
+        Err.Raise vbObjectError + 1435, src, _
+                  "Zbirna " & zbirnaID & " je zbirna kupca '" & kupacRoditelja & "' i vozaca '" & _
+                  vozacRoditelja & "', a prijemnica pise kupca '" & Trim$(kupacID) & _
+                  "' i vozaca '" & Trim$(vozacID) & "'."
+    End If
+    If Not ZbirnaJeIzdata(Trim$(zbirnaID)) Then
+        Err.Raise vbObjectError + 1437, src, _
+                  "Zbirna " & zbirnaID & " nije izdata -- prijemnica je ne sme imati za roditelja (PRJ-ZBR-01)."
+    End If
+    ZbirnaRoditeljPrijemnice = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_ID)))
 End Function
-    
-Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
-                               ByVal vozacID As String, ByVal brojPrij As String, _
-                               ByVal brojZbirne As String, ByVal vrstaVoca As String, _
-                               ByVal sortaVoca As String, ByVal kolicina As Double, _
-                               ByVal cena As Double, ByVal tipAmb As String, _
-                               ByVal kolAmb As Long, ByVal kolAmbVracena As Long, _
-                               Optional ByVal klasa As String = "I", _
-                               Optional ByVal brutoKg As Double = 0) As String
+
+' Razlog za operatera bez tehnickog prefiksa izvora: jezgro dokumenta pri
+' ponovnom dizanju lepi "Source=<procedura> | " ispred opisa (v.
+' SavePrijemnicaDokument), a operateru treba samo recenica koja kaze ZASTO.
+Private Function RazlogBezIzvora(ByVal opis As String) As String
+    Dim s As String, k As Long
+    s = Trim$(opis)
+    Do While Left$(s, 7) = "Source="
+        k = InStr(1, s, " | ", vbBinaryCompare)
+        If k = 0 Then Exit Do
+        s = Trim$(Mid$(s, k + 3))
+    Loop
+    RazlogBezIzvora = s
+End Function
+
+' JEZGRO PRIJEMNICE: JEDAN DOKUMENT = ZAGLAVLJE + STAVKE (S6 korak 2, plan 14.55).
+'
+' tx je OBAVEZAN. Od 10b-2 prijemnica knjizi u knjigu ambalaze, a AMB-INV-08
+' trazi da knjiga i izvorni dokument dele JEDAN rollback. Opcion tx bio bi
+' fail-open seam -- isti razlog zbog kog su ga StornoOtkup i StornoOtpremnica
+' dobili kao obavezan.
+'
+' Transakcija mora da snima i tblPrijemnicaStavke: pad posle prve stavke bi
+' inace ostavio stavku bez zaglavlja (rollback vraca CEO dokument). Ovde se to
+' PROVERAVA, ne pretpostavlja -- test sa sopstvenom transakcijom koji zaboravi
+' novu tabelu pada glasno, umesto da ostavi siroce u tudjem testu.
+'
+' stavke: Collection od Array(klasa, kolicina, cena, kolAmb, brutoKg), kanonskim
+' redom klasa. outStavkaIDs vraca ID-jeve istim redom, jer paletizaciju po
+' stavci radi ulaz posle jezgra.
+'
+' ZAGLAVLJE NE NOSI LINIJSKA POLJA (stavka 174, odluka 1). Kolicina, Cena, Klasa,
+' KolAmbalaze, BrutoKg i kes fakture (Fakturisano, FakturaID) ostaju PRAZNI do
+' koraka 8, kada se kolone brisu. Dvoklasno zaglavlje sa klasom I bi lagalo:
+' CreateFaktura bi tiho fakturisao samo nju. Prazno pada glasno (Kolicina > 0).
+'
+' zbirnaRoditeljID: roditelj PO ID-u (S6 korak 7, odluka 7). Pozivalac koji ZNA
+' svoju zbirnu (hladnjacki lanac) predaje je po identitetu: broj zbirne je
+' labela i ume da bude dvosmislen (KR-001). Pisac proverava da je zbirna tacno
+' jedna, aktivna, izdata, istog vlasnika i da nosi bas taj broj -- PRE ijednog
+' upisa -- i vezuje nju. Prazan = po broju (F4, koji ID ne zna), kroz istu
+' kapiju koju F4 drzi (PrijemnicaRoditeljRazlog, PRJ-ZBR-01): samo izdata,
+' jednoznacna zbirna istog vlasnika. Do S6 koraka 8 je put po broju vezivao
+' sta zatekne (ZbirnaIDZaBroj), a za dvosmislen broj ostavljao dete bez
+' roditelja.
+'
+' Broj prijemnice se proverava istim pravilom kao u F4 (PrijemnicaBrojRazlog,
+' A2): jedinstven po kupcu medju aktivnima, a za kupca hladnjace i medju
+' storniranima (KI-051).
+Private Function SavePrijemnicaDokument(ByVal tx As clsTransaction, _
+                                        ByVal datum As Date, _
+                                        ByVal kupacID As String, _
+                                        ByVal vozacID As String, _
+                                        ByVal brojPrij As String, _
+                                        ByVal brojZbirne As String, _
+                                        ByVal vrstaVoca As String, _
+                                        ByVal sortaVoca As String, _
+                                        ByVal tipAmb As String, _
+                                        ByVal kolAmbVracena As Long, _
+                                        ByVal stavke As Collection, _
+                                        ByVal potvrdaDeficita As Double, _
+                                        ByRef outStavkaIDs As Collection, _
+                                        Optional ByVal zbirnaRoditeljID As String = "") As String
+    Const SRC As String = "SavePrijemnicaDokument"
     On Error GoTo EH
 
-    Call ValidatePrijemnicaInput(kupacID, vozacID, brojPrij, brojZbirne, _
-                             kolicina, cena, tipAmb, kolAmb, _
-                             kolAmbVracena, klasa)
+    Set outStavkaIDs = New Collection
+
+    ' Zaglavlje bez ijedne stavke ne sme da nastane: nijedan pisac ne prolazi
+    ' ovuda bez klase, ali jezgro to brani samo, a ne veruje ulazu.
+    If stavke Is Nothing Then
+        Err.Raise vbObjectError + 1303, SRC, "Mora postojati bar jedna klasa (I ili II)."
+    End If
+    If stavke.count = 0 Then
+        Err.Raise vbObjectError + 1303, SRC, "Mora postojati bar jedna klasa (I ili II)."
+    End If
+
+    If Not tx.ImaSnapshot(TBL_PRIJEMNICA_STAVKE) Then
+        modSchemaGuard.RaiseSistemski 26, SRC, _
+            "Transakcija ne snima tblPrijemnicaStavke -- rollback ne bi vratio CEO dokument."
+    End If
+
+    ' Validacija PO STAVCI, pre ijednog upisa. Klasa najvise jednom: stavka je
+    ' "jedna klasa jednog prijema" (DOCUMENT_HEADER_LINES 4.4).
+    Dim vidjene As Object
+    Set vidjene = CreateObject("Scripting.Dictionary")
+
+    Dim i As Long, s As Variant, ukupnoAmb As Long
+    For i = 1 To stavke.count
+        s = stavke(i)
+        Call ValidatePrijemnicaInput(kupacID, vozacID, brojPrij, brojZbirne, _
+                                     CDbl(s(1)), CDbl(s(2)), tipAmb, CLng(s(3)), _
+                                     kolAmbVracena, CStr(s(0)))
+        If vidjene.Exists(Trim$(CStr(s(0)))) Then
+            Err.Raise vbObjectError + 1432, SRC, _
+                      "Klasa " & CStr(s(0)) & " je dvaput na istoj prijemnici " & brojPrij & "."
+        End If
+        vidjene.Add Trim$(CStr(s(0))), True
+        ukupnoAmb = ukupnoAmb + CLng(s(3))
+    Next i
+
+    ' Roditelj se razresava PRE ijednog upisa: zadat ID mora da bude ziva, izdata
+    ' zbirna bas tog broja i vlasnika, inace pisac staje (odluka 7). Bez njega ide
+    ' po broju, kroz kapiju F4 (PRJ-ZBR-01, S6 korak 8).
+    Dim roditeljID As String, razlog As String
+    If Len(Trim$(zbirnaRoditeljID)) > 0 Then
+        roditeljID = ZbirnaRoditeljPrijemnice(Trim$(zbirnaRoditeljID), brojZbirne, _
+                                              kupacID, vozacID, SRC)
+    Else
+        razlog = PrijemnicaRoditeljRazlog(brojZbirne, vozacID, kupacID, roditeljID)
+        If Len(razlog) > 0 Then
+            Err.Raise vbObjectError + 1436, SRC, PrijemnicaRoditeljPoruka(razlog, brojZbirne)
+        End If
+    End If
+
+    ' Roba zbirne (PRJ-ZBR-02, KI-047) -- nad razresenim roditeljem, i kad ga je
+    ' zadao lanac. Isto pravilo koje F4 pokazuje uz polje vrste ili sorte.
+    razlog = PrijemnicaRobaRazlog(roditeljID, vrstaVoca, sortaVoca)
+    If Len(razlog) > 0 Then Err.Raise vbObjectError + 1439, SRC, razlog
+
+    ' Broj u kontekstu kupca (A2, KI-051) -- isto pravilo koje F4 pokazuje uz polje.
+    razlog = PrijemnicaBrojRazlog(brojPrij, kupacID)
+    If Len(razlog) > 0 Then Err.Raise vbObjectError + 1438, SRC, razlog
 
     Dim newID As String
     newID = GetNextID(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-")
 
     If newID = "" Then
-        Err.Raise vbObjectError + 1013, "SavePrijemnica", _
+        Err.Raise vbObjectError + 1013, SRC, _
                   "GetNextID nije vratio PrijemnicaID."
     End If
 
-    Dim rowData As Variant
-    rowData = BuildPrijemnicaRowData( _
-                newID, datum, kupacID, vozacID, brojPrij, brojZbirne, _
-                vrstaVoca, sortaVoca, kolicina, cena, tipAmb, kolAmb, _
-                kolAmbVracena, klasa)
-
-
     Dim appendedRow As Long
-    appendedRow = AppendRow(TBL_PRIJEMNICA, rowData)
+    appendedRow = AppendRow(TBL_PRIJEMNICA, BuildPrijemnicaRowData( _
+                      newID, datum, kupacID, vozacID, brojPrij, brojZbirne, _
+                      vrstaVoca, sortaVoca, tipAmb, kolAmbVracena))
 
     If appendedRow <= 0 Then
-        Err.Raise vbObjectError + 1014, "SavePrijemnica", _
-                "AppendRow fehlgeschlagen fuer tblPrijemnica."
+        Err.Raise vbObjectError + 1014, SRC, _
+                  "AppendRow nije upisao zaglavlje prijemnice."
     End If
+
+    ' AMB-10-ODL-15: vezati sme SAMO kanonski pisac izvornog dokumenta, u svojoj
+    ' proceduri i tek POSLE sto ga je ova transakcija stvarno promenila.
+    ' AppendRow je bas to. Pisac je na exact allowlist-i AMB_BIND_DOZVOLJENI.
+    ' Od S6 koraka 2 se veze JEDNOM -- dokument je jedan.
+    tx.BindSourceDocument DOK_TIP_PRIJEMNICA, newID
 
     ' ZBR-CHILD-01: generacija roditeljske zbirne (v. isti komentar u
     ' SaveOtpremnica). Prijemnica roditelja obicno IMA, pa je ovde retko prazna.
     PoveziDeteNaZbirnu TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ_ZBIRNE, brojZbirne, _
-                       ZbirnaIDZaBroj(brojZbirne), "modDokumenta.SavePrijemnica"
-    ApplyGeneracijaID TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ, brojPrij, _
-                      COL_PRJ_KUPAC, kupacID
+                       roditeljID, "modDokumenta.SavePrijemnicaDokument"
 
-    ' Bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS) -> upis po imenu;
-    ' prazno = neto. Kolona postoji posle EnsureDoradeSchema (na kraju tblPrijemnica).
-    If brutoKg > 0 Then UpdateCell TBL_PRIJEMNICA, appendedRow, COL_PRJ_BRUTO, brutoKg
+    ' Generacije nema od S6 koraka 8: dokument je JEDAN red (korak 2), pa je
+    ' njegov identitet PrijemnicaID. Do koraka 8 je pisac pecatirao NOVU
+    ' generaciju 1 : 1 sa ID-om (stavka 174), sto je bila ista cinjenica dvaput.
 
-    ' Ambalaza je ENTITETSKI-relativna (smer iz ugla hladnjace / Kupca):
-    ' 1. txt = pune gajbe koje hladnjaca PRIMA od zbirne -> Kupac ULAZ.
-    If kolAmb > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmb, "Ulaz", kupacID, "Kupac", _
-                      vozacID, newID, DOK_TIP_PRIJEMNICA
+    ' STAVKE: jedna po klasi, RedniBroj 1..n, BrutoKg po stavci (do koraka 2 je
+    ' bruto isao na red klase).
+    Dim stavkaID As String
+    For i = 1 To stavke.count
+        s = stavke(i)
+        stavkaID = NewEntityID("PRS-")
+        If stavkaID = "" Then
+            modSchemaGuard.RaiseSistemski 27, SRC, _
+                "NewEntityID nije vratio PrijemnicaStavkaID za klasu " & CStr(s(0)) & "."
+        End If
+
+        If AppendRow(TBL_PRIJEMNICA_STAVKE, BuildPrijemnicaStavkaRowData( _
+                         stavkaID, newID, i, Trim$(CStr(s(0))), CDbl(s(1)), _
+                         CDbl(s(2)), CLng(s(3)), CDbl(s(4)))) <= 0 Then
+            modSchemaGuard.RaiseSistemski 28, SRC, _
+                "AppendRow nije upisao stavku klase " & CStr(s(0)) & "."
+        End If
+
+        outStavkaIDs.Add stavkaID
+    Next i
+
+    ' AMBALAZA: DVA DOGADJAJA NAD JEDNIM PAREM NALOGA (10b-2, 6.12g).
+    '
+    ' Stari red je imao JEDAN entitet (Kupca) i smer iz NJEGOVOG ugla, a vozaca je
+    ' nosio kao ZIG -- pa se vozacev saldo dobijao inverzijom smera, sto je
+    ' fail-open (citalac koji inverziju zaboravi dobija pogresan ZNAK, ne gresku).
+    ' Nov red imenuje obe strane, pa je ceo lanac vidljiv jednim racunom:
+    ' stanica -> vozac (otpremnica) -> kupac (prijemnica).
+    '
+    ' VRSTA JE PROCITANA IZ 6.7, NE IZVEDENA IZ PARA. Pune gajbe putuju SA ROBOM,
+    ' prazne su POVRAT -- isti par naloga, suprotno poslovno znacenje. Zato je
+    ' vrsta podatak. AMB-INV-10 trazi jedan NEUREDJEN par po dokumentu i oba reda
+    ' ga dele ({Vozac, Kupac}); AMB-INV-04 ih razlikuje po vrsti.
+    '
+    ' JEDNA NOGA PUNIH PO DOKUMENTU = ZBIR STAVKI (S6 korak 2, plan 14.55 nalaz 1).
+    ' Identitet efekta je (DokumentTIP, DokumentID, VrstaKretanja, TipAmbalaze), a
+    ' ponavljanje se meri ZBIROM (6.9). Dve noge iste vrste pod ID-jem dokumenta
+    ' bi se sudarile: 10 + 10 gajbi bi se TIHO progutalo kao ponavljanje (knjiga
+    ' 10, ne 20), a razlicit broj bi dao HARD CONFLICT. Isto radi otpremnica
+    ' (OtpKnjiziAmbalazu, ukupno).
+    '
+    ' AMB-10-ODL-22: povrat praznih od kupca mora da nosi KUPCEV broj -- a broj
+    ' prijemnice to i jeste, jer je prijemnica eksterni dokument (operater,
+    ' 05.10.2026: "nema dodatnog broja"). Vlasnika broja objavljuje
+    ' AmbRobniZaglavlje iz zatvorene mape, ne ovaj pisac o sebi.
+    '
+    ' NEMA PROTOKOLA POTVRDE na nozi punih, i to je razlika od otkupa -- ali NE
+    ' zbog obaveze: AmbDoprinosObavezi kaze da obavezi doprinose SAMO
+    ' ULAZ_TUDJE_AMBALAZE (+) i VRACANJE_TUDJE (-), a obe ove vrste doprinose NULU.
+    ' INV-09 nije kapija ovog pisca.
+    '
+    ' Kapija je AMB-INV-07, jer je i Kupac REALAN nalog (AmbNalogUKlasi: svaki
+    ' poznat tip osim SpoljniSvet). ZATO JE REDOSLED NOGU NOSEC, ne kozmetika:
+    ' prva noga kupcu DAJE gajbe, pa druga ima sta da vrati. Obrnut red bi na
+    ' punoj zameni (vracena = kolAmb) gurnuo kupca u minus i ceo upis bi pao.
+    ' POVRAT VECI OD ONOGA STO KUPAC DRZI: od 07.10.2026 nije tvrdo odbijen
+    ' nego PITANJE, kroz isti protokol koji otkup ima od 6.5 -- kupac fizicki
+    ' vraca gajbe koje po nasoj knjizi ne drzi, pa visak ulazi u opticaj kao
+    ' tudja ambalaza (ULAZ_TUDJE, AMB-10-ODL-8: deficit PARTNERA je pokriv).
+    If ukupnoAmb > 0 Or kolAmbVracena > 0 Then
+        If Len(Trim$(vozacID)) = 0 Then
+            Err.Raise vbObjectError + 1367, SRC, _
+                      "Prijemnica " & brojPrij & " knjizi gajbe a nema vozaca. " & _
+                      "Gajbe ne mogu da dodju NI OD KOGA."
+        End If
     End If
 
-    ' 2. txt = zamena: prazne gajbe koje hladnjaca VRACA (daje vozacu) -> Kupac IZLAZ.
+    If ukupnoAmb > 0 Then
+        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, CDbl(ukupnoAmb), _
+                    AMB_NALOG_VOZAC, vozacID, AMB_NALOG_KUPAC, kupacID, _
+                    AMB_VK_UZ_ROBU, DOK_TIP_PRIJEMNICA, newID
+    End If
+
     If kolAmbVracena > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmbVracena, "Izlaz", kupacID, "Kupac", _
-                      vozacID, newID, DOK_TIP_PRIJEMNICA
+        modAmbalaza.PrenesiAmbalazu tx, datum, tipAmb, CDbl(kolAmbVracena), _
+                    AMB_NALOG_KUPAC, kupacID, AMB_NALOG_VOZAC, vozacID, _
+                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_PRIJEMNICA, newID, _
+                    potvrdaDeficita
     End If
 
-    RelinkFakturaStavke newID, brojPrij, klasa
+    ' Prevezivanja osirotelih linija fakture vise NEMA (S6 korak 5, odluka 4):
+    ' fakturisana prijemnica se ne stornira (korak 4, odluka 1), pa se ni ne
+    ' ispravlja -- linija fakture nikad ne ostaje nad storniranom prijemnicom.
+    ' Kapiju meri Test_S6K4_FakturisanaSeOdbija.
 
-    SavePrijemnica = newID
+    SavePrijemnicaDokument = newID
     Exit Function
 
 EH:
@@ -6879,15 +7207,22 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogError "SavePrijemnica", errDesc, errNum
+    ' Potvrda deficita je PITANJE pozivaocu, ne kvar -- ne ide u log (obrazac
+    ' iz CreateOtkup_TX). Broj greske se cuva, jer je on ugovor sa pozivaocem.
+    If errNum <> AMB_ERR_POTVRDA_DEFICITA Then _
+        LogError SRC, errDesc, errNum
     On Error GoTo 0
 
-    Err.Raise errNum, "SavePrijemnica", _
+    Err.Raise errNum, SRC, _
               "Source=" & errSrc & " | " & errDesc
 End Function
 
-' Gradi red tblZbirna PO IMENU kolone (AUD-003). Otporno na promenu redosleda
+' Gradi red tblPrijemnica PO IMENU kolone (AUD-003). Otporno na promenu redosleda
 ' kolona i na kolonu umetnutu u sredinu -- za razliku od pozicijskog Array(...).
+'
+' S6 KORAK 2: ovo je ZAGLAVLJE. Kolicina, Cena, Klasa, KolAmbalaze i kes fakture
+' (Fakturisano, FakturaID) se NE pisu -- zive na stavci, odnosno izvode se iz
+' tblFakturaStavke (stavka 174, odluka 1). Kolone se brisu u koraku 8.
 Private Function BuildPrijemnicaRowData(ByVal prijemnicaID As String, _
                                         ByVal datum As Date, _
                                         ByVal kupacID As String, _
@@ -6896,12 +7231,8 @@ Private Function BuildPrijemnicaRowData(ByVal prijemnicaID As String, _
                                         ByVal brojZbirne As String, _
                                         ByVal vrstaVoca As String, _
                                         ByVal sortaVoca As String, _
-                                        ByVal kolicina As Double, _
-                                        ByVal cena As Double, _
                                         ByVal tipAmb As String, _
-                                        ByVal kolAmb As Long, _
-                                        ByVal kolAmbVracena As Long, _
-                                        ByVal klasa As String) As Variant
+                                        ByVal kolAmbVracena As Long) As Variant
     Const SRC As String = "BuildPrijemnicaRowData"
 
     Dim colCount As Long
@@ -6923,14 +7254,8 @@ Private Function BuildPrijemnicaRowData(ByVal prijemnicaID As String, _
     SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, brojZbirne, SRC
     SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_VRSTA, vrstaVoca, SRC
     SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_SORTA, sortaVoca, SRC
-    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_KOLICINA, kolicina, SRC
-    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_CENA, cena, SRC
     SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_TIP_AMB, tipAmb, SRC
-    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_KOL_AMB, kolAmb, SRC
     SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA, kolAmbVracena, SRC
-    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_KLASA, klasa, SRC
-    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, "Ne", SRC
-    SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, "", SRC
 
     If GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO) > 0 Then
         SetRowValueByColumn rowData, TBL_PRIJEMNICA, COL_STORNIRANO, "", SRC
@@ -6939,10 +7264,443 @@ Private Function BuildPrijemnicaRowData(ByVal prijemnicaID As String, _
     BuildPrijemnicaRowData = rowData
 End Function
 
+' Gradi red tblPrijemnicaStavke PO IMENU kolone (obrazac
+' BuildOtpremnicaStavkaRowData). Stavka je "jedna klasa jednog prijema"
+' (DOCUMENT_HEADER_LINES 4.4) i nosi STVARNU cenu prijema.
+Private Function BuildPrijemnicaStavkaRowData(ByVal stavkaID As String, _
+                                              ByVal prijemnicaID As String, _
+                                              ByVal redniBroj As Long, _
+                                              ByVal klasa As String, _
+                                              ByVal kolicina As Double, _
+                                              ByVal cena As Double, _
+                                              ByVal kolAmb As Long, _
+                                              ByVal bruto As Double) As Variant
+    Const SRC As String = "BuildPrijemnicaStavkaRowData"
+
+    Dim colCount As Long
+    colCount = TabelaBrojKolona(TBL_PRIJEMNICA_STAVKE)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 1431, SRC, _
+                  "Ne mogu da odredim broj kolona za tblPrijemnicaStavke."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, stavkaID, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, prijemnicaID, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_RB, redniBroj, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, klasa, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, kolicina, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA, cena, SRC
+    SetRowValueByColumn rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KOL_AMB, kolAmb, SRC
+
+    ' Bruto (preneto iz otkupa kad je OTKUP_BRUTO_UNOS): prazno = neto. Do koraka 2
+    ' je isao na red klase (UpdateCell na tblPrijemnica).
+    If bruto > 0 Then
+        SetRowValueByColumn rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_BRUTO, bruto, SRC
+    End If
+
+    BuildPrijemnicaStavkaRowData = rowData
+End Function
+
+' --- kanonski citaoci stavki prijemnice (S6 korak 3, plan 14.55 "Korak 3") --
+'
+' Zaglavlje prijemnice od koraka 2 NE nosi Kolicinu, Cenu, Klasu, KolAmbalaze ni
+' BrutoKg -- SavePrijemnicaDokument liniju pise u tblPrijemnicaStavke, a od
+' koraka 8 tih kolona na zaglavlju nema ni u kanonu. Citalac koji je te kolone i dalje citao za dokument
+' novog oblika dobija PRAZNO: papir prazan red, izvestaj nulu. Ovde je jedno
+' mesto sa kojeg svi citaju, po istom obrascu koji imaju otkup
+' (StavkeOtkupaRedovi), otpremnica i zbirna.
+'
+' UGOVOR JE DOKUMENTSKI, NE STAVKARSKI (isti razlog kao kod ostalih, review #334
+' P1). Kapije su ISTE koje pisac drzi (SavePrijemnicaDokument,
+' ValidatePrijemnicaInput), pa se pisac i citalac ne mogu raziici:
+'   1) svaka stavka ima neprazan PrijemnicaID i zaglavlje TACNO JEDNOM;
+'   2) svako zaglavlje ima BAR JEDNU stavku -- pisac to trazi (1303) i vraca CEO
+'      dokument kad stavka padne, pa citalac koji bi nulu vratio kao podatak
+'      laze o dokumentu koji pisac ne moze da napravi;
+'   3) Kolicina broj > 0; Cena broj >= 0 (pisac nulu PUSTA, :ValidatePrijemnicaInput);
+'      KolAmbalaze ceo broj >= 0 (prazno = 0 gajbi); BrutoKg prazan ili broj > 0
+'      (pisac ga upisuje samo kad je > 0);
+'   4) Klasa kroz istu kapiju koju pisac zove (RequireValidDocumentClass), i
+'      najvise JEDNA stavka po klasi po dokumentu (pisac: 1432);
+'   5) PrijemnicaStavkaID neprazan i JEDINSTVEN U CELOJ TABELI (review #437,
+'      P2) -- identitet linije, kljuc palete i (korak 5) fakture. Pisac ga
+'      uzima iz NewEntityID, pa je globalan: kapija po dokumentu ne bi videla
+'      isti ID na dva dokumenta.
+'
+' Linijskih polja ZAGLAVLJA od S6 koraka 8 nema (kanon), pa ih ovde nema sta da
+' se cita ni proverava.
+'
+' Integritet cita MEKO (obrazac ZbirOtpremnicaMeko u modIntegritet): audit
+' postoji da nabroji pokvarene redove, pa kvar ovde znaci prazan podatak u
+' auditu, ne pad provere.
+Public Function StavkePrijemniceRedovi() As Variant
+    Const SRC As String = "StavkePrijemniceRedovi"
+
+    StavkePrijemniceRedovi = Empty
+
+    Dim zagl As Object
+    Set zagl = ZaglavljaPrijemnicePoID(SRC)
+    RequireJedinstvenoZaglavljePrijemnice zagl, SRC
+
+    Dim imaStavku As Object
+    Set imaStavku = CreateObject("Scripting.Dictionary")
+
+    Dim d As Variant
+    d = GetTableData(TBL_PRIJEMNICA_STAVKE)
+
+    Dim cPrj As Long, cRb As Long, cKl As Long, cKol As Long
+    Dim cCena As Long, cAmb As Long, cId As Long, cBruto As Long
+    Dim i As Long, n As Long, pid As String
+
+    If IsArray(d) Then
+        cPrj = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, SRC)
+        cRb = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_RB, SRC)
+        cKl = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, SRC)
+        cKol = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, SRC)
+        cCena = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA, SRC)
+        cAmb = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOL_AMB, SRC)
+        cId = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, SRC)
+        cBruto = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_BRUTO, SRC)
+
+        Dim parKlasa As Object, kParKl As String
+        Set parKlasa = CreateObject("Scripting.Dictionary")
+        Dim idStavke As Object, sid As String, kId As String
+        Set idStavke = CreateObject("Scripting.Dictionary")
+
+        For i = 1 To UBound(d, 1)
+            pid = Trim$(NzToText(d(i, cPrj)))
+            RequirePrsStavkaUgovor zagl, pid, d(i, cKl), d(i, cKol), d(i, cCena), _
+                                   d(i, cAmb), d(i, cBruto), i, SRC
+            sid = Trim$(NzToText(d(i, cId)))
+            If Len(sid) = 0 Then
+                Err.Raise vbObjectError + 1978, SRC, _
+                          "Stavka prijemnice bez PrijemnicaStavkaID-a: PrijemnicaID=" & pid & _
+                          ", red " & CStr(i) & ". ID stavke je kljuc palete -- linija " & _
+                          "bez njega se ne moze citati."
+            End If
+            kId = UCase$(sid)
+            If idStavke.Exists(kId) Then
+                Err.Raise vbObjectError + 1979, SRC, _
+                          "PrijemnicaStavkaID se ponavlja: " & sid & " (PrijemnicaID=" & _
+                          CStr(idStavke(kId)) & " i " & pid & "). ID stavke je identitet linije."
+            End If
+            idStavke.Add kId, pid
+            kParKl = UCase$(pid) & "|" & UCase$(Trim$(NzToText(d(i, cKl))))
+            If parKlasa.Exists(kParKl) Then
+                Err.Raise vbObjectError + 1974, SRC, _
+                          "Dve stavke iste klase na prijemnici: PrijemnicaID=" & pid & _
+                          ", klasa " & Trim$(NzToText(d(i, cKl))) & "."
+            End If
+            parKlasa.Add kParKl, True
+            imaStavku(pid) = True
+            n = n + 1
+        Next i
+    End If
+
+    RequireZaglavljaPrijemniceSaStavkama zagl, imaStavku, SRC
+
+    If n = 0 Then Exit Function
+
+    ' Kolone: 1 PrijemnicaID, 2 RedniBroj, 3 Klasa, 4 Kolicina, 5 Cena,
+    ' 6 KolAmbalaze, 7 PrijemnicaStavkaID, 8 BrutoKg (prazno = unet neto) -- isti
+    ' raspored kao StavkeOtkupaRedovi. Nove kolone idu NA KRAJ: citaoci
+    ' indeksiraju poziciono.
+    Dim res() As Variant
+    ReDim res(1 To n, 1 To 8)
+    n = 0
+    For i = 1 To UBound(d, 1)
+        n = n + 1
+        res(n, 1) = Trim$(NzToText(d(i, cPrj)))
+        res(n, 2) = d(i, cRb)
+        res(n, 3) = Trim$(NzToText(d(i, cKl)))
+        res(n, 4) = CDbl(d(i, cKol))
+        res(n, 5) = CDbl(d(i, cCena))
+        res(n, 6) = OtpDbl(d(i, cAmb))
+        res(n, 7) = Trim$(NzToText(d(i, cId)))
+        res(n, 8) = PrsBrutoIliPrazno(d(i, cBruto))
+    Next i
+
+    StavkePrijemniceRedovi = res
+End Function
+
+Private Function PrsBrutoIliPrazno(ByVal v As Variant) As Variant
+    PrsBrutoIliPrazno = ""
+    If IsNumeric(v) Then
+        If CDbl(v) > 0 Then PrsBrutoIliPrazno = CDbl(v)
+    End If
+End Function
+
+' Zaglavlja prijemnice: PrijemnicaID -> broj redova sa tim ID-em. Prazan ID se
+' ne broji -- on nije kljuc nego kvar zaglavlja.
+Private Function ZaglavljaPrijemnicePoID(ByVal sourceName As String) As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set ZaglavljaPrijemnicePoID = dict
+
+    Dim d As Variant
+    d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cId As Long
+    cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, sourceName)
+
+    Dim i As Long, pid As String
+    For i = 1 To UBound(d, 1)
+        pid = Trim$(NzToText(d(i, cId)))
+        If Len(pid) > 0 Then
+            If dict.Exists(pid) Then
+                dict(pid) = CLng(dict(pid)) + 1
+            Else
+                dict.Add pid, 1&
+            End If
+        End If
+    Next i
+End Function
+
+' JEDAN LOGICKI DOKUMENT = JEDAN ID (od koraka 2). Dva reda zaglavlja sa istim
+' PrijemnicaID-em nisu dvoklasni dokument nego kvar: dokument-level citaoci
+' iteriraju zaglavlja, pa bi isti prijem bio izbrojan dvaput.
+Private Sub RequireJedinstvenoZaglavljePrijemnice(ByVal zagl As Object, _
+                                                  ByVal sourceName As String)
+    Dim k As Variant
+    For Each k In zagl.keys
+        If CLng(zagl(k)) <> 1 Then
+            Err.Raise vbObjectError + 1975, sourceName, _
+                      "Zaglavlje prijemnice se ne nalazi tacno jednom: " & CStr(k) & _
+                      " (headera: " & CStr(zagl(k)) & "). PrijemnicaID je identitet " & _
+                      "dokumenta -- dva reda sa istim ID-em nisu dokument."
+        End If
+    Next k
+End Sub
+
+Private Sub RequirePrsStavkaUgovor(ByVal zagl As Object, ByVal pid As String, _
+                                   ByVal klasa As Variant, ByVal kol As Variant, _
+                                   ByVal cena As Variant, ByVal amb As Variant, _
+                                   ByVal bruto As Variant, ByVal red As Long, _
+                                   ByVal sourceName As String)
+    If Len(pid) = 0 Then
+        Err.Raise vbObjectError + 1970, sourceName, _
+                  "Stavka prijemnice bez PrijemnicaID-a: " & TBL_PRIJEMNICA_STAVKE & _
+                  ", red " & CStr(red) & ". Stavka bez dokumenta se ne moze citati."
+    End If
+
+    If Not zagl.Exists(pid) Then
+        Err.Raise vbObjectError + 1971, sourceName, _
+                  "Zaglavlje prijemnice ne postoji: " & pid & ", stavka u redu " & _
+                  CStr(red) & ". Stavka bez dokumenta se ne moze citati."
+    End If
+
+    If Not IsNumeric(kol) Or Not IsNumeric(cena) Then
+        Err.Raise vbObjectError + 1972, sourceName, _
+                  "Kolicina ili cena stavke nije brojcana: PrijemnicaID=" & pid & "."
+    End If
+
+    If CDbl(kol) <= 0 Then
+        Err.Raise vbObjectError + 1973, sourceName, _
+                  "Kolicina stavke mora biti veca od nule: PrijemnicaID=" & pid & "."
+    End If
+
+    If CDbl(cena) < 0 Then
+        Err.Raise vbObjectError + 1973, sourceName, _
+                  "Cena stavke ne sme biti negativna: PrijemnicaID=" & pid & "."
+    End If
+
+    ' Gajbe su KOMADI: prazno je 0, a nebrojcano, negativno i decimalno je kvar --
+    ' pisac prima Long >= 0 (ValidatePrijemnicaInput, 1426).
+    If Len(Trim$(NzToText(amb))) > 0 Then
+        If Not IsNumeric(amb) Then
+            Err.Raise vbObjectError + 1972, sourceName, _
+                      "KolAmbalaze stavke nije brojcana: PrijemnicaID=" & pid & "."
+        End If
+        If CDbl(amb) < 0 Then
+            Err.Raise vbObjectError + 1973, sourceName, _
+                      "KolAmbalaze stavke ne sme biti negativna: PrijemnicaID=" & pid & "."
+        End If
+        RequireCeoBroj CDbl(amb), "KolAmbalaze stavke (PrijemnicaID=" & pid & ")", _
+                       sourceName
+    End If
+
+    ' Bruto: pisac ga upisuje samo kad je > 0, prazno znaci unet neto. Nula nije
+    ' ni jedno ni drugo (review #437, P3).
+    If Len(Trim$(NzToText(bruto))) > 0 Then
+        If Not IsNumeric(bruto) Then
+            Err.Raise vbObjectError + 1977, sourceName, _
+                      "BrutoKg stavke nije brojcan: PrijemnicaID=" & pid & "."
+        End If
+        If CDbl(bruto) <= 0 Then
+            Err.Raise vbObjectError + 1977, sourceName, _
+                      "BrutoKg stavke mora biti veci od nule (prazno = unet neto): " & _
+                      "PrijemnicaID=" & pid & "."
+        End If
+    End If
+
+    RequireValidDocumentClass Trim$(NzToText(klasa)), _
+                              sourceName & " (PrijemnicaID=" & pid & ")"
+End Sub
+
+Private Sub RequireZaglavljaPrijemniceSaStavkama(ByVal zagl As Object, _
+                                                 ByVal imaStavku As Object, _
+                                                 ByVal sourceName As String)
+    Dim k As Variant
+    For Each k In zagl.keys
+        If Not imaStavku.Exists(CStr(k)) Then
+            Err.Raise vbObjectError + 1976, sourceName, _
+                      "Prijemnica nema nijednu stavku: " & CStr(k) & _
+                      ". Kolicina dokumenta se racuna iz " & TBL_PRIJEMNICA_STAVKE & "."
+        End If
+    Next k
+End Sub
+
+' Zbir stavki po dokumentu. Kljuc je PrijemnicaID, vrednost
+' Array(kg, vrednost, gajbe, klase):
+'   kg       = SUM(Kolicina)
+'   vrednost = SUM(Kolicina x Cena) PO STAVCI -- prijemnica nosi stvarnu cenu
+'              prijema (kao otkup), pa je vrednost zbir linija, ne kg x prva cena
+'   gajbe    = SUM(KolAmbalaze)
+'   klase    = klase stavki redom upisa, bez ponavljanja ("I, II")
+' Oblik je isti kao ZbirStavkiPoOtkupu, jer mreza F4 cita iste pozicije.
+'
+' SVAKI dokument JE u recniku -- zaglavlje bez stavki obara citaoca gore, pa
+' "nema kljuca" ne moze da znaci 0 kg.
+Public Function ZbirStavkiPoPrijemnici() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set ZbirStavkiPoPrijemnici = dict
+
+    Dim s As Variant
+    s = StavkePrijemniceRedovi()
+    If Not IsArray(s) Then Exit Function
+
+    Dim i As Long, pid As String, kl As String, rec As Variant
+    For i = 1 To UBound(s, 1)
+        pid = CStr(s(i, 1))
+        If dict.Exists(pid) Then
+            rec = dict(pid)
+        Else
+            rec = Array(0#, 0#, 0#, "")
+        End If
+        rec(0) = CDbl(rec(0)) + CDbl(s(i, 4))
+        rec(1) = CDbl(rec(1)) + CDbl(s(i, 4)) * CDbl(s(i, 5))
+        rec(2) = CDbl(rec(2)) + CDbl(s(i, 6))
+        kl = CStr(s(i, 3))
+        If Len(kl) > 0 Then
+            If InStr(1, ", " & CStr(rec(3)) & ", ", ", " & kl & ", ", vbBinaryCompare) = 0 Then
+                If Len(CStr(rec(3))) > 0 Then rec(3) = CStr(rec(3)) & ", "
+                rec(3) = CStr(rec(3)) & kl
+            End If
+        End If
+        dict(pid) = rec
+    Next i
+End Function
+
+' Zbir stavki JEDNOG dokumenta iz recnika -- nedostajuci kljuc je GRESKA. Druga
+' brana, kao ZbirStavkiZaOtkup: nijedan citalac ne sme da ima granu koja nulu
+' vraca kao podatak.
+Public Function ZbirStavkiZaPrijemnicu(ByVal zbir As Object, _
+                                       ByVal prijemnicaID As String, _
+                                       ByVal sourceName As String) As Variant
+    If zbir Is Nothing Then
+        Err.Raise vbObjectError + 1976, sourceName, _
+                  "Zbir stavki prijemnice nije izgradjen."
+    End If
+
+    Dim pid As String
+    pid = Trim$(prijemnicaID)
+
+    If Len(pid) = 0 Then
+        Err.Raise vbObjectError + 1970, sourceName, _
+                  "Zaglavlje prijemnice bez PrijemnicaID-a se ne moze citati."
+    End If
+
+    If Not zbir.Exists(pid) Then
+        Err.Raise vbObjectError + 1976, sourceName, _
+                  "Prijemnica nema nijednu stavku: " & pid & _
+                  ". Kolicina dokumenta se racuna iz " & TBL_PRIJEMNICA_STAVKE & "."
+    End If
+
+    ZbirStavkiZaPrijemnicu = zbir(pid)
+End Function
+
+' Stavke grupisane po dokumentu -- za citaoce kojima jedan red izlaza pripada
+' JEDNOJ klasi (papir, izvestaj kupca, manjak po klasi, palete, izvoz).
+' Vrednost je Collection redova iz StavkePrijemniceRedovi (1..8), redom upisa.
+Public Function StavkePrijemnicePoDokumentu() As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set StavkePrijemnicePoDokumentu = dict
+
+    Dim s As Variant
+    s = StavkePrijemniceRedovi()
+    If Not IsArray(s) Then Exit Function
+
+    Dim i As Long, j As Long, pid As String, c As Collection, red As Variant
+    For i = 1 To UBound(s, 1)
+        pid = CStr(s(i, 1))
+        If dict.Exists(pid) Then
+            Set c = dict(pid)
+        Else
+            Set c = New Collection
+            dict.Add pid, c
+        End If
+        ReDim red(1 To 8)
+        For j = 1 To 8
+            red(j) = s(i, j)
+        Next j
+        c.Add red
+    Next i
+End Function
+
+' Stavke JEDNOG dokumenta -- nedostajuci kljuc je GRESKA, isti razlog kao gore.
+Public Function StavkeZaPrijemnicu(ByVal poDok As Object, _
+                                   ByVal prijemnicaID As String, _
+                                   ByVal sourceName As String) As Collection
+    If poDok Is Nothing Then
+        Err.Raise vbObjectError + 1976, sourceName, _
+                  "Stavke prijemnice nisu ucitane."
+    End If
+
+    Dim pid As String
+    pid = Trim$(prijemnicaID)
+
+    If Not poDok.Exists(pid) Then
+        Err.Raise vbObjectError + 1976, sourceName, _
+                  "Prijemnica nema nijednu stavku: " & pid & _
+                  ". Stavke se citaju iz " & TBL_PRIJEMNICA_STAVKE & "."
+    End If
+
+    Set StavkeZaPrijemnicu = poDok(pid)
+End Function
+
+' Zbir stavki po dokumentu -- MEKO, za audit i oporavak (obrazac
+' modIntegritet.ZbirOtpremnicaMeko). Ti spiskovi postoje da nabroje pokvarene
+' redove, pa kvar strogog citaoca ovde znaci "nema podatka" (Nothing), a ne pad
+' spiska. Tvrda kapija zivi u citaocima papira, ekrana i izvestaja.
+Public Function ZbirStavkiPoPrijemniciMeko() As Object
+    On Error Resume Next
+    Set ZbirStavkiPoPrijemniciMeko = ZbirStavkiPoPrijemnici()
+    On Error GoTo 0
+End Function
+
+' Kg JEDNOG dokumenta iz mekog zbira: nedostajuci kljuc ili neizgradjen zbir je
+' PRAZNO, ne nula -- dokument bez stavki mora ostati u spisku, a kolicina mu je
+' nepoznata.
+Public Function KgPrijemniceMeko(ByVal zbir As Object, ByVal prijemnicaID As String) As Variant
+    KgPrijemniceMeko = ""
+    If zbir Is Nothing Then Exit Function
+    If Not zbir.Exists(Trim$(prijemnicaID)) Then Exit Function
+    KgPrijemniceMeko = CDbl(zbir(Trim$(prijemnicaID))(0))
+End Function
+
+' Parametar samoNefakturisano je obrisan u S6 koraku 5: filtrirao je po kesu
+' Fakturisano na zaglavlju, a nijedan pozivalac ga nije palio. Fakturisanost je
+' izvedena (modFaktura.FakturisanostPoPrijemnici) i cinjenica je STAVKE, ne reda.
 Public Function GetPrijemniceByKupac(ByVal kupacID As String, _
                                       Optional ByVal datumOd As Date = 0, _
-                                      Optional ByVal datumDo As Date = 0, _
-                                      Optional ByVal samoNefakturisano As Boolean = False) As Variant
+                                      Optional ByVal datumDo As Date = 0) As Variant
     On Error GoTo EH
 
     Dim data As Variant
@@ -6975,13 +7733,6 @@ Public Function GetPrijemniceByKupac(ByVal kupacID As String, _
         filters.Add fp
     End If
 
-    If samoNefakturisano Then
-        Set fp = New clsFilterParam
-        fp.Init RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, _
-                "modDokumenta.GetPrijemniceByKupac"), "<>", "Da"
-        filters.Add fp
-    End If
-
     GetPrijemniceByKupac = FilterArray(data, filters)
     Exit Function
 
@@ -6990,13 +7741,29 @@ EH:
     GetPrijemniceByKupac = Empty
 End Function
 
+' UPLATA KUPCA -- SAMO NOVAC (AMB-10-ODL-5: nijedan dokument nije istovremeno
+' ambalazni i novcani).
+'
+' Do 06.10.2026 je ova funkcija bila i ambalazni pisac: isti brojDok nosili su
+' i noga u tblAmbalaza ("Izlaz" kod kupca, zig vozaca, DokumentTIP
+' "Kupci-Otpremnica") i red u kasi. Dva dogadjaja su delila jedan broj, a
+' zivotni ciklus im nije isti: storno uplate ne vraca gajbe, a storno povrata
+' ne vraca novac (AMBALAZA.md 6.11a).
+'
+' GDE SE POVRAT PRAZNE AMBALAZE OD KUPCA KNJIZI SADA: na prijemnici, kao
+' Kupac -> Vozac + POVRAT_PRAZNE, pod BROJEM PRIJEMNICE -- AMB-10-ODL-9/-10 uz
+' ODL-22 (presuda operatera 05.10.2026: zamena pune ambalaze praznom nema
+' dodatan broj). Ime funkcije ostaje; menja se obim, ne pozivno mesto.
+'
+' AMBALAZNA NOGA NIJE IMALA POZIVAOCA NI PRE REZA, i to je mereno: jedini
+' produkcioni pozivalac je F6 (modNovacUnos.UplataUpisi), a on je slao
+' kolAmb:=0, tipAmb:="" i vozacID:="" tvrdo upisane. Sposobnost "kupac vraca
+' prazne BEZ dostave robe" time nije izgubljena ovde nego je vec bila bez
+' ulaza; vrsta AMB_DOK_REVERS_PARTNERA je za nju spremna ali jos bez pisca.
 Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
                                   ByVal brojDok As String, _
                                   ByVal kupacNaziv As String, _
                                   ByVal kupacID As String, _
-                                  ByVal vozacID As String, _
-                                  ByVal tipAmb As String, _
-                                  ByVal kolAmb As Long, _
                                   ByVal vrstaVoca As String, _
                                   ByVal novac As Double, _
                                   ByVal fakturaID As String, _
@@ -7012,21 +7779,14 @@ Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
                   "KupacID je obavezan."
     End If
 
-    If kolAmb <= 0 And novac <= 0 Then
+    If novac <= 0 Then
         Err.Raise vbObjectError + 1602, "SaveKupciIzlaz_TX", _
-                  Poruka("DOK_ERR_NEMA_AMBALAZE_NOVCA")
+                  Poruka("DOK_ERR_NEMA_NOVCA")
     End If
 
     tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_FAKTURE
-
-    If kolAmb > 0 Then
-        TrackAmbalaza datum, tipAmb, kolAmb, _
-                      "Izlaz", kupacID, "Kupac", _
-                      vozacID, brojDok, DOK_TIP_IZLAZ_KUPCI
-    End If
 
     If novac > 0 Then
         Dim novacID As String
@@ -7088,9 +7848,16 @@ End Function
 Public Function CalculateManjakPreview(ByVal brojZbirne As String, _
                                       ByVal pendingKgKlI As Double, _
                                       ByVal pendingKgKlII As Double) As Variant
+    Const SRC As String = "modDokumenta.CalculateManjakPreview"
     On Error GoTo EH
 
+    ' S6 KORAK 3 (stavka 178, odluka 7): OBE strane se citaju iz STAVKI. Zaglavlje
+    ' zbirne od PR3, a zaglavlje prijemnice od S6 koraka 2 NE nose kolicinu, pa je
+    ' preview za kanonske dokumente sabirao nule -- a ManjakLinija nulu zbirne
+    ' cita kao "nema zbirne" i liniju ne crta. Spoj ostaje po broju zbirne, kao i
+    ' do sada; identitet spoja je imenovan rizik van obima (plan 14.55).
     Dim zbirnaKg As Double
+    Dim i As Long
 
     Dim zbrData As Variant
     zbrData = GetTableData(TBL_ZBIRNA)
@@ -7098,18 +7865,15 @@ Public Function CalculateManjakPreview(ByVal brojZbirne As String, _
     If IsArray(zbrData) Then zbrData = ExcludeStornirano(zbrData, TBL_ZBIRNA)
 
     If IsArray(zbrData) Then
-        Dim colBroj As Long
-        Dim colKol As Long
-        Dim i As Long
-
-        colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, _
-                                     "modDokumenta.CalculateManjakPreview")
-        colKol = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA, _
-                                    "modDokumenta.CalculateManjakPreview")
+        Dim colBroj As Long, colZid As Long, zbirZbr As Object
+        colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+        colZid = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)
+        Set zbirZbr = ZbirStavkiPoZbirni()
 
         For i = 1 To UBound(zbrData, 1)
             If CStr(zbrData(i, colBroj)) = brojZbirne Then
-                If IsNumeric(zbrData(i, colKol)) Then zbirnaKg = zbirnaKg + CDbl(zbrData(i, colKol))
+                zbirnaKg = zbirnaKg + CDbl(ZbirStavkiZaZbirnu(zbirZbr, _
+                               CStr(zbrData(i, colZid)), SRC)(0))
             End If
         Next i
     End If
@@ -7122,17 +7886,15 @@ Public Function CalculateManjakPreview(ByVal brojZbirne As String, _
     If IsArray(prijData) Then prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)
 
     If IsArray(prijData) Then
-        Dim colBrZbr As Long
-        Dim colPrijKol As Long
-
-        colBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, _
-                                      "modDokumenta.CalculateManjakPreview")
-        colPrijKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, _
-                                        "modDokumenta.CalculateManjakPreview")
+        Dim colBrZbr As Long, colPid As Long, zbirPrj As Object
+        colBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+        colPid = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+        Set zbirPrj = ZbirStavkiPoPrijemnici()
 
         For i = 1 To UBound(prijData, 1)
             If CStr(prijData(i, colBrZbr)) = brojZbirne Then
-                If IsNumeric(prijData(i, colPrijKol)) Then prijKg = prijKg + CDbl(prijData(i, colPrijKol))
+                prijKg = prijKg + CDbl(ZbirStavkiZaPrijemnicu(zbirPrj, _
+                             CStr(prijData(i, colPid)), SRC)(0))
             End If
         Next i
     End If
@@ -7150,7 +7912,7 @@ Public Function CalculateManjakPreview(ByVal brojZbirne As String, _
     Exit Function
 
 EH:
-    LogErr "modDokumenta.CalculateManjakPreview"
+    LogErr SRC
     CalculateManjakPreview = Array(0#, pendingKgKlI + pendingKgKlII, 0#, 0#)
 End Function
 
@@ -7158,22 +7920,37 @@ End Function
 ' PROSEK GAJBE - Durchschnittsgewicht pro Kaestchen
 ' ============================================================
 
+' Prosek kg po gajbi CELE zbirne datog broja: zbir kg i zbir gajbi svih aktivnih
+' dokumenata tog broja (obe klase).
+'
+' S6 KORAK 3 (stavka 178, odluka 7): kg i gajbe zbirne su na STAVKAMA (PR3);
+' zaglavlje ih ne nosi, pa je prosek za kanonsku zbirnu bio 0. Stornirana zbirna
+' ne ulazi (prosek gajbe je ranije racunao i nju -- RF-05 R01).
 Public Function CalculateProsekGajbeByZbirna(ByVal brojZbirne As String) As Double
+    Const SRC As String = "modDokumenta.CalculateProsekGajbeByZbirna"
     On Error GoTo EH
 
     If Trim$(brojZbirne) = "" Then Exit Function
 
-    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_BROJ, _
-                       "modDokumenta.CalculateProsekGajbeByZbirna"
-    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_KOLICINA, _
-                       "modDokumenta.CalculateProsekGajbeByZbirna"
-    RequireColumnIndex TBL_ZBIRNA, COL_ZBR_KOL_AMB, _
-                       "modDokumenta.CalculateProsekGajbeByZbirna"
+    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
+    If IsArray(data) Then data = ExcludeStornirano(data, TBL_ZBIRNA)
+    If Not IsArray(data) Then Exit Function
 
-    ' Dvoklasni doc: sumiraj kol i amb preko SVIH redova broja (ne samo prvi red).
-    Dim kol As Double, amb As Double
-    kol = SumByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_KOLICINA)
-    amb = SumByBroj(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_KOL_AMB)
+    Dim cB As Long, cId As Long
+    cB = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+    cId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)
+
+    Dim zbir As Object
+    Set zbir = ZbirStavkiPoZbirni()
+
+    Dim kol As Double, amb As Double, i As Long, z As Variant
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, cB))) = Trim$(brojZbirne) Then
+            z = ZbirStavkiZaZbirnu(zbir, CStr(data(i, cId)), SRC)
+            kol = kol + CDbl(z(0))
+            amb = amb + CDbl(z(2))
+        End If
+    Next i
 
     If amb > 0 Then
         CalculateProsekGajbeByZbirna = kol / amb
@@ -7184,29 +7961,8 @@ Public Function CalculateProsekGajbeByZbirna(ByVal brojZbirne As String) As Doub
     Exit Function
 
 EH:
-    LogErr "modDokumenta.CalculateProsekGajbeByZbirna"
+    LogErr SRC
     CalculateProsekGajbeByZbirna = 0
-End Function
-
-' Sumira valCol preko SVIH redova gde brojCol = broj (obe klase dvorednog doc-a).
-Private Function SumByBroj(ByVal tbl As String, ByVal brojCol As String, _
-                           ByVal broj As String, ByVal valCol As String) As Double
-    Dim data As Variant: data = GetTableData(tbl)
-    If IsEmpty(data) Then Exit Function
-    ' Stornirani redovi ne ulaze u sumu (prosek gajbe je racunao i njih).
-    If IsArray(data) Then data = ExcludeStornirano(data, tbl)
-    If Not IsArray(data) Then Exit Function
-    Dim cB As Long, cV As Long
-    cB = GetColumnIndex(tbl, brojCol)
-    cV = GetColumnIndex(tbl, valCol)
-    If cB = 0 Or cV = 0 Then Exit Function
-    Dim i As Long, s As Double
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, cB))) = Trim$(broj) Then
-            If IsNumeric(data(i, cV)) Then s = s + CDbl(data(i, cV))
-        End If
-    Next i
-    SumByBroj = s
 End Function
 
 ' ============================================================
@@ -7392,7 +8148,6 @@ Private Function GetVerwaistePrijemnice(ByVal storniraneBrojevi As Object) As Va
     Dim colBrPrij As Long
     Dim colBrZbr As Long
     Dim colKupac As Long
-    Dim colKol As Long
     Dim colStorno As Long
 
     colID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, _
@@ -7403,10 +8158,13 @@ Private Function GetVerwaistePrijemnice(ByVal storniraneBrojevi As Object) As Va
                                   "modDokumenta.GetVerwaistePrijemnice")
     colKupac = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, _
                                   "modDokumenta.GetVerwaistePrijemnice")
-    colKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, _
-                                "modDokumenta.GetVerwaistePrijemnice")
     colStorno = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, _
                                    "modDokumenta.GetVerwaistePrijemnice")
+
+    ' Kolicina dokumenta je zbir STAVKI (S6 korak 3), citan MEKO: ovo je spisak
+    ' za audit (Chk_B1), pa kvar stavki daje praznu kolicinu, ne pad provere.
+    Dim zbir As Object
+    Set zbir = ZbirStavkiPoPrijemniciMeko()
 
     Dim count As Long
     Dim i As Long
@@ -7431,7 +8189,6 @@ NextCount:
 
     Dim idx As Long
     Dim kupacNaziv As String
-    Dim kol As Double
 
     For i = 1 To UBound(data, 1)
         If Trim$(NzToText(data(i, colStorno))) = "Da" Then GoTo NextRow
@@ -7442,14 +8199,11 @@ NextCount:
             kupacNaziv = CStr(LookupValue(TBL_KUPCI, COL_KUP_ID, _
                                           NzToText(data(i, colKupac)), COL_KUP_NAZIV))
 
-            kol = 0
-            If IsNumeric(data(i, colKol)) Then kol = CDbl(data(i, colKol))
-
             result(idx, 1) = NzToText(data(i, colID))
             result(idx, 2) = NzToText(data(i, colBrPrij))
             result(idx, 3) = NzToText(data(i, colBrZbr))
             result(idx, 4) = kupacNaziv
-            result(idx, 5) = kol
+            result(idx, 5) = KgPrijemniceMeko(zbir, NzToText(data(i, colID)))
         End If
 
 NextRow:
@@ -7462,103 +8216,6 @@ EH:
     LogErr "modDokumenta.GetVerwaistePrijemnice"
     GetVerwaistePrijemnice = Empty
 End Function
-
-Public Sub RelinkFakturaStavke(ByVal newPrijemnicaID As String, _
-                               ByVal brojPrijemnice As String, _
-                               Optional ByVal klasaFilter As String = "")
-    ' Sucht verwaiste FakturaStavke die auf eine stornierte Prijemnica
-    ' mit gleichem BrojPrijemnice zeigen, und verlinkt sie auf die neue.
-    On Error GoTo EH
-
-    If Trim$(newPrijemnicaID) = "" Or Trim$(brojPrijemnice) = "" Then Exit Sub
-
-    Dim stavkeData As Variant
-    stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
-
-    If IsEmpty(stavkeData) Then Exit Sub
-
-    Dim colPrijID As Long
-    Dim colOsir As Long
-    Dim colFakID As Long
-    Dim colFsKlasa As Long
-
-    colPrijID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, _
-                                   "modDokumenta.RelinkFakturaStavke")
-    colOsir = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD, _
-                                 "modDokumenta.RelinkFakturaStavke")
-    colFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, _
-                                  "modDokumenta.RelinkFakturaStavke")
-    colFsKlasa = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KLASA, _
-                                "modDokumenta.RelinkFakturaStavke")
-
-    Dim i As Long
-    Dim oldPrijID As String
-    Dim oldBroj As String
-    Dim fakID As String
-
-    For i = 1 To UBound(stavkeData, 1)
-    
-        Dim stavkaKlasa As String
-        stavkaKlasa = Trim$(NzToText(stavkeData(i, colFsKlasa)))
-        If Len(Trim$(klasaFilter)) > 0 Then
-            If UCase$(stavkaKlasa) <> UCase$(Trim$(klasaFilter)) Then GoTo NextStavka
-        End If
-
-        If Trim$(NzToText(stavkeData(i, colOsir))) = "" Then GoTo NextStavka
-
-        oldPrijID = Trim$(NzToText(stavkeData(i, colPrijID)))
-
-        If oldPrijID = "" Then GoTo NextStavka
-
-        oldBroj = CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, oldPrijID, COL_PRJ_BROJ))
-
-        If oldBroj = brojPrijemnice Then
-            fakID = Trim$(NzToText(stavkeData(i, colFakID)))
-            
-            If Len(Trim$(fakID)) = 0 Then
-            Err.Raise vbObjectError + 7413, "modDokumenta.RelinkFakturaStavke", _
-                    "FakturaStavka nema FakturaID za relink. BrojPrijemnice=" & _
-                    brojPrijemnice & "; Klasa=" & stavkaKlasa
-            End If
-
-            RequireUpdateCell TBL_FAKTURA_STAVKE, i, COL_FS_PRIJEMNICA_ID, _
-                              newPrijemnicaID, "modDokumenta.RelinkFakturaStavke"
-
-            RequireUpdateCell TBL_FAKTURA_STAVKE, i, COL_OSIROCENO_OD, _
-                              "", "modDokumenta.RelinkFakturaStavke"
-
-            Dim newPrijRow As Long
-            newPrijRow = FindPrijemnicaRowByIDAndKlasa(newPrijemnicaID, stavkaKlasa, _
-                                           "modDokumenta.RelinkFakturaStavke")
-
-            If newPrijRow <= 0 Then
-                Err.Raise vbObjectError + 7410, "modDokumenta.RelinkFakturaStavke", _
-                        "Nova prijemnica nije pronadena za relink. PrijemnicaID=" & _
-                        newPrijemnicaID & "; Klasa=" & stavkaKlasa
-            End If
-
-            RequireUpdateCell TBL_PRIJEMNICA, newPrijRow, COL_PRJ_FAKTURISANO, _
-                            "Da", "modDokumenta.RelinkFakturaStavke"
-
-            RequireUpdateCell TBL_PRIJEMNICA, newPrijRow, COL_PRJ_FAKTURA_ID, _
-                            fakID, "modDokumenta.RelinkFakturaStavke"
-
-
-            If Len(Trim$(fakID)) > 0 Then
-                UpdateFakturaStatus fakID
-            End If
-
-        End If
-
-NextStavka:
-    Next i
-
-    Exit Sub
-
-EH:
-    LogErr "modDokumenta.RelinkFakturaStavke"
-    Err.Raise Err.Number, "modDokumenta.RelinkFakturaStavke", Err.description
-End Sub
 
 ' ============================================================
 ' HELPER - Vozac-Report (ersetzt alten modTransport)
@@ -7731,15 +8388,10 @@ Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _
         Err.Raise vbObjectError + 1423, SRC, "Broj zbirne je obavezan."
     End If
 
-    ' Referencijalni integritet: broj zbirne mora da postoji u tblZbirna.
-    ' Samo u BLOK modu -- u UPOZORENJE modu forma trazi potvrdu, pa backend ne
-    ' sme tvrdo da padne. Ujedno je bezbedna mreza i za ne-form pozivaoce.
-    If PrijemnicaZbirnaBlokira() Then
-        If Not ZbirnaPostoji(brojZbirne) Then
-            Err.Raise vbObjectError + 1428, SRC, _
-                "Zbirna '" & brojZbirne & "' ne postoji u sistemu."
-        End If
-    End If
+    ' Da zbirna postoji, da je jednoznacna, istog vlasnika i IZDATA proverava
+    ' jezgro JEDNOM po dokumentu (PrijemnicaRoditeljRazlog, PRJ-ZBR-01), ne
+    ' ovaj validator stavke. Blaza grana (PRIJEMNICA_ZBIRNA_PROVERA =
+    ' UPOZORENJE) je obrisana u S6 koraku 8.
 
     If kolicina <= 0 Then
         Err.Raise vbObjectError + 1424, SRC, "Koli" & ChrW(269) & "ina mora biti veca od nule."
@@ -7759,42 +8411,6 @@ Private Sub ValidatePrijemnicaInput(ByVal kupacID As String, _
 
     RequireValidDocumentClass klasa, SRC
 End Sub
-
-Private Function FindPrijemnicaRowByIDAndKlasa(ByVal prijemnicaID As String, _
-                                               ByVal klasa As String, _
-                                               ByVal sourceName As String) As Long
-    Dim data As Variant
-    data = GetTableData(TBL_PRIJEMNICA)
-
-    If IsEmpty(data) Then Exit Function
-
-    Dim colID As Long
-    Dim colKlasa As Long
-
-    colID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, sourceName)
-    colKlasa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, sourceName)
-
-    Dim i As Long
-    Dim foundRow As Long
-    Dim foundCount As Long
-
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, colID))) = Trim$(prijemnicaID) And _
-           Trim$(NzToText(data(i, colKlasa))) = Trim$(klasa) Then
-
-            foundRow = i
-            foundCount = foundCount + 1
-        End If
-    Next i
-
-    If foundCount > 1 Then
-        Err.Raise vbObjectError + 7412, sourceName, _
-                  "Dupli redovi za PrijemnicaID + Klasa. PrijemnicaID=" & _
-                  prijemnicaID & "; Klasa=" & klasa
-    End If
-
-    FindPrijemnicaRowByIDAndKlasa = foundRow
-End Function
 
 ' ============================================================
 ' STORNO PREGLED (read-only) -- agregira stornirane dokumente po tipu za
@@ -7818,60 +8434,6 @@ Public Function StorniraniHeaders() As Variant
     StorniraniHeaders = Array("Broj", "Datum", "Partner", "Vrsta", "Sorta", _
                               "Klasa", "Koli" & ChrW(269) & "ina", "Cena", "Iznos (RSD)", _
                               "Zbirna", "Otpremnica", "Faktura")
-End Function
-
-' Stornirani OM<->koop revers (dokTip) iz tblAmbalaza -> unifikovane 12 kolona.
-' Jedan red po dokumentu: Kooperant noga (nosi partnera); Stanica noga se preskace.
-' Mapiranje: Vrsta=TipAmbalaze, Kolicina=broj gajbica; ostalo prazno.
-' Preskace OM-Izlaz-Koop noge knjizene UZ otkup (DokumentID = otkupID "OTK-...";
-' vec se vide pod grupom 'Otkup') -> ostaju samo standalone reversi (broj x/ddmmyy).
-Private Function GetStorniraniRevers(ByVal dokTip As String, _
-                                     Optional ByVal entType As String = "Kooperant") As Variant
-    On Error GoTo EH
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If IsEmpty(data) Then Exit Function
-
-    Dim iBroj As Long, iDat As Long, iEntID As Long, iEntTip As Long
-    Dim iDokTip As Long, iTipAmb As Long, iKol As Long, iStorno As Long
-    iBroj = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
-    iDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
-    iEntID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
-    iEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
-    iDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
-    iTipAmb = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
-    iKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
-    iStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
-    If iBroj = 0 Or iDokTip = 0 Or iStorno = 0 Then Exit Function
-
-    Dim pdict As Object
-    If entType = "Stanica" Then
-        Set pdict = BuildIdNameDict(TBL_STANICE, "StanicaID", "Naziv")
-    Else
-        Set pdict = BuildIdNameDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
-    End If
-    Dim rows As Collection: Set rows = New Collection
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If UCase$(Trim$(NzToText(data(i, iStorno)))) = "DA" Then
-            If Trim$(CStr(data(i, iDokTip))) = dokTip And _
-               Trim$(CStr(data(i, iEntTip))) = entType And _
-               UCase$(Left$(Trim$(CStr(data(i, iBroj))), 3)) <> "OTK" Then
-                rows.Add Array( _
-                    StornoCellText(data, i, iBroj), _
-                    StornoDateText(StornoCellRaw(data, i, iDat)), _
-                    ResolveNameFromDict(pdict, StornoCellRaw(data, i, iEntID)), _
-                    StornoCellText(data, i, iTipAmb), _
-                    "", "", _
-                    StornoNumText(StornoCellRaw(data, i, iKol), "#,##0"), _
-                    "", "", "", "", "")
-            End If
-        End If
-    Next i
-    GetStorniraniRevers = StornoRowsTo2D(rows, 12)
-    Exit Function
-EH:
-    LogErr "modDokumenta.GetStorniraniRevers(" & dokTip & ")"
-    GetStorniraniRevers = Empty
 End Function
 
 ' id -> "Naziv" (ili "Ime Prezime") recnik; prazan recnik ako tabela/kolone fale.
@@ -7903,48 +8465,6 @@ Public Function BuildIdNameDict(ByVal tbl As String, ByVal idCol As String, _
             If Not d.Exists(idv) Then d.Add idv, nm
         End If
     Next i
-End Function
-
-Private Function ResolveNameFromDict(ByVal d As Object, ByVal idRaw As Variant) As String
-    Dim s As String
-    s = Trim$(NzToText(idRaw))
-    If Len(s) = 0 Then Exit Function
-    If Not d Is Nothing Then
-        If d.Exists(s) Then
-            If Len(Trim$(NzToText(d(s)))) > 0 Then
-                ResolveNameFromDict = d(s)
-                Exit Function
-            End If
-        End If
-    End If
-    ResolveNameFromDict = s          ' fallback: prikazi ID ako nema imena
-End Function
-
-' Sirova vrednost celije (Empty ako kolona ne postoji -> idx=0).
-' `data` je ByRef namerno. ByVal na Variantu koji SADRZI niz kopira ceo niz pri
-' svakom pozivu, a ovo je citac PO CELIJI -- u petlji se zove vise puta po redu.
-' Mereno na istom obrascu u modPaletniList.SafeCell: 1063 stavke, 1883 ms, to jest
-' 1.8 ms po redu za citanje dva polja iz niza koji je vec u memoriji.
-'
-' Funkcija niz samo CITA, nikad ne pise, pa je razlika iskljucivo u tome sto se
-' niz ne umnozava.
-Private Function StornoCellRaw(ByRef data As Variant, ByVal r As Long, ByVal idx As Long) As Variant
-    If idx = 0 Then Exit Function
-    StornoCellRaw = data(r, idx)
-End Function
-
-' ByRef iz istog razloga kao StornoCellRaw: ByVal bi kopirao ceo niz po pozivu.
-Private Function StornoCellText(ByRef data As Variant, ByVal r As Long, ByVal idx As Long) As String
-    If idx = 0 Then Exit Function
-    StornoCellText = Trim$(NzToText(data(r, idx)))
-End Function
-
-Private Function StornoDateText(ByVal v As Variant) As String
-    If IsDate(v) Then
-        StornoDateText = Format$(CDate(v), "d.m.yyyy")
-    Else
-        StornoDateText = Trim$(NzToText(v))
-    End If
 End Function
 
 Private Function StornoNumText(ByVal v As Variant, ByVal fmt As String) As String
@@ -7987,82 +8507,6 @@ Private Function DictGet(ByVal d As Object, ByVal key As String) As String
     If d.Exists(key) Then DictGet = CStr(d(key))
 End Function
 
-' Dodaj val u listu pod key (", "-spojeno, bez duplikata).
-Private Sub DictAppend(ByVal d As Object, ByVal key As String, ByVal val As String)
-    If d Is Nothing Then Exit Sub
-    If Len(key) = 0 Or Len(val) = 0 Then Exit Sub
-    If Not d.Exists(key) Then
-        d.Add key, val
-    Else
-        Dim cur As String: cur = CStr(d(key))
-        If InStr(1, ", " & cur & ", ", ", " & val & ", ", vbTextCompare) = 0 Then
-            d(key) = cur & ", " & val
-        End If
-    End If
-End Sub
-
-' Izgradi indeks lanca: otpByZbr, fakByZbr, fakById, zbrByFak (sve case-insensitive).
-Private Function BuildChainIndex() As Object
-    Dim idx As Object: Set idx = CreateObject("Scripting.Dictionary")
-    Set BuildChainIndex = idx
-
-    Dim fakById As Object:  Set fakById = NewDict()
-    Dim otpByZbr As Object: Set otpByZbr = NewDict()
-    Dim fakByZbr As Object: Set fakByZbr = NewDict()
-    Dim zbrByFak As Object: Set zbrByFak = NewDict()
-    idx.Add "fakById", fakById
-    idx.Add "otpByZbr", otpByZbr
-    idx.Add "fakByZbr", fakByZbr
-    idx.Add "zbrByFak", zbrByFak
-
-    Dim d As Variant, i As Long, k As String, v As String
-
-    ' Faktura: FakturaID -> BrojFakture
-    d = GetTableData(TBL_FAKTURE)
-    If Not IsEmpty(d) Then
-        Dim cfi As Long, cfb As Long
-        cfi = GetColumnIndex(TBL_FAKTURE, COL_FAK_ID)
-        cfb = GetColumnIndex(TBL_FAKTURE, COL_FAK_BROJ)
-        If cfi > 0 And cfb > 0 Then
-            For i = 1 To UBound(d, 1)
-                k = Trim$(NzToText(d(i, cfi))): v = Trim$(NzToText(d(i, cfb)))
-                If Len(k) > 0 And Not fakById.Exists(k) Then fakById.Add k, v
-            Next i
-        End If
-    End If
-
-    ' Otpremnica: BrojZbirne -> lista BrojOtpremnice
-    d = GetTableData(TBL_OTPREMNICA)
-    If Not IsEmpty(d) Then
-        Dim coz As Long, cob As Long
-        coz = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
-        cob = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
-        If coz > 0 And cob > 0 Then
-            For i = 1 To UBound(d, 1)
-                DictAppend otpByZbr, Trim$(NzToText(d(i, coz))), Trim$(NzToText(d(i, cob)))
-            Next i
-        End If
-    End If
-
-    ' Prijemnica: BrojZbirne <-> FakturaID  (i BrojZbirne -> BrojFakture preko fakById)
-    d = GetTableData(TBL_PRIJEMNICA)
-    If Not IsEmpty(d) Then
-        Dim cpz As Long, cpf As Long
-        cpz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
-        cpf = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID)
-        If cpz > 0 And cpf > 0 Then
-            For i = 1 To UBound(d, 1)
-                Dim z As String, fid As String
-                z = Trim$(NzToText(d(i, cpz))): fid = Trim$(NzToText(d(i, cpf)))
-                If Len(fid) > 0 Then
-                    DictAppend zbrByFak, fid, z
-                    If fakById.Exists(fid) Then DictAppend fakByZbr, z, CStr(fakById(fid))
-                End If
-            Next i
-        End If
-    End If
-End Function
-
 ' Kolekcija 0-baznih 1D nizova -> 2D (1..n, 1..ncol). Empty ako je prazna.
 Private Function StornoRowsTo2D(ByVal rows As Collection, ByVal ncol As Long) As Variant
     If rows Is Nothing Then Exit Function
@@ -8081,9 +8525,16 @@ Private Function StornoRowsTo2D(ByVal rows As Collection, ByVal ncol As Long) As
 End Function
 
 ' Osirocene prijemnice: AKTIVNE prijemnice cija zbirna (BrojZbirne) vise nije
-' aktivna (stornirana ili ne postoji). Jedan red po BrojPrijemnice (Klasa I+II
-' dele broj). Za re-point UI (frmDokumenta recovery panel).
-' Kolone 1..7: BrojPrijemnice|Datum|Vrsta|Sorta|Kolicina|StaraZbirna|Status
+' aktivna (stornirana ili ne postoji). Jedan red po DOKUMENTU (PrijemnicaID).
+' Za re-point UI (Oporavak).
+' Kolone 1..8: BrojPrijemnice|Datum|Vrsta|Sorta|Kolicina|StaraZbirna|Status|
+'              PrijemnicaID
+'
+' S6 KORAK 3: Kolicina je kg DOKUMENTA iz stavki, citan MEKO -- spisak postoji da
+' nabroji pokvarene redove, pa nepoznata kolicina ostaje prazna.
+'
+' S6 KORAK 8: dokument je JEDAN red zaglavlja (korak 2), pa grupisanja vise nema:
+' red tabele = red liste, a identitet u 8. koloni je PrijemnicaID, ne generacija.
 Public Function GetOsirocenePrijemnice() As Variant
     On Error GoTo EH
 
@@ -8109,20 +8560,18 @@ Public Function GetOsirocenePrijemnice() As Variant
     End If
 
     Dim cBr As Long, cDat As Long, cVr As Long, cSo As Long
-    Dim cKol As Long, cZbr As Long, cSt As Long, cGen As Long
-    cGen = GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID)
+    Dim cId As Long, cZbr As Long, cSt As Long
     cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
     cDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
     cVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
     cSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
-    cKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
     cZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
     cSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
-    If cBr = 0 Or cZbr = 0 Then Exit Function
+    If cBr = 0 Or cZbr = 0 Or cId = 0 Then Exit Function
 
-    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
-    seen.CompareMode = vbTextCompare
     Dim rows As Collection: Set rows = New Collection
+    Dim zbir As Object: Set zbir = ZbirStavkiPoPrijemniciMeko()
     Dim i As Long
     For i = 1 To UBound(prj, 1)
         Dim isStor As Boolean: isStor = False
@@ -8132,21 +8581,19 @@ Public Function GetOsirocenePrijemnice() As Variant
             Dim brp As String: brp = Trim$(NzToText(prj(i, cBr)))
             If Len(bz) > 0 And Len(brp) > 0 Then
                 If Not aktZbr.Exists(bz) Then
-                    ' Grupise se po BROJ + GENERACIJA, ne po samom broju: dva
-                    ' kupca istog dana dele "1/ddmmyy", pa bi dedup po broju
-                    ' spojio DVA dokumenta u jedan red - i recovery bi posle
-                    ' prevezao onaj koji zatekne.
-                    Dim gen As String: gen = Trim$(NzToText(prj(i, cGen)))
-                    Dim kljuc As String: kljuc = brp & Chr$(1) & gen
-                    If Not seen.Exists(kljuc) Then
-                        seen(kljuc) = True
-                        Dim st As String
-                        If allZbr.Exists(bz) Then st = "zbirna stornirana" Else st = "zbirna ne postoji"
-                        ' 8. kolona je GENERACIJA - dodata na KRAJ, pa legacy
-                        ' panel (cita fiksno 1..7) ostaje netaknut.
-                        rows.Add Array(brp, prj(i, cDat), Trim$(NzToText(prj(i, cVr))), _
-                            Trim$(NzToText(prj(i, cSo))), StornoNumText(prj(i, cKol), "#,##0.00"), bz, st, gen)
-                    End If
+                    ' Jedan red po PrijemnicaID-u, ne po broju: dva kupca istog
+                    ' dana dele "1/ddmmyy", pa bi dedup po broju spojio DVA
+                    ' dokumenta u jedan red - i recovery bi posle prevezao onaj
+                    ' koji zatekne.
+                    Dim pidR As String: pidR = Trim$(NzToText(prj(i, cId)))
+                    Dim st As String
+                    If allZbr.Exists(bz) Then st = "zbirna stornirana" Else st = "zbirna ne postoji"
+                    ' 8. kolona je IDENTITET dokumenta - na KRAJU, pa legacy
+                    ' panel (cita fiksno 1..7) ostaje netaknut.
+                    rows.Add Array(brp, prj(i, cDat), Trim$(NzToText(prj(i, cVr))), _
+                        Trim$(NzToText(prj(i, cSo))), _
+                        StornoNumText(KgPrijemniceMeko(zbir, pidR), "#,##0.00"), _
+                        bz, st, pidR)
                 End If
             End If
         End If
@@ -8160,7 +8607,8 @@ EH:
 End Function
 
 ' Stornirane prijemnice koje imaju AKTIVNE (osirocene) paleta-stavke. Za P1 pallet
-' re-point. Kolone 1..6: BrojPrijemnice|Datum|Vrsta|Sorta|Gajbica|StavkiAktivnih
+' re-point. Kolone 1..7: BrojPrijemnice|Datum|Vrsta|Sorta|Gajbica|StavkiAktivnih|
+' PrijemnicaID
 Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
     On Error GoTo EH
     Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
@@ -8188,17 +8636,20 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
     cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
     If cBr = 0 Or cPid = 0 Then Exit Function
 
-    ' Grupise se po GENERACIJI storniranog dokumenta, ne po njegovom broju.
+    ' Grupise se po DOKUMENTU (PrijemnicaID koji stavka nosi), ne po broju.
     ' Dve stornirane prijemnice razlicitih kupaca lako dele broj (racuna se po
     ' kupcu), pa bi grupisanje po broju spojilo DVA dokumenta u jedan recovery
-    ' red - a prevezivanje bi posle pomerilo palete oba.
-    ' Generacija se cita sa PRIJEMNICE, preko PrijemnicaID koji stavka nosi.
+    ' red - a prevezivanje bi posle pomerilo palete oba. Do S6 koraka 8 je kljuc
+    ' bio generacija dokumenta, 1 : 1 sa ID-om od koraka 2.
     Dim gSum As Object: Set gSum = CreateObject("Scripting.Dictionary"): gSum.CompareMode = vbTextCompare
     Dim sCnt As Object: Set sCnt = CreateObject("Scripting.Dictionary"): sCnt.CompareMode = vbTextCompare
     Dim vrD As Object: Set vrD = CreateObject("Scripting.Dictionary"): vrD.CompareMode = vbTextCompare
     Dim soD As Object: Set soD = CreateObject("Scripting.Dictionary"): soD.CompareMode = vbTextCompare
     Dim brD As Object: Set brD = CreateObject("Scripting.Dictionary"): brD.CompareMode = vbTextCompare
-    Dim genD As Object: Set genD = CreateObject("Scripting.Dictionary"): genD.CompareMode = vbTextCompare
+    ' Dokument grupe (PrijemnicaID), iz kog se cita DATUM -- ne broj (KI-046 (1)):
+    ' dva kupca nose isti broj, pa je LookupValue po broju davao datum PRVOG
+    ' dokumenta tog broja i redu drugog kupca.
+    Dim pidD As Object: Set pidD = CreateObject("Scripting.Dictionary"): pidD.CompareMode = vbTextCompare
     Dim order As Collection: Set order = New Collection
     Dim i As Long
     For i = 1 To UBound(ps, 1)
@@ -8208,12 +8659,11 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
             Dim pid As String: pid = Trim$(NzToText(ps(i, cPid)))
             Dim br As String: br = Trim$(NzToText(ps(i, cBr)))
             If stPrij.Exists(pid) And Len(br) > 0 Then
-                Dim gen As String: gen = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, pid)
-                Dim kl As String: kl = br & Chr$(1) & gen
+                Dim kl As String: kl = pid
                 If Not gSum.Exists(kl) Then
                     gSum(kl) = 0&: sCnt(kl) = 0&: order.Add kl
                     vrD(kl) = Trim$(NzToText(ps(i, cVr))): soD(kl) = Trim$(NzToText(ps(i, cSo)))
-                    brD(kl) = br: genD(kl) = gen
+                    brD(kl) = br: pidD(kl) = pid
                 End If
                 If IsNumeric(ps(i, cGajb)) Then gSum(kl) = CLng(gSum(kl)) + CLng(ps(i, cGajb))
                 sCnt(kl) = CLng(sCnt(kl)) + 1
@@ -8225,10 +8675,11 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
     Dim v As Variant
     For Each v In order
         Dim k2 As String: k2 = CStr(v)
-        ' 7. kolona je GENERACIJA - na KRAJ, pa legacy panel (cita 1..6) ostaje.
+        ' 7. kolona je IDENTITET dokumenta - na KRAJ, pa legacy panel (cita
+        ' 1..6) ostaje.
         rows.Add Array(CStr(brD(k2)), _
-                       LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, CStr(brD(k2)), COL_PRJ_DATUM), _
-                       CStr(vrD(k2)), CStr(soD(k2)), CLng(gSum(k2)), CLng(sCnt(k2)), CStr(genD(k2)))
+                       LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, CStr(pidD(k2)), COL_PRJ_DATUM), _
+                       CStr(vrD(k2)), CStr(soD(k2)), CLng(gSum(k2)), CLng(sCnt(k2)), CStr(pidD(k2)))
     Next v
     GetPrijemniceSaOsirocenimPaletama = StornoRowsTo2D(rows, 7)
     Exit Function
@@ -8237,88 +8688,19 @@ EH:
     GetPrijemniceSaOsirocenimPaletama = Empty
 End Function
 
-' Aktivne (ne-stornirane) prijemnice = ciljevi za pallet re-point. Ukljucuje i
-' paletizovane i NEpaletizovane (motor ReassignPaleteToPrijemnica_TX podrzava cilj
-' bez svezih stavki: STEP1 tada ne undo-uje nista). Kolone 1..7:
-'   BrojPrijemnice|Datum|Vrsta|Sorta|Gajbica(KolAmb)|Zbirna|Paletizovana(Da/Ne)
-Public Function GetAktivnePrijemnice() As Variant
-    On Error GoTo EH
-    Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
-    If IsEmpty(prj) Then Exit Function
-
-    ' BrojPrijemnice koje imaju bar jednu AKTIVNU paleta-stavku (-> Paletizovana=Da).
-    Dim palBr As Object: Set palBr = CreateObject("Scripting.Dictionary"): palBr.CompareMode = vbTextCompare
-    Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
-    If Not IsEmpty(ps) Then
-        Dim xBr As Long, xSt As Long, x As Long
-        xBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-        xSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-        For x = 1 To UBound(ps, 1)
-            Dim sx As Boolean: sx = False
-            If xSt > 0 Then sx = (UCase$(Trim$(NzToText(ps(x, xSt)))) = "DA")
-            If Not sx Then palBr(Trim$(NzToText(ps(x, xBr)))) = True
-        Next x
-    End If
-
-    Dim cBr As Long, cDat As Long, cVr As Long, cSo As Long, cAmb As Long, cZbr As Long, cSt As Long
-    cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
-    cDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
-    cVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
-    cSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
-    cAmb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
-    cZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
-    cSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
-    If cBr = 0 Then Exit Function
-
-    Dim gSum As Object: Set gSum = CreateObject("Scripting.Dictionary"): gSum.CompareMode = vbTextCompare
-    Dim datD As Object: Set datD = CreateObject("Scripting.Dictionary"): datD.CompareMode = vbTextCompare
-    Dim vrD As Object: Set vrD = CreateObject("Scripting.Dictionary"): vrD.CompareMode = vbTextCompare
-    Dim soD As Object: Set soD = CreateObject("Scripting.Dictionary"): soD.CompareMode = vbTextCompare
-    Dim zbD As Object: Set zbD = CreateObject("Scripting.Dictionary"): zbD.CompareMode = vbTextCompare
-    Dim order As Collection: Set order = New Collection
-    Dim i As Long
-    For i = 1 To UBound(prj, 1)
-        Dim stp As Boolean: stp = False
-        If cSt > 0 Then stp = (UCase$(Trim$(NzToText(prj(i, cSt)))) = "DA")
-        If Not stp Then
-            Dim br As String: br = Trim$(NzToText(prj(i, cBr)))
-            If Len(br) > 0 Then
-                If Not gSum.Exists(br) Then
-                    gSum(br) = 0&: order.Add br
-                    datD(br) = prj(i, cDat): vrD(br) = Trim$(NzToText(prj(i, cVr)))
-                    soD(br) = Trim$(NzToText(prj(i, cSo))): zbD(br) = Trim$(NzToText(prj(i, cZbr)))
-                End If
-                If cAmb > 0 Then If IsNumeric(prj(i, cAmb)) Then gSum(br) = CLng(gSum(br)) + CLng(prj(i, cAmb))
-            End If
-        End If
-    Next i
-
-    Dim rows As Collection: Set rows = New Collection
-    Dim v As Variant
-    For Each v In order
-        Dim br2 As String: br2 = CStr(v)
-        rows.Add Array(br2, datD(br2), CStr(vrD(br2)), CStr(soD(br2)), CLng(gSum(br2)), _
-                       CStr(zbD(br2)), IIf(palBr.Exists(br2), "Da", "Ne"))
-    Next v
-    GetAktivnePrijemnice = StornoRowsTo2D(rows, 7)
-    Exit Function
-EH:
-    LogErr "modDokumenta.GetAktivnePrijemnice"
-    GetAktivnePrijemnice = Empty
-End Function
-
 ' Re-point prijemnice na drugu (aktivnu) zbirnu po BrojZbirne. Koristi se posle
 ' storna otpremnice+zbirne (van autohladnjace): operater napravi novu otpremnicu+
 ' zbirnu pa "osirocenu" prijemnicu prevezuje na nju. Handle = BrojPrijemnice
 ' (citljiv, eksteran kad nije autohladnjaca); stvarna veza lanca = BrojZbirne.
 ' PrijemnicaID se NE dira -> faktura-stavke i paleta-stavke ostaju ispravne.
-' prijemnicaGeneracijaID / zbirnaGeneracijaID: identitet prijemnice koja se
-' prevezuje i zbirne na koju ide. Kad su poznati, bira se BAS taj dokument, a
-' broj ostaje labela. Oba su opciona zbog zatecenih pozivalaca - bez njih vazi
-' kapija nad jednoznacnoscu broja, na svakoj strani zasebno.
+' prijemnicaID / zbirnaGeneracijaID: identitet prijemnice koja se prevezuje
+' (PK; do S6 koraka 8 njena generacija) i zbirne na koju ide (ZBR-IDENT-01). Kad
+' su poznati, bira se BAS taj dokument, a broj ostaje labela. Oba su opciona
+' zbog zatecenih pozivalaca - bez njih vazi kapija nad jednoznacnoscu broja, na
+' svakoj strani zasebno.
 Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
                                               ByVal targetBrZbirne As String, _
-                                              Optional ByVal prijemnicaGeneracijaID As String = "", _
+                                              Optional ByVal prijemnicaID As String = "", _
                                               Optional ByVal zbirnaGeneracijaID As String = "") As Boolean
     Const SRC As String = "modDokumenta.ReassignPrijemnicaToZbirna_TX"
     Dim tx As clsTransaction
@@ -8410,14 +8792,14 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
     If IsEmpty(data) Then Exit Function
 
-    ' IZVOR SE BIRA PO IDENTITETU. Sa poznatom generacijom menjaju se samo redovi
-    ' TE generacije (Klasa I i II zajedno, i nijedan tudji). Bez nje ostaje izbor
-    ' po broju, ali tek posto se dokaze da je broj jednoznacan - inace bi se
-    ' prevezala i prijemnica drugog kupca koja deli broj.
+    ' IZVOR SE BIRA PO IDENTITETU. Sa poznatim PrijemnicaID-om menja se samo taj
+    ' dokument, i nijedan tudji. Bez njega ostaje izbor po broju, ali tek posto se
+    ' dokaze da je broj jednoznacan - inace bi se prevezala i prijemnica drugog
+    ' kupca koja deli broj.
     Dim srcIds As Object
-    Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaGeneracijaID)
-    If Len(Trim$(prijemnicaGeneracijaID)) > 0 Then
-        ' ZADATA generacija koja se ne razresava je GRESKA, ne poziv na fallback.
+    Set srcIds = IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID)
+    If Len(Trim$(prijemnicaID)) > 0 Then
+        ' ZADAT identitet koji se ne razresava je GRESKA, ne poziv na fallback.
         ' Pad na broj bi znacio: pozivalac je rekao "bas ovaj dokument", nije
         ' nadjen, pa se dira nesto drugo. Prazan argument je nesto sasvim drugo
         ' (legacy zapis) i za njega fallback ostaje.
@@ -8443,7 +8825,8 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     End If
     Dim cPrjId As Long: cPrjId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
 
-    ' Aktivni redovi prijemnice (Klasa I i II dele broj I generaciju).
+    ' Aktivni red(ovi) izabrane prijemnice: sa identitetom jedan, bez njega svi
+    ' aktivni redovi jednoznacnog broja.
     Dim targetRows As Collection: Set targetRows = New Collection
     Dim i As Long
     For i = 1 To UBound(data, 1)
@@ -8454,6 +8837,29 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
         End If
     Next i
     If targetRows.count = 0 Then Exit Function                  ' nema aktivne prijemnice
+
+    ' PRJ-ZBR-02 (KI-047): cilj mora da nosi ISTU robu kao prijemnica koja se
+    ' prevezuje. Prevezivanje je druga ulazna tacka iste veze, pa prolazi kroz istu
+    ' kapiju kao pisac. Cilj se cita po ID-u: izabran (generacija) ili jedini
+    ' vlasnik broja, dokazan iznad. Odbijanje dize gresku -- EH je zapise i vrati
+    ' False, pre ijedne izmene.
+    Dim ciljID As String, robaRazlog As String, cVr As Long, cSo As Long
+    If tgtIds.count > 0 Then
+        ciljID = CStr(tId)
+    Else
+        ciljID = ZbirnaIDZaBroj(targetBrZbirne)
+        If Len(ciljID) = 0 Then
+            ciljID = Trim$(NzToText(LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, _
+                                                   targetBrZbirne, COL_ZBR_ID)))
+        End If
+    End If
+    cVr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, SRC)
+    cSo = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA, SRC)
+    For i = 1 To targetRows.count
+        robaRazlog = PrijemnicaRobaRazlog(ciljID, NzToText(data(targetRows(i), cVr)), _
+                                          NzToText(data(targetRows(i), cSo)))
+        If Len(robaRazlog) > 0 Then Err.Raise vbObjectError + 1440, SRC, robaRazlog
+    Next i
 
     ' ZBR-CHILD-01: generacija CILJA, jednom za sve redove.
     '
@@ -8552,133 +8958,41 @@ End Function
 ' modul moze da se testira bez instanciranja forme (core guard za smer ambalaze).
 ' ============================================================
 
+' SAMO NOVAC (AMB-10-ODL-5). Ambalazna polovina je 10b-2 presla na
+' modAmbalaza.UpisiReversAmbalaze_TX -- revers je AMBALAZNI dokument i nosi svoj
+' AmbDokID, svoj broj i svoj storno.
+'
+' Prekrsaj je bio LATENTAN: nijedan ziv pozivalac nije mesao klase (F5 je slao
+' kolAmb:=0, F7 novac:=0), pa je ovo razlaganje POTPISA, ne ponasanja -- nijedan
+' poslovni tok se ne menja. Cetiri ambalazna parametra i reversID su otisli jer
+' ih novcana grana ne koristi (izmereno), a ostavljeni bi bili poziv da se klase
+' opet pomesaju.
+'
+' IME JE ZADRZANO namerno: preimenovanje dira modNovacUnos, modPrint i 12 test
+' poziva bez ijedne promene ponasanja. To je kozmetika i ide svojim rezom.
 Public Function SaveOMUlaz_TX(ByVal datum As Date, _
                               ByVal brojDok As String, _
                               ByVal stanicaNaziv As String, _
                               ByVal stanicaID As String, _
-                              ByVal vozacID As String, _
-                              ByVal tipAmb As String, _
-                              ByVal kolAmb As Long, _
                               ByVal vrstaVoca As String, _
                               ByVal novac As Double, _
                               ByVal kooperantID As String, _
                               ByVal primalacDisplay As String, _
                               ByVal otkupID As String, _
-                              ByVal tipNovca As String, _
-                              ByVal koopSmer As String) As Boolean
+                              ByVal tipNovca As String) As Boolean
     Dim tx As clsTransaction
-    Dim reversID As String
     Set tx = New clsTransaction
 
     On Error GoTo EH
 
-    If kolAmb <= 0 And novac <= 0 Then
+    If novac <= 0 Then
         Err.Raise vbObjectError + 1501, "SaveOMUlaz_TX", _
-                  Poruka("DOK_ERR_NEMA_AMBALAZE_NOVCA")
+                  Poruka("DOK_ERR_NEMA_NOVCA")
     End If
 
     tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_OTKUP
-
-    If kolAmb > 0 Then
-        ' Kapija broja stoji SAMO ovde, u revers grani. Cist gotovinski
-        ' promet (F5 isplata / F6 uplata) prolazi kroz istu proceduru sa
-        ' kolAmb = 0, nema svoj brojevni niz (broj je slobodan unos) i
-        ' tamo stanicaID postaje partner-OM -- kapija nad celom procedurom
-        ' odbijala bi legitimnu isplatu.
-        modBrojevi.RequireBrojUKontekstu modBrojevi.KIND_REV, stanicaID, datum, _
-                                         brojDok, "SaveOMUlaz_TX"
-
-        ' Zauzetost broja u nizu (stanica, dan), sa storniranima (A9) -- ista
-        ' provera koju ekran zove u ReversValidiraj. Jednom po dokumentu, pre
-        ' nogu: provera po nozi odbila bi sopstvenu nogu Kooperant. Vazi za SVA
-        ' CETIRI smera, i jedina je provera broja: isti KOOP broj, smer i dan na
-        ' drugoj stanici je legalan (REV-IDENT-01 Faza 2b -- noge povezuje ReversID).
-        modBrojevi.RequireBrojSlobodanUNizu modBrojevi.KIND_REV, stanicaID, datum, _
-                                            brojDok, "SaveOMUlaz_TX"
-
-        ' REV-IDENT-01: JEDAN identitet po dokumentu, zajednicki svim nogama
-        ' (Kooperant + Stanica za KOOP, sama Stanica za FIRMA). Kuje se jednom i
-        ' NASLEDJUJE u svakoj nozi -- nikad po nozi.
-        reversID = modAmbalaza.NoviReversID()
-
-        Select Case koopSmer
-        Case "IZDAVANJE"
-            ' OM IZDAJE prazne kooperantu -> DVOJNI upis (bez vozaca):
-            '   1) Kooperant ULAZ (dobija prazne), 2) OM/Stanica IZLAZ (razduzenje OM).
-            If Trim$(kooperantID) = "" Then
-                Err.Raise vbObjectError + 1503, "SaveOMUlaz_TX", _
-                          "Izdavanje kooperantu: kooperant je obavezan."
-            End If
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1504, "SaveOMUlaz_TX", _
-                          "Izdavanje kooperantu: OM (otkupno mesto) je obavezan za razdu" & ChrW(382) & "enje."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", kooperantID, "Kooperant", _
-                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP, reversID
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Izlaz", stanicaID, "Stanica", _
-                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP, reversID
-        Case "PRIJEM"
-            ' KOOPERANT VRACA prazne na OM (povrat) -> DVOJNI upis, mirror izdavanja:
-            '   1) Kooperant IZLAZ (predaje prazne), 2) OM/Stanica ULAZ (zaduzenje OM).
-            If Trim$(kooperantID) = "" Then
-                Err.Raise vbObjectError + 1505, "SaveOMUlaz_TX", _
-                          "Prijem od kooperanta: kooperant je obavezan."
-            End If
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1506, "SaveOMUlaz_TX", _
-                          "Prijem od kooperanta: OM (otkupno mesto) je obavezan za zadu" & ChrW(382) & "enje."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Izlaz", kooperantID, "Kooperant", _
-                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP, reversID
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", stanicaID, "Stanica", _
-                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP, reversID
-        Case "IZDATO_OM"
-            ' Vozac raspodeljuje prazne na OM (revers ide na OM): OM (Stanica) ULAZ +
-            ' vozac (inverzno Izlaz = vozac se razduzuje). Vozac je prethodno zaduzen
-            ' kod kupca (prijemnica-povrat / kupci-izlaz) -> hladnjaca se NE knjizi ovde.
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1507, "SaveOMUlaz_TX", _
-                          "Izdato OM: OM (otkupno mesto) je obavezan."
-            End If
-            If Trim$(vozacID) = "" Then
-                Err.Raise vbObjectError + 1509, "SaveOMUlaz_TX", _
-                          "Izdato OM: vozac je obavezan (firma<->OM ide preko vozaca)."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", stanicaID, "Stanica", _
-                          vozacID, brojDok, DOK_TIP_OM_ULAZ_FIRMA, reversID
-        Case "PRIJEM_OD_OM"
-            ' OM vraca prazne vozacu (revers ide na OM): OM (Stanica) IZLAZ + vozac
-            ' (inverzno Ulaz = vozac se zaduzuje). Vozac kasnije razduzuje firmi
-            ' (hladnjaci) kroz postojece kupac tokove -> hladnjaca se NE knjizi ovde.
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1508, "SaveOMUlaz_TX", _
-                          "Prijem od OM: OM (otkupno mesto) je obavezan."
-            End If
-            If Trim$(vozacID) = "" Then
-                Err.Raise vbObjectError + 1510, "SaveOMUlaz_TX", _
-                          "Prijem od OM: vozac je obavezan (firma<->OM ide preko vozaca)."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Izlaz", stanicaID, "Stanica", _
-                          vozacID, brojDok, DOK_TIP_OM_IZLAZ_FIRMA, reversID
-        Case Else
-            ' Smer je OBAVEZAN uz kolicinu ambalaze. Ranije je ovde tiho knjizen
-            ' legacy "OM prima od vozaca" (Stanica ULAZ, DOK_TIP_OM_ULAZ), pa je
-            ' prazan/nepoznat smer davao pogresan ledger red bez ijedne poruke.
-            ' UI blokira prazan smer, ovo je core guard za sve ostale pozivaoce.
-            Err.Raise vbObjectError + 1511, "SaveOMUlaz_TX", _
-                      "Nepoznat smer ambalaze '" & koopSmer & "'. Dozvoljeni: " & _
-                      "IZDAVANJE, PRIJEM, IZDATO_OM, PRIJEM_OD_OM."
-        End Select
-    End If
 
     If novac > 0 Then
         Dim novacID As String

@@ -153,9 +153,14 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
             h("datum") = HLZ(COL_ZBR_DATUM, zbrUvid, strict)
             h("kolicina") = ZbirnaKgZaUvid(zbrUvid, strict)
         Case FLOW_DOC_PRIJEMNICA
-            h("partnerID") = HLI(tTbl, tCol, broj, COL_PRJ_KUPAC, docID, strict)
-            h("datum") = HLI(tTbl, tCol, broj, COL_PRJ_DATUM, docID, strict)
-            h("kolicina") = SumActiveNum(tTbl, tCol, broj, COL_PRJ_KOLICINA, docID, strict)
+            ' Identitet je PrijemnicaID (S6 korak 4), razresen JEDNOM istim
+            ' razresavacem koji koristi okvir; kg dokumenta je zbir STAVKI (R5) --
+            ' zaglavlje novog oblika kolicinu ne nosi.
+            Dim prjUvid As String
+            prjUvid = modStornoFlow.PrijemnicaIDZaStorno(broj, docID, strict)
+            h("partnerID") = HLP(COL_PRJ_KUPAC, prjUvid)
+            h("datum") = HLP(COL_PRJ_DATUM, prjUvid)
+            h("kolicina") = PrijemnicaKgZaUvid(prjUvid, strict)
     End Select
     ' Razresi ID -> naziv (otpremnica = stanica; zbirna/prijemnica = kupac). Fallback ID.
     h("partner") = ResolvePartnerName(docType, CStr(h("partnerID")))
@@ -164,6 +169,9 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
         If docType = FLOW_DOC_ZBIRNA Then
             h("ispravkaOd") = HLZ(COL_TRACE_ISPRAVKA_OD, zbrUvid, strict)
             h("zamenjenSa") = HLZ(COL_TRACE_ZAMENJEN_SA, zbrUvid, strict)
+        ElseIf docType = FLOW_DOC_PRIJEMNICA Then
+            h("ispravkaOd") = HLP(COL_TRACE_ISPRAVKA_OD, prjUvid)
+            h("zamenjenSa") = HLP(COL_TRACE_ZAMENJEN_SA, prjUvid)
         Else
             h("ispravkaOd") = HLI(tTbl, tCol, broj, COL_TRACE_ISPRAVKA_OD, docID, strict)
             h("zamenjenSa") = HLI(tTbl, tCol, broj, COL_TRACE_ZAMENJEN_SA, docID, strict)
@@ -253,37 +261,44 @@ EH:
     Set ImpactPalete = New Collection
 End Function
 
-' PrijemnicaID-jevi koji pripadaju IZABRANOJ generaciji. Nothing = nema identiteta
-' ili sema nema kolonu generacije -> pozivalac se vraca na broj. Fail-open je ovde
-' ispravan: zatecen zapis bez generacije nema identitet, a uvid mora nesto da
-' pokaze; nizvodne KAPIJE su te koje su fail-closed.
+' PrijemnicaID IZABRANOG dokumenta kao skup od jednog clana (S6 korak 4: identitet
+' je PrijemnicaID, ne generacija). Nothing = identitet nije zadat ili se ne
+' razresava -> pozivalac se vraca na broj (samo van strict-a, v. ImpactPalete).
+' Prazan skup NIJE "nema paleta" nego "identitet nije nadjen".
 Private Function PrijemniceIDPoIdentitetu(ByVal broj As String, _
                                           ByVal docID As String) As Object
-    If Len(Trim$(docID)) = 0 Then Exit Function
-    On Error GoTo done
-    Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
-    If IsEmpty(data) Then Exit Function
-    Dim cBr As Long, cId As Long, cGen As Long
-    cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
-    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
-    cGen = GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID)
-    If cBr = 0 Or cId = 0 Or cGen = 0 Then Exit Function
+    Dim pid As String
+    pid = modStornoFlow.PrijemnicaIDZaStorno(broj, docID, False)
+    If Len(pid) = 0 Then Exit Function
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
-    Dim i As Long, pid As String
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cBr))) = Trim$(broj) Then
-            If Trim$(CStr(data(i, cGen))) = Trim$(docID) Then
-                pid = Trim$(CStr(data(i, cId)))
-                If Len(pid) > 0 Then
-                    If Not d.Exists(pid) Then d.Add pid, 1
-                End If
-            End If
-        End If
-    Next i
-    ' Prazan skup NIJE "nema paleta" nego "identitet nije nadjen" -- vraca se
-    ' Nothing, da pozivalac padne na broj umesto da tvrdi da paleta nema.
-    If d.count > 0 Then Set PrijemniceIDPoIdentitetu = d
-done:
+    d.Add pid, 1
+    Set PrijemniceIDPoIdentitetu = d
+End Function
+
+' Polje zaglavlja prijemnice po PrijemnicaID-u (razresen gore). Prazan ID daje
+' prazno -- uvid tada ne opisuje tudji dokument istog broja.
+Private Function HLP(ByVal valCol As String, ByVal prijemnicaID As String) As String
+    If Len(Trim$(prijemnicaID)) = 0 Then Exit Function
+    HLP = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(prijemnicaID), valCol)))
+End Function
+
+' Kg prijemnice u uvidu je zbir STAVKI (R5). Strict: strogi citalac (dokument bez
+' stavki obara uvid po imenu); van strict-a meko, jer uvid mora nesto da pokaze.
+Private Function PrijemnicaKgZaUvid(ByVal prijemnicaID As String, _
+                                    ByVal strict As Boolean) As String
+    Const SRC As String = "modStornoImpact.PrijemnicaKgZaUvid"
+    If Len(Trim$(prijemnicaID)) = 0 Then Exit Function
+    Dim kg As Variant
+    If strict Then
+        kg = modDokumenta.ZbirStavkiZaPrijemnicu(modDokumenta.ZbirStavkiPoPrijemnici(), _
+                                                 prijemnicaID, SRC)(0)
+    Else
+        kg = modDokumenta.KgPrijemniceMeko(modDokumenta.ZbirStavkiPoPrijemniciMeko(), prijemnicaID)
+        If Not IsNumeric(kg) Then Exit Function
+    End If
+    ' Isti formater kao lista za storno (KgTekst), da uvid i lista ne pokazu
+    ' istu kolicinu na dva nacina.
+    PrijemnicaKgZaUvid = modStornoDok.KgTekst(CDbl(kg))
 End Function
 
 ' Faktura (samo prijemnica ima direktan link u ovom sloju), po IDENTITETU.
@@ -297,8 +312,15 @@ Private Function ImpactFaktura(ByVal docType As String, ByVal broj As String, _
     f("hasFaktura") = False: f("fakturaID") = ""
     On Error GoTo EH
     If docType = FLOW_DOC_PRIJEMNICA Then
-        f("hasFaktura") = (UCase$(HLI(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_FAKTURISANO, docID, strict)) = "DA")
-        f("fakturaID") = HLI(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_FAKTURA_ID, docID, strict)
+        ' ISTI predikat kao kapija storna (S6 korak 4, odluka 1): izveden iz
+        ' aktivnih linija fakture (S6 korak 5, FAK-LIN-03). Uvid koji kaze "nije
+        ' fakturisana" nad dokumentom koji kapija odbija bio bi gori od uvida koga nema.
+        Dim prjF As String, fakF As String
+        prjF = modStornoFlow.PrijemnicaIDZaStorno(broj, docID, strict)
+        If Len(prjF) > 0 Then
+            f("hasFaktura") = modFaktura.PrijemnicaJeFakturisana(prjF, fakF)
+            f("fakturaID") = fakF
+        End If
     End If
     Exit Function
 EH:
@@ -565,61 +587,6 @@ Private Function ZbirnaKgZaUvid(ByVal zbirnaID As String, _
     End If
 
     ZbirnaKgZaUvid = CStr(CDbl(zbirStavki(zid)(0)))
-End Function
-
-' Suma numericke kolone preko AKTIVNIH (ne-storniranih) redova istog kljuca -> ukupno
-' po dokumentu (Klasa I + II). Prazan string ako nema aktivnog reda.
-'
-' docID suzava na redove IZABRANOG dokumenta. Klasa I i II iz istog upisa dele
-' generaciju, pa suzavanje ne gubi drugu klasu -- odbacuje samo tudji dokument
-' istog broja.
-Private Function SumActiveNum(ByVal tbl As String, ByVal keyCol As String, _
-                             ByVal keyVal As String, ByVal sumCol As String, _
-                             Optional ByVal docID As String = "", _
-                             Optional ByVal strict As Boolean = False) As String
-    Dim data As Variant: data = GetTableData(tbl)
-    If IsEmpty(data) Then
-        If strict Then
-            Err.Raise ERR_UI_BASE + 30, MOD_NAME & ".SumActiveNum", _
-                      "Tabela " & tbl & " nije citljiva."
-        End If
-        Exit Function
-    End If
-    Dim cKey As Long, cSum As Long, cSt As Long, cGen As Long
-    cKey = GetColumnIndex(tbl, keyCol)
-    cSum = GetColumnIndex(tbl, sumCol)
-    cSt = GetColumnIndex(tbl, COL_STORNIRANO)
-    cGen = GetColumnIndex(tbl, COL_GENERACIJA_ID)
-    If cKey = 0 Or cSum = 0 Then
-        If strict Then
-            Err.Raise ERR_UI_BASE + 31, MOD_NAME & ".SumActiveNum", _
-                      "Kolona " & keyCol & " ili " & sumCol & " ne postoji u " & tbl & "."
-        End If
-        Exit Function
-    End If
-    Dim uzmiID As Boolean
-    uzmiID = (Len(Trim$(docID)) > 0 And cGen > 0)
-    Dim i As Long, total As Double, found As Boolean
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cKey))) = Trim$(keyVal) Then
-            Dim uzmi As Boolean: uzmi = True
-            If uzmiID Then uzmi = (Trim$(CStr(data(i, cGen))) = Trim$(docID))
-            If uzmi Then
-                Dim isStor As Boolean: isStor = False
-                If cSt > 0 Then isStor = (UCase$(Trim$(CStr(data(i, cSt)))) = "DA")
-                If Not isStor Then
-                    total = total + SafeDblZ(data(i, cSum))
-                    found = True
-                End If
-            End If
-        End If
-    Next i
-    If found Then SumActiveNum = Format$(total, "#,##0.##")
-End Function
-
-Private Function SafeDblZ(ByVal v As Variant) As Double
-    On Error Resume Next
-    If IsNumeric(v) Then SafeDblZ = CDbl(v) Else SafeDblZ = Val(CStr(v))
 End Function
 
 ' ============================================================

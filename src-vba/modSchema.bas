@@ -41,7 +41,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "88E04EC5"
+Public Const SCHEMA_FINGERPRINT As String = "87AB4F9B"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -541,9 +541,14 @@ End Function
 ' Vraca "" kad je sve u redu, inace opis PRVOG neslaganja -- pozivalac odlucuje
 ' da li ga prijavljuje ili dize gresku.
 '
-' Jedan helper za VerifySchema i SchemaReadyOrFail: dve kapije ne smeju da
-' razviju razlicite definicije "ispravnog prefiksa".
-Private Function PrefiksNeslaganje(ByVal lo As ListObject, _
+' Jedan helper za VerifySchema, SchemaReadyOrFail i self-heal u modSetup: tri
+' kapije ne smeju da razviju razlicite definicije "ispravnog prefiksa".
+'
+' PUBLIC je zbog treceg pozivaoca. modSetup.PreimenujKolonuAko pita "je li
+' zaglavlje kanonsko ISPRED kolone koju vracam na mesto" -- i sme da premesti
+' SAMO ako jeste. Prolazi mu se SKRACEN kanon (prvih N-1 imena), pa je to isto
+' pitanje nad kracim ugovorom, a ne novo pravilo.
+Public Function PrefiksNeslaganje(ByVal lo As ListObject, _
                                    ByVal kolone As Collection) As String
     Dim i As Long
     Dim stvarno As String
@@ -653,6 +658,11 @@ Private Function FormatRegistry() As Object
     k("DokumentID") = "text"
     k("TipAmbalaze") = "text"
     Set reg("tblAmbalaza") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
+    k("BrojDokumenta") = "text"
+    Set reg("tblAmbalazaDokument") = k
 
     Set k = CreateObject("Scripting.Dictionary")
     k.CompareMode = vbTextCompare
@@ -844,6 +854,7 @@ Private Function BuildRegistry() As Object
     reg.CompareMode = vbTextCompare
 
     SpecAmbalaza reg
+    SpecAmbalazaDokument reg
     SpecArtikli reg
     SpecBankaImport reg
     SpecCenovnik reg
@@ -874,6 +885,7 @@ Private Function BuildRegistry() As Object
     SpecPreradaStavka reg
     SpecPrevoznici reg
     SpecPrijemnica reg
+    SpecPrijemnicaStavke reg
     SpecSEFConfig reg
     SpecSEFEventLog reg
     SpecSEFSubmission reg
@@ -901,19 +913,39 @@ Private Sub SpecAmbalaza(ByVal reg As Object)
     k.Add "Datum"
     k.Add "TipAmbalaze"
     k.Add "Kolicina"
-    k.Add "Smer"
-    k.Add "EntitetID"
-    k.Add "EntitetTip"
-    k.Add "VozacID"
     k.Add "DokumentID"
     k.Add "DokumentTIP"
+    k.Add "CreatedAt"
+    k.Add "CreatedBy"
+    k.Add "ModifiedAt"
+    k.Add "ModifiedBy"
+    k.Add "OdNalogTip"
+    k.Add "OdNalogID"
+    k.Add "NaNalogTip"
+    k.Add "NaNalogID"
+    k.Add "VrstaKretanja"
+    k.Add "StornoOd"
+    RegistrujTabelu reg, TBL_AMBALAZA, "Ambalaza", k
+End Sub
+
+Private Sub SpecAmbalazaDokument(ByVal reg As Object)
+    Dim k As Collection
+    Set k = New Collection
+    k.Add "AmbDokID"
+    k.Add "Vrsta"
+    k.Add "BrojDokumenta"
+    k.Add "Datum"
+    k.Add "BrojOwnerTip"
+    k.Add "BrojOwnerID"
+    k.Add "Napomena"
     k.Add "Stornirano"
     k.Add "CreatedAt"
     k.Add "CreatedBy"
     k.Add "ModifiedAt"
     k.Add "ModifiedBy"
-    k.Add "ReversID"
-    RegistrujTabelu reg, TBL_AMBALAZA, "Ambalaza", k
+    k.Add "IspravkaOdID"
+    k.Add "ZamenjenSaID"
+    RegistrujTabelu reg, TBL_AMBALAZA_DOKUMENT, "AmbalazaDokument", k
 End Sub
 
 Private Sub SpecArtikli(ByVal reg As Object)
@@ -1014,6 +1046,7 @@ Private Sub SpecFakturaStavke(ByVal reg As Object)
     k.Add "PreradaID"
     k.Add "BrojPrerade"
     k.Add "UtovarID"
+    k.Add "PrijemnicaStavkaID"
     RegistrujTabelu reg, TBL_FAKTURA_STAVKE, "FakturaStavke", k
 End Sub
 
@@ -1305,13 +1338,8 @@ Private Sub SpecOtpremnica(ByVal reg As Object)
     k.Add "BrojZbirne"
     k.Add "VrstaVoca"
     k.Add "SortaVoca"
-    k.Add "Kolicina"
-    k.Add "Cena"
     k.Add "TipAmbalaze"
-    k.Add "KolAmbalaze"
-    k.Add "Klasa"
     k.Add "Stornirano"
-    k.Add "BrutoKg"
     k.Add "CreatedAt"
     k.Add "CreatedBy"
     k.Add "ModifiedAt"
@@ -1409,6 +1437,7 @@ Private Sub SpecPaletaStavka(ByVal reg As Object)
     k.Add "ModifiedAt"
     k.Add "ModifiedBy"
     k.Add "ZbirnaRoditeljID"
+    k.Add "PrijemnicaStavkaID"
     RegistrujTabelu reg, TBL_PALETA_STAVKA, "PaletaStavka", k
 End Sub
 
@@ -1530,16 +1559,9 @@ Private Sub SpecPrijemnica(ByVal reg As Object)
     k.Add "BrojZbirne"
     k.Add "VrstaVoca"
     k.Add "SortaVoca"
-    k.Add "Kolicina"
-    k.Add "Cena"
     k.Add "TipAmbalaze"
-    k.Add "KolAmbalaze"
     k.Add "KolAmbVracena"
-    k.Add "Klasa"
-    k.Add "Fakturisano"
-    k.Add "FakturaID"
     k.Add "Stornirano"
-    k.Add "BrutoKg"
     k.Add "CreatedAt"
     k.Add "CreatedBy"
     k.Add "ModifiedAt"
@@ -1548,9 +1570,26 @@ Private Sub SpecPrijemnica(ByVal reg As Object)
     k.Add "ZamenjenSa"
     k.Add "CorrectionID"
     k.Add "IzdatoStatus"
-    k.Add "GeneracijaID"
     k.Add "ZbirnaRoditeljID"
     RegistrujTabelu reg, TBL_PRIJEMNICA, "Prijemnica", k
+End Sub
+
+Private Sub SpecPrijemnicaStavke(ByVal reg As Object)
+    Dim k As Collection
+    Set k = New Collection
+    k.Add "PrijemnicaStavkaID"
+    k.Add "PrijemnicaID"
+    k.Add "RedniBroj"
+    k.Add "Klasa"
+    k.Add "Kolicina"
+    k.Add "Cena"
+    k.Add "KolAmbalaze"
+    k.Add "BrutoKg"
+    k.Add "CreatedAt"
+    k.Add "CreatedBy"
+    k.Add "ModifiedAt"
+    k.Add "ModifiedBy"
+    RegistrujTabelu reg, TBL_PRIJEMNICA_STAVKE, "PrijemnicaStavke", k
 End Sub
 
 Private Sub SpecSEFConfig(ByVal reg As Object)
@@ -1781,6 +1820,7 @@ Private Sub SpecZbirna(ByVal reg As Object)
     k.Add "CorrectionID"
     k.Add "IzdatoStatus"
     k.Add "GeneracijaID"
+    k.Add "KupacHladnjaca"
     RegistrujTabelu reg, TBL_ZBIRNA, "Zbirna", k
 End Sub
 

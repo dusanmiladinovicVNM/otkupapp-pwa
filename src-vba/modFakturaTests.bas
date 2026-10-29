@@ -64,6 +64,10 @@ Private Sub RequireFakturaSuiteGreen()
               "RunFakturaSmokeSuite: " & m_Failed & " od " & m_Total & " provera palo."
 End Sub
 
+' S6 KORAK 5: izbor fakture je STAVKA prijemnice (PrijemnicaStavkaID), a seme
+' prave dokument u obliku pravog pisca -- zaglavlje bez kolicine, cene, klase i
+' kesa fakture, brojke na stavci. Do koraka 5 je zaglavlje nosilo brojke, pa je
+' suite bila zelena nad oblikom koji pisac od koraka 2 ne pravi (stavka 188).
 Private Sub Test_CreateFakturaUsesCanonicalPrijemnicaValues()
     On Error GoTo EH
 
@@ -73,27 +77,26 @@ Private Sub Test_CreateFakturaUsesCanonicalPrijemnicaValues()
     Dim kupacID As String
     Dim prijemnicaID As String
     Dim realBrojPrij As String
+    Dim stavkaID As String
 
     kupacID = "KUP-TST-" & code
     prijemnicaID = "PRJ-TST-" & code
     realBrojPrij = "TST-PRJ-" & code
 
-    AppendTestPrijemnicaRow _
+    stavkaID = AppendTestPrijemnicaRow( _
         prijemnicaID:=prijemnicaID, _
         kupacID:=kupacID, _
         brojPrijemnice:=realBrojPrij, _
         kolicina:=100#, _
         cena:=10#, _
         klasa:="I", _
-        stornirano:="", _
-        fakturisano:="", _
-        fakturaID:=""
+        stornirano:="")
 
     Dim stavke As New Collection
 
-    ' Namerno pogreL^ni caller payload.
-    ' CreateFaktura sme da koristi samo stavka(0) = PrijemnicaID.
-    stavke.Add Array(prijemnicaID, 9999#, 9999#, "BAD-KLASA", "BAD-BROJ")
+    ' Namerno pogresan caller payload.
+    ' CreateFaktura sme da koristi samo stavka(0) = PrijemnicaStavkaID.
+    stavke.Add Array(stavkaID, 9999#, 9999#, "BAD-KLASA", "BAD-BROJ")
 
     Dim fakturaID As String
     fakturaID = CreateFaktura_TX(kupacID, stavke)
@@ -107,31 +110,44 @@ Private Sub Test_CreateFakturaUsesCanonicalPrijemnicaValues()
     fakturaIznos = CDbl(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_IZNOS))
 
     AssertFakturaDoubleEquals 1000#, fakturaIznos, _
-                              "CreateFaktura uses canonical Prijemnica total"
+                              "CreateFaktura uses canonical PrijemnicaStavka total"
 
     AssertFakturaDoubleEquals 100#, _
         CDbl(GetFirstFakturaStavkaValue(fakturaID, COL_FS_KOLICINA)), _
-        "FakturaStavka Koli" & ChrW(269) & "ina comes from Prijemnica"
+        "FakturaStavka Koli" & ChrW(269) & "ina comes from PrijemnicaStavka"
 
     AssertFakturaDoubleEquals 10#, _
         CDbl(GetFirstFakturaStavkaValue(fakturaID, COL_FS_CENA)), _
-        "FakturaStavka Cena comes from Prijemnica"
+        "FakturaStavka Cena comes from PrijemnicaStavka"
 
     AssertFakturaTextEquals "I", _
         CStr(GetFirstFakturaStavkaValue(fakturaID, COL_FS_KLASA)), _
-        "FakturaStavka Klasa comes from Prijemnica"
+        "FakturaStavka Klasa comes from PrijemnicaStavka"
 
     AssertFakturaTextEquals realBrojPrij, _
         CStr(GetFirstFakturaStavkaValue(fakturaID, COL_FS_BROJ_PRIJEMNICE)), _
         "FakturaStavka BrojPrijemnice comes from Prijemnica"
 
-    AssertFakturaTextEquals "Da", _
-        CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_FAKTURISANO)), _
-        "CreateFaktura marks Prijemnica as fakturisano"
+    AssertFakturaTextEquals stavkaID, _
+        CStr(GetFirstFakturaStavkaValue(fakturaID, COL_FS_PRIJEMNICA_STAVKA_ID)), _
+        "FakturaStavka nosi PrijemnicaStavkaID izbora (FAK-LIN-02)"
 
-    AssertFakturaTextEquals fakturaID, _
-        CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_FAKTURA_ID)), _
-        "CreateFaktura writes FakturaID back to Prijemnica"
+    AssertFakturaTextEquals prijemnicaID, _
+        CStr(GetFirstFakturaStavkaValue(fakturaID, COL_FS_PRIJEMNICA_ID)), _
+        "FakturaStavka PrijemnicaID je dokument stavke"
+
+    AssertFakturaTrue modFaktura.PrijemnicaJeFakturisana(prijemnicaID), _
+                      "CreateFaktura: prijemnica je fakturisana -- izveden status"
+
+    ' Od S6 koraka 8 kes kolona na zaglavlju NEMA (kanon), pa se meri odsustvo
+    ' kolone -- jace od "polje je prazno". Imena su literali: konstante ne postoje.
+    AssertFakturaTextEquals "0", _
+        CStr(GetColumnIndex(TBL_PRIJEMNICA, "Fakturisano")), _
+        "zaglavlje prijemnice nema kes Fakturisano (FAK-LIN-03, S6 korak 8)"
+
+    AssertFakturaTextEquals "0", _
+        CStr(GetColumnIndex(TBL_PRIJEMNICA, "FakturaID")), _
+        "zaglavlje prijemnice nema kes FakturaID (FAK-LIN-03, S6 korak 8)"
 
     Exit Sub
 
@@ -148,15 +164,16 @@ Private Sub Test_CreateFakturaBlocksDuplicatePrijemnica()
 
     Dim kupacID As String
     Dim prijemnicaID As String
+    Dim stavkaID As String
 
     kupacID = "KUP-TST-" & code
     prijemnicaID = "PRJ-TST-" & code
 
-    AppendTestPrijemnicaRow prijemnicaID, kupacID, "TST-PRJ-" & code, 50#, 20#, "I", "", "", ""
+    stavkaID = AppendTestPrijemnicaRow(prijemnicaID, kupacID, "TST-PRJ-" & code, 50#, 20#, "I", "")
 
     Dim stavke As New Collection
-    stavke.Add Array(prijemnicaID)
-    stavke.Add Array(prijemnicaID)
+    stavke.Add Array(stavkaID)
+    stavke.Add Array(stavkaID)
 
     Dim fakturaID As String
     fakturaID = CreateFaktura_TX(kupacID, stavke)
@@ -168,8 +185,7 @@ Private Sub Test_CreateFakturaBlocksDuplicatePrijemnica()
                        "Expected empty result, got FakturaID=" & fakturaID
     End If
 
-    AssertFakturaTextEquals "", _
-        CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_FAKTURISANO)), _
+    AssertFakturaTrue Not modFaktura.PrijemnicaJeFakturisana(prijemnicaID), _
         "Duplicate block leaves Prijemnica not fakturisano"
 
     Exit Sub
@@ -187,14 +203,15 @@ Private Sub Test_CreateFakturaBlocksStorniranaPrijemnica()
 
     Dim kupacID As String
     Dim prijemnicaID As String
+    Dim stavkaID As String
 
     kupacID = "KUP-TST-" & code
     prijemnicaID = "PRJ-TST-" & code
 
-    AppendTestPrijemnicaRow prijemnicaID, kupacID, "TST-PRJ-" & code, 50#, 20#, "I", "Da", "", ""
+    stavkaID = AppendTestPrijemnicaRow(prijemnicaID, kupacID, "TST-PRJ-" & code, 50#, 20#, "I", "Da")
 
     Dim stavke As New Collection
-    stavke.Add Array(prijemnicaID)
+    stavke.Add Array(stavkaID)
 
     Dim fakturaID As String
     fakturaID = CreateFaktura_TX(kupacID, stavke)
@@ -213,6 +230,9 @@ EH:
                    FormatErrDetails()
 End Sub
 
+' Vec fakturisana = stavka vec ima AKTIVNU liniju fakture (FAK-LIN-01). Do S6
+' koraka 5 se to seme pravilo kesom Fakturisano = Da na zaglavlju; kes od tada
+' niko ne cita, pa se prva faktura pravi kroz isti ulaz.
 Private Sub Test_CreateFakturaBlocksAlreadyFakturisanaPrijemnica()
     On Error GoTo EH
 
@@ -221,14 +241,20 @@ Private Sub Test_CreateFakturaBlocksAlreadyFakturisanaPrijemnica()
 
     Dim kupacID As String
     Dim prijemnicaID As String
+    Dim stavkaID As String
 
     kupacID = "KUP-TST-" & code
     prijemnicaID = "PRJ-TST-" & code
 
-    AppendTestPrijemnicaRow prijemnicaID, kupacID, "TST-PRJ-" & code, 50#, 20#, "I", "", "Da", ""
+    stavkaID = AppendTestPrijemnicaRow(prijemnicaID, kupacID, "TST-PRJ-" & code, 50#, 20#, "I", "")
 
     Dim stavke As New Collection
-    stavke.Add Array(prijemnicaID)
+    stavke.Add Array(stavkaID)
+
+    Dim prvaID As String
+    prvaID = CreateFaktura_TX(kupacID, stavke)
+    AssertFakturaTrue Len(Trim$(prvaID)) > 0, _
+                      "preduslov: prva faktura nad stavkom nastaje"
 
     Dim fakturaID As String
     fakturaID = CreateFaktura_TX(kupacID, stavke)
@@ -280,17 +306,18 @@ Private Sub Test_CreateFakturaBlocksPrijemnicaDrugogKupca()
     Dim kupacID As String
     Dim drugiKupacID As String
     Dim prijemnicaID As String
+    Dim stavkaID As String
 
     kupacID = "KUP-TST-A-" & code
     drugiKupacID = "KUP-TST-B-" & code
     prijemnicaID = "PRJ-TST-" & code
 
     ' Prijemnica pripada kupcu B, faktura se pravi za kupca A.
-    AppendTestPrijemnicaRow prijemnicaID, drugiKupacID, "TST-PRJ-" & code, _
-                            50#, 20#, "I", "", "", ""
+    stavkaID = AppendTestPrijemnicaRow(prijemnicaID, drugiKupacID, "TST-PRJ-" & code, _
+                                       50#, 20#, "I", "")
 
     Dim stavke As New Collection
-    stavke.Add Array(prijemnicaID)
+    stavke.Add Array(stavkaID)
 
     Dim fakturaID As String
     fakturaID = CreateFaktura_TX(kupacID, stavke)
@@ -302,8 +329,7 @@ Private Sub Test_CreateFakturaBlocksPrijemnicaDrugogKupca()
                        "Expected empty result, got FakturaID=" & fakturaID
     End If
 
-    AssertFakturaTextEquals "", _
-        CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_FAKTURISANO)), _
+    AssertFakturaTrue Not modFaktura.PrijemnicaJeFakturisana(prijemnicaID), _
         "Cross-kupac block leaves Prijemnica not fakturisano"
 
 CleanExit:
@@ -320,27 +346,42 @@ End Sub
 
 ' AUD-011 / FM-0034 #2: dva aktivna reda sa istim PrijemnicaID -> Count=1 guard
 ' mora da pukne umesto da tiho uzme prvi pogodak.
+' S6 korak 3: test radi u SVOJOJ transakciji i vraca se rollback-om. Dupli
+' PrijemnicaID je sinteticka anomalija (pisac je ne pravi), a strog citalac
+' stavki je odbija nad CELOM tabelom -- ostavljena u svesci oborila bi svaki
+' citalac prijemnice u suite-ovima koji idu posle ove.
+' S6 korak 5: izbor je stavka prvog reda; dupli dokument obara strog citac stavki
+' pre ijednog upisa.
 Private Sub Test_CreateFakturaBlocksDuplicatePrijemnicaID()
+    Dim tx As clsTransaction
     On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
 
     Dim code As String
     code = NewFakturaTestCode("DUPID")
 
     Dim kupacID As String
     Dim prijemnicaID As String
+    Dim stavkaID As String
 
     kupacID = "KUP-TST-" & code
     prijemnicaID = "PRJ-TST-" & code
 
     ' Isti PrijemnicaID, razlicite kolicine/cene -> tihi izbor prvog reda bi
     ' fakturisao 1000, a ne 2100.
-    AppendTestPrijemnicaRow prijemnicaID, kupacID, "TST-PRJ-A-" & code, _
-                            50#, 20#, "I", "", "", ""
+    stavkaID = AppendTestPrijemnicaRow(prijemnicaID, kupacID, "TST-PRJ-A-" & code, _
+                                       50#, 20#, "I", "")
     AppendTestPrijemnicaRow prijemnicaID, kupacID, "TST-PRJ-B-" & code, _
-                            70#, 30#, "I", "", "", ""
+                            70#, 30#, "I", ""
 
     Dim stavke As New Collection
-    stavke.Add Array(prijemnicaID)
+    stavke.Add Array(stavkaID)
 
     Dim fakturaID As String
     fakturaID = CreateFaktura_TX(kupacID, stavke)
@@ -354,7 +395,8 @@ Private Sub Test_CreateFakturaBlocksDuplicatePrijemnicaID()
 
 CleanExit:
     On Error Resume Next
-    MarkTestPrijemnicaStornirano prijemnicaID
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
     On Error GoTo 0
     Exit Sub
 
@@ -733,15 +775,19 @@ End Function
 
 ' kupacID je obavezan: CreateFaktura od RF-08 proverava da prijemnica pripada
 ' kupcu fakture (AUD-011 / FM-0034 #1), pa test red bez KupacID-a vise ne prolazi.
-Private Sub AppendTestPrijemnicaRow(ByVal prijemnicaID As String, _
-                                    ByVal kupacID As String, _
-                                    ByVal brojPrijemnice As String, _
-                                    ByVal kolicina As Double, _
-                                    ByVal cena As Double, _
-                                    ByVal klasa As String, _
-                                    ByVal stornirano As String, _
-                                    ByVal fakturisano As String, _
-                                    ByVal fakturaID As String)
+'
+' Dokument u obliku PRAVOG pisca (S6 korak 5): zaglavlje BEZ kolicine, cene,
+' klase i kesa fakture, a brojke na jedinoj stavci. Vraca PrijemnicaStavkaID --
+' izbor fakture. Do koraka 5 je zaglavlje nosilo iste brojke, jer ih je faktura
+' citala odatle; stavka uz zaglavlje je od S6 koraka 3 (citaoci linija citaju
+' tblPrijemnicaStavke kroz strog citalac, a ova suite ostavlja redove u svesci).
+Private Function AppendTestPrijemnicaRow(ByVal prijemnicaID As String, _
+                                         ByVal kupacID As String, _
+                                         ByVal brojPrijemnice As String, _
+                                         ByVal kolicina As Double, _
+                                         ByVal cena As Double, _
+                                         ByVal klasa As String, _
+                                         ByVal stornirano As String) As String
     Const SRC As String = "AppendTestPrijemnicaRow"
 
     Dim values As Object
@@ -752,15 +798,24 @@ Private Sub AppendTestPrijemnicaRow(ByVal prijemnicaID As String, _
     values.Add COL_PRJ_BROJ, brojPrijemnice
     values.Add COL_PRJ_BROJ_ZBIRNE, "TST-ZBR-" & prijemnicaID
     values.Add COL_PRJ_DATUM, Date
-    values.Add COL_PRJ_KOLICINA, kolicina
-    values.Add COL_PRJ_CENA, cena
-    values.Add COL_PRJ_KLASA, klasa
-    values.Add COL_PRJ_FAKTURISANO, fakturisano
-    values.Add COL_PRJ_FAKTURA_ID, fakturaID
     values.Add COL_STORNIRANO, stornirano
 
     AppendFakturaTestRowByColumnMap TBL_PRIJEMNICA, values, SRC
-End Sub
+
+    Dim st As Object, stavkaID As String
+    stavkaID = "PRS-" & prijemnicaID & "-" & brojPrijemnice
+    Set st = CreateObject("Scripting.Dictionary")
+    st.Add COL_PRS_ID, stavkaID
+    st.Add COL_PRS_PRIJEMNICA_ID, prijemnicaID
+    st.Add COL_PRS_RB, 1
+    st.Add COL_PRS_KLASA, klasa
+    st.Add COL_PRS_KOLICINA, kolicina
+    st.Add COL_PRS_CENA, cena
+    st.Add COL_PRS_KOL_AMB, 0
+    AppendFakturaTestRowByColumnMap TBL_PRIJEMNICA_STAVKE, st, SRC
+
+    AppendTestPrijemnicaRow = stavkaID
+End Function
 
 Private Sub AppendTestFakturaRow(ByVal fakturaID As String, _
                                  ByVal brojFakture As String, _

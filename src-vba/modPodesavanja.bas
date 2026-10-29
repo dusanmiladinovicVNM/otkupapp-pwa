@@ -98,7 +98,6 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, "Otkup / dokumenta", "OTKUP_BLOK_PANEL", "Panel za blokove (Otkup)", "bool"
     CfgAdd c, "Otkup / dokumenta", "PRACENJE_PARCELA", "Pracenje parcela (unos parcele u otkupu)", "bool"
     CfgAdd c, "Otkup / dokumenta", "VALIDACIJA_UNOSA", "Kompletna validacija unosa (obavezna polja pre snimanja)", "bool"
-    CfgAdd c, "Otkup / dokumenta", "PRIJEMNICA_ZBIRNA_PROVERA", "Prijemnica: kad zbirna nije u sistemu", "list:BLOK;UPOZORENJE"
 
     ' --- Stampa (centralni izlazni dispecer; DocResolveMode cita ove kljuceve) ---
     ' Po dokumentu: PDF | PRINT | PREVIEW | OFF (prazno -> default tog dokumenta).
@@ -121,9 +120,10 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, ChrW(352) & "tampa", "SLEDLJIVOST_PRINT_MODE", "Sledljivost", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "ISPLATA_SPEC_PRINT_MODE", "Specifikacija isplata (banka nalozi)", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "SPECIFIKACIJA_PRINT_MODE", "Specifikacija", "list:PDF;PRINT;PREVIEW;OFF"
+    ' Vazi za sve rezime PDF iznad: NO -> PDF se pravi, ali se ne otvara.
+    CfgAdd c, ChrW(352) & "tampa", "PDF_OTVORI_POSLE", "Otvori PDF posle izrade", "bool"
 
     CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_MODE", "Auto-zbirna iz otpremnice (1 stanica = 1 vozilo)", "bool"
-    CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "AUTO_PRIJEMNICA_HLADNJACA", "Auto otpremnica+zbirna+prijemnica (OM=hladnjaca)", "bool"
     CfgAdd c, Poruka("CFG_MSG_MALINA_REZIM"), "MALINA_DEFAULT_KUPAC", "Podrazumevani kupac/hladnjaca (KupacID)", "list:" & LookupCSV(TBL_KUPCI, COL_KUP_ID, False)
 
     CfgAdd c, "Management / Klijent", "MGMT_USER_1", "Management korisnik 1", "text"
@@ -676,6 +676,8 @@ Public Function Podesavanja_ImaNesacuvano() As Boolean
             If sad <> bilo Then
                 Podesavanja_ImaNesacuvano = True
                 Err.Clear
+                ' TEST SEAM (KI-014, test 238): odgovor uz gresku ostavljenu u Err.
+                modUiScreens.ScrCuriAkoTest "PANEL_NESACUVANO"
                 Exit Function
             End If
         End If

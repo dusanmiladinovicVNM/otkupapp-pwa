@@ -192,9 +192,16 @@ Public Function OtpremnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         If dveKl And kolAmbII <= 0 Then
             fokus = "kolAmbII": OtpremnicaValidiraj = Poruka("OTKUNOS_ERR_GAJBE_II"): Exit Function
         End If
-        If (kolAmb > 0 Or kolAmbII > 0) And Len(S(p, "tipAmb")) = 0 Then
+        If (kolAmb > 0 Or kolAmbII > 0) And modAmbalazaUgovor.AmbTipPrazan(S(p, "tipAmb")) Then
             fokus = "tipAmb": OtpremnicaValidiraj = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"): Exit Function
         End If
+    End If
+
+    ' KI-021: otkucan tip mora postojati u sifarniku i bez stroge validacije --
+    ' pogresan tip nije nepopunjeno polje nego upis koji pisac odbija (AMB-INV-12).
+    If (kolAmb > 0 Or kolAmbII > 0) And Not modAmbalazaUgovor.AmbTipPrazan(S(p, "tipAmb")) Then
+        OtpremnicaValidiraj = modOtkupUnos.TipAmbalazePoruka(S(p, "tipAmb"))
+        If Len(OtpremnicaValidiraj) > 0 Then fokus = "tipAmb": Exit Function
     End If
 
     ' --- BRUTO -> NETO. Otpremnica se cuva u NETO, isto kao otkupni list, da
@@ -265,7 +272,7 @@ EH:
     ' Next, koji cisti Err - operater bi inace dobio poruku bez objasnjenja.
     errDesc = Err.description
     LogErr "modDokUnos.OtpremnicaValidiraj"
-    OtpremnicaValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    OtpremnicaValidiraj = Poruka("DOKUNOS_ERR_GRESKA_UNOS_OTP") & errDesc
 End Function
 
 ' Ocekivana stavka otpremnice: sta operater PRIJAVLJUJE da ce otpremnica nositi.
@@ -308,7 +315,7 @@ Public Function OtpremnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
     res = CreateOtpremnicaDraft_TX(h, ocek, greska)
 
     If Len(res) = 0 Then
-        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_OTP") & greska
         Exit Function
     End If
 
@@ -352,7 +359,7 @@ Public Function OtpremnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
 EH:
     errDesc = Err.description
     LogErr "modDokUnos.OtpremnicaUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_OTP") & errDesc
 End Function
 
 ' Zaglavlje i ocekivanje nacrta iz unosa F2 -- JEDNO mesto za upis i izmenu
@@ -406,7 +413,7 @@ Public Function OtpremnicaIzmeniNacrt(ByVal otpremnicaID As String, ByVal p As O
     poruke = ""
     If Not OtpremnicaNacrtIzUnosa(p, h, ocek, poruke) Then Exit Function
     If Not UpdateOtpremnicaDraft_TX(otpremnicaID, h, ocek, greska) Then
-        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_OTP") & greska
         Exit Function
     End If
     poruke = poruke & Poruka("DOKUNOS_MSG_OTP_NACRT_IZMENJEN") & vbCrLf
@@ -415,7 +422,7 @@ Public Function OtpremnicaIzmeniNacrt(ByVal otpremnicaID As String, ByVal p As O
 EH:
     errDesc = Err.description
     LogErr "modDokUnos.OtpremnicaIzmeniNacrt"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_OTP") & errDesc
 End Function
 
 '=====================================================================
@@ -451,21 +458,6 @@ End Function
 
 ' Redosled provera je isti kao u frmDokumenta.btnUnosZbr_Click - to nije stil
 ' nego ponasanje: operater je navikao koje ga polje prvo zaustavi.
-' Kod razloga za RODITELJA -> korisnicki tekst. NEMA se prevodi u postojecu
-' poruku "zbirna ne postoji": do nje se kroz PrijemnicaValidiraj ne stize (kapija
-' je u Else grani, gde zbirna postoji), ali funkcija ne sme da vrati prazno i tako
-' izgleda kao prolaz.
-Private Function ZbirnaRoditeljPoruka(ByVal razlog As String) As String
-    Select Case razlog
-        Case ZBR_PARENT_DVOSMISLEN: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN")
-        Case ZBR_PARENT_TUDJ: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_TUDJ")
-        Case ZBR_PARENT_ISTORIJA: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_P_ISTORIJA")
-        Case ZBR_PARENT_NEMA: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_1") & " " & _
-                                                     Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")
-        Case Else: ZbirnaRoditeljPoruka = Poruka("DOKUNOS_ERR_ZBR_INTEGRITET")
-    End Select
-End Function
-
 ' VALIDACIJA UNOSA ZBIRNE NAD KANONSKIM MODELOM (S4-2c/2b-1).
 '
 ' Sta je NESTALO, i zasto:
@@ -625,7 +617,7 @@ EH:
     ' Next, koji cisti Err - operater bi inace dobio poruku bez objasnjenja.
     errDesc = Err.description
     LogErr "modDokUnos.ZbirnaValidiraj"
-    ZbirnaValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    ZbirnaValidiraj = Poruka("DOKUNOS_ERR_GRESKA_UNOS_ZBR") & errDesc
 End Function
 
 ' PREVODILAC PRENOSI, PISAC SUDI (review #375, P1).
@@ -706,7 +698,7 @@ Public Function ZbirnaUpisi(ByVal p As Object, ByRef poruke As String) As String
     res = CreateZbirnaDraft_TX(h, ocek, greska)
 
     If Len(res) = 0 Then
-        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_ZBR") & greska
         Exit Function
     End If
 
@@ -726,7 +718,7 @@ Public Function ZbirnaUpisi(ByVal p As Object, ByRef poruke As String) As String
 EH:
     errDesc = Err.description
     LogErr "modDokUnos.ZbirnaUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_ZBR") & errDesc
 End Function
 
 ' IZMENA NACRTA. Kad povezano nije jednako najavljenom -- operater je pogresio
@@ -740,7 +732,7 @@ Public Function ZbirnaIzmeniNacrt(ByVal zbirnaID As String, ByVal p As Object, _
     poruke = ""
     If Not ZbirnaNacrtIzUnosa(p, h, ocek, poruke) Then Exit Function
     If Not UpdateZbirnaDraft_TX(zbirnaID, h, ocek, greska) Then
-        poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & greska
+        poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_ZBR") & greska
         Exit Function
     End If
     poruke = poruke & Poruka("DOKUNOS_MSG_ZBR_NACRT_IZMENJEN") & vbCrLf
@@ -749,7 +741,7 @@ Public Function ZbirnaIzmeniNacrt(ByVal zbirnaID As String, ByVal p As Object, _
 EH:
     errDesc = Err.description
     LogErr "modDokUnos.ZbirnaIzmeniNacrt"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_ZBR") & errDesc
 End Function
 
 ' Upisuje zbirnu. Vraca ZbirnaID (ili spojene ID-eve obe klase); prazno znaci
@@ -805,21 +797,18 @@ End Function
 ' zamrznuti uneti bruto (kad je OTKUP_BRUTO_UNOS ON).
 Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As String
     Dim kolI As Double, cenI As Double, kolII As Double, cenII As Double
-    Dim kolAmb As Long, kolAmbII As Long
+    ' AMBALAZA JE DOUBLE, NE LONG (S6 korak 6, odluka 5; isti razlog kao review
+    ' #375 kod zbirne). Kao Long bi je L() kroz CLng zaokruzio JOS OVDE, pa bi
+    ' 20.5 gajbi postalo 20 pre ijedne provere.
+    Dim kolAmb As Double, kolAmbII As Double, kolAmbVr As Double
     Dim imaKlasaI As Boolean, dveKl As Boolean, strogo As Boolean
     Dim tara As Double, taraII As Double
-    Dim postojeca As String, errDesc As String
+    Dim postojeca As String, errDesc As String, rodRazlog As String, rodID As String
     On Error GoTo EH
     fokus = ""
 
-    ' F4 JE PAUZIRAN DO S6 (Prijemnica cutover; review #362) -- ne do S4: S4 vraca
-    ' zbirnu, a prijemnica dobija svoj header + stavke + izvore tek u S6. Razlog
-    ' pauze je isti kao kod F3 (ZbirnaValidiraj): prijemnica
-    ' trazi postojecu zbirnu, a zbirna se od S3a ne moze napraviti. Operater
-    ' dobija razlog umesto poruke o zbirnoj koja "ne postoji".
-    PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA")
-    Exit Function
-
+    ' Pauza F4 (S3b-1 do S6) je otisla u S6 koraku 6: prijemnica je zaglavlje +
+    ' stavke (koraci 1-5), a zbirna se od S4 pravi i izdaje.
     strogo = IsValidacijaUnosa()
 
     If Len(S(p, "kupacID")) = 0 Then
@@ -837,46 +826,19 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         fokus = "brojZbirne": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_BROJ_ZBIRNE"): Exit Function
     End If
 
-    ' Zbirna mora da postoji u sistemu. Ponasanje po PRIJEMNICA_ZBIRNA_PROVERA:
-    ' BLOK = prekid; UPOZORENJE = potvrda pa nastavak.
-    If Not ZbirnaPostoji(S(p, "brojZbirne")) Then
+    ' PRJ-ZBR-01: zbirna postoji, jednoznacna je, istog vlasnika, sa istorijom
+    ' jednog vlasnika, i IZDATA -- UVEK, bez pitanja (review #440, krug 1: uz
+    ' UPOZORENJE je potvrda pravila prijemnicu bez roditelja). Od S6 koraka 8 je
+    ' to ISTA kapija koju pisac drzi (modDokumenta.PrijemnicaRoditeljRazlog), i
+    ' isti tekst (PrijemnicaRoditeljPoruka): ovde ide kao poruka uz polje, tamo
+    ' kao greska. Status se cita sa razresenog dokumenta, ne po broju. Tvrda
+    ' blokada: ekran ne moze da ponudi koji je dokument pravi.
+    rodRazlog = modDokumenta.PrijemnicaRoditeljRazlog(S(p, "brojZbirne"), S(p, "vozacID"), _
+                                                      S(p, "kupacID"), rodID)
+    If Len(rodRazlog) > 0 Then
         fokus = "brojZbirne"
-        If PrijemnicaZbirnaBlokira() Then
-            PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_1") & " '" & _
-                                  S(p, "brojZbirne") & "' " & Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2")
-            Exit Function
-        End If
-        If MsgBox(Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_1") & " '" & S(p, "brojZbirne") & "' " & _
-                  Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2") & vbCrLf & vbCrLf & _
-                  Poruka("DOKUNOS_ASK_ZBIRNA_NEMA"), _
-                  vbQuestion + vbYesNo, APP_NAME) <> vbYes Then
-            PrijemnicaValidiraj = " ": Exit Function
-        End If
-        fokus = ""            ' operater je potvrdio - polje vise nije sporno
-    Else
-        ' I2 (docs/DOMEN/ZBR_IDENTITET.md par.6): "postoji" NIJE isto sto i
-        ' "jednoznacna". ZbirnaPostoji odgovara samo na prvo -- vraca True cim
-        ' ijedan aktivan red nosi taj broj, pa bi se prijemnica vezala i kad pod
-        ' brojem stoje DVA dokumenta, ili dokument DRUGOG vlasnika.
-        '
-        ' Veza se upisuje kao GOLA LABELA (COL_PRJ_BROJ_ZBIRNE), pa nizvodne
-        ' operacije po broju mogu da zahvate tudje. Zato i UNIQUE danas pada ako
-        ' je broj IKAD imao dva vlasnika -- isto pravilo koje drzi
-        ' modStorno.RequireJedanVlasnikIkadPoBroju.
-        '
-        ' Ovo je TVRDA blokada, ne UPOZORENJE: PRIJEMNICA_ZBIRNA_PROVERA bira
-        ' politiku za "zbirne nema" -- stanje koje operater moze da zna unapred.
-        ' Dvosmislen ili tudj dokument nije to; tu potvrda ne pomaze jer ekran ne
-        ' moze ni da ponudi koji je pravi.
-        Dim zbrRod As ZbirnaIdent
-        Dim rodRazlog As String
-        zbrRod = ZbirnaIdentResolve(S(p, "brojZbirne"), S(p, "vozacID"), S(p, "kupacID"))
-        rodRazlog = ZbirnaRoditeljRazlog(zbrRod)
-        If Len(rodRazlog) > 0 Then
-            fokus = "brojZbirne"
-            PrijemnicaValidiraj = ZbirnaRoditeljPoruka(rodRazlog)
-            Exit Function
-        End If
+        PrijemnicaValidiraj = modDokumenta.PrijemnicaRoditeljPoruka(rodRazlog, S(p, "brojZbirne"))
+        Exit Function
     End If
 
     If strogo And Len(S(p, "vrsta")) = 0 Then
@@ -886,14 +848,58 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         fokus = "sorta": PrijemnicaValidiraj = Poruka("OTKUNOS_ERR_SORTA"): Exit Function
     End If
 
+    ' PRJ-ZBR-02 (KI-047, odluka 27.10.2026): vrsta i sorta su roba izabrane
+    ' zbirne; podela na klase sme da se razlikuje. ISTA kapija koju pisac drzi
+    ' (modDokumenta.PrijemnicaRobaRazlog), nad zbirnom koju je PRJ-ZBR-01 upravo
+    ' razresio -- ovde kao poruka uz polje koje se ne slaze.
+    Dim robaRazlog As String, robaPolje As String
+    robaRazlog = modDokumenta.PrijemnicaRobaRazlog(rodID, S(p, "vrsta"), S(p, "sorta"), robaPolje)
+    If Len(robaRazlog) > 0 Then
+        fokus = robaPolje: PrijemnicaValidiraj = robaRazlog: Exit Function
+    End If
+
     kolI = D(p, "kolicinaI")
     cenI = D(p, "cenaI")
     kolII = D(p, "kolicinaII")
     cenII = D(p, "cenaII")
-    kolAmb = L(p, "kolAmb")
-    kolAmbII = L(p, "kolAmbII")
+    kolAmb = D(p, "kolAmb")
+    kolAmbII = D(p, "kolAmbII")
+    kolAmbVr = D(p, "kolAmbVracena")
     dveKl = B(p, "dveKlase")
     imaKlasaI = (kolI > 0)
+
+    ' NULA I MINUS NISU ISTO STANJE (S6 korak 6, odluka 5; isto pravilo i poruka
+    ' kao ZbirnaValidiraj, review #375). 0 kg znaci "te klase nema" -- II-only
+    ' prijemnica je legitimna. -5 kg je NEVALIDAN podatak: pisac klasu I uzima
+    ' samo kad je > 0, pa bi minus tiho nestao i operater bi dobio dokument koji
+    ' nije uneo (sonda, stavka 193).
+    If kolI < 0 Then
+        fokus = "kolicinaI": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA"): Exit Function
+    End If
+    If dveKl And kolII < 0 Then
+        fokus = "kolicinaII": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_NEGATIVNA_KOLICINA"): Exit Function
+    End If
+
+    ' GAJBE SU KOMADI: minus i decimala se odbijaju, ne zaokruzuju. Povrat ima
+    ' svoje polje na ekranu (kolAmbIzdata -- isto polje, u F4 znaci VRACENA).
+    If kolAmb < 0 Then
+        fokus = "kolAmb": PrijemnicaValidiraj = Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE"): Exit Function
+    End If
+    If kolAmb <> Int(kolAmb) Then
+        fokus = "kolAmb": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO"): Exit Function
+    End If
+    If dveKl And kolAmbII < 0 Then
+        fokus = "kolAmbII": PrijemnicaValidiraj = Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE"): Exit Function
+    End If
+    If dveKl And kolAmbII <> Int(kolAmbII) Then
+        fokus = "kolAmbII": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO"): Exit Function
+    End If
+    If kolAmbVr < 0 Then
+        fokus = "kolAmbIzdata": PrijemnicaValidiraj = Poruka("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE"): Exit Function
+    End If
+    If kolAmbVr <> Int(kolAmbVr) Then
+        fokus = "kolAmbIzdata": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_ZBR_AMB_NIJE_CEO"): Exit Function
+    End If
 
     If Not imaKlasaI Then
         If Not dveKl Then
@@ -920,10 +926,11 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         If dveKl And kolAmbII <= 0 Then
             fokus = "kolAmbII": PrijemnicaValidiraj = Poruka("OTKUNOS_ERR_GAJBE_II"): Exit Function
         End If
-        If (kolAmb > 0 Or kolAmbII > 0) And Len(S(p, "tipAmb")) = 0 Then
-            fokus = "tipAmb": PrijemnicaValidiraj = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"): Exit Function
-        End If
     End If
+
+    ' KI-021: tip ambalaze prijemnice (AMB-INV-12); pravilo je u PrijemnicaTipPoruka.
+    PrijemnicaValidiraj = PrijemnicaTipPoruka(p, strogo)
+    If Len(PrijemnicaValidiraj) > 0 Then fokus = "tipAmb": Exit Function
 
     If dveKl Then
         If kolII <= 0 Then
@@ -975,8 +982,14 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         p("kolicinaII") = kolII
     End If
 
+    ' BROJ JE JEDINSTVEN PO KUPCU (S6 korak 6, odluka 6; A2): broj prijemnice je
+    ' kupcev (ODL-22), pa dva kupca smeju isti broj. Do koraka 6 je provera bila
+    ' globalna i odbijala legitiman broj drugog kupca. Eksternom kupcu se
+    ' stornirani ne broje (ispravka zadrzava broj), a kupcu hladnjace se broje:
+    ' njegov broj je nas niz i storno ga ne oslobadja (A2 t. 4, KI-051, S6 korak
+    ' 8). Pravilo je jedno za F4 i pisca (modDokumenta.PrijemnicaBrojRazlog).
     Dim dup As String
-    dup = CheckDuplicate(TBL_PRIJEMNICA, COL_PRJ_BROJ, S(p, "brDok"), COL_PRJ_DATUM)
+    dup = modDokumenta.PrijemnicaBrojRazlog(S(p, "brDok"), S(p, "kupacID"))
     If Len(dup) > 0 Then
         fokus = "brDok": PrijemnicaValidiraj = dup: Exit Function
     End If
@@ -1009,7 +1022,27 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
 EH:
     errDesc = Err.description
     LogErr "modDokUnos.PrijemnicaValidiraj"
-    PrijemnicaValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_GRESKA_UNOS_PRIJ") & errDesc
+End Function
+
+' KI-021: poruka uz polje tipa ambalaze prijemnice; "" kad je tip valjan ili ga ne
+' treba. Pune gajbe (I i II) traze PRAZAN tip samo uz strogu validaciju, kao
+' otpremnica. Povrat praznih ga trazi UVEK: pisac ga knjizi po tipu, a prijemnica
+' sa samo povratom ranije nije dobijala poruku uz polje (review #432, P3).
+' Otkucan tip mora biti u sifarniku uvek (AMB-INV-12).
+'
+' Public zbog testa: 253 meri i ovo pravilo i, od S6 koraka 6, njegov poziv iz
+' PrijemnicaValidiraj (pauza F4 je otisla, pa poziv vise nije staticki).
+Public Function PrijemnicaTipPoruka(ByVal p As Object, ByVal strogo As Boolean) As String
+    Dim tip As String, pune As Boolean, povrat As Boolean
+    tip = S(p, "tipAmb")
+    pune = (L(p, "kolAmb") > 0 Or L(p, "kolAmbII") > 0)
+    povrat = (L(p, "kolAmbVracena") > 0)
+    If modAmbalazaUgovor.AmbTipPrazan(tip) Then
+        If (pune And strogo) Or povrat Then PrijemnicaTipPoruka = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE")
+    ElseIf pune Or povrat Then
+        PrijemnicaTipPoruka = modOtkupUnos.TipAmbalazePoruka(tip)
+    End If
 End Function
 
 '--------------------------------------------- ISPRAVKA PRIJEMNICE
@@ -1133,38 +1166,56 @@ End Function
 ' (osirocene palete) i jednom pod novom.
 Public Function PrijemnicaUpisi(ByVal p As Object, ByRef poruke As String) As String
     Dim res As String, defHlad As String, palStatus As String, errDesc As String
-    Dim ispravka As Boolean
+    Dim ispravka As Boolean, greska As String
+    Dim ambErrNum As Long, manjak As Double
     On Error GoTo EH
     poruke = ""
 
     ispravka = (Len(S(p, "ispravkaID")) > 0)
     If ispravka Then SetPaletizeSkip True
 
-    res = SavePrijemnicaMulti_TX( _
-        datum:=CDate(p("datum")), _
-        kupacID:=S(p, "kupacID"), _
-        vozacID:=S(p, "vozacID"), _
-        brojPrij:=S(p, "brDok"), _
-        brojZbirne:=S(p, "brojZbirne"), _
-        vrstaVoca:=S(p, "vrsta"), _
-        sortaVoca:=S(p, "sorta"), _
-        kolicinaI:=D(p, "kolicinaI"), _
-        cenaI:=D(p, "cenaI"), _
-        tipAmb:=S(p, "tipAmb"), _
-        kolAmb:=L(p, "kolAmb"), _
-        kolAmbVracena:=L(p, "kolAmbVracena"), _
-        hasKlasaII:=B(p, "dveKlase"), _
-        kolicinaII:=D(p, "kolicinaII"), _
-        cenaII:=D(p, "cenaII"), _
-        kolAmbII:=L(p, "kolAmbII"), _
-        brutoKgI:=D(p, "brutoKgI"), _
-        brutoKgII:=D(p, "brutoKgII"))
+    res = PrjUpisPoziv(p, -1, ambErrNum, greska)
+
+    ' POTVRDA DEFICITA: pitanje operateru, ne greska (6.5, AMB-10-ODL-8).
+    '
+    ' Kupac koji vrati VISE praznih gajbi nego sto po knjizi drzi nije kvar nego
+    ' redovan slucaj -- visak ulazi u opticaj kao tudja ambalaza. Isti protokol i
+    ' isti obrazac kao na otkupu (modOtkupUnos) i na F7 (modNovacUnos): slucaj se
+    ' prepoznaje po BROJU greske jer je tekst prevodiv, manjak se cita SADA jer se
+    ' stanje izmedju pitanja i odgovora moglo promeniti, a ekran ZADRZAVA podatke
+    ' pa operater ne unosi nista ponovo.
+    '
+    ' Manjak se meri na NOZI POVRATA: puna noga polazi od vozaca, a njegov manjak
+    ' je po ODL-8 tvrdo odbijen i potvrda tamo ne postoji.
+    '
+    ' Pitanje ide kroz modOtkupUnos.PotvrdiManjakAmbalaze (KI-015): u test
+    ' rezimu ga belezi i odgovara "Ne", pa MsgBox u run_vba prolazu vise ne visi.
+    If Len(res) = 0 And ambErrNum = AMB_ERR_POTVRDA_DEFICITA Then
+        manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KUPAC, S(p, "kupacID"), _
+                                                S(p, "tipAmb"), _
+                                                CDbl(L(p, "kolAmbVracena")))
+        If manjak > 0 Then
+            If modOtkupUnos.PotvrdiManjakAmbalaze(AMB_NALOG_KUPAC, manjak) Then
+                res = PrjUpisPoziv(p, manjak, ambErrNum, greska)
+            End If
+        End If
+    End If
 
     ' Toggle se vraca UVEK, i kad upis nije uspeo: ostavljen ukljucen bi
-    ' sledecoj prijemnici tiho preskocio paletizaciju.
+    ' sledecoj prijemnici tiho preskocio paletizaciju. Stoji POSLE ponovnog
+    ' poziva -- izmedju dva pokusaja mora da ostane ukljucen, jer je ispravka
+    ' ista roba i drugi poziv ne sme da je paletizuje.
     SetPaletizeSkip False
 
-    If Len(res) = 0 Then Exit Function
+    ' KI-020 (S6 korak 6, odluka 4): pisac koji odbije iz razloga koji validator
+    ' ne vidi (npr. vozac nema gajbe, AMB-INV-07) vraca RAZLOG. Do koraka 6 je
+    ' poruke ostajao prazan, pa je operater video samo "Greska pri cuvanju" bez
+    ' ijednog "zasto". Odbijena potvrda manjka razlog ne nosi: to je izbor
+    ' operatera, ne kvar.
+    If Len(res) = 0 Then
+        If Len(greska) > 0 Then poruke = poruke & greska
+        Exit Function
+    End If
 
     ' Prevezivanje paleta ide ODMAH posle upisa, pre stampe: stampa je
     ' best-effort i sme da padne, a palete ne smeju da ostanu osirocene.
@@ -1182,10 +1233,11 @@ Public Function PrijemnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
         On Error GoTo EH
     End If
 
-    ' Status palete (Klasa I = prvi token rezultata) - citanje vec iskomitovanih
-    ' tabela, pa ide u napomene uz potvrdu upisa.
+    ' Status palete DOKUMENTA (od S6 koraka 2 pisac vraca jedan ID, a palete
+    ' svih klasa stoje pod njim) - citanje vec iskomitovanih tabela, pa ide u
+    ' napomene uz potvrdu upisa.
     On Error Resume Next
-    palStatus = GetPaletaStatusForPrijemnica(Split(res, " + ")(0))
+    palStatus = GetPaletaStatusForPrijemnica(res)
     Err.Clear
     On Error GoTo EH
     If Len(palStatus) > 0 Then poruke = poruke & palStatus & vbCrLf
@@ -1196,7 +1248,37 @@ EH:
     errDesc = Err.description
     SetPaletizeSkip False        ' toggle ne sme da ostane ukljucen ni na gresci
     LogErr "modDokUnos.PrijemnicaUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("DOKUNOS_ERR_GRESKA_UNOS_PRIJ") & errDesc
+End Function
+
+
+' Jedan poziv pisca prijemnice. Postoji zato da protokol potvrde deficita ne
+' duplira osamnaest imenovanih argumenata -- ponovljen poziv se razlikuje SAMO po
+' potvrdjenom manjku. outGreska je razlog odbijanja pisca (KI-020).
+Private Function PrjUpisPoziv(ByVal p As Object, ByVal potvrda As Double, _
+                              ByRef outErrNum As Long, ByRef outGreska As String) As String
+    PrjUpisPoziv = SavePrijemnicaMulti_TX( _
+        datum:=CDate(p("datum")), _
+        kupacID:=S(p, "kupacID"), _
+        vozacID:=S(p, "vozacID"), _
+        brojPrij:=S(p, "brDok"), _
+        brojZbirne:=S(p, "brojZbirne"), _
+        vrstaVoca:=S(p, "vrsta"), _
+        sortaVoca:=S(p, "sorta"), _
+        kolicinaI:=D(p, "kolicinaI"), _
+        cenaI:=D(p, "cenaI"), _
+        tipAmb:=S(p, "tipAmb"), _
+        kolAmb:=L(p, "kolAmb"), _
+        kolAmbVracena:=L(p, "kolAmbVracena"), _
+        hasKlasaII:=B(p, "dveKlase"), _
+        kolicinaII:=D(p, "kolicinaII"), _
+        cenaII:=D(p, "cenaII"), _
+        kolAmbII:=L(p, "kolAmbII"), _
+        brutoKgI:=D(p, "brutoKgI"), _
+        brutoKgII:=D(p, "brutoKgII"), _
+        potvrdaDeficita:=potvrda, _
+        outErrNum:=outErrNum, _
+        outGreska:=outGreska)
 End Function
 
 ' Nova prijemnica preuzima palete stare (bez ponovne paletizacije - ista
@@ -1228,26 +1310,22 @@ Private Sub PreveziPaleteIspravke(ByVal p As Object, ByVal res As String, _
     noviBroj = Trim$(S(p, "brDok"))
     If Len(noviBroj) = 0 Then _
         noviBroj = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
-                   Trim$(Split(res, " + ")(0)), COL_PRJ_BROJ)))
+                   Trim$(res), COL_PRJ_BROJ)))
 
     ' IZVOR SE SALJE PO IDENTITETU. Correction context nosi PK stornirane
-    ' prijemnice; iz njega se cita njena GENERACIJA, pa writer bira bas njene
-    ' paletne stavke. Bez toga bi izbor isao po broju - a broj se racuna po
-    ' kupcu, pa bi dokument drugog kupca istog broja bio zahvacen.
+    ' prijemnice, pa writer bira bas njene paletne stavke. Bez toga bi izbor isao
+    ' po broju - a broj se racuna po kupcu, pa bi dokument drugog kupca istog
+    ' broja bio zahvacen. Do S6 koraka 8 se iz PK-a citala generacija (1 : 1).
     '
     ' Kapija nad jednoznacnoscu broja vise nije ovde: ista provera sada stoji u
     ' writeru i vazi za svakog pozivaoca, ukljucujuci legacy formu.
-    Dim stariGen As String
-    stariGen = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, _
-                              modStornoDok.StorniraniDocID(cid))
+    Dim stariID As String
+    stariID = Trim$(modStornoDok.StorniraniDocID(cid))
 
     ' CILJ SE TAKODJE SALJE PO IDENTITETU. Nova prijemnica je upravo upisana, pa
     ' joj je PK poznat -- nema razloga da se cilj trazi po broju koji je labela.
-    Dim noviGen As String
-    noviGen = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(Split(res, " + ")(0)))
-
     relOk = ReassignPaleteToPrijemnica_TX(stariBroj, noviBroj, relWarn, True, gajbDiff, _
-                                          stariGen, noviGen)
+                                          stariID, Trim$(res))
     If relOk Then
         poruke = poruke & Poruka("DOKUNOS_MSG_PALETE_PREVEZANE") & " " & _
                  stariBroj & " " & ChrW(8594) & " " & noviBroj & vbCrLf
@@ -1256,7 +1334,8 @@ Private Sub PreveziPaleteIspravke(ByVal p As Object, ByVal res As String, _
         If Len(cid) > 0 Then
             modStornoContext.CompleteCorrectionContext cid, "", noviBroj, _
                 "Ispravka prijemnice: palete prevezane na " & noviBroj & "."
-            StampIspravkaTrace TBL_PRIJEMNICA, COL_PRJ_BROJ, noviBroj, stariBroj, cid
+            StampIspravkaTrace TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(res), _
+                               modStornoDok.StorniraniDocID(cid), noviBroj, stariBroj, cid
         End If
     Else
         LogRelinkFailure stariBroj, noviBroj, relWarn
@@ -1285,100 +1364,11 @@ Private Sub OznaciRucnuIspravku(ByVal cid As String, ByVal razlog As String)
 End Sub
 
 '--------------------------------------------------------- ISPRAVKA
-' Zavrsetak ispravke posle snimanja zamenskog dokumenta.
-'
-' Radi SAMO nad PERSISTENTNOM ispravkom na cekanju (tblStornoVeza), ne nad
-' stanjem sesije. Razlog vazi i sad kad F8 ume da pokrene ispravku: storno
-' se pokrece u jednom rezimu (F8), a zamenski dokument se unosi u drugom
-' (F2/F3/F7), i izmedju to dvoje operater sme da zatvori Excel. Persistentan
-' zapis to prezivljava, promenljiva u modulu ne bi.
-'
-' SAFE-STOP kao u legacy: dve ili vise otvorenih ispravki istog tipa = ne
-' biraj naslepo, nego pusti operatera kroz "Osiroceni dokumenti".
-'
-' PRIJEMNICA NIJE U OVOM SELECT-u namerno: njena ispravka nije samo zatvaranje
-' konteksta nego i prevezivanje paleta, koje mora da krene PRE upisa
-' (SetPaletizeSkip). Zato ima svoj tok - PrepoznajIspravkuPrijemnice u
-' PrijemnicaValidiraj i PreveziPaleteIspravke u PrijemnicaUpisi.
-'
-' PUBLIC je zbog modNovacUnos (revers, F7): pravilo "posle zamenskog dokumenta
-' zavrsi ispravku" je isto za sva tri tipa, pa se zove odavde umesto da se
-' prepise u treci modul.
-'
-' stanicaID / datum nosi samo revers: pisac vraca samo uspeh, pa
-' CompleteReversIspravka ReversID zamene nalazi po (broj, stanica, dan) --
-' zamena sme na drugu stanicu ili drugi dan. Ostali tipovi ih ne citaju.
-Public Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, _
-                             ByRef poruke As String, _
-                             Optional ByVal stanicaID As String = "", _
-                             Optional ByVal datum As Variant = Empty)
-    Dim cnt As Long, cid As String, res As Object
-    On Error GoTo EH
-    newBroj = Trim$(newBroj)
-    If Len(newBroj) = 0 Then Exit Sub
-
-    cnt = modStornoContext.CountPendingCorrectionsByDocType(docType, SV_MODE_ISPRAVKA)
-    If cnt = 0 Then Exit Sub                    ' nema ispravke -> obican unos
-    If cnt > 1 Then
-        poruke = poruke & Poruka("DOKUNOS_MSG_VISE_ISPRAVKI") & vbCrLf
-        Exit Sub
-    End If
-
-    cid = modStornoContext.FindLatestPending(docType, SV_MODE_ISPRAVKA)
-    If Len(cid) = 0 Then Exit Sub
-
-    ' Potvrda je obavezna: operater je mozda napustio ispravku pa uneo DRUGI
-    ' dokument - automatsko vezivanje bi tada spojilo pogresna dva.
-    If MsgBox(ZavrsiIspravkuPitanje(docType, cid, newBroj, stanicaID, datum), _
-              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
-
-    ' ZBIRNE VISE NEMA OVDE (S4-3a). Ispravka zbirne je bila DVOKORAK -- storno
-    ' sada, zamena kasnije -- pa je ovo bio "kasnije". ZBR-KANON-03 taj mod
-    ' ukida; do S6 zbirna se ne ispravlja nego stornira (DUPLI/PONISTENJE).
-    Select Case docType
-        Case FLOW_DOC_REVERS:     Set res = CompleteReversIspravka(cid, newBroj, stanicaID, datum)
-        Case Else: Exit Sub
-    End Select
-
-    If res Is Nothing Then Exit Sub
-    If CBool(res("success")) Then
-        poruke = poruke & Poruka("DOKUNOS_MSG_ISPRAVKA_OK") & " " & CStr(res("message")) & vbCrLf
-    Else
-        poruke = poruke & Poruka("DOKUNOS_MSG_ISPRAVKA_NIJE") & " " & CStr(res("message")) & vbCrLf
-    End If
-    Exit Sub
-EH:
-    LogErr "modDokUnos.ZavrsiIspravkuAko"
-End Sub
-
-' Pitanje pre vezivanja zamene za ispravku na cekanju. Ispravka se bira po TIPU
-' (jedna otvorena ispravka tog tipa), pa je ovo pitanje jedina kapija protiv
-' vezivanja pogresnog dokumenta. Za revers zato nosi i STANICU i DAN oba
-' dokumenta: broj reversa je jedinstven tek u nizu (stanica, dan), pa bi
-' "'45' -> '45'?" izgledalo isto i kad je snimljen tudj revers istog broja na
-' drugoj stanici -- a jedno "Da" bi zatvorilo pogresnu ispravku.
-' Stari revers se cita iz traga (OldDocID = ReversID; stanica i dan iz njegovih
-' nogu Stanica), novi iz snimanja.
-' Za ostale tipove tekst je nepromenjen. PUBLIC zbog testa: MsgBox se ne meri.
-Public Function ZavrsiIspravkuPitanje(ByVal docType As String, ByVal cid As String, _
-                                      ByVal newBroj As String, _
-                                      Optional ByVal stanicaID As String = "", _
-                                      Optional ByVal datum As Variant = Empty) As String
-    Dim oldBroj As String, oldID As String, oldOpis As String, newOpis As String
-    Dim oldSt As String, oldDan As Long
-    oldBroj = modStornoContext.GetCorrectionField(cid, COL_SV_OLD_BROJ)
-    If docType = FLOW_DOC_REVERS Then
-        oldID = Trim$(modStornoContext.GetCorrectionField(cid, COL_SV_OLD_DOCID))
-        If Len(oldID) > 0 Then
-            If Len(modStorno.ReversStanicaDan(oldID, oldSt, oldDan)) = 0 Then _
-                oldOpis = ReversOpis(oldSt, CDate(oldDan))
-        End If
-        newOpis = ReversOpis(stanicaID, datum)
-    End If
-    ZavrsiIspravkuPitanje = Poruka("DOKUNOS_ASK_ISPRAVKA_1") & " '" & oldBroj & "'" & oldOpis & "." & _
-                            vbCrLf & vbCrLf & _
-                            Poruka("DOKUNOS_ASK_ISPRAVKA_2") & " '" & Trim$(newBroj) & "'" & newOpis & "?"
-End Function
+' ZavrsiIspravkuAko (zavrsetak ispravke pri snimanju zamene) i njegovo pitanje
+' su obrisani u 10d. Poslednji tip koji ga je koristio bio je revers, a njegova
+' ispravka je od 10d JEDAN potez (modAmbalaza.IspravkaReversa_TX) -- nema
+' "druge faze" koju bi snimanje zatvaralo. Prijemnica ima svoj tok
+' (PrepoznajIspravkuPrijemnice / PreveziPaleteIspravke).
 
 ' " (naziv / StanicaID, dd.mm.yyyy)" -- ID ostaje i uz naziv, jer dve stanice
 ' mogu imati slican naziv. "" kad stanica nije poznata.

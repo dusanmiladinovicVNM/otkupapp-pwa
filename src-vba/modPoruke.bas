@@ -130,6 +130,8 @@ Private Sub UpsertPoruke01(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOK_ERR_GRESKA", "Gre" & ChrW(353) & "ka:"
     UpsertRow lo, existing, "DOK_MSG_UNESITE_AMBALAZU_ILI", "Unesite ambala" & ChrW(382) & "u ili novac za OM ulaz."
     UpsertRow lo, existing, "DOK_MSG_IZABERITE_TIP_AMBALAZE", "Izaberite tip ambala" & ChrW(382) & "e!"
+    ' KI-021: ide iza DOK_MSG_TIP_AMBALAZE i otkucanog tipa, kao DOK_MSG_NEMA_UNETU_TEZINU.
+    UpsertRow lo, existing, "DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU", "' ne postoji u " & ChrW(353) & "ifarniku ambala" & ChrW(382) & "e"
     UpsertRow lo, existing, "DOK_MSG_NEDOVOLJNO_AVANSA_RASPOLOZIVO", "Nedovoljno OM avansa! Raspolo" & ChrW(382) & "ivo:"
     UpsertRow lo, existing, "DOK_MSG_GRESKA_PRI_CUVANJU_2", "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju OM ulaza. Promene su vra" & ChrW(263) & "ene."
     UpsertRow lo, existing, "DOK_MSG_VALIDACIJA_NIJE_PROSLA", "Validacija nije pro" & ChrW(353) & "la. Proverite kg i ambala" & ChrW(382) & "u (razlika mora biti 0)."
@@ -273,7 +275,7 @@ Private Sub UpsertPoruke02(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "SETUP_MSG_BANKARSKI_FOLDERI_PODESENI", "Bankarski folderi su pode" & ChrW(353) & "eni."
     UpsertRow lo, existing, "SETUP_ERR_GRESKA_PRI_PODESAVANJU", "Gre" & ChrW(353) & "ka pri pode" & ChrW(353) & "avanju bankarskih foldera:"
     UpsertRow lo, existing, "STM_ERR_GRESKA_PRI_EXPORTU", "Gre" & ChrW(353) & "ka pri exportu parcela:"
-    UpsertRow lo, existing, "DOK_ERR_NEMA_AMBALAZE_NOVCA", "Nema ambala" & ChrW(382) & "e ni novca za " & ChrW(269) & "uvanje."
+    UpsertRow lo, existing, "DOK_ERR_NEMA_NOVCA", "Nema novca za " & ChrW(269) & "uvanje."
     UpsertRow lo, existing, "SEF_MSG_SENDING_FAKTURA_TRENUTNO", "- SENDING: Faktura se trenutno " & ChrW(353) & "alje."
     UpsertRow lo, existing, "SEF_MSG_SENT_FAKTURA_USPESNO", "- SENT: Faktura uspe" & ChrW(353) & "no primljena na SEF."
     UpsertRow lo, existing, "SEF_MSG_REJECTED_GRESKA_PROVERI", "- REJECTED: Gre" & ChrW(353) & "ka! Proveri 'Poslednja gre" & ChrW(353) & "ka'."
@@ -785,12 +787,6 @@ Private Sub UpsertPoruke04(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_ZBR_IZDATA", "Zbirna je izdata " & ChrW(8212) & " izdato se ne menja, nego se stornira i unese nova."
     UpsertRow lo, existing, "OTKUI_MSG_ZBIRNA_AKTIVNA", "Aktivna zbirna:"
     UpsertRow lo, existing, "OTKUI_HD_OSNOV", "OSNOV"
-    UpsertRow lo, existing, "OTKUI_OSN_REV_IZDATO", "Revers " & ChrW(8212) & " izdato"
-    UpsertRow lo, existing, "OTKUI_OSN_REV_POVRAT", "Revers " & ChrW(8212) & " povrat"
-    UpsertRow lo, existing, "OTKUI_OSN_REV_OM_IZDATO", "Revers " & ChrW(8212) & " OM izdato"
-    UpsertRow lo, existing, "OTKUI_OSN_REV_OM_PRIJEM", "Revers " & ChrW(8212) & " OM prijem"
-    UpsertRow lo, existing, "OTKUI_OSN_OTKUP_PUNE", "Uz otkup " & ChrW(8212) & " pune"
-    UpsertRow lo, existing, "OTKUI_OSN_OTKUP_PRAZNE", "Uz otkup " & ChrW(8212) & " prazne"
     UpsertRow lo, existing, "OTKUI_HD_SMER", "SMER"
     UpsertRow lo, existing, "OTKUI_HD_PLACENO", "PLA" & ChrW(262) & "ENO"
     UpsertRow lo, existing, "OTKUI_HD_OSTATAK", "OSTATAK"
@@ -798,6 +794,7 @@ Private Sub UpsertPoruke04(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_PAY_DELIMICNO", "Delimi" & ChrW(269) & "no"
     UpsertRow lo, existing, "OTKUI_PAY_NEPLACENO", "Nepla" & ChrW(263) & "eno"
     UpsertRow lo, existing, "OTKUI_PAY_NEFAKT", "Nefakturisano"
+    UpsertRow lo, existing, "OTKUI_PAY_DELIM_FAKT", "Delim. fakturisano"
     UpsertRow lo, existing, "OTKUI_HD_VRSTA", "VRSTA"
     UpsertRow lo, existing, "OTKUI_HD_SORTA", "SORTA"
     UpsertRow lo, existing, "OTKUI_HD_KLASA", "KLASA"
@@ -835,6 +832,26 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_SEG_REV_PRI_KOOP", "Prijem koop."
     UpsertRow lo, existing, "OTKUI_SEG_REV_IZD_OM", "Izdato OM"
     UpsertRow lo, existing, "OTKUI_SEG_REV_PRI_OM", "Prijem od OM"
+    UpsertRow lo, existing, "OTKUI_SEG_REV_POVRAT_KUP", "Povrat kupca"
+    UpsertRow lo, existing, "OTKUI_SEG_REV_POZAJMICA_KUP", "Pozajmica"
+    ' AMB-10-ODL-34: nabavka i otpis, u svom okviru ispod smerova reversa.
+    UpsertRow lo, existing, "OTKUI_FLD_SMER_AMB", "NABAVKA I OTPIS"
+    UpsertRow lo, existing, "OTKUI_SEG_REV_NABAVKA", "Nabavka"
+    UpsertRow lo, existing, "OTKUI_SEG_REV_OTPIS", "Otpis"
+    UpsertRow lo, existing, "OTKUI_FLD_NAPOMENA", "Napomena"
+    UpsertRow lo, existing, "OTKUI_AMBD_REVERS", "Revers"
+    UpsertRow lo, existing, "OTKUI_AMBD_REVERS_PART", "Revers kupca"
+    UpsertRow lo, existing, "OTKUI_AMBD_NABAVKA", "Nabavka"
+    UpsertRow lo, existing, "OTKUI_AMBD_OTPIS", "Otpis"
+    UpsertRow lo, existing, "OTKUI_VK_IZDATA", "Izdato"
+    UpsertRow lo, existing, "OTKUI_VK_POVRAT", "Povrat"
+    UpsertRow lo, existing, "OTKUI_VK_INTERNO", "Interno"
+    UpsertRow lo, existing, "OTKUI_VK_UZ_ROBU", "Uz robu"
+    UpsertRow lo, existing, "OTKUI_VK_ULAZ_TUDJE", "Ulaz tudje"
+    UpsertRow lo, existing, "OTKUI_VK_VRACANJE_TUDJE", "Vracanje tudje"
+    UpsertRow lo, existing, "OTKUI_VK_NABAVKA", "Nabavka"
+    UpsertRow lo, existing, "OTKUI_VK_OTPIS", "Otpis"
+    UpsertRow lo, existing, "OTKUI_VK_POZAJMICA", "Pozajmica"
     UpsertRow lo, existing, "OTKUI_CTX_VRSTA", "Jabuka"
     UpsertRow lo, existing, "OTKUI_CTX_SORTA", "Idared"
     UpsertRow lo, existing, "OTKUI_CTX_OM", "OM Zaovine"
@@ -965,13 +982,14 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUNOS_ERR_TARA_VECA", "je ve" & ChrW(263) & "a ili jednaka bruto te" & ChrW(382) & "ini " & ChrW(8212) & " proveri broj gajbi"
     UpsertRow lo, existing, "OTKUNOS_ASK_PARCELA_1", "Kultura parcele"
     UpsertRow lo, existing, "OTKUNOS_ASK_PARCELA_2", "ne odgovara izabranoj vrsti"
-    UpsertRow lo, existing, "OTKUNOS_MSG_NIJE_HLADNJACA", "Napomena: ovaj unos nije autohladnja" & ChrW(269) & "a lanac " & ChrW(8212) & " palete stornirane prijemnice NISU prevezane:"
+    UpsertRow lo, existing, "AMB_ASK_DEFICIT_1", "Kooperant nema toliko na" & ChrW(353) & "ih gajbi."
+    UpsertRow lo, existing, "AMB_ASK_DEFICIT_2", "Manjak ulazi u opticaj kao TU" & ChrW(272) & "A ambala" & ChrW(382) & "a " & ChrW(8212) & " firma ga duguje kooperantu:"
+    ' KI-015: isto pitanje za KUPCA (kupcev revers, prijemnica) -- ogledalo
+    ' kooperanta, AMBALAZA.md 6.4: manjak pokriva ULAZ_TUDJE na nalog kupca.
+    UpsertRow lo, existing, "AMB_ASK_DEFICIT_KUP_1", "Kupac nema toliko na" & ChrW(353) & "ih gajbi."
+    UpsertRow lo, existing, "AMB_ASK_DEFICIT_KUP_2", "Manjak ulazi u opticaj kao TU" & ChrW(272) & "A ambala" & ChrW(382) & "a " & ChrW(8212) & " firma ga duguje kupcu:"
     UpsertRow lo, existing, "OTKUNOS_ERR_BROJ_ZAUZET", "Taj broj otkupnog lista je ve" & ChrW(263) & " izdat na ovom otkupnom mestu tog dana. Storno ne osloba" & ChrW(273) & "a broj " & ChrW(8212) & " ispravka dobija NOV broj. Postoje" & ChrW(263) & "i dokument:"
     UpsertRow lo, existing, "OTKUNOS_ERR_KULTURA", "Izabrana vrsta i sorta se ne prevode u ta" & ChrW(269) & "no jednu kulturu iz " & ChrW(353) & "ifarnika:"
-    UpsertRow lo, existing, "OTKUNOS_MSG_ISPRAVKA_PAUZIRANA", "Ispravka hladnja" & ChrW(269) & "kog dokumenta je privremeno nedostupna: nizvodni lanac je pauziran, pa palete ne bi imale gde da se prevezu. Otkup NIJE unet. Storniran dokument:"
-    UpsertRow lo, existing, "OTKUNOS_MSG_NEMA_PRIJEMNICE", "Novi lanac nije kreirao prijemnicu " & ChrW(8212) & " palete NISU prevezane."
-    UpsertRow lo, existing, "OTKUNOS_MSG_PALETE_PREVEZANE", "Palete prevezane:"
-    UpsertRow lo, existing, "OTKUNOS_MSG_PALETE_NISU", ChrW(10007) & " Auto-prevezivanje paleta nije uspelo:"
     UpsertRow lo, existing, "OTKUI_ASK_PREKORACENJE_1", "Blok prelazi ostatak otpremnice za"
     UpsertRow lo, existing, "OTKUI_ASK_PREKORACENJE_2", ChrW(8212) & " ipak upisati?"
     UpsertRow lo, existing, "OTKUNOS_MSG_UPISAN", ChrW(10003) & " Otkupni list sa" & ChrW(269) & "uvan:"
@@ -984,7 +1002,6 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_ISPRAVKA_PAUZIRANA", "Napomena: ISPRAVKA otpremnice je PAUZIRANA dok otpremnica ne pre" & ChrW(273) & "e na nov model. Ova otpremnica NIJE vezana za storniranu " & ChrW(8212) & " ispravka i dalje " & ChrW(269) & "eka na ekranu Oporavak."
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_NACRT", "Otpremnica je otvorena kao NACRT. Izda" & ChrW(263) & "e se kad joj se vezu otkupni blokovi."
     UpsertRow lo, existing, "DOKUNOS_MSG_OTP_NACRT_IZMENJEN", "Nacrt otpremnice je izmenjen."
-    UpsertRow lo, existing, "DOKUNOS_ERR_PRIJEMNICA_PAUZIRANA", "Unos prijemnice je PAUZIRAN dok prijemnica ne pre" & ChrW(273) & "e na nov model. Prijemnica tra" & ChrW(382) & "i zbirnu, a zbirna se jo" & ChrW(353) & " ne mo" & ChrW(382) & "e uneti."
     UpsertRow lo, existing, "PRINT_OTP_NIJE_IZDATA", "Otpremnica jo" & ChrW(353) & " nije izdata " & ChrW(8212) & " nacrt se ne " & ChrW(353) & "tampa. Otpremnica se " & ChrW(353) & "tampa kad je izdata, sa cenama njenih otkupnih blokova."
     UpsertRow lo, existing, "STORNO_ERR_OTP_IZVOR_ZBIRNE", "Otpremnica je izvor aktivne zbirne " & ChrW(8212) & " storno je pauziran dok zbirna ne pre" & ChrW(273) & "e na nov model. Zbirna:"
     UpsertRow lo, existing, "STORNO_ERR_OTK_IZVOR_OTP", "Otkup je u sastavu aktivne otpremnice " & ChrW(8212) & " storno izvora nije dozvoljen dok je otkup u njenom sastavu. Otpremnica:"
@@ -1002,7 +1019,6 @@ End Sub
 Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBIRNA_NEMA_1", ChrW(10007) & " Zbirna"
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBIRNA_NEMA_2", "ne postoji u sistemu " & ChrW(8212) & " prvo unesi zbirnu otpremnicu."
-    UpsertRow lo, existing, "DOKUNOS_ASK_ZBIRNA_NEMA", "Ipak snimiti prijemnicu sa ovim brojem zbirne?"
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_AKTIVNA", ChrW(10007) & " Pod tim brojem ve" & ChrW(263) & " postoji aktivna zbirna " & ChrW(8212) & " storniraj je pa unesi ispravku."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_TUDJ", ChrW(10007) & " Taj broj je ve" & ChrW(263) & " pripadao drugom voza" & ChrW(269) & "u ili kupcu " & ChrW(8212) & " izaberi drugi broj."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_STORNIRAN", ChrW(10007) & " Taj broj je ve" & ChrW(263) & " izdat pa storniran " & ChrW(8212) & " storno ne osloba" & ChrW(273) & "a broj. Ispravku unesi pod NOVIM brojem."
@@ -1020,16 +1036,36 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_DVOSMISLEN", ChrW(10007) & " Pod tim brojem postoji vi" & ChrW(353) & "e aktivnih zbirnih " & ChrW(8212) & " ne mo" & ChrW(382) & "e se utvrditi na koju se prijemnica ve" & ChrW(382) & "e."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_TUDJ", ChrW(10007) & " Zbirna pod tim brojem pripada drugom voza" & ChrW(269) & "u ili kupcu " & ChrW(8212) & " proveri broj zbirne."
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_ISTORIJA", ChrW(10007) & " Taj broj su ranije dr" & ChrW(382) & "ala dva vlasnika " & ChrW(8212) & " vezivanje po broju bi moglo da zahvati tu" & ChrW(273) & "i dokument."
+    ' PRJ-ZBR-01 (S6 korak 6): prijemnica se vezuje samo na IZDATU zbirnu.
+    UpsertRow lo, existing, "DOKUNOS_ERR_ZBR_P_NIJE_IZDATA", ChrW(10007) & " Zbirna pod tim brojem jo" & ChrW(353) & " nije izdata " & ChrW(8212) & " izdaj je u F3, pa unesi prijemnicu."
+    ' A2 t. 4 (S6 korak 8, KI-051): broj prijemnice hladnjace je nas niz, storno ga ne oslobadja.
+    UpsertRow lo, existing, "DOKUNOS_ERR_PRJ_BROJ_STORNIRAN", ChrW(10007) & " Taj broj je nosila stornirana prijemnica hladnja" & ChrW(269) & "e " & ChrW(8212) & " storno ne osloba" & ChrW(273) & "a broj. Uzmi predlo" & ChrW(382) & "eni broj."
+    ' PRJ-ZBR-02 (KI-047): vrednost zbirne se dopisuje iza teksta (PrijemnicaRobaRazlog).
+    UpsertRow lo, existing, "DOKUNOS_ERR_PRJ_VRSTA_ZBIRNE", ChrW(10007) & " Vrsta vo" & ChrW(263) & "a prijemnice mora biti ista kao na zbirnoj:"
+    UpsertRow lo, existing, "DOKUNOS_ERR_PRJ_SORTA_ZBIRNE", ChrW(10007) & " Sorta prijemnice mora biti ista kao na zbirnoj:"
+    UpsertRow lo, existing, "DOKUNOS_ERR_PRJ_ZBIRNA_BEZ_ROBE", ChrW(10007) & " Zbirna nema vrstu vo" & ChrW(263) & "a " & ChrW(8212) & " proveri zbirnu u F3."
     UpsertRow lo, existing, "DOKUNOS_ASK_DUPLA_PRIJ_1", "PA" & ChrW(381) & "NJA: zbirna"
     UpsertRow lo, existing, "DOKUNOS_ASK_DUPLA_PRIJ_2", "ve" & ChrW(263) & " ima aktivnu prijemnicu"
     UpsertRow lo, existing, "DOKUNOS_ASK_DUPLA_PRIJ_3", "Pravilo je 1 zbirna = 1 prijemnica, pa ovo li" & ChrW(269) & "i na DUPLI UNOS. Ipak snimiti?"
     UpsertRow lo, existing, "DOKUNOS_MSG_UPISANA_ZBR", ChrW(10003) & " Zbirna sa" & ChrW(269) & "uvana:"
     UpsertRow lo, existing, "DOKUNOS_MSG_UPISANA_PRIJ", ChrW(10003) & " Prijemnica sa" & ChrW(269) & "uvana:"
+    ' KI-015: neuspeh upisa po vrsti, kao uspeh iznad (PorukaUpisano). Otkup
+    ' ostaje OTKUP_ERR_GRESKA_PRI_UNOSU.
+    UpsertRow lo, existing, "DOKUNOS_ERR_GRESKA_UNOS_OTP", "Gre" & ChrW(353) & "ka pri unosu otpremnice:"
+    UpsertRow lo, existing, "DOKUNOS_ERR_GRESKA_UNOS_ZBR", "Gre" & ChrW(353) & "ka pri unosu zbirne:"
+    UpsertRow lo, existing, "DOKUNOS_ERR_GRESKA_UNOS_PRIJ", "Gre" & ChrW(353) & "ka pri unosu prijemnice:"
     ' --- unos novca i ambalaze (modNovacUnos): isplate F5, uplate F6, reversi F7 ---
     UpsertRow lo, existing, "NOVUNOS_ERR_NOVAC", ChrW(10007) & " Unesi iznos ve" & ChrW(263) & "i od nule"
     UpsertRow lo, existing, "NOVUNOS_ERR_KOL_AMB", ChrW(10007) & " Unesi koli" & ChrW(269) & "inu ambala" & ChrW(382) & "e"
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER", ChrW(10007) & " Izaberi smer reversa " & ChrW(8212) & " bez njega se ne zna ko koga zadu" & ChrW(382) & "uje."
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KOOP", ChrW(10007) & " Za izdavanje/prijem ambala" & ChrW(382) & "e izaberi KOOPERANTA kao partnera."
+    UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KUP", ChrW(10007) & " Povrat praznih od kupca tra" & ChrW(382) & "i KUPCA kao partnera."
+    UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KUP_POZ", ChrW(10007) & " Pozajmica ambala" & ChrW(382) & "e od kupca tra" & ChrW(382) & "i KUPCA kao partnera."
+    ' Otpis (AMB-10-ODL-34): nalog, razlog i saldo; saldu se dopisuje broj iza teksta.
+    UpsertRow lo, existing, "NOVUNOS_ERR_OTPIS_NALOG", ChrW(10007) & " Otpis tra" & ChrW(382) & "i nalog " & ChrW(8212) & " izaberi partnera (kooperant, OM ili kupac) ili voza" & ChrW(269) & "a."
+    UpsertRow lo, existing, "NOVUNOS_ERR_OTPIS_RAZLOG", ChrW(10007) & " Upi" & ChrW(353) & "i razlog otpisa (lom, gubitak) " & ChrW(8212) & " ide na zapisnik."
+    UpsertRow lo, existing, "NOVUNOS_ERR_OTPIS_SALDO", ChrW(10007) & " Ne mo" & ChrW(382) & "e se otpisati vi" & ChrW(353) & "e nego " & ChrW(353) & "to nalog dr" & ChrW(382) & "i. Stanje naloga:"
+    UpsertRow lo, existing, "NOVUNOS_ERR_BROJ_KUPCA", ChrW(10007) & " Upi" & ChrW(353) & "i broj kup" & ChrW(269) & "evog reversa " & ChrW(8212) & " na" & ChrW(353) & " se ne predla" & ChrW(382) & "e, jer je dokument njegov."
     UpsertRow lo, existing, "NOVUNOS_ERR_VOZAC_OM", ChrW(10007) & " Revers firma" & ChrW(8212) & "OM ide preko voza" & ChrW(269) & "a " & ChrW(8212) & " izaberi voza" & ChrW(269) & "a."
     UpsertRow lo, existing, "NOVUNOS_ERR_VECI_OD_OSTATKA", ChrW(10007) & " Iznos je ve" & ChrW(263) & "i od neispla" & ChrW(263) & "enog ostatka bloka:"
     UpsertRow lo, existing, "NOVUNOS_ERR_VECI_OD_FAKTURE", ChrW(10007) & " Uplata je ve" & ChrW(263) & "a od preostalog iznosa fakture:"
@@ -1055,6 +1091,15 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "NOVUNOS_MSG_UPISANA_ISPL", ChrW(10003) & " Isplata sa" & ChrW(269) & "uvana:"
     UpsertRow lo, existing, "NOVUNOS_MSG_UPISANA_UPL", ChrW(10003) & " Uplata sa" & ChrW(269) & "uvana:"
     UpsertRow lo, existing, "NOVUNOS_MSG_UPISAN_REV", ChrW(10003) & " Revers sa" & ChrW(269) & "uvan:"
+    ' KI-015: neuspeh upisa po vrsti. Do KI-015 su sve tri vrste javljale
+    ' "cuvanju otpremnice" i "unosu otkupa".
+    UpsertRow lo, existing, "NOVUNOS_MSG_GRESKA_CUVANJE_ISPL", "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju isplate. Promene su vra" & ChrW(263) & "ene."
+    UpsertRow lo, existing, "NOVUNOS_MSG_GRESKA_CUVANJE_UPL", "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju uplate. Promene su vra" & ChrW(263) & "ene."
+    UpsertRow lo, existing, "NOVUNOS_MSG_GRESKA_CUVANJE_REV", "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju reversa. Promene su vra" & ChrW(263) & "ene."
+    UpsertRow lo, existing, "NOVUNOS_ERR_GRESKA_UNOS_ISPL", "Gre" & ChrW(353) & "ka pri unosu isplate:"
+    UpsertRow lo, existing, "NOVUNOS_ERR_GRESKA_UNOS_UPL", "Gre" & ChrW(353) & "ka pri unosu uplate:"
+    UpsertRow lo, existing, "NOVUNOS_ERR_GRESKA_UNOS_REV", "Gre" & ChrW(353) & "ka pri unosu reversa:"
+    UpsertRow lo, existing, "NOVUNOS_MSG_STAMPA_NIJE", ChrW(10007) & " Revers je sa" & ChrW(269) & "uvan, ali papir nije napravljen " & ChrW(8212) & " NE unosi ga ponovo. Razlog:"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_REDA", ChrW(10007) & " Prvo izaberi red u listi"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_DOK", ChrW(10007) & " Nema nestorniranog dokumenta broj"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_OTP", ChrW(10007) & " Izaberi otpremnicu (ili vi" & ChrW(353) & "e njih preko " & ChrW(8222) & "Izaberi vi" & ChrW(353) & "e" & ChrW(8220) & ")"
@@ -1076,11 +1121,6 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "STORNO_TIP_UPLATA", "uplatu kupca"
     UpsertRow lo, existing, "STORNO_TIP_FAKTURA", "fakturu"
     UpsertRow lo, existing, "STORNO_TIP_IZVOD", "CEO izvod"
-    UpsertRow lo, existing, "STORNO_TIP_REVERS", "revers"
-    UpsertRow lo, existing, "STORNO_TIP_REV_IZD_KOOP", "revers izdavanje kooperantu"
-    UpsertRow lo, existing, "STORNO_TIP_REV_PRI_KOOP", "revers povrat od kooperanta"
-    UpsertRow lo, existing, "STORNO_TIP_REV_IZD_OM", "revers izdato OM (firma)"
-    UpsertRow lo, existing, "STORNO_TIP_REV_PRI_OM", "revers prijem od OM (firma)"
     UpsertRow lo, existing, "STORNO_MSG_OK", ChrW(10003) & " Stornirano"
     UpsertRow lo, existing, "STORNO_MSG_ZBIRNA_PRIJ", "Zbirna je stornirana, ali AKTIVNA prijemnica ostaje vezana za nju " & _
               ChrW(8212) & " sledljivost je prekinuta. Kad unese" & ChrW(353) & "te novu zbirnu, prevezite prijemnicu:"
@@ -1088,6 +1128,10 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "STORNO_ERR_NEMA_DOK", ChrW(10007) & " Nema nestorniranog dokumenta broj"
     UpsertRow lo, existing, "STORNO_ERR_ZBR_PAR", ChrW(10007) & " Izabrani red i broj zbirne ne pripadaju " & _
               "istom dokumentu " & ChrW(8212) & " osve" & ChrW(382) & "ite listu pa poku" & ChrW(353) & "ajte ponovo"
+    UpsertRow lo, existing, "STORNO_ERR_PRJ_PAR", ChrW(10007) & " Izabrani red i broj prijemnice ne pripadaju " & _
+              "istom dokumentu " & ChrW(8212) & " osve" & ChrW(382) & "ite listu pa poku" & ChrW(353) & "ajte ponovo"
+    UpsertRow lo, existing, "STORNO_ERR_PRJ_FAKTURISANA", ChrW(10007) & " Prijemnica je fakturisana " & _
+              ChrW(8212) & " prvo stornirajte fakturu, pa prijemnicu. Faktura:"
     UpsertRow lo, existing, "STORNO_ERR_NEMA_SMERA", ChrW(10007) & " Revers bez smera " & ChrW(8212) & " " & _
               ChrW(269) & "etiri smera dele isti brojevni niz"
     UpsertRow lo, existing, "STORNO_ERR_REV_KLJUC", ChrW(10007) & " Revers se ne mo" & ChrW(382) & _
@@ -1160,6 +1204,13 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "STEF_NEPROM_MN", "ostaju nepromenjene"
     UpsertRow lo, existing, "STEF_PAL_ODVEZ", "odvezuju se sa palete"
     UpsertRow lo, existing, "STEF_FAK_OSLOB", "osloba" & ChrW(273) & "a se; stavke ostaju osirotele"
+    ' S6 korak 4 (odluke 1 i 3): fakturisana prijemnica i roba na preradjenoj paleti
+    ' se NE storniraju -- uvid to kaze umesto da obeca oslobadjanje ili skidanje.
+    UpsertRow lo, existing, "STEF_FAK_ODBIJA", "storno se ODBIJA " & ChrW(8212) & " prvo stornirajte fakturu"
+    UpsertRow lo, existing, "STEF_PAL_PRER_DUP", "storno se ODBIJA " & ChrW(8212) & " roba je na prera" & ChrW(273) & _
+              "enoj paleti (prolazi samo uz 'Ne diraj palete')"
+    UpsertRow lo, existing, "STEF_PAL_PRER_PON", "storno se ODBIJA " & ChrW(8212) & " roba je na prera" & ChrW(273) & _
+              "enoj paleti; prvo stornirajte preradu"
     UpsertRow lo, existing, "STEF_BLOK_SAM", "evidentiraju se zasebno; storniraju se samo po izboru iz liste"
     ' Red o blokovima je JEDINI u tabeli posledica koji trazi odluku operatera, a
     ' odluka se donosi na drugom mestu (lista Blokovi). Zato taj red ne stoji kao
@@ -1169,7 +1220,6 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "STEF_BLOK_IZABRANO_1", "izabrano "
     UpsertRow lo, existing, "STEF_BLOK_IZABRANO_2", " od "
     UpsertRow lo, existing, "STEF_BLOK_IZABRANO_3", " " & ChrW(8212) & " storniraju se uz Dupli unos ili Poni" & ChrW(353) & "tenje prometa"
-    UpsertRow lo, existing, "STEF_REVERS", "stornira se; saldo se koriguje bez kontra-stavke"
     ' natpisi prekidaca tipova u Stornu - kratki, jer ih je deset u jednom redu
     UpsertRow lo, existing, "OTKUI_SEG_ST_OTKUP", "Otkupni"
     UpsertRow lo, existing, "OTKUI_SEG_ST_OTP", "Otpremnice"
@@ -1249,18 +1299,6 @@ Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ERR_BROJ_DVOSMISLEN2", "Prevezivanje paleta ide PO BROJU, pa se ne zna na koji dokument." & vbCrLf & _
               "Palete su ostale na staroj prijemnici " & ChrW(8212) & " prevezi ih ru" & ChrW(269) & "no kroz Oporavak, " & _
               "posle ispravke broja."
-    ' --- hladnjaca ispravka posle storna otkupa (F1) ---
-    UpsertRow lo, existing, "OTKUI_MSG_HLAD_LANAC", "Otkup storniran (autohladnja" & ChrW(269) & "a: ceo lanac oboren)."
-    UpsertRow lo, existing, "OTKUI_MSG_HLAD_PALETE", "Paletizovana prijemnica:"
-    UpsertRow lo, existing, "OTKUI_ASK_HLAD", ChrW(352) & "ta dalje sa paletama?" & vbCrLf & vbCrLf & _
-              "DA = ISPRAVKA: izmeni gre" & ChrW(353) & "ku, palete idu na nov lanac" & vbCrLf & _
-              "NE = DUPLI UNOS: nije primljeno 2x, skini stavke" & vbCrLf & _
-              "OTKAZI = ni" & ChrW(353) & "ta sada (palete ostaju osiro" & ChrW(263) & "ene)"
-    UpsertRow lo, existing, "OTKUI_MSG_HLAD_ISPRAVKA", ChrW(10003) & " Polja popunjena iz storniranog " & ChrW(8212) & _
-              " izmeni gre" & ChrW(353) & "ku pa snimi"
-    UpsertRow lo, existing, "OTKUI_MSG_HLAD_NISTA", "Ni" & ChrW(353) & "ta nije skinuto."
-    UpsertRow lo, existing, "OTKUI_MSG_HLAD_OSIROCENE", "Palete su osiro" & ChrW(263) & "ene (i dalje broje robu)." & vbCrLf & _
-              "Re" & ChrW(353) & "i ru" & ChrW(269) & "no: Oporavak " & ChrW(8594) & " Palete."
     ' --- ekran Oporavak (Faza D/14) ---
     UpsertRow lo, existing, "OTKUI_NAV_OPORAVAK", "Oporavak"
     UpsertRow lo, existing, "OTKUI_HDO_CID", "CID"
@@ -1319,6 +1357,7 @@ Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_OPO_UNDO", ChrW(10007) & " Vra" & ChrW(263) & "anje storna nije uspelo:"
     UpsertRow lo, existing, "OTKUI_HDO_VLASNIK", "VLASNIK"
     UpsertRow lo, existing, "OTKUI_HDO_GENERACIJA", "GENERACIJA"
+    UpsertRow lo, existing, "OTKUI_HDO_PRJ_ID", "PRIJEMNICA ID"
     UpsertRow lo, existing, "OTKUI_ERR_OPO_DVOSMISLEN", ChrW(10007) & " Ciljni broj nije jednozna" & ChrW(269) & "an " & _
               ChrW(8212) & " isti broj nose dokumenta VI" & ChrW(352) & "E vlasnika:"
     UpsertRow lo, existing, "OTKUI_ERR_OPO_DVOSMISLEN2", "Prevezivanje ide PO BROJU, pa se ne zna na koji dokument." & vbCrLf & _
@@ -1476,16 +1515,35 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ASK_ISPRAVI2", "? Stara se stornira, a nova nastaje kao NACRT sa istim blokovima, istim o" & ChrW(269) & "ekivanjem i NOVIM brojem."
     UpsertRow lo, existing, "OTKUI_MSG_ISPRAVLJENA", "Nova otpremnica (nacrt):"
     UpsertRow lo, existing, "OTKUI_ERR_ISPRAVI", ChrW(10007) & " Ispravka nije uspela:"
-    ' --- S3d: auto-lanac hladnjace, korak otpremnice (A-014) ---
-    UpsertRow lo, existing, "OTKUI_MSG_LANAC_OTP", ChrW(183) & " Hladnja" & ChrW(269) & "a: izdata otpremnica"
-    UpsertRow lo, existing, "OTKUI_ERR_LANAC", ChrW(10007) & " Otpremnica hladnja" & ChrW(269) & "e nije napravljena:"
+    ' --- S6 korak 7: hladnjacki lanac OTK -> OTP -> ZBR -> PRJ (HLD-LANAC-01) ---
+    ' Uspeh nosi oznaku 183 (toast), pad oznaku 10007 (toast + dijalog posle upisa).
+    UpsertRow lo, existing, "OTKUI_MSG_LANAC", ChrW(183) & " Hladnja" & ChrW(269) & "a: lanac kompletan " & ChrW(8212)
+    UpsertRow lo, existing, "OTKUI_LANAC_OTP", "otpremnica"
+    UpsertRow lo, existing, "OTKUI_LANAC_ZBR", "zbirna"
+    UpsertRow lo, existing, "OTKUI_LANAC_PRJ", "prijemnica"
+    UpsertRow lo, existing, "OTKUI_LANAC_BLOK", "blok"
+    UpsertRow lo, existing, "OTKUI_LANAC_VEC", "Ve" & ChrW(263) & " napravljeno (nastavak: Oporavak, lista Nedovr" & ChrW(353) & "eno):"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC", ChrW(10007) & " Hladnja" & ChrW(269) & "ki lanac nije zavr" & ChrW(353) & "en:"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_KORAK_OTP", "otpremnica nije napravljena " & ChrW(8212)
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_KORAK_ZBR", "zbirna nije napravljena " & ChrW(8212)
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_KORAK_PRJ", "prijemnica nije napravljena " & ChrW(8212)
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_KUPAC", "nije postavljen kupac hladnja" & ChrW(269) & "e (MALINA_DEFAULT_KUPAC u Pode" & ChrW(353) & "avanjima) " & ChrW(8212) & " nijedan dokument nije napravljen; blok " & ChrW(269) & "eka u listi Bez otpremnice."
     UpsertRow lo, existing, "OTKUI_ERR_LANAC_MIRROR", "stanica nema vozaca-ogledalo (VozacID = StanicaID):"
     UpsertRow lo, existing, "OTKUI_ERR_LANAC_BROJ", "broj otpremnice nije generisan za stanicu"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_BROJ_ZBR", "broj zbirne nije generisan (auto-broj dokumenta u Pode" & ChrW(353) & "avanjima) za voza" & ChrW(269) & "a"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_BROJ_PRJ", "broj prijemnice nije generisan za kupca"
+    UpsertRow lo, existing, "OTKUI_ERR_LANAC_ZBR_TIHO", "jezgro zbirne nije prihvatilo otpremnicu (nije izdata ili je ve" & ChrW(263) & " u zbirnoj)."
     UpsertRow lo, existing, "OTKUI_BTN_RED_PONOVI", "Ponovi auto-lanac"
     ' --- S3d-2: ispravka bloka (B-040) ---
     UpsertRow lo, existing, "OTKUI_BTN_RED_ISPRAVI_BLOK", "Ispravi"
     UpsertRow lo, existing, "OTKUI_MSG_ISPRAVKA_BLOKA", "Ispravka bloka " & ChrW(8212) & " snimanje pravi NOV dokument umesto:"
     UpsertRow lo, existing, "OTKUI_ERR_ISPRAVI_BLOK", ChrW(10007) & " Podaci bloka se ne mogu pro" & ChrW(269) & "itati za ispravku:"
+    ' --- 10d: ispravka naseg reversa u jednom potezu ---
+    UpsertRow lo, existing, "OTKUI_MSG_ISPRAVKA_REVERSA", "Ispravka reversa " & ChrW(8212) & " snimanje pravi NOV revers sa novim brojem umesto:"
+    UpsertRow lo, existing, "OTKUI_ERR_ISPRAVI_REVERS", ChrW(10007) & " Podaci reversa se ne mogu pro" & ChrW(269) & "itati za ispravku:"
+    UpsertRow lo, existing, "NOVUNOS_ERR_ISPR_REV_NIJE_REVERS", ChrW(10007) & " Ispravka postoji samo za na" & ChrW(353) & " revers " & ChrW(8212) & " nabavka i otpis se storniraju i unose ponovo."
+    UpsertRow lo, existing, "NOVUNOS_ERR_ISPR_REV_KUPAC", ChrW(10007) & " Ispravka na" & ChrW(353) & "eg reversa ostaje na" & ChrW(353) & " revers " & ChrW(8212) & " izaberi jedan od " & ChrW(269) & "etiri na" & ChrW(353) & "a smera. Kup" & ChrW(269) & "ev revers se unosi kao nov dokument."
+    UpsertRow lo, existing, "NOVUNOS_MSG_ISPR_REV_OK", ChrW(10003) & " Ispravka reversa: stari je storniran, a nov je snimljen sa novim brojem. Stari:"
     UpsertRow lo, existing, "OTKUI_ERR_VEZA_HLADNJACA", ChrW(10007) & " Hladnja" & ChrW(269) & "ki blok ide u svoj lanac " & ChrW(8212) & " ru" & ChrW(269) & "no vezivanje nije dozvoljeno; otkloni uzrok pa ponovi auto-lanac"
     UpsertRow lo, existing, "OTKUI_ERR_PONOVI_NIJE_HLAD", ChrW(10007) & " Auto-lanac va" & ChrW(382) & "i samo za blok na hladnja" & ChrW(269) & "koj stanici"
     UpsertRow lo, existing, "OTKUI_ERR_LANAC_PUT", ChrW(10007) & " Ne mo" & ChrW(382) & "e da se utvrdi da li blok ide u hladnja" & ChrW(269) & "ki lanac, pa nije vezan ni za jedan dokument:"
@@ -1494,6 +1552,17 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_OPO_BLOK_AKCIJA", "Otkup (F1), lista Bez otpremnice: Ve" & ChrW(382) & "i za otpremnicu"
     UpsertRow lo, existing, "OTKUI_OPO_BLOK_GRESKA", ChrW(268) & "lanstvo otpremnica se ne mo" & ChrW(382) & "e pro" & ChrW(269) & "itati:"
     UpsertRow lo, existing, "OTKUI_OPO_BLOK_AKCIJA_GRESKA", "Popravi " & ChrW(269) & "lanstvo, pa osve" & ChrW(382) & "i listu"
+    ' --- S6 korak 7: nedovrsen hladnjacki lanac na ekranu OPORAVAK (odluka 8) ---
+    UpsertRow lo, existing, "OTKUI_HDO_OTK", "OtkupID"
+    UpsertRow lo, existing, "OTKUI_OPO_LANAC_OPIS_OTP", "Hladnja" & ChrW(269) & "ki lanac je stao posle otpremnice (nema zbirne):"
+    UpsertRow lo, existing, "OTKUI_OPO_LANAC_OPIS_ZBR", "Hladnja" & ChrW(269) & "ki lanac je stao posle zbirne (nema prijemnice):"
+    UpsertRow lo, existing, "OTKUI_OPO_LANAC_AKCIJA", "Ovde: Ponovi auto-lanac"
+    UpsertRow lo, existing, "OTKUI_OPO_LANAC_GRESKA", ChrW(268) & "itanje hladnja" & ChrW(269) & "kih lanaca nije uspelo:"
+    UpsertRow lo, existing, "OTKUI_OPO_LANAC_AKCIJA_GRESKA", "Popravi podatke lanca, pa osve" & ChrW(382) & "i listu"
+    UpsertRow lo, existing, "OTKUI_OPO_PONOVI_NIJE_LANAC", ChrW(10007) & " Ovaj red nije nedovr" & ChrW(353) & "en hladnja" & ChrW(269) & "ki lanac " & ChrW(8212) & " Ponovi auto-lanac radi samo nad redom vrste LANAC."
+    UpsertRow lo, existing, "OTKUI_OPO_PONOVI_NEMA_POSLA", ChrW(10003) & " Lanac je ve" & ChrW(263) & " kompletan " & ChrW(8212) & " nema " & ChrW(353) & "ta da se ponovi."
+    ' --- S6 korak 7: rucna zbirna ne prima hladnjacku otpremnicu (odluka 10) ---
+    UpsertRow lo, existing, "DOK_ERR_ZBR_HLADNJACKA_OTP", ChrW(10007) & " Hladnja" & ChrW(269) & "ka otpremnica ide u svoj lanac " & ChrW(8212) & " ru" & ChrW(269) & "no vezivanje u zbirnu nije dozvoljeno:"
     ' --- ekran Agrohemija (Faza E/15, v6-ui-171) ---
     UpsertRow lo, existing, "OTKUI_SCRAG_SUB", "Magacin " & ChrW(8212) & " izdavanje kooperantu i prijem od dobavlja" & ChrW(269) & "a"
     UpsertRow lo, existing, "OTKUI_SCRAG_LISTA", "Korpa"
@@ -1655,7 +1724,7 @@ Private Sub UpsertPoruke09(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_KPI_FK_IZNOS", "Iznos korpe"
     UpsertRow lo, existing, "OTKUI_KPI_FK_NEPLACENO", "Nepla" & ChrW(263) & "eno"
     UpsertRow lo, existing, "OTKUI_LBL_FK_KORPA_CAP", "Stavke fakture"
-    UpsertRow lo, existing, "OTKUI_LBL_FK_HINT", "Dvoklik na red dodaje prijemnicu u fakturu i vra" & ChrW(263) & "a je iz nje."
+    UpsertRow lo, existing, "OTKUI_LBL_FK_HINT", "Red je klasa prijemnice. Dvoklik je dodaje u fakturu i vra" & ChrW(263) & "a je iz nje."
     UpsertRow lo, existing, "OTKUI_LBL_FK_HINT_KUPAC", "Izaberi kupca da bi se videle njegove prijemnice."
     UpsertRow lo, existing, "OTKUI_ERR_FK_NEMA_KUPCA", ChrW(10007) & " Izaberi kupca"
     UpsertRow lo, existing, "OTKUI_ERR_FK_KORPA_PRAZNA", ChrW(10007) & " Korpa je prazna " & ChrW(8212) & " dodaj bar jednu prijemnicu"
@@ -1934,6 +2003,8 @@ Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_IZ_DET_AMB_VRAC", "vra" & ChrW(263) & "eno"
     UpsertRow lo, existing, "OTKUI_IZ_DET_FAKTURA", "Faktura:"
     UpsertRow lo, existing, "OTKUI_IZ_DET_NEFAKT", "nije fakturisana"
+    UpsertRow lo, existing, "OTKUI_IZ_DET_DELIMFAKT", "(delimi" & ChrW(269) & "no -- ne sve stavke)"
+    UpsertRow lo, existing, "OTKUI_IZ_DET_ZAJEDNICKA", "(zajedni" & ChrW(269) & "ka sa drugim prijemnicama -- ostatak se vodi na fakturi)"
     UpsertRow lo, existing, "OTKUI_IZ_BEZ_GRANICE", "po" & ChrW(269) & "etak"
     UpsertRow lo, existing, "OTKUI_IZ_PRETRAGA", "pretraga:"
     UpsertRow lo, existing, "OTKUI_IZ_FILTER", "filter:"
@@ -1944,6 +2015,11 @@ Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_KPI_IZ_SALDO", "Saldo (kraj perioda)"
     UpsertRow lo, existing, "OTKUI_KPI_IZ_SALDOAMB", "Saldo amb. (gajbe)"
     UpsertRow lo, existing, "OTKUI_MSG_IZ_PRVO_PRIKAZI", ChrW(10007) & " Izve" & ChrW(353) & "taj jo" & ChrW(353) & " nije prikazan " & ChrW(8212) & " izaberi entitet i period pa poku" & ChrW(353) & "aj ponovo"
+    ' Kartica (KARTICA, AMBKARTICA) i dokumentne liste: klik na zaglavlje ne
+    ' preuredjuje redove -- tekuci saldo vazi samo hronoloskim redom
+    ' (KART-HRON-01), a broj dokumenta se poredi kao broj (DOC-SORT-01).
+    UpsertRow lo, existing, "OTKUI_MSG_KART_HRONOLOGIJA", "Lista ostaje u poslovnom redosledu (dan, pa broj dokumenta) " & ChrW(8212) & " saldo kartice va" & ChrW(382) & "i samo tim redom"
+    UpsertRow lo, existing, "OTKUI_KART_STORNO", "storno"
     UpsertRow lo, existing, "OTKUI_ERR_IZ_PRAZNO", ChrW(10007) & " Nema podataka za " & ChrW(353) & "tampu"
     UpsertRow lo, existing, "OTKUI_ERR_IZ_NEMA_DOK", ChrW(10007) & " Red nema dokument iza sebe " & ChrW(8212) & " agregat se ne " & ChrW(353) & "tampa po redu"
     UpsertRow lo, existing, "OTKUI_ERR_IZ_STAMPA_NEDOSTUPNA", "Za ovu vrstu reda " & ChrW(353) & "tampa nije dostupna iz ovog pregleda"
@@ -2171,21 +2247,38 @@ Private Sub UpsertPoruke12(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "APP_MSG_BACKUP_NIJE_USPEO", ChrW(9888) & " Sigurnosna kopija pri pokretanju NIJE napravljena (nema mesta na disku ili folder nije upisiv). Aplikacija radi, ali dana" & ChrW(353) & "nji rad nije za" & ChrW(353) & ChrW(263) & "i" & ChrW(263) & "en kopijom. Oslobodi prostor pa restartuj."
     ' --- Kapija: prekinut VBA import ne sme da se snimi u svesku ---
     UpsertRow lo, existing, "OTKUI_MSG_WB_IMPORT_PREKINUT", ChrW(10007) & " Nije snimljeno: prethodni uvoz VBA koda je prekinut, pa je projekat mo" & ChrW(382) & "da nepotpun. Dovr" & ChrW(353) & "i 'Uvezi VBA' ili vrati backup, pa snimi."
+    ' --- Kapija: nepotpun rollback ne sme da se snimi u svesku ---
+    UpsertRow lo, existing, "APP_MSG_ROLLBACK_NEPOTPUN_NE_SNIMAM", "Prethodni rollback nije bio potpun, pa podaci u memoriji mogu biti " & "nekonzistentni." & vbCrLf & vbCrLf & "Upis i snimanje su ZATVORENI za ovu sesiju. Sveska se zatvara BEZ snimanja " & ChrW(8212) & " na disku stoji stanje pre te transakcije." & vbCrLf & vbCrLf & "Posle ponovnog otvaranja proveri tabele:"
     UpsertRow lo, existing, "APP_MSG_IMPORT_PREKINUT_NE_SNIMAM", "Prethodni uvoz VBA koda je prekinut, pa je projekat mo" & ChrW(382) & "da nepotpun." & vbCrLf & vbCrLf & "Sveska se zatvara BEZ snimanja " & ChrW(8212) & " snimanje bi u" & ChrW(269) & "inilo o" & ChrW(353) & "te" & ChrW(263) & "enje trajnim." & vbCrLf & vbCrLf & "Posle otvaranja: dovr" & ChrW(353) & "i 'Uvezi VBA' ili vrati poslednji backup."
 End Sub
 
 
+' Poredi se sa onim sto se CITA (CStr(Value)), a pise kroz TekstZaCeliju -- pa red
+' koji je vec ispravan ne prepisuje se na svakom EnsurePoruke.
 Private Sub UpsertRow(lo As ListObject, existing As Object, _
                       ByVal kljuc As String, ByVal tekst As String)
     If existing.Exists(kljuc) Then
         If CStr(lo.ListRows(existing(kljuc)).Range(2).Value) <> tekst Then
-            lo.ListRows(existing(kljuc)).Range(2).Value = tekst
+            lo.ListRows(existing(kljuc)).Range(2).Value = TekstZaCeliju(tekst)
         End If
     Else
         Dim r As ListRow
         Set r = lo.ListRows.Add
         r.Range(1).Value = kljuc
-        r.Range(2).Value = tekst
+        r.Range(2).Value = TekstZaCeliju(tekst)
         existing(kljuc) = r.Index
     End If
 End Sub
+
+' KI-023: Excel vodeci apostrof u Range.Value tumaci kao prefiks teksta
+' (PrefixCharacter) i ne cuva ga -- "' ne postoji" postane " ne postoji", pa
+' poruka "Tip ambalaze '" & tip & "' ne postoji" ostane bez zatvarajuceg
+' navodnika. Udvojen apostrof cuva jedan (izmereno sondom 19.10.2026). Tekst koji
+' pocinje sa "+" ili "-" Excel cuva netaknut, pa se ne dira.
+Private Function TekstZaCeliju(ByVal tekst As String) As String
+    If Left$(tekst, 1) = "'" Then
+        TekstZaCeliju = "'" & tekst
+    Else
+        TekstZaCeliju = tekst
+    End If
+End Function

@@ -226,7 +226,7 @@ function renderOtkMoreQueueCard(row) {
             <div class="otk-more-queue-line">
                 ${escapeHtml(row.vrstaVoca || '-')}
                 ${row.sortaVoca ? ' / ' + escapeHtml(row.sortaVoca) : ''}
-                <span class="otk-more-queue-muted"> • ${escapeHtml(formatOtkMoreKg(row.kolicina || 0))}</span>
+                <span class="otk-more-queue-muted"> • ${escapeHtml(formatOtkMoreKg(otkupZbirKg(row)))}</span>
             </div>
 
             <div class="otk-more-queue-line otk-more-queue-muted">

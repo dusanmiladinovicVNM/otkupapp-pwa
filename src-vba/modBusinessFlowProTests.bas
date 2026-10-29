@@ -76,6 +76,10 @@ Private Const TEST_TIP_AMB As String = "Test Gajba"
 ' Drugi tip ambalaze: clanovi otpremnice moraju biti homogeni -- header nosi
 ' jedan TipAmbalaze, pa 20 plasticnih + 30 drvenih gajbi nije 50 gajbi.
 Private Const TEST_TIP_AMB_B As String = "Test Letvarica"
+' Treci tip NAMERNO ostaje van SeedAmbalazaOpticaj: scenario deficita mora sam
+' da proizvede manjak, a ne da zavisi od toga koliko je zalihe potrosio neki
+' test pre njega.
+Private Const TEST_TIP_AMB_C As String = "Test Kaseta"
 Private Const TEST_VRSTA_BEZ_SORTE As String = "Test Dunja"
 
 Private Const TEST_PREFIX As String = "TST-PRO"
@@ -119,6 +123,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OtkupInputValidationHardening
     Test_OtkupReadHelpersExcludeStornirano
     Test_DokumentaInputValidationHardening
+    Test_DokumentaReadHelpersExcludeStornirano
     Test_MalinaVozacMirror
 
     ' RF-28 (MasterSync integritet -- AUD-041/042/043)
@@ -133,7 +138,6 @@ Public Sub RunBusinessFlowProSuite()
     Test_ManjakPreviewJeZbirnaMinusPrijem
     Test_OpenFaktureExcludeStornirano
     Test_PrefillBiraPoslednjuGeneraciju
-    Test_GeneracijaNePrelaziVlasnika
     Test_StornoPoBrojuOdbijaDvaVlasnika
     Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice
     Test_ZbirnaRowDataColumnMapped
@@ -222,13 +226,13 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_SamoKlasaII
     Test_OTK_SortaPraznaSamoUzKulturuBezSorte
     Test_OTK_TipAmbalazeVezujeSvakaAmbalaza
+    Test_OTK_DeficitKooperantaTraziPotvrdu
     Test_OTK_AmbalazaIdeNaDokument
     Test_OTK_OdbijenDokumentNeKnjiziAmbalazu
     Test_OTK_EkranPiseNovimModelom
     Test_OTK_EkranNerazresivaKulturaPada
     Test_OTK_UpisNeVodiLanac
     Test_OTK_PrintNetoUnosNeRekonstruiseBruto
-    Test_OTK_IspravkaPauziranaNeTrosiPending
     Test_OTK_BrojJedinstvenPoStaniciIDanu
     Test_OTK_VrednostBezStavkiPada
     Test_OTK_VrednostPunUgovor
@@ -263,9 +267,6 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_DraftBrojIzuzimaSebe
     Test_ZBR_StorniranBrojIstogVozacaOdbijen
     Test_BKTX_ReversPisacOdbijaZauzet
-    Test_BKTX_ReversKoopIstiBrojDveStanice
-    Test_BKTX_ReversIDNaSvimNogama
-    Test_BKTX_ReversIDJedanDokument
     Test_PWA_BezUredjajaUvozPada
     Test_OTK_OdvezanVirmanJeRaspolozivAvans
     Test_OTK_IspravkaIzdatogRoditeljaFailClosed
@@ -290,12 +291,84 @@ Public Sub RunBusinessFlowProSuite()
     Test_PWA_RazresivacImenujeRazlog
     Test_PWA_KonfliktPoParceliITipu
     Test_PWA_PrenosiVremeNastanka
+    Test_PWA_StavkeSaZiceIduPoCridu
+    Test_PWA_ManifestNeporavnatNeUvozi
+    Test_OTK_PushIndeksPreskaceRedSaTerena
+    Test_OTP_ZaglavljeBezLinijskihKolona
+    Test_Schema_TragZbirneNosiNovoIme
+    Test_Schema_ZalutalaKolonaSeVracaNaMesto
+    Test_Amb_UgovorPrenosa
+    Test_Amb_DoprinosObavezi
+    Test_Amb_NalogDvosmislenPada
+    Test_Amb_DokumentUgovor
+    Test_Amb_PisacKnjige
+    Test_Amb_KanonskiRedPoImenu
+    Test_Amb_StareKoloneSelfHeal
+    Test_Amb_DeficitIObaveza
+    Test_Amb_ZaglavljeDokumentaPisac
+    Test_Amb_Inv08TxVlasnistvo
+    Test_Amb_NabavkaOtvaraIzdavanje
+    Test_Amb_DokBrojZauzetPoVlasniku
+    Test_Amb_StornoKontraStavVracaSaldo
+    Test_Amb_StornoPosleVracanjaOdbijen
+    Test_Amb_StornoNePraviMinus
+    Test_Amb_UndoStornaOdbijenNadKnjigom
+    Test_Amb_PonovnaStampaBezRedaKnjige
+    Test_Amb_JedanProtivpartnerPoDokumentu
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
     Test_OTP_JedanBrojJedanHeader
     Test_OTP_PredlogCeneJePoKlasi
     Test_OTP_AmbalazaSeKnjiziPriIzdavanju
+    Test_OTP_StornoVracaGajbeVozacu
+    Test_OTP_PapirStanjeOkoSvogReda
+    Test_OTP_PapirBezVezeKnjige
+    Test_PRJ_AmbalazaDveNogeJedanPar
+    Test_PRJ_StornoVracaGajbe
+    Test_PRJ_LanacSeOdmotavaObrnuto
+    Test_PRJ_EksternaPrijemnicaBlokiraPonistenje
+    Test_PRJ_VlasnikBrojaJeNjenKupac
+    Test_REV_SmerDajeJedanRed
+    Test_REV_UgovorSmeraJeFailClosed
+    Test_REV_AutoBrojJedanNiz
+    Test_KUP_UplataJeSamoNovac
+    Test_RVP_KupcevDokumentJedanRed
+    Test_RVP_BrojJeKupcevINePredlazeSe
+    Test_RVP_DeficitSePotvrdjuje
+    Test_PRJ_PovratIdeSaKlasomKojaPostoji
+    Test_S6_DveKlaseJedanDokument
+    Test_S6_JednaKlasaJednaStavka
+    Test_S6_ManjakObeStraneIzStavki
+    Test_S6_GrupniListStanjeVozaca
+    Test_S6_PaleteCitajuStavke
+    Test_S6_CitalacStavkiPrijemniceDrziUgovor
+    Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu
+    Test_S6K4_StornoSkidaPaleteUIstojTx
+    Test_S6K4_FakturisanaSeOdbija
+    Test_S6K4_PreradjenaPaletaObaraStorno
+    Test_S6K4_F8IdentitetDokumenta
+    Test_S6K4_KaskadaSubjekatJeDokument
+    Test_S6K4_PadPosleSvihUpisaVracaSve
+    Test_S6K4_JezgroTraziSnimak
+    Test_S6K4_KontraStavPadneDokumentOstaje
+    Test_S6K4_PaletnaStavkaBezPaleteObaraStorno
+    Test_S6K5_DveKlaseIzStavki
+    Test_S6K5_DelimicnoFakturisanje
+    Test_S6K5_FakturaOdbijaNevazeceStavke
+    Test_S6K5_OkvirOdbijaFakturisanuPreZapisa
+    Test_S6K5_StornoFakturePaPrijemnice
+    Test_S6K5_PadPosleUpisaVracaFakturu
+    Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka
+    Test_S6K5_LinijaBezFaktureJeKvar
+    Test_S6K6_F4DokumentProlaziLanac
+    Test_S6K7_OsirocenePaleteDatumPoDokumentu
+    Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
+    Test_AMB_TipVanSifarnikaPisacOdbija
+    Test_ODL24_UgovorPozajmice
+    Test_ODL24_PozajmicaJeSvojDogadjaj
+    Test_AMBINV14_OtpisSeNePokriva
+    Test_KI026_OtpisPisacKapije
     Test_OTP_F2OtvaraNacrt
     Test_OTP_MalinaAutoZbirna
     Test_OTP_AutoIzPwaSpajaKlase
@@ -308,6 +381,12 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_PredajaPrezivljavaParcijalanSync
     Test_OTP_NepotpunUtovarNeDobijaDokument
     Test_OTP_BlokVanManifestaNeUlaziUUtovar
+    Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem
+    Test_OTPVOZ_ZbirnaIDJeTekucaIstina
+    Test_OTPVOZ_StavkeIzKanonaBezCene
+    Test_OTPVOZ_ObjavaSeDokazujeIzvozom
+    Test_ZBR_UvozNosiTacnoPoslateOtpremnice
+    Test_ZBR_UvozOdbijaPrazanIzborITudjuOtpremnicu
     Test_ZBR_KapijaPustaKadJeIzborScoped
     Test_ZBR_DispecerPustaScopedIzbor
     Test_STO_BlokUSastavuOtpremniceSeNeStornira
@@ -352,6 +431,19 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTP_KapijaBlokaPoKanonu
     Test_OPO_IzgubljenBlok
     Test_HLD_AutoLanacOtpremnica
+    Test_S6K7_LanacNastavljiv
+    Test_S6K7_LanacBezKupcaNePise
+    Test_S6K7_JezgroZbirneHladnjacka
+    Test_S6K7_PwaHladnjackiBlokovi
+    Test_S6K7_RucnaZbirnaOdbijaHladnjacku
+    Test_S6K7_NastavakNosiKupcaRoditelja
+    Test_S6K7_LanacJednaPrijemnica
+    Test_S6K7_VlasnistvoLancaNeCitaKonfig
+    Test_S6K7_LanacSamoOgledalo
+    Test_S6K8_PisacPrjZbr01
+    Test_S6K8_BrojPrijemnicePoKupcu
+    Test_S6K8_PrijemnicaStareKoloneSelfHeal
+    Test_S6K8_PrijemnicaRobaKaoZbirna
     Test_OTK_IspravkaBlokaUNacrtu
     Test_OTK_RutaPosleUpisa
     Test_OTP_ClanstvoBulkStrogo
@@ -483,21 +575,51 @@ Private Sub Test_CoreTablesAndColumnsExist()
         COL_OKS_ID, COL_OKS_OTKUP_ID, COL_OKS_RB, COL_OKS_KLASA, COL_OKS_KOLICINA, _
         COL_OKS_CENA, COL_OKS_KOL_AMB, COL_OKS_BRUTO)
 
+    ' Kolicina, Cena, KolAmbalaze, Klasa i BrutoKg su obrisane iz kanona
+    ' (S3-ostatak): cinjenice su STAVKE i zive na tblOtpremnicaStavke. TipAmbalaze
+    ' ostaje -- tip je cinjenica zaglavlja.
     RequireColumnsExist TBL_OTPREMNICA, Array( _
         "OtpremnicaID", "Datum", "StanicaID", "VozacID", "BrojOtpremnice", _
-        "BrojZbirne", "VrstaVoca", "SortaVoca", "Kolicina", "Cena", _
-        "TipAmbalaze", "KolAmbalaze", "Klasa")
+        "BrojZbirne", "VrstaVoca", "SortaVoca", "TipAmbalaze")
 
     RequireColumnsExist TBL_ZBIRNA, Array( _
         "ZbirnaID", "Datum", "VozacID", "BrojZbirne", "KupacID", _
         "VrstaVoca", "SortaVoca", "UkupnoKolicina", "TipAmbalaze", _
         "UkupnoAmbalaze", "Klasa")
 
+    ' Prijemnica je zaglavlje + stavke (S6 korak 8): Kolicina, Cena, KolAmbalaze,
+    ' Klasa i BrutoKg su na stavci, kes fakture i GeneracijaID su obrisani iz
+    ' kanona. TipAmbalaze i KolAmbVracena ostaju -- cinjenice dokumenta.
     RequireColumnsExist TBL_PRIJEMNICA, Array( _
         "PrijemnicaID", "Datum", "KupacID", "VozacID", "BrojPrijemnice", _
-        "BrojZbirne", "VrstaVoca", "SortaVoca", "Kolicina", "Cena", _
-        "TipAmbalaze", "KolAmbalaze", "KolAmbVracena", "Klasa", _
-        "Fakturisano", "FakturaID")
+        "BrojZbirne", "VrstaVoca", "SortaVoca", "TipAmbalaze", "KolAmbVracena", _
+        COL_DETE_ZBIRNA_ROD)
+
+    RequireTableExists TBL_PRIJEMNICA_STAVKE
+    RequireColumnsExist TBL_PRIJEMNICA_STAVKE, Array( _
+        COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, COL_PRS_KOLICINA, _
+        COL_PRS_CENA, COL_PRS_KOL_AMB, COL_PRS_BRUTO)
+
+    ' AMB-10b: knjiga nosi OBE strane dogadjaja, vrstu kretanja i vezu na storno.
+    '
+    ' Kolone su dopisane NA KRAJ (CLAUDE.md 3): AppendRow pise poziciono, pa bi
+    ' kolona u sredini tiho poslala sve iza sebe u pogresna polja. Stare kolone
+    ' (Smer, EntitetID, VozacID, ReversID) su jos tu i brisu se u 10e.
+    RequireColumnsExist TBL_AMBALAZA, Array( _
+        COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, _
+        COL_AMB_DOK_ID, COL_AMB_DOK_TIP, _
+        COL_AMB_OD_TIP, COL_AMB_OD_ID, COL_AMB_NA_TIP, COL_AMB_NA_ID, _
+        COL_AMB_VRSTA_KRETANJA, COL_AMB_STORNO_OD)
+
+    ' AMB-10-DOK: ambalazni dokument postoji u svesci, ne samo u kanonu.
+    '
+    ' Strane dogadjaja NISU ovde -- njih nosi svaki red knjige (Od/Na). Zaglavlje
+    ' nosi identitet, broj, datum, storno i VLASNIKA NUMERICKOG NIZA; stanica tu
+    ' ne stoji, jer revers kupca stanicu nema (review #399).
+    RequireColumnsExist TBL_AMBALAZA_DOKUMENT, Array( _
+        COL_AMBD_ID, COL_AMBD_VRSTA, COL_AMBD_BROJ, COL_AMBD_DATUM, _
+        COL_AMBD_BROJ_OWNER_TIP, COL_AMBD_BROJ_OWNER_ID, _
+        COL_AMBD_NAPOMENA, COL_STORNIRANO)
 
     RequireColumnsExist TBL_FAKTURE, Array( _
         "FakturaID", "BrojFakture", "Datum", "KupacID", "Iznos")
@@ -534,63 +656,37 @@ EH:
     LogFail "Seed master data available", Err.description
 End Sub
 
+' DRUGA FAKTURA NAD ISTOM STAVKOM JE ODBIJENA (FAK-LIN-01). Obrisan u S6 koraku 2
+' (faktura je citala zaglavlje, koje od koraka 2 ne nosi brojke), vracen u
+' koraku 5 (plan 14.55 "Korak 5", R3): izbor je STAVKA prijemnice, a dokument
+' pravi produkcioni pisac. Druga faktura nad istom stavkom ne ostavlja ni
+' zaglavlje ni liniju.
+' SABOTAZE: s6k5-druga-faktura-prolazi.
 Private Sub Test_DuplicateFakturaIsBlocked()
     On Error GoTo EH
 
-    Dim scenario As String
+    Dim scenario As String, prj As String, stI As String
     scenario = NewScenarioCode("DUPFAK")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID)
+    AssertTrue Len(prj) > 0, "Duplicate faktura fixture prijemnica created"
+    stI = S6StavkaID(prj, KLASA_I)
 
-    Dim testDate As Date
-    testDate = NextTestDate()
-
-    Dim brojZbirne As String
-    Dim brojPrij As String
-
-    brojZbirne = TEST_PREFIX & "-ZBR-" & scenario
-    brojPrij = TEST_PREFIX & "-PRJ-" & scenario
-
-    ' Minimal prijemnica fixture for faktura duplicate test.
-    ' Zbirna mora da postoji pre prijemnice (PRIJEMNICA_ZBIRNA_PROVERA guard).
-    Dim zbrFix As String
-    zbrFix = ZbrZateceniRed(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
-                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
-                           100#, TEST_TIP_AMB, 0, "I")
-    AssertTrue Len(zbrFix) > 0, "Duplicate faktura fixture zbirna created"
-
-    Dim prjI As String
-    prjI = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
-                             TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 0, 0, "I")
-
-    AssertTrue Len(prjI) > 0, "Duplicate faktura fixture prijemnica created"
-
-    Dim stavke As Collection
-    Set stavke = New Collection
-    stavke.Add Array(prjI, 100#, 100#, "I", brojPrij)
-
-    Dim beforeFak As Long
+    Dim beforeFak As Long, beforeFs As Long
     beforeFak = CountRows(TBL_FAKTURE)
+    beforeFs = CountRows(TBL_FAKTURA_STAVKE)
 
     Dim f1 As String
-    f1 = CreateFaktura_TX(TEST_KUP_ID, stavke)
-
+    f1 = S6K5Fakturisi(TEST_KUP_ID, stI)
     AssertTrue Len(f1) > 0, "First faktura for duplicate test created"
     AssertEquals CStr(beforeFak + 1), CStr(CountRows(TBL_FAKTURE)), "First faktura increments count"
 
     Dim f2 As String
-    On Error Resume Next
-    f2 = CreateFaktura_TX(TEST_KUP_ID, stavke)
-
-    If Err.Number <> 0 Then
-        LogPass "Duplicate faktura attempt raises/blocks"
-        Err.Clear
-        On Error GoTo EH
-    Else
-        On Error GoTo EH
-        AssertTrue Len(Trim$(f2)) = 0, "Duplicate faktura attempt returns empty"
-    End If
-
+    f2 = S6K5Fakturisi(TEST_KUP_ID, stI)
+    AssertTrue Len(Trim$(f2)) = 0, "Duplicate faktura attempt returns empty"
     AssertEquals CStr(beforeFak + 1), CStr(CountRows(TBL_FAKTURE)), _
                  "Duplicate faktura did not append second faktura"
+    AssertEquals CStr(beforeFs + 1), CStr(CountRows(TBL_FAKTURA_STAVKE)), _
+                 "Duplicate faktura did not append second line"
 
     Exit Sub
 
@@ -644,10 +740,13 @@ Private Sub Test_InvalidPrijemnicaDoesNotAppend()
     Dim beforeCount As Long
     beforeCount = CountRows(TBL_PRIJEMNICA)
 
-    Dim result As String
-    result = SavePrijemnica_TX(NextTestDate(), "", TEST_VOZ_ID, TEST_PREFIX & "-BAD-PRJ-" & NewScenarioCode("BAD"), _
-                               TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("BAD"), _
-                               TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 1, 1, "I")
+    Dim result As String, errNum As Long
+    result = SavePrijemnicaMulti_TX(datum:=NextTestDate(), kupacID:="", vozacID:=TEST_VOZ_ID, _
+                                    brojPrij:=TEST_PREFIX & "-BAD-PRJ-" & NewScenarioCode("BAD"), _
+                                    brojZbirne:=TEST_PREFIX & "-BAD-ZBR-" & NewScenarioCode("BAD"), _
+                                    vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+                                    kolicinaI:=100#, cenaI:=100#, tipAmb:=TEST_TIP_AMB, _
+                                    kolAmb:=1, kolAmbVracena:=1, outErrNum:=errNum)
 
     If Len(Trim$(result)) = 0 Then
         AssertEquals CStr(beforeCount), CStr(CountRows(TBL_PRIJEMNICA)), _
@@ -655,7 +754,7 @@ Private Sub Test_InvalidPrijemnicaDoesNotAppend()
         Exit Sub
     End If
 
-    LogFail "Invalid prijemnica rejected", "SavePrijemnica_TX returned ID: " & result
+    LogFail "Invalid prijemnica rejected", "SavePrijemnicaMulti_TX returned ID: " & result
     Exit Sub
 
 ExpectedError:
@@ -784,25 +883,23 @@ Private Sub Test_InvalidPrijemnicaNegativeAmbalazaDoesNotAppend()
     beforePrj = CountRows(TBL_PRIJEMNICA)
     beforeAmb = CountRows(TBL_AMBALAZA)
 
-    ' Validna zbirna mora da postoji -> jedini razlog odbijanja je negativna
-    ' ambalaza (a ne PRIJEMNICA_ZBIRNA_PROVERA guard, koji bi inace prekinuo pre).
+    ' Validna (izdata, istog vlasnika) zbirna mora da postoji -> jedini razlog
+    ' odbijanja je negativna ambalaza, a ne kapija roditelja (PRJ-ZBR-01).
     Dim scenario As String: scenario = NewScenarioCode("NEGAMB")
     Dim testDate As Date: testDate = NextTestDate()
     Dim brojZbirne As String: brojZbirne = TEST_PREFIX & "-BAD-ZBR-" & scenario
 
     Dim zbrFix As String
-    zbrFix = ZbrZateceniRed(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
-                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
-                           100#, TEST_TIP_AMB, 0, KLASA_I)
+    zbrFix = ZbrIzdataPodPrijemnicu(testDate, brojZbirne, TEST_KUP_ID)
     AssertTrue Len(zbrFix) > 0, "Negative ambalaza fixture zbirna created"
 
-    Dim result As String
-    result = SavePrijemnica_TX( _
-        testDate, TEST_KUP_ID, TEST_VOZ_ID, _
-        TEST_PREFIX & "-BAD-PRJ-" & scenario, _
-        brojZbirne, _
-        TEST_VRSTA, TEST_SORTA, _
-        100#, 10#, TEST_TIP_AMB, -1, 0, KLASA_I)
+    Dim result As String, errNum As Long
+    result = SavePrijemnicaMulti_TX(datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+                                    brojPrij:=TEST_PREFIX & "-BAD-PRJ-" & scenario, _
+                                    brojZbirne:=brojZbirne, _
+                                    vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+                                    kolicinaI:=100#, cenaI:=10#, tipAmb:=TEST_TIP_AMB, _
+                                    kolAmb:=-1, kolAmbVracena:=0, outErrNum:=errNum)
 
     AssertEquals "", result, "Invalid prijemnica negative ambalaza returns empty"
     AssertEquals CStr(beforePrj), CStr(CountRows(TBL_PRIJEMNICA)), _
@@ -816,38 +913,44 @@ EH:
     LogFail "Invalid prijemnica negative ambalaza", Err.description
 End Sub
 
+' R4 (S6 korak 8): PISAC ODBIJA PRIJEMNICU NEPOSTOJECE ZBIRNE BEZ IKAKVOG CONFIGA.
+'
+' Do koraka 8 je ovo vazilo samo uz PRIJEMNICA_ZBIRNA_PROVERA = BLOK, a fixture
+' (i stari donor) nosi UPOZORENJE -- pa je pisac mimo F4 pravio prijemnicu bez
+' roditelja. Podesavanje je obrisano: kapija roditelja (PRJ-ZBR-01) je u piscu
+' bezuslovna. Razlog mora da imenuje zbirnu, inace se odbijanje ne razlikuje od
+' pada iz drugog razloga.
+' SABOTAZA: s6k8-pisac-pusta-bez-zbirne.
 Private Sub Test_PrijemnicaMissingZbirnaDoesNotAppend()
     On Error GoTo EH
-
-    ' PRIJEMNICA_ZBIRNA_PROVERA guard: u BLOK modu prijemnica sa nepostojecom
-    ' zbirnom mora biti odbijena (referencijalni integritet, bez orphan reda).
-    Dim prevMode As String
-    prevMode = GetConfigValue(CFG_PRIJEMNICA_ZBIRNA_PROVERA)
-    SetConfigValue CFG_PRIJEMNICA_ZBIRNA_PROVERA, "BLOK"
 
     Dim beforePrj As Long
     beforePrj = CountRows(TBL_PRIJEMNICA)
 
-    Dim scenario As String
+    Dim scenario As String, brojZbirne As String
     scenario = NewScenarioCode("NOZBR")
+    brojZbirne = TEST_PREFIX & "-ZBR-MISSING-" & scenario
 
-    Dim result As String
-    result = SavePrijemnica_TX( _
-        NextTestDate(), TEST_KUP_ID, TEST_VOZ_ID, _
-        TEST_PREFIX & "-PRJ-" & scenario, _
-        TEST_PREFIX & "-ZBR-MISSING-" & scenario, _
-        TEST_VRSTA, TEST_SORTA, _
-        100#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+    Dim result As String, errNum As Long, greska As String
+    result = SavePrijemnicaMulti_TX(datum:=NextTestDate(), kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+                                    brojPrij:=TEST_PREFIX & "-PRJ-" & scenario, _
+                                    brojZbirne:=brojZbirne, _
+                                    vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+                                    kolicinaI:=100#, cenaI:=100#, tipAmb:=TEST_TIP_AMB, _
+                                    kolAmb:=0, kolAmbVracena:=0, outErrNum:=errNum, _
+                                    outGreska:=greska)
 
-    AssertEquals "", result, "Prijemnica with missing zbirna is rejected (BLOK)"
+    AssertEquals "", result, "Prijemnica with missing zbirna is rejected (PRJ-ZBR-01)"
     AssertEquals CStr(beforePrj), CStr(CountRows(TBL_PRIJEMNICA)), _
                  "Rejected prijemnica did not append a row"
+    ' Isti tekst koji F4 daje uz polje -- pisac i F4 dele kapiju (R2).
+    AssertEquals Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_1") & " '" & brojZbirne & "' " & _
+                 Poruka("DOKUNOS_ERR_ZBIRNA_NEMA_2"), greska, _
+                 "Rejected prijemnica names the missing zbirna"
 
-    SetConfigValue CFG_PRIJEMNICA_ZBIRNA_PROVERA, prevMode
     Exit Sub
 
 EH:
-    SetConfigValue CFG_PRIJEMNICA_ZBIRNA_PROVERA, prevMode
     LogFail "Prijemnica without zbirna is blocked", Err.description
 End Sub
 
@@ -914,6 +1017,34 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
     LogFail "Otkup read helpers exclude stornirano", errDesc
+End Sub
+
+' CITAC PRIJEMNICA KUPCA IZBACUJE STORNIRANE. Obrisan u S3b-1 zajedno sa starim
+' piscem otpremnice; korak 5 vraca deo GetPrijemniceByKupac (S6 korak 4, odluka
+' 4) -- isti citac puni korpu Fakturisanja. Delovi o otpremnici i zbirni mere
+' citaoce koje korak 5 ne dira, pa ostaju van (plan 14.55 "Korak 5").
+Private Sub Test_DokumentaReadHelpersExcludeStornirano()
+    On Error GoTo EH
+
+    Dim scenario As String, prjActive As String, prjStorno As String
+    Dim brojActive As String, brojStorno As String
+    scenario = NewScenarioCode("STOFILTER")
+    prjActive = S6K5Dokument(scenario & "-A", TEST_KUP_ID, brojActive)
+    prjStorno = S6K5Dokument(scenario & "-S", TEST_KUP_ID, brojStorno)
+    AssertTrue Len(prjActive) > 0 And Len(prjStorno) > 0, "Storno filter fixture prijemnice created"
+
+    If Len(prjStorno) > 0 Then MarkTestRowStornirano TBL_PRIJEMNICA, COL_PRJ_ID, prjStorno
+
+    Dim d As Variant
+    d = GetPrijemniceByKupac(TEST_KUP_ID)
+    AssertTrue ArrayContainsKeyValue(d, TBL_PRIJEMNICA, COL_PRJ_ID, prjActive), _
+               "GetPrijemniceByKupac keeps active"
+    AssertFalse ArrayContainsKeyValue(d, TBL_PRIJEMNICA, COL_PRJ_ID, prjStorno), _
+                "GetPrijemniceByKupac excludes stornirano"
+    Exit Sub
+
+EH:
+    LogFail "Dokumenta read helpers exclude stornirano", Err.description
 End Sub
 
 ' ============================================================
@@ -1079,6 +1210,8 @@ Private Sub SeedBusinessFlowProMasterData()
     SeedKooperant
     SeedKooperant2
     SeedParcelaIfAvailable
+    SeedTipoveAmbalaze
+    SeedAmbalazaOpticaj
 
     LogPass "Seed master data ready"
     Exit Sub
@@ -1353,8 +1486,8 @@ Private Sub Test_ZBR_ImportDvaUredjajaNeStapaDokumente()
     ' Od S5-3 zbirna se sastavlja od OTPREMNICA, pa svaki uredjaj mora da posalje
     ' SVOJ izvor. Dva uredjaja, dve otpremnice, isti broj -- bas KR-001.
     Dim cridA As String, cridB As String
-    cridA = ZbrPwaIzvorCrid("IDENT-A-" & m_RunID, testDate, TEST_VOZ_ID)
-    cridB = ZbrPwaIzvorCrid("IDENT-B-" & m_RunID, testDate, TEST_VOZ_ID)
+    cridA = ZbrPwaIzvorOtpremnica("IDENT-A-" & m_RunID, testDate, TEST_VOZ_ID)
+    cridB = ZbrPwaIzvorOtpremnica("IDENT-B-" & m_RunID, testDate, TEST_VOZ_ID)
 
     idA = TestHook_ImportZbirnaRowPWA("CRID-ZBRIDENT-A-" & m_RunID, TEST_VOZ_ID, _
                                       TEST_KUP_ID, testDate, TEST_VRSTA, TEST_SORTA, _
@@ -1479,7 +1612,7 @@ Private Sub Test_ZBR_IstiCridNevalidanDatumNijeDuplikat()
     danas = NextTestDate()
 
     Dim crid As String
-    crid = ZbrPwaIzvorCrid("DAT-" & scenario, danas, TEST_VOZ_ID)
+    crid = ZbrPwaIzvorOtpremnica("DAT-" & scenario, danas, TEST_VOZ_ID)
 
     Dim zbrCrid As String, broj As String
     zbrCrid = "CRID-ZBRDAT-" & scenario
@@ -1556,8 +1689,8 @@ Private Sub Test_ZBR_IstiCridDrugiSadrzajJeKonflikt()
     danas = NextTestDate()
 
     Dim cridA As String, cridB As String
-    cridA = ZbrPwaIzvorCrid("CRIDA-" & scenario, danas, TEST_VOZ_ID)
-    cridB = ZbrPwaIzvorCrid("CRIDB-" & scenario, danas, TEST_VOZ_ID)
+    cridA = ZbrPwaIzvorOtpremnica("CRIDA-" & scenario, danas, TEST_VOZ_ID)
+    cridB = ZbrPwaIzvorOtpremnica("CRIDB-" & scenario, danas, TEST_VOZ_ID)
 
     Dim zbrCrid As String, broj As String
     zbrCrid = "CRID-ZBRK-" & scenario
@@ -1643,7 +1776,7 @@ Private Sub Test_ZBR_UvozPamtiPoreklo()
     danas = NextTestDate()
 
     Dim crid As String
-    crid = ZbrPwaIzvorCrid("POR-" & scenario, danas, TEST_VOZ_ID)
+    crid = ZbrPwaIzvorOtpremnica("POR-" & scenario, danas, TEST_VOZ_ID)
 
     Dim zbrCrid As String
     zbrCrid = "CRID-ZBRPOR-" & scenario
@@ -1665,9 +1798,11 @@ Private Sub Test_ZBR_UvozPamtiPoreklo()
                                             COL_ZBR_SYNC_SOURCE))), _
                  "ZBR poreklo: zbirna nosi SyncSource"
 
-    ' Clanstvo je razreseno kroz kanon: otkup -> otpremnica -> izvor zbirne.
+    ' Clanstvo vise nije RAZRESENO nego PRENETO: PWA salje OtpremnicaID.
     AssertEquals "1", CStr(modDokumenta.IzvoriZbirne(zbrID).count), _
-                 "ZBR poreklo: zbirna ima izvor razresen iz otkupRecordIDs"
+                 "ZBR poreklo: zbirna ima izvor primljen kao OtpremnicaID"
+    AssertEquals crid, Trim$(NzToText(modDokumenta.IzvoriZbirne(zbrID)(1))), _
+                 "ZBR poreklo: clan je BAS ona otpremnica koju je PWA poslala"
 
 Kraj:
     tx.RollbackTx
@@ -1807,11 +1942,9 @@ Private Sub AppendRF28OtpremnicaFixture(ByVal otpremnicaID As String, _
     SetRequiredField rowData, TBL_OTPREMNICA, COL_OTP_BROJ, brojOtpremnice
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_VRSTA, TEST_VRSTA
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_SORTA, TEST_SORTA
-    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KOLICINA, 100#
-    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_CENA, 10#
+    ' Kolicina, Cena, KolAmbalaze i Klasa se ne sejaju: kolone ne postoje na
+    ' zaglavlju od S3-ostatka. Tip ambalaze JESTE cinjenica zaglavlja i ostaje.
     SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_TIP_AMB, TEST_TIP_AMB
-    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KOL_AMB, 0
-    SetOptionalField rowData, TBL_OTPREMNICA, COL_OTP_KLASA, "I"
 
     ' BrojZbirne i ZbirnaID ostaju PRAZNI -- dete pre roditelja, sto je
     ' za otpremnicu legitimno (auto-lanac je snima pre zbirne).
@@ -1842,7 +1975,7 @@ End Sub
 
 ' ============================================================
 ' RF-05 -- frmDokumenta unos + storno set (regresija)
-'   R01 prosek gajbe ne racuna stornirane redove (SumByBroj)
+'   R01 prosek gajbe ne racuna stornirane redove (CalculateProsekGajbeByZbirna)
 '   R02 stornirana faktura ne ulazi u listu za placanje/avans (FillOpenFakture)
 '   R03 izvor sa Klasom II blokira zbirnu bez "Dve klase" (ZbirnaIzvorImaKlasuII)
 '   R04 prefill bira POSLEDNJU GENERACIJU (GeneracijaID, ne datum/ID kontinuitet)
@@ -1856,67 +1989,59 @@ End Sub
 '   R12 kaskade mutiraju samo redove razresenog lanca (scope), fail-closed bez parenta
 ' ============================================================
 
-' MIG-004. Manjak koji F4 crta nije novi racun nego CalculateManjakPreview --
-' funkcija koja je od brisanja frmDokumenta ostala bez ijednog pozivaoca. Ovo
+' MIG-004. Manjak koji F4 crta nije novi racun nego CalculateManjakPreview. Ovo
 ' meri BAS NJU, nad pravim redovima: da sabira po broju zbirne, da dodaje
-' NEUPISANE kilograme iz forme, i da stornirane redove ne broji ni sa jedne
-' strane. Bez toga bi ekran mogao da pokaze zelenu nulu nad podacima koji se
-' ne slazu.
+' NEUPISANE kilograme iz forme, i da stornirane dokumente ne broji ni sa jedne
+' strane. Bez toga bi ekran mogao da pokaze zelenu nulu nad podacima koji se ne
+' slazu.
+'
+' S6 KORAK 3 (stavka 178): test je obrisan u koraku 2 i vraca se nad DOKUMENTIMA
+' NOVOG OBLIKA sa obe strane. Zbirna je kanonska (CreateZbirna_TX, dve izdate
+' otpremnice), pa joj je zaglavlje PRAZNO -- do koraka 3 je preview zbirnu
+' sabirao sa zaglavlja i za nju video nulu. Prijemnica je dvoklasna, kroz pisca.
+' Ranije je zbirna bila ZbrZateceniRed, koji pise i zaglavlje, pa bi ta laz
+' ostala skrivena.
+' SABOTAZE: manjak-preview-bez-druge-klase -> pukne "Manjak: neupisane kg obe
+' klase ulaze u prijemnicu"; s6k3-preview-zbirna-nula -> "Manjak: zbirna je
+' ZBIR svojih stavki".
 Private Sub Test_ManjakPreviewJeZbirnaMinusPrijem()
     On Error GoTo EH
 
     Dim scenario As String
     scenario = NewScenarioCode("MANJAK")
 
-    Dim testDate As Date
-    testDate = NextTestDate()
+    Dim broj As String, zbr As String, datZbr As Date, prj As String
+    prj = S6K3ZbirnaIPrijemnica(scenario, broj, zbr, datZbr)
+    AssertTrue Len(zbr) > 0, "Manjak: kanonska zbirna I+II kreirana"
+    AssertTrue Len(prj) > 0, "Manjak: dvoklasna prijemnica kreirana kroz pisca"
 
-    Dim brojZbirne As String, brojPrij As String
-    brojZbirne = TEST_PREFIX & "-ZBR-MJ-" & scenario
-    brojPrij = TEST_PREFIX & "-PRJ-MJ-" & scenario
-
-    ' Zbirna 300 kg u dva reda (100 + 200) -- manjak se meri po BROJU, ne po
-    ' jednom redu; sa jednim redom bi i pogresno "uzmi prvi" prolazilo.
-    Dim zbrI As String, zbrII As String
-    zbrI = ZbrZateceniRed(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
-                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
-                         100#, TEST_TIP_AMB, 10, KLASA_I)
-    zbrII = ZbrZateceniRed(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
-                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
-                          200#, TEST_TIP_AMB, 20, KLASA_II)
-    AssertTrue Len(zbrI) > 0 And Len(zbrII) > 0, "Manjak: fixture zbirna I+II kreirana"
-
-    Dim prj As String
-    prj = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
-                            TEST_VRSTA, TEST_SORTA, 200#, 100#, TEST_TIP_AMB, 20, 0, "I")
-    AssertTrue Len(prj) > 0, "Manjak: fixture prijemnica kreirana"
-
-    ' 300 upisano na zbirnoj, 200 stiglo prijemnicom -> manjak 100 kg = 33,33%.
+    ' Zbirna 550 kg u dve stavke (400 + 150), prijemnica 420 (300 + 120) ->
+    ' manjak 130 kg = 23,64% zbirne.
     Dim m As Variant
-    m = CalculateManjakPreview(brojZbirne, 0#, 0#)
+    m = CalculateManjakPreview(broj, 0#, 0#)
     AssertTrue IsArray(m), "Manjak: preview vraca niz"
-    AssertDoubleNear 300#, CDbl(m(0)), 0.01, "Manjak: zbirna je ZBIR svih svojih redova"
-    AssertDoubleNear 200#, CDbl(m(1)), 0.01, "Manjak: prijemnica je zbir upisanih redova"
-    AssertDoubleNear 100#, CDbl(m(2)), 0.01, "Manjak: manjak je zbirna minus prijemnica"
-    AssertDoubleNear 33.3333, CDbl(m(3)), 0.01, "Manjak: procenat je udeo u ZBIRNOJ"
+    AssertDoubleNear 550#, CDbl(m(0)), 0.01, "Manjak: zbirna je ZBIR svojih stavki"
+    AssertDoubleNear 420#, CDbl(m(1)), 0.01, "Manjak: prijemnica je ZBIR svojih stavki"
+    AssertDoubleNear 130#, CDbl(m(2)), 0.01, "Manjak: manjak je zbirna minus prijemnica"
+    AssertDoubleNear 23.6364, CDbl(m(3)), 0.01, "Manjak: procenat je udeo u ZBIRNOJ"
 
     ' NEUPISANI kilogrami iz forme ulaze u prijemnicu -- to je cela svrha
     ' "Preview" varijante: operater vidi manjak PRE snimanja, ne posle.
-    m = CalculateManjakPreview(brojZbirne, 50#, 25#)
-    AssertDoubleNear 275#, CDbl(m(1)), 0.01, "Manjak: neupisane kg obe klase ulaze u prijemnicu"
-    AssertDoubleNear 25#, CDbl(m(2)), 0.01, "Manjak: manjak pada za neupisane kilograme"
+    m = CalculateManjakPreview(broj, 50#, 25#)
+    AssertDoubleNear 495#, CDbl(m(1)), 0.01, "Manjak: neupisane kg obe klase ulaze u prijemnicu"
+    AssertDoubleNear 55#, CDbl(m(2)), 0.01, "Manjak: manjak pada za neupisane kilograme"
 
     ' Stornirana prijemnica NE ulazi -- inace bi ispravka dokumenta izgledala
     ' kao da je roba stigla dvaput.
-    MarkTestRowStornirano TBL_PRIJEMNICA, "PrijemnicaID", prj
-    m = CalculateManjakPreview(brojZbirne, 0#, 0#)
+    If Len(prj) > 0 Then MarkTestRowStornirano TBL_PRIJEMNICA, COL_PRJ_ID, prj
+    m = CalculateManjakPreview(broj, 0#, 0#)
     AssertDoubleNear 0#, CDbl(m(1)), 0.01, "Manjak: stornirana prijemnica se NE broji"
-    AssertDoubleNear 300#, CDbl(m(2)), 0.01, "Manjak: posle storna fali cela zbirna"
+    AssertDoubleNear 550#, CDbl(m(2)), 0.01, "Manjak: posle storna fali cela zbirna"
 
-    ' Ista uzica na drugoj strani: storniran red zbirne smanjuje ocekivanje.
-    MarkTestRowStornirano TBL_ZBIRNA, "ZbirnaID", zbrII
-    m = CalculateManjakPreview(brojZbirne, 0#, 0#)
-    AssertDoubleNear 100#, CDbl(m(0)), 0.01, "Manjak: storniran red zbirne se NE broji"
+    ' Ista uzica na drugoj strani: stornirana zbirna se ne ocekuje.
+    If Len(zbr) > 0 Then MarkTestRowStornirano TBL_ZBIRNA, COL_ZBR_ID, zbr
+    m = CalculateManjakPreview(broj, 0#, 0#)
+    AssertDoubleNear 0#, CDbl(m(0)), 0.01, "Manjak: stornirana zbirna se NE broji"
 
     ' Broj koji ne postoji nije "sve se slaze" nego NEMA ZBIRNE: zbirna ostaje
     ' nula, i bas po toj nuli ekran zna da liniju ne sme da nacrta.
@@ -1930,36 +2055,62 @@ EH:
     LogFatal "Test_ManjakPreviewJeZbirnaMinusPrijem", Err.Number, Err.description
 End Sub
 
+' KANONSKA ZBIRNA I DVOKLASNA PRIJEMNICA NA NJOJ (S6 korak 3).
+'
+' Zbirna: I 400 kg / 20 gajbi + II 150 kg / 10, iz dve izdate otpremnice, kroz
+' CreateZbirna_TX -- zaglavlje joj je PRAZNO (PR3), pa citalac zaglavlja vidi
+' nulu. Prijemnica: I 300 x 50 + II 120 x 40, kroz pisca, BEZ ambalaze. Klase
+' nose RAZLICITE kolicine i cene, pa zbir, prva stavka i prosek daju razlicit
+' broj. Vraca PrijemnicaID ("" kad upis nije uspeo; tvrdnje to prijave po imenu).
+Private Function S6K3ZbirnaIPrijemnica(ByVal scenario As String, _
+                                       ByRef brojZbirne As String, _
+                                       ByRef zbrID As String, _
+                                       ByRef datumZbr As Date) As String
+    Dim otpI As String, otpII As String, ocek As Collection
+    Dim h As Object, razlog As String
+
+    otpI = Pr3Otpremnica(TEST_PREFIX & "-OTP-S6K3I-" & scenario, KLASA_I, 400#, 20)
+    otpII = Pr3Otpremnica(TEST_PREFIX & "-OTP-S6K3II-" & scenario, KLASA_II, 150#, 10)
+
+    Set ocek = New Collection
+    ocek.Add Pr3Ocekivano(KLASA_I, 400#, 20)
+    ocek.Add Pr3Ocekivano(KLASA_II, 150#, 10)
+
+    brojZbirne = TEST_PREFIX & "-ZBR-S6K3-" & scenario
+    Set h = Pr3Header(brojZbirne)
+    datumZbr = CDate(h("Datum"))
+    zbrID = CreateZbirna_TX(h, Pr3Izvor(otpI, otpII), ocek, razlog)
+    If Len(zbrID) = 0 Then Exit Function
+
+    Dim errNum As Long
+    On Error Resume Next
+    S6K3ZbirnaIPrijemnica = SavePrijemnicaMulti_TX( _
+        datum:=datumZbr, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+        brojPrij:=TEST_PREFIX & "-PRJ-S6K3-" & scenario, brojZbirne:=brojZbirne, _
+        vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+        kolicinaI:=300#, cenaI:=50#, tipAmb:="", kolAmb:=0, kolAmbVracena:=0, _
+        hasKlasaII:=True, kolicinaII:=120#, cenaII:=40#, kolAmbII:=0, _
+        outErrNum:=errNum)
+    If Err.Number <> 0 Then
+        S6K3ZbirnaIPrijemnica = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Function
+
+' STORNIRANA FAKTURA NE ULAZI U LISTU ZA PLACANJE. Obrisan u S6 koraku 2 (faktura
+' je citala zaglavlje prijemnice), vracen u koraku 5: faktura nastaje nad STAVKOM
+' dokumenta koji pravi produkcioni pisac.
 Private Sub Test_OpenFaktureExcludeStornirano()
     On Error GoTo EH
 
-    Dim scenario As String
+    Dim scenario As String, prj As String
     scenario = NewScenarioCode("FAKSTO")
-
-    Dim testDate As Date
-    testDate = NextTestDate()
-
-    Dim brojZbirne As String, brojPrij As String
-    brojZbirne = TEST_PREFIX & "-ZBR-FS-" & scenario
-    brojPrij = TEST_PREFIX & "-PRJ-FS-" & scenario
-
-    Dim zbrFix As String
-    zbrFix = ZbrZateceniRed(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
-                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
-                           100#, TEST_TIP_AMB, 0, KLASA_I)
-    AssertTrue Len(zbrFix) > 0, "Storno faktura: fixture zbirna kreirana"
-
-    Dim prjI As String
-    prjI = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
-                             TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
-    AssertTrue Len(prjI) > 0, "Storno faktura: fixture prijemnica kreirana"
-
-    Dim stavke As Collection
-    Set stavke = New Collection
-    stavke.Add Array(prjI, 100#, 100#, KLASA_I, brojPrij)
+    prj = S6K5Dokument(scenario, TEST_KUP_ID)
+    AssertTrue Len(prj) > 0, "Storno faktura: fixture prijemnica kreirana"
 
     Dim fakID As String
-    fakID = CreateFaktura_TX(TEST_KUP_ID, stavke)
+    fakID = S6K5Fakturisi(TEST_KUP_ID, S6StavkaID(prj, KLASA_I))
     AssertTrue Len(fakID) > 0, "Storno faktura: fixture faktura kreirana"
 
     ' Pre storna: faktura JESTE u produkcionom read-modelu koji forma zove
@@ -1969,7 +2120,13 @@ Private Sub Test_OpenFaktureExcludeStornirano()
     AssertTrue OpenFaktureImaDatum(TEST_KUP_ID, fakID), _
                "GetOpenFakture vraca i Datum (6. kolona za prikaz u formi)"
 
-    MarkTestRowStornirano TBL_FAKTURE, COL_FAK_ID, fakID
+    ' Storno kroz PRAVI pisac: zaglavlje I linije. Samo zaglavlje bi ostavilo
+    ' aktivnu liniju nad storniranom fakturom -- kvar koji citac linija odbija
+    ' (FAK-LIN-02, review #439 P2-2), pa bi pao svaki kasniji test koji ga cita.
+    If Len(fakID) > 0 Then
+        AssertTrue modStorno.StornoFaktura_TX(fakID), _
+                   "Storno faktura: storno kroz pravi pisac prolazi"
+    End If
 
     ' Stornirana faktura NIJE "Placeno" -- stari filter forme (Status <> Placeno)
     ' bi je pustio nazad u listu.
@@ -2059,25 +2216,27 @@ Private Sub Test_StornoPoBrojuOdbijaDvaVlasnika()
     Dim testDate As Date
     testDate = NextTestDate()
 
-    Dim brojZbirne As String, brojPrij As String
+    ' Zbirna PO KUPCU: prijemnica se vezuje samo na zbirnu svog vlasnika
+    ' (PRJ-ZBR-01, S6 korak 8), pa dva kupca istog broja prijemnice imaju dve.
+    Dim brojZbirne As String, brojZbirneB As String, brojPrij As String
     brojZbirne = TEST_PREFIX & "-ZBR-SV-" & scenario
+    brojZbirneB = TEST_PREFIX & "-ZBR-SVB-" & scenario
     brojPrij = TEST_PREFIX & "-PRJ-SV-" & scenario     ' ISTI broj za oba kupca
 
-    AssertTrue Len(ZbrZateceniRed(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
-                                 "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
-                                 100#, TEST_TIP_AMB, 0, KLASA_I)) > 0, _
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(testDate, brojZbirne, TEST_KUP_ID)) > 0 And _
+               Len(ZbrIzdataPodPrijemnicu(testDate, brojZbirneB, TEST_KUP2_ID)) > 0, _
                "Storno guard: fixture zbirna kreirana"
 
     Dim prjA As String, prjB As String
-    prjA = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
-                             TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
-    prjB = SavePrijemnica_TX(testDate, TEST_KUP2_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
-                             TEST_VRSTA, TEST_SORTA, 80#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+    prjA = PrjJednaKlasa(testDate, TEST_KUP_ID, brojPrij, brojZbirne, 100#, 100#, KLASA_I)
+    prjB = PrjJednaKlasa(testDate, TEST_KUP2_ID, brojPrij, brojZbirneB, 80#, 100#, KLASA_I)
     AssertTrue Len(prjA) > 0 And Len(prjB) > 0, _
                "Storno guard: obe prijemnice (isti broj, dva kupca) kreirane"
 
-    ' Dvosmislen number-only storno mora pasti...
-    AssertFalse StornoPrijemnicaByBroj_TX(brojPrij), _
+    ' Dvosmislen number-only storno mora pasti... (S6 korak 4: ulaz po broju
+    ' je obrisan; ekran Storno bez identiteta dokument ne razresava po broju.)
+    Dim msgSt As String
+    AssertFalse modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, brojPrij, "", msgSt, ""), _
                 "Storno guard: storno po broju sa dva vlasnika je ODBIJEN"
 
     ' ...i ne sme ostaviti nijedan storniran red (rollback / nista nije dirano).
@@ -2087,22 +2246,28 @@ Private Sub Test_StornoPoBrojuOdbijaDvaVlasnika()
                "Storno guard: dokument kupca B ostaje aktivan"
 
     ' Kontrola: jedinstven broj (jedan vlasnik, obe klase) i dalje prolazi.
+    '
+    ' Od S6 koraka 2 je dvoklasna prijemnica JEDAN dokument (zaglavlje + dve
+    ' stavke), pa se pravi jednim pozivom pisca. Ranije su to bila dva poziva
+    ' SavePrijemnica_TX istog broja -- a to su sada DVA dokumenta.
     Dim brojPrijOK As String
     brojPrijOK = TEST_PREFIX & "-PRJ-SV1-" & scenario
 
-    Dim okI As String, okII As String
-    okI = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrijOK, brojZbirne, _
-                            TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
-    okII = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrijOK, brojZbirne, _
-                             TEST_VRSTA, TEST_SORTA, 40#, 90#, TEST_TIP_AMB, 0, 0, KLASA_II)
-    AssertTrue Len(okI) > 0 And Len(okII) > 0, "Storno guard: fixture jednog vlasnika kreiran"
+    Dim okDok As String, errNum As Long
+    okDok = SavePrijemnicaMulti_TX( _
+                datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+                brojPrij:=brojPrijOK, brojZbirne:=brojZbirne, _
+                vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+                kolicinaI:=100#, cenaI:=100#, tipAmb:=TEST_TIP_AMB, _
+                kolAmb:=0, kolAmbVracena:=0, _
+                hasKlasaII:=True, kolicinaII:=40#, cenaII:=90#, kolAmbII:=0, _
+                outErrNum:=errNum)
+    AssertTrue Len(okDok) > 0, "Storno guard: dvoklasni dokument jednog vlasnika kreiran"
 
-    AssertTrue StornoPrijemnicaByBroj_TX(brojPrijOK), _
+    AssertTrue modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, brojPrijOK, "", msgSt, okDok), _
                "Storno guard: jedinstven broj (jedan vlasnik) i dalje prolazi"
-    AssertTrue RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, okI), _
-               "Storno guard: Kl.I stornirana"
-    AssertTrue RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, okII), _
-               "Storno guard: Kl.II stornirana (obe klase istog broja)"
+    AssertTrue RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, okDok), _
+               "Storno guard: dvoklasni dokument je storniran CEO (jedno zaglavlje)"
 
     Exit Sub
 
@@ -2130,8 +2295,8 @@ End Function
 ' (dokaz.py: NE OBARA NISTA).
 '
 ' Grana B je ZATECEN red: broj stoji, generacija prazna. Druga verzija je tu
-' pokusala redosled "dete pre roditelja" i pukla na ValidatePrijemnicaInput:
-' PrijemnicaZbirnaBlokira() je po defaultu True (Case Else hvata i prazno), pa
+' pokusala redosled "dete pre roditelja" i pukla na kapiji roditelja u piscu
+' (tada PrijemnicaZbirnaBlokira(), od S6 koraka 8 PrijemnicaRoditeljRazlog), pa
 ' prijemnica bez postojece zbirne uopste ne prolazi. Taj redosled je stvaran za
 ' OTPREMNICU iz auto-lanca (modAutoHladnjaca), ne za prijemnicu.
 '
@@ -2163,18 +2328,25 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
     ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_PRIJEMNICA
+    ' S6 korak 2: prijemnica je zaglavlje + stavke -- isti razlog kao gore.
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    ' KNJIGA IDE SA DOKUMENTOM (10b-2). Od cutovera prijemnica knjizi
+    ' Vozac -> Kupac, a pisac prijemnice commituje SVOJU tx. Bez ovog snimka
+    ' spoljni rollback vrati tblPrijemnica a knjigu ne -- red ostaje kao
+    ' SIROTAN, GetNextID ponovo izda isti broj, i AMB-INV-04 ga obori u
+    ' TUDJEM testu dva testa kasnije (05.10.2026, bas tako i jeste palo).
+    tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
+    ' Izdata zbirna nastaje kroz pisce otkupa, otpremnice i zbirne (S6 korak 8).
+    ZbrPodPrijemnicuSnimi tx
 
     ' --- A) uobicajen redosled: roditelj pa dete ---
-    zbrA = ZbrZateceniRed(testDate, TEST_VOZ_ID, brojA, TEST_KUP_ID, _
-                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
-                         100#, TEST_TIP_AMB, 10, KLASA_I)
+    zbrA = ZbrIzdataPodPrijemnicu(testDate, brojA, TEST_KUP_ID)
     AssertTrue Len(zbrA) > 0, "ZBR-PAL preduslov: zbirna je snimljena"
 
-    prjA = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brPrijA, brojA, _
-                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, 0, _
-                             KLASA_I, 0)
+    prjA = PrjJednaKlasa(testDate, TEST_KUP_ID, brPrijA, brojA, 100#, 10#, KLASA_I, _
+                         TEST_TIP_AMB, 10)
     AssertTrue Len(prjA) > 0, "ZBR-PAL preduslov: prijemnica je snimljena"
 
     genPrj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_DETE_ZBIRNA_ROD))
@@ -2185,9 +2357,9 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
         "ZBR-PAL: paletna stavka nosi ISTU generaciju kao njena prijemnica"
 
     ' --- B) ZATECEN red: broj stoji, generacija prazna ---
-    prjB = SavePrijemnica(testDate, TEST_KUP_ID, TEST_VOZ_ID, brPrijB, brojA, _
-                          TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 0, 0, _
-                          KLASA_I, 0)
+    ' Bez gajbi, pa pisac ne paletizuje -- paletu pravi test ispod, posle
+    ' praznjenja generacije. Pisac commituje svoju transakciju, a ova je snima.
+    prjB = PrjJednaKlasa(testDate, TEST_KUP_ID, brPrijB, brojA, 100#, 10#, KLASA_I)
     AssertTrue Len(prjB) > 0, "ZBR-PAL preduslov: druga prijemnica je snimljena"
 
     IsprazniGeneracijuDeteta TBL_PRIJEMNICA, COL_PRJ_ID, prjB
@@ -2200,9 +2372,12 @@ Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
     AssertEquals genPrj, ZbirnaIDZaBroj(brojA), _
         "ZBR-PAL preduslov: broj razresava na generaciju (ima sta da se pogodi)"
 
+    ' Od S6 koraka 2 je kljuc paletne stavke LINIJA, pa se salje i stavka --
+    ' isto kao sto to radi pisac (SavePrijemnicaMulti_TX).
     PaletizePrijemnica prijemnicaID:=prjB, brojPrij:=brPrijB, brojZbirne:=brojA, _
                        vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, klasa:=KLASA_I, _
-                       netoKg:=100#, brGajbica:=10, tipAmb:=TEST_TIP_AMB
+                       netoKg:=100#, brGajbica:=10, tipAmb:=TEST_TIP_AMB, _
+                       prijemnicaStavkaID:=S6StavkaID(prjB, KLASA_I)
 
     AssertTrue BrojPaletnihStavki(prjB) > 0, _
         "ZBR-PAL preduslov: paletizacija je napravila stavku (grana B)"
@@ -2278,16 +2453,6 @@ Private Sub VeziOtkupZaOtpremnicuFixture(ByVal otkupID As String, _
 
     RequireUpdateCell TBL_OTKUP, CLng(rows(1)), COL_OTK_OTPREMNICA_ID, otpremnicaID, SRC
 End Sub
-
-Private Function StornoOznaka(ByVal tableName As String, ByVal idColumn As String, _
-                                      ByVal idValue As String) As String
-    StornoOznaka = UCase$(NzToText(LookupValue(tableName, idColumn, idValue, COL_STORNIRANO)))
-End Function
-
-Private Function RedJeStorniran(ByVal tableName As String, ByVal idColumn As String, _
-                                ByVal idValue As String) As Boolean
-    RedJeStorniran = (StornoOznaka(tableName, idColumn, idValue) = "DA")
-End Function
 
 ' ZAUZETOST BROJA OTPREMNICE -- ekran i pisac, po nizu (stanica, dan), sa
 ' storniranima (A2 tacke 2 i 4, odluke 14.09.2026).
@@ -2454,91 +2619,6 @@ Private Sub Test_ZBR_StorniranBrojIstogVozacaOdbijen()
 EH:
     LogFatal "Test_ZBR_StorniranBrojIstogVozacaOdbijen", Err.Number, Err.description
 End Sub
-' Dva kupca mogu istog dana dobiti ISTI BrojPrijemnice (GenerateBrojPrijemnice
-' racuna sekvencu po kupcu). Generacije im moraju biti razlicite.
-Private Sub Test_GeneracijaNePrelaziVlasnika()
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("GENVLAS")
-
-    Dim testDate As Date
-    testDate = NextTestDate()
-
-    Dim brojZbirne As String, brojPrij As String
-    brojZbirne = TEST_PREFIX & "-ZBR-VL-" & scenario
-    brojPrij = TEST_PREFIX & "-PRJ-VL-" & scenario     ' ISTI broj za oba kupca
-
-    Dim zbrFix As String
-    zbrFix = ZbrZateceniRed(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
-                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
-                           100#, TEST_TIP_AMB, 0, KLASA_I)
-    AssertTrue Len(zbrFix) > 0, "Vlasnik scope: fixture zbirna kreirana"
-
-    Dim prjA As String, prjB As String
-    prjA = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
-                             TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
-    prjB = SavePrijemnica_TX(testDate, TEST_KUP2_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
-                             TEST_VRSTA, TEST_SORTA, 80#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
-
-    AssertTrue Len(prjA) > 0 And Len(prjB) > 0, _
-               "Vlasnik scope: obe prijemnice (isti broj, razliciti kupci) kreirane"
-
-    Dim genA As String, genB As String
-    genA = DokGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, prjA)
-    genB = DokGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, prjB)
-
-    AssertTrue Len(genA) > 0 And Len(genB) > 0, "Vlasnik scope: obe prijemnice imaju generaciju"
-    AssertTrue genA <> genB, _
-               "Vlasnik scope: isti broj kod DVA kupca ne deli generaciju"
-
-    ' Klasa II kupca A mora naslediti generaciju kupca A (ne kupca B).
-    Dim prjAII As String
-    prjAII = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
-                               TEST_VRSTA, TEST_SORTA, 40#, 90#, TEST_TIP_AMB, 0, 0, KLASA_II)
-    AssertTrue Len(prjAII) > 0, "Vlasnik scope: Kl.II kupca A kreirana"
-    AssertEquals genA, DokGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, prjAII), _
-                 "Vlasnik scope: Kl.II nasledjuje generaciju SVOG kupca"
-
-    ' Prefill po PK-u kupca A vraca redove kupca A.
-    Dim d As Variant
-    d = GetTableData(TBL_PRIJEMNICA)
-
-    Dim rI As Long, rII As Long
-    PickPrefillRows d, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ), _
-                    GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA), _
-                    GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID), _
-                    GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID), _
-                    brojPrij, prjA, rI, rII
-
-    AssertTrue rI > 0 And rII > 0, "Vlasnik scope: prefill nasao obe klase kupca A"
-
-    Dim cKup As Long
-    cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
-    If rI > 0 Then
-        AssertEquals TEST_KUP_ID, Trim$(CStr(nz(d(rI, cKup), ""))), _
-                     "Vlasnik scope: prefill Kl.I je kupca A (ne prelazi na kupca B)"
-    End If
-    If rII > 0 Then
-        AssertEquals TEST_KUP_ID, Trim$(CStr(nz(d(rII, cKup), ""))), _
-                     "Vlasnik scope: prefill Kl.II je kupca A"
-    End If
-
-    Exit Sub
-
-EH:
-    LogFatal "Test_GeneracijaNePrelaziVlasnika", Err.Number, Err.description
-End Sub
-
-' Generacija reda po ID-u. Prazan ID daje "" -> AssertEquals nad dva prazna bi
-' lazno prosao, pa pozivaoci uz poredjenje tvrde i da generacija NIJE prazna.
-Private Function DokGeneracija(ByVal tableName As String, ByVal idColumn As String, _
-                               ByVal idValue As String) As String
-    If Len(Trim$(idValue)) = 0 Then Exit Function
-
-    DokGeneracija = Trim$(CStr(nz(GetValueByKey(tableName, idColumn, idValue, _
-                                                COL_GENERACIJA_ID), "")))
-End Function
 
 Private Sub Test_PorukeKatalogPokrivaDokumenta()
     On Error GoTo EH
@@ -2660,36 +2740,21 @@ Private Sub Test_OMUlazSmerObavezan()
     ' Prazan smer uz kolicinu ambalaze: ranije je tiho knjizen legacy Stanica ULAZ.
     ' Sada core guard odbija upis (UI dodatno blokira pre poziva).
     Dim ok As Boolean
-    ok = SaveOMUlaz_TX(datum:=testDate, brojDok:=brojDok, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="")
+    ok = UpisiReversKol(testDate, brojDok, TEST_ST_ID, "", "", 10)
 
     AssertFalse ok, "OM ulaz: prazan smer uz kolicinu ambalaze je odbijen"
     AssertEquals CStr(ambBefore), CStr(CountRows(TBL_AMBALAZA)), _
                  "OM ulaz: odbijen upis nije ostavio ambalaza red"
 
     ' Nepoznat smer takodje pada (nije jedan od cetiri dozvoljena).
-    ok = SaveOMUlaz_TX(datum:=testDate, brojDok:=brojDok & "-X", _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="NEPOSTOJECI")
+    ok = UpisiReversKol(testDate, brojDok & "-X", TEST_ST_ID, "", "NEPOSTOJECI", 10)
 
     AssertFalse ok, "OM ulaz: nepoznat smer je odbijen"
     AssertEquals CStr(ambBefore), CStr(CountRows(TBL_AMBALAZA)), _
                  "OM ulaz: nepoznat smer nije ostavio ambalaza red"
 
     ' Kontrola: eksplicitan smer prolazi (IZDATO_OM = vozac predaje na OM).
-    ok = SaveOMUlaz_TX(datum:=testDate, brojDok:=brojDok & "-OK", _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(testDate, brojDok & "-OK", TEST_ST_ID, "", "IZDATO_OM", 10)
 
     AssertTrue ok, "OM ulaz: eksplicitan smer IZDATO_OM prolazi"
     AssertEquals CStr(ambBefore + 1), CStr(CountRows(TBL_AMBALAZA)), _
@@ -3056,35 +3121,6 @@ Private Function FindIDByTwoColumns(ByVal tableName As String, _
            Trim$(CStr(data(i, colKey2))) = Trim$(keyValue2) Then
 
             FindIDByTwoColumns = Trim$(CStr(data(i, colID)))
-            Exit Function
-        End If
-    Next i
-End Function
-
-' BrojPrijemnice za (BrojZbirne | Klasa | KupacID). FindPrijemnicaIDByBrojAndKlasa
-' ne moze ovde: trazi po BROJU prijemnice, a kod izolacije po kupcu dve prijemnice
-' dele isti BrojZbirne pa je kupac deo kljuca.
-Private Function FindPrijBrojByZbirnaKlasaKupac(ByVal brZbr As String, ByVal klasa As String, _
-                                                ByVal kupacID As String) As String
-    Const SRC As String = "FindPrijBrojByZbirnaKlasaKupac"
-    Dim data As Variant
-    data = GetTableData(TBL_PRIJEMNICA)
-    If IsEmpty(data) Then Exit Function
-    data = ExcludeStornirano(data, TBL_PRIJEMNICA)
-    If IsEmpty(data) Then Exit Function
-
-    Dim cZbr As Long, cKla As Long, cKup As Long, cBroj As Long
-    cZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
-    cKla = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, SRC)
-    cKup = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, SRC)
-    cBroj = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
-
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cZbr))) = Trim$(brZbr) And _
-           Trim$(CStr(data(i, cKla))) = Trim$(klasa) And _
-           StrComp(Trim$(CStr(data(i, cKup))), Trim$(kupacID), vbTextCompare) = 0 Then
-            FindPrijBrojByZbirnaKlasaKupac = Trim$(CStr(data(i, cBroj)))
             Exit Function
         End If
     Next i
@@ -4911,6 +4947,68 @@ End Sub
 ' Slucaj (c) je onaj koji je zatecen ekran vec pokrivao (modOtkupUnos:158
 ' gleda i kolAmbIzdata), a nov writer umalo nije: izdata ambalaza bez tipa je
 ' gajba koja je otisla kooperantu a ne zna se koja.
+' KOOPERANT DONESE SVOJE GAJBE -- 5-10% otkupa (mereno kod operatera).
+'
+' Nije edge case nego osnovno pravilo (6.4): manjak kooperanta se POKRIVA kao
+' ulaz tudje ambalaze, a to je dug firme prema njemu -- pa trazi pristanak i NE
+' sme da prodje tiho (6.5).
+'
+' Meri UGOVOR IZMEDJU PISCA I EKRANA, ne samo odbijanje: ekran prepoznaje slucaj
+' po BROJU greske (tekst je prevodiv, broj je ugovor) i dobija TACAN broj istim
+' javnim racunom koji pisac koristi. Zato tvrdnje gledaju outErrNum i
+' OtkupDeficitKooperanta, a ne tekst poruke.
+'
+' Tip je TEST_TIP_AMB_C, koji SeedAmbalazaOpticaj namerno ne zaseje.
+'
+' Saldo se po ovom testu VRACA na nulu sam: kooperant da 20 (-20), a pokrice mu
+' upise 20 (+20) -- pa ponovljen prolaz suite-a vidi isti deficit.
+Private Sub Test_OTK_DeficitKooperantaTraziPotvrdu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTKDEF")
+
+    Dim h As Object
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-DF-" & scenario)
+    h("TipAmbalaze") = TEST_TIP_AMB_C
+
+    Dim stavke As Collection
+    Set stavke = OtkStavke(400#, 50#, 20, 0#, 0#, 0)
+
+    Dim greska As String, errNum As Long, bezPotvrde As String
+    bezPotvrde = CreateOtkup_TX(h, stavke, greska, , errNum)
+
+    Dim deficit As Double
+    deficit = modOtkup.OtkupDeficitKooperanta(h, stavke)
+
+    ' Pogresna potvrda se odbija: izmedju pitanja i odgovora stanje se moglo
+    ' promeniti, pa pisac meri prema SVEZE izracunatom manjku.
+    Dim greska2 As String, errNum2 As Long, saPogresnom As String
+    saPogresnom = CreateOtkup_TX(h, stavke, greska2, deficit + 1#, errNum2)
+
+    Dim greska3 As String, errNum3 As Long, saPotvrdom As String
+    saPotvrdom = CreateOtkup_TX(h, stavke, greska3, deficit, errNum3)
+
+    AssertEquals "", bezPotvrde, "OTK deficit: bez potvrde dokument ne nastaje"
+    AssertEquals CStr(AMB_ERR_POTVRDA_DEFICITA), CStr(errNum), _
+                 "OTK deficit: ekran prepoznaje slucaj po BROJU greske"
+    AssertTrue Abs(deficit - 20#) < 0.001, _
+               "OTK deficit: javni racun daje tacan manjak za potvrdu"
+    AssertEquals "", saPogresnom, "OTK deficit: pogresna potvrda se odbija"
+    AssertTrue Len(saPotvrdom) > 0, _
+               "OTK deficit: sa tacnom potvrdom dokument nastaje"
+    AssertEquals "1", _
+                 CStr(AmbNoviBrojRedova(saPotvrdom, DOK_TIP_OTKUP, AMB_VK_ULAZ_TUDJE)), _
+                 "OTK deficit: pokrice je upisano kao ULAZ tudje ambalaze"
+    AssertTrue Abs(AmbNoviKolicina(saPotvrdom, DOK_TIP_OTKUP, AMB_VK_ULAZ_TUDJE) _
+                   - deficit) < 0.001, _
+               "OTK deficit: pokrice nosi tacno manjak, ni vise ni manje"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_DeficitKooperantaTraziPotvrdu", Err.Number, Err.description
+End Sub
+
 Private Sub Test_OTK_TipAmbalazeVezujeSvakaAmbalaza()
     On Error GoTo EH
 
@@ -4957,6 +5055,116 @@ Private Sub Test_OTK_TipAmbalazeVezujeSvakaAmbalaza()
 
 EH:
     LogFatal "Test_OTK_TipAmbalazeVezujeSvakaAmbalaza", Err.Number, Err.description
+End Sub
+
+' OPTICAJ AMBALAZE ZA SUITE -- fixture mora da predstavlja POSLOVANJE U TOKU.
+'
+' Posle cutovera otkupa pisac TRAZI da kooperantove gajbe postoje: primljena
+' ambalaza je prenos Kooperant -> Stanica, a nalog koji nema dovoljno ulazi u
+' protokol potvrde deficita (6.5). Stari pisac (TrackAmbalaza) nije imao nikakvu
+' kapiju, pa je fixture mogao da krene od nule.
+'
+' Zasejava se na JEDNOM mestu, a ne potvrdom deficita na 139 pozivnih mesta
+' CreateOtkup_TX: u stvarnosti kooperant vraca NASE gajbe koje mu je stanica
+' izdala, i to je 90-95% slucajeva (odluka operatera 03.10.2026). Potvrda
+' deficita ostaje ono sto jeste -- izuzetak, koji ima svoj test.
+'
+' Zaliha se ponovnim pokretanjem suite-a samo DODAJE, nikad ne umanjuje, pa
+' visestruki prolaz nad istom sveskom ne menja ishod.
+Private Sub SeedAmbalazaOpticaj()
+    Const SRC As String = "SeedAmbalazaOpticaj"
+    Const SEED_NABAVKA As Double = 100000#
+    Const SEED_KOOPERANTU As Double = 20000#
+
+    On Error GoTo EH
+
+    Dim stanice As Variant, kooperanti As Variant, tipovi As Variant
+    stanice = Array(TEST_ST_ID, TEST_HLAD_ST_ID, TEST_HLAD2_ST_ID)
+    kooperanti = Array(TEST_KOOP_ID, TEST_KOOP2_ID)
+    tipovi = Array(TEST_TIP_AMB, TEST_TIP_AMB_B)
+
+    ' NASE gajbe ulaze u opticaj samo kroz NABAVKU (AMB-10-ODL-8).
+    Dim i As Long, j As Long
+    For i = LBound(stanice) To UBound(stanice)
+        For j = LBound(tipovi) To UBound(tipovi)
+            ' BROJ SE PROSLEDJUJE, ne racuna: zasejavanje ne sme da zavisi od
+            ' generatora. Sabotaza generatora je inace obarala SEED (duplikat broja
+            ' na kapiji zauzetosti), fixture je ostajao nezasejan i padale su
+            ' STOTINE tvrdnji -- a ciljani test je LogFatal-ovao pre svoje tvrdnje.
+            ' Jedinstven je po (stanica, tip, run), pa kapija zauzetosti prolazi.
+            modAmbalaza.NabaviAmbalazu_TX Date, CStr(stanice(i)), CStr(tipovi(j)), _
+                                          SEED_NABAVKA, _
+                                          "SEEDNAB-" & CStr(i) & "-" & CStr(j) & _
+                                          "-" & NewScenarioCode("AMBNAB"), _
+                                          "SEED opticaj suite"
+        Next j
+    Next i
+
+    ' Stanica izdaje prazne kooperantima -- tek posle toga kooperant ima sta da
+    ' vrati pun, sto je normalan tok otkupa.
+    Dim tx As clsTransaction, dokID As String
+    For i = LBound(kooperanti) To UBound(kooperanti)
+        For j = LBound(tipovi) To UBound(tipovi)
+            Set tx = New clsTransaction
+            tx.BeginTx
+            tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+            tx.AddTableSnapshot TBL_AMBALAZA
+            ' SVOJ dokument po (kooperant, tip): AMB-INV-10 zakljucava JEDAN par
+            ' naloga po dokumentu, pa dva kooperanta ne mogu deliti zaglavlje.
+            ' BROJ IZ INDEKSA PETLJE, ne iz NewScenarioCode: on broji TVRDNJE, a
+            ' ovde ih nema -- pa su sva cetiri poziva vracala ISTI string i kapija
+            ' zauzetosti broja ih je ispravno odbila (prvi prolaz 03.10.2026).
+            dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, _
+                        "SEED-" & NewScenarioCode("AMBOP") & "-" & _
+                        CStr(i) & "-" & CStr(j), _
+                        Date, AMB_NALOG_STANICA, TEST_ST_ID)
+            modAmbalaza.PrenesiAmbalazu tx, Date, CStr(tipovi(j)), SEED_KOOPERANTU, _
+                        AMB_NALOG_STANICA, TEST_ST_ID, _
+                        AMB_NALOG_KOOPERANT, CStr(kooperanti(i)), _
+                        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+            tx.CommitTx
+            Set tx = Nothing
+        Next j
+    Next i
+
+    ' Stanica daje prazne i VOZACIMA (AMB-10-ODL-7: vozac je SOPSTVEN nalog, a
+    ' prazne sa stanice najcesce idu bas njemu). Bez ovoga prijemnica od 10b-2
+    ' nema sta da knjizi: njena prva noga je Vozac -> Kupac, pa bi vozac bez
+    ' zaliha otisao u minus i AMB-INV-07 bi fail-closed odbio 14 zatecenih
+    ' pozivnih mesta koja prijemnicu prave sa gajbama.
+    Dim vozaci As Variant
+    vozaci = Array(TEST_VOZ_ID, TEST_VOZ_ID_B)
+    For i = LBound(vozaci) To UBound(vozaci)
+        For j = LBound(tipovi) To UBound(tipovi)
+            Set tx = New clsTransaction
+            tx.BeginTx
+            tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+            tx.AddTableSnapshot TBL_AMBALAZA
+            dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, _
+                        "SEEDVOZ-" & NewScenarioCode("AMBVOZ") & "-" & _
+                        CStr(i) & "-" & CStr(j), _
+                        Date, AMB_NALOG_STANICA, TEST_ST_ID)
+            modAmbalaza.PrenesiAmbalazu tx, Date, CStr(tipovi(j)), SEED_KOOPERANTU, _
+                        AMB_NALOG_STANICA, TEST_ST_ID, _
+                        AMB_NALOG_VOZAC, CStr(vozaci(i)), _
+                        AMB_VK_PRENOS_INTERNO, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+            tx.CommitTx
+            Set tx = Nothing
+        Next j
+    Next i
+    Exit Sub
+
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    ' Pad zasejavanja se NE guta: bez opticaja bi 139 testova palo na potvrdi
+    ' deficita, a izvestaj bi pokazivao 139 nepovezanih nalaza.
+    LogFatal SRC, errNum, errDesc
 End Sub
 
 Private Function OtkHeader(ByVal brDok As String) As Object
@@ -5119,8 +5327,10 @@ Private Sub Test_OTP_PredlogCeneJePoKlasi()
                "OTP predlog cene: Klasa I nosi svoju cenu"
     AssertTrue Abs(OtpStavkaBrojP(otpID, KLASA_II, COL_OPS_PREDLOG_CENA) - 120#) < 0.001, _
                "OTP predlog cene: Klasa II nosi SVOJU cenu, ne cenu prve"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_CENA), _
-                 "OTP predlog cene: zaglavlje vise ne nosi cenu"
+    ' Od S3-ostatka kolone Cena na zaglavlju NEMA, pa se meri njeno odsustvo --
+    ' jaca tvrdnja od "prazna je".
+    AssertEquals "0", CStr(GetColumnIndex(TBL_OTPREMNICA, "Cena")), _
+                 "OTP predlog cene: zaglavlje vise ne nosi kolonu Cena"
 
     ' Stavka bez predloga je legitimna ("cena jos nije dogovorena") i ostaje
     ' PRAZNA -- nula bi u prefillu otkupa bila tvrdnja da je cena nula.
@@ -5164,6 +5374,4652 @@ End Sub
 ' i sme da ostane neizdat. Da se ambalaza knjizila sa nacrtom, napusten nacrt bi
 ' trajno umanjio stanje gajbi na otkupnom mestu, a svaka izmena ocekivanja bi
 ' trazila storniranje knjizenja.
+' STORNO OTPREMNICE: kontra-stav vraca gajbe i stanici i vozacu.
+'
+' Meri POSLOVNU POSLEDICU, ne upis. Izdavanje prebacuje gajbe sa stanice NA
+' VOZACA -- u starom modelu vozac je bio ZIG na redu stanice, pa je njegov saldo
+' nastajao inverzijom smera (VozacAmbEffectiveSmer) i ovaj test se nije mogao
+' napisati. Sada je vozac nalog, pa se njegov saldo meri direktno.
+'
+' Tvrdnje su nad vracanjem na IZMERENU pre-vrednost: suite vrti vise testova nad
+' istim fixture-om, pa apsolutan broj zavisi od redosleda.
+' PISAC KOJI PADNE MORA DA KAZE ZASTO -- U TVRDNJI.
+'
+' Runner ne hvata Immediate prozor -- ni tests/last_run.txt ni last_run.json ga
+' ne nose -- pa je pad 05.10.2026 bio nedijagnostikovan iz izvestaja i trazio dva
+' dodatna prolaza. Tvrdnja o upisu bez razloga je slepa kapija.
+'
+' Do S6 koraka 8 je seam zato zvao JEZGRO sa svojom transakcijom (jezgro gresku
+' DIZE). Od koraka 6 pisac razlog vraca sam (outGreska, KI-020), pa seam zove
+' produkcioni ulaz -- isti koji zove F4 -- a jezgro sa transakcijom pozivaoca je
+' obrisano sa starim piscem (S6 korak 8). Broj greske ide uz razlog.
+Private Function PrjUpisiSaRazlogom(ByVal datum As Date, ByVal kupacID As String, _
+                                    ByVal vozacID As String, _
+                                    ByVal brojPrij As String, _
+                                    ByVal brojZbirne As String, _
+                                    ByVal kolicina As Double, _
+                                    ByVal tipAmb As String, ByVal kolAmb As Long, _
+                                    ByVal kolAmbVracena As Long, _
+                                    ByRef outRazlog As String) As String
+    Dim errNum As Long, greska As String, res As String
+    outRazlog = ""
+
+    res = SavePrijemnicaMulti_TX(datum:=datum, kupacID:=kupacID, vozacID:=vozacID, _
+                                 brojPrij:=brojPrij, brojZbirne:=brojZbirne, _
+                                 vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+                                 kolicinaI:=kolicina, cenaI:=100#, tipAmb:=tipAmb, _
+                                 kolAmb:=kolAmb, kolAmbVracena:=kolAmbVracena, _
+                                 outErrNum:=errNum, outGreska:=greska)
+    If Len(res) = 0 Then outRazlog = "err " & CStr(errNum - vbObjectError) & ": " & greska
+    PrjUpisiSaRazlogom = res
+End Function
+
+' ============================================================
+' PRIJEMNICA -- trece preseceno mesto knjizenja (10b-2, 6.12g)
+'
+' Stari red je imao JEDAN entitet (Kupca), smer iz njegovog ugla i vozaca kao
+' ZIG -- pa je vozacev saldo nastajao inverzijom smera. Nov red imenuje obe
+' strane, pa ceo lanac stanica -> vozac -> kupac ima jedan racun.
+'
+' Zasto PER-TEST tip ambalaze nije potreban ovde: tvrdnje gledaju Od/Na/vrstu
+' KONKRETNOG reda dokumenta (AmbNoviPolje), ne deltu salda suite-a -- pa ih
+' tudji promet ne pomera. Saldo se meri samo kao razlika pre/posle istog
+' poteza, u istom testu.
+' ============================================================
+Private Sub Test_PRJ_AmbalazaDveNogeJedanPar()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("PRJAMB")
+    testDate = NextTestDate()
+
+    Dim brZbr As String, zbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    zbr = ZbrIzdataPodPrijemnicu(testDate, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 100#)
+    AssertTrue Len(zbr) > 0, "PRJ ambalaza: preduslov -- zbirna je snimljena"
+
+    Dim vozPre As Double, kupPre As Double
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, TEST_TIP_AMB)
+
+    ' Nesimetricna zamena (20 punih dole, 8 praznih gore): simetricna bi dala
+    ' nulu na oba salda, pa tvrdnja ne bi razlikovala DVE noge od NIJEDNE.
+    Dim prj As String, razlogPrj As String
+    prj = PrjUpisiSaRazlogom(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-PRJ-AMB-" & scenario, brZbr, _
+                             400#, TEST_TIP_AMB, 20, 8, razlogPrj)
+    AssertTrue Len(prj) > 0, _
+               "PRJ ambalaza: prijemnica je snimljena (" & razlogPrj & ")"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    ' --- noga 1: pune gajbe idu SA ROBOM, od vozaca kupcu ---
+    AssertEquals "1", CStr(AmbNoviBrojRedova(prj, DOK_TIP_PRIJEMNICA, AMB_VK_UZ_ROBU)), _
+                 "PRJ ambalaza: pune gajbe knjize TACNO jedan red"
+    AssertEquals AMB_NALOG_VOZAC, _
+                 AmbNoviPolje(prj, DOK_TIP_PRIJEMNICA, AMB_VK_UZ_ROBU, COL_AMB_OD_TIP), _
+                 "PRJ ambalaza: pune gajbe POLAZE OD VOZACA -- on je nalog, ne zig"
+    AssertEquals TEST_KUP_ID, _
+                 AmbNoviPolje(prj, DOK_TIP_PRIJEMNICA, AMB_VK_UZ_ROBU, COL_AMB_NA_ID), _
+                 "PRJ ambalaza: pune gajbe stizu BAS tom kupcu"
+    AssertTrue Abs(AmbNoviKolicina(prj, DOK_TIP_PRIJEMNICA, AMB_VK_UZ_ROBU) - 20#) < 0.001, _
+               "PRJ ambalaza: kolicina punih je KolAmbalaze"
+
+    ' --- noga 2: prazne se VRACAJU, od kupca vozacu ---
+    AssertEquals "1", _
+                 CStr(AmbNoviBrojRedova(prj, DOK_TIP_PRIJEMNICA, AMB_VK_POVRAT_PRAZNE)), _
+                 "PRJ ambalaza: povrat praznih knjizi TACNO jedan red"
+    AssertEquals AMB_NALOG_KUPAC, _
+                 AmbNoviPolje(prj, DOK_TIP_PRIJEMNICA, AMB_VK_POVRAT_PRAZNE, COL_AMB_OD_TIP), _
+                 "PRJ ambalaza: prazne POLAZE OD KUPCA"
+    AssertEquals TEST_VOZ_ID, _
+                 AmbNoviPolje(prj, DOK_TIP_PRIJEMNICA, AMB_VK_POVRAT_PRAZNE, COL_AMB_NA_ID), _
+                 "PRJ ambalaza: prazne se vracaju BAS tom vozacu"
+    AssertTrue Abs(AmbNoviKolicina(prj, DOK_TIP_PRIJEMNICA, AMB_VK_POVRAT_PRAZNE) - 8#) < 0.001, _
+               "PRJ ambalaza: kolicina praznih je KolAmbVracena"
+
+    ' AMB-10-ODL-22: obrnuta kapija ODL-10 pusta povrat od kupca na dokumentu
+    ' koji NIJE REVERS_PARTNERA -- jer je prijemnica i sama partnerov dokument i
+    ' nosi kupcev broj. Pre ODL-22 je ovaj red bio tvrdo odbijen.
+    AssertTrue AmbNoviRedIdx(prj, DOK_TIP_PRIJEMNICA, AMB_VK_POVRAT_PRAZNE) > 0, _
+               "PRJ ambalaza: povrat praznih PROLAZI na prijemnici (AMB-10-ODL-22)"
+
+    ' AMB-INV-10: jedan NEUREDJEN par naloga po dokumentu. Obe noge dele
+    ' {Vozac, Kupac}, pa oba naloga stoje na oba reda.
+    AssertEquals "2", _
+                 CStr(AmbNoviBrojSaNalogom(prj, DOK_TIP_PRIJEMNICA, AMB_NALOG_VOZAC)), _
+                 "PRJ ambalaza: vozac je strana na OBA reda (jedan par, AMB-INV-10)"
+    AssertEquals "2", _
+                 CStr(AmbNoviBrojSaNalogom(prj, DOK_TIP_PRIJEMNICA, AMB_NALOG_KUPAC)), _
+                 "PRJ ambalaza: kupac je strana na OBA reda (jedan par, AMB-INV-10)"
+
+    Dim vozPosle As Double, kupPosle As Double
+    vozPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    kupPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, TEST_TIP_AMB)
+    AssertTrue Abs((vozPre - vozPosle) - 12#) < 0.001, _
+               "PRJ ambalaza: vozacu je ostalo 12 manje (20 dato, 8 vraceno)"
+    AssertTrue Abs((kupPosle - kupPre) - 12#) < 0.001, _
+               "PRJ ambalaza: kupcu je ostalo 12 vise (20 primljeno, 8 vraceno)"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_PRJ_AmbalazaDveNogeJedanPar", Err.Number, Err.description
+End Sub
+
+' Storno prijemnice ide kroz KONTRA-STAV (AMB-10-ODL-16), ne kroz zastavicu --
+' nov citalac zastavicu ne gleda, pa bi gajbe ostale kod kupca i posle storna.
+' DVA dogadjaja -> DVA kontra-stava.
+Private Sub Test_PRJ_StornoVracaGajbe()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("PRJSTO")
+    testDate = NextTestDate()
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(testDate, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 100#)) > 0, _
+               "PRJ storno: preduslov -- zbirna je snimljena"
+
+    Dim vozPre As Double, kupPre As Double
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, TEST_TIP_AMB)
+
+    Dim prj As String, razlogPrj As String
+    prj = PrjUpisiSaRazlogom(testDate, TEST_KUP_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-PRJ-STO-" & scenario, brZbr, _
+                             400#, TEST_TIP_AMB, 20, 8, razlogPrj)
+    AssertTrue Len(prj) > 0, _
+               "PRJ storno: prijemnica je snimljena (" & razlogPrj & ")"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    Dim prosao As Boolean
+    prosao = modStorno.StornoPrijemnica_TX(prj)
+
+    Dim vozKraj As Double, kupKraj As Double
+    vozKraj = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    kupKraj = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, TEST_TIP_AMB)
+
+    AssertTrue prosao, "PRJ storno: storno prijemnice prolazi"
+    AssertEquals "2", CStr(AmbBrojKontraStavova(prj, DOK_TIP_PRIJEMNICA)), _
+                 "PRJ storno: dva dogadjaja -- DVA kontra-stava"
+    AssertTrue Abs(vozKraj - vozPre) < 0.001, _
+               "PRJ storno: saldo vozaca se vraca na stanje pre prijemnice"
+    AssertTrue Abs(kupKraj - kupPre) < 0.001, _
+               "PRJ storno: saldo kupca se vraca na stanje pre prijemnice"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_PRJ_StornoVracaGajbe", Err.Number, Err.description
+End Sub
+
+' AMB-10-ODL-21: LANAC SE ODMOTAVA OBRNUTO OD FIZICKOG REDA.
+'
+' Ovo je tvrdnja o SVOJSTVU na kom kaskada stoji, merena na dva dokumenta --
+' ne grep redosleda poziva u PonistiZbirnaChain_TX. Prijemnica vezana za
+' zbirnu nema fixture u ovoj suite (v. isti razlog u Test_ZBR_VlasnistvoLanca),
+' pa se meri bas pravilo: dok prijemnica stoji, storno otpremnice MORA da
+' padne, jer bi vozac otisao u minus.
+Private Sub Test_PRJ_LanacSeOdmotavaObrnuto()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("PRJLAN")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPL-" & scenario)
+
+    ' SVEZ TIP AMBALAZE, i to je NOSEC deo testa, ne higijena.
+    '
+    ' Prva verzija je koristila TEST_TIP_AMB -- a SeedAmbalazaOpticaj vozacu daje
+    ' 20000 gajbi tog tipa, pa kontra-stav od 20 nikad ne obori saldo u minus i
+    ' odbijanja NEMA. Tvrdnja je time bila nemerljiva: ista klasa kao P1 koji je
+    ' review nasao -- odbrana izvedena iz salda vazi samo za NEKE vrednosti salda.
+    '
+    ' Sa svezim tipom vozac pocinje od NULE, pa je ceo racun vidljiv. Preduslov
+    ' se i TVRDI: ako neki buduci seed zaprlja ovaj tip, test to kaze po imenu
+    ' umesto da tiho prestane da meri.
+    modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, tipT, 40#, _
+                                  "PRJLAN-NAB-" & scenario, "preduslov lanca"
+
+    ' Stanica zaduzi kooperanta praznim, da otkup ima sta da donese pun.
+    Dim tx As clsTransaction, dokID As String
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, _
+                "PRJLAN-REV-" & scenario, Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 20#, _
+                AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    tx.CommitTx
+    Set tx = Nothing
+
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                   tipT)) < 0.001, _
+               "PRJ lanac: preduslov -- vozac NE drzi gajbe ovog tipa, pa je saldo merljiv"
+
+    Dim oh As Object, g As String, izvor As String
+    Set oh = OtkHeader(TEST_PREFIX & "-OTK-LAN-" & scenario)
+    oh("TipAmbalaze") = tipT
+    izvor = CreateOtkup_TX(oh, OtkStavke(400#, 50#, 20, 0#, 0#, 0), g)
+    AssertTrue Len(izvor) > 0, "PRJ lanac: preduslov -- otkup je upisan (" & g & ")"
+    If Len(izvor) = 0 Then GoTo Kraj
+
+    Dim razlog As String, otpID As String, ohdr As Object
+    Set ohdr = OtpHeader(TEST_PREFIX & "-OTP-LAN-" & scenario)
+    ohdr("TipAmbalaze") = tipT
+    otpID = CreateOtpremnicaDraft_TX(ohdr, OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue Len(otpID) > 0, "PRJ lanac: nacrt otpremnice napravljen (" & razlog & ")"
+    If Len(otpID) = 0 Then GoTo Kraj
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, izvor, razlog), "PRJ lanac: izvor vezan"
+    AssertTrue IzdajOtpremnicu_TX(otpID, razlog), "PRJ lanac: otpremnica je izdata"
+
+    Dim vozPosleOtp As Double
+    vozPosleOtp = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT)
+    AssertTrue Abs(vozPosleOtp - 20#) < 0.001, _
+               "PRJ lanac: izdavanje je stavilo gajbe NA VOZACA"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(testDate, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 100#)) > 0, _
+               "PRJ lanac: preduslov -- zbirna je snimljena"
+
+    ' Prijemnica odnosi SVE gajbe sa vozaca (bez povrata), pa mu je saldo opet 0
+    ' i otpremnica vise nema sta da skine.
+    Dim prj As String
+    prj = PrjJednaKlasa(testDate, TEST_KUP_ID, TEST_PREFIX & "-PRJ-LAN-" & scenario, _
+                        brZbr, 400#, 100#, KLASA_I, tipT, 20)
+    AssertTrue Len(prj) > 0, "PRJ lanac: prijemnica je snimljena"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                   tipT)) < 0.001, _
+               "PRJ lanac: prijemnica je odnela sve gajbe koje je otpremnica dala"
+
+    ' POGRESAN RED: otpremnica prva. Mora da padne -- gajbe vise nisu na vozacu.
+    AssertTrue Not modStorno.StornoOtpremnica_TX(otpID), _
+               "PRJ lanac: storno otpremnice PRE prijemnice je ODBIJEN (AMB-INV-07)"
+
+    ' TACAN RED: prijemnica prva vraca gajbe, pa otpremnica ima sta da skine.
+    AssertTrue modStorno.StornoPrijemnica_TX(prj), _
+               "PRJ lanac: storno prijemnice prolazi i bez storna otpremnice"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                   tipT) - 20#) < 0.001, _
+               "PRJ lanac: storno prijemnice je vratio gajbe NA VOZACA"
+    AssertTrue modStorno.StornoOtpremnica_TX(otpID), _
+               "PRJ lanac: storno otpremnice POSLE prijemnice prolazi"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                   tipT)) < 0.001, _
+               "PRJ lanac: po odmotanom lancu vozac je na pocetnom stanju"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_PRJ_LanacSeOdmotavaObrnuto", Err.Number, Err.description
+End Sub
+
+' AKTIVNA EKSTERNA PRIJEMNICA BLOKIRA PONISTENJE (review 05.10.2026, P1).
+'
+' Ovaj test postoji zato sto je prethodna odbrana bila IZVEDENA IZ SALDA:
+' "eksterna prijemnica ostaje, vozac nema gajbe, storno otpremnice padne sam".
+' Puna zamena je kontraprimer -- kupac vrati sve prazne, vozacev saldo se vrati,
+' kontra-stav otpremnice prodje, i kaskada javi USPEH nad polomljenim lancem.
+'
+' Zato scenario koristi 20 punih i 20 PRAZNIH: tvrdnja br. 3 imenuje bas to --
+' saldo je vracen, dakle saldo NE BI zaustavio storno. Da je test uzeo
+' kolAmbVracena = 0 (kao Test_PRJ_LanacSeOdmotavaObrnuto), prosao bi i sa
+' ugasenom kapijom, jer bi ga AMB-INV-07 slucajno spasao.
+Private Sub Test_PRJ_EksternaPrijemnicaBlokiraPonistenje()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, prevKupac As String
+    scenario = NewScenarioCode("PRJEXT")
+    testDate = NextTestDate()
+
+    ' REZIM SE POSTAVLJA, NE NASLEDJUJE. ownsChain je IsHladnjacaKupac(zbirna.Kupac),
+    ' tj. poredjenje sa CFG_MALINA_DEFAULT_KUPAC -- ambijentalnom vrednoscu koju
+    ' zatecen Test_ZBR_AutoLanac postavlja na TEST_KUP_ID. Bez ovoga bi rezim ovog
+    ' testa zavisio od REDOSLEDA testova, a on meri bas eksternu granu.
+    ' Tvrdnja res("owns") = False ostaje -- ona je kapija nad ovim preduslovom.
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP2_ID
+
+    Dim stPre As Double, vozPre As Double
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+
+    Dim otp As String
+    otp = Pr3Otpremnica(TEST_PREFIX & "-OTP-EXT-" & scenario, KLASA_I, 400#, 20)
+    AssertTrue Len(otp) > 0, "PRJ eksterna: preduslov -- otpremnica je izdata"
+    If Len(otp) = 0 Then GoTo Kraj
+
+    Dim brZbr As String, zbrID As String
+    brZbr = TEST_PREFIX & "-ZBR-EXT-" & scenario
+    zbrID = CreateZbirnaIzIzvora_TX(Pr3Header(brZbr), Pr3Izvor(otp, ""))
+    AssertTrue Len(zbrID) > 0, "PRJ eksterna: preduslov -- zbirna nosi tu otpremnicu"
+    If Len(zbrID) = 0 Then GoTo Kraj
+
+    ' PUNA ZAMENA: 20 punih dole, 20 praznih gore.
+    Dim prj As String
+    prj = PrjJednaKlasa(testDate, TEST_KUP_ID, TEST_PREFIX & "-PRJ-EXT-" & scenario, _
+                        brZbr, 400#, 100#, KLASA_I, TEST_TIP_AMB, 20, 20)
+    AssertTrue Len(prj) > 0, "PRJ eksterna: preduslov -- prijemnica je snimljena"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    Dim stPosle As Double, vozPosle As Double
+    stPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    vozPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+
+    ' TVRDNJA KOJA IMENUJE RAZLOG: saldo je vracen, pa saldo nije kapija.
+    AssertTrue Abs((vozPosle - vozPre) - 20#) < 0.001, _
+               "PRJ eksterna: puna zamena je VRATILA gajbe vozacu -- saldo ne bi zaustavio storno"
+
+    Dim res As Object
+    Set res = modStornoFlow.PonistiZbirnaChain_Test(brZbr, zbrID)
+
+    AssertTrue Not CBool(res("owns")), _
+               "PRJ eksterna: rezim je EKSTERNI kupac (ownsChain = False)"
+    AssertTrue Not CBool(res("ok")), _
+               "PRJ eksterna: ponistenje je ODBIJENO zbog aktivne eksterne prijemnice"
+    AssertTrue InStr(1, NzToText(res("message")), "EKSTERNOG kupca", vbTextCompare) > 0, _
+               "PRJ eksterna: razlog imenuje eksternu prijemnicu, ne genericki neuspeh"
+
+    ' NISTA NIJE DIRNUTO -- kapija stoji PRED mutacijom, pa ni zbirna nije pala.
+    AssertTrue NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_STORNIRANO)) <> "Da", _
+               "PRJ eksterna: zbirna je ostala AKTIVNA"
+    AssertTrue NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otp, COL_STORNIRANO)) <> "Da", _
+               "PRJ eksterna: otpremnica je ostala AKTIVNA"
+    AssertTrue NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_STORNIRANO)) <> "Da", _
+               "PRJ eksterna: eksterna prijemnica je ostala AKTIVNA"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                   TEST_TIP_AMB) - vozPosle) < 0.001, _
+               "PRJ eksterna: saldo vozaca je NEPROMENJEN posle odbijanja"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, _
+                   TEST_TIP_AMB) - stPosle) < 0.001, _
+               "PRJ eksterna: saldo stanice je NEPROMENJEN posle odbijanja"
+
+Kraj:
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    LogFatal "Test_PRJ_EksternaPrijemnicaBlokiraPonistenje", Err.Number, Err.description
+End Sub
+
+' AMB-10-ODL-22: VLASNIK BROJA PRIJEMNICE JE NJEN KUPAC -- BEZ GRANE PO IZDAVAOCU.
+'
+' Review (P2, 05.10.2026) je tacno prigovorio da KupacID odgovara na "ko je kupac
+' u poslu" a BrojOwner na "cijem nizu pripada broj", i da testa za slucaj "nasa
+' hladnjaca je izdavalac" nema. Odluka operatera je da vlasnik NAMERNO ostaje
+' KupacID u oba rezima; merenje koje je opravdava stoji u AmbRobniVlasniciBroja
+' (generator broja prijemnice scope-uje niz bas po (KupacID, dan)).
+'
+' Zato test meri bas ODSUSTVO GRANE: dva razlicita kupca, isti pisac, i svaki
+' dokument prijavljuje SVOG kupca. Jedan kupac ne bi razlikovao pravilo od
+' hardkodirane vrednosti.
+Private Sub Test_PRJ_VlasnikBrojaJeNjenKupac()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("PRJVLB")
+    testDate = NextTestDate()
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    ' Zbirna po kupcu: prijemnica se vezuje samo na zbirnu svog vlasnika
+    ' (PRJ-ZBR-01, S6 korak 8), pa drugi kupac dobija sledecu zbirnu vozaca.
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(testDate, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 100#)) > 0 And _
+               Len(ZbrIzdataPodPrijemnicu(testDate, brZbr & "-2", TEST_KUP2_ID, TEST_VOZ_ID, 100#)) > 0, _
+               "PRJ vlasnik: preduslov -- zbirna je snimljena"
+
+    ' Gajbe nisu predmet ovog testa, pa su obe kolicine 0: meri se ZAGLAVLJE.
+    Dim prjA As String, prjB As String
+    prjA = PrjJednaKlasa(testDate, TEST_KUP_ID, TEST_PREFIX & "-PRJ-VLA-" & scenario, _
+                         brZbr, 400#, 100#, KLASA_I)
+    prjB = PrjJednaKlasa(testDate, TEST_KUP2_ID, TEST_PREFIX & "-PRJ-VLB-" & scenario, _
+                         brZbr & "-2", 400#, 100#, KLASA_I)
+    AssertTrue Len(prjA) > 0 And Len(prjB) > 0, _
+               "PRJ vlasnik: preduslov -- dve prijemnice, RAZLICITI kupci"
+    If Len(prjA) = 0 Or Len(prjB) = 0 Then GoTo Kraj
+
+    Dim tA As String, iA As String, tB As String, iB As String
+    modAmbalaza.AmbRobniZaglavlje DOK_TIP_PRIJEMNICA, prjA, tA, iA
+    modAmbalaza.AmbRobniZaglavlje DOK_TIP_PRIJEMNICA, prjB, tB, iB
+
+    AssertEquals AMB_NALOG_KUPAC, tA, _
+                 "ODL-22: vlasnik broja prijemnice je nalog tipa Kupac"
+    AssertEquals TEST_KUP_ID, iA, _
+                 "ODL-22: prva prijemnica prijavljuje SVOG kupca"
+    AssertEquals TEST_KUP2_ID, iB, _
+                 "ODL-22: druga prijemnica prijavljuje SVOG kupca -- nema grane po izdavaocu"
+    AssertEquals AMB_NALOG_KUPAC, tB, _
+                 "ODL-22: tip vlasnika je isti za oba kupca"
+
+    ' FAIL-CLOSED DEFAULT: tip koji mapa ne poznaje ne objavljuje vlasnika, pa ga
+    ' obrnuta kapija ODL-10 odbija. Meri se nad ISTIM ID-em, da razlika dodje
+    ' samo od TIPA dokumenta.
+    Dim tX As String, iX As String
+    modAmbalaza.AmbRobniZaglavlje DOK_TIP_OTKUP, prjA, tX, iX
+    AssertEquals "", tX, _
+                 "ODL-22: dokument van zatvorene mape NE objavljuje vlasnika broja"
+    AssertEquals "", iX, _
+                 "ODL-22: ni ID vlasnika ne nastaje za tip van mape"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_PRJ_VlasnikBrojaJeNjenKupac", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' REVERS -- cetvrto preseceno mesto knjizenja (10b-2, 6.12h)
+'
+' Stari pisac je isti posao radio sa SEST nogu u cetiri smera, a vozaca nosio
+' kao ZIG. Nov model daje PO JEDAN red na smer, iz zatvorene mape.
+'
+' Broj se NE zadaje (broj:="") nego ga pisac generise: zadat broj ide kroz
+' RequireBrojUKontekstu, koji trazi REV oblik -- a test meri par naloga i vrstu,
+' ne numeraciju. Numeraciju mere zateceni REV testovi, koji su preseljeni na
+' istog pisca.
+' ============================================================
+' Revers kroz pravog pisca, ali tako da GRESKA NE UBIJE TEST.
+'
+' Pisac gresku DIZE, a ovaj test meri i sabotaze koje ga obaraju. Bez
+' On Error Resume Next sabotaza digne gresku na pozivu od kog se ocekuje USPEH,
+' EH uradi LogFatal i ciljana tvrdnja nikad ne dodje na red -- dokaz.py to
+' prijavi kao "NE OBARA SVOJ TEST, nego: <ImeTesta>" (06.10.2026).
+Private Function RevDokID(ByVal d As Date, ByVal stanicaID As String, _
+                          ByVal kol As Long, ByVal smer As String, _
+                          ByVal kooperantID As String, _
+                          ByVal vozacID As String) As String
+    On Error Resume Next
+    RevDokID = modAmbalaza.UpisiReversAmbalaze_TX(d, "", stanicaID, TEST_TIP_AMB, _
+                                                  kol, smer, kooperantID, vozacID)
+    If Err.Number <> 0 Then
+        RevDokID = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Function
+
+' AUTO BROJ REVERSA IMA JEDAN IZVOR (review 06.10.2026, P1).
+'
+' Do ovog reza su postojala DVA: UI prefill je citao stari oblik (tblAmbalaza),
+' a pisac je upisivao zaglavlje (tblAmbalazaDokument). Na PRAZNOJ instalaciji
+' prvi F7 prodje, a DRUGI istog dana dobije OPET prvi broj i padne tek na upisu.
+'
+' Zato test ide bas tim putem: predlog -> upis -> predlog -> upis, dva puta za
+' redom, istog dana i iste stanice. Nov datum je nosec -- niz je po (stanica,
+' dan), pa bi tudji reversi istog dana merenje zamutili.
+Private Sub Test_REV_AutoBrojJedanNiz()
+    On Error GoTo EH
+
+    Dim d As Date: d = NextTestDate()
+    Dim b1 As String, b2 As String, b3 As String
+    Dim dok1 As String, dok2 As String
+
+    b1 = modBrojevi.SuggestNextBroj(modBrojevi.KIND_REV, TEST_ST_ID, d, False)
+    AssertTrue Len(b1) > 0, "REV niz: prvi predlog je dat"
+    dok1 = RevDokID(d, TEST_ST_ID, 3, REV_SMER_IZDATO_OM, "", TEST_VOZ_ID)
+
+    b2 = modBrojevi.SuggestNextBroj(modBrojevi.KIND_REV, TEST_ST_ID, d, False)
+    ' SRZ NALAZA: posle prvog upisa predlog MORA da se pomeri.
+    AssertTrue b2 <> b1, _
+               "REV niz: drugi predlog istog dana je RAZLICIT od prvog"
+
+    dok2 = RevDokID(d, TEST_ST_ID, 2, REV_SMER_IZDATO_OM, "", TEST_VOZ_ID)
+    AssertTrue Len(dok1) > 0 And Len(dok2) > 0, _
+               "REV niz: dva uzastopna reversa istog dana OBA prolaze"
+    AssertTrue dok1 <> dok2, "REV niz: to su dva razlicita dokumenta"
+
+    ' Storno NE oslobadja broj (A9): sledeci predlog se ne vraca unazad.
+    If Len(dok2) > 0 Then
+        AssertTrue modAmbalaza.StornirajAmbDokument_TX(dok2), _
+                   "REV niz: storno drugog reversa prolazi"
+    End If
+    b3 = modBrojevi.SuggestNextBroj(modBrojevi.KIND_REV, TEST_ST_ID, d, False)
+    AssertTrue b3 <> b1 And b3 <> b2, _
+               "REV niz: storno ne oslobadja broj -- predlog ide dalje, ne nazad"
+
+    Exit Sub
+EH:
+    LogFatal "Test_REV_AutoBrojJedanNiz", Err.Number, Err.description
+End Sub
+
+Private Sub Test_REV_SmerDajeJedanRed()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("REVSMR")
+
+    Dim dIzd As String, dPri As String, dOm As String, dOdOm As String
+    dIzd = RevDokID(Date, TEST_ST_ID, 6, REV_SMER_IZDAVANJE, TEST_KOOP_ID, "")
+    dPri = RevDokID(Date, TEST_ST_ID, 4, REV_SMER_PRIJEM, TEST_KOOP_ID, "")
+    dOm = RevDokID(Date, TEST_ST_ID, 3, REV_SMER_IZDATO_OM, "", TEST_VOZ_ID)
+    dOdOm = RevDokID(Date, TEST_ST_ID, 2, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID)
+
+    AssertTrue Len(dIzd) > 0 And Len(dPri) > 0 And Len(dOm) > 0 And Len(dOdOm) > 0, _
+               "REV smer: sva cetiri reversa su upisana"
+
+    ' JEDAN RED PO SMERU -- stari pisac je za prva dva smera pisao DVE noge.
+    '
+    ' STOJE IZNAD RANE IZLAZNE TACKE, i to je nosece: sabotaza vrste obara sam
+    ' UPIS, pa bi iza `GoTo Kraj` ove tvrdnje ostale nedosegnute -- padala bi
+    ' samo tvrdnja da su reversi upisani, a to je POSLEDICA, ne razlog. Sa
+    ' praznim dokID-em broj redova nije 1, pa pucaju PO IMENU.
+    AssertEquals "1", CStr(AmbNoviBrojRedova(dIzd, DOK_TIP_AMBALAZA_DOKUMENT, _
+                           AMB_VK_IZDATA_PRAZNA)), _
+                 "REV smer: IZDAVANJE knjizi TACNO jedan red"
+    AssertEquals "1", CStr(AmbNoviBrojRedova(dPri, DOK_TIP_AMBALAZA_DOKUMENT, _
+                           AMB_VK_POVRAT_PRAZNE)), _
+                 "REV smer: PRIJEM knjizi TACNO jedan red"
+    If Len(dIzd) = 0 Or Len(dPri) = 0 Or Len(dOm) = 0 Or Len(dOdOm) = 0 Then GoTo Kraj
+
+    ' PAR NALOGA PO SMERU.
+    AssertEquals TEST_ST_ID, AmbNoviPolje(dIzd, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_IZDATA_PRAZNA, COL_AMB_OD_ID), _
+                 "REV IZDAVANJE: polazi od stanice"
+    AssertEquals TEST_KOOP_ID, AmbNoviPolje(dIzd, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_IZDATA_PRAZNA, COL_AMB_NA_ID), _
+                 "REV IZDAVANJE: stize kooperantu"
+    AssertEquals TEST_KOOP_ID, AmbNoviPolje(dPri, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_POVRAT_PRAZNE, COL_AMB_OD_ID), _
+                 "REV PRIJEM: polazi od kooperanta"
+
+    ' VOZAC JE NALOG, NE ZIG -- to se u starom modelu nije moglo tvrditi, jer je
+    ' stajao u koloni VozacID a saldo se dobijao inverzijom smera.
+    AssertEquals TEST_VOZ_ID, AmbNoviPolje(dOm, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_PRENOS_INTERNO, COL_AMB_OD_ID), _
+                 "REV IZDATO_OM: gajbe POLAZE OD VOZACA -- on je nalog, ne zig"
+    AssertEquals TEST_VOZ_ID, AmbNoviPolje(dOdOm, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_PRENOS_INTERNO, COL_AMB_NA_ID), _
+                 "REV PRIJEM_OD_OM: gajbe STIZU VOZACU -- on je nalog, ne zig"
+
+    ' VRSTA JE PROCITANA IZ 6.7, ne izvedena iz para: isti par (Stanica, Vozac)
+    ' nosi PRENOS_INTERNO u oba smera, a Stanica <-> Kooperant dve razlicite.
+    AssertEquals AMB_VK_PRENOS_INTERNO, AmbNoviPolje(dOm, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_PRENOS_INTERNO, COL_AMB_VRSTA_KRETANJA), _
+                 "REV IZDATO_OM: vozac i stanica su oba SOPSTVENA -- PRENOS_INTERNO"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_REV_SmerDajeJedanRed", Err.Number, Err.description
+End Sub
+
+' Ugovor smera je ZATVOREN, i nalog koji smer trazi je OBAVEZAN.
+'
+' Stari pisac je isto pravilo nosio u OSAM kopija (po dve u svakom od cetiri
+' Case bloka) plus Case Else za nepoznat smer. Ovde je jedno telo, pa test meri
+' da se grane ne razilaze: isti razlog pada za sva cetiri smera.
+Private Sub Test_REV_UgovorSmeraJeFailClosed()
+    On Error GoTo EH
+
+    Dim scenario As String, n As Long
+    scenario = NewScenarioCode("REVUGV")
+
+    AssertEquals "4", CStr(UBound(modAmbalazaUgovor.AmbReversSmerovi()) - _
+                           LBound(modAmbalazaUgovor.AmbReversSmerovi()) + 1), _
+                 "REV ugovor: mapa nosi TACNO cetiri smera"
+
+    n = CountRows(TBL_AMBALAZA)
+    AssertTrue Not UpisiReversKol(Date, "", TEST_ST_ID, TEST_KOOP_ID, _
+                                  "NEPOSTOJECI", 5), _
+               "REV ugovor: nepoznat smer je ODBIJEN (zatvorena mapa)"
+    AssertEquals CStr(n), CStr(CountRows(TBL_AMBALAZA)), _
+                 "REV ugovor: odbijen smer nije ostavio red u knjizi"
+
+    ' Nalog koji smer trazi mora da postoji -- i to je JEDNO telo za sva cetiri.
+    Dim raz As String
+    AssertTrue Not UpisiReversKol(Date, "", TEST_ST_ID, "", _
+                                  REV_SMER_IZDAVANJE, 5, raz), _
+               "REV ugovor: IZDAVANJE bez kooperanta je ODBIJENO"
+    AssertTrue InStr(1, raz, "trazi nalog", vbTextCompare) > 0, _
+               "REV ugovor: razlog imenuje nalog koji nedostaje, ne opstu gresku"
+    AssertTrue Not UpisiReversKol(Date, "", TEST_ST_ID, "", _
+                                  REV_SMER_PRIJEM, 5), _
+               "REV ugovor: PRIJEM bez kooperanta je ODBIJEN"
+    AssertEquals CStr(n), CStr(CountRows(TBL_AMBALAZA)), _
+                 "REV ugovor: nijedno odbijanje nije ostavilo red u knjizi"
+
+    Exit Sub
+EH:
+    LogFatal "Test_REV_UgovorSmeraJeFailClosed", Err.Number, Err.description
+End Sub
+
+' UPLATA KUPCA NE SME DA DODIRNE KNJIGU AMBALAZE (AMB-10-ODL-5, red 8).
+'
+' Do 06.10.2026 je isti poziv pisao i nogu u tblAmbalaza, pod istim brojem.
+' Rez je OBIM pisca, pa tvrdnja mora da meri obe strane: da je novac legao I
+' da knjiga nije porasla. Sama "knjiga nije porasla" bila bi zelena i kad
+' pisac uopste ne radi -- zato stoji uz tvrdnju da je red u kasi nastao.
+Private Sub Test_KUP_UplataJeSamoNovac()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("KUPNOV")
+
+    Dim nAmb As Long, nNov As Long, ok As Boolean
+    nAmb = CountRows(TBL_AMBALAZA)
+    nNov = CountRows(TBL_NOVAC)
+
+    ok = SaveKupciIzlaz_TX(datum:=Date, brojDok:="KUP-" & scenario, _
+                           kupacNaziv:=TEST_KUP_ID, kupacID:=TEST_KUP_ID, _
+                           vrstaVoca:=TEST_VRSTA, novac:=1000, fakturaID:="", _
+                           napomena:="test: avans kupca " & scenario, _
+                           tipNovca:=NOV_KUPCI_AVANS)
+
+    AssertTrue ok, "KUP uplata: avans kupca je proknjizen"
+    AssertEquals CStr(nNov + 1), CStr(CountRows(TBL_NOVAC)), _
+                 "KUP uplata: nastao je TACNO jedan red u kasi"
+    AssertEquals CStr(nAmb), CStr(CountRows(TBL_AMBALAZA)), _
+                 "KUP uplata: knjiga ambalaze je NEDIRNUTA"
+
+    ' KAPIJA JE SAD SAMO NOVAC: stara je glasila `kolAmb <= 0 And novac <= 0`,
+    ' pa je sa ambalaznom nogom nestao i njen drugi clan. Prazan upis mora da
+    ' ostane odbijen -- inace bi u kasi legao red od nula dinara.
+    nNov = CountRows(TBL_NOVAC)
+    AssertTrue Not SaveKupciIzlaz_TX(datum:=Date, brojDok:="KUP0-" & scenario, _
+                           kupacNaziv:=TEST_KUP_ID, kupacID:=TEST_KUP_ID, _
+                           vrstaVoca:=TEST_VRSTA, novac:=0, fakturaID:="", _
+                           napomena:="test: bez novca " & scenario, _
+                           tipNovca:=NOV_KUPCI_AVANS), _
+               "KUP uplata: upis bez novca je ODBIJEN"
+    AssertEquals CStr(nNov), CStr(CountRows(TBL_NOVAC)), _
+                 "KUP uplata: odbijen upis nije ostavio red u kasi"
+
+    Exit Sub
+EH:
+    LogFatal "Test_KUP_UplataJeSamoNovac", Err.Number, Err.description
+End Sub
+
+' Pisac kupcevog reversa, kroz produkcioni seam. Vraca "" i RAZLOG, jer pisac
+' gresku DIZE a ovi testovi mere i odbijanja.
+Private Function RvpUpisi(ByVal d As Date, ByVal broj As String, _
+                          ByVal kupacID As String, ByVal vozacID As String, _
+                          ByVal tipAmb As String, ByVal kol As Double, _
+                          Optional ByRef outRazlog As String) As String
+    Dim res As String
+    outRazlog = ""
+    On Error Resume Next
+    res = modAmbalaza.UpisiReversPartnera_TX(d, broj, kupacID, vozacID, _
+                                             tipAmb, kol, "test RVP")
+    If Err.Number <> 0 Then
+        outRazlog = Err.description
+        res = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+    RvpUpisi = res
+End Function
+
+' PREDUSLOV ZA POVRAT: kupac mora da DRZI gajbe. Puni ih prijemnica --
+' produkcioni put, ne direktan upis u knjigu.
+Private Function RvpSejKupcu(ByVal testDate As Date, ByVal scenario As String, _
+                             ByVal kupacID As String, ByVal kol As Long, _
+                             Optional ByRef outRazlog As String, _
+                             Optional ByVal tipAmb As String = "") As String
+    Dim brZbr As String, zbr As String, t As String
+    t = tipAmb
+    If Len(t) = 0 Then t = TEST_TIP_AMB
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    zbr = ZbrIzdataPodPrijemnicu(testDate, brZbr, kupacID, TEST_VOZ_ID, 100#)
+    RvpSejKupcu = PrjUpisiSaRazlogom(testDate, kupacID, TEST_VOZ_ID, _
+                                     TEST_PREFIX & "-RVPSEED-" & scenario, brZbr, _
+                                     400#, t, kol, 0, outRazlog)
+End Function
+
+' KUPCEV REVERS: jedan red, par Kupac -> Vozac, i broj koji je NJEGOV.
+'
+' AMB-10-ODL-23 (operater, 06.10.2026): kupac vraca prazne i bez prijemnice.
+' Tri tvrdnje o zaglavlju stoje IZNAD rane izlazne tacke -- LookupValue nad
+' praznim dokID-em vraca "", pa pucaju PO IMENU i kad sabotaza obori ceo upis.
+' Da stoje ispod, sabotaza vlasnika broja obarala bi samo tvrdnju da je
+' dokument upisan -- posledicu, ne pravilo.
+Private Sub Test_RVP_KupcevDokumentJedanRed()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("RVPDOK")
+    testDate = NextTestDate()
+
+    Dim razlogSeed As String
+    AssertTrue Len(RvpSejKupcu(testDate, scenario, TEST_KUP_ID, 20, razlogSeed)) > 0, _
+               "RVP: preduslov -- kupac je dobio 20 gajbi (" & razlogSeed & ")"
+
+    Dim dok As String, razlog As String
+    dok = RvpUpisi(testDate, "KUP-R/" & scenario, TEST_KUP_ID, TEST_VOZ_ID, _
+                   TEST_TIP_AMB, 20#, razlog)
+
+    AssertEquals AMB_NALOG_KUPAC, _
+                 CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, _
+                      COL_AMBD_BROJ_OWNER_TIP)), _
+                 "RVP: vlasnik broja je KUPAC, ne nas nalog"
+    AssertEquals TEST_KUP_ID, _
+                 CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, _
+                      COL_AMBD_BROJ_OWNER_ID)), _
+                 "RVP: vlasnik broja je BAS taj kupac"
+    AssertEquals AMB_DOK_REVERS_PARTNERA, _
+                 CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, _
+                      COL_AMBD_VRSTA)), _
+                 "RVP: vrsta je partnerov revers"
+    AssertTrue Len(dok) > 0, "RVP: kupcev revers je upisan (" & razlog & ")"
+    If Len(dok) = 0 Then GoTo Kraj
+
+    ' JEDAN RED, i par je lanac iz ODL-9.
+    AssertEquals "1", CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                           AMB_VK_POVRAT_PRAZNE)), _
+                 "RVP: povrat knjizi TACNO jedan red"
+    AssertEquals TEST_KUP_ID, AmbNoviPolje(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_POVRAT_PRAZNE, COL_AMB_OD_ID), _
+                 "RVP: prazne POLAZE OD KUPCA"
+    AssertEquals TEST_VOZ_ID, AmbNoviPolje(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                 AMB_VK_POVRAT_PRAZNE, COL_AMB_NA_ID), _
+                 "RVP: prazne STIZU VOZACU -- lanac kupac -> vozac -> stanica"
+
+    ' STORNO NIJE PISAN ZA OVU VRSTU, i to je tvrdnja: StornirajAmbDokument_TX
+    ' radi nad SVAKIM ambalaznim dokumentom, pa partnerov ne trazi svoju putanju.
+    AssertTrue modAmbalaza.StornirajAmbDokument_TX(dok), _
+               "RVP: storno kupcevog reversa prolazi kroz zajednicku putanju"
+    AssertEquals "1", CStr(AmbBrojKontraStavova(dok, DOK_TIP_AMBALAZA_DOKUMENT)), _
+                 "RVP: storno je upisao KONTRA-STAV, ne izmenu reda"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_RVP_KupcevDokumentJedanRed", Err.Number, Err.description
+End Sub
+
+' BROJ JE KUPCEV: obavezan, i NE predlaze se.
+'
+' Ovo je jedino pravilo koje nosi sam pisac -- sve ostalo sudi jezgro. Brat
+' blizanac (UpisiReversAmbalaze_TX) na prazan broj zove generator; ovde
+' generator ne sme ni da postoji, jer bi predlozio broj iz NASEG niza.
+Private Sub Test_RVP_BrojJeKupcevINePredlazeSe()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("RVPBRJ")
+    testDate = NextTestDate()
+
+    Dim razlogSeed As String
+    AssertTrue Len(RvpSejKupcu(testDate, scenario, TEST_KUP_ID, 20, razlogSeed)) > 0, _
+               "RVP broj: preduslov -- kupac je dobio 20 gajbi (" & razlogSeed & ")"
+
+    ' PRAZAN BROJ: odbijen, i razlog imenuje BAS to pravilo.
+    Dim n As Long, razlog As String
+    n = CountRows(TBL_AMBALAZA_DOKUMENT)
+    AssertTrue Len(RvpUpisi(testDate, "", TEST_KUP_ID, TEST_VOZ_ID, _
+                            TEST_TIP_AMB, 5#, razlog)) = 0, _
+               "RVP broj: prazan broj je ODBIJEN, ne dopunjen predlogom"
+    AssertTrue InStr(1, razlog, "ne predlaze", vbTextCompare) > 0, _
+               "RVP broj: razlog imenuje da se broj NE PREDLAZE"
+    AssertEquals CStr(n), CStr(CountRows(TBL_AMBALAZA_DOKUMENT)), _
+                 "RVP broj: odbijen upis nije ostavio zaglavlje"
+
+    ' ZAUZETOST IDE KROZ OVOG PISCA, u opsegu (Kupac, KupacID, dan) -- ODL-20.
+    ' Drugi upis istog broja nad istim kupcem i danom mora da padne, inace bi
+    ' jedan poslovni broj nosila dva AmbDokID-a.
+    Dim br As String
+    br = "KUP-Z/" & scenario
+    AssertTrue Len(RvpUpisi(testDate, br, TEST_KUP_ID, TEST_VOZ_ID, _
+                            TEST_TIP_AMB, 5#, razlog)) > 0, _
+               "RVP broj: prvi upis sa kupcevim brojem prolazi (" & razlog & ")"
+    n = CountRows(TBL_AMBALAZA_DOKUMENT)
+    AssertTrue Len(RvpUpisi(testDate, br, TEST_KUP_ID, TEST_VOZ_ID, _
+                            TEST_TIP_AMB, 5#, razlog)) = 0, _
+               "RVP broj: isti broj istog kupca istog dana je ODBIJEN"
+    AssertTrue InStr(1, razlog, "zauzet", vbTextCompare) > 0, _
+               "RVP broj: razlog imenuje zauzetost, ne neku drugu kapiju"
+    AssertEquals CStr(n), CStr(CountRows(TBL_AMBALAZA_DOKUMENT)), _
+                 "RVP broj: odbijen duplikat nije ostavio zaglavlje"
+
+    Exit Sub
+EH:
+    LogFatal "Test_RVP_BrojJeKupcevINePredlazeSe", Err.Number, Err.description
+End Sub
+
+' PREKOMERAN POVRAT JE PITANJE, NE ZID (P2 #2 iz review-a 024995de).
+'
+' Kupac fizicki vraca vise gajbi nego sto po knjizi drzi. Jezgro je protokol
+' imalo sve vreme (PrenesiAmbalazu, potvrdaDeficita), ali ga pisac nije prenosio
+' -- pa nije postojao nacin da pozivalac ponovi upis sa potvrdjenim manjkom.
+'
+' SVEZ TIP AMBALAZE je uslov merenja, ne ukras: nad TEST_TIP_AMB kupcev saldo
+' nosi i sve ostale testove, pa deficit ne bi bio TACNO 15 i tvrdnja o broju u
+' poruci ne bi bila ponovljiva.
+Private Sub Test_RVP_DeficitSePotvrdjuje()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("RVPDEF")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPD-" & scenario)
+
+    ' Nase gajbe u opticaj ulaze samo kroz NABAVKU (ODL-8), pa stanica -> vozac
+    ' kroz pravi revers, pa vozac -> kupac kroz prijemnicu. Sve produkcioni put.
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABD-" & scenario, "test deficit"
+    Dim revD As String
+    revD = modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, tipT, _
+                                              50#, REV_SMER_PRIJEM_OD_OM, "", _
+                                              TEST_VOZ_ID, "test deficit")
+    AssertTrue Len(revD) > 0, "RVP deficit: preduslov -- vozac je preuzeo 50"
+
+    Dim razlogSeed As String
+    AssertTrue Len(RvpSejKupcu(testDate, scenario, TEST_KUP_ID, 5, razlogSeed, tipT)) > 0, _
+               "RVP deficit: preduslov -- kupac drzi TACNO 5 (" & razlogSeed & ")"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT) - 5#) < 0.001, _
+               "RVP deficit: preduslov -- saldo kupca je 5, ne vise"
+
+    Dim kupPre As Double, vozPre As Double
+    kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT)
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT)
+
+    ' BEZ POTVRDE: odbijeno, i poruka nosi TACAN manjak -- pozivalac iz nje zna
+    ' sta da potvrdi. Broj u poruci je ceo ugovor protokola.
+    Dim razlog As String
+    AssertTrue Len(RvpUpisi(testDate, "KUPD1-" & scenario, TEST_KUP_ID, TEST_VOZ_ID, _
+                            tipT, 20#, razlog)) = 0, _
+               "RVP deficit: povrat 20 bez potvrde je ODBIJEN"
+    AssertTrue InStr(1, razlog, "Manjak 15", vbTextCompare) > 0, _
+               "RVP deficit: poruka imenuje TACAN manjak (15)"
+
+    ' POGRESNA POTVRDA: takodje odbijena -- potvrda se meri prema SVEZEM manjku.
+    AssertTrue Len(RvpUpisiSaPotvrdom(testDate, "KUPD2-" & scenario, TEST_KUP_ID, _
+                                      TEST_VOZ_ID, tipT, 20#, 14#, razlog)) = 0, _
+               "RVP deficit: potvrda 14 na manjak 15 je ODBIJENA"
+    AssertTrue InStr(1, razlog, "ne slaze", vbTextCompare) > 0, _
+               "RVP deficit: razlog imenuje da se potvrda NE SLAZE sa manjkom"
+
+    ' TACNA POTVRDA: upis prolazi, i visak ulazi kao TUDJA ambalaza.
+    Dim dok As String
+    dok = RvpUpisiSaPotvrdom(testDate, "KUPD3-" & scenario, TEST_KUP_ID, _
+                             TEST_VOZ_ID, tipT, 20#, 15#, razlog)
+    ' RAZLOG IDE U SVOJU TVRDNJU, ne u tekst one iznad: sabotaza se u dokaz.py
+    ' poklapa po DOSLOVNOM literalu, pa tvrdnja sa `& razlog &` nikad ne moze da
+    ' se poklopi. AssertEquals svejedno ispisuje stvaran razlog kad padne.
+    AssertEquals "", razlog, "RVP deficit: potvrdjen manjak ne ostavlja razlog"
+    AssertTrue Len(dok) > 0, "RVP deficit: potvrdjen manjak 15 PROLAZI"
+    If Len(dok) = 0 Then GoTo Kraj
+
+    ' KOLICINE I SALDA -- P3 iz review-a: do sada je RVP acceptance merio samo
+    ' oblik reda, a ne brojeve.
+    AssertTrue Abs(AmbNoviKolicina(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                   AMB_VK_POVRAT_PRAZNE) - 20#) < 0.001, _
+               "RVP deficit: noga povrata nosi TRAZENIH 20, ne pokrivenih 15"
+    AssertEquals "1", CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                           AMB_VK_ULAZ_TUDJE)), _
+                 "RVP deficit: pokrice je JEDAN red tudje ambalaze"
+    AssertTrue Abs(AmbNoviKolicina(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                   AMB_VK_ULAZ_TUDJE) - 15#) < 0.001, _
+               "RVP deficit: pokrice je TACNO manjak (15), ne cela kolicina"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT) - _
+                   (kupPre + 15# - 20#)) < 0.001, _
+               "RVP deficit: kupcev saldo je 0 -- pokrice pa povrat, nijedan minus"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT) - _
+                   (vozPre + 20#)) < 0.001, _
+               "RVP deficit: vozac je dobio svih 20"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_RVP_DeficitSePotvrdjuje", Err.Number, Err.description
+End Sub
+
+' NOGA POVRATA NE SME DA ZAVISI OD POSTOJANJA KLASE I.
+'
+' Nalaz 07.10.2026 (nadjen pri citanju za P2 #2, nije iz review-a): u
+' SavePrijemnicaMulti_TX je kolAmbVracena isla SAMO pozivu za Klasu I, a Klasa II
+' je dobijala tvrdo upisanu 0. Klasa I je OPCIONA, pa je prijemnica sa samo
+' Klasom II i vracenim gajbama TIHO gubila nogu povrata.
+'
+' Test ide kroz Multi, jer se bas tamo bira kome noga ide -- SavePrijemnica je
+' sve vreme radio ispravno sa onim sto dobije. Od S6 koraka 2 noga povrata vise
+' ne ide "uz klasu" nego uz DOKUMENT (jedno zaglavlje), pa tvrdnje vaze i dalje,
+' a sabotaza amb-prj-povrat-samo-sa-klasom-i kvari prenos povrata u jezgro.
+Private Sub Test_PRJ_PovratIdeSaKlasomKojaPostoji()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("PRJKL2")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK-" & scenario)
+
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABK-" & scenario, "test klasa II"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "PRJ klasa II: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(testDate, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 100#)) > 0, _
+               "PRJ klasa II: preduslov -- zbirna je snimljena"
+
+    ' SAMO KLASA II: kolicinaI = 0. Vracene prazne idu uz nju, jer druge nema.
+    Dim prj As String, errNum As Long
+    On Error Resume Next
+    prj = SavePrijemnicaMulti_TX( _
+              datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+              brojPrij:=TEST_PREFIX & "-PRJKL2-" & scenario, brojZbirne:=brZbr, _
+              vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+              kolicinaI:=0#, cenaI:=0#, tipAmb:=tipT, _
+              kolAmb:=0, kolAmbVracena:=4, _
+              hasKlasaII:=True, kolicinaII:=300#, cenaII:=90#, kolAmbII:=10, _
+              outErrNum:=errNum)
+    If Err.Number <> 0 Then
+        prj = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+
+    AssertTrue Len(prj) > 0, "PRJ klasa II: prijemnica bez Klase I je snimljena"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    AssertEquals "1", CStr(AmbNoviBrojRedova(prj, DOK_TIP_PRIJEMNICA, _
+                           AMB_VK_POVRAT_PRAZNE)), _
+                 "PRJ klasa II: povrat praznih JE knjizen i bez Klase I"
+    AssertTrue Abs(AmbNoviKolicina(prj, DOK_TIP_PRIJEMNICA, _
+                   AMB_VK_POVRAT_PRAZNE) - 4#) < 0.001, _
+               "PRJ klasa II: knjizene su TACNO vracene 4 gajbe"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_PRJ_PovratIdeSaKlasomKojaPostoji", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' S6 KORAK 2 -- PRIJEMNICA JE ZAGLAVLJE + STAVKE (plan 14.55 "Korak 2", stavka 174)
+'
+' Do koraka 2 je SavePrijemnicaMulti_TX pisao red PO KLASI i vracao
+' "PRJ-I + PRJ-II". Sada pise JEDNO zaglavlje i stavku po klasi, i vraca jedan
+' ID. Nivoi koji se mere su imenovani: LOGICKI dokument (jedan ID), FIZICKI
+' redovi (zaglavlje, stavke), POSLOVNI dogadjaj knjige (noga punih, povrat) i
+' LINIJA (paleta po PrijemnicaStavkaID).
+'
+' Svez tip ambalaze (obrazac Test_RVP_DeficitSePotvrdjuje): saldo vozaca za tip
+' suite-a deli ceo prolaz, a tvrdnje ovde mere i saldo.
+' ============================================================
+
+' JEDNAK BROJ GAJBI U OBE KLASE (10 + 10) JE NAMERAN -- to je slucaj iz nalaza 1.
+' AMB-INV-04 meri ponavljanje ZBIROM (ZbirZahteva), pa bi druga noga istog tipa
+' pod istim ID-jem tiho vratila prvu: knjiga 10, ne 20. Razlicit broj bi dao
+' glasan HARD CONFLICT i sakrio bas tihi slucaj.
+'
+' Nema rane izlazne tacke posle snimanja: tvrdnja zaklonjena izlazom ne moze da
+' bude oborena po imenu (sabotaza-ubija-test-pre-tvrdnje). Pomocnici nad praznim
+' ID-jem vracaju nulu, pa pad snimanja crveni SVE tvrdnje, i svaku po imenu.
+' SABOTAZE: s6k2-noga-bez-zbira, s6k2-kapija-palete-po-dokumentu,
+' s6k2-paleta-bez-kljuca-stavke, s6k2-zaglavlje-nosi-klasu,
+' s6k2-storno-dokumenta-bez-kontrastava.
+Private Sub Test_S6_DveKlaseJedanDokument()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String, prevPal As String
+    scenario = NewScenarioCode("S6DVE")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS6-" & scenario)
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABS6-" & scenario, "test S6 dve klase"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S6 PRJ: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(testDate, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "S6 PRJ: preduslov -- zbirna je snimljena"
+
+    Dim vozPre As Double, kupPre As Double
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT)
+    kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT)
+
+    Dim prj As String, errNum As Long
+    On Error Resume Next
+    prj = SavePrijemnicaMulti_TX( _
+              datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+              brojPrij:=TEST_PREFIX & "-S6DVE-" & scenario, brojZbirne:=brZbr, _
+              vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+              kolicinaI:=100#, cenaI:=120#, tipAmb:=tipT, _
+              kolAmb:=10, kolAmbVracena:=4, _
+              hasKlasaII:=True, kolicinaII:=50#, cenaII:=80#, kolAmbII:=10, _
+              outErrNum:=errNum)
+    If Err.Number <> 0 Then
+        prj = ""
+        Err.Clear
+    End If
+    On Error GoTo EH
+
+    AssertTrue Len(prj) > 0, "S6 PRJ: dvoklasna prijemnica je snimljena"
+
+    ' --- logicki dokument: JEDAN ID ---
+    AssertTrue Len(prj) > 0 And InStr(prj, " + ") = 0, _
+               "S6 PRJ: dve klase su JEDAN dokument (jedan ID, bez ' + ')"
+
+    ' --- fizicki redovi: jedno zaglavlje, stavka po klasi ---
+    AssertEquals "1", CStr(S6BrojRedova(TBL_PRIJEMNICA, COL_PRJ_ID, prj)), _
+                 "S6 PRJ: dokument je JEDAN red zaglavlja"
+    AssertEquals "2", CStr(S6BrojRedova(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, prj)), _
+                 "S6 PRJ: dokument ima DVE stavke, po jednu za klasu"
+    AssertEquals "1:100|120|10", S6StavkaOtisak(prj, KLASA_I), _
+                 "S6 PRJ: stavka klase I nosi svoj redni broj, kolicinu, cenu i gajbe"
+    AssertEquals "2:50|80|10", S6StavkaOtisak(prj, KLASA_II), _
+                 "S6 PRJ: stavka klase II nosi svoj redni broj, kolicinu, cenu i gajbe"
+
+    ' --- zaglavlje ne laze o klasi; cinjenice dokumenta ostaju na njemu ---
+    ' Prva tvrdnja meri ODSUSTVO, pa je kontra-tvrdnja nosi: bez nje bi prazno
+    ' zaglavlje (ili zaglavlje koga nema) bilo "ispravno".
+    AssertEquals "", S6ZaglavljeLinija(prj), _
+                 "S6 PRJ: zaglavlje ne nosi linijska polja ni kes fakture"
+    AssertEquals tipT & "|4", S6ZaglavljeDokument(prj), _
+                 "S6 PRJ: zaglavlje nosi cinjenice dokumenta (TipAmbalaze, KolAmbVracena)"
+
+    ' --- poslovni dogadjaj knjige: JEDNA noga punih = zbir stavki ---
+    AssertEquals "1", CStr(S6AmbBroj(prj, AMB_VK_UZ_ROBU)), _
+                 "S6 PRJ: pune gajbe dokumenta su JEDNA noga"
+    AssertTrue Abs(S6AmbKolicina(prj, AMB_VK_UZ_ROBU) - 20#) < 0.001, _
+               "S6 PRJ: noga punih nosi zbir stavki (10 + 10 = 20)"
+    AssertEquals "1", CStr(S6AmbBroj(prj, AMB_VK_POVRAT_PRAZNE)), _
+                 "S6 PRJ: povrat praznih je JEDAN po dokumentu"
+    AssertTrue Len(prj) > 0 And _
+               Abs((vozPre - modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT)) _
+                   - 16#) < 0.001, _
+               "S6 PRJ: vozacu je ostalo 16 manje (20 dato, 4 vraceno)"
+
+    ' --- linija: obe klase dobijaju palete, svaka pod SVOJOM stavkom ---
+    Dim stI As String, stII As String
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    AssertEquals "20", CStr(S6GajbiNaPaletama(prj, "")), _
+                 "S6 PRJ: obe klase dobijaju palete (20 gajbi pod dokumentom)"
+    AssertTrue Len(stI) > 0 And Len(stII) > 0 And stI <> stII And _
+               S6GajbiNaPaletama(prj, stI) = 10 And S6GajbiNaPaletama(prj, stII) = 10, _
+               "S6 PRJ: paletna stavka nosi PrijemnicaStavkaID svoje klase"
+
+    ' --- storno dokumenta: svaka noga dobija JEDAN kontra-stav ---
+    Dim prosao As Boolean
+    If Len(prj) > 0 Then prosao = modStorno.StornoPrijemnica_TX(prj)
+    AssertTrue prosao, "S6 PRJ: storno dvoklasnog dokumenta prolazi"
+    AssertEquals "2", CStr(S6AmbKontraStavova(prj)), _
+                 "S6 PRJ: storno dokumenta daje TACNO dva kontra-stava (puna i povrat)"
+    AssertTrue prosao And _
+               Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT) - vozPre) < 0.001 And _
+               Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT) - kupPre) < 0.001, _
+               "S6 PRJ: posle storna su salda vozaca i kupca kao pre dokumenta"
+
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6_DveKlaseJedanDokument", Err.Number, Err.description
+    On Error Resume Next
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' JEDNA KLASA = JEDNA STAVKA TE KLASE. Manifest razlikuje "stavka fali" od
+' "dokument ima jednu stavku": dokument samo sa klasom II nema stavku klase I,
+' a ne stavku klase I sa nulom. Povrat praznih je cinjenica DOKUMENTA, pa stoji
+' pod njegovim ID-jem i kad klase I nema (do koraka 2 je to bilo "uz klasu koja
+' postoji", Test_PRJ_PovratIdeSaKlasomKojaPostoji).
+' SABOTAZA: s6k2-druga-klasa-kao-prva.
+Private Sub Test_S6_JednaKlasaJednaStavka()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6JED")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS6J-" & scenario)
+
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABS6J-" & scenario, "test S6 jedna klasa"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S6 PRJ jedna klasa: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(testDate, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 100#)) > 0, _
+               "S6 PRJ jedna klasa: preduslov -- zbirna je snimljena"
+
+    Dim prjI As String, prjII As String, errNum As Long
+    On Error Resume Next
+    prjI = SavePrijemnicaMulti_TX( _
+               datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+               brojPrij:=TEST_PREFIX & "-S6JI-" & scenario, brojZbirne:=brZbr, _
+               vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+               kolicinaI:=60#, cenaI:=100#, tipAmb:=tipT, _
+               kolAmb:=6, kolAmbVracena:=2, outErrNum:=errNum)
+    If Err.Number <> 0 Then prjI = "": Err.Clear
+    prjII = SavePrijemnicaMulti_TX( _
+                datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+                brojPrij:=TEST_PREFIX & "-S6JII-" & scenario, brojZbirne:=brZbr, _
+                vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+                kolicinaI:=0#, cenaI:=0#, tipAmb:=tipT, _
+                kolAmb:=0, kolAmbVracena:=1, _
+                hasKlasaII:=True, kolicinaII:=40#, cenaII:=70#, kolAmbII:=4, _
+                outErrNum:=errNum)
+    If Err.Number <> 0 Then prjII = "": Err.Clear
+    On Error GoTo EH
+
+    AssertTrue Len(prjI) > 0 And Len(prjII) > 0, _
+               "S6 PRJ jedna klasa: oba dokumenta su snimljena"
+    AssertEquals KLASA_I, S6StavkeKlase(prjI), _
+                 "S6 PRJ jedna klasa: dokument samo sa klasom I ima JEDNU stavku, klase I"
+    AssertEquals KLASA_II, S6StavkeKlase(prjII), _
+                 "S6 PRJ jedna klasa: dokument samo sa klasom II ima JEDNU stavku, klase II"
+    AssertEquals "6|2", CStr(S6AmbKolicina(prjI, AMB_VK_UZ_ROBU)) & "|" & _
+                        CStr(S6AmbKolicina(prjI, AMB_VK_POVRAT_PRAZNE)), _
+                 "S6 PRJ jedna klasa: puna noga i povrat stoje pod ID-jem dokumenta (klasa I)"
+    AssertEquals "4|1", CStr(S6AmbKolicina(prjII, AMB_VK_UZ_ROBU)) & "|" & _
+                        CStr(S6AmbKolicina(prjII, AMB_VK_POVRAT_PRAZNE)), _
+                 "S6 PRJ jedna klasa: puna noga i povrat stoje pod ID-jem dokumenta (klasa II)"
+
+    Exit Sub
+EH:
+    LogFatal "Test_S6_JednaKlasaJednaStavka", Err.Number, Err.description
+End Sub
+
+' --- pomocnici S6 koraka 2 -- nad praznim ID-jem vracaju nulu ili prazno ---
+
+Private Function S6BrojRedova(ByVal tbl As String, ByVal kol As String, _
+                              ByVal vrednost As String) As Long
+    Dim rows As Collection
+    If Len(vrednost) = 0 Then Exit Function
+    Set rows = FindRows(tbl, kol, vrednost)
+    If Not rows Is Nothing Then S6BrojRedova = rows.count
+End Function
+
+' Red stavke date klase na dokumentu (0 = nema).
+Private Function S6StavkaRed(ByVal prj As String, ByVal klasa As String, _
+                             ByRef d As Variant) As Long
+    If Len(prj) = 0 Then Exit Function
+    d = GetTableData(TBL_PRIJEMNICA_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cP As Long, cK As Long, i As Long
+    cP = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, "S6StavkaRed")
+    cK = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, "S6StavkaRed")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = prj And Trim$(nz(d(i, cK), "")) = klasa Then
+            S6StavkaRed = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+Private Function S6StavkaID(ByVal prj As String, ByVal klasa As String) As String
+    Dim d As Variant, r As Long
+    r = S6StavkaRed(prj, klasa, d)
+    If r = 0 Then Exit Function
+    S6StavkaID = Trim$(nz(d(r, RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, _
+                                                  "S6StavkaID")), ""))
+End Function
+
+' "RedniBroj:Kolicina|Cena|KolAmbalaze" stavke date klase; prazno ako je nema.
+Private Function S6StavkaOtisak(ByVal prj As String, ByVal klasa As String) As String
+    Dim d As Variant, r As Long
+    r = S6StavkaRed(prj, klasa, d)
+    If r = 0 Then Exit Function
+    S6StavkaOtisak = S6Broj(d(r, RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_RB, "S6"))) & ":" & _
+                     S6Broj(d(r, RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, "S6"))) & "|" & _
+                     S6Broj(d(r, RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA, "S6"))) & "|" & _
+                     S6Broj(d(r, RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOL_AMB, "S6")))
+End Function
+
+Private Function S6Broj(ByVal v As Variant) As String
+    If IsNumeric(v) And Not IsEmpty(v) Then
+        S6Broj = CStr(CDbl(v))
+    Else
+        S6Broj = Trim$(nz(v, ""))
+    End If
+End Function
+
+' Klase stavki dokumenta, redom po RedniBroj, spojene sa ",".
+Private Function S6StavkeKlase(ByVal prj As String) As String
+    If Len(prj) = 0 Then Exit Function
+    Dim d As Variant
+    d = GetTableData(TBL_PRIJEMNICA_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cP As Long, cK As Long, cR As Long, i As Long, rb As Long
+    cP = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, "S6StavkeKlase")
+    cK = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, "S6StavkeKlase")
+    cR = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_RB, "S6StavkeKlase")
+    For rb = 1 To 9
+        For i = 1 To UBound(d, 1)
+            If Trim$(nz(d(i, cP), "")) = prj And S6Broj(d(i, cR)) = CStr(rb) Then
+                If Len(S6StavkeKlase) > 0 Then S6StavkeKlase = S6StavkeKlase & ","
+                S6StavkeKlase = S6StavkeKlase & Trim$(nz(d(i, cK), ""))
+            End If
+        Next i
+    Next rb
+End Function
+
+' Linijska polja i kes fakture zaglavlja: prazno = zaglavlje ih ne nosi.
+'
+' Od S6 koraka 8 se meri ODSUSTVO KOLONE, ne prazna vrednost (obrazac
+' OtpLinijskeKoloneIndeksi): kolone su obrisane iz kanona, pa "polje je prazno"
+' vise nije najjace sto se moze tvrditi. Vraca imena kolona koje su ostale u
+' svesci. Imena su LITERALI -- konstante ne postoje.
+Private Function S6ZaglavljeLinija(ByVal prj As String) As String
+    If S6BrojRedova(TBL_PRIJEMNICA, COL_PRJ_ID, prj) <> 1 Then
+        S6ZaglavljeLinija = "<nema zaglavlja>"
+        Exit Function
+    End If
+    Dim k As Variant, s As String
+    For Each k In Array("Kolicina", "Cena", "Klasa", "KolAmbalaze", "BrutoKg", _
+                        "Fakturisano", "FakturaID")
+        If GetColumnIndex(TBL_PRIJEMNICA, CStr(k)) > 0 Then s = s & "|" & CStr(k)
+    Next k
+    S6ZaglavljeLinija = s
+End Function
+
+Private Function S6ZaglavljeDokument(ByVal prj As String) As String
+    If Len(prj) = 0 Then Exit Function
+    S6ZaglavljeDokument = _
+        Trim$(nz(GetValueByKey(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_TIP_AMB), "")) & "|" & _
+        S6Broj(GetValueByKey(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_KOL_AMB_VRACENA))
+End Function
+
+Private Function S6AmbBroj(ByVal prj As String, ByVal vrsta As String) As Long
+    If Len(prj) = 0 Then Exit Function
+    S6AmbBroj = AmbNoviBrojRedova(prj, DOK_TIP_PRIJEMNICA, vrsta)
+End Function
+
+Private Function S6AmbKolicina(ByVal prj As String, ByVal vrsta As String) As Double
+    If Len(prj) = 0 Then Exit Function
+    S6AmbKolicina = AmbNoviKolicina(prj, DOK_TIP_PRIJEMNICA, vrsta)
+End Function
+
+Private Function S6AmbKontraStavova(ByVal prj As String) As Long
+    If Len(prj) = 0 Then Exit Function
+    S6AmbKontraStavova = AmbBrojKontraStavova(prj, DOK_TIP_PRIJEMNICA)
+End Function
+
+' Gajbe na AKTIVNIM paletnim stavkama dokumenta; uz stavkaID samo te linije.
+Private Function S6GajbiNaPaletama(ByVal prj As String, ByVal stavkaID As String) As Long
+    If Len(prj) = 0 Then Exit Function
+    Dim d As Variant
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cP As Long, cS As Long, cG As Long, cSt As Long, i As Long
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S6GajbiNaPaletama")
+    cG = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, "S6GajbiNaPaletama")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S6GajbiNaPaletama")
+    cS = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID)
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = prj And _
+           UCase$(Trim$(nz(d(i, cSt), ""))) <> "DA" Then
+            If Len(stavkaID) = 0 Then
+                S6GajbiNaPaletama = S6GajbiNaPaletama + CLng(Val(nz(d(i, cG), 0)))
+            ElseIf cS > 0 Then
+                If Trim$(nz(d(i, cS), "")) = stavkaID Then _
+                    S6GajbiNaPaletama = S6GajbiNaPaletama + CLng(Val(nz(d(i, cG), 0)))
+            End If
+        End If
+    Next i
+End Function
+
+' ============================================================
+' S6 KORAK 4 -- STORNO NA NIVOU DOKUMENTA, KI-031 KAO KAPIJA (plan 14.55
+' "Korak 4", stavka 182)
+'
+' Storno ponistava TRI dogadjaja -- dokument, knjigu ambalaze i palete -- i svi
+' moraju da padnu ili da ostanu ZAJEDNO. Lanci su na svezem tipu ambalaze i
+' vozacu VOZ-90001, pa KI-028 ne ulazi. Identitet koji testovi salju je onaj koji
+' nosi red F8 (S6K4Ident) -- test meri ugovor mreze, ne njegovu kopiju.
+' ============================================================
+
+' KI-031: KASKADA SA SUBJEKTOM MORA DA SNIMI PRIJEMNICU.
+'
+' Ponistenje prijemnice zove kaskadu svoje zbirne, a ona subjekat stornira u
+' grani ownsChain = False -- u transakciji koja do koraka 4 nije snimala
+' tblPrijemnica. Knjiga je tada odbijala kontra-stav (RequireAmbTxIzvorniDokument),
+' a rollback je vracao sve OSIM zaglavlja: dokument storniran, gajbe kod kupca.
+' Kaskada se vozi kroz PRAVI ulaz (RunPrijemnicaCorrection, PONISTENJE), ne kroz
+' test seam. Prva tvrdnja meri samu invarijantu, nezavisno od ishoda.
+' SABOTAZE: s6k4-kaskada-ne-snima-prijemnicu, s6k4-kaskada-palete-posle-commita.
+Private Sub Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu()
+    Dim prevPal As String, prevKupac As String
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4KAS")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4K-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    ' Lanac nije nas (ownsChain = False): hladnjaca je DRUGI kupac.
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP2_ID
+
+    AssertTrue S6K4Gajbe(testDate, scenario, tipT), _
+               "S6K4 kaskada: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim vozPre As Double, kupPre As Double
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT)
+    kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT)
+
+    Dim brZbr As String, brPrj As String, zbrID As String, prj As String
+    brZbr = TEST_PREFIX & "-ZK4K-" & scenario
+    brPrj = TEST_PREFIX & "-PK4K-" & scenario
+    zbrID = S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)
+    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, brPrj, brZbr, tipT, 10, 10, 4)
+    AssertTrue Len(zbrID) > 0 And Len(prj) > 0, _
+               "S6K4 kaskada: preduslov -- zbirna i dvoklasna prijemnica su snimljene"
+    If Len(prj) = 0 Then GoTo Kraj
+    AssertEquals "2", CStr(S6AmbBroj(prj, AMB_VK_UZ_ROBU) + S6AmbBroj(prj, AMB_VK_POVRAT_PRAZNE)), _
+                 "S6K4 kaskada: preduslov -- prijemnica ima obe noge knjige"
+    AssertEquals "20", CStr(S6GajbiNaPaletama(prj, "")), _
+                 "S6K4 kaskada: preduslov -- prijemnica je na paletama"
+
+    Dim res As Object
+    Set res = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_PONISTENJE, True, False, _
+                                                    S6K4Ident(prj))
+    AssertTrue S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj) = (S6AmbKontraStavova(prj) = 2), _
+               "S6K4 kaskada: storniran dokument i kontra-stav knjige idu ZAJEDNO (KI-031)"
+    AssertTrue CBool(res("success")), _
+               "S6K4 kaskada: ponistenje prijemnice sa nogama knjige PROLAZI kroz pravu kaskadu"
+    AssertTrue S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K4 kaskada: subjekat je storniran"
+    AssertEquals "2", CStr(S6AmbKontraStavova(prj)), _
+                 "S6K4 kaskada: knjiga ima oba kontra-stava subjekta"
+    AssertEquals "0", CStr(S6GajbiNaPaletama(prj, "")), _
+                 "S6K4 kaskada: palete subjekta su skinute u istoj kaskadi"
+    AssertTrue S6K4Stornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "S6K4 kaskada: zbirna je stornirana"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT) - vozPre) < 0.001 And _
+               Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT) - kupPre) < 0.001, _
+               "S6K4 kaskada: salda vozaca i kupca su kao pre prijemnice"
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu", Err.Number, Err.description
+    On Error Resume Next
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+End Sub
+
+' R1 + R3: DVOKLASNA PRIJEMNICA SE STORNIRA JEDNIM POZIVOM, A PALETE PADAJU SA NJOM.
+'
+' Do koraka 4 storno dokumenta palete nije dirao: skidao ih je okvir ispravke
+' POSLE commit-a, u zasebnoj transakciji i po BROJU -- pa je dokument mogao da
+' ostane storniran sa robom na paleti. Nivo: logicki dokument (jedan PrijemnicaID,
+' dve stavke). Gajbe se mere i na samim paletama (BrojGajbica), jer paleta sme da
+' ima su-stanare.
+' SABOTAZE: s6k4-jezgro-ne-skida-palete.
+Private Sub Test_S6K4_StornoSkidaPaleteUIstojTx()
+    Dim prevPal As String
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4PAL")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4P-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    AssertTrue S6K4Gajbe(testDate, scenario, tipT), _
+               "S6K4 storno: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim brZbr As String, prj As String
+    brZbr = TEST_PREFIX & "-ZK4P-" & scenario
+    AssertTrue Len(S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)) > 0, _
+               "S6K4 storno: preduslov -- zbirna je snimljena"
+    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, TEST_PREFIX & "-PK4P-" & scenario, _
+                         brZbr, tipT, 10, 10, 4)
+    AssertTrue Len(prj) > 0, "S6K4 storno: preduslov -- dvoklasna prijemnica je snimljena"
+    If Len(prj) = 0 Then GoTo Kraj
+    Dim palete As String, gajbePre As Long
+    palete = S6K4PaleteDokumenta(prj)
+    gajbePre = S6K4GajbiNaPaletamaUkupno(palete)
+    AssertTrue Len(palete) > 0, "S6K4 storno: preduslov -- dokument je na paletama"
+
+    Dim prosao As Boolean
+    prosao = modStorno.StornoPrijemnica_TX(prj)
+    AssertEquals "0", CStr(S6GajbiNaPaletama(prj, "")), _
+                 "S6K4 storno: paletne stavke OBE klase padaju sa dokumentom"
+    AssertEquals "20", CStr(gajbePre - S6K4GajbiNaPaletamaUkupno(palete)), _
+                 "S6K4 storno: palete gube tacno gajbe dokumenta (10 + 10)"
+    AssertTrue prosao, "S6K4 storno: dvoklasni dokument se stornira JEDNIM pozivom"
+    AssertTrue S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K4 storno: zaglavlje je stornirano"
+    AssertEquals "2", CStr(S6AmbKontraStavova(prj)), _
+                 "S6K4 storno: knjiga ima oba kontra-stava"
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_StornoSkidaPaleteUIstojTx", Err.Number, Err.description
+    On Error Resume Next
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' ODLUKA 1: FAKTURISANA PRIJEMNICA SE NE STORNIRA -- PRVO FAKTURA.
+'
+' Do koraka 4 storno je gledao samo kes Fakturisano na zaglavlju, osirotio fakturu
+' i prosao. Prijemnicu koju faktura pokriva STAVKOM (bez kesa) je stornirao bez
+' ikakvog traga. Sada jezgro odbija PRE ijedne mutacije.
+'
+' S6 korak 5: fakturisanost je IZVEDENA iz aktivnih linija (FAK-LIN-03); kes je
+' od koraka 8 obrisan iz kanona. Ovde ostaje linija:
+' PRAVA faktura (rollback), na stavci KLASE I dvoklasnog dokumenta.
+' Dokument je time DELIMICNO fakturisan, i jezgro ga odbija kao fakturisan.
+' Direktan poziv jezgra -- jezgro je ovde JEDINA brana (okvir ispravke ima svoju,
+' KI-040, pa sabotaza jezgra kroz okvir ne bi grizla).
+' SABOTAZE: s6k4-faktura-kapija-u-jezgru, s6k4-faktura-stavka-prolazi.
+Private Sub Test_S6K4_FakturisanaSeOdbija()
+    Dim txSeme As clsTransaction
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4FAK")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4F-" & scenario)
+
+    Dim brZbr As String, prjS As String
+    brZbr = TEST_PREFIX & "-ZK4F-" & scenario
+    AssertTrue Len(S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)) > 0, _
+               "S6K4 faktura: preduslov -- zbirna je snimljena"
+    prjS = S6K4Prijemnica(testDate, TEST_KUP_ID, TEST_PREFIX & "-PK4FS-" & scenario, _
+                          brZbr, tipT, 0, 0, 0)
+    AssertTrue Len(prjS) > 0, "S6K4 faktura: preduslov -- prijemnica bez gajbi"
+    If Len(prjS) = 0 Then Exit Sub
+
+    ' --- PRAVA faktura nad stavkom klase I (dokument je delimicno fakturisan) ---
+    ' Do review-a #439 je ovde stajala sinteticka linija na fakturu koje nema; od
+    ' P2-2 takvu liniju citac odbija po imenu (FAK-LIN-02), pa bi storno pao iz
+    ' DRUGOG razloga. Faktura i avans se vracaju rollback-om.
+    Dim odbijenaS As Boolean, aktivnaS As Boolean, fidK4 As String
+    Set txSeme = New clsTransaction
+    txSeme.BeginTx
+    txSeme.AddTableSnapshot TBL_FAKTURE
+    txSeme.AddTableSnapshot TBL_FAKTURA_STAVKE
+    txSeme.AddTableSnapshot TBL_NOVAC
+    fidK4 = S6K5Fakturisi(TEST_KUP_ID, S6StavkaID(prjS, KLASA_I))
+    odbijenaS = Not modStorno.StornoPrijemnica_TX(prjS)
+    aktivnaS = Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjS)
+    txSeme.RollbackTx
+    Set txSeme = Nothing
+    AssertTrue Len(fidK4) > 0, "S6K4 faktura: preduslov -- stavka klase I je fakturisana kroz pravi pisac"
+    AssertTrue odbijenaS, _
+               "S6K4 faktura: prijemnica pod aktivnom stavkom fakture je ODBIJENA"
+    AssertTrue aktivnaS, "S6K4 faktura: odbijena (stavka) ostaje aktivna"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_FakturisanaSeOdbija", Err.Number, Err.description
+    On Error Resume Next
+    If Not txSeme Is Nothing Then txSeme.RollbackTx
+End Sub
+
+' ODLUKA 3: STAVKA NA PRERADJENOJ PALETI OBARA CEO STORNO.
+'
+' Roba sa preradjene palete je vec postala proizvod; skinuti je znacilo bi menjati
+' preradjenu paletu (stari Detach je to radio i samo pisao napomenu). Storno staje
+' PRE ijedne mutacije: dokument, knjiga i palete ostaju netaknuti. Oznaka
+' preradjenosti je sinteticka i vraca se odmah posle poziva.
+' SABOTAZE: s6k4-preradjena-paleta-prolazi, s6k4-f8-guta-razlog,
+' s6k4-okvir-pusta-preradjenu, s6k4-okvir-preradjena-uz-ne-diraj.
+Private Sub Test_S6K4_PreradjenaPaletaObaraStorno()
+    Dim prevPal As String, prvaPal As String, prevPre As String
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4PRE")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4R-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    AssertTrue S6K4Gajbe(testDate, scenario, tipT), _
+               "S6K4 preradjena: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim brZbr As String, prj As String, brPrj As String
+    brZbr = TEST_PREFIX & "-ZK4R-" & scenario
+    brPrj = TEST_PREFIX & "-PK4R-" & scenario
+    AssertTrue Len(S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)) > 0, _
+               "S6K4 preradjena: preduslov -- zbirna je snimljena"
+    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, brPrj, brZbr, tipT, 10, 10, 4)
+    AssertTrue Len(prj) > 0 And Len(S6K4PaleteDokumenta(prj)) > 0, _
+               "S6K4 preradjena: preduslov -- dokument je na paletama"
+    If Len(prj) = 0 Then GoTo Kraj
+    prvaPal = Split(S6K4PaleteDokumenta(prj) & "|", "|")(0)
+    If Len(prvaPal) = 0 Then GoTo Kraj
+    prevPre = NzToText(LookupValue(TBL_PALETA, COL_PAL_ID, prvaPal, COL_PAL_PRERADJENO))
+    S6K4Postavi TBL_PALETA, COL_PAL_ID, prvaPal, COL_PAL_PRERADJENO, "DA"
+
+    ' Tri ulaza, ista odbijenica. Review #438 (rucna provera): operater je na
+    ' ekranu dobijao samo "Storno prijemnice nije uspeo" -- RAZLOG (preradjena
+    ' paleta) je ostajao u logu. Okvir i F8 moraju da ga prenesu.
+    '
+    ' Ponovljena rucna provera #438: okvir ispravke odbija PRE dijaloga posledica
+    ' i PRE zapisa ispravke. Do tada je PONISTENJE obecavalo "skidaju se sa
+    ' paleta", a svaki odbijen pokusaj je ostavljao FAILED zapis u Oporavku, iako
+    ' se nista nije promenilo. Uz "Ne diraj palete" DUPLI palete ne skida, pa mora
+    ' da prode -- zato ide poslednji, posle merenja stanja odbijenih pokusaja.
+    Dim prosao As Boolean, resD As Object, okF8 As Boolean, msgF8 As String
+    Dim resP As Object, resPF As Object, resN As Object
+    Dim vezaPre As Long, vezaPosle As Long, aktivan As Boolean, gajbi As String, kontra As String
+    vezaPre = S6K4Redova(TBL_STORNO_VEZE)
+    prosao = modStorno.StornoPrijemnica_TX(prj)
+    Set resD = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_DUPLI, True, False, S6K4Ident(prj))
+    okF8 = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, brPrj, "", msgF8, S6K4Ident(prj))
+    Set resP = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_PONISTENJE, False, False, S6K4Ident(prj))
+    Set resPF = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_PONISTENJE, True, False, S6K4Ident(prj))
+    vezaPosle = S6K4Redova(TBL_STORNO_VEZE)
+    aktivan = Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj)
+    gajbi = CStr(S6GajbiNaPaletama(prj, ""))
+    kontra = CStr(S6AmbKontraStavova(prj))
+    Set resN = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_DUPLI, True, True, S6K4Ident(prj))
+    S6K4Postavi TBL_PALETA, COL_PAL_ID, prvaPal, COL_PAL_PRERADJENO, prevPre
+    prvaPal = ""
+    AssertTrue Not prosao And Not CBool(resD("success")) And Not okF8, _
+               "S6K4 preradjena: storno dokumenta sa robom na preradjenoj paleti je ODBIJEN"
+    AssertTrue InStr(1, CStr(resD("message")), "preradjenoj paleti", vbTextCompare) > 0, _
+               "S6K4 preradjena: okvir ispravke (DUPLI) prikazuje RAZLOG, ne samo neuspeh"
+    AssertTrue InStr(1, msgF8, "preradjenoj paleti", vbTextCompare) > 0, _
+               "S6K4 preradjena: ekran Storno prikazuje RAZLOG, ne samo neuspeh"
+    AssertTrue Not CBool(resP("blocked")) And Not CBool(resP("success")) And _
+               InStr(1, CStr(resP("message")), "preradjenoj paleti", vbTextCompare) > 0, _
+               "S6K4 preradjena: PONISTENJE odbija PRE dijaloga posledica, sa RAZLOGOM"
+    AssertTrue Not CBool(resPF("success")) And vezaPosle = vezaPre, _
+               "S6K4 preradjena: odbijen pokusaj NE ostavlja zapis ispravke (Oporavak)"
+    AssertTrue aktivan, "S6K4 preradjena: dokument ostaje aktivan"
+    AssertEquals "20", gajbi, "S6K4 preradjena: paletne stavke ostaju na paletama"
+    AssertEquals "0", kontra, "S6K4 preradjena: knjiga nema nijedan kontra-stav"
+    AssertTrue CBool(resN("success")) And S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K4 preradjena: uz 'Ne diraj palete' DUPLI prolazi -- provera ne obara izbor operatera"
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_PreradjenaPaletaObaraStorno", Err.Number, Err.description
+    On Error Resume Next
+    If Len(prvaPal) > 0 Then S6K4Postavi TBL_PALETA, COL_PAL_ID, prvaPal, COL_PAL_PRERADJENO, prevPre
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' R6 + 14.14 Test_StornoGuardNaSvimPutanjama (deo prijemnice): F8 IDENTITET.
+'
+' Broj prijemnice je kupcev (AMB-10-ODL-22), pa ga nose dva kupca. Storno po broju
+' je zato obarao tudji dokument ili oba. Nivo: logicki dokument; ulaz je
+' StornoIzvrsi, isti koji zove ekran Storno.
+' Do S6 koraka 8 je ovde stajao i slucaj "dva dokumenta ISTOG kupca i broja" (dve
+' generacije). Pisac ga od tada ne pravi -- broj je jedinstven po kupcu i u piscu
+' (A2, Test_S6K8_BrojPrijemnicePoKupcu) -- pa je obrisan; treci dokument (p1)
+' ostaje da broj u proveri para pripada STVARNOM drugom dokumentu.
+' SABOTAZE: s6k4-f8-prazan-id-po-broju, s6k4-f8-bez-provere-para.
+Private Sub Test_S6K4_F8IdentitetDokumenta()
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4F8")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK48-" & scenario)
+
+    Dim zbA As String, zbB As String, brPrj As String, brPrj2 As String
+    zbA = TEST_PREFIX & "-ZK48A-" & scenario
+    zbB = TEST_PREFIX & "-ZK48B-" & scenario
+    brPrj = TEST_PREFIX & "-PK48-" & scenario
+    brPrj2 = TEST_PREFIX & "-PK48G-" & scenario
+    AssertTrue Len(S6K4Zbirna(testDate, zbA, TEST_KUP_ID, tipT)) > 0 And _
+               Len(S6K4Zbirna(testDate, zbB, TEST_KUP2_ID, tipT)) > 0, _
+               "S6K4 F8: preduslov -- zbirne dva kupca su snimljene"
+    Dim pA As String, pB As String, p1 As String
+    pA = S6K4Prijemnica(testDate, TEST_KUP_ID, brPrj, zbA, tipT, 0, 0, 0)
+    pB = S6K4Prijemnica(testDate, TEST_KUP2_ID, brPrj, zbB, tipT, 0, 0, 0)
+    p1 = S6K4Prijemnica(testDate, TEST_KUP_ID, brPrj2, zbA, tipT, 0, 0, 0)
+    AssertTrue Len(pA) > 0 And Len(pB) > 0 And Len(p1) > 0, _
+               "S6K4 F8: preduslov -- dva vlasnika istog broja i dokument drugog broja"
+    If Len(pA) = 0 Or Len(pB) = 0 Or Len(p1) = 0 Then Exit Sub
+
+    Dim ok As Boolean, msg As String
+    ' --- dva vlasnika istog broja ---
+    ok = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, brPrj, "", msg, "")
+    AssertTrue Not ok, "S6K4 F8: dva vlasnika -- storno bez identiteta je ODBIJEN"
+    ok = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, brPrj2, "", msg, S6K4Ident(pA))
+    AssertTrue Not ok, "S6K4 F8: identitet jednog dokumenta pod brojem drugog je ODBIJEN"
+    AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, pA) And _
+               Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, pB), _
+               "S6K4 F8: dva vlasnika -- odbijanja ne diraju nijedan dokument"
+    ok = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, brPrj, "", msg, S6K4Ident(pA))
+    AssertTrue ok And S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, pA) And _
+               Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, pB), _
+               "S6K4 F8: dva vlasnika -- storno po identitetu obara SAMO izabran dokument"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_F8IdentitetDokumenta", Err.Number, Err.description
+End Sub
+
+' R6 + 14.14 Test_StornoGuardUKaskadi (deo prijemnice): SUBJEKAT KASKADE JE DOKUMENT.
+'
+' Ponistenje prijemnice kaskadira na njenu zbirnu i ukida SUBJEKAT -- a subjekat
+' se do koraka 4 birao po BROJU. Dva dokumenta istog broja na istoj zbirni (dve
+' generacije) su tada oba bila "subjekat", pa je kaskada oborila i onaj koji
+' operater nije izabrao. Drugi dokument je sada AKTIVNA prijemnica lanca koju niko
+' ne ukida, pa kaskada staje PRED mutacijom -- isto pravilo kao kod eksterne.
+' Od S6 koraka 8 drugi dokument nosi SVOJ broj: isti broj istog kupca pisac vise
+' ne pravi (A2). Mereno svojstvo ga i ne trazi -- subjekat je izabrani dokument
+' zbirne, a ne svaka njena prijemnica (s6k4-subjekat-po-broju i dalje grize).
+' SABOTAZE: s6k4-subjekat-po-broju.
+Private Sub Test_S6K4_KaskadaSubjekatJeDokument()
+    Dim prevKupac As String
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4SUB")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4S-" & scenario)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP2_ID
+
+    Dim brZbr As String, brPrj As String, zbrID As String, p1 As String, p2 As String
+    brZbr = TEST_PREFIX & "-ZK4S-" & scenario
+    brPrj = TEST_PREFIX & "-PK4S-" & scenario
+    zbrID = S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)
+    p1 = S6K4Prijemnica(testDate, TEST_KUP_ID, brPrj, brZbr, tipT, 0, 0, 0)
+    p2 = S6K4Prijemnica(testDate, TEST_KUP_ID, brPrj & "-2", brZbr, tipT, 0, 0, 0)
+    AssertTrue Len(zbrID) > 0 And Len(p1) > 0 And Len(p2) > 0, _
+               "S6K4 kaskada subjekat: preduslov -- dva dokumenta na istoj zbirni"
+    If Len(p1) = 0 Or Len(p2) = 0 Then GoTo Kraj
+
+    Dim res As Object
+    Set res = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_PONISTENJE, True, False, _
+                                                    S6K4Ident(p1))
+    AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, p2), _
+               "S6K4 kaskada subjekat: DRUGI dokument iste zbirne ostaje aktivan"
+    AssertTrue Not CBool(res("success")), _
+               "S6K4 kaskada subjekat: ponistenje staje jer lanac nosi drugu aktivnu prijemnicu"
+    AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, p1) And _
+               Not S6K4Stornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "S6K4 kaskada subjekat: odbijanje stoji PRED mutacijom (subjekat i zbirna aktivni)"
+Kraj:
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_KaskadaSubjekatJeDokument", Err.Number, Err.description
+    On Error Resume Next
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+End Sub
+
+' R2 + R4: PAD POSLE SVIH UPISA VRACA CEO DOKUMENT -- direktno i kroz kaskadu.
+'
+' Seam (modStorno.StornoPrijemnicePadniTest) pada na KRAJU jezgra, posle paleta,
+' zaglavlja i kontra-stava knjige. Tvrdi se povratak SVIH tabela matrice (stavka
+' 182) kroz otisak: broj redova i kljucna polja (Stornirano, kontra-stavovi, gajbe
+' na paletama, storno paleta, zbirna), ne samo Stornirano. tblStornoVeze nije u
+' transakciji storna (svaki poziv konteksta ima svoju): neuspela kaskada tamo
+' ostavlja TACNO jedan zapis neuspele ispravke, i to se tvrdi posebno.
+' SABOTAZE: s6k4-seam-ne-pada, s6k4-kaskada-ne-snima-prijemnicu.
+Private Sub Test_S6K4_PadPosleSvihUpisaVracaSve()
+    Dim prevPal As String, prevKupac As String, prevMode As Boolean
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4PAD")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4D-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    prevMode = IsTestMode()
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP2_ID
+    SetTestMode True
+
+    AssertTrue S6K4Gajbe(testDate, scenario, tipT), _
+               "S6K4 pad: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim brZbr As String, brPrj As String, zbrID As String, prj As String, palete As String
+    brZbr = TEST_PREFIX & "-ZK4D-" & scenario
+    brPrj = TEST_PREFIX & "-PK4D-" & scenario
+    zbrID = S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)
+    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, brPrj, brZbr, tipT, 10, 10, 4)
+    palete = S6K4PaleteDokumenta(prj)
+    AssertTrue Len(zbrID) > 0 And Len(prj) > 0 And Len(palete) > 0, _
+               "S6K4 pad: preduslov -- dokument sa knjigom i paletama"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    Dim otisakPre As String, vezePre As Long, prosao As Boolean
+    otisakPre = S6K4Otisak(prj, zbrID, palete)
+    vezePre = S6K4Redova(TBL_STORNO_VEZE)
+
+    ' --- direktan storno ---
+    modStorno.StornoPrijemnicePadniTest True
+    prosao = modStorno.StornoPrijemnica_TX(prj)
+    modStorno.StornoPrijemnicePadniTest False
+    AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K4 pad: posle pada direktnog storna Stornirano je PRAZNO"
+    AssertEquals otisakPre, S6K4Otisak(prj, zbrID, palete), _
+                 "S6K4 pad: posle pada direktnog storna sve tabele matrice su kao pre"
+    AssertTrue Not prosao, "S6K4 pad: direktan storno sa padom posle upisa vraca neuspeh"
+    AssertEquals CStr(vezePre), CStr(S6K4Redova(TBL_STORNO_VEZE)), _
+                 "S6K4 pad: direktan storno ne pise veze ispravke"
+
+    ' --- kaskada sa subjektom (pravi ulaz) ---
+    Dim res As Object
+    modStorno.StornoPrijemnicePadniTest True
+    Set res = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_PONISTENJE, True, False, _
+                                                    S6K4Ident(prj))
+    modStorno.StornoPrijemnicePadniTest False
+    AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj) And _
+               Not S6K4Stornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID), _
+               "S6K4 pad: posle pada kaskade ni subjekat ni zbirna nisu stornirani"
+    AssertEquals otisakPre, S6K4Otisak(prj, zbrID, palete), _
+                 "S6K4 pad: posle pada kaskade sve tabele matrice su kao pre"
+    AssertTrue Not CBool(res("success")), "S6K4 pad: kaskada sa padom posle upisa vraca neuspeh"
+    AssertTrue InStr(1, CStr(res("message")), "namerna greska", vbTextCompare) > 0, _
+               "S6K4 pad: kaskada prenosi RAZLOG pada do okvira"
+    AssertEquals CStr(vezePre + 1), CStr(S6K4Redova(TBL_STORNO_VEZE)), _
+                 "S6K4 pad: neuspela kaskada ostavlja TACNO jedan zapis neuspele ispravke"
+Kraj:
+    modStorno.StornoPrijemnicePadniTest False
+    SetTestMode prevMode
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_PadPosleSvihUpisaVracaSve", Err.Number, Err.description
+    On Error Resume Next
+    modStorno.StornoPrijemnicePadniTest False
+    SetTestMode prevMode
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+End Sub
+
+' KI-031 PO KONSTRUKCIJI: JEZGRO TRAZI SNIMAK SVAKE TABELE KOJU MENJA -- dva sloja.
+'
+' Transakcija koja snima prijemnicu i knjigu, ali NE palete, mora da padne PO
+' IMENU pre prvog upisa: inace bi skinute palete prezivele rollback dokumenta.
+' Prvi sloj je jezgro storna (poruka nosi "KI-031"), drugi je paletni primitiv,
+' koji se meri ZASEBNO -- jer ga prvi sloj inace zaklanja, pa bi sabotaza drugog
+' bila placebo.
+' SABOTAZE: s6k4-jezgro-ne-trazi-snimak, s6k4-palete-ne-traze-snimak.
+Private Sub Test_S6K4_JezgroTraziSnimak()
+    Dim prevPal As String, tx As clsTransaction
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4SNM")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4N-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    AssertTrue S6K4Gajbe(testDate, scenario, tipT), _
+               "S6K4 snimak: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim brZbr As String, prj As String
+    brZbr = TEST_PREFIX & "-ZK4N-" & scenario
+    AssertTrue Len(S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)) > 0, _
+               "S6K4 snimak: preduslov -- zbirna je snimljena"
+    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, TEST_PREFIX & "-PK4N-" & scenario, _
+                         brZbr, tipT, 10, 10, 4)
+    AssertTrue Len(prj) > 0 And S6GajbiNaPaletama(prj, "") = 20, _
+               "S6K4 snimak: preduslov -- dokument je na paletama"
+    If Len(prj) = 0 Then GoTo Kraj
+
+    Dim razlogJezgra As String, razlogPaleta As String
+    ' --- prvi sloj: jezgro storna ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_AMBALAZA
+    On Error Resume Next
+    modStorno.StornoPrijemnica prj, tx
+    razlogJezgra = Err.description
+    Err.Clear
+    ' --- drugi sloj: paletni primitiv, direktno ---
+    modPaletniList.SkiniPaleteZaStornoPrijemnice tx, prj, "Test_S6K4_JezgroTraziSnimak"
+    razlogPaleta = Err.description
+    Err.Clear
+    On Error GoTo EH
+    tx.RollbackTx
+    Set tx = Nothing
+
+    AssertTrue InStr(1, razlogJezgra, "KI-031", vbTextCompare) > 0, _
+               "S6K4 snimak: jezgro storna odbija transakciju bez snimka paleta PO IMENU"
+    AssertTrue InStr(1, razlogPaleta, "Storno paleta: transakcija ne snima", vbTextCompare) > 0, _
+               "S6K4 snimak: paletni primitiv odbija transakciju bez snimka PO IMENU"
+    AssertEquals "20", CStr(S6GajbiNaPaletama(prj, "")), _
+                 "S6K4 snimak: palete su netaknute posle odbijanja"
+    AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K4 snimak: dokument ostaje aktivan posle odbijanja"
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_JezgroTraziSnimak", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' R6: NEUSPEO KONTRA-STAV AMBALAZE OBARA CEO STORNO.
+'
+' Kupac je gajbe dokumenta vec vratio (kupcev revers), pa bi kontra-stav
+' prijemnice ostavio kupca u minusu: AMB-INV-07 odbija. Dokument, palete i knjiga
+' ostaju netaknuti, a palete su SKINUTE pre knjige -- pa se ovde meri i da ih
+' rollback vraca. Razlog se cita iz jezgra (StornoPrijemnica_TX ga samo loguje).
+' SABOTAZE: s6k4-tx-ne-snima-palete.
+Private Sub Test_S6K4_KontraStavPadneDokumentOstaje()
+    Dim prevPal As String, tx As clsTransaction
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4KON")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4O-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    AssertTrue S6K4Gajbe(testDate, scenario, tipT), _
+               "S6K4 kontra-stav: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim brZbr As String, prj As String, zbrID As String, palete As String, razlog As String
+    brZbr = TEST_PREFIX & "-ZK4O-" & scenario
+    zbrID = S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)
+    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, TEST_PREFIX & "-PK4O-" & scenario, _
+                         brZbr, tipT, 10, 10, 0)
+    palete = S6K4PaleteDokumenta(prj)
+    AssertTrue Len(prj) > 0 And Len(palete) > 0, _
+               "S6K4 kontra-stav: preduslov -- dokument sa 20 punih gajbi i paletama"
+    If Len(prj) = 0 Then GoTo Kraj
+    AssertTrue Len(RvpUpisi(testDate, "KUPK4-" & scenario, TEST_KUP_ID, TEST_VOZ_ID, _
+                            tipT, 20#, razlog)) > 0, _
+               "S6K4 kontra-stav: preduslov -- kupac je vratio svih 20 gajbi"
+
+    Dim otisakPre As String, razlogJezgra As String
+    otisakPre = S6K4Otisak(prj, zbrID, palete)
+    Set tx = New clsTransaction
+    tx.BeginTx
+    modStorno.SnimiZaStornoPrijemnice tx
+    On Error Resume Next
+    modStorno.StornoPrijemnica prj, tx
+    razlogJezgra = Err.description
+    Err.Clear
+    On Error GoTo EH
+    tx.RollbackTx
+    Set tx = Nothing
+    AssertTrue InStr(1, razlogJezgra, "AMB-INV-07", vbTextCompare) > 0, _
+               "S6K4 kontra-stav: storno je ODBIJEN po imenu (AMB-INV-07)"
+    AssertEquals otisakPre, S6K4Otisak(prj, zbrID, palete), _
+                 "S6K4 kontra-stav: dokument, palete i knjiga su netaknuti"
+    AssertTrue Not modStorno.StornoPrijemnica_TX(prj), _
+               "S6K4 kontra-stav: ni javni ulaz ne prolazi"
+    AssertEquals otisakPre, S6K4Otisak(prj, zbrID, palete), _
+                 "S6K4 kontra-stav: ni javni ulaz ne ostavlja trag"
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_KontraStavPadneDokumentOstaje", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' REVIEW #438 P2: PALETNA STAVKA KOJA POKAZUJE NA PALETU KOJE NEMA OBARA STORNO.
+'
+' DecrementPaletaForStavka nad nepostojecom paletom TIHO izlazi (palRow = 0), a
+' telo skidanja posle toga ipak oznaci stavku kao storniranu. Do ispravke je
+' storno ipak padao, ali SLUCAJNO: "prazna" nepostojeca paleta je isla u
+' StornoPaleta, koji je pao sa "Stavka nije pronadjena" (izmereno, prvi crveni
+' prolaz: 1 pad, ne 3). Ta odbrana ne vazi cim na istu nepostojecu paletu
+' pokazuje i stavka DRUGOG dokumenta (su-stanar): paleta nije "prazna", storno
+' tiho prolazi -- pa test pravi bas taj slucaj. Fixture: SINTETICKA ANOMALIJA
+' (fault injection) -- po jedna stavka dva dokumenta preusmerena na isti
+' nepostojeci PaletaID, i vracena na kraju; pisac takvu stavku ne pravi. Razlog
+' se cita iz jezgra (javni ulaz ga samo loguje).
+' SABOTAZE: s6k4-paleta-bez-zaglavlja-prolazi, s6k4-okvir-guta-razlog.
+Private Sub Test_S6K4_PaletnaStavkaBezPaleteObaraStorno()
+    Dim prevPal As String, tx As clsTransaction, stavka As String, pravaPal As String
+    Dim stavka2 As String, pravaPal2 As String
+    On Error GoTo EH
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6K4BPL")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK4B-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    AssertTrue S6K4Gajbe(testDate, scenario, tipT), _
+               "S6K4 bez palete: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim brZbr As String, prj As String, zbrID As String, palete As String
+    brZbr = TEST_PREFIX & "-ZK4B-" & scenario
+    zbrID = S6K4Zbirna(testDate, brZbr, TEST_KUP_ID, tipT)
+    prj = S6K4Prijemnica(testDate, TEST_KUP_ID, TEST_PREFIX & "-PK4B-" & scenario, _
+                         brZbr, tipT, 10, 10, 4)
+    stavka = S6K4PrvaPaletnaStavka(prj, pravaPal)
+    stavka2 = S6K4PrvaPaletnaStavka(S6K4Prijemnica(testDate, TEST_KUP_ID, _
+                                    TEST_PREFIX & "-PK4B2-" & scenario, brZbr, tipT, 10, 10, 4), _
+                                    pravaPal2)
+    AssertTrue Len(prj) > 0 And Len(stavka) > 0 And Len(pravaPal) > 0 And _
+               Len(stavka2) > 0 And Len(pravaPal2) > 0, _
+               "S6K4 bez palete: preduslov -- dokument i su-stanar su na paletama"
+    If Len(stavka) = 0 Or Len(stavka2) = 0 Then GoTo Kraj
+    S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka, COL_PALS_PALETA_ID, "PAL-NEMA-" & scenario
+    S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka2, COL_PALS_PALETA_ID, "PAL-NEMA-" & scenario
+
+    Dim otisakPre As String, razlogJezgra As String
+    palete = S6K4PaleteDokumenta(prj)
+    otisakPre = S6K4Otisak(prj, zbrID, palete)
+    Set tx = New clsTransaction
+    tx.BeginTx
+    modStorno.SnimiZaStornoPrijemnice tx
+    On Error Resume Next
+    modStorno.StornoPrijemnica prj, tx
+    razlogJezgra = Err.description
+    Err.Clear
+    On Error GoTo EH
+    tx.RollbackTx
+    Set tx = Nothing
+    AssertTrue InStr(1, razlogJezgra, "paletu koje nema", vbTextCompare) > 0, _
+               "S6K4 bez palete: storno je ODBIJEN po imenu (stavka pokazuje na paletu koje nema)"
+    AssertEquals otisakPre, S6K4Otisak(prj, zbrID, palete), _
+                 "S6K4 bez palete: dokument, palete i knjiga su netaknuti"
+    AssertTrue Not modStorno.StornoPrijemnica_TX(prj), _
+               "S6K4 bez palete: ni javni ulaz ne prolazi"
+    ' Ponovljena rucna provera #438: preradjenu paletu okvir ispravke odbija PRE
+    ' jezgra, pa je ovo jedini test u kome DUPLI stize do grane "jezgro odbilo ->
+    ' razlog". Paleta koje nema je odbijenica koju zna samo jezgro.
+    Dim resD As Object
+    Set resD = modStornoFlow.RunPrijemnicaCorrection(TEST_PREFIX & "-PK4B-" & scenario, _
+                                                     SV_MODE_DUPLI, True, False, S6K4Ident(prj))
+    AssertTrue Not CBool(resD("success")) And _
+               InStr(1, CStr(resD("message")), "paletu koje nema", vbTextCompare) > 0, _
+               "S6K4 bez palete: okvir ispravke (DUPLI) prikazuje RAZLOG jezgra"
+    AssertTrue Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K4 bez palete: dokument ostaje aktivan"
+Kraj:
+    If Len(stavka) > 0 And Len(pravaPal) > 0 Then _
+        S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka, COL_PALS_PALETA_ID, pravaPal
+    If Len(stavka2) > 0 And Len(pravaPal2) > 0 Then _
+        S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka2, COL_PALS_PALETA_ID, pravaPal2
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6K4_PaletnaStavkaBezPaleteObaraStorno", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    If Len(stavka) > 0 And Len(pravaPal) > 0 Then _
+        S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka, COL_PALS_PALETA_ID, pravaPal
+    If Len(stavka2) > 0 And Len(pravaPal2) > 0 Then _
+        S6K4Postavi TBL_PALETA_STAVKA, COL_PALS_ID, stavka2, COL_PALS_PALETA_ID, pravaPal2
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' --- S6K4 pomocnici ---
+
+' Prva AKTIVNA paletna stavka dokumenta: vraca njen ID, a outPaleta njenu paletu.
+Private Function S6K4PrvaPaletnaStavka(ByVal prj As String, ByRef outPaleta As String) As String
+    outPaleta = ""
+    If Len(prj) = 0 Then Exit Function
+    Dim d As Variant
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(d) Then Exit Function
+    Dim cP As Long, cId As Long, cPal As Long, cSt As Long, i As Long
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S6K4PrvaPaletnaStavka")
+    cId = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, "S6K4PrvaPaletnaStavka")
+    cPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, "S6K4PrvaPaletnaStavka")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S6K4PrvaPaletnaStavka")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = prj And UCase$(Trim$(nz(d(i, cSt), ""))) <> "DA" Then
+            outPaleta = Trim$(nz(d(i, cPal), ""))
+            S6K4PrvaPaletnaStavka = Trim$(nz(d(i, cId), ""))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Otisak svih tabela matrice storna (stavka 182) za jedan dokument: broj redova i
+' kljucna polja. Dva otiska su jednaka samo ako se nista nije promenilo -- ni
+' Stornirano, ni knjiga, ni gajbe na paletama, ni storno paleta, ni zbirna.
+Private Function S6K4Otisak(ByVal prj As String, ByVal zbrID As String, _
+                            ByVal palete As String) As String
+    S6K4Otisak = "PRJ=" & S6K4Redova(TBL_PRIJEMNICA) & ":" & _
+                 CStr(S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj)) & _
+                 "|PRS=" & S6K4Redova(TBL_PRIJEMNICA_STAVKE) & _
+                 "|AMB=" & S6K4Redova(TBL_AMBALAZA) & ":" & S6AmbKontraStavova(prj) & _
+                 "|PAL=" & S6K4Redova(TBL_PALETA) & ":" & S6K4GajbiNaPaletamaUkupno(palete) & _
+                 ":" & S6K4StorniranihPaleta(palete) & _
+                 "|PALS=" & S6K4Redova(TBL_PALETA_STAVKA) & ":" & S6GajbiNaPaletama(prj, "") & _
+                 "|FAK=" & S6K4Redova(TBL_FAKTURE) & "|FS=" & S6K4Redova(TBL_FAKTURA_STAVKE) & _
+                 "|ZUR=" & S6K4Redova(TBL_STORNO_ZURNAL) & _
+                 "|ZBR=" & CStr(S6K4Stornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrID))
+End Function
+
+Private Function S6K4Redova(ByVal tbl As String) As Long
+    Dim d As Variant
+    d = GetTableData(tbl)
+    If IsArray(d) Then S6K4Redova = UBound(d, 1)
+End Function
+
+Private Function S6K4StorniranihPaleta(ByVal palete As String) As Long
+    If Len(palete) = 0 Then Exit Function
+    Dim p As Variant
+    For Each p In Split(palete, "|")
+        If S6K4Stornirano(TBL_PALETA, COL_PAL_ID, CStr(p)) Then _
+            S6K4StorniranihPaleta = S6K4StorniranihPaleta + 1
+    Next p
+End Function
+
+' Identitet koji nosi red F8 za ovu prijemnicu: skrivena kolona tipa
+' (modScrDokumenti.IdKolonaTipa). Test ga cita odande, a ne pretpostavlja.
+Private Function S6K4Ident(ByVal prj As String) As String
+    If Len(prj) = 0 Then Exit Function
+    S6K4Ident = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prj, _
+                                     modScrDokumenti.IdKolonaTipa(STIP_PRIJEMNICA)))
+End Function
+
+Private Function S6K4Stornirano(ByVal tbl As String, ByVal idCol As String, _
+                                ByVal id As String) As Boolean
+    If Len(id) = 0 Then Exit Function
+    S6K4Stornirano = (UCase$(Trim$(NzToText(LookupValue(tbl, idCol, id, COL_STORNIRANO)))) = "DA")
+End Function
+
+' Nase gajbe svezeg tipa: 100 nabavljeno na stanici, 50 preuzeo vozac (produkcioni
+' put, kao Test_S6_DveKlaseJedanDokument).
+Private Function S6K4Gajbe(ByVal testDate As Date, ByVal scenario As String, _
+                           ByVal tipT As String) As Boolean
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABK4-" & scenario, "test S6 korak 4"
+    S6K4Gajbe = (Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, _
+                     tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0)
+End Function
+
+Private Function S6K4Zbirna(ByVal testDate As Date, ByVal brZbr As String, _
+                            ByVal kupacID As String, ByVal tipT As String) As String
+    S6K4Zbirna = ZbrIzdataPodPrijemnicu(testDate, brZbr, kupacID, TEST_VOZ_ID, 150#)
+End Function
+
+' Jednoklasna prijemnica kroz PRODUKCIONI pisac (SavePrijemnicaMulti_TX) -- zamena
+' za obrisani omotac SavePrijemnica_TX (S6 korak 8). Klasa II ide kao hasKlasaII
+' uz praznu klasu I, isto kao F4. Prazno = pisac je odbio; razlog je u outGreska.
+Private Function PrjJednaKlasa(ByVal datum As Date, ByVal kupacID As String, _
+                               ByVal brojPrij As String, ByVal brojZbirne As String, _
+                               ByVal kolicina As Double, ByVal cena As Double, _
+                               ByVal klasa As String, _
+                               Optional ByVal tipAmb As String = TEST_TIP_AMB, _
+                               Optional ByVal kolAmb As Long = 0, _
+                               Optional ByVal kolAmbVracena As Long = 0, _
+                               Optional ByRef outGreska As String) As String
+    Dim errNum As Long
+    If StrComp(Trim$(klasa), KLASA_II, vbTextCompare) = 0 Then
+        PrjJednaKlasa = SavePrijemnicaMulti_TX( _
+            datum:=datum, kupacID:=kupacID, vozacID:=TEST_VOZ_ID, brojPrij:=brojPrij, _
+            brojZbirne:=brojZbirne, vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+            kolicinaI:=0#, cenaI:=0#, tipAmb:=tipAmb, kolAmb:=0, _
+            kolAmbVracena:=kolAmbVracena, hasKlasaII:=True, kolicinaII:=kolicina, _
+            cenaII:=cena, kolAmbII:=kolAmb, outErrNum:=errNum, outGreska:=outGreska)
+    Else
+        PrjJednaKlasa = SavePrijemnicaMulti_TX( _
+            datum:=datum, kupacID:=kupacID, vozacID:=TEST_VOZ_ID, brojPrij:=brojPrij, _
+            brojZbirne:=brojZbirne, vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+            kolicinaI:=kolicina, cenaI:=cena, tipAmb:=tipAmb, kolAmb:=kolAmb, _
+            kolAmbVracena:=kolAmbVracena, outErrNum:=errNum, outGreska:=outGreska)
+    End If
+End Function
+
+' Dvoklasna prijemnica kroz produkcioni pisac: I 100 x 120, II 50 x 80.
+' Prazan rezultat = pisac je odbio (razlog je u logu).
+Private Function S6K4Prijemnica(ByVal testDate As Date, ByVal kupacID As String, _
+                                ByVal brPrj As String, ByVal brZbr As String, _
+                                ByVal tipT As String, ByVal ambI As Long, _
+                                ByVal ambII As Long, ByVal povrat As Long) As String
+    Dim prj As String, errNum As Long
+    On Error Resume Next
+    prj = SavePrijemnicaMulti_TX( _
+              datum:=testDate, kupacID:=kupacID, vozacID:=TEST_VOZ_ID, _
+              brojPrij:=brPrj, brojZbirne:=brZbr, _
+              vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+              kolicinaI:=100#, cenaI:=120#, tipAmb:=tipT, _
+              kolAmb:=ambI, kolAmbVracena:=povrat, _
+              hasKlasaII:=True, kolicinaII:=50#, cenaII:=80#, kolAmbII:=ambII, _
+              outErrNum:=errNum)
+    If Err.Number <> 0 Then prj = ""
+    Err.Clear
+    On Error GoTo 0
+    S6K4Prijemnica = prj
+End Function
+
+' Palete na kojima stoji AKTIVNA stavka dokumenta, "PAL-1|PAL-2", bez ponavljanja.
+Private Function S6K4PaleteDokumenta(ByVal prj As String) As String
+    If Len(prj) = 0 Then Exit Function
+    Dim d As Variant
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(d) Then Exit Function
+    Dim cP As Long, cPal As Long, cSt As Long, i As Long, pal As String, s As String
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S6K4PaleteDokumenta")
+    cPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, "S6K4PaleteDokumenta")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S6K4PaleteDokumenta")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = prj And UCase$(Trim$(nz(d(i, cSt), ""))) <> "DA" Then
+            pal = Trim$(nz(d(i, cPal), ""))
+            If Len(pal) > 0 And InStr(1, "|" & s & "|", "|" & pal & "|", vbTextCompare) = 0 Then
+                If Len(s) > 0 Then s = s & "|"
+                s = s & pal
+            End If
+        End If
+    Next i
+    S6K4PaleteDokumenta = s
+End Function
+
+' Zbir BrojGajbica na datim paletama, bez obzira na storno -- mera same palete.
+Private Function S6K4GajbiNaPaletamaUkupno(ByVal palete As String) As Long
+    If Len(palete) = 0 Then Exit Function
+    Dim p As Variant
+    For Each p In Split(palete, "|")
+        S6K4GajbiNaPaletamaUkupno = S6K4GajbiNaPaletamaUkupno + _
+            CLng(Val(NzToText(LookupValue(TBL_PALETA, COL_PAL_ID, CStr(p), COL_PAL_BR_GAJBICA))))
+    Next p
+End Function
+
+' Sinteticka izmena jedne celije (fault injection) -- test modul pise uz povrat.
+Private Sub S6K4Postavi(ByVal tbl As String, ByVal idCol As String, ByVal id As String, _
+                        ByVal col As String, ByVal vrednost As String)
+    Dim rows As Collection
+    Set rows = FindRows(tbl, idCol, id)
+    If rows Is Nothing Then Exit Sub
+    If rows.count <> 1 Then Exit Sub
+    RequireUpdateCell tbl, CLng(rows(1)), col, vrednost, "S6K4Postavi"
+End Sub
+
+' ============================================================
+' S6 KORAK 5 -- FAKTURA PO PrijemnicaStavkaID, FAKTURISANOST IZVEDENA
+' (plan 14.55 "Korak 5", stavka 188; FAK-LIN-01..03)
+'
+' Dokumente pravi PRODUKCIONI pisac (S6K4Prijemnica: I 100 x 120, II 50 x 80),
+' bez gajbi -- KI-028 ne ulazi. Izbor fakture je STAVKA prijemnice. Pomocnici nad
+' praznim ID-jem vracaju prazno, pa pad preduslova crveni svaku tvrdnju po imenu
+' (nema rane izlazne tacke ispred tvrdnje).
+' ============================================================
+
+' 16.000 = 100 x 120 + 50 x 80. Linija nosi SVOJU stavku i njene brojke; zaglavlje
+' prijemnice ne dobija kes, a dokument je ipak fakturisan -- status je izveden.
+' SABOTAZE: s6k5-faktura-sa-zaglavlja, s6k5-linija-bez-stavke, s6k5-pisac-pise-kes.
+Private Sub Test_S6K5_DveKlaseIzStavki()
+    On Error GoTo EH
+    Dim scenario As String, prj As String, stI As String, stII As String, fid As String
+    scenario = NewScenarioCode("S6K5DVE")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID)
+    AssertTrue Len(prj) > 0, "S6K5 faktura: preduslov -- dvoklasni dokument kroz pravi pisac"
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+
+    fid = S6K5Fakturisi(TEST_KUP_ID, stI, stII)
+    AssertTrue Len(fid) > 0, "S6K5 faktura: dvoklasni dokument se fakturise iz STAVKI"
+    AssertEquals stI & "|I|100|120;" & stII & "|II|50|80", S6K5Linije(fid), _
+                 "S6K5 faktura: linija po stavci, sa PrijemnicaStavkaID-em i brojkama stavke"
+    AssertEquals "2", CStr(S6K5LinijeDokumenta(fid, prj)), _
+                 "S6K5 faktura: obe linije nose dokument kao PrijemnicaID"
+    AssertTrue Abs(S6K5Iznos(fid) - 16000#) < 0.001, _
+               "S6K5 faktura: iznos je zbir stavki (100 x 120 + 50 x 80)"
+    AssertEquals "", S6ZaglavljeLinija(prj), _
+                 "S6K5 faktura: zaglavlje prijemnice ne dobija kes fakture"
+    AssertTrue PrijemnicaJeFakturisana(prj), _
+               "S6K5 faktura: dokument je fakturisan -- izveden iz linija"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K5_DveKlaseIzStavki", Err.Number, Err.description
+End Sub
+
+' DELIMICNO FAKTURISANJE (R2, odluka 5): faktura samo klase I zauzima njenu
+' stavku, a klasa II ostaje slobodna i ide na DRUGU fakturu. Dokument je u medjustanju
+' vidljivo "Delim. fakturisano" i medju nefakturisanima, a storno ga ODBIJA.
+' SABOTAZE: s6k5-delim-kao-fakturisan, s6k5-lista-bez-delim, s6k5-mreza-po-dokumentu.
+Private Sub Test_S6K5_DelimicnoFakturisanje()
+    On Error GoTo EH
+    Dim scenario As String, prj As String, br As String, stI As String, stII As String
+    Dim fid1 As String, fid2 As String, pil As Long
+    scenario = NewScenarioCode("S6K5DEL")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID, br)
+    AssertTrue Len(prj) > 0, "S6K5 delimicno: preduslov -- dvoklasni dokument kroz pravi pisac"
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+
+    fid1 = S6K5Fakturisi(TEST_KUP_ID, stI)
+    AssertTrue Len(fid1) > 0, "S6K5 delimicno: faktura samo klase I nastaje"
+    AssertEquals "False|" & S6K5BrojFakture(fid1), S6K5MrezaRed(TEST_KUP_ID, stI), _
+                 "S6K5 delimicno: stavka I je u mrezi zauzeta i nosi broj fakture"
+    AssertEquals "True|", S6K5MrezaRed(TEST_KUP_ID, stII), _
+                 "S6K5 delimicno: stavka II ostaje slobodna u mrezi"
+    AssertEquals CStr(PAY_DELIM_FAKT), CStr(S6K5Pilula(br)), _
+                 "S6K5 delimicno: lista dokumenata kaze 'Delim. fakturisano'"
+    AssertTrue S6K5UNefakt(br), _
+               "S6K5 delimicno: cip 'Nefakturisane' ukljucuje delimicno fakturisan dokument"
+    AssertTrue PrijemnicaJeFakturisana(prj), _
+               "S6K5 delimicno: kapija storna vidi delimicno fakturisan dokument kao fakturisan"
+    AssertTrue Len(prj) > 0 And InStr(1, S6K5Detalj(prj), Poruka("OTKUI_IZ_DET_DELIMFAKT"), _
+                                      vbTextCompare) > 0, _
+               "S6K5 delimicno: detalj izvestaja kaze da je dokument delimicno fakturisan"
+
+    fid2 = S6K5Fakturisi(TEST_KUP_ID, stII)
+    AssertTrue Len(fid2) > 0 And fid2 <> fid1, "S6K5 delimicno: klasa II ide na DRUGU fakturu"
+    AssertEquals "False|" & S6K5BrojFakture(fid2), S6K5MrezaRed(TEST_KUP_ID, stII), _
+                 "S6K5 delimicno: posle druge fakture ni stavka II nije slobodna"
+    pil = S6K5Pilula(br)
+    AssertTrue pil <> PAY_DELIM_FAKT And pil <> PAY_NEFAKT And pil <> -1, _
+               "S6K5 delimicno: potpuno fakturisan dokument pokazuje placanje"
+    AssertTrue Not S6K5UNefakt(br), _
+               "S6K5 delimicno: potpuno fakturisan dokument nije medju nefakturisanima"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K5_DelimicnoFakturisanje", Err.Number, Err.description
+End Sub
+
+' NEGATIVNO (R3): svako odbijanje PO IMENU, a stanje netaknuto -- ni faktura ni
+' linija. KONTROLA na kraju: ista ispravna stavka sama prolazi; bez nje bi pisac
+' koji odbija SVE bio "zelen".
+' SABOTAZE: s6k5-storno-prolazi, s6k5-nepostojeca-prolazi, s6k5-tudji-kupac-prolazi,
+' s6k5-dupla-u-izboru-prolazi.
+Private Sub Test_S6K5_FakturaOdbijaNevazeceStavke()
+    On Error GoTo EH
+    Dim scenario As String, prjA As String, prjB As String, prjS As String
+    Dim stA As String, stB As String, stS As String
+    scenario = NewScenarioCode("S6K5NEG")
+    prjA = S6K5Dokument(scenario & "-A", TEST_KUP_ID)
+    prjB = S6K5Dokument(scenario & "-B", TEST_KUP2_ID)
+    prjS = S6K5Dokument(scenario & "-S", TEST_KUP_ID)
+    AssertTrue Len(prjA) > 0 And Len(prjB) > 0 And Len(prjS) > 0, _
+               "S6K5 negativno: preduslov -- tri dokumenta kroz pravi pisac"
+    stA = S6StavkaID(prjA, KLASA_I)
+    stB = S6StavkaID(prjB, KLASA_I)
+    stS = S6StavkaID(prjS, KLASA_I)
+    AssertTrue Len(prjS) > 0 And modStorno.StornoPrijemnica_TX(prjS), _
+               "S6K5 negativno: preduslov -- treci dokument je storniran"
+
+    Dim fakPre As String
+    fakPre = CStr(CountRows(TBL_FAKTURE)) & "|" & CStr(CountRows(TBL_FAKTURA_STAVKE))
+    AssertEquals "", S6K5Fakturisi(TEST_KUP_ID, stS), _
+                 "S6K5 negativno: faktura nad storniranom prijemnicom je ODBIJENA"
+    AssertEquals "", S6K5Fakturisi(TEST_KUP_ID, "PRS-NEMA-" & scenario), _
+                 "S6K5 negativno: linija za nepostojecu stavku prijemnice je ODBIJENA"
+    AssertEquals "", S6K5Fakturisi(TEST_KUP_ID, stB), _
+                 "S6K5 negativno: stavka dokumenta drugog kupca je ODBIJENA"
+    AssertEquals "", S6K5Fakturisi(TEST_KUP_ID, stA, stA), _
+                 "S6K5 negativno: ista stavka dvaput u izboru je ODBIJENA"
+    AssertEquals fakPre, CStr(CountRows(TBL_FAKTURE)) & "|" & CStr(CountRows(TBL_FAKTURA_STAVKE)), _
+                 "S6K5 negativno: odbijanja ne ostavljaju ni fakturu ni liniju"
+    AssertTrue Not PrijemnicaJeFakturisana(prjA) And Not PrijemnicaJeFakturisana(prjB), _
+               "S6K5 negativno: odbijene stavke ostaju nefakturisane"
+    AssertTrue Len(S6K5Fakturisi(TEST_KUP_ID, stA)) > 0, _
+               "S6K5 negativno: KONTROLA -- ista ispravna stavka sama prolazi"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K5_FakturaOdbijaNevazeceStavke", Err.Number, Err.description
+End Sub
+
+' KI-040 (R5): okvir ispravke fakturisanu prijemnicu ODBIJA PRE zapisa ispravke.
+' Do koraka 5 je zapis nastajao pre nego sto jezgro odbije, pa je ostajao FAILED
+' u Oporavku iako je dokument netaknut. RESI KASNIJE je izuzetak -- ono SAMO pravi
+' zapis, pa mora i dalje da ga pravi.
+' Faktura je PRAVA (pisac, stavka klase I); do review-a #439 je ovde bila
+' sinteticka linija na fakturu koje nema, a nju od P2-2 citac odbija po imenu.
+' Cela izmena se vraca rollback-om -- faktura, avans i zapisi ispravke (svoja TX
+' po pozivu) sa njom.
+' SABOTAZE: s6k5-okvir-pusta-fakturisanu, s6k5-okvir-odbija-resi-kasnije.
+Private Sub Test_S6K5_OkvirOdbijaFakturisanuPreZapisa()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Dim scenario As String, prj As String, br As String, idF8 As String
+    scenario = NewScenarioCode("S6K5OKV")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID, br)
+    AssertTrue Len(prj) > 0, "S6K5 okvir: preduslov -- dokument kroz pravi pisac"
+    idF8 = S6K4Ident(prj)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    SnimiZaStornoPrijemnice tx
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_NOVAC
+    Dim fidOkv As String
+    If Len(prj) > 0 Then fidOkv = S6K5Fakturisi(TEST_KUP_ID, S6StavkaID(prj, KLASA_I))
+
+    Dim svPre As Long, svPosle As Long, svResi As Long
+    Dim rI As Object, rD As Object, rP As Object, rR As Object, aktivna As Boolean
+    svPre = CountRows(TBL_STORNO_VEZE)
+    Set rI = modStornoFlow.RunPrijemnicaCorrection(br, SV_MODE_ISPRAVKA, True, False, idF8)
+    Set rD = modStornoFlow.RunPrijemnicaCorrection(br, SV_MODE_DUPLI, True, False, idF8)
+    Set rP = modStornoFlow.RunPrijemnicaCorrection(br, SV_MODE_PONISTENJE, True, False, idF8)
+    svPosle = CountRows(TBL_STORNO_VEZE)
+    aktivna = Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj)
+    Set rR = modStornoFlow.RunPrijemnicaCorrection(br, SV_MODE_RESI_KASNIJE, True, False, idF8)
+    svResi = CountRows(TBL_STORNO_VEZE)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    AssertTrue Len(fidOkv) > 0, "S6K5 okvir: preduslov -- stavka klase I je fakturisana kroz pravi pisac"
+    AssertTrue S6K5OdbijenoFakturisana(rI) And S6K5OdbijenoFakturisana(rD) And _
+               S6K5OdbijenoFakturisana(rP), _
+               "S6K5 okvir: ISPRAVKA, DUPLI i PONISTENJE fakturisane su odbijeni sa razlogom"
+    AssertEquals "0", CStr(svPosle - svPre), _
+                 "S6K5 okvir: odbijen pokusaj NE ostavlja zapis ispravke (KI-040)"
+    AssertTrue Len(prj) > 0 And aktivna, "S6K5 okvir: odbijena prijemnica ostaje aktivna"
+    AssertEquals "1", CStr(svResi - svPosle), "S6K5 okvir: RESI KASNIJE i dalje pravi zapis"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K5_OkvirOdbijaFakturisanuPreZapisa", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' R6: STORNO FAKTURE, PA PRIJEMNICE -- oba kroz F8 ulaz (StornoIzvrsi). Posle storna
+' fakture dokument je NEFAKTURISAN bez ijednog upisa u kes: linije su stornirane, a
+' status se izvodi. Tek tada storno prijemnice prolazi.
+' SABOTAZE: s6k5-storno-fakture-ne-gasi-linije.
+Private Sub Test_S6K5_StornoFakturePaPrijemnice()
+    On Error GoTo EH
+    Dim scenario As String, prj As String, br As String, stI As String, stII As String
+    Dim fid As String, poruka As String, okPre As Boolean, okFak As Boolean, okPrj As Boolean
+    scenario = NewScenarioCode("S6K5STO")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID, br)
+    AssertTrue Len(prj) > 0, "S6K5 storno: preduslov -- dokument kroz pravi pisac"
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    fid = S6K5Fakturisi(TEST_KUP_ID, stI, stII)
+    AssertTrue Len(fid) > 0, "S6K5 storno: preduslov -- dokument je fakturisan"
+
+    okPre = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, br, "", poruka, S6K4Ident(prj))
+    AssertTrue Not okPre And Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K5 storno: F8 ODBIJA storno fakturisane prijemnice"
+
+    ' Bez fakture se F8 NE zove: prazan ID i prazan broj bi se razresili na prvu
+    ' aktivnu fakturu praznog broja (FAK-TEST-0 u fixture-u) i stornirali tudji
+    ' dokument -- izmereno u crvenom prolazu (KI-041).
+    If Len(fid) > 0 Then
+        okFak = modStornoDok.StornoIzvrsi(STIP_FAKTURA, S6K5BrojFakture(fid), "", poruka, fid)
+    End If
+    AssertTrue okFak, "S6K5 storno: F8 stornira fakturu"
+    ' Storno koji ne stornira linije ostavlja aktivnu liniju nad storniranom fakturom,
+    ' a citac to odbija po imenu (1768) -- pa se stanje cita kao ishod, ne kroz poziv
+    ' koji bi test oborio PRE tvrdnje.
+    AssertEquals "NE", IIf(Len(fid) > 0, S6K5Fakturisanost(prj), "<bez fakture>"), _
+                 "S6K5 storno: posle storna fakture dokument je NEFAKTURISAN"
+    AssertEquals "", S6ZaglavljeLinija(prj), _
+                 "S6K5 storno: storno fakture ne pise kes na zaglavlje prijemnice"
+    AssertEquals "True|", S6K5MrezaRed(TEST_KUP_ID, stI), _
+                 "S6K5 storno: stavka je posle storna fakture ponovo slobodna"
+
+    okPrj = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, br, "", poruka, S6K4Ident(prj))
+    AssertTrue okPrj And S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K5 storno: storno prijemnice POSLE storna fakture prolazi kroz F8"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K5_StornoFakturePaPrijemnice", Err.Number, Err.description
+End Sub
+
+' TX (plan 14.55 "Korak 5"): podmetnut pad na KRAJU jezgra fakture -- posle
+' zaglavlja, obe linije i avansa -- vraca SVE. Avans je posejan bas za ovaj test,
+' pa njegovo zatvaranje meri da je jezgro do pada stvarno stiglo (kontrola), a
+' povratak meri rollback. Test rezim pali sam (seam je gejtovan), i vraca ga i
+' na putu greske.
+' SABOTAZE: s6k5-tx-bez-snimka-linija, s6k5-seam-inertan.
+Private Sub Test_S6K5_PadPosleUpisaVracaFakturu()
+    Dim prevMode As Boolean
+    On Error GoTo EH
+    Dim scenario As String, prj As String, stI As String, stII As String
+    Dim pre As String, posle As String, avansPre As Double, fidPad As String, fidKon As String
+    scenario = NewScenarioCode("S6K5TX")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID)
+    AssertTrue Len(prj) > 0, "S6K5 TX: preduslov -- dokument kroz pravi pisac"
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    AssertTrue SaveKupciIzlaz_TX(datum:=Date, brojDok:="AVK5-" & scenario, _
+                                 kupacNaziv:=TEST_KUP_ID, kupacID:=TEST_KUP_ID, _
+                                 vrstaVoca:=TEST_VRSTA, novac:=500, fakturaID:="", _
+                                 napomena:="test: avans za rollback fakture " & scenario, _
+                                 tipNovca:=NOV_KUPCI_AVANS), _
+               "S6K5 TX: preduslov -- kupac ima otvoren avans"
+    avansPre = S6K5OtvorenAvans(TEST_KUP_ID)
+    pre = CStr(CountRows(TBL_FAKTURE)) & "|" & CStr(CountRows(TBL_FAKTURA_STAVKE)) & "|" & _
+          CStr(CountRows(TBL_NOVAC))
+
+    prevMode = IsTestMode()
+    SetTestMode True
+    modFaktura.CreateFakturaPadniTest True
+    fidPad = S6K5Fakturisi(TEST_KUP_ID, stI, stII)
+    modFaktura.CreateFakturaPadniTest False
+    SetTestMode prevMode
+    posle = CStr(CountRows(TBL_FAKTURE)) & "|" & CStr(CountRows(TBL_FAKTURA_STAVKE)) & "|" & _
+            CStr(CountRows(TBL_NOVAC))
+
+    AssertEquals "", fidPad, "S6K5 TX: pad posle svih upisa obara fakturu"
+    AssertEquals pre, posle, "S6K5 TX: rollback vraca zaglavlje, linije i novac"
+    AssertTrue avansPre > 0 And Abs(S6K5OtvorenAvans(TEST_KUP_ID) - avansPre) < 0.001, _
+               "S6K5 TX: rollback vraca avans otvoren"
+    AssertTrue Len(prj) > 0 And Not PrijemnicaJeFakturisana(prj), _
+               "S6K5 TX: posle pada su stavke slobodne"
+
+    fidKon = S6K5Fakturisi(TEST_KUP_ID, stI, stII)
+    AssertTrue Len(fidKon) > 0, "S6K5 TX: KONTROLA -- bez pada ista faktura nastaje"
+    AssertTrue S6K5OtvorenAvans(TEST_KUP_ID) < avansPre, _
+               "S6K5 TX: KONTROLA -- jezgro do kraja zatvara avans"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K5_PadPosleUpisaVracaFakturu", Err.Number, Err.description
+    On Error Resume Next
+    modFaktura.CreateFakturaPadniTest False
+    SetTestMode prevMode
+End Sub
+
+' P2-1 (review #439, stavka 190): ZAJEDNICKA faktura -- dve prijemnice na jednoj
+' fakturi. Do ispravke je svaki red liste F4 pokazivao CEO ostatak fakture (dva reda
+' po 32.000 za jedan racun od 32.000); zateceno od pre koraka 5, a korak 5 ga je
+' prosirio sabiranjem preko faktura. Odluka operatera: pilula pokazuje placanje
+' faktura, a ostatak se NE pripisuje dokumentu kad je faktura zajednicka -- dug
+' pripada fakturi i vidi se u listi Fakture. KONTROLA: prijemnica sa SVOJOM fakturom
+' pokazuje ostatak jednak ostatku te fakture u listi Fakture.
+' SABOTAZE: s6k5-ostatak-zajednicke, s6k5-zajednicka-se-ne-vidi.
+Private Sub Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka()
+    On Error GoTo EH
+    Dim scenario As String, prjA As String, prjB As String, prjC As String
+    Dim brA As String, brB As String, brC As String, fidAB As String, fidC As String
+    Dim pil As Long, ostC As Double
+    scenario = NewScenarioCode("S6K5ZAJ")
+    prjA = S6K5Dokument(scenario & "-A", TEST_KUP_ID, brA)
+    prjB = S6K5Dokument(scenario & "-B", TEST_KUP_ID, brB)
+    prjC = S6K5Dokument(scenario & "-C", TEST_KUP_ID, brC)
+    AssertTrue Len(prjA) > 0 And Len(prjB) > 0 And Len(prjC) > 0, _
+               "S6K5 zajednicka: preduslov -- tri dokumenta kroz pravi pisac"
+
+    fidAB = S6K5Fakturisi(TEST_KUP_ID, S6StavkaID(prjA, KLASA_I), S6StavkaID(prjA, KLASA_II), _
+                          S6StavkaID(prjB, KLASA_I), S6StavkaID(prjB, KLASA_II))
+    fidC = S6K5Fakturisi(TEST_KUP_ID, S6StavkaID(prjC, KLASA_I), S6StavkaID(prjC, KLASA_II))
+    AssertTrue Len(fidAB) > 0 And Len(fidC) > 0, _
+               "S6K5 zajednicka: preduslov -- zajednicka faktura A+B i sopstvena faktura C"
+
+    AssertEquals "0", S6Broj(S6K5Ostatak(brA)), _
+                 "S6K5 zajednicka: prijemnica A ne nosi ostatak zajednicke fakture"
+    AssertEquals "0", S6Broj(S6K5Ostatak(brB)), _
+                 "S6K5 zajednicka: prijemnica B ne nosi ostatak zajednicke fakture"
+    pil = S6K5Pilula(brA)
+    AssertTrue pil = PAY_NEPLAC Or pil = PAY_DELIM Or pil = PAY_PLACENO, _
+               "S6K5 zajednicka: pilula pokazuje placanje zajednicke fakture"
+    AssertTrue Len(prjA) > 0 And InStr(1, S6K5Detalj(prjA), Poruka("OTKUI_IZ_DET_ZAJEDNICKA"), _
+                                       vbTextCompare) > 0, _
+               "S6K5 zajednicka: detalj izvestaja kaze da je faktura zajednicka"
+    AssertTrue S6K5PreostaloFakture(fidAB) > 0, _
+               "S6K5 zajednicka: ostatak se vodi na fakturi (lista Fakture)"
+
+    ostC = S6K5Ostatak(brC)
+    AssertTrue ostC > 0 And Abs(ostC - S6K5PreostaloFakture(fidC)) < 0.005, _
+               "S6K5 zajednicka: KONTROLA -- sopstvena faktura daje ostatak jednak ostatku fakture"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka", Err.Number, Err.description
+End Sub
+
+' P2-2 (review #439, stavka 190): AKTIVNA linija prijemnice nosi FakturaID fakture
+' koja postoji TACNO jednom i nije stornirana (FAK-LIN-02). Do ispravke je linija sa
+' praznim FakturaID-em zauzimala stavku za pisca, a mreza ju je nudila kao slobodnu.
+' Tri pokvarena oblika (fault injection), svaki u SVOJOJ transakciji: citac ih odbija
+' PO IMENU, a mreza stavku ne nudi. Nalazi se skupljaju i tvrde POSLE rollback-a --
+' pokvaren red obara svako sledece citanje. KONTROLA: posle rollback-a citac je cist.
+' SABOTAZE: s6k5-linija-bez-fakture-prolazi, s6k5-linija-na-nepostojecu-fakturu,
+' s6k5-linija-nad-storniranom-fakturom.
+Private Sub Test_S6K5_LinijaBezFaktureJeKvar()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Dim scenario As String, prj As String, stI As String, stII As String, fid As String
+    Dim gBez As String, gNema As String, gStorn As String, gPosle As String, mreza As String
+    scenario = NewScenarioCode("S6K5KVAR")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID)
+    AssertTrue Len(prj) > 0, "S6K5 kvar: preduslov -- dokument kroz pravi pisac"
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+
+    ' 1) aktivna linija bez FakturaID-a
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    If Len(stI) > 0 Then S6K5SejLiniju prj, stI, ""
+    gBez = S6K5GreskaCitaca()
+    mreza = S6K5MrezaNudi(TEST_KUP_ID, stI)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 2) aktivna linija na fakturu koje nema
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    If Len(stI) > 0 Then S6K5SejLiniju prj, stI, "FAK-NEMA-" & scenario
+    gNema = S6K5GreskaCitaca()
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 3) aktivna linija nad STORNIRANOM fakturom (zaglavlje storno, linija ne)
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_NOVAC
+    If Len(stII) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stII)
+    If Len(fid) > 0 Then MarkTestRowStornirano TBL_FAKTURE, COL_FAK_ID, fid
+    gStorn = S6K5GreskaCitaca()
+    tx.RollbackTx
+    Set tx = Nothing
+    gPosle = S6K5GreskaCitaca()
+
+    AssertTrue Len(fid) > 0, "S6K5 kvar: preduslov -- faktura nad stavkom klase II kroz pravi pisac"
+    AssertTrue InStr(1, gBez, "bez FakturaID", vbTextCompare) > 0, _
+               "S6K5 kvar: aktivna linija bez FakturaID-a obara citac PO IMENU"
+    AssertEquals "<greska>", mreza, _
+                 "S6K5 kvar: mreza Fakturisanja ne nudi stavku pod linijom bez fakture"
+    AssertTrue InStr(1, gNema, "fakturu koje nema", vbTextCompare) > 0, _
+               "S6K5 kvar: linija na fakturu koje nema obara citac PO IMENU"
+    AssertTrue InStr(1, gStorn, "nad storniranom fakturom", vbTextCompare) > 0, _
+               "S6K5 kvar: aktivna linija nad storniranom fakturom obara citac PO IMENU"
+    AssertEquals "", gPosle, "S6K5 kvar: KONTROLA -- posle rollback-a citac je cist"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K5_LinijaBezFaktureJeKvar", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' S6 KORAK 6 (R2, plan 14.55 "Korak 6"): DOKUMENT KOJI F4 NAPRAVI PROLAZI SVE STO
+' JE POSLE NJEGA.
+'
+' Zbirna je PRAVA: otkup -> izdata otpremnica -> izdata zbirna, sve kroz pisce
+' (CreateZbirna_TX je odmah izdaje). Prijemnica ide kroz EKRAN F4
+' (modScrDokumenti.Scr_Save -> PrijemnicaValidiraj -> PrijemnicaUpisi), dakle i
+' kroz kapiju PRJ-ZBR-01. Posle toga: knjiga (jedna noga punih = zbir gajbi
+' stavki, jedan povrat), palete po stavci, faktura nad jednom stavkom (DELIM),
+' F8 storno odbijen dok je dokument fakturisan, pa storno fakture i storno
+' prijemnice kroz F8 (kontra-stav obe noge, palete skinute).
+' Ispravka prijemnice na cekanju bi otvorila pitanje u validatoru (MsgBox, odluka
+' 3). Ostavlja je modTest 35 (ISPRAVKA stornira staru i ceka novu), koji se vrti
+' pre BFP u istoj svesci -- izmereno u crvenom prolazu (stavka 194). Test je zato
+' PARKIRA samo dok traje potez i vraca je, i na putu greske; preduslov tvrdi da
+' posle parkiranja nijedna ne ceka, a bez toga se potez ne pusta.
+Private Sub Test_S6K6_F4DokumentProlaziLanac()
+    On Error GoTo EH
+    Dim scenario As String, otpI As String, otpII As String, ocek As Collection
+    Dim h As Object, razlog As String, zbrID As String, brZbr As String, nPend As Long
+    Dim parkirane As String
+    Dim pf As Object, res As String, broj As String, prj As String, rod As String
+    Dim stI As String, stII As String, fid As String, poruka As String
+    Dim okPre As Boolean, okFak As Boolean, okPrj As Boolean
+
+    scenario = NewScenarioCode("S6K6F4")
+    otpI = Pr3Otpremnica(TEST_PREFIX & "-OTP-S6K6I-" & scenario, KLASA_I, 400#, 20)
+    otpII = Pr3Otpremnica(TEST_PREFIX & "-OTP-S6K6II-" & scenario, KLASA_II, 150#, 10)
+    Set ocek = New Collection
+    ocek.Add Pr3Ocekivano(KLASA_I, 400#, 20)
+    ocek.Add Pr3Ocekivano(KLASA_II, 150#, 10)
+    brZbr = TEST_PREFIX & "-ZBR-S6K6-" & scenario
+    Set h = Pr3Header(brZbr)
+    zbrID = CreateZbirna_TX(h, Pr3Izvor(otpI, otpII), ocek, razlog)
+    parkirane = S6K6IspravkeNaCekanjuIDs()
+    S6K6StatusIspravki parkirane, "TEST-PARKIRANO"
+    nPend = modStornoContext.CountPendingCorrectionsByDocType(FLOW_DOC_PRIJEMNICA, SV_MODE_ISPRAVKA)
+
+    AssertTrue Len(zbrID) > 0 And modDokumenta.ZbirnaJeIzdata(zbrID), _
+               "S6K6 F4: preduslov -- zbirna je izdata kroz pravi lanac"
+    AssertEquals "0", CStr(nPend), "S6K6 F4: preduslov -- nema ispravke prijemnice na cekanju"
+    AssertTrue IsPaletiranjeEnabled(), "S6K6 F4: preduslov -- paletiranje je ukljuceno"
+
+    broj = TEST_PREFIX & "-PRJ-S6K6-" & scenario
+    Set pf = CreateObject("Scripting.Dictionary")
+    pf.CompareMode = vbTextCompare
+    pf("rezim") = "PRIJEMNICA"
+    pf("datum") = CDate(h("Datum"))
+    pf("kooperantID") = TEST_KUP_ID
+    pf("vozacID") = TEST_VOZ_ID
+    pf("brDok") = broj
+    pf("brojZbirne") = brZbr
+    pf("vrsta") = TEST_VRSTA
+    pf("sorta") = TEST_SORTA
+    pf("tipAmb") = TEST_TIP_AMB
+    pf("kolicinaI") = 380#
+    pf("cenaI") = 50#
+    pf("kolAmb") = 20&
+    pf("kolAmbIzdata") = 5&
+    pf("dveKlase") = True
+    pf("kolicinaII") = 140#
+    pf("cenaII") = 40#
+    pf("kolAmbII") = 10&
+    If Len(zbrID) > 0 And nPend = 0 Then
+        res = modScrDokumenti.Scr_Save(pf)
+    Else
+        res = "<potez nije pusten>"
+    End If
+    S6K6StatusIspravki parkirane, SV_STATUS_PENDING
+    parkirane = ""
+    prj = Trim$(nz(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_ID), ""))
+    If Len(prj) > 0 Then
+        rod = Trim$(nz(GetValueByKey(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_DETE_ZBIRNA_ROD), ""))
+        stI = S6StavkaID(prj, KLASA_I)
+        stII = S6StavkaID(prj, KLASA_II)
+    End If
+
+    AssertEquals "", res, "S6K6 F4: upis kroz ekran F4 prolazi"
+    AssertEquals "True|" & zbrID, CStr(Len(prj) > 0) & "|" & rod, _
+                 "S6K6 F4: prijemnica je vezana na izdatu zbirnu iz lanca"
+    AssertEquals "I,II", S6StavkeKlase(prj), "S6K6 F4: dokument ima dve stavke, I pa II"
+    AssertEquals "1|30|1|5", CStr(S6AmbBroj(prj, AMB_VK_UZ_ROBU)) & "|" & _
+                 CStr(S6AmbKolicina(prj, AMB_VK_UZ_ROBU)) & "|" & _
+                 CStr(S6AmbBroj(prj, AMB_VK_POVRAT_PRAZNE)) & "|" & _
+                 CStr(S6AmbKolicina(prj, AMB_VK_POVRAT_PRAZNE)), _
+                 "S6K6 F4: knjiga ima jednu nogu punih = zbir gajbi stavki i jedan povrat"
+    AssertEquals "20|10", CStr(S6GajbiNaPaletama(prj, stI)) & "|" & CStr(S6GajbiNaPaletama(prj, stII)), _
+                 "S6K6 F4: palete nose gajbe svake stavke pod njenim kljucem"
+
+    ' Faktura nad stavkom klase I -- bez dokumenta se ne zove (prazan ID bi se
+    ' razresio po broju, KI-041).
+    If Len(stI) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stI)
+    AssertEquals "DELIM", S6K5Fakturisanost(prj), _
+                 "S6K6 F4: faktura nad stavkom I cini dokument delimicno fakturisanim"
+
+    If Len(prj) > 0 Then okPre = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, broj, "", poruka, S6K4Ident(prj))
+    AssertTrue Len(prj) > 0 And Not okPre And Not S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K6 F4: F8 odbija storno fakturisane prijemnice iz F4"
+    If Len(fid) > 0 Then okFak = modStornoDok.StornoIzvrsi(STIP_FAKTURA, S6K5BrojFakture(fid), "", poruka, fid)
+    AssertTrue okFak, "S6K6 F4: F8 stornira fakturu"
+    If Len(prj) > 0 And okFak Then okPrj = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, broj, "", poruka, S6K4Ident(prj))
+    AssertTrue okPrj And S6K4Stornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prj), _
+               "S6K6 F4: storno prijemnice posle storna fakture prolazi kroz F8"
+    AssertEquals "True|0", CStr(Len(prj) > 0) & "|" & CStr(S6GajbiNaPaletama(prj, "")), _
+                 "S6K6 F4: storno skida gajbe sa paleta"
+    AssertEquals "2", CStr(S6AmbKontraStavova(prj)), _
+                 "S6K6 F4: storno stavlja kontra-stav obe noge knjige"
+    Exit Sub
+EH:
+    LogFatal "Test_S6K6_F4DokumentProlaziLanac", Err.Number, Err.description
+    On Error Resume Next
+    S6K6StatusIspravki parkirane, SV_STATUS_PENDING
+End Sub
+
+' S6 KORAK 7, KI-046 (1): RED OPORAVKA NOSI DATUM SVOG DOKUMENTA.
+'
+' Dva kupca smeju isti broj prijemnice (S6 korak 6, odluka 6), a kupcev broj ne
+' nosi datum. Lista osirotelih paleta grupise po dokumentu, ali je DATUM citala
+' po broju -- pa je red drugog kupca nosio datum prvog dokumenta tog broja. Nivo:
+' logicki dokument (PrijemnicaID; do S6 koraka 8 generacija). Palete ostaju osirocene kao posle F8 ISPRAVKA
+' (StornoPrijemnica_TX sa skiniPalete = False), a na kraju ih skida jezgro
+' skidanja, da ne ostanu u tudjoj listi Oporavka.
+' SABOTAZE: s6k7-osir-datum-po-broju.
+Private Sub Test_S6K7_OsirocenePaleteDatumPoDokumentu()
+    Dim prevPal As String, prevMode As Boolean, rezimPostavljen As Boolean
+    Dim prjA As String, prjB As String
+    On Error GoTo EH
+    Dim scenario As String, d1 As Date, d2 As Date, tipT As String
+    scenario = NewScenarioCode("S6K7OSIR")
+    d1 = NextTestDate()
+    d2 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK7O-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    AssertTrue S6K4Gajbe(d1, scenario, tipT), _
+               "S6K7 osirotele: preduslov -- vozac drzi gajbe svezeg tipa"
+    Dim brPrj As String, zbr1 As String, zbr2 As String
+    brPrj = TEST_PREFIX & "-PK7O-" & scenario
+    zbr1 = TEST_PREFIX & "-ZK7O1-" & scenario
+    zbr2 = TEST_PREFIX & "-ZK7O2-" & scenario
+    AssertTrue Len(S6K4Zbirna(d1, zbr1, TEST_KUP_ID, tipT)) > 0, _
+               "S6K7 osirotele: preduslov -- zbirna prvog kupca"
+    AssertTrue Len(S6K4Zbirna(d2, zbr2, TEST_KUP2_ID, tipT)) > 0, _
+               "S6K7 osirotele: preduslov -- zbirna drugog kupca"
+    prjA = S6K4Prijemnica(d1, TEST_KUP_ID, brPrj, zbr1, tipT, 5, 5, 0)
+    prjB = S6K4Prijemnica(d2, TEST_KUP2_ID, brPrj, zbr2, tipT, 5, 5, 0)
+    AssertTrue Len(prjA) > 0 And Len(prjB) > 0, _
+               "S6K7 osirotele: preduslov -- dva kupca, isti broj prijemnice"
+    If Len(prjA) = 0 Or Len(prjB) = 0 Then GoTo Kraj
+    AssertTrue modStorno.StornoPrijemnica_TX(prjA, False), _
+               "S6K7 osirotele: preduslov -- prva stornirana, palete ostaju"
+    AssertTrue modStorno.StornoPrijemnica_TX(prjB, False), _
+               "S6K7 osirotele: preduslov -- druga stornirana, palete ostaju"
+
+    ' Lista se cita kroz ekran Oporavak (Scr_Rows), isti put kojim je vidi
+    ' operater. Izbor liste je seam ekrana, tvrdo gejtovan test rezimom.
+    Dim d As Variant
+    prevMode = IsTestMode()
+    SetTestMode True
+    rezimPostavljen = True
+    modScrOporavak.Scr_OpoTestSet "PALETE", "", ""
+    d = modScrOporavak.Scr_Rows("sve", brPrj)
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    SetTestMode prevMode
+    rezimPostavljen = False
+
+    ' 7. kolona reda je identitet dokumenta -- od S6 koraka 8 PrijemnicaID (do
+    ' tada generacija, 1 : 1 sa njim).
+    Dim datA As String, datB As String
+    Dim redovi As Variant, n As Long, i As Long, nasih As Long
+    If IsArray(d) Then
+        n = CLng(d(2))
+        redovi = d(1)
+    End If
+    For i = 1 To n
+        If CStr(redovi(i, 1)) = brPrj Then
+            nasih = nasih + 1
+            If CStr(redovi(i, 7)) = prjA Then datA = S6K7DatumTekst(redovi(i, 2))
+            If CStr(redovi(i, 7)) = prjB Then datB = S6K7DatumTekst(redovi(i, 2))
+        End If
+    Next i
+    AssertEquals "2", CStr(nasih), _
+                 "S6K7 osirotele: dva dokumenta istog broja su dva reda Oporavka"
+    AssertEquals Format$(d1, "yyyy-mm-dd"), datA, _
+                 "S6K7 osirotele: red prvog kupca nosi datum svog dokumenta"
+    AssertEquals Format$(d2, "yyyy-mm-dd"), datB, _
+                 "S6K7 osirotele: red drugog kupca nosi datum SVOG dokumenta, ne prvog istog broja"
+Kraj:
+    S6K7SkiniPalete prjA
+    S6K7SkiniPalete prjB
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6K7_OsirocenePaleteDatumPoDokumentu", Err.Number, Err.description
+    On Error Resume Next
+    If rezimPostavljen Then SetTestMode prevMode
+    S6K7SkiniPalete prjA
+    S6K7SkiniPalete prjB
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' Celija datuma iz mreze kao "yyyy-mm-dd"; prazno ako nije datum.
+Private Function S6K7DatumTekst(ByVal v As Variant) As String
+    If IsDate(v) Then S6K7DatumTekst = Format$(CDate(v), "yyyy-mm-dd")
+End Function
+
+' Test sklanja svoje osirocene palete kroz jezgro skidanja (po PrijemnicaID-u),
+' u svojoj transakciji -- inace ostaju u listi Oporavka za sledeci test (KI-045).
+Private Sub S6K7SkiniPalete(ByVal prj As String)
+    Dim tx As clsTransaction
+    If Len(prj) = 0 Then Exit Sub
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    modPaletniList.SkiniPaleteZaStornoPrijemnice tx, prj, "S6K7SkiniPalete"
+    tx.CommitTx
+    Exit Sub
+EH:
+    LogFatal "S6K7SkiniPalete", Err.Number, Err.description
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' Ispravke prijemnice na cekanju (ISPRAVKA, PENDING), "|"-spojeni ID-jevi -- isti
+' kriterijum kao modStornoContext.CountPendingCorrectionsByDocType.
+Private Function S6K6IspravkeNaCekanjuIDs() As String
+    Dim c As Collection, i As Long, d As Object, s As String
+    Set c = modStornoContext.GetPendingCorrections()
+    If c Is Nothing Then Exit Function
+    For i = 1 To c.count
+        Set d = c(i)
+        If UCase$(CStr(d("status"))) = UCase$(SV_STATUS_PENDING) _
+           And StrComp(CStr(d("oldDocType")), FLOW_DOC_PRIJEMNICA, vbTextCompare) = 0 _
+           And StrComp(CStr(d("mode")), SV_MODE_ISPRAVKA, vbTextCompare) = 0 Then
+            If Len(s) > 0 Then s = s & "|"
+            s = s & CStr(d("id"))
+        End If
+    Next i
+    S6K6IspravkeNaCekanjuIDs = s
+End Function
+
+' Status datih ispravki ("|"-spojeni ID-jevi); prazan spisak ne radi nista.
+Private Sub S6K6StatusIspravki(ByVal ids As String, ByVal st As String)
+    Dim k As Variant
+    If Len(ids) = 0 Then Exit Sub
+    For Each k In Split(ids, "|")
+        S6K4Postavi TBL_STORNO_VEZE, COL_SV_ID, CStr(k), COL_SV_STATUS, st
+    Next k
+End Sub
+
+' --- pomocnici S6 koraka 5 -- nad praznim ID-jem vracaju prazno ---
+
+' Opis greske citaca linija ("" kad je citanje proslo).
+Private Function S6K5GreskaCitaca() As String
+    Dim d As Object
+    On Error Resume Next
+    Err.Clear
+    Set d = modFaktura.FakturaLinijePoStavci()
+    If Err.Number <> 0 Then S6K5GreskaCitaca = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' Izvedena fakturisanost dokumenta: "NE" / "DELIM" / "DA"; greska citaca je ishod
+' ("<greska> opis"), ne pad testa.
+Private Function S6K5Fakturisanost(ByVal prj As String) As String
+    Dim st As Long
+    If Len(prj) = 0 Then Exit Function
+    On Error Resume Next
+    Err.Clear
+    st = modFaktura.PrijemnicaFakturisanost(prj)
+    If Err.Number <> 0 Then
+        S6K5Fakturisanost = "<greska> " & Err.description
+    ElseIf st = FAKT_NE Then
+        S6K5Fakturisanost = "NE"
+    ElseIf st = FAKT_DELIM Then
+        S6K5Fakturisanost = "DELIM"
+    Else
+        S6K5Fakturisanost = "DA"
+    End If
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' Kao S6K5MrezaRed, ali greska citaca je ishod, ne pad testa: "<greska>".
+Private Function S6K5MrezaNudi(ByVal kupacID As String, ByVal sid As String) As String
+    Dim r As String
+    On Error Resume Next
+    Err.Clear
+    r = S6K5MrezaRed(kupacID, sid)
+    If Err.Number <> 0 Then r = "<greska>"
+    Err.Clear
+    On Error GoTo 0
+    S6K5MrezaNudi = r
+End Function
+
+' OSTATAK reda prijemnice u listi F4 (kolona "rest") -- isti poziv koji crta ekran;
+' -1 = red nije tacno jedan.
+Private Function S6K5Ostatak(ByVal broj As String) As Double
+    Dim d As Variant, cols As Variant, redovi As Variant, c As Long, iRest As Long
+    S6K5Ostatak = -1
+    modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache   ' izvedene mape liste (FakturaIznosMap) -- kao RefreshFromData
+    d = modScrDokumenti.RedoviZaTip("PRIJEMNICA", "", broj)
+    If Not IsArray(d) Then Exit Function
+    If CLng(d(2)) <> 1 Then Exit Function
+    cols = d(0)
+    redovi = d(1)
+    For c = 0 To UBound(cols)
+        If modScrDokumenti.ColF(CStr(cols(c)), 2) = "rest" Then iRest = c + 1
+    Next c
+    If iRest = 0 Then Exit Function
+    S6K5Ostatak = CDbl(redovi(1, iRest))
+End Function
+
+' Preostalo FAKTURE u listi Fakture (GetFaktureForGrid, kolona 7); -1 = nema reda.
+Private Function S6K5PreostaloFakture(ByVal fid As String) As Double
+    Dim g As Variant, i As Long
+    S6K5PreostaloFakture = -1
+    If Len(fid) = 0 Then Exit Function
+    g = modFaktura.GetFaktureForGrid()
+    If Not IsArray(g) Then Exit Function
+    For i = 1 To UBound(g, 1)
+        If CStr(g(i, 1)) = fid Then
+            S6K5PreostaloFakture = CDbl(g(i, 7))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Zbir OTVORENIH avansa kupca: avans u kasi bez fakture, nestorniran -- isti oblik
+' koji ApplyAvansToFaktura zatvara.
+Private Function S6K5OtvorenAvans(ByVal kupacID As String) As Double
+    Dim d As Variant, i As Long, cP As Long, cT As Long, cF As Long, cU As Long, cS As Long
+    d = GetTableData(TBL_NOVAC)
+    If Not IsArray(d) Then Exit Function
+    cP = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID, "S6K5OtvorenAvans")
+    cT = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, "S6K5OtvorenAvans")
+    cF = RequireColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID, "S6K5OtvorenAvans")
+    cU = RequireColumnIndex(TBL_NOVAC, COL_NOV_UPLATA, "S6K5OtvorenAvans")
+    cS = RequireColumnIndex(TBL_NOVAC, COL_STORNIRANO, "S6K5OtvorenAvans")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = kupacID And Trim$(nz(d(i, cT), "")) = NOV_KUPCI_AVANS _
+           And Len(Trim$(nz(d(i, cF), ""))) = 0 And UCase$(Trim$(nz(d(i, cS), ""))) <> "DA" Then
+            If IsNumeric(d(i, cU)) And Not IsEmpty(d(i, cU)) Then _
+                S6K5OtvorenAvans = S6K5OtvorenAvans + CDbl(d(i, cU))
+        End If
+    Next i
+End Function
+
+' Dvoklasni dokument kupca kroz produkcioni pisac, sa svojom zbirnom i svezim
+' tipom (obrazac Test_S6K4_FakturisanaSeOdbija); outBroj = broj prijemnice.
+Private Function S6K5Dokument(ByVal oznaka As String, ByVal kupacID As String, _
+                              Optional ByRef outBroj As String) As String
+    Dim testDate As Date, tipT As String, brZbr As String
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK5-" & oznaka)
+    brZbr = TEST_PREFIX & "-ZK5-" & oznaka
+    outBroj = TEST_PREFIX & "-PK5-" & oznaka
+    If Len(S6K4Zbirna(testDate, brZbr, kupacID, tipT)) = 0 Then Exit Function
+    S6K5Dokument = S6K4Prijemnica(testDate, kupacID, outBroj, brZbr, tipT, 0, 0, 0)
+End Function
+
+' Faktura nad izabranim stavkama kroz PRAVI ulaz; prazno = odbijeno.
+Private Function S6K5Fakturisi(ByVal kupacID As String, ParamArray stavkaIDs() As Variant) As String
+    Dim c As Collection, i As Long
+    Set c = New Collection
+    For i = LBound(stavkaIDs) To UBound(stavkaIDs)
+        c.Add Array(CStr(stavkaIDs(i)))
+    Next i
+    On Error Resume Next
+    S6K5Fakturisi = CreateFaktura_TX(kupacID, c)
+    If Err.Number <> 0 Then S6K5Fakturisi = ""
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+Private Function S6K5BrojFakture(ByVal fid As String) As String
+    If Len(fid) = 0 Then Exit Function
+    S6K5BrojFakture = Trim$(NzToText(LookupValue(TBL_FAKTURE, COL_FAK_ID, fid, COL_FAK_BROJ)))
+End Function
+
+Private Function S6K5Iznos(ByVal fid As String) As Double
+    Dim v As Variant
+    If Len(fid) = 0 Then Exit Function
+    v = LookupValue(TBL_FAKTURE, COL_FAK_ID, fid, COL_FAK_IZNOS)
+    If IsNumeric(v) And Not IsEmpty(v) Then S6K5Iznos = CDbl(v)
+End Function
+
+' Linije fakture "PrijemnicaStavkaID|Klasa|Kolicina|Cena", klasa I pa II, spojene
+' sa ";". Sveska bez kolone stavke daje "<bez kolone>".
+Private Function S6K5Linije(ByVal fid As String) As String
+    Dim d As Variant, i As Long, kl As Variant, s As String, sid As String
+    Dim cF As Long, cS As Long, cK As Long, cKol As Long, cC As Long
+    If Len(fid) = 0 Then Exit Function
+    d = GetTableData(TBL_FAKTURA_STAVKE)
+    If Not IsArray(d) Then Exit Function
+    cF = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID)
+    cS = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_STAVKA_ID)
+    cK = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KLASA)
+    cKol = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA)
+    cC = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_CENA)
+    For Each kl In Array(KLASA_I, KLASA_II)
+        For i = 1 To UBound(d, 1)
+            If Trim$(nz(d(i, cF), "")) = fid And Trim$(nz(d(i, cK), "")) = CStr(kl) Then
+                sid = "<bez kolone>"
+                If cS > 0 Then sid = Trim$(nz(d(i, cS), ""))
+                If Len(s) > 0 Then s = s & ";"
+                s = s & sid & "|" & CStr(kl) & "|" & S6Broj(d(i, cKol)) & "|" & S6Broj(d(i, cC))
+            End If
+        Next i
+    Next kl
+    S6K5Linije = s
+End Function
+
+Private Function S6K5LinijeDokumenta(ByVal fid As String, ByVal prj As String) As Long
+    Dim d As Variant, i As Long, cF As Long, cP As Long
+    If Len(fid) = 0 Or Len(prj) = 0 Then Exit Function
+    d = GetTableData(TBL_FAKTURA_STAVKE)
+    If Not IsArray(d) Then Exit Function
+    cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, "S6K5LinijeDokumenta")
+    cP = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, "S6K5LinijeDokumenta")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cF), "")) = fid And Trim$(nz(d(i, cP), "")) = prj Then _
+            S6K5LinijeDokumenta = S6K5LinijeDokumenta + 1
+    Next i
+End Function
+
+' Red stavke u mrezi Fakturisanja -- isti citac koji crta ekran:
+' "dostupna|BrojFakture"; "<nema reda>" kad stavke u mrezi nema.
+Private Function S6K5MrezaRed(ByVal kupacID As String, ByVal sid As String) As String
+    Dim g As Variant, i As Long
+    S6K5MrezaRed = "<nema reda>"
+    If Len(sid) = 0 Then Exit Function
+    g = modFaktura.GetPrijemniceZaFakturisanjeForGrid(kupacID)
+    If Not IsArray(g) Then Exit Function
+    For i = 1 To UBound(g, 1)
+        If CStr(g(i, 1)) = sid Then
+            S6K5MrezaRed = CStr(CBool(g(i, 9))) & "|" & CStr(g(i, 10))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Sifra pilule placanja reda prijemnice u listi dokumenata F4 -- isti poziv koji
+' crta ekran (obrazac OtkMrezaRed); -1 = red nije tacno jedan.
+Private Function S6K5Pilula(ByVal broj As String, Optional ByVal filter As String = "") As Long
+    Dim d As Variant, cols As Variant, redovi As Variant, c As Long, iPill As Long
+    S6K5Pilula = -1
+    modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache   ' izvedene mape liste (FakturaIznosMap) -- kao RefreshFromData
+    d = modScrDokumenti.RedoviZaTip("PRIJEMNICA", filter, broj)
+    If Not IsArray(d) Then Exit Function
+    If CLng(d(2)) <> 1 Then Exit Function
+    cols = d(0)
+    redovi = d(1)
+    For c = 0 To UBound(cols)
+        If modScrDokumenti.ColF(CStr(cols(c)), 2) = "paypill" Then iPill = c + 1
+    Next c
+    If iPill = 0 Then Exit Function
+    S6K5Pilula = CLng(redovi(1, iPill))
+End Function
+
+' Dokument je u listi uz cip "Nefakturisane".
+Private Function S6K5UNefakt(ByVal broj As String) As Boolean
+    S6K5UNefakt = (S6K5Pilula(broj, "nefakt") <> -1)
+End Function
+
+Private Function S6K5Detalj(ByVal prj As String) As String
+    Dim d As Variant
+    If Len(prj) = 0 Then Exit Function
+    d = modScrIzvestaji.IzDetaljPrijemnice(prj)
+    If IsArray(d) Then S6K5Detalj = Join(d, "|")
+End Function
+
+' Odbijeno, a razlog imenuje fakturisanost.
+Private Function S6K5OdbijenoFakturisana(ByVal r As Object) As Boolean
+    If r Is Nothing Then Exit Function
+    If CBool(r("success")) Then Exit Function
+    S6K5OdbijenoFakturisana = (InStr(1, CStr(r("message")), "fakturisan", vbTextCompare) > 0)
+End Function
+
+' Sinteticka AKTIVNA linija fakture na stavku (fault injection, bez zaglavlja
+' fakture), u obliku koji pise pravi pisac: dokument I stavka. Pozivalac je dodaje
+' u svojoj transakciji i vraca rollback-om.
+Private Sub S6K5SejLiniju(ByVal prj As String, ByVal sid As String, ByVal fakID As String)
+    Const SRC As String = "S6K5SejLiniju"
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_FAKTURA_STAVKE)
+    SetRequiredField rowData, TBL_FAKTURA_STAVKE, COL_FS_ID, "FS-" & fakID
+    SetRequiredField rowData, TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, fakID
+    SetRequiredField rowData, TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, prj
+    SetRequiredField rowData, TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_STAVKA_ID, sid
+    If AppendRow(TBL_FAKTURA_STAVKE, rowData) <= 0 Then
+        Err.Raise vbObjectError + 9321, SRC, "AppendRow za tblFakturaStavke nije uspeo."
+    End If
+End Sub
+
+' ============================================================
+' S6 KORAK 3 -- CITAOCI PRIJEMNICE CITAJU STAVKE (plan 14.55 "Korak 3", stavka 178)
+'
+' Od koraka 2 zaglavlje prijemnice NE nosi Kolicinu, Cenu, Klasu ni gajbe. Citalac
+' koji ih uzima sa zaglavlja nad dokumentom novog oblika vidi PRAZNO, bez greske.
+' Ovi testovi mere citaoce kojima treba svez tip ambalaze ili kanonska zbirna;
+' ostale meri modTest 259, kroz F4 put.
+' ============================================================
+
+' ZBIRNINA I PRIJEMNICKA STRANA MANJKA IZ STAVKI (odluka 7).
+'
+' S4-1 je manjak ostavio na zaglavlju zbirne, sa obrazlozenjem da ga S6 prevodi
+' zajedno sa prijemnicom. Kanonska zbirna zaglavlje NE puni, pa su izvestaj
+' manjka, integritet A2 i prosek gajbe za nju videli nulu. Nivo: POSLOVNI BROJ
+' zbirne (spoj ostaje po broju i vlasniku -- imenovan rizik, van obima).
+' Vrednosti su iz pravila: 550 = 400 + 150 (stavke zbirne), 420 = 300 + 120
+' (stavke prijemnice), prosek gajbe = 550 / (20 + 10).
+' SABOTAZE: s6k3-manjak-izv-zbirna-nula, s6k3-a2-prijem-gajbe,
+' s6k3-prosek-gajbe-nula.
+Private Sub Test_S6_ManjakObeStraneIzStavki()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("S6MAN")
+
+    Dim broj As String, zbr As String, datZbr As Date, prj As String
+    prj = S6K3ZbirnaIPrijemnica(scenario, broj, zbr, datZbr)
+    AssertTrue Len(zbr) > 0 And Len(prj) > 0, _
+               "S6 manjak: preduslov -- kanonska zbirna i prijemnica su upisane"
+
+    AssertEquals "550|420", S6K3ManjakRed(broj, datZbr), _
+                 "S6 manjak: izvestaj manjka cita stavke zbirne i prijemnice"
+    AssertEquals "550|420|130", S6K3NalazA2(broj), _
+                 "S6 manjak: integritet A2 vidi zbirnu i prijemnicu iz stavki"
+    AssertDoubleNear 550# / 30#, CalculateProsekGajbeByZbirna(broj), 0.001, _
+                     "S6 manjak: prosek gajbe je zbir kg stavki zbirne kroz zbir gajbi"
+    Exit Sub
+
+EH:
+    LogFatal "Test_S6_ManjakObeStraneIzStavki", Err.Number, Err.description
+End Sub
+
+' "ZbirnaKg|PrijKg" reda zbirne u izvestaju manjka; prazno = reda nema.
+Private Function S6K3ManjakRed(ByVal broj As String, ByVal dan As Date) As String
+    Dim d As Variant, i As Long
+    If Len(broj) = 0 Then Exit Function
+    d = ReportManjak("", "", dan, dan)
+    If Not IsArray(d) Then Exit Function
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, 1), "")) = broj Then
+            ' Kolona prijema moze nositi oznaku "nema prijema" -- tada ide tekst.
+            S6K3ManjakRed = S6Broj(d(i, 2)) & "|" & S6Broj(d(i, 3))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Polja ZbirnaKg|PrijemnicaKg|ManjakKg nalaza A2 za dati broj zbirne; prazno =
+' nalaza nema. Procenat se ne poredi (decimalni znak zavisi od lokala).
+Private Function S6K3NalazA2(ByVal broj As String) As String
+    Dim rows As Variant, i As Long, tekuca As String, polja As Variant
+    If Len(broj) = 0 Then Exit Function
+    rows = modIntegritet.GetIntegritetRows()
+    If Not IsArray(rows) Then Exit Function
+    For i = 1 To UBound(rows, 1)
+        If Len(Trim$(nz(rows(i, 1), ""))) > 0 Then tekuca = Trim$(nz(rows(i, 1), ""))
+        If tekuca = "A2" Then
+            polja = Split(nz(rows(i, 2), ""), "|")
+            If UBound(polja) >= 3 Then
+                If Trim$(polja(0)) = broj Then
+                    S6K3NalazA2 = Trim$(polja(1)) & "|" & Trim$(polja(2)) & "|" & Trim$(polja(3))
+                    Exit Function
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' GRUPNI OTKUPNI LIST NOSI STANJE VOZACA OKO SVOG REDA KNJIGE (odluka 3, 6.13g).
+'
+' Papir je citao GetStanicaAmbSaldo(VozacID) -- nalog Stanica:<VozacID>, i to
+' DANASNJI saldo -- dok prijemnica od 10b-2 pomera nalog VOZAC (pune gajbe
+' Vozac -> Kupac, povrat Kupac -> Vozac). Pravilo je isto kao na reversu i
+' otpremnici: saldo = stanje vozaca posle ovog dokumenta po redosledu upisa,
+' pocetno = saldo + primljeno - izdato. Linije su stavke dokumenta, ne red
+' zaglavlja.
+'
+' Svez tip (obrazac Test_S6_DveKlaseJedanDokument): vozac preuzme 50, prijemnica
+' da 10 + 10 i vrati 4, pa je stanje 50 -> 34. Kontrole: ponovna stampa posle
+' kasnijeg dokumenta je ista; dokument bez gajbi stampa "-" (ODL-27); dokument sa
+' gajbama bez svog reda knjige ne daje papir (obrazac 7693).
+' SABOTAZE: s6k3-grupni-pocetno-bez-kretanja, s6k3-grupni-saldo-dvostruko,
+' s6k3-grupni-danasnji-saldo, s6k3-grupni-linije-prva-stavka,
+' s6k3-grupni-bez-gajbi-nula, s6k3-grupni-bez-veze-stampa.
+Private Sub Test_S6_GrupniListStanjeVozaca()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("S6GRL")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS6G-" & scenario)
+
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABS6G-" & scenario, "test S6 grupni list"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S6 grupni list: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(testDate, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "S6 grupni list: preduslov -- zbirna je snimljena"
+
+    Dim vozPre As Long, vozPosle As Long
+    vozPre = CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT))
+
+    Dim prj As String, prjBez As String, errNum As Long
+    On Error Resume Next
+    prj = SavePrijemnicaMulti_TX( _
+              datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+              brojPrij:=TEST_PREFIX & "-S6GRL-" & scenario, brojZbirne:=brZbr, _
+              vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+              kolicinaI:=100#, cenaI:=120#, tipAmb:=tipT, _
+              kolAmb:=10, kolAmbVracena:=4, _
+              hasKlasaII:=True, kolicinaII:=50#, cenaII:=80#, kolAmbII:=10, _
+              outErrNum:=errNum)
+    If Err.Number <> 0 Then prj = "": Err.Clear
+    prjBez = SavePrijemnicaMulti_TX( _
+                 datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+                 brojPrij:=TEST_PREFIX & "-S6GRL0-" & scenario, brojZbirne:=brZbr, _
+                 vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+                 kolicinaI:=30#, cenaI:=100#, tipAmb:=tipT, _
+                 kolAmb:=0, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then prjBez = "": Err.Clear
+    On Error GoTo EH
+    vozPosle = CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT))
+
+    AssertTrue Len(prj) > 0 And Len(prjBez) > 0, _
+               "S6 grupni list: preduslov -- obe prijemnice su snimljene"
+    AssertTrue vozPre - vozPosle = 16, _
+               "S6 grupni list: preduslov -- vozacu je ostalo 16 manje (20 dato, 4 vraceno)"
+
+    Dim prvi As String, delovi As Variant
+    prvi = S6GrupniStanje(prj)
+    delovi = Split(prvi & "||", "|")
+    AssertEquals tipT & " x " & CStr(vozPre), CStr(delovi(0)), _
+                 "S6 grupni list: pocetno stanje je stanje vozaca pre prijemnice"
+    AssertEquals tipT & " x " & CStr(vozPosle), CStr(delovi(1)), _
+                 "S6 grupni list: saldo ambalaze je stanje vozaca posle prijemnice"
+    AssertEquals "I:100|II:50", S6GrupniLinije(prj), _
+                 "S6 grupni list: red po stavci dokumenta"
+
+    ' Kasniji dokument istog vozaca i istog tipa, pa ponovna stampa.
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(NextTestDate(), "", TEST_ST_ID, _
+                   tipT, 7#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S6 grupni list: preduslov -- kasniji revers vozacu je upisan"
+    AssertEquals prvi, S6GrupniStanje(prj), _
+                 "S6 grupni list: ponovna stampa posle kasnijeg dokumenta je ista"
+
+    ' Dokument BEZ gajbi nema svoj red knjige po pravilu (ODL-27).
+    AssertEquals tipT & " x -|" & tipT & " x -", S6GrupniStanje(prjBez), _
+                 "S6 grupni list bez gajbi: stampa nepoznato stanje (ODL-27), ne odbija se"
+
+    ' Dokument SA gajbama bez svog reda knjige: veza je pokidana, papir ne
+    ' nastaje. Oba reda (puna noga i povrat) se kidaju i vracaju pre tvrdnje;
+    ' izmedju kvara i vracanja nista ne sme da iskoci u EH.
+    Dim redovi As Collection, k As Long, papirBezVeze As String, vraceno As Boolean
+    Set redovi = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, prj)
+    AssertEquals "2", CStr(redovi.count), _
+                 "S6 grupni list bez veze: preduslov -- prijemnica ima dva reda knjige"
+    On Error Resume Next
+    For k = 1 To redovi.count
+        RequireUpdateCell TBL_AMBALAZA, CLng(redovi(k)), COL_AMB_DOK_ID, prj & "-BEZVEZE", _
+                          "Test_S6_GrupniListStanjeVozaca"
+    Next k
+    papirBezVeze = S6GrupniStanje(prj)
+    Err.Clear
+    vraceno = True
+    For k = 1 To redovi.count
+        RequireUpdateCell TBL_AMBALAZA, CLng(redovi(k)), COL_AMB_DOK_ID, prj, _
+                          "Test_S6_GrupniListStanjeVozaca"
+        vraceno = vraceno And (Err.Number = 0)
+        Err.Clear
+    Next k
+    On Error GoTo EH
+
+    AssertTrue vraceno, "S6 grupni list bez veze: preduslov -- pokidani redovi su vraceni"
+    AssertEquals "", papirBezVeze, _
+                 "S6 grupni list bez veze: prijemnica sa gajbama se ne popunjava"
+    Exit Sub
+
+EH:
+    LogFatal "Test_S6_GrupniListStanjeVozaca", Err.Number, Err.description
+End Sub
+
+' Stanje ambalaze sa grupnog otkupnog lista, prvi primerak: "pocetno|saldo".
+' Isti raspored kao otpremnica (modPrint.WriteOtkupCopy), pa isti citac kao
+' OtpStanjePapira. Fill je Private -> Application.Run. Prazno = list se nije
+' popunio.
+Private Function S6GrupniStanje(ByVal prj As String) As String
+    Dim ws As Object, r As Long, poslednji As Long, t As String
+    Dim poc As String, sal As String, imaPoc As Boolean, imaSal As Boolean
+
+    If Len(prj) = 0 Then Exit Function
+    On Error Resume Next
+    Set ws = Application.Run("modPrint.FillGrupniOtkupSablon", prj)
+    Err.Clear
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+
+    poslednji = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    For r = 1 To poslednji
+        t = NzToText(ws.cells(r, 1).value)
+        If Not imaPoc And t = "Pocetno stanje:" Then
+            poc = NzToText(ws.cells(r, 4).value)
+            imaPoc = True
+        End If
+        If Not imaSal And InStr(1, t, "Saldo ambala", vbBinaryCompare) = 1 Then
+            sal = NzToText(ws.cells(r, 4).value)
+            imaSal = True
+        End If
+    Next r
+    If imaPoc Or imaSal Then S6GrupniStanje = poc & "|" & sal
+End Function
+
+' Linije grupnog lista, prvi primerak: "klasa:kg neto|...". Linije su redovi
+' posle zaglavlja tabele ("Rb") sa rednim brojem u koloni 1.
+Private Function S6GrupniLinije(ByVal prj As String) As String
+    Dim ws As Object, r As Long, poslednji As Long, s As String, uTabeli As Boolean
+
+    If Len(prj) = 0 Then Exit Function
+    On Error Resume Next
+    Set ws = Application.Run("modPrint.FillGrupniOtkupSablon", prj)
+    Err.Clear
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+
+    poslednji = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    For r = 1 To poslednji
+        If uTabeli Then
+            If Not IsNumeric(ws.cells(r, 1).value) Or IsEmpty(ws.cells(r, 1).value) Then Exit For
+            If Len(s) > 0 Then s = s & "|"
+            s = s & NzToText(ws.cells(r, 3).value) & ":" & CStr(ws.cells(r, 6).value)
+        ElseIf NzToText(ws.cells(r, 1).value) = "Rb" Then
+            uTabeli = True
+        End If
+    Next r
+    S6GrupniLinije = s
+End Function
+
+' PALETE I INTEGRITET A3 CITAJU LINIJE DOKUMENTA (odluka 4).
+'
+' AdjustPaletaGajbiceZaPrijemnicu_TX je ziv (Oporavak, Alt+F8). Do koraka 3 je
+' dokument citao sa zaglavlja: nad novim oblikom to je "klasa I, 0 gajbi", pa
+' bi palete te klase svukao na nulu, a klasu II proglasio viskom. A3 je
+' neto paleta poredio sa Kolicinom zaglavlja (prazno = 0) i prijavljivao svaki
+' ispravan dokument.
+'
+' Nivo: LINIJA (dokument + klasa). Dokument 10 + 10 gajbi, palete po stavci.
+' Kontra-tvrdnje: A3 i dalje vidi STVARNO odstupanje neta (+5 kg na paleti
+' klase II), a Adjust i dalje ispravlja STVARNO odstupanje gajbi (-3 na paleti
+' klase II -> vraca na 10, pod kljucem stavke II). Oba kvara se prave na
+' paletnoj stavci, ne na dokumentu.
+' SABOTAZE: s6k3-a3-linija-bez-klase, s6k3-a3-slepa, s6k3-adjust-gajbe-iz-neta,
+' s6k3-adjust-ne-dopunjuje.
+Private Sub Test_S6_PaleteCitajuStavke()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String, prevPal As String
+    scenario = NewScenarioCode("S6PAL")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS6P-" & scenario)
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABS6P-" & scenario, "test S6 palete"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S6 palete: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(testDate, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "S6 palete: preduslov -- zbirna je snimljena"
+
+    Dim prj As String, brojPrij As String, errNum As Long
+    brojPrij = TEST_PREFIX & "-S6PAL-" & scenario
+    On Error Resume Next
+    prj = SavePrijemnicaMulti_TX( _
+              datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+              brojPrij:=brojPrij, brojZbirne:=brZbr, _
+              vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+              kolicinaI:=100#, cenaI:=120#, tipAmb:=tipT, _
+              kolAmb:=10, kolAmbVracena:=0, _
+              hasKlasaII:=True, kolicinaII:=50#, cenaII:=80#, kolAmbII:=10, _
+              outErrNum:=errNum)
+    If Err.Number <> 0 Then prj = "": Err.Clear
+    On Error GoTo EH
+
+    Dim stI As String, stII As String
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    AssertTrue Len(stI) > 0 And Len(stII) > 0 And _
+               S6GajbiNaPaletama(prj, stI) = 10 And S6GajbiNaPaletama(prj, stII) = 10, _
+               "S6 palete: preduslov -- obe klase su paletizovane pod svojom stavkom"
+
+    ' --- A3 nad ispravnim dokumentom nema nalaz ---
+    AssertTrue Len(prj) > 0 And Not modTest.NalazSadrzi(modIntegritet.GetIntegritetRows(), "A3", prj), _
+               "S6 palete: A3 nema nalaz nad ispravnim dokumentom"
+
+    ' --- A3 kontra: +5 kg na paletnoj stavci klase II je nalaz ---
+    Dim rII As Long, netoPre As Variant, a3Kvar As Boolean, netoVracen As Boolean
+    Dim ps As Variant
+    rII = S6PaletnaStavkaRed(prj, stII)
+    If rII > 0 Then
+        ps = GetTableData(TBL_PALETA_STAVKA)
+        netoPre = ps(rII, RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, _
+                                             "Test_S6_PaleteCitajuStavke"))
+        On Error Resume Next
+        RequireUpdateCell TBL_PALETA_STAVKA, rII, COL_PALS_NETO, CDbl(netoPre) + 5#, _
+                          "Test_S6_PaleteCitajuStavke"
+        a3Kvar = modTest.NalazSadrzi(modIntegritet.GetIntegritetRows(), "A3", prj)
+        Err.Clear
+        RequireUpdateCell TBL_PALETA_STAVKA, rII, COL_PALS_NETO, netoPre, _
+                          "Test_S6_PaleteCitajuStavke"
+        netoVracen = (Err.Number = 0)
+        Err.Clear
+        On Error GoTo EH
+    End If
+    AssertTrue netoVracen, "S6 palete: preduslov -- neto paletne stavke je vracen"
+    AssertTrue a3Kvar, "S6 palete: A3 vidi stvarno odstupanje neta na liniji"
+
+    ' --- Adjust nad ispravnim dokumentom ne menja nista ---
+    Dim info As String, rez As Long
+    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "", info)
+    AssertEquals "0|10|10", CStr(rez) & "|" & CStr(S6GajbiNaPaletama(prj, stI)) & "|" & _
+                            CStr(S6GajbiNaPaletama(prj, stII)), _
+                 "S6 palete: Adjust nad ispravnim dokumentom ne menja nijednu paletu"
+
+    ' --- Adjust kontra: -3 gajbe na paleti klase II vraca na 10, pod kljucem II ---
+    If rII > 0 Then
+        RequireUpdateCell TBL_PALETA_STAVKA, rII, COL_PALS_BR_GAJBICA, 7, _
+                          "Test_S6_PaleteCitajuStavke"
+    End If
+    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "", info)
+    AssertEquals "1|10|10", CStr(rez) & "|" & CStr(S6GajbiNaPaletama(prj, stI)) & "|" & _
+                            CStr(S6GajbiNaPaletama(prj, stII)), _
+                 "S6 palete: Adjust vraca klasu II na gajbe njene stavke, pod njenim kljucem"
+
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S6_PaleteCitajuStavke", Err.Number, Err.description
+    On Error Resume Next
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' UGOVOR CITAOCA STAVKI PRIJEMNICE JE DOKUMENTSKI (odluka 1): pokvaren dokument
+' obara citaoca PO IMENU, papir tada ne nastaje, a audit (integritet) ne pada
+' nego kvar imenuje.
+'
+' Sve anomalije su SINTETICKE -- pisac ih ne pravi (jedna stavka po klasi,
+' 1432; Kolicina > 0; ID stavke iz NewEntityID; BrutoKg samo kad je > 0;
+' rollback CELOG dokumenta). Prave se u transakciji koja se vraca, pa se posle
+' vracanja meri da je citalac opet cist. Obrazac je
+' Test_ZBR_CitalacStavkiDrziUgovor.
+' SABOTAZE: s6k3-citalac-pusta-dve-iste-klase,
+' s6k3-citalac-pusta-zaglavlje-bez-stavki, s6k3-citalac-pusta-stavku-bez-id,
+' s6k3-citalac-id-stavke-po-dokumentu, s6k3-citalac-pusta-bruto-nula.
+Private Sub Test_S6_CitalacStavkiPrijemniceDrziUgovor()
+    Const SRC As String = "Test_S6_CitalacStavkiPrijemniceDrziUgovor"
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, brZbr As String
+    scenario = NewScenarioCode("S6UG")
+    testDate = NextTestDate()
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & _
+            Format$(testDate, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(testDate, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "S6 ugovor: preduslov -- zbirna je snimljena"
+
+    Dim prj As String, errNum As Long
+    On Error Resume Next
+    prj = SavePrijemnicaMulti_TX( _
+              datum:=testDate, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+              brojPrij:=TEST_PREFIX & "-S6UG-" & scenario, brojZbirne:=brZbr, _
+              vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+              kolicinaI:=100#, cenaI:=50#, tipAmb:="", kolAmb:=0, kolAmbVracena:=0, _
+              outErrNum:=errNum)
+    If Err.Number <> 0 Then prj = "": Err.Clear
+    On Error GoTo EH
+    AssertTrue Len(prj) > 0, "S6 ugovor: preduslov -- prijemnica je snimljena"
+    If Len(prj) = 0 Then Exit Sub
+
+    AssertEquals "", S6CitalacGreska(), "S6 ugovor: ispravan dokument prolazi"
+
+    ' --- (1) dve stavke iste klase ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    S6DodajStavku prj & "-DUPLA", prj, 2, KLASA_I, 10#, SRC
+    AssertTrue InStr(1, S6CitalacGreska(), "Dve stavke iste klase", vbTextCompare) > 0, _
+               "S6 ugovor: dve stavke iste klase obaraju citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- (2) kolicina nula ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    S6DodajStavku prj & "-NULA", prj, 2, KLASA_II, 0#, SRC
+    AssertTrue InStr(1, S6CitalacGreska(), "veca od nule", vbTextCompare) > 0, _
+               "S6 ugovor: kolicina nula obara citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- (3) stavka bez zaglavlja ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    S6DodajStavku prj & "-SIROCE", prj & "-NEMA-GA", 1, KLASA_I, 10#, SRC
+    AssertTrue InStr(1, S6CitalacGreska(), "Zaglavlje prijemnice ne postoji", vbTextCompare) > 0, _
+               "S6 ugovor: stavka bez zaglavlja obara citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- (5) stavka bez svog ID-a (review #437, P2): PrijemnicaStavkaID je
+    '     kljuc palete (i fakture, korak 5), pa linija bez njega nije
+    '     upotrebljiva ni kad su joj klasa i kolicina ispravne ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    S6DodajStavku "", prj, 2, KLASA_II, 10#, SRC
+    AssertTrue InStr(1, S6CitalacGreska(), "bez PrijemnicaStavkaID", vbTextCompare) > 0, _
+               "S6 ugovor: stavka bez svog ID-a obara citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- (6) isti ID stavke na DRUGOM dokumentu: identitet linije je globalan
+    '     (NewEntityID), pa ga kapija po dokumentu ne bi videla. Klasa II je
+    '     nova za ovaj dokument, da kapija klase ne presretne tvrdnju ---
+    Dim tudjiID As String
+    tudjiID = S6TudjiStavkaID(prj)
+    AssertTrue Len(tudjiID) > 0, "S6 ugovor: preduslov -- postoji stavka drugog dokumenta"
+    If Len(tudjiID) > 0 Then
+        Set tx = New clsTransaction
+        tx.BeginTx
+        tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+        S6DodajStavku tudjiID, prj, 2, KLASA_II, 10#, SRC
+        AssertTrue InStr(1, S6CitalacGreska(), "PrijemnicaStavkaID se ponavlja", vbTextCompare) > 0, _
+                   "S6 ugovor: isti ID stavke na dva dokumenta obara citaoca po imenu"
+        tx.RollbackTx
+        Set tx = Nothing
+    End If
+
+    ' --- (7) BrutoKg = 0 (review #437, P3): pisac ga upisuje samo kad je > 0,
+    '     a prazno znaci unet neto; nula nije ni jedno ni drugo ---
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    S6DodajStavku prj & "-BRUTO0", prj, 2, KLASA_II, 10#, SRC, 0#
+    AssertTrue InStr(1, S6CitalacGreska(), "BrutoKg stavke mora biti veci od nule", vbTextCompare) > 0, _
+               "S6 ugovor: BrutoKg nula obara citaoca po imenu"
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- (4) zaglavlje bez stavki: citalac pada, papir ne nastaje, audit
+    '     imenuje kvar. Merenje ide PRE vracanja, tvrdnje posle njega. ---
+    Dim greska As String, papir As String, nalazi As Variant
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    S6ObrisiStavke prj
+    greska = S6CitalacGreska()
+    papir = S6PapirPrijemnice(prj)
+    nalazi = modIntegritet.GetIntegritetRows()
+    tx.RollbackTx
+    Set tx = Nothing
+    AssertTrue InStr(1, greska, "nema nijednu stavku", vbTextCompare) > 0, _
+               "S6 ugovor: zaglavlje bez stavki obara citaoca po imenu"
+    AssertEquals "", papir, "S6 ugovor: nad zaglavljem bez stavki papir ne nastaje"
+    AssertTrue modTest.NalazSadrzi(nalazi, "A2", "nema nijednu stavku"), _
+               "S6 ugovor: integritet ne pada nego imenuje kvar (A2 GRESKA)"
+
+    AssertEquals "", S6CitalacGreska(), "S6 ugovor: na kraju je citalac cist"
+    Exit Sub
+
+EH:
+    Dim eNo As Long, eOpis As String
+    eNo = Err.Number: eOpis = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal SRC, eNo, eOpis
+End Sub
+
+' Greska strogog citaoca stavki prijemnice; prazno = citalac prolazi.
+Private Function S6CitalacGreska() As String
+    Dim s As Variant
+    On Error Resume Next
+    s = modDokumenta.StavkePrijemniceRedovi()
+    If Err.Number <> 0 Then S6CitalacGreska = Err.description
+    Err.Clear
+End Function
+
+Private Sub S6DodajStavku(ByVal stavkaID As String, ByVal prijemnicaID As String, _
+                          ByVal rb As Long, ByVal klasa As String, _
+                          ByVal kol As Double, ByVal src As String, _
+                          Optional ByVal bruto As Variant)
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_PRIJEMNICA_STAVKE)
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, stavkaID
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, prijemnicaID
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_RB, rb
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, klasa
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, kol
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA, 0#
+    If Not IsMissing(bruto) Then
+        SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_BRUTO, bruto
+    End If
+    RequireAppend TBL_PRIJEMNICA_STAVKE, rowData, src
+End Sub
+
+' ID prve stavke DRUGOG dokumenta (prazno ako je nema) -- za isti ID stavke na
+' dva dokumenta.
+Private Function S6TudjiStavkaID(ByVal prj As String) As String
+    Dim d As Variant
+    d = GetTableData(TBL_PRIJEMNICA_STAVKE)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cP As Long, cId As Long, i As Long, sid As String
+    cP = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, "S6TudjiStavkaID")
+    cId = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, "S6TudjiStavkaID")
+    For i = 1 To UBound(d, 1)
+        sid = Trim$(nz(d(i, cId), ""))
+        If Trim$(nz(d(i, cP), "")) <> prj And Len(sid) > 0 Then
+            S6TudjiStavkaID = sid
+            Exit Function
+        End If
+    Next i
+End Function
+
+Private Sub S6ObrisiStavke(ByVal prijemnicaID As String)
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, prijemnicaID)
+    If redovi Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = redovi.count To 1 Step -1
+        DeleteRow TBL_PRIJEMNICA_STAVKE, CLng(redovi(i))
+    Next i
+End Sub
+
+' "<papir>" kad se papir prijemnice popunio, prazno kad nije. Fill je Private,
+' pa ide kroz Application.Run (kao 230).
+Private Function S6PapirPrijemnice(ByVal prj As String) As String
+    Dim ws As Object
+    On Error Resume Next
+    Set ws = Application.Run("modPrint.FillPrijemnicaSablon", prj)
+    Err.Clear
+    On Error GoTo 0
+    If Not ws Is Nothing Then S6PapirPrijemnice = "<papir>"
+End Function
+
+' Red AKTIVNE paletne stavke dokumenta pod datim kljucem stavke (prvi; 0 = nema).
+Private Function S6PaletnaStavkaRed(ByVal prj As String, ByVal stavkaID As String) As Long
+    If Len(prj) = 0 Or Len(stavkaID) = 0 Then Exit Function
+    Dim d As Variant
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cP As Long, cS As Long, cSt As Long, i As Long
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S6PaletnaStavkaRed")
+    cS = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID, "S6PaletnaStavkaRed")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S6PaletnaStavkaRed")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = prj And Trim$(nz(d(i, cS), "")) = stavkaID And _
+           UCase$(Trim$(nz(d(i, cSt), ""))) <> "DA" Then
+            S6PaletnaStavkaRed = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' KI-015, KONTROLA: PITANJE O MANJKU NA OTKUPU I DALJE IMENUJE KOOPERANTA.
+'
+' Sva tri pisca sa potvrdom deficita (otkup, kupcev revers, prijemnica) pitaju
+' kroz modOtkupUnos.PotvrdiManjakAmbalaze, koje u test rezimu tekst BELEZI i
+' odgovara "Ne" -- pa test sme da udje u granu u kojoj je do KI-015 stajao
+' MsgBox. Kupca meri modTest 248; ovo je kontrola iz suprotnog smera: na otkupu,
+' gde je tekst bio tacan, pitanje i posle izdvajanja imenuje kooperanta, a
+' odbijen otkup i dalje nosi "unos otkupa".
+'
+' RunBusinessFlowProSuite test rezim NE pali (v. Test_PR3_PrazanHeaderIDNeProlazi),
+' a bez njega bi seam otvorio MsgBox i suite bi visila. Rezim se vraca i na
+' putu greske.
+' SABOTAZA: ki015-otkup-pita-kupca -> pukne
+' "KI015 otkup: pitanje o manjku imenuje kooperanta".
+Private Sub Test_AMB_PitanjeManjkaOtkupImenujeKooperanta()
+    Dim prevMode As Boolean
+    prevMode = IsTestMode()
+    On Error GoTo EH
+
+    Dim scenario As String, p As Object, poruke As String, res As String
+    Dim pitanje As String, saldo As Double, n0 As Long
+
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    scenario = NewScenarioCode("KI015K")
+    ' Kooperant donosi 3 gajbe vise nego sto drzi: manjak je tacno 3.
+    saldo = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)
+    Set p = OtkEkranParam(TEST_PREFIX & "-KI015K-" & scenario)
+    p("kolicinaI") = 400#
+    p("cenaI") = 50#
+    p("kolAmb") = CLng(saldo) + 3
+
+    n0 = Pr3BrojRedova(TBL_OTKUP)
+    SetTestMode True
+    modOtkupUnos.PitanjeManjkaTestReset
+    res = modOtkupUnos.OtkupUpisi(p, poruke)
+    pitanje = modOtkupUnos.PitanjeManjkaTest()
+    modOtkupUnos.PitanjeManjkaTestReset
+    SetTestMode prevMode
+
+    AssertTrue Len(pitanje) > 0, "KI015 otkup: kooperant iznad salda dobija pitanje o manjku"
+    AssertEquals "", res, "KI015 otkup: odgovor Ne ne upisuje otkup"
+    AssertEquals CStr(n0), CStr(Pr3BrojRedova(TBL_OTKUP)), "KI015 otkup: odbijen otkup ne pravi red"
+    AssertTrue PorukaPostoji("AMB_ASK_DEFICIT_1") And PorukaPostoji("AMB_ASK_DEFICIT_2") And _
+               InStr(1, pitanje, Poruka("AMB_ASK_DEFICIT_1"), vbBinaryCompare) > 0 And _
+               InStr(1, pitanje, Poruka("AMB_ASK_DEFICIT_2") & " 3", vbBinaryCompare) > 0 And _
+               InStr(1, pitanje, "kooperant", vbTextCompare) > 0 And _
+               InStr(1, pitanje, "kup", vbTextCompare) = 0, _
+               "KI015 otkup: pitanje o manjku imenuje kooperanta"
+    AssertTrue InStr(1, poruke, Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU"), vbBinaryCompare) > 0, _
+               "KI015 otkup: odbijen otkup i dalje nosi unos otkupa"
+    Exit Sub
+EH:
+    modOtkupUnos.PitanjeManjkaTestReset
+    SetTestMode prevMode
+    LogFatal "Test_AMB_PitanjeManjkaOtkupImenujeKooperanta", Err.Number, Err.description
+End Sub
+
+' KI-021: PISAC ODBIJA TIP AMBALAZE KOGA NEMA U SIFARNIKU (AMB-INV-12).
+'
+' Do KI-021 je pisac trazio samo neprazan tip posle Trim$, koji skida samo ASCII
+' razmak -- pa su NBSP i nepostojece "12/2" prolazili do knjige (rucna provera
+' #429, stavka 155). Kapija stoji u AmbPrenosProblem, POSLE postojanja naloga:
+' postojanje u maticnoj tabeli je kapija UPISA, ne citanja (isti obrazac kao
+' AmbNalogProblem). Vazi bez obzira na velika slova i na Aktivan -- neaktivan tip
+' i dalje sme da se vrati (povrat gajbi koje se vise ne izdaju).
+'
+' Pisac se meri bez transakcije: kapija tipa stoji u RequireAmbPrenos na ulazu u
+' PrenesiAmbalazu, pre AMB-INV-08. Pre ispravke isti poziv pada na INV-08, pa
+' tvrdnja trazi bas razlog kapije tipa. Nista se ne upisuje.
+' SABOTAZE: ki021-ugovor-bez-sifarnika -> "KI021 ugovor: tip van sifarnika je
+' odbijen, sa imenom tipa"; ki021-ugovor-osetljiv-na-slova -> "KI021 ugovor: tip
+' iz sifarnika prolazi bez obzira na velika slova"; ki021-ugovor-samo-aktivni ->
+' "KI021 ugovor: neaktivan tip iz sifarnika prolazi"; ki021-pwa-bez-sifarnika ->
+' "KI021 PWA: red sa tipom van sifarnika dobija imenovan razlog".
+Private Sub Test_AMB_TipVanSifarnikaPisacOdbija()
+    Const TIP_NEMA As String = "KI021-NEMA-U-SIFARNIKU"
+    Const TIP_NEAKTIVAN As String = "KI021-NEAKTIVAN"
+    On Error GoTo EH
+
+    Dim nema As String, nbsp As String, slova As String, neakt As String
+    Dim pisac As String, pwa As String, pwaOk As String
+    Dim rowData As Variant
+
+    If FindRows(TBL_TIP_AMBALAZE, COL_TAMB_TIP, TIP_NEAKTIVAN).count = 0 Then
+        rowData = BlankRow(TBL_TIP_AMBALAZE)
+        SetRequiredField rowData, TBL_TIP_AMBALAZE, COL_TAMB_TIP, TIP_NEAKTIVAN
+        SetRequiredField rowData, TBL_TIP_AMBALAZE, COL_TAMB_TEZINA, 0#
+        SetOptionalField rowData, TBL_TIP_AMBALAZE, "Aktivan", STATUS_NEAKTIVAN
+        RequireAppend TBL_TIP_AMBALAZE, rowData, "Test_AMB_TipVanSifarnikaPisacOdbija"
+    End If
+
+    nema = modAmbalazaUgovor.AmbPrenosProblem(AMB_NALOG_STANICA, TEST_ST_ID, _
+               AMB_NALOG_KOOPERANT, TEST_KOOP_ID, 10, TIP_NEMA, AMB_VK_IZDATA_PRAZNA)
+    nbsp = modAmbalazaUgovor.AmbPrenosProblem(AMB_NALOG_STANICA, TEST_ST_ID, _
+               AMB_NALOG_KOOPERANT, TEST_KOOP_ID, 10, ChrW(160), AMB_VK_IZDATA_PRAZNA)
+    slova = modAmbalazaUgovor.AmbPrenosProblem(AMB_NALOG_STANICA, TEST_ST_ID, _
+               AMB_NALOG_KOOPERANT, TEST_KOOP_ID, 10, UCase$(TEST_TIP_AMB), AMB_VK_IZDATA_PRAZNA)
+    neakt = modAmbalazaUgovor.AmbPrenosProblem(AMB_NALOG_STANICA, TEST_ST_ID, _
+               AMB_NALOG_KOOPERANT, TEST_KOOP_ID, 10, TIP_NEAKTIVAN, AMB_VK_IZDATA_PRAZNA)
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Nothing, Date, TIP_NEMA, 1#, _
+                                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, "KI021-NEMA-DOK"
+    pisac = CStr(Err.Number) & " " & Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    pwa = modMasterSync.TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, DateSerial(2090, 5, 5), _
+                                                       TIP_NEMA, 5#)
+    pwaOk = modMasterSync.TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, DateSerial(2090, 5, 5), _
+                                                         TEST_TIP_AMB, 5#)
+
+    AssertTrue InStr(1, nema, "'" & TIP_NEMA & "' ne postoji u sifarniku", vbBinaryCompare) > 0, _
+               "KI021 ugovor: tip van sifarnika je odbijen, sa imenom tipa"
+    AssertTrue Len(nbsp) > 0, "KI021 ugovor: NBSP nije tip"
+    AssertEquals "", slova, "KI021 ugovor: tip iz sifarnika prolazi bez obzira na velika slova"
+    AssertEquals "", neakt, "KI021 ugovor: neaktivan tip iz sifarnika prolazi"
+    AssertTrue InStr(1, pisac, "'" & TIP_NEMA & "' ne postoji u sifarniku", vbBinaryCompare) > 0, _
+               "KI021 pisac: PrenesiAmbalazu odbija tip van sifarnika pre upisa"
+    AssertTrue InStr(1, pwa, "'" & TIP_NEMA & "' ne postoji u sifarniku", vbBinaryCompare) > 0, _
+               "KI021 PWA: red sa tipom van sifarnika dobija imenovan razlog"
+    AssertEquals "", pwaOk, "KI021 PWA: red sa tipom iz sifarnika prolazi"
+    Exit Sub
+EH:
+    LogFatal "Test_AMB_TipVanSifarnikaPisacOdbija", Err.Number, Err.description
+End Sub
+
+' Pisac kupcevog reversa SA potvrdom manjka -- odvojen helper, da pozivi bez
+' potvrde ostanu citljivi.
+Private Function RvpUpisiSaPotvrdom(ByVal d As Date, ByVal broj As String, _
+                                    ByVal kupacID As String, ByVal vozacID As String, _
+                                    ByVal tipAmb As String, ByVal kol As Double, _
+                                    ByVal potvrda As Double, _
+                                    Optional ByRef outRazlog As String) As String
+    Dim res As String
+    outRazlog = ""
+    On Error Resume Next
+    res = modAmbalaza.UpisiReversPartnera_TX(d, broj, kupacID, vozacID, _
+                                             tipAmb, kol, "test RVP", potvrda)
+    If Err.Number <> 0 Then
+        outRazlog = Err.description
+        res = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+    RvpUpisiSaPotvrdom = res
+End Function
+
+' ODL-24: POZAJMICA KUPCA KROZ JEZGRO, u jednoj transakciji kao pisac.
+'
+' Zaglavlje kupcevog dokumenta pa PrenesiAmbalazu -- isti redosled kao
+' UpisiReversPartnera_TX. Zahtev se salje DVAPUT u istoj TX: drugi poziv je
+' ponavljanje, i AMB-INV-04 mora da vrati isti red bez drugog ULAZ_TUDJE.
+' Vrsta je LITERAL, ne konstanta: test mora da se kompajlira i nad kodom koji
+' pozajmicu jos ne zna, da bi reprodukcija bila crvena PO IMENU (stavka 166).
+' kolPonovo >= 0 salje ponavljanje sa DRUGOM kolicinom -- to nije ponavljanje
+' nego HARD CONFLICT, pa transakcija mora da vrati ceo dokument.
+' Vraca AmbDokID ili "" uz RAZLOG -- pisac gresku dize.
+Private Function Odl24Pozajmi(ByVal d As Date, ByVal broj As String, _
+                              ByVal kupacID As String, ByVal vozacID As String, _
+                              ByVal tipAmb As String, ByVal kol As Double, _
+                              Optional ByRef outRazlog As String, _
+                              Optional ByRef outPrvi As String, _
+                              Optional ByRef outPonovljen As String, _
+                              Optional ByVal kolPonovo As Double = -1) As String
+    Const VK_POZ As String = "POZAJMICA_PARTNERA"
+    Dim tx As clsTransaction, dokID As String, kol2 As Double
+
+    kol2 = kol
+    If kolPonovo >= 0 Then kol2 = kolPonovo
+    outRazlog = ""
+    outPrvi = ""
+    outPonovljen = ""
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS_PARTNERA, broj, d, _
+                                         AMB_NALOG_KUPAC, kupacID, "test ODL-24")
+    outPrvi = modAmbalaza.PrenesiAmbalazu(tx, d, tipAmb, kol, _
+                                          AMB_NALOG_KUPAC, kupacID, AMB_NALOG_VOZAC, vozacID, _
+                                          VK_POZ, DOK_TIP_AMBALAZA_DOKUMENT, dokID)
+    outPonovljen = modAmbalaza.PrenesiAmbalazu(tx, d, tipAmb, kol2, _
+                                               AMB_NALOG_KUPAC, kupacID, AMB_NALOG_VOZAC, vozacID, _
+                                               VK_POZ, DOK_TIP_AMBALAZA_DOKUMENT, dokID)
+    tx.CommitTx
+    Set tx = Nothing
+
+    Odl24Pozajmi = dokID
+    Exit Function
+EH:
+    outRazlog = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    Odl24Pozajmi = ""
+End Function
+
+' ODL-24: MESOVIT KUPCEV DOKUMENT -- povrat sa pokricem, pa pozajmica, u ISTOJ TX.
+'
+' Odluka (c) kaze da su povrat i pozajmica dva dokumenta, a nijedan pisac ih ne
+' spaja. Ako ih neko ipak spoji, pozajmica upise svoj red, pa njen ULAZ_TUDJE
+' udari u ULAZ_TUDJE pokrica istog tipa na istom dokumentu (AMB-INV-04). To je
+' pad DRUGOG reda jednog zahteva: transakcija mora da vrati i taj red, i povrat,
+' i zaglavlje. Vraca AmbDokID ili "" uz RAZLOG.
+Private Function Odl24MesovitDokument(ByVal d As Date, ByVal broj As String, _
+                                      ByVal kupacID As String, ByVal vozacID As String, _
+                                      ByVal tipAmb As String, ByVal kolPovrat As Double, _
+                                      ByVal potvrda As Double, ByVal kolPoz As Double, _
+                                      Optional ByRef outRazlog As String) As String
+    Const VK_POZ As String = "POZAJMICA_PARTNERA"
+    Dim tx As clsTransaction, dokID As String
+
+    outRazlog = ""
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS_PARTNERA, broj, d, _
+                                         AMB_NALOG_KUPAC, kupacID, "test ODL-24 mesovit")
+    modAmbalaza.PrenesiAmbalazu tx, d, tipAmb, kolPovrat, _
+                                AMB_NALOG_KUPAC, kupacID, AMB_NALOG_VOZAC, vozacID, _
+                                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID, potvrda
+    modAmbalaza.PrenesiAmbalazu tx, d, tipAmb, kolPoz, _
+                                AMB_NALOG_KUPAC, kupacID, AMB_NALOG_VOZAC, vozacID, _
+                                VK_POZ, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    tx.CommitTx
+    Set tx = Nothing
+
+    Odl24MesovitDokument = dokID
+    Exit Function
+EH:
+    outRazlog = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    Odl24MesovitDokument = ""
+End Function
+
+' ODL-24: UGOVOR POZAJMICE -- tablica istinitosti, svaka tvrdnja uz kontra-tvrdnju.
+'
+' Odluke operatera 19.10.2026 (AMBALAZA.md 6.12k): pozajmica je deveta vrsta
+' (PARTNER -> SOPSTVENI), nosi je samo KUPCEV dokument, ide samo od kupca na
+' vozaca uz kupcev broj. Obavezu NE nosi ona nego njen ULAZ_TUDJE (AMB-INV-13),
+' pa ULAZ_TUDJE ostaje posledica -- cvor AMB-INV-04 ne nastaje.
+'
+' Vrsta je LITERAL iz istog razloga kao u Odl24Pozajmi. Kontra-tvrdnje su zelene
+' i pre ispravke; one cuvaju da sirenje ugovora ne pomeri ono sto vec vazi.
+'
+' Pozajmica ide SAMO na kupcev ambalazni dokument (review #434, P2), pa se
+' strana, odrediste i vlasnik broja mere NA NJEMU -- na svakom drugom dokumentu
+' pozajmica pada ranije, na kapiji ODL-24, i tvrdnja o ODL-9/-10 ne bi merila
+' nista. Robni slucaj (prijemnica: kupcev broj, kupac -> vozac) kroz pravo jezgro
+' meri Test_ODL24_PozajmicaJeSvojDogadjaj.
+' SABOTAZE: odl24-pozajmica-van-enuma, odl24-matrica-obrnuta,
+' odl24-partnerov-ne-nosi-pozajmicu (tvrdnje imenuje tools/sabotaza.py).
+Private Sub Test_ODL24_UgovorPozajmice()
+    Const VK_POZ As String = "POZAJMICA_PARTNERA"
+    On Error GoTo EH
+
+    Dim klase As Variant, par As String
+    klase = modAmbalazaUgovor.AmbKlaseVrste(VK_POZ)
+    If UBound(klase) >= 1 Then par = CStr(klase(0)) & ">" & CStr(klase(1))
+
+    ' --- ENUM I MATRICA ---------------------------------------------------
+    AssertTrue modAmbalazaUgovor.AmbVrstaPoznata(VK_POZ), _
+               "ODL-24 ugovor: POZAJMICA_PARTNERA je poznata vrsta"
+    AssertEquals AMB_KLASA_PARTNER & ">" & AMB_KLASA_SOPSTVENI, par, _
+                 "ODL-24 ugovor: pozajmica ide PARTNER -> SOPSTVENI"
+    AssertTrue modAmbalazaUgovor.AmbVrstaJeZahtev(VK_POZ), _
+               "ODL-24 ugovor: pozajmica JE zahtev"
+    AssertTrue Not modAmbalazaUgovor.AmbVrstaJeZahtev(AMB_VK_ULAZ_TUDJE), _
+               "ODL-24 ugovor: ULAZ_TUDJE ostaje posledica, ne zahtev"
+    AssertEquals "0", CStr(modAmbalazaUgovor.AmbDoprinosObavezi(VK_POZ, 40#, "")), _
+                 "ODL-24 ugovor: pozajmica sama ne dize obavezu -- nosi je njen ULAZ"
+
+    ' --- KOJI DOKUMENT JE NOSI --------------------------------------------
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS_PARTNERA, VK_POZ), _
+               "ODL-24 ugovor: kupcev dokument nosi pozajmicu"
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS_PARTNERA, _
+                                                          AMB_VK_POVRAT_PRAZNE), _
+               "ODL-24 ugovor: kupcev dokument i dalje nosi povrat"
+    AssertTrue Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS, VK_POZ), _
+               "ODL-24 ugovor: nas revers NE nosi pozajmicu"
+
+    ' --- KO, KOME, CIJIM BROJEM --------------------------------------------
+    AssertEquals "", modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     AMB_DOK_REVERS_PARTNERA, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, VK_POZ), _
+                 "ODL-24 ugovor: kupac -> vozac uz kupcev broj prolazi"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     "", "", "", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     AMB_NALOG_STANICA, VK_POZ), "ODL-24", vbBinaryCompare) > 0, _
+               "ODL-24 ugovor: pozajmica od kooperanta pada iako je matrica pusta"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     "", AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     AMB_NALOG_VOZAC, VK_POZ), "ODL-24", vbBinaryCompare) > 0, _
+               "ODL-24 ugovor: pozajmica ne ide na robni dokument ni uz kupcev broj"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     AMB_DOK_REVERS_PARTNERA, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_STANICA, VK_POZ), _
+                     "ODL-9", vbBinaryCompare) > 0, _
+               "ODL-24 ugovor: pozajmica od kupca ide na vozaca, ne na stanicu"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     AMB_DOK_REVERS_PARTNERA, AMB_NALOG_STANICA, TEST_ST_ID, _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, VK_POZ), _
+                     "ODL-10", vbBinaryCompare) > 0, _
+               "ODL-24 ugovor: pozajmica nosi kupcev broj, ne nas"
+    Exit Sub
+EH:
+    LogFatal "Test_ODL24_UgovorPozajmice", Err.Number, Err.description
+End Sub
+
+' ODL-24: POZAJMICA JE SVOJ DOGADJAJ -- kroz jezgro, sa brojevima.
+'
+' Presuda operatera 08.10.2026: kupci pre sezone predaju SVOJE prazne gajbe
+' vozacu. Do ODL-24 se to knjizilo kao povrat sa potvrdjenim manjkom, pa su
+' planirana pozajmica i neobjasnjeno odstupanje ostavljali isti trag.
+'
+' Kupac drzi TACNO 5 nasih (svez tip, isti put kao Test_RVP_DeficitSePotvrdjuje)
+' i pozajmi 40 svojih. Po AMB-INV-13 u opticaj ulazi CELA kolicina (40, a ne
+' manjak 35), kupac i dalje drzi 5 nasih, vozac dobija 40, obaveza raste za 40
+' (ne 80). Kontra-tvrdnja na kraju: povrat istog kupca i dalje PITA za manjak,
+' jer odstupanje ostaje odstupanje.
+'
+' Tvrdnje o zaglavlju i ishodu stoje IZNAD rane izlazne tacke. Kraj meri
+' Test_RVP_DeficitSePotvrdjuje (povrat sa potvrdom: pokrice je manjak).
+'
+' Review #434 (P2) dodaje tri slucaja:
+'   - pozajmica NE ide na prijemnicu, iako je i ona kupcev dokument sa kupcevim
+'     brojem -- poziv bez transakcije, jer kapija ODL-24 stoji PRE kapija
+'     transakcije (obrazac Test_AMB_TipVanSifarnikaPisacOdbija);
+'   - isti zahtev sa DRUGOM kolicinom je HARD CONFLICT, ne ponavljanje, i
+'     transakcija vraca ceo dokument;
+'   - mesovit dokument (povrat sa pokricem pa pozajmica) pada GLASNO na drugom
+'     ULAZ_TUDJE, i pad drugog reda vraca sve.
+' Ugovor dva nivoa: ponavljanje KNJIZENJA nad postojecim dokumentom je
+' idempotentno (ovde), a ponovno KREIRANJE dokumenta istim kupcevim brojem je
+' fail-closed (zauzetost broja, isto telo pisca -- Test_RVP_BrojJeKupcevINePredlazeSe).
+' SABOTAZE: odl24-ulaz-je-manjak, odl24-pozajmica-pita-manjak,
+' odl24-pozajmica-dize-obavezu-dvaput, odl24-pozajmica-van-kupcevog-dokumenta,
+' odl24-druga-kolicina-je-ponavljanje, odl24-ulaz-se-ne-sudara.
+Private Sub Test_ODL24_PozajmicaJeSvojDogadjaj()
+    Const VK_POZ As String = "POZAJMICA_PARTNERA"
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("ODL24P")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPP-" & scenario)
+
+    ' Nase gajbe kupcu: nabavka -> vozac (revers) -> kupac (prijemnica).
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 100#, _
+                                  "NABP-" & scenario, "test pozajmica"
+    Dim revP As String
+    revP = modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, tipT, _
+                                              50#, REV_SMER_PRIJEM_OD_OM, "", _
+                                              TEST_VOZ_ID, "test pozajmica")
+    AssertTrue Len(revP) > 0, "ODL-24: preduslov -- vozac je preuzeo 50"
+
+    Dim razlogSeed As String, prijSeed As String
+    prijSeed = RvpSejKupcu(testDate, scenario, TEST_KUP_ID, 5, razlogSeed, tipT)
+    AssertTrue Len(prijSeed) > 0, "ODL-24: preduslov -- kupac je dobio 5 nasih"
+
+    Dim kupPre As Double, vozPre As Double, obPre As Double
+    kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT)
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT)
+    obPre = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT)
+    AssertTrue Abs(kupPre - 5#) < 0.001, "ODL-24: preduslov -- saldo kupca je 5"
+
+    ' NEGATIVNO: pozajmica na prijemnicu (kupcev broj, kupac -> vozac) se odbija
+    ' imenom ODL-24, pre ijednog upisa. Bez kapije bi stigla do transakcijske
+    ' kapije i pala sa drugim razlogom.
+    Dim naPrij As String
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu Nothing, testDate, tipT, 5#, _
+                                AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                                VK_POZ, DOK_TIP_PRIJEMNICA, prijSeed
+    naPrij = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue InStr(1, naPrij, "AMB-10-ODL-24", vbBinaryCompare) > 0, _
+               "ODL-24: pozajmica se ne knjizi na prijemnicu -- samo na kupcev dokument"
+
+    ' POZAJMICA 40, BEZ POTVRDE. Ponavljanje ide u istoj TX (Odl24Pozajmi).
+    Dim dok As String, razlog As String, prvi As String, ponovljen As String
+    dok = Odl24Pozajmi(testDate, "KUPP1-" & scenario, TEST_KUP_ID, TEST_VOZ_ID, _
+                       tipT, 40#, razlog, prvi, ponovljen)
+    AssertEquals "", razlog, "ODL-24: pozajmica se upisuje bez potvrde manjka"
+    AssertTrue Len(dok) > 0, "ODL-24: pozajmica je upisana"
+    If Len(dok) = 0 Then GoTo Kraj
+
+    ' DOGADJAJ: jedan red pozajmice, kupac -> vozac, i nijedan povrat.
+    AssertEquals "1", CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, VK_POZ)), _
+                 "ODL-24: predaja je JEDAN red vrste POZAJMICA_PARTNERA"
+    AssertEquals "0", CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                           AMB_VK_POVRAT_PRAZNE)), _
+                 "ODL-24: pozajmica NIJE povrat -- nema reda POVRAT_PRAZNE"
+    AssertEquals TEST_KUP_ID, AmbNoviPolje(dok, DOK_TIP_AMBALAZA_DOKUMENT, VK_POZ, _
+                 COL_AMB_OD_ID), "ODL-24: gajbe polaze od kupca"
+    AssertEquals TEST_VOZ_ID, AmbNoviPolje(dok, DOK_TIP_AMBALAZA_DOKUMENT, VK_POZ, _
+                 COL_AMB_NA_ID), "ODL-24: gajbe stizu vozacu"
+
+    ' AMB-INV-13: u opticaj ulazi CELA kolicina, jednim redom.
+    AssertEquals "1", CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                           AMB_VK_ULAZ_TUDJE)), _
+                 "ODL-24: ulaz u opticaj je JEDAN red i posle ponovljenog zahteva"
+    AssertTrue Abs(AmbNoviKolicina(dok, DOK_TIP_AMBALAZA_DOKUMENT, _
+                   AMB_VK_ULAZ_TUDJE) - 40#) < 0.001, _
+               "ODL-24: u opticaj ulazi CELA kolicina (40), ne manjak (35)"
+    AssertEquals prvi, ponovljen, _
+                 "ODL-24: ponovljen zahtev vraca isti red (AMB-INV-04)"
+
+    ' DRUGA KOLICINA NIJE PONAVLJANJE: 40 pa 30 nad istim dokumentom je sudar, a
+    ' tvrdnja meri BAS razlog ponavljanja (ZbirZahteva), ne kapiju identiteta
+    ' ispod njega, koja bi isti zahtev odbila drugim tekstom.
+    Dim nDok As Long
+    nDok = CountRows(TBL_AMBALAZA_DOKUMENT)
+    Call Odl24Pozajmi(testDate, "KUPP3-" & scenario, TEST_KUP_ID, TEST_VOZ_ID, _
+                      tipT, 40#, razlog, , , 30#)
+    AssertTrue InStr(1, razlog, "vec knjizen sa 40, a trazi se 30", vbBinaryCompare) > 0, _
+               "ODL-24: druga kolicina istog zahteva je HARD CONFLICT, ne ponavljanje"
+    AssertEquals CStr(nDok), CStr(CountRows(TBL_AMBALAZA_DOKUMENT)), _
+                 "ODL-24: sudar kolicina vraca ceo dokument"
+
+    ' BROJEVI: kupac zadrzava nase, vozac dobija sve, obaveza raste jednom.
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT) - _
+                   kupPre) < 0.001, _
+               "ODL-24: kupac i dalje drzi svojih 5 nasih -- pozajmica ne dira saldo"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT) - _
+                   (vozPre + 40#)) < 0.001, _
+               "ODL-24: vozac je dobio svih 40"
+    AssertTrue Abs(modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT) - _
+                   (obPre + 40#)) < 0.001, _
+               "ODL-24: firma duguje kupcu 40, ne 80"
+
+    ' STORNO: zajednicka putanja, kontra-stav OBA reda, sve se vraca.
+    AssertTrue modAmbalaza.StornirajAmbDokument_TX(dok), _
+               "ODL-24: storno pozajmice prolazi kroz zajednicku putanju"
+    AssertEquals "2", CStr(AmbBrojKontraStavova(dok, DOK_TIP_AMBALAZA_DOKUMENT)), _
+                 "ODL-24: storno upisuje kontra-stav OBA reda"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipT) - _
+                   vozPre) < 0.001, _
+               "ODL-24: posle storna vozac vise nema pozajmljene gajbe"
+    AssertTrue Abs(modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT) - _
+                   obPre) < 0.001, _
+               "ODL-24: posle storna firma kupcu ne duguje pozajmicu"
+
+    ' KONTRA: povrat istog kupca i dalje PITA -- odstupanje ostaje odstupanje.
+    AssertTrue Len(RvpUpisi(testDate, "KUPP2-" & scenario, TEST_KUP_ID, TEST_VOZ_ID, _
+                            tipT, 20#, razlog)) = 0, _
+               "ODL-24 kontra: povrat 20 uz saldo 5 i dalje trazi potvrdu manjka"
+    AssertTrue InStr(1, razlog, "Manjak 15", vbTextCompare) > 0, _
+               "ODL-24 kontra: manjak povrata je 15 -- pozajmica nije pomerila saldo"
+
+    ' MESOVIT DOKUMENT: povrat 20 uz potvrdu 15 (pokrice ULAZ_TUDJE 15), pa
+    ' pozajmica 40 na ISTOM dokumentu. Pozajmica upise svoj red, a njen ulaz udari
+    ' u pokrice -- glasno, po AMB-INV-04. Pad drugog reda vraca i povrat i
+    ' zaglavlje, pa se ni kupcev saldo ne pomera.
+    Dim kupMes As Double
+    nDok = CountRows(TBL_AMBALAZA_DOKUMENT)
+    kupMes = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT)
+    Call Odl24MesovitDokument(testDate, "KUPP4-" & scenario, TEST_KUP_ID, TEST_VOZ_ID, _
+                              tipT, 20#, 15#, 40#, razlog)
+    AssertTrue InStr(1, razlog, "je vec knjizio " & AMB_VK_ULAZ_TUDJE, vbBinaryCompare) > 0, _
+               "ODL-24: pozajmica na dokumentu sa pokricem je glasan sudar, ne tiho gutanje"
+    AssertEquals CStr(nDok) & "|" & CStr(kupMes), _
+                 CStr(CountRows(TBL_AMBALAZA_DOKUMENT)) & "|" & _
+                 CStr(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipT)), _
+                 "ODL-24: pad drugog reda vraca ceo dokument i kupcev saldo"
+
+Kraj:
+    Exit Sub
+EH:
+    LogFatal "Test_ODL24_PozajmicaJeSvojDogadjaj", Err.Number, Err.description
+End Sub
+
+' AMB-INV-14 (AMB-10-ODL-34 (g), odluke 27.10.2026): OTPIS SE NE POKRIVA.
+'
+' Otpis veci od salda naloga se ODBIJA, bez protokola potvrde i bez
+' ULAZ_TUDJE_AMBALAZE -- za svaki realni nalog. Do ovog reza je jezgro otpis
+' preko salda PARTNERA vodilo kroz pokrice (6.5): bez potvrde je pitalo, a uz
+' potvrdu upisivalo ULAZ_TUDJE, pa bi firma partneru "dugovala" otpisane gajbe.
+' Kod sopstvenog naloga je odbijalo, ali sa tekstom "za njih ide NABAVKA".
+'
+' Meri se kroz JEZGRO (PrenesiAmbalazu u sopstvenoj TX, OtpisKrozJezgro), jer
+' je kapija tamo i vazi za svakog pozivaoca, ne samo za ekran. Vrsta je
+' LITERAL, pa se test kompajlira i nad kodom bez kapije -- reprodukcija je
+' crvena po imenu.
+'   - partner preko salda, bez potvrde: AMB-INV-14, ne pitanje o manjku;
+'   - partner preko salda, UZ potvrdu jednaku manjku: i dalje AMB-INV-14;
+'   - odbijanje ne ostavlja ni zaglavlje, ni red, ni obavezu;
+'   - sopstveni nalog (stanica) preko salda: AMB-INV-14, ne "ide NABAVKA";
+'   - KONTRA: povrat istog kooperanta preko salda i dalje PITA -- kapija je po
+'     vrsti, a ne opsta zabrana pokrica;
+'   - otpis tacno salda prolazi, spusta nalog na nulu i ne nosi ULAZ_TUDJE;
+'   - drugi nalog na istom dokumentu otpisa pada na AMB-INV-10 (ODL-3).
+Private Sub Test_AMBINV14_OtpisSeNePokriva()
+    Const VK_OTP As String = "OTPIS"
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("INV14")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPO-" & scenario)
+
+    ' Preduslov kroz prave pisce: nabavka 10, kooperantu 3, drugom kooperantu 1.
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 10#, _
+                                  "NABO-" & scenario, "test AMB-INV-14"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, tipT, 3#, _
+                   REV_SMER_IZDAVANJE, TEST_KOOP_ID, "")) > 0, _
+               "AMB-INV-14: preduslov -- kooperant drzi 3"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, tipT, 1#, _
+                   REV_SMER_IZDAVANJE, TEST_KOOP2_ID, "")) > 0, _
+               "AMB-INV-14: preduslov -- drugi kooperant drzi 1"
+
+    Dim nDok As Long, nAmb As Long, obPre As Double, razlog As String
+    nDok = CountRows(TBL_AMBALAZA_DOKUMENT)
+    nAmb = CountRows(TBL_AMBALAZA)
+    obPre = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)
+
+    Call OtpisKrozJezgro(testDate, "OTPA-" & scenario, TEST_ST_ID, AMB_NALOG_KOOPERANT, _
+                         TEST_KOOP_ID, tipT, 5#, -1#, razlog)
+    AssertTrue InStr(1, razlog, "AMB-INV-14", vbBinaryCompare) > 0, _
+               "AMB-INV-14: otpis preko salda partnera se odbija, ne pita za manjak"
+    Call OtpisKrozJezgro(testDate, "OTPB-" & scenario, TEST_ST_ID, AMB_NALOG_KOOPERANT, _
+                         TEST_KOOP_ID, tipT, 5#, 2#, razlog)
+    AssertTrue InStr(1, razlog, "AMB-INV-14", vbBinaryCompare) > 0, _
+               "AMB-INV-14: ni potvrda jednaka manjku ne pokriva otpis"
+    AssertEquals CStr(nDok) & "|" & CStr(nAmb) & "|" & CStr(obPre) & "|3", _
+                 CStr(CountRows(TBL_AMBALAZA_DOKUMENT)) & "|" & CStr(CountRows(TBL_AMBALAZA)) & "|" & _
+                 CStr(modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)) & "|" & _
+                 CStr(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)), _
+                 "AMB-INV-14: odbijen otpis ne ostavlja ni zaglavlje, ni red, ni obavezu"
+
+    Call OtpisKrozJezgro(testDate, "OTPC-" & scenario, TEST_ST_ID, AMB_NALOG_STANICA, _
+                         TEST_ST_ID, tipT, 100#, -1#, razlog)
+    AssertTrue InStr(1, razlog, "AMB-INV-14", vbBinaryCompare) > 0, _
+               "AMB-INV-14: otpis preko salda stanice se odbija imenom, a ne porukom o nabavci"
+
+    ' KONTRA: povrat istog kooperanta preko salda i dalje pita (6.5).
+    Dim errN As Long
+    On Error Resume Next
+    Call modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, tipT, 5#, _
+                                            REV_SMER_PRIJEM, TEST_KOOP_ID, "")
+    errN = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_POTVRDA_DEFICITA), CStr(errN), _
+                 "AMB-INV-14 kontra: povrat preko salda kooperanta i dalje trazi potvrdu manjka"
+
+    ' Otpis tacno salda prolazi.
+    Dim dok As String
+    dok = OtpisKrozJezgro(testDate, "OTPD-" & scenario, TEST_ST_ID, AMB_NALOG_KOOPERANT, _
+                          TEST_KOOP_ID, tipT, 3#, -1#, razlog)
+    AssertEquals "", razlog, "AMB-INV-14: otpis tacno salda partnera prolazi"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)) < 0.001, _
+               "AMB-INV-14: posle otpisa celog salda kooperant drzi 0"
+    AssertEquals "1|0", CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, VK_OTP)) & "|" & _
+                 CStr(AmbNoviBrojRedova(dok, DOK_TIP_AMBALAZA_DOKUMENT, AMB_VK_ULAZ_TUDJE)), _
+                 "AMB-INV-14: otpis je jedan red OTPIS, bez ULAZ_TUDJE"
+
+    ' AMB-INV-10 (ODL-3): drugi nalog na istom dokumentu otpisa pada.
+    Call OtpisDvaNaloga(testDate, "OTPE-" & scenario, TEST_ST_ID, TEST_KOOP2_ID, tipT, razlog)
+    AssertTrue InStr(1, razlog, "AMB-INV-10", vbBinaryCompare) > 0, _
+               "AMB-INV-10: otpis pokriva jednog protivpartnera -- drugi nalog na istom dokumentu pada"
+
+    Exit Sub
+EH:
+    LogFatal "Test_AMBINV14_OtpisSeNePokriva", Err.Number, Err.description
+End Sub
+
+' KI-026 (AMB-10-ODL-34): KAPIJE PISCA OTPISA -- ulaz koji ekran ne bi pustio.
+'
+' OtpisiAmbalazu_TX ima pozivaoce mimo ekrana, pa svoje kapije nosi sam
+' (testovi.md par. 5). Svako odbijanje se meri zajedno sa tim da NIJE ostavilo
+' zaglavlje: pisac pada pre transakcije ili je vraca celu.
+'   - kolicina 0 i negativna;
+'   - prazan razlog (ODL-34 k) -- kapija i u piscu, ne samo na ekranu;
+'   - nepostojeci nalog (AMB-INV-03) i granica kao nalog (REALAN -> GRANICA);
+'   - broj zauzet u nizu stanice tog dana (ODL-20) -- i kad je prvi dokument
+'     nabavka: niz (Stanica, dan) je zajednicki za nase ambalazne dokumente;
+'   - ispravan otpis prolazi, a vlasnik broja je stanica (ODL-34 c).
+Private Sub Test_KI026_OtpisPisacKapije()
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date, tipT As String
+    scenario = NewScenarioCode("KI026P")
+    testDate = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK-" & scenario)
+
+    Dim brojNab As String
+    brojNab = "NABK-" & scenario
+    modAmbalaza.NabaviAmbalazu_TX testDate, TEST_ST_ID, tipT, 5#, brojNab, "test KI-026"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(testDate, "", TEST_ST_ID, tipT, 2#, _
+                   REV_SMER_IZDAVANJE, TEST_KOOP_ID, "")) > 0, _
+               "KI-026 pisac: preduslov -- kooperant drzi 2"
+
+    Dim nDok As Long, razlog As String, dok As String
+    nDok = CountRows(TBL_AMBALAZA_DOKUMENT)
+
+    razlog = OtpisPisac(testDate, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT, 0#, "lom", "", dok)
+    AssertTrue InStr(1, razlog, "trazi pozitivnu kolicinu", vbBinaryCompare) > 0, _
+               "KI-026 pisac: kolicina 0 se odbija"
+    razlog = OtpisPisac(testDate, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT, -1#, "lom", "", dok)
+    AssertTrue InStr(1, razlog, "trazi pozitivnu kolicinu", vbBinaryCompare) > 0, _
+               "KI-026 pisac: negativna kolicina se odbija"
+    razlog = OtpisPisac(testDate, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT, 1#, "   ", "", dok)
+    AssertTrue InStr(1, razlog, "AMB-10-ODL-34 (k)", vbBinaryCompare) > 0, _
+               "KI-026 pisac: otpis bez razloga se odbija i mimo ekrana"
+    razlog = OtpisPisac(testDate, AMB_NALOG_KOOPERANT, "KOOP-NEMA-" & scenario, tipT, 1#, _
+                        "lom", "", dok)
+    AssertTrue InStr(1, razlog, "ne postoji", vbBinaryCompare) > 0, _
+               "KI-026 pisac: nepostojeci nalog se odbija (AMB-INV-03)"
+    razlog = OtpisPisac(testDate, AMB_NALOG_SPOLJNI, "", tipT, 1#, "lom", "", dok)
+    AssertTrue Len(razlog) > 0, "KI-026 pisac: granica nije nalog otpisa"
+    razlog = OtpisPisac(testDate, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT, 1#, "lom", _
+                        brojNab, dok)
+    AssertTrue InStr(1, razlog, "vec zauzet", vbBinaryCompare) > 0, _
+               "KI-026 pisac: broj nabavke iste stanice i dana je zauzet i za otpis (ODL-20)"
+    AssertEquals CStr(nDok), CStr(CountRows(TBL_AMBALAZA_DOKUMENT)), _
+                 "KI-026 pisac: odbijen otpis ne ostavlja zaglavlje"
+
+    razlog = OtpisPisac(testDate, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT, 1#, "lom", "", dok)
+    AssertEquals "", razlog, "KI-026 pisac: ispravan otpis prolazi"
+    AssertEquals AMB_DOK_OTPIS & "|" & AMB_NALOG_STANICA & "|" & TEST_ST_ID & "|lom", _
+                 NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, COL_AMBD_VRSTA)) & "|" & _
+                 NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, COL_AMBD_BROJ_OWNER_TIP)) & "|" & _
+                 NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, COL_AMBD_BROJ_OWNER_ID)) & "|" & _
+                 NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dok, COL_AMBD_NAPOMENA)), _
+                 "KI-026 pisac: otpis je nas dokument -- broj stanice, razlog na zaglavlju"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT) - 1#) < 0.001, _
+               "KI-026 pisac: kooperant posle otpisa 1 drzi 1"
+
+    Exit Sub
+EH:
+    LogFatal "Test_KI026_OtpisPisacKapije", Err.Number, Err.description
+End Sub
+
+' Jedan poziv pisca otpisa uz stanicu testa. Vraca razlog odbijanja ("" =
+' upisano), a AmbDokID u outDok.
+Private Function OtpisPisac(ByVal d As Date, ByVal nalogTip As String, ByVal nalogID As String, _
+                            ByVal tipAmb As String, ByVal kol As Double, _
+                            ByVal razlog As String, ByVal broj As String, _
+                            ByRef outDok As String) As String
+    outDok = ""
+    On Error Resume Next
+    outDok = modAmbalaza.OtpisiAmbalazu_TX(d, TEST_ST_ID, nalogTip, nalogID, tipAmb, kol, razlog, broj)
+    If Err.Number <> 0 Then
+        OtpisPisac = Err.description
+        outDok = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Function
+
+' Otpis kroz JEZGRO: zaglavlje OTPIS (broj stanice) i jedan red nalog ->
+' SpoljniSvet u sopstvenoj TX. potvrda -1 znaci "nije data". Vraca AmbDokID, a
+' razlog odbijanja u outRazlog ("" = upisano). Vrsta je literal (v. test).
+Private Function OtpisKrozJezgro(ByVal d As Date, ByVal broj As String, _
+                                 ByVal stanicaID As String, _
+                                 ByVal nalogTip As String, ByVal nalogID As String, _
+                                 ByVal tipAmb As String, ByVal kol As Double, _
+                                 ByVal potvrda As Double, _
+                                 Optional ByRef outRazlog As String) As String
+    Const VK_OTP As String = "OTPIS"
+    Const DOK_OTP As String = "OTPIS"
+    Dim tx As clsTransaction, dokID As String
+
+    outRazlog = ""
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    dokID = modAmbalaza.UpisiAmbDokument(tx, DOK_OTP, broj, d, _
+                                         AMB_NALOG_STANICA, stanicaID, "test AMB-INV-14")
+    modAmbalaza.PrenesiAmbalazu tx, d, tipAmb, kol, nalogTip, nalogID, _
+                                AMB_NALOG_SPOLJNI, "", VK_OTP, _
+                                DOK_TIP_AMBALAZA_DOKUMENT, dokID, potvrda
+    tx.CommitTx
+    Set tx = Nothing
+
+    OtpisKrozJezgro = dokID
+    Exit Function
+EH:
+    outRazlog = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    OtpisKrozJezgro = ""
+End Function
+
+' Dva naloga na JEDNOM dokumentu otpisa: kooperant pa stanica. Drugi red nosi
+' drugi par {Od, Na}, pa mora pasti na AMB-INV-10 i vratiti ceo dokument.
+Private Function OtpisDvaNaloga(ByVal d As Date, ByVal broj As String, _
+                                ByVal stanicaID As String, ByVal koopID As String, _
+                                ByVal tipAmb As String, _
+                                Optional ByRef outRazlog As String) As String
+    Const VK_OTP As String = "OTPIS"
+    Const DOK_OTP As String = "OTPIS"
+    Dim tx As clsTransaction, dokID As String
+
+    outRazlog = ""
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    dokID = modAmbalaza.UpisiAmbDokument(tx, DOK_OTP, broj, d, _
+                                         AMB_NALOG_STANICA, stanicaID, "test AMB-INV-10")
+    modAmbalaza.PrenesiAmbalazu tx, d, tipAmb, 1#, AMB_NALOG_KOOPERANT, koopID, _
+                                AMB_NALOG_SPOLJNI, "", VK_OTP, _
+                                DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    modAmbalaza.PrenesiAmbalazu tx, d, tipAmb, 1#, AMB_NALOG_STANICA, stanicaID, _
+                                AMB_NALOG_SPOLJNI, "", VK_OTP, _
+                                DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    tx.CommitTx
+    Set tx = Nothing
+
+    OtpisDvaNaloga = dokID
+    Exit Function
+EH:
+    outRazlog = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    OtpisDvaNaloga = ""
+End Function
+
+Private Sub Test_OTP_StornoVracaGajbeVozacu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPSTV")
+
+    Dim izvor As String
+    izvor = OtpNoviOtkup(scenario, 400#, 0#)      ' Klasa I: 400 kg, 20 gajbi
+    AssertTrue Len(izvor) > 0, "OTP storno: polazni otkup je upisan"
+
+    Dim stPre As Double, vozPre As Double
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-STV-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, izvor, razlog), _
+               "OTP storno: izvor vezan"
+    AssertTrue IzdajOtpremnicu_TX(otpID, razlog), _
+               "OTP storno: otpremnica je izdata"
+
+    Dim stPosle As Double, vozPosle As Double
+    stPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    vozPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+
+    Dim stornoProsao As Boolean
+    stornoProsao = StornoOtpremnica_TX(otpID)
+
+    Dim stKraj As Double, vozKraj As Double, kontra As Long
+    stKraj = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    vozKraj = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, TEST_TIP_AMB)
+    kontra = AmbBrojKontraStavova(otpID, DOK_TIP_OTPREMNICA)
+
+    AssertTrue Abs((stPre - stPosle) - 20#) < 0.001, _
+               "OTP storno: izdavanje je skinulo gajbe sa stanice"
+    AssertTrue Abs((vozPosle - vozPre) - 20#) < 0.001, _
+               "OTP storno: izdavanje je prebacilo gajbe NA VOZACA"
+    AssertTrue stornoProsao, "OTP storno: storno izdate otpremnice prolazi"
+    AssertTrue Abs(stKraj - stPre) < 0.001, _
+               "OTP storno: saldo stanice se vraca na stanje pre izdavanja"
+    AssertTrue Abs(vozKraj - vozPre) < 0.001, _
+               "OTP storno: saldo vozaca se vraca na stanje pre izdavanja"
+    AssertEquals "1", CStr(kontra), _
+                 "OTP storno: jedan dogadjaj -- jedan kontra-stav"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_StornoVracaGajbeVozacu", Err.Number, Err.description
+End Sub
+
+' OTPREMNICA NA PAPIRU NOSI STANJE STANICE OKO SVOG REDA KNJIGE (stavka 135).
+'
+' Izdavanje knjizi Stanica -> Vozac, a stampa se samo IZDATA otpremnica. Papir je
+' zato citao saldo stanice POSLE otpremnice kao "pocetno" i oduzimao njene gajbe
+' JOS JEDNOM -- pogresno pri svakoj stampi, ne samo pri ponovljenoj. Pravilo je
+' isto kao na reversu (odluka operatera 13.10.2026): saldo = stanje stanice posle
+' ovog dokumenta po redosledu upisa, a pocetno = saldo + gajbe otpremnice.
+'
+' Kvar knjige: papir ne nastaje (odluka operatera 13.10.2026), umesto papira sa
+' izmisljenom nulom. Kvar je na redu KASNIJE nabavke, ne na redu otpremnice, i
+' vraca se pre ijedne tvrdnje.
+' SABOTAZE: saldo-otp-dvostruko -> "OTP papir: pocetno stanje je stanje stanice pre
+' otpremnice"; saldo-otp-danasnji -> "OTP papir: ponovna stampa posle kasnijeg
+' dokumenta je ista". Tvrdnja o kvaru ovde je ISHOD (papir ne nastaje), ali od
+' review #421 (7693) ovu otpremnicu sa gajbama cuvaju dve brane, pa sabotaza
+' citaoca nad njom ne grize -- meri se nad otpremnicom bez gajbi
+' (Test_OTP_PapirBezVezeKnjige).
+Private Sub Test_OTP_PapirStanjeOkoSvogReda()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OTPPAP")
+
+    Dim izvor As String
+    izvor = OtpNoviOtkup(scenario, 400#, 0#)      ' Klasa I: 400 kg, 20 gajbi
+    AssertTrue Len(izvor) > 0, "OTP papir: polazni otkup je upisan"
+
+    Dim stPre As Long, stPosle As Long
+    stPre = CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB))
+
+    Dim razlog As String, otpID As String
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-PAP-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, izvor, razlog), "OTP papir: izvor vezan"
+    AssertTrue IzdajOtpremnicu_TX(otpID, razlog), "OTP papir: otpremnica je izdata"
+    stPosle = CLng(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB))
+
+    Dim prvi As String, delovi As Variant
+    prvi = OtpStanjePapira(otpID)
+    delovi = Split(prvi & "||", "|")
+    AssertTrue Len(prvi) > 0, "OTP papir: nad cistom knjigom otpremnica se popunjava"
+    AssertEquals TEST_TIP_AMB & " x " & CStr(stPre), CStr(delovi(0)), _
+                 "OTP papir: pocetno stanje je stanje stanice pre otpremnice"
+    AssertEquals TEST_TIP_AMB & " x " & CStr(stPosle), CStr(delovi(1)), _
+                 "OTP papir: saldo ambalaze je stanje stanice posle otpremnice"
+
+    ' Kasniji dokument iste stanice i istog tipa, pa ponovna stampa.
+    Dim nabDok As String
+    nabDok = modAmbalaza.NabaviAmbalazu_TX(NextTestDate(), TEST_ST_ID, TEST_TIP_AMB, 7#, _
+                                           TEST_PREFIX & "-NAB-PAP-" & scenario, _
+                                           "test papira otpremnice")
+    AssertEquals prvi, OtpStanjePapira(otpID), _
+                 "OTP papir: ponovna stampa posle kasnijeg dokumenta je ista"
+
+    ' Kvar knjige na redu nabavke. Izmedju kvara i vracanja nista ne sme da
+    ' iskoci u EH: pokvarena knjiga bi oborila svaki sledeci test.
+    Dim redovi As Collection, rKvar As Long, naTipPre As String
+    Dim kvarPapir As String, vracen As Boolean
+    Set redovi = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, nabDok)
+    AssertEquals "1", CStr(redovi.count), "OTP papir: preduslov -- nabavka ima jedan red knjige"
+    rKvar = CLng(redovi(1))
+    naTipPre = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_DOK_ID, nabDok, COL_AMB_NA_TIP))
+
+    On Error Resume Next
+    RequireUpdateCell TBL_AMBALAZA, rKvar, COL_AMB_NA_TIP, "", "Test_OTP_PapirStanjeOkoSvogReda"
+    kvarPapir = OtpStanjePapira(otpID)
+    Err.Clear
+    RequireUpdateCell TBL_AMBALAZA, rKvar, COL_AMB_NA_TIP, naTipPre, "Test_OTP_PapirStanjeOkoSvogReda"
+    vracen = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue vracen And Len(naTipPre) > 0, "OTP papir: preduslov -- pokvaren red je vracen"
+    AssertEquals "", kvarPapir, "OTP papir: kvar knjige -- otpremnica se ne popunjava"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_PapirStanjeOkoSvogReda", Err.Number, Err.description
+End Sub
+
+' OTPREMNICA SA GAJBAMA BEZ SVOG REDA KNJIGE NE DAJE PAPIR (review #421, P2 #1).
+'
+' "-" (ODL-27) sme da znaci samo jedno: otpremnica BEZ gajbi, koja svoj red knjige
+' nema po pravilu. Izdata otpremnica sa gajbama ga uvek ima (OtpKnjiziAmbalazu),
+' pa je njegovo odsustvo pokidana veza -- narusen integritet, ne nepoznato stanje.
+' Papir je ranije u oba slucaja nosio "-".
+'
+' Veza se kida na dva nacina, oba na redu OVE otpremnice i oba se vracaju pre
+' tvrdnji: DokumentID vise ne pokazuje na nju, i red nosi tudji tip dokumenta.
+' Drugi oblik meri i to da je identitet dokumenta u knjizi (DokumentTIP,
+' DokumentID), a ne sam DokumentID (AMB-INV-04). Kontrola: otpremnica bez gajbi i
+' dalje stampa "-", a nad pokvarenom knjigom ni ona ne nastaje.
+' SABOTAZE: saldo-otp-bez-veze-nepoznato -> "OTP papir bez veze: izgubljen
+' DokumentID -- otpremnica sa gajbama se ne popunjava"; saldo-dokument-bez-tipa ->
+' "OTP papir bez veze: red tudjeg tipa dokumenta -- otpremnica sa gajbama se ne
+' popunjava"; saldo-otp-guta-kvar -> "OTP papir bez gajbi: kvar knjige -- ni
+' otpremnica bez gajbi se ne popunjava".
+Private Sub Test_OTP_PapirBezVezeKnjige()
+    On Error GoTo EH
+
+    Dim scenario As String, razlog As String
+    scenario = NewScenarioCode("OTPBVK")
+
+    Dim izvor As String, otpID As String
+    izvor = OtpNoviOtkup(scenario, 400#, 0#)      ' Klasa I: 400 kg, 20 gajbi
+    otpID = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-BVK-" & scenario), _
+                                     OtpOcek(400#, 20#, 0#, 0#), razlog)
+    AssertTrue DodajOtpremnicaIzvor_TX(otpID, izvor, razlog), "OTP papir bez veze: izvor vezan"
+    AssertTrue IzdajOtpremnicu_TX(otpID, razlog), "OTP papir bez veze: otpremnica je izdata"
+    AssertTrue Len(OtpStanjePapira(otpID)) > 0, _
+               "OTP papir bez veze: nad cistom knjigom otpremnica se popunjava"
+
+    Dim redovi As Collection, rOtp As Long
+    Set redovi = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, otpID)
+    AssertEquals "1", CStr(redovi.count), "OTP papir bez veze: preduslov -- otpremnica ima jedan red knjige"
+    rOtp = CLng(redovi(1))
+
+    ' Izmedju kvara i vracanja nista ne sme da iskoci u EH: pokvarena veza bi
+    ' ostala za sledece testove.
+    Dim papirBezID As String, papirTudjTip As String, vraceno As Boolean
+    On Error Resume Next
+    RequireUpdateCell TBL_AMBALAZA, rOtp, COL_AMB_DOK_ID, otpID & "-BEZVEZE", "Test_OTP_PapirBezVezeKnjige"
+    papirBezID = OtpStanjePapira(otpID)
+    Err.Clear
+    RequireUpdateCell TBL_AMBALAZA, rOtp, COL_AMB_DOK_ID, otpID, "Test_OTP_PapirBezVezeKnjige"
+    vraceno = (Err.Number = 0)
+    Err.Clear
+    RequireUpdateCell TBL_AMBALAZA, rOtp, COL_AMB_DOK_TIP, DOK_TIP_OTKUP, "Test_OTP_PapirBezVezeKnjige"
+    papirTudjTip = OtpStanjePapira(otpID)
+    Err.Clear
+    RequireUpdateCell TBL_AMBALAZA, rOtp, COL_AMB_DOK_TIP, DOK_TIP_OTPREMNICA, "Test_OTP_PapirBezVezeKnjige"
+    vraceno = vraceno And (Err.Number = 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue vraceno, "OTP papir bez veze: preduslov -- pokvareni redovi su vraceni"
+    AssertEquals "", papirBezID, _
+                 "OTP papir bez veze: izgubljen DokumentID -- otpremnica sa gajbama se ne popunjava"
+    AssertEquals "", papirTudjTip, _
+                 "OTP papir bez veze: red tudjeg tipa dokumenta -- otpremnica sa gajbama se ne popunjava"
+
+    ' KONTROLA: otpremnica BEZ gajbi nema svoj red knjige po pravilu (ODL-27).
+    Dim c As Collection, izvorBez As String, otpBez As String
+    Set c = New Collection
+    c.Add OtkStavka(KLASA_I, 400#, 50#, 0#, 0#)
+    izvorBez = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-BVK0-" & scenario), c)
+    otpBez = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-BVK0-" & scenario), _
+                                      OtpOcek(400#, 0#, 0#, 0#), razlog)
+    AssertTrue DodajOtpremnicaIzvor_TX(otpBez, izvorBez, razlog), _
+               "OTP papir bez gajbi: izvor bez gajbi vezan"
+    AssertTrue IzdajOtpremnicu_TX(otpBez, razlog), "OTP papir bez gajbi: otpremnica je izdata"
+    AssertEquals "0", CStr(FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, otpBez).count), _
+                 "OTP papir bez gajbi: preduslov -- otpremnica nema red knjige"
+    AssertEquals TEST_TIP_AMB & " x -|" & TEST_TIP_AMB & " x -", OtpStanjePapira(otpBez), _
+                 "OTP papir bez gajbi: stampa nepoznato stanje (ODL-27), ne odbija se"
+
+    ' KVAR KNJIGE NAD OTPREMNICOM BEZ GAJBI. Za otpremnicu sa gajbama postoje DVE
+    ' brane (strog citalac, pa 7693 "gajbe bez reda"), pa njen papir ne nastaje i
+    ' kad prvu neko ugasi -- dokaz je to izmerio: sabotaza prve brane nad njom nije
+    ' obarala nista. Ovde druge brane nema ("-" je dozvoljen), pa je strog citalac
+    ' jedini: da ga papir proguta, otpremnica bi stampala "-" nad pokvarenom
+    ' knjigom. Kvar je na redu PRVE otpremnice i vraca se pre tvrdnje.
+    Dim naTipPre As String, papirBezGajbiKvar As String, vracenKvar As Boolean
+    naTipPre = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_DOK_ID, otpID, COL_AMB_NA_TIP))
+    On Error Resume Next
+    RequireUpdateCell TBL_AMBALAZA, rOtp, COL_AMB_NA_TIP, "", "Test_OTP_PapirBezVezeKnjige"
+    papirBezGajbiKvar = OtpStanjePapira(otpBez)
+    Err.Clear
+    RequireUpdateCell TBL_AMBALAZA, rOtp, COL_AMB_NA_TIP, naTipPre, "Test_OTP_PapirBezVezeKnjige"
+    vracenKvar = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue vracenKvar And Len(naTipPre) > 0, _
+               "OTP papir bez gajbi: preduslov -- pokvaren red je vracen"
+    AssertEquals "", papirBezGajbiKvar, _
+                 "OTP papir bez gajbi: kvar knjige -- ni otpremnica bez gajbi se ne popunjava"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_PapirBezVezeKnjige", Err.Number, Err.description
+End Sub
+
+' Stanje ambalaze sa papira otpremnice, prvi primerak: "pocetno|saldo", npr.
+' "Test Gajba x 37|Test Gajba x 17". Labela je u koloni 1, vrednost u koloni 4
+' (modPrint.WriteOtkupCopy). Prazno = list se nije popunio. Fill je Private, pa
+' ide kroz Application.Run, kao FillPrijemnicaSablon u modTest 230.
+Private Function OtpStanjePapira(ByVal otpID As String) As String
+    Dim ws As Object, r As Long, poslednji As Long, t As String
+    Dim poc As String, sal As String, imaPoc As Boolean, imaSal As Boolean
+
+    On Error Resume Next
+    Set ws = Application.Run("modPrint.FillOtpremnicaSablon", otpID)
+    Err.Clear
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+
+    poslednji = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    For r = 1 To poslednji
+        t = NzToText(ws.cells(r, 1).value)
+        If Not imaPoc And t = "Pocetno stanje:" Then
+            poc = NzToText(ws.cells(r, 4).value)
+            imaPoc = True
+        End If
+        If Not imaSal And InStr(1, t, "Saldo ambala", vbBinaryCompare) = 1 Then
+            sal = NzToText(ws.cells(r, 4).value)
+            imaSal = True
+        End If
+    Next r
+    If imaPoc Or imaSal Then OtpStanjePapira = poc & "|" & sal
+End Function
+
 Private Sub Test_OTP_AmbalazaSeKnjiziPriIzdavanju()
     On Error GoTo EH
 
@@ -5194,10 +10050,23 @@ Private Sub Test_OTP_AmbalazaSeKnjiziPriIzdavanju()
                  "OTP ambalaza: izdavanje knjizi TACNO jedan red"
     AssertTrue Abs(AmbKolicinaZaDokument(otpID) - 20#) < 0.001, _
                "OTP ambalaza: kolicina je ZBIR STAVKI izdate otpremnice"
-    AssertEquals "Izlaz", AmbPoljeZaDokument(otpID, COL_AMB_SMER), _
-                 "OTP ambalaza: smer je izlaz sa stanice"
-    AssertEquals TEST_ST_ID, AmbPoljeZaDokument(otpID, COL_AMB_ENTITET), _
+    ' SMER JE SADA PAR NALOGA, ne kolona. Stari red je imao JEDAN entitet
+    ' (stanicu) i ZIG vozaca, pa se saldo vozaca dobijao INVERZIJOM smera
+    ' (VozacAmbEffectiveSmer) -- citalac koji inverziju zaboravi dobijao je
+    ' pogresan ZNAK, ne gresku (6.8, fail-open). Nov red imenuje obe strane.
+    AssertEquals AMB_NALOG_STANICA, AmbPoljeZaDokument(otpID, COL_AMB_OD_TIP), _
                  "OTP ambalaza: gajbe odlaze sa OTKUPNOG MESTA otpremnice"
+    AssertEquals TEST_ST_ID, AmbPoljeZaDokument(otpID, COL_AMB_OD_ID), _
+                 "OTP ambalaza: izvorni nalog je BAS ta stanica"
+    ' Ova tvrdnja je NOVA sposobnost, ne prevod: stari model je vozaca mogao samo
+    ' da zigose, pa nije mogao da kaze da gajbe IDU NA NJEGOV nalog.
+    AssertEquals AMB_NALOG_VOZAC, AmbPoljeZaDokument(otpID, COL_AMB_NA_TIP), _
+                 "OTP ambalaza: gajbe idu NA VOZACA -- on je nalog, ne zig"
+    AssertEquals TEST_VOZ_ID, AmbPoljeZaDokument(otpID, COL_AMB_NA_ID), _
+                 "OTP ambalaza: odredisni nalog je BAS taj vozac"
+    AssertEquals AMB_VK_UZ_ROBU, _
+                 AmbPoljeZaDokument(otpID, COL_AMB_VRSTA_KRETANJA), _
+                 "OTP ambalaza: gajbe putuju SA ROBOM (AMBALAZA_UZ_ROBU)"
     AssertEquals TEST_TIP_AMB, AmbPoljeZaDokument(otpID, COL_AMB_TIP), _
                  "OTP ambalaza: knjizi se PO TIPU gajbe"
 
@@ -5693,7 +10562,12 @@ End Function
 ' Ide kroz PRODUKCIONI put predaje (S5-2), ne kroz fixture precicu: zbirna se od
 ' S5-3 sastavlja od otpremnica, pa izvor mora stvarno da postoji kao otpremnica.
 ' Precica bi merila podatke koje nijedan pisac ne pravi.
-Private Function ZbrPwaIzvorCrid(ByVal oznaka As String, ByVal datum As Date, _
+' IZVOR ZBIRNE JE OTPREMNICA (S5-4b-2).
+'
+' Do ovog reza je pomocnik vracao otkupni CRID, jer je master prevodio CRID ->
+' otpremnica. Prevodilac je obrisan, pa pomocnik vraca ono sto PWA sada stvarno
+' salje: OtpremnicaID. Ime pozivajucih lokalnih promenljivih nije menjano.
+Private Function ZbrPwaIzvorOtpremnica(ByVal oznaka As String, ByVal datum As Date, _
                                  ByVal vozacID As String) As String
     Dim crid As String
     crid = "CRID-ZBRIZV-" & oznaka
@@ -5709,11 +10583,11 @@ Private Function ZbrPwaIzvorCrid(ByVal oznaka As String, ByVal datum As Date, _
 
     Dim ishodi As Object, greske As String
     If modMasterSync.TestHook_CreateOtpremniceIzPredaje(predaje, ishodi, greske) <> 1 Then
-        Err.Raise vbObjectError + 9430, "ZbrPwaIzvorCrid", _
+        Err.Raise vbObjectError + 9430, "ZbrPwaIzvorOtpremnica", _
                   "Predaja nije napravila otpremnicu: " & greske
     End If
 
-    ZbrPwaIzvorCrid = crid
+    ZbrPwaIzvorOtpremnica = modDokumenta.OtpremnicaZaOtkup(otkID)
 End Function
 
 ' Snimak SVIH tabela koje auto-otpremnica dira. Rollback mora da vrati CEO
@@ -6304,6 +11178,7 @@ Private Sub Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira()
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
     tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     tx.AddTableSnapshot TBL_STORNO_VEZE
@@ -6388,10 +11263,22 @@ Private Sub ZbrSejPrijemnicuSaRoditeljem(ByVal prijID As String, ByVal broj As S
     SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_VOZAC, TEST_VOZ_ID
     SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj
     SetOptionalField rowData, TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD, zbirnaID
-    SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_KLASA, KLASA_I
-    SetOptionalField rowData, TBL_PRIJEMNICA, COL_PRJ_KOLICINA, 100#
+    ' Klasa i kolicina su samo na stavci: zaglavlje ih od S6 koraka 8 nema.
 
     RequireAppend TBL_PRIJEMNICA, rowData, "ZbrSejPrijemnicuSaRoditeljem"
+
+    ' Stavka uz zaglavlje (S6 korak 3): citaoci linija prijemnice citaju
+    ' tblPrijemnicaStavke kroz strog citalac, koji zaglavlje bez stavke odbija
+    ' po imenu. Transakcija pozivaoca snima i ovu tabelu.
+    Dim st As Variant
+    st = BlankRow(TBL_PRIJEMNICA_STAVKE)
+    SetRequiredField st, TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, "PRS-" & prijID
+    SetRequiredField st, TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, prijID
+    SetRequiredField st, TBL_PRIJEMNICA_STAVKE, COL_PRS_RB, 1
+    SetRequiredField st, TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, KLASA_I
+    SetRequiredField st, TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, 100#
+    SetOptionalField st, TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA, 0#
+    RequireAppend TBL_PRIJEMNICA_STAVKE, st, "ZbrSejPrijemnicuSaRoditeljem"
 End Sub
 
 ' VLASNISTVO NIZVODNOG LANCA IDE PO IDENTITETU (review #389, P1).
@@ -6949,6 +11836,463 @@ Private Function ZbrParPodIstimBrojem(ByVal broj As String, ByVal datum As Date,
 
     ZbrParPodIstimBrojem = (Len(outZbrA) > 0 And Len(outZbrB) > 0 And outZbrA <> outZbrB)
 End Function
+
+' ============================================================
+' S5-4b-1: VOZACU SE SERVIRAJU OTPREMNICE, NE OTKUPNI REDOVI
+' ============================================================
+'
+' Meri se PRODUKCIONI SEAM (OtpremniceVozacaRedovi), ne kopija za test: sam
+' izvoz pise u Google preko mreze, pa kroz njega test ne moze da prodje.
+
+' Indeks kolone u izvozu, po IMENU iz zaglavlja. Test koji bi racunao poziciju
+' cutke bi presao na susednu kolonu cim se izvoz prosiri.
+Private Function OtpVozKolona(ByVal redovi As Variant, ByVal ime As String) As Long
+    Dim k As Long
+    For k = 1 To UBound(redovi, 2)
+        If StrComp(Trim$(NzToText(redovi(1, k))), ime, vbTextCompare) = 0 Then
+            OtpVozKolona = k
+            Exit Function
+        End If
+    Next k
+    OtpVozKolona = 0
+End Function
+
+' Indeks reda ciji je prvi stubac (OtpremnicaID za zaglavlja) zadata vrednost.
+Private Function OtpVozRedPoID(ByVal redovi As Variant, _
+                               ByVal kolona As Long, _
+                               ByVal vrednost As String) As Long
+    Dim i As Long
+    For i = 2 To UBound(redovi, 1)
+        If StrComp(Trim$(NzToText(redovi(i, kolona))), vrednost, vbTextCompare) = 0 Then
+            OtpVozRedPoID = i
+            Exit Function
+        End If
+    Next i
+    OtpVozRedPoID = 0
+End Function
+
+Private Function OtpVozBrojStavki(ByVal stavke As Variant, ByVal otpID As String) As Long
+    Dim cOtp As Long, i As Long, n As Long
+    cOtp = OtpVozKolona(stavke, "OtpremnicaID")
+    If cOtp = 0 Then Exit Function
+
+    For i = 2 To UBound(stavke, 1)
+        If StrComp(Trim$(NzToText(stavke(i, cOtp))), otpID, vbTextCompare) = 0 Then n = n + 1
+    Next i
+    OtpVozBrojStavki = n
+End Function
+
+' Vozac sme da vidi samo ono sto mu je STVARNO predato: izdatu, nestorniranu
+' otpremnicu koja nosi njegov VozacID. Nacrt nije predat nikome, a stornirana
+' otpremnica vise nije nicija obaveza.
+Private Sub Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, datum As Date
+    Dim otpID As String, draftID As String, razlog As String
+    Dim redovi As Variant, cId As Long, cVoz As Long, cZbr As Long
+
+    scenario = NewScenarioCode("OTPVOZ1")
+    datum = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    otpID = ZbrOtpremnicaNaDan("V1" & scenario, datum)
+    AssertTrue Len(otpID) > 0, "OTPVOZ-1 preduslov: izdata otpremnica postoji"
+
+    redovi = modStammdatenSync.OtpremniceVozacaRedovi()
+    cId = OtpVozKolona(redovi, "OtpremnicaID")
+    cVoz = OtpVozKolona(redovi, "VozacID")
+    cZbr = OtpVozKolona(redovi, "ZbirnaID")
+
+    AssertTrue cId > 0 And cVoz > 0 And cZbr > 0, _
+        "OTPVOZ-1: izvoz nosi OtpremnicaID, VozacID i ZbirnaID"
+
+    Dim r As Long
+    r = OtpVozRedPoID(redovi, cId, otpID)
+    AssertTrue r > 0, "OTPVOZ-1: izdata otpremnica sa vozacem JESTE u izvozu"
+
+    If r > 0 Then
+        AssertEquals TEST_VOZ_ID, Trim$(NzToText(redovi(r, cVoz))), _
+            "OTPVOZ-1: red nosi vozaca kome je predato"
+        AssertEquals "", Trim$(NzToText(redovi(r, cZbr))), _
+            "OTPVOZ-1: bez zbirne je ZbirnaID prazan -- otpremnica je slobodna"
+    End If
+
+    ' --- nacrt nije predat nikome ---
+    draftID = CreateOtpremnicaDraft_TX( _
+        OtpBrojHeader(TEST_PREFIX & "-D" & scenario, datum, TEST_ST_ID), _
+        OtpOcek(100#, 10#, 50#, 0#), razlog)
+    AssertTrue Len(draftID) > 0, _
+        "OTPVOZ-1 preduslov: nacrt je napravljen (bilo: " & razlog & ")"
+
+    redovi = modStammdatenSync.OtpremniceVozacaRedovi()
+    AssertEquals "0", CStr(OtpVozRedPoID(redovi, cId, draftID)), _
+        "OTPVOZ-1: NACRT ne izlazi vozacu"
+
+    ' --- stornirana vise nije nicija obaveza ---
+    AssertTrue modStorno.StornoOtpremnica_TX(otpID), _
+        "OTPVOZ-1 preduslov: otpremnica je stornirana"
+
+    redovi = modStammdatenSync.OtpremniceVozacaRedovi()
+    AssertEquals "0", CStr(OtpVozRedPoID(redovi, cId, otpID)), _
+        "OTPVOZ-1: STORNIRANA otpremnica ispada iz izvoza"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem", eN, eD
+End Sub
+
+' ZbirnaID U IZVOZU JE TEKUCA ISTINA, NE ZABELEZENA.
+'
+' Racuna se iz clanstva (AktivnaZbirnaZaOtpremnicu), pa posle storna zbirne
+' otpremnica sama ponovo postane slobodna -- bez ijednog upisa u izvoz i bez
+' kolone na detetu. Da je bila zabelezena, vozac bi trajno izgubio otpremnicu
+' ciju je zbirnu neko stornirao.
+Private Sub Test_OTPVOZ_ZbirnaIDJeTekucaIstina()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, datum As Date, broj As String
+    Dim otpID As String, zbrID As String, g As String
+    Dim izvori As Collection
+    Dim redovi As Variant, cId As Long, cZbr As Long, r As Long
+    Dim res As Object
+
+    scenario = NewScenarioCode("OTPVOZ2")
+    datum = NextTestDate()
+    broj = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(datum, "ddmmyy")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    otpID = ZbrOtpremnicaNaDan("V2" & scenario, datum)
+    AssertTrue Len(otpID) > 0, "OTPVOZ-2 preduslov: izdata otpremnica postoji"
+
+    Set izvori = New Collection
+    izvori.Add otpID
+    zbrID = modDokumenta.CreateZbirnaIzIzvora_TX(ZbrHeaderNaDan(broj, datum), izvori, g, True)
+    AssertTrue Len(zbrID) > 0, "OTPVOZ-2 preduslov: zbirna je napravljena"
+
+    redovi = modStammdatenSync.OtpremniceVozacaRedovi()
+    cId = OtpVozKolona(redovi, "OtpremnicaID")
+    cZbr = OtpVozKolona(redovi, "ZbirnaID")
+    r = OtpVozRedPoID(redovi, cId, otpID)
+    AssertTrue r > 0, "OTPVOZ-2: otpremnica u zbirni JESTE i dalje u izvozu"
+
+    If r > 0 Then
+        AssertEquals zbrID, Trim$(NzToText(redovi(r, cZbr))), _
+            "OTPVOZ-2: izvoz nosi zbirnu koja je BAS potrosila ovu otpremnicu"
+    End If
+
+    ' --- storno zbirne oslobadja otpremnicu, bez upisa u izvoz ---
+    Set res = modStornoFlow.RunSimpleStornoZbirna(broj, zbrID)
+    AssertTrue CBool(res("success")), _
+        "OTPVOZ-2 preduslov: zbirna je stornirana (bilo: " & CStr(res("message")) & ")"
+
+    redovi = modStammdatenSync.OtpremniceVozacaRedovi()
+    r = OtpVozRedPoID(redovi, cId, otpID)
+    AssertTrue r > 0, "OTPVOZ-2: posle storna zbirne otpremnica je i dalje vozaceva"
+
+    If r > 0 Then
+        AssertEquals "", Trim$(NzToText(redovi(r, cZbr))), _
+            "OTPVOZ-2: posle storna zbirne ZbirnaID je opet PRAZAN -- otpremnica je slobodna"
+    End If
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTPVOZ_ZbirnaIDJeTekucaIstina", eN, eD
+End Sub
+
+' KILAZA DOLAZI IZ STAVKI, A CENA NE IDE NIKUD.
+'
+' Zaglavlje otpremnice jos NOSI legacy kolone Kolicina/Cena/Klasa, pa bi izvoz
+' koji ih procita bio zelen a pogresan. Meri se da red stavke nosi kolicinu iz
+' tblOtpremnicaStavke, i da NIJEDNA kolona izvoza ne nosi cenu: vozac prevozi
+' robu, a PredlogCena je ocekivanje dokumenta (review #362), ne vrednost.
+Private Sub Test_OTPVOZ_StavkeIzKanonaBezCene()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, datum As Date, otpID As String
+    Dim zagl As Variant, stavke As Variant
+    Dim cOtp As Long, cKl As Long, cKol As Long, cAmb As Long, r As Long
+    Dim k As Long, ime As String, cena As Long
+
+    scenario = NewScenarioCode("OTPVOZ3")
+    datum = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+
+    otpID = ZbrOtpremnicaNaDan("V3" & scenario, datum)
+    AssertTrue Len(otpID) > 0, "OTPVOZ-3 preduslov: izdata otpremnica postoji"
+
+    stavke = modStammdatenSync.OtpremniceVozacaStavkeRedovi()
+    AssertEquals "1", CStr(OtpVozBrojStavki(stavke, otpID)), _
+        "OTPVOZ-3: jednoklasna otpremnica daje TACNO jednu stavku"
+
+    cOtp = OtpVozKolona(stavke, "OtpremnicaID")
+    cKl = OtpVozKolona(stavke, "Klasa")
+    cKol = OtpVozKolona(stavke, "Kolicina")
+    cAmb = OtpVozKolona(stavke, "KolAmbalaze")
+    r = OtpVozRedPoID(stavke, cOtp, otpID)
+
+    AssertTrue r > 0, "OTPVOZ-3: stavka izvezene otpremnice je u izvozu"
+
+    If r > 0 Then
+        AssertEquals KLASA_I, Trim$(NzToText(stavke(r, cKl))), _
+            "OTPVOZ-3: klasa dolazi iz stavke"
+        AssertEquals "400", CStr(CLng(stavke(r, cKol))), _
+            "OTPVOZ-3: kilaza dolazi iz stavke, ne sa zaglavlja"
+        AssertEquals "20", CStr(CLng(stavke(r, cAmb))), _
+            "OTPVOZ-3: gajbe dolaze iz stavke"
+    End If
+
+    ' --- cena ne izlazi ni u jednom od dva taba ---
+    zagl = modStammdatenSync.OtpremniceVozacaRedovi()
+
+    For k = 1 To UBound(zagl, 2)
+        ime = Trim$(NzToText(zagl(1, k)))
+        If InStr(1, ime, "Cena", vbTextCompare) > 0 Then cena = cena + 1
+    Next k
+
+    For k = 1 To UBound(stavke, 2)
+        ime = Trim$(NzToText(stavke(1, k)))
+        If InStr(1, ime, "Cena", vbTextCompare) > 0 Then cena = cena + 1
+    Next k
+
+    AssertEquals "0", CStr(cena), _
+        "OTPVOZ-3: nijedna kolona izvoza ne nosi cenu"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_OTPVOZ_StavkeIzKanonaBezCene", eN, eD
+End Sub
+
+' Vrednost parametra iz kontrolnog taba, po IMENU. Test koji bi racunao red
+' cutke bi presao na susedni cim se tab prosiri.
+Private Function SyncControlVrednost(ByVal redovi As Variant, _
+                                     ByVal parametar As String) As String
+    Dim i As Long
+    For i = 1 To UBound(redovi, 1)
+        If StrComp(Trim$(NzToText(redovi(i, 1))), parametar, vbTextCompare) = 0 Then
+            SyncControlVrednost = Trim$(NzToText(redovi(i, 2)))
+            Exit Function
+        End If
+    Next i
+    SyncControlVrednost = vbNullString
+End Function
+
+' OBJAVA JE DOKAZ, NE NAJAVA (review #391, P1).
+'
+' MgmtReports se izvozi na KRAJU ciklusa, pa skidanje lock-a samo po sebi ne
+' znaci da je vozacev read-model svez. Ako izvoz padne, lock se ipak skida
+' (CleanExit), a stari snimak ostaje na Google-u -- i to ne nekoliko minuta nego
+' SVE do sledeceg uspesnog izvoza.
+'
+' Zato objavljena generacija sme da bude jednaka tekucoj SAMO kad je ciklus
+' zavrsen I izvoz uspeo. Meri se produkcioni seam koji gradi redove kontrolnog
+' taba: sam upis ide u Google preko mreze.
+Private Sub Test_OTPVOZ_ObjavaSeDokazujeIzvozom()
+    On Error GoTo EH
+
+    Const CIKLUS As String = "CYC-TEST-0001"
+    Dim redovi As Variant
+
+    ' --- dok ciklus traje: tekuca generacija postoji, objavljena NE ---
+    redovi = modGoogleSyncOrchestrator.MasterSyncControlRedovi(True, "u toku", CIKLUS, False)
+
+    AssertEquals "YES", SyncControlVrednost(redovi, "MASTER_SYNC_LOCK"), _
+        "OTPVOZ-4 preduslov: dok ciklus traje upis je zakljucan"
+    AssertEquals CIKLUS, SyncControlVrednost(redovi, "MASTER_SYNC_CYCLE_ID"), _
+        "OTPVOZ-4: tekuca generacija je upisana i dok ciklus traje"
+    AssertEquals "", SyncControlVrednost(redovi, "OTPREMNICE_PUBLISHED_CYCLE_ID"), _
+        "OTPVOZ-4: dok ciklus traje objavljena generacija je PRAZNA"
+
+    ' --- ciklus zavrsen, izvoz uspeo: objava se sme dokazati ---
+    redovi = modGoogleSyncOrchestrator.MasterSyncControlRedovi(False, "gotovo", CIKLUS, True)
+
+    AssertEquals "NO", SyncControlVrednost(redovi, "MASTER_SYNC_LOCK"), _
+        "OTPVOZ-4 preduslov: posle ciklusa je upis otkljucan"
+    AssertEquals CIKLUS, SyncControlVrednost(redovi, "OTPREMNICE_PUBLISHED_CYCLE_ID"), _
+        "OTPVOZ-4: posle uspesnog izvoza objavljena generacija je BAS taj ciklus"
+
+    ' --- ciklus zavrsen, izvoz PAO: otkljucano nije objavljeno ---
+    redovi = modGoogleSyncOrchestrator.MasterSyncControlRedovi(False, "gotovo", CIKLUS, False)
+
+    AssertEquals "NO", SyncControlVrednost(redovi, "MASTER_SYNC_LOCK"), _
+        "OTPVOZ-4 preduslov: i posle palog izvoza je upis otkljucan"
+    AssertEquals "", SyncControlVrednost(redovi, "OTPREMNICE_PUBLISHED_CYCLE_ID"), _
+        "OTPVOZ-4: otkljucano ali PAO izvoz -> objavljena generacija ostaje prazna"
+
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    LogFatal "Test_OTPVOZ_ObjavaSeDokazujeIzvozom", eN, eD
+End Sub
+
+' ZBIRNA SE SASTAVLJA OD OTPREMNICA KOJE JE VOZAC POSLAO (S5-4b-2).
+'
+' Dve otpremnice u spisku daju clanstvo od TACNO te dve. Meri se i broj i
+' identitet: test koji bi brojao samo clanove prosao bi i da su izvori zamenjeni
+' tudjim dokumentima.
+Private Sub Test_ZBR_UvozNosiTacnoPoslateOtpremnice()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, danas As Date
+    Dim otpA As String, otpB As String, zbrID As String, zbrCrid As String
+    Dim clanovi As Collection
+
+    scenario = NewScenarioCode("ZBRIDS1")
+    danas = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    otpA = ZbrPwaIzvorOtpremnica("IDSA-" & scenario, danas, TEST_VOZ_ID)
+    otpB = ZbrPwaIzvorOtpremnica("IDSB-" & scenario, danas, TEST_VOZ_ID)
+    zbrCrid = "CRID-ZBRIDS-" & scenario
+
+    AssertTrue Len(otpA) > 0 And Len(otpB) > 0 And otpA <> otpB, _
+        "ZBR-IDS preduslov: dve razlicite izdate otpremnice"
+
+    zbrID = modMasterSync.TestHook_ImportZbirnaRowPWA( _
+                zbrCrid, TEST_VOZ_ID, TEST_KUP_ID, danas, TEST_VRSTA, TEST_SORTA, _
+                100#, "", otpA & "," & otpB)
+
+    AssertTrue Len(zbrID) > 0, "ZBR-IDS: uvoz je prosao"
+    If Len(zbrID) = 0 Then GoTo Kraj
+
+    Set clanovi = modDokumenta.IzvoriZbirne(zbrID)
+    AssertEquals "2", CStr(clanovi.count), _
+        "ZBR-IDS: clanstvo ima tacno dve otpremnice"
+
+    Dim imena As String, i As Long
+    For i = 1 To clanovi.count
+        imena = imena & "|" & Trim$(NzToText(clanovi(i)))
+    Next i
+
+    AssertTrue InStr(1, imena, otpA, vbTextCompare) > 0, _
+        "ZBR-IDS: prva poslata otpremnica JESTE clan"
+    AssertTrue InStr(1, imena, otpB, vbTextCompare) > 0, _
+        "ZBR-IDS: druga poslata otpremnica JESTE clan"
+
+    ' BROJ DODELJUJE MASTER: PWA je poslala prazno.
+    AssertTrue Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, _
+                                              COL_ZBR_BROJ)))) > 0, _
+        "ZBR-IDS: master je dodelio BrojZbirne iako ga PWA nije poslala"
+
+Kraj:
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_UvozNosiTacnoPoslateOtpremnice", eN, eD
+End Sub
+
+' DVE KAPIJE KOJE UVOZ NE SME DA PUSTI.
+'
+' Prazan spisak: zbirna bez izvora nije dokument. Tudja otpremnica: zbirna je
+' JEDAN transport JEDNOG vozaca, pa dokument drugog vozaca u njoj nije rubni
+' slucaj nego korupcija domena.
+'
+' Obe kapije zivi u kanonskom piscu, ne u uvozu -- test ih meri kroz uvoz, jer
+' to je put kojim podatak stvarno dolazi.
+Private Sub Test_ZBR_UvozOdbijaPrazanIzborITudjuOtpremnicu()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, danas As Date
+    Dim otpTudji As String, zbrID As String
+
+    scenario = NewScenarioCode("ZBRIDS2")
+    danas = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+
+    ' --- prazan spisak ---
+    zbrID = modMasterSync.TestHook_ImportZbirnaRowPWA( _
+                "CRID-ZBRPRZ-" & scenario, TEST_VOZ_ID, TEST_KUP_ID, danas, _
+                TEST_VRSTA, TEST_SORTA, 100#, "", "")
+
+    AssertEquals "", zbrID, _
+        "ZBR-IDS: prazan OtpremnicaIDs ne pravi zbirnu"
+
+    ' --- otpremnica drugog vozaca ---
+    otpTudji = ZbrPwaIzvorOtpremnica("IDSX-" & scenario, danas, TEST_VOZ_ID_B)
+    AssertTrue Len(otpTudji) > 0, "ZBR-IDS preduslov: otpremnica drugog vozaca postoji"
+
+    zbrID = modMasterSync.TestHook_ImportZbirnaRowPWA( _
+                "CRID-ZBRTUD-" & scenario, TEST_VOZ_ID, TEST_KUP_ID, danas, _
+                TEST_VRSTA, TEST_SORTA, 100#, "", otpTudji)
+
+    AssertEquals "", zbrID, _
+        "ZBR-IDS: otpremnica DRUGOG vozaca ne ulazi u zbirnu"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_ZBR_UvozOdbijaPrazanIzborITudjuOtpremnicu", eN, eD
+End Sub
 
 ' KAPIJA PUSTA SCOPED IZBOR -- NAD PRIMITIVOM (vraceno u S5-3b).
 '
@@ -8599,8 +13943,12 @@ Private Sub Test_OTP_F8StornoPoID()
     ' Potvrda opisuje BAS B: njena kilaza, ne zbir oba dokumenta istog broja.
     Dim opis As String
     opis = modStornoDok.DokumentOpis(STIP_OTPREMNICA, broj, "", idB)
+    ' NEGATIVNA TVRDNJA MORA BITI USIDRENA. Golo "650" pogadja i BROJ
+    ' DOKUMENTA (npr. ...-1650), pa je tvrdnja pucala bez ijedne poslovne
+    ' greske cim bi brojac pao na takav broj. Meri se kilaza, pa i sidro
+    ' mora da bude kilaza.
     AssertTrue InStr(1, opis, "250 kg", vbTextCompare) > 0 And _
-               InStr(1, opis, "650", vbTextCompare) = 0, _
+               InStr(1, opis, "650 kg", vbTextCompare) = 0, _
                "OTP F8: potvrda pokazuje samo B kg (bilo: " & opis & ")"
 
     Dim poruka As String
@@ -9487,9 +14835,23 @@ Private Sub Test_OTP_IspravkaIzdate()
     Dim nova As String
     nova = modDokumenta.IspravkaOtpremnice_TX(izdata, gr)
     AssertTrue Len(nova) > 0, "Ispravka: izdata otpremnica ispravljena (" & gr & ")"
+
+    ' TVRDNJA O STORNU STOJI PRED RANOM IZLAZNOM TACKOM, ne za njom.
+    '
+    ' Sabotaza `ispravka-ne-stornira-staru` gasi bas poziv StornoOtpremnica, a
+    ' posledica NIJE "dve aktivne otpremnice": OtpRequireIzvorValjan odbije novu
+    ' jer je izvor jos u sastavu aktivne stare -- ista veza koju OtpIspravi
+    ' imenuje u svom komentaru (storno stare IDE PRE nego sto nova primi izvore).
+    ' Ceo poziv zato padne i vrati "".
+    '
+    ' Dok je ova tvrdnja stajala POSLE `GoTo Kraj`, sabotaza je nije dosegla:
+    ' padala je samo tvrdnja da je ispravka USPELA, a to je POSLEDICA, ne razlog
+    ' (dokaz.py 05.10.2026: NE OBARA SVOJ TEST). Vrednost koju ova tvrdnja cita
+    ' postoji i kad poziv padne -- rollback vrati staru u AKTIVNO -- pa tada cita
+    ' "" umesto "Da" i puca PO IMENU, imenujuci tacno ono sto je ugaseno.
+    AssertEquals "Da", OtpPolje(izdata, COL_STORNIRANO), "Ispravka: stara je stornirana"
     If Len(nova) = 0 Then GoTo Kraj
 
-    AssertEquals "Da", OtpPolje(izdata, COL_STORNIRANO), "Ispravka: stara je stornirana"
     AssertEquals IZDATO_DRAFT, OtpPolje(nova, COL_TRACE_IZDATO_STATUS), _
                  "Ispravka: nova je NACRT"
     AssertTrue OtpPolje(nova, COL_OTP_BROJ) <> brStari, "Ispravka: nova nosi NOV broj"
@@ -9662,159 +15024,201 @@ EH:
 End Sub
 
 ' ============================================================
-' S3d -- AUTO-LANAC HLADNJACE, korak otpremnice (A-014).
+' S6 KORAK 7 -- HLADNJACKI LANAC, CEO (HLD-LANAC-01, A-014; plan 14.55
+' "Korak 7", R2, R3, R5a, R12).
 '
 ' Roba koju proizvodjac doveze DIREKTNO u hladnjacu meri se na prijemu, pa je
-' otpremnica 1:1 sa otkupnim listom -- po KLASI, ne samo u totalu -- i nema sta
-' da ceka: nastaje i izdaje se odmah, sa vozacem-ogledalom stanice kao proxyjem
-' (taj prevoz nema firminog vozaca).
+' lanac OTK -> OTP -> ZBR -> PRJ 1:1 po KLASI, ne samo u totalu: svaki nivo
+' izvodi stavke iz svog kanonskog roditelja i vezuje se za njega po ID-u. Vozac
+' je ogledalo stanice (taj prevoz nema firminog vozaca), kupac je hladnjaca
+' (MALINA_DEFAULT_KUPAC), cena prijemnice je cena otkupa te klase, a sva cetiri
+' dokumenta nose datum otkupa. Knjiga: noga punih na otpremnici (stanica ->
+' ogledalo) i na prijemnici (ogledalo -> kupac), pa je saldo ogledala posle
+' lanca isti kao pre njega.
+'
+' Prekidaca nema (odluka 2): fixture nosi prazan AUTO_PRIJEMNICA_HLADNJACA, a
+' lanac mora da radi. Fixture nema ni MALINA_DEFAULT_KUPAC: test ga postavlja i
+' vraca. Sve ide u transakciji testa koja se na kraju vraca -- sinteticki lanac
+' ne sme da ostane u tudjem merenju (KI-045).
+'
+' Nizvodno (R12): prijemnica ima palete po stavci, faktura nad jednom stavkom je
+' cini DELIMICNO fakturisanom sa cenom otkupa, a F8 PONISTENJE (posle storna
+' fakture) obara prijemnicu, zbirnu i otpremnicu i oslobadja blok. Pre toga se
+' meri trag brisanja KI-046 (R2): storno bloka iz kompletnog lanca odbija A13,
+' sa razlogom koji imenuje otpremnicu.
 '
 ' Meri se i sta lanac NE sme:
-'   - da radi dok prekidac nije ukljucen (jedan autoritet nad aktivacijom);
-'   - da ga aktivan RUCNI nacrt presretne -- hladnjacki blok je obavezan da ide
-'     u svoj lanac, inace bi zavrsio kao clan tudje otpremnice sa drugom kilazom;
-'   - da se pokrene dvaput za isti blok (zastita od dupliranja);
-'   - da dira obicnu stanicu ili storniran blok.
+'   - da ga aktivan RUCNI nacrt presretne;
+'   - da se ponovi nad kompletnim lancem (ponovljen poziv je tih, R5a);
+'   - da dira obicnu stanicu ili storniran blok;
+'   - da pusti hladnjacki blok u rucno vezivanje.
+' SABOTAZE: s6k7-lanac-staje-posle-otp, s6k7-prj-kolicina-ne-iz-zbirne,
+' s6k7-cena-nije-iz-otkupa, s6k7-storno-bloka-u-lancu-prolazi,
+' s6k7-dupla-prijemnica, lanac-storniran-blok, lanac-i-na-obicnoj-stanici,
+' lanac-put-tiho-false, veza-hladnjackog-bloka-rucno.
 ' ============================================================
 Private Sub Test_HLD_AutoLanacOtpremnica()
+    Dim tx As clsTransaction, prevKupac As String, prevPal As String, prevAkt As String
     On Error GoTo EH
 
-    Dim scenario As String, izvestaj As String, g As String, prevCfg As String
+    Dim scenario As String, izvestaj As String, g As String, r As String
     scenario = NewScenarioCode("HLDLAN")
-    prevCfg = GetConfigValue(CFG_AUTO_PRIJEMNICA_HLADNJACA)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    prevAkt = modOtkupUI.ActiveMode
 
-    ' --- 0) PREKIDAC JE JEDAN AUTORITET -----------------------------------
-    ' Dok je iskljucen (default do S6), hladnjacki blok ide radnim stolom kao i
-    ' svaki drugi: ni lanca ni poruke. Stanica kaze KOJI blok, prekidac DA LI.
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, "Ne"
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    SetConfigValue CFG_PALETIRANJE, "DA"
 
-    Dim ugasen As String
-    ugasen = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLD0-" & scenario, TEST_HLAD_ST_ID), _
-                            OtkStavke(30#, 100#, 3, 0#, 0#, 0))
-    AssertTrue Len(ugasen) > 0, "Lanac: blok za provereni prekidac upisan"
-    AssertTrue Not modAutoHladnjaca.LanacVaziZaBlok(ugasen), _
-               "Lanac: iskljucen prekidac ne pusta blok u lanac"
-    izvestaj = "x"
-    AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(ugasen, izvestaj), _
-                 "Lanac: iskljucen prekidac ne pravi otpremnicu"
-    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(ugasen), _
-                 "Lanac: blok ostaje nevezan dok je prekidac iskljucen"
-
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, "Da"
-
-    ' --- 1) hladnjacka stanica -> izdata otpremnica 1:1 -------------------
-    Dim blok As String, otpID As String
-    blok = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDA-" & scenario, TEST_HLAD_ST_ID), _
-                          OtkStavke(70#, 100#, 7, 0#, 0#, 0))
-    AssertTrue Len(blok) > 0, "Lanac: blok na hladnjackoj stanici upisan"
-    If Len(blok) = 0 Then GoTo Kraj
-
+    ' --- 1) DVOKLASNI BLOK: CEO LANAC, 1:1 PO KLASI (R3) -------------------
+    Dim datum As Date, blok As String, prj As String, otpID As String, zbrID As String
+    Dim brOtp As String, brZbr As String, brPrj As String, ogPre As Double
+    datum = NextTestDate()
+    blok = HldBlok("HLDA-" & scenario, TEST_HLAD_ST_ID, datum, 70#, 100#, 7, 25#, 90#, 3)
+    AssertTrue Len(blok) > 0, "Lanac: dvoklasni blok na hladnjackoj stanici upisan"
     AssertTrue modAutoHladnjaca.LanacVaziZaBlok(blok), "Lanac: hladnjacki blok ide u lanac"
-    otpID = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
-    AssertTrue Len(otpID) > 0, "Lanac: otpremnica je napravljena (" & izvestaj & ")"
-    If Len(otpID) = 0 Then GoTo Kraj
+    ogPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_HLAD_ST_ID, TEST_TIP_AMB)
 
-    AssertEquals IZDATO_IZDATO, OtpPolje(otpID, COL_TRACE_IZDATO_STATUS), _
-                 "Lanac: otpremnica je odmah IZDATA"
-    AssertEquals TEST_HLAD_ST_ID, OtpPolje(otpID, COL_OTP_VOZAC), _
-                 "Lanac: vozac je ogledalo stanice"
-    AssertEquals TEST_HLAD_ST_ID, OtpPolje(otpID, COL_OTP_STANICA), _
-                 "Lanac: otpremnica je na stanici bloka"
-    AssertEquals otpID, modDokumenta.OtpremnicaZaOtkup(blok), _
-                 "Lanac: blok je izvor te otpremnice"
+    izvestaj = ""
+    If Len(blok) > 0 Then prj = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    otpID = HldOtp(blok)
+    zbrID = HldZbr(otpID)
+    brOtp = HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)
+    brZbr = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)
+    brPrj = HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_BROJ)
 
-    Dim prog As Object, kl As Object
-    Set prog = modDokumenta.GetOtpremnicaProgress(otpID)
-    AssertTrue prog.Exists(KLASA_I), "Lanac: otpremnica ima klasu I"
-    If prog.Exists(KLASA_I) Then
-        Set kl = prog(KLASA_I)
-        AssertEquals "70", CStr(kl("ocekivano")), "Lanac: kilaza je 1:1 sa blokom"
-        AssertEquals "7", CStr(kl("ocekivanoAmb")), "Lanac: ambalaza je 1:1 sa blokom"
-        AssertEquals "0", CStr(kl("preostalo")), "Lanac: nema ostatka (nema sta da se dovezuje)"
-    End If
+    AssertEquals "True|" & UCase$(prj), CStr(Len(prj) > 0) & "|" & UCase$(HldPrj(zbrID)), _
+                 "Lanac: jedan poziv kompletira lanac i vraca PrijemnicaID"
+    AssertEquals IZDATO_IZDATO & "|" & TEST_HLAD_ST_ID & "|" & TEST_HLAD_ST_ID, _
+                 HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_TRACE_IZDATO_STATUS) & "|" & _
+                 HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA) & "|" & _
+                 HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VOZAC), _
+                 "Lanac: otpremnica je IZDATA, na stanici bloka, vozac je ogledalo"
+    AssertEquals "True|" & TEST_KUP_ID & "|" & TEST_HLAD_ST_ID & "|" & UCase$(otpID), _
+                 HldZbrIzdata(zbrID) & "|" & _
+                 HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_KUPAC) & "|" & _
+                 HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_VOZAC) & "|" & _
+                 HldIzvorZbirne(zbrID), _
+                 "Lanac: zbirna je IZDATA, kupac hladnjace, vozac ogledalo, clan je ta otpremnica"
+    AssertEquals "True|" & TEST_KUP_ID & "|" & TEST_HLAD_ST_ID & "|" & UCase$(zbrID) & "|" & brZbr, _
+                 CStr(Len(zbrID) > 0) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_KUPAC) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_VOZAC) & "|" & _
+                 UCase$(HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_DETE_ZBIRNA_ROD)) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_BROJ_ZBIRNE), _
+                 "Lanac: prijemnica -- kupac hladnjace, vozac ogledalo, roditelj je ta zbirna po ID-u"
+    AssertEquals modBrojevi.FormatBroj(TEST_HLAD_ST_ID, datum, 1) & "|" & _
+                 modBrojevi.ApplyMirrorPrefix(TEST_HLAD_ST_ID, _
+                                              modBrojevi.FormatBroj(TEST_HLAD_ST_ID, datum, 1)) & "|" & _
+                 modBrojevi.FormatBroj("1", datum, 1), _
+                 brOtp & "|" & brZbr & "|" & brPrj, _
+                 "Lanac: broj otpremnice iz niza stanice, zbirne iz niza ogledala, prijemnice iz niza hladnjace"
+    AssertEquals "I:70/7|II:25/3", HldKlaseOtp(otpID), "Lanac: otpremnica je 1:1 po klasi sa blokom"
+    AssertEquals "I:70/7|II:25/3", HldKlaseZbr(zbrID), "Lanac: zbirna je 1:1 po klasi sa otpremnicom"
+    AssertEquals "I:70/7|II:25/3", HldKlasePrj(prj), "Lanac: prijemnica je 1:1 po klasi sa zbirnom"
+    AssertEquals "I:100|II:90", HldCenePrj(prj), "Lanac: cena stavke prijemnice je cena otkupa te klase"
+    AssertEquals "|" & Format$(datum, "yyyy-mm-dd") & "|" & Format$(datum, "yyyy-mm-dd") & "|" & _
+                 Format$(datum, "yyyy-mm-dd") & "|" & Format$(datum, "yyyy-mm-dd") & "|", _
+                 "|" & HldDatum(TBL_OTKUP, COL_OTK_ID, blok, COL_OTK_DATUM) & "|" & _
+                 HldDatum(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM) & "|" & _
+                 HldDatum(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_DATUM) & "|" & _
+                 HldDatum(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_PRJ_DATUM) & "|", _
+                 "Lanac: sva cetiri dokumenta nose datum otkupa"
+    AssertEquals "1|10|1|10", HldNoga(otpID, DOK_TIP_OTPREMNICA) & "|" & HldNoga(prj, DOK_TIP_PRIJEMNICA), _
+                 "Lanac: knjiga -- jedna noga punih na otpremnici i jedna na prijemnici, po 10 gajbi"
+    AssertEquals CStr(ogPre), CStr(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_HLAD_ST_ID, TEST_TIP_AMB)), _
+                 "Lanac: saldo ogledala posle lanca je isti kao pre njega"
+    AssertTrue Len(brOtp) > 0 And Len(brZbr) > 0 And Len(brPrj) > 0 And _
+               HldImaBroj(izvestaj, brOtp) And HldImaBroj(izvestaj, brZbr) And HldImaBroj(izvestaj, brPrj), _
+               "Lanac: izvestaj nosi brojeve otpremnice, zbirne i prijemnice"
 
-    ' Zastita od dupliranja: ponovljen poziv nad istim blokom ne pravi drugu.
+    ' --- 2) PONOVLJEN POZIV NAD KOMPLETNIM LANCEM JE TIH (R5a) --------------
+    Dim nOtp As Long, nZbr As Long, nPrj As Long, ponovo As String
+    nOtp = Pr3BrojRedova(TBL_OTPREMNICA)
+    nZbr = Pr3BrojRedova(TBL_ZBIRNA)
+    nPrj = Pr3BrojRedova(TBL_PRIJEMNICA)
     izvestaj = "x"
-    AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj), _
-                 "Lanac: ponovljen poziv ne pravi drugu otpremnicu"
+    ponovo = "x"
+    If Len(blok) > 0 Then ponovo = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertEquals "||0|0|0", ponovo & "|" & izvestaj & "|" & _
+                 CStr(Pr3BrojRedova(TBL_OTPREMNICA) - nOtp) & "|" & _
+                 CStr(Pr3BrojRedova(TBL_ZBIRNA) - nZbr) & "|" & _
+                 CStr(Pr3BrojRedova(TBL_PRIJEMNICA) - nPrj), _
+                 "Lanac: ponovljen poziv nad kompletnim lancem ne pravi nista i ne javlja nista"
 
-    ' --- 2) OBAVEZNOST: rucni nacrt NE presrece hladnjacki blok -----------
-    ' Ovo je jezgro odluke: da je blok prvo ponudjen radnom stolu, zavrsio bi kao
-    ' clan tudje otpremnice sa sasvim drugom kilazom, a lanac se ne bi pokrenuo.
-    Dim nacrt As String, blok2 As String, otp2 As String, prev As String
-    prev = modOtkupUI.ActiveMode
+    ' --- 3) DRUGI BLOK ISTE STANICE ISTOG DANA, SAMO KLASA II ---------------
+    ' Jedan blok = jedan lanac: drugi blok istog dana je drugi lanac, pa nosi
+    ' sledeci broj u nizu stanice i u nizu hladnjace.
+    Dim blokII As String, prjII As String
+    blokII = HldBlok("HLDK-" & scenario, TEST_HLAD_ST_ID, datum, 0#, 0#, 0, 25#, 90#, 3)
+    If Len(blokII) > 0 Then prjII = modAutoHladnjaca.AutoLanacHladnjaca(blokII, izvestaj)
+    AssertEquals "II:25/3", HldKlasePrj(prjII), _
+                 "Lanac: jednoklasni blok (samo II) daje prijemnicu samo sa klasom II"
+    AssertEquals modBrojevi.FormatBroj(TEST_HLAD_ST_ID, datum, 2) & "|" & modBrojevi.FormatBroj("1", datum, 2), _
+                 HldPolje(TBL_OTPREMNICA, COL_OTP_ID, HldOtp(blokII), COL_OTP_BROJ) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjII, COL_PRJ_BROJ), _
+                 "Lanac: drugi blok iste stanice istog dana je drugi lanac (brojevi -2)"
+
+    ' --- 4) BLOK BEZ GAJBI: lanac bez nogu knjige i bez paleta --------------
+    Dim blokG As String, prjG As String
+    blokG = HldBlok("HLDG-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 12#, 100#, 0, 0#, 0#, 0)
+    If Len(blokG) > 0 Then prjG = modAutoHladnjaca.AutoLanacHladnjaca(blokG, izvestaj)
+    AssertEquals "True|0|0", CStr(Len(prjG) > 0) & "|" & CStr(S6AmbBroj(prjG, AMB_VK_UZ_ROBU)) & "|" & _
+                 CStr(S6GajbiNaPaletama(prjG, "")), _
+                 "Lanac: blok bez gajbi daje lanac bez nogu knjige i bez paleta"
+
+    ' --- 5) OBAVEZNOST: rucni nacrt NE presrece hladnjacki blok -------------
+    ' Da je blok prvo ponudjen radnom stolu, zavrsio bi kao clan tudje
+    ' otpremnice sa sasvim drugom kilazom, a lanac se ne bi pokrenuo.
+    Dim nacrt As String, blok2 As String, prj2 As String, otp2 As String, aktiv As String
     modOtkupUI.ActiveMode = "F1"
     nacrt = CreateOtpremnicaDraft_TX(OtpHeaderNaStanici(TEST_PREFIX & "-OTP-HLDN-" & scenario, TEST_HLAD_ST_ID), _
                                      OtpOcek(1500#, 150#, 0#, 0#), g)
-    AssertTrue Len(nacrt) > 0, "Lanac: rucni nacrt napravljen (" & g & ")"
-    If Len(nacrt) > 0 Then
-        AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(nacrt), "Lanac: rucni nacrt je aktivan"
-        blok2 = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDB-" & scenario, TEST_HLAD_ST_ID), _
-                               OtkStavke(40#, 100#, 4, 0#, 0#, 0))
-        AssertTrue modAutoHladnjaca.LanacVaziZaBlok(blok2), _
-                   "Lanac: hladnjacki blok ide u lanac i kad je rucni nacrt aktivan"
-        otp2 = modAutoHladnjaca.AutoLanacHladnjaca(blok2, izvestaj)
-        AssertTrue Len(otp2) > 0, "Lanac: blok dobija svoj lanac uprkos aktivnom nacrtu (" & izvestaj & ")"
-        AssertTrue otp2 <> nacrt, "Lanac: to je sopstvena otpremnica, ne rucni nacrt"
-        AssertEquals otp2, modDokumenta.OtpremnicaZaOtkup(blok2), _
-                     "Lanac: blok je u svojoj otpremnici, ne u nacrtu"
-    End If
+    aktiv = "<nema nacrta>"
+    If Len(nacrt) > 0 Then aktiv = modScrDokumenti.AktivirajOtpremnicu(nacrt)
+    AssertEquals "", aktiv, "Lanac: rucni nacrt je aktivan"
+    blok2 = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDB-" & scenario, TEST_HLAD_ST_ID), _
+                           OtkStavke(40#, 100#, 4, 0#, 0#, 0))
+    AssertTrue modAutoHladnjaca.LanacVaziZaBlok(blok2), _
+               "Lanac: hladnjacki blok ide u lanac i kad je rucni nacrt aktivan"
+    If Len(blok2) > 0 Then prj2 = modAutoHladnjaca.AutoLanacHladnjaca(blok2, izvestaj)
+    otp2 = HldOtp(blok2)
+    AssertTrue Len(prj2) > 0 And Len(otp2) > 0 And otp2 <> nacrt, _
+               "Lanac: blok dobija svoj lanac uprkos aktivnom nacrtu, ne rucni nacrt"
     RadniStoPocetno
-    modOtkupUI.ActiveMode = prev
+    modOtkupUI.ActiveMode = prevAkt
 
-    ' --- 3) DVE KLASE: raspodela po klasi je ista, ne samo total ----------
-    Dim dveKlase As String, otp3 As String
-    dveKlase = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDF-" & scenario, TEST_HLAD_ST_ID), _
-                              OtkStavke(70#, 100#, 7, 25#, 90#, 3))
-    otp3 = modAutoHladnjaca.AutoLanacHladnjaca(dveKlase, izvestaj)
-    AssertTrue Len(otp3) > 0, "Lanac: dvoklasni blok je dobio otpremnicu (" & izvestaj & ")"
-    If Len(otp3) > 0 Then
-        Set prog = modDokumenta.GetOtpremnicaProgress(otp3)
-        AssertTrue prog.Exists(KLASA_I) And prog.Exists(KLASA_II), _
-                   "Lanac: otpremnica nosi obe klase"
-        If prog.Exists(KLASA_I) Then
-            Set kl = prog(KLASA_I)
-            AssertEquals "70", CStr(kl("ocekivano")), "Lanac: klasa I je 1:1 sa blokom"
-            AssertEquals "7", CStr(kl("ocekivanoAmb")), "Lanac: ambalaza klase I je 1:1"
-        End If
-        If prog.Exists(KLASA_II) Then
-            Set kl = prog(KLASA_II)
-            AssertEquals "25", CStr(kl("ocekivano")), "Lanac: klasa II je 1:1 sa blokom"
-            AssertEquals "3", CStr(kl("ocekivanoAmb")), "Lanac: ambalaza klase II je 1:1"
-        End If
-    End If
-
-    ' --- 4) obicna stanica se ne dira -------------------------------------
+    ' --- 6) obicna stanica se ne dira -------------------------------------
     Dim obican As String
     obican = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-HLDC-" & scenario), _
                             OtkStavke(20#, 100#, 2, 0#, 0#, 0))
     izvestaj = "x"
     AssertTrue Not modAutoHladnjaca.LanacVaziZaBlok(obican), "Lanac: obicna stanica nema auto-lanac"
-    AssertEquals "", modAutoHladnjaca.AutoLanacHladnjaca(obican, izvestaj), _
-                 "Lanac: obicna stanica ne dobija otpremnicu"
-    AssertEquals "", modDokumenta.OtpremnicaZaOtkup(obican), _
-                 "Lanac: blok obicne stanice ostaje nevezan"
+    r = "x"
+    If Len(obican) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(obican, izvestaj)
+    AssertEquals "|", r & "|" & izvestaj, "Lanac: obicna stanica ne dobija lanac i ne javlja nista"
+    AssertEquals "", HldOtp(obican), "Lanac: blok obicne stanice ostaje nevezan"
 
-    ' --- 5) hladnjaca BEZ ogledala: lanac ga napravi, ne staje -----------
+    ' --- 7) hladnjaca BEZ ogledala: lanac ga napravi, ne staje -------------
     ' Ogledalo nije podatak o coveku nego proxy za stanicu, pa ga lanac trazi
     ' kanonskim idempotentnim upisom. Van malina rezima ovo je JEDINI put koji ga
     ' za hladnjacu pravi -- bez toga bi lanac tamo uvek stajao.
-    Dim bezOgledala As String, otp5 As String
+    Dim bezOgledala As String, prj5 As String
     AssertTrue Not modMalina.IsManagedStationMirror(TEST_HLAD2_ST_ID), _
                "Lanac: druga hladnjacka stanica pocinje bez ogledala"
     bezOgledala = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDD-" & scenario, TEST_HLAD2_ST_ID), _
                                  OtkStavke(10#, 100#, 1, 0#, 0#, 0))
-    izvestaj = ""
-    otp5 = modAutoHladnjaca.AutoLanacHladnjaca(bezOgledala, izvestaj)
-    AssertTrue Len(otp5) > 0, "Lanac: ogledalo nastaje kroz lanac (" & izvestaj & ")"
+    If Len(bezOgledala) > 0 Then prj5 = modAutoHladnjaca.AutoLanacHladnjaca(bezOgledala, izvestaj)
+    AssertTrue Len(prj5) > 0, "Lanac: ogledalo nastaje kroz lanac i lanac se kompletira"
     AssertTrue modMalina.IsManagedStationMirror(TEST_HLAD2_ST_ID), _
                "Lanac: posle lanca stanica ima svoje ogledalo"
-    If Len(otp5) > 0 Then
-        AssertEquals TEST_HLAD2_ST_ID, OtpPolje(otp5, COL_OTP_VOZAC), _
-                     "Lanac: vozac je ogledalo bas te stanice"
-    End If
+    AssertEquals TEST_HLAD2_ST_ID, HldPolje(TBL_OTPREMNICA, COL_OTP_ID, HldOtp(bezOgledala), COL_OTP_VOZAC), _
+                 "Lanac: vozac je ogledalo bas te stanice"
 
-    ' --- 6) storniran blok nema sta da nosi -------------------------------
+    ' --- 8) storniran blok nema sta da nosi -------------------------------
     Dim stornirani As String
     stornirani = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDE-" & scenario, TEST_HLAD_ST_ID), _
                                 OtkStavke(15#, 100#, 1, 0#, 0#, 0))
@@ -9826,7 +15230,7 @@ Private Sub Test_HLD_AutoLanacOtpremnica()
                  "Lanac: storniran blok ne pokrece lanac"
     AssertEquals "", izvestaj, "Lanac: storniran blok ne javlja nista"
 
-    ' --- 7) "NE ZNAM" NIJE "NIJE HLADNJACA" -------------------------------
+    ' --- 9) "NE ZNAM" NIJE "NIJE HLADNJACA" -------------------------------
     ' Razvodnica bira izmedju OBAVEZNOG lanca i rucnog toka, pa neizvesnost ne
     ' sme da padne na rucnu stranu: hladnjacki blok bi tiho zavrsio u tudjem
     ' nacrtu. Stanica bloka se kvari MIMO pisca, pa se vraca -- kontrola posle
@@ -9855,11 +15259,9 @@ Private Sub Test_HLD_AutoLanacOtpremnica()
         End If
     End If
 
-    ' --- 8) ROUTER PO STANICI: odluka PRE nego sto blok postoji -----------
+    ' --- 10) ROUTER PO STANICI: odluka PRE nego sto blok postoji ----------
     ' Ekran ovim grana pre potvrde prekoracenja: hladnjacki blok ne podleze
     ' ogranicenju tudjeg rucnog nacrta, pa mu se to pitanje i ne postavlja.
-    ' (Da se pitalo, operater bi na "Ne" izgubio ceo upis zbog dokumenta sa
-    ' kojim blok nema veze.)
     Dim stGreska As String
     stGreska = "x"
     AssertTrue modAutoHladnjaca.LanacVaziZaStanicu(TEST_HLAD_ST_ID, stGreska), _
@@ -9877,47 +15279,94 @@ Private Sub Test_HLD_AutoLanacOtpremnica()
     AssertTrue Len(stGreska) > 0, _
                "Lanac: nepoznata stanica vraca RAZLOG i u routeru po stanici"
 
-    ' --- 9) HLADNJACKI BLOK SE NE VEZUJE RUCNO ----------------------------
+    ' --- 11) HLADNJACKI BLOK SE NE VEZUJE RUCNO ---------------------------
     ' Oporavak posle pale automatike je "otkloni uzrok pa PONOVI lanac", a ne
     ' "veze ga za prvu otvorenu otpremnicu" -- inace se obavezan lanac zaobilazi
     ' jednim klikom iz liste "Bez otpremnice". Kapija je na granici radnje.
     Dim rucni As String, hldSlobodan As String, obicanSlobodan As String, razlog As String
-    prev = modOtkupUI.ActiveMode
+    Dim prjSlob As String
     modOtkupUI.ActiveMode = "F1"
     rucni = CreateOtpremnicaDraft_TX(OtpHeaderNaStanici(TEST_PREFIX & "-OTP-HLDR-" & scenario, TEST_ST_ID), _
                                      OtpOcek(100#, 10#, 0#, 0#), g)
-    AssertTrue Len(rucni) > 0, "Lanac: rucni nacrt za vezivanje napravljen (" & g & ")"
-    If Len(rucni) > 0 Then
-        AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(rucni), _
-                     "Lanac: rucni nacrt je aktivan (vezivanje)"
+    aktiv = "<nema nacrta>"
+    If Len(rucni) > 0 Then aktiv = modScrDokumenti.AktivirajOtpremnicu(rucni)
+    AssertEquals "", aktiv, "Lanac: rucni nacrt je aktivan (vezivanje)"
 
-        hldSlobodan = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDI-" & scenario, TEST_HLAD2_ST_ID), _
-                                     OtkStavke(8#, 100#, 1, 0#, 0#, 0))
-        razlog = modScrDokumenti.VeziZaAktivnu(hldSlobodan)
-        AssertTrue Len(razlog) > 0, "Lanac: hladnjacki blok se ne vezuje rucno"
-        AssertEquals "", modDokumenta.OtpremnicaZaOtkup(hldSlobodan), _
-                     "Lanac: odbijen blok nije zavrsio u rucnom nacrtu"
+    hldSlobodan = CreateOtkup_TX(OtkHeaderNaStanici(TEST_PREFIX & "-OTK-HLDI-" & scenario, TEST_HLAD2_ST_ID), _
+                                 OtkStavke(8#, 100#, 1, 0#, 0#, 0))
+    razlog = modScrDokumenti.VeziZaAktivnu(hldSlobodan)
+    AssertTrue Len(razlog) > 0, "Lanac: hladnjacki blok se ne vezuje rucno"
+    AssertEquals "", HldOtp(hldSlobodan), "Lanac: odbijen blok nije zavrsio u rucnom nacrtu"
 
-        ' Kontrola: obican blok se vezuje normalno -- kapija gadja bas hladnjacu.
-        obicanSlobodan = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-HLDJ-" & scenario), _
-                                        OtkStavke(9#, 100#, 1, 0#, 0#, 0))
-        AssertEquals "", modScrDokumenti.VeziZaAktivnu(obicanSlobodan), _
-                     "Lanac: obican blok se i dalje vezuje rucno"
+    ' Kontrola: obican blok se vezuje normalno -- kapija gadja bas hladnjacu.
+    obicanSlobodan = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-HLDJ-" & scenario), _
+                                    OtkStavke(9#, 100#, 1, 0#, 0#, 0))
+    AssertEquals "", modScrDokumenti.VeziZaAktivnu(obicanSlobodan), _
+                 "Lanac: obican blok se i dalje vezuje rucno"
 
-        ' Oporavak: ponavljanje lanca nad tim istim blokom uspeva.
-        izvestaj = ""
-        AssertTrue Len(modAutoHladnjaca.AutoLanacHladnjaca(hldSlobodan, izvestaj)) > 0, _
-                   "Lanac: odbijen blok se oporavlja ponavljanjem lanca (" & izvestaj & ")"
-    End If
+    ' Oporavak: ponavljanje lanca nad tim istim blokom uspeva.
+    izvestaj = ""
+    If Len(hldSlobodan) > 0 Then prjSlob = modAutoHladnjaca.AutoLanacHladnjaca(hldSlobodan, izvestaj)
+    AssertTrue Len(prjSlob) > 0, "Lanac: odbijen blok se oporavlja ponavljanjem lanca"
     RadniStoPocetno
-    modOtkupUI.ActiveMode = prev
+    modOtkupUI.ActiveMode = prevAkt
 
-Kraj:
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
+    ' --- 12) NIZVODNO (R12) I TRAG BRISANJA KI-046 (R2) --------------------
+    Dim stI As String, stII As String, fid As String
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    AssertEquals "7|3", CStr(S6GajbiNaPaletama(prj, stI)) & "|" & CStr(S6GajbiNaPaletama(prj, stII)), _
+                 "Lanac: palete nose gajbe svake stavke prijemnice"
+    If Len(stI) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stI)
+    AssertEquals "DELIM", S6K5Fakturisanost(prj), _
+                 "Lanac: faktura nad stavkom I cini prijemnicu delimicno fakturisanom"
+    AssertEquals stI & "|I|70|100", S6K5Linije(fid), _
+                 "Lanac: linija fakture nosi kolicinu i cenu otkupa klase I"
+
+    ' A13: blok iz kompletnog lanca se ne stornira. Razlog daje jezgro storna
+    ' (StornoOtkup) u transakciji koja se vraca; pravi ulaz (StornoOtkup_TX) se
+    ' zove samo nad blokom koji JE u otpremnici.
+    Dim razlogA13 As String, storniran As Boolean
+    razlogA13 = HldRazlogStornaBloka(blok)
+    If Len(otpID) > 0 Then storniran = StornoOtkup_TX(blok)
+    AssertTrue Len(otpID) > 0 And Not storniran And Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, blok), _
+               "Lanac: storno bloka iz kompletnog lanca je odbijen, blok ostaje aktivan (A13)"
+    AssertTrue Len(otpID) > 0 And InStr(1, razlogA13, otpID, vbTextCompare) > 0, _
+               "Lanac: razlog odbijenog storna bloka imenuje otpremnicu lanca"
+
+    ' F8 PONISTENJE: fakturisana prijemnica se ne stornira, pa faktura ide prva.
+    Dim okFak As Boolean, poruka As String, res As Object, uspeh As Boolean
+    If Len(fid) > 0 Then okFak = modStornoDok.StornoIzvrsi(STIP_FAKTURA, S6K5BrojFakture(fid), "", poruka, fid)
+    AssertTrue okFak, "Lanac: faktura auto-prijemnice se stornira (preduslov ponistenja)"
+    If okFak Then
+        Set res = modStornoFlow.RunPrijemnicaCorrection(brPrj, SV_MODE_PONISTENJE, True, False, _
+                                                        S6K4Ident(prj))
+        uspeh = CBool(res("success"))
+    End If
+    AssertTrue uspeh, "Lanac: F8 PONISTENJE auto-prijemnice prolazi"
+    AssertEquals "Da|Da|Da", HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prj, COL_STORNIRANO) & "|" & _
+                 HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_STORNIRANO) & "|" & _
+                 HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_STORNIRANO), _
+                 "Lanac: PONISTENJE obara prijemnicu, zbirnu i otpremnicu"
+    AssertTrue Len(otpID) > 0 And Len(HldOtp(blok)) = 0 And Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, blok), _
+               "Lanac: posle PONISTENJA blok je slobodan i aktivan"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_PALETIRANJE, prevPal
     Exit Sub
 EH:
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
-    LogFatal "Test_HLD_AutoLanacOtpremnica", Err.Number, Err.description
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    RadniStoPocetno
+    modOtkupUI.ActiveMode = prevAkt
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    On Error GoTo 0
+    LogFatal "Test_HLD_AutoLanacOtpremnica", eN, eD
 End Sub
 
 ' ============================================================
@@ -10060,17 +15509,16 @@ End Sub
 ' Posle upisa blok ide u hladnjacki lanac, u aktivan rucni nacrt, ili nigde.
 ' Ispravka nije nov unos, pa joj pravila rucnog nacrta ne vaze -- ali OBAVEZNI
 ' hladnjacki lanac vazi i njoj. Merilo je ovde, a ne u Scr_Save, jer Scr_Save
-' povlaci stampu i formu.
+' povlaci stampu i formu. Prekidaca vise nema (S6 korak 7, odluka 2): stanica
+' sama bira lanac, bez ikakve konfiguracije.
 ' ============================================================
 Private Sub Test_OTK_RutaPosleUpisa()
     On Error GoTo EH
 
-    Dim scenario As String, g As String, greska As String, prevCfg As String, prev As String
+    Dim scenario As String, g As String, greska As String, prev As String
     scenario = NewScenarioCode("OTKRUT")
-    prevCfg = GetConfigValue(CFG_AUTO_PRIJEMNICA_HLADNJACA)
     prev = modOtkupUI.ActiveMode
     modOtkupUI.ActiveMode = "F1"
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, "Da"
 
     Dim obican As String, hladni As String, nacrt As String
     obican = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-RUTA-" & scenario), _
@@ -10133,15 +15581,1557 @@ Private Sub Test_OTK_RutaPosleUpisa()
 
 Kraj:
     RadniStoPocetno
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
     modOtkupUI.ActiveMode = prev
     Exit Sub
 EH:
     RadniStoPocetno
-    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevCfg
     modOtkupUI.ActiveMode = prev
     LogFatal "Test_OTK_RutaPosleUpisa", Err.Number, Err.description
 End Sub
+
+' ============================================================
+' S6 KORAK 7, R5 + odluka 7: LANAC JE NASTAVLJIV, A PRIJEMNICA SE VEZUJE PO ID-u.
+'
+' Medjustanja grade ISTI pisci koje lanac zove (CreateOtpremnicaIzIzvora_TX,
+' jezgro auto-zbirne), ne seam:
+'   (b) blok sa otpremnicom bez zbirne -- poziv pravi zbirnu i prijemnicu, ne
+'       drugu otpremnicu;
+'   (c) blok sa otpremnicom i zbirnom bez prijemnice -- poziv pravi samo
+'       prijemnicu.
+' U (c) se broj zbirne namerno ne moze razresiti u jedan dokument: druga zbirna
+' ISTOG ogledala nosi isti broj (KR-001, uvoz sa terena -- brojSaTerena).
+' Prijemnica vezana po broju tada ostaje bez roditelja (nalaz pre-flight-a);
+' vezana po ID-u dobija SVOJU. Pisac sa zadatim roditeljem odbija zbirnu koje
+' nema i zbirnu drugog broja, i ne ostavlja nista.
+' SABOTAZE: lanac-dupli-poziv, s6k7-prj-roditelj-po-broju.
+' ============================================================
+Private Sub Test_S6K7_LanacNastavljiv()
+    Dim tx As clsTransaction, prevKupac As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, izvestaj As String, datum As Date, vozacOg As String
+    scenario = NewScenarioCode("S6K7NAS")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    vozacOg = modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID)
+
+    ' --- (b) OTPREMNICA BEZ ZBIRNE ----------------------------------------
+    Dim blokB As String, otpB As String, zbrB As String, prjB As String
+    datum = NextTestDate()
+    blokB = HldBlok("NASB-" & scenario, TEST_HLAD_ST_ID, datum, 30#, 100#, 3, 0#, 0#, 0)
+    otpB = HldOtpremnicaLanca(blokB, vozacOg, g)
+    AssertTrue Len(otpB) > 0 And Len(HldZbr(otpB)) = 0, _
+               "S6K7 nastavak: preduslov -- blok ima otpremnicu bez zbirne"
+    izvestaj = ""
+    If Len(blokB) > 0 Then prjB = modAutoHladnjaca.AutoLanacHladnjaca(blokB, izvestaj)
+    zbrB = HldZbr(otpB)
+    AssertEquals "True|" & UCase$(otpB) & "|True", _
+                 CStr(Len(prjB) > 0) & "|" & UCase$(HldOtp(blokB)) & "|" & _
+                 CStr(Len(zbrB) > 0 And UCase$(prjB) = UCase$(HldPrj(zbrB))), _
+                 "S6K7 nastavak: blok sa otpremnicom bez zbirne dobija zbirnu i prijemnicu, ne drugu otpremnicu"
+
+    ' --- (c) OTPREMNICA I ZBIRNA BEZ PRIJEMNICE, BROJ ZBIRNE DVOSMISLEN -----
+    Dim blokA As String, otpA As String, zbrA As String, prjA As String, brA As String
+    Dim blokC As String, otpC As String, zbrC As String, prjC As String
+    datum = NextTestDate()
+    blokA = HldBlok("NASA-" & scenario, TEST_HLAD_ST_ID, datum, 40#, 100#, 4, 0#, 0#, 0)
+    otpA = HldOtpremnicaLanca(blokA, vozacOg, g)
+    If Len(otpA) > 0 Then zbrA = modMasterSync.AutoZbirnaZaOtpremnicu(otpA, g)
+    brA = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrA, COL_ZBR_BROJ)
+    blokC = HldBlok("NASC-" & scenario, TEST_HLAD_ST_ID, datum, 20#, 100#, 2, 0#, 0#, 0)
+    otpC = HldOtpremnicaLanca(blokC, vozacOg, g)
+    If Len(otpC) > 0 And Len(brA) > 0 Then zbrC = HldZbirnaSaTerena(otpC, vozacOg, brA, datum, g)
+    AssertTrue Len(zbrA) > 0 And Len(zbrC) > 0 And UCase$(zbrA) <> UCase$(zbrC) And _
+               HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrC, COL_ZBR_BROJ) = brA, _
+               "S6K7 nastavak: preduslov -- dve aktivne zbirne istog ogledala pod istim brojem"
+    AssertEquals "", modDokumenta.ZbirnaIDZaBroj(brA), _
+                 "S6K7 nastavak: preduslov -- broj zbirne se ne razresava u jedan dokument"
+
+    Dim nOtp As Long, nZbr As Long
+    nOtp = Pr3BrojRedova(TBL_OTPREMNICA)
+    nZbr = Pr3BrojRedova(TBL_ZBIRNA)
+    If Len(blokA) > 0 Then prjA = modAutoHladnjaca.AutoLanacHladnjaca(blokA, izvestaj)
+    If Len(blokC) > 0 Then prjC = modAutoHladnjaca.AutoLanacHladnjaca(blokC, izvestaj)
+    AssertEquals "True|True|0|0", CStr(Len(prjA) > 0) & "|" & CStr(Len(prjC) > 0) & "|" & _
+                 CStr(Pr3BrojRedova(TBL_OTPREMNICA) - nOtp) & "|" & CStr(Pr3BrojRedova(TBL_ZBIRNA) - nZbr), _
+                 "S6K7 nastavak: blok sa otpremnicom i zbirnom dobija samo prijemnicu"
+    AssertEquals "True|" & UCase$(zbrA) & "|" & UCase$(zbrC), _
+                 CStr(Len(zbrA) > 0 And Len(zbrC) > 0) & "|" & _
+                 UCase$(HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_DETE_ZBIRNA_ROD)) & "|" & _
+                 UCase$(HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjC, COL_DETE_ZBIRNA_ROD)), _
+                 "S6K7 nastavak: svaka prijemnica je vezana na SVOJU zbirnu po ID-u, i kad broj zbirne nije jednoznacan"
+
+    ' --- PISAC SA ZADATIM RODITELJEM (odluka 7) ----------------------------
+    Dim brB As String, nPrj As Long, prjNema As String, prjDrugi As String
+    brB = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrB, COL_ZBR_BROJ)
+    nPrj = Pr3BrojRedova(TBL_PRIJEMNICA)
+    prjNema = HldPrijemnicaPisca(datum, vozacOg, brA, "ZBR-NEMA-" & scenario, scenario & "-N", g)
+    prjDrugi = HldPrijemnicaPisca(datum, vozacOg, brB, zbrA, scenario & "-D", g)
+    AssertEquals "True||", CStr(Len(brA) > 0 And Len(brB) > 0) & "|" & prjNema & "|" & prjDrugi, _
+                 "S6K7 pisac: zadat roditelj koga nema ili cijeg broja nije broj zbirne se odbija"
+    AssertEquals "0", CStr(Pr3BrojRedova(TBL_PRIJEMNICA) - nPrj), _
+                 "S6K7 pisac: odbijen roditelj ne ostavlja prijemnicu"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_S6K7_LanacNastavljiv", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, R6: PREDUSLOVI SE PROVERAVAJU PRE PRVOG UPISA (odluka 1).
+'
+' Bez MALINA_DEFAULT_KUPAC lanac ne zna kome idu zbirna i prijemnica. Da se to
+' sazna tek na zbirnoj, blok bi ostao sa izdatom otpremnicom i bez puta napred
+' -- polovican lanac. Zato lanac staje PRE otpremnice, izvestaj imenuje kljuc, a
+' blok ostaje nevezan (ceka u "Bez otpremnice", sa radnjom "Ponovi").
+' Kontrola: sa kupcem isti blok prolazi ceo lanac.
+' SABOTAZA: s6k7-kupac-proveren-kasno.
+' ============================================================
+Private Sub Test_S6K7_LanacBezKupcaNePise()
+    Dim tx As clsTransaction, prevKupac As String
+    On Error GoTo EH
+
+    Dim scenario As String, izvestaj As String, blok As String, r As String, nOtp As Long
+    scenario = NewScenarioCode("S6K7KUP")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, ""
+
+    blok = HldBlok("KUP-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 20#, 100#, 2, 0#, 0#, 0)
+    nOtp = Pr3BrojRedova(TBL_OTPREMNICA)
+    izvestaj = ""
+    r = "x"
+    If Len(blok) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertEquals "", r, "S6K7 kupac: bez kupca hladnjace lanac ne vraca prijemnicu"
+    AssertTrue InStr(1, izvestaj, "MALINA_DEFAULT_KUPAC", vbTextCompare) > 0, _
+               "S6K7 kupac: izvestaj imenuje kljuc MALINA_DEFAULT_KUPAC"
+    AssertEquals "True|0|", CStr(Len(blok) > 0) & "|" & CStr(Pr3BrojRedova(TBL_OTPREMNICA) - nOtp) & "|" & _
+                 HldOtp(blok), _
+                 "S6K7 kupac: bez kupca se ne pravi ni otpremnica -- blok ostaje nevezan"
+
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    r = ""
+    If Len(blok) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertTrue Len(r) > 0, "S6K7 kupac: kontrola -- sa kupcem isti blok prolazi ceo lanac"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_S6K7_LanacBezKupcaNePise", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, R8: ISTO JEZGRO ZBIRNE ZA MALINU I HLADNJACU (odluka 3).
+'
+' Jezgro malina auto-zbirne (AutoZbirnaZaOtpremnicu) bilo je zatvoreno iza
+' IsMalinaMode i van maline vracalo "" BEZ razloga -- ugovor jezgra to cita kao
+' "nije bilo posla", pa bi lanac van maline tiho stao posle otpremnice. Kapija je
+' sada "malina ILI hladnjacka otpremnica", strogo, istim primitivom kao
+' razvodnica. Kontrola: obicna otpremnica van maline i dalje ne dobija zbirnu, i
+' to bez razloga (nije bilo posla).
+' U malini batch stigne prvi: zbirnu nad hladnjackom otpremnicom pravi batch,
+' pa lanac pravi samo prijemnicu nad TOM zbirnom.
+' SABOTAZA: s6k7-jezgro-zbirne-samo-malina.
+' ============================================================
+Private Sub Test_S6K7_JezgroZbirneHladnjacka()
+    Dim tx As clsTransaction, prevKupac As String, prevMode As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, izvestaj As String, vozacOg As String
+    scenario = NewScenarioCode("S6K7JZ")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    SetConfigValue CFG_KEY_MALINA_MODE, "NO"
+    vozacOg = modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID)
+
+    ' --- 1) van maline: hladnjacka otpremnica dobija zbirnu ---------------
+    Dim blok As String, otpH As String, zbrH As String, gH As String
+    blok = HldBlok("JZH-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 30#, 100#, 3, 0#, 0#, 0)
+    otpH = HldOtpremnicaLanca(blok, vozacOg, g)
+    AssertTrue Len(otpH) > 0, "S6K7 jezgro: preduslov -- izdata hladnjacka otpremnica"
+    gH = "x"
+    If Len(otpH) > 0 Then zbrH = modMasterSync.AutoZbirnaZaOtpremnicu(otpH, gH)
+    AssertEquals "True|" & UCase$(otpH), CStr(Len(zbrH) > 0) & "|" & HldIzvorZbirne(zbrH), _
+                 "S6K7 jezgro: van maline hladnjacka otpremnica dobija zbirnu"
+
+    ' --- 2) kontrola: obicna otpremnica van maline ------------------------
+    Dim otpO As String, zbrO As String, gO As String
+    otpO = ZbrIzdataOtp("K7JO-" & scenario, 50#, 5#)
+    gO = "x"
+    zbrO = "x"
+    If Len(otpO) > 0 Then zbrO = modMasterSync.AutoZbirnaZaOtpremnicu(otpO, gO)
+    AssertEquals "True||", CStr(Len(otpO) > 0) & "|" & zbrO & "|" & gO, _
+                 "S6K7 jezgro: kontrola -- obicna otpremnica van maline ne dobija zbirnu, bez razloga"
+
+    ' --- 3) malina: batch pravi zbirnu, lanac samo prijemnicu nad njom ----
+    Dim blokM As String, otpM As String, zbrM As String, prjM As String, nBatch As Long, nZbr As Long
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+    blokM = HldBlok("JZM-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 25#, 100#, 2, 0#, 0#, 0)
+    otpM = HldOtpremnicaLanca(blokM, vozacOg, g)
+    If Len(otpM) > 0 Then nBatch = modMasterSync.AutoCreateZbirnaFromOtpremnice_TX(otpM)
+    zbrM = HldZbr(otpM)
+    AssertEquals "1|True", CStr(nBatch) & "|" & CStr(Len(zbrM) > 0), _
+                 "S6K7 jezgro: u malini batch pravi zbirnu nad hladnjackom otpremnicom"
+    nZbr = Pr3BrojRedova(TBL_ZBIRNA)
+    If Len(blokM) > 0 Then prjM = modAutoHladnjaca.AutoLanacHladnjaca(blokM, izvestaj)
+    AssertEquals "True|0|" & UCase$(zbrM), CStr(Len(prjM) > 0) & "|" & _
+                 CStr(Pr3BrojRedova(TBL_ZBIRNA) - nZbr) & "|" & _
+                 UCase$(HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjM, COL_DETE_ZBIRNA_ROD)), _
+                 "S6K7 jezgro: posle batch-a lanac pravi samo prijemnicu nad TOM zbirnom"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_S6K7_JezgroZbirneHladnjacka", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, R10: PWA HLADNJACKI BLOKOVI IDU U SVOJ LANAC (odluka 9).
+'
+' Malina batch je grupisao nevezane izdate blokove po stanici i danu -- i
+' hladnjacke, pa bi dva hladnjacka bloka istog dana zavrsila u JEDNOJ otpremnici
+' (a lanac drzi 1 blok = 1 lanac). Batch ih sada preskace, a sync korak
+' (AutoLanacZaNevezaneBlokove) vodi svaki kroz AutoLanacHladnjaca. Pad jednog
+' bloka se imenuje i ne obara ostale: blok na hladnjackoj stanici bez cifara u
+' ID-u ne moze da dobije broj otpremnice, i ide PRVI u prolazu.
+' Prolaz je pun (bez suzavanja), u transakciji testa: zateceni nevezani
+' hladnjacki blokovi drugih testova dobijaju lanac i nestaju sa rollback-om, pa
+' se tvrdi "bar dva", ne tacan broj.
+' SABOTAZE: s6k7-pwa-batch-guta-hladnjacke, s6k7-sync-bez-lanca.
+' ============================================================
+Private Sub Test_S6K7_PwaHladnjackiBlokovi()
+    Const ST_BEZ_BROJA As String = "ST-HLADTEST-BEZBROJA"
+    Dim tx As clsTransaction, prevKupac As String, prevMode As String
+    On Error GoTo EH
+
+    Dim scenario As String, datum As Date
+    scenario = NewScenarioCode("S6K7PWA")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    tx.AddTableSnapshot TBL_STANICE
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+    HldStanicaBezBroja ST_BEZ_BROJA
+
+    Dim hlBad As String, hl1 As String, hl2 As String
+    datum = NextTestDate()
+    hlBad = HldBlok("PWAX-" & scenario, ST_BEZ_BROJA, datum, 10#, 100#, 1, 0#, 0#, 0)
+    hl1 = HldBlok("PWA1-" & scenario, TEST_HLAD_ST_ID, datum, 30#, 100#, 3, 0#, 0#, 0)
+    hl2 = HldBlok("PWA2-" & scenario, TEST_HLAD_ST_ID, datum, 20#, 100#, 2, 0#, 0#, 0)
+    AssertTrue Len(hlBad) > 0 And Len(hl1) > 0 And Len(hl2) > 0, _
+               "S6K7 PWA: preduslov -- tri nevezana hladnjacka bloka istog dana"
+
+    ' --- 1) malina batch preskace hladnjacke blokove ----------------------
+    Dim nB As Long, gB As String
+    gB = "x"
+    If Len(hl1) > 0 Then nB = modMasterSync.AutoCreateOtpremniceFromPWA_TX(hl1, gB)
+    AssertEquals "0|||", CStr(nB) & "|" & gB & "|" & HldOtp(hl1) & "|" & HldOtp(hl2), _
+                 "S6K7 PWA: malina batch ne pravi otpremnicu od hladnjackih blokova"
+
+    ' --- 2) sync korak: svaki blok svoj lanac, pad je imenovan ------------
+    Dim nS As Long, gS As String, o1 As String, o2 As String
+    nS = modAutoHladnjaca.AutoLanacZaNevezaneBlokove(gS)
+    o1 = HldOtp(hl1)
+    o2 = HldOtp(hl2)
+    AssertTrue nS >= 2, "S6K7 PWA: sync korak pravi lanac za nevezane hladnjacke blokove"
+    AssertEquals "True|True|True", CStr(Len(HldPrj(HldZbr(o1))) > 0) & "|" & _
+                 CStr(Len(HldPrj(HldZbr(o2))) > 0) & "|" & CStr(Len(o1) > 0 And o1 <> o2), _
+                 "S6K7 PWA: svaki hladnjacki blok dobija SVOJ lanac"
+    AssertTrue Len(hlBad) > 0 And InStr(1, gS, OtkPolje(hlBad, COL_OTK_BR_DOK), vbTextCompare) > 0, _
+               "S6K7 PWA: pad bloka je imenovan po broju bloka"
+    AssertEquals "", HldOtp(hlBad), "S6K7 PWA: blok koji je pao ostaje nevezan"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_S6K7_PwaHladnjackiBlokovi", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, R11: HLADNJACKA OTPREMNICA SE NE VEZUJE RUCNO U ZBIRNU (odluka 10).
+'
+' F2 veze svaku izdatu nevezanu otpremnicu u rucnu zbirnu (DodajZbirnaIzvor_TX).
+' Hladnjacka ima svoj lanac (HLD-LANAC-01), pa bi je rucno vezivanje oduzelo
+' lancu -- isto pravilo koje VeziZaAktivnu drzi za blok (review #367). Kapija je
+' u piscu: on je jedino mesto kroz koje svaki ulaz prolazi. Nacrt nosi vozaca-
+' ogledalo, pa je hladnjaca JEDINI razlog odbijanja. Kontrola: obicna otpremnica
+' ulazi u nacrt svog vozaca.
+' SABOTAZA: s6k7-rucna-zbirna-prima-hladnjacku.
+' ============================================================
+Private Sub Test_S6K7_RucnaZbirnaOdbijaHladnjacku()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, vozacOg As String, datum As Date
+    scenario = NewScenarioCode("S6K7RZ")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    vozacOg = modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID)
+
+    Dim blok As String, otpH As String, nacrtH As String, okH As Boolean, gH As String
+    datum = NextTestDate()
+    blok = HldBlok("RZH-" & scenario, TEST_HLAD_ST_ID, datum, 30#, 100#, 3, 0#, 0#, 0)
+    otpH = HldOtpremnicaLanca(blok, vozacOg, g)
+    nacrtH = CreateZbirnaDraft_TX(Pr3HeaderVozac(TEST_PREFIX & "-ZBR-RZH-" & scenario, vozacOg), _
+                                  ZbrOcek(KLASA_I, 30#, 3#), g)
+    AssertTrue Len(otpH) > 0 And Len(nacrtH) > 0, _
+               "S6K7 rucna zbirna: preduslov -- izdata hladnjacka otpremnica i nacrt zbirne ogledala"
+    okH = True
+    If Len(otpH) > 0 And Len(nacrtH) > 0 Then okH = DodajZbirnaIzvor_TX(nacrtH, otpH, gH)
+    AssertEquals "False|True|", CStr(okH) & "|" & CStr(Len(gH) > 0) & "|" & HldZbirnaClanstvo(otpH), _
+                 "S6K7 rucna zbirna: hladnjacka otpremnica se odbija sa razlogom, clanstvo nije upisano"
+
+    Dim otpO As String, nacrtO As String, okO As Boolean, gO As String
+    otpO = ZbrIzdataOtp("K7RZO-" & scenario, 50#, 5#)
+    nacrtO = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-RZO-" & scenario), _
+                                  ZbrOcek(KLASA_I, 50#, 5#), g)
+    If Len(otpO) > 0 And Len(nacrtO) > 0 Then okO = DodajZbirnaIzvor_TX(nacrtO, otpO, gO)
+    AssertTrue okO, "S6K7 rucna zbirna: kontrola -- obicna otpremnica ulazi u nacrt"
+
+    tx.RollbackTx
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_S6K7_RucnaZbirnaOdbijaHladnjacku", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, review #442 P1-a (R13): NASTAVAK LANCA NOSI KUPCA RODITELJA.
+'
+' Lanac je stao posle zbirne (kupac A), pa je operater promenio kupca hladnjace
+' na B i ponovio lanac. Zbirna je vec cinjenica kupca A: prijemnica i noga
+' knjige moraju ici NJEMU, ne trenutnom configu -- inace zbirna kupca A dobija
+' prijemnicu kupca B. Druga brana je pisac: zadat roditelj drugog vlasnika
+' (kupac ILI vozac) se odbija i nista se ne upisuje. Kontrola: pisac sa istim
+' vlasnikom prolazi. Obe brane se mere odvojeno -- svaka na slucaju koji druga
+' pusta (lanac ne zove pisca sa tudjim kupcem; direktan poziv pisca ga zove).
+' SABOTAZE: s6k7-nastavak-kupac-iz-konfiguracije, s6k7-pisac-pusta-tudjeg-roditelja.
+' ============================================================
+Private Sub Test_S6K7_NastavakNosiKupcaRoditelja()
+    Dim tx As clsTransaction, prevKupac As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, izvestaj As String, datum As Date, vozacOg As String
+    scenario = NewScenarioCode("S6K7KR")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    vozacOg = modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID)
+
+    ' Dva bloka sa otpremnicom i zbirnom kupca A, bez prijemnice.
+    Dim blokA As String, otpA As String, zbrA As String
+    Dim blokB As String, otpB As String, zbrB As String, brB As String
+    datum = NextTestDate()
+    blokA = HldBlok("KRA-" & scenario, TEST_HLAD_ST_ID, datum, 30#, 100#, 3, 0#, 0#, 0)
+    otpA = HldOtpremnicaLanca(blokA, vozacOg, g)
+    If Len(otpA) > 0 Then zbrA = modMasterSync.AutoZbirnaZaOtpremnicu(otpA, g)
+    blokB = HldBlok("KRB-" & scenario, TEST_HLAD_ST_ID, datum, 20#, 100#, 0, 0#, 0#, 0)
+    otpB = HldOtpremnicaLanca(blokB, vozacOg, g)
+    If Len(otpB) > 0 Then zbrB = modMasterSync.AutoZbirnaZaOtpremnicu(otpB, g)
+    brB = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrB, COL_ZBR_BROJ)
+    AssertTrue Len(zbrA) > 0 And Len(zbrB) > 0, _
+               "S6K7 kupac lanca: preduslov -- dve zbirne kupca A bez prijemnice"
+
+    ' Operater menja kupca hladnjace, pa ponavlja lanac.
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP2_ID
+    Dim prjA As String
+    izvestaj = ""
+    If Len(blokA) > 0 Then prjA = modAutoHladnjaca.AutoLanacHladnjaca(blokA, izvestaj)
+    AssertEquals "True|" & TEST_KUP_ID & "|" & TEST_KUP_ID, _
+                 CStr(Len(prjA) > 0) & "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_PRJ_KUPAC) & "|" & _
+                 HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrA, COL_ZBR_KUPAC), _
+                 "S6K7 kupac lanca: nastavak posle promene kupca hladnjace pravi prijemnicu za kupca roditeljske zbirne"
+    AssertEquals "1|" & TEST_KUP_ID, CStr(S6AmbBroj(prjA, AMB_VK_UZ_ROBU)) & "|" & _
+                 HldNogaNa(prjA), _
+                 "S6K7 kupac lanca: noga punih prijemnice ide kupcu roditeljske zbirne"
+
+    ' Druga brana: pisac sa zadatim roditeljem drugog vlasnika.
+    Dim nPrj As Long, prjKupac As String, prjVozac As String, prjDobar As String
+    nPrj = Pr3BrojRedova(TBL_PRIJEMNICA)
+    prjKupac = HldPrijemnicaPisca(datum, vozacOg, brB, zbrB, scenario & "-K", g, TEST_KUP2_ID)
+    prjVozac = HldPrijemnicaPisca(datum, TEST_VOZ_ID, brB, zbrB, scenario & "-V", g, TEST_KUP_ID)
+    AssertEquals "True|||0", CStr(Len(brB) > 0) & "|" & prjKupac & "|" & prjVozac & "|" & _
+                 CStr(Pr3BrojRedova(TBL_PRIJEMNICA) - nPrj), _
+                 "S6K7 pisac: roditelj drugog vlasnika (kupac ili vozac) se odbija i nista ne ostaje"
+    prjDobar = HldPrijemnicaPisca(datum, vozacOg, brB, zbrB, scenario & "-D", g, TEST_KUP_ID)
+    AssertEquals "True|" & UCase$(zbrB), CStr(Len(prjDobar) > 0) & "|" & _
+                 UCase$(HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjDobar, COL_DETE_ZBIRNA_ROD)), _
+                 "S6K7 pisac: kontrola -- roditelj istog vlasnika se vezuje"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_S6K7_NastavakNosiKupcaRoditelja", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, review #442 P2 (R14): ZBIRNA LANCA NOSI TACNO JEDNU PRIJEMNICU.
+'
+' Citac koji je za zbirnu uzimao PRVU aktivnu prijemnicu precutao bi drugu, pa bi
+' nastavak lanca javio "nije bilo posla" nad stanjem koje krsi HLD-LANAC-01, a
+' Oporavak ga ne bi video. Druga prijemnica se ovde pravi istim pisacem (F4 je ume
+' da napravi uz potvrdu "dupla prijemnica"); posle toga ostaje JEDINA aktivna, i to
+' bez ID-a (kvar podatka). U oba slucaja nastavak vraca RAZLOG koji imenuje
+' zbirnu, a za dve prijemnice Oporavak ima red LANAC sa statusom GRESKA.
+' Kontrola: kompletan lanac sa jednom prijemnicom je tih.
+' SABOTAZE: s6k7-citac-prijemnica-prvi-pogodak, s6k7-citac-prijemnica-bez-id,
+' s6k7-oporavak-precutkuje-dve-prijemnice.
+' ============================================================
+Private Sub Test_S6K7_LanacJednaPrijemnica()
+    Dim tx As clsTransaction, prevKupac As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, izvestaj As String, datum As Date, vozacOg As String
+    scenario = NewScenarioCode("S6K7JP")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    vozacOg = modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID)
+
+    Dim blok As String, prj As String, zbrID As String, brZbr As String, r As String
+    datum = NextTestDate()
+    blok = HldBlok("JP-" & scenario, TEST_HLAD_ST_ID, datum, 30#, 100#, 0, 0#, 0#, 0)
+    If Len(blok) > 0 Then prj = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    zbrID = HldZbr(HldOtp(blok))
+    brZbr = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)
+    izvestaj = "x"
+    r = "x"
+    If Len(blok) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertEquals "True||", CStr(Len(prj) > 0) & "|" & r & "|" & izvestaj, _
+                 "S6K7 jedna prijemnica: kontrola -- kompletan lanac je tih"
+
+    ' Druga aktivna prijemnica istog roditelja.
+    Dim prj2 As String
+    prj2 = HldPrijemnicaPisca(datum, vozacOg, brZbr, zbrID, scenario & "-2", g, TEST_KUP_ID)
+    izvestaj = ""
+    r = "x"
+    If Len(blok) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertEquals "True|", CStr(Len(prj2) > 0) & "|" & r, _
+                 "S6K7 jedna prijemnica: preduslov -- druga prijemnica postoji, nastavak ne vraca ID"
+    AssertTrue Len(zbrID) > 0 And InStr(1, izvestaj, zbrID, vbTextCompare) > 0, _
+               "S6K7 jedna prijemnica: dve aktivne prijemnice zbirne lanca daju razlog koji imenuje zbirnu"
+    AssertTrue HldOporavakLanacGreska(), _
+               "S6K7 jedna prijemnica: Oporavak pokazuje gresku lanca"
+
+    ' Aktivna prijemnica bez PrijemnicaID-a (kvar podatka), i to JEDINA aktivna:
+    ' prva se obara direktnim upisom (fault injection). Sa dve aktivne bi slucaj
+    ' uhvatilo pravilo "vise prijemnica" iznad, pa tvrdnja ne bi merila prazan ID.
+    ' Bez tog pravila citalac vraca prazan ID kao "nema prijemnice", a nastavak
+    ' pravi jos jednu.
+    Dim redovi As Collection, nPrj As Long
+    If Len(prj) > 0 And Len(prj2) > 0 Then
+        Set redovi = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prj)
+        If Not redovi Is Nothing Then
+            If redovi.count = 1 Then
+                RequireUpdateCell TBL_PRIJEMNICA, CLng(redovi(1)), COL_STORNIRANO, "Da", _
+                                  "Test_S6K7_LanacJednaPrijemnica"
+            End If
+        End If
+        Set redovi = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prj2)
+        If Not redovi Is Nothing Then
+            If redovi.count = 1 Then
+                RequireUpdateCell TBL_PRIJEMNICA, CLng(redovi(1)), COL_PRJ_ID, "", _
+                                  "Test_S6K7_LanacJednaPrijemnica"
+            End If
+        End If
+    End If
+    nPrj = Pr3BrojRedova(TBL_PRIJEMNICA)
+    izvestaj = ""
+    If Len(blok) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(blok, izvestaj)
+    AssertTrue Len(zbrID) > 0 And InStr(1, izvestaj, zbrID, vbTextCompare) > 0 And _
+               Pr3BrojRedova(TBL_PRIJEMNICA) = nPrj, _
+               "S6K7 jedna prijemnica: jedina aktivna prijemnica bez ID-a daje razlog koji imenuje zbirnu i ne pravi drugu"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_S6K7_LanacJednaPrijemnica", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, review #442 P1-b (R15): VLASNISTVO TOKA ZBIRNE NE CITA TRENUTNI CONFIG.
+'
+' PONISTENJE zbirne odlucuje sme li da stornira prijemnicu i palete po tome da li
+' je zbirna INTERNI hladnjacki tok. To je bilo pitanje "da li je kupac zbirne
+' DANAS MALINA_DEFAULT_KUPAC" -- pa je promena configa menjala pravilo storna
+' starih lanaca. Sada je cinjenica zbirne (KupacHladnjaca, ZBR-OWN-01), upisana
+' pri nastanku; prazna znaci "ne zna se" i PONISTENJE staje bez mutacije.
+'
+'   (a) interni lanac, config promenjen POSLE: posledice kazu "storniraju se",
+'       PONISTENJE prolazi i obara prijemnicu;
+'   (b) eksterna zbirna, njen kupac POSTANE hladnjaca: PONISTENJE se odbija zbog
+'       aktivne eksterne prijemnice, nista nije stornirano;
+'   (c) zbirna bez oznake: posledice ne tvrde vlasnistvo, PONISTENJE staje sa
+'       razlogom koji imenuje oznaku, nista nije stornirano;
+'   (d) izmena kupca u nacrtu zbirne prati oznaku.
+' SABOTAZE: s6k7-vlasnistvo-iz-konfiguracije, s6k7-prazna-oznaka-pusta,
+' s6k7-pisac-zbirne-bez-oznake, s6k7-nacrt-ne-prati-oznaku.
+' ============================================================
+Private Sub Test_S6K7_VlasnistvoLancaNeCitaKonfig()
+    Const OZNAKA As String = "KupacHladnjaca"
+    Dim tx As clsTransaction, prevKupac As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, izvestaj As String, poruka As String
+    scenario = NewScenarioCode("S6K7VL")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+
+    ' --- (a) interni lanac, config promenjen posle ---------------------------
+    Dim blokA As String, prjA As String, zbrA As String, brA As String, otpA As String
+    Dim posA As String, resA As Object, uspehA As Boolean
+    blokA = HldBlok("VLA-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 30#, 100#, 0, 0#, 0#, 0)
+    If Len(blokA) > 0 Then prjA = modAutoHladnjaca.AutoLanacHladnjaca(blokA, izvestaj)
+    otpA = HldOtp(blokA)
+    zbrA = HldZbr(otpA)
+    brA = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrA, COL_ZBR_BROJ)
+    AssertEquals "True|Da", CStr(Len(prjA) > 0) & "|" & HldPoljeAko(TBL_ZBIRNA, COL_ZBR_ID, zbrA, OZNAKA), _
+                 "S6K7 vlasnistvo: zbirna lanca nosi oznaku internog toka od nastanka"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP2_ID
+    If Len(zbrA) > 0 Then
+        posA = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, brA, "", zbrA)
+        Set resA = modStornoFlow.RunZbirnaCorrection(brA, SV_MODE_PONISTENJE, True, zbrA)
+        uspehA = CBool(resA("success"))
+    End If
+    AssertTrue InStr(1, posA, "prijemnice: 1 (storniraju se)", vbTextCompare) > 0, _
+               "S6K7 vlasnistvo: posle promene configa posledice internog lanca i dalje kazu da se prijemnica stornira"
+    AssertEquals "True|Da|Da", CStr(uspehA) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_STORNIRANO) & "|" & _
+                 HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_STORNIRANO), _
+                 "S6K7 vlasnistvo: PONISTENJE internog lanca posle promene configa obara i prijemnicu"
+
+    ' --- (b) eksterna zbirna, njen kupac POSTANE hladnjaca --------------------
+    ' Config je sada KUP2, pa zbirna kupca KUP nastaje kao EKSTERNA.
+    Dim otpB As String, zbrB As String, brB As String, prjB As String, resB As Object, uspehB As Boolean
+    Dim izvB As Collection
+    otpB = ZbrIzdataOtp("VLB-" & scenario, 40#, 0#)
+    brB = TEST_PREFIX & "-ZBR-VLB-" & scenario
+    Set izvB = New Collection
+    If Len(otpB) > 0 Then izvB.Add otpB
+    If izvB.count > 0 Then zbrB = CreateZbirnaIzIzvora_TX(Pr3Header(brB), izvB, g)
+    If Len(zbrB) > 0 Then
+        prjB = HldPrijemnicaPisca(CDate(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrB, COL_ZBR_DATUM)), _
+                                  TEST_VOZ_ID, brB, zbrB, scenario & "-B", g, TEST_KUP_ID)
+    End If
+    AssertEquals "True|Ne", CStr(Len(prjB) > 0) & "|" & HldPoljeAko(TBL_ZBIRNA, COL_ZBR_ID, zbrB, OZNAKA), _
+                 "S6K7 vlasnistvo: preduslov -- eksterna zbirna sa prijemnicom nosi oznaku Ne"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    If Len(zbrB) > 0 Then
+        Set resB = modStornoFlow.RunZbirnaCorrection(brB, SV_MODE_PONISTENJE, True, zbrB)
+        uspehB = CBool(resB("success"))
+    End If
+    AssertEquals "True|False||", CStr(Len(prjB) > 0) & "|" & CStr(uspehB) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_STORNIRANO) & "|" & _
+                 HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrB, COL_STORNIRANO), _
+                 "S6K7 vlasnistvo: kupac koji POSTANE hladnjaca ne cini eksternu prijemnicu nasom -- PONISTENJE se odbija, nista nije stornirano"
+
+    ' --- (c) zbirna bez oznake: staje bez mutacije ----------------------------
+    Dim blokC As String, prjC As String, zbrC As String, brC As String, posC As String
+    Dim resC As Object, uspehC As Boolean, porukaC As String, redovi As Collection, cOzn As Long
+    blokC = HldBlok("VLC-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 25#, 100#, 0, 0#, 0#, 0)
+    If Len(blokC) > 0 Then prjC = modAutoHladnjaca.AutoLanacHladnjaca(blokC, izvestaj)
+    zbrC = HldZbr(HldOtp(blokC))
+    brC = HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrC, COL_ZBR_BROJ)
+    cOzn = GetColumnIndex(TBL_ZBIRNA, OZNAKA)
+    If Len(zbrC) > 0 And cOzn > 0 Then
+        Set redovi = FindRows(TBL_ZBIRNA, COL_ZBR_ID, zbrC)
+        If redovi.count = 1 Then RequireUpdateCell TBL_ZBIRNA, CLng(redovi(1)), OZNAKA, "", _
+                                                   "Test_S6K7_VlasnistvoLancaNeCitaKonfig"
+    End If
+    If Len(zbrC) > 0 Then
+        posC = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, brC, "", zbrC)
+        Set resC = modStornoFlow.RunZbirnaCorrection(brC, SV_MODE_PONISTENJE, True, zbrC)
+        uspehC = CBool(resC("success"))
+        porukaC = CStr(resC("message"))
+    End If
+    AssertTrue Len(posC) > 0 And InStr(1, posC, "storniraju se", vbTextCompare) = 0 And _
+               InStr(1, posC, "NETAKNUTE", vbTextCompare) = 0, _
+               "S6K7 vlasnistvo: posledice nad zbirnom bez oznake ne tvrde ni jedno vlasnistvo"
+    AssertEquals "True|False|||", CStr(Len(prjC) > 0) & "|" & CStr(uspehC) & "|" & _
+                 HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, prjC, COL_STORNIRANO) & "|" & _
+                 HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zbrC, COL_STORNIRANO) & "|", _
+                 "S6K7 vlasnistvo: PONISTENJE zbirne bez oznake staje bez mutacije"
+    AssertTrue InStr(1, porukaC, OZNAKA, vbTextCompare) > 0, _
+               "S6K7 vlasnistvo: razlog zastoja imenuje oznaku vlasnistva"
+
+    ' --- (d) izmena kupca u nacrtu prati oznaku -------------------------------
+    Dim nacrt As String, hN As Object, okIzm As Boolean
+    Set hN = Pr3Header(TEST_PREFIX & "-ZBR-VLD-" & scenario)
+    hN("KupacID") = TEST_KUP2_ID
+    nacrt = CreateZbirnaDraft_TX(hN, ZbrOcek(KLASA_I, 10#, 1#), g)
+    Dim oznPre As String
+    oznPre = HldPoljeAko(TBL_ZBIRNA, COL_ZBR_ID, nacrt, OZNAKA)
+    hN("KupacID") = TEST_KUP_ID
+    If Len(nacrt) > 0 Then okIzm = UpdateZbirnaDraft_TX(nacrt, hN, ZbrOcek(KLASA_I, 10#, 1#), g)
+    AssertEquals "Ne|True|Da", oznPre & "|" & CStr(okIzm) & "|" & HldPoljeAko(TBL_ZBIRNA, COL_ZBR_ID, nacrt, OZNAKA), _
+                 "S6K7 vlasnistvo: izmena kupca u nacrtu zbirne prati oznaku internog toka"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_S6K7_VlasnistvoLancaNeCitaKonfig", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 7, rucna provera #442, N1 (R16): OTPREMNICA PRIPADA LANCU SAMO AKO JOJ
+' JE VOZAC OGLEDALO STANICE.
+'
+' Lanac je birao po TRENUTNOJ oznaci stanice. Blok koji je otisao u RUCNU
+' otpremnicu (pravi vozac), pa je stanica POSLE oznacena kao hladnjaca, postajao
+' je "nedovrsen lanac": Oporavak ga je nudio, "Ponovi" mu je pravio zbirnu kupca
+' hladnjace pod pravim vozacem, a rucna zbirna ga vise nije primala. Rucna
+' provera je tako dobila 13 laznih redova LANAC nad blokovima fixture-a.
+'
+' Stanje se pravi tacno tako: obican blok, izdata otpremnica sa pravim vozacem,
+' pa oznaka stanice. Kontrola: otpremnica lanca (ogledalo) bez zbirne je i dalje
+' nedovrsen lanac i "Ponovi" ga zavrsava.
+' SABOTAZE: s6k7-ogledalo-ne-odlucuje, s6k7-oporavak-ne-pita-ogledalo,
+' s6k7-ponovi-ne-pita-ogledalo.
+' ============================================================
+Private Sub Test_S6K7_LanacSamoOgledalo()
+    Dim tx As clsTransaction, prevKupac As String, prevMode As String
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, izvestaj As String, vozacOg As String
+    scenario = NewScenarioCode("S6K7OG")
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    tx.AddTableSnapshot TBL_STANICE
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    SetConfigValue CFG_KEY_MALINA_MODE, "NO"
+
+    ' Obican blok u izdatoj RUCNOJ otpremnici, pa stanica postaje hladnjaca. Stanica
+    ' je SVOJA: oznaka nad deljenom test stanicom bi u Oporavak uvukla i tudje
+    ' zbirne, pa bi strog citac prijemnica mogao da padne pre tvrdnje. Blok je bez
+    ' gajbi, da otpremnica ne zavisi od stanja knjige nove stanice.
+    Const STA_OG As String = "ST-OGLTEST-90077"
+    Dim otpR As String, blokR As String, redSt As Collection
+    HldStanicaSaOznakom STA_OG, "Ne"
+    blokR = HldBlok("OGR-" & scenario, STA_OG, NextTestDate(), 40#, 100#, 0, 0#, 0#, 0)
+    otpR = HldOtpremnicaLanca(blokR, TEST_VOZ_ID, g)
+    Set redSt = FindRows(TBL_STANICE, "StanicaID", STA_OG)
+    If Not redSt Is Nothing Then
+        If redSt.count = 1 Then RequireUpdateCell TBL_STANICE, CLng(redSt(1)), COL_STA_JE_HLADNJACA, "Da", _
+                                                  "Test_S6K7_LanacSamoOgledalo"
+    End If
+    AssertTrue Len(blokR) > 0 And Len(otpR) > 0 And _
+               HldPolje(TBL_OTPREMNICA, COL_OTP_ID, otpR, COL_OTP_VOZAC) = TEST_VOZ_ID And _
+               HldPolje(TBL_STANICE, "StanicaID", STA_OG, COL_STA_JE_HLADNJACA) = "Da", _
+               "S6K7 ogledalo: preduslov -- blok u rucnoj otpremnici sa pravim vozacem, stanica posle oznacena kao hladnjaca"
+
+    Dim jeLanca As String
+    jeLanca = "x"
+    If Len(otpR) > 0 Then jeLanca = CStr(modAutoHladnjaca.OtpremnicaJeHladnjacka(otpR))
+    AssertEquals "False", jeLanca, _
+                 "S6K7 ogledalo: rucna otpremnica stanice oznacene posle nije otpremnica lanca"
+    AssertTrue Len(blokR) > 0 And Not HldNedovrsenLanac(blokR), _
+               "S6K7 ogledalo: Oporavak ne prikazuje blok rucne otpremnice kao nedovrsen lanac"
+
+    Dim r As String, nZbr As Long, nPrj As Long
+    nZbr = Pr3BrojRedova(TBL_ZBIRNA)
+    nPrj = Pr3BrojRedova(TBL_PRIJEMNICA)
+    izvestaj = "x"
+    r = "x"
+    If Len(blokR) > 0 Then r = modAutoHladnjaca.AutoLanacHladnjaca(blokR, izvestaj)
+    AssertEquals "||0|0", r & "|" & izvestaj & "|" & CStr(Pr3BrojRedova(TBL_ZBIRNA) - nZbr) & "|" & _
+                 CStr(Pr3BrojRedova(TBL_PRIJEMNICA) - nPrj), _
+                 "S6K7 ogledalo: Ponovi nad blokom rucne otpremnice ne pravi nista i ne javlja nista"
+
+    Dim nacrt As String, okR As Boolean, gR As String
+    nacrt = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-OGR-" & scenario), ZbrOcek(KLASA_I, 40#, 0#), g)
+    If Len(otpR) > 0 And Len(nacrt) > 0 Then okR = DodajZbirnaIzvor_TX(nacrt, otpR, gR)
+    AssertEquals "True|", CStr(okR) & "|" & gR, _
+                 "S6K7 ogledalo: rucna otpremnica stanice oznacene posle ulazi u rucnu zbirnu"
+
+    ' --- kontrola: otpremnica lanca (ogledalo) bez zbirne ----------------------
+    Dim blokH As String, otpH As String, prjH As String, izvH As String, jeH As String
+    vozacOg = modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID)
+    blokH = HldBlok("OGH-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 30#, 100#, 3, 0#, 0#, 0)
+    otpH = HldOtpremnicaLanca(blokH, vozacOg, g)
+    If Len(otpH) > 0 Then jeH = CStr(modAutoHladnjaca.OtpremnicaJeHladnjacka(otpH))
+    AssertEquals "True|True", jeH & "|" & CStr(Len(blokH) > 0 And HldNedovrsenLanac(blokH)), _
+                 "S6K7 ogledalo: kontrola -- otpremnica ogledala je otpremnica lanca i Oporavak je vidi kao nedovrsen lanac"
+    If Len(blokH) > 0 Then prjH = modAutoHladnjaca.AutoLanacHladnjaca(blokH, izvH)
+    AssertTrue Len(prjH) > 0, _
+               "S6K7 ogledalo: kontrola -- Ponovi zavrsava lanac otpremnice ogledala"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_S6K7_LanacSamoOgledalo", eN, eD
+End Sub
+
+' ============================================================
+' S6 KORAK 8 (plan 14.55 "Korak 8", R1-R4): KAPIJE PRIJEMNICE U PISCU.
+'
+' Do koraka 8 je PRJ-ZBR-01 (samo izdata, jednoznacna zbirna istog vlasnika) i
+' broj po kupcu drzao SAMO F4. Pisac ima pozivaoce mimo F4 -- hladnjacki lanac,
+' testovi -- pa se kapija meri DIREKTNO nad piscem: kroz F4 bi isti slucaj odbio
+' validator i tvrdnja ne bi merila pisca. Svaki test radi u svojoj transakciji
+' koja se vraca (KI-045).
+' ============================================================
+
+' R1: PISAC ODBIJA RODITELJA KOJI NIJE IZDATA, JEDNOZNACNA ZBIRNA ISTOG VLASNIKA.
+'
+' Svaki odbijen poziv nosi gajbe, pa "pre ijednog upisa" meri i knjigu, ne samo
+' zaglavlje. Razlog je ISTI tekst koji F4 daje uz polje (jedna kapija, R2).
+' Nepostojecu zbirnu meri Test_PrijemnicaMissingZbirnaDoesNotAppend (R4).
+' Kontrola: izdata zbirna istog vlasnika prolazi i postaje roditelj.
+' SABOTAZE: s6k8-pisac-pusta-nacrt, s6k8-pisac-pusta-dvosmislenu,
+' s6k8-pisac-pusta-tudju, s6k8-roditelj-id-pusta-nacrt.
+Private Sub Test_S6K8_PisacPrjZbr01()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("S6K8Z")
+    testDate = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    ZbrPodPrijemnicuSnimi tx
+
+    Dim brIzd As String, brNacrt As String, brDv As String, brTudj As String
+    Dim zIzd As String, zNacrt As String, zDv1 As String, zDv2 As String, zTudj As String
+    brIzd = TEST_PREFIX & "-ZK8I-" & scenario
+    brNacrt = TEST_PREFIX & "-ZK8N-" & scenario
+    brDv = TEST_PREFIX & "-ZK8D-" & scenario
+    brTudj = TEST_PREFIX & "-ZK8T-" & scenario
+    zIzd = ZbrIzdataPodPrijemnicu(testDate, brIzd, TEST_KUP_ID)
+    zNacrt = ZbrKanonNacrt(testDate, TEST_VOZ_ID, brNacrt, TEST_KUP_ID, KLASA_I, 100#, 0#)
+    zDv1 = ZbrIzdataPodPrijemnicu(testDate, brDv, TEST_KUP_ID)
+    zDv2 = ZbrIzdataPodPrijemnicu(testDate, brDv, TEST_KUP_ID, TEST_VOZ_ID_B)
+    zTudj = ZbrIzdataPodPrijemnicu(testDate, brTudj, TEST_KUP2_ID)
+    AssertTrue Len(zIzd) > 0 And Len(zNacrt) > 0 And Len(zDv1) > 0 And Len(zDv2) > 0 And _
+               Len(zTudj) > 0 And Not ZbirnaJeIzdata(zNacrt), _
+               "S6K8 pisac: preduslov -- izdata zbirna, nacrt, dvosmislen par i zbirna drugog kupca"
+
+    Dim r As String, g As String, pre As String
+
+    pre = S6K8Redova()
+    r = S6K8Pisac(testDate, TEST_KUP_ID, "N-" & scenario, brNacrt, "", g)
+    AssertEquals "|" & Poruka("DOKUNOS_ERR_ZBR_P_NIJE_IZDATA") & "|" & pre, _
+                 r & "|" & g & "|" & S6K8Redova(), _
+                 "S6K8 pisac: nacrt zbirne se odbija pre ijednog upisa (PRJ-ZBR-01)"
+
+    pre = S6K8Redova()
+    r = S6K8Pisac(testDate, TEST_KUP_ID, "D-" & scenario, brDv, "", g)
+    AssertEquals "|" & Poruka("DOKUNOS_ERR_ZBR_P_DVOSMISLEN") & "|" & pre, _
+                 r & "|" & g & "|" & S6K8Redova(), _
+                 "S6K8 pisac: dvosmislen broj zbirne se odbija pre ijednog upisa"
+
+    pre = S6K8Redova()
+    r = S6K8Pisac(testDate, TEST_KUP_ID, "T-" & scenario, brTudj, "", g)
+    AssertEquals "|" & Poruka("DOKUNOS_ERR_ZBR_P_TUDJ") & "|" & pre, _
+                 r & "|" & g & "|" & S6K8Redova(), _
+                 "S6K8 pisac: zbirna drugog kupca se odbija pre ijednog upisa"
+
+    ' Zadat roditelj (put hladnjackog lanca, odluka 7 koraka 7): broj i vlasnik
+    ' su ispravni, ali zbirna nije izdata.
+    pre = S6K8Redova()
+    r = S6K8Pisac(testDate, TEST_KUP_ID, "R-" & scenario, brNacrt, zNacrt, g)
+    AssertEquals "|Zbirna " & zNacrt & " nije izdata -- prijemnica je ne sme imati za roditelja (PRJ-ZBR-01).|" & pre, _
+                 r & "|" & g & "|" & S6K8Redova(), _
+                 "S6K8 pisac: zadat roditelj u nacrtu se odbija pre ijednog upisa"
+
+    ' Kontrola: ista prijemnica nad izdatom zbirnom istog vlasnika.
+    r = S6K8Pisac(testDate, TEST_KUP_ID, "OK-" & scenario, brIzd, "", g)
+    AssertEquals "True|" & zIzd & "|", _
+                 CStr(Len(r) > 0) & "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_DETE_ZBIRNA_ROD) & "|" & g, _
+                 "S6K8 pisac: kontrola -- izdata zbirna istog vlasnika prolazi i postaje roditelj"
+
+    tx.RollbackTx
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_S6K8_PisacPrjZbr01", eN, eD
+End Sub
+
+' R3 (A2 t. 4, KI-051): BROJ PRIJEMNICE U PISCU -- PO KUPCU, A ZA HLADNJACU I STORNIRAN.
+'
+' Eksterni kupac: broj je kupcev, pa ga drzi samo AKTIVNA prijemnica istog kupca
+' (ispravka naseg pogresnog unosa zadrzava kupcev broj); drugi kupac sme isti
+' broj. Hladnjaca-kupac (MALINA_DEFAULT_KUPAC): broj je nas niz i storno ga ne
+' oslobadja. Isti dokument, isti storno, ista zbirna -- razlikuje se SAMO uloga
+' kupca, pa slucaj (b) meri pravilo, a (a3) mu je kontrola. Config se postavlja,
+' ne nasledjuje, i vraca pre kraja.
+' SABOTAZE: s6k8-pisac-bez-provere-broja, s6k8-hladnjaca-ne-broji-stornirane,
+' s6k8-eksterni-broji-stornirane, s6k8-broj-bez-opsega-kupca.
+Private Sub Test_S6K8_BrojPrijemnicePoKupcu()
+    Dim tx As clsTransaction, prevKupac As String
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("S6K8B")
+    testDate = NextTestDate()
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    ZbrPodPrijemnicuSnimi tx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, "KUP-NEMA-S6K8"
+
+    Dim brA As String, brB As String, zA As String, zB As String
+    brA = TEST_PREFIX & "-ZK8A-" & scenario
+    brB = TEST_PREFIX & "-ZK8B-" & scenario
+    zA = ZbrIzdataPodPrijemnicu(testDate, brA, TEST_KUP_ID)
+    zB = ZbrIzdataPodPrijemnicu(testDate, brB, TEST_KUP2_ID)
+
+    Dim broj As String, prjA As String, r As String, g As String, pre As String
+    broj = TEST_PREFIX & "-PK8B-" & scenario
+    prjA = PrjJednaKlasa(testDate, TEST_KUP_ID, broj, brA, 100#, 50#, KLASA_I)
+    AssertTrue Len(zA) > 0 And Len(zB) > 0 And Len(prjA) > 0, _
+               "S6K8 broj: preduslov -- zbirne oba kupca i prijemnica kupca A"
+
+    ' (a1) eksterni kupac, isti broj, aktivan -- isti tekst koji F4 daje.
+    pre = S6K8Redova()
+    r = PrjJednaKlasa(testDate, TEST_KUP_ID, broj, brA, 60#, 50#, KLASA_I, , , , g)
+    AssertEquals "|Dokument '" & broj & "' ve" & ChrW(263) & " postoji! Unet je " & _
+                 Format$(testDate, "d.m.yyyy") & ".|" & pre, _
+                 r & "|" & g & "|" & S6K8Redova(), _
+                 "S6K8 broj: aktivan isti broj istog kupca se odbija u piscu (A2)"
+
+    ' (a2) drugi kupac sme isti broj.
+    r = PrjJednaKlasa(testDate, TEST_KUP2_ID, broj, brB, 60#, 50#, KLASA_I, , , , g)
+    AssertEquals "True|", CStr(Len(r) > 0) & "|" & g, _
+                 "S6K8 broj: isti broj drugog kupca prolazi"
+
+    ' (a3) kontrola: storniran broj eksternog kupca prolazi -- ispravka zadrzava
+    ' kupcev broj.
+    Dim okSt As Boolean
+    okSt = modStorno.StornoPrijemnica_TX(prjA)
+    r = PrjJednaKlasa(testDate, TEST_KUP_ID, broj, brA, 60#, 50#, KLASA_I, , , , g)
+    AssertEquals "True|True|", CStr(okSt) & "|" & CStr(Len(r) > 0) & "|" & g, _
+                 "S6K8 broj: storniran broj eksternog kupca prolazi (ispravka zadrzava kupcev broj)"
+
+    ' (b) isti potez za kupca hladnjace: storno NE oslobadja broj.
+    Dim brojH As String, prjH As String, okH As Boolean
+    brojH = TEST_PREFIX & "-PK8H-" & scenario
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    prjH = PrjJednaKlasa(testDate, TEST_KUP_ID, brojH, brA, 100#, 50#, KLASA_I)
+    If Len(prjH) > 0 Then okH = modStorno.StornoPrijemnica_TX(prjH)
+    pre = S6K8Redova()
+    r = PrjJednaKlasa(testDate, TEST_KUP_ID, brojH, brA, 60#, 50#, KLASA_I, , , , g)
+    AssertEquals "True|True||" & Poruka("DOKUNOS_ERR_PRJ_BROJ_STORNIRAN") & "|" & pre, _
+                 CStr(Len(prjH) > 0) & "|" & CStr(okH) & "|" & r & "|" & g & "|" & S6K8Redova(), _
+                 "S6K8 broj: storniran broj hladnjace se ne oslobadja u piscu (A2 t. 4, KI-051)"
+
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_S6K8_BrojPrijemnicePoKupcu", eN, eD
+End Sub
+
+' R7 (S6 KORAK 8): ZATECENA SVESKA GUBI STARE KOLONE ZAGLAVLJA PRIJEMNICE PO
+' IMENU, A VREDNOSTI OSTAJU SVOJE.
+'
+' Fixture se pravi BEZ osam kolona (make_fixture DROP_COLS), pa self-heal nad njim
+' nikad nema posla -- bez ovog testa bi put zatecene sveske meren samo rucnim
+' smoke-om. Obrazac je Test_Amb_StareKoloneSelfHeal: test FIZICKI vraca stari
+' raspored (stari kanon: 9, 10, 12, 14-16, 18 i 27), meri da kanonski prefiks
+' tada PADA (inace bi test bio vakuumski), pusta
+' modSetup.ObrisiStareKolonePrijemnice i meri: kolone su otisle, prefiks prolazi,
+' a prvi red nosi ISTE vrednosti po imenu u svakoj kanonskoj koloni.
+' Prva tvrdnja meri drugu polovinu R7: EnsureSledljivostSchema prijemnici vise ne
+' dodaje GeneracijaID (dodata bi se vratila NA KRAJ, gde je prefiks ne vidi).
+'
+' Bez transakcije: clsTransaction.RestoreTable pada na promenu broja kolona.
+' Ciscenje ide kroz genericki primitiv po imenu, i u EH grani.
+' SABOTAZE: s6k8-selfheal-ne-brise, s6k8-generacija-vraca-se.
+Private Sub Test_S6K8_PrijemnicaStareKoloneSelfHeal()
+    On Error GoTo EH
+
+    modSetup.EnsureSledljivostSchema
+    AssertEquals "0", CStr(GetColumnIndex(TBL_PRIJEMNICA, "GeneracijaID")), _
+                 "S6K8 self-heal: EnsureSledljivostSchema ne vraca GeneracijaID prijemnici"
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_PRIJEMNICA)
+    If lo Is Nothing Then
+        AssertTrue False, "S6K8 self-heal: tabela prijemnice postoji"
+        Exit Sub
+    End If
+    If lo.ListRows.count = 0 Then
+        AssertTrue False, "S6K8 self-heal: zaglavlje ima bar jedan red (svedok vrednosti)"
+        Exit Sub
+    End If
+
+    Dim stare As Variant, nadjene As String, k As Long
+    stare = PrjStareKolone()
+    For k = LBound(stare) To UBound(stare)
+        If GetColumnIndex(TBL_PRIJEMNICA, CStr(stare(k))) > 0 Then
+            nadjene = nadjene & CStr(stare(k)) & " "
+        End If
+    Next k
+    If Len(nadjene) > 0 Then
+        AssertTrue False, "S6K8 self-heal: polazna tabela je bez starih kolona"
+        Exit Sub
+    End If
+
+    Dim preKolona As Long
+    preKolona = lo.ListColumns.count
+
+    ' Svedok: prvi red, svaka kanonska kolona po imenu, PRE vracanja starog rasporeda.
+    Dim kanon As Collection, ime As String
+    Set kanon = modSchema.SchemaTableColumns(TBL_PRIJEMNICA)
+    Dim pre As Object
+    Set pre = CreateObject("Scripting.Dictionary")
+    For k = 1 To kanon.count
+        ime = CStr(kanon(k))
+        pre(ime) = CStr(nz(lo.ListColumns(GetColumnIndex(TBL_PRIJEMNICA, ime)) _
+                               .DataBodyRange.cells(1, 1).value, ""))
+    Next k
+
+    ' Stari raspored, redom po STAROJ poziciji -- svaka umetnuta kolona pomera ostale.
+    lo.ListColumns.Add(9).name = "Kolicina"
+    lo.ListColumns.Add(10).name = "Cena"
+    lo.ListColumns.Add(12).name = "KolAmbalaze"
+    lo.ListColumns.Add(14).name = "Klasa"
+    lo.ListColumns.Add(15).name = "Fakturisano"
+    lo.ListColumns.Add(16).name = "FakturaID"
+    lo.ListColumns.Add(18).name = "BrutoKg"
+    lo.ListColumns.Add(27).name = "GeneracijaID"
+    lo.ListColumns(GetColumnIndex(TBL_PRIJEMNICA, "Kolicina")).DataBodyRange.cells(1, 1).value = 123
+    lo.ListColumns(GetColumnIndex(TBL_PRIJEMNICA, "GeneracijaID")).DataBodyRange.cells(1, 1).value = _
+        "GEN-SELFHEAL"
+
+    Dim errNum As Long, errDesc As String
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail "Test_S6K8_PrijemnicaStareKoloneSelfHeal", TBL_PRIJEMNICA
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "S6K8 self-heal: stari raspored obara kanonski prefiks"
+
+    modSetup.ObrisiStareKolonePrijemnice
+
+    nadjene = ""
+    For k = LBound(stare) To UBound(stare)
+        If GetColumnIndex(TBL_PRIJEMNICA, CStr(stare(k))) > 0 Then
+            nadjene = nadjene & CStr(stare(k)) & " "
+        End If
+    Next k
+    AssertEquals "", Trim$(nadjene), _
+                 "S6K8 self-heal: nijedna stara kolona zaglavlja nije ostala"
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_PRIJEMNICA).ListColumns.count), _
+                 "S6K8 self-heal: tabela je vracena na kanonski broj kolona"
+
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail "Test_S6K8_PrijemnicaStareKoloneSelfHeal", TBL_PRIJEMNICA
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), _
+                 "S6K8 self-heal: posle brisanja kanonski prefiks prolazi"
+
+    Dim razlike As String
+    Set lo = GetTable(TBL_PRIJEMNICA)
+    For k = 1 To kanon.count
+        ime = CStr(kanon(k))
+        If CStr(nz(lo.ListColumns(GetColumnIndex(TBL_PRIJEMNICA, ime)) _
+                       .DataBodyRange.cells(1, 1).value, "")) <> CStr(pre(ime)) Then
+            razlike = razlike & ime & " "
+        End If
+    Next k
+    AssertEquals "", Trim$(razlike), _
+                 "S6K8 self-heal: prvi red nosi iste vrednosti po imenu"
+
+    ' Idempotentno: drugi prolaz nema sta da obrise.
+    modSetup.ObrisiStareKolonePrijemnice
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_PRIJEMNICA).ListColumns.count), _
+                 "S6K8 self-heal: drugi prolaz ne dira tabelu"
+
+    ' Ciscenje NE ide kroz primitiv koji test meri: pokvaren primitiv bi ostavio
+    ' staru kolonu u sredini, a ona obara SVAKI sledeci upis prijemnice.
+    PrjObrisiStareKoloneTest
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    ' Ciscenje i posle pada -- stara kolona ne sme da ostane iza testa.
+    On Error Resume Next
+    PrjObrisiStareKoloneTest
+    On Error GoTo 0
+    LogFatal "Test_S6K8_PrijemnicaStareKoloneSelfHeal", errNum, errDesc
+End Sub
+
+' R11 (PRJ-ZBR-02, KI-047): PISAC I PREVEZIVANJE PRIMAJU SAMO ROBU ZBIRNE.
+'
+' Odluka operatera (27.10.2026): vrsta i sorta prijemnice su vrsta i sorta zbirne,
+' a podela na I i II klasu sme da se razlikuje. Mere se pisac mimo F4 (kao R1),
+' zadat roditelj (put hladnjackog lanca) i prevezivanje na drugu zbirnu (Oporavak
+' "Prevezi prijemnicu"). Odbijanje pisca je pre ijednog upisa (zaglavlje, stavke,
+' knjiga), a razlog je ISTI tekst koji F4 daje uz polje. Zbirna druge vrste je
+' kultura bez sorte (Test Dunja) -- legitimna roba, ne kvar.
+' SABOTAZE: s6k8-roba-ne-poredi-vrstu, s6k8-roba-ne-poredi-sortu,
+' s6k8-pisac-bez-provere-robe, s6k8-prevezi-bez-provere-robe.
+Private Sub Test_S6K8_PrijemnicaRobaKaoZbirna()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, testDate As Date
+    scenario = NewScenarioCode("S6K8R")
+    testDate = NextTestDate()
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    ZbrPodPrijemnicuSnimi tx
+
+    Dim brA As String, brB As String, brC As String
+    Dim zA As String, zB As String, zC As String
+    brA = TEST_PREFIX & "-ZK8RA-" & scenario
+    brB = TEST_PREFIX & "-ZK8RB-" & scenario
+    brC = TEST_PREFIX & "-ZK8RC-" & scenario
+    zA = ZbrIzdataPodPrijemnicu(testDate, brA, TEST_KUP_ID)
+    zB = ZbrIzdataPodPrijemnicu(testDate, brB, TEST_KUP_ID)
+    zC = ZbrIzdataPodPrijemnicu(testDate, brC, TEST_KUP_ID, kulturaID:=TEST_KUL_BEZ_SORTE_ID)
+    AssertTrue Len(zA) > 0 And Len(zB) > 0 And Len(zC) > 0 And _
+               HldPolje(TBL_ZBIRNA, COL_ZBR_ID, zC, COL_ZBR_VRSTA) = TEST_VRSTA_BEZ_SORTE, _
+               "S6K8 roba: preduslov -- dve izdate zbirne iste robe i jedna druge vrste"
+
+    Dim r As String, g As String, pre As String
+
+    pre = S6K8Redova()
+    r = S6K8PisacRoba(testDate, "V-" & scenario, brA, "", "Test Kruska", TEST_SORTA, g)
+    AssertEquals "|" & Poruka("DOKUNOS_ERR_PRJ_VRSTA_ZBIRNE") & " " & TEST_VRSTA & "|" & pre, _
+                 r & "|" & g & "|" & S6K8Redova(), _
+                 "S6K8 roba: druga vrsta se odbija u piscu pre ijednog upisa (PRJ-ZBR-02)"
+
+    pre = S6K8Redova()
+    r = S6K8PisacRoba(testDate, "S-" & scenario, brA, "", TEST_VRSTA, "Druga Sorta", g)
+    AssertEquals "|" & Poruka("DOKUNOS_ERR_PRJ_SORTA_ZBIRNE") & " " & TEST_SORTA & "|" & pre, _
+                 r & "|" & g & "|" & S6K8Redova(), _
+                 "S6K8 roba: druga sorta se odbija u piscu pre ijednog upisa (PRJ-ZBR-02)"
+
+    ' Zadat roditelj (put hladnjackog lanca): zbirna je izdata i istog vlasnika,
+    ' samo roba nije ista.
+    pre = S6K8Redova()
+    r = S6K8PisacRoba(testDate, "R-" & scenario, brA, zA, "Test Kruska", TEST_SORTA, g)
+    AssertEquals "|" & Poruka("DOKUNOS_ERR_PRJ_VRSTA_ZBIRNE") & " " & TEST_VRSTA & "|" & pre, _
+                 r & "|" & g & "|" & S6K8Redova(), _
+                 "S6K8 roba: zadat roditelj druge robe se odbija pre ijednog upisa (PRJ-ZBR-02)"
+
+    ' Kontrola: ista roba, a podela na klase nije ona sa zbirne (zbirna: I = 100).
+    Dim brOk As String
+    brOk = TEST_PREFIX & "-PK8R-OK-" & scenario
+    r = S6K8PisacRoba(testDate, "OK-" & scenario, brA, "", TEST_VRSTA, TEST_SORTA, g, 60#, 40#)
+    AssertEquals "True|" & zA & "|", _
+                 CStr(Len(r) > 0) & "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_DETE_ZBIRNA_ROD) & "|" & g, _
+                 "S6K8 roba: kontrola -- ista roba uz drugu podelu na klase prolazi"
+
+    ' Prevezivanje (Oporavak "Prevezi prijemnicu"): cilj druge vrste se odbija bez
+    ' ijedne izmene, cilj iste robe prolazi.
+    Dim ok As Boolean
+    ok = ReassignPrijemnicaToZbirna_TX(brOk, brC, r)
+    AssertEquals "False|" & brA & "|" & zA, _
+                 CStr(ok) & "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_PRJ_BROJ_ZBIRNE) & _
+                 "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_DETE_ZBIRNA_ROD), _
+                 "S6K8 roba: prevezivanje na zbirnu druge vrste se odbija bez izmene (PRJ-ZBR-02)"
+
+    ok = ReassignPrijemnicaToZbirna_TX(brOk, brB, r)
+    AssertEquals "True|" & brB & "|" & zB, _
+                 CStr(ok) & "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_PRJ_BROJ_ZBIRNE) & _
+                 "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_DETE_ZBIRNA_ROD), _
+                 "S6K8 roba: kontrola -- prevezivanje na zbirnu iste robe prolazi"
+
+    tx.RollbackTx
+    Exit Sub
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_S6K8_PrijemnicaRobaKaoZbirna", eN, eD
+End Sub
+
+' Osam kolona starog zaglavlja prijemnice, po imenu (literali: konstante ne postoje).
+Private Function PrjStareKolone() As Variant
+    PrjStareKolone = Array("Kolicina", "Cena", "KolAmbalaze", "Klasa", "Fakturisano", _
+                           "FakturaID", "BrutoKg", "GeneracijaID")
+End Function
+
+' Brise stare kolone GENERICKIM primitivom, po imenu -- nezavisno od
+' modSetup.ObrisiStareKolonePrijemnice, koji Test_S6K8_PrijemnicaStareKoloneSelfHeal meri.
+Private Sub PrjObrisiStareKoloneTest()
+    Dim stare As Variant, k As Long
+    stare = PrjStareKolone()
+    For k = LBound(stare) To UBound(stare)
+        modSetup.ObrisiKolonuAko TBL_PRIJEMNICA, CStr(stare(k))
+    Next k
+End Sub
+
+' Prijemnica S6K8 testa kroz pisac: jedna klasa sa gajbama (knjiga ima sta da
+' upise), zadat ili prazan roditelj.
+Private Function S6K8Pisac(ByVal datum As Date, ByVal kupacID As String, ByVal oznaka As String, _
+                           ByVal brZbr As String, ByVal roditelj As String, _
+                           ByRef outG As String) As String
+    Dim errN As Long
+    outG = ""
+    S6K8Pisac = SavePrijemnicaMulti_TX(datum:=datum, kupacID:=kupacID, vozacID:=TEST_VOZ_ID, _
+        brojPrij:=TEST_PREFIX & "-PK8-" & oznaka, brojZbirne:=brZbr, vrstaVoca:=TEST_VRSTA, _
+        sortaVoca:=TEST_SORTA, kolicinaI:=100#, cenaI:=50#, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
+        kolAmbVracena:=0, outErrNum:=errN, outGreska:=outG, zbirnaRoditeljID:=roditelj)
+End Function
+
+' Prijemnica R11 testa kroz pisac, sa zadatom robom. Kupac TEST_KUP_ID, broj
+' TEST_PREFIX & "-PK8R-" & oznaka. kolII > 0 dodaje klasu II (bez gajbi).
+Private Function S6K8PisacRoba(ByVal datum As Date, ByVal oznaka As String, _
+                               ByVal brZbr As String, ByVal roditelj As String, _
+                               ByVal vrsta As String, ByVal sorta As String, _
+                               ByRef outG As String, _
+                               Optional ByVal kolI As Double = 100#, _
+                               Optional ByVal kolII As Double = 0#) As String
+    Dim errN As Long
+    outG = ""
+    S6K8PisacRoba = SavePrijemnicaMulti_TX(datum:=datum, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+        brojPrij:=TEST_PREFIX & "-PK8R-" & oznaka, brojZbirne:=brZbr, vrstaVoca:=vrsta, _
+        sortaVoca:=sorta, kolicinaI:=kolI, cenaI:=50#, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
+        kolAmbVracena:=0, hasKlasaII:=(kolII > 0), kolicinaII:=kolII, cenaII:=30#, _
+        outErrNum:=errN, outGreska:=outG, zbirnaRoditeljID:=roditelj)
+End Function
+
+' Broj redova zaglavlja, stavki i knjige -- "pre ijednog upisa" kao jedan otisak.
+Private Function S6K8Redova() As String
+    S6K8Redova = "P" & CStr(Pr3BrojRedova(TBL_PRIJEMNICA)) & _
+                 "/S" & CStr(Pr3BrojRedova(TBL_PRIJEMNICA_STAVKE)) & _
+                 "/A" & CStr(Pr3BrojRedova(TBL_AMBALAZA))
+End Function
+
+' Test stanica sa cifrom u ID-u (niz broja otpremnice) i zadatom oznakom hladnjace.
+Private Sub HldStanicaSaOznakom(ByVal stanicaID As String, ByVal jeHladnjaca As String)
+    Dim rowData As Variant
+    If RowExists(TBL_STANICE, "StanicaID", stanicaID) Then Exit Sub
+    rowData = BlankRow(TBL_STANICE)
+    SetRequiredField rowData, TBL_STANICE, "StanicaID", stanicaID
+    SetRequiredField rowData, TBL_STANICE, "Naziv", "TEST STANICA " & stanicaID
+    SetOptionalField rowData, TBL_STANICE, "Mesto", "Test Mesto"
+    SetOptionalField rowData, TBL_STANICE, "Aktivan", "Aktivan"
+    SetOptionalField rowData, TBL_STANICE, COL_STA_JE_HLADNJACA, jeHladnjaca
+    RequireAppend TBL_STANICE, rowData, "HldStanicaSaOznakom"
+End Sub
+
+' Da li je blok u listi nedovrsenih lanaca (ono sto Oporavak prikazuje kao LANAC).
+Private Function HldNedovrsenLanac(ByVal otkupID As String) As Boolean
+    Dim c As Collection, i As Long, r As Variant
+    Set c = modAutoHladnjaca.NedovrseniLanci()
+    For i = 1 To c.count
+        r = c(i)
+        If StrComp(CStr(r(0)), otkupID, vbTextCompare) = 0 Then
+            HldNedovrsenLanac = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Polje po imenu kolone koje mozda jos ne postoji (crveni prolaz): "" kad ga nema.
+Private Function HldPoljeAko(ByVal tbl As String, ByVal idCol As String, ByVal id As String, _
+                             ByVal col As String) As String
+    If Len(id) = 0 Then Exit Function
+    If GetColumnIndex(tbl, col) = 0 Then Exit Function
+    HldPoljeAko = Trim$(NzToText(GetValueByKey(tbl, idCol, id, col)))
+End Function
+
+' Kome ide noga punih prijemnice (NaNalogID); prazan ID = "".
+Private Function HldNogaNa(ByVal prj As String) As String
+    If Len(prj) = 0 Then Exit Function
+    HldNogaNa = AmbNoviPolje(prj, DOK_TIP_PRIJEMNICA, AMB_VK_UZ_ROBU, COL_AMB_NA_ID)
+End Function
+
+' Da li Oporavak (lista Nedovrseno) ima red LANAC sa statusom GRESKA.
+Private Function HldOporavakLanacGreska() As Boolean
+    Dim c As Collection, i As Long, d As Object
+    Set c = modStornoRecovery.GetNedovrseno()
+    If c Is Nothing Then Exit Function
+    For i = 1 To c.count
+        Set d = c(i)
+        If CStr(d("kind")) = "LANAC" And CStr(d("status")) = "GRESKA" Then
+            HldOporavakLanacGreska = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+' --- pomocnici S6 koraka 7 (hladnjacki lanac) -- nad praznim ID-jem vracaju
+'     prazno, da crveni prolaz izvrsi iste tvrdnje kao zeleni ---
+
+' Transakcija testa lanca: sve sto lanac, nizvodni pisci i F8 diraju. Rollback
+' vraca CEO lanac, pa sinteticki dokumenti ne ostaju u tudjem merenju (KI-045).
+Private Sub HldSnimak(ByVal tx As clsTransaction)
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+End Sub
+
+' Blok kroz kanonski pisac otkupa, na datoj stanici i danu; klasa sa kolicinom
+' 0 se izostavlja.
+Private Function HldBlok(ByVal oznaka As String, ByVal stanicaID As String, ByVal datum As Date, _
+                         ByVal kolI As Double, ByVal cenaI As Double, ByVal ambI As Double, _
+                         ByVal kolII As Double, ByVal cenaII As Double, ByVal ambII As Double) As String
+    Dim h As Object
+    Set h = OtkHeaderNaStanici(TEST_PREFIX & "-OTK-" & oznaka, stanicaID)
+    h("Datum") = datum
+    HldBlok = CreateOtkup_TX(h, OtkStavke(kolI, cenaI, ambI, kolII, cenaII, ambII))
+End Function
+
+' Otpremnica bloka -- ISTI pisac i isto zaglavlje koje pravi lanac, za
+' medjustanja (otpremnica bez zbirne, otpremnica sa zbirnom bez prijemnice).
+Private Function HldOtpremnicaLanca(ByVal otkupID As String, ByVal vozacID As String, _
+                                    ByRef outG As String) As String
+    Dim h As Object, izvori As Collection, stanica As String, datum As Date
+    If Len(otkupID) = 0 Or Len(vozacID) = 0 Then Exit Function
+    stanica = OtkPolje(otkupID, COL_OTK_STANICA)
+    datum = CDate(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM))
+    Set h = CreateObject("Scripting.Dictionary")
+    h("Datum") = datum
+    h("StanicaID") = stanica
+    h("VozacID") = vozacID
+    h("KulturaID") = OtkPolje(otkupID, COL_OTK_KULTURA)
+    h("TipAmbalaze") = OtkPolje(otkupID, COL_OTK_TIP_AMB)
+    h("BrojOtpremnice") = modBrojevi.GenerateBrojOtpremnice(stanica, datum)
+    Set izvori = New Collection
+    izvori.Add otkupID
+    HldOtpremnicaLanca = CreateOtpremnicaIzIzvora_TX(h, izvori, outG)
+End Function
+
+' Druga zbirna ISTOG vozaca pod ZADATIM brojem -- uvoz sa terena (KR-001,
+' brojSaTerena), kroz kanonski pisac.
+Private Function HldZbirnaSaTerena(ByVal otpID As String, ByVal vozacID As String, _
+                                   ByVal broj As String, ByVal datum As Date, _
+                                   ByRef outG As String) As String
+    Dim h As Object, izvori As Collection
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", datum
+    h.Add "VozacID", vozacID
+    h.Add "BrojZbirne", broj
+    h.Add "KupacID", TEST_KUP_ID
+    Set izvori = New Collection
+    izvori.Add otpID
+    HldZbirnaSaTerena = CreateZbirnaIzIzvora_TX(h, izvori, outG, True)
+End Function
+
+' Prijemnica kroz pisac sa zadatim roditeljem (odluka 7), bez gajbi.
+Private Function HldPrijemnicaPisca(ByVal datum As Date, ByVal vozacID As String, _
+                                    ByVal brZbr As String, ByVal roditelj As String, _
+                                    ByVal oznaka As String, ByRef outG As String, _
+                                    Optional ByVal kupacID As String = TEST_KUP_ID) As String
+    Dim errN As Long
+    If Len(brZbr) = 0 Then Exit Function
+    HldPrijemnicaPisca = SavePrijemnicaMulti_TX(datum:=datum, kupacID:=kupacID, vozacID:=vozacID, _
+        brojPrij:=TEST_PREFIX & "-PK7W-" & oznaka, brojZbirne:=brZbr, vrstaVoca:=TEST_VRSTA, _
+        sortaVoca:=TEST_SORTA, kolicinaI:=1#, cenaI:=1#, tipAmb:="", kolAmb:=0, _
+        kolAmbVracena:=0, outErrNum:=errN, outGreska:=outG, zbirnaRoditeljID:=roditelj)
+End Function
+
+' Hladnjacka stanica bez cifara u ID-u: lanac ne moze da joj da broj otpremnice.
+Private Sub HldStanicaBezBroja(ByVal stanicaID As String)
+    Dim rowData As Variant
+    If RowExists(TBL_STANICE, "StanicaID", stanicaID) Then Exit Sub
+    rowData = BlankRow(TBL_STANICE)
+    SetRequiredField rowData, TBL_STANICE, "StanicaID", stanicaID
+    SetRequiredField rowData, TBL_STANICE, "Naziv", "TEST HLADNJACA BEZ BROJA"
+    SetOptionalField rowData, TBL_STANICE, "Mesto", "Test Mesto"
+    SetOptionalField rowData, TBL_STANICE, "Aktivan", "Aktivan"
+    SetOptionalField rowData, TBL_STANICE, COL_STA_JE_HLADNJACA, "Da"
+    RequireAppend TBL_STANICE, rowData, "HldStanicaBezBroja"
+End Sub
+
+Private Function HldOtp(ByVal otkupID As String) As String
+    If Len(otkupID) = 0 Then Exit Function
+    HldOtp = modDokumenta.OtpremnicaZaOtkup(otkupID)
+End Function
+
+Private Function HldZbr(ByVal otpID As String) As String
+    If Len(otpID) = 0 Then Exit Function
+    HldZbr = modDokumenta.AktivnaZbirnaZaOtpremnicu(otpID)
+End Function
+
+' Aktivna prijemnica cija je roditeljska zbirna (po ID-u) data.
+Private Function HldPrj(ByVal zbrID As String) As String
+    If Len(zbrID) = 0 Then Exit Function
+    HldPrj = Trim$(NzToText(LookupActiveID(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD, zbrID, COL_PRJ_ID)))
+End Function
+
+' Clanstvo otpremnice u bilo kojoj zbirnoj (i u NACRTU): "" = nije clan.
+Private Function HldZbirnaClanstvo(ByVal otpID As String) As String
+    Dim redovi As Collection
+    If Len(otpID) = 0 Then Exit Function
+    Set redovi = FindRows(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, otpID)
+    If redovi Is Nothing Then Exit Function
+    If redovi.count > 0 Then HldZbirnaClanstvo = CStr(redovi.count)
+End Function
+
+Private Function HldPolje(ByVal tbl As String, ByVal idCol As String, ByVal id As String, _
+                          ByVal col As String) As String
+    If Len(id) = 0 Then Exit Function
+    HldPolje = Trim$(NzToText(GetValueByKey(tbl, idCol, id, col)))
+End Function
+
+Private Function HldDatum(ByVal tbl As String, ByVal idCol As String, ByVal id As String, _
+                          ByVal col As String) As String
+    Dim v As Variant
+    If Len(id) = 0 Then Exit Function
+    v = GetValueByKey(tbl, idCol, id, col)
+    If IsDate(v) Then HldDatum = Format$(CDate(v), "yyyy-mm-dd")
+End Function
+
+Private Function HldZbrIzdata(ByVal zbrID As String) As String
+    If Len(zbrID) = 0 Then Exit Function
+    HldZbrIzdata = CStr(modDokumenta.ZbirnaJeIzdata(zbrID))
+End Function
+
+' Jedini izvor zbirne (UCase); vise ili nijedan je ishod, ne pad testa.
+Private Function HldIzvorZbirne(ByVal zbrID As String) As String
+    Dim c As Collection
+    If Len(zbrID) = 0 Then Exit Function
+    Set c = modDokumenta.IzvoriZbirne(zbrID)
+    If c.count = 1 Then
+        HldIzvorZbirne = UCase$(CStr(c(1)))
+    Else
+        HldIzvorZbirne = "<" & CStr(c.count) & " izvora>"
+    End If
+End Function
+
+' "I:kg/gajbe|II:kg/gajbe" iz read-modela otpremnice (ocekivanje = izvedeno iz izvora).
+Private Function HldKlaseOtp(ByVal otpID As String) As String
+    Dim prog As Object, k As Object, kl As Variant, s As String
+    If Len(otpID) = 0 Then Exit Function
+    Set prog = modDokumenta.GetOtpremnicaProgress(otpID)
+    For Each kl In Array(KLASA_I, KLASA_II)
+        If prog.Exists(CStr(kl)) Then
+            Set k = prog(CStr(kl))
+            If Len(s) > 0 Then s = s & "|"
+            s = s & CStr(kl) & ":" & CStr(k("ocekivano")) & "/" & CStr(k("ocekivanoAmb"))
+        End If
+    Next kl
+    HldKlaseOtp = s
+End Function
+
+' Isto, iz stavki zbirne (strog citac ZbirnaPoKlasi).
+Private Function HldKlaseZbr(ByVal zbrID As String) As String
+    Dim pk As Object, kl As Variant, s As String
+    If Len(zbrID) = 0 Then Exit Function
+    Set pk = modDokumenta.ZbirnaPoKlasi(zbrID)
+    For Each kl In Array(KLASA_I, KLASA_II)
+        If pk.Exists(UCase$(CStr(kl))) Then
+            If Len(s) > 0 Then s = s & "|"
+            s = s & CStr(kl) & ":" & CStr(pk(UCase$(CStr(kl)))(0)) & "/" & _
+                CStr(pk(UCase$(CStr(kl)))(1))
+        End If
+    Next kl
+    HldKlaseZbr = s
+End Function
+
+' Isto, iz stavki prijemnice.
+Private Function HldKlasePrj(ByVal prj As String) As String
+    Dim d As Variant, r As Long, kl As Variant, s As String
+    If Len(prj) = 0 Then Exit Function
+    For Each kl In Array(KLASA_I, KLASA_II)
+        r = S6StavkaRed(prj, CStr(kl), d)
+        If r > 0 Then
+            If Len(s) > 0 Then s = s & "|"
+            s = s & CStr(kl) & ":" & _
+                S6Broj(d(r, RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, "HldKlasePrj"))) & "/" & _
+                S6Broj(d(r, RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KOL_AMB, "HldKlasePrj")))
+        End If
+    Next kl
+    HldKlasePrj = s
+End Function
+
+' "I:cena|II:cena" stavki prijemnice.
+Private Function HldCenePrj(ByVal prj As String) As String
+    Dim d As Variant, r As Long, kl As Variant, s As String
+    If Len(prj) = 0 Then Exit Function
+    For Each kl In Array(KLASA_I, KLASA_II)
+        r = S6StavkaRed(prj, CStr(kl), d)
+        If r > 0 Then
+            If Len(s) > 0 Then s = s & "|"
+            s = s & CStr(kl) & ":" & _
+                S6Broj(d(r, RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA, "HldCenePrj")))
+        End If
+    Next kl
+    HldCenePrj = s
+End Function
+
+' Noga punih dokumenta: "broj redova|kolicina"; prazan ID = "0|0".
+Private Function HldNoga(ByVal dokID As String, ByVal dokTip As String) As String
+    If Len(dokID) = 0 Then
+        HldNoga = "0|0"
+        Exit Function
+    End If
+    HldNoga = CStr(AmbNoviBrojRedova(dokID, dokTip, AMB_VK_UZ_ROBU)) & "|" & _
+              CStr(AmbNoviKolicina(dokID, dokTip, AMB_VK_UZ_ROBU))
+End Function
+
+' Da li je broj CEO token izvestaja. InStr ne valja: broj otpremnice ("90001/...")
+' je podniz broja zbirne ogledala ("S90001/..."), a broj prijemnice ("1/...")
+' podniz oba.
+Private Function HldImaBroj(ByVal tekst As String, ByVal broj As String) As Boolean
+    Dim t As Variant
+    If Len(broj) = 0 Then Exit Function
+    For Each t In Split(Replace(Replace(Replace(tekst, ",", " "), ";", " "), ":", " "), " ")
+        If StrComp(CStr(t), broj, vbTextCompare) = 0 Then
+            HldImaBroj = True
+            Exit Function
+        End If
+    Next t
+End Function
+
+' Razlog kojim JEZGRO storna odbija blok, u transakciji koja se odmah vraca:
+' "" = jezgro je pustilo storno (pa je i to vraceno).
+Private Function HldRazlogStornaBloka(ByVal otkupID As String) As String
+    Dim t As clsTransaction
+    If Len(otkupID) = 0 Then Exit Function
+    Set t = New clsTransaction
+    t.BeginTx
+    t.AddTableSnapshot TBL_OTKUP
+    t.AddTableSnapshot TBL_AMBALAZA
+    t.AddTableSnapshot TBL_NOVAC
+    t.AddTableSnapshot TBL_STORNO_ZURNAL
+    On Error Resume Next
+    modStorno.StornoOtkup otkupID, t
+    HldRazlogStornaBloka = Err.description
+    Err.Clear
+    On Error GoTo 0
+    t.RollbackTx
+End Function
 
 ' Red liste Nedovrseno za dati poslovni broj; Nothing = nije u listi.
 Private Function NedRedZaRef(ByVal ref As String) As Object
@@ -10239,69 +17229,65 @@ Private Sub IzvorOtpremniceOdbijen(ByVal otkupID As String, ByVal otpID As Strin
                  "OTK izvor otpremnice " & stanje & ": clanstvo ostaje netaknuto"
 End Sub
 
-' ZATECENI OBLIK ZAGLAVLJA ZBIRNE -- FIXTURE, NE PISAC (S4-2c/2a).
+' IZDATA ZBIRNA POD PRIJEMNICU (S6 korak 8, PRJ-ZBR-01 u piscu).
 '
-' Stari pisac (SaveZbirna / _TX / Multi_TX) je obrisan u ovom rezu. Testovi koji
-' su ga zvali uglavnom nisu merili NJEGA nego nesto nizvodno: manjak, generaciju
-' palete, otvorene fakture, storno po broju. Njima treba RED, ne pisac.
+' Od koraka 8 pisac prijemnice vezuje SAMO na izdatu, jednoznacnu zbirnu istog
+' vlasnika (vozac + kupac), pa je seed red kakav pravi pisac zbirne: izdata
+' otpremnica i CreateZbirna_TX nad njom. Sirov red zbirne (ZbrZateceniRed,
+' obrisan u koraku 8) to nije bio -- nema clanstvo ni status, a "izdata" bez
+' clanstva je stanje koje pisac ne pravi i koje strog citalac izvora odbija
+' (IzvoriZbirne).
 '
-' Fixture pravi ZATECENI oblik: kolicina, klasa i gajbe NA ZAGLAVLJU, plus
-' stavka (da strog citalac ne odbije ceo registar). Taj oblik kanonski pisac vise
-' NE pravi -- namerno ostavlja te kolone prazne -- a citaoci koji ih jos citaju
-' (popis: grupa zbr_linija) nestaju u S3e-2. Tada nestaje i ovaj fixture. Do tada
-' bi seed u kanonskom obliku tim citaocima davao NULU, pa bi test "prolazio" ne
-' merivsi nista.
-'
-' Generacija se pecati ISTIM scope-om koji je pecatio stari pisac (broj + vozac +
-' kupac) -- testovi generacije mere bas taj scope.
-'
-' STA FIXTURE NE RADI: ne proverava NISTA. Testovi koji su merili KAPIJE starog
-' pisca (nevalidna klasa, zauzet broj, tudji vlasnik broja) presli su na kanonski
-' pisac; da su ostali ovde, tvrdnja bi im postala placebo.
-Private Function ZbrZateceniRed(ByVal datum As Date, ByVal vozacID As String, _
-                                ByVal brojZbirne As String, ByVal kupacID As String, _
-                                ByVal hladnjaca As String, ByVal pogon As String, _
-                                ByVal vrstaVoca As String, ByVal sortaVoca As String, _
-                                ByVal ukupnoKol As Double, ByVal tipAmb As String, _
-                                ByVal ukupnoAmb As Long, _
-                                Optional ByVal klasa As String = "I") As String
-    Const SRC As String = "ZbrZateceniRed"
+' Otpremnica je BEZ GAJBI: izdavanje bi stavilo gajbe na vozaca i pomerilo saldo
+' koji testovi prijemnice mere. Vrstu i sortu zbirna preuzima od izvora
+' (ZBR-KANON-04). Pisci otkupa, otpremnice i zbirne commituju SVOJE transakcije:
+' test koji sam drzi transakciju snima i njihove tabele (ZbrPodPrijemnicuSnimi).
+Private Function ZbrIzdataPodPrijemnicu(ByVal datum As Date, ByVal brojZbirne As String, _
+                                        ByVal kupacID As String, _
+                                        Optional ByVal vozacID As String = TEST_VOZ_ID, _
+                                        Optional ByVal kol As Double = 100#, _
+                                        Optional ByVal kulturaID As String = "") As String
+    Const SRC As String = "ZbrIzdataPodPrijemnicu"
+    Dim otp As String, h As Object, ocek As Collection, razlog As String
 
-    Dim zbirnaID As String
-    zbirnaID = GetNextID(TBL_ZBIRNA, COL_ZBR_ID, "ZBR-")
-    If Len(zbirnaID) = 0 Then
-        Err.Raise vbObjectError + 9310, SRC, "GetNextID nije vratio ZbirnaID."
+    ' Broj izvora nosi i vozaca: dve zbirne istog broja dva vozaca (dvosmislen
+    ' broj) ne smeju da dele broj otpremnice ni otkupa.
+    otp = Pr3OtpremnicaVozac(TEST_PREFIX & "-OTP-PZ-" & Replace(brojZbirne, "/", "-") & _
+                             "-" & vozacID, KLASA_I, kol, 0, vozacID, kulturaID)
+    If Len(otp) = 0 Then
+        Err.Raise vbObjectError + 9312, SRC, _
+                  "Izdata otpremnica za zbirnu " & brojZbirne & " nije napravljena."
     End If
 
-    Dim rowData As Variant
-    rowData = BlankRow(TBL_ZBIRNA)
-    SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_ID, zbirnaID
-    SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_DATUM, datum
-    SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_VOZAC, vozacID
-    SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne
-    SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_KUPAC, kupacID
-    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_HLADNJACA, hladnjaca
-    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_POGON, pogon
-    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_VRSTA, vrstaVoca
-    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_SORTA, sortaVoca
-    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_KOLICINA, ukupnoKol
-    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_TIP_AMB, tipAmb
-    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_KOL_AMB, ukupnoAmb
-    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_KLASA, klasa
-    SetOptionalField rowData, TBL_ZBIRNA, COL_STORNIRANO, ""
-
-    Dim r As Long
-    r = AppendRow(TBL_ZBIRNA, rowData)
-    If r <= 0 Then
-        Err.Raise vbObjectError + 9311, SRC, "AppendRow za tblZbirna nije uspeo."
+    Set h = Pr3Header(brojZbirne)
+    h("Datum") = datum
+    h("VozacID") = vozacID
+    h("KupacID") = kupacID
+    Set ocek = New Collection
+    ocek.Add Pr3Ocekivano(KLASA_I, kol, 0)
+    ZbrIzdataPodPrijemnicu = CreateZbirna_TX(h, Pr3Izvor(otp, ""), ocek, razlog)
+    If Len(ZbrIzdataPodPrijemnicu) = 0 Then
+        Err.Raise vbObjectError + 9313, SRC, _
+                  "Izdata zbirna " & brojZbirne & " nije napravljena: " & razlog
     End If
-
-    ApplyGeneracijaID TBL_ZBIRNA, r, COL_ZBR_BROJ, brojZbirne, _
-                      COL_ZBR_VOZAC, vozacID, COL_ZBR_KUPAC, kupacID
-
-    ZbrZateceniRed = zbirnaID
-    ZbrStavkaUzZateceni zbirnaID, klasa, ukupnoKol, ukupnoAmb
 End Function
+
+' Tabele koje ZbrIzdataPodPrijemnicu menja mimo prijemnice -- za test koji sam
+' drzi transakciju: bez snimka spoljni rollback ostavi otkup i otpremnicu kao
+' sirocad koja posle padnu u tudjem testu. Spisak je unija snimaka tri pisca
+' (CreateOtkup_TX: i knjiga i novac, jer primenjuje avans; otpremnica; zbirna).
+Private Sub ZbrPodPrijemnicuSnimi(ByVal tx As clsTransaction)
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTKUP_STAVKE
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+End Sub
 
 ' KANONSKI NACRT ZBIRNE -- za testove koji mere KAPIJE pisca, ne oblik reda.
 Private Function ZbrKanonNacrt(ByVal datum As Date, ByVal vozacID As String, _
@@ -10322,14 +17308,6 @@ Private Function ZbrKanonNacrt(ByVal datum As Date, ByVal vozacID As String, _
     Dim g As String
     ZbrKanonNacrt = CreateZbirnaDraft_TX(h, ZbrOcek(klasa, kol, amb), g)
 End Function
-
-Private Sub ZbrStavkaUzZateceni(ByVal zbirnaID As String, ByVal klasa As String, _
-                                   ByVal kol As Double, ByVal amb As Double)
-    If kol <= 0 Then Exit Sub
-    ZbrDodajStavku zbirnaID & "-S1", zbirnaID, _
-                   IIf(UCase$(Trim$(klasa)) = UCase$(KLASA_II), 2, 1), _
-                   klasa, kol, amb, "ZbrStavkaUzZateceni"
-End Sub
 
 ' =====================================================================
 ' S4-2b: NACRT ZBIRNE -- najava, pokrivanje, izdavanje
@@ -12855,10 +19833,10 @@ Private Sub Test_OTP_HeaderNeNosiLinePolja()
                                         izvori)
 
     AssertTrue Len(otpID) > 0, "OTP header: upis prosao"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_KOLICINA), "OTP header: Kolicina prazna"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_KOL_AMB), "OTP header: KolAmbalaze prazna"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_KLASA), "OTP header: Klasa prazna"
-    AssertEquals "", OtpPolje(otpID, COL_OTP_BRUTO), "OTP header: BrutoKg prazan"
+    ' "Prazno" je bilo najbolje sto se moglo tvrditi dok je kolona postojala. Od
+    ' S3-ostatka je njeno odsustvo STRUKTURNO, pa tvrdnja to i kaze.
+    AssertEquals "0|0|0|0|0", OtpLinijskeKoloneIndeksi(), _
+                 "OTP header: nijedne linijske kolone nema na zaglavlju"
 
     ' A vozac JESTE na headeru -- otpremnica ga poseduje (S4.1c).
     AssertEquals TEST_VOZ_ID, OtpPolje(otpID, COL_OTP_VOZAC), "OTP header: VozacID"
@@ -13681,27 +20659,53 @@ Private Sub Test_OTK_AmbalazaIdeNaDokument()
 
     AssertTrue Len(otkID) > 0, "OTK ambalaza: upis prosao"
 
-    ' Primljene gajbe: 20 + 30 = 50, JEDAN par redova.
+    ' DVA DOGADJAJA, NE CETIRI NOGE (10b-2). Nov red imenuje OBE strane, pa
+    ' dokument ima tacno dva reda -- primljeno i izdato.
     AssertEquals "2", CStr(AmbBrojRedova(otkID, DOK_TIP_OTKUP)), _
-                 "OTK ambalaza: primljeno = jedan dvojni upis, ne po klasi"
-    AssertTrue Abs(AmbKolicina(otkID, DOK_TIP_OTKUP, "Izlaz") - 50#) < 0.001, _
-               "OTK ambalaza: kooperant IZLAZ nosi zbir stavki"
-    AssertTrue Abs(AmbKolicina(otkID, DOK_TIP_OTKUP, "Ulaz") - 50#) < 0.001, _
-               "OTK ambalaza: OM ULAZ nosi isti zbir"
-    AssertEquals TEST_KOOP_ID, AmbEntitet(otkID, DOK_TIP_OTKUP, "Izlaz"), _
-                 "OTK ambalaza: izlazna noga je kooperantova"
-    AssertEquals TEST_ST_ID, AmbEntitet(otkID, DOK_TIP_OTKUP, "Ulaz"), _
-                 "OTK ambalaza: ulazna noga je stanicina"
+                 "OTK ambalaza: dokument ima DVA reda -- dva dogadjaja, ne cetiri noge"
 
-    ' Izdate gajbe: obrnut smer, svoj tip dokumenta.
-    AssertEquals "2", CStr(AmbBrojRedova(otkID, DOK_TIP_OM_IZLAZ_KOOP)), _
-                 "OTK ambalaza: izdato = jedan dvojni upis"
-    AssertTrue Abs(AmbKolicina(otkID, DOK_TIP_OM_IZLAZ_KOOP, "Ulaz") - 7#) < 0.001, _
-               "OTK ambalaza: kooperant ULAZ prima prazne"
+    ' Primljene gajbe: 20 + 30 = 50, JEDAN red nad zbirom stavki.
+    AssertEquals "1", CStr(AmbNoviBrojRedova(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU)), _
+                 "OTK ambalaza: primljeno = JEDAN red, ne po klasi"
+    AssertTrue Abs(AmbNoviKolicina(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU) - 50#) < 0.001, _
+               "OTK ambalaza: primljeno nosi zbir stavki"
+    AssertEquals AMB_NALOG_KOOPERANT, _
+                 AmbNoviPolje(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU, COL_AMB_OD_TIP), _
+                 "OTK ambalaza: primljeno ide OD kooperanta"
+    AssertEquals TEST_KOOP_ID, _
+                 AmbNoviPolje(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU, COL_AMB_OD_ID), _
+                 "OTK ambalaza: primljeno imenuje BAS tog kooperanta"
+    AssertEquals AMB_NALOG_STANICA, _
+                 AmbNoviPolje(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU, COL_AMB_NA_TIP), _
+                 "OTK ambalaza: primljeno ide NA stanicu"
+    AssertEquals TEST_ST_ID, _
+                 AmbNoviPolje(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU, COL_AMB_NA_ID), _
+                 "OTK ambalaza: primljeno imenuje BAS tu stanicu"
 
-    ' Vozac se NE zigose -- otkup ga u ciljnom modelu nema.
-    AssertEquals "", AmbVozac(otkID, DOK_TIP_OTKUP, "Izlaz"), _
-                 "OTK ambalaza: nema vozaca na otkupnoj nozi"
+    ' Izdate gajbe: obrnut par, ISTI tip dokumenta. Pozajmljen DokumentTIP
+    ' (OM-Izlaz-Koop) je napetost T3 iz AMBALAZA.md i vise ne nastaje -- dogadjaj
+    ' se desava UNUTAR otkupa, a AMB-INV-04 ih razlikuje po VrstaKretanja.
+    ' Konstanta tog tipa je obrisana u 10e-3, pa kontra-tvrdnja meri PRAVILO, ne
+    ' jedno ime: svi redovi sa DokumentID = otkup stoje pod tipom Otkup.
+    AssertEquals "1", _
+                 CStr(AmbNoviBrojRedova(otkID, DOK_TIP_OTKUP, AMB_VK_IZDATA_PRAZNA)), _
+                 "OTK ambalaza: izdato = JEDAN red, pod ISTIM tipom dokumenta"
+    AssertEquals CStr(AmbBrojRedova(otkID, DOK_TIP_OTKUP)), _
+                 CStr(FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, otkID).count), _
+                 "OTK ambalaza: nijedan red otkupa ne stoji pod drugim tipom dokumenta"
+    AssertTrue Abs(AmbNoviKolicina(otkID, DOK_TIP_OTKUP, AMB_VK_IZDATA_PRAZNA) - 7#) < 0.001, _
+               "OTK ambalaza: izdato nosi kolicinu sa zaglavlja"
+    AssertEquals AMB_NALOG_STANICA, _
+                 AmbNoviPolje(otkID, DOK_TIP_OTKUP, AMB_VK_IZDATA_PRAZNA, COL_AMB_OD_TIP), _
+                 "OTK ambalaza: izdato ide OD stanice"
+    AssertEquals AMB_NALOG_KOOPERANT, _
+                 AmbNoviPolje(otkID, DOK_TIP_OTKUP, AMB_VK_IZDATA_PRAZNA, COL_AMB_NA_TIP), _
+                 "OTK ambalaza: izdato ide NA kooperanta"
+
+    ' Vozac nije STRANA ni u jednom redu otkupa. Tvrdnja nad kolonom VozacID bi
+    ' posle prelaza prolazila vakuumski -- nov pisac tu kolonu ne pise nikad.
+    AssertEquals "0", CStr(AmbNoviBrojSaNalogom(otkID, DOK_TIP_OTKUP, AMB_NALOG_VOZAC)), _
+                 "OTK ambalaza: vozac nije strana ni u jednom redu otkupa"
 
     ' Bez gajbi nema ni reda -- prazan upis nije nula, nego odsustvo.
     Dim otkID2 As String
@@ -13806,8 +20810,10 @@ Private Sub Test_OTK_EkranPiseNovimModelom()
     AssertEquals "", OtkPolje(res, COL_OTK_VOZAC), "OTK ekran: header ne nosi vozaca"
 
     ' Ambalaza: jedan dvojni upis nad zbirom (20 + 30).
-    AssertEquals "2", CStr(AmbBrojRedova(res, DOK_TIP_OTKUP)), "OTK ekran: jedan dvojni upis"
-    AssertTrue Abs(AmbKolicina(res, DOK_TIP_OTKUP, "Izlaz") - 50#) < 0.001, _
+    AssertEquals "1", _
+                 CStr(AmbNoviBrojRedova(res, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU)), _
+                 "OTK ekran: primljeno = JEDAN red koji imenuje obe strane"
+    AssertTrue Abs(AmbNoviKolicina(res, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU) - 50#) < 0.001, _
                "OTK ekran: knjizen zbir gajbi obe klase"
 
     Exit Sub
@@ -13920,10 +20926,10 @@ Private Sub Test_PWA_IngestPraviHeaderIStavku()
     crid = TEST_PREFIX & "-CRID-" & scenario
 
     Dim red As Variant
-    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWA-" & scenario, 400#, 50#, 20)
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWA-" & scenario, 1)
 
     Dim otkID As String
-    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
 
     AssertTrue Len(otkID) > 0, "PWA: uvoz vratio OtkupID"
     AssertEquals "1", CStr(FindRows(TBL_OTKUP, COL_OTK_ID, otkID).count), _
@@ -13944,7 +20950,9 @@ Private Sub Test_PWA_IngestPraviHeaderIStavku()
     AssertEquals "PWA", OtkPolje(otkID, COL_OTK_SYNC_SOURCE), "PWA: SyncSource"
 
     ' Ambalazu knjizi pisac, jednom po dokumentu.
-    AssertEquals "2", CStr(AmbBrojRedova(otkID, DOK_TIP_OTKUP)), "PWA: dvojni upis ambalaze"
+    AssertEquals "1", _
+                 CStr(AmbNoviBrojRedova(otkID, DOK_TIP_OTKUP, AMB_VK_UZ_ROBU)), _
+                 "PWA: primljena ambalaza je JEDAN red novog oblika"
 
     Exit Sub
 
@@ -13977,7 +20985,7 @@ Private Sub Test_PWA_IsoDatumStizeKaoString()
     zeljeni = NextTestDate()
 
     Dim red As Variant
-    red = PwaRed(crid, TEST_PREFIX & "-OTK-ISO-" & scenario, 400#, 50#, 20)
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-ISO-" & scenario, 1)
 
     ' PRODUKCIONI OBLIK: string, ne Date.
     red(1, 9) = Format$(zeljeni, "yyyy-mm-dd")
@@ -13986,7 +20994,7 @@ Private Sub Test_PWA_IsoDatumStizeKaoString()
                "PWA ISO preduslov: datum je STRING, kao iz JSON-a"
 
     Dim otkID As String
-    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(otkID) > 0, "PWA ISO: uvoz je prosao"
     If Len(otkID) = 0 Then Exit Sub
 
@@ -14014,14 +21022,14 @@ Private Sub Test_PWA_NerazresivaKulturaObaraUvoz()
     crid = TEST_PREFIX & "-CRID-KU-" & scenario
 
     Dim red As Variant
-    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWAKU-" & scenario, 400#, 50#, 20)
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWAKU-" & scenario, 1)
     red(1, 13) = TEST_SORTA & " NEPOSTOJECA"        ' GS_SORTA
 
     Dim preH As Long
     preH = OtkBrojRedova(TBL_OTKUP)
 
     Dim otkID As String
-    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
 
     AssertEquals "", otkID, "PWA kultura: uvoz odbijen"
     AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
@@ -14048,17 +21056,17 @@ Private Sub Test_PWA_IstiCridIstiSadrzajJeNoOp()
     crid = TEST_PREFIX & "-CRID-NO-" & scenario
 
     Dim red As Variant
-    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWANO-" & scenario, 400#, 50#, 20)
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWANO-" & scenario, 1)
 
     Dim prvi As String
-    prvi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    prvi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(prvi) > 0, "PWA no-op: prvi uvoz prosao"
 
     Dim preH As Long
     preH = OtkBrojRedova(TBL_OTKUP)
 
     Dim drugi As String
-    drugi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    drugi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
 
     AssertEquals prvi, drugi, "PWA no-op: drugi uvoz vraca ISTI OtkupID"
     AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
@@ -14085,24 +21093,23 @@ Private Sub Test_PWA_IstiCridDrugiSadrzajPada()
     crid = TEST_PREFIX & "-CRID-KF-" & scenario
 
     Dim red As Variant
-    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWAKF-" & scenario, 400#, 50#, 20)
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWAKF-" & scenario, 1)
 
     Dim prvi As String
-    prvi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    prvi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(prvi) > 0, "PWA konflikt: prvi uvoz prosao"
 
-    ' Isti CRID, promenjena SAMO kolicina -- kopija, ne nov PwaRed poziv.
-    ' Nov poziv bi pomerio i datum (NextTestDate), pa bi test merio razliku
-    ' datuma umesto razlike kolicine i ostao zelen i sa ugasenom kapijom.
-    Dim izmenjen As Variant
-    izmenjen = red
-    izmenjen(1, 15) = 999#                             ' GS_KOLICINA
-
+    ' Isti CRID, promenjena SAMO kolicina. Od S5-5b je to izmena STAVKE, pa
+    ' zaglavlje ide NEPROMENJENO -- skup stavki je jedina razlika, sto je tvrdnja
+    ' jaca nego pre: nema drugog polja koje bi moglo da objasni odbijanje.
+    ' (Nov PwaRed poziv bi pomerio datum preko NextTestDate i test bi merio
+    ' razliku datuma, pa ostao zelen i sa ugasenom kapijom.)
     Dim preH As Long
     preH = OtkBrojRedova(TBL_OTKUP)
 
     Dim drugi As String
-    drugi = modMasterSync.ImportRowToTblOtkup_RowTX(izmenjen, 1, crid)
+    drugi = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, _
+                                                    PwaStavke1(999#, 50#, 20))
 
     AssertEquals "", drugi, "PWA konflikt: izmenjen sadrzaj pod istim CRID-om odbijen"
     AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
@@ -14141,11 +21148,11 @@ Private Sub Test_PWA_StanicaJeUredjajNeKooperant()
 
     Dim crid As String: crid = "CRID-STA-" & NewScenarioCode("PWAST")
     Dim red As Variant
-    red = PwaRed(crid, "PWA stanica", 100#, 100#, 0)
+    red = PwaRed(crid, "PWA stanica", 1)
     red(1, 8) = TEST_HLAD_ST_ID          ' GS_OTKUPAC_ID -- uredjaj DRUGE stanice
 
     Dim otkID As String
-    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(100#, 100#, 0))
     AssertTrue Len(otkID) > 0, "PWA stanica: dokument uvezen"
 
     Dim upisana As String
@@ -14176,14 +21183,14 @@ Private Sub Test_PWA_BezUredjajaUvozPada()
 
     Dim crid As String: crid = "CRID-NOST-" & NewScenarioCode("PWANO")
     Dim red As Variant
-    red = PwaRed(crid, "PWA bez uredjaja", 100#, 100#, 0)
+    red = PwaRed(crid, "PWA bez uredjaja", 1)
     red(1, 8) = ""                        ' GS_OTKUPAC_ID prazan
 
     Dim pre As Long
     pre = CountRows(TBL_OTKUP)
 
     Dim rezultat As String
-    rezultat = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    rezultat = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(100#, 100#, 0))
 
     AssertEquals "", rezultat, _
                  "PWA bez uredjaja: uvoz NE vraca OtkupID"
@@ -14559,34 +21566,23 @@ Private Sub Test_BKTX_ReversSudiSamoAmbalazu()
     ambPre = CountRows(TBL_AMBALAZA)
 
     Dim ok As Boolean
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=tudjBroj, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d, tudjBroj, TEST_ST_ID, "", "IZDATO_OM", 10)
 
     AssertFalse ok, "BKTX revers: broj tudje stanice je ODBIJEN"
     AssertEquals CStr(ambPre), CStr(CountRows(TBL_AMBALAZA)), _
                  "BKTX revers: odbijen upis nije ostavio ambalaza red"
 
     ' Kontrola: broj ove stanice prolazi.
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=modBrojevi.FormatBroj(TEST_ST_ID, d, 1), _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d, modBrojevi.FormatBroj(TEST_ST_ID, d, 1), TEST_ST_ID, "", "IZDATO_OM", 10)
 
     AssertTrue ok, "BKTX revers: broj ove stanice prolazi"
 
     ' GOTOVINA: isti "tudj" broj, ali kolAmb = 0 -- nema niza, kapija cuti.
     ok = SaveOMUlaz_TX(datum:=d, brojDok:=tudjBroj, _
                        stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:="", tipAmb:="", kolAmb:=0, _
                        vrstaVoca:=TEST_VRSTA, novac:=5000#, kooperantID:="", _
                        primalacDisplay:="Test primalac", otkupID:="", _
-                       tipNovca:=NOV_KES_FIRMA_OTKUPAC, koopSmer:="")
+                       tipNovca:=NOV_KES_FIRMA_OTKUPAC)
 
     AssertTrue ok, "BKTX revers: cist gotovinski promet NIJE sudjen po broju"
 
@@ -14595,18 +21591,19 @@ EH:
     LogFatal "Test_BKTX_ReversSudiSamoAmbalazu", Err.Number, Err.description
 End Sub
 
-' ZAUZETOST BROJA REVERSA U PISCU -- SaveOMUlaz_TX, po nizu (stanica, dan), sa
-' storniranima (A2 red REV, A9). Plus storno i undo po kljucu: isti broj legalno
-' nose reversi druge stanice i drugog dana, pa ni storno ni undo ne biraju po broju.
+' ZAUZETOST BROJA REVERSA U PISCU -- po nizu (stanica, dan), za sva cetiri smera
+' (A2 red REV). Kroz pravog pisca (UpisiReversAmbalaze_TX).
 '
-' Nivo merenja: poslovni broj u nizu. Smer IZDATO_OM pise JEDNU nogu (Stanica),
-' pa je broj redova tblAmbalaza isto sto i broj dokumenata. Broj je nekanonski,
-' da kapija konteksta ne sudi -- meri se samo zauzetost.
+' Nivo merenja: poslovni broj u nizu. Smer IZDATO_OM pise JEDAN red knjige, pa je
+' broj redova tblAmbalaza isto sto i broj dokumenata. Broj je nekanonski, da
+' kapija konteksta ne sudi -- meri se samo zauzetost.
 '
-' SABOTAZE: ukloni RequireBrojSlobodanUNizu iz SaveOMUlaz_TX -> pukne "pisac
-' odbija isti broj, stanicu i dan"; preskoci stornirane u BrojZauzetRevers ->
-' pukne "storno ne oslobadja broj reversa"; u ReversIDRazresi uzmi prvi
-' ReversID -> pukne "storno bez identiteta odbija dvosmislen broj".
+' 10e-2: obrisana je druga polovina -- storno i undo STAROG oblika (noge pod
+' ReversID-om, zastavica na redu knjige). Sa njom su otisle i tri tvrdnje A9
+' ("storno ne oslobadja broj"): stornirale su red starog oblika, a broj je
+' drzalo NESTORNIRANO kanonsko zaglavlje prvog upisa, pa nisu merile storno. A9
+' nad istim skenom niza (AmbDokNizSken deli generator i kapija) meri
+' Test_REV_AutoBrojJedanNiz, kroz kanonski storno.
 Private Sub Test_BKTX_ReversPisacOdbijaZauzet()
     On Error GoTo EH
 
@@ -14618,488 +21615,61 @@ Private Sub Test_BKTX_ReversPisacOdbijaZauzet()
     Dim broj As String: broj = TEST_PREFIX & "-REV-BZ-" & scenario
 
     Dim ok As Boolean, pre As Long
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d, broj, TEST_ST_ID, "", "IZDATO_OM", 10)
     AssertTrue ok, "REV broj: prvi revers se upisuje"
 
     pre = CountRows(TBL_AMBALAZA)
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d, broj, TEST_ST_ID, "", "IZDATO_OM", 5)
     AssertFalse ok, "REV broj: pisac odbija isti broj, stanicu i dan"
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="PRIJEM_OD_OM")
+    ok = UpisiReversKol(d, broj, TEST_ST_ID, "", "PRIJEM_OD_OM", 5)
     AssertFalse ok, "REV broj: drugi smer istog broja je isti niz"
     AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
                  "REV broj: odbijeni upisi nisu ostavili red"
 
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
-                       stanicaNaziv:="Test OM 2", stanicaID:=BKTX_ST2, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=7, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d, broj, BKTX_ST2, "", "IZDATO_OM", 7)
     AssertTrue ok, "REV broj: druga stanica istog dana prima isti broj (A2)"
-    ok = SaveOMUlaz_TX(datum:=d2, brojDok:=broj, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=9, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
+    ok = UpisiReversKol(d2, broj, TEST_ST_ID, "", "IZDATO_OM", 9)
     AssertTrue ok, "REV broj: drugi dan iste stanice prima isti broj"
-
-    Dim ambA As String, ambB As String, ambC As String
-    ambA = AmbIDNogeStanice(broj, TEST_ST_ID, d)
-    ambB = AmbIDNogeStanice(broj, BKTX_ST2, d)
-    ambC = AmbIDNogeStanice(broj, TEST_ST_ID, d2)
-    AssertTrue Len(ambA) > 0 And Len(ambB) > 0 And Len(ambC) > 0, _
-               "REV storno: preduslov -- tri reversa istog broja postoje"
-
-    ' Storno: bez identiteta broj je dvosmislen; sa identitetom pada samo taj revers.
-    AssertFalse StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_ULAZ_FIRMA), _
-                "REV storno: bez identiteta odbija dvosmislen broj"
-    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambA) Or _
-                RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambB) Or _
-                RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambC), _
-                "REV storno: odbijen storno nije dirao nijedan revers"
-    AssertTrue StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_ULAZ_FIRMA, ambA), _
-               "REV storno: storno po identitetu reda prolazi"
-    AssertTrue RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambA), _
-               "REV storno: storniran je izabrani revers"
-    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambB), _
-                "REV storno: revers istog broja na drugoj stanici ostaje aktivan"
-    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambC), _
-                "REV storno: revers istog broja drugog dana ostaje aktivan"
-
-    ' Storno ne oslobadja broj (A9): ni pisac ni ekran.
-    pre = CountRows(TBL_AMBALAZA)
-    ok = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
-                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
-                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
-                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
-                       primalacDisplay:="", otkupID:="", tipNovca:="", _
-                       koopSmer:="IZDATO_OM")
-    AssertFalse ok, "REV broj: storno ne oslobadja broj reversa -- pisac (A9)"
-    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
-                 "REV broj: odbijen upis posle storna nije ostavio red"
-    AssertEquals ambA, modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, TEST_ST_ID, d, broj), _
-                 "REV broj: storno ne oslobadja broj reversa -- provera vraca storniranu nogu"
-
-    ' Undo po operaciji: garda pita kljuc operacije, pa aktivni reversi istog broja
-    ' na drugoj stanici i drugog dana ne blokiraju vracanje.
-    AssertTrue UndoOperation_TX(LatestOpFor(DOK_TIP_OM_ULAZ_FIRMA, broj)), _
-               "REV undo: reversi istog broja drugde ne blokiraju vracanje (garda po kljucu)"
-    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, ambA), _
-                "REV undo: izabrani revers je ponovo aktivan"
 
     Exit Sub
 EH:
     LogFatal "Test_BKTX_ReversPisacOdbijaZauzet", Err.Number, Err.description
 End Sub
 
-' KOOP REVERS, ISTI BROJ NA DVE STANICE (REV-IDENT-01 Faza 2b). Zabrana istog
-' (broj, KOOP smer, dan) na drugoj stanici je uklonjena: noge jednog reversa povezuje
-' ReversID, pa su dva takva reversa -- i za ISTOG kooperanta -- dva nezavisna
-' dokumenta. Broj i dalje zauzima niz (stanica, dan) za SVA CETIRI smera, sa
-' storniranima (A2, A9).
+' Revers kroz PRAVI pisac (modAmbalaza.UpisiReversAmbalaze_TX), bez novca.
 '
-' Nivo merenja: poslovni broj u nizu + logicki dokument (storno, undo). Kroz pravi
-' pisac, ne seed; noge se nalaze po ReversID-u, jer (broj, kooperant, dan) vise
-' nije jednoznacan.
-'
-' SABOTAZE: vrati u SaveOMUlaz_TX (IZDAVANJE) odbijanje broja i smera koji vec nosi
-' aktivan revers -> pukne "REV KOOP 2b: isti broj, smer i dan na drugoj stanici se
-' upisuje (i za istog kooperanta)"; isto u grani PRIJEM -> pukne "REV KOOP 2b: povrat
-' istog broja i dana na drugoj stanici se upisuje"; u ReversRedoviRID ne poredi ReversID -> pukne
-' "REV KOOP 2b: storno S2 ne dira revers S1"; izbaci RequireBrojSlobodanUNizu iz
-' SaveOMUlaz_TX -> pukne "REV KOOP 2b: drugi smer istog broja na istoj stanici i
-' danu je isti niz".
-Private Sub Test_BKTX_ReversKoopIstiBrojDveStanice()
-    On Error GoTo EH
-
-    SeedBktxDrugaStanica
-
-    Dim scenario As String: scenario = NewScenarioCode("REVKS")
-    Dim d As Date: d = NextTestDate()
-    Dim broj As String: broj = TEST_PREFIX & "-REV-KS-" & scenario
-    Dim pre As Long
-
-    AssertTrue UpisiReversTest(d, broj, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE"), _
-               "REV KOOP 2b: izdavanje kooperantu na S1 upisano"
-    pre = CountRows(TBL_AMBALAZA)
-    AssertTrue UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP_ID, "IZDAVANJE"), _
-               "REV KOOP 2b: isti broj, smer i dan na drugoj stanici se upisuje (i za istog kooperanta)"
-    AssertEquals CStr(pre + 2), CStr(CountRows(TBL_AMBALAZA)), _
-                 "REV KOOP 2b: revers na S2 ima obe noge"
-
-    Dim s1 As String, s2 As String, rid1 As String, rid2 As String, k1 As String, k2 As String
-    s1 = AmbIDNogeStanice(broj, TEST_ST_ID, d)
-    s2 = AmbIDNogeStanice(broj, BKTX_ST2, d)
-    AssertTrue Len(s1) > 0 And Len(s2) > 0, "REV KOOP 2b: preduslov -- noge Stanica oba reversa postoje"
-    rid1 = ReversIDReda(s1)
-    rid2 = ReversIDReda(s2)
-    AssertTrue Len(rid1) > 0 And Len(rid2) > 0 And rid1 <> rid2, _
-               "REV KOOP 2b: dva reversa istog broja nose razlicit ReversID"
-    k1 = NogaPoReversID(rid1, "Kooperant")
-    k2 = NogaPoReversID(rid2, "Kooperant")
-    AssertTrue Len(k1) > 0 And Len(k2) > 0 And k1 <> k2, _
-               "REV KOOP 2b: svaki revers ima svoju nogu Kooperant"
-
-    ' Niz (stanica, dan) i dalje vazi za sva cetiri smera.
-    pre = CountRows(TBL_AMBALAZA)
-    AssertFalse UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP2_ID, "PRIJEM"), _
-                "REV KOOP 2b: drugi smer istog broja na istoj stanici i danu je isti niz"
-    AssertFalse UpisiReversTest(d, broj, TEST_ST_ID, "", "IZDATO_OM"), _
-                "REV KOOP 2b: FIRMA smer istog broja na istoj stanici i danu je isti niz"
-    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
-                 "REV KOOP 2b: odbijeni upisi nisu ostavili red"
-
-    ' Isto za povrat (PRIJEM), zasebna grana pisca: isti broj, smer i dan na dve
-    ' stanice, drugi broj niza.
-    Dim brojP As String: brojP = TEST_PREFIX & "-REV-KSP-" & scenario
-    pre = CountRows(TBL_AMBALAZA)
-    AssertTrue UpisiReversTest(d, brojP, TEST_ST_ID, TEST_KOOP_ID, "PRIJEM"), _
-               "REV KOOP 2b: povrat od kooperanta na S1 upisan"
-    AssertTrue UpisiReversTest(d, brojP, BKTX_ST2, TEST_KOOP_ID, "PRIJEM"), _
-               "REV KOOP 2b: povrat istog broja i dana na drugoj stanici se upisuje"
-    AssertEquals CStr(pre + 4), CStr(CountRows(TBL_AMBALAZA)), _
-                 "REV KOOP 2b: oba povrata imaju obe noge"
-
-    ' Bez identiteta reda broj je dvosmislen -- odbija se, nista se ne dira.
-    AssertFalse StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_IZLAZ_KOOP), _
-                "REV KOOP 2b: storno bez identiteta reda odbija broj koji nose dva reversa"
-    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s1) Or RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s2), _
-                "REV KOOP 2b: odbijen storno nije dirao nijedan revers"
-
-    ' Storno sa noge Kooperant S2 dira samo S2 -- isti kooperant, broj, smer i dan.
-    AssertTrue StornoOMKoopByBrDok_TX(broj, DOK_TIP_OM_IZLAZ_KOOP, k2), _
-               "REV KOOP 2b: storno S2 sa noge Kooperant prolazi"
-    AssertTrue RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, k2) And RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s2), _
-               "REV KOOP 2b: stornirane su obe noge S2"
-    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, k1) Or RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s1), _
-                "REV KOOP 2b: storno S2 ne dira revers S1"
-
-    ' Storno ne oslobadja broj u nizu S2 (A9), a treca stanica ga istog dana prima.
-    pre = CountRows(TBL_AMBALAZA)
-    AssertFalse UpisiReversTest(d, broj, BKTX_ST2, TEST_KOOP2_ID, "IZDAVANJE"), _
-                "REV KOOP 2b: storno ne oslobadja broj u nizu S2 (A9)"
-    AssertTrue UpisiReversTest(d, broj, TEST_HLAD_ST_ID, TEST_KOOP2_ID, "IZDAVANJE"), _
-               "REV KOOP 2b: treca stanica istog dana prima isti broj -- niz je (stanica, dan)"
-    AssertEquals CStr(pre + 2), CStr(CountRows(TBL_AMBALAZA)), _
-                 "REV KOOP 2b: noge je ostavio samo upis trece stanice"
-
-    ' Undo po operaciji vraca S2, a S1 ostaje netaknut.
-    AssertTrue UndoOperation_TX(LatestOpFor(DOK_TIP_OM_IZLAZ_KOOP, broj)), _
-               "REV KOOP 2b: undo storna S2 prolazi"
-    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, k2) Or RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s2), _
-                "REV KOOP 2b: undo je vratio obe noge S2"
-    AssertFalse RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, k1) Or RedJeStorniran(TBL_AMBALAZA, COL_AMB_ID, s1), _
-                "REV KOOP 2b: undo S2 ne dira revers S1"
-
-    Exit Sub
-EH:
-    LogFatal "Test_BKTX_ReversKoopIstiBrojDveStanice", Err.Number, Err.description
-End Sub
-
-' AmbID noge date vrste entiteta pod ReversID-om; prazno kad nema. Od Faze 2b
-' (broj, kooperant, dan) nije jednoznacan -- noge jednog reversa nalazi ReversID.
-Private Function NogaPoReversID(ByVal rid As String, ByVal entitetTip As String) As String
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(data) Then Exit Function
-    Dim cID As Long, cR As Long, cET As Long, i As Long
-    cID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
-    cR = GetColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID)
-    cET = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
-    If cID = 0 Or cR = 0 Or cET = 0 Then Exit Function
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, cR))) = rid And Trim$(NzToText(data(i, cET))) = entitetTip Then
-            NogaPoReversID = Trim$(NzToText(data(i, cID)))
-            Exit Function
-        End If
-    Next i
-End Function
-
-' REV-IDENT-01 (Faza 1): identitet logickog reversa je ReversID -- ISTI na svim
-' nogama jednog dokumenta, RAZLICIT izmedju dokumenata. Kroz pravi pisac.
-'
-' Nivo merenja: logicki dokument. Preduslov je fizicki (KOOP revers ima dve noge,
-' FIRMA jednu), pa se tek onda tvrdi da te noge nose isti, neprazan ReversID. Uz to
-' B10 (modIntegritet) prijavljuje nogu kojoj je ReversID obrisan i grupu kojoj time
-' fali noga Kooperant -- a ispravan revers ne prijavljuje.
-'
-' SABOTAZE: izostavi reversID u nozi Kooperant IZDAVANJE grane SaveOMUlaz_TX ->
-' pukne "REV-ID KOOP izdavanje: obe noge nose isti ReversID"; izostavi ga u
-' PRIJEM_OD_OM grani -> pukne "REV-ID FIRMA prijem od OM: noga Stanica nosi
-' ReversID"; u Chk_B10 preskoci prazan ReversID -> pukne "REV-ID B10: noga bez
-' ReversID prijavljena"; vrati GetNextID u NoviReversID -> pukne "REV-ID: format
-' je opaque RID-<32 hex>".
-Private Sub Test_BKTX_ReversIDNaSvimNogama()
-    On Error GoTo EH
-
-    Dim scenario As String: scenario = NewScenarioCode("REVID")
-    Dim d As Date: d = NextTestDate()
-    Dim brojI As String: brojI = TEST_PREFIX & "-REV-IDI-" & scenario
-    Dim brojP As String: brojP = TEST_PREFIX & "-REV-IDP-" & scenario
-    Dim brojF As String: brojF = TEST_PREFIX & "-REV-IDF-" & scenario
-    Dim brojO As String: brojO = TEST_PREFIX & "-REV-IDO-" & scenario
-
-    AssertTrue UpisiReversTest(d, brojI, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE"), _
-               "REV-ID: izdavanje kooperantu upisano"
-    AssertTrue UpisiReversTest(d, brojP, TEST_ST_ID, TEST_KOOP_ID, "PRIJEM"), _
-               "REV-ID: povrat od kooperanta upisan"
-    AssertTrue UpisiReversTest(d, brojF, TEST_ST_ID, "", "IZDATO_OM"), _
-               "REV-ID: FIRMA izdato OM upisan"
-    AssertTrue UpisiReversTest(d, brojO, TEST_ST_ID, "", "PRIJEM_OD_OM"), _
-               "REV-ID: FIRMA prijem od OM upisan"
-
-    Dim kI As String, sI As String, kP As String, sP As String, sF As String, sO As String
-    kI = AmbIDNoge(brojI, TEST_KOOP_ID, "Kooperant", d)
-    sI = AmbIDNogeStanice(brojI, TEST_ST_ID, d)
-    kP = AmbIDNoge(brojP, TEST_KOOP_ID, "Kooperant", d)
-    sP = AmbIDNogeStanice(brojP, TEST_ST_ID, d)
-    sF = AmbIDNogeStanice(brojF, TEST_ST_ID, d)
-    sO = AmbIDNogeStanice(brojO, TEST_ST_ID, d)
-    AssertTrue Len(kI) > 0 And Len(sI) > 0 And Len(kP) > 0 And Len(sP) > 0 And Len(sF) > 0 And Len(sO) > 0, _
-               "REV-ID: preduslov -- KOOP reversi imaju obe noge, FIRMA nogu Stanica"
-    AssertEquals "", AmbIDNoge(brojF, TEST_KOOP_ID, "Kooperant", d), _
-                 "REV-ID: preduslov -- FIRMA revers nema nogu Kooperant"
-
-    Dim ridI As String, ridP As String, ridF As String, ridO As String
-    ridI = ReversIDReda(sI)
-    ridP = ReversIDReda(sP)
-    ridF = ReversIDReda(sF)
-    ridO = ReversIDReda(sO)
-    AssertTrue Len(ridI) > 0 And Len(ridP) > 0 And Len(ridF) > 0, _
-               "REV-ID: svaka noga Stanica nosi ReversID"
-    AssertTrue Len(ridO) > 0, "REV-ID FIRMA prijem od OM: noga Stanica nosi ReversID"
-    AssertTrue ridI Like "RID-" & String$(32, "?") And Len(ridI) = 36 And Not (Mid$(ridI, 5) Like "*[!0-9A-F]*"), _
-               "REV-ID: format je opaque RID-<32 hex>"
-    AssertEquals ridI, ReversIDReda(kI), "REV-ID KOOP izdavanje: obe noge nose isti ReversID"
-    AssertEquals ridP, ReversIDReda(kP), "REV-ID KOOP povrat: obe noge nose isti ReversID"
-    AssertTrue ridI <> ridP And ridI <> ridF And ridP <> ridF And ridO <> ridI And ridO <> ridP And ridO <> ridF, _
-               "REV-ID: cetiri dokumenta imaju cetiri razlicita ReversID-a"
-
-    ' B10: identitet se ne pogadja po broju -- noga bez ReversID-a je nalaz.
-    Dim r As Long: r = RedAmbalaze(kP)
-    AssertTrue r > 0, "REV-ID B10: preduslov -- red noge Kooperant povrata nadjen"
-    If r > 0 Then RequireUpdateCell TBL_AMBALAZA, r, COL_AMB_REVERS_ID, "", "Test_BKTX_ReversIDNaSvimNogama"
-    AssertTrue InStr(1, IntegritetRedoviSa(kP), "nema ReversID", vbBinaryCompare) > 0, _
-               "REV-ID B10: noga bez ReversID prijavljena"
-    AssertTrue InStr(1, IntegritetRedoviSa(ridP), "KOOP ocekuje 1", vbBinaryCompare) > 0, _
-               "REV-ID B10: revers kome fali noga Kooperant prijavljen"
-    AssertEquals "", IntegritetRedoviSa(ridI), "REV-ID B10: ispravan revers nije prijavljen"
-
-    ' Jedan revers sme da nosi VISE tipova ambalaze (odluka 15.09.2026). Fixture
-    ' REV-IZV-1 (12/1 + LETVA) je jedan dokument pod jednim ReversID-om: cetiri
-    ' aktivne noge, dva tipa. B10 broji noge PO TIPU, pa ga ne prijavljuje.
-    Const RID_DVA_TIPA As String = "RID-00000000000000000000000000000001"
-    Dim nNogu As Long, nTipova As Long
-    NogeReversID RID_DVA_TIPA, nNogu, nTipova
-    AssertTrue nNogu = 4 And nTipova = 2, _
-               "REV-ID: preduslov -- fixture REV-IZV-1 ima 4 noge dva tipa pod jednim ReversID-om"
-    AssertEquals "", IntegritetRedoviSa(RID_DVA_TIPA), _
-                 "REV-ID B10: revers sa dva tipa ambalaze nije prijavljen"
-
-    Exit Sub
-EH:
-    LogFatal "Test_BKTX_ReversIDNaSvimNogama", Err.Number, Err.description
-End Sub
-
-' REV-IDENT-01, B10 kao ugovor kome ce Faza 2 verovati: ReversID je JEDAN dokument.
-' Sme da nosi vise tipova ambalaze, ali ne sme da spoji delove dva dokumenta --
-' drugu stanicu, drugog kooperanta ili drugog vozaca.
-'
-' To stanje pisac ne moze da napravi (jedan tip i jedan ReversID po pozivu), pa se
-' prave dva ISPRAVNA reversa i drugi se PREPISE u prvi: isti ReversID, broj i dan,
-' drugi tip ambalaze. Po tipu i po kljucu oblik ostaje ispravan (preduslov), pa
-' nalaz mora biti bas stanica / kooperant / vozac.
-'
-' SABOTAZE: u Chk_B10 ne uskladjuj stanicu -> pukne "REV-ID B10: jedan ReversID na
-' dve stanice prijavljen"; ne uskladjuj kooperanta -> "REV-ID B10: jedan KOOP
-' ReversID sa dva kooperanta prijavljen"; ne uskladjuj vozaca -> "REV-ID B10: jedan
-' FIRMA ReversID sa dva vozaca prijavljen".
-Private Sub Test_BKTX_ReversIDJedanDokument()
-    On Error GoTo EH
-
-    SeedBktxDrugaStanica
-
-    Dim scenario As String: scenario = NewScenarioCode("REVJD")
-    Dim d As Date: d = NextTestDate()
-    Dim brojA As String: brojA = TEST_PREFIX & "-REV-JDA-" & scenario
-    Dim brojB As String: brojB = TEST_PREFIX & "-REV-JDB-" & scenario
-    Dim brojF1 As String: brojF1 = TEST_PREFIX & "-REV-JDF1-" & scenario
-    Dim brojF2 As String: brojF2 = TEST_PREFIX & "-REV-JDF2-" & scenario
-    Dim tipB As String: tipB = TEST_TIP_AMB & "-B10"
-
-    AssertTrue UpisiReversTest(d, brojA, TEST_ST_ID, TEST_KOOP_ID, "IZDAVANJE"), _
-               "REV-ID JD: KOOP revers A upisan"
-    AssertTrue UpisiReversTest(d, brojB, BKTX_ST2, TEST_KOOP2_ID, "IZDAVANJE"), _
-               "REV-ID JD: KOOP revers B (druga stanica i kooperant) upisan"
-    AssertTrue UpisiReversTest(d, brojF1, TEST_ST_ID, "", "IZDATO_OM"), _
-               "REV-ID JD: FIRMA revers F1 upisan"
-    AssertTrue UpisiReversTest(d, brojF2, TEST_ST_ID, "", "IZDATO_OM"), _
-               "REV-ID JD: FIRMA revers F2 upisan"
-
-    Dim kA As String, sA As String, kB As String, sB As String, sF1 As String, sF2 As String
-    kA = AmbIDNoge(brojA, TEST_KOOP_ID, "Kooperant", d)
-    sA = AmbIDNogeStanice(brojA, TEST_ST_ID, d)
-    kB = AmbIDNoge(brojB, TEST_KOOP2_ID, "Kooperant", d)
-    sB = AmbIDNogeStanice(brojB, BKTX_ST2, d)
-    sF1 = AmbIDNogeStanice(brojF1, TEST_ST_ID, d)
-    sF2 = AmbIDNogeStanice(brojF2, TEST_ST_ID, d)
-    AssertTrue Len(kA) > 0 And Len(sA) > 0 And Len(kB) > 0 And Len(sB) > 0 And Len(sF1) > 0 And Len(sF2) > 0, _
-               "REV-ID JD: preduslov -- sve noge postoje"
-
-    Dim ridA As String: ridA = ReversIDReda(sA)
-    Dim ridF As String: ridF = ReversIDReda(sF1)
-    AssertEquals "", IntegritetRedoviSa(ridA), "REV-ID JD: preduslov -- ispravan KOOP revers A nije nalaz"
-    AssertEquals "", IntegritetRedoviSa(ridF), "REV-ID JD: preduslov -- ispravan FIRMA revers F1 nije nalaz"
-
-    ' B se prepise u A (druga stanica, drugi kooperant); F2 u F1 (ista stanica, drugi vozac).
-    PrepisiNoguURevers kB, ridA, brojA, tipB
-    PrepisiNoguURevers sB, ridA, brojA, tipB
-    PrepisiNoguURevers sF2, ridF, brojF1, tipB
-    If RedAmbalaze(sF2) > 0 Then RequireUpdateCell TBL_AMBALAZA, RedAmbalaze(sF2), COL_AMB_VOZAC, _
-                                                     "VOZ-B10-DRUGI", "Test_BKTX_ReversIDJedanDokument"
-
-    Dim nalA As String: nalA = IntegritetRedoviSa(ridA)
-    Dim nalF As String: nalF = IntegritetRedoviSa(ridF)
-    AssertTrue InStr(1, nalA & nalF, "nogu ", vbBinaryCompare) = 0 And _
-               InStr(1, nalA & nalF, "nisu istog", vbBinaryCompare) = 0, _
-               "REV-ID JD: preduslov -- po tipu i po kljucu oblik je ispravan"
-    AssertTrue InStr(1, nalA, "razlicite stanice", vbBinaryCompare) > 0, _
-               "REV-ID B10: jedan ReversID na dve stanice prijavljen"
-    AssertTrue InStr(1, nalA, "razlicite kooperante", vbBinaryCompare) > 0, _
-               "REV-ID B10: jedan KOOP ReversID sa dva kooperanta prijavljen"
-    AssertTrue InStr(1, nalF, "razlicite vozace", vbBinaryCompare) > 0, _
-               "REV-ID B10: jedan FIRMA ReversID sa dva vozaca prijavljen"
-    AssertTrue InStr(1, nalF, "razlicite stanice", vbBinaryCompare) = 0, _
-               "REV-ID B10: FIRMA revers iste stanice nije nalaz za stanicu"
-
-    Exit Sub
-EH:
-    LogFatal "Test_BKTX_ReversIDJedanDokument", Err.Number, Err.description
-End Sub
-
-' Test-only adversarijalno stanje: noga se prepise u drugi revers (ReversID, broj,
-' tip ambalaze). Kroz pisac se ne moze napraviti.
-Private Sub PrepisiNoguURevers(ByVal ambID As String, ByVal rid As String, _
-                               ByVal broj As String, ByVal tipAmb As String)
-    Dim r As Long: r = RedAmbalaze(ambID)
-    If r <= 0 Then
-        Err.Raise vbObjectError + 9901, "PrepisiNoguURevers", "Noga " & ambID & " nije nadjena."
+' Pisac gresku DIZE, a SaveOMUlaz_TX je vracao False -- ovi testovi mere i
+' ODBIJANJA, pa helper gresku hvata i prevodi u False. Tvrdnje time ostaju
+' nepromenjene, a put je nov: smisao selidbe je da se ISTO pravilo meri na
+' novom piscu, ne da se uvedu nova pravila.
+Private Function UpisiReversKol(ByVal d As Date, ByVal broj As String, _
+                                ByVal stanicaID As String, ByVal kooperantID As String, _
+                                ByVal koopSmer As String, ByVal kol As Long, _
+                                Optional ByRef outRazlog As String) As Boolean
+    Dim dokID As String
+    outRazlog = ""
+    On Error Resume Next
+    dokID = modAmbalaza.UpisiReversAmbalaze_TX(datum:=d, broj:=broj, _
+                stanicaID:=stanicaID, tipAmb:=TEST_TIP_AMB, kolicina:=kol, _
+                smer:=koopSmer, kooperantID:=kooperantID, vozacID:=TEST_VOZ_ID)
+    ' RAZLOG IZLAZI, ne samo ishod: tvrdnja koja kaze samo "odbijeno" je nad
+    ' dvoslojnom kapijom nemerljiva -- ugasi se prva provera, a druga odbije
+    ' isti slucaj i tvrdnja ostane zelena.
+    If Err.Number <> 0 Then
+        outRazlog = Err.description
+        Err.Clear
     End If
-    RequireUpdateCell TBL_AMBALAZA, r, COL_AMB_REVERS_ID, rid, "PrepisiNoguURevers"
-    RequireUpdateCell TBL_AMBALAZA, r, COL_AMB_DOK_ID, broj, "PrepisiNoguURevers"
-    RequireUpdateCell TBL_AMBALAZA, r, COL_AMB_TIP, tipAmb, "PrepisiNoguURevers"
-End Sub
-
-' Aktivne noge tblAmbalaza pod datim ReversID-om: broj nogu i broj razlicitih
-' tipova ambalaze.
-Private Sub NogeReversID(ByVal rid As String, ByRef nNogu As Long, ByRef nTipova As Long)
-    nNogu = 0
-    nTipova = 0
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(data) Then Exit Sub
-    Dim cR As Long, cT As Long, i As Long, tipovi As Object
-    cR = GetColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID)
-    cT = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
-    If cR = 0 Or cT = 0 Then Exit Sub
-    Set tipovi = CreateObject("Scripting.Dictionary")
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, cR))) = rid Then
-            nNogu = nNogu + 1
-            tipovi(Trim$(NzToText(data(i, cT)))) = True
-        End If
-    Next i
-    nTipova = tipovi.count
-End Sub
-
-' ReversID reda tblAmbalaza po AmbID; prazno kad nema.
-Private Function ReversIDReda(ByVal ambID As String) As String
-    ReversIDReda = Trim$(NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_REVERS_ID)))
+    On Error GoTo 0
+    UpisiReversKol = (Len(dokID) > 0)
 End Function
 
-' Indeks reda tblAmbalaza sa datim AmbID; 0 kad nema.
-Private Function RedAmbalaze(ByVal ambID As String) As Long
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(data) Then Exit Function
-    Dim cID As Long, i As Long
-    cID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
-    If cID = 0 Then Exit Function
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, cID))) = ambID Then
-            RedAmbalaze = i
-            Exit Function
-        End If
-    Next i
-End Function
-
-' Redovi nalaza integriteta (modIntegritet) koji sadrze dati tekst, spojeni vbLf.
-Private Function IntegritetRedoviSa(ByVal sadrzi As String) As String
-    Dim nal As Variant, i As Long, out As String
-    nal = modIntegritet.GetIntegritetRows()
-    If Not IsArray(nal) Then Exit Function
-    For i = LBound(nal, 1) To UBound(nal, 1)
-        If InStr(1, CStr(nal(i, 2)), sadrzi, vbBinaryCompare) > 0 Then out = out & CStr(nal(i, 2)) & vbLf
-    Next i
-    IntegritetRedoviSa = out
-End Function
-
-' Revers kroz pravi pisac (SaveOMUlaz_TX): 5 gajbi test tipa, bez novca.
+' Isto, sa zatecenih 5 gajbi -- da 11 pozivnih mesta ne mora da se dira.
 Private Function UpisiReversTest(ByVal d As Date, ByVal broj As String, _
                                  ByVal stanicaID As String, ByVal kooperantID As String, _
                                  ByVal koopSmer As String) As Boolean
-    UpisiReversTest = SaveOMUlaz_TX(datum:=d, brojDok:=broj, _
-                                    stanicaNaziv:="Test OM", stanicaID:=stanicaID, _
-                                    vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=5, _
-                                    vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:=kooperantID, _
-                                    primalacDisplay:="", otkupID:="", tipNovca:="", _
-                                    koopSmer:=koopSmer)
+    UpisiReversTest = UpisiReversKol(d, broj, stanicaID, kooperantID, koopSmer, 5)
 End Function
 
-' AmbID noge Stanica reversa (broj, stanica, dan) -- identitet reda, onako kako ga
-' salje ekran Storno. Prazno kad nema.
-Private Function AmbIDNogeStanice(ByVal broj As String, ByVal stanicaID As String, _
-                                  ByVal d As Date) As String
-    AmbIDNogeStanice = AmbIDNoge(broj, stanicaID, "Stanica", d)
-End Function
-
-' AmbID noge reversa (broj, entitet, tip entiteta, dan). Prazno kad nema.
-Private Function AmbIDNoge(ByVal broj As String, ByVal entitetID As String, _
-                           ByVal entitetTip As String, ByVal d As Date) As String
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(data) Then Exit Function
-    Dim cID As Long, cDok As Long, cEnt As Long, cEntTip As Long, cDat As Long, i As Long
-    cID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
-    cDok = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
-    cEnt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
-    cEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
-    cDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
-    If cID = 0 Or cDok = 0 Or cEnt = 0 Or cEntTip = 0 Or cDat = 0 Then Exit Function
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, cDok))) = broj And Trim$(NzToText(data(i, cEnt))) = entitetID _
-           And Trim$(NzToText(data(i, cEntTip))) = entitetTip Then
-            If IsDate(data(i, cDat)) Then
-                If Int(CDbl(CDate(data(i, cDat)))) = Int(CDbl(d)) Then
-                    AmbIDNoge = Trim$(NzToText(data(i, cID)))
-                    Exit Function
-                End If
-            End If
-        End If
-    Next i
-End Function
 
 ' RUCNI REZIM. Kad je auto-broj iskljucen u Podesavanjima, operater kuca svoj
 ' broj -- i ostaje slobodan: broj koji ne govori kanonski jezik se ne sudi. Ali
@@ -15182,13 +21752,14 @@ Private Sub Test_BKTX_UvozOtkupaOdbijaTudjBroj()
     ' --- osa vlasnika ---
     Dim cridV As String: cridV = "CRID-BKTXV-" & scenario
     Dim redV As Variant
-    redV = PwaRed(cridV, "BKTX vlasnik", 100#, 100#, 0)
+    redV = PwaRed(cridV, "BKTX vlasnik", 1)
     Dim dV As Date: dV = CDate(redV(1, 9))
     redV(1, 23) = modBrojevi.FormatBroj(BKTX_ST2, dV, 1)
 
     Dim preV As Long: preV = OtkBrojRedova(TBL_OTKUP)
 
-    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(redV, 1, cridV), _
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(redV, 1, cridV, _
+        PwaStavke1(100#, 100#, 0)), _
                  "BKTX uvoz: broj druge stanice NE vraca OtkupID"
     AssertEquals CStr(preV), CStr(OtkBrojRedova(TBL_OTKUP)), _
                  "BKTX uvoz: odbijen red nije upisan"
@@ -15196,13 +21767,14 @@ Private Sub Test_BKTX_UvozOtkupaOdbijaTudjBroj()
     ' --- osa dana ---
     Dim cridD As String: cridD = "CRID-BKTXD-" & scenario
     Dim redD As Variant
-    redD = PwaRed(cridD, "BKTX dan", 100#, 100#, 0)
+    redD = PwaRed(cridD, "BKTX dan", 1)
     Dim dD As Date: dD = CDate(redD(1, 9))
     redD(1, 23) = modBrojevi.FormatBroj(TEST_ST_ID, DateAdd("d", -1, dD), 1)
 
     Dim preD As Long: preD = OtkBrojRedova(TBL_OTKUP)
 
-    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(redD, 1, cridD), _
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(redD, 1, cridD, _
+        PwaStavke1(100#, 100#, 0)), _
                  "BKTX uvoz: broj od juce NE vraca OtkupID"
     AssertEquals CStr(preD), CStr(OtkBrojRedova(TBL_OTKUP)), _
                  "BKTX uvoz: odbijen dan nije ostavio red"
@@ -15210,11 +21782,12 @@ Private Sub Test_BKTX_UvozOtkupaOdbijaTudjBroj()
     ' Kontrola: broj ove stanice i ovog dana prolazi kroz isti put.
     Dim cridOK As String: cridOK = "CRID-BKTXOK-" & scenario
     Dim redOK As Variant
-    redOK = PwaRed(cridOK, "BKTX kontrola", 100#, 100#, 0)
+    redOK = PwaRed(cridOK, "BKTX kontrola", 1)
     Dim dOK As Date: dOK = CDate(redOK(1, 9))
     redOK(1, 23) = modBrojevi.FormatBroj(TEST_ST_ID, dOK, 1)
 
-    AssertTrue Len(modMasterSync.ImportRowToTblOtkup_RowTX(redOK, 1, cridOK)) > 0, _
+    AssertTrue Len(modMasterSync.ImportRowToTblOtkup_RowTX(redOK, 1, cridOK, _
+        PwaStavke1(100#, 100#, 0))) > 0, _
                "BKTX uvoz: kanonski broj ove stanice i ovog dana prolazi"
 
     Exit Sub
@@ -15266,7 +21839,7 @@ Private Sub Test_BKTX_UvozZbirneOdbijaTudjBroj()
     ' puca PRE razresavanja clanstva, i to je namerno: red sa tudjim brojem se
     ' odbija bez obzira na to sta nosi.
     Dim bktxCrid As String
-    bktxCrid = ZbrPwaIzvorCrid("BKTX-" & scenario, d, TEST_VOZ_ID)
+    bktxCrid = ZbrPwaIzvorOtpremnica("BKTX-" & scenario, d, TEST_VOZ_ID)
 
     AssertTrue Len(TestHook_ImportZbirnaRowPWA("CRID-BKTXZOK-" & scenario, TEST_VOZ_ID, _
                          TEST_KUP_ID, d, TEST_VRSTA, TEST_SORTA, 100#, _
@@ -15289,11 +21862,13 @@ End Sub
 '
 ' Za konflikt-testove: pozovi JEDNOM, pa kopiraj (VBA niz se kopira dodelom) i
 ' promeni tacno jedno polje.
+' stavkeCount je MANIFEST, i namerno je PARAMETAR a ne izvedena vrednost: test
+' sme da posalje zaglavlje koje tvrdi dve stavke uz skup od jedne, jer se bas to
+' u produkciji desava kad deo redova ne stigne.
 Private Function PwaRed(ByVal crid As String, ByVal opisPoziva As String, _
-                        ByVal kolicina As Double, ByVal cena As Double, _
-                        ByVal kolAmb As Long) As Variant
+                        ByVal stavkeCount As Long) As Variant
     Dim r As Variant
-    ReDim r(1 To 1, 1 To 23)
+    ReDim r(1 To 1, 1 To 24)
 
     r(1, 1) = crid                  ' GS_CLIENT_RECORD_ID
     r(1, 6) = "PENDING"             ' GS_SYNC_STATUS
@@ -15302,19 +21877,42 @@ Private Function PwaRed(ByVal crid As String, ByVal opisPoziva As String, _
     r(1, 10) = TEST_KOOP_ID         ' GS_KOOPERANT_ID
     r(1, 12) = TEST_VRSTA           ' GS_VRSTA
     r(1, 13) = TEST_SORTA           ' GS_SORTA
-    r(1, 14) = KLASA_I              ' GS_KLASA
-    r(1, 15) = kolicina             ' GS_KOLICINA
-    r(1, 16) = cena                 ' GS_CENA
+    ' CETIRI MRTVA SLOTA (S5-5b): klasa, kolicina, cena i ambalaza su cinjenice
+    ' STAVKE i dolaze tabom OTK_STAVKE. PWA ih pise prazne, pa ih i fixture pise
+    ' prazne -- fixture koji bi ih punio merio bi zicu koje vise nema.
+    r(1, 14) = ""                   ' GS_KLASA -- MRTAV SLOT
+    r(1, 15) = ""                   ' GS_KOLICINA -- MRTAV SLOT
+    r(1, 16) = ""                   ' GS_CENA -- MRTAV SLOT
     r(1, 17) = TEST_TIP_AMB         ' GS_TIP_AMB
-    r(1, 18) = kolAmb               ' GS_KOL_AMB
+    r(1, 18) = ""                   ' GS_KOL_AMB -- MRTAV SLOT
     r(1, 19) = ""                   ' GS_PARCELA_ID
     r(1, 20) = ""                   ' GS_VOZAC_ID
     ' GS_BROJ_DOKUMENTA se NE salje: kanonski format je ^\d+/\d{6}(-\d+)?$ i
     ' ne trpi test-prefiks, pa ingest generise broj lokalno -- to je i realan
     ' PWA pre-rollout put (modMasterSync: "BrojDokumenta fallback-generated").
     r(1, 23) = ""                   ' GS_BROJ_DOKUMENTA
+    r(1, 24) = stavkeCount          ' GS_STAVKE_COUNT
 
     PwaRed = r
+End Function
+
+' Skup stavki kakav uvoz dobija iz taba OTK_STAVKE: jedna klasa.
+'
+' Vraca ISTI oblik koji OtkPwaStavkeIzTaba gradi (Dictionary sa Klasa/Kolicina/
+' Cena/KolAmbalaze), pa test meri produkcioni ugovor a ne svoj.
+Private Function PwaStavke1(ByVal kolicina As Double, ByVal cena As Double, _
+                            ByVal kolAmb As Long) As Collection
+    Dim s As Object
+    Set s = CreateObject("Scripting.Dictionary")
+    s.Add "Klasa", KLASA_I
+    s.Add "Kolicina", kolicina
+    s.Add "Cena", cena
+    s.Add "KolAmbalaze", CDbl(kolAmb)
+
+    Dim c As Collection
+    Set c = New Collection
+    c.Add s
+    Set PwaStavke1 = c
 End Function
 
 ' DELJENI RAZRESIVAC (Vrsta, Sorta) -> KulturaID.
@@ -15513,7 +22111,7 @@ Private Sub Test_OTK_IzvozDveKlaseIzStavki()
     For r = 1 To lo.DataBodyRange.rows.count
         If CStr(lo.DataBodyRange.cells(r, iID).value) = otkID Then Exit For
     Next r
-    red = modStanicaLock.BuildOTKSheetRowForOtkup(otkID, TEST_ST_ID, lo, r, iID)
+    red = modStanicaLock.BuildOTKSheetRowForOtkup(otkID, TEST_ST_ID, lo, r, iID, 2)
     AssertTrue IsArray(red), "OTK push: red zaglavlja sastavljen"
     zk = modMasterSync.OtkZaglavljeKolone()
     AssertEquals CStr(UBound(zk) - LBound(zk)), CStr(UBound(red)), "OTK push: red prati spisak kolona"
@@ -15523,6 +22121,8 @@ Private Sub Test_OTK_IzvozDveKlaseIzStavki()
                 AssertEquals otkID, CStr(red(k - LBound(zk))), "OTK push: ServerRecordID = OtkupID"
             Case "Klasa", "Kolicina", "Cena", "KolAmbalaze"
                 AssertEquals "", CStr(red(k - LBound(zk))), "OTK push: " & CStr(zk(k)) & " je na stavci, ne u zaglavlju"
+            Case "StavkeCount"
+                AssertEquals "2", CStr(red(k - LBound(zk))), "OTK push: zaglavlje nosi broj stavki"
         End Select
     Next k
     Dim poOtk As Object
@@ -15685,8 +22285,16 @@ Private Sub Test_OTK_PushStavkiIdempotentan()
     errOpis = Err.description
     Err.Clear
     On Error GoTo EH
+    ' IME TVRDNJE JE STATICKO, detalj ide u log.
+    '
+    ' Dok je errOpis stajao u imenu, sabotaza je tvrdnju obarala ali je dokaz.py
+    ' nije prepoznavao: ime se sa ishodom menjalo ("... pada ()"), a katalog trazi
+    ' doslovan tekst. vba_check to ne hvata jer pusta podniz.
+    If InStr(1, errOpis, "Naslov taba", vbTextCompare) = 0 Then
+        LogWarn "Test_OTK_PushStavkiIdempotentan", "errOpis=" & errOpis
+    End If
     AssertTrue InStr(1, errOpis, "Naslov taba", vbTextCompare) > 0, _
-               "OTK push retry: pogresan redosled naslova pada (" & errOpis & ")"
+               "OTK push retry: pogresan redosled naslova pada"
 
     modStanicaLock.TestHook_OtkStavkeSimulacija Nothing, 0
     Exit Sub
@@ -15694,6 +22302,2786 @@ Private Sub Test_OTK_PushStavkiIdempotentan()
 EH:
     modStanicaLock.TestHook_OtkStavkeSimulacija Nothing, 0
     LogFatal "Test_OTK_PushStavkiIdempotentan", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' S5-5b -- ZICA OTKUPA: ZAGLAVLJE + STAVKE
+' ============================================================
+
+' Red taba OTK_STAVKE kakav ga zica NOSI. Jedan graditelj za OBA pisca, jer se
+' dva graditelja istog reda razidju: desktop push puni OtkupStavkaID i OtkupID a
+' wire kolone ostavlja prazne, PWA obrnuto -- OtkupID ne zna, on nastaje u
+' masteru (CreateOtkup_TX).
+Private Function StavkaRedZice(ByVal stavkaID As String, ByVal otkupID As String, _
+                               ByVal cridStavke As String, ByVal cridZaglavlja As String, _
+                               ByVal rb As Long, ByVal klasa As String, _
+                               ByVal kolicina As Double, ByVal cena As Double, _
+                               ByVal kolAmb As Long) As Variant
+    Dim kol As Variant, nk As Long, k As Long
+    kol = modMasterSync.OtkStavkeKolone()
+    nk = UBound(kol) - LBound(kol) + 1
+
+    Dim r() As Variant
+    ReDim r(0 To nk - 1)
+
+    For k = 0 To nk - 1
+        Select Case CStr(kol(LBound(kol) + k))
+            Case COL_OKS_ID: r(k) = stavkaID
+            Case COL_OKS_OTKUP_ID: r(k) = otkupID
+            Case COL_OKS_RB: r(k) = rb
+            Case COL_OKS_KLASA: r(k) = klasa
+            Case COL_OKS_KOLICINA: r(k) = kolicina
+            Case COL_OKS_CENA: r(k) = cena
+            Case COL_OKS_KOL_AMB: r(k) = kolAmb
+            Case modMasterSync.OKS_WIRE_CRID: r(k) = cridStavke
+            Case modMasterSync.OKS_WIRE_OTKUP_CRID: r(k) = cridZaglavlja
+            Case Else: r(k) = ""
+        End Select
+    Next k
+
+    StavkaRedZice = r
+End Function
+
+' STAVKE SA TERENA SE GRUPISU PO CRID-u ZAGLAVLJA, i tudji red se preskace.
+'
+' Ovo je tvrdnja nad citaocem zice, ne nad pisacem: tab pisu dva pisca, pa je
+' pitanje bas to KOJE redove uvoz otkupa sme da uzme. Meri se bez Google-a --
+' OtkPwaStavkeIzTaba prima sadrzaj taba kakav ga TryReadSheetData vraca.
+Private Sub Test_PWA_StavkeSaZiceIduPoCridu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PWAST")
+
+    Dim cridA As String, cridB As String
+    cridA = TEST_PREFIX & "-CRID-STA-" & scenario
+    cridB = TEST_PREFIX & "-CRID-STB-" & scenario
+
+    ' Dve stavke otkupa A, jedna otkupa B, i jedan red DESKTOP PUSH-a.
+    Dim redovi As Collection
+    Set redovi = New Collection
+    redovi.Add StavkaRedZice("", "", cridA & "-S1", cridA, 1, KLASA_I, 100#, 50#, 4)
+    redovi.Add StavkaRedZice("", "", cridA & "-S2", cridA, 2, KLASA_II, 60#, 30#, 2)
+    redovi.Add StavkaRedZice("", "", cridB & "-S1", cridB, 1, KLASA_I, 20#, 10#, 0)
+    redovi.Add StavkaRedZice("OKS-SIM-" & scenario, "OTK-SIM-" & scenario, _
+                             "", "", 1, KLASA_I, 999#, 999#, 9)
+
+    Dim greska As String
+    Dim mapa As Object
+    Set mapa = modMasterSync.OtkPwaStavkeIzTaba(SimTabStavki(redovi), greska)
+
+    AssertEquals "", greska, "PWA stavke: citanje taba bez greske"
+    AssertEquals "2", CStr(mapa.count), _
+                 "PWA stavke: dva otkupa sa terena (red desktop push-a se ne racuna)"
+    AssertTrue Not mapa.Exists("OTK-SIM-" & scenario), _
+               "PWA stavke: OtkupID desktop reda nije kljuc mape"
+    AssertEquals "2", CStr(mapa(cridA).count), "PWA stavke: otkup A nosi dve klase"
+    AssertEquals "1", CStr(mapa(cridB).count), "PWA stavke: otkup B nosi jednu klasu"
+
+    ' Redosled u Collection-u nista ne znaci -- RedniBroj dodeljuje pisac -- pa se
+    ' meri SKUP klasa, ne pozicija.
+    Dim klase As Object, i As Long
+    Set klase = CreateObject("Scripting.Dictionary")
+    klase.CompareMode = vbTextCompare
+    For i = 1 To mapa(cridA).count
+        klase(CStr(mapa(cridA)(i)("Klasa"))) = CDbl(mapa(cridA)(i)("Kolicina"))
+    Next i
+    AssertEquals "100", CStr(klase(KLASA_I)), "PWA stavke: I klasa nosi 100 kg"
+    AssertEquals "60", CStr(klase(KLASA_II)), "PWA stavke: II klasa nosi 60 kg"
+
+    ' STAVKA BEZ SVOG IDENTITETA JE GRESKA, ne stavka. Bez ClientRecordID-a se
+    ' ponovljen sync ne razlikuje od druge stavke, pa bi retry udvajao robu.
+    Dim bezIdent As Collection
+    Set bezIdent = New Collection
+    bezIdent.Add StavkaRedZice("", "", "", cridA, 1, KLASA_I, 100#, 50#, 4)
+
+    Dim mapa2 As Object
+    Set mapa2 = modMasterSync.OtkPwaStavkeIzTaba(SimTabStavki(bezIdent), greska)
+    AssertTrue mapa2 Is Nothing, "PWA stavke: red bez ClientRecordID obara citanje"
+    If InStr(1, greska, "nema svoj ClientRecordID", vbTextCompare) = 0 Then
+        LogWarn "Test_PWA_StavkeSaZiceIduPoCridu", "greska=" & greska
+    End If
+    AssertTrue InStr(1, greska, "nema svoj ClientRecordID", vbTextCompare) > 0, _
+               "PWA stavke: greska imenuje nedostatak identiteta"
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_StavkeSaZiceIduPoCridu", Err.Number, Err.description
+End Sub
+
+' MANIFEST: zaglavlje koje tvrdi dve stavke uz jednu primljenu NE POSTAJE dokument.
+'
+' Bez manifesta su "PWA je poslala dve klase pa je jedna stigla" i "dokument ima
+' jednu klasu" isti ulaz -- pa bi deo robe tiho postao ceo dokument, sa tacnim
+' brojem i tacnim kooperantom. Nista posle toga ne bi prijavilo razliku.
+Private Sub Test_PWA_ManifestNeporavnatNeUvozi()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PWAMF")
+
+    Dim crid As String
+    crid = TEST_PREFIX & "-CRID-MF-" & scenario
+
+    ' Zaglavlje tvrdi DVE stavke, a skup nosi JEDNU.
+    Dim red As Variant
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWAMF-" & scenario, 2)
+
+    Dim preH As Long, preS As Long
+    preH = OtkBrojRedova(TBL_OTKUP)
+    preS = OtkBrojRedova(TBL_OTKUP_STAVKE)
+
+    Dim rezultat As String
+    rezultat = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, _
+                                                       PwaStavke1(400#, 50#, 20))
+
+    AssertEquals "", rezultat, "PWA manifest: neporavnat StavkeCount ne daje OtkupID"
+    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
+                 "PWA manifest: nijedno zaglavlje nije nastalo"
+    AssertEquals CStr(preS), CStr(OtkBrojRedova(TBL_OTKUP_STAVKE)), _
+                 "PWA manifest: nijedna stavka nije nastala"
+
+    ' Kontrola: ISTI skup uz poravnat manifest PROLAZI. Bez ove tvrdnje bi test
+    ' bio zelen i da uvoz odbija sve, pa ne bi merio manifest nego postojanje.
+    Dim cridOK As String
+    cridOK = TEST_PREFIX & "-CRID-MFOK-" & scenario
+
+    Dim redOK As Variant
+    redOK = PwaRed(cridOK, TEST_PREFIX & "-OTK-PWAMFOK-" & scenario, 1)
+
+    AssertTrue Len(modMasterSync.ImportRowToTblOtkup_RowTX(redOK, 1, cridOK, _
+                       PwaStavke1(400#, 50#, 20))) > 0, _
+               "PWA manifest: poravnat StavkeCount prolazi"
+    Exit Sub
+
+EH:
+    LogFatal "Test_PWA_ManifestNeporavnatNeUvozi", Err.Number, Err.description
+End Sub
+
+' PUSH INDEKS PRESKACE RED SA TERENA -- inace prvi PWA red trajno blokira push.
+'
+' Indeks idempotencije push-a radi po OtkupStavkaID. PWA red ga NE ZNA, pa je
+' stari uslov citao kao "red bez identiteta" i dizao gresku fail-closed: naslov
+' ispravan, podatak ispravan, a push te stanice pada na svakom prolazu.
+'
+' Red bez OBA identiteta i dalje pada: to nije tudji red nego kvar.
+Private Sub Test_OTK_PushIndeksPreskaceRedSaTerena()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PSHID")
+
+    Dim stavkaID As String
+    stavkaID = "OKS-SIM-" & scenario
+
+    Dim redovi As Collection
+    Set redovi = New Collection
+    redovi.Add StavkaRedZice(stavkaID, "OTK-SIM-" & scenario, "", "", _
+                             1, KLASA_I, 100#, 50#, 4)
+    redovi.Add StavkaRedZice("", "", TEST_PREFIX & "-CRID-PSH-" & scenario & "-S1", _
+                             TEST_PREFIX & "-CRID-PSH-" & scenario, _
+                             1, KLASA_I, 60#, 30#, 2)
+
+    ' Izuzetak se HVATA i meri kao tvrdnja. Da se ne hvata, ugasena kapija bi
+    ' pala u EH i prijavila LogFatal sa imenom testa -- videlo bi se da je crveno,
+    ' ali ne i KOJA tvrdnja je pala. Ostale tvrdnje su zato pod If Not ... Nothing:
+    ' posle podignutog izuzetka ids nije dodeljen.
+    Dim ids As Object
+    Dim errIndeks As String
+    On Error Resume Next
+    Set ids = modStanicaLock.OtkStavkeIndeksIzTaba(SimTabStavki(redovi))
+    errIndeks = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    AssertEquals "", errIndeks, _
+                 "OTK push indeks: red sa terena ne obara indeks push-a"
+
+    If Not ids Is Nothing Then
+        AssertEquals "1", CStr(ids.count), _
+                     "OTK push indeks: red sa terena se ne racuna u indeks"
+        AssertTrue ids.Exists(stavkaID), "OTK push indeks: push red je u indeksu"
+    End If
+
+    ' Red bez ijednog identiteta je KVAR i pada PO IMENU.
+    Dim kvar As Collection
+    Set kvar = New Collection
+    kvar.Add StavkaRedZice("", "", "", "", 1, KLASA_I, 10#, 10#, 0)
+
+    Dim errOpis As String
+    On Error Resume Next
+    Set ids = modStanicaLock.OtkStavkeIndeksIzTaba(SimTabStavki(kvar))
+    errOpis = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    If InStr(1, errOpis, "nema OtkupStavkaID", vbTextCompare) = 0 Then
+        LogWarn "Test_OTK_PushIndeksPreskaceRedSaTerena", "errOpis=" & errOpis
+    End If
+    AssertTrue InStr(1, errOpis, "nema OtkupStavkaID", vbTextCompare) > 0, _
+               "OTK push indeks: red bez ijednog identiteta pada po imenu"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTK_PushIndeksPreskaceRedSaTerena", Err.Number, Err.description
+End Sub
+
+' TRAG RODITELJSKE ZBIRNE NOSI NOVO IME, I NIJEDNA TABELA NE NOSI STARO.
+'
+' S4-3c je kolonu u kanonu preimenovao (ZbirnaGeneracijaID -> ZbirnaRoditeljID) ali
+' self-heal nije dobio putanju preimenovanja, pa se sveska sa starim imenom NIJE
+' mogla izleciti: ensure dopise novo ime na kraj, staro ostane u sredini, kanonski
+' prefiks puca i upis staje fail-closed. Mereno na tri dev sveske -- sve tri nose
+' staro ime.
+'
+' OVO JE REGRESIONA OGRADA, NE DOKAZ. Rename se moze izmeriti samo na svesci koja
+' nosi staro ime; posle lecenja ga nijedna ne nosi, pa tvrdnja tada prolazi
+' trivijalno. Prava mera je end-to-end: regeneracija fixture-a iz dev sveske sa
+' starim imenom, pa pun prolaz. Ograda postoji da ukinut rename ili vraceno staro
+' ime padnu PO IMENU, a ne da se izdaje za dokaz.
+Private Sub Test_Schema_TragZbirneNosiNovoIme()
+    On Error GoTo EH
+
+    Dim tabele As Variant
+    tabele = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_PRIJEMNICA, TBL_PALETA_STAVKA)
+
+    Dim i As Long, staro As String, bezNovog As String
+    For i = LBound(tabele) To UBound(tabele)
+        Dim tbl As String: tbl = CStr(tabele(i))
+
+        If GetColumnIndex(tbl, "ZbirnaGeneracijaID") > 0 Then
+            staro = staro & tbl & " "
+        End If
+        If GetColumnIndex(tbl, COL_DETE_ZBIRNA_ROD) <= 0 Then
+            bezNovog = bezNovog & tbl & " "
+        End If
+    Next i
+
+    If Len(staro) > 0 Then LogWarn "Test_Schema_TragZbirneNosiNovoIme", "staro ime: " & staro
+    AssertEquals "", staro, "Trag zbirne: nijedna tabela ne nosi staro ime kolone"
+
+    If Len(bezNovog) > 0 Then LogWarn "Test_Schema_TragZbirneNosiNovoIme", "bez novog: " & bezNovog
+    AssertEquals "", bezNovog, "Trag zbirne: sve cetiri tabele nose novo ime kolone"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Schema_TragZbirneNosiNovoIme", Err.Number, Err.description
+End Sub
+
+' UGOVOR AMBALAZNE KNJIGE (AMB-10a) -- nalozi, zatvoren enum, granica opticaja.
+'
+' modAmbalazaUgovor jos NIJE u produkcionom putu: 10a je ugovor, cutover je 10b.
+' Zato se meri ovde, PRE nego sto ijedan pisac zavisi od njega -- kapija koja se
+' prvi put vidi kad je pisac vec napisan menja se pod pritiskom pisca.
+'
+' Razresavanje naloga trazi PRAVE entitete, pa test ide u BFP a ne u modTest:
+' zamka "Tip=Vozac, ID=KUP-..." se meri nad stvarnim tabelama, ne nad izmisljenim
+' stringom koji bi pao iz pogresnog razloga.
+Private Sub Test_Amb_UgovorPrenosa()
+    On Error GoTo EH
+
+    ' --- ZATVOREN ENUM -------------------------------------------------
+    ' Devet od ODL-24 (19.10.2026): POZAJMICA_PARTNERA je jedina nova vrednost.
+    AssertEquals "9", CStr(UBound(modAmbalazaUgovor.AmbVrsteSve()) - _
+                           LBound(modAmbalazaUgovor.AmbVrsteSve()) + 1), _
+                 "Amb ugovor: vrsta kretanja ima tacno devet"
+    AssertTrue modAmbalazaUgovor.AmbVrstaPoznata(AMB_VK_ULAZ_TUDJE), _
+               "Amb ugovor: ULAZ_TUDJE_AMBALAZE je poznata vrsta"
+    AssertTrue Not modAmbalazaUgovor.AmbVrstaPoznata("POCETNO_STANJE"), _
+               "Amb ugovor: POCETNO_STANJE NE postoji -- ono je NABAVKA + IZDATA_PRAZNA"
+
+    ' --- NALOZI: polimorfna zamka ---------------------------------------
+    ' "Tip=Vozac, ID=KUP-..." je sintaksno ispravan a semanticki nemoguc, i to je
+    ' jedini razlog zasto razresavanje uopste postoji kao kapija.
+    AssertEquals "", modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_KOOPERANT, TEST_KOOP_ID), _
+                 "Amb nalog: postojeci kooperant prolazi"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_VOZAC, TEST_KUP_ID), _
+                     "ne postoji", vbTextCompare) > 0, _
+               "Amb nalog: kupcev ID pod tipom Vozac je odbijen"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbNalogProblem("Prevoznik", "X"), _
+                     "Nepoznat tip", vbTextCompare) > 0, _
+               "Amb nalog: nepoznat tip naloga je odbijen"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_KOOPERANT, ""), _
+                     "trazi ID", vbTextCompare) > 0, _
+               "Amb nalog: entitet bez ID-a je odbijen"
+    AssertEquals "", modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_FIRMA, ""), _
+                 "Amb nalog: Firma je sistemski nalog bez ID-a"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_FIRMA, "F-1"), _
+                     "sistemski", vbTextCompare) > 0, _
+               "Amb nalog: sistemski nalog sa ID-em je odbijen"
+
+    ' --- PRENOS: INV-01 i INV-02 ----------------------------------------
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     10, "G", AMB_VK_IZDATA_PRAZNA), _
+                 "Amb prenos: stanica -> kooperant, izdate prazne, prolazi"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     0, "G", AMB_VK_IZDATA_PRAZNA), "veca od nule", vbTextCompare) > 0, _
+               "Amb prenos: kolicina nula je odbijena (INV-01)"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                     10, "G", AMB_VK_PRENOS_INTERNO), "isti nalog", vbTextCompare) > 0, _
+               "Amb prenos: prenos na samog sebe je odbijen (INV-02)"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     10, "", AMB_VK_IZDATA_PRAZNA), "Tip ambalaze", vbTextCompare) > 0, _
+               "Amb prenos: bez tipa ambalaze je odbijen -- stanje se vodi PO TIPU"
+
+    ' --- MATRICA STRANA ---------------------------------------------------
+    '
+    ' Svaka vrsta kretanja izgovara klasu OBE strane. Ranije je to bilo sest If
+    ' blokova sa po jednim smerom implikacije, i sest puta je nadjeno da
+    ' komplement prolazi. Zato se ovde meri i sta PROLAZI i sta PADA.
+    AssertEquals "", modAmbalazaUgovor.AmbMatricaNepotpuna(), _
+                 "Amb matrica: svaka vrsta ima definisane klase obe strane"
+
+    ' Prolazi -- po jedan predstavnik svake vrste.
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_VOZAC, TEST_VOZ_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     10, "G", AMB_VK_IZDATA_PRAZNA), _
+                 "Amb matrica: vozac -> kupac, izdate prazne, prolazi"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                     10, "G", AMB_VK_POVRAT_PRAZNE), _
+                 "Amb matrica: kooperant -> stanica, povrat praznih, prolazi"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                     10, "G", AMB_VK_POVRAT_PRAZNE), _
+                 "Amb matrica: kupac -> vozac, povrat praznih, prolazi"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                     20, "G", AMB_VK_PRENOS_INTERNO), _
+                 "Amb matrica: stanica -> vozac je sopstveni prenos (AMB-10-ODL-7)"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     15, "G", AMB_VK_ULAZ_TUDJE), _
+                 "Amb matrica: tudja ambalaza ulazi iz SpoljnogSveta ka partneru"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                     100, "G", AMB_VK_NABAVKA), _
+                 "Amb matrica: nabavka ulazi iz SpoljnogSveta na sopstveni nalog"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_SPOLJNI, "", _
+                     3, "G", AMB_VK_OTPIS), _
+                 "Amb matrica: otpis sme i kod partnera -- gajbica se lomi i tamo"
+
+    ' Pada -- ista vrsta, pogresna klasa strane. Poruka imenuje KOJU stranu.
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     10, "G", AMB_VK_IZDATA_PRAZNA), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: kooperant NE moze da izda prazne -- izvor nije sopstveni"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                     10, "G", AMB_VK_POVRAT_PRAZNE), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: stanica -> vozac NIJE povrat -- izvor nije partner"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     20, "G", AMB_VK_PRENOS_INTERNO), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: kooperant -> kupac NIJE sopstveni prenos"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     100, "G", AMB_VK_NABAVKA), "kao ODREDISTE", vbTextCompare) > 0, _
+               "Amb matrica: nabavka NE ide direktno partneru -- preskocila bi izdavanje"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                     15, "G", AMB_VK_ULAZ_TUDJE), "kao ODREDISTE", vbTextCompare) > 0, _
+               "Amb matrica: ulaz tudje ambalaze ka stanici je odbijen -- firma sebi ne duguje"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     100, "G", AMB_VK_NABAVKA), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: nabavka bez granice kao izvora je odbijena"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     3, "G", AMB_VK_OTPIS), "kao ODREDISTE", vbTextCompare) > 0, _
+               "Amb matrica: otpis bez granice kao odredista je odbijen"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     12, "G", AMB_VK_VRACANJE_TUDJE), "kao IZVOR", vbTextCompare) > 0, _
+               "Amb matrica: vracanje tudje ambalaze sa partnerovog naloga je odbijeno"
+    AssertEquals "", modAmbalazaUgovor.AmbPrenosProblem( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                     12, "G", AMB_VK_VRACANJE_TUDJE), _
+                 "Amb matrica: vracanje tudje ambalaze stanica -> kooperant prolazi"
+
+    ' --- ISTA PROVERA, DRUGI POZIVALAC -----------------------------------
+    ' Pisac dobija gresku, ekran poruku. Da Require* ne dize, pisac bi prosao dalje
+    ' sa istim podatkom koji ekran odbija.
+    Dim dignuto As Boolean
+    On Error Resume Next
+    modAmbalazaUgovor.RequireAmbPrenos AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_NALOG_STANICA, TEST_ST_ID, 10, "G", AMB_VK_PRENOS_INTERNO, "test"
+    dignuto = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue dignuto, "Amb ugovor: Require* dize gresku tamo gde *Problem vraca tekst"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_UgovorPrenosa", Err.Number, Err.description
+End Sub
+
+' DOPRINOS OBAVEZI -- osnova AMB-INV-09, i jedini deo koji storno mora da gasi.
+'
+' Prosta razlika dve sume je nad append-only knjigom NETACNA: storno ulaza tudje
+' ambalaze anulira fizicko stanje, a obaveza bi ostala da visi. Zato se meri i
+' kontra-stav, ne samo original.
+Private Sub Test_Amb_DoprinosObavezi()
+    On Error GoTo EH
+
+    AssertEquals "15", CStr(modAmbalazaUgovor.AmbDoprinosObavezi(AMB_VK_ULAZ_TUDJE, 15, "")), _
+                 "Amb obaveza: ulaz tudje ambalaze STVARA obavezu"
+    AssertEquals "-12", CStr(modAmbalazaUgovor.AmbDoprinosObavezi(AMB_VK_VRACANJE_TUDJE, 12, "")), _
+                 "Amb obaveza: vracanje tudje ambalaze GASI obavezu"
+    AssertEquals "0", CStr(modAmbalazaUgovor.AmbDoprinosObavezi(AMB_VK_IZDATA_PRAZNA, 20, "")), _
+                 "Amb obaveza: izdavanje firminih gajbi NE dira obavezu"
+    AssertEquals "0", CStr(modAmbalazaUgovor.AmbDoprinosObavezi(AMB_VK_UZ_ROBU, 99, "")), _
+                 "Amb obaveza: ambalaza uz robu NE dira obavezu"
+
+    ' Kontra-stav nosi MINUS doprinos originala -- jedno pravilo gasi i stanje i dug.
+    AssertEquals "-15", CStr(modAmbalazaUgovor.AmbDoprinosObavezi( _
+                         AMB_VK_ULAZ_TUDJE, 15, AMB_VK_ULAZ_TUDJE)), _
+                 "Amb obaveza: storno ulaza tudje ambalaze GASI obavezu koju je stvorio"
+    AssertEquals "12", CStr(modAmbalazaUgovor.AmbDoprinosObavezi( _
+                         AMB_VK_VRACANJE_TUDJE, 12, AMB_VK_VRACANJE_TUDJE)), _
+                 "Amb obaveza: storno vracanja VRACA obavezu koju je ugasio"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_DoprinosObavezi", Err.Number, Err.description
+End Sub
+
+' AMB-INV-03 trazi JEDNOZNACNO razresenje, ne "postoji bar jedan".
+'
+' Prva verzija je proveravala samo `count = 0`, pa su dva master reda sa istim
+' ID-em prolazila -- pisac bi gajbe pripisao nalogu koji ne zna koji je. Ovo se ne
+' moze izmeriti nad izmisljenim stringom nego trazi PRAVI duplikat, pa test sam
+' seje drugi red i sklanja ga i u EH: visak u master tabeli bi oborio tudje testove.
+Private Sub Test_Amb_NalogDvosmislenPada()
+    On Error GoTo EH
+
+    Const SRC As String = "Test_Amb_NalogDvosmislenPada"
+
+    AssertEquals "", modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_VOZAC, TEST_VOZ_ID), _
+                 "Amb dvosmislen: jedan vozac se razresava"
+
+    ' Sejanje ide ZATECENIM idiomom BFP-a (SetRequiredField + RequireAppend).
+    ' SetRowValueByColumn ovde ne moze: trazi deklarisan niz, a BlankRow vraca
+    ' goli Variant -- VBA to javlja kao Type mismatch na argumentu.
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_VOZACI)
+    SetRequiredField rowData, TBL_VOZACI, "VozacID", TEST_VOZ_ID
+    SetRequiredField rowData, TBL_VOZACI, "Ime", "AMB"
+    SetRequiredField rowData, TBL_VOZACI, "Prezime", "Dvojnik"
+    RequireAppend TBL_VOZACI, rowData, SRC
+
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_VOZACI, "VozacID", TEST_VOZ_ID)
+    AssertEquals "2", CStr(redovi.count), _
+                 "Amb dvosmislen: drugi red sa istim ID-em je zasejan"
+
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_VOZAC, TEST_VOZ_ID), _
+                     "nije jednoznacan", vbTextCompare) > 0, _
+               "Amb dvosmislen: dva reda sa istim ID-em se ODBIJAJU, ne prolaze"
+
+    ' Brise se POSLEDNJI red sa tim ID-em -- zasejani je dopisan na kraj.
+    DeleteRow TBL_VOZACI, CLng(redovi(redovi.count))
+
+    AssertEquals "", modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_VOZAC, TEST_VOZ_ID), _
+                 "Amb dvosmislen: posle ciscenja se opet razresava"
+    Exit Sub
+
+EH:
+    ' Visak u master tabeli ne sme da ostane iza testa.
+    On Error Resume Next
+    Dim ostatak As Collection
+    Set ostatak = FindRows(TBL_VOZACI, "VozacID", TEST_VOZ_ID)
+    Do While ostatak.count > 1
+        DeleteRow TBL_VOZACI, CLng(ostatak(ostatak.count))
+        Set ostatak = FindRows(TBL_VOZACI, "VozacID", TEST_VOZ_ID)
+    Loop
+    On Error GoTo 0
+    LogFatal "Test_Amb_NalogDvosmislenPada", Err.Number, Err.description
+End Sub
+
+' UGOVOR AMBALAZNOG DOKUMENTA (AMB-10-DOK).
+'
+' Dokument jos nema pisca -- 10-DOK je kanon i ugovor, cutover je 10b. Zato se
+' ovde meri ono sto se MOZE meriti bez pisca: da vrsta jeste zatvorena, da
+' zaglavlje pada na svaki nedostatak, i da veza dokument <-> kretanje vazi u OBA
+' smera (sta sme i sta NE sme).
+Private Sub Test_Amb_DokumentUgovor()
+    On Error GoTo EH
+
+    ' --- ZATVOREN ENUM VRSTE ---------------------------------------------
+    ' CETIRI od 03.10.2026: REVERS_PARTNERA je dodat jer partnerov dokument nosi
+    ' NJEGOV broj (AMB-10-ODL-10). Broj je tvrdnja, ne kozmetika -- da je ostao
+    ' na tri, nova vrsta bi se mogla dodati a da niko ne primeti da je enum
+    ' prestao da bude zatvoren.
+    AssertEquals "4", CStr(UBound(modAmbalazaUgovor.AmbDokVrsteSve()) - _
+                           LBound(modAmbalazaUgovor.AmbDokVrsteSve()) + 1), _
+                 "Amb dokument: vrsta dokumenta ima tacno cetiri vrednosti"
+    AssertTrue Not modAmbalazaUgovor.AmbDokVrstaPoznata("POCETNO_STANJE"), _
+               "Amb dokument: POCETNO_STANJE nije vrsta dokumenta -- ne postoji"
+
+    ' --- ODL-9/-10: VRSTA, VLASNIK BROJA I PAR NALOGA ZAJEDNO -------------
+    '
+    ' Klasa vlasnika i dozvoljeno kretanje su bile dve NEZAVISNE provere, pa su
+    ' tri zaobilaznice prolazile: kupac -> FIRMA (Firma je SOPSTVENI), broj
+    ' jednog kupca uz kretanje drugog, i obican REVERS nad kupac -> vozac (cime
+    ' je partnerov broj potpuno zaobidjen).
+    AssertEquals "", modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     AMB_DOK_REVERS_PARTNERA, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
+                     AMB_VK_POVRAT_PRAZNE), _
+                 "ODL-9: kupac -> vozac na partnerovom reversu PROLAZI"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   AMB_DOK_REVERS_PARTNERA, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_FIRMA, _
+                   AMB_VK_POVRAT_PRAZNE)) > 0, _
+               "ODL-9: firma NE ulazi u lanac -- kupac -> firma pada"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   AMB_DOK_REVERS_PARTNERA, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_STANICA, _
+                   AMB_VK_POVRAT_PRAZNE)) > 0, _
+               "ODL-9: kupac -> stanica preskace vozaca -- pada"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   AMB_DOK_REVERS_PARTNERA, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                   AMB_NALOG_KUPAC, TEST_KUP2_ID, AMB_NALOG_VOZAC, _
+                   AMB_VK_POVRAT_PRAZNE)) > 0, _
+               "ODL-10: broj jednog kupca uz kretanje drugog -- pada"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   AMB_DOK_REVERS, AMB_NALOG_VOZAC, TEST_VOZ_ID, _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
+                   AMB_VK_POVRAT_PRAZNE)) > 0, _
+               "ODL-10: obican REVERS ne sme da nosi kupac -> vozac"
+    ' Obrnuta kapija pokriva SVAKI povrat od kupca, ne samo kupac -> vozac:
+    ' prva verzija je trazila ceo par, pa su ova dva prolazila na NASEM reversu.
+    '
+    ' TVRDNJA IMENUJE ODLUKU, NE SAMO ODBIJANJE. Blok povratOdKupca ima DVE
+    ' posledice: naTip <> Vozac daje ODL-9, a inace pada na ODL-10 (vrsta mora
+    ' biti REVERS_PARTNERA). Dok je tvrdnja bila "Len(...) > 0", gasenje prvog
+    ' pravila nije obaralo nista -- drugi sloj je i dalje odbijao slucaj, pa je
+    ' sabotaza amb-odl9-povrat-od-kupca-ide-svuda javljala NE OBARA NISTA
+    ' (prvi prolaz dokaza, 04.10.2026).
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   AMB_DOK_REVERS, AMB_NALOG_FIRMA, "", _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_FIRMA, _
+                   AMB_VK_POVRAT_PRAZNE), "AMB-10-ODL-9") > 0, _
+               "ODL-9: obican REVERS ne sme da nosi kupac -> firma"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   AMB_DOK_REVERS, AMB_NALOG_STANICA, TEST_ST_ID, _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_STANICA, _
+                   AMB_VK_POVRAT_PRAZNE), "AMB-10-ODL-9") > 0, _
+               "ODL-9: obican REVERS ne sme da nosi kupac -> stanica"
+    ' Obrnuta kapija ne sme da bude presiroka: kooperant -> stanica je NAS
+    ' revers i mora da prolazi (danasnji PRIJEM smer).
+    AssertEquals "", modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     AMB_DOK_REVERS, AMB_NALOG_STANICA, TEST_ST_ID, _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, _
+                     AMB_VK_POVRAT_PRAZNE), _
+                 "ODL-10: kooperant -> stanica je NAS revers i prolazi"
+
+    ' --- AMB-10-ODL-22: pravilo je VLASNIK BROJA, ne vrsta dokumenta --------
+    '
+    ' Operater je 05.10.2026 pobio premisu obrnute kapije: prijemnica je i sama
+    ' partnerov dokument (eksterna je) i zamena pune ambalaze praznom se knjizi
+    ' POD NJENIM brojem, bez dodatnog. Dakle ODL-10 nije zaobidjen nego ispunjen.
+    '
+    ' Robni dokument nosi praznu VRSTU (dokVrsta se puni samo za ambalazni), pa
+    ' se meri bas vlasnik broja -- i to u OBA smera.
+    AssertEquals "", modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                     "", AMB_NALOG_KUPAC, TEST_KUP_ID, _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
+                     AMB_VK_POVRAT_PRAZNE), _
+                 "ODL-22: povrat od kupca na ROBNOM dokumentu sa KUPCEVIM brojem prolazi"
+    ' TRAZI SE PORUKA PRVOG SLOJA, ne ID odluke. Blok ima DVA uslova i oba su
+    ' AMB-10-ODL-10: prvi trazi da je vlasnik KUPAC, drugi da je BAS taj kupac.
+    ' Nad dokumentom bez vlasnika oba su netacna, pa je gasenje prvog ostajalo
+    ' nevidljivo -- drugi sloj odbije isti slucaj i tvrdnja ostane zelena
+    ' (dokaz.py 05.10.2026: NE OBARA NISTA). Zato se meri tekst KOJI SAMO PRVI
+    ' SLOJ proizvodi.
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   "", "", "", _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
+                   AMB_VK_POVRAT_PRAZNE), "vlasnik broja je") > 0, _
+               "ODL-22: dokument koji NE objavi vlasnika broja pada (fail-closed)"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokKretanjeProblem( _
+                   "", AMB_NALOG_KUPAC, TEST_KUP2_ID, _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_VOZAC, _
+                   AMB_VK_POVRAT_PRAZNE), "AMB-10-ODL-10") > 0, _
+               "ODL-22: broj jednog kupca uz povrat drugog pada i na robnom dokumentu"
+
+    ' --- ZAGLAVLJE --------------------------------------------------------
+    AssertEquals "", modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", Date, AMB_NALOG_STANICA, TEST_ST_ID), _
+                 "Amb dokument: ispravno zaglavlje prolazi"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     "REVERSI", "1/011026", Date, AMB_NALOG_STANICA, TEST_ST_ID), _
+                     "Nepoznata vrsta", vbTextCompare) > 0, _
+               "Amb dokument: nepoznata vrsta je odbijena"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "", Date, AMB_NALOG_STANICA, TEST_ST_ID), _
+                     "nema broj", vbTextCompare) > 0, _
+               "Amb dokument: bez broja je odbijen"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", 0, AMB_NALOG_STANICA, TEST_ST_ID), _
+                     "nema datum", vbTextCompare) > 0, _
+               "Amb dokument: bez datuma je odbijen"
+
+    ' VLASNIK NUMERICKOG NIZA JE OBAVEZAN -- broj bez opsega nije jedinstven.
+    ' Ranije je tu stajala stanica, i to opciona, pa je revers KUPCA (koji stanicu
+    ' nema) prolazio bez ikakvog opsega (review #399, P2).
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", Date, "", ""), _
+                     "vlasnika numerickog niza", vbTextCompare) > 0, _
+               "Amb dokument: bez vlasnika broja je odbijen"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", Date, AMB_NALOG_VOZAC, TEST_KUP_ID), _
+                     "ne postoji", vbTextCompare) > 0, _
+               "Amb dokument: vlasnik broja ide kroz ISTU kapiju kao svaki nalog"
+    AssertEquals "", modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", Date, AMB_NALOG_VOZAC, TEST_VOZ_ID), _
+                 "Amb dokument: revers kupca sme da broji po vozacu, bez stanice"
+
+    ' POSTOJANJE NALOGA NIJE PRAVO NA SERIJU BROJEVA (review #399, drugi krug).
+    ' Ranije je provera zavrsavala na AmbNalogProblem, pa je prolazilo i to da
+    ' partner poseduje NASU seriju -- i da je poseduje granica opticaja.
+    AssertEquals "", modAmbalazaUgovor.AmbDokMatricaNepotpuna(), _
+                 "Amb dokument: svaka vrsta ima definisanog vlasnika broja"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS, "1/011026", Date, AMB_NALOG_KOOPERANT, TEST_KOOP_ID), _
+                     "vlasnika broja", vbTextCompare) > 0, _
+               "Amb dokument: partner NE moze da poseduje nas broj"
+    AssertTrue InStr(1, modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_OTPIS, "1/011026", Date, AMB_NALOG_SPOLJNI, ""), _
+                     "vlasnika broja", vbTextCompare) > 0, _
+               "Amb dokument: granica opticaja NE moze da poseduje broj"
+    AssertEquals "", modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_NABAVKA, "1/011026", Date, AMB_NALOG_FIRMA, ""), _
+                 "Amb dokument: firma sme da bude vlasnik broja nabavke"
+
+    ' --- VEZA DOKUMENT <-> KRETANJE, U OBA SMERA --------------------------
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS, AMB_VK_IZDATA_PRAZNA), _
+               "Amb dokument: revers nosi izdavanje praznih"
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS, AMB_VK_PRENOS_INTERNO), _
+               "Amb dokument: revers nosi i sopstveni prenos"
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_NABAVKA, AMB_VK_NABAVKA), _
+               "Amb dokument: nabavka nosi nabavku"
+    AssertTrue Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS, AMB_VK_NABAVKA), _
+               "Amb dokument: nabavka NE sme da visi na reversu"
+    AssertTrue Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_OTPIS, AMB_VK_POVRAT_PRAZNE), _
+               "Amb dokument: povrat praznih NE sme da visi na otpisu"
+    AssertTrue Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_REVERS, AMB_VK_UZ_ROBU), _
+               "Amb dokument: ambalaza uz robu NIKAD nije na ambalaznom dokumentu"
+
+    ' Pokrice deficita je izuzetak: ono nije vrsta posla nego posledica
+    ' AMB-INV-07, pa nastaje svuda gde bi realan nalog pao ispod nule.
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje(AMB_DOK_OTPIS, AMB_VK_ULAZ_TUDJE), _
+               "Amb dokument: pokrice deficita sme uz SVAKI dokument"
+
+    ' FAIL-CLOSED NA NEPOZNATU VRSTU. Dozvola za pokrice deficita je ranije stajala
+    ' IZNAD provere vrste, pa je nepostojeci dokument prolazio kroz zatvoren enum.
+    AssertTrue Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje( _
+                   "NEPOSTOJECI_DOKUMENT", AMB_VK_ULAZ_TUDJE), _
+               "Amb dokument: nepoznata vrsta ne prolazi ni sa pokricem deficita"
+
+    ' KANONSKI TIP: jedna tabela = jedan DokumentTIP. Vrsta posla zivi na zaglavlju,
+    ' ne u tipu -- inace bi ista klasifikacija stajala u dve kolone, a AMB-INV-04
+    ' racuna identitet efekta bas iz DokumentTIP-a.
+    AssertEquals "AmbalazaDokument", DOK_TIP_AMBALAZA_DOKUMENT, _
+                 "Amb dokument: kanonski DokumentTIP za knjigu je definisan"
+    AssertTrue Not modAmbalazaUgovor.AmbDokVrstaPoznata(DOK_TIP_AMBALAZA_DOKUMENT), _
+               "Amb dokument: DokumentTIP nije vrsta -- dve kolone, dva pojma"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_DokumentUgovor", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' PISAC KNJIGE (AMB-10b-1)
+' ============================================================
+'
+' Knjiga dobija pisca, ali NIJEDNO pozivno mesto se ne menja -- devet mesta
+' knjizenja, razlaganje slozenih pisaca i citaoci su 10b-2. Meri se zato sam
+' pisac: sta upisuje, sta ODBIJA, i sta radi kad se isti zahtev ponovi.
+'
+' PREDUSLOV SVAKOG SCENARIJA JE NULA. Fixture nema redova novog oblika, pa je
+' saldo svakog naloga 0 i stanje se gradi u testu. Prvi upis zato mora biti
+' NABAVKA (GRANICA -> SOPSTVENI): jedini prenos koji ne trazi postojeci saldo.
+' STORNO U KNJIZI: kontra-stav vraca saldo, zastavica ga ne bi vratila.
+'
+' Meri POSLOVNU POSLEDICU, ne upis. Nov citalac (RedDoticeKnjigu/AmbSaldoNaloga)
+' ne gleda COL_STORNIRANO nigde, pa dokument storniran zastavicom ostavlja gajbe
+' na saldu. Tvrdnja (c) je zato jedina koja dokazuje da ulaz ima svrhu.
+'
+' Tvrdnje su nad DELTOM i nad vracanjem na izmerenu pre-vrednost, ne nad
+' apsolutnim brojem: suite vrti vise testova nad istim fixture-om.
+Private Sub Test_Amb_StornoKontraStavVracaSaldo()
+    Dim scenario As String, tipT As String
+    Dim h As Object, stavke As Collection
+    Dim otkID As String, greska As String
+    Dim deficit As Double
+    Dim stPre As Double, koopPre As Double
+    Dim stPosle As Double, koopPosle As Double
+    Dim stStorno As Double, koopStorno As Double
+    Dim stornoProsao As Boolean, drugiProsao As Boolean
+    Dim kontra As Long
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("STKS")
+    ' SOPSTVEN tip: tvrdnje su nad vracanjem salda na IZMERENU pre-vrednost, a
+    ' deljeni tip menja svaki drugi test koji knjizi ambalazu.
+    tipT = RegistrujTipTesta("TIPS-" & scenario)
+
+    ' Stanica mora imati sta da izda uz otkup (AMB-10-ODL-8: njen manjak se NE
+    ' pokriva tudjom ambalazom).
+    modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, tipT, 40#
+
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
+    koopPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)
+
+    ' --- otkup: kooperant donese 20 SVOJIH gajbi, stanica mu izda 7 praznih
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-STK-" & scenario)
+    h("TipAmbalaze") = tipT
+    h.Add "KolAmbIzdata", 7#
+    Set stavke = OtkStavke(400#, 50#, 20, 0#, 0#, 0)
+    deficit = modOtkup.OtkupDeficitKooperanta(h, stavke)
+    otkID = CreateOtkup_TX(h, stavke, greska, deficit)
+
+    stPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
+    koopPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)
+
+    ' --- storno: kontra-stav, ne zastavica
+    stornoProsao = StornoOtkup_TX(otkID)
+    kontra = AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)
+    stStorno = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
+    koopStorno = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)
+
+    ' --- drugi storno: nema sta da se stornira dvaput
+    drugiProsao = StornoOtkup_TX(otkID)
+
+    AssertTrue Len(otkID) > 0, "STORNO: polazni otkup je upisan"
+    ' Kontra-stav IZDATE PRAZNE nosi zamenjene Od/Na, pa ga matrica klasa odbija
+    ' ako se proveri u ISTOM smeru (trazi SOPSTVENI kao izvor, dobija partnera).
+    AssertTrue stornoProsao, _
+               "STORNO: kontra-stav IZDATA_PRAZNA prolazi jer se proverava OBRNUTO"
+    AssertTrue Abs(stStorno - stPre) < 0.001, _
+               "STORNO: saldo stanice se vraca na stanje pre dogadjaja"
+    AssertTrue Abs(koopStorno - koopPre) < 0.001, _
+               "STORNO: saldo kooperanta se vraca na stanje pre dogadjaja"
+    ' Tri originala: trazeni prenos, izdate prazne i POKRICE deficita.
+    AssertEquals "3", CStr(kontra), _
+                 "STORNO: kontra-stav je upisan za svaki aktivan red dokumenta"
+    AssertTrue Abs((stPosle - stPre) - 13#) < 0.001, _
+               "STORNO: otkup je stvarno promenio saldo pre storna"
+    AssertFalse drugiProsao, "STORNO: ponovljeni storno je odbijen"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_StornoKontraStavVracaSaldo", Err.Number, Err.description
+End Sub
+
+
+' AMB-INV-09 NAD POSLE-STANJEM: storno ULAZA tudje ambalaze koja je VEC vracena
+' se odbija.
+'
+' Zahtev nije nov -- pisac ga je imenovao kao nasledje za ulaz storna
+' (PrenesiAmbalazu, VRACANJE_TUDJE, "negativna obaveza ne spusta se na nulu").
+' Lanac: kooperant donese SVOJE gajbe (deficit -> pokrice ULAZ_TUDJE), stanica mu
+' ih vrati (VRACANJE_TUDJE), pa storno prvog dokumenta ostavlja obavezu -N.
+' AMB-INV-09 NAD POSLE-STANJEM: storno ULAZA tudje ambalaze koja je VEC vracena
+' se odbija.
+'
+' Zahtev nije nov -- pisac ga je imenovao kao nasledje za ulaz storna
+' (PrenesiAmbalazu, VRACANJE_TUDJE, "negativna obaveza ne spusta se na nulu").
+'
+' Nabavka 40 je tu da AMB-INV-07 NE ucestvuje: posle kontra-stava stanica ostaje
+' u plusu, pa odbijenica moze da dodje SAMO od AMB-INV-09. Inace bi sabotaza
+' INV-09 bila pokrivena INV-07 i izgledala kao da ne grize.
+Private Sub Test_Amb_StornoPosleVracanjaOdbijen()
+    Dim scenario As String, tipT As String
+    Dim tx As clsTransaction
+    Dim h As Object, stavke As Collection
+    Dim otkID As String, dokVrac As String, greska As String
+    Dim deficit As Double, obavezaPosle As Double
+    Dim stornoProsao As Boolean
+    Dim kontra As Long, zastavica As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("STPV")
+    tipT = RegistrujTipTesta("TIPV-" & scenario)
+
+    modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, tipT, 40#
+
+    ' --- otkup: kooperant donese SVOJE gajbe -> pokrice ulazi u opticaj
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-SPV-" & scenario)
+    h("TipAmbalaze") = tipT
+    Set stavke = OtkStavke(400#, 50#, 20, 0#, 0#, 0)
+    deficit = modOtkup.OtkupDeficitKooperanta(h, stavke)
+    otkID = CreateOtkup_TX(h, stavke, greska, deficit)
+
+    ' --- stanica vraca kooperantu tacno onoliko koliko mu duguje
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokVrac = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "SPV-" & scenario, _
+                                           Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, deficit, _
+                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_VRACANJE_TUDJE, DOK_TIP_AMBALAZA_DOKUMENT, dokVrac
+    tx.CommitTx
+    Set tx = Nothing
+
+    obavezaPosle = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, _
+                                                  TEST_KOOP_ID, tipT)
+
+    ' --- storno otkupa bi obavezu odveo pod nulu
+    stornoProsao = StornoOtkup_TX(otkID)
+    kontra = AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)
+    zastavica = OtkPolje(otkID, COL_STORNIRANO)
+
+    AssertTrue deficit > 0, "STORNO: scenario je stvarno proizveo manjak kooperanta"
+    AssertTrue Abs(obavezaPosle) < 0.001, _
+               "STORNO: vracanje je zatvorilo obavezu prema kooperantu"
+    AssertFalse stornoProsao, _
+                "STORNO: ulaz tudje ambalaze koja je vracena se NE stornira (AMB-INV-09)"
+    AssertEquals "0", CStr(kontra), _
+                 "STORNO: odbijen storno ne ostavlja kontra-stav"
+    AssertTrue zastavica <> "Da", _
+               "STORNO: odbijen storno ostavlja dokument AKTIVNIM"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal "Test_Amb_StornoPosleVracanjaOdbijen", errNum, errDesc
+End Sub
+
+
+' AMB-INV-07 NAD KONTRA-STAVOM: dokument cija je ambalaza otisla dalje se ne
+' stornira.
+'
+' Kontra-stav ide direktno kroz UpisiRedKnjige, pa zaobilazi sve sto stoji u
+' PrenesiAmbalazu -- a tamo zivi AMB-INV-07. Bez provere nad posle-stanjem storno
+' commituje stanje koje normalan pisac eksplicitno zabranjuje.
+'
+' Ide kroz PRODUKCIONI ulaz StornoOtkup_TX, ne kroz primitiv: nalaz je bio da
+' bas ta putanja moze da commituje minus.
+'
+' Tip je TEST_TIP_AMB_C (nezasejan): zasejana stanica ima desetine hiljada gajbi,
+' pa se minus nad njom ne moze proizvesti. Dreniranje ide Stanica -> druga Stanica
+' (PRENOS_INTERNO) a ne ka partneru, jer bi partnerska noga dirala AMB-INV-09 --
+' storno bi tada pao i sa ugasenom INV-07, pa sabotaza ne bi nista merila.
+' AMB-INV-07 NAD KONTRA-STAVOM: dokument cija je ambalaza otisla dalje se ne
+' stornira.
+'
+' Kontra-stav ide direktno kroz UpisiRedKnjige, pa zaobilazi sve sto stoji u
+' PrenesiAmbalazu -- a tamo zivi AMB-INV-07.
+'
+' SCENARIJ JE BEZ POKRICA, i to je namerno: stanica izda prazne, kooperant ih
+' vrati pune. Obaveza je 0 kroz ceo test, pa AMB-INV-09 NE ucestvuje i
+' odbijenica moze da dodje SAMO od AMB-INV-07. Inace bi sabotaza INV-07 bila
+' pokrivena INV-09 i izgledala kao da ne grize.
+'
+' Dreniranje ide Stanica -> druga Stanica (PRENOS_INTERNO): partnerska noga bi
+' opet uvela obavezu.
+Private Sub Test_Amb_StornoNePraviMinus()
+    Dim scenario As String, tipT As String
+    Dim tx As clsTransaction
+    Dim h As Object, stavke As Collection
+    Dim otkID As String, dokIzd As String, dokPrenos As String, greska As String
+    Dim stPosleOtkupa As Double, stPosleDrena As Double, stNaKraju As Double
+    Dim stornoProsao As Boolean
+    Dim kontra As Long, zastavica As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("STMIN")
+    tipT = RegistrujTipTesta("TIPM-" & scenario)
+
+    ' --- stanica nabavi 20 i izda ih kooperantu kao prazne
+    modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, tipT, 20#
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokIzd = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "MINI-" & scenario, _
+                                          Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 20#, _
+                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd
+    tx.CommitTx
+    Set tx = Nothing
+
+    ' --- kooperant ih vrati pune: NEMA deficita, pa nema ni pokrica
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-MIN-" & scenario)
+    h("TipAmbalaze") = tipT
+    Set stavke = OtkStavke(400#, 50#, 20, 0#, 0#, 0)
+    otkID = CreateOtkup_TX(h, stavke, greska)
+    stPosleOtkupa = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
+
+    ' --- te gajbe legitimno odu dalje, na drugu stanicu
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokPrenos = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "MIN-" & scenario, _
+                                             Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 20#, _
+                AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_NALOG_STANICA, TEST_HLAD_ST_ID, _
+                AMB_VK_PRENOS_INTERNO, DOK_TIP_AMBALAZA_DOKUMENT, dokPrenos
+    tx.CommitTx
+    Set tx = Nothing
+    stPosleDrena = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
+
+    ' --- storno otkupa bi stanicu odveo u minus
+    stornoProsao = StornoOtkup_TX(otkID)
+    stNaKraju = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
+    kontra = AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)
+    zastavica = OtkPolje(otkID, COL_STORNIRANO)
+
+    AssertTrue Len(otkID) > 0, "STORNO minus: polazni otkup je upisan"
+    AssertTrue Abs((stPosleOtkupa - stPosleDrena) - 20#) < 0.001, _
+               "STORNO minus: scenario je stvarno odveo gajbe dalje"
+    AssertFalse stornoProsao, _
+                "STORNO: dokument cija je ambalaza otisla dalje se NE stornira (AMB-INV-07)"
+    AssertTrue Abs(stNaKraju - stPosleDrena) < 0.001, _
+               "STORNO minus: odbijen storno ne menja saldo"
+    AssertEquals "0", CStr(kontra), _
+                 "STORNO minus: odbijen storno ne ostavlja kontra-stav"
+    AssertTrue zastavica <> "Da", _
+               "STORNO minus: izvorni dokument ostaje AKTIVAN posle rollback-a"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal "Test_Amb_StornoNePraviMinus", errNum, errDesc
+End Sub
+
+
+' UNDO NAD APPEND-ONLY KNJIGOM SE ODBIJA (AMB-10-ODL-19).
+'
+' Zurnal je CELIJSKI, a kontra-stav je NOV RED koji u njemu ne postoji. Undo bi
+' vratio zaglavlje u aktivno stanje, a ambalazni efekat bi ostao anuliran --
+' dokument aktivan sa nula ambalaze. Putanja je POSTOJECA lossless undo
+' (UndoStorno_TX delegira ovamo kad operacija postoji), pa je ovo regresija a ne
+' hipoteza.
+'
+' Tvrdnja ide i nad RAZLOGOM, ne samo nad ishodom: ekran oporavka prikazuje bas
+' taj tekst, pa odbijenica bez razloga operateru ne znaci nista.
+Private Sub Test_Amb_UndoStornaOdbijenNadKnjigom()
+    Dim scenario As String
+    Dim h As Object
+    Dim otkID As String, brDok As String, opID As String
+    Dim razlog As String
+    Dim undoProsao As Boolean
+    Dim kontraPre As Long, kontraPosle As Long
+    Dim zastavica As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("UNDKS")
+
+    brDok = TEST_PREFIX & "-OTK-UK-" & scenario
+    Set h = OtkHeader(brDok)
+    h.Add "KolAmbIzdata", 7#
+    otkID = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 0#, 0#, 0))
+
+    AssertTrue StornoOtkup_TX(otkID), "UNDO: polazni storno je prosao"
+    kontraPre = AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)
+
+    opID = modStornoZurnal.LatestOpFor(DOK_TIP_OTKUP, brDok)
+    razlog = modStornoZurnal.UndoGuardReasonZaOp(opID, DOK_TIP_OTKUP, brDok)
+    undoProsao = modStornoZurnal.UndoOperation_TX(opID)
+
+    kontraPosle = AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)
+    zastavica = OtkPolje(otkID, COL_STORNIRANO)
+
+    AssertTrue Len(opID) > 0, "UNDO: operacija storna je nadjena u zurnalu"
+    AssertEquals "2", CStr(kontraPre), "UNDO: storno je upisao oba kontra-stava"
+    AssertFalse undoProsao, _
+                "UNDO: operacija sa kontra-stavom u knjizi se ODBIJA (AMB-10-ODL-19)"
+    AssertTrue InStr(1, razlog, "AMB-10-ODL-19") > 0, _
+               "UNDO: odbijenica imenuje razlog, jer je ekran oporavka prikazuje: [" & _
+               razlog & "]"
+    ' AMB-10-ODL-25: odbijanje je PRAVILO, ne privremena brana -- pa odbijenica
+    ' kaze i sta operater radi. Bez toga bi ekran oporavka nudio razlog bez izlaza.
+    AssertTrue InStr(1, razlog, "unesi dokument ponovo", vbTextCompare) > 0 And _
+               InStr(1, razlog, "AMB-10-ODL-25") > 0, _
+               "UNDO: storno sa ambalazom je konacan, a odbijenica kaze put (AMB-10-ODL-25)"
+    AssertEquals "Da", zastavica, _
+                 "UNDO: odbijen undo ostavlja dokument STORNIRAN"
+    AssertEquals CStr(kontraPre), CStr(kontraPosle), _
+                 "UNDO: odbijen undo ne dira knjigu"
+
+    ' KLJUC KNJIGE JE KOMPOZITAN (DokumentTIP, DokumentID). Isti ID pod drugim
+    ' tipom NE SME da da pogodak -- inace bi undo jednog dokumenta mogao da bude
+    ' lazno odbijen zbog kontra-stava tudjeg. AMB-INV-04 nosi tip tacno zato sto
+    ' se jedan globalni namespace DokumentID-eva ne sme pretpostaviti.
+    AssertTrue modAmbalaza.AmbImaKontraStav(DOK_TIP_OTKUP, otkID), _
+               "UNDO: kontra-stav se nalazi pod SVOJIM tipom dokumenta"
+    AssertFalse modAmbalaza.AmbImaKontraStav(DOK_TIP_AMBALAZA_DOKUMENT, otkID), _
+                "UNDO: isti DokumentID pod DRUGIM tipom nije pogodak"
+    AssertFalse modAmbalaza.AmbImaKontraStav("", otkID), _
+                "UNDO: prazan tip dokumenta ne daje pogodak (fail-closed)"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_UndoStornaOdbijenNadKnjigom", Err.Number, Err.description
+End Sub
+
+' D-057 / AMB-10-ODL-27: PONOVNA STAMPA DOKUMENTA BEZ SOPSTVENOG REDA KNJIGE.
+'
+' Review #415 (P2): otkup bez gajbi (neto unos, stroga validacija iskljucena) ne
+' pravi nijedan red knjige, pa citac pocetnog stanja nije nalazio granicu bloka i
+' uzimao je CELU danasnju knjigu. Prva stampa je tada bila tacna (danas = pre
+' dokumenta), a ponovna posle kasnijeg kretanja nije. REPRODUKOVANO pre
+' ispravke (11.10.2026): ocekivano 17740, dobijeno 17743 -- tacno kasniji revers.
+'
+' Odluka operatera (ODL-27): bez granice nema stanja. Tvrdnja o NEPOZNATOM ide
+' prva: ona je pravilo, a nepromenjena vrednost je njegova posledica.
+' SABOTAZA: amb-istorija-bez-granice-poznato -> pukne "D-057 bez reda: stanje pre
+' dokumenta bez reda knjige je NEPOZNATO".
+Private Sub Test_Amb_PonovnaStampaBezRedaKnjige()
+    Dim scenario As String, h As Object, otkID As String, revDok As String
+    Dim o1 As Long, o2 As Long, p1 As Boolean, p2 As Boolean
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("PSBRK")
+
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-PS-" & scenario)
+    otkID = CreateOtkup_TX(h, OtkStavke(100#, 50#, 0, 0#, 0#, 0))
+    AssertTrue Len(otkID) > 0, "D-057 bez reda: otkup bez gajbi je upisan"
+    AssertEquals "0", CStr(FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, otkID).count), _
+                 "D-057 bez reda: otkup bez gajbi nema red u knjizi"
+
+    o1 = modAmbalaza.GetKooperantAmbOpening(TEST_KOOP_ID, TEST_TIP_AMB, otkID, p1)
+    revDok = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", TEST_ST_ID, TEST_TIP_AMB, 3, _
+                                                REV_SMER_IZDAVANJE, TEST_KOOP_ID, "")
+    AssertTrue Len(revDok) > 0, "D-057 bez reda: kasniji revers je upisan"
+    o2 = modAmbalaza.GetKooperantAmbOpening(TEST_KOOP_ID, TEST_TIP_AMB, otkID, p2)
+
+    AssertFalse p1 Or p2, _
+                "D-057 bez reda: stanje pre dokumenta bez reda knjige je NEPOZNATO"
+    AssertEquals CStr(o1), CStr(o2), _
+                 "D-057 bez reda: kasniji revers ne menja pocetno stanje ponovne stampe"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_PonovnaStampaBezRedaKnjige", Err.Number, Err.description
+End Sub
+
+' BROJ AMBALAZNOG DOKUMENTA: NIZ JE (BrojOwnerTip, BrojOwnerID, DAN).
+'
+' Dve stvari koje stari test nije merio (review 03.10.2026, P2 #2):
+'
+'   1. RUCNO PROSLEDJEN broj koji je vec zauzet mora biti ODBIJEN. Stari test je
+'      merio samo da dva AUTO-generisana dokumenta dobiju razlicite brojeve -- a
+'      to generator postize sa max+1 i bez ikakve kapije.
+'   2. TIP vlasnika je deo opsega. U AgriX-u VozacID moze da bude jednak
+'      StanicaID (ogledalo vozaca), pa niz koji gleda samo ID spaja dva naloga.
+'
+' Isti broj za DRUGOG vlasnika prolazi -- to nije rupa nego pravilo: nizovi su
+' razliciti, a dokument nosi i tip i ID vlasnika, pa je par (vlasnik, broj)
+' jedinstven.
+Private Sub Test_Amb_DokBrojZauzetPoVlasniku()
+    Dim scenario As String
+    Dim brojK As String
+    Dim prvi As String, drugiVlasnik As String
+    Dim pukloIsti As Boolean, opisIsti As String
+    Dim nizStanice As String, nizVozaca As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("AMBBR")
+
+    ' Broj u kanonskom obliku, ali namerno sa drugim numerickim delom od onog koji
+    ' bi generator dao -- da se ne sudari sa zasejanim nabavkama istog dana.
+    brojK = "7731/" & Format$(Date, "ddmmyy")
+
+    prvi = modAmbalaza.NabaviAmbalazu_TX(Date, TEST_ST_ID, TEST_TIP_AMB, 5#, brojK, _
+                                         "P2 broj " & scenario)
+
+    ' --- isti broj, isti vlasnik, isti dan: HARD REJECT
+    On Error Resume Next
+    modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, TEST_TIP_AMB, 3#, brojK
+    pukloIsti = (Err.Number <> 0)
+    opisIsti = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    ' --- isti broj, DRUGI vlasnik: prolazi, jer je drugi niz
+    drugiVlasnik = modAmbalaza.NabaviAmbalazu_TX(Date, TEST_HLAD_ST_ID, TEST_TIP_AMB, _
+                                                 4#, brojK, "P2 drugi " & scenario)
+
+    ' --- opseg niza: vozac sa ISTIM ID-em kao stanica ima SVOJ niz
+    ' Niz stanice je neprazan zbog DVA dokumenta koja je ovaj test upisao gore --
+    ' ne zbog zasejavanja, koje od 04.10.2026 nosi svoje brojeve. Ako se ti upisi
+    ' ikad uklone, ova tvrdnja prestaje da meri (oba niza bi krenula od 1).
+    nizStanice = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, TEST_ST_ID, Date)
+    nizVozaca = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_VOZAC, TEST_ST_ID, Date)
+
+    AssertTrue Len(prvi) > 0, _
+               "AMB DOK broj: prvi dokument sa rucno unetim brojem prolazi"
+    AssertTrue pukloIsti, _
+               "AMB DOK broj: isti broj u istom nizu je ODBIJEN"
+    AssertTrue InStr(1, opisIsti, "zauzet") > 0, _
+               "AMB DOK broj: odbijenica imenuje zauzet broj: [" & opisIsti & "]"
+    AssertTrue Len(drugiVlasnik) > 0, _
+               "AMB DOK broj: isti broj za DRUGOG vlasnika prolazi -- drugi niz"
+    ' VREDNOSTI IDU U SVOJU TVRDNJU. Ciljana tvrdnja mora da bude JEDAN statican
+    ' literal: dokaz.py je za BFP koristi kao KLJUC, pa interpolirana poruka nikad
+    ' ne moze da se poklopi i prijavljuje se kao "NE OBARA SVOJ TEST".
+    AssertTrue Len(nizVozaca) > 0, _
+               "AMB DOK broj: niz vozaca je izracunat: [" & nizVozaca & "] [" & _
+               nizStanice & "]"
+    AssertTrue nizVozaca <> nizStanice, _
+               "AMB DOK broj: niz vozaca nije niz stanice sa istim ID-em"
+    Exit Sub
+
+EH:
+    LogFatal "Test_Amb_DokBrojZauzetPoVlasniku", Err.Number, Err.description
+End Sub
+
+' NABAVKA: jedini put kojim NASE gajbe ulaze u opticaj.
+'
+' Meri POSLOVNU POSLEDICU, ne upis. Pre nabavke stanica ne moze da izda vise
+' nego sto ima -- i to nije pitanje potvrde nego TVRDO odbijanje, jer
+' AMB-10-ODL-8 kaze da se deficit sopstvenog naloga ne pokriva ulazom tudje
+' ambalaze: "nase gajbe ne nastaju iz vazduha, za njih ide NABAVKA". Posle
+' nabavke isto izdavanje prolazi.
+'
+' Tvrdnje su nad DELTOM salda, ne nad apsolutnom vrednoscu: suite vrti vise
+' testova nad istim fixture-om, pa bi apsolutan broj zavisio od redosleda.
+' Isti razlog i za "izdaj saldoPre + 1" umesto "izdaj 1 iz nule".
+Private Sub Test_Amb_NabavkaOtvaraIzdavanje()
+    Dim scenario As String
+    Dim tx As clsTransaction
+    Dim dokNab As String, dokNab2 As String, dokRev As String
+    Dim saldoPre As Double, saldoPosle As Double
+    Dim brojNab As String, brojNab2 As String
+    Dim pukloDrugiNab As Boolean
+    Dim opisBez As String
+    Dim errBezNabavke As Long
+    Dim pukloNula As Boolean
+    Dim presloPosle As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("NABAV")
+
+    saldoPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+
+    ' --- PRE nabavke: izdavanje preko salda je TVRDO odbijeno
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokRev = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "NBR-" & scenario, _
+                                          Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, TEST_TIP_AMB, saldoPre + 1#, _
+                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev
+    errBezNabavke = Err.Number
+    opisBez = Err.description
+    Err.Clear
+    On Error GoTo EH
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- nabavka: dva dokumenta istog dana moraju imati RAZLICITE brojeve
+    '
+    ' DRUGI POZIV SE HVATA. Od kapije zauzetosti broja (AMB-10-ODL-20) ugasen
+    ' generator ne proizvodi dva ista broja nego ODBIJEN upis -- sto je bolje
+    ' ponasanje, ali nehvatan pad ide u LogFatal i tvrdnja se nikad ne izgovori
+    ' (drugi prolaz dokaza, 04.10.2026). Tvrdnja zato meri OBE posledice: da je
+    ' drugi dokument PROSAO i da nosi DRUG broj.
+    dokNab = modAmbalaza.NabaviAmbalazu_TX(Date, TEST_ST_ID, TEST_TIP_AMB, 10#)
+    On Error Resume Next
+    dokNab2 = modAmbalaza.NabaviAmbalazu_TX(Date, TEST_ST_ID, TEST_TIP_AMB, 5#)
+    pukloDrugiNab = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+    brojNab = CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokNab, COL_AMBD_BROJ))
+    brojNab2 = CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokNab2, COL_AMBD_BROJ))
+
+    saldoPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+
+    ' --- POSLE nabavke: isto izdavanje prolazi
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokRev = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "NBR2-" & scenario, _
+                                          Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    presloPosle = Len(modAmbalaza.PrenesiAmbalazu(tx, Date, TEST_TIP_AMB, 10#, _
+                      AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                      AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev)) > 0
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' --- nulta kolicina nema poslovno znacenje
+    On Error Resume Next
+    modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, TEST_TIP_AMB, 0#
+    pukloNula = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    ' TVRDNJA GLEDA BROJ GRESKE, ne "nesto je palo". Sa ugasenom klasnom kapijom
+    ' manjak stanice postane PITANJE POTVRDE (AMB_ERR_POTVRDA_DEFICITA) umesto
+    ' tvrdog odbijanja -- pa je sabotaza amb-nabavka-stanica-sme-u-minus obarala
+    ' druge tvrdnje a ne svoju. AMB-10-ODL-8: manjak SOPSTVENOG naloga se NE
+    ' pokriva, dakle ishod je NEPOKRIV, a ne pitanje.
+    AssertEquals CStr(AMB_ERR_DEFICIT_NEPOKRIV), CStr(errBezNabavke), _
+                 "NABAVKA: stanica NE SME da izda vise gajbi nego sto ima"
+    AssertTrue InStr(1, opisBez, "NABAVKA") > 0, _
+               "NABAVKA: odbijenica mora da imenuje PUT (nabavku), ne samo " & _
+               "manjak: [" & opisBez & "]"
+    AssertTrue Len(dokNab) > 0, "NABAVKA: nabavka ima zaglavlje"
+    AssertEquals AMB_DOK_NABAVKA, modAmbalaza.AmbDokVrstaZaID(dokNab), _
+                 "NABAVKA: vrsta se cita sa zaglavlja"
+    AssertEquals CStr(saldoPre + 15#), CStr(saldoPosle), _
+                 "NABAVKA: saldo stanice raste za ukupnu nabavljenu kolicinu"
+    AssertTrue Len(brojNab) > 0, _
+               "NABAVKA: prvi broj je izracunat: [" & brojNab & "] [" & _
+               brojNab2 & "]"
+    AssertTrue (Not pukloDrugiNab) And brojNab <> brojNab2, _
+               "NABAVKA: dva dokumenta istog dana imaju razlicite brojeve"
+    AssertTrue presloPosle, _
+               "NABAVKA: posle nabavke stanica MOZE da izda iste gajbe"
+    AssertTrue pukloNula, "NABAVKA: nulta kolicina je odbijena"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal "Test_Amb_NabavkaOtvaraIzdavanje", errNum, errDesc
+End Sub
+
+' AMB-INV-08 U JEZGRU: upis u knjigu ne nastaje van vlasnistva transakcije
+' izvornog dokumenta.
+'
+' Ovo je u planu bila STATICKA kapija. Napisana je, prosla self-test u oba
+' smera, bila zelena nad pravim izvorom -- i pala na drugom nivou dokaza:
+' pravilo "neki predak u pozivnom lancu poseduje tx sa snapshotom" je nad 4120
+' procedura i 17 vlasnika uvek istinito ako se ide dovoljno visoko. Skinuta su
+' oba AddTableSnapshot iz modOtkup, a kapija je ostala ZELENA. Zato pisac trazi
+' transakciju i sam pita; poziv bez nje je compile error.
+'
+' POSTAVKA MERI BAS KAPIJU, ne susednu gresku. Prva verzija ovog testa je
+' koristila dokID = "NEMA", pa je PrenesiAmbalazu padala na AmbDokVrstaZaID jos
+' pre nego sto red stigne do jezgra -- tvrdnja "puklo" je bila istinita iz
+' pogresnog razloga i test bi bio zelen i bez kapije.
+'
+'   txA snapshotuje SAMO tblAmbalazaDokument
+'       zaglavlje PROLAZI   <- dokaz da kapija nije "uvek odbij"
+'       red knjige PADA     <- nema tblAmbalaza, a dokID je PRAVI
+'   txB snapshotuje SAMO tblAmbalaza
+'       zaglavlje PADA      <- nema tblAmbalazaDokument
+Private Sub Test_Amb_Inv08TxVlasnistvo()
+    Dim txA As clsTransaction, txB As clsTransaction
+    Dim scenario As String, dokID As String
+    Dim pukloBezTx As Boolean, pukloKnjiga As Boolean, pukloZaglavlje As Boolean
+    Dim txC As clsTransaction
+    Dim dokC As String, pukloTudjaTx As Boolean, opisTudjaTx As String
+    Dim presloSvoja As Boolean
+    Dim dokP As String, pukloPar As Boolean, opisPar As String
+    Dim pukloIzvorTbl As Boolean, opisIzvorTbl As String
+    Dim opisKnjiga As String, opisZaglavlje As String
+    Dim imaPosle As Boolean, pukloImaPosle As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("I8TX")
+
+    ' --- txA: ima ZAGLAVLJE, nema KNJIGU
+    Set txA = New clsTransaction
+    txA.BeginTx
+    txA.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+
+    ' Zaglavlje prolazi -- i time daje PRAVI dokID za sledeci korak.
+    dokID = modAmbalaza.UpisiAmbDokument(txA, AMB_DOK_NABAVKA, "I8-" & scenario, _
+                                         Date, AMB_NALOG_FIRMA, "")
+
+    On Error Resume Next
+    ' bez transakcije
+    modAmbalaza.PrenesiAmbalazu Nothing, Date, TEST_TIP_AMB, 1#, _
+                AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    pukloBezTx = (Err.Number <> 0)
+    Err.Clear
+
+    ' transakcija postoji i aktivna je, ali ne nosi KNJIGU
+    modAmbalaza.PrenesiAmbalazu txA, Date, TEST_TIP_AMB, 1#, _
+                AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokID
+    pukloKnjiga = (Err.Number <> 0)
+    opisKnjiga = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    txA.RollbackTx
+    ' Poziv se HVATA: sa ugasenim kapijama ImaSnapshot pada na Nothing, a
+    ' nehvatan pad bi bio LogFatal -- tvrdnja se tada ne bi ni izgovorila.
+    On Error Resume Next
+    imaPosle = txA.ImaSnapshot(TBL_AMBALAZA_DOKUMENT)
+    pukloImaPosle = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+    Set txA = Nothing
+
+    ' --- txB: ima KNJIGU, nema ZAGLAVLJE
+    Set txB = New clsTransaction
+    txB.BeginTx
+    txB.AddTableSnapshot TBL_AMBALAZA
+
+    On Error Resume Next
+    modAmbalaza.UpisiAmbDokument txB, AMB_DOK_NABAVKA, "I8B-" & scenario, _
+                Date, AMB_NALOG_FIRMA, ""
+    pukloZaglavlje = (Err.Number <> 0)
+    opisZaglavlje = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    txB.RollbackTx
+    Set txB = Nothing
+
+    ' --- IZVORNA TABELA MORA BITI U ISTOM ROLLBACK-u
+    '
+    ' Vezivanje dokumenta dokazuje IDENTITET transakcije, ne i da je tabela tog
+    ' dokumenta u njenom snapshotu. Ovde je dokument VEZAN, knjiga snapshotovana,
+    ' a tblOtkup nije -- pa rollback ne bi bio zajednicki.
+    Set txB = New clsTransaction
+    txB.BeginTx
+    txB.AddTableSnapshot TBL_AMBALAZA
+    txB.BindSourceDocument DOK_TIP_OTKUP, "OTK-I8-" & scenario
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu txB, Date, TEST_TIP_AMB, 1#, _
+                AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_NABAVKA, DOK_TIP_OTKUP, "OTK-I8-" & scenario
+    pukloIzvorTbl = (Err.Number <> 0)
+    opisIzvorTbl = Err.description
+    Err.Clear
+    On Error GoTo EH
+    txB.RollbackTx
+    Set txB = Nothing
+
+    ' --- OZICENJE ODL-9: validator mora da se ZOVE iz pisca
+    '
+    ' Nova kapija stoji PRE idempotencije i pre racuna deficita, pa padajuci
+    ' slucaj ne trazi ni potvrdu deficita ni saldo -- meri bas nju. Prolazni
+    ' smer je pokriven tablicom u Test_Amb_DokumentUgovor i sa 50 postojecih
+    ' poziva kroz isti pisac.
+    Set txB = New clsTransaction
+    txB.BeginTx
+    txB.AddTableSnapshot TBL_AMBALAZA
+    txB.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    dokP = modAmbalaza.UpisiAmbDokument(txB, AMB_DOK_REVERS_PARTNERA, _
+                                        "KUPREV-" & scenario, Date, _
+                                        AMB_NALOG_KUPAC, TEST_KUP_ID)
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu txB, Date, TEST_TIP_AMB, 1#, _
+                AMB_NALOG_KUPAC, TEST_KUP_ID, AMB_NALOG_FIRMA, "", _
+                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokP
+    pukloPar = (Err.Number <> 0)
+    opisPar = Err.description
+    Err.Clear
+    On Error GoTo EH
+    txB.RollbackTx
+    Set txB = Nothing
+
+    ' --- TACKA 3: ista tabela u snapshotu, DRUGA transakcija
+    '
+    ' txC snapshotuje OBE tabele, pa je po snapshotu neodvojiv od vlasnika --
+    ' razlikuje ih samo to CIJI je dokument. Zaglavlje se pravi u svojoj
+    ' transakciji i ona se COMMIT-uje, da zaglavlje stvarno postoji kad ga txC
+    ' pomene; rollback bi ga uklonio, pa bi test pao na "dokument ne postoji" --
+    ' opet placebo.
+    Set txC = New clsTransaction
+    txC.BeginTx
+    txC.AddTableSnapshot TBL_AMBALAZA
+    txC.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    dokC = modAmbalaza.UpisiAmbDokument(txC, AMB_DOK_NABAVKA, "I8C-" & scenario, _
+                                        Date, AMB_NALOG_FIRMA, "")
+    ' svoja transakcija, svoj dokument -- mora da PROLAZI
+    presloSvoja = Len(modAmbalaza.PrenesiAmbalazu(txC, Date, TEST_TIP_AMB, 1#, _
+                      AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                      AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokC)) > 0
+    txC.CommitTx
+    Set txC = Nothing
+
+    ' nova transakcija, iste tabele, TUDJ dokument -- mora da PADNE
+    Set txC = New clsTransaction
+    txC.BeginTx
+    txC.AddTableSnapshot TBL_AMBALAZA
+    txC.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu txC, Date, TEST_TIP_AMB_B, 1#, _
+                AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokC
+    pukloTudjaTx = (Err.Number <> 0)
+    opisTudjaTx = Err.description
+    Err.Clear
+    On Error GoTo EH
+    txC.RollbackTx
+    Set txC = Nothing
+
+    AssertTrue Len(dokID) > 0, _
+               "AMB-INV-08: zaglavlje sa SVOJIM snapshotom prolazi -- kapija " & _
+               "nije 'uvek odbij'"
+    AssertTrue pukloBezTx, _
+               "AMB-INV-08: upis bez transakcije mora pasti"
+    AssertTrue pukloKnjiga, _
+               "AMB-INV-08: red knjige bez snapshota knjige mora pasti"
+    AssertTrue InStr(1, opisKnjiga, "AMB-INV-08") > 0, _
+               "AMB-INV-08: odbijenica mora da IMENUJE invarijantu: [" & _
+               opisKnjiga & "]"
+    AssertTrue pukloZaglavlje, _
+               "AMB-INV-08: zaglavlje bez snapshota SVOJE tabele mora pasti"
+    AssertTrue InStr(1, opisZaglavlje, "AmbalazaDokument") > 0, _
+               "AMB-INV-08: odbijenica zaglavlja imenuje SVOJU tabelu: [" & _
+               opisZaglavlje & "]"
+    ' FAIL-CLOSED ZNACI I "BEZ GRESKE". ImaSnapshot ima dve kapije (mActive,
+    ' mSnapshots Is Nothing), a CleanUp gasi OBE -- pa uklanjanje jedne ne menja
+    ' ishod i sabotaza je javljala NE OBARA NISTA. Sabotaza sada uklanja OBE, a
+    ' poziv tada pada na Nothing: tvrdnja mora da meri i da GRESKE NEMA.
+    AssertTrue (Not imaPosle) And (Not pukloImaPosle), _
+               "ImaSnapshot je fail-closed: posle rollback-a nema snapshota"
+
+    ' --- TACKA 3: vlasnistvo DOKUMENTA, ne samo pokrivenost tabele
+    AssertTrue presloSvoja, _
+               "AMB-INV-08: svoja transakcija i svoj dokument PROLAZE -- " & _
+               "kapija nije 'uvek odbij'"
+    AssertTrue pukloTudjaTx, _
+               "AMB-INV-08: DRUGA transakcija sa istim snapshotom ne sme da pise u knjigu nad tudjim dokumentom"
+    AssertTrue InStr(1, opisTudjaTx, "nije vezan za ovu transakciju") > 0, _
+               "AMB-INV-08: odbijenica imenuje NEVEZAN dokument, ne snapshot: [" & _
+               opisTudjaTx & "]"
+
+    ' --- ODL-9 je OZICEN u piscu, ne samo u ugovoru
+    '
+    ' TVRDNJA IMENUJE ODLUKU, ne samo odbijanje. Sa ugasenim validatorom upis je
+    ' i dalje odbijen -- ali PROTOKOLOM POTVRDE DEFICITA, jer kupac u fixture-u
+    ' nema gajbe. "Puklo je" zato ostaje istinito i sabotaza
+    ' amb-odl9-validator-se-ne-zove je javljala NE OBARA SVOJ TEST (drugi prolaz
+    ' dokaza, 04.10.2026). Sestrinska tvrdnja ispod meri isto, ali nosi dinamican
+    ' rep, pa ne moze biti meta sabotaze.
+    AssertTrue pukloPar And InStr(1, opisPar, "AMB-10-ODL-9") > 0, _
+               "ODL-9: pisac mora da ODBIJE kupac -> firma na partnerovom reversu -- validator se zove iz PrenesiAmbalazu"
+    AssertTrue InStr(1, opisPar, "AMB-10-ODL-9") > 0, _
+               "ODL-9: odbijenica imenuje odluku: [" & opisPar & "]"
+
+    AssertTrue pukloIzvorTbl, _
+               "AMB-INV-08: vezan dokument bez snapshota SVOJE tabele mora pasti"
+    AssertTrue InStr(1, opisIzvorTbl, "tblOtkup") > 0, _
+               "AMB-INV-08: odbijenica imenuje IZVORNU tabelu: [" & _
+               opisIzvorTbl & "]"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not txA Is Nothing Then txA.RollbackTx
+    If Not txB Is Nothing Then txB.RollbackTx
+    If Not txC Is Nothing Then txC.RollbackTx
+    Set txA = Nothing
+    Set txB = Nothing
+    Set txC = Nothing
+    On Error GoTo 0
+    LogFatal "Test_Amb_Inv08TxVlasnistvo", errNum, errDesc
+End Sub
+
+Private Sub Test_Amb_PisacKnjige()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, errNum As Long, errDesc As String
+    scenario = NewScenarioCode("AMBPIS")
+    ' SOPSTVEN TIP AMBALAZE -- test POSEDUJE svoj merni opseg.
+    '
+    ' Tvrdnje ispod su APSOLUTNE ("100", "-100", "70"), a saldo se vodi po
+    ' (nalog, TIP). Nad deljenim tipom su radile samo dok nista drugo nije pisalo
+    ' ambalazu; SeedAmbalazaOpticaj je to oborio, a oborio bi i svaki od preostalih
+    ' osam cutovera. Sinteticki tip je nula PO KONSTRUKCIJI.
+    '
+    ' Ne prelazi se na delte: delta tvrdnja ne hvata "pisac je upisao na POGRESAN
+    ' nalog", a apsolutna nad sopstvenim opsegom hvata.
+    Dim tipT As String
+    tipT = RegistrujTipTesta("TIP-" & scenario)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+
+    ' KAPIJE POTPUNOSTI idu PRE scenarija: vrsta bez odgovora prolazi tiho.
+    AssertEquals "", modAmbalazaUgovor.AmbProizvodnjaNepotpuna(), _
+                 "Amb pisac: svaka vrsta ima definisanu proizvodnju"
+    AssertEquals AMB_KLASA_PARTNER, modAmbalazaUgovor.AmbPokriceKlasa(), _
+                 "Amb pisac: klasa pokrica se CITA iz matrice, ne pise posebno"
+
+    ' OBAVEZA POSTOJI SAMO PREMA NALOGU KOJI MOZE DA PRIMI TUDJU AMBALAZU.
+    ' Bez te kapije stanica dobija broj iz svojih VRACANJE redova, pa bi "firma
+    ' duguje stanici -70" izgledalo kao podatak a ne kao besmislica.
+    On Error Resume Next
+    modAmbalaza.AmbObavezaPartneru AMB_NALOG_STANICA, TEST_ST_ID, tipT
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb pisac: obaveza se ne racuna prema SOPSTVENOM nalogu"
+
+    ' --- A0) REVERS_PARTNERA: partnerov papir nosi PARTNEROV broj ----------
+    '
+    ' AMB-10-ODL-10 (03.10.2026): dokument od kupca je dokaz da je vozac preuzeo
+    ' ambalazu -- kupcev papir, kupcev broj. Do ovog reza je AmbDokBrojOwnerKlasa
+    ' vracala SOPSTVENI za SVE vrste, pa bi BrojOwnerTip=Kupac pao pre upisa.
+    '
+    ' Oba smera su obavezna: partnerov dokument prima partnera i ODBIJA nas
+    ' nalog, a nas dokument ODBIJA partnera. Kapija koja bi primala oba bila bi
+    ' zelena na prvoj tvrdnji, a pustila bi dva pozivna mesta da izaberu
+    ' razlicitu politiku -- sto ova funkcija postoji da spreci.
+    AssertEquals AMB_KLASA_PARTNER, _
+                 modAmbalazaUgovor.AmbDokBrojOwnerKlasa(AMB_DOK_REVERS_PARTNERA), _
+                 "AmbDok: partnerov revers broji PARTNER"
+    AssertEquals AMB_KLASA_SOPSTVENI, _
+                 modAmbalazaUgovor.AmbDokBrojOwnerKlasa(AMB_DOK_REVERS), _
+                 "AmbDok: nas revers i dalje broji SOPSTVENI nalog"
+    AssertEquals "", modAmbalazaUgovor.AmbDokMatricaNepotpuna(), _
+                 "AmbDok: nova vrsta ima definisanog vlasnika broja"
+
+    AssertEquals "", modAmbalazaUgovor.AmbDokProblem( _
+                     AMB_DOK_REVERS_PARTNERA, "KUP-9/" & scenario, Date, _
+                     AMB_NALOG_KUPAC, TEST_KUP_ID), _
+                 "AmbDok: partnerov revers prima kupca kao vlasnika broja"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokProblem( _
+                   AMB_DOK_REVERS_PARTNERA, "X/" & scenario, Date, _
+                   AMB_NALOG_STANICA, TEST_ST_ID)) > 0, _
+               "AmbDok: partnerov revers ODBIJA nas nalog kao vlasnika broja"
+    AssertTrue Len(modAmbalazaUgovor.AmbDokProblem( _
+                   AMB_DOK_REVERS, "Y/" & scenario, Date, _
+                   AMB_NALOG_KUPAC, TEST_KUP_ID)) > 0, _
+               "AmbDok: nas revers ODBIJA partnera kao vlasnika broja"
+
+    ' Veza dokument <-> kretanje: partnerov papir dokazuje da je ambalaza stigla
+    ' OD NJEGA. Kad mi izdajemo partneru, dokument je NAS.
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje( _
+                   AMB_DOK_REVERS_PARTNERA, AMB_VK_POVRAT_PRAZNE), _
+               "AmbDok: partnerov revers nosi POVRAT_PRAZNE"
+    AssertTrue Not modAmbalazaUgovor.AmbDokDozvoljavaKretanje( _
+                   AMB_DOK_REVERS_PARTNERA, AMB_VK_IZDATA_PRAZNA), _
+               "AmbDok: partnerov revers NE nosi IZDATA_PRAZNA -- to je nas papir"
+    AssertTrue modAmbalazaUgovor.AmbDokDozvoljavaKretanje( _
+                   AMB_DOK_REVERS_PARTNERA, AMB_VK_ULAZ_TUDJE), _
+               "AmbDok: pokrice deficita ide uz svaki ambalazni dokument"
+
+    ' --- A) NABAVKA: knjiga pocinje na granici opticaja --------------------
+    Dim dokNab As String, nabID As String
+    dokNab = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_NABAVKA, "NAB-" & scenario, Date, _
+                                          AMB_NALOG_FIRMA, "")
+    AssertTrue Len(dokNab) > 0, "Amb pisac: nabavka ima zaglavlje"
+    AssertEquals AMB_DOK_NABAVKA, modAmbalaza.AmbDokVrstaZaID(dokNab), _
+                 "Amb pisac: vrsta posla se cita sa zaglavlja"
+
+    nabID = modAmbalaza.PrenesiAmbalazu(tx, Date, tipT, 100#, _
+                AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab)
+    AssertTrue Len(nabID) > 0, "Amb pisac: nabavka je upisana"
+    AssertEquals "100", CStr(modAmbalaza.AmbSaldoNaloga( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, tipT)), _
+                 "Amb pisac: nabavka podize saldo stanice"
+    ' Granica nema fizicko znacenje, ali je knjiga simetricna -- njen saldo pada.
+    AssertEquals "-100", CStr(modAmbalaza.AmbSaldoNaloga( _
+                      AMB_NALOG_SPOLJNI, "", tipT)), _
+                 "Amb pisac: SpoljniSvet je izvor, ne nosilac salda"
+
+    ' --- B) IDEMPOTENCIJA I HARD CONFLICT ---------------------------------
+    Dim pre As Long, ponovo As String
+    pre = CountRows(TBL_AMBALAZA)
+    ponovo = modAmbalaza.PrenesiAmbalazu(tx, Date, tipT, 100#, _
+                 AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                 AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab)
+    AssertEquals nabID, ponovo, "Amb pisac: isti zahtev vraca ISTI AmbID"
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb pisac: ponovljen zahtev ne dopisuje red"
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 101#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_IDENTITET), CStr(errNum), _
+                 "Amb pisac: isti identitet sa DRUGOM kolicinom je HARD CONFLICT"
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb pisac: sudar identiteta ne upisuje nista"
+
+    ' DATUM JE SADRZAJ, pa je i on sudar. Nad append-only knjigom je ispravka
+    ' datuma storno + nov dogadjaj -- tiho preuzimanje starog reda bi ispravku
+    ' pojelo bez poruke.
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, DateAdd("d", 1, Date), tipT, 100#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_IDENTITET), CStr(errNum), _
+                 "Amb pisac: isti identitet sa DRUGIM datumom je HARD CONFLICT"
+    ' DVE KAPIJE, DVA ISHODA. Bez datuma u filteru ponavljanja zahtev postaje
+    ' idempotentan (nema novog reda); bez kapije jedinstvenosti se red DOPISE. Zato
+    ' broj redova razlikuje te dve sabotaze -- inace bi delile jednu tvrdnju.
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb pisac: odbijen datum ne dopisuje red"
+
+    ' --- C) (obrisana u 10e-3) ---------------------------------------------
+    ' Merila je da se red STAROG oblika, upisan starim piscem, PRESKACE. Stari
+    ' pisac i kolone su obrisani, a pravilo je obrnuto: takav red je KVAR (F2).
+
+    ' --- D) IZDAVANJE PARTNERU: fizicko stanje nije dug -------------------
+    Dim dokRev As String, izdID As String
+    dokRev = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "REV-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID)
+    izdID = modAmbalaza.PrenesiAmbalazu(tx, Date, tipT, 30#, _
+                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev)
+    AssertTrue Len(izdID) > 0, "Amb pisac: izdavanje praznih je upisano"
+    AssertEquals "70", CStr(modAmbalaza.AmbSaldoNaloga( _
+                    AMB_NALOG_STANICA, TEST_ST_ID, tipT)), _
+                 "Amb pisac: izdavanje razduzuje stanicu"
+    AssertEquals "30", CStr(modAmbalaza.AmbSaldoNaloga( _
+                    AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)), _
+                 "Amb pisac: izdavanje zaduzuje partnera"
+    AssertEquals "0", CStr(modAmbalaza.AmbObavezaPartneru( _
+                   AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)), _
+                 "Amb pisac: izdate NASE gajbe ne stvaraju obavezu prema partneru"
+
+    ' --- E) JEDAN DOKUMENT, JEDAN PROTIVPARTNER (AMB-INV-10) --------------
+    ' Isti revers ne sme da izda prazne i kooperantu i kupcu. Ovaj slucaj bi
+    ' uhvatio i AMB-INV-04 (ista vrsta, isti tip), pa ga mora uhvatiti kapija koja
+    ' je za to -- zaobilaznice preko druge vrste i drugog tipa meri
+    ' Test_Amb_JedanProtivpartnerPoDokumentu.
+    Dim preE As Long
+    preE = CountRows(TBL_AMBALAZA)
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 10#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KUPAC, TEST_KUP_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_JEDAN_PARTNER), CStr(errNum), _
+                 "Amb pisac: isti dokument NE sme drugog protivpartnera (AMB-INV-10)"
+    AssertEquals CStr(preE), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb pisac: odbijen drugi protivpartner ne upisuje red"
+
+    ' --- F) POLUPISAN RED KNJIGE PADA, NE PRESKACE SE ---------------------
+    ' Red koji DOTICE knjigu a ne prolazi ugovor je KVAR. Do 10e-3 je citalac
+    ' preskakao STARI oblik reda (sve nove kolone prazne); od tada ni njega (F2).
+    '
+    ' TRI OBLIKA, ne jedan (review #400, P2): prva verzija je merila samo "ima Od,
+    ' nema vrstu", pa su dva opasnija oblika prolazila -- red sa praznim IZVOROM
+    ' (tiho preskocen kao legacy) i red sa izvorom BEZ ID-a (ulazi u saldo pola-pola:
+    ' partner dobije +20, a nijedan stvarni nalog ne dobije -20). Taj saldo ulazi u
+    ' kapiju deficita, pa pokvaren ZAPISAN red menja odluku SLEDECEG upisa.
+    '
+    ' Svaki oblik se posle tvrdnje BRISE -- inace obara svako sledece citanje.
+    errNum = KvarUKnjizi(scenario & "-A", AMB_NALOG_STANICA, TEST_ST_ID, _
+                         AMB_NALOG_KOOPERANT, TEST_KOOP_ID, "", errDesc)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: red sa stranama a bez vrste PADA, ne preskace se"
+    AssertTrue InStr(1, errDesc, "vrsta kretanja", vbTextCompare) > 0, _
+               "Amb pisac: kvar reda bez vrste imenuje polje"
+
+    errNum = KvarUKnjizi(scenario & "-B", "", "", _
+                         AMB_NALOG_STANICA, TEST_ST_ID, AMB_VK_NABAVKA, errDesc)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: red bez IZVORA nije legacy nego KVAR"
+    AssertTrue InStr(1, errDesc, "Nalog OD", vbTextCompare) > 0, _
+               "Amb pisac: kvar reda bez izvora imenuje polje"
+
+    errNum = KvarUKnjizi(scenario & "-C", AMB_NALOG_STANICA, "", _
+                         AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_VK_IZDATA_PRAZNA, errDesc)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: red sa izvorom BEZ ID-a ne ulazi u saldo"
+    AssertTrue InStr(1, errDesc, "trazi ID", vbTextCompare) > 0, _
+               "Amb pisac: kvar reda bez ID-a naloga imenuje polje"
+
+    ' --- F2) RED STAROG OBLIKA JE KVAR (10e-3, AMBALAZA.md 6.13e) -----------
+    ' Citalac ima TRI ishoda: prazan, knjiga, KVAR. Red sa kolicinom i dokumentom,
+    ' a bez naloga, vrste i StornoOd, je tacno ono sto zatecena sveska nosi posle
+    ' brisanja starih kolona (self-heal brise kolone, ne redove). Do 10e-3 je takav
+    ' red smeo da bude VALJAN stari red i preskakao se; preskocen, njegova kolicina
+    ' tiho nestaje iz svakog salda -- pa staje po imenu.
+    '
+    ' Pozitivnu kontrolu nosi isti test: saldi nad cistom kanonskom knjigom (A, D)
+    ' i G/H ispod, koji bi pali na OVOM redu da ga pomocnik nije obrisao.
+    errNum = KvarUKnjizi(scenario & "-F", "", "", "", "", "", errDesc)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: red starog oblika nije knjiga nego KVAR"
+    AssertTrue InStr(1, errDesc, "ne dotice knjigu", vbTextCompare) > 0, _
+               "Amb pisac: red koji ne dotice knjigu imenuje razlog"
+
+    ' --- G) IDENTITET REDA JE SVOJSTVO KNJIGE, NE REDA ---------------------
+    ' Dva reda sa istim AmbID-em su, red po red, besprekorna -- pa ih KnjigaRedProblem
+    ' ne moze videti. Ranije je tu proveru nosio SAMO citalac obaveze, pa je saldo
+    ' sabirao oba i naduvao stanje (review #400, drugi krug). A stanje je ulaz u
+    ' kapiju deficita, dakle u odluku o SLEDECEM upisu.
+    errNum = KvarUKnjizi(scenario & "-D", AMB_NALOG_STANICA, TEST_ST_ID, _
+                         AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_VK_IZDATA_PRAZNA, _
+                         errDesc, nabID)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: dva reda sa istim AmbID-em obaraju citaoca SALDA"
+    AssertTrue InStr(1, errDesc, "nose AmbID", vbTextCompare) > 0, _
+               "Amb pisac: duplikat identiteta imenuje AmbID"
+
+    ' --- H) STORNO MORA DA POKAZUJE NA POSTOJECI RED ----------------------
+    ' Isti razlog: bez jednoznacnog originala StornoOd nije veza nego niz znakova, a
+    ' 10d na njemu racuna inverz. Provera je bila u citaocu obaveze; sada je u knjizi.
+    errNum = KvarUKnjizi(scenario & "-E", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                         AMB_NALOG_SPOLJNI, "", AMB_VK_ULAZ_TUDJE, _
+                         errDesc, "", "AMB-NEMA-" & scenario)
+    AssertTrue errNum <> 0, _
+               "Amb pisac: StornoOd koji ne pokazuje nigde obara citaoca SALDA"
+    AssertTrue InStr(1, errDesc, "ne pokazuje na red knjige", vbTextCompare) > 0, _
+               "Amb pisac: slomljena storno veza imenuje AmbID originala"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_Amb_PisacKnjige", errNum, errDesc
+End Sub
+
+' KANONSKI RED SE PISE I CITA PO IMENU, NAD KONACNOM SEMOM (10e-3).
+'
+' 10e-3 je iz kanona tblAmbalaza obrisao sest kolona IZ SREDINE (pozicije 5-8, 11 i
+' 16). Pisac ili seme koje pise POZICIONO bi posle toga tiho slalo vrednosti u
+' pogresne kolone -- gore od pada upisa. UpisiRedKnjige gradi red po imenu, i ovo
+' je dokaz za to: svako polje reda upisanog kanonskim piscem cita se PO IMENU i
+' mora da nosi bas svoju vrednost. Red se nalazi po AmbID-u, ne po dokumentu, da
+' pomerena kolona dokumenta ne bi sakrila i sam red.
+'
+' KONTRA-TVRDNJA nije "pisac ne pise staru kolonu" -- posle reza nema sta da meri.
+' Pravilo je: tabela nosi TACNO kanonske kolone. Zatecena kolona starog modela, i u
+' sredini i dopisana na kraj (koju provera prefiksa NE vidi), obara test po imenu.
+Private Sub Test_Amb_KanonskiRedPoImenu()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, errNum As Long, errDesc As String
+    scenario = NewScenarioCode("AMBIME")
+    Dim tipT As String
+    tipT = RegistrujTipTesta("TIP-" & scenario)
+
+    ' (1) Tabela nosi tacno kanonske kolone.
+    Dim stare As Variant, k As Long, nadjene As String
+    stare = Array("Smer", "EntitetID", "EntitetTip", "VozacID", "Stornirano", "ReversID")
+    For k = LBound(stare) To UBound(stare)
+        If GetColumnIndex(TBL_AMBALAZA, CStr(stare(k))) > 0 Then
+            nadjene = nadjene & CStr(stare(k)) & " "
+        End If
+    Next k
+    AssertEquals "", Trim$(nadjene), _
+                 "Amb po imenu: tabela nema nijednu kolonu starog modela"
+    AssertEquals CStr(modSchema.SchemaTableColumns(TBL_AMBALAZA).count), _
+                 CStr(GetTable(TBL_AMBALAZA).ListColumns.count), _
+                 "Amb po imenu: tabela nosi tacno kanonske kolone"
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail "Test_Amb_KanonskiRedPoImenu", TBL_AMBALAZA
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), _
+                 "Amb po imenu: kanonski prefiks prolazi (" & errDesc & ")"
+
+    ' (2) Red kanonskog pisca, procitan polje po polje PO IMENU.
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+
+    Dim datum As Date
+    datum = DateSerial(2026, 3, 14)
+    Dim dokNab As String, ambID As String
+    dokNab = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_NABAVKA, "NABI-" & scenario, datum, _
+                                          AMB_NALOG_FIRMA, "")
+    ambID = modAmbalaza.PrenesiAmbalazu(tx, datum, tipT, 37#, _
+                AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab)
+    AssertTrue Len(ambID) > 0, "Amb po imenu: kanonski pisac je upisao red"
+    AssertEquals "1", CStr(FindRows(TBL_AMBALAZA, COL_AMB_ID, ambID).count), _
+                 "Amb po imenu: red je jednoznacno nadjen po AmbID-u"
+
+    Dim dat As Variant
+    dat = GetValueByKey(TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_DATUM)
+    AssertTrue IsDate(dat), "Amb po imenu: Datum je datum"
+    If IsDate(dat) Then
+        AssertEquals Format$(datum, "yyyy-mm-dd"), Format$(CDate(dat), "yyyy-mm-dd"), _
+                     "Amb po imenu: Datum je u svojoj koloni"
+    End If
+    AssertEquals tipT, AmbPoljeReda(ambID, COL_AMB_TIP), _
+                 "Amb po imenu: TipAmbalaze je u svojoj koloni"
+    AssertEquals "37", AmbPoljeReda(ambID, COL_AMB_KOLICINA), _
+                 "Amb po imenu: Kolicina je u svojoj koloni"
+    AssertEquals dokNab, AmbPoljeReda(ambID, COL_AMB_DOK_ID), _
+                 "Amb po imenu: DokumentID je u svojoj koloni"
+    AssertEquals DOK_TIP_AMBALAZA_DOKUMENT, AmbPoljeReda(ambID, COL_AMB_DOK_TIP), _
+                 "Amb po imenu: DokumentTIP je u svojoj koloni"
+    AssertEquals AMB_NALOG_SPOLJNI, AmbPoljeReda(ambID, COL_AMB_OD_TIP), _
+                 "Amb po imenu: OdNalogTip je u svojoj koloni"
+    AssertEquals "", AmbPoljeReda(ambID, COL_AMB_OD_ID), _
+                 "Amb po imenu: OdNalogID granice je prazan"
+    AssertEquals AMB_NALOG_STANICA, AmbPoljeReda(ambID, COL_AMB_NA_TIP), _
+                 "Amb po imenu: NaNalogTip je u svojoj koloni"
+    AssertEquals TEST_ST_ID, AmbPoljeReda(ambID, COL_AMB_NA_ID), _
+                 "Amb po imenu: NaNalogID je u svojoj koloni"
+    AssertEquals AMB_VK_NABAVKA, AmbPoljeReda(ambID, COL_AMB_VRSTA_KRETANJA), _
+                 "Amb po imenu: VrstaKretanja je u svojoj koloni"
+    AssertEquals "", AmbPoljeReda(ambID, COL_AMB_STORNO_OD), _
+                 "Amb po imenu: original nema StornoOd"
+
+    ' I citalac knjige vidi isti red: saldo nad sopstvenim tipom je tacno 37.
+    AssertEquals "37", CStr(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)), _
+                 "Amb po imenu: citalac knjige sabira bas taj red"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_Amb_KanonskiRedPoImenu", errNum, errDesc
+End Sub
+
+' Polje reda knjige po AmbID-u i IMENU kolone, kao tekst.
+Private Function AmbPoljeReda(ByVal ambID As String, ByVal kolona As String) As String
+    AmbPoljeReda = Trim$(CStr(nz(GetValueByKey(TBL_AMBALAZA, COL_AMB_ID, ambID, kolona), "")))
+End Function
+
+' ZATECENA SVESKA GUBI STARE KOLONE PO IMENU, A VREDNOSTI OSTAJU SVOJE (10e-3).
+'
+' Fixture se pravi BEZ starih kolona (make_fixture DROP_COLS), pa self-heal nad
+' njim nikad nema posla -- bez ovog testa bi put zatecene sveske bio meren samo
+' rucnim smoke-om. Test zato FIZICKI vraca stari raspored: sest kolona na njihova
+' mesta iz starog kanona (5-8, 11 i 16), sa vrednoscu starog modela u prvom redu.
+' Meri da kanonski prefiks tada PADA (inace bi test bio vakuumski), pa pusta
+' modSetup.ObrisiStareKoloneAmbalaze i meri: kolone su otisle, prefiks prolazi, a
+' prvi red nosi ISTE vrednosti po imenu u svakoj kanonskoj koloni kao pre.
+'
+' Bez transakcije: clsTransaction.RestoreTable pada na promenu broja kolona.
+' Ciscenje ide kroz isti primitiv, i u EH grani.
+Private Sub Test_Amb_StareKoloneSelfHeal()
+    On Error GoTo EH
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_AMBALAZA)
+    If lo Is Nothing Then
+        AssertTrue False, "Amb self-heal: tabela knjige postoji"
+        Exit Sub
+    End If
+    If lo.ListRows.count = 0 Then
+        AssertTrue False, "Amb self-heal: knjiga ima bar jedan red (svedok vrednosti)"
+        Exit Sub
+    End If
+
+    ' Preduslov: polazi se od kanonske tabele. Zatecena stara kolona bi se pri
+    ' umetanju sudarila po imenu, a test bi tabelu ostavio gorom nego sto ju je nasao.
+    Dim stare As Variant, nadjene As String
+    stare = Array("Smer", "EntitetID", "EntitetTip", "VozacID", "Stornirano", "ReversID")
+    Dim k As Long
+    For k = LBound(stare) To UBound(stare)
+        If GetColumnIndex(TBL_AMBALAZA, CStr(stare(k))) > 0 Then
+            nadjene = nadjene & CStr(stare(k)) & " "
+        End If
+    Next k
+    If Len(nadjene) > 0 Then
+        AssertTrue False, "Amb self-heal: polazna tabela je bez starih kolona"
+        Exit Sub
+    End If
+
+    Dim preKolona As Long
+    preKolona = lo.ListColumns.count
+
+    ' Svedok: prvi red, svaka kanonska kolona po imenu, PRE vracanja starog rasporeda.
+    Dim kanon As Collection, ime As String
+    Set kanon = modSchema.SchemaTableColumns(TBL_AMBALAZA)
+    Dim pre As Object
+    Set pre = CreateObject("Scripting.Dictionary")
+    For k = 1 To kanon.count
+        ime = CStr(kanon(k))
+        pre(ime) = CStr(nz(lo.ListColumns(GetColumnIndex(TBL_AMBALAZA, ime)) _
+                               .DataBodyRange.cells(1, 1).value, ""))
+    Next k
+
+    ' Stari raspored, redom po STAROJ poziciji -- svaka umetnuta kolona pomera ostale.
+    lo.ListColumns.Add(5).name = "Smer"
+    lo.ListColumns.Add(6).name = "EntitetID"
+    lo.ListColumns.Add(7).name = "EntitetTip"
+    lo.ListColumns.Add(8).name = "VozacID"
+    lo.ListColumns.Add(11).name = "Stornirano"
+    lo.ListColumns.Add(16).name = "ReversID"
+    lo.ListColumns(GetColumnIndex(TBL_AMBALAZA, "Smer")).DataBodyRange.cells(1, 1).value = "Ulaz"
+    lo.ListColumns(GetColumnIndex(TBL_AMBALAZA, "ReversID")).DataBodyRange.cells(1, 1).value = _
+        "RID-SELFHEAL"
+
+    Dim errNum As Long, errDesc As String
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail "Test_Amb_StareKoloneSelfHeal", TBL_AMBALAZA
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb self-heal: stari raspored obara kanonski prefiks"
+
+    modSetup.ObrisiStareKoloneAmbalaze
+
+    nadjene = ""
+    For k = LBound(stare) To UBound(stare)
+        If GetColumnIndex(TBL_AMBALAZA, CStr(stare(k))) > 0 Then
+            nadjene = nadjene & CStr(stare(k)) & " "
+        End If
+    Next k
+    AssertEquals "", Trim$(nadjene), _
+                 "Amb self-heal: nijedna kolona starog modela nije ostala"
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_AMBALAZA).ListColumns.count), _
+                 "Amb self-heal: tabela je vracena na kanonski broj kolona"
+
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail "Test_Amb_StareKoloneSelfHeal", TBL_AMBALAZA
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), _
+                 "Amb self-heal: posle brisanja kanonski prefiks prolazi"
+
+    Dim razlike As String
+    Set lo = GetTable(TBL_AMBALAZA)
+    For k = 1 To kanon.count
+        ime = CStr(kanon(k))
+        If CStr(nz(lo.ListColumns(GetColumnIndex(TBL_AMBALAZA, ime)) _
+                       .DataBodyRange.cells(1, 1).value, "")) <> CStr(pre(ime)) Then
+            razlike = razlike & ime & " "
+        End If
+    Next k
+    AssertEquals "", Trim$(razlike), _
+                 "Amb self-heal: prvi red nosi iste vrednosti po imenu"
+
+    ' Idempotentno: drugi prolaz nema sta da obrise.
+    modSetup.ObrisiStareKoloneAmbalaze
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_AMBALAZA).ListColumns.count), _
+                 "Amb self-heal: drugi prolaz ne dira tabelu"
+
+    ' Ciscenje NE ide kroz primitiv koji test meri: pokvaren primitiv bi ostavio
+    ' staru kolonu u sredini, a ona obara SVAKI sledeci test knjige.
+    AmbObrisiStareKoloneTest
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    ' Ciscenje i posle pada -- kolona starog modela ne sme da ostane iza testa.
+    On Error Resume Next
+    AmbObrisiStareKoloneTest
+    On Error GoTo 0
+    LogFatal "Test_Amb_StareKoloneSelfHeal", errNum, errDesc
+End Sub
+
+' Brise sest kolona starog modela GENERICKIM primitivom, po imenu -- nezavisno od
+' modSetup.ObrisiStareKoloneAmbalaze, koji Test_Amb_StareKoloneSelfHeal meri.
+Private Sub AmbObrisiStareKoloneTest()
+    Dim stare As Variant, k As Long
+    stare = Array("Smer", "EntitetID", "EntitetTip", "VozacID", "Stornirano", "ReversID")
+    For k = LBound(stare) To UBound(stare)
+        modSetup.ObrisiKolonuAko TBL_AMBALAZA, CStr(stare(k))
+    Next k
+End Sub
+
+' Seje JEDAN malformed red knjige, tvrdi da citalac na njemu PADA i imenuje polje,
+' pa ga brise. Postoji kao pomocnik jer se tri oblika razlikuju samo po polju koje
+' fali -- tri kopije istog bloka bile bi tri stvari koje mogu da se razidju.
+'
+' Red se seje ALATOM TESTA (BlankRow + SetRequiredField), ne kroz pisca: pisac bas
+' ovakav red ne bi ni upisao, a meri se sta citalac radi kad ga NADJE.
+Private Function KvarUKnjizi(ByVal oznaka As String, _
+                             ByVal odTip As String, ByVal odID As String, _
+                             ByVal naTip As String, ByVal naID As String, _
+                             ByVal vrsta As String, _
+                             ByRef outDesc As String, _
+                             Optional ByVal ambIDOverride As String = "", _
+                             Optional ByVal stornoOd As String = "") As Long
+    Const SRC As String = "KvarUKnjizi"
+
+    Dim ambID As String
+    ambID = "AMB-KVAR-" & oznaka
+    If Len(ambIDOverride) > 0 Then ambID = ambIDOverride
+
+    Dim kvar As Variant
+    kvar = BlankRow(TBL_AMBALAZA)
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_ID, ambID
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_DATUM, Date
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_TIP, TEST_TIP_AMB
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_KOLICINA, 7
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_DOK_TIP, DOK_TIP_AMBALAZA_DOKUMENT
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_DOK_ID, "ADK-KVAR-" & oznaka
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_OD_TIP, odTip
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_OD_ID, odID
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_NA_TIP, naTip
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_NA_ID, naID
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, vrsta
+    SetRequiredField kvar, TBL_AMBALAZA, COL_AMB_STORNO_OD, stornoOd
+    RequireAppend TBL_AMBALAZA, kvar, SRC
+
+    Dim errNum As Long, errDesc As String
+    On Error Resume Next
+    modAmbalaza.AmbSaldoNaloga AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    ' POMOCNIK NE TVRDI. Tvrdnja mora stajati uz Assert U IMENOVANOM TESTU --
+    ' sabotaza se vezuje za tekst tvrdnje, a tekst predat kao argument je za
+    ' dokaz.py nevidljiv. Pomocnik zato samo seje, meri i cisti.
+    ' Brise se POSLEDNJI red sa tim ID-em -- zasejani je dopisan na kraj. Kod
+    ' duplikata identiteta postoje dva, pa "samo ako je jedan" ne bi ocistilo nista.
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_AMBALAZA, COL_AMB_ID, ambID)
+    If redovi.count >= 1 Then DeleteRow TBL_AMBALAZA, CLng(redovi(redovi.count))
+
+    outDesc = errDesc
+    KvarUKnjizi = errNum
+End Function
+
+' JEDAN DOKUMENT, JEDAN PROTIVPARTNER -- AMB-INV-10, sprovodjenje AMB-10-ODL-3.
+'
+' Review #400 je pokazao da AMB-INV-04 ovo NE pokriva: njegov kljuc nosi vrstu i tip
+' ambalaze, pa dva protivpartnera prolaze cim se razlikuje bilo koje od toga dvoga.
+' Ovde se mere BAS te dve zaobilaznice, plus dve granice kapije:
+'
+'   drugi partner, DRUGA VRSTA        -> odbijen
+'   drugi partner, DRUGI TIP          -> odbijen
+'   ISTI partner, drugi tip           -> prolazi (granica je NALOG, ne tip)
+'   pokrice deficita (SpoljniSvet)    -> prolazi (granica se ne racuna kao nalog)
+'
+' Bez poslednje dve tvrdnje kapija moze biti i obicno "jedan red po dokumentu", a to
+' bi obaralo ispravan upis.
+Private Sub Test_Amb_JedanProtivpartnerPoDokumentu()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, errNum As Long, errDesc As String
+    scenario = NewScenarioCode("AMB1PR")
+    ' SOPSTVEN TIP AMBALAZE -- test POSEDUJE svoj merni opseg.
+    '
+    ' Tvrdnje ispod su APSOLUTNE ("100", "-100", "70"), a saldo se vodi po
+    ' (nalog, TIP). Nad deljenim tipom su radile samo dok nista drugo nije pisalo
+    ' ambalazu; SeedAmbalazaOpticaj je to oborio, a oborio bi i svaki od preostalih
+    ' osam cutovera. Sinteticki tip je nula PO KONSTRUKCIJI.
+    '
+    ' Ne prelazi se na delte: delta tvrdnja ne hvata "pisac je upisao na POGRESAN
+    ' nalog", a apsolutna nad sopstvenim opsegom hvata.
+    Dim tipT As String
+    tipT = RegistrujTipTesta("TIP-" & scenario)
+    Dim tipT2 As String
+    tipT2 = RegistrujTipTesta("TIP2-" & scenario)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_KOOPERANTI
+
+    SeedKooperant2
+
+    ' Zaliha na stanici za OBA tipa, na ISTOM dokumentu: jedan dokument sme dva tipa
+    ' ambalaze, jer granica je nalog a ne tip.
+    Dim dokNab As String
+    dokNab = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_NABAVKA, "N1P-" & scenario, Date, _
+                                          AMB_NALOG_FIRMA, "")
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 100#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT2, 100#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab
+    AssertEquals "100", CStr(modAmbalaza.AmbSaldoNaloga( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, tipT2)), _
+                 "Amb jedan partner: jedan dokument sme DVA tipa ambalaze"
+
+    ' Dva reversa, po jedan partner -- oba legitimna.
+    Dim dokIzd As String, dokIzd2 As String
+    dokIzd = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "I1P-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID)
+    dokIzd2 = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "I2P-" & scenario, Date, _
+                                           AMB_NALOG_STANICA, TEST_ST_ID)
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 30#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 20#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP2_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd2
+
+    Dim pre As Long
+    pre = CountRows(TBL_AMBALAZA)
+
+    ' --- ZAOBILAZNICA 1: drugi partner, DRUGA VRSTA ------------------------
+    ' K2 ima 20, pa deficit ne moze da obori upis umesto kapije.
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 5#, _
+        AMB_NALOG_KOOPERANT, TEST_KOOP2_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_JEDAN_PARTNER), CStr(errNum), _
+                 "Amb jedan partner: drugi partner kroz DRUGU VRSTU je odbijen"
+    AssertTrue InStr(1, errDesc, "AMB-INV-10", vbTextCompare) > 0, _
+               "Amb jedan partner: odbijanje imenuje invarijantu"
+
+    ' --- ZAOBILAZNICA 2: drugi partner, DRUGI TIP AMBALAZE ----------------
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT2, 10#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP2_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_JEDAN_PARTNER), CStr(errNum), _
+                 "Amb jedan partner: drugi partner kroz DRUGI TIP je odbijen"
+    AssertEquals CStr(pre), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb jedan partner: nijedna zaobilaznica ne upisuje red"
+
+    ' --- GRANICA 1: ISTI partner, drugi tip -- PROLAZI --------------------
+    ' IDE KROZ ZAMKU ZA GRESKE IAKO SE OCEKUJE DA PRODJE. Sa ugasenom kapijom para
+    ' zaobilazni upisi iznad prolaze, pa ovaj padne na AMB-INV-04 -- i bez zamke
+    ' ubije test PRE tvrdnji ispod, koje sabotaza treba da obori.
+    Dim istiID As String
+    On Error Resume Next
+    istiID = modAmbalaza.PrenesiAmbalazu(tx, Date, tipT2, 10#, _
+                 AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                 AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd)
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), _
+                 "Amb jedan partner: ISTI partner sa drugim tipom NE pada"
+    AssertTrue Len(istiID) > 0, _
+               "Amb jedan partner: ISTI partner sa drugim tipom prolazi -- granica je nalog"
+
+    ' --- ZAOBILAZNICA 3: jedna strana je GRANICA ---------------------------
+    ' Ovo je prolazilo dok je kapija BROJALA naloge van granice: dve stanice daju
+    ' broj 2 (review #400, drugi krug). Dokument ima SVOJ dokument i SVOJ tip, pa
+    ' AMB-INV-04 ovde ne pomaze -- samo par moze da odbije.
+    Dim dokNab2 As String
+    dokNab2 = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_NABAVKA, "N2P-" & scenario, Date, _
+                                           AMB_NALOG_FIRMA, "")
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 40#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab2
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT2, 40#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_HLAD_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab2
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_JEDAN_PARTNER), CStr(errNum), _
+                 "Amb jedan partner: NABAVKA na DRUGU stanicu istim dokumentom je odbijena"
+    AssertTrue InStr(1, errDesc, "jedan poslovni par", vbTextCompare) > 0, _
+               "Amb jedan partner: odbijanje imenuje PAR, ne broj naloga"
+
+    ' --- ZAOBILAZNICA 4: ogledalno, OTPIS ka granici -----------------------
+    Dim dokOtp As String
+    dokOtp = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_OTPIS, "O1P-" & scenario, Date, _
+                                          AMB_NALOG_FIRMA, "")
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 5#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_SPOLJNI, "", _
+        AMB_VK_OTPIS, DOK_TIP_AMBALAZA_DOKUMENT, dokOtp
+
+    ' Druga stanica dobija zalihu na SVOM dokumentu, da deficit ne obori upis umesto
+    ' kapije -- isti razlog kao kod storniranog dokumenta.
+    Dim dokNab3 As String
+    dokNab3 = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_NABAVKA, "N3P-" & scenario, Date, _
+                                           AMB_NALOG_FIRMA, "")
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT2, 30#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_HLAD_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab3
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT2, 5#, _
+        AMB_NALOG_STANICA, TEST_HLAD_ST_ID, AMB_NALOG_SPOLJNI, "", _
+        AMB_VK_OTPIS, DOK_TIP_AMBALAZA_DOKUMENT, dokOtp
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_JEDAN_PARTNER), CStr(errNum), _
+                 "Amb jedan partner: OTPIS sa DRUGE stanice istim dokumentom je odbijen"
+
+    ' --- GRANICA 2: pokrice deficita se ne racuna kao treci nalog --------
+    ' K1 ima 30 u tipT, vraca 50 -> manjak 20 ulazi iz SpoljniSvet.
+    Dim dokPov As String, povID As String
+    dokPov = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "P1P-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID)
+    On Error Resume Next
+    povID = modAmbalaza.PrenesiAmbalazu(tx, Date, tipT, 50#, _
+                AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokPov, 20#)
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), _
+                 "Amb jedan partner: prenos sa pokricem NE pada"
+    AssertTrue Len(povID) > 0, _
+               "Amb jedan partner: pokrice deficita NE racuna se kao treci nalog"
+    AssertEquals "20", CStr(modAmbalaza.AmbObavezaPartneru( _
+                    AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)), _
+                 "Amb jedan partner: pokrice je i dalje stvorilo dug prema partneru"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_Amb_JedanProtivpartnerPoDokumentu", errNum, errDesc
+End Sub
+
+' DEFICIT I OBAVEZA -- dve granice koje pisac postavlja SAM (AMB-INV-07, -09).
+'
+' Oba scenarija su primeri iz modela (AMBALAZA.md 6.4 i 6.9), brojevi su isti:
+' partner vraca vise nego sto ima, i firma vraca vise nego sto duguje.
+'
+' SVAKI CIN IDE NA SVOJ DOKUMENT, i to nije kozmetika testa: AMB-INV-04 drzi
+' (dokument, vrsta, tip) jedinstvenim, a ostatak podele je takodje IZDATA_PRAZNA
+' -- pa bi na istom dokumentu sudario sa eksplicitnim izdavanjem.
+Private Sub Test_Amb_DeficitIObaveza()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, errNum As Long, errDesc As String
+    scenario = NewScenarioCode("AMBDEF")
+    ' SOPSTVEN TIP AMBALAZE -- test POSEDUJE svoj merni opseg.
+    '
+    ' Tvrdnje ispod su APSOLUTNE ("100", "-100", "70"), a saldo se vodi po
+    ' (nalog, TIP). Nad deljenim tipom su radile samo dok nista drugo nije pisalo
+    ' ambalazu; SeedAmbalazaOpticaj je to oborio, a oborio bi i svaki od preostalih
+    ' osam cutovera. Sinteticki tip je nula PO KONSTRUKCIJI.
+    '
+    ' Ne prelazi se na delte: delta tvrdnja ne hvata "pisac je upisao na POGRESAN
+    ' nalog", a apsolutna nad sopstvenim opsegom hvata.
+    Dim tipT As String
+    tipT = RegistrujTipTesta("TIP-" & scenario)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+
+    Dim dokNab As String, dokIzd As String, dokPov As String
+    Dim dokVra As String, dokVra2 As String
+    dokNab = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_NABAVKA, "NAB-" & scenario, Date, _
+                                          AMB_NALOG_FIRMA, "")
+    dokIzd = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "IZD-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID)
+    dokPov = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "POV-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID)
+    dokVra = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "VRA-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID)
+    dokVra2 = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "VR2-" & scenario, Date, _
+                                           AMB_NALOG_STANICA, TEST_ST_ID)
+
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 100#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 30#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd
+
+    ' --- A) POKRICE NIJE ZAHTEV -------------------------------------------
+    AssertTrue Not modAmbalazaUgovor.AmbVrstaJeZahtev(AMB_VK_ULAZ_TUDJE), _
+               "Amb deficit: ulaz tudje ambalaze nije zahtev nego posledica"
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 5#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+        AMB_VK_ULAZ_TUDJE, DOK_TIP_AMBALAZA_DOKUMENT, dokPov
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb deficit: pokrice se NE moze poruciti izvana -- pisac ga generise"
+
+    ' --- B) DEFICIT SOPSTVENOG NALOGA SE NE POKRIVA (AMB-10-ODL-8) --------
+    ' Matrica kaze ULAZ_TUDJE: GRANICA -> PARTNER. Stanica nije partner, pa njen
+    ' manjak nije "tudje gajbe" nego skriven manjak -- put je NABAVKA.
+    Dim preB As Long
+    preB = CountRows(TBL_AMBALAZA)
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 500#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokPov
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_DEFICIT_NEPOKRIV), CStr(errNum), _
+                 "Amb deficit: manjak SOPSTVENOG naloga se odbija, ne pokriva"
+    AssertTrue InStr(1, errDesc, "NABAVKA", vbTextCompare) > 0, _
+               "Amb deficit: odbijanje imenuje put -- NABAVKA"
+    AssertEquals CStr(preB), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb deficit: odbijeni prenos ne upisuje nista"
+
+    ' --- C) DEFICIT PARTNERA: PROTOKOL POTVRDE ----------------------------
+    ' Kooperant ima 30, vraca 100 praznih -> manjak 70 ulazi u opticaj kao tudja
+    ' ambalaza, i firma mu posle toga duguje 70.
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 100#, _
+        AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokPov
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_POTVRDA_DEFICITA), CStr(errNum), _
+                 "Amb deficit: bez potvrde pisac PITA, ne upisuje"
+    AssertTrue InStr(1, errDesc, "Manjak 70 ulazi", vbTextCompare) > 0, _
+               "Amb deficit: pitanje nosi TACAN manjak"
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 100#, _
+        AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokPov, 69#
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals CStr(AMB_ERR_POTVRDA_DEFICITA), CStr(errNum), _
+                 "Amb deficit: potvrda koja se ne slaze se ODBIJA, ne zaokruzuje"
+
+    Dim povID As String
+    povID = modAmbalaza.PrenesiAmbalazu(tx, Date, tipT, 100#, _
+                AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokPov, 70#)
+    AssertTrue Len(povID) > 0, "Amb deficit: sa tacnom potvrdom prenos prolazi"
+    AssertEquals "0", CStr(modAmbalaza.AmbSaldoNaloga( _
+                   AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)), _
+                 "Amb deficit: partner posle pokrica NE pada ispod nule (AMB-INV-07)"
+    AssertEquals "170", CStr(modAmbalaza.AmbSaldoNaloga( _
+                     AMB_NALOG_STANICA, TEST_ST_ID, tipT)), _
+                 "Amb deficit: stanica je primila svih 100"
+    AssertEquals "70", CStr(modAmbalaza.AmbObavezaPartneru( _
+                    AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)), _
+                 "Amb deficit: pokrice stvara dug firme prema partneru"
+
+    ' --- D) OBAVEZA SE NE MOZE PREVRATITI (AMB-INV-09) -------------------
+    ' Firma duguje 70, vraca 100: 70 gasi dug, 30 je NOVO zaduzenje partnera.
+    ' Bez podele bi obaveza bila -30 -- matematicki tacna, poslovno nemoguca.
+    Dim preD As Long, vraID As String
+    preD = CountRows(TBL_AMBALAZA)
+    vraID = modAmbalaza.PrenesiAmbalazu(tx, Date, tipT, 100#, _
+                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_VRACANJE_TUDJE, DOK_TIP_AMBALAZA_DOKUMENT, dokVra)
+    AssertTrue Len(vraID) > 0, "Amb obaveza: vracanje preko duga je upisano"
+    AssertEquals CStr(preD + 2), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb obaveza: podela daje DVA reda, ne jedan sa dva znacenja"
+    AssertEquals "0", CStr(modAmbalaza.AmbObavezaPartneru( _
+                   AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)), _
+                 "Amb obaveza: dug je ugasen na nulu, ne u minus"
+    AssertEquals "100", CStr(modAmbalaza.AmbSaldoNaloga( _
+                     AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)), _
+                 "Amb obaveza: partner je fizicki primio svih 100"
+
+    ' IDEMPOTENCIJA PREKO PODELE -- ovde naivno poredjenje puca: zahtev je 100, a
+    ' red koji ga nosi je 70. Zbir nad parem naloga je 100, pa je ponavljanje
+    ' ponavljanje -- ne sudar.
+    ' IDE KROZ On Error Resume Next, iako se OCEKUJE da prodje. Bez toga sudar ne
+    ' postaje pad tvrdnje nego pad celog testa, pa imenovana tvrdnja nikad ne
+    ' pukne -- a tvrdnja koja ne moze da pukne po imenu ne dokazuje nista.
+    Dim vraPonovo As String, errPon As Long
+    On Error Resume Next
+    vraPonovo = modAmbalaza.PrenesiAmbalazu(tx, Date, tipT, 100#, _
+                    AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                    AMB_VK_VRACANJE_TUDJE, DOK_TIP_AMBALAZA_DOKUMENT, dokVra)
+    errPon = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errPon), _
+                 "Amb obaveza: ponovljen PODELJEN zahtev NE pada na sudar"
+    AssertEquals vraID, vraPonovo, _
+                 "Amb obaveza: ponovljen PODELJEN zahtev vraca isti AmbID"
+    AssertEquals CStr(preD + 2), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb obaveza: ponavljanje podeljenog zahteva ne dopisuje red"
+
+    ' --- E) VRACANJE BEZ DUGA JE CISTO IZDAVANJE -------------------------
+    Dim preE As Long, vra2 As String
+    preE = CountRows(TBL_AMBALAZA)
+    vra2 = modAmbalaza.PrenesiAmbalazu(tx, Date, tipT, 10#, _
+               AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+               AMB_VK_VRACANJE_TUDJE, DOK_TIP_AMBALAZA_DOKUMENT, dokVra2)
+    AssertTrue Len(vra2) > 0, "Amb obaveza: vracanje bez duga ima AmbID"
+    AssertEquals CStr(preE + 1), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb obaveza: bez duga nema reda od nula kolicine (AMB-INV-01)"
+    AssertEquals "0", CStr(modAmbalaza.AmbObavezaPartneru( _
+                   AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)), _
+                 "Amb obaveza: izdavanje nasih gajbi ne pravi dug prema partneru"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_Amb_DeficitIObaveza", errNum, errDesc
+End Sub
+
+' ZAGLAVLJE KAO POVOD -- sta pisac trazi od dokumenta pre nego sto knjizi.
+'
+' Ugovor zaglavlja (vrsta, broj, datum, vlasnik niza) meri Test_Amb_DokumentUgovor
+' bez pisca. Ovde se meri ono sto se bez pisca NE MOZE: da kretanje bez identiteta
+' dokumenta ne postoji, da vrsta posla ogranicava vrstu kretanja, i da storniran
+' dokument ne prima nova kretanja.
+Private Sub Test_Amb_ZaglavljeDokumentaPisac()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    Dim scenario As String, errNum As Long, errDesc As String
+    scenario = NewScenarioCode("AMBZAG")
+    ' SOPSTVEN TIP AMBALAZE -- test POSEDUJE svoj merni opseg.
+    '
+    ' Tvrdnje ispod su APSOLUTNE ("100", "-100", "70"), a saldo se vodi po
+    ' (nalog, TIP). Nad deljenim tipom su radile samo dok nista drugo nije pisalo
+    ' ambalazu; SeedAmbalazaOpticaj je to oborio, a oborio bi i svaki od preostalih
+    ' osam cutovera. Sinteticki tip je nula PO KONSTRUKCIJI.
+    '
+    ' Ne prelazi se na delte: delta tvrdnja ne hvata "pisac je upisao na POGRESAN
+    ' nalog", a apsolutna nad sopstvenim opsegom hvata.
+    Dim tipT As String
+    tipT = RegistrujTipTesta("TIP-" & scenario)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+
+    Dim dokRev As String
+    dokRev = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "ZAG-" & scenario, Date, _
+                                          AMB_NALOG_STANICA, TEST_ST_ID, "napomena")
+    AssertTrue Len(dokRev) > 0, "Amb zaglavlje: revers je upisan"
+    AssertEquals AMB_DOK_REVERS, CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                      dokRev, COL_AMBD_VRSTA)), _
+                 "Amb zaglavlje: vrsta je upisana KANONSKI"
+    AssertEquals AMB_NALOG_STANICA, CStr(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                         dokRev, COL_AMBD_BROJ_OWNER_TIP)), _
+                 "Amb zaglavlje: vlasnik numerickog niza je upisan"
+
+    ' --- A) KRETANJE BEZ DOKUMENTA NE POSTOJI ----------------------------
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 5#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, "", ""
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb zaglavlje: kretanje bez identiteta dokumenta se odbija (AMB-INV-04)"
+
+    ' --- B) NEPOSTOJEC DOKUMENT ------------------------------------------
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 5#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, "ADK-NEMA-" & scenario
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb zaglavlje: knjizenje na nepostojec dokument se odbija"
+
+    ' --- C) VRSTA POSLA OGRANICAVA VRSTU KRETANJA ------------------------
+    ' NABAVKA na reversu izgledala bi kao uredan zapis -- zato kapija, ne komentar.
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 5#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb zaglavlje: nabavka se NE knjizi na revers"
+
+    ' --- D) STORNIRAN DOKUMENT NE PRIMA NOVA KRETANJA --------------------
+    ' STANICA PRVO DOBIJA ZALIHU, i to nije kozmetika scenarija. Bez nje je saldo
+    ' stanice nula, pa IZDATA_PRAZNA pada zbog DEFICITA -- i tvrdnja o storniranom
+    ' dokumentu prolazi iz pogresnog razloga. Prvi dvosmerni dokaz je bas to nasao:
+    ' sabotaza je obarala drugu tvrdnju, jer je ovu stitio drugi uzrok.
+    Dim dokNab As String
+    dokNab = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_NABAVKA, "ZNB-" & scenario, Date, _
+                                          AMB_NALOG_FIRMA, "")
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 50#, _
+        AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
+        AMB_VK_NABAVKA, DOK_TIP_AMBALAZA_DOKUMENT, dokNab
+    AssertEquals "50", CStr(modAmbalaza.AmbSaldoNaloga( _
+                    AMB_NALOG_STANICA, TEST_ST_ID, tipT)), _
+                 "Amb zaglavlje: preduslov -- stanica ima zalihu, pa deficit ne moze da padne"
+
+    Dim redovi As Collection
+    Set redovi = FindRows(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, dokRev)
+    AssertEquals "1", CStr(redovi.count), "Amb zaglavlje: dokument je jednoznacan"
+    RequireUpdateCell TBL_AMBALAZA_DOKUMENT, CLng(redovi(1)), COL_STORNIRANO, "Da", _
+                      "Test_Amb_ZaglavljeDokumentaPisac"
+
+    On Error Resume Next
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 5#, _
+        AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+        AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokRev
+    errNum = Err.Number: errDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, _
+               "Amb zaglavlje: storniran dokument ne prima nova kretanja"
+    AssertTrue InStr(1, errDesc, "storniran", vbTextCompare) > 0, _
+               "Amb zaglavlje: odbijanje imenuje RAZLOG, ne samo da je palo"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal "Test_Amb_ZaglavljeDokumentaPisac", errNum, errDesc
+End Sub
+
+' ZALUTALA KOLONA SE VRACA NA KANONSKO MESTO -- ali NE preko tudjeg drifta.
+'
+' Test TRANZICIJE iz stanja koje je proizvodila PRETHODNA merge-ovana verzija
+' oporavka (#395: obrisi prazno staro ime, ostavi novo tamo gde je dopisano):
+'
+'     27 GeneracijaID | 28 SourceCreatedAt  | 29 ZbirnaRoditeljID   <- zateceno
+'     27 GeneracijaID | 28 ZbirnaRoditeljID | 29 SourceCreatedAt    <- kanon
+'
+' Staro ime je tu vec nestalo, pa pravilo "zadrzi levlju od dve pozicije" nema za
+' sta da se uhvati: pozicija se mora uzeti iz KANONA (review #396, P2). Do tada je
+' helper na "staro ime nema" tiho izlazio kao da je posao zavrsen.
+'
+' MORA NAD PRAVOM KANONSKOM KOLONOM. Sa pomocnim imenom se ova grana ne moze
+' izmeriti -- kanon ga ne zna, pa se kanonski indeks nikad ne bi ni procitao. Zato
+' se raspored pravi FIZICKI nad tblOtkup, sadrzaj se nosi sa sobom na svakom
+' koraku, a ciscenje stoji i u EH: ovaj test, jedini u suite-u, dira kanonsku
+' kolonu, pa sveska ne sme da ostane drift-ovana za ostatak prolaza.
+Private Sub Test_Schema_ZalutalaKolonaSeVracaNaMesto()
+    On Error GoTo EH
+
+    Const STARO_IME As String = "ZbirnaGeneracijaID"
+    Const SENTINEL As String = "ZZ-ZALUTALA"
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_OTKUP)
+    AssertTrue Not lo Is Nothing, "Zalutala: tblOtkup postoji"
+
+    Dim preKolona As Long
+    preKolona = lo.ListColumns.count
+
+    Dim iKanon As Long
+    iKanon = GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD)
+    AssertTrue iKanon > 0, "Zalutala: kolona je na pocetku prisutna"
+    AssertTrue iKanon < preKolona, _
+               "Zalutala: iza nje STOJI kolona (inace test ne meri pomeranje)"
+
+    ' Premisa se PINUJE, ne pretpostavlja: sveska i kanon moraju da se slazu o
+    ' poziciji pre nego sto test tu poziciju pokvari.
+    Dim kanonKol As Collection
+    Set kanonKol = modSchema.SchemaTableColumns(TBL_OTKUP)
+    Dim izKanona As Long, k As Long
+    For k = 1 To kanonKol.count
+        If StrComp(CStr(kanonKol(k)), COL_DETE_ZBIRNA_ROD, vbTextCompare) = 0 Then
+            izKanona = k
+            Exit For
+        End If
+    Next k
+    AssertEquals CStr(izKanona), CStr(iKanon), _
+                 "Zalutala: sveska i kanon se na pocetku slazu o poziciji kolone"
+
+    Dim imeIza As String
+    imeIza = CStr(lo.ListColumns(iKanon + 1).name)
+
+    ' --- SEED: stanje koje je #395 mogao da ostavi ---------------------
+    Dim imaRedova As Boolean
+    Dim staraVrednost As String
+    imaRedova = (lo.ListRows.count > 0)
+    If imaRedova Then
+        staraVrednost = CStr(lo.ListColumns(iKanon).DataBodyRange.cells(1, 1).value & "")
+    End If
+
+    lo.ListColumns(iKanon).name = STARO_IME
+    lo.ListColumns.Add().name = COL_DETE_ZBIRNA_ROD
+    If imaRedova Then
+        lo.ListColumns(lo.ListColumns.count).DataBodyRange.value = _
+            lo.ListColumns(iKanon).DataBodyRange.value
+        lo.ListColumns(lo.ListColumns.count).DataBodyRange.cells(1, 1).value = SENTINEL
+    End If
+    lo.ListColumns(iKanon).Delete
+
+    AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, STARO_IME)), _
+                 "Zalutala: staro ime je nestalo, kao posle #395"
+    AssertEquals CStr(preKolona), CStr(GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD)), _
+                 "Zalutala: novo ime stoji NA KRAJU, ne na kanonskom mestu"
+    AssertEquals CStr(preKolona), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "Zalutala: seed nije promenio broj kolona"
+
+    ' --- KAPIJA: preko TUDJEG drifta se ne premesta --------------------
+    ' Prazna kolona ubacena ISPRED kanonskog mesta kvari prefiks. Tada zalutala
+    ' kolona nije jedina razlika, pa premestanje nije popravka nego drugo
+    ' pogadjanje -- kod mora da stane, sa imenovanim razlogom.
+    ' Rezultat se hvata NAMERNO -- to nije stil nego kapija. Poziv sa zagradama u
+    ' poziciji NAREDBE ("...ListColumns.Add(5)") VBE preformatira u "Add (5)", a
+    ' CanonCode niz razmaka sazima ali ga ne UKLANJA. Razlika zato prezivi kanon,
+    ' zavrsni drift pass ImportAllVBA javi "kod se razlikuje od izvora" i UVOZ
+    ' PADNE -- operater mora da zatvori svesku bez snimanja. Mereno 27.09.2026 nad
+    ' kopijom radne sveske: tacno 1 red od 20128 (plan 14.54).
+    Dim praznaKol As ListColumn
+    Set praznaKol = GetTable(TBL_OTKUP).ListColumns.Add(5)
+
+    Dim razlog As String
+    razlog = modSetup.PreimenujKolonuAko(TBL_OTKUP, STARO_IME, COL_DETE_ZBIRNA_ROD)
+    AssertTrue InStr(1, razlog, "nije kanonski", vbTextCompare) > 0, _
+               "Zalutala: kapija imenuje da redosled ISPRED kolone nije kanonski"
+    AssertEquals CStr(preKolona + 1), CStr(GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD)), _
+                 "Zalutala: preko tudjeg drifta kolona NIJE premestena"
+
+    praznaKol.Delete
+
+    ' --- LECENJE ------------------------------------------------------
+    AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, STARO_IME, COL_DETE_ZBIRNA_ROD), _
+                 "Zalutala: lecenje prolazi bez razloga za stop"
+
+    Set lo = GetTable(TBL_OTKUP)
+    AssertEquals CStr(iKanon), CStr(GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD)), _
+                 "Zalutala: kolona je vracena na KANONSKU poziciju"
+    AssertEquals imeIza, CStr(lo.ListColumns(iKanon + 1).name), _
+                 "Zalutala: kanonska kolona iza nje je ostala neposredno iza"
+    AssertEquals CStr(preKolona), CStr(lo.ListColumns.count), _
+                 "Zalutala: broj kolona je vracen -- privremeno ime nije ostalo"
+    If imaRedova Then
+        AssertEquals SENTINEL, _
+                     CStr(lo.ListColumns(iKanon).DataBodyRange.cells(1, 1).value & ""), _
+                     "Zalutala: sadrzaj je presao sa kraja na kanonsko mesto"
+        lo.ListColumns(iKanon).DataBodyRange.cells(1, 1).value = staraVrednost
+    End If
+    Exit Sub
+
+EH:
+    ' Ciscenje i posle pada: kanonska kolona mora da se vrati, inace ostatak
+    ' suite-a pada na drift-u i pravi uzrok se gubi.
+    On Error Resume Next
+    modSetup.ObrisiKolonuAko TBL_OTKUP, COL_DETE_ZBIRNA_ROD & "_MIG"
+    If GetColumnIndex(TBL_OTKUP, "ZbirnaGeneracijaID") > 0 Then
+        If GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD) > 0 Then
+            modSetup.ObrisiKolonuAko TBL_OTKUP, "ZbirnaGeneracijaID"
+        Else
+            GetTable(TBL_OTKUP).ListColumns( _
+                GetColumnIndex(TBL_OTKUP, "ZbirnaGeneracijaID")).name = COL_DETE_ZBIRNA_ROD
+        End If
+    End If
+    ' Prazna kolona iz kapije: ako je ostala, pozicija 5 ne nosi kanonsko ime.
+    Dim kanonEH As Collection
+    Set kanonEH = modSchema.SchemaTableColumns(TBL_OTKUP)
+    If GetTable(TBL_OTKUP).ListColumns.count > 5 And kanonEH.count >= 5 Then
+        If StrComp(CStr(GetTable(TBL_OTKUP).ListColumns(5).name), _
+                   CStr(kanonEH(5)), vbTextCompare) <> 0 Then
+            GetTable(TBL_OTKUP).ListColumns(5).Delete
+        End If
+    End If
+    On Error GoTo 0
+    LogFatal "Test_Schema_ZalutalaKolonaSeVracaNaMesto", Err.Number, Err.description
+End Sub
+
+' Indeksi pet linijskih kolona zaglavlja otpremnice, kao tekst "i|i|i|i|i".
+'
+' Nula znaci "kolone nema" (GetColumnIndex tako i vraca). Jedan string umesto pet
+' tvrdnji: pad imenuje SVE kolone koje su ostale, a ne samo prvu.
+Private Function OtpLinijskeKoloneIndeksi() As String
+    OtpLinijskeKoloneIndeksi = _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "Kolicina")) & "|" & _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "Cena")) & "|" & _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "KolAmbalaze")) & "|" & _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "Klasa")) & "|" & _
+        CStr(GetColumnIndex(TBL_OTPREMNICA, "BrutoKg"))
+End Function
+
+' ZAGLAVLJE OTPREMNICE BEZ LINIJSKIH KOLONA -- I SVE IZA NJIH NA SVOM MESTU.
+'
+' Ovo je jedini stvarni rizik ovog reza. Pet kolona je obrisano IZ SREDINE i NE
+' NEPREKIDNO: pozicije su bile 9, 10, 12, 13 i 15, a 14 je Stornirano -- dakle
+' IZMEDJU njih. Kolona koja ostane u zatecenoj svesci pomera sve iza sebe, pa
+' pozicioni upis (AppendRow) salje vrednost u pogresnu kolonu.
+'
+' Tvrdnja zato meri DVE stvari:
+'   1. da nijedne od pet nema u svesci (self-heal ih je obrisao),
+'   2. da kolone IZA njih stoje tacno tamo gde ih kanon ocekuje.
+'
+' Drugu ne izvodi iz svoje kopije rasporeda nego iz modSchema.SchemaTableColumns --
+' prepisan raspored bi znacio da preimenovana kolona prodje kroz oba sita.
+Private Sub Test_OTP_ZaglavljeBezLinijskihKolona()
+    On Error GoTo EH
+
+    AssertEquals "0|0|0|0|0", OtpLinijskeKoloneIndeksi(), _
+                 "OTP kolone: nijedne linijske kolone nema u svesci"
+
+    Dim kanon As Collection
+    Set kanon = modSchema.SchemaTableColumns(TBL_OTPREMNICA)
+    AssertEquals "24", CStr(kanon.count), "OTP kolone: kanon ima 24 kolone"
+
+    ' Svaka kanonska kolona mora u svesci stajati na SVOJOJ poziciji. Nijedna
+    ' izuzeta: razlika bilo gde iza brisanja je isti kvar.
+    Dim i As Long, razlike As String
+    For i = 1 To kanon.count
+        Dim uSvesci As Long
+        uSvesci = GetColumnIndex(TBL_OTPREMNICA, CStr(kanon(i)))
+        If uSvesci <> i Then
+            razlike = razlike & CStr(kanon(i)) & "(kanon " & CStr(i) & _
+                      ", sveska " & CStr(uSvesci) & ") "
+        End If
+    Next i
+
+    If Len(razlike) > 0 Then LogWarn "Test_OTP_ZaglavljeBezLinijskihKolona", razlike
+    AssertEquals "", razlike, "OTP kolone: sveska i kanon se poklapaju po poziciji"
+    Exit Sub
+
+EH:
+    LogFatal "Test_OTP_ZaglavljeBezLinijskihKolona", Err.Number, Err.description
 End Sub
 
 ' Simulirani OTK_STAVKE kao sto ga TryReadSheetData vraca: 2D, red 1 = naslov.
@@ -15732,6 +25120,10 @@ Private Sub Test_OTK_StornoJednimID()
     Set h = OtkHeader(TEST_PREFIX & "-OTK-SJ-" & scenario)
     h.Add "KolAmbIzdata", 7#
 
+    Dim stPre As Double, koopPre As Double
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, TEST_TIP_AMB)
+    koopPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, TEST_TIP_AMB)
+
     Dim otkID As String
     otkID = CreateOtkup_TX(h, OtkStavke(400#, 50#, 20, 600#, 40#, 30))
     AssertTrue Len(otkID) > 0, "OTK storno: dvoklasni dokument upisan"
@@ -15742,11 +25134,17 @@ Private Sub Test_OTK_StornoJednimID()
 
     AssertEquals "Da", OtkPolje(otkID, COL_STORNIRANO), "OTK storno: header storniran"
 
-    ' Obe noge ambalaze idu sa dokumentom -- primljena i izdata.
-    AssertEquals "Da", AmbPolje(otkID, DOK_TIP_OTKUP, "Izlaz", COL_STORNIRANO), _
-                 "OTK storno: primljena ambalaza stornirana"
-    AssertEquals "Da", AmbPolje(otkID, DOK_TIP_OM_IZLAZ_KOOP, "Ulaz", COL_STORNIRANO), _
-                 "OTK storno: izdata ambalaza stornirana"
+    ' OBA DOGADJAJA IDU SA DOKUMENTOM, i to KONTRA-STAVOM a ne zastavicom:
+    ' nov citalac salda zastavicu ne gleda, pa bi zigosan red ostavio gajbe u
+    ' opticaju tiho (AMB-10-ODL-16). Tvrdnja je zato nad SALDOM, ne nad kolonom.
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, _
+                   TEST_TIP_AMB) - stPre) < 0.001, _
+               "OTK storno: saldo stanice se vraca na stanje pre otkupa"
+    AssertTrue Abs(modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                   TEST_TIP_AMB) - koopPre) < 0.001, _
+               "OTK storno: saldo kooperanta se vraca na stanje pre otkupa"
+    AssertEquals "2", CStr(AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)), _
+                 "OTK storno: oba dogadjaja otkupa imaju svoj kontra-stav"
 
     ' Stavke NEMAJU svoj storno: aktivnost stavke je pitanje za header (S7).
     AssertEquals "2", CStr(OtkBrojStavkiZaOtkup(otkID)), _
@@ -17043,7 +26441,8 @@ Private Sub Test_OTK_OdvezanVirmanJeRaspolozivAvans()
     AssertTrue Abs(GetKooperantUnallocatedAvans(TEST_KOOP_ID) - pre) < 0.001, _
                "Odvezan virman: dok je vezan za blok NIJE raspoloziv"
 
-    AssertTrue modStorno.StornoOtkup(otkID), "Odvezan virman: storno prosao"
+    ' Produkcioni ulaz, ne jezgro: jezgro trazi tx (AMB-INV-08), a _TX ga nosi.
+    AssertTrue modStorno.StornoOtkup_TX(otkID), "Odvezan virman: storno prosao"
 
     ' Posle storna JESTE raspoloziv. Pre odluke je ovde bilo 0.
     AssertTrue Abs(GetKooperantUnallocatedAvans(TEST_KOOP_ID) - pre - 7000#) < 0.001, _
@@ -17443,6 +26842,9 @@ Private Sub Test_OTK_SelfHealMigracijeKolona()
 
     Const PROBA As String = "ZZTestKolonaProba"
     Const PROBA2 As String = "ZZTestKolonaProbaID"
+    ' Stoji IZMEDJU starog imena i dopisanog novog -- bez nje se pomeranje
+    ' pozicije ne vidi (review #395, P2).
+    Const PROBA_IZA As String = "ZZTestKolonaIza"
 
     Dim lo As ListObject
     Set lo = GetTable(TBL_OTKUP)
@@ -17469,18 +26871,18 @@ Private Sub Test_OTK_SelfHealMigracijeKolona()
     AssertTrue GetColumnIndex(TBL_OTKUP, PROBA2) > 0, _
                "SelfHeal: drugi prolaz preimenovanja ne kvari nista"
 
-    ' OBA IMENA ODJEDNOM -- stanje koje pravi medjuverzija.
+    ' OBA IMENA ODJEDNOM -- stanje koje je pravio PRETHODNI main.
     '
-    ' Sveska koju je stara grana vec dopunila novim imenom (EnsureColumnOnTable
-    ' dodaje NA KRAJ), a staro jos nosi. Bez kapije 'vec migrirano' preimenovanje
-    ' bi napravilo DVE kolone istog imena -- Excel ih tada sam preimenuje u
-    ' 'ime2' i pozicioni upis dobija polje koje niko ne trazi.
+    ' Kanon je nosio novo ime, rename putanje nije bilo, pa je EnsureAllTables
+    ' dopisivao novo ime NA KRAJ dok je staro ostajalo u SREDINI. Stari helper je
+    ' na to izlazio tiho (no-op), pa je sveska ostajala TRAJNO drift-ovana:
+    ' SchemaReadyOrFail blokira upise fail-closed, ali se sveska sama nije mogla
+    ' izleciti (review #395, P1).
     '
-    ' MERENO: gasenje kapije 'vec migrirano' NE obara ovaj test, i to je tacan
-    ' rezultat -- Excel sam odbija drugu ListColumn istog imena, pa se ishod ne
-    ' menja. Kapija stedi LogError na svakom startu takve sveske, ne podatak.
-    ' Test zato tvrdi ISHOD (nema duplikata, nista se nije pomerilo), a razlog
-    ' zbog kog kapija ipak stoji pise uz nju u modSetup.
+    ' PREMISA OVOG TESTA JE PROMENJENA. Do #395 je tvrdio "sa oba imena
+    ' preimenovanje NE radi nista" i time zakljucavao nekonvergentno ponasanje.
+    ' Sada tvrdi OPORAVAK -- jer repair koji ne pokriva stanje koje je sam bug
+    ' pravio nije repair.
     Dim loM As ListObject
     Set loM = GetTable(TBL_OTKUP)
     loM.ListColumns.Add().name = PROBA
@@ -17488,16 +26890,124 @@ Private Sub Test_OTK_SelfHealMigracijeKolona()
     AssertEquals CStr(preKolona + 2), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
                  "SelfHeal: sada postoje OBA imena"
 
-    modSetup.PreimenujKolonuAko TBL_OTKUP, PROBA, PROBA2
-
-    AssertEquals CStr(preKolona + 2), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
-                 "SelfHeal: sa oba imena preimenovanje NE radi nista"
-    AssertTrue GetColumnIndex(TBL_OTKUP, PROBA) > 0, _
-               "SelfHeal: staro ime je netaknuto (nema duplikata)"
-
-    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA
+    ' Novo je PRAZNO -> visak; brise se, staro se preimenuje NA MESTU.
+    AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2), _
+                 "SelfHeal oporavak: oba imena, novo prazno -- bez razloga za stop"
+    AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, PROBA)), _
+                 "SelfHeal oporavak: staro ime je nestalo"
+    AssertTrue GetColumnIndex(TBL_OTKUP, PROBA2) > 0, _
+               "SelfHeal oporavak: novo ime postoji"
     AssertEquals CStr(preKolona + 1), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
-                 "SelfHeal: pomocna kolona sklonjena"
+                 "SelfHeal oporavak: duplikat je uklonjen, ostala je JEDNA kolona"
+
+    ' Idempotentno: drugi prolaz nad izlecenim stanjem nema sta da radi.
+    AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2), _
+                 "SelfHeal oporavak: drugi prolaz je bez posla i bez razloga"
+    AssertEquals CStr(preKolona + 1), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal oporavak: drugi prolaz ne dira broj kolona"
+
+    ' STARO PRAZNO, NOVO PUNO -> staro je visak; novo ostaje sa svojim podacima.
+    '
+    ' Suprotan smer od gornjeg, i mora da radi: sveska koja je vec pisala u novu
+    ' kolonu ne sme da je izgubi zato sto je staro ime negde zaostalo.
+    Dim loD As ListObject
+    Set loD = GetTable(TBL_OTKUP)
+    If loD.ListRows.count > 0 Then
+        loD.ListColumns(GetColumnIndex(TBL_OTKUP, PROBA2)).DataBodyRange.cells(1, 1).value = "X"
+        loD.ListColumns.Add().name = PROBA
+
+        AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2), _
+                     "SelfHeal oporavak: staro prazno a novo puno -- bez razloga za stop"
+        AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, PROBA)), _
+                     "SelfHeal oporavak: prazno staro ime je obrisano"
+        AssertEquals "X", CStr(GetTable(TBL_OTKUP).ListColumns( _
+                         GetColumnIndex(TBL_OTKUP, PROBA2)).DataBodyRange.cells(1, 1).value), _
+                     "SelfHeal oporavak: podatak u novoj koloni je ostao"
+
+        ' OBA PUNA -> STOP sa imenovanim razlogom, nista se ne dira.
+        '
+        ' Dve pune kolone su dva tvrdjenja o istom polju. Kod koji tu tiho izabere
+        ' jednu istinu je gori od koda koji stane.
+        Dim loP As ListObject
+        Set loP = GetTable(TBL_OTKUP)
+        loP.ListColumns.Add().name = PROBA
+        loP.ListColumns(GetColumnIndex(TBL_OTKUP, PROBA)).DataBodyRange.cells(1, 1).value = "Y"
+
+        Dim razlog As String
+        razlog = modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2)
+        AssertTrue InStr(1, razlog, "nose podatke", vbTextCompare) > 0, _
+                   "SelfHeal oporavak: oba puna -- razlog imenuje da OBA nose podatke"
+        AssertTrue GetColumnIndex(TBL_OTKUP, PROBA) > 0, _
+                   "SelfHeal oporavak: oba puna -- staro ime je NETAKNUTO"
+        AssertTrue GetColumnIndex(TBL_OTKUP, PROBA2) > 0, _
+                   "SelfHeal oporavak: oba puna -- novo ime je NETAKNUTO"
+
+        modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA
+        GetTable(TBL_OTKUP).ListColumns(GetColumnIndex(TBL_OTKUP, PROBA2)) _
+            .DataBodyRange.cells(1, 1).ClearContents
+    End If
+
+    ' OPORAVAK MORA DA VRATI I POZICIJU, NE SAMO IME (review #395, P2).
+    '
+    ' Blok iznad testira raspored "NOVO, pa STARO". U njemu brisanje starog
+    ' ostavlja novo na pravom mestu SAMO SLUCAJNO, pa taj raspored ne razlikuje
+    ' ispravan oporavak od pogresnog. Stanje koje je bug pravio je suprotno:
+    '
+    '     ... kanonske kolone ... | STARO | kolona iza njega | NOVO na kraju
+    '
+    ' jer EnsureAllTables dopisuje NA KRAJ, a staro ime ostaje na kanonskom mestu
+    ' u sredini. Golo brisanje starog tada ostavlja novo IZA kolone koja u kanonu
+    ' ide posle njega; VerifySchema trazi kanonski PREFIKS po INDEKSU, pa sveska
+    ' ostaje trajno drift-ovana -- podaci sacuvani, upis i dalje blokiran.
+    '
+    ' Zato se raspored gradi FIZICKI, i meri se POZICIJA, ne samo ime. U kanonu
+    ' iza ZbirnaRoditeljID stoje kanonske kolone (28/29 na tblOtkup, 20/24 na
+    ' tblOtpremnici), pa ovo nije teorijski slucaj.
+    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA2
+
+    Dim loPoz As ListObject
+    Set loPoz = GetTable(TBL_OTKUP)
+    loPoz.ListColumns.Add().name = PROBA          ' staro: na kanonskom mestu
+    loPoz.ListColumns.Add().name = PROBA_IZA      ' kolona koja u kanonu ide IZA
+    loPoz.ListColumns.Add().name = PROBA2         ' novo: DOPISANO na kraj
+
+    Dim pozStaro As Long
+    pozStaro = GetColumnIndex(TBL_OTKUP, PROBA)
+    AssertEquals CStr(preKolona + 1), CStr(pozStaro), _
+                 "SelfHeal pozicija: staro ime je na mestu koje kanon trazi"
+    AssertEquals CStr(preKolona + 3), CStr(GetColumnIndex(TBL_OTKUP, PROBA2)), _
+                 "SelfHeal pozicija: novo ime je dopisano NA KRAJ"
+
+    ' Podatak je SAMO u novoj koloni: po SADRZAJU je ona prava, po MESTU nije.
+    Dim imaRedova As Boolean
+    imaRedova = (GetTable(TBL_OTKUP).ListRows.count > 0)
+    If imaRedova Then
+        GetTable(TBL_OTKUP).ListColumns(GetColumnIndex(TBL_OTKUP, PROBA2)) _
+            .DataBodyRange.cells(1, 1).value = "Z"
+    End If
+
+    AssertEquals "", modSetup.PreimenujKolonuAko(TBL_OTKUP, PROBA, PROBA2), _
+                 "SelfHeal pozicija: oporavak prolazi bez razloga za stop"
+    AssertEquals "0", CStr(GetColumnIndex(TBL_OTKUP, PROBA)), _
+                 "SelfHeal pozicija: staro ime je nestalo"
+    AssertEquals CStr(pozStaro), CStr(GetColumnIndex(TBL_OTKUP, PROBA2)), _
+                 "SelfHeal pozicija: novo ime je na STAROM mestu, ne na kraju"
+    AssertEquals CStr(pozStaro + 1), CStr(GetColumnIndex(TBL_OTKUP, PROBA_IZA)), _
+                 "SelfHeal pozicija: kolona iza je ostala neposredno iza"
+    AssertEquals CStr(preKolona + 2), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal pozicija: visak je obrisan, ostale su dve pomocne"
+    If imaRedova Then
+        AssertEquals "Z", CStr(GetTable(TBL_OTKUP).ListColumns( _
+                         GetColumnIndex(TBL_OTKUP, PROBA2)).DataBodyRange.cells(1, 1).value), _
+                     "SelfHeal pozicija: sadrzaj je preseljen sa kraja na kanonsko mesto"
+        GetTable(TBL_OTKUP).ListColumns(GetColumnIndex(TBL_OTKUP, PROBA2)) _
+            .DataBodyRange.cells(1, 1).ClearContents
+    End If
+
+    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA_IZA
+
+    AssertEquals CStr(preKolona + 1), CStr(GetTable(TBL_OTKUP).ListColumns.count), _
+                 "SelfHeal: pomocne kolone sklonjene, ostala je jedna"
 
     ' --- BRISANJE ---
     modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA2
@@ -17528,6 +27038,7 @@ EH:
     On Error Resume Next
     modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA
     modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA2
+    modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA_IZA
     On Error GoTo 0
     LogFatal "Test_OTK_SelfHealMigracijeKolona", Err.Number, Err.description
 End Sub
@@ -17551,10 +27062,10 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     cridP = TEST_PREFIX & "-CRID-PAR-" & scenario
 
     Dim redP As Variant
-    redP = PwaRed(cridP, TEST_PREFIX & "-OTK-PWAPAR-" & scenario, 400#, 50#, 20)
+    redP = PwaRed(cridP, TEST_PREFIX & "-OTK-PWAPAR-" & scenario, 1)
 
     Dim prviP As String
-    prviP = modMasterSync.ImportRowToTblOtkup_RowTX(redP, 1, cridP)
+    prviP = modMasterSync.ImportRowToTblOtkup_RowTX(redP, 1, cridP, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(prviP) > 0, "PWA parcela: prvi uvoz prosao"
 
     ' PwaRed salje PRAZNU parcelu, pa prvi dokument nema parcelu. Drugi je salje.
@@ -17568,7 +27079,8 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     izmenjenP(1, 19) = GetTestParcelaID()              ' GS_PARCELA_ID
 
     Dim preP As Long: preP = OtkBrojRedova(TBL_OTKUP)
-    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenP, 1, cridP), _
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenP, 1, cridP, _
+        PwaStavke1(400#, 50#, 20)), _
                  "PWA parcela: druga parcela pod istim CRID-om je ODBIJENA"
     AssertEquals CStr(preP), CStr(OtkBrojRedova(TBL_OTKUP)), _
                  "PWA parcela: nijedan nov red nije nastao"
@@ -17578,21 +27090,23 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     cridT = TEST_PREFIX & "-CRID-TIP-" & scenario
 
     Dim redT As Variant
-    redT = PwaRed(cridT, TEST_PREFIX & "-OTK-PWATIP-" & scenario, 400#, 50#, 20)
+    redT = PwaRed(cridT, TEST_PREFIX & "-OTK-PWATIP-" & scenario, 1)
 
     Dim prviT As String
-    prviT = modMasterSync.ImportRowToTblOtkup_RowTX(redT, 1, cridT)
+    prviT = modMasterSync.ImportRowToTblOtkup_RowTX(redT, 1, cridT, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(prviT) > 0, "PWA tip: prvi uvoz prosao"
 
     Dim izmenjenT As Variant
     izmenjenT = redT
-    ' TipAmbalaze NIJE FK (v. modOtkup:474 -- FK su kooperant, stanica, kultura,
-    ' parcela), pa je drugi tip legitiman ulaz i kapija jednakosti je jedino sto
-    ' ga moze odbiti.
-    izmenjenT(1, 17) = TEST_TIP_AMB & "-DRUGI"         ' GS_TIP_AMB
+    ' Drugi tip mora biti legitiman ulaz, da kapija jednakosti ostane JEDINO sto
+    ' ga moze odbiti. Od KI-021 tip mora postojati u sifarniku (AMB-INV-12), pa
+    ' se registruje -- bez toga bi ga odbio i pisac, i tvrdnja ispod bi bila
+    ' zelena iz pogresnog razloga.
+    izmenjenT(1, 17) = RegistrujTipTesta(TEST_TIP_AMB & "-DRUGI")   ' GS_TIP_AMB
 
     Dim preT As Long: preT = OtkBrojRedova(TBL_OTKUP)
-    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenT, 1, cridT), _
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenT, 1, cridT, _
+        PwaStavke1(400#, 50#, 20)), _
                  "PWA tip: drugi tip ambalaze pod istim CRID-om je ODBIJEN"
     AssertEquals CStr(preT), CStr(OtkBrojRedova(TBL_OTKUP)), _
                  "PWA tip: nijedan nov red nije nastao"
@@ -17605,7 +27119,7 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     cridB = TEST_PREFIX & "-CRID-BR-" & scenario
 
     Dim redB As Variant
-    redB = PwaRed(cridB, TEST_PREFIX & "-OTK-PWABR-" & scenario, 400#, 50#, 20)
+    redB = PwaRed(cridB, TEST_PREFIX & "-OTK-PWABR-" & scenario, 1)
 
     ' Broj se gradi iz stanice i dana SAMOG REDA. Ranije su ovde stajali literali
     ' "77/090926" i "78/090926" -- oni tvrde stanicu 77, a red nosi ST-90001 i
@@ -17620,7 +27134,7 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     redB(1, 23) = brojB                                ' GS_BROJ_DOKUMENTA
 
     Dim prviB As String
-    prviB = modMasterSync.ImportRowToTblOtkup_RowTX(redB, 1, cridB)
+    prviB = modMasterSync.ImportRowToTblOtkup_RowTX(redB, 1, cridB, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(prviB) > 0, "PWA broj: prvi uvoz sa izricitim brojem prosao"
     AssertEquals brojB, OtkPolje(prviB, COL_OTK_BR_DOK), _
                  "PWA broj: izricit broj je zapisan"
@@ -17630,16 +27144,19 @@ Private Sub Test_PWA_KonfliktPoParceliITipu()
     izmenjenB(1, 23) = brojB2
 
     Dim preB As Long: preB = OtkBrojRedova(TBL_OTKUP)
-    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenB, 1, cridB), _
+    AssertEquals "", modMasterSync.ImportRowToTblOtkup_RowTX(izmenjenB, 1, cridB, _
+        PwaStavke1(400#, 50#, 20)), _
                  "PWA broj: drugi broj pod istim CRID-om je ODBIJEN"
     AssertEquals CStr(preB), CStr(OtkBrojRedova(TBL_OTKUP)), _
                  "PWA broj: nijedan nov red nije nastao"
 
     ' Kontrola: NEPROMENJEN red je i dalje no-op, ne konflikt -- i za red BEZ
     ' broja (master ga je generisao), sto dokazuje da uslov ne lomi taj put.
-    AssertEquals prviT, modMasterSync.ImportRowToTblOtkup_RowTX(redT, 1, cridT), _
+    AssertEquals prviT, modMasterSync.ImportRowToTblOtkup_RowTX(redT, 1, cridT, _
+        PwaStavke1(400#, 50#, 20)), _
                  "PWA kontrola: nepromenjen sadrzaj je i dalje NO-OP"
-    AssertEquals prviB, modMasterSync.ImportRowToTblOtkup_RowTX(redB, 1, cridB), _
+    AssertEquals prviB, modMasterSync.ImportRowToTblOtkup_RowTX(redB, 1, cridB, _
+        PwaStavke1(400#, 50#, 20)), _
                  "PWA kontrola: isti izricit broj je i dalje NO-OP"
 
     Exit Sub
@@ -17664,14 +27181,14 @@ Private Sub Test_PWA_PrenosiVremeNastanka()
     crid = TEST_PREFIX & "-CRID-SCA-" & scenario
 
     Dim red As Variant
-    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWASCA-" & scenario, 400#, 50#, 20)
+    red = PwaRed(crid, TEST_PREFIX & "-OTK-PWASCA-" & scenario, 1)
 
     Dim nastalo As String
     nastalo = "2026-08-14T06:30:00Z"
     red(1, 3) = nastalo                                ' GS_CREATED_AT
 
     Dim otkID As String
-    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid)
+    otkID = modMasterSync.ImportRowToTblOtkup_RowTX(red, 1, crid, PwaStavke1(400#, 50#, 20))
     AssertTrue Len(otkID) > 0, "PWA vreme: uvoz prosao"
 
     AssertEquals nastalo, OtkPolje(otkID, COL_OTK_SOURCE_CREATED_AT), _
@@ -17813,52 +27330,6 @@ EH:
     LogFatal "Test_OTK_PrintNetoUnosNeRekonstruiseBruto", Err.Number, Err.description
 End Sub
 
-' Ispravka hladnjackog dokumenta je FAIL-CLOSED dok je lanac pauziran.
-'
-' Bez ove kapije bi nastao nov otkup, pending bi bio POTROSEN, a operater bi
-' dobio samo "nema prijemnice" -- pola ispravke, i to nepovratno.
-Private Sub Test_OTK_IspravkaPauziranaNeTrosiPending()
-    On Error GoTo EH
-
-    Dim scenario As String
-    scenario = NewScenarioCode("OTKIP")
-
-    Dim stariPending As String
-    stariPending = GetHladnjacaRelinkPending()
-    SetHladnjacaRelinkPending TEST_PREFIX & "-PRJ-STARA-" & scenario
-
-    Dim p As Object
-    Set p = OtkEkranParam(TEST_PREFIX & "-OTK-IP-" & scenario)
-    p("stanicaID") = TEST_HLAD_ST_ID
-    p("kolicinaI") = 400#
-    p("cenaI") = 50#
-    p("kolAmb") = 20&
-
-    Dim preH As Long
-    preH = OtkBrojRedova(TBL_OTKUP)
-
-    Dim poruke As String
-    Dim res As String
-    res = modOtkupUnos.OtkupUpisi(p, poruke)
-
-    Dim pendingPosle As String
-    pendingPosle = GetHladnjacaRelinkPending()
-    SetHladnjacaRelinkPending stariPending          ' vrati stanje pre tvrdnji
-
-    AssertEquals "", res, "OTK ispravka: otkup NIJE nastao"
-    AssertEquals CStr(preH), CStr(OtkBrojRedova(TBL_OTKUP)), _
-                 "OTK ispravka: nijedan red nije upisan"
-    AssertEquals TEST_PREFIX & "-PRJ-STARA-" & scenario, pendingPosle, _
-                 "OTK ispravka: pending NIJE potrosen"
-    AssertTrue InStr(1, poruke, "nedostupna", vbTextCompare) > 0, _
-               "OTK ispravka: operater je obavesten (bilo: " & poruke & ")"
-
-    Exit Sub
-
-EH:
-    LogFatal "Test_OTK_IspravkaPauziranaNeTrosiPending", Err.Number, Err.description
-End Sub
-
 ' Broj otkupnog lista je jedinstven po STANICI I DANU -- i to cuva PISAC.
 '
 ' Zatecena provera je bila samo u UI-ju (modOtkupUnos:229) i nije gledala
@@ -17916,6 +27387,24 @@ Private Sub Test_OTK_BrojJedinstvenPoStaniciIDanu()
 EH:
     LogFatal "Test_OTK_BrojJedinstvenPoStaniciIDanu", Err.Number, Err.description
 End Sub
+
+' KI-021: tipovi koje suite upisuje u knjigu moraju postojati u sifarniku
+' (AMB-INV-12). Ide PRE SeedAmbalazaOpticaj, koji nabavlja TEST_TIP_AMB i _B.
+' "G" je tip tvrdnji ugovora prenosa (AmbPrenosProblem).
+Private Sub SeedTipoveAmbalaze()
+    RegistrujTipTesta TEST_TIP_AMB
+    RegistrujTipTesta TEST_TIP_AMB_B
+    RegistrujTipTesta TEST_TIP_AMB_C
+    RegistrujTipTesta "G"
+End Sub
+
+' KI-021: tip koji test upisuje u knjigu, registrovan u sifarniku ako ga nema.
+' Tezina se ne dira (nov red dobija 0 -- GetTezinaGajbice je isti kao bez
+' reda). Vraca tip, pa mesto nastanka svezeg tipa ostaje jedna linija.
+Private Function RegistrujTipTesta(ByVal tip As String) As String
+    If FindRows(TBL_TIP_AMBALAZE, COL_TAMB_TIP, tip).count = 0 Then SeedTaraGajbice tip, 0#
+    RegistrujTipTesta = tip
+End Function
 
 ' Tara gajbice u sifarniku -- upisuje se ili azurira.
 Private Sub SeedTaraGajbice(ByVal tip As String, ByVal tezina As Double)
@@ -18053,48 +27542,132 @@ Private Function AmbRedovi(ByVal dokID As String, ByVal dokTip As String) As Col
     Next i
 End Function
 
-Private Function AmbBrojRedova(ByVal dokID As String, ByVal dokTip As String) As Long
-    AmbBrojRedova = AmbRedovi(dokID, dokTip).count
-End Function
-
-Private Function AmbPolje(ByVal dokID As String, ByVal dokTip As String, _
-                          ByVal smer As String, ByVal columnName As String) As String
+' ---- citaoci NOVOG oblika reda knjige ----
+'
+' Identitet reda je (DokumentTip, DokumentID, VrstaKretanja) -- tacno kljuc koji
+' AMB-INV-04 cuva, pa helper ne mora da zna nista o smeru. Kontra-stavovi su
+' IZUZETI (StornoOd neprazan): tvrdnja meri sta je dokument knjizio, ne sta je od
+' toga kasnije povuceno.
+Private Function AmbNoviRedIdx(ByVal dokID As String, ByVal dokTip As String, _
+                               ByVal vrsta As String) As Long
     Dim d As Variant
     d = GetTableData(TBL_AMBALAZA)
     If Not IsArray(d) Then Exit Function
 
-    Dim cSmer As Long, cTraz As Long
-    cSmer = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_SMER, "AmbPolje")
-    cTraz = RequireColumnIndex(TBL_AMBALAZA, columnName, "AmbPolje")
+    Dim cVK As Long, cSt As Long
+    cVK = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, "AmbNoviRedIdx")
+    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, "AmbNoviRedIdx")
 
-    Dim redovi As Collection
-    Set redovi = AmbRedovi(dokID, dokTip)
+    Dim i As Variant
+    For Each i In AmbRedovi(dokID, dokTip)
+        If Len(Trim$(nz(d(CLng(i), cSt), ""))) = 0 Then
+            If StrComp(Trim$(nz(d(CLng(i), cVK), "")), vrsta, vbTextCompare) = 0 Then
+                AmbNoviRedIdx = CLng(i)
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
 
-    Dim k As Long, i As Long
-    For k = 1 To redovi.count
-        i = CLng(redovi(k))
-        If StrComp(Trim$(nz(d(i, cSmer), "")), smer, vbTextCompare) = 0 Then
-            AmbPolje = Trim$(CStr(nz(d(i, cTraz), "")))
+Private Function AmbNoviBrojRedova(ByVal dokID As String, ByVal dokTip As String, _
+                                   ByVal vrsta As String) As Long
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cVK As Long, cSt As Long
+    cVK = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, "AmbNoviBrojRedova")
+    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, "AmbNoviBrojRedova")
+
+    Dim i As Variant, n As Long
+    For Each i In AmbRedovi(dokID, dokTip)
+        If Len(Trim$(nz(d(CLng(i), cSt), ""))) = 0 Then
+            If StrComp(Trim$(nz(d(CLng(i), cVK), "")), vrsta, vbTextCompare) = 0 Then n = n + 1
+        End If
+    Next i
+    AmbNoviBrojRedova = n
+End Function
+
+Private Function AmbNoviPolje(ByVal dokID As String, ByVal dokTip As String, _
+                              ByVal vrsta As String, ByVal kolona As String) As String
+    Dim r As Long
+    r = AmbNoviRedIdx(dokID, dokTip, vrsta)
+    If r = 0 Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    AmbNoviPolje = Trim$(nz(d(r, RequireColumnIndex(TBL_AMBALAZA, kolona, "AmbNoviPolje")), ""))
+End Function
+
+Private Function AmbNoviKolicina(ByVal dokID As String, ByVal dokTip As String, _
+                                 ByVal vrsta As String) As Double
+    Dim s As String
+    s = AmbNoviPolje(dokID, dokTip, vrsta, COL_AMB_KOLICINA)
+    If IsNumeric(s) Then AmbNoviKolicina = CDbl(s)
+End Function
+
+' Koliko redova dokumenta ima dati nalog kao STRANU (Od ili Na). Zamena za
+' tvrdnju nad kolonom VozacID: posle prelaza se ta kolona ne pise nikad, pa bi
+' tvrdnja "vozac je prazan" prolazila vakuumski.
+Private Function AmbNoviBrojSaNalogom(ByVal dokID As String, ByVal dokTip As String, _
+                                      ByVal nalogTip As String) As Long
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cOd As Long, cNa As Long
+    cOd = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_OD_TIP, "AmbNoviBrojSaNalogom")
+    cNa = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_NA_TIP, "AmbNoviBrojSaNalogom")
+
+    Dim i As Variant, n As Long
+    For Each i In AmbRedovi(dokID, dokTip)
+        If StrComp(Trim$(nz(d(CLng(i), cOd), "")), nalogTip, vbTextCompare) = 0 Or _
+           StrComp(Trim$(nz(d(CLng(i), cNa), "")), nalogTip, vbTextCompare) = 0 Then n = n + 1
+    Next i
+    AmbNoviBrojSaNalogom = n
+End Function
+
+' Kontra-stavovi dokumenta -- redovi sa nepraznim StornoOd. Oblik-neutralno:
+' AmbRedovi grupise po (DokumentID, DokumentTip), sto vazi i u starom i u novom
+' modelu, pa helper ne mora da zna koji je red kog oblika.
+Private Function AmbBrojKontraStavova(ByVal dokID As String, _
+                                      ByVal dokTip As String) As Long
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cSt As Long
+    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, "AmbBrojKontraStavova")
+
+    Dim i As Variant, n As Long
+    For Each i In AmbRedovi(dokID, dokTip)
+        If Len(Trim$(nz(d(CLng(i), cSt), ""))) > 0 Then n = n + 1
+    Next i
+    AmbBrojKontraStavova = n
+End Function
+
+' AmbID na koji pokazuje PRVI kontra-stav dokumenta, inace "".
+Private Function AmbStornoOdPrvi(ByVal dokID As String, _
+                                 ByVal dokTip As String) As String
+    Dim d As Variant
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cSt As Long
+    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, "AmbStornoOdPrvi")
+
+    Dim i As Variant, s As String
+    For Each i In AmbRedovi(dokID, dokTip)
+        s = Trim$(nz(d(CLng(i), cSt), ""))
+        If Len(s) > 0 Then
+            AmbStornoOdPrvi = s
             Exit Function
         End If
-    Next k
+    Next i
 End Function
 
-Private Function AmbKolicina(ByVal dokID As String, ByVal dokTip As String, _
-                             ByVal smer As String) As Double
-    Dim t As String
-    t = AmbPolje(dokID, dokTip, smer, COL_AMB_KOLICINA)
-    If IsNumeric(t) Then AmbKolicina = CDbl(t)
-End Function
-
-Private Function AmbEntitet(ByVal dokID As String, ByVal dokTip As String, _
-                            ByVal smer As String) As String
-    AmbEntitet = AmbPolje(dokID, dokTip, smer, COL_AMB_ENTITET)
-End Function
-
-Private Function AmbVozac(ByVal dokID As String, ByVal dokTip As String, _
-                          ByVal smer As String) As String
-    AmbVozac = AmbPolje(dokID, dokTip, smer, COL_AMB_VOZAC)
+Private Function AmbBrojRedova(ByVal dokID As String, ByVal dokTip As String) As Long
+    AmbBrojRedova = AmbRedovi(dokID, dokTip).count
 End Function
 
 ' --- OTP pomocne -------------------------------------------------------------
@@ -18849,6 +28422,13 @@ Public Sub HardDeleteBusinessFlowTestRows()
     deleted = DeleteTestRowsFromTable(TBL_FAKTURE, Array("BrojFakture"))
     total = total + deleted
     Debug.Print "tblFakture: " & deleted & " obrisano"
+
+    ' Stavke prijemnice PRE zaglavlja, po FK (S6 korak 2) -- nemaju marker, a
+    ' roditelj se trazi po markeru, pa bi posle njegovog brisanja ostale siroce.
+    deleted = DeleteChildRowsByParent(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, _
+                                      TBL_PRIJEMNICA, COL_PRJ_ID, "BrojPrijemnice")
+    total = total + deleted
+    Debug.Print "tblPrijemnicaStavke: " & deleted & " obrisano"
 
     deleted = DeleteTestRowsFromTable(TBL_PRIJEMNICA, Array("BrojPrijemnice", "BrojZbirne"))
     total = total + deleted

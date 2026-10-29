@@ -17,10 +17,11 @@ Option Explicit
 ' - Svaki dokument se stornira pojedinacno.
 ' - Nema automatske kaskade izmedju dokumenata.
 ' - Ambalaza se stornira za dokument gde postoji.
-' - Faktura: stavke se storniraju, prijemnice se oslobadjaju,
-'   novac se odvezuje od fakture.
-' - Prijemnica: ako je bila fakturisana, oslobadja se i faktura/stavke
-'   se oznacavaju kao osirocene.
+' - Faktura: stavke se storniraju, novac se odvezuje od fakture. Prijemnica
+'   se time oslobadja SAMA: njena fakturisanost je izvedena iz aktivnih
+'   linija (S6 korak 5, FAK-LIN-03), pa se nista na njoj ne pise.
+' - Prijemnica: fakturisana (i delimicno) se ODBIJA -- prvo storno fakture
+'   (S6 korak 4, odluka 1).
 ' ============================================================
 
 Private Const MOD_NAME As String = "modStorno"
@@ -34,6 +35,12 @@ Private Const ERR_STORNO_BASE As Long = vbObjectError + 2400
 ' release). Tvrdo gejtovano: setter radi samo u test rezimu, flag je
 ' u produkciji uvek False.
 Private mTestFailPosleRelease As Boolean
+
+' TEST SEAM (S6 korak 4, R2/R4): namerna greska na KRAJU jezgra storna
+' prijemnice, posle SVIH upisa (palete, zaglavlje, knjiga) -- jedini nacin da test
+' dokaze da rollback pozivaoca vraca ceo dokument. Postavljac ga pali samo u test
+' rezimu, kuka ponovo pita IsTestMode(), a gasi ga modTest.ResetSeamova.
+Private mTestPrjStornoPadni As Boolean
 
 ' ============================================================
 ' OTKUP
@@ -86,7 +93,7 @@ Public Function StornoOtkup_TX(ByVal otkupID As String) As Boolean
 
     ' StornoOtkup otvara i zatvara SVOJ zurnal op, pa kaskada ispod NE ulazi u
     ' operaciju otkupa.
-    If Not StornoOtkup(otkupID) Then
+    If Not StornoOtkup(otkupID, tx) Then
         Err.Raise ERR_STORNO_BASE + 1, SRC, _
                   "StornoOtkup nije uspeo. OtkupID=" & otkupID
     End If
@@ -104,33 +111,11 @@ EH:
     StornoOtkup_TX = False
 End Function
 
-' ============================================================
-' Pripada li red IZABRANOM dokumentu
-' ============================================================
-' Po GeneracijaID kad je poznat, inace po broju. Broj je labela: BrojPrijemnice
-' se racuna PO KUPCU, BrojDokumenta otkupa PO OTKUPNOM MESTU -- prosirenje
-' operacije na sve redove tog broja moze da zahvati tudji dokument.
-'
-' Kad je generacija zadata a kolone nema (zatecena instalacija pre
-' EnsureSledljivostSchema), staje se glasno: pozivalac je rekao BAS TAJ
-' dokument, pa tihi pad na broj znaci da se dira nesto drugo.
-Private Function RedJeIzabranogDokumenta(ByRef data As Variant, ByVal i As Long, _
-                                         ByVal colBroj As Long, ByVal colGen As Long, _
-                                         ByVal broj As String, ByVal gen As String, _
-                                         ByVal sourceName As String) As Boolean
-    If Len(Trim$(gen)) = 0 Then
-        RedJeIzabranogDokumenta = (Trim$(CStr(data(i, colBroj))) = Trim$(broj))
-        Exit Function
-    End If
-    If colGen = 0 Then
-        Err.Raise ERR_STORNO_BASE + 13, sourceName, _
-                  "Zadata je generacija dokumenta, a tabela nema kolonu " & _
-                  COL_GENERACIJA_ID & ". Pokreni EnsureRuntimeSchema pa ponovi."
-    End If
-    RedJeIzabranogDokumenta = (Trim$(NzToText(data(i, colGen))) = Trim$(gen))
-End Function
-
-Public Function StornoOtkup(ByVal otkupID As String) As Boolean
+' tx je OBAVEZAN, ne opcion: storno knjige je kontra-stav koji mora da legne u
+' ISTU transakciju (AMB-INV-08). Opcion tx bio bi fail-open seam -- pozivalac
+' koji ga zaboravi tiho preskoci kontra-stavove, a zastavica bi ostavila zeleno.
+Public Function StornoOtkup(ByVal otkupID As String, _
+                            ByVal tx As clsTransaction) As Boolean
     Const SRC As String = "StornoOtkup"
     Dim owns As Boolean
 
@@ -160,15 +145,26 @@ Public Function StornoOtkup(ByVal otkupID As String) As Boolean
     rowOtkup = RequireStornoAllowed(TBL_OTKUP, otkupID, COL_OTK_ID, SRC)
 
     ' Zurnal: otvori op po broju bloka (lossless undo). Journal stare vrednosti PRE
-    ' mutacije; primitive (StornoAmbalazaByDokument/ResetNovacOtkupLink) usput belezene.
+    ' mutacije; primitiv ResetNovacOtkupLink usput belezen.
     Dim brDok As String: brDok = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BR_DOK))
     owns = BeginStornoOp(DOK_TIP_OTKUP, brDok)
     JournalCell TBL_OTKUP, otkupID, COL_STORNIRANO, _
         NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO)), "Da"
 
     MarkRowStornirano TBL_OTKUP, rowOtkup, SRC
-    StornoAmbalazaByDokument otkupID, DOK_TIP_OTKUP
-    StornoAmbalazaByDokument otkupID, DOK_TIP_OM_IZLAZ_KOOP   ' izdata ambalaza (OM->kooperant) uz otkup
+
+    ' AMB-INV-08: dokument se vezuje TEK POSLE sto je OVA transakcija stvarno
+    ' promenila zaglavlje. Vezivanje iz ambalaznog primitiva bilo bi samopotvrda --
+    ' ledger-storno nije pisac izvornog dokumenta, pa je mogao da anulira efekat
+    ' AKTIVNOG otkupa i prodje sve kapije (review 03.10.2026, P1 #1). Zato je
+    ' modStorno.StornoOtkup na AMB_BIND_DOZVOLJENI, a primitiv nije.
+    tx.BindSourceDocument DOK_TIP_OTKUP, otkupID
+
+    ' Storno ambalaze je KONTRA-STAV u knjizi (AMB-10-ODL-16, 6.12d): knjiga je
+    ' nepromenljiva, a citalac vidi red po Od_*/Na_*/VrstaKretanja/StornoOd.
+    ' Zastavica Stornirano na redu knjige je bila mehanizam STAROG modela i
+    ' obrisana je u 10e-2 -- nov citalac je nikad nije gledao.
+    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_OTKUP, otkupID
     ResetNovacOtkupLink otkupID
 
     EndStornoOp owns
@@ -196,7 +192,7 @@ Public Function StornoOtpremnica_TX(ByVal otpremnicaID As String) As Boolean
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    If Not StornoOtpremnica(otpremnicaID) Then
+    If Not StornoOtpremnica(otpremnicaID, tx) Then
         Err.Raise ERR_STORNO_BASE + 2, SRC, _
                   "StornoOtpremnica nije uspeo. OtpremnicaID=" & otpremnicaID
     End If
@@ -214,7 +210,12 @@ EH:
     StornoOtpremnica_TX = False
 End Function
 
-Public Function StornoOtpremnica(ByVal otpremnicaID As String) As Boolean
+' tx je OBAVEZAN -- isti razlog kao kod StornoOtkup: storno knjige je
+' kontra-stav koji mora da legne u ISTU transakciju (AMB-INV-08). Sva tri
+' pozivna mesta (StornoOtpremnica_TX, OtpIspravi, PonistiZbirnaChain_TX) tx vec
+' imaju, uz snapshot TBL_OTPREMNICA i TBL_AMBALAZA.
+Public Function StornoOtpremnica(ByVal otpremnicaID As String, _
+                                 ByVal tx As clsTransaction) As Boolean
     Const SRC As String = "StornoOtpremnica"
 
     On Error GoTo EH
@@ -242,7 +243,14 @@ Public Function StornoOtpremnica(ByVal otpremnicaID As String) As Boolean
     rowOtp = RequireStornoAllowed(TBL_OTPREMNICA, otpremnicaID, COL_OTP_ID, SRC)
 
     MarkRowStornirano TBL_OTPREMNICA, rowOtp, SRC
-    StornoAmbalazaByDokument otpremnicaID, DOK_TIP_OTPREMNICA
+
+    ' AMB-INV-08: dokument se vezuje POSLE sto ga je ova transakcija promenila.
+    ' Vezivanje iz ambalaznog primitiva bilo bi samopotvrda (v. AMB-10-ODL-15),
+    ' pa je modStorno.StornoOtpremnica na AMB_BIND_DOZVOLJENI.
+    tx.BindSourceDocument DOK_TIP_OTPREMNICA, otpremnicaID
+
+    ' Storno ambalaze je kontra-stav u knjizi (AMB-10-ODL-16), kao kod otkupa.
+    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_OTPREMNICA, otpremnicaID
 
     StornoOtpremnica = True
     Exit Function
@@ -378,7 +386,23 @@ End Function
 ' PRIJEMNICA
 ' ============================================================
 
-Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String) As Boolean
+' STORNO PRIJEMNICE IDE PO PrijemnicaID-u (S6 korak 4, odluka 2) -- jedini ulaz.
+'
+' Od koraka 2 je dokument JEDAN red zaglavlja sa 1..2 stavke, pa "svih redova
+' broja" vise nema; StornoPrijemnicaByBroj_TX je obrisan. Broj nose dva kupca i
+' dva dokumenta istog kupca, a sa generacijom je stari ulaz broj ignorisao.
+'
+' skiniPalete = False samo kad operater to IZRICITO bira: ISPRAVKA (palete cekaju
+' novu prijemnicu) i DUPLI "ne diraj palete" (MANUAL recovery). Neuspeh nikad ne
+' vodi u tu granu -- tada pada ceo storno (R3).
+'
+' outRazlog: ZASTO je storno odbijen, citljivo operateru (review #438: ekran je
+' javljao samo "Storno prijemnice nije uspeo", pa operater nije znao da je, npr.,
+' paleta preradjena). Prazno kad je storno prosao.
+Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String, _
+                                    Optional ByVal skiniPalete As Boolean = True, _
+                                    Optional ByRef outPaletnihStavki As Long, _
+                                    Optional ByRef outRazlog As String) As Boolean
     Const SRC As String = "StornoPrijemnica_TX"
 
     Dim tx As clsTransaction
@@ -386,13 +410,12 @@ Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String) As Boolean
 
     On Error GoTo EH
 
+    outPaletnihStavki = 0
+    outRazlog = ""
     tx.BeginTx
-    tx.AddTableSnapshot TBL_PRIJEMNICA
-    tx.AddTableSnapshot TBL_FAKTURE
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    SnimiZaStornoPrijemnice tx
 
-    If Not StornoPrijemnica(prijemnicaID) Then
+    If Not StornoPrijemnica(prijemnicaID, tx, skiniPalete, outPaletnihStavki) Then
         Err.Raise ERR_STORNO_BASE + 4, SRC, _
                   "StornoPrijemnica nije uspeo. PrijemnicaID=" & prijemnicaID
     End If
@@ -406,135 +429,140 @@ Public Function StornoPrijemnica_TX(ByVal prijemnicaID As String) As Boolean
     Exit Function
 
 EH:
+    outPaletnihStavki = 0
+    outRazlog = StornoRazlogOperateru(Err.description)
     HandleStornoTxError SRC, "Prijemnica", prijemnicaID, tx
     StornoPrijemnica_TX = False
 End Function
 
-Public Function StornoPrijemnica(ByVal prijemnicaID As String) As Boolean
+' Poruka greske za operatera: LogAndReraise na svakom nivou dodaje prefiks
+' "Source=<procedura> | ", pa je izvorni razlog posle POSLEDNJEG " | ". Prazan
+' opis ostaje prazan -- pozivalac tada javlja samo neuspeh.
+Public Function StornoRazlogOperateru(ByVal opis As String) As String
+    Dim k As Long
+    k = InStrRev(opis, " | ")
+    If k > 0 Then
+        StornoRazlogOperateru = Trim$(Mid$(opis, k + 3))
+    Else
+        StornoRazlogOperateru = Trim$(opis)
+    End If
+End Function
+
+' JEDAN skup snimaka za SVAKOG pozivaoca storna prijemnice (S6 korak 4, KI-031).
+'
+' Kaskada zbirne je tblPrijemnica snimala samo u jednoj grani, a subjekat je
+' stornirala u drugoj -- rollback je vracao sve osim zaglavlja. Skup je SIRI od
+' onoga sto jezgro pise (stavke prijemnice, faktura i njene stavke): rollback
+' vraca ceo dokument i njegovu okolinu, a jezgro posebno TRAZI ono sto samo menja
+' (RequireSnimakZaStornoPrijemnice), pa pozivalac koji preskoci ovaj poziv pada
+' glasno, pre prvog upisa. AddTableSnapshot preskace vec snimljenu tabelu.
+Public Sub SnimiZaStornoPrijemnice(ByVal tx As clsTransaction)
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+End Sub
+
+' JEZGRO STORNA PRIJEMNICE (S6 korak 4). Storno ponistava TRI dogadjaja --
+' palete, dokument i knjigu -- i svi padaju ZAJEDNO ili nijedan (R3):
+'
+'   1) snimci     tx MORA da snima svaku tabelu koju jezgro menja (KI-031);
+'   2) provere    red postoji jednom i nije storniran; dokument nije fakturisan
+'                 (odluka 1); preradjena paleta se proverava u paletnom motoru,
+'                 pre njegove prve mutacije (odluka 3);
+'   3) upisi      palete -> Stornirano -> bind -> kontra-stav knjige.
+'
+' Stornirano ne ide pre posledica van knjige (R4), a knjiga ide POSLE bind-a, jer
+' AMB-10-ODL-15 trazi da dokument vezuje samo pisac koji ga je u ovoj transakciji
+' stvarno promenio. Pad bilo gde vraca SVE rollback-om pozivaoca: zato tacka 1.
+'
+' Faktura se ovde vise ne pise: fakturisana prijemnica se odbija, pa je stara
+' grana osirotelosti (MarkFakturaOrphaned) postala nedostizna i obrisana je.
+Public Function StornoPrijemnica(ByVal prijemnicaID As String, _
+                                 ByVal tx As clsTransaction, _
+                                 Optional ByVal skiniPalete As Boolean = True, _
+                                 Optional ByRef outPaletnihStavki As Long) As Boolean
     Const SRC As String = "StornoPrijemnica"
 
     On Error GoTo EH
 
+    outPaletnihStavki = 0
+    RequireSnimakZaStornoPrijemnice tx, SRC
+
     Dim rowPrij As Long
     rowPrij = RequireStornoAllowed(TBL_PRIJEMNICA, prijemnicaID, COL_PRJ_ID, SRC)
 
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC
-    RequireColumnIndex TBL_FAKTURE, COL_FAK_ID, SRC
-    RequireColumnIndex TBL_FAKTURE, COL_OSIROCENO_OD, SRC
-    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC
-    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC
-    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD, SRC
-
-    Dim prijData As Variant
-    prijData = GetTableData(TBL_PRIJEMNICA)
-
-    If IsEmpty(prijData) Then
-        Err.Raise ERR_STORNO_BASE + 30, SRC, _
-                  "Tabela prijemnica je prazna."
+    Dim razlogFak As String
+    razlogFak = FakturisanaPrijemnicaRazlog(prijemnicaID)
+    If Len(razlogFak) > 0 Then
+        Err.Raise ERR_STORNO_BASE + 74, SRC, razlogFak
     End If
 
-    Dim colFakturisano As Long
-    Dim colFakturaID As Long
-    Dim fakturaID As String
-
-    colFakturisano = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC)
-    colFakturaID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC)
-
-    fakturaID = Trim$(CStr(prijData(rowPrij, colFakturaID)))
+    If skiniPalete Then
+        outPaletnihStavki = modPaletniList.SkiniPaleteZaStornoPrijemnice(tx, prijemnicaID, SRC)
+    End If
 
     MarkRowStornirano TBL_PRIJEMNICA, rowPrij, SRC
 
-    If UCase$(Trim$(CStr(prijData(rowPrij, colFakturisano)))) = "DA" Then
-        RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURISANO, "", SRC
-        RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURA_ID, "", SRC
+    ' Vezivanje stoji POSLE izmene zaglavlja (AMB-10-ODL-15): ova transakcija je
+    ' dokument stvarno promenila, pa sme da tvrdi da ga poseduje.
+    tx.BindSourceDocument DOK_TIP_PRIJEMNICA, prijemnicaID
 
-        If Len(fakturaID) > 0 Then
-            MarkFakturaOrphaned fakturaID, prijemnicaID
-            MarkFakturaStavkeOrphaned fakturaID, prijemnicaID
+    ' Storno ambalaze je kontra-stav u knjizi (AMB-10-ODL-16), kao kod otkupa.
+    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_PRIJEMNICA, prijemnicaID
+
+    If mTestPrjStornoPadni Then
+        If IsTestMode() Then
+            Err.Raise ERR_STORNO_BASE + 75, SRC, _
+                      "TEST: namerna greska posle svih upisa storna prijemnice (rollback dokaz)"
         End If
     End If
-
-    StornoAmbalazaByDokument prijemnicaID, DOK_TIP_PRIJEMNICA
 
     StornoPrijemnica = True
     Exit Function
 
 EH:
+    outPaletnihStavki = 0
     LogAndReraise SRC
 End Function
 
-' Storniraj SVE aktivne redove prijemnice za dati BrojPrijemnice (Klasa I i II
-' dele isti broj, zaseban red po klasi). Mirror StornoOtkupByBrDok_TX.
-Public Function StornoPrijemnicaByBroj_TX(ByVal brBroj As String, _
-                                          Optional ByVal generacijaID As String = "") As Boolean
-    Const SRC As String = "StornoPrijemnicaByBroj_TX"
-
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-
-    On Error GoTo EH
-
-    RequireNonBlank brBroj, "BrojPrijemnice", SRC
-
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_PRIJEMNICA
-    tx.AddTableSnapshot TBL_FAKTURE
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
-
-    Dim data As Variant
-    data = GetTableData(TBL_PRIJEMNICA)
-    If IsEmpty(data) Then
-        Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_PRIJEMNICA
+' KI-031 PO KONSTRUKCIJI: jezgro TRAZI snimak svake tabele koju menja, pre prvog
+' upisa. Zakrpa jednog pozivaoca bi ostavila sledeceg otvorenog -- invarijanta
+' ide u jezgro, ne u omotac.
+Private Sub RequireSnimakZaStornoPrijemnice(ByVal tx As clsTransaction, _
+                                           ByVal sourceName As String)
+    If tx Is Nothing Then
+        Err.Raise ERR_STORNO_BASE + 73, sourceName, _
+                  "Storno prijemnice trazi aktivnu transakciju."
     End If
-
-    ' Sa generacijom se dokument bira po identitetu, pa kapija nad brojem nije
-    ' potrebna -- bez ovoga bi kapija obarala potpuno legitimnu operaciju nad
-    ' jednim od dva dokumenta istog broja.
-    If Len(Trim$(generacijaID)) = 0 Then _
-        RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brBroj, SRC, COL_PRJ_KUPAC
-
-    Dim colBr As Long, colID As Long, colStorno As Long
-    colBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
-    Dim colGen As Long: colGen = GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID)
-    colID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
-    colStorno = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
-
-    Dim ids As Collection: Set ids = New Collection
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If RedJeIzabranogDokumenta(data, i, colBr, colGen, brBroj, generacijaID, SRC) Then
-            If Not IsStorniranoValue(data(i, colStorno)) Then
-                ids.Add Trim$(CStr(data(i, colID)))
-            End If
+    Dim t As Variant
+    For Each t In Array(TBL_PRIJEMNICA, TBL_AMBALAZA, TBL_PALETA, TBL_PALETA_STAVKA)
+        If Not tx.ImaSnapshot(CStr(t)) Then
+            Err.Raise ERR_STORNO_BASE + 73, sourceName, _
+                      "Storno prijemnice: transakcija ne snima " & CStr(t) & _
+                      " -- rollback ne bi vratio ceo dokument (KI-031). " & _
+                      "Pozivalac snima kroz SnimiZaStornoPrijemnice."
         End If
-    Next i
+    Next t
+End Sub
 
-    If ids.count = 0 Then
-        Err.Raise ERR_STORNO_BASE + 9, SRC, _
-                  "Nema aktivne prijemnice za broj: " & brBroj
-    End If
-
-    Dim k As Long
-    For k = 1 To ids.count
-        If Not StornoPrijemnica(CStr(ids(k))) Then
-            Err.Raise ERR_STORNO_BASE + 4, SRC, _
-                      "StornoPrijemnica nije uspeo. PrijemnicaID=" & CStr(ids(k))
-        End If
-    Next k
-
-    tx.CommitTx
-
-    StornoPrijemnicaByBroj_TX = True
-    MonitorStornoSuccess SRC, "Prijemnica", brBroj
-
-    Set tx = Nothing
-    Exit Function
-
-EH:
-    HandleStornoTxError SRC, "Prijemnica", brBroj, tx
-    StornoPrijemnicaByBroj_TX = False
+' FAKTURISANA PRIJEMNICA SE NE STORNIRA (S6 korak 4, odluka 1). Razlog odbijanja,
+' citljiv operateru; prazno = dokument nije fakturisan. JEDAN tekst za jezgro
+' storna i okvir ispravke (KI-040) -- dva teksta bi se razisla. Delimicno
+' fakturisan dokument se odbija kao fakturisan.
+'
+' Fakturisanost se ne racuna ovde: od S6 koraka 5 je izvedena iz aktivnih linija
+' fakture u JEDNOM telu, modFaktura.PrijemnicaJeFakturisana (FAK-LIN-03), koje
+' pitaju i lista, mreza i uvid. Do tada je ovde stajao drugi predikat (kes
+' Fakturisano ILI linija), a lista je citala treci izvor (KI-038).
+Public Function FakturisanaPrijemnicaRazlog(ByVal prijemnicaID As String) As String
+    Dim fak As String
+    If Not modFaktura.PrijemnicaJeFakturisana(prijemnicaID, fak) Then Exit Function
+    FakturisanaPrijemnicaRazlog = "Prijemnica " & Trim$(prijemnicaID) & _
+        " je fakturisana (faktura " & fak & "). Prvo stornirajte fakturu, pa prijemnicu."
 End Function
 
 ' ============================================================
@@ -549,10 +577,11 @@ Public Function StornoFaktura_TX(ByVal fakturaID As String) As Boolean
 
     On Error GoTo EH
 
+    ' Prijemnica se ne snima: od S6 koraka 5 je storno fakture ne pise --
+    ' oslobadja se sama, jer joj je fakturisanost izvedena iz linija.
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
-    tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_NOVAC
     ' R3/krug 5 (revizija #248): GP grana oslobadja UTOVAR
     ' (ReleaseUtovarFromFaktura pise tblUtovar) -- bez snapshota bi
@@ -595,14 +624,11 @@ Public Function StornoFaktura(ByVal fakturaID As String) As Boolean
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_ID, SRC
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC
-    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC
 
     MarkRowStornirano TBL_FAKTURE, rowFak, SRC
     RequireUpdateCell TBL_FAKTURE, rowFak, COL_FAK_STATUS, STATUS_STORNIRANO, SRC
 
-    StornoFakturaStavkeAndReleasePrijemnice fakturaID
+    StornoFakturaStavke fakturaID
     ' R3 rollback dokaz: tacka je POSLE oslobadjanja prijemnica/prerada
     ' a PRE kraja -- pukne li ovde, TX mora da vrati i tblPrerada.
     If mTestFailPosleRelease Then
@@ -623,6 +649,14 @@ End Function
 Public Sub StornoTestFailPosleRelease(ByVal fail As Boolean)
     If Not IsTestMode() Then Exit Sub
     mTestFailPosleRelease = fail
+End Sub
+
+' Pali/gasi namernu gresku na kraju jezgra storna prijemnice (v.
+' mTestPrjStornoPadni). Paljenje van test rezima ne radi nista; gasenje radi
+' uvek, da ga ResetSeamova ugasi bez obzira na rezim.
+Public Sub StornoPrijemnicePadniTest(ByVal pali As Boolean)
+    If pali And Not IsTestMode() Then Exit Sub
+    mTestPrjStornoPadni = pali
 End Sub
 
 ' ============================================================
@@ -1600,8 +1634,12 @@ End Function
 ' PRIVATE BUSINESS HELPERS
 ' ============================================================
 
-Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
-    Const SRC As String = "StornoFakturaStavkeAndReleasePrijemnice"
+' Linije fakture se storniraju. Prijemnica se time OSLOBADJA SAMA -- njena
+' fakturisanost je izvedena iz aktivnih linija (S6 korak 5, FAK-LIN-03), pa se na
+' njoj nista ne pise. Do koraka 5 je ovde stajao ReleasePrijemnicaFromFaktura,
+' koji je brisao kes Fakturisano/FakturaID na zaglavlju.
+Private Sub StornoFakturaStavke(ByVal fakturaID As String)
+    Const SRC As String = "StornoFakturaStavke"
 
     Dim stavkeData As Variant
     stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
@@ -1609,10 +1647,8 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
     If IsEmpty(stavkeData) Then Exit Sub
 
     Dim colFakID As Long
-    Dim colPrijID As Long
 
     colFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
-    colPrijID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
 
     Dim i As Long
 
@@ -1633,13 +1669,6 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
         If Trim$(CStr(stavkeData(i, colFakID))) = Trim$(fakturaID) Then
             MarkRowStornirano TBL_FAKTURA_STAVKE, i, SRC
 
-            Dim prijID As String
-            prijID = Trim$(CStr(stavkeData(i, colPrijID)))
-
-            If Len(prijID) > 0 Then
-                ReleasePrijemnicaFromFaktura prijID, fakturaID
-            End If
-
             If colUtID > 0 Then
                 Dim utID As String
                 utID = Trim$(CStr(nz(stavkeData(i, colUtID))))
@@ -1654,8 +1683,8 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
     Next i
 End Sub
 
-' GP par ReleasePrijemnicaFromFaktura (krug 5): storno GP fakture
-' oslobadja UTOVAR -- fail-closed na dupli ID, isti obrazac.
+' GP grana (krug 5): storno GP fakture oslobadja UTOVAR (njegov marker je
+' cinjenica utovara, ne izvedena) -- fail-closed na dupli ID.
 Private Sub ReleaseUtovarFromFaktura(ByVal utovarID As String, _
                                      ByVal fakturaID As String)
     Const SRC As String = "ReleaseUtovarFromFaktura"
@@ -1694,73 +1723,10 @@ Private Sub ReleaseUtovarFromFaktura(ByVal utovarID As String, _
     RequireUpdateCell TBL_UTOVAR, rowUt, COL_UT_FAKTURA_ID, "", SRC
 End Sub
 
-Private Sub ReleasePrijemnicaFromFaktura(ByVal prijemnicaID As String, _
-                                         ByVal fakturaID As String)
-    Const SRC As String = "ReleasePrijemnicaFromFaktura"
-
-    Dim rows As Collection
-    Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID)
-
-    If rows Is Nothing Then Exit Sub
-    If rows.count = 0 Then Exit Sub
-
-    If rows.count > 1 Then
-        Err.Raise ERR_STORNO_BASE + 50, SRC, _
-                  "Dupla PrijemnicaID vrednost: " & prijemnicaID
-    End If
-
-    Dim rowPrij As Long
-    rowPrij = CLng(rows(1))
-
-    RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURISANO, "", SRC
-    RequireUpdateCell TBL_PRIJEMNICA, rowPrij, COL_PRJ_FAKTURA_ID, "", SRC
-End Sub
-
-Private Sub MarkFakturaOrphaned(ByVal fakturaID As String, _
-                                ByVal prijemnicaID As String)
-    Const SRC As String = "MarkFakturaOrphaned"
-
-    Dim rows As Collection
-    Set rows = FindRows(TBL_FAKTURE, COL_FAK_ID, fakturaID)
-
-    If rows Is Nothing Then Exit Sub
-    If rows.count = 0 Then Exit Sub
-
-    If rows.count > 1 Then
-        Err.Raise ERR_STORNO_BASE + 51, SRC, _
-                  "Dupla FakturaID vrednost: " & fakturaID
-    End If
-
-    RequireUpdateCell TBL_FAKTURE, CLng(rows(1)), COL_OSIROCENO_OD, _
-                      prijemnicaID, SRC
-End Sub
-
-
-Private Sub MarkFakturaStavkeOrphaned(ByVal fakturaID As String, _
-                                      ByVal prijemnicaID As String)
-    Const SRC As String = "MarkFakturaStavkeOrphaned"
-
-    Dim stavkeData As Variant
-    stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
-
-    If IsEmpty(stavkeData) Then Exit Sub
-
-    Dim colFakID As Long
-    Dim colPrijID As Long
-
-    colFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
-    colPrijID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
-
-    Dim i As Long
-
-    For i = 1 To UBound(stavkeData, 1)
-        If Trim$(CStr(stavkeData(i, colPrijID))) = Trim$(prijemnicaID) And _
-           Trim$(CStr(stavkeData(i, colFakID))) = Trim$(fakturaID) Then
-            RequireUpdateCell TBL_FAKTURA_STAVKE, i, COL_OSIROCENO_OD, _
-                              prijemnicaID, SRC
-        End If
-    Next i
-End Sub
+' MarkFakturaOrphaned / MarkFakturaStavkeOrphaned su obrisani u S6 koraku 4:
+' storno fakturisane prijemnice se odbija (odluka 1), pa je grana osirotelosti
+' nedostizna. Korak 5 je nije vratio: put je storno fakture (linije se storniraju,
+' prijemnica postaje nefakturisana sama), pa storno prijemnice.
 
 Private Sub ResetNovacFakturaLink(ByVal fakturaID As String)
     Const SRC As String = "ResetNovacFakturaLink"
@@ -1791,575 +1757,15 @@ End Sub
 ' stornirane redove. Poziv ispod se sada razresava tamo.
 
 
-Private Sub StornoAmbalazaByDokument(ByVal dokumentID As String, _
-                                     ByVal dokumentTip As String)
-    Const SRC As String = "StornoAmbalazaByDokument"
-
-    Dim data As Variant
-    data = GetTableData(TBL_AMBALAZA)
-
-    If IsEmpty(data) Then Exit Sub
-
-    Dim colDokID As Long
-    Dim colDokTip As Long
-    Dim colStorno As Long
-
-    colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
-    colDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
-    colStorno = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
-    Dim colAmbID As Long
-    If StornoOpActive() Then colAmbID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC) _
-                       Else colAmbID = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
-
-    Dim i As Long
-
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colDokID))) = Trim$(dokumentID) And _
-           Trim$(CStr(data(i, colDokTip))) = Trim$(dokumentTip) Then
-
-            If Not IsStorniranoValue(data(i, colStorno)) Then
-                If StornoOpActive() Then JournalAmbStorno CStr(data(i, colAmbID)), CStr(data(i, colStorno)), SRC
-                MarkRowStornirano TBL_AMBALAZA, i, SRC
-            End If
-        End If
-    Next i
-End Sub
-
-' Zajednicki zurnal upis za ambalaza soft-delete (otkup + revers). PK obavezan.
-Private Sub JournalAmbStorno(ByVal ambID As String, ByVal oldStorno As String, ByVal SRC As String)
-    If Len(Trim$(ambID)) = 0 Then Err.Raise ERR_STORNO_BASE + 31, SRC, _
-        "Ambalaza red bez AmbID (PK) -> lossless storno nije moguc. Odbijeno."
-    JournalCell TBL_AMBALAZA, ambID, COL_STORNIRANO, oldStorno, "Da"
-End Sub
-
 ' ============================================================
-' OM <-> KOOPERANT AMBALAZA (revers): izdavanje (OM-Izlaz-Koop) i povrat
-' (OM-Ulaz-Koop), plus firma <-> OM (OM-Ulaz-Firma / OM-Izlaz-Firma).
+' STORNO REVERSA -- nema ga u ovom modulu od 10e-2.
 '
-' Identitet reversa je ReversID (REV-IDENT-01): isti na svim nogama jednog
-' dokumenta. Broj je labela -- isti broj legalno nose reversi druge stanice ili
-' drugog dana (A2 red REV) -- pa storno nikad ne bira po (broj, tip). ReversID
-' razresava ReversIDRazresi, noge dokumenta bira ReversRedoviRID. Novac unet uz
-' isti broj stornira se zasebno ("Novac").
-'
-' ambID = identitet kliknutog reda (ekran Storno, IdKolonaTipa REVERSI); ReversID
-' se cita iz njega, koja god da je noga. Bez njega se ReversID trazi po (broj,
-' tip) i mora biti jednoznacan, inace odbijeno.
+' Revers je ambalazni dokument (tblAmbalazaDokument, identitet AmbDokID), a
+' storno je kontra-stav u knjizi: modAmbalaza.StornirajAmbDokument_TX, sa
+' ekrana Storno kroz modStornoDok.StornoIzvrsi. Stari storno po nogama
+' (ReversID, zastavica Stornirano na redu tblAmbalaza) je obrisan zajedno sa
+' undo-om i ispravkom koji su ga zvali.
 ' ============================================================
-
-Public Function StornoOMKoopByBrDok_TX(ByVal brDok As String, _
-                                       ByVal dokumentTip As String, _
-                                       Optional ByVal ambID As String = "") As Boolean
-    Const SRC As String = "StornoOMKoopByBrDok_TX"
-
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-
-    On Error GoTo EH
-
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_STORNO_ZURNAL    ' zurnal upisi teku u istoj TX -> rollback ih povlaci
-
-    If Not StornoOMKoopByBrDok(brDok, dokumentTip, ambID) Then
-        Err.Raise ERR_STORNO_BASE + 3, SRC, _
-                  "StornoOMKoopByBrDok nije uspeo. Broj=" & brDok
-    End If
-
-    tx.CommitTx
-
-    StornoOMKoopByBrDok_TX = True
-    MonitorStornoSuccess SRC, dokumentTip, brDok
-
-    Set tx = Nothing
-    Exit Function
-
-EH:
-    HandleStornoTxError SRC, dokumentTip, brDok, tx
-    StornoOMKoopByBrDok_TX = False
-End Function
-
-' Markira AKTIVNE tblAmbalaza redove jednog ReversID-a. Raise ako ReversID nije
-' jednoznacan ili ga red nema, i ako aktivnog reda nema (forma prikazuje gresku).
-' Nijedan red nije promenjen pre nego sto je ceo skup nogu poznat.
-Public Function StornoOMKoopByBrDok(ByVal brDok As String, _
-                                    ByVal dokumentTip As String, _
-                                    Optional ByVal ambID As String = "") As Boolean
-    Const SRC As String = "StornoOMKoopByBrDok"
-    Dim owns As Boolean
-
-    On Error GoTo EH
-
-    RequireNonBlank brDok, "BrojDokumenta", SRC
-    RequireNonBlank dokumentTip, "DokumentTip", SRC
-
-    Dim data As Variant
-    data = GetTableData(TBL_AMBALAZA)
-    If IsEmpty(data) Then
-        Err.Raise ERR_STORNO_BASE + 20, SRC, "Tabela je prazna: " & TBL_AMBALAZA
-    End If
-
-    Dim colStorno As Long, colAmbID As Long
-    colStorno = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
-    colAmbID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
-
-    Dim reversID As String, razlog As String
-    razlog = ReversIDRazresi(ambID, brDok, dokumentTip, reversID, False)
-    If Len(razlog) > 0 Then Err.Raise ERR_STORNO_BASE + 23, SRC, razlog
-
-    Dim redovi As Collection
-    Set redovi = ReversRedoviRID(reversID, False)
-    If redovi.count = 0 Then
-        Err.Raise ERR_STORNO_BASE + 21, SRC, _
-                  "Aktivan revers nije pronadjen. Broj=" & brDok & " Tip=" & dokumentTip & _
-                  " ReversID=" & reversID
-    End If
-
-    ' Zurnal op po broju reversa (lossless undo; revers je cist soft-delete
-    ' ambalaze). ReversID undo cita iz AmbID-eva ove operacije.
-    owns = BeginStornoOp(dokumentTip, brDok)
-
-    Dim v As Variant, i As Long
-    For Each v In redovi
-        i = CLng(v)
-        JournalAmbStorno CStr(data(i, colAmbID)), CStr(data(i, colStorno)), SRC
-        MarkRowStornirano TBL_AMBALAZA, i, SRC
-    Next v
-
-    EndStornoOp owns
-    StornoOMKoopByBrDok = True
-    Exit Function
-
-EH:
-    EndStornoOp owns
-    LogAndReraise SRC
-End Function
-
-' Zauzima li AKTIVAN revers broj. dokumentTip prazan = bilo koji od cetiri smera
-' reversa (dele jedan niz). Sa (stanicaID, dan) pita niz: aktivnu nogu
-' Stanica tog broja i smera na toj stanici, tog dana -- to je pitanje duplikata
-' (undo garda), ne identiteta dokumenta. Bez stanice odgovara na sire pitanje
-' "ima li ijedan aktivan red (broj, tip)" -- dovoljno za poruku "nije pronadjen",
-' ali ne za odluku o mutaciji. Da li je BAS JEDAN revers aktivan pita se po
-' ReversID-u (ReversRedoviRID).
-'
-' FAIL-CLOSED: greska se DIZE. Ranije je vracala False, a "nema aktivnog" je
-' ovde odgovor koji pusta undo i zavrsetak ispravke.
-Public Function ActiveAmbalazaDokExists(ByVal brDok As String, _
-                                        ByVal dokumentTip As String, _
-                                        Optional ByVal stanicaID As String = "", _
-                                        Optional ByVal dan As Long = 0) As Boolean
-    Const SRC As String = "ActiveAmbalazaDokExists"
-    On Error GoTo EH
-    If Trim$(brDok) = "" Then Exit Function
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If IsEmpty(data) Then Exit Function
-    Dim colDokID As Long, colDokTip As Long, colStorno As Long
-    Dim colDat As Long, colEnt As Long, colEntTip As Long
-    colDokID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
-    colDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
-    colStorno = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
-    colDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
-    colEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-    colEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-    Dim saKljucem As Boolean: saKljucem = (Len(Trim$(stanicaID)) > 0)
-    Dim i As Long, tipOk As Boolean
-    For i = 1 To UBound(data, 1)
-        If Len(Trim$(dokumentTip)) = 0 Then
-            tipOk = ReversTipJe(NzToText(data(i, colDokTip)))
-        Else
-            tipOk = (Trim$(NzToText(data(i, colDokTip))) = Trim$(dokumentTip))
-        End If
-        If BrojJednak(data(i, colDokID), brDok) And tipOk Then
-            If Not IsStorniranoValue(data(i, colStorno)) Then
-                If Not saKljucem Then
-                    ActiveAmbalazaDokExists = True
-                    Exit Function
-                End If
-                If ReversNogaStaniceUKljucu(data, i, colEnt, colEntTip, colDat, stanicaID, dan) Then
-                    ActiveAmbalazaDokExists = True
-                    Exit Function
-                End If
-            End If
-        End If
-    Next i
-    Exit Function
-EH:
-    LogAndReraise "modStorno.ActiveAmbalazaDokExists"
-End Function
-
-' Je li cetvrti smer ambalaze revers (a ne otkup, otpremnica, prijemnica...).
-Public Function ReversTipJe(ByVal dokumentTip As String) As Boolean
-    Select Case Trim$(dokumentTip)
-        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, _
-             DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-            ReversTipJe = True
-    End Select
-End Function
-
-' IDENTITET REVERSA -- ReversID (REV-IDENT-01). Vraca "" kad je ReversID
-' jednoznacan (i popunjava ByRef polja), inace RAZLOG. Ne menja podatke.
-'
-'   ambID zadat  -> ReversID TOG reda, koja god da je noga (Kooperant ili
-'                   Stanica); broj i smer se citaju iz reda. Status storna se
-'                   ovde ne gleda: da li je dokument aktivan pita pozivalac
-'                   (ReversRedoviRID).
-'   ambID prazan -> ReversID se trazi medju redovima (broj, tip) zadatog statusa
-'                   storna; mora biti tacno jedan.
-'
-' Red bez ReversID-a se odbija -- bez fallback-a na broj, stanicu ili dan (B10).
-' Ambalaza uz otkup (DokumentID = OtkupID) nije revers: stornira se sa otkupom ->
-' razlog, i to PRE provere ReversID-a, koji ona ni nema.
-Public Function ReversIDRazresi(ByVal ambID As String, ByRef brDok As String, _
-                                ByRef dokumentTip As String, ByRef reversID As String, _
-                                ByVal storniran As Boolean) As String
-    Const SRC As String = "modStorno.ReversIDRazresi"
-    Dim data As Variant, i As Long, r As Long
-    Dim cID As Long, cDok As Long, cTip As Long, cSt As Long, cRid As Long
-    Dim rid As String, nadjeni As Object, bezID As String
-
-    reversID = ""
-    ambID = Trim$(ambID)
-
-    data = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(data) Then
-        ReversIDRazresi = "Revers " & brDok & " nije pronadjen (tblAmbalaza je prazna)."
-        Exit Function
-    End If
-    cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
-    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
-    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
-    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
-    cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC)
-
-    If Len(ambID) > 0 Then
-        For i = 1 To UBound(data, 1)
-            If BrojJednak(data(i, cID), ambID) Then
-                If r > 0 Then
-                    ReversIDRazresi = "Dva reda ambalaze nose AmbID " & ambID & _
-                                      " -> identitet reda nije jednoznacan."
-                    Exit Function
-                End If
-                r = i
-            End If
-        Next i
-        If r = 0 Then
-            ReversIDRazresi = "Red ambalaze " & ambID & " nije pronadjen."
-            Exit Function
-        End If
-        If Not ReversTipJe(NzToText(data(r, cTip))) Then
-            ReversIDRazresi = "Red ambalaze " & ambID & " nije revers (tip '" & _
-                              NzToText(data(r, cTip)) & "')."
-            Exit Function
-        End If
-        If Len(Trim$(brDok)) > 0 And Not BrojJednak(data(r, cDok), brDok) Then
-            ReversIDRazresi = "Red ambalaze " & ambID & " ne nosi broj " & brDok & "."
-            Exit Function
-        End If
-        If Len(Trim$(dokumentTip)) > 0 And _
-           Trim$(NzToText(data(r, cTip))) <> Trim$(dokumentTip) Then
-            ReversIDRazresi = "Red ambalaze " & ambID & " nije smer " & dokumentTip & "."
-            Exit Function
-        End If
-        brDok = Trim$(NzToText(data(r, cDok)))
-        dokumentTip = Trim$(NzToText(data(r, cTip)))
-    ElseIf Not ReversTipJe(dokumentTip) Then
-        ReversIDRazresi = "Tip '" & dokumentTip & "' nije smer reversa."
-        Exit Function
-    End If
-
-    If Len(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, Trim$(brDok), COL_OTK_ID))) > 0 Then
-        ReversIDRazresi = "Ambalaza " & brDok & " je knjizena uz otkup -- stornira se " & _
-                          "sa otkupom, ne kao revers."
-        Exit Function
-    End If
-
-    If r > 0 Then
-        rid = Trim$(NzToText(data(r, cRid)))
-        If Len(rid) = 0 Then
-            ReversIDRazresi = "Red ambalaze " & ambID & " nema ReversID -> identitet reversa " & _
-                              "nije poznat (integritet B10). Odbijeno."
-            Exit Function
-        End If
-        reversID = rid
-        Exit Function
-    End If
-
-    Set nadjeni = CreateObject("Scripting.Dictionary")
-    nadjeni.CompareMode = vbTextCompare
-    For i = 1 To UBound(data, 1)
-        If BrojJednak(data(i, cDok), brDok) Then
-            If Trim$(NzToText(data(i, cTip))) = Trim$(dokumentTip) Then
-                If IsStorniranoValue(data(i, cSt)) = storniran Then
-                    rid = Trim$(NzToText(data(i, cRid)))
-                    If Len(rid) = 0 Then
-                        If Len(bezID) = 0 Then bezID = Trim$(NzToText(data(i, cID)))
-                    Else
-                        nadjeni(rid) = True
-                    End If
-                End If
-            End If
-        End If
-    Next i
-
-    If Len(bezID) > 0 Then
-        ReversIDRazresi = "Revers " & brDok & " [" & dokumentTip & "] ima red bez ReversID-a (" & _
-                          bezID & ") -> identitet reversa nije poznat (integritet B10). Odbijeno."
-    ElseIf nadjeni.count > 1 Then
-        ReversIDRazresi = "Broj reversa " & brDok & " [" & dokumentTip & "] nosi " & nadjeni.count & _
-                          " dokumenta -> izaberi red iz liste ili resi rucno."
-    ElseIf nadjeni.count = 0 Then
-        ReversIDRazresi = "Revers " & brDok & " [" & dokumentTip & "] nije pronadjen" & _
-                          IIf(storniran, " medju storniranima", "") & "."
-    Else
-        reversID = CStr(nadjeni.keys()(0))
-    End If
-End Function
-
-' Indeksi redova tblAmbalaza (= indeksi u GetTableData) jednog ReversID-a zadatog
-' statusa storna -- sve noge dokumenta, svih tipova ambalaze. Nema uparivanja nogu:
-' noga Kooperant pripada dokumentu jer nosi njegov ReversID, ne zato sto je istog
-' broja i dana kao neka noga Stanica. Prazan ReversID ne bira nista.
-' GRANICA: pre izbora se proverava da SVI redovi koji nose taj ReversID cine jedan
-' revers (ReversIDGranica). ReversID bira redove za mutaciju, pa red tudjeg
-' dokumenta sa istim ReversID-om ne sme da se tiho pokupi -- Err.Raise, nijedan red
-' nije izabran.
-Public Function ReversRedoviRID(ByVal reversID As String, ByVal storniran As Boolean) As Collection
-    Const SRC As String = "modStorno.ReversRedoviRID"
-    Dim res As Collection: Set res = New Collection
-    Set ReversRedoviRID = res
-    reversID = Trim$(reversID)
-    If Len(reversID) = 0 Then Exit Function
-
-    Dim granica As String: granica = ReversIDGranica(reversID)
-    If Len(granica) > 0 Then Err.Raise ERR_STORNO_BASE + 24, SRC, granica
-
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(data) Then Exit Function
-    Dim cRid As Long, cSt As Long, i As Long
-    cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC)
-    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
-    For i = 1 To UBound(data, 1)
-        If StrComp(Trim$(NzToText(data(i, cRid))), reversID, vbTextCompare) = 0 Then
-            If IsStorniranoValue(data(i, cSt)) = storniran Then res.Add i
-        End If
-    Next i
-End Function
-
-' GRANICA DOKUMENTA -- svi redovi tblAmbalaza koji nose ReversID (i stornirani)
-' moraju biti JEDAN revers, jer ReversID bira redove za storno, undo i stampu:
-'   - svaki red je jedan od cetiri smera reversa (red drugog prometa ambalaze,
-'     npr. otpremnica, sa istim ReversID-om nije noga);
-'   - nijedan red nije ambalaza uz otkup (DokumentID = OtkupID);
-'   - svi redovi nose isti broj, tip dokumenta i dan, i istog vozaca;
-'   - noge Stanica istu stanicu, noge Kooperant istog kooperanta; red drugog tipa
-'     entiteta nije noga reversa.
-' Isti ugovor meri B10 (modIntegritet) nad aktivnim redovima; ovde je kapija pred
-' mutacijom i stampom, fail-closed. Broj nogu po tipu ambalaze NIJE granica:
-' revers kome fali noga ne dira tudj red -- to prijavljuje B10.
-' "" = granica cista; inace razlog. Prazan ReversID i ReversID bez redova ovde
-' nisu nalaz -- to proveravaju pozivaoci (ReversIDRazresi, ReversRedoviRID).
-Public Function ReversIDGranica(ByVal reversID As String) As String
-    Const SRC As String = "modStorno.ReversIDGranica"
-    reversID = Trim$(reversID)
-    If Len(reversID) = 0 Then Exit Function
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(data) Then Exit Function
-    Dim cID As Long, cDok As Long, cTip As Long, cDat As Long
-    Dim cEnt As Long, cEntTip As Long, cVoz As Long, cRid As Long
-    cID = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, SRC)
-    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
-    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
-    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
-    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-    cVoz = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, SRC)
-    cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC)
-
-    Dim i As Long, n As Long, amb As String, tip As String, entTip As String, ent As String
-    Dim dok As String, tipDok As String, dan As Long, danReda As Long
-    Dim stanica As String, koop As String, vozac As String
-    Dim imaSt As Boolean, imaKoop As Boolean
-    For i = 1 To UBound(data, 1)
-        If StrComp(Trim$(NzToText(data(i, cRid))), reversID, vbTextCompare) = 0 Then
-            amb = Trim$(NzToText(data(i, cID)))
-            tip = Trim$(NzToText(data(i, cTip)))
-            If Not ReversTipJe(tip) Then
-                ReversIDGranica = "Red ambalaze " & amb & " nosi ReversID " & reversID & ", a nije revers (tip '" & _
-                                  tip & "') -> granica dokumenta je narusena (integritet B10). Odbijeno."
-                Exit Function
-            End If
-            If Not IsDate(data(i, cDat)) Then
-                ReversIDGranica = "Red ambalaze " & amb & " reversa " & reversID & " nema datum -> granica " & _
-                                  "dokumenta nije proverljiva. Odbijeno."
-                Exit Function
-            End If
-            danReda = Int(CDbl(CDate(data(i, cDat))))
-            n = n + 1
-            If n = 1 Then
-                dok = Trim$(NzToText(data(i, cDok)))
-                tipDok = tip
-                dan = danReda
-                vozac = Trim$(NzToText(data(i, cVoz)))
-            ElseIf Not BrojJednak(data(i, cDok), dok) Or tip <> tipDok Or danReda <> dan Then
-                ReversIDGranica = "Red ambalaze " & amb & " nosi ReversID " & reversID & ", a drugi broj, smer ili dan (" & _
-                                  Trim$(NzToText(data(i, cDok))) & " [" & tip & "], ocekivano " & dok & " [" & tipDok & _
-                                  "]) -> granica dokumenta je narusena (integritet B10). Odbijeno."
-                Exit Function
-            ElseIf StrComp(Trim$(NzToText(data(i, cVoz))), vozac, vbBinaryCompare) <> 0 Then
-                ReversIDGranica = "Noge reversa " & reversID & " nose razlicite vozace (" & amb & ") -> granica " & _
-                                  "dokumenta je narusena (integritet B10). Odbijeno."
-                Exit Function
-            End If
-            entTip = Trim$(NzToText(data(i, cEntTip)))
-            ent = Trim$(NzToText(data(i, cEnt)))
-            Select Case entTip
-                Case "Stanica"
-                    If Not imaSt Then
-                        stanica = ent: imaSt = True
-                    ElseIf StrComp(ent, stanica, vbBinaryCompare) <> 0 Then
-                        ReversIDGranica = "Noge Stanica reversa " & reversID & " nose razlicite stanice (" & amb & _
-                                          ") -> granica dokumenta je narusena (integritet B10). Odbijeno."
-                        Exit Function
-                    End If
-                Case "Kooperant"
-                    If Not imaKoop Then
-                        koop = ent: imaKoop = True
-                    ElseIf StrComp(ent, koop, vbBinaryCompare) <> 0 Then
-                        ReversIDGranica = "Noge Kooperant reversa " & reversID & " nose razlicite kooperante (" & amb & _
-                                          ") -> granica dokumenta je narusena (integritet B10). Odbijeno."
-                        Exit Function
-                    End If
-                Case Else
-                    ReversIDGranica = "Red ambalaze " & amb & " nosi ReversID " & reversID & ", a nije noga reversa " & _
-                                      "(EntitetTip '" & entTip & "') -> granica dokumenta je narusena. Odbijeno."
-                    Exit Function
-            End Select
-        End If
-    Next i
-
-    If n > 0 Then
-        If Len(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, dok, COL_OTK_ID))) > 0 Then
-            ReversIDGranica = "ReversID " & reversID & " nose redovi ambalaze uz otkup " & dok & _
-                              " -> to nije revers (integritet B10). Odbijeno."
-        End If
-    End If
-End Function
-
-' (stanica, dan) reversa -- iz njegovih nogu Stanica, bez obzira na storno.
-' Identitet dokumenta je ReversID; stanica i dan trebaju zauzetosti broja (undo
-' garda) i opisu dokumenta (pregled, pitanje ispravke).
-' "" = noge Stanica nose jednu stanicu i jedan dan (ByRef popunjen); inace razlog.
-' Revers bez noge Stanica ili sa dve stanice je nalaz B10 -- ovde se odbija.
-Public Function ReversStanicaDan(ByVal reversID As String, ByRef stanicaID As String, _
-                                 ByRef dan As Long) As String
-    Const SRC As String = "modStorno.ReversStanicaDan"
-    stanicaID = "": dan = 0
-    reversID = Trim$(reversID)
-    If Len(reversID) = 0 Then
-        ReversStanicaDan = "Revers bez ReversID-a -> stanica i dan nisu poznati. Odbijeno."
-        Exit Function
-    End If
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(data) Then
-        ReversStanicaDan = "Revers " & reversID & " nije pronadjen (tblAmbalaza je prazna)."
-        Exit Function
-    End If
-    Dim cRid As Long, cEnt As Long, cEntTip As Long, cDat As Long
-    cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC)
-    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
-
-    Dim i As Long, k As String, nasao As String
-    For i = 1 To UBound(data, 1)
-        If StrComp(Trim$(NzToText(data(i, cRid))), reversID, vbTextCompare) = 0 Then
-            If Trim$(NzToText(data(i, cEntTip))) = "Stanica" Then
-                If Not IsDate(data(i, cDat)) Then
-                    stanicaID = "": dan = 0
-                    ReversStanicaDan = "Noga Stanica reversa " & reversID & " nema datum -> dan nije poznat. Odbijeno."
-                    Exit Function
-                End If
-                k = UCase$(Trim$(NzToText(data(i, cEnt)))) & "|" & CStr(Int(CDbl(CDate(data(i, cDat)))))
-                If Len(nasao) = 0 Then
-                    nasao = k
-                    stanicaID = Trim$(NzToText(data(i, cEnt)))
-                    dan = Int(CDbl(CDate(data(i, cDat))))
-                ElseIf k <> nasao Then
-                    stanicaID = "": dan = 0
-                    ReversStanicaDan = "Noge Stanica reversa " & reversID & " nose vise stanica ili dana " & _
-                                       "(integritet B10). Odbijeno."
-                    Exit Function
-                End If
-            End If
-        End If
-    Next i
-    If Len(nasao) = 0 Then
-        ReversStanicaDan = "Revers " & reversID & " nema nogu Stanica -> stanica i dan nisu poznati. Odbijeno."
-    End If
-End Function
-
-' ReversID dokumenta koji nosi broj u nizu (stanica, dan), zadatog statusa storna.
-' Broj ovde nije identitet nego ulaz iz snimanja: pisac vraca samo uspeh, pa
-' zavrsetak ispravke zamenu nalazi po (broj, stanica, dan) -- a zauzetost broja
-' (BrojZauzetRevers, sa storniranima) drzi najvise jedan dokument preko sva cetiri
-' smera. dokumentTip prazan = bilo koji smer. Vise nogu Stanica istog ReversID-a
-' (vise tipova ambalaze) je JEDAN dokument.
-' "" = nijedan, vise razlicitih ReversID-a, ili noga bez ReversID-a -- identitet
-' nije jednoznacan, pozivalac odbija (fail-closed), a ne upisuje broj umesto ID-a.
-Public Function ReversIDStanice(ByVal brDok As String, ByVal dokumentTip As String, _
-                                ByVal stanicaID As String, ByVal dan As Long, _
-                                ByVal storniran As Boolean) As String
-    Const SRC As String = "modStorno.ReversIDStanice"
-    If Len(Trim$(stanicaID)) = 0 Then Exit Function
-    Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
-    If Not IsArray(data) Then Exit Function
-    Dim cDok As Long, cTip As Long, cDat As Long, cEnt As Long, cEntTip As Long
-    Dim cSt As Long, cRid As Long
-    cDok = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, SRC)
-    cTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
-    cDat = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, SRC)
-    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
-    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
-    cSt = RequireColumnIndex(TBL_AMBALAZA, COL_STORNIRANO, SRC)
-    cRid = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_REVERS_ID, SRC)
-
-    Dim i As Long, tipOk As Boolean, rid As String, nasao As String
-    For i = 1 To UBound(data, 1)
-        If BrojJednak(data(i, cDok), brDok) Then
-            If Len(Trim$(dokumentTip)) = 0 Then
-                tipOk = ReversTipJe(NzToText(data(i, cTip)))
-            Else
-                tipOk = (Trim$(NzToText(data(i, cTip))) = Trim$(dokumentTip))
-            End If
-            If tipOk Then
-                If IsStorniranoValue(data(i, cSt)) = storniran Then
-                    If ReversNogaStaniceUKljucu(data, i, cEnt, cEntTip, cDat, stanicaID, dan) Then
-                        rid = Trim$(NzToText(data(i, cRid)))
-                        If Len(rid) = 0 Then Exit Function
-                        If Len(nasao) = 0 Then
-                            nasao = rid
-                        ElseIf StrComp(rid, nasao, vbTextCompare) <> 0 Then
-                            Exit Function
-                        End If
-                    End If
-                End If
-            End If
-        End If
-    Next i
-    ReversIDStanice = nasao
-End Function
-
-' Je li red i noga Stanica reversa (stanica, dan)?
-Private Function ReversNogaStaniceUKljucu(ByRef data As Variant, ByVal i As Long, _
-                                          ByVal cEnt As Long, ByVal cEntTip As Long, _
-                                          ByVal cDat As Long, ByVal stanicaID As String, _
-                                          ByVal dan As Long) As Boolean
-    If Trim$(NzToText(data(i, cEntTip))) <> "Stanica" Then Exit Function
-    If Not BrojJednak(data(i, cEnt), stanicaID) Then Exit Function
-    If Not IsDate(data(i, cDat)) Then Exit Function
-    ReversNogaStaniceUKljucu = (Int(CDbl(CDate(data(i, cDat)))) = dan)
-End Function
 
 ' ============================================================
 ' PRIVATE GUARDS / LOW-LEVEL HELPERS

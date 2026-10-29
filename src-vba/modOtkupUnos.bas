@@ -39,6 +39,10 @@ Option Explicit
 
 Public Const OTKUNOS_BUILD As String = "v6-ui-114"
 
+' Tekst poslednjeg pitanja o manjku ambalaze, zabelezen u test rezimu (seam
+' PotvrdiManjakAmbalaze, KI-015). "" = pitanja nije bilo.
+Private mPitanjeManjkaTest As String
+
 '--------------------------------------------------------------- ULAZ
 ' Prazan recnik sa svim kljucevima - da pozivalac ne mora da pamti spisak.
 Public Function NoviOtkupUnos() As Object
@@ -156,8 +160,10 @@ Public Function OtkupValidiraj(ByVal p As Object, ByRef fokus As String) As Stri
         End If
     End If
 
-    If (kolAmb > 0 Or kolAmbII > 0 Or kolAmbIzd > 0) And Len(S(p, "tipAmb")) = 0 Then
-        fokus = "tipAmb": OtkupValidiraj = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"): Exit Function
+    ' KI-021: tip iz sifarnika (AMB-INV-12); tip od samih nevidljivih znakova je prazan.
+    If kolAmb > 0 Or kolAmbII > 0 Or kolAmbIzd > 0 Then
+        OtkupValidiraj = TipAmbalazePoruka(S(p, "tipAmb"))
+        If Len(OtkupValidiraj) > 0 Then fokus = "tipAmb": Exit Function
     End If
 
     ' Broj gajbi je OBAVEZAN za svaku unetu klasu kad je validacija ukljucena.
@@ -306,26 +312,10 @@ End Function
 ' ambalaza i poruke operateru su isti posao u oba slucaja.
 Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
                            Optional ByVal ispravljaOtkupID As String = "") As String
-    Dim res As String, hlPending As String, hlNewPrij As String, hlWarn As String
-    Dim doHlRelink As Boolean, hlRelWarn As String, hlGajbDiff As Boolean
+    Dim res As String
     Dim errDesc As String
     On Error GoTo EH
     poruke = ""
-
-    ' ISPRAVKA HLADNJACKOG LANCA JE FAIL-CLOSED DOK LANAC STOJI.
-    '
-    ' Pending relink znaci: operater je stornirao stari hladnjacki dokument i
-    ' izabrao "Uneti ispravku". Ispravka nije samo nov otkup -- ona trazi i nov
-    ' nizvodni lanac, da bi se palete stare prijemnice imale gde prevezati.
-    '
-    ' Lanac je pauziran do PR7, pa se taj drugi deo ne moze izvrsiti. Zato se
-    ' STAJE PRE PISCA: bez ovoga bi nastao nov otkup, pending bi bio POTROSEN, a
-    ' operater bi dobio samo "nema prijemnice" -- pola ispravke, i to nepovratno.
-    If Len(GetHladnjacaRelinkPending()) > 0 Then
-        poruke = poruke & Poruka("OTKUNOS_MSG_ISPRAVKA_PAUZIRANA") & " " & _
-                 GetHladnjacaRelinkPending() & vbCrLf
-        Exit Function
-    End If
 
     ' KANONSKI PISAC. Sta vise NE ide u upis, i zasto:
     '
@@ -371,13 +361,44 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
     End If
 
     Dim greska As String, upozorenje As String
+    Dim ambErrNum As Long, ambDeficit As Double
     If Len(Trim$(ispravljaOtkupID)) > 0 Then
-        res = modOtkup.IspravkaOtkupa_TX(Trim$(ispravljaOtkupID), h, stavke, greska, upozorenje)
+        res = modOtkup.IspravkaOtkupa_TX(Trim$(ispravljaOtkupID), h, stavke, _
+                                         greska, upozorenje, , ambErrNum)
         ' Upozorenje NIJE greska (preplata posle smanjenja): ispravka prolazi, a
         ' operater to mora da vidi -- inace preplatu nadje tek na kartici.
         If Len(upozorenje) > 0 Then poruke = poruke & upozorenje & vbCrLf
     Else
-        res = CreateOtkup_TX(h, stavke, greska)
+        res = CreateOtkup_TX(h, stavke, greska, , ambErrNum)
+    End If
+
+    ' POTVRDA DEFICITA: pitanje operateru, ne greska (6.5, AMB-10-ODL-8).
+    '
+    ' Kooperant koji donese SVOJE gajbe pravi manjak na svom nalogu, a pokrice
+    ' toga je dug firme prema njemu -- pa ne sme da prodje tiho. Mereno kod
+    ' operatera: 5-10% otkupa, dakle izuzetak ali redovan.
+    '
+    ' EKRAN ZADRZAVA PODATKE: poziv se ponavlja ODAVDE, pa operater ne unosi
+    ' nista ponovo (odluka 03.10.2026). Slucaj se prepoznaje po BROJU greske, ne
+    ' po tekstu -- tekst je prevodiv i menja se, broj je ugovor.
+    '
+    ' Odbijena potvrda nije greska: res ostaje prazan, a pozivalac je vec dobio
+    ' tekst odbijenice u greska.
+    If ambErrNum = AMB_ERR_POTVRDA_DEFICITA Then
+        ambDeficit = modOtkup.OtkupDeficitKooperanta(h, stavke)
+        If ambDeficit > 0 Then
+            If PotvrdiManjakAmbalaze(AMB_NALOG_KOOPERANT, ambDeficit) Then
+                greska = ""
+                ambErrNum = 0
+                If Len(Trim$(ispravljaOtkupID)) > 0 Then
+                    res = modOtkup.IspravkaOtkupa_TX(Trim$(ispravljaOtkupID), h, stavke, _
+                                                     greska, upozorenje, ambDeficit, ambErrNum)
+                    If Len(upozorenje) > 0 Then poruke = poruke & upozorenje & vbCrLf
+                Else
+                    res = CreateOtkup_TX(h, stavke, greska, ambDeficit, ambErrNum)
+                End If
+            End If
+        End If
     End If
 
     If Len(res) = 0 Then
@@ -396,32 +417,88 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
     ' u ovom trenutku blok jos nije ponudjen radnom stolu, pa bi lanac pretekao
     ' operaterov izbor. Pravilo ("blok koji je vec u aktivnoj otpremnici ne
     ' dobija svoju") zivi u modAutoHladnjaca.AutoLanacHladnjaca, ne u pozivaocu.
-    SetPaletizeSkip False        ' toggle se vraca i kad lanac nije ni pokrenut
-
-    ' Relink aparat je NEDOSTIZAN dok je lanac pauziran: pending se hvata iznad,
-    ' pre pisca, pa dovde nikad ne stigne sa vrednoscu. Ostaje netaknut da ga PR7
-    ' vrati u pogon zajedno sa lancem.
-    If doHlRelink Then
-        SetHladnjacaRelinkPending ""         ' potrosi (idempotentno)
-        If Len(hlNewPrij) = 0 Then
-            poruke = poruke & Poruka("OTKUNOS_MSG_NEMA_PRIJEMNICE") & vbCrLf
-        ElseIf ReassignPaleteToPrijemnica_TX(hlPending, hlNewPrij, hlRelWarn, True, hlGajbDiff) Then
-            poruke = poruke & Poruka("OTKUNOS_MSG_PALETE_PREVEZANE") & " " & _
-                     hlPending & " " & ChrW(8594) & " " & hlNewPrij & vbCrLf
-            If Len(hlRelWarn) > 0 Then poruke = poruke & hlRelWarn & vbCrLf
-            If hlGajbDiff Then poruke = poruke & PaletaAdjustPrompt(hlNewPrij) & vbCrLf
-        Else
-            LogRelinkFailure hlPending, hlNewPrij, hlRelWarn
-            poruke = poruke & Poruka("OTKUNOS_MSG_PALETE_NISU") & " " & hlRelWarn & vbCrLf
-        End If
-    End If
+    '
+    ' Prevezivanja paleta stare hladnjacke prijemnice ovde VISE NEMA (S6 korak 7,
+    ' KI-046): jedini izvor mu je bila ponuda posle storna bloka, a ona je bila
+    ' nedostizna (A13). Prevezivanje siroce paleta je u Oporavku ("Prevezi").
 
     OtkupUpisi = res
     Exit Function
 EH:
     ' isto pravilo: opis pre logovanja (LogErr / Poruka cuvaju svoj Err)
     errDesc = Err.description
-    SetPaletizeSkip False        ' toggle ne sme da ostane ukljucen ni na gresci
     LogErr "modOtkupUnos.OtkupUpisi"
     poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
+
+' PITANJE O MANJKU AMBALAZE (protokol potvrde deficita, AMB-10-ODL-8, 6.5).
+'
+' KI-021: poruka uz polje tipa ambalaze -- JEDNO mesto za sve validatore sa
+' ambalazom (otkup, otpremnica, prijemnica, revers). Pravilo drzi kapija pisca
+' (modAmbalazaUgovor.AmbTipProblem, AMB-INV-12); ovde se bira samo tekst. Tip od
+' samih nevidljivih znakova je PRAZAN tip (postojeca poruka), a svaki drugi mora
+' postojati u sifarniku. "" kad je tip valjan.
+Public Function TipAmbalazePoruka(ByVal tipAmb As String) As String
+    If modAmbalazaUgovor.AmbTipPrazan(tipAmb) Then
+        TipAmbalazePoruka = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE")
+    ElseIf Len(modAmbalazaUgovor.AmbTipProblem(tipAmb)) > 0 Then
+        TipAmbalazePoruka = Poruka("DOK_MSG_TIP_AMBALAZE") & tipAmb & _
+                            Poruka("DOK_MSG_TIP_AMB_NIJE_U_SIFARNIKU")
+    End If
+End Function
+
+' Jedno mesto za pitanje koje postavljaju sva tri pisca sa potvrdom: otkup
+' (kooperant donosi svoje gajbe), kupcev revers i prijemnica (kupac vraca vise
+' nego sto drzi). Do KI-015 je svako mesto sastavljalo isti MsgBox po svom.
+'
+' nalogTip je nalog kome fali, i pitanje imenuje BAS tu stranu: kooperant donosi
+' svoje gajbe, kupac vraca vise nego sto drzi. Smer duga je isti -- pokrice je
+' ULAZ_TUDJE na nalog partnera, pa firma duguje partneru (AMBALAZA.md 6.4). Do
+' KI-015 je i kupac dobijao tekst o kooperantu. manjak je SVEZE izracunat manjak
+' -- pozivalac ga cita neposredno pre pitanja.
+'
+' Druga strana nema pitanje: stanica i vozac manjak NE pokrivaju ulazom tudje
+' ambalaze (AMB-10-ODL-8), pa ih pisac odbija pre pitanja. Nepoznat nalog je
+' kvar pozivaoca i dize gresku -- pitanje o pogresnoj strani je bas ono sto je
+' KI-015 bio.
+'
+' TEST SEAM, tvrdo gejtovan (.claude/rules/testovi.md S4): u test rezimu se
+' pitanje BELEZI umesto da se otvori, a odgovor je UVEK "Ne" -- seam samo
+' posmatra i zabranjuje, ne upisuje. MsgBox u nevidljivom Excelu visi do
+' timeout-a i ostavlja Excel u [break]. Zabelezen tekst cita PitanjeManjkaTest,
+' a gasi ga ResetSeamova (PitanjeManjkaTestReset).
+Public Function PotvrdiManjakAmbalaze(ByVal nalogTip As String, _
+                                      ByVal manjak As Double) As Boolean
+    Dim txt As String, k1 As String, k2 As String
+    Select Case nalogTip
+        Case AMB_NALOG_KOOPERANT
+            k1 = "AMB_ASK_DEFICIT_1": k2 = "AMB_ASK_DEFICIT_2"
+        Case AMB_NALOG_KUPAC
+            k1 = "AMB_ASK_DEFICIT_KUP_1": k2 = "AMB_ASK_DEFICIT_KUP_2"
+        Case Else
+            Err.Raise vbObjectError + 1590, "modOtkupUnos.PotvrdiManjakAmbalaze", _
+                      "Pitanje o manjku za nalog '" & nalogTip & "' ne postoji."
+    End Select
+    txt = Poruka(k1) & vbCrLf & _
+          Poruka(k2) & " " & _
+          Format$(manjak, "#,##0") & vbCrLf & vbCrLf & _
+          Poruka("OTKUP_MSG_ZELITE_IPAK_NASTAVITE")
+    If IsTestMode() Then
+        mPitanjeManjkaTest = txt
+        Exit Function
+    End If
+    PotvrdiManjakAmbalaze = (MsgBox(txt, vbExclamation + vbYesNo, APP_NAME) = vbYes)
+End Function
+
+' TEST SEAM: tekst poslednjeg pitanja o manjku ("" = nije postavljeno). Tvrdo
+' gejtovan.
+Public Function PitanjeManjkaTest() As String
+    If Not IsTestMode() Then Exit Function
+    PitanjeManjkaTest = mPitanjeManjkaTest
+End Function
+
+' TEST SEAM: brise zabelezeno pitanje -- test pre poteza, i ResetSeamova.
+Public Sub PitanjeManjkaTestReset()
+    If Not IsTestMode() Then Exit Sub
+    mPitanjeManjkaTest = ""
+End Sub

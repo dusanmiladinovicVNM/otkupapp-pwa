@@ -735,7 +735,7 @@ function handleAppShellClick(event) {
 
         if (action === 'vozac-fab-nova-zbirna') {
             showTab('zbirna');
-            // loadVozacData is async — wait for it to populate vozacOtkupi before opening create view
+            // loadVozacData is async — wait for it to populate vozacOtpremnice before opening create view
             setTimeout(() => startZbirnaCreation(), 400);
             return;
         }

@@ -202,6 +202,9 @@ Public Const PAY_PLACENO As Long = 10
 Public Const PAY_DELIM   As Long = 11
 Public Const PAY_NEPLAC  As Long = 12
 Public Const PAY_NEFAKT  As Long = 13
+' S6 korak 5 (odluka 5): prijemnica cija je bar jedna stavka na fakturi, ali ne
+' sve. Ima prednost nad placanjem -- na dokumentu jos ima sta da se fakturise.
+Public Const PAY_DELIM_FAKT As Long = 14
 Private Const POP_MAX     As Long = 14       ' stavki u sopstvenom dropdown-u
 Private Const POP_ITEM_H  As Single = 21
 Private Const FLT_W       As Single = 236     ' panel "Filteri"
@@ -361,7 +364,23 @@ Private mCntNefakt As Long
 Private mCntOtvor As Long
 ' Stoji li na ekranu crveni toast koji je podigla mreza. Sledece uspelo
 ' citanje ga gasi; toast greske nema tajmer, pa bi inace ostao zauvek.
+' ShowToast je spusta, kao mScrToast: poruka koja je zamenila poruku mreze nije
+' njena, pa je uspelo citanje ne gasi (KI-016 (f), test 244). Do tada je prvo
+' uspelo citanje posle pada gasilo tudju poruku -- npr. DoSync: "sync pocinje",
+' pa RefreshFromData -- a direktan HideToast je tajmer te zelene poruke
+' ostavljao bez vlasnika, pa je on posle mogao da sakrije i crveni ishod.
 Private mGridToast As Boolean
+' Stoji li na ekranu crveni toast ODBIJENOG PRELASKA (ActivateScreen: zabranjen
+' ekran ili pad gradnje zone). Sledeci uspesan prelazak ga gasi, kao sto uspelo
+' citanje gasi mGridToast -- inace je "ekran nije dostupan" ostajao i posle
+' uspesnog ulaska u bas taj ekran (rucna provera #423). Zabrana je isti kvar, i
+' dostizniji: prigusena stavka sidebara je klikabilna. Greska panela je van
+' (prakticno nedostizna, KI-016). ShowToast je spusta: nova poruka je
+' zamenila staru, pa prelazak vise nema svoju poruku da gasi. Bez toga bi stara
+' zastavica sakrila poruku koju podigne SAM sledeci prelazak -- pad mreze ekrana
+' u koji se upravo uslo (ReloadGrid) ili poruku kuke ulaska (ScrAktiviraj) --
+' jer ActivateScreen gasi tek posle jezgra (stavka 146).
+Private mScrToast As Boolean
 ' Polje na koje ide kursor pri novom dokumentu, i polje koje TRENUTNO ima
 ' zeleni okvir. Drugo se pamti da bi se okvir skinuo i kad MSForms preskoci
 ' dogadjaj napustanja (a preskace ga kad se forma sakrije ili polje ugasi).
@@ -464,6 +483,13 @@ Private mFltVrsta As String          ' dodatni uslov: vrsta iz Osnovnih podataka
 Private mFltPart As String           ' dodatni uslov: partner iz Osnovnih podataka
 Private mDirty As Boolean            ' ima neupisanih izmena u formi
 Private mLoading As Boolean          ' program puni polja - to NIJE izmena korisnika
+' Tekst dijaloga koji bi CommitDokument otvorio -- belezi se SAMO u test rezimu
+' (v. Dijalog). KI-011: ishod upisa mora da se izmeri, a MsgBox u nevidljivom
+' Excelu visi do timeout-a.
+Private mDijalogTest As String
+' Polje na koje bi CommitDokument dao fokus -- belezi se SAMO u test rezimu
+' (v. FokusNaPolje): SetFocus u nevidljivom Excelu visi, kao i MsgBox.
+Private mFokusTest As String
 '=====================================================================
 ' BUILD
 '=====================================================================
@@ -1267,8 +1293,14 @@ Private Sub BuildForm(frm As Object)
     NewFieldG z, "fgHladnjaca", Poruka("OTKUI_FLD_HLADNJACA"), "cmb", "", 1, False, False, "DOK"
     NewFieldG z, "fgPogon", Poruka("OTKUI_FLD_POGON"), "txt", "", 1, False, False, "DOK"
 
-    ' SMER REVERSA - cetiri medjusobno iskljuciva segmenta, isti skup kao
-    ' frmDokumenta.SetupOMIzdavanjeToggle. Span 2 da sva cetiri stanu u red.
+    ' SMER REVERSA - SEST medjusobno iskljucivih segmenata. Prva cetiri su isti
+    ' skup kao frmDokumenta.SetupOMIzdavanjeToggle; peti je povrat praznih od
+    ' kupca (AMB-10-ODL-23), a sesti pozajmica kupca (AMB-10-ODL-24) -- oba
+    ' dokumenta nose KUPCEV broj.
+    '
+    ' Sest segmenata u istih 370pt: 1 + 4*61 + 2*60 + 5*1 = 370. Uzi (60) su
+    ' segmenti sa natpisom od 9 znakova ('Izdato OM', 'Pozajmica'); ostali nose
+    ' 12 znakova ('Prijem od OM', 'Povrat kupca'). Izgled je rucna provera.
     Set fr = NewFrame(z, "fgSmerRev", 0, 0, 370, FIELD_GRP_H, C_WHITE)
     fr.tag = "fld:3:AMB"
     NewLbl fr, "fgSmerRevL", Poruka("OTKUI_FLD_SMER_REV"), 0, 0, 300, 12, TS_LABEL, True, C_MUTED, -1
@@ -1276,10 +1308,26 @@ Private Sub BuildForm(frm As Object)
     ' NIJEDAN segment nije unapred obelezen: smer se bira eksplicitno. Ranije je
     ' segRev1 izgledao izabrano a mSmerRev je bio 0, pa je forma pokazivala smer
     ' koji dokument nije imao.
-    NewSegBtn fr, "segRev1", Poruka("OTKUI_SEG_REV_IZD_KOOP"), 1, 17, 91, FIELD_H - 2, False
-    NewSegBtn fr, "segRev2", Poruka("OTKUI_SEG_REV_PRI_KOOP"), 93, 17, 91, FIELD_H - 2, False
-    NewSegBtn fr, "segRev3", Poruka("OTKUI_SEG_REV_IZD_OM"), 185, 17, 91, FIELD_H - 2, False
-    NewSegBtn fr, "segRev4", Poruka("OTKUI_SEG_REV_PRI_OM"), 277, 17, 91, FIELD_H - 2, False
+    NewSegBtn fr, "segRev1", Poruka("OTKUI_SEG_REV_IZD_KOOP"), 1, 17, 61, FIELD_H - 2, False
+    NewSegBtn fr, "segRev2", Poruka("OTKUI_SEG_REV_PRI_KOOP"), 63, 17, 61, FIELD_H - 2, False
+    NewSegBtn fr, "segRev3", Poruka("OTKUI_SEG_REV_IZD_OM"), 125, 17, 60, FIELD_H - 2, False
+    NewSegBtn fr, "segRev4", Poruka("OTKUI_SEG_REV_PRI_OM"), 186, 17, 61, FIELD_H - 2, False
+    NewSegBtn fr, "segRev5", Poruka("OTKUI_SEG_REV_POVRAT_KUP"), 248, 17, 61, FIELD_H - 2, False
+    NewSegBtn fr, "segRev6", Poruka("OTKUI_SEG_REV_POZAJMICA_KUP"), 310, 17, 60, FIELD_H - 2, False
+
+    ' NABAVKA I OTPIS (AMB-10-ODL-34 a) -- sedmi i osmi smer, u SVOM okviru ispod
+    ' reversa. Isti red bi suzio svih osam segmenata (LayoutSegs deli sirinu
+    ' okvira podjednako), pa bi natpisi od 12 znakova bili odseceni. Izbor je i
+    ' dalje jedan: SetSmerRev gasi segmente oba okvira.
+    Set fr = NewFrame(z, "fgSmerAmb", 0, 0, 180, FIELD_GRP_H, C_WHITE)
+    fr.tag = "fld:1:AMB"
+    NewLbl fr, "fgSmerAmbL", Poruka("OTKUI_FLD_SMER_AMB"), 0, 0, 170, 12, TS_LABEL, True, C_MUTED, -1
+    NewShell fr, "fgSmerAmb", 0, 16, 180, FIELD_H, C_BORDER_LT, C_WHITE
+    NewSegBtn fr, "segRev7", Poruka("OTKUI_SEG_REV_NABAVKA"), 1, 17, 88, FIELD_H - 2, False
+    NewSegBtn fr, "segRev8", Poruka("OTKUI_SEG_REV_OTPIS"), 91, 17, 88, FIELD_H - 2, False
+    ' NAPOMENA (ODL-34 k) -- samo uz nabavku i otpis; za otpis je razlog i ide na
+    ' zapisnik. Vidljivost prati smer (SetSmerRev), ne samo rezim.
+    NewFieldG z, "fgNapomena", Poruka("OTKUI_FLD_NAPOMENA"), "txt", "", 2, False, False, "AMB"
 
 
     ' VREDNOST - forest ploca (isti shell, druga ispuna). Ploca ne zauzima celo
@@ -3132,9 +3180,12 @@ Private Sub RenderPager(ft As Object)
     BoxShow ft, "pgNext", (pages > 1)
 End Sub
 
-' Radnja se salje ekranu, a greska iz njega se PRIKAZUJE. Omotac u
-' modUiScreens gusi greske da ekran koji padne ne obori aplikaciju - ali
-' gusenje bez traga znaci dugme koje "ne radi" i niko ne zna zasto.
+' Radnja se salje ekranu, a radnja koja se NIJE izvrsila se PRIKAZUJE --
+' gusenje bez traga znaci dugme koje "ne radi" i niko ne zna zasto. Sta je
+' neuspeh odlucuje modUiScreens.ScrRunIshod: greska koja ostane u Err uz
+' obradjenu radnju je zaostatak (log), ne pad (KI-014, test 237). Pad koji clan
+' uhvati stize kroz kanal (KI-016, test 241). Svaki ulaz do Scr_Event ide ovuda --
+' i prekidac liste i izbor reda -- da pad nijednog ne ostane nevidljiv.
 Private Function ScrAct(ByVal tag As String) As Boolean
     ScrAct = modUiScreens.ScrEvent(mScreen, tag, "Click")
     If Len(modUiScreens.ScrLastErr) > 0 Then
@@ -3166,6 +3217,14 @@ End Sub
 Private Sub PrimeniSortZaListu(ByVal kljuc As String)
     Dim spec As String, p() As String
     spec = modUiScreens.ScrSort(mScreen)
+    ' Lista sa poslovnim redosledom nema kolonu sorta: 0 znaci "redosled
+    ' ekrana", pa zaglavlje ne crta strelicu (KART-HRON-01).
+    If spec = modUiScreens.SCR_SORT_POSLOVNI Then
+        mSortCol = 0
+        mSortAsc = True
+        mSortLista = kljuc
+        Exit Sub
+    End If
     If Len(spec) > 0 Then
         p = Split(spec, ":")
         If UBound(p) >= 1 Then
@@ -3180,6 +3239,14 @@ Private Sub PrimeniSortZaListu(ByVal kljuc As String)
     SortZaListu kljuc, mSortCol, mSortAsc
     mSortLista = kljuc
 End Sub
+
+' Da li aktivna lista nosi POSLOVNI redosled (kartica sa tekucim saldom).
+' Pita se ekran u trenutku upotrebe, ne stanje sorta: zaostao mSortCol --
+' druga lista, test seam, buduci put koji zaobidje PrimeniSortZaListu -- ne
+' sme da preuredi karticu (KART-HRON-01).
+Private Function RedosledJePoslovni() As Boolean
+    RedosledJePoslovni = (modUiScreens.ScrSort(mScreen) = modUiScreens.SCR_SORT_POSLOVNI)
+End Function
 
 ' TEST SEAM: postavi sort kao da ga je ostavio DRUGI ekran (aktivacioni
 ' lifecycle test) i izvrsi aktivacioni korak -- ista procedura koju zove
@@ -3517,6 +3584,8 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgHladnjaca", False
             FldShow z, "fgPogon", False
             FldShow z, "fgSmerRev", False
+            FldShow z, "fgSmerAmb", False
+            FldShow z, "fgNapomena", False
             FldShow z, "fgVrednost", False
             ' otvoreni blok i neisplaceni ostatak imaju smisla samo kod isplata
             FldShow z, "fgBlok", (mode = "F5")
@@ -3539,6 +3608,8 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgHladnjaca", False
             FldShow z, "fgPogon", False
             FldShow z, "fgSmerRev", True
+            FldShow z, "fgSmerAmb", True
+            FldShow z, "fgNapomena", modNovacUnos.RevSmerJeNabavkaIliOtpis(mSmerRev)
             FldShow z, "fgVrednost", False
             FldShow z, "fgBlok", False
             FldShow z, "fgOstatak", False
@@ -3576,6 +3647,8 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgHladnjaca", (mode = "F3")
             FldShow z, "fgPogon", (mode = "F3")
             FldShow z, "fgSmerRev", False
+            FldShow z, "fgSmerAmb", False
+            FldShow z, "fgNapomena", False
             ' Vrednost se racuna iz cene, koje zbirna nema -- prikaz bi uvek bio
             ' nula, a nula uz robu izgleda kao podatak.
             FldShow z, "fgVrednost", (mode <> "F3")
@@ -3617,18 +3690,55 @@ Private Sub KlasaCenaPoRezimu(ByVal z As Object, ByVal mode As String)
         UCase$(Poruka(IIf(imaCenu, "OTKUI_FLD_KLASA_CENA", "OTKUI_FLD_KLASA")))
 End Sub
 
-' Cetiri smera reversa su medjusobno iskljuciva - isti obrazac kao SetKlasa.
-' n = 0 gasi sve cetiri (stanje "nije izabrano", u koje se rezim i vraca).
+' Sest smerova reversa su medjusobno iskljucivi - isti obrazac kao SetKlasa.
+' n = 0 gasi sve (stanje "nije izabrano", u koje se rezim i vraca).
 Private Sub SetSmerRev(ByVal n As Long)
     Dim z As Object, i As Long, sel As Boolean
+    Dim stariKupcev As Boolean, noviKupcev As Boolean, zAmb As Object
     On Error Resume Next
     Set z = mFrm.Controls("zForm").Controls("fgSmerRev")
+    Set zAmb = mFrm.Controls("zForm").Controls("fgSmerAmb")
+    ' Vlasnik niza se cita PRE dodele -- posle nje se stari smer vise ne zna.
+    ' Kupcev je i povrat (5) i pozajmica (6): odluka je u modNovacUnos.
+    stariKupcev = modNovacUnos.RevSmerJeKupcev(mSmerRev)
+    noviKupcev = modNovacUnos.RevSmerJeKupcev(n)
     mSmerRev = n
     MarkDirty
-    For i = 1 To 4
+    For i = 1 To modNovacUnos.SMER_REV_OTPIS
         sel = (i = n)
-        BoxState z, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
+        ' Nabavka i otpis su u svom okviru (fgSmerAmb), ostali u okviru reversa.
+        If i > modNovacUnos.SMER_REV_POZAJMICA_KUP Then
+            BoxState zAmb, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
+        Else
+            BoxState z, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
+        End If
     Next i
+
+    ' NAPOMENA PRATI SMER (ODL-34 k): vidi se samo uz nabavku i otpis. Kad se
+    ' vidljivost promeni, polja se ponovo slazu -- osim dok rezim puni formu
+    ' (SelectModeCore sam slaze na kraju).
+    If FldVidljivo("fgNapomena") <> modNovacUnos.RevSmerJeNabavkaIliOtpis(n) Then
+        FldShow mFrm.Controls("zForm"), "fgNapomena", modNovacUnos.RevSmerJeNabavkaIliOtpis(n)
+        If Not mBuilding And Not mLoading Then LayoutOtkup mFrm
+    End If
+
+    ' BROJ PRATI VLASNIKA NIZA, ne svaki smer.
+    '
+    ' Nasa cetiri smera dele niz STANICE; peti i sesti nose KUPCEV broj. Dok se
+    ' vlasnik ne menja (1 <-> 2, 3 <-> 4, 5 <-> 6), broj se NE dira -- rucno upisan broj bi inace
+    ' nestajao na svaki klik. Kad se vlasnik promeni, polje se PRAZNI, pa se za
+    ' nase smerove trazi predlog.
+    '
+    ' PRAZNJENJE JE NOSECE I U SMERU 5 -> 1..4, i to je bio P1 (review
+    ' 08.10.2026): prva verzija je samo zvala RefreshBrojPredlog, a on sa
+    ' iskljucenim AUTO_BROJ-em vraca prazno i IZLAZI bez diranja polja -- pa bi
+    ' kupcev broj tiho postao broj NASEG dokumenta.
+    '
+    ' n = 0 (reset rezima) ne dira polje.
+    If n > 0 And (stariKupcev <> noviKupcev) Then
+        SetFld "fgBrOtpr", ""
+        If Not noviKupcev Then RefreshBrojPredlog False
+    End If
 End Sub
 
 ' Isplata iz OM avansa vs virman firme - dva segmenta, isti obrazac. Prekidac
@@ -3652,6 +3762,12 @@ Private Sub FldShow(z As Object, ByVal nm As String, ByVal vis As Boolean)
     On Error Resume Next
     z.Controls(nm).Visible = vis
 End Sub
+
+' Da li je polje forme vidljivo; nepostojece polje nije.
+Private Function FldVidljivo(ByVal nm As String) As Boolean
+    On Error Resume Next
+    FldVidljivo = mFrm.Controls("zForm").Controls(nm).Visible
+End Function
 
 Private Sub ApplyAktivnaZbirna(frm As Object, ByVal mode As String)
     Dim fld As Object
@@ -3766,11 +3882,14 @@ Public Function AktivanEkran() As String
 End Function
 
 Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As Boolean)
-    Dim k As String
+    Dim k As String, stariRezim As String
     On Error Resume Next
     mPopMute = True                    ' punjenje lista pise u combo -> ne otvaraj panel
     mLoading = True                    ' i to NIJE izmena korisnika
     ClosePopup
+    ' Stari rezim se cita PRE dodele -- posle nje se vise ne zna odakle se doslo,
+    ' a bas to odlucuje da li broj pripada ovom dokumentu (v. kraj procedure).
+    stariRezim = ActiveMode
     ActiveMode = key
     k = modeKey(key)
     ' Ovde je do v6-ui-143 stajao grid-max za STORNO: F8 je crtao unosnu formu
@@ -3874,9 +3993,25 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     mPopMute = False
     mLoading = False
     ' Svaki rezim ima svoj brojevni niz (otkupni list / otpremnica / zbirna /
-    ' revers), pa se predlog racuna i pri promeni rezima - inace bi u polju
-    ' ostao broj iz prethodnog niza. Rezimi bez niza ga ne diraju.
-    If Not mBuilding Then RefreshBrojPredlog False
+    ' revers), pa broj prethodnog dokumenta ne sme da predje u sledeci.
+    '
+    ' PRAZNJENJE JE NOSECE, a ne sam predlog -- i to je bio P1 (review
+    ' 08.10.2026). RefreshBrojPredlog upisuje SAMO kad ima sta da predlozi:
+    '
+    '   AUTO_BROJ_DOKUMENTA = NE   -> SuggestNextBroj vraca "" -> Exit Sub
+    '   rezim bez niza (F5, F6)    -> KindZaRezim vraca "" -> Exit Sub
+    '
+    ' U oba slucaja polje ostaje netaknuto, pa bi broj prethodnog dokumenta
+    ' otisao u pisac sledeceg: kupcev broj reversa je tako mogao da postane
+    ' broj OTKUPNOG LISTA, a OtkupValidiraj ga ne odbija (rucno unet broj van
+    ' nase seme je legitiman -- BrojOdgovaraKontekstu vraca NEPRIMENLJIVO).
+    '
+    ' Zato se polje PRVO prazni, pa tek onda trazi predlog. Prefill ispravke
+    ' ide POSLE SelectMode i upisuje svoj broj, pa ga ovo ne dira.
+    If Not mBuilding Then
+        If StrComp(stariRezim, key, vbTextCompare) <> 0 Then SetFld "fgBrOtpr", ""
+        RefreshBrojPredlog False
+    End If
     If doReload Then
         mView = Empty: mViewN = 0
         ReloadGrid
@@ -3954,7 +4089,8 @@ Private Sub RefreshSortGlyphs()
         Else
             If mSortCol = i + 1 Then
                 g = IIf(mSortAsc, ChrW(9650), ChrW(9660))
-            ElseIf mHoverHd = i Then
+            ElseIf mHoverHd = i And mSortCol > 0 Then
+                ' mSortCol = 0: poslovni redosled, zaglavlje ne nudi sort
                 g = ChrW(8597)
             Else
                 g = "  "
@@ -4278,6 +4414,14 @@ Private Sub UiClickCore(ByVal tag As String)
         Exit Sub
     End If
     If Left$(tag, 2) = "hd" And Len(tag) = 3 Then
+        ' Kartica nosi tekuci saldo: preuredjen red bi pokazao saldo drugog
+        ' toka (KART-HRON-01); dokumentna lista je slozena po broju kao broju
+        ' (DOC-SORT-01). Klik zato ne sortira, ali to i kaze -- tih klik bi
+        ' izgledao kao kvar.
+        If RedosledJePoslovni() Then
+            ShowToast Poruka("OTKUI_MSG_KART_HRONOLOGIJA"), False
+            Exit Sub
+        End If
         c = CLng(Mid$(tag, 3)) + 1
         If mSortCol = c Then
             mSortAsc = Not mSortAsc
@@ -4310,7 +4454,8 @@ Private Sub UiClickCore(ByVal tag As String)
         Dim segK As String
         segK = SegKey(segI)
         If Len(segK) = 0 Then Exit Sub
-        If modUiScreens.ScrEvent(mScreen, "ls" & segK, "Click") Then
+        ' Kroz ScrAct, kao svaka radnja: pad clana se vidi (KI-016).
+        If ScrAct("ls" & segK) Then
             mSelRow = 0
             mSearch = ""
             mFrm.Controls("zGrid").Controls("txtSearch").text = ""
@@ -4387,6 +4532,10 @@ Private Sub UiClickCore(ByVal tag As String)
         Case "segRev2": SetSmerRev 2
         Case "segRev3": SetSmerRev 3
         Case "segRev4": SetSmerRev 4
+        Case "segRev5": SetSmerRev 5
+        Case "segRev6": SetSmerRev 6
+        Case "segRev7": SetSmerRev 7
+        Case "segRev8": SetSmerRev 8
         Case "segAvans1": SetAvans 1
         Case "segAvans2": SetAvans 2
         Case "btnSacuvaj", "btnSacuvajPrint": CommitDokument (tag = "btnSacuvajPrint")
@@ -5094,9 +5243,9 @@ Private Sub RowFromTag(ByVal tag As String)
     If mSelRow > mViewN Then mSelRow = 0
     ' Izbor reda se javlja ekranu: u listi otpremnica klik BIRA otpremnicu, a
     ' ljuska ne zna sta je otpremnica. Ako je ekran nesto uradio, mreza se
-    ' puni ponovo.
+    ' puni ponovo. Ide kroz ScrAct, pa se pad clana vidi (KI-016).
     If mSelRow > 0 Then
-        If modUiScreens.ScrEvent(mScreen, "row:" & mSelRow, "Click") Then
+        If ScrAct("row:" & mSelRow) Then
             mSelRow = 0
             RefreshListSeg mFrm
             RefreshGridTitle mFrm
@@ -5655,8 +5804,21 @@ End Sub
 ' ShowOtkupUI, pa je NaPrviDozvoljenEkran (posle zamene operatera na nalog sa
 ' pravom samo na Banku) i dalje pokretao uvoz bez ijednog klika. Zastavica
 ' pokriva put koji je autor gledao; argument pokriva svakog pozivaoca.
+'
+' Uspesan prelazak gasi poruku PRETHODNOG odbijenog prelaska (v. mScrToast).
+' Ovde, a ne na izlazima jezgra: jezgro ima pet izlaza sa uspehom, a zaboravljen
+' jedan bi poruku ostavio bas na tom putu.
 Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
                                 Optional ByVal kuka As Boolean = True) As Boolean
+    ActivateScreen = ActivateScreenCore(frm, kljuc, kuka)
+    If ActivateScreen And mScrToast Then
+        mScrToast = False
+        HideToast
+    End If
+End Function
+
+Private Function ActivateScreenCore(frm As Object, ByVal kljuc As String, _
+                                    ByVal kuka As Boolean) As Boolean
     Dim z As Object, nm As String, greska As String, vratiEkran As Boolean
     Dim jePanel As Boolean, zatvorenPanel As Boolean, btnsPre As Long
 
@@ -5665,7 +5827,7 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
     ' na klik u stavku na kojoj operater vec jeste.
     If Len(kljuc) > 0 Then
         If modUiPanel.PanelAktivan() = UCase$(kljuc) Then
-            ActivateScreen = True       ' vec smo tu
+            ActivateScreenCore = True   ' vec smo tu
             Exit Function
         End If
     End If
@@ -5674,7 +5836,7 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
     ' Klik na stavku ekrana na kome VEC jesmo, bez otvorenog panela: nista se
     ' ne menja, pa se nista i ne dira.
     If (Not jePanel) And kljuc = mScreen And modUiPanel.PanelAktivan() = "" Then
-        ActivateScreen = True           ' vec smo tu
+        ActivateScreenCore = True       ' vec smo tu
         Exit Function
     End If
 
@@ -5688,6 +5850,7 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
     ' bio izuzet, pa se na njega moglo vratiti i bez prava.
     If Not modUiScreens.ScrDozvoljen(kljuc) Then
         ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
+        mScrToast = True
         PaintNav frm, NavTagFor(AktivnaStavka())
         Exit Function
     End If
@@ -5757,12 +5920,12 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
             PaintNav frm, NavTagFor(AktivnaStavka())
             Exit Function
         End If
-        ActivateScreen = True
+        ActivateScreenCore = True
         Exit Function
     End If
     ' Panel je zatvoren i ekran je vec vracen kad ostajemo na njemu.
     If kljuc = mScreen Then
-        ActivateScreen = True
+        ActivateScreenCore = True
         Exit Function
     End If
     If kljuc <> SCR_POCETNI Then
@@ -5794,6 +5957,7 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
                 Set z = Nothing
                 UkloniZonu frm, nm, btnsPre
                 ShowToast Poruka("OTKUI_SCR_NEMA"), True
+                mScrToast = True
                 If zatvorenPanel Then PanelVracenNaEkran
                 PaintNav frm, NavTagFor(AktivnaStavka())
                 Exit Function
@@ -5846,7 +6010,7 @@ Private Function ActivateScreen(frm As Object, ByVal kljuc As String, _
         On Error GoTo 0
     End If
 
-    ActivateScreen = True
+    ActivateScreenCore = True
 End Function
 
 ' Ceo prostor desno od sidebara pripada ugovornom ekranu. Ljuska mu daje
@@ -6565,9 +6729,12 @@ Private Sub LoadGridFromScreen()
     ' ih niko nije prerasporedjivao. Zato ide ovde, nad onim sto ekran vrati.
     ' Kopija u tipizirani niz je obavezna - SortedView prima a() As Variant,
     ' a d(1) je Variant koji SADRZI niz.
+    '
+    ' Lista sa POSLOVNIM redosledom (kartica) se ne sortira: ekran je redove vec
+    ' poredjao i po tom redu izracunao tekuci saldo (KART-HRON-01).
     Dim tmp() As Variant
     tmp = d(1)
-    If mViewN > 0 Then
+    If mViewN > 0 And Not RedosledJePoslovni() Then
         mView = SortedView(tmp, mViewN, mColN, mSortCol, mSortAsc)
     Else
         mView = tmp
@@ -6600,20 +6767,23 @@ EH:
     ' tiho preskakala RenderGrid - mreza bi ostala na starom rezimu i izgledalo
     ' bi da "klik ne radi". Sada se vidi gde je puklo.
     '
-    ' Korak vise ne dolazi iz stanja ljuske: ekran ga upisuje u IZVOR greske
-    ' (Err.Raise ..., "modScrDokumenti.Scr_Rows[petlja po redovima]", ...), pa
-    ' se cita odatle. Tako svaki ekran prijavljuje svoje korake, a ljuska ne
-    ' mora da zna nijedan.
+    ' Korak vise ne dolazi iz stanja ljuske nego iz IZVORA greske. Za listu koja
+    ' se nije procitala izvor je ScrLastErr ("modScrX.Scr_Rows -> broj opis",
+    ' v. LoadGridFromScreen), pa ljuska ne mora da zna nijedan ekran. Greska koju
+    ' Scr_Rows DIGNE kroz Application.Run ovde ne bi stigla (runtime dijalog i
+    ' reset, sonda 14. i 15.10.2026), pa je clan hvata sam i javlja kroz kanal:
+    ' ScrLastErr tada nosi ime clana i korak funkcije liste (KI-016, UI-PAD-01).
     ' Err se cita PRVI, pre bilo kog drugog poziva: Poruka() usput obrise
     ' stanje greske (ima svoj On Error Resume Next), pa je toast prijavljivao
     ' prazan izvor i sifru 0 - poruku od koje se nije imalo sta zakljuciti.
     errNum = Err.Number: errSrc = Err.Source: errDesc = Err.description
     mBusyGrid = False
-    mGridToast = True
     Debug.Print "modOtkupUI.ReloadGrid PAO [" & mScreen & " / " & ActiveMode & _
                 " / " & errSrc & "]: " & errNum & " " & errDesc
     ShowToast Poruka("OTKUI_MSG_MREZA_PALA") & " " & errSrc & _
               " (" & errNum & ")", True
+    ' Zastavica tek POSLE ShowToast-a, koji je spusta (v. mGridToast).
+    mGridToast = True
 End Sub
 
 ' Rezimi kojima je 4. kolona TEKST, a ne broj: gotovinski promet nosi kanal,
@@ -6680,6 +6850,8 @@ Private Sub PaintPayPill(lbl As Object, ByVal code As Long)
             cap = Poruka("OTKUI_PAY_DELIMICNO"): fc = C_AMBER
         Case PAY_NEFAKT
             cap = Poruka("OTKUI_PAY_NEFAKT"): fc = C_DISABLED_FG
+        Case PAY_DELIM_FAKT
+            cap = Poruka("OTKUI_PAY_DELIM_FAKT"): fc = C_AMBER
         Case Else
             cap = Poruka("OTKUI_PAY_NEPLACENO"): fc = C_RUST
     End Select
@@ -8020,6 +8192,8 @@ End Sub
 Public Sub ShowToast(ByVal msg As String, ByVal isErr As Boolean)
     Dim fr As Object
     On Error Resume Next
+    mScrToast = False                   ' nova poruka je zamenila poruku prelaska
+    mGridToast = False                  ' ... i poruku mreze
     If mFrm Is Nothing Then Exit Sub
     Set fr = mFrm.Controls("zGrid").Controls("tstScr")
     If fr Is Nothing Then Exit Sub
@@ -8232,7 +8406,7 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
         ShowToast listaPoruka, True
         ' I u MsgBox: toast pise u usko polje akcionog reda, a bas rep poruke nosi
         ' RAZLOG -- isti obrazac kao kod neuspelog upisa nize.
-        MsgBox listaPoruka, vbExclamation, APP_NAME
+        Dijalog listaPoruka
         Exit Sub
     End If
 
@@ -8260,7 +8434,7 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
             ' Razlikovanje ide po FOKUSU, ne po duzini: validacija polja ga
             ' postavlja i pokazuje na polje, pa njoj toast i pripada. Pad upisa
             ' nema fokus -- nema polja na koje bi se pokazalo.
-            If Len(fokus) = 0 Then MsgBox greska, vbExclamation, APP_NAME
+            If Len(fokus) = 0 Then Dijalog greska
             FokusNaPolje fokus
         End If
         Exit Sub
@@ -8291,12 +8465,49 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     ' Unicode, ista oznaka se crta ispravno i tamo OSTAJE: tamo nosi znacenje
     ' (crveno = nesto nije proslo), a u dijalogu ga vec nosi sam vbExclamation.
     If InStr(1, dopuna, ChrW(10007)) > 0 Then
-        MsgBox PorukaZaDijalog(dopuna), vbExclamation, APP_NAME
+        Dijalog PorukaZaDijalog(dopuna)
     End If
     Exit Sub
 EH:
     ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Sub
+
+' Dijalog posle pokusaja upisa (CommitDokument). U test rezimu se BELEZI umesto
+' da se otvori: MsgBox u nevidljivom Excelu ne puca nego visi do timeout-a --
+' isti razlog zbog kog su tri SetFocus-a iza IsTestMode. U produkciji je
+' IsTestMode() uvek False, pa operater vidi isti dijalog kao i pre.
+Private Sub Dijalog(ByVal txt As String)
+    If IsTestMode() Then
+        mDijalogTest = txt
+        Exit Sub
+    End If
+    MsgBox txt, vbExclamation, APP_NAME
+End Sub
+
+' TEST SEAM (KI-011): ceo potez "Sacuvaj" kroz CommitDokument -- isti put kojim
+' ide klik operatera, ne kopija. Ishod upisa (lazna greska, forma, lista) se
+' odlucuje BAS ovde, pa test koji meri samo ScrSave meri pomocnik, a ne poziv.
+' Tvrdo gejtovan.
+Public Sub CommitDokumentTest(ByVal alsoPrint As Boolean)
+    If Not IsTestMode() Then Exit Sub
+    mDijalogTest = ""
+    mFokusTest = ""
+    CommitDokument alsoPrint
+End Sub
+
+' TEST SEAM: dijalog koji bi operater video posle poslednjeg CommitDokumentTest
+' ("" = nijedan). Tvrdo gejtovan.
+Public Function DijalogTest() As String
+    If Not IsTestMode() Then Exit Function
+    DijalogTest = mDijalogTest
+End Function
+
+' TEST SEAM: ime kontrole na koju bi poslednji CommitDokumentTest dao fokus
+' ("" = nijedna -- kljuc bez grane ili uspeh). Tvrdo gejtovan.
+Public Function FokusTest() As String
+    If Not IsTestMode() Then Exit Function
+    FokusTest = mFokusTest
+End Function
 
 ' Tekst poruke bez oznake za rutiranje. Oznaka (ChrW(10007)) kaze SLOJU IZNAD da
 ' poruku treba pokazati u dijalogu -- nije deo recenice. MsgBox crta kroz ANSI
@@ -8364,6 +8575,10 @@ Private Function SkupiPolja(ByVal dat As Double, ByVal stampaj As Boolean) As Ob
     p("fakturaTekst") = Trim$(FldText("fgFaktura"))
     p("fakturaOstatak") = FakturaOstatak()
     p("smerRev") = mSmerRev
+    ' Napomena ide samo dok se VIDI (nabavka i otpis, ODL-34 k): tekst ostaje u
+    ' sakrivenom polju posle promene smera, pa se ne salje drugom dokumentu.
+    p("napomena") = ""
+    If FldVidljivo("fgNapomena") Then p("napomena") = Trim$(FldText("fgNapomena"))
     p("stampajUvek") = stampaj
     Set SkupiPolja = p
 End Function
@@ -8424,33 +8639,51 @@ End Function
 
 ' Fokus na polje koje je ekran prijavio kao sporno. Imena su LOGICKA, ista ona
 ' koja ekran koristi u recniku.
+'
+' Polje se prvo ODREDI, pa mu se da fokus. U test rezimu se polje BELEZI umesto
+' fokusa (FokusTest): SetFocus u nevidljivom Excelu ne puca nego visi -- isti
+' razlog kao za Dijalog. Bez beleske je test merio samo kljuc koji ekran vrati,
+' ne i da ga ljuska ume da primeni (review #440, ishod rucne provere).
 Private Sub FokusNaPolje(ByVal kljuc As String)
+    Dim c As Object
     On Error Resume Next
     If Len(kljuc) = 0 Then Exit Sub
     Select Case kljuc
-        Case "stanicaID":    mFrm.Controls("zCtx").Controls("cbOM").SetFocus
-        ' isto polje, dva imena: robni dokumenti ga zovu kooperantID, gotovinski
-        ' rezimi i reversi partnerID (tamo partner ne mora biti kooperant)
-        Case "kooperantID", "partnerID": mFrm.Controls("zCtx").Controls("cbKupac").SetFocus
-        Case "novac":        mFrm.Controls("zForm").Controls("fgNovac").Controls("fgNovacT").SetFocus
-        Case "otkupID":      mFrm.Controls("zForm").Controls("fgBlok").Controls("fgBlokT").SetFocus
-        Case "fakturaID":    mFrm.Controls("zForm").Controls("fgFaktura").Controls("fgFakturaT").SetFocus
+        Case "stanicaID":    Set c = mFrm.Controls("zCtx").Controls("cbOM")
+        ' isto polje, tri imena: robni dokumenti ga zovu kooperantID, gotovinski
+        ' rezimi i reversi partnerID (tamo partner ne mora biti kooperant), a
+        ' zbirna i prijemnica kupacID (F3, F4)
+        Case "kooperantID", "partnerID", "kupacID": Set c = mFrm.Controls("zCtx").Controls("cbKupac")
+        Case "novac":        Set c = mFrm.Controls("zForm").Controls("fgNovac").Controls("fgNovacT")
+        Case "otkupID":      Set c = mFrm.Controls("zForm").Controls("fgBlok").Controls("fgBlokT")
+        Case "fakturaID":    Set c = mFrm.Controls("zForm").Controls("fgFaktura").Controls("fgFakturaT")
         ' "smerRev" ovde NEMA granu i to nije propust: segmenti su Label-i
         ' (modUiKit.BoxText), a Label ne prima fokus. Poruka o gresci sama kaze
         ' sta se bira, pa kursor ostaje gde jeste umesto da odleti na tudje polje.
-        Case "vrsta":        mFrm.Controls("zCtx").Controls("cbVrsta").SetFocus
-        Case "sorta":        mFrm.Controls("zCtx").Controls("cbSorta").SetFocus
-        Case "brDok":        mFrm.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT").SetFocus
-        Case "kolicinaI":    mFrm.Controls("zForm").Controls("fgKgI").Controls("fgKgIT").SetFocus
-        Case "kolicinaII":   mFrm.Controls("zForm").Controls("fgKgII").Controls("fgKgIIT").SetFocus
-        Case "cenaI":        mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena1T").SetFocus
-        Case "cenaII":       mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena2T").SetFocus
-        Case "kolAmb":       mFrm.Controls("zForm").Controls("fgKolAmb").Controls("fgKolAmbT").SetFocus
-        Case "kolAmbII":     mFrm.Controls("zForm").Controls("fgKolAmbII").Controls("fgKolAmbIIT").SetFocus
-        Case "tipAmb":       mFrm.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT").SetFocus
-        Case "parcelaID":    mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT").SetFocus
-        Case "vozacID":      mFrm.Controls("zCtx").Controls("cbVozac").SetFocus
+        Case "vrsta":        Set c = mFrm.Controls("zCtx").Controls("cbVrsta")
+        Case "sorta":        Set c = mFrm.Controls("zCtx").Controls("cbSorta")
+        Case "brDok":        Set c = mFrm.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT")
+        ' broj zbirne na koju se prijemnica vezuje (F4: nema je, nije izdata, tudja)
+        Case "brojZbirne":   Set c = mFrm.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT")
+        Case "kolicinaI":    Set c = mFrm.Controls("zForm").Controls("fgKgI").Controls("fgKgIT")
+        Case "kolicinaII":   Set c = mFrm.Controls("zForm").Controls("fgKgII").Controls("fgKgIIT")
+        Case "cenaI":        Set c = mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena1T")
+        Case "cenaII":       Set c = mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena2T")
+        Case "kolAmb":       Set c = mFrm.Controls("zForm").Controls("fgKolAmb").Controls("fgKolAmbT")
+        Case "kolAmbII":     Set c = mFrm.Controls("zForm").Controls("fgKolAmbII").Controls("fgKolAmbIIT")
+        ' polje izdate ambalaze; u F4 znaci VRACENA (S6 korak 6: validator prijemnice)
+        Case "kolAmbIzdata": Set c = mFrm.Controls("zForm").Controls("fgAmbPr").Controls("fgAmbPrT")
+        Case "tipAmb":       Set c = mFrm.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT")
+        Case "parcelaID":    Set c = mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT")
+        Case "vozacID":      Set c = mFrm.Controls("zCtx").Controls("cbVozac")
+        Case "napomena":     Set c = mFrm.Controls("zForm").Controls("fgNapomena").Controls("fgNapomenaT")
     End Select
+    If c Is Nothing Then Exit Sub
+    If IsTestMode() Then
+        mFokusTest = c.Name
+        Exit Sub
+    End If
+    c.SetFocus
 End Sub
 
 ' KONTEKST OTKUPNOG MESTA I DATUMA (Z3 + Z14).
@@ -8593,6 +8826,13 @@ Private Sub RefreshBrojPredlog(Optional ByVal checkRemote As Boolean = True)
 
     kind = KindZaRezim(mk)
     If Len(kind) = 0 Then Exit Sub
+
+    ' KUPCEV REVERS NE DOBIJA PREDLOG (AMB-10-ODL-23): dokument je njegov i nosi
+    ' njegov broj. Isti oblik kao PredlogPrijemnice ispod -- "polje se tada NE
+    ' dira". Odluku drzi modNovacUnos, jer je isto pravilo potrebno i validatoru.
+    If kind = KIND_REV Then
+        If Not modNovacUnos.RevSmerPredlazeBroj(mSmerRev) Then Exit Sub
+    End If
     entID = EntitetZaBroj(kind)
     If Len(entID) = 0 Then Exit Sub
     sug = SuggestNextBroj(kind, entID, DatumIzPolja(), checkRemote)
@@ -8812,6 +9052,9 @@ Public Sub ApplyPrefill(ByVal spec As String)
                 Case "cena2":    If Len(v) > 0 Then zf.Controls("fgCena").Controls("fgCena2T").text = v
                 Case "ambpr":    If Len(v) > 0 Then zf.Controls("fgAmbPr").Controls("fgAmbPrT").text = v
                 Case "parcela":  If Len(v) > 0 Then SetComboByID cbPar, v
+                ' Smer reversa (F7, ispravka 10d). Segmenti su Label-i, pa nema
+                ' kontrole kojoj bi se upisala vrednost -- bira se isto kao klik.
+                Case "smerrev":  If val(v) > 0 Then SetSmerRev CLng(val(v))
                 Case "fokus":    fokus = v
             End Select
         End If
@@ -8850,6 +9093,8 @@ Public Sub ApplyPrefill(ByVal spec As String)
     If IsTestMode() Then Exit Sub
     If fokus = "kolicina" Then
         zf.Controls("fgKgI").Controls("fgKgIT").SetFocus
+    ElseIf fokus = "kolamb" Then
+        zf.Controls("fgKolAmb").Controls("fgKolAmbT").SetFocus
     Else
         ctx.Controls("cbKupac").SetFocus
     End If
@@ -8906,7 +9151,8 @@ Public Sub ClearForm()
     ' fgNovac je u istom spisku: iznos pripada JEDNOM dokumentu, a zatecen iznos
     ' u polju posle snimanja je najskuplja greska ovog rezima - sledeca potvrda
     ' bi isplatila isti novac drugi put.
-    nmv = Array("fgBrOtpr", "fgKgI", "fgKgII", "fgKolAmb", "fgAmbPr", "fgNovac")
+    ' fgNapomena: razlog otpisa pripada JEDNOM dokumentu (ODL-34 k).
+    nmv = Array("fgBrOtpr", "fgKgI", "fgKgII", "fgKolAmb", "fgAmbPr", "fgNovac", "fgNapomena")
     For i = 0 To UBound(nmv)
         mFrm.Controls("zForm").Controls(CStr(nmv(i))).Controls(CStr(nmv(i)) & "T").text = ""
     Next i

@@ -98,8 +98,168 @@ MODULE_DECL = re.compile(
     r"^(Public|Private|Global)\s+"
     r"(Const\b|Declare\b|Type\b|Enum\b|WithEvents\b|\w+\s+As\b|\w+\s*\()", re.IGNORECASE)
 
-PUBLIC_PROC = re.compile(
-    r"^Public\s+(?:Static\s+)?(?:Sub|Function|Const)\s+(\w+)", re.IGNORECASE)
+# --- jedan razlagac deklaracije procedure za ceo tooling sloj ---------------
+#
+# VBA: `[Public|Private|Friend] [Static] Sub|Function name [ ( arglist ) ]`.
+# Tri stvari koje izraz lako promasi, i svaka je vec bila rupa u popisu suita:
+#
+#   1. MODIFIKATOR JE OPCION, a default je Public -- `Sub Foo()` je javna.
+#   2. ZAGRADE SU OPCIONE -- `Sub Foo` je validna javna procedura bez
+#      argumenata, i upravo upotrebljiva kao ulazna tacka suite-a.
+#   3. OPCIONI ARGUMENT NIJE OBAVEZAN -- `Sub Foo(Optional x As Long)` se zove
+#      po imenu bez ijednog argumenta, pa je i ona ulazna tacka.
+#
+# Zato razlagac vraca POLJA, a odluka ("kandidat za suite", "javno ime") stoji
+# kao uslov nad njima -- ne kao sve siri izraz. Siri izraz je ovde opasan u
+# drugom smeru: `()` kao opcione lako pocnu da klasifikuju proceduru SA
+# argumentima kao zero-arg.
+#
+# `Const` NE ide kroz razlagac: modul-level `Const X = 1` bez modifikatora je
+# PRIVATE, obrnuto od procedure (v. PUBLIC_CONST). Prvo merenje te asimetrije ju
+# je promasilo i prijavilo 609 "javnih imena" -- sve lokalni `Const SRC`.
+# --- fizicki redovi -> LOGICKE IZJAVE --------------------------------------
+#
+# Razlagac ispod cita IZJAVU, ne fizicki red. Bez ovog sloja je svaki krug
+# review-a nalazio nov validan oblik koji mu je bio nevidljiv: uvucena
+# deklaracija, komentar na kraju reda, prelom reda u listi argumenata. To nije
+# bio niz izuzetaka nego pogresan sloj.
+_NASTAVAK = re.compile(r"\s_$")
+
+
+def _izjava_deo(red: str) -> tuple:
+    """(tekst reda bez komentara, da li se izjava nastavlja u sledecem redu).
+
+    String literal se CUVA: `"a,b"` ostaje ceo, pa ni zapeta ni apostrof u njemu
+    ne menjaju znacenje. VBA string ne poznaje escape osim udvojenih navodnika
+    (`""`), sto se prirodno resava prebacivanjem stanja na svakom `"`.
+
+    Komentar se skida PRE provere nastavka: `..., _   ' komentar` je u VBA syntax
+    error (`_` mora biti poslednji znak), pa je svejedno da li ga ovde tretiramo
+    kao nastavak -- a ovako se ne gubi deklaracija zbog zaostalog komentara.
+    """
+    u_str = False
+    kraj = len(red)
+    for i, c in enumerate(red):
+        if c == '"':
+            u_str = not u_str
+        elif c == "'" and not u_str:
+            kraj = i
+            break
+    tekst = red[:kraj].rstrip()
+    nastavlja = not u_str and bool(_NASTAVAK.search(tekst))
+    if nastavlja:
+        tekst = _NASTAVAK.sub("", tekst)
+    return tekst, nastavlja
+
+
+def logicke_izjave(tekst: str) -> list:
+    """[(izjava, broj PRVOG fizickog reda)] -- spojeni nastavci, bez komentara.
+
+    Broj reda je prvog fizickog: nalaz treba da pokaze na pocetak deklaracije, ne
+    na njen rep.
+    """
+    out, bafer, prvi = [], "", 0
+    for i, red in enumerate(tekst.replace("\r\n", "\n").split("\n"), 1):
+        deo, nastavlja = _izjava_deo(red)
+        if not bafer:
+            prvi = i
+        bafer = (bafer + " " + deo.strip()) if bafer else deo.strip()
+        if not nastavlja:
+            out.append((bafer, prvi))
+            bafer = ""
+    if bafer:
+        out.append((bafer, prvi))
+    return out
+
+
+_DEKL_PROC = re.compile(
+    r"^(?:(?P<vid>Public|Private|Friend)\s+)?(?:Static\s+)?"
+    r"(?P<vrsta>Sub|Function|Property)\s+(?:(?:Get|Let|Set)\s+)?"
+    r"(?P<ime>\w+)\s*(?P<ostatak>.*)$", re.IGNORECASE)
+_VRACA_TIP = re.compile(r"^As\s+\w", re.IGNORECASE)
+_NIJE_OBAVEZAN = re.compile(r"(?:Optional|ParamArray)\b", re.IGNORECASE)
+
+# Public Const deli globalni imenski prostor; implicitni modul-level Const NE.
+PUBLIC_CONST = re.compile(
+    r"^Public\s+(?:Static\s+)?Const\s+(\w+)", re.IGNORECASE)
+
+
+def _arglist(ostatak: str) -> tuple:
+    """(ima_zagrade, argumenti) iz ostatka reda posle imena procedure."""
+    ostatak = ostatak.strip()
+    if not ostatak.startswith("("):
+        return False, ""
+    dubina, u_str = 0, False
+    for i, c in enumerate(ostatak):
+        if c == '"':
+            u_str = not u_str
+        elif u_str:
+            continue
+        elif c == "(":
+            dubina += 1
+        elif c == ")":
+            dubina -= 1
+            if dubina == 0:
+                return True, ostatak[1:i]
+    return True, ostatak[1:]          # nezatvorena zagrada: uzmi sve
+
+
+def _obaveznih_argumenata(argumenti: str) -> int:
+    """Koliko argumenata se MORA dati. Optional i ParamArray se ne broje.
+
+    Deli po zapeti koja je VAN zagrada I VAN string literala. Bez drugog uslova
+    `Sub X(Optional s As String = "a,b")` izgleda kao dva argumenta, pa bi se
+    izmislio obavezan -- i suite bi postala nevidljiva popisu.
+    """
+    broj, dubina, u_str, tekuci = 0, 0, False, ""
+    for c in argumenti + ",":
+        if c == '"':
+            u_str = not u_str
+        elif not u_str and c == "(":
+            dubina += 1
+        elif not u_str and c == ")":
+            dubina -= 1
+        if c == "," and dubina == 0 and not u_str:
+            t = tekuci.strip()
+            if t and not _NIJE_OBAVEZAN.match(t):
+                broj += 1
+            tekuci = ""
+        else:
+            tekuci += c
+    return broj
+
+
+def deklaracija_procedure(red: str) -> dict:
+    """Razlozena deklaracija procedure, ili None ako red nije deklaracija.
+
+    Jedna definicija za ceo tooling sloj: dele je `collect_public` (kapija
+    DUPLIKAT) i `tools/vba_gate.py` (popis test suita). Druga kopija bi bila
+    druga stvar koja moze da se razidje -- a oba promasaja nadjena u popisu su
+    bila upravo "izraz vidi manje od VBA sintakse".
+
+    Polja: vidljivost, javna, vrsta, ime, ima_zagrade, argumenti, obaveznih.
+    `javna` je True i bez modifikatora (default je Public); `Friend` nije javno
+    u smislu globalnog imenskog prostora standardnog modula.
+    """
+    # Uvucena deklaracija je validna (`    Public Sub X()`), pa se vodeci razmak
+    # skida ovde -- a ne pretpostavlja da je pozivalac vec ocistio red.
+    m = _DEKL_PROC.match(red.strip())
+    if not m:
+        return None
+    ostatak = (m.group("ostatak") or "").strip()
+    ima_zagrade, argumenti = _arglist(ostatak)
+    if not ima_zagrade and ostatak and not _VRACA_TIP.match(ostatak):
+        return None                   # ime pa nesto trece -- nije deklaracija
+    vid = (m.group("vid") or "").lower()
+    return {
+        "vidljivost": vid or "implicitno",
+        "javna": vid in ("", "public"),
+        "vrsta": m.group("vrsta").lower(),
+        "ime": m.group("ime"),
+        "ima_zagrade": ima_zagrade,
+        "argumenti": argumenti,
+        "obaveznih": _obaveznih_argumenata(argumenti),
+    }
 
 # --- izuzetak od DUPLIKAT-a: ugovor ekrana novog UI-ja ---------------------
 #
@@ -578,7 +738,10 @@ def collect_public(path: str, lines: list[str]) -> list[tuple[str, int]]:
     jer se u projekat kompajlira samo jedna grana.
     """
     out, cond_depth = [], 0
-    for i, line in enumerate(lines, start=1):
+    # Preko LOGICKIH IZJAVA, ne fizickih redova: `Public Function X( _` u dva
+    # reda je jedna deklaracija, a uvucena deklaracija je validna. Dva sloja za
+    # istu stvar su vec tri puta divergirala, pa ih je ovde jedan.
+    for line, i in logicke_izjave("\n".join(lines)):
         stripped = line.strip().lower()
         if stripped.startswith("#if"):
             cond_depth += 1
@@ -588,7 +751,11 @@ def collect_public(path: str, lines: list[str]) -> list[tuple[str, int]]:
             continue
         if cond_depth:
             continue
-        m = PUBLIC_PROC.match(line)
+        d = deklaracija_procedure(line)
+        if d and d["javna"] and d["vrsta"] in ("sub", "function"):
+            out.append((d["ime"], i))
+            continue
+        m = PUBLIC_CONST.match(line)
         if m:
             out.append((m.group(1), i))
     return out
@@ -988,6 +1155,376 @@ def check_clan_forme(files: list[str],
                                    f"Debug > Compile, jer se modul forme kompajlira "
                                    f"tek kad se pozove."))
     return out
+
+# --- ROLLBACK_TVRDNJA_RED: wrapper mora da zna ishod koji opisuje -------------
+#
+# Prolazak kroz PorukaIshodaRollbacka nije isto sto i prolazak POSLE rollback-a.
+# Dva EH bloka u modAgroUnos su racunala poruku PRE tx.RollbackTx, pa je
+# modTxState tada jos govorio "nije kompromitovano" -- parcijalan rollback je i
+# dalje vracao "promene vracene", dok su se globalne brane ispravno zatvarale.
+# Kapija koja meri samo prisustvo wrappera je na tome bila ZELENA.
+#
+# Gleda se samo procedura koja SAMA poseduje tx. Ko zove *_TX pisca nema sta da
+# ceka -- rollback je zavrsen unutra (mereno: 11 takvih pozivnih mesta).
+_RB_PROC_KRAJ = re.compile(r'^End\s+(?:Sub|Function|Property)\b', re.IGNORECASE)
+_RB_ROLLBACK = re.compile(r'\.RollbackTx\b', re.IGNORECASE)
+
+
+def check_rollback_red(files: list[str]) -> list[Finding]:
+    out = []
+    for path in files:
+        ime = os.path.basename(path)
+        # Testovi smeju da zovu wrapper izolovano, da bi ga MERILI.
+        if "Test" in ime:
+            continue
+        with open(path, "r", encoding="ascii", errors="replace") as fh:
+            tekst = fh.read()
+
+        proc = None
+        wrap: list[int] = []
+        roll: list[int] = []
+
+        def zatvori():
+            if proc is None or not wrap or not roll:
+                return
+            zadnji_roll = max(roll)
+            for n in wrap:
+                if n < zadnji_roll:
+                    out.append(Finding(
+                        path, n, "ROLLBACK_TVRDNJA_RED",
+                        f"PorukaIshodaRollbacka u '{proc}' stoji PRE .RollbackTx "
+                        f"(red {zadnji_roll}) -- poruka se racuna dok modTxState jos "
+                        f"ne zna da je rollback bio nepotpun, pa i dalje tvrdi da su "
+                        f"promene vracene."))
+
+        for izjava, nred in logicke_izjave(tekst):
+            if _RB_PROC_KRAJ.match(izjava.strip()):
+                zatvori()
+                proc, wrap, roll = None, [], []
+                continue
+            d = deklaracija_procedure(izjava)
+            if d:
+                zatvori()
+                proc, wrap, roll = d["ime"], [], []
+                continue
+            if proc is None:
+                continue
+            if "PorukaIshodaRollbacka" in izjava:
+                wrap.append(nred)
+            if _RB_ROLLBACK.search(izjava):
+                roll.append(nred)
+        zatvori()
+    return out
+
+
+ROLLBACK_RED_CASES = [
+    # (naziv, ocekivano nalaza, telo)
+    ("wrapper POSLE rollback-a", 0,
+     'Option Explicit\n'
+     'Function F() As String\n'
+     '    Dim tx As clsTransaction\n'
+     'EH:\n'
+     '    If Not tx Is Nothing Then tx.RollbackTx\n'
+     '    F = modTxState.PorukaIshodaRollbacka("x")\n'
+     'End Function\n'),
+    ("wrapper PRE rollback-a", 1,
+     'Option Explicit\n'
+     'Function F() As String\n'
+     '    Dim tx As clsTransaction\n'
+     'EH:\n'
+     '    F = modTxState.PorukaIshodaRollbacka("x")\n'
+     '    If Not tx Is Nothing Then tx.RollbackTx\n'
+     'End Function\n'),
+    ("procedura NE poseduje tx", 0,
+     'Option Explicit\n'
+     'Function F() As String\n'
+     '    F = modTxState.PorukaIshodaRollbacka("x")\n'
+     'End Function\n'),
+    ("prelomljen poziv je JEDNA izjava", 0,
+     'Option Explicit\n'
+     'Function F() As String\n'
+     'EH:\n'
+     '    If Not tx Is Nothing Then tx.RollbackTx\n'
+     '    F = modTxState.PorukaIshodaRollbacka(Poruka("K") & _\n'
+     '        " " & errDesc)\n'
+     'End Function\n'),
+    ("rollback u DRUGOJ proceduri ne vazi", 0,
+     'Option Explicit\n'
+     'Sub A()\n'
+     '    If Not tx Is Nothing Then tx.RollbackTx\n'
+     'End Sub\n'
+     'Function F() As String\n'
+     '    F = modTxState.PorukaIshodaRollbacka("x")\n'
+     'End Function\n'),
+    ("dva wrappera, jedan pre jedan posle", 1,
+     'Option Explicit\n'
+     'Function F() As String\n'
+     '    F = modTxState.PorukaIshodaRollbacka("rano")\n'
+     '    If Not tx Is Nothing Then tx.RollbackTx\n'
+     '    F = modTxState.PorukaIshodaRollbacka("pozno")\n'
+     'End Function\n'),
+]
+
+# --- AMB_BIND_VLASNIK: ko sme da veze izvorni dokument za transakciju ---------
+#
+# clsTransaction.BindSourceDocument je capability: ko ga pozove, ta transakcija
+# tvrdi da poseduje dokument. Runtime to ne moze da proveri -- transakcija ne zna
+# ko ju je pozvao -- pa bi svaka procedura mogla da veze TUDJ (DokTip, DokID) i
+# time ponovo zaobidje AMB-INV-08.
+#
+# Zato EXACT ALLOWLIST, ne hod po grafu. Hod po grafu je nad ovim projektom danas
+# jednom pao kao placebo (v. AMBALAZA.md 6.12c): pravilo "neki predak poseduje tx"
+# je nad 4120 procedura uvek istinito. Ovo je popis pozivnih mesta JEDNE funkcije,
+# pa nema dubine koja se moze prevariti.
+#
+# Dodavanje pozivaoca je namerno NEUDOBNO: menja se ova lista, sto je vidljiv cin
+# u diff-u.
+#
+# STA OVA KAPIJA DOKAZUJE, I STA NE. Dokazuje KO: (modul, procedura) je na
+# listi. NE dokazuje KADA -- da BindSourceDocument stoji POSLE uspesnog upisa
+# dokumenta, niti da vezan dokument stvarno pripada pozivaocu. To ostaje na
+# pregledu i testu kanonskog pisca, i tako se izgovara, da dokumentacija ne
+# tvrdi vise od koda.
+#
+# Za svakog clana liste se izgovara STA ga cini kanonskim:
+#
+#   UpisiAmbDokument            -- dokument NASTAJE tu: AppendRow, provera
+#                                  rowIdx > 0, pa tek onda bind.
+#   CreateOtkup                 -- otkup NASTAJE tu, i bind stoji TEK POSLE
+#                                  uspesnog AppendRow zaglavlja.
+#   StornoOtkup                 -- otkup se tu MENJA (MarkRowStornirano), i bind
+#                                  stoji POSLE te izmene.
+#   OtpIzdaj                    -- otpremnica se tu MENJA (IzdatoStatus), i bind
+#                                  stoji POSLE te izmene. Knjizenje je zbog toga
+#                                  i premesteno IZA nje: ranije je stajalo pre,
+#                                  pa bind nije imao sta da dokazuje.
+#   StornoOtpremnica            -- otpremnica se tu MENJA (MarkRowStornirano).
+#
+# NA LISTI SU PISCI IZVORNOG DOKUMENTA, NE LEDGER PRIMITIVI.
+# modAmbalaza.StornirajAmbalazuDokumenta je bio na listi i vezivao dokument sam.
+# Obrazlozenje je bilo da to nije samopotvrda jer kapija trazi i izvornu tabelu u
+# snapshotu -- i to je FALSIFIKOVANO (review 03.10.2026, P1 #1): snapshot je
+# jeftin i ne dokazuje da je dokument promenjen, pa je pozivalac mogao da anulira
+# ambalazni efekat AKTIVNOG otkupa i prodje sve kapije. Ledger-storno zato NE
+# vezuje; ako kanonski pisac nije vezao, primitiv pada fail-closed.
+AMB_BIND_DOZVOLJENI = {
+    ("modAmbalaza", "UpisiAmbDokument"),
+    ("modOtkup", "CreateOtkup"),
+    ("modStorno", "StornoOtkup"),
+    ("modDokumenta", "OtpIzdaj"),
+    ("modStorno", "StornoOtpremnica"),
+    # Prijemnica (10b-2): pisac vezuje posle AppendRow, storno posle
+    # MarkRowStornirano. Prijemnica je jedini robni dokument koji je I SAM
+    # partnerov (AMB-10-ODL-22), pa joj vlasnika broja daje zatvorena mapa
+    # AmbRobniVlasniciBroja -- ne ovaj pisac o sebi.
+    # S6 korak 2 (stavka 174): kanonski pisac je JEZGRO dokumenta
+    # (zaglavlje + stavke), a SavePrijemnica je postao jednoklasni omotac koji
+    # ne vezuje -- pa unos prati jezgro, kao kod StornirajAmbDokument ispod.
+    ("modDokumenta", "SavePrijemnicaDokument"),
+    ("modStorno", "StornoPrijemnica"),
+    # Ambalazni dokument (revers/nabavka/otpis) dobija svoj storno u 10b-2:
+    # oznaci zaglavlje, pa vezi, pa kontra-stav -- isti redosled kao tri robna
+    # storna iznad. Do ovog reza tblAmbalazaDokument uopste nije imao storno.
+    # Od 10d bind stoji u JEZGRU (StornirajAmbDokument, tx pozivaoca), jer ga
+    # zovu dva pisca: samostalan storno (_TX omotac) i ispravka reversa, koja
+    # storno i nov dokument radi u JEDNOJ transakciji. Isti oblik kao
+    # modStorno.StornoOtkup, koji je na listi umesto svog _TX omotaca.
+    ("modAmbalaza", "StornirajAmbDokument"),
+}
+_AMB_END = re.compile(r'^End\s+(?:Sub|Function|Property)\b', re.IGNORECASE)
+_BIND_POZIV = re.compile(r'\.\s*BindSourceDocument\b', re.IGNORECASE)
+_BIND_STRING = re.compile(r'"[^"]*"')
+
+
+def check_amb_bind_vlasnik(src_dir: str | None = None) -> list[Finding]:
+    if src_dir is None:
+        src_dir = SRC_VBA
+    if not os.path.isdir(src_dir):
+        return []
+    out = []
+    for ime_f in sorted(os.listdir(src_dir)):
+        # VBA_EXT, ne samo .bas/.cls: BindSourceDocument je JAVNA metoda, pa
+        # poziv iz .frm ili .doccls mora da se vidi. Dok je ovde stajao uzi
+        # spisak, kapija je tvrdila vise nego sto je proveravala.
+        if not ime_f.lower().endswith(VBA_EXT):
+            continue
+        modul = ime_f.rsplit(".", 1)[0]
+        # Testovi smeju: oni MERE kapiju, i to nad svojim transakcijama.
+        if "Test" in modul:
+            continue
+        with open(os.path.join(src_dir, ime_f), "r", encoding="ascii",
+                  errors="replace") as fh:
+            tekst = fh.read()
+        proc = None
+        for izjava, nred in logicke_izjave(tekst):
+            go = izjava.strip()
+            if _AMB_END.match(go):
+                proc = None
+                continue
+            d = deklaracija_procedure(go)
+            if d:
+                proc = d["ime"]
+                continue
+            # String literali se skidaju: poruka o gresci sme da pomene ime.
+            if not _BIND_POZIV.search(_BIND_STRING.sub('""', go)):
+                continue
+            if (modul, proc) in AMB_BIND_DOZVOLJENI:
+                continue
+            out.append(Finding(
+                os.path.join(src_dir, ime_f), nred, "AMB_BIND_VLASNIK",
+                f"'{modul}.{proc}' zove BindSourceDocument a nije na listi "
+                f"kanonskih pisaca izvornog dokumenta (AMB_BIND_DOZVOLJENI u "
+                f"tools/vba_check.py). Vezivanje tudjeg dokumenta zaobilazi "
+                f"AMB-INV-08: transakcija bi tvrdila vlasnistvo koje nema."))
+    return out
+
+
+AMB_BIND_CASES = [
+    # (naziv, ocekivano nalaza, ime fajla, telo)
+    ("dozvoljen pisac", 0, "modAmbalaza.bas",
+     'Option Explicit\n'
+     'Public Function UpisiAmbDokument() As String\n'
+     '    tx.BindSourceDocument DOK_TIP_AMBALAZA_DOKUMENT, novID\n'
+     'End Function\n'),
+    ("tudja procedura istog modula", 1, "modAmbalaza.bas",
+     'Option Explicit\n'
+     'Public Sub NekaDruga()\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-123"\n'
+     'End Sub\n'),
+    ("tudj modul", 1, "modOrkestrator.bas",
+     'Option Explicit\n'
+     'Public Sub Snimi()\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-123"\n'
+     'End Sub\n'),
+    ("komentar nije poziv", 0, "modNesto.bas",
+     'Option Explicit\n'
+     'Public Sub S()\n'
+     "    ' tx.BindSourceDocument \"Otkup\", \"X\"\n"
+     'End Sub\n'),
+    ("ime u tekstu greske nije poziv", 0, "modNesto.bas",
+     'Option Explicit\n'
+     'Public Sub S()\n'
+     '    Err.Raise 5, , "nije vezan (tx.BindSourceDocument)"\n'
+     'End Sub\n'),
+    ("definicija nije poziv", 0, "clsTransaction.cls",
+     'Option Explicit\n'
+     'Public Sub BindSourceDocument(ByVal dokTip As String)\n'
+     'End Sub\n'),
+    # JAVNA metoda se moze zvati i iz forme i iz ThisWorkbook -- dok je kapija
+    # gledala samo .bas/.cls, ovo su bile nevidljive zaobilaznice.
+    ("poziv iz .frm", 1, "frmNesto.frm",
+     'Option Explicit\n'
+     'Private Sub cmd_Click()\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-1"\n'
+     'End Sub\n'),
+    ("poziv iz .doccls", 1, "ThisWorkbook.doccls",
+     'Option Explicit\n'
+     'Private Sub Workbook_Open()\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-1"\n'
+     'End Sub\n'),
+    # Granica procedure: poziv POSLE End Function ne sme da se pripise
+    # dozvoljenoj proceduri iznad. Slucaj postoji jer je _AMB_END bio
+    # dvostruko escapovan i nije pogadjao nista -- bez tvrdnje se to ne vidi.
+    ("granica procedure se resetuje", 1, "modAmbalaza.bas",
+     'Option Explicit\n'
+     'Public Function UpisiAmbDokument() As String\n'
+     'End Function\n'
+     '    tx.BindSourceDocument "Otkup", "OTK-1"\n'),
+    ("test modul se ne gleda", 0, "modNestoTests.bas",
+     'Option Explicit\n'
+     'Public Sub T()\n'
+     '    tx.BindSourceDocument "Otkup", "X"\n'
+     'End Sub\n'),
+]
+
+# --- ROLLBACK_TVRDNJA: poruka ne sme da tvrdi ishod koji ne zna ---------------
+#
+# Posle NEPOTPUNOG rollback-a tvrdnja "promene vracene" je cinjenicno netacna:
+# podaci su delimicno vraceni, a upis i snimanje su zakljucani (modTxState).
+# Operater koji procita staru poruku pokusa ponovo i tek tada sazna istinu.
+#
+# Kljucevi se CITAJU iz modPoruke, ne hardkoduju: pravilo pokriva i dvanaesti
+# takav kljuc dodat sutra, bez izmene kapije. Isto za inline tekst.
+TVRDNJA_VRACENO = re.compile(
+    r'promene\s+(?:su\s+)?vra"\s*&\s*ChrW\(263\)\s*&\s*"ene', re.IGNORECASE)
+TVRDNJA_WRAPPER = "PorukaIshodaRollbacka"
+
+
+def check_rollback_tvrdnja(files: list[str],
+                           poruke_path: str | None = None) -> list[Finding]:
+    if poruke_path is None:
+        poruke_path = os.path.join(SRC_VBA, "modPoruke.bas")
+    kljucevi: set[str] = set()
+    if os.path.exists(poruke_path):
+        with open(poruke_path, "r", encoding="ascii", errors="replace") as fh:
+            for line in fh:
+                if "UpsertRow" in line and TVRDNJA_VRACENO.search(line):
+                    m = re.search(r'"([A-Z0-9_]+)"', line)
+                    if m:
+                        kljucevi.add(m.group(1))
+
+    out = []
+    for path in files:
+        ime = os.path.basename(path)
+        if ime == os.path.basename(poruke_path):
+            continue
+        # Testovi smeju da nose tekst kao PODATAK (ocekivana poruka u tvrdnji).
+        if "Test" in ime:
+            continue
+        with open(path, "r", encoding="ascii", errors="replace") as fh:
+            for i, line in enumerate(fh, start=1):
+                if line.lstrip().startswith("'"):
+                    continue
+                if TVRDNJA_WRAPPER in line:
+                    continue
+                pogodak = None
+                if TVRDNJA_VRACENO.search(line):
+                    pogodak = "inline tekst"
+                else:
+                    for k in sorted(kljucevi):
+                        if f'"{k}"' in line:
+                            pogodak = k
+                            break
+                if pogodak:
+                    out.append(Finding(
+                        path, i, "ROLLBACK_TVRDNJA",
+                        f"poruka tvrdi da su promene vracene ({pogodak}) a ne pita "
+                        f"modTxState.PorukaIshodaRollbacka -- posle nepotpunog "
+                        f"rollback-a je ta tvrdnja netacna."))
+    return out
+
+
+ROLLBACK_TVRDNJA_CASES = [
+    # (naziv, ocekivano nalaza, telo pozivaoca)
+    ("gola inline tvrdnja", 1,
+     'Option Explicit\n'
+     'Sub X()\n'
+     '    MsgBox "Gre" & ChrW(353) & "ka, promene vra" & ChrW(263) & "ene: " & e\n'
+     'End Sub\n'),
+    ("inline kroz wrapper", 0,
+     'Option Explicit\n'
+     'Sub X()\n'
+     '    MsgBox modTxState.PorukaIshodaRollbacka("promene vra" & ChrW(263) & "ene")\n'
+     'End Sub\n'),
+    ("gol kljuc iz modPoruke", 1,
+     'Option Explicit\n'
+     'Sub X()\n'
+     '    MsgBox Poruka("DOK_MSG_LAZE") & e\n'
+     'End Sub\n'),
+    ("kljuc kroz wrapper", 0,
+     'Option Explicit\n'
+     'Sub X()\n'
+     '    MsgBox modTxState.PorukaIshodaRollbacka(Poruka("DOK_MSG_LAZE") & e)\n'
+     'End Sub\n'),
+    ("kljuc koji NE tvrdi ishod", 0,
+     'Option Explicit\n'
+     'Sub X()\n'
+     '    MsgBox Poruka("DOK_MSG_CIST") & e\n'
+     'End Sub\n'),
+    ("komentar nije kod", 0,
+     'Option Explicit\n'
+     "    ' MsgBox Poruka(\"DOK_MSG_LAZE\")\n"),
+]
 
 def check_poruke(files: list[str]) -> list[Finding]:
     poruke_path = os.path.join(SRC_VBA, "modPoruke.bas")
@@ -3223,6 +3760,64 @@ def self_test() -> int:
     finally:
         shutil.rmtree(tmp2, ignore_errors=True)
 
+    # ROLLBACK_TVRDNJA je cross-file (kljucevi se citaju iz modPoruke), pa ide
+    # kroz svoju funkciju sa laznim katalogom na disku. Meri se i da pravilo
+    # PUSTA kljuc koji ne tvrdi ishod -- inace bi "uvek prijavi" bilo zeleno.
+    tmp4 = tempfile.mkdtemp(prefix="vbacheck_rt_")
+    try:
+        katalog = os.path.join(tmp4, "modPoruke.bas")
+        with open(katalog, "w", encoding="ascii", newline="\r\n") as fh:
+            fh.write('Option Explicit\n'
+                     'Sub UpsertPoruke()\n'
+                     '    UpsertRow lo, ex, "DOK_MSG_LAZE", "Gre" & ChrW(353) & '
+                     '"ka. Promene su vra" & ChrW(263) & "ene."\n'
+                     '    UpsertRow lo, ex, "DOK_MSG_CIST", "Gre" & ChrW(353) & "ka."\n'
+                     'End Sub\n')
+        for naziv, ocekivano, telo in ROLLBACK_TVRDNJA_CASES:
+            put = os.path.join(tmp4, "modPozivalac.bas")
+            with open(put, "w", encoding="ascii", newline="\r\n") as fh:
+                fh.write(telo)
+            dobijeno = len(check_rollback_tvrdnja([put], katalog))
+            if dobijeno != ocekivano:
+                palo.append(f"  ROLLBACK_TVRDNJA/{naziv}: ocekivano {ocekivano} "
+                            f"nalaza, dobijeno {dobijeno}")
+    finally:
+        shutil.rmtree(tmp4, ignore_errors=True)
+
+    # ROLLBACK_TVRDNJA_RED: meri REDOSLED, pa mu self-test mora nositi i
+    # slucajeve koji NE smeju da opale -- procedura bez tx, prelomljen poziv,
+    # rollback u tudjoj proceduri. Bez njih bi "uvek prijavi" bilo zeleno.
+    tmp5 = tempfile.mkdtemp(prefix="vbacheck_rr_")
+    try:
+        for naziv, ocekivano, telo in ROLLBACK_RED_CASES:
+            put = os.path.join(tmp5, "modPozivalac.bas")
+            with open(put, "w", encoding="ascii", newline="\r\n") as fh:
+                fh.write(telo)
+            dobijeno = len(check_rollback_red([put]))
+            if dobijeno != ocekivano:
+                palo.append(f"  ROLLBACK_TVRDNJA_RED/{naziv}: ocekivano "
+                            f"{ocekivano} nalaza, dobijeno {dobijeno}")
+    finally:
+        shutil.rmtree(tmp5, ignore_errors=True)
+
+    # AMB_BIND_VLASNIK je allowlist nad jednom primitivom, pa mu self-test mora
+    # nositi i slucajeve koji NE smeju da opale: komentar, ime u tekstu greske,
+    # sama definicija, i test modul.
+    tmp7 = tempfile.mkdtemp(prefix="vbacheck_bv_")
+    try:
+        for naziv, ocekivano, ime_f, telo in AMB_BIND_CASES:
+            poddir = os.path.join(tmp7, re.sub(r"[^a-z0-9]+", "_", naziv.lower()))
+            os.makedirs(poddir, exist_ok=True)
+            with open(os.path.join(poddir, ime_f), "w", encoding="ascii",
+                      newline="\r\n") as fh:
+                fh.write(telo)
+            dobijeno = len(check_amb_bind_vlasnik(poddir))
+            if dobijeno != ocekivano:
+                palo.append(f"  AMB_BIND_VLASNIK/{naziv}: ocekivano {ocekivano} "
+                            f"nalaza, dobijeno {dobijeno}")
+    finally:
+        shutil.rmtree(tmp7, ignore_errors=True)
+
     # SEMA_REGISTAR je isto cross-file (modConfig + modSchema), sa lazna dva
     # fajla na disku.
     tmp3 = tempfile.mkdtemp(prefix="vbacheck_sr_")
@@ -3319,7 +3914,9 @@ def self_test() -> int:
               + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES)
               + len(PROC_SIZE_CASES) + len(KVAL_CASES)
               + len(KRAJ_REDA_CASES) + len(CLAN_FORME_CASES)
-              + len(DUPLI_LOKAL_CASES) + 3)
+              + len(DUPLI_LOKAL_CASES)
+              + len(ROLLBACK_TVRDNJA_CASES) + len(ROLLBACK_RED_CASES)
+              + len(AMB_BIND_CASES) + 3)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
@@ -3436,6 +4033,62 @@ def check_katalog_sabotaza(tiho: bool = False) -> int:
     return 2 if modul.proveri_sidra(tiho) else 0
 
 
+# --- pravila grupisanja dokaza ---------------------------------------------
+#
+# `tools/dokaz.py --grupe` skracuje dvosmerni dokaz tako sto pusta vise mutacija
+# u JEDNOM prolazu suite-a. Koliko ih sme zajedno, odlucuju cetiri pravila (ista
+# suite, razlicit test, razlicit kljuc, razlicita procedura) -- a pravilo koje
+# prestane da grize ne pravi crven alat nego TISE TVRDNJU: dokaz i dalje kaze
+# "crvenih = sabotaza", samo vise ne zna koja je mutacija oborila koju tvrdnju.
+#
+# Ta pravila su ciste funkcije, pa im dokaz ne trazi ni Excel ni src-vba i staje
+# u isti budzet kao katalog: ide ovde, dakle i kroz PostToolUse hook.
+def check_dokaz_grupe(tiho: bool = False) -> int:
+    put = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dokaz.py")
+    if not os.path.exists(put):
+        return 0
+    spec = importlib.util.spec_from_file_location("_dokaz_za_check", put)
+    modul = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(modul)
+    except Exception as e:                       # pokvaren alat je isto nalaz
+        print(f"GRUPE: tools/dokaz.py se ne ucitava -- {e}", file=sys.stderr)
+        return 2
+    return 2 if modul._self_test(tiho) else 0
+
+
+# --- popis test suita -------------------------------------------------------
+#
+# Suite koju nijedna kapija ne pokrece je nevidljiva: `SUITES` u run_vba.py ne zna
+# da procedura postoji, pa je ne pominje ni kao preskocenu. Zato provera ide ovde,
+# uz katalog sabotaza: oba nalaza nastaju BAS VBA izmenom (nova suite, obrisana
+# suite, suite prikljucena kapiji), i oba se vide bez Excela.
+#
+# Pravila i registar `SUITE_VAN_KAPIJA` su u tools/vba_gate.py, zajedno sa svojim
+# dvosmernim dokazom.
+def check_popis_suita(tiho: bool = False) -> int:
+    put = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vba_gate.py")
+    if not os.path.exists(put):
+        return 0
+    spec = importlib.util.spec_from_file_location("_gate_za_check", put)
+    modul = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(modul)
+        # Sloj se PREDAJE kao PAR (razlagac, izjave), da se vba_check ne uvozi
+        # drugi put na ovoj (hook) putanji -- v. `_razlagac` u vba_gate.
+        nalazi = modul.popis_problemi(
+            razlagac=(deklaracija_procedure, logicke_izjave))
+    except Exception as e:                       # pokvaren alat je isto nalaz
+        print(f"POPIS: tools/vba_gate.py se ne ucitava -- {e}", file=sys.stderr)
+        return 2
+    for n in nalazi:
+        print(f"POPIS-SUITA: {n}", file=sys.stderr)
+    if not nalazi and not tiho:
+        print(f"popis suita: {len(modul.katalog_suita())} u SUITES, "
+              f"{len(modul.SUITE_VAN_KAPIJA)} van kapija sa zapisanim razlogom")
+    return 2 if nalazi else 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Staticke provere nad src-vba")
     ap.add_argument("paths", nargs="*", help="konkretni fajlovi (podrazumevano ceo src-vba/)")
@@ -3448,8 +4101,24 @@ def main(argv: list[str]) -> int:
         return self_test()
 
     files = vba_files(args.paths)
+    # KAPIJE NAD ALATIMA se racunaju PRE izlaza "nema fajlova".
+    #
+    # Katalog sabotaza i pravila grupisanja dokaza ne zavise od toga koji su
+    # fajlovi dati: sidra pokrivaju ceo src-vba, a pravila grupisanja ne citaju
+    # ni jedan fajl. Prva verzija je ovo vezala za `not args.paths` -- a
+    # PostToolUse hook zove `vba_check.py --hook <fajl>`, pa se katalog kroz
+    # hook nikad nije proveravao; to je popravljeno, ali je ostao jos jedan
+    # izlaz ispred: `if not files: return 0`. Hook se zove i sa putanjom koja
+    # NIJE VBA fajl -- na primer bas `tools/sabotaza.py`, gde se greska u
+    # katalogu i pravi -- i tada je `files` prazno, pa se izlazilo sa 0 pre
+    # ijedne od ovih provera. Ovde se to vise ne moze zaobici.
+    rc_kat = check_katalog_sabotaza(args.hook)
+    rc_grupe = check_dokaz_grupe(args.hook)
+    rc_popis = check_popis_suita(args.hook)
+    rc_alata = rc_kat or rc_grupe or rc_popis
+
     if not files:
-        return 0
+        return rc_alata
 
     findings: list[Finding] = []
     publics: dict[str, list[tuple[str, int]]] = defaultdict(list)
@@ -3486,31 +4155,29 @@ def main(argv: list[str]) -> int:
                                         f'-- VBA "Ambiguous name detected".'))
 
     findings += check_poruke(files)
+    findings += check_rollback_tvrdnja(files)
+    findings += check_rollback_red(files)
     findings += check_storno_registar(files)
     findings += check_sema_registar()
+    findings += check_amb_bind_vlasnik()
     findings += check_clan_forme(files)
-
-    # Katalog se proverava UVEK, i kad je dat jedan fajl.
-    #
-    # Prva verzija je ovo vezala za `not args.paths` -- a PostToolUse hook zove
-    # bas `vba_check.py --hook <fajl>`, pa se katalog kroz hook nikad nije
-    # proveravao. Time je i cela poenta promasena: sidro obara VBA izmena, i
-    # treba da se vidi u toj sekundi, a ne tek u CI-ju posle dvadeset izmena.
-    # Katalog nema veze sa tim koji je fajl dat -- sidra pokrivaju ceo src-vba.
-    rc_kat = check_katalog_sabotaza(args.hook)
 
     if not findings:
         if not args.hook:
-            if rc_kat:
+            if rc_alata:
                 # NE 'izvor cist': jedan od nalaza kataloga je bas to da je
                 # izvor zatecen sabotiran. Tvrdi se samo ono sto je mereno --
                 # da pravila nad fajlovima nisu nasla nista.
+                krivci = " i ".join(ime for ime, rc in (
+                    ("KATALOG SABOTAZA", rc_kat),
+                    ("PRAVILA GRUPISANJA DOKAZA", rc_grupe),
+                    ("POPIS TEST SUITA", rc_popis)) if rc)
                 print(f"vba_check: pravila nad fajlovima cista "
-                      f"({len(files)} fajlova), ali KATALOG SABOTAZA nije.",
+                      f"({len(files)} fajlova), ali {krivci} ne prolazi.",
                       file=sys.stderr)
             else:
                 print(f"vba_check: cisto ({len(files)} fajlova).")
-        return rc_kat
+        return rc_alata
 
     by_code: dict[str, int] = defaultdict(int)
     for f in sorted(findings, key=lambda f: (f.path, f.line)):

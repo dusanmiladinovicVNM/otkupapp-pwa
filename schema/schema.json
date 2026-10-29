@@ -25,18 +25,39 @@
         "Datum",
         "TipAmbalaze",
         "Kolicina",
-        "Smer",
-        "EntitetID",
-        "EntitetTip",
-        "VozacID",
         "DokumentID",
         "DokumentTIP",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy",
+        "OdNalogTip",
+        "OdNalogID",
+        "NaNalogTip",
+        "NaNalogID",
+        "VrstaKretanja",
+        "StornoOd"
+      ]
+    },
+    {
+      "table": "tblAmbalazaDokument",
+      "const": "TBL_AMBALAZA_DOKUMENT",
+      "sheet": "AmbalazaDokument",
+      "columns": [
+        "AmbDokID",
+        "Vrsta",
+        "BrojDokumenta",
+        "Datum",
+        "BrojOwnerTip",
+        "BrojOwnerID",
+        "Napomena",
         "Stornirano",
         "CreatedAt",
         "CreatedBy",
         "ModifiedAt",
         "ModifiedBy",
-        "ReversID"
+        "IspravkaOdID",
+        "ZamenjenSaID"
       ]
     },
     {
@@ -142,7 +163,8 @@
         "ModifiedBy",
         "PreradaID",
         "BrojPrerade",
-        "UtovarID"
+        "UtovarID",
+        "PrijemnicaStavkaID"
       ]
     },
     {
@@ -448,13 +470,8 @@
         "BrojZbirne",
         "VrstaVoca",
         "SortaVoca",
-        "Kolicina",
-        "Cena",
         "TipAmbalaze",
-        "KolAmbalaze",
-        "Klasa",
         "Stornirano",
-        "BrutoKg",
         "CreatedAt",
         "CreatedBy",
         "ModifiedAt",
@@ -555,7 +572,8 @@
         "CreatedBy",
         "ModifiedAt",
         "ModifiedBy",
-        "ZbirnaRoditeljID"
+        "ZbirnaRoditeljID",
+        "PrijemnicaStavkaID"
       ]
     },
     {
@@ -684,16 +702,9 @@
         "BrojZbirne",
         "VrstaVoca",
         "SortaVoca",
-        "Kolicina",
-        "Cena",
         "TipAmbalaze",
-        "KolAmbalaze",
         "KolAmbVracena",
-        "Klasa",
-        "Fakturisano",
-        "FakturaID",
         "Stornirano",
-        "BrutoKg",
         "CreatedAt",
         "CreatedBy",
         "ModifiedAt",
@@ -702,8 +713,26 @@
         "ZamenjenSa",
         "CorrectionID",
         "IzdatoStatus",
-        "GeneracijaID",
         "ZbirnaRoditeljID"
+      ]
+    },
+    {
+      "table": "tblPrijemnicaStavke",
+      "const": "TBL_PRIJEMNICA_STAVKE",
+      "sheet": "PrijemnicaStavke",
+      "columns": [
+        "PrijemnicaStavkaID",
+        "PrijemnicaID",
+        "RedniBroj",
+        "Klasa",
+        "Kolicina",
+        "Cena",
+        "KolAmbalaze",
+        "BrutoKg",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
       ]
     },
     {
@@ -947,7 +976,8 @@
         "ZamenjenSa",
         "CorrectionID",
         "IzdatoStatus",
-        "GeneracijaID"
+        "GeneracijaID",
+        "KupacHladnjaca"
       ]
     },
     {
@@ -1018,6 +1048,9 @@
     },
     "tblArtikli": {
       "BarKod": "text"
+    },
+    "tblAmbalazaDokument": {
+      "BrojDokumenta": "text"
     },
     "tblBankaImport": {
       "BankaReferenz": "text",

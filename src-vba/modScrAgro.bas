@@ -236,6 +236,9 @@ End Function
 '=====================================================================
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrAgro.Scr_Build"
 
     ' Bela podloga ispod oba reda polja. Zona je krem, a polja su bela -- bez
     ' podloge se izmedju njih vidi pozadina zone i panel izgleda kao niz
@@ -316,6 +319,9 @@ Public Sub Scr_Build(ByVal z As Object)
                   118, AG_BTN_H, "ghost"
 
     modUiKit.NewLbl z, "agLnB", "", 0, AG_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
+    Exit Sub
+EH:
+    modUiScreens.ScrPadZabelezi "modScrAgro.Scr_Build"
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
@@ -1379,6 +1385,9 @@ End Sub
 ' REDOVI ZA MREZU
 '=====================================================================
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrAgro.Scr_Rows"
     ' Zona se puni odavde, kao i na ekranu Palete: gradi se jednom, a podaci
     ' za nju postoje tek kad se lista cita.
     OsveziZonu
@@ -1389,6 +1398,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     End Select
     ' Korpa nema cipove, pa filter ne gleda -- v. Scr_Cipovi.
     Scr_Rows = RedoviKorpa(q)
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrAgro.Scr_Rows"
 End Function
 
 Private Function PrazanRezultat(ByVal kolone As Variant) As Variant

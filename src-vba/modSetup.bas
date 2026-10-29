@@ -1188,6 +1188,33 @@ Public Sub EnsureRuntimeSchema()
     ' NE unutar transakcije: clsTransaction.RestoreTable dize gresku na
     ' neslaganje broja kolona. EnsureRuntimeSchema se zove pre svakog rada, van
     ' transakcije.
+    ' PREIMENOVANJA IDU PRE KANONSKOG SELF-HEAL-A, i to je jedini ispravan red.
+    '
+    ' S4-3c je kolonu u kanonu preimenovao (ZbirnaGeneracijaID -> ZbirnaRoditeljID)
+    ' ali self-heal nije dobio putanju, pa se zatecena sveska NIJE mogla izleciti:
+    ' EnsureAllTables ispod dopuni kolonu koja "fali" (novo ime) NA KRAJ, staro ime
+    ' ostane na svojoj poziciji u sredini, i kanonski prefiks puca --
+    '   "tblOtkup pozicija 28: ocekivano ZbirnaRoditeljID, stvarno ZbirnaGeneracijaID"
+    ' pa svaki upis staje fail-closed, bez izlaza.
+    '
+    ' MERENO: prvi pokusaj je rename stavio ispred EnsureKolonaSaTragom poziva na
+    ' kraju ovog modula -- i nije pomoglo, jer je EnsureAllTables vec dodao novo
+    ' ime, a PreimenujKolonuAko tiho izlazi kad novo ime postoji. Pun prolaz je to
+    ' pokazao, ne rezonovanje. Rename zato mora da bude PRVA stvar.
+    '
+    ' Staro ime je LITERAL: konstante za njega nema i ne vraca se -- isto kao kod
+    ' ObrisiKolonuAko za obrisane kolone.
+    PreimenujKolonuAko TBL_OTKUP, "ZbirnaGeneracijaID", COL_DETE_ZBIRNA_ROD
+    PreimenujKolonuAko TBL_OTPREMNICA, "ZbirnaGeneracijaID", COL_DETE_ZBIRNA_ROD
+    PreimenujKolonuAko TBL_PRIJEMNICA, "ZbirnaGeneracijaID", COL_DETE_ZBIRNA_ROD
+    PreimenujKolonuAko TBL_PALETA_STAVKA, "ZbirnaGeneracijaID", COL_DETE_ZBIRNA_ROD
+
+    ' Brisanje iz kanona ide PRE provere otiska, iz istog razloga kao rename:
+    ' EnsureAllTables ume samo da DODA, pa bi stara kolona u sredini ostala i
+    ' otisak bi prijavljivao drift koji self-heal ne leci.
+    ObrisiStareKoloneAmbalaze
+    ObrisiStareKolonePrijemnice
+
     If Len(modSchema.SchemaCheckOnStart()) > 0 Then modSchema.EnsureAllTables
 
     ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
@@ -1286,6 +1313,25 @@ Public Sub EnsureSledljivostSchema()
     Dim i As Long
     For i = LBound(tbls) To UBound(tbls)
         Dim t As String: t = CStr(tbls(i))
+
+        ' LINIJSKA POLJA ZAGLAVLJA OTPREMNICE SU OBRISANA IZ KANONA (S3-ostatak).
+        '
+        ' Klasa, Kolicina, Cena, KolAmbalaze i BrutoKg su cinjenice STAVKE i od S3a
+        ' zive na tblOtpremnicaStavke; zaglavlje ih je pisalo prazne.
+        '
+        ' Brisanje je IZ SREDINE i NIJE NEPREKIDNO: pozicije su bile 9, 10, 12, 13
+        ' i 15, a 14 je Stornirano -- dakle izmedju njih. Kolona koja ostane u
+        ' zatecenoj svesci POMERA sve iza sebe, pa pozicioni upis (AppendRow) salje
+        ' vrednosti u pogresne kolone. Zato se brisu PRE prvog upisa, isto kao osam
+        ' kolona tblOtkup u S1d.
+        If t = TBL_OTPREMNICA Then
+            ObrisiKolonuAko t, "Kolicina"
+            ObrisiKolonuAko t, "Cena"
+            ObrisiKolonuAko t, "KolAmbalaze"
+            ObrisiKolonuAko t, "Klasa"
+            ObrisiKolonuAko t, "BrutoKg"
+        End If
+
         ' tblOtkup je presao na vezu PO ID-u (A9, korak 5). Broj-oblik se tu vise
         ' NE dodaje -- inace bi self-heal vratio kolonu koju je kanon preimenovao,
         ' pa bi tabela nosila oba oblika i nijedan ne bi bio merodavan.
@@ -1319,7 +1365,9 @@ Public Sub EnsureSledljivostSchema()
         EnsureKolonaSaTragom t, COL_TRACE_IZDATO_STATUS
         ' Generacija upisa (Klasa I + II iz istog Multi_TX poziva dele vrednost).
         ' Prefill iz stornirane bira poslednju generaciju po ovoj koloni.
-        EnsureKolonaSaTragom t, COL_GENERACIJA_ID
+        ' Prijemnica je NEMA od S6 koraka 8: dokument je jedan red, a identitet
+        ' je PrijemnicaID. Dodata ovde, obrisana kolona bi se vratila NA KRAJ.
+        If t <> TBL_PRIJEMNICA Then EnsureKolonaSaTragom t, COL_GENERACIJA_ID
     Next i
     ' Faza 7 korak 5: denorm poslovni kljuc bloka -> otpremnica (stabilan kroz re-verziju).
     EnsureKolonaSaTragom TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
@@ -1331,6 +1379,8 @@ Public Sub EnsureSledljivostSchema()
     ' Samo SEMA. Popunjavanje starih redova je zasebna, jednokratna migracija
     ' (obrisan u S4-3c: nema legacy podataka) -- bio je skup za svaki start
     ' samo jednoznacne brojeve, sto je odluka a ne rutina.
+    ' Preimenovanje ZbirnaGeneracijaID -> ZbirnaRoditeljID NIJE ovde nego na
+    ' POCETKU EnsureRuntimeSchema -- pre kanonskog self-heal-a. Razlog je tamo.
     EnsureKolonaSaTragom TBL_OTPREMNICA, COL_DETE_ZBIRNA_ROD
     EnsureKolonaSaTragom TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD
     EnsureKolonaSaTragom TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD
@@ -1359,6 +1409,49 @@ End Sub
 '
 ' Podatak se gubi, i to je namerno: ove dve kolone su bile KES izvedenog statusa
 ' (v. modNovac, obrisan UpdateOtkupStatus). Istina o isplatama zivi u tblNovac.
+' STARI MODEL AMBALAZE JE OBRISAN IZ KANONA (10e-3, AMBALAZA.md 6.13e).
+'
+' Sest kolona (Smer, EntitetID, EntitetTip, VozacID, Stornirano, ReversID) stoji
+' u SREDINI starog kanona (pozicije 5-8, 11 i 16), pa kolona koja ostane u
+' zatecenoj svesci pomera sve iza sebe: SchemaReadyOrFail tada zaustavlja svako
+' citanje i svaki upis knjige. Brisu se PO IMENU, bez obzira na sadrzaj -- nijedan
+' citalac ih vise ne cita, a migracije nema (nema produkcionih podataka).
+'
+' Red STAROG OBLIKA koji ostane posle brisanja nije tiho preskocen: citalac ga
+' prijavljuje kao kvar knjige (modAmbalaza.KnjigaIntegritet). Imena su LITERALI,
+' kao kod ostalih obrisanih kolona -- konstante za njih nema i ne vraca se.
+' Public jer ga meri test (Test_Amb_StareKoloneSelfHeal).
+Public Sub ObrisiStareKoloneAmbalaze()
+    ObrisiKolonuAko TBL_AMBALAZA, "Smer"
+    ObrisiKolonuAko TBL_AMBALAZA, "EntitetID"
+    ObrisiKolonuAko TBL_AMBALAZA, "EntitetTip"
+    ObrisiKolonuAko TBL_AMBALAZA, "VozacID"
+    ObrisiKolonuAko TBL_AMBALAZA, "Stornirano"
+    ObrisiKolonuAko TBL_AMBALAZA, "ReversID"
+End Sub
+
+' ZAGLAVLJE PRIJEMNICE GUBI LINIJSKA POLJA, KES FAKTURE I GENERACIJU (S6 korak 8).
+'
+' Kolicina, Cena, KolAmbalaze, Klasa i BrutoKg su cinjenice STAVKE i od S6 koraka 2
+' zive na tblPrijemnicaStavke; Fakturisano i FakturaID su kes koji od koraka 5
+' niko ne cita (fakturisanost je izvedena iz linija fakture); GeneracijaID je
+' identitet modela "red po klasi", a dokument je od koraka 2 jedan red sa svojim
+' PrijemnicaID-om. Osam kolona stoji u SREDINI starog kanona (9, 10, 12, 14-16, 18
+' i 27), pa kolona koja ostane u zatecenoj svesci pomera sve iza sebe. Brisu se
+' PO IMENU, bez obzira na sadrzaj -- citalaca nema, a migracije nema (nema
+' produkcionih podataka). Imena su LITERALI: konstante su obrisane i ne vracaju
+' se. Public jer ga meri test (Test_S6K8_PrijemnicaStareKoloneSelfHeal).
+Public Sub ObrisiStareKolonePrijemnice()
+    ObrisiKolonuAko TBL_PRIJEMNICA, "Kolicina"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "Cena"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "KolAmbalaze"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "Klasa"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "Fakturisano"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "FakturaID"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "BrutoKg"
+    ObrisiKolonuAko TBL_PRIJEMNICA, "GeneracijaID"
+End Sub
+
 Public Sub ObrisiKolonuAko(ByVal tbl As String, ByVal ime As String)
     On Error GoTo EH
 
@@ -1393,33 +1486,340 @@ End Sub
 ' Sadrzaj se NE prevodi: stara kolona je nosila poslovni BROJ, nova nosi ID, ali
 ' na tblOtkup je nikad niko nije ni pisao (StampIspravkaTrace se zove samo za
 ' Otpremnicu, Zbirnu i Prijemnicu), pa je svaka zatecena vrednost prazna.
-Public Sub PreimenujKolonuAko(ByVal tbl As String, ByVal staroIme As String, _
-                               ByVal novoIme As String)
+' Indeks kolone PO IMENU, direktno iz tabele -- BEZ kesa.
+'
+' GetColumnIndex kesira pozitivne indekse unutar Begin/EndTableCache prozora.
+' Postcondition koji sme da procita kes nije postcondition: posle preimenovanja bi
+' vratio ustajao indeks starog imena i tvrdio da migracija nije uspela. Zato se
+' ovde gleda ziva tabela.
+Private Function IndeksKoloneUTabeli(ByVal lo As ListObject, ByVal ime As String) As Long
+    Dim k As Long
+    For k = 1 To lo.ListColumns.count
+        If StrComp(Trim$(CStr(lo.ListColumns(k).name)), Trim$(ime), vbTextCompare) = 0 Then
+            IndeksKoloneUTabeli = k
+            Exit Function
+        End If
+    Next k
+End Function
+
+' Ima li kolona ijednu NEPRAZNU celiju. Prazna tabela = nema podataka.
+Private Function KolonaImaPodatke(ByVal lo As ListObject, ByVal idx As Long) As Boolean
+    If idx <= 0 Then Exit Function
+    If lo.ListRows.count = 0 Then Exit Function
+
+    Dim dbr As Range
+    Set dbr = lo.ListColumns(idx).DataBodyRange
+    If dbr Is Nothing Then Exit Function
+
+    Dim r As Long
+    For r = 1 To dbr.Rows.count
+        If Len(Trim$(CStr(dbr.cells(r, 1).value & ""))) > 0 Then
+            KolonaImaPodatke = True
+            Exit Function
+        End If
+    Next r
+End Function
+
+' PRESELJENJE SADRZAJA KOLONE -- format PRE vrednosti.
+'
+' Ciljna kolona je do sada nosila STARO ime, pa kanonski format (kljuc "formats"
+' u schema/schema.json ide PO IMENU) nikad nije dobila: ostala je General. Upis
+' teksta u General celiju Excel TIHO konvertuje, i to u TRENUTKU UPISA -- naknadno
+' postavljanje formata vec pokvarenu vrednost ne vraca (v. modSchema, sekcija
+' FORMAT CELIJE). Zato format ide prvi, pa vrednosti.
+'
+' NumberFormat MESANOG opsega vraca Null, a Null se ne sme upisati natrag -- tada
+' se format ne dira i prenose se samo vrednosti.
+Private Sub PreseliSadrzajKolone(ByVal lo As ListObject, ByVal iOd As Long, _
+                                 ByVal iNa As Long)
+    If lo.ListRows.count = 0 Then Exit Sub
+
+    Dim od As Range, na As Range
+    Set od = lo.ListColumns(iOd).DataBodyRange
+    Set na = lo.ListColumns(iNa).DataBodyRange
+    If od Is Nothing Or na Is Nothing Then Exit Sub
+
+    Dim fmt As Variant
+    fmt = od.NumberFormat
+    If VarType(fmt) = vbString Then na.NumberFormat = CStr(fmt)
+
+    na.value = od.value
+End Sub
+
+' KANONSKI INDEKS KOLONE -- iz kanona, ne iz sveske. 0 = kanon je ne zna.
+Private Function KanonskiIndeksKolone(ByVal tbl As String, ByVal ime As String) As Long
+    Dim kol As Collection
+    Dim i As Long
+
+    Set kol = modSchema.SchemaTableColumns(tbl)
+    For i = 1 To kol.count
+        If StrComp(Trim$(CStr(kol(i))), Trim$(ime), vbTextCompare) = 0 Then
+            KanonskiIndeksKolone = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Prvih N kanonskih imena: isti ugovor, skracen do jedne pozicije.
+Private Function KanonPrefiksDo(ByVal tbl As String, ByVal doIndeksa As Long) As Collection
+    Dim kol As Collection
+    Dim out As Collection
+    Dim i As Long
+
+    Set out = New Collection
+    Set kol = modSchema.SchemaTableColumns(tbl)
+    For i = 1 To doIndeksa
+        If i > kol.count Then Exit For
+        out.Add CStr(kol(i))
+    Next i
+
+    Set KanonPrefiksDo = out
+End Function
+
+' KOLONA POSTOJI, ALI NE NA KANONSKOM MESTU -- ciljano vracanje, ne prearanziranje.
+'
+' ZASTO POSTOJI (review #396, P2). "Staro ime nema" NIJE dokaz da je migracija
+' zavrsena: kolona sa pravim imenom moze da stoji NA KRAJU, jer ju je tamo dopisao
+' EnsureAllTables. Bas to stanje je mogla da ostavi PRETHODNA verzija ovog istog
+' oporavka (#395: obrisi prazno staro, ostavi novo gde je), a proizvodi ga i cist
+' rename nad kolonom koja je i sama bila zalutala. Repair koji se ne oporavlja od
+' onoga sto je njegova ranija verzija ostavila nije konvergentan -- to je isti
+' princip zbog kog su zatvorena prethodna dva nalaza.
+'
+' ZASTO JE OVDE DOZVOLJENO ONO STO EnsureAllTables ODBIJA. modSchema NAMERNO ne
+' popravlja redosled ("premestanje kolone bi pomerilo podatke; pogresan redosled je
+' nalaz za coveka"), i to pravilo OSTAJE. Razlika je obim: tamo pitanje "koja je od
+' 638 kolona zalutala" nema odgovor, a ovde se zna JEDNO ime, njegov kanonski
+' indeks i merljiv postcondition. Zato se premesta samo kad je sve ISPRED
+' kanonskog mesta vec kanonsko -- tada je ta kolona jedina razlika. Inace se NISTA
+' ne dira i vraca se imenovan razlog: to je i dalje nalaz za coveka.
+'
+' Provera prefiksa NIJE nova: to je modSchema.PrefiksNeslaganje, isti helper koji
+' vrte VerifySchema i SchemaReadyOrFail, samo nad SKRACENIM kanonom. Treca lokalna
+' kopija tog poredjenja bila bi bas ono sto komentar iznad njega zabranjuje.
+Private Function VratiKolonuNaKanonskoMesto(ByVal tbl As String, _
+                                            ByVal ime As String) As String
     On Error GoTo EH
 
     Dim lo As ListObject
     Set lo = modDataAccess.GetTable(tbl)
-    If lo Is Nothing Then Exit Sub
+    If lo Is Nothing Then Exit Function
 
-    ' Vec migrirano -> tiho izlazi. MERENO: bez ove kapije ishod je ISTI, jer
-    ' Excel odbija drugu ListColumn istog imena i EH to uhvati. Razlika je u
-    ' tragu: bez nje bi sveska sa oba imena pisala LogError na SVAKOM startu,
-    ' pa bi realna greska nestala u sumu. Sabotaza je nece oboriti -- namerno.
-    If GetColumnIndex(tbl, novoIme) > 0 Then Exit Sub
+    Dim iSad As Long, iKanon As Long
+    iSad = IndeksKoloneUTabeli(lo, ime)
+    iKanon = KanonskiIndeksKolone(tbl, ime)
 
-    Dim i As Long
-    i = GetColumnIndex(tbl, staroIme)
-    If i <= 0 Then Exit Sub                                ' nema sta da se menja
+    If iSad <= 0 Then Exit Function          ' nema je; EnsureAllTables je pravi
+    If iKanon <= 0 Then Exit Function        ' kanon je ne zna; visak na kraju je legitiman
+    If iSad = iKanon Then Exit Function      ' na mestu je
 
-    lo.ListColumns(i).name = novoIme
-    LogInfo "modSetup.PreimenujKolonuAko", _
-            tbl & ": " & staroIme & " -> " & novoIme & " (pozicija " & CStr(i) & ")"
-    Exit Sub
+    If iSad < iKanon Then
+        ' Ispred svog kanonskog mesta znaci da je nesto PRE nje ispalo iz sveske.
+        ' To nije zalutala kolona nego MANJAK, i premestanjem se ne resava.
+        VratiKolonuNaKanonskoMesto = tbl & ": '" & ime & "' je na poziciji " & _
+            CStr(iSad) & ", ISPRED kanonske " & CStr(iKanon) & _
+            " -- nedostaje kolona pre nje, premestanje ne bi pomoglo"
+        Exit Function
+    End If
+
+    Dim neslaganje As String
+    neslaganje = modSchema.PrefiksNeslaganje(lo, KanonPrefiksDo(tbl, iKanon - 1))
+    If Len(neslaganje) > 0 Then
+        VratiKolonuNaKanonskoMesto = tbl & ": '" & ime & "' je na " & CStr(iSad) & _
+            " a kanonska je " & CStr(iKanon) & ", ali redosled ISPRED nje nije kanonski (" & _
+            neslaganje & ") -- ne premesta se automatski"
+        Exit Function
+    End If
+
+    ' Premestanje BEZ Cut/Insert: dodaj kolonu na kanonsko mesto, prenesi sadrzaj,
+    ' obrisi zalutalu, pa preimenuj. Cut/Insert bi bio jedan korak, ali njegovo
+    ' ponasanje u nevidljivom Excelu nije mereno, a ove tri operacije modul vec vrti.
+    ' Privremeno ime je neophodno: dva ista imena Excel odbija.
+    Dim privIme As String
+    privIme = ime & "_MIG"
+
+    lo.ListColumns.Add(iKanon).name = privIme    ' zalutala se pomera na iSad + 1
+    PreseliSadrzajKolone lo, iSad + 1, iKanon
+    lo.ListColumns(iSad + 1).Delete
+    lo.ListColumns(iKanon).name = ime
+
+    LogInfo "modSetup.VratiKolonuNaKanonskoMesto", _
+            tbl & ": '" & ime & "' vracena sa pozicije " & CStr(iSad) & _
+            " na kanonsku " & CStr(iKanon)
+
+    ' POSTCONDITION: jedna kolona, na kanonskom mestu, bez privremenog imena.
+    Set lo = modDataAccess.GetTable(tbl)
+    If IndeksKoloneUTabeli(lo, privIme) > 0 Then
+        VratiKolonuNaKanonskoMesto = tbl & ": privremeno ime '" & privIme & "' je ostalo"
+    ElseIf IndeksKoloneUTabeli(lo, ime) <> iKanon Then
+        VratiKolonuNaKanonskoMesto = tbl & ": '" & ime & "' je posle premestanja na " & _
+            CStr(IndeksKoloneUTabeli(lo, ime)) & " a ne na kanonskoj " & CStr(iKanon)
+    End If
+
+    If Len(VratiKolonuNaKanonskoMesto) > 0 Then
+        LogError "modSetup.VratiKolonuNaKanonskoMesto", VratiKolonuNaKanonskoMesto
+    End If
+    Exit Function
 EH:
-    LogError "modSetup.PreimenujKolonuAko", _
-             tbl & ": " & staroIme & " -> " & novoIme & " nije uspelo: " & _
-             Err.description, Err.Number
-End Sub
+    VratiKolonuNaKanonskoMesto = tbl & ": '" & ime & _
+        "' nije vracena na kanonsko mesto: " & Err.description
+    LogError "modSetup.VratiKolonuNaKanonskoMesto", VratiKolonuNaKanonskoMesto, Err.Number
+End Function
+
+' MIGRACIJA IMENA KOLONE, KONVERGENTNA NAD SVA CETIRI STANJA.
+'
+' Vraca "" kad je posle poziva stanje kanonsko, inace IMENOVAN razlog. Razlog se
+' vraca a ne samo loguje, da ga test moze tvrditi -- kapija bez merljivog izlaza
+' je rec, ne kapija.
+'
+'   staro DA / novo NE   -> preimenuj NA MESTU (cist migration path)
+'   staro NE / novo DA   -> ime je migrirano; proveri MESTO (review #396, P2)
+'   staro NE / novo NE   -> nista; EnsureAllTables kasnije sme da je napravi
+'   staro DA / novo DA   -> OPORAVAK, ne no-op
+'
+' Ugovor je UNIFORMAN, ne grana po grana: posle poziva je novo ime na kanonskom
+' mestu, ili se vraca imenovan razlog. Ime bez mesta nije migracija -- upis je
+' POZICION. Zato istu proveru mesta vrte SVE putanje, i ona bez imenskog posla:
+' "staro ime nema" je bilo tiho "vec migrirano", a moglo je da znaci "ime je tacno,
+' kolona je na kraju".
+'
+' ZASTO OPORAVAK A NE NO-OP (review #395, P1). Bas to stanje je proizvodio
+' PRETHODNI main: kanon je nosio novo ime, rename putanje nije bilo, pa je
+' EnsureAllTables dopisivao novo ime NA KRAJ dok je staro ostajalo u SREDINI.
+' Stari helper je na to izlazio tiho, pa je sveska ostajala TRAJNO drift-ovana --
+' SchemaReadyOrFail blokira upise fail-closed, ali se sveska sama nije mogla
+' izleciti. Repair koji ne pokriva stanje koje je sam bug pravio nije repair.
+'
+' Unutar tog stanja MESTO odlucuje kanon a SADRZAJ podaci (review #395, P2):
+'   POZICIJA   -> prezivljava LEVLJA od dve, jer je visak uvek DOPISAN na kraj
+'   SADRZAJ    -> ako ga nosi ona desna, preseli se u levu pa se desna obrise
+'   OBA PUNA   -> STOP, imenovan razlog, nista se ne dira
+'
+' Pozicija je deo ugovora, ne kozmetika: upis je POZICION, a VerifySchema trazi
+' da kanon bude PREFIKS zaglavlja po indeksu. Oporavak koji sacuva podatke a
+' ostavi kolonu na kraju nije konvergentan -- sveska ostaje odbijena.
+'
+' Zadnji slucaj se NE resava tihim izborom jedne istine: dve pune kolone su dva
+' tvrdjenja o istom polju, a to je odluka koju kod ne sme da donese sam.
+Public Function PreimenujKolonuAko(ByVal tbl As String, ByVal staroIme As String, _
+                                   ByVal novoIme As String) As String
+    On Error GoTo EH
+
+    Dim lo As ListObject
+    Set lo = modDataAccess.GetTable(tbl)
+    If lo Is Nothing Then Exit Function
+
+    Dim iStaro As Long, iNovo As Long
+    Dim ocekivanaPozicija As Long
+    iStaro = IndeksKoloneUTabeli(lo, staroIme)
+    iNovo = IndeksKoloneUTabeli(lo, novoIme)
+
+    If iStaro <= 0 Then
+        ' Nema IMENSKOG posla -- ali to nije dokaz da je migracija zavrsena
+        ' (review #396, P2). Ako novog imena nema, helper ispod tiho izlazi;
+        ' ako ga ima na pogresnom mestu, vraca ga ili imenuje razlog.
+        PreimenujKolonuAko = VratiKolonuNaKanonskoMesto(tbl, novoIme)
+        Exit Function
+    End If
+
+    If iNovo > 0 Then
+        ' --- OBA IMENA: oporavak po podacima -----------------------------
+        Dim staroPuno As Boolean, novoPuno As Boolean
+        staroPuno = KolonaImaPodatke(lo, iStaro)
+        novoPuno = KolonaImaPodatke(lo, iNovo)
+
+        If staroPuno And novoPuno Then
+            PreimenujKolonuAko = tbl & ": i '" & staroIme & "' i '" & novoIme & _
+                "' nose podatke -- migracija se NE radi automatski. " & _
+                "Dve pune kolone su dva tvrdjenja o istom polju."
+            LogError "modSetup.PreimenujKolonuAko", PreimenujKolonuAko
+            Exit Function
+        End If
+
+        ' MESTO ODLUCUJE KANON, SADRZAJ ODLUCUJU PODACI (review #395, P2).
+        '
+        ' Prvi oporavak je brisao praznu kolonu a punu ostavljao TAMO GDE JE. To
+        ' je dovoljno samo kad je puna slucajno na kanonskom mestu -- a stanje koje
+        ' je bug pravio ima staro ime u SREDINI (na kanonskoj poziciji) i novo
+        ' DOPISANO NA KRAJ. Golo brisanje starog tada ostavlja novo na kraju, a
+        ' VerifySchema trazi da kanon bude PREFIKS po INDEKSU (EnsureAllTables
+        ' redosled NE popravlja), pa sveska ostaje drift-ovana: podaci sacuvani,
+        ' upis i dalje blokiran. Oporavak koji ne vrati poziciju nije konvergentan.
+        '
+        ' Mereno u kanonu: ZbirnaRoditeljID je 28/29 na tblOtkup i 20/24 na
+        ' tblOtpremnici, IspravkaOdID 22/29 -- dakle iza njih STOJE kanonske
+        ' kolone. Samo na tblPrijemnica i tblPaletaStavka je zadnja, i tamo je
+        ' golo brisanje slucajno davalo dobar rezultat.
+        '
+        ' Koja je od dve pozicije kanonska zna se bez citanja kanona: visak je
+        ' uvek DOPISAN, jer ListColumns.Add pise NA KRAJ. Kanonska je zato ona
+        ' LEVLJA. Prezivljava leva pozicija, a u nju se preseli sadrzaj desne --
+        ' jedna putanja za oba smera, ne dve.
+        Dim iZadrzi As Long, iVisak As Long
+        iZadrzi = iStaro
+        iVisak = iNovo
+        If iNovo < iStaro Then
+            iZadrzi = iNovo
+            iVisak = iStaro
+        End If
+
+        If KolonaImaPodatke(lo, iVisak) Then PreseliSadrzajKolone lo, iVisak, iZadrzi
+        lo.ListColumns(iVisak).Delete        ' desno od iZadrzi, pa ga ne pomera
+        If iZadrzi = iStaro Then lo.ListColumns(iZadrzi).name = novoIme
+        ocekivanaPozicija = iZadrzi
+
+        LogInfo "modSetup.PreimenujKolonuAko", _
+                tbl & ": oporavak -- '" & novoIme & "' ostaje na poziciji " & _
+                CStr(iZadrzi) & ", visak sa pozicije " & CStr(iVisak) & " obrisan"
+    Else
+        ' --- CIST PUT: staro postoji, novog nema -------------------------
+        lo.ListColumns(iStaro).name = novoIme
+        ocekivanaPozicija = iStaro
+        LogInfo "modSetup.PreimenujKolonuAko", _
+                tbl & ": " & staroIme & " -> " & novoIme & " (pozicija " & CStr(iStaro) & ")"
+    End If
+
+    ' POSTCONDITION, ne pretpostavka: akcija se ne smatra uspelom dok se ne izmeri.
+    '
+    ' IME NIJE DOVOLJNO (review #395, P2). Kolona sa pravim imenom na pogresnom
+    ' mestu je i dalje drift, jer je upis POZICION, pa se meri i pozicija -- bas
+    ' ona koju je ovaj poziv obecao da nece pomeriti.
+    '
+    ' Meri se obecanje OVE migracije, ne redosled cele tabele: kanonski indeks
+    ' moze da se ne poklopi i zbog kolone koja fali negde ispred, a to ovaj poziv
+    ' nije napravio i ne moze da izleci. Redosled cele tabele ima svog vlasnika --
+    ' modSchema.VerifySchema (SCHEMA_DRIFT_REDOSLED) -- i drugi vlasnik iste
+    ' invarijante bi prijavljivao tudji drift kao svoj pad.
+    Set lo = modDataAccess.GetTable(tbl)
+    Dim iPosle As Long
+    iPosle = IndeksKoloneUTabeli(lo, novoIme)
+
+    If IndeksKoloneUTabeli(lo, staroIme) > 0 Then
+        PreimenujKolonuAko = tbl & ": '" & staroIme & "' je i posle migracije prisutno"
+    ElseIf iPosle <= 0 Then
+        PreimenujKolonuAko = tbl & ": '" & novoIme & "' ne postoji posle migracije"
+    ElseIf ocekivanaPozicija > 0 And iPosle <> ocekivanaPozicija Then
+        PreimenujKolonuAko = tbl & ": '" & novoIme & "' je na poziciji " & _
+            CStr(iPosle) & " a morao je da ostane na " & CStr(ocekivanaPozicija) & _
+            " -- pozicija kolone je pomerena, upis je POZICION"
+    End If
+
+    If Len(PreimenujKolonuAko) > 0 Then
+        LogError "modSetup.PreimenujKolonuAko", PreimenujKolonuAko
+        Exit Function
+    End If
+
+    ' Ime je kanonsko; ostaje MESTO. Preimenovanje na mestu cuva poziciju koju je
+    ' kolona imala -- a ona ne mora da bude kanonska: zatecena sveska je mogla da
+    ' nosi staro ime na pogresnom mestu, i tada je i novo ime tamo. Ista provera,
+    ' isti helper, za sve putanje.
+    PreimenujKolonuAko = VratiKolonuNaKanonskoMesto(tbl, novoIme)
+    Exit Function
+EH:
+    PreimenujKolonuAko = tbl & ": " & staroIme & " -> " & novoIme & _
+                         " nije uspelo: " & Err.description
+    LogError "modSetup.PreimenujKolonuAko", PreimenujKolonuAko, Err.Number
+End Function
 
 Private Sub EnsureKolonaSaTragom(ByVal tbl As String, ByVal col As String)
     On Error GoTo EH
@@ -1472,8 +1872,8 @@ Public Sub EnsureDoradeSchema()
     BackfillColumn TBL_STANICE, COL_STA_JE_HLADNJACA, "Ne"
 
     ' #5: decimalni format kolicine (vrednost je vec Double; samo prikaz).
-    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_KOLICINA, "0.00"
-    SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "0.00"
+    ' Otpremnica i prijemnica vise nemaju Kolicina na zaglavlju -- nosi je
+    ' stavka (tblOtpremnicaStavke, tblPrijemnicaStavke), i format se postavlja tamo.
     SetColumnNumberFormat TBL_ZBIRNA, COL_ZBR_KOLICINA, "0.00"
 
     ' Izdata ambalaza (OM->kooperant uz otkup) -> kolona na tblOtkup za otkupni list.
@@ -1483,10 +1883,10 @@ Public Sub EnsureDoradeSchema()
     ' Bruto tezina (kad kupac unosi bruto -> sistem cuva neto u Kolicina, bruto ovde).
     ' Prazno = unet neto (bruto == neto). Otkup nosi bruto NA STAVCI (kanon,
     ' tblOtkupStavke), pa ovde vise nema reda za tblOtkup (S1c).
-    EnsureColumnOnTable TBL_PRIJEMNICA, COL_PRJ_BRUTO
-    SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_BRUTO, "0.00"
-    EnsureColumnOnTable TBL_OTPREMNICA, COL_OTP_BRUTO
-    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_BRUTO, "0.00"
+    ' Otpremnica i prijemnica nose bruto NA STAVCI (kanon, tblOtpremnicaStavke i
+    ' tblPrijemnicaStavke), pa ovde nema reda ni za njih -- isto sto je S1c uradio
+    ' za tblOtkup. Vracen EnsureColumnOnTable bi obrisanu kolonu dodao NA KRAJ
+    ' zaglavlja prijemnice (S6 korak 8).
 
     LogSetup "OK", "EnsureDoradeSchema done"
     MsgBox "Dorade: seme su proverene/kreirane." & vbCrLf & vbCrLf & _
@@ -2055,20 +2455,45 @@ Private Sub InitSetupLog()
     End If
 End Sub
 
+' NEUTRALAN PREMA Err POZIVAOCA (KI-011, LOG-01): posle LogSetup-a je Err tacno
+' onakav kakav je bio pre njega.
+'
+' Log je opcioni -- lista SETUP_LOG nema dok setup nije pokrenut -- pa proba ispod
+' u NORMALNOM toku padne. Do KI-011 je ta greska 9 ostajala u Err (izlaz VAN
+' handlera je ne brise; izmereno sondom 13.10.2026) i putovala kroz EnsureFolder,
+' EnsureDocFolder i stampu do ScrSave, koja je uspesan upis reversa prijavila kao
+' neuspeh -- pa ga je operater snimio dvaput. Ista greska je na SVAKOM startu
+' pisala lazan "ERROR modMain.InitApp.EnsurePoruke | 9".
+'
+' Drugi smer je jednako vazan: "On Error" na ulazu BRISE gresku pozivaoca, a
+' handleri ovog modula posle LogSetup-a citaju Err (Err.Raise Err.Number, MsgBox
+' sa Err.description) -- pa su dizali i prikazivali gresku logera umesto svoje.
+' Zato se stanje pozivaoca cita PRE "On Error" i vraca na izlazu.
 Private Sub LogSetup(ByVal levelText As String, ByVal messageText As String)
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
     On Error Resume Next
 
     Dim ws As Worksheet
     Set ws = ThisWorkbook.Worksheets(SETUP_LOG_SHEET)
 
-    If ws Is Nothing Then Exit Sub
+    If Not ws Is Nothing Then
+        Dim r As Long
+        r = ws.cells(ws.rows.count, 1).End(xlUp).row + 1
 
-    Dim r As Long
-    r = ws.cells(ws.rows.count, 1).End(xlUp).row + 1
+        ws.cells(r, 1).value = Now
+        ws.cells(r, 2).value = levelText
+        ws.cells(r, 3).value = Left$(messageText, 2000)
+        ws.cells(r, 4).value = Environ$("Username")
+    End If
 
-    ws.cells(r, 1).value = Now
-    ws.cells(r, 2).value = levelText
-    ws.cells(r, 3).value = Left$(messageText, 2000)
-    ws.cells(r, 4).value = Environ$("Username")
+    Err.Clear
+    If errNum <> 0 Then
+        Err.Number = errNum
+        Err.SOURCE = errSrc
+        Err.description = errDesc
+    End If
 End Sub
 

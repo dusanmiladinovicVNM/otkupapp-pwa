@@ -235,6 +235,32 @@ Public Function Scr_Lista() As String
     Scr_Lista = mLista
 End Function
 
+' Kartice nose TEKUCI SALDO, izracunat redom koji je dao izvestaj
+' (KART-HRON-01). Ljuskino "druga kolona opadajuce" je nad njima redjalo broj
+' dokumenta kao tekst, a saldo je ostajao iz drugog reda -- P1 sa saldima 17 i
+' -13.
+'
+' DOKUMENTNE LISTE (DOC-SORT-01) -- otkupni listovi, roba OM (otpremnice),
+' roba kupca (prijemnice) i pojedinacan pregled ambalaze -- red je dokument,
+' a izvestaj ih slaze po danu i broju KAO BROJU. Isti tekstualni sort ljuske
+' bi x/080726-10 stavio pre x/080726-2. Zbirni oblici i agregati (saldo,
+' isplata, zbirni, roba vozaca po vrsti) broj dokumenta nemaju i ostaju na
+' pravilu ljuske.
+Public Function Scr_Sort() As String
+    Select Case Scr_Lista()
+        Case IZ_KART, IZ_AMBK, IZ_OTKL
+            Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI
+        Case IZ_AMB
+            If Not mZbirni Then Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI
+        Case IZ_ROBA
+            If Not mZbirni Then
+                Select Case TrenutniTip()
+                    Case "OM", "Kupac": Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI
+                End Select
+            End If
+    End Select
+End Function
+
 ' Prvi cip je svuda "sve" -- ljuska na njega pada kad zatecen filter ne
 ' pripada listi (RefreshChipsForScreen). Liste bez prirodnog status-filtera
 ' NEMAJU cipove (prazno = ljuska ih krije): entitet, rezim i opseg su polja
@@ -634,6 +660,9 @@ End Function
 '=====================================================================
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     Dim rez As Variant
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrIzvestaji.Scr_Rows"
     ' Combo mora biti napunjen PRE citanja konteksta (entitet se cita iz
     ' njega); ostatak zone (hint, brojke, dugmad) se osvezava POSLE citanja,
     ' jer se hint i brojke racunaju iz njega.
@@ -648,6 +677,9 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     mDiagQ = q
     mDiagN = CLng(rez(2))
     Err.Clear
+    Exit Function
+EH:
+    modUiScreens.ScrPadZabelezi "modScrIzvestaji.Scr_Rows"
 End Function
 
 ' Opis kolona PO KLJUCU LISTE I TIPU -- oblik kolona prati stvarni oblik
@@ -1723,6 +1755,9 @@ End Function
 '=====================================================================
 Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
+    ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
+    On Error GoTo EH
+    modUiScreens.ScrPadAkoTest "modScrIzvestaji.Scr_Build"
 
     ' Bela podloga ispod reda polja -- LABELA, ne Frame (Frame je prozorska
     ' kontrola i crta se iznad bezprozorskih). Napravljena PRVA, ostaje ispod.
@@ -1780,7 +1815,10 @@ Public Sub Scr_Build(ByVal z As Object)
     On Error Resume Next
     z.Controls("scrIzOd").Controls("scrIzOdT").text = "1.1." & Year(Date)
     z.Controls("scrIzDo").Controls("scrIzDoT").text = Format$(Date, "d.m.yyyy")
-    On Error GoTo 0
+    On Error GoTo EH                 ' nazad na branu clana (KI-016), ne GoTo 0
+    ' Druga kuka seam-a: pad USRED gradnje, posle Resume Next segmenta -- zona vec
+    ' ima kontrole, a brana mora i dalje da vazi (KI-016, test 243).
+    modUiScreens.ScrPadAkoTest "modScrIzvestaji.Scr_Build#usred"
 
     modUiKit.NewLbl z, "izHint", "", PAD, IZ_Y_HINT, 420, 12, TS_META, False, C_MUTED, -1
 
@@ -1792,6 +1830,9 @@ Public Sub Scr_Build(ByVal z As Object)
                   170, IZ_BTN_H, "soft"
 
     modUiKit.NewLbl z, "izLnB", "", 0, IZ_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
+    Exit Sub
+EH:
+    modUiScreens.ScrPadZabelezi "modScrIzvestaji.Scr_Build"
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
@@ -2235,25 +2276,30 @@ End Function
 Private Sub DodajPrijemniceZbirne(ByVal linije As Collection, _
                                   ByVal brZb As String, ByVal vozId As String)
     Dim d As Variant, i As Long, krug As Long, nasao As Boolean
-    Dim cZb As Long, cVoz As Long, cBr As Long, cKol As Long, cStorno As Long
-    Dim cKup As Long, s As String
+    Dim cZb As Long, cVoz As Long, cBr As Long, cId As Long, cStorno As Long
+    Dim cKup As Long, s As String, zbir As Object, kg As Variant
     On Error Resume Next
     d = GetTableData(TBL_PRIJEMNICA)
     If Not IsArray(d) Then Exit Sub
     cZb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
     cVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
     cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
-    cKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
     cStorno = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
     cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
+    ' Kg dokumenta je zbir STAVKI (S6 korak 3), citan meko: detalj je prikaz,
+    ' pa nepoznata kolicina (kvar stavki) izostaje iz linije, ne pise se kao 0.
+    Set zbir = modDokumenta.ZbirStavkiPoPrijemniciMeko()
     For krug = 1 To 2
         For i = 1 To UBound(d, 1)
             If NzS(d(i, cZb)) = brZb Then
                 If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
                     If krug = 2 Or NzS(d(i, cVoz)) = vozId Then
-                        s = Poruka("OTKUI_IZ_DET_PRIJEMNICA") & " " & _
-                            NzS(d(i, cBr)) & "  " & ChrW(183) & "  " & _
-                            FmtKolicina(NzD(d(i, cKol))) & " kg"
+                        s = Poruka("OTKUI_IZ_DET_PRIJEMNICA") & " " & NzS(d(i, cBr))
+                        kg = modDokumenta.KgPrijemniceMeko(zbir, NzS(d(i, cId)))
+                        If Len(CStr(kg)) > 0 Then
+                            s = s & "  " & ChrW(183) & "  " & FmtKolicina(CDbl(kg)) & " kg"
+                        End If
                         If Len(NzS(d(i, cKup))) > 0 Then
                             s = s & "  " & ChrW(183) & "  " & _
                                 EntitetNaziv("Kupac", NzS(d(i, cKup)), False)
@@ -2274,8 +2320,9 @@ End Sub
 Public Function IzDetaljPrijemnice(ByVal prjID As String) As Variant
     Dim d As Variant, i As Long
     Dim cId As Long, cVoz As Long, cSor As Long, cTipA As Long
-    Dim cKolA As Long, cVrac As Long, cFakt As Long, cFid As Long
-    Dim linije As Collection
+    Dim cVrac As Long
+    Dim linije As Collection, zbir As Object, gajbeTxt As String
+    Dim stanjeFak As Long, faktureTxt As String, zajednicka As Boolean, zajTxt As String
     On Error GoTo EH
 
     d = GetTableData(TBL_PRIJEMNICA)
@@ -2284,10 +2331,10 @@ Public Function IzDetaljPrijemnice(ByVal prjID As String) As Variant
     cVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
     cSor = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
     cTipA = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
-    cKolA = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
     cVrac = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA)
-    cFakt = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO)
-    cFid = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID)
+    ' Primljene gajbe su zbir STAVKI dokumenta (S6 korak 3); vracene su
+    ' cinjenica dokumenta i ostaju na zaglavlju.
+    Set zbir = modDokumenta.ZbirStavkiPoPrijemniciMeko()
 
     For i = 1 To UBound(d, 1)
         If Trim$(CStr(d(i, cId))) = Trim$(prjID) Then
@@ -2298,16 +2345,33 @@ Public Function IzDetaljPrijemnice(ByVal prjID As String) As Variant
                 linije.Add Poruka("OTKUI_IZ_DET_SORTA") & " " & NzS(d(i, cSor))
             End If
             If Len(NzS(d(i, cTipA))) > 0 Then
+                ' Nepoznate gajbe (kvar stavki) su "-", ne 0.
+                gajbeTxt = "-"
+                If Not zbir Is Nothing Then
+                    If zbir.Exists(Trim$(prjID)) Then _
+                        gajbeTxt = Format$(CDbl(zbir(Trim$(prjID))(2)), "#,##0")
+                End If
                 linije.Add Poruka("OTKUI_IZ_DET_AMB") & " " & NzS(d(i, cTipA)) & _
-                           " x " & Format$(NzD(d(i, cKolA)), "#,##0") & _
+                           " x " & gajbeTxt & _
                            "  (" & Poruka("OTKUI_IZ_DET_AMB_VRAC") & " " & _
                            Format$(NzD(d(i, cVrac)), "#,##0") & ")"
             End If
-            If CStr(d(i, cFakt)) = "Da" Then
-                linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & NzS(d(i, cFid))
-            Else
+            ' Fakturisanost je IZVEDENA iz aktivnih linija fakture (S6 korak 5,
+            ' FAK-LIN-03) -- isti odgovor koji daju lista i kapija storna. Do tada
+            ' je detalj citao kes Fakturisano/FakturaID sa zaglavlja.
+            ' Zajednicka faktura (i druge prijemnice na istom racunu): ostatak se vodi
+            ' na fakturi, ne na dokumentu -- lista F4 ga zato ne pokazuje (P2-1).
+            stanjeFak = modFaktura.PrijemnicaFakturisanost(Trim$(prjID), faktureTxt, zajednicka)
+            zajTxt = ""
+            If zajednicka Then zajTxt = " " & Poruka("OTKUI_IZ_DET_ZAJEDNICKA")
+            If stanjeFak = FAKT_NE Then
                 linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & _
                            Poruka("OTKUI_IZ_DET_NEFAKT")
+            ElseIf stanjeFak = FAKT_DELIM Then
+                linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & faktureTxt & " " & _
+                           Poruka("OTKUI_IZ_DET_DELIMFAKT") & zajTxt
+            Else
+                linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & faktureTxt & zajTxt
             End If
 
             Dim res() As String, n As Long
@@ -2764,16 +2828,18 @@ Private Sub StampajDokumentReda(ByVal red As Long)
                     ReprintOtkupniListByOtkupID dokID
                 Case DOK_TIP_OTPREMNICA
                     OutputOtpremnicaPDF dokID
-                Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, _
-                     DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-                    ' Revers: rekonstrukcija iz nogu ledgera -- racun izdvojen
-                    ' u modIzvestaj.StampajReversAmbalaze (AUD-012: tip
-                    ' ambalaze IZABRANOG reda je deo kljuca). Identitet je
-                    ' ReversID reda (skrivena kolona 9, REV-IDENT-01): isti broj
-                    ' legalno nose reversi druge stanice ili drugog dana, pa se
-                    ' dokument ne trazi po broju, stanici ni danu.
-                    StampajReversAmbalaze dokID, dokTip, tipAmb, _
-                                          NzS(modOtkupUI.GridCell(red, 9))
+                Case DOK_TIP_AMBALAZA_DOKUMENT
+                    ' KANONSKI DOKUMENT (AMB-10c). Ovaj Case je NEDOSTAJAO, pa je
+                    ' posle 10b-2 cutovera svaki NOV revers padao u Case Else i
+                    ' operater je dobijao "stampa nedostupna". Grana
+                    ' modIzvestaj.StampajAmbDokument, napisana u 10c-2, nije bila
+                    ' dosegnuta NI JEDNOM iz UI-ja -- regresija sposobnosti koju
+                    ' su propustila i dva review kruga (KI-009a).
+                    '
+                    ' ReversID se NE salje: nov dokument ima SVOJ identitet
+                    ' (AmbDokID), pa rekonstrukcija iz nogu starog oblika nije ni
+                    ' potrebna ni moguca.
+                    StampajReversAmbalaze dokID, dokTip, tipAmb
                 Case Else
                     modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_STAMPA_NEDOSTUPNA"), True
             End Select
@@ -2902,6 +2968,11 @@ Public Sub Scr_IzTestReset()
     mTestDo = 0
     mSnimakPunjenja = 0
     mComboTip = ""
+    ' Podrazumevani entitet ide uz combo koji ga je napunio: ponovo se racuna
+    ' tek kad se combo ponovo napuni. Bez ovoga test koji je kroz ljusku
+    ' izgradio zonu (237, ANALIZA -> IZVESTAJI) ostavlja prvi OM kao "izbor",
+    ' pa sledeci test "bez entiteta" cita njegove redove (KI-014, 15.10.2026).
+    mDefaultId = ""
     ResetZonskeBrojke
     mHintKljuc = ""
     Scr_ResetCache

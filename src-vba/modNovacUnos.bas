@@ -7,9 +7,9 @@ Attribute VB_Name = "modNovacUnos"
 ' modNovacUnos (F5-F7). Razlog je isti - poslovni posao ne sme da zivi
 ' u formi, jer ga onda drugi ekran ne moze pozvati bez prepisivanja.
 '
-'   IsplataValidiraj / IsplataUpisi   F5, SaveOMUlaz_TX (samo novac)
+'   IsplataValidiraj / IsplataUpisi   F5, SaveOMUlaz_TX (od 10b-2 SAMO novac)
 '   UplataValidiraj  / UplataUpisi    F6, SaveKupciIzlaz_TX (samo novac)
-'   ReversValidiraj  / ReversUpisi    F7, SaveOMUlaz_TX (samo ambalaza)
+'   ReversValidiraj  / ReversUpisi    F7, modAmbalaza.UpisiReversAmbalaze_TX
 '
 ' Sve tri Validiraj rutine vracaju "" kad je proslo, inace poruku za
 ' operatera, i pune LOGICKO ime polja na koje treba vratiti fokus.
@@ -61,6 +61,19 @@ Public Const SMER_REV_IZD_KOOP As Long = 1
 Public Const SMER_REV_PRI_KOOP As Long = 2
 Public Const SMER_REV_IZD_OM As Long = 3
 Public Const SMER_REV_PRI_OM As Long = 4
+' Peti smer NIJE nas revers: dokument je kupcev (AMB-10-ODL-23), pa ide svom
+' piscu i svom nizu brojeva. Vrednost 5 je redni broj segmenta na F7.
+Public Const SMER_REV_POVRAT_KUP As Long = 5
+' Sesti je POZAJMICA KUPCA (AMB-10-ODL-24): kupac predaje SVOJE prazne gajbe
+' vozacu. Isti papir kao peti (kupcev, njegov broj), druga vrsta kretanja -- i
+' bez pitanja o manjku, jer pozajmica ne gleda kupcev saldo.
+Public Const SMER_REV_POZAJMICA_KUP As Long = 6
+' Sedmi i osmi NISU reversi nego nasi jednoredni dokumenti (AMB-10-ODL-34):
+' NABAVKA (gajbe ulaze na stanicu iz SpoljniSvet) i OTPIS (lom, gubitak --
+' gajbe izlaze iz opticaja sa bilo kog realnog naloga). Broj je iz niza
+' STANICE, kao kod nasih reversa; segmenti stoje u svom okviru ispod reversa.
+Public Const SMER_REV_NABAVKA As Long = 7
+Public Const SMER_REV_OTPIS As Long = 8
 
 '--------------------------------------------------------------- ULAZ
 ' Prazan recnik sa svim kljucevima - da pozivalac ne mora da pamti spisak.
@@ -121,6 +134,8 @@ Public Function NoviReversUnos() As Object
     p("tipAmb") = ""
     p("kolAmb") = 0&
     p("smerRev") = 0&
+    ' Razlog otpisa / dobavljac nabavke (ODL-34 k); ide u tblAmbalazaDokument.Napomena.
+    p("napomena") = ""
     Set NoviReversUnos = p
 End Function
 
@@ -181,11 +196,27 @@ End Function
 ' je isti broj na drugoj stanici ili drugi dan (po A2 legalno), a pustala broj
 ' storniranog reversa. Novac je od 14.09.2026 odvojen (A2 red NOV).
 ' Prazno = slobodan; inace poruka sa AmbID-em noge koja drzi broj.
+' Zauzetost broja -- OPSEG ZAVISI OD SMERA, i to je cela razlika petog smera.
+'
+' Nasi reversi dele niz (Stanica, dan). Kupcev revers nosi KUPCEV broj, pa mu
+' je niz (Kupac, KupacID, dan) -- isti opseg koji meri i pisac (ODL-20). Da je
+' ostalo na stanici, kupcev broj bi se merio nad NASIM nizom: i lazno zauzet
+' (kad slucajno poklopi nas broj) i lazno slobodan (kad isti kupac dva puta
+' istog dana posalje isti broj).
 Private Function ReversBrojZauzet(ByVal p As Object) As String
     Dim zauzeo As String
     If Len(S(p, "brDok")) = 0 Then Exit Function
-    zauzeo = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, S(p, "stanicaID"), _
-                                        CDate(p("datum")), S(p, "brDok"))
+
+    If RevSmerJeKupcev(L(p, "smerRev")) Then
+        ' Bez izabranog kupca nema niza -- partnersku gresku javlja validator.
+        If Len(S(p, "partnerID")) = 0 Then Exit Function
+        zauzeo = modBrojevi.AmbDokBrojZauzet(AMB_NALOG_KUPAC, S(p, "partnerID"), _
+                                             CDate(p("datum")), S(p, "brDok"))
+    Else
+        zauzeo = modBrojevi.BrojZauzetUNizu(modBrojevi.KIND_REV, S(p, "stanicaID"), _
+                                            CDate(p("datum")), S(p, "brDok"))
+    End If
+
     If Len(zauzeo) > 0 Then _
         ReversBrojZauzet = Poruka("DOKUNOS_ERR_BROJ_ZAUZET") & " " & zauzeo
 End Function
@@ -292,7 +323,7 @@ EH:
     ' Resume Next, koji cisti Err.
     errDesc = Err.description
     LogErr "modNovacUnos.IsplataValidiraj"
-    IsplataValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    IsplataValidiraj = Poruka("NOVUNOS_ERR_GRESKA_UNOS_ISPL") & errDesc
 End Function
 
 Public Function IsplataUpisi(ByVal p As Object, ByRef poruke As String) As String
@@ -305,23 +336,19 @@ Public Function IsplataUpisi(ByVal p As Object, ByRef poruke As String) As Strin
         brojDok:=S(p, "brDok"), _
         stanicaNaziv:=S(p, "stanicaTekst"), _
         stanicaID:=S(p, "stanicaID"), _
-        vozacID:="", _
-        tipAmb:="", _
-        kolAmb:=0, _
         vrstaVoca:=S(p, "vrsta"), _
         novac:=D(p, "novac"), _
         kooperantID:=S(p, "partnerID"), _
         primalacDisplay:=S(p, "partnerTekst"), _
         otkupID:=S(p, "otkupID"), _
-        tipNovca:=S(p, "tipNovca"), _
-        koopSmer:="") Then Exit Function
+        tipNovca:=S(p, "tipNovca")) Then Exit Function
 
     IsplataUpisi = BrojIliOznaka(S(p, "brDok"))
     Exit Function
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.IsplataUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("NOVUNOS_ERR_GRESKA_UNOS_ISPL") & errDesc
 End Function
 
 '=====================================================================
@@ -385,7 +412,7 @@ Public Function UplataValidiraj(ByVal p As Object, ByRef fokus As String) As Str
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.UplataValidiraj"
-    UplataValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    UplataValidiraj = Poruka("NOVUNOS_ERR_GRESKA_UNOS_UPL") & errDesc
 End Function
 
 Public Function UplataUpisi(ByVal p As Object, ByRef poruke As String) As String
@@ -398,9 +425,6 @@ Public Function UplataUpisi(ByVal p As Object, ByRef poruke As String) As String
         brojDok:=S(p, "brDok"), _
         kupacNaziv:=S(p, "partnerTekst"), _
         kupacID:=S(p, "partnerID"), _
-        vozacID:="", _
-        tipAmb:="", _
-        kolAmb:=0, _
         vrstaVoca:=S(p, "vrsta"), _
         novac:=D(p, "novac"), _
         fakturaID:=S(p, "fakturaID"), _
@@ -412,7 +436,7 @@ Public Function UplataUpisi(ByVal p As Object, ByRef poruke As String) As String
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.UplataUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("NOVUNOS_ERR_GRESKA_UNOS_UPL") & errDesc
 End Function
 
 '=====================================================================
@@ -427,6 +451,7 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     Dim strogo As Boolean, kolAmb As Long, smer As Long, dup As String
     Dim partTip As String
     Dim errDesc As String
+    Dim nTip As String, nID As String, saldo As Double
     On Error GoTo EH
     fokus = ""
     strogo = IsValidacijaUnosa()
@@ -434,7 +459,9 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     If Len(S(p, "stanicaID")) = 0 Then
         fokus = "stanicaID": ReversValidiraj = Poruka("OTKUNOS_ERR_OM"): Exit Function
     End If
-    If strogo And Len(S(p, "vrsta")) = 0 Then
+    ' Vrsta voca ide na papir REVERSA; nabavka i otpis je nemaju (ODL-34).
+    If strogo And Len(S(p, "vrsta")) = 0 And _
+       Not RevSmerJeNabavkaIliOtpis(L(p, "smerRev")) Then
         fokus = "vrsta": ReversValidiraj = Poruka("OTKUNOS_ERR_VRSTA"): Exit Function
     End If
 
@@ -447,16 +474,73 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     If kolAmb <= 0 Then
         fokus = "kolAmb": ReversValidiraj = Poruka("NOVUNOS_ERR_KOL_AMB"): Exit Function
     End If
-    If Len(S(p, "tipAmb")) = 0 Then
-        fokus = "tipAmb": ReversValidiraj = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE"): Exit Function
-    End If
+    ' KI-021: tip iz sifarnika (AMB-INV-12); tip od samih nevidljivih znakova je prazan.
+    ReversValidiraj = modOtkupUnos.TipAmbalazePoruka(S(p, "tipAmb"))
+    If Len(ReversValidiraj) > 0 Then fokus = "tipAmb": Exit Function
 
     smer = L(p, "smerRev")
-    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_PRI_OM Then
+    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_OTPIS Then
         fokus = "smerRev": ReversValidiraj = Poruka("NOVUNOS_ERR_SMER"): Exit Function
     End If
 
     partTip = UCase$(S(p, "partnerTip"))
+    ' POVRAT OD KUPCA (AMB-10-ODL-23): kupac je partner, vozac je odredisten
+    ' (lanac kupac -> vozac -> stanica, ODL-9), a broj je KUPCEV -- pa je
+    ' obavezan i NE predlaze se. Zato ova grana stoji PRE auto-broja ispod i
+    ' izlazi iz funkcije sama: predlog iz naseg niza bio bi tudj broj.
+    ' Ista pravila vaze i za POZAJMICU KUPCA (ODL-24): isti papir, isti lanac.
+    If RevSmerJeKupcev(smer) Then
+        If NerazresenIzbor(S(p, "partnerTekst"), S(p, "partnerID")) Then
+            fokus = "partnerID": ReversValidiraj = Poruka("NOVUNOS_ERR_PARTNER_NEIZABRAN"): Exit Function
+        End If
+        If Len(S(p, "partnerID")) = 0 Or partTip <> "KUP" Then
+            fokus = "partnerID"
+            If smer = SMER_REV_POZAJMICA_KUP Then
+                ReversValidiraj = Poruka("NOVUNOS_ERR_SMER_KUP_POZ")
+            Else
+                ReversValidiraj = Poruka("NOVUNOS_ERR_SMER_KUP")
+            End If
+            Exit Function
+        End If
+        If Len(S(p, "vozacID")) = 0 Then
+            fokus = "vozacID": ReversValidiraj = Poruka("NOVUNOS_ERR_VOZAC_OM"): Exit Function
+        End If
+        ' Broj je obavezan BEZ OBZIRA na VALIDACIJA_UNOSA: pisac ga tvrdo trazi
+        ' (UpisiReversPartnera_TX), pa bi prazan dao izuzetak umesto polja.
+        If Len(S(p, "brDok")) = 0 Then
+            fokus = "brDok": ReversValidiraj = Poruka("NOVUNOS_ERR_BROJ_KUPCA"): Exit Function
+        End If
+        dup = ReversBrojZauzet(p)
+        If Len(dup) > 0 Then
+            fokus = "brDok": ReversValidiraj = dup: Exit Function
+        End If
+        Exit Function
+    End If
+
+    ' OTPIS (AMB-10-ODL-34 j, k, g): nalog, razlog i saldo NAD SNIMKOM, da operater
+    ' dobije polje a ne izuzetak. Saldo je i kapija pisca (AMB-INV-14 u jezgru):
+    ' izmedju punjenja i potvrde stanje se moze promeniti (testovi.md par. 5).
+    If smer = SMER_REV_OTPIS Then
+        If NerazresenIzbor(S(p, "partnerTekst"), S(p, "partnerID")) Then
+            fokus = "partnerID": ReversValidiraj = Poruka("NOVUNOS_ERR_PARTNER_NEIZABRAN"): Exit Function
+        End If
+        If Not OtpisNalog(p, nTip, nID) Then
+            fokus = "partnerID": ReversValidiraj = Poruka("NOVUNOS_ERR_OTPIS_NALOG"): Exit Function
+        End If
+        If Len(S(p, "napomena")) = 0 Then
+            fokus = "napomena": ReversValidiraj = Poruka("NOVUNOS_ERR_OTPIS_RAZLOG"): Exit Function
+        End If
+        saldo = modAmbalaza.AmbSaldoNaloga(nTip, nID, S(p, "tipAmb"))
+        If kolAmb > saldo Then
+            fokus = "kolAmb"
+            ReversValidiraj = Poruka("NOVUNOS_ERR_OTPIS_SALDO") & " " & CStr(saldo)
+            Exit Function
+        End If
+    End If
+
+    ' Nabavka (7) i otpis (8) ne citaju ni kooperanta ni vozaca kao drugu stranu
+    ' reversa: nabavka ide samo na stanicu (ODL-34 b), a nalog otpisa je resen
+    ' iznad. Zato je grana vozaca uza od "sve ostalo" -- samo smerovi 3 i 4.
     If smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP Then
         ' Ukucano ime bez izbora iz liste dobija svoju poruku: opsta ("izaberi
         ' kooperanta") ne bi objasnila zasto polje sa vidljivim imenom ne valja.
@@ -468,7 +552,7 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
         If Len(S(p, "partnerID")) = 0 Or partTip <> "KOOP" Then
             fokus = "partnerID": ReversValidiraj = Poruka("NOVUNOS_ERR_SMER_KOOP"): Exit Function
         End If
-    Else
+    ElseIf smer = SMER_REV_IZD_OM Or smer = SMER_REV_PRI_OM Then
         ' Firma <-> OM uvek ide preko vozaca, pa je vozac obavezan i kad je
         ' VALIDACIJA_UNOSA iskljucena - SaveOMUlaz_TX bi inace podigao gresku.
         If Len(S(p, "vozacID")) = 0 Then
@@ -480,7 +564,7 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     ' ako broj nije unet ni predlozen, generise se sada, po modelu
     ' x/ddmmyy[-N] iz revers tokova nad tblAmbalaza. Isto radi legacy, i to
     ' tek posle izbora smera - zato je ovde, a ne pre njega.
-    If Len(S(p, "brDok")) = 0 Then
+    If Len(S(p, "brDok")) = 0 And RevSmerPredlazeBroj(smer) Then
         p("brDok") = SuggestNextBroj(KIND_REV, S(p, "stanicaID"), CDate(p("datum")))
         dup = ReversBrojZauzet(p)
         If Len(dup) > 0 Then
@@ -499,84 +583,372 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.ReversValidiraj"
-    ReversValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    ReversValidiraj = Poruka("NOVUNOS_ERR_GRESKA_UNOS_REV") & errDesc
+End Function
+
+
+' DA LI SMER UOPSTE DOBIJA PREDLOG BROJA.
+'
+' Cetiri nasa smera dele niz (Stanica, dan), pa im ljuska predlaze broj cim se
+' izabere otkupno mesto. Peti je KUPCEV dokument (AMB-10-ODL-23) i nosi NJEGOV
+' broj -- predlog iz naseg niza bio bi izmisljen broj tudje serije.
+'
+' PRAVILO ZIVI OVDE, A NE U LJUSCI, jer ga trazi DVA sloja: RefreshBrojPredlog
+' (predlog cim se izabere stanica) i ReversValidiraj (predlog ako je polje
+' ostalo prazno). Dve kopije istog uslova bi se razisle -- i prvi put su se bas
+' tako i razisle: validator je imao granu, ljuska nije, pa je kupcev revers na
+' ekranu nosio nas broj (nadjeno operaterskom proverom 07.10.2026).
+Public Function RevSmerPredlazeBroj(ByVal smer As Long) As Boolean
+    RevSmerPredlazeBroj = Not RevSmerJeKupcev(smer)
+End Function
+
+' DA LI JE SMER KUPCEV DOKUMENT -- povrat (5) ili pozajmica (6, ODL-24).
+'
+' Oba nose KUPCEV broj u nizu (Kupac, KupacID, dan) i traze kupca i vozaca, pa
+' je odluka JEDNA: ljuska (vlasnik niza pri promeni smera), validator, zauzetost
+' broja i predlog je citaju odavde. Treca kopija uslova "smer = 5" bi pri
+' sledecem kupcevom smeru ostala nepromenjena -- kao sto je validator vec jednom
+' imao granu koju ljuska nije (07.10.2026).
+Public Function RevSmerJeKupcev(ByVal smer As Long) As Boolean
+    RevSmerJeKupcev = (smer = SMER_REV_POVRAT_KUP) Or (smer = SMER_REV_POZAJMICA_KUP)
+End Function
+
+' DA LI JE SMER NAS JEDNOREDNI DOKUMENT BEZ REVERSA -- nabavka (7) ili otpis (8),
+' AMB-10-ODL-34. Jedna odluka za tri sloja: validator (bez vrste voca), ljuska
+' (polje Napomena) i ispravka (koja postoji samo za nas revers).
+Public Function RevSmerJeNabavkaIliOtpis(ByVal smer As Long) As Boolean
+    RevSmerJeNabavkaIliOtpis = (smer = SMER_REV_NABAVKA) Or (smer = SMER_REV_OTPIS)
+End Function
+
+' NALOG OTPISA SA EKRANA (AMB-10-ODL-34 j): izabran partner, inace vozac.
+'
+' Jedno mesto za oba sloja koja ga traze -- validator (saldo nad snimkom) i upis
+' (nalog piscu). Druga kopija pravila bi se razisla pri prvoj izmeni, kao sto se
+' vec desilo sa kupcevim smerom (RevSmerJeKupcev, 07.10.2026).
+'
+' Partner ima prednost jer je IZABRAN u polju dokumenta; vozac je kontekst
+' ekrana koji ostaje izmedju dokumenata, pa vazi samo kad partnera nema. OM kao
+' partner je stanica (PartnerSrcDef "OM" -> StanicaID). Nepoznat tip partnera
+' nije nalog -- validator tada trazi izbor, ne pogadja.
+Public Function OtpisNalog(ByVal p As Object, ByRef nalogTip As String, _
+                           ByRef nalogID As String) As Boolean
+    nalogTip = ""
+    nalogID = ""
+    If Len(S(p, "partnerID")) > 0 Then
+        Select Case UCase$(S(p, "partnerTip"))
+            Case "KOOP": nalogTip = AMB_NALOG_KOOPERANT
+            Case "OM":   nalogTip = AMB_NALOG_STANICA
+            Case "KUP":  nalogTip = AMB_NALOG_KUPAC
+        End Select
+        If Len(nalogTip) > 0 Then nalogID = S(p, "partnerID")
+    ElseIf Len(S(p, "vozacID")) > 0 Then
+        nalogTip = AMB_NALOG_VOZAC
+        nalogID = S(p, "vozacID")
+    End If
+    OtpisNalog = (Len(nalogTip) > 0)
 End Function
 
 ' Redni broj segmenta -> vrednost koju SaveOMUlaz_TX poznaje. Nepoznat
 ' smer vraca prazno, pa core guard puca umesto da knjizi nasumice.
 Public Function SmerRevKljuc(ByVal smer As Long) As String
     Select Case smer
-        Case SMER_REV_IZD_KOOP: SmerRevKljuc = "IZDAVANJE"
-        Case SMER_REV_PRI_KOOP: SmerRevKljuc = "PRIJEM"
-        Case SMER_REV_IZD_OM:   SmerRevKljuc = "IZDATO_OM"
-        Case SMER_REV_PRI_OM:   SmerRevKljuc = "PRIJEM_OD_OM"
+        Case SMER_REV_IZD_KOOP: SmerRevKljuc = REV_SMER_IZDAVANJE
+        Case SMER_REV_PRI_KOOP: SmerRevKljuc = REV_SMER_PRIJEM
+        Case SMER_REV_IZD_OM:   SmerRevKljuc = REV_SMER_IZDATO_OM
+        Case SMER_REV_PRI_OM:   SmerRevKljuc = REV_SMER_PRIJEM_OD_OM
     End Select
 End Function
 
-Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String) As String
+' `ispravljaAmbDokID` != "" -> upis je ISPRAVKA tog naseg reversa (10d): nov
+' broj, nov AmbDokID, stari storniran -- sve u JEDNOJ transakciji
+' (modAmbalaza.IspravkaReversa_TX). Prazno -> obican nov unos. Jedan ulaz
+' namerno, kao OtkupUpisi: stampa i poruke su isti posao u oba slucaja.
+Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
+                            Optional ByVal ispravljaAmbDokID As String = "") As String
     Dim smer As Long, brDok As String
     Dim errDesc As String
     On Error GoTo EH
     poruke = ""
     smer = L(p, "smerRev")
     brDok = S(p, "brDok")
+    ispravljaAmbDokID = Trim$(ispravljaAmbDokID)
 
-    If Not SaveOMUlaz_TX( _
+    ' REVERS JE AMBALAZNI DOKUMENT (AMB-10-ODL-5, rez 10b-2): ide SVOM piscu,
+    ' koji mu pravi zaglavlje u tblAmbalazaDokument i knjizi JEDAN red po smeru.
+    ' Stari put (SaveOMUlaz_TX) je od ovog reza samo novcani.
+    '
+    ' Pisac gresku DIZE umesto da vrati False -- i to je bolje: EH ispod je
+    ' pretvara u poruku operateru, dok je stari put cutke izlazio.
+    Dim revDokID As String, stariBroj As String, nTip As String, nID As String
+
+    ' ISPRAVKA NASEG REVERSA (10d). Ide PRE kupceve grane: ispravka naseg reversa
+    ' ostaje nas revers (nas broj, nas niz), pa se peti smer ovde odbija -- inace
+    ' bi zamena tiho postala kupcev dokument sa tudjim brojem, a stari bi ostao
+    ' storniran bez naslednika iste vrste.
+    If Len(ispravljaAmbDokID) > 0 Then
+        If RevSmerJeKupcev(smer) Then
+            poruke = poruke & Poruka("NOVUNOS_ERR_ISPR_REV_KUPAC")
+            Exit Function
+        End If
+        ' Nabavka i otpis nisu revers: storno i nov unos (ODL-34, kao kupcev).
+        If RevSmerJeNabavkaIliOtpis(smer) Then
+            poruke = poruke & Poruka("NOVUNOS_ERR_ISPR_REV_NIJE_REVERS")
+            Exit Function
+        End If
+        stariBroj = Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                               ispravljaAmbDokID, COL_AMBD_BROJ)))
+        revDokID = modAmbalaza.IspravkaReversa_TX( _
+            stariAmbDokID:=ispravljaAmbDokID, _
+            datum:=CDate(p("datum")), _
+            broj:=brDok, _
+            stanicaID:=S(p, "stanicaID"), _
+            tipAmb:=S(p, "tipAmb"), _
+            kolicina:=L(p, "kolAmb"), _
+            smer:=SmerRevKljuc(smer), _
+            kooperantID:=S(p, "partnerID"), _
+            vozacID:=S(p, "vozacID"))
+        If Len(revDokID) = 0 Then Exit Function
+        poruke = poruke & Poruka("NOVUNOS_MSG_ISPR_REV_OK") & " " & stariBroj & vbCrLf
+        ' Nov dokument = nov papir (A9: nov broj).
+        poruke = poruke & StampajRevers(p, smer, revDokID)
+        ReversUpisi = BrojIliOznaka(brDok)
+        Exit Function
+    End If
+
+    ' POVRAT OD KUPCA IDE SVOM PISCU (AMB-10-ODL-23): dokument je kupcev, nosi
+    ' njegov broj i vrstu REVERS_PARTNERA. Zato nije peti red u
+    ' AmbReversSmerovi -- ta mapa je mapa NASEG reversa, sa stanicinim brojem.
+    If smer = SMER_REV_POVRAT_KUP Then
+        revDokID = RevKupcaUpisi(p, poruke)
+        If Len(revDokID) = 0 Then Exit Function
+        ' Ispravka kupcevog reversa ne postoji: 10d ispravlja samo NAS revers, a
+        ' kupcev se stornira i unosi ponovo (IspravkaReversaRazlog ga odbija).
+        '
+        ' KUPCEV REVERS SE NE STAMPA (AMB-10-ODL-32, odluka operatera 13.10.2026),
+        ' isto pravilo kao lista AMBALAZA (7507): dokument je kupcev, nosi njegov
+        ' broj, a original drzi operater. Bez upozorenja -- to je pravilo, ne pad
+        ' stampe. Ranije je ovde isao papir na sablonu za kooperanta, sa imenom
+        ' kupca i bez redova stanja.
+        ReversUpisi = BrojIliOznaka(brDok)
+        Exit Function
+    End If
+
+    ' POZAJMICA KUPCA (AMB-10-ODL-24): isti kupcev papir, druga vrsta kretanja.
+    ' Ide pravo piscu, BEZ protokola potvrde manjka -- pozajmica ne gleda kupcev
+    ' saldo, pa manjka nema i pitanje ne postoji (odluka (f), 19.10.2026). Greska
+    ' pisca ide kroz EH ispod, kao kod naseg reversa. Ne stampa se (ODL-32).
+    If smer = SMER_REV_POZAJMICA_KUP Then
+        revDokID = modAmbalaza.UpisiPozajmicuKupca_TX( _
+            datum:=CDate(p("datum")), _
+            broj:=brDok, _
+            kupacID:=S(p, "partnerID"), _
+            vozacID:=S(p, "vozacID"), _
+            tipAmb:=S(p, "tipAmb"), _
+            kolicina:=CDbl(L(p, "kolAmb")), _
+            napomena:=S(p, "napomena"))
+        If Len(revDokID) = 0 Then Exit Function
+        ' Pozajmica je kupcev dokument: papir se ne pravi (ODL-32 vazi i za nju).
+        ReversUpisi = BrojIliOznaka(brDok)
+        Exit Function
+    End If
+
+    ' NABAVKA I OTPIS (AMB-10-ODL-34): nasi jednoredni dokumenti, svaki svom
+    ' piscu. Broj je iz niza STANICE (c) -- predlozen u validatoru ili, kad je
+    ' polje ostalo prazno, izracunat u piscu -- pa se posle upisa cita SA
+    ' ZAGLAVLJA. Pisac gresku DIZE, a EH ispod je pretvara u poruku.
+    If smer = SMER_REV_NABAVKA Then
+        revDokID = modAmbalaza.NabaviAmbalazu_TX( _
+            datum:=CDate(p("datum")), _
+            stanicaID:=S(p, "stanicaID"), _
+            tipAmb:=S(p, "tipAmb"), _
+            kolicina:=CDbl(L(p, "kolAmb")), _
+            broj:=brDok, _
+            napomena:=S(p, "napomena"))
+        If Len(revDokID) = 0 Then Exit Function
+        ' Nabavka se ne stampa (ODL-34 h).
+        ReversUpisi = BrojIliOznaka(BrojAmbDokumenta(revDokID))
+        Exit Function
+    End If
+    If smer = SMER_REV_OTPIS Then
+        Call OtpisNalog(p, nTip, nID)
+        revDokID = modAmbalaza.OtpisiAmbalazu_TX( _
+            datum:=CDate(p("datum")), _
+            stanicaID:=S(p, "stanicaID"), _
+            nalogTip:=nTip, _
+            nalogID:=nID, _
+            tipAmb:=S(p, "tipAmb"), _
+            kolicina:=CDbl(L(p, "kolAmb")), _
+            razlog:=S(p, "napomena"), _
+            broj:=brDok)
+        If Len(revDokID) = 0 Then Exit Function
+        brDok = BrojAmbDokumenta(revDokID)
+        ' Zapisnik o otpisu (ODL-34 h, l) -- best-effort, kao papir reversa.
+        poruke = poruke & StampajOtpis(p, revDokID, brDok, nTip, nID)
+        ReversUpisi = BrojIliOznaka(brDok)
+        Exit Function
+    End If
+
+    revDokID = modAmbalaza.UpisiReversAmbalaze_TX( _
         datum:=CDate(p("datum")), _
-        brojDok:=brDok, _
-        stanicaNaziv:=S(p, "stanicaTekst"), _
+        broj:=brDok, _
         stanicaID:=S(p, "stanicaID"), _
-        vozacID:=S(p, "vozacID"), _
         tipAmb:=S(p, "tipAmb"), _
-        kolAmb:=L(p, "kolAmb"), _
-        vrstaVoca:=S(p, "vrsta"), _
-        novac:=0, _
+        kolicina:=L(p, "kolAmb"), _
+        smer:=SmerRevKljuc(smer), _
         kooperantID:=S(p, "partnerID"), _
-        primalacDisplay:=S(p, "partnerTekst"), _
-        otkupID:="", _
-        tipNovca:="", _
-        koopSmer:=SmerRevKljuc(smer)) Then Exit Function
+        vozacID:=S(p, "vozacID"))
+    If Len(revDokID) = 0 Then Exit Function
 
-    ' ISPRAVKA reversa (druga faza): ako je revers-ispravka na cekanju,
-    ' upravo snimljeni revers je njena zamena. No-op inace. Stanica i dan idu
-    ' uz broj: broj reversa je jedinstven tek u nizu (stanica, dan), a zamena
-    ' sme na drugu stanicu ili drugi dan.
-    modDokUnos.ZavrsiIspravkuAko FLOW_DOC_REVERS, brDok, poruke, _
-                                 S(p, "stanicaID"), CDate(p("datum"))
+    ' "Druga faza ispravke" (ZavrsiIspravkuAko) je ovde stajala do 10d: stari
+    ' tok je stornirao odmah, a zamenu vezivao pri SLEDECEM snimanju F7. Od 10d
+    ' je ispravka jedan potez (grana iznad), pa obican unos vise nije zamena ni
+    ' za koga -- i ne sme da zatvori tudju ispravku sa slucajno istim brojem.
 
-    ' PDF revers - best-effort, isto kao u legacy: pad stampe ne sme da
-    ' obori potvrdu upisa (rutina loguje sama).
-    StampajRevers p, smer
+    ' PDF revers - best-effort: pad stampe ne sme da obori potvrdu upisa. Rutina
+    ' ga vraca kao upozorenje uz uspeh (KI-011), pa ide u poruke.
+    poruke = poruke & StampajRevers(p, smer, revDokID)
 
     ReversUpisi = BrojIliOznaka(brDok)
     Exit Function
 EH:
     errDesc = Err.description
     LogErr "modNovacUnos.ReversUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
+    poruke = poruke & Poruka("NOVUNOS_ERR_GRESKA_UNOS_REV") & errDesc
+End Function
+
+
+' UPIS KUPCEVOG REVERSA, SA PROTOKOLOM POTVRDE DEFICITA (AMB-10-ODL-8, 6.5).
+'
+' Kupac koji vrati vise gajbi nego sto po knjizi drzi nije kvar nego REDOVAN
+' slucaj: visak ulazi u opticaj kao tudja ambalaza. Jezgro zato ne odbija nego
+' PITA -- a pitanje se prepoznaje po BROJU greske, ne po tekstu (tekst je
+' prevodiv i menja se). Obrazac je prepisan iz modOtkupUnos, gde isti protokol
+' radi za otkup od 03.10.2026: ekran ZADRZAVA podatke, pa operater ne unosi
+' nista ponovo.
+'
+' Pitanje ide kroz modOtkupUnos.PotvrdiManjakAmbalaze (KI-015), koje u test
+' rezimu tekst BELEZI i odgovara "Ne" -- pa test sme da udje u ovu granu. Do
+' tada je ovde stajao MsgBox, koji u run_vba prolazu visi do timeout-a.
+Private Function RevKupcaUpisi(ByVal p As Object, ByRef poruke As String) As String
+    Dim res As String, greska As String, errNum As Long, manjak As Double
+
+    res = RevKupcaPisac(p, -1, errNum, greska)
+
+    If errNum = AMB_ERR_POTVRDA_DEFICITA Then
+        ' Manjak se cita SADA, ne iz poruke: izmedju pitanja i odgovora stanje se
+        ' moglo promeniti, a jezgro potvrdu meri prema SVEZEM manjku.
+        manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KUPAC, S(p, "partnerID"), _
+                                                S(p, "tipAmb"), CDbl(L(p, "kolAmb")))
+        If manjak > 0 Then
+            If modOtkupUnos.PotvrdiManjakAmbalaze(AMB_NALOG_KUPAC, manjak) Then
+                res = RevKupcaPisac(p, manjak, errNum, greska)
+            End If
+        End If
+    End If
+
+    If Len(res) = 0 Then
+        poruke = poruke & Poruka("NOVUNOS_ERR_GRESKA_UNOS_REV") & greska
+    End If
+    RevKupcaUpisi = res
+End Function
+
+' Jedan poziv pisca. Pisac gresku DIZE, pa se ovde hvata broj -- on je ugovor.
+Private Function RevKupcaPisac(ByVal p As Object, ByVal potvrda As Double, _
+                               ByRef outErrNum As Long, _
+                               ByRef outGreska As String) As String
+    outErrNum = 0
+    outGreska = ""
+    On Error Resume Next
+    RevKupcaPisac = modAmbalaza.UpisiReversPartnera_TX( _
+        datum:=CDate(p("datum")), _
+        broj:=S(p, "brDok"), _
+        kupacID:=S(p, "partnerID"), _
+        vozacID:=S(p, "vozacID"), _
+        tipAmb:=S(p, "tipAmb"), _
+        kolicina:=CDbl(L(p, "kolAmb")), _
+        napomena:=S(p, "napomena"), _
+        potvrdaDeficita:=potvrda)
+    If Err.Number <> 0 Then
+        outErrNum = Err.Number
+        outGreska = Err.description
+        RevKupcaPisac = ""
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Function
+
+' Poslovni broj ambalaznog dokumenta sa ZAGLAVLJA -- broj koji je pisac upisao,
+' i kad ga je sam izracunao.
+Private Function BrojAmbDokumenta(ByVal ambDokID As String) As String
+    BrojAmbDokumenta = Trim$(NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, _
+                                                  ambDokID, COL_AMBD_BROJ)))
+End Function
+
+' ZAPISNIK O OTPISU (AMB-10-ODL-34 h, l): sablon reversa sa svojim naslovom.
+' Nalog i razlog papir cita SA DOKUMENTA (modPrint, protivstrana "OTPIS"); ovde
+' ide samo ime naloga za prikaz. Sporedni efekat kao papir reversa (KI-011): ""
+' kad je papir napravljen ili je stampa ugasena, inace upozorenje uz uspeh.
+Private Function StampajOtpis(ByVal p As Object, ByVal ambDokID As String, _
+                              ByVal brojDok As String, ByVal nalogTip As String, _
+                              ByVal nalogID As String) As String
+    Dim nalogNaziv As String, razlog As String
+    On Error GoTo EH
+    If nalogTip = AMB_NALOG_VOZAC Then
+        nalogNaziv = Trim$(NzToText(LookupValue(TBL_VOZACI, "VozacID", nalogID, "Ime")) & " " & _
+                           NzToText(LookupValue(TBL_VOZACI, "VozacID", nalogID, "Prezime")))
+    Else
+        nalogNaziv = S(p, "partnerTekst")
+    End If
+    razlog = OutputIzdavanjeAmbalaze(CDate(p("datum")), brojDok, _
+                                     S(p, "stanicaTekst"), S(p, "stanicaID"), _
+                                     nalogNaziv, nalogID, _
+                                     S(p, "tipAmb"), L(p, "kolAmb"), "", _
+                                     False, ambDokID, "OTPIS", True)
+    If Len(razlog) > 0 Then StampajOtpis = Poruka("NOVUNOS_MSG_STAMPA_NIJE") & " " & razlog & vbCrLf
+    Exit Function
+EH:
+    razlog = Err.description
+    LogErr "modNovacUnos.StampajOtpis"
+    StampajOtpis = Poruka("NOVUNOS_MSG_STAMPA_NIJE") & " " & razlog & vbCrLf
 End Function
 
 ' Dva oblika reversa, kao u legacy: kooperantski nosi ime kooperanta i
 ' ID, firma<->OM nosi ime vozaca (bez ID-ja) i drugu protivstranu.
-Private Sub StampajRevers(ByVal p As Object, ByVal smer As Long)
-    Dim vozacNaziv As String
+'
+' PAPIR JE SPOREDNI EFEKAT, NE DOKUMENT (KI-011). Vraca "" kad je papir napravljen
+' ili je stampa ugasena; inace UPOZORENJE za niz poruka iz ReversUpisi. Pad se
+' klasifikuje OVDE, jer je ovo jedino mesto koje zna da je upis vec prosao: poruka
+' nosi oznaku ChrW(10007) iz kataloga, pa ga ljuska prikaze kao upozorenje UZ
+' USPEH -- forma se cisti, lista osvezava, a operater zna da revers ne unosi
+' ponovo. Do KI-011 je pad PDF-a otvarao dijalog iz dubine stampe, a pad
+' PRINT/PREVIEW izlaza je bio tih.
+'
+' ambDokID je dokument koji je pisac upravo napravio: papir cita stanje oko
+' NJEGOVOG reda knjige (AMB-10-ODL-31). Kupcev revers ovde ne stize -- ne stampa
+' se (AMB-10-ODL-32, ReversUpisi).
+Private Function StampajRevers(ByVal p As Object, ByVal smer As Long, _
+                               ByVal ambDokID As String) As String
+    Dim vozacNaziv As String, razlog As String
     On Error GoTo EH
     If smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP Then
-        OutputIzdavanjeAmbalaze CDate(p("datum")), S(p, "brDok"), _
-                                S(p, "stanicaTekst"), S(p, "stanicaID"), _
-                                S(p, "partnerTekst"), S(p, "partnerID"), _
-                                S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
-                                (smer = SMER_REV_PRI_KOOP)
+        razlog = OutputIzdavanjeAmbalaze(CDate(p("datum")), S(p, "brDok"), _
+                                         S(p, "stanicaTekst"), S(p, "stanicaID"), _
+                                         S(p, "partnerTekst"), S(p, "partnerID"), _
+                                         S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
+                                         (smer = SMER_REV_PRI_KOOP), ambDokID, tiho:=True)
     Else
         vozacNaziv = Trim$(NzToText(LookupValue(TBL_VOZACI, "VozacID", S(p, "vozacID"), "Ime")) & " " & _
                            NzToText(LookupValue(TBL_VOZACI, "VozacID", S(p, "vozacID"), "Prezime")))
-        OutputIzdavanjeAmbalaze CDate(p("datum")), S(p, "brDok"), _
-                                S(p, "stanicaTekst"), S(p, "stanicaID"), _
-                                vozacNaziv, "", _
-                                S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
-                                (smer = SMER_REV_IZD_OM), "FIRMA"
+        razlog = OutputIzdavanjeAmbalaze(CDate(p("datum")), S(p, "brDok"), _
+                                         S(p, "stanicaTekst"), S(p, "stanicaID"), _
+                                         vozacNaziv, "", _
+                                         S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
+                                         (smer = SMER_REV_IZD_OM), ambDokID, "FIRMA", True)
     End If
-    Exit Sub
+    If Len(razlog) > 0 Then StampajRevers = Poruka("NOVUNOS_MSG_STAMPA_NIJE") & " " & razlog & vbCrLf
+    Exit Function
 EH:
+    razlog = Err.description
     LogErr "modNovacUnos.StampajRevers"
-End Sub
+    StampajRevers = Poruka("NOVUNOS_MSG_STAMPA_NIJE") & " " & razlog & vbCrLf
+End Function

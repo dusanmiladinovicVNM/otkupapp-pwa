@@ -677,12 +677,23 @@ function buildOtkupRecord(input, brojDokumenta, danIso) {
 
         vrstaVoca: input.vrstaVoca,
         sortaVoca: input.sortaVoca || '',
-        klasa: input.klasa || 'I',
-        kolicina: input.kolicina,
-        cena: input.cena,
+
+        // STAVKE SU DOKUMENT (S5-5b). Klasa, kolicina, cena i kolicina gajbi su
+        // cinjenice LINIJE i zive u stavke[]; zaglavlje nosi samo tip ambalaze.
+        //
+        // Forma u ovom rezu unosi JEDNU klasu, pa je niz duzine 1 -- ali oblik je
+        // vec tacan, jer sync-engine salje zapis verbatim i taj oblik je zica.
+        // Kad forma dobije vise klasa, ovde se menja samo sklapanje niza.
+        stavke: [
+            novaStavkaOtkupa({
+                klasa: input.klasa || 'I',
+                kolicina: input.kolicina,
+                cena: input.cena,
+                kolAmbalaze: input.kolAmbalaze
+            })
+        ],
 
         tipAmbalaze: input.tipAmbalaze,
-        kolAmbalaze: input.kolAmbalaze,
 
         parcelaID: input.parcelaID || '',
         napomena: input.napomena || '',
@@ -838,13 +849,8 @@ function safeGetDeviceID() {
     }
 }
 
-function generateClientRecordID() {
-    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
-        return window.crypto.randomUUID();
-    }
-
-    return 'loc-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);
-}
+// generateClientRecordID zivi u otkup-stavke.js, uz stavke koje isti identitet
+// koriste. Dva generatora identiteta bi bila dve sanse da se razidju.
 
 function isMobileViewport() {
     return window.matchMedia('(max-width: 900px)').matches;

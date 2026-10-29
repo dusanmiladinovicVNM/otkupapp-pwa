@@ -411,7 +411,7 @@ Populated AR section `4. VBA / Excel Desktop Architecture` with current-state de
 - fail-fast schema/update helper model;
 - `clsTransaction` snapshot/rollback semantics;
 - `Workbook_Open` / `StartApp` / `ShutdownApp` lifecycle contract;
-- local workstation setup through `modSetup`, `tblLocalConfig` and `Setup-OtkupApp.ps1`;
+- local workstation setup through `modSetup`, `tblLocalConfig` and `Setup-AgriX.ps1`;
 - `AutoSaveAfterCommit` durability rule;
 - local journal/backup/recovery-warning layer;
 - `RunProductionHealthCheck` workbook launch gate;

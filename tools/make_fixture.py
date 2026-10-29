@@ -298,7 +298,7 @@ IZV_KES = 200.0
 IZV_VIRMAN = 300.0
 IZV_AVANS_KOOP = 700.0
 IZV_OM_AVANS = 5000.0            # KesFirmaOtkupac; GetOMAvansSaldo = 5000 - 200
-AMB_LETVA = "Letvarica"          # drugi tip ambalaze; slobodan unos kao u pogonu
+AMB_LETVA = "Letvarica"          # drugi tip ambalaze; od KI-021 i on je u sifarniku
 
 # EKRAN SLEDLJIVOST (Faza E/20, v6-ui-187). Do sada fixture NIJE imao nijednu
 # otpremnicu cija zbirna nosi NESTORNIRANU prijemnicu (rupa zapisana u
@@ -486,6 +486,9 @@ SEED = {
     ],
     "tblTipAmbalaze": [
         {"TipAmbalaze": AMB_12_1, "TezinaGajbiceKg": 1.0, "Aktivan": STATUS_AKTIVAN},
+        # KI-021: tip je zatvoren skup (AMB-INV-12), pa i drugi tip knjige mora
+        # biti u sifarniku. Tezina 0 cuva tara ponasanje kakvo je bilo bez reda.
+        {"TipAmbalaze": AMB_LETVA, "TezinaGajbiceKg": 0.0, "Aktivan": STATUS_AKTIVAN},
     ],
     "tblKooperanti": [
         # KOOP-TEST-1 IMA tekuci racun: ekran Platni nalozi bez ijednog
@@ -833,7 +836,7 @@ SEED = {
         {"OtkupID": "OTK-LEG-A", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
          "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
-         "KolAmbalaze": 10, "VozacID": VOZAC, "BrojDokumenta": "L1/TEST", "Klasa": "I",
+         "KolAmbalaze": 10, "KolAmbIzdata": 10, "VozacID": VOZAC, "BrojDokumenta": "L1/TEST", "Klasa": "I",
          "OtpremnicaID": "OTP-LEG-A", "BrojOtpremnice": OTPREMNICA_LEGACY},
         {"OtkupID": "OTK-LEG-B", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
          "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
@@ -845,7 +848,7 @@ SEED = {
         {"OtkupID": "OTK-KOL-A", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
          "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
-         "KolAmbalaze": 10, "VozacID": VOZAC, "BrojDokumenta": OTKUP_KOLIZIJA, "Klasa": "I"},
+         "KolAmbalaze": 10, "KolAmbIzdata": 10, "VozacID": VOZAC, "BrojDokumenta": OTKUP_KOLIZIJA, "Klasa": "I"},
         {"OtkupID": "OTK-KOL-B", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
          "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
@@ -854,7 +857,7 @@ SEED = {
         {"OtkupID": "OTK-BLK-A", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
          "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
-         "KolAmbalaze": 10, "VozacID": VOZAC, "BrojDokumenta": "B1/TEST", "Klasa": "I",
+         "KolAmbalaze": 10, "KolAmbIzdata": 10, "VozacID": VOZAC, "BrojDokumenta": "B1/TEST", "Klasa": "I",
          "OtpremnicaID": "OTP-BLK-A", "BrojOtpremnice": OTPREMNICA_BLOK},
         {"OtkupID": "OTK-BLK-B", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
          "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
@@ -864,7 +867,7 @@ SEED = {
         {"OtkupID": "OTK-TEST-1", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
          "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 400, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
-         "KolAmbalaze": 40, "VozacID": VOZAC, "BrojDokumenta": "1/TEST",
+         "KolAmbalaze": 40, "KolAmbIzdata": 40, "VozacID": VOZAC, "BrojDokumenta": "1/TEST",
          "Klasa": "I", "BrojZbirne": ZBIRNA, "OtpremnicaID": "OTP-TEST-1",
          "BrojOtpremnice": "1/TEST", "ParcelaID": "PAR-TEST-1"},
         {"OtkupID": "OTK-TEST-2", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
@@ -1173,116 +1176,183 @@ SEED = {
     # skupom. Redovi su SAMOSTALNA kretanja (DokumentID nije otkupID): bas njih
     # ReportKarticaKooperanta uzima kao amb redove kartice, a uz-otkup parove
     # vec pokrivaju kolone tblOtkup.
+    # AMBALAZNI LEDGER -- KANONSKI MODEL (AMB-10c).
+    #
+    # Do 08.10.2026 je ovde stajao STARI oblik: po DVE noge na dogadjaj
+    # (Smer + EntitetID + EntitetTip), jer je red imenovao samo JEDNU stranu.
+    # Nov red imenuje OBE (Od -> Na) i nosi VrstaKretanja, pa je svaki par nogu
+    # postao JEDAN red. Kolicine su nedirnute, pa su i saldi isti:
+    #
+    #   KOOP-TEST-1:  +30 +5 (izdate) -10 (povrat) +-99 (storniran par)
+    #                 -72 (uz-otkup) = -47
+    #
+    # To je isti broj koji je kartica dala i pre cutovera -- slaganje kartice i
+    # kanonskog salda zato ostaje tvrdnja nad ISTIM skupom, ne nad dva modela.
+    #
+    # STORNO NIJE KOLONA. Stari red je nosio Stornirano="Da"; knjiga je
+    # nepromenljiva, pa storno pise KONTRA-STAV: zamenjene strane, ISTA vrsta
+    # kretanja, StornoOd -> AmbID originala (modAmbalaza.StornirajAmbalazuDokumenta).
+    # Par se algebarski anulira, pa ga pregled skriva a kartica prikazuje.
     "tblAmbalaza": [
-        # Revers REV-IZV-1: OM izdao KOOP-TEST-1 prazne gajbe, DVE NOGE ISTOG
-        # DokumentID-a (Kooperant Ulaz + Stanica Izlaz) -- oblik koji
-        # rekonstrukcija reversa trazi. Uz 12/1 ide i DRUGI TIP na ISTOM
-        # dokumentu (AMB_LETVA): kljuc reversa je DokumentID + DokumentTip +
-        # TIP AMBALAZE, pa pregled mora da ih drzi u DVA reda (AUD-012); bez
-        # ovog para bi se spajanje tipova vratilo neprimeceno.
-        # ReversID (REV-IDENT-01): identitet logickog reversa. Jedan revers sme da
-        # nosi VISE tipova ambalaze (odluka 15.09.2026), pa REV-IZV-1 (12/1 +
-        # LETVA) nosi JEDAN ReversID na sve cetiri noge. Danasnji pisac pise jedan
-        # tip po pozivu -- to je granica API-ja, ne grain dokumenta. Transakcioni
-        # identitet je opaque "RID-<32 hex>"
-        # (NewEntityID, DOCUMENT_HEADER_LINES.md par. 2.1) -- fixture drzi isti
-        # FORMAT, samo deterministicne vrednosti, da ne legitimizuje RID-00001.
+        # ADK-IZV-1 -- OM izdao KOOP-TEST-1 prazne gajbe, DVA TIPA na ISTOM
+        # dokumentu. Identitet reda je (DokTip, DokID, VrstaKretanja, TipAmbalaze)
+        # po AMB-INV-04, pa dva tipa legalno dele dokument -- i pregled ih drzi u
+        # DVA reda (AUD-012). Bez ovog para bi se spajanje tipova vratilo
+        # neprimeceno.
         {"AmbID": "AMB-IZV-K1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 30, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
-         "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-1",
-         "DokumentTip": "OM-Izlaz-Koop", "ReversID": "RID-00000000000000000000000000000001"},
-        {"AmbID": "AMB-IZV-S1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 30, "Smer": "Izlaz", "EntitetID": STANICA,
-         "EntitetTip": "Stanica", "DokumentID": "REV-IZV-1",
-         "DokumentTip": "OM-Izlaz-Koop", "ReversID": "RID-00000000000000000000000000000001"},
+         "Kolicina": 30, "OdNalogTip": "Stanica", "OdNalogID": STANICA,
+         "NaNalogTip": "Kooperant", "NaNalogID": "KOOP-TEST-1",
+         "DokumentID": "ADK-IZV-1", "DokumentTip": "AmbalazaDokument",
+         "VrstaKretanja": "IZDATA_PRAZNA"},
         {"AmbID": "AMB-IZV-K2", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_LETVA,
-         "Kolicina": 5, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
-         "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-1",
-         "DokumentTip": "OM-Izlaz-Koop", "ReversID": "RID-00000000000000000000000000000001"},
-        {"AmbID": "AMB-IZV-S2", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_LETVA,
-         "Kolicina": 5, "Smer": "Izlaz", "EntitetID": STANICA,
-         "EntitetTip": "Stanica", "DokumentID": "REV-IZV-1",
-         "DokumentTip": "OM-Izlaz-Koop", "ReversID": "RID-00000000000000000000000000000001"},
-        # Povrat REV-IZV-2: kooperant vratio 10 gajbi -> saldo kooperanta
-        # 30 + 5 - 10 = 25; kartica ambalaze ima i Ulaz i Izlaz redove.
+         "Kolicina": 5, "OdNalogTip": "Stanica", "OdNalogID": STANICA,
+         "NaNalogTip": "Kooperant", "NaNalogID": "KOOP-TEST-1",
+         "DokumentID": "ADK-IZV-1", "DokumentTip": "AmbalazaDokument",
+         "VrstaKretanja": "IZDATA_PRAZNA"},
+        # ADK-IZV-2 -- kooperant vratio 10: kartica ambalaze ima i Ulaz i Izlaz red.
         {"AmbID": "AMB-IZV-K3", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 10, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
-         "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-2",
-         "DokumentTip": "OM-Ulaz-Koop", "ReversID": "RID-00000000000000000000000000000002"},
-        {"AmbID": "AMB-IZV-S3", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 10, "Smer": "Ulaz", "EntitetID": STANICA,
-         "EntitetTip": "Stanica", "DokumentID": "REV-IZV-2",
-         "DokumentTip": "OM-Ulaz-Koop", "ReversID": "RID-00000000000000000000000000000002"},
-        # STORNIRAN red sa velikom kolicinom: i izvestaj i kanonski saldo
-        # (GetAmbalazeStanje) ga izuzimaju (ExcludeStornirano). Da jedna
-        # strana prestane, saldo kooperanta postane 124 i slaganje pukne --
-        # isti obrazac kao NOV-TEST-AB4.
+         "Kolicina": 10, "OdNalogTip": "Kooperant", "OdNalogID": "KOOP-TEST-1",
+         "NaNalogTip": "Stanica", "NaNalogID": STANICA,
+         "DokumentID": "ADK-IZV-2", "DokumentTip": "AmbalazaDokument",
+         "VrstaKretanja": "POVRAT_PRAZNE"},
+        # ADK-IZV-X -- STORNIRAN dokument sa velikom kolicinom, kao PAR
+        # original + kontra-stav. Da kontra-stav nestane, saldo kooperanta skoci
+        # na +52 i slaganje pukne -- isti obrazac kao stari Stornirano="Da" red.
         {"AmbID": "AMB-IZV-KS", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 99, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
-         "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-X",
-         "DokumentTip": "OM-Izlaz-Koop", "Stornirano": "Da", "ReversID": "RID-00000000000000000000000000000003"},
-        # Ulaz od firme na OM: lista AMBALAZA za Stanicu ima i Ulaz i Izlaz
-        # redove, pa cipovi ulaz/izlaz ne mere prazan skup.
+         "Kolicina": 99, "OdNalogTip": "Stanica", "OdNalogID": STANICA,
+         "NaNalogTip": "Kooperant", "NaNalogID": "KOOP-TEST-1",
+         "DokumentID": "ADK-IZV-X", "DokumentTip": "AmbalazaDokument",
+         "VrstaKretanja": "IZDATA_PRAZNA"},
+        {"AmbID": "AMB-IZV-KSC", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 99, "OdNalogTip": "Kooperant", "OdNalogID": "KOOP-TEST-1",
+         "NaNalogTip": "Stanica", "NaNalogID": STANICA,
+         "DokumentID": "ADK-IZV-X", "DokumentTip": "AmbalazaDokument",
+         "VrstaKretanja": "IZDATA_PRAZNA", "StornoOd": "AMB-IZV-KS"},
+        # ADK-IZV-3 -- nase gajbe ULAZE samo kroz NABAVKU (AMB-10-ODL-8), pa je
+        # stari "OM-Ulaz-Firma" red sada nabavka: SpoljniSvet -> Stanica. Lista
+        # AMBALAZA za stanicu time ima i ulazne i izlazne redove.
         {"AmbID": "AMB-IZV-S4", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 100, "Smer": "Ulaz", "EntitetID": STANICA,
-         "EntitetTip": "Stanica", "DokumentID": "REV-IZV-3",
-         "DokumentTip": "OM-Ulaz-Firma", "ReversID": "RID-00000000000000000000000000000004"},
-        # KUPAC red: lista AMBALAZA za Kupca nije prazna. DokumentTip
-        # Prijemnica -> ResolveDokBroj razresava broj iz tblPrijemnica.
+         "Kolicina": 100, "OdNalogTip": "SpoljniSvet", "OdNalogID": "",
+         "NaNalogTip": "Stanica", "NaNalogID": STANICA,
+         "DokumentID": "ADK-IZV-3", "DokumentTip": "AmbalazaDokument",
+         "VrstaKretanja": "NABAVKA"},
+        # LEGACY NOGE (AMB-LEG-*, revers REV-IZV-1 u STAROM obliku) su obrisane u
+        # 10e-3, zajedno sa kolonama starog modela koje su nosile. Od tada je red
+        # starog oblika KVAR knjige (AMBALAZA.md 6.13e), pa bi svako citanje knjige
+        # nad fixture-om palo -- fixture nosi samo kanonski oblik.
+        # KUPAC: prijemnica PRJ-FAK-3 nosi gajbe UZ ROBU, Vozac -> Kupac. Pregled
+        # kupca mora da pokaze POSLOVNI broj prijemnice, ne DokumentID.
         {"AmbID": "AMB-IZV-KP1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 10, "Smer": "Ulaz", "EntitetID": KUPAC,
-         "EntitetTip": "Kupac", "DokumentID": "PRJ-FAK-3",
-         "DokumentTip": "Prijemnica"},
-        # UZ-OTKUP PAROVI za KOOP-TEST-1 -- onako kako ih SaveOtkup pise
-        # (primljene pune gajbe: Kooperant-Izlaz + Stanica-Ulaz, DokTip=Otkup,
-        # DokumentID = otkupID). Bez njih su kartica kooperanta (tblOtkup
-        # kolone + samostalna kretanja) i kanonski ledger saldo
-        # (GetAmbalazeStanje) dva read-modela nad NEKONZISTENTNOM sveskom i
-        # slaganje nema smisla -- prvi crveni run T_Izv_SlaganjeKartica je
-        # bio tacno to (kartica -47, ledger 25). Parovi idu za SVAKI
-        # nestorniran otkup KOOP-TEST-1 sa KolAmbalaze > 0; storniran
-        # OTK-NAL-STOR se preskace (storno flow bi stornirao i par).
+         "Kolicina": 10, "OdNalogTip": "Vozac", "OdNalogID": VOZAC,
+         "NaNalogTip": "Kupac", "NaNalogID": KUPAC,
+         "DokumentID": "PRJ-FAK-3", "DokumentTip": "Prijemnica",
+         "VrstaKretanja": "AMBALAZA_UZ_ROBU"},
+        # UZ-OTKUP KNJIZI DVE VRSTE NAD ISTIM DOKUMENTOM, i to nije kozmetika:
+        #
+        # ZAGLAVLJE OTKUPA MORA DA SE SLAZE SA KNJIGOM. tblOtkup nosi DVE kolone --
+        # KolAmbalaze (primljene pune) i KolAmbIzdata (izdate prazne) -- a fixture je
+        # do 09.10.2026 sejao samo prvu. Kartica kooperanta je zato citala
+        # "primio 72, izdato 0" = -72, dok knjiga ta dva kretanja nulira. Razlika
+        # NIJE bila greska citaoca (modIzvestaj:896 cita obe kolone) nego
+        # nekonzistentna sveska. Pet otkupa koji ovde imaju IZDATA_PRAZNA nogu zato i
+        # na zaglavlju nose istu kolicinu u KolAmbIzdata.
+        # pune gajbe stizu sa robom (AMBALAZA_UZ_ROBU, Kooperant -> Stanica), a
+        # prazne se istom prilikom izdaju (IZDATA_PRAZNA, Stanica -> Kooperant) --
+        # tako to opisuje AMBALAZA.md za danasnji otkup.
+        #
+        # Prva verzija je upisala SAMO nogu UZ_ROBU, pa je kooperant pao na -47 i
+        # AMB-INV-07 je oborio svaki storno ("nijedan realni nalog nema saldo < 0",
+        # potvrdjeno 28.09.2026, bez izuzetka). Stari model to nije prijavljivao jer
+        # ta invarijanta nad njegovim redovima nije ni postojala.
+        #
+        # Dve vrste istog dokumenta su legalne po AMB-INV-04 (identitet nosi i
+        # VrstaKretanja), a AMB-INV-10 je zadovoljen jer je neuredjen par isti.
+        # Idu za SVAKI nestorniran otkup KOOP-TEST-1 sa KolAmbalaze > 0;
+        # DokumentID = otkupID. Bez njih su kartica (tblOtkup kolone + samostalna
+        # kretanja) i kanonski saldo dva read-modela nad NEKONZISTENTNOM sveskom.
+        # Idu za SVAKI nestorniran otkup KOOP-TEST-1 sa KolAmbalaze > 0;
+        # storniran OTK-NAL-STOR se preskace.
         {"AmbID": "AMB-OTK-K1A", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 10, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
-         "EntitetTip": "Kooperant", "DokumentID": "OTK-LEG-A", "DokumentTip": "Otkup"},
+         "Kolicina": 10, "OdNalogTip": "Kooperant", "OdNalogID": "KOOP-TEST-1",
+         "NaNalogTip": "Stanica", "NaNalogID": STANICA,
+         "DokumentID": "OTK-LEG-A", "DokumentTip": "Otkup",
+         "VrstaKretanja": "AMBALAZA_UZ_ROBU"},
         {"AmbID": "AMB-OTK-S1A", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 10, "Smer": "Ulaz", "EntitetID": STANICA,
-         "EntitetTip": "Stanica", "DokumentID": "OTK-LEG-A", "DokumentTip": "Otkup"},
+         "Kolicina": 10, "OdNalogTip": "Stanica", "OdNalogID": STANICA,
+         "NaNalogTip": "Kooperant", "NaNalogID": "KOOP-TEST-1",
+         "DokumentID": "OTK-LEG-A", "DokumentTip": "Otkup",
+         "VrstaKretanja": "IZDATA_PRAZNA"},
         {"AmbID": "AMB-OTK-K1B", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 10, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
-         "EntitetTip": "Kooperant", "DokumentID": "OTK-KOL-A", "DokumentTip": "Otkup"},
+         "Kolicina": 10, "OdNalogTip": "Kooperant", "OdNalogID": "KOOP-TEST-1",
+         "NaNalogTip": "Stanica", "NaNalogID": STANICA,
+         "DokumentID": "OTK-KOL-A", "DokumentTip": "Otkup",
+         "VrstaKretanja": "AMBALAZA_UZ_ROBU"},
         {"AmbID": "AMB-OTK-S1B", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 10, "Smer": "Ulaz", "EntitetID": STANICA,
-         "EntitetTip": "Stanica", "DokumentID": "OTK-KOL-A", "DokumentTip": "Otkup"},
+         "Kolicina": 10, "OdNalogTip": "Stanica", "OdNalogID": STANICA,
+         "NaNalogTip": "Kooperant", "NaNalogID": "KOOP-TEST-1",
+         "DokumentID": "OTK-KOL-A", "DokumentTip": "Otkup",
+         "VrstaKretanja": "IZDATA_PRAZNA"},
         {"AmbID": "AMB-OTK-K1C", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 10, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
-         "EntitetTip": "Kooperant", "DokumentID": "OTK-BLK-A", "DokumentTip": "Otkup"},
+         "Kolicina": 10, "OdNalogTip": "Kooperant", "OdNalogID": "KOOP-TEST-1",
+         "NaNalogTip": "Stanica", "NaNalogID": STANICA,
+         "DokumentID": "OTK-BLK-A", "DokumentTip": "Otkup",
+         "VrstaKretanja": "AMBALAZA_UZ_ROBU"},
         {"AmbID": "AMB-OTK-S1C", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 10, "Smer": "Ulaz", "EntitetID": STANICA,
-         "EntitetTip": "Stanica", "DokumentID": "OTK-BLK-A", "DokumentTip": "Otkup"},
+         "Kolicina": 10, "OdNalogTip": "Stanica", "OdNalogID": STANICA,
+         "NaNalogTip": "Kooperant", "NaNalogID": "KOOP-TEST-1",
+         "DokumentID": "OTK-BLK-A", "DokumentTip": "Otkup",
+         "VrstaKretanja": "IZDATA_PRAZNA"},
         {"AmbID": "AMB-OTK-K1D", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 40, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
-         "EntitetTip": "Kooperant", "DokumentID": "OTK-TEST-1", "DokumentTip": "Otkup"},
+         "Kolicina": 40, "OdNalogTip": "Kooperant", "OdNalogID": "KOOP-TEST-1",
+         "NaNalogTip": "Stanica", "NaNalogID": STANICA,
+         "DokumentID": "OTK-TEST-1", "DokumentTip": "Otkup",
+         "VrstaKretanja": "AMBALAZA_UZ_ROBU"},
         {"AmbID": "AMB-OTK-S1D", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 40, "Smer": "Ulaz", "EntitetID": STANICA,
-         "EntitetTip": "Stanica", "DokumentID": "OTK-TEST-1", "DokumentTip": "Otkup"},
+         "Kolicina": 40, "OdNalogTip": "Stanica", "OdNalogID": STANICA,
+         "NaNalogTip": "Kooperant", "NaNalogID": "KOOP-TEST-1",
+         "DokumentID": "OTK-TEST-1", "DokumentTip": "Otkup",
+         "VrstaKretanja": "IZDATA_PRAZNA"},
         {"AmbID": "AMB-OTK-K1E", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 2, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
-         "EntitetTip": "Kooperant", "DokumentID": "OTK-NAL-DELIM", "DokumentTip": "Otkup"},
-        {"AmbID": "AMB-OTK-S1E", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 2, "Smer": "Ulaz", "EntitetID": STANICA,
-         "EntitetTip": "Stanica", "DokumentID": "OTK-NAL-DELIM", "DokumentTip": "Otkup"},
-        # VOZAC ruta (filter po VozacID koloni): utovar na otpremnici pa
-        # predaja na prijemnici -- kompletna ruta, vozacev saldo 0. DokTip
-        # Otkup se NE koristi (vozacki izvestaj ga izuzima).
+         "Kolicina": 2, "OdNalogTip": "Kooperant", "OdNalogID": "KOOP-TEST-1",
+         "NaNalogTip": "Stanica", "NaNalogID": STANICA,
+         "DokumentID": "OTK-NAL-DELIM", "DokumentTip": "Otkup",
+         "VrstaKretanja": "AMBALAZA_UZ_ROBU"},
+        # OTK-NAL-DELIM NAMERNO OSTAJE JEDNOSMERAN: kooperant je doneo 2 pune a
+        # NIJE uzeo prazne. Racunica to dopusta (saldo kooperanta ostaje +23, pa
+        # AMB-INV-07 miruje), a fixture time zadrzava dokument na kome se meri
+        # pravilo "nula se ne salje kao vrednost" (prefill ispravke).
+        # VOZACEVA RUTA: utovar (Stanica -> Vozac) pa predaja (Vozac -> Kupac).
+        # Vozac je od 10b-2 NALOG, ne zig uz red, pa mu je saldo 40 - 40 = 0 bez
+        # ikakve inverzije smera (AMBALAZA.md 6.8).
         {"AmbID": "AMB-IZV-V1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 40, "Smer": "Izlaz", "EntitetID": STANICA,
-         "EntitetTip": "Stanica", "VozacID": VOZAC, "DokumentID": "OTP-TEST-1",
-         "DokumentTip": "Otpremnica"},
+         "Kolicina": 40, "OdNalogTip": "Stanica", "OdNalogID": STANICA,
+         "NaNalogTip": "Vozac", "NaNalogID": VOZAC,
+         "DokumentID": "OTP-TEST-1", "DokumentTip": "Otpremnica",
+         "VrstaKretanja": "AMBALAZA_UZ_ROBU"},
         {"AmbID": "AMB-IZV-V2", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
-         "Kolicina": 40, "Smer": "Ulaz", "EntitetID": KUPAC,
-         "EntitetTip": "Kupac", "VozacID": VOZAC, "DokumentID": "PRJ-TEST-A",
-         "DokumentTip": "Prijemnica"},
+         "Kolicina": 40, "OdNalogTip": "Vozac", "OdNalogID": VOZAC,
+         "NaNalogTip": "Kupac", "NaNalogID": KUPAC,
+         "DokumentID": "PRJ-TEST-A", "DokumentTip": "Prijemnica",
+         "VrstaKretanja": "AMBALAZA_UZ_ROBU"},
+    ],
+    # ZAGLAVLJA AMBALAZNIH DOKUMENATA. Poslovni broj i vrsta zive TU, a ne na nozi
+    # knjige -- AmbDokID je opaque identitet (AMB-10-ODL-16). Bez zaglavlja bi
+    # kartica, pregled i papir prikazivali "ADK-..." umesto broja.
+    #
+    # Tabelu donor NEMA; pravi je ENSURE_TABLES gore, pre sejanja.
+    "tblAmbalazaDokument": [
+        {"AmbDokID": "ADK-IZV-1", "Datum": FIXTURE_DATE, "Vrsta": "REVERS",
+         "BrojDokumenta": "1/IZV", "BrojOwnerTip": "Stanica",
+         "BrojOwnerID": STANICA},
+        {"AmbDokID": "ADK-IZV-2", "Datum": FIXTURE_DATE, "Vrsta": "REVERS",
+         "BrojDokumenta": "2/IZV", "BrojOwnerTip": "Stanica",
+         "BrojOwnerID": STANICA},
+        {"AmbDokID": "ADK-IZV-X", "Datum": FIXTURE_DATE, "Vrsta": "REVERS",
+         "BrojDokumenta": "3/IZV", "BrojOwnerTip": "Stanica",
+         "BrojOwnerID": STANICA},
+        {"AmbDokID": "ADK-IZV-3", "Datum": FIXTURE_DATE, "Vrsta": "NABAVKA",
+         "BrojDokumenta": "4/IZV", "BrojOwnerTip": "Stanica",
+         "BrojOwnerID": STANICA},
     ],
     "tblFakture": [
         {"FakturaID": FAKTURA, "KupacID": KUPAC, "Iznos": FAKTURA_IZNOS},
@@ -2246,6 +2316,15 @@ SEED["tblOtpremnicaStavke"] = [
 # nijedan citalac iz S4-1 ne cita, a izvodjenje iz Otpremnica.BrojZbirne bi za
 # dvosmislene brojeve iz fixture-a moralo da pogadja vlasnika. To je posao S4-2
 # (F3 bira izvore) i S4-3 (clanstvo i okvir), gde se i meri.
+
+# ZBR-OWN-01 (review #442, P1-b): svaki red tblZbirna nosi trajnu oznaku
+# internog hladnjackog toka. Pisac je racuna pri nastanku iz MALINA_DEFAULT_KUPAC,
+# a donor taj kljuc drzi PRAZAN -- nijedna zbirna ovde nije interni lanac, pa je
+# oznaka "Ne". Bez nje PONISTENJE fixture zbirne staje (prazna oznaka = "ne zna
+# se"), a to je stanje koje pisac ne moze da proizvede.
+for _red in SEED["tblZbirna"]:
+    _red.setdefault("KupacHladnjaca", "Ne")
+
 SEED["tblZbirnaStavke"] = [
     {
         "ZbirnaStavkaID": "ZBS-" + str(red["ZbirnaID"]),
@@ -2256,6 +2335,84 @@ SEED["tblZbirnaStavke"] = [
         "KolAmbalaze": red.get("UkupnoAmbalaze", 0),
     }
     for red in SEED["tblZbirna"]
+]
+
+# tblPrijemnicaStavke SE IZVODI IZ tblPrijemnica -- isti razlog, cetvrti
+# dokument (S6 korak 3, plan 14.55, odluka 2).
+#
+# Od S6 koraka 2 klasa, kolicina, cena i gajbe prijemnice zive na stavkama, a
+# pisac ih na zaglavlju ostavlja prazne. Citaoci (stampa, izvestaji, F4 lista,
+# manjak, integritet, oporavak, izvoz, palete) ih od koraka 3 odatle i citaju, a
+# strog citalac zaglavlje bez stavki odbija PO IMENU -- dakle fixture sa
+# zaglavljem bez stavke ne bi oborio jedan test nego svaki koji dodirne bilo
+# kog od tih citalaca.
+#
+# JEDNA STAVKA PO ZAGLAVLJU, ne spajanje po broju: zatecen fixture drzi vise
+# redova istog BrojPrijemnice kao VISE dokumenata (PRJ-TEST-A/B: isti broj, dva
+# kupca; I1/I2, Z1/Z2, C1/C2, D1/D2) i scenariji se oslanjaju bas na to.
+#
+# Linijske kolone ZAGLAVLJA (Kolicina/Cena/Klasa/KolAmbalaze) su u SEED-u samo
+# IZVOR ovog izvodjenja: od S6 koraka 8 ih kanon nema, pa se posle izvodjenja
+# skidaju sa redova zaglavlja (PRJ_SAMO_IZVOR, ispod), a DROP_COLS ih brise iz
+# donora.
+SEED["tblPrijemnicaStavke"] = [
+    {
+        "PrijemnicaStavkaID": "PRS-" + str(red["PrijemnicaID"]),
+        "PrijemnicaID": red["PrijemnicaID"],
+        "RedniBroj": 1,
+        "Klasa": red.get("Klasa") or "I",
+        "Kolicina": red["Kolicina"],
+        "Cena": red.get("Cena", 0),
+        "KolAmbalaze": red.get("KolAmbalaze", 0),
+        "BrutoKg": "",
+    }
+    for red in SEED["tblPrijemnica"]
+]
+
+# LINIJE FAKTURE NAD PRIJEMNICOM SE IZVODE IZ KESA ZAGLAVLJA (S6 korak 5, plan
+# 14.55, odluka 3).
+#
+# Od koraka 5 je fakturisanost IZVEDENA: stavka je fakturisana kad ima aktivnu
+# liniju tblFakturaStavke sa svojim PrijemnicaStavkaID (FAK-LIN-03), a kes
+# Fakturisano/FakturaID na zaglavlju niko ne cita. Fixture je do sada fakturisanu
+# prijemnicu drzao SAMO u kesu, bez linije -- pa bi posle koraka 5 svaka postala
+# nefakturisana.
+#
+# Ista cinjenica, zapisana na drugom mestu: zaglavlje sa FakturaID POSTOJECE
+# fakture dobija liniju na svoju jedinu stavku (PRS-<PrijemnicaID>, gore), sa
+# brojkama te stavke. Red bez FakturaID-a (PRJ-FAK-2, kes "Da" bez veze) i red
+# koji pokazuje na fakturu koje nema (PRJ-SLED-F2 -> FAK-NEMA-GA) liniju NE
+# dobijaju: kes posle koraka 5 ne odlucuje nista (R4, KI-038). Od koraka 8 kes
+# kolona nema ni u kanonu ni u fixture-u (PRJ_SAMO_IZVOR, ispod).
+_FAK_STORNO = {r["FakturaID"]: r.get("Stornirano", "") for r in SEED["tblFakture"]}
+SEED["tblFakturaStavke"] = SEED["tblFakturaStavke"] + [
+    {
+        "StavkaID": "FST-PRS-" + str(red["PrijemnicaID"]),
+        "FakturaID": red["FakturaID"],
+        "PrijemnicaID": red["PrijemnicaID"],
+        "Kolicina": red["Kolicina"],
+        "Cena": red.get("Cena", 0),
+        "Klasa": red.get("Klasa") or "I",
+        "BrojPrijemnice": red["BrojPrijemnice"],
+        "Stornirano": _FAK_STORNO[red["FakturaID"]],
+        "PrijemnicaStavkaID": "PRS-" + str(red["PrijemnicaID"]),
+    }
+    for red in SEED["tblPrijemnica"]
+    if red.get("FakturaID") in _FAK_STORNO
+]
+
+# ZAGLAVLJE PRIJEMNICE POSLE IZVODJENJA (S6 korak 8, plan 14.55 "Korak 8").
+#
+# Kanon tblPrijemnica nema linijska polja, kes fakture ni generaciju. Kljucevi
+# iznad su posluzili kao IZVOR za dve izvedene tabele (stavke, linije fakture);
+# na zaglavlju bi sejanje po imenu palo (add_row: donor nema kolonu), a da ih
+# DROP_COLS ne brise, ostale bi u SREDINI zaglavlja i pomerile pozicioni upis.
+# Isto radi modSetup.ObrisiStareKolonePrijemnice na startu aplikacije.
+PRJ_SAMO_IZVOR = ("Kolicina", "Cena", "KolAmbalaze", "Klasa", "Fakturisano",
+                  "FakturaID", "BrutoKg", "GeneracijaID")
+SEED["tblPrijemnica"] = [
+    {k: v for k, v in red.items() if k not in PRJ_SAMO_IZVOR}
+    for red in SEED["tblPrijemnica"]
 ]
 
 # tblOtpremnicaIzvori SE IZVODI IZ STARE VEZE Otkup.OtpremnicaID (review #362).
@@ -2304,6 +2461,17 @@ for _red in SEED["tblOtpremnica"]:
 DROP_COLS = {
     # Kes izvedenog statusa isplate (korak 7); istina zivi u tblNovac.
     "tblOtkup": ["Isplaceno", "DatumIsplate"],
+    # 10e-3: stari model ambalaze. Kolone su u SREDINI starog kanona (5-8, 11, 16).
+    # Isto radi modSetup.ObrisiStareKoloneAmbalaze na startu aplikacije; ovde se
+    # brisu u donoru da fixture nosi KONACNU semu, a put zatecene sveske meri
+    # Test_Amb_StareKoloneSelfHeal.
+    "tblAmbalaza": ["Smer", "EntitetID", "EntitetTip", "VozacID", "Stornirano",
+                    "ReversID"],
+    # S6 korak 8: linijska polja, kes fakture i generacija zaglavlja prijemnice
+    # (stari kanon 9, 10, 12, 14-16, 18 i 27). Isto radi
+    # modSetup.ObrisiStareKolonePrijemnice; put zatecene sveske meri
+    # Test_S6K8_PrijemnicaStareKoloneSelfHeal.
+    "tblPrijemnica": list(PRJ_SAMO_IZVOR),
 }
 
 RENAME_COLS = {
@@ -2315,7 +2483,10 @@ RENAME_COLS = {
 ENSURE_COLS = {
     "tblKorisnici": ["KorisnikID", "Username", "ImePrezime", "PIN", "Uloga",
                      "Aktivan", "StanicaID"] + KOR_OBLASTI,
-    "tblFakturaStavke": ["PreradaID", "BrojPrerade", "UtovarID"],
+    # S6 korak 5: PrijemnicaStavkaID je kanonska linija prijemnice, na KRAJU
+    # kanona, a donor (stari fixture) je nema. Sejanje linija izvedenih iz kesa
+    # (gore) ide po imenu, pa bi bez nje red pao.
+    "tblFakturaStavke": ["PreradaID", "BrojPrerade", "UtovarID", "PrijemnicaStavkaID"],
     # Revizija #13: snapshot roka na lotu (prazno u fixture-u =
     # fallback putanja RokIstekaZaTip, koju test 162 i tvrdi).
     "tblPrerada": ["DatumIsteka"],
@@ -2331,17 +2502,42 @@ ENSURE_COLS = {
     # Samo tblZbirna: EnsureSledljivostSchema je dodaje na sest tabela, ali
     # invarijanta se drzi zbirne -- tblOtpremnica namerno ima red bez generacije
     # (OTP-LEG-A), koji T_ZavrsetakIspravke_NeDegradiraOldDocID tvrdi kao preduslov.
-    "tblZbirna": ["GeneracijaID"],
-    # REV-IDENT-01: identitet logickog reversa. Kanon ga drzi kao poslednju
-    # kolonu tblAmbalaza, a donor (stari fixture) je nema -- bez nje sejanje po
-    # imenu obara red, jer SEED upisuje ReversID na revers noge.
-    "tblAmbalaza": ["ReversID"],
+    # ZBR-OWN-01: KupacHladnjaca je na KRAJU kanona, a donor je nema (v. SEED).
+    "tblZbirna": ["GeneracijaID", "KupacHladnjaca"],
+    # AMB-10c: kanonske kolone knjige -- kanon ih drzi, a donor (stari fixture) ih
+    # nema, jer ih u aplikaciji dodaje modSetup.EnsureRuntimeSchema na startu. Bez
+    # njih sejanje po imenu obara red, jer SEED od 08.10.2026 upisuje kanonski oblik
+    # (jedan red, obe strane).
+    #
+    # ReversID (REV-IDENT-01) je ovde stajao do 10e-3. Sada je u DROP_COLS, a
+    # ENSURE_COLS ide POSLE brisanja: da je ostao i ovde, generator bi ga obrisao
+    # iz sredine pa VRATIO na kraj -- gde ga provera kanonskog PREFIKSA ne vidi.
+    "tblAmbalaza": ["OdNalogTip", "OdNalogID", "NaNalogTip",
+                    "NaNalogID", "VrstaKretanja", "StornoOd"],
+    # AMB-10d: veza ispravke reversa po ID-u (A9). Kanon ih drzi na KRAJU
+    # tblAmbalazaDokument, a donor (stari fixture) ih nema. Bez njih pisac pada
+    # na SchemaReadyOrFail (kanonski prefiks), pa bi svaki test sa reversom
+    # merio svesku, a ne kod.
+    "tblAmbalazaDokument": ["IspravkaOdID", "ZamenjenSaID"],
 }
 
 # Tabele koje donor NEMA (krug 5: utovarna lista) -- generator ih pravi
 # isto kao modSetup.EnsureUtovarSchemaCore (EnsureDataTable): novi sheet
 # + ListObject sa ovim kolonama. Redosled = redosled u modSetup Array.
 ENSURE_TABLES = {
+    # AMB-10-DOK: zaglavlje ambalaznog dokumenta. Donor je nema -- u aplikaciji je
+    # pravi modSchema.EnsureAllTables na startu, pa je fixture do sada imao tek u
+    # temp kopiji tokom run-a. Mora da postoji PRE sejanja, jer poslovni broj i
+    # vrsta zive TU, a ne na nozi knjige (AmbDokID je opaque identitet, ODL-16).
+    # Kolone i redosled su iz kanona (schema/schema.json, tblAmbalazaDokument);
+    # AppendRow pise POZICIONO, pa redosled nije kozmetika.
+    "tblAmbalazaDokument": ("AmbalazaDokument",
+                            ["AmbDokID", "Vrsta", "BrojDokumenta", "Datum",
+                             "BrojOwnerTip", "BrojOwnerID", "Napomena",
+                             "Stornirano", "CreatedAt", "CreatedBy",
+                             "ModifiedAt", "ModifiedBy",
+                             # AMB-10d (A9): veza ispravke po ID-u, na kraju.
+                             "IspravkaOdID", "ZamenjenSaID"]),
     "tblUtovar": ("Utovar",
                   ["UtovarID", "BrojUtovara", "Godina", "DatumUtovara",
                    "KupacID", "Fakturisano", "FakturaID", "Napomena",
@@ -2387,6 +2583,13 @@ ENSURE_TABLES = {
                         ["ZbirnaStavkaID", "ZbirnaID", "RedniBroj", "Klasa",
                          "Kolicina", "KolAmbalaze", "CreatedAt", "CreatedBy",
                          "ModifiedAt", "ModifiedBy"]),
+    # Prijemnica: header + stavke (S6 korak 3). Isti razlog -- fixture seje i
+    # stavke. Kolone i redosled su iz kanona (schema/schema.json,
+    # tblPrijemnicaStavke, oblik tblOtkupStavke); AppendRow pise poziciono.
+    "tblPrijemnicaStavke": ("PrijemnicaStavke",
+                            ["PrijemnicaStavkaID", "PrijemnicaID", "RedniBroj",
+                             "Klasa", "Kolicina", "Cena", "KolAmbalaze", "BrutoKg",
+                             "CreatedAt", "CreatedBy", "ModifiedAt", "ModifiedBy"]),
 }
 
 # tblLocalConfig (Kljuc | Vrednost | Opis)
@@ -2437,6 +2640,15 @@ SEF_CONFIG = {
     # pa bi donor sa ukljucenim modom davao druge brojke manjka -- ista klasa
     # kao KES_ISPLATE. Pinuje se OFF; malina grana ima svoj E2E u
     # modIzvestajTests koji rezim postavlja sam.
+    # Otkup/otpremnica u BRUTO unosu (KI-008): zastavica ukljucuje bruto->neto
+    # konverziju u modDokUnos.OtpremnicaValidiraj -- tara = gajbe x tezina gajbice,
+    # pa se ocekivanje umanjuje, a tara >= kolicina se ODBIJA. Donor sa ukljucenim
+    # modom je zato obarao pet provera koje su napisane za NETO unos:
+    #   "Tezina ambalaze (30,00 kg) je veca ili jednaka bruto tezini" (x2)
+    #   "ocekivano 77.00, povezano 110.00" -- 110 - 33 (11 gajbi x 3 kg) (x3, kaskada)
+    # Ista klasa kao MALINA_MODE iznad; bruto grana trazi svoj test koji zastavicu
+    # postavlja sam.
+    "OTKUP_BRUTO_UNOS": "NO",
     "MALINA_MODE": "NO",
     # Stampe iz izvestaja u testu/smoke-u nad fixture-om ne prave PDF-ove --
     # isti razlog kao ISPLATA_SPEC_PRINT_MODE iznad.
@@ -2454,6 +2666,14 @@ SEF_CONFIG = {
     # klik u testu/smoke-u nad fixture-om ne pravi PDF (ekran OFF prijavljuje
     # porukom, pa dugme ne izgleda mrtvo).
     "SLEDLJIVOST_PRINT_MODE": "OFF",
+    # PDF se u testu PRAVI, ali se NE otvara (19.10.2026). Operater radi na
+    # istom racunaru dok se suite vrti, a svaki otvoren PDF mu uzme fokus:
+    # 16 po punom prolazu (11 reversa iz modTest, 5 otkupnih listova iz BFP
+    # Test_OTK_*), i dokaz.py ih ponavlja po sabotazi. Rezimi iznad koji ostaju
+    # PDF (OTKUP, OM_IZDAVANJE...) ostaju PDF -- KI-011 je ziveo bas zato sto su
+    # testovi gasili stampu, a 226-228 broje napravljene fajlove. Test rezim
+    # nije signal: BFP ga pali samo u pojedinim testovima. Meri test 249.
+    "PDF_OTVORI_POSLE": "NO",
 }
 
 # DEFAULT_VRSTA_VOCA / DEFAULT_SORTA_VOCA se PINUJU NA PRAZNO (v. SEF_CONFIG):

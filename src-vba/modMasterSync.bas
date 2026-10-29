@@ -63,16 +63,30 @@ Private Const GS_KOOPERANT_ID As Long = 10       ' J
 Private Const GS_KOOPERANT_NAME As Long = 11     ' K
 Private Const GS_VRSTA As Long = 12              ' L
 Private Const GS_SORTA As Long = 13              ' M
-Private Const GS_KLASA As Long = 14              ' N
-Private Const GS_KOLICINA As Long = 15           ' O
-Private Const GS_CENA As Long = 16               ' P
+' CETIRI MRTVA SLOTA (S5-5b). Klasa, Kolicina, Cena i KolAmbalaze su cinjenice
+' STAVKE, i od ovog reza dolaze na tabu OTK_STAVKE. Uvoz ih vise ne cita.
+'
+' Slotovi ostaju, i to je odluka: ensureSheetColumns u GAS-u dozidjuje kolonu
+' SAMO na kraju, a svaku drugu razliku prijavljuje kao SCHEMA_DRIFT koji se
+' namerno ne popravlja tiho. Brisanje iz sredine bi zato oborilo sync na svakom
+' zatecenom OTK listu i pomerilo sve GS_* konstante ispod sebe. Isti precedent
+' kao VS_OTKUP_RECORD_IDS. Skidaju se sa zice kad nijedan citalac ne ostane.
+Private Const GS_KLASA As Long = 14              ' N -- MRTAV SLOT
+Private Const GS_KOLICINA As Long = 15           ' O -- MRTAV SLOT
+Private Const GS_CENA As Long = 16               ' P -- MRTAV SLOT
 Private Const GS_TIP_AMB As Long = 17            ' Q
-Private Const GS_KOL_AMB As Long = 18            ' R
+Private Const GS_KOL_AMB As Long = 18            ' R -- MRTAV SLOT
 Private Const GS_PARCELA_ID As Long = 19         ' S
 Private Const GS_VOZAC_ID As Long = 20           ' T
 Private Const GS_NAPOMENA As Long = 21           ' U
 Private Const GS_RECEIVED_AT As Long = 22        ' V
 Private Const GS_BROJ_DOKUMENTA As Long = 23     ' W
+
+' MANIFEST STAVKI (S5-5b). Zaglavlje kaze KOLIKO stavki pripada dokumentu, pa
+' uvoz prepozna nekompletan dolazak i odbije ga PO IMENU -- umesto da napravi
+' dokument od nula kilograma ili od dela robe. Bez manifesta se "nedostaje
+' stavka" i "dokument ima jednu stavku" ne razlikuju.
+Private Const GS_STAVKE_COUNT As Long = 24       ' X
 
 
 ' VOZ Sheet Spaltenindizes (1-based, Header in Row 1)
@@ -93,12 +107,36 @@ Private Const VS_KOLICINA_KL_II As Long = 14    ' N
 Private Const VS_TIP_AMB As Long = 15           ' O
 Private Const VS_KOL_AMB As Long = 16           ' P
 Private Const VS_KLASA As Long = 17             ' Q
-Private Const VS_OTKUP_RECORD_IDS As Long = 18  ' R
+Private Const VS_OTKUP_RECORD_IDS As Long = 18  ' R -- MRTAV SLOT, v. nize
 Private Const VS_RECEIVED_AT As Long = 19       ' S
 Private Const VS_BROJ_ZBIRNE As Long = 20   ' T
 
+' IZVORI ZBIRNE SU OTPREMNICE (S5-4b-2).
+'
+' Kolona ide NA KRAJ, ne na mesto starog OtkupRecordIDs: obe strane citaju VOZ
+' list POZICIONO (ovde VS_*, u GAS-u redosled u ZBIRNA_COLUMNS), pa bi zamena u
+' sredini tiho pomerila svaku kolonu iza sebe. Isto pravilo kao za kolone tabela.
+'
+' VS_OTKUP_RECORD_IDS zato ostaje kao rezervisan, PRAZAN slot: vise ga niko ne
+' pise i niko ne cita. Kapija koja ga je trazila je obrisana -- mrtav podatak se
+' ne hrani.
+Private Const VS_OTPREMNICA_IDS As Long = 21    ' U
+
 ' Tab stavki otkupa u OTK-* sheet-u stanice (S1c, REFAKTOR S14.8 t. 13).
 Public Const OTK_STAVKE_TAB As String = "OTK_STAVKE"
+
+' WIRE-ONLY KOLONE TABA OTK_STAVKE (S5-5b) -- nisu u semi tblOtkupStavke.
+'
+' PWA ne zna OtkupID: on nastaje u masteru, u CreateOtkup_TX. Zato red stavke
+' koji dolazi sa terena nosi SVOJ ClientRecordID (identitet REDA) i CRID svog
+' zaglavlja. Doslovno isti obrazac kao PRED red iz S5-4a, gde je identitet
+' dogadjaja kolona, a ne rekonstrukcija iz atributa.
+'
+' Desktop push ih ostavlja PRAZNE: njegov identitet je OtkupStavkaID, a roditelj
+' pravi OtkupID. Dva pisca, dva puta identiteta, jedan tab -- isto kao na
+' zaglavlju, gde push puni ServerRecordID a PWA ga ostavlja prazan.
+Public Const OKS_WIRE_CRID As String = "ClientRecordID"
+Public Const OKS_WIRE_OTKUP_CRID As String = "OtkupClientRecordID"
 
 ' ============================================================
 ' PUBLIC -- Hauptfunktion
@@ -690,13 +728,14 @@ End Function
 '======================================================================
 ' KOLONE OTK-* SHEET-A -- JEDINO MESTO (REFAKTOR S14.8 t. 13, nalaz E-5)
 '
-' OtkZaglavljeKolone: tab Sheet1, red po otkupu. Raspored je PWA ugovor do S5:
-' PWA ga puni, ImportOneOTKSheet ga cita poziciono (GS_*). Klasa, Kolicina,
-' Cena i KolAmbalaze su u njemu jos samo zato sto PWA salje jednu klasu po
-' zapisu; VBA push ih ostavlja PRAZNE i pise stavke u OTK_STAVKE.
+' OtkZaglavljeKolone: tab Sheet1, red po otkupu. Raspored je PWA ugovor: PWA ga
+' puni, ImportOneOTKSheet ga cita poziciono (GS_*). Od S5-5b nosi SAMO cinjenice
+' zaglavlja -- Klasa, Kolicina, Cena i KolAmbalaze su mrtvi slotovi koje OBA
+' pisca ostavljaju prazne -- plus StavkeCount kao manifest.
 '
-' OtkStavkeKolone: tab OTK_STAVKE, red po stavci; roditelj je OtkupID
-' (= ServerRecordID zaglavlja).
+' OtkStavkeKolone: tab OTK_STAVKE, red po stavci. Roditelj je OtkupID kad red
+' pise desktop push, a OtkupClientRecordID kad red dolazi iz PWA -- PWA OtkupID
+' ne zna, on nastaje u masteru.
 '
 ' Graditelji redova (modStanicaLock, izvoz OtkupiAllStavke) slazu vrednosti PO
 ' IMENU iz ovih spiskova, ne po poziciji.
@@ -707,15 +746,191 @@ Public Function OtkZaglavljeKolone() As Variant
         "UpdatedAtServer", "SyncStatus", "DeviceID", "OtkupacID", "Datum", _
         "KooperantID", "KooperantName", "VrstaVoca", "SortaVoca", "Klasa", _
         "Kolicina", "Cena", "TipAmbalaze", "KolAmbalaze", "ParcelaID", "VozacID", _
-        "Napomena", "ReceivedAt", "BrojDokumenta")
+        "Napomena", "ReceivedAt", "BrojDokumenta", "StavkeCount")
 End Function
 
 Public Function OtkStavkeKolone() As Variant
     OtkStavkeKolone = Array(COL_OKS_ID, COL_OKS_OTKUP_ID, COL_OKS_RB, COL_OKS_KLASA, _
-                            COL_OKS_KOLICINA, COL_OKS_CENA, COL_OKS_KOL_AMB, COL_OKS_BRUTO)
+                            COL_OKS_KOLICINA, COL_OKS_CENA, COL_OKS_KOL_AMB, COL_OKS_BRUTO, _
+                            OKS_WIRE_CRID, OKS_WIRE_OTKUP_CRID)
 End Function
 
 ' Red taba OTK_STAVKE za stavku i iz modOtkup.StavkeOtkupaRedovi, po imenu.
+' STAVKE SA TERENA, grupisane po ClientRecordID ZAGLAVLJA.
+'
+' Cist deo citaoca: prima sadrzaj taba kakav ga TryReadSheetData vraca, pa se
+' meri bez Google-a. Mrezni deo je OtkPwaStavkePoCridu.
+'
+' PRESKACE REDOVE DESKTOP PUSH-A. Tab pisu dva pisca; push red se poznaje po
+' tome sto NEMA OtkupClientRecordID (njegov roditelj je pravi OtkupID). Uvoz
+' otkupa cita samo redove sa terena -- desktop stavke su u masteru vec.
+'
+' RedniBroj sa zice se NE CITA, i to je odluka: CreateOtkup_TX dodeljuje redni
+' broj po KANONSKOM redu klasa (modOtkup.bas:749), pa bi poslat broj bio drugi
+' izvor istine za isti pojam. Redosled u Collection-u zato nista ne znaci.
+'
+' Vraca Nothing + outGreska; prazan tab je PRAZNA MAPA, ne greska -- odluku sta
+' prazan tab znaci za dati red donosi validacija, koja jedina zna manifest.
+Public Function OtkPwaStavkeIzTaba(ByVal data As Variant, _
+                                   ByRef outGreska As String) As Object
+    Const SRC As String = "OtkPwaStavkeIzTaba"
+
+    On Error GoTo EH
+    outGreska = ""
+
+    Dim mapa As Object
+    Set mapa = CreateObject("Scripting.Dictionary")
+    mapa.CompareMode = vbTextCompare
+
+    If IsEmpty(data) Then
+        Set OtkPwaStavkeIzTaba = mapa
+        Exit Function
+    End If
+
+    Dim naslov As Object
+    Set naslov = OtkStavkeNaslovIndeks(data)
+
+    Dim cCrid As Long, cOtkCrid As Long
+    Dim cKlasa As Long, cKol As Long, cCena As Long, cAmb As Long, cBruto As Long
+    cCrid = naslov(OKS_WIRE_CRID)
+    cOtkCrid = naslov(OKS_WIRE_OTKUP_CRID)
+    cKlasa = naslov(COL_OKS_KLASA)
+    cKol = naslov(COL_OKS_KOLICINA)
+    cCena = naslov(COL_OKS_CENA)
+    cAmb = naslov(COL_OKS_KOL_AMB)
+    cBruto = naslov(COL_OKS_BRUTO)
+
+    Dim vidjeni As Object
+    Set vidjeni = CreateObject("Scripting.Dictionary")
+    vidjeni.CompareMode = vbTextCompare
+
+    Dim r As Long, otkCrid As String, redCrid As String
+    Dim stavka As Object, nova As Collection, bruto As Double
+
+    For r = LBound(data, 1) + 1 To UBound(data, 1)
+        otkCrid = Trim$(CStr(nz(data(r, cOtkCrid), "")))
+
+        If Len(otkCrid) > 0 Then
+            ' IDENTITET REDA JE OBAVEZAN. Bez njega se ponovljen sync ne
+            ' razlikuje od druge stavke, pa bi retry tiho udvajao robu.
+            redCrid = Trim$(CStr(nz(data(r, cCrid), "")))
+            If Len(redCrid) = 0 Then
+                outGreska = "red " & CStr(r) & " taba " & OTK_STAVKE_TAB & _
+                            " ima OtkupClientRecordID ali nema svoj ClientRecordID"
+                Set OtkPwaStavkeIzTaba = Nothing
+                Exit Function
+            End If
+
+            If vidjeni.Exists(redCrid) Then
+                outGreska = "dva reda sa istim ClientRecordID stavke u " & _
+                            OTK_STAVKE_TAB & ": " & redCrid
+                Set OtkPwaStavkeIzTaba = Nothing
+                Exit Function
+            End If
+            vidjeni.Add redCrid, True
+
+            Set stavka = CreateObject("Scripting.Dictionary")
+            stavka.Add "Klasa", Trim$(CStr(nz(data(r, cKlasa), "")))
+            stavka.Add "Kolicina", PwaBroj(data(r, cKol))
+            stavka.Add "Cena", PwaBroj(data(r, cCena))
+            stavka.Add "KolAmbalaze", PwaBroj(data(r, cAmb))
+
+            ' BrutoKg samo kad ga zica stvarno nosi: pisac ga cuva SAMO kad je
+            ' unos bio bruto, pa nula nije "bruto = 0" nego "nije bruto unos".
+            bruto = PwaBroj(data(r, cBruto))
+            If bruto > 0 Then stavka.Add "BrutoKg", bruto
+
+            If Not mapa.Exists(otkCrid) Then
+                Set nova = New Collection
+                mapa.Add otkCrid, nova
+            End If
+            mapa(otkCrid).Add stavka
+        End If
+    Next r
+
+    Set OtkPwaStavkeIzTaba = mapa
+    Exit Function
+
+EH:
+    outGreska = "tab " & OTK_STAVKE_TAB & ": " & Err.description
+    LogErr SRC
+    Set OtkPwaStavkeIzTaba = Nothing
+End Function
+
+' Mrezni deo: procitaj tab OTK_STAVKE i grupisi ga po CRID-u zaglavlja.
+'
+' FAIL-CLOSED, isti model kao citanje Sheet1 (AUD-001): neuspelo citanje NIJE
+' prazan tab. Da jeste, svaki otkup bi ostao bez stavki, pao na validaciji i
+' dobio SyncError -- a red je ispravan i cekao bi rucno raspetljavanje.
+Private Function OtkPwaStavkePoCridu(ByVal spreadsheetID As String, _
+                                     ByRef outGreska As String) As Object
+    Dim data As Variant
+
+    outGreska = ""
+    If Not TryReadSheetData(spreadsheetID, OTK_STAVKE_TAB, data) Then
+        outGreska = "citanje taba " & OTK_STAVKE_TAB & " nije uspelo (HTTP ili JSON)"
+        Set OtkPwaStavkePoCridu = Nothing
+        Exit Function
+    End If
+
+    Set OtkPwaStavkePoCridu = OtkPwaStavkeIzTaba(data, outGreska)
+End Function
+
+' NASLOV TABA OTK_STAVKE -> indeks IME KOLONE -> apsolutni indeks u data.
+'
+' Tab pisu DVA pisca (desktop push i PWA) i citaju DVA citaoca (push indeks
+' idempotencije i uvoz otkupa). Pitanja su im razlicita, ali invarijanta je
+' jedna: naslov je DOSLOVNO OtkStavkeKolone, istim redom, bez kolone van
+' ugovora. Zato provera zivi kod vlasnika ugovora kolona, a ne u citaocima:
+' dve provere istog pojma se razidju (v. modStanicaLock.OtkStavkeIndeksIzTaba).
+'
+' Pada PO IMENU: uze od ugovora, pogresna kolona na poziciji, kolona van
+' ugovora. Prazan tab (Empty) je pad, ne prazan indeks -- odluku sta prazan tab
+' znaci donosi pozivalac, koji jedini zna da li sme da ga napravi.
+Public Function OtkStavkeNaslovIndeks(ByVal data As Variant) As Object
+    Const SRC As String = "OtkStavkeNaslovIndeks"
+
+    Dim idx As Object
+    Set idx = CreateObject("Scripting.Dictionary")
+    idx.CompareMode = vbTextCompare
+    Set OtkStavkeNaslovIndeks = idx
+
+    If IsEmpty(data) Then
+        Err.Raise vbObjectError + 8144, SRC, _
+                  "Naslov taba " & OTK_STAVKE_TAB & " ne postoji (prazan tab)."
+    End If
+
+    Dim kol As Variant, nk As Long, k As Long
+    kol = OtkStavkeKolone()
+    nk = UBound(kol) - LBound(kol) + 1
+
+    Dim r1 As Long, lb2 As Long, ub2 As Long
+    r1 = LBound(data, 1)
+    lb2 = LBound(data, 2)
+    ub2 = UBound(data, 2)
+
+    If ub2 - lb2 + 1 < nk Then
+        Err.Raise vbObjectError + 8144, SRC, _
+                  "Naslov taba " & OTK_STAVKE_TAB & " ima manje kolona od ugovora."
+    End If
+
+    For k = 0 To ub2 - lb2
+        If k < nk Then
+            If CStr(data(r1, lb2 + k)) <> CStr(kol(LBound(kol) + k)) Then
+                Err.Raise vbObjectError + 8144, SRC, _
+                          "Naslov taba " & OTK_STAVKE_TAB & " kolona " & (k + 1) & " je '" & _
+                          CStr(data(r1, lb2 + k)) & "', ugovor trazi '" & _
+                          CStr(kol(LBound(kol) + k)) & "'."
+            End If
+            idx.Add CStr(kol(LBound(kol) + k)), lb2 + k
+        ElseIf Len(Trim$(CStr(data(r1, lb2 + k)))) > 0 Then
+            Err.Raise vbObjectError + 8144, SRC, _
+                      "Naslov taba " & OTK_STAVKE_TAB & " ima kolonu van ugovora: " & _
+                      CStr(data(r1, lb2 + k))
+        End If
+    Next k
+End Function
+
 Private Function OtkStavkaPolje(ByVal s As Variant, ByVal i As Long, _
                                 ByVal kolona As String) As Variant
     Select Case kolona
@@ -727,6 +942,13 @@ Private Function OtkStavkaPolje(ByVal s As Variant, ByVal i As Long, _
         Case COL_OKS_CENA: OtkStavkaPolje = s(i, 5)
         Case COL_OKS_KOL_AMB: OtkStavkaPolje = s(i, 6)
         Case COL_OKS_BRUTO: OtkStavkaPolje = s(i, 8)
+
+        ' Push ne puni wire kolone: njegov identitet je OtkupStavkaID, a
+        ' roditelj pravi OtkupID. Prazno je TACNO, ne nedostatak -- upisivati
+        ' "VBA:" + ID bilo bi pisanje podatka koji nijedan citalac ne trazi.
+        Case OKS_WIRE_CRID: OtkStavkaPolje = ""
+        Case OKS_WIRE_OTKUP_CRID: OtkStavkaPolje = ""
+
         Case Else
             Err.Raise vbObjectError + 8141, "OtkStavkaPolje", _
                       "Kolona OTK_STAVKE bez izvora: " & kolona
@@ -801,8 +1023,16 @@ Public Function AutoZbirnaDostupna() As Boolean
 End Function
 
 ' JEZGRO: auto-zbirna za JEDNU otpremnicu. Vraca ZbirnaID, "" = nista nije
-' napravljeno (nije malina, otpremnica nije slobodna/izdata, ili je greska --
-' razlog je tada u outGreska).
+' napravljeno (nije malina ni hladnjacka otpremnica, otpremnica nije
+' slobodna/izdata, ili je greska -- razlog je tada u outGreska).
+'
+' KAPIJA: MALINA ILI HLADNJACKA OTPREMNICA (S6 korak 7, odluka 3). Do koraka 7
+' je jezgro bilo zatvoreno iza IsMalinaMode i van maline vracalo "" BEZ razloga
+' -- ugovor ispod to cita kao "nije bilo posla", pa bi hladnjacki lanac van
+' maline tiho stao posle otpremnice. Lanac zato zove ISTO jezgro kao malina
+' (isti kupac, isti niz broja vozaca-ogledala), a kapija pusta hladnjacku
+' otpremnicu u svakom rezimu. Pitanje je STROGO, isti primitiv kao razvodnica
+' bloka: otpremnica cija se stanica ne moze utvrditi je razlog, ne "nije posao".
 '
 ' ZASTO SE ODLUKA "DA LI SME" NE RACUNA OVDE: pita se
 ' modDokumenta.NevezaneOtpremnice, ISTA lista koju operater vidi u F2 radnom
@@ -818,8 +1048,6 @@ Public Function AutoZbirnaZaOtpremnicu(ByVal otpremnicaID As String, _
     Const SRC As String = "AutoZbirnaZaOtpremnicu"
 
     outGreska = ""
-    If Not AutoZbirnaDostupna() Then Exit Function
-
     otpremnicaID = Trim$(otpremnicaID)
     If Len(otpremnicaID) = 0 Then Exit Function
 
@@ -836,6 +1064,10 @@ Public Function AutoZbirnaZaOtpremnicu(ByVal otpremnicaID As String, _
     On Error GoTo EH
 
     Dim slobodne As Object
+    If Not AutoZbirnaDostupna() Then
+        If Not modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then Exit Function
+    End If
+
     Set slobodne = modDokumenta.NevezaneOtpremnice()
     If Not slobodne.Exists(UCase$(otpremnicaID)) Then Exit Function
 
@@ -1084,13 +1316,21 @@ Private Function GrupeZaAutoOtpremnicu(ByVal samoOtkupID As String) As Object
     Dim filterKljuc As String
     filterKljuc = ""
 
+    ' HLADNJACKI BLOK NE IDE U MALINA OTPREMNICU (S6 korak 7, odluka 9). Lanac
+    ' drzi 1 blok = 1 lanac, a grupa po stanici i danu bi dva hladnjacka bloka
+    ' spojila u jednu otpremnicu. Vodi ih sync korak
+    ' modAutoHladnjaca.AutoLanacZaNevezaneBlokove, blok po blok.
+    Dim hladne As Object
+    Set hladne = modAutoHladnjaca.HladnjackeStanice()
+
     Dim i As Long, oid As String, kljuc As String
     For i = 1 To UBound(otk, 1)
         oid = Trim$(NzToText(otk(i, cId)))
         If Len(oid) > 0 Then
             If slobodni.Exists(UCase$(oid)) Then
                 If modDokumenta.IzdatoStatusJeIzdato(otk(i, cIzd)) Then
-                    If IsDate(otk(i, cDat)) Then
+                    If IsDate(otk(i, cDat)) And _
+                       Not hladne.Exists(UCase$(Trim$(NzToText(otk(i, cSta))))) Then
                         kljuc = KljucGrupe(otk(i, cSta), otk(i, cDat), otk(i, cKul), _
                                            otk(i, cAmb))
                         If Not rez.Exists(kljuc) Then
@@ -2059,10 +2299,11 @@ Private Function ValidateOTKSheetHeader(ByVal data As Variant, _
         Exit Function
     End If
 
-    If UBound(data, 2) < 22 Then
+    If UBound(data, 2) < GS_STAVKE_COUNT Then
         LogError SOURCE, _
                  "OTK schema drift: premalo kolona u sheetu " & sheetName & _
-                 ". Expected=22, Actual=" & CStr(UBound(data, 2))
+                 ". Expected=" & CStr(GS_STAVKE_COUNT) & _
+                 ", Actual=" & CStr(UBound(data, 2))
         ValidateOTKSheetHeader = False
         Exit Function
     End If
@@ -2090,6 +2331,12 @@ Private Function ValidateOTKSheetHeader(ByVal data As Variant, _
     If Not RequireOTKHeaderValue(data, sheetName, GS_NAPOMENA, "Napomena") Then Exit Function
     If Not RequireOTKHeaderValue(data, sheetName, GS_RECEIVED_AT, "ReceivedAt") Then Exit Function
     If Not RequireOTKHeaderValue(data, sheetName, GS_BROJ_DOKUMENTA, "BrojDokumenta") Then Exit Function
+
+    ' MANIFEST JE DEO ZICE, ne dodatak. List bez njega ne moze da se uveze: bez
+    ' broja stavki se nekompletan dolazak ne razlikuje od jednoklasnog dokumenta.
+    ' Klasa/Kolicina/Cena/KolAmbalaze ostaju u naslovu kao MRTVI SLOTOVI -- oba
+    ' pisca ih ostavljaju prazne, ali kolona je tu, pa se i dalje proverava.
+    If Not RequireOTKHeaderValue(data, sheetName, GS_STAVKE_COUNT, "StavkeCount") Then Exit Function
 
     ValidateOTKSheetHeader = True
     Exit Function
@@ -2145,20 +2392,34 @@ End Function
 
 ' AUD-042(b): verdikt ValidatePWAOtkup za zadatu Datum vrednost. Ostala polja se
 ' popunjavaju tako da PROLAZE validaciju, pa je datum jedina promenljiva.
+' KI-021: tip i gajbe su opcioni -- bez njih red nema ambalazu, kao do sada.
 Public Function TestHook_ValidatePWAOtkupDatum(ByVal kooperantID As String, _
-                                              ByVal datumValue As Variant) As String
+                                              ByVal datumValue As Variant, _
+                                              Optional ByVal tipAmb As String = "", _
+                                              Optional ByVal kolAmb As Double = 0#) As String
     Dim data As Variant
-    ReDim data(1 To 1, 1 To GS_BROJ_DOKUMENTA)
+    ReDim data(1 To 1, 1 To GS_STAVKE_COUNT)
 
     data(1, GS_KOOPERANT_ID) = kooperantID
     data(1, GS_VRSTA) = "Malina"
-    data(1, GS_KOLICINA) = 100
-    data(1, GS_CENA) = 200
-    data(1, GS_TIP_AMB) = ""
-    data(1, GS_KOL_AMB) = 0
+    data(1, GS_TIP_AMB) = tipAmb
     data(1, GS_DATUM) = datumValue
+    data(1, GS_STAVKE_COUNT) = 1
 
-    TestHook_ValidatePWAOtkupDatum = ValidatePWAOtkup(data, 1)
+    ' Jedna stavka koja PROLAZI, da datum ostane jedina promenljiva -- od S5-5b
+    ' kolicina i cena nisu u zaglavlju, pa bi bez ovoga pao skup stavki.
+    Dim stavka As Object
+    Set stavka = CreateObject("Scripting.Dictionary")
+    stavka.Add "Klasa", "I"
+    stavka.Add "Kolicina", 100#
+    stavka.Add "Cena", 200#
+    stavka.Add "KolAmbalaze", kolAmb
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add stavka
+
+    TestHook_ValidatePWAOtkupDatum = ValidatePWAOtkup(data, 1, stavke)
 End Function
 
 ' AUD-042(b): isto za VOZ putanju (ValidatePWAZbirna).
@@ -2166,7 +2427,7 @@ Public Function TestHook_ValidatePWAZbirnaDatum(ByVal vozacID As String, _
                                                ByVal kupacID As String, _
                                                ByVal datumValue As Variant) As String
     Dim data As Variant
-    ReDim data(1 To 1, 1 To VS_BROJ_ZBIRNE)
+    ReDim data(1 To 1, 1 To VS_OTPREMNICA_IDS)
 
     data(1, VS_VOZAC_ID) = vozacID
     data(1, VS_KUPAC_ID) = kupacID
@@ -2179,7 +2440,7 @@ Public Function TestHook_ValidatePWAZbirnaDatum(ByVal vozacID As String, _
     ' Od S5-3 validacija trazi IZVORE, jer zbirna bez njih nije dokument.
     ' Ovaj hook meri SAMO datum, pa ostala polja moraju da PROLAZE -- inace bi
     ' tvrdnja o datumu bila zelena iz pogresnog razloga.
-    data(1, VS_OTKUP_RECORD_IDS) = "CRID-HOOK-DATUM"
+    data(1, VS_OTPREMNICA_IDS) = "OTP-HOOK-DATUM"
 
     TestHook_ValidatePWAZbirnaDatum = ValidatePWAZbirna(data, 1)
 End Function
@@ -2198,14 +2459,16 @@ Public Function TestHook_ImportZbirnaRowPWA(ByVal crid As String, _
                                            ByVal sorta As String, _
                                            ByVal kolKlI As Double, _
                                            ByVal brojZbirne As String, _
-                                           Optional ByVal otkupCrids As String = "") As String
+                                           Optional ByVal otpremnicaIDs As String = "") As String
     Dim data As Variant
-    ReDim data(1 To 1, 1 To VS_BROJ_ZBIRNE)
+    ReDim data(1 To 1, 1 To VS_OTPREMNICA_IDS)
 
     ' Od S5-3 zbirna se sastavlja od OTPREMNICA, pa uvoz bez izvora nema sta da
     ' napravi. Testovi koji mere ODBIJANJE (broj tudjeg vlasnika, los format)
     ' izvore i ne salju -- ta kapija puca pre njih.
-    data(1, VS_OTKUP_RECORD_IDS) = otkupCrids
+    '
+    ' Od S5-4b-2 ovde stize OtpremnicaID, ne otkupni CRID: identitet putuje.
+    data(1, VS_OTPREMNICA_IDS) = otpremnicaIDs
 
     data(1, VS_CLIENT_RECORD_ID) = crid
     data(1, VS_VOZAC_ID) = vozacID
@@ -2233,16 +2496,16 @@ Public Function TestHook_PwaZbirnaRazlika(ByVal zbirnaID As String, _
                                           ByVal kupacID As String, _
                                           ByVal datumValue As Variant, _
                                           ByVal brojZbirne As String, _
-                                          ByVal otkupCrids As String) As String
+                                          ByVal otpremnicaIDs As String) As String
     Dim data As Variant
-    ReDim data(1 To 1, 1 To VS_BROJ_ZBIRNE)
+    ReDim data(1 To 1, 1 To VS_OTPREMNICA_IDS)
 
     data(1, VS_CLIENT_RECORD_ID) = crid
     data(1, VS_VOZAC_ID) = vozacID
     data(1, VS_KUPAC_ID) = kupacID
     data(1, VS_DATUM) = datumValue
     data(1, VS_BROJ_ZBIRNE) = brojZbirne
-    data(1, VS_OTKUP_RECORD_IDS) = otkupCrids
+    data(1, VS_OTPREMNICA_IDS) = otpremnicaIDs
 
     TestHook_PwaZbirnaRazlika = PwaZbirnaRazlika(zbirnaID, data, 1)
 End Function
@@ -2571,6 +2834,22 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
         Exit Sub
     End If
     
+    ' STAVKE SE CITAJU JEDNOM ZA CEO LIST (S5-5b).
+    '
+    ' Isti fail-closed model kao Sheet1 (AUD-001): neuspelo citanje taba nije
+    ' "nema stavki". Da jeste, svaki red bi pao na validaciji, dobio SyncError i
+    ' cekao rucno raspetljavanje -- a podatak je ispravan, samo je mreza pala.
+    ' Zato se prekida PRE ijednog reda i pre writeback-a.
+    Dim stavkePoCridu As Object
+    Dim stavkeGreska As String
+    Set stavkePoCridu = OtkPwaStavkePoCridu(spreadsheetID, stavkeGreska)
+    If stavkePoCridu Is Nothing Then
+        outErrors = outErrors + 1
+        MarkPWAFatalSyncError "ImportOneOTKSheet", _
+            "Tab " & OTK_STAVKE_TAB & " nije procitan (" & stavkeGreska & _
+            "). Uvoz je prekinut pre ijednog reda i pre writeback-a. Sheet=" & sheetName
+        Exit Sub
+    End If
     Set statusUpdates = New Collection
     
     For i = 2 To UBound(data, 1)
@@ -2582,6 +2861,14 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
             
             Dim clientRecordID As String
             clientRecordID = Trim$(CStr(data(i, GS_CLIENT_RECORD_ID)))
+
+            ' STAVKE OVOG REDA -- Nothing kad ih tab ne nosi; validacija odlucuje
+            ' sta to znaci, jer ona jedina zna manifest.
+            Dim redStavke As Collection
+            Set redStavke = Nothing
+            If stavkePoCridu.Exists(clientRecordID) Then
+                Set redStavke = stavkePoCridu(clientRecordID)
+            End If
 
             If Len(clientRecordID) = 0 Then
                 statusUpdates.Add Array(i, SYNC_STATUS_ERROR & ":ClientRecordID missing", "")
@@ -2612,7 +2899,7 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                 Dim posID As String
                 posID = modOtkup.OtkupPoClientRecordID(clientRecordID)
                 If Len(posID) > 0 Then
-                    If Not PwaIstiSadrzaj(posID, data, i) Then
+                    If Not PwaIstiSadrzaj(posID, data, i, redStavke) Then
                         statusUpdates.Add Array(i, SYNC_STATUS_ERROR & _
                             ":CRID konflikt -- isti ClientRecordID, drugi sadrzaj (" & _
                             posID & ")")
@@ -2641,7 +2928,7 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
             Else
                 ' Validierung
                 Dim validationError As String
-                validationError = ValidatePWAOtkup(data, i)
+                validationError = ValidatePWAOtkup(data, i, redStavke)
                 
                 If Len(validationError) > 0 Then
                     statusUpdates.Add Array(i, SYNC_STATUS_ERROR & ":" & validationError)
@@ -2650,7 +2937,8 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                 Else
                     ' Import in tblOtkup
                     Dim newOtkupID As String
-                    newOtkupID = ImportRowToTblOtkup_RowTX(data, i, clientRecordID)
+                    newOtkupID = ImportRowToTblOtkup_RowTX(data, i, clientRecordID, _
+                                                            redStavke)
                     If Len(newOtkupID) > 0 Then
                         ' PREDAJA STIZE I NA PRVOM VIDJENJU REDA (review #387, P1).
                         '
@@ -2710,14 +2998,18 @@ End Sub
 ' PRIVATE -- Validierung
 ' ============================================================
 
-Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long) As String
+' Verdikt nad JEDNIM dolaskom: zaglavlje + skup njegovih stavki.
+'
+' Od S5-5b stavke ulaze kao Collection, jer ih zaglavlje vise ne nosi. Prazan
+' skup je GRESKA, ne dokument od nula kilograma -- a manifest (StavkeCount) je
+' ono cime se "nedostaje stavka" razlikuje od "dokument ima jednu stavku".
+Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long, _
+                                 ByVal stavke As Collection) As String
     ' Prueft Pflichtfelder und Plausibilitaet
     ' Returns "" wenn OK, sonst Fehlermeldung
     
     Dim koopID As String
     Dim vrsta As String
-    Dim kolicina As Double
-    Dim cena As Double
     
     koopID = Trim$(CStr(data(row, GS_KOOPERANT_ID)))
     vrsta = Trim$(CStr(data(row, GS_VRSTA)))
@@ -2749,43 +3041,79 @@ Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long) As S
         Exit Function
     End If
     
-    ' Kolicina
+    ' DOKUMENT BEZ STAVKI NIJE DOKUMENT.
+    If stavke Is Nothing Then
+        ValidatePWAOtkup = "Stavke missing (tab " & OTK_STAVKE_TAB & ")"
+        Exit Function
+    End If
+    If stavke.count = 0 Then
+        ValidatePWAOtkup = "Stavke missing (tab " & OTK_STAVKE_TAB & ")"
+        Exit Function
+    End If
+    ' MANIFEST: zaglavlje kaze KOLIKO stavki pripada dokumentu.
+    '
+    ' Bez njega su "PWA je poslala tri klase pa su dve stigle" i "dokument ima
+    ' jednu klasu" isti ulaz -- pa bi se deo robe tiho uvezao kao ceo dokument.
+    ' Neporavnat manifest je zato SyncError, ne upozorenje: red se ne uvozi.
+    Dim manifest As Long
     On Error Resume Next
-    kolicina = CDbl(data(row, GS_KOLICINA))
+    manifest = CLng(nz(data(row, GS_STAVKE_COUNT), 0))
     On Error GoTo 0
-    If kolicina <= 0 Then
-        ValidatePWAOtkup = "Kolicina <= 0"
+    If manifest <> stavke.count Then
+        ValidatePWAOtkup = "StavkeCount mismatch: zaglavlje kaze " & CStr(manifest) & _
+                           ", u " & OTK_STAVKE_TAB & " ih je " & CStr(stavke.count)
         Exit Function
     End If
     
-    ' Cena
-    On Error Resume Next
-    cena = CDbl(data(row, GS_CENA))
-    On Error GoTo 0
-    If cena <= 0 Then
-        ValidatePWAOtkup = "Cena <= 0"
-        Exit Function
-    End If
+    ' Linijska plauzibilnost je PO STAVCI, i poruka imenuje KOJU.
+    '
+    ' CreateOtkup_TX iste granice drzi kao tvrde greske. Ovde je druga kapija sa
+    ' ISTIM pragovima: red dobija SyncError koji operater vidi, umesto izuzetka
+    ' iz pisca koji ne zna ClientRecordID. Dva mesta, isti prag, razlicit ishod.
+    Dim i As Long
+    Dim s As Object
+    Dim ukupnoAmb As Double
+    For i = 1 To stavke.count
+        Set s = stavke(i)
+        If Len(Trim$(CStr(nz(s("Klasa"), "")))) = 0 Then
+            ValidatePWAOtkup = "Klasa missing (stavka " & CStr(i) & ")"
+            Exit Function
+        End If
+        If PwaBroj(s("Kolicina")) <= 0 Then
+            ValidatePWAOtkup = "Kolicina <= 0 (stavka " & CStr(i) & ")"
+            Exit Function
+        End If
+        If PwaBroj(s("Cena")) <= 0 Then
+            ValidatePWAOtkup = "Cena <= 0 (stavka " & CStr(i) & ")"
+            Exit Function
+        End If
+        If PwaBroj(s("KolAmbalaze")) < 0 Then
+            ValidatePWAOtkup = "KolAmbalaze < 0 (stavka " & CStr(i) & ")"
+            Exit Function
+        End If
+        ukupnoAmb = ukupnoAmb + PwaBroj(s("KolAmbalaze"))
+    Next i
     
-    Dim kolAmb As Long
-    Dim tipAmb As String
-
+    ' TIP AMBALAZE JE CINJENICA ZAGLAVLJA, kolicina je po stavci -- zato se
+    ' poredi ZBIR: gajbe bez tipa nema kome da se knjize, na kojoj god stavci su.
+    Dim tipAmb As String, tipProblem As String
     tipAmb = Trim$(CStr(nz(data(row, GS_TIP_AMB), "")))
-
-    On Error Resume Next
-    kolAmb = CLng(nz(data(row, GS_KOL_AMB), 0))
-    On Error GoTo 0
-
-    If kolAmb < 0 Then
-        ValidatePWAOtkup = "KolAmbalaze < 0"
-        Exit Function
-    End If
-
-    If kolAmb > 0 And Len(tipAmb) = 0 Then
+    If ukupnoAmb > 0 And Len(tipAmb) = 0 Then
         ValidatePWAOtkup = "TipAmbalaze missing while KolAmbalaze > 0"
         Exit Function
     End If
-    
+
+    ' KI-021: tip mora postojati u sifarniku (AMB-INV-12). Pisac bi ga i sam
+    ' odbio, ali njegov razlog do Sheet-a ne stize: ImportRowToTblOtkup_RowTX
+    ' vraca "", red dobije "ERROR:AppendRow failed" i posle se trajno preskace.
+    If ukupnoAmb > 0 Then
+        tipProblem = modAmbalazaUgovor.AmbTipProblem(tipAmb)
+        If Len(tipProblem) > 0 Then
+            ValidatePWAOtkup = tipProblem
+            Exit Function
+        End If
+    End If
+
     ValidatePWAOtkup = ""
 End Function
 
@@ -2794,7 +3122,7 @@ End Function
 ' Poredi se ono sto dokument JESTE, ne kako je zapisan.
 '
 ' UCESTVUJU:  KooperantID, KulturaID, Datum, ParcelaID, TipAmbalaze,
-'             i jedina stavka -- Klasa, Kolicina, Cena, KolAmbalaze.
+'             i CEO SKUP STAVKI -- po klasi: Kolicina, Cena, KolAmbalaze.
 '
 ' NE UCESTVUJU, i za svako postoji razlog:
 '   OtkupID, CreatedAt, redosled   ocekuje se da se razlikuju
@@ -2807,19 +3135,23 @@ End Function
 '
 ' Funkcija sama parsira red, da bi je mogla zvati OBA mesta: i ingest, i grana
 ' koja duplikat preskace. Dva poredjenja istog pojma bi se razisla.
+'
+' SKUP STAVKI ULAZI IZVANA (S5-5b), jer zaglavlje linijska polja vise ne nosi.
+' Poredjenje je NEOSETLJIVO NA REDOSLED: klasa je kljuc, a RedniBroj u masteru
+' dodeljuje pisac po kanonskom redu klasa -- redosled kojim je PWA slala stavke
+' zato nije razlika u sadrzaju.
 Private Function PwaIstiSadrzaj(ByVal otkupID As String, ByVal data As Variant, _
-                                ByVal row As Long) As Boolean
+                                ByVal row As Long, _
+                                ByVal stavke As Collection) As Boolean
     Const SRC As String = "PwaIstiSadrzaj"
 
     On Error GoTo EH
 
-    Dim kooperantID As String, vrstaVoca As String, sortaVoca As String, klasa As String
+    Dim kooperantID As String, vrstaVoca As String, sortaVoca As String
     Dim parcelaID As String, tipAmb As String
     kooperantID = Trim$(CStr(nz(data(row, GS_KOOPERANT_ID), "")))
     vrstaVoca = Trim$(CStr(nz(data(row, GS_VRSTA), "")))
     sortaVoca = Trim$(CStr(nz(data(row, GS_SORTA), "")))
-    klasa = Trim$(CStr(nz(data(row, GS_KLASA), "")))
-    If Len(klasa) = 0 Then klasa = "I"
     parcelaID = Trim$(CStr(nz(data(row, GS_PARCELA_ID), "")))
     tipAmb = Trim$(CStr(nz(data(row, GS_TIP_AMB), "")))
 
@@ -2866,7 +3198,13 @@ Private Function PwaIstiSadrzaj(ByVal otkupID As String, ByVal data As Variant, 
     If Not IsDate(dat) Then Exit Function
     If Int(CDbl(CDate(dat))) <> Int(CDbl(datum)) Then Exit Function
 
-    ' Stavka: PWA salje tacno jednu (S7).
+    ' SKUP STAVKI, KLASA JE KLJUC.
+    '
+    ' Dokument ima najvise jednu stavku po klasi (CreateOtkup_TX to i drzi), pa
+    ' je klasa dovoljan kljuc i poredjenje ne zavisi od redosleda. Dve iste
+    ' klase u masteru su kvar, ne "isti sadrzaj" -- fail-closed.
+    If stavke Is Nothing Then Exit Function
+
     Dim d As Variant
     d = GetTableData(TBL_OTKUP_STAVKE)
     If Not IsArray(d) Then Exit Function
@@ -2878,25 +3216,53 @@ Private Function PwaIstiSadrzaj(ByVal otkupID As String, ByVal data As Variant, 
     cCena = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_CENA, SRC)
     cAmb = RequireColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_KOL_AMB, SRC)
 
-    Dim k As Long, nasao As Long
+    Dim uMasteru As Object
+    Set uMasteru = CreateObject("Scripting.Dictionary")
+    uMasteru.CompareMode = vbTextCompare
+
+    Dim k As Long, kl As String
     For k = 1 To UBound(d, 1)
         If StrComp(Trim$(nz(d(k, cOtk), "")), otkupID, vbTextCompare) = 0 Then
-            nasao = nasao + 1
-            If nasao > 1 Then Exit Function       ' vise stavki -> nije PWA dokument
-            If StrComp(Trim$(nz(d(k, cKlasa), "")), klasa, vbTextCompare) <> 0 Then Exit Function
-            If Abs(PwaBroj(d(k, cKol)) - CDbl(nz(data(row, GS_KOLICINA), 0))) > 0.0001 Then Exit Function
-            If Abs(PwaBroj(d(k, cCena)) - CDbl(nz(data(row, GS_CENA), 0))) > 0.0001 Then Exit Function
-            If Abs(PwaBroj(d(k, cAmb)) - CDbl(nz(data(row, GS_KOL_AMB), 0))) > 0.0001 Then Exit Function
+            kl = Trim$(CStr(nz(d(k, cKlasa), "")))
+            If uMasteru.Exists(kl) Then Exit Function      ' dve iste klase -> kvar
+            uMasteru.Add kl, PwaStavkaKljuc(PwaBroj(d(k, cKol)), _
+                                            PwaBroj(d(k, cCena)), _
+                                            PwaBroj(d(k, cAmb)))
         End If
     Next k
 
-    PwaIstiSadrzaj = (nasao = 1)
+    ' BROJ STAVKI JE DEO SADRZAJA. Dokument od dve klase i dokument od jedne nisu
+    ' isti, pa bi poredjenje samo po preseku pustalo izgubljenu stavku kao NO-OP.
+    If uMasteru.count <> stavke.count Then Exit Function
+
+    Dim i As Long, s As Object
+    For i = 1 To stavke.count
+        Set s = stavke(i)
+        kl = Trim$(CStr(nz(s("Klasa"), "")))
+        If Not uMasteru.Exists(kl) Then Exit Function
+        If uMasteru(kl) <> PwaStavkaKljuc(PwaBroj(s("Kolicina")), _
+                                         PwaBroj(s("Cena")), _
+                                         PwaBroj(s("KolAmbalaze"))) Then Exit Function
+    Next i
+
+    PwaIstiSadrzaj = True
     Exit Function
 
 EH:
     ' Greska pri poredjenju NIJE "isto" -- fail-closed.
     LogErr SRC, "OtkupID=" & otkupID
     PwaIstiSadrzaj = False
+End Function
+
+' Sadrzaj jedne stavke kao TEKST, da bi se poredio jednom uporedbom.
+'
+' Zaokruzivanje na 4 decimale nosi istu toleranciju koju je staro poredjenje
+' imalo kao 0.0001 -- samo na jednom mestu, pa dve strane ne mogu da se razidju.
+Private Function PwaStavkaKljuc(ByVal kolicina As Double, ByVal cena As Double, _
+                                ByVal kolAmb As Double) As String
+    PwaStavkaKljuc = CStr(Round(kolicina, 4)) & "|" & _
+                     CStr(Round(cena, 4)) & "|" & _
+                     CStr(Round(kolAmb, 4))
 End Function
 
 ' Broj iz celije. NumVal postoji, ali je Private u modOtkupBlok i
@@ -2951,7 +3317,8 @@ End Function
 ' (RunMasterSyncSmokeSuite je zatecena crvena i nije u FULL prolazu).
 Public Function ImportRowToTblOtkup_RowTX(ByVal data As Variant, _
                                            ByVal row As Long, _
-                                           ByVal clientRecordID As String) As String
+                                           ByVal clientRecordID As String, _
+                                           ByVal stavke As Collection) As String
     Dim tx As clsTransaction
 
     On Error GoTo EH
@@ -2961,7 +3328,7 @@ Public Function ImportRowToTblOtkup_RowTX(ByVal data As Variant, _
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    ImportRowToTblOtkup_RowTX = ImportRowToTblOtkup(data, row, clientRecordID)
+    ImportRowToTblOtkup_RowTX = ImportRowToTblOtkup(data, row, clientRecordID, stavke)
 
     If Len(Trim$(ImportRowToTblOtkup_RowTX)) = 0 Then
         Err.Raise vbObjectError + 8301, "ImportRowToTblOtkup_RowTX", _
@@ -2982,18 +3349,17 @@ End Function
 
 Private Function ImportRowToTblOtkup(ByVal data As Variant, _
                                      ByVal row As Long, _
-                                     ByVal clientRecordID As String) As String
+                                     ByVal clientRecordID As String, _
+                                     ByVal stavke As Collection) As String
     Dim newID As String
     Dim datum As Date
     Dim kooperantID As String
     Dim stanicaID As String
     Dim vrstaVoca As String
     Dim sortaVoca As String
-    Dim kolicina As Double
-    Dim cena As Double
     Dim tipAmb As String
-    Dim kolAmb As Long
-    Dim klasa As String
+    Dim ukupnoAmb As Double
+    Dim ukupnoKg As Double
     Dim parcelaID As String
     Dim kulturaID As String
     Dim otkupacID As String
@@ -3005,14 +3371,11 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     kooperantID = Trim$(CStr(data(row, GS_KOOPERANT_ID)))
     vrstaVoca = Trim$(CStr(data(row, GS_VRSTA)))
     sortaVoca = Trim$(CStr(data(row, GS_SORTA)))
-    klasa = Trim$(CStr(data(row, GS_KLASA)))
     tipAmb = Trim$(CStr(data(row, GS_TIP_AMB)))
     parcelaID = Trim$(CStr(data(row, GS_PARCELA_ID)))
     otkupacID = Trim$(CStr(data(row, GS_OTKUPAC_ID)))
     vozacID = Trim$(CStr(data(row, GS_VOZAC_ID)))
-    
-    If Len(klasa) = 0 Then klasa = "I"
-    
+
     ' Datum -- AUD-042(b) STRIKT (nema tihog fallbacka na Date()).
     ' ValidatePWAOtkup ovo hvata jos pre importa (red -> SyncError); ovo je druga
     ' linija za direktne/test pozive, da nijedan ulaz ne prodje kao "danas".
@@ -3022,20 +3385,58 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     End If
     datum = CDate(data(row, GS_DATUM))
 
-    ' Numerische Werte
-    kolicina = CDbl(data(row, GS_KOLICINA))
-    cena = CDbl(data(row, GS_CENA))
-    
+    ' STAVKE SU DOKUMENT (S5-5b).
+    '
+    ' ValidatePWAOtkup ovo hvata jos pre importa (red -> SyncError); ovo je druga
+    ' linija za direktne i test pozive, isto kao kod datuma -- nijedan ulaz ne
+    ' sme da postane dokument od nula stavki.
+    If stavke Is Nothing Then
+        Err.Raise vbObjectError + 8110, "ImportRowToTblOtkup", _
+              "Otkup bez stavki se ne uvozi (tab " & OTK_STAVKE_TAB & _
+              " nema red za ClientRecordID=" & clientRecordID & ")"
+    End If
+
+    If stavke.count = 0 Then
+        Err.Raise vbObjectError + 8110, "ImportRowToTblOtkup", _
+              "Otkup bez stavki se ne uvozi. ClientRecordID=" & clientRecordID
+    End If
+
+    ' MANIFEST SE PORAVNAVA I U JEZGRU, ne samo u validaciji.
+    '
+    ' ValidatePWAOtkup ga gleda da bi red dobio SyncError koji operater vidi; ovde
+    ' je ista invarijanta TVRDA, jer direktan i test poziv validaciju preskacu --
+    ' isti obrazac kao datum (AUD-042b). Deo robe ne sme da postane ceo dokument
+    ' ni kroz jedan ulaz, a zaglavlje je jedino mesto koje zna koliko ih je bilo.
+    Dim manifest As Long
     On Error Resume Next
-    kolAmb = CLng(data(row, GS_KOL_AMB))
+    manifest = CLng(nz(data(row, GS_STAVKE_COUNT), 0))
     On Error GoTo EH
-    
-    If kolAmb < 0 Then
+    If manifest <> stavke.count Then
+        Err.Raise vbObjectError + 8111, "ImportRowToTblOtkup", _
+              "StavkeCount se ne poklapa: zaglavlje kaze " & CStr(manifest) & _
+              ", primljeno stavki " & CStr(stavke.count) & _
+              ". ClientRecordID=" & clientRecordID
+    End If
+
+    ' ZBIROVI SU SAMO ZA KAPIJU I LOG. Klasa, kolicina i cena ne prolaze kroz
+    ' adapter: sto je zica donela, to pisac vidi -- pa je razlika u robi razlika
+    ' u ULAZU, a ne u prevodu.
+    Dim si As Long
+    Dim ss As Object
+    For si = 1 To stavke.count
+        Set ss = stavke(si)
+        ukupnoKg = ukupnoKg + PwaBroj(ss("Kolicina"))
+        ukupnoAmb = ukupnoAmb + PwaBroj(ss("KolAmbalaze"))
+    Next si
+
+    If ukupnoAmb < 0 Then
         Err.Raise vbObjectError + 8100, "ImportRowToTblOtkup", _
               "KolAmbalaze ne sme biti negativan. ClientRecordID=" & clientRecordID
     End If
 
-    If kolAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
+    ' TIP AMBALAZE JE POLJE ZAGLAVLJA, kolicina gajbi je po stavci -- kapija je
+    ' zato nad ZBIROM: gajbe bez tipa nema kome da se knjize.
+    If ukupnoAmb > 0 And Len(Trim$(tipAmb)) = 0 Then
         Err.Raise vbObjectError + 8101, "ImportRowToTblOtkup", _
               "TipAmbalaze je obavezan kada je KolAmbalaze > 0. ClientRecordID=" & clientRecordID
     End If
@@ -3145,7 +3546,7 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     postojeci = modOtkup.OtkupPoClientRecordID(clientRecordID)
 
     If Len(postojeci) > 0 Then
-        If PwaIstiSadrzaj(postojeci, data, row) Then
+        If PwaIstiSadrzaj(postojeci, data, row, stavke) Then
             LogInfo "ImportRowToTblOtkup", "NO-OP (isti CRID i sadrzaj): " & _
                     postojeci & " <- PWA:" & clientRecordID
             ImportRowToTblOtkup = postojeci
@@ -3191,20 +3592,27 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     srcCreated = Trim$(CStr(nz(data(row, GS_CREATED_AT), "")))
     If Len(srcCreated) > 0 Then h.Add "SourceCreatedAt", srcCreated
 
-    ' PWA salje JEDAN zapis = JEDNA klasa = ceo dokument (S7).
-    Dim stavka As Object
-    Set stavka = CreateObject("Scripting.Dictionary")
-    stavka.Add "Klasa", klasa
-    stavka.Add "Kolicina", kolicina
-    stavka.Add "Cena", cena
-    stavka.Add "KolAmbalaze", CDbl(kolAmb)
-
-    Dim stavke As Collection
-    Set stavke = New Collection
-    stavke.Add stavka
-
+    ' Stavke idu pisacu KAKVE SU DOSLE. RedniBroj dodeljuje pisac, po kanonskom
+    ' redu klasa -- redosled u Collection-u nista ne znaci (modOtkup.bas:749).
     Dim greska As String
-    newID = CreateOtkup_TX(h, stavke, greska)
+    Dim ambErrNum As Long
+    newID = CreateOtkup_TX(h, stavke, greska, , ambErrNum)
+
+    ' AUTO-POTVRDA DEFICITA, I SAMO NA OVOJ PUTANJI (odluka 03.10.2026).
+    '
+    ' Operatera ovde nema, a otkupac je na terenu vec uneo koliko je gajbi
+    ' doslo -- potvrda je formalnost koju nema kome postaviti, a odbijanje bi
+    ' zaustavilo sinhronizaciju na redu koji je u polju vec prihvacen. Ekran
+    ' (modOtkupUnos) PITA, jer tamo operater postoji.
+    '
+    ' Broj se cita istim javnim racunom koji pisac koristi, pa auto-potvrda ne
+    ' moze da potvrdi drugi broj od onog koji pisac meri. Ako se ne slozi,
+    ' pisac odbija i red ostaje neuvezen -- sto je ispravno.
+    If ambErrNum = AMB_ERR_POTVRDA_DEFICITA Then
+        greska = ""
+        newID = CreateOtkup_TX(h, stavke, greska, _
+                               modOtkup.OtkupDeficitKooperanta(h, stavke), ambErrNum)
+    End If
 
     If Len(newID) = 0 Then
         Err.Raise vbObjectError + 8108, "ImportRowToTblOtkup", _
@@ -3212,7 +3620,8 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     End If
 
     LogInfo "ImportRowToTblOtkup", "Uvezeno: " & newID & " <- PWA:" & clientRecordID & _
-            " | " & kooperantID & " | " & vrstaVoca & " " & kolicina & "kg"
+            " | " & kooperantID & " | " & vrstaVoca & " " & CStr(ukupnoKg) & "kg u " & _
+            CStr(stavke.count) & " stavki"
     ImportRowToTblOtkup = newID
     Exit Function
 
@@ -4166,8 +4575,8 @@ Private Function ValidatePWAZbirna(ByVal data As Variant, ByVal row As Long) As 
     '
     ' Sta uvozu STVARNO treba: identitet zapisa, vozac, kupac, dan i IZVORI.
     ' Bez izvora zbirna nije dokument -- to je jedina nova tvrdnja.
-    If Len(Trim$(CStr(nz(data(row, VS_OTKUP_RECORD_IDS), "")))) = 0 Then
-        ValidatePWAZbirna = "OtkupRecordIDs missing -- zbirna bez izvora nije dokument"
+    If Len(Trim$(CStr(nz(data(row, VS_OTPREMNICA_IDS), "")))) = 0 Then
+        ValidatePWAZbirna = "OtpremnicaIDs missing -- zbirna bez izvora nije dokument"
         Exit Function
     End If
     
@@ -4252,8 +4661,8 @@ Private Function PwaZbirnaRazlika(ByVal zbirnaID As String, _
     ' SKUP IZVORA. Razresava se ISTIM putem kao pri uvozu, pa se poredi ono sto
     ' bi dokument stvarno dobio -- ne sirovi CRID spisak.
     Dim noviIzvori As Collection
-    Set noviIzvori = OtpremniceIzOtkupRecordIDs( _
-                         Trim$(CStr(nz(data(row, VS_OTKUP_RECORD_IDS), ""))), _
+    Set noviIzvori = OtpremniceIzIDs( _
+                         Trim$(CStr(nz(data(row, VS_OTPREMNICA_IDS), ""))), _
                          "PwaZbirnaRazlika")
     If noviIzvori Is Nothing Then
         PwaZbirnaRazlika = "izvori se vise ne razresavaju (v. log)"
@@ -4415,8 +4824,8 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     End If
 
     Dim izvori As Collection
-    Set izvori = OtpremniceIzOtkupRecordIDs( _
-                     Trim$(CStr(nz(data(row, VS_OTKUP_RECORD_IDS), ""))), _
+    Set izvori = OtpremniceIzIDs( _
+                     Trim$(CStr(nz(data(row, VS_OTPREMNICA_IDS), ""))), _
                      clientRecordID)
     If izvori Is Nothing Then Exit Function
 
@@ -4463,70 +4872,55 @@ EH:
     ImportRowToTblZbirna = ""
 End Function
 
-' otkupRecordIDs (CRID-ovi, zarezom) -> Collection OtpremnicaID-eva, bez
-' ponavljanja, redom prvog pojavljivanja. Nothing = uvoz ovog reda NE SME dalje.
+' OtpremnicaIDs (zarezom) -> Collection. Nothing = uvoz ovog reda NE SME dalje.
 '
-' Svaki korak je KANONSKI citac: CRID -> OtkupID (modOtkup.OtkupPoClientRecordID),
-' OtkupID -> OtpremnicaID (modDokumenta.OtpremnicaZaOtkup). Nista se ne trazi po
-' poslovnom broju i nista se ne pogadja.
+' IDENTITET PUTUJE, NE PREVODI SE (S5-4b-2).
 '
-' Fail-closed je ovde jedini ispravan izbor: zbirna od DELA onoga sto je vozac
-' natovario je drugi dokument od onog koji je vozac napravio, a ne "malo manji".
-Private Function OtpremniceIzOtkupRecordIDs(ByVal crids As String, _
-                                            ByVal clientRecordID As String) As Collection
-    Const SRC As String = "OtpremniceIzOtkupRecordIDs"
+' Do ovog reza je PWA slala otkupne CRID-ove, pa je master morao da ih prevodi:
+' CRID -> OtkupID -> OtpremnicaZaOtkup -> dedup. Prevod je radio tacno, ali je
+' identitet isao okolo -- vrednost sa ekrana, pa ponovni lookup do kanonskog ID-a.
+' Od S5-4b-1 vozac dobija OTPREMNICE, pa OtpremnicaID putuje direktno.
+'
+' KAPIJE SE OVDE NE PONAVLJAJU. CreateZbirna vec odbija, svaku sa svojim razlogom:
+'   prazan ID (1225) - isti dvaput (1226) - nepoznat (NadjiJedanRedOtpremnice)
+'   nacrt ili storniran (RequireOtpValidanIzvorZbirne) - vec u aktivnoj zbirni
+'   (1228) - tudjeg vozaca (RequireIstoPolje VozacID)
+' Druga kopija istih pravila ovde znacila bi dve verzije jedne invarijante.
+'
+' NEMA DEDUPA, i to je promena znacenja: stari prevodilac je dedup morao, jer dva
+' otkupa legitimno pokazuju na JEDNU otpremnicu. Isti OtpremnicaID dvaput u
+' spisku je greska klijenta, pa se prijavljuje (1226), ne ravna u tisini.
+Private Function OtpremniceIzIDs(ByVal ids As String, _
+                                 ByVal clientRecordID As String) As Collection
+    Const SRC As String = "OtpremniceIzIDs"
 
-    If Len(Trim$(crids)) = 0 Then
-        LogError SRC, "Zbirna nema nijedan otkupRecordID (CRID=" & clientRecordID & _
+    If Len(Trim$(ids)) = 0 Then
+        LogError SRC, "Zbirna nema nijedan OtpremnicaID (CRID=" & clientRecordID & _
                  "). Zbirna bez izvora nije dokument."
         Exit Function
     End If
 
     Dim rez As New Collection
-    Dim vidjene As Object
-    Set vidjene = CreateObject("Scripting.Dictionary")
-    vidjene.CompareMode = vbTextCompare
 
     Dim delovi As Variant, i As Long
-    delovi = Split(crids, ",")
+    delovi = Split(ids, ",")
 
     For i = LBound(delovi) To UBound(delovi)
-        Dim crid As String
-        crid = Trim$(CStr(delovi(i)))
+        Dim otpID As String
+        otpID = Trim$(CStr(delovi(i)))
 
-        If Len(crid) > 0 Then
-            Dim otkupID As String
-            otkupID = modOtkup.OtkupPoClientRecordID(crid)
-
-            If Len(otkupID) = 0 Then
-                LogError SRC, "Otkup nije u masteru: CRID=" & crid & _
-                         " (zbirna CRID=" & clientRecordID & ")"
-                Exit Function
-            End If
-
-            Dim otpID As String
-            otpID = modDokumenta.OtpremnicaZaOtkup(otkupID)
-
-            If Len(otpID) = 0 Then
-                LogError SRC, "Otkup " & otkupID & " nije ni u jednoj aktivnoj " & _
-                         "otpremnici, a zbirna se sastavlja od otpremnica " & _
-                         "(zbirna CRID=" & clientRecordID & ")"
-                Exit Function
-            End If
-
-            If Not vidjene.Exists(otpID) Then
-                vidjene.Add otpID, 1
-                rez.Add otpID
-            End If
-        End If
+        ' Prazan token se NE preskace: komentar iznad obecava da ga odbija
+        ' kanonski pisac (1225), pa mu mora i stici. Tiho preskakanje bi od
+        ' "OTP-1,,OTP-2" napravilo uredan spisak i sakrilo pokvaren manifest.
+        rez.Add otpID
     Next i
 
     If rez.count = 0 Then
-        LogError SRC, "Nijedan upotrebljiv izvor (CRID=" & clientRecordID & ")"
+        LogError SRC, "Nijedan upotrebljiv OtpremnicaID (CRID=" & clientRecordID & ")"
         Exit Function
     End If
 
-    Set OtpremniceIzOtkupRecordIDs = rez
+    Set OtpremniceIzIDs = rez
 End Function
 
 ' Detekcija kolizije broja POSLE upisa. Zove se sa vec ubacenim redom, pa meri
@@ -4739,6 +5133,7 @@ Private Function ValidateVOZSheetHeader(ByVal data As Variant, _
     If Not RequireVOZHeaderValue(data, sheetName, VS_OTKUP_RECORD_IDS, "OtkupRecordIDs") Then Exit Function
     If Not RequireVOZHeaderValue(data, sheetName, VS_RECEIVED_AT, "ReceivedAt") Then Exit Function
     If Not RequireVOZHeaderValue(data, sheetName, VS_BROJ_ZBIRNE, "BrojZbirne") Then Exit Function
+    If Not RequireVOZHeaderValue(data, sheetName, VS_OTPREMNICA_IDS, "OtpremnicaIDs") Then Exit Function
 
     ValidateVOZSheetHeader = True
     Exit Function

@@ -404,6 +404,16 @@ Public Sub ZatvoriAplikaciju()
         ThisWorkbook.Close SaveChanges:=False
         Exit Sub
     End If
+    ' Isti razlog, druga steta: parcijalno vracen podatak. Bez ovoga je gasenje
+    ' aplikacije bilo GARANTOVAN put do Save-a -- korisnik koji samo zatvori
+    ' program zabetonirao bi nekonzistentno stanje na disk. Vlasnik markera:
+    ' modTxState (postavlja clsTransaction.RollbackTx).
+    If Not modTxState.SnimanjeDozvoljeno() Then
+        MsgBox Poruka("APP_MSG_ROLLBACK_NEPOTPUN_NE_SNIMAM") & vbCrLf & _
+               modTxState.NevraceneTabeleSesije(), vbCritical, APP_NAME
+        ThisWorkbook.Close SaveChanges:=False
+        Exit Sub
+    End If
     ThisWorkbook.Close SaveChanges:=True
 End Sub
 

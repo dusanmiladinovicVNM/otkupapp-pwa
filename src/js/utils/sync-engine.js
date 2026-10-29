@@ -137,6 +137,7 @@
                 record.serverRecordID = result.serverRecordID || record.serverRecordID || '';
                 record.updatedAtServer = result.updatedAtServer || record.updatedAtServer || '';
                 record.lastServerStatus = result.status || 'synced';
+                record.lastServerCode = '';
 
                 if (typeof onResultRecord === 'function') {
                     try { onResultRecord(record, result); } catch (_) {}
@@ -146,6 +147,18 @@
                 record.syncStatus = 'pending';
                 record.lastSyncError = result.error || 'Sync stavke neuspešan';
                 record.lastServerStatus = result.status || 'failed';
+
+                // RAZLOG ODBIJANJA SE CUVA (review #392, drugi krug).
+                //
+                // Bez njega se ne razlikuje "mreza je pukla" od "server je
+                // presudio i odbio". Oba zavrsavaju kao pending, pa pozivalac
+                // koji na osnovu toga drzi rezervaciju ne moze da je otpusti ni
+                // kad je odbijanje TRAJNO.
+                //
+                // Prazan kod znaci transportni neuspeh -- takav zapis ostaje
+                // retryable i rezervaciju zadrzava.
+                record.lastServerCode = (result && result.code) || '';
+
                 failedCount++;
             }
 

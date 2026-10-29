@@ -77,10 +77,30 @@ Public Const SCRG_SEKCIJA As Long = 2
 Public Const SEK_RAD     As String = "RAD"
 Public Const SEK_MATICNI As String = "MATICNI"
 
-' Poslednja greska iz ekrana. Omotaci guse greske (ekran koji padne ne sme da
-' obori aplikaciju), ali gusenje BEZ TRAGA znaci da dugme "ne radi" i niko ne
-' zna zasto - tacno to se desilo sa "Po datumu". Ljuska ovo cita i prikazuje.
+' Poslednja greska iz ekrana: clan ugovora koji se NIJE izvrsio (v. ScrRunIshod).
+' Gusenje BEZ TRAGA znaci da dugme "ne radi" i niko ne zna zasto - tacno to se
+' desilo sa "Po datumu". Ljuska ovo cita i prikazuje.
 Public ScrLastErr As String
+
+' Greska koju je clan ugovora OSTAVIO u Err, a ipak VRATIO rezultat (KI-011 za
+' Scr_Save, KI-014 za ostale). To nije neuspeh clana nego kvar koda -- neki
+' pomocni korak je gresku prigusio i nije je obrisao. Ne prikazuje se operateru
+' (clan JESTE odgovorio), ali se ne guta: ide u log kao WARN, a test ga tvrdi.
+' Nosi POSLEDNJI zaostatak; prazni ga samo ScrSave, na pocetku upisa.
+Public ScrZaostalaGreska As String
+
+' Ishod Application.Run nad clanom ugovora (ScrRunIshod). Redosled je deo
+' ugovora: sve do SCR_RUN_PRAZNO znaci "clan se izvrsio".
+Public Const SCR_RUN_VRATIO As Long = 0  ' vratio vrednost (zaostatak zabelezen)
+Public Const SCR_RUN_PRAZNO As Long = 1  ' vratio Empty, Err = 0 (npr. ekran bez liste)
+Public Const SCR_RUN_NEMA   As Long = 2  ' nije se izvrsio: 1004, clana nema
+Public Const SCR_RUN_PAO    As Long = 3  ' nije se izvrsio iz drugog razloga (npr. 449)
+
+' Vrednost Scr_Sort koja nije "kolona:smer" nego izjava: REDOSLED KOJI EKRAN
+' VRATI JE POSLOVNI, ljuska ga ne dira -- ni podrazumevano, ni na klik
+' zaglavlja, ni zaostalim sortom druge liste. Kartice racunaju tekuci saldo
+' tim redom, pa bi svaki drugi red pokazivao saldo tudjeg toka (KART-HRON-01).
+Public Const SCR_SORT_POSLOVNI As String = "poslovni"
 
 ' Kes odgovora "da li modul postoji" - Application.Run na nepostojeci modul
 ' baca gresku, a to je skupo raditi pri svakom crtanju sidebara.
@@ -106,6 +126,26 @@ Private mSekcijaZabranjenaTest As String
 ' je i dostupan i postoji, pa je i jedini nacin da se SEKCIJSKI prelazak obori
 ' kroz pravi prekidac (v. T_Sekcija_OdbijenPrelazakNePomeraSekciju).
 Private mGradnjaPadaTest As Boolean
+
+' mCuriTest (KI-014): clan ugovora cije telo na svom izlazu pozove
+' ScrCuriAkoTest sa ovim imenom VRACA rezultat i ostavlja gresku u Err -- oblik
+' koji je sonda izmerila (proba pod Resume Next, izlaz van handlera). Greska nije
+' dignuta, pa kroz Application.Run stize do citaoca. Ne dodaje ni pristup ni
+' sposobnost; prazno gasi seam.
+Private mCuriTest As String
+
+' mPadTest (KI-016): clan ugovora cije telo na svom vrhu pozove ScrPadAkoTest sa
+' ovim imenom DIGNE gresku -- podmetnut pad. Clan koji ga ne uhvati pusta gresku
+' pozivaocu, a kroz Application.Run je to runtime dijalog i reset projekta. Zato
+' test clan BEZ brane zove DIREKTNO, nikad kroz Run. Prazno gasi seam.
+Private mPadTest As String
+
+' KANAL PADA (KI-016, UI-PAD-01). Clan ugovora koji uhvati svoju gresku upisuje
+' je ovde (ScrPadZabelezi), a citalac je PREUZIMA posle Run-a, PRE nego sto
+' pogleda vracenu vrednost. Vrednost ne moze da nosi pad (sonda 15.10.2026):
+' posle handlera clana je Err = 0, Boolean bez rezultata je False (dakle
+' "vratio"), a clan koji je vec dodelio rezultat pa pao vraca taj rezultat.
+Private mPadClana As String
 
 '------------------------------------------------------------ REGISTAR
 ' kljuc | modul | naslov (kljuc kataloga) | MDL2 kod | grupa | oblast | sekcija
@@ -270,7 +310,7 @@ Public Function ScrPostoji(ByVal kljuc As String) As Boolean
     If Len(modul) = 0 Then Exit Function
     On Error Resume Next
     dummy = Application.Run(modul & ".Scr_Meta")
-    ScrPostoji = (Err.Number = 0)
+    ScrPostoji = (ScrRunIshod(dummy, modul & ".Scr_Meta") <= SCR_RUN_PRAZNO)
     Err.Clear
     On Error GoTo 0
     mHas(kljuc) = ScrPostoji
@@ -297,6 +337,52 @@ End Sub
 Public Sub ScrGradnjuOboriTest(ByVal obori As Boolean)
     If Not IsTestMode() Then Exit Sub
     mGradnjaPadaTest = obori
+End Sub
+
+' Test seam (KI-014): koji clan ugovora "curi" (v. mCuriTest). Prazno gasi seam.
+Public Sub ScrCuriTestSet(ByVal clan As String)
+    If Not IsTestMode() Then Exit Sub
+    mCuriTest = clan
+End Sub
+
+' Kuka seam-a. Zove je telo clana ugovora NA SVOM IZLAZU, posle poslednjeg
+' On Error/Err.Clear. Van test rezima i za drugi clan ne radi nista i ne dira
+' Err. Vraca True kad je gresku ostavila.
+Public Function ScrCuriAkoTest(ByVal clan As String) As Boolean
+    Dim ws As Object
+    If Len(mCuriTest) = 0 Then Exit Function
+    If mCuriTest <> clan Then Exit Function
+    If Not IsTestMode() Then Exit Function
+    ScrCuriAkoTest = True
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets("__KI014_CURI__")
+End Function
+
+' Kuka seam-a BEZ curenja: True kad je seam postavljen na ovaj clan, a clan tada
+' vraca Empty uz Err = 0 -- oblik "ekran nema listu" (236). Danas ga nijedan
+' ekran ne proizvodi u normalnom toku (sonda 14.10.2026: svih 14 vraca niz, i
+' ANALIZA), pa bez ovoga grana SCR_RUN_PRAZNO u ScrGridData nema slucaj.
+Public Function ScrPraznoAkoTest(ByVal clan As String) As Boolean
+    If Len(mCuriTest) = 0 Then Exit Function
+    If mCuriTest <> clan Then Exit Function
+    ScrPraznoAkoTest = IsTestMode()
+End Function
+
+' Test seam (KI-016): koji clan ugovora "pada" (v. mPadTest). Prazno gasi seam.
+Public Sub ScrPadTestSet(ByVal clan As String)
+    If Not IsTestMode() Then Exit Sub
+    mPadTest = clan
+End Sub
+
+' Kuka seam-a. Zove je telo clana ugovora na SVOM VRHU, odmah posle brane, pa
+' podmetnut pad gadja branu koja pokriva celo telo. Van test rezima i za drugi
+' clan ne radi nista i ne dira Err.
+Public Sub ScrPadAkoTest(ByVal clan As String)
+    If Len(mPadTest) = 0 Then Exit Sub
+    If mPadTest <> clan Then Exit Sub
+    If Not IsTestMode() Then Exit Sub
+    Err.Raise 9, "modUiScreens.ScrPadAkoTest[" & clan & "]", _
+              "podmetnut pad clana ugovora (KI-016)"
 End Sub
 
 Public Function ScrDozvoljen(ByVal kljuc As String) As Boolean
@@ -326,13 +412,13 @@ End Function
 '
 ' KO IMA BRANU KAZE REGISTAR (SCR_BRANA), ne broj greske. Ekran koji je ne
 ' deklarise se ne pita uopste -- prolazi. Ekran koji je deklarise mora da
-' odgovori: SVAKA greska pri pozivu je pukla brana, pa je odgovor ZABRANJENO.
+' odgovori: brana koja NIJE ODGOVORILA (Run nije vratio vrednost) je ZABRANJENO.
 '
 ' Do v6-ui-204 se sposobnost pogadjala iz greske 1004 ("Cannot run the macro").
 ' Ali 1004 je obicna Excel greska koju i postojeca brana moze da digne iznutra,
 ' pa je pukla brana bila nerazluciva od nepostojece -- i propustala. Sada
-' nijedan broj greske nista ne znaci: registar kaze da li brana postoji, a ako
-' postoji, greska je uvek "ne".
+' registar kaze da li brana postoji, a ako postoji, neodgovor je uvek "ne".
+' Greska koja ostane u Err uz VRACEN odgovor je zaostatak, ne "ne" (KI-014).
 '
 ' Odgovor se NIKAD ne kesira: prava se menjaju zamenom operatera, pa bi kesiran
 ' odgovor ostavio otvoren ekran kome novi operater nema pristup.
@@ -347,7 +433,7 @@ Private Function ScrSopstvenaBrana(ByVal kljuc As String) As Boolean
     On Error Resume Next
     Err.Clear
     v = Application.Run(m & ".Scr_Dozvoljen")
-    If Err.Number = 0 Then
+    If ScrRunIshod(v, m & ".Scr_Dozvoljen") = SCR_RUN_VRATIO Then
         ScrSopstvenaBrana = CBool(v)
     Else
         ScrSopstvenaBrana = False
@@ -362,8 +448,13 @@ End Function
 '
 ' Greska poziva znaci "nema takvu proceduru", ne "pad" -- isto kao ScrPostoji.
 ' Ima li ekran nesacuvanih izmena. Neobavezno -- ekran koji to ne implementira
-' nema sta da izgubi, pa greska poziva znaci False, ne pad. Isti obrazac i isto
-' ime kao modUiPanel.PanelImaNesacuvano; ljuska pita oba pre nego sto zatvori.
+' nema sta da izgubi, pa clan koji se nije izvrsio znaci False, ne pad. Isti
+' obrazac i isto ime kao modUiPanel.PanelImaNesacuvano; ljuska pita oba pre nego
+' sto zatvori.
+'
+' Jedini FAIL-OPEN u ugovoru: dok se ovde citao Err.Number, zaostala greska uz
+' odgovor True je davala False -- ljuska bi zatvorila ekran bez pitanja i
+' odbacila unos (KI-014, test 238).
 Public Function ScrImaNesacuvano(ByVal kljuc As String) As Boolean
     Dim m As String, v As Variant
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
@@ -371,7 +462,8 @@ Public Function ScrImaNesacuvano(ByVal kljuc As String) As Boolean
     On Error Resume Next
     Err.Clear
     v = Application.Run(m & ".Scr_ImaNesacuvano")
-    If Err.Number = 0 Then ScrImaNesacuvano = CBool(v)
+    If ScrRunIshod(v, m & ".Scr_ImaNesacuvano") = SCR_RUN_VRATIO Then _
+        ScrImaNesacuvano = CBool(v)
     Err.Clear
 End Function
 
@@ -414,8 +506,16 @@ Public Sub ScrResetCache()
 End Sub
 
 '--------------------------------------------------------------- POZIV
-' Omotaci ugovora. Svaki gura gresku u "nije uspelo" umesto da je propusti
-' u ljusku: ekran koji padne ne sme da obori aplikaciju.
+' Omotaci ugovora. Ishod svakog poziva tumaci ScrRunIshod (dole), ne Err.Number.
+'
+' Omotac NE MOZE da uhvati pad ekrana. Izmereno sondom (14. i 15.10.2026): clan
+' koji gresku DIGNE je kroz Application.Run ne vraca pozivaocu -- ni pod On Error
+' Resume Next, ni pod On Error GoTo, ni iz dogadjaja prikazane forme -- nego
+' otvara runtime dijalog ("Run-time error ...", Continue UGASEN, End, Debug). "End"
+' resetuje projekat: stanje modula se brise, forma nestaje, a Excel ostaje
+' sakriven. Zato pad hvata CLAN, u svom handleru, i javlja ga kroz kanal
+' (ScrPadZabelezi); citaoci sa porukom za pad -- ScrGridData, ScrEvent, ScrBuild
+' -- kanal citaju pre vracene vrednosti (KI-016, UI-PAD-01).
 Public Function ScrMeta(ByVal kljuc As String) As String
     Dim m As String
     On Error Resume Next
@@ -423,13 +523,21 @@ Public Function ScrMeta(ByVal kljuc As String) As String
     If Len(m) > 0 Then ScrMeta = CStr(Application.Run(m & ".Scr_Meta"))
 End Function
 
+' Gradnja zone. Scr_Build je Sub, pa Run ne vraca nista: uspeh je Err = 0. Pad
+' koji clan uhvati ostavlja Err = 0 kao i uspeh (sonda 15.10.2026), pa se kanal
+' cita PRVI -- bez njega bi ljuska presla na ekran cija zona nije izgradjena.
 Public Function ScrBuild(ByVal kljuc As String, ByVal z As Object) As Boolean
     Dim m As String
     On Error Resume Next
     If mGradnjaPadaTest And IsTestMode() Then Exit Function
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) = 0 Then Exit Function
+    ScrPadPreuzmi
     Application.Run m & ".Scr_Build", z
+    If Len(ScrPadPreuzmi()) > 0 Then
+        Err.Clear
+        Exit Function
+    End If
     ScrBuild = (Err.Number = 0)
 End Function
 
@@ -448,19 +556,33 @@ Public Function ScrGrid(ByVal kljuc As String) As Variant
     If Len(m) > 0 Then ScrGrid = Application.Run(m & ".Scr_Grid")
 End Function
 
+' Radnja ekrana. Pad radnje je samo clan koji se NIJE izvrsio iz razloga koji
+' nije "nema ga" (SCR_RUN_PAO). Ekran bez Scr_Event (1004) radnju nije ni
+' imao -- to nije pad: ANALIZA ga nema, a gradnja zone sledeceg ekrana joj salje
+' "chg:" dok je jos aktivna (izmereno 14.10.2026, test 237).
+'
+' Pad radnje koji clan uhvati (KI-016) javlja kanal, i to PRE vrednosti: Scr_Event
+' je Boolean, pa posle uhvacenog pada Run vraca False -- "vratio", ne Empty.
 Public Function ScrEvent(ByVal kljuc As String, ByVal tag As String, _
                          ByVal ev As String) As Boolean
-    Dim m As String
+    Dim m As String, v As Variant, ishodRadnje As Long, pad As String
     ScrLastErr = ""
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) = 0 Then Exit Function
     Err.Clear
-    ScrEvent = CBool(Application.Run(m & ".Scr_Event", tag, ev))
-    If Err.Number <> 0 Then
-        ScrLastErr = m & ".Scr_Event " & tag & " -> " & Err.Number & " " & Err.description
+    ScrPadPreuzmi
+    v = Application.Run(m & ".Scr_Event", tag, ev)
+    pad = ScrPadPreuzmi()
+    If Len(pad) > 0 Then
+        ScrLastErr = pad
         Err.Clear
+        Exit Function
     End If
+    ishodRadnje = ScrRunIshod(v, m & ".Scr_Event " & tag)
+    If ishodRadnje = SCR_RUN_VRATIO Then ScrEvent = CBool(v)
+    If ishodRadnje = SCR_RUN_PAO Then ScrLastErr = m & ".Scr_Event " & tag & " -> " & Err.Number & " " & Err.description
+    Err.Clear
 End Function
 
 ' Redovi za deljenu mrezu. Vraca Array(kolone, redovi, n, zbirKg, zbirVal)
@@ -468,25 +590,42 @@ End Function
 ' NE zove se ScrRows - to ime vec nosi spisak redova REGISTRA, a dve funkcije
 ' istog imena u istom modulu su "Ambiguous name".
 '
-' GRESKA SE BELEZI, ne samo gusi. "On Error Resume Next" ovde mora da ostane --
-' ekran koji padne ne sme da obori aplikaciju -- ali gusenje BEZ TRAGA je vec
-' jednom skupo naplaceno ("Po datumu", v. ScrLastErr gore). Ponovilo se na cipu
-' "Svi": Scr_Rows pukne, ovde se pretvori u Empty, LoadGridFromScreen na ne-niz
-' radi Exit Sub -- pa mreza OSTANE na prethodnoj listi, sa prethodnim naslovom.
-' Operater vidi dugme koje "ne radi", bez ijedne poruke i bez traga u logu.
+' NEUSPEH SE BELEZI, ne samo gusi. Gusenje BEZ TRAGA je vec jednom skupo
+' naplaceno ("Po datumu", v. ScrLastErr gore): na cipu "Svi" je lista koja se
+' nije procitala davala Empty, LoadGridFromScreen na ne-niz radi Exit Sub -- pa
+' je mreza OSTAJALA na prethodnoj listi, bez ijedne poruke i bez traga u logu.
+'
+' Tri oblika (KI-014, test 236), jer Scr_Rows LEGITIMNO vraca Empty:
+'   - lista uz gresku u Err      -> lista vazi, greska je zaostatak;
+'   - Empty uz Err = 0           -> ekran nema listu, nije neuspeh;
+'   - Empty uz gresku            -> neuspeh. Ovde se nepokrenut clan (1004) i
+'     Empty uz zaostatak NE MOGU razlikovati (sonda 14.10.2026), pa vazi
+'     strozi ishod: mreza javlja da se lista nije procitala.
+' Cetvrti oblik je PAD koji je clan uhvatio (KI-016): Empty uz Err = 0, isto kao
+' "nema liste", a clan koji je vec dodelio listu pa pao vraca i nju. Zato kanal
+' ide pre svih: pad je neuspeh liste, sa imenom clana i korakom u ScrLastErr.
 Public Function ScrGridData(ByVal kljuc As String, ByVal filter As String, _
                             ByVal q As String) As Variant
-    Dim m As String
+    Dim m As String, v As Variant, pad As String
     ScrLastErr = ""
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) = 0 Then Exit Function
     Err.Clear
-    ScrGridData = Application.Run(m & ".Scr_Rows", filter, q)
-    If Err.Number <> 0 Then
-        ScrLastErr = m & ".Scr_Rows -> " & Err.Number & " " & Err.description
+    ScrPadPreuzmi
+    v = Application.Run(m & ".Scr_Rows", filter, q)
+    pad = ScrPadPreuzmi()
+    If Len(pad) > 0 Then
+        ScrLastErr = pad
         Err.Clear
+        Exit Function
     End If
+    Select Case ScrRunIshod(v, m & ".Scr_Rows")
+        Case SCR_RUN_VRATIO: ScrGridData = v
+        Case SCR_RUN_PRAZNO
+        Case Else: ScrLastErr = m & ".Scr_Rows -> " & Err.Number & " " & Err.description
+    End Select
+    Err.Clear
 End Function
 
 ' Cipovi AKTIVNE liste, oblika 'kljuc:KATALOG:sirina|...'. Opciono -- ekran
@@ -520,22 +659,21 @@ End Function
 
 ' Podrazumevani sort AKTIVNE liste ekrana, oblika "kolona:asc" ili "kolona:desc".
 ' Prazno = ekran nema misljenje, pa ostaje pravilo ljuske (SortZaListu).
+' SCR_SORT_POSLOVNI = ljuska redove uopste ne sortira (KART-HRON-01).
 '
 ' Uvedeno zbog sifarnika: ljuskino pravilo je "druga kolona opadajuce", sto je
 ' datum dokumenta -- nad Stanicama to znaci nazive unazad. Ekran koji zna sta mu
 ' je glavna kolona to kaze sam, umesto da se ljusci dopisuje jos trinaest imena
 ' lista pored zatecena dva.
 Public Function ScrSort(ByVal kljuc As String) As String
-    Dim m As String
+    Dim m As String, v As Variant
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) = 0 Then Exit Function
     Err.Clear
-    ScrSort = CStr(Application.Run(m & ".Scr_Sort"))
-    If Err.Number <> 0 Then
-        ScrSort = ""
-        Err.Clear
-    End If
+    v = Application.Run(m & ".Scr_Sort")
+    If ScrRunIshod(v, m & ".Scr_Sort") = SCR_RUN_VRATIO Then ScrSort = CStr(v)
+    Err.Clear
 End Function
 
 ' Radnje nad izabranim redom za trenutno aktivnu listu ekrana.
@@ -546,16 +684,14 @@ End Function
 ' dobija broj koji ce nacrtati uz stavku menija. Bez ovoga bi morala da zove
 ' GetNedovrseno po imenu, a to je tacno ono sto ceo ugovor izbegava.
 Public Function ScrBrojac(ByVal kljuc As String) As Long
-    Dim m As String
+    Dim m As String, v As Variant
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) = 0 Then Exit Function
     Err.Clear
-    ScrBrojac = CLng(Application.Run(m & ".Scr_Brojac"))
-    If Err.Number <> 0 Then
-        ScrBrojac = 0
-        Err.Clear
-    End If
+    v = Application.Run(m & ".Scr_Brojac")
+    If ScrRunIshod(v, m & ".Scr_Brojac") = SCR_RUN_VRATIO Then ScrBrojac = CLng(v)
+    Err.Clear
 End Function
 
 ' Broji li podnozje KOMADE umesto dinara na ovom ekranu.
@@ -569,16 +705,14 @@ End Function
 ' Ekran koji ovo ne implementira dobija False -- dinari. Ljuska ovim ne saznaje
 ' NISTA o ekranu, isto kao kod ScrBrojac.
 Public Function ScrBrojiKomade(ByVal kljuc As String) As Boolean
-    Dim m As String
+    Dim m As String, v As Variant
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) = 0 Then Exit Function
     Err.Clear
-    ScrBrojiKomade = CBool(Application.Run(m & ".Scr_BrojiKomade"))
-    If Err.Number <> 0 Then
-        ScrBrojiKomade = False
-        Err.Clear
-    End If
+    v = Application.Run(m & ".Scr_BrojiKomade")
+    If ScrRunIshod(v, m & ".Scr_BrojiKomade") = SCR_RUN_VRATIO Then ScrBrojiKomade = CBool(v)
+    Err.Clear
 End Function
 
 Public Function ScrRadnje(ByVal kljuc As String) As String
@@ -592,16 +726,109 @@ End Function
 ' zna sta su i sta se sa njima radi. Vraca "" kad je proslo, inace poruku za
 ' operatera (jedan razmak = operater je odustao, ne prikazuje se nista).
 ' Ekran u isti recnik upisuje "fokus", "rezultat" i "poruke".
+'
+' NEUSPEH JE SAMO NEVRACEN REZULTAT (KI-011, UI-ISHOD-01). Izmereno sondom
+' 13.10.2026:
+'   - makro koji DIGNE gresku kroz Application.Run je NE vraca pozivaocu, nego
+'     otvara runtime dijalog -- pa "greska u Err posle Run-a" nikad nije bila
+'     pad Scr_Save;
+'   - Run koji makro ne moze da pokrene (1004) ne vraca nista -- to JESTE
+'     neuspeh, upis se nije ni desio;
+'   - makro koji VRATI rezultat a ostavi gresku u Err vraca i jedno i drugo.
+' Treci slucaj je do KI-011 citan kao neuspeh: revers je bio snimljen, a ljuska je
+' javila "Radnja nije uspela", nije ocistila formu ni osvezila listu, pa je
+' operater isti revers snimio dvaput. Sada vazi ono sto je ekran VRATIO, a
+' zaostala greska ide u ScrZaostalaGreska i u log -- vidljiva, ne progutana.
 Public Function ScrSave(ByVal kljuc As String, ByVal polja As Object) As String
-    Dim m As String
+    Dim m As String, v As Variant, ishodUpisa As Long
     ScrLastErr = ""
+    ScrZaostalaGreska = ""
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
-    If Len(m) = 0 Then Exit Function
-    Err.Clear
-    ScrSave = CStr(Application.Run(m & ".Scr_Save", polja))
-    If Err.Number <> 0 Then
-        ScrLastErr = m & ".Scr_Save -> " & Err.Number & " " & Err.description
+    ' Ekran bez modula u registru: nijedan pisac nije pozvan, pa to JE neuspeh
+    ' (review #419, P2). Prazan rezultat uz prazan ScrLastErr CommitDokument cita
+    ' kao upis -- ocistio bi formu i javio "sacuvan" bez dokumenta.
+    If Len(m) = 0 Then
+        ScrLastErr = "modUiScreens.ScrSave: ekran '" & kljuc & "' nema modul u registru"
         Err.Clear
+        Exit Function
     End If
+    Err.Clear
+    v = Application.Run(m & ".Scr_Save", polja)
+    ishodUpisa = ScrRunIshod(v, m & ".Scr_Save")
+    If ishodUpisa = SCR_RUN_VRATIO Then
+        ScrSave = CStr(v)
+    Else
+        ScrLastErr = m & ".Scr_Save -> " & Err.Number & " " & Err.description
+    End If
+    Err.Clear
+End Function
+
+' Pad koji je clan zabelezio od poslednjeg preuzimanja; vraca ga i BRISE.
+' Citalac ga zove DVAPUT: pre Run-a (odbacuje pad koji nije iz ovog poziva --
+' clan pozvan direktno, mimo citaoca, ostavlja ga u kanalu) i posle Run-a. Tako
+' i ugnjezden citalac (radnja koja osvezi mrezu) preuzme SVOJ pad, pa spoljni
+' ne dobije tudji. Bez On Error naredbe, iz istog razloga kao ScrRunIshod.
+Public Function ScrPadPreuzmi() As String
+    ScrPadPreuzmi = mPadClana
+    mPadClana = ""
+End Function
+
+' Zove ga CLAN UGOVORA iz svog handlera (UI-PAD-01): upisuje pad u kanal i ERROR
+' u log. Jedna implementacija za sve clanove -- clan nosi samo branu i ime.
+' Err se cita PRVI, pre bilo kog poziva. Izvor greske ide u zapis kad nosi ime
+' (funkcija liste ga dize sa korakom, npr. "modScrFakture.RedoviFakture[fakture]"),
+' jer je to ono sto ReloadGrid prikazuje posle "na koraku:". Err se ovde ne brise:
+' izlaz iz handlera clana ga brise sam (sonda 15.10.2026).
+'
+' Oblik je "clan [izvor] -> broj opis": izvor ide PRE opisa. Opis nema granicu
+' duzine (greska seme nabraja celo zaglavlje), a traka poruke odseca KRAJ -- pa
+' je korak, dok je stajao iza opisa, ispadao sa ekrana (rucna provera #423).
+Public Sub ScrPadZabelezi(ByVal clan As String)
+    Dim errNum As Long, errSrc As String, errDesc As String
+    errNum = Err.Number: errSrc = Err.Source: errDesc = Err.description
+    mPadClana = clan
+    If InStr(1, errSrc, ".", vbBinaryCompare) > 0 Then _
+        mPadClana = mPadClana & " [" & errSrc & "]"
+    mPadClana = mPadClana & " -> " & errNum & " " & errDesc
+    LogError clan, "pad clana ugovora (KI-016): " & errDesc, errNum, LOG_ERROR, errSrc
+End Sub
+
+' ISHOD Application.Run NAD CLANOM UGOVORA -- UI-ISHOD-01 za ceo ugovor ekrana
+' (KI-011 za Scr_Save, KI-014 za ostale). Jedno pravilo za sve citaoce: do
+' KI-014 je svaki citao Err.Number po svom, i svaki ga je tumacio drugacije.
+'
+' Zove se ODMAH posle Run-a, sa onim sto je Run vratio, pre bilo cega sto bi
+' moglo da obrise Err. Izmereno sondom (13. i 14.10.2026):
+'   - clan koji VRATI vrednost a ostavi gresku u Err vraca i jedno i drugo;
+'     Boolean/Long/String/niz su tada UVEK ne-Empty -> SCR_RUN_VRATIO, a greska
+'     je ZAOSTATAK pomocnog koraka: ScrZaostalaGreska + WARN, Err se brise;
+'   - clan koji se ne izvrsi ne vraca nista: 1004 (nema ga) -> SCR_RUN_NEMA,
+'     druga greska (449, pogresan potpis) -> SCR_RUN_PAO. Err OSTAJE pozivaocu
+'     da ga upise u ScrLastErr;
+'   - Empty uz Err = 0 je clan koji je vratio Empty -> SCR_RUN_PRAZNO.
+' Variant clan koji vrati Empty UZ zaostatak, i Sub uz zaostatak, nerazlucivi su
+' od nepokrenutog clana (isti oblik). Zato ScrBuild (Sub) i dalje cita Err.
+' Clan koji gresku DIGNE ovde ne stize (v. POZIV gore); pad koji clan uhvati
+' nosi kanal (ScrPadPreuzmi), a citalac ga gleda PRE ovog pomocnika.
+'
+' Bez On Error naredbe -- ona bi obrisala Err koji pozivalac jos treba da
+' procita. v je ByRef: Scr_Rows vraca celu mrezu, ByVal bi je kopirao.
+Public Function ScrRunIshod(ByRef v As Variant, ByVal poziv As String) As Long
+    If IsEmpty(v) Then
+        If Err.Number = 0 Then
+            ScrRunIshod = SCR_RUN_PRAZNO
+        ElseIf Err.Number = 1004 Then
+            ScrRunIshod = SCR_RUN_NEMA
+        Else
+            ScrRunIshod = SCR_RUN_PAO
+        End If
+        Exit Function
+    End If
+    ScrRunIshod = SCR_RUN_VRATIO
+    If Err.Number = 0 Then Exit Function
+    ScrZaostalaGreska = poziv & ": " & Err.Number & " " & Err.description
+    Err.Clear
+    LogWarn "modUiScreens.ScrRunIshod", "zaostala greska posle " & poziv & _
+            " (KI-014): " & ScrZaostalaGreska
 End Function
