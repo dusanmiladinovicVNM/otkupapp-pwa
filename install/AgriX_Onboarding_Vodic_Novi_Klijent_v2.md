@@ -2179,6 +2179,77 @@ Proveri:
 [ ] Clear site data za app.agrix.rs.
 ```
 
+## 46.6 Excel: `Sub or Function not defined` na `B64_SPLASH2` (`modLogo`)
+
+Simptom:
+
+```text
+Na dev računaru .xlsm radi, a kod klijenta start pada u modLogo.Base64Za na
+B64_SPLASH2 (ili B64_KARTICA2 / B64_MINI2): "Compile error: Sub or Function not defined".
+```
+
+Uzrok: `modLogo` je u svesci kod klijenta **odsečen** (`docs/KNOWN_ISSUES.md`, `KI-030`).
+Izvorni `src-vba/modLogo.bas` je ispravan. Mehanizam još nije poznat.
+
+Prvo:
+
+```text
+[ ] OK → Run → Reset.
+[ ] NE snimati svesku (ni Ctrl+S, ni čekati autosave) — snimljen odsečen modul ostaje u fajlu.
+[ ] Zatvori bez snimanja.
+```
+
+Ako ima vremena, pre zaobilaznice zapiši podatke za `KI-030`:
+
+```text
+[ ] SHA-256 i veličina .xlsm u bajtovima na dev računaru i kod klijenta (posle prenosa, pre otvaranja).
+[ ] Broj linija modLogo kod klijenta: Alt+F11 → modLogo → Ctrl+End → "Ln" (ceo modul = 397).
+[ ] File → Account → About Excel na oba računara (verzija, build, 32/64-bit).
+[ ] Koji antivirus je kod klijenta i šta piše u njegovom logu u vreme prenosa.
+```
+
+Hash na dev računaru (Git Bash):
+
+```bash
+sha256sum ~/Desktop/AgriX.xlsm
+```
+
+Hash kod klijenta (PowerShell):
+
+```powershell
+Get-FileHash C:\AgriX\AgriX.xlsm -Algorithm SHA256
+```
+
+Zaobilaznica — sveska bez `modLogo`, modul se uvozi kod klijenta (C002, 28.10.2026).
+
+Na dev računaru:
+
+```text
+1. Kopiraj .xlsm u nov folder i otvori ga. NE klikći "Enable Content".
+2. Alt+F11 → desni klik na modLogo → Remove → Export: No. Ctrl+S, zatvori.
+3. Pošalji tu svesku i src-vba/modLogo.bas kao dva odvojena fajla.
+   Zapiši veličinu modLogo.bas u bajtovima (iz repoa: 45.074).
+```
+
+Kod klijenta:
+
+```text
+4. Proveri veličinu modLogo.bas u bajtovima — mora biti ista kao na dev računaru.
+   Ako nije: stani, nešto menja fajl pri prenosu; upiši u KI-030.
+5. Otvori svesku. Ako se makroi pokrenu pre uvoza, start stane na LOGO_BG_SPLASH
+   u modUiFaze.GradiBoot — očekivano, modula još nema: Run → Reset.
+6. Alt+F11 → File → Import File → modLogo.bas.
+   Modul mora da se zove modLogo, ne modLogo1.
+7. modLogo → Ctrl+End → "Ln 397".
+8. Debug → Compile VBAProject — bez greške. Snimi.
+9. Zatvori, otvori ponovo, Enable Content → program se pokreće sa logom;
+   modLogo → Ctrl+End → "Ln 397".
+   Ako je modul opet odsečen: nešto menja snimljen fajl — log antivirusa, pa KI-030.
+```
+
+Na C002 su potvrđeni uvoz, Compile i rad programa. Nisu potvrđeni veličina `.bas`
+(korak 4), broj linija (koraci 7 i 9) i ponovno otvaranje (korak 9).
+
 ---
 
 # 47. Zaključak
