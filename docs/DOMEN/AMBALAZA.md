@@ -2833,6 +2833,38 @@ Koliko firma duguje partnerima?      izvedeno iz VrstaKretanja
 
 Sve iz jednog append-only modela, bez ijedne rucne kes kolone.
 
+### 6.14a Bilans ambalaže — svi odgovori na jednom mestu (`AMB-BIL-01/02`, 29.10.2026)
+
+Pitanja iz 6.14 su do sada imala samo **čitaoce**. Izveštaj ih je prikazivao jedan
+po jedan nalog, a pogled firme nije postojao (plan 6.13, korak 5: „ukupno u
+opticaju, pozajmljeno od partnera"). Bilans ih daje zajedno, po tipu gajbe, za
+period, kao listu Izveštaji → OM → „Bilans amb.":
+
+```
+GDE      stanice | vozaci | kooperanti | kupci | (Firma) -> OPTICAJ    na datumDo
+CIJE     NASE = nabavka - otpis ; TUDJE = obaveza (po partneru) ;
+         NEUSKLADJENO = OPTICAJ - NASE - TUDJE                       na datumDo
+GRANICA  POCETAK + nabavka + pokrice + pozajmica + otpis = KRAJ     u periodu
+```
+
+- **Granica je iz matrice, ne iz spiska call-site-ova.** Kretanje preko granice
+  mogu imati samo vrste kojima `AmbKlaseVrste` daje `GRANICA` (nabavka, ulaz
+  tuđe, otpis). Stavku bira ugovor (`AmbBilansStavkaGranice`), a kapija
+  potpunosti (`AmbBilansGranicaNepotpuna`) obara novu vrstu na granici koja nema
+  stavku. Čitalac na takvom redu staje, ne preskače ga.
+- **Ulaz pozajmice nije pokriće**, iako je ista vrsta: prepoznaje se po
+  dokumentu koji nosi `POZAJMICA_PARTNERA` (`AMB-INV-13`).
+- **Naše** su vrste na granici koje su zahtev (`AmbVrstaJeZahtev`): nabavka i
+  otpis. Ulaz tuđe je posledica i ide u obavezu. Otpis tuđih gajbi umanjuje
+  naše, a obaveza ostaje (6.12m: firma snosi lom).
+- **`NEUSKLADJENO` je signal (`AMB-BIL-02`), ne invarijanta.** Danas je 0, jer
+  `VRACANJE_TUDJE` nema pisca. Kad ga dobije, ostavlja gajbe na saldu partnera
+  (`KI-024`), pa razlika postaje vidljiva upravo ovde.
+- **Datum:** isto kao kartica (`ODL-26`). `KRAJ` (granica) i `OPTICAJ` (salda)
+  računaju se odvojeno, a jednakost meri granicu perioda.
+
+*Provera:* `modTest` 290–292 · sabotaže `amb-bil-*`.
+
 ### 6.15 Cena — posteno
 
 Najveci redizajn jedne tabele u refaktoru: cetiri funkcije salda, tri izvestaja +

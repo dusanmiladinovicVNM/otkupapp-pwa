@@ -394,6 +394,9 @@ Public Sub RunAllTests()
     RunOne 287
     RunOne 288
     RunOne 289
+    RunOne 290
+    RunOne 291
+    RunOne 292
     RunOne 13
     RunOne 14
     RunOne 15
@@ -978,6 +981,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 287: TestName = "T_AmbPoslovno_OtkupniListKaoKartica"
         Case 288: TestName = "T_AmbPoslovno_OtpisUPregleduOM"
         Case 289: TestName = "T_AmbPoslovno_ReversKooperantaPoslovno"
+        Case 290: TestName = "T_AmbBilans_GdeCijeGranica"
+        Case 291: TestName = "T_AmbBilans_SignalIKvar"
+        Case 292: TestName = "T_AmbBilans_ListaIzvestaja"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1275,6 +1281,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 287: T_AmbPoslovno_OtkupniListKaoKartica
         Case 288: T_AmbPoslovno_OtpisUPregleduOM
         Case 289: T_AmbPoslovno_ReversKooperantaPoslovno
+        Case 290: T_AmbBilans_GdeCijeGranica
+        Case 291: T_AmbBilans_SignalIKvar
+        Case 292: T_AmbBilans_ListaIzvestaja
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -12966,6 +12975,292 @@ Private Sub T_AmbPoslovno_ReversKooperantaPoslovno()
              "sledeci revers pocinje tamo gde je prethodni papir stao"
 End Sub
 
+' ============================================================
+' 290. AMB-BIL-01: BILANS AMBALAZE -- GDE SU, CIJE SU, GRANICA U PERIODU.
+' ============================================================
+' Pogled firme na celu knjigu, po tipu (modAmbalaza.AmbBilansPodaci). Tok
+' (nov tip T, FX_STANICA, FX_KOOPERANT, kupac FX_KUPAC, vozac FX_VOZAC), period
+' D1..D3:
+'   D0  nabavka 100                         (pre perioda -> POCETAK)
+'   D1  nabavka 20; kooperant vrati 15 sa saldom 0 (pokrice 15); izdavanje 30
+'   D2  pozajmica kupca 10 vozacu; otpis 5 na stanici; nabavka 7 pa njen storno
+'   D3  otpis 2 kod kooperanta
+'   D4  nabavka 50                          (posle perioda -> nigde)
+' Na D3: stanica 100, vozac 10, kooperant 28, kupac 0 = 138; nase 120 - 7 = 113;
+' tudje: kooperant 15, kupac 10; granica: 100 + 20 + 15 + 10 - 7 = 138.
+' Semanticki nivo: KOMADI po (tip, vrsta naloga) i po (tip, partner); pozajmica
+' se od pokrica razlikuje po identitetu DOKUMENTA (AMB-INV-13), ne po broju.
+' Fixture: normal production state (sve kroz produkcione pisce).
+' SABOTAZE: amb-bil-bez-reza-datumdo, amb-bil-nase-sa-ulazom,
+' amb-bil-pocetak-ukljucuje-od, amb-bil-period-bez-prvog-dana,
+' amb-bil-pozajmica-kao-pokrice.
+Private Sub T_AmbBilans_GdeCijeGranica()
+    Dim tip As String, d0 As Date, d1 As Date, d2 As Date, d3 As Date, d4 As Date
+    Dim nab7 As String, bP As String, dP As String, dI As String, dPoz As String
+    Dim dO1 As String, dO2 As String, storno7 As Boolean
+    Dim r As Variant, rDanas As Variant
+
+    tip = KartNoviTipAmb("BIL")
+    d0 = Date - 40
+    d1 = Date - 30
+    d2 = Date - 20
+    d3 = Date - 10
+    d4 = Date - 5
+
+    modAmbalaza.NabaviAmbalazu_TX d0, FX_STANICA, tip, 100
+    modAmbalaza.NabaviAmbalazu_TX d1, FX_STANICA, tip, 20
+    dP = KartPovratSaPokricem(tip, 15, bP, d1)
+    dI = modAmbalaza.UpisiReversAmbalaze_TX(d1, "", FX_STANICA, tip, 30, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    dPoz = modAmbalaza.UpisiPozajmicuKupca_TX(d2, "POZ-" & tip, FX_KUPAC, FX_VOZAC, tip, 10, "test 290")
+    dO1 = modAmbalaza.OtpisiAmbalazu_TX(d2, FX_STANICA, AMB_NALOG_STANICA, FX_STANICA, tip, 5, "lom -- test 290")
+    nab7 = modAmbalaza.NabaviAmbalazu_TX(d2, FX_STANICA, tip, 7)
+    storno7 = modAmbalaza.StornirajAmbDokument_TX(nab7)
+    dO2 = modAmbalaza.OtpisiAmbalazu_TX(d3, FX_STANICA, AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip, 2, "gubitak -- test 290")
+    modAmbalaza.NabaviAmbalazu_TX d4, FX_STANICA, tip, 50
+
+    r = modAmbalaza.AmbBilansPodaci(d1, d3)
+    rDanas = modAmbalaza.AmbBilansPodaci(d1, Date)
+
+    AssertEq (Len(dP) > 0 And Len(dI) > 0 And Len(dPoz) > 0 And Len(dO1) > 0 And _
+              Len(dO2) > 0 And Len(nab7) > 0 And storno7), True, _
+             "preduslov: svi dokumenti toka su upisani, nabavka 7 je stornirana"
+    AssertEq BilKol(r, tip, AMB_BIL_GDE, AMB_NALOG_STANICA), 100, _
+             "bilans GDE: kraj perioda ne nosi kasniju nabavku -- otkupna mesta drze 100"
+    AssertEq BilKol(r, tip, AMB_BIL_GDE, AMB_NALOG_KOOPERANT) & "|" & _
+             BilKol(r, tip, AMB_BIL_GDE, AMB_NALOG_VOZAC) & "|" & _
+             BilKol(r, tip, AMB_BIL_GDE, AMB_NALOG_KUPAC), "28|10|0", _
+             "bilans GDE: kooperant drzi 28, vozac 10, kupac 0"
+    AssertEq BilKol(r, tip, AMB_BIL_GDE, AMB_BIL_OPTICAJ) & "|" & _
+             BilIma(r, tip, AMB_BIL_GDE, AMB_NALOG_FIRMA), "138|False", _
+             "bilans GDE: ukupno u opticaju je zbir realnih naloga (138), Firma bez reda"
+    AssertEq BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_NASE), 113, _
+             "bilans CIJE: nase = nabavka - otpis (113)"
+    AssertEq BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_TUDJE) & "|" & _
+             BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_PARTNER, FX_KOOPERANT) & "|" & _
+             BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_PARTNER, FX_KUPAC), "25|15|10", _
+             "bilans CIJE: tudje je obaveza po partneru (kooperant 15, kupac 10)"
+    AssertEq BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_NEUSKLADJENO), 0, _
+             "bilans CIJE: neuskladjeno je 0 kad vracanja tudjih gajbi nema"
+    AssertEq BilKol(r, tip, AMB_BIL_GRANICA, AMB_BIL_POCETAK), 100, _
+             "bilans GRANICA: pocetak je stanje pre prvog dana perioda (100)"
+    AssertEq BilKol(r, tip, AMB_BIL_GRANICA, AMB_BIL_NABAVKA), 20, _
+             "bilans GRANICA: nabavka prvog dana ulazi u period, a storno je ponistava (20)"
+    AssertEq BilKol(r, tip, AMB_BIL_GRANICA, AMB_BIL_POKRICE) & "|" & _
+             BilKol(r, tip, AMB_BIL_GRANICA, AMB_BIL_POZAJMICA), "15|10", _
+             "bilans GRANICA: pokrice i ulaz pozajmice kupca su odvojene stavke (15|10)"
+    AssertEq BilKol(r, tip, AMB_BIL_GRANICA, AMB_BIL_OTPIS), -7, _
+             "bilans GRANICA: otpis izlazi iz opticaja (-7)"
+    AssertEq BilKol(r, tip, AMB_BIL_GRANICA, AMB_BIL_KRAJ) & "|" & _
+             BilKol(r, tip, AMB_BIL_GDE, AMB_BIL_OPTICAJ), "138|138", _
+             "bilans GRANICA: kraj = pocetak + kretanje = ukupno u opticaju (138)"
+    AssertEq BilKol(rDanas, tip, AMB_BIL_GDE, AMB_NALOG_STANICA) & "|" & _
+             BilKol(rDanas, tip, AMB_BIL_GDE, AMB_NALOG_KOOPERANT) & "|" & _
+             BilKol(rDanas, tip, AMB_BIL_GDE, AMB_NALOG_VOZAC) & "|" & _
+             BilKol(rDanas, tip, AMB_BIL_CIJE, AMB_BIL_PARTNER, FX_KOOPERANT) & "|" & _
+             BilKol(rDanas, tip, AMB_BIL_CIJE, AMB_BIL_PARTNER, FX_KUPAC), _
+             modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, tip) & "|" & _
+             modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip) & "|" & _
+             modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, tip) & "|" & _
+             modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip) & "|" & _
+             modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KUPAC, FX_KUPAC, tip), _
+             "bilans do danas se slaze sa kanonskim citaocima (saldo naloga, obaveza partneru)"
+End Sub
+
+' ============================================================
+' 291. AMB-BIL-02: NEUSKLADJENO JE SIGNAL, A KVAR KNJIGE NIJE BROJ.
+' ============================================================
+' (1) Kapija potpunosti: svaka vrsta koja prelazi granicu ima stavku bilansa, i
+'     nijedna druga (AmbBilansGranicaNepotpuna).
+' (2) KI-024: VRACANJE_TUDJE gasi obavezu, a gajbe ostaju na saldu partnera, pa
+'     opticaj - nase - tudje vise nije 0. Tok (nov tip T): nabavka 40; kooperant
+'     vrati 12 sa saldom 0 (pokrice 12); stanica mu vrati 12 kao VRACANJE_TUDJE.
+'     Opticaj 52, nase 40, tudje 0 -> neuskladjeno 12.
+'     Fixture: synthetic -- ugovorno ispravan red BEZ produkcionog pisca
+'     (KI-024: VRACANJE_TUDJE danas ne zove nijedan pisac; obrazac BFP 23135).
+'     Kad KI-024 dobije pisca koji vracene gajbe izvodi iz opticaja, ova tvrdnja
+'     menja premisu -- to je i namera.
+' (3) Kvar knjige (red bez odredista, obrazac 224): bilans dize gresku ugovora
+'     knjige, a ne vraca brojeve.
+' SABOTAZE: amb-bil-stavka-bez-granice, amb-bil-neuskladjeno-nula,
+' amb-bil-kvar-progutan.
+Private Sub T_AmbBilans_SignalIKvar()
+    Dim tip As String, nepotpuno As String, bP As String, dP As String
+    Dim tx As clsTransaction, dokVrac As String, ambID As String, naTipPre As String
+    Dim obaveza As Double, r As Variant, neuskl As Double
+    Dim dignuto As Boolean, razlog As String
+    Dim errNum As Long, errDesc As String
+
+    nepotpuno = modAmbalazaUgovor.AmbBilansGranicaNepotpuna()
+
+    tip = KartNoviTipAmb("BIK")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tip, 40
+    dP = KartPovratSaPokricem(tip, 12, bP)
+
+    Set tx = New clsTransaction
+    On Error GoTo EH
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokVrac = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "VRA-" & tip, Date, _
+                                           AMB_NALOG_STANICA, FX_STANICA, "KI-024 -- test 291")
+    modAmbalaza.PrenesiAmbalazu tx, Date, tip, 12, _
+                                AMB_NALOG_STANICA, FX_STANICA, AMB_NALOG_KOOPERANT, FX_KOOPERANT, _
+                                AMB_VK_VRACANJE_TUDJE, DOK_TIP_AMBALAZA_DOKUMENT, dokVrac
+    tx.CommitTx
+    Set tx = Nothing
+    On Error GoTo 0
+
+    obaveza = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip)
+    r = modAmbalaza.AmbBilansPodaci(Date, Date)
+    neuskl = BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_NEUSKLADJENO)
+
+    ' Kvar na redu ovog tipa; fixture se vraca PRE tvrdnji.
+    ambID = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_DOK_ID, dokVrac, COL_AMB_ID))
+    naTipPre = NzToText(LookupValue(TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP))
+    PostaviPoljePoPK TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP, ""
+    On Error Resume Next
+    modAmbalaza.AmbBilansPodaci Date, Date
+    dignuto = (Err.Number <> 0)
+    razlog = Err.description
+    Err.Clear
+    On Error GoTo 0
+    PostaviPoljePoPK TBL_AMBALAZA, COL_AMB_ID, ambID, COL_AMB_NA_TIP, naTipPre
+
+    AssertEq nepotpuno, "", _
+             "bilans: svaka vrsta koja prelazi granicu ima stavku, i nijedna druga"
+    AssertEq (Len(dP) > 0 And Len(dokVrac) > 0 And Len(naTipPre) > 0 And obaveza = 0), True, _
+             "preduslov: pokrice i vracanje su upisani, obaveza prema kooperantu je zatvorena"
+    AssertEq neuskl, 12, _
+             "bilans: vracene tudje gajbe ostaju u opticaju -- neuskladjeno je 12 (KI-024)"
+    AssertEq dignuto & "|" & (InStr(1, razlog, "Red knjige ", vbTextCompare) > 0), "True|True", _
+             "kvar knjige: bilans dize gresku iz ugovora knjige, ne vraca brojeve"
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_AmbBilans_SignalIKvar", errDesc
+End Sub
+
+' ============================================================
+' 292. AMB-BIL-01: LISTA "BILANS AMBALAZE" NA EKRANU IZVESTAJI.
+' ============================================================
+' Lista je pogled firme: nudi se samo pod OM, u oba rezima, bez izbora
+' entiteta; redosled je izvestajev (odeljci redom pitanja), a podnozje nema
+' zbir jer su stavke mesane. Natpisi se sastavljaju u kodu
+' ("OTKUI_IZ_BIL_" & sifra), pa ih staticki PORUKA ne vidi -- meri ih ova
+' tvrdnja. Kroz pravi Scr_Rows: redovi tipa T i njihovi komadi idu istim
+' redom kao redovi citaoca.
+' Tok (nov tip T): nabavka 9 danas.
+' Fixture: normal production state.
+' SABOTAZE: amb-bil-lista-trazi-entitet, amb-bil-lista-sort-ljuske.
+Private Sub T_AmbBilans_ListaIzvestaja()
+    Dim tip As String, dostupna As String, kolone As Variant, i As Long
+    Dim imaKg As Boolean, natpisi As String, k As Variant
+    Dim d As Variant, redovi As Variant, n As Long, rc As Variant
+    Dim ekran As String, citalac As String, prviOdeljak As String, prvaStavka As String
+    Dim sortBil As String
+
+    sortBil = KartSortListe("AMBBILANS", "OM", False)
+    modScrIzvestaji.Scr_IzTestReset
+    dostupna = modScrIzvestaji.IzListaDostupna("AMBBILANS", "OM", False) & "|" & _
+               modScrIzvestaji.IzListaDostupna("AMBBILANS", "OM", True) & "|" & _
+               modScrIzvestaji.IzListaDostupna("AMBBILANS", "Kupac", False) & "|" & _
+               modScrIzvestaji.IzListaDostupna("AMBBILANS", "Vozac", True) & "|" & _
+               modScrIzvestaji.IzListaDostupna("AMBBILANS", "Kooperant", False)
+
+    kolone = modScrIzvestaji.IzKoloneZaListu("AMBBILANS", "OM", False)
+    For i = LBound(kolone) To UBound(kolone)
+        If Split(CStr(kolone(i)), "|")(2) = "kg" Then imaKg = True
+    Next i
+
+    For Each k In Array("OTKUI_SEG_IZ_AMBBIL", "OTKUI_GRID_TITLE_IZ_AMBBIL", _
+                        "OTKUI_HDI_ODELJAK", "OTKUI_HDI_STAVKA", _
+                        "OTKUI_IZ_BIL_" & AMB_BIL_GDE, "OTKUI_IZ_BIL_" & AMB_BIL_CIJE, _
+                        "OTKUI_IZ_BIL_" & AMB_BIL_GRANICA, "OTKUI_IZ_BIL_" & AMB_BIL_OPTICAJ, _
+                        "OTKUI_IZ_BIL_" & AMB_BIL_NASE, "OTKUI_IZ_BIL_" & AMB_BIL_TUDJE, _
+                        "OTKUI_IZ_BIL_" & AMB_BIL_NEUSKLADJENO, "OTKUI_IZ_BIL_" & AMB_BIL_POCETAK, _
+                        "OTKUI_IZ_BIL_" & AMB_BIL_NABAVKA, "OTKUI_IZ_BIL_" & AMB_BIL_POKRICE, _
+                        "OTKUI_IZ_BIL_" & AMB_BIL_POZAJMICA, "OTKUI_IZ_BIL_" & AMB_BIL_OTPIS, _
+                        "OTKUI_IZ_BIL_" & AMB_BIL_KRAJ, _
+                        "OTKUI_IZ_BIL_N_" & UCase$(AMB_NALOG_STANICA), _
+                        "OTKUI_IZ_BIL_N_" & UCase$(AMB_NALOG_VOZAC), _
+                        "OTKUI_IZ_BIL_N_" & UCase$(AMB_NALOG_KOOPERANT), _
+                        "OTKUI_IZ_BIL_N_" & UCase$(AMB_NALOG_KUPAC), _
+                        "OTKUI_IZ_BIL_N_" & UCase$(AMB_NALOG_FIRMA), _
+                        "OTKUI_IZ_BIL_P_" & UCase$(AMB_NALOG_KOOPERANT), _
+                        "OTKUI_IZ_BIL_P_" & UCase$(AMB_NALOG_KUPAC))
+        If PorukaNedostaje(CStr(k)) Then natpisi = natpisi & " " & CStr(k)
+    Next k
+
+    tip = KartNoviTipAmb("BIE")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tip, 9
+
+    modScrIzvestaji.Scr_IzTestSet "AMBBILANS", "OM", False, "", CDbl(Date), CDbl(Date)
+    modScrIzvestaji.Scr_ResetCache
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    For i = 1 To n
+        If StrComp(NzToText(redovi(i, 1)), tip, vbTextCompare) = 0 Then
+            ekran = ekran & "|" & CStr(CDbl(redovi(i, 4)))
+            If Len(prviOdeljak) = 0 Then
+                prviOdeljak = NzToText(redovi(i, 2))
+                prvaStavka = NzToText(redovi(i, 3))
+            End If
+        End If
+    Next i
+    rc = modAmbalaza.AmbBilansPodaci(Date, Date)
+    For i = 1 To UBound(rc, 1)
+        If StrComp(CStr(rc(i, 1)), tip, vbTextCompare) = 0 Then
+            citalac = citalac & "|" & CStr(CDbl(rc(i, 6)))
+        End If
+    Next i
+    modScrIzvestaji.Scr_IzTestReset
+
+    AssertEq dostupna, "True|True|False|False|False", _
+             "bilans: lista postoji samo pod OM, u oba rezima"
+    AssertEq modScrIzvestaji.IzTrebaEntitet("AMBBILANS", False), False, _
+             "bilans: lista ne trazi izabran entitet"
+    AssertEq sortBil, "P", _
+             "bilans: redosled je izvestajev, ljuska ga ne sortira"
+    AssertEq imaKg & "|" & modOtkupUI.OpisImaValKolonu(kolone), "False|False", _
+             "bilans: kolone nemaju kg ni novac, pa podnozje nema zbir"
+    AssertEq Trim$(natpisi), "", _
+             "bilans: svaki odeljak, stavka i nalog ima natpis u katalogu"
+    AssertEq (Len(ekran) > 0 And ekran = citalac), True, _
+             "bilans kroz ekran: redovi tipa i komadi idu redom citaoca"
+    AssertEq prviOdeljak & "|" & prvaStavka, _
+             Poruka("OTKUI_IZ_BIL_" & AMB_BIL_GDE) & "|" & _
+             Poruka("OTKUI_IZ_BIL_N_" & UCase$(AMB_NALOG_STANICA)), _
+             "bilans kroz ekran: prvi red je odeljak GDE, stavka otkupna mesta"
+End Sub
+
+' Kolicina reda bilansa (AmbBilansPodaci) za tip, odeljak i stavku; partner se
+' bira po ID-u. -999999 kad reda nema -- da "nema reda" ne izgleda kao 0.
+Private Function BilKol(ByVal r As Variant, ByVal tip As String, ByVal odeljak As String, _
+                        ByVal stavka As String, Optional ByVal nalogID As String = "") As Double
+    Dim i As Long
+    BilKol = -999999
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 1)), tip, vbTextCompare) = 0 And CStr(r(i, 2)) = odeljak And _
+           CStr(r(i, 3)) = stavka Then
+            If Len(nalogID) = 0 Or StrComp(CStr(r(i, 5)), nalogID, vbTextCompare) = 0 Then
+                BilKol = CDbl(r(i, 6))
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+Private Function BilIma(ByVal r As Variant, ByVal tip As String, ByVal odeljak As String, _
+                        ByVal stavka As String) As Boolean
+    BilIma = (BilKol(r, tip, odeljak, stavka) <> -999999)
+End Function
+
 
 ' "P" kad lista trazi poslovni redosled, "-" kad nema misljenje.
 Private Function KartSortListe(ByVal lista As String, ByVal tip As String, _
@@ -12995,13 +13290,15 @@ End Function
 ' Revers POVRATA kooperanta FX_STANICA koji je veci od onoga sto kooperant drzi:
 ' pisac tada trazi potvrdu manjka i dopisuje pokrice (ULAZ_TUDJE) -- isti put
 ' kao otkup uz potvrdjen manjak. Potvrda se racuna JAVNIM racunom pisca.
-' Vraca AmbDokID; outBroj je poslovni broj dokumenta.
+' Vraca AmbDokID; outBroj je poslovni broj dokumenta. datum = 0 znaci danas.
 Private Function KartPovratSaPokricem(ByVal tip As String, ByVal kol As Double, _
-                                      ByRef outBroj As String) As String
+                                      ByRef outBroj As String, _
+                                      Optional ByVal datum As Date = 0) As String
     Dim tx As clsTransaction, dokID As String, manjak As Double
     Dim errNum As Long, errDesc As String
 
-    outBroj = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, Date)
+    If datum = 0 Then datum = Date
+    outBroj = modBrojevi.GenerateBrojAmbDokumenta(AMB_NALOG_STANICA, FX_STANICA, datum)
     manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip, kol)
 
     Set tx = New clsTransaction
@@ -13009,9 +13306,9 @@ Private Function KartPovratSaPokricem(ByVal tip As String, ByVal kol As Double, 
     tx.BeginTx
     tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
     tx.AddTableSnapshot TBL_AMBALAZA
-    dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, outBroj, Date, _
+    dokID = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, outBroj, datum, _
                                          AMB_NALOG_STANICA, FX_STANICA, "povrat uz pokrice")
-    modAmbalaza.PrenesiAmbalazu tx, Date, tip, kol, _
+    modAmbalaza.PrenesiAmbalazu tx, datum, tip, kol, _
                                 AMB_NALOG_KOOPERANT, FX_KOOPERANT, AMB_NALOG_STANICA, FX_STANICA, _
                                 AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokID, manjak
     tx.CommitTx
@@ -19788,7 +20085,7 @@ Private Sub T_Izv_UgovorEkrana()
              "modul odgovara na ugovor -- stavka menija vise nije prigusena"
 
     ' Od kruga 5 Scr_Liste vraca tabove ZA TEKUCI TIP (kontekstni tabovi);
-    ' pun katalog od deset lista se meri kao UNIJA preko sva cetiri tipa.
+    ' pun katalog lista se meri kao UNIJA preko sva cetiri tipa.
     Dim unija As Object, t As Variant, k2 As Variant
     Set unija = CreateObject("Scripting.Dictionary")
     For Each t In Array("OM", "Kupac", "Vozac", "Kooperant")
@@ -19799,8 +20096,10 @@ Private Sub T_Izv_UgovorEkrana()
             unija(Split(CStr(liste(i)), "|")(0)) = True
         Next i
     Next t
-    AssertEq unija.count, 11, _
-             "jedanaest lista deljene mreze (unija po tipovima; +RANG od kruga 8)"
+    ' PREMISA PROMENJENA (AMB-BIL-01, test 292): +AMBBILANS pod OM. Bazen
+    ' prekidaca je PO TIPU (gore), a OM sada ima devet lista -- slot ostaje.
+    AssertEq unija.count, 12, _
+             "dvanaest lista deljene mreze (unija po tipovima; +RANG od kruga 8, +AMBBILANS)"
     For Each k2 In unija.Keys
         kljuc = CStr(k2)
         kolone = modScrIzvestaji.IzKoloneZaListu(kljuc, "OM")

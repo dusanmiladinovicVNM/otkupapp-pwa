@@ -10447,6 +10447,100 @@ SABOTAZE = {
         "T_AmbPoslovno_ReversKooperantaPoslovno",
         "revers kooperanta uz pokrice: pocetno je stanje pre dokumenta, novo je poslovno",
     ),
+    # --- AMB-BIL-01/02: bilans ambalaze (testovi 290-292) ---
+    # Bilans ne sece po datumDo: kasnija nabavka ulazi u stanje na kraju perioda.
+    "amb-bil-bez-reza-datumdo": (
+        "modAmbalaza.bas",
+        "        If d > dDo Then GoTo SledeciRedBilansa\n",
+        "        ' SABOTAZA: bez reza po datumDo\n",
+        "T_AmbBilans_GdeCijeGranica",
+        "bilans GDE: kraj perioda ne nosi kasniju nabavku -- otkupna mesta drze 100",
+    ),
+    # Ulaz tudje ambalaze se racuna kao NASE gajbe (nase 138 umesto 113).
+    "amb-bil-nase-sa-ulazom": (
+        "modAmbalaza.bas",
+        "            If modAmbalazaUgovor.AmbVrstaJeZahtev(vrsta) Then\n"
+        "                BilDodaj acc, kt & sep & AMB_BIL_NASE, znak\n",
+        "            If True Then   ' SABOTAZA: ulaz tudje ulazi u nase\n"
+        "                BilDodaj acc, kt & sep & AMB_BIL_NASE, znak\n",
+        "T_AmbBilans_GdeCijeGranica",
+        "bilans CIJE: nase = nabavka - otpis (113)",
+    ),
+    # Prvi dan perioda ulazi i u POCETAK (granica perioda dva puta).
+    "amb-bil-pocetak-ukljucuje-od": (
+        "modAmbalaza.bas",
+        "            If d < dOd Then BilDodaj acc, kt & sep & AMB_BIL_POCETAK, q\n",
+        "            If d <= dOd Then BilDodaj acc, kt & sep & AMB_BIL_POCETAK, q   ' SABOTAZA\n",
+        "T_AmbBilans_GdeCijeGranica",
+        "bilans GRANICA: pocetak je stanje pre prvog dana perioda (100)",
+    ),
+    # Kretanje prvog dana perioda ne ulazi u period (nabavka 20 -> 0).
+    "amb-bil-period-bez-prvog-dana": (
+        "modAmbalaza.bas",
+        "            If d >= dOd Then BilDodaj acc, kt & sep & AMB_BIL_GRANICA & sep & stavka, znak\n",
+        "            If d > dOd Then BilDodaj acc, kt & sep & AMB_BIL_GRANICA & sep & stavka, znak   ' SABOTAZA\n",
+        "T_AmbBilans_GdeCijeGranica",
+        "bilans GRANICA: nabavka prvog dana ulazi u period, a storno je ponistava (20)",
+    ),
+    # Ulaz pozajmice kupca se vodi kao pokrice deficita (15|10 -> 25|0).
+    "amb-bil-pozajmica-kao-pokrice": (
+        "modAmbalaza.bas",
+        "            If stavka = AMB_BIL_POKRICE Then\n",
+        "            If False Then   ' SABOTAZA: pozajmica kao pokrice\n",
+        "T_AmbBilans_GdeCijeGranica",
+        "bilans GRANICA: pokrice i ulaz pozajmice kupca su odvojene stavke (15|10)",
+    ),
+    # Signal KI-024 ugasen: neuskladjeno je uvek 0. Test 290 to ne vidi (tamo i
+    # jeste 0) -- vidi ga samo 291, sa vracanjem tudjih gajbi.
+    "amb-bil-neuskladjeno-nula": (
+        "modAmbalaza.bas",
+        "               opticaj - nase - tudje\n",
+        "               0   ' SABOTAZA: neuskladjeno uvek 0\n",
+        "T_AmbBilans_SignalIKvar",
+        "bilans: vracene tudje gajbe ostaju u opticaju -- neuskladjeno je 12 (KI-024)",
+    ),
+    # Stavka bilansa za vrstu koja granicu ne prelazi (pozajmica je PARTNER ->
+    # SOPSTVENI): citalac je ne zove, pa je hvata samo kapija potpunosti.
+    "amb-bil-stavka-bez-granice": (
+        "modAmbalazaUgovor.bas",
+        "        Case AMB_VK_OTPIS:      AmbBilansStavkaGranice = AMB_BIL_OTPIS\n",
+        "        Case AMB_VK_OTPIS:      AmbBilansStavkaGranice = AMB_BIL_OTPIS\n"
+        "        Case AMB_VK_POZAJMICA:  AmbBilansStavkaGranice = AMB_BIL_POZAJMICA   ' SABOTAZA\n",
+        "T_AmbBilans_SignalIKvar",
+        "bilans: svaka vrsta koja prelazi granicu ima stavku, i nijedna druga",
+    ),
+    # Bilans cita knjigu mimo kapije integriteta: kvar se sakuplja umesto da
+    # se digne, pa greska (ako je ima) vise ne dolazi iz ugovora knjige.
+    "amb-bil-kvar-progutan": (
+        "modAmbalaza.bas",
+        "    Set kol = KnjigaZaCitanje(data, SRC, vrste)\n"
+        "\n"
+        "    Dim cDat As Long, cTipA As Long, cKol As Long, cVK As Long, cSt As Long\n",
+        "    Set kol = KnjigaIndeksi(SRC)   ' SABOTAZA: kvar knjige progutan\n"
+        "    Set vrste = KnjigaIntegritet(data, kol, SRC, New Collection)\n"
+        "\n"
+        "    Dim cDat As Long, cTipA As Long, cKol As Long, cVK As Long, cSt As Long\n",
+        "T_AmbBilans_SignalIKvar",
+        "kvar knjige: bilans dize gresku iz ugovora knjige, ne vraca brojeve",
+    ),
+    # Lista bilansa trazi izabran entitet, kao pojedinacni izvestaji.
+    "amb-bil-lista-trazi-entitet": (
+        "modScrIzvestaji.bas",
+        "    If kljuc = IZ_RANG Or kljuc = IZ_AMBBIL Then Exit Function\n",
+        "    If kljuc = IZ_RANG Then Exit Function   ' SABOTAZA: bilans trazi entitet\n",
+        "T_AmbBilans_ListaIzvestaja",
+        "bilans: lista ne trazi izabran entitet",
+    ),
+    # Ljuska sortira bilans po koloni, pa se odeljci mesaju.
+    "amb-bil-lista-sort-ljuske": (
+        "modScrIzvestaji.bas",
+        "            ' redom racuna -- red je deo izvestaja (AMB-BIL-01).\n"
+        "            Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
+        "            ' redom racuna -- red je deo izvestaja (AMB-BIL-01).\n"
+        "            Scr_Sort = \"\"   ' SABOTAZA: ljuska sortira bilans\n",
+        "T_AmbBilans_ListaIzvestaja",
+        "bilans: redosled je izvestajev, ljuska ga ne sortira",
+    ),
 }
 
 

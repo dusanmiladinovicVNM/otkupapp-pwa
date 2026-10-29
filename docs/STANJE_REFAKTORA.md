@@ -8139,6 +8139,39 @@
        pa `python tools/dokaz.py amb-posl-revers --grupe`, pa ručno: revers povrata uz pokriće.
      - **Sledeći brojevi:** test 290 · stavka 222 · KI-064.
 
+222. **Merge `#446` = `b5528922`** (29.10.2026). Grana `claude/trusting-hawking-2cw6z1` (`f9fdfc9b`, 2 commita
+     na `7c12aa2e`), merge commit uz proveru head-a, na izričit zahtev operatera. CI `static` zelen; VBA runtime u
+     web sesiji nije pušten — `RunAllTests` (očekivano 289/0) ostaje operateru nad `main`-om. Stavka 221 je ono
+     što je spojeno.
+
+223. **Bilans ambalaže — pogled firme na celu knjigu (`AMB-BIL-01/02`)** (29.10.2026). Pre-flight u chatu
+     28.10.2026; odluke operatera 29.10.2026: lista pod OM bez entiteta, mreža Tip | Odeljak | Stavka |
+     Komada, red „neusklađeno" uvek vidljiv, rez posle `#446`. Pravilo: `docs/DOMEN/README.md` §2,
+     `docs/DOMEN/AMBALAZA.md` 6.14a.
+
+     - **Šta je novo:** čitalac `modAmbalaza.AmbBilansPodaci(datumOd, datumDo)` u jednom prolazu daje tri
+       odeljka po tipu gajbe: gde su (fizički saldo po vrsti naloga, opticaj), čije su (naše = nabavka −
+       otpis, tuđe = obaveza po partneru, neusklađeno) i granicu u periodu (početak + nabavka + pokriće +
+       pozajmica + otpis = kraj). Izveštaj `modIzvestaj.ReportBilansAmbalaze`, lista `AMBBILANS` u
+       `modScrIzvestaji`, natpisi u `modPoruke`. Ugovor dobija šifre `AMB_BIL_*`, `AmbBilansStavkaGranice` i
+       kapiju potpunosti `AmbBilansGranicaNepotpuna`.
+     - **Šta NIJE dirano:** pisci, knjiga, storno, šema, postojeći čitaoci i izveštaji. Nema nove tabele,
+       kolone ni pisca (`who_writes --check-ownership` nepromenjen).
+     - **Pre-flight nalaz:** provera „kraj = početak + ulaz − izlaz" je identitet po matrici, pa ne može da
+       padne. Ostaje kao prikaz, a prava provera je `NEUSKLADJENO` (opticaj − naše − tuđe). Ona je 0 dok
+       `KI-024` nema pisca (`VRACANJE_TUDJE` danas niko ne zove).
+     - **Testovi:** 290 `T_AmbBilans_GdeCijeGranica` (tok D0–D4 kroz prave pisce, paritet sa
+       `AmbSaldoNaloga` i `AmbObavezaPartneru`), 291 `T_AmbBilans_SignalIKvar` (kapija potpunosti; KI-024
+       ugovorno ispravnim redom bez produkcionog pisca daje neusklađeno 12; kvar knjige diže grešku),
+       292 `T_AmbBilans_ListaIzvestaja` (lista samo pod OM, bez entiteta, poslovni redosled, bez zbira,
+       natpisi, `Scr_Rows` = čitalac). **Promenjena premisa:** `T_Izv_UgovorEkrana` meri 12 lista umesto 11.
+       **Sabotaže:** 10 × `amb-bil-*`; katalog 1040 → 1050. Python simulacija čitaoca nad tokom 290/291:
+       svaka sabotaža obara svoju tvrdnju.
+     - **NEVERIFIKOVANO:** `run_vba` u web sesiji ne radi. Treba: `python tools/run_vba.py --suite
+       RunAllTests` (292/0), `python tools/dokaz.py amb-bil --grupe`, compile, pa ručno: lista „Bilans amb."
+       pod OM, izgled i štampa.
+     - **Sledeći brojevi:** test 293 · stavka 224 · KI-064.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
