@@ -9986,6 +9986,11 @@ End Sub
 ' (OFF) -- ceo lanac se vrti, samo papir ne nastaje (isto kao 213).
 ' Redosled tvrdnji je nosec: modTest staje na prvom padu, pa snimanje nabavke
 ' stoji PRE tvrdnji o njenom dokumentu.
+' PREMISA PROMENJENA (AMB-INV-16, 29.10.2026): kolicina nabavke se racuna od
+' PRAZNIH stanice, ne od ukupnog salda. Stanica u suite-i drzi i pune iz ranijih
+' otkupa (prvi Excel prolaz: 32), pa nabavka "do ukupnog salda" vise ne otvara
+' izdavanje -- kapija praznih ga s pravom odbija. Preduslov A ostaje isti:
+' izdavanje vece od UKUPNOG salda pada na AMB-INV-07.
 Private Sub T_KI025_F7NabavkaOtvaraIzdavanje()
     Const SMER_IZD As Long = 1
     Const SMER_NAB As Long = 7
@@ -10005,7 +10010,7 @@ Private Sub T_KI025_F7NabavkaOtvaraIzdavanje()
     s0 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, FX_TIP_AMB)
     kolIzd = 5
     If s0 > 0 Then kolIzd = CLng(s0) + 5
-    kolNab = kolIzd - CLng(s0) + 2
+    kolNab = kolIzd - CLng(modAmbalaza.AmbPrazneRaspolozive(FX_STANICA, FX_TIP_AMB, Date)) + 2
 
     modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
     autoPre = NzToText(GetConfigValue(CFG_AUTO_BROJ_DOK))
@@ -13903,7 +13908,7 @@ Private Sub T_Prazne_ReversRetroIStorno()
     Dim b As String, errNum As Long, greska As String, rev As String, rev2 As String
     Dim err1 As Long, err2 As Long, err4a As Long, err4b As Long
     Dim d1 As Date, d2 As Date, d3 As Date, dok3 As String, nab3 As String
-    Dim stornoOk As Boolean, nKnj As Long, revB As String
+    Dim stornoOk As Boolean, nKnj As Long, dKnj3 As Long, revB As String
 
     t1 = KartNoviTipAmb("PRV1")
     KartOtkup t1, 10, 0, b, errNum, greska
@@ -13932,6 +13937,7 @@ Private Sub T_Prazne_ReversRetroIStorno()
     modAmbalaza.UpisiReversAmbalaze_TX Date, "", FX_STANICA, t3, 10, REV_SMER_IZDAVANJE, FX_KOOPERANT, ""
     nKnj = IspRevRedova(TBL_AMBALAZA)
     stornoOk = modAmbalaza.StornirajAmbDokument_TX(nab3)
+    dKnj3 = IspRevRedova(TBL_AMBALAZA) - nKnj
 
     t4 = KartNoviTipAmb("PRV4")
     t5 = KartNoviTipAmb("PRV5")
@@ -13951,7 +13957,7 @@ Private Sub T_Prazne_ReversRetroIStorno()
              "revers: stanica koja ima samo pune gajbe ne izdaje prazne"
     AssertEq (Len(dok3) > 0) & "|" & err2 & "|" & (Len(rev2) = 0), "True|" & AMB_ERR_PRAZNE_NEMA & "|True", _
              "unos unazad: izdavanje koje bi kasnije izdavanje ostavilo bez praznih je odbijeno"
-    AssertEq stornoOk & "|" & (IspRevRedova(TBL_AMBALAZA) - nKnj) & "|" & _
+    AssertEq stornoOk & "|" & dKnj3 & "|" & _
              NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, nab3, COL_STORNIRANO)), "False|0|", _
              "storno nabavke posle izdavanja je odbijen -- prazne bi bile ispod nule (AMB-INV-16)"
     AssertEq err4a & "|" & err4b & "|" & (Len(revB) > 0), AMB_ERR_PRAZNE_NEMA & "|0|True", _
