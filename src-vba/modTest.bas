@@ -407,6 +407,7 @@ Public Sub RunAllTests()
     RunOne 300
     RunOne 301
     RunOne 302
+    RunOne 303
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1004,6 +1005,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 300: TestName = "T_KI024_ReversJednaRadnja"
         Case 301: TestName = "T_Prazne_MatricaOtkupa"
         Case 302: TestName = "T_Prazne_ReversRetroIStorno"
+        Case 303: TestName = "T_Prazne_PredajaVozacu"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1314,6 +1316,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 300: T_KI024_ReversJednaRadnja
         Case 301: T_Prazne_MatricaOtkupa
         Case 302: T_Prazne_ReversRetroIStorno
+        Case 303: T_Prazne_PredajaVozacu
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -13951,6 +13954,77 @@ Private Sub T_Prazne_ReversRetroIStorno()
     AssertEq err4a & "|" & err4b & "|" & (Len(revB) > 0), AMB_ERR_PRAZNE_NEMA & "|0|True", _
              "tip i stanica se ne mesaju: prazne druge stanice i drugog tipa ne pokrivaju izdavanje"
 End Sub
+
+' ============================================================
+' 303. AMB-INV-16: PREDAJA PRAZNIH VOZACU JE IZDAVANJE PRAZNIH SA STANICE.
+' ============================================================
+' Pregled 29.10.2026 (P1): kapija je gledala samo izdavanje partneru, pa je
+' stanica sa 0 praznih i 10 punih predavala vozacu "prazne" (PRENOS_INTERNO), a
+' ukupni saldo (AMB-INV-07) je to pustao.
+' (1) Stanica ima samo pune (otkup 10): revers "prijem od OM" (stanica -> vozac)
+'     5 je odbijen, bez zaglavlja i bez reda knjige.
+' (2) Isto pravilo u jezgru pisca, bez obzira kome: PRENOS_INTERNO sa stanice na
+'     drugu stanicu je odbijen.
+' (3) Posle nabavke 5 ista predaja prolazi; stanici ostaje 0 praznih uz 10 punih.
+' (4) Smer vozac -> stanica ("izdato OM") stanici DAJE prazne: nije pod kapijom
+'     i povecava prazne.
+' Semanticki nivo: KOMADI po (stanica, tip), pune i prazne iz vrste kretanja.
+' Fixture: normal production state.
+' SABOTAZE: prazne-predaja-vozacu-van-kapije.
+Private Sub T_Prazne_PredajaVozacu()
+    Dim t As String, b As String, errNum As Long, greska As String
+    Dim rev1 As String, err1 As Long, nKnj As Long, nDok As Long
+    Dim dKnj As Long, dDok As Long
+    Dim tx As clsTransaction, dok2 As String, err2 As Long
+    Dim rev3 As String, prazne3 As Double, ukupno3 As Double
+    Dim rev4 As String, prazne4 As Double
+
+    t = KartNoviTipAmb("PVZ")
+    KartOtkup t, 10, 0, b, errNum, greska
+    nKnj = IspRevRedova(TBL_AMBALAZA)
+    nDok = IspRevRedova(TBL_AMBALAZA_DOKUMENT)
+    On Error Resume Next
+    rev1 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t, 5, REV_SMER_PRIJEM_OD_OM, "", FX_VOZAC)
+    err1 = Err.Number
+    Err.Clear
+    On Error GoTo 0
+    dKnj = IspRevRedova(TBL_AMBALAZA) - nKnj
+    dDok = IspRevRedova(TBL_AMBALAZA_DOKUMENT) - nDok
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    On Error Resume Next
+    dok2 = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "PVZ-" & t, Date, _
+                                        AMB_NALOG_STANICA, FX_STANICA)
+    modAmbalaza.PrenesiAmbalazu tx, Date, t, 5, AMB_NALOG_STANICA, FX_STANICA, _
+                                AMB_NALOG_STANICA, FX_STANICA_B, _
+                                AMB_VK_PRENOS_INTERNO, DOK_TIP_AMBALAZA_DOKUMENT, dok2
+    err2 = Err.Number
+    Err.Clear
+    tx.RollbackTx
+    On Error GoTo 0
+    Set tx = Nothing
+
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, t, 5, "NAB-" & t, "preduslov AMB-INV-16"
+    rev3 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t, 5, REV_SMER_PRIJEM_OD_OM, "", FX_VOZAC)
+    prazne3 = modAmbalaza.AmbPrazneRaspolozive(FX_STANICA, t, Date)
+    ukupno3 = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, t)
+
+    rev4 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t, 2, REV_SMER_IZDATO_OM, "", FX_VOZAC)
+    prazne4 = modAmbalaza.AmbPrazneRaspolozive(FX_STANICA, t, Date)
+
+    AssertEq err1 & "|" & (Len(rev1) = 0) & "|" & dKnj & "|" & dDok, AMB_ERR_PRAZNE_NEMA & "|True|0|0", _
+             "predaja vozacu: stanica koja ima samo pune ne predaje prazne -- bez zaglavlja i reda knjige"
+    AssertEq CStr(err2), CStr(AMB_ERR_PRAZNE_NEMA), _
+             "jezgro: prenos praznih sa stanice je izdavanje, bez obzira kome (druga stanica)"
+    AssertEq (Len(rev3) > 0) & "|" & prazne3 & "|" & ukupno3, "True|0|10", _
+             "posle nabavke predaja vozacu prolazi, a stanici ostaju samo pune"
+    AssertEq (Len(rev4) > 0) & "|" & prazne4, "True|2", _
+             "vozac -> stanica nije pod kapijom i stanici daje prazne"
+End Sub
+
 
 ' Kolona reda po partneru (AmbPartneriPodaci): 4 = drzi, 5 = tudje, 6 = neto;
 ' "" kad partner nema red za taj tip.

@@ -23232,19 +23232,17 @@ Private Sub Test_Amb_StornoNePraviMinus()
     otkID = CreateOtkup_TX(h, stavke, greska)
     stPosleOtkupa = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
 
-    ' --- te gajbe legitimno odu dalje, na drugu stanicu
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
-    tx.AddTableSnapshot TBL_AMBALAZA
-    dokPrenos = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "MIN-" & scenario, _
-                                             Date, AMB_NALOG_STANICA, TEST_ST_ID)
-    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 20#, _
-                AMB_NALOG_STANICA, TEST_ST_ID, _
-                AMB_NALOG_STANICA, TEST_HLAD_ST_ID, _
-                AMB_VK_PRENOS_INTERNO, DOK_TIP_AMBALAZA_DOKUMENT, dokPrenos
-    tx.CommitTx
-    Set tx = Nothing
+    ' --- te gajbe legitimno odu iz stanice
+    '
+    ' PREMISA PROMENJENA (AMB-INV-16, pregled 29.10.2026): do tada su ovih 20
+    ' odlazile na drugu stanicu kao PRENOS_INTERNO. To je prenos PRAZNIH (6.7a), a
+    ' stanica ovde drzi samo PUNE vracene otkupom -- kapija praznih ga sada s
+    ' pravom odbija. Pune sa stanice odlaze otpremnicom, ali storno otkupa u
+    ' otpremnici odbija i druga kapija, pa bi tvrdnja ispod merila nju. Otpis je
+    ' izlaz bez nove kapije (sudi mu se po ukupnom saldu, AMB-INV-14), pa test i
+    ' dalje meri samo AMB-INV-07 na stornu.
+    dokPrenos = modAmbalaza.OtpisiAmbalazu_TX(Date, TEST_ST_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                                              tipT, 20#, "lom -- " & scenario)
     stPosleDrena = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
 
     ' --- storno otkupa bi stanicu odveo u minus

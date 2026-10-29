@@ -10704,6 +10704,15 @@ SABOTAZE = {
         "T_Prazne_ReversRetroIStorno",
         "storno nabavke posle izdavanja je odbijen -- prazne bi bile ispod nule (AMB-INV-16)",
     ),
+    # Predaja praznih vozacu (PRENOS_INTERNO sa stanice) opet se sudi samo po
+    # ukupnom saldu: stanica sa 10 punih predaje 5 "praznih" (pregled 29.10.2026, P1).
+    "prazne-predaja-vozacu-van-kapije": (
+        "modAmbalazaUgovor.bas",
+        "        Case AMB_VK_IZDATA_PRAZNA, AMB_VK_VRACANJE_TUDJE, AMB_VK_PRENOS_INTERNO\n",
+        "        Case AMB_VK_IZDATA_PRAZNA, AMB_VK_VRACANJE_TUDJE   ' SABOTAZA: predaja vozacu van kapije\n",
+        "T_Prazne_PredajaVozacu",
+        "predaja vozacu: stanica koja ima samo pune ne predaje prazne -- bez zaglavlja i reda knjige",
+    ),
 }
 
 

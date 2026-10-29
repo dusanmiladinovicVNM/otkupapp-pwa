@@ -1037,15 +1037,21 @@ End Function
 
 ' KO SE SUDI PO PRAZNIM GAJBAMA (AMB-INV-16), a ne samo po ukupnom saldu.
 '
-' Samo IZDAVANJE praznih sa stanice partneru: IZDATA_PRAZNA i VRACANJE_TUDJE
-' (deo istog izdavanja, ODL-35). Svim ostalim radnjama se sudi po ukupnom saldu,
-' kao i do sada (odluka operatera 29.10.2026, tacka 1.2) -- i predaji praznih
-' vozacu (PRENOS_INTERNO), dok se o njoj ne odluci drugacije: to je jedna grana
-' ovde, ne nova kapija.
+' Svako IZDAVANJE praznih sa stanice, bez obzira kome (odluka operatera
+' 29.10.2026, tacka 1.2: "izdavanje prazne ambalaze sa stanice"):
+'   IZDATA_PRAZNA     partneru
+'   VRACANJE_TUDJE    partneru (deo istog izdavanja, ODL-35)
+'   PRENOS_INTERNO    vozacu ili drugom sopstvenom nalogu -- 6.7a: prazne izmedju
+'                     sopstvenih naloga. Bez ove grane stanica sa 0 praznih i 10
+'                     punih predaje vozacu 5 "praznih" (pregled 29.10.2026, P1).
+' Pune sa stanice odlaze samo sa robom (AMBALAZA_UZ_ROBU), a OTPIS nije predaja
+' nego izlaz iz opticaja: njima se i dalje sudi po ukupnom saldu (AMB-INV-07,
+' AMB-INV-14), kao i svim ostalim radnjama. Smer vozac -> stanica stanici DAJE
+' prazne, pa ga kapija ne gleda (izvor nije stanica).
 Public Function AmbPrazneKapijaVazi(ByVal odTip As String, ByVal vrsta As String) As Boolean
     If StrComp(Trim$(odTip), AMB_NALOG_STANICA, vbTextCompare) <> 0 Then Exit Function
     Select Case AmbVrstaKanon(vrsta)
-        Case AMB_VK_IZDATA_PRAZNA, AMB_VK_VRACANJE_TUDJE
+        Case AMB_VK_IZDATA_PRAZNA, AMB_VK_VRACANJE_TUDJE, AMB_VK_PRENOS_INTERNO
             AmbPrazneKapijaVazi = True
     End Select
 End Function

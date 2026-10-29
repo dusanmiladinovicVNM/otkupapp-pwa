@@ -4003,9 +4003,10 @@ Public Function PrenesiAmbalazu(ByVal tx As clsTransaction, _
     ' robom -- i to istim otkupom, jer KnjiziOtkupAmbalazu prvo knjizi prijem
     ' punih, pa tek onda izdavanje. "0 + 10 punih - 1 prazna = +9" je zato
     ' prolazilo, a stanica nije imala nijednu praznu. Izdavanje praznih sa stanice
-    ' (AmbPrazneKapijaVazi) zato trazi i PRAZNE, od dana izdavanja nadalje --
-    ' nezavisno od redosleda nogu u dokumentu. Kapija je u jezgru, pa vazi za
-    ' otkup, revers, sync i svakog drugog pozivaoca; odbijanje vraca celu TX.
+    ' (AmbPrazneKapijaVazi: partneru i vozacu) zato trazi i PRAZNE, od dana
+    ' izdavanja nadalje -- nezavisno od redosleda nogu u dokumentu. Kapija je u
+    ' jezgru, pa vazi za otkup, revers i svakog drugog pozivaoca; odbijanje vraca
+    ' celu TX.
     If modAmbalazaUgovor.AmbPrazneKapijaVazi(odTip, vrstaK) Then
         Dim prazne As Double
         prazne = AmbPrazneRaspolozive(odID, tipAmb, datum)
