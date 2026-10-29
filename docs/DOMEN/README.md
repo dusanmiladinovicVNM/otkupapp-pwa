@@ -314,7 +314,7 @@ entiteta, isto u oba režima. Tri odeljka, iz iste knjige, bez novog pisca:
 |---|---|---|
 | Gde su gajbe | otkupna mesta, vozači, kooperanti, kupci (Firma kad nije 0), ukupno u opticaju | fizički saldo po vrsti naloga na kraju perioda; opticaj = zbir realnih naloga (`AMBALAZA.md` 6.14) |
 | Čije su | sopstveni saldo, tuđe (i po partneru), neusklađeno | sopstveni saldo = nabavka − otpis (vrste na granici koje su zahtev) — **obračunski**, ne broj gajbi u vlasništvu: gajbe se ne vode po vlasniku, pa sme biti negativan (pozajmica 10, otpis 2 → −2: firma duguje više nego što drži); tuđe = obaveza (`AmbDoprinosObavezi`, `AMB-INV-09`) |
-| Ulaz i izlaz u periodu | početak, nabavka, tuđe: partner doneo svoje, tuđe: pozajmica kupca, otpis, kraj | kretanje preko `SpoljniSvet`; kraj = početak + kretanje = ukupno u opticaju |
+| Ulaz i izlaz u periodu | početak, nabavka, tuđe: partner doneo svoje, tuđe: pozajmica kupca, tuđe: vraćeno partneru, otpis, kraj | kretanje preko `SpoljniSvet`; kraj = početak + kretanje = ukupno u opticaju |
 
 Red ulazi po svom danu, a kontra-stav nosi dan originala, pa je storno u svakom
 periodu „kao da nije bilo" — ista istorija kao kartica (`AMB-10-ODL-26`). Ulaz
@@ -325,10 +325,11 @@ izveštaj `ReportBilansAmbalaze`. Koju vrstu na granici bilans zna, drži ugovor
 (`AmbBilansStavkaGranice`), uz kapiju potpunosti `AmbBilansGranicaNepotpuna`.
 
 **AMB-BIL-02 — „neusklađeno" je signal, ne invarijanta.** Opticaj − naše −
-tuđe je 0 dok vraćene tuđe gajbe ne ostaju u opticaju. `VRACANJE_TUDJE` gasi
-obavezu, a gajbe ostavlja na saldu partnera (`KI-024`). Danas ga ne zove nijedan
-pisac, pa je zbir 0. Kad KI-024 dobije ulaz, ovaj red pokazuje razliku dok se
-model ne ispravi. Ni jedan pisac ga ne drži; vlasnik je čitalac sa testom 291.
+tuđe je 0 dok vraćene tuđe gajbe ne ostaju u opticaju, tj. zbir `VRACANJE_TUDJE`
+minus zbir `IZLAZ_TUDJE`. Od `AMB-INV-15` (29.10.2026) živi pisac uz svako
+vraćanje piše i izlaz, pa je u živom radu 0; vraćanje bez izlaza upisuje samo
+migracija (MIG-16/17, `KI-024`). Ni jedan pisac ga ne drži; vlasnik je čitalac sa
+testom 291 (koji meri i stari oblik: vraćanje bez izlaza daje razliku).
 
 Mere ih `modTest` 290 (tri odeljka, granica perioda, storno, paritet sa
 `AmbSaldoNaloga` i `AmbObavezaPartneru`), 291 (kapija potpunosti, KI-024, kvar
@@ -346,14 +347,40 @@ broja iz iste knjige:
 | Neto | poslovni saldo: + partner drži naše, − firma duguje | kartica ambalaže (`AMB-POSL-01`) |
 
 Zbir „Tuđe" je bilans „Tuđe", a zbir „Drži" je bilans „Gde su" za kooperante i
-kupce. Drži − Tuđe − Neto = zbir `VRACANJE_TUDJE` tog partnera (`KI-024`): u
-živom radu je 0, jer tu vrstu ne zove nijedan VBA pisac, a u migriranoj svesci
-nije — migracija je upisuje po pravilu MIG-16/17 (nađeno 29.10.2026: Bajić,
+kupce. Drži − Tuđe − Neto = zbir `VRACANJE_TUDJE` tog partnera minus njegov
+`IZLAZ_TUDJE` (`KI-024`): u živom radu je 0, jer živi pisac uz vraćanje piše i
+izlaz (`AMB-INV-15`), a u migriranoj svesci nije — migracija upisuje vraćanje bez
+izlaza po pravilu MIG-16/17 (nađeno 29.10.2026: Bajić,
 0,4kg, 5 | 10 | −10, razlika 5 = vraćanje tuđe od 10.07). Red bez
 ijednog broja se ne prikazuje. Čitalac `modAmbalaza.AmbPartneriPodaci` (jedan
 prolaz; stranu partnera za obavezu bira isti `BilStranaDuga` kao bilans),
 izveštaj `ReportAmbalazaPoPartnerima` (po imenu, ljuska sme da sortira), podnožje
 nosi zbir „Drži" i „Tuđe". Mere ga `modTest` 293 i 294, sabotaže `amb-par-*`.
+
+**AMB-10-ODL-35 — izdavanje praznih kooperantu prvo vraća tuđe (odluka
+operatera 29.10.2026).** Kad firma kooperantu duguje N njegovih gajbi (obaveza,
+isti tip) i izda mu Q praznih, pisac sam deli jednu količinu: `MIN(Q, N)` je
+`VRACANJE_TUDJE`, ostatak `IZDATA_PRAZNA`. Isto na otkupu (`KolAmbIzdata`) i na
+reversu, bez novog polja i bez drugog dokumenta; lista, papir i ispravka
+prikazuju jednu radnju „Izdata prazna". Kupac nije obuhvaćen (vraćanje pozajmice
+kupcu, `KI-024` ostatak). Pravilo: `AMBALAZA.md` 6.14b.
+
+**AMB-INV-15 — vraćene tuđe gajbe izlaze iz opticaja.** Uz svaki
+`VRACANJE_TUDJE` pisac u istoj TX, na istom dokumentu, piše
+`Partner → SpoljniSvet` `IZLAZ_TUDJE_AMBALAZE` iste količine (ogledalo
+`AMB-INV-13`). Fizički saldo partnera se zbirno ne menja, obaveza pada, poslovni
+saldo vidi samo vraćanje. Nije otpis. U bilansu: „Tuđe: vraćeno partneru".
+
+**AMB-INV-16 — stanica izdaje samo prazne gajbe koje ima.** Pune gajbe primljene
+sa robom (`AMBALAZA_UZ_ROBU`) nisu prazne i ne postaju prazne same od sebe.
+Prazne se izvode iz iste knjige po vrsti kretanja (`AmbVrstaPuneGajbe`), po
+danima od datuma izdavanja nadalje (`AmbPrazneRaspolozive`). Kapija je u jezgru
+pisca (`PrenesiAmbalazu`) za izdavanje partneru sa stanice, i u stornu koji
+stanici oduzima prazne. Odbijanje imenuje manjak i vraća celu TX. Predaja praznih
+vozaču i otpis se i dalje sude po ukupnom saldu (`AMB-INV-07`).
+
+Mere ih `modTest` 295–300 (`T_KI024_*`) i 301–302 (`T_Prazne_*`), sabotaže
+`ki024-*` i `prazne-*`.
 
 ## 3) Ko šta piše
 

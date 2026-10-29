@@ -1783,9 +1783,10 @@ End Sub
 '   NETO   poslovni saldo, kao na kartici     (bez tehnickih redova, AMB-POSL-01)
 '
 ' Knjiga ne vodi gajbe po vlasniku, pa NETO + znaci da partner drzi nase, a -
-' da firma duguje. DRZI - TUDJE - NETO = zbir VRACANJE_TUDJE partnera -- isti
-' signal kao NEUSKLADJENO u bilansu (KI-024). Zivi VBA pisci tu vrstu ne zovu,
-' ali je migracija upisuje (MIG-16/17), pa u migriranoj svesci razlika postoji.
+' da firma duguje. DRZI - TUDJE - NETO = VRACANJE_TUDJE partnera minus njegov
+' IZLAZ_TUDJE -- isti signal kao NEUSKLADJENO u bilansu (KI-024). Zivi pisac uz
+' svako vracanje pise i izlaz (AMB-INV-15), pa je razlika 0; vracanje BEZ izlaza
+' upisuje migracija (MIG-16/17), pa u migriranoj svesci razlika postoji.
 ' Zbir TUDJE po partnerima = bilans CIJE/TUDJE; zbir DRZI = bilans GDE za
 ' kooperante i kupce.
 '

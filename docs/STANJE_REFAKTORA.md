@@ -8251,6 +8251,45 @@
        po tipu), ručni compile i štampa.
      - **Sledeći brojevi:** test 295 · stavka 229 · KI-065.
 
+229. **`KI-024` (kooperant) i kontrola praznih gajbi — `AMB-10-ODL-35`, `AMB-INV-15`, `AMB-INV-16`** (29.10.2026).
+     Grana `claude/trusting-hawking-2cw6z1`, na stavkama 227–228. Zadatak operatera: „KI-024 + kontrola
+     raspoloživih praznih gajbi", sa matricom od osam slučajeva i deset dodatnih provera. Pravilo:
+     `AMBALAZA.md` 6.14b, `README.md` §2.
+
+     - **Reprodukcija nad izvorom (pre koda):** (a) izdavanje kooperantu kome firma duguje je uvek bilo
+       `IZDATA_PRAZNA` — obaveza ostaje, kooperant zadužen „našim" gajbama; `VRACANJE_TUDJE` nema izlaz iz
+       opticaja. (b) Otkup knjiži prijem punih (`UZ_ROBU`) pre izdavanja, a stanica se sudi samo po ukupnom
+       saldu (`AmbDeficitZaPrenos` → `AmbSaldoNaloga`), pa 0 + 10 punih − 1 prazna prolazi.
+     - **KI-024, commit `8f05d2fe`:** pisac (`PrenesiAmbalazu`) deli jednu količinu, `MIN(izdato, obaveza)` →
+       `VRACANJE_TUDJE` + nova vrsta `IZLAZ_TUDJE_AMBALAZE` (`Partner → SpoljniSvet`, deseta, `AMB-INV-15`),
+       ostatak `IZDATA_PRAZNA`. Ugovor: matrica, `AmbVrstaJeZahtev` (izlaz je tehnički), porodica zahteva za
+       idempotenciju (`AmbVrsteZahteva`), `AmbZahtevPrvoVracaTudje`, `AmbVrstaPoslovnaRadnja` (lista, papir,
+       ispravka i prefill sabiraju radnju), stavka bilansa `VRACENO`. Ispravka otkupa meri `AMB-INV-09` posle
+       zamene (`StornoOtkup(..., odloziObavezu)` + `AmbRequireObavezeDokumenta`); običan storno ostaje odbijen.
+     - **Prazne, commit `1747ac1c`:** `AmbPrazneRaspolozive` (najmanje stanje praznih po danima od datuma
+       nadalje, iz vrste kretanja — bez nove tabele i kolone), kapija u `PrenesiAmbalazu` za izdavanje partneru
+       sa stanice (`AMB_ERR_PRAZNE_NEMA`, sa manjkom), `RequirePrazneStorna` u stornu. Predaja vozaču i otpis
+       ostaju na ukupnom saldu (tačka 1.2).
+     - **Testovi:** 295–300 `T_KI024_*` (tri primera iz odluke, otkup = revers, ponavljanje i storno, ispravka
+       posle vraćanja, bez prebijanja između kooperanata i tipova, revers kao jedna radnja), 301
+       `T_Prazne_MatricaOtkupa` (matrica od osam redova kroz pravog pisca otkupa, atomarno odbijanje), 302
+       `T_Prazne_ReversRetroIStorno` (revers, unos unazad, storno nabavke, tip i stanica).
+     - **Promenjene premise (KI-024 menja ishod):** `modTest` 283 (fizički 0, ne +5), 290 (opticaj 123, stavka
+       `VRACENO` −15), 291 (izlaz 0, pa stari oblik bez izlaza kroz `ObrisiRedKnjigePoVrsti` daje 12), 293,
+       oracle `KartAmbPoslovniOracle` (izlaz nije poslovni red); BFP enum 10, `StornoKontraStav` 4 kontra-stava,
+       `DeficitIObaveza` (podela na 3 reda, saldo 30).
+     - **Sabotaže:** 6 × `ki024-*`, 4 × `prazne-*` (katalog 1058 → 1068); osam postojećih ponovo usidreno.
+       Svaka je primenjena i vraćena: izvor posle vraćanja identičan, `vba_check` čist.
+     - **Python model** (scratchpad, van repoa) sa pravilima pisca: 42/42 očekivanja testova i BFP premisa.
+     - **Proveren nizvodni put:** PWA sync otkupa ne prenosi izdate prazne (nema polja u `modMasterSync`), pa
+       ga ni podela ni kapija ne dodiruju. BFP testovi koji izdaju sa stanice imaju posejane ili kupljene prazne.
+     - **Otvoreno:** `KI-024` ostaje OPEN — kupac (dokument vraćanja pozajmice, `ODL-24` (d)) i migracija
+       (MIG-16/17 da piše izlaz). `KI-065` (NEEDS REVIEW): stanje praznih u migriranoj svesci nije izmereno, a
+       negativno bi blokiralo izdavanje.
+     - **NEVERIFIKOVANO:** `RunAllTests` (očekivano 302/0), BFP, `dokaz.py ki024` / `prazne` / ponovo
+       usidrene `amb-*`, ručni compile, papir reversa i otkupnog lista sa podelom.
+     - **Sledeći brojevi:** test 303 · stavka 230 · KI-066.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
