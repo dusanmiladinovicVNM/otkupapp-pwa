@@ -1875,15 +1875,18 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     ' partnera (ODL-26). Ranije je novo bio DANASNJI saldo, pa je ponovljen papir
     ' 1/IZV nosio "-10 -> 20".
     '
-    ' POKRICE DEFICITA je red istog dokumenta, pa ulazi u novo, a pocetno je novo
-    ' minus kretanje -- pravilo reversa i pre stavke 135, zadrzano odlukom
-    ' operatera 13.10.2026. Prikaz pokrica ide uz ODL-24.
+    ' POKRICE DEFICITA je red istog dokumenta. Za KOOPERANTA se stanje cita
+    ' POSLOVNO (AMB-POSL-03, odluka operatera 28.10.2026): pokrice ne ulazi ni u
+    ' novo ni u pocetno, isto kao na otkupnom listu i kartici -- promet papira je
+    ' vec poslovni red dokumenta, pa i stanje mora biti. Pravilo reversa (novo =
+    ' stanje posle dokumenta, pocetno = novo - kretanje; stavka 135, odluka 3)
+    ' ostaje. Revers firme (stanje OM-a) i zapisnik o otpisu ostaju fizicki.
     '
     ' Revers UVEK ima svoj red za nalog i tip papira, pa njegovo odsustvo nije
     ' "nepoznato stanje" (ODL-27) nego kvar identiteta: papir ne nastaje, umesto
     ' papira koji tiho izostavi redove stanja. Kvar knjige ide istim putem, kroz
     ' handler lista.
-    Dim nalogTip As String, nalogID As String
+    Dim nalogTip As String, nalogID As String, poslovno As Boolean
     If counterparty = "FIRMA" Then
         ' Firma revers prikazuje stanje praznih gajbi NA OM-u (Stanica saldo).
         nalogTip = AMB_NALOG_STANICA
@@ -1898,10 +1901,12 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     Else
         nalogTip = AMB_NALOG_KOOPERANT
         nalogID = koopID
+        poslovno = True
     End If
     Dim saldoNovo As Long, revPoznato As Boolean
     modAmbalaza.AmbStanjeOkoDokumenta nalogTip, nalogID, tipAmb, _
-                                      DOK_TIP_AMBALAZA_DOKUMENT, ambDokID, revPoznato, saldoNovo
+                                      DOK_TIP_AMBALAZA_DOKUMENT, ambDokID, revPoznato, saldoNovo, _
+                                      poslovno
     If Not revPoznato Then
         Err.Raise vbObjectError + 7692, "modPrint.FillIzdavanjeAmbalazeSablon", _
                   "Revers '" & ambDokID & "' nema svoj red knjige za nalog " & nalogTip & _

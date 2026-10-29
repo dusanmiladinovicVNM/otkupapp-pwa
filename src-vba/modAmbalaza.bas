@@ -176,8 +176,9 @@ End Function
 '
 ' Stanje je POSLOVNO (AMB-POSL-01): otkupni list kooperantu kaze koliko gajbi
 ' firme duguje, isto kao kartica -- pokrice deficita su njegove gajbe, ne nase.
-' Ostali papiri (stanica, vozac, revers) i dalje citaju FIZICKO stanje istog
-' jezgra, pa se jezgro ne menja nego dobija izbor.
+' Revers kooperantu cita isto (AMB-POSL-03); papiri stanice i vozaca i zapisnik
+' o otpisu citaju FIZICKO stanje istog jezgra, pa se jezgro ne menja nego
+' dobija izbor.
 '
 ' blockOtkupIDs: niz (npr. Split rezultat) ili string "OTK-1 + OTK-2".
 ' Vraca Long (entitetski saldo: Ulaz = +Kolicina, Izlaz = -Kolicina).

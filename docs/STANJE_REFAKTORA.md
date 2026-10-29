@@ -8118,6 +8118,27 @@
        - sabotaže `amb-posl-om-bez-otpisa`, `amb-posl-om-otpis-svake-stanice`; katalog 1037 → 1039.
      - **Sledeći brojevi:** test 289 · stavka 220 · KI-064.
 
+220. **Merge `#441` = `7c12aa2e`** (28.10.2026). Grana `claude/trusting-hawking-2cw6z1` (`7274598c`, 9 commitova
+     na `b91df251`), merge commit uz proveru head-a. CI `static` zelen; VBA runtime u web sesiji nije pušten —
+     `RunAllTests` (očekivano 288/0), `RunIzvestajTests` i `RunBusinessFlowProSuite` ostaju operateru nad
+     `main`-om. Stavke 218 i 219 su ono što je spojeno.
+
+221. **Revers kooperantu nosi poslovno stanje (`AMB-POSL-03`)** (28.10.2026). Grana
+     `claude/trusting-hawking-2cw6z1`, nova, od `7c12aa2e`. Odluka i pravilo: `docs/DOMEN/README.md` §2.
+
+     - **Uzrok (iz koda):** papir reversa (`modPrint.FillIzdavanjeAmbalazeSablon`) računa novo = stanje posle
+       dokumenta i početno = novo − promet. Promet je poslovni red dokumenta (`AmbDokPoslovniRedovi` preskače
+       pokriće), a stanje fizičko — pa pokriće ulazi u novo i naduvava početno (povrat 23 uz pokriće 12:
+       23 → 0 umesto 11 → −12), i uzastopni papiri se ne nastavljaju.
+     - **Ispravka:** za kooperanta `AmbStanjeOkoDokumenta(..., samoPoslovno:=True)`; revers firme i zapisnik o
+       otpisu nepromenjeni. Pravilo reversa iz stavke 135 (odluka 3) ostaje — menja se samo koje stanje.
+     - **Testovi:** 289 `T_AmbPoslovno_ReversKooperantaPoslovno` crven pre ispravke (11 → −12, pa −12 → −15);
+       zatečeni testovi papira reversa (231, 232, 235) rade bez pokrića, pa im se premisa ne menja.
+       **Sabotaža:** `amb-posl-revers-fizicki`; katalog 1039 → 1040.
+     - **NEVERIFIKOVANO:** `run_vba` u web sesiji ne radi. Treba: `python tools/run_vba.py --suite RunAllTests`,
+       pa `python tools/dokaz.py amb-posl-revers --grupe`, pa ručno: revers povrata uz pokriće.
+     - **Sledeći brojevi:** test 290 · stavka 222 · KI-064.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
