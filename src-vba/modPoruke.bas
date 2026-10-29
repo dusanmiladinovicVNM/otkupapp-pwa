@@ -852,6 +852,7 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_VK_NABAVKA", "Nabavka"
     UpsertRow lo, existing, "OTKUI_VK_OTPIS", "Otpis"
     UpsertRow lo, existing, "OTKUI_VK_POZAJMICA", "Pozajmica"
+    UpsertRow lo, existing, "OTKUI_VK_IZLAZ_TUDJE", "Izlaz vra" & ChrW(263) & "enih tu" & ChrW(273) & "ih"
     UpsertRow lo, existing, "OTKUI_CTX_VRSTA", "Jabuka"
     UpsertRow lo, existing, "OTKUI_CTX_SORTA", "Idared"
     UpsertRow lo, existing, "OTKUI_CTX_OM", "OM Zaovine"
@@ -2090,6 +2091,7 @@ Private Sub UpsertPoruke11(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_IZ_BIL_POKRICE", "Tu" & ChrW(273) & "e: partner doneo svoje"
     UpsertRow lo, existing, "OTKUI_IZ_BIL_POZAJMICA", "Tu" & ChrW(273) & "e: pozajmica kupca"
     UpsertRow lo, existing, "OTKUI_IZ_BIL_OTPIS", "Otpis (lom, gubitak)"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_VRACENO", "Tu" & ChrW(273) & "e: vra" & ChrW(263) & "eno partneru"
     UpsertRow lo, existing, "OTKUI_IZ_BIL_KRAJ", "U opticaju na kraju"
     ' --- Ambalaza po partnerima (AMB-BIL-03): kolone i podnozje ---
     UpsertRow lo, existing, "OTKUI_HDI_DRZI", "DR" & ChrW(381) & "I"

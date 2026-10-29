@@ -399,6 +399,12 @@ Public Sub RunAllTests()
     RunOne 292
     RunOne 293
     RunOne 294
+    RunOne 295
+    RunOne 296
+    RunOne 297
+    RunOne 298
+    RunOne 299
+    RunOne 300
     RunOne 13
     RunOne 14
     RunOne 15
@@ -988,6 +994,12 @@ Private Function TestName(ByVal idx As Long) As String
         Case 292: TestName = "T_AmbBilans_ListaIzvestaja"
         Case 293: TestName = "T_AmbPartneri_BrutoNeto"
         Case 294: TestName = "T_AmbPartneri_ListaIzvestaja"
+        Case 295: TestName = "T_KI024_IzdavanjeZatvaraObavezu"
+        Case 296: TestName = "T_KI024_OtkupIstoKaoRevers"
+        Case 297: TestName = "T_KI024_PonavljanjeIStorno"
+        Case 298: TestName = "T_KI024_IspravkaOtkupaPosleVracanja"
+        Case 299: TestName = "T_KI024_BezPrebijanja"
+        Case 300: TestName = "T_KI024_ReversJednaRadnja"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1290,6 +1302,12 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 292: T_AmbBilans_ListaIzvestaja
         Case 293: T_AmbPartneri_BrutoNeto
         Case 294: T_AmbPartneri_ListaIzvestaja
+        Case 295: T_KI024_IzdavanjeZatvaraObavezu
+        Case 296: T_KI024_OtkupIstoKaoRevers
+        Case 297: T_KI024_PonavljanjeIStorno
+        Case 298: T_KI024_IspravkaOtkupaPosleVracanja
+        Case 299: T_KI024_BezPrebijanja
+        Case 300: T_KI024_ReversJednaRadnja
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -12666,11 +12684,15 @@ End Function
 '   izdavanje 10, povrat 4, izdavanje 5        fizicki 11, poslovno 11
 '   povrat 23 uz pokrice 12      (primer A)    fizicki  0, poslovno -12
 '   povrat 3 uz pokrice 3        (primer B)    fizicki  0, poslovno -15
-'   izdavanje 5                                fizicki  5, poslovno -10
-'   storno povrata 3 (upisan POSLE)            fizicki  5, poslovno -7
+'   izdavanje 5                                fizicki  0, poslovno -10
+'   storno povrata 3 (upisan POSLE)            fizicki  0, poslovno -7
 ' Fixture: normal production state (pravi pisci; pokrice kroz potvrdu manjka).
 ' Stanje posle izdavanja 5 je slucaj iz prijave (Bajic): pokrica +12 i +3 su
-' tehnicka, pa je poslovno -10, a fizicki +5.
+' tehnicka, pa je poslovno -10.
+' PREMISA PROMENJENA (KI-024, AMB-10-ODL-35, 29.10.2026): izdavanje 5 kooperantu
+' kome firma duguje 15 je VRACANJE njegovih -- gasi 5 obaveze, a te gajbe izlaze
+' iz opticaja (AMB-INV-15). Fizicki je zato 0, ne +5 (do sada su vracene tudje
+' ostajale na njegovom saldu), a obaveza posle storna povrata 3 je 15 - 5 - 3 = 7.
 ' SABOTAZE: amb-posl-kartica-fizicki, amb-posl-pokrice-po-vrsti,
 ' amb-posl-pdf-fizicki, amb-posl-jezgro-stanja-fizicki.
 Private Sub T_AmbPoslovno_PokriceNijeZaduzenje()
@@ -12712,18 +12734,18 @@ Private Sub T_AmbPoslovno_PokriceNijeZaduzenje()
               Len(dB) > 0 And Len(dL) > 0), True, "preduslov: svih sest reversa je upisano"
     AssertEq netoA, -23, "primer A: povrat 23 uz pokrice 12 je poslovno -23, ne -11"
     AssertEq netoB, -3, "primer B: povrat 3 uz pokrice 3 je poslovno -3, ne 0"
-    AssertEq posleL & "|" & fizPosleL, "-10|5", _
-             "slucaj Bajic: posle pokrica +12 i +3 i izdavanja 5 stanje je poslovno -10, fizicki 5"
+    AssertEq posleL & "|" & fizPosleL, "-10|0", _
+             "slucaj Bajic: posle pokrica +12 i +3 i izdavanja 5 stanje je poslovno -10, fizicki 0 (KI-024)"
     AssertEq pocL & "|" & IIf(poznato, "1", "0"), "-15|1", _
              "PDF pocetno stanje je poslovno: pokrice ne uvecava stanje pre dokumenta"
     AssertEq pocLPosle & "|" & IIf(poznatoPosle, "1", "0"), "-15|1", _
              "storno upisan posle dokumenta ne menja papir (ODL-26)"
     AssertEq netoBPosle, 0, "storno povrata gasi i poslovni promet tog dokumenta"
     AssertEq redovaPokrica, 0, "kartica ambalaze ne prikazuje red tehnickog pokrica"
-    AssertEq modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip), 5, _
-             "fizicki saldo ostaje fizicki: pokrice je u njemu"
-    AssertEq modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip), 12, _
-             "obaveza za tudju ambalazu ostaje izvedena iz knjige"
+    AssertEq modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip), 0, _
+             "fizicki saldo ostaje fizicki: vracene tudje su izasle iz opticaja (KI-024)"
+    AssertEq modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip), 7, _
+             "obaveza za tudju ambalazu ostaje izvedena iz knjige (15 - 5 vraceno - 3 storno)"
     AssertEq Format$(KartZavrsni(ka, 3, 6), "0") & "|" & Format$(KartZavrsni(kk, 4, 8), "0"), _
              Format$(oracle, "0") & "|" & Format$(oracle, "0"), _
              "kartica ambalaze i kartica kooperanta daju isti poslovni saldo"
@@ -13000,11 +13022,15 @@ End Sub
 ' D1..D3:
 '   D0  nabavka 100                         (pre perioda -> POCETAK)
 '   D1  nabavka 20; kooperant vrati 15 sa saldom 0 (pokrice 15); izdavanje 30
+'       (ODL-35: prvih 15 je VRACANJE njegovih -- izlaze iz opticaja -- pa 15 izdato)
 '   D2  pozajmica kupca 10 vozacu; otpis 5 na stanici; nabavka 7 pa njen storno
 '   D3  otpis 2 kod kooperanta
 '   D4  nabavka 50                          (posle perioda -> nigde)
-' Na D3: stanica 100, vozac 10, kooperant 28, kupac 0 = 138; nase 120 - 7 = 113;
-' tudje: kooperant 15, kupac 10; granica: 100 + 20 + 15 + 10 - 7 = 138.
+' Na D3: stanica 100, vozac 10, kooperant 13, kupac 0 = 123; nase 120 - 7 = 113;
+' tudje: kooperant 0 (bez reda), kupac 10; granica: 100 + 20 + 15 + 10 - 7 - 15
+' (vraceno tudje) = 123.
+' PREMISA PROMENJENA (KI-024, AMB-INV-15, 29.10.2026): do sada je izdavanje 30
+' ostavljalo kooperantu 28 i obavezu 15 (vracene tudje nisu postojale).
 ' Semanticki nivo: KOMADI po (tip, vrsta naloga) i po (tip, partner); pozajmica
 ' se od pokrica razlikuje po identitetu DOKUMENTA (AMB-INV-13), ne po broju.
 ' Fixture: normal production state (sve kroz produkcione pisce).
@@ -13045,19 +13071,19 @@ Private Sub T_AmbBilans_GdeCijeGranica()
              "bilans GDE: kraj perioda ne nosi kasniju nabavku -- otkupna mesta drze 100"
     AssertEq BilKol(r, tip, AMB_BIL_GDE, AMB_NALOG_KOOPERANT) & "|" & _
              BilKol(r, tip, AMB_BIL_GDE, AMB_NALOG_VOZAC) & "|" & _
-             BilKol(r, tip, AMB_BIL_GDE, AMB_NALOG_KUPAC), "28|10|0", _
-             "bilans GDE: kooperant drzi 28, vozac 10, kupac 0"
+             BilKol(r, tip, AMB_BIL_GDE, AMB_NALOG_KUPAC), "13|10|0", _
+             "bilans GDE: kooperant drzi 13 (vracene tudje nisu kod njega), vozac 10, kupac 0"
     AssertEq BilKol(r, tip, AMB_BIL_GDE, AMB_BIL_OPTICAJ) & "|" & _
-             BilIma(r, tip, AMB_BIL_GDE, AMB_NALOG_FIRMA), "138|False", _
-             "bilans GDE: ukupno u opticaju je zbir realnih naloga (138), Firma bez reda"
+             BilIma(r, tip, AMB_BIL_GDE, AMB_NALOG_FIRMA), "123|False", _
+             "bilans GDE: ukupno u opticaju je zbir realnih naloga (123), Firma bez reda"
     AssertEq BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_NASE), 113, _
              "bilans CIJE: nase = nabavka - otpis (113)"
     AssertEq BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_TUDJE) & "|" & _
-             BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_PARTNER, FX_KOOPERANT) & "|" & _
-             BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_PARTNER, FX_KUPAC), "25|15|10", _
-             "bilans CIJE: tudje je obaveza po partneru (kooperant 15, kupac 10)"
+             BilPartner(r, tip, FX_KOOPERANT) & "|" & _
+             BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_PARTNER, FX_KUPAC), "10|0|10", _
+             "bilans CIJE: tudje je obaveza po partneru (kooperantu vraceno, kupac 10)"
     AssertEq BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_NEUSKLADJENO), 0, _
-             "bilans CIJE: neuskladjeno je 0 kad vracanja tudjih gajbi nema"
+             "bilans CIJE: neuskladjeno je 0 -- vracene tudje gajbe su izasle iz opticaja"
     AssertEq BilKol(r, tip, AMB_BIL_GRANICA, AMB_BIL_POCETAK), 100, _
              "bilans GRANICA: pocetak je stanje pre prvog dana perioda (100)"
     AssertEq BilKol(r, tip, AMB_BIL_GRANICA, AMB_BIL_NABAVKA), 20, _
@@ -13067,14 +13093,16 @@ Private Sub T_AmbBilans_GdeCijeGranica()
              "bilans GRANICA: pokrice i ulaz pozajmice kupca su odvojene stavke (15|10)"
     AssertEq BilKol(r, tip, AMB_BIL_GRANICA, AMB_BIL_OTPIS), -7, _
              "bilans GRANICA: otpis izlazi iz opticaja (-7)"
+    AssertEq BilKol(r, tip, AMB_BIL_GRANICA, AMB_BIL_VRACENO), -15, _
+             "bilans GRANICA: vracene tudje gajbe izlaze iz opticaja kao svoja stavka (-15)"
     AssertEq BilKol(r, tip, AMB_BIL_GRANICA, AMB_BIL_KRAJ) & "|" & _
-             BilKol(r, tip, AMB_BIL_GDE, AMB_BIL_OPTICAJ), "138|138", _
-             "bilans GRANICA: kraj = pocetak + kretanje = ukupno u opticaju (138)"
+             BilKol(r, tip, AMB_BIL_GDE, AMB_BIL_OPTICAJ), "123|123", _
+             "bilans GRANICA: kraj = pocetak + kretanje = ukupno u opticaju (123)"
     AssertEq BilKol(rDanas, tip, AMB_BIL_GDE, AMB_NALOG_STANICA) & "|" & _
              BilKol(rDanas, tip, AMB_BIL_GDE, AMB_NALOG_KOOPERANT) & "|" & _
              BilKol(rDanas, tip, AMB_BIL_GDE, AMB_NALOG_VOZAC) & "|" & _
-             BilKol(rDanas, tip, AMB_BIL_CIJE, AMB_BIL_PARTNER, FX_KOOPERANT) & "|" & _
-             BilKol(rDanas, tip, AMB_BIL_CIJE, AMB_BIL_PARTNER, FX_KUPAC), _
+             BilPartner(rDanas, tip, FX_KOOPERANT) & "|" & _
+             BilPartner(rDanas, tip, FX_KUPAC), _
              modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, tip) & "|" & _
              modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip) & "|" & _
              modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, tip) & "|" & _
@@ -13088,14 +13116,15 @@ End Sub
 ' ============================================================
 ' (1) Kapija potpunosti: svaka vrsta koja prelazi granicu ima stavku bilansa, i
 '     nijedna druga (AmbBilansGranicaNepotpuna).
-' (2) KI-024: VRACANJE_TUDJE gasi obavezu, a gajbe ostaju na saldu partnera, pa
-'     opticaj - nase - tudje vise nije 0. Tok (nov tip T): nabavka 40; kooperant
-'     vrati 12 sa saldom 0 (pokrice 12); stanica mu vrati 12 kao VRACANJE_TUDJE.
-'     Opticaj 52, nase 40, tudje 0 -> neuskladjeno 12.
-'     Fixture: synthetic -- ugovorno ispravan red BEZ produkcionog pisca
-'     (KI-024: VRACANJE_TUDJE danas ne zove nijedan pisac; obrazac BFP 23135).
-'     Kad KI-024 dobije pisca koji vracene gajbe izvodi iz opticaja, ova tvrdnja
-'     menja premisu -- to je i namera.
+' (2) KI-024: vracanje tudje sa svojim izlazom (AMB-INV-15) ne ostavlja nista
+'     neuskladjeno; LEGACY oblik -- vracanje BEZ izlaza, kako ga je ostavila
+'     migracija (MIG-16/17) -- ostavlja gajbe na saldu partnera, pa opticaj -
+'     nase - tudje nije 0. Tok (nov tip T): nabavka 40; kooperant vrati 12 sa
+'     saldom 0 (pokrice 12); stanica mu vrati 12 (VRACANJE_TUDJE + izlaz):
+'     neuskladjeno 0. Pa se izlaz obrise: opticaj 52, nase 40, tudje 0 -> 12.
+'     Fixture: synthetic anomaly -- izlaz obrisan rucno (legacy oblik).
+'     PREMISA PROMENJENA (KI-024, 29.10.2026): do sada je pisac pisao vracanje
+'     bez izlaza, pa je 12 bio proizvod pisca, a ne legacy oblik.
 ' (3) Kvar knjige (red bez odredista, obrazac 224): bilans dize gresku ugovora
 '     knjige, a ne vraca brojeve.
 ' (4) NASE je OBRACUNSKI saldo (P2 nezavisnog pregleda #447): tok samo sa
@@ -13112,6 +13141,7 @@ Private Sub T_AmbBilans_SignalIKvar()
     Dim dignuto As Boolean, razlog As String
     Dim errNum As Long, errDesc As String
     Dim tipP As String, dPoz As String, dOtp As String, rP As Variant
+    Dim neusklSaIzlazom As Double
 
     nepotpuno = modAmbalazaUgovor.AmbBilansGranicaNepotpuna()
 
@@ -13134,6 +13164,10 @@ Private Sub T_AmbBilans_SignalIKvar()
     On Error GoTo 0
 
     obaveza = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip)
+    neusklSaIzlazom = BilKol(modAmbalaza.AmbBilansPodaci(Date, Date), tip, AMB_BIL_CIJE, _
+                             AMB_BIL_NEUSKLADJENO)
+    ' Legacy oblik: vracanje bez svog izlaza (migracija MIG-16/17).
+    ObrisiRedKnjigePoVrsti dokVrac, AMB_VK_IZLAZ_TUDJE
 
     tipP = KartNoviTipAmb("BIP")
     dPoz = modAmbalaza.UpisiPozajmicuKupca_TX(Date, "POZ-" & tipP, FX_KUPAC, FX_VOZAC, tipP, 10, "test 291")
@@ -13159,6 +13193,8 @@ Private Sub T_AmbBilans_SignalIKvar()
              "bilans: svaka vrsta koja prelazi granicu ima stavku, i nijedna druga"
     AssertEq (Len(dP) > 0 And Len(dokVrac) > 0 And Len(naTipPre) > 0 And obaveza = 0), True, _
              "preduslov: pokrice i vracanje su upisani, obaveza prema kooperantu je zatvorena"
+    AssertEq neusklSaIzlazom, 0, _
+             "bilans: vracanje tudje sa izlazom ne ostavlja neuskladjeno (KI-024, AMB-INV-15)"
     AssertEq neuskl, 12, _
              "bilans: vracene tudje gajbe ostaju u opticaju -- neuskladjeno je 12 (KI-024)"
     AssertEq dignuto & "|" & (InStr(1, razlog, "Red knjige ", vbTextCompare) > 0), "True|True", _
@@ -13283,13 +13319,16 @@ End Sub
 ' (odluka operatera 29.10.2026: bruto + neto).
 ' Tok (nov tip T, FX_STANICA; d1 = danas - 2):
 '   d1  nabavka 100
-'   d1  K1 vrati 15 sa saldom 0 (pokrice 15), pa dobije 30     -> 30 | 15 | +15
+'   d1  K1 vrati 15 sa saldom 0 (pokrice 15), pa dobije 30     -> 15 |  0 | +15
+'       (ODL-35: prvih 15 je vracanje njegovih -- izlaze iz opticaja)
 '   d1  K2 dobije 11, vrati 23 (pokrice 12) -- slucaj Bajic    ->  0 | 12 | -12
 '   d1  kupac pozajmi 10 vozacu                                ->  0 | 10 | -10
 '   d1  K3 dobije 4 i vrati 4                                  -> nema reda
 '   danas  kupac 2 pozajmi 3 vozacu                            -> tek na danas
-' Zbir tudje na d1 = bilans CIJE/TUDJE (37); zbir drzi = bilans GDE kooperanti +
-' kupci (30).
+' Zbir tudje na d1 = bilans CIJE/TUDJE (22); zbir drzi = bilans GDE kooperanti +
+' kupci (15).
+' PREMISA PROMENJENA (KI-024, 29.10.2026): do sada je K1 bio 30 | 15 | +15 --
+' vracene tudje su ostajale kod njega kao da su nase.
 ' Semanticki nivo: KOMADI po (partner, tip). Fixture: normal production state.
 ' SABOTAZE: amb-par-drzi-samo-ulaz, amb-par-tudje-nula, amb-par-neto-fizicki,
 ' amb-par-nula-red, amb-par-bez-reza-datumdo.
@@ -13335,10 +13374,10 @@ Private Sub T_AmbPartneri_BrutoNeto()
     AssertEq (Len(dP1) > 0 And Len(dI1) > 0 And Len(dI2) > 0 And Len(dP2) > 0 And _
               Len(dPoz) > 0 And Len(dI3) > 0 And Len(dR3) > 0 And Len(dPoz2) > 0), True, _
              "preduslov: svi dokumenti toka su upisani"
-    AssertEq drzi, "30|0|0", _
-             "po partnerima: drzi je fizicki saldo (K1 30, Bajic 0, kupac 0)"
-    AssertEq tudje, "15|12|10", _
-             "po partnerima: tudje je obaveza firme po partneru (15, 12, 10)"
+    AssertEq drzi, "15|0|0", _
+             "po partnerima: drzi je fizicki saldo (K1 15, Bajic 0, kupac 0)"
+    AssertEq tudje, "0|12|10", _
+             "po partnerima: tudje je obaveza firme po partneru (0, 12, 10)"
     AssertEq neto, "15|-12|-10", _
              "po partnerima: neto je saldo kao na kartici (+15 drzi nase, -12 i -10 firma duguje)"
     AssertEq ParKol(r, FX_KOOPERANT3, tip, 4), "", _
@@ -13457,6 +13496,297 @@ Private Sub T_AmbPartneri_ListaIzvestaja()
              "po partnerima kroz ekran: podnozje nosi zbir drzi i tudje preko svih redova"
 End Sub
 
+' ============================================================
+' 295. KI-024 / AMB-10-ODL-35: IZDAVANJE KOOPERANTU PRVO ZATVARA OBAVEZU FIRME.
+' ============================================================
+' Tri primera iz odluke operatera (29.10.2026), svaki na svom novom tipu
+' (FX_KOOPERANT, FX_STANICA; nabavka 50 da stanica ima prazne). Obaveza 10
+' nastaje povratom 10 sa saldom 0 (pokrice 10). Revers izdavanja, jedna kolicina:
+'   A  izdaje 10 -> vraceno 10 (+ izlaz 10), novo 0;  obaveza 0, fizicki 0, poslovno 0
+'   B  izdaje 6  -> vraceno 6  (+ izlaz 6),  novo 0;  obaveza 4, fizicki 0, poslovno -4
+'   C  izdaje 15 -> vraceno 10 (+ izlaz 10), novo 5;  obaveza 0, fizicki 5, poslovno 5
+' Primer A meri i opticaj: 60 pre (nabavka 50 + 10 tudjih), 50 posle -- vracene
+' tudje IZLAZE iz opticaja (AMB-INV-15).
+' Oblik stanja (Ki024Stanje): vraceno | izlaz | novo | obaveza | fizicki |
+' poslovno posle dokumenta.
+' Semanticki nivo: KOMADI po (nalog, tip) i ORIGINALNI redovi knjige po
+' (dokument, vrsta). Fixture: normal production state (pravi pisci).
+' SABOTAZE: ki024-izdavanje-ne-vraca, ki024-vracanje-bez-izlaza.
+Private Sub T_KI024_IzdavanjeZatvaraObavezu()
+    Dim tA As String, tB As String, tC As String
+    Dim dA As String, dB As String, dC As String
+    Dim opPre As Double, opPosle As Double
+
+    tA = KartNoviTipAmb("K24A")
+    tB = KartNoviTipAmb("K24B")
+    tC = KartNoviTipAmb("K24C")
+    Ki024Obaveza10 tA
+    Ki024Obaveza10 tB
+    Ki024Obaveza10 tC
+
+    opPre = BilKol(modAmbalaza.AmbBilansPodaci(Date, Date), tA, AMB_BIL_GDE, AMB_BIL_OPTICAJ)
+    dA = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tA, 10, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    opPosle = BilKol(modAmbalaza.AmbBilansPodaci(Date, Date), tA, AMB_BIL_GDE, AMB_BIL_OPTICAJ)
+    dB = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tB, 6, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    dC = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tC, 15, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+
+    AssertEq KnjZbirVrste(dA, AMB_VK_IZLAZ_TUDJE), KnjZbirVrste(dA, AMB_VK_VRACANJE_TUDJE), _
+             "uz svako vracanje tudjih ide izlaz iste kolicine iz opticaja (AMB-INV-15)"
+    AssertEq Ki024Stanje(dA, FX_KOOPERANT, tA), "10|10|0|0|0|0", _
+             "primer A: izdavanje 10 uz obavezu 10 je vracanje -- obaveza 0, gajbe izlaze"
+    AssertEq opPre & "|" & opPosle, "60|50", _
+             "primer A: vracene tudje gajbe izlaze iz opticaja (60 -> 50)"
+    AssertEq Ki024Stanje(dB, FX_KOOPERANT, tB), "6|6|0|4|0|-4", _
+             "primer B: izdavanje 6 uz obavezu 10 -- vraceno 6, obaveza ostaje 4"
+    AssertEq Ki024Stanje(dC, FX_KOOPERANT, tC), "10|10|5|0|5|5", _
+             "primer C: izdavanje 15 uz obavezu 10 -- vraceno 10, novo zaduzenje 5"
+End Sub
+
+' ============================================================
+' 296. KI-024: OTKUP KNJIZI ISTO STO I REVERS (KolAmbIzdata), I U ISTOM DOKUMENTU.
+' ============================================================
+' (1) Primer C kroz otkup: kooperantu FX_KOOPERANT3 firma duguje 10, otkup
+'     izdaje 15 praznih -- isti redovi kao revers (vraceno 10, izlaz 10, novo 5)
+'     i isti papir: otkupni list pocinje od -10 i zavrsava na 5.
+' (2) Otkup koji PRIMA 10 svojih (pokrice 10) i IZDAJE 10 zatvara obavezu u
+'     istom dokumentu: obaveza 0, fizicki 0, poslovno 0.
+' Kooperant FX_KOOPERANT3: nema nedodeljen avans (v. 287).
+' Fixture: normal production state.
+Private Sub T_KI024_OtkupIstoKaoRevers()
+    Dim tC As String, tS As String, broj As String, brojS As String
+    Dim otkC As String, otkS As String, errNum As Long, greska As String
+    Dim ws As Worksheet
+
+    tC = KartNoviTipAmb("K24O")
+    tS = KartNoviTipAmb("K24S")
+    Ki024Obaveza10 tC, FX_KOOPERANT3
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tS, 50, "NAB-" & tS, "preduslov KI-024"
+
+    otkC = KartOtkup(tC, 0, 15, broj, errNum, greska)
+    If Len(otkC) > 0 Then Set ws = modPrint.FillOtkupSablon(otkC)
+    otkS = KartOtkup(tS, 10, 10, brojS, errNum, greska)
+
+    AssertEq Ki024Stanje(otkC, FX_KOOPERANT3, tC), "10|10|5|0|5|5", _
+             "otkup: izdavanje 15 uz obavezu 10 knjizi isto kao revers (vraceno 10, novo 5)"
+    AssertEq KartListSadrzi(ws, tC & " x -10") & "|" & KartListSadrzi(ws, tC & " x 5"), "True|True", _
+             "otkupni list: pocetno -10, zavrsno 5 -- papir kaze isto sto i knjiga"
+    AssertEq KnjZbirVrste(otkS, AMB_VK_UZ_ROBU) & "|" & KnjZbirVrste(otkS, AMB_VK_ULAZ_TUDJE) & _
+             "|" & Ki024Stanje(otkS, FX_KOOPERANT3, tS), "10|10|10|10|0|0|0|0", _
+             "otkup koji prima 10 svojih i izdaje 10 zatvara obavezu u istom dokumentu"
+End Sub
+
+' ============================================================
+' 297. KI-024: PONAVLJANJE NE PREDELJUJE, STORNO VRACA SVE.
+' ============================================================
+' (1) Revers C (obaveza 10, izdaje 15). Posle njega nastane NOVA obaveza (povrat
+'     8 dok kooperant drzi 5 -> pokrice 3). Ponovljen ISTI zahtev nad istim
+'     dokumentom (izdavanje 15) vraca postojeci ishod: bez novog reda i bez nove
+'     podele po novoj obavezi (ostaje 3); drugaciji iznos je sudar (AMB-INV-04).
+' (2) Storno reversa koji je imao oba dela (drugi tip): obaveza se vraca na 10,
+'     kooperant, stanica i opticaj na stanje pre izdavanja, a kontra-stav ide za
+'     sva tri reda (vraceno, izlaz, novo).
+' Fixture: normal production state.
+' SABOTAZE: ki024-ponavljanje-bez-vracanja.
+Private Sub T_KI024_PonavljanjeIStorno()
+    Dim tP As String, tS As String, b As String, dP As String, dS As String
+    Dim nPre As Long, nPosle As Long, idPon As String, errPon As Long, errSudar As Long
+    Dim obPosle As Double, tx As clsTransaction, errNum As Long, errDesc As String
+    Dim koopPre As Double, stPre As Double, opPre As Double, obPre As Double
+    Dim stornoOk As Boolean, stanjePosle As String
+
+    tP = KartNoviTipAmb("K24P")
+    Ki024Obaveza10 tP
+    dP = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tP, 15, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    KartPovratSaPokricem tP, 8, b
+    nPre = IspRevRedova(TBL_AMBALAZA)
+
+    Set tx = New clsTransaction
+    On Error GoTo EH
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    On Error Resume Next
+    idPon = modAmbalaza.PrenesiAmbalazu(tx, Date, tP, 15, AMB_NALOG_STANICA, FX_STANICA, _
+                                        AMB_NALOG_KOOPERANT, FX_KOOPERANT, AMB_VK_IZDATA_PRAZNA, _
+                                        DOK_TIP_AMBALAZA_DOKUMENT, dP)
+    errPon = Err.Number
+    Err.Clear
+    modAmbalaza.PrenesiAmbalazu tx, Date, tP, 16, AMB_NALOG_STANICA, FX_STANICA, _
+                                AMB_NALOG_KOOPERANT, FX_KOOPERANT, AMB_VK_IZDATA_PRAZNA, _
+                                DOK_TIP_AMBALAZA_DOKUMENT, dP
+    errSudar = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    nPosle = IspRevRedova(TBL_AMBALAZA)
+    tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    obPosle = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tP)
+
+    tS = KartNoviTipAmb("K24T")
+    Ki024Obaveza10 tS
+    koopPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tS)
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, tS)
+    obPre = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tS)
+    opPre = BilKol(modAmbalaza.AmbBilansPodaci(Date, Date), tS, AMB_BIL_GDE, AMB_BIL_OPTICAJ)
+    dS = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tS, 15, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    stornoOk = modAmbalaza.StornirajAmbDokument_TX(dS)
+    stanjePosle = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tS) & "|" & _
+                  modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tS) & "|" & _
+                  modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, FX_STANICA, tS) & "|" & _
+                  BilKol(modAmbalaza.AmbBilansPodaci(Date, Date), tS, AMB_BIL_GDE, AMB_BIL_OPTICAJ)
+
+    AssertEq (Len(dP) > 0 And Len(dS) > 0), True, "preduslov: oba reversa su upisana"
+    AssertEq errPon & "|" & (Len(idPon) > 0) & "|" & (nPosle - nPre) & "|" & obPosle, "0|True|0|3", _
+             "ponavljanje istog izdavanja vraca postojeci ishod -- ne predeljuje po novoj obavezi"
+    AssertEq errSudar, AMB_ERR_IDENTITET, _
+             "drugaciji iznos istog zahteva je sudar (AMB-INV-04)"
+    AssertEq stornoOk & "|" & KnjKontraStavova(dS), "True|3", _
+             "storno reversa sa podelom: kontra-stav za vraceno, izlaz i novo"
+    AssertEq stanjePosle, obPre & "|" & koopPre & "|" & stPre & "|" & opPre, _
+             "storno vraca obavezu, kooperanta, stanicu i opticaj na stanje pre izdavanja"
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_KI024_PonavljanjeIStorno", errDesc
+End Sub
+
+' ============================================================
+' 298. KI-024: ISPRAVKA OTKUPA CIJE JE POKRICE VEC VRACENO -- AMB-INV-09 NA KRAJU.
+' ============================================================
+' Kooperant FX_KOOPERANT3 donese 10 svojih (otkup O1, pokrice 10), pa mu revers
+' izda 10 -- to je vracanje njegovih (obaveza 0). Od tada:
+'   storno O1                -> ODBIJEN: pokrice je vraceno, obaveza bi bila -10
+'   ispravka O1, istih 10    -> PROLAZI: zamena donosi isto pokrice, a AMB-INV-09
+'                               se meri POSLE zamene (obaveza ostaje 0)
+'   ispravka O2 (drugi tip, isti tok), 8 svojih -> ODBIJENA na kraju (obaveza
+'                               -2), i cela TX se vraca
+' Fixture: normal production state.
+' SABOTAZE: ki024-ispravka-meri-medjukorak, ki024-ispravka-bez-zavrsne-provere.
+Private Sub T_KI024_IspravkaOtkupaPosleVracanja()
+    Dim t1 As String, t2 As String, b As String, errNum As Long, greska As String
+    Dim o1 As String, o2 As String, r1 As String, r2 As String
+    Dim stornoOk As Boolean, novi1 As String, novi2 As String
+    Dim upoz As String, g1 As String, g2 As String, e1 As Long, e2 As Long
+    Dim nKnj As Long, ob1 As Double
+
+    t1 = KartNoviTipAmb("K24I")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, t1, 50, "NAB-" & t1, "preduslov KI-024"
+    o1 = KartOtkup(t1, 10, 0, b, errNum, greska)
+    r1 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t1, 10, REV_SMER_IZDAVANJE, FX_KOOPERANT3, "")
+    stornoOk = StornoOtkup_TX(o1)
+    novi1 = modOtkup.IspravkaOtkupa_TX(o1, _
+                KartOtkupZaglavlje(t1, FX_KOOPERANT3, Date, modBrojevi.GenerateBrojDokumenta(FX_STANICA, Date), 0), _
+                KartOtkupStavke(10), g1, upoz, 10, e1)
+    ob1 = modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT3, t1)
+
+    t2 = KartNoviTipAmb("K24J")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, t2, 50, "NAB-" & t2, "preduslov KI-024"
+    o2 = KartOtkup(t2, 10, 0, b, errNum, greska)
+    r2 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t2, 10, REV_SMER_IZDAVANJE, FX_KOOPERANT3, "")
+    nKnj = IspRevRedova(TBL_AMBALAZA)
+    novi2 = modOtkup.IspravkaOtkupa_TX(o2, _
+                KartOtkupZaglavlje(t2, FX_KOOPERANT3, Date, modBrojevi.GenerateBrojDokumenta(FX_STANICA, Date), 0), _
+                KartOtkupStavke(8), g2, upoz, 8, e2)
+
+    AssertEq (Len(o1) > 0 And Len(r1) > 0 And Len(o2) > 0 And Len(r2) > 0), True, _
+             "preduslov: otkupi uz pokrice i reversi izdavanja su upisani"
+    AssertEq (Len(novi1) > 0) & "|" & ob1, "True|0", _
+             "ispravka otkupa sa istim svojim gajbama prolazi -- AMB-INV-09 se meri posle zamene"
+    AssertEq stornoOk, False, _
+             "storno otkupa cije je pokrice vec vraceno je odbijen (AMB-INV-09)"
+    AssertEq novi2 & "|" & (InStr(1, g2, "AMB-INV-09", vbTextCompare) > 0) & "|" & _
+             (IspRevRedova(TBL_AMBALAZA) - nKnj), "|True|0", _
+             "ispravka koja ne vrati isto pokrice je odbijena na kraju, bez traga u knjizi"
+    AssertEq NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o2, COL_STORNIRANO)) <> "Da", True, _
+             "odbijena ispravka ostavlja stari otkup aktivnim"
+End Sub
+
+' ============================================================
+' 299. KI-024: OBAVEZA SE ZATVARA SAMO ZA ISTOG KOOPERANTA I ISTI TIP.
+' ============================================================
+' Tip X: firma duguje K1 10 i K2 4 (povrati uz pokrice). Tip Y: K1 ne duguje
+' nista. Izdavanje K2 10 (tip X) vraca SAMO njegovih 4 (novo 6) -- obaveza K1
+' ostaje 10; izdavanje K1 8 tipa Y je cisto zaduzenje -- obaveza K1 tipa X se
+' ne trosi na drugi tip.
+' Fixture: normal production state.
+Private Sub T_KI024_BezPrebijanja()
+    Dim tX As String, tY As String, b As String, dK2 As String, dK1 As String
+
+    tX = KartNoviTipAmb("K24X")
+    tY = KartNoviTipAmb("K24Y")
+    Ki024Obaveza10 tX
+    KartPovratSaPokricem tX, 4, b, 0, FX_KOOPERANT2
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tY, 20, "NAB-" & tY, "preduslov KI-024"
+    dK2 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tX, 10, REV_SMER_IZDAVANJE, FX_KOOPERANT2, "")
+    dK1 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tY, 8, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+
+    AssertEq Ki024Stanje(dK2, FX_KOOPERANT2, tX), "4|4|6|0|6|6", _
+             "drugi kooperant: vraca se samo njegova obaveza (4), ostatak je novo zaduzenje (6)"
+    AssertEq modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tX), 10, _
+             "obaveza prvog kooperanta se ne trosi na tudje izdavanje"
+    AssertEq Ki024Stanje(dK1, FX_KOOPERANT, tY), "0|0|8|0|8|8", _
+             "drugi tip: obaveza tipa X se ne trosi na izdavanje tipa Y"
+End Sub
+
+' ============================================================
+' 300. KI-024: REVERS SA PODELOM JE JEDNA RADNJA -- LISTA, PAPIR I ISPRAVKA.
+' ============================================================
+' Revers C (obaveza 10, izdaje 15) ima dva poslovna reda (vraceno 10, novo 5) i
+' tehnicki izlaz. Za operatera je to JEDNO izdavanje 15, pa:
+'   - poslovni redovi dokumenta su JEDAN red IZDATA_PRAZNA 15 (papir, KI-013);
+'   - mapa liste nosi isti red (prikaz i prefill ispravke);
+'   - papir reversa stampa poslovno stanje -10 -> 5;
+'   - ispravka je dozvoljena, a zamena 12 se deli iznova (vraceno 10, novo 2).
+' Fixture: normal production state.
+' SABOTAZE: ki024-dokument-deo-radnje.
+Private Sub T_KI024_ReversJednaRadnja()
+    Dim t As String, d As String, redovi As Collection, r As Variant, mapa As Object
+    Dim m As Variant, razlog As String, novi As String, papir As String, g As String
+    Dim modePre As String, errNum As Long, errDesc As String
+
+    t = KartNoviTipAmb("K24R")
+    Ki024Obaveza10 t
+    d = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t, 15, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    r = Array("", "", "")
+    m = Array("", "", "")
+    Set redovi = modAmbalaza.AmbDokPoslovniRedovi(d)
+    If redovi.count > 0 Then r = redovi(1)
+    Set mapa = modAmbalaza.AmbDokRedMapa()
+    If mapa.Exists(d) Then m = mapa(d)
+    razlog = modAmbalaza.IspravkaReversaRazlog(d)
+
+    modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, "PDF"
+    On Error Resume Next
+    OcistiList WS_IZDAMB_SABLON
+    modIzvestaj.StampajReversAmbalaze d, DOK_TIP_AMBALAZA_DOKUMENT, t
+    g = Err.description
+    Err.Clear
+    papir = ReversStanjePapira()
+    errNum = Err.Number
+    errDesc = Err.description
+    SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KI024_ReversJednaRadnja", errDesc
+
+    novi = modAmbalaza.IspravkaReversa_TX(d, Date, "", FX_STANICA, t, 12, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+
+    AssertEq redovi.count & "|" & CStr(r(0)) & "|" & CStr(r(2)), "1|" & AMB_VK_IZDATA_PRAZNA & "|15", _
+             "revers sa podelom je JEDAN poslovni red: izdato 15"
+    AssertEq CStr(m(0)) & "|" & CStr(m(2)), AMB_VK_IZDATA_PRAZNA & "|15", _
+             "mapa liste nosi isto izdavanje 15"
+    AssertEq g & "|" & papir, "|-10 kom|5 kom", _
+             "papir reversa: jedna radnja, poslovno stanje -10 -> 5"
+    AssertEq razlog, "", "ispravka reversa sa podelom je dozvoljena"
+    AssertEq Ki024Stanje(novi, FX_KOOPERANT, t), "10|10|2|0|2|2", _
+             "zamena 12 se deli iznova: vraceno 10, novo 2"
+End Sub
+
 ' Kolona reda po partneru (AmbPartneriPodaci): 4 = drzi, 5 = tudje, 6 = neto;
 ' "" kad partner nema red za taj tip.
 Private Function ParKol(ByVal r As Variant, ByVal nalogID As String, ByVal tip As String, _
@@ -13469,6 +13799,65 @@ Private Function ParKol(ByVal r As Variant, ByVal nalogID As String, ByVal tip A
             ParKol = CStr(CDbl(r(i, kolona)))
             Exit Function
         End If
+    Next i
+End Function
+
+' Preduslov primera KI-024: stanica ima 50 praznih novog tipa, a firma kooperantu
+' duguje 10 njegovih (povrat 10 sa saldom 0 -> pokrice 10). Vraca AmbDokID povrata.
+Private Function Ki024Obaveza10(ByVal tip As String, _
+                                Optional ByVal koopID As String = FX_KOOPERANT) As String
+    Dim b As String
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tip, 50, "NAB-" & tip & "-" & koopID, _
+                                  "preduslov KI-024"
+    Ki024Obaveza10 = KartPovratSaPokricem(tip, 10, b, 0, koopID)
+End Function
+
+' Stanje kooperanta posle JEDNOG dokumenta, kao jedan string za tvrdnju:
+'   vraceno | izlaz | novo zaduzenje | obaveza | fizicki | poslovno posle dokumenta
+' Prve tri su ORIGINALNI redovi knjige tog dokumenta po vrsti (KnjZbirVrste), a
+' poslednje tri kanonski citaoci -- obaveza i fizicki na danas, poslovno oko
+' dokumenta (AMB-POSL-01).
+Private Function Ki024Stanje(ByVal dokID As String, ByVal koopID As String, _
+                             ByVal tip As String) As String
+    Dim pp As Boolean, poslovno As Long
+    modAmbalaza.AmbStanjeOkoDokumenta AMB_NALOG_KOOPERANT, koopID, tip, "", dokID, pp, poslovno, True
+    Ki024Stanje = KnjZbirVrste(dokID, AMB_VK_VRACANJE_TUDJE) & "|" & _
+                  KnjZbirVrste(dokID, AMB_VK_IZLAZ_TUDJE) & "|" & _
+                  KnjZbirVrste(dokID, AMB_VK_IZDATA_PRAZNA) & "|" & _
+                  modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, koopID, tip) & "|" & _
+                  modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, koopID, tip) & "|" & poslovno
+End Function
+
+' Zbir kolicine ORIGINALNIH redova knjige jednog dokumenta (po DokumentID) za
+' vrstu kretanja -- kontra-stavovi se ne broje. ID-evi dokumenata su jedinstveni
+' (OTK-, ADK-), pa tip dokumenta ne ulazi u kljuc.
+Private Function KnjZbirVrste(ByVal dokID As String, ByVal vrsta As String) As Double
+    Dim data As Variant, i As Long, cI As Long, cV As Long, cK As Long, cS As Long
+    data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Function
+    cI = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, "modTest")
+    cV = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, "modTest")
+    cK = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA, "modTest")
+    cS = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, "modTest")
+    For i = 1 To UBound(data, 1)
+        If StrComp(NzToText(data(i, cI)), dokID, vbTextCompare) = 0 And _
+           StrComp(NzToText(data(i, cV)), vrsta, vbTextCompare) = 0 And _
+           Len(NzToText(data(i, cS))) = 0 Then
+            KnjZbirVrste = KnjZbirVrste + CDbl(data(i, cK))
+        End If
+    Next i
+End Function
+
+' Broj kontra-stavova (StornoOd popunjen) jednog dokumenta.
+Private Function KnjKontraStavova(ByVal dokID As String) As Long
+    Dim data As Variant, i As Long, cI As Long, cS As Long
+    data = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(data) Then Exit Function
+    cI = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID, "modTest")
+    cS = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, "modTest")
+    For i = 1 To UBound(data, 1)
+        If StrComp(NzToText(data(i, cI)), dokID, vbTextCompare) = 0 And _
+           Len(NzToText(data(i, cS))) > 0 Then KnjKontraStavova = KnjKontraStavova + 1
     Next i
 End Function
 
@@ -13494,6 +13883,31 @@ Private Function BilIma(ByVal r As Variant, ByVal tip As String, ByVal odeljak A
                         ByVal stavka As String) As Boolean
     BilIma = (BilKol(r, tip, odeljak, stavka) <> -999999)
 End Function
+
+' Obaveza prema partneru iz bilansa (CIJE/PARTNER). Partner sa obavezom 0 nema red
+' (AMB-BIL-01), pa je tada odgovor 0 -- isti broj koji daje AmbObavezaPartneru.
+Private Function BilPartner(ByVal r As Variant, ByVal tip As String, _
+                            ByVal nalogID As String) As Double
+    BilPartner = BilKol(r, tip, AMB_BIL_CIJE, AMB_BIL_PARTNER, nalogID)
+    If BilPartner = -999999 Then BilPartner = 0
+End Function
+
+' Brise red knjige jednog dokumenta po vrsti kretanja -- SAMO za sintetican
+' legacy oblik (vracanje tudje bez izlaza, kako ga je ostavila migracija). Knjiga
+' je append-only; test ovde namerno pravi stanje koje pisac vise ne pravi.
+Private Sub ObrisiRedKnjigePoVrsti(ByVal dokID As String, ByVal vrsta As String)
+    Dim rows As Collection, data As Variant, cVK As Long, k As Long, r As Long
+    Set rows = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, dokID)
+    If rows Is Nothing Then Exit Sub
+    data = GetTableData(TBL_AMBALAZA)
+    cVK = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, "modTest")
+    For k = rows.count To 1 Step -1
+        r = CLng(rows(k))
+        If StrComp(NzToText(data(r, cVK)), vrsta, vbTextCompare) = 0 Then
+            modSchemaGuard.RequireDeleteRow TBL_AMBALAZA, r, "modTest.ObrisiRedKnjigePoVrsti"
+        End If
+    Next k
+End Sub
 
 
 ' "P" kad lista trazi poslovni redosled, "-" kad nema misljenje.
@@ -13568,31 +13982,65 @@ End Function
 Private Function KartOtkupSaPokricem(ByVal tip As String, ByVal gajbi As Double, _
                                      ByRef outBroj As String, _
                                      Optional ByVal koopID As String = FX_KOOPERANT) As String
-    Dim h As Object, s As Object, stavke As Collection, greska As String
-    outBroj = modBrojevi.GenerateBrojDokumenta(FX_STANICA, Date)
+    Dim greska As String, errNum As Long
+    KartOtkupSaPokricem = KartOtkup(tip, gajbi, 0, outBroj, errNum, greska, koopID)
+    If Len(KartOtkupSaPokricem) = 0 Then
+        Err.Raise vbObjectError + 9271, "modTest.KartOtkupSaPokricem", _
+                  "CreateOtkup_TX nije vratio ID: " & greska
+    End If
+End Function
+
+' Otkup kooperanta na FX_STANICA koji PRIMA `primljeno` punih (stavka) i IZDAJE
+' `izdato` praznih (KolAmbIzdata), uz potvrdu manjka javnim racunom pisca. NE dize
+' gresku: kapije se mere i kad pisac odbije, pa vraca "" uz outErrNum i outGreska.
+' Podrazumevan kooperant je FX_KOOPERANT3 -- nema nedodeljen avans (v. 287).
+Private Function KartOtkup(ByVal tip As String, ByVal primljeno As Double, _
+                           ByVal izdato As Double, ByRef outBroj As String, _
+                           ByRef outErrNum As Long, ByRef outGreska As String, _
+                           Optional ByVal koopID As String = FX_KOOPERANT3, _
+                           Optional ByVal datum As Date = 0) As String
+    Dim h As Object, stavke As Collection
+    If datum = 0 Then datum = Date
+    outBroj = modBrojevi.GenerateBrojDokumenta(FX_STANICA, datum)
+    Set h = KartOtkupZaglavlje(tip, koopID, datum, outBroj, izdato)
+    Set stavke = KartOtkupStavke(primljeno)
+    outErrNum = 0
+    outGreska = ""
+    KartOtkup = modOtkup.CreateOtkup_TX(h, stavke, outGreska, _
+                                        modOtkup.OtkupDeficitKooperanta(h, stavke), outErrNum)
+End Function
+
+' Zaglavlje otkupa na FX_STANICA. Parcela je opciona (OtkHdrOpcion) i ide samo
+' uz FX_KOOPERANT -- FX_PARCELA je njegova (RequireParcelaKooperanta).
+Private Function KartOtkupZaglavlje(ByVal tip As String, ByVal koopID As String, _
+                                    ByVal datum As Date, ByVal broj As String, _
+                                    ByVal izdato As Double) As Object
+    Dim h As Object
     Set h = CreateObject("Scripting.Dictionary")
-    h.Add "Datum", Date
+    h.Add "Datum", datum
     h.Add "KooperantID", koopID
     h.Add "StanicaID", FX_STANICA
     h.Add "KulturaID", FX_KULTURA
     h.Add "VrstaVoca", FX_VRSTA
     h.Add "SortaVoca", FX_SORTA
     h.Add "TipAmbalaze", tip
-    h.Add "BrojDokumenta", outBroj
+    h.Add "BrojDokumenta", broj
+    If izdato > 0 Then h.Add "KolAmbIzdata", izdato
     If StrComp(koopID, FX_KOOPERANT, vbTextCompare) = 0 Then h.Add "ParcelaID", FX_PARCELA
+    Set KartOtkupZaglavlje = h
+End Function
+
+' Jedna stavka otkupa (Klasa I, 10 kg po 50) sa `primljeno` punih gajbi.
+Private Function KartOtkupStavke(ByVal primljeno As Double) As Collection
+    Dim s As Object, c As Collection
     Set s = CreateObject("Scripting.Dictionary")
     s.Add "Klasa", KLASA_I
     s.Add "Kolicina", 10#
     s.Add "Cena", 50#
-    s.Add "KolAmbalaze", gajbi
-    Set stavke = New Collection
-    stavke.Add s
-    KartOtkupSaPokricem = modOtkup.CreateOtkup_TX(h, stavke, greska, _
-                                                  modOtkup.OtkupDeficitKooperanta(h, stavke))
-    If Len(KartOtkupSaPokricem) = 0 Then
-        Err.Raise vbObjectError + 9271, "modTest.KartOtkupSaPokricem", _
-                  "CreateOtkup_TX nije vratio ID: " & greska
-    End If
+    s.Add "KolAmbalaze", primljeno
+    Set c = New Collection
+    c.Add s
+    Set KartOtkupStavke = c
 End Function
 
 ' Da li popunjen list igde nosi TACNO taj tekst celije. Prisustvo, ne
@@ -13656,7 +14104,10 @@ Private Function KartAmbPoslovniOracle(ByVal koopID As String, ByVal protivTip A
     k = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, koopID)
     If Not IsArray(k) Then Exit Function
     For i = 1 To UBound(k, 1)
+        ' Tehnicki redovi su imenovani ovde, ne kroz AmbVrstaJeZahtev: oracle je
+        ' nezavisan put. Od KI-024 ih je dva -- pokrice i izlaz vracenih tudjih.
         If StrComp(NzToText(k(i, 9)), AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0 _
+           And StrComp(NzToText(k(i, 9)), AMB_VK_IZLAZ_TUDJE, vbTextCompare) <> 0 _
            And Len(NzToText(k(i, 2))) > 0 And IsDate(k(i, 1)) Then
             ' VBA Or ne prekida izracunavanje -- predikat samo uz zadat protivnalog.
             pripada = True
