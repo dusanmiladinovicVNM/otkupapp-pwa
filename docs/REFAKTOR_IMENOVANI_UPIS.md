@@ -1,235 +1,206 @@
 # Refaktor: imenovani upis umesto pozicionog
 
 > **Ulaz za svaku sesiju koja radi na ovom refaktoru.** Cilj: nijedan pisac ne zna poziciju kolone.
-> Kanon (`schema/schema.json`) je registar **imena**; živa sveska je registar **pozicija**; pisac ne
-> vidi ni jedno ni drugo nego predaje imenovane vrednosti.
 >
-> Merenje je na `2cd86eb8` (merge PR #390). Ponašanje u Excelu je **NEVERIFIKOVANO** — `run_vba`
-> traži Windows + Excel + `pywin32` i u web sesiji se ne izvršava.
+> **Verzija 4.** Verzije 1–3 su imale greške koje bi, da su izvršene, **ubile aplikaciju** (§1.1).
+> Ovaj dokument je prošao tri nezavisne kritike i presudu nad njima (29.10.2026). Merenje je na
+> `b552892` (PR #446). Ponašanje u Excelu je **NEVERIFIKOVANO** — `run_vba` traži Windows + Excel.
 
 ---
 
-## 0. Ispravka merenja
+## 1. Šta je prethodna verzija pogrešno tvrdila
 
-Ranija procena „161–163 mesta upisa" je bila **pogrešna**. To je bio broj pojavljivanja tokena
-`AppendRow` u `src-vba/`, što uključuje 62 komentarske linije, dve definicije i `AppendRow = 0` /
-`AppendRow = newRow.index` dodele u samom telu.
+### 1.1 Kapija napisana po staroj §5 ubija svaku živu svesku
 
-Stvaran broj, merеn parserom koji spaja prelomljene redove i izbacuje komentare, string literale i
-definicione redove:
+Stara §5 je u negativne slučajeve stavila *„sveska uža **ili šira** od kanona"* kao nešto što mora
+dići grešku. **To je obrnuto od istine.**
 
-| Mera | Vrednost |
+- `modSchema.PrefiksNeslaganje:557` pada **samo** kad je `lo.ListColumns.count < kolone.count`.
+- `modSchemaGuard.TabelaBrojKolona:303` vraća **živu** širinu (`lo.ListColumns.count`), ne kanonsku.
+- **Širu svesku pravi sam projekat, na svakom startu:** `modSetup.EnsureRuntimeSchema:1221-1236` zove
+  `EnsureColumnOnTable` nad `TBL_KULTURE`, `TBL_FAKTURA_STAVKE`, `TBL_VRSTA_GP`, `TBL_PRERADA`, a
+  `:2250` dodaje **na kraj**. `.claude/rules/testovi.md` §9 to izričito zove legitimnim: *„one idu NA
+  KRAJ. Legitimne su — samo ih kanon još ne drži."*
+
+Kapija koja meri naspram kanona bi fail-closed obarala **svaki upis na svakoj živoj svesci**, a
+`vba_check` i CI bi ostali zeleni — jer se to vidi samo u Excelu.
+
+**Ispravno pravilo:** arnost se meri naspram **`lo.ListColumns.count` žive tabele**. Šira živa sveska
+**mora da prođe**, a višak kolona dobija `Empty`. Pada **samo** sveska kojoj **kanonska** kolona
+**fali** — i to već radi `RequireColumnIndex`.
+
+### 1.2 Merenje je bilo pogrešno u sva tri prethodna oblika
+
+Verzija 1 je tvrdila 163 mesta, v2 36/16/14, v3 39/18/21. **Sve troje netačno.** Uzrok je isti:
+klasifikacija grep-om nad oknom linija ne vidi helper definisan daleko, ne razlikuje `Array(...)`
+**imena kolona** od `Array(...)` **vrednosti**, i ne vidi fail-open granu.
+
+**Ovo se ne sme meriti grep-om.** Potreban je parser koji spaja prelomljene redove, razrešava
+helper i gleda da li je prvi `Array` imena ili vrednosti. Taj alat je **deo posla** (§4, P0).
+
+### 1.3 Klasifikacija je trojna, ne binarna
+
+Postoji treća grupa koju prethodne verzije nisu videle: **imenovan upis koji nepostojeću kolonu tiho
+preskače.**
+
+```vb
+' modPaletniList.bas:1352-1359 -- PalAppendRow
+n = lo.ListColumns.count
+ReDim rowData(0 To n - 1)                               ' puna ZIVA sirina
+idx = GetColumnIndex(tblName, CStr(cols(i)))            ' po IMENU
+If idx >= 1 And idx <= n Then rowData(idx - 1) = vals(i)  ' <- FAIL-OPEN
+```
+
+Prvi `Array(...)` na pozivnom mestu su `COL_PALS_*` — **imena kolona**, ne vrednosti. Pozivna mesta
+na preskakanje **računaju**: `:1321` *„PalAppendRow nepoznatu kolonu TIHO preskače, pa kolonu traži
+RequirePaletaStavkaSchema pre ijednog upisa"*, `:2874` *„inače PalAppendRow tiho preskoči upis
+bruto/paleta/ambalaza → 0 u sažetku paletnog lista"*.
+
+### 1.4 `StampRowAudit` je vlasnik audit repa, i prethodna verzija ga nije pominjala
+
+`modDataAccess.bas:294` zove `StampRowAudit` **posle** pozicione petlje. `:393-402`: `Created*` se
+piše **samo ako je ćelija prazna** („ne gazi eksplicitnu vrednost"); `Modified*` uvek.
+
+Pisci koji danas šalju kraći niz **ne diraju** audit rep, pa ga sistem ispuni. „Zaokruživanje reda na
+punu širinu" bi upisalo vrednost pisca i **tiho ugasilo sistemski trag**. `modCenovnik.bas:132` već
+danas piše `Now` u `CreatedAt`, pa ta grana tamo već okida.
+
+**Pravilo: imenovani graditelj NE adresira `CreatedAt`/`CreatedBy`/`ModifiedAt`/`ModifiedBy`.**
+Vlasnik je `StampRowAudit`; te kolone ostaju `Empty`. Nosi tvrdnju u `modTest`.
+
+### 1.5 „Okidač ne dolazi skoro" je netačno
+
+Stara §8 je prevod pisaca rangirala nisko jer *„nijedna od tih tabela nije u planu skraćivanja"*.
+`docs/STANJE_REFAKTORA.md:39` kaže suprotno: **`S7 faktura · S8 palete · S9 sledljivost`** čekaju.
+
+Istorija kanona pokazuje obrazac: **brisanje iz sredine se dogodi tačno kad se vrti korak te tabele.**
+`7d2fb98` (27.09, S3-ostatak, `tblOtpremnica`) · `260ffd8` (01.10, `tblAmbalazaDokument`) · `d890814`
+(13.10, `tblAmbalaza`) · **`cc3e294` (27.10, S6 korak 8 — obrisani `Kolicina`/`Cena`/`KolAmbalaze` iz
+SREDINE `tblPrijemnica`)**.
+
+**Deset od 14 pozicionih mesta živi u `tblFakture`/`tblFakturaStavke`/`tblPaleta`/`tblPaletaStavka`/
+`tblPrerada`/`tblPreradaStavka`/`tblUtovar`/`tblUtovarStavke`** — tabelama S7 i S8.
+
+---
+
+## 2. Merenje (prošlo adversarnu proveru)
+
+**41 produkcioni poziv** `\w*AppendRow` sa `TBL_` konstantom (+ 20 u test modulima):
+
+| Grupa | Mesta |
 |---|---|
-| Poziva `AppendRow` (+ lokalni `PalAppendRow`) | **51** |
-| — produkcionih | **36** u 19 modula |
-| — u test modulima | 15 |
-| Mesta koja grade goli `Array(...)` | 16 |
-| **Od toga niz kraći od broja kolona** | **14** (11 produkcionih, 3 testna) |
-| Mesta gde je niz duži od broja kolona | 0 |
-| Kapija arnosti | **0** |
+| **Imenovano fail-closed** — puna živa širina, `RequireColumnIndex` | **21** |
+| **Imenovano FAIL-OPEN** — puna širina, nepoznatu kolonu tiho preskače | **6** |
+| **Pozicionо** — goli `Array(...)` vrednosti | **14** |
 
-Obim posla je dakle **36 produkcionih mesta**, ne 163. To menja rez: ovo je posao za 5–6 PR-ova,
-ne za desetine.
+**Pozicionih 14, po fajlu:** `modUtovar:1270,1285,1593,1603` · `modNovac:230,351` ·
+`modSEFPersistance:355,501` · `modFaktura:328,345` · `modAgrohemija:161` · `modCenovnik:137` ·
+`modStornoContext:79` · `modStornoZurnal:95`
+
+**Fail-open 6:** `modPaletniList:1281,1323,2934,2951` · `modAgrohemija:397` · `modKooperant:140`
+
+`modDokumenta` (11) i `modOtkup` (2) su **imenovani fail-closed** — jezgro je završeno.
+
+### 2.1 Obrazac se ne projektuje, postoji
+
+`modOtkup.BuildOtkupHeaderRowData` radi tačno to, i **dokazan je stvarnim događajem**: `018be597`
+(S1d, 17.09) obrisao je 8 kolona iz **sredine** `tblOtkup` (37→29), a `modOtkup.bas` **nije dirnut
+nijednom linijom**. `SetRowValueByColumn` (`modSchemaGuard:281`) se koristi 89 puta.
+
+`.claude/rules/podaci-i-config.md` to već propisuje: *„Za polja čiji redosled nije siguran koristi
+upis po imenu"*, uz napomenu da *„kapija štiti od zatečene sveske, ne od novog koda koji pogrešno
+složi niz"*.
+
+### 2.2 Baza niza nije uniformna
+
+`SetRowValueByColumn:289` piše `rowData(colIndex - 1)` → **0**-bazno. `modUtovar:157`
+`ReDim rowData(1 To lo.ListColumns.count)` → **1**-bazno. Kapija **mora normalizovati `LBound`**.
+
+### 2.3 Dva SEF pisca imaju ZAKUCANU širinu
+
+`modSEFPersistance.bas:331` `Dim rowData(1 To 20)`, `:488` `Dim rowData(1 To 9)` — literali, ne
+`TabelaBrojKolona`. Danas su tačno jednaki kanonu, pa ih **kapija arnosti nikad ne okine**. Kad se
+tabela proširi, nova kolona ide na kraj, literal ostaje, poslednja kolona nikad ne dobije vrednost, a
+kapija propusti. `tblSEFEventLog` uz to **nije** gejtovan `SchemaReadyOrFail`-om.
+
+### 2.4 Tri pozicionа pisca nisu gejtovana ni `SchemaReadyOrFail`-om
+
+`modCenovnik:137` (modul nije ni u spisku pozivaoca) · `modNovac:351` za `tblPartnerMap` (kapija na
+`:71` prosleđuje samo `TBL_NOVAC`) · `modSEFPersistance:501` za `tblSEFEventLog`. Za ta tri
+reorderovana sveska **danas** tiho piše u pogrešne kolone.
 
 ---
 
-## 1. Pre-flight verdikt
-
-Po `.claude/skills/pre-flight/SKILL.md` §1. Dokaz uz svaku osu.
+## 3. Pre-flight verdikt (ispravljen)
 
 | Osa | Status | Dokaz |
 |---|---|---|
-| `DOMAIN` | **ZATVOREN** (v. §2.4) | Prvobitno prijavljen kao GAP. Zapravo je odluka **vec doneta i zapisana** u kanonskom piscu: `modOtkup.bas:1444-1446` pise `IzdatoStatus` EKSPLICITNO, uz komentar "nov model se ne oslanja na legacy konvenciju prazno = IZDATO". Periferija to samo nije ispratila. Dva pisca se oslanjaju na nezapisanu konvenciju „prazno znači X": `modAmbalaza.bas:175-184` šalje 10 vrednosti u `tblAmbalaza` (16 kolona) i `Stornirano` nikad ne upisuje; `modFaktura.bas:299` šalje 21 u `tblFakture` (30) i `IzdatoStatus` ostavlja prazan. Imenovani upis prisiljava odluku: upisati eksplicitno ili izostaviti ključ. **Blokira samo PR-ove B2 i B4**, ne ceo plan. |
-| `IDENTITY` | `N/A` | Nijedan identitet se ne menja. Ni jedan `*ID` ne dobija nov izvor. Napomena: prvi argument mora ostati `TBL_` konstanta (atribucija, ne identitet — v. `WRITERS`). |
-| `CARDINALITY` | `N/A` | Jedan niz = jedan red, pre i posle. Nijedan pisac ne prelazi iz 1:1 u 1:N. |
-| `INVARIANTS/OWNER` | **PROVEN** | `python tools/who_writes.py --check-ownership` → exit 0, 34 tabele, „nema novih pisaca". Vlasnik upisa ostaje isti modul; menja se samo kako gradi red. |
-| `WRITERS` | **PROVEN** (uz imenovanu zamku) | 36 produkcionih mesta popisano po fajlu (§0). **Zamka:** `tools/who_writes.py:81` `MUTATE_RE = r'\w*(?:AppendRow\|UpdateCell\|DeleteRow)\s*[\s(]\s*(TBL_\w+\|"(\w+)")'` — prefiks je slobodan, **sufiks strog**. Ime koje se *nastavlja* posle `AppendRow` (`AppendRowByName`, `AppendRowNamed`) kapiji je **nevidljivo**, pa bi A11 ostao zelen ne mereći ništa. Zato ime **mora da se završava** na `AppendRow`. |
-| `DOWNSTREAM` | **PROVEN** | **Nijedno mesto u `src-vba/` ne čita tabelarni red literalnim indeksom kolone** — svi čitaoci idu po imenu (`RequireColumnIndex` 1368 pojava, `GetColumnIndex` 1057). Zato je kvar nevidljiv: `modSEFMapper.bas:37-41` čita `FakturaID/KupacID/BrojFakture/Datum/Iznos` po imenu i **verno pošalje pomerenu vrednost u SEF** — van sveske, u državni sistem. Drugi potrošač istog niza: `modJournaling.WriteJournalRow` (v. §2.4). Treći pozicioni put van sveske: `modGoogleSheets.AppendRowToSheet` (`:1056`, 3 produkciona pozivaoca). |
-| `CAPABILITY` | `N/A` za zamenu upisa | Nijedna sposobnost se ne dodaje ni uklanja; `docs/DOMEN/MAPA_SPOSOBNOSTI.md` se ne dira. **Ne važi za fazu D3** (brisanje mrtve površine) — tamo je `CAPABILITY` posebna osa. |
-| `ACCEPTANCE CONTRACT` | **PROVEN** (plan dokaza) | §5. |
-| `PLATFORM` | **UNMEASURED** | Ne zna se šta `lo.ListRows.Add` ostavlja u kolonama koje petlja ne popuni — `ListRows.Add` nasleđuje formule i autofill tabele, pa „kraći niz ostavlja prazno" **nije dokazano**. Traži sondu na Windows + pravom Excelu. Do tada se piše kao neizmereno. |
-| `LANDING` | **PROVEN** | Grana `claude/great-hawking-91ti26` = `origin/main` = `2cd86eb8`, radno stablo čisto. **PR #391 je otvoren nad S5** — `modDataAccess`/`schema.json` ne smeju paralelno s njim (`CLAUDE.md` §6, serijski redosled za schema/setup i centralne primitive). `tools/` sme sa kodom; `.claude/` ide **zasebnim process PR-om**. |
+| `DOMAIN` | **GAP** — samo `modFaktura` i `tblNovac` | `UPIS-KONV-01` je **mrtva**: `tblAmbalaza` u kanonu **nema** kolonu `Stornirano`, a `tblAmbalazaDokument.Stornirano` se piše eksplicitno (`modAmbalaza.bas:1461`). Ostaje `modFaktura` (`IzdatoStatus` prazan) i — što stara verzija nije videla — `tblNovac` |
+| `IDENTITY` | `N/A` | Nijedan identitet se ne menja |
+| `CARDINALITY` | `N/A` | Jedan niz = jedan red |
+| `INVARIANTS/OWNER` | **GAP** | Ne „PROVEN": `KNOWN_ISSUES.md:55` **KI-029 OPEN** — `who_writes.py:291` čita `WRITE_OWNERSHIP.json` golim `json.load`, duplikat ključa uzima **poslednji**. Registar na kom osa stoji može tiho izgubiti vlasnika |
+| `WRITERS` | **PROVEN** | §2. Ime novog mutatora mora da **završava** na `AppendRow`/`UpdateCell`/`DeleteRow` (`who_writes.py:81` slobodan prefiks, strog sufiks; token je `UpdateCell`, **ne** `UpdateRow`), i tabela ostaje **prvi** argument kao `TBL_` konstanta |
+| `DOWNSTREAM` | **PROVEN** | Nijedno mesto ne čita red literalnim indeksom — svi po imenu, i zato je kvar nevidljiv: `modSEFMapper` verno pošalje pomerenu vrednost **u SEF**. Žurnal je drugi potrošač i **ima čitaoca na startu** (`modMain.bas:217 CheckJournalForRecovery`) |
+| `CAPABILITY` | **GAP** za fail-open grupu | Prevod fail-open → fail-closed menja „paleta sa nepotpunim sažetkom" u „paleta se ne može napraviti". Nosi `MAPA_SPOSOBNOSTI.md` C-046/C-048/C-049, a `STANJE_REFAKTORA.md:14` kaže da se mapa sposobnosti **apsolutno čuva** |
+| `ACCEPTANCE CONTRACT` | **GAP** | §5 |
+| `PLATFORM` | **UNMEASURED, i BLOKIRA** | Pun imenovani niz menja „nedirnuto" u `Empty` na svakoj koloni žive sveske; danas `Application.Min` klamp znači da rep **nikad** ne dobije upis. Šta `ListRows.Add:283` ostavlja u nepopunjenoj koloni nije izmerivo bez Excela. **Odluka pre P2** |
+| `LANDING` | **GAP** | Stara verzija je merila nad **spojenim** PR-om. Otvoren je **#447** („Bilans ambalaže", nije draft) i dira `src-vba/modTest.bas`, `tools/sabotaza.py`, `docs/STANJE_REFAKTORA.md` — **tačno fajlove koje §5 obavezno dira** |
 
-### BUSINESS EVENTS
-
-`EVENTS: N/A — čist refaktor sloja upisa.` Nijedan datum, status ni tabela poslovnog događaja se ne
-menja. Izuzetak je `DOMAIN GAP` iznad: odluka o `Stornirano` i `IzdatoStatus` **jeste** semantika
-statusa i rešava se kao odluka operatera pre PR-ova B2/B4, ne u kodu.
-
-### ⚠ Signali
-
-- **⚠ DOMAIN NOT CLOSED** — dve konvencije „prazno znači X" (v. `DOMAIN`).
-- **⚠ DOWNSTREAM RISK** — pomerena kolona danas putuje u SEF i u Google Sheets bez ijedne kapije.
-- **⚠ PLATFORM UNKNOWN** — ponašanje `ListRows.Add` nad nepopunjenim kolonama nije izmereno.
-- **⚠ FALSE-GREEN RISK** — kapija koja se prijavljuje kao `AppendRow = 0` je **nemerljiva** na 11
-  poziva koji povratnu vrednost ne čitaju; u `dokaz.py` bi ispala kao „ne obara ništa", nerazlučivo
-  od mrtve sabotaže. **Zato kapija mora da diže `Err.Raise`, ne da vraća 0.**
+`EVENTS: N/A — refaktor sloja upisa.`
 
 ---
 
-## 2. Obrazac ne treba projektovati -- postoji i dokazan je
+## 4. Rez
 
-**Ispravka prvobitne verzije ovog plana.** Prvobitno je ovde stajao izbor izmedju tri predloga novog
-API-ja (`ImenovaniAppendRow` i sl.). To je bilo nepotrebno: obrazac postoji, koristi se 89 puta i
-**prosao je stvaran test u produkcionoj istoriji**.
+Jedno imenovanje kroz ceo dokument: **P0…P7**. (Stare oznake B/C/D ne postoje više.)
 
-### 2.1 Kanonski obrazac
-
-`modOtkup.BuildOtkupHeaderRowData` (`src-vba/modOtkup.bas:1408`):
-
-```vb
-Dim colCount As Long
-colCount = TabelaBrojKolona(TBL_OTKUP)
-If colCount <= 0 Then Err.Raise vbObjectError + 1883, SRC, "..."
-
-Dim rowData() As Variant
-ReDim rowData(0 To colCount - 1)          ' PUNA sirina, uvek
-
-SetRowValueByColumn rowData, TBL_OTKUP, COL_OTK_ID, otkupID, SRC
-SetRowValueByColumn rowData, TBL_OTKUP, COL_OTK_DATUM, datum, SRC
-' ... po imenu za svako polje
-```
-
-Tri svojstva koja resavaju ceo problem:
-1. **Puna sirina** iz `TabelaBrojKolona` -- niz nikad nije kraci, pa `Application.Min` klamp nema sta
-   da odseca i nijedna kolona ne ostaje nedirnuta slucajno.
-2. **Upis po imenu** -- pozicija se razresava iz zive sveske, pa je redosled nebitan.
-3. **Bez "ako kolona postoji"** -- kanonska kolona koja fali **pada**, ne postaje prazno polje.
-   Komentar na `:1437` to izricito obrazlaze: tiho preskakanje bi sakrilo bas drift zbog kog kapija
-   postoji.
-
-### 2.2 Dokaz da obrazac radi
-
-`018be597` (S1d, 17.09.2026) obrisao je **8 kolona iz SREDINE `tblOtkup`** (37 -> 29 kolona;
-`Kolicina` sa pozicije 8, `Cena` sa 9, `KolAmbalaze` sa 11, `Novac` sa 14 -- sve iza pozicije 8 se
-pomerilo). U tom commitu **`src-vba/modOtkup.bas` nije diran nijednom linijom**, a pisac je nastavio
-da radi ispravno.
-
-To je najjaci moguci dokaz: obrazac je prosao tacno onaj dogadjaj zbog kog se ovaj refaktor radi.
-
-### 2.3 Sta se onda radi
-
-Ne projektuje se nista novo. Periferni pisci se prevode **na postojeci obrazac** -- `Build*RowData`
-helper sa `ReDim` pune sirine i `SetRowValueByColumn` po imenu. Nijedna nova javna procedura, nijedan
-nov modul, nijedna izmena `modDataAccess.AppendRow` dok prevod ne zavrsi.
-
-## 3. Rez na PR-ove
-
-### Konačno merenje (tri revizije; ova važi)
-
-Klasifikacija po pozivu, sa razrešenim helperom (i kad se zove inline kao drugi argument, i kad ide
-kroz promenljivu):
-
-| Stanje | Mesta |
-|---|---|
-| **Imenovano** — puna širina + razrešenje po imenu | **18** |
-| **Pozicionо** — goli `Array(...)` | **21** |
-| Ukupno produkcionih | 39 |
-
-**Jezgro je 100% imenovano.** Nijedno pozicionо mesto nije u `modDokumenta` ni `modOtkup` — dakle
-pisci `tblOtkup`, `tblOtpremnica`, `tblZbirna`, njihovih stavki **i tabela članstva**
-(`tblZbirnaIzvori` preko `BuildZbirnaIzvorRowData`) svi rade po imenu.
-
-Preostalih 21 je periferija: `modPaletniList` 4, `modUtovar` 4, `modNovac` 2, `modSEFPersistance` 2,
-`modFaktura` 2, `modAgrohemija` 2, te po jedno `modStornoZurnal`, `modStornoContext`, `modCenovnik`,
-`modSetup`, `modAmbalaza`.
-
-### Tri imenovana idioma već postoje
-
-Merenje je našlo **tri nezavisna** načina na koja repo već piše po imenu — zato se ništa ne
-projektuje, nego se bira jedan:
-
-| Idiom | Primer | Baza niza |
+| PR | Sadržaj | Blokira ga |
 |---|---|---|
-| `Build*RowData` + `SetRowValueByColumn` | `modOtkup.bas:1408`, `modDokumenta` (7 helpera, 63 upotrebe) | **0**-bazna (`rowData(colIndex - 1)`, `modSchemaGuard.bas:289`) |
-| `ReDim 1 To count` + `RequireColumnIndex` kao indeks | `modUtovar.bas:157-163`, `modMalina.bas` | **1**-bazna |
-| lokalni `Set*Cell` omotač | `modAgrohemija.bas:403` | varira |
+| **P0** | **Alat koji meri** — parser koji spaja prelomljene redove, razrešava helper i razlikuje `Array` imena od `Array` vrednosti; daje trojnu klasifikaciju. Nijedna izmena VBA | — |
+| **P1** | `modSetup.EnsureDataTable`: **prisutan kvar van plana.** Tri `Array`-a odstupaju od kanona **u sredini** (`tblPaleta` 20/23 od pozicije 6, `tblPaletaStavka` 13/18 od 3, `tblPrerada` 17/22 od 5). `:2206` postojećoj tabeli samo dopunjava, `:2222` nepostojeću pravi **tačno** u redosledu `Array`-a, `:2250` dodaje na kraj — redosled se **nikad** ne popravi. Dostupno sa Admin dugmeta (`modAdmin.bas:294`), i od tog momenta `modPaletniList.bas:165 SchemaReadyOrFail` **trajno** odbija paletizaciju. Kapija: Python poredi svaki `EnsureDataTable` `Array` sa kanonom | — |
+| **P2** | **Asimetrija strogih čitalaca članstva zbirne.** Prenos šest tvrdnji iz `modDokumenta:5723-5758` (`AktivnoOtpClanstvoPoKanonu`: prazan roditelj 1331, prazno dete 1332, roditelj ne postoji tačno jednom 1334, dete 1335, dupli par 1333, dva aktivna 1305) u `modDokumenta:1598-1612` (`AktivnoClanstvoPoKanonu`, zbirna, 7 pozivaoca, ima **samo** 1260, a `:1601` red sa praznim ID-em **tiho preskače**). ~20 linija, obrazac postoji sprat niže | — |
+| **P3** | **Integritet nad S6 vezama.** `tblPrijemnica.ZbirnaRoditeljID`, `tblPaletaStavka.PrijemnicaStavkaID`, `tblFakturaStavke.PrijemnicaStavkaID` — **nula provera**, a `Chk_B5:264` meri **labelu** `BrojZbirne`, pa prijemnica sa visećim `ZbirnaRoditeljID` prolazi ako je labela popunjena (`prj_brojzbirne 33 = prag 33`) | P2 |
+| **P4** | **KI-036 + KI-029** — merila kojima se sve ostalo dokazuje. Dok `dokaz.py` može upisati zeleni marker nad nečistim izvorom, §5 ništa ne tvrdi | — |
+| **P5** | `modJournaling`: **širina FAJLA, ne reda.** `:94 If Dir(filePath) = ""` — zaglavlje se piše jednom po tabeli po danu, `:98` po **živoj** širini. Dopuna reda „do žive širine" posle `EnsureRuntimeSchema` daje red **širi od zaglavlja u fajlu** → crash-recovery uvoz tiho pomeri svako polje. Danas je red kraći, pa je manjak **vidljiv**. Rešenje mora da reši fajl, inače je **gore od zatečenog** | P4 |
+| **P6** | Prevod **14 pozicionih** pisaca — **preduslov za S7/S8** (§1.5). `tblFakture` piše **dva** modula poziciono (`modFaktura:328`, `modUtovar:1593`), pa prevod jednog ne rešava ništa. Uz to: SEF literali (§2.3) i tri negejtovana (§2.4) | P0, odluke §6 |
+| **P7** | **Fail-open grupa (6)** — zaseban korak uz odluku, **ne mehanički**. Ili se svuda dodaje `Require*Schema` pre transakcije (`modPaletniList:1322` to već ima za `PALETA_STAVKA`, `:1281` za `PALETA` **nema**), ili se degradacija svesno ukida i upisuje u `MAPA_SPOSOBNOSTI` uz C-046/C-048/C-049 | `CAPABILITY` odluka |
 
-**Posledica za kapiju arnosti:** baza niza **nije uniformna**. Formula koja pretpostavlja
-`LBound = 0` je pogrešna za `modUtovar`/`modMalina`, a formula koja pretpostavlja 1 je pogrešna za
-`SetRowValueByColumn`. Kapija mora da normalizuje `LBound`, ne da ga pretpostavi.
+**Kapija arnosti u `AppendRow` nije u rezu.** Stara P4 je bila nedefinisana na tri točke i uvodila
+`newRow.Delete` — oblik koji `.claude/rules/podaci-i-config.md` zabranjuje („brisanje reda je razred
+upisa"; golo `newRow.Delete` je nevidljivo A11 kapiji, mora kroz `RequireDeleteRow`), a `newRow` može
+biti `Nothing` pa `Delete` u handleru baca 91 **iz** handlera. Uz to: 41 produkcioni + 20 testnih
+pozivaoca je napisano na `<= 0`/`= 0`, a plan nije rekao šta `AppendRow` vraća posle kapije. Vraća se
+kad P6 i P7 završe, kao zaseban pre-flight.
 
-Za prevod periferije preporučen je **prvi idiom** — ima najviše upotreba, jedini je dokazan stvarnim
-događajem (§2.2), i drži pravilo „kanonska kolona koja fali pada".
-
-### Redosled
-
-| PR | Sadržaj | Mesta | Zašto tu |
-|---|---|---|---|
-| **P1** | `modJournaling.WriteJournalRow` dopunjava red do širine zaglavlja | — | **Jedini PRISUTAN kvar u skupu.** `:116` ispisuje CSV bez dopune, `:100` ispisuje sva imena kolona; za pisce sa kraćim nizom žurnalni CSV **danas** ima manje polja od zaglavlja, pod `On Error Resume Next`. Nezavisno od svega ostalog, ~10 linija |
-| **P2** | `modCenovnik`, `modFaktura`, `modNovac`, `modAgrohemija`, `modAmbalaza` | 8 | Kraći nizovi. `modCenovnik` prvi — nema `SchemaReadyOrFail`, a `:124` nosi **rukom održavan komentar sa redosledom kolona**. `modFaktura` uz njega jer `tblFakture` čita SEF |
-| **P3** | `modPaletniList`, `modUtovar`, `modSEFPersistance`, `modStornoZurnal`, `modStornoContext`, `modSetup` | 13 | Mehanički. `modUtovar` traži odluku `UPIS-KONV-03` |
-| **P4** | Kapija arnosti u `AppendRow` + `newRow.Delete` u `ErrHandler` | — | **Zaštitna mreža, ne otkriće.** Tek posle P2/P3. PRE `lo.ListRows.Add` (`:283`), `Err.Raise` a ne `return 0`, i sa **normalizovanim `LBound`** |
-| **P5** | 15 testnih mesta | 15 | Bez pritiska |
-
-`tools/popis_citalaca.py` dobija grupu `pozicioni_upis`, prag **21** i pada svakim PR-om.
-
-### Ograničenja koja važe za svaki plan nad ovim slojem
-
-Devet nezavisnih ocena predloga (3–7/10, sve sa fatalnom zamerkom) ostavilo je pet činjenica koje
-vrede bez obzira šta se radi:
-
-1. **Ime novog mutatora mora da prođe pravi `MUTATE_RE` pre nego što se izabere.** Token je
-   `UpdateCell`, **ne** `UpdateRow` — pa bi `ImenovaniUpdateRow(TBL_NOVAC, ...)` bio **nevidljiv** za
-   A11 kapiju. Izvršeno nad pravim regexom: `ImenovaniAppendRow(TBL_CENOVNIK` → MATCH,
-   `ImenovaniUpdateRow(TBL_NOVAC` → NO MATCH.
-2. **Tabela mora ostati PRVI argument kao `TBL_` konstanta u istoj logičkoj liniji**, inače upis pada
-   u `MUTATE_DYN_RE` („mapa ne može da pripiše").
-3. **`RaiseSistemski` kodovi 1, 2, 10–13, 20–25 su zauzeti** (izmereno; 20–25 su u
-   `modDokumenta.bas:4186,4195,4444,4454,4631,4639,4644`). Slobodno od 30.
-4. **`tools/vba_check.py` već statički hvata** „Sub or Function not defined" (`:444`) i „Wrong number
-   of arguments" (`:461`), bez Excela. Jeftina nezavisna dobit: proširiti `collect_arities` (`:333`)
-   da skuplja i **imena** parametara, pa validirati svaki `ime:=` poziv u CI-ju.
-5. **Ne dodavati četvrtu definiciju „ispravnog prefiksa".** `modSchema.PrefiksNeslaganje:546` je
-   `Private`, a komentar na `:544` izričito kaže da dve kapije ne smeju da razviju različite
-   definicije. Postojeći helper se koristi, ne duplira.
-
-> **Šta ovaj plan NIJE dobio:** kritika kompletnosti i adversarna kritika rizika migracije nisu se
-> izvršile — pale su na session limit dva puta. Plan nije prošao nezavisnu proveru na propuste.
-
-## 4. Šta plan NE radi
-
-- Ne dira `.frx` i ne uvodi `Private WithEvents` (`CLAUDE.md` §3).
-- Ne menja vlasništvo upisa ni jedne tabele (A11 ostaje kakav je).
-- Ne menja semantiku ni jednog upisa — izuzev dve konvencije iz `DOMAIN GAP`, koje su **odluka
-  operatera**, ne odluka koda.
-- Ne uvodi nov modul. Sve u `modSchemaGuard` i `modDataAccess`.
-- Ne menja pravilo „nove kolone idu na kraj" dok faza B nije završena. **Trenutak kada to pravilo
-  prestaje da bude invarijanta zbog koje se pada je PR C1**, i tada se `CLAUDE.md` §3 menja —
-  zasebnim process PR-om.
+**Merilo napretka ne može biti grupa u `popis_citalaca.py`.** `:79-123` `GRUPE` su regexi nad
+**sidrima** (`COL_*` konstante, imena procedura), a `Array(newID, brojDok, datum, ...)` ne nosi ni
+jedno sidro. Uz to `:1048-1057` traži **tačnu jednakost** praga (pada i iznad i ispod), pa bi prag 21
+nad 14 mesta dao exit 1 na prvom commit-u. Merilo je alat iz P0.
 
 ---
 
 ## 5. ACCEPTANCE CONTRACT
 
-Plan dokaza, ne dokaz — kod još ne postoji (`pre-flight` §1).
+Stara §5 je citirala pet mrtvih ili zastarelih stvari: suite `imenovani-upis` **ne postoji** u
+`tools/run_vba.py` (18 suita; `.claude/rules/testovi.md` §3: *„katalog SUITES je jedini izvor istine"*
+i *„Nova suite mora biti gate"*); `RequireRedArnost` — **nula pogodaka** u repou (sabotirala je ime
+koje nikad nije definisano); prefiks za `dokaz.py` ne postoji; „598 sabotaža" je danas **1040**;
+„`modTest` 199 testova" je **288**; „34 tabele" je **36**.
 
-**Šta važi kad se završi**
-Nijedan produkcioni pisac ne prosleđuje pozicioni niz. `pozicioni_upis` = 0. Kolona ubačena u sredinu
-tabele **ne može** da pošalje vrednost u pogrešnu kolonu, jer se ime razrešava nad živim headerom.
-Nepun red pada po imenu pre nego što red uopšte nastane.
+**Zato je `ACCEPTANCE CONTRACT` = GAP i piše se po PR-u, ne za ceo refaktor.** Svaki PR nosi:
+šta važi kad se završi · šta ostaje netaknuto · koji negativan slučaj pada **po imenu** · kojim
+testom i u kojoj **postojećoj** suite (ili koja se dodaje u `SUITES` kao gate).
 
-**Šta mora ostati netaknuto**
-`python tools/who_writes.py --check-ownership` exit 0, ista lista vlasnika. `gen_schema_module.py
---check` otisak nepromenjen kroz fazu B. `modTest` 199 testova ne pada. 2 golden scenarija nepromenjena.
-`RequireColumnIndex`/`GetColumnIndex` semantika nedirnuta.
+Baseline-ovi na dan 29.10.2026, izmereni: `vba_check` exit 0 „čisto (191 fajlova)", 1040 sabotaža ·
+`gen_schema_module --check` exit 0, otisak `87AB4F9B` · `who_writes --check-ownership` exit 0,
+36 tabela · `popis_citalaca --check` exit 0, 13 grupa · `modTest` očekivano 288/0.
 
-**Koji edge case mora proći**
-Sveska sa **drugačijim redosledom** kolona od kanona: upis mora da ide u tačnu kolonu po imenu.
-Sveska sa kolonom koja u kanonu ne postoji: širina se razilazi → pada po imenu, ne piše tiho.
+**Negativni slučajevi koji moraju pasti** (ispravljeno po §1.1): red **uži** od žive širine · red
+**širi** od žive širine · nepoznato ime kolone · red koji nije niz · **kanonska kolona koja fali**.
+**Mora da PROĐE:** živa sveska **šira** od kanona (višak dobija `Empty`).
 
-**Koji negativan slučaj mora biti odbijen**
-Kraći red · duži red · red sa nepoznatim imenom kolone · red koji nije niz · sveska uža ili šira od
-kanona. Svaki od njih diže `Err.Raise` sa kodom iz `ERR_SIS_*` i **ne ostavlja red u tabeli**.
-
-**Čime se dokazuje**
-`python tools/vba_check.py` (radi bez Excela) · `python tools/run_vba.py --suite imenovani-upis` ·
-`python tools/who_writes.py --check-ownership` · `python tools/gen_schema_module.py --check` ·
-`python tools/popis_citalaca.py --check`.
-**Dokaz u oba smera je obavezan** (§5 `CLAUDE.md` — menja se checker): pokvari `RequireRedArnost` →
-`dokaz.py` mora da javne pad **po imenu te tvrdnje** → vrati → zeleno. Nove sabotaže u rezu:
-`python tools/dokaz.py imenovani-upis`; pun katalog (598 unosa) pred release.
-`Alt+F11 → Debug → Compile VBAProject` je ručna kapija pred svaki merge.
+**Dokaz u oba smera** je obavezan (menja se checker), ali tek posle P4 — jer `KI-036` kaže da
+`dokaz.py` može upisati zeleno nad sabotiranim izvorom.
 
 ---
 
@@ -237,10 +208,12 @@ kanona. Svaki od njih diže `Err.Raise` sa kodom iz `ERR_SIS_*` i **ne ostavlja 
 
 | ID | Pitanje | Blokira |
 |---|---|---|
-| `UPIS-KONV-01` | `tblAmbalaza.Stornirano` se danas **ne upisuje** (`modAmbalaza.bas:175-184`); čitaoci računaju „prazno = nije stornirano". Da li imenovani upis piše eksplicitnu vrednost ili izostavlja ključ? | PR B2 |
-| `UPIS-KONV-02` | `tblFakture.IzdatoStatus` ostaje prazan (`modFaktura.bas:299`); konvencija je „prazno = IZDATO". Isto pitanje. | PR B4 |
-| `UPIS-KONV-03` | `modUtovar.bas:1265-1267` računa na tiho dopunjavanje 8 kolona. Šta u njih ide? | PR B3 |
-| `UPIS-PLATFORM-01` | Šta `lo.ListRows.Add` ostavlja u kolonama koje petlja ne popuni (formule, autofill)? Traži sondu na Windows + Excelu. | ne blokira; menja formulaciju u §5 |
+| ~~`UPIS-KONV-01`~~ | **MRTVA** — `tblAmbalaza` u kanonu nema `Stornirano`; `tblAmbalazaDokument` ga piše eksplicitno (`modAmbalaza:1461`) | — |
+| `UPIS-KONV-02` | `tblFakture.IzdatoStatus` ostaje prazan (`modFaktura:304-327`); konvencija „prazno = IZDATO". Eksplicitno ili izostaviti? | P6 |
+| `UPIS-KONV-04` | **Novo** — `tblNovac` isto pitanje, stara verzija ga nije videla | P6 |
+| `UPIS-KONV-03` | `modUtovar:1265` računa na tiho dopunjavanje. Šta ide u te kolone? | P6 |
+| `UPIS-CAP-01` | Fail-open grupa: `Require*Schema` pre transakcije (čuva sposobnost) ili svesno ukidanje degradacije uz upis u `MAPA_SPOSOBNOSTI`? | P7 |
+| `UPIS-PLATFORM-01` | Pun niz upisuje `Empty` u kolone koje danas ostaju nedirnute. Šta `ListRows.Add` tamo ostavlja? Traži sondu na Windows + Excelu | **P6** (ne „ne blokira") |
 
 ---
 
@@ -253,24 +226,3 @@ git checkout claude/great-hawking-91ti26
 git pull origin claude/great-hawking-91ti26
 python tools/vba_check.py
 ```
-
----
-
-## 8. Značaj u ovom trenutku — iskren rang
-
-Merenje je oborilo prvobitnu procenu značaja ovog posla. Redosled po stvarnoj koristi, ne po tome
-koji je nalaz prvi našao:
-
-| # | Posao | Značaj | Zašto |
-|---|---|---|---|
-| 1 | **Integritet nad kanonskim članstvom** (`tblOtpremnicaIzvori`, `tblZbirnaIzvori`) | **VISOK** | `RunAllChecks` zove 21 proveru; **11 spaja preko `BrojZbirne`, 0 preko članstva**, a tabele članstva imaju **nula čitanja** u `modIntegritet`. Najnoviji i najmanje testiran deo modela — ono što je poslednjih 100 PR-ova izgradilo — **nema ni jedan sken integriteta**. Za redosled kolona postoji pravilo (`CLAUDE.md` §3) i dokazan obrazac pisca; za članstvo ne postoji ništa |
-| 2 | **`modJournaling` CSV** | SREDNJI | Jedini **prisutan** kvar iz ovog skupa, ~10 linija. Revizijski trag je već nepotpun |
-| 3 | **Prevod 21 perifernog pisca** | SREDNJE‑NIZAK | Mehanički, po postojećem obrascu. Nijedna od tih tabela nije u planu skraćivanja za S3e-2 ni S6, pa okidač ne dolazi skoro |
-| 3b | **`vba_check`: validacija imena parametara u `ime:=` pozivima** | SREDNJE‑NIZAK | Radi bez Excela, u CI-ju; `collect_arities` (`tools/vba_check.py:333`) već skuplja arnost, treba mu samo lista imena. Hvata klasu koju danas hvata jedino ručni Compile |
-| 4 | **Kapija arnosti** | NIZAK | Zaštitna mreža posle #3, ne otkriće. Ne može samostalno: 7 pisaca bi palo istog trenutka |
-| 5 | **Tipovi / FK / unique u kanonu** | NIZAK | Upis po imenu već uklanja rizik pozicije. Tipovi hvataju drugu klasu koja još nije ugrizla |
-| 6 | **Brisanje mrtve površine** | NIZAK | Higijena. `modTheme` 49/49 mrtvo, 983 linije — ali 78 `Sub`-ova bez parametara ne sme u brisanje bez potvrde operatera (sveska nije u repou) |
-
-**Šta NIJE rizik, iako je zvučalo tako.** Jezgro modela je već imenovano i **dokazano stvarnim
-događajem** (§2.2). Pomeraj kolone u `tblOtkup`/`tblOtpremnica`/`tblZbirna` piscima više ne može
-ništa, a to su jedine tabele koje S3e-2 skraćuje.
