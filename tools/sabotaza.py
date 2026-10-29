@@ -10552,6 +10552,69 @@ SABOTAZE = {
         "T_AmbBilans_SignalIKvar",
         "bilans: nase je obracunski saldo -- pozajmica 10 i otpis 2 daju -2, neuskladjeno 0",
     ),
+    # --- AMB-BIL-03: ambalaza po partneru (testovi 293-294) ---
+    # Drzi ne oduzima izlaz sa partnera (povrat): fizicki saldo raste.
+    "amb-par-drzi-samo-ulaz": (
+        "modAmbalaza.bas",
+        "            PartDodaj red, kljucevi, odTip & sep & odID & sep & kt, odTip, odID, kt, _\n"
+        "                      -q, 0, IIf(tehnicki, 0, -q)\n",
+        "            PartDodaj red, kljucevi, odTip & sep & odID & sep & kt, odTip, odID, kt, _\n"
+        "                      0, 0, IIf(tehnicki, 0, -q)   ' SABOTAZA: drzi samo ulaz\n",
+        "T_AmbPartneri_BrutoNeto",
+        "po partnerima: drzi je fizicki saldo (K1 30, Bajic 0, kupac 0)",
+    ),
+    # Obaveza se ne pripisuje partneru: tudje 0 svuda.
+    "amb-par-tudje-nula": (
+        "modAmbalaza.bas",
+        "            PartDodaj red, kljucevi, pTip & sep & pID & sep & kt, pTip, pID, kt, 0, dop, 0\n",
+        "            PartDodaj red, kljucevi, pTip & sep & pID & sep & kt, pTip, pID, kt, 0, 0, 0   ' SABOTAZA\n",
+        "T_AmbPartneri_BrutoNeto",
+        "po partnerima: tudje je obaveza firme po partneru (15, 12, 10)",
+    ),
+    # Neto broji i tehnicki ulaz (pokrice): fizicki umesto kartice.
+    "amb-par-neto-fizicki": (
+        "modAmbalaza.bas",
+        "            PartDodaj red, kljucevi, naTip & sep & naID & sep & kt, naTip, naID, kt, _\n"
+        "                      q, 0, IIf(tehnicki, 0, q)\n",
+        "            PartDodaj red, kljucevi, naTip & sep & naID & sep & kt, naTip, naID, kt, _\n"
+        "                      q, 0, q   ' SABOTAZA: neto fizicki\n",
+        "T_AmbPartneri_BrutoNeto",
+        "po partnerima: neto je saldo kao na kartici (+15 drzi nase, -12 i -10 firma duguje)",
+    ),
+    # Red bez ijednog broja ostaje u pregledu.
+    "amb-par-nula-red": (
+        "modAmbalaza.bas",
+        "        If v(0) <> 0 Or v(1) <> 0 Or v(2) <> 0 Then\n",
+        "        If True Then   ' SABOTAZA: i red bez brojeva\n",
+        "T_AmbPartneri_BrutoNeto",
+        "po partnerima: partner bez ijednog broja nema red",
+    ),
+    # Stanje po partneru ne sece po datumDo.
+    "amb-par-bez-reza-datumdo": (
+        "modAmbalaza.bas",
+        "        If d > dDo Then GoTo SledeciRedPartnera\n",
+        "        ' SABOTAZA: po partnerima bez reza po datumDo\n",
+        "T_AmbPartneri_BrutoNeto",
+        "po partnerima: kasniji dokument ne ulazi u stanje na datumDo, a do danas ulazi",
+    ),
+    # Lista po partnerima trazi izabran entitet.
+    "amb-par-lista-trazi-entitet": (
+        "modScrIzvestaji.bas",
+        "    If kljuc = IZ_AMBPAR Then Exit Function\n",
+        "    ' SABOTAZA: po partnerima trazi entitet\n",
+        "T_AmbPartneri_ListaIzvestaja",
+        "po partnerima: lista ne trazi izabran entitet",
+    ),
+    # Podnozje bez slotova drzi/tudje (ljuska bi pisala "0 kg" i "0,00 RSD").
+    "amb-par-podnozje-bez-slotova": (
+        "modScrIzvestaji.bas",
+        "    If kljuc = IZ_AMBPAR Then\n"
+        "        Oblikuj = Array(kolone, outA, n, 0#, 0#, Array(0, 0, 0), _\n",
+        "    If False Then   ' SABOTAZA: podnozje bez slotova\n"
+        "        Oblikuj = Array(kolone, outA, n, 0#, 0#, Array(0, 0, 0), _\n",
+        "T_AmbPartneri_ListaIzvestaja",
+        "po partnerima kroz ekran: podnozje nosi zbir drzi i tudje preko svih redova",
+    ),
 }
 
 

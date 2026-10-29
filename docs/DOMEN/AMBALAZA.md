@@ -2871,6 +2871,15 @@ GRANICA  POCETAK + nabavka + pokrice + pozajmica + otpis = KRAJ     u periodu
 
 *Provera:* `modTest` 290–292 · sabotaže `amb-bil-*`.
 
+**Po partneru (`AMB-BIL-03`, 29.10.2026).** Bilans kaže koliko je tuđeg ukupno;
+lista „Amb. partneri" kaže **čije**. Za svakog partnera i tip gajbe na `datumDo`:
+drži (fizički), tuđe (obaveza) i neto (poslovni saldo, kao kartica). Odluka
+operatera je **bruto + neto**, a ne samo neto razdvojen na „naše kod njega" i
+„firma duguje": tako zbir „Tuđe" ostaje jednak bilansu, a partner koji drži 30 i
+kome firma duguje 15 vidi se kao 30 | 15 | +15, ne kao 15 | 0.
+
+*Provera:* `modTest` 293–294 · sabotaže `amb-par-*`.
+
 ### 6.15 Cena — posteno
 
 Najveci redizajn jedne tabele u refaktoru: cetiri funkcije salda, tri izvestaja +

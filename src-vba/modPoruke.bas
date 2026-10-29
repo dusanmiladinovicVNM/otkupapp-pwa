@@ -1970,6 +1970,8 @@ Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_IZ_OTKL", "Otkupni listovi"
     UpsertRow lo, existing, "OTKUI_SEG_IZ_AMBBIL", "Bilans amb."
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_IZ_AMBBIL", "Bilans ambala" & ChrW(382) & "e"
+    UpsertRow lo, existing, "OTKUI_SEG_IZ_AMBPAR", "Amb. partneri"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_IZ_AMBPAR", "Ambala" & ChrW(382) & "a po partnerima"
     UpsertRow lo, existing, "OTKUI_CIPIZ_BEZPRIJ", "Bez prijema"
     UpsertRow lo, existing, "OTKUI_CIPIZ_ULAZ", "Ulaz"
     UpsertRow lo, existing, "OTKUI_CIPIZ_IZLAZ", "Izlaz"
@@ -2089,6 +2091,12 @@ Private Sub UpsertPoruke11(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_IZ_BIL_POZAJMICA", "Tu" & ChrW(273) & "e: pozajmica kupca"
     UpsertRow lo, existing, "OTKUI_IZ_BIL_OTPIS", "Otpis (lom, gubitak)"
     UpsertRow lo, existing, "OTKUI_IZ_BIL_KRAJ", "U opticaju na kraju"
+    ' --- Ambalaza po partnerima (AMB-BIL-03): kolone i podnozje ---
+    UpsertRow lo, existing, "OTKUI_HDI_DRZI", "DR" & ChrW(381) & "I"
+    UpsertRow lo, existing, "OTKUI_HDI_TUDJE", "TU" & ChrW(272) & "E"
+    UpsertRow lo, existing, "OTKUI_HDI_NETO", "NETO"
+    UpsertRow lo, existing, "OTKUI_FT_PAR_DRZI", "Dr" & ChrW(382) & "e"
+    UpsertRow lo, existing, "OTKUI_FT_PAR_TUDJE", "Tu" & ChrW(273) & "e"
     ' --- Ekran SLEDLJIVOST (v6-ui-187) ---
     UpsertRow lo, existing, "OTKUI_SCRSL_CAP", "Sledljivost"
     UpsertRow lo, existing, "OTKUI_SCRSL_SUB", "Lanac dokumenata: otkup " & ChrW(8212) & " otpremnica " & ChrW(8212) & " zbirna " & ChrW(8212) & " prijemnica " & ChrW(8212) & " faktura"

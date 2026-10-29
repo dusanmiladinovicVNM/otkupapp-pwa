@@ -2413,6 +2413,44 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
+' AMBALAZA PO PARTNERU (AMB-BIL-03): drzi, tudje i neto po partneru i tipu gajbe,
+' na datumDo. Racun je u modAmbalaza.AmbPartneriPodaci; ovde su naziv partnera,
+' natpis vrste i poredak po nazivu (agregat, kao zbirni oblici -- IzvNazivKljuc).
+' (1)=NalogID (2)=Naziv (3)=Vrsta (4)=TipAmbalaze (5)=Drzi (6)=Tudje (7)=Neto
+' (8)=REF ("KOP|id" / "KUP|id")
+Public Function ReportAmbalazaPoPartnerima(ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportAmbalazaPoPartnerima"
+    On Error GoTo EH
+
+    Dim d As Variant
+    d = modAmbalaza.AmbPartneriPodaci(datumDo)
+    If IsEmpty(d) Then Exit Function
+
+    Dim outA() As Variant, kljuc() As String, i As Long, n As Long, nm As String
+    n = UBound(d, 1)
+    ReDim outA(1 To n, 1 To 8)
+    ReDim kljuc(1 To n)
+    For i = 1 To n
+        nm = Trim$(ResolveEntitetName(CStr(d(i, 2)), CStr(d(i, 1))))
+        If Len(nm) = 0 Then nm = CStr(d(i, 2))
+        outA(i, 1) = CStr(d(i, 2))
+        outA(i, 2) = nm
+        outA(i, 3) = Poruka("OTKUI_IZ_BIL_P_" & UCase$(CStr(d(i, 1))))
+        outA(i, 4) = CStr(d(i, 3))
+        outA(i, 5) = CDbl(d(i, 4))
+        outA(i, 6) = CDbl(d(i, 5))
+        outA(i, 7) = CDbl(d(i, 6))
+        outA(i, 8) = IIf(StrComp(CStr(d(i, 1)), AMB_NALOG_KUPAC, vbTextCompare) = 0, _
+                         "KUP|", "KOP|") & CStr(d(i, 2))
+        kljuc(i) = IzvNazivKljuc(nm, CStr(d(i, 1)) & ":" & CStr(d(i, 2))) & _
+                   UCase$(CStr(d(i, 3)))
+    Next i
+    ReportAmbalazaPoPartnerima = IzvSortTelo(outA, n, kljuc)
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
 ' Naziv entiteta za zbirne redove: sifarnik sa fallback-om na ID.
 Private Function IzvEntNaziv(ByVal entitetTip As String, ByVal iD As String) As String
     Dim nm As String

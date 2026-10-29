@@ -334,6 +334,24 @@ Mere ih `modTest` 290 (tri odeljka, granica perioda, storno, paritet sa
 `AmbSaldoNaloga` i `AmbObavezaPartneru`), 291 (kapija potpunosti, KI-024, kvar
 knjige) i 292 (lista na ekranu), sabotaže `amb-bil-*`.
 
+**AMB-BIL-03 — ambalaža po partneru: bruto i neto (odluka operatera
+29.10.2026).** Izveštaji → OM → „Amb. partneri", bez izbora entiteta. Red =
+partner (kooperant, kupac) × tip gajbe, stanje na `datumDo`, tri već postojeća
+broja iz iste knjige:
+
+| Kolona | Pravilo | Isto kao |
+|---|---|---|
+| Drži | fizički saldo naloga | `AmbSaldoNaloga` |
+| Tuđe | obaveza firme prema partneru | `AmbObavezaPartneru`, bilans „Tuđe" |
+| Neto | poslovni saldo: + partner drži naše, − firma duguje | kartica ambalaže (`AMB-POSL-01`) |
+
+Zbir „Tuđe" je bilans „Tuđe", a zbir „Drži" je bilans „Gde su" za kooperante i
+kupce. Drži − Tuđe = Neto dok `VRACANJE_TUDJE` nema pisca (`KI-024`). Red bez
+ijednog broja se ne prikazuje. Čitalac `modAmbalaza.AmbPartneriPodaci` (jedan
+prolaz; stranu partnera za obavezu bira isti `BilStranaDuga` kao bilans),
+izveštaj `ReportAmbalazaPoPartnerima` (po imenu, ljuska sme da sortira), podnožje
+nosi zbir „Drži" i „Tuđe". Mere ga `modTest` 293 i 294, sabotaže `amb-par-*`.
+
 ## 3) Ko šta piše
 
 `WHO_WRITES.md` u ovom folderu — generisana mapa vlasništva nad tabelama

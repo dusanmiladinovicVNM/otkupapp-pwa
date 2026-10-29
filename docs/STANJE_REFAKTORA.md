@@ -8205,6 +8205,34 @@
      - **Ostaje operateru:** ručni compile, prikaz i štampa liste „Bilans amb.".
      - **Sledeći brojevi:** test 293 · stavka 226 · KI-065.
 
+226. **Merge `#447` = `5ad4668a`** (29.10.2026). Grana `claude/trusting-hawking-2cw6z1` (`a40f9d4b`, 5 commita
+     na `b5528922`), merge commit uz proveru head-a, na izričit zahtev operatera. CI `static` zelen; Excel
+     `RunAllTests` 292/0 nad `63889480` (operater potvrdio `git log`), `a40f9d4b` posle njega menja samo tekst
+     jedne poruke. Posle merge-a, nad `main`-om: `RunAllTests --keep` zeleno (operater). Ručni compile i
+     štampa liste nisu potvrđeni. Stavke 223–225 su ono što je spojeno.
+
+227. **Ambalaža po partneru — bruto i neto (`AMB-BIL-03`)** (29.10.2026). Grana `claude/trusting-hawking-2cw6z1`,
+     nova, od `5ad4668a`. Operater posle pregleda bilansa: „fali pregled tuđe ambalaže po partnerima, kao i naše
+     po partnerima". Odluke (29.10.2026): bruto + neto; nova lista pod OM. Pravilo: `docs/DOMEN/README.md` §2.
+
+     - **Šta je novo:** čitalac `modAmbalaza.AmbPartneriPodaci(datumDo)` — po partneru i tipu: drži (fizički),
+       tuđe (obaveza), neto (poslovni saldo, kao kartica); red bez brojeva se ne vraća. Strana partnera za
+       obavezu je izdvojena u `BilStranaDuga`, koji sada dele bilans i ovaj pregled. Izveštaj
+       `modIzvestaj.ReportAmbalazaPoPartnerima`, lista `AMBPARTNERI` (OM, bez entiteta, ljuska sortira),
+       podnožje: zbir drži i tuđe; štampa sabira sve tri kolone.
+     - **Testovi:** 293 `T_AmbPartneri_BrutoNeto` (mešovit partner 30 | 15 | +15, Bajić 0 | 12 | −12, kupac sa
+       pozajmicom 0 | 10 | −10, partner bez brojeva bez reda, rez po `datumDo`, zbirovi = bilans, paritet sa
+       `AmbSaldoNaloga` i `AmbObavezaPartneru`), 294 `T_AmbPartneri_ListaIzvestaja` (lista kroz `Scr_Rows`,
+       podnožje). **Promenjena premisa:** `T_Izv_UgovorEkrana` meri 13 lista; pod OM ih je 10, a bazen ljuske
+       ima 11 — ostaje **jedno** slobodno mesto. **Sabotaže:** 7 × `amb-par-*` (katalog 1051 → 1058); Python
+       simulacija: svaka pada na svojoj tvrdnji, svaka se vraća identično.
+     - **Nađeno usput:** prva verzija sabotaže `amb-par-bez-reza-datumdo` imala je istu zamenu kao
+       `amb-bil-bez-reza-datumdo`; vraćanje je u novi čitalac upisalo `GoTo SledeciRedBilansa` (labela druge
+       procedure → compile greška). `vba_check` to ne vidi; nađeno proverom „svaki `GoTo` ima labelu u svojoj
+       proceduri". Zamena je sada jedinstvena, a izvor proveren posle svakog vraćanja.
+     - **NEVERIFIKOVANO:** `RunAllTests` (očekivano 294/0), `dokaz.py amb-par`, compile, prikaz i štampa.
+     - **Sledeći brojevi:** test 295 · stavka 228 · KI-065.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

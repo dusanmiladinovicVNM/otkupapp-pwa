@@ -1548,16 +1548,7 @@ Public Function AmbBilansPodaci(ByVal datumOd As Date, ByVal datumDo As Date) As
         ' TUDJE: doprinos obavezi, pripisan strani reda koja je partner.
         dop = modAmbalazaUgovor.AmbDoprinosObavezi(vk, q, vrstaOrig)
         If dop <> 0 Then
-            If modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, naTip) Then
-                pTip = naTip
-                pID = naID
-            ElseIf modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, odTip) Then
-                pTip = odTip
-                pID = odID
-            Else
-                Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
-                          "Red sa doprinosom obavezi nema partnera ni na jednoj strani."
-            End If
+            BilStranaDuga klasaDuga, naTip, naID, odTip, odID, pTip, pID, SRC
             BilDodaj partneri, kt & sep & pTip & sep & pID, dop
         End If
 SledeciRedBilansa:
@@ -1656,6 +1647,203 @@ Private Sub BilRed(ByVal redovi As Collection, ByVal tip As String, _
     redovi.Add Array(tip, odeljak, stavka, nalogTip, nalogID, kolicina, _
                      UCase$(tip) & sep & CStr(odeljakRed) & sep & Format$(stavkaRed, "00") & _
                      sep & UCase$(nalogTip) & sep & UCase$(nalogID))
+End Sub
+
+' STRANA REDA KOJOJ PRIPADA DOPRINOS OBAVEZI -- partner (klasa koju matrica
+' daje odredistu pokrica, isto kao AmbObavezaPartneru). ULAZ i VRACANJE nose
+' partnera na NA strani, njihov kontra-stav na OD strani. Red sa doprinosom
+' bez partnera je kvar ugovora, ne nula.
+Private Sub BilStranaDuga(ByVal klasaDuga As String, _
+                          ByVal naTip As String, ByVal naID As String, _
+                          ByVal odTip As String, ByVal odID As String, _
+                          ByRef outTip As String, ByRef outID As String, _
+                          ByVal SRC As String)
+    If modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, naTip) Then
+        outTip = naTip
+        outID = naID
+    ElseIf modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, odTip) Then
+        outTip = odTip
+        outID = odID
+    Else
+        Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                  "Red sa doprinosom obavezi nema partnera ni na jednoj strani."
+    End If
+End Sub
+
+' ============================================================
+' READ: AMBALAZA PO PARTNERU -- bruto i neto (AMB-BIL-03)
+' ============================================================
+'
+' Za svakog partnera (klasa duga: kooperant, kupac) i tip gajbe, stanje NA
+' datumDo, tri vec postojeca broja iz iste knjige:
+'
+'   DRZI   fizicki saldo naloga               (isto pravilo kao AmbSaldoNaloga)
+'   TUDJE  obaveza firme prema partneru       (AmbDoprinosObavezi, AMB-INV-09)
+'   NETO   poslovni saldo, kao na kartici     (bez tehnickih redova, AMB-POSL-01)
+'
+' Knjiga ne vodi gajbe po vlasniku, pa NETO + znaci da partner drzi nase, a -
+' da firma duguje. DRZI - TUDJE = NETO dok VRACANJE_TUDJE nema pisca; kad ga
+' dobije, razlika je isti signal kao NEUSKLADJENO u bilansu (KI-024).
+' Zbir TUDJE po partnerima = bilans CIJE/TUDJE; zbir DRZI = bilans GDE za
+' kooperante i kupce.
+'
+' Jedan prolaz, ista kapija integriteta; storno po vrsti ORIGINALA. Red bez
+' ijednog broja (sve 0) se ne vraca.
+'
+' Vraca 2D niz (1..n, 1..6), Empty kad nema redova:
+'   (1) NalogTip  (2) NalogID  (3) TipAmbalaze  (4) Drzi  (5) Tudje  (6) Neto
+' Poredak: tip naloga, ID, tip ambalaze (velikim slovima); izvestaj ga slaze
+' po imenu.
+Public Function AmbPartneriPodaci(ByVal datumDo As Date) As Variant
+    Const SRC As String = "modAmbalaza.AmbPartneriPodaci"
+
+    Dim dDo As Long
+    dDo = Int(CDbl(datumDo))
+
+    RequireKnjigaSchema SRC
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim kol As Object, vrste As Object
+    Set kol = KnjigaZaCitanje(data, SRC, vrste)
+
+    Dim cOdTip As Long, cOdID As Long, cNaTip As Long, cNaID As Long
+    Dim cDat As Long, cTipA As Long, cKol As Long, cVK As Long, cSt As Long
+    cDat = kol(COL_AMB_DATUM)
+    cTipA = kol(COL_AMB_TIP)
+    cKol = kol(COL_AMB_KOLICINA)
+    cVK = kol(COL_AMB_VRSTA_KRETANJA)
+    cSt = kol(COL_AMB_STORNO_OD)
+    cOdTip = kol(COL_AMB_OD_TIP)
+    cOdID = kol(COL_AMB_OD_ID)
+    cNaTip = kol(COL_AMB_NA_TIP)
+    cNaID = kol(COL_AMB_NA_ID)
+
+    Dim klasaDuga As String
+    klasaDuga = modAmbalazaUgovor.AmbPokriceKlasa()
+    If Len(klasaDuga) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, "Klasa duga nije definisana u matrici."
+    End If
+
+    Dim sep As String
+    sep = Chr$(30)
+
+    ' Kljuc reda: tip naloga | ID | tip ambalaze (prvi zapis tipa, bez obzira na
+    ' velicinu slova -- isto kao bilans). Vrednosti: Array(drzi, tudje, neto).
+    Dim tipovi As Object, red As Object, kljucevi As Object
+    Set tipovi = CreateObject("Scripting.Dictionary")
+    tipovi.CompareMode = vbTextCompare
+    Set red = CreateObject("Scripting.Dictionary")
+    red.CompareMode = vbTextCompare
+    Set kljucevi = CreateObject("Scripting.Dictionary")
+    kljucevi.CompareMode = vbTextCompare
+
+    Dim i As Long, d As Long, tip As String, kt As String, q As Double
+    Dim odTip As String, odID As String, naTip As String, naID As String
+    Dim st As String, vk As String, vrstaOrig As String, tehnicki As Boolean
+    Dim dop As Double, pTip As String, pID As String
+
+    For i = 1 To UBound(data, 1)
+        If Not RedDoticeKnjigu(data, i, kol) Then GoTo SledeciRedPartnera
+        d = Int(CDbl(CDate(data(i, cDat))))
+        If d > dDo Then GoTo SledeciRedPartnera
+
+        tip = AmbText(data(i, cTipA))
+        If Not tipovi.Exists(tip) Then tipovi.Add tip, tip
+        kt = CStr(tipovi(tip))
+        q = CDbl(data(i, cKol))
+        odTip = AmbText(data(i, cOdTip))
+        odID = AmbText(data(i, cOdID))
+        naTip = AmbText(data(i, cNaTip))
+        naID = AmbText(data(i, cNaID))
+        vk = AmbText(data(i, cVK))
+        vrstaOrig = ""
+        st = AmbText(data(i, cSt))
+        If Len(st) > 0 Then
+            If Not vrste.Exists(st) Then
+                Err.Raise AMB_ERR_KNJIGA_KVAR, SRC, _
+                          "StornoOd '" & st & "' ne pokazuje na red knjige."
+            End If
+            vrstaOrig = CStr(vrste(st))
+        End If
+        tehnicki = AmbRedJeTehnicki(data, i, kol, vrste)
+
+        ' DRZI i NETO: strana reda koja je partner, odrediste +, izvor -.
+        If modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, naTip) Then
+            PartDodaj red, kljucevi, naTip & sep & naID & sep & kt, naTip, naID, kt, _
+                      q, 0, IIf(tehnicki, 0, q)
+        End If
+        If modAmbalazaUgovor.AmbNalogUKlasi(klasaDuga, odTip) Then
+            PartDodaj red, kljucevi, odTip & sep & odID & sep & kt, odTip, odID, kt, _
+                      -q, 0, IIf(tehnicki, 0, -q)
+        End If
+
+        ' TUDJE: doprinos obavezi, ista strana kao u bilansu.
+        dop = modAmbalazaUgovor.AmbDoprinosObavezi(vk, q, vrstaOrig)
+        If dop <> 0 Then
+            BilStranaDuga klasaDuga, naTip, naID, odTip, odID, pTip, pID, SRC
+            PartDodaj red, kljucevi, pTip & sep & pID & sep & kt, pTip, pID, kt, 0, dop, 0
+        End If
+SledeciRedPartnera:
+    Next i
+
+    ' Samo redovi sa bar jednim brojem, pa stabilno sortiranje po kljucu.
+    Dim k As Variant, v As Variant, m As Variant, n As Long, j As Long
+    Dim arr() As Variant
+    If red.count = 0 Then Exit Function
+    ReDim arr(1 To red.count, 1 To 7)
+    For Each k In red.keys
+        v = red(k)
+        If v(0) <> 0 Or v(1) <> 0 Or v(2) <> 0 Then
+            m = kljucevi(k)
+            n = n + 1
+            arr(n, 1) = m(0)
+            arr(n, 2) = m(1)
+            arr(n, 3) = m(2)
+            arr(n, 4) = v(0)
+            arr(n, 5) = v(1)
+            arr(n, 6) = v(2)
+            arr(n, 7) = UCase$(CStr(m(0))) & Chr$(1) & UCase$(CStr(m(1))) & Chr$(1) & _
+                        UCase$(CStr(m(2)))
+        End If
+    Next k
+    If n = 0 Then Exit Function
+
+    Dim telo() As Variant, sortirano As Variant, outA() As Variant
+    ReDim telo(1 To n, 1 To 7)
+    For i = 1 To n
+        For j = 1 To 7
+            telo(i, j) = arr(i, j)
+        Next j
+    Next i
+    sortirano = modArrayUtils.SortArrayPoKljucu(telo, 7)
+    ReDim outA(1 To n, 1 To 6)
+    For i = 1 To n
+        For j = 1 To 6
+            outA(i, j) = sortirano(i, j)
+        Next j
+    Next i
+    AmbPartneriPodaci = outA
+End Function
+
+' Dodaje (drzi, tudje, neto) redu partnera. Vrednost u recniku je NIZ, ne
+' objekat -- Set d(k) = objekat nad late-bound Dictionary-jem puca
+' (.claude/rules/vba-izvor.md), a niz se dodeljuje obicno.
+Private Sub PartDodaj(ByVal red As Object, ByVal kljucevi As Object, ByVal k As String, _
+                      ByVal nalogTip As String, ByVal nalogID As String, ByVal tip As String, _
+                      ByVal drzi As Double, ByVal tudje As Double, ByVal neto As Double)
+    Dim v As Variant
+    If Not red.Exists(k) Then
+        red.Add k, Array(0#, 0#, 0#)
+        kljucevi.Add k, Array(nalogTip, nalogID, tip)
+    End If
+    v = red(k)
+    v(0) = CDbl(v(0)) + drzi
+    v(1) = CDbl(v(1)) + tudje
+    v(2) = CDbl(v(2)) + neto
+    red(k) = v
 End Sub
 
 ' ============================================================

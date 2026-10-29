@@ -397,6 +397,8 @@ Public Sub RunAllTests()
     RunOne 290
     RunOne 291
     RunOne 292
+    RunOne 293
+    RunOne 294
     RunOne 13
     RunOne 14
     RunOne 15
@@ -984,6 +986,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 290: TestName = "T_AmbBilans_GdeCijeGranica"
         Case 291: TestName = "T_AmbBilans_SignalIKvar"
         Case 292: TestName = "T_AmbBilans_ListaIzvestaja"
+        Case 293: TestName = "T_AmbPartneri_BrutoNeto"
+        Case 294: TestName = "T_AmbPartneri_ListaIzvestaja"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1284,6 +1288,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 290: T_AmbBilans_GdeCijeGranica
         Case 291: T_AmbBilans_SignalIKvar
         Case 292: T_AmbBilans_ListaIzvestaja
+        Case 293: T_AmbPartneri_BrutoNeto
+        Case 294: T_AmbPartneri_ListaIzvestaja
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -13268,6 +13274,204 @@ Private Sub T_AmbBilans_ListaIzvestaja()
              "bilans kroz ekran: prvi red je odeljak GDE, stavka otkupna mesta"
 End Sub
 
+' ============================================================
+' 293. AMB-BIL-03: AMBALAZA PO PARTNERU -- DRZI, TUDJE, NETO.
+' ============================================================
+' Tri vec postojeca broja po partneru i tipu, na datumDo: drzi = fizicki saldo,
+' tudje = obaveza (AMB-INV-09), neto = poslovni saldo kao na kartici. Knjiga ne
+' vodi gajbe po vlasniku, pa neto + znaci da partner drzi nase, - da firma duguje
+' (odluka operatera 29.10.2026: bruto + neto).
+' Tok (nov tip T, FX_STANICA; d1 = danas - 2):
+'   d1  nabavka 100
+'   d1  K1 vrati 15 sa saldom 0 (pokrice 15), pa dobije 30     -> 30 | 15 | +15
+'   d1  K2 dobije 11, vrati 23 (pokrice 12) -- slucaj Bajic    ->  0 | 12 | -12
+'   d1  kupac pozajmi 10 vozacu                                ->  0 | 10 | -10
+'   d1  K3 dobije 4 i vrati 4                                  -> nema reda
+'   danas  kupac 2 pozajmi 3 vozacu                            -> tek na danas
+' Zbir tudje na d1 = bilans CIJE/TUDJE (37); zbir drzi = bilans GDE kooperanti +
+' kupci (30).
+' Semanticki nivo: KOMADI po (partner, tip). Fixture: normal production state.
+' SABOTAZE: amb-par-drzi-samo-ulaz, amb-par-tudje-nula, amb-par-neto-fizicki,
+' amb-par-nula-red, amb-par-bez-reza-datumdo.
+Private Sub T_AmbPartneri_BrutoNeto()
+    Dim tip As String, d1 As Date, bP As String, b2 As String
+    Dim dI1 As String, dI2 As String, dP1 As String, dP2 As String, dPoz As String
+    Dim dI3 As String, dR3 As String, dPoz2 As String
+    Dim r As Variant, rDanas As Variant, bil As Variant
+    Dim drzi As String, tudje As String, neto As String
+    Dim sumD As Double, sumT As Double, i As Long
+
+    tip = KartNoviTipAmb("PAR")
+    d1 = Date - 2
+    modAmbalaza.NabaviAmbalazu_TX d1, FX_STANICA, tip, 100
+    dP1 = KartPovratSaPokricem(tip, 15, bP, d1, FX_KOOPERANT)
+    dI1 = modAmbalaza.UpisiReversAmbalaze_TX(d1, "", FX_STANICA, tip, 30, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    dI2 = modAmbalaza.UpisiReversAmbalaze_TX(d1, "", FX_STANICA, tip, 11, REV_SMER_IZDAVANJE, FX_KOOPERANT2, "")
+    dP2 = KartPovratSaPokricem(tip, 23, b2, d1, FX_KOOPERANT2)
+    dPoz = modAmbalaza.UpisiPozajmicuKupca_TX(d1, "POZ-" & tip, FX_KUPAC, FX_VOZAC, tip, 10, "test 293")
+    dI3 = modAmbalaza.UpisiReversAmbalaze_TX(d1, "", FX_STANICA, tip, 4, REV_SMER_IZDAVANJE, FX_KOOPERANT3, "")
+    dR3 = modAmbalaza.UpisiReversAmbalaze_TX(d1, "", FX_STANICA, tip, 4, REV_SMER_PRIJEM, FX_KOOPERANT3, "")
+    dPoz2 = modAmbalaza.UpisiPozajmicuKupca_TX(Date, "POZ2-" & tip, FX_KUPAC2, FX_VOZAC, tip, 3, "test 293")
+
+    r = modAmbalaza.AmbPartneriPodaci(d1)
+    rDanas = modAmbalaza.AmbPartneriPodaci(Date)
+    bil = modAmbalaza.AmbBilansPodaci(d1, d1)
+
+    drzi = ParKol(r, FX_KOOPERANT, tip, 4) & "|" & ParKol(r, FX_KOOPERANT2, tip, 4) & "|" & _
+           ParKol(r, FX_KUPAC, tip, 4)
+    tudje = ParKol(r, FX_KOOPERANT, tip, 5) & "|" & ParKol(r, FX_KOOPERANT2, tip, 5) & "|" & _
+            ParKol(r, FX_KUPAC, tip, 5)
+    neto = ParKol(r, FX_KOOPERANT, tip, 6) & "|" & ParKol(r, FX_KOOPERANT2, tip, 6) & "|" & _
+           ParKol(r, FX_KUPAC, tip, 6)
+    If IsArray(r) Then
+        For i = 1 To UBound(r, 1)
+            If StrComp(CStr(r(i, 3)), tip, vbTextCompare) = 0 Then
+                sumD = sumD + CDbl(r(i, 4))
+                sumT = sumT + CDbl(r(i, 5))
+            End If
+        Next i
+    End If
+
+    AssertEq (Len(dP1) > 0 And Len(dI1) > 0 And Len(dI2) > 0 And Len(dP2) > 0 And _
+              Len(dPoz) > 0 And Len(dI3) > 0 And Len(dR3) > 0 And Len(dPoz2) > 0), True, _
+             "preduslov: svi dokumenti toka su upisani"
+    AssertEq drzi, "30|0|0", _
+             "po partnerima: drzi je fizicki saldo (K1 30, Bajic 0, kupac 0)"
+    AssertEq tudje, "15|12|10", _
+             "po partnerima: tudje je obaveza firme po partneru (15, 12, 10)"
+    AssertEq neto, "15|-12|-10", _
+             "po partnerima: neto je saldo kao na kartici (+15 drzi nase, -12 i -10 firma duguje)"
+    AssertEq ParKol(r, FX_KOOPERANT3, tip, 4), "", _
+             "po partnerima: partner bez ijednog broja nema red"
+    AssertEq ParKol(r, FX_KUPAC2, tip, 5) & "/" & ParKol(rDanas, FX_KUPAC2, tip, 4) & "|" & _
+             ParKol(rDanas, FX_KUPAC2, tip, 5) & "|" & ParKol(rDanas, FX_KUPAC2, tip, 6), "/0|3|-3", _
+             "po partnerima: kasniji dokument ne ulazi u stanje na datumDo, a do danas ulazi"
+    AssertEq sumT & "|" & sumD, _
+             BilKol(bil, tip, AMB_BIL_CIJE, AMB_BIL_TUDJE) & "|" & _
+             (BilKol(bil, tip, AMB_BIL_GDE, AMB_NALOG_KOOPERANT) + _
+              BilKol(bil, tip, AMB_BIL_GDE, AMB_NALOG_KUPAC)), _
+             "po partnerima: zbir tudje = bilans tudje, zbir drzi = bilans gde (kooperanti + kupci)"
+    AssertEq ParKol(rDanas, FX_KOOPERANT, tip, 4) & "|" & ParKol(rDanas, FX_KOOPERANT, tip, 5) & "|" & _
+             ParKol(rDanas, FX_KOOPERANT2, tip, 4) & "|" & ParKol(rDanas, FX_KOOPERANT2, tip, 5) & "|" & _
+             ParKol(rDanas, FX_KUPAC, tip, 4) & "|" & ParKol(rDanas, FX_KUPAC, tip, 5), _
+             modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip) & "|" & _
+             modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT, tip) & "|" & _
+             modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, FX_KOOPERANT2, tip) & "|" & _
+             modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KOOPERANT, FX_KOOPERANT2, tip) & "|" & _
+             modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, FX_KUPAC, tip) & "|" & _
+             modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KUPAC, FX_KUPAC, tip), _
+             "po partnerima do danas se slaze sa kanonskim citaocima (saldo naloga, obaveza partneru)"
+End Sub
+
+' ============================================================
+' 294. AMB-BIL-03: LISTA "AMB. PO PARTNERIMA" NA EKRANU IZVESTAJI.
+' ============================================================
+' Isti ugao kao bilans: samo pod OM, u oba rezima, bez izbora entiteta. To je
+' agregat (red = partner), pa ga ljuska sme sortirati. Kolone su komadi, bez kg
+' i novca; podnozje nosi Drzi i Tudje kao dva slota. Kroz pravi Scr_Rows: red
+' kooperanta za tip T nosi ime, vrstu i iste brojeve kao citalac, a slotovi
+' podnozja su zbir citaoca preko svih redova.
+' Tok (nov tip T): K1 vrati 6 sa saldom 0 (pokrice 6) -> 0 | 6 | -6.
+' Fixture: normal production state.
+' SABOTAZE: amb-par-lista-trazi-entitet, amb-par-podnozje-bez-slotova.
+Private Sub T_AmbPartneri_ListaIzvestaja()
+    Dim tip As String, bP As String, dP As String, dostupna As String
+    Dim kolone As Variant, i As Long, imaKgIliNovac As Boolean, natpisi As String, k As Variant
+    Dim sortPar As String, d As Variant, redovi As Variant, n As Long, slotovi As Variant
+    Dim redK1 As String, sumD As Double, sumT As Double, rc As Variant
+    Dim slotD As Double, slotT As Double, kljucD As String, kljucT As String
+
+    sortPar = KartSortListe("AMBPARTNERI", "OM", False)
+    modScrIzvestaji.Scr_IzTestReset
+    dostupna = modScrIzvestaji.IzListaDostupna("AMBPARTNERI", "OM", False) & "|" & _
+               modScrIzvestaji.IzListaDostupna("AMBPARTNERI", "OM", True) & "|" & _
+               modScrIzvestaji.IzListaDostupna("AMBPARTNERI", "Kupac", False) & "|" & _
+               modScrIzvestaji.IzListaDostupna("AMBPARTNERI", "Vozac", True) & "|" & _
+               modScrIzvestaji.IzListaDostupna("AMBPARTNERI", "Kooperant", False)
+
+    kolone = modScrIzvestaji.IzKoloneZaListu("AMBPARTNERI", "OM", False)
+    For i = LBound(kolone) To UBound(kolone)
+        Select Case Split(CStr(kolone(i)), "|")(2)
+            Case "kg", "rsd", "rest": imaKgIliNovac = True
+        End Select
+    Next i
+
+    For Each k In Array("OTKUI_SEG_IZ_AMBPAR", "OTKUI_GRID_TITLE_IZ_AMBPAR", _
+                        "OTKUI_HDI_DRZI", "OTKUI_HDI_TUDJE", "OTKUI_HDI_NETO", _
+                        "OTKUI_FT_PAR_DRZI", "OTKUI_FT_PAR_TUDJE", _
+                        "OTKUI_IZ_BIL_P_" & UCase$(AMB_NALOG_KOOPERANT), _
+                        "OTKUI_IZ_BIL_P_" & UCase$(AMB_NALOG_KUPAC))
+        If PorukaNedostaje(CStr(k)) Then natpisi = natpisi & " " & CStr(k)
+    Next k
+
+    tip = KartNoviTipAmb("PAE")
+    dP = KartPovratSaPokricem(tip, 6, bP)
+
+    modScrIzvestaji.Scr_IzTestSet "AMBPARTNERI", "OM", False, "", CDbl(Date), CDbl(Date)
+    modScrIzvestaji.Scr_ResetCache
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    For i = 1 To n
+        If StrComp(NzToText(redovi(i, 3)), tip, vbTextCompare) = 0 And _
+           NzToText(redovi(i, 7)) = "KOP|" & FX_KOOPERANT Then
+            redK1 = NzToText(redovi(i, 1)) & "|" & NzToText(redovi(i, 2)) & "|" & _
+                    CStr(CDbl(redovi(i, 4))) & "|" & CStr(CDbl(redovi(i, 5))) & "|" & _
+                    CStr(CDbl(redovi(i, 6)))
+        End If
+    Next i
+    If UBound(d) >= 6 Then
+        slotovi = d(6)
+        If IsArray(slotovi) Then
+            If UBound(slotovi) >= 1 Then
+                kljucD = CStr(slotovi(0)(0))
+                slotD = CDbl(slotovi(0)(1))
+                kljucT = CStr(slotovi(1)(0))
+                slotT = CDbl(slotovi(1)(1))
+            End If
+        End If
+    End If
+    rc = modAmbalaza.AmbPartneriPodaci(Date)
+    For i = 1 To UBound(rc, 1)
+        sumD = sumD + CDbl(rc(i, 4))
+        sumT = sumT + CDbl(rc(i, 5))
+    Next i
+    modScrIzvestaji.Scr_IzTestReset
+
+    AssertEq dostupna, "True|True|False|False|False", _
+             "po partnerima: lista postoji samo pod OM, u oba rezima"
+    AssertEq modScrIzvestaji.IzTrebaEntitet("AMBPARTNERI", False), False, _
+             "po partnerima: lista ne trazi izabran entitet"
+    AssertEq sortPar, "-", _
+             "po partnerima: agregat -- ljuska sme da sortira"
+    AssertEq imaKgIliNovac, False, _
+             "po partnerima: kolone su komadi, bez kg i novca"
+    AssertEq Trim$(natpisi), "", _
+             "po partnerima: kolone, podnozje i vrsta partnera imaju natpis u katalogu"
+    AssertEq (Len(dP) > 0), True, "preduslov: povrat uz pokrice je upisan"
+    AssertEq redK1, "Prvi Testni|" & Poruka("OTKUI_IZ_BIL_P_" & UCase$(AMB_NALOG_KOOPERANT)) & _
+             "|0|6|-6", _
+             "po partnerima kroz ekran: red kooperanta nosi ime, vrstu i brojeve citaoca"
+    AssertEq kljucD & "=" & slotD & "|" & kljucT & "=" & slotT, _
+             "OTKUI_FT_PAR_DRZI=" & sumD & "|OTKUI_FT_PAR_TUDJE=" & sumT, _
+             "po partnerima kroz ekran: podnozje nosi zbir drzi i tudje preko svih redova"
+End Sub
+
+' Kolona reda po partneru (AmbPartneriPodaci): 4 = drzi, 5 = tudje, 6 = neto;
+' "" kad partner nema red za taj tip.
+Private Function ParKol(ByVal r As Variant, ByVal nalogID As String, ByVal tip As String, _
+                        ByVal kolona As Long) As String
+    Dim i As Long
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 2)), nalogID, vbTextCompare) = 0 And _
+           StrComp(CStr(r(i, 3)), tip, vbTextCompare) = 0 Then
+            ParKol = CStr(CDbl(r(i, kolona)))
+            Exit Function
+        End If
+    Next i
+End Function
+
 ' Kolicina reda bilansa (AmbBilansPodaci) za tip, odeljak i stavku; partner se
 ' bira po ID-u. -999999 kad reda nema -- da "nema reda" ne izgleda kao 0.
 Private Function BilKol(ByVal r As Variant, ByVal tip As String, ByVal odeljak As String, _
@@ -20131,10 +20335,11 @@ Private Sub T_Izv_UgovorEkrana()
             unija(Split(CStr(liste(i)), "|")(0)) = True
         Next i
     Next t
-    ' PREMISA PROMENJENA (AMB-BIL-01, test 292): +AMBBILANS pod OM. Bazen
-    ' prekidaca je PO TIPU (gore), a OM sada ima devet lista -- slot ostaje.
-    AssertEq unija.count, 12, _
-             "dvanaest lista deljene mreze (unija po tipovima; +RANG od kruga 8, +AMBBILANS)"
+    ' PREMISA PROMENJENA (AMB-BIL-01, test 292; AMB-BIL-03, test 294): +AMBBILANS
+    ' i +AMBPARTNERI pod OM. Bazen prekidaca je PO TIPU (gore), a OM sada ima
+    ' deset lista -- slot ostaje, ali je POSLEDNJI.
+    AssertEq unija.count, 13, _
+             "trinaest lista deljene mreze (unija po tipovima; +RANG od kruga 8, +AMBBILANS, +AMBPARTNERI)"
     For Each k2 In unija.Keys
         kljuc = CStr(k2)
         kolone = modScrIzvestaji.IzKoloneZaListu(kljuc, "OM")
