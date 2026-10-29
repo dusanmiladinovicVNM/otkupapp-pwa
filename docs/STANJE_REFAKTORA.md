@@ -8172,6 +8172,26 @@
        pod OM, izgled i štampa.
      - **Sledeći brojevi:** test 293 · stavka 224 · KI-064.
 
+224. **#447, krug posle prvog Excel prolaza i nezavisnog pregleda** (29.10.2026). Ista grana, isti PR.
+
+     - **Excel (operater, `8628e209`):** `RunAllTests` 292 ukupno, 1 palo; 290–292 i `T_Izv_UgovorEkrana` (nova
+       premisa) zeleni. Compile `NEJASNO` (ručno). Palo je **287** `T_AmbPoslovno_OtkupniListKaoKartica` iz `#441`:
+       `CreateOtkup_TX` → `SaveNovac` „Partner ili PartnerID je obavezan".
+     - **Uzrok (iz koda i fixture-a):** otkup primenjuje zatečen avans kooperanta (`ApplyAvansToOtkup`). Fixture
+       za `KOOP-TEST-1` nosi `NOV-TEST-D1` (`VirmanAvansKoop` 1000) **bez partnera** — red koji produkcioni pisac
+       ne može da napravi (svi pisci `tblNovac` idu kroz `SaveNovac`, koji traži partnera). Otkup od 500 ga deli,
+       deoba nasleđuje prazan partner i pada. Pad postoji od `#441`; bilans ga ne dira (287 ide pre 290–292).
+     - **Ispravka testa, ne koda:** 287 radi nad `KOOP-TEST-3` (nema nedodeljen avans — tvrdi se kao preduslov);
+       helperi `KartPovratSaPokricem` / `KartOtkupSaPokricem` dobijaju opcioni kooperant. Tvrdnje i sabotaže 287
+       se ne menjaju.
+     - **P2 iz nezavisnog pregleda:** „naše" je obračunski saldo, ne broj gajbi u vlasništvu (pozajmica 10 + otpis 2
+       → −2, neusklađeno 0). Račun ostaje; natpis postaje „Sopstveni saldo, obračunski (nabavka - otpis)", test
+       291 dobija taj slučaj, sabotaža `amb-bil-nase-bez-minusa` (katalog 1050 → 1051). Docs: README §2,
+       `AMBALAZA.md` 6.14a.
+     - **NEVERIFIKOVANO:** ponoviti `RunAllTests` (očekivano 292/0), `dokaz.py amb-bil` i `dokaz.py amb-posl-pdf`,
+       `amb-posl-stanje` (287 je dirnut), compile.
+     - **Sledeći brojevi:** test 293 · stavka 225 · KI-064.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
