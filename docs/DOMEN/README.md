@@ -375,11 +375,19 @@ saldo vidi samo vraćanje. Nije otpis. U bilansu: „Tuđe: vraćeno partneru".
 sa robom (`AMBALAZA_UZ_ROBU`) nisu prazne i ne postaju prazne same od sebe.
 Prazne se izvode iz iste knjige po vrsti kretanja (`AmbVrstaPuneGajbe`), po
 danima od datuma izdavanja nadalje (`AmbPrazneRaspolozive`). Kapija je u jezgru
-pisca (`PrenesiAmbalazu`) za izdavanje partneru sa stanice, i u stornu koji
-stanici oduzima prazne. Odbijanje imenuje manjak i vraća celu TX. Predaja praznih
-vozaču i otpis se i dalje sude po ukupnom saldu (`AMB-INV-07`).
+pisca (`PrenesiAmbalazu`) za svako izdavanje praznih sa stanice, bez obzira
+kome: partneru (`IZDATA_PRAZNA`, `VRACANJE_TUDJE`) i vozaču ili drugom sopstvenom
+nalogu (`PRENOS_INTERNO`). Isto važi u stornu koji stanici oduzima prazne.
+Odbijanje imenuje manjak i vraća celu TX. Otpis se i dalje sudi po ukupnom saldu
+(`AMB-INV-14`).
 
-Mere ih `modTest` 295–300 (`T_KI024_*`) i 301–302 (`T_Prazne_*`), sabotaže
+**AMB-10-ODL-36 — otpis na stanici je lom praznih (odluka operatera
+29.10.2026).** Zapisnik o otpisu ne kaže da li je gajba bila puna ili prazna, pa
+to knjiga sama ne zna. Odluka: otpis na stanici umanjuje prazne (polomljena puna
+se presipa u praznu). Cena: lom pune dok stanica nema praznih spušta prazne ispod
+stvarnih, a izlaz je nabavka ili povrat (`AMBALAZA.md` 6.14b).
+
+Mere ih `modTest` 295–300 (`T_KI024_*`) i 301–304 (`T_Prazne_*`), sabotaže
 `ki024-*` i `prazne-*`.
 
 ## 3) Ko šta piše

@@ -517,7 +517,7 @@ nepromenljiva. Razlog mora da stoji u registru.
 | `AMB-INV-13` | **pozajmica unosi u opticaj tačno svoju količinu**: uz `POZAJMICA_PARTNERA` pisac na istom dokumentu, u istoj TX, upisuje `SpoljniSvet → partner` `ULAZ_TUDJE_AMBALAZE` iste količine i tipa — nezavisno od partnerovog salda i bez pitanja o manjku; saldo partnera se ne menja, obaveza raste za količinu (6.12k) |
 | `AMB-INV-14` | **otpis se ne pokriva**: zahtev `OTPIS` veći od salda naloga se odbija — bez protokola potvrde i bez `ULAZ_TUDJE_AMBALAZE`, za svaki realni nalog, sopstveni i partnera (`AMB-10-ODL-34` (g), 6.12m) |
 | `AMB-INV-15` | **vracene tudje gajbe izlaze iz opticaja**: uz svaki `VRACANJE_TUDJE_AMBALAZE` pisac na istom dokumentu, u istoj TX, upisuje `Partner → SpoljniSvet` `IZLAZ_TUDJE_AMBALAZE` iste kolicine i tipa — ogledalo `AMB-INV-13`; doprinos obavezi 0, poslovni saldo ga ne vidi, nije otpis (`KI-024`, 6.14b) |
-| `AMB-INV-16` | **stanica izdaje samo prazne gajbe koje ima**: izdavanje praznih partneru sa stanice (`IZDATA_PRAZNA`, `VRACANJE_TUDJE`) ne sme da ostavi nijedan dan od datuma izdavanja nadalje sa stanjem praznih < 0; pune primljene sa robom (`AMBALAZA_UZ_ROBU`) nisu prazne. Kapija je u piscu i u stornu; odbijanje vraca celu TX (6.14b) |
+| `AMB-INV-16` | **stanica izdaje samo prazne gajbe koje ima**: izdavanje praznih sa stanice, partneru ili vozaču (`IZDATA_PRAZNA`, `VRACANJE_TUDJE`, `PRENOS_INTERNO`), ne sme da ostavi nijedan dan od datuma izdavanja nadalje sa stanjem praznih < 0; pune primljene sa robom (`AMBALAZA_UZ_ROBU`) nisu prazne. Kapija je u piscu i u stornu; odbijanje vraca celu TX (6.14b) |
 
 Zbir svih salda ostaje **sanity check nad oblikom**, ne dokaz ispravnosti: svaki
 prenos po konstrukciji daje `-x` i `+x`, pa je nula i kad je dogadjaj dupliran.
@@ -2973,9 +2973,9 @@ merila samo **ukupni** saldo (`AMB-INV-07`), a otkup knjiži prvo prijem punih p
 izdavanje: 0 + 10 punih − 1 prazna = +9 je prolazilo, iako stanica nije imala
 nijednu praznu.
 
-> **`AMB-INV-16` (odluka operatera 29.10.2026).** Izdavanje praznih partneru sa
-> stanice (`IZDATA_PRAZNA`, `VRACANJE_TUDJE` — `AmbPrazneKapijaVazi`) ne sme da
-> ostavi nijedan dan od datuma izdavanja nadalje sa stanjem praznih < 0. Pune
+> **`AMB-INV-16` (odluka operatera 29.10.2026).** Izdavanje praznih sa stanice,
+> bez obzira kome (`IZDATA_PRAZNA`, `VRACANJE_TUDJE`, `PRENOS_INTERNO` —
+> `AmbPrazneKapijaVazi`), ne sme da ostavi nijedan dan od datuma izdavanja nadalje sa stanjem praznih < 0. Pune
 > gajbe se ne pretvaraju u prazne same od sebe.
 
 **Prazne se izvode iz knjige, bez nove tabele i kolone.** Vrsta kretanja već kaže
@@ -2986,7 +2986,7 @@ da li gajba putuje puna (`AmbVrstaPuneGajbe`):
 | `AMBALAZA_UZ_ROBU` | **pune** (otkup, otpremnica, prijemnica) |
 | `NABAVKA`, `IZDATA_PRAZNA`, `POVRAT_PRAZNE`, `VRACANJE_TUDJE` | prazne |
 | `PRENOS_INTERNO` | prazne (6.7a: prazne između sopstvenih naloga) |
-| `OTPIS` | računa se kao izlaz praznih — knjiga ne kaže da li je lom pun ili prazan, a polomljenu punu stanica presipa u praznu. Strožije od suprotnog. |
+| `OTPIS` | prazne — **odluka `AMB-10-ODL-36`** (ispod): knjiga sama ne zna da li je lom pun ili prazan |
 | `ULAZ/IZLAZ_TUDJE`, `POZAJMICA_PARTNERA` | ne dodiruju stanicu |
 
 - **Po danima, ne po redosledu upisa** (`AmbPrazneRaspolozive`): raspoloživo je
@@ -3001,9 +3001,29 @@ da li gajba putuje puna (`AmbVrstaPuneGajbe`):
   i vraća celu TX: nema otkupa, stavke, reda knjige ni avansa.
 - **Storno** koji stanici oduzima prazne (nabavke, povrata, prenosa na stanicu)
   meri isto stanje od dana originala (`RequirePrazneStorna`).
-- **Van kapije, odlukom (tačka 1.2):** predaja praznih vozaču (`PRENOS_INTERNO`) i
-  otpis — njima se sudi po ukupnom saldu, kao i do sada. Proširenje je jedna grana
-  u `AmbPrazneKapijaVazi`, ne nova kapija.
+- **Predaja vozaču je izdavanje praznih** (pregled 29.10.2026, P1). Prva verzija
+  je pod kapiju stavila samo izdavanje partneru, pa je stanica sa 0 praznih i 10
+  punih predavala vozaču 5 „praznih" (`PRENOS_INTERNO`), a ukupni saldo je to
+  pustao. Tačka 1.2 govori o izdavanju praznih **sa stanice**, ne o primaocu, pa je
+  `PRENOS_INTERNO` sa stanice pod kapijom bez obzira kome ide. Smer vozač → stanica
+  stanici **daje** prazne i nije pod kapijom.
+- **Van kapije ostaju** pune sa robom (`AMBALAZA_UZ_ROBU`) i otpis: otpis nije
+  predaja nego izlaz iz opticaja, i sudi mu se po ukupnom saldu (`AMB-INV-14`).
+
+> **`AMB-10-ODL-36` (odluka operatera 29.10.2026): otpis na stanici je lom PRAZNIH.**
+> Zapisnik o otpisu (6.12m) nosi nalog, tip, količinu i razlog, ali ne i da li je
+> gajba bila puna ili prazna. Knjiga to zato **sama ne zna**, a prva verzija je to
+> pretpostavila bez odluke (pregled 29.10.2026, P2). Operater je izabrao: otpis na
+> stanici je izlaz praznih — polomljenu punu stanica presipa u praznu, pa prazna
+> nestaje i tada. Odbijene varijante: „prvo prazne, pa pune" (pravilo čitanja bez
+> podatka) i izbor „pune / prazne" na F7 (nova vrsta ili kolona, svoj rez).
+>
+> **Cena odluke, svesno prihvaćena:** lom pune dok stanica nema nijednu praznu
+> spušta prazne ispod stvarnih. Primer: 10 punih, 0 praznih, otpis 1 → prazne −1;
+> nabavka 1 ih vraća na 0, pa izdavanje 1 i dalje ne prolazi. Izlaz je još jedna
+> nabavka ili povrat praznih. Poruka odbijanja imenuje raspoloživo i manjak, pa se
+> slučaj vidi. Raspoloživost praznih je zato tačna **u granicama ove odluke**, ne
+> potpuno izvedena iz fizičkih činjenica.
 
 | Pune pre | Prazne pre | Primljeno | Izdato | Ishod |
 |---|---|---|---|---|
@@ -3022,9 +3042,9 @@ puštanja se meri `AmbPrazneRaspolozive(stanica, tip, Date)` po stanici i tipu:
 negativno stanje blokira svako izdavanje dok se ne knjiži početno stanje praznih
 (nabavka ili prenos). Migracija treba da dobije isti izlaz (`KI-024`).
 
-*Provera:* `modTest` 295–302 (`T_KI024_*`, `T_Prazne_*`) · BFP premise
-(`Enum` deset, `StornoKontraStav`, `DeficitIObaveza`) · sabotaže `ki024-*` (6) i
-`prazne-*` (4).
+*Provera:* `modTest` 295–304 (`T_KI024_*`, `T_Prazne_*`) · BFP premise
+(`Enum` deset, `StornoKontraStav`, `DeficitIObaveza`, `StornoNePraviMinus`) ·
+sabotaže `ki024-*` (6) i `prazne-*` (6).
 
 ### 6.15 Cena — posteno
 

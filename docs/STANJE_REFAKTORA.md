@@ -8290,6 +8290,35 @@
        usidrene `amb-*`, ručni compile, papir reversa i otkupnog lista sa podelom.
      - **Sledeći brojevi:** test 303 · stavka 230 · KI-066.
 
+230. **Pregled grane (29.10.2026): predaja vozaču pod kapijom praznih (P1), otpis na stanici je odluka
+     `AMB-10-ODL-36` (P2).** Grana `claude/trusting-hawking-2cw6z1`. Nezavisan pregled stavke 229 (operater je
+     preneo; Excel prolaz nad `310901a1` je u toku kod operatera).
+
+     - **P1, potvrđen čitanjem koda:** `AmbPrazneKapijaVazi` je gledao samo `IZDATA_PRAZNA` i `VRACANJE_TUDJE`,
+       pa je revers „prijem od OM" (stanica → vozač, `PRENOS_INTERNO`) predavao „prazne" sa stanice koja ima samo
+       pune. Tačka 1.2 i 3.3 zadatka govore o izdavanju praznih **sa stanice**, ne o primaocu — prva verzija je
+       to suzila bez osnova. Ispravka: `PRENOS_INTERNO` sa stanice je pod kapijom, bez obzira kome ide; smer
+       vozač → stanica nije. Test 303 `T_Prazne_PredajaVozacu` (pravi revers, jezgro stanica → stanica, nabavka
+       pa predaja, povratak od vozača), sabotaža `prazne-predaja-vozacu-van-kapije`.
+     - **Promenjena premisa:** BFP `Test_Amb_StornoNePraviMinus` je gajbe „odvodio" na drugu stanicu kao
+       `PRENOS_INTERNO`, a stanica je imala samo 20 punih. Nova kapija to s pravom odbija. Odvod je sada otpis
+       (ukupni saldo, `AMB-INV-14`), pa test i dalje meri samo `AMB-INV-07` na stornu. Otpremnica nije uzeta,
+       jer storno otkupa iz aktivne otpremnice odbija i `modStorno` (`:128-144`), pa bi tvrdnja merila tu kapiju.
+       Ostali testovi koji predaju vozaču prvo kupe prazne (pregledano svih 12 mesta u BFP-u i 2 u `modTest`;
+       fixture `FX_STANICA`/12/1 ima 80 praznih).
+     - **P2:** zapisnik o otpisu ne nosi „pune/prazne", pa knjiga to sama ne zna; prva verzija je otpis na stanici
+       računala kao prazne bez odluke. **Odluka operatera (29.10.2026): otpis na stanici je lom praznih**
+       (`AMB-10-ODL-36`); odbijene varijante „prvo prazne, pa pune" i izbor na F7. Cena je upisana uz odluku
+       (`AMBALAZA.md` 6.14b). Ponašanje se ne menja; test 304 `T_Prazne_OtpisNaStanici` fiksira odluku i cenu,
+       sabotaža `prazne-otpis-nije-prazna`.
+     - **Provere:** `vba_check`, `sabotaza.py --proveri-sidra` (1070), primena i vraćanje novih sabotaža (izvor
+       identičan), Python model 51/51.
+     - **Uočeno, nije u obimu (stanica je obim zadatka):** vozač ima istu klasu rupe — vraća stanici „prazne"
+       (`PRENOS_INTERNO` vozač → stanica) sudeći samo po ukupnom saldu, u kome su i pune sa otpremnice. Nije
+       mereno ni upisano kao KI dok operater ne kaže da li je to stvaran tok.
+     - **NEVERIFIKOVANO:** `RunAllTests` (očekivano 304/0), BFP, `dokaz.py prazne` / `ki024`, compile.
+     - **Sledeći brojevi:** test 305 · stavka 231 · KI-066.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
