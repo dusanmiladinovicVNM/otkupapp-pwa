@@ -25,6 +25,9 @@ Public Const AMB_ERR_DEFICIT_NEPOKRIV As Long = vbObjectError + 4471
 Public Const AMB_ERR_IDENTITET As Long = vbObjectError + 4472
 Public Const AMB_ERR_JEDAN_PARTNER As Long = vbObjectError + 4475
 Public Const AMB_ERR_STORNO As Long = vbObjectError + 4476
+' AMB-INV-16: stanica nema dovoljno PRAZNIH gajbi za izdavanje (pune primljene
+' sa robom nisu prazne). Broj, ne tekst, je ugovor sa pozivaocem.
+Public Const AMB_ERR_PRAZNE_NEMA As Long = vbObjectError + 4477
 Private Const AMB_ERR_KNJIGA_KVAR As Long = vbObjectError + 4473
 Private Const AMB_ERR_KNJIGA_ULAZ As Long = vbObjectError + 4474
 
@@ -1381,6 +1384,103 @@ Public Function AmbDeficitZaPrenos(ByVal odTip As String, ByVal odID As String, 
 End Function
 
 ' ============================================================
+' PRAZNE GAJBE STANICE -- AMB-INV-16 (odluka operatera 29.10.2026)
+' ============================================================
+'
+' Koliko PRAZNIH gajbi tipa stanica moze da izda na dan `odDatuma`, a da nijedan
+' kasniji dan ne ostane bez pokrica: NAJMANJE stanje praznih na kraju dana, od tog
+' dana nadalje. Izdavanje sa ranijim datumom tako vidi i vec upisana kasnija
+' izdavanja, a storno nabavke se meri istim brojem.
+'
+' Prazne se IZVODE iz knjige, bez nove kolone i bez paralelne knjige: svaki red
+' stanice koji NIJE AMBALAZA_UZ_ROBU nosi prazne (AmbVrstaPuneGajbe -- spisak
+' vrsta i razlog stoje uz nju). Pune primljene otkupom zato ne povecavaju prazne,
+' ni na istom otkupu ni ranije. Kontra-stav nosi vrstu originala, pa se storno
+' gasi istim pravilom.
+'
+' DAN, ne red: knjiga je dnevna (6.12d). Broj sme biti NEGATIVAN -- kad je
+' istorija knjige vec izdala prazne kojih nije bilo (npr. migrirani podaci); citalac
+' to ne ulepsava, jer bi ulepsan broj pustio jos jedno takvo izdavanje.
+Public Function AmbPrazneRaspolozive(ByVal stanicaID As String, ByVal tipAmb As String, _
+                                     ByVal odDatuma As Date) As Double
+    Const SRC As String = "modAmbalaza.AmbPrazneRaspolozive"
+
+    Dim p As String
+    p = modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_STANICA, stanicaID)
+    If Len(p) > 0 Then Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, p
+    If Len(Trim$(tipAmb)) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Prazne se vode PO TIPU ambalaze -- tip je obavezan."
+    End If
+
+    RequireKnjigaSchema SRC
+
+    Dim data As Variant
+    data = GetTableData(TBL_AMBALAZA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim kol As Object, vrste As Object
+    Set kol = KnjigaZaCitanje(data, SRC, vrste)
+
+    ' Stanje na kraju dana odDatuma, i promena po svakom kasnijem danu.
+    Dim dani As Object, d0 As Long, d As Long, i As Long, znak As Long
+    Dim stanje As Double, q As Double
+    Set dani = CreateObject("Scripting.Dictionary")
+    d0 = Int(CDbl(odDatuma))
+    For i = 1 To UBound(data, 1)
+        If RedDoticeKnjigu(data, i, kol) Then
+            If IstiTipAmb(AmbText(data(i, kol(COL_AMB_TIP))), tipAmb) Then
+                If Not modAmbalazaUgovor.AmbVrstaPuneGajbe(AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA)))) Then
+                    znak = NalogZnakReda(data, i, kol, AMB_NALOG_STANICA, stanicaID)
+                    If znak <> 0 Then
+                        q = znak * CDbl(data(i, kol(COL_AMB_KOLICINA)))
+                        d = Int(CDbl(CDate(data(i, kol(COL_AMB_DATUM)))))
+                        If d <= d0 Then
+                            stanje = stanje + q
+                        Else
+                            If Not dani.Exists(d) Then dani.Add d, 0#
+                            dani(d) = CDbl(dani(d)) + q
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next i
+
+    Dim najmanje As Double
+    najmanje = stanje
+    If dani.count > 0 Then
+        Dim kasniji() As Long, k As Variant, n As Long
+        ReDim kasniji(1 To dani.count)
+        For Each k In dani.Keys
+            n = n + 1
+            kasniji(n) = CLng(k)
+        Next k
+        SortirajDane kasniji
+        For n = 1 To UBound(kasniji)
+            stanje = stanje + CDbl(dani(kasniji(n)))
+            If stanje < najmanje Then najmanje = stanje
+        Next n
+    End If
+    AmbPrazneRaspolozive = najmanje
+End Function
+
+' Rastuci poredak dana (umetanjem) -- dani jednog naloga i tipa su malobrojni.
+Private Sub SortirajDane(ByRef a() As Long)
+    Dim i As Long, j As Long, v As Long
+    For i = LBound(a) + 1 To UBound(a)
+        v = a(i)
+        j = i - 1
+        Do While j >= LBound(a)
+            If a(j) <= v Then Exit Do
+            a(j + 1) = a(j)
+            j = j - 1
+        Loop
+        a(j + 1) = v
+    Next i
+End Sub
+
+' ============================================================
 ' READ: BILANS AMBALAZE -- pogled firme na celu knjigu (AMB-BIL-01)
 ' ============================================================
 '
@@ -2561,6 +2661,10 @@ Public Function StornirajAmbalazuDokumenta(ByVal tx As clsTransaction, _
         End If
     Next k
 
+    ' AMB-INV-16: storno koji stanici ODUZIMA prazne (storno nabavke, povrata,
+    ' prenosa na stanicu) ne sme da ostavi kasnija izdavanja bez pokrica.
+    RequirePrazneStorna originali, SRC
+
     ' AMB-INV-09: zahtev koji je ovaj ulaz NASLEDIO od pisca (PrenesiAmbalazu,
     ' VRACANJE_TUDJE): storno ULAZA tudje ambalaze cija je obaveza vec zatvorena
     ' vracanjem daje NEGATIVNU obavezu. Ispravka ga meri tek posle zamene
@@ -2569,6 +2673,62 @@ Public Function StornirajAmbalazuDokumenta(ByVal tx As clsTransaction, _
 
     StornirajAmbalazuDokumenta = originali.count
 End Function
+
+' AMB-INV-16 NAD POSLE-STANJEM STORNA.
+'
+' Kontra-stav ima zamenjene strane, pa original koji je stanici DAO prazne (Na =
+' stanica) storno oduzima, a original koji ih je ODNEO (Od = stanica) storno vraca.
+' Kad je promena za (stanicu, tip) negativna, meri se AmbPrazneRaspolozive nad
+' upisanim stanjem, od najranijeg dana tih redova: kontra-stav nosi datum originala
+' (ODL-26), pa storno deluje unazad i moze da otkrije izdavanje koje je usledilo.
+' Pune (UZ_ROBU) se ne broje -- isto pravilo kao citalac.
+'
+' originali: (AmbID, datum, tip, kolicina, odTip, odID, naTip, naID, vrsta)
+Private Sub RequirePrazneStorna(ByVal originali As Collection, ByVal SRC As String)
+    Dim promena As Object, odDana As Object, r As Variant, k As Variant
+    Dim sep As String, delovi() As String, m As Double
+    sep = Chr$(30)
+    Set promena = CreateObject("Scripting.Dictionary")
+    Set odDana = CreateObject("Scripting.Dictionary")
+
+    For Each r In originali
+        If Not modAmbalazaUgovor.AmbVrstaPuneGajbe(CStr(r(8))) Then
+            If StrComp(CStr(r(6)), AMB_NALOG_STANICA, vbTextCompare) = 0 Then
+                PrazneStornaZabelezi promena, odDana, CStr(r(7)) & sep & CStr(r(2)), _
+                                     -CDbl(r(3)), CDate(r(1))
+            End If
+            If StrComp(CStr(r(4)), AMB_NALOG_STANICA, vbTextCompare) = 0 Then
+                PrazneStornaZabelezi promena, odDana, CStr(r(5)) & sep & CStr(r(2)), _
+                                     CDbl(r(3)), CDate(r(1))
+            End If
+        End If
+    Next r
+
+    For Each k In promena.Keys
+        If CDbl(promena(k)) < 0 Then
+            delovi = Split(CStr(k), sep)
+            m = AmbPrazneRaspolozive(delovi(0), delovi(1), CDate(odDana(k)))
+            If m < 0 Then
+                Err.Raise AMB_ERR_STORNO, SRC, _
+                          "AMB-INV-16: storno bi ostavio stanicu '" & delovi(0) & "' bez " & _
+                          "praznih gajbi '" & delovi(1) & "' (najmanje stanje od " & _
+                          Format$(CDate(odDana(k)), "dd.mm.yyyy") & ": " & CStr(m) & _
+                          ") -- te prazne su posle ovog dokumenta vec izdate, pa se " & _
+                          "dokument ne moze stornirati bez njihovog vracanja."
+            End If
+        End If
+    Next k
+End Sub
+
+Private Sub PrazneStornaZabelezi(ByVal promena As Object, ByVal odDana As Object, _
+                                 ByVal kljuc As String, ByVal q As Double, ByVal dan As Date)
+    If Not promena.Exists(kljuc) Then
+        promena.Add kljuc, 0#
+        odDana.Add kljuc, dan
+    End If
+    promena(kljuc) = CDbl(promena(kljuc)) + q
+    If dan < CDate(odDana(kljuc)) Then odDana(kljuc) = dan
+End Sub
 
 ' AMB-INV-09 NAD NALOZIMA: obaveza firme prema svakom partneru iz popisa >= 0.
 '
@@ -3834,6 +3994,28 @@ Public Function PrenesiAmbalazu(ByVal tx As clsTransaction, _
         ' mora postojati pre njega. Redosled unutar transakcije je slobodan --
         ' AMB-INV-07 govori o stanju POSLE commit-a, ne o putu do njega.
         pokriceZaUpis = deficit
+    End If
+
+    ' AMB-INV-16 (odluka operatera 29.10.2026): STANICA IZDAJE SAMO PRAZNE KOJE IMA.
+    '
+    ' AMB-INV-07 iznad meri UKUPAN saldo, a u njemu su i pune gajbe primljene sa
+    ' robom -- i to istim otkupom, jer KnjiziOtkupAmbalazu prvo knjizi prijem
+    ' punih, pa tek onda izdavanje. "0 + 10 punih - 1 prazna = +9" je zato
+    ' prolazilo, a stanica nije imala nijednu praznu. Izdavanje praznih sa stanice
+    ' (AmbPrazneKapijaVazi) zato trazi i PRAZNE, od dana izdavanja nadalje --
+    ' nezavisno od redosleda nogu u dokumentu. Kapija je u jezgru, pa vazi za
+    ' otkup, revers, sync i svakog drugog pozivaoca; odbijanje vraca celu TX.
+    If modAmbalazaUgovor.AmbPrazneKapijaVazi(odTip, vrstaK) Then
+        Dim prazne As Double
+        prazne = AmbPrazneRaspolozive(odID, tipAmb, datum)
+        If kolicina > prazne Then
+            Err.Raise AMB_ERR_PRAZNE_NEMA, SRC, _
+                      "AMB-INV-16: stanica '" & Trim$(odID) & "' nema dovoljno PRAZNIH gajbi '" & _
+                      Trim$(tipAmb) & "' na dan " & Format$(datum, "dd.mm.yyyy") & _
+                      ": raspolozivo " & CStr(prazne) & ", trazi se " & CStr(kolicina) & _
+                      ", manjak " & CStr(kolicina - prazne) & ". Pune gajbe primljene sa " & _
+                      "robom nisu prazne -- prazne stizu povratom, prenosom ili nabavkom."
+        End If
     End If
 
     ' AMB-INV-09: ne moze se vratiti vise tudje ambalaze nego sto je uzeto. Visak

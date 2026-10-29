@@ -405,6 +405,8 @@ Public Sub RunAllTests()
     RunOne 298
     RunOne 299
     RunOne 300
+    RunOne 301
+    RunOne 302
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1000,6 +1002,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 298: TestName = "T_KI024_IspravkaOtkupaPosleVracanja"
         Case 299: TestName = "T_KI024_BezPrebijanja"
         Case 300: TestName = "T_KI024_ReversJednaRadnja"
+        Case 301: TestName = "T_Prazne_MatricaOtkupa"
+        Case 302: TestName = "T_Prazne_ReversRetroIStorno"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1308,6 +1312,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 298: T_KI024_IspravkaOtkupaPosleVracanja
         Case 299: T_KI024_BezPrebijanja
         Case 300: T_KI024_ReversJednaRadnja
+        Case 301: T_Prazne_MatricaOtkupa
+        Case 302: T_Prazne_ReversRetroIStorno
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -13785,6 +13791,165 @@ Private Sub T_KI024_ReversJednaRadnja()
     AssertEq razlog, "", "ispravka reversa sa podelom je dozvoljena"
     AssertEq Ki024Stanje(novi, FX_KOOPERANT, t), "10|10|2|0|2|2", _
              "zamena 12 se deli iznova: vraceno 10, novo 2"
+End Sub
+
+' ============================================================
+' 301. AMB-INV-16: OTKUP NE IZDAJE PUNE KAO PRAZNE -- MATRICA IZ ODLUKE.
+' ============================================================
+' Svaki red je nov tip, FX_STANICA, kooperant FX_KOOPERANT3 (bez avansa):
+' "pune pre" = raniji otkup koji samo PRIMA (gajbe su kooperantove -> pokrice),
+' "prazne pre" = nabavka. Pa otkup kroz pravog pisca: primljeno 10, izdato N.
+'   pune pre | prazne pre | primljeno | izdato | ocekivanje
+'      0     |     0      |    10     |   0    | prolazi
+'      0     |     0      |    10     |   1    | odbijen
+'      0     |     0      |    10     |   10   | odbijen
+'      5     |     0      |    10     |   1    | odbijen
+'      0     |     5      |    10     |   5    | prolazi
+'      0     |     5      |    10     |   6    | odbijen
+'     10     |     5      |    10     |   5    | prolazi
+'     10     |     5      |    10     |   6    | odbijen
+' Ishod reda: "P" prolazi, "R" odbijen sa AMB_ERR_PRAZNE_NEMA, "?" sve drugo.
+' Odbijen otkup ne ostavlja nista: ni otkup, ni stavku, ni red knjige, ni novac.
+' Pa kooperant iz prvog reda (firma mu duguje 10, stanica ima samo 10 punih):
+' revers izdavanja 10 je odbijen dok stanica nema prazne; posle nabavke 10 prolazi,
+' zatvara obavezu, a njegovih 10 izlazi iz opticaja (20 -> 10).
+' Semanticki nivo: KOMADI po (stanica, tip), pune i prazne iz vrste kretanja.
+' Fixture: normal production state.
+' SABOTAZE: prazne-pune-su-prazne.
+Private Sub T_Prazne_MatricaOtkupa()
+    Dim mat As Variant, i As Long, ishod As String, t As String, tPrvi As String
+    Dim broj As String, errNum As Long, greska As String, otk As String, b As String
+    Dim nOtk As Long, nSt As Long, nKnj As Long, nNov As Long, trag As String
+    Dim porukaManjka As Boolean, revPre As String, revPosle As String, errRev As Long
+    Dim opNab As Double, opPosle As Double
+
+    mat = Array(Array(0, 0, 10, 0), Array(0, 0, 10, 1), Array(0, 0, 10, 10), _
+                Array(5, 0, 10, 1), Array(0, 5, 10, 5), Array(0, 5, 10, 6), _
+                Array(10, 5, 10, 5), Array(10, 5, 10, 6))
+    For i = LBound(mat) To UBound(mat)
+        t = KartNoviTipAmb("PRZ" & CStr(i))
+        If i = LBound(mat) Then tPrvi = t
+        If mat(i)(1) > 0 Then
+            modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, t, mat(i)(1), "NAB-" & t, _
+                                          "preduslov AMB-INV-16"
+        End If
+        If mat(i)(0) > 0 Then KartOtkup t, mat(i)(0), 0, b, errNum, greska
+        nOtk = IspRevRedova(TBL_OTKUP)
+        nSt = IspRevRedova(TBL_OTKUP_STAVKE)
+        nKnj = IspRevRedova(TBL_AMBALAZA)
+        nNov = IspRevRedova(TBL_NOVAC)
+        otk = KartOtkup(t, mat(i)(2), mat(i)(3), broj, errNum, greska)
+        If Len(otk) > 0 Then
+            ishod = ishod & "P"
+        ElseIf errNum = AMB_ERR_PRAZNE_NEMA Then
+            ishod = ishod & "R"
+            If (IspRevRedova(TBL_OTKUP) - nOtk) + (IspRevRedova(TBL_OTKUP_STAVKE) - nSt) + _
+               (IspRevRedova(TBL_AMBALAZA) - nKnj) + (IspRevRedova(TBL_NOVAC) - nNov) <> 0 Then
+                trag = trag & CStr(i)
+            End If
+            If InStr(1, greska, "manjak", vbTextCompare) > 0 Then porukaManjka = True
+        Else
+            ishod = ishod & "?"
+        End If
+    Next i
+
+    On Error Resume Next
+    revPre = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tPrvi, 10, _
+                                                REV_SMER_IZDAVANJE, FX_KOOPERANT3, "")
+    errRev = Err.Number
+    Err.Clear
+    On Error GoTo 0
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tPrvi, 10, "NAB2-" & tPrvi, "preduslov AMB-INV-16"
+    opNab = BilKol(modAmbalaza.AmbBilansPodaci(Date, Date), tPrvi, AMB_BIL_GDE, AMB_BIL_OPTICAJ)
+    revPosle = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tPrvi, 10, _
+                                                  REV_SMER_IZDAVANJE, FX_KOOPERANT3, "")
+    opPosle = BilKol(modAmbalaza.AmbBilansPodaci(Date, Date), tPrvi, AMB_BIL_GDE, AMB_BIL_OPTICAJ)
+
+    AssertEq ishod, "PRRRPRPR", _
+             "matrica: pune gajbe ne postaju prazne -- izdavanje preko praznih je odbijeno"
+    AssertEq trag & "|" & porukaManjka, "|True", _
+             "odbijen otkup ne ostavlja ni otkup ni stavku ni knjigu ni novac, a razlog imenuje manjak"
+    AssertEq errRev & "|" & (Len(revPre) = 0), AMB_ERR_PRAZNE_NEMA & "|True", _
+             "revers izdavanja bez praznih je odbijen i kad firma kooperantu duguje"
+    AssertEq Ki024Stanje(revPosle, FX_KOOPERANT3, tPrvi) & "|" & opNab & "|" & opPosle, _
+             "10|10|0|0|0|0|20|10", _
+             "kad stanica ima prazne, izdavanje zatvara obavezu i vracene gajbe izlaze iz opticaja"
+End Sub
+
+' ============================================================
+' 302. AMB-INV-16: REVERS, UNOS UNAZAD I STORNO NE OSTAVLJAJU IZDAVANJE BEZ PRAZNIH.
+' ============================================================
+' (1) Stanica ima samo pune (otkup 10 svojih kooperanta): revers izdavanja 1
+'     drugom kooperantu je odbijen -- ista kapija kao na otkupu, u jezgru pisca.
+' (2) Unos unazad: nabavka 10 (D1), izdavanje 10 (D3); izdavanje 1 sa datumom D2
+'     je odbijeno -- na D2 prazne postoje, ali bi izdavanje sa D3 ostalo bez njih.
+'     Stanica drzi i 10 punih (otkup danas), pa ukupni saldo (AMB-INV-07, koji ne
+'     gleda datum) prolazi: odbija samo kapija praznih po danima.
+' (3) Storno nabavke posle izdavanja: stanica drzi i 10 punih, pa ukupni saldo
+'     ostaje 0 i AMB-INV-07 cuti, ali prazne bi bile -10 -- storno je odbijen.
+' (4) Tip i stanica se ne mesaju: prazne druge stanice i drugog tipa ne pokrivaju
+'     izdavanje, a na stanici koja ih ima isto izdavanje prolazi.
+' Fixture: normal production state.
+' SABOTAZE: prazne-kapija-iskljucena, prazne-bez-buducih-dana,
+' prazne-storno-bez-provere.
+Private Sub T_Prazne_ReversRetroIStorno()
+    Dim t1 As String, t2 As String, t3 As String, t4 As String, t5 As String
+    Dim b As String, errNum As Long, greska As String, rev As String, rev2 As String
+    Dim err1 As Long, err2 As Long, err4a As Long, err4b As Long
+    Dim d1 As Date, d2 As Date, d3 As Date, dok3 As String, nab3 As String
+    Dim stornoOk As Boolean, nKnj As Long, revB As String
+
+    t1 = KartNoviTipAmb("PRV1")
+    KartOtkup t1, 10, 0, b, errNum, greska
+    On Error Resume Next
+    rev = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t1, 1, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    err1 = Err.Number
+    Err.Clear
+    On Error GoTo 0
+
+    t2 = KartNoviTipAmb("PRV2")
+    d1 = Date - 10
+    d2 = Date - 7
+    d3 = Date - 5
+    modAmbalaza.NabaviAmbalazu_TX d1, FX_STANICA, t2, 10, "NAB-" & t2, "preduslov AMB-INV-16"
+    KartOtkup t2, 10, 0, b, errNum, greska
+    dok3 = modAmbalaza.UpisiReversAmbalaze_TX(d3, "", FX_STANICA, t2, 10, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    On Error Resume Next
+    rev2 = modAmbalaza.UpisiReversAmbalaze_TX(d2, "", FX_STANICA, t2, 1, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    err2 = Err.Number
+    Err.Clear
+    On Error GoTo 0
+
+    t3 = KartNoviTipAmb("PRV3")
+    KartOtkup t3, 10, 0, b, errNum, greska
+    nab3 = modAmbalaza.NabaviAmbalazu_TX(Date, FX_STANICA, t3, 10, "NAB-" & t3, "preduslov AMB-INV-16")
+    modAmbalaza.UpisiReversAmbalaze_TX Date, "", FX_STANICA, t3, 10, REV_SMER_IZDAVANJE, FX_KOOPERANT, ""
+    nKnj = IspRevRedova(TBL_AMBALAZA)
+    stornoOk = modAmbalaza.StornirajAmbDokument_TX(nab3)
+
+    t4 = KartNoviTipAmb("PRV4")
+    t5 = KartNoviTipAmb("PRV5")
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA_B, t4, 5, "NAB-B-" & t4, "preduslov AMB-INV-16"
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, t5, 5, "NAB-" & t5, "preduslov AMB-INV-16"
+    KartOtkup t4, 10, 0, b, errNum, greska
+    On Error Resume Next
+    modAmbalaza.UpisiReversAmbalaze_TX Date, "", FX_STANICA, t4, 1, REV_SMER_IZDAVANJE, FX_KOOPERANT, ""
+    err4a = Err.Number
+    Err.Clear
+    revB = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA_B, t4, 1, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    err4b = Err.Number
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq err1 & "|" & (Len(rev) = 0), AMB_ERR_PRAZNE_NEMA & "|True", _
+             "revers: stanica koja ima samo pune gajbe ne izdaje prazne"
+    AssertEq (Len(dok3) > 0) & "|" & err2 & "|" & (Len(rev2) = 0), "True|" & AMB_ERR_PRAZNE_NEMA & "|True", _
+             "unos unazad: izdavanje koje bi kasnije izdavanje ostavilo bez praznih je odbijeno"
+    AssertEq stornoOk & "|" & (IspRevRedova(TBL_AMBALAZA) - nKnj) & "|" & _
+             NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, nab3, COL_STORNIRANO)), "False|0|", _
+             "storno nabavke posle izdavanja je odbijen -- prazne bi bile ispod nule (AMB-INV-16)"
+    AssertEq err4a & "|" & err4b & "|" & (Len(revB) > 0), AMB_ERR_PRAZNE_NEMA & "|0|True", _
+             "tip i stanica se ne mesaju: prazne druge stanice i drugog tipa ne pokrivaju izdavanje"
 End Sub
 
 ' Kolona reda po partneru (AmbPartneriPodaci): 4 = drzi, 5 = tudje, 6 = neto;

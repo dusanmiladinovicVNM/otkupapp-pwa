@@ -10670,6 +10670,40 @@ SABOTAZE = {
         "T_KI024_ReversJednaRadnja",
         "revers sa podelom je JEDAN poslovni red: izdato 15",
     ),
+    # --- AMB-INV-16: stanica izdaje samo prazne koje ima (301-302) ---
+    # Pune gajbe se racunaju kao prazne: "0 + 10 punih - 1 prazna" opet prolazi.
+    "prazne-pune-su-prazne": (
+        "modAmbalazaUgovor.bas",
+        "    AmbVrstaPuneGajbe = (StrComp(Trim$(vrsta), AMB_VK_UZ_ROBU, vbTextCompare) = 0)\n",
+        "    AmbVrstaPuneGajbe = False   ' SABOTAZA: pune se racunaju kao prazne\n",
+        "T_Prazne_MatricaOtkupa",
+        "matrica: pune gajbe ne postaju prazne -- izdavanje preko praznih je odbijeno",
+    ),
+    # Izdavanje sa stanice se sudi samo po ukupnom saldu (stanje pre ovog reza).
+    "prazne-kapija-iskljucena": (
+        "modAmbalazaUgovor.bas",
+        "            AmbPrazneKapijaVazi = True\n",
+        "            AmbPrazneKapijaVazi = False   ' SABOTAZA: izdavanje bez kapije praznih\n",
+        "T_Prazne_ReversRetroIStorno",
+        "revers: stanica koja ima samo pune gajbe ne izdaje prazne",
+    ),
+    # Raspolozive prazne gledaju samo dan izdavanja: unos unazad ostavlja kasnije
+    # izdavanje bez praznih.
+    "prazne-bez-buducih-dana": (
+        "modAmbalaza.bas",
+        "            If stanje < najmanje Then najmanje = stanje\n",
+        "            ' SABOTAZA: kasniji dani se ne gledaju\n",
+        "T_Prazne_ReversRetroIStorno",
+        "unos unazad: izdavanje koje bi kasnije izdavanje ostavilo bez praznih je odbijeno",
+    ),
+    # Storno koji stanici oduzima prazne ne meri kasnija izdavanja.
+    "prazne-storno-bez-provere": (
+        "modAmbalaza.bas",
+        "    RequirePrazneStorna originali, SRC\n",
+        "    ' SABOTAZA: storno bez provere praznih\n",
+        "T_Prazne_ReversRetroIStorno",
+        "storno nabavke posle izdavanja je odbijen -- prazne bi bile ispod nule (AMB-INV-16)",
+    ),
 }
 
 
