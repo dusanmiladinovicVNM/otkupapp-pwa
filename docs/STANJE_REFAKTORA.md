@@ -8370,7 +8370,10 @@
        prve tvrdnje. **Ispravka:** tvrdnje o poslovnom redu i mapi liste stoje odmah posle čitanja, pre papira i
        ispravke.
      - Ostalih 18 obara svoju tvrdnju (14 grupno, 4 pojedinačno).
-     - **NEVERIFIKOVANO:** ponovljen `dokaz.py` za ove dve (i 300 u `RunAllTests`), ručni compile, papir.
+     - **Ponovljeno (operater, isti dan, nad `53bea3d8`):** `RunAllTests` zelen (GREEN marker),
+       `dokaz.py amb-pisac-obaveza-u-minus ki024-dokument-deo-radnje` → obe **OK**, „DOKAZANO", izvor identičan.
+       Svih 20 sabotaža ovog reza (`ki024-*`, `prazne-*`, osam ponovo usidrenih) sada obara svoju tvrdnju.
+     - **NEVERIFIKOVANO:** ručni compile (`Alt+F11` → Debug → Compile), papir reversa i otkupnog lista sa podelom.
      - **Sledeći brojevi:** test 305 · stavka 234 · KI-066.
 
 ## Dug sa imenom (posle S5-5b)
