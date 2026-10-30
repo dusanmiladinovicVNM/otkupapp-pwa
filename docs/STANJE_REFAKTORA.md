@@ -35,7 +35,8 @@
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
-| **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ⏳ **`#445`** — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217); čeka merge |
+| **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
+| **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ⏳ **`#448`** (`AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`) — nezavisni pregled GO za merge (stavka 235); čeka merge. Primena na migriranoj svesci: HOLD do `KI-065` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -8204,6 +8205,217 @@
      - **Fixture avansi bez partnera** upisani kao `KI-064` (zamka za testove sa otkupom nad prva dva kooperanta).
      - **Ostaje operateru:** ručni compile, prikaz i štampa liste „Bilans amb.".
      - **Sledeći brojevi:** test 293 · stavka 226 · KI-065.
+
+226. **Merge `#447` = `5ad4668a`** (29.10.2026). Grana `claude/trusting-hawking-2cw6z1` (`a40f9d4b`, 5 commita
+     na `b5528922`), merge commit uz proveru head-a, na izričit zahtev operatera. CI `static` zelen; Excel
+     `RunAllTests` 292/0 nad `63889480` (operater potvrdio `git log`), `a40f9d4b` posle njega menja samo tekst
+     jedne poruke. Posle merge-a, nad `main`-om: `RunAllTests --keep` zeleno (operater). Ručni compile i
+     štampa liste nisu potvrđeni. Stavke 223–225 su ono što je spojeno.
+
+227. **Ambalaža po partneru — bruto i neto (`AMB-BIL-03`)** (29.10.2026). Grana `claude/trusting-hawking-2cw6z1`,
+     nova, od `5ad4668a`. Operater posle pregleda bilansa: „fali pregled tuđe ambalaže po partnerima, kao i naše
+     po partnerima". Odluke (29.10.2026): bruto + neto; nova lista pod OM. Pravilo: `docs/DOMEN/README.md` §2.
+
+     - **Šta je novo:** čitalac `modAmbalaza.AmbPartneriPodaci(datumDo)` — po partneru i tipu: drži (fizički),
+       tuđe (obaveza), neto (poslovni saldo, kao kartica); red bez brojeva se ne vraća. Strana partnera za
+       obavezu je izdvojena u `BilStranaDuga`, koji sada dele bilans i ovaj pregled. Izveštaj
+       `modIzvestaj.ReportAmbalazaPoPartnerima`, lista `AMBPARTNERI` (OM, bez entiteta, ljuska sortira),
+       podnožje: zbir drži i tuđe; štampa sabira sve tri kolone.
+     - **Testovi:** 293 `T_AmbPartneri_BrutoNeto` (mešovit partner 30 | 15 | +15, Bajić 0 | 12 | −12, kupac sa
+       pozajmicom 0 | 10 | −10, partner bez brojeva bez reda, rez po `datumDo`, zbirovi = bilans, paritet sa
+       `AmbSaldoNaloga` i `AmbObavezaPartneru`), 294 `T_AmbPartneri_ListaIzvestaja` (lista kroz `Scr_Rows`,
+       podnožje). **Promenjena premisa:** `T_Izv_UgovorEkrana` meri 13 lista; pod OM ih je 10, a bazen ljuske
+       ima 11 — ostaje **jedno** slobodno mesto. **Sabotaže:** 7 × `amb-par-*` (katalog 1051 → 1058); Python
+       simulacija: svaka pada na svojoj tvrdnji, svaka se vraća identično.
+     - **Nađeno usput:** prva verzija sabotaže `amb-par-bez-reza-datumdo` imala je istu zamenu kao
+       `amb-bil-bez-reza-datumdo`; vraćanje je u novi čitalac upisalo `GoTo SledeciRedBilansa` (labela druge
+       procedure → compile greška). `vba_check` to ne vidi; nađeno proverom „svaki `GoTo` ima labelu u svojoj
+       proceduri". Zamena je sada jedinstvena, a izvor proveren posle svakog vraćanja.
+     - **NEVERIFIKOVANO:** `RunAllTests` (očekivano 294/0), `dokaz.py amb-par`, compile, prikaz i štampa.
+     - **Sledeći brojevi:** test 295 · stavka 228 · KI-065.
+
+228. **`AMB-BIL-03` u Excelu, pa prvi pregled na migriranoj svesci** (29.10.2026). Grana
+     `claude/trusting-hawking-2cw6z1`.
+
+     - **Excel (operater):** `RunAllTests` 294 / 0 palo, BFP 2801 / 0; `dokaz.py amb-par --grupe` 9 / 9 crveno
+       (7 × `amb-par-*` + stare `amb-partner-*`), izvor pre/posle identičan. `amb-par-podnozje-bez-slotova` je u
+       grupi pao na drugoj tvrdnji, sam na svojoj.
+     - **Pregled na operaterovoj svesci (snimci ekrana):** Bajić (KOOP-00019), 0,4kg: „Amb. partneri" 5 | 10 | −10,
+       bilans „Čije su" 10, kartica −10. Drži − tuđe ≠ neto, a razlika 5 je red „Vraćanje tuđe (Revers)" od
+       10.07. **Izvor reda je migracija**, ne VBA pisac (operater: stara sveska → Python → nov kanon):
+       `tools/migracija/ambalaza.py`, MIG-16/17, prevodi izdate prazne u `VRACANJE_TUDJE` na dan pada obaveze
+       (12 → 7, pa 5 od 20). Proveren put: nijedna od 373 udaljene grane nema VBA pisca te vrste. **`KI-024` time
+       više nije latentan** — ažurirani su `KI-024`, `docs/DOMEN/README.md` (`AMB-BIL-03`), `AMBALAZA.md` 6.14a i
+       komentar čitaoca. Čitalac radi kako je zamišljen: razliku pokazuje, ne sakriva.
+     - **Otvoreno, svoj rez:** popravka `KI-024` (vraćene tuđe gajbe izlaze iz opticaja) mora da obuhvati i živi
+       ugovor i migraciju, pre konačnog prenosa. **NEVERIFIKOVANO:** ukupan obim u svesci (bilans, „Neusklađeno"
+       po tipu), ručni compile i štampa.
+     - **Sledeći brojevi:** test 295 · stavka 229 · KI-065.
+
+229. **`KI-024` (kooperant) i kontrola praznih gajbi — `AMB-10-ODL-35`, `AMB-INV-15`, `AMB-INV-16`** (29.10.2026).
+     Grana `claude/trusting-hawking-2cw6z1`, na stavkama 227–228. Zadatak operatera: „KI-024 + kontrola
+     raspoloživih praznih gajbi", sa matricom od osam slučajeva i deset dodatnih provera. Pravilo:
+     `AMBALAZA.md` 6.14b, `README.md` §2.
+
+     - **Reprodukcija nad izvorom (pre koda):** (a) izdavanje kooperantu kome firma duguje je uvek bilo
+       `IZDATA_PRAZNA` — obaveza ostaje, kooperant zadužen „našim" gajbama; `VRACANJE_TUDJE` nema izlaz iz
+       opticaja. (b) Otkup knjiži prijem punih (`UZ_ROBU`) pre izdavanja, a stanica se sudi samo po ukupnom
+       saldu (`AmbDeficitZaPrenos` → `AmbSaldoNaloga`), pa 0 + 10 punih − 1 prazna prolazi.
+     - **KI-024, commit `8f05d2fe`:** pisac (`PrenesiAmbalazu`) deli jednu količinu, `MIN(izdato, obaveza)` →
+       `VRACANJE_TUDJE` + nova vrsta `IZLAZ_TUDJE_AMBALAZE` (`Partner → SpoljniSvet`, deseta, `AMB-INV-15`),
+       ostatak `IZDATA_PRAZNA`. Ugovor: matrica, `AmbVrstaJeZahtev` (izlaz je tehnički), porodica zahteva za
+       idempotenciju (`AmbVrsteZahteva`), `AmbZahtevPrvoVracaTudje`, `AmbVrstaPoslovnaRadnja` (lista, papir,
+       ispravka i prefill sabiraju radnju), stavka bilansa `VRACENO`. Ispravka otkupa meri `AMB-INV-09` posle
+       zamene (`StornoOtkup(..., odloziObavezu)` + `AmbRequireObavezeDokumenta`); običan storno ostaje odbijen.
+     - **Prazne, commit `1747ac1c`:** `AmbPrazneRaspolozive` (najmanje stanje praznih po danima od datuma
+       nadalje, iz vrste kretanja — bez nove tabele i kolone), kapija u `PrenesiAmbalazu` za izdavanje partneru
+       sa stanice (`AMB_ERR_PRAZNE_NEMA`, sa manjkom), `RequirePrazneStorna` u stornu. Predaja vozaču i otpis
+       ostaju na ukupnom saldu (tačka 1.2).
+     - **Testovi:** 295–300 `T_KI024_*` (tri primera iz odluke, otkup = revers, ponavljanje i storno, ispravka
+       posle vraćanja, bez prebijanja između kooperanata i tipova, revers kao jedna radnja), 301
+       `T_Prazne_MatricaOtkupa` (matrica od osam redova kroz pravog pisca otkupa, atomarno odbijanje), 302
+       `T_Prazne_ReversRetroIStorno` (revers, unos unazad, storno nabavke, tip i stanica).
+     - **Promenjene premise (KI-024 menja ishod):** `modTest` 283 (fizički 0, ne +5), 290 (opticaj 123, stavka
+       `VRACENO` −15), 291 (izlaz 0, pa stari oblik bez izlaza kroz `ObrisiRedKnjigePoVrsti` daje 12), 293,
+       oracle `KartAmbPoslovniOracle` (izlaz nije poslovni red); BFP enum 10, `StornoKontraStav` 4 kontra-stava,
+       `DeficitIObaveza` (podela na 3 reda, saldo 30).
+     - **Sabotaže:** 6 × `ki024-*`, 4 × `prazne-*` (katalog 1058 → 1068); osam postojećih ponovo usidreno.
+       Svaka je primenjena i vraćena: izvor posle vraćanja identičan, `vba_check` čist.
+     - **Python model** (scratchpad, van repoa) sa pravilima pisca: 42/42 očekivanja testova i BFP premisa.
+     - **Proveren nizvodni put:** PWA sync otkupa ne prenosi izdate prazne (nema polja u `modMasterSync`), pa
+       ga ni podela ni kapija ne dodiruju. BFP testovi koji izdaju sa stanice imaju posejane ili kupljene prazne.
+     - **Otvoreno:** `KI-024` ostaje OPEN — kupac (dokument vraćanja pozajmice, `ODL-24` (d)) i migracija
+       (MIG-16/17 da piše izlaz). `KI-065` (NEEDS REVIEW): stanje praznih u migriranoj svesci nije izmereno, a
+       negativno bi blokiralo izdavanje.
+     - **NEVERIFIKOVANO:** `RunAllTests` (očekivano 302/0), BFP, `dokaz.py ki024` / `prazne` / ponovo
+       usidrene `amb-*`, ručni compile, papir reversa i otkupnog lista sa podelom.
+     - **Sledeći brojevi:** test 303 · stavka 230 · KI-066.
+
+230. **Pregled grane (29.10.2026): predaja vozaču pod kapijom praznih (P1), otpis na stanici je odluka
+     `AMB-10-ODL-36` (P2).** Grana `claude/trusting-hawking-2cw6z1`. Nezavisan pregled stavke 229 (operater je
+     preneo; Excel prolaz nad `310901a1` je u toku kod operatera).
+
+     - **P1, potvrđen čitanjem koda:** `AmbPrazneKapijaVazi` je gledao samo `IZDATA_PRAZNA` i `VRACANJE_TUDJE`,
+       pa je revers „prijem od OM" (stanica → vozač, `PRENOS_INTERNO`) predavao „prazne" sa stanice koja ima samo
+       pune. Tačka 1.2 i 3.3 zadatka govore o izdavanju praznih **sa stanice**, ne o primaocu — prva verzija je
+       to suzila bez osnova. Ispravka: `PRENOS_INTERNO` sa stanice je pod kapijom, bez obzira kome ide; smer
+       vozač → stanica nije. Test 303 `T_Prazne_PredajaVozacu` (pravi revers, jezgro stanica → stanica, nabavka
+       pa predaja, povratak od vozača), sabotaža `prazne-predaja-vozacu-van-kapije`.
+     - **Promenjena premisa:** BFP `Test_Amb_StornoNePraviMinus` je gajbe „odvodio" na drugu stanicu kao
+       `PRENOS_INTERNO`, a stanica je imala samo 20 punih. Nova kapija to s pravom odbija. Odvod je sada otpis
+       (ukupni saldo, `AMB-INV-14`), pa test i dalje meri samo `AMB-INV-07` na stornu. Otpremnica nije uzeta,
+       jer storno otkupa iz aktivne otpremnice odbija i `modStorno` (`:128-144`), pa bi tvrdnja merila tu kapiju.
+       Ostali testovi koji predaju vozaču prvo kupe prazne (pregledano svih 12 mesta u BFP-u i 2 u `modTest`;
+       fixture `FX_STANICA`/12/1 ima 80 praznih).
+     - **P2:** zapisnik o otpisu ne nosi „pune/prazne", pa knjiga to sama ne zna; prva verzija je otpis na stanici
+       računala kao prazne bez odluke. **Odluka operatera (29.10.2026): otpis na stanici je lom praznih**
+       (`AMB-10-ODL-36`); odbijene varijante „prvo prazne, pa pune" i izbor na F7. Cena je upisana uz odluku
+       (`AMBALAZA.md` 6.14b). Ponašanje se ne menja; test 304 `T_Prazne_OtpisNaStanici` fiksira odluku i cenu,
+       sabotaža `prazne-otpis-nije-prazna`.
+     - **Provere:** `vba_check`, `sabotaza.py --proveri-sidra` (1070), primena i vraćanje novih sabotaža (izvor
+       identičan), Python model 51/51.
+     - **Uočeno, nije u obimu (stanica je obim zadatka):** vozač ima istu klasu rupe — vraća stanici „prazne"
+       (`PRENOS_INTERNO` vozač → stanica) sudeći samo po ukupnom saldu, u kome su i pune sa otpremnice. Nije
+       mereno ni upisano kao KI dok operater ne kaže da li je to stvaran tok.
+     - **NEVERIFIKOVANO:** `RunAllTests` (očekivano 304/0), BFP, `dokaz.py prazne` / `ki024`, compile.
+     - **Sledeći brojevi:** test 305 · stavka 231 · KI-066.
+
+231. **Prvi Excel prolaz stavke 229 — dva pada, oba u premisi testa** (29.10.2026). Operater, nad `310901a1`
+     (302 testa, pre stavke 230): `dokaz.py` za `ki024`, `prazne` i `amb-` je stao na baznom prolazu —
+     `RunAllTests` 302 / 2 palo, pa ništa nije sabotirano.
+
+     - **`T_KI025_F7NabavkaOtvaraIzdavanje` (277):** „posle nabavke prolazi izdavanje…" dobija `AMB-INV-16`
+       (raspoloživo 271, traži se 301, manjak 30). Test je nabavku računao od UKUPNOG salda stanice, a stanica u
+       suiti drži i pune iz ranijih otkupa. Kapija radi ispravno; **promenjena premisa:** nabavka se računa od
+       praznih (`AmbPrazneRaspolozive`). Preduslov (izdavanje veće od ukupnog salda pada na `AMB-INV-07`) isti.
+     - **`T_Prazne_ReversRetroIStorno` (302), treća tvrdnja:** dobijeno `False|5|`, očekivano `False|0|`. Storno
+       je odbijen ispravno; test je razliku redova knjige merio tek na kraju, posle dela (4), koji dodaje tačno 5
+       redova (dve nabavke, otkup + pokriće, revers). **Greška testa:** razlika se sada meri odmah posle storna.
+       Python model to nije uhvatio jer je razliku merio na pravom mestu — model proverava pravila, ne raspored
+       merenja u VBA testu.
+     - Pregledani ostali novi testovi (295–304): razlike redova se mere odmah posle radnje.
+     - **NEVERIFIKOVANO:** `RunAllTests` nad novom glavom (očekivano 304/0), BFP, `dokaz.py`, compile.
+     - **Sledeći brojevi:** test 305 · stavka 232 · KI-066.
+
+232. **Drugi Excel prolaz, nad `83a199ae` (29.10.2026, operater).** Pun `run_vba.py`:
+
+     - **Zeleno:** `RunAllTests` **304 / 0** (oba ispravljena testa i 303, 304), BFP **2801 / 0**, Banka 241 / 0,
+       Storno 111 / 0, Faktura 39 / 39, Palete 96, Agrohemija 25 / 25, JSON 72 / 72, Izveštaji, StornoCentar,
+       Licenca.
+     - **`RunGoldenSuite`: Excel pao** posle 6 s (`RPC failed`), zatim 600 s bez odgovora i proces ubijen
+       (break mode). Nije pala tvrdnja: pad golden scenarija stiže kao tekst „N od M golden scenarija palo".
+       Čitanjem koda nema veze sa ovom granom (golden ne izdaje prazne, nema obavezu za podelu; grana ne menja
+       `modGoldenTests`, `modDokumenta` ni fixture), ali to nije dokaz. U prvom prolazu (`310901a1`) isti pad je
+       pogodio BFP na kraju (2801 / 0 pa `RPC failed`), pa liči na nestabilnost Excela posle dugog niza suita.
+       **Razdvojeno (operater, isti dan):** `run_vba.py --suite RunGoldenSuite` je **zelen** i na grani
+       (`c215c0a3`, 9,5 s, GREEN marker) i na `main`-u (`5ad4668a`, 9,2 s). Pad nije od ove grane; uzrok pada u
+       punom prolazu (Excel posle ~10 min rada) ostaje neistražen i nije vezan za ovaj rez.
+     - **`dokaz.py` (20 sabotaža, `--grupe`):** bazni prolaz zelen (304 / 0, BFP 2801 / 0), prva grupa (BFP, 4
+       sabotaže) završila je kao `PREKID` = Ctrl+C (`KeyboardInterrupt`, `dokaz.py` §`_prolaz`), pa je alat
+       stao. **Ništa nije izmereno**; izvor pre i posle identičan.
+     - **NEVERIFIKOVANO:** `dokaz.py`, ručni compile, papir.
+     - **Sledeći brojevi:** test 305 · stavka 233 · KI-066.
+
+233. **`dokaz.py` nad `3aa6e6fa` — 20 / 20 crveno, ali dve sabotaže ne obaraju SVOJU tvrdnju** (29.10.2026,
+     operater, `--grupe`). Bazni prolaz zelen (304 / 0, BFP 2801 / 0), izvor pre i posle identičan. Verdikt alata:
+     NIJE DOKAZANO, zbog dva nalaza — oba u ovom rezu, oba ispravljena:
+
+     - **`amb-pisac-obaveza-u-minus` — sabotaža je postala preširoka.** Gasila je ceo red
+       `If vraceno > obaveza Then vraceno = obaveza`, a od `ODL-35` taj red deli i IZDAVANJE kooperantu. Seed BFP-a
+       (izdavanje 20000 kooperantima) postao je celo „vraćanje", obaveza je pala u minus, pa su pale stotine BFP
+       tvrdnji, a ciljni `Test_Amb_DeficitIObaveza` je pukao pre svoje tvrdnje. Ponovo je usidrena bez prave
+       provere u stanju sa ODL-35 — vraćanje i ispravnost sidra su provereni, smisao nije. **Ispravka:** sabotaža
+       gasi podelu samo za izričit zahtev `VRACANJE_TUDJE` (kao original iz `5ad4668a`); izdavanje ostaje tačno.
+     - **`ki024-dokument-deo-radnje` — test je padao na grešci, ne na tvrdnji.** Test 300 je papir i ispravku
+       reversa zvao pre tvrdnji; pod sabotažom `IspravkaReversa_TX` digne „nema tačno jedan poslovni red" pre
+       prve tvrdnje. **Ispravka:** tvrdnje o poslovnom redu i mapi liste stoje odmah posle čitanja, pre papira i
+       ispravke.
+     - Ostalih 18 obara svoju tvrdnju (14 grupno, 4 pojedinačno).
+     - **Ponovljeno (operater, isti dan, nad `53bea3d8`):** `RunAllTests` zelen (GREEN marker),
+       `dokaz.py amb-pisac-obaveza-u-minus ki024-dokument-deo-radnje` → obe **OK**, „DOKAZANO", izvor identičan.
+       Svih 20 sabotaža ovog reza (`ki024-*`, `prazne-*`, osam ponovo usidrenih) sada obara svoju tvrdnju.
+     - **NEVERIFIKOVANO:** ručni compile (`Alt+F11` → Debug → Compile), papir reversa i otkupnog lista sa podelom.
+     - **Sledeći brojevi:** test 305 · stavka 234 · KI-066.
+
+234. **Ručna provera reza — zatvara NEVERIFIKOVANO iz 232/233** (30.10.2026, operater, test sveska, `ImportAllVBA`
+     nad `53bea3d8`; kod je isti do `60848905`).
+
+     - **Compile** (`Alt+F11` → Debug → Compile VBAProject): prolazi bez poruke.
+     - **Revers kooperantu sa obavezom firme** (posle otkupa 8/301026: primljeno 10, izdato 0, poslovni saldo −10),
+       revers 8/301026-2, izdato 15: papir **Početno −10 · Izdato 15 · Novo 5**, jedan red 15 ✓ (`AMB-POSL-03`).
+     - **F7 lista:** isti revers je **jedan** red „Izdato 15", ne 10 + 5 ✓ (`ki024-dokument-deo-radnje`).
+     - **Otkup sa podelom** — novi kooperant (KOOP-00106, bez početnog stanja), otkupni list 8/301026-2, primljeno 10
+       i izdato 15 u istom dokumentu:
+       - PDF: **Početno 0 · Primljeno 10 · Izdato 15 · Saldo 5** ✓;
+       - kartica ambalaže, tri reda dokumenta: „Izdato (otkup)" ulaz 5, „Vraćanje tuđe (otkup)" ulaz 10, „Uz robu
+         (otkup)" izlaz 10; **saldo kraja 5** ✓. Tehnički `IZLAZ_TUDJE` se ne vidi (poslovna projekcija,
+         `AMB-POSL-01`), a otkupni list i kartica kažu isti broj.
+       - Međusaldo unutar dokumenta ide 5 → 15 → 5. To nije nalaz nego konvencija `KART-HRON-01` („ulaz pre
+         izlaza"; međusaldo ne pada ispod manjeg od stanja pre i posle dokumenta, ovde 0 i 5).
+     - **Van reza, nije istraženo:** klauzula na PDF-u otkupnog lista nosi `_x000D_` na kraju redova. Tekst nije
+       podrazumevani (`OtkupKlauzulaDefault`), nego operaterov iz podešavanja `OTKUP_KLAUZULA` (memo), pa trag
+       vodi ka sadržaju ćelije, ne ka ovom rezu.
+     - **Status reza:** `RunAllTests` 304 / 0, BFP 2801 / 0, ostale suite zelene, Golden zelen sam, `dokaz.py`
+       20 / 20 obara svoju tvrdnju, compile i papir potvrđeni. Otvoreno i namerno van reza: kupčev deo `KI-024`
+       (MIG-16/17), `KI-065` (prazne u migriranoj svesci — izmeriti pre uvoza u pravu svesku), vozač iz stavke 230.
+     - **Sledeći brojevi:** test 305 · stavka 235 · KI-066.
+
+235. **Nezavisni pregled `#448` nad `da42b5a0` — GO za merge** (30.10.2026, 9,3 / 10). Poslovna semantika,
+     implementacija, testovi i sabotaže, ručni acceptance: GO. Primena na migriranoj svesci: **HOLD do `KI-065`**.
+     GitHub Actions `static` je zelen na `da42b5a0`. Pregled je potvrdio i obe ispravke iz `c9a989c6`. Nema novog
+     P0/P1, i ovaj PR se dalje ne proširuje.
+
+     - **P3, ispravljeno (samo dokumentacija):** `KI-024` je i dalje pisao „kooperant NEVERIFIKOVANO u Excelu".
+       Sada piše da je verifikovan (stavke 232–234). Tabela „Gde smo" dobija merge `#445` i red za ovaj rez.
+     - **Imenovana granica** (`AMBALAZA.md` 6.14b, „Po danima"): kapija praznih je dnevna, ne trenutna.
+       Izdavanje ujutru uz nabavku popodne istog dana prolazi. Prihvaćeno, vremenska knjiga se ne uvodi.
+     - **Ostaje van PR-a, svaki kao svoj rez:**
+       - kupčev deo `KI-024`;
+       - migracija MIG-16/17 (izlaz uz `VRACANJE_TUDJE`);
+       - `KI-065` — meriti pre primene;
+       - pad `RunGoldenSuite` u punom prolazu (stavka 232, neistražen; sam je zelen);
+       - vozač (stavka 230).
+     - **Sledeći brojevi:** test 305 · stavka 236 · KI-066.
 
 ## Dug sa imenom (posle S5-5b)
 

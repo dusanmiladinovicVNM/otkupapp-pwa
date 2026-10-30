@@ -22581,10 +22581,11 @@ Private Sub Test_Amb_UgovorPrenosa()
     On Error GoTo EH
 
     ' --- ZATVOREN ENUM -------------------------------------------------
-    ' Devet od ODL-24 (19.10.2026): POZAJMICA_PARTNERA je jedina nova vrednost.
-    AssertEquals "9", CStr(UBound(modAmbalazaUgovor.AmbVrsteSve()) - _
-                           LBound(modAmbalazaUgovor.AmbVrsteSve()) + 1), _
-                 "Amb ugovor: vrsta kretanja ima tacno devet"
+    ' Devet od ODL-24 (19.10.2026): POZAJMICA_PARTNERA. Deset od KI-024
+    ' (29.10.2026): IZLAZ_TUDJE_AMBALAZE, ogledalo ulaza tudje (AMB-INV-15).
+    AssertEquals "10", CStr(UBound(modAmbalazaUgovor.AmbVrsteSve()) - _
+                            LBound(modAmbalazaUgovor.AmbVrsteSve()) + 1), _
+                 "Amb ugovor: vrsta kretanja ima tacno deset"
     AssertTrue modAmbalazaUgovor.AmbVrstaPoznata(AMB_VK_ULAZ_TUDJE), _
                "Amb ugovor: ULAZ_TUDJE_AMBALAZE je poznata vrsta"
     AssertTrue Not modAmbalazaUgovor.AmbVrstaPoznata("POCETNO_STANJE"), _
@@ -23071,8 +23072,10 @@ Private Sub Test_Amb_StornoKontraStavVracaSaldo()
                "STORNO: saldo stanice se vraca na stanje pre dogadjaja"
     AssertTrue Abs(koopStorno - koopPre) < 0.001, _
                "STORNO: saldo kooperanta se vraca na stanje pre dogadjaja"
-    ' Tri originala: trazeni prenos, izdate prazne i POKRICE deficita.
-    AssertEquals "3", CStr(kontra), _
+    ' Cetiri originala: trazeni prenos, POKRICE deficita, i izdate prazne -- koje
+    ' su od ODL-35 VRACANJE njegovih 7 (obaveza 20) sa svojim IZLAZOM iz opticaja.
+    ' Premisa promenjena 29.10.2026 (KI-024); do tada je izdato bio jedan red.
+    AssertEquals "4", CStr(kontra), _
                  "STORNO: kontra-stav je upisan za svaki aktivan red dokumenta"
     AssertTrue Abs((stPosle - stPre) - 13#) < 0.001, _
                "STORNO: otkup je stvarno promenio saldo pre storna"
@@ -23229,19 +23232,17 @@ Private Sub Test_Amb_StornoNePraviMinus()
     otkID = CreateOtkup_TX(h, stavke, greska)
     stPosleOtkupa = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
 
-    ' --- te gajbe legitimno odu dalje, na drugu stanicu
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
-    tx.AddTableSnapshot TBL_AMBALAZA
-    dokPrenos = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "MIN-" & scenario, _
-                                             Date, AMB_NALOG_STANICA, TEST_ST_ID)
-    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 20#, _
-                AMB_NALOG_STANICA, TEST_ST_ID, _
-                AMB_NALOG_STANICA, TEST_HLAD_ST_ID, _
-                AMB_VK_PRENOS_INTERNO, DOK_TIP_AMBALAZA_DOKUMENT, dokPrenos
-    tx.CommitTx
-    Set tx = Nothing
+    ' --- te gajbe legitimno odu iz stanice
+    '
+    ' PREMISA PROMENJENA (AMB-INV-16, pregled 29.10.2026): do tada su ovih 20
+    ' odlazile na drugu stanicu kao PRENOS_INTERNO. To je prenos PRAZNIH (6.7a), a
+    ' stanica ovde drzi samo PUNE vracene otkupom -- kapija praznih ga sada s
+    ' pravom odbija. Pune sa stanice odlaze otpremnicom, ali storno otkupa u
+    ' otpremnici odbija i druga kapija, pa bi tvrdnja ispod merila nju. Otpis je
+    ' izlaz bez nove kapije (sudi mu se po ukupnom saldu, AMB-INV-14), pa test i
+    ' dalje meri samo AMB-INV-07 na stornu.
+    dokPrenos = modAmbalaza.OtpisiAmbalazu_TX(Date, TEST_ST_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                                              tipT, 20#, "lom -- " & scenario)
     stPosleDrena = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
 
     ' --- storno otkupa bi stanicu odveo u minus
@@ -24704,20 +24705,23 @@ Private Sub Test_Amb_DeficitIObaveza()
     ' --- D) OBAVEZA SE NE MOZE PREVRATITI (AMB-INV-09) -------------------
     ' Firma duguje 70, vraca 100: 70 gasi dug, 30 je NOVO zaduzenje partnera.
     ' Bez podele bi obaveza bila -30 -- matematicki tacna, poslovno nemoguca.
+    ' Od KI-024 (AMB-INV-15) vracenih 70 i IZLAZI iz opticaja: tri reda (vracanje,
+    ' izlaz, novo zaduzenje), a partner fizicki drzi samo nasih 30. Premisa
+    ' promenjena 29.10.2026 -- do tada su vracene tudje ostajale kod njega (100).
     Dim preD As Long, vraID As String
     preD = CountRows(TBL_AMBALAZA)
     vraID = modAmbalaza.PrenesiAmbalazu(tx, Date, tipT, 100#, _
                 AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
                 AMB_VK_VRACANJE_TUDJE, DOK_TIP_AMBALAZA_DOKUMENT, dokVra)
     AssertTrue Len(vraID) > 0, "Amb obaveza: vracanje preko duga je upisano"
-    AssertEquals CStr(preD + 2), CStr(CountRows(TBL_AMBALAZA)), _
-                 "Amb obaveza: podela daje DVA reda, ne jedan sa dva znacenja"
+    AssertEquals CStr(preD + 3), CStr(CountRows(TBL_AMBALAZA)), _
+                 "Amb obaveza: podela daje vracanje, njegov izlaz i novo zaduzenje"
     AssertEquals "0", CStr(modAmbalaza.AmbObavezaPartneru( _
                    AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)), _
                  "Amb obaveza: dug je ugasen na nulu, ne u minus"
-    AssertEquals "100", CStr(modAmbalaza.AmbSaldoNaloga( _
+    AssertEquals "30", CStr(modAmbalaza.AmbSaldoNaloga( _
                      AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipT)), _
-                 "Amb obaveza: partner je fizicki primio svih 100"
+                 "Amb obaveza: partner fizicki drzi samo novo zaduzenje -- vracene su izasle"
 
     ' IDEMPOTENCIJA PREKO PODELE -- ovde naivno poredjenje puca: zahtev je 100, a
     ' red koji ga nosi je 70. Zbir nad parem naloga je 100, pa je ponavljanje
@@ -24737,7 +24741,7 @@ Private Sub Test_Amb_DeficitIObaveza()
                  "Amb obaveza: ponovljen PODELJEN zahtev NE pada na sudar"
     AssertEquals vraID, vraPonovo, _
                  "Amb obaveza: ponovljen PODELJEN zahtev vraca isti AmbID"
-    AssertEquals CStr(preD + 2), CStr(CountRows(TBL_AMBALAZA)), _
+    AssertEquals CStr(preD + 3), CStr(CountRows(TBL_AMBALAZA)), _
                  "Amb obaveza: ponavljanje podeljenog zahteva ne dopisuje red"
 
     ' --- E) VRACANJE BEZ DUGA JE CISTO IZDAVANJE -------------------------

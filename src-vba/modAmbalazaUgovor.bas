@@ -38,7 +38,7 @@ Public Const AMB_NALOG_FIRMA As String = "Firma"
 Public Const AMB_NALOG_SPOLJNI As String = "SpoljniSvet"
 
 ' ============================================================
-' VRSTA KRETANJA -- zatvoren enum, devet vrednosti
+' VRSTA KRETANJA -- zatvoren enum, deset vrednosti
 ' ============================================================
 '
 ' Odgovara na ZASTO je prenos nastao. Ko kome daje vec nose Od/Na, a koji je
@@ -62,6 +62,14 @@ Public Const AMB_VK_OTPIS As String = "OTPIS"
 ' ovaj red nego njegov ULAZ_TUDJE iste kolicine (AMB-INV-13), pa ULAZ_TUDJE
 ' ostaje posledica, a ne zahtev.
 Public Const AMB_VK_POZAJMICA As String = "POZAJMICA_PARTNERA"
+' VRACENE TUDJE GAJBE IZLAZE IZ OPTICAJA (KI-024, AMB-INV-15, odluka operatera
+' 29.10.2026). Ogledalo ULAZ_TUDJE: posledica, ne zahtev -- pisac je upisuje sam,
+' na istom dokumentu i u istoj TX, uz svaki red VRACANJE_TUDJE (Partner ->
+' SpoljniSvet, ista kolicina i tip). Bez nje vracene gajbe ostaju na fizickom
+' saldu partnera i u opticaju firme, pa ih sledece donosenje tiho prevede u
+' firmine. Obavezu NE dira (gasi je VRACANJE_TUDJE), poslovni saldo takodje ne
+' (tehnicki red, AMB-POSL-01). OTPIS nije zamena: on je lom/gubitak.
+Public Const AMB_VK_IZLAZ_TUDJE As String = "IZLAZ_TUDJE_AMBALAZE"
 
 ' Vrsta AMBALAZNOG DOKUMENTA (AMB-10-DOK) -- zatvoren enum, tri vrednosti.
 ' Ne mesati sa VrstaKretanja iznad: ovo je vrsta DOKUMENTA, ono je vrsta
@@ -110,8 +118,10 @@ Public Const AMB_KLASA_REALAN As String = "REALAN"
 '            NASE je OBRACUNSKI saldo, ne broj gajbi u vlasnistvu: gajbe se ne
 '            vode po vlasniku, pa sme biti negativan (firma duguje vise nego
 '            sto drzi -- pozajmica 10, otpis 2: NASE -2, TUDJE 10);
-'            NEUSKLADJENO = OPTICAJ - NASE - TUDJE (AMB-BIL-02, signal KI-024)
-'   GRANICA  kretanje preko SpoljniSvet U PERIODU: POCETAK + stavke = KRAJ
+'            NEUSKLADJENO = OPTICAJ - NASE - TUDJE (AMB-BIL-02, signal KI-024:
+'            vracanje tudje bez svog izlaza, npr. iz migracije)
+'   GRANICA  kretanje preko SpoljniSvet U PERIODU: POCETAK + stavke = KRAJ;
+'            VRACENO je izlaz vracenih tudjih gajbi (AMB-INV-15)
 '
 ' Sifre nisu natpisi: natpis bira izvestaj (Poruka), a citalac i test dele
 ' sifru -- isti razlog kao kod VrstaKretanja.
@@ -128,6 +138,7 @@ Public Const AMB_BIL_NABAVKA As String = "NABAVKA"
 Public Const AMB_BIL_POKRICE As String = "POKRICE"
 Public Const AMB_BIL_POZAJMICA As String = "POZAJMICA"
 Public Const AMB_BIL_OTPIS As String = "OTPIS"
+Public Const AMB_BIL_VRACENO As String = "VRACENO"
 Public Const AMB_BIL_KRAJ As String = "KRAJ"
 
 ' ============================================================
@@ -162,7 +173,8 @@ End Function
 Public Function AmbVrsteSve() As Variant
     AmbVrsteSve = Array(AMB_VK_UZ_ROBU, AMB_VK_IZDATA_PRAZNA, AMB_VK_POVRAT_PRAZNE, _
                         AMB_VK_PRENOS_INTERNO, AMB_VK_ULAZ_TUDJE, AMB_VK_VRACANJE_TUDJE, _
-                        AMB_VK_NABAVKA, AMB_VK_OTPIS, AMB_VK_POZAJMICA)
+                        AMB_VK_NABAVKA, AMB_VK_OTPIS, AMB_VK_POZAJMICA, _
+                        AMB_VK_IZLAZ_TUDJE)
 End Function
 
 ' NAZIV VRSTE KRETANJA, za coveka. Nepoznata vrsta vraca SVOJ KOD, ne prazno:
@@ -183,6 +195,7 @@ Public Function AmbKretanjeNaziv(ByVal vk As String) As String
         Case AMB_VK_NABAVKA:         AmbKretanjeNaziv = Poruka("OTKUI_VK_NABAVKA")
         Case AMB_VK_OTPIS:           AmbKretanjeNaziv = Poruka("OTKUI_VK_OTPIS")
         Case AMB_VK_POZAJMICA:       AmbKretanjeNaziv = Poruka("OTKUI_VK_POZAJMICA")
+        Case AMB_VK_IZLAZ_TUDJE:     AmbKretanjeNaziv = Poruka("OTKUI_VK_IZLAZ_TUDJE")
     End Select
 End Function
 
@@ -421,9 +434,12 @@ Public Function AmbDokDozvoljavaKretanje(ByVal dokVrsta As String, _
 
     Select Case Trim$(dokVrsta)
         Case AMB_DOK_REVERS
+            ' IZLAZ_TUDJE ide samo uz VRACANJE_TUDJE (AMB-INV-15), pa sme tamo
+            ' gde i ono -- na nasem reversu.
             Select Case Trim$(vrstaKretanja)
                 Case AMB_VK_IZDATA_PRAZNA, AMB_VK_POVRAT_PRAZNE, _
-                     AMB_VK_PRENOS_INTERNO, AMB_VK_VRACANJE_TUDJE
+                     AMB_VK_PRENOS_INTERNO, AMB_VK_VRACANJE_TUDJE, _
+                     AMB_VK_IZLAZ_TUDJE
                     AmbDokDozvoljavaKretanje = True
             End Select
         Case AMB_DOK_REVERS_PARTNERA
@@ -586,6 +602,10 @@ End Sub
 '   NABAVKA                    | GRANICA    | SOPSTVENI
 '   OTPIS                      | REALAN     | GRANICA
 '   POZAJMICA_PARTNERA         | PARTNER    | SOPSTVENI
+'   IZLAZ_TUDJE_AMBALAZE       | PARTNER    | GRANICA
+'
+' IZLAZ_TUDJE je ogledalo ULAZ_TUDJE (KI-024, AMB-INV-15): partnerove gajbe koje
+' mu je firma vratila izlaze iz opticaja na istoj strani na kojoj su usle.
 '
 ' POZAJMICA ima ISTI par klasa kao povrat (ODL-24): kupac predaje vozacu. Razlika
 ' je cije su gajbe, pa je nosi vrsta, a obavezu njen ULAZ_TUDJE (AMB-INV-13).
@@ -619,6 +639,8 @@ Public Function AmbKlaseVrste(ByVal vrsta As String) As Variant
             AmbKlaseVrste = Array(AMB_KLASA_REALAN, AMB_KLASA_GRANICA)
         Case AMB_VK_POZAJMICA
             AmbKlaseVrste = Array(AMB_KLASA_PARTNER, AMB_KLASA_SOPSTVENI)
+        Case AMB_VK_IZLAZ_TUDJE
+            AmbKlaseVrste = Array(AMB_KLASA_PARTNER, AMB_KLASA_GRANICA)
         Case Else
             AmbKlaseVrste = Array()
     End Select
@@ -896,9 +918,14 @@ End Function
 ' generise je pisac. Da je i zahtev, pokrice jednog zahteva i eksplicitan zahtev
 ' nad istim dokumentom delili bi i par i vrstu, pa bi jedan tiho progutao drugi
 ' kao "idempotentno ponavljanje".
+'
+' IZLAZ_TUDJE_AMBALAZE je njeno ogledalo (AMB-INV-15) i iz istog razloga nije
+' zahtev: pisac je pise sam, uz svaki red VRACANJE_TUDJE. Kao posledica je i
+' TEHNICKI red (AmbRedJeTehnicki), pa ne ulazi u poslovni saldo partnera.
 Public Function AmbVrstaJeZahtev(ByVal vrsta As String) As Boolean
     If Not AmbVrstaPoznata(vrsta) Then Exit Function
-    AmbVrstaJeZahtev = (StrComp(Trim$(vrsta), AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0)
+    AmbVrstaJeZahtev = (StrComp(Trim$(vrsta), AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0) And _
+                       (StrComp(Trim$(vrsta), AMB_VK_IZLAZ_TUDJE, vbTextCompare) <> 0)
 End Function
 
 ' AMB-INV-13: VRSTA KOJA SAMA UNOSI SVOJU KOLICINU U OPTICAJ (ODL-24).
@@ -929,8 +956,107 @@ Public Function AmbVrsteZahteva(ByVal vrsta As String) As Variant
             ' AMB-INV-09: vracanje preko obaveze se cepa, a ostatak je NOVO
             ' zaduzenje partnera -- ne vracanje. Dva dogadjaja, dve vrste.
             AmbVrsteZahteva = Array(AMB_VK_VRACANJE_TUDJE, AMB_VK_IZDATA_PRAZNA)
+        Case AMB_VK_IZDATA_PRAZNA
+            ' AMB-10-ODL-35: izdavanje kooperantu PRVO zatvara obavezu firme
+            ' prema njemu (AmbZahtevPrvoVracaTudje), pa isti zahtev daje iste
+            ' dve vrste, obrnutim redom. Ponavljanje se meri zbirom obe -- inace
+            ' bi ponovljeno izdavanje posle podele izgledalo kao sudar.
+            AmbVrsteZahteva = Array(AMB_VK_IZDATA_PRAZNA, AMB_VK_VRACANJE_TUDJE)
         Case Else
             AmbVrsteZahteva = Array(AmbVrstaKanon(vrsta))
+    End Select
+End Function
+
+' AMB-10-ODL-35 (odluka operatera 29.10.2026): IZDAVANJE KOOPERANTU PRVO ZATVARA
+' OBAVEZU FIRME PREMA NJEMU.
+'
+' Gajbe istog tipa su zamenljive -- ne vodi se koja je cija. Kad firma kooperantu
+' duguje N njegovih (ULAZ_TUDJE) i izda mu Q praznih, prvih MIN(Q, N) je VRACANJE
+' tudjih (gasi obavezu, i one izlaze iz opticaja -- AMB-INV-15), a tek ostatak je
+' novo zaduzenje (IZDATA_PRAZNA). Operater unosi jednu kolicinu; podelu radi
+' pisac, isto i na otkupu (KolAmbIzdata) i na reversu.
+'
+' Eksplicitno VRACANJE_TUDJE se deli isto, i to od ranije (AMB-INV-09).
+'
+' KUPAC NIJE OBUHVACEN, i to je namerno: kupcu se prazne ne izdaju (nijedan pisac
+' ne pise IZDATA_PRAZNA na kupca), a vracanje pozajmice kupcu trazi svoju odluku o
+' dokumentu i broju (ODL-24 (d), KI-024 ostatak) -- ne pretpostavlja se F7.
+Public Function AmbZahtevPrvoVracaTudje(ByVal vrsta As String, ByVal naTip As String) As Boolean
+    Select Case AmbVrstaKanon(vrsta)
+        Case AMB_VK_VRACANJE_TUDJE
+            AmbZahtevPrvoVracaTudje = True
+        Case AMB_VK_IZDATA_PRAZNA
+            AmbZahtevPrvoVracaTudje = (StrComp(Trim$(naTip), AMB_NALOG_KOOPERANT, vbTextCompare) = 0)
+    End Select
+End Function
+
+' POSLOVNA RADNJA KOJOJ RED DOKUMENTA PRIPADA -- za citaoce koji prikazuju
+' DOKUMENT (lista, papir, ispravka reversa), ne za saldo.
+'
+' Od ODL-35 jedno izdavanje kooperantu daje do dva poslovna reda istog para i
+' tipa: VRACANJE_TUDJE (do visine obaveze) i IZDATA_PRAZNA (ostatak). Za
+' operatera je to JEDNA radnja -- izdao je Q praznih -- pa ih citalac dokumenta
+' sabira pod IZDATA_PRAZNA. Bez toga bi lista pokazala samo deo, papir bi odbio
+' "dva reda istog tipa", a ispravka "nema tacno jedan poslovni red".
+Public Function AmbVrstaPoslovnaRadnja(ByVal vrsta As String) As String
+    AmbVrstaPoslovnaRadnja = AmbVrstaKanon(vrsta)
+    If Len(AmbVrstaPoslovnaRadnja) = 0 Then AmbVrstaPoslovnaRadnja = Trim$(vrsta)
+    If StrComp(AmbVrstaPoslovnaRadnja, AMB_VK_VRACANJE_TUDJE, vbTextCompare) = 0 Then
+        AmbVrstaPoslovnaRadnja = AMB_VK_IZDATA_PRAZNA
+    End If
+End Function
+
+' ============================================================
+' PUNE I PRAZNE GAJBE -- stanje upotrebe, ne vlasnistvo (AMB-INV-16)
+' ============================================================
+'
+' Gajbe istog tipa su zamenljive, ali PUNA GAJBA NIJE RASPOLOZIVA PRAZNA (odluka
+' operatera 29.10.2026). Razlika se ne vodi kao nova kolona ni nova knjiga: VRSTA
+' kretanja je vec kaze, za svaku vrstu procitanu iz 6.7 i iz njenog pisca:
+'
+'   AMBALAZA_UZ_ROBU    PUNE   gajbe putuju SA ROBOM (otkup K->S, otpremnica S->V,
+'                              prijemnica V->Kupac)
+'   NABAVKA             prazne nove gajbe ulaze u firmu
+'   IZDATA_PRAZNA       prazne vec po imenu
+'   POVRAT_PRAZNE       prazne vec po imenu
+'   PRENOS_INTERNO      prazne 6.7a / modDokumenta.OtpKnjiziAmbalazu: "za PRAZNE
+'                              gajbe izmedju sopstvenih naloga"
+'   VRACANJE_TUDJE      prazne partneru se vracaju njegove prazne
+'   OTPIS               prazne -- ODLUKA operatera 29.10.2026 (AMB-10-ODL-36):
+'                              otpis na stanici je lom PRAZNIH. Zapisnik ne
+'                              kaze pune/prazne, pa to knjiga sama ne zna;
+'                              polomljenu punu stanica presipa u praznu, pa
+'                              prazna nestaje i tada. Cena odluke (pregled
+'                              29.10.2026, P2): lom pune dok stanica nema
+'                              praznih spusta prazne ispod stvarnih, a izlaz je
+'                              nabavka ili povrat. Meri je test 304.
+'   ULAZ/IZLAZ_TUDJE,   --     ne dodiruju stanicu (GRANICA <-> PARTNER;
+'   POZAJMICA                  pozajmica ide kupac -> vozac, ODL-9)
+'
+' Pune se ne pretvaraju u prazne same od sebe -- nema dogadjaja koji to opravdava,
+' pa ga ni citalac ne izmislja.
+Public Function AmbVrstaPuneGajbe(ByVal vrsta As String) As Boolean
+    AmbVrstaPuneGajbe = (StrComp(Trim$(vrsta), AMB_VK_UZ_ROBU, vbTextCompare) = 0)
+End Function
+
+' KO SE SUDI PO PRAZNIM GAJBAMA (AMB-INV-16), a ne samo po ukupnom saldu.
+'
+' Svako IZDAVANJE praznih sa stanice, bez obzira kome (odluka operatera
+' 29.10.2026, tacka 1.2: "izdavanje prazne ambalaze sa stanice"):
+'   IZDATA_PRAZNA     partneru
+'   VRACANJE_TUDJE    partneru (deo istog izdavanja, ODL-35)
+'   PRENOS_INTERNO    vozacu ili drugom sopstvenom nalogu -- 6.7a: prazne izmedju
+'                     sopstvenih naloga. Bez ove grane stanica sa 0 praznih i 10
+'                     punih predaje vozacu 5 "praznih" (pregled 29.10.2026, P1).
+' Pune sa stanice odlaze samo sa robom (AMBALAZA_UZ_ROBU), a OTPIS nije predaja
+' nego izlaz iz opticaja: njima se i dalje sudi po ukupnom saldu (AMB-INV-07,
+' AMB-INV-14), kao i svim ostalim radnjama. Smer vozac -> stanica stanici DAJE
+' prazne, pa ga kapija ne gleda (izvor nije stanica).
+Public Function AmbPrazneKapijaVazi(ByVal odTip As String, ByVal vrsta As String) As Boolean
+    If StrComp(Trim$(odTip), AMB_NALOG_STANICA, vbTextCompare) <> 0 Then Exit Function
+    Select Case AmbVrstaKanon(vrsta)
+        Case AMB_VK_IZDATA_PRAZNA, AMB_VK_VRACANJE_TUDJE, AMB_VK_PRENOS_INTERNO
+            AmbPrazneKapijaVazi = True
     End Select
 End Function
 
@@ -1231,6 +1357,9 @@ End Sub
 ' POZAJMICA_PARTNERA doprinosi NULU, i to je pravilo (ODL-24): obavezu nosi
 ' njen ULAZ_TUDJE iste kolicine (AMB-INV-13). Da i ona nosi +N, pozajmica bi
 ' obavezu brojala dvaput.
+'
+' IZLAZ_TUDJE doprinosi NULU iz istog razloga, u ogledalu (AMB-INV-15): obavezu
+' gasi njen VRACANJE_TUDJE, a izlaz samo izvodi te gajbe iz opticaja.
 Public Function AmbDoprinosObavezi(ByVal vrsta As String, ByVal kolicina As Double, _
                                    ByVal vrstaOriginala As String) As Double
     If Len(Trim$(vrstaOriginala)) > 0 Then
@@ -1265,6 +1394,7 @@ Public Function AmbBilansStavkaGranice(ByVal vrsta As String) As String
         Case AMB_VK_NABAVKA:    AmbBilansStavkaGranice = AMB_BIL_NABAVKA
         Case AMB_VK_ULAZ_TUDJE: AmbBilansStavkaGranice = AMB_BIL_POKRICE
         Case AMB_VK_OTPIS:      AmbBilansStavkaGranice = AMB_BIL_OTPIS
+        Case AMB_VK_IZLAZ_TUDJE: AmbBilansStavkaGranice = AMB_BIL_VRACENO
     End Select
 End Function
 

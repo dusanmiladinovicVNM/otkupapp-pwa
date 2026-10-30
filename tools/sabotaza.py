@@ -5072,8 +5072,9 @@ SABOTAZE = {
     # bi jedan tiho progutao drugi kao "idempotentno ponavljanje".
     "amb-pisac-pokrice-je-zahtev": (
         "modAmbalazaUgovor.bas",
-        "    AmbVrstaJeZahtev = (StrComp(Trim$(vrsta), AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0)\n",
-        "    AmbVrstaJeZahtev = True   ' SABOTAZA: pokrice deficita je i zahtev\n",
+        "    AmbVrstaJeZahtev = (StrComp(Trim$(vrsta), AMB_VK_ULAZ_TUDJE, vbTextCompare) <> 0) And _\n"
+        "                       (StrComp(Trim$(vrsta), AMB_VK_IZLAZ_TUDJE, vbTextCompare) <> 0)\n",
+        "    AmbVrstaJeZahtev = (StrComp(Trim$(vrsta), AMB_VK_IZLAZ_TUDJE, vbTextCompare) <> 0)   ' SABOTAZA: pokrice deficita je i zahtev\n",
         "Test_Amb_DeficitIObaveza",
         "Amb deficit: pokrice se NE moze poruciti izvana -- pisac ga generise",
     ),
@@ -5106,10 +5107,14 @@ SABOTAZE = {
     ),
     # Bez podele obaveza ide u minus: firma "vrati" vise tudjih gajbi nego sto je
     # uzela. Fizicki ledger ostaje tacan, knjiga obaveza postaje nemoguca.
+    # Gasi se samo IZRICITO vracanje: od ODL-35 isti red deli i izdavanje
+    # kooperantu, pa je sabotaza celog reda oborila seed BFP-a i ciljni test je
+    # pukao pre svoje tvrdnje (dokaz 29.10.2026: "NE OBARA SVOJ TEST").
     "amb-pisac-obaveza-u-minus": (
         "modAmbalaza.bas",
-        "        If kolicina > obaveza Then\n",
-        "        If False Then   ' SABOTAZA: vracanje preko duga se ne deli\n",
+        "        If vraceno > obaveza Then vraceno = obaveza\n",
+        "        If vraceno > obaveza And vrstaK <> AMB_VK_VRACANJE_TUDJE Then vraceno = obaveza"
+        "   ' SABOTAZA: izricito vracanje preko duga se ne deli\n",
         "Test_Amb_DeficitIObaveza",
         "Amb obaveza: dug je ugasen na nulu, ne u minus",
     ),
@@ -6962,8 +6967,8 @@ SABOTAZE = {
     # prolazi i ostavlja NEGATIVNU obavezu, koja izgleda kao normalno stanje.
     "amb-storno-posle-vracanja-prolazi": (
         "modAmbalaza.bas",
-        "                If ob < 0 Then\n",
-        "                If False Then   ' SABOTAZA: negativna obaveza je OK\n",
+        "            If ob < 0 Then\n",
+        "            If False Then   ' SABOTAZA: negativna obaveza je OK\n",
         "Test_Amb_StornoPosleVracanjaOdbijen",
         "STORNO: ulaz tudje ambalaze koja je vracena se NE stornira (AMB-INV-09)",
     ),
@@ -6990,7 +6995,7 @@ SABOTAZE = {
     # cutover (AMB-10-ODL-16).
     "amb-otkup-storno-bez-kontrastava": (
         "modStorno.bas",
-        "    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_OTKUP, otkupID\n",
+        "    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_OTKUP, otkupID, odloziObavezu\n",
         "    ' SABOTAZA: storno otkupa ostaje na zastavici\n",
         "Test_OTK_StornoJednimID",
         "OTK storno: saldo stanice se vraca na stanje pre otkupa",
@@ -8494,8 +8499,10 @@ SABOTAZE = {
     # pa model opet ume samo da je knjizi kao povrat sa potvrdom manjka.
     "odl24-pozajmica-van-enuma": (
         "modAmbalazaUgovor.bas",
-        "                        AMB_VK_NABAVKA, AMB_VK_OTPIS, AMB_VK_POZAJMICA)\n",
-        "                        AMB_VK_NABAVKA, AMB_VK_OTPIS)   ' SABOTAZA: pozajmica van enuma\n",
+        "                        AMB_VK_NABAVKA, AMB_VK_OTPIS, AMB_VK_POZAJMICA, _\n"
+        "                        AMB_VK_IZLAZ_TUDJE)\n",
+        "                        AMB_VK_NABAVKA, AMB_VK_OTPIS, _\n"
+        "                        AMB_VK_IZLAZ_TUDJE)   ' SABOTAZA: pozajmica van enuma\n",
         "Test_ODL24_UgovorPozajmice",
         "ODL-24 ugovor: POZAJMICA_PARTNERA je poznata vrsta",
     ),
@@ -10401,7 +10408,7 @@ SABOTAZE = {
         "            If samoPoslovno Then\n                If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0\n",
         "            If False Then   ' SABOTAZA: stanje pre dokumenta fizicki\n                If AmbRedJeTehnicki(data, i, kolIdx, vrsteDok) Then znak = 0\n",
         "T_AmbPoslovno_PokriceNijeZaduzenje",
-        "slucaj Bajic: posle pokrica +12 i +3 i izdavanja 5 stanje je poslovno -10, fizicki 5",
+        "slucaj Bajic: posle pokrica +12 i +3 i izdavanja 5 stanje je poslovno -10, fizicki 0 (KI-024)",
     ),
     # Otkupni list racuna zavrsno stanje bez primljenih gajbi (pocetno + izdato).
     "amb-posl-pdf-zavrsno-bez-prijema": (
@@ -10551,6 +10558,175 @@ SABOTAZE = {
         "        If nase < 0 Then nase = 0   ' SABOTAZA: nase bez minusa\n",
         "T_AmbBilans_SignalIKvar",
         "bilans: nase je obracunski saldo -- pozajmica 10 i otpis 2 daju -2, neuskladjeno 0",
+    ),
+    # --- AMB-BIL-03: ambalaza po partneru (testovi 293-294) ---
+    # Drzi ne oduzima izlaz sa partnera (povrat): fizicki saldo raste.
+    "amb-par-drzi-samo-ulaz": (
+        "modAmbalaza.bas",
+        "            PartDodaj red, kljucevi, odTip & sep & odID & sep & kt, odTip, odID, kt, _\n"
+        "                      -q, 0, IIf(tehnicki, 0, -q)\n",
+        "            PartDodaj red, kljucevi, odTip & sep & odID & sep & kt, odTip, odID, kt, _\n"
+        "                      0, 0, IIf(tehnicki, 0, -q)   ' SABOTAZA: drzi samo ulaz\n",
+        "T_AmbPartneri_BrutoNeto",
+        "po partnerima: drzi je fizicki saldo (K1 15, Bajic 0, kupac 0)",
+    ),
+    # Obaveza se ne pripisuje partneru: tudje 0 svuda.
+    "amb-par-tudje-nula": (
+        "modAmbalaza.bas",
+        "            PartDodaj red, kljucevi, pTip & sep & pID & sep & kt, pTip, pID, kt, 0, dop, 0\n",
+        "            PartDodaj red, kljucevi, pTip & sep & pID & sep & kt, pTip, pID, kt, 0, 0, 0   ' SABOTAZA\n",
+        "T_AmbPartneri_BrutoNeto",
+        "po partnerima: tudje je obaveza firme po partneru (0, 12, 10)",
+    ),
+    # Neto broji i tehnicki ulaz (pokrice): fizicki umesto kartice.
+    "amb-par-neto-fizicki": (
+        "modAmbalaza.bas",
+        "            PartDodaj red, kljucevi, naTip & sep & naID & sep & kt, naTip, naID, kt, _\n"
+        "                      q, 0, IIf(tehnicki, 0, q)\n",
+        "            PartDodaj red, kljucevi, naTip & sep & naID & sep & kt, naTip, naID, kt, _\n"
+        "                      q, 0, q   ' SABOTAZA: neto fizicki\n",
+        "T_AmbPartneri_BrutoNeto",
+        "po partnerima: neto je saldo kao na kartici (+15 drzi nase, -12 i -10 firma duguje)",
+    ),
+    # Red bez ijednog broja ostaje u pregledu.
+    "amb-par-nula-red": (
+        "modAmbalaza.bas",
+        "        If v(0) <> 0 Or v(1) <> 0 Or v(2) <> 0 Then\n",
+        "        If True Then   ' SABOTAZA: i red bez brojeva\n",
+        "T_AmbPartneri_BrutoNeto",
+        "po partnerima: partner bez ijednog broja nema red",
+    ),
+    # Stanje po partneru ne sece po datumDo.
+    "amb-par-bez-reza-datumdo": (
+        "modAmbalaza.bas",
+        "        If d > dDo Then GoTo SledeciRedPartnera\n",
+        "        ' SABOTAZA: po partnerima bez reza po datumDo\n",
+        "T_AmbPartneri_BrutoNeto",
+        "po partnerima: kasniji dokument ne ulazi u stanje na datumDo, a do danas ulazi",
+    ),
+    # Lista po partnerima trazi izabran entitet.
+    "amb-par-lista-trazi-entitet": (
+        "modScrIzvestaji.bas",
+        "    If kljuc = IZ_AMBPAR Then Exit Function\n",
+        "    ' SABOTAZA: po partnerima trazi entitet\n",
+        "T_AmbPartneri_ListaIzvestaja",
+        "po partnerima: lista ne trazi izabran entitet",
+    ),
+    # Podnozje bez slotova drzi/tudje (ljuska bi pisala "0 kg" i "0,00 RSD").
+    "amb-par-podnozje-bez-slotova": (
+        "modScrIzvestaji.bas",
+        "    If kljuc = IZ_AMBPAR Then\n"
+        "        Oblikuj = Array(kolone, outA, n, 0#, 0#, Array(0, 0, 0), _\n",
+        "    If False Then   ' SABOTAZA: podnozje bez slotova\n"
+        "        Oblikuj = Array(kolone, outA, n, 0#, 0#, Array(0, 0, 0), _\n",
+        "T_AmbPartneri_ListaIzvestaja",
+        "po partnerima kroz ekran: podnozje nosi zbir drzi i tudje preko svih redova",
+    ),
+    # --- KI-024 / AMB-10-ODL-35: izdavanje kooperantu prvo vraca tudje (295-300) ---
+    # Izdavanje kooperantu vise ne zatvara obavezu: sve ide kao novo zaduzenje.
+    "ki024-izdavanje-ne-vraca": (
+        "modAmbalazaUgovor.bas",
+        "            AmbZahtevPrvoVracaTudje = (StrComp(Trim$(naTip), AMB_NALOG_KOOPERANT, vbTextCompare) = 0)\n",
+        "            AmbZahtevPrvoVracaTudje = False   ' SABOTAZA: izdavanje ne vraca tudje\n",
+        "T_KI024_IzdavanjeZatvaraObavezu",
+        "primer A: izdavanje 10 uz obavezu 10 je vracanje -- obaveza 0, gajbe izlaze",
+    ),
+    # Vracanje gasi obavezu, ali vracene gajbe ostaju na partnerovom saldu (KI-024).
+    "ki024-vracanje-bez-izlaza": (
+        "modAmbalaza.bas",
+        "        UpisiRedKnjige tx, datum, tipAmb, vraceno, naTip, naID, AMB_NALOG_SPOLJNI, \"\", _\n"
+        "                       dokTip, dokID, AMB_VK_IZLAZ_TUDJE, \"\", SRC\n",
+        "        ' SABOTAZA: vracene tudje ostaju u opticaju\n",
+        "T_KI024_IzdavanjeZatvaraObavezu",
+        "uz svako vracanje tudjih ide izlaz iste kolicine iz opticaja (AMB-INV-15)",
+    ),
+    # Ponavljanje izdavanja meri samo izdato: posle podele 10 + 5 ponovljen zahtev
+    # 15 nalazi 5 i prijavljuje sudar.
+    "ki024-ponavljanje-bez-vracanja": (
+        "modAmbalazaUgovor.bas",
+        "            AmbVrsteZahteva = Array(AMB_VK_IZDATA_PRAZNA, AMB_VK_VRACANJE_TUDJE)\n",
+        "            AmbVrsteZahteva = Array(AMB_VK_IZDATA_PRAZNA)   ' SABOTAZA: ponavljanje meri samo izdato\n",
+        "T_KI024_PonavljanjeIStorno",
+        "ponavljanje istog izdavanja vraca postojeci ishod -- ne predeljuje po novoj obavezi",
+    ),
+    # Ispravka otkupa meri AMB-INV-09 u medjukoraku: zamena sa istim gajbama pada.
+    "ki024-ispravka-meri-medjukorak": (
+        "modOtkup.bas",
+        "    If Not modStorno.StornoOtkup(stariOtkupID, tx, True) Then\n",
+        "    If Not modStorno.StornoOtkup(stariOtkupID, tx, False) Then   ' SABOTAZA: obaveza u medjukoraku\n",
+        "T_KI024_IspravkaOtkupaPosleVracanja",
+        "ispravka otkupa sa istim svojim gajbama prolazi -- AMB-INV-09 se meri posle zamene",
+    ),
+    # Ispravka bez zavrsne provere: zamena koja ne vrati isto pokrice ostavlja
+    # obavezu ispod nule.
+    "ki024-ispravka-bez-zavrsne-provere": (
+        "modOtkup.bas",
+        "    modAmbalaza.AmbRequireObavezeDokumenta DOK_TIP_OTKUP, stariOtkupID, SRC\n",
+        "    ' SABOTAZA: ispravka bez zavrsne provere obaveze\n",
+        "T_KI024_IspravkaOtkupaPosleVracanja",
+        "ispravka koja ne vrati isto pokrice je odbijena na kraju, bez traga u knjizi",
+    ),
+    # Citalac dokumenta vidi vrstu reda umesto radnje: podela izgleda kao dva reda.
+    "ki024-dokument-deo-radnje": (
+        "modAmbalaza.bas",
+        "    PoslovniRedNiz = Array(modAmbalazaUgovor.AmbVrstaPoslovnaRadnja( _\n",
+        "    PoslovniRedNiz = Array(Trim$( _\n",
+        "T_KI024_ReversJednaRadnja",
+        "revers sa podelom je JEDAN poslovni red: izdato 15",
+    ),
+    # --- AMB-INV-16: stanica izdaje samo prazne koje ima (301-302) ---
+    # Pune gajbe se racunaju kao prazne: "0 + 10 punih - 1 prazna" opet prolazi.
+    "prazne-pune-su-prazne": (
+        "modAmbalazaUgovor.bas",
+        "    AmbVrstaPuneGajbe = (StrComp(Trim$(vrsta), AMB_VK_UZ_ROBU, vbTextCompare) = 0)\n",
+        "    AmbVrstaPuneGajbe = False   ' SABOTAZA: pune se racunaju kao prazne\n",
+        "T_Prazne_MatricaOtkupa",
+        "matrica: pune gajbe ne postaju prazne -- izdavanje preko praznih je odbijeno",
+    ),
+    # Izdavanje sa stanice se sudi samo po ukupnom saldu (stanje pre ovog reza).
+    "prazne-kapija-iskljucena": (
+        "modAmbalazaUgovor.bas",
+        "            AmbPrazneKapijaVazi = True\n",
+        "            AmbPrazneKapijaVazi = False   ' SABOTAZA: izdavanje bez kapije praznih\n",
+        "T_Prazne_ReversRetroIStorno",
+        "revers: stanica koja ima samo pune gajbe ne izdaje prazne",
+    ),
+    # Raspolozive prazne gledaju samo dan izdavanja: unos unazad ostavlja kasnije
+    # izdavanje bez praznih.
+    "prazne-bez-buducih-dana": (
+        "modAmbalaza.bas",
+        "            If stanje < najmanje Then najmanje = stanje\n",
+        "            ' SABOTAZA: kasniji dani se ne gledaju\n",
+        "T_Prazne_ReversRetroIStorno",
+        "unos unazad: izdavanje koje bi kasnije izdavanje ostavilo bez praznih je odbijeno",
+    ),
+    # Storno koji stanici oduzima prazne ne meri kasnija izdavanja.
+    "prazne-storno-bez-provere": (
+        "modAmbalaza.bas",
+        "    RequirePrazneStorna originali, SRC\n",
+        "    ' SABOTAZA: storno bez provere praznih\n",
+        "T_Prazne_ReversRetroIStorno",
+        "storno nabavke posle izdavanja je odbijen -- prazne bi bile ispod nule (AMB-INV-16)",
+    ),
+    # Predaja praznih vozacu (PRENOS_INTERNO sa stanice) opet se sudi samo po
+    # ukupnom saldu: stanica sa 10 punih predaje 5 "praznih" (pregled 29.10.2026, P1).
+    "prazne-predaja-vozacu-van-kapije": (
+        "modAmbalazaUgovor.bas",
+        "        Case AMB_VK_IZDATA_PRAZNA, AMB_VK_VRACANJE_TUDJE, AMB_VK_PRENOS_INTERNO\n",
+        "        Case AMB_VK_IZDATA_PRAZNA, AMB_VK_VRACANJE_TUDJE   ' SABOTAZA: predaja vozacu van kapije\n",
+        "T_Prazne_PredajaVozacu",
+        "predaja vozacu: stanica koja ima samo pune ne predaje prazne -- bez zaglavlja i reda knjige",
+    ),
+    # Otpis na stanici se racuna kao lom PUNIH -- suprotno odluci AMB-10-ODL-36
+    # (otpis na stanici je lom praznih), pa stanica posle loma "ima" prazne koje
+    # je izgubila.
+    "prazne-otpis-nije-prazna": (
+        "modAmbalazaUgovor.bas",
+        "    AmbVrstaPuneGajbe = (StrComp(Trim$(vrsta), AMB_VK_UZ_ROBU, vbTextCompare) = 0)\n",
+        "    AmbVrstaPuneGajbe = (StrComp(Trim$(vrsta), AMB_VK_UZ_ROBU, vbTextCompare) = 0) Or "
+        "(StrComp(Trim$(vrsta), AMB_VK_OTPIS, vbTextCompare) = 0)   ' SABOTAZA: otpis nije izlaz praznih\n",
+        "T_Prazne_OtpisNaStanici",
+        "otpis na stanici je izlaz praznih (AMB-10-ODL-36): 5 praznih i 10 punih, otpis 2",
     ),
 }
 

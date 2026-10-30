@@ -114,8 +114,12 @@ End Function
 ' tx je OBAVEZAN, ne opcion: storno knjige je kontra-stav koji mora da legne u
 ' ISTU transakciju (AMB-INV-08). Opcion tx bio bi fail-open seam -- pozivalac
 ' koji ga zaboravi tiho preskoci kontra-stavove, a zastavica bi ostavila zeleno.
+'
+' odloziObavezu: SAMO ispravka otkupa (modAmbalaza.StornirajAmbalazuDokumenta) --
+' AMB-INV-09 tada meri pozivalac, posle zamene.
 Public Function StornoOtkup(ByVal otkupID As String, _
-                            ByVal tx As clsTransaction) As Boolean
+                            ByVal tx As clsTransaction, _
+                            Optional ByVal odloziObavezu As Boolean = False) As Boolean
     Const SRC As String = "StornoOtkup"
     Dim owns As Boolean
 
@@ -164,7 +168,7 @@ Public Function StornoOtkup(ByVal otkupID As String, _
     ' nepromenljiva, a citalac vidi red po Od_*/Na_*/VrstaKretanja/StornoOd.
     ' Zastavica Stornirano na redu knjige je bila mehanizam STAROG modela i
     ' obrisana je u 10e-2 -- nov citalac je nikad nije gledao.
-    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_OTKUP, otkupID
+    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_OTKUP, otkupID, odloziObavezu
     ResetNovacOtkupLink otkupID
 
     EndStornoOp owns

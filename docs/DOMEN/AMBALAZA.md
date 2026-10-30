@@ -350,6 +350,11 @@ su fizicki isti potez (`Stanica -> Kooperant`):
 | `IZDATA_PRAZNA` | koop += N | firma ga **zaduzuje** svojim gajbama |
 | `VRACANJE_TUDJE_AMBALAZE` | koop += N | firma **zatvara pozajmicu** |
 
+> **Od 29.10.2026 (`AMB-INV-15`, 6.14b)** uz vraćanje ide i `IZLAZ_TUDJE_AMBALAZE`
+> `Kooperant → SpoljniSvet` iste količine: vraćene gajbe su njegove, pa izlaze iz
+> opticaja, a fizički saldo kooperanta se zbirno ne menja. Do tada je ovaj red
+> ostavljao `koop += N` (`KI-024`). Vrsta ostaje odvojena iz istog razloga kao gore.
+
 **To je i dokaz da `VrstaKretanja` mora postojati kao podatak:** dva dogadjaja sa
 istim `Od`, `Na` i `Kolicina` nose suprotno poslovno znacenje. Iz para se ne moze
 izvesti.
@@ -374,7 +379,8 @@ i storno se ne menjaju. Ko koji broj čita: `README.md` §2, `AMB-POSL-01/02/03`
 | `POVRAT_PRAZNE` | partner vraca prazne gajbe firmi |
 | `PRENOS_INTERNO` | izmedju **sopstvenih** naloga: stanica <-> firma <-> **vozac** (v. 6.7a) |
 | `ULAZ_TUDJE_AMBALAZE` | partnerove gajbe ulaze u opticaj — **stvara obavezu** |
-| `VRACANJE_TUDJE_AMBALAZE` | firma vraca partneru njegove — **gasi obavezu** |
+| `VRACANJE_TUDJE_AMBALAZE` | firma vraca partneru njegove — **gasi obavezu**; kooperantu ga pisac izvodi sam iz izdavanja praznih (`AMB-10-ODL-35`, 6.14b) |
+| `IZLAZ_TUDJE_AMBALAZE` | vracene partnerove gajbe **izlaze iz opticaja** (`Partner → SpoljniSvet`); posledica vracanja, ne zahtev — ogledalo ulaza tudje (`AMB-INV-15`, 6.14b) |
 | `POZAJMICA_PARTNERA` | kupac predaje **svoje** prazne gajbe vozaču, na pozajmicu (`AMB-10-ODL-24`, 6.12k); obavezu nosi njen `ULAZ_TUDJE_AMBALAZE` (`AMB-INV-13`) |
 | `NABAVKA` | nove gajbe ulaze u opticaj (firmine) |
 | `OTPIS` | lom, gubitak — izlaze iz opticaja |
@@ -387,6 +393,10 @@ Nema `OTKUP_*` ni `PRIJEMNICA_*` (to kaze `DokumentTIP`) ni
 > **Od 19.10.2026 enum ima devet vrednosti:** `POZAJMICA_PARTNERA` je ušla odlukom
 > `AMB-10-ODL-24` (6.12k). Enum ostaje zatvoren — širi se samo odlukom, sa kapijama
 > potpunosti (`AmbMatricaNepotpuna`, `AmbProizvodnjaNepotpuna`).
+>
+> **Od 29.10.2026 enum ima deset vrednosti:** `IZLAZ_TUDJE_AMBALAZE` je ušla sa
+> `KI-024` (`AMB-INV-15`, 6.14b), klase `PARTNER → GRANICA`, kroz iste kapije
+> potpunosti i uz `AmbBilansStavkaGranice` (`VRACENO`).
 
 Tri pitanja koja su enum drzala otvorenim su odgovorena, i nijedno ne trazi desetu
 vrednost:
@@ -506,6 +516,8 @@ nepromenljiva. Razlog mora da stoji u registru.
 | `AMB-INV-12` | **`TipAmbalaze` postoji u `tblTipAmbalaze`** (`Trim$`, bez obzira na velika slova i na `Aktivan`) — kapija upisa, kao postojanje naloga; citalac je ne meri (6.13h) |
 | `AMB-INV-13` | **pozajmica unosi u opticaj tačno svoju količinu**: uz `POZAJMICA_PARTNERA` pisac na istom dokumentu, u istoj TX, upisuje `SpoljniSvet → partner` `ULAZ_TUDJE_AMBALAZE` iste količine i tipa — nezavisno od partnerovog salda i bez pitanja o manjku; saldo partnera se ne menja, obaveza raste za količinu (6.12k) |
 | `AMB-INV-14` | **otpis se ne pokriva**: zahtev `OTPIS` veći od salda naloga se odbija — bez protokola potvrde i bez `ULAZ_TUDJE_AMBALAZE`, za svaki realni nalog, sopstveni i partnera (`AMB-10-ODL-34` (g), 6.12m) |
+| `AMB-INV-15` | **vracene tudje gajbe izlaze iz opticaja**: uz svaki `VRACANJE_TUDJE_AMBALAZE` pisac na istom dokumentu, u istoj TX, upisuje `Partner → SpoljniSvet` `IZLAZ_TUDJE_AMBALAZE` iste kolicine i tipa — ogledalo `AMB-INV-13`; doprinos obavezi 0, poslovni saldo ga ne vidi, nije otpis (`KI-024`, 6.14b) |
+| `AMB-INV-16` | **stanica izdaje samo prazne gajbe koje ima**: izdavanje praznih sa stanice, partneru ili vozaču (`IZDATA_PRAZNA`, `VRACANJE_TUDJE`, `PRENOS_INTERNO`), ne sme da ostavi nijedan dan od datuma izdavanja nadalje sa stanjem praznih < 0; pune primljene sa robom (`AMBALAZA_UZ_ROBU`) nisu prazne. Kapija je u piscu i u stornu; odbijanje vraca celu TX (6.14b) |
 
 Zbir svih salda ostaje **sanity check nad oblikom**, ne dokaz ispravnosti: svaki
 prenos po konstrukciji daje `-x` i `+x`, pa je nula i kad je dogadjaj dupliran.
@@ -650,6 +662,11 @@ postane `-8`.
 >
 > Dva dogadjaja, ne jedan sa dva znacenja: `AMB-INV-04` ih razlikuje po
 > `VrstaKretanja`, a `AMB-INV-09` posle oba i dalje vazi.
+
+> **Od 29.10.2026 (`AMB-10-ODL-35`, 6.14b)** ista podela vazi i za
+> `IZDATA_PRAZNA` kooperantu: prvih `MIN(izdato, obaveza)` je vracanje, ostatak
+> novo zaduzenje. Uz vracanje pisac upisuje i `IZLAZ_TUDJE_AMBALAZE`
+> (`AMB-INV-15`), cija je doprinos obavezi 0.
 
 #### Ugovor ZAPISANOG reda — zasto citalac ne sme da preskace
 
@@ -2844,12 +2861,14 @@ period, kao listu Izveštaji → OM → „Bilans amb.":
 GDE      stanice | vozaci | kooperanti | kupci | (Firma) -> OPTICAJ    na datumDo
 CIJE     NASE = nabavka - otpis ; TUDJE = obaveza (po partneru) ;
          NEUSKLADJENO = OPTICAJ - NASE - TUDJE                       na datumDo
-GRANICA  POCETAK + nabavka + pokrice + pozajmica + otpis = KRAJ     u periodu
+GRANICA  POCETAK + nabavka + pokrice + pozajmica + vraceno + otpis = KRAJ
+                                                                     u periodu
 ```
 
 - **Granica je iz matrice, ne iz spiska call-site-ova.** Kretanje preko granice
   mogu imati samo vrste kojima `AmbKlaseVrste` daje `GRANICA` (nabavka, ulaz
-  tuđe, otpis). Stavku bira ugovor (`AmbBilansStavkaGranice`), a kapija
+  tuđe, otpis, a od 6.14b i izlaz tuđe — stavka „Tuđe: vraćeno partneru",
+  sa minusom). Stavku bira ugovor (`AmbBilansStavkaGranice`), a kapija
   potpunosti (`AmbBilansGranicaNepotpuna`) obara novu vrstu na granici koja nema
   stavku. Čitalac na takvom redu staje, ne preskače ga.
 - **Ulaz pozajmice nije pokriće**, iako je ista vrsta: prepoznaje se po
@@ -2863,13 +2882,175 @@ GRANICA  POCETAK + nabavka + pokrice + pozajmica + otpis = KRAJ     u periodu
   naše −2 i neusklađeno 0. Firma tada duguje više nego što drži; da vrati
   pozajmicu, mora da nabavi 2. Natpis na ekranu je „Sopstveni saldo,
   obračunski", a negativan broj se ne „ulepšava" na 0 (test 291).
-- **`NEUSKLADJENO` je signal (`AMB-BIL-02`), ne invarijanta.** Danas je 0, jer
-  `VRACANJE_TUDJE` nema pisca. Kad ga dobije, ostavlja gajbe na saldu partnera
-  (`KI-024`), pa razlika postaje vidljiva upravo ovde.
+- **`NEUSKLADJENO` je signal (`AMB-BIL-02`), ne invarijanta.** Jednak je zbiru
+  `VRACANJE_TUDJE` minus zbir `IZLAZ_TUDJE`: vraćanje bez svog izlaza ostavlja
+  gajbe na saldu partnera (`KI-024`), pa razlika postaje vidljiva upravo ovde.
+  Od 6.14b živi pisac uz svako vraćanje piše i izlaz (`AMB-INV-15`), pa je u
+  živom radu 0. Vraćanje **bez** izlaza upisuje **migracija** (MIG-16/17: dan u
+  kome kooperantu pada obaveza prevodi izdate prazne u vraćanje tuđe). U
+  migriranoj svesci signal zato nije 0 (29.10.2026, operaterova sveska), dok
+  migracija ne dobije isti izlaz.
 - **Datum:** isto kao kartica (`ODL-26`). `KRAJ` (granica) i `OPTICAJ` (salda)
   računaju se odvojeno, a jednakost meri granicu perioda.
 
 *Provera:* `modTest` 290–292 · sabotaže `amb-bil-*`.
+
+**Po partneru (`AMB-BIL-03`, 29.10.2026).** Bilans kaže koliko je tuđeg ukupno;
+lista „Amb. partneri" kaže **čije**. Za svakog partnera i tip gajbe na `datumDo`:
+drži (fizički), tuđe (obaveza) i neto (poslovni saldo, kao kartica). Odluka
+operatera je **bruto + neto**, a ne samo neto razdvojen na „naše kod njega" i
+„firma duguje": tako zbir „Tuđe" ostaje jednak bilansu, a partner koji drži 30 i
+kome firma duguje 15 vidi se kao 30 | 15 | +15, ne kao 15 | 0.
+
+Drži − Tuđe − Neto je zbir `VRACANJE_TUDJE` tog partnera minus njegov
+`IZLAZ_TUDJE` — od 6.14b 0 za sve što upiše živi pisac. Prvi pregled na
+migriranoj svesci (29.10.2026) to je i pokazao: Bajić, 0,4kg, 5 | 10 | −10.
+Migracija je 10.07 od 20 izdatih praznih 5 prevela u vraćanje tuđe, jer mu je
+tog dana obaveza pala 12 → 7. Neto (−10) i tuđe (10) su tačni; drži 5 su
+njegove gajbe, koje knjiga ostavlja u opticaju (`KI-024`). Kad ih donese,
+deficita nema, pa tuđe ostaje 10, a neto ide na −15.
+
+*Provera:* `modTest` 293–294 · sabotaže `amb-par-*`.
+
+### 6.14b Izdavanje praznih — prvo tuđe, i samo prazne koje stanica ima (`AMB-10-ODL-35`, `AMB-INV-15/16`, 29.10.2026)
+
+Dva nalaza iste kategorije: knjiga je primala izdavanje koje se fizički nije
+moglo desiti, ili ga je knjižila kao nešto drugo.
+
+**1. Vraćene tuđe gajbe su ostajale u opticaju (`KI-024`).** `VRACANJE_TUDJE` je
+bio jedan red `Stanica → Partner`: gasio je obavezu, a gajbe ostavljao na saldu
+partnera. Živi pisac ga uz to nije ni zvao: izdavanje kooperantu kome firma duguje
+bilo je uvek `IZDATA_PRAZNA`, pa je obaveza visila, a kooperant je bio zadužen
+„našim" gajbama koje su njegove.
+
+> **`AMB-10-ODL-35` (odluka operatera 29.10.2026).** Izdavanje praznih kooperantu
+> prvo zatvara obavezu firme prema njemu, za isti tip:
+>
+> ```
+> vraceno = MIN(izdato, Obaveza(kooperant, tip))  -> VRACANJE_TUDJE + IZLAZ_TUDJE
+> novo    = izdato - vraceno                       -> IZDATA_PRAZNA
+> ```
+>
+> - Operater unosi **jednu** količinu, bez novog polja. Podelu radi pisac
+>   (`PrenesiAmbalazu`, pravilo `AmbZahtevPrvoVracaTudje`), u istoj TX, nad
+>   obavezom iz te TX — isto na otkupu (`KolAmbIzdata`) i na reversu.
+> - **Jedan dokument, jedan broj, jedna radnja.** Lista, papir, ispravka i prefill
+>   sabiraju oba reda pod „Izdata prazna" (`AmbVrstaPoslovnaRadnja`).
+> - **Ponavljanje ne deli ponovo:** idempotencija ide nad celom porodicom zahteva
+>   (`AmbVrsteZahteva`: izdavanje i vraćanje), pa isti zahtev nad istim dokumentom
+>   vraća postojeći ishod i kad se obaveza u međuvremenu promenila.
+> - Obaveza drugog kooperanta i drugog tipa se ne troši (nema prebijanja).
+> - **Kupac nije obuhvaćen:** kupcu se prazne ne izdaju, a vraćanje pozajmice kupcu
+>   traži odluku o dokumentu i broju (`ODL-24` (d)) — ostatak `KI-024`.
+
+> **`AMB-INV-15`.** Uz svaki `VRACANJE_TUDJE` pisac na istom dokumentu, u istoj TX,
+> upisuje `Partner → SpoljniSvet` `IZLAZ_TUDJE_AMBALAZE` iste količine i tipa —
+> ogledalo `AMB-INV-13`. Vraćene gajbe su partnerove, pa izlaze iz opticaja.
+> **Nije otpis:** otpis je zahtev nad našim gajbama (lom), a izlaz je posledica
+> vraćanja tuđih. Doprinos obavezi je 0 (obavezu gasi vraćanje), poslovni saldo ga
+> ne vidi (tehnički red, kao ulaz), a u bilansu je stavka granice „Tuđe: vraćeno
+> partneru".
+
+Primer (obaveza 10, nabavka 50 na stanici):
+
+| Izdato | Vraćeno (+ izlaz) | Novo | Obaveza | Fizički | Poslovno | Opticaj |
+|---|---|---|---|---|---|---|
+| 10 | 10 | 0 | 0 | 0 | 0 | 60 → 50 |
+| 6 | 6 | 0 | 4 | 0 | −4 | 60 → 54 |
+| 15 | 10 | 5 | 0 | 5 | 5 | 60 → 50 |
+
+- **Storno** je kontra-stav sva tri reda; obaveza, partner, stanica i opticaj se
+  vraćaju na stanje pre izdavanja.
+- **Ispravka otkupa** (storno + nov unos u jednoj TX) meri `AMB-INV-09` **posle
+  zamene**, ne u međukoraku (`StornoOtkup(..., odloziObavezu)` +
+  `AmbRequireObavezeDokumenta`). Pokriće starog otkupa je posle ODL-35 često već
+  zatvoreno kasnijim izdavanjem, pa bi kontra-stav sam spustio obavezu ispod nule,
+  a zamena koja donosi iste gajbe je vraća. Zamena koja ih ne donese pada na kraju,
+  i cela TX se vraća. Običan storno takvog otkupa i dalje odbija `AMB-INV-09`.
+
+**2. Stanica je izdavala prazne koje nema (`AMB-INV-16`).** Kapija stanice je
+merila samo **ukupni** saldo (`AMB-INV-07`), a otkup knjiži prvo prijem punih pa
+izdavanje: 0 + 10 punih − 1 prazna = +9 je prolazilo, iako stanica nije imala
+nijednu praznu.
+
+> **`AMB-INV-16` (odluka operatera 29.10.2026).** Izdavanje praznih sa stanice,
+> bez obzira kome (`IZDATA_PRAZNA`, `VRACANJE_TUDJE`, `PRENOS_INTERNO` —
+> `AmbPrazneKapijaVazi`), ne sme da ostavi nijedan dan od datuma izdavanja nadalje sa stanjem praznih < 0. Pune
+> gajbe se ne pretvaraju u prazne same od sebe.
+
+**Prazne se izvode iz knjige, bez nove tabele i kolone.** Vrsta kretanja već kaže
+da li gajba putuje puna (`AmbVrstaPuneGajbe`):
+
+| Vrsta | Na stanici nosi |
+|---|---|
+| `AMBALAZA_UZ_ROBU` | **pune** (otkup, otpremnica, prijemnica) |
+| `NABAVKA`, `IZDATA_PRAZNA`, `POVRAT_PRAZNE`, `VRACANJE_TUDJE` | prazne |
+| `PRENOS_INTERNO` | prazne (6.7a: prazne između sopstvenih naloga) |
+| `OTPIS` | prazne — **odluka `AMB-10-ODL-36`** (ispod): knjiga sama ne zna da li je lom pun ili prazan |
+| `ULAZ/IZLAZ_TUDJE`, `POZAJMICA_PARTNERA` | ne dodiruju stanicu |
+
+- **Po danima, ne po redosledu upisa** (`AmbPrazneRaspolozive`): raspoloživo je
+  najmanje stanje praznih na kraju dana, od dana izdavanja nadalje. Unos unazad
+  tako vidi već upisana kasnija izdavanja. Kontra-stav nosi vrstu i dan
+  originala, pa se storno gasi istim pravilom.
+  **Granica je dan, ne trenutak** (nezavisni pregled `#448`, 30.10.2026):
+  knjiga ne nosi vreme ni redosled unutar dana, pa kapija dokazuje samo da
+  nijedan dan ne završava sa manje od nule praznih — ne i da su prazne
+  fizički postojale u trenutku izdavanja. Izdavanje ujutru uz nabavku
+  popodne istog dana prolazi. Prihvaćeno kao granica dnevne knjige;
+  vremenska knjiga se zbog ovoga ne uvodi.
+- **Kapija je u jezgru pisca** (`PrenesiAmbalazu`), posle provere ponavljanja i
+  posle `AMB-INV-07`: važi za otkup, revers i svakog drugog pozivaoca pisca.
+  PWA sync danas ne prenosi izdate prazne (otkup sa terena nosi samo primljene),
+  pa ga kapija ne dodiruje. Odbijanje
+  (`AMB_ERR_PRAZNE_NEMA`) imenuje stanicu, tip, dan, raspoloživo, traženo i manjak,
+  i vraća celu TX: nema otkupa, stavke, reda knjige ni avansa.
+- **Storno** koji stanici oduzima prazne (nabavke, povrata, prenosa na stanicu)
+  meri isto stanje od dana originala (`RequirePrazneStorna`).
+- **Predaja vozaču je izdavanje praznih** (pregled 29.10.2026, P1). Prva verzija
+  je pod kapiju stavila samo izdavanje partneru, pa je stanica sa 0 praznih i 10
+  punih predavala vozaču 5 „praznih" (`PRENOS_INTERNO`), a ukupni saldo je to
+  pustao. Tačka 1.2 govori o izdavanju praznih **sa stanice**, ne o primaocu, pa je
+  `PRENOS_INTERNO` sa stanice pod kapijom bez obzira kome ide. Smer vozač → stanica
+  stanici **daje** prazne i nije pod kapijom.
+- **Van kapije ostaju** pune sa robom (`AMBALAZA_UZ_ROBU`) i otpis: otpis nije
+  predaja nego izlaz iz opticaja, i sudi mu se po ukupnom saldu (`AMB-INV-14`).
+
+> **`AMB-10-ODL-36` (odluka operatera 29.10.2026): otpis na stanici je lom PRAZNIH.**
+> Zapisnik o otpisu (6.12m) nosi nalog, tip, količinu i razlog, ali ne i da li je
+> gajba bila puna ili prazna. Knjiga to zato **sama ne zna**, a prva verzija je to
+> pretpostavila bez odluke (pregled 29.10.2026, P2). Operater je izabrao: otpis na
+> stanici je izlaz praznih — polomljenu punu stanica presipa u praznu, pa prazna
+> nestaje i tada. Odbijene varijante: „prvo prazne, pa pune" (pravilo čitanja bez
+> podatka) i izbor „pune / prazne" na F7 (nova vrsta ili kolona, svoj rez).
+>
+> **Cena odluke, svesno prihvaćena:** lom pune dok stanica nema nijednu praznu
+> spušta prazne ispod stvarnih. Primer: 10 punih, 0 praznih, otpis 1 → prazne −1;
+> nabavka 1 ih vraća na 0, pa izdavanje 1 i dalje ne prolazi. Izlaz je još jedna
+> nabavka ili povrat praznih. Poruka odbijanja imenuje raspoloživo i manjak, pa se
+> slučaj vidi. Raspoloživost praznih je zato tačna **u granicama ove odluke**, ne
+> potpuno izvedena iz fizičkih činjenica.
+
+| Pune pre | Prazne pre | Primljeno | Izdato | Ishod |
+|---|---|---|---|---|
+| 0 | 0 | 10 | 0 | prolazi |
+| 0 | 0 | 10 | 1 | odbijen |
+| 0 | 0 | 10 | 10 | odbijen |
+| 5 | 0 | 10 | 1 | odbijen |
+| 0 | 5 | 10 | 5 | prolazi |
+| 0 | 5 | 10 | 6 | odbijen |
+| 10 | 5 | 10 | 5 | prolazi |
+| 10 | 5 | 10 | 6 | odbijen |
+
+**Migrirana sveska.** Migracija (MIG-16/17) upisuje vraćanje bez izlaza, a stanje
+praznih stanice iz stare sveske možda nikad nije bilo knjiženo kao prazne. Pre
+puštanja se meri `AmbPrazneRaspolozive(stanica, tip, Date)` po stanici i tipu:
+negativno stanje blokira svako izdavanje dok se ne knjiži početno stanje praznih
+(nabavka ili prenos). Migracija treba da dobije isti izlaz (`KI-024`).
+
+*Provera:* `modTest` 295–304 (`T_KI024_*`, `T_Prazne_*`) · BFP premise
+(`Enum` deset, `StornoKontraStav`, `DeficitIObaveza`, `StornoNePraviMinus`) ·
+sabotaže `ki024-*` (6) i `prazne-*` (6).
 
 ### 6.15 Cena — posteno
 
