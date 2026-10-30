@@ -8376,6 +8376,29 @@
      - **NEVERIFIKOVANO:** ručni compile (`Alt+F11` → Debug → Compile), papir reversa i otkupnog lista sa podelom.
      - **Sledeći brojevi:** test 305 · stavka 234 · KI-066.
 
+234. **Ručna provera reza — zatvara NEVERIFIKOVANO iz 232/233** (30.10.2026, operater, test sveska, `ImportAllVBA`
+     nad `53bea3d8`; kod je isti do `60848905`).
+
+     - **Compile** (`Alt+F11` → Debug → Compile VBAProject): prolazi bez poruke.
+     - **Revers kooperantu sa obavezom firme** (posle otkupa 8/301026: primljeno 10, izdato 0, poslovni saldo −10),
+       revers 8/301026-2, izdato 15: papir **Početno −10 · Izdato 15 · Novo 5**, jedan red 15 ✓ (`AMB-POSL-03`).
+     - **F7 lista:** isti revers je **jedan** red „Izdato 15", ne 10 + 5 ✓ (`ki024-dokument-deo-radnje`).
+     - **Otkup sa podelom** — novi kooperant (KOOP-00106, bez početnog stanja), otkupni list 8/301026-2, primljeno 10
+       i izdato 15 u istom dokumentu:
+       - PDF: **Početno 0 · Primljeno 10 · Izdato 15 · Saldo 5** ✓;
+       - kartica ambalaže, tri reda dokumenta: „Izdato (otkup)" ulaz 5, „Vraćanje tuđe (otkup)" ulaz 10, „Uz robu
+         (otkup)" izlaz 10; **saldo kraja 5** ✓. Tehnički `IZLAZ_TUDJE` se ne vidi (poslovna projekcija,
+         `AMB-POSL-01`), a otkupni list i kartica kažu isti broj.
+       - Međusaldo unutar dokumenta ide 5 → 15 → 5. To nije nalaz nego konvencija `KART-HRON-01` („ulaz pre
+         izlaza"; međusaldo ne pada ispod manjeg od stanja pre i posle dokumenta, ovde 0 i 5).
+     - **Van reza, nije istraženo:** klauzula na PDF-u otkupnog lista nosi `_x000D_` na kraju redova. Tekst nije
+       podrazumevani (`OtkupKlauzulaDefault`), nego operaterov iz podešavanja `OTKUP_KLAUZULA` (memo), pa trag
+       vodi ka sadržaju ćelije, ne ka ovom rezu.
+     - **Status reza:** `RunAllTests` 304 / 0, BFP 2801 / 0, ostale suite zelene, Golden zelen sam, `dokaz.py`
+       20 / 20 obara svoju tvrdnju, compile i papir potvrđeni. Otvoreno i namerno van reza: kupčev deo `KI-024`
+       (MIG-16/17), `KI-065` (prazne u migriranoj svesci — izmeriti pre uvoza u pravu svesku), vozač iz stavke 230.
+     - **Sledeći brojevi:** test 305 · stavka 235 · KI-066.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
