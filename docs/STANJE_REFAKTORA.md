@@ -8355,6 +8355,24 @@
      - **NEVERIFIKOVANO:** `dokaz.py`, ručni compile, papir.
      - **Sledeći brojevi:** test 305 · stavka 233 · KI-066.
 
+233. **`dokaz.py` nad `3aa6e6fa` — 20 / 20 crveno, ali dve sabotaže ne obaraju SVOJU tvrdnju** (29.10.2026,
+     operater, `--grupe`). Bazni prolaz zelen (304 / 0, BFP 2801 / 0), izvor pre i posle identičan. Verdikt alata:
+     NIJE DOKAZANO, zbog dva nalaza — oba u ovom rezu, oba ispravljena:
+
+     - **`amb-pisac-obaveza-u-minus` — sabotaža je postala preširoka.** Gasila je ceo red
+       `If vraceno > obaveza Then vraceno = obaveza`, a od `ODL-35` taj red deli i IZDAVANJE kooperantu. Seed BFP-a
+       (izdavanje 20000 kooperantima) postao je celo „vraćanje", obaveza je pala u minus, pa su pale stotine BFP
+       tvrdnji, a ciljni `Test_Amb_DeficitIObaveza` je pukao pre svoje tvrdnje. Ponovo je usidrena bez prave
+       provere u stanju sa ODL-35 — vraćanje i ispravnost sidra su provereni, smisao nije. **Ispravka:** sabotaža
+       gasi podelu samo za izričit zahtev `VRACANJE_TUDJE` (kao original iz `5ad4668a`); izdavanje ostaje tačno.
+     - **`ki024-dokument-deo-radnje` — test je padao na grešci, ne na tvrdnji.** Test 300 je papir i ispravku
+       reversa zvao pre tvrdnji; pod sabotažom `IspravkaReversa_TX` digne „nema tačno jedan poslovni red" pre
+       prve tvrdnje. **Ispravka:** tvrdnje o poslovnom redu i mapi liste stoje odmah posle čitanja, pre papira i
+       ispravke.
+     - Ostalih 18 obara svoju tvrdnju (14 grupno, 4 pojedinačno).
+     - **NEVERIFIKOVANO:** ponovljen `dokaz.py` za ove dve (i 300 u `RunAllTests`), ručni compile, papir.
+     - **Sledeći brojevi:** test 305 · stavka 234 · KI-066.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
