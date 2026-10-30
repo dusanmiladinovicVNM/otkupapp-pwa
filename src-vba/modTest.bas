@@ -13775,6 +13775,15 @@ Private Sub T_KI024_ReversJednaRadnja()
     If redovi.count > 0 Then r = redovi(1)
     Set mapa = modAmbalaza.AmbDokRedMapa()
     If mapa.Exists(d) Then m = mapa(d)
+
+    ' Ove dve tvrdnje stoje PRE papira i ispravke: oba poziva nad dokumentom sa
+    ' dva poslovna reda dizu gresku, pa bi test pao na njoj, a ne po imenu
+    ' (dokaz 29.10.2026: ki024-dokument-deo-radnje "PALA DRUGA TVRDNJA").
+    AssertEq redovi.count & "|" & CStr(r(0)) & "|" & CStr(r(2)), "1|" & AMB_VK_IZDATA_PRAZNA & "|15", _
+             "revers sa podelom je JEDAN poslovni red: izdato 15"
+    AssertEq CStr(m(0)) & "|" & CStr(m(2)), AMB_VK_IZDATA_PRAZNA & "|15", _
+             "mapa liste nosi isto izdavanje 15"
+
     razlog = modAmbalaza.IspravkaReversaRazlog(d)
 
     modePre = NzToText(GetConfigValue(CFG_OM_IZDAVANJE_PRINT_MODE))
@@ -13793,10 +13802,6 @@ Private Sub T_KI024_ReversJednaRadnja()
 
     novi = modAmbalaza.IspravkaReversa_TX(d, Date, "", FX_STANICA, t, 12, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
 
-    AssertEq redovi.count & "|" & CStr(r(0)) & "|" & CStr(r(2)), "1|" & AMB_VK_IZDATA_PRAZNA & "|15", _
-             "revers sa podelom je JEDAN poslovni red: izdato 15"
-    AssertEq CStr(m(0)) & "|" & CStr(m(2)), AMB_VK_IZDATA_PRAZNA & "|15", _
-             "mapa liste nosi isto izdavanje 15"
     AssertEq g & "|" & papir, "|-10 kom|5 kom", _
              "papir reversa: jedna radnja, poslovno stanje -10 -> 5"
     AssertEq razlog, "", "ispravka reversa sa podelom je dozvoljena"

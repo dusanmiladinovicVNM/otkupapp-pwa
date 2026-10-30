@@ -5107,10 +5107,14 @@ SABOTAZE = {
     ),
     # Bez podele obaveza ide u minus: firma "vrati" vise tudjih gajbi nego sto je
     # uzela. Fizicki ledger ostaje tacan, knjiga obaveza postaje nemoguca.
+    # Gasi se samo IZRICITO vracanje: od ODL-35 isti red deli i izdavanje
+    # kooperantu, pa je sabotaza celog reda oborila seed BFP-a i ciljni test je
+    # pukao pre svoje tvrdnje (dokaz 29.10.2026: "NE OBARA SVOJ TEST").
     "amb-pisac-obaveza-u-minus": (
         "modAmbalaza.bas",
         "        If vraceno > obaveza Then vraceno = obaveza\n",
-        "        ' SABOTAZA: vracanje preko duga se ne deli\n",
+        "        If vraceno > obaveza And vrstaK <> AMB_VK_VRACANJE_TUDJE Then vraceno = obaveza"
+        "   ' SABOTAZA: izricito vracanje preko duga se ne deli\n",
         "Test_Amb_DeficitIObaveza",
         "Amb obaveza: dug je ugasen na nulu, ne u minus",
     ),
