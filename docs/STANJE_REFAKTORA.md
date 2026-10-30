@@ -35,7 +35,8 @@
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
-| **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ⏳ **`#445`** — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217); čeka merge |
+| **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
+| **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ⏳ **`#448`** (`AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`) — nezavisni pregled GO za merge (stavka 235); čeka merge. Primena na migriranoj svesci: HOLD do `KI-065` |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -8398,6 +8399,23 @@
        20 / 20 obara svoju tvrdnju, compile i papir potvrđeni. Otvoreno i namerno van reza: kupčev deo `KI-024`
        (MIG-16/17), `KI-065` (prazne u migriranoj svesci — izmeriti pre uvoza u pravu svesku), vozač iz stavke 230.
      - **Sledeći brojevi:** test 305 · stavka 235 · KI-066.
+
+235. **Nezavisni pregled `#448` nad `da42b5a0` — GO za merge** (30.10.2026, 9,3 / 10). Poslovna semantika,
+     implementacija, testovi i sabotaže, ručni acceptance: GO. Primena na migriranoj svesci: **HOLD do `KI-065`**.
+     GitHub Actions `static` je zelen na `da42b5a0`. Pregled je potvrdio i obe ispravke iz `c9a989c6`. Nema novog
+     P0/P1, i ovaj PR se dalje ne proširuje.
+
+     - **P3, ispravljeno (samo dokumentacija):** `KI-024` je i dalje pisao „kooperant NEVERIFIKOVANO u Excelu".
+       Sada piše da je verifikovan (stavke 232–234). Tabela „Gde smo" dobija merge `#445` i red za ovaj rez.
+     - **Imenovana granica** (`AMBALAZA.md` 6.14b, „Po danima"): kapija praznih je dnevna, ne trenutna.
+       Izdavanje ujutru uz nabavku popodne istog dana prolazi. Prihvaćeno, vremenska knjiga se ne uvodi.
+     - **Ostaje van PR-a, svaki kao svoj rez:**
+       - kupčev deo `KI-024`;
+       - migracija MIG-16/17 (izlaz uz `VRACANJE_TUDJE`);
+       - `KI-065` — meriti pre primene;
+       - pad `RunGoldenSuite` u punom prolazu (stavka 232, neistražen; sam je zelen);
+       - vozač (stavka 230).
+     - **Sledeći brojevi:** test 305 · stavka 236 · KI-066.
 
 ## Dug sa imenom (posle S5-5b)
 

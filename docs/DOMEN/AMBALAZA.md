@@ -2993,6 +2993,12 @@ da li gajba putuje puna (`AmbVrstaPuneGajbe`):
   najmanje stanje praznih na kraju dana, od dana izdavanja nadalje. Unos unazad
   tako vidi već upisana kasnija izdavanja. Kontra-stav nosi vrstu i dan
   originala, pa se storno gasi istim pravilom.
+  **Granica je dan, ne trenutak** (nezavisni pregled `#448`, 30.10.2026):
+  knjiga ne nosi vreme ni redosled unutar dana, pa kapija dokazuje samo da
+  nijedan dan ne završava sa manje od nule praznih — ne i da su prazne
+  fizički postojale u trenutku izdavanja. Izdavanje ujutru uz nabavku
+  popodne istog dana prolazi. Prihvaćeno kao granica dnevne knjige;
+  vremenska knjiga se zbog ovoga ne uvodi.
 - **Kapija je u jezgru pisca** (`PrenesiAmbalazu`), posle provere ponavljanja i
   posle `AMB-INV-07`: važi za otkup, revers i svakog drugog pozivaoca pisca.
   PWA sync danas ne prenosi izdate prazne (otkup sa terena nosi samo primljene),
