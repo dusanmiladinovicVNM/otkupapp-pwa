@@ -362,8 +362,8 @@ operatera 29.10.2026).** Kad firma kooperantu duguje N njegovih gajbi (obaveza,
 isti tip) i izda mu Q praznih, pisac sam deli jednu količinu: `MIN(Q, N)` je
 `VRACANJE_TUDJE`, ostatak `IZDATA_PRAZNA`. Isto na otkupu (`KolAmbIzdata`) i na
 reversu, bez novog polja i bez drugog dokumenta; lista, papir i ispravka
-prikazuju jednu radnju „Izdata prazna". Kupac nije obuhvaćen (vraćanje pozajmice
-kupcu, `KI-024` ostatak). Pravilo: `AMBALAZA.md` 6.14b.
+prikazuju jednu radnju „Izdata prazna". Kupac nije obuhvaćen: njemu se prazne ne
+izdaju, nego vraćaju (`ODL-39`, ispod). Pravilo: `AMBALAZA.md` 6.14b.
 
 **AMB-INV-15 — vraćene tuđe gajbe izlaze iz opticaja.** Uz svaki
 `VRACANJE_TUDJE` pisac u istoj TX, na istom dokumentu, piše
@@ -398,8 +398,23 @@ kupčev povrat se zato unose pre predaje istih gajbi.
 kao `ODL-36` na stanici. Cena: puna polomljena u transportu, pre prijemnice,
 ostavi vozaču praznu manje (`AMBALAZA.md` 6.14b, tačka 3).
 
-Mere ih `modTest` 295–300 (`T_KI024_*`) i 301–306 (`T_Prazne_*`), sabotaže
-`ki024-*`, `prazne-*` i `storno-rev-razlog-*`.
+**AMB-10-ODL-39 — firma vraća kupcu njegove gajbe (odluke operatera 31.10.2026,
+`KI-024` kupčev deo).** Dokument je naš revers (obrnuto `ODL-10`), sa brojem iz
+niza stanice koji se predlaže i sme ručno. Par je vozač → kupac (obrnut lanac
+`ODL-9`): vozač prazne dobija sa stanice preko „Prijem od OM" i mora da ih ima
+(`AMB-INV-16`, `ODL-37`). Pisac piše `VRACANJE_TUDJE` uz `IZLAZ_TUDJE`
+(`AMB-INV-15`), i to delimično, do duga firme prema kupcu: dug je jedan broj po
+kupcu i tipu (pozajmica plus pokriće manjka). **Kupcu se prazne ne izdaju**, pa
+jezgro odbija količinu preko duga (`AmbIzdavanjePraznihProblem`), a F7 to javlja uz
+polje količine. Stanica → kupac i robni dokument se odbijaju
+(`AmbDokKretanjeProblem`). Lista i ekran Storno prikazuju vraćanje kao svoju
+radnju, ne kao „Izdata prazna". Storno ide postojećim putem, a ispravke nema
+(`AmbReversSmerSeIspravlja`). Papir je naš, sa poslovnim stanjem kupca, kao
+`AMB-POSL-03`. Na F7 je smer 9, u okviru KUPAC. Pravilo: `AMBALAZA.md` 6.14b,
+tačka 4.
+
+Mere ih `modTest` 295–300 (`T_KI024_*`), 301–306 (`T_Prazne_*`) i 307–308
+(`T_ODL39_*`), sabotaže `ki024-*`, `prazne-*`, `storno-rev-razlog-*` i `odl39-*`.
 
 ## 3) Ko šta piše
 

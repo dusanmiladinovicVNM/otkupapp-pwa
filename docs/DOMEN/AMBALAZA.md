@@ -379,7 +379,7 @@ i storno se ne menjaju. Ko koji broj čita: `README.md` §2, `AMB-POSL-01/02/03`
 | `POVRAT_PRAZNE` | partner vraca prazne gajbe firmi |
 | `PRENOS_INTERNO` | izmedju **sopstvenih** naloga: stanica <-> firma <-> **vozac** (v. 6.7a) |
 | `ULAZ_TUDJE_AMBALAZE` | partnerove gajbe ulaze u opticaj — **stvara obavezu** |
-| `VRACANJE_TUDJE_AMBALAZE` | firma vraca partneru njegove — **gasi obavezu**; kooperantu ga pisac izvodi sam iz izdavanja praznih (`AMB-10-ODL-35`, 6.14b) |
+| `VRACANJE_TUDJE_AMBALAZE` | firma vraca partneru njegove — **gasi obavezu**; kooperantu ga pisac izvodi sam iz izdavanja praznih (`AMB-10-ODL-35`, 6.14b), a kupcu ide svojim smerom našeg reversa, vozač → kupac, najviše do duga (`AMB-10-ODL-39`, 6.14b tačka 4) |
 | `IZLAZ_TUDJE_AMBALAZE` | vracene partnerove gajbe **izlaze iz opticaja** (`Partner → SpoljniSvet`); posledica vracanja, ne zahtev — ogledalo ulaza tudje (`AMB-INV-15`, 6.14b) |
 | `POZAJMICA_PARTNERA` | kupac predaje **svoje** prazne gajbe vozaču, na pozajmicu (`AMB-10-ODL-24`, 6.12k); obavezu nosi njen `ULAZ_TUDJE_AMBALAZE` (`AMB-INV-13`) |
 | `NABAVKA` | nove gajbe ulaze u opticaj (firmine) |
@@ -2092,7 +2092,7 @@ reda**. Pitanje je samo koji od njih nosi značenje.
 > | (e) dokument i papir | **kupčev dokument**: `REVERS_PARTNERA`, vlasnik broja `(Kupac, KupacID)`, niz `(Kupac, KupacID, dan)` po `ODL-20`. **Ne štampa se**, jer `ODL-32` važi i za pozajmicu. |
 > | (c) mešovit slučaj | pozajmica **ne gleda kupčev saldo**: operater izjavljuje da su gajbe kupčeve. Kupac koji drži 5 naših i preda 40 svojih i dalje drži 5 naših. Kad su gajbe zaista izmešane, operater unosi **dva dokumenta**: povrat (smer 5) i pozajmicu (smer 6). Pisac ne deli sam, jer ne zna čije su koje gajbe. |
 > | (f) pitanje o manjku | pozajmica **ne pita**: manjka nema, jer u opticaj ulazi cela količina. Povrat pitanje zadržava, i ono od sada znači stvarno odstupanje. |
-> | (d) storno, ispravka, vraćanje | storno ide postojećim `StornirajAmbDokument_TX`, kontra-stavom oba reda. `AMB-INV-07` ga odbija ako je vozač gajbe već predao dalje, a `AMB-INV-09` ako je pozajmica već vraćena. Ispravke nema, kao ni za kupčev revers: storno i nov unos. **Vraćanje pozajmice kupcu je van reza** (`KI-024`). |
+> | (d) storno, ispravka, vraćanje | storno ide postojećim `StornirajAmbDokument_TX`, kontra-stavom oba reda. `AMB-INV-07` ga odbija ako je vozač gajbe već predao dalje, a `AMB-INV-09` ako je pozajmica već vraćena. Ispravke nema, kao ni za kupčev revers: storno i nov unos. **Vraćanje pozajmice kupcu je van reza** (`KI-024`). Od 31.10.2026 postoji: `AMB-10-ODL-39`, 6.14b tačka 4. |
 
 **Čvor `AMB-INV-04` je rešen time što `ULAZ_TUDJE` OSTAJE posledica.** Zahtev je
 `POZAJMICA_PARTNERA`, pa idempotencija (`ZbirZahteva` nad `AmbVrsteZahteva`) meri samo
@@ -3088,6 +3088,7 @@ Tokovi naloga vozača (popis 30.10.2026, stavka 236) i šta kapija od sada gleda
 | „Prijem od OM" | Stanica → Vozač | prazne | stanica (`INV-16`); storno — vozač |
 | **„Izdato OM"** | **Vozač → Stanica** | prazne | **vozač (`ODL-37`)** |
 | otpis | Vozač → SpoljniSvet | prazne (`ODL-38`) | ne (`AMB-INV-14`) |
+| **vraćanje kupcu** (od `ODL-39`, tačka 4) | **Vozač → Kupac** | prazne, kupčeve | **vozač (`ODL-37`)**; storno „Prijem od OM" posle vraćanja — da |
 
 **Migrirana sveska.** Migracija (MIG-16/17) upisuje vraćanje bez izlaza, a stanje
 praznih stanice iz stare sveske možda nikad nije bilo knjiženo kao prazne. Pre
@@ -3097,9 +3098,57 @@ negativno stanje blokira svako izdavanje dok se ne knjiži početno stanje prazn
 `AmbPrazneNaloga("Vozac", "<VozacID>", "<Tip>", Date)`. Migracija treba da dobije
 isti izlaz (`KI-024`).
 
-*Provera:* `modTest` 295–306 (`T_KI024_*`, `T_Prazne_*`) · BFP premise
-(`Enum` deset, `StornoKontraStav`, `DeficitIObaveza`, `StornoNePraviMinus`) ·
-sabotaže `ki024-*` (6), `prazne-*` (6) i `storno-rev-razlog-*` (2).
+**4. Firma kupcu nije umela da vrati njegove gajbe (`KI-024`, kupčev deo).** Firma
+je primala kupčeve gajbe (pozajmica, `ODL-24`; pokriće manjka na povratu), pa je
+rasla obaveza prema kupcu, a postupka kojim mu ih vraća nije bilo. `AmbReversSmerovi`
+nije znao `VRACANJE_TUDJE` prema kupcu, F7 nije imao smer, a dokument i broj nisu
+bili odlučeni (`ODL-24` (d)). Predlog je bio u stavci 236, a pre-flight u stavci 245.
+
+> **`AMB-10-ODL-39` (odluke operatera 31.10.2026, sve po preporuci).**
+>
+> | Pitanje | Odluka |
+> |---|---|
+> | (a) dokument i broj | **naš `REVERS`** (obrnuto `ODL-10`: kad mi predajemo partneru, papir je naš). Broj iz niza stanice (`GenerateBrojAmbDokumenta(Stanica, …)`), vlasnik `(Stanica, StanicaID)`; predlaže se, a sme i ručno. |
+> | (b) količina preko duga | **odbija se**. Kupcu se prazne ne izdaju (`AmbPartnerPrimaPrazne`), pa bi višak bio `IZDATA_PRAZNA` vozač → kupac, tok koji niko nije odlučio. Sudi se ostatak vraćanja. Izričit zahtev `IZDATA_PRAZNA` na kupca i dalje nema pisca i ne sudi se (zatečeno). BFP ga koristi kao probu drugog protivpartnera (`AMB-INV-10`), pa bi kapija nad njim bez odluke zaklonila tu probu (stavka 246). |
+> | (c) par | **vozač → kupac** (obrnut lanac `ODL-9`: stanica → vozač „Prijem od OM" → kupac). Stanica i firma kupcu ne vraćaju direktno, a robni dokument nije mesto vraćanja. Vozač mora da ima prazne (`AMB-INV-16`, `ODL-37`). |
+> | (d) ulaz | F7, **smer 9 „Vraćanje kupcu"** u novom okviru **KUPAC**, uz „Povrat kupca" i „Pozajmicu" (sedam segmenata u jednom redu bi odseklo natpise). Kupac, vozač i OM su obavezni; OM bira operater, kao za „Izdato OM". |
+> | (e) storno i ispravka | storno ide postojećim `StornirajAmbDokument_TX`, kontra-stavom vraćanja i izlaza: dug i vozačeve prazne se vraćaju. **Ispravke nema**: storno, pa nov unos, kao za kupčev dokument, nabavku i otpis. |
+> | (f) šta se gasi | **ceo dug prema kupcu**, po tipu (`AmbObavezaPartneru`: pozajmica i pokriće manjka), jer su gajbe zamenljive, kao kod kooperanta (`ODL-35`). Vraćanje sme i delimično, kroz više dokumenata. |
+> | (g) papir | **štampa se**: papir je naš, pa `ODL-32` ne važi. Protivstrana je kupac, a stanje je **poslovno**, kao `AMB-POSL-03` (posle pozajmice 10 i vraćanja 6: −10 → −4). Fizički bi kupac stajao na nuli, jer pozajmica i vraćanje nose svoj ulaz i izlaz. Isti papir daje i ponovna štampa iz izveštaja. |
+
+```
+kupac pozajmi 10, vozac ih preda stanici, stanica ih vrati vozacu, vozac kupcu 10
+
+Kupac       -> Vozac       10   POZAJMICA_PARTNERA   (+ ULAZ_TUDJE 10)   dug 10
+Vozac       -> Stanica     10   PRENOS_INTERNO       ("Izdato OM")
+Stanica     -> Vozac       10   PRENOS_INTERNO       ("Prijem od OM")
+Vozac       -> Kupac       10   VRACANJE_TUDJE       nas revers, broj stanice
+Kupac       -> SpoljniSvet 10   IZLAZ_TUDJE          (AMB-INV-15)        dug 0
+```
+
+**Gde živi pravilo:**
+
+| Pravilo | Gde |
+|---|---|
+| smer i par | `modAmbalazaUgovor.AmbReversSmerovi` (`REV_SMER_VRACANJE_KUPCU`: Vozač → Kupac, `VRACANJE_TUDJE`) |
+| kupcu se prazne ne izdaju | `AmbPartnerPrimaPrazne`, `AmbIzdavanjePraznihProblem`: jedna implementacija, dva pozivaoca (`PrenesiAmbalazu` diže `AMB_ERR_IZDAVANJE_KUPCU`, a `modNovacUnos.ReversValidiraj` vraća poruku uz polje količine) |
+| samo sa vozača, na našem reversu, broj stanice | `AmbDokKretanjeProblem` |
+| vraćanje je svoja radnja | `AmbVrstaPoslovnaRadnja(vrsta, naTip)`: sabira `VRACANJE` pod „Izdata prazna" samo kad je partner kooperant |
+| bez ispravke | `AmbReversSmerSeIspravlja`, `AmbReversSmerZaRed` → `IspravkaReversaRazlog` (dokument) i `IspravkaReversa_TX` (smer zamene) |
+| pisac | `modAmbalaza.UpisiReversAmbalaze_TX(…, kupacID)`: isto telo kao ostala četiri smera (`UpisiReversUTx`, `ReversNalogID`) |
+| ulaz | `modNovacUnos` smer 9 (`SMER_REV_VRACANJE_KUP`). Nije `RevSmerJeKupcev`, jer je broj naš. Ljuska: okvir `fgSmerKup` u `modOtkupUI` |
+| papir | `modPrint` protivstrana `KUPAC` (poslovno stanje); ponovna štampa `modIzvestaj.StampajAmbDokument` |
+
+**Netaknuto:** `AmbKlaseVrste`, `AmbDoprinosObavezi`, `AmbVrsteZahteva` (deljenje
+`VRACANJE_TUDJE` po obavezi postoji od ranije), storno (`RequirePrazneStorna`
+sam odbija storno „Prijem od OM" posle vraćanja), bilans (`IZLAZ_TUDJE` →
+„Tuđe: vraćeno partneru"), kupčevi smerovi 5 i 6 i njihov broj, PWA (ne zna
+`VrstaKretanja`).
+
+*Provera:* `modTest` 295–308 (`T_KI024_*`, `T_Prazne_*`, `T_ODL39_*`) · BFP premise
+(`Enum` deset, `StornoKontraStav`, `DeficitIObaveza`, `StornoNePraviMinus`; od
+`ODL-39` mapa smerova ima pet redova) · sabotaže `ki024-*` (6), `prazne-*` (6),
+`storno-rev-razlog-*` (2) i `odl39-*` (14).
 
 ### 6.15 Cena — posteno
 
