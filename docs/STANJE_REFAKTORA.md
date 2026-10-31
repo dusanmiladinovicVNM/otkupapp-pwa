@@ -36,7 +36,7 @@
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
-| **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065`. Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, nije commitovan (stavke 237–240). Kupčev deo `KI-024`: čeka odluke 3a/3b (stavka 236) |
+| **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240). Kupčev deo `KI-024`: čeka odluke 3a/3b (stavka 236) |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -8575,6 +8575,34 @@
        `run_vba.py` i pun `dokaz.py` (pred release).
      - **Otvoreno:** problem 3 — dokument i broj vraćanja pozajmice kupcu (3a) i višak preko obaveze (3b).
      - **Sledeći brojevi:** test 306 · stavka 241 · KI-066.
+
+241. **Ručna provera u migriranoj svesci: otkup prošao, otpremnica pala — `KI-065` izmeren** (31.10.2026, operater
+     i asistent; sveska `AgriX_C002_nova - Copy.xlsm`, merenje nad kopijom u scratchpad-u, samo čitanjem).
+
+     - **Nalaz operatera:** Rača (ST-00003), 0,4kg, ukupni saldo 0. Otkup sa 6 primljenih i 6 izdatih (OTK-A51C0750D:
+       `UZ_ROBU` 6; kooperant je doneo jednu svoju gajbu, pa `ULAZ_TUDJE` 1, `VRACANJE_TUDJE` 1 i `IZLAZ_TUDJE` 1;
+       `IZDATA_PRAZNA` 5) je prošao, a izdavanje otpremnice 3/311026 sa istih 6 gajbi je odbijeno: „Deficit naloga
+       Stanica se NE pokriva ulazom tuđe ambalaže … Manjak: 6".
+     - **Merenje** (Python replika pravila čitaoca, ne VBA): pre tog otkupa su pune Rače (`AMBALAZA_UZ_ROBU`, ulaz −
+       izlaz) **−871** (otkupi 2701, otpremnice 3572), a prazne **+871** (nabavka 3525, izdato 2531, vraćeno tuđe
+       123); ukupno 0. Kapija praznih je videla 871 i pustila izdavanje 6, a ukupni saldo nije pao jer je otkup uneo
+       6 punih. Manjak je izašao tek na otpremnici (`AMB-INV-07`): tačno odbijanje, pogrešan dokument.
+     - **Ista neusklađenost u C002** (zbir po nalogu i tipu na kraju knjige; dnevni tok meren samo za prazne Rače
+       0,4kg, nijedan dan ispod nule): pune ispod nule na ST-00001 (−125), ST-00002 (−39), ST-00003 (−865 posle
+       otkupa) i vozaču ST-00003 0,5kg (−47); prazne ispod nule samo na ST-00006 (−28). Ostali sopstveni nalozi
+       nemaju ni jedno ni drugo.
+     - **Zašto ne nastaje bez migracije** (čitanjem koda, ne testom): otpremnica knjiži tačno zbir gajbi svojih
+       blokova (`OtpRequireJednakost`, `modDokumenta.bas:4923`), a otkup u izdatoj otpremnici se ne ispravlja
+       (A13, `modOtkup.bas:352`). Pune stanice zato ne idu ispod nule.
+     - **Odluka operatera (31.10.2026): bez izmene koda.** Nalaz je u `KI-065`, sa pravilom za ponovni prevod
+       migracije (broj gajbi otpremnice = zbir njenih blokova; pune i prazne sopstvenog naloga nijednog dana ispod
+       nule). Odbijena varijanta: kapija u čitaocu koja staje kad pune naloga padnu ispod nule. Otkup bi tada pao na
+       pravom dokumentu, ali kapija nad stanjem koje čist model ne proizvodi je mrtva grana, a u C002 bi blokirala
+       svako izdavanje na četiri naloga do novog prevoda.
+     - **NOT RUN:** potvrda iz VBA (`?modAmbalaza.AmbPrazneNaloga("Stanica", "ST-00003", "0,4kg", Date)`, očekivano
+       865); dnevni tok punih.
+     - **Ostalo:** ručni compile i F7 provera reza 238 nisu prijavljeni; problem 3 (3a/3b) i dalje otvoren.
+     - **Sledeći brojevi:** test 306 · stavka 242 · KI-066.
 
 ## Dug sa imenom (posle S5-5b)
 
