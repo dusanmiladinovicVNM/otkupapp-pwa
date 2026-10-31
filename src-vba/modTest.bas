@@ -409,6 +409,8 @@ Public Sub RunAllTests()
     RunOne 302
     RunOne 303
     RunOne 304
+    RunOne 305
+    RunOne 306
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1008,6 +1010,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 302: TestName = "T_Prazne_ReversRetroIStorno"
         Case 303: TestName = "T_Prazne_PredajaVozacu"
         Case 304: TestName = "T_Prazne_OtpisNaStanici"
+        Case 305: TestName = "T_Prazne_VozacVracaSamoPrazne"
+        Case 306: TestName = "T_Prazne_StornoKazeRazlog"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1320,6 +1324,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 302: T_Prazne_ReversRetroIStorno
         Case 303: T_Prazne_PredajaVozacu
         Case 304: T_Prazne_OtpisNaStanici
+        Case 305: T_Prazne_VozacVracaSamoPrazne
+        Case 306: T_Prazne_StornoKazeRazlog
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -14084,6 +14090,230 @@ Private Sub T_Prazne_OtpisNaStanici()
              "cena odluke: lom kad stanica ima samo pune spusta prazne na -1; izlaz je nabavka"
 End Sub
 
+' ============================================================
+' 305. AMB-10-ODL-37: VOZAC VRACA STANICI SAMO PRAZNE.
+' ============================================================
+' Odluka operatera 30.10.2026 (stavke 236-237): na "Izdato OM" vozac stanici
+' vraca samo prazne. Njegov ukupni saldo nosi i pune sa otpremnice, pa je
+' AMB-INV-07 pustao povrat "praznih" koje su jos na putu do kupca.
+' (1) Vozac ima samo 10 punih (otkup -> izdata otpremnica): "Izdato OM" 5 je
+'     odbijen, bez zaglavlja i reda knjige, a poruka imenuje vozaca.
+' (2) Kupac mu vrati 8 praznih (kupcev revers): povrat 10 je odbijen, 8 prolazi,
+'     i stanica dobija tacno 8 praznih.
+' (3) Storno kupcevog reversa posle predaje je odbijen -- vozac bi ostao bez
+'     praznih koje je vec predao (RequirePrazneStorna za sopstveni nalog).
+' (4) Kontra-tvrdnja: kupcev revers 3, storniran PRE predaje, prolazi.
+' (5) Pune se ne diraju: vozacu ostaje 10 punih i 0 praznih.
+' Semanticki nivo: KOMADI po (nalog, tip); pune i prazne iz vrste kretanja.
+' Fixture: normal production state. Ceo tok ide u transakciji testa koja se na
+' kraju vraca (S6K8Snimak): otkup i izdata otpremnica ne ostaju tudjim testovima.
+' Zato se sve meri pre vracanja, a tvrdi posle.
+' SABOTAZE: prazne-vozac-van-kapije, prazne-citac-samo-stanica,
+'           prazne-vozac-storno.
+Private Sub T_Prazne_VozacVracaSamoPrazne()
+    Dim t As String, b As String, errNum As Long, greska As String, g As String
+    Dim otk As String, otp As String, h As Object, izvori As Collection
+    Dim tx As clsTransaction, nKnj As Long, nDok As Long, dKnj As Long, dDok As Long
+    Dim rev1 As String, err1 As Long, opis1 As String
+    Dim rvp As String, errRvp As Long, rev2a As String, err2a As Long
+    Dim rev2b As String, err2b As Long, prazneSt As Double
+    Dim stornoPosle As Boolean, nStorno As Long, dStorno As Long, zastavica As String
+    Dim rvp4 As String, errRvp4 As Long, stornoPre As Boolean
+    Dim prazneVoz As Double, ukupnoVoz As Double
+    Dim errNumTx As Long, errDescTx As String
+
+    t = KartNoviTipAmb("PVV")
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    On Error GoTo CleanUp
+
+    ' Preduslov: stanica primi 10 punih, pa ih otpremnicom izda vozacu
+    ' (Stanica -> Vozac, AMBALAZA_UZ_ROBU).
+    otk = KartOtkup(t, 10, 0, b, errNum, greska)
+    If Len(otk) = 0 Then GoTo CleanUp
+    Set h = CreateObject("Scripting.Dictionary")
+    h("Datum") = Date
+    h("StanicaID") = FX_STANICA
+    h("VozacID") = FX_VOZAC
+    h("KulturaID") = FX_KULTURA
+    h("TipAmbalaze") = t
+    h("BrojOtpremnice") = modBrojevi.GenerateBrojOtpremnice(FX_STANICA, Date)
+    Set izvori = New Collection
+    izvori.Add otk
+    otp = modDokumenta.CreateOtpremnicaIzIzvora_TX(h, izvori, g)
+    If Len(otp) = 0 Then GoTo CleanUp
+
+    ' (1) samo pune
+    nKnj = IspRevRedova(TBL_AMBALAZA)
+    nDok = IspRevRedova(TBL_AMBALAZA_DOKUMENT)
+    On Error Resume Next
+    rev1 = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t, 5, REV_SMER_IZDATO_OM, "", FX_VOZAC)
+    err1 = Err.Number
+    opis1 = Err.description
+    Err.Clear
+    On Error GoTo CleanUp
+    dKnj = IspRevRedova(TBL_AMBALAZA) - nKnj
+    dDok = IspRevRedova(TBL_AMBALAZA_DOKUMENT) - nDok
+
+    ' (2) kupac vrati 8 praznih. SVAKI POTEZ CIJI ISHOD ZAVISI OD KAPIJE SE HVATA
+    ' (dokaz 30.10.2026): nehvatan pad povrata 8 pod sabotazom je test ubijao u
+    ' CleanUp-u, pre tvrdnje koja ga meri.
+    On Error Resume Next
+    rvp = modAmbalaza.UpisiReversPartnera_TX(Date, "RVP305-" & t, FX_KUPAC, FX_VOZAC, t, 8, "test 305", _
+              modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KUPAC, FX_KUPAC, t, 8))
+    errRvp = Err.Number
+    Err.Clear
+    rev2a = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t, 10, REV_SMER_IZDATO_OM, "", FX_VOZAC)
+    err2a = Err.Number
+    Err.Clear
+    rev2b = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t, 8, REV_SMER_IZDATO_OM, "", FX_VOZAC)
+    err2b = Err.Number
+    Err.Clear
+    On Error GoTo CleanUp
+    prazneSt = modAmbalaza.AmbPrazneRaspolozive(FX_STANICA, t, Date)
+
+    ' (3) storno izvora praznih posle predaje
+    If Len(rvp) > 0 Then
+        nStorno = IspRevRedova(TBL_AMBALAZA)
+        stornoPosle = modAmbalaza.StornirajAmbDokument_TX(rvp)
+        dStorno = IspRevRedova(TBL_AMBALAZA) - nStorno
+        zastavica = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, rvp, COL_STORNIRANO))
+    End If
+
+    ' (4) kontra: storno pre predaje
+    On Error Resume Next
+    rvp4 = modAmbalaza.UpisiReversPartnera_TX(Date, "RVP305B-" & t, FX_KUPAC, FX_VOZAC, t, 3, "test 305", _
+               modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KUPAC, FX_KUPAC, t, 3))
+    errRvp4 = Err.Number
+    Err.Clear
+    On Error GoTo CleanUp
+    If Len(rvp4) > 0 Then stornoPre = modAmbalaza.StornirajAmbDokument_TX(rvp4)
+
+    ' (5) pune ostaju pune
+    prazneVoz = modAmbalaza.AmbPrazneNaloga(AMB_NALOG_VOZAC, FX_VOZAC, t, Date)
+    ukupnoVoz = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, t)
+    Err.Clear
+
+CleanUp:
+    errNumTx = Err.Number
+    errDescTx = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    If errNumTx <> 0 Then Err.Raise errNumTx, "modTest.T_Prazne_VozacVracaSamoPrazne", errDescTx
+
+    AssertEq (Len(otk) > 0) & "|" & (Len(otp) > 0), "True|True", _
+             "preduslov: otkup 10 punih i otpremnica izdata vozacu"
+    AssertEq err1 & "|" & (Len(rev1) = 0) & "|" & dKnj & "|" & dDok & "|" & _
+             (InStr(1, opis1, FX_VOZAC, vbTextCompare) > 0), _
+             AMB_ERR_PRAZNE_NEMA & "|True|0|0|True", _
+             "vozac sa samo punim gajbama ne vraca prazne -- bez zaglavlja i reda knjige, poruka imenuje vozaca"
+    AssertEq (Len(rvp) > 0) & "|" & errRvp & "|" & err2a & "|" & (Len(rev2a) = 0) & "|" & _
+             (Len(rev2b) > 0) & "|" & err2b & "|" & prazneSt, _
+             "True|0|" & AMB_ERR_PRAZNE_NEMA & "|True|True|0|8", _
+             "kupac vrati 8 praznih: povrat 10 je odbijen, 8 prolazi, stanica dobija tacno 8"
+    AssertEq stornoPosle & "|" & dStorno & "|" & zastavica, "False|0|", _
+             "storno kupcevog reversa posle predaje je odbijen -- vozac bi ostao bez praznih"
+    AssertEq (Len(rvp4) > 0) & "|" & errRvp4 & "|" & stornoPre, "True|0|True", _
+             "kontra: storno kupcevog reversa pre predaje prolazi"
+    AssertEq prazneVoz & "|" & ukupnoVoz, "0|10", _
+             "pune se ne diraju: vozacu ostaje 10 punih i 0 praznih"
+End Sub
+
+' ============================================================
+' 306. ODBIJEN STORNO REVERSA KAZE OPERATERU RAZLOG.
+' ============================================================
+' Rucna provera reza 238 (31.10.2026, stavka 242): storno kupcevog reversa posle
+' predaje praznih pisac tacno odbija, ali je ekran Storno pokazivao samo "Storno
+' nije uspeo: <broj>" -- StornirajAmbDokument_TX je razlog upisivao u log i
+' vracao False. Isto je vazilo i za stanicu (ODL-35/36, #448).
+' Test ide kroz modStornoDok.StornoIzvrsi, isti poziv kojim ekran Storno izvrsava
+' izabran revers (modScrStorno.ObicanStorno); njegovu poruku ekran pokazuje u
+' toast-u.
+' (1) Pisac: odbijen storno vraca razlog pozivaocu (outGreska) -- pravilo
+'     (AMB-INV-16) i vozaca, ne samo False.
+' (2) Ekran: storno kupcevog reversa posle predaje je odbijen, a poruka pocinje
+'     porukom neuspeha i nosi isti razlog.
+' (3) Kontra-tvrdnja: posle storna predaje isti storno prolazi, sa porukom uspeha.
+' Dve karike, dve tvrdnje: (1) stoji pre (2), pa svaka sabotaza obara svoju.
+' Fixture: normal production state; tok u transakciji testa koja se vraca.
+' SABOTAZE: storno-rev-razlog-pisac, storno-rev-razlog-poziv.
+Private Sub T_Prazne_StornoKazeRazlog()
+    Dim t As String, b As String, errNum As Long, greska As String, g As String
+    Dim otk As String, otp As String, h As Object, izvori As Collection
+    Dim tx As clsTransaction, rvp As String, rev As String
+    Dim ok1 As Boolean, poruka1 As String, ok2 As Boolean, poruka2 As String
+    Dim ok3 As Boolean, poruka3 As String, neuspeh As String, uspeh As String
+    Dim okP As Boolean, greskaPisca As String
+    Dim errNumTx As Long, errDescTx As String
+
+    t = KartNoviTipAmb("PSR")
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    On Error GoTo CleanUp
+
+    ' Preduslov kao u 305: vozac ima 10 punih, kupac mu vrati 8 praznih, a on ih
+    ' preda stanici ("Izdato OM").
+    otk = KartOtkup(t, 10, 0, b, errNum, greska)
+    If Len(otk) = 0 Then GoTo CleanUp
+    Set h = CreateObject("Scripting.Dictionary")
+    h("Datum") = Date
+    h("StanicaID") = FX_STANICA
+    h("VozacID") = FX_VOZAC
+    h("KulturaID") = FX_KULTURA
+    h("TipAmbalaze") = t
+    h("BrojOtpremnice") = modBrojevi.GenerateBrojOtpremnice(FX_STANICA, Date)
+    Set izvori = New Collection
+    izvori.Add otk
+    otp = modDokumenta.CreateOtpremnicaIzIzvora_TX(h, izvori, g)
+    If Len(otp) = 0 Then GoTo CleanUp
+    rvp = modAmbalaza.UpisiReversPartnera_TX(Date, "RVP306-" & t, FX_KUPAC, FX_VOZAC, t, 8, "test 306", _
+              modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KUPAC, FX_KUPAC, t, 8))
+    rev = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t, 8, REV_SMER_IZDATO_OM, "", FX_VOZAC)
+
+    ' (1) pisac: odbijen storno vraca razlog
+    okP = modAmbalaza.StornirajAmbDokument_TX(rvp, greskaPisca)
+    ' (2) storno izvora praznih posle predaje -- poziv ekrana Storno
+    ok1 = modStornoDok.StornoIzvrsi(STIP_REVERSI, AmbDokBroj306(rvp), "", poruka1, rvp)
+    ' (3) kontra: vrati predaju, pa isti storno
+    ok2 = modStornoDok.StornoIzvrsi(STIP_REVERSI, AmbDokBroj306(rev), "", poruka2, rev)
+    ok3 = modStornoDok.StornoIzvrsi(STIP_REVERSI, AmbDokBroj306(rvp), "", poruka3, rvp)
+    Err.Clear
+
+CleanUp:
+    errNumTx = Err.Number
+    errDescTx = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    If errNumTx <> 0 Then Err.Raise errNumTx, "modTest.T_Prazne_StornoKazeRazlog", errDescTx
+
+    neuspeh = modPoruke.Poruka("STORNO_ERR_NEUSPEH")
+    uspeh = modPoruke.Poruka("STORNO_MSG_OK")
+    AssertEq (Len(otp) > 0) & "|" & (Len(rvp) > 0) & "|" & (Len(rev) > 0), "True|True|True", _
+             "preduslov: otpremnica izdata, kupac vratio 8 praznih, vozac ih predao stanici"
+    AssertEq okP & "|" & (InStr(1, greskaPisca, "AMB-INV-16", vbBinaryCompare) > 0) & "|" & _
+             (InStr(1, greskaPisca, FX_VOZAC, vbTextCompare) > 0), "False|True|True", _
+             "pisac odbijenog storna vraca razlog pozivaocu -- pravilo i vozaca, ne samo False"
+    AssertEq ok1 & "|" & (InStr(1, poruka1, neuspeh, vbBinaryCompare) = 1) & "|" & _
+             (InStr(1, poruka1, "AMB-INV-16", vbBinaryCompare) > 0) & "|" & _
+             (InStr(1, poruka1, FX_VOZAC, vbTextCompare) > 0), _
+             "False|True|True|True", _
+             "odbijen storno reversa kaze operateru razlog -- pravilo i vozaca, ne samo da nije uspeo"
+    AssertEq ok2 & "|" & ok3 & "|" & (InStr(1, poruka3, uspeh, vbBinaryCompare) = 1), _
+             "True|True|True", _
+             "kontra: posle storna predaje isti storno prolazi, sa porukom uspeha"
+End Sub
+
+' Poslovni broj ambalaznog dokumenta -- ekran Storno ga salje uz AmbDokID.
+Private Function AmbDokBroj306(ByVal ambDokID As String) As String
+    AmbDokBroj306 = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, ambDokID, COL_AMBD_BROJ))
+End Function
+
 ' Kolona reda po partneru (AmbPartneriPodaci): 4 = drzi, 5 = tudje, 6 = neto;
 ' "" kad partner nema red za taj tip.
 Private Function ParKol(ByVal r As Variant, ByVal nalogID As String, ByVal tip As String, _
@@ -25875,6 +26105,16 @@ Private Function ZasejReversZaNiz() As String
     If Len(ZasejReversZaNiz) > 0 Then Exit Function
 
     ZasejOpticajVozacu
+    ' AMB-10-ODL-37 (30.10.2026): "Izdato OM" vraca samo prazne koje vozac ima OD
+    ' TOG DANA nadalje. Seed iznad nosi danasnji datum, a fixture vozac na
+    ' FX_DATUM drzi samo pune (OTP-TEST-1 / PRJ-FAK-3 / PRJ-TEST-A). Praznu mu na
+    ' isti dan vraca kupac -- kupcevim dokumentom i KUPCEVIM nizom, pa niz stanice
+    ' koji ovaj seed meri ostaje netaknut.
+    modAmbalaza.UpisiReversPartnera_TX d, "RVP-IZV-" & Format$(Now, "hhnnss") & "-" & _
+                                       CStr(Int(Rnd() * 9999)), FX_KUPAC, FX_VOZAC, _
+                                       FX_TIP_AMB, 1, "preduslov REV niza", _
+                                       modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KUPAC, _
+                                           FX_KUPAC, FX_TIP_AMB, 1)
     ZasejReversZaNiz = modAmbalaza.UpisiReversAmbalaze_TX(d, BR, FX_STANICA, _
                            FX_TIP_AMB, 1, REV_SMER_IZDATO_OM, "", FX_VOZAC, _
                            "preduslov REV niza")
