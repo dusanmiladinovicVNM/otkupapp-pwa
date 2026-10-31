@@ -25,8 +25,9 @@ Public Const AMB_ERR_DEFICIT_NEPOKRIV As Long = vbObjectError + 4471
 Public Const AMB_ERR_IDENTITET As Long = vbObjectError + 4472
 Public Const AMB_ERR_JEDAN_PARTNER As Long = vbObjectError + 4475
 Public Const AMB_ERR_STORNO As Long = vbObjectError + 4476
-' AMB-INV-16: stanica nema dovoljno PRAZNIH gajbi za izdavanje (pune primljene
-' sa robom nisu prazne). Broj, ne tekst, je ugovor sa pozivaocem.
+' AMB-INV-16: sopstveni nalog (stanica, vozac) nema dovoljno PRAZNIH gajbi za
+' izdavanje (pune primljene sa robom nisu prazne). Broj, ne tekst, je ugovor sa
+' pozivaocem.
 Public Const AMB_ERR_PRAZNE_NEMA As Long = vbObjectError + 4477
 Private Const AMB_ERR_KNJIGA_KVAR As Long = vbObjectError + 4473
 Private Const AMB_ERR_KNJIGA_ULAZ As Long = vbObjectError + 4474
@@ -1384,29 +1385,41 @@ Public Function AmbDeficitZaPrenos(ByVal odTip As String, ByVal odID As String, 
 End Function
 
 ' ============================================================
-' PRAZNE GAJBE STANICE -- AMB-INV-16 (odluka operatera 29.10.2026)
+' PRAZNE GAJBE SOPSTVENOG NALOGA -- AMB-INV-16 (odluke operatera 29. i 30.10.2026)
 ' ============================================================
 '
-' Koliko PRAZNIH gajbi tipa stanica moze da izda na dan `odDatuma`, a da nijedan
-' kasniji dan ne ostane bez pokrica: NAJMANJE stanje praznih na kraju dana, od tog
-' dana nadalje. Izdavanje sa ranijim datumom tako vidi i vec upisana kasnija
+' Koliko PRAZNIH gajbi tipa sopstveni nalog moze da izda na dan `odDatuma`, a da
+' nijedan kasniji dan ne ostane bez pokrica: NAJMANJE stanje praznih na kraju dana,
+' od tog dana nadalje. Izdavanje sa ranijim datumom tako vidi i vec upisana kasnija
 ' izdavanja, a storno nabavke se meri istim brojem.
 '
+' Sopstveni nalog je stanica, i od AMB-10-ODL-37 VOZAC: on na "Izdato OM" stanici
+' vraca samo prazne -- dobijene od kupca (prijemnica, kupcev revers, pozajmica)
+' ili sa stanice ("Prijem od OM"). Pune sa otpremnice idu kupcu prijemnicom.
+' Partner nema ovo pravilo: kooperant i kupac pune gajbe sami prazne.
+'
 ' Prazne se IZVODE iz knjige, bez nove kolone i bez paralelne knjige: svaki red
-' stanice koji NIJE AMBALAZA_UZ_ROBU nosi prazne (AmbVrstaPuneGajbe -- spisak
-' vrsta i razlog stoje uz nju). Pune primljene otkupom zato ne povecavaju prazne,
-' ni na istom otkupu ni ranije. Kontra-stav nosi vrstu originala, pa se storno
-' gasi istim pravilom.
+' naloga koji NIJE AMBALAZA_UZ_ROBU nosi prazne (AmbVrstaPuneGajbe -- spisak
+' vrsta i razlog stoje uz nju). Pune primljene otkupom ili otpremnicom zato ne
+' povecavaju prazne, ni na istom dokumentu ni ranije. Kontra-stav nosi vrstu
+' originala, pa se storno gasi istim pravilom. Otpis je lom praznih i kod
+' vozaca (AMB-10-ODL-38), isto kao na stanici (ODL-36).
 '
 ' DAN, ne red: knjiga je dnevna (6.12d). Broj sme biti NEGATIVAN -- kad je
 ' istorija knjige vec izdala prazne kojih nije bilo (npr. migrirani podaci); citalac
 ' to ne ulepsava, jer bi ulepsan broj pustio jos jedno takvo izdavanje.
-Public Function AmbPrazneRaspolozive(ByVal stanicaID As String, ByVal tipAmb As String, _
-                                     ByVal odDatuma As Date) As Double
-    Const SRC As String = "modAmbalaza.AmbPrazneRaspolozive"
+Public Function AmbPrazneNaloga(ByVal nalogTip As String, ByVal nalogID As String, _
+                                ByVal tipAmb As String, ByVal odDatuma As Date) As Double
+    Const SRC As String = "modAmbalaza.AmbPrazneNaloga"
+
+    If Not modAmbalazaUgovor.AmbNalogSopstveni(nalogTip) Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Prazne se vode za sopstveni nalog (stanica, vozac), a trazi se '" & _
+                  Trim$(nalogTip) & "'."
+    End If
 
     Dim p As String
-    p = modAmbalazaUgovor.AmbNalogProblem(AMB_NALOG_STANICA, stanicaID)
+    p = modAmbalazaUgovor.AmbNalogProblem(nalogTip, nalogID)
     If Len(p) > 0 Then Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, p
     If Len(Trim$(tipAmb)) = 0 Then
         Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
@@ -1431,7 +1444,7 @@ Public Function AmbPrazneRaspolozive(ByVal stanicaID As String, ByVal tipAmb As 
         If RedDoticeKnjigu(data, i, kol) Then
             If IstiTipAmb(AmbText(data(i, kol(COL_AMB_TIP))), tipAmb) Then
                 If Not modAmbalazaUgovor.AmbVrstaPuneGajbe(AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA)))) Then
-                    znak = NalogZnakReda(data, i, kol, AMB_NALOG_STANICA, stanicaID)
+                    znak = NalogZnakReda(data, i, kol, nalogTip, nalogID)
                     If znak <> 0 Then
                         q = znak * CDbl(data(i, kol(COL_AMB_KOLICINA)))
                         d = Int(CDbl(CDate(data(i, kol(COL_AMB_DATUM)))))
@@ -1462,7 +1475,14 @@ Public Function AmbPrazneRaspolozive(ByVal stanicaID As String, ByVal tipAmb As 
             If stanje < najmanje Then najmanje = stanje
         Next n
     End If
-    AmbPrazneRaspolozive = najmanje
+    AmbPrazneNaloga = najmanje
+End Function
+
+' Prazne STANICE -- isti citalac. Ulaz ostaje zbog pozivalaca koji pitaju za
+' stanicu (testovi, merenje u Immediate iz KI-065).
+Public Function AmbPrazneRaspolozive(ByVal stanicaID As String, ByVal tipAmb As String, _
+                                     ByVal odDatuma As Date) As Double
+    AmbPrazneRaspolozive = AmbPrazneNaloga(AMB_NALOG_STANICA, stanicaID, tipAmb, odDatuma)
 End Function
 
 ' Rastuci poredak dana (umetanjem) -- dani jednog naloga i tipa su malobrojni.
@@ -2677,12 +2697,18 @@ End Function
 
 ' AMB-INV-16 NAD POSLE-STANJEM STORNA.
 '
-' Kontra-stav ima zamenjene strane, pa original koji je stanici DAO prazne (Na =
-' stanica) storno oduzima, a original koji ih je ODNEO (Od = stanica) storno vraca.
-' Kad je promena za (stanicu, tip) negativna, meri se AmbPrazneRaspolozive nad
-' upisanim stanjem, od najranijeg dana tih redova: kontra-stav nosi datum originala
+' Kontra-stav ima zamenjene strane, pa original koji je nalogu DAO prazne (Na =
+' nalog) storno oduzima, a original koji ih je ODNEO (Od = nalog) storno vraca.
+' Kad je promena za (nalog, tip) negativna, meri se AmbPrazneNaloga nad upisanim
+' stanjem, od najranijeg dana tih redova: kontra-stav nosi datum originala
 ' (ODL-26), pa storno deluje unazad i moze da otkrije izdavanje koje je usledilo.
 ' Pune (UZ_ROBU) se ne broje -- isto pravilo kao citalac.
+'
+' Vazi za svaki SOPSTVENI nalog, ne samo stanicu (AMB-10-ODL-37, odluka operatera
+' 30.10.2026): storno prijemnice sa povratom, kupcevog reversa, pozajmice ili
+' "Prijem od OM" posle vozaceve predaje istih praznih stanici se odbija. Cena,
+' svesno prihvacena: ispravka takve prijemnice (storno, pa nov unos) ceka da se
+' prvo vrati i predaja.
 '
 ' originali: (AmbID, datum, tip, kolicina, odTip, odID, naTip, naID, vrsta)
 Private Sub RequirePrazneStorna(ByVal originali As Collection, ByVal SRC As String)
@@ -2694,12 +2720,14 @@ Private Sub RequirePrazneStorna(ByVal originali As Collection, ByVal SRC As Stri
 
     For Each r In originali
         If Not modAmbalazaUgovor.AmbVrstaPuneGajbe(CStr(r(8))) Then
-            If StrComp(CStr(r(6)), AMB_NALOG_STANICA, vbTextCompare) = 0 Then
-                PrazneStornaZabelezi promena, odDana, CStr(r(7)) & sep & CStr(r(2)), _
+            If modAmbalazaUgovor.AmbNalogSopstveni(CStr(r(6))) Then
+                PrazneStornaZabelezi promena, odDana, _
+                                     CStr(r(6)) & sep & CStr(r(7)) & sep & CStr(r(2)), _
                                      -CDbl(r(3)), CDate(r(1))
             End If
-            If StrComp(CStr(r(4)), AMB_NALOG_STANICA, vbTextCompare) = 0 Then
-                PrazneStornaZabelezi promena, odDana, CStr(r(5)) & sep & CStr(r(2)), _
+            If modAmbalazaUgovor.AmbNalogSopstveni(CStr(r(4))) Then
+                PrazneStornaZabelezi promena, odDana, _
+                                     CStr(r(4)) & sep & CStr(r(5)) & sep & CStr(r(2)), _
                                      CDbl(r(3)), CDate(r(1))
             End If
         End If
@@ -2708,14 +2736,14 @@ Private Sub RequirePrazneStorna(ByVal originali As Collection, ByVal SRC As Stri
     For Each k In promena.Keys
         If CDbl(promena(k)) < 0 Then
             delovi = Split(CStr(k), sep)
-            m = AmbPrazneRaspolozive(delovi(0), delovi(1), CDate(odDana(k)))
+            m = AmbPrazneNaloga(delovi(0), delovi(1), delovi(2), CDate(odDana(k)))
             If m < 0 Then
                 Err.Raise AMB_ERR_STORNO, SRC, _
-                          "AMB-INV-16: storno bi ostavio stanicu '" & delovi(0) & "' bez " & _
-                          "praznih gajbi '" & delovi(1) & "' (najmanje stanje od " & _
+                          "AMB-INV-16: storno bi ostavio " & delovi(0) & " '" & delovi(1) & _
+                          "' bez praznih gajbi '" & delovi(2) & "' (najmanje stanje od " & _
                           Format$(CDate(odDana(k)), "dd.mm.yyyy") & ": " & CStr(m) & _
-                          ") -- te prazne su posle ovog dokumenta vec izdate, pa se " & _
-                          "dokument ne moze stornirati bez njihovog vracanja."
+                          ") -- te prazne su posle ovog dokumenta vec izdate ili predate, pa " & _
+                          "se dokument ne moze stornirati bez njihovog vracanja."
             End If
         End If
     Next k
@@ -4007,16 +4035,27 @@ Public Function PrenesiAmbalazu(ByVal tx As clsTransaction, _
     ' izdavanja nadalje -- nezavisno od redosleda nogu u dokumentu. Kapija je u
     ' jezgru, pa vazi za otkup, revers i svakog drugog pozivaoca; odbijanje vraca
     ' celu TX.
+    '
+    ' AMB-10-ODL-37 (odluka operatera 30.10.2026): isto vazi za VOZACA. Njegov
+    ' ukupni saldo nosi i pune sa otpremnice, pa je "Izdato OM" pustao da vozac
+    ' stanici vrati kao prazne gajbe koje su jos na putu do kupca -- ili ih kupac
+    ' po prijemnici nije ni vratio. Posledica, imenovana u odluci: prijemnica i
+    ' kupcev povrat se unose PRE predaje istih gajbi stanici.
     If modAmbalazaUgovor.AmbPrazneKapijaVazi(odTip, vrstaK) Then
-        Dim prazne As Double
-        prazne = AmbPrazneRaspolozive(odID, tipAmb, datum)
+        Dim prazne As Double, odakle As String
+        prazne = AmbPrazneNaloga(odTip, odID, tipAmb, datum)
         If kolicina > prazne Then
+            odakle = "Pune gajbe primljene sa robom nisu prazne -- prazne stizu povratom, " & _
+                     "prenosom ili nabavkom."
+            If StrComp(Trim$(odTip), AMB_NALOG_VOZAC, vbTextCompare) = 0 Then
+                odakle = "Pune gajbe sa otpremnice nisu prazne -- vozac prazne dobija od kupca " & _
+                         "(prijemnica, kupcev revers) ili sa stanice; unesi ih pre predaje."
+            End If
             Err.Raise AMB_ERR_PRAZNE_NEMA, SRC, _
-                      "AMB-INV-16: stanica '" & Trim$(odID) & "' nema dovoljno PRAZNIH gajbi '" & _
+                      "AMB-INV-16: " & Trim$(odTip) & " '" & Trim$(odID) & "' nema dovoljno PRAZNIH gajbi '" & _
                       Trim$(tipAmb) & "' na dan " & Format$(datum, "dd.mm.yyyy") & _
                       ": raspolozivo " & CStr(prazne) & ", trazi se " & CStr(kolicina) & _
-                      ", manjak " & CStr(kolicina - prazne) & ". Pune gajbe primljene sa " & _
-                      "robom nisu prazne -- prazne stizu povratom, prenosom ili nabavkom."
+                      ", manjak " & CStr(kolicina - prazne) & ". " & odakle
         End If
     End If
 

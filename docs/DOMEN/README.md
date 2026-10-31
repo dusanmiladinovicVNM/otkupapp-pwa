@@ -371,7 +371,8 @@ kupcu, `KI-024` ostatak). Pravilo: `AMBALAZA.md` 6.14b.
 `AMB-INV-13`). Fizički saldo partnera se zbirno ne menja, obaveza pada, poslovni
 saldo vidi samo vraćanje. Nije otpis. U bilansu: „Tuđe: vraćeno partneru".
 
-**AMB-INV-16 — stanica izdaje samo prazne gajbe koje ima.** Pune gajbe primljene
+**AMB-INV-16 — sopstveni nalog izdaje samo prazne gajbe koje ima** (stanica, a od
+`AMB-10-ODL-37` i vozač). Pune gajbe primljene
 sa robom (`AMBALAZA_UZ_ROBU`) nisu prazne i ne postaju prazne same od sebe.
 Prazne se izvode iz iste knjige po vrsti kretanja (`AmbVrstaPuneGajbe`), po
 danima od datuma izdavanja nadalje (`AmbPrazneRaspolozive`). Kapija je u jezgru
@@ -387,7 +388,17 @@ to knjiga sama ne zna. Odluka: otpis na stanici umanjuje prazne (polomljena puna
 se presipa u praznu). Cena: lom pune dok stanica nema praznih spušta prazne ispod
 stvarnih, a izlaz je nabavka ili povrat (`AMBALAZA.md` 6.14b).
 
-Mere ih `modTest` 295–300 (`T_KI024_*`) i 301–304 (`T_Prazne_*`), sabotaže
+**AMB-10-ODL-37 — vozač vraća stanici samo prazne (odluka operatera
+30.10.2026).** Na „Izdato OM" vozač vraća prazne dobijene od kupca ili sa stanice,
+ne pune sa otpremnice. Kapija i čitalac `AMB-INV-16` važe za vozača, a storno
+dokumenta koji mu je dao prazne posle njihove predaje se odbija. Prijemnica i
+kupčev povrat se zato unose pre predaje istih gajbi.
+
+**AMB-10-ODL-38 — otpis kod vozača je lom praznih (odluka operatera 30.10.2026)**,
+kao `ODL-36` na stanici. Cena: puna polomljena u transportu, pre prijemnice,
+ostavi vozaču praznu manje (`AMBALAZA.md` 6.14b, tačka 3).
+
+Mere ih `modTest` 295–300 (`T_KI024_*`) i 301–305 (`T_Prazne_*`), sabotaže
 `ki024-*` i `prazne-*`.
 
 ## 3) Ko šta piše

@@ -3012,7 +3012,8 @@ da li gajba putuje puna (`AmbVrstaPuneGajbe`):
   punih predavala vozaču 5 „praznih" (`PRENOS_INTERNO`), a ukupni saldo je to
   pustao. Tačka 1.2 govori o izdavanju praznih **sa stanice**, ne o primaocu, pa je
   `PRENOS_INTERNO` sa stanice pod kapijom bez obzira kome ide. Smer vozač → stanica
-  stanici **daje** prazne i nije pod kapijom.
+  stanici **daje** prazne, pa za stanicu nije izdavanje — za vozača jeste (tačka 3
+  ispod, `ODL-37`).
 - **Van kapije ostaju** pune sa robom (`AMBALAZA_UZ_ROBU`) i otpis: otpis nije
   predaja nego izlaz iz opticaja, i sudi mu se po ukupnom saldu (`AMB-INV-14`).
 
@@ -3042,13 +3043,59 @@ da li gajba putuje puna (`AmbVrstaPuneGajbe`):
 | 10 | 5 | 10 | 5 | prolazi |
 | 10 | 5 | 10 | 6 | odbijen |
 
+**3. Vozač je stanici vraćao „prazne" koje su bile pune (`AMB-10-ODL-37`, stavke
+230, 236–238).** Kapija praznih je gledala samo stanicu, pa je vozača na „Izdato OM"
+(vozač → stanica, `PRENOS_INTERNO`) sudio samo ukupni saldo — a u njemu su i pune
+sa otpremnice. Dva oblika posledice: tih (otpremnica 10, prijemnica „primljeno 8,
+vraćeno 8", povrat 10 prolazi i stanica dobija dve prazne kojih nema) i odložen
+(povrat pre druge prijemnice prolazi, a ta prijemnica zatim pada na `AMB-INV-07`
+vozača, na pogrešnom dokumentu).
+
+> **`AMB-10-ODL-37` (odluka operatera 30.10.2026).** Vozač na „Izdato OM" stanici
+> vraća **samo prazne** — dobijene od kupca (prijemnica, kupčev revers, pozajmica)
+> ili sa stanice („Prijem od OM"). Pune sa otpremnice idu kupcu prijemnicom.
+>
+> - `AMB-INV-16` zato važi za svaki **sopstveni** nalog (`AmbNalogSopstveni`:
+>   stanica, vozač; firma nema tokova koji iz nje izdaju), istim čitaocem
+>   (`AmbPrazneNaloga`; `AmbPrazneRaspolozive` je njegov ulaz za stanicu) i
+>   istom kapijom u jezgru pisca (`AmbPrazneKapijaVazi`). Partner nije pod
+>   kapijom: kooperant i kupac pune gajbe sami prazne.
+> - **Storno** dokumenta koji je vozaču dao prazne — prijemnica sa povratom,
+>   kupčev revers, pozajmica, „Prijem od OM" — posle njihove predaje stanici se
+>   **odbija**, isto kao za stanicu (`RequirePrazneStorna` po sopstvenom nalogu).
+> - **Posledica, prihvaćena:** prijemnica ili kupčev povrat se unosi **pre**
+>   „Izdato OM" za iste gajbe; inače revers pada sa porukom koja imenuje vozača,
+>   prazne i manjak. Ispravka takve prijemnice (storno, pa nov unos) čeka da se
+>   prvo vrati predaja.
+
+> **`AMB-10-ODL-38` (odluka operatera 30.10.2026): otpis kod vozača je lom
+> praznih**, kao na stanici (`ODL-36`) — jedno pravilo po vrsti, bez nove grane u
+> čitaocu. Cena: puna gajba polomljena u transportu, pre prijemnice, ostavi vozaču
+> praznu manje, pa povrat poslednje **glasno** pada. Odbijene varijante: „pune"
+> (lom prazne na povratku tiho daje praznu viška — ista klasa rupe koju
+> `ODL-37` zatvara) i „prvo pune, pa prazne" (pravilo čitanja bez podatka, odbijeno
+> i za stanicu).
+
+Tokovi naloga vozača (popis 30.10.2026, stavka 236) i šta kapija od sada gleda:
+
+| Tok | Smer | Gajbe | Kapija praznih |
+|---|---|---|---|
+| otpremnica (F2, PWA predaja) | Stanica → Vozač | pune | ne |
+| prijemnica, isporuka | Vozač → Kupac | pune | ne |
+| prijemnica, zamena · kupčev revers · pozajmica | Kupac → Vozač | prazne | ne (vozaču daje); storno — da |
+| „Prijem od OM" | Stanica → Vozač | prazne | stanica (`INV-16`); storno — vozač |
+| **„Izdato OM"** | **Vozač → Stanica** | prazne | **vozač (`ODL-37`)** |
+| otpis | Vozač → SpoljniSvet | prazne (`ODL-38`) | ne (`AMB-INV-14`) |
+
 **Migrirana sveska.** Migracija (MIG-16/17) upisuje vraćanje bez izlaza, a stanje
 praznih stanice iz stare sveske možda nikad nije bilo knjiženo kao prazne. Pre
 puštanja se meri `AmbPrazneRaspolozive(stanica, tip, Date)` po stanici i tipu:
 negativno stanje blokira svako izdavanje dok se ne knjiži početno stanje praznih
-(nabavka ili prenos). Migracija treba da dobije isti izlaz (`KI-024`).
+(nabavka ili prenos). Od `ODL-37` isto važi za vozača:
+`AmbPrazneNaloga("Vozac", "<VozacID>", "<Tip>", Date)`. Migracija treba da dobije
+isti izlaz (`KI-024`).
 
-*Provera:* `modTest` 295–304 (`T_KI024_*`, `T_Prazne_*`) · BFP premise
+*Provera:* `modTest` 295–305 (`T_KI024_*`, `T_Prazne_*`) · BFP premise
 (`Enum` deset, `StornoKontraStav`, `DeficitIObaveza`, `StornoNePraviMinus`) ·
 sabotaže `ki024-*` (6) i `prazne-*` (6).
 

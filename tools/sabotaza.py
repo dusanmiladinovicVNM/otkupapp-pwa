@@ -10728,6 +10728,37 @@ SABOTAZE = {
         "T_Prazne_OtpisNaStanici",
         "otpis na stanici je izlaz praznih (AMB-10-ODL-36): 5 praznih i 10 punih, otpis 2",
     ),
+    # --- AMB-10-ODL-37: vozac vraca stanici samo prazne (305) ---
+    # Kapija praznih opet gleda samo stanicu: vozac sa 10 punih sa otpremnice
+    # vraca "prazne" na "Izdato OM", jer ga sudi samo ukupni saldo.
+    "prazne-vozac-van-kapije": (
+        "modAmbalazaUgovor.bas",
+        "    If Not AmbNalogSopstveni(odTip) Then Exit Function\n",
+        "    If StrComp(Trim$(odTip), AMB_NALOG_STANICA, vbTextCompare) <> 0 Then Exit Function"
+        "   ' SABOTAZA: vozac van kapije praznih\n",
+        "T_Prazne_VozacVracaSamoPrazne",
+        "vozac sa samo punim gajbama ne vraca prazne -- bez zaglavlja i reda knjige, poruka imenuje vozaca",
+    ),
+    # Citalac praznih vidi samo redove stanice: vozac nikad nema prazne, pa ni
+    # one koje mu je kupac stvarno vratio.
+    "prazne-citac-samo-stanica": (
+        "modAmbalaza.bas",
+        "                    znak = NalogZnakReda(data, i, kol, nalogTip, nalogID)\n",
+        "                    znak = NalogZnakReda(data, i, kol, AMB_NALOG_STANICA, nalogID)"
+        "   ' SABOTAZA: citalac zna samo stanicu\n",
+        "T_Prazne_VozacVracaSamoPrazne",
+        "kupac vrati 8 praznih: povrat 10 je odbijen, 8 prolazi, stanica dobija tacno 8",
+    ),
+    # Storno meri prazne samo za stanicu: kupcev revers se stornira i posle
+    # vozaceve predaje istih praznih stanici.
+    "prazne-vozac-storno": (
+        "modAmbalaza.bas",
+        "            If modAmbalazaUgovor.AmbNalogSopstveni(CStr(r(6))) Then\n",
+        "            If StrComp(CStr(r(6)), AMB_NALOG_STANICA, vbTextCompare) = 0 Then"
+        "   ' SABOTAZA: storno ne gleda vozaca\n",
+        "T_Prazne_VozacVracaSamoPrazne",
+        "storno kupcevog reversa posle predaje je odbijen -- vozac bi ostao bez praznih",
+    ),
 }
 
 
