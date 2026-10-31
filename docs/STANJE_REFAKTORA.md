@@ -36,7 +36,7 @@
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
-| **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242). Kupčev deo `KI-024`: čeka odluke 3a/3b (stavka 236) |
+| **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 (stavka 243), compile nije prijavljen. Kupčev deo `KI-024`: čeka odluke 3a/3b (stavka 236) |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -8638,6 +8638,29 @@
        `StornoOtkup_TX`, `StornoOtpremnica_TX` i `StornoNovac_TX` kroz `HandleStornoTxError`. Da li neko njihovo
        poslovno odbijanje stiže do tog puta mimo provere pre potvrde (`StornoRazlog`) **nije mereno**.
      - **Sledeći brojevi:** test 307 · stavka 243 · KI-066.
+
+243. **Ručna provera reza `#449` (vrh `409ab1e6`) — 7/7 funkcionalnih koraka, razlog storna čitljiv** (31.10.2026,
+     operater; sveska `tests/fixtures/rucna_odl37_409ab1e6.xlsm`, seed iz stavke 242).
+
+     - **Koraci i ishodi:**
+       - „Izdato OM" 5, vozač ima samo pune: odbijeno; dijalog nosi ceo tekst (raspoloživo 0, manjak 5).
+       - „Povrat kupca" 8: snimljen.
+       - „Izdato OM" 10: odbijeno (raspoloživo 8, manjak 2); 8: snimljeno (1/311026-2).
+       - Storno povrata kupca posle predaje: odbijeno; toast nosi ceo razlog, do „… bez njihovog vracanja.".
+       - Storno predaje, pa storno povrata: oba „✓ Stornirano".
+       - „Prijem od OM" 5, otpis vozača 2, „Izdato OM" 5: odbijeno (raspoloživo 3, manjak 2); 3: snimljeno.
+       - F1 otkup 5 primljenih / 20 izdatih: odbijeno **na otkupu** (raspoloživo 18, manjak 2); dijalog nosi ceo
+         tekst.
+     - **Čitljivost (P2 iz pregleda `#449`):** F7 i F1 odbijanje prikazuju u dijalogu sa celim tekstom; toast ispod
+       ponavlja poruku i seče je, ali je dijalog ceo. Ekran Storno nema desni panel, pa traka (oko 1650 px na
+       ekranu od 1920) nosi ceo razlog od ~265 znakova. Ispravka u `#449` nije potrebna; rizik ostaje za znatno
+       uži prozor (nije mereno).
+     - **Usputni nalazi, nijedan iz `#449`:** smer „Interno" za obe strane internog prenosa u listi F7 → `KI-066`;
+       pitanje o manjku kooperanta stiže pre odbijanja zbog praznih stanice → `KI-067`; tehnički prefiks
+       „Source=…" u dijalogu odbijenog otkupa → dopunjen `KI-048`; „Revers sačuvan" posle otpisa je već `KI-062`;
+       gubitak č/ć u dijalogu je `KI-037`/`KI-048` (`MsgBox` je ANSI, lokal DEU; katalog i toast ih imaju).
+     - **NOT REPORTED:** ručni compile (`Alt+F11` → Debug → Compile VBAProject).
+     - **Sledeći brojevi:** test 307 · stavka 244 · KI-068.
 
 ## Dug sa imenom (posle S5-5b)
 
