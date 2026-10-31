@@ -85,6 +85,12 @@ Public Const REV_SMER_IZDAVANJE As String = "IZDAVANJE"
 Public Const REV_SMER_PRIJEM As String = "PRIJEM"
 Public Const REV_SMER_IZDATO_OM As String = "IZDATO_OM"
 Public Const REV_SMER_PRIJEM_OD_OM As String = "PRIJEM_OD_OM"
+' Peti smer NASEG reversa (AMB-10-ODL-39, odluke operatera 31.10.2026): firma
+' vraca kupcu NJEGOVE gajbe -- pozajmicu i pokrice manjka, jer je dug jedan broj
+' po kupcu i tipu. Papir je nas (obrnuto ODL-10: kad mi predajemo partneru,
+' dokument je nas), broj iz niza stanice, a par je vozac -> kupac (obrnut lanac
+' ODL-9). Ispravke nema (AmbReversSmerSeIspravlja).
+Public Const REV_SMER_VRACANJE_KUPCU As String = "VRACANJE_KUPCU"
 ' Dokument koji je izdao PARTNER, a ne mi. Danas: revers kupca -- dokaz da je
 ' vozac preuzeo prazne gajbe (odluka operatera 03.10.2026, AMB-10-ODL-10).
 ' Broj je NJEGOV, pa je vlasnik numerickog niza partner, ne sopstveni nalog.
@@ -720,7 +726,7 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
                                       ByVal naTip As String, _
                                       ByVal vrstaKretanja As String) As String
     Dim jePartnerov As Boolean, povratOdKupca As Boolean, jePozajmica As Boolean
-    Dim ko As String
+    Dim ko As String, vracanjeKupcu As Boolean
     jePartnerov = (StrComp(Trim$(vrsta), AMB_DOK_REVERS_PARTNERA, vbTextCompare) = 0)
     jePozajmica = (StrComp(Trim$(vrstaKretanja), AMB_VK_POZAJMICA, vbTextCompare) = 0)
     ' OBRNUTA KAPIJA GLEDA SVAKI POVRAT OD KUPCA, ne samo kupac -> vozac.
@@ -741,6 +747,33 @@ Public Function AmbDokKretanjeProblem(ByVal vrsta As String, _
     If jePozajmica And Not jePartnerov Then
         AmbDokKretanjeProblem = "AMB-10-ODL-24: pozajmica ambalaze ide samo na kupcev " & _
             "dokument (" & AMB_DOK_REVERS_PARTNERA & "), a dokument je '" & Trim$(vrsta) & "'."
+        Exit Function
+    End If
+
+    ' AMB-10-ODL-39 (c): VRACANJE KUPCU IDE SAMO SA VOZACA, NA NASEM REVERSU, POD
+    ' BROJEM STANICE (odluke operatera 31.10.2026). Lanac je obrnut ODL-9:
+    ' stanica -> vozac ("Prijem od OM") -> kupac, pa stanica i firma kupcu ne
+    ' vracaju direktno. Papir je nas (obrnuto ODL-10), a robni dokument nije
+    ' njegovo mesto -- prijemnica ne sme tiho da postane vracanje tudjih. Matrica
+    ' (SOPSTVENI -> PARTNER) bi pustila sve to, kao sto pusta i kooperanta na
+    ' vracanju (ODL-35), pa pravilo za kupca stoji ovde, uz par i vlasnika broja.
+    vracanjeKupcu = (StrComp(Trim$(naTip), AMB_NALOG_KUPAC, vbTextCompare) = 0) And _
+                    (StrComp(Trim$(vrstaKretanja), AMB_VK_VRACANJE_TUDJE, vbTextCompare) = 0)
+    If vracanjeKupcu Then
+        If StrComp(Trim$(vrsta), AMB_DOK_REVERS, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-39: vracanje gajbi kupcu ide samo na nas revers (" & _
+                AMB_DOK_REVERS & "), a dokument je '" & Trim$(vrsta) & "'."
+            Exit Function
+        End If
+        If StrComp(Trim$(odTip), AMB_NALOG_VOZAC, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-39: vracanje kupcu polazi od vozaca (lanac stanica -> " & _
+                "vozac -> kupac), a polazi od " & Trim$(odTip) & "."
+            Exit Function
+        End If
+        If StrComp(Trim$(brojOwnerTip), AMB_NALOG_STANICA, vbTextCompare) <> 0 Then
+            AmbDokKretanjeProblem = "AMB-10-ODL-39: broj vracanja kupcu je iz niza stanice, a vlasnik " & _
+                "niza je " & Trim$(brojOwnerTip) & "."
+        End If
         Exit Function
     End If
 
@@ -854,6 +887,9 @@ End Function
 '   stanica zaduzuje kooperanta praznim   -> IZDATA_PRAZNA
 '   kooperant ih vraca                    -> POVRAT_PRAZNE
 '   vozac <-> stanica, oba SOPSTVENA      -> PRENOS_INTERNO (ODL-7)
+'   vozac vraca kupcu NJEGOVE gajbe       -> VRACANJE_TUDJE (ODL-39); jezgro uz
+'                                            njega pise IZLAZ_TUDJE (AMB-INV-15),
+'                                            a kolicinu preko duga odbija
 '
 ' Mapa je ZATVORENA: nepoznat smer nema red i pisac pada fail-closed. Oblik:
 ' (smer, odTip, naTip, vrstaKretanja).
@@ -866,7 +902,41 @@ Public Function AmbReversSmerovi() As Variant
         Array(REV_SMER_IZDATO_OM, AMB_NALOG_VOZAC, AMB_NALOG_STANICA, _
               AMB_VK_PRENOS_INTERNO), _
         Array(REV_SMER_PRIJEM_OD_OM, AMB_NALOG_STANICA, AMB_NALOG_VOZAC, _
-              AMB_VK_PRENOS_INTERNO))
+              AMB_VK_PRENOS_INTERNO), _
+        Array(REV_SMER_VRACANJE_KUPCU, AMB_NALOG_VOZAC, AMB_NALOG_KUPAC, _
+              AMB_VK_VRACANJE_TUDJE))
+End Function
+
+' DA LI SE NAS REVERS OVOG SMERA ISPRAVLJA JEDNIM POTEZOM (10d).
+'
+' Cetiri smera da. Vracanje kupcu NE (AMB-10-ODL-39 (e), odluka operatera
+' 31.10.2026): storno pa nov unos, kao kupcev dokument, nabavka i otpis. Zamena
+' bi u istoj TX morala da sudi i dug firme i prazne vozaca nad stanjem izmedju
+' storna i upisa, a dobitak to ne opravdava. Nepoznat smer se ne ispravlja
+' (fail-closed). Jedan izvor za dokument koji se ispravlja (IspravkaReversaRazlog)
+' i za smer zamene (IspravkaReversa_TX).
+Public Function AmbReversSmerSeIspravlja(ByVal smer As String) As Boolean
+    Select Case UCase$(Trim$(smer))
+        Case REV_SMER_IZDAVANJE, REV_SMER_PRIJEM, REV_SMER_IZDATO_OM, REV_SMER_PRIJEM_OD_OM
+            AmbReversSmerSeIspravlja = True
+    End Select
+End Function
+
+' SMER NASEG REVERSA ZA RED KNJIGE -- obrnuto citanje iste zatvorene mape: par
+' strana i poslovna radnja (AmbVrstaPoslovnaRadnja) daju smer. "" = red nije
+' nijedan smer mape.
+Public Function AmbReversSmerZaRed(ByVal odTip As String, ByVal naTip As String, _
+                                   ByVal radnja As String) As String
+    Dim mapa As Variant, i As Long
+    mapa = AmbReversSmerovi()
+    For i = LBound(mapa) To UBound(mapa)
+        If StrComp(CStr(mapa(i)(1)), Trim$(odTip), vbTextCompare) = 0 And _
+           StrComp(CStr(mapa(i)(2)), Trim$(naTip), vbTextCompare) = 0 And _
+           StrComp(CStr(mapa(i)(3)), Trim$(radnja), vbTextCompare) = 0 Then
+            AmbReversSmerZaRed = CStr(mapa(i)(0))
+            Exit Function
+        End If
+    Next i
 End Function
 
 ' Pripada li nalog trazenoj klasi.
@@ -978,9 +1048,42 @@ End Function
 '
 ' Eksplicitno VRACANJE_TUDJE se deli isto, i to od ranije (AMB-INV-09).
 '
-' KUPAC NIJE OBUHVACEN, i to je namerno: kupcu se prazne ne izdaju (nijedan pisac
-' ne pise IZDATA_PRAZNA na kupca), a vracanje pozajmice kupcu trazi svoju odluku o
-' dokumentu i broju (ODL-24 (d), KI-024 ostatak) -- ne pretpostavlja se F7.
+' KUPAC NIJE OBUHVACEN IZDAVANJEM, i to je namerno: kupcu se prazne ne izdaju
+' (AMB-10-ODL-39 (b), AmbPartnerPrimaPrazne -- pisac to od tada i odbija). Kupcu
+' se VRACA, eksplicitnim zahtevom VRACANJE_TUDJE sa svog smera reversa
+' (REV_SMER_VRACANJE_KUPCU), koji se deli isto kao za kooperanta; ostatak preko
+' duga, koji bi bio izdavanje, jezgro odbija (AmbIzdavanjePraznihProblem).
+' KOME SE PRAZNE IZDAJU (AMB-10-ODL-39 (b), odluka operatera 31.10.2026).
+'
+' Kooperantu da: on gajbe puni (IZDATA_PRAZNA, ODL-35). Kupcu NE: on robu prima
+' u punim gajbama, a prazne mu se samo VRACAJU -- njegove, do duga firme prema
+' njemu. Ostatak preko duga bio bi IZDATA_PRAZNA vozac -> kupac, tok koji niko
+' nije odlucio. Matrica ne razlikuje dva partnera (oba su PARTNER), pa pravilo
+' stoji ovde, po imenu. Pisac ga sudi nad ostatkom vracanja (PrenesiAmbalazu);
+' izricit zahtev IZDATA_PRAZNA na kupca i dalje nema pisca i ne sudi se.
+Public Function AmbPartnerPrimaPrazne(ByVal naTip As String) As Boolean
+    AmbPartnerPrimaPrazne = (StrComp(Trim$(naTip), AMB_NALOG_KOOPERANT, vbTextCompare) = 0)
+End Function
+
+' AMB-10-ODL-39 (b): IZDAVANJE PRAZNIH PARTNERU KOJI IH NE PRIMA -- jedna
+' implementacija, dva pozivaoca. Pisac (PrenesiAmbalazu) je dize kao gresku nad
+' dugom iz svoje TX; modul unosa (ReversValidiraj) je vraca uz polje kolicine,
+' nad snimkom. "" = moze.
+'
+' `dug` je koliko firma tom partneru sme da vrati (njegova obaveza, AMB-INV-09);
+' sve preko njega bilo bi novo zaduzenje praznim. Negativan dug se ovde ne sudi:
+' njega jezgro odbija kao vec prekrsenu AMB-INV-09.
+Public Function AmbIzdavanjePraznihProblem(ByVal naTip As String, ByVal dug As Double, _
+                                           ByVal kolicina As Double, _
+                                           ByVal tipAmb As String) As String
+    If AmbPartnerPrimaPrazne(naTip) Then Exit Function
+    If dug < 0 Then dug = 0
+    If kolicina <= dug Then Exit Function
+    AmbIzdavanjePraznihProblem = "AMB-10-ODL-39: " & Trim$(naTip) & " ne prima prazne -- vraca mu " & _
+        "se najvise ono sto mu firma duguje (" & CStr(dug) & " '" & Trim$(tipAmb) & "'). Trazi se " & _
+        CStr(kolicina) & ", visak " & CStr(kolicina - dug) & "."
+End Function
+
 Public Function AmbZahtevPrvoVracaTudje(ByVal vrsta As String, ByVal naTip As String) As Boolean
     Select Case AmbVrstaKanon(vrsta)
         Case AMB_VK_VRACANJE_TUDJE
@@ -998,10 +1101,16 @@ End Function
 ' operatera je to JEDNA radnja -- izdao je Q praznih -- pa ih citalac dokumenta
 ' sabira pod IZDATA_PRAZNA. Bez toga bi lista pokazala samo deo, papir bi odbio
 ' "dva reda istog tipa", a ispravka "nema tacno jedan poslovni red".
-Public Function AmbVrstaPoslovnaRadnja(ByVal vrsta As String) As String
+'
+' VRACANJE KUPCU JE SVOJA RADNJA (AMB-10-ODL-39): kupcu se prazne ne izdaju, pa
+' njegovo vracanje nije deo izdavanja -- lista i ekran Storno ga zovu svojim
+' imenom, a ispravka ga prepoznaje kao smer koji se ne ispravlja. Zato radnja
+' zavisi i od ODREDISTA reda, ne samo od vrste.
+Public Function AmbVrstaPoslovnaRadnja(ByVal vrsta As String, ByVal naTip As String) As String
     AmbVrstaPoslovnaRadnja = AmbVrstaKanon(vrsta)
     If Len(AmbVrstaPoslovnaRadnja) = 0 Then AmbVrstaPoslovnaRadnja = Trim$(vrsta)
-    If StrComp(AmbVrstaPoslovnaRadnja, AMB_VK_VRACANJE_TUDJE, vbTextCompare) = 0 Then
+    If StrComp(AmbVrstaPoslovnaRadnja, AMB_VK_VRACANJE_TUDJE, vbTextCompare) = 0 And _
+       AmbPartnerPrimaPrazne(naTip) Then
         AmbVrstaPoslovnaRadnja = AMB_VK_IZDATA_PRAZNA
     End If
 End Function

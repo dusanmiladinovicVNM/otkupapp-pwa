@@ -4875,6 +4875,20 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
         Exit Sub
     End If
 
+    ' VRACANJE KUPCU (AMB-10-ODL-39 g) je pusteno SVESNO, po beloj listi: nas
+    ' revers bez stanice u paru (vozac -> kupac), pa OM na papiru je VLASNIK BROJA
+    ' sa zaglavlja, kao kod otpisa. Isti izlaz kao F7 (ctype KUPAC).
+    If StrComp(vrstaDok, AMB_DOK_REVERS, vbTextCompare) = 0 And _
+       StrComp(naTip, AMB_NALOG_KUPAC, vbTextCompare) = 0 Then
+        Dim vrstaVk As String, ownTipVk As String, ownIDVk As String
+        modAmbalaza.AmbDokZaglavlje ambDokID, vrstaVk, ownTipVk, ownIDVk
+        OutputIzdavanjeAmbalaze datum, broj, _
+                                CStr(LookupValue(TBL_STANICE, "StanicaID", ownIDVk, "Naziv")), ownIDVk, _
+                                ResolveEntitetName(naID, naTip), naID, _
+                                tipAmb, kolAmb, "", False, ambDokID, "KUPAC"
+        Exit Sub
+    End If
+
     If StrComp(vrstaDok, AMB_DOK_REVERS, vbTextCompare) <> 0 Then
         Err.Raise vbObjectError + 7510, SRC, _
                   "Vrsta '" & vrstaDok & "' nema svoj sablon -- sablon je " & _

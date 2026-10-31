@@ -5965,9 +5965,10 @@ Private Sub Test_REV_UgovorSmeraJeFailClosed()
     Dim scenario As String, n As Long
     scenario = NewScenarioCode("REVUGV")
 
-    AssertEquals "4", CStr(UBound(modAmbalazaUgovor.AmbReversSmerovi()) - _
+    ' Peti je vracanje kupcu (AMB-10-ODL-39, 31.10.2026).
+    AssertEquals "5", CStr(UBound(modAmbalazaUgovor.AmbReversSmerovi()) - _
                            LBound(modAmbalazaUgovor.AmbReversSmerovi()) + 1), _
-                 "REV ugovor: mapa nosi TACNO cetiri smera"
+                 "REV ugovor: mapa nosi TACNO pet smerova"
 
     n = CountRows(TBL_AMBALAZA)
     AssertTrue Not UpisiReversKol(Date, "", TEST_ST_ID, TEST_KOOP_ID, _

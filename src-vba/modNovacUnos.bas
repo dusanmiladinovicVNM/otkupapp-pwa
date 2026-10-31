@@ -74,6 +74,10 @@ Public Const SMER_REV_POZAJMICA_KUP As Long = 6
 ' STANICE, kao kod nasih reversa; segmenti stoje u svom okviru ispod reversa.
 Public Const SMER_REV_NABAVKA As Long = 7
 Public Const SMER_REV_OTPIS As Long = 8
+' Deveti je VRACANJE KUPCU (AMB-10-ODL-39): NAS revers -- broj iz niza stanice,
+' par vozac -> kupac -- pa nije kupcev smer (RevSmerJeKupcev), iako mu je partner
+' kupac. Na ekranu stoji u okviru KUPAC, uz povrat i pozajmicu.
+Public Const SMER_REV_VRACANJE_KUP As Long = 9
 
 '--------------------------------------------------------------- ULAZ
 ' Prazan recnik sa svim kljucevima - da pozivalac ne mora da pamti spisak.
@@ -479,7 +483,7 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     If Len(ReversValidiraj) > 0 Then fokus = "tipAmb": Exit Function
 
     smer = L(p, "smerRev")
-    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_OTPIS Then
+    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_VRACANJE_KUP Then
         fokus = "smerRev": ReversValidiraj = Poruka("NOVUNOS_ERR_SMER"): Exit Function
     End If
 
@@ -535,6 +539,29 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
             fokus = "kolAmb"
             ReversValidiraj = Poruka("NOVUNOS_ERR_OTPIS_SALDO") & " " & CStr(saldo)
             Exit Function
+        End If
+    End If
+
+    ' VRACANJE KUPCU (AMB-10-ODL-39): kupac je partner, vozac je strana koja
+    ' vraca (obrnut lanac ODL-9), a broj je NAS -- pa ova grana NE izlazi iz
+    ' funkcije: predlog broja ispod vazi i za nju. Dug firme se meri nad snimkom
+    ' ISTIM pravilom kojim ga meri pisac (AmbIzdavanjePraznihProblem), da operater
+    ' dobije polje kolicine, a ne izuzetak; pisac ga ponovo sudi u svojoj TX.
+    If smer = SMER_REV_VRACANJE_KUP Then
+        If NerazresenIzbor(S(p, "partnerTekst"), S(p, "partnerID")) Then
+            fokus = "partnerID": ReversValidiraj = Poruka("NOVUNOS_ERR_PARTNER_NEIZABRAN"): Exit Function
+        End If
+        If partTip <> "KUP" Or Len(S(p, "partnerID")) = 0 Then
+            fokus = "partnerID": ReversValidiraj = Poruka("NOVUNOS_ERR_SMER_KUP_VRK"): Exit Function
+        End If
+        If Len(S(p, "vozacID")) = 0 Then
+            fokus = "vozacID": ReversValidiraj = Poruka("NOVUNOS_ERR_VOZAC_OM"): Exit Function
+        End If
+        dup = modAmbalazaUgovor.AmbIzdavanjePraznihProblem(AMB_NALOG_KUPAC, _
+                  modAmbalaza.AmbObavezaPartneru(AMB_NALOG_KUPAC, S(p, "partnerID"), S(p, "tipAmb")), _
+                  kolAmb, S(p, "tipAmb"))
+        If Len(dup) > 0 Then
+            fokus = "kolAmb": ReversValidiraj = Poruka("NOVUNOS_ERR_VRACANJE_DUG") & " " & dup: Exit Function
         End If
     End If
 
@@ -656,6 +683,7 @@ Public Function SmerRevKljuc(ByVal smer As Long) As String
         Case SMER_REV_PRI_KOOP: SmerRevKljuc = REV_SMER_PRIJEM
         Case SMER_REV_IZD_OM:   SmerRevKljuc = REV_SMER_IZDATO_OM
         Case SMER_REV_PRI_OM:   SmerRevKljuc = REV_SMER_PRIJEM_OD_OM
+        Case SMER_REV_VRACANJE_KUP: SmerRevKljuc = REV_SMER_VRACANJE_KUPCU
     End Select
 End Function
 
@@ -788,6 +816,8 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
         Exit Function
     End If
 
+    ' Partner je kupac samo na vracanju kupcu (ODL-39); ostali nasi smerovi ga
+    ' citaju kao kooperanta. Pisac uzima ID po tipu naloga u mapi smerova.
     revDokID = modAmbalaza.UpisiReversAmbalaze_TX( _
         datum:=CDate(p("datum")), _
         broj:=brDok, _
@@ -795,8 +825,9 @@ Public Function ReversUpisi(ByVal p As Object, ByRef poruke As String, _
         tipAmb:=S(p, "tipAmb"), _
         kolicina:=L(p, "kolAmb"), _
         smer:=SmerRevKljuc(smer), _
-        kooperantID:=S(p, "partnerID"), _
-        vozacID:=S(p, "vozacID"))
+        kooperantID:=IIf(smer = SMER_REV_VRACANJE_KUP, "", S(p, "partnerID")), _
+        vozacID:=S(p, "vozacID"), _
+        kupacID:=IIf(smer = SMER_REV_VRACANJE_KUP, S(p, "partnerID"), ""))
     If Len(revDokID) = 0 Then Exit Function
 
     ' "Druga faza ispravke" (ZavrsiIspravkuAko) je ovde stajala do 10d: stari
@@ -930,7 +961,15 @@ Private Function StampajRevers(ByVal p As Object, ByVal smer As Long, _
                                ByVal ambDokID As String) As String
     Dim vozacNaziv As String, razlog As String
     On Error GoTo EH
-    If smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP Then
+    If smer = SMER_REV_VRACANJE_KUP Then
+        ' Vracanje kupcu (ODL-39 g): nas papir, kupac je protivstrana, stanje
+        ' poslovno (kao AMB-POSL-03). Kupcevi smerovi 5 i 6 ovde ne stizu.
+        razlog = OutputIzdavanjeAmbalaze(CDate(p("datum")), S(p, "brDok"), _
+                                         S(p, "stanicaTekst"), S(p, "stanicaID"), _
+                                         S(p, "partnerTekst"), S(p, "partnerID"), _
+                                         S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
+                                         False, ambDokID, "KUPAC", True)
+    ElseIf smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP Then
         razlog = OutputIzdavanjeAmbalaze(CDate(p("datum")), S(p, "brDok"), _
                                          S(p, "stanicaTekst"), S(p, "stanicaID"), _
                                          S(p, "partnerTekst"), S(p, "partnerID"), _

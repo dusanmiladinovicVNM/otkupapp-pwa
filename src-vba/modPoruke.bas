@@ -834,6 +834,9 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_SEG_REV_PRI_OM", "Prijem od OM"
     UpsertRow lo, existing, "OTKUI_SEG_REV_POVRAT_KUP", "Povrat kupca"
     UpsertRow lo, existing, "OTKUI_SEG_REV_POZAJMICA_KUP", "Pozajmica"
+    ' AMB-10-ODL-39: kupcevi smerovi i vracanje kupcu u svom okviru.
+    UpsertRow lo, existing, "OTKUI_FLD_SMER_KUP", "KUPAC"
+    UpsertRow lo, existing, "OTKUI_SEG_REV_VRACANJE_KUP", "Vra" & ChrW(263) & "anje kupcu"
     ' AMB-10-ODL-34: nabavka i otpis, u svom okviru ispod smerova reversa.
     UpsertRow lo, existing, "OTKUI_FLD_SMER_AMB", "NABAVKA I OTPIS"
     UpsertRow lo, existing, "OTKUI_SEG_REV_NABAVKA", "Nabavka"
@@ -1061,6 +1064,8 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER", ChrW(10007) & " Izaberi smer reversa " & ChrW(8212) & " bez njega se ne zna ko koga zadu" & ChrW(382) & "uje."
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KOOP", ChrW(10007) & " Za izdavanje/prijem ambala" & ChrW(382) & "e izaberi KOOPERANTA kao partnera."
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KUP", ChrW(10007) & " Povrat praznih od kupca tra" & ChrW(382) & "i KUPCA kao partnera."
+    UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KUP_VRK", ChrW(10007) & " Vra" & ChrW(263) & "anje gajbi kupcu tra" & ChrW(382) & "i KUPCA kao partnera."
+    UpsertRow lo, existing, "NOVUNOS_ERR_VRACANJE_DUG", ChrW(10007) & " Kupcu se vra" & ChrW(263) & "a najvi" & ChrW(353) & "e ono " & ChrW(353) & "to mu firma duguje."
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KUP_POZ", ChrW(10007) & " Pozajmica ambala" & ChrW(382) & "e od kupca tra" & ChrW(382) & "i KUPCA kao partnera."
     ' Otpis (AMB-10-ODL-34): nalog, razlog i saldo; saldu se dopisuje broj iza teksta.
     UpsertRow lo, existing, "NOVUNOS_ERR_OTPIS_NALOG", ChrW(10007) & " Otpis tra" & ChrW(382) & "i nalog " & ChrW(8212) & " izaberi partnera (kooperant, OM ili kupac) ili voza" & ChrW(269) & "a."
