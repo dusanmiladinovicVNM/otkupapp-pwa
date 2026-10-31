@@ -440,7 +440,12 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ' docID = AmbDokID: storno ambalaznog dokumenta je kontra-stav nad
             ' zaglavljem I knjigom, u jednoj transakciji (AMB-10-ODL-16/-17).
             ' Broj i vrsta vise ne ucestvuju u izboru -- identitet je dovoljan.
-            ok = modAmbalaza.StornirajAmbDokument_TX(docID)
+            ' Razlog odbijanja vraca pisac, a operater ga vidi (test 306): bez
+            ' njega bi ekran rekao samo "Storno nije uspeo".
+            ok = modAmbalaza.StornirajAmbDokument_TX(docID, razlog)
+            If Not ok And Len(razlog) > 0 Then
+                poruka = modPoruke.Poruka("STORNO_ERR_NEUSPEH") & " " & broj & ": " & razlog
+            End If
 
         Case STIP_IZVOD
             If Not ResolveIzvodZaStorno(broj, izvBroj, izvRacun, razlog) Then

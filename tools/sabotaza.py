@@ -10759,6 +10759,23 @@ SABOTAZE = {
         "T_Prazne_VozacVracaSamoPrazne",
         "storno kupcevog reversa posle predaje je odbijen -- vozac bi ostao bez praznih",
     ),
+    # Rucna provera 31.10.2026 (stavka 242): odbijen storno reversa je ekranu
+    # Storno davao samo "Storno nije uspeo". Razlog putuje pisac -> StornoIzvrsi
+    # -> toast; svaka od dve karike je svoja sabotaza.
+    "storno-rev-razlog-pisac": (
+        "modAmbalaza.bas",
+        "    outGreska = errDesc\n",
+        "    outGreska = vbNullString   ' SABOTAZA: razlog ostaje samo u logu\n",
+        "T_Prazne_StornoKazeRazlog",
+        "pisac odbijenog storna vraca razlog pozivaocu -- pravilo i vozaca, ne samo False",
+    ),
+    "storno-rev-razlog-poziv": (
+        "modStornoDok.bas",
+        "            ok = modAmbalaza.StornirajAmbDokument_TX(docID, razlog)\n",
+        "            ok = modAmbalaza.StornirajAmbDokument_TX(docID)   ' SABOTAZA: razlog se ne trazi\n",
+        "T_Prazne_StornoKazeRazlog",
+        "odbijen storno reversa kaze operateru razlog -- pravilo i vozaca, ne samo da nije uspeo",
+    ),
 }
 
 

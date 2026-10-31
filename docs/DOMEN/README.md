@@ -398,8 +398,8 @@ kupčev povrat se zato unose pre predaje istih gajbi.
 kao `ODL-36` na stanici. Cena: puna polomljena u transportu, pre prijemnice,
 ostavi vozaču praznu manje (`AMBALAZA.md` 6.14b, tačka 3).
 
-Mere ih `modTest` 295–300 (`T_KI024_*`) i 301–305 (`T_Prazne_*`), sabotaže
-`ki024-*` i `prazne-*`.
+Mere ih `modTest` 295–300 (`T_KI024_*`) i 301–306 (`T_Prazne_*`), sabotaže
+`ki024-*`, `prazne-*` i `storno-rev-razlog-*`.
 
 ## 3) Ko šta piše
 

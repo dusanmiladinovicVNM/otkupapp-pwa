@@ -410,6 +410,7 @@ Public Sub RunAllTests()
     RunOne 303
     RunOne 304
     RunOne 305
+    RunOne 306
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1010,6 +1011,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 303: TestName = "T_Prazne_PredajaVozacu"
         Case 304: TestName = "T_Prazne_OtpisNaStanici"
         Case 305: TestName = "T_Prazne_VozacVracaSamoPrazne"
+        Case 306: TestName = "T_Prazne_StornoKazeRazlog"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1323,6 +1325,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 303: T_Prazne_PredajaVozacu
         Case 304: T_Prazne_OtpisNaStanici
         Case 305: T_Prazne_VozacVracaSamoPrazne
+        Case 306: T_Prazne_StornoKazeRazlog
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -14218,6 +14221,98 @@ CleanUp:
     AssertEq prazneVoz & "|" & ukupnoVoz, "0|10", _
              "pune se ne diraju: vozacu ostaje 10 punih i 0 praznih"
 End Sub
+
+' ============================================================
+' 306. ODBIJEN STORNO REVERSA KAZE OPERATERU RAZLOG.
+' ============================================================
+' Rucna provera reza 238 (31.10.2026, stavka 242): storno kupcevog reversa posle
+' predaje praznih pisac tacno odbija, ali je ekran Storno pokazivao samo "Storno
+' nije uspeo: <broj>" -- StornirajAmbDokument_TX je razlog upisivao u log i
+' vracao False. Isto je vazilo i za stanicu (ODL-35/36, #448).
+' Test ide kroz modStornoDok.StornoIzvrsi, isti poziv kojim ekran Storno izvrsava
+' izabran revers (modScrStorno.ObicanStorno); njegovu poruku ekran pokazuje u
+' toast-u.
+' (1) Pisac: odbijen storno vraca razlog pozivaocu (outGreska) -- pravilo
+'     (AMB-INV-16) i vozaca, ne samo False.
+' (2) Ekran: storno kupcevog reversa posle predaje je odbijen, a poruka pocinje
+'     porukom neuspeha i nosi isti razlog.
+' (3) Kontra-tvrdnja: posle storna predaje isti storno prolazi, sa porukom uspeha.
+' Dve karike, dve tvrdnje: (1) stoji pre (2), pa svaka sabotaza obara svoju.
+' Fixture: normal production state; tok u transakciji testa koja se vraca.
+' SABOTAZE: storno-rev-razlog-pisac, storno-rev-razlog-poziv.
+Private Sub T_Prazne_StornoKazeRazlog()
+    Dim t As String, b As String, errNum As Long, greska As String, g As String
+    Dim otk As String, otp As String, h As Object, izvori As Collection
+    Dim tx As clsTransaction, rvp As String, rev As String
+    Dim ok1 As Boolean, poruka1 As String, ok2 As Boolean, poruka2 As String
+    Dim ok3 As Boolean, poruka3 As String, neuspeh As String, uspeh As String
+    Dim okP As Boolean, greskaPisca As String
+    Dim errNumTx As Long, errDescTx As String
+
+    t = KartNoviTipAmb("PSR")
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    On Error GoTo CleanUp
+
+    ' Preduslov kao u 305: vozac ima 10 punih, kupac mu vrati 8 praznih, a on ih
+    ' preda stanici ("Izdato OM").
+    otk = KartOtkup(t, 10, 0, b, errNum, greska)
+    If Len(otk) = 0 Then GoTo CleanUp
+    Set h = CreateObject("Scripting.Dictionary")
+    h("Datum") = Date
+    h("StanicaID") = FX_STANICA
+    h("VozacID") = FX_VOZAC
+    h("KulturaID") = FX_KULTURA
+    h("TipAmbalaze") = t
+    h("BrojOtpremnice") = modBrojevi.GenerateBrojOtpremnice(FX_STANICA, Date)
+    Set izvori = New Collection
+    izvori.Add otk
+    otp = modDokumenta.CreateOtpremnicaIzIzvora_TX(h, izvori, g)
+    If Len(otp) = 0 Then GoTo CleanUp
+    rvp = modAmbalaza.UpisiReversPartnera_TX(Date, "RVP306-" & t, FX_KUPAC, FX_VOZAC, t, 8, "test 306", _
+              modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_KUPAC, FX_KUPAC, t, 8))
+    rev = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t, 8, REV_SMER_IZDATO_OM, "", FX_VOZAC)
+
+    ' (1) pisac: odbijen storno vraca razlog
+    okP = modAmbalaza.StornirajAmbDokument_TX(rvp, greskaPisca)
+    ' (2) storno izvora praznih posle predaje -- poziv ekrana Storno
+    ok1 = modStornoDok.StornoIzvrsi(STIP_REVERSI, AmbDokBroj306(rvp), "", poruka1, rvp)
+    ' (3) kontra: vrati predaju, pa isti storno
+    ok2 = modStornoDok.StornoIzvrsi(STIP_REVERSI, AmbDokBroj306(rev), "", poruka2, rev)
+    ok3 = modStornoDok.StornoIzvrsi(STIP_REVERSI, AmbDokBroj306(rvp), "", poruka3, rvp)
+    Err.Clear
+
+CleanUp:
+    errNumTx = Err.Number
+    errDescTx = Err.description
+    On Error Resume Next
+    tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+    If errNumTx <> 0 Then Err.Raise errNumTx, "modTest.T_Prazne_StornoKazeRazlog", errDescTx
+
+    neuspeh = modPoruke.Poruka("STORNO_ERR_NEUSPEH")
+    uspeh = modPoruke.Poruka("STORNO_MSG_OK")
+    AssertEq (Len(otp) > 0) & "|" & (Len(rvp) > 0) & "|" & (Len(rev) > 0), "True|True|True", _
+             "preduslov: otpremnica izdata, kupac vratio 8 praznih, vozac ih predao stanici"
+    AssertEq okP & "|" & (InStr(1, greskaPisca, "AMB-INV-16", vbBinaryCompare) > 0) & "|" & _
+             (InStr(1, greskaPisca, FX_VOZAC, vbTextCompare) > 0), "False|True|True", _
+             "pisac odbijenog storna vraca razlog pozivaocu -- pravilo i vozaca, ne samo False"
+    AssertEq ok1 & "|" & (InStr(1, poruka1, neuspeh, vbBinaryCompare) = 1) & "|" & _
+             (InStr(1, poruka1, "AMB-INV-16", vbBinaryCompare) > 0) & "|" & _
+             (InStr(1, poruka1, FX_VOZAC, vbTextCompare) > 0), _
+             "False|True|True|True", _
+             "odbijen storno reversa kaze operateru razlog -- pravilo i vozaca, ne samo da nije uspeo"
+    AssertEq ok2 & "|" & ok3 & "|" & (InStr(1, poruka3, uspeh, vbBinaryCompare) = 1), _
+             "True|True|True", _
+             "kontra: posle storna predaje isti storno prolazi, sa porukom uspeha"
+End Sub
+
+' Poslovni broj ambalaznog dokumenta -- ekran Storno ga salje uz AmbDokID.
+Private Function AmbDokBroj306(ByVal ambDokID As String) As String
+    AmbDokBroj306 = NzToText(LookupValue(TBL_AMBALAZA_DOKUMENT, COL_AMBD_ID, ambDokID, COL_AMBD_BROJ))
+End Function
 
 ' Kolona reda po partneru (AmbPartneriPodaci): 4 = drzi, 5 = tudje, 6 = neto;
 ' "" kad partner nema red za taj tip.

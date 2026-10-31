@@ -3063,6 +3063,8 @@ vozača, na pogrešnom dokumentu).
 > - **Storno** dokumenta koji je vozaču dao prazne — prijemnica sa povratom,
 >   kupčev revers, pozajmica, „Prijem od OM" — posle njihove predaje stanici se
 >   **odbija**, isto kao za stanicu (`RequirePrazneStorna` po sopstvenom nalogu).
+>   Ekran Storno operateru pokazuje i razlog odbijanja, ne samo „Storno nije
+>   uspeo" (test 306, stavka 242).
 > - **Posledica, prihvaćena:** prijemnica ili kupčev povrat se unosi **pre**
 >   „Izdato OM" za iste gajbe; inače revers pada sa porukom koja imenuje vozača,
 >   prazne i manjak. Ispravka takve prijemnice (storno, pa nov unos) čeka da se
@@ -3095,9 +3097,9 @@ negativno stanje blokira svako izdavanje dok se ne knjiži početno stanje prazn
 `AmbPrazneNaloga("Vozac", "<VozacID>", "<Tip>", Date)`. Migracija treba da dobije
 isti izlaz (`KI-024`).
 
-*Provera:* `modTest` 295–305 (`T_KI024_*`, `T_Prazne_*`) · BFP premise
+*Provera:* `modTest` 295–306 (`T_KI024_*`, `T_Prazne_*`) · BFP premise
 (`Enum` deset, `StornoKontraStav`, `DeficitIObaveza`, `StornoNePraviMinus`) ·
-sabotaže `ki024-*` (6) i `prazne-*` (6).
+sabotaže `ki024-*` (6), `prazne-*` (6) i `storno-rev-razlog-*` (2).
 
 ### 6.15 Cena — posteno
 

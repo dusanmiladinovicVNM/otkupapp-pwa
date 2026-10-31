@@ -2892,12 +2892,19 @@ End Function
 ' Redosled je isti kao kod otkupa, otpremnice i prijemnice: oznaci zaglavlje,
 ' pa VEZI (AMB-10-ODL-15 trazi bind POSLE stvarne izmene), pa kontra-stav.
 ' Kontra-stav sam proverava AMB-INV-07 i -09 nad POSLE-stanjem.
-Public Function StornirajAmbDokument_TX(ByVal ambDokID As String) As Boolean
+'
+' RAZLOG ODBIJANJA IDE POZIVAOCU (outGreska), ne samo u log: ekran Storno ga
+' pokazuje operateru. Bez njega je odbijen storno (npr. AMB-INV-16: prazne iz
+' dokumenta su vec izdate ili predate) izgledao kao "Storno nije uspeo", bez
+' traga sta prvo treba vratiti (rucna provera 31.10.2026, test 306).
+Public Function StornirajAmbDokument_TX(ByVal ambDokID As String, _
+                                        Optional ByRef outGreska As String) As Boolean
     Const SRC As String = "modAmbalaza.StornirajAmbDokument_TX"
 
     Dim tx As clsTransaction
     Dim errNum As Long, errDesc As String
 
+    outGreska = ""
     On Error GoTo EH
 
     ' Nepostojeci ili vec storniran dokument pada PRE transakcije -- jezgro ga
@@ -2924,6 +2931,7 @@ EH:
     Set tx = Nothing
     On Error GoTo 0
     LogError SRC, errDesc, errNum
+    outGreska = errDesc
     StornirajAmbDokument_TX = False
 End Function
 

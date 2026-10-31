@@ -36,7 +36,7 @@
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
-| **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240). Kupčev deo `KI-024`: čeka odluke 3a/3b (stavka 236) |
+| **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242). Kupčev deo `KI-024`: čeka odluke 3a/3b (stavka 236) |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -8603,6 +8603,41 @@
        865); dnevni tok punih.
      - **Ostalo:** ručni compile i F7 provera reza 238 nisu prijavljeni; problem 3 (3a/3b) i dalje otvoren.
      - **Sledeći brojevi:** test 306 · stavka 242 · KI-066.
+
+242. **Odbijen storno reversa kaže operateru razlog** (31.10.2026, asistent na zahtev operatera; nalaz iz suvog
+     prolaza sveske za ručnu proveru reza 238).
+
+     - **Sveska za ručnu proveru:** `tests/fixtures/rucna_odl37.xlsm` (gitignored): kopija fixture-a `7eab17dc`,
+       kod grane i `modVbaTools`, seed sa datumom 31.10.2026 — nov tip `RUC-37`, nabavka 20 praznih na STA-TEST-1,
+       otkup 10 punih (KOOP-TEST-3), otpremnica izdata VOZ-TEST-1. Početno: vozač 10 ukupno / 0 praznih, stanica
+       20 / 20. Seed modul i skripta su u scratchpad-u sesije, ne u repou.
+     - **Suvi prolaz** checkliste od 12 koraka, nad posebnom kopijom (obrisana), kroz iste pisce kao ekran: svi
+       ishodi po pravilu (`Izdato OM` sa samo punim odbijen; posle povrata kupca 8: 10 odbijen, 8 prolazi; otpis
+       vozača 2 spušta prazne; otkup koji izdaje više praznih nego što stanica ima odbijen **na otkupu**). Jedino
+       odstupanje: storno kupčevog reversa posle predaje, kroz `modStornoDok.StornoIzvrsi` (poziv ekrana Storno),
+       vratio je samo „✗ Storno nije uspeo: \<broj\>". `StornirajAmbDokument_TX` je razlog upisivao u log i vraćao
+       `False`; tako je od `#448` bilo i za stanicu.
+     - **Reprodukcija:** test 306 `T_Prazne_StornoKazeRazlog` pre ispravke: `RunAllTests` **306 / 1**, pad po
+       imenu („odbijen storno reversa kaže operateru razlog …", dobijeno `[False|True|False|False]`).
+     - **Ispravka:** `StornirajAmbDokument_TX(ambDokID, Optional ByRef outGreska)` (`modAmbalaza.bas:2900`, upis
+       razloga `:2934`) — obrazac `outGreska` kao `CreateOtkup_TX`; log ostaje. `StornoIzvrsi`
+       (`modStornoDok.bas:445`) traži razlog i sastavlja „Storno nije uspeo: \<broj\>: \<razlog\>", isti oblik kao
+       njegov EH. Ekran (`modScrStorno.ObicanStorno`) poruku već pokazuje u toast-u.
+     - **Test 306** (`modTest.bas:14243`): dve karike, dve tvrdnje — pisac vraća razlog (pravilo i vozač), pa ekran
+       ga pokazuje; kontra: posle storna predaje isti storno prolazi, sa porukom uspeha. Sabotaže
+       `storno-rev-razlog-pisac` i `storno-rev-razlog-poziv` (katalog 1073 → 1075). Prva verzija testa je obe
+       sabotaže vezala za istu tvrdnju, pa ju je katalog odbio („test ih ne razlikuje") — tvrdnja pisca je
+       izdvojena ispred tvrdnje ekrana. Obe su statički primenjene i vraćene (pravila nad fajlovima čista, izvor
+       bajt-identičan).
+     - **Provere:** `vba_check` čist (191 fajl), sidra 1075 / 0, `who_writes --check` i `--check-ownership`,
+       `gen_schema_module --check`; `RunAllTests` **306 / 0**, BFP **2801 / 0**, `RunStornoTestSuite` **111 / 0**,
+       `Test_StornoCentar_All` zeleno, GREEN marker upisan; `dokaz.py storno-rev-razlog` **2 / 2 DOKAZANO**, izvor
+       identičan (`48836078f03a1445`). **NOT RUN:** ručni compile (probe `NEJASNO`), izgled duge poruke u toast-u
+       (ručno), checklista kroz ekran, pun `run_vba.py` i pun `dokaz.py` (pred release).
+     - **Van obima, zabeleženo:** isti obrazac (greška u log, `False`, ekran „Storno nije uspeo") imaju
+       `StornoOtkup_TX`, `StornoOtpremnica_TX` i `StornoNovac_TX` kroz `HandleStornoTxError`. Da li neko njihovo
+       poslovno odbijanje stiže do tog puta mimo provere pre potvrde (`StornoRazlog`) **nije mereno**.
+     - **Sledeći brojevi:** test 307 · stavka 243 · KI-066.
 
 ## Dug sa imenom (posle S5-5b)
 
