@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 01.11.2026 (stavka 251: pre-flight S7, odluke `FAK-ODL-01..05`; GO za rez 1).
+**Ažurirano:** 01.11.2026 (stavka 252: review PR `#451` — `S7-REV-01` uslov reza 2, test 310 proširen).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -8852,6 +8852,28 @@
      - **Provere:** `vba_check` čist, `who_writes --check` ažuran, `--check-ownership` bez novih pisaca,
        `gen_schema_module --check` u koraku. `run_vba` i `dokaz.py` **NOT RUN** (nema koda).
      - **Sledeći brojevi:** test 309 · stavka 252 · KI-076.
+
+252. **Nezavisni review PR `#451` (01.11.2026) — `S7-REV-01` upisan kao uslov reza 2, test 310 proširen.**
+     Verdikt review-a: DOC REVIEW HOLD (kvalitet 9,0 / 10), rez 1 GO. HOLD je bio samo zbog `S7-REV-01`.
+
+     - **P1 `S7-REV-01`, potvrđen čitanjem:** `StornoFakturaStavke` (`modStorno:1645`) markira linije **i**
+       oslobađa GP utovar (`ReleaseUtovarFromFaktura:1692`). Rez 2 briše markiranje, pa oslobađanje mora ostati
+       izričit uslov. Upisan u plan §14.57 (podsekcija „Dopuna po nezavisnom review-u") i u `FAK-ODL-03`.
+     - **Izmereno: kod i regresija već postoje.** Utovar se oslobađa jednom (`relUt`), tuđ utovar se ne dira
+       (`:1710-1724`), a rollback vraća marker (snapshot `tblUtovar`, `StornoFaktura_TX:590-599`). Tok utovar →
+       faktura → storno → nova faktura nad istim utovarom meri test 162 `T_FakturaGP_WriterKapijeIStorno`
+       (`modTest:18903-18947`), sa dve sabotaže `storno-gp-*`. Rez 2 ga čuva bez slabljenja, prepisuje čišćenje
+       rogue linije (`:18935`) i sidro sabotaže, i dodaje tvrdnju „tuđ utovar se ne dira", koje danas nema.
+     - **Test 310 proširen (rez 1):** odvezana uplata veća od nove fakture. Na fakturu ide tačno njen iznos, ostatak
+       ostaje raspoloživ, zbir uplata kupca se ne menja, a split nosi BIM marker izvoda. Dve nove sabotaže čuvaju te
+       tvrdnje. Otvoreno za rez 1, pre koda: split danas dobija tip `KupciAvans` tvrdo (`modNovac:683`).
+       `FAK-ODL-05` imenuje split.
+     - **Opseg GO-a:** važi za kod reza 1. N4, N5 i N10 ostaju izvedeni, ne izmereni.
+     - **`KI-075`:** ostaje van S7. Dopisano je da se zatvara pre redovne upotrebe automatskog mapiranja izvoda (P1
+       po review-u).
+     - **Provere:** `vba_check` čist, `who_writes --check` ažuran, `--check-ownership` bez novih pisaca,
+       `gen_schema_module --check` u koraku. `run_vba` i `dokaz.py` **NOT RUN** (nema koda).
+     - **Sledeći brojevi:** test 309 · stavka 253 · KI-076.
 
 ## Dug sa imenom (posle S5-5b)
 

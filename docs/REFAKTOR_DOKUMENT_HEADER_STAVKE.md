@@ -9779,6 +9779,7 @@ fakture (S6 korak 5). Identitet fakture za SEF i banku je izmeren, ne pitan (`FA
 2. **Rez 2 — linija bez sopstvenog storna** (`FAK-ODL-03`, N5, N6, N10): šema (dve kolone iz
    sredine `tblFakturaStavke`, jedna iz `tblFakture`), oba poziciona pisca, sedam čitalaca,
    `modSchemaGuard` (`tblFakturaStavke` prelazi u `BEZ_STORNA`), fixture i sejači, health check 3.
+   Storno fakture pri tom **zadržava** oslobađanje GP utovara: uslov `S7-REV-01` (dole).
 3. **Rez 3 — SEF linija i zatvaranje S7** (`FAK-ODL-01`, strog čitač zaglavlja u mapperu,
    test C-003, grupa `fak_broj_prj` u `popis_citalaca.py` sa pragom 0). Posle reza 2, jer rez 2
    već pojednostavi petlju mappera.
@@ -9809,13 +9810,23 @@ fakture (S6 korak 5). Identitet fakture za SEF i banku je izmeren, ne pitan (`FA
   faktura je odbijena, posle `SEF_STORNO` puštena;
 - **310 `T_FAK_OdvezanaUplataJeAvans`** — faktura, `KupciUplata` na nju, storno fakture, nova
   faktura istom kupcu: nova je umanjena za uplatu. Kontrola: `KupciUplata` DRUGOG kupca se ne
-  prebija;
+  prebija. **Delimično prebijanje** (review PR `#451`): odvezana uplata nosi BIM marker izvoda i
+  veća je od nove fakture. Tvrdnje:
+  - na fakturu ide tačno njen iznos;
+  - ostatak ostaje na izvornom redu, bez `FakturaID`-a, i prebija se na sledeću fakturu;
+  - zbir uplata kupca je isti pre i posle;
+  - split red nosi marker izvoda (`BuildAvansSplitNapomena`, `modNovac:686`).
+
+  Ovo nije udvajanje. Postojeći `Test_PartialBuyerAvansSplitFaktura` (`modNovacTests:302`, suite
+  `blind`) meri iznose, a ne marker; T32 (`modTestStorno:430`) marker seje sam, mimo pravog splita;
 - **311 `T_FAK_StornoBezIDNeTraziPoBroju`** — `StornoIzvrsi(STIP_FAKTURA, broj, "")` odbija i ne
   menja nijednu fakturu, i kad broj postoji i kad je prazan.
 
 **Sabotaže (`s7r1-*`), svaka na svojoj tvrdnji:** kapija izbačena iz jezgra; `TECH_FAILED`
 pušten; izuzetak `TERMINAL` obrisan (otkazana faktura postaje nestornirljiva); F8 ne pita
-predikat; avans ponovo samo `KupciAvans`; vraćen `LookupActiveID` po broju.
+predikat; avans ponovo samo `KupciAvans`; vraćen `LookupActiveID` po broju; split bez markera
+izvoda; ostatak uplate ne ostaje na izvornom redu. Poslednje dve čuvaju tvrdnje delimičnog
+prebijanja u 310, jer sabotaža „avans ponovo samo `KupciAvans`" ubija test pre njih.
 
 **Kapije:** `vba_check`; `who_writes --check` i `--check-ownership` (nema novog pisca: `modNovac`
 već piše `tblNovac`); `gen_schema_module --check` (šema se ne menja). TARGETED: `RunAllTests`,
@@ -9832,11 +9843,67 @@ diff-a.
   se popisuju pre koda, sa stanjem koje nose; kapija sudi tačno listu iz `FAK-ODL-02`;
 - `FAK-ODL-05` menja zbir avansa kupca: testovi koji ga broje (`modNovacTests`,
   `T_UplataGuard_VecPlacenaFaktura`) se grep-uju pre suite;
+- split danas dobija tip `KupciAvans` tvrdo (`modNovac:683`), i kad je roditelj `KupciUplata`.
+  Da li split nasleđuje tip roditelja bira se pre koda reza 1, posle popisa čitalaca tipa, a
+  test 310 imenuje izbor;
 - uplata iz izvoda posle storna postaje avans i prebija se na sledeću fakturu bez pitanja. To
   JE odluka, ali operater mora da vidi koliko je prešlo.
 
 **GO / HOLD za kod:** **GO za rez 1.** Nijedna relevantna osa nije `GAP`. N4 je izveden iz koda,
 pa ga test 310 meri crvenog pre ispravke; N5 i N10 mere se na početku reza 2.
+
+#### Dopuna po nezavisnom review-u PR `#451` (01.11.2026)
+
+Verdikt review-a: DOC REVIEW HOLD, kvalitet 9,0 / 10, rez 1 GO. HOLD je bio samo zbog `S7-REV-01`.
+
+**`S7-REV-01` (P1 za rez 2) — storno fakture i dalje oslobađa GP utovar.**
+`modStorno.StornoFakturaStavke` (`:1645`) radi dve stvari: markira linije fakture i, za GP liniju,
+oslobađa utovar (`ReleaseUtovarFromFaktura`, `:1692`). Rez 2 briše prvo, a drugo ostaje. Uslov
+reza 2:
+
+- storno fakture ne piše linije, a GP utovar oslobađa kroz postojeći `ReleaseUtovarFromFaktura`, u
+  istoj transakciji;
+- jedan utovar se oslobađa najviše jednom (`relUt`, `:1666-1683`);
+- utovar koji tvrdi drugu fakturu se ne dira (`:1710-1724`);
+- rollback vraća i zaglavlje fakture i marker utovara (uslovni snapshot `tblUtovar`,
+  `StornoFaktura_TX:590-599`).
+
+Izmereno čitanjem, 01.11.2026: sva četiri pravila već stoje u kodu. Tok koji review traži (GP
+utovar → faktura → storno → nova faktura nad istim utovarom) već meri test 162
+`T_FakturaGP_WriterKapijeIStorno`:
+
+- rollback vraća marker utovara (`modTest:18903`);
+- storno oslobađa utovar (`:18912`);
+- nova faktura iz istog utovara prolazi, a utovar pamti nju (`:18942-18947`);
+- korekcija cene ponavlja krug (`:19016-19021`).
+
+Na tom testu stoje dve sabotaže: `storno-gp-rollback-bez-utovara` i
+`storno-gp-faktura-ne-oslobadja-utovar` (`tools/sabotaza.py:5880-5897`).
+
+Šta rez 2 zato mora:
+
+- test 162 ostaje zelen sa svim navedenim tvrdnjama, bez slabljenja. Posle reza 2 tvrdnja „ponovna
+  faktura iz istog utovara prolazi" meri i novog čitaoca `modUtovar.AktivnihFstZaUtovar`, jer
+  aktivnost linije tada dolazi iz zaglavlja (`:371-372`);
+- čišćenje rogue linije u testu 162 (`:18935`) piše linijski `Stornirano`. Kolone više neće biti,
+  pa čišćenje dobija drugi oblik, a tvrdnja na `:18933` ostaje;
+- sidro sabotaže `storno-gp-faktura-ne-oslobadja-utovar` je red iz `StornoFakturaStavke`. Kad rez 2
+  menja tu proceduru, sidro se prepisuje i sabotaža ide u `dokaz.py` reza 2: zastarelo sidro je
+  sabotaža koja ništa ne kvari;
+- „utovar koji tvrdi drugu fakturu se ne dira" danas nema tvrdnju (grep po `*Test*.bas`,
+  01.11.2026). Rez 2 je dodaje, sa svojom sabotažom;
+- „najviše jednom" ne traži posebnu tvrdnju. Drugi poziv za isti utovar naiđe na prazan marker i
+  samo upiše WARN (`:1719-1723`), pa nema posledicu po podatke.
+
+**Test 310 je proširen** na delimično prebijanje i poreklo izvoda (gore, rez 1). Review je tražio
+dokaz da isti mehanizam splita radi i za `KupciUplata` bez `FakturaID`-a.
+
+**Opseg GO-a.** GO važi za projektovanje i kod reza 1, ne za tvrdnju da je S7 dokazan. N4, N5 i N10
+su izvedeni iz koda; N4 meri test 310 pre ispravke, a N5 i N10 početak reza 2.
+
+**`KI-075`** ostaje van S7, u svom malom rezu. Review ga ocenjuje kao P1 pre redovne upotrebe
+automatskog mapiranja izvoda, pa je to upisano u `KNOWN_ISSUES.md`. Mehanizam je potvrđen čitanjem
+koda, a nije reprodukovan.
 
 ## 15) Backlog — namerno van opsega
 

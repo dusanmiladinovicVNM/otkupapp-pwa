@@ -75,7 +75,9 @@ spoljni `SEFStatus` po `modSEFStatusSync.ClassifySEFExternalStatus` pada u klasu
 `FAK-LIN-02` („aktivna linija nad storniranom fakturom je KVAR") postaje nemoguć po
 konstrukciji. `OsirocenoOd` od S6 koraka 4 niko ne piše, a grana koja ga čita je
 nedostižna: fakturisana prijemnica se ne stornira (`Test_S6K4_FakturisanaSeOdbija`
-meri tu kapiju). Važi i za GP linije (`modUtovar`).
+meri tu kapiju). Važi i za GP linije (`modUtovar`). Storno GP fakture i dalje oslobađa utovar
+(`modStorno.ReleaseUtovarFromFaktura:1692`) u istoj transakciji: linija se ne piše, marker utovara
+da (`S7-REV-01`, plan §14.57).
 
 **`FAK-ODL-04` — saldo kupca ostaje robni.** C-003 i C-004 ostaju vrednost stavki
 prijemnica minus uplate kupca (prevedeno u S6 koraku 3, `modIzvestaj.ReportSaldoKupci:2687`).
@@ -89,4 +91,6 @@ prazni `FakturaID` na njenim uplatama (`modStorno.ResetNovacFakturaLink:1735`).
 `:628`) prima i `KupciUplata` bez `FakturaID`-a, pa se uplata sama prebija na sledeću
 fakturu kupca (`CreateFaktura` → `ApplyAvansToFaktura`). Analog odluke „D suženo" za
 kooperanta (`ODLUKA_NOVAC_PRI_STORNU.md` §0): oba tipa su isti novac kupca, razlika
-je samo da li je faktura bila poznata u trenutku uplate.
+je samo da li je faktura bila poznata u trenutku uplate. Delimično prebijanje ide postojećim
+splitom (`modNovac:660-692`): ostatak ostaje na izvornom redu, a split nosi marker izvoda
+(`BuildAvansSplitNapomena`).
