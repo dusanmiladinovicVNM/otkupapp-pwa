@@ -10899,6 +10899,23 @@ SABOTAZE = {
         "T_ODL39_PapirVracanjaKupcu",
         "ponovna stampa iz izvestaja daje isti papir vracanja kupcu",
     ),
+    # Review #450 (ODL39-REV-01): vracanje kupcu opet trazi vrstu voca na F7.
+    "odl39-f7-trazi-vrstu": (
+        "modNovacUnos.bas",
+        "                           (smer <> SMER_REV_VRACANJE_KUP)\n",
+        "                           True   ' SABOTAZA: vracanje kupcu trazi vrstu voca\n",
+        "T_ODL39_PapirVracanjaKupcu",
+        "F7 vracanje kupcu ne trazi vrstu voca ni uz strogu validaciju",
+    ),
+    # Prva stampa opet nosi vrstu voca, a ponovna je ne zna: isto stanje, drugi
+    # sadrzaj. Komentar iza "_" VBA ne pusta, pa je zamena IIf(True, ...).
+    "odl39-papir-nosi-vrstu": (
+        "modNovacUnos.bas",
+        "                                         IIf(RevSmerNosiVrstuVoca(smer), S(p, \"vrsta\"), \"\"), _\n",
+        "                                         IIf(True, S(p, \"vrsta\"), \"\"), _\n",
+        "T_ODL39_PapirVracanjaKupcu",
+        "prva i ponovljena stampa vracanja kupcu nose isti sadrzaj: bez reda Vrsta voca",
+    ),
 }
 
 

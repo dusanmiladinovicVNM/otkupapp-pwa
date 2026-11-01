@@ -14553,18 +14553,27 @@ End Sub
 ' na -4. Fizicki bi papir pokazao -6 -> 0: pozajmica i vracanje nose svoj ulaz i
 ' izlaz (AMB-INV-13/15), pa kupac fizicki stoji na nuli -- zato tvrdnja meri
 ' bas -10.
+' (0) vrsta voca nije obavezna za vracanje kupcu, ni uz strogu validaciju:
+'     vracanje odredjuju kupac, tip, kolicina i datum (review #450, ODL39-REV-01).
 ' (1) F7 sa stampom PDF pravi papir za taj broj, bez upozorenja.
 ' (2) papir: stanje -10 -> -4; protivstrana "Kupac: <naziv>".
 ' (3) ponovna stampa iz izvestaja (StampajReversAmbalaze) daje isti papir.
+' (4) ISTI SADRZAJ, ne samo isto stanje: prva stampa nema red "Vrsta voca" iako
+'     je operater vrstu uneo, a ni ponovna ga nema (ona vrstu nikad ne zna --
+'     revers je ne cuva). A -> B -> A: isti papir, sa vrstom zadatom direktno,
+'     red IMA -- inace bi "nema reda" merilo slepu sondu.
 ' Fixture: normal production state; tok u transakciji testa koja se vraca.
 ' SABOTAZE: odl39-papir-kao-firma, odl39-papir-fizicki,
-'           odl39-papir-kao-kooperant, odl39-ponovna-stampa.
+'           odl39-papir-kao-kooperant, odl39-ponovna-stampa,
+'           odl39-f7-trazi-vrstu, odl39-papir-nosi-vrstu.
 Private Sub T_ODL39_PapirVracanjaKupcu()
     Const SMER_VRK As Long = 9
     Dim t As String, tx As clsTransaction, poz As String, modePre As String
     Dim p As Object, fokus As String, brPred As String, pdfPre As Long, pdfPosle As Long
     Dim res As String, poruke As String, dok As String, upozorenje As String
     Dim papir1 As String, strana1 As String, g3 As String, papir3 As String, strana3 As String
+    Dim valPre As String, valPostavljen As Boolean, porukaBezVrste As String
+    Dim vrsta1 As Boolean, vrstaKontra As Boolean, vrsta3 As Boolean, gKontra As String
     Dim errNumTx As Long, errDescTx As String
 
     modSetup.EnsurePoruke
@@ -14587,6 +14596,16 @@ Private Sub T_ODL39_PapirVracanjaKupcu()
     brPred = NzToText(p("brDok"))
     If Len(brPred) > 0 Then pdfPre = BrojPdfReversa(brPred)
 
+    ' (0) bez vrste voca, uz strogu validaciju
+    valPre = NzToText(GetConfigValue(CFG_VALIDACIJA_UNOSA))
+    valPostavljen = True
+    SetConfigValue CFG_VALIDACIJA_UNOSA, "DA"
+    Set p = Vrk307Unos(t, 6, FX_KUPAC, "KUP", FX_KUPAC_NAZIV, SMER_VRK)
+    p("vrsta") = ""
+    porukaBezVrste = modNovacUnos.ReversValidiraj(p, fokus)
+    SetConfigValue CFG_VALIDACIJA_UNOSA, valPre
+    valPostavljen = False
+
     ' (1)-(2) F7
     OcistiList WS_IZDAMB_SABLON
     Set p = Vrk307Polja(t, 6, SMER_VRK)
@@ -14596,6 +14615,15 @@ Private Sub T_ODL39_PapirVracanjaKupcu()
     dok = AmbDokIDPoBroju(NzToText(p("rezultat")), FX_STANICA)
     papir1 = ReversStanjePapira()
     strana1 = Vrk308Strana()
+    vrsta1 = Vrk308ImaVrstu()
+
+    ' (4) kontra: isti papir, vrsta zadata direktno -- sonda mora da vidi red
+    OcistiList WS_IZDAMB_SABLON
+    If Len(dok) > 0 Then
+        gKontra = modPrint.OutputIzdavanjeAmbalaze(Date, NzToText(p("rezultat")), FX_STANICA, FX_STANICA, _
+                      FX_KUPAC_NAZIV, FX_KUPAC, t, 6, FX_VRSTA, False, dok, "KUPAC", True)
+    End If
+    vrstaKontra = Vrk308ImaVrstu()
 
     ' (3) ponovna stampa
     OcistiList WS_IZDAMB_SABLON
@@ -14606,6 +14634,7 @@ Private Sub T_ODL39_PapirVracanjaKupcu()
     On Error GoTo CleanUp
     papir3 = ReversStanjePapira()
     strana3 = Vrk308Strana()
+    vrsta3 = Vrk308ImaVrstu()
 
 CleanUp:
     errNumTx = Err.Number
@@ -14614,10 +14643,13 @@ CleanUp:
     tx.RollbackTx
     Set tx = Nothing
     SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
+    If valPostavljen Then SetConfigValue CFG_VALIDACIJA_UNOSA, valPre
     On Error GoTo 0
     If errNumTx <> 0 Then Err.Raise errNumTx, "modTest.T_ODL39_PapirVracanjaKupcu", errDescTx
 
     AssertEq (Len(poz) > 0), True, "preduslov: kupac je pozajmio 10 svojih gajbi vozacu"
+    AssertEq porukaBezVrste, "", _
+             "F7 vracanje kupcu ne trazi vrstu voca ni uz strogu validaciju"
     AssertEq res & "|" & (Len(dok) > 0) & "|" & (pdfPosle - pdfPre) & "|" & _
              (InStr(1, poruke, upozorenje, vbBinaryCompare) > 0), "|True|1|False", _
              "F7 vracanje kupcu se stampa: jedan PDF za taj broj, bez upozorenja"
@@ -14625,6 +14657,8 @@ CleanUp:
              "papir vracanja nosi poslovno stanje kupca: -10 -> -4"
     AssertEq strana1, "Kupac: " & FX_KUPAC_NAZIV, _
              "papir vracanja imenuje kupca kao protivstranu"
+    AssertEq vrsta1 & "|" & gKontra & "|" & vrstaKontra & "|" & vrsta3, "False||True|False", _
+             "prva i ponovljena stampa vracanja kupcu nose isti sadrzaj: bez reda Vrsta voca"
     AssertEq g3 & "|" & papir3 & "|" & strana3, "|-10 kom|-4 kom|Kupac: " & FX_KUPAC_NAZIV, _
              "ponovna stampa iz izvestaja daje isti papir vracanja kupcu"
 End Sub
@@ -14724,6 +14758,23 @@ Private Function Vrk307Izlaz(ByVal dokID As String) As String
         End If
     Next i
     Vrk307Izlaz = CStr(kol) & "|" & strane
+End Function
+
+' Da li papir reversa nosi red "Vrsta voca:" (WriteIzdavanjeCopy ga pise samo
+' kad je vrsta zadata). Prazan ili nepostojeci list je False.
+Private Function Vrk308ImaVrstu() As Boolean
+    Dim ws As Worksheet, r As Long, poslednji As Long
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(WS_IZDAMB_SABLON)
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Function
+    poslednji = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    For r = 1 To poslednji
+        If InStr(1, NzToText(ws.cells(r, 1).value), "Vrsta vo", vbBinaryCompare) = 1 Then
+            Vrk308ImaVrstu = True
+            Exit Function
+        End If
+    Next r
 End Function
 
 ' Protivstrana sa papira reversa: prvi red kolone 1 koji imenuje partnera

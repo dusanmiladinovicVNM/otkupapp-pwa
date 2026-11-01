@@ -463,9 +463,10 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     If Len(S(p, "stanicaID")) = 0 Then
         fokus = "stanicaID": ReversValidiraj = Poruka("OTKUNOS_ERR_OM"): Exit Function
     End If
-    ' Vrsta voca ide na papir REVERSA; nabavka i otpis je nemaju (ODL-34).
+    ' Vrsta voca ide na papir REVERSA; nabavka i otpis je nemaju (ODL-34), a ni
+    ' vracanje kupcu (ODL-39 g) -- jedno pravilo, RevSmerNosiVrstuVoca.
     If strogo And Len(S(p, "vrsta")) = 0 And _
-       Not RevSmerJeNabavkaIliOtpis(L(p, "smerRev")) Then
+       RevSmerNosiVrstuVoca(L(p, "smerRev")) Then
         fokus = "vrsta": ReversValidiraj = Poruka("OTKUNOS_ERR_VRSTA"): Exit Function
     End If
 
@@ -645,6 +646,18 @@ End Function
 ' (polje Napomena) i ispravka (koja postoji samo za nas revers).
 Public Function RevSmerJeNabavkaIliOtpis(ByVal smer As Long) As Boolean
     RevSmerJeNabavkaIliOtpis = (smer = SMER_REV_NABAVKA) Or (smer = SMER_REV_OTPIS)
+End Function
+
+' DA LI PAPIR SMERA NOSI VRSTU VOCA -- jedna odluka za validator i papir F7.
+'
+' Revers vrstu ne cuva (AMB-10-ODL-5: nije robni dokument), pa je ona samo natpis
+' prve stampe. Nabavka i otpis je nemaju (ODL-34). Vracanje kupcu takodje ne
+' (AMB-10-ODL-39 g, review #450 ODL39-REV-01): odredjuju ga kupac, tip, kolicina
+' i datum, a ponovna stampa iz izvestaja vrstu i ne zna -- pa bi prva i ponovljena
+' stampa istog dokumenta imale razlicit sadrzaj.
+Public Function RevSmerNosiVrstuVoca(ByVal smer As Long) As Boolean
+    RevSmerNosiVrstuVoca = Not RevSmerJeNabavkaIliOtpis(smer) And _
+                           (smer <> SMER_REV_VRACANJE_KUP)
 End Function
 
 ' NALOG OTPISA SA EKRANA (AMB-10-ODL-34 j): izabran partner, inace vozac.
@@ -963,11 +976,13 @@ Private Function StampajRevers(ByVal p As Object, ByVal smer As Long, _
     On Error GoTo EH
     If smer = SMER_REV_VRACANJE_KUP Then
         ' Vracanje kupcu (ODL-39 g): nas papir, kupac je protivstrana, stanje
-        ' poslovno (kao AMB-POSL-03). Kupcevi smerovi 5 i 6 ovde ne stizu.
+        ' poslovno (kao AMB-POSL-03). Kupcevi smerovi 5 i 6 ovde ne stizu. Vrste
+        ' voca nema (RevSmerNosiVrstuVoca), isto kao na ponovnoj stampi.
         razlog = OutputIzdavanjeAmbalaze(CDate(p("datum")), S(p, "brDok"), _
                                          S(p, "stanicaTekst"), S(p, "stanicaID"), _
                                          S(p, "partnerTekst"), S(p, "partnerID"), _
-                                         S(p, "tipAmb"), L(p, "kolAmb"), S(p, "vrsta"), _
+                                         S(p, "tipAmb"), L(p, "kolAmb"), _
+                                         IIf(RevSmerNosiVrstuVoca(smer), S(p, "vrsta"), ""), _
                                          False, ambDokID, "KUPAC", True)
     ElseIf smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP Then
         razlog = OutputIzdavanjeAmbalaze(CDate(p("datum")), S(p, "brDok"), _
