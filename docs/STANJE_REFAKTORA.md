@@ -8729,6 +8729,37 @@
        `dokaz.py` (pred release). Migracija (`KI-065`, MIG-16/17) nije dirana.
      - **Sledeći brojevi:** test 309 · stavka 247 · KI-069.
 
+247. **Nezavisni review PR `#450` (01.11.2026) — `ODL39-REV-01` ispravljen u PR-u, `ODL39-REV-02` → `KI-069`.**
+     Verdikt review-a: MERGE HOLD. Arhitektura je ocenjena 8,8/10, a testovi 8,5/10; rollback i deljenje PR-a
+     nisu traženi.
+
+     - **P1 `ODL39-REV-01`, potvrđen čitanjem:** prva i ponovljena štampa vraćanja kupcu nisu imale isti sadržaj.
+       F7 je slala vrstu voća sa ekrana (`StampajRevers`), ponovna štampa `""` (`modIzvestaj.StampajAmbDokument`),
+       a `WriteIzdavanjeCopy` red „Vrsta voća" piše samo kad je vrsta zadata. Test 308 je merio isto stanje i
+       istog kupca, ali ne i isti sadržaj.
+     - **Test prvo:** 308 je dobio dve tvrdnje (`modTest.bas:14652`, `:14661`) i sondu `Vrk308ImaVrstu` (`:14765`):
+       - validator ne traži vrstu voća za smer 9 ni uz `VALIDACIJA_UNOSA = DA`;
+       - prva štampa nema red, kontrola (isti papir sa vrstom zadatom direktno) ga ima, a ponovna ga nema.
+         A → B → A, da „nema reda" ne meri slepu sondu.
+
+       **Crveno pre ispravke:** `FAIL T_ODL39_PapirVracanjaKupcu -- F7 vracanje kupcu ne trazi vrstu voca ni uz
+       strogu validaciju -- dobijeno [? Izaberi vrstu voca]`. Druga tvrdnja nije došla na red (prvi pad staje);
+       nju meri sabotaža `odl39-papir-nosi-vrstu`.
+     - **Ispravka (preporuka review-a):** vraćanje kupcu ne nosi vrstu voća. Jedno pravilo,
+       `modNovacUnos.RevSmerNosiVrstuVoca` (`:658`), čitaju i validator (`:469`) i papir F7 (`:985`).
+     - **P2 `ODL39-REV-02` → `KI-069`, bez izmene koda:** jezgro ne zabranjuje izričit `IZDATA_PRAZNA` na kupca.
+       Pisca nema, a pravilo zahteva pre-flight i premeštanje BFP probe `AMB-INV-10` na drugog kooperanta.
+     - **Isti razred, stariji od `#450` → `KI-070`:** prva i ponovna štampa našeg reversa kooperantu i firmi
+       takođe se razlikuju u redu „Vrsta voća" (revers je ne čuva, `ODL-5`). Čeka odluku; ne dira se ovde.
+     - **Provere:** `vba_check` čist (191 fajl), sidra **1091 / 0** (+2 `odl39-f7-trazi-vrstu`,
+       `odl39-papir-nosi-vrstu`), `who_writes --check` i `--check-ownership`, `gen_schema_module --check`
+       (87AB4F9B). TARGETED nad finalnim kodom: `RunAllTests` **308 / 0**, BFP **2801 / 0**, Storno **111 / 0**,
+       `Test_StornoCentar_All` zeleno, GREEN marker (izvor `4530a20aa2ae`). Dokaz šest sabotaža testa 308 (dve
+       nove i četiri zatečene, jer je test promenjen): **6 / 6 crveno**, sve pojedinačno, izvor identičan (`cbd50efce7d9e53b`).
+     - **NOT RUN:** ručni Compile nad finalnim head-om, ručna provera F7, papira, storna i ponovne štampe; pun
+       `run_vba.py` i pun `dokaz.py`.
+     - **Sledeći brojevi:** test 309 · stavka 248 · KI-071.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

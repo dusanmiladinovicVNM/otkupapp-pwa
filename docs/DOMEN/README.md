@@ -410,8 +410,9 @@ polje količine. Stanica → kupac i robni dokument se odbijaju
 (`AmbDokKretanjeProblem`). Lista i ekran Storno prikazuju vraćanje kao svoju
 radnju, ne kao „Izdata prazna". Storno ide postojećim putem, a ispravke nema
 (`AmbReversSmerSeIspravlja`). Papir je naš, sa poslovnim stanjem kupca, kao
-`AMB-POSL-03`. Na F7 je smer 9, u okviru KUPAC. Pravilo: `AMBALAZA.md` 6.14b,
-tačka 4.
+`AMB-POSL-03`. Vrste voća nema ni na ekranu ni na papiru, pa prva i ponovna štampa
+imaju isti sadržaj. Na F7 je smer 9, u okviru KUPAC. Izričit zahtev `IZDATA_PRAZNA`
+na kupca jezgro još ne sudi (`KI-069`). Pravilo: `AMBALAZA.md` 6.14b, tačka 4.
 
 Mere ih `modTest` 295–300 (`T_KI024_*`), 301–306 (`T_Prazne_*`) i 307–308
 (`T_ODL39_*`), sabotaže `ki024-*`, `prazne-*`, `storno-rev-razlog-*` i `odl39-*`.

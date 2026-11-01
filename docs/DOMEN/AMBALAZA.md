@@ -3111,10 +3111,10 @@ bili odlučeni (`ODL-24` (d)). Predlog je bio u stavci 236, a pre-flight u stavc
 > | (a) dokument i broj | **naš `REVERS`** (obrnuto `ODL-10`: kad mi predajemo partneru, papir je naš). Broj iz niza stanice (`GenerateBrojAmbDokumenta(Stanica, …)`), vlasnik `(Stanica, StanicaID)`; predlaže se, a sme i ručno. |
 > | (b) količina preko duga | **odbija se**. Kupcu se prazne ne izdaju (`AmbPartnerPrimaPrazne`), pa bi višak bio `IZDATA_PRAZNA` vozač → kupac, tok koji niko nije odlučio. Sudi se ostatak vraćanja. Izričit zahtev `IZDATA_PRAZNA` na kupca i dalje nema pisca i ne sudi se (zatečeno). BFP ga koristi kao probu drugog protivpartnera (`AMB-INV-10`), pa bi kapija nad njim bez odluke zaklonila tu probu (stavka 246). |
 > | (c) par | **vozač → kupac** (obrnut lanac `ODL-9`: stanica → vozač „Prijem od OM" → kupac). Stanica i firma kupcu ne vraćaju direktno, a robni dokument nije mesto vraćanja. Vozač mora da ima prazne (`AMB-INV-16`, `ODL-37`). |
-> | (d) ulaz | F7, **smer 9 „Vraćanje kupcu"** u novom okviru **KUPAC**, uz „Povrat kupca" i „Pozajmicu" (sedam segmenata u jednom redu bi odseklo natpise). Kupac, vozač i OM su obavezni; OM bira operater, kao za „Izdato OM". |
+> | (d) ulaz | F7, **smer 9 „Vraćanje kupcu"** u novom okviru **KUPAC**, uz „Povrat kupca" i „Pozajmicu" (sedam segmenata u jednom redu bi odseklo natpise). Kupac, vozač i OM su obavezni; OM bira operater, kao za „Izdato OM". Vrsta voća **nije** obavezna, ni uz strogu validaciju (review `#450`, `ODL39-REV-01`). |
 > | (e) storno i ispravka | storno ide postojećim `StornirajAmbDokument_TX`, kontra-stavom vraćanja i izlaza: dug i vozačeve prazne se vraćaju. **Ispravke nema**: storno, pa nov unos, kao za kupčev dokument, nabavku i otpis. |
 > | (f) šta se gasi | **ceo dug prema kupcu**, po tipu (`AmbObavezaPartneru`: pozajmica i pokriće manjka), jer su gajbe zamenljive, kao kod kooperanta (`ODL-35`). Vraćanje sme i delimično, kroz više dokumenata. |
-> | (g) papir | **štampa se**: papir je naš, pa `ODL-32` ne važi. Protivstrana je kupac, a stanje je **poslovno**, kao `AMB-POSL-03` (posle pozajmice 10 i vraćanja 6: −10 → −4). Fizički bi kupac stajao na nuli, jer pozajmica i vraćanje nose svoj ulaz i izlaz. Isti papir daje i ponovna štampa iz izveštaja. |
+> | (g) papir | **štampa se**: papir je naš, pa `ODL-32` ne važi. Protivstrana je kupac, a stanje je **poslovno**, kao `AMB-POSL-03` (posle pozajmice 10 i vraćanja 6: −10 → −4). Fizički bi kupac stajao na nuli, jer pozajmica i vraćanje nose svoj ulaz i izlaz. Papir **nema vrstu voća**: vraćanje određuju kupac, tip, količina i datum, a revers vrstu ne čuva. Zato prva štampa i ponovna štampa iz izveštaja daju isti sadržaj, ne samo isto stanje (`RevSmerNosiVrstuVoca`, review `#450`). |
 
 ```
 kupac pozajmi 10, vozac ih preda stanici, stanica ih vrati vozacu, vozac kupcu 10
@@ -3137,7 +3137,7 @@ Kupac       -> SpoljniSvet 10   IZLAZ_TUDJE          (AMB-INV-15)        dug 0
 | bez ispravke | `AmbReversSmerSeIspravlja`, `AmbReversSmerZaRed` → `IspravkaReversaRazlog` (dokument) i `IspravkaReversa_TX` (smer zamene) |
 | pisac | `modAmbalaza.UpisiReversAmbalaze_TX(…, kupacID)`: isto telo kao ostala četiri smera (`UpisiReversUTx`, `ReversNalogID`) |
 | ulaz | `modNovacUnos` smer 9 (`SMER_REV_VRACANJE_KUP`). Nije `RevSmerJeKupcev`, jer je broj naš. Ljuska: okvir `fgSmerKup` u `modOtkupUI` |
-| papir | `modPrint` protivstrana `KUPAC` (poslovno stanje); ponovna štampa `modIzvestaj.StampajAmbDokument` |
+| papir | `modPrint` protivstrana `KUPAC` (poslovno stanje); ponovna štampa `modIzvestaj.StampajAmbDokument`; bez vrste voća `modNovacUnos.RevSmerNosiVrstuVoca` (validator i papir F7) |
 
 **Netaknuto:** `AmbKlaseVrste`, `AmbDoprinosObavezi`, `AmbVrsteZahteva` (deljenje
 `VRACANJE_TUDJE` po obavezi postoji od ranije), storno (`RequirePrazneStorna`
@@ -3148,7 +3148,11 @@ sam odbija storno „Prijem od OM" posle vraćanja), bilans (`IZLAZ_TUDJE` →
 *Provera:* `modTest` 295–308 (`T_KI024_*`, `T_Prazne_*`, `T_ODL39_*`) · BFP premise
 (`Enum` deset, `StornoKontraStav`, `DeficitIObaveza`, `StornoNePraviMinus`; od
 `ODL-39` mapa smerova ima pet redova) · sabotaže `ki024-*` (6), `prazne-*` (6),
-`storno-rev-razlog-*` (2) i `odl39-*` (14).
+`storno-rev-razlog-*` (2) i `odl39-*` (16).
+
+**Granica posle review-a `#450`:** izričit zahtev `IZDATA_PRAZNA` na kupca jezgro ne
+sudi. Pisca nema, a F7 ga ne nudi, ali pravilo „kupcu se prazne ne izdaju" je tu
+samo nad ostatkom vraćanja → `KI-069`.
 
 ### 6.15 Cena — posteno
 
