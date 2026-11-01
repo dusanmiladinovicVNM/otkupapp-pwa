@@ -16,6 +16,7 @@ Tezine:
 from collections import Counter, defaultdict
 from decimal import Decimal
 
+import ambalaza
 from citac import broj, je_storno, kljuc, tekst
 from cilj import DOKUMENTI, IZDATO, _kf
 
@@ -32,6 +33,7 @@ def proveri(c):
     _novac(c)
     _palete(c)
     _hladnjaca(c)
+    _ambalaza(c)
     return c.nalazi
 
 
@@ -298,3 +300,40 @@ def _hladnjaca(c):
     for z in c.tabele["tblZbirna"]:
         if "KupacHladnjaca" in z and z["KupacHladnjaca"] not in ("Da", "Ne"):
             c.nalaz(BLOKIRA, "KUPAC_HLADNJACA_NIJE_DA_NE", "tblZbirna", z.get("ZbirnaID"), "")
+
+
+def _ambalaza(c):
+    """Knjiga ambalaze po pravilima main-a posle #445-#450 (MIG-ODL-13..15).
+
+    Invarijante knjige (AMB-INV-01/02/04/10/11/12/15, AMB-BIL-02), zatvaranje
+    salda i pokrivenost su greska ALATA ako padnu -- BLOKIRA. U rezimu ispravno i:
+    nijedan realan nalog ni jednog dana ispod nule (AMB-INV-07) i prazne
+    stanice/vozaca nijednog dana ispod nule (AMB-INV-16, ODL-37): inace bi prvo
+    izdavanje u novoj sezoni palo. PUNE ispod nule (nalog je poslao vise punih
+    nego sto je primio) knjiga ne moze da popravi nabavkom -- ODLUKA (KI-065).
+    """
+    rez = c.amb
+    if rez is None:
+        return
+    for x in ambalaza.proveri_invarijante(rez):
+        c.nalaz(BLOKIRA, "AMB_" + x["inv"].replace("-", "_"), "tblAmbalaza", x.get("amb_id", ""), x["opis"])
+    for kljuc_, lst in ambalaza.proveri_pokrivenost(rez).items():
+        if lst:
+            c.nalaz(BLOKIRA, "AMB_POKRIVENOST", "tblAmbalaza", "", "%s: %d starih redova" % (kljuc_, len(lst)))
+    ispravno = rez.knjizenje == ambalaza.ISPRAVNO
+    for x in ambalaza.izracunaj_salda(rez):
+        nalog = "%s %s '%s'" % (x["nalog_tip"], x["nalog_id"], x["tip"])
+        if x["razlika"]:
+            c.nalaz(BLOKIRA, "AMB_SALDA_SE_NE_ZATVARAJU", "tblAmbalaza", "", "%s: razlika %s" % (nalog, x["razlika"]))
+        if not ispravno or x["nalog_tip"] not in ambalaza.REALNI:
+            continue
+        if x["najmanji"] < 0:
+            c.nalaz(BLOKIRA, "AMB_INV07_NALOG_ISPOD_NULE", "tblAmbalaza", "",
+                    "%s: %s na dan %s" % (nalog, x["najmanji"], x["najmanji_dan"]))
+        if x["najmanje_prazne"] is not None and x["najmanje_prazne"] < 0:
+            c.nalaz(BLOKIRA, "AMB_INV16_PRAZNE_ISPOD_NULE", "tblAmbalaza", "",
+                    "%s: prazne %s na dan %s" % (nalog, x["najmanje_prazne"], x["dan_prazne"]))
+        if x["najmanje_pune"] is not None and x["najmanje_pune"] < 0:
+            c.nalaz(ODLUKA, "AMB_PUNE_ISPOD_NULE", "tblAmbalaza", "",
+                    "%s: pune %s na dan %s -- poslao je vise punih nego sto je primio, pa su mu "
+                    "prazne za toliko iznad stvarnih (KI-065)" % (nalog, x["najmanje_pune"], x["dan_pune"]))

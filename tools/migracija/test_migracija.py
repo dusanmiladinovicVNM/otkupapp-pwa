@@ -15,6 +15,7 @@ import os
 import sys
 import tempfile
 import unittest
+from collections import Counter
 from datetime import date
 from decimal import Decimal
 
@@ -182,13 +183,24 @@ class NormalnoStanje(SaSveskom):
         self.assertEqual((k1["najmanji"], k1["najmanji_dan"]), (Decimal(-6), D1))
 
     def test_dug_kooperanta_po_dnevnom_zakljucku_na_zahtev(self):
-        """MIG-16/17: dan 1 obaveza raste 6 (pokrice), dan 2 pada 6 (vracanje)."""
+        """MIG-16/17: dan 1 obaveza raste 6 (pokrice), dan 2 pada 6 (vracanje + izlaz).
+
+        Premisa promenjena sa AMB-INV-15 (#448): vracene gajbe izlaze iz opticaja,
+        pa je fizicki saldo K1 = stari (2), a ne 8 -- 8 je bio KI-024 (vracene
+        gajbe su ostajale na kooperantu, pa bi ih sledece donosenje prevelo u firmine).
+        """
         rez = self.prevedi(normalno(), partneri=("Kooperant",))
         self.assertIn(("PODELA_VRACANJE_TUDJE", Decimal(6)),
                       [(k.pravilo, k.kolicina) for k in rez.kretanja])
+        vr = next(k for k in rez.kretanja if k.vrsta == ambalaza.VRACANJE_TUDJE)
+        iz = [k for k in rez.kretanja if k.vrsta == ambalaza.IZLAZ_TUDJE]
+        self.assertEqual([(k.kolicina, k.dok_tip, k.dok_id, k.datum, k.od_id, k.na_tip) for k in iz],
+                         [(vr.kolicina, vr.dok_tip, vr.dok_id, vr.datum, "K1", "SpoljniSvet")])
         k1 = self.salda[("Kooperant", "K1", "12/1")]
-        self.assertEqual((k1["stari"], k1["novi"], k1["pokrice"], k1["obaveza"]),
-                         (Decimal(2), Decimal(8), Decimal(6), Decimal(0)))
+        self.assertEqual((k1["stari"], k1["novi"], k1["pokrice"], k1["izlaz"], k1["obaveza"]),
+                         (Decimal(2), Decimal(2), Decimal(6), Decimal(-6), Decimal(0)))
+        self.assertEqual([x for x in ambalaza.proveri_invarijante(rez)
+                          if x["inv"] in ("AMB-INV-15", "AMB-BIL-02", "AMB-INV-10")], [])
         self.assertGreaterEqual(k1["najmanji"], 0)              # AMB-INV-07 posle pokrica
         self.assertGreaterEqual(k1["najmanja_obaveza"], 0)      # AMB-INV-09
         pok = [k for k in rez.kretanja if k.pravilo == "POKRICE_DUGA"]
@@ -402,9 +414,7 @@ class Amb10Oblik(SaSveskom):
         self.assertEqual(self.salda[("Stanica", "S1", "12/1")]["razlika"], 0)
 
 
-class NovaSveska(SaSveskom):
-    """Faza 2: nova sveska u memoriji (cilj.py) i provere pre upisa (provere.py)."""
-
+class SaNovomSveskom(SaSveskom):
     def sagradi(self, amb=None, dodatno=None):
         put = os.path.join(self.dir.name, "stara.xlsx")
         snimi_svesku(put, osnovne_tabele(normalno() if amb is None else amb, dodatno))
@@ -416,6 +426,10 @@ class NovaSveska(SaSveskom):
 
     def nalazi(self, c, tezina=None):
         return sorted((n["pravilo"], tekst(n["id"])) for n in c.nalazi if tezina in (None, n["tezina"]))
+
+
+class NovaSveska(SaNovomSveskom):
+    """Faza 2: nova sveska u memoriji (cilj.py) i provere pre upisa (provere.py)."""
 
     def test_zaglavlje_i_jedna_stavka_po_dokumentu(self):
         c = self.sagradi()
@@ -590,6 +604,109 @@ class NovaSveska(SaSveskom):
         self.assertIsNotNone(tabela(t, "Provere"))
 
 
+def izmeni(ime, izmene=None, novi=()):
+    """Tabela iz osnovne sveske sa izmenjenim redovima ({ID: {kolona: vrednost}}) i
+    dodatim redovima ({kolona: vrednost}), u obliku za `dodatno`."""
+    kol, redovi = osnovne_tabele(normalno())[ime]
+    redovi = [list(r) for r in redovi]
+    for r in redovi:
+        for c, v in (izmene or {}).get(r[0], {}).items():
+            r[kol.index(c)] = v
+    for n in novi:
+        redovi.append([n.get(c, "") for c in kol])
+    return {ime: (kol, redovi)}
+
+
+class MainPosle448(SaNovomSveskom):
+    """Knjiga ambalaze po pravilima main-a posle #445-#450 (MIG-ODL-13..15)."""
+
+    def knjiga(self, c, dok_id):
+        return [(r["VrstaKretanja"], r["OdNalogID"], r["NaNalogID"], r["Kolicina"])
+                for r in c.tabele["tblAmbalaza"] if r["DokumentID"] == dok_id]
+
+    def saldo(self, c, tip, idn, tip_amb="12/1"):
+        return next(s for s in ambalaza.izracunaj_salda(c.amb)
+                    if (s["nalog_tip"], s["nalog_id"], s["tip"]) == (tip, idn, tip_amb))
+
+    def test_otpremnica_nosi_zbir_gajbi_blokova(self):
+        """KI-065: stara otpremnica 12 gajbi, njen otkup 10 -> dokument i knjiga 10,
+        zbirna 10; stanica nijednog dana nema pune ispod nule."""
+        amb = normalno()
+        amb[6] = noga(7, D2, 12, "Izlaz", "S1", "Stanica", "D1", "OTP-1", "Otpremnica")
+        d = {}
+        d.update(izmeni("tblOtpremnica", {"OTP-1": {"KolAmbalaze": 12}}))
+        d.update(izmeni("tblZbirna", {"ZBR-1": {"UkupnoAmbalaze": 12}}))
+        c = self.sagradi(amb, d)
+        ost = {s["OtpremnicaID"]: s for s in c.tabele["tblOtpremnicaStavke"]}
+        self.assertEqual(ost["OTP-1"]["KolAmbalaze"], Decimal(10))
+        self.assertEqual(c.tabele["tblZbirnaStavke"][0]["KolAmbalaze"], Decimal(10))
+        self.assertEqual(self.knjiga(c, "OTP-1"), [("AMBALAZA_UZ_ROBU", "S1", "D1", Decimal(10))])
+        self.assertIn(("GAJBE_OTPREMNICE_PO_BLOKOVIMA", "OTP-1"), self.nalazi(c, "INFO"))
+        s1 = self.saldo(c, "Stanica", "S1")
+        self.assertEqual((s1["korekcija"], s1["razlika"], s1["najmanje_pune"]),
+                         (Decimal(2), Decimal(0), Decimal(0)))
+        self.assertEqual([n for n in self.nalazi(c) if n[0].startswith("AMB_")], [])
+
+    def test_neizdata_otpremnica_ne_knjizi(self):
+        """Otpremnica bez otkupa ostaje neizdata (MIG-ODL-06), a main knjizi gajbe tek
+        pri izdavanju (OtpIzdaj): njene stare noge izlaze iz knjige, ali ne nestaju."""
+        amb = normalno() + [noga(13, D2, 5, "Izlaz", "S1", "Stanica", "D1", "OTP-5", "Otpremnica")]
+        d = izmeni("tblOtpremnica", novi=[dict(OtpremnicaID="OTP-5", Datum=D2, StanicaID="S1", VozacID="D1",
+                                                BrojOtpremnice="205", Klasa="I", Kolicina=40, KolAmbalaze=5)])
+        c = self.sagradi(amb, d)
+        self.assertEqual(self.knjiga(c, "OTP-5"), [])
+        self.assertIn(("NEIZDATA_OTPREMNICA_NE_KNJIZI", "OTP-5"), self.nalazi(c, "INFO"))
+        noga13 = next(n for n in c.amb.noge if n.amb_id == "AMB-00013")
+        self.assertEqual(noga13.ishod, ambalaza.ISHOD_NE_KNJIZI)
+        self.assertFalse(any(ambalaza.proveri_pokrivenost(c.amb).values()))
+        self.assertEqual(self.saldo(c, "Stanica", "S1")["razlika"], 0)
+
+    def test_nabavka_pokriva_i_prazne(self):
+        """AMB-INV-16: S2 primi 10 punih i izda 4 prazne -- ukupno +6, prazne -4.
+        Nabavka 4 prvog dana (pre #448 ne bi je bilo, pa bi kapija odbila izdavanje)."""
+        amb = normalno() + [
+            noga(13, D1, 10, "Izlaz", "K2", "Kooperant", "", "OTK-7", "Otkup"),
+            noga(14, D1, 10, "Ulaz", "S2", "Stanica", "", "OTK-7", "Otkup"),
+            noga(15, D1, 4, "Ulaz", "K2", "Kooperant", "", "OTK-7", "OM-Izlaz-Koop"),
+            noga(16, D1, 4, "Izlaz", "S2", "Stanica", "", "OTK-7", "OM-Izlaz-Koop")]
+        d = izmeni("tblOtkup", novi=[dict(OtkupID="OTK-7", Datum=D1, KooperantID="K2", StanicaID="S2",
+                                          BrojDokumenta="107", Klasa="I", Kolicina=100, Cena=80,
+                                          KolAmbalaze=10, KolAmbIzdata=4, TipAmbalaze="12/1")])
+        c = self.sagradi(amb, d)
+        s2 = self.saldo(c, "Stanica", "S2")
+        self.assertEqual((s2["nabavka"], s2["najmanje_prazne"], s2["najmanji"], s2["pune"], s2["prazne"]),
+                         (Decimal(4), Decimal(0), Decimal(10), Decimal(10), Decimal(0)))
+        self.assertNotIn("AMB_INV16_PRAZNE_ISPOD_NULE", [n[0] for n in self.nalazi(c, "BLOKIRA")])
+
+    def test_pune_vozaca_ispod_nule_ide_na_odluku(self):
+        """Prijemnica 12 punih, a vozac je otpremnicom primio 10: nabavka pokriva ukupno,
+        ali pune ostaju -2 -- knjiga to ne ume da popravi, operater odlucuje (KI-065)."""
+        amb = normalno()
+        amb[7] = noga(8, D3, 12, "Ulaz", "C1", "Kupac", "D1", "PRJ-1", "Prijemnica")
+        c = self.sagradi(amb, izmeni("tblPrijemnica", {"PRJ-1": {"KolAmbalaze": 12}}))
+        d1 = self.saldo(c, "Vozac", "D1")
+        self.assertEqual((d1["najmanje_pune"], d1["najmanji"], d1["najmanje_prazne"]),
+                         (Decimal(-2), Decimal(0), Decimal(0)))
+        self.assertIn("AMB_PUNE_ISPOD_NULE", [n[0] for n in self.nalazi(c, "ODLUKA")])
+
+    def test_dokument_otkupa_prati_staru_knjigu(self):
+        """Otkup kaze 5 izdatih, stara knjiga 4: main knjizi tacno polje dokumenta,
+        a istorija je knjiga (MIG-ODL-01) -- dokument dobija 4, uz upozorenje."""
+        c = self.sagradi(dodatno=izmeni("tblOtkup", {"OTK-1": {"KolAmbIzdata": 5}}))
+        otk = {z["OtkupID"]: z for z in c.tabele["tblOtkup"]}
+        self.assertEqual(otk["OTK-1"]["KolAmbIzdata"], Decimal(4))
+        self.assertIn(("GAJBE_DOKUMENTA_PO_KNJIZI", "OTK-1"), self.nalazi(c, "UPOZORENJE"))
+        self.assertEqual(sorted(self.knjiga(c, "OTK-1"))[1], ("IZDATA_PRAZNA", "S1", "K1", Decimal(4)))
+
+    def test_bilans_neuskladjeno_nula_i_vracanje_ima_izlaz(self):
+        """AMB-BIL-02 / AMB-INV-15 nad celom novom sveskom (kooperant sa dugom)."""
+        c = self.sagradi()
+        vrste = Counter(r["VrstaKretanja"] for r in c.tabele["tblAmbalaza"])
+        self.assertEqual(vrste["VRACANJE_TUDJE_AMBALAZE"], vrste["IZLAZ_TUDJE_AMBALAZE"])
+        self.assertGreater(vrste["IZLAZ_TUDJE_AMBALAZE"], 0)
+        self.assertEqual([x for x in ambalaza.proveri_invarijante(c.amb)], [])
+
+
 class Upis(SaSveskom):
     """Ciste funkcije upisa (bez Excela): pretvaranje, redosled kolona, poredjenje."""
 
@@ -762,7 +879,7 @@ class Upis(SaSveskom):
         finally:
             upis.PRIMERA_PO_TABELI = stari
         self.assertEqual(len([x for x in r if x.startswith("tblAmbalaza red")]), 2)
-        self.assertIn("tblAmbalaza: ukupno 11 razlika -- po koloni: Datum 10, Kolicina 1", r)
+        self.assertIn("tblAmbalaza: ukupno 12 razlika -- po koloni: Datum 11, Kolicina 1", r)
         self.assertIn("tblOtkupStavke red 1, Kolicina", r[-1])
 
     def test_podesavanja_iz_stare_bez_aktivacije_licence(self):
@@ -837,7 +954,7 @@ class Komanda(SaSveskom):
             self.assertIsNotNone(tabela(t, ime), ime)
         k1 = [r for r in tabela(t, "Salda").redovi if polje(r, "ID") == "K1"]
         self.assertEqual(polje(k1[0], "Naziv"), "Pera Peric")
-        self.assertEqual(len(tabela(t, "Kretanja").redovi), 10)       # 7 + pokrice + vracanje + nabavka
+        self.assertEqual(len(tabela(t, "Kretanja").redovi), 11)       # 7 + pokrice + vracanje + izlaz + nabavka
         with open(os.path.join(izlaz, "tabele.txt"), encoding="utf-8") as f:
             self.assertIn("tblAmbalaza (12 redova): AmbID, Datum", f.read())
         with open(os.path.join(izlaz, "sazetak.txt"), encoding="utf-8") as f:

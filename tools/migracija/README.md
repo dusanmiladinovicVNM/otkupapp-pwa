@@ -33,16 +33,21 @@ Dva režima knjiženja (`--knjizenje`):
 
 - **`ispravno`** (podrazumevano) — istorija + ono što `main` traži za dalji rad
   (nijedan realan nalog ni jednog dana ispod nule, AMB-INV-07):
-  kooperant → `ULAZ_TUDJE` / `VRACANJE_TUDJE` po dnevnom zaključku (MIG-16/17),
-  kupac → `ULAZ_TUDJE` u trenutku manjka, stanica/vozač → jedna `NABAVKA` na
-  prvi dan rada, u iznosu najdubljeg minusa. Sve dodato nosi `CreatedBy =
-  MIGRACIJA`.
+  kooperant → `ULAZ_TUDJE` / `VRACANJE_TUDJE` + `IZLAZ_TUDJE` po dnevnom
+  zaključku (MIG-16/17, AMB-INV-15), kupac → `ULAZ_TUDJE` u trenutku manjka,
+  stanica/vozač → jedna `NABAVKA` na prvi dan rada, u iznosu najdubljeg minusa
+  ukupnog salda ili praznih (AMB-INV-16). Knjiga robnog dokumenta je ono što bi
+  upisao pisac main-a: otpremnica = zbir gajbi blokova i samo kad je izdata,
+  zbirna = zbir otpremnica, a gajbe otkupa i prijemnice prate staru knjigu
+  (MIG-ODL-13..15). Sve dodato nosi `CreatedBy = MIGRACIJA`.
 - **`verno`** — tačno kao stara sveska, sa negativnim saldima; list Salda tada
   predlaže događaj preseka iz salda na kraju.
 - **Stavke** — svaki kooperant, stanica, vozač i kupac, stavka po stavka, sa
   tekućim novim i starim saldom. Filter na koloni *Naziv* ili *ID*.
 - **Kretanja** — nacrt nove knjige u redosledu kolona `tblAmbalaza`.
 - **Reversi** — nacrt zaglavlja `tblAmbalazaDokument`.
+- **Uskladjivanje** — svaki red knjige koji je odredio dokument (stara i nova
+  količina, razlog).
 - **ZaOdluku**, **Upozorenja**, **Invarijante** — šta alat neće sam da reši.
 - **Dokumenti**, **DokumentiViseRedova**, **Tabele** — ulaz za odluku 1.
 

@@ -36,6 +36,7 @@ Pravila (odluke operatera 28.10.2026; trag u docs/DOMEN/MIGRACIJA_LEGACY.md):
 
 import uuid
 from collections import defaultdict
+from decimal import Decimal
 
 import ambalaza
 from citac import broj, datum, je_storno, kljuc, polje, tabela, tekst
@@ -606,11 +607,166 @@ def _stavke_nizvodno(c):
 # Ambalaza
 # ---------------------------------------------------------------------------
 
+def _gajbe(red, kol):
+    return broj(red.get(kol)) or Decimal(0)
+
+
+def _robni_dokumenti(c, rez):
+    """Robni dokumenti i knjiga se slazu kao kod pisca main-a (MIG-ODL-14).
+
+    Poziva ga ambalaza.prevedi posle prevoda nogu, a pre politike duga:
+
+      1. otkup i prijemnica: knjiga je istorija koju je klijent video (MIG-ODL-01),
+         pa se DOKUMENT uskladjuje sa njom -- gajbe stavke, KolAmbIzdata,
+         KolAmbVracena (main: modOtkup.KnjiziOtkupAmbalazu,
+         modDokumenta.SavePrijemnicaDokument knjize tacno ta polja);
+      2. otpremnica: gajbe = zbir gajbi blokova istog tipa ambalaze (odluka
+         operatera 31.10.2026, KI-065; modDokumenta.OtpRequireJednakost), i u
+         dokumentu i u knjizi; neizdata otpremnica ne knjizi (OtpIzdaj);
+      3. zbirna: gajbe = zbir njenih izdatih otpremnica (ZbrRequireJednakost).
+
+    Vraca ocekivanu knjigu otpremnica za ambalaza.uskladi_sa_dokumentima.
+    """
+    knj = defaultdict(lambda: defaultdict(Decimal))
+    for k in rez.kretanja:
+        if not k.generisano and k.dok_tip in ("Otkup", "Prijemnica"):
+            knj[(k.dok_tip, kljuc(k.dok_id))][k.vrsta] += k.kolicina
+    # Dokument cija je noga nerazresena (za odluku / izuzeta) se ne dira: njegova
+    # knjiga nije konacna. n.dt je normalizovan stari DokumentTip.
+    robni = {"otkup": "Otkup", "om-izlaz-koop": "Otkup", "prijemnica": "Prijemnica"}
+    nerazreseno = {(robni[n.dt], kljuc(n.dok_id)) for n in rez.noge
+                   if n.dt in robni and n.ishod in (ambalaza.ISHOD_ZA_ODLUKU, ambalaza.ISHOD_IZUZETO)}
+    _dokument_po_knjizi(c, knj, nerazreseno)
+    return _otpremnice_po_blokovima(c)
+
+
+def _dokument_po_knjizi(c, knj, nerazreseno):
+    stavka = {}
+    for ime, pk in (("tblOtkupStavke", "OtkupID"), ("tblPrijemnicaStavke", "PrijemnicaID")):
+        for s in c.tabele[ime]:
+            stavka[(ime, kljuc(s.get(pk)))] = s
+    polja = (("tblOtkup", "Otkup", "OtkupID", "tblOtkupStavke",
+              ((ambalaza.UZ_ROBU, None), (ambalaza.IZDATA, "KolAmbIzdata"))),
+             ("tblPrijemnica", "Prijemnica", "PrijemnicaID", "tblPrijemnicaStavke",
+              ((ambalaza.UZ_ROBU, None), (ambalaza.POVRAT, "KolAmbVracena"))))
+    for ime, dt, pk, stv, parovi in polja:
+        for z in c.tabele[ime]:
+            idn = kljuc(z.get(pk))
+            if je_storno(_kf(z)):
+                continue
+            s = stavka.get((stv, idn))
+            for vrsta, kolona in parovi:
+                red, kol = (s, "KolAmbalaze") if kolona is None else (z, kolona)
+                if red is None:
+                    continue
+                staro, novo = _gajbe(red, kol), knj.get((dt, idn), {}).get(vrsta, Decimal(0))
+                if staro == novo:
+                    continue
+                if (dt, idn) in nerazreseno:
+                    c.nalaz("UPOZORENJE", "GAJBE_DOKUMENTA_NE_SLAZU_SE_SA_KNJIGOM", ime, z.get(pk),
+                            "%s: dokument %s, knjiga %s -- noga je ZA ODLUKU, dokument se ne dira"
+                            % (kol, staro, novo))
+                    continue
+                red[kol] = novo
+                c.nalaz("UPOZORENJE", "GAJBE_DOKUMENTA_PO_KNJIZI", ime, z.get(pk),
+                        "broj %s, %s: dokument %s -> %s (stara knjiga; main knjizi tacno polje dokumenta)"
+                        % (z.get("BrojDokumenta") or z.get("BrojPrijemnice", ""), kol, staro, novo))
+
+
+def _otpremnice_po_blokovima(c):
+    otk = {kljuc(z["OtkupID"]): z for z in c.tabele["tblOtkup"] if not je_storno(_kf(z))}
+    gajbe_otk = defaultdict(Decimal)
+    for s in c.tabele["tblOtkupStavke"]:
+        gajbe_otk[kljuc(s.get("OtkupID"))] += _gajbe(s, "KolAmbalaze")
+    blokovi = defaultdict(list)
+    for v in c.tabele["tblOtpremnicaIzvori"]:
+        if kljuc(v.get("OtkupID")) in otk:
+            blokovi[kljuc(v.get("OtpremnicaID"))].append(kljuc(v.get("OtkupID")))
+    stavka = {kljuc(s.get("OtpremnicaID")): s for s in c.tabele["tblOtpremnicaStavke"]}
+    ocek, izdate = {}, {}
+    for z in c.tabele["tblOtpremnica"]:
+        oid = z["OtpremnicaID"]
+        if je_storno(_kf(z)):
+            continue
+        if tekst(z.get("IzdatoStatus")) != IZDATO:
+            ocek[("Otpremnica", oid)] = {ambalaza.UZ_ROBU: None}
+            continue
+        tip = tekst(z.get("TipAmbalaze"))
+        if not tip:
+            # Pisac main-a otpremnicu sa gajbama bez tipa ne pravi (OtpUpisiOcekivano);
+            # jednoznacan tip blokova koji nose gajbe dopunjuje zaglavlje.
+            tipovi = {tekst(otk[b].get("TipAmbalaze")) for b in blokovi.get(kljuc(oid), [])
+                      if gajbe_otk.get(b, Decimal(0)) > 0}
+            if len(tipovi) == 1:
+                tip = tipovi.pop()
+                z["TipAmbalaze"] = tip
+                c.nalaz("INFO", "TIP_AMBALAZE_OTPREMNICE_IZ_BLOKOVA", "tblOtpremnica", oid,
+                        "zaglavlje bez tipa ambalaze; blokovi nose '%s'" % tip)
+        q = Decimal(0)
+        for b in blokovi.get(kljuc(oid), []):
+            g = gajbe_otk.get(b, Decimal(0))
+            if g <= 0:
+                continue
+            if ambalaza.norm_tip(otk[b].get("TipAmbalaze")) != ambalaza.norm_tip(tip):
+                c.nalaz("ODLUKA", "BLOK_DRUGOG_TIPA_AMBALAZE", "tblOtpremnica", oid,
+                        "otkup %s nosi %s gajbi '%s', otpremnica je '%s' -- main ga ne prima "
+                        "(OtpRequireIzvorValjan); gajbe ostaju pune na stanici"
+                        % (otk[b]["OtkupID"], g, otk[b].get("TipAmbalaze"), tip))
+                continue
+            q += g
+        s = stavka.get(kljuc(oid))
+        if s is not None and _gajbe(s, "KolAmbalaze") != q:
+            c.nalaz("INFO", "GAJBE_OTPREMNICE_PO_BLOKOVIMA", "tblOtpremnica", oid,
+                    "broj %s: gajbe %s -> %s (zbir blokova; KI-065, OtpRequireJednakost)"
+                    % (z.get("BrojOtpremnice", ""), _gajbe(s, "KolAmbalaze"), q))
+            s["KolAmbalaze"] = q
+        izdate[kljuc(oid)] = q
+        vozac = tekst(z.get("VozacID"))
+        if q > 0 and not vozac:
+            c.nalaz("ODLUKA", "OTPREMNICA_BEZ_VOZACA", "tblOtpremnica", oid,
+                    "%s gajbi, a nema vozaca -- main je ne izdaje (OtpKnjiziAmbalazu); knjiga ostaje stara" % q)
+            continue
+        ocek[("Otpremnica", oid)] = {ambalaza.UZ_ROBU: ambalaza.Ocekivano(
+            q, tip, datum(z.get("Datum")), ("Stanica", tekst(z.get("StanicaID"))), ("Vozac", vozac),
+            "zbir gajbi blokova (KI-065)")}
+    _zbirne_po_otpremnicama(c, izdate)
+    return ocek
+
+
+def _zbirne_po_otpremnicama(c, izdate):
+    clanovi = defaultdict(list)
+    for v in c.tabele["tblZbirnaIzvori"]:
+        if kljuc(v.get("OtpremnicaID")) in izdate:
+            clanovi[kljuc(v.get("ZbirnaID"))].append(kljuc(v.get("OtpremnicaID")))
+    stavka = {kljuc(s.get("ZbirnaID")): s for s in c.tabele["tblZbirnaStavke"]}
+    for z in c.tabele["tblZbirna"]:
+        zid = kljuc(z["ZbirnaID"])
+        s = stavka.get(zid)
+        if je_storno(_kf(z)) or s is None or not clanovi.get(zid):
+            continue
+        q = sum((izdate[o] for o in clanovi[zid]), Decimal(0))
+        if _gajbe(s, "KolAmbalaze") != q:
+            c.nalaz("INFO", "GAJBE_ZBIRNE_PO_OTPREMNICAMA", "tblZbirna", z["ZbirnaID"],
+                    "broj %s: gajbe %s -> %s (zbir izdatih otpremnica; ZbrRequireJednakost)"
+                    % (z.get("BrojZbirne", ""), _gajbe(s, "KolAmbalaze"), q))
+            s["KolAmbalaze"] = q
+
+
+def _nalazi_uskladjivanja(c, rez):
+    for u in rez.uskladjivanje:
+        if u["dok_tip"] == "Otpremnica" and u["novo"] == 0:
+            c.nalaz("INFO", "NEIZDATA_OTPREMNICA_NE_KNJIZI", "tblOtpremnica", u["dok_id"],
+                    "%s gajbi '%s' stanica -> vozac izlazi iz knjige (main knjizi tek pri izdavanju)"
+                    % (u["staro"], u["tip"]))
+
 def _ambalaza(c, tabele, izuzeci, knjizenje):
     if tabela(tabele, "tblAmbalaza") is None:
         return
-    rez = ambalaza.prevedi(tabele, izuzeci, knjizenje=knjizenje)
+    rez = ambalaza.prevedi(tabele, izuzeci, knjizenje=knjizenje,
+                           dokumenti=(lambda r: _robni_dokumenti(c, r)) if knjizenje == ambalaza.ISPRAVNO
+                           else None)
     c.amb = rez
+    _nalazi_uskladjivanja(c, rez)
     kol = c.kanon["tblAmbalaza"]
     for k in sorted(rez.kretanja, key=lambda x: (x.datum is None, x.datum or 0, x.redosled, x.generisano)):
         red = {x: "" for x in kol}
