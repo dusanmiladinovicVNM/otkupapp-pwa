@@ -9585,6 +9585,326 @@ zatvoren enum `VrstaKretanja`, `AmbDokID` na **svim** revers putanjama (ukljucuj
 potvrde deficita, i test da pozajmljena ambalaza moze **uci -> kretati se ->
 biti vracena vlasniku** bez ijednog negativnog realnog salda.
 
+### 14.57) Pre-flight S7 — faktura na novom modelu (01.11.2026)
+
+> Mereno nad `main` = `fd39a716` (grana `claude/s7-preflight-faktura`); linije koda
+> važe za taj commit. Odluke operatera od 01.11.2026 su u `docs/DOMEN/FAKTURA.md`
+> (`FAK-IDENT-01/02`, `FAK-ODL-01..05`), stanje u `docs/STANJE_REFAKTORA.md` (stavka 251).
+> Produkcionog koda u ovom koraku nema.
+
+#### Premisa reda S7 iz §14.9 je zastarela — izmereno
+
+Red je pisan 17.09.2026, pre S6. Od tri stavke sadržaja:
+
+- **`FakturaStavka.PrijemnicaStavkaID` je urađen u S6 koraku 5** (`#439`): kanon, pisac
+  (`modFaktura.CreateFaktura:127`, upis `:345-364`), strog čitač
+  `FakturaLinijePoStavci:983`, izveden status `FakturisanostPoPrijemnici:1056`,
+  `FAK-LIN-01..03` i health check 4 (`modProductionHealthCheck:302`). Faktura više ne piše
+  `tblPrijemnica` (`WHO_WRITES.md:48`: jedini pisac je `modDokumenta`).
+- **„Briše: veza fakture preko broja prijemnice" ima 0 mesta** i pre S7 (merenje ispod). Bila
+  je 0 i 17.09: `MAPA_SPOSOBNOSTI` D-002 već tada kaže da je veza `COL_FS_PRIJEMNICA_ID`, a
+  `BrojPrijemnice` kopija za štampu.
+- **„Kartica kupca" kao sposobnost ne postoji.** KARTICA je samo za kooperanta (C-017);
+  saldo kupca (C-003/C-004) je prešao na stavke u S6 koraku 3.
+
+U tabeli nije stajalo ono što S7 stvarno ima da uradi: SEF linija, storno fakture prema SEF-u,
+linijski storno, uplata posle storna i provera zdravlja fakture. Pravilo slajsa ostaje:
+faktura **do kraja** — pisac, čitaoci, štampa, SEF, storno, sync.
+
+#### Merenje
+
+1. **Veza preko broja.** `popis_citalaca.py` nema grupu za fakturu (`GRUPE`,
+   `tools/popis_citalaca.py:79-112`), pa je mereno ad hoc nad `src-vba/` bez test modula:
+   - `TBL_PRIJEMNICA, COL_PRJ_BROJ` kao ključ pretrage (`LookupValue`, `FindRows`,
+     `LookupActiveID`, `BuildLookupDict`, `RowsAktivni`, `CheckDuplicate`): **2** mesta, nijedno
+     nije faktura — F4 provera duplikata (`modDokumenta:604`) i lista Oporavka
+     (`modScrOporavak:785`);
+   - `TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRIJEMNICE` kao ključ: **0**;
+   - `prj_linija` 0 i `prj_kes` 0 PROD (`popis_citalaca.py`, ovaj commit): niko ne čita
+     prijemnicu mimo stavki.
+
+   `BrojPrijemnice` na liniji čitaju samo prikazi: papir (`PrintFaktura:693`, `:746`), SEF
+   naziv i JSON (`modSEFMapper:204`, `:272`, `:486`) i PWA izvoz
+   (`modStammdatenSync.ExportFakturaStavke:2841`). To je snapshot, ne ključ (`FAK-IDENT-02`).
+
+2. **Status mesta** (`popis_citalaca.py --procedura`):
+
+   | Procedura | Status | Šta čita / piše |
+   |---|---|---|
+   | `modFaktura.CreateFaktura` (`:127`) | ZIV_UI | stavke po `PrijemnicaStavkaID`; kupac, storno i broj sa zaglavlja po `PrijemnicaID` |
+   | `modFaktura.PrintFaktura` (`:639`) | ZIV_UI | snapshot linije |
+   | `modSEFMapper.BuildSEFInvoiceDto` (`:10`) | ZIV_UI | linija, uz `Stornirano` i `OsirocenoOd` (`:169-170`); vrsta i sorta zaglavlja po `PrijemnicaID` (`:268`) |
+   | `modSEFMapper.GetInvoiceDeliveryDate` (`:906`) | ZIV_UI | `Prijemnica.Datum` po `PrijemnicaID` (`:961`) |
+   | `modNovac.BuildFakturaVrstaUdeoCache` (`:834`) | ZIV_UI (C-003) | linije kroz `ExcludeStornirano` (`:844`), vrsta zaglavlja |
+   | `modNovac.GetVrstaFromFaktura` (`:359`) | **MRTAV** | 0 pozivalaca |
+   | `modStammdatenSync.ExportFakturaStavke` (`:2841`) | ZIV_UI (sync) | linija + `BrojZbirne` zaglavlja (grupa `prj_brojzbirne`, S8/S9) |
+   | `modProductionHealthCheck.Check_FakturaStavkeReferences` (`:248`) | ZIV_UI (admin) | v. N5 |
+   | `modBankaMapiranje.TryResolveFakturaByPoziv` (`:3304`) | ZIV_UI | `BrojFakture` → `FakturaID`, samo uz `hits = 1` |
+   | `modBankaMapiranje.FakturaZaKupcaIzVrednosti` (`:2686`) | ZIV_UI | podniz broja, `KI-075` |
+   | `modStorno.StornoFaktura` (`:619`) | ZIV_UI | v. N2, N3, N4 |
+   | `modStornoDok.StornoIzvrsi` (`:336`) | ZIV_UI | `KI-041` (`:416`) |
+   | `modIzvestaj.ReportSaldoKupci` (`:2687`) | ZIV_UI | stavke prijemnice + uplate po `PartnerID` |
+
+3. **Pisci** (`who_writes.py`: `--check` ažuran, `--check-ownership` bez novih pisaca):
+   `tblFakture` pišu `modFaktura`, `modSEFPersistance`, `modStorno` i `modUtovar`
+   (`WHO_WRITES.md:23`); `tblFakturaStavke` pišu `modFaktura` i `modUtovar` (`:28`) — **i
+   `modStorno`**, kroz `MarkRowStornirano` (`modStorno:1674` → `:1837`). Taj upis mapa vidi samo
+   kao nepripisan (`WHO_WRITES.md`, „modStorno: 1"), a `WRITE_OWNERSHIP.json` ga za tu tabelu
+   nema. Polja prijemnice faktura ne menja od S6 koraka 5. Oba poziciona pisca linije
+   (`modFaktura:345`, `modUtovar:1603`) pišu isti prefiks od devet kolona, zaključno sa
+   `OsirocenoOd`.
+
+4. **Storno i ispravka**, pročitani pre ijedne preporuke:
+   - F8 za fakturu nudi samo običan storno: faktura nije tip okvira
+     (`modStornoDok.TipUFlowDoc:513`), a `Run*Correction` za fakturu ne postoji. Ispravka je
+     storno + nova faktura iz Fakturisanja; stavke se oslobađaju same (`FAK-LIN-03`).
+   - `StornoFaktura` (`:619`) stornira zaglavlje i stavlja `Status = STORNIRANO`, stornira svaku
+     liniju (`StornoFakturaStavke:1645`), oslobađa GP utovar (`:1692`) i prazni `FakturaID` na
+     uplatama (`ResetNovacFakturaLink:1735`). SEF stanje se u storno modulima ne čita nigde
+     (`grep SEF` nad `modStorno`, `modStornoDok`, `modStornoImpact`, `modScrStorno`: 0 pogodaka).
+   - Fakturisana prijemnica: `STORNO_ERR_PRJ_FAKTURISANA` (`modStornoDok.StornoRazlog:242-243`),
+     jezgro `FakturisanaPrijemnicaRazlog` (`modStorno:565`), okvir `modStornoFlow:503`. Odlučeno
+     u S6 koraku 4 i ne otvara se ponovo.
+
+#### Nalazi
+
+| # | Nalaz | Dokaz | Ishod |
+|---|---|---|---|
+| N1 | SEF linija nosi kao ID `PrijemnicaID` dokumenta, a naziv nema klasu. Dve klase iste prijemnice su na e-fakturi neraspoznatljive, a papir ih razlikuje | `modSEFMapper:268-276`, `:783-789`; `PrintFaktura:746-747` | `FAK-ODL-01`, rez 3 |
+| N2 | Lokalni storno fakture ne zna za SEF, a SEF storno ne stornira lokalno | merenje 4 | `FAK-ODL-02`, rez 1 |
+| N3 | Linijski `Stornirano`/`OsirocenoOd` na `tblFakturaStavke` krši §6.5. `OsirocenoOd` (i na `tblFakture`) od S6 koraka 4 niko ne piše, a grana koja ga čita je nedostižna. Pisac linije `modStorno` je nevidljiv za A11 | `modFaktura:997`, `modSEFMapper:169-170`, `:200-201`, `modSEFValidator:142`, `modNovac:844`, `modUtovar:371-372`, `modSchemaGuard:24-31`, `make_fixture.py:2387-2401` | `FAK-ODL-03`, rez 2 |
+| N4 | Storno fakture odvezuje uplatu, a avans kupca uzima samo `KupciAvans`, pa odvezana `KupciUplata` nije ni plaćanje ni avans. Izvedeno iz koda, **nije reprodukovano** | `modStorno:1735-1752`, `modNovac:628` | `FAK-ODL-05`, rez 1 (test 310 ga meri pre koda) |
+| N5 | Health check 3 prolazi kroz SVE linije, pa GP linija (prazan `PrijemnicaID`) i svaka linija stornirane fakture javljaju „missing". Izvedeno iz koda, **nije izmereno**: check je `gate: False` i van FULL-a | `modProductionHealthCheck:272-288`, `ActiveRowExists:1446`; `tools/run_vba.py:91` | rez 2, uz §14.8 t. 11 |
+| N6 | `GetVrstaFromFaktura` je mrtav | `--procedura`: MRTAV | briše se u rezu 2 |
+| N7 | `StornoIzvrsi` bez `docID`-a traži fakturu po broju | `modStornoDok:416`, `KI-041` | rez 1 (IDENTITY) |
+| N8 | Slab put banke poredi podniz broja (`1/2026` je podniz od `11/2026`) | `modBankaMapiranje:2720` | `KI-075`, van S7 (ne čita prijemnicu) |
+| N9 | Ugovor A2 nema red za `BrojFakture` | `ARCHITECTURE_CONTRACT.md` A2 | dopisano uz ovaj zapis (`FAK-IDENT-01`) |
+| N10 | `tblFakture` nosi `IspravkaOd`, `ZamenjenSa`, `CorrectionID`, `IzdatoStatus` i `GeneracijaID`, a nijedan pisac fakture ih ne puni (`CreateFaktura:304-326` piše 21 kolonu) | `schema.json` `tblFakture` | **NEPROVERENO**: generički čitaoci po promenljivoj tabeli nisu prođeni; ide u pre-check reza 2 |
+
+`KI-044` (faktura imenovana `FakturaID`-jem u poruci) **nije pitanje identiteta**: kapije rade
+po `FakturaID`-u, a pogrešan je samo tekst. Ostaje u UX prolazu lanca unosa.
+
+#### Verdikt po osama
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | PROVEN | lanac u `docs/DOMEN/README.md:13`; `DOCUMENT_HEADER_LINES` §3, §4.5, §6.5, §6.6; plan §14.55 „Korak 5" |
+| `EVENTS` | PROVEN | pet događaja, tabela ispod |
+| `IDENTITY` | PROVEN, četiri imenovana rizika | tabela ispod; `FAK-IDENT-01/02` |
+| `CARDINALITY` | PROVEN + ⚠ ARCHITECTURAL EDGE CASE | stavka : aktivna linija = 1 : 0..1 (`FAK-LIN-01`); faktura : linije = 1 : N iz N dokumenata jednog kupca (zajednička faktura, review `#439` P2-1); dokument : fakture = 1 : 0..2 (delimično); GP faktura : utovar = 1 : 1 (`modSEFMapper:218-237`). Edge: otkazana faktura ostaje `SEF_SENT`, pa `FAK-ODL-02` nosi izuzetak |
+| `INVARIANTS/OWNER` | PROVEN | `FAK-LIN-01..03`: pisac `CreateFaktura` (`:221-285`), čitač `FakturaLinijePoStavci` (`:983`), health 4. `FAK-ODL-02`: jezgro `StornoFaktura` (plan). `FAK-ODL-03`: čitač linija (plan). §6.5 je danas prekršen (N3) i rešava ga `FAK-ODL-03` |
+| `WRITERS` | PROVEN, ⚠ jedan nevidljiv | merenje 3; `modStorno` nad `tblFakturaStavke` je van `WRITE_OWNERSHIP` i nestaje sa `FAK-ODL-03` |
+| `DOWNSTREAM` | PROVEN | tabela ispod |
+| `CAPABILITY` | PROVEN | mapa ispod; nijedna sposobnost nije ostala bez reza |
+| `ACCEPTANCE CONTRACT` | PROVEN (plan) | rez 1 ispod; rez 2 i rez 3 dobijaju svoj na početku, obim je ovde |
+| `PLATFORM` | N/A | brisanje kolona ide postojećim self-heal-om (`ObrisiKolonuAko`, presedan S1d); nema novog Excel/COM ponašanja |
+| `LANDING` | PROVEN | grana od `fd39a716`; otvoreni PR-ovi `#444` (migracioni alati, `KI-065`, ne dira se), `#410` (docs), `#42` i `#7` ne diraju fakturu |
+
+#### BUSINESS EVENTS
+
+| Događaj | Datum / status | Tabela | Šta postoji bez sledećeg |
+|---|---|---|---|
+| fizički — roba primljena kod kupca (GP: utovarena) | `Prijemnica.Datum` (GP `DatumUtovara`) | `tblPrijemnica` + stavke (GP `tblUtovar`) | prijemnica bez fakture, trajno; GP utovar bez fakture (D-006) |
+| poslovni — faktura izdata | `tblFakture.Datum` = dan izdavanja (`CreateFaktura:307`), `Status = Neplaceno`, `SEFWorkflowState = LOCAL_FINALIZED` (`:314`) | `tblFakture` + linije | faktura bez SEF-a i bez uplate; faktura nad jednom klasom dokumenta |
+| finansijski — potraživanje i naplata | potraživanje = `Iznos`, isti dan; naplata = `tblNovac.Datum` uz `FakturaID`; `Placeno` se izvodi (`UpdateFakturaStatus:792`); avans se prebija u istoj TX (`:370`) | `tblFakture`, `tblNovac` | potraživanje bez naplate; uplata bez fakture (avans) |
+| pravni — e-faktura | `SEFSentAt`, `SEFWorkflowState` / `SEFStatus`; datum isporuke na UBL-u = najkasniji `Prijemnica.Datum` (`GetInvoiceDeliveryDate:906`), ne datum fakture | SEF kolone `tblFakture`, `tblSEFSubmission`, `tblSEFEventLog` | faktura bez SEF-a (SEF nije podešen, D-015) |
+| poništenje — lokalno i na SEF-u | lokalno `Stornirano = Da`, `Status = STORNIRANO`, uplate odvezane; na SEF-u `SEF_STORNO` | `tblFakture`, `tblNovac`, SEF tabele | danas svaki bez drugog (N2) → `FAK-ODL-02`; odvezana uplata bez cilja (N4) → `FAK-ODL-05` |
+
+Datum fakture, datum prijema i datum isporuke na SEF-u nisu izjednačeni zbog implementacije.
+Isporuka na e-fakturi JESTE fizički prijem, jer to SEF i pita.
+
+#### IDENTITY
+
+| Put | Šta putuje | Rizik |
+|---|---|---|
+| mreža Fakturisanja → korpa → pisac | `PrijemnicaStavkaID` (kolona 1, `GetPrijemniceZaFakturisanjeForGrid:1286`) → `stavka(0)` u `CreateFaktura` (`:223`) | nema; dvosmislen ID daje prazan identitet (`IdIliPrazno`) |
+| lista faktura → štampa, SEF, status | `FakturaID` (`GetFaktureForGrid:1378`, `GetFaktureSEFForGrid:1478`) | nema |
+| F8 → storno | `docID` = `FakturaID` (`StornoIzvrsi:414`) | ⚠ IDENTITY RISK: bez `docID`-a ide `broj → LookupActiveID → ID` (`:416`, `KI-041`); briše ga rez 1 |
+| izvod → uplata na fakturu | poziv na broj → `BrojFakture` → `FakturaID`, jednom (`TryResolveFakturaByPoziv:3304`) | prihvaćeno, jer spolja stiže samo broj (§14.8 t. 7); slab put poredi podniz → `KI-075` |
+| linija → SEF | `PrijemnicaID` dokumenta kao ID linije (`modSEFMapper:783`) | ⚠ → `FAK-ODL-01` |
+| linija → zaglavlje prijemnice (vrsta, sorta, datum) | `PrijemnicaID` kroz `LookupValue` (`modSEFMapper:268`, `:961`), prvi pogodak | ⚠ fail-open na dupli ID; rez 3 prelazi na strog čitač |
+
+#### DOWNSTREAM — ko zavisi od činjenica fakture
+
+| Čitalac | Činjenica | Posle S7 |
+|---|---|---|
+| kapija storna i okvir prijemnice, uvid, F8 | izvedena fakturisanost (`PrijemnicaJeFakturisana`) | rez 2: aktivnost linije iz zaglavlja; ishod isti |
+| mreža Fakturisanja, lista F4, detalj izveštaja | isto | isto |
+| SEF mapper i validator | linija, `Stornirano`, `OsirocenoOd` | rez 2: aktivnost iz zaglavlja, `OsirocenoOd` odlazi; rez 3: ID i naziv linije |
+| `modUtovar.AktivnihFstZaUtovar` (D-011) | linijski `Stornirano` i `OsirocenoOd` (`:371-372`) | rez 2: aktivna faktura |
+| saldo kupca (C-003) | linije za udeo uplate po vrsti (`modNovac:844`) | rez 2: linije aktivnih faktura |
+| avans kupca (`ApplyAvansToFaktura`) | `Tip = KupciAvans` bez fakture (`modNovac:628`) | rez 1: i `KupciUplata` bez fakture |
+| status plaćanja (`UpdateFakturaStatus`, `GetUplataForFaktura`) | uplate sa `FakturaID` | netaknuto |
+| banka (plan, `MapBankaImportAsKupac`) | `BrojFakture`, `FakturaID` | netaknuto; `KI-075` je van S7 |
+| PWA izvoz linija (E-041, E-042, E-078) | linija bez stavke | nizvodni zahtev: `PrijemnicaStavkaID` i aktivnost iz zaglavlja (VBA vodi, PWA prati) |
+| health 3, 4, 5, 6c | linije i zaglavlja | rez 2: check 3 se prepisuje na ugovor dokumenta |
+| fixture (`make_fixture.py:2387-2401`) i sejači linija u testovima (`modTest:18249`, `:18926`, `:27028`, `:27078`; BFP `:8421`) | linijski `Stornirano` | rez 2: popisani; prelaze na stornirano zaglavlje |
+
+#### Mapa sposobnosti S7
+
+| Red | Ishod | Test (zatečen / u rezu) |
+|---|---|---|
+| C-003 saldo kupca | MIGRATED u S6 koraku 3; `FAK-ODL-04` | `T_S6_CitaociStavkiPrijemnice` (`modTest:12122`), `T_Izv_SlaganjeKupacVozac` (`:22241`), `T_UplataSrazmernoPoVrsti` (`modIzvestajTests:300`); rez 3: dvoklasna i delimično fakturisana prijemnica, i uplata posle storna fakture |
+| C-004 zbirno po kupcu | MIGRATED (nasleđuje C-003) | `T_Izv_ZbirniSadrzaj` (`modTest:23105`) |
+| D-031 auto-knjiženje stavke izvoda | netaknuto: grana fakture čita samo `tblFakture` | `T_BankaUvoz_PlanPrikazaJeIPlanPisca` (`modTest:25584`), `T09_AutoBlokIdePoPozivuNaBroj` (`modTestBanka:649`) |
+| D-001 prijemnice kupca za fakturu | MIGRATED u S6 koraku 5 | `T_Fak_DostupnostSePrenosiURedu` (`modTest:18213`), `T_S6K5_FakturisanostJedanIzvor` (`:10608`) |
+| D-002 sastavi fakturu | MIGRATED u S6 koraku 5 | `Test_S6K5_DveKlaseIzStavki` (BFP `:7545`), `Test_S6K5_DelimicnoFakturisanje` (`:7575`), `Test_S6K5_FakturaOdbijaNevazeceStavke` (`:7620`), `Test_CreateFakturaUsesCanonicalPrijemnicaValues` (`modFakturaTests:71`) |
+| D-003 avans kroz novu fakturu | MIGRATED; proširuje ga `FAK-ODL-05` | `Test_PartialBuyerAvansSplitFaktura` (`modNovacTests:302`); rez 1: test 310 |
+| D-013 štampa fakture | MIGRATED (snapshot linije) | `Test_PrintFakturaBlocksStorniranaFaktura` (`modFakturaTests:532`), `Test_FakturaSablonCleanupPratiBrojStavki` (`:652`); izgled papira je ručna provera |
+| D-016 slanje na SEF | REPLACED u rezu 3 (`FAK-ODL-01`) | `Test_BuildDtoAndUBL` (`modSEFTests:310`; `RunSEFTestSuite` nije u FULL-u); rez 3: offline test u gate suite |
+| B-017 storno fakture | REPLACED u rezu 1 (`FAK-ODL-02`, `FAK-ODL-05`, `KI-041`) | `Test_S6K5_StornoFakturePaPrijemnice` (BFP `:7717`); rez 1: testovi 309–311 |
+| B-007, B-016 | zatvoreni u S6 (MIGRATED / REPLACED) | `Test_S6K4_FakturisanaSeOdbija` (BFP `:6827`) |
+
+Nijedna sposobnost nije INTENTIONALLY REMOVED. Mrtav `GetVrstaFromFaktura` nije sposobnost.
+
+#### Odluke operatera (01.11.2026)
+
+| # | Pitanje | Odluka | ID |
+|---|---|---|---|
+| 1 | šta nosi SEF linija | stavku i klasu | `FAK-ODL-01` |
+| 2 | lokalni storno fakture koja je na SEF-u | odbija se dok faktura živi na SEF-u | `FAK-ODL-02` |
+| 2a | `SEF_TECH_FAILED` | nejasno stanje, odbija se (409 CONFLICT, AUD-030) | `FAK-ODL-02` |
+| 3 | linijski storno | aktivnost linije iz zaglavlja; `Stornirano` i `OsirocenoOd` odlaze sa linije, `OsirocenoOd` i sa zaglavlja | `FAK-ODL-03` |
+| 4 | saldo i „kartica" kupca | saldo ostaje robni; nova kartica posle refaktora | `FAK-ODL-04` |
+| 5 | uplata odvezana stornom fakture | postaje avans kupca | `FAK-ODL-05` |
+
+Sve po preporuci. Pune formulacije su u `docs/DOMEN/FAKTURA.md` §3. Nisu postavljena pitanja
+koja su već odlučena: kardinalnost (§6.6), storno fakturisane prijemnice (S6 korak 4), datum
+fakture (S6 korak 5). Identitet fakture za SEF i banku je izmeren, ne pitan (`FAK-IDENT-01`).
+
+#### Redosled rezova
+
+1. **Rez 1 — storno fakture do kraja** (`FAK-ODL-02`, `FAK-ODL-05`, `KI-041`). Ide prvi jer
+   je to lifecycle: ulaz za storno se zatvara pre nego što rez 2 preseče linijskog pisca.
+2. **Rez 2 — linija bez sopstvenog storna** (`FAK-ODL-03`, N5, N6, N10): šema (dve kolone iz
+   sredine `tblFakturaStavke`, jedna iz `tblFakture`), oba poziciona pisca, sedam čitalaca,
+   `modSchemaGuard` (`tblFakturaStavke` prelazi u `BEZ_STORNA`), fixture i sejači, health check 3.
+   Storno fakture pri tom **zadržava** oslobađanje GP utovara: uslov `S7-REV-01` (dole).
+3. **Rez 3 — SEF linija i zatvaranje S7** (`FAK-ODL-01`, strog čitač zaglavlja u mapperu,
+   test C-003, grupa `fak_broj_prj` u `popis_citalaca.py` sa pragom 0). Posle reza 2, jer rez 2
+   već pojednostavi petlju mappera.
+
+#### Predlog — S7 rez 1: storno fakture do kraja
+
+**Obim:**
+
+- jezgro `modStorno.StornoFaktura`: kapija `FAK-ODL-02` pre `MarkRowStornirano` (`:632`).
+  Predikat postoji jednom, kod vlasnika SEF stanja (`modSEFValidator`), a spoljni status
+  klasifikuje postojeći `modSEFStatusSync.ClassifySEFExternalStatus` — bez druge kopije liste;
+- F8: `modStornoDok.StornoRazlog` (`:246`) pita isti predikat i kaže razlog; `StornoIzvrsi`
+  (`:411`) i `StornoRazlog` bez `docID`-a odbijaju umesto da traže po broju (`KI-041` → `CLOSED`);
+- avans: `modNovac.ApplyAvansToFaktura` (`:628`) prima i `KupciUplata` bez `FakturaID`-a
+  (`FAK-ODL-05`); posle storna operater dobija iznos koji je prešao u avans;
+- tekst kroz katalog (`modPoruke`), nov ključ za razlog SEF-a; PWA izvoz uplata
+  (`modStammdatenSync:2789`) se samo popisuje kao nizvodni zahtev.
+
+**Šta se briše:** traženje fakture po broju u `StornoIzvrsi` i `StornoRazlog`.
+
+**Testovi (od 309), svaki crven nad današnjim kodom pre ispravke:**
+
+- **309 `T_FAK_StornoOdbijaFakturuNaSEF`** — po jedan slučaj za svako stanje iz `FAK-ODL-02`:
+  `SENT`, `ACCEPTED`, `SENDING`, `SYNC_ERROR`, `UNKNOWN` i `TECH_FAILED` se odbijaju; `SENT` uz
+  `SEFStatus = Cancelled` prolazi; prazno, `LOCAL_FINALIZED`, `SEF_READY`, `SEF_REJECTED` i
+  `SEF_STORNO` prolaze. Odbijanje se meri u jezgru (`StornoFaktura_TX` vraća `False`, nijedan red
+  fakture ni uplate nije promenjen) **i** kroz F8 (`StornoRazlog` nosi tekst). A → B → A: ista
+  faktura je odbijena, posle `SEF_STORNO` puštena;
+- **310 `T_FAK_OdvezanaUplataJeAvans`** — faktura, `KupciUplata` na nju, storno fakture, nova
+  faktura istom kupcu: nova je umanjena za uplatu. Kontrola: `KupciUplata` DRUGOG kupca se ne
+  prebija. **Delimično prebijanje** (review PR `#451`): odvezana uplata nosi BIM marker izvoda i
+  veća je od nove fakture. Tvrdnje:
+  - na fakturu ide tačno njen iznos;
+  - ostatak ostaje na izvornom redu, bez `FakturaID`-a, i prebija se na sledeću fakturu;
+  - zbir uplata kupca je isti pre i posle;
+  - split red nosi marker izvoda (`BuildAvansSplitNapomena`, `modNovac:686`).
+
+  Ovo nije udvajanje. Postojeći `Test_PartialBuyerAvansSplitFaktura` (`modNovacTests:302`, suite
+  `blind`) meri iznose, a ne marker; T32 (`modTestStorno:430`) marker seje sam, mimo pravog splita;
+- **311 `T_FAK_StornoBezIDNeTraziPoBroju`** — `StornoIzvrsi(STIP_FAKTURA, broj, "")` odbija i ne
+  menja nijednu fakturu, i kad broj postoji i kad je prazan.
+
+**Sabotaže (`s7r1-*`), svaka na svojoj tvrdnji:** kapija izbačena iz jezgra; `TECH_FAILED`
+pušten; izuzetak `TERMINAL` obrisan (otkazana faktura postaje nestornirljiva); F8 ne pita
+predikat; avans ponovo samo `KupciAvans`; vraćen `LookupActiveID` po broju; split bez markera
+izvoda; ostatak uplate ne ostaje na izvornom redu. Poslednje dve čuvaju tvrdnje delimičnog
+prebijanja u 310, jer sabotaža „avans ponovo samo `KupciAvans`" ubija test pre njih.
+
+**Kapije:** `vba_check`; `who_writes --check` i `--check-ownership` (nema novog pisca: `modNovac`
+već piše `tblNovac`); `gen_schema_module --check` (šema se ne menja). TARGETED: `RunAllTests`,
+BFP, `RunStornoTestSuite`, `Test_StornoCentar_All`, `RunFakturaSmokeSuite`; `RunNovacSmokeSuite`
+je `blind` i ne broji se kao zeleno. `dokaz.py s7r1` jednom, posle zelenog prolaza i pročitanog
+diff-a.
+
+**Rizici:**
+
+- ⚠ FALSE-GREEN RISK: fakture u fixture-u nemaju SEF kolone (`make_fixture.py:1357-1397`), pa je
+  zatečeno stanje „prazno". Svako stanje iz tabele test postavlja sam, uz rollback;
+- „kapija šira od odluke": tuđi testovi koji storniraju fakturu (BFP
+  `Test_S6K5_StornoFakturePaPrijemnice`, `Test_OpenFaktureExcludeStornirano`, `RunSEFTestSuite`)
+  se popisuju pre koda, sa stanjem koje nose; kapija sudi tačno listu iz `FAK-ODL-02`;
+- `FAK-ODL-05` menja zbir avansa kupca: testovi koji ga broje (`modNovacTests`,
+  `T_UplataGuard_VecPlacenaFaktura`) se grep-uju pre suite;
+- split danas dobija tip `KupciAvans` tvrdo (`modNovac:683`), i kad je roditelj `KupciUplata`.
+  Da li split nasleđuje tip roditelja bira se pre koda reza 1, posle popisa čitalaca tipa, a
+  test 310 imenuje izbor;
+- uplata iz izvoda posle storna postaje avans i prebija se na sledeću fakturu bez pitanja. To
+  JE odluka, ali operater mora da vidi koliko je prešlo.
+
+**GO / HOLD za kod:** **GO za rez 1.** Nijedna relevantna osa nije `GAP`. N4 je izveden iz koda,
+pa ga test 310 meri crvenog pre ispravke; N5 i N10 mere se na početku reza 2.
+
+#### Dopuna po nezavisnom review-u PR `#451` (01.11.2026)
+
+Verdikt review-a: DOC REVIEW HOLD, kvalitet 9,0 / 10, rez 1 GO. HOLD je bio samo zbog `S7-REV-01`.
+
+**`S7-REV-01` (P1 za rez 2) — storno fakture i dalje oslobađa GP utovar.**
+`modStorno.StornoFakturaStavke` (`:1645`) radi dve stvari: markira linije fakture i, za GP liniju,
+oslobađa utovar (`ReleaseUtovarFromFaktura`, `:1692`). Rez 2 briše prvo, a drugo ostaje. Uslov
+reza 2:
+
+- storno fakture ne piše linije, a GP utovar oslobađa kroz postojeći `ReleaseUtovarFromFaktura`, u
+  istoj transakciji;
+- jedan utovar se oslobađa najviše jednom (`relUt`, `:1666-1683`);
+- utovar koji tvrdi drugu fakturu se ne dira (`:1710-1724`);
+- rollback vraća i zaglavlje fakture i marker utovara (uslovni snapshot `tblUtovar`,
+  `StornoFaktura_TX:590-599`).
+
+Izmereno čitanjem, 01.11.2026: sva četiri pravila već stoje u kodu. Tok koji review traži (GP
+utovar → faktura → storno → nova faktura nad istim utovarom) već meri test 162
+`T_FakturaGP_WriterKapijeIStorno`:
+
+- rollback vraća marker utovara (`modTest:18903`);
+- storno oslobađa utovar (`:18912`);
+- nova faktura iz istog utovara prolazi, a utovar pamti nju (`:18942-18947`);
+- korekcija cene ponavlja krug (`:19016-19021`).
+
+Na tom testu stoje dve sabotaže: `storno-gp-rollback-bez-utovara` i
+`storno-gp-faktura-ne-oslobadja-utovar` (`tools/sabotaza.py:5880-5897`).
+
+Šta rez 2 zato mora:
+
+- test 162 ostaje zelen sa svim navedenim tvrdnjama, bez slabljenja. Posle reza 2 tvrdnja „ponovna
+  faktura iz istog utovara prolazi" meri i novog čitaoca `modUtovar.AktivnihFstZaUtovar`, jer
+  aktivnost linije tada dolazi iz zaglavlja (`:371-372`);
+- čišćenje rogue linije u testu 162 (`:18935`) piše linijski `Stornirano`. Kolone više neće biti,
+  pa čišćenje dobija drugi oblik, a tvrdnja na `:18933` ostaje;
+- sidro sabotaže `storno-gp-faktura-ne-oslobadja-utovar` je red iz `StornoFakturaStavke`. Kad rez 2
+  menja tu proceduru, sidro se prepisuje i sabotaža ide u `dokaz.py` reza 2: zastarelo sidro je
+  sabotaža koja ništa ne kvari;
+- „utovar koji tvrdi drugu fakturu se ne dira" danas nema tvrdnju (grep po `*Test*.bas`,
+  01.11.2026). Rez 2 je dodaje, sa svojom sabotažom;
+- „najviše jednom" ne traži posebnu tvrdnju. Drugi poziv za isti utovar naiđe na prazan marker i
+  samo upiše WARN (`:1719-1723`), pa nema posledicu po podatke.
+
+**Test 310 je proširen** na delimično prebijanje i poreklo izvoda (gore, rez 1). Review je tražio
+dokaz da isti mehanizam splita radi i za `KupciUplata` bez `FakturaID`-a.
+
+**Opseg GO-a.** GO važi za projektovanje i kod reza 1, ne za tvrdnju da je S7 dokazan. N4, N5 i N10
+su izvedeni iz koda; N4 meri test 310 pre ispravke, a N5 i N10 početak reza 2.
+
+**`KI-075`** ostaje van S7, u svom malom rezu. Review ga ocenjuje kao P1 pre redovne upotrebe
+automatskog mapiranja izvoda, pa je to upisano u `KNOWN_ISSUES.md`. Mehanizam je potvrđen čitanjem
+koda, a nije reprodukovan.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

@@ -977,6 +977,12 @@ zbirne, koja cenu nema).
 `Stornirano` postoji **samo na headeru**. Stavke ga nemaju — line-level storno ne
 postoji u domenu. `tbl*Stavke` idu u `BEZ_STORNA` registar `modSchemaGuard`-a.
 
+> **Izuzetak do S7 reza 2 (izmereno 01.11.2026):** `tblFakturaStavke` i dalje nosi
+> `Stornirano` i `OsirocenoOd` po liniji i stoji u `STORNO_TABELE`
+> (`modSchemaGuard:24-31`); linije piše `modStorno.StornoFakturaStavke`. Odluka
+> `FAK-ODL-03` (`docs/DOMEN/FAKTURA.md`) ih briše: linija je aktivna ako i samo ako je
+> aktivna njena faktura.
+
 ### 6.6 Faktura ne prelazi izvor
 
 ```
