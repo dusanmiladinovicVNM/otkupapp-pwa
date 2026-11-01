@@ -176,6 +176,15 @@ Private Function OtkupAktivanPoID(ByVal otkupID As String) As Boolean
         LookupValue(TBL_OTKUP, COL_OTK_ID, Trim$(otkupID), COL_STORNIRANO)))) <> "DA")
 End Function
 
+' Faktura po PK: postoji i nije stornirana. Prazan ID = False (fail-closed, KI-041).
+Private Function FakturaAktivnaPoID(ByVal fakturaID As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(fakturaID)) = 0 Then Exit Function
+    If FindRows(TBL_FAKTURE, COL_FAK_ID, Trim$(fakturaID)).count <> 1 Then Exit Function
+    FakturaAktivnaPoID = (UCase$(Trim$(NzToText( _
+        LookupValue(TBL_FAKTURE, COL_FAK_ID, Trim$(fakturaID), COL_STORNIRANO)))) <> "DA")
+End Function
+
 Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
                              ByVal opcija As String, _
                              Optional ByVal docID As String = "") As String
@@ -244,13 +253,15 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
             End If
 
         Case STIP_FAKTURA
-            ' Identitet fakture JE njen PK, pa se proverava direktno.
-            If Len(Trim$(docID)) > 0 Then
-                If UCase$(Trim$(NzToText(LookupValue(TBL_FAKTURE, COL_FAK_ID, docID, _
-                                                     COL_STORNIRANO)))) = "DA" Then _
-                    StornoRazlog = NijePronadjen(broj)
-            ElseIf Len(LookupActiveID(TBL_FAKTURE, COL_FAK_BROJ, broj, COL_FAK_ID)) = 0 Then
+            ' Identitet fakture JE njen PK (FAK-IDENT-01). Bez njega se ne pogadja
+            ' po broju (KI-041): LookupActiveID je uzimao prvi pogodak, a prazan
+            ' broj je pogadjao tudju fakturu praznog broja.
+            If Not FakturaAktivnaPoID(docID) Then
                 StornoRazlog = NijePronadjen(broj)
+            ElseIf modSEFValidator.FakturaZiviNaSEFPoID(Trim$(docID)) Then
+                ' FAK-ODL-02 -- isti predikat koji dize jezgro (modStorno.StornoFaktura).
+                StornoRazlog = Poruka("STORNO_ERR_FAK_NA_SEF") & " " & _
+                               modSEFPersistance.GetFakturaSEFWorkflowState(Trim$(docID))
             End If
 
         Case STIP_ISPLATE, STIP_UPLATE
@@ -338,7 +349,7 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
                              Optional ByVal docID As String = "") As Boolean
     Dim ok As Boolean, novID As String, razlog As String, errDesc As String
     Dim izvBroj As String, izvRacun As String, izvInfo As String
-    Dim fakID As String, vezPrij As String
+    Dim fakID As String, vezPrij As String, fakAvans As Double
     On Error GoTo EH
     poruka = ""
     broj = Trim$(broj)
@@ -409,16 +420,19 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
                 poruka = modPoruke.Poruka("STORNO_ERR_NEUSPEH") & " " & broj & ": " & razlogPrj
 
         Case STIP_FAKTURA
-            ' Identitet fakture JE njen PK -- kad ga ekran posalje, ne trazi se
-            ' ponovo po broju (LookupActiveID uzima prvi pogodak).
-            fakID = docID
-            If Len(fakID) = 0 Then _
-                fakID = LookupActiveID(TBL_FAKTURE, COL_FAK_BROJ, broj, COL_FAK_ID)
-            If Len(fakID) = 0 Then
+            ' Identitet fakture JE njen PK. Prazan ID se ne razresava po broju
+            ' (KI-041, isto kao otkup od S1e).
+            If Not FakturaAktivnaPoID(docID) Then
                 poruka = NijePronadjen(broj)
                 Exit Function
             End If
+            fakID = Trim$(docID)
+            ' FAK-ODL-05: uplate fakture posle storna postaju avans kupca. Iznos se
+            ' meri PRE storna (storno prazni FakturaID), a operater ga dobija u poruci.
+            fakAvans = modNovac.GetUplataForFaktura(fakID)
             ok = StornoFaktura_TX(fakID)
+            If ok And fakAvans > 0 Then _
+                poruka = modPoruke.Poruka("STORNO_MSG_FAK_AVANS") & " " & Format$(fakAvans, "#,##0.00")
 
         Case STIP_ISPLATE, STIP_UPLATE
             ' StornoNovac_TX ocekuje NovacID, a mreza pokazuje BROJ. Isto

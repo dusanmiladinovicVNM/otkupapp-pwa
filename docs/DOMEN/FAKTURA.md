@@ -94,3 +94,17 @@ kooperanta (`ODLUKA_NOVAC_PRI_STORNU.md` §0): oba tipa su isti novac kupca, raz
 je samo da li je faktura bila poznata u trenutku uplate. Delimično prebijanje ide postojećim
 splitom (`modNovac:660-692`): ostatak ostaje na izvornom redu, a split nosi marker izvoda
 (`BuildAvansSplitNapomena`).
+
+**`FAK-ODL-06` — odvojeni deo uplate je `KupciAvans`, a PWA broji svaku uplatu vezanu za
+fakturu (operater, 01.11.2026, pre koda S7 reza 1).** Kad odvezana uplata pokrije samo deo nove
+fakture, `ApplyAvansToFaktura` deli red. Primenjeni deo je nov red tipa `KupciAvans`, sa
+`FakturaID`-om nove fakture i BIM markerom izvoda. Izvorni red zadržava svoj tip (`KupciUplata`),
+umanjen iznos i marker. PWA izvoz plaćenog po fakturi (`modStammdatenSync.UplacenoPoFakturi`)
+broji svaku nestorniranu uplatu vezanu za fakturu, bez obzira na tip — isto pravilo kao
+`modNovac.GetUplataForFaktura`. Do S7 reza 1 je brojao samo `KupciUplata`, pa je avans primenjen
+na fakturu u PWA izgledao kao neplaćen deo.
+
+Izmereno pre odluke: `KupciUplata` bez fakture nastaje samo stornom, jer je oba pisca upisuju
+samo uz fakturu (`modNovacUnos.UplataValidiraj`, `modBankaMapiranje.MapBankaImportAsKupac`).
+Zato proširen čitač avansa tačno odgovara `FAK-ODL-05`. Tip u ovom toku čita samo taj izvoz;
+zbir po kupcu (`ExportSaldoKupci`) broji oba tipa.

@@ -97,6 +97,10 @@ Private Const TEST_HLAD2_ST_ID As String = "ST-HLADTEST-90002"
 ' pa nad njima kapija ne moze da razlikuje vlasnike niza.
 Private Const BKTX_ST2 As String = "ST-BKTX-90007"
 Private Const TEST_KUP2_ID As String = "KUP-90002"
+' Treci kupac -- samo S7 rez 1 (Test_S7R1_OdvezanaUplataJeAvans): uplata koju storno
+' fakture odveze je slobodan novac kupca, pa bi je zajednicki test kupac preneo u
+' tudji test.
+Private Const TEST_KUP3_ID As String = "KUP-90003"
 
 ' ============================================================
 ' PUBLIC ENTRY POINTS
@@ -361,6 +365,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6K5_PadPosleUpisaVracaFakturu
     Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka
     Test_S6K5_LinijaBezFaktureJeKvar
+    Test_S7R1_StornoOdbijaFakturuNaSEF
+    Test_S7R1_OdvezanaUplataJeAvans
+    Test_S7R1_StornoBezIDNeTraziPoBroju
     Test_S6K6_F4DokumentProlaziLanac
     Test_S6K7_OsirocenePaleteDatumPoDokumentu
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
@@ -1205,6 +1212,7 @@ Private Sub SeedBusinessFlowProMasterData()
     SeedVozac2
     SeedKupac
     SeedKupac2
+    SeedKupac3
     SeedKultura
     SeedKulturaBezSorte
     SeedKooperant
@@ -1334,6 +1342,28 @@ Private Sub SeedKupac2()
     SetOptionalField rowData, TBL_KUPCI, "TekuciRacun", "160-0000000000002-00"
 
     RequireAppend TBL_KUPCI, rowData, "SeedKupac2"
+End Sub
+
+' Treci kupac (v. TEST_KUP3_ID) -- isti oblik kao SeedKupac2.
+Private Sub SeedKupac3()
+    If RowExists(TBL_KUPCI, "KupacID", TEST_KUP3_ID) Then Exit Sub
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_KUPCI)
+
+    SetRequiredField rowData, TBL_KUPCI, "KupacID", TEST_KUP3_ID
+    SetRequiredField rowData, TBL_KUPCI, "Naziv", "TEST KUPAC TRI DOO"
+    SetOptionalField rowData, TBL_KUPCI, "Mesto", "Test Grad"
+    SetRequiredField rowData, TBL_KUPCI, "PIB", "109000003"
+    SetOptionalField rowData, TBL_KUPCI, "MaticniBroj", "20900003"
+    SetOptionalField rowData, TBL_KUPCI, "Ulica", "Test ulica 3"
+    SetOptionalField rowData, TBL_KUPCI, "PostanskiBroj", "11000"
+    SetOptionalField rowData, TBL_KUPCI, "Drzava", "RS"
+    SetOptionalField rowData, TBL_KUPCI, "Hladnjaca", "Test Hladnjaca 3"
+    SetOptionalField rowData, TBL_KUPCI, "Aktivan", "Aktivan"
+    SetOptionalField rowData, TBL_KUPCI, "TekuciRacun", "160-0000000000003-00"
+
+    RequireAppend TBL_KUPCI, rowData, "SeedKupac3"
 End Sub
 
 ' Drugi vozac. Koristi ga PR3 (zbirna nosi otpremnice SAMO svog vozaca) i
@@ -8312,6 +8342,334 @@ Private Function S6K5Iznos(ByVal fid As String) As Double
     If Len(fid) = 0 Then Exit Function
     v = LookupValue(TBL_FAKTURE, COL_FAK_ID, fid, COL_FAK_IZNOS)
     If IsNumeric(v) And Not IsEmpty(v) Then S6K5Iznos = CDbl(v)
+End Function
+
+' ============================================================
+' S7 REZ 1 -- STORNO FAKTURE DO KRAJA (plan 14.57; FAK-ODL-02, -05, -06; KI-041)
+'
+' Fakture nastaju kroz pravi pisac nad dokumentom iz S6K5Dokument. Fixture fakture
+' nemaju SEF stanje (FALSE-GREEN RISK iz pre-flight-a), pa ga test postavlja sam,
+' na SVOJOJ fakturi -- synthetic state, ne zatecen podatak.
+' ============================================================
+
+' FAK-ODL-02: dok faktura zivi na SEF-u, jezgro odbija lokalni storno, a F8 kaze
+' zasto. A -> B -> A nad ISTOM fakturom: odbijena dok je na SEF-u, pustena kad je
+' SEF_STORNO. SEF_SENT uz otkazan dokument je izuzetak (otkaz na SEF-u ostavlja
+' workflow u SEF_SENT). Jezgro se zove direktno (StornoFaktura_TX), da se meri
+' kapija u jezgru, a ne samo F8.
+' SABOTAZE: s7r1-kapija-van-jezgra, s7r1-tech-failed-pusten, s7r1-bez-izuzetka-otkaza,
+'           s7r1-f8-ne-pita-sef.
+Private Sub Test_S7R1_StornoOdbijaFakturuNaSEF()
+    On Error GoTo EH
+    Dim scenario As String, prj As String, fid As String, br As String
+    scenario = NewScenarioCode("S7R1SEF")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID)
+    AssertTrue Len(prj) > 0, "S7R1 SEF: preduslov -- dokument kroz pravi pisac"
+    fid = S6K5Fakturisi(TEST_KUP_ID, S6StavkaID(prj, KLASA_I))
+    br = S6K5BrojFakture(fid)
+    AssertTrue Len(fid) > 0 And Len(br) > 0, "S7R1 SEF: preduslov -- faktura kroz pravi pisac"
+
+    ' F8 pre jezgra: razlog se cita bez mutacije.
+    S7R1SefStanje fid, WF_SEF_SENT, "Sent"
+    AssertTrue InStr(1, modStornoDok.StornoRazlog(STIP_FAKTURA, br, "", fid), _
+                     modPoruke.Poruka("STORNO_ERR_FAK_NA_SEF"), vbTextCompare) > 0, _
+               "S7R1 SEF: F8 kaze razlog za SEF_SENT"
+    S7R1SefStanje fid, WF_SEF_SENT, "Cancelled"
+    AssertEquals "", modStornoDok.StornoRazlog(STIP_FAKTURA, br, "", fid), _
+                 "S7R1 SEF: SEF_SENT uz otkazan dokument pusta storno (F8)"
+    AssertEquals "", S7R1PustajuF8(fid, br), _
+                 "S7R1 SEF: prazno, LOCAL_FINALIZED, SEF_READY, SEF_REJECTED i SEF_STORNO pustaju storno (F8)"
+
+    ' Jezgro odbija svako stanje u kome faktura zivi na SEF-u.
+    AssertTrue S7R1SefOdbija(fid, WF_SEF_SENDING, ""), "S7R1 SEF: jezgro odbija SEF_SENDING"
+    AssertTrue S7R1SefOdbija(fid, WF_SEF_SENT, "Sent"), "S7R1 SEF: jezgro odbija SEF_SENT"
+    AssertTrue S7R1SefOdbija(fid, WF_SEF_ACCEPTED, "Approved"), "S7R1 SEF: jezgro odbija SEF_ACCEPTED"
+    AssertTrue S7R1SefOdbija(fid, WF_SEF_SYNC_ERROR, "FAILED"), "S7R1 SEF: jezgro odbija SEF_SYNC_ERROR"
+    AssertTrue S7R1SefOdbija(fid, WF_SEF_UNKNOWN, SEF_STATUS_UNKNOWN), "S7R1 SEF: jezgro odbija SEF_UNKNOWN"
+    AssertTrue S7R1SefOdbija(fid, WF_SEF_TECH_FAILED, ""), "S7R1 SEF: jezgro odbija SEF_TECH_FAILED (AUD-030)"
+
+    ' Ista faktura posle SEF storna: lokalni storno prolazi.
+    S7R1SefStanje fid, WF_SEF_STORNO, "Storno"
+    AssertTrue Len(fid) > 0 And modStorno.StornoFaktura_TX(fid) And _
+               S6K4Stornirano(TBL_FAKTURE, COL_FAK_ID, fid), _
+               "S7R1 SEF: ista faktura posle SEF storna prolazi lokalni storno"
+    Exit Sub
+EH:
+    LogFatal "Test_S7R1_StornoOdbijaFakturuNaSEF", Err.Number, Err.description
+End Sub
+
+' FAK-ODL-05 i FAK-ODL-06: uplata koju storno odveze od fakture je avans kupca i
+' sama se prebija na sledecu fakturu. Delimicno: nova faktura (4.000) je manja od
+' uplate (16.000) -- na nju ide tacno njen iznos kao odvojen KupciAvans red sa BIM
+' markerom izvoda, a ostatak ostaje na izvornom redu (KupciUplata, isti marker) i
+' zatvara sledecu fakturu (12.000). Zbir novca kupca je isti posle svakog koraka.
+' Svoj kupac (TEST_KUP3_ID), jer je odvezana uplata slobodan novac kupca.
+' KONTROLA: faktura DRUGOG kupca tu uplatu ne uzima.
+' SABOTAZE: s7r1-avans-samo-kupciavans, s7r1-split-bez-markera, s7r1-split-gubi-ostatak,
+'           s7r1-pwa-samo-kupciuplata.
+Private Sub Test_S7R1_OdvezanaUplataJeAvans()
+    On Error GoTo EH
+    Dim scenario As String, prj As String, prjX As String, stI As String, stII As String
+    Dim fidA As String, fidB As String, fidC As String, fidX As String
+    Dim brUpl As String, novU As String, bim As String, poruka As String, okSt As Boolean
+    scenario = NewScenarioCode("S7R1AV")
+    SeedKupac3
+    AssertTrue S7R1NovacKupca(TEST_KUP3_ID, True) < 0.005, _
+               "S7R1 avans: preduslov -- kupac nema slobodnog novca"
+    prj = S6K5Dokument(scenario, TEST_KUP3_ID)
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    fidA = S6K5Fakturisi(TEST_KUP3_ID, stI, stII)
+    AssertTrue Len(fidA) > 0 And Abs(S6K5Iznos(fidA) - 16000#) < 0.005, _
+               "S7R1 avans: preduslov -- faktura od 16.000 kroz pravi pisac"
+
+    brUpl = TEST_PREFIX & "-UPL7-" & scenario
+    bim = "BIM-S7R1-" & scenario
+    If Len(fidA) > 0 Then
+        AssertTrue SaveKupciIzlaz_TX(datum:=Date, brojDok:=brUpl, kupacNaziv:=TEST_KUP3_ID, _
+                                     kupacID:=TEST_KUP3_ID, vrstaVoca:=TEST_VRSTA, novac:=16000#, _
+                                     fakturaID:=fidA, _
+                                     napomena:=NOV_NAPOMENA_BIM_PREFIX & bim & "; test S7R1", _
+                                     tipNovca:=NOV_KUPCI_UPLATA), _
+                   "S7R1 avans: preduslov -- uplata iz izvoda placa celu fakturu"
+    End If
+    novU = S7R1NovacPoBroju(brUpl)
+
+    If Len(fidA) > 0 Then okSt = modStornoDok.StornoIzvrsi(STIP_FAKTURA, S6K5BrojFakture(fidA), _
+                                                           "", poruka, fidA)
+    AssertTrue okSt, "S7R1 avans: F8 stornira placenu fakturu"
+    AssertTrue InStr(1, poruka, modPoruke.Poruka("STORNO_MSG_FAK_AVANS"), vbTextCompare) > 0 And _
+               InStr(1, poruka, Format$(16000#, "#,##0.00"), vbTextCompare) > 0, _
+               "S7R1 avans: poruka storna kaze koliko je preslo u avans"
+    AssertTrue Abs(S7R1NovacKupca(TEST_KUP3_ID, True) - 16000#) < 0.005, _
+               "S7R1 avans: posle storna je uplata slobodan novac kupca"
+
+    prjX = S6K5Dokument(scenario & "-X", TEST_KUP2_ID)
+    fidX = S6K5Fakturisi(TEST_KUP2_ID, S6StavkaID(prjX, KLASA_II))
+    AssertTrue Len(fidX) > 0 And Abs(S7R1NovacKupca(TEST_KUP3_ID, True) - 16000#) < 0.005, _
+               "S7R1 avans: KONTROLA -- faktura drugog kupca ne uzima tu uplatu"
+
+    fidB = S6K5Fakturisi(TEST_KUP3_ID, stII)
+    AssertTrue Len(fidB) > 0 And Abs(GetUplataForFaktura(fidB) - 4000#) < 0.005, _
+               "S7R1 avans: nova faktura je placena odvezanom uplatom"
+    AssertEquals Format$(12000#, "0.00") & "|" & NOV_KUPCI_UPLATA & "||" & bim, S7R1Red(novU), _
+                 "S7R1 avans: ostatak od 12.000 ostaje na izvornom redu, slobodan, sa markerom izvoda"
+    AssertEquals Format$(4000#, "0.00") & "|" & NOV_KUPCI_AVANS & "|" & fidB & "|" & bim, _
+                 S7R1SplitRed(fidB, novU), _
+                 "S7R1 avans: na fakturu ide odvojen KupciAvans red od 4.000 sa markerom izvoda"
+    AssertTrue Abs(S7R1NovacKupca(TEST_KUP3_ID, False) - 16000#) < 0.005, _
+               "S7R1 avans: zbir novca kupca je isti posle podele"
+    AssertTrue Len(fidB) > 0 And Abs(S7R1PwaUplaceno(fidB) - 4000#) < 0.005, _
+               "S7R1 avans: PWA izvoz broji avans primenjen na fakturu (FAK-ODL-06)"
+
+    fidC = S6K5Fakturisi(TEST_KUP3_ID, stI)
+    AssertTrue Len(fidC) > 0 And Abs(GetUplataForFaktura(fidC) - 12000#) < 0.005 And _
+               S7R1NovacKupca(TEST_KUP3_ID, True) < 0.005, _
+               "S7R1 avans: ostatak uplate zatvara sledecu fakturu do kraja"
+    AssertTrue Abs(S7R1NovacKupca(TEST_KUP3_ID, False) - 16000#) < 0.005, _
+               "S7R1 avans: zbir novca kupca je isti posle druge fakture"
+    Exit Sub
+EH:
+    LogFatal "Test_S7R1_OdvezanaUplataJeAvans", Err.Number, Err.description
+End Sub
+
+' KI-041: F8 bez FakturaID-a ne trazi fakturu po broju. Do S7 rez 1 je StornoIzvrsi
+' uzimao prvu aktivnu fakturu tog broja, a prazan broj je pogadjao FAK-TEST-0 iz
+' fixture-a (izmereno u crvenom prolazu S6K5). Prazan broj ide tek kad slucaj sa
+' brojem pokaze da se po broju vise ne trazi -- inace bi crveni prolaz stornirao
+' tudji fixture red.
+' KONTROLA: sa FakturaID-om F8 stornira istu fakturu.
+' SABOTAZE: s7r1-f8-trazi-po-broju.
+Private Sub Test_S7R1_StornoBezIDNeTraziPoBroju()
+    On Error GoTo EH
+    Dim scenario As String, prj As String, fid As String, br As String
+    Dim poruka As String, ok As Boolean, stPre As Long
+    scenario = NewScenarioCode("S7R1BID")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID)
+    fid = S6K5Fakturisi(TEST_KUP_ID, S6StavkaID(prj, KLASA_I))
+    br = S6K5BrojFakture(fid)
+    AssertTrue Len(fid) > 0 And Len(br) > 0, "S7R1 bez ID: preduslov -- faktura sa brojem kroz pravi pisac"
+
+    ' Razlog pre izvrsenja: dok je faktura jos aktivna, stari razresavac po broju
+    ' bi je nasao i vratio prazno -- posle storna bi tvrdnja prosla i bez ispravke.
+    AssertTrue Len(br) > 0 And Len(modStornoDok.StornoRazlog(STIP_FAKTURA, br, "", "")) > 0, _
+               "S7R1 bez ID: F8 razlog odbija broj bez FakturaID-a"
+    If Len(br) > 0 Then ok = modStornoDok.StornoIzvrsi(STIP_FAKTURA, br, "", poruka, "")
+    AssertTrue Not ok And Len(fid) > 0 And Not S6K4Stornirano(TBL_FAKTURE, COL_FAK_ID, fid), _
+               "S7R1 bez ID: F8 sa brojem a bez FakturaID-a ne stornira fakturu"
+
+    If Len(fid) > 0 And Not S6K4Stornirano(TBL_FAKTURE, COL_FAK_ID, fid) Then
+        stPre = S7R1StorniranihFaktura()
+        ok = modStornoDok.StornoIzvrsi(STIP_FAKTURA, "", "", poruka, "")
+        AssertTrue Not ok And S7R1StorniranihFaktura() = stPre, _
+                   "S7R1 bez ID: prazan broj i prazan ID ne storniraju nijednu fakturu"
+    Else
+        AssertTrue False, "S7R1 bez ID: prazan broj i prazan ID ne storniraju nijednu fakturu"
+    End If
+
+    ok = False
+    If Len(fid) > 0 And Not S6K4Stornirano(TBL_FAKTURE, COL_FAK_ID, fid) Then _
+        ok = modStornoDok.StornoIzvrsi(STIP_FAKTURA, br, "", poruka, fid)
+    AssertTrue ok And S6K4Stornirano(TBL_FAKTURE, COL_FAK_ID, fid), _
+               "S7R1 bez ID: KONTROLA -- sa FakturaID-om F8 stornira istu fakturu"
+    Exit Sub
+EH:
+    LogFatal "Test_S7R1_StornoBezIDNeTraziPoBroju", Err.Number, Err.description
+End Sub
+
+' SEF stanje fakture (synthetic, fault injection): workflow i spoljni status.
+Private Sub S7R1SefStanje(ByVal fid As String, ByVal wf As String, ByVal st As String)
+    If Len(fid) = 0 Then Exit Sub
+    S6K4Postavi TBL_FAKTURE, COL_FAK_ID, fid, "SEFWorkflowState", wf
+    S6K4Postavi TBL_FAKTURE, COL_FAK_ID, fid, "SEFStatus", st
+End Sub
+
+' True = jezgro je odbilo storno u tom SEF stanju i faktura je ostala aktivna.
+Private Function S7R1SefOdbija(ByVal fid As String, ByVal wf As String, _
+                               ByVal st As String) As Boolean
+    Dim ok As Boolean
+    If Len(fid) = 0 Then Exit Function
+    S7R1SefStanje fid, wf, st
+    ok = modStorno.StornoFaktura_TX(fid)
+    S7R1SefOdbija = (Not ok) And Not S6K4Stornirano(TBL_FAKTURE, COL_FAK_ID, fid)
+End Function
+
+' Stanja u kojima faktura NE zivi na SEF-u, a F8 ipak daje razlog; prazno = sva
+' pustaju. Bez mutacije: meri se samo razlog.
+Private Function S7R1PustajuF8(ByVal fid As String, ByVal br As String) As String
+    Dim stanja As Variant, statusi As Variant, i As Long, s As String
+    If Len(fid) = 0 Then
+        S7R1PustajuF8 = "<bez fakture>"
+        Exit Function
+    End If
+    stanja = Array("", WF_LOCAL_FINALIZED, WF_SEF_READY, WF_SEF_REJECTED, WF_SEF_STORNO)
+    statusi = Array("", "", "", "Rejected", "Storno")
+    For i = LBound(stanja) To UBound(stanja)
+        S7R1SefStanje fid, CStr(stanja(i)), CStr(statusi(i))
+        If Len(modStornoDok.StornoRazlog(STIP_FAKTURA, br, "", fid)) > 0 Then
+            If Len(s) > 0 Then s = s & ","
+            s = s & "[" & CStr(stanja(i)) & "]"
+        End If
+    Next i
+    S7R1PustajuF8 = s
+End Function
+
+' Novac kupca (KupciUplata i KupciAvans, nestorniran); samoSlobodan = bez fakture.
+Private Function S7R1NovacKupca(ByVal kupacID As String, ByVal samoSlobodan As Boolean) As Double
+    Dim d As Variant, i As Long, cP As Long, cT As Long, cF As Long, cU As Long, cS As Long
+    Dim tip As String
+    d = GetTableData(TBL_NOVAC)
+    If Not IsArray(d) Then Exit Function
+    cP = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID, "S7R1NovacKupca")
+    cT = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, "S7R1NovacKupca")
+    cF = RequireColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID, "S7R1NovacKupca")
+    cU = RequireColumnIndex(TBL_NOVAC, COL_NOV_UPLATA, "S7R1NovacKupca")
+    cS = RequireColumnIndex(TBL_NOVAC, COL_STORNIRANO, "S7R1NovacKupca")
+    For i = 1 To UBound(d, 1)
+        tip = Trim$(nz(d(i, cT), ""))
+        If Trim$(nz(d(i, cP), "")) = kupacID And UCase$(Trim$(nz(d(i, cS), ""))) <> "DA" _
+           And (tip = NOV_KUPCI_UPLATA Or tip = NOV_KUPCI_AVANS) Then
+            If Not samoSlobodan Or Len(Trim$(nz(d(i, cF), ""))) = 0 Then
+                If IsNumeric(d(i, cU)) And Not IsEmpty(d(i, cU)) Then _
+                    S7R1NovacKupca = S7R1NovacKupca + CDbl(d(i, cU))
+            End If
+        End If
+    Next i
+End Function
+
+' NovacID jedinog nestorniranog reda sa tim brojem dokumenta; prazno = nije tacno jedan.
+Private Function S7R1NovacPoBroju(ByVal brojDok As String) As String
+    Dim d As Variant, i As Long, cB As Long, cI As Long, cS As Long, n As Long, id As String
+    d = GetTableData(TBL_NOVAC)
+    If Not IsArray(d) Then Exit Function
+    cB = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, "S7R1NovacPoBroju")
+    cI = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, "S7R1NovacPoBroju")
+    cS = RequireColumnIndex(TBL_NOVAC, COL_STORNIRANO, "S7R1NovacPoBroju")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cB), "")) = brojDok And UCase$(Trim$(nz(d(i, cS), ""))) <> "DA" Then
+            n = n + 1
+            id = Trim$(nz(d(i, cI), ""))
+        End If
+    Next i
+    If n = 1 Then S7R1NovacPoBroju = id
+End Function
+
+' "Uplata|Tip|FakturaID|BIM" za red novca; Uplata u obliku "0.00".
+Private Function S7R1OpisReda(ByVal d As Variant, ByVal i As Long) As String
+    Dim v As Variant
+    v = d(i, RequireColumnIndex(TBL_NOVAC, COL_NOV_UPLATA, "S7R1OpisReda"))
+    If IsNumeric(v) And Not IsEmpty(v) Then S7R1OpisReda = Format$(CDbl(v), "0.00")
+    S7R1OpisReda = S7R1OpisReda & "|" & _
+        Trim$(nz(d(i, RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, "S7R1OpisReda")), "")) & "|" & _
+        Trim$(nz(d(i, RequireColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID, "S7R1OpisReda")), "")) & "|" & _
+        modBankaMapiranje.BimIdFromNapomena(CStr(nz(d(i, _
+            RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, "S7R1OpisReda")), "")))
+End Function
+
+Private Function S7R1Red(ByVal novID As String) As String
+    Dim d As Variant, i As Long, cI As Long
+    If Len(novID) = 0 Then
+        S7R1Red = "<bez reda>"
+        Exit Function
+    End If
+    d = GetTableData(TBL_NOVAC)
+    If Not IsArray(d) Then Exit Function
+    cI = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, "S7R1Red")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cI), "")) = novID Then
+            S7R1Red = S7R1OpisReda(d, i)
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Jedini nestorniran red vezan za fakturu, osim izvornog; inace "redova=N".
+Private Function S7R1SplitRed(ByVal fid As String, ByVal osimNovID As String) As String
+    Dim d As Variant, i As Long, cI As Long, cF As Long, cS As Long, n As Long, s As String
+    If Len(fid) = 0 Then
+        S7R1SplitRed = "<bez fakture>"
+        Exit Function
+    End If
+    d = GetTableData(TBL_NOVAC)
+    If Not IsArray(d) Then Exit Function
+    cI = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, "S7R1SplitRed")
+    cF = RequireColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID, "S7R1SplitRed")
+    cS = RequireColumnIndex(TBL_NOVAC, COL_STORNIRANO, "S7R1SplitRed")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cF), "")) = fid And Trim$(nz(d(i, cI), "")) <> osimNovID _
+           And UCase$(Trim$(nz(d(i, cS), ""))) <> "DA" Then
+            n = n + 1
+            s = S7R1OpisReda(d, i)
+        End If
+    Next i
+    If n = 1 Then S7R1SplitRed = s Else S7R1SplitRed = "redova=" & CStr(n)
+End Function
+
+' Uplaceno po fakturi kako ga vidi PWA izvoz (modStammdatenSync.ExportFakture).
+' Kasno vezano: test se kompajlira i nad kodom pre reza, gde citaca jos nema, i
+' tada je crven po imenu umesto da obori ceo modul. -1 = citac nije pozvan.
+Private Function S7R1PwaUplaceno(ByVal fid As String) As Double
+    Dim m As Object
+    S7R1PwaUplaceno = -1
+    On Error Resume Next
+    Set m = Application.Run("modStammdatenSync.UplacenoPoFakturi")
+    If Err.Number <> 0 Or m Is Nothing Then
+        Err.Clear
+        Exit Function
+    End If
+    On Error GoTo 0
+    S7R1PwaUplaceno = 0
+    If m.Exists(fid) Then S7R1PwaUplaceno = CDbl(m(fid))
+End Function
+
+Private Function S7R1StorniranihFaktura() As Long
+    Dim d As Variant, i As Long, cS As Long
+    d = GetTableData(TBL_FAKTURE)
+    If Not IsArray(d) Then Exit Function
+    cS = RequireColumnIndex(TBL_FAKTURE, COL_STORNIRANO, "S7R1StorniranihFaktura")
+    For i = 1 To UBound(d, 1)
+        If UCase$(Trim$(nz(d(i, cS), ""))) = "DA" Then S7R1StorniranihFaktura = S7R1StorniranihFaktura + 1
+    Next i
 End Function
 
 ' Linije fakture "PrijemnicaStavkaID|Klasa|Kolicina|Cena", klasa I pa II, spojene

@@ -2739,6 +2739,33 @@ EH:
     ExportUsers = False
 End Function
 
+' Uplaceno po fakturi za PWA izvoz: zbir nestorniranih uplata vezanih za fakturu,
+' BEZ obzira na tip -- isto pravilo kao modNovac.GetUplataForFaktura (FAK-ODL-06).
+' Do S7 rez 1 je izvoz brojao samo KupciUplata, pa je avans primenjen na fakturu
+' (KupciAvans sa FakturaID-om) u PWA izgledao kao neplacen deo.
+Public Function UplacenoPoFakturi() As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set UplacenoPoFakturi = d
+
+    Dim novData As Variant
+    novData = GetTableData(TBL_NOVAC)
+    If IsEmpty(novData) Then Exit Function
+    novData = ExcludeStornirano(novData, TBL_NOVAC)
+    If IsEmpty(novData) Then Exit Function
+
+    Dim colFak As Long, colUpl As Long, n As Long, fakID As String
+    colFak = GetColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID)
+    colUpl = GetColumnIndex(TBL_NOVAC, COL_NOV_UPLATA)
+    For n = 1 To UBound(novData, 1)
+        fakID = Trim$(CStr(nz(novData(n, colFak), "")))
+        If Len(fakID) > 0 Then ' uplata vezana za fakturu, svaki tip
+            If Not d.Exists(fakID) Then d.Add fakID, 0#
+            d(fakID) = d(fakID) + CDbl(nz(novData(n, colUpl), 0))
+        End If
+    Next n
+End Function
+
 Private Function ExportFakture(ByVal sheetID As String) As Boolean
     Dim data As Variant
     Dim colID As Long, colBroj As Long, colDatum As Long, colKupac As Long
@@ -2765,35 +2792,10 @@ Private Function ExportFakture(ByVal sheetID As String) As Boolean
     colStatus = GetColumnIndex(TBL_FAKTURE, "Status")
     colSEFStatus = GetColumnIndex(TBL_FAKTURE, "SEFStatus")
     
-    ' Uplate per Faktura aus tblNovac
-    Dim novData As Variant
-    novData = GetTableData(TBL_NOVAC)
-    If Not IsEmpty(novData) Then novData = ExcludeStornirano(novData, TBL_NOVAC)
-    
+    ' Uplaceno po fakturi -- isto pravilo kao VBA (UplacenoPoFakturi, FAK-ODL-06).
     Dim dictPlaceno As Object
-    Set dictPlaceno = CreateObject("Scripting.Dictionary")
-    
-    If Not IsEmpty(novData) Then
-        Dim colNovFaktura As Long, colNovUplata As Long, colNovTip As Long
-        colNovFaktura = GetColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID)
-        colNovUplata = GetColumnIndex(TBL_NOVAC, COL_NOV_UPLATA)
-        colNovTip = GetColumnIndex(TBL_NOVAC, COL_NOV_TIP)
-        
-        Dim n As Long
-        For n = 1 To UBound(novData, 1)
-            Dim fakID As String
-            fakID = Trim$(CStr(nz(novData(n, colNovFaktura), "")))
-            If Len(fakID) > 0 Then
-                Dim tip As String
-                tip = CStr(novData(n, colNovTip))
-                If tip = NOV_KUPCI_UPLATA Then
-                    If Not dictPlaceno.Exists(fakID) Then dictPlaceno.Add fakID, 0#
-                    dictPlaceno(fakID) = dictPlaceno(fakID) + CDbl(nz(novData(n, colNovUplata), 0))
-                End If
-            End If
-        Next n
-    End If
-    
+    Set dictPlaceno = UplacenoPoFakturi()
+
     Dim result() As Variant
     ReDim result(1 To UBound(data, 1) + 1, 1 To 10)
     
