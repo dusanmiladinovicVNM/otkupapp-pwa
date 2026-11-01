@@ -35,7 +35,8 @@
 | **S5 (PWA i sync na novom modelu)** | ✅ zatvoren kroz #385–#394; ostatak je jedno mesto `DEGRADIRANO` grane (v. „Sledeće“) |
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
-| **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ⏳ **`#445`** — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217); čeka merge |
+| **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
+| **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): PR `#450`, review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); čeka merge |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -8117,6 +8118,699 @@
          (`KartAmbPoslovniOracle`) dobija isto pravilo nezavisno, čitajući zaglavlje sama;
        - sabotaže `amb-posl-om-bez-otpisa`, `amb-posl-om-otpis-svake-stanice`; katalog 1037 → 1039.
      - **Sledeći brojevi:** test 289 · stavka 220 · KI-064.
+
+220. **Merge `#441` = `7c12aa2e`** (28.10.2026). Grana `claude/trusting-hawking-2cw6z1` (`7274598c`, 9 commitova
+     na `b91df251`), merge commit uz proveru head-a. CI `static` zelen; VBA runtime u web sesiji nije pušten —
+     `RunAllTests` (očekivano 288/0), `RunIzvestajTests` i `RunBusinessFlowProSuite` ostaju operateru nad
+     `main`-om. Stavke 218 i 219 su ono što je spojeno.
+
+221. **Revers kooperantu nosi poslovno stanje (`AMB-POSL-03`)** (28.10.2026). Grana
+     `claude/trusting-hawking-2cw6z1`, nova, od `7c12aa2e`. Odluka i pravilo: `docs/DOMEN/README.md` §2.
+
+     - **Uzrok (iz koda):** papir reversa (`modPrint.FillIzdavanjeAmbalazeSablon`) računa novo = stanje posle
+       dokumenta i početno = novo − promet. Promet je poslovni red dokumenta (`AmbDokPoslovniRedovi` preskače
+       pokriće), a stanje fizičko — pa pokriće ulazi u novo i naduvava početno (povrat 23 uz pokriće 12:
+       23 → 0 umesto 11 → −12), i uzastopni papiri se ne nastavljaju.
+     - **Ispravka:** za kooperanta `AmbStanjeOkoDokumenta(..., samoPoslovno:=True)`; revers firme i zapisnik o
+       otpisu nepromenjeni. Pravilo reversa iz stavke 135 (odluka 3) ostaje — menja se samo koje stanje.
+     - **Testovi:** 289 `T_AmbPoslovno_ReversKooperantaPoslovno` crven pre ispravke (11 → −12, pa −12 → −15);
+       zatečeni testovi papira reversa (231, 232, 235) rade bez pokrića, pa im se premisa ne menja.
+       **Sabotaža:** `amb-posl-revers-fizicki`; katalog 1039 → 1040.
+     - **NEVERIFIKOVANO:** `run_vba` u web sesiji ne radi. Treba: `python tools/run_vba.py --suite RunAllTests`,
+       pa `python tools/dokaz.py amb-posl-revers --grupe`, pa ručno: revers povrata uz pokriće.
+     - **Sledeći brojevi:** test 290 · stavka 222 · KI-064.
+
+222. **Merge `#446` = `b5528922`** (29.10.2026). Grana `claude/trusting-hawking-2cw6z1` (`f9fdfc9b`, 2 commita
+     na `7c12aa2e`), merge commit uz proveru head-a, na izričit zahtev operatera. CI `static` zelen; VBA runtime u
+     web sesiji nije pušten — `RunAllTests` (očekivano 289/0) ostaje operateru nad `main`-om. Stavka 221 je ono
+     što je spojeno.
+
+223. **Bilans ambalaže — pogled firme na celu knjigu (`AMB-BIL-01/02`)** (29.10.2026). Pre-flight u chatu
+     28.10.2026; odluke operatera 29.10.2026: lista pod OM bez entiteta, mreža Tip | Odeljak | Stavka |
+     Komada, red „neusklađeno" uvek vidljiv, rez posle `#446`. Pravilo: `docs/DOMEN/README.md` §2,
+     `docs/DOMEN/AMBALAZA.md` 6.14a.
+
+     - **Šta je novo:** čitalac `modAmbalaza.AmbBilansPodaci(datumOd, datumDo)` u jednom prolazu daje tri
+       odeljka po tipu gajbe: gde su (fizički saldo po vrsti naloga, opticaj), čije su (naše = nabavka −
+       otpis, tuđe = obaveza po partneru, neusklađeno) i granicu u periodu (početak + nabavka + pokriće +
+       pozajmica + otpis = kraj). Izveštaj `modIzvestaj.ReportBilansAmbalaze`, lista `AMBBILANS` u
+       `modScrIzvestaji`, natpisi u `modPoruke`. Ugovor dobija šifre `AMB_BIL_*`, `AmbBilansStavkaGranice` i
+       kapiju potpunosti `AmbBilansGranicaNepotpuna`.
+     - **Šta NIJE dirano:** pisci, knjiga, storno, šema, postojeći čitaoci i izveštaji. Nema nove tabele,
+       kolone ni pisca (`who_writes --check-ownership` nepromenjen).
+     - **Pre-flight nalaz:** provera „kraj = početak + ulaz − izlaz" je identitet po matrici, pa ne može da
+       padne. Ostaje kao prikaz, a prava provera je `NEUSKLADJENO` (opticaj − naše − tuđe). Ona je 0 dok
+       `KI-024` nema pisca (`VRACANJE_TUDJE` danas niko ne zove).
+     - **Testovi:** 290 `T_AmbBilans_GdeCijeGranica` (tok D0–D4 kroz prave pisce, paritet sa
+       `AmbSaldoNaloga` i `AmbObavezaPartneru`), 291 `T_AmbBilans_SignalIKvar` (kapija potpunosti; KI-024
+       ugovorno ispravnim redom bez produkcionog pisca daje neusklađeno 12; kvar knjige diže grešku),
+       292 `T_AmbBilans_ListaIzvestaja` (lista samo pod OM, bez entiteta, poslovni redosled, bez zbira,
+       natpisi, `Scr_Rows` = čitalac). **Promenjena premisa:** `T_Izv_UgovorEkrana` meri 12 lista umesto 11.
+       **Sabotaže:** 10 × `amb-bil-*`; katalog 1040 → 1050. Python simulacija čitaoca nad tokom 290/291:
+       svaka sabotaža obara svoju tvrdnju.
+     - **NEVERIFIKOVANO:** `run_vba` u web sesiji ne radi. Treba: `python tools/run_vba.py --suite
+       RunAllTests` (292/0), `python tools/dokaz.py amb-bil --grupe`, compile, pa ručno: lista „Bilans amb."
+       pod OM, izgled i štampa.
+     - **Sledeći brojevi:** test 293 · stavka 224 · KI-064.
+
+224. **#447, krug posle prvog Excel prolaza i nezavisnog pregleda** (29.10.2026). Ista grana, isti PR.
+
+     - **Excel (operater, `8628e209`):** `RunAllTests` 292 ukupno, 1 palo; 290–292 i `T_Izv_UgovorEkrana` (nova
+       premisa) zeleni. Compile `NEJASNO` (ručno). Palo je **287** `T_AmbPoslovno_OtkupniListKaoKartica` iz `#441`:
+       `CreateOtkup_TX` → `SaveNovac` „Partner ili PartnerID je obavezan".
+     - **Uzrok (iz koda i fixture-a):** otkup primenjuje zatečen avans kooperanta (`ApplyAvansToOtkup`). Fixture
+       za `KOOP-TEST-1` nosi `NOV-TEST-D1` (`VirmanAvansKoop` 1000) **bez partnera** — red koji produkcioni pisac
+       ne može da napravi (svi pisci `tblNovac` idu kroz `SaveNovac`, koji traži partnera). Otkup od 500 ga deli,
+       deoba nasleđuje prazan partner i pada. Pad postoji od `#441`; bilans ga ne dira (287 ide pre 290–292).
+     - **Ispravka testa, ne koda:** 287 radi nad `KOOP-TEST-3` (nema nedodeljen avans — tvrdi se kao preduslov);
+       helperi `KartPovratSaPokricem` / `KartOtkupSaPokricem` dobijaju opcioni kooperant. Tvrdnje i sabotaže 287
+       se ne menjaju.
+     - **P2 iz nezavisnog pregleda:** „naše" je obračunski saldo, ne broj gajbi u vlasništvu (pozajmica 10 + otpis 2
+       → −2, neusklađeno 0). Račun ostaje; natpis postaje „Sopstveni saldo, obračunski (nabavka - otpis)", test
+       291 dobija taj slučaj, sabotaža `amb-bil-nase-bez-minusa` (katalog 1050 → 1051). Docs: README §2,
+       `AMBALAZA.md` 6.14a.
+     - **NEVERIFIKOVANO:** ponoviti `RunAllTests` (očekivano 292/0), `dokaz.py amb-bil` i `dokaz.py amb-posl-pdf`,
+       `amb-posl-stanje` (287 je dirnut), compile.
+     - **Sledeći brojevi:** test 293 · stavka 225 · KI-064.
+
+225. **#447, drugi Excel prolaz — zeleno** (29.10.2026). Operater posle `git pull` grane (glava `63889480`;
+     commit nije ispisan u izlazu prolaza, pa ga operater potvrđuje).
+
+     - **`RunAllTests` 292/0**, GREEN marker upisan. **Dokaz:** `amb-bil` 11/11 (6 pojedinačno, 5 grupno),
+       `amb-posl-pdf` 2/2 (`zavrsno-bez-prijema` je u grupi pao na drugoj tvrdnji i ponovljen sam — OK),
+       `amb-posl-stanje` 1/1; potpis izvora pre i posle identičan.
+     - **P2 drugog nezavisnog pregleda:** natpis „Neusklađeno (mora biti 0)" je tvrdio invarijantu koju niko ne
+       sprovodi (`AMB-BIL-02` je signal, test 291 namerno daje 12). Postaje „Neusklađeno (očekivano 0)" — jedan red
+       kataloga; ključ, račun i testovi isti.
+     - **Fixture avansi bez partnera** upisani kao `KI-064` (zamka za testove sa otkupom nad prva dva kooperanta).
+     - **Ostaje operateru:** ručni compile, prikaz i štampa liste „Bilans amb.".
+     - **Sledeći brojevi:** test 293 · stavka 226 · KI-065.
+
+226. **Merge `#447` = `5ad4668a`** (29.10.2026). Grana `claude/trusting-hawking-2cw6z1` (`a40f9d4b`, 5 commita
+     na `b5528922`), merge commit uz proveru head-a, na izričit zahtev operatera. CI `static` zelen; Excel
+     `RunAllTests` 292/0 nad `63889480` (operater potvrdio `git log`), `a40f9d4b` posle njega menja samo tekst
+     jedne poruke. Posle merge-a, nad `main`-om: `RunAllTests --keep` zeleno (operater). Ručni compile i
+     štampa liste nisu potvrđeni. Stavke 223–225 su ono što je spojeno.
+
+227. **Ambalaža po partneru — bruto i neto (`AMB-BIL-03`)** (29.10.2026). Grana `claude/trusting-hawking-2cw6z1`,
+     nova, od `5ad4668a`. Operater posle pregleda bilansa: „fali pregled tuđe ambalaže po partnerima, kao i naše
+     po partnerima". Odluke (29.10.2026): bruto + neto; nova lista pod OM. Pravilo: `docs/DOMEN/README.md` §2.
+
+     - **Šta je novo:** čitalac `modAmbalaza.AmbPartneriPodaci(datumDo)` — po partneru i tipu: drži (fizički),
+       tuđe (obaveza), neto (poslovni saldo, kao kartica); red bez brojeva se ne vraća. Strana partnera za
+       obavezu je izdvojena u `BilStranaDuga`, koji sada dele bilans i ovaj pregled. Izveštaj
+       `modIzvestaj.ReportAmbalazaPoPartnerima`, lista `AMBPARTNERI` (OM, bez entiteta, ljuska sortira),
+       podnožje: zbir drži i tuđe; štampa sabira sve tri kolone.
+     - **Testovi:** 293 `T_AmbPartneri_BrutoNeto` (mešovit partner 30 | 15 | +15, Bajić 0 | 12 | −12, kupac sa
+       pozajmicom 0 | 10 | −10, partner bez brojeva bez reda, rez po `datumDo`, zbirovi = bilans, paritet sa
+       `AmbSaldoNaloga` i `AmbObavezaPartneru`), 294 `T_AmbPartneri_ListaIzvestaja` (lista kroz `Scr_Rows`,
+       podnožje). **Promenjena premisa:** `T_Izv_UgovorEkrana` meri 13 lista; pod OM ih je 10, a bazen ljuske
+       ima 11 — ostaje **jedno** slobodno mesto. **Sabotaže:** 7 × `amb-par-*` (katalog 1051 → 1058); Python
+       simulacija: svaka pada na svojoj tvrdnji, svaka se vraća identično.
+     - **Nađeno usput:** prva verzija sabotaže `amb-par-bez-reza-datumdo` imala je istu zamenu kao
+       `amb-bil-bez-reza-datumdo`; vraćanje je u novi čitalac upisalo `GoTo SledeciRedBilansa` (labela druge
+       procedure → compile greška). `vba_check` to ne vidi; nađeno proverom „svaki `GoTo` ima labelu u svojoj
+       proceduri". Zamena je sada jedinstvena, a izvor proveren posle svakog vraćanja.
+     - **NEVERIFIKOVANO:** `RunAllTests` (očekivano 294/0), `dokaz.py amb-par`, compile, prikaz i štampa.
+     - **Sledeći brojevi:** test 295 · stavka 228 · KI-065.
+
+228. **`AMB-BIL-03` u Excelu, pa prvi pregled na migriranoj svesci** (29.10.2026). Grana
+     `claude/trusting-hawking-2cw6z1`.
+
+     - **Excel (operater):** `RunAllTests` 294 / 0 palo, BFP 2801 / 0; `dokaz.py amb-par --grupe` 9 / 9 crveno
+       (7 × `amb-par-*` + stare `amb-partner-*`), izvor pre/posle identičan. `amb-par-podnozje-bez-slotova` je u
+       grupi pao na drugoj tvrdnji, sam na svojoj.
+     - **Pregled na operaterovoj svesci (snimci ekrana):** Bajić (KOOP-00019), 0,4kg: „Amb. partneri" 5 | 10 | −10,
+       bilans „Čije su" 10, kartica −10. Drži − tuđe ≠ neto, a razlika 5 je red „Vraćanje tuđe (Revers)" od
+       10.07. **Izvor reda je migracija**, ne VBA pisac (operater: stara sveska → Python → nov kanon):
+       `tools/migracija/ambalaza.py`, MIG-16/17, prevodi izdate prazne u `VRACANJE_TUDJE` na dan pada obaveze
+       (12 → 7, pa 5 od 20). Proveren put: nijedna od 373 udaljene grane nema VBA pisca te vrste. **`KI-024` time
+       više nije latentan** — ažurirani su `KI-024`, `docs/DOMEN/README.md` (`AMB-BIL-03`), `AMBALAZA.md` 6.14a i
+       komentar čitaoca. Čitalac radi kako je zamišljen: razliku pokazuje, ne sakriva.
+     - **Otvoreno, svoj rez:** popravka `KI-024` (vraćene tuđe gajbe izlaze iz opticaja) mora da obuhvati i živi
+       ugovor i migraciju, pre konačnog prenosa. **NEVERIFIKOVANO:** ukupan obim u svesci (bilans, „Neusklađeno"
+       po tipu), ručni compile i štampa.
+     - **Sledeći brojevi:** test 295 · stavka 229 · KI-065.
+
+229. **`KI-024` (kooperant) i kontrola praznih gajbi — `AMB-10-ODL-35`, `AMB-INV-15`, `AMB-INV-16`** (29.10.2026).
+     Grana `claude/trusting-hawking-2cw6z1`, na stavkama 227–228. Zadatak operatera: „KI-024 + kontrola
+     raspoloživih praznih gajbi", sa matricom od osam slučajeva i deset dodatnih provera. Pravilo:
+     `AMBALAZA.md` 6.14b, `README.md` §2.
+
+     - **Reprodukcija nad izvorom (pre koda):** (a) izdavanje kooperantu kome firma duguje je uvek bilo
+       `IZDATA_PRAZNA` — obaveza ostaje, kooperant zadužen „našim" gajbama; `VRACANJE_TUDJE` nema izlaz iz
+       opticaja. (b) Otkup knjiži prijem punih (`UZ_ROBU`) pre izdavanja, a stanica se sudi samo po ukupnom
+       saldu (`AmbDeficitZaPrenos` → `AmbSaldoNaloga`), pa 0 + 10 punih − 1 prazna prolazi.
+     - **KI-024, commit `8f05d2fe`:** pisac (`PrenesiAmbalazu`) deli jednu količinu, `MIN(izdato, obaveza)` →
+       `VRACANJE_TUDJE` + nova vrsta `IZLAZ_TUDJE_AMBALAZE` (`Partner → SpoljniSvet`, deseta, `AMB-INV-15`),
+       ostatak `IZDATA_PRAZNA`. Ugovor: matrica, `AmbVrstaJeZahtev` (izlaz je tehnički), porodica zahteva za
+       idempotenciju (`AmbVrsteZahteva`), `AmbZahtevPrvoVracaTudje`, `AmbVrstaPoslovnaRadnja` (lista, papir,
+       ispravka i prefill sabiraju radnju), stavka bilansa `VRACENO`. Ispravka otkupa meri `AMB-INV-09` posle
+       zamene (`StornoOtkup(..., odloziObavezu)` + `AmbRequireObavezeDokumenta`); običan storno ostaje odbijen.
+     - **Prazne, commit `1747ac1c`:** `AmbPrazneRaspolozive` (najmanje stanje praznih po danima od datuma
+       nadalje, iz vrste kretanja — bez nove tabele i kolone), kapija u `PrenesiAmbalazu` za izdavanje partneru
+       sa stanice (`AMB_ERR_PRAZNE_NEMA`, sa manjkom), `RequirePrazneStorna` u stornu. Predaja vozaču i otpis
+       ostaju na ukupnom saldu (tačka 1.2).
+     - **Testovi:** 295–300 `T_KI024_*` (tri primera iz odluke, otkup = revers, ponavljanje i storno, ispravka
+       posle vraćanja, bez prebijanja između kooperanata i tipova, revers kao jedna radnja), 301
+       `T_Prazne_MatricaOtkupa` (matrica od osam redova kroz pravog pisca otkupa, atomarno odbijanje), 302
+       `T_Prazne_ReversRetroIStorno` (revers, unos unazad, storno nabavke, tip i stanica).
+     - **Promenjene premise (KI-024 menja ishod):** `modTest` 283 (fizički 0, ne +5), 290 (opticaj 123, stavka
+       `VRACENO` −15), 291 (izlaz 0, pa stari oblik bez izlaza kroz `ObrisiRedKnjigePoVrsti` daje 12), 293,
+       oracle `KartAmbPoslovniOracle` (izlaz nije poslovni red); BFP enum 10, `StornoKontraStav` 4 kontra-stava,
+       `DeficitIObaveza` (podela na 3 reda, saldo 30).
+     - **Sabotaže:** 6 × `ki024-*`, 4 × `prazne-*` (katalog 1058 → 1068); osam postojećih ponovo usidreno.
+       Svaka je primenjena i vraćena: izvor posle vraćanja identičan, `vba_check` čist.
+     - **Python model** (scratchpad, van repoa) sa pravilima pisca: 42/42 očekivanja testova i BFP premisa.
+     - **Proveren nizvodni put:** PWA sync otkupa ne prenosi izdate prazne (nema polja u `modMasterSync`), pa
+       ga ni podela ni kapija ne dodiruju. BFP testovi koji izdaju sa stanice imaju posejane ili kupljene prazne.
+     - **Otvoreno:** `KI-024` ostaje OPEN — kupac (dokument vraćanja pozajmice, `ODL-24` (d)) i migracija
+       (MIG-16/17 da piše izlaz). `KI-065` (NEEDS REVIEW): stanje praznih u migriranoj svesci nije izmereno, a
+       negativno bi blokiralo izdavanje.
+     - **NEVERIFIKOVANO:** `RunAllTests` (očekivano 302/0), BFP, `dokaz.py ki024` / `prazne` / ponovo
+       usidrene `amb-*`, ručni compile, papir reversa i otkupnog lista sa podelom.
+     - **Sledeći brojevi:** test 303 · stavka 230 · KI-066.
+
+230. **Pregled grane (29.10.2026): predaja vozaču pod kapijom praznih (P1), otpis na stanici je odluka
+     `AMB-10-ODL-36` (P2).** Grana `claude/trusting-hawking-2cw6z1`. Nezavisan pregled stavke 229 (operater je
+     preneo; Excel prolaz nad `310901a1` je u toku kod operatera).
+
+     - **P1, potvrđen čitanjem koda:** `AmbPrazneKapijaVazi` je gledao samo `IZDATA_PRAZNA` i `VRACANJE_TUDJE`,
+       pa je revers „prijem od OM" (stanica → vozač, `PRENOS_INTERNO`) predavao „prazne" sa stanice koja ima samo
+       pune. Tačka 1.2 i 3.3 zadatka govore o izdavanju praznih **sa stanice**, ne o primaocu — prva verzija je
+       to suzila bez osnova. Ispravka: `PRENOS_INTERNO` sa stanice je pod kapijom, bez obzira kome ide; smer
+       vozač → stanica nije. Test 303 `T_Prazne_PredajaVozacu` (pravi revers, jezgro stanica → stanica, nabavka
+       pa predaja, povratak od vozača), sabotaža `prazne-predaja-vozacu-van-kapije`.
+     - **Promenjena premisa:** BFP `Test_Amb_StornoNePraviMinus` je gajbe „odvodio" na drugu stanicu kao
+       `PRENOS_INTERNO`, a stanica je imala samo 20 punih. Nova kapija to s pravom odbija. Odvod je sada otpis
+       (ukupni saldo, `AMB-INV-14`), pa test i dalje meri samo `AMB-INV-07` na stornu. Otpremnica nije uzeta,
+       jer storno otkupa iz aktivne otpremnice odbija i `modStorno` (`:128-144`), pa bi tvrdnja merila tu kapiju.
+       Ostali testovi koji predaju vozaču prvo kupe prazne (pregledano svih 12 mesta u BFP-u i 2 u `modTest`;
+       fixture `FX_STANICA`/12/1 ima 80 praznih).
+     - **P2:** zapisnik o otpisu ne nosi „pune/prazne", pa knjiga to sama ne zna; prva verzija je otpis na stanici
+       računala kao prazne bez odluke. **Odluka operatera (29.10.2026): otpis na stanici je lom praznih**
+       (`AMB-10-ODL-36`); odbijene varijante „prvo prazne, pa pune" i izbor na F7. Cena je upisana uz odluku
+       (`AMBALAZA.md` 6.14b). Ponašanje se ne menja; test 304 `T_Prazne_OtpisNaStanici` fiksira odluku i cenu,
+       sabotaža `prazne-otpis-nije-prazna`.
+     - **Provere:** `vba_check`, `sabotaza.py --proveri-sidra` (1070), primena i vraćanje novih sabotaža (izvor
+       identičan), Python model 51/51.
+     - **Uočeno, nije u obimu (stanica je obim zadatka):** vozač ima istu klasu rupe — vraća stanici „prazne"
+       (`PRENOS_INTERNO` vozač → stanica) sudeći samo po ukupnom saldu, u kome su i pune sa otpremnice. Nije
+       mereno ni upisano kao KI dok operater ne kaže da li je to stvaran tok.
+     - **NEVERIFIKOVANO:** `RunAllTests` (očekivano 304/0), BFP, `dokaz.py prazne` / `ki024`, compile.
+     - **Sledeći brojevi:** test 305 · stavka 231 · KI-066.
+
+231. **Prvi Excel prolaz stavke 229 — dva pada, oba u premisi testa** (29.10.2026). Operater, nad `310901a1`
+     (302 testa, pre stavke 230): `dokaz.py` za `ki024`, `prazne` i `amb-` je stao na baznom prolazu —
+     `RunAllTests` 302 / 2 palo, pa ništa nije sabotirano.
+
+     - **`T_KI025_F7NabavkaOtvaraIzdavanje` (277):** „posle nabavke prolazi izdavanje…" dobija `AMB-INV-16`
+       (raspoloživo 271, traži se 301, manjak 30). Test je nabavku računao od UKUPNOG salda stanice, a stanica u
+       suiti drži i pune iz ranijih otkupa. Kapija radi ispravno; **promenjena premisa:** nabavka se računa od
+       praznih (`AmbPrazneRaspolozive`). Preduslov (izdavanje veće od ukupnog salda pada na `AMB-INV-07`) isti.
+     - **`T_Prazne_ReversRetroIStorno` (302), treća tvrdnja:** dobijeno `False|5|`, očekivano `False|0|`. Storno
+       je odbijen ispravno; test je razliku redova knjige merio tek na kraju, posle dela (4), koji dodaje tačno 5
+       redova (dve nabavke, otkup + pokriće, revers). **Greška testa:** razlika se sada meri odmah posle storna.
+       Python model to nije uhvatio jer je razliku merio na pravom mestu — model proverava pravila, ne raspored
+       merenja u VBA testu.
+     - Pregledani ostali novi testovi (295–304): razlike redova se mere odmah posle radnje.
+     - **NEVERIFIKOVANO:** `RunAllTests` nad novom glavom (očekivano 304/0), BFP, `dokaz.py`, compile.
+     - **Sledeći brojevi:** test 305 · stavka 232 · KI-066.
+
+232. **Drugi Excel prolaz, nad `83a199ae` (29.10.2026, operater).** Pun `run_vba.py`:
+
+     - **Zeleno:** `RunAllTests` **304 / 0** (oba ispravljena testa i 303, 304), BFP **2801 / 0**, Banka 241 / 0,
+       Storno 111 / 0, Faktura 39 / 39, Palete 96, Agrohemija 25 / 25, JSON 72 / 72, Izveštaji, StornoCentar,
+       Licenca.
+     - **`RunGoldenSuite`: Excel pao** posle 6 s (`RPC failed`), zatim 600 s bez odgovora i proces ubijen
+       (break mode). Nije pala tvrdnja: pad golden scenarija stiže kao tekst „N od M golden scenarija palo".
+       Čitanjem koda nema veze sa ovom granom (golden ne izdaje prazne, nema obavezu za podelu; grana ne menja
+       `modGoldenTests`, `modDokumenta` ni fixture), ali to nije dokaz. U prvom prolazu (`310901a1`) isti pad je
+       pogodio BFP na kraju (2801 / 0 pa `RPC failed`), pa liči na nestabilnost Excela posle dugog niza suita.
+       **Razdvojeno (operater, isti dan):** `run_vba.py --suite RunGoldenSuite` je **zelen** i na grani
+       (`c215c0a3`, 9,5 s, GREEN marker) i na `main`-u (`5ad4668a`, 9,2 s). Pad nije od ove grane; uzrok pada u
+       punom prolazu (Excel posle ~10 min rada) ostaje neistražen i nije vezan za ovaj rez.
+     - **`dokaz.py` (20 sabotaža, `--grupe`):** bazni prolaz zelen (304 / 0, BFP 2801 / 0), prva grupa (BFP, 4
+       sabotaže) završila je kao `PREKID` = Ctrl+C (`KeyboardInterrupt`, `dokaz.py` §`_prolaz`), pa je alat
+       stao. **Ništa nije izmereno**; izvor pre i posle identičan.
+     - **NEVERIFIKOVANO:** `dokaz.py`, ručni compile, papir.
+     - **Sledeći brojevi:** test 305 · stavka 233 · KI-066.
+
+233. **`dokaz.py` nad `3aa6e6fa` — 20 / 20 crveno, ali dve sabotaže ne obaraju SVOJU tvrdnju** (29.10.2026,
+     operater, `--grupe`). Bazni prolaz zelen (304 / 0, BFP 2801 / 0), izvor pre i posle identičan. Verdikt alata:
+     NIJE DOKAZANO, zbog dva nalaza — oba u ovom rezu, oba ispravljena:
+
+     - **`amb-pisac-obaveza-u-minus` — sabotaža je postala preširoka.** Gasila je ceo red
+       `If vraceno > obaveza Then vraceno = obaveza`, a od `ODL-35` taj red deli i IZDAVANJE kooperantu. Seed BFP-a
+       (izdavanje 20000 kooperantima) postao je celo „vraćanje", obaveza je pala u minus, pa su pale stotine BFP
+       tvrdnji, a ciljni `Test_Amb_DeficitIObaveza` je pukao pre svoje tvrdnje. Ponovo je usidrena bez prave
+       provere u stanju sa ODL-35 — vraćanje i ispravnost sidra su provereni, smisao nije. **Ispravka:** sabotaža
+       gasi podelu samo za izričit zahtev `VRACANJE_TUDJE` (kao original iz `5ad4668a`); izdavanje ostaje tačno.
+     - **`ki024-dokument-deo-radnje` — test je padao na grešci, ne na tvrdnji.** Test 300 je papir i ispravku
+       reversa zvao pre tvrdnji; pod sabotažom `IspravkaReversa_TX` digne „nema tačno jedan poslovni red" pre
+       prve tvrdnje. **Ispravka:** tvrdnje o poslovnom redu i mapi liste stoje odmah posle čitanja, pre papira i
+       ispravke.
+     - Ostalih 18 obara svoju tvrdnju (14 grupno, 4 pojedinačno).
+     - **Ponovljeno (operater, isti dan, nad `53bea3d8`):** `RunAllTests` zelen (GREEN marker),
+       `dokaz.py amb-pisac-obaveza-u-minus ki024-dokument-deo-radnje` → obe **OK**, „DOKAZANO", izvor identičan.
+       Svih 20 sabotaža ovog reza (`ki024-*`, `prazne-*`, osam ponovo usidrenih) sada obara svoju tvrdnju.
+     - **NEVERIFIKOVANO:** ručni compile (`Alt+F11` → Debug → Compile), papir reversa i otkupnog lista sa podelom.
+     - **Sledeći brojevi:** test 305 · stavka 234 · KI-066.
+
+234. **Ručna provera reza — zatvara NEVERIFIKOVANO iz 232/233** (30.10.2026, operater, test sveska, `ImportAllVBA`
+     nad `53bea3d8`; kod je isti do `60848905`).
+
+     - **Compile** (`Alt+F11` → Debug → Compile VBAProject): prolazi bez poruke.
+     - **Revers kooperantu sa obavezom firme** (posle otkupa 8/301026: primljeno 10, izdato 0, poslovni saldo −10),
+       revers 8/301026-2, izdato 15: papir **Početno −10 · Izdato 15 · Novo 5**, jedan red 15 ✓ (`AMB-POSL-03`).
+     - **F7 lista:** isti revers je **jedan** red „Izdato 15", ne 10 + 5 ✓ (`ki024-dokument-deo-radnje`).
+     - **Otkup sa podelom** — novi kooperant (KOOP-00106, bez početnog stanja), otkupni list 8/301026-2, primljeno 10
+       i izdato 15 u istom dokumentu:
+       - PDF: **Početno 0 · Primljeno 10 · Izdato 15 · Saldo 5** ✓;
+       - kartica ambalaže, tri reda dokumenta: „Izdato (otkup)" ulaz 5, „Vraćanje tuđe (otkup)" ulaz 10, „Uz robu
+         (otkup)" izlaz 10; **saldo kraja 5** ✓. Tehnički `IZLAZ_TUDJE` se ne vidi (poslovna projekcija,
+         `AMB-POSL-01`), a otkupni list i kartica kažu isti broj.
+       - Međusaldo unutar dokumenta ide 5 → 15 → 5. To nije nalaz nego konvencija `KART-HRON-01` („ulaz pre
+         izlaza"; međusaldo ne pada ispod manjeg od stanja pre i posle dokumenta, ovde 0 i 5).
+     - **Van reza, nije istraženo:** klauzula na PDF-u otkupnog lista nosi `_x000D_` na kraju redova. Tekst nije
+       podrazumevani (`OtkupKlauzulaDefault`), nego operaterov iz podešavanja `OTKUP_KLAUZULA` (memo), pa trag
+       vodi ka sadržaju ćelije, ne ka ovom rezu.
+     - **Status reza:** `RunAllTests` 304 / 0, BFP 2801 / 0, ostale suite zelene, Golden zelen sam, `dokaz.py`
+       20 / 20 obara svoju tvrdnju, compile i papir potvrđeni. Otvoreno i namerno van reza: kupčev deo `KI-024`
+       (MIG-16/17), `KI-065` (prazne u migriranoj svesci — izmeriti pre uvoza u pravu svesku), vozač iz stavke 230.
+     - **Sledeći brojevi:** test 305 · stavka 235 · KI-066.
+
+235. **Nezavisni pregled `#448` nad `da42b5a0` — GO za merge** (30.10.2026, 9,3 / 10). Poslovna semantika,
+     implementacija, testovi i sabotaže, ručni acceptance: GO. Primena na migriranoj svesci: **HOLD do `KI-065`**.
+     GitHub Actions `static` je zelen na `da42b5a0`. Pregled je potvrdio i obe ispravke iz `c9a989c6`. Nema novog
+     P0/P1, i ovaj PR se dalje ne proširuje.
+
+     - **P3, ispravljeno (samo dokumentacija):** `KI-024` je i dalje pisao „kooperant NEVERIFIKOVANO u Excelu".
+       Sada piše da je verifikovan (stavke 232–234). Tabela „Gde smo" dobija merge `#445` i red za ovaj rez.
+     - **Imenovana granica** (`AMBALAZA.md` 6.14b, „Po danima"): kapija praznih je dnevna, ne trenutna.
+       Izdavanje ujutru uz nabavku popodne istog dana prolazi. Prihvaćeno, vremenska knjiga se ne uvodi.
+     - **Ostaje van PR-a, svaki kao svoj rez:**
+       - kupčev deo `KI-024`;
+       - migracija MIG-16/17 (izlaz uz `VRACANJE_TUDJE`);
+       - `KI-065` — meriti pre primene;
+       - pad `RunGoldenSuite` u punom prolazu (stavka 232, neistražen; sam je zelen);
+       - vozač (stavka 230).
+     - **Sledeći brojevi:** test 305 · stavka 236 · KI-066.
+
+236. **Popis tokova naloga vozača i predlog za vraćanje pozajmice kupcu — pre odluke, bez koda** (30.10.2026).
+     Grana `claude/agrix-ambalaza-migracija-0b07ca`, nad `main`-om `5a9bd868` (merge `#448`). `src-vba/` nije dirnut.
+
+     - **Problem 1 (migrirana knjiga) je van obima — odluka operatera 30.10.2026.** Kod migracije
+       (`tools/migracija/`, grana `claude/dazzling-newton-uwwh2h`) operater sam usklađuje sa `main`-om posle ove
+       sesije; dosadašnje migracije i podaci se ne čuvaju, prevod se ponavlja. Merenja na migriranoj kopiji (Python i
+       VBA) su **NOT RUN, namerno**. `KI-024` (migracioni deo) i `KI-065` ostaju otvoreni do tog prevoda. Šta `main`
+       danas traži od svake knjige, pa i od migrirane:
+       - uz svaki `VRACANJE_TUDJE`, na istom dokumentu i danu, `IZLAZ_TUDJE_AMBALAZE` Partner → SpoljniSvet iste
+         količine i tipa (`AMB-INV-15`); enum ima 10 vrsta;
+       - prazne stanice su svaki njen red osim `AMBALAZA_UZ_ROBU` (`AmbVrstaPuneGajbe`), otpis na stanici je lom
+         praznih (`ODL-36`), i `AmbPrazneRaspolozive(stanica, tip, dan) >= 0` za svaki dan. Početna nabavka zato mora
+         da pokrije **veći** od dva minusa — praznih i ukupnog salda (`AMB-INV-07`) — a ne samo ukupni;
+       - ako se usvoji kapija vozača (ispod), isto pravilo važi i za vozača.
+     - **Tokovi naloga vozača** (matrica `AmbKlaseVrste`, `AmbReversSmerovi`, pravi pisci):
+
+       | # | Pisac | Od → Na | Vrsta | Gajbe | Kapija danas |
+       |---|---|---|---|---|---|
+       | 1 | otpremnica, izdavanje (`OtpIzdaj` → `OtpKnjiziAmbalazu`); ulaz F2 i PWA predaja (`AutoOtpremnicaUpis` → `CreateOtpremnicaIzIzvora_TX`) | Stanica → Vozač | `UZ_ROBU` | pune | `INV-07` stanice |
+       | 2 | prijemnica, isporuka (`SavePrijemnicaDokument`) | Vozač → Kupac | `UZ_ROBU` | pune | `INV-07` vozača, manjak se ne pokriva |
+       | 3 | prijemnica, zamena (ista TX) | Kupac → Vozač | `POVRAT_PRAZNE` | prazne | `INV-07` kupca, manjak = pitanje → `ULAZ_TUDJE` |
+       | 4 | kupčev revers, F7 smer 5 (`UpisiReversPartnera_TX`) | Kupac → Vozač | `POVRAT_PRAZNE` | prazne | kao 3 |
+       | 5 | pozajmica, F7 smer 6 (`UpisiPozajmicuKupca_TX`) | Kupac → Vozač | `POZAJMICA_PARTNERA` + `ULAZ_TUDJE` | prazne (kupčeve) | bez manjka (`INV-13`) |
+       | 6 | naš revers „Prijem od OM", F7 smer 4 | Stanica → Vozač | `PRENOS_INTERNO` | prazne | `INV-07` + `INV-16` stanice |
+       | 7 | naš revers „Izdato OM", F7 smer 3 | Vozač → Stanica | `PRENOS_INTERNO` | prazne (6.7a) | **samo `INV-07` vozača (ukupno)** |
+       | 8 | otpis, F7 smer 8 (`OtpisiAmbalazu_TX`, nalog vozač kad partner nije izabran) | Vozač → SpoljniSvet | `OTPIS` | ne zna se (`ODL-36` je samo za stanicu) | `INV-14` (ukupno) |
+       | 9 | storno i ispravka 1–8 (kontra-stav) | obrnuto | ista | iste | `INV-07`/`09`; `RequirePrazneStorna` samo za stanicu |
+
+       Nema: nabavke na vozača (`NabaviAmbalazu_TX` piše samo stanicu), izdavanja vozač → kooperant (nijedan smer),
+       otkupa preko vozača (otkup je Kooperant ↔ Stanica). PWA ne piše reverse ni prijemnicu; jedini PWA tok vozača je 1.
+     - **Premisa iz stavke 230 je potvrđena čitanjem koda, nije izmerena u Excelu.** `AmbPrazneKapijaVazi` izlazi
+       čim izvor nije stanica, a `AmbPrazneRaspolozive` zna samo stanicu. Tok 7 zato sudi `AmbDeficitZaPrenos` →
+       `AmbSaldoNaloga`: ukupni saldo vozača, bez datuma, u kome su i pune iz toka 1. Dva oblika posledice:
+       - **tih, trajan:** otpremnica 10, prijemnica „primljeno 8, vraćeno 8" → vozač 2 pune + 8 praznih. „Izdato OM"
+         10 prolazi, stanica dobija 10 praznih i sme da ih izda. Nijedna kapija to ni kasnije ne vidi;
+       - **odložen, na tuđem dokumentu:** dve otpremnice po 10, unesena samo prva prijemnica (10 / 10) → vozač 10
+         punih + 10 praznih. „Izdato OM" 20 prolazi. Druga prijemnica (vozač → kupac 10 punih) zatim pada na
+         `INV-07` vozača, iako je fizički sve bilo tačno. Storno reversa blokira `RequirePrazneStorna` čim je stanica
+         prazne izdala.
+     - **Premise testova, ako kapija uđe:** „Izdato OM" zovu BFP (10 mesta: 2757, 5870, 5877, 5905, 21569, 21576,
+       21618, 21622, 21629, 21631) i `modTest` (25879, 26019; 6756 je mapa smera). Većina su testovi niza brojeva
+       kojima revers služi kao nosač. Pregled ide posle odluke, pre koda.
+     - **Problem 3, kupac:** merenje „Tuđe" po kupcu na migriranoj kopiji je **NOT RUN** (podaci se ponovo
+       prevode). Obaveza prema kupcu nastaje i u živom radu, bez migracije: pozajmica (`ODL-24`) i pokriće manjka na
+       prijemnici i kupčevom reversu. Ulaz za vraćanje je zato potreban u svakom slučaju. **Predlog:**
+       - dokument je **naš `REVERS`** — obrnuto `ODL-10`: kad mi predajemo partneru, papir je naš (isto pravilo zbog
+         kog `IZDATA_PRAZNA` ne sme na `REVERS_PARTNERA`, 6.12b). Ugovor to već pušta
+         (`AmbDokDozvoljavaKretanje(REVERS, VRACANJE_TUDJE / IZLAZ_TUDJE)`);
+       - broj iz niza stanice sa F7 (`GenerateBrojAmbDokumenta(Stanica, …)`), vlasnik (Stanica, StanicaID) — kao kod
+         ostala četiri naša smera; predlaže se, sme i ručno;
+       - par **Vozač → Kupac**, `VRACANJE_TUDJE` + `IZLAZ_TUDJE` (`INV-15`): obrnut lanac `ODL-9` („Prijem od OM", pa
+         vozač → kupac). Stanica → kupac ne, jer stanica ne ulazi u lanac sa kupcem;
+       - preko obaveze: pisac bi višak upisao kao `IZDATA_PRAZNA` vozač → kupac, a taj tok niko nije odlučio. Predlog
+         je da se višak za kupca **odbije**;
+       - papir se štampa (`ODL-32` važi za kupčev dokument, ne za naš), sa poslovnim stanjem kao `AMB-POSL-03`.
+     - **Otvoreno, odluke operatera pre koda:** (2a) vraća li vozač stanici samo prazne dobijene od kupca ili od
+       stanice, ili i pune (neisporučena roba); (2b) unosi li se prijemnica pre „Izdato OM" za iste gajbe; (2c) otpis
+       kod vozača — prazne ili pune; (3a) dokument i broj vraćanja; (3b) višak preko obaveze.
+     - **Sledeći brojevi:** test 305 · stavka 237 · KI-066.
+
+237. **Vozač vraća samo prazne (`AMB-10-ODL-37`, odluka 2a) — pre-flight, HOLD na otpisu kod vozača**
+     (30.10.2026). Odluka operatera: na „Izdato OM" vozač stanici vraća **samo prazne** gajbe. Tok iz stavke 230
+     (pune sa otpremnice vraćene kao „prazne") zato nije stvaran, i knjiga ne sme da ga primi.
+
+     - **Predlog pravila (proširenje `AMB-INV-16`):** sopstveni nalog — stanica i vozač; firma nema tokova
+       (`AmbNalogSopstveni`) — izdaje samo prazne koje ima. Prazne vozača su njegovi redovi osim `UZ_ROBU`, po
+       danima od datuma nadalje, istim čitaocem. Kapija ostaje u jezgru pisca (`AmbPrazneKapijaVazi`, izvor
+       sopstveni, vrste `PRENOS_INTERNO` / `IZDATA_PRAZNA` / `VRACANJE_TUDJE`). Storno meri isto kroz
+       `RequirePrazneStorna` za svaki sopstveni nalog: storno prijemnice, kupčevog reversa, pozajmice i „Prijem od
+       OM" posle predaje dalje se odbija.
+     - **Posledica 2a, imenovana:** prijemnica ili kupčev povrat se unosi **pre** „Izdato OM" za iste gajbe; inače
+       revers pada sa porukom koja imenuje vozača, prazne i manjak. Danas isti redosled delimično nameće `INV-07`,
+       ali na pogrešnom dokumentu (stavka 236, odložen oblik).
+     - **Pre-flight (dokazi u chatu):** DOMAIN GAP samo na otpisu kod vozača (2c); IDENTITY i CARDINALITY N/A (nema
+       novog ključa ni reda); INVARIANTS/OWNER: pisac `PrenesiAmbalazu` i storno `StornirajAmbalazuDokumenta` →
+       `RequirePrazneStorna`; WRITERS: `tblAmbalaza` ima jednog fizičkog pisca (`WHO_WRITES.md`), a svi ulazi
+       (otkup, otpremnica i PWA predaja, prijemnica, reversi, storno) idu kroz ta dva mesta; DOWNSTREAM: F7 i
+       modul unosa nemaju sopstvenu proveru salda za smer 3 (`ReversValidiraj`), pa poruka dolazi iz pisca, kao
+       za stanicu; PWA ne piše reverse. PLATFORM N/A. LANDING: grana nad `5a9bd868`, sledeći test 305.
+     - **Premise koje se menjaju (pregled pre koda):** BFP „Izdato OM" sa `TEST_TIP_AMB` — 10 mesta (2757, 5870,
+       5877, 5905, 21569, 21576, 21618, 21622, 21629, 21631), uglavnom testovi niza brojeva. `SeedAmbalazaOpticaj`
+       kupuje samo na stanicama; da li vozač u tim tačkama ima prazne tog tipa zavisi od ranijih testova (kupčev
+       revers 6052/9153, prijemnice sa povratom) — statički NIJE utvrđeno. Ispravka: seed praznih vozaču kroz pravog pisca
+       (nabavka + „Prijem od OM"), ne promena smera, jer 5905/5906 mere oba smera. `modTest`: `ZasejOpticajVozacu`
+       (`:3418`) preskače seed kad je UKUPNI saldo vozača >= 100, pa uslov mora da meri prazne; 25879 i 26019 idu
+       preko njega. Fixture: `VOZ-TEST-1` 12/1 po zapisu od 27.10. ima samo pune (+40 / −10 / −40), prazne 0 — nije ponovo mereno.
+     - **Otvoreno (2c):** otpis kod vozača — prazne (kao `ODL-36`), pune, ili prvo pune pa prazne. Bez te odluke
+       nema koda, jer čitalac danas otpis računa kao prazne po vrsti.
+     - **Sledeći brojevi:** test 305 · stavka 238 · KI-066.
+
+238. **Vozač vraća samo prazne — rez (`AMB-10-ODL-37/-38`)** (30.10.2026). Odluke operatera: 2c — otpis kod
+     vozača je lom praznih (`ODL-38`, kao `ODL-36`); storno dokumenta koji je vozaču dao prazne posle njihove
+     predaje stanici se **odbija**, kao za stanicu (deo `ODL-37`). Pravilo: `AMBALAZA.md` 6.14b tačka 3,
+     `README.md` §2.
+
+     - **Kod:** čitalac `AmbPrazneNaloga(nalogTip, nalogID, tip, dan)` za svaki sopstveni nalog
+       (`modAmbalaza.bas:1411`); `AmbPrazneRaspolozive` ostaje kao ulaz za stanicu (`:1483`). Kapija u piscu
+       (`:4039`) sudi izvoru preko `AmbPrazneKapijaVazi` (`modAmbalazaUgovor.bas:1068`: `AmbNalogSopstveni`
+       umesto „samo stanica"), a poruka za vozača kaže odakle dolaze prazne i da se unose pre predaje.
+       `RequirePrazneStorna` (`:2714`) beleži promenu po (nalog, ID, tip) za svaki sopstveni nalog.
+     - **Test 305 `T_Prazne_VozacVracaSamoPrazne`** — prava otpremnica i kupčev revers, sve u transakciji testa
+       koja se vraća: vozač sa samo punim gajbama ne vraća prazne; posle povrata kupca 8 je povrat 10 odbijen, a 8
+       prolazi; storno kupčevog reversa posle predaje je odbijen, a pre predaje prolazi; vozaču ostaje 10 punih i 0
+       praznih. **Sabotaže:** `prazne-vozac-van-kapije`, `prazne-citac-samo-stanica`, `prazne-vozac-storno`
+       (katalog 1070 → 1073). Svaka je statički primenjena i vraćena: `vba_check` nad fajlovima čist, izvor
+       posle vraćanja bajt-identičan (sha256).
+     - **Premise — ispravka stavke 237, sada izmereno čitanjem:**
+       - BFP **drži**: `SeedAmbalazaOpticaj` (`modBusinessFlowProTests.bas:5130`) vozačima `TEST_VOZ_ID` i
+         `TEST_VOZ_ID_B` daje po 20000 praznih (`PRENOS_INTERNO`, današnji datum), a svih 10 „Izdato OM" je istog
+         dana ili 2090+ (`NextTestDate`). Druge suite (Storno, StornoCentar, Golden, Izveštaji, sync) nemaju odliv
+         praznih sa vozača.
+       - `ZasejOpticajVozacu` **ne menja uslov**, suprotno stavci 237: njegovi pozivaoci pišu prijemnice (pune,
+         van kapije), pa im treba ukupni saldo.
+       - **Menja se `ZasejReversZaNiz`** (`modTest.bas:25993`): „Izdato OM" 1 na `FX_DATUM`, a fixture vozač
+         `VOZ-TEST-1` 12/1 tog dana drži samo pune — **izmereno** čitanjem `otkup_test.xlsm` (openpyxl, samo
+         čitanje; nad zastarelim fixture-om `d3d3ff6d` iz worktree-ja, pa ponovljeno nad važećim `7eab17dc` —
+         isti redovi): +40 `OTP-TEST-1`, −10 `PRJ-FAK-3`, −40 `PRJ-TEST-A`, praznih 0. Seed sada pre toga upiše
+         kupčev povrat 1 istog dana, kupčevim dokumentom i nizom, pa niz stanice koji test meri ostaje isti.
+     - **Ostalo:** `KI-065` — merenje u migriranoj svesci obuhvata i vozača; odloženo do novog prevoda migracije.
+     - **Provere:** `vba_check` čist (191 fajl), `sabotaza.py --proveri-sidra` 1073 / 0, stare `prazne-*` sidra
+       netaknuta. **NOT RUN:** `RunAllTests` (očekivano 305 / 0), BFP (2801 / 0, očekivano bez promene),
+       `RunStornoTestSuite`, `Test_StornoCentar_All`, `dokaz.py` za tri nove sabotaže, ručni compile.
+     - **Otvoreno:** problem 3 — dokument i broj vraćanja pozajmice kupcu (3a) i višak preko obaveze (3b).
+     - **Sledeći brojevi:** test 306 · stavka 239 · KI-066.
+
+239. **Prvi Excel prolaz reza 238 — `dokaz.py` 3 / 3 crveno, dve sabotaže ne obaraju SVOJU tvrdnju** (30.10.2026,
+     operater, worktree `heuristic-hypatia-4ad402`, fixture `7eab17dc` kopiran iz glavnog checkout-a — u worktree-ju je
+     bio zastareo `d3d3ff6d`, pa je prvi pokušaj svih suita stao na potpisu).
+
+     - **Bazni prolaz zelen:** `RunAllTests` **305 / 0**; izvor pre i posle dokaza identičan (`163d56c1e05ea95c`).
+     - `prazne-vozac-storno` → **OK**.
+     - `prazne-vozac-van-kapije` i `prazne-citac-samo-stanica` → **PALA DRUGA TVRDNJA**: test je umro na izuzetku pre
+       tvrdnje. Povrat 8 (`rev2b`) nije bio uhvaćen, pa je pod sabotažom digao `AMB-INV-07` (deficit vozača) odnosno
+       `AMB-INV-16` i otišao u `CleanUp`, koji grešku ponovo diže. **Greška testa, ne koda** — ista klasa kao
+       `ki024-dokument-deo-radnje` (stavka 233).
+     - **Ispravka:** svaki potez čiji ishod zavisi od kapije se hvata — kupčev revers 8 i 3 i povrat 8 (`errRvp`,
+       `err2b`, `errRvp4`) — a ishod ulazi u tvrdnju koja ga meri. Tekst tvrdnji je isti, pa katalog ne menja ključ.
+       Zeleni put: sva tri broja su 0, očekivanja su ista.
+     - **Provere posle ispravke:** `vba_check` čist, sidra 1073 / 0, tri sabotaže statički primenjene i vraćene (VBA
+       pravila čista, izvor bajt-identičan). **NOT RUN:** ponovljen `dokaz.py` za `prazne-vozac-van-kapije` i
+       `prazne-citac-samo-stanica`; `RunAllTests` nad ispravljenim testom; BFP, `RunStornoTestSuite` i
+       `Test_StornoCentar_All` (nisu u prijavljenom izlazu); ručni compile.
+     - **Sledeći brojevi:** test 306 · stavka 240 · KI-066.
+
+240. **Drugi Excel prolaz reza 238 — zeleno, 3 / 3 dokazano** (31.10.2026, asistent na zahtev operatera, worktree
+     `heuristic-hypatia-4ad402`, fixture `7eab17dc`, izvor `adaa2c9afc919374`).
+
+     - `dokaz.py prazne-vozac-van-kapije prazne-citac-samo-stanica`: bazni `RunAllTests` **305 / 0**, obe **OK**
+       (`prazne-citac-samo-stanica` obara i još 4 testa — očekivano: bez praznih vozača pada svaki povrat sa vozača,
+       npr. seed niza `ZasejReversZaNiz`), izvor pre i posle identičan → **DOKAZANO**.
+     - `dokaz.py prazne-vozac-storno`, ponovljen nad ispravljenim testom (stari OK iz stavke 239 važio je za
+       prethodnu verziju testa): **OK**, izvor identičan → **DOKAZANO**.
+     - `RunBusinessFlowProSuite` **2801 / 0** (isto kao baseline), `RunStornoTestSuite` **111 / 0**,
+       `Test_StornoCentar_All` zeleno; GREEN marker za sve tri.
+     - **NOT RUN:** ručni compile (`Alt+F11` → Debug → Compile), ručna provera na F7 (checklista u chatu), pun
+       `run_vba.py` i pun `dokaz.py` (pred release).
+     - **Otvoreno:** problem 3 — dokument i broj vraćanja pozajmice kupcu (3a) i višak preko obaveze (3b).
+     - **Sledeći brojevi:** test 306 · stavka 241 · KI-066.
+
+241. **Ručna provera u migriranoj svesci: otkup prošao, otpremnica pala — `KI-065` izmeren** (31.10.2026, operater
+     i asistent; sveska `AgriX_C002_nova - Copy.xlsm`, merenje nad kopijom u scratchpad-u, samo čitanjem).
+
+     - **Nalaz operatera:** Rača (ST-00003), 0,4kg, ukupni saldo 0. Otkup sa 6 primljenih i 6 izdatih (OTK-A51C0750D:
+       `UZ_ROBU` 6; kooperant je doneo jednu svoju gajbu, pa `ULAZ_TUDJE` 1, `VRACANJE_TUDJE` 1 i `IZLAZ_TUDJE` 1;
+       `IZDATA_PRAZNA` 5) je prošao, a izdavanje otpremnice 3/311026 sa istih 6 gajbi je odbijeno: „Deficit naloga
+       Stanica se NE pokriva ulazom tuđe ambalaže … Manjak: 6".
+     - **Merenje** (Python replika pravila čitaoca, ne VBA): pre tog otkupa su pune Rače (`AMBALAZA_UZ_ROBU`, ulaz −
+       izlaz) **−871** (otkupi 2701, otpremnice 3572), a prazne **+871** (nabavka 3525, izdato 2531, vraćeno tuđe
+       123); ukupno 0. Kapija praznih je videla 871 i pustila izdavanje 6, a ukupni saldo nije pao jer je otkup uneo
+       6 punih. Manjak je izašao tek na otpremnici (`AMB-INV-07`): tačno odbijanje, pogrešan dokument.
+     - **Ista neusklađenost u C002** (zbir po nalogu i tipu na kraju knjige; dnevni tok meren samo za prazne Rače
+       0,4kg, nijedan dan ispod nule): pune ispod nule na ST-00001 (−125), ST-00002 (−39), ST-00003 (−865 posle
+       otkupa) i vozaču ST-00003 0,5kg (−47); prazne ispod nule samo na ST-00006 (−28). Ostali sopstveni nalozi
+       nemaju ni jedno ni drugo.
+     - **Zašto ne nastaje bez migracije** (čitanjem koda, ne testom): otpremnica knjiži tačno zbir gajbi svojih
+       blokova (`OtpRequireJednakost`, `modDokumenta.bas:4923`), a otkup u izdatoj otpremnici se ne ispravlja
+       (A13, `modOtkup.bas:352`). Pune stanice zato ne idu ispod nule.
+     - **Odluka operatera (31.10.2026): bez izmene koda.** Nalaz je u `KI-065`, sa pravilom za ponovni prevod
+       migracije (broj gajbi otpremnice = zbir njenih blokova; pune i prazne sopstvenog naloga nijednog dana ispod
+       nule). Odbijena varijanta: kapija u čitaocu koja staje kad pune naloga padnu ispod nule. Otkup bi tada pao na
+       pravom dokumentu, ali kapija nad stanjem koje čist model ne proizvodi je mrtva grana, a u C002 bi blokirala
+       svako izdavanje na četiri naloga do novog prevoda.
+     - **NOT RUN:** potvrda iz VBA (`?modAmbalaza.AmbPrazneNaloga("Stanica", "ST-00003", "0,4kg", Date)`, očekivano
+       865); dnevni tok punih.
+     - **Ostalo:** ručni compile i F7 provera reza 238 nisu prijavljeni; problem 3 (3a/3b) i dalje otvoren.
+     - **Sledeći brojevi:** test 306 · stavka 242 · KI-066.
+
+242. **Odbijen storno reversa kaže operateru razlog** (31.10.2026, asistent na zahtev operatera; nalaz iz suvog
+     prolaza sveske za ručnu proveru reza 238).
+
+     - **Sveska za ručnu proveru:** `tests/fixtures/rucna_odl37.xlsm` (gitignored): kopija fixture-a `7eab17dc`,
+       kod grane i `modVbaTools`, seed sa datumom 31.10.2026 — nov tip `RUC-37`, nabavka 20 praznih na STA-TEST-1,
+       otkup 10 punih (KOOP-TEST-3), otpremnica izdata VOZ-TEST-1. Početno: vozač 10 ukupno / 0 praznih, stanica
+       20 / 20. Seed modul i skripta su u scratchpad-u sesije, ne u repou.
+     - **Suvi prolaz** checkliste od 12 koraka, nad posebnom kopijom (obrisana), kroz iste pisce kao ekran: svi
+       ishodi po pravilu (`Izdato OM` sa samo punim odbijen; posle povrata kupca 8: 10 odbijen, 8 prolazi; otpis
+       vozača 2 spušta prazne; otkup koji izdaje više praznih nego što stanica ima odbijen **na otkupu**). Jedino
+       odstupanje: storno kupčevog reversa posle predaje, kroz `modStornoDok.StornoIzvrsi` (poziv ekrana Storno),
+       vratio je samo „✗ Storno nije uspeo: \<broj\>". `StornirajAmbDokument_TX` je razlog upisivao u log i vraćao
+       `False`; tako je od `#448` bilo i za stanicu.
+     - **Reprodukcija:** test 306 `T_Prazne_StornoKazeRazlog` pre ispravke: `RunAllTests` **306 / 1**, pad po
+       imenu („odbijen storno reversa kaže operateru razlog …", dobijeno `[False|True|False|False]`).
+     - **Ispravka:** `StornirajAmbDokument_TX(ambDokID, Optional ByRef outGreska)` (`modAmbalaza.bas:2900`, upis
+       razloga `:2934`) — obrazac `outGreska` kao `CreateOtkup_TX`; log ostaje. `StornoIzvrsi`
+       (`modStornoDok.bas:445`) traži razlog i sastavlja „Storno nije uspeo: \<broj\>: \<razlog\>", isti oblik kao
+       njegov EH. Ekran (`modScrStorno.ObicanStorno`) poruku već pokazuje u toast-u.
+     - **Test 306** (`modTest.bas:14243`): dve karike, dve tvrdnje — pisac vraća razlog (pravilo i vozač), pa ekran
+       ga pokazuje; kontra: posle storna predaje isti storno prolazi, sa porukom uspeha. Sabotaže
+       `storno-rev-razlog-pisac` i `storno-rev-razlog-poziv` (katalog 1073 → 1075). Prva verzija testa je obe
+       sabotaže vezala za istu tvrdnju, pa ju je katalog odbio („test ih ne razlikuje") — tvrdnja pisca je
+       izdvojena ispred tvrdnje ekrana. Obe su statički primenjene i vraćene (pravila nad fajlovima čista, izvor
+       bajt-identičan).
+     - **Provere:** `vba_check` čist (191 fajl), sidra 1075 / 0, `who_writes --check` i `--check-ownership`,
+       `gen_schema_module --check`; `RunAllTests` **306 / 0**, BFP **2801 / 0**, `RunStornoTestSuite` **111 / 0**,
+       `Test_StornoCentar_All` zeleno, GREEN marker upisan; `dokaz.py storno-rev-razlog` **2 / 2 DOKAZANO**, izvor
+       identičan (`48836078f03a1445`). **NOT RUN:** ručni compile (probe `NEJASNO`), izgled duge poruke u toast-u
+       (ručno), checklista kroz ekran, pun `run_vba.py` i pun `dokaz.py` (pred release).
+     - **Van obima, zabeleženo:** isti obrazac (greška u log, `False`, ekran „Storno nije uspeo") imaju
+       `StornoOtkup_TX`, `StornoOtpremnica_TX` i `StornoNovac_TX` kroz `HandleStornoTxError`. Da li neko njihovo
+       poslovno odbijanje stiže do tog puta mimo provere pre potvrde (`StornoRazlog`) **nije mereno**.
+     - **Sledeći brojevi:** test 307 · stavka 243 · KI-066.
+
+243. **Ručna provera reza `#449` (vrh `409ab1e6`) — 7/7 funkcionalnih koraka, razlog storna čitljiv** (31.10.2026,
+     operater; sveska `tests/fixtures/rucna_odl37_409ab1e6.xlsm`, seed iz stavke 242).
+
+     - **Koraci i ishodi:**
+       - „Izdato OM" 5, vozač ima samo pune: odbijeno; dijalog nosi ceo tekst (raspoloživo 0, manjak 5).
+       - „Povrat kupca" 8: snimljen.
+       - „Izdato OM" 10: odbijeno (raspoloživo 8, manjak 2); 8: snimljeno (1/311026-2).
+       - Storno povrata kupca posle predaje: odbijeno; toast nosi ceo razlog, do „… bez njihovog vracanja.".
+       - Storno predaje, pa storno povrata: oba „✓ Stornirano".
+       - „Prijem od OM" 5, otpis vozača 2, „Izdato OM" 5: odbijeno (raspoloživo 3, manjak 2); 3: snimljeno.
+       - F1 otkup 5 primljenih / 20 izdatih: odbijeno **na otkupu** (raspoloživo 18, manjak 2); dijalog nosi ceo
+         tekst.
+     - **Čitljivost (P2 iz pregleda `#449`):** F7 i F1 odbijanje prikazuju u dijalogu sa celim tekstom; toast ispod
+       ponavlja poruku i seče je, ali je dijalog ceo. Ekran Storno nema desni panel, pa traka (oko 1650 px na
+       ekranu od 1920) nosi ceo razlog od ~265 znakova. Ispravka u `#449` nije potrebna; rizik ostaje za znatno
+       uži prozor (nije mereno).
+     - **Usputni nalazi, nijedan iz `#449`:** smer „Interno" za obe strane internog prenosa u listi F7 → `KI-066`;
+       pitanje o manjku kooperanta stiže pre odbijanja zbog praznih stanice → `KI-067`; tehnički prefiks
+       „Source=…" u dijalogu odbijenog otkupa → dopunjen `KI-048`; „Revers sačuvan" posle otpisa je već `KI-062`;
+       gubitak č/ć u dijalogu je `KI-037`/`KI-048` (`MsgBox` je ANSI, lokal DEU; katalog i toast ih imaju).
+     - **Compile:** `Alt+F11` → Debug → Compile VBAProject prošao bez greške (operater, 31.10.2026, posle
+       ručne provere).
+     - **Sledeći brojevi:** test 307 · stavka 244 · KI-068.
+
+244. **Merge `#449` u `main` — `f3572fd1`** (31.10.2026). Rez 238 (vozač vraća samo prazne, `ODL-37/-38`) i
+     razlog odbijenog storna reversa (stavka 242, test 306). Roditelji su `5a9bd868` (`main` posle `#448`) i
+     `ee10e49f` (vrh grane). `src-vba` i `tools` su bajt-isti kao u `409ab1e6`, nad kojim su mereni prolaz i
+     ručna provera (diff prazan). Stanje `main`-a: `RunAllTests` **306 / 0**, BFP **2801 / 0**, Storno
+     **111 / 0**, sabotaža **1075**, otisak šeme **87AB4F9B**, fixture **`7eab17dc6aec0058`**; Compile i ručna
+     provera 7/7 (stavka 243). Pun `run_vba.py` i pun `dokaz.py` nisu pušteni (idu pred release).
+
+245. **`KI-024` kupčev deo — odluke operatera i pre-flight (`AMB-10-ODL-39`)** (31.10.2026, grana
+     `claude/ki024-vracanje-kupcu` od `f3572fd1`).
+
+     - **Odluke (sve po preporuci):** 3a naš `REVERS`, broj iz niza stanice; 3b količina preko duga se odbija;
+       ulaz je smer 9 u novom okviru F7 „KUPAC" (OM bira operater); štampa se, sa poslovnim stanjem kupca;
+       storno bez ispravke; delimično do duga; gasi se ceo dug prema kupcu (pozajmica i pokriće). Tabela:
+       `docs/DOMEN/AMBALAZA.md` 6.14b, tačka 4.
+     - **Pre-flight:** nijedna osa nije `GAP`. `DOWNSTREAM` je otkrio četiri mesta koja ulaze u rez:
+       - `AmbVrstaPoslovnaRadnja` sabira svako `VRACANJE` pod „Izdata prazna" (`ODL-35`), pa bi lista F7 i ekran
+         Storno vraćanje kupcu prikazali kao izdavanje;
+       - `IspravkaReversaRazlog` pušta svaki naš `REVERS` sa jednim poslovnim redom, pa bi ispravka bila ponuđena;
+       - ponovna štampa (`modIzvestaj.StampajAmbDokument`) traži stanicu u paru i pada na 7507;
+       - premisa BFP `Test_REV_UgovorSmeraJeFailClosed` („tačno četiri smera") postaje pet.
+     - **Zatečeno, izmereno čitanjem:** jezgro je `VRACANJE_TUDJE` vozač → kupac već puštalo kroz matricu,
+       `AmbDokDozvoljavaKretanje` i kapiju praznih vozača. Višak preko duga bi tiho podelilo u `IZDATA_PRAZNA`
+       vozač → kupac (`AmbVrsteZahteva`). Fale smer u mapi, ulaz i kapija viška.
+
+246. **`KI-024` kupčev deo — rez `AMB-10-ODL-39`: firma vraća kupcu njegove gajbe** (31.10.–01.11.2026, grana
+     `claude/ki024-vracanje-kupcu`).
+
+     - **Test prvo:** 307 `T_ODL39_VracanjeKupcu` (`modTest.bas:14361`) i 308 `T_ODL39_PapirVracanjaKupcu`
+       (`:14562`). Smer F7 je broj 9, a smer pisca literal; jezgro se meri kroz javne pisce zatečenog potpisa
+       (`UpisiAmbDokument` + `PrenesiAmbalazu`, u svojoj TX koja se vraća). Zato se test kompajlira i nad starim
+       kodom. **Crveno pre koda** (`RunOne 307, 308` nad kopijom sa starim produkcionim kodom): 307 na „mapa
+       naseg reversa zna vracanje kupcu …" (`[False]`), 308 na „F7 vracanje kupcu se stampa …" (validator:
+       „Izaberi smer reversa"). Preduslovi 307 (otkup, otpremnica, nabavka, pozajmica, Izdato OM) su prošli.
+     - **Kod:**
+       - ugovor (`modAmbalazaUgovor`): `REV_SMER_VRACANJE_KUPCU` (`:93`), peti red mape (`:897`), kapija para u
+         `AmbDokKretanjeProblem` (`:762`), `AmbReversSmerSeIspravlja` / `AmbReversSmerZaRed` (`:918`, `:928`),
+         `AmbPartnerPrimaPrazne` / `AmbIzdavanjePraznihProblem` (`:1064`, `:1076`), `AmbVrstaPoslovnaRadnja(vrsta,
+         naTip)` (`:1109`);
+       - pisac (`modAmbalaza`): `AMB_ERR_IZDAVANJE_KUPCU` (`:34`), `UpisiReversAmbalaze_TX(…, kupacID)` (`:3002`),
+         `ReversNalogID` zna kupca (`:3711`), kapija ispravke (`:3189`, `:3272`), kapija viška u
+         `PrenesiAmbalazu` (`:4157`), `PoslovniRedNiz` čita odredište (`:3456`);
+       - ulaz (`modNovacUnos`): smer 9 (`:80`), grana validatora sa dugom uz polje količine (`:550`), kupac piscu
+         (`:830`), papir `KUPAC` (`:964`); ljuska: okvir `fgSmerKup` (`modOtkupUI.bas:1320`), `SetSmerRev` po tri
+         okvira (`:3708`); papir: protivstrana `KUPAC` sa poslovnim stanjem (`modPrint.bas:1896`, natpisi `:2055`,
+         PDF `:1772`); ponovna štampa (`modIzvestaj.bas:4882`); četiri ključa poruka.
+     - **Premisa promenjena (odlukom):** BFP `Test_REV_UgovorSmeraJeFailClosed`, „tačno četiri" → „tačno pet
+       smerova" (`modBusinessFlowProTests.bas:5971`).
+     - **Jedan pad u prvom prolazu, uzrok izmeren:** BFP 2801 / 1 — „isti dokument NE sme drugog protivpartnera
+       (AMB-INV-10)" je dobio 4478 umesto 4475. Prva verzija kapije viška sudila je i **izričito** `IZDATA_PRAZNA`
+       na kupca, a taj zahtev BFP koristi kao probu drugog protivpartnera. Odluka 3b govori samo o ostatku
+       vraćanja, pa je kapija sužena na njega (`modAmbalaza.bas:4153`). Izričito izdavanje kupcu i dalje nema
+       pisca i ne sudi se (zatečeno). Premisa tuđeg testa se ne menja.
+     - **Sabotaže:** 14 novih `odl39-*` (katalog 1075 → 1089), svaka na svojoj tvrdnji. Presidrene su tri:
+       `revers-smer` i `odl24-f7-smer-van-opsega` (granica opsega je sada smer 9), i `ki024-dokument-deo-radnje`
+       (zatečena zamena bi uz dva argumenta oborila compile, pa ista mutacija sada stoji na liniji koja sabira, u
+       ugovoru). Dva nova reda su napisana drugačije od zatečenih sidara (`amb-ulaz-kupcev-smer-prima-kooperanta`,
+       `amb-posl-revers-fizicki`), pa ta sidra ostaju jednoznačna bez izmene kataloga.
+     - **Provere:** `vba_check` čist (191 fajl), sidra 1089 / 0; `who_writes --check` ažuran,
+       `--check-ownership` bez novih pisaca, `gen_schema_module --check` u koraku (87AB4F9B). TARGETED posle
+       poslednje izmene koda: `RunAllTests` **308 / 0**, BFP **2801 / 0**, `RunStornoTestSuite` **111 / 0**,
+       `Test_StornoCentar_All` zeleno, GREEN marker (izvor `cc45fbd66804`). Fixture `7eab17dc6aec0058` nije
+       regenerisan. `dokaz.py --grupe 6 odl39 revers-smer odl24-f7-smer-van-opsega ki024-dokument-deo-radnje`: **17 / 17 crveno**, izvor posle vraćanja identičan (`104b4c0f82b638fc`). Osam je izmereno grupno, a devet pojedinačno; tri od njih su u grupi pala na tvrdnji partnera, pa su ponovljena sama i oborila svoju.
+     - **NOT RUN:** ručni Compile (probe `NEJASNO`), izgled okvira KUPAC i papira (ručno), pun `run_vba.py` i pun
+       `dokaz.py` (pred release). Migracija (`KI-065`, MIG-16/17) nije dirana.
+     - **Sledeći brojevi:** test 309 · stavka 247 · KI-069.
+
+247. **Nezavisni review PR `#450` (01.11.2026) — `ODL39-REV-01` ispravljen u PR-u, `ODL39-REV-02` → `KI-069`.**
+     Verdikt review-a: MERGE HOLD. Arhitektura je ocenjena 8,8/10, a testovi 8,5/10; rollback i deljenje PR-a
+     nisu traženi.
+
+     - **P1 `ODL39-REV-01`, potvrđen čitanjem:** prva i ponovljena štampa vraćanja kupcu nisu imale isti sadržaj.
+       F7 je slala vrstu voća sa ekrana (`StampajRevers`), ponovna štampa `""` (`modIzvestaj.StampajAmbDokument`),
+       a `WriteIzdavanjeCopy` red „Vrsta voća" piše samo kad je vrsta zadata. Test 308 je merio isto stanje i
+       istog kupca, ali ne i isti sadržaj.
+     - **Test prvo:** 308 je dobio dve tvrdnje (`modTest.bas:14652`, `:14661`) i sondu `Vrk308ImaVrstu` (`:14765`):
+       - validator ne traži vrstu voća za smer 9 ni uz `VALIDACIJA_UNOSA = DA`;
+       - prva štampa nema red, kontrola (isti papir sa vrstom zadatom direktno) ga ima, a ponovna ga nema.
+         A → B → A, da „nema reda" ne meri slepu sondu.
+
+       **Crveno pre ispravke:** `FAIL T_ODL39_PapirVracanjaKupcu -- F7 vracanje kupcu ne trazi vrstu voca ni uz
+       strogu validaciju -- dobijeno [? Izaberi vrstu voca]`. Druga tvrdnja nije došla na red (prvi pad staje);
+       nju meri sabotaža `odl39-papir-nosi-vrstu`.
+     - **Ispravka (preporuka review-a):** vraćanje kupcu ne nosi vrstu voća. Jedno pravilo,
+       `modNovacUnos.RevSmerNosiVrstuVoca` (`:658`), čitaju i validator (`:469`) i papir F7 (`:985`).
+     - **P2 `ODL39-REV-02` → `KI-069`, bez izmene koda:** jezgro ne zabranjuje izričit `IZDATA_PRAZNA` na kupca.
+       Pisca nema, a pravilo zahteva pre-flight i premeštanje BFP probe `AMB-INV-10` na drugog kooperanta.
+     - **Isti razred, stariji od `#450` → `KI-070`:** prva i ponovna štampa našeg reversa kooperantu i firmi
+       takođe se razlikuju u redu „Vrsta voća" (revers je ne čuva, `ODL-5`). Čeka odluku; ne dira se ovde.
+     - **Provere:** `vba_check` čist (191 fajl), sidra **1091 / 0** (+2 `odl39-f7-trazi-vrstu`,
+       `odl39-papir-nosi-vrstu`), `who_writes --check` i `--check-ownership`, `gen_schema_module --check`
+       (87AB4F9B). TARGETED nad finalnim kodom: `RunAllTests` **308 / 0**, BFP **2801 / 0**, Storno **111 / 0**,
+       `Test_StornoCentar_All` zeleno, GREEN marker (izvor `4530a20aa2ae`). Dokaz šest sabotaža testa 308 (dve
+       nove i četiri zatečene, jer je test promenjen): **6 / 6 crveno**, sve pojedinačno, izvor identičan (`cbd50efce7d9e53b`).
+     - **NOT RUN:** ručni Compile nad finalnim head-om, ručna provera F7, papira, storna i ponovne štampe; pun
+       `run_vba.py` i pun `dokaz.py`.
+     - **Sledeći brojevi:** test 309 · stavka 248 · KI-071.
+
+248. **Ručna provera PR `#450` (01.11.2026) — nad kodom PRE ispravke P1; funkcija prolazi, četiri nalaza u KI.**
+     Sveska `tests/fixtures/rucna_odl39_kod.xlsm` nosi kod pre `98d27b75`: u `vbaProject.bin` postoji
+     `SMER_REV_VRACANJE_KUP`, a ne postoji `RevSmerNosiVrstuVoca`. Zato je red „Vrsta voća: TESTVOCE" na PDF-u
+     očekivan, a ne regresija. Knjiga je pročitana iz kopije sveske snimljene posle provere (11:11).
+
+     - **Prošlo (slike i knjiga):**
+       - okvir KUPAC sa tri cela natpisa;
+       - višak 12 odbijen, broj predložen (`1/011126-2`);
+       - PDF „Kupac: Test kupac 1", −10 → −4;
+       - vraćanje 4 prolazi, a 1 se odbija (dug 0); ispravka se ne nudi;
+       - storno `-3` vraća obe noge (`VRACANJE_TUDJE` i `IZLAZ_TUDJE`, obe sa `StornoOd`);
+       - „Izdato OM" 4 → vraćanje odbijeno, bez zaglavlja i reda knjige; „Prijem od OM" 4 → vraćanje prolazi.
+     - **Ponavlja se nad finalnim kodom:** Compile; partner kooperant (korak 3); vrsta voća nije obavezna i nema je
+       na papiru (koraci 4–5); ponovna štampa (korak 10); storno „Prijem od OM" posle vraćanja. U ovoj proveri je
+       pre tog storna storniran „Izdato OM" (`-5`), pa je vozač imao gajbe i storno je s pravom prošao.
+     - **Nalazi — odluka operatera: samo zapis, bez koda u ovom PR-u:**
+       - `KI-071`: poruka viška ponavlja istu rečenicu (katalog, pa tekst jezgra bez dijakritike i sa ID-jem odluke);
+       - `KI-072`: kad vozač nema nijednu gajbu, jezgro odbija opštom porukom deficita „…za njih ide NABAVKA", u
+         dijalogu; za vraćanje kupcu lek je „Prijem od OM". Test 307 meri samo vozača sa punim gajbama;
+       - `KI-073` (zatečeno): crvena poruka ostaje posle prelaska na drugi ekran;
+       - `KI-074` (zatečeno): zaglavlje papira reversa seče naziv OM-a, a „Pocetno" je bez č.
+     - **Nisu nalazi:** prazan panel posledica za revers (po dizajnu, revers „uvid nema po prirodi", `modScrStorno`);
+       Napomena skrivena za smer 9 (`ODL-34 k`); „Otkazane 2" su dva stornirana dokumenta (`-3` i `-4`), ne dve noge.
+     - **Sledeći brojevi:** test 309 · stavka 249 · KI-075.
+
+249. **Ručna provera PR `#450` nad FINALNIM kodom (01.11.2026) — PASS na svim funkcionalnim tačkama; Compile ✅.**
+     Sveska `tests/fixtures/rucna_odl39_final.xlsm`: `run_vba --compile-only --keep` nad `2c24ee1e` (kod = `98d27b75`),
+     `modVbaTools` uvezen, seed kroz prave pisce (RUC-39: nabavka 20, pozajmica `POZ-RUC39` 10 → dug 10, vozač 10
+     praznih), validacija unosa uključena. Pored slika je pročitana i snimljena sveska (11:45:57).
+
+     - **Prošlo:**
+       - okvir KUPAC; partner kooperant → „Vraćanje gajbi kupcu traži KUPCA kao partnera.";
+       - vrsta voća: „Izdato koop." bez vrste je traži, a vraćanje bez vrste je snimljeno (`-3`);
+       - višak preko duga odbijen (dug 8, traži 12, „visak 4"); broj se predlaže;
+       - papir `-4`: „Kupac: Test kupac 1", bez reda „Vrsta voća", −8 → 6 → −2;
+       - **papir `-8` sa izabranom vrstom TESTVOCE nema red „Vrsta voća"** (slučaj koji je u stavci 248 pao), −4 → 0;
+       - ponovna štampa `-4` iz izveštaja: isti sadržaj kao prvi papir (−8 → −2);
+       - ostatak duga i dug 0 („(0 'RUC-39'). Trazi se 1, visak 1.");
+       - storno `-2`, `-3`, `-5`: knjiga nosi obe noge sa `StornoOd`; za vraćanje se nudi samo „Storno bez zamene",
+         a za „Prijem od OM" i „Zamena reversa";
+       - lanac preko OM: vraćanje posle „Izdato OM" odbijeno bez traga u knjizi, posle „Prijem od OM" prolazi;
+         storno tog „Prijem od OM" odbijen, red ostaje.
+     - **Kraj (knjiga):** vozač 0, stanica 20, dug firme kupcu 0; odbijeni pokušaji nisu ostavili ni zaglavlje ni red.
+     - **Tekst odbijanja storna „Prijem od OM"** je `AMB-INV-07` („storno bi ostavio saldo -4 na Vozac…"), ne
+       `AMB-INV-16`: vozač pada ispod nule pre nego što se pitaju prazne. Ishod je isti; test 307 meri ishod, ne ID kapije.
+     - **Compile:** operater, `Debug → Compile VBAProject` bez poruke; `vba_gate --mark-compile` nad izvorom
+       `4530a20aa2ae` (isti izvor kao GREEN marker 308/0, 2801/0, 111/0).
+     - **Viđeno, poznato:** `KI-071` (dupla rečenica), `KI-072` (savet „NABAVKA"), `KI-073` (crvena poruka ostaje),
+       `KI-074` (zaglavlje papira).
+     - **NOT RUN:** pun `run_vba.py` i pun `dokaz.py` (pred release).
+     - **Sledeći brojevi:** test 309 · stavka 250 · KI-075.
 
 ## Dug sa imenom (posle S5-5b)
 

@@ -1769,6 +1769,8 @@ Public Function ExportIzdavanjeAmbalazePDF(ByVal datum As Date, ByVal brojDok As
     Dim pref As String
     If counterparty = "OTPIS" Then
         pref = "OtpisAmbalaze_"
+    ElseIf counterparty = "KUPAC" Then
+        pref = "VracanjeAmbKupcu_"
     ElseIf counterparty = "FIRMA" Then
         pref = IIf(m_izdAmbPrijem, "PrijemAmbFirma_", "IzdavanjeAmbFirma_")
     Else
@@ -1875,19 +1877,29 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     ' partnera (ODL-26). Ranije je novo bio DANASNJI saldo, pa je ponovljen papir
     ' 1/IZV nosio "-10 -> 20".
     '
-    ' POKRICE DEFICITA je red istog dokumenta, pa ulazi u novo, a pocetno je novo
-    ' minus kretanje -- pravilo reversa i pre stavke 135, zadrzano odlukom
-    ' operatera 13.10.2026. Prikaz pokrica ide uz ODL-24.
+    ' POKRICE DEFICITA je red istog dokumenta. Za KOOPERANTA se stanje cita
+    ' POSLOVNO (AMB-POSL-03, odluka operatera 28.10.2026): pokrice ne ulazi ni u
+    ' novo ni u pocetno, isto kao na otkupnom listu i kartici -- promet papira je
+    ' vec poslovni red dokumenta, pa i stanje mora biti. Pravilo reversa (novo =
+    ' stanje posle dokumenta, pocetno = novo - kretanje; stavka 135, odluka 3)
+    ' ostaje. Revers firme (stanje OM-a) i zapisnik o otpisu ostaju fizicki.
     '
     ' Revers UVEK ima svoj red za nalog i tip papira, pa njegovo odsustvo nije
     ' "nepoznato stanje" (ODL-27) nego kvar identiteta: papir ne nastaje, umesto
     ' papira koji tiho izostavi redove stanja. Kvar knjige ide istim putem, kroz
     ' handler lista.
-    Dim nalogTip As String, nalogID As String
+    Dim nalogTip As String, nalogID As String, poslovno As Boolean
     If counterparty = "FIRMA" Then
         ' Firma revers prikazuje stanje praznih gajbi NA OM-u (Stanica saldo).
         nalogTip = AMB_NALOG_STANICA
         nalogID = omID
+    ElseIf counterparty = "KUPAC" Then
+        ' VRACANJE KUPCU (AMB-10-ODL-39 g): nas papir, stanje kupca POSLOVNO --
+        ' isto pravilo kao kooperant (AMB-POSL-03). Fizicki bi kupac stajao na
+        ' nuli, jer pozajmica i vracanje nose svoj ulaz i izlaz (AMB-INV-13/15).
+        nalogTip = AMB_NALOG_KUPAC
+        nalogID = koopID
+        poslovno = True   ' AMB-POSL-03 i za kupca
     ElseIf counterparty = "OTPIS" Then
         ' ZAPISNIK O OTPISU (AMB-10-ODL-34 h, l): nalog se cita SA REDA dokumenta,
         ' ne sa ekrana -- otpis ide sa bilo kog realnog naloga, a red je cinjenica.
@@ -1898,10 +1910,12 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     Else
         nalogTip = AMB_NALOG_KOOPERANT
         nalogID = koopID
+        poslovno = True
     End If
     Dim saldoNovo As Long, revPoznato As Boolean
     modAmbalaza.AmbStanjeOkoDokumenta nalogTip, nalogID, tipAmb, _
-                                      DOK_TIP_AMBALAZA_DOKUMENT, ambDokID, revPoznato, saldoNovo
+                                      DOK_TIP_AMBALAZA_DOKUMENT, ambDokID, revPoznato, saldoNovo, _
+                                      poslovno
     If Not revPoznato Then
         Err.Raise vbObjectError + 7692, "modPrint.FillIzdavanjeAmbalazeSablon", _
                   "Revers '" & ambDokID & "' nema svoj red knjige za nalog " & nalogTip & _
@@ -1952,6 +1966,7 @@ Private Function FillIzdavanjeAmbalazeSablon(ByVal datum As Date, ByVal brojDok 
     Select Case counterparty
         Case "FIRMA": copy2Lbl = "Primerak: firma (centrala)"
         Case "OTPIS": copy2Lbl = "Primerak: nalog"
+        Case "KUPAC": copy2Lbl = "Primerak: kupac"
         Case Else:    copy2Lbl = "Primerak: kooperant"
     End Select
     R0 = WriteIzdavanjeCopy(ws, 1, "Primerak: OM (otkupno mesto)", h, _
@@ -2015,6 +2030,7 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     ' Naljepnice zavisne od protivpartnera (kooperant vs firma) i smera (h("prijem")).
     Dim isFirma As Boolean: isFirma = (UCase$(Trim$(CStr(h("ctype")))) = "FIRMA")
     Dim isOtpis As Boolean: isOtpis = (UCase$(Trim$(CStr(h("ctype")))) = "OTPIS")
+    Dim isKupac As Boolean: isKupac = (UCase$(Trim$(CStr(h("ctype")))) = "KUPAC")
     Dim lblDescr As String, lblParty As String, lblKret As String
     Dim lblSigLeft As String, lblSigRight As String
     Dim lblPocetno As String, lblNovo As String
@@ -2036,6 +2052,16 @@ Private Function WriteIzdavanjeCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
         lblSigRight = "Potvrdio (nalog):  ____________________"
         lblPocetno = "Stanje pre otpisa (tip " & CStr(h("tipAmb")) & "):"
         lblNovo = "Stanje posle otpisa (saldo):"
+    ElseIf isKupac Then
+        ' VRACANJE KUPCU (AMB-10-ODL-39 g): firma vraca kupcu NJEGOVE gajbe, preko
+        ' vozaca. Stanje je poslovno: minus je ono sto firma kupcu duguje.
+        lblDescr = "Vra" & ChrW(263) & "anje ambala" & ChrW(382) & "e kupcu (njegove gajbe, preko voza" & ChrW(269) & "a)"
+        lblParty = "Kupac: " & CStr(h("koop"))
+        lblKret = "Vra" & ChrW(263) & "eno (kupcu):"
+        lblSigLeft = "Predao (voza" & ChrW(269) & "):  ____________________"
+        lblSigRight = "Primio (kupac):  ____________________"
+        lblPocetno = "Pocetno stanje (tip " & CStr(h("tipAmb")) & "):"
+        lblNovo = "Novo stanje (saldo):"
     Else
         lblDescr = IIf(h("prijem"), "Prijem (povrat) prazne ambala" & ChrW(382) & "e od kooperanta", "Izdavanje prazne ambala" & ChrW(382) & "e kooperantu")
         lblParty = "Kooperant: " & CStr(h("koop"))
