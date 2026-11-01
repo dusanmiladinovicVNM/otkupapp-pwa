@@ -9905,6 +9905,33 @@ su izvedeni iz koda; N4 meri test 310 pre ispravke, a N5 i N10 početak reza 2.
 automatskog mapiranja izvoda, pa je to upisano u `KNOWN_ISSUES.md`. Mehanizam je potvrđen čitanjem
 koda, a nije reprodukovan.
 
+#### S7 rez 1 — urađen (01.11.2026, `docs/STANJE_REFAKTORA.md` stavka 254)
+
+Obim je po predlogu:
+
+- kapija `FAK-ODL-02` stoji u jezgru `modStorno.StornoFaktura`, a predikat je jedan:
+  `modSEFValidator.FakturaZiviNaSEF`;
+- F8 (`StornoRazlog`) pita isti predikat i kaže stanje;
+- `KI-041` je CLOSED;
+- `FAK-ODL-05` je u `modNovac.ApplyAvansToFaktura`;
+- poruka storna kaže koliko je prešlo u avans.
+
+Pre koda je doneta nova odluka `FAK-ODL-06`: split ostaje `KupciAvans`, a PWA izvoz broji svaku
+uplatu vezanu za fakturu (`modStammdatenSync.UplacenoPoFakturi`). Popis je pokazao da tip u ovom
+toku čita samo taj izvoz, koji je do tada brojao samo `KupciUplata`.
+
+**Odstupanja od predloga:**
+
+- testovi su u BFP kao `Test_S7R1_*`, a ne u `modTest` kao 309–311. Poslovni testovi storna i
+  upisa žive u BFP (`.claude/rules/testovi.md` §4), a tamo su i pomoćnici fakture nad prijemnicom
+  (S6K5). Broj 309 u `modTest` ostaje slobodan;
+- test avansa radi nad svojim kupcem (`KUP-90003`, `SeedKupac3`). Odvezana uplata je slobodan
+  novac kupca, pa bi je zajednički test kupac preneo u tuđ test;
+- uz sabotaže iz predloga i dopune dodata je `s7r1-pwa-samo-kupciuplata` (`FAK-ODL-06`).
+
+**N4 je reprodukovan:** nad starim kodom je nova faktura posle storna ostala neplaćena, a
+odvezana uplata je ostala slobodna (stavka 254, crveni prolaz).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

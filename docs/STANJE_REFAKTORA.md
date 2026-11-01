@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 01.11.2026 (stavka 253: merge `#451` = `eb6c5970`; S7 rez 1 počinje).
+**Ažurirano:** 01.11.2026 (stavka 254: S7 rez 1 — storno fakture do kraja, lokalno zeleno, dokaz 9 / 9).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -37,7 +37,7 @@
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
 | **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): ✅ merge **`#450`** (`fd39a716`, 01.11.2026) — review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); stavka 250 |
-| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1 |
+| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, grana `claude/s7-rez1-storno-faktura`): čeka review, ručnu proveru i Compile |
 | S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -8881,6 +8881,42 @@
      Samo dokumentacija: `src-vba`, `tools` i `schema` su bajt-isti kao u `fd39a716`, pa baseline iz stavke 250 važi
      nepromenjen. CI `static` PASS.
      - **Sledeći brojevi:** test 309 · stavka 254 · KI-076.
+
+254. **S7 rez 1 — storno fakture do kraja (`FAK-ODL-02`, `-05`, `-06`; `KI-041`)** (01.11.2026, grana
+     `claude/s7-rez1-storno-faktura` od `eb6c5970`, commit `a8779347`). Plan §14.57 „S7 rez 1 — urađen".
+
+     - **Odluka pre koda `FAK-ODL-06`:** operater je izabrao preporuku (review #451 i popis). Split ostaje
+       `KupciAvans`, a izvorni red zadržava tip i BIM marker. PWA izvoz po fakturi broji svaku uplatu vezanu za
+       fakturu, kao `GetUplataForFaktura`. Popis: `KupciUplata` bez fakture nastaje samo stornom, a tip u ovom
+       toku čita samo `modStammdatenSync.ExportFakture`, koji je do sada brojao samo `KupciUplata`.
+     - **Kod:**
+       - predikat `modSEFValidator.FakturaZiviNaSEF` (+ `PoID`);
+       - kapija u jezgru `modStorno.StornoFaktura`, pre prve mutacije (`ERR_STORNO_BASE + 76`);
+       - F8 `StornoRazlog` pita isti predikat i kaže stanje (`STORNO_ERR_FAK_NA_SEF`);
+       - `StornoIzvrsi`/`StornoRazlog` bez `docID`-a odbijaju (`FakturaAktivnaPoID`) → `KI-041` CLOSED;
+       - `ApplyAvansToFaktura` prima i `KupciUplata` bez `FakturaID`-a;
+       - poruka storna kaže koliko je prešlo u avans (`STORNO_MSG_FAK_AVANS`);
+       - izvoz kroz nov `modStammdatenSync.UplacenoPoFakturi`.
+
+       Potpisi javnih procedura se ne menjaju.
+     - **Testovi u BFP, ne u `modTest`** (odstupanje od predloga; razlog u planu): `Test_S7R1_StornoOdbijaFakturuNaSEF`,
+       `Test_S7R1_OdvezanaUplataJeAvans` (svoj kupac `KUP-90003`), `Test_S7R1_StornoBezIDNeTraziPoBroju` — 31
+       tvrdnja. Broj 309 u `modTest` ostaje slobodan.
+     - **Crveno nad starim kodom** (produkcioni fajlovi vraćeni na `62695e1f`, novi BFP): palo **17**, sve `S7R1`,
+       ostalih 2815 zeleno. **N4 reprodukovan:** posle storna nova faktura nije plaćena, a uplata od 16.000 je
+       ostala slobodna. **`KI-041` reprodukovan:** F8 sa brojem, a bez ID-a, stornirao je fakturu. Zaštita u testu
+       je preskočila poziv sa praznim brojem, pa fixture faktura nije dirnuta. Jedna tvrdnja (razlog bez ID-a) nije
+       bila izmerena crveno, jer je faktura već bila stornirana. Pomerena je pre mutacije.
+     - **Zeleno nad finalnim kodom** (izvor `2030191edc7f`): `RunAllTests` **308 / 0**, BFP **2832 / 0**, Storno
+       **111 / 0**, `Test_StornoCentar_All` OK, Faktura **39 / 0**; GREEN marker.
+     - **Dokaz `s7r1`:** **9 / 9 crveno**, svaka na svojoj tvrdnji, grupno (4 prolaza), izvor pre/posle identičan
+       (`49be9534fbfcd302`). Katalog sabotaža **1100**.
+     - **Kapije:** `vba_check` čist (191), `who_writes --check` ažuran, `--check-ownership` bez novih pisaca,
+       `gen_schema_module --check` (87AB4F9B).
+     - **NOT RUN / NEJASNO:** Compile (`COMPILE NEJASNO` — ručna kapija); ručna provera F8 storna nad fakturom u
+       SEF stanju i poruke avansa (novi ključevi poruka traže restart sveske); pun `run_vba.py` i pun `dokaz.py`;
+       pojedinačni (negrupisani) dokaz.
+     - **Sledeći brojevi:** test 309 · stavka 255 · KI-076.
 
 ## Dug sa imenom (posle S5-5b)
 
