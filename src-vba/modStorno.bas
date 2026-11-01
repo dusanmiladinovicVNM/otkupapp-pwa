@@ -629,6 +629,14 @@ Public Function StornoFaktura(ByVal fakturaID As String) As Boolean
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC
 
+    ' FAK-ODL-02: dok faktura zivi na SEF-u, lokalni storno bi ostavio dokument
+    ' koji kupac i poreska uprava i dalje vide kao vazeci. Kapija je u jezgru, pre
+    ' prve mutacije; F8 (modStornoDok.StornoRazlog) pita isti predikat.
+    If modSEFValidator.FakturaZiviNaSEFPoID(fakturaID) Then
+        Err.Raise ERR_STORNO_BASE + 76, SRC, _
+                  "Faktura je na SEF-u (FAK-ODL-02) -- lokalni storno nije dozvoljen. FakturaID=" & fakturaID
+    End If
+
     MarkRowStornirano TBL_FAKTURE, rowFak, SRC
     RequireUpdateCell TBL_FAKTURE, rowFak, COL_FAK_STATUS, STATUS_STORNIRANO, SRC
 
