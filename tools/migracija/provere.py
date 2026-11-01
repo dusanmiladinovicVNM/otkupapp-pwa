@@ -335,5 +335,6 @@ def _ambalaza(c):
                     "%s: prazne %s na dan %s" % (nalog, x["najmanje_prazne"], x["dan_prazne"]))
         if x["najmanje_pune"] is not None and x["najmanje_pune"] < 0:
             c.nalaz(ODLUKA, "AMB_PUNE_ISPOD_NULE", "tblAmbalaza", "",
-                    "%s: pune %s na dan %s -- poslao je vise punih nego sto je primio, pa su mu "
-                    "prazne za toliko iznad stvarnih (KI-065)" % (nalog, x["najmanje_pune"], x["dan_pune"]))
+                    "%s: pune najmanje %s (dan %s), na kraju %s; prazne na kraju %s -- poslao je vise "
+                    "punih nego sto je primio, pa su mu prazne za toliko iznad stvarnih (KI-065)"
+                    % (nalog, x["najmanje_pune"], x["dan_pune"], x["pune"], x["prazne"]))

@@ -216,6 +216,12 @@ def komanda_proba(a):
     with open(os.path.join(izlaz, "proba_sazetak.txt"), "w", encoding="utf-8") as f:
         for k, v in saz:
             f.write(("%-60s %s" % (k, v)).rstrip() + "\n")
+        # BLOKIRA i ODLUKA ceo tekst: o njima se odlucuje pre upisa, pa sazetak
+        # mora da kaze KOJI dokument ili nalog, ne samo koliko.
+        f.write("\nBLOKIRA i ODLUKA -- pojedinacno:\n")
+        for n in c.nalazi:
+            if n["tezina"] in (provere.BLOKIRA, provere.ODLUKA):
+                f.write("%s %s %s %s %s\n" % (n["tezina"], n["pravilo"], n["tabela"], n["id"], n["opis"]))
     for k, v in saz:
         print(("%-60s %s" % (k, v)).rstrip())
     print("\nPaket: %s" % paket)
