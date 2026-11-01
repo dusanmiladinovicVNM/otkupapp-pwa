@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 01.11.2026 (stavka 250: merge `#450` = `fd39a716`).
+**Ažurirano:** 01.11.2026 (stavka 251: pre-flight S7, odluke `FAK-ODL-01..05`; GO za rez 1).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -37,7 +37,8 @@
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
 | **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): ✅ merge **`#450`** (`fd39a716`, 01.11.2026) — review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); stavka 250 |
-| S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
+| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1 |
+| S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
 ## Hronologija rezova — i gde je sledeći (v. stavku 50)
@@ -8820,6 +8821,37 @@
      dokaz **17 / 17** (stavka 246) i **6 / 6** (stavka 247); Compile ✅ i ručna provera nad finalnim kodom PASS
      (stavke 248–249). Pun `run_vba.py` i pun `dokaz.py` nisu pušteni (idu pred release).
      - **Sledeći brojevi:** test 309 · stavka 251 · KI-075.
+
+251. **Pre-flight S7 — faktura na novom modelu (01.11.2026, grana `claude/s7-preflight-faktura` od `fd39a716`).**
+     Bez produkcionog koda. Zapis: plan §14.57, odluke `docs/DOMEN/FAKTURA.md`.
+
+     - **Premisa iz §14.9 je zastarela.** `FakturaStavka.PrijemnicaStavkaID` je doneo S6 korak 5 (`#439`). Veza
+       fakture preko broja prijemnice ima **0** mesta: ad hoc merenje ključeva pretrage nad `src-vba/` (2 pogotka,
+       nijedan nije faktura), `prj_linija` 0, `prj_kes` 0. Bila je 0 i 17.09 (D-002). „Kartica kupca" kao sposobnost
+       ne postoji; C-003/C-004 su prešli na stavke u S6 koraku 3.
+     - **Šta S7 stvarno ima, izmereno čitanjem:**
+       - SEF linija nosi `PrijemnicaID` dokumenta i naziv bez klase, pa su dve klase na e-fakturi neraspoznatljive;
+       - lokalni storno fakture ne čita SEF stanje;
+       - linijski `Stornirano`/`OsirocenoOd` krši §6.5, a `OsirocenoOd` nema pisca od S6 koraka 4;
+       - uplata odvezana stornom nije ni plaćanje ni avans (izvedeno, nije reprodukovano);
+       - health check 3 javlja GP linije i linije stornirane fakture kao „missing" (izvedeno, nije izmereno);
+       - `modNovac.GetVrstaFromFaktura` je mrtav;
+       - `StornoIzvrsi` bez `docID`-a traži fakturu po broju (`KI-041`).
+     - **Verdikt:** nijedna osa nije `GAP`. Signali: ⚠ IDENTITY RISK (`KI-041`, SEF ID linije, `LookupValue` u
+       mapperu), ⚠ ARCHITECTURAL EDGE CASE (otkazana faktura ostaje `SEF_SENT`), ⚠ FALSE-GREEN RISK (fixture fakture
+       nemaju SEF stanje), pisac `modStorno` nad `tblFakturaStavke` je nevidljiv za A11.
+     - **Odluke operatera (sve po preporuci):** `FAK-ODL-01` SEF linija nosi stavku i klasu · `FAK-ODL-02` lokalni
+       storno se odbija dok faktura živi na SEF-u, uključujući `SEF_TECH_FAILED` (dopuna istog dana, AUD-030), uz
+       izuzetak otkazane · `FAK-ODL-03` aktivnost linije iz zaglavlja · `FAK-ODL-04` saldo kupca ostaje robni ·
+       `FAK-ODL-05` odvezana uplata je avans kupca. Izmereno, ne pitano: `FAK-IDENT-01` (`BrojFakture` godišnji niz
+       firme, red dopisan u A2) i `FAK-IDENT-02` (linija: `PrijemnicaStavkaID` ključ, broj prijemnice snapshot).
+     - **Usput:** C-003/C-004 u mapi označeni kao MIGRIRANO (S6 korak 3); `DOCUMENT_HEADER_LINES` §6.5 imenuje izuzetak
+       fakture do reza 2; `KI-075` (banka poredi podniz broja fakture, van S7).
+     - **Redosled:** rez 1 storno fakture do kraja (testovi 309–311) → rez 2 linija bez sopstvenog storna → rez 3 SEF
+       linija i zatvaranje. **GO za rez 1.**
+     - **Provere:** `vba_check` čist, `who_writes --check` ažuran, `--check-ownership` bez novih pisaca,
+       `gen_schema_module --check` u koraku. `run_vba` i `dokaz.py` **NOT RUN** (nema koda).
+     - **Sledeći brojevi:** test 309 · stavka 252 · KI-076.
 
 ## Dug sa imenom (posle S5-5b)
 
