@@ -80,9 +80,18 @@ def komanda_pregled(a):
         return 2
     print("  tabela: %d" % len(tabele))
 
+    kanon = dokumenti.ucitaj_kanon()
     try:
         izuzeci = ambalaza.ucitaj_izuzetke(izuzeci_put)
-        rez = ambalaza.prevedi(tabele, izuzeci, knjizenje=a.knjizenje)
+        if a.knjizenje == ambalaza.ISPRAVNO:
+            # Ista knjiga koju pise upis: robni dokumenti odredjuju svoju knjigu
+            # (MIG-ODL-14), pa pregled ide kroz cilj, ne samo kroz prevod nogu.
+            rez = cilj.izgradi(tabele, kanon, izuzeci, knjizenje=a.knjizenje,
+                               izuzeci_dok=cilj.ucitaj_izuzetke_dokumenata(izuzeci_put)).amb
+            if rez is None:
+                raise ambalaza.GreskaAmbalaze("Sveska nema tabelu tblAmbalaza")
+        else:
+            rez = ambalaza.prevedi(tabele, izuzeci, knjizenje=a.knjizenje)
     except (ambalaza.GreskaAmbalaze, ValueError, OSError) as e:
         # ValueError pokriva i pokvaren izuzeci.json (json.JSONDecodeError).
         print("GRESKA: %s" % e, file=sys.stderr)
@@ -92,7 +101,6 @@ def komanda_pregled(a):
     invarijante = ambalaza.proveri_invarijante(rez)
     stavke = ambalaza.stavke_po_nalogu(rez)
 
-    kanon = dokumenti.ucitaj_kanon()
     popis = dokumenti.popis_tabela(tabele, kanon)
     oblik_dok = dokumenti.oblik_dokumenata(tabele)
     dok_sazetak, dok_grupe = dokumenti.identitet_dokumenata(tabele)

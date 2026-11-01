@@ -23,6 +23,9 @@
 | **MIG-ODL-10** | Isplate kooperantu bez `OtkupID` (5 redova, `VirmanFirmaKoop`/`VirmanAvansKoop`) su **stvarni avansi** — ostaju bez veze, a prvi sledeći otkup kooperanta ih troši (`modNovac.JeAvansKooperanta`). Odluka operatera 28.10.2026. | — |
 | **MIG-ODL-11** | Otvorene palete stare sezone se **zatvaraju** (`Status = Zatvorena`), inače ih nova sezona puni gajbicama iste vrste/sorte/klase (`modPaletniList`). | `cilj._zatvori_otvorene_palete` |
 | **MIG-ODL-12** | Prihvaćeno nad sveskom s kraja sezone: 17 aktivnih otpremnica bez dokazivog otkupa ostaje neizdato (MIG-ODL-06), 3 aktivna otkupa bez otpremnice ostaju neizdata, aktivacija licence se ne prenosi (MIG-ODL-07). | — |
+| **MIG-ODL-13** | **Vraćanje tuđe ambalaže ima svoj izlaz** (`AMB-INV-15`, #448; `KI-024` deo 2). Uz svako migraciono `VRACANJE_TUDJE` ide `IZLAZ_TUDJE_AMBALAZE` partner → SpoljniSvet, isti dokument, dan, tip i količina — isti red koji piše `PrenesiAmbalazu`. Fizički saldo kooperanta na kraju dana je max(stari, 0), obaveza max(−stari, 0), a poslovni saldo (kartica) = stari. Bilans „Neusklađeno" je 0 (`AMB-BIL-02`). | `ambalaza.primeni_politiku_duga`, `_izlaz_tudje` |
+| **MIG-ODL-14** | **Knjiga robnog dokumenta je ono što bi upisao pisac main-a** (`KI-065`, odluka operatera 31.10.2026 za otpremnicu). Otpremnica: gajbe = zbir gajbi blokova istog tipa, i u dokumentu i u knjizi (`OtpRequireJednakost`); **neizdata otpremnica ne knjiži** (`OtpIzdaj`) — njene stare noge su van knjige (`DOKUMENT_NE_KNJIZI`); blok drugog tipa ambalaže ne ulazi u zbir (`OtpRequireIzvorValjan`, ODLUKA). Zbirna: gajbe = zbir izdatih otpremnica (`ZbrRequireJednakost`). Otkup i prijemnica: **knjiga je istorija** (MIG-ODL-01), pa se gajbe dokumenta (`KolAmbalaze` stavke, `KolAmbIzdata`, `KolAmbVracena`) usklađuju sa njom; dokument sa nerazrešenom nogom se ne dira. Kg se ne menja nigde. Svaka izmena je nalaz u probi i red na listu „Uskladjivanje" pregleda. | `cilj._robni_dokumenti`, `ambalaza.uskladi_sa_dokumentima` |
+| **MIG-ODL-15** | **NABAVKA pokriva i prazne** (`AMB-INV-16`, #448; vozač od `AMB-10-ODL-37`, #449). Jedna NABAVKA sopstvenog naloga prvog dana rada, u iznosu dubljeg od dva minusa: ukupnog salda i praznih (svaki red naloga osim `AMBALAZA_UZ_ROBU`, `AmbPrazneNaloga`). Pune ispod nule nabavka ne može da popravi — proba ih javlja kao ODLUKA (`AMB_PUNE_ISPOD_NULE`). | `ambalaza.nabavka_na_pocetku`, `pune_i_prazne`, `provere._ambalaza` |
 
 ## MIG-WR-01 — izuzetak od vlasništva upisa
 
@@ -34,7 +37,8 @@ izvornog dokumenta) i od A11 (`WRITE_OWNERSHIP.json`, red `tblAmbalaza` →
 Uslovi koje alat drži:
 
 - **pre upisa**: `provere.py` meri ista pravila po kojima main čita celu tabelu
-  (`Stavke*Redovi`, članstvo, izdate otpremnice bez izvora, fakture). Nalaz
+  (`Stavke*Redovi`, članstvo, izdate otpremnice bez izvora, fakture) i knjigu
+  ambalaže (invarijante, salda, `AMB-INV-07/15/16`, `AMB-BIL-02`). Nalaz
   BLOKIRA odbija upis; ODLUKA traži `--prihvatam-odluke`.
 - **upis**: svaka tabela u koju se piše mora biti prazna; izvorna sveska se ne
   otvara u Excelu; makroi i događaji ugašeni.
@@ -43,13 +47,16 @@ Uslovi koje alat drži:
 
 ## Stanje
 
+- **01.11.2026 — sveska iz `7c12aa2e` više NIJE sveska za C002.** Main
+  `fd39a716` (#446–#450) menja pisca ambalaže (MIG-ODL-13..15); migracija se
+  ponavlja nad svežom sveskom iz tog main-a (pregled → proba → upis).
 - **Upis 28.10.2026 nad sveskom C002 (SHA256 `d5e1f612…`): prošao.** 34 tabele
   + podešavanja; povratno poređenje svake ćelije: 0 razlika; salda ambalaže nove
   sveske naspram prevoda: 0 razlika. Usput nađene i ispravljene tri greške
   samog upisa (pywin32 `Range.Resize`, tabela sa jednim redom, datum pomeren u
   UTC) — svaka ima test.
 - **Ponovljen isti dan nad svežom sveskom iz main-a `7c12aa2e` (#445 + #441):**
-  isti ishod — 0 razlika, salda 0. To je sveska za C002.
+  isti ishod — 0 razlika, salda 0 (zamenjeno gore).
 
 ## Usklađenost sa main-om posle #445 i #441
 
@@ -72,10 +79,32 @@ izmene. Sveska za C002 se pravi iz ovog main-a.
   jednačina koju alat već meri (stari − van knjige + izuzeci + pokriće = novi;
   pokriće partnera je samo `ULAZ_TUDJE`).
 
+## Usklađenost sa main-om `fd39a716` (#446–#450)
+
+Provereno nad kodom 01.11.2026; šema se ne menja (otisak `87AB4F9B`).
+
+- **#446 (revers kooperantu poslovno), #447 (bilans):** samo čitaoci. Bilans
+  „Neusklađeno" je signal za vraćanje bez izlaza — posle MIG-ODL-13 je 0.
+- **#448:** pisac deli izdavanje kooperantu (`AMB-10-ODL-35`: prvo vraća tuđe)
+  i piše izlaz (`AMB-INV-15`) → MIG-ODL-13; migracija deli po dnevnom zaključku
+  (MIG-16/17), što je na kraju dana isto. Kapija praznih stanice (`AMB-INV-16`)
+  → MIG-ODL-15.
+- **#449:** kapija praznih i za vozača (`ODL-37`), otpis kod vozača je lom
+  praznih (`ODL-38`, stara sveska nema otpis), `KI-065` izmeren nad sveskom
+  C002 (pune stanica ispod nule zbog otpremnica sa više gajbi od otkupa) i
+  pravilo za ponovni prevod → MIG-ODL-14/15.
+- **#450:** vraćanje kupcu (`ODL-39`) — novi tok, stara sveska ga nema; obaveza
+  prema kupcu iz migracionog pokrića ostaje i sada se može vratiti sa F7.
+
 ## Otvoreno
 
+- Ponovljena migracija nad sveskom C002 po MIG-ODL-13..15 — NEVERIFIKOVANO dok
+  je operater ne pokrene (koliko se gajbi otpremnica menja, nabavke, pune ispod
+  nule vidi se tek nad stvarnim podacima).
 - Provera u pravom Excelu nad novom sveskom (Compile, otvaranje ekrana,
-  kartice, izveštaji robe, aktivacija licence) — NEVERIFIKOVANO dok je operater
-  ne prođe.
+  kartice, bilans „Neusklađeno" = 0, izveštaji robe, aktivacija licence) —
+  NEVERIFIKOVANO dok je operater ne prođe.
+- `docs/KNOWN_ISSUES.md` `KI-024` (deo 2) i `KI-065` se zatvaraju tek posle te
+  provere.
 - `docs/DOMEN/README.md` §1 još kaže da se otkup vezuje preko
   `OtpremnicaID`/`BrojOtpremnice`; kod ga vezuje preko `tblOtpremnicaIzvori`.

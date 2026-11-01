@@ -25,6 +25,13 @@ samo sazeta u jedan prolaz i bez SHA zakljucavanja:
 Stornirani redovi idu u arhivu, ne u knjigu (MIG-05.7/05.8). Aktivna noga
 storniranog dokumenta ide ZA ODLUKU (slucaj AMB-00700, MIG-19.12).
 
+Rezim ISPRAVNO prati main posle #445-#450 (docs/DOMEN/MIGRACIJA_LEGACY.md,
+MIG-ODL-13..15): knjiga i robni dokument se slazu kao kod pisca main-a --
+otpremnica knjizi zbir gajbi blokova i samo kad je izdata, a gajbe otkupa i
+prijemnice na dokumentu prate staru knjigu (`dokumenti`, gradi ih cilj.py);
+uz svako VRACANJE_TUDJE ide IZLAZ_TUDJE (AMB-INV-15); NABAVKA sopstvenog
+naloga pokriva i najdublji minus PRAZNIH (AMB-INV-16, ODL-37).
+
 Istorija se prevodi VERNO: negativna stara salda ostaju negativna. Klijent nije
 unosio pocetno stanje stanica, a tudja ambalaza tada nije postojala kao pojam
 (odluka operatera 28.10.2026), pa se u istoriju nista ne dopisuje. Prelaz u
@@ -59,6 +66,10 @@ ISHOD_KRETANJE = "KRETANJE"
 ISHOD_STORNO = "STORNO"
 ISHOD_IZUZETO = "IZUZETO"
 ISHOD_ZA_ODLUKU = "ZA_ODLUKU"
+# Noga dokumenta koji po main-u NE knjizi gajbe (neizdata otpremnica: pisac
+# knjizi tek pri izdavanju, modDokumenta.OtpIzdaj).
+ISHOD_NE_KNJIZI = "DOKUMENT_NE_KNJIZI"
+VAN_KNJIGE = (ISHOD_IZUZETO, ISHOD_ZA_ODLUKU, ISHOD_NE_KNJIZI)
 
 UZ_ROBU = "AMBALAZA_UZ_ROBU"
 IZDATA = "IZDATA_PRAZNA"
@@ -66,9 +77,16 @@ POVRAT = "POVRAT_PRAZNE"
 PRENOS = "PRENOS_INTERNO"
 ULAZ_TUDJE = "ULAZ_TUDJE_AMBALAZE"
 VRACANJE_TUDJE = "VRACANJE_TUDJE_AMBALAZE"
+IZLAZ_TUDJE = "IZLAZ_TUDJE_AMBALAZE"
 NABAVKA = "NABAVKA"
-VRSTE = {UZ_ROBU, IZDATA, POVRAT, PRENOS, ULAZ_TUDJE, VRACANJE_TUDJE, NABAVKA,
-         "OTPIS", "POZAJMICA_PARTNERA"}
+OTPIS = "OTPIS"
+VRSTE = {UZ_ROBU, IZDATA, POVRAT, PRENOS, ULAZ_TUDJE, VRACANJE_TUDJE, IZLAZ_TUDJE, NABAVKA,
+         OTPIS, "POZAJMICA_PARTNERA"}
+# Posledica, ne zahtev (modAmbalazaUgovor.AmbVrstaJeZahtev): pisac ih upisuje sam,
+# ne ulaze u par dokumenta (AMB-INV-10) ni u poslovni saldo partnera (AMB-POSL-01).
+NE_ZAHTEV = {ULAZ_TUDJE, IZLAZ_TUDJE}
+# Sopstveni nalozi pod kapijom praznih (AMB-INV-16; vozac od ODL-37).
+POD_KAPIJOM_PRAZNIH = ("Stanica", "Vozac")
 
 DOK_AMB = "AmbalazaDokument"
 
@@ -201,6 +219,8 @@ class Kretanje:
     created_by: str = ""
     generisano: bool = False
     napomena: str = ""
+    # Razlika prema starim nogama kad knjigu odredjuje dokument (uskladi_sa_dokumentima).
+    korekcija: Decimal = Decimal(0)
 
     def doprinos(self):
         out = []
@@ -228,6 +248,7 @@ class Rezultat:
     tipovi_ambalaze: set = field(default_factory=set)
     politika: list = field(default_factory=list)
     knjizenje: str = VERNO
+    uskladjivanje: list = field(default_factory=list)
 
 
 class GreskaAmbalaze(Exception):
@@ -347,7 +368,11 @@ def _potpis_se_slaze(n, provera):
 # Glavni prolaz
 # ---------------------------------------------------------------------------
 
-def prevedi(tabele, izuzeci=(), knjizenje=VERNO, politika_partneri=None):
+def prevedi(tabele, izuzeci=(), knjizenje=VERNO, politika_partneri=None, dokumenti=None):
+    """`dokumenti` (samo ISPRAVNO): sta bi pisac main-a knjizio za robne dokumente
+    -- {(DokumentTIP, DokumentID): {vrsta: Ocekivano ili None}}, ili funkcija
+    (rez) -> takav recnik, pozvana posle prevoda nogu a pre politike duga (cilj.py
+    tada iz knjige uskladjuje i sam dokument)."""
     t = tabela(tabele, "tblAmbalaza")
     if t is None:
         raise GreskaAmbalaze("Sveska nema tabelu tblAmbalaza")
@@ -395,6 +420,10 @@ def prevedi(tabele, izuzeci=(), knjizenje=VERNO, politika_partneri=None):
 
     _proveri_efekte(rez)
     rez.knjizenje = knjizenje
+    if knjizenje == ISPRAVNO and dokumenti is not None:
+        if callable(dokumenti):
+            dokumenti = dokumenti(rez)
+        rez.uskladjivanje = uskladi_sa_dokumentima(rez, dokumenti)
     if politika_partneri is None:
         politika_partneri = ("Kooperant",) if knjizenje == ISPRAVNO else ()
     rez.politika = primeni_politiku_duga(rez, politika_partneri)
@@ -751,6 +780,96 @@ def _postojeca_knjiga(t, rez):
 
 
 # ---------------------------------------------------------------------------
+# Knjiga robnog dokumenta = pisac main-a (MIG-ODL-14, KI-065)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Ocekivano:
+    """Jedan red koji bi pisac main-a upisao za (dokument, vrsta)."""
+    kolicina: Decimal
+    tip: str
+    datum: object
+    od: tuple
+    na: tuple
+    razlog: str = ""
+
+
+def uskladi_sa_dokumentima(rez, dokumenti):
+    """Knjiga robnog dokumenta je ono sto bi upisao pisac main-a, ne stara noga.
+
+    `dokumenti`: {(DokumentTIP, DokumentID): {vrsta: Ocekivano ili None}}; None =
+    dokument tu vrstu ne knjizi (neizdata otpremnica). Za svaki par:
+
+      * kretanje iz starih nogu dobija kolicinu i dan dokumenta; razlika prema
+        nogama ide u `korekcija` (salda je mere zasebno);
+      * kretanje koje dokument ne knjizi izlazi iz knjige, a njegove noge dobijaju
+        ishod DOKUMENT_NE_KNJIZI (van knjige, kao izuzete);
+      * ocekivan red bez ijedne noge se dopisuje (generisan, pravilo DOKUMENT).
+
+    Nalog i tip se NE pogadjaju: ako se ne slazu sa dokumentom, ili dokument nosi
+    vise kretanja iste vrste, stavka ide ZA ODLUKU, a kretanje ostaje kakvo je.
+    """
+    po_dok = defaultdict(list)
+    for k in rez.kretanja:
+        if not k.generisano:
+            po_dok[(kljuc(k.dok_tip), kljuc(k.dok_id), k.vrsta)].append(k)
+    po_rednom = {n.redni: n for n in rez.noge}
+    trag, izbaci = [], set()
+    dalje = 10 ** 9
+    for (dt, did), vrste in sorted(dokumenti.items(), key=lambda x: (kljuc(x[0][0]), kljuc(x[0][1]))):
+        for vrsta in sorted(vrste):
+            oc = vrste[vrsta]
+            q = oc.kolicina if oc is not None and oc.kolicina else Decimal(0)
+            postojeca = po_dok.get((kljuc(dt), kljuc(did), vrsta), [])
+            if len(postojeca) > 1:
+                rez.za_odluku.append(dict(
+                    razlog="DOKUMENT_VISE_KRETANJA", noge=[r for k in postojeca for r in k.noge], predlog="",
+                    napomena="%s %s: %d kretanja vrste %s, dokument knjizi jedno."
+                             % (dt, did, len(postojeca), vrsta)))
+                continue
+            if not postojeca:
+                if q > 0:
+                    dalje += 1
+                    k = Kretanje(amb_id=novi_id("AMB-", "dokument", kljuc(dt), kljuc(did), vrsta),
+                                 datum=oc.datum, tip=oc.tip, kolicina=q, dok_tip=dt, dok_id=did,
+                                 od_tip=oc.od[0], od_id=oc.od[1], na_tip=oc.na[0], na_id=oc.na[1],
+                                 vrsta=vrsta, pravilo="DOKUMENT", redosled=dalje, created_by="MIGRACIJA",
+                                 generisano=True, korekcija=q,
+                                 napomena="Dokument knjizi %s, stara knjiga nema nogu. %s" % (q, oc.razlog))
+                    rez.kretanja.append(k)
+                    trag.append(dict(dok_tip=dt, dok_id=did, vrsta=vrsta, tip=oc.tip, datum=oc.datum,
+                                     staro=Decimal(0), novo=q, razlog=oc.razlog))
+                continue
+            k = postojeca[0]
+            if q > 0 and (norm_tip(k.tip) != norm_tip(oc.tip)
+                          or (k.od_tip, kljuc(k.od_id)) != (oc.od[0], kljuc(oc.od[1]))
+                          or (k.na_tip, kljuc(k.na_id)) != (oc.na[0], kljuc(oc.na[1]))):
+                rez.za_odluku.append(dict(
+                    razlog="DOKUMENT_NALOG_ILI_TIP_SE_NE_SLAZE", noge=list(k.noge), predlog="",
+                    napomena="%s %s %s: knjiga %s->%s '%s', dokument %s->%s '%s'."
+                             % (dt, did, vrsta, k.od_id, k.na_id, k.tip, oc.od[1], oc.na[1], oc.tip)))
+                continue
+            if q <= 0:
+                izbaci.add(id(k))
+                for r in k.noge:
+                    po_rednom[r].ishod = ISHOD_NE_KNJIZI
+                    po_rednom[r].razlog = oc.razlog if oc is not None else "dokument ne knjizi gajbe"
+                trag.append(dict(dok_tip=dt, dok_id=did, vrsta=vrsta, tip=k.tip, datum=k.datum,
+                                 staro=k.kolicina, novo=Decimal(0),
+                                 razlog=oc.razlog if oc is not None else "dokument ne knjizi gajbe"))
+                continue
+            if q != k.kolicina or k.datum != oc.datum:
+                trag.append(dict(dok_tip=dt, dok_id=did, vrsta=vrsta, tip=k.tip, datum=oc.datum,
+                                 staro=k.kolicina, novo=q, razlog=oc.razlog,
+                                 dan="%s -> %s" % (k.datum, oc.datum) if k.datum != oc.datum else ""))
+                k.korekcija += q - k.kolicina
+                k.kolicina = q
+                k.datum = oc.datum
+    rez.kretanja = [k for k in rez.kretanja if id(k) not in izbaci]
+    return trag
+
+
+# ---------------------------------------------------------------------------
 # Politika duga prema partneru (MIG-16/17): dnevni zakljucak
 # ---------------------------------------------------------------------------
 
@@ -759,8 +878,11 @@ def primeni_politiku_duga(rez, partneri):
 
     Po danu i tipu: rast obaveze -> ULAZ_TUDJE (SpoljniSvet -> partner) na
     partnerovim izlaznim kretanjima tog dana; pad obaveze -> izdavanje praznih
-    tog dana postaje VRACANJE_TUDJE. Fizicki vektor se ne menja; novi saldo
-    partnera na kraju dana = max(stari, 0), a obaveza = max(-stari, 0).
+    tog dana postaje VRACANJE_TUDJE, a uz njega IZLAZ_TUDJE (partner ->
+    SpoljniSvet, isti dokument i kolicina; AMB-INV-15, kao PrenesiAmbalazu od
+    #448): vracene gajbe su njegove i izlaze iz opticaja. Novi saldo partnera
+    na kraju dana = max(stari, 0), obaveza = max(-stari, 0), a poslovni saldo
+    (bez ULAZ/IZLAZ_TUDJE, kartica) = stari.
     """
     tragovi = []
     po_danu = defaultdict(list)
@@ -791,6 +913,7 @@ def primeni_politiku_duga(rez, partneri):
                     if deo == k.kolicina:
                         k.vrsta = VRACANJE_TUDJE
                         cilj = k
+                        nova.append(_izlaz_tudje(cilj))
                     else:
                         # Podela: stare noge ostaju na izvornom kretanju (staro
                         # se broji jednom), odvojeni deo nosi samo novu kolicinu.
@@ -804,7 +927,9 @@ def primeni_politiku_duga(rez, partneri):
                         cilj.noge = ()
                         cilj.stari_amb = ()
                         cilj.napomena = "Deo kretanja %s (vracanje tudje ambalaze)." % k.amb_id
+                        cilj.korekcija = Decimal(0)
                         nova.append(cilj)
+                        nova.append(_izlaz_tudje(cilj))
                     ostalo -= deo
                     tragovi.append(dict(uloga="VRACANJE_TUDJE", partner=(tipn, idn), tip=tip,
                                         datum=d, kolicina=deo, amb_id=cilj.amb_id))
@@ -847,6 +972,17 @@ def _pokrice(k, deo, pravilo):
         napomena="Tudja ambalaza partnera (stari negativan saldo).")
 
 
+def _izlaz_tudje(v):
+    """IZLAZ_TUDJE (partner -> SpoljniSvet) uz VRACANJE_TUDJE `v`: isti dokument,
+    dan, tip i kolicina -- ogledalo pokrica (AMB-INV-15, modAmbalaza.PrenesiAmbalazu)."""
+    return Kretanje(
+        amb_id=novi_id("AMB-", "izlaz", v.amb_id), datum=v.datum, tip=v.tip, kolicina=v.kolicina,
+        dok_tip=v.dok_tip, dok_id=v.dok_id, od_tip=v.na_tip, od_id=v.na_id, na_tip=GRANICA, na_id="",
+        vrsta=IZLAZ_TUDJE, pravilo="IZLAZ_TUDJE", stari_tip=v.stari_tip, stari_broj=v.stari_broj,
+        redosled=v.redosled, created_at=v.created_at, created_by="MIGRACIJA", generisano=True,
+        napomena="Vracene gajbe partnera izlaze iz opticaja (AMB-INV-15).")
+
+
 def _po_nalogu_i_danu(kretanja, tipovi):
     """{(tip, id, tip amb.): (prikaz_id, prikaz_tip, {datum: [(strana, kretanje)]})}"""
     out = {}
@@ -863,6 +999,30 @@ def _po_nalogu_i_danu(kretanja, tipovi):
 
 def _delta(stavke):
     return sum((k.kolicina if s == "Na" else -k.kolicina) for s, k in stavke)
+
+
+def pune_i_prazne(rez, tipovi=POD_KAPIJOM_PRAZNIH):
+    """{(tip naloga, id, tip amb.): dict(pune, prazne, najmanje_pune, najmanje_prazne, dan_*)}.
+
+    Isto pravilo kao modAmbalaza.AmbPrazneNaloga (AMB-INV-16): PUNE su redovi
+    AMBALAZA_UZ_ROBU, PRAZNE svi ostali redovi naloga; stanje na kraju dana.
+    Pune ispod nule = nalog je poslao vise punih nego sto je primio -- tada su
+    prazne za isto toliko iznad stvarnih, pa bi kapija pustila izdavanje praznih
+    kojih nema (KI-065, obrnut slucaj)."""
+    out = {}
+    for kl, (_pid, _ptip, dani) in _po_nalogu_i_danu(rez.kretanja, tipovi).items():
+        pune = prazne = Decimal(0)
+        r = dict(najmanje_pune=Decimal(0), najmanje_prazne=Decimal(0), dan_pune=None, dan_prazne=None)
+        for d in sorted(x for x in dani if x is not None):
+            pune += _delta([(st, k) for st, k in dani[d] if k.vrsta == UZ_ROBU])
+            prazne += _delta([(st, k) for st, k in dani[d] if k.vrsta != UZ_ROBU])
+            if pune < r["najmanje_pune"]:
+                r["najmanje_pune"], r["dan_pune"] = pune, d
+            if prazne < r["najmanje_prazne"]:
+                r["najmanje_prazne"], r["dan_prazne"] = prazne, d
+        r.update(pune=pune, prazne=prazne)
+        out[kl] = r
+    return out
 
 
 def pokrice_po_manjku(rez, tipovi):
@@ -909,6 +1069,11 @@ def nabavka_na_pocetku(rez, tipovi):
     "firma ima gajbe" je NABAVKA SpoljniSvet -> Stanica. Posle nje nalog ni
     jednog dana nije ispod nule (main inace odbija izdavanje i storno nad
     nalogom u minusu), a saldo na kraju = stari saldo + nabavka.
+
+    Minus se meri dvaput i uzima se dublji (MIG-ODL-15): UKUPAN saldo (AMB-INV-07)
+    i, za stanicu i vozaca, PRAZNE (AMB-INV-16, ODL-37: svaki red naloga osim
+    AMBALAZA_UZ_ROBU; modAmbalaza.AmbPrazneNaloga). Nabavka unosi prazne, pa
+    pokriva oba; pune ne moze -- njihov minus prijavljuje pune_i_prazne.
     """
     tragovi = []
     for (tipn, idn, tip), (pid, ptip, dani) in sorted(_po_nalogu_i_danu(rez.kretanja, tipovi).items()):
@@ -916,9 +1081,14 @@ def nabavka_na_pocetku(rez, tipovi):
         if not dati:
             continue
         b = najm = Decimal(0)
+        pr = najm_pr = Decimal(0)
         for d in dati:
             b += _delta(dani[d])
             najm = min(najm, b)
+            if tipn in POD_KAPIJOM_PRAZNIH:
+                pr += _delta([(st, k) for st, k in dani[d] if k.vrsta != UZ_ROBU])
+                najm_pr = min(najm_pr, pr)
+        najm = min(najm, najm_pr)
         if najm >= 0:
             continue
         prvi = dati[0]
@@ -929,7 +1099,8 @@ def nabavka_na_pocetku(rez, tipovi):
                      kolicina=-najm, dok_tip=DOK_AMB, dok_id=adk, od_tip=GRANICA, od_id="",
                      na_tip=tipn, na_id=pid, vrsta=NABAVKA, pravilo="NABAVKA_POCETNO_STANJE",
                      redosled=0, created_by="MIGRACIJA", generisano=True,
-                     napomena="Najdublji minus u sezoni; posle nabavke nalog nije ispod nule.")
+                     napomena="Najdublji minus u sezoni (ukupno ili prazne); posle nabavke "
+                              "nalog nije ispod nule.")
         rez.kretanja.append(k)
         tragovi.append(dict(uloga="NABAVKA", partner=(tipn, idn), tip=tip, datum=prvi,
                             kolicina=-najm, amb_id=k.amb_id))
@@ -942,8 +1113,7 @@ def nabavka_na_pocetku(rez, tipovi):
 
 def proveri_pokrivenost(rez):
     """Svaki stari red ima tacno jedan ishod; noga u kretanju je u tacno jednom."""
-    bez = [n.redni for n in rez.noge if n.ishod not in (ISHOD_KRETANJE, ISHOD_STORNO,
-                                                         ISHOD_IZUZETO, ISHOD_ZA_ODLUKU)]
+    bez = [n.redni for n in rez.noge if n.ishod not in (ISHOD_KRETANJE, ISHOD_STORNO) + VAN_KNJIGE]
     u_kretanju = Counter(r for k in rez.kretanja for r in k.noge)
     dvaput = [r for r, c in u_kretanju.items() if c > 1]
     kretanje_bez = [n.redni for n in rez.noge
@@ -954,9 +1124,11 @@ def proveri_pokrivenost(rez):
 
 
 def izracunaj_salda(rez):
-    """Po nalogu i tipu: stari saldo, novi saldo, pokrice, nabavka, van knjige, izuzeci.
+    """Po nalogu i tipu: stari saldo, novi saldo, pokrice, izlaz tudje, nabavka,
+    korekcija po dokumentu, van knjige, izuzeci; za stanicu i vozaca i pune/prazne.
 
-    stari - van_knjige + izuzeci + pokrice + nabavka == novi   (razlika mora biti 0)
+    stari - van_knjige + izuzeci + pokrice + izlaz + nabavka + korekcija == novi
+    (razlika mora biti 0; izlaz je negativan na partneru)
     """
     s = defaultdict(lambda: defaultdict(Decimal))
     prikaz = {}
@@ -970,7 +1142,7 @@ def izracunaj_salda(rez):
     for n in rez.noge:
         for kl, v in n.doprinos():
             dodaj(kl, "stari", v)
-            if n.ishod in (ISHOD_IZUZETO, ISHOD_ZA_ODLUKU):
+            if n.ishod in VAN_KNJIGE:
                 dodaj(kl, "van_knjige", v)
     for k in rez.kretanja:
         for kl, v in k.doprinos():
@@ -979,6 +1151,10 @@ def izracunaj_salda(rez):
                 dodaj(kl, "pokrice", v)
             if k.vrsta == NABAVKA and k.generisano:
                 dodaj(kl, "nabavka", v)
+            if k.vrsta == IZLAZ_TUDJE and k.generisano:
+                dodaj(kl, "izlaz", v)
+            if k.korekcija:
+                dodaj(kl, "korekcija", k.korekcija if v > 0 else -k.korekcija)
         if k.pravilo == "IZUZETAK":
             for kl, v in k.doprinos():
                 dodaj(kl, "izuzeci", v)
@@ -990,19 +1166,25 @@ def izracunaj_salda(rez):
             v["stari"] = v["novi"]
 
     dnevno = _dnevni_zakljucci(rez)
+    pp = pune_i_prazne(rez)
     out = []
     for k in sorted(s, key=lambda x: (x[0], x[1], x[2])):
         v = s[k]
-        razlika = (v["stari"] - v["van_knjige"] + v["izuzeci"] + v["pokrice"] + v["nabavka"]
-                   - v["novi"])
+        razlika = (v["stari"] - v["van_knjige"] + v["izuzeci"] + v["pokrice"] + v["izlaz"]
+                   + v["nabavka"] + v["korekcija"] - v["novi"])
         d = dnevno.get(k, {})
+        p = pp.get(k, {})
         out.append(dict(nalog_tip=prikaz[k][0], nalog_id=prikaz[k][1], tip=prikaz[k][2],
                         naziv=rez.nazivi.get((prikaz[k][0], k[1]), ""),
-                        stari=v["stari"], novi=v["novi"], pokrice=v["pokrice"], nabavka=v["nabavka"],
+                        stari=v["stari"], novi=v["novi"], pokrice=v["pokrice"], izlaz=v["izlaz"],
+                        nabavka=v["nabavka"], korekcija=v["korekcija"],
                         van_knjige=v["van_knjige"], izuzeci=v["izuzeci"], razlika=razlika,
                         najmanji=d.get("najmanji", Decimal(0)), najmanji_dan=d.get("najmanji_dan"),
                         obaveza=d.get("obaveza", Decimal(0)),
-                        najmanja_obaveza=d.get("najmanja_obaveza", Decimal(0))))
+                        najmanja_obaveza=d.get("najmanja_obaveza", Decimal(0)),
+                        pune=p.get("pune"), prazne=p.get("prazne"),
+                        najmanje_pune=p.get("najmanje_pune"), dan_pune=p.get("dan_pune"),
+                        najmanje_prazne=p.get("najmanje_prazne"), dan_prazne=p.get("dan_prazne")))
     return out
 
 
@@ -1035,10 +1217,12 @@ def _dnevni_zakljucci(rez):
 
 
 def proveri_invarijante(rez):
-    """AMB-INV-01/02/04/10/11/12 nad projektovanom knjigom (AMBALAZA.md 6.9).
+    """AMB-INV-01/02/04/10/11/12/15 i AMB-BIL-02 nad projektovanom knjigom
+    (AMBALAZA.md 6.9, 6.14a/b).
 
     INV-07 (nijedan realan nalog ispod nule) i INV-09 (obaveza >= 0) se citaju
-    iz dnevnih zakljucaka u izracunaj_salda -- tamo su i iznosi potrebnog pokrica.
+    iz dnevnih zakljucaka u izracunaj_salda -- tamo su i iznosi potrebnog pokrica;
+    INV-16 (pune/prazne sopstvenog naloga) iz pune_i_prazne.
     """
     nalazi = []
     ids = Counter(kljuc(k.amb_id) for k in rez.kretanja)
@@ -1047,6 +1231,9 @@ def proveri_invarijante(rez):
             nalazi.append(dict(inv="AMB-INV-11", opis="AmbID se ponavlja %d puta" % c, amb_id=i))
     identitet = defaultdict(list)
     parovi = defaultdict(set)
+    strane = defaultdict(set)
+    vracanje = defaultdict(Decimal)
+    bilans = defaultdict(lambda: defaultdict(Decimal))
     for k in rez.kretanja:
         if not k.kolicina or k.kolicina <= 0:
             nalazi.append(dict(inv="AMB-INV-01", opis="Kolicina nije > 0", amb_id=k.amb_id))
@@ -1060,8 +1247,14 @@ def proveri_invarijante(rez):
         if k.pravilo == "POSTOJECA_KNJIGA" and k.napomena.startswith("storno od"):
             continue
         identitet[(kljuc(k.dok_tip), kljuc(k.dok_id), k.vrsta, norm_tip(k.tip))].append(k)
-        if not (k.generisano and k.vrsta == ULAZ_TUDJE):
-            parovi[(kljuc(k.dok_tip), kljuc(k.dok_id))].add(k.par())
+        dok = (kljuc(k.dok_tip), kljuc(k.dok_id))
+        if k.vrsta in NE_ZAHTEV:
+            # Kao modAmbalaza.DodajStranu: generisan red ne gradi par, ali njegova
+            # strana koja nije granica mora biti clan para dokumenta.
+            strane[dok].add((k.na_tip, kljuc(k.na_id)) if k.od_tip == GRANICA else (k.od_tip, kljuc(k.od_id)))
+        else:
+            parovi[dok].add(k.par())
+        _bilans_i_vracanje(k, bilans, vracanje)
     for ident, ks in identitet.items():
         if len(ks) > 1:
             nalazi.append(dict(inv="AMB-INV-04",
@@ -1073,7 +1266,51 @@ def proveri_invarijante(rez):
             nalazi.append(dict(inv="AMB-INV-10",
                                opis="Dokument %s nosi %d razlicita para naloga" % ("/".join(dok), len(ps)),
                                amb_id=""))
+    for dok, ss in strane.items():
+        clanovi = set().union(*parovi.get(dok, [set()]))
+        for st in sorted(ss - clanovi):
+            nalazi.append(dict(inv="AMB-INV-10",
+                               opis="Generisan red na dokumentu %s ide na %s:%s, a par dokumenta je %s"
+                                    % ("/".join(dok), st[0], st[1], sorted(clanovi)), amb_id=""))
+    for (dok, partner, tip), razlika in sorted(vracanje.items()):
+        if razlika:
+            nalazi.append(dict(inv="AMB-INV-15",
+                               opis="Dokument %s, %s:%s, '%s': VRACANJE_TUDJE - IZLAZ_TUDJE = %s"
+                                    % ("/".join(dok), partner[0], partner[1], tip, razlika), amb_id=""))
+    for tip, b in sorted(bilans.items()):
+        neusk = b["opticaj"] - b["nase"] - b["tudje"]
+        if neusk:
+            nalazi.append(dict(inv="AMB-BIL-02",
+                               opis="'%s': opticaj %s - nase %s - tudje %s = neuskladjeno %s"
+                                    % (tip, b["opticaj"], b["nase"], b["tudje"], neusk), amb_id=""))
     return nalazi
+
+
+def _bilans_i_vracanje(k, bilans, vracanje):
+    """Doprinos reda bilansu firme (modAmbalaza.AmbBilansPodaci) i paru
+    vracanje/izlaz (AMB-INV-15). Smer odredjuje znak, pa se kontra-stav storna
+    gasi sam (ista vrsta, zamenjene strane)."""
+    b = bilans[norm_tip(k.tip)]
+    q = k.kolicina or Decimal(0)
+    if k.od_tip == GRANICA:
+        b["opticaj"] += q
+    if k.na_tip == GRANICA:
+        b["opticaj"] -= q
+    if k.vrsta == NABAVKA:
+        b["nase"] += q if k.od_tip == GRANICA else -q
+    elif k.vrsta == OTPIS:
+        b["nase"] -= q if k.na_tip == GRANICA else -q
+    elif k.vrsta == ULAZ_TUDJE:
+        b["tudje"] += q if k.od_tip == GRANICA else -q
+    elif k.vrsta == VRACANJE_TUDJE:
+        b["tudje"] -= q if k.na_tip in PARTNERI else -q
+    dok = (kljuc(k.dok_tip), kljuc(k.dok_id))
+    if k.vrsta == VRACANJE_TUDJE:
+        partner = (k.na_tip, kljuc(k.na_id)) if k.na_tip in PARTNERI else (k.od_tip, kljuc(k.od_id))
+        vracanje[(dok, partner, norm_tip(k.tip))] += q if k.na_tip in PARTNERI else -q
+    elif k.vrsta == IZLAZ_TUDJE:
+        partner = (k.od_tip, kljuc(k.od_id)) if k.na_tip == GRANICA else (k.na_tip, kljuc(k.na_id))
+        vracanje[(dok, partner, norm_tip(k.tip))] -= q if k.na_tip == GRANICA else -q
 
 
 def stavke_po_nalogu(rez):
@@ -1104,7 +1341,7 @@ def stavke_po_nalogu(rez):
                                    novo=novo.get(kl, Decimal(0)), staro=staro.get(kl, Decimal(0)),
                                    druga=druga))
     for n in rez.noge:
-        if n.ishod not in (ISHOD_IZUZETO, ISHOD_ZA_ODLUKU):
+        if n.ishod not in VAN_KNJIGE:
             continue
         for kl, v in n.doprinos():
             stavke[_kl(kl)].append(dict(datum=n.datum, redosled=n.redni, kretanje=None, noga=n,

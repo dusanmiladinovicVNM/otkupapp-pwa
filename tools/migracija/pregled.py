@@ -14,8 +14,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from xml.sax.saxutils import escape
 
-from ambalaza import (DOK_AMB, ISHOD_IZUZETO, ISHOD_KRETANJE, ISHOD_STORNO, ISHOD_ZA_ODLUKU,
-                      ISPRAVNO, NABAVKA, OPIS, PARTNERI, SOPSTVENI, ULAZ_TUDJE)
+from ambalaza import (DOK_AMB, ISHOD_IZUZETO, ISHOD_KRETANJE, ISHOD_NE_KNJIZI, ISHOD_STORNO,
+                      ISHOD_ZA_ODLUKU, ISPRAVNO, IZLAZ_TUDJE, NABAVKA, OPIS, PARTNERI,
+                      POD_KAPIJOM_PRAZNIH, SOPSTVENI, ULAZ_TUDJE)
 from citac import EXCEL_NULA, kljuc
 
 _NEDOZVOLJENO = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
@@ -283,6 +284,9 @@ def napravi_izvestaj(putanja, izvor, rez, salda, stavke, invarijante, pokrivenos
     vrste = Counter(k.vrsta for k in rez.kretanja)
     pokrica = [k for k in rez.kretanja if k.generisano and k.vrsta == ULAZ_TUDJE]
     nabavke = [k for k in rez.kretanja if k.generisano and k.vrsta == NABAVKA]
+    izlazi = [k for k in rez.kretanja if k.generisano and k.vrsta == IZLAZ_TUDJE]
+    prazne_minus = [s for s in salda if s.get("najmanje_prazne") is not None and s["najmanje_prazne"] < 0]
+    pune_minus = [s for s in salda if s.get("najmanje_pune") is not None and s["najmanje_pune"] < 0]
     ispod_nule = [s for s in salda if s["najmanji"] < 0 and s["nalog_tip"] in PARTNERI + SOPSTVENI]
     minus = defaultdict(lambda: [0, Decimal(0)])
     bio = Counter()
@@ -309,6 +313,7 @@ def napravi_izvestaj(putanja, izvor, rez, salda, stavke, invarijante, pokrivenos
         ("  stornirani (arhiva)", ishodi.get(ISHOD_STORNO, 0)),
         ("  izuzeti (izuzeci.json)", ishodi.get(ISHOD_IZUZETO, 0)),
         ("  ZA ODLUKU", ishodi.get(ISHOD_ZA_ODLUKU, 0)),
+        ("  dokument ne knjizi (neizdata otpremnica)", ishodi.get(ISHOD_NE_KNJIZI, 0)),
         ("Svaki red ima tacno jedan ishod", "DA" if pokr_ok else "NE -- GRESKA ALATA"),
         ("", ""),
         ("AMB-10 kretanja -- ukupno", len(rez.kretanja)),
@@ -321,6 +326,14 @@ def napravi_izvestaj(putanja, izvor, rez, salda, stavke, invarijante, pokrivenos
             len(pokrica), _kom(sum((k.kolicina for k in pokrica), Decimal(0))))),
         ("  dopisano NABAVKA (stanica, vozac)", "%d dok., %s kom." % (
             len(nabavke), _kom(sum((k.kolicina for k in nabavke), Decimal(0))))),
+        ("  dopisano IZLAZ_TUDJE (uz vracanje, AMB-INV-15)", "%d red., %s kom." % (
+            len(izlazi), _kom(sum((k.kolicina for k in izlazi), Decimal(0))))),
+    ]
+    for dt in sorted({u["dok_tip"] for u in rez.uskladjivanje}):
+        us = [u for u in rez.uskladjivanje if u["dok_tip"] == dt]
+        saz.append(("  knjiga po dokumentu: %s" % dt, "%d red., razlika %s kom." % (
+            len(us), _kom(sum((u["novo"] - u["staro"] for u in us), Decimal(0))))))
+    saz += [
         ("Zaglavlja reversa (nacrt)", len(rez.zaglavlja)),
         ("", ""),
         ("Naloga (nalog x tip ambalaze)", len(salda)),
@@ -336,8 +349,12 @@ def napravi_izvestaj(putanja, izvor, rez, salda, stavke, invarijante, pokrivenos
     saz += [
         ("Nijedan nalog ni jednog dana ispod nule (AMB-INV-07)", "DA" if not ispod_nule else
          "NE -- %d naloga" % len(ispod_nule)),
-        ("Salda: stari - van knjige + izuzeci + pokrice + nabavka = novi", "DA" if not razlike else
-         "NE za %d naloga -- GRESKA ALATA" % len(razlike)),
+        ("Prazne stanice/vozaca nijednog dana ispod nule (AMB-INV-16)", "DA" if not prazne_minus else
+         "NE -- %d naloga" % len(prazne_minus)),
+        ("Pune stanice/vozaca nijednog dana ispod nule (KI-065)", "DA" if not pune_minus else
+         "NE -- %d naloga (list Salda, za odluku)" % len(pune_minus)),
+        ("Salda: stari - van knjige + izuzeci + pokrice + izlaz + nabavka + korekcija = novi",
+         "DA" if not razlike else "NE za %d naloga -- GRESKA ALATA" % len(razlike)),
         ("Nalazi nad invarijantama", ", ".join("%s: %d" % x for x in sorted(inv.items())) or "nema"),
         ("Stavki za odluku", len(rez.za_odluku)),
     ]
@@ -372,16 +389,35 @@ def napravi_izvestaj(putanja, izvor, rez, salda, stavke, invarijante, pokrivenos
             status = "MINUS NA KRAJU"
         elif s["najmanji"] < 0:
             status = "BIO U MINUSU"
+        elif s.get("najmanje_prazne") is not None and s["najmanje_prazne"] < 0:
+            status = "PRAZNE U MINUSU"
+        elif s.get("najmanje_pune") is not None and s["najmanje_pune"] < 0:
+            status = "PUNE U MINUSU"
+        pp = s["nalog_tip"] in POD_KAPIJOM_PRAZNIH
         red_s.append([s["nalog_tip"], s["nalog_id"], s["naziv"], s["tip"], s["stari"], s["novi"],
-                      s["pokrice"], s["nabavka"], s["obaveza"] if s["nalog_tip"] in PARTNERI else "",
+                      s["pokrice"], s["izlaz"], s["nabavka"], s["korekcija"],
+                      s["obaveza"] if s["nalog_tip"] in PARTNERI else "",
                       s["van_knjige"], s["izuzeci"], s["razlika"], s["najmanji"], s["najmanji_dan"],
+                      s["pune"] if pp else "", s["najmanje_pune"] if pp else "",
+                      s["prazne"] if pp else "", s["najmanje_prazne"] if pp else "",
                       predlog, manjak or "", status])
     sv.dodaj_list("Salda", ["Tip naloga", "ID", "Naziv", "Tip ambalaze", "Stari saldo", "Novi saldo",
-                            "Pokrice tudje", "Nabavka", "Obaveza firme", "Van knjige", "Izuzeci", "Razlika",
-                            "Najmanji dnevni saldo", "Dan najmanjeg", "Presek: dogadjaj",
+                            "Pokrice tudje", "Izlaz tudje", "Nabavka", "Korekcija po dokumentu",
+                            "Obaveza firme", "Van knjige", "Izuzeci", "Razlika",
+                            "Najmanji dnevni saldo", "Dan najmanjeg", "Pune na kraju", "Najmanje punih",
+                            "Prazne na kraju", "Najmanje praznih", "Presek: dogadjaj",
                             "Presek: kolicina", "Status"],
-                  red_s, sirine=[11, 12, 28, 12, 11, 11, 12, 10, 12, 11, 10, 9, 13, 13, 22, 12, 15],
+                  red_s, sirine=[11, 12, 28, 12, 11, 11, 12, 11, 10, 12, 12, 11, 10, 9, 13, 13,
+                                 11, 12, 11, 12, 22, 12, 16],
                   tabela="Salda")
+
+    # Knjiga robnog dokumenta po pravilu main-a (MIG-ODL-14)
+    red_u = [[u["dok_tip"], u["dok_id"], _broj_dok(rez, u["dok_tip"], u["dok_id"]), u["vrsta"], u["tip"],
+              u["datum"], u["staro"], u["novo"], u["novo"] - u["staro"], u.get("dan", ""), u["razlog"]]
+             for u in sorted(rez.uskladjivanje, key=lambda x: (x["dok_tip"], x["datum"] or date.min, x["dok_id"]))]
+    sv.dodaj_list("Uskladjivanje", ["Dokument", "ID", "Broj", "Vrsta", "Tip ambalaze", "Datum", "Stara knjiga",
+                                    "Nova knjiga", "Razlika", "Dan (staro -> novo)", "Razlog"],
+                  red_u, sirine=[12, 14, 16, 22, 12, 11, 11, 11, 9, 24, 40], tabela="Uskladjivanje")
 
     # Stavke po nalogu
     red_st = []
