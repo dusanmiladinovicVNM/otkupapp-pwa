@@ -36,7 +36,7 @@
 | **AMB-10 ambalaza kao knjiga prenosa** | ✅ **zatvoren** (provereno 20.10.2026, stavka 181: svi PR-ovi reda su `MERGED`) -- model ✅ (#397) · `10a` ugovor ✅ (#398) · `10-DOK` zaglavlje ✅ (#399) · `10b-1` pisac ✅ (#400) · `10b-2` cutover pisaca ✅ (#408) · `10c` čitaoci ✅ (#408, #409, #411; `KI-010` `CLOSED`, stavka 139) · `10d` ✅ (#414 ispravka reversa jednim potezom, stavke 117–120; #415 undo i istorija `ODL-25/-26/-27`, stavke 121–124) · `10e` brisanje starog modela ✅ (`10e-1` `#416`, `10e-2` `#417`, `10e-3` `#418`; `KI-011` `#419`; `KI-012`/`KI-013` `#420`) · čitaoci salda na papiru ✅ `#421` (stavke 134–137) · `ODL-24` pozajmica od kupca ✅ `#434` (stavka 169). Otvoreno van reda, svako sa svojim mestom: `KI-024`, `KI-025`+`KI-026` (rez posle S6), `KI-027`, `KI-028`; `docs/DOMEN/AMBALAZA.md` |
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
-| **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): PR `#450`, review P1 ispravljen (stavke 245–247); ručna provera nad kodom pre P1 prošla, ponavlja se nad finalnim kodom uz Compile (stavka 248), pa merge |
+| **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): PR `#450`, review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); čeka merge |
 | S7 faktura · S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -8784,6 +8784,33 @@
      - **Nisu nalazi:** prazan panel posledica za revers (po dizajnu, revers „uvid nema po prirodi", `modScrStorno`);
        Napomena skrivena za smer 9 (`ODL-34 k`); „Otkazane 2" su dva stornirana dokumenta (`-3` i `-4`), ne dve noge.
      - **Sledeći brojevi:** test 309 · stavka 249 · KI-075.
+
+249. **Ručna provera PR `#450` nad FINALNIM kodom (01.11.2026) — PASS na svim funkcionalnim tačkama; Compile ✅.**
+     Sveska `tests/fixtures/rucna_odl39_final.xlsm`: `run_vba --compile-only --keep` nad `2c24ee1e` (kod = `98d27b75`),
+     `modVbaTools` uvezen, seed kroz prave pisce (RUC-39: nabavka 20, pozajmica `POZ-RUC39` 10 → dug 10, vozač 10
+     praznih), validacija unosa uključena. Pored slika je pročitana i snimljena sveska (11:45:57).
+
+     - **Prošlo:**
+       - okvir KUPAC; partner kooperant → „Vraćanje gajbi kupcu traži KUPCA kao partnera.";
+       - vrsta voća: „Izdato koop." bez vrste je traži, a vraćanje bez vrste je snimljeno (`-3`);
+       - višak preko duga odbijen (dug 8, traži 12, „visak 4"); broj se predlaže;
+       - papir `-4`: „Kupac: Test kupac 1", bez reda „Vrsta voća", −8 → 6 → −2;
+       - **papir `-8` sa izabranom vrstom TESTVOCE nema red „Vrsta voća"** (slučaj koji je u stavci 248 pao), −4 → 0;
+       - ponovna štampa `-4` iz izveštaja: isti sadržaj kao prvi papir (−8 → −2);
+       - ostatak duga i dug 0 („(0 'RUC-39'). Trazi se 1, visak 1.");
+       - storno `-2`, `-3`, `-5`: knjiga nosi obe noge sa `StornoOd`; za vraćanje se nudi samo „Storno bez zamene",
+         a za „Prijem od OM" i „Zamena reversa";
+       - lanac preko OM: vraćanje posle „Izdato OM" odbijeno bez traga u knjizi, posle „Prijem od OM" prolazi;
+         storno tog „Prijem od OM" odbijen, red ostaje.
+     - **Kraj (knjiga):** vozač 0, stanica 20, dug firme kupcu 0; odbijeni pokušaji nisu ostavili ni zaglavlje ni red.
+     - **Tekst odbijanja storna „Prijem od OM"** je `AMB-INV-07` („storno bi ostavio saldo -4 na Vozac…"), ne
+       `AMB-INV-16`: vozač pada ispod nule pre nego što se pitaju prazne. Ishod je isti; test 307 meri ishod, ne ID kapije.
+     - **Compile:** operater, `Debug → Compile VBAProject` bez poruke; `vba_gate --mark-compile` nad izvorom
+       `4530a20aa2ae` (isti izvor kao GREEN marker 308/0, 2801/0, 111/0).
+     - **Viđeno, poznato:** `KI-071` (dupla rečenica), `KI-072` (savet „NABAVKA"), `KI-073` (crvena poruka ostaje),
+       `KI-074` (zaglavlje papira).
+     - **NOT RUN:** pun `run_vba.py` i pun `dokaz.py` (pred release).
+     - **Sledeći brojevi:** test 309 · stavka 250 · KI-075.
 
 ## Dug sa imenom (posle S5-5b)
 
