@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 01.11.2026 (stavka 252: review PR `#451` — `S7-REV-01` uslov reza 2, test 310 proširen).
+**Ažurirano:** 01.11.2026 (stavka 253: merge `#451` = `eb6c5970`; S7 rez 1 počinje).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -8874,6 +8874,13 @@
      - **Provere:** `vba_check` čist, `who_writes --check` ažuran, `--check-ownership` bez novih pisaca,
        `gen_schema_module --check` u koraku. `run_vba` i `dokaz.py` **NOT RUN** (nema koda).
      - **Sledeći brojevi:** test 309 · stavka 253 · KI-076.
+
+253. **Merge `#451` u `main` — `eb6c5970`** (01.11.2026, asistent uz izričito odobrenje operatera). Pre-flight S7
+     (stavke 250–252, plan §14.57, `docs/DOMEN/FAKTURA.md`, odluke `FAK-ODL-01..05`, uslov `S7-REV-01`). Roditelji su
+     `fd39a716` (`main` posle `#450`) i `6fcb4c6a` (vrh grane, nad kojim je drugi nezavisni review dao MERGE GO, 9,3 / 10).
+     Samo dokumentacija: `src-vba`, `tools` i `schema` su bajt-isti kao u `fd39a716`, pa baseline iz stavke 250 važi
+     nepromenjen. CI `static` PASS.
+     - **Sledeći brojevi:** test 309 · stavka 254 · KI-076.
 
 ## Dug sa imenom (posle S5-5b)
 
