@@ -602,6 +602,10 @@ class NovaSveska(SaNovomSveskom):
         self.assertEqual(len(tabela(t, "tblOtkupStavke").redovi), 3)
         self.assertEqual(datum(polje(tabela(t, "tblOtkup").redovi[0], "Datum")), D1)
         self.assertIsNotNone(tabela(t, "Provere"))
+        with open(os.path.join(izlaz, "proba_sazetak.txt"), encoding="utf-8") as f:
+            saz = f.read()
+        # ODLUKA pojedinacno (dokument/nalog), ne samo broj -- o njima se odlucuje pre upisa
+        self.assertIn("ODLUKA AKTIVAN_OTKUP_BEZ_OTPREMNICE tblOtkup OTK-3", saz.split("pojedinacno:")[1])
 
 
 def izmeni(ime, izmene=None, novi=()):
