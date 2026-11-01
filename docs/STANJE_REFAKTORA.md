@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 01.11.2026 (stavka 254: S7 rez 1 — storno fakture do kraja, lokalno zeleno, dokaz 9 / 9).
+**Ažurirano:** 01.11.2026 (stavka 255: review PR `#452` — CODE GO, MERGE HOLD na ručnim kapijama).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -8917,6 +8917,20 @@
        SEF stanju i poruke avansa (novi ključevi poruka traže restart sveske); pun `run_vba.py` i pun `dokaz.py`;
        pojedinačni (negrupisani) dokaz.
      - **Sledeći brojevi:** test 309 · stavka 255 · KI-076.
+
+255. **Nezavisni review PR `#452` (01.11.2026) — CODE GO, MERGE HOLD samo na ručnim kapijama.** Implementacija je
+     ocenjena 9,1 / 10, testni ugovor 9,0 / 10; CI `static` PASS. Novog P1 nema. HOLD je zbog Compile-a nad tačnim
+     HEAD-om i ručne provere F8 storna (faktura na SEF-u, faktura čija je uplata prešla u avans).
+
+     - **P2 `S7R1-REV-01`, potvrđen čitanjem:** izuzetak `SEF_SENT` + spoljni `Cancelled` je meren samo kroz F8
+       (`StornoRazlog`), ne izvršnim stornom u jezgru. Jezgro posle izuzetka izvršava tek `SEF_STORNO`. Jezgro i
+       F8 dele predikat, pa ovo nije nalaz o kodu. Preporuka review-a: ručna provera izvršava storno nad
+       `SEF_SENT` + `Cancelled` i gleda zaglavlje, linije i uplate. Taj korak već stoji u opisu PR-a.
+     - **P2 `S7R1-REV-02` → `KI-076`, bez izmene koda:** `FakturaAktivnaPoID` je preuzeo obrazac
+       `On Error Resume Next` + `FindRows(...).count` iz četiri postojeća čitaoca u `modStornoDok`. Čitanjem je
+       ishod fail-closed, ali to počiva na ponašanju platforme. Jezgro (`RequireStornoAllowed`) identitet proverava
+       zasebno.
+     - **Sledeći brojevi:** test 309 · stavka 256 · KI-077.
 
 ## Dug sa imenom (posle S5-5b)
 
