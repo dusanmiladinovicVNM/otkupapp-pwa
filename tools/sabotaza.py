@@ -310,7 +310,7 @@ SABOTAZE = {
     "revers-smer": (
         "modNovacUnos.bas",
         '    smer = L(p, "smerRev")\n'
-        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_OTPIS Then\n"
+        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_VRACANJE_KUP Then\n"
         '        fokus = "smerRev": ReversValidiraj = Poruka("NOVUNOS_ERR_SMER"): Exit Function\n'
         "    End If\n",
         '    smer = L(p, "smerRev")   \' SABOTAZA: smer vise nije obavezan\n',
@@ -8578,7 +8578,7 @@ SABOTAZE = {
     # pre nego sto stigne do partnera.
     "odl24-f7-smer-van-opsega": (
         "modNovacUnos.bas",
-        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_OTPIS Then\n",
+        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_VRACANJE_KUP Then\n",
         "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_POVRAT_KUP Then   ' SABOTAZA: sesti smer van opsega\n",
         "T_ODL24_F7PozajmicaKupca",
         "F7 pozajmica: partner koji nije kupac se odbija uz polje partnera",
@@ -10668,9 +10668,9 @@ SABOTAZE = {
     ),
     # Citalac dokumenta vidi vrstu reda umesto radnje: podela izgleda kao dva reda.
     "ki024-dokument-deo-radnje": (
-        "modAmbalaza.bas",
-        "    PoslovniRedNiz = Array(modAmbalazaUgovor.AmbVrstaPoslovnaRadnja( _\n",
-        "    PoslovniRedNiz = Array(Trim$( _\n",
+        "modAmbalazaUgovor.bas",
+        "        AmbVrstaPoslovnaRadnja = AMB_VK_IZDATA_PRAZNA\n",
+        "        ' SABOTAZA: podela se ne sabira pod izdavanje\n",
         "T_KI024_ReversJednaRadnja",
         "revers sa podelom je JEDAN poslovni red: izdato 15",
     ),
@@ -10775,6 +10775,146 @@ SABOTAZE = {
         "            ok = modAmbalaza.StornirajAmbDokument_TX(docID)   ' SABOTAZA: razlog se ne trazi\n",
         "T_Prazne_StornoKazeRazlog",
         "odbijen storno reversa kaze operateru razlog -- pravilo i vozaca, ne samo da nije uspeo",
+    ),
+    # --- AMB-10-ODL-39: firma vraca kupcu njegove gajbe (307, 308) ---
+    # Mapa naseg reversa ne zna peti smer: pisac ga odbija kao nepoznat.
+    "odl39-mapa-bez-smera": (
+        "modAmbalazaUgovor.bas",
+        "              AMB_VK_PRENOS_INTERNO), _\n"
+        "        Array(REV_SMER_VRACANJE_KUPCU, AMB_NALOG_VOZAC, AMB_NALOG_KUPAC, _\n"
+        "              AMB_VK_VRACANJE_TUDJE))\n",
+        "              AMB_VK_PRENOS_INTERNO))   ' SABOTAZA: mapa ne zna vracanje kupcu\n",
+        "T_ODL39_VracanjeKupcu",
+        "mapa naseg reversa zna vracanje kupcu: vozac -> kupac, VRACANJE_TUDJE",
+    ),
+    # Deveti smer ispadne iz opsega validatora: F7 ga odbija kao "izaberi smer".
+    "odl39-f7-smer-van-opsega": (
+        "modNovacUnos.bas",
+        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_VRACANJE_KUP Then\n",
+        "    If smer < SMER_REV_IZD_KOOP Or smer > SMER_REV_OTPIS Then   ' SABOTAZA: vracanje kupcu van opsega\n",
+        "T_ODL39_VracanjeKupcu",
+        "F7 vracanje kupcu: ispravan unos prolazi validator",
+    ),
+    # Validator ne gleda tip partnera: kooperant na vracanju kupcu stize do
+    # citanja duga i pada na izuzetku umesto uz polje partnera.
+    "odl39-f7-partner-nije-kupac": (
+        "modNovacUnos.bas",
+        "        If partTip <> \"KUP\" Or Len(S(p, \"partnerID\")) = 0 Then\n",
+        "        If Len(S(p, \"partnerID\")) = 0 Then   ' SABOTAZA: vracanje kupcu ne gleda tip partnera\n",
+        "T_ODL39_VracanjeKupcu",
+        "F7 vracanje kupcu: partner koji nije kupac se odbija uz polje partnera",
+    ),
+    # F7 salje vracanje piscu bez kupca: pisac pada na nalogu koji nije zadat.
+    "odl39-f7-bez-kupca": (
+        "modNovacUnos.bas",
+        "        kupacID:=IIf(smer = SMER_REV_VRACANJE_KUP, S(p, \"partnerID\"), \"\"))\n",
+        "        kupacID:=\"\")   ' SABOTAZA: F7 ne salje kupca piscu\n",
+        "T_ODL39_VracanjeKupcu",
+        "vozac bez praznih ne vraca kupcu -- odbijeno bez zaglavlja i reda knjige, poruka imenuje vozaca",
+    ),
+    # Jezgro pusta visak preko duga: ostatak postaje IZDATA_PRAZNA vozac -> kupac.
+    "odl39-visak-zaduzuje-kupca": (
+        "modAmbalaza.bas",
+        "            If Len(izdProblem) > 0 Then Err.Raise AMB_ERR_IZDAVANJE_KUPCU, SRC, izdProblem\n",
+        "            ' SABOTAZA: visak preko duga postaje izdavanje kupcu\n",
+        "T_ODL39_VracanjeKupcu",
+        "jezgro odbija vracanje kupcu preko duga firme -- bez ijednog reda knjige",
+    ),
+    # F7 ne meri dug: odbija ga tek pisac, pa operater ne dobija polje kolicine.
+    "odl39-f7-bez-provere-duga": (
+        "modNovacUnos.bas",
+        "            fokus = \"kolAmb\": ReversValidiraj = Poruka(\"NOVUNOS_ERR_VRACANJE_DUG\") & \" \" & dup: Exit Function\n",
+        "            dup = \"\"   ' SABOTAZA: F7 ne meri dug firme prema kupcu\n",
+        "T_ODL39_VracanjeKupcu",
+        "F7 vracanje kupcu preko duga se odbija uz polje kolicine",
+    ),
+    # Kapija para ugasena: stanica vraca kupcu direktno, mimo vozaca.
+    "odl39-par-van-kapije": (
+        "modAmbalazaUgovor.bas",
+        "    If vracanjeKupcu Then\n",
+        "    If False Then   ' SABOTAZA: vracanje kupcu van kapije para\n",
+        "T_ODL39_VracanjeKupcu",
+        "vracanje kupcu ide samo sa vozaca na nasem reversu -- stanica i robni dokument se odbijaju",
+    ),
+    # Citalac dokumenta sabira vracanje kupcu pod izdavanje (kao ODL-35 za
+    # kooperanta): lista i Storno ga zovu "izdata prazna".
+    "odl39-radnja-kao-izdavanje": (
+        "modAmbalazaUgovor.bas",
+        "       AmbPartnerPrimaPrazne(naTip) Then\n",
+        "       True Then   ' SABOTAZA: vracanje kupcu se prikazuje kao izdavanje\n",
+        "T_ODL39_VracanjeKupcu",
+        "vracanje kupcu je svoja poslovna radnja (vozac -> kupac), ne izdata prazna",
+    ),
+    # Ispravka se nudi i za vracanje kupcu.
+    "odl39-ispravka-se-nudi": (
+        "modAmbalaza.bas",
+        "    If Not modAmbalazaUgovor.AmbReversSmerSeIspravlja(smerReda) Then\n",
+        "    If False Then   ' SABOTAZA: vracanje kupcu se nudi za ispravku\n",
+        "T_ODL39_VracanjeKupcu",
+        "vracanje kupcu se ne ispravlja (storno pa nov unos), a Izdato OM i dalje moze",
+    ),
+    # Zamena reversa sme da postane vracanje kupcu: pada tek na nalogu kupca,
+    # porukom koja ne kaze pravilo.
+    "odl39-ispravka-u-vracanje": (
+        "modAmbalaza.bas",
+        "    If Not modAmbalazaUgovor.AmbReversSmerSeIspravlja(smer) Then\n",
+        "    If False Then   ' SABOTAZA: zamena reversa sme da postane vracanje kupcu\n",
+        "T_ODL39_VracanjeKupcu",
+        "zamena reversa ne moze da postane vracanje kupcu",
+    ),
+    # Vracanje kupcu se stampa kao revers firme: papir trazi red stanice, ne
+    # nastaje, i operater dobija upozorenje.
+    "odl39-papir-kao-firma": (
+        "modNovacUnos.bas",
+        "    If smer = SMER_REV_VRACANJE_KUP Then\n"
+        "        ' Vracanje kupcu (ODL-39 g): nas papir, kupac je protivstrana, stanje\n",
+        "    If False Then   ' SABOTAZA: vracanje kupcu se stampa kao revers firme\n"
+        "        ' Vracanje kupcu (ODL-39 g): nas papir, kupac je protivstrana, stanje\n",
+        "T_ODL39_PapirVracanjaKupcu",
+        "F7 vracanje kupcu se stampa: jedan PDF za taj broj, bez upozorenja",
+    ),
+    # Papir vracanja cita fizicko stanje kupca: -6 -> 0 umesto -10 -> -4.
+    "odl39-papir-fizicki": (
+        "modPrint.bas",
+        "        poslovno = True   ' AMB-POSL-03 i za kupca\n",
+        "        poslovno = False   ' SABOTAZA: papir vracanja kupcu fizicki\n",
+        "T_ODL39_PapirVracanjaKupcu",
+        "papir vracanja nosi poslovno stanje kupca: -10 -> -4",
+    ),
+    # Papir vracanja imenuje protivstranu kao kooperanta.
+    "odl39-papir-kao-kooperant": (
+        "modPrint.bas",
+        "        lblParty = \"Kupac: \" & CStr(h(\"koop\"))\n",
+        "        lblParty = \"Kooperant: \" & CStr(h(\"koop\"))   ' SABOTAZA: papir vracanja imenuje kooperanta\n",
+        "T_ODL39_PapirVracanjaKupcu",
+        "papir vracanja imenuje kupca kao protivstranu",
+    ),
+    # Ponovna stampa iz izvestaja ne zna vracanje kupcu: pada na 7507 (nema
+    # stanice u paru).
+    "odl39-ponovna-stampa": (
+        "modIzvestaj.bas",
+        "    If StrComp(vrstaDok, AMB_DOK_REVERS, vbTextCompare) = 0 And _\n"
+        "       StrComp(naTip, AMB_NALOG_KUPAC, vbTextCompare) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: ponovna stampa ne zna vracanje kupcu\n",
+        "T_ODL39_PapirVracanjaKupcu",
+        "ponovna stampa iz izvestaja daje isti papir vracanja kupcu",
+    ),
+    # Review #450 (ODL39-REV-01): vracanje kupcu opet trazi vrstu voca na F7.
+    "odl39-f7-trazi-vrstu": (
+        "modNovacUnos.bas",
+        "                           (smer <> SMER_REV_VRACANJE_KUP)\n",
+        "                           True   ' SABOTAZA: vracanje kupcu trazi vrstu voca\n",
+        "T_ODL39_PapirVracanjaKupcu",
+        "F7 vracanje kupcu ne trazi vrstu voca ni uz strogu validaciju",
+    ),
+    # Prva stampa opet nosi vrstu voca, a ponovna je ne zna: isto stanje, drugi
+    # sadrzaj. Komentar iza "_" VBA ne pusta, pa je zamena IIf(True, ...).
+    "odl39-papir-nosi-vrstu": (
+        "modNovacUnos.bas",
+        "                                         IIf(RevSmerNosiVrstuVoca(smer), S(p, \"vrsta\"), \"\"), _\n",
+        "                                         IIf(True, S(p, \"vrsta\"), \"\"), _\n",
+        "T_ODL39_PapirVracanjaKupcu",
+        "prva i ponovljena stampa vracanja kupcu nose isti sadrzaj: bez reda Vrsta voca",
     ),
 }
 

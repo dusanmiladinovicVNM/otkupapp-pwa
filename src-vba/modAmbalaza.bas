@@ -29,6 +29,9 @@ Public Const AMB_ERR_STORNO As Long = vbObjectError + 4476
 ' izdavanje (pune primljene sa robom nisu prazne). Broj, ne tekst, je ugovor sa
 ' pozivaocem.
 Public Const AMB_ERR_PRAZNE_NEMA As Long = vbObjectError + 4477
+' AMB-10-ODL-39 (b): partneru koji ne prima prazne (kupac) trazi se vise nego sto
+' mu firma duguje -- visak bi bio izdavanje praznih kupcu.
+Public Const AMB_ERR_IZDAVANJE_KUPCU As Long = vbObjectError + 4478
 Private Const AMB_ERR_KNJIGA_KVAR As Long = vbObjectError + 4473
 Private Const AMB_ERR_KNJIGA_ULAZ As Long = vbObjectError + 4474
 
@@ -2993,6 +2996,9 @@ End Function
 ' (AmbDokBrojOwnerKlasa = SOPSTVENI, vlasnik stanica), a kapija zauzetosti iz
 ' AMB-10-ODL-20 radi isti posao kao zateceni RequireBrojSlobodanUNizu --
 ' nad istim kljucem (vlasnik, dan).
+'
+' kupacID nosi samo smer VRACANJE_KUPCU (AMB-10-ODL-39): to je jedini nas smer
+' cija je druga strana kupac. Ostali smerovi ga ne citaju.
 Public Function UpisiReversAmbalaze_TX(ByVal datum As Date, ByVal broj As String, _
                                        ByVal stanicaID As String, _
                                        ByVal tipAmb As String, _
@@ -3000,7 +3006,8 @@ Public Function UpisiReversAmbalaze_TX(ByVal datum As Date, ByVal broj As String
                                        ByVal smer As String, _
                                        ByVal kooperantID As String, _
                                        ByVal vozacID As String, _
-                                       Optional ByVal napomena As String = "") As String
+                                       Optional ByVal napomena As String = "", _
+                                       Optional ByVal kupacID As String = "") As String
     Const SRC As String = "modAmbalaza.UpisiReversAmbalaze_TX"
 
     Dim tx As clsTransaction
@@ -3019,7 +3026,7 @@ Public Function UpisiReversAmbalaze_TX(ByVal datum As Date, ByVal broj As String
     tx.AddTableSnapshot TBL_AMBALAZA
 
     dokID = UpisiReversUTx(tx, red, datum, brojK, stanicaID, tipAmb, kolicina, _
-                           smer, kooperantID, vozacID, napomena, SRC)
+                           smer, kooperantID, vozacID, napomena, SRC, kupacID)
 
     tx.CommitTx
     Set tx = Nothing
@@ -3099,7 +3106,8 @@ Private Function UpisiReversUTx(ByVal tx As clsTransaction, ByVal red As Variant
                                 ByVal stanicaID As String, ByVal tipAmb As String, _
                                 ByVal kolicina As Double, ByVal smer As String, _
                                 ByVal kooperantID As String, ByVal vozacID As String, _
-                                ByVal napomena As String, ByVal SRC As String) As String
+                                ByVal napomena As String, ByVal SRC As String, _
+                                Optional ByVal kupacID As String = "") As String
     Dim dokID As String, odTip As String, naTip As String, vrstaK As String
     odTip = CStr(red(1))
     naTip = CStr(red(2))
@@ -3109,8 +3117,8 @@ Private Function UpisiReversUTx(ByVal tx As clsTransaction, ByVal red As Variant
                              AMB_NALOG_STANICA, stanicaID, napomena)
 
     PrenesiAmbalazu tx, datum, tipAmb, kolicina, _
-                    odTip, ReversNalogID(odTip, stanicaID, kooperantID, vozacID, smer, SRC), _
-                    naTip, ReversNalogID(naTip, stanicaID, kooperantID, vozacID, smer, SRC), _
+                    odTip, ReversNalogID(odTip, stanicaID, kooperantID, vozacID, kupacID, smer, SRC), _
+                    naTip, ReversNalogID(naTip, stanicaID, kooperantID, vozacID, kupacID, smer, SRC), _
                     vrstaK, DOK_TIP_AMBALAZA_DOKUMENT, dokID
 
     UpisiReversUTx = dokID
@@ -3128,6 +3136,7 @@ End Function
 ' se ne ispravljaju ovim putem. Za sve njih ostaje storno.
 Public Function IspravkaReversaRazlog(ByVal ambDokID As String) As String
     Dim redovi As Collection, vrsta As String, nPoslovnih As Long
+    Dim r As Variant, smerReda As String
     On Error GoTo EH
 
     ambDokID = Trim$(ambDokID)
@@ -3169,6 +3178,23 @@ Public Function IspravkaReversaRazlog(ByVal ambDokID As String) As String
         IspravkaReversaRazlog = "Revers '" & ambDokID & "' nema tacno jedan poslovni red u knjizi (" & _
                                 CStr(nPoslovnih) & ") -- zamena iz forme ne bi bila ista radnja. " & _
                                 "Storniraj ga i unesi ponovo."
+        Exit Function
+    End If
+
+    ' AMB-10-ODL-39 (e): SMER SE CITA IZ REDA, iz iste zatvorene mape kojom pise
+    ' pisac. Vracanje kupcu je nas revers sa jednim poslovnim redom, pa bi bez
+    ' ovoga proslo kao bilo koji drugi -- a taj smer se ne ispravlja. Red koji nije
+    ' nijedan smer mape takodje ne: zamenu ne bi umeo da napise ni pisac.
+    r = AmbDokPoslovniRedovi(ambDokID)(1)
+    smerReda = modAmbalazaUgovor.AmbReversSmerZaRed(CStr(r(3)), CStr(r(5)), CStr(r(0)))
+    If Len(smerReda) = 0 Then
+        IspravkaReversaRazlog = "Red reversa '" & ambDokID & "' nije nijedan smer naseg reversa -- " & _
+                                "zamena se ne bi mogla napisati. Storniraj ga i unesi ponovo."
+        Exit Function
+    End If
+    If Not modAmbalazaUgovor.AmbReversSmerSeIspravlja(smerReda) Then
+        IspravkaReversaRazlog = "AMB-10-ODL-39: revers '" & ambDokID & "' je smer " & smerReda & _
+                                ", a on se ne ispravlja -- storniraj ga i unesi ponovo."
         Exit Function
     End If
     Exit Function
@@ -3239,6 +3265,15 @@ Public Function IspravkaReversa_TX(ByVal stariAmbDokID As String, ByVal datum As
     If Len(prepreka) > 0 Then Err.Raise AMB_ERR_IDENTITET, SRC, prepreka
 
     red = ReversSmerZaUpis(kolicina, smer, SRC)
+
+    ' AMB-10-ODL-39 (e): zamena ne sme da postane vracanje kupcu -- taj smer se ne
+    ' ispravlja (storno pa nov unos). Bez ove kapije bi zamena pala tek na nalogu
+    ' kupca, koji ispravka i ne prenosi, porukom koja ne kaze pravilo.
+    If Not modAmbalazaUgovor.AmbReversSmerSeIspravlja(smer) Then
+        Err.Raise AMB_ERR_IDENTITET, SRC, _
+                  "AMB-10-ODL-39: zamena reversa ne moze da bude smer " & Trim$(smer) & _
+                  " -- vracanje kupcu se ne ispravlja, nego stornira i unosi ponovo."
+    End If
 
     ' A9: NOV POSLOVNI BROJ -- dvaput, jer broj nastaje na dva nacina.
     '
@@ -3416,11 +3451,13 @@ End Function
 ' pa i on sme da nosi '|' -- ista rupa kao kod poslovnog broja (P2, 08.10.2026).
 '
 ' Vrsta u nizu je POSLOVNA RADNJA (AmbVrstaPoslovnaRadnja), ne vrsta reda: deo
-' izdavanja koji je vratio tudje (VRACANJE_TUDJE) pripada izdavanju.
+' izdavanja kooperantu koji je vratio tudje (VRACANJE_TUDJE) pripada izdavanju,
+' a vracanje kupcu je svoja radnja (ODL-39) -- zato radnja cita i odrediste.
 Private Function PoslovniRedNiz(ByRef data As Variant, ByVal i As Long, _
                                 ByRef kol As Object) As Variant
     PoslovniRedNiz = Array(modAmbalazaUgovor.AmbVrstaPoslovnaRadnja( _
-                               AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA)))), _
+                               AmbText(data(i, kol(COL_AMB_VRSTA_KRETANJA))), _
+                               AmbText(data(i, kol(COL_AMB_NA_TIP)))), _
                            AmbText(data(i, kol(COL_AMB_TIP))), _
                            CDbl(nz(data(i, kol(COL_AMB_KOLICINA)), 0)), _
                            AmbText(data(i, kol(COL_AMB_OD_TIP))), _
@@ -3665,11 +3702,13 @@ End Function
 ' pravila. Ovde je jedno telo, pa ne moze da se razidje po granama.
 Private Function ReversNalogID(ByVal nalogTip As String, ByVal stanicaID As String, _
                                ByVal kooperantID As String, ByVal vozacID As String, _
+                               ByVal kupacID As String, _
                                ByVal smer As String, ByVal SRC As String) As String
     Select Case Trim$(nalogTip)
         Case AMB_NALOG_STANICA: ReversNalogID = Trim$(stanicaID)
         Case AMB_NALOG_KOOPERANT: ReversNalogID = Trim$(kooperantID)
         Case AMB_NALOG_VOZAC: ReversNalogID = Trim$(vozacID)
+        Case AMB_NALOG_KUPAC: ReversNalogID = Trim$(kupacID)
     End Select
 
     If Len(ReversNalogID) = 0 Then
@@ -4099,6 +4138,24 @@ Public Function PrenesiAmbalazu(ByVal tx As clsTransaction, _
         vraceno = kolicina
         If vraceno > obaveza Then vraceno = obaveza
         zaduzenje = kolicina - vraceno
+    End If
+
+    ' AMB-10-ODL-39 (b), odluka operatera 31.10.2026: KUPCU SE PRAZNE NE IZDAJU.
+    ' Vracanje kupcu preko duga firme bi ostatak knjizilo kao IZDATA_PRAZNA vozac
+    ' -> kupac -- tok koji niko nije odlucio -- pa se ceo zahtev odbija, pre
+    ' ijednog reda. Pravilo je u ugovoru (AmbIzdavanjePraznihProblem), a dug je
+    ' ovaj iz transakcije, procitan posle provere ponavljanja.
+    '
+    ' Sudi se SAMO ostatak vracanja, jer je to odluka (3b). Izricit zahtev
+    ' IZDATA_PRAZNA na kupca nema pisca, matrica ga pusta kao i pre ODL-39, a BFP
+    ' ga koristi kao probu drugog protivpartnera na istom dokumentu (AMB-INV-10):
+    ' kapija nad njim bi zaklonila tu, i to bez odluke.
+    If zaduzenje > 0 Then
+        If StrComp(vrstaK, AMB_VK_VRACANJE_TUDJE, vbTextCompare) = 0 Then
+            Dim izdProblem As String
+            izdProblem = modAmbalazaUgovor.AmbIzdavanjePraznihProblem(naTip, vraceno, kolicina, tipAmb)
+            If Len(izdProblem) > 0 Then Err.Raise AMB_ERR_IZDAVANJE_KUPCU, SRC, izdProblem
+        End If
     End If
 
     ' REDOSLED REDOVA JE NOSEC: vracanje prvo (ono zakljucava par dokumenta,
