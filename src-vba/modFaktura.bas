@@ -935,8 +935,9 @@ End Function
 
 ' Stavke prijemnice po ID-u: UCase(PrijemnicaStavkaID) -> red (1..8) iz strogog
 ' citaoca StavkePrijemniceRedovi (1 PrijemnicaID, 3 Klasa, 4 Kolicina, 5 Cena,
-' 7 PrijemnicaStavkaID). Citac vec garantuje jedinstven ID stavke.
-Private Function StavkePrijemnicePoID() As Object
+' 7 PrijemnicaStavkaID). Citac vec garantuje jedinstven ID stavke. Zovu ga pisac
+' fakture i SEF mapper (S7R3-REV-04: stavka linije postoji i pripada prijemnici).
+Public Function StavkePrijemnicePoID() As Object
     Dim d As Object, s As Variant, i As Long, j As Long, red As Variant
     Set d = CreateObject("Scripting.Dictionary")
     Set StavkePrijemnicePoID = d

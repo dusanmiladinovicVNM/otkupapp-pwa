@@ -375,6 +375,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S7R2_KapijaUtovaraFailClosed
     Test_S7R3_SefLinijaNosiStavkuIKlasu
     Test_S7R3_SefOdbijaNejasnuLiniju
+    Test_S7R3_SefStavkaIdentitet
     Test_S7R3_SaldoKupcaRobni
     Test_S7R3_GpPraviloJedno
     Test_S7R3_UgovorGpIzvor
@@ -9125,7 +9126,7 @@ Private Sub Test_S7R3_SefOdbijaNejasnuLiniju()
 
     gPosle = S7R3GreskaDto(fid)
 
-    AssertTrue InStr(1, gBezStavke, "PrijemnicaStavkaID", vbTextCompare) > 0, _
+    AssertTrue InStr(1, gBezStavke, "without PrijemnicaStavkaID", vbTextCompare) > 0, _
                "S7R3 nejasna linija: linija bez stavke ne ide na SEF (FAK-LIN-02)"
     AssertTrue InStr(1, gDupli, "Prijemnica linije fakture", vbTextCompare) > 0 And _
                InStr(1, gDupli, "nije jednoznacan", vbTextCompare) > 0, _
@@ -9136,6 +9137,79 @@ Private Sub Test_S7R3_SefOdbijaNejasnuLiniju()
     Exit Sub
 EH:
     LogFatal "Test_S7R3_SefOdbijaNejasnuLiniju", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' S7R3-REV-04 (review #454): stavka linije je identitet koji odlazi na e-fakturu, pa
+' mapper dokazuje da je stvarna, ne samo da nije prazna. Faktura kroz pravi pisac nad
+' dvoklasnom prijemnicom; tri synthetic kvara, svaki u svojoj TX: (1) stavka koje
+' nema u tblPrijemnicaStavke; (2) stavka druge prijemnice; (3) ista stavka na obe
+' linije fakture (FAK-LIN-01). Nalazi se tvrde posle rollback-a. KONTROLA: posle
+' rollback-a DTO se gradi. Zove samo API koji postoji i pre ispravke, pa je crven
+' nad starim kodom: stari mapper sva tri prihvata.
+' SABOTAZE: s7r3-sef-stavka-ne-postoji, s7r3-sef-stavka-tudja, s7r3-sef-stavka-dve-linije.
+Private Sub Test_S7R3_SefStavkaIdentitet()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Const SRC As String = "Test_S7R3_SefStavkaIdentitet"
+    Dim scenario As String, prj As String, br As String, stI As String, stII As String
+    Dim fid As String, tudja As String, poruka As String
+    Dim gNema As String, gTudja As String, gDve As String, gPosle As String
+    scenario = NewScenarioCode("S7R3IDS")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID, br)
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    If Len(stI) > 0 And Len(stII) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stI, stII)
+    If Len(prj) > 0 Then tudja = S6TudjiStavkaID(prj)
+    AssertTrue Len(fid) > 0, "S7R3 identitet stavke: preduslov -- faktura nad dvoklasnom prijemnicom"
+    AssertTrue Len(tudja) > 0, "S7R3 identitet stavke: preduslov -- stavka druge prijemnice"
+    If Len(fid) = 0 Or Len(tudja) = 0 Then GoTo Ciscenje
+
+    ' 1) stavka koje nema
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    S7R2PostaviNaLiniji fid, KLASA_I, COL_FS_PRIJEMNICA_STAVKA_ID, "PRS-S7R3-NEPOSTOJI"
+    gNema = S7R3GreskaDto(fid)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 2) stavka druge prijemnice
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    S7R2PostaviNaLiniji fid, KLASA_I, COL_FS_PRIJEMNICA_STAVKA_ID, tudja
+    gTudja = S7R3GreskaDto(fid)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 3) ista stavka na obe linije
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    S7R2PostaviNaLiniji fid, KLASA_II, COL_FS_PRIJEMNICA_STAVKA_ID, stI
+    gDve = S7R3GreskaDto(fid)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    gPosle = S7R3GreskaDto(fid)
+
+    AssertTrue InStr(1, gNema, "does not exist", vbTextCompare) > 0, _
+               "S7R3 identitet stavke: nepostojeca stavka ne ide na SEF"
+    AssertTrue InStr(1, gTudja, "belongs to PrijemnicaID", vbTextCompare) > 0, _
+               "S7R3 identitet stavke: stavka druge prijemnice ne ide na SEF"
+    AssertTrue InStr(1, gDve, "FAK-LIN-01", vbTextCompare) > 0, _
+               "S7R3 identitet stavke: stavka na dve aktivne linije ne ide na SEF (FAK-LIN-01)"
+    AssertEquals "", gPosle, "S7R3 identitet stavke: KONTROLA -- posle rollback-a DTO se gradi"
+
+Ciscenje:
+    If Len(fid) > 0 Then
+        If modStorno.StornoFaktura_TX(fid) Then Call modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, br, "", poruka, S6K4Ident(prj))
+    End If
+    Exit Sub
+EH:
+    LogFatal SRC, Err.Number, Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Sub

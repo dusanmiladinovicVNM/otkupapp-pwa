@@ -10272,7 +10272,48 @@ Obim je po ugovoru prihvatanja. Odstupanja i odluke usput:
   sada GP pravilo pita posle petlje, a ne usred nje. Ishod je isti: `ERR_SEF_VALIDATION` sa istim tekstom.
 - **Sabotaže: 8 umesto 9.** „Health ne pita GP pravilo" bi bila placebo, jer nijedan test ne vidi health 6c
   (`Private`, `gate: False`). Health se meri prolazom `RunProductionHealthCheck` i čitanjem njegovog izlaza.
-  „Prag `fak_broj_prj`" je kapija samog alata, a ne VBA sabotaža.
+  „Prag `fak_broj_prj`" je kapija samog alata, a ne VBA sabotaža. *(Prevaziđeno review-om, stavka 266: health
+  6c je javni čitač `FakturaIznosNalazi`, pa obe health sabotaže mere test.)*
+
+#### S7 rez 3 — review `#454`, drugi krug: `S7R3-REV-04` (02.11.2026, `docs/STANJE_REFAKTORA.md` stavka 269)
+
+**Prekid kruga (pravilo „dva kruga, nova klasa").** Prvi krug (stavka 266) je našao praznine u health 6c i u
+meraču: GP linija po pogrešnom ključu, health bez testa, regex bez poziva bez zagrada. Drugi krug je našao novu
+klasu: identitet koji SEF linija nosi nije dokazan nad izvorom. Uzrok je **IDENTITY GAP u ovom pre-flight-u**.
+Osa IDENTITY je označena kao PROVEN rečenicom „`PrijemnicaStavkaID` putuje od linije do SEF-a", a to dokazuje
+prenos, ne da je ID stvaran. Za GP izvor je isti pre-flight tražio postojanje (`KI-078`), za stavku nije, i
+ugovor prihvatanja nije imao nijedan negativ stavke.
+
+**Ispravljene ose** (zamenjuju istoimene redove u tabeli pre-flight-a):
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `IDENTITY` | PROVEN (posle ispravke) | `PrijemnicaStavkaID` linije na SEF-u postoji tačno jednom (`modFaktura.StavkePrijemnicePoID` nad strogim `StavkePrijemniceRedovi`), pripada `PrijemnicaID`-u linije i nije na dve aktivne linije (`FakturaLinijePoStavci`, `FAK-LIN-01`). To su isti čitači koje koristi pisac fakture (`CreateFaktura`) |
+| `DOWNSTREAM` | PROVEN (ispravljeno) | `tblSEFSubmission.RequestBody` je UBL (`SendInvoiceToSEF_TX` → `SerializeUBLInvoice`). JSON (`SerializeSEFRequest`) je legacy/debug zapis koji nigde ne odlazi, pa njegov test meri dijagnostički prikaz, ne zahtev |
+
+**Dopuna ugovora prihvatanja:**
+
+6. **`Test_S7R3_SefStavkaIdentitet`** — faktura kroz pravi pisac nad dvoklasnom prijemnicom i tri synthetic kvara,
+   svaki u svojoj TX: stavka koje nema, stavka druge prijemnice, ista stavka na obe linije. Svaki kvar daje
+   grešku sa svojim razlogom, a posle rollback-a DTO se gradi. Test zove samo API koji postoji i pre ispravke,
+   pa je crven nad starim kodom. Sabotaže: `s7r3-sef-stavka-ne-postoji`, `s7r3-sef-stavka-tudja`,
+   `s7r3-sef-stavka-dve-linije` (katalog 1121).
+
+**Redosled provera u petlji nosi razlog (dvoslojna kapija):** prazna stavka → zaglavlje tačno jednom → stavka
+postoji → pripada prijemnici → `FAK-LIN-01`.
+
+- Strog čitač stavki i sam odbija dupli `PrijemnicaID`. Ispred `RequireTacnoJedan` bi zato zaklonio razlog
+  zaglavlja, pa `s7r3-zaglavlje-prvi-pogodak` ne bi grizla.
+- Provera postojanja hvata i praznu stavku. Tvrdnja „linija bez stavke" u `Test_S7R3_SefOdbijaNejasnuLiniju`
+  zato sada meri tekst prve brane („without PrijemnicaStavkaID"), inače `s7r3-mapper-ne-trazi-stavku` ne bi
+  grizla.
+- Tuđa stavka je obično već fakturisana, pa `FAK-LIN-01` ide posle provere pripadnosti.
+
+Čitači su globalni i strogi kao u `CreateFaktura`. Zovu se tek uz prvu liniju prijemnice, pa GP faktura od njih
+ne zavisi. Količina, cena i klasa ostaju snapshot linije: ispravka stavku čita samo kao identitet, ne kao
+vrednost.
+
+**Van obima:** health 3 ne imenuje liniju čija stavka ne postoji ili je tuđa (`KI-080`).
 
 ## 15) Backlog — namerno van opsega
 

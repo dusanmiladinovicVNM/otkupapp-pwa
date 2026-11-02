@@ -9581,6 +9581,28 @@ SABOTAZE = {
         "Test_S7R3_SefOdbijaNejasnuLiniju",
         "S7R3 nejasna linija: linija bez stavke ne ide na SEF (FAK-LIN-02)",
     ),
+    # S7R3-REV-04 (review #454): stavka linije se dokazuje, ne samo prenosi.
+    "s7r3-sef-stavka-ne-postoji": (
+        "modSEFMapper.bas",
+        "                If Not poStavci.Exists(kStavke) Then\n",
+        "                If False Then   ' SABOTAZA: postojanje stavke se ne proverava\n",
+        "Test_S7R3_SefStavkaIdentitet",
+        "S7R3 identitet stavke: nepostojeca stavka ne ide na SEF",
+    ),
+    "s7r3-sef-stavka-tudja": (
+        "modSEFMapper.bas",
+        "                ElseIf StrComp(CStr(poStavci(kStavke)(1)), prijemnicaID, vbTextCompare) <> 0 Then\n",
+        "                ElseIf False Then   ' SABOTAZA: pripadnost prijemnici se ne proverava\n",
+        "Test_S7R3_SefStavkaIdentitet",
+        "S7R3 identitet stavke: stavka druge prijemnice ne ide na SEF",
+    ),
+    "s7r3-sef-stavka-dve-linije": (
+        "modSEFMapper.bas",
+        "                If linijeStavki Is Nothing Then Set linijeStavki = modFaktura.FakturaLinijePoStavci()\n",
+        "                ' SABOTAZA: FAK-LIN-01 se ne pita\n",
+        "Test_S7R3_SefStavkaIdentitet",
+        "S7R3 identitet stavke: stavka na dve aktivne linije ne ide na SEF (FAK-LIN-01)",
+    ),
     # Strog citac zaglavlja stoji SAMO u petlji linija: datum isporuke ga namerno
     # nema, inace bi druga kopija zaklonila ovu sabotazu (dvoslojna kapija).
     "s7r3-zaglavlje-prvi-pogodak": (

@@ -168,6 +168,9 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     Dim prijemnicaID As String
     Dim brojPrijemnice As String
     Dim stavkaID As String
+    Dim poStavci As Object
+    Dim linijeStavki As Object
+    Dim kStavke As String
     Dim preradaID As String
     Dim brojPrerade As String
     Dim vrstaVoca As String
@@ -238,6 +241,30 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
                 End If
                 RequireTacnoJedan TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _
                                   "Prijemnica linije fakture " & fakturaID, SRC
+                ' S7R3-REV-04 (review #454): stavka je identitet koji odlazi na
+                ' e-fakturu, pa se dokazuje, ne samo prenosi. Postoji tacno jednom
+                ' (strog citac stavki, isti koji cita pisac fakture), pripada bas
+                ' prijemnici linije i nije na dve aktivne linije (FakturaLinijePoStavci
+                ' dize FAK-LIN-01). Citaci su globalni i strogi kao u CreateFaktura, pa
+                ' se zovu tek uz prvu liniju prijemnice: GP faktura od njih ne zavisi.
+                ' Redosled nosi razlog: zaglavlje pre stavki (strog citac stavki i sam
+                ' odbija dupli PrijemnicaID, pa bi ispred zaklonio razlog zaglavlja), a
+                ' pripadnost pre FAK-LIN-01 (tudja stavka je obicno vec fakturisana, pa
+                ' bi FAK-LIN-01 zaklonio pravi razlog). Kolicina, cena i klasa ostaju
+                ' snapshot linije.
+                If poStavci Is Nothing Then Set poStavci = modFaktura.StavkePrijemnicePoID()
+                kStavke = UCase$(stavkaID)
+                If Not poStavci.Exists(kStavke) Then
+                    Err.Raise ERR_SEF_VALIDATION, SRC, _
+                              "Invoice line PrijemnicaStavkaID " & stavkaID & " does not exist in " & _
+                              TBL_PRIJEMNICA_STAVKE & " (faktura " & fakturaID & ") -- SEF send blocked."
+                ElseIf StrComp(CStr(poStavci(kStavke)(1)), prijemnicaID, vbTextCompare) <> 0 Then
+                    Err.Raise ERR_SEF_VALIDATION, SRC, _
+                              "Invoice line PrijemnicaStavkaID " & stavkaID & " belongs to PrijemnicaID " & _
+                              CStr(poStavci(kStavke)(1)) & ", not to " & prijemnicaID & _
+                              " (faktura " & fakturaID & ") -- SEF send blocked."
+                End If
+                If linijeStavki Is Nothing Then Set linijeStavki = modFaktura.FakturaLinijePoStavci()
                 vrstaVoca = CStr(LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID, "VrstaVoca"))
                 sortaVoca = CStr(LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID, "SortaVoca"))
 
