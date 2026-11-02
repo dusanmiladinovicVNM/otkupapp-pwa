@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 01.11.2026 (stavka 255: review PR `#452` — CODE GO, MERGE HOLD na ručnim kapijama).
+**Ažurirano:** 02.11.2026 (stavka 256: ručna provera PR `#452` i Compile prošli — ručne kapije zatvorene).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -37,7 +37,7 @@
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
 | **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): ✅ merge **`#450`** (`fd39a716`, 01.11.2026) — review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); stavka 250 |
-| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, grana `claude/s7-rez1-storno-faktura`): čeka review, ručnu proveru i Compile |
+| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); čeka merge |
 | S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -8931,6 +8931,42 @@
        ishod fail-closed, ali to počiva na ponašanju platforme. Jezgro (`RequireStornoAllowed`) identitet proverava
        zasebno.
      - **Sledeći brojevi:** test 309 · stavka 256 · KI-077.
+
+256. **Ručna provera PR `#452` i Compile (01–02.11.2026): sva četiri koraka prošla, a obe ručne kapije iz stavke 255
+     su zatvorene.** Sveska `tests/fixtures/rucna_provera_s7r1_kod.xlsm` (gitignored) je BFP `--keep` nad `dd682f9b`
+     (izvor `2030191edc7f`). SEF stanje je upisano spolja na dve fakture, jer faktura iz BFP-a nikad nije išla na SEF
+     (synthetic, isti oblik kao `S7R1SefStanje`): `FAK-00013` = `SEF_SENT` / `Sent`, `FAK-00014` = `SEF_SENT` /
+     `Cancelled`. Ishod je pročitan na ekranu operatera (snimci) i sondom nad snimljenom sveskom.
+
+     - **Compile:** operater je uvezao `modVbaTools` i `Debug → Compile VBAProject` je prošao bez poruke. Zatvara
+       `COMPILE NEJASNO` iz stavke 254.
+     - **Korak 1, `FAK-ODL-02`:** F8 → 25/2026 (`SEF_SENT` / `Sent`). Dijalog sa razlogom i stanjem „SEF_SENT"
+       stiže pre pitanja „Stornirati…". Sonda posle svih koraka: `FAK-00013` je aktivna i neplaćena.
+     - **Korak 2, `S7R1-REV-01`:** F8 → 26/2026 (`SEF_SENT` / `Cancelled`). Razloga odbijanja nema, a posle pitanja
+       „Stornirati fakturu 26/2026?" → Da stiže toast „✓ Stornirano. Uplate fakture su prešle u avans kupca:
+       4.000,00 26/2026". Sonda: `FAK-00014` i njena linija (klasa II) su stornirane, a workflow ostaje `SEF_SENT` /
+       `Cancelled`. Izuzetak je sada izvršen kroz jezgro, ne samo pitan kroz F8 → **`S7R1-REV-01` zatvoren**.
+     - **Korak 3, `FAK-ODL-05`:** F8 → 27/2026 → Da, toast „… 12.000,00 27/2026". Sonda: `FAK-00015` i njena
+       linija (klasa I) su stornirane.
+     - **Korak 4, `FAK-ODL-05` / `-06`:** Fakturisanje → TEST KUPAC TRI DOO pokazuje obe stavke prijemnice
+       `…-1844` kao slobodne (Neplaćeno 0). Korpa od 16.000 daje fakturu **30/2026** (`FAK-00018`), odmah Plaćeno
+       16.000 / ostatak 0. Sonda: obe linije su aktivne, a `NOV-00016` (`KupciUplata` 12.000) i `NOV-00017`
+       (`KupciAvans` 4.000) su vezani za `FAK-00018` sa BIM markerom izvoda, bez podele. Broj je 30, ne 28, jer su
+       28/2026 i 29/2026 (`FAK-00016/17`, `KUP-90001`) stornirane fakture drugih BFP testova.
+     - **Kontrola:** 25/2026 drugog kupca (`KUP-90002`) je posle svih koraka i dalje neplaćena, pa avans
+       `KUP-90003` nije prešao na tuđu fakturu.
+     - **Viđeno ponovo, bez nove stavke:** `KI-037`. Dijalog koraka 1 počinje sa „?" umesto „✗", jer `MsgBox`
+       font nema taj znak. `STORNO_ERR_FAK_NA_SEF` je preuzeo prefiks postojećih `STORNO_ERR_*` ključeva. Ne dira
+       se, ide u UX prolaz posle S6–S9.
+     - **Nije rađeno ručno:**
+       - opcioni korak 4b (vidljiva podela uplate); podelu mere `Test_S7R1_OdvezanaUplataJeAvans` i sabotaže
+         `s7r1-split-*`;
+       - `KI-041` (F8 uvek šalje ID);
+       - PWA izvoz (traži Google sync).
+
+       Sva tri pokrivaju samo testovi.
+     - **Status PR `#452`:** MERGE HOLD iz stavke 255 više nema uzrok. Merge čeka izričit zahtev operatera.
+     - **Sledeći brojevi:** test 309 · stavka 257 · KI-077.
 
 ## Dug sa imenom (posle S5-5b)
 
