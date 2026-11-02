@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 02.11.2026 (stavka 260: review PR `#453`, P1 ispravljen; skupe kapije čekaju).
+**Ažurirano:** 02.11.2026 (stavka 261: S7 rez 2 zelen, dokaz 13/13; čeka Compile).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -37,7 +37,7 @@
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
 | **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): ✅ merge **`#450`** (`fd39a716`, 01.11.2026) — review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); stavka 250 |
-| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); ✅ merge **`#452`** (`ff3e9c7a`, 02.11.2026, stavka 257). **Rez 2: pre-flight ✅** (stavka 258, `FAK-ODL-07`); **kod ✅** (stavka 259, PR `#453`); review HOLD → P1 ispravljen (stavka 260, `KI-077`/`KI-078` za rez 3); fixture, suite, dokaz i Compile čekaju |
+| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); ✅ merge **`#452`** (`ff3e9c7a`, 02.11.2026, stavka 257). **Rez 2: pre-flight ✅** (stavka 258, `FAK-ODL-07`); **kod ✅** (stavka 259, PR `#453`); review HOLD → P1 ispravljen (stavka 260, `KI-077`/`KI-078` za rez 3); crveno nad starim kodom, zeleno (308 / 2868 / 111 / 39), dokaz 13/13 (stavka 261); čeka Compile |
 | S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -9092,6 +9092,46 @@
        5. sabotaže reza 2;
        6. Compile.
      - **Sledeći brojevi:** test 309 · stavka 261 · KI-079.
+
+261. **S7 rez 2 — skupe kapije posle ispravke P1 (02.11.2026, izvor `94bf4643`, uz izričito „Push, pa kapije").**
+     Push `c799527f..94bf4643` na PR `#453`.
+
+     - **Crveni prolaz nad starim kodom.** Produkcioni moduli su vraćeni na `ff3e9c7a`, a novi testovi su ostali.
+       Bez `Test_S7R2_UgovorLinijaFakture` i `Test_S7R2_FakturaStareKoloneSelfHeal`, jer zovu nov API. Sveska je
+       stari fixture `7eab17dc` (svesno `--ignore-fixture-sig`). Ishod:
+       - BFP **8 / 2851** palo, sve `S7R2`:
+         - slučaj 3 (stari čitač diže 1768: dve tvrdnje);
+         - storno je pisao `Stornirano` na obe linije, a kanon nosi sve stare kolone;
+         - GP kapija posle storna zaglavlja daje 1;
+         - kapija utovara bez kolone `UtovarID` pušta storno (tri tvrdnje).
+       - `RunAllTests` **2 / 308**: `T_FakturaGP_WriterKapijeIStorno` i `T_UtovarB_StornoKapije`. Rogue linija je
+         ostala aktivna posle storna svog zaglavlja.
+
+       Ništa van reza nije palo. Izvor je posle toga vraćen na HEAD.
+     - **Fixture regenerisan:** potpis `7eab17dc` → `8196bbca`; obrisane su sve tri kolone u sredini i pet trace
+       kolona.
+     - **Zeleno nad novim kodom** (izvor `69dff0c90dcc`, GREEN marker):
+
+       | Suite | Rezultat |
+       |---|---|
+       | `RunAllTests` | **308 / 0** |
+       | BFP | **2868 / 0** (+36 tvrdnji, tačno broj novih i izmenjenih) |
+       | `RunStornoTestSuite` | **111 / 0** |
+       | `Test_StornoCentar_All` | OK |
+       | `RunFakturaSmokeSuite` | **39 / 0** |
+       | `RunGoldenSuite` | OK |
+
+     - **Dokaz: 13 / 13 crveno**, izvor pre i posle identičan (`94e497510d709e09`).
+       - `s7r2-aktivnost-ignorise-storno` je puštena **sama**: kvari zajednički čitač, pa bi u grupi oborila i tuđe
+         tvrdnje.
+       - Ostalih 12 je išlo u pet grupnih prolaza; 9 je izmereno grupno.
+       - `s7r2-storno-oslobadja-tudji-utovar` je u grupi pala na tuđoj tvrdnji, pa je ponovljena sama i pala na svojoj.
+     - **Nepušteno:**
+       - pun i pojedinačni (negrupisani) `dokaz.py`;
+       - `RunProductionHealthCheck` (`gate: False`; `KI-077`);
+       - Compile (`COMPILE NEJASNO`, ručna kapija);
+       - ručna provera.
+     - **Sledeći brojevi:** test 309 · stavka 262 · KI-079.
 
 ## Dug sa imenom (posle S5-5b)
 
