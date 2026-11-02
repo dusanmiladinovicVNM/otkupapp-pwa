@@ -9028,8 +9028,12 @@ End Sub
 ' nazivi se razlikuju po klasi, a JSON zapis slanja nosi stavku. KONTROLA: GP
 ' faktura iz fixture-a (FAK-SLED-GP4) i dalje nosi PreradaID. Tvrdi kroz javni API
 ' koji postoji i pre reza (UBL i JSON kao tekst), pa je crven nad starim kodom.
+' Datum isporuke na UBL-u je datum prijemnice, a BFP dokumenti nose datume posle
+' 2090. -- SEF validacija bi odbila isporuku kasniju od fakture. Zato se UBL gradi u
+' TX u kojoj prijemnica nosi danasnji datum (synthetic), pa rollback.
 ' SABOTAZE: s7r3-ubl-id-dokument, s7r3-naziv-bez-klase, s7r3-json-bez-stavke.
 Private Sub Test_S7R3_SefLinijaNosiStavkuIKlasu()
+    Dim tx As clsTransaction, rows As Collection
     On Error GoTo EH
     Dim scenario As String, prj As String, br As String, stI As String, stII As String
     Dim fid As String, poruka As String
@@ -9042,9 +9046,17 @@ Private Sub Test_S7R3_SefLinijaNosiStavkuIKlasu()
     AssertTrue Len(fid) > 0, "S7R3 SEF: preduslov -- faktura nad dvoklasnom prijemnicom"
     If Len(fid) = 0 Then Exit Sub
 
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prj)
+    If rows.count = 1 Then RequireUpdateCell TBL_PRIJEMNICA, CLng(rows(1)), COL_PRJ_DATUM, Date, _
+                                             "Test_S7R3_SefLinijaNosiStavkuIKlasu"
     Set dto = modSEFMapper.BuildSEFInvoiceDto(fid)
     ubl = modSEFMapper.SerializeUBLInvoice(dto)
     zapis = modSEFMapper.SerializeSEFRequest(dto)
+    tx.RollbackTx
+    Set tx = Nothing
     Set dto = modSEFMapper.BuildSEFInvoiceDto("FAK-SLED-GP4")
     ublGp = modSEFMapper.SerializeUBLInvoice(dto)
 
@@ -9066,6 +9078,8 @@ Private Sub Test_S7R3_SefLinijaNosiStavkuIKlasu()
     Exit Sub
 EH:
     LogFatal "Test_S7R3_SefLinijaNosiStavkuIKlasu", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
 End Sub
 
 ' Mapper odbija liniju prijemnice ciji identitet nije jasan, pre slanja: (1) linija
