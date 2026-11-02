@@ -10092,6 +10092,17 @@ Postojeći testovi menjaju se po R2-3. Uz to:
 
 **GO / HOLD za kod:** GO posle odgovora na N10. Pitanje je o obimu, ne o domenu.
 
+**Odgovor operatera (02.11.2026): da, u rezu 2** → `FAK-ODL-07` (`docs/DOMEN/FAKTURA.md` §3). Obim
+reza se time proširuje:
+
+- iz kanona `tblFakture` odlazi i pet trace kolona;
+- `EnsureSledljivostSchema` izuzima fakturu;
+- self-heal briše i tih pet kolona, iako su na kraju. Inače bi zatečena sveska nosila kolone koje
+  kanon ne zna;
+- `Test_S7R2_FakturaStareKoloneSelfHeal` meri i njih.
+
+**GO za kod.**
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

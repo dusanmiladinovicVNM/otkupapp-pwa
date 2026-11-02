@@ -110,3 +110,17 @@ Izmereno pre odluke: `KupciUplata` bez fakture nastaje samo stornom, jer je oba 
 samo uz fakturu (`modNovacUnos.UplataValidiraj`, `modBankaMapiranje.MapBankaImportAsKupac`).
 Zato proširen čitač avansa tačno odgovara `FAK-ODL-05`. Tip u ovom toku čita samo taj izvoz;
 zbir po kupcu (`ExportSaldoKupci`) broji oba tipa.
+
+**`FAK-ODL-07` — `tblFakture` gubi pet trace kolona ispravke (operater, 02.11.2026, pre koda S7
+reza 2; nalaz N10).** `IspravkaOd`, `ZamenjenSa`, `CorrectionID`, `IzdatoStatus` i `GeneracijaID`
+brišu se iz kanona `tblFakture` u istom rezu kao `FAK-ODL-03`, istim self-heal-om.
+
+Razlog:
+
+- nijedan pisac fakture ih ne puni;
+- nijedan njihov čitalac ne dodiruje fakturu. Okvir ispravke nema fakturu
+  (`modStornoDok.TabelaZaPrefill`), a ispravka fakture je storno + nova faktura (§1);
+- dodaje ih samo `modSetup.EnsureSledljivostSchema`, koja zato izuzima fakturu.
+
+Kolone stoje na kraju kanona, pa brisanje ne pomera pozicioni upis. Mereno u pre-flight-u reza 2
+(plan §14.57).
