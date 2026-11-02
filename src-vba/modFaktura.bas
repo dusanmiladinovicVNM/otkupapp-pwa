@@ -1090,8 +1090,8 @@ End Function
 ' UGOVOR DOKUMENTA FAKTURE (S7 rez 2, N5). Nalaz je Array(kod, StavkaID, FakturaID):
 '   LINIJA_BEZ_FAKTURE -- linija pokazuje na fakturu koje nema ili je dvosmislena;
 '   FAKTURA_BEZ_LINIJA -- aktivna faktura nema nijednu liniju (StavkaID prazan);
-'   LINIJA_DVA_IZVORA  -- aktivna linija nosi i izvor prijemnice (PrijemnicaID ili
-'                         PrijemnicaStavkaID, S7R3-REV-01) i PreradaID;
+'   LINIJA_DVA_IZVORA  -- aktivna linija nosi i PrijemnicaID i PreradaID, ili je GP
+'                         linija (PreradaID) koja nosi i PrijemnicaStavkaID (S7R3-REV-01);
 '   LINIJA_BEZ_IZVORA  -- aktivna linija nema ni PrijemnicaID ni PreradaID;
 '   GP_PRERADA_NEMA    -- aktivna GP linija: PreradaID nije u tblPrerada tacno jednom;
 '   GP_UTOVAR_NEMA     -- aktivna GP linija: UtovarID je prazan ili nije u tblUtovar
@@ -1137,13 +1137,16 @@ Public Function UgovorLinijaFaktureNalazi() As Collection
                 res.Add Array("LINIJA_BEZ_FAKTURE", sid, fid)
             ElseIf CBool(aktivnaFak(fid)) Then
                 saLinijom(fid) = True
-                imaPrj = (Len(Trim$(NzToText(fs(i, cP)))) > 0 Or Len(Trim$(NzToText(fs(i, cSt)))) > 0)
+                imaPrj = (Len(Trim$(NzToText(fs(i, cP)))) > 0)
                 imaPre = (Len(Trim$(NzToText(fs(i, cPre)))) > 0)
                 If imaPrj And imaPre Then
                     res.Add Array("LINIJA_DVA_IZVORA", sid, fid)
                 ElseIf Not imaPrj And Not imaPre Then
                     res.Add Array("LINIJA_BEZ_IZVORA", sid, fid)
                 ElseIf imaPre Then
+                    ' GP linija ne nosi stavku prijemnice (S7R3-REV-01): takva linija je
+                    ' kontradiktorna, a health 6c je i dalje meri kao GP (po PreradaID-u).
+                    If Len(Trim$(NzToText(fs(i, cSt)))) > 0 Then res.Add Array("LINIJA_DVA_IZVORA", sid, fid)
                     izvor = Trim$(NzToText(fs(i, cPre)))
                     If IdIliPrazno(brojPre, izvor) <> izvor Then res.Add Array("GP_PRERADA_NEMA", sid, fid)
                     izvor = Trim$(NzToText(fs(i, cUt)))

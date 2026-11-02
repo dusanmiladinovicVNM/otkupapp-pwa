@@ -308,8 +308,15 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     Exit Function
 
 EH:
+    ' AUD-054 (S7 rez 3): Err se hvata PRE LogErr-a. LogError iznutra radi
+    ' On Error, a svaka On Error naredba brise Err -- "Err.Raise Err.Number" je
+    ' tako postajao Err.Raise 0, pa je operater umesto razloga (GP pravilo,
+    ' stavka linije, zaglavlje) dobijao "Invalid procedure call". Isti obrazac
+    ' kao modSEFValidator; vazi za svaki EH ovog modula.
+    Dim ehNum As Long, ehDesc As String
+    ehNum = Err.Number: ehDesc = Err.description
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise ehNum, SRC, ehDesc
 End Function
 
 ' JEDNO GP PRAVILO FAKTURE (S7 rez 3, KI-077). Vraca razlog ("" = ispravno) i ne
@@ -543,8 +550,11 @@ Public Function SerializeSEFRequest(ByVal dto As clsSEFInvoiceSnapshot) As Strin
     Exit Function
     
 EH:
+    ' AUD-054: Err se hvata PRE LogErr-a (v. BuildSEFInvoiceDto).
+    Dim ehNum As Long, ehDesc As String
+    ehNum = Err.Number: ehDesc = Err.description
     LogErr "SerializeSEFRequest"
-    Err.Raise Err.Number, "SerializeSEFRequest", Err.description
+    Err.Raise ehNum, "SerializeSEFRequest", ehDesc
 
 End Function
 
@@ -1043,8 +1053,11 @@ Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String) As Date
     Exit Function
 
 EH:
+    ' AUD-054: Err se hvata PRE LogErr-a (v. BuildSEFInvoiceDto).
+    Dim ehNum As Long, ehDesc As String
+    ehNum = Err.Number: ehDesc = Err.description
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise ehNum, SRC, ehDesc
 End Function
 
 Private Function GetFakturaDateForSEF(ByVal fakturaID As String) As Date
@@ -1071,8 +1084,11 @@ Private Function GetFakturaDateForSEF(ByVal fakturaID As String) As Date
     Exit Function
 
 EH:
+    ' AUD-054: Err se hvata PRE LogErr-a (v. BuildSEFInvoiceDto).
+    Dim ehNum As Long, ehDesc As String
+    ehNum = Err.Number: ehDesc = Err.description
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise ehNum, SRC, ehDesc
 End Function
 
 Public Function ComputePayloadHash(ByVal payload As String) As String
@@ -1128,8 +1144,11 @@ Private Function GetSEFPaymentDueDays() As Long
     Exit Function
 
 EH:
+    ' AUD-054: Err se hvata PRE LogErr-a (v. BuildSEFInvoiceDto).
+    Dim ehNum As Long, ehDesc As String
+    ehNum = Err.Number: ehDesc = Err.description
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise ehNum, SRC, ehDesc
 End Function
 
 Private Function GetFakturaIssueDate(ByVal fakturaID As String, _
@@ -1155,8 +1174,11 @@ Private Function GetFakturaIssueDate(ByVal fakturaID As String, _
     Exit Function
 
 EH:
+    ' AUD-054: Err se hvata PRE LogErr-a (v. BuildSEFInvoiceDto).
+    Dim ehNum As Long, ehDesc As String
+    ehNum = Err.Number: ehDesc = Err.description
     LogErr sourceName
-    Err.Raise Err.Number, sourceName, Err.description
+    Err.Raise ehNum, sourceName, ehDesc
 End Function
 
 

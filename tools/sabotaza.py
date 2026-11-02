@@ -9622,6 +9622,24 @@ SABOTAZE = {
         "Test_S7R3_HealthIznosNalazi",
         "S7R3 health 6c: utovar druge fakture je nalaz GP_UTOVAR",
     ),
+    # AUD-054 u mapperu (S7 rez 3): EH ponovo dize Err POSLE LogErr-a, koji ga brise --
+    # razlog SEF kapije se gubi, a operater dobija "Invalid procedure call".
+    "s7r3-sef-eh-gubi-razlog": (
+        "modSEFMapper.bas",
+        "    ehNum = Err.Number: ehDesc = Err.description\n"
+        "    LogErr SRC\n"
+        "    Err.Raise ehNum, SRC, ehDesc\n"
+        "End Function\n"
+        "\n"
+        "' JEDNO GP PRAVILO FAKTURE",
+        "    LogErr SRC\n"
+        "    Err.Raise Err.Number, SRC, Err.description   ' SABOTAZA: razlog se gubi\n"
+        "End Function\n"
+        "\n"
+        "' JEDNO GP PRAVILO FAKTURE",
+        "Test_S7R3_GpPraviloJedno",
+        "S7R3 GP pravilo: SEF kapija odbija sa istim razlogom (kolicina)",
+    ),
     # S7R3-REV-01: GP linija se prepoznaje po stavci umesto po preradi -- linija sa
     # obe vrednosti tada preskace GP pravilo.
     "s7r3-health-gp-po-stavci": (
