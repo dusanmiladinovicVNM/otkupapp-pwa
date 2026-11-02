@@ -1090,7 +1090,8 @@ End Function
 ' UGOVOR DOKUMENTA FAKTURE (S7 rez 2, N5). Nalaz je Array(kod, StavkaID, FakturaID):
 '   LINIJA_BEZ_FAKTURE -- linija pokazuje na fakturu koje nema ili je dvosmislena;
 '   FAKTURA_BEZ_LINIJA -- aktivna faktura nema nijednu liniju (StavkaID prazan);
-'   LINIJA_DVA_IZVORA  -- aktivna linija nosi i PrijemnicaID i PreradaID;
+'   LINIJA_DVA_IZVORA  -- aktivna linija nosi i izvor prijemnice (PrijemnicaID ili
+'                         PrijemnicaStavkaID, S7R3-REV-01) i PreradaID;
 '   LINIJA_BEZ_IZVORA  -- aktivna linija nema ni PrijemnicaID ni PreradaID;
 '   GP_PRERADA_NEMA    -- aktivna GP linija: PreradaID nije u tblPrerada tacno jednom;
 '   GP_UTOVAR_NEMA     -- aktivna GP linija: UtovarID je prazan ili nije u tblUtovar
@@ -1120,6 +1121,8 @@ Public Function UgovorLinijaFaktureNalazi() As Collection
         cP = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
         cPre = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID, SRC)
         cUt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID, SRC)
+        Dim cSt As Long
+        cSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_STAVKA_ID, SRC)
 
         Dim brojPre As Object, brojUt As Object
         Set brojPre = BrojacIdova(TBL_PRERADA, COL_PRE_ID)
@@ -1134,7 +1137,7 @@ Public Function UgovorLinijaFaktureNalazi() As Collection
                 res.Add Array("LINIJA_BEZ_FAKTURE", sid, fid)
             ElseIf CBool(aktivnaFak(fid)) Then
                 saLinijom(fid) = True
-                imaPrj = (Len(Trim$(NzToText(fs(i, cP)))) > 0)
+                imaPrj = (Len(Trim$(NzToText(fs(i, cP)))) > 0 Or Len(Trim$(NzToText(fs(i, cSt)))) > 0)
                 imaPre = (Len(Trim$(NzToText(fs(i, cPre)))) > 0)
                 If imaPrj And imaPre Then
                     res.Add Array("LINIJA_DVA_IZVORA", sid, fid)

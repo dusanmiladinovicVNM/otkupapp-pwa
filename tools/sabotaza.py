@@ -9613,6 +9613,24 @@ SABOTAZE = {
         "Test_S7R3_UgovorGpIzvor",
         "S7R3 ugovor: GP linija na preradu koje nema je nalaz GP_PRERADA_NEMA",
     ),
+    # Review #454 (S7R3-REV-02): health 6c je od tada javni citac nalaza, pa ga test
+    # meri -- i sabotaza vise nije placebo.
+    "s7r3-health-ne-pita-gp-pravilo": (
+        "modProductionHealthCheck.bas",
+        "                If Len(gpRazlog) > 0 Then res.Add Array(\"GP_UTOVAR\", fakturaID, gpRazlog)\n",
+        "                ' SABOTAZA: health ne pita GP pravilo\n",
+        "Test_S7R3_HealthIznosNalazi",
+        "S7R3 health 6c: utovar druge fakture je nalaz GP_UTOVAR",
+    ),
+    # S7R3-REV-01: GP linija se prepoznaje po stavci umesto po preradi -- linija sa
+    # obe vrednosti tada preskace GP pravilo.
+    "s7r3-health-gp-po-stavci": (
+        "modProductionHealthCheck.bas",
+        "            If Len(fid) > 0 And Len(pre) > 0 Then\n",
+        "            If Len(fid) > 0 And Len(pre) > 0 And Len(sid) = 0 Then   ' SABOTAZA: GP po stavci\n",
+        "Test_S7R3_HealthIznosNalazi",
+        "S7R3 health 6c: GP linija sa stavkom prijemnice i dalje prolazi GP pravilo (S7R3-REV-01)",
+    ),
     # --- S6 korak 6: F4 odmrznut (plan 14.55 "Korak 6") --------------------
     # Vraceno iz 14.14 (tela u fc06fa77): redosled provera F4, bruto -> neto i
     # vezivanje samo na jednoznacnu zbirnu. Sidra su ista kao tada, osim

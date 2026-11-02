@@ -112,8 +112,10 @@ GRUPE = collections.OrderedDict([
     # linija fakture trazena po broju kao kljucu. Izmereno 0 i pre S7 (merenje 1
     # pre-flight-a); prag 0 pretvara merenje u kapiju. BrojPrijemnice na liniji je
     # snapshot za papir, SEF naziv i izvoz, i njegovo CITANJE nije u grupi.
+    # Zagrada je opciona (review #454, S7R3-REV-03): VBA zove proceduru i bez nje
+    # (`RequireTacnoJedan TBL_FAKTURA_STAVKE, ...`), a taj oblik je merilo propustalo.
     ("fak_broj_prj", re.compile(r"\b(LookupValue|FindRows|LookupActiveID|BuildLookupDict|RowsAktivni"
-                                r"|CheckDuplicate|RequireTacnoJedan)\s*\(\s*TBL_FAKTURA_STAVKE\s*,\s*"
+                                r"|CheckDuplicate|RequireTacnoJedan)\s*\(?\s*TBL_FAKTURA_STAVKE\s*,\s*"
                                 r"(COL_FS_BROJ_PRIJEMNICE\b|\"BrojPrijemnice\")")),
 ])
 # Prosirene grupe: ono sto konstante ne vide (kriticar pokrivenosti, 15.09).

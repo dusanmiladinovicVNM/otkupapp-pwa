@@ -378,6 +378,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S7R3_SaldoKupcaRobni
     Test_S7R3_GpPraviloJedno
     Test_S7R3_UgovorGpIzvor
+    Test_S7R3_HealthIznosNalazi
     Test_S6K6_F4DokumentProlaziLanac
     Test_S6K7_OsirocenePaleteDatumPoDokumentu
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
@@ -9263,6 +9264,102 @@ EH:
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Sub
+
+' S7R3-REV-02 (review #454; KI-077): health 6c meri GP fakturu kroz ISTI citac koji
+' ispisuje (modProductionHealthCheck.FakturaIznosNalazi). Cetiri slucaja iz review-a
+' nad fixture GP fakturom FAK-SLED-GP4, svaki kvar u svojoj TX: ispravna faktura nema
+' nalaz; utovar tvrdi drugu fakturu -> GP_UTOVAR; kolicina linije nije kolicina
+' utovara -> GP_UTOVAR; Iznos zaglavlja nije zbir linija -> IZNOS_DRIFT. Peti je
+' S7R3-REV-01 (fault injection): GP linija koja nosi i stavku prijemnice i dalje
+' prolazi GP pravilo, a ugovor dokumenta je javlja kao LINIJA_DVA_IZVORA.
+' KONTROLA: posle rollback-a nalaza nema.
+' SABOTAZE: s7r3-health-ne-pita-gp-pravilo, s7r3-health-gp-po-stavci.
+Private Sub Test_S7R3_HealthIznosNalazi()
+    Dim tx As clsTransaction, rows As Collection
+    On Error GoTo EH
+    Const FAK As String = "FAK-SLED-GP4"
+    Const SRC As String = "Test_S7R3_HealthIznosNalazi"
+    Dim nA As String, nDruga As String, nKg As String, nIznos As String
+    Dim nStavka As String, uStavka As String, nPosle As String
+
+    nA = S7R3NalaziIznosa(FAK)
+
+    ' 1) utovar tvrdi drugu fakturu
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_UTOVAR
+    Set rows = FindRows(TBL_UTOVAR, COL_UT_ID, "UT-SLED-P")
+    If rows.count = 1 Then RequireUpdateCell TBL_UTOVAR, CLng(rows(1)), COL_UT_FAKTURA_ID, "FAK-DRUGA-S7R3", SRC
+    nDruga = S7R3NalaziIznosa(FAK)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 2) kolicina linije nije kolicina utovara
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    Set rows = FindRows(TBL_FAKTURA_STAVKE, COL_FS_ID, "FST-SLED-P")
+    If rows.count = 1 Then RequireUpdateCell TBL_FAKTURA_STAVKE, CLng(rows(1)), COL_FS_KOLICINA, 40, SRC
+    nKg = S7R3NalaziIznosa(FAK)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 3) Iznos zaglavlja nije zbir GP linija
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURE
+    Set rows = FindRows(TBL_FAKTURE, COL_FAK_ID, FAK)
+    If rows.count = 1 Then RequireUpdateCell TBL_FAKTURE, CLng(rows(1)), COL_FAK_IZNOS, 9999, SRC
+    nIznos = S7R3NalaziIznosa(FAK)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 4) S7R3-REV-01: GP linija nosi i stavku prijemnice, a utovar tvrdi drugu fakturu
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_UTOVAR
+    Set rows = FindRows(TBL_FAKTURA_STAVKE, COL_FS_ID, "FST-SLED-P")
+    If rows.count = 1 Then RequireUpdateCell TBL_FAKTURA_STAVKE, CLng(rows(1)), COL_FS_PRIJEMNICA_STAVKA_ID, "PRS-S7R3-LAZNA", SRC
+    Set rows = FindRows(TBL_UTOVAR, COL_UT_ID, "UT-SLED-P")
+    If rows.count = 1 Then RequireUpdateCell TBL_UTOVAR, CLng(rows(1)), COL_UT_FAKTURA_ID, "FAK-DRUGA-S7R3", SRC
+    nStavka = S7R3NalaziIznosa(FAK)
+    uStavka = S7R2NalaziFakture(FAK)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    nPosle = S7R3NalaziIznosa(FAK)
+
+    AssertEquals "", nA, "S7R3 health 6c: ispravna GP faktura je bez nalaza"
+    AssertTrue InStr(1, ";" & nDruga & ";", ";GP_UTOVAR;", vbTextCompare) > 0, _
+               "S7R3 health 6c: utovar druge fakture je nalaz GP_UTOVAR"
+    AssertTrue InStr(1, ";" & nKg & ";", ";GP_UTOVAR;", vbTextCompare) > 0, _
+               "S7R3 health 6c: kolicina linije koja nije kolicina utovara je nalaz GP_UTOVAR"
+    AssertTrue InStr(1, ";" & nIznos & ";", ";IZNOS_DRIFT;", vbTextCompare) > 0, _
+               "S7R3 health 6c: Iznos koji nije zbir GP linija je nalaz IZNOS_DRIFT"
+    AssertTrue InStr(1, ";" & nStavka & ";", ";GP_UTOVAR;", vbTextCompare) > 0, _
+               "S7R3 health 6c: GP linija sa stavkom prijemnice i dalje prolazi GP pravilo (S7R3-REV-01)"
+    AssertTrue InStr(1, ";" & uStavka & ";", ";LINIJA_DVA_IZVORA;", vbTextCompare) > 0, _
+               "S7R3 ugovor: GP linija sa stavkom prijemnice je nalaz LINIJA_DVA_IZVORA"
+    AssertEquals "", nPosle, "S7R3 health 6c: KONTROLA -- posle rollback-a nalaza nema"
+    Exit Sub
+EH:
+    LogFatal SRC, Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' Kodovi nalaza health 6c za jednu fakturu, spojeni ";" (prazno = bez nalaza).
+Private Function S7R3NalaziIznosa(ByVal fid As String) As String
+    Dim n As Variant, s As String
+    For Each n In modProductionHealthCheck.FakturaIznosNalazi()
+        If StrComp(CStr(n(1)), fid, vbTextCompare) = 0 Then
+            If Len(s) > 0 Then s = s & ";"
+            s = s & CStr(n(0))
+        End If
+    Next n
+    S7R3NalaziIznosa = s
+End Function
 
 ' Greska gradnje SEF DTO-a kao ishod ("" = DTO je izgradjen), ne pad testa.
 Private Function S7R3GreskaDto(ByVal fid As String) As String
