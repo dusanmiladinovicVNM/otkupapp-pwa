@@ -354,26 +354,33 @@ Private Sub UtsPakovanja(ByVal kol As Double, ByVal neto As Double, _
     outKes = PakovanjaZaKg(kol, neto, kes, True, "KES", tipS)
 End Sub
 
-' Broj AKTIVNIH (nestorniranih, neosirocenih) faktura-stavki koje
-' tvrde ovaj utovar. KANONSKO pravilo (revizija #10 B2) koje dele
-' CreateFakturaIzUtovara (re-fakturisanje kontradiktornog utovara je
-' dupla prodaja) i modStorno.StornoUtovar (storno utovara cija roba
-' je na aktivnoj fakturi = dupla zaliha) -- header marker sam nije
-' dovoljan dokaz "nefakturisanosti".
+' Broj AKTIVNIH faktura-stavki koje tvrde ovaj utovar. KANONSKO pravilo
+' (revizija #10 B2) koje dele CreateFakturaIzUtovara (re-fakturisanje
+' kontradiktornog utovara je dupla prodaja) i modStorno.StornoUtovar (storno
+' utovara cija roba je na aktivnoj fakturi = dupla zaliha) -- header marker
+' utovara sam nije dovoljan dokaz "nefakturisanosti".
+'
+' Linija nema svoj storno (FAK-ODL-03, S7 rez 2): aktivna je kad njena faktura
+' nije stornirana (modFaktura.AktivnostFaktura). Linija na fakturu koje nema ili
+' je dvosmislena se BROJI -- kapija je fail-closed, jer bi tiho preskocena linija
+' pustila duplu prodaju.
 Public Function AktivnihFstZaUtovar(ByVal utovarID As String) As Long
     Const SRC As String = "modUtovar.AktivnihFstZaUtovar"
     Dim fs As Variant, i As Long
-    Dim cUt As Long, cSt As Long, cOs As Long
+    Dim cUt As Long, cF As Long
+    Dim aktivnaFak As Object, fid As String, aktivna As Boolean
     fs = GetTableData(TBL_FAKTURA_STAVKE)
     If Not IsArray(fs) Then Exit Function
     cUt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
     If cUt = 0 Then Exit Function    ' sveska pre GP nadogradnje
-    cSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC)
-    cOs = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD, SRC)
+    cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    Set aktivnaFak = modFaktura.AktivnostFaktura()
     For i = 1 To UBound(fs, 1)
         If Trim$(CStr(nz(fs(i, cUt)))) = Trim$(utovarID) Then
-            If UCase$(Trim$(CStr(nz(fs(i, cSt))))) <> "DA" _
-               And Len(Trim$(CStr(nz(fs(i, cOs))))) = 0 Then
+            fid = Trim$(CStr(nz(fs(i, cF))))
+            aktivna = True
+            If aktivnaFak.Exists(fid) Then aktivna = CBool(aktivnaFak(fid))
+            If aktivna Then
                 AktivnihFstZaUtovar = AktivnihFstZaUtovar + 1
             End If
         End If
@@ -1592,7 +1599,7 @@ Private Function CreateFakturaIzUtovara(ByVal utovarID As String, _
 
     If AppendRow(TBL_FAKTURE, Array( _
         fakturaID, brojFakture, Date, kupacID, ukupno, STATUS_NEPLACENO, _
-        Empty, "", "", WF_LOCAL_FINALIZED, "", "", "", Empty, Empty, _
+        Empty, "", WF_LOCAL_FINALIZED, "", "", "", Empty, Empty, _
         "", "", "", 0, "Ne", "")) <= 0 Then
         Err.Raise vbObjectError + 1772, SRC, "AppendRow nije uspeo za tblFakture."
     End If
@@ -1602,7 +1609,7 @@ Private Function CreateFakturaIzUtovara(ByVal utovarID As String, _
         stavkaNum = stavkaNum + 1
         rowStavke = AppendRow(TBL_FAKTURA_STAVKE, Array( _
             fakturaID & "-" & Format$(stavkaNum, "00"), fakturaID, "", _
-            CDbl(sv(1)), CDbl(sv(2)), "", "", "", ""))
+            CDbl(sv(1)), CDbl(sv(2)), "", ""))
         If rowStavke <= 0 Then
             Err.Raise vbObjectError + 1773, SRC, _
                       "AppendRow nije uspeo za tblFakturaStavke."

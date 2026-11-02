@@ -155,8 +155,6 @@
         "Cena",
         "Klasa",
         "BrojPrijemnice",
-        "Stornirano",
-        "OsirocenoOd",
         "CreatedAt",
         "CreatedBy",
         "ModifiedAt",
@@ -180,7 +178,6 @@
         "Status",
         "DatumPlacanja",
         "Stornirano",
-        "OsirocenoOd",
         "SEFWorkflowState",
         "SEFStatus",
         "SEFDocumentId",
@@ -196,12 +193,7 @@
         "CreatedAt",
         "CreatedBy",
         "ModifiedAt",
-        "ModifiedBy",
-        "IspravkaOd",
-        "ZamenjenSa",
-        "CorrectionID",
-        "IzdatoStatus",
-        "GeneracijaID"
+        "ModifiedBy"
       ]
     },
     {

@@ -10103,6 +10103,31 @@ reza se time proširuje:
 
 **GO za kod.**
 
+#### S7 rez 2 — kod (02.11.2026, `docs/STANJE_REFAKTORA.md` stavka 259)
+
+Obim je po ugovoru prihvatanja. Pun spisak je u stavci 259; ovde su samo odstupanja i šta je odlučeno usput.
+
+- **Čitač aktivnosti je jedan:** `modFaktura.AktivnostFaktura` (FakturaID → aktivna/stornirana, samo za ID koji
+  se javlja tačno jednom), uz `LinijaFaktureAktivna`. Nepoznatu ili dvosmislenu fakturu čitalac tumači sam:
+  - strog čitač linija je odbija po imenu (1766/1767, kao do sada);
+  - kapija utovara je broji kao aktivnu (fail-closed);
+  - udeo uplate i health je preskaču.
+- **SEF mapper** gubi filter linija, a dobija odbijanje neaktivne fakture pre prve linije. Defense-in-depth iz
+  AUD-031 tako ostaje i za pozivaoca mimo `ValidateFakturaForSEF`.
+- **Sabotaže koje su gubile sidro su zamenjene, ne obrisane.**
+  - `s6k5-storno-fakture-ne-gasi-linije` je postala `s7r2-aktivnost-ignorise-storno`: kvari se čitač, na istoj
+    tvrdnji;
+  - `s6k5-linija-nad-storniranom-fakturom` je postala `s7r2-citac-linija-ne-pita-zaglavlje`, na novoj tvrdnji
+    slučaja 3.
+- **Crveni prolaz nad starim kodom meri samo testove koji ne zovu nov API:**
+  - `Test_S7R2_StornoFakturePiseSamoZaglavlje` i `Test_S7R2_AktivnostLinijeIzZaglavlja`;
+  - slučaj 3 u `Test_S6K5_LinijaBezFaktureJeKvar`;
+  - rogue linija u testu GP fakture.
+
+  `Test_S7R2_UgovorLinijaFakture` i `Test_S7R2_FakturaStareKoloneSelfHeal` zovu `UgovorLinijaFaktureNalazi` i
+  `ObrisiStareKoloneFakture`, pa se nad starim kodom ne kompajliraju. Za njih se crveni prolaz pušta bez njih, a
+  dokaz su sabotaže.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

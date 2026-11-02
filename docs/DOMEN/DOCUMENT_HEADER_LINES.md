@@ -994,15 +994,18 @@ Prijemnica.KupacID == Faktura.KupacID
 
 Imena (S6 korak 5, plan §14.55 „Korak 5"):
 
-- **`FAK-LIN-01`** — stavka prijemnice je na najviše jednoj AKTIVNOJ liniji fakture
-  (`Stornirano <> Da`). Drži ga pisac `CreateFaktura` pre prvog upisa, a čitač
-  `modFaktura.FakturisanostPoPrijemnici` ga proverava fail-closed.
+- **`FAK-LIN-01`** — stavka prijemnice je na najviše jednoj AKTIVNOJ liniji fakture.
+  Od S7 reza 2 (`FAK-ODL-03`) linija nema svoj storno: aktivna je ako i samo ako je
+  aktivna njena faktura (`modFaktura.AktivnostFaktura`). Drži ga pisac
+  `CreateFaktura` pre prvog upisa, a čitač `modFaktura.FakturisanostPoPrijemnici` ga
+  proverava fail-closed.
 - **`FAK-LIN-02`** — aktivna linija prijemnice nosi `PrijemnicaStavkaID` postojeće
-  stavke, i to stavke dokumenta koji nosi njen `PrijemnicaID`. Nosi i neprazan
-  `FakturaID` fakture čije zaglavlje postoji **tačno jednom** i **nije stornirano**
-  (review `#439` P2-2): linija bez žive fakture bi stavku zauzimala za pisca, a
-  mreža bi je nudila kao slobodnu. GP linija (bez `PrijemnicaID`) nije linija
-  prijemnice.
+  stavke, i to stavke dokumenta koji nosi njen `PrijemnicaID`. Svaka linija prijemnice
+  nosi i neprazan `FakturaID` fakture čije zaglavlje postoji **tačno jednom** (review
+  `#439` P2-2): linija bez fakture bi stavku zauzimala za pisca, a mreža bi je nudila
+  kao slobodnu. „Aktivna linija nad storniranom fakturom" je do S7 reza 2 bila kvar
+  (1768), a od tada je nemoguća po konstrukciji. GP linija (bez `PrijemnicaID`) nije
+  linija prijemnice.
 - **`FAK-LIN-03`** — fakturisanost se IZVODI iz aktivnih linija: stavka je
   fakturisana ⇔ ima aktivnu liniju, a dokument je `NE` / `DELIMIČNO` / `DA`. Keš
   na zaglavlju se ne čita ni piše; storno fakture time sam vraća dokument u `NE`.

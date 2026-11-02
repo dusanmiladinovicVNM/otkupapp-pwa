@@ -81,6 +81,15 @@ meri tu kapiju). Važi i za GP linije (`modUtovar`). Storno GP fakture i dalje o
 (`modStorno.ReleaseUtovarFromFaktura:1692`) u istoj transakciji: linija se ne piše, marker utovara
 da (`S7-REV-01`, plan §14.57).
 
+Urađeno u S7 rezu 2 (stavka 259):
+
+- aktivnost zaglavlja čita jedan čitač, `modFaktura.AktivnostFaktura`, i pitaju ga svi čitaoci
+  aktivnosti linije;
+- `tblFakturaStavke` je u `BEZ_STORNA`;
+- storno fakture kroz `OslobodiUtovareFakture` dira samo GP utovar;
+- zatečena sveska gubi kolone kroz `modSetup.ObrisiStareKoloneFakture`;
+- ugovor dokumenta (health 3) meri `modFaktura.UgovorLinijaFaktureNalazi`.
+
 **`FAK-ODL-04` — saldo kupca ostaje robni.** C-003 i C-004 ostaju vrednost stavki
 prijemnica minus uplate kupca (prevedeno u S6 koraku 3, `modIzvestaj.ReportSaldoKupci:2687`).
 „Kartica kupca" iz tabele slajsova nije postojeća sposobnost (KARTICA postoji samo za

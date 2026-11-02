@@ -9333,11 +9333,14 @@ SABOTAZE = {
         "Test_S6K5_OkvirOdbijaFakturisanuPreZapisa",
         "S6K5 okvir: RESI KASNIJE i dalje pravi zapis",
     ),
-    # R6: storno fakture koji ne stornira linije ostavlja dokument fakturisan.
-    "s6k5-storno-fakture-ne-gasi-linije": (
-        "modStorno.bas",
-        "            MarkRowStornirano TBL_FAKTURA_STAVKE, i, SRC\n",
-        "            ' SABOTAZA: storno fakture ne stornira linije\n",
+    # R6: posle storna fakture dokument je nefakturisan. Od S7 reza 2 to drzi CITAC
+    # (linija nema svoj storno, FAK-ODL-03): jedini citac aktivnosti zaglavlja koji
+    # storniranu fakturu vidi kao aktivnu ostavlja dokument fakturisan. Do reza 2 je
+    # ovde stajala s6k5-storno-fakture-ne-gasi-linije (pisac linija ne postoji).
+    "s7r2-aktivnost-ignorise-storno": (
+        "modFaktura.bas",
+        "                d(fid) = (UCase$(Trim$(NzToText(fk(i, cSt)))) <> \"DA\")\n",
+        "                d(fid) = True   ' SABOTAZA: stornirana faktura je aktivna\n",
         "Test_S6K5_StornoFakturePaPrijemnice",
         "S6K5 storno: posle storna fakture dokument je NEFAKTURISAN",
     ),
@@ -9363,24 +9366,27 @@ SABOTAZE = {
     # padne na drugoj (1767), pa tvrdnja meri IME razloga, ne samo pad.
     "s6k5-linija-bez-fakture-prolazi": (
         "modFaktura.bas",
-        "                If Len(fid) = 0 Then\n",
-        "                If False Then   ' SABOTAZA: linija bez FakturaID-a prolazi\n",
+        "            If Len(fid) = 0 Then\n",
+        "            If False Then   ' SABOTAZA: linija bez FakturaID-a prolazi\n",
         "Test_S6K5_LinijaBezFaktureJeKvar",
         "S6K5 kvar: aktivna linija bez FakturaID-a obara citac PO IMENU",
     ),
     "s6k5-linija-na-nepostojecu-fakturu": (
         "modFaktura.bas",
-        "                If nFak <> 1 Then\n",
-        "                If False Then   ' SABOTAZA: linija na fakturu koje nema prolazi\n",
+        "            If nFak <> 1 Then\n",
+        "            If False Then   ' SABOTAZA: linija na fakturu koje nema prolazi\n",
         "Test_S6K5_LinijaBezFaktureJeKvar",
         "S6K5 kvar: linija na fakturu koje nema obara citac PO IMENU",
     ),
-    "s6k5-linija-nad-storniranom-fakturom": (
+    # S7 rez 2 (FAK-ODL-03): aktivna linija nad storniranom fakturom vise nije kvar
+    # (1768) nego nemoguce stanje -- citac pita ZAGLAVLJE. Citac koji ga ne pita drzi
+    # stavku zauzetom posle storna. Do reza 2: s6k5-linija-nad-storniranom-fakturom.
+    "s7r2-citac-linija-ne-pita-zaglavlje": (
         "modFaktura.bas",
-        "                If UCase$(Trim$(NzToText(stornoFak(fid)))) = \"DA\" Then\n",
-        "                If False Then   ' SABOTAZA: linija nad storniranom fakturom prolazi\n",
+        "            If LinijaFaktureAktivna(aktivnaFak, fid) Then\n",
+        "            If True Then   ' SABOTAZA: citac linija ne pita zaglavlje\n",
         "Test_S6K5_LinijaBezFaktureJeKvar",
-        "S6K5 kvar: aktivna linija nad storniranom fakturom obara citac PO IMENU",
+        "S7R2: posle storna zaglavlja mreza stavku nudi kao slobodnu",
     ),
     # P2-1: zajednicka faktura -- lista pripise ceo ostatak racuna svakom dokumentu.
     "s6k5-ostatak-zajednicke": (
@@ -9480,6 +9486,59 @@ SABOTAZE = {
         "            If Len(fakID) = 0 Then fakID = LookupActiveID(TBL_FAKTURE, COL_FAK_BROJ, broj, COL_FAK_ID)   ' SABOTAZA\n",
         "Test_S7R1_StornoBezIDNeTraziPoBroju",
         "S7R1 bez ID: F8 sa brojem a bez FakturaID-a ne stornira fakturu",
+    ),
+    # --- S7 rez 2: linija fakture bez sopstvenog storna (FAK-ODL-03, FAK-ODL-07;
+    # plan 14.57 "Pre-flight S7 rez 2"). Ugovor prihvatanja: sest s7r2-* uz dve
+    # zamene iznad (s7r2-aktivnost-ignorise-storno, s7r2-citac-linija-ne-pita-zaglavlje)
+    # i presidrena GP sidra (storno-gp-faktura-ne-oslobadja-utovar,
+    # utovar-gp-refakt-aktivna-fst), koja idu u isti dokaz.
+    # Kapija utovara koja ne pita zaglavlje drzi utovar stornirane fakture.
+    "s7r2-utovar-ne-pita-zaglavlje": (
+        "modUtovar.bas",
+        "            If aktivnaFak.Exists(fid) Then aktivna = CBool(aktivnaFak(fid))\n",
+        "            ' SABOTAZA: kapija utovara ne pita zaglavlje\n",
+        "Test_S7R2_AktivnostLinijeIzZaglavlja",
+        "S7R2 aktivnost: posle storna zaglavlja GP linija ne drzi utovar",
+    ),
+    # S7-REV-01 (R2-4): utovar koji tvrdi DRUGU fakturu se ne dira. Tvrdnja postoji od
+    # revizije #10 B3, sabotaza je dodata u rezu 2.
+    "s7r2-storno-oslobadja-tudji-utovar": (
+        "modStorno.bas",
+        "    If StrComp(tvrdi, Trim$(fakturaID), vbTextCompare) <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: storno oslobadja utovar druge fakture\n",
+        "T_UtovarB_StornoKapije",
+        "korumpirana stavka tudje fakture NE oslobadja utovar",
+    ),
+    # N5: ugovor dokumenta fakture (health 3).
+    "s7r2-ugovor-linija-bez-fakture": (
+        "modFaktura.bas",
+        "                res.Add Array(\"LINIJA_BEZ_FAKTURE\", sid, fid)\n",
+        "                ' SABOTAZA: linija bez zaglavlja nije nalaz\n",
+        "Test_S7R2_UgovorLinijaFakture",
+        "S7R2 ugovor: linija na fakturu koje nema je nalaz LINIJA_BEZ_FAKTURE",
+    ),
+    "s7r2-ugovor-faktura-bez-linija": (
+        "modFaktura.bas",
+        "            If Not saLinijom.Exists(CStr(k)) Then res.Add Array(\"FAKTURA_BEZ_LINIJA\", \"\", CStr(k))\n",
+        "            ' SABOTAZA: aktivna faktura bez linija nije nalaz\n",
+        "Test_S7R2_UgovorLinijaFakture",
+        "S7R2 ugovor: aktivna faktura bez linija je nalaz FAKTURA_BEZ_LINIJA",
+    ),
+    # Zatecena sveska: stara kolona u SREDINI ostaje, pa pozicioni upis puca.
+    "s7r2-selfheal-ne-brise": (
+        "modSetup.bas",
+        "    ObrisiKolonuAko TBL_FAKTURA_STAVKE, \"Stornirano\"\n",
+        "    ' SABOTAZA: linijski Stornirano ostaje u svesci\n",
+        "Test_S7R2_FakturaStareKoloneSelfHeal",
+        "S7R2 self-heal: nijedna stara kolona fakture nije ostala",
+    ),
+    # FAK-ODL-07: EnsureSledljivostSchema bi trace kolone vratila NA KRAJ.
+    "s7r2-sledljivost-vraca-trace": (
+        "modSetup.bas",
+        "    tbls = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, TBL_NOVAC)\n",
+        "    tbls = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, TBL_FAKTURE, TBL_NOVAC)   ' SABOTAZA\n",
+        "Test_S7R2_FakturaStareKoloneSelfHeal",
+        "S7R2 self-heal: EnsureSledljivostSchema ne vraca trace kolone fakturi",
     ),
     # --- S6 korak 6: F4 odmrznut (plan 14.55 "Korak 6") --------------------
     # Vraceno iz 14.14 (tela u fc06fa77): redosled provera F4, bruto -> neto i

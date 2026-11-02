@@ -912,68 +912,11 @@ Private Function GldFakture() As String
         End If
     End If
 
+    ' Probe "osirocena" i "osirocenih stavki" su obrisane u S7 rezu 2: OsirocenoOd vise
+    ' nije u kanonu ni zaglavlja ni linije (FAK-ODL-03), a stanje je nemoguce po
+    ' konstrukciji -- fakturisana prijemnica se ne stornira (S6 korak 4).
     GldFakture = "FAKTURA" & vbLf & _
-        "  iznos           " & Fmt2(iznos) & vbLf & _
-        "  osirocena       " & GldFakturaOsirocena() & vbLf & _
-        "  osirocenih stavki " & CStr(GldOsirocenihStavki()) & vbLf
-End Function
-
-' Izdata faktura se posle storna svoje prijemnice NE brise -- markira se kao
-' osirocena (COL_OSIROCENO_OD) i trazi korekciju. Bez ovoga bi D2 ostao zelen i
-' kad bi neko obrisao MarkFakturaOrphaned / MarkFakturaStavkeOrphaned.
-Private Function GldFakturaOsirocena() As String
-    Dim data As Variant
-    Dim cID As Long, cOs As Long
-    Dim i As Long, k As Long
-
-    GldFakturaOsirocena = "-"
-    If m_Fak.count = 0 Then Exit Function
-
-    data = GetTableData(TBL_FAKTURE)
-    If Not IsArray(data) Then Exit Function
-
-    cID = RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, "GldFakturaOsirocena")
-    cOs = GetColumnIndex(TBL_FAKTURE, COL_OSIROCENO_OD)
-    If cOs = 0 Then Exit Function
-
-    GldFakturaOsirocena = "NE"
-    For i = 1 To UBound(data, 1)
-        For k = 1 To m_Fak.count
-            If StrComp(Trim$(NzToText(data(i, cID))), Trim$(CStr(m_Fak(k))), _
-                       vbTextCompare) = 0 Then
-                If Len(Trim$(NzToText(data(i, cOs)))) > 0 Then
-                    GldFakturaOsirocena = "DA"
-                    Exit Function
-                End If
-            End If
-        Next k
-    Next i
-End Function
-
-Private Function GldOsirocenihStavki() As Long
-    Dim data As Variant
-    Dim cFak As Long, cOs As Long
-    Dim i As Long, k As Long
-
-    If m_Fak.count = 0 Then Exit Function
-
-    data = GetTableData(TBL_FAKTURA_STAVKE)
-    If Not IsArray(data) Then Exit Function
-
-    cFak = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, "GldOsirocenihStavki")
-    cOs = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD)
-    If cOs = 0 Then Exit Function
-
-    For i = 1 To UBound(data, 1)
-        If Len(Trim$(NzToText(data(i, cOs)))) > 0 Then
-            For k = 1 To m_Fak.count
-                If StrComp(Trim$(NzToText(data(i, cFak))), Trim$(CStr(m_Fak(k))), _
-                           vbTextCompare) = 0 Then
-                    GldOsirocenihStavki = GldOsirocenihStavki + 1
-                End If
-            Next k
-        End If
-    Next i
+        "  iznos           " & Fmt2(iznos) & vbLf
 End Function
 
 

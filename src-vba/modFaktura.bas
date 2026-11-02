@@ -310,7 +310,6 @@ Private Function CreateFaktura(ByVal kupacID As String, _
         STATUS_NEPLACENO, _
         Empty, _
         "", _
-        "", _
         WF_LOCAL_FINALIZED, _
         "", _
         "", _
@@ -349,9 +348,7 @@ Private Function CreateFaktura(ByVal kupacID As String, _
             CDbl(v(2)), _
             CDbl(v(3)), _
             CStr(v(4)), _
-            CStr(v(5)), _
-            "", _
-            "" _
+            CStr(v(5)) _
         ))
 
         If fsRow <= 0 Then
@@ -968,15 +965,18 @@ End Function
 ' AKTIVNE LINIJE PRIJEMNICE PO STAVCI: UCase(PrijemnicaStavkaID) ->
 ' Array(FakturaID, PrijemnicaID, PrijemnicaStavkaID). Linija prijemnice je red
 ' tblFakturaStavke sa nepraznim PrijemnicaID; GP linija (prerada, utovar) ga nema i
-' ovde ne ulazi. Aktivna = Stornirano <> Da.
+' ovde ne ulazi. Linija nema svoj storno (FAK-ODL-03, S7 rez 2): aktivna je ako i
+' samo ako je aktivna njena faktura (AktivnostFaktura).
 '
 ' FAIL-CLOSED, jer na ovom recniku stoje kapija pisca i kapija storna, a mreza po
 ' njemu nudi stavke. KVAR koji dize gresku po imenu:
+'   - linija bez FakturaID-a, ili na fakturu koje nema (ili je dvosmislena)
+'     (FAK-LIN-02, review #439 P2-2) -- njena aktivnost se ne moze znati, a tiho
+'     preskocena bi stavku zauzimala za pisca dok je mreza nudi kao slobodnu;
 '   - aktivna linija bez PrijemnicaStavkaID-a (FAK-LIN-02);
-'   - stavka na dve aktivne linije (FAK-LIN-01);
-'   - aktivna linija bez FakturaID-a, na fakturu koje nema (ili je dvosmislena), ili
-'     nad STORNIRANOM fakturom (FAK-LIN-02, review #439 P2-2) -- takva linija bi
-'     stavku zauzimala za pisca, a mreza bi je nudila kao slobodnu.
+'   - stavka na dve aktivne linije (FAK-LIN-01).
+' Aktivna linija nad STORNIRANOM fakturom (do S7 reza 2 greska 1768) vise ne moze
+' da postoji: storno fakture je storno njenih linija.
 ' Starog oblika nema (nema produkcionih podataka), pa "preskoci red koji ne
 ' razumem" ovde ne postoji -- preskocen red bi bio fakturisana stavka koju niko ne
 ' vidi.
@@ -990,47 +990,41 @@ Public Function FakturaLinijePoStavci() As Object
     fs = GetTableData(TBL_FAKTURA_STAVKE)
     If Not IsArray(fs) Then Exit Function
 
-    Dim cF As Long, cP As Long, cS As Long, cSt As Long
+    Dim cF As Long, cP As Long, cS As Long
     cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
     cP = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
     cS = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_STAVKA_ID, SRC)
-    cSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC)
 
     ' Zaglavlja faktura: koliko puta se ID javlja (sirova tabela, kao FindRows) i
-    ' da li je storniran.
-    Dim brojFak As Object, stornoFak As Object
+    ' da li je aktivno.
+    Dim brojFak As Object, aktivnaFak As Object
     Set brojFak = BrojacIdova(TBL_FAKTURE, COL_FAK_ID)
-    Set stornoFak = BuildLookupDict(TBL_FAKTURE, COL_FAK_ID, COL_STORNIRANO)
+    Set aktivnaFak = AktivnostFaktura()
 
     Dim i As Long, pid As String, sid As String, fid As String, k As String
     Dim nFak As Long
     For i = 1 To UBound(fs, 1)
         pid = Trim$(NzToText(fs(i, cP)))
         If Len(pid) > 0 Then
-            If UCase$(Trim$(NzToText(fs(i, cSt)))) <> "DA" Then
-                fid = Trim$(NzToText(fs(i, cF)))
-                sid = Trim$(NzToText(fs(i, cS)))
+            fid = Trim$(NzToText(fs(i, cF)))
+            sid = Trim$(NzToText(fs(i, cS)))
+            If Len(fid) = 0 Then
+                Err.Raise vbObjectError + 1766, SRC, _
+                          "Linija fakture bez FakturaID-a: PrijemnicaStavkaID=" & sid & _
+                          ", PrijemnicaID=" & pid & ". Linija prijemnice pripada fakturi (FAK-LIN-02)."
+            End If
+            nFak = 0
+            If brojFak.Exists(fid) Then nFak = CLng(brojFak(fid))
+            If nFak <> 1 Then
+                Err.Raise vbObjectError + 1767, SRC, _
+                          "Linija fakture pokazuje na fakturu koje nema ili je dvosmislena: FakturaID=" & _
+                          fid & " (zaglavlja: " & CStr(nFak) & "), PrijemnicaStavkaID=" & sid & " (FAK-LIN-02)."
+            End If
+            If LinijaFaktureAktivna(aktivnaFak, fid) Then
                 If Len(sid) = 0 Then
                     Err.Raise vbObjectError + 1760, SRC, _
                               "Aktivna linija fakture bez PrijemnicaStavkaID-a: FakturaID=" & fid & _
                               ", PrijemnicaID=" & pid & ". Linija prijemnice nosi svoju stavku (FAK-LIN-02)."
-                End If
-                If Len(fid) = 0 Then
-                    Err.Raise vbObjectError + 1766, SRC, _
-                              "Aktivna linija fakture bez FakturaID-a: PrijemnicaStavkaID=" & sid & _
-                              ", PrijemnicaID=" & pid & ". Linija prijemnice pripada fakturi (FAK-LIN-02)."
-                End If
-                nFak = 0
-                If brojFak.Exists(fid) Then nFak = CLng(brojFak(fid))
-                If nFak <> 1 Then
-                    Err.Raise vbObjectError + 1767, SRC, _
-                              "Linija fakture pokazuje na fakturu koje nema ili je dvosmislena: FakturaID=" & _
-                              fid & " (zaglavlja: " & CStr(nFak) & "), PrijemnicaStavkaID=" & sid & " (FAK-LIN-02)."
-                End If
-                If UCase$(Trim$(NzToText(stornoFak(fid)))) = "DA" Then
-                    Err.Raise vbObjectError + 1768, SRC, _
-                              "Aktivna linija fakture nad storniranom fakturom: FakturaID=" & fid & _
-                              ", PrijemnicaStavkaID=" & sid & ". Storno fakture stornira i linije (FAK-LIN-02)."
                 End If
                 k = UCase$(sid)
                 If d.Exists(k) Then
@@ -1042,6 +1036,111 @@ Public Function FakturaLinijePoStavci() As Object
             End If
         End If
     Next i
+End Function
+
+' AKTIVNOST FAKTURE: FakturaID -> True (aktivna) / False (stornirana).
+'
+' Linija fakture nema svoj storno (FAK-ODL-03, S7 rez 2): aktivna je ako i samo
+' ako je aktivna njena faktura. Ovo je JEDINI citac te cinjenice -- pitaju ga citac
+' linija po stavci, ugovor dokumenta (health 3), kapija utovara, udeo uplate po
+' vrsti i health provera aktivnih referenci. Do reza 2 je svaki od njih citao
+' Stornirano na liniji.
+'
+' Kljuc ima samo ID koji se u tblFakture javlja TACNO JEDNOM. Faktura koje nema ili
+' je dvosmislena nije ni aktivna ni stornirana, pa citalac sam bira sta to za
+' njega znaci: strog citac linija je odbija po imenu, kapija utovara je broji kao
+' aktivnu (fail-closed), a izvestaj je preskace.
+Public Function AktivnostFaktura() As Object
+    Const SRC As String = "AktivnostFaktura"
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set AktivnostFaktura = d
+
+    Dim fk As Variant
+    fk = GetTableData(TBL_FAKTURE)
+    If Not IsArray(fk) Then Exit Function
+
+    Dim cID As Long, cSt As Long
+    cID = RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, SRC)
+    cSt = RequireColumnIndex(TBL_FAKTURE, COL_STORNIRANO, SRC)
+
+    Dim brojFak As Object
+    Set brojFak = BrojacIdova(TBL_FAKTURE, COL_FAK_ID)
+
+    Dim i As Long, fid As String
+    For i = 1 To UBound(fk, 1)
+        fid = Trim$(NzToText(fk(i, cID)))
+        If Len(fid) > 0 Then
+            If CLng(brojFak(fid)) = 1 Then
+                d(fid) = (UCase$(Trim$(NzToText(fk(i, cSt)))) <> "DA")
+            End If
+        End If
+    Next i
+End Function
+
+' Linija je aktivna kad njena faktura postoji tacno jednom i nije stornirana.
+' Faktura koje nema ili je dvosmislena daje False -- citalac kome to nije dovoljno
+' (strog citac, kapija) proverava ID sam, pre ovog pitanja.
+Public Function LinijaFaktureAktivna(ByVal aktivnost As Object, ByVal fakturaID As String) As Boolean
+    If aktivnost Is Nothing Then Exit Function
+    If Not aktivnost.Exists(Trim$(fakturaID)) Then Exit Function
+    LinijaFaktureAktivna = CBool(aktivnost(Trim$(fakturaID)))
+End Function
+
+' UGOVOR DOKUMENTA FAKTURE (S7 rez 2, N5). Nalaz je Array(kod, StavkaID, FakturaID):
+'   LINIJA_BEZ_FAKTURE -- linija pokazuje na fakturu koje nema ili je dvosmislena;
+'   FAKTURA_BEZ_LINIJA -- aktivna faktura nema nijednu liniju (StavkaID prazan);
+'   LINIJA_DVA_IZVORA  -- aktivna linija nosi i PrijemnicaID i PreradaID;
+'   LINIJA_BEZ_IZVORA  -- aktivna linija nema ni PrijemnicaID ni PreradaID.
+' Izvor je TACNO JEDAN od dva, isto pravilo kao SEF mapper (BuildSEFInvoiceDto).
+' Linija stornirane fakture se ne meri dalje od zaglavlja: storno je dokument-level.
+' Stavku prijemnice (FAK-LIN-01/-02) meri FakturaLinijePoStavci, ne ovaj citac.
+' Read-only; zove ga health check 3.
+Public Function UgovorLinijaFaktureNalazi() As Collection
+    Const SRC As String = "UgovorLinijaFaktureNalazi"
+    Dim res As Collection
+    Set res = New Collection
+    Set UgovorLinijaFaktureNalazi = res
+
+    Dim aktivnaFak As Object, saLinijom As Object
+    Set aktivnaFak = AktivnostFaktura()
+    Set saLinijom = CreateObject("Scripting.Dictionary")
+
+    Dim fs As Variant
+    fs = GetTableData(TBL_FAKTURA_STAVKE)
+    If IsArray(fs) Then
+        Dim cID As Long, cF As Long, cP As Long, cPre As Long
+        cID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_ID, SRC)
+        cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+        cP = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
+        cPre = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID, SRC)
+
+        Dim i As Long, sid As String, fid As String
+        Dim imaPrj As Boolean, imaPre As Boolean
+        For i = 1 To UBound(fs, 1)
+            sid = Trim$(NzToText(fs(i, cID)))
+            fid = Trim$(NzToText(fs(i, cF)))
+            If Not aktivnaFak.Exists(fid) Then
+                res.Add Array("LINIJA_BEZ_FAKTURE", sid, fid)
+            ElseIf CBool(aktivnaFak(fid)) Then
+                saLinijom(fid) = True
+                imaPrj = (Len(Trim$(NzToText(fs(i, cP)))) > 0)
+                imaPre = (Len(Trim$(NzToText(fs(i, cPre)))) > 0)
+                If imaPrj And imaPre Then
+                    res.Add Array("LINIJA_DVA_IZVORA", sid, fid)
+                ElseIf Not imaPrj And Not imaPre Then
+                    res.Add Array("LINIJA_BEZ_IZVORA", sid, fid)
+                End If
+            End If
+        Next i
+    End If
+
+    Dim k As Variant
+    For Each k In aktivnaFak.keys
+        If CBool(aktivnaFak(k)) Then
+            If Not saLinijom.Exists(CStr(k)) Then res.Add Array("FAKTURA_BEZ_LINIJA", "", CStr(k))
+        End If
+    Next k
 End Function
 
 ' FAKTURISANOST SVAKOG DOKUMENTA PRIJEMNICE: PrijemnicaID ->

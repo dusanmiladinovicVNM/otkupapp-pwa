@@ -242,53 +242,27 @@ EH:
 End Sub
 
 ' ============================================================
-' CHECK 3: FAKTURA STAVKE REFERENCES
+' CHECK 3: UGOVOR DOKUMENTA FAKTURE (S7 rez 2, N5)
 ' ============================================================
-
+'
+' Do S7 reza 2 je provera za SVAKU liniju trazila aktivnu fakturu i aktivnu
+' prijemnicu -- pa su GP linija (izvor je prerada, ne prijemnica) i svaka linija
+' stornirane fakture javljale "missing". Linija nema svoj storno (FAK-ODL-03), pa
+' se meri ugovor DOKUMENTA, kroz isti citac koji meri test
+' (modFaktura.UgovorLinijaFaktureNalazi). Stavku prijemnice meri check 4. Read-only.
 Private Sub Check_FakturaStavkeReferences()
     On Error GoTo EH
 
-    Dim data As Variant
-    data = GetTableData(TBL_FAKTURA_STAVKE)
+    Dim nalazi As Collection
+    Set nalazi = modFaktura.UgovorLinijaFaktureNalazi()
 
-    If IsEmpty(data) Then
-        HealthWarn "Faktura stavke references", "tblFakturaStavke is empty."
-        Exit Sub
-    End If
+    Dim n As Variant
+    For Each n In nalazi
+        HealthFail "Faktura krsi ugovor dokumenta: " & CStr(n(0)), _
+                   "StavkaID=" & CStr(n(1)) & " FakturaID=" & CStr(n(2))
+    Next n
 
-    Dim colStavkaID As Long
-    Dim colFakturaID As Long
-    Dim colPrijemnicaID As Long
-
-    colStavkaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, "StavkaID", "Check_FakturaStavkeReferences")
-    colFakturaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, "FakturaID", "Check_FakturaStavkeReferences")
-    colPrijemnicaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, "PrijemnicaID", "Check_FakturaStavkeReferences")
-
-    Dim i As Long
-    Dim badCount As Long
-    Dim stavkaID As String
-    Dim fakturaID As String
-    Dim prijemnicaID As String
-
-    For i = 1 To UBound(data, 1)
-        stavkaID = Trim$(CStr(data(i, colStavkaID)))
-        fakturaID = Trim$(CStr(data(i, colFakturaID)))
-        prijemnicaID = Trim$(CStr(data(i, colPrijemnicaID)))
-
-        If Len(fakturaID) = 0 Or Not ActiveRowExists(TBL_FAKTURE, "FakturaID", fakturaID) Then
-            badCount = badCount + 1
-            HealthFail "FakturaStavka references missing faktura", _
-                       "StavkaID=" & stavkaID & " FakturaID=" & fakturaID
-        End If
-
-        If Len(prijemnicaID) = 0 Or Not ActiveRowExists(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID) Then
-            badCount = badCount + 1
-            HealthFail "FakturaStavka references missing prijemnica", _
-                       "StavkaID=" & stavkaID & " PrijemnicaID=" & prijemnicaID
-        End If
-    Next i
-
-    If badCount = 0 Then
+    If nalazi.count = 0 Then
         HealthOk "Faktura stavke references are valid", ""
     End If
 
@@ -988,12 +962,13 @@ Private Sub Check_DocumentSoftDeleteReferences()
 
     ' Prijemnica -> faktura vise nije veza na zaglavlju (S6 korak 5): kes
     ' FakturaID se ne cita, a fakturisanost je izvedena iz aktivnih linija --
-    ' storno fakture linije stornira, pa aktivna veza na storniranu fakturu ne
-    ' moze da nastane. Provera je zato skinuta, ne prepisana.
+    ' storno fakture je storno njenih linija, pa aktivna veza na storniranu
+    ' fakturu ne moze da nastane. Provera je zato skinuta, ne prepisana.
 
-    badCount = badCount + CountActiveReferencesToStornirano( _
-        TBL_FAKTURA_STAVKE, "StavkaID", "PrijemnicaID", _
-        TBL_PRIJEMNICA, "PrijemnicaID", _
+    ' Linija nema svoj storno (FAK-ODL-03, S7 rez 2), pa genericki brojac (storno
+    ' izvora cita iz kolone reda) ovde ne vazi: bez kolone bi brojao i linije
+    ' stornirane fakture, a storno fakture pa prijemnice je redovan tok.
+    badCount = badCount + CountAktivneLinijeNadStorniranomPrijemnicom( _
         "Faktura stavka references stornirana prijemnica")
 
     If badCount = 0 Then
@@ -1175,6 +1150,48 @@ End Sub
 ' ============================================================
 ' SUPPORT: REFERENCE CHECK
 ' ============================================================
+
+' Aktivna linija fakture (aktivna faktura, FAK-ODL-03) koja pokazuje na
+' storniranu prijemnicu. Kapija storna fakturisanu prijemnicu ne pusta
+' (FakturisanaPrijemnicaRazlog), pa je svaki nalaz kvar. Linija na fakturu koje
+' nema ili je dvosmislena se ovde ne broji -- nju javlja check 3.
+Private Function CountAktivneLinijeNadStorniranomPrijemnicom(ByVal checkName As String) As Long
+    Const SRC As String = "CountAktivneLinijeNadStorniranomPrijemnicom"
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_FAKTURA_STAVKE)
+    If IsEmpty(data) Then Exit Function
+
+    Dim aktivnaFak As Object
+    Set aktivnaFak = modFaktura.AktivnostFaktura()
+
+    Dim cID As Long, cF As Long, cP As Long
+    cID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_ID, SRC)
+    cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    cP = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
+
+    Dim i As Long, prjID As String
+    For i = 1 To UBound(data, 1)
+        prjID = Trim$(CStr(data(i, cP)))
+        If Len(prjID) > 0 Then
+            If modFaktura.LinijaFaktureAktivna(aktivnaFak, Trim$(CStr(data(i, cF)))) Then
+                If IsStorniranoRow(TBL_PRIJEMNICA, "PrijemnicaID", prjID) Then
+                    CountAktivneLinijeNadStorniranomPrijemnicom = _
+                        CountAktivneLinijeNadStorniranomPrijemnicom + 1
+                    HealthFail checkName, _
+                               TBL_FAKTURA_STAVKE & ".StavkaID=" & Trim$(CStr(data(i, cID))) & _
+                               " -> " & TBL_PRIJEMNICA & ".PrijemnicaID=" & prjID
+                End If
+            End If
+        End If
+    Next i
+
+    Exit Function
+
+EH:
+    HealthFail checkName & " failed", FormatHealthErr()
+End Function
 
 Private Function CountActiveReferencesToStornirano(ByVal sourceTable As String, _
                                                    ByVal sourceIDColumn As String, _
