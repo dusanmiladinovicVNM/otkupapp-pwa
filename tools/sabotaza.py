@@ -9398,6 +9398,89 @@ SABOTAZE = {
         "Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka",
         "S6K5 zajednicka: detalj izvestaja kaze da je faktura zajednicka",
     ),
+    # --- S7 rez 1: storno fakture do kraja (plan 14.57; FAK-ODL-02/-05/-06, KI-041) ---
+    # Kapija FAK-ODL-02 je u jezgru; test zove StornoFaktura_TX direktno.
+    "s7r1-kapija-van-jezgra": (
+        "modStorno.bas",
+        "    If modSEFValidator.FakturaZiviNaSEFPoID(fakturaID) Then\n",
+        "    If False Then   ' SABOTAZA: kapija FAK-ODL-02 izbacena iz jezgra\n",
+        "Test_S7R1_StornoOdbijaFakturuNaSEF",
+        "S7R1 SEF: jezgro odbija SEF_SENDING",
+    ),
+    # AUD-030: 409 ostavlja dokument mozda ziv na SEF-u -- TECH_FAILED se odbija.
+    "s7r1-tech-failed-pusten": (
+        "modSEFValidator.bas",
+        "             WF_SEF_SYNC_ERROR, WF_SEF_UNKNOWN, _\n"
+        "             WF_SEF_TECH_FAILED\n",
+        "             WF_SEF_SYNC_ERROR, WF_SEF_UNKNOWN\n"
+        "             ' SABOTAZA: SEF_TECH_FAILED pusten\n",
+        "Test_S7R1_StornoOdbijaFakturuNaSEF",
+        "S7R1 SEF: jezgro odbija SEF_TECH_FAILED (AUD-030)",
+    ),
+    # Otkaz na SEF-u ostavlja workflow u SEF_SENT: bez izuzetka faktura je
+    # zauvek nestornirljiva.
+    "s7r1-bez-izuzetka-otkaza": (
+        "modSEFValidator.bas",
+        "                Case SEF_CLS_STORNO, SEF_CLS_TERMINAL\n"
+        "                    FakturaZiviNaSEF = False\n",
+        "                Case SEF_CLS_STORNO   ' SABOTAZA: otkazan dokument nije izuzetak\n"
+        "                    FakturaZiviNaSEF = False\n",
+        "Test_S7R1_StornoOdbijaFakturuNaSEF",
+        "S7R1 SEF: SEF_SENT uz otkazan dokument pusta storno (F8)",
+    ),
+    "s7r1-f8-ne-pita-sef": (
+        "modStornoDok.bas",
+        "            ElseIf modSEFValidator.FakturaZiviNaSEFPoID(Trim$(docID)) Then\n",
+        "            ElseIf False Then   ' SABOTAZA: F8 ne pita SEF\n",
+        "Test_S7R1_StornoOdbijaFakturuNaSEF",
+        "S7R1 SEF: F8 kaze razlog za SEF_SENT",
+    ),
+    # FAK-ODL-05: odvezana KupciUplata je avans kupca.
+    "s7r1-avans-samo-kupciavans": (
+        "modNovac.bas",
+        "        If CStr(data(i, colTip)) <> NOV_KUPCI_AVANS And _\n"
+        "           CStr(data(i, colTip)) <> NOV_KUPCI_UPLATA Then GoTo NextAvans\n",
+        "        If CStr(data(i, colTip)) <> NOV_KUPCI_AVANS Then GoTo NextAvans   ' SABOTAZA\n",
+        "Test_S7R1_OdvezanaUplataJeAvans",
+        "S7R1 avans: nova faktura je placena odvezanom uplatom",
+    ),
+    # Delimicno prebijanje: split nosi BIM marker izvoda, ostatak ostaje na izvoru.
+    "s7r1-split-bez-markera": (
+        "modNovac.bas",
+        "                BuildAvansSplitNapomena(CStr(data(i, colNapomena)), \"Avans raspodela\"))\n",
+        "                \"Avans raspodela\")   ' SABOTAZA: split bez markera izvoda\n",
+        "Test_S7R1_OdvezanaUplataJeAvans",
+        "S7R1 avans: na fakturu ide odvojen KupciAvans red od 4.000 sa markerom izvoda",
+    ),
+    "s7r1-split-gubi-ostatak": (
+        "modNovac.bas",
+        "            RequireUpdateCell TBL_NOVAC, origRows(1), COL_NOV_UPLATA, avansIznos - apply, _\n",
+        "            ' SABOTAZA: ostatak uplate nestaje\n"
+        "            RequireUpdateCell TBL_NOVAC, origRows(1), COL_NOV_UPLATA, 0, _\n",
+        "Test_S7R1_OdvezanaUplataJeAvans",
+        "S7R1 avans: ostatak od 12.000 ostaje na izvornom redu, slobodan, sa markerom izvoda",
+    ),
+    # FAK-ODL-06: PWA izvoz broji svaku uplatu vezanu za fakturu, kao VBA.
+    "s7r1-pwa-samo-kupciuplata": (
+        "modStammdatenSync.bas",
+        "        If Len(fakID) > 0 Then ' uplata vezana za fakturu, svaki tip\n",
+        "        If Len(fakID) > 0 And CStr(novData(n, GetColumnIndex(TBL_NOVAC, COL_NOV_TIP))) = NOV_KUPCI_UPLATA Then   ' SABOTAZA\n",
+        "Test_S7R1_OdvezanaUplataJeAvans",
+        "S7R1 avans: PWA izvoz broji avans primenjen na fakturu (FAK-ODL-06)",
+    ),
+    # KI-041: bez FakturaID-a se ne trazi po broju.
+    "s7r1-f8-trazi-po-broju": (
+        "modStornoDok.bas",
+        "            If Not FakturaAktivnaPoID(docID) Then\n"
+        "                poruka = NijePronadjen(broj)\n"
+        "                Exit Function\n"
+        "            End If\n"
+        "            fakID = Trim$(docID)\n",
+        "            fakID = Trim$(docID)\n"
+        "            If Len(fakID) = 0 Then fakID = LookupActiveID(TBL_FAKTURE, COL_FAK_BROJ, broj, COL_FAK_ID)   ' SABOTAZA\n",
+        "Test_S7R1_StornoBezIDNeTraziPoBroju",
+        "S7R1 bez ID: F8 sa brojem a bez FakturaID-a ne stornira fakturu",
+    ),
     # --- S6 korak 6: F4 odmrznut (plan 14.55 "Korak 6") --------------------
     # Vraceno iz 14.14 (tela u fc06fa77): redosled provera F4, bruto -> neto i
     # vezivanje samo na jednoznacnu zbirnu. Sidra su ista kao tada, osim

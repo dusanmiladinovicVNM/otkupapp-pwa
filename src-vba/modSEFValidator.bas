@@ -616,6 +616,39 @@ Public Function CanStornoSEFStatus(ByVal sefStatus As String) As Boolean
     End Select
 End Function
 
+' FAK-ODL-02 (S7 rez 1): faktura "zivi na SEF-u" dok lokalni workflow kaze da je
+' dokument predat ili da ishod nije poznat. SEF_TECH_FAILED je tu namerno: 409
+' CONFLICT zavrsava kao tehnicki neuspeh, a dokument mozda postoji (AUD-030).
+' Izuzetak je spoljni status otkazan/obrisan/storniran: otkaz na SEF-u ostavlja
+' workflow u SEF_SENT (lokalnog CANCELLED nema), pa bi bez izuzetka takva faktura
+' ostala zauvek nestornirljiva. Prazno, LOCAL_*, SEF_READY, SEF_REJECTED i
+' SEF_STORNO ne zive. JEDAN predikat za jezgro storna (modStorno.StornoFaktura) i
+' za F8 (modStornoDok.StornoRazlog).
+Public Function FakturaZiviNaSEF(ByVal workflowState As String, _
+                                 ByVal sefStatus As String) As Boolean
+    Select Case UCase$(Trim$(workflowState))
+        Case WF_SEF_SENDING, WF_SEF_SENT, WF_SEF_ACCEPTED, _
+             WF_SEF_SYNC_ERROR, WF_SEF_UNKNOWN, _
+             WF_SEF_TECH_FAILED
+            Select Case ClassifySEFExternalStatus(sefStatus)
+                Case SEF_CLS_STORNO, SEF_CLS_TERMINAL
+                    FakturaZiviNaSEF = False
+                Case Else
+                    FakturaZiviNaSEF = True
+            End Select
+        Case Else
+            FakturaZiviNaSEF = False
+    End Select
+End Function
+
+' Isti predikat po FakturaID-u. Citaoci dizu gresku kad kolone nema (fail-closed);
+' kolone su u kanonu seme, pa ih EnsureSchema uvek napravi.
+Public Function FakturaZiviNaSEFPoID(ByVal fakturaID As String) As Boolean
+    Const SRC As String = "modSEFValidator.FakturaZiviNaSEFPoID"
+    FakturaZiviNaSEFPoID = FakturaZiviNaSEF(GetFakturaSEFWorkflowState(fakturaID), _
+                                            GetFakturaSEFStatusText(fakturaID, SRC))
+End Function
+
 Public Sub ValidateFakturaCanBeCancelledOnSEF(ByVal fakturaID As String)
     On Error GoTo EH
 

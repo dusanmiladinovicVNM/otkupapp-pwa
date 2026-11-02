@@ -1138,6 +1138,11 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
               "istom dokumentu " & ChrW(8212) & " osve" & ChrW(382) & "ite listu pa poku" & ChrW(353) & "ajte ponovo"
     UpsertRow lo, existing, "STORNO_ERR_PRJ_FAKTURISANA", ChrW(10007) & " Prijemnica je fakturisana " & _
               ChrW(8212) & " prvo stornirajte fakturu, pa prijemnicu. Faktura:"
+    UpsertRow lo, existing, "STORNO_ERR_FAK_NA_SEF", ChrW(10007) & " Faktura je na SEF-u " & ChrW(8212) & _
+              " lokalni storno nije dozvoljen dok dokument " & ChrW(382) & "ivi na SEF-u. Prvo storno ili " & _
+              "otkaz na SEF-u, ili Osve" & ChrW(382) & "i status SEF-a. Stanje:"
+    UpsertRow lo, existing, "STORNO_MSG_FAK_AVANS", ChrW(10003) & " Stornirano. Uplate fakture su pre" & _
+              ChrW(353) & "le u avans kupca:"
     UpsertRow lo, existing, "STORNO_ERR_NEMA_SMERA", ChrW(10007) & " Revers bez smera " & ChrW(8212) & " " & _
               ChrW(269) & "etiri smera dele isti brojevni niz"
     UpsertRow lo, existing, "STORNO_ERR_REV_KLJUC", ChrW(10007) & " Revers se ne mo" & ChrW(382) & _

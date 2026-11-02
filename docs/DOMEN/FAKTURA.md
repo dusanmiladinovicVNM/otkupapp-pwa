@@ -30,8 +30,9 @@ dva mesta i tamo se razrešava **jednom** u `FakturaID`:
   (`modBankaMapiranje.TryResolveFakturaByPoziv:3304`, `hits = 1`). Slabi put (kupac
   iz imena ili mape, pa faktura) poredi podniz — `KI-075`.
 
-Posle izbora reda nijedan pisac ne traži fakturu po broju. Jedini izuzetak danas je
-`modStornoDok.StornoIzvrsi` bez `docID`-a (`:416`, `KI-041`); briše ga S7 rez 1.
+Posle izbora reda nijedan pisac ne traži fakturu po broju. Poslednji izuzetak je bio
+`modStornoDok.StornoIzvrsi` bez `docID`-a (`KI-041`); S7 rez 1 ga je obrisao: bez `FakturaID`-a
+F8 odbija (`FakturaAktivnaPoID`).
 
 **`FAK-IDENT-02` — linija fakture nad prijemnicom.** Kanonski ključ je
 `PrijemnicaStavkaID`. `PrijemnicaID` je dokument: labela za čitaoce i ključ za
@@ -65,7 +66,8 @@ spoljni `SEFStatus` po `modSEFStatusSync.ClassifySEFExternalStatus` pada u klasu
   tehnički neuspeh, a dokument možda postoji na SEF-u (AUD-030, `modSEFService:364`).
   Put je „Osveži status"; kad pokaže da dokumenta nema ili je otkazan, storno ide.
 - Kapija stoji u jezgru `modStorno.StornoFaktura` (pre prve mutacije), a F8 razlog i
-  uvid pitaju isti predikat. SEF storno (`sfstorno`) i dalje ne stornira lokalno:
+  uvid pitaju isti predikat. Predikat je `modSEFValidator.FakturaZiviNaSEF` (po ID-u
+  `FakturaZiviNaSEFPoID`), urađen u S7 rezu 1. SEF storno (`sfstorno`) i dalje ne stornira lokalno:
   posle njega lokalni storno ide jer je stanje `SEF_STORNO`.
 
 **`FAK-ODL-03` — linija je aktivna ako i samo ako je njena faktura aktivna.**
@@ -87,10 +89,24 @@ pravilu §14.8 t. 8.
 
 **`FAK-ODL-05` — uplata odvezana stornom fakture je avans kupca.** Storno fakture
 prazni `FakturaID` na njenim uplatama (`modStorno.ResetNovacFakturaLink:1735`).
-Čitač avansa kupca (`modNovac.ApplyAvansToFaktura`, danas samo `Tip = KupciAvans`,
-`:628`) prima i `KupciUplata` bez `FakturaID`-a, pa se uplata sama prebija na sledeću
+Čitač avansa kupca (`modNovac.ApplyAvansToFaktura`, do S7 reza 1 samo `Tip = KupciAvans`)
+prima i `KupciUplata` bez `FakturaID`-a, pa se uplata sama prebija na sledeću
 fakturu kupca (`CreateFaktura` → `ApplyAvansToFaktura`). Analog odluke „D suženo" za
 kooperanta (`ODLUKA_NOVAC_PRI_STORNU.md` §0): oba tipa su isti novac kupca, razlika
 je samo da li je faktura bila poznata u trenutku uplate. Delimično prebijanje ide postojećim
 splitom (`modNovac:660-692`): ostatak ostaje na izvornom redu, a split nosi marker izvoda
 (`BuildAvansSplitNapomena`).
+
+**`FAK-ODL-06` — odvojeni deo uplate je `KupciAvans`, a PWA broji svaku uplatu vezanu za
+fakturu (operater, 01.11.2026, pre koda S7 reza 1).** Kad odvezana uplata pokrije samo deo nove
+fakture, `ApplyAvansToFaktura` deli red. Primenjeni deo je nov red tipa `KupciAvans`, sa
+`FakturaID`-om nove fakture i BIM markerom izvoda. Izvorni red zadržava svoj tip (`KupciUplata`),
+umanjen iznos i marker. PWA izvoz plaćenog po fakturi (`modStammdatenSync.UplacenoPoFakturi`)
+broji svaku nestorniranu uplatu vezanu za fakturu, bez obzira na tip — isto pravilo kao
+`modNovac.GetUplataForFaktura`. Do S7 reza 1 je brojao samo `KupciUplata`, pa je avans primenjen
+na fakturu u PWA izgledao kao neplaćen deo.
+
+Izmereno pre odluke: `KupciUplata` bez fakture nastaje samo stornom, jer je oba pisca upisuju
+samo uz fakturu (`modNovacUnos.UplataValidiraj`, `modBankaMapiranje.MapBankaImportAsKupac`).
+Zato proširen čitač avansa tačno odgovara `FAK-ODL-05`. Tip u ovom toku čita samo taj izvoz;
+zbir po kupcu (`ExportSaldoKupci`) broji oba tipa.

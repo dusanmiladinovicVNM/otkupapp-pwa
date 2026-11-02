@@ -625,7 +625,12 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
     For i = 1 To UBound(data, 1)
         If preostalo <= 0 Then Exit For
         If CStr(data(i, colPID)) <> kupacID Then GoTo NextAvans
-        If CStr(data(i, colTip)) <> NOV_KUPCI_AVANS Then GoTo NextAvans
+        ' FAK-ODL-05: uplata koju je storno fakture odvezao (KupciUplata bez
+        ' FakturaID-a) je avans kupca kao i KupciAvans. Drugim putem KupciUplata bez
+        ' fakture ne nastaje: oba pisca je upisuju samo uz fakturu
+        ' (modNovacUnos.UplataValidiraj, modBankaMapiranje.MapBankaImportAsKupac).
+        If CStr(data(i, colTip)) <> NOV_KUPCI_AVANS And _
+           CStr(data(i, colTip)) <> NOV_KUPCI_UPLATA Then GoTo NextAvans
         If CStr(data(i, colFakID)) <> "" Then GoTo NextAvans  ' bereits verrechnet
         If Not IsNumeric(data(i, colUplata)) Then GoTo NextAvans
         
@@ -658,6 +663,8 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
 
         Else
             ' Partial avans consumption: reduce original row and create consumed split row.
+            ' FAK-ODL-06: split je primenjeni deo avansa i uvek je KupciAvans; izvorni
+            ' red zadrzava svoj tip (i KupciUplata) i BIM marker izvoda.
             Dim origRows As Collection
             Set origRows = FindRows(TBL_NOVAC, COL_NOV_ID, CStr(data(i, colID)))
 
