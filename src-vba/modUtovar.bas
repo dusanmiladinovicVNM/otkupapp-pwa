@@ -364,16 +364,22 @@ End Sub
 ' nije stornirana (modFaktura.AktivnostFaktura). Linija na fakturu koje nema ili
 ' je dvosmislena se BROJI -- kapija je fail-closed, jer bi tiho preskocena linija
 ' pustila duplu prodaju.
+'
+' FAIL-CLOSED i nad semom (review #453, S7R2-REV-01). Nepostojeca tabela linija ili
+' kolona UtovarID su ranije davale NULU -- "nijedna faktura ne tvrdi utovar" -- pa
+' bi StornoUtovar, koji semu linija sam ne proverava, vratio fakturisanu GP robu na
+' stanje. Meka grana "sveska pre GP nadogradnje" je obrisana: kolona je u kanonu, a
+' EnsureRuntimeSchema je dodaje na svakom startu. Prazna tabela je legitimna nula.
 Public Function AktivnihFstZaUtovar(ByVal utovarID As String) As Long
     Const SRC As String = "modUtovar.AktivnihFstZaUtovar"
     Dim fs As Variant, i As Long
     Dim cUt As Long, cF As Long
     Dim aktivnaFak As Object, fid As String, aktivna As Boolean
-    fs = GetTableData(TBL_FAKTURA_STAVKE)
-    If Not IsArray(fs) Then Exit Function
-    cUt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
-    If cUt = 0 Then Exit Function    ' sveska pre GP nadogradnje
+    RequireTable TBL_FAKTURA_STAVKE, SRC
+    cUt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID, SRC)
     cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    fs = GetTableData(TBL_FAKTURA_STAVKE)
+    If Not IsArray(fs) Then Exit Function    ' tabela postoji i prazna je: nijedna linija
     Set aktivnaFak = modFaktura.AktivnostFaktura()
     For i = 1 To UBound(fs, 1)
         If Trim$(CStr(nz(fs(i, cUt)))) = Trim$(utovarID) Then

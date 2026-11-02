@@ -372,6 +372,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S7R2_AktivnostLinijeIzZaglavlja
     Test_S7R2_UgovorLinijaFakture
     Test_S7R2_FakturaStareKoloneSelfHeal
+    Test_S7R2_KapijaUtovaraFailClosed
     Test_S6K6_F4DokumentProlaziLanac
     Test_S6K7_OsirocenePaleteDatumPoDokumentu
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
@@ -8800,6 +8801,66 @@ EH:
     errDesc = Err.description
     On Error Resume Next
     FakObrisiStareKoloneTest
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' Review #453, S7R2-REV-01 (P1): kapija utovara je fail-closed i nad SEMOM linija.
+' Bez kolone UtovarID je modUtovar.AktivnihFstZaUtovar vracao nulu, a StornoUtovar,
+' koji semu linija sam ne proverava, bi tada stornirao utovar -- fakturisana GP roba
+' bi se vratila na stanje. A -> B -> A nad sopstvenim utovarom (nefakturisan, bez
+' ijedne linije): sa pokvarenom semom (kolona preimenovana, synthetic) citac pada
+' PO IMENU kolone, a storno ne prolazi i utovar ostaje nestorniran; sa vracenom semom
+' storno ISTOG utovara prolazi -- dokaz da ga je blokirala sema, a ne nesto drugo.
+' Kolona se vraca i u EH grani. Nepostojeca tabela ide istom granom (RequireTable).
+' SABOTAZA: s7r2-utovar-kapija-fail-open.
+Private Sub Test_S7R2_KapijaUtovaraFailClosed()
+    Const SRC As String = "Test_S7R2_KapijaUtovaraFailClosed"
+    Const PRIVREMENO As String = "UtovarID_S7R2"
+    On Error GoTo EH
+    Dim utX As String, st As Collection, lo As ListObject, iUt As Long
+    Dim gCitac As String, okB As Boolean, stornB As Boolean, okA As Boolean
+    Dim kolonaSkinuta As Boolean
+
+    Set st = New Collection
+    st.Add Array("PRE-SLED-U", 5#, 100#)
+    utX = modUtovar.CreateUtovar_TX(TEST_KUP_ID, st)
+    AssertTrue Len(utX) > 0, "S7R2 kapija utovara: preduslov -- utovar kroz pravi pisac"
+    If Len(utX) = 0 Then Exit Sub
+
+    Set lo = GetTable(TBL_FAKTURA_STAVKE)
+    iUt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
+    If iUt > 0 Then lo.ListColumns(iUt).name = PRIVREMENO
+    kolonaSkinuta = (GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID) = 0)
+
+    On Error Resume Next
+    Err.Clear
+    Call modUtovar.AktivnihFstZaUtovar(utX)
+    gCitac = Err.description
+    Err.Clear
+    On Error GoTo EH
+    okB = modStorno.StornoUtovar_TX(utX)
+    stornB = S6K4Stornirano(TBL_UTOVAR, COL_UT_ID, utX)
+
+    If iUt > 0 Then lo.ListColumns(iUt).name = COL_FS_UTOVAR_ID
+    okA = modStorno.StornoUtovar_TX(utX)
+
+    AssertTrue kolonaSkinuta, "S7R2 kapija utovara: preduslov -- kolona UtovarID je skinuta"
+    AssertTrue InStr(1, gCitac, COL_FS_UTOVAR_ID, vbTextCompare) > 0, _
+               "S7R2 kapija utovara: citac bez kolone UtovarID pada po imenu kolone"
+    AssertTrue Not okB And Not stornB, _
+               "S7R2 kapija utovara: bez kolone UtovarID storno utovara ne prolazi"
+    AssertTrue okA And S6K4Stornirano(TBL_UTOVAR, COL_UT_ID, utX), _
+               "S7R2 kapija utovara: KONTROLA -- sa vracenom semom storno istog utovara prolazi"
+    Exit Sub
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If iUt > 0 Then
+        If GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID) = 0 Then lo.ListColumns(iUt).name = COL_FS_UTOVAR_ID
+    End If
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub

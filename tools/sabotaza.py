@@ -9532,6 +9532,15 @@ SABOTAZE = {
         "Test_S7R2_FakturaStareKoloneSelfHeal",
         "S7R2 self-heal: nijedna stara kolona fakture nije ostala",
     ),
+    # Review #453, S7R2-REV-01 (P1): stara meka grana -- bez kolone UtovarID kapija
+    # vraca nulu, pa storno utovara vraca fakturisanu GP robu na stanje.
+    "s7r2-utovar-kapija-fail-open": (
+        "modUtovar.bas",
+        "    cUt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID, SRC)\n",
+        "    cUt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID): If cUt = 0 Then Exit Function   ' SABOTAZA\n",
+        "Test_S7R2_KapijaUtovaraFailClosed",
+        "S7R2 kapija utovara: bez kolone UtovarID storno utovara ne prolazi",
+    ),
     # FAK-ODL-07: EnsureSledljivostSchema bi trace kolone vratila NA KRAJ.
     "s7r2-sledljivost-vraca-trace": (
         "modSetup.bas",
