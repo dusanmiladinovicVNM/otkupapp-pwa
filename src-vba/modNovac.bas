@@ -356,51 +356,6 @@ Public Function savePartnerMap(ByVal bankaName As String, _
     savePartnerMap = True
 End Function
 
-Private Function GetVrstaFromFaktura(ByVal fakturaID As String) As String
-    Const SRC As String = "GetVrstaFromFaktura"
-
-    Dim stavkeData As Variant
-    stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
-
-    If IsEmpty(stavkeData) Then
-        GetVrstaFromFaktura = "(Nepoznato)"
-        Exit Function
-    End If
-
-    stavkeData = ExcludeStornirano(stavkeData, TBL_FAKTURA_STAVKE)
-
-    If IsEmpty(stavkeData) Then
-        GetVrstaFromFaktura = "(Nepoznato)"
-        Exit Function
-    End If
-
-    Dim colFID As Long
-    Dim colPrijemnicaID As Long
-
-    colFID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
-    colPrijemnicaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
-
-    Dim i As Long
-    For i = 1 To UBound(stavkeData, 1)
-
-        If Trim$(CStr(stavkeData(i, colFID))) = Trim$(fakturaID) Then
-            Dim prijID As String
-            prijID = Trim$(CStr(stavkeData(i, colPrijemnicaID)))
-
-            GetVrstaFromFaktura = CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijID, COL_PRJ_VRSTA))
-
-            If Len(Trim$(GetVrstaFromFaktura)) = 0 Then
-                GetVrstaFromFaktura = "(Nepoznato)"
-            End If
-
-            Exit Function
-        End If
-
-    Next i
-
-    GetVrstaFromFaktura = "(Nepoznato)"
-End Function
-
 Public Function GetUplataByVrsta(ByVal kupacID As String, _
                                  ByVal datumOd As Date, _
                                  ByVal datumDo As Date) As Object
@@ -848,12 +803,12 @@ Private Function BuildFakturaVrstaUdeoCache() As Object
         Set BuildFakturaVrstaUdeoCache = dict
         Exit Function
     End If
-    stavkeData = ExcludeStornirano(stavkeData, TBL_FAKTURA_STAVKE)
 
-    If IsEmpty(stavkeData) Then
-        Set BuildFakturaVrstaUdeoCache = dict
-        Exit Function
-    End If
+    ' Linija nema svoj storno (FAK-ODL-03, S7 rez 2): udeo nose linije AKTIVNIH
+    ' faktura. ExcludeStornirano nad tblFakturaStavke bi od reza 2 vratio SVE
+    ' redove (tabela je BEZ_STORNA), pa se aktivnost pita zaglavlje.
+    Dim aktivnaFak As Object
+    Set aktivnaFak = modFaktura.AktivnostFaktura()
 
     Const SRC As String = "BuildFakturaVrstaUdeoCache"
 
@@ -877,7 +832,7 @@ Private Function BuildFakturaVrstaUdeoCache() As Object
     For i = 1 To UBound(stavkeData, 1)
         Dim fID As String
         fID = Trim$(CStr(stavkeData(i, colFID)))
-        If Len(fID) > 0 Then
+        If modFaktura.LinijaFaktureAktivna(aktivnaFak, fID) Then
             Dim prijID As String
             prijID = Trim$(CStr(stavkeData(i, colPrijID)))
 

@@ -368,6 +368,11 @@ Public Sub RunBusinessFlowProSuite()
     Test_S7R1_StornoOdbijaFakturuNaSEF
     Test_S7R1_OdvezanaUplataJeAvans
     Test_S7R1_StornoBezIDNeTraziPoBroju
+    Test_S7R2_StornoFakturePiseSamoZaglavlje
+    Test_S7R2_AktivnostLinijeIzZaglavlja
+    Test_S7R2_UgovorLinijaFakture
+    Test_S7R2_FakturaStareKoloneSelfHeal
+    Test_S7R2_KapijaUtovaraFailClosed
     Test_S6K6_F4DokumentProlaziLanac
     Test_S6K7_OsirocenePaleteDatumPoDokumentu
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
@@ -1131,7 +1136,8 @@ Public Sub SoftStornoBusinessFlowTestRows()
     SoftStornoByTestMarkers TBL_ZBIRNA, Array("BrojZbirne")
     SoftStornoByTestMarkers TBL_PRIJEMNICA, Array("BrojPrijemnice", "BrojZbirne")
     SoftStornoByTestMarkers TBL_FAKTURE, Array("BrojFakture")
-    SoftStornoByTestMarkers TBL_FAKTURA_STAVKE, Array("BrojPrijemnice")
+    ' Linije fakture se ne storniraju: linija nema svoj storno (FAK-ODL-03, S7 rez 2),
+    ' pa je gasi storno zaglavlja iznad.
 
     EndRun
     Exit Sub
@@ -7767,9 +7773,8 @@ Private Sub Test_S6K5_StornoFakturePaPrijemnice()
         okFak = modStornoDok.StornoIzvrsi(STIP_FAKTURA, S6K5BrojFakture(fid), "", poruka, fid)
     End If
     AssertTrue okFak, "S6K5 storno: F8 stornira fakturu"
-    ' Storno koji ne stornira linije ostavlja aktivnu liniju nad storniranom fakturom,
-    ' a citac to odbija po imenu (1768) -- pa se stanje cita kao ishod, ne kroz poziv
-    ' koji bi test oborio PRE tvrdnje.
+    ' Storno fakture je storno njenih linija (FAK-ODL-03, S7 rez 2): citac linija pita
+    ' zaglavlje. Stanje se cita kao ishod, ne kroz poziv koji bi test oborio PRE tvrdnje.
     AssertEquals "NE", IIf(Len(fid) > 0, S6K5Fakturisanost(prj), "<bez fakture>"), _
                  "S6K5 storno: posle storna fakture dokument je NEFAKTURISAN"
     AssertEquals "", S6ZaglavljeLinija(prj), _
@@ -7886,19 +7891,23 @@ EH:
     LogFatal "Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka", Err.Number, Err.description
 End Sub
 
-' P2-2 (review #439, stavka 190): AKTIVNA linija prijemnice nosi FakturaID fakture
-' koja postoji TACNO jednom i nije stornirana (FAK-LIN-02). Do ispravke je linija sa
-' praznim FakturaID-em zauzimala stavku za pisca, a mreza ju je nudila kao slobodnu.
-' Tri pokvarena oblika (fault injection), svaki u SVOJOJ transakciji: citac ih odbija
-' PO IMENU, a mreza stavku ne nudi. Nalazi se skupljaju i tvrde POSLE rollback-a --
-' pokvaren red obara svako sledece citanje. KONTROLA: posle rollback-a citac je cist.
+' P2-2 (review #439, stavka 190): linija prijemnice nosi FakturaID fakture koja
+' postoji TACNO jednom (FAK-LIN-02). Do ispravke je linija sa praznim FakturaID-em
+' zauzimala stavku za pisca, a mreza ju je nudila kao slobodnu. Dva pokvarena oblika
+' (fault injection), svaki u SVOJOJ transakciji: citac ih odbija PO IMENU, a mreza
+' stavku ne nudi. Nalazi se skupljaju i tvrde POSLE rollback-a -- pokvaren red obara
+' svako sledece citanje. KONTROLA: posle rollback-a citac je cist.
+' Treci oblik (zaglavlje storno, linija netaknuta) je do S7 reza 2 bio kvar (1768), a
+' sada je PRAVILO: linija nema svoj storno (FAK-ODL-03), pa je stavka slobodna, a
+' citac cist. Nad starim kodom pada, jer je citac trazio storno na liniji.
 ' SABOTAZE: s6k5-linija-bez-fakture-prolazi, s6k5-linija-na-nepostojecu-fakturu,
-' s6k5-linija-nad-storniranom-fakturom.
+' s7r2-citac-linija-ne-pita-zaglavlje.
 Private Sub Test_S6K5_LinijaBezFaktureJeKvar()
     Dim tx As clsTransaction
     On Error GoTo EH
     Dim scenario As String, prj As String, stI As String, stII As String, fid As String
     Dim gBez As String, gNema As String, gStorn As String, gPosle As String, mreza As String
+    Dim mrezaStorn As String
     scenario = NewScenarioCode("S6K5KVAR")
     prj = S6K5Dokument(scenario, TEST_KUP_ID)
     AssertTrue Len(prj) > 0, "S6K5 kvar: preduslov -- dokument kroz pravi pisac"
@@ -7924,7 +7933,7 @@ Private Sub Test_S6K5_LinijaBezFaktureJeKvar()
     tx.RollbackTx
     Set tx = Nothing
 
-    ' 3) aktivna linija nad STORNIRANOM fakturom (zaglavlje storno, linija ne)
+    ' 3) storno ZAGLAVLJA je storno linije (FAK-ODL-03): linija netaknuta, stavka slobodna
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURE
@@ -7933,6 +7942,7 @@ Private Sub Test_S6K5_LinijaBezFaktureJeKvar()
     If Len(stII) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stII)
     If Len(fid) > 0 Then MarkTestRowStornirano TBL_FAKTURE, COL_FAK_ID, fid
     gStorn = S6K5GreskaCitaca()
+    mrezaStorn = S6K5MrezaNudi(TEST_KUP_ID, stII)
     tx.RollbackTx
     Set tx = Nothing
     gPosle = S6K5GreskaCitaca()
@@ -7944,8 +7954,10 @@ Private Sub Test_S6K5_LinijaBezFaktureJeKvar()
                  "S6K5 kvar: mreza Fakturisanja ne nudi stavku pod linijom bez fakture"
     AssertTrue InStr(1, gNema, "fakturu koje nema", vbTextCompare) > 0, _
                "S6K5 kvar: linija na fakturu koje nema obara citac PO IMENU"
-    AssertTrue InStr(1, gStorn, "nad storniranom fakturom", vbTextCompare) > 0, _
-               "S6K5 kvar: aktivna linija nad storniranom fakturom obara citac PO IMENU"
+    AssertEquals "", gStorn, _
+                 "S7R2: storno zaglavlja gasi liniju -- citac linija je cist (FAK-ODL-03)"
+    AssertEquals "True|", mrezaStorn, _
+                 "S7R2: posle storna zaglavlja mreza stavku nudi kao slobodnu"
     AssertEquals "", gPosle, "S6K5 kvar: KONTROLA -- posle rollback-a citac je cist"
     Exit Sub
 EH:
@@ -8515,6 +8527,488 @@ Private Sub Test_S7R1_StornoBezIDNeTraziPoBroju()
     Exit Sub
 EH:
     LogFatal "Test_S7R1_StornoBezIDNeTraziPoBroju", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' S7 REZ 2 -- LINIJA FAKTURE BEZ SOPSTVENOG STORNA (FAK-ODL-03, FAK-ODL-07; plan 14.57,
+' "Pre-flight S7 rez 2")
+' ============================================================
+
+' Storno fakture pise ZAGLAVLJE, a linije ne dira. Linija je aktivna ako i samo ako
+' je aktivna njena faktura, pa je storno zaglavlja storno linija: obe stavke su
+' posle storna slobodne, a citac linija je cist. Kanon pri tom vise nema linijski
+' storno ni siroce, a zaglavlje ni siroce ni trace kolone ispravke (FAK-ODL-07).
+' Nad starim kodom pada prva tvrdnja: storno je svakoj liniji pisao Stornirano.
+' SABOTAZA: s7r2-aktivnost-ignorise-storno (preko Test_S6K5_StornoFakturePaPrijemnice).
+Private Sub Test_S7R2_StornoFakturePiseSamoZaglavlje()
+    On Error GoTo EH
+    Dim scenario As String, prj As String, br As String, stI As String, stII As String
+    Dim fid As String, linPre As String, linPosle As String, poruka As String
+    Dim okFak As Boolean, okPrj As Boolean
+    scenario = NewScenarioCode("S7R2STO")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID, br)
+    AssertTrue Len(prj) > 0, "S7R2 storno: preduslov -- dokument kroz pravi pisac"
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    If Len(stI) > 0 And Len(stII) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stI, stII)
+    AssertTrue Len(fid) > 0, "S7R2 storno: preduslov -- faktura nad obe stavke"
+
+    linPre = S7R2OtisakLinija(fid)
+    If Len(fid) > 0 Then okFak = modStorno.StornoFaktura_TX(fid)
+    linPosle = S7R2OtisakLinija(fid)
+
+    AssertTrue okFak And S6K4Stornirano(TBL_FAKTURE, COL_FAK_ID, fid), _
+               "S7R2 storno: storno fakture prolazi i stornira zaglavlje"
+    AssertTrue Len(linPre) > 0, "S7R2 storno: KONTROLA -- otisak linija nije prazan"
+    AssertEquals linPre, linPosle, _
+                 "S7R2 storno: linije fakture su posle storna iste kao pre (storno pise samo zaglavlje)"
+    AssertEquals "NE", S6K5Fakturisanost(prj), _
+                 "S7R2 storno: posle storna zaglavlja dokument je NEFAKTURISAN"
+    AssertEquals "", S6K5GreskaCitaca(), "S7R2 storno: citac linija je cist"
+    AssertEquals "", S7R2NadjeneKolone(TBL_FAKTURA_STAVKE, FakStareLinija()) & _
+                     S7R2NadjeneKolone(TBL_FAKTURE, FakStareZaglavlje()), _
+                 "S7R2 kanon: linija nema storno ni siroce, zaglavlje nema siroce ni trace kolone"
+
+    ' Ciscenje: dokument kupca ne ostaje slobodan za tudje testove.
+    If Len(prj) > 0 And okFak Then okPrj = modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, br, "", poruka, S6K4Ident(prj))
+    AssertTrue okPrj, "S7R2 storno: ciscenje -- storno prijemnice posle storna fakture prolazi"
+    Exit Sub
+EH:
+    LogFatal "Test_S7R2_StornoFakturePiseSamoZaglavlje", Err.Number, Err.description
+End Sub
+
+' GP linija nema svoj storno -- kapija utovara (modUtovar.AktivnihFstZaUtovar) pita
+' ZAGLAVLJE. A -> B -> A nad fixture fakturom FAK-SLED-GP4 (utovar UT-SLED-P, jedna
+' linija FST-SLED-P): aktivna faktura drzi utovar, storno ZAGLAVLJA (synthetic, u TX)
+' ga pusta, a posle rollback-a ga opet drzi. KONTROLA fail-closed: linija na fakturu
+' koje nema se BROJI -- tiho preskocena bi pustila duplu prodaju.
+' Nad starim kodom pada B: kapija je citala Stornirano LINIJE, a njega storno
+' zaglavlja ne dira. Test zove samo javni API koji postoji i pre reza.
+' SABOTAZA: s7r2-utovar-ne-pita-zaglavlje.
+Private Sub Test_S7R2_AktivnostLinijeIzZaglavlja()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Const FAK As String = "FAK-SLED-GP4"
+    Const UT As String = "UT-SLED-P"
+    Const SRC As String = "Test_S7R2_AktivnostLinijeIzZaglavlja"
+    Dim nA As Long, nB As Long, nA2 As Long, nNema As Long
+    Dim rows As Collection
+
+    nA = modUtovar.AktivnihFstZaUtovar(UT)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURE
+    MarkTestRowStornirano TBL_FAKTURE, COL_FAK_ID, FAK
+    nB = modUtovar.AktivnihFstZaUtovar(UT)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    nA2 = modUtovar.AktivnihFstZaUtovar(UT)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    Set rows = FindRows(TBL_FAKTURA_STAVKE, COL_FS_ID, "FST-SLED-P")
+    If Not rows Is Nothing Then
+        If rows.count = 1 Then RequireUpdateCell TBL_FAKTURA_STAVKE, CLng(rows(1)), _
+                                   COL_FS_FAKTURA_ID, "FAK-NEMA-S7R2", SRC
+    End If
+    nNema = modUtovar.AktivnihFstZaUtovar(UT)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    AssertEquals "1", CStr(nA), "S7R2 aktivnost: preduslov -- aktivna GP faktura drzi svoj utovar"
+    AssertEquals "0", CStr(nB), "S7R2 aktivnost: posle storna zaglavlja GP linija ne drzi utovar"
+    AssertEquals "1", CStr(nA2), "S7R2 aktivnost: posle rollback-a faktura opet drzi utovar"
+    AssertEquals "1", CStr(nNema), "S7R2 aktivnost: linija na fakturu koje nema se broji (fail-closed)"
+    Exit Sub
+EH:
+    LogFatal SRC, Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' N5: health check 3 meri UGOVOR DOKUMENTA kroz modFaktura.UgovorLinijaFaktureNalazi.
+' Do reza 2 je za SVAKU liniju trazio aktivnu prijemnicu, pa je GP linija javljala
+' "missing". Ispravne fakture (dvoklasna nad prijemnicom i fixture GP FAK-SLED-GP4)
+' su bez nalaza; cetiri kvara (synthetic, u TX) javljaju se svaki pod svojim kodom;
+' linije STORNIRANE fakture se ne mere dalje od zaglavlja. Fixture namerno nosi
+' negativ (FST-GP-SB), pa se meri po ID-u fakture, ne "nula nalaza".
+' SABOTAZE: s7r2-ugovor-linija-bez-fakture, s7r2-ugovor-faktura-bez-linija.
+Private Sub Test_S7R2_UgovorLinijaFakture()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Dim scenario As String, prj As String, stI As String, stII As String, fid As String
+    Dim cist As String, gp As String, storn As String, posle As String
+    Dim fakNema As String, fakPrazna As String
+    Dim imaSiroce As Boolean, imaPrazna As Boolean, imaDva As Boolean, imaBez As Boolean
+    scenario = NewScenarioCode("S7R2UG")
+    fakNema = "FAK-NEMA-" & scenario
+    fakPrazna = "FAK-PRAZNA-" & scenario
+    prj = S6K5Dokument(scenario, TEST_KUP_ID)
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_NOVAC
+    If Len(stI) > 0 And Len(stII) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stI, stII)
+    cist = S7R2NalaziFakture(fid)
+    gp = S7R2NalaziFakture("FAK-SLED-GP4")
+
+    If Len(fid) > 0 Then
+        S7R2SejGpLiniju "FST-SIROCE-" & scenario, fakNema
+        S7R2SejZaglavlje fakPrazna
+        S7R2PostaviNaLiniji fid, KLASA_I, COL_FS_PRERADA_ID, "PRE-" & scenario
+        S7R2PostaviNaLiniji fid, KLASA_II, COL_FS_PRIJEMNICA_ID, ""
+        imaSiroce = S7R2ImaNalaz("LINIJA_BEZ_FAKTURE", fakNema)
+        imaPrazna = S7R2ImaNalaz("FAKTURA_BEZ_LINIJA", fakPrazna)
+        imaDva = S7R2ImaNalaz("LINIJA_DVA_IZVORA", fid)
+        imaBez = S7R2ImaNalaz("LINIJA_BEZ_IZVORA", fid)
+        MarkTestRowStornirano TBL_FAKTURE, COL_FAK_ID, fid
+        storn = S7R2NalaziFakture(fid)
+    End If
+    tx.RollbackTx
+    Set tx = Nothing
+    posle = S7R2NalaziFakture(fakNema) & S7R2NalaziFakture(fakPrazna)
+
+    AssertTrue Len(fid) > 0, "S7R2 ugovor: preduslov -- dvoklasna faktura kroz pravi pisac"
+    AssertEquals "", cist, "S7R2 ugovor: ispravna dvoklasna faktura je bez nalaza"
+    AssertEquals "", gp, "S7R2 ugovor: GP linija (izvor je prerada) nije kvar"
+    AssertTrue imaSiroce, "S7R2 ugovor: linija na fakturu koje nema je nalaz LINIJA_BEZ_FAKTURE"
+    AssertTrue imaPrazna, "S7R2 ugovor: aktivna faktura bez linija je nalaz FAKTURA_BEZ_LINIJA"
+    AssertTrue imaDva, "S7R2 ugovor: linija sa oba izvora je nalaz LINIJA_DVA_IZVORA"
+    AssertTrue imaBez, "S7R2 ugovor: linija bez izvora je nalaz LINIJA_BEZ_IZVORA"
+    AssertEquals "", storn, "S7R2 ugovor: linije stornirane fakture se ne mere dalje od zaglavlja"
+    AssertEquals "", posle, "S7R2 ugovor: KONTROLA -- posle rollback-a nalaza nema"
+    Exit Sub
+EH:
+    LogFatal "Test_S7R2_UgovorLinijaFakture", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' ZATECENA sveska gubi linijski storno, siroce i trace kolone ispravke fakture pre
+' prvog upisa. Obrazac je Test_S6K8_PrijemnicaStareKoloneSelfHeal: test FIZICKI vraca
+' stari raspored (linija: Stornirano 8 i OsirocenoOd 9; zaglavlje: OsirocenoOd 9 i
+' pet trace kolona na kraju), meri da kanonski prefiks tada PADA (inace bi test bio
+' vakuumski), pusta modSetup.ObrisiStareKoloneFakture i meri: kolone su otisle,
+' prefiks prolazi, a prvi red nosi ISTE vrednosti po imenu u svakoj kanonskoj
+' koloni. Prva tvrdnja meri da EnsureSledljivostSchema fakturi vise ne dodaje trace
+' kolone (dodate bi se vratile NA KRAJ, gde ih prefiks ne vidi).
+' Bez transakcije: clsTransaction.RestoreTable pada na promenu broja kolona.
+' Ciscenje ide kroz genericki primitiv po imenu, i u EH grani.
+' SABOTAZE: s7r2-selfheal-ne-brise, s7r2-sledljivost-vraca-trace.
+Private Sub Test_S7R2_FakturaStareKoloneSelfHeal()
+    Const SRC As String = "Test_S7R2_FakturaStareKoloneSelfHeal"
+    On Error GoTo EH
+    Dim errNum As Long, errDesc As String
+
+    modSetup.EnsureSledljivostSchema
+    AssertEquals "", S7R2NadjeneKolone(TBL_FAKTURE, FakStareTrace()), _
+                 "S7R2 self-heal: EnsureSledljivostSchema ne vraca trace kolone fakturi"
+
+    Dim loF As ListObject, loS As ListObject
+    Set loF = GetTable(TBL_FAKTURE)
+    Set loS = GetTable(TBL_FAKTURA_STAVKE)
+    If loF Is Nothing Or loS Is Nothing Then
+        AssertTrue False, "S7R2 self-heal: tabele fakture postoje"
+        Exit Sub
+    End If
+    If loF.ListRows.count = 0 Or loS.ListRows.count = 0 Then
+        AssertTrue False, "S7R2 self-heal: zaglavlje i linije imaju bar po jedan red (svedok vrednosti)"
+        Exit Sub
+    End If
+    If Len(S7R2NadjeneKolone(TBL_FAKTURA_STAVKE, FakStareLinija()) & _
+           S7R2NadjeneKolone(TBL_FAKTURE, FakStareZaglavlje())) > 0 Then
+        AssertTrue False, "S7R2 self-heal: polazne tabele su bez starih kolona"
+        Exit Sub
+    End If
+
+    Dim preF As Long, preS As Long
+    preF = loF.ListColumns.count
+    preS = loS.ListColumns.count
+    Dim svedokF As Object, svedokS As Object
+    Set svedokF = S7R2SvedokPrvogReda(TBL_FAKTURE)
+    Set svedokS = S7R2SvedokPrvogReda(TBL_FAKTURA_STAVKE)
+
+    ' Stari raspored, redom po STAROJ poziciji -- svaka umetnuta kolona pomera ostale.
+    loS.ListColumns.Add(8).name = "Stornirano"
+    loS.ListColumns.Add(9).name = "OsirocenoOd"
+    loF.ListColumns.Add(9).name = "OsirocenoOd"
+    Dim t As Variant
+    For Each t In FakStareTrace()
+        loF.ListColumns.Add.name = CStr(t)
+    Next t
+    loS.ListColumns(GetColumnIndex(TBL_FAKTURA_STAVKE, "Stornirano")).DataBodyRange.cells(1, 1).value = "Da"
+    loF.ListColumns(GetColumnIndex(TBL_FAKTURE, "OsirocenoOd")).DataBodyRange.cells(1, 1).value = "PRJ-SELFHEAL"
+
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail SRC, TBL_FAKTURA_STAVKE
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, "S7R2 self-heal: stari raspored linije obara kanonski prefiks"
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail SRC, TBL_FAKTURE
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, "S7R2 self-heal: stari raspored zaglavlja obara kanonski prefiks"
+
+    modSetup.ObrisiStareKoloneFakture
+
+    AssertEquals "", S7R2NadjeneKolone(TBL_FAKTURA_STAVKE, FakStareLinija()) & _
+                     S7R2NadjeneKolone(TBL_FAKTURE, FakStareZaglavlje()), _
+                 "S7R2 self-heal: nijedna stara kolona fakture nije ostala"
+    AssertEquals CStr(preS) & "|" & CStr(preF), _
+                 CStr(GetTable(TBL_FAKTURA_STAVKE).ListColumns.count) & "|" & _
+                 CStr(GetTable(TBL_FAKTURE).ListColumns.count), _
+                 "S7R2 self-heal: tabele su vracene na kanonski broj kolona"
+
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail SRC, TBL_FAKTURA_STAVKE
+    errNum = Err.Number
+    If errNum = 0 Then
+        modSchema.SchemaReadyOrFail SRC, TBL_FAKTURE
+        errNum = Err.Number
+    End If
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), "S7R2 self-heal: posle brisanja kanonski prefiks prolazi"
+
+    AssertEquals "", Trim$(S7R2RazlikeOdSvedoka(TBL_FAKTURA_STAVKE, svedokS) & " " & _
+                           S7R2RazlikeOdSvedoka(TBL_FAKTURE, svedokF)), _
+                 "S7R2 self-heal: prvi red nosi iste vrednosti po imenu"
+
+    ' Idempotentno: drugi prolaz nema sta da obrise.
+    modSetup.ObrisiStareKoloneFakture
+    AssertEquals CStr(preS) & "|" & CStr(preF), _
+                 CStr(GetTable(TBL_FAKTURA_STAVKE).ListColumns.count) & "|" & _
+                 CStr(GetTable(TBL_FAKTURE).ListColumns.count), _
+                 "S7R2 self-heal: drugi prolaz ne dira tabele"
+
+    ' Ciscenje NE ide kroz primitiv koji test meri: pokvaren primitiv bi ostavio staru
+    ' kolonu u sredini, a ona obara SVAKI sledeci upis fakture.
+    FakObrisiStareKoloneTest
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    FakObrisiStareKoloneTest
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' Review #453, S7R2-REV-01 (P1): kapija utovara je fail-closed i nad SEMOM linija.
+' Bez kolone UtovarID je modUtovar.AktivnihFstZaUtovar vracao nulu, a StornoUtovar,
+' koji semu linija sam ne proverava, bi tada stornirao utovar -- fakturisana GP roba
+' bi se vratila na stanje. A -> B -> A nad sopstvenim utovarom (nefakturisan, bez
+' ijedne linije): sa pokvarenom semom (kolona preimenovana, synthetic) citac pada
+' PO IMENU kolone, a storno ne prolazi i utovar ostaje nestorniran; sa vracenom semom
+' storno ISTOG utovara prolazi -- dokaz da ga je blokirala sema, a ne nesto drugo.
+' Kolona se vraca i u EH grani. Nepostojeca tabela ide istom granom (RequireTable).
+' SABOTAZA: s7r2-utovar-kapija-fail-open.
+Private Sub Test_S7R2_KapijaUtovaraFailClosed()
+    Const SRC As String = "Test_S7R2_KapijaUtovaraFailClosed"
+    Const PRIVREMENO As String = "UtovarID_S7R2"
+    On Error GoTo EH
+    Dim utX As String, st As Collection, lo As ListObject, iUt As Long
+    Dim gCitac As String, okB As Boolean, stornB As Boolean, okA As Boolean
+    Dim kolonaSkinuta As Boolean
+
+    Set st = New Collection
+    st.Add Array("PRE-SLED-U", 5#, 100#)
+    utX = modUtovar.CreateUtovar_TX(TEST_KUP_ID, st)
+    AssertTrue Len(utX) > 0, "S7R2 kapija utovara: preduslov -- utovar kroz pravi pisac"
+    If Len(utX) = 0 Then Exit Sub
+
+    Set lo = GetTable(TBL_FAKTURA_STAVKE)
+    iUt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
+    If iUt > 0 Then lo.ListColumns(iUt).name = PRIVREMENO
+    kolonaSkinuta = (GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID) = 0)
+
+    On Error Resume Next
+    Err.Clear
+    Call modUtovar.AktivnihFstZaUtovar(utX)
+    gCitac = Err.description
+    Err.Clear
+    On Error GoTo EH
+    okB = modStorno.StornoUtovar_TX(utX)
+    stornB = S6K4Stornirano(TBL_UTOVAR, COL_UT_ID, utX)
+
+    If iUt > 0 Then lo.ListColumns(iUt).name = COL_FS_UTOVAR_ID
+    okA = modStorno.StornoUtovar_TX(utX)
+
+    AssertTrue kolonaSkinuta, "S7R2 kapija utovara: preduslov -- kolona UtovarID je skinuta"
+    AssertTrue InStr(1, gCitac, COL_FS_UTOVAR_ID, vbTextCompare) > 0, _
+               "S7R2 kapija utovara: citac bez kolone UtovarID pada po imenu kolone"
+    AssertTrue Not okB And Not stornB, _
+               "S7R2 kapija utovara: bez kolone UtovarID storno utovara ne prolazi"
+    AssertTrue okA And S6K4Stornirano(TBL_UTOVAR, COL_UT_ID, utX), _
+               "S7R2 kapija utovara: KONTROLA -- sa vracenom semom storno istog utovara prolazi"
+    Exit Sub
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If iUt > 0 Then
+        If GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID) = 0 Then lo.ListColumns(iUt).name = COL_FS_UTOVAR_ID
+    End If
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' Otisak SVIH kolona svih linija jedne fakture, redom u tabeli. Meri da storno linije
+' ne dira -- ni kolone koje kanon vise ne zna, dok ih sveska nosi.
+Private Function S7R2OtisakLinija(ByVal fid As String) As String
+    Dim d As Variant, i As Long, j As Long, cF As Long, s As String
+    If Len(fid) = 0 Then Exit Function
+    d = GetTableData(TBL_FAKTURA_STAVKE)
+    If Not IsArray(d) Then Exit Function
+    cF = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID)
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cF), "")) = fid Then
+            For j = 1 To UBound(d, 2)
+                s = s & "|" & CStr(nz(d(i, j), ""))
+            Next j
+            s = s & ";"
+        End If
+    Next i
+    S7R2OtisakLinija = s
+End Function
+
+' Kodovi nalaza ugovora dokumenta za jednu fakturu, spojeni ";" (prazno = bez nalaza).
+Private Function S7R2NalaziFakture(ByVal fid As String) As String
+    Dim n As Variant, s As String
+    If Len(fid) = 0 Then Exit Function
+    For Each n In modFaktura.UgovorLinijaFaktureNalazi()
+        If StrComp(CStr(n(2)), fid, vbTextCompare) = 0 Then
+            If Len(s) > 0 Then s = s & ";"
+            s = s & CStr(n(0))
+        End If
+    Next n
+    S7R2NalaziFakture = s
+End Function
+
+Private Function S7R2ImaNalaz(ByVal kod As String, ByVal fid As String) As Boolean
+    S7R2ImaNalaz = (InStr(1, ";" & S7R2NalaziFakture(fid) & ";", ";" & kod & ";", vbTextCompare) > 0)
+End Function
+
+' Sinteticka GP linija (izvor je prerada) na zadatu fakturu. Pozivalac je dodaje u
+' svojoj transakciji i vraca rollback-om.
+Private Sub S7R2SejGpLiniju(ByVal sid As String, ByVal fakID As String)
+    Const SRC As String = "S7R2SejGpLiniju"
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_FAKTURA_STAVKE)
+    SetRequiredField rowData, TBL_FAKTURA_STAVKE, COL_FS_ID, sid
+    SetRequiredField rowData, TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, fakID
+    SetRequiredField rowData, TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID, "PRE-" & sid
+    If AppendRow(TBL_FAKTURA_STAVKE, rowData) <= 0 Then
+        Err.Raise vbObjectError + 9322, SRC, "AppendRow za tblFakturaStavke nije uspeo."
+    End If
+End Sub
+
+' Sinteticko AKTIVNO zaglavlje fakture bez linija. Pozivalac ga dodaje u svojoj
+' transakciji i vraca rollback-om.
+Private Sub S7R2SejZaglavlje(ByVal fakID As String)
+    Const SRC As String = "S7R2SejZaglavlje"
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_FAKTURE)
+    SetRequiredField rowData, TBL_FAKTURE, COL_FAK_ID, fakID
+    SetRequiredField rowData, TBL_FAKTURE, COL_FAK_KUPAC, TEST_KUP_ID
+    SetRequiredField rowData, TBL_FAKTURE, COL_FAK_STATUS, STATUS_NEPLACENO
+    If AppendRow(TBL_FAKTURE, rowData) <= 0 Then
+        Err.Raise vbObjectError + 9323, SRC, "AppendRow za tblFakture nije uspeo."
+    End If
+End Sub
+
+' Upisuje vrednost u kolonu linije zadate fakture i klase (tacno jedna linija).
+Private Sub S7R2PostaviNaLiniji(ByVal fid As String, ByVal klasa As String, _
+                                ByVal kolona As String, ByVal vrednost As String)
+    Const SRC As String = "S7R2PostaviNaLiniji"
+    Dim d As Variant, i As Long, cF As Long, cK As Long, red As Long, n As Long
+    d = GetTableData(TBL_FAKTURA_STAVKE)
+    If Not IsArray(d) Then Exit Sub
+    cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    cK = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KLASA, SRC)
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cF), "")) = fid And Trim$(nz(d(i, cK), "")) = klasa Then
+            red = i
+            n = n + 1
+        End If
+    Next i
+    If n <> 1 Then
+        Err.Raise vbObjectError + 9324, SRC, "Faktura " & fid & " nema tacno jednu liniju klase " & klasa
+    End If
+    RequireUpdateCell TBL_FAKTURA_STAVKE, red, kolona, vrednost, SRC
+End Sub
+
+' Kolone koje je S7 rez 2 obrisao, po imenu (literali: konstante se ne vracaju).
+Private Function FakStareLinija() As Variant
+    FakStareLinija = Array("Stornirano", "OsirocenoOd")
+End Function
+
+Private Function FakStareTrace() As Variant
+    FakStareTrace = Array("IspravkaOd", "ZamenjenSa", "CorrectionID", "IzdatoStatus", "GeneracijaID")
+End Function
+
+Private Function FakStareZaglavlje() As Variant
+    FakStareZaglavlje = Array("OsirocenoOd", "IspravkaOd", "ZamenjenSa", "CorrectionID", _
+                              "IzdatoStatus", "GeneracijaID")
+End Function
+
+' Imena iz spiska koja tabela ima ("tbl.Kolona ...", prazno = nijedno).
+Private Function S7R2NadjeneKolone(ByVal tbl As String, ByVal imena As Variant) As String
+    Dim k As Long, s As String
+    For k = LBound(imena) To UBound(imena)
+        If GetColumnIndex(tbl, CStr(imena(k))) > 0 Then s = s & tbl & "." & CStr(imena(k)) & " "
+    Next k
+    S7R2NadjeneKolone = Trim$(s)
+End Function
+
+' Prvi red tabele, svaka kanonska kolona po imenu.
+Private Function S7R2SvedokPrvogReda(ByVal tbl As String) As Object
+    Dim kanon As Collection, lo As ListObject, k As Long, ime As String, d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set lo = GetTable(tbl)
+    Set kanon = modSchema.SchemaTableColumns(tbl)
+    For k = 1 To kanon.count
+        ime = CStr(kanon(k))
+        d(ime) = CStr(nz(lo.ListColumns(GetColumnIndex(tbl, ime)).DataBodyRange.cells(1, 1).value, ""))
+    Next k
+    Set S7R2SvedokPrvogReda = d
+End Function
+
+' Kanonske kolone prvog reda cija se vrednost razlikuje od svedoka.
+Private Function S7R2RazlikeOdSvedoka(ByVal tbl As String, ByVal svedok As Object) As String
+    Dim lo As ListObject, k As Variant, s As String
+    Set lo = GetTable(tbl)
+    For Each k In svedok.keys
+        If CStr(nz(lo.ListColumns(GetColumnIndex(tbl, CStr(k))).DataBodyRange.cells(1, 1).value, "")) _
+           <> CStr(svedok(k)) Then s = s & tbl & "." & CStr(k) & " "
+    Next k
+    S7R2RazlikeOdSvedoka = Trim$(s)
+End Function
+
+' Brise stare kolone GENERICKIM primitivom, po imenu -- nezavisno od
+' modSetup.ObrisiStareKoloneFakture, koji Test_S7R2_FakturaStareKoloneSelfHeal meri.
+Private Sub FakObrisiStareKoloneTest()
+    Dim a As Variant, k As Long
+    a = FakStareLinija()
+    For k = LBound(a) To UBound(a)
+        modSetup.ObrisiKolonuAko TBL_FAKTURA_STAVKE, CStr(a(k))
+    Next k
+    a = FakStareZaglavlje()
+    For k = LBound(a) To UBound(a)
+        modSetup.ObrisiKolonuAko TBL_FAKTURE, CStr(a(k))
+    Next k
 End Sub
 
 ' SEF stanje fakture (synthetic, fault injection): workflow i spoljni status.

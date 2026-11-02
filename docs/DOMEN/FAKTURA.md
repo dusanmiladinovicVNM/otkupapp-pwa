@@ -81,6 +81,15 @@ meri tu kapiju). Važi i za GP linije (`modUtovar`). Storno GP fakture i dalje o
 (`modStorno.ReleaseUtovarFromFaktura:1692`) u istoj transakciji: linija se ne piše, marker utovara
 da (`S7-REV-01`, plan §14.57).
 
+Urađeno u S7 rezu 2 (stavka 259):
+
+- aktivnost zaglavlja čita jedan čitač, `modFaktura.AktivnostFaktura`, i pitaju ga svi čitaoci
+  aktivnosti linije;
+- `tblFakturaStavke` je u `BEZ_STORNA`;
+- storno fakture kroz `OslobodiUtovareFakture` dira samo GP utovar;
+- zatečena sveska gubi kolone kroz `modSetup.ObrisiStareKoloneFakture`;
+- ugovor dokumenta (health 3) meri `modFaktura.UgovorLinijaFaktureNalazi`.
+
 **`FAK-ODL-04` — saldo kupca ostaje robni.** C-003 i C-004 ostaju vrednost stavki
 prijemnica minus uplate kupca (prevedeno u S6 koraku 3, `modIzvestaj.ReportSaldoKupci:2687`).
 „Kartica kupca" iz tabele slajsova nije postojeća sposobnost (KARTICA postoji samo za
@@ -110,3 +119,17 @@ Izmereno pre odluke: `KupciUplata` bez fakture nastaje samo stornom, jer je oba 
 samo uz fakturu (`modNovacUnos.UplataValidiraj`, `modBankaMapiranje.MapBankaImportAsKupac`).
 Zato proširen čitač avansa tačno odgovara `FAK-ODL-05`. Tip u ovom toku čita samo taj izvoz;
 zbir po kupcu (`ExportSaldoKupci`) broji oba tipa.
+
+**`FAK-ODL-07` — `tblFakture` gubi pet trace kolona ispravke (operater, 02.11.2026, pre koda S7
+reza 2; nalaz N10).** `IspravkaOd`, `ZamenjenSa`, `CorrectionID`, `IzdatoStatus` i `GeneracijaID`
+brišu se iz kanona `tblFakture` u istom rezu kao `FAK-ODL-03`, istim self-heal-om.
+
+Razlog:
+
+- nijedan pisac fakture ih ne puni;
+- nijedan njihov čitalac ne dodiruje fakturu. Okvir ispravke nema fakturu
+  (`modStornoDok.TabelaZaPrefill`), a ispravka fakture je storno + nova faktura (§1);
+- dodaje ih samo `modSetup.EnsureSledljivostSchema`, koja zato izuzima fakturu.
+
+Kolone stoje na kraju kanona, pa brisanje ne pomera pozicioni upis. Mereno u pre-flight-u reza 2
+(plan §14.57).

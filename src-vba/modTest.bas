@@ -18247,7 +18247,7 @@ Private Sub T_Fak_DostupnostSePrenosiURedu()
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     rowFs = AppendRow(TBL_FAKTURA_STAVKE, Array( _
-        "FST-K5-BEZBROJA", "FAK-TEST-0", FX_PRJ_FAK2, 100, 40#, "I", "21/150326", "", ""))
+        "FST-K5-BEZBROJA", "FAK-TEST-0", FX_PRJ_FAK2, 100, 40#, "I", "21/150326"))
     RequireUpdateCell TBL_FAKTURA_STAVKE, rowFs, COL_FS_PRIJEMNICA_STAVKA_ID, FX_PRS_FAK2, _
                       "T_Fak_DostupnostSePrenosiURedu"
 
@@ -18664,6 +18664,20 @@ End Sub
 ' (parcijalna prodaja legalna); prerada se NE zakljucava markerom.
 ' Storno: faktura oslobadja utovar; utovar (nefakturisan) vraca robu
 ' na stanje; prerada sa aktivnim utovarom se ne stornira.
+' Rogue AKTIVNO zaglavlje fakture za test kontradikcije (S7 rez 2). Linija nema svoj
+' storno (FAK-ODL-03), pa je rogue linija aktivna samo na AKTIVNOJ fakturi; ciscenje
+' stornira to zaglavlje (RogueFakturaStorniraj). Upis je po imenu, mimo pisca:
+' preduslov je namerno kontradiktoran i nijedan pisac ga ne pravi.
+Private Function RogueFakturaZaglavlje(ByVal fakturaID As String, ByVal kupacID As String) As Long
+    Dim lo As ListObject, red As Variant
+    Set lo = GetTable(TBL_FAKTURE)
+    ReDim red(1 To lo.ListColumns.count)
+    red(RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, "modTest")) = fakturaID
+    red(RequireColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC, "modTest")) = kupacID
+    red(RequireColumnIndex(TBL_FAKTURE, COL_FAK_STATUS, "modTest")) = STATUS_NEPLACENO
+    RogueFakturaZaglavlje = AppendRow(TBL_FAKTURE, red)
+End Function
+
 Private Sub T_FakturaGP_WriterKapijeIStorno()
     Dim s As Collection, fid As String
 
@@ -18921,10 +18935,14 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
 
     ' --- Revizija #7 B2: "nefakturisan" utovar sa AKTIVNOM faktura-
     ' stavkom je kontradikcija -- re-fakturisanje preko nje bi bilo
-    ' dupla prodaja. Rogue aktivna FST pa pokusaj.
-    Dim rowRog As Long
+    ' dupla prodaja. Rogue aktivna FST pa pokusaj. Linija nema svoj storno
+    ' (FAK-ODL-03, S7 rez 2), pa rogue FST stoji na svom AKTIVNOM zaglavlju --
+    ' fid je ovde vec storniran, i linija na njemu ne bi bila aktivna.
+    Dim rowRog As Long, rowRogFak As Long
+    rowRogFak = RogueFakturaZaglavlje("FAK-ROGUE-1", FX_KUPAC2)
+    AssertEq (rowRogFak > 0), True, "rogue zaglavlje upisano"
     rowRog = AppendRow(TBL_FAKTURA_STAVKE, Array( _
-        "FST-ROGUE-1", fid, "", 30.5, 100#, "", "", "", ""))
+        "FST-ROGUE-1", "FAK-ROGUE-1", "", 30.5, 100#, "", ""))
     AssertEq (rowRog > 0), True, "rogue FST upisana"
     RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_PRERADA_ID, _
                       "PRE-GP-W1", "T162"
@@ -18932,7 +18950,7 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
                       utID2, "T162"
     AssertEq modUtovar.CreateFakturaIzUtovara_TX(utID2), "", _
              "nefakturisan utovar sa aktivnom FST se ne fakturise ponovo"
-    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_STORNIRANO, "Da", "T162"
+    RequireUpdateCell TBL_FAKTURE, rowRogFak, COL_STORNIRANO, "Da", "T162"
 
     ' --- Revizija #6/#7 B1 lifecycle: nova faktura iz ISTOG utovara --
     ' roba je fizicki izasla JEDNOM, ne pravi se nov utovar.
@@ -27024,9 +27042,13 @@ Private Sub T_UtovarB_StornoKapije()
 
     ' --- B2: aktivna FST na "nefakturisanom" utovaru = kontradikcija;
     ' header marker sam nije dovoljan ni za storno ni za re-fakturu.
-    Dim rowRog As Long
+    ' Linija nema svoj storno (FAK-ODL-03, S7 rez 2): rogue FST stoji na svom
+    ' AKTIVNOM zaglavlju, pa ciscenje stornira zaglavlje, ne tudju fakturu.
+    Dim rowRog As Long, rowRogFak As Long
+    rowRogFak = RogueFakturaZaglavlje("FAK-ROGUE-B2", FX_KUPAC2)
+    AssertEq (rowRogFak > 0), True, "rogue zaglavlje upisano"
     rowRog = AppendRow(TBL_FAKTURA_STAVKE, Array( _
-        "FST-ROGUE-B2", "FAK-SLED-GP4", "", 50, 100#, "", "", "", ""))
+        "FST-ROGUE-B2", "FAK-ROGUE-B2", "", 50, 100#, "", ""))
     AssertEq (rowRog > 0), True, "rogue FST upisana"
     RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_PRERADA_ID, _
                       "PRE-SLED-U", "T163"
@@ -27036,7 +27058,7 @@ Private Sub T_UtovarB_StornoKapije()
              "aktivna FST blokira storno utovara i bez header markera"
     AssertEq modUtovar.CreateFakturaIzUtovara_TX("UT-SLED-U"), "", _
              "aktivna FST blokira re-fakturisanje"
-    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_STORNIRANO, "Da", "T163"
+    RequireUpdateCell TBL_FAKTURE, rowRogFak, COL_STORNIRANO, "Da", "T163"
 
     ' --- B3: storno fakture sa korumpiranom stavkom NE oslobadja tudj
     ' utovar. UT-SLED-U se prvo legalno fakturise (cena sa stavke).
@@ -27076,7 +27098,7 @@ Private Sub T_UtovarB_StornoKapije()
     ' Korumpirana stavka: aktivna FST na fidX tvrdi UT-SLED-U, koji
     ' tvrdi fidU -- storno fidX ne sme da mu resetuje marker.
     rowRog = AppendRow(TBL_FAKTURA_STAVKE, Array( _
-        "FST-ROGUE-B3", fidX, "", 1, 100#, "", "", "", ""))
+        "FST-ROGUE-B3", fidX, "", 1, 100#, "", ""))
     RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_PRERADA_ID, _
                       "PRE-SLED-U", "T163"
     RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_UTOVAR_ID, _

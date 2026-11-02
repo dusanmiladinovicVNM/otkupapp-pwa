@@ -627,7 +627,6 @@ Public Function StornoFaktura(ByVal fakturaID As String) As Boolean
     RequireColumnIndex TBL_FAKTURE, COL_FAK_STATUS, SRC
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC
-    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC
 
     ' FAK-ODL-02: dok faktura zivi na SEF-u, lokalni storno bi ostavio dokument
     ' koji kupac i poreska uprava i dalje vide kao vazeci. Kapija je u jezgru, pre
@@ -640,7 +639,7 @@ Public Function StornoFaktura(ByVal fakturaID As String) As Boolean
     MarkRowStornirano TBL_FAKTURE, rowFak, SRC
     RequireUpdateCell TBL_FAKTURE, rowFak, COL_FAK_STATUS, STATUS_STORNIRANO, SRC
 
-    StornoFakturaStavke fakturaID
+    OslobodiUtovareFakture fakturaID
     ' R3 rollback dokaz: tacka je POSLE oslobadjanja prijemnica/prerada
     ' a PRE kraja -- pukne li ovde, TX mora da vrati i tblPrerada.
     If mTestFailPosleRelease Then
@@ -1646,12 +1645,15 @@ End Function
 ' PRIVATE BUSINESS HELPERS
 ' ============================================================
 
-' Linije fakture se storniraju. Prijemnica se time OSLOBADJA SAMA -- njena
-' fakturisanost je izvedena iz aktivnih linija (S6 korak 5, FAK-LIN-03), pa se na
-' njoj nista ne pise. Do koraka 5 je ovde stajao ReleasePrijemnicaFromFaktura,
-' koji je brisao kes Fakturisano/FakturaID na zaglavlju.
-Private Sub StornoFakturaStavke(ByVal fakturaID As String)
-    Const SRC As String = "StornoFakturaStavke"
+' Storno fakture NE pise linije (FAK-ODL-03, S7 rez 2): linija je aktivna ako i
+' samo ako je aktivna njena faktura, pa je storno zaglavlja ujedno storno linija.
+' Do reza 2 je ovde stajao StornoFakturaStavke, koji je svakoj liniji pisao
+' Stornirano. Prijemnica se oslobadja SAMA -- njena fakturisanost je izvedena iz
+' aktivnih linija (S6 korak 5, FAK-LIN-03). Ostaje samo GP grana: utovar nosi svoj
+' marker (cinjenica utovara, ne izvedena), pa ga storno fakture oslobadja u istoj
+' transakciji (S7-REV-01).
+Private Sub OslobodiUtovareFakture(ByVal fakturaID As String)
+    Const SRC As String = "OslobodiUtovareFakture"
 
     Dim stavkeData As Variant
     stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
@@ -1679,8 +1681,6 @@ Private Sub StornoFakturaStavke(ByVal fakturaID As String)
 
     For i = 1 To UBound(stavkeData, 1)
         If Trim$(CStr(stavkeData(i, colFakID))) = Trim$(fakturaID) Then
-            MarkRowStornirano TBL_FAKTURA_STAVKE, i, SRC
-
             If colUtID > 0 Then
                 Dim utID As String
                 utID = Trim$(CStr(nz(stavkeData(i, colUtID))))

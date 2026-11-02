@@ -136,8 +136,6 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     Dim colCena As Long
     Dim colKlasa As Long
     Dim colBrojPrijemnice As Long
-    Dim colStStornirano As Long
-    Dim colStOsiroceno As Long
 
     colStFakturaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, "FakturaID", SRC)
     colPrijemnicaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, "PrijemnicaID", SRC)
@@ -163,11 +161,14 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     ' preradi -- poredi se 1:1 sa aktivnim UtovarStavkama tog utovara.
     Dim gpKg As Object: Set gpKg = CreateObject("Scripting.Dictionary")
     gpKg.CompareMode = vbTextCompare
-    ' AUD-031: active-line markers. Both exist on tblFakturaStavke (full storno
-    ' sets Stornirano="Da" on every line; a storno-ed invoiced prijemnica sets
-    ' OsirocenoOd). RequireColumnIndex keeps the tax send path fail-closed.
-    colStStornirano = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC)
-    colStOsiroceno = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD, SRC)
+    ' AUD-031 / FAK-ODL-03 (S7 rez 2): linija nema svoj storno -- aktivna je ako i
+    ' samo ako je aktivna njena faktura. Zato se linije vise ne filtriraju, nego se
+    ' neaktivna faktura odbija ovde, pre prve linije. U normalnom toku je vec odbija
+    ' ValidateFakturaForSEF; ovo je defense-in-depth za svakog drugog pozivaoca.
+    If Not modFaktura.LinijaFaktureAktivna(modFaktura.AktivnostFaktura(), fakturaID) Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Faktura nije aktivna (stornirana, nepostojeca ili dvosmislena): " & fakturaID
+    End If
 
     Dim line As clsSEFLine
     Dim prijemnicaID As String
@@ -191,14 +192,6 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     For i = 1 To UBound(stavke, 1)
 
         If CStr(stavke(i, colStFakturaID)) = fakturaID Then
-
-            ' AUD-031: build UBL only from ACTIVE stavke. Skip a line that is
-            ' stornirana (Stornirano="DA") or orphaned (OsirocenoOd set, i.e.
-            ' its invoiced prijemnica was storno-ed) so line totals stay
-            ' consistent. In the normal flow ValidateFakturaForSEF has already
-            ' blocked such invoices; this is defense-in-depth.
-            If UCase$(Trim$(CStr(stavke(i, colStStornirano)))) = "DA" Then GoTo NextStavka
-            If Len(Trim$(CStr(stavke(i, colStOsiroceno)))) > 0 Then GoTo NextStavka
 
             prijemnicaID = Trim$(CStr(stavke(i, colPrijemnicaID)))
             brojPrijemnice = Trim$(CStr(stavke(i, colBrojPrijemnice)))
@@ -310,7 +303,6 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
 
         End If
 
-NextStavka:
     Next i
 
     If dto.lines.count = 0 Then

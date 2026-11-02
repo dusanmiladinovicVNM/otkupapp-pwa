@@ -41,7 +41,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "87AB4F9B"
+Public Const SCHEMA_FINGERPRINT As String = "B22A1572"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -1037,8 +1037,6 @@ Private Sub SpecFakturaStavke(ByVal reg As Object)
     k.Add "Cena"
     k.Add "Klasa"
     k.Add "BrojPrijemnice"
-    k.Add "Stornirano"
-    k.Add "OsirocenoOd"
     k.Add "CreatedAt"
     k.Add "CreatedBy"
     k.Add "ModifiedAt"
@@ -1061,7 +1059,6 @@ Private Sub SpecFakture(ByVal reg As Object)
     k.Add "Status"
     k.Add "DatumPlacanja"
     k.Add "Stornirano"
-    k.Add "OsirocenoOd"
     k.Add "SEFWorkflowState"
     k.Add "SEFStatus"
     k.Add "SEFDocumentId"
@@ -1078,11 +1075,6 @@ Private Sub SpecFakture(ByVal reg As Object)
     k.Add "CreatedBy"
     k.Add "ModifiedAt"
     k.Add "ModifiedBy"
-    k.Add "IspravkaOd"
-    k.Add "ZamenjenSa"
-    k.Add "CorrectionID"
-    k.Add "IzdatoStatus"
-    k.Add "GeneracijaID"
     RegistrujTabelu reg, TBL_FAKTURE, "Fakture", k
 End Sub
 

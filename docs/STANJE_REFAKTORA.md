@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 02.11.2026 (stavka 256: ručna provera PR `#452` i Compile prošli — ručne kapije zatvorene).
+**Ažurirano:** 02.11.2026 (stavka 262: ručna provera i Compile PR `#453` prošli).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -37,7 +37,7 @@
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
 | **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): ✅ merge **`#450`** (`fd39a716`, 01.11.2026) — review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); stavka 250 |
-| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); čeka merge |
+| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); ✅ merge **`#452`** (`ff3e9c7a`, 02.11.2026, stavka 257). **Rez 2: pre-flight ✅** (stavka 258, `FAK-ODL-07`); **kod ✅** (stavka 259, PR `#453`); review HOLD → P1 ispravljen (stavka 260, `KI-077`/`KI-078` za rez 3); crveno nad starim kodom, zeleno (308 / 2868 / 111 / 39), dokaz 13/13 (stavka 261); ručna provera i Compile ✅ (stavka 262); čeka merge |
 | S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -8967,6 +8967,199 @@
        Sva tri pokrivaju samo testovi.
      - **Status PR `#452`:** MERGE HOLD iz stavke 255 više nema uzrok. Merge čeka izričit zahtev operatera.
      - **Sledeći brojevi:** test 309 · stavka 257 · KI-077.
+
+257. **Merge `#452` u `main` — `ff3e9c7a`** (02.11.2026, asistent uz izričito „Merge posle CI-a"). S7 rez 1 —
+     storno fakture do kraja (stavke 253–256, `FAK-ODL-02/-05/-06`, `KI-041` CLOSED). Roditelji su `eb6c5970`
+     (`main` posle `#451`) i `ee93420b` (vrh grane). CI `static` PASS nad `ee93420b`; merge vezan za taj commit
+     (`--match-head-commit`). Stablo `main`-a je isto kao stablo `ee93420b`, pa baseline iz stavke 254 važi
+     nepromenjen: `RunAllTests` 308 / 0, BFP 2832 / 0, Storno 111 / 0, Faktura 39 / 0, katalog sabotaža 1100,
+     otisak šeme 87AB4F9B. Sledi S7 rez 2 (`FAK-ODL-03`, uslov `S7-REV-01`).
+     - **Sledeći brojevi:** test 309 · stavka 258 · KI-077.
+
+258. **Pre-flight S7 rez 2 — linija bez sopstvenog storna (`FAK-ODL-03`)** (02.11.2026, grana
+     `claude/s7-rez2-linija-storno` od `ff3e9c7a`). Zapis: plan §14.57, „Pre-flight S7 rez 2". Produkcionog
+     koda nema.
+
+     - **Izmereno:**
+       - dva poziciona pisca zaglavlja i linije (`modFaktura`, `modUtovar`) i četiri poziciona test sejača;
+       - deset čitalaca aktivnosti linije (tabela u planu). Dva od njih bi posle brisanja kolone ćutke promenila
+         ishod: `ExcludeStornirano` nad tabelom iz `BEZ_STORNA` vraća sve redove (R2-1), a provera aktivnih
+         referenci čita kolonu meko (R2-2).
+     - **Ispravka dopune `S7-REV-01` (R2-4):** tvrdnja „utovar koji tvrdi drugu fakturu se ne dira" već postoji
+       (`T_UtovarB_StornoKapije`, `modTest:27086`). Fali samo sabotaža.
+     - **Premisa tri postojeća testa se menja (R2-3):**
+       - slučaj 3 u `Test_S6K5_LinijaBezFaktureJeKvar` postaje legitimno stanje storna;
+       - rogue linija u `T_FakturaGP_WriterKapijeIStorno` stoji na storniranoj fakturi, pa dobija svoje aktivno
+         zaglavlje;
+       - čišćenje rogue linija ide stornom zaglavlja.
+     - **N5** je potvrđen čitanjem, a nije izmeren: nijedan test ne zove health check. **N10:** pet trace kolona
+       `tblFakture` nema ni pisca ni čitaoca koji dodiruje fakturu → pitanje operateru o obimu.
+     - **Verdikt:** sve ose PROVEN; ugovor prihvatanja ima četiri `Test_S7R2_*` i šest `s7r2-*` sabotaža. GO za
+       kod posle odgovora na N10.
+     - **Odluka operatera (N10): da, u rezu 2** → `FAK-ODL-07` (`docs/DOMEN/FAKTURA.md`). Iz `tblFakture` odlaze
+       i `IspravkaOd`, `ZamenjenSa`, `CorrectionID`, `IzdatoStatus` i `GeneracijaID`, a `EnsureSledljivostSchema`
+       izuzima fakturu. **GO za kod.**
+     - **Provere:** samo dokumentacija; `src-vba`, `tools` i `schema` su bajt-isti kao u `ff3e9c7a`.
+     - **Sledeći brojevi:** test 309 · stavka 259 · KI-077.
+
+259. **S7 rez 2 — linija fakture bez sopstvenog storna (`FAK-ODL-03`, `FAK-ODL-07`; N5, N6, N10)** (02.11.2026,
+     grana `claude/s7-rez2-linija-storno`). Plan §14.57, „S7 rez 2 — kod".
+
+     - **Šema** (otisak `87AB4F9B` → `B22A1572`):
+       - `tblFakturaStavke` gubi `Stornirano` i `OsirocenoOd`;
+       - `tblFakture` gubi `OsirocenoOd` i pet trace kolona;
+       - `tblFakturaStavke` prelazi u `BEZ_STORNA`;
+       - zatečena sveska kolone gubi kroz `modSetup.ObrisiStareKoloneFakture`, pre provere otiska;
+       - `EnsureSledljivostSchema` izuzima fakturu.
+     - **Kod:**
+       - dva poziciona pisca su skraćena (`modFaktura.CreateFaktura`, `modUtovar.CreateFakturaIzUtovara`);
+       - aktivnost zaglavlja čita jedan čitač, `modFaktura.AktivnostFaktura` (+ `LinijaFaktureAktivna`). Pitaju ga
+         `FakturaLinijePoStavci` (greška 1768 je obrisana), `AktivnihFstZaUtovar` (nepoznata faktura se broji,
+         fail-closed), `BuildFakturaVrstaUdeoCache` i health provera aktivnih referenci;
+       - SEF mapper ne filtrira linije, nego odbija neaktivnu fakturu pre prve linije;
+       - validator je izgubio proveru `OsirocenoOd`;
+       - storno fakture ne piše linije: `StornoFakturaStavke` → `OslobodiUtovareFakture`, a GP utovar se
+         oslobađa kao pre (`S7-REV-01`);
+       - health check 3 meri ugovor dokumenta kroz `modFaktura.UgovorLinijaFaktureNalazi` (N5);
+       - `GetVrstaFromFaktura` je obrisan (N6).
+
+       Potpisi javnih procedura se ne menjaju.
+     - **R2-1 zatvoren:** u produkciji je 0 pogodaka i za `ExcludeStornirano(…TBL_FAKTURA_STAVKE)` i za
+       `TBL_FAKTURA_STAVKE` + `COL_STORNIRANO` / `COL_OSIROCENO_OD`. Generički čitaoci (`modDokumenta`,
+       `modIntegritet`) linije fakture ne čitaju.
+     - **Testovi (BFP, 4 nova):**
+       - `Test_S7R2_StornoFakturePiseSamoZaglavlje`;
+       - `Test_S7R2_AktivnostLinijeIzZaglavlja` (zove samo API koji postoji i pre reza, pa se meri crven nad
+         starim kodom);
+       - `Test_S7R2_UgovorLinijaFakture`;
+       - `Test_S7R2_FakturaStareKoloneSelfHeal`.
+
+       Testovi 3 i 4 zovu nov API, pa ih crveni prolaz nad starim kodom ne kompajlira: njihov dokaz su sabotaže.
+     - **Prepravljeni testovi (R2-3):**
+       - slučaj 3 u `Test_S6K5_LinijaBezFaktureJeKvar` meri novo pravilo;
+       - rogue linije u `T_FakturaGP_WriterKapijeIStorno` i `T_UtovarB_StornoKapije` stoje na svom aktivnom
+         zaglavlju (`RogueFakturaZaglavlje`), a čišćenje stornira zaglavlje;
+       - četiri poziciona sejača su skraćena;
+       - golden A1, A2 i F2 su bez dva reda, a probe su obrisane;
+       - BFP čistač više ne stornira linije.
+     - **Fixture:** `DROP_COLS` za obe tabele; izvedene linije više ne nose `Stornirano`.
+     - **Sabotaže:** katalog 1100 → **1106**.
+       - zamene: `s7r2-aktivnost-ignorise-storno` i `s7r2-citac-linija-ne-pita-zaglavlje`;
+       - presidrene: `s6k5-linija-bez-fakture-prolazi`, `s6k5-linija-na-nepostojecu-fakturu`;
+       - nove: `s7r2-utovar-ne-pita-zaglavlje`, `s7r2-storno-oslobadja-tudji-utovar` (R2-4),
+         `s7r2-ugovor-linija-bez-fakture`, `s7r2-ugovor-faktura-bez-linija`, `s7r2-selfheal-ne-brise`,
+         `s7r2-sledljivost-vraca-trace`.
+
+       Sidra `storno-gp-faktura-ne-oslobadja-utovar` i `utovar-gp-refakt-aktivna-fst` važe bez izmene.
+     - **Kapije — PASS:** `vba_check` (191, katalog 0 nalaza), `gen_schema_module --check`, `who_writes --check`
+       (`WHO_WRITES.md` ažuran) i `--check-ownership`, `popis_citalaca --check`.
+     - **NOT RUN (skupe kapije, čekaju odobrenje operatera):**
+       - regenerisanje fixture-a (`make_fixture`);
+       - crveni prolaz nad starim kodom;
+       - TARGETED `RunAllTests`, BFP, `RunStornoTestSuite`, `Test_StornoCentar_All`, `RunFakturaSmokeSuite`,
+         `RunGoldenSuite`;
+       - `dokaz.py`;
+       - Compile.
+     - **Sledeći brojevi:** test 309 · stavka 260 · KI-077.
+
+260. **Nezavisni review PR `#453` (02.11.2026) — REVIEW HOLD, ocena strukture 8,8 / 10; P1 ispravljen u istom
+     PR-u.** CODE GO je bio HOLD samo zbog GP kapije, TEST GO čeka ispravku i izvršavanje, MERGE HOLD. CI `static`
+     #1117 PASS nad `c799527f`. Review potvrđuje glavnu promenu: aktivnost iz zaglavlja, sačuvano GP oslobađanje
+     (`S7-REV-01`), pisci i šema usklađeni (zaglavlje 20 vrednosti, linija 7), prepravljeni testovi mere novo pravilo.
+
+     - **P1 `S7R2-REV-01` → ispravljen.** `modUtovar.AktivnihFstZaUtovar` je zadržao meku granu: bez kolone
+       `UtovarID` (i bez tabele linija) vraćao je 0. `StornoUtovar` šemu linija sam ne proverava, pa bi tada
+       stornirao utovar fakturisane GP robe. Potvrđeno čitanjem (`modStorno:1453`); slabost je stara (krug 5).
+       - **Ispravka:** `RequireTable` + `RequireColumnIndex` za `UtovarID`; prazna tabela ostaje legitimna nula.
+         Meka grana „sveska pre GP nadogradnje" je obrisana: kolona je u kanonu, a `EnsureRuntimeSchema` je dodaje na
+         svakom startu.
+       - **Test:** `Test_S7R2_KapijaUtovaraFailClosed` (BFP), A → B → A nad sopstvenim utovarom. Bez kolone čitač
+         pada po imenu kolone, a storno ne prolazi i utovar ostaje nestorniran. Sa vraćenom šemom storno istog
+         utovara prolazi, što dokazuje da ga je blokirala šema.
+       - **Sabotaža:** `s7r2-utovar-kapija-fail-open` vraća staru granu. Katalog **1107**.
+     - **P2 `S7R2-REV-02` → `KI-077`.** Health 6c sabira živu vrednost fakture samo preko `PrijemnicaStavkaID`, pa
+       aktivnu GP fakturu javlja kao drift. Potvrđeno čitanjem, zatečeno od S6 koraka 5. Rešenje je sopstveno GP
+       poređenje, ne izuzeće; zatvara se pre proglašenja produkcionog health-a zelenim (kandidat za rez 3).
+     - **P2 `S7R2-REV-03` → `KI-078`.** Ugovor dokumenta ne proverava da prerada i utovar GP linije postoje. Drže ih
+       pisac i SEF kapija, ali ne i health. Kandidat za rez 3.
+     - **Kapije posle ispravke — PASS:** `vba_check` (191, katalog 1107, 0 nalaza), `gen_schema_module --check`,
+       `who_writes --check` / `--check-ownership`, `popis_citalaca --check`.
+     - **Redosled koji review odobrava:** prvo P1 (urađeno). Zatim, po odobrenju operatera:
+       1. fixture;
+       2. crveni prolaz nad starim kodom, gde je moguć;
+       3. TARGETED suite;
+       4. golden;
+       5. sabotaže reza 2;
+       6. Compile.
+     - **Sledeći brojevi:** test 309 · stavka 261 · KI-079.
+
+261. **S7 rez 2 — skupe kapije posle ispravke P1 (02.11.2026, izvor `94bf4643`, uz izričito „Push, pa kapije").**
+     Push `c799527f..94bf4643` na PR `#453`.
+
+     - **Crveni prolaz nad starim kodom.** Produkcioni moduli su vraćeni na `ff3e9c7a`, a novi testovi su ostali.
+       Bez `Test_S7R2_UgovorLinijaFakture` i `Test_S7R2_FakturaStareKoloneSelfHeal`, jer zovu nov API. Sveska je
+       stari fixture `7eab17dc` (svesno `--ignore-fixture-sig`). Ishod:
+       - BFP **8 / 2851** palo, sve `S7R2`:
+         - slučaj 3 (stari čitač diže 1768: dve tvrdnje);
+         - storno je pisao `Stornirano` na obe linije, a kanon nosi sve stare kolone;
+         - GP kapija posle storna zaglavlja daje 1;
+         - kapija utovara bez kolone `UtovarID` pušta storno (tri tvrdnje).
+       - `RunAllTests` **2 / 308**: `T_FakturaGP_WriterKapijeIStorno` i `T_UtovarB_StornoKapije`. Rogue linija je
+         ostala aktivna posle storna svog zaglavlja.
+
+       Ništa van reza nije palo. Izvor je posle toga vraćen na HEAD.
+     - **Fixture regenerisan:** potpis `7eab17dc` → `8196bbca`; obrisane su sve tri kolone u sredini i pet trace
+       kolona.
+     - **Zeleno nad novim kodom** (izvor `69dff0c90dcc`, GREEN marker):
+
+       | Suite | Rezultat |
+       |---|---|
+       | `RunAllTests` | **308 / 0** |
+       | BFP | **2868 / 0** (+36 tvrdnji, tačno broj novih i izmenjenih) |
+       | `RunStornoTestSuite` | **111 / 0** |
+       | `Test_StornoCentar_All` | OK |
+       | `RunFakturaSmokeSuite` | **39 / 0** |
+       | `RunGoldenSuite` | OK |
+
+     - **Dokaz: 13 / 13 crveno**, izvor pre i posle identičan (`94e497510d709e09`).
+       - `s7r2-aktivnost-ignorise-storno` je puštena **sama**: kvari zajednički čitač, pa bi u grupi oborila i tuđe
+         tvrdnje.
+       - Ostalih 12 je išlo u pet grupnih prolaza; 9 je izmereno grupno.
+       - `s7r2-storno-oslobadja-tudji-utovar` je u grupi pala na tuđoj tvrdnji, pa je ponovljena sama i pala na svojoj.
+     - **Nepušteno:**
+       - pun i pojedinačni (negrupisani) `dokaz.py`;
+       - `RunProductionHealthCheck` (`gate: False`; `KI-077`);
+       - Compile (`COMPILE NEJASNO`, ručna kapija);
+       - ručna provera.
+     - **Sledeći brojevi:** test 309 · stavka 262 · KI-079.
+
+262. **Ručna provera i Compile PR `#453` (02.11.2026): oba prošla.** Sveska `tests/fixtures/rucna_provera_s7r2_kod.xlsm`
+     (gitignored) je BFP `--keep` nad `94bf4643` (izvor `69dff0c90dcc`, 2868 / 0). Ishod je pročitan na ekranu operatera
+     (snimci) i sondom nad snimljenom sveskom.
+
+     - **Compile:** operater je uvezao `modVbaTools` i Compile je prošao.
+     - **Šema u svesci:** `tblFakturaStavke` ima 15 kolona i nema `Stornirano` ni `OsirocenoOd`; `tblFakture` ima 24
+       kolone i nema nijednu od šest obrisanih.
+     - **Storno fakture nad prijemnicom (`FAK-ODL-03`):** F8 → 16/2026 (`FAK-00004`, `KUP-90001`) → Da, toast
+       „✓ Stornirano 16/2026". Sonda:
+       - zaglavlje je `Stornirano` / `Status = Stornirano`;
+       - linija `FAK-00004-01` je netaknuta. Njen `ModifiedAt` (12:25:02) je vreme BFP upisa, a storno je bio u 12:46;
+       - stavka nije ni na jednoj drugoj liniji, pa je u Fakturisanju slobodna (ekran: red bez fakture).
+     - **GP storno i ponovna faktura (`S7-REV-01`):** F8 → 12/2026 (`FAK-SLED-GP4`) → Da. Utovar 3/2026 (`UT-SLED-P`)
+       je u listi Utovari bez fakture, a „Fakturiši" (prazna cena = cena prethodne fakture) daje **31/2026**
+       (`FAK-00019`). Sonda:
+       - linija `FST-SLED-P` stornirane fakture je netaknuta;
+       - zaglavlje nove fakture ima `LOCAL_FINALIZED`, verziju 0, `PoslatNaSEF = Ne` i Neplaćeno, svaka vrednost u
+         svojoj koloni;
+       - linija nove fakture: 50 kg × 200 = 10.000, `PreradaID` / `BrojPrerade` / `UtovarID` postavljeni;
+       - utovar tvrde dve linije: jedna je na storniranoj, a druga na aktivnoj fakturi.
+     - **Nije rađeno ručno:**
+       - self-heal nad zatečenom sveskom (meri ga `Test_S7R2_FakturaStareKoloneSelfHeal`);
+       - health check 3 (`gate: False`; fixture nosi namerne negative, pa ishod nije čitljiv kao pass / fail);
+       - kapija utovara bez kolone (meri ga `Test_S7R2_KapijaUtovaraFailClosed`).
+     - **Status PR `#453`:** ispravka P1, crveno, zeleno, dokaz, Compile i ručna provera su urađeni. Review je bio HOLD
+       zbog P1; potvrda ispravke i merge čekaju izričit zahtev.
+     - **Sledeći brojevi:** test 309 · stavka 263 · KI-079.
 
 ## Dug sa imenom (posle S5-5b)
 

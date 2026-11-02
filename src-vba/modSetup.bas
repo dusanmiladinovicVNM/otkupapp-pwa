@@ -1214,6 +1214,7 @@ Public Sub EnsureRuntimeSchema()
     ' otisak bi prijavljivao drift koji self-heal ne leci.
     ObrisiStareKoloneAmbalaze
     ObrisiStareKolonePrijemnice
+    ObrisiStareKoloneFakture
 
     If Len(modSchema.SchemaCheckOnStart()) > 0 Then modSchema.EnsureAllTables
 
@@ -1308,8 +1309,11 @@ End Sub
 ' Sada svaka kolona ide kroz svoj gard: pad jedne se ZAPISE i ne zaustavlja
 ' ostale. Otpornost je ista, trag postoji.
 Public Sub EnsureSledljivostSchema()
+    ' Faktura NIJE na spisku (FAK-ODL-07, S7 rez 2): ispravka fakture je storno +
+    ' nova faktura, okvir ispravke je ne poznaje, pa trace kolone na njoj nemaju ni
+    ' pisca ni citaoca. Dodata ovde, obrisana kolona bi se vratila NA KRAJ.
     Dim tbls As Variant
-    tbls = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, TBL_FAKTURE, TBL_NOVAC)
+    tbls = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, TBL_NOVAC)
     Dim i As Long
     For i = LBound(tbls) To UBound(tbls)
         Dim t As String: t = CStr(tbls(i))
@@ -1450,6 +1454,28 @@ Public Sub ObrisiStareKolonePrijemnice()
     ObrisiKolonuAko TBL_PRIJEMNICA, "FakturaID"
     ObrisiKolonuAko TBL_PRIJEMNICA, "BrutoKg"
     ObrisiKolonuAko TBL_PRIJEMNICA, "GeneracijaID"
+End Sub
+
+' FAKTURA GUBI LINIJSKI STORNO, SIROCE I TRACE KOLONE ISPRAVKE (S7 rez 2).
+'
+' FAK-ODL-03: linija je aktivna ako i samo ako je aktivna njena faktura, pa
+' tblFakturaStavke gubi Stornirano i OsirocenoOd, a tblFakture OsirocenoOd. Sve tri
+' stoje u SREDINI starog kanona (linija 8 i 9, zaglavlje 9), pa kolona koja ostane u
+' zatecenoj svesci pomera sve iza sebe i pozicioni upis salje vrednosti u pogresna
+' polja. FAK-ODL-07: IspravkaOd, ZamenjenSa, CorrectionID, IzdatoStatus i
+' GeneracijaID su na KRAJU zaglavlja i nemaju ni pisca ni citaoca. Ne pomeraju
+' nista, ali se brisu istim potezom -- inace bi sveska nosila kolone koje kanon ne
+' zna. Brisu se PO IMENU, bez obzira na sadrzaj (nema produkcionih podataka).
+' Imena su LITERALI. Public jer ga meri test (Test_S7R2_FakturaStareKoloneSelfHeal).
+Public Sub ObrisiStareKoloneFakture()
+    ObrisiKolonuAko TBL_FAKTURA_STAVKE, "Stornirano"
+    ObrisiKolonuAko TBL_FAKTURA_STAVKE, "OsirocenoOd"
+    ObrisiKolonuAko TBL_FAKTURE, "OsirocenoOd"
+    ObrisiKolonuAko TBL_FAKTURE, "IspravkaOd"
+    ObrisiKolonuAko TBL_FAKTURE, "ZamenjenSa"
+    ObrisiKolonuAko TBL_FAKTURE, "CorrectionID"
+    ObrisiKolonuAko TBL_FAKTURE, "IzdatoStatus"
+    ObrisiKolonuAko TBL_FAKTURE, "GeneracijaID"
 End Sub
 
 Public Sub ObrisiKolonuAko(ByVal tbl As String, ByVal ime As String)

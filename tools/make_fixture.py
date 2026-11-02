@@ -2384,7 +2384,9 @@ SEED["tblPrijemnicaStavke"] = [
 # koji pokazuje na fakturu koje nema (PRJ-SLED-F2 -> FAK-NEMA-GA) liniju NE
 # dobijaju: kes posle koraka 5 ne odlucuje nista (R4, KI-038). Od koraka 8 kes
 # kolona nema ni u kanonu ni u fixture-u (PRJ_SAMO_IZVOR, ispod).
-_FAK_STORNO = {r["FakturaID"]: r.get("Stornirano", "") for r in SEED["tblFakture"]}
+# Linija nema svoj storno (S7 rez 2, FAK-ODL-03): stornirana faktura gasi svoje
+# linije sama, pa linija ne nosi Stornirano -- treba samo skup postojecih faktura.
+_FAK_IDS = {r["FakturaID"] for r in SEED["tblFakture"]}
 SEED["tblFakturaStavke"] = SEED["tblFakturaStavke"] + [
     {
         "StavkaID": "FST-PRS-" + str(red["PrijemnicaID"]),
@@ -2394,11 +2396,10 @@ SEED["tblFakturaStavke"] = SEED["tblFakturaStavke"] + [
         "Cena": red.get("Cena", 0),
         "Klasa": red.get("Klasa") or "I",
         "BrojPrijemnice": red["BrojPrijemnice"],
-        "Stornirano": _FAK_STORNO[red["FakturaID"]],
         "PrijemnicaStavkaID": "PRS-" + str(red["PrijemnicaID"]),
     }
     for red in SEED["tblPrijemnica"]
-    if red.get("FakturaID") in _FAK_STORNO
+    if red.get("FakturaID") in _FAK_IDS
 ]
 
 # ZAGLAVLJE PRIJEMNICE POSLE IZVODJENJA (S6 korak 8, plan 14.55 "Korak 8").
@@ -2472,6 +2473,13 @@ DROP_COLS = {
     # modSetup.ObrisiStareKolonePrijemnice; put zatecene sveske meri
     # Test_S6K8_PrijemnicaStareKoloneSelfHeal.
     "tblPrijemnica": list(PRJ_SAMO_IZVOR),
+    # S7 rez 2 (FAK-ODL-03, FAK-ODL-07): linija nema svoj storno ni siroce (stari
+    # kanon 8 i 9), a zaglavlje ni siroce (9) ni trace kolone ispravke (kraj). Isto
+    # radi modSetup.ObrisiStareKoloneFakture; put zatecene sveske meri
+    # Test_S7R2_FakturaStareKoloneSelfHeal.
+    "tblFakturaStavke": ["Stornirano", "OsirocenoOd"],
+    "tblFakture": ["OsirocenoOd", "IspravkaOd", "ZamenjenSa", "CorrectionID",
+                   "IzdatoStatus", "GeneracijaID"],
 }
 
 RENAME_COLS = {

@@ -9891,7 +9891,8 @@ Na tom testu stoje dve sabotaže: `storno-gp-rollback-bez-utovara` i
   menja tu proceduru, sidro se prepisuje i sabotaža ide u `dokaz.py` reza 2: zastarelo sidro je
   sabotaža koja ništa ne kvari;
 - „utovar koji tvrdi drugu fakturu se ne dira" danas nema tvrdnju (grep po `*Test*.bas`,
-  01.11.2026). Rez 2 je dodaje, sa svojom sabotažom;
+  01.11.2026). Rez 2 je dodaje, sa svojom sabotažom. **Netačno, ispravljeno u pre-flight-u reza 2
+  (R2-4):** tvrdnja postoji (`T_UtovarB_StornoKapije`, `modTest:27086`), a nedostaje samo sabotaža;
 - „najviše jednom" ne traži posebnu tvrdnju. Drugi poziv za isti utovar naiđe na prazan marker i
   samo upiše WARN (`:1719-1723`), pa nema posledicu po podatke.
 
@@ -9931,6 +9932,201 @@ toku čita samo taj izvoz, koji je do tada brojao samo `KupciUplata`.
 
 **N4 je reprodukovan:** nad starim kodom je nova faktura posle storna ostala neplaćena, a
 odvezana uplata je ostala slobodna (stavka 254, crveni prolaz).
+
+#### Pre-flight S7 rez 2 — linija bez sopstvenog storna (02.11.2026, stavka 258)
+
+> Mereno nad `main` = `ff3e9c7a` (grana `claude/s7-rez2-linija-storno`); linije koda važe za
+> taj commit. Produkcionog koda u ovom koraku nema. Domen je odlučen (`FAK-ODL-03`); ovde se meri
+> obim i piše ugovor prihvatanja.
+
+**Pisci.** Zaglavlje i liniju u produkciji pišu dva poziciona pisca:
+
+- `modFaktura.CreateFaktura`: zaglavlje `:303-326` (21 vrednost), linija `:345-355` (9 vrednosti);
+- `modUtovar.CreateFakturaIzUtovara`: zaglavlje `:1593-1596`, linija `:1603-1605`. Kroz njega
+  ide i `CreateUtovarSaFakturom` (`:1006`).
+
+Oba pišu `""` u `OsirocenoOd` i u linijski `Stornirano`. Linijski `Stornirano` piše samo
+`modStorno.StornoFakturaStavke` (`MarkRowStornirano`, `:1682`). `OsirocenoOd` ne piše niko.
+
+Test sejači:
+
+- poziciono, devet vrednosti: `modTest:18249` (`T_Fak_DostupnostSePrenosiURedu`), `:18926`
+  (`T_FakturaGP_WriterKapijeIStorno`), `:27028` i `:27078` (`T_UtovarB_StornoKapije`);
+- po imenu: BFP `:8774` (`BlankRow`);
+- linijski `Stornirano` pišu `modTest:18935` i `:27039` (čišćenje rogue linije) i
+  `SoftStornoByTestMarkers` (BFP `:1134`).
+
+**Čitaoci aktivnosti linije.** Ovo su sva mesta koja čitaju `Stornirano` ili `OsirocenoOd` linije,
+ili `OsirocenoOd` zaglavlja:
+
+| Mesto | Šta čita danas | Posle reza 2 |
+|---|---|---|
+| `modFaktura.FakturaLinijePoStavci` (`:997`, `:1012-1047`) | linijski `Stornirano`. Zaglavlje već čita (`:1003`) i odbija aktivnu liniju nad storniranom fakturom (1768) | aktivnost iz zaglavlja; 1768 postaje nemoguć i briše se |
+| `modNovac.BuildFakturaVrstaUdeoCache` (`:851`) | `ExcludeStornirano(…, TBL_FAKTURA_STAVKE)` | linije aktivnih faktura |
+| `modNovac.GetVrstaFromFaktura` (`:359`, mrtav, N6) | isto | briše se |
+| `modSEFMapper.BuildSEFInvoiceDto` (`:169-170`, `:200-201`) | preskače liniju sa `Stornirano` / `OsirocenoOd` | bez preskakanja; storniranu fakturu odbija `ValidateFakturaForSEF` |
+| `modSEFValidator.ValidateFakturaForSEF` (`:142`, `:166-173`) | `OsirocenoOd` zaglavlja | provera se briše (nemoguće stanje) |
+| `modUtovar.AktivnihFstZaUtovar` (`:371-378`) | linijski `Stornirano` i `OsirocenoOd` | aktivnost iz zaglavlja |
+| `modStorno.StornoFaktura` (`:630`), `StornoFakturaStavke` (`:1653`) | traži kolonu i piše linije | linije ne piše; GP utovar oslobađa kao danas (`S7-REV-01`) |
+| `modProductionHealthCheck.Check_FakturaStavkeReferences` (`:248`, N5) | `ActiveRowExists` zaglavlja i prijemnice, za svaku liniju | prepisuje se na ugovor dokumenta |
+| `modProductionHealthCheck`, aktivne reference (`:994-997` → `CountActiveReferencesToStornirano`, `:1198`) | linijski `Stornirano`, **meko** (`GetColumnIndex`) | aktivnost iz zaglavlja |
+| `modGoldenTests.GldFakturaOsirocena` / `GldOsirocenihStavki` (`:924`, `:953`); golden A1, A2, F2 | `OsirocenoOd` | proba i po dva reda golden fajla se brišu |
+
+Ovi čitaju liniju, ali ne njenu aktivnost, pa se ne menjaju:
+
+- štampa (`PrintFaktura`);
+- SEF datum isporuke (`GetInvoiceDeliveryDate`);
+- PWA izvoz linija (`ExportFakturaStavke`), koji i danas izvozi sve linije, bez kolone storna;
+- cene prethodnih faktura utovara (`modUtovar:1493-1508`), koje namerno čitaju i stornirane;
+- provera 6c (`Check_FakturaIznosReconciliation`), koja filtrira po zaglavlju.
+
+**Nalazi pre koda:**
+
+| # | Nalaz | Dokaz | Ishod |
+|---|---|---|---|
+| R2-1 | ⚠ Tih prolaz: kad `tblFakturaStavke` pređe u `BEZ_STORNA`, `ExcludeStornirano` nad njom vraća sve redove bez greške. Čitalac koji ostane na njemu počinje da broji linije storniranih faktura | `modHelpers:156-161`; `modSchemaGuard:25-27` | pozivi nad linijom se uklanjaju u istom rezu; čitalac pita zaglavlje |
+| R2-2 | Isto, meko: provera aktivnih referenci čita linijski storno kroz `GetColumnIndex`. Bez kolone bi prijavila svaku liniju stornirane fakture čija je prijemnica posle stornirana, a to je redovan tok | `modProductionHealthCheck:1198`, `:1206` | aktivnost iz zaglavlja |
+| R2-3 | Menja se premisa tri postojeća testa. (a) `Test_S6K5_LinijaBezFaktureJeKvar`, slučaj 3: storno zaglavlje uz aktivnu liniju (1768) postaje **legitimno stanje storna**. (b) Rogue linija u `T_FakturaGP_WriterKapijeIStorno` stoji na **storniranoj** fakturi `fid`, pa posle reza nije aktivna i tvrdnja `:18933` bi pala iz pogrešnog razloga. (c) Čišćenje rogue linija (`:18935`, `:27039`) piše kolonu koje više nema | BFP `:7932-7948`; `modTest:18926-18935`, `:27028-27039` | slučaj 3 meri novo pravilo (stavka slobodna, čitač čist); rogue linija dobija svoje AKTIVNO zaglavlje, a čišćenje stornira to zaglavlje |
+| R2-4 | **Ispravka dopune `S7-REV-01`:** „utovar koji tvrdi drugu fakturu se ne dira" ima tvrdnju u `T_UtovarB_StornoKapije` (`modTest:27086`). Raniji grep ju je promašio. Nema **sabotažu** | `modTest:27076-27090`; `tools/sabotaza.py`: 0 pogodaka | rez dodaje sabotažu na `modStorno:1727`, ne novu tvrdnju |
+| R2-5 | Dve sabotaže gube sidro: `s6k5-storno-fakture-ne-gasi-linije` i `s6k5-linija-nad-storniranom-fakturom`. Dve druge stoje na redovima koje rez dira: `storno-gp-faktura-ne-oslobadja-utovar` i `utovar-gp-refakt-aktivna-fst` | `tools/sabotaza.py:9337`, `:9378`, `:5891`, `:5976` | prve dve se zamenjuju sabotažom čitaoca aktivnosti, na istoj tvrdnji; druge dve se presidravaju po potrebi i idu u dokaz reza |
+| N5 | Potvrđeno čitanjem, nije izmereno. Provera je `gate: False` i van FULL-a, a nijedan test je ne zove | `modProductionHealthCheck:272-288`; `tools/run_vba.py:91` | ugovor dobija javni čitač i test kroz njega |
+| N10 | Pet kolona na `tblFakture` (`IspravkaOd`, `ZamenjenSa`, `CorrectionID`, `IzdatoStatus`, `GeneracijaID`) nema pisca. Nijedan njihov čitalac ne dodiruje fakturu: okvir ispravke nema fakturu, a generička lista čita samo kolone svog spiska. Dodaje ih samo `EnsureSledljivostSchema`. Stoje na KRAJU kanona | grep `COL_TRACE_*` i `COL_GENERACIJA_ID` × `TBL_FAKTURE`; `modStornoDok:980-984`; `modSetup:1310`, `:1370` | **pitanje operateru**, ispod |
+
+**Verdikt po osama:**
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | PROVEN | `FAK-ODL-03`; `DOCUMENT_HEADER_LINES.md` §6.5; razlog 2 za `BEZ_STORNA` (`modSchemaGuard:40-46`) |
+| `EVENTS` | PROVEN | menja se samo zapis poništenja. Storno fakture piše zaglavlje, uplate (`FAK-ODL-05`) i GP utovar, a linije ne. Fizički događaj (utovar) i finansijski (uplata) ostaju netaknuti |
+| `IDENTITY` | PROVEN | linija → zaglavlje po `FakturaID`. Aktivnost daje jedan čitač zaglavlja; dupli i nepostojeći ID ostaju greška (1767) |
+| `CARDINALITY` | PROVEN | nepromenjena. Odnos stavka : aktivna linija = 1 : 0..1 posle storna važi po konstrukciji |
+| `INVARIANTS/OWNER` | PROVEN | vlasnik `FAK-LIN-01..03` je `FakturaLinijePoStavci`. „Aktivna linija nad storniranom fakturom" (`FAK-LIN-02`) postaje nemoguća po konstrukciji |
+| `WRITERS` | PROVEN | dva poziciona pisca; `modStorno` prestaje da piše linije; sejači su popisani |
+| `DOWNSTREAM` | PROVEN | tabela čitalaca gore. PWA ne čita linijski storno. Migraciju C002 (van `main`-a) operater usklađuje sam |
+| `CAPABILITY` | PROVEN | nijedna sposobnost se ne menja: B-017 ima isti ishod, D-016 i C-003 su netaknuti |
+| `ACCEPTANCE CONTRACT` | PROVEN (plan) | ispod |
+| `PLATFORM` | PROVEN | brisanje iz sredine ide postojećim self-heal-om (`ObrisiKolonuAko`; presedan `ObrisiStareKolonePrijemnice`, `modSetup:1216`, `:1444`, i `Test_S6K8_PrijemnicaStareKoloneSelfHeal`, BFP `:16923`), a fixture kroz `DROP_COLS` |
+| `LANDING` | PROVEN | grana od `ff3e9c7a`. Otvoreni `#444` dira samo `migration/`; `#410`, `#42` i `#7` ne diraju fakturu |
+
+**Ugovor prihvatanja.** Posle reza važi:
+
+- kanon: `tblFakturaStavke` nema `Stornirano` ni `OsirocenoOd`, `tblFakture` nema `OsirocenoOd`
+  (uz N10, ako operater odluči), a `tblFakturaStavke` je u `BEZ_STORNA`;
+- jedan čitač aktivnosti zaglavlja u `modFaktura`, i pitaju ga svi čitaoci aktivnosti linije;
+- storno fakture menja samo zaglavlje, uplate i GP utovar;
+- zatečena sveska gubi kolone pre prvog upisa;
+- health 3 meri ugovor dokumenta:
+  - linija pripada fakturi koja postoji tačno jednom;
+  - aktivna faktura ima bar jednu liniju;
+  - linija ima tačno jedan izvor, `PrijemnicaID` ili `PreradaID` (isto pravilo kao `modSEFMapper:210`).
+
+Netaknuto ostaje:
+
+- `T_FakturaGP_WriterKapijeIStorno` i `T_UtovarB_StornoKapije`, sa svim tvrdnjama iz `S7-REV-01`;
+- rez 1;
+- baseline (`RunAllTests` 308, BFP 2832, Storno 111, Faktura 39). Dopuštene su samo imenovane razlike.
+
+**Testovi**, u BFP kao `Test_S7R2_*`. Gde je moguće, test je crven nad starim kodom.
+
+1. **`Test_S7R2_StornoFakturePiseSamoZaglavlje`.** Faktura nad dvoklasnom prijemnicom se stornira.
+   Linije su red po red iste pre i posle, zaglavlje je stornirano, obe stavke su slobodne i čitač je
+   čist. Uz to: tri obrisane kolone nemaju indeks. Danas je crven, jer storno piše linije.
+2. **`Test_S7R2_AktivnostLinijeIzZaglavlja`.** A → B → A nad istom fakturom (sintetički, u TX:
+   zaglavlje stornirano, pa vraćeno). Mere se `FakturisanostPoPrijemnici`, GP
+   `AktivnihFstZaUtovar` i čitač ugovora iz health-a. Danas je crven, jer čitač diže 1768 na B.
+3. **`Test_S7R2_UgovorLinijaFakture` (N5).** Test seje sopstvene fakture. Fixture namerno nosi
+   negativ (`FST-GP-SB`), pa se meri po ID-u, ne „nula nalaza". Ispravna dvoklasna i GP faktura su
+   bez nalaza; danas GP linija javlja „missing prijemnica", pa je test crven. Svaki kvar se javlja po
+   imenu:
+   - linija bez zaglavlja;
+   - aktivna faktura bez linije;
+   - linija sa oba izvora;
+   - linija bez izvora.
+4. **`Test_S7R2_FakturaStareKoloneSelfHeal`.** Po obrascu S6K8: kolone se sintetički vrate u
+   sredinu, `EnsureRuntimeSchema` ih briše, otisak je čist i upis fakture prolazi.
+
+Postojeći testovi menjaju se po R2-3. Uz to:
+
+- golden A1, A2 i F2 gube po dva reda;
+- briše se `SoftStornoByTestMarkers TBL_FAKTURA_STAVKE`.
+
+**Sabotaže (`s7r2-*`):**
+
+- čitač linija ne pita zaglavlje;
+- `AktivnihFstZaUtovar` ne pita zaglavlje;
+- utovar druge fakture se oslobađa (`modStorno:1727`, R2-4);
+- health 3 ne javlja liniju bez zaglavlja;
+- health 3 ne javlja aktivnu fakturu bez linije;
+- self-heal ne briše kolonu.
+
+`dokaz.py` ide jednom, posle zelenog prolaza i pročitanog diff-a, nad `s7r2` uz
+`storno-gp-faktura-ne-oslobadja-utovar` i `utovar-gp-refakt-aktivna-fst`.
+
+**Kapije:**
+
+- `vba_check`;
+- `gen_schema_module --check` (otisak se menja);
+- `who_writes --check`: `WHO_WRITES.md` se regeneriše, jer `modStorno` više ne piše linije;
+- `who_writes --check-ownership`;
+- `make_fixture` (`DROP_COLS`) i nov potpis fixture-a;
+- TARGETED: `RunAllTests`, BFP, `RunStornoTestSuite`, `Test_StornoCentar_All`,
+  `RunFakturaSmokeSuite`, `RunGoldenSuite`.
+
+**Rizici:**
+
+- ⚠ FALSE-GREEN: kod `BuildFakturaVrstaUdeoCache` uplata nikad ne nosi `FakturaID` stornirane
+  fakture (`ResetNovacFakturaLink`). Filter po zaglavlju zato nema slučaj u kome bi bio crven: meri
+  se samo čitanjem i nema sabotažu;
+- ⚠ R2-1: posle reza u produkciji mora biti nula pogodaka i za `ExcludeStornirano(…,
+  TBL_FAKTURA_STAVKE)` i za `TBL_FAKTURA_STAVKE` + `COL_STORNIRANO`;
+- pozicioni nizovi se grep-uju po broju vrednosti, ne samo po imenu konstante. Kompajler ne vidi
+  višak `""` u `Array(`.
+
+**Pitanje operateru (N10):** da li rez 2 briše i pet mrtvih trace kolona zaglavlja fakture?
+
+- **Preporuka: da.** Ista tabela, isti self-heal, a kolone su na kraju, pa se ništa ne pomera. Time
+  se i rečenica iz §16 „`GeneracijaID` ne postoji" približava istini.
+- **Cena:** `EnsureSledljivostSchema` izuzima fakturu, kao što prijemnicu već izuzima za
+  `GeneracijaID` (`modSetup:1370`).
+- **Alternativa:** `KI-077`, van S7.
+
+**GO / HOLD za kod:** GO posle odgovora na N10. Pitanje je o obimu, ne o domenu.
+
+**Odgovor operatera (02.11.2026): da, u rezu 2** → `FAK-ODL-07` (`docs/DOMEN/FAKTURA.md` §3). Obim
+reza se time proširuje:
+
+- iz kanona `tblFakture` odlazi i pet trace kolona;
+- `EnsureSledljivostSchema` izuzima fakturu;
+- self-heal briše i tih pet kolona, iako su na kraju. Inače bi zatečena sveska nosila kolone koje
+  kanon ne zna;
+- `Test_S7R2_FakturaStareKoloneSelfHeal` meri i njih.
+
+**GO za kod.**
+
+#### S7 rez 2 — kod (02.11.2026, `docs/STANJE_REFAKTORA.md` stavka 259)
+
+Obim je po ugovoru prihvatanja. Pun spisak je u stavci 259; ovde su samo odstupanja i šta je odlučeno usput.
+
+- **Čitač aktivnosti je jedan:** `modFaktura.AktivnostFaktura` (FakturaID → aktivna/stornirana, samo za ID koji
+  se javlja tačno jednom), uz `LinijaFaktureAktivna`. Nepoznatu ili dvosmislenu fakturu čitalac tumači sam:
+  - strog čitač linija je odbija po imenu (1766/1767, kao do sada);
+  - kapija utovara je broji kao aktivnu (fail-closed);
+  - udeo uplate i health je preskaču.
+- **SEF mapper** gubi filter linija, a dobija odbijanje neaktivne fakture pre prve linije. Defense-in-depth iz
+  AUD-031 tako ostaje i za pozivaoca mimo `ValidateFakturaForSEF`.
+- **Sabotaže koje su gubile sidro su zamenjene, ne obrisane.**
+  - `s6k5-storno-fakture-ne-gasi-linije` je postala `s7r2-aktivnost-ignorise-storno`: kvari se čitač, na istoj
+    tvrdnji;
+  - `s6k5-linija-nad-storniranom-fakturom` je postala `s7r2-citac-linija-ne-pita-zaglavlje`, na novoj tvrdnji
+    slučaja 3.
+- **Crveni prolaz nad starim kodom meri samo testove koji ne zovu nov API:**
+  - `Test_S7R2_StornoFakturePiseSamoZaglavlje` i `Test_S7R2_AktivnostLinijeIzZaglavlja`;
+  - slučaj 3 u `Test_S6K5_LinijaBezFaktureJeKvar`;
+  - rogue linija u testu GP fakture.
+
+  `Test_S7R2_UgovorLinijaFakture` i `Test_S7R2_FakturaStareKoloneSelfHeal` zovu `UgovorLinijaFaktureNalazi` i
+  `ObrisiStareKoloneFakture`, pa se nad starim kodom ne kompajliraju. Za njih se crveni prolaz pušta bez njih, a
+  dokaz su sabotaže.
 
 ## 15) Backlog — namerno van opsega
 

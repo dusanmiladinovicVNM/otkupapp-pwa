@@ -29,5 +29,3 @@ NOVAC
   nealocirano      0.00
 FAKTURA
   iznos           62000.00
-  osirocena       NE
-  osirocenih stavki 0
