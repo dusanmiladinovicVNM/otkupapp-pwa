@@ -10128,6 +10128,137 @@ Obim je po ugovoru prihvatanja. Pun spisak je u stavci 259; ovde su samo odstupa
   `ObrisiStareKoloneFakture`, pa se nad starim kodom ne kompajliraju. Za njih se crveni prolaz pušta bez njih, a
   dokaz su sabotaže.
 
+Merge `#453` = `2ac332e3` (stavka 263), uz drugi review: MERGE GO, 9,3 / 10.
+
+#### Pre-flight S7 rez 3 — SEF linija i zatvaranje S7 (02.11.2026, stavka 264)
+
+> Mereno nad `main` = `2ac332e3` (grana `claude/s7-rez3-sef-linija`); linije koda važe za taj commit.
+> Produkcionog koda u ovom koraku nema. Domen je odlučen (`FAK-ODL-01`, `FAK-ODL-04`). Ovde se meri obim,
+> zajedno sa dva nalaza review-a `#453` koji su upućeni u rez 3 (`KI-077`, `KI-078`).
+
+**Obim — pet celina:**
+
+1. **`FAK-ODL-01`: SEF linija nosi stavku i klasu.** Danas linija prijemnice na SEF-u nosi `PrijemnicaID`
+   dokumenta kao `SellersItemIdentification/ID` (`modSEFMapper.SerializeUBLInvoice:773-781`), a naziv
+   „<vrsta> <sorta> po prijemnici <broj>" (`BuildSEFInvoiceDto:261-268`). Dve klase iste prijemnice su zato
+   dve linije sa istim imenom i istim ID-om. Papir ih razlikuje po klasi (`PrintFaktura:746-747`). Izmene:
+   - `clsSEFLine` dobija `prijemnicaStavkaID` (javno polje; `.cls`, ne `.frm`, pa bez `.frx`);
+   - mapper čita `COL_FS_PRIJEMNICA_STAVKA_ID`. Linija prijemnice bez stavke je greška pre slanja
+     (`FAK-LIN-02`, fail-closed na putu prema poreskoj upravi);
+   - naziv postaje „<vrsta> <sorta> kl. <klasa> po prijemnici <broj>". Klasa je snapshot sa linije, isti kao
+     na papiru;
+   - UBL `ID` je stavka za liniju prijemnice, a `PreradaID` za GP liniju (GP se ne menja);
+   - JSON zapis slanja (`SerializeSEFRequest:477-487`) dobija `PrijemnicaStavkaID`.
+2. **Strog čitač zaglavlja prijemnice u mapperu** (rizik iz tabele IDENTITY gore). Vrsta, sorta
+   (`BuildSEFInvoiceDto:261-262`) i datum isporuke (`GetInvoiceDeliveryDate:953`) danas uzimaju prvi pogodak
+   `LookupValue`, pa je čitanje fail-open na dupli `PrijemnicaID`. Pre `LookupValue` ide postojeći
+   `modSchemaGuard.RequireTacnoJedan(TBL_PRIJEMNICA, COL_PRJ_ID, …)`, pa nov čitač ne treba.
+   `modSEFMapper:1406` je u dijagnostičkoj proceduri; ide uz isto pravilo ako je dostižna iz produkcije, a to se
+   proverava pre koda.
+3. **`KI-077` (health 6c i GP faktura).** `Check_FakturaIznosReconciliation` sabira živu vrednost samo preko
+   `PrijemnicaStavkaID`, pa svaku aktivnu GP fakturu javlja kao drift. GP faktura dobija SOPSTVENO poređenje:
+   - `Iznos` = zbir linija (`Kolicina × Cena`);
+   - utovar svake GP linije prolazi isto pravilo kao SEF GP kapija (`ValidateGpUtovarZaSEF:333`): postoji
+     tačno jednom, nije storniran, markiran je i tvrdi baš tu fakturu, a kg linija po preradi su 1 : 1 sa
+     aktivnim stavkama utovara.
+   - **Jedna implementacija, dva pozivaoca** (`.claude/rules/testovi.md` §5): pravilo se izdvaja u funkciju koja
+     vraća razlog (prazno = ispravno). SEF kapija ga diže kao grešku, a health ga javlja kao nalaz. Druga
+     kopija pravila se ne piše.
+   - Zaštita od duplog iznosa: faktura se poredi jednom, po `FakturaID`-u. Utovar koji tvrdi drugu fakturu je
+     nalaz, ne zbir.
+4. **`KI-078` (ugovor dokumenta i GP izvor).** `modFaktura.UgovorLinijaFaktureNalazi` meri samo da GP linija
+   ima izvor, a ne da on postoji. Aktivna GP linija dobija dva nova nalaza:
+   - `GP_PRERADA_NEMA`: `PreradaID` nije u `tblPrerada` tačno jednom;
+   - `GP_UTOVAR_NEMA`: `UtovarID` je prazan ili nije u `tblUtovar` tačno jednom.
+
+   Fixture namerno nosi negativ `FST-GP-SB` (GP linija bez utovara, `FAK-SLED-GP2`), i on posle reza postaje
+   nalaz. Tako i treba: sledljivost ga već prijavljuje kao siroče.
+5. **C-003 i veza po broju — zatvaranje S7.**
+   - Test salda kupca (`FAK-ODL-04`, saldo je robni, `modIzvestaj.ReportSaldoKupci:2687`): dvoklasna
+     prijemnica, faktura samo nad klasom I (delimično), uplata na fakturu, storno fakture (uplata prelazi u
+     avans, `FAK-ODL-05`), pa nova faktura. Saldo kupca je posle svakog koraka isti: vrednost stavki minus
+     uplate. Očekivanje je da prođe i nad starim kodom: test brani pravilo, ne popravlja kvar.
+   - `tools/popis_citalaca.py` dobija grupu `fak_broj_prj` (pretraga linije fakture ili prijemnice po broju
+     prijemnice iz koda fakture) sa pragom 0. Merenje 1 iz pre-flight-a S7 tako postaje kapija.
+
+**Nalazi pre koda:**
+
+| # | Nalaz | Dokaz | Ishod |
+|---|---|---|---|
+| R3-1 | Nijedan test ne tvrdi današnji SEF naziv ni `SellersItemIdentification` linije prijemnice | grep `*Test*.bas`, `modSEFTests`: 0 | nema tvrdnje koja bi pala zbog promene; novi testovi su prvi koji to mere |
+| R3-2 | ⚠ **EXTERNAL UNKNOWN:** SEF ograničenje dužine `SellersItemIdentification/ID`. `PrijemnicaStavkaID` ima 36 znakova (`PRS-` + 32 hex), `PrijemnicaID` 9. U repou nema zapisa o ograničenju | grep `docs/`: 0 | **NEPROVERENO.** Kod ide; pre prvog produkcionog slanja treba proba na SEF demo okruženju ili u dokumentaciji SEF-a (D-015: SEF danas nije podešen) |
+| R3-3 | Ponovno slanje (retry) koristi sačuvano telo zahteva (`modSEFService:40-55`), a ne nov UBL | čitanje | već poslata faktura ne menja hash; nov oblik važi samo za novo slanje |
+| R3-4 | `RunSEFTestSuite` je `gate: True`, ali je van podrazumevanog skupa | `tools/run_vba.py:77` | ulazi u TARGETED reza 3 |
+
+**Verdikt po osama:**
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | PROVEN | `FAK-ODL-01`, `FAK-ODL-04`, `FAK-IDENT-02` (`docs/DOMEN/FAKTURA.md`) |
+| `EVENTS` | PROVEN | menja se samo zapis pravnog događaja (sadržaj e-fakture). Datum isporuke ostaje fizički prijem, sada čitan strogo. Fizički i finansijski događaji su netaknuti |
+| `IDENTITY` | PROVEN | `PrijemnicaStavkaID` putuje od linije do SEF-a. Zaglavlje po `PrijemnicaID`-u čita se strogo. GP identitet (`PreradaID`) se ne menja |
+| `CARDINALITY` | PROVEN | stavka : SEF linija = 1 : 1 (`FAK-LIN-01`); GP faktura : utovar = 1 : 1 |
+| `INVARIANTS/OWNER` | PROVEN | SEF kapija i health dele jednog vlasnika GP pravila (celina 3); `FAK-LIN-02` drži ugovor dokumenta i strog čitač linija |
+| `WRITERS` | N/A | rez ne piše nijednu tabelu. SEF tabele piše `modSEFPersistance`, kao i do sada |
+| `DOWNSTREAM` | PROVEN | SEF payload i hash (R3-3), JSON zapis (`tblSEFSubmission.RequestBody`), health 3 / 6c. PWA SEF zapis ne čita |
+| `CAPABILITY` | PROVEN | D-016 slanje na SEF: REPLACED (`FAK-ODL-01`); C-003: test |
+| `ACCEPTANCE CONTRACT` | PROVEN (plan) | ispod |
+| `PLATFORM` | ⚠ R3-2 | spoljna nepoznanica nije Excel/VBA, pa ne blokira kod. Blokira produkcijsko slanje dok se ne proveri |
+| `LANDING` | PROVEN | grana od `2ac332e3`; `#444` dira samo `migration/` |
+
+**Ugovor prihvatanja.** Testovi idu u BFP kao `Test_S7R3_*`. Gde je moguće, test tvrdi preko javnog API-ja koji
+postoji i pre reza (UBL i JSON kao tekst), pa se crveni prolaz kompajlira i nad starim kodom.
+
+1. **`Test_S7R3_SefLinijaNosiStavkuIKlasu`** — faktura nad dvoklasnom prijemnicom:
+   - UBL nosi dva različita `SellersItemIdentification/ID`, i to baš stavke linija, a ne `PrijemnicaID`;
+   - nazivi se razlikuju po „kl. I" / „kl. II";
+   - JSON nosi `PrijemnicaStavkaID`.
+
+   Kontrola: GP faktura (`FAK-SLED-GP4`) i dalje nosi `PreradaID`. Danas je crven.
+2. **`Test_S7R3_SefZaglavljeStrogo`** — dupli `PrijemnicaID` zaglavlja (synthetic, TX): DTO se ne gradi, a
+   greška imenuje dvosmislenost. Danas je crven: uzima prvi red.
+3. **`Test_S7R3_SaldoKupcaRobni`** — C-003 kroz korake iz celine 5. Brani pravilo; crven nad starim kodom nije
+   očekivan.
+4. **`Test_S7R3_GpPraviloJedno`** — GP faktura iz fixture-a bez razloga; kvarovi (utovar storniran, tvrdi drugu
+   fakturu, kg se ne poklapaju) daju isti razlog u SEF kapiji i u health-u. Kontrola: aktivna GP faktura u
+   health 6c više ne javlja drift.
+5. **`Test_S7R3_UgovorGpIzvor`** — `GP_PRERADA_NEMA` i `GP_UTOVAR_NEMA` (synthetic, TX). Fixture negativ
+   `FST-GP-SB` je nalaz `GP_UTOVAR_NEMA`.
+
+**Sabotaže (`s7r3-*`):**
+
+- UBL ID ponovo `PrijemnicaID`;
+- naziv bez klase;
+- JSON bez stavke;
+- mapper ne traži stavku;
+- čitač zaglavlja ponovo prvi pogodak;
+- SEF kapija ne pita zajedničko GP pravilo;
+- health ne pita zajedničko GP pravilo;
+- `GP_UTOVAR_NEMA` se ne javlja;
+- grupa `fak_broj_prj` bez praga, kao test samog alata.
+
+**Kapije:**
+
+- jeftine: `vba_check`, `gen_schema_module --check` (šema se ne menja), `who_writes` (bez novog pisca),
+  `popis_citalaca --check` (nova grupa);
+- TARGETED: `RunAllTests`, BFP, `RunSEFTestSuite` (R3-4), `RunFakturaSmokeSuite`, `RunGoldenSuite`,
+  `RunIzvestajTests` (C-003);
+- crveni prolaz nad `2ac332e3`;
+- `dokaz.py` nad `s7r2-*` i `s7r3-*` čija sidra rez dira;
+- Compile;
+- ručna provera: UBL i JSON zapis jedne dvoklasne fakture (sonda), bez stvarnog slanja.
+
+**Rizici:**
+
+- ⚠ R3-2 (spoljno, gore);
+- izdvajanje GP pravila iz `ValidateGpUtovarZaSEF` mora da zadrži tačne poruke na koje stoje postojeće
+  tvrdnje (`T_FakturaGP_WriterKapijeIStorno`, „SEF blokira …"). Pre koda se popisuju i ostaju doslovne;
+- fixture negativ `FST-GP-SB` posle reza puni health 3. Testovi koji broje nalaze moraju da mere po ID-u
+  (obrazac `Test_S7R2_UgovorLinijaFakture`).
+
+**GO / HOLD za kod:** **GO.** Sve relevantne ose su PROVEN. R3-2 je spoljni rizik za produkcijsko slanje, ne za
+kod i testove; upisuje se u `docs/KNOWN_ISSUES.md` kao `KI-079`.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
