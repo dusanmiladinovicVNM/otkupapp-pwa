@@ -1091,7 +1091,12 @@ End Function
 '   LINIJA_BEZ_FAKTURE -- linija pokazuje na fakturu koje nema ili je dvosmislena;
 '   FAKTURA_BEZ_LINIJA -- aktivna faktura nema nijednu liniju (StavkaID prazan);
 '   LINIJA_DVA_IZVORA  -- aktivna linija nosi i PrijemnicaID i PreradaID;
-'   LINIJA_BEZ_IZVORA  -- aktivna linija nema ni PrijemnicaID ni PreradaID.
+'   LINIJA_BEZ_IZVORA  -- aktivna linija nema ni PrijemnicaID ni PreradaID;
+'   GP_PRERADA_NEMA    -- aktivna GP linija: PreradaID nije u tblPrerada tacno jednom;
+'   GP_UTOVAR_NEMA     -- aktivna GP linija: UtovarID je prazan ili nije u tblUtovar
+'                         tacno jednom (S7 rez 3, KI-078). Pisac pravi GP liniju samo
+'                         iz aktivnih stavki utovara, a SEF kapija trazi izvor tek pri
+'                         slanju; health ga meri ovde.
 ' Izvor je TACNO JEDAN od dva, isto pravilo kao SEF mapper (BuildSEFInvoiceDto).
 ' Linija stornirane fakture se ne meri dalje od zaglavlja: storno je dokument-level.
 ' Stavku prijemnice (FAK-LIN-01/-02) meri FakturaLinijePoStavci, ne ovaj citac.
@@ -1109,13 +1114,18 @@ Public Function UgovorLinijaFaktureNalazi() As Collection
     Dim fs As Variant
     fs = GetTableData(TBL_FAKTURA_STAVKE)
     If IsArray(fs) Then
-        Dim cID As Long, cF As Long, cP As Long, cPre As Long
+        Dim cID As Long, cF As Long, cP As Long, cPre As Long, cUt As Long
         cID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_ID, SRC)
         cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
         cP = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
         cPre = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID, SRC)
+        cUt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID, SRC)
 
-        Dim i As Long, sid As String, fid As String
+        Dim brojPre As Object, brojUt As Object
+        Set brojPre = BrojacIdova(TBL_PRERADA, COL_PRE_ID)
+        Set brojUt = BrojacIdova(TBL_UTOVAR, COL_UT_ID)
+
+        Dim i As Long, sid As String, fid As String, izvor As String
         Dim imaPrj As Boolean, imaPre As Boolean
         For i = 1 To UBound(fs, 1)
             sid = Trim$(NzToText(fs(i, cID)))
@@ -1130,6 +1140,12 @@ Public Function UgovorLinijaFaktureNalazi() As Collection
                     res.Add Array("LINIJA_DVA_IZVORA", sid, fid)
                 ElseIf Not imaPrj And Not imaPre Then
                     res.Add Array("LINIJA_BEZ_IZVORA", sid, fid)
+                ElseIf imaPre Then
+                    izvor = Trim$(NzToText(fs(i, cPre)))
+                    If IdIliPrazno(brojPre, izvor) <> izvor Then res.Add Array("GP_PRERADA_NEMA", sid, fid)
+                    izvor = Trim$(NzToText(fs(i, cUt)))
+                    If Len(izvor) = 0 Or IdIliPrazno(brojUt, izvor) <> izvor Then _
+                        res.Add Array("GP_UTOVAR_NEMA", sid, fid)
                 End If
             End If
         Next i

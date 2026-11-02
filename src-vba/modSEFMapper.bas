@@ -147,20 +147,14 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     ' prijemnice. Kolone se citaju MEKO -- sveska pre nadogradnje ih
     ' nema, a tada ni GP faktura ne postoji (stari put netaknut).
     ' Poreski tretman GP = isti kao sveza roba (potvrdjena odluka).
-    Dim colPreradaID As Long, colBrojPrerade As Long, colUtID As Long
+    Dim colPreradaID As Long, colBrojPrerade As Long
     colPreradaID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
     colBrojPrerade = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE)
-    colUtID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
-    ' GP kapija (revizija #6 t.2): utovarID svih GP linija fakture --
-    ' fizicki utovar je JEDINI legitiman izvor SEF datuma isporuke GP
-    ' robe, pa GP linija bez validnog utovara BLOKIRA slanje (nikad
-    ' tihi fallback na datum fakture).
-    Dim gpUtovarID As String
-    gpUtovarID = ""
-    ' Kolicinski dokaz (revizija #7 B3): zbir kg aktivnih GP linija po
-    ' preradi -- poredi se 1:1 sa aktivnim UtovarStavkama tog utovara.
-    Dim gpKg As Object: Set gpKg = CreateObject("Scripting.Dictionary")
-    gpKg.CompareMode = vbTextCompare
+    ' GP kapija (revizija #6 t.2, #7 B3) ima JEDNOG vlasnika od S7 reza 3
+    ' (KI-077): GpFakturaRazlog, koji zove i health 6c. Pita se posle petlje.
+    ' FAK-ODL-01 (S7 rez 3): linija prijemnice nosi svoju STAVKU na e-fakturu.
+    Dim colStavkaID As Long
+    colStavkaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_STAVKA_ID, SRC)
     ' AUD-031 / FAK-ODL-03 (S7 rez 2): linija nema svoj storno -- aktivna je ako i
     ' samo ako je aktivna njena faktura. Zato se linije vise ne filtriraju, nego se
     ' neaktivna faktura odbija ovde, pre prve linije. U normalnom toku je vec odbija
@@ -173,6 +167,7 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     Dim line As clsSEFLine
     Dim prijemnicaID As String
     Dim brojPrijemnice As String
+    Dim stavkaID As String
     Dim preradaID As String
     Dim brojPrerade As String
     Dim vrstaVoca As String
@@ -195,6 +190,7 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
 
             prijemnicaID = Trim$(CStr(stavke(i, colPrijemnicaID)))
             brojPrijemnice = Trim$(CStr(stavke(i, colBrojPrijemnice)))
+            stavkaID = Trim$(CStr(nz(stavke(i, colStavkaID))))
             preradaID = ""
             brojPrerade = ""
             If colPreradaID > 0 Then preradaID = Trim$(CStr(nz(stavke(i, colPreradaID))))
@@ -212,38 +208,10 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
                           "Invoice line has both PrijemnicaID and PreradaID for " & fakturaID
             End If
 
-            ' GP linija MORA nositi UtovarID (revizija #6 t.2) i sve GP
-            ' linije iste fakture isti (contract: 1 faktura = 1 utovar).
-            If Len(preradaID) > 0 Then
-                Dim utvID As String
-                utvID = ""
-                If colUtID > 0 Then utvID = Trim$(CStr(nz(stavke(i, colUtID))))
-                If Len(utvID) = 0 Then
-                    Err.Raise ERR_SEF_VALIDATION, SRC, _
-                              "GP line without UtovarID for " & fakturaID & _
-                              " -- fizicki utovar je dokaz isporuke, SEF send blocked."
-                End If
-                If Len(gpUtovarID) = 0 Then
-                    gpUtovarID = utvID
-                ElseIf StrComp(gpUtovarID, utvID, vbTextCompare) <> 0 Then
-                    Err.Raise ERR_SEF_VALIDATION, SRC, _
-                              "GP lines reference different utovari (" & gpUtovarID & _
-                              " vs " & utvID & ") for " & fakturaID
-                End If
-            End If
-
             If Not TryParseDouble(CStr(stavke(i, colKolicina)), qty) Or qty <= 0 Then
                 Err.Raise ERR_SEF_VALIDATION, SRC, _
                           "Invalid line quantity for faktura " & fakturaID
             End If
-            If Len(preradaID) > 0 Then
-                If gpKg.Exists(preradaID) Then
-                    gpKg(preradaID) = CDbl(gpKg(preradaID)) + qty
-                Else
-                    gpKg.Add preradaID, qty
-                End If
-            End If
-
             If Not TryParseDouble(CStr(stavke(i, colCena)), price) Or price < 0 Then
                 Err.Raise ERR_SEF_VALIDATION, SRC, _
                           "Invalid line price for faktura " & fakturaID
@@ -258,10 +226,24 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
                 End If
                 opis = opis & " po preradi " & brojPrerade
             Else
+                ' FAK-ODL-01 (S7 rez 3): linija prijemnice nosi STAVKU (identitet na
+                ' e-fakturi) i klasu u nazivu -- dve klase iste prijemnice su dve
+                ' razlicite linije, kao na papiru (PrintFaktura). Klasa je snapshot
+                ' linije, isti koji papir stampa. Zaglavlje se cita STROGO: dupli
+                ' PrijemnicaID nije "prvi pogodak" nego kvar.
+                If Len(stavkaID) = 0 Then
+                    Err.Raise ERR_SEF_VALIDATION, SRC, _
+                              "Invoice line without PrijemnicaStavkaID for " & fakturaID & _
+                              " (PrijemnicaID " & prijemnicaID & ", FAK-LIN-02) -- SEF send blocked."
+                End If
+                RequireTacnoJedan TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _
+                                  "Prijemnica linije fakture " & fakturaID, SRC
                 vrstaVoca = CStr(LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID, "VrstaVoca"))
                 sortaVoca = CStr(LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID, "SortaVoca"))
 
                 opis = Trim$(vrstaVoca & " " & sortaVoca)
+                If Len(Trim$(CStr(stavke(i, colKlasa)))) > 0 Then _
+                    opis = Trim$(opis & " kl. " & Trim$(CStr(stavke(i, colKlasa))))
                 opis = Trim$(opis & " po prijemnici " & brojPrijemnice)
 
                 If Len(Trim$(opis)) = 0 Then
@@ -285,6 +267,7 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
 
             line.prijemnicaID = prijemnicaID
             line.brojPrijemnice = brojPrijemnice
+            If Len(preradaID) = 0 Then line.prijemnicaStavkaID = stavkaID
             line.preradaID = preradaID
             line.brojPrerade = brojPrerade
             line.naziv = opis
@@ -309,10 +292,13 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
         Err.Raise ERR_SEF_VALIDATION, SRC, "Invoice has no lines."
     End If
 
-    ' GP kapija (revizija #6 t.2): utovar iza GP linija mora POSTOJATI
-    ' tacno jednom, biti aktivan i tvrditi bas OVU fakturu; kolicine
-    ' fakture moraju 1:1 odgovarati utovarnim stavkama (revizija #7 B3).
-    If Len(gpUtovarID) > 0 Then ValidateGpUtovarZaSEF gpUtovarID, fakturaID, gpKg
+    ' GP kapija (revizija #6 t.2, #7 B3): GP linija nosi utovar, sve GP linije
+    ' fakture isti, a utovar postoji tacno jednom, aktivan je, tvrdi bas OVU
+    ' fakturu i kolicine su 1:1 sa njegovim stavkama. Jedan vlasnik pravila od S7
+    ' reza 3 (KI-077): GpFakturaRazlog -- isti razlog javlja i health 6c.
+    Dim gpRazlog As String
+    gpRazlog = GpFakturaRazlog(fakturaID)
+    If Len(gpRazlog) > 0 Then Err.Raise ERR_SEF_VALIDATION, SRC, gpRazlog
 
     ValidateSEFTotalMatch "TotalNet", calcTotalNet, dto.TotalNet, fakturaID, SRC
     ValidateSEFTotalMatch "TotalVat", calcTotalVat, dto.TotalVat, fakturaID, SRC
@@ -326,41 +312,102 @@ EH:
     Err.Raise Err.Number, SRC, Err.description
 End Function
 
-' GP SEF kapija (revizija #6 t.2): utovar mora postojati TACNO jednom,
+' JEDNO GP PRAVILO FAKTURE (S7 rez 3, KI-077). Vraca razlog ("" = ispravno) i ne
+' dize gresku za poslovni kvar: SEF kapija (BuildSEFInvoiceDto) ga dize, a health
+' 6c ga javlja kao nalaz -- jedna implementacija, dva pozivaoca. Faktura bez GP
+' linija daje "". Linije se citaju bez obzira na aktivnost: aktivnost je pitanje
+' zaglavlja i pita je pozivalac.
+Public Function GpFakturaRazlog(ByVal fakturaID As String) As String
+    Const SRC As String = "modSEFMapper.GpFakturaRazlog"
+    Dim fs As Variant, i As Long
+    Dim cF As Long, cPre As Long, cUt As Long, cKol As Long
+    Dim preradaID As String, utvID As String, gpUtovarID As String, qty As Double
+    Dim gpKg As Object
+    Set gpKg = CreateObject("Scripting.Dictionary")
+    gpKg.CompareMode = vbTextCompare
+
+    fs = GetTableData(TBL_FAKTURA_STAVKE)
+    If Not IsArray(fs) Then Exit Function
+    cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    cPre = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID, SRC)
+    cUt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID, SRC)
+    cKol = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA, SRC)
+
+    For i = 1 To UBound(fs, 1)
+        If Trim$(CStr(nz(fs(i, cF)))) = Trim$(fakturaID) Then
+            preradaID = Trim$(CStr(nz(fs(i, cPre))))
+            If Len(preradaID) > 0 Then
+                ' GP linija MORA nositi UtovarID (revizija #6 t.2) i sve GP linije
+                ' iste fakture isti (contract: 1 faktura = 1 utovar).
+                utvID = Trim$(CStr(nz(fs(i, cUt))))
+                If Len(utvID) = 0 Then
+                    GpFakturaRazlog = "GP line without UtovarID for " & fakturaID & _
+                                      " -- fizicki utovar je dokaz isporuke, SEF send blocked."
+                    Exit Function
+                End If
+                If Len(gpUtovarID) = 0 Then
+                    gpUtovarID = utvID
+                ElseIf StrComp(gpUtovarID, utvID, vbTextCompare) <> 0 Then
+                    GpFakturaRazlog = "GP lines reference different utovari (" & gpUtovarID & _
+                                      " vs " & utvID & ") for " & fakturaID
+                    Exit Function
+                End If
+                ' Kolicinski dokaz (revizija #7 B3): zbir kg GP linija po preradi.
+                If Not TryParseDouble(CStr(fs(i, cKol)), qty) Or qty <= 0 Then
+                    GpFakturaRazlog = "Invalid line quantity for faktura " & fakturaID
+                    Exit Function
+                End If
+                If gpKg.Exists(preradaID) Then
+                    gpKg(preradaID) = CDbl(gpKg(preradaID)) + qty
+                Else
+                    gpKg.Add preradaID, qty
+                End If
+            End If
+        End If
+    Next i
+
+    If Len(gpUtovarID) > 0 Then GpFakturaRazlog = GpUtovarRazlog(gpUtovarID, fakturaID, gpKg)
+End Function
+
+' GP PRAVILO UTOVARA (revizija #6 t.2): utovar mora postojati TACNO jednom,
 ' ne sme biti storniran, mora biti markiran Fakturisano=Da i mora
 ' tvrditi bas ovu fakturu. Bilo sta drugo = BLOCK slanja -- korumpiran
 ' GP red se ne sme "spasiti" datumom fakture.
-Private Sub ValidateGpUtovarZaSEF(ByVal utovarID As String, ByVal fakturaID As String, _
-                                  ByVal gpKg As Object)
-    Const SRC As String = "modSEFMapper.ValidateGpUtovarZaSEF"
+'
+' Od S7 reza 3 (KI-077) VRACA razlog ("" = ispravno) umesto da dize gresku: zovu je
+' SEF kapija i health 6c, kroz GpFakturaRazlog. Poruke su doslovno iste kao u
+' kapiji pre reza. Strukturni kvar (tabela, kolona) i dalje dize gresku.
+Public Function GpUtovarRazlog(ByVal utovarID As String, ByVal fakturaID As String, _
+                               ByVal gpKg As Object) As String
+    Const SRC As String = "modSEFMapper.GpUtovarRazlog"
 
     Dim utRows As Collection
     Set utRows = FindRows(TBL_UTOVAR, COL_UT_ID, utovarID)
     If utRows Is Nothing Then
-        Err.Raise ERR_SEF_VALIDATION, SRC, _
-                  "Utovar ne postoji: " & utovarID & " (faktura " & fakturaID & ")"
+        GpUtovarRazlog = "Utovar ne postoji: " & utovarID & " (faktura " & fakturaID & ")"
+        Exit Function
     End If
     If utRows.count <> 1 Then
-        Err.Raise ERR_SEF_VALIDATION, SRC, _
-                  "Utovar ne postoji jednoznacno: " & utovarID & _
+        GpUtovarRazlog = "Utovar ne postoji jednoznacno: " & utovarID & _
                   "; Count=" & CStr(utRows.count)
+        Exit Function
     End If
 
     Dim ut As Variant, rowUt As Long
     ut = GetTableData(TBL_UTOVAR)
     rowUt = CLng(utRows(1))
     If UCase$(Trim$(CStr(nz(ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_STORNIRANO, SRC)))))) = "DA" Then
-        Err.Raise ERR_SEF_VALIDATION, SRC, _
-                  "Utovar je storniran: " & utovarID & " (faktura " & fakturaID & ")"
+        GpUtovarRazlog = "Utovar je storniran: " & utovarID & " (faktura " & fakturaID & ")"
+        Exit Function
     End If
     If UCase$(Trim$(CStr(nz(ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURISANO, SRC)))))) <> "DA" Then
-        Err.Raise ERR_SEF_VALIDATION, SRC, _
-                  "Utovar nije markiran kao fakturisan: " & utovarID
+        GpUtovarRazlog = "Utovar nije markiran kao fakturisan: " & utovarID
+        Exit Function
     End If
     If StrComp(Trim$(CStr(nz(ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURA_ID, SRC))))), _
                Trim$(fakturaID), vbTextCompare) <> 0 Then
-        Err.Raise ERR_SEF_VALIDATION, SRC, _
-                  "Utovar " & utovarID & " tvrdi drugu fakturu, ne " & fakturaID
+        GpUtovarRazlog = "Utovar " & utovarID & " tvrdi drugu fakturu, ne " & fakturaID
+        Exit Function
     End If
 
     ' Kupac FIZICKOG dokumenta = kupac FAKTURE (revizija #11 B1):
@@ -371,9 +418,9 @@ Private Sub ValidateGpUtovarZaSEF(ByVal utovarID As String, ByVal fakturaID As S
     utKup = Trim$(CStr(nz(ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_KUPAC, SRC)))))
     fakKup = Trim$(CStr(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_KUPAC))))
     If StrComp(utKup, fakKup, vbTextCompare) <> 0 Then
-        Err.Raise ERR_SEF_VALIDATION, SRC, _
-                  "Kupac utovara (" & utKup & ") nije kupac fakture (" & _
+        GpUtovarRazlog = "Kupac utovara (" & utKup & ") nije kupac fakture (" & _
                   fakKup & ") za " & fakturaID & " -- SEF send blocked."
+        Exit Function
     End If
 
     ' Kolicinski dokaz 1:1 (revizija #7 B3): za svaku aktivnu GP liniju
@@ -408,25 +455,25 @@ Private Sub ValidateGpUtovarZaSEF(ByVal utovarID As String, ByVal fakturaID As S
     Dim k As Variant
     For Each k In gpKg.keys
         If Not utKg.Exists(CStr(k)) Then
-            Err.Raise ERR_SEF_VALIDATION, SRC, _
-                      "GP linija za preradu " & CStr(k) & _
+            GpUtovarRazlog = "GP linija za preradu " & CStr(k) & _
                       " nema utovarnu stavku na " & utovarID & " -- SEF send blocked."
+            Exit Function
         End If
         If Abs(CDbl(gpKg(CStr(k))) - CDbl(utKg(CStr(k)))) > 0.0001 Then
-            Err.Raise ERR_SEF_VALIDATION, SRC, _
-                      "Kolicina fakture (" & CStr(gpKg(CStr(k))) & _
+            GpUtovarRazlog = "Kolicina fakture (" & CStr(gpKg(CStr(k))) & _
                       " kg) ne odgovara utovaru (" & CStr(utKg(CStr(k))) & _
                       " kg) za preradu " & CStr(k) & " -- SEF send blocked."
+            Exit Function
         End If
     Next k
     For Each k In utKg.keys
         If Not gpKg.Exists(CStr(k)) Then
-            Err.Raise ERR_SEF_VALIDATION, SRC, _
-                      "Utovarna stavka za preradu " & CStr(k) & _
+            GpUtovarRazlog = "Utovarna stavka za preradu " & CStr(k) & _
                       " nije predstavljena u fakturi " & fakturaID & " -- SEF send blocked."
+            Exit Function
         End If
     Next k
-End Sub
+End Function
 
 ' Legacy/debug JSON snapshot serializer.
 ' Not used for actual SEF UBL submission.
@@ -476,6 +523,7 @@ Public Function SerializeSEFRequest(ByVal dto As clsSEFInvoiceSnapshot) As Strin
         sb = sb & "{"
         sb = sb & """PrijemnicaID"":" & JsonString(ln.prijemnicaID) & ","
         sb = sb & """BrojPrijemnice"":" & JsonString(ln.brojPrijemnice) & ","
+        sb = sb & """PrijemnicaStavkaID"":" & JsonString(ln.prijemnicaStavkaID) & ","
         sb = sb & """PreradaID"":" & JsonString(ln.preradaID) & ","
         sb = sb & """BrojPrerade"":" & JsonString(ln.brojPrerade) & ","
         sb = sb & """Naziv"":" & JsonString(ln.naziv) & ","
@@ -768,11 +816,12 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
         xml = xml & "    <cbc:InvoicedQuantity unitCode=""KGM"">" & XmlQuantity(ln.kolicina) & "</cbc:InvoicedQuantity>" & vbCrLf
         xml = xml & "    <cbc:LineExtensionAmount currencyID=""" & XmlEscape(dto.CurrencyCode) & """>" & XmlAmount(ln.neto) & "</cbc:LineExtensionAmount>" & vbCrLf
         
-        ' GP stavka (R2): stabilni source identity je PreradaID -- isti
-        ' princip kao PrijemnicaID za svezu (tacno jedan je popunjen,
-        ' mapper je to vec fail-closed proverio).
+        ' Identitet linije na e-fakturi: STAVKA prijemnice za svezu robu (FAK-ODL-01,
+        ' S7 rez 3 -- do tada PrijemnicaID dokumenta, pa su dve klase bile dve
+        ' linije istog ID-a), PreradaID za GP (R2). Tacno jedan je popunjen, mapper
+        ' je to vec fail-closed proverio.
         Dim srcID As String
-        srcID = ln.prijemnicaID
+        srcID = ln.prijemnicaStavkaID
         If Len(ln.preradaID) > 0 Then srcID = ln.preradaID
 
         xml = xml & "    <cac:Item>" & vbCrLf
@@ -949,6 +998,10 @@ Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String) As Date
 
             If Len(prijemnicaID) > 0 Then
 
+                ' Dupli PrijemnicaID ovde nije proveren namerno (S7 rez 3): jedini
+                ' pozivalac je BuildSEFInvoiceDto, ciji citac linija isto zaglavlje
+                ' cita STROGO (RequireTacnoJedan) -- DTO sa ovakvim datumom zato nikad
+                ' ne nastaje. Druga kopija provere bi prvu zaklonila.
                 Dim v As Variant
                 v = LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID, "Datum")
 

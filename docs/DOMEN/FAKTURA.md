@@ -51,6 +51,8 @@ nad prijemnicom je `PrijemnicaStavkaID`, a naziv dobija klasu
 prijemnice na e-fakturi dve linije istog naziva i istog ID-a dokumenta
 (`modSEFMapper:268-276`, `:783-789`), a papir ih razlikuje po klasi
 (`modFaktura.PrintFaktura:746-747`). Papir i e-faktura posle S7 nose isti sadržaj.
+Urađeno u S7 rezu 3 (stavka 265): mapper, `clsSEFLine.prijemnicaStavkaID`, UBL i JSON zapis; zaglavlje prijemnice
+mapper čita strogo.
 
 **`FAK-ODL-02` — lokalni storno fakture se odbija dok faktura živi na SEF-u.**
 Faktura „živi na SEF-u" kad je `SEFWorkflowState` jedno od `SEF_SENDING`, `SEF_SENT`,

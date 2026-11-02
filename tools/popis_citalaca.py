@@ -108,6 +108,13 @@ GRUPE = collections.OrderedDict([
     # Literal kljuca je u grupi namerno: konstanta je obrisana, a red u
     # Podesavanjima bi kljuc vratio kao golu nisku.
     ("prj_zbr_cfg", re.compile(r"\bPrijemnicaZbirnaBlokira\b|PRIJEMNICA_ZBIRNA_PROVERA")),
+    # S7 rez 3 (plan 14.57, zatvaranje S7): veza fakture preko BROJA prijemnice --
+    # linija fakture trazena po broju kao kljucu. Izmereno 0 i pre S7 (merenje 1
+    # pre-flight-a); prag 0 pretvara merenje u kapiju. BrojPrijemnice na liniji je
+    # snapshot za papir, SEF naziv i izvoz, i njegovo CITANJE nije u grupi.
+    ("fak_broj_prj", re.compile(r"\b(LookupValue|FindRows|LookupActiveID|BuildLookupDict|RowsAktivni"
+                                r"|CheckDuplicate|RequireTacnoJedan)\s*\(\s*TBL_FAKTURA_STAVKE\s*,\s*"
+                                r"(COL_FS_BROJ_PRIJEMNICE\b|\"BrojPrijemnice\")")),
 ])
 # Prosirene grupe: ono sto konstante ne vide (kriticar pokrivenosti, 15.09).
 GRUPE_X = collections.OrderedDict([
@@ -228,6 +235,7 @@ PRAGOVI = collections.OrderedDict([
     ("prj_kes", 0),
     ("prj_generacija", 0),
     ("prj_brojzbirne", 33),
+    ("fak_broj_prj", 0),
 ])
 
 # Linijska polja zaglavlja -- prag dual READ.

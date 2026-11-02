@@ -9549,6 +9549,70 @@ SABOTAZE = {
         "Test_S7R2_FakturaStareKoloneSelfHeal",
         "S7R2 self-heal: EnsureSledljivostSchema ne vraca trace kolone fakturi",
     ),
+    # --- S7 rez 3: SEF linija i zatvaranje S7 (FAK-ODL-01, KI-077, KI-078; plan 14.57
+    # "Pre-flight S7 rez 3"). Health 6c (Private, gate: False) i prag fak_broj_prj
+    # (kapija samog alata) nemaju sabotazu u katalogu -- nema suite-a koji ih meri.
+    "s7r3-ubl-id-dokument": (
+        "modSEFMapper.bas",
+        "        srcID = ln.prijemnicaStavkaID\n",
+        "        srcID = ln.prijemnicaID   ' SABOTAZA: dokument kao ID linije\n",
+        "Test_S7R3_SefLinijaNosiStavkuIKlasu",
+        "S7R3 SEF: UBL nosi stavke kao ID linija",
+    ),
+    "s7r3-naziv-bez-klase": (
+        "modSEFMapper.bas",
+        "                If Len(Trim$(CStr(stavke(i, colKlasa)))) > 0 Then _\n"
+        "                    opis = Trim$(opis & \" kl. \" & Trim$(CStr(stavke(i, colKlasa))))\n",
+        "                ' SABOTAZA: naziv bez klase\n",
+        "Test_S7R3_SefLinijaNosiStavkuIKlasu",
+        "S7R3 SEF: nazivi linija razlikuju klase",
+    ),
+    "s7r3-json-bez-stavke": (
+        "modSEFMapper.bas",
+        "        sb = sb & \"\"\"PrijemnicaStavkaID\"\":\" & JsonString(ln.prijemnicaStavkaID) & \",\"\n",
+        "        ' SABOTAZA: JSON bez stavke\n",
+        "Test_S7R3_SefLinijaNosiStavkuIKlasu",
+        "S7R3 SEF: JSON zapis nosi PrijemnicaStavkaID",
+    ),
+    "s7r3-mapper-ne-trazi-stavku": (
+        "modSEFMapper.bas",
+        "                If Len(stavkaID) = 0 Then\n",
+        "                If False Then   ' SABOTAZA: linija bez stavke prolazi\n",
+        "Test_S7R3_SefOdbijaNejasnuLiniju",
+        "S7R3 nejasna linija: linija bez stavke ne ide na SEF (FAK-LIN-02)",
+    ),
+    # Strog citac zaglavlja stoji SAMO u petlji linija: datum isporuke ga namerno
+    # nema, inace bi druga kopija zaklonila ovu sabotazu (dvoslojna kapija).
+    "s7r3-zaglavlje-prvi-pogodak": (
+        "modSEFMapper.bas",
+        "                RequireTacnoJedan TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _\n"
+        "                                  \"Prijemnica linije fakture \" & fakturaID, SRC\n",
+        "                ' SABOTAZA: zaglavlje prvi pogodak\n",
+        "Test_S7R3_SefOdbijaNejasnuLiniju",
+        "S7R3 nejasna linija: zaglavlje prijemnice dvaput ne ide na SEF (strog citac)",
+    ),
+    "s7r3-sef-ne-pita-gp-pravilo": (
+        "modSEFMapper.bas",
+        "    If Len(gpRazlog) > 0 Then Err.Raise ERR_SEF_VALIDATION, SRC, gpRazlog\n",
+        "    ' SABOTAZA: SEF ne pita GP pravilo\n",
+        "Test_S7R3_GpPraviloJedno",
+        "S7R3 GP pravilo: SEF kapija odbija sa istim razlogom (utovar druge fakture)",
+    ),
+    "s7r3-ugovor-gp-utovar-nema": (
+        "modFaktura.bas",
+        "                    If Len(izvor) = 0 Or IdIliPrazno(brojUt, izvor) <> izvor Then _\n"
+        "                        res.Add Array(\"GP_UTOVAR_NEMA\", sid, fid)\n",
+        "                    ' SABOTAZA: GP linija bez utovara nije nalaz\n",
+        "Test_S7R3_UgovorGpIzvor",
+        "S7R3 ugovor: GP linija bez utovara je nalaz GP_UTOVAR_NEMA",
+    ),
+    "s7r3-ugovor-gp-prerada-nema": (
+        "modFaktura.bas",
+        "                    If IdIliPrazno(brojPre, izvor) <> izvor Then res.Add Array(\"GP_PRERADA_NEMA\", sid, fid)\n",
+        "                    ' SABOTAZA: prerada koje nema nije nalaz\n",
+        "Test_S7R3_UgovorGpIzvor",
+        "S7R3 ugovor: GP linija na preradu koje nema je nalaz GP_PRERADA_NEMA",
+    ),
     # --- S6 korak 6: F4 odmrznut (plan 14.55 "Korak 6") --------------------
     # Vraceno iz 14.14 (tela u fc06fa77): redosled provera F4, bruto -> neto i
     # vezivanje samo na jednoznacnu zbirnu. Sidra su ista kao tada, osim

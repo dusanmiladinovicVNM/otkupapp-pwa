@@ -10259,6 +10259,21 @@ postoji i pre reza (UBL i JSON kao tekst), pa se crveni prolaz kompajlira i nad 
 **GO / HOLD za kod:** **GO.** Sve relevantne ose su PROVEN. R3-2 je spoljni rizik za produkcijsko slanje, ne za
 kod i testove; upisuje se u `docs/KNOWN_ISSUES.md` kao `KI-079`.
 
+#### S7 rez 3 — kod (02.11.2026, `docs/STANJE_REFAKTORA.md` stavka 265)
+
+Obim je po ugovoru prihvatanja. Odstupanja i odluke usput:
+
+- **Strog čitač zaglavlja stoji samo u petlji linija.** Datum isporuke (`GetInvoiceDeliveryDate`) se računa PRE
+  petlje, a jedini pozivalac mu je `BuildSEFInvoiceDto`. Druga kopija provere bi zato prva oborila dupli ID, pa
+  sabotaža provere u petlji ne bi grizla (dvoslojna kapija). DTO sa datumom pročitanim sa prvog reda ionako ne
+  nastaje.
+- **GP pravilo je izdvojeno bez promene poruka.** `GpUtovarRazlog` je doslovno telo stare kapije, sa povratkom
+  razloga umesto `Err.Raise`, a `GpFakturaRazlog` preuzima proveru linija koja je bila u petlji mappera. Mapper
+  sada GP pravilo pita posle petlje, a ne usred nje. Ishod je isti: `ERR_SEF_VALIDATION` sa istim tekstom.
+- **Sabotaže: 8 umesto 9.** „Health ne pita GP pravilo" bi bila placebo, jer nijedan test ne vidi health 6c
+  (`Private`, `gate: False`). Health se meri prolazom `RunProductionHealthCheck` i čitanjem njegovog izlaza.
+  „Prag `fak_broj_prj`" je kapija samog alata, a ne VBA sabotaža.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

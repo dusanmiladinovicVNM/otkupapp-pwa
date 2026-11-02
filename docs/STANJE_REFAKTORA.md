@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 02.11.2026 (stavka 264: pre-flight S7 rez 3; GO za kod).
+**Ažurirano:** 02.11.2026 (stavka 265: S7 rez 3 u kodu; jeftine kapije PASS, skupe čekaju).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -37,7 +37,7 @@
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
 | **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): ✅ merge **`#450`** (`fd39a716`, 01.11.2026) — review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); stavka 250 |
-| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); ✅ merge **`#452`** (`ff3e9c7a`, 02.11.2026, stavka 257). **Rez 2: pre-flight ✅** (stavka 258, `FAK-ODL-07`); **kod ✅** (stavka 259, PR `#453`); review HOLD → P1 ispravljen (stavka 260, `KI-077`/`KI-078` za rez 3); crveno nad starim kodom, zeleno (308 / 2868 / 111 / 39), dokaz 13/13 (stavka 261); ručna provera i Compile ✅ (stavka 262); ✅ merge **`#453`** (`2ac332e3`, 02.11.2026, stavka 263). **Rez 3: pre-flight ✅** (stavka 264, `KI-079`); GO za kod |
+| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); ✅ merge **`#452`** (`ff3e9c7a`, 02.11.2026, stavka 257). **Rez 2: pre-flight ✅** (stavka 258, `FAK-ODL-07`); **kod ✅** (stavka 259, PR `#453`); review HOLD → P1 ispravljen (stavka 260, `KI-077`/`KI-078` za rez 3); crveno nad starim kodom, zeleno (308 / 2868 / 111 / 39), dokaz 13/13 (stavka 261); ručna provera i Compile ✅ (stavka 262); ✅ merge **`#453`** (`2ac332e3`, 02.11.2026, stavka 263). **Rez 3: pre-flight ✅** (stavka 264, `KI-079`); **kod ✅** (stavka 265), jeftine kapije PASS; skupe čekaju |
 | S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -9204,6 +9204,44 @@
        devet `s7r3-*` sabotaža. **GO za kod.**
      - **Provere:** samo dokumentacija; `src-vba`, `tools` i `schema` su bajt-isti kao u `2ac332e3`.
      - **Sledeći brojevi:** test 309 · stavka 265 · KI-080.
+
+265. **S7 rez 3 — SEF linija i zatvaranje S7 u kodu (`FAK-ODL-01`, `FAK-ODL-04`; `KI-077`, `KI-078`)** (02.11.2026,
+     grana `claude/s7-rez3-sef-linija`). Plan §14.57, „S7 rez 3 — kod".
+
+     - **SEF linija** (`modSEFMapper`, `clsSEFLine`):
+       - linija prijemnice nosi `PrijemnicaStavkaID` kao UBL `SellersItemIdentification/ID` i u JSON zapisu, a GP
+         linija i dalje `PreradaID`;
+       - naziv je „<vrsta> <sorta> kl. <klasa> po prijemnici <broj>";
+       - linija prijemnice bez stavke ne ide na SEF (`FAK-LIN-02`);
+       - zaglavlje prijemnice petlja linija čita strogo (`RequireTacnoJedan`). Datum isporuke tu proveru namerno
+         nema: računa se pre petlje i jedini pozivalac mu je `BuildSEFInvoiceDto`, pa bi druga kopija zaklonila prvu.
+     - **Jedno GP pravilo (`KI-077`):**
+       - `ValidateGpUtovarZaSEF` → `GpUtovarRazlog`: vraća razlog, sa istim porukama;
+       - nov je `GpFakturaRazlog(fakturaID)`, koji skuplja GP linije fakture;
+       - SEF kapija diže razlog kao grešku, a health 6c ga javlja („GP faktura ne odgovara svom utovaru");
+       - GP faktura u 6c dobija živu vrednost iz svojih linija, pa više nije lažan drift.
+     - **GP izvor (`KI-078`):** `UgovorLinijaFaktureNalazi` dobija `GP_PRERADA_NEMA` i `GP_UTOVAR_NEMA`. Fixture
+       negativ `FST-GP-SB` je od sada nalaz.
+     - **Zatvaranje S7:** grupa `fak_broj_prj` u `popis_citalaca` sa pragom 0 (danas 0). Regex hvata pretragu po broju,
+       a ne čitanje kolone.
+     - **Testovi (BFP, 5 novih):**
+       - `Test_S7R3_SefLinijaNosiStavkuIKlasu` i `Test_S7R3_SefOdbijaNejasnuLiniju`. Oba zovu samo API koji postoji i
+         pre reza, pa se mere crveni nad starim kodom;
+       - `Test_S7R3_SaldoKupcaRobni` (C-003) brani pravilo; crven nad starim kodom nije očekivan;
+       - `Test_S7R3_GpPraviloJedno` i `Test_S7R3_UgovorGpIzvor` zovu nov API.
+     - **Sabotaže:** katalog 1107 → **1115** (8 `s7r3-*`). Dva odstupanja od ugovora prihvatanja:
+       - „health ne pita GP pravilo" nema sabotažu: health 6c je `Private` i `gate: False`, pa je ne bi merio nijedan
+         test; meri ga prolaz `RunProductionHealthCheck`;
+       - prag `fak_broj_prj` čuva `--check` samog alata, ne katalog.
+
+       Sidro `sef-gp-kolicina-placebo` važi bez izmene.
+     - **Kapije — PASS:** `vba_check` (191, katalog 0 nalaza), `gen_schema_module --check` (šema nepromenjena),
+       `who_writes --check` (`WHO_WRITES.md` regenerisan: test sada piše `tblUtovar` u TX) i `--check-ownership`,
+       `popis_citalaca --check`.
+     - **NOT RUN (skupe kapije, čekaju odobrenje):** crveni prolaz, TARGETED (`RunAllTests`, BFP, `RunSEFTestSuite`,
+       `RunFakturaSmokeSuite`, `RunGoldenSuite`, `RunIzvestajTests`), `RunProductionHealthCheck`, `dokaz.py`,
+       Compile. `KI-077` i `KI-078` ostaju OPEN do zelenog prolaza.
+     - **Sledeći brojevi:** test 309 · stavka 266 · KI-080.
 
 ## Dug sa imenom (posle S5-5b)
 

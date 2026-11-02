@@ -664,6 +664,8 @@ Private Sub Check_FakturaIznosReconciliation()
 
     ' Live sums per FakturaID: Array(allLinked, activeOnly).
     Dim liveDict As Object: Set liveDict = CreateObject("Scripting.Dictionary")
+    ' S7 rez 3 (KI-077): fakture sa GP linijama -- one se porede i sa utovarom.
+    Dim gpFak As Object: Set gpFak = CreateObject("Scripting.Dictionary")
 
     Dim fsData As Variant
     fsData = GetTableData(TBL_FAKTURA_STAVKE)
@@ -681,9 +683,12 @@ Private Sub Check_FakturaIznosReconciliation()
         Dim stornPrj As Object
         Set stornPrj = BuildLookupDict(TBL_PRIJEMNICA, COL_PRJ_ID, COL_STORNIRANO)
 
-        Dim fFak As Long, fSt As Long
+        Dim fFak As Long, fSt As Long, fPre As Long, fKol As Long, fCena As Long
         fFak = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, "Check_FakturaIznosReconciliation")
         fSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_STAVKA_ID, "Check_FakturaIznosReconciliation")
+        fPre = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID, "Check_FakturaIznosReconciliation")
+        fKol = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA, "Check_FakturaIznosReconciliation")
+        fCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_CENA, "Check_FakturaIznosReconciliation")
 
         Dim p As Long
         Dim fid As String, sid As String, prjID As String
@@ -708,6 +713,22 @@ Private Sub Check_FakturaIznosReconciliation()
                     liveDict(fid) = acc
                 End If
             End If
+            ' S7 rez 3 (KI-077): GP linija nema stavku prijemnice. Njena ziva vrednost
+            ' je sopstveni zbir (kolicina x cena), a izvor -- utovar -- meri zajednicko
+            ' GP pravilo ispod. Do reza 3 je svaka aktivna GP faktura javljala drift.
+            If Len(fid) > 0 And Len(sid) = 0 Then
+                If Len(Trim$(CStr(fsData(p, fPre)))) > 0 Then
+                    pv = 0#
+                    If IsNumeric(fsData(p, fKol)) And IsNumeric(fsData(p, fCena)) Then _
+                        pv = CDbl(fsData(p, fKol)) * CDbl(fsData(p, fCena))
+                    If Not liveDict.Exists(fid) Then liveDict.Add fid, Array(0#, 0#)
+                    acc = liveDict(fid)
+                    acc(0) = acc(0) + pv
+                    acc(1) = acc(1) + pv
+                    liveDict(fid) = acc
+                    gpFak(fid) = True
+                End If
+            End If
         Next p
     End If
 
@@ -722,6 +743,7 @@ Private Sub Check_FakturaIznosReconciliation()
     Dim fakturaID As String
     Dim iznos As Double, liveAll As Double, liveActive As Double
     Dim accf As Variant
+    Dim gpRazlog As String
 
     For i = 1 To UBound(fakData, 1)
 
@@ -760,6 +782,21 @@ Private Sub Check_FakturaIznosReconciliation()
                            " Iznos=" & HealthMoney(iznos) & _
                            " Active=" & HealthMoney(liveActive) & _
                            " Delta=" & HealthMoney(iznos - liveActive)
+            End If
+        End If
+
+        ' S7 rez 3 (KI-077): GP faktura se poredi i sa svojim IZVOROM -- utovarom --
+        ' kroz ISTO pravilo koje drzi SEF kapija (modSEFMapper.GpFakturaRazlog). Faktura
+        ' se poredi jednom, po FakturaID-u; utovar koji tvrdi drugu fakturu je nalaz.
+        If gpFak.Exists(fakturaID) Then
+            gpRazlog = modSEFMapper.GpFakturaRazlog(fakturaID)
+            If Len(gpRazlog) > 0 Then
+                badCount = badCount + 1
+                If detailCount < 25 Then
+                    detailCount = detailCount + 1
+                    HealthWarn "GP faktura ne odgovara svom utovaru", _
+                               "FakturaID=" & fakturaID & " -- " & gpRazlog
+                End If
             End If
         End If
 
