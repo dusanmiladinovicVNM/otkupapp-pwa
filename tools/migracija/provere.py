@@ -405,7 +405,9 @@ def _otpremnice_preostalo(c, dana=3):
             prijemnice[kljuc(pr.get("ZbirnaRoditeljID"))].append(tekst(pr.get("BrojPrijemnice")))
 
     def kg(d):
-        return ", ".join("%s %s" % (k, format(v.normalize(), "f")) for k, v in sorted(d.items()) if v) or "0"
+        # Dve decimale: stari Excel brojevi nose ostatke (171.299999999999999).
+        return ", ".join("%s %s" % (k, format(round(v, 2).normalize(), "f"))
+                         for k, v in sorted(d.items()) if round(v, 2)) or "0"
 
     visak, neizdate = [], []
     for z in c.tabele["tblOtpremnica"]:
@@ -442,7 +444,7 @@ def _otpremnice_preostalo(c, dana=3):
         kand = sorted(((abs((_dan(x.get("Datum")) - d0).days) if d0 and _dan(x.get("Datum")) else 99, x, q)
                        for x, q in visak if tekst(x.get("StanicaID")) == tekst(z.get("StanicaID"))),
                       key=lambda t: (t[0], -t[2]))
-        kand = ["%s %s (+%s kg)" % (x.get("OtpremnicaID"), x.get("BrojOtpremnice", ""), format(q.normalize(), "f"))
+        kand = ["%s %s (+%s kg)" % (x.get("OtpremnicaID"), x.get("BrojOtpremnice", ""), format(round(q, 2).normalize(), "f"))
                 for d, x, q in kand if d <= dana and x is not z][:3]
         c.nalaz(INFO, "NEIZDATA_OTPREMNICA_LANAC", "tblOtpremnica", z.get("OtpremnicaID"),
                 "%s: ocekivano %s kg, %s gajbi; povezano %s kg; %s; kandidati sa viskom blokova: %s"

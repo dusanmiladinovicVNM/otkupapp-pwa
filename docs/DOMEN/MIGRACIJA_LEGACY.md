@@ -119,6 +119,15 @@ robni dokumenti se ne menjaju, pa MIG-ODL-13..15 važe.
 
 ## Otvoreno
 
+- **Proba 03.11.2026 (MIG-ODL-18):** 16 od 17 otpremnica bez bloka ima izdatu
+  zbirnu i tačno jednu prijemnicu, bez kandidata sa viškom blokova — prave, čekaju
+  blokove (ukupno 2340,6 kg, 1007 gajbi; ST-00001 6, ST-00003 9, ST-00007 1).
+  Gajbe stanica ST-00001 (125) i ST-00007 (7) su tačno manjak punih tih vozača
+  (MIG-ODL-17), pa se on gasi kad operater izda te otpremnice. OTP-00666 nema
+  prijemnicu, zbirna joj je stornirana — ODLUKA. 37 izdatih otpremnica ima razliku
+  kg prema blokovima (30 do 1,2 kg; veće: OTP-00289 −44,6, OTP-00329 −30,4 i
+  OTP-00676 +30,4 na istoj stanici ST-00005, OTP-00424 −12,4, OTP-00174 +4,4,
+  OTP-00184 −3,7, OTP-00393 −2,0) — rešava operater sa otkupcem.
 - Posle upisa: operater unosi blokove otpremnica koje ih čekaju (MIG-ODL-18) i
   rešava sa otkupcem otpremnice čiji se kg ne slaže sa blokovima (spisak:
   `proba_sazetak.txt`, odeljak „Otpremnice — preostalo kg i neizdate").
