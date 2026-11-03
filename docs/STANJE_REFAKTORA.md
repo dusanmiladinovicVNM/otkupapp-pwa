@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 02.11.2026 (stavka 269: drugi review `#454` HOLD — `S7R3-REV-04` ispravljen lokalno; skupe kapije i Compile čekaju).
+**Ažurirano:** 03.11.2026 (stavka 270: treći review `#454` — CODE GO i TEST GO; za `S7R3-REV-04` čekaju skupe kapije i Compile).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -37,7 +37,7 @@
 | **S6 prijemnica** | ✅ **zatvoren, 8/8** (merge `#443` = `86fca63f`, stavka 213) -- pre-flight ponovo izmeren nad `main`-om (plan §14.55, stavka 170) · korak 1 (kanon) ✅ `#435` (`c3301527`, stavka 173) · korak 2 (pisac) ✅ `#436` (`5afde431`, stavka 177) · korak 3 (čitaoci) ✅ `#437` (`8e970d99`, stavka 181) · korak 4 (storno na nivou dokumenta) ✅ `#438` (`992e1f45`, stavka 187) · korak 5 (faktura po `PrijemnicaStavkaID`, `Fakturisano` izveden; `KI-038` i `KI-040` zatvoreni) ✅ `#439` (`4958f68b`, stavka 192) · korak 6 (F4 odmrznut + vraćeni testovi iz §14.14; fokus na ekranu odložen u UX lanca unosa, `KI-050`) ✅ `#440` (`e21830c5`, stavka 199) · korak 7 (hladnjačin lanac B: OTK → OTP → ZBR → PRJ; `KI-046`, `ZBR-OWN-01`, N1 ogledalo) ✅ `#442` (`376a3d3e`, stavka 206) · **korak 8 (završni): u toku** — pre-flight i odluke 1–4 (stavka 207) · deo 1 (kapije pisca, stari pisac) zelen (stavka 208) · deo 2 (šema, identitet po ID-u) zelen (stavka 209) · deo 3 (golden lanac, 11/0) zelen (stavka 210) · dopuna `KI-047` (`PRJ-ZBR-02`), FULL 12/12, dokaz i Compile (stavka 211) · ručna provera 9/9 (stavka 212) ✅ `#443` (`86fca63f`, stavka 213) |
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
 | **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): ✅ merge **`#450`** (`fd39a716`, 01.11.2026) — review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); stavka 250 |
-| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); ✅ merge **`#452`** (`ff3e9c7a`, 02.11.2026, stavka 257). **Rez 2: pre-flight ✅** (stavka 258, `FAK-ODL-07`); **kod ✅** (stavka 259, PR `#453`); review HOLD → P1 ispravljen (stavka 260, `KI-077`/`KI-078` za rez 3); crveno nad starim kodom, zeleno (308 / 2868 / 111 / 39), dokaz 13/13 (stavka 261); ručna provera i Compile ✅ (stavka 262); ✅ merge **`#453`** (`2ac332e3`, 02.11.2026, stavka 263). **Rez 3: pre-flight ✅** (stavka 264, `KI-079`); **kod ✅** (stavka 265, PR `#454`); review HOLD → tri P2 ispravljena (stavka 266); crveno, zeleno (308 / 2901 / SEF 238), health i dokaz 14/14 (stavka 267, `KI-077`/`KI-078` CLOSED); Compile ✅ (stavka 268); drugi review HOLD → `S7R3-REV-04` (identitet SEF stavke) ispravljen lokalno (stavka 269, `KI-080`); čekaju skupe kapije i Compile |
+| **S7 faktura** | **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); ✅ merge **`#452`** (`ff3e9c7a`, 02.11.2026, stavka 257). **Rez 2: pre-flight ✅** (stavka 258, `FAK-ODL-07`); **kod ✅** (stavka 259, PR `#453`); review HOLD → P1 ispravljen (stavka 260, `KI-077`/`KI-078` za rez 3); crveno nad starim kodom, zeleno (308 / 2868 / 111 / 39), dokaz 13/13 (stavka 261); ručna provera i Compile ✅ (stavka 262); ✅ merge **`#453`** (`2ac332e3`, 02.11.2026, stavka 263). **Rez 3: pre-flight ✅** (stavka 264, `KI-079`); **kod ✅** (stavka 265, PR `#454`); review HOLD → tri P2 ispravljena (stavka 266); crveno, zeleno (308 / 2901 / SEF 238), health i dokaz 14/14 (stavka 267, `KI-077`/`KI-078` CLOSED); Compile ✅ (stavka 268); drugi review HOLD → `S7R3-REV-04` (identitet SEF stavke) ispravljen (stavka 269, `KI-080`); treći review CODE GO i TEST GO (stavka 270, `KI-081`/`KI-082`); čekaju skupe kapije i Compile |
 | S8 palete · S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -9376,6 +9376,34 @@
 
        Skupe kapije čekaju reviewer GO i operaterovo „Push, pa kapije".
      - **Sledeći brojevi:** test 309 · stavka 270 · KI-081.
+
+270. **Treći review PR `#454` (03.11.2026) — CODE GO, TEST GO, MERGE HOLD (9,3 / 10, TEST PENDING).** Pregledan je
+     `1f384cc2`. Push i opis PR-a su urađeni uz izričito „Push i ažuriraj"; Static CI #1125 PASS (po review-u).
+
+     - **`S7R3-REV-04`: CODE FIX ACCEPTED.** Tri provere koriste postojeće čitače, a SEF ne nosi svoju verziju
+       `FAK-LIN-01`. Redosled zaglavlje → postojanje → pripadnost → `FAK-LIN-01` je prihvaćen. U dodatim proverama
+       review nije našao novu grešku. `Test_S7R3_SefStavkaIdentitet` je ocenjen kao A → B → A sa imenovanim razlogom
+       odbijanja; tri sabotaže su smislene, ali ih tek dokaz potvrđuje.
+     - **P2, van ovog reza → `KI-081`:** oba čitača su globalna, pa pokvarena nepovezana prijemnica ili linija druge
+       fakture blokira slanje ispravne fakture. Ponašanje je fail-closed i isto kao kod pisca fakture: slabi
+       dostupnost, ne kvari podatke. Rešava se kao zajednički hardening strogih čitača po dokumentu, ne u SEF rezu.
+     - **`KI-080` ostaje OPEN:** health 3 i dalje ne imenuje nepostojeću ili tuđu stavku aktivne linije.
+     - **Pitanja 3 i 4 iz opisa PR-a review nije posebno obradio.** Oba ostaju kako jesu, uz proveru koda:
+       - tekst 1761 (`FAK-LIN-01`) kaže „na dve aktivne fakture: X (F i F)" i kad su obe linije na istoj fakturi.
+         Takvo stanje pisac ne pravi (`CreateFaktura` odbija duplu stavku u izboru, 1710), pa ga vidi samo
+         synthetic test → `KI-082`;
+       - stornirana prijemnica: čitač stavki vraća i njene stavke, ali aktivna linija nad njom ne nastaje. Storno
+         prijemnice (`modStorno.bas:567`, `modStornoDok.bas:251`) pita fakturisanost izvedenu iz
+         `FakturaLinijePoStavci`, pa SEF aktivnu prijemnicu posebno ne traži.
+     - **Ugovor prihvatanja po review-u.** Minimalan je: health i Golden se ne ponavljaju, jer se promenio samo
+       read-only SEF put.
+       - crveni prolaz nad `d6125239`: nov test hvata sva tri kvara;
+       - zeleno nad `1f384cc2`: BFP, `RunSEFTestSuite`, `RunFakturaSmokeSuite`, `RunAllTests`;
+       - dokaz za pet sabotaža: tri nove, `s7r3-mapper-ne-trazi-stavku` i `s7r3-zaglavlje-prvi-pogodak`;
+       - Compile.
+     - **Posle prolaza:** merge review `#454`, pa formalno zatvaranje S7 i prelazak na S8 (palete i prerada). Review
+       savetuje da se arhitektura S7 ne otvara ponovo bez novog, konkretnog dokaza poslovnog kvara.
+     - **Sledeći brojevi:** test 309 · stavka 271 · KI-083.
 
 ## Dug sa imenom (posle S5-5b)
 
