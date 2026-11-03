@@ -10420,7 +10420,7 @@ Pravilo slajsa ostaje: palete i prerada **do kraja**.
 | N5 | C-040 nema ulaz: ekran SLEDLJIVOST je obrisan u S1b-3b (`b4d74093`, „vraća S9") | git istorija `src-vba/modScrSledljivost.bas` | `PAL-ODL-07` |
 | N6 | Siročad klase koju nova prijemnica nema nemaju izlaz. Prevezivanje ih ostavlja i šalje operatera na „Skini stavke" (`:1730`, `:1763`), a `MAPA` B-030 nudi „Prevezi ili skini palete ručno". Skidanje je obrisano u S6 koraku 7. Korekcija ih odbija („reši kroz Prevezi/Skini", `:2382`), a „Storniraj paletu" skida i su-stanare | §14.55, odluke 24.10.2026, t. 4 | `PAL-ODL-05` |
 | N7 | Storno palete skida robu aktivnih prijemnica. Kad je na paleti cela stavka, A3 je više ne vidi (A3 gleda samo linije sa bar jednom aktivnom paletnom stavkom) | `modStorno:1372-1381`; `modIntegritet:794` | `PAL-ODL-06` |
-| N8 | „Prazna paleta" posle skidanja se odlučuje **prikaznim** čitačem (`GetPaletaStavkeForGrid`: `GetColumnIndex`, a EH vraća `Empty`), a posledica je `StornoPaleta`, koji skida i su-stanare. Danas je nedostižno, jer put već strogo traži iste kolone, ali rez 2 menja baš taj čitač (C-048) | `modPaletniList:2232`, `:623-665` | rez 2: strog brojač aktivnih stavki |
+| N8 | „Prazna paleta" posle skidanja se odlučuje **prikaznim** čitačem (`GetPaletaStavkeForGrid`: `GetColumnIndex`, a EH vraća `Empty`), a posledica je `StornoPaleta`, koji skida i su-stanare. Danas je nedostižno, jer put već strogo traži iste kolone, ali rez 2 menja baš taj čitač (C-048) | `modPaletniList:2232`, `:623-665` | strog brojač aktivnih stavki; po drugom review-u (`S8-REV-05`) u rezu **1b**, pre „Skini palete", ne u rezu 2 |
 | N9 | Oporavak „Nedovršeno" deduplikuje siročad po BROJU (`seen`), pa kontekst ispravke jednog kupca sakriva red osirotelih paleta drugog kupca istog broja. `KI-039` ga pominje kao posledicu. **Izvedeno iz koda, nije reprodukovano** | `modStornoRecovery:54-64` | rez 2 (dedup po ID-u koji red već nosi) |
 | N10 | Alt+F8 makroi paleta i prerade biraju po broju i tekućoj godini, prvi pogodak. Integritet C5 pokazuje da dupli broj palete u godini može da postoji. §14.8 t. 9 ih ne pokriva: tamo su makroi održavanja | `modPaletniListUI:79`, `:133`, `:158`, `:188`; `FindPaletaIDByBroj:1130`, `FindPreradaIDByBroj:3015` | `PAL-ODL-04`, rez 1 |
 | N11 | Pisac prerade ne proverava masa-balans (`NetoIzlaz` ≤ `NetoUlaz`) ni istovrsnost paleta; meko ga meri A5 | `SavePrerada_TX:2861-2870`; `modIntegritet:1008` | **van S8**: Prerada 2.0, odluka D3 (`docs/PRERADA_2_MODEL_I_PLAN.md`) |
@@ -10658,10 +10658,10 @@ testa N1 ostaje **izveden iz koda**.
 | Rez | Sadržaj | Status |
 |---|---|---|
 | **1a** | N1: korekcija (`AdjustPaletaGajbiceZaPrijemnicu_TX`) i `ResyncStavkeNetoAmb` po ID-u. Tri ulaza šalju ID: F4 ispravka (`res`), Oporavak (`mCiljPrijemnicaID`) i `PaletaAdjust_Prompt`, strog po `PAL-ODL-04` | **GO**: prvo crven test nad `main`-om |
-| 1b | N2 (prevezivanje: oba ID-a obavezna); N9 („Nedovršeno" deduplikuje po ID-u); `KI-056`; „Skini palete" (`PAL-ODL-05`), sa porukama prevezivanja i B-030; brisanje četiri makroa (`PAL-ODL-04`) | GO posle 1a |
+| 1b | **N8 pre „Skini palete"** (`S8-REV-05`): odluku „paleta je prazna" donosi strog brojač aktivnih stavki, ne prikazni čitač; N2 (prevezivanje: oba ID-a obavezna); N9 („Nedovršeno" deduplikuje po ID-u); `KI-056`; „Skini palete" (`PAL-ODL-05`), sa porukama prevezivanja i B-030; brisanje četiri makroa (`PAL-ODL-04`) | GO posle 1a |
 | 1c | N7: storno palete odbija robu aktivne prijemnice (`PAL-ODL-06`) | GO posle 1b |
-| 2a | prevod čitalaca na ID: storno zbirne (scope, pregled, uvid, kaskada) uz `KI-039`; uvid prijemnice bez grane po broju; labela u Oporavku; C-048; integritet A3 i C1 po stavci; N8 (strog brojač aktivnih stavki) | svoj pre-flight |
-| 2b | brisanje tri kolone (`PAL-ODL-03`); kapija pisca `PAL-INV-01`; fixture i seed-ovi; grupa `pal_broj` sa pragom 0 | HOLD do 2a |
+| 2a | prevod čitalaca na ID: storno zbirne (scope, pregled, uvid, kaskada) uz `KI-039`; uvid prijemnice bez grane po broju; labela u Oporavku; C-048; integritet A3 i C1 po stavci | svoj pre-flight |
+| 2b | brisanje tri kolone (`PAL-ODL-03`); kapija pisca `PAL-INV-01`; fixture i seed-ovi; grupa `pal_broj` sa pragom 0 | HOLD do 2a i izlazne kapije C002 (ispod, „Drugi review") |
 | S9 | C-040 i spisak kooperanata na listu (`PAL-ODL-07`) | — |
 
 **ACCEPTANCE CONTRACT — rez 1a**
@@ -10706,6 +10706,60 @@ testa N1 ostaje **izveden iz koda**.
   - paletne stavke bez `PrijemnicaStavkaID` su *synthetic anomaly* i 1a ih ne dira; test seje
     stavke sa ključem.
 - **Ručna provera:** samo Compile. Papir se ne menja (`PAL-ODL-01`).
+
+#### Drugi review PR `#456` (03.11.2026, `docs/STANJE_REFAKTORA.md` stavka 275)
+
+Ocena 9,0 / 10 kao pripremnog rada, uz jednu dopunu pre merge-a. Static CI #1131 je PASS (po review-u).
+
+**`S8-REV-05` (P1) — „Skini palete" bi nastala pre bezbedne provere praznine.**
+
+- **Problem:** `SkiniPaletneStavke` (`modPaletniList:2208`) odlučuje „paleta je prazna" izrazom
+  `IsEmpty(GetPaletaStavkeForGrid(...))` (`:2232`). Taj čitač ima `On Error GoTo EH` i na grešci vraća
+  `Empty`. Posledica je `StornoPaleta`, koji skida sve aktivne stavke palete, i su-stanare. Greška
+  čitanja tako postaje dozvola za destruktivnu operaciju.
+- **Obim:** isto telo danas koristi i storno prijemnice (`SkiniPaleteZaStornoPrijemnice:2166`), pa N8
+  ne važi samo za novu radnju nego i za postojeći put.
+- **Prihvaćeno:** N8 ide u rez 1b, pre radnje (tabela iznad je ispravljena).
+
+**Dopuna ugovora prihvatanja reza 1b (N8):**
+
+- **Važi:** praznina se odlučuje strogim brojem aktivnih stavki palete. Nečitljiva tabela ili kolona diže
+  grešku, a ne vraća 0, pa se cela operacija povlači. Prikazni čitač ostaje samo za ekran (C-048).
+- **Negativ:** paleta sa stavkama dve prijemnice; skida se siroče prve, a prikazni čitač je pokvaren
+  test seam-om (samo kvari, tvrdo gejtovan, u `ResetSeamova`). Druga stavka, zaglavlje palete i
+  bilansi ostaju netaknuti, a paleta nije stornirana.
+  - **Su-stanar je roba druge STORNIRANE prijemnice**, ne aktivne. Kapija iz 1c (`PAL-ODL-06`) štiti
+    samo aktivnu robu, pa je N8 jedina brana na tom slučaju (pouka „dvoslojna kapija").
+- **Kontra-tvrdnja:** paleta čija je jedina stavka skinuta se stornira.
+- **Pad strogog brojača:** operacija se povlači cela; nema delimičnog skidanja.
+- **Sabotaža:** odluka o praznini se vraća na prikazni čitač → crveno po imenu.
+
+**C002 i rez 2b** (review, t. 4) — ulaz za pre-flight 2b, ne razvojni projekat.
+
+Operater je 03.11.2026 rekao kako se migrirana sveska C002 koristi: **samo za analizu i štampu izveštaja;
+ručno se unose samo novčane uplate kooperantima; novih otkupa ni prijema neće biti.** Za 2b to znači:
+
+- **Kapija pisca `PAL-INV-01`** u C002 nema šta da radi, jer se palete tamo ne pišu.
+- **Brisanje tri kolone** (self-heal) ne dira putanje koje C002 koristi: izveštaji ne čitaju palete
+  (merenje 5, DOWNSTREAM).
+- **Strog čitač paleta je po dokumentu, ne globalan** (`KI-081`). Migrirana paletna stavka koja krši
+  `PAL-INV-01` zato ne sme da blokira ni unos uplate ni izveštaj. Integritet je imenuje, informativno.
+- **Ponovni prevod iz stare sveske nije bez troška:** izgubio bi uplate unete u novu svesku. Pre 2b
+  je to **pitanje za operatera**: da li C002 uopšte prima izdanje sa 2b, i ako prima, kako se uplate
+  prenose. Ne pretpostavlja se.
+- **Izlazna kapija 2b (predlog):** read-only sonda nad **kopijom** C002 posle 2b. Sveska se otvara,
+  izveštaji i unos uplate rade, a integritet imenuje nalaze `PAL-INV-01`, ako ih ima; broj nalaza ide
+  u zapis.
+
+**Van S8** (review, t. 5): `MIG455-REV-01..05` i operativni acceptance C002 (HOLD po review-u)
+pripadaju migraciji (`#455`, `tools/migracija/`, `KI-065`). Ova grana ih ne dira; ovde su samo zabeleženi.
+
+**Verdikt posle drugog review-a:**
+- 1a: **GO**;
+- 1b: GO posle 1a, sa N8 u istom rezu;
+- 1c: GO posle 1b;
+- 2a: svoj pre-flight;
+- 2b: HOLD do 2a i izlazne kapije C002.
 
 ## 15) Backlog — namerno van opsega
 
