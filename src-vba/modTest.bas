@@ -415,6 +415,7 @@ Public Sub RunAllTests()
     RunOne 308
     RunOne 309
     RunOne 310
+    RunOne 311
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1023,6 +1024,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 308: TestName = "T_ODL39_PapirVracanjaKupcu"
         Case 309: TestName = "T_S8R1a_IspravkaKorigujeSvojDokument"
         Case 310: TestName = "T_S8R1a_AltF8BrojUJedanDokument"
+        Case 311: TestName = "T_S8R1b_PrevezivanjeTraziObaID"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1341,6 +1343,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 308: T_ODL39_PapirVracanjaKupcu
         Case 309: T_S8R1a_IspravkaKorigujeSvojDokument
         Case 310: T_S8R1a_AltF8BrojUJedanDokument
+        Case 311: T_S8R1b_PrevezivanjeTraziObaID
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -3782,6 +3785,43 @@ Private Sub T_S8R1a_AltF8BrojUJedanDokument()
     prjID = PrijemnicaZaKorekciju(FX_PRIJ_KOLIZIJA, razlog)
     AssertEq prjID, "", "310: broj samo storniranih dokumenata se odbija"
     AssertEq (Len(razlog) > 0), True, "310: odbijen broj nosi razlog"
+End Sub
+
+' ============================================================
+' 311. S8 REZ 1b (N2): PREVEZIVANJE TRAZI OBA DOKUMENTA (PrijemnicaID).
+' ============================================================
+' Grana po broju i njene kapije dvosmislenosti su obrisane. Bez izvornog ili
+' ciljnog ID-a writer odbija PRE ijednog citanja paleta, i razlog imenuje BAS
+' ID koji fali. Druga brana postoji (prazan skup ID-eva ne nalazi dokument), pa
+' tvrdnja meri RAZLOG, ne samo odbijanje -- inace bi bila placebo.
+'
+'   C2 (8/150326, storniran, PRJ-TEST-C2)  ->  A (1/150326, aktivan, PRJ-TEST-A)
+'
+' Ne meri se apsolutna roba (testovi dele svesku), nego da se nista ne pomeri.
+' SABOTAZA: s8r1b-prevezivanje-bez-izvornog-id.
+Private Sub T_S8R1b_PrevezivanjeTraziObaID()
+    Dim ok As Boolean, upoz As String, gajbDiff As Boolean, pre As String
+
+    pre = GajbicaZaDokument("PRJ-TEST-C2") & "|" & GajbicaZaDokument("PRJ-TEST-A")
+
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
+                                       gajbDiff, "", "PRJ-TEST-A")
+    AssertEq ok, False, "311: prevezivanje bez izvornog ID-a se odbija"
+    AssertEq (InStr(upoz, "Izvorna prijemnica nije zadata") > 0), True, _
+             "311: razlog imenuje izvorni ID koji fali"
+
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
+                                       gajbDiff, "PRJ-TEST-C2", "")
+    AssertEq ok, False, "311: prevezivanje bez ciljnog ID-a se odbija"
+    AssertEq (InStr(upoz, "Ciljna prijemnica nije zadata") > 0), True, _
+             "311: razlog imenuje ciljni ID koji fali"
+
+    AssertEq GajbicaZaDokument("PRJ-TEST-C2") & "|" & GajbicaZaDokument("PRJ-TEST-A"), pre, _
+             "311: odbijeno prevezivanje nije nista pomerilo"
+
+    Dim v As Variant
+    v = EvaluatePaletaReassign(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ)
+    AssertEq CStr(v(0)), "NONE", "311: presuda bez ID-eva ne bira dokument po broju"
 End Sub
 
 ' ============================================================

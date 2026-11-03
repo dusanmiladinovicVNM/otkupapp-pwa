@@ -1320,17 +1320,17 @@ SABOTAZE = {
     # --- identitet dokumenta na granici prevezivanja (zavrsnica Faze D) -----
     "relink-izvor-po-broju": (
         "modPaletniList.bas",
-        "            ElseIf PripadaDokumentu(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds, srcDvosmislen) Then\n",
-        "            ElseIf bp = oldBroj Then   ' SABOTAZA: izvor se opet bira po broju\n",
+        "            ElseIf PripadaDokumentu(Trim$(CStr(ps(i, sPid))), srcIds) Then\n",
+        "            ElseIf Trim$(CStr(ps(i, sBr))) = oldBroj Then   ' SABOTAZA: izvor se opet bira po broju\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "tudji dokument istog broja OSTAJE na svom mestu",
     ),
     "relink-ignorise-generaciju": (
         "modPaletniList.bas",
         "    Dim srcIds As Object: Set srcIds = modDokumenta.IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, oldPrijemnicaID)\n"
-        "    Dim srcDvosmislen As Boolean\n",
+        "    If srcIds.count = 0 Then\n",
         "    Dim srcIds As Object: Set srcIds = modDokumenta.IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, \"\")      ' SABOTAZA\n"
-        "    Dim srcDvosmislen As Boolean\n",
+        "    If srcIds.count = 0 Then\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "prevezivanje po identitetu je proslo",
     ),
@@ -1338,23 +1338,14 @@ SABOTAZE = {
     # odnese palete pogresnom kupcu -- samo na drugom kraju.
     "relink-cilj-po-broju": (
         "modPaletniList.bas",
-        "        If Len(tgtID) > 0 Then\n"
-        "            ciljni = (Trim$(NzToText(prj(r, pcId))) = tgtID)\n"
-        "        Else\n"
-        "            ciljni = (Trim$(CStr(prj(r, pcBr))) = newBroj)\n"
-        "        End If\n",
+        "        ciljni = (Trim$(NzToText(prj(r, pcId))) = tgtID)\n",
         "        ciljni = (Trim$(CStr(prj(r, pcBr))) = newBroj)   ' SABOTAZA\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "roba je stigla na dokument kupca 1 (40 gajbica)",
     ),
-    "relink-cilj-bez-kapije": (
-        "modPaletniList.bas",
-        "    tgtDvosmislen = (VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, newBroj, SRC, False, _\n"
-        "                                     Array(COL_PRJ_KUPAC)).count > 1)\n",
-        "    tgtDvosmislen = False   ' SABOTAZA: dvosmislen cilj vise ne zaustavlja\n",
-        "T_RelinkPoGeneraciji_NeDiraTudjDokument",
-        "bez identiteta CILJA dvosmislen broj se odbija",
-    ),
+    # "relink-cilj-bez-kapije" je povucen u S8 rezu 1b (N2): kapija dvosmislenog
+    # CILJA po broju je obrisana sa celom granom po broju. Prevezivanje bez ID-a
+    # sada odbija ulazna kapija (s8r1b-prevezivanje-bez-izvornog-id, test 311).
     # Propagacija BrojZbirne u paletne stavke. Izbor redova prijemnice je bio
     # tacan, pa je ovaj drugi upis po BROJU ponistavao ceo taj izbor.
     "zbirna-paleta-po-broju": (
@@ -1759,20 +1750,19 @@ SABOTAZE = {
     # okine i relabel prepravi header cele palete.
     "cotenant-po-broju": (
         "modPaletniList.bas",
-        "                    jeIzvor = PripadaDokumentu(bpg, oldBroj, pidG, srcIds, srcDvosmislen)\n"
-        "                    jeCilj = PripadaDokumentu(bpg, newBroj, pidG, tgtIds, tgtDvosmislen)\n",
+        "                    jeIzvor = PripadaDokumentu(pidG, srcIds)\n"
+        "                    jeCilj = PripadaDokumentu(pidG, tgtIds)\n",
         "                    jeIzvor = (bpg = oldBroj)   ' SABOTAZA\n"
         "                    jeCilj = (bpg = newBroj)\n",
         "T_DeljenaPaleta_SuStanarPoIdentitetu",
         "relabel deljene palete se odbija i uz potvrdu",
     ),
-    # Kapija "isti broj" na ulazu u writer, pre razresavanja generacija.
+    # "Isti dokument" se meri identitetom, ne brojem (od S8 reza 1b broj vise nema
+    # svoju granu; sabotaza vraca poredjenje po broju).
     "writer-isti-broj-odbija": (
         "modPaletniList.bas",
-        "    If Len(Trim$(oldPrijemnicaID)) > 0 And Len(Trim$(newPrijemnicaID)) > 0 Then\n"
-        "        If StrComp(Trim$(oldPrijemnicaID), Trim$(newPrijemnicaID), vbTextCompare) = 0 Then\n",
-        "    If False Then   ' SABOTAZA: opet se gleda samo broj\n"
-        "        If StrComp(Trim$(oldPrijemnicaID), Trim$(newPrijemnicaID), vbTextCompare) = 0 Then\n",
+        "    If StrComp(oldPrijemnicaID, newPrijemnicaID, vbTextCompare) = 0 Then\n",
+        "    If StrComp(oldBroj, newBroj, vbTextCompare) = 0 Then   ' SABOTAZA: isti broj = isti dokument\n",
         "T_IstiBrojRazliciteGeneracije_NijeIstiDokument",
         "isti broj a razliciti dokumenti PROLAZI",
     ),
@@ -9041,6 +9031,15 @@ SABOTAZE = {
         "        If IsEmpty(GetPaletaStavkeForGrid(CStr(v))) Then   ' SABOTAZA: praznina iz prikaznog citaca\n",
         "Test_S8R1b_PraznaPaletaStrogBrojac",
         "S8R1b: su-stanar stornirane prijemnice ostaje na paleti",
+    ),
+    # S8 rez 1b (N2): prevezivanje trazi oba ID-a. Druga brana (prazan skup ID-eva)
+    # i dalje odbija, pa tvrdnja meri RAZLOG koji imenuje ID koji fali.
+    "s8r1b-prevezivanje-bez-izvornog-id": (
+        "modPaletniList.bas",
+        "    If Len(oldPrijemnicaID) = 0 Or Len(newPrijemnicaID) = 0 Then\n",
+        "    If Len(newPrijemnicaID) = 0 Then   ' SABOTAZA: prazan izvorni ID prolazi\n",
+        "T_S8R1b_PrevezivanjeTraziObaID",
+        "311: razlog imenuje izvorni ID koji fali",
     ),
     # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
     "s8r1a-altf8-prvi-pogodak": (
