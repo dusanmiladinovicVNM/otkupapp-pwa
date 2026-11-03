@@ -9604,8 +9604,8 @@
        - BFP `Test_S8R1a_KorekcijaPoIdentitetu`: jezgro, dva kupca istog broja, kvar na paletnoj stavci,
          različit neto po gajbi, negativ „broj umesto ID-a";
        - Palete: T04 je dvoklasni dokument, T05–T09 idu po ID-u, a seed nosi ključ linije. Nove su **T12**
-         (rubna paleta dva kupca istog broja, broj umesto ID-a, stornirani ID) i **T13** (klasa dodata
-         ispravkom).
+         (rubna paleta dva kupca istog broja, broj umesto ID-a, stornirani ID), **T13** (klasa dodata
+         ispravkom) i **T14** (paletna stavka bez ključa linije zaustavlja korekciju, bez mutacije).
      - **Sabotaže (+4, katalog 1125):**
        - `s8r1a-korekcija-stavke-po-broju` i `s8r1a-resync-po-broju` → BFP;
        - `s8r1a-dokunos-salje-broj` → 309;

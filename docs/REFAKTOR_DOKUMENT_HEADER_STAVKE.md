@@ -10777,7 +10777,10 @@ nosi stavka 277. Ovde su samo odstupanja od ugovora i recept za crveni prolaz.
 - **Oporavak nema svoj test u 1a.** Poziv je promenjen (`mCiljPrijemnicaID`), a potvrda je `MsgBox`.
   Ugovor 1a ga ne traži; Oporavak meri 1b.
 - **Paletna stavka dokumenta bez linije je `ADJ_BLOCKED`.** Ugovor kaže da 1a stavke bez ključa „ne dira".
-  Korekcija koja bi ih preskočila brojala bi gajbe pogrešno, pa staje i imenuje ih.
+  Korekcija koja bi ih preskočila brojala bi gajbe pogrešno, pa staje i imenuje ih. Meri ga Palete T14.
+  Sabotaža za tu kapiju ne postoji, jer katalog ne pokreće Palete suite (`_SUITA_PO_MODULU`).
+  Prevezivanje uvek upisuje ključ linije nove prijemnice (`modPaletniList:1782`), a stavke klase koju
+  nova prijemnica nema ostavlja na staroj, pa ova kapija ne zaustavlja put posle prevezivanja.
 
 **Crveni prolaz nad `d222aad4` (recept, NIJE izvršen):**
 

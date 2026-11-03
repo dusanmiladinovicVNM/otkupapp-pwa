@@ -40,6 +40,7 @@ Option Explicit
 '  T10 zbirna re-point: i paletne stavke dobijaju novu zbirnu
 '  T12 korekcija po ID-u: dva kupca isti broj, rubna paleta (S8 rez 1a, N1)
 '  T13 korekcija: klasa dodata ispravkom (sveza paletizacija pod kljucem linije)
+'  T14 korekcija staje na paletnoj stavci bez linije dokumenta (stari oblik)
 '
 ' Korekcija (T04-T09, T12, T13) ide po PrijemnicaID-u, a paletne stavke se seju
 ' SA kljucem linije (PrijemnicaStavkaID) -- stavka bez kljuca je stari oblik i
@@ -123,6 +124,7 @@ Public Sub RunPaleteTestSuite()
     T11_RelabelBlokNaDeljenojPaleti
     T12_KorekcijaPoIDDvaKupcaIstiBroj
     T13_KlasaDodataIspravkom
+    T14_StavkaBezLinijeZaustavljaKorekciju
 
     tx.RollbackTx                ' UVEK vrati sve - test ne ostavlja podatke
     Set tx = Nothing
@@ -579,6 +581,28 @@ Private Sub T13_KlasaDodataIspravkom()
     ChkEq LinijaGajbe("TSTPRJ-25", "PRS-TSTPRJ-25-II"), 3, _
           S & "linija II paletizovana pod svojim kljucem"
     ChkEq LinijaGajbe("TSTPRJ-25", "PRS-TSTPRJ-25"), 5, S & "linija I netaknuta"
+End Sub
+
+' Paletna stavka dokumenta BEZ kljuca linije (stari oblik -- synthetic anomaly:
+' pisac je od S6 koraka 2 ne pravi, a prevezivanje uvek upisuje kljuc linije
+' nove prijemnice). Korekcija ne zna kojoj liniji stavka pripada, pa staje
+' (ADJ_BLOCKED) i nista ne menja (S8 rez 1a). Da je stavku preskocila, linija
+' bi izgledala nepaletizovano i dobila bi svezu paletizaciju -- iste gajbe dvaput.
+Private Sub T14_StavkaBezLinijeZaustavljaKorekciju()
+    Const S As String = "T14 stavka bez linije: "
+    MakePrij "TSTPRJ-26", "TST-P19", "TST-Z14", "I", 50, 5, "TST-S14"
+    PaletizePrijemnica prijemnicaID:="TSTPRJ-26", brojPrij:="TST-P19", brojZbirne:="TST-Z14", _
+                       vrstaVoca:=TST_VRSTA, sortaVoca:="TST-S14", klasa:="I", _
+                       netoKg:=50, brGajbica:=5, tipAmb:=TST_AMB      ' bez kljuca linije
+    ChkEq LinijaGajbe("TSTPRJ-26", ""), 5, S & "preduslov: stavka bez kljuca linije"
+    SetLinija "PRS-TSTPRJ-26", 60, 6
+
+    Dim ot As String: ot = DokOtisak("TSTPRJ-26")
+    Dim info As String
+    ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-26", "", info), ADJ_BLOCKED, _
+          S & "korekcija odbijena"
+    Chk InStr(info, "nema liniju dokumenta") > 0, S & "poruka imenuje stavku bez linije"
+    ChkEq DokOtisak("TSTPRJ-26"), ot, S & "nista nije promenjeno"
 End Sub
 
 ' Skidanje paletnih stavki jedne prijemnice kroz JEZGRO (po PrijemnicaID-u), u
