@@ -10544,7 +10544,7 @@ SABOTAZE = {
     # Isti dan, drugi izvor: novac skoci ispred otkupa.
     "kart-hron-izvor-rang": (
         "modIzvestaj.bas",
-        "        Case LCase$(KART_IZVOR_NOVAC):          KarticaIzvorRang = 6\n",
+        "        Case LCase$(KART_IZVOR_NOVAC):          KarticaIzvorRang = 7\n",
         "        Case LCase$(KART_IZVOR_NOVAC):          KarticaIzvorRang = 0   ' SABOTAZA: novac pre otkupa\n",
         "T_KartHron_KljucISortEkrana",
         "isti dan: otkup, ambalazni dokument, agrohemija, novac; dan ide pre izvora",
@@ -11261,6 +11261,56 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: zaduzenje pre robe koju placa\n",
         "T_Doplata_OdbijaNeispravanUnos",
         "datum knjizenja pre kraja perioda se odbija",
+    ),
+    # --- DOPLATA KOOPERANTU, F2 (izvestaji; testovi 315-317) ---
+    # Kartica ne cita KO: doplata se ne vidi ni na ekranu, ni u PDF-u, ni u PWA.
+    "dop-kartica-bez-doplate": (
+        "modIzvestaj.bas",
+        "    koDop = modDoplata.DoplataKOKooperanta(kooperantID)\n",
+        "    koDop = Empty   ' SABOTAZA: kartica ne vidi doplatu\n",
+        "T_Doplata_KarticaZaduzenje",
+        "kartica: jedan red po KO, zaduzenje = iznos KO, ref-kljuc DOP|DoplataID",
+    ),
+    # KO pre perioda se gubi: kartica krece od pogresnog stanja duga.
+    "dop-kartica-pocetno-bez-doplate": (
+        "modIzvestaj.bas",
+        "                        pocetniSaldo = pocetniSaldo + dopIznos\n",
+        "                        pocetniSaldo = pocetniSaldo + 0   ' SABOTAZA: KO ne ulazi u pocetno stanje\n",
+        "T_Doplata_KarticaZaduzenje",
+        "kartica: KO pre perioda ulazi u pocetno stanje",
+    ),
+    # Citac iznosa ne gleda stanicu: svaka stanica vidi ceo KO kooperanta.
+    "dop-saldo-om-bez-stanice": (
+        "modDoplata.bas",
+        "            ok = (StrComp(CStr(r(i, 6)), Trim$(stanicaID), vbTextCompare) = 0)\n",
+        "            ok = True   ' SABOTAZA: doplata ne gleda stanicu\n",
+        "T_Doplata_SaldoOMPoStanici",
+        "saldo OM: doplata po stanici na kojoj je roba predata",
+    ),
+    # Kolona doplate postoji, a saldo je ne ukljucuje.
+    "dop-saldo-om-saldo-bez-doplate": (
+        "modIzvestaj.bas",
+        "        result(i + 1, 6) = vals(1) + dopSum - novacSum - agroSum   ' Saldo\n",
+        "        result(i + 1, 6) = vals(1) - novacSum - agroSum   ' SABOTAZA: saldo bez doplate\n",
+        "T_Doplata_SaldoOMPoStanici",
+        "saldo OM: saldo = vrednost + doplata - isplaceno - agro (KO bez otkupa u periodu)",
+    ),
+    # Zbirna mreza opet sabira "pretposlednju" kolonu: posle kolone Doplata to je
+    # ambalaza, pa podnozje tiho postaje zbir gajbi.
+    "dop-zbirni-saldo-pretposlednja": (
+        "modScrIzvestaji.bas",
+        "                sumVal = sumVal + NzD(src(i, IIf(tip = \"Kupac\", 6, 7)))\n",
+        "                sumVal = sumVal + NzD(src(i, nSrcK - 1))   ' SABOTAZA: saldo kao pretposlednja kolona\n",
+        "T_Doplata_SaldoOMPoStanici",
+        "mreza zbirnog salda: podnozje sabira saldo, ne ambalazu",
+    ),
+    # PWA izvoz nosi kolonu Doplata, a saldo je ne ukljucuje.
+    "dop-pwa-saldo-bez-doplate": (
+        "modStammdatenSync.bas",
+        "        saldo = v(2) + dop - v(4) - v(5) ' Vrednost + Doplata - Isplaceno - AgroZaduzenje\n",
+        "        saldo = v(2) - v(4) - v(5)   ' SABOTAZA: PWA saldo bez doplate\n",
+        "T_Doplata_PWASaldoDetalj",
+        "PWA saldo: doplata 140, saldo = 700 + 140 - isplaceno - agro",
     ),
 }
 

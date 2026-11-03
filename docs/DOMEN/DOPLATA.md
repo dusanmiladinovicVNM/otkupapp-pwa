@@ -1,9 +1,10 @@
 # Doplata kooperantu — knjižno odobrenje po kulturi i klasi
 
 > **Status (03.11.2026):** odluke operatera u §2 su donete, struktura iz §3 je
-> **potvrđena**. **F1 (šema, pisac, storno, testovi) je u kodu** — statičke
-> provere zelene, ponašanje **NEVERIFIKOVANO** dok `run_vba` ne prođe na Windows +
-> Excel (§7). F2–F4 još nisu počeli. Otvoreno: §8.
+> **potvrđena**. **F1 (šema, pisac, storno) i F2 (kartica, Saldo OM, PWA) su u
+> kodu** — statičke provere zelene, ponašanje **NEVERIFIKOVANO** dok `run_vba` ne
+> prođe na Windows + Excel (§7). F2 je napisan pre nego što je F1 pušten na
+> Excelu. F3–F4 još nisu počeli. Otvoreno: §8.
 
 ## 1) Šta je doplata
 
@@ -81,6 +82,7 @@ koji u jednoj transakciji pravi po jedan KO za svakog kooperanta sa kg > 0.
 | **DOP-04** | Pisci: nastanak samo `modDoplata` (`KnjiziDoplatu_TX`, obe tabele); storno zaglavlja `modStorno`, kao kod ostalih dokumenata. | `WRITE_OWNERSHIP.json` (A11), `who_writes.py --check-ownership` |
 | **DOP-05** | (F4) Novac vezan za KO se pri stornu KO **odvezuje, ne stornira** — isto pravilo kao kod otkupa (`ODLUKA_NOVAC_PRI_STORNU.md`). | F4 |
 | **DOP-06** | Jedan KO po kooperantu po obračunu; brojevi uzastopni u nizu godine. | `modDoplata.KnjiziPlan` · 310 |
+| **DOP-07** | Doplata je **zaduženje u korist kooperanta** svuda gde se vidi saldo: na kartici je jedan red po KO na datum knjiženja (i u početnom stanju), a u Saldo OM i PWA izvozu saldo = vrednost + doplata − isplaćeno − agro. U Saldo OM stavka KO pripada stanici na kojoj je roba predata, a period je po datumu knjiženja. | `modDoplata.DoplataIznosPoKooperantu` / `DoplataKOKooperanta`, `modIzvestaj`, `modStammdatenSync.SaldoOMDetailRedovi` · 315, 316, 317 |
 
 **Prikaz i pisac dele jedan plan** (obrazac `BimAutoPlan`): `DoplataPlan` računa
 stavke bez upisa, ekran ga prikazuje (F3), `KnjiziDoplatu_TX` ga izvršava.
@@ -100,13 +102,19 @@ odobrenja (DOP-ODL-04), ne zbog lakše implementacije.
 
 | Čitač | Promena | Gde se vidi | Faza |
 |---|---|---|---|
-| `modIzvestaj.ReportKarticaKooperanta` | nov izvor zaduženja; ulazi i u početno stanje; nov rang izvora u `KarticaIzvorRang` (KART-HRON-01) | ekran kartice, PDF po šablonu, PWA `getKartica` | F2 |
-| `modIzvestaj.ReportSaldoOM`, `ReportSaldoOMZbirni` | nova kolona „Doplata", ulazi u saldo | tabelarni PDF | F2 |
-| `modStammdatenSync.OtkupSaldoPoKooperantu` / `ExportSaldoOMDetail` | doplata u vrednost | PWA saldo | F2 |
+| `modIzvestaj.ReportKarticaKooperanta` | **urađeno:** red po KO (`DOP\|<DoplataID>`), zaduženje, ulazi u početno stanje; opis `KarticaDoplataOpis` („Doplata … kg x … din"); rang izvora: doplata 6, novac 7 (KART-HRON-01) | ekran kartice, PDF po šablonu, PWA `getKartica` | F2 |
+| `modIzvestaj.ReportSaldoOM` | **urađeno:** kolona **8 „Doplata"** (na kraju, pozicioni čitaoci); saldo (6) je uključuje | ekran, tabelarni PDF, KPI pločica (kolona 6) | F2 |
+| `modIzvestaj.ReportSaldoOMZbirni` | **urađeno:** kolona **9 „Doplata"**; ekran sabira saldo po indeksu (OM 7, kupci 6) umesto „pretposlednje kolone" | ekran, tabelarni PDF | F2 |
+| `modStammdatenSync.SaldoOMDetailRedovi` (seam izdvojen iz `ExportSaldoOMDetail`) | **urađeno:** kolona **10 „Doplata"**; saldo je uključuje; PWA kartica kooperanta u menadžmentu prikazuje doplatu | PWA saldo | F2 |
 | otvorene obaveze (`modNovac.GetOpenOtkupi` ili njegov par za KO), `modBankaExportPregled`, `ValidateNalogSaldo`, `BimAutoPlan` + resolver po broju KO | KO kao otvorena obaveza; `tblNovac` dobija kolonu `DoplataID` **na kraju** | nalozi za banku, specifikacija isplata (PDF), uvoz izvoda | F4 |
 
 **Ne menja se:** `ReportIsplata*`, `ReportKarticaRobaRekap`, `ReportProsecnaCena`,
-otkupni list, lanac dokumenata.
+otkupni list, lanac dokumenata. Ekran kartice ne treba izmenu: red bez otkupa
+(`DOP|`) već dobija detalj iz opisa i poruku „štampa nedostupna" (štampa KO je F3).
+
+**Raspored promenjen u F2, testovi prilagođeni:** formula u testu Saldo OM
+(„saldo = vrednost + doplata − isplaćeno − agro") i ref-kolona zbirnog salda u
+dva testa (8 → 9). Sidro sabotaže `kart-hron-izvor-rang` prati novi rang novca (7).
 
 **Nije pročitano (pre F2/F3):** unutrašnjost `ReportSaldoOMZbirni` i
 `ReportProsecnaCena`, registracija novog tipa dokumenta u storno toku i ekranu
@@ -126,7 +134,9 @@ Storno, PWA `pregled.js`.
      `RequireValidOtkupClass` je `Public`.
    - `modTest` 309–314 (`T_Doplata_*`), sabotaže `dop-*` u `tools/sabotaza.py`.
    - Nove tabele pravi `EnsureAllTables` pri startu (`modMain.StartApp`).
-2. **F2 — čitaoci.** Kartica, Saldo OM (pojedinačno i zbirno), PWA izvoz.
+2. **F2 — čitaoci. U KODU (03.11.2026).** Kartica, Saldo OM (pojedinačno i
+   zbirno), PWA izvoz (§6); `modTest` 315–317, sabotaže `dop-kartica-*`,
+   `dop-saldo-om-*`, `dop-zbirni-*`, `dop-pwa-*`.
 3. **F3 — ekran i papir.** Nov ekran u ljusci `frmOtkupUI` (runtime kontrole, bez
    novih `WithEvents`): period sa satom, tabela stopa, pregled plana sa
    „stope bez otkupa", potvrda ponavljanja, „Knjiži"; štampa KO (DOP-ODL-11);

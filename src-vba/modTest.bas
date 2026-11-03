@@ -419,6 +419,9 @@ Public Sub RunAllTests()
     RunOne 312
     RunOne 313
     RunOne 314
+    RunOne 315
+    RunOne 316
+    RunOne 317
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1028,6 +1031,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 312: TestName = "T_Doplata_PonavljanjeTraziPotvrdu"
         Case 313: TestName = "T_Doplata_StornoIzlaziIzZbira"
         Case 314: TestName = "T_Doplata_OdbijaNeispravanUnos"
+        Case 315: TestName = "T_Doplata_KarticaZaduzenje"
+        Case 316: TestName = "T_Doplata_SaldoOMPoStanici"
+        Case 317: TestName = "T_Doplata_PWASaldoDetalj"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1350,6 +1356,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 312: T_Doplata_PonavljanjeTraziPotvrdu
         Case 313: T_Doplata_StornoIzlaziIzZbira
         Case 314: T_Doplata_OdbijaNeispravanUnos
+        Case 315: T_Doplata_KarticaZaduzenje
+        Case 316: T_Doplata_SaldoOMPoStanici
+        Case 317: T_Doplata_PWASaldoDetalj
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -22218,7 +22227,9 @@ Private Sub T_Izv_SlaganjeOtkupOM()
     AssertEq CStr(roba(ukup, 7)), "", "roba OM: kolona blokova je prazna do S3 (ne nula)"
     AssertEq CStr(roba(ukup, 8)), "", "roba OM: kolona razlike je prazna do S3 (ne nula)"
 
-    ' (4) SALDO OM: po svakom redu Saldo = Vrednost - Isplaceno - Agro;
+    ' (4) SALDO OM: po svakom redu Saldo = Vrednost + Doplata - Isplaceno - Agro
+    ' (Doplata je kolona 8 od F2 doplate, DOPLATA.md par. 6; KO testova 309+
+    ' stoje na FX_STANICA, pa bez nje formula ne bi vazila za njihove redove);
     ' 'Isplaceno' kooperanta = rucni prolaz sa NovacRedPripadaStanici;
     ' ambalaza kolona = POSLOVNI saldo kooperanta prema OVOJ stanici na datumDo
     ' (AMB-POSL-02) -- ne fizicki globalni GetAmbalazeStanje.
@@ -22227,8 +22238,9 @@ Private Sub T_Izv_SlaganjeOtkupOM()
     For i = 1 To UBound(sal, 1)
         If CStr(sal(i, 1)) <> "UKUPNO" Then
             AssertEq Format$(CDbl(sal(i, 6)), "0.00"), _
-                     Format$(CDbl(sal(i, 3)) - CDbl(sal(i, 4)) - CDbl(sal(i, 5)), "0.00"), _
-                     "saldo OM red " & i & ": saldo = vrednost - isplaceno - agro"
+                     Format$(CDbl(sal(i, 3)) + NzD2(sal(i, 8)) - CDbl(sal(i, 4)) - _
+                             CDbl(sal(i, 5)), "0.00"), _
+                     "saldo OM red " & i & ": saldo = vrednost + doplata - isplaceno - agro"
         End If
         If CDbl(sal(i, 7)) <> 0 And CStr(sal(i, 1)) <> "UKUPNO" Then nasao = True
     Next i
@@ -23168,12 +23180,14 @@ Private Sub T_Izv_ZbirniSadrzaj()
         If CStr(pj(i, 1)) = "UKUPNO" Then pu = i
     Next i
     AssertEq (pu > 0), True, "vozilo: pojedinacni saldo stanice ima UKUPNO"
+    ' Ref-kolona mreze je 9 od F2 doplate (kolona 8 = Doplata, DOPLATA.md
+    ' par. 6); poredi se i ona -- UKUPNO pojedinacnog nosi doplatu u koloni 8.
     For i = 1 To n
-        If InStr(1, CStr(redovi(i, 8)), FX_STANICA_B, vbTextCompare) > 0 Then
+        If InStr(1, CStr(redovi(i, 9)), FX_STANICA_B, vbTextCompare) > 0 Then
             nasla = True
             AssertEq Format$(CDbl(redovi(i, 2)), "0.00"), Format$(rKg, "0.00"), _
                      "zbirni saldo: kg stanice = rucni prolaz tblOtkupStavke"
-            For j = 2 To 7
+            For j = 2 To 8
                 AssertEq Format$(CDbl(redovi(i, j)), "0.00"), _
                          Format$(NzD2(pj(pu, j)), "0.00"), _
                          "zbirni saldo kolona " & j & " = UKUPNO pojedinacnog"
@@ -23433,8 +23447,9 @@ Private Sub T_Izv_ZbirniOrphanStanica()
     n = CLng(d(2))
     redovi = d(1)
     nasla = False
+    ' Ref-kolona zbirnog salda je 9 od F2 doplate (kolona 8 = Doplata).
     For i = 1 To n
-        If InStr(1, CStr(redovi(i, 8)), "STA-ORPHAN", vbTextCompare) > 0 Then
+        If InStr(1, CStr(redovi(i, 9)), "STA-ORPHAN", vbTextCompare) > 0 Then
             nasla = True
             AssertEq CStr(redovi(i, 1)), "STA-ORPHAN", _
                      "orphan stanica se prikazuje pod svojim ID-em"
@@ -27670,4 +27685,226 @@ Private Function DopIznosKooperanta(ByVal koopID As String) As Double
             If CStr(r(i, 4)) = koopID Then DopIznosKooperanta = DopIznosKooperanta + CDbl(r(i, 12))
         Next i
     End If
+End Function
+
+' ============================================================
+' 315. DOPLATA F2: KARTICA -- JEDAN RED PO KO, ZADUZENJE, POCETNO STANJE.
+' ============================================================
+' KO je red kartice kooperanta na datum knjizenja (DOP-ODL-04): zaduzenje =
+' iznos KO, opis pocinje recju "Doplata" i nosi kg x stopa, ref-kljuc je
+' DOP|<DoplataID>. KO pre perioda ulazi u pocetno stanje. Rekapitulacija robe
+' ne vidi doplatu (DOP-01), a storniran KO izlazi. Istog dana doplata ide posle
+' agrohemije, pre novca (KART-HRON-01).
+' Tok (kooperant A): juce otkup I 10 kg po 50 (500); danas KO I 10 din/kg (100).
+' SABOTAZE: dop-kartica-bez-doplate, dop-kartica-pocetno-bez-doplate.
+Private Sub T_Doplata_KarticaZaduzenje()
+    Dim b As String, vr As String, kA As String, kul As String, stope As Collection
+    Dim obr As String, g As String, en As Long, idA As String, brojA As String
+    Dim r As Variant, rPre As Variant, rek As Variant, i As Long
+    Dim nDop As Long, zad As Double, opis As String, refDop As String
+    Dim ukSaldo As Double, pocSaldo As Double, rekKg As Double
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    DopOtkup kA, FX_STANICA, kul, vr, "S1", 10, 0
+    Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 315", _
+                                      False, g, en)
+    AssertEq g, "", "preduslov: KO se knjizi"
+    idA = DopIdKO(obr, kA)
+    brojA = DopBrojDokumentaKO(obr, kA)
+
+    r = modIzvestaj.ReportKarticaKooperanta(kA, Date - 1, Date)
+    If IsArray(r) Then
+        For i = 1 To UBound(r, 1)
+            If Left$(NzToText(r(i, 9)), 4) = "DOP|" Then
+                nDop = nDop + 1
+                zad = NzD2(r(i, 5))
+                opis = NzToText(r(i, 4)) & "|" & NzToText(r(i, 2))
+                refDop = NzToText(r(i, 9))
+            End If
+            If NzToText(r(i, 4)) = "UKUPNO" Then ukSaldo = NzD2(r(i, 7))
+        Next i
+    End If
+    AssertEq nDop & "|" & Format$(zad, "0.00") & "|" & refDop, _
+             "1|" & Format$(100, "0.00") & "|DOP|" & idA, _
+             "kartica: jedan red po KO, zaduzenje = iznos KO, ref-kljuc DOP|DoplataID"
+    AssertEq Format$(ukSaldo, "0.00"), Format$(600, "0.00"), _
+             "kartica: zavrsni saldo = otkup + doplata (500 + 100)"
+    AssertEq (Left$(opis, 8) = "Doplata " And InStr(1, opis, " kg x ", vbBinaryCompare) > 0 And _
+              InStr(1, opis, "|" & brojA, vbBinaryCompare) > 0), True, _
+             "kartica: opis je Doplata sa kg x stopa, broj dokumenta je broj KO"
+
+    rPre = modIzvestaj.ReportKarticaKooperanta(kA, Date + 1, Date + 2)
+    If IsArray(rPre) Then
+        For i = 1 To UBound(rPre, 1)
+            If NzToText(rPre(i, 4)) = IZV_POCETNO_STANJE Then pocSaldo = NzD2(rPre(i, 7))
+        Next i
+    End If
+    AssertEq Format$(pocSaldo, "0.00"), Format$(600, "0.00"), _
+             "kartica: KO pre perioda ulazi u pocetno stanje"
+
+    rek = modIzvestaj.ReportKarticaRobaRekap(kA, Date - 1, Date)
+    If IsArray(rek) Then rekKg = NzD2(rek(UBound(rek, 1), 4))
+    AssertEq Format$(rekKg, "0.00"), Format$(10, "0.00"), _
+             "rekapitulacija robe ne vidi doplatu: samo otkupljeni kg"
+
+    AssertEq (KartPre(modIzvestaj.KarticaDokKljuc(Date, "MAG", "1", "MAG-1"), _
+                      modIzvestaj.KarticaDokKljuc(Date, "DOP", "KO-1/2026", "DOP-1")) And _
+              KartPre(modIzvestaj.KarticaDokKljuc(Date, "DOP", "KO-1/2026", "DOP-1"), _
+                      modIzvestaj.KarticaDokKljuc(Date, "NOV", "1", "NOV-1"))), True, _
+             "isti dan: doplata posle agrohemije, pre novca"
+
+    AssertEq modStorno.StornoDoplata_TX(idA), True, "preduslov: storno KO prolazi"
+    nDop = 0
+    ukSaldo = 0
+    r = modIzvestaj.ReportKarticaKooperanta(kA, Date - 1, Date)
+    If IsArray(r) Then
+        For i = 1 To UBound(r, 1)
+            If Left$(NzToText(r(i, 9)), 4) = "DOP|" Then nDop = nDop + 1
+            If NzToText(r(i, 4)) = "UKUPNO" Then ukSaldo = NzD2(r(i, 7))
+        Next i
+    End If
+    AssertEq nDop & "|" & Format$(ukSaldo, "0.00"), "0|" & Format$(500, "0.00"), _
+             "kartica: storniran KO izlazi, saldo je opet samo otkup"
+End Sub
+
+' ============================================================
+' 316. DOPLATA F2: SALDO OM -- KOLONA 8, PO STANICI I DATUMU KNJIZENJA.
+' ============================================================
+' Stavka KO pripada stanici na kojoj je roba predata, pa Saldo OM svake stanice
+' vidi svoj deo; period je po datumu knjizenja, ne po datumu otkupa. Saldo =
+' vrednost + doplata - isplaceno - agro. Zbirni oblik nosi doplatu u koloni 9
+' (UKUPNO pojedinacnog), mreza u koloni 8, a zaglavlje kolone ima poruku.
+' Tok (A i B, juce): A @STA1 I 10, A @STA2 I 4, B @STA1 I 6; danas KO I 10 din/kg
+'   -> A: STA1 100 + STA2 40 ; B: STA1 60.
+' SABOTAZE: dop-saldo-om-bez-stanice, dop-saldo-om-saldo-bez-doplate,
+'           dop-zbirni-saldo-pretposlednja.
+Private Sub T_Doplata_SaldoOMPoStanici()
+    Dim b As String, vr As String, kA As String, kB As String, kul As String
+    Dim stope As Collection, obr As String, g As String, en As Long
+    Dim s1 As Variant, s2 As Variant, sJuce As Variant, zb As Variant
+    Dim nazivA As String, nazivB As String, uk As Long, i As Long, zbRed As Long
+    Dim d As Variant, redovi As Variant, n As Long, gridDop As Double, kolone As Variant
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    kB = DopKooperant(b & "-B")
+    nazivA = "Dop " & b & "-A"
+    nazivB = "Dop " & b & "-B"
+    DopOtkup kA, FX_STANICA, kul, vr, "S1", 10, 0
+    DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 4, 0
+    DopOtkup kB, FX_STANICA, kul, vr, "S1", 6, 0
+    Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 316", _
+                                      False, g, en)
+    AssertEq g, "", "preduslov: KO se knjizi"
+
+    s1 = modIzvestaj.ReportSaldoOM(FX_STANICA, Date, Date)
+    s2 = modIzvestaj.ReportSaldoOM(FX_STANICA_B, Date, Date)
+    AssertEq DopSaldoKol(s1, nazivA, 8) & "|" & DopSaldoKol(s2, nazivA, 8) & "|" & _
+             DopSaldoKol(s1, nazivB, 8), _
+             Format$(100, "0.00") & "|" & Format$(40, "0.00") & "|" & Format$(60, "0.00"), _
+             "saldo OM: doplata po stanici na kojoj je roba predata"
+    AssertEq DopSaldoKol(s1, nazivA, 6) & "|" & DopSaldoKol(s1, nazivA, 3), _
+             Format$(100, "0.00") & "|" & Format$(0, "0.00"), _
+             "saldo OM: saldo = vrednost + doplata - isplaceno - agro (KO bez otkupa u periodu)"
+    sJuce = modIzvestaj.ReportSaldoOM(FX_STANICA, Date - 1, Date - 1)
+    AssertEq DopSaldoKol(sJuce, nazivA, 3) & "|" & DopSaldoKol(sJuce, nazivA, 8), _
+             Format$(500, "0.00") & "|" & Format$(0, "0.00"), _
+             "saldo OM: period je po datumu knjizenja KO, ne po datumu otkupa"
+
+    uk = UBound(s1, 1)
+    zb = modIzvestaj.ReportSaldoOMZbirni(Date, Date)
+    If IsArray(zb) Then
+        For i = 1 To UBound(zb, 1)
+            If CStr(zb(i, 1)) = FX_STANICA Then zbRed = i
+        Next i
+    End If
+    AssertEq (zbRed > 0), True, "preduslov: zbirni saldo ima red stanice"
+    AssertEq Format$(NzD2(zb(zbRed, 9)), "0.00") & "|" & Format$(NzD2(zb(zbRed, 7)), "0.00"), _
+             Format$(NzD2(s1(uk, 8)), "0.00") & "|" & Format$(NzD2(s1(uk, 6)), "0.00"), _
+             "zbirni saldo: doplata (9) i saldo (7) = UKUPNO pojedinacnog"
+
+    kolone = modScrIzvestaji.IzKoloneZaListu("SALDO", "OM")
+    AssertEq (UBound(kolone) = 7 And Left$(CStr(kolone(7)), 18) = "OTKUI_HDI_DOPLATA|" And _
+              Not PorukaNedostaje("OTKUI_HDI_DOPLATA")), True, _
+             "mreza saldo OM: kolona 8 je Doplata, zaglavlje ima poruku"
+    modScrIzvestaji.Scr_IzTestReset
+    modScrIzvestaji.Scr_IzTestSet "SALDO", "OM", False, FX_STANICA, CDbl(Date), CDbl(Date)
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    For i = 1 To n
+        If CStr(redovi(i, 1)) = nazivA Then gridDop = NzD2(redovi(i, 8))
+    Next i
+    modScrIzvestaji.Scr_IzTestReset
+    AssertEq Format$(gridDop, "0.00"), Format$(100, "0.00"), _
+             "mreza saldo OM prikazuje doplatu kooperanta u koloni 8"
+
+    ' Zbirna mreza: Doplata je kolona 8, pa saldo vise nije "pretposlednja"
+    ' kolona izvora -- podnozje mora da sabira saldo (mreza 6 = izvestaj 7).
+    Dim sumSaldo As Double
+    modScrIzvestaji.Scr_IzTestSet "SALDO", "OM", True, "", CDbl(Date), CDbl(Date)
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    For i = 1 To n
+        sumSaldo = sumSaldo + NzD2(redovi(i, 6))
+    Next i
+    modScrIzvestaji.Scr_IzTestReset
+    AssertEq (n > 0 And Format$(NzD2(d(4)), "0.00") = Format$(sumSaldo, "0.00")), True, _
+             "mreza zbirnog salda: podnozje sabira saldo, ne ambalazu"
+End Sub
+
+' ============================================================
+' 317. DOPLATA F2: PWA IZVOZ SALDA -- KOLONA DOPLATA, SALDO JE UKLJUCUJE.
+' ============================================================
+' Tab SaldoOMDetail (PWA ga cita po imenu kolone) dobija kolonu Doplata na kraju;
+' saldo = vrednost + doplata - isplaceno - agro. Meri se produkcioni seam
+' SaldoOMDetailRedovi, ne kopija: sam izvoz pise u Google list preko mreze.
+' Tok (kooperant A, juce): I 14 kg po 50 (700); danas KO I 10 din/kg (140).
+' SABOTAZE: dop-pwa-saldo-bez-doplate.
+Private Sub T_Doplata_PWASaldoDetalj()
+    Dim b As String, vr As String, kA As String, kul As String, stope As Collection
+    Dim obr As String, g As String, en As Long, r As Variant, i As Long, red As Long
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    DopOtkup kA, FX_STANICA, kul, vr, "S1", 14, 0
+    Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 317", _
+                                      False, g, en)
+    AssertEq g, "", "preduslov: KO se knjizi"
+
+    r = modStammdatenSync.SaldoOMDetailRedovi()
+    AssertEq (IsArray(r)), True, "preduslov: izvoz salda ima redove"
+    For i = 2 To UBound(r, 1)
+        If CStr(r(i, 1)) = kA Then red = i
+    Next i
+    AssertEq (red > 0 And CStr(r(1, 10)) = "Doplata"), True, _
+             "PWA saldo: kolona 10 je Doplata, kooperant ima red"
+    AssertEq Format$(CDbl(r(red, 10)), "0.00") & "|" & Format$(CDbl(r(red, 8)), "0.00"), _
+             Format$(140, "0.00") & "|" & Format$(840, "0.00"), _
+             "PWA saldo: doplata 140, saldo = 700 + 140 - isplaceno - agro"
+End Sub
+
+' Vrednost kolone `kol` u redu kooperanta `naziv` (kolona 1) izvestaja salda,
+' kao "0.00" tekst; "nema" kad reda nema.
+Private Function DopSaldoKol(ByVal s As Variant, ByVal naziv As String, ByVal kol As Long) As String
+    Dim i As Long
+    DopSaldoKol = "nema"
+    If Not IsArray(s) Then Exit Function
+    For i = 1 To UBound(s, 1)
+        If CStr(s(i, 1)) = naziv Then
+            DopSaldoKol = Format$(NzD2(s(i, kol)), "0.00")
+            Exit Function
+        End If
+    Next i
 End Function

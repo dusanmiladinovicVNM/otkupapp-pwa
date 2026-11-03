@@ -2044,6 +2044,7 @@ Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_HDI_AMB", "AMB"
     UpsertRow lo, existing, "OTKUI_HDI_ISPLACENO", "ISPLA" & ChrW(262) & "ENO"
     UpsertRow lo, existing, "OTKUI_HDI_AGRO", "AGRO"
+    UpsertRow lo, existing, "OTKUI_HDI_DOPLATA", "DOPLATA"
     UpsertRow lo, existing, "OTKUI_HDI_BROTP", "OTPREMNICA"
     UpsertRow lo, existing, "OTKUI_HDI_KLASA", "KL."
     UpsertRow lo, existing, "OTKUI_HDI_VOZAC", "VOZA" & ChrW(268)

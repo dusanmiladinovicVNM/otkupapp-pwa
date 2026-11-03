@@ -180,6 +180,8 @@ function renderMgmtKoopPregled() {
             const agro = parseFloat(r.AgroZaduzenje)||0;
             const saldo = parseFloat(r.Saldo)||0;
             const amb = parseFloat(r.Ambalaza)||0;
+            // Doplata (knjizno odobrenje) ulazi u Saldo: Vrednost + Doplata - Isplaceno - Agro.
+            const dop = parseFloat(r.Doplata)||0;
             const bc = saldo > 0 ? 'var(--warning)' : 'var(--success)';
             return `<div class="queue-item" style="border-left-color:${bc};">
                 <div class="qi-header"><span class="qi-koop">${escapeHtml(r.Kooperant||r.KooperantID)}</span><span class="qi-time">${escapeHtml(fmtStanica(r.StanicaID))}</span></div>
@@ -187,7 +189,7 @@ function renderMgmtKoopPregled() {
                     ${kg.toLocaleString('sr')} kg | Vrednost: ${vr.toLocaleString('sr')}
                 </div>
                 <div class="qi-detail" style="font-size:12px;margin-top:2px;">
-                    Isplaćeno: ${isp.toLocaleString('sr')} | Agro: ${agro.toLocaleString('sr')} | Amb: ${amb.toLocaleString('sr')}
+                    Isplaćeno: ${isp.toLocaleString('sr')} | Agro: ${agro.toLocaleString('sr')} | Amb: ${amb.toLocaleString('sr')}${dop ? ` | Doplata: ${dop.toLocaleString('sr')}` : ''}
                 </div>
                 <div class="qi-detail" style="font-size:13px;margin-top:4px;font-weight:600;">
                     Saldo: <span style="color:${saldo>0?'var(--danger)':'var(--success)'};">${saldo.toLocaleString('sr')} RSD</span>

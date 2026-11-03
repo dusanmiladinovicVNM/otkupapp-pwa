@@ -442,6 +442,14 @@ Public Function DoplataStavkeRedovi() As Variant
 
     DoplataStavkeRedovi = Empty
 
+    ' Sveska PRE NADOGRADNJE: obe tabele jos ne postoje (pravi ih EnsureAllTables
+    ' na startu), pa KO nema -- prazno, isti obrazac kao modUtovar.UtovarenoPoPreradi.
+    ' Bez ovoga bi kartica i Saldo OM pali SVIM kooperantima do prvog restarta.
+    ' Samo jedna od dve je drift i pada po imenu nize (RequireColumnIndex).
+    If GetTable(TBL_DOPLATA) Is Nothing And GetTable(TBL_DOPLATA_STAVKE) Is Nothing Then
+        Exit Function
+    End If
+
     Dim hd As Variant
     hd = GetTableData(TBL_DOPLATA)
 
@@ -566,6 +574,121 @@ Public Function DoplataStavkeRedovi() As Variant
     Next i
 
     DoplataStavkeRedovi = res
+End Function
+
+' Iznos AKTIVNIH KO po kooperantu: KooperantID -> din (zbir stavki).
+'
+' stanicaID  samo stavke te stanice -- stavka pripada stanici na kojoj je roba
+'            predata (DOPLATA.md par. 3), pa Saldo OM svake stanice vidi svoj
+'            deo, a zbir po stanicama je ceo KO. Prazno = sve stanice.
+' datumOd/Do Datum KO = datum knjizenja = datum zaduzenja (DOP-ODL-04), po
+'            danu, obe granice ukljucene. Izostavljeno = bez granice.
+'
+' Jedan citac za Saldo OM i PWA izvoz salda -- isti filter storna i ista
+' pripadnost stanici, bez druge kopije.
+Public Function DoplataIznosPoKooperantu(Optional ByVal stanicaID As String = "", _
+                                         Optional ByVal datumOd As Variant, _
+                                         Optional ByVal datumDo As Variant) As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set DoplataIznosPoKooperantu = dict
+
+    Dim r As Variant
+    r = DoplataStavkeRedovi()
+    If Not IsArray(r) Then Exit Function
+
+    Dim imaOd As Boolean, imaDo As Boolean, danOd As Long, danDo As Long
+    If Not IsMissing(datumOd) Then
+        If IsDate(datumOd) Then imaOd = True: danOd = Int(CDbl(CDate(datumOd)))
+    End If
+    If Not IsMissing(datumDo) Then
+        If IsDate(datumDo) Then imaDo = True: danDo = Int(CDbl(CDate(datumDo)))
+    End If
+
+    Dim i As Long, dan As Long, koop As String, ok As Boolean
+    For i = 1 To UBound(r, 1)
+        ok = True
+        If Len(Trim$(stanicaID)) > 0 Then
+            ok = (StrComp(CStr(r(i, 6)), Trim$(stanicaID), vbTextCompare) = 0)
+        End If
+        If ok And (imaOd Or imaDo) Then
+            dan = Int(CDbl(CDate(r(i, 3))))
+            If imaOd And dan < danOd Then ok = False
+            If imaDo And dan > danDo Then ok = False
+        End If
+        If ok Then
+            koop = CStr(r(i, 4))
+            dict(koop) = CDbl(dict(koop)) + CDbl(r(i, 12))
+        End If
+    Next i
+End Function
+
+' AKTIVNI KO jednog kooperanta, jedan red po dokumentu -- za karticu
+' (modIzvestaj.ReportKarticaKooperanta). 2D niz (1..n, 1..5):
+'   1 DoplataID | 2 BrojDokumenta | 3 Datum | 4 Iznos (zbir stavki)
+'   5 delovi opisa: Collection od Array(vrsta, sorta, klasa, kg, cena)
+' Stavke istog kljuca i iste stope sa razlicitih stanica se sabiraju: kartica
+' je kooperantova, ne stanicina. Redosled: redosled prve stavke u tabeli; poredak
+' na kartici ionako daje kljuc hronologije (KART-HRON-01). Empty kad nema KO.
+Public Function DoplataKOKooperanta(ByVal kooperantID As String) As Variant
+    DoplataKOKooperanta = Empty
+
+    Dim r As Variant
+    r = DoplataStavkeRedovi()
+    If Not IsArray(r) Then Exit Function
+
+    Dim ko As Object, red As Variant, delovi As Collection, kDeo As Object
+    Dim i As Long, id As String, kljuc As String, j As Long, deo As Variant
+    Set ko = CreateObject("Scripting.Dictionary")
+    ko.CompareMode = vbTextCompare
+    Set kDeo = CreateObject("Scripting.Dictionary")
+    kDeo.CompareMode = vbTextCompare
+
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 4)), Trim$(kooperantID), vbTextCompare) = 0 Then
+            id = CStr(r(i, 1))
+            If Not ko.Exists(id) Then
+                Set delovi = New Collection
+                ko.Add id, Array(r(i, 2), r(i, 3), 0#, delovi)
+            End If
+            red = ko(id)
+            red(2) = CDbl(red(2)) + CDbl(r(i, 12))
+            Set delovi = red(3)
+            kljuc = id & "|" & UCase$(CStr(r(i, 7))) & "|" & UCase$(CStr(r(i, 8))) & "|" & _
+                    UCase$(CStr(r(i, 9))) & "|" & CStr(r(i, 11))
+            If kDeo.Exists(kljuc) Then
+                j = CLng(kDeo(kljuc))
+                deo = delovi(j)
+                deo(3) = CDbl(deo(3)) + CDbl(r(i, 10))
+                delovi.Remove j
+                If j > delovi.count Then
+                    delovi.Add deo
+                Else
+                    delovi.Add deo, Before:=j
+                End If
+            Else
+                delovi.Add Array(CStr(r(i, 7)), CStr(r(i, 8)), CStr(r(i, 9)), CDbl(r(i, 10)), _
+                                 CDbl(r(i, 11)))
+                kDeo.Add kljuc, delovi.count
+            End If
+            ko(id) = red
+        End If
+    Next i
+
+    If ko.count = 0 Then Exit Function
+
+    Dim res() As Variant, n As Long, k As Variant
+    ReDim res(1 To ko.count, 1 To 5)
+    For Each k In ko.keys
+        red = ko(k)
+        n = n + 1
+        res(n, 1) = CStr(k)
+        res(n, 2) = red(0)
+        res(n, 3) = red(1)
+        res(n, 4) = modNovac.ZaokruziNovac(CDbl(red(2)))
+        Set res(n, 5) = red(3)
+    Next k
+    DoplataKOKooperanta = res
 End Function
 
 ' DoplataID-evi AKTIVNIH KO jednog obracuna -- za storno celog obracuna

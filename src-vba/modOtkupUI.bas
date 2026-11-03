@@ -7940,7 +7940,8 @@ Private Function SaldoOMUkupno(ByVal stanicaID As String) As Double
 End Function
 
 ' Saldo iz rezultata ReportSaldoOM: poslednji red je UKUPNO, a saldo je kolona 6
-' (2 kg, 3 vrednost, 4 isplaceno, 5 agrohemija, 6 saldo, 7 ambalaza). Plocica je
+' (2 kg, 3 vrednost, 4 isplaceno, 5 agrohemija, 6 saldo, 7 ambalaza, 8 doplata;
+' saldo ukljucuje doplatu, DOPLATA.md par. 6). Plocica je
 ' citala kolonu 5 -- agro zaduzenje -- pa nije reagovala ni na otkup ni na
 ' isplatu (AUD-056). Javna da test tvrdi polozaj bez podataka u svesci.
 Public Function SaldoIzIzvestajaOM(ByVal res As Variant) As Double

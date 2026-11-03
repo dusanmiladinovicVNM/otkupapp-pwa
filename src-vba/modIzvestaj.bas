@@ -36,6 +36,9 @@ Public Const IZV_POCETNO_STANJE As String = "POCETNO STANJE"
 ' (kolona 9 kartice), pa izvor ima jedno ime.
 Private Const KART_IZVOR_NOVAC As String = "NOV"
 Private Const KART_IZVOR_MAGACIN As String = "MAG"
+' Doplata (knjizno odobrenje, DOPLATA.md): red = jedan KO; ref-kljuc reda je
+' "DOP|<DoplataID>".
+Private Const KART_IZVOR_DOPLATA As String = "DOP"
 
 ' RF-07 (AUD-024 / FM-0029 #3) - indeksi STATICKIH stranica mpReports u
 ' frmIzvestaj (redosled iz .frx); koristi ih matrica IzvestajTabDostupan.
@@ -483,7 +486,11 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
                               
     Const SRC As String = "modIzvestaj.ReportSaldoOM"
     On Error GoTo EH
-    ' Returns: 2D Array (Name, Kolicina, Vrednost, Novac, Saldo, Ambalaza)
+    ' Returns: 2D Array, 8 kolona:
+    '   1 Kooperant | 2 Kolicina | 3 Vrednost | 4 Isplaceno | 5 AgroZaduzenje
+    '   6 Saldo | 7 Ambalaza | 8 Doplata
+    ' Saldo = Vrednost + Doplata - Isplaceno - Agro. Doplata je NA KRAJU jer
+    ' citaoci indeksiraju poziciono (KPI cita 6, zbirni 2..8, testovi 4/6/7).
     ' Letzte Zeile = UKUPNO
     
     Dim otkupData As Variant
@@ -591,6 +598,17 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
         Next n
     End If
 
+    ' --- Doplata (knjizno odobrenje) pro Kooperant -- DOPLATA.md par. 6 ---
+    ' Stavka KO pripada stanici na kojoj je roba predata; period je po datumu
+    ' knjizenja (DOP-ODL-04). Kooperant sa doplatom a bez otkupa u periodu
+    ' ulazi u listu, kao kod novca: KO se po pravilu knjizi posle otkupa.
+    Dim dopDict As Object
+    Set dopDict = modDoplata.DoplataIznosPoKooperantu(stanicaID, datumOd, datumDo)
+    Dim dopK As Variant
+    For Each dopK In dopDict.keys
+        If Not dict.Exists(CStr(dopK)) Then dict.Add CStr(dopK), Array(0#, 0#, 0#)
+    Next dopK
+
         ' --- OM Avans berechnen (VOR dem ReDim) ---
     Dim omAvans As Double
     omAvans = 0
@@ -684,8 +702,8 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
     Set koopAmbDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT, True, datumDo, _
                                                    AMB_NALOG_STANICA, Trim$(stanicaID))
 
-    ' --- Ergebnis-Array: 7 Spalten ---
-    ' Kooperant | Kolicina | Vrednost | Isplaceno | AgroZaduzenje | Saldo | Ambalaza
+    ' --- Ergebnis-Array: 8 Spalten ---
+    ' Kooperant | Kolicina | Vrednost | Isplaceno | AgroZaduzenje | Saldo | Ambalaza | Doplata
     
     Dim rowCount As Long
     rowCount = dict.count + 1  ' +UKUPNO
@@ -693,12 +711,12 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
     If agroBezStanica > 0 Then rowCount = rowCount + 1
     
     Dim result() As Variant
-    ReDim result(1 To rowCount, 1 To 7)
+    ReDim result(1 To rowCount, 1 To 8)
     
     Dim keys As Variant
     keys = dict.keys
     Dim totKol As Double, totVr As Double, totNov As Double
-    Dim totAgro As Double, totAmb As Long
+    Dim totAgro As Double, totAmb As Long, totDop As Double
     
     For i = 0 To dict.count - 1
         vals = dict(keys(i))
@@ -711,6 +729,10 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
         agroSum = 0
         If agroKoopDict.Exists(keys(i)) Then agroSum = agroKoopDict(keys(i))
 
+        Dim dopSum As Double
+        dopSum = 0
+        If dopDict.Exists(keys(i)) Then dopSum = CDbl(dopDict(keys(i)))
+
         Dim koopNaziv As String
         If koopNameDict.Exists(CStr(keys(i))) Then koopNaziv = koopNameDict(CStr(keys(i))) Else koopNaziv = ""
 
@@ -719,16 +741,18 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
         result(i + 1, 3) = vals(1)                          ' Vrednost
         result(i + 1, 4) = novacSum                         ' Isplaceno
         result(i + 1, 5) = agroSum                          ' AgroZaduzenje
-        result(i + 1, 6) = vals(1) - novacSum - agroSum     ' Saldo
+        result(i + 1, 6) = vals(1) + dopSum - novacSum - agroSum   ' Saldo
         Dim ambSaldo As Long: ambSaldo = 0
         If koopAmbDict.Exists(keys(i)) Then ambSaldo = CLng(koopAmbDict(keys(i)))
         result(i + 1, 7) = ambSaldo                         ' Ambalaza (aktivni saldo, neto)
+        result(i + 1, 8) = dopSum                           ' Doplata (KO te stanice)
         
         totKol = totKol + vals(0)
         totVr = totVr + vals(1)
         totNov = totNov + novacSum
         totAgro = totAgro + agroSum
         totAmb = totAmb + ambSaldo
+        totDop = totDop + dopSum
     Next i
     
     ' OM Avans (nerasporedjen)
@@ -758,8 +782,9 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
     result(rowCount, 3) = totVr
     result(rowCount, 4) = totNov
     result(rowCount, 5) = totAgro
-    result(rowCount, 6) = totVr - totNov - totAgro
+    result(rowCount, 6) = totVr + totDop - totNov - totAgro
     result(rowCount, 7) = totAmb
+    result(rowCount, 8) = totDop
     
     ' Telo po nazivu kooperanta (DOC-SORT-01); OM AVANS, AGROHEMIJA i UKUPNO
     ' ostaju na kraju.
@@ -790,7 +815,8 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
     ' (5)=Zaduzenje, (6)=Razduzenje, (7)=Saldo,
     ' (8)=SaldoAmbalaze (running; gajbe = Izdata - Primljena;
     '     ukljucuje i samostalna kretanja ambalaze van otkupa),
-    ' (9)=RefKljuc reda ("OTK|<OtkupID>" / "NOV" / "MAG" / "AMB") za Detalje otkupa
+    ' (9)=RefKljuc reda ("OTK|<OtkupID>" / "DOP|<DoplataID>" / "NOV" / "MAG" / "AMB")
+    '     za Detalje otkupa
     '
     ' RF-06: promet PRE datumOd se vise ne odbacuje nego se sabira u pocetno
     ' stanje, pa kartica krece od stanja duga a ne od nule (FM-0028 #1).
@@ -1022,6 +1048,39 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                 End If
             Next m
         End If
+    End If
+
+    ' 3b. Doplata (knjizno odobrenje) = Zaduzenje -- DOPLATA.md par. 6.
+    '     Jedan red po KO (DOP-ODL-04), na datum knjizenja; KO pre datumOd ulazi
+    '     u pocetno stanje kao i otkup. Kilograma nema u saldu ambalaze ni u
+    '     rekapitulaciji robe: doplata ne nosi robu (DOP-01).
+    Dim koDop As Variant
+    koDop = modDoplata.DoplataKOKooperanta(kooperantID)
+    If IsArray(koDop) Then
+        Dim dp As Long, dopDatum As Date, dopIznos As Double
+        For dp = 1 To UBound(koDop, 1)
+            If IsDate(koDop(dp, 3)) Then
+                dopDatum = CDate(koDop(dp, 3))
+                If dopDatum <= datumDo Then
+                    dopIznos = CDbl(koDop(dp, 4))
+                    If dopDatum < datumOd Then
+                        pocetniSaldo = pocetniSaldo + dopIznos
+                    Else
+                        moves.Add Array( _
+                            dopDatum, _
+                            CStr(koDop(dp, 2)), _
+                            "", _
+                            KarticaDoplataOpis(koDop(dp, 5)), _
+                            dopIznos, _
+                            0#, _
+                            0#, _
+                            KART_IZVOR_DOPLATA & "|" & CStr(koDop(dp, 1)), _
+                            KarticaDokKljuc(dopDatum, KART_IZVOR_DOPLATA, _
+                                            CStr(koDop(dp, 2)), CStr(koDop(dp, 1))))
+                    End If
+                End If
+            End If
+        Next dp
     End If
 
     ' 4. Ambalaza (samostalna kretanja, van otkupa) -> menja samo "Saldo amb."
@@ -1488,7 +1547,7 @@ End Function
 '   1. dan dogadjaja, bez vremena -- da li celija nosi vreme zavisi od toga
 '      ko je red upisao, a poredak ne sme da zavisi od porekla;
 '   2. izvor (KarticaIzvorRang): otkup, otpremnica, prijemnica, ambalazni
-'      dokument, agrohemija, novac. Brojevi RAZLICITIH nizova se ne porede --
+'      dokument, agrohemija, doplata, novac. Brojevi RAZLICITIH nizova se ne porede --
 '      to je dokumentovana konvencija, ne tvrdnja o tome sta je bilo pre;
 '   3. broj dokumenta u nizu (KarticaBrojKljuc), kao broj;
 '   4. identitet dokumenta, da redovi jednog dokumenta ostanu zajedno;
@@ -1603,6 +1662,24 @@ Public Function KarticaOtkupOpis(ByVal vrsta As String, ByVal sorta As String, _
     KarticaOtkupOpis = s
 End Function
 
+' OPIS REDA DOPLATE na kartici: "Doplata" pa, po kljucu stope, isti opis kao red
+' otkupa i stopa -- "Doplata Malina Willamette I 1.250,00 kg x 10,00 din;
+' Malina Willamette II 300,00 kg x 5,50 din". delovi su iz
+' modDoplata.DoplataKOKooperanta (Array(vrsta, sorta, klasa, kg, cena)).
+' Isti tekst ide na ekran, u PDF i u PWA, jer svi citaju ReportKarticaKooperanta.
+Public Function KarticaDoplataOpis(ByVal delovi As Variant) As String
+    Dim s As String, d As Variant
+    s = "Doplata"
+    If IsObject(delovi) Then
+        For Each d In delovi
+            If s <> "Doplata" Then s = s & ";"
+            s = s & " " & KarticaOtkupOpis(CStr(d(0)), CStr(d(1)), CStr(d(2)), CDbl(d(3))) & _
+                " x " & Format$(CDbl(d(4)), "#,##0.00") & " din"
+        Next d
+    End If
+    KarticaDoplataOpis = s
+End Function
+
 ' Redosled izvora istog dana. Nepoznat izvor ide poslednji (pa po imenu).
 Private Function KarticaIzvorRang(ByVal izvor As String) As Long
     Select Case LCase$(Trim$(izvor))
@@ -1611,7 +1688,10 @@ Private Function KarticaIzvorRang(ByVal izvor As String) As Long
         Case LCase$(DOK_TIP_PRIJEMNICA):        KarticaIzvorRang = 3
         Case LCase$(DOK_TIP_AMBALAZA_DOKUMENT): KarticaIzvorRang = 4
         Case LCase$(KART_IZVOR_MAGACIN):        KarticaIzvorRang = 5
-        Case LCase$(KART_IZVOR_NOVAC):          KarticaIzvorRang = 6
+        ' Doplata pre novca: isplata KO istog dana ne sme da spusti medjusaldo
+        ' ispod nule pre zaduzenja koje placa.
+        Case LCase$(KART_IZVOR_DOPLATA):        KarticaIzvorRang = 6
+        Case LCase$(KART_IZVOR_NOVAC):          KarticaIzvorRang = 7
         Case Else:                              KarticaIzvorRang = 9
     End Select
 End Function
@@ -2002,9 +2082,10 @@ End Sub
 ' prometa perioda OSTAJE. Poslednji red = UKUPNO preko svih stanica.
 ' ============================================================
 ' (1)=StanicaID (2)=Naziv (3)=Kg (4)=Vrednost (5)=Isplaceno (6)=Agro
-' (7)=Saldo (8)=Amb -- kolone 3..8 su UKUPNO red (2..7) pojedinacnog
-' ReportSaldoOM te stanice (agro PRIPISAN stanicama ucestvuje u saldu;
-' "nerasporedjena" agro linija je i tamo van UKUPNO pa je nema ni ovde).
+' (7)=Saldo (8)=Amb (9)=Doplata -- kolone 3..9 su UKUPNO red (2..8)
+' pojedinacnog ReportSaldoOM te stanice (agro PRIPISAN stanicama ucestvuje u
+' saldu; "nerasporedjena" agro linija je i tamo van UKUPNO pa je nema ni ovde).
+' Doplata je na kraju iz istog razloga kao u pojedinacnom: pozicioni citaoci.
 Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
                                     ByVal datumDo As Date) As Variant
     Const SRC As String = "modIzvestaj.ReportSaldoOMZbirni"
@@ -2017,8 +2098,8 @@ Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
 
     Dim outA() As Variant, n As Long, i As Long, j As Long
     Dim r As Variant, uk As Long, imaSta As Boolean
-    Dim tot(3 To 8) As Double
-    ReDim outA(1 To UBound(st, 1) + 1, 1 To 8)
+    Dim tot(3 To 9) As Double
+    ReDim outA(1 To UBound(st, 1) + 1, 1 To 9)
     For i = 1 To UBound(st, 1)
         Dim stID As String
         stID = Trim$(CStr(st(i, 1)))
@@ -2027,14 +2108,14 @@ Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
             uk = IzvUkupnoRed(r, 1)
             If uk > 0 Then
                 imaSta = False
-                For j = 2 To 7
+                For j = 2 To 8
                     If IzvNum(r(uk, j)) <> 0 Then imaSta = True
                 Next j
                 If imaSta Then
                     n = n + 1
                     outA(n, 1) = stID
                     outA(n, 2) = CStr(st(i, 2))
-                    For j = 3 To 8
+                    For j = 3 To 9
                         outA(n, j) = IzvNum(r(uk, j - 1))
                         tot(j) = tot(j) + IzvNum(outA(n, j))
                     Next j
@@ -2045,7 +2126,7 @@ Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
     If n = 0 Then Exit Function
 
     outA(n + 1, 2) = "UKUPNO"
-    For j = 3 To 8
+    For j = 3 To 9
         outA(n + 1, j) = tot(j)
     Next j
     ' Po nazivu stanice (DOC-SORT-01); UKUPNO ostaje poslednji.
@@ -2054,7 +2135,7 @@ Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
     For i = 1 To n
         kljuc(i) = IzvNazivKljuc(CStr(outA(i, 2)), CStr(outA(i, 1)))
     Next i
-    ReportSaldoOMZbirni = IzvIseciRedove(IzvSortTelo(outA, n, kljuc), n + 1, 8)
+    ReportSaldoOMZbirni = IzvIseciRedove(IzvSortTelo(outA, n, kljuc), n + 1, 9)
     Exit Function
 EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
