@@ -1663,7 +1663,7 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         If Len(sharedPal) > 0 Then
             outWarn = "BLOKIRANO: paleta " & sharedPal & " deli robu sa drugom prijemnicom (" & bpg & _
                       "). Promena identiteta (" & CStr(verdict(2)) & ") bi iskvarila i tu robu. " & _
-                      "Skini stavke ove prijemnice sa palete (Mod: Palete -> Skini stavke), pa unesi " & _
+                      "Skini palete ove prijemnice (Oporavak -> Osiroc. palete -> Skini palete), pa unesi " & _
                       "robu kao nov unos na ispravno oznacenu paletu."
             Exit Function
         End If
@@ -1696,7 +1696,7 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     For Each kk In oldGajbByKl.Keys
         If Not newById.Exists(kk) Then
             warnMsg = warnMsg & "Klasa " & kk & ": nova prijemnica nema tu klasu - stavke ostaju " & _
-                      "osirocene (skini ih: Osiroceni dokumenti -> Palete -> Skini stavke). "
+                      "osirocene (skini ih: Oporavak -> Osiroc. palete -> Skini palete). "
             outGajbDiff = True
         ElseIf NzL(oldGajbByKl(kk)) <> NzL(newGajb(kk)) Then
             warnMsg = warnMsg & "Klasa " & kk & ": gajbica staro=" & NzL(oldGajbByKl(kk)) & " novo=" & _
@@ -2098,6 +2098,49 @@ Public Function SkiniPaleteZaStornoPrijemnice(ByVal tx As clsTransaction, _
 
     Dim emptied As String
     SkiniPaleteZaStornoPrijemnice = SkiniPaletneStavke(s, rowsC, pid, SRC, emptied)
+End Function
+
+' "SKINI PALETE" IZ OPORAVKA (S8 rez 1b, PAL-ODL-05): skida aktivne paletne stavke
+' STORNIRANE prijemnice -- sirocad klase koju nova prijemnica nema -- u SOPSTVENOJ
+' transakciji, kroz isto telo kao storno prijemnice (preradjena paleta i stavka bez
+' palete obaraju ceo posao; prazna paleta se stornira tek po strogom brojacu, N8).
+' Prijemnica mora da postoji i da bude stornirana: palete aktivne prijemnice su
+' njena roba, ne sirocad. Vraca broj skinutih stavki; 0 uz outRazlog = odbijeno
+' ili nema sta da se skine.
+Public Function SkiniPaleteSirocadi_TX(ByVal prijemnicaID As String, ByRef outRazlog As String) As Long
+    Const SRC As String = "modPaletniList.SkiniPaleteSirocadi_TX"
+    Dim tx As clsTransaction, pid As String, st As String
+    outRazlog = ""
+    pid = Trim$(prijemnicaID)
+    If Len(pid) = 0 Then
+        outRazlog = "Red nema PrijemnicaID."
+        Exit Function
+    End If
+    If FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, pid).count <> 1 Then
+        outRazlog = "Prijemnica " & pid & " ne postoji ili nije jednoznacna."
+        Exit Function
+    End If
+    st = UCase$(Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, pid, COL_STORNIRANO))))
+    If st <> "DA" Then
+        outRazlog = "Prijemnica " & pid & " je aktivna -- njene palete nisu sirocad."
+        Exit Function
+    End If
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    SkiniPaleteSirocadi_TX = SkiniPaleteZaStornoPrijemnice(tx, pid, SRC)
+    tx.CommitTx
+    Set tx = Nothing
+    If SkiniPaleteSirocadi_TX = 0 Then outRazlog = "Prijemnica " & pid & " nema aktivnih paletnih stavki."
+    Exit Function
+EH:
+    outRazlog = Err.description
+    LogErr SRC
+    SkiniPaleteSirocadi_TX = 0
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
 End Function
 
 ' Razlog odbijanja storna zbog robe na PRERADJENOJ paleti (odluka 3), ili "" kad

@@ -10836,7 +10836,7 @@ iznad. Ovde je samo plan merenja:
 **Korak 3 — Oporavak (N9, `KI-056`, `PAL-ODL-05`, `S8R1A-REV-03`, B-030).**
 
 - **„Skini palete"** nad izabranim redom liste PALETE (po `PrijemnicaID` stornirane prijemnice):
-  - jezgro `SkiniPaleteCore` (javno, bez `MsgBox`-a, po obrascu `OdbaciIspravkuCore`) i UI omotač sa
+  - jezgro `modPaletniList.SkiniPaleteSirocadi_TX` (vlasnik tabela, bez `MsgBox`-a) i UI omotač sa
     potvrdom;
   - sopstvena transakcija kroz `SkiniPaleteZaStornoPrijemnice`, sa strogim brojačem iz koraka 1;
   - aktivna prijemnica i prerađena paleta se odbijaju po imenu.

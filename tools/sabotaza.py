@@ -9041,6 +9041,38 @@ SABOTAZE = {
         "T_S8R1b_PrevezivanjeTraziObaID",
         "311: razlog imenuje izvorni ID koji fali",
     ),
+    # S8 rez 1b (PAL-ODL-05): "Skini palete" skida samo sirocad STORNIRANE prijemnice.
+    "s8r1b-skini-aktivnu": (
+        "modPaletniList.bas",
+        "    If st <> \"DA\" Then\n",
+        "    If False Then   ' SABOTAZA: skida i palete aktivne prijemnice\n",
+        "T_S8R1b_SkiniPaleteJezgro",
+        "312: palete aktivne prijemnice se ne skidaju",
+    ),
+    # S8 rez 1b (N9): Nedovrseno deduplikuje po ID-u dokumenta, ne po broju.
+    "s8r1b-nedovrseno-po-broju": (
+        "modStornoRecovery.bas",
+        "            If Len(id) > 0 Then kljuc = \"ID|\" & id\n",
+        "            kljuc = b   ' SABOTAZA: dedup po broju\n",
+        "T_S8R1b_NedovrsenoPoIdentitetu",
+        "313: dva dokumenta istog broja sa osirotelim paletama daju dva reda",
+    ),
+    # S8 rez 1b (KI-056): potvrda imenuje dokument kad broj u listi nije jedinstven.
+    "s8r1b-potvrda-bez-dokumenta": (
+        "modScrOporavak.bas",
+        "    If n > 1 And Len(Trim$(prijemnicaID)) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: potvrda nosi samo broj\n",
+        "T_S8R1b_NedovrsenoPoIdentitetu",
+        "313: potvrda imenuje izabrani dokument kad broj nije jedinstven",
+    ),
+    # S8 rez 1b (S8R1A-REV-03): posle prevezivanja sa razlikom gajbi ide korekcija cilja.
+    "s8r1b-prevezi-bez-korekcije": (
+        "modScrOporavak.bas",
+        "        If gajbDiff Then\n",
+        "        If False Then   ' SABOTAZA: korekcija posle prevezivanja izostaje\n",
+        "T_S8R1b_PreveziPaleteJezgro",
+        "314: palete su na cilju i svedene na njegove gajbe",
+    ),
     # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
     "s8r1a-altf8-prvi-pogodak": (
         "modPaletniListUI.bas",

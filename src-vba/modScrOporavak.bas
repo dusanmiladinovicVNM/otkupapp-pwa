@@ -167,6 +167,9 @@ Public Function Scr_Radnje() As String
             Scr_Radnje = "prevezipri:OTKUI_BTN_OPO_PREVEZI:96:soft:1"
         Case "PALETE"
             Scr_Radnje = "prevezipal:OTKUI_BTN_OPO_PREVEZI:96:soft:1"
+            ' "Skini palete" (S8 rez 1b, PAL-ODL-05): izlaz za sirocad klase koju
+            ' nova prijemnica nema. MENJA podatke, pa nosi danger stil.
+            Scr_Radnje = Scr_Radnje & "|skinipal:OTKUI_BTN_OPO_SKINI:110:danger:1"
         Case "UNDO"
             ' "Vrati storno" MENJA podatke i tesko se poziva nazad, pa nosi
             ' danger stil - isto kao samo dugme storna.
@@ -310,6 +313,7 @@ Private Function OpoAkcija(ByVal tag As String) As Boolean
     Select Case p(0)
         Case "prevezipri": OpoAkcija = PreveziPrijemnicu(kljuc, IdentitetIzReda(red, 8))
         Case "prevezipal": OpoAkcija = PreveziPalete(kljuc, IdentitetIzReda(red, 7))
+        Case "skinipal":   OpoAkcija = SkiniPalete(kljuc, IdentitetIzReda(red, 7))
         Case "vrati":      OpoAkcija = VratiStorno(kljuc, red)
         Case "odbaci":     OpoAkcija = OdbaciIspravku(red)
         Case "ponovi":     OpoAkcija = PonoviLanac(red)
@@ -333,7 +337,7 @@ Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal prijemnicaID 
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_NEMA_ZBIRNE"), True
         Exit Function
     End If
-    If MsgBox(Poruka("OTKUI_ASK_OPO_PRI") & " " & brojPrij & " " & _
+    If MsgBox(Poruka("OTKUI_ASK_OPO_PRI") & " " & OpisIzvoraZaPotvrdu(brojPrij, prijemnicaID) & " " & _
               Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljZbirna & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
@@ -358,7 +362,7 @@ End Function
 ' umela, pa razlika u broju gajbica ne sme da bude kapija - prijavljuje se
 ' i koriguje u mestu (PaletaAdjustPrompt).
 Private Function PreveziPalete(ByVal brojPrij As String, ByVal prijemnicaID As String) As Boolean
-    Dim upoz As String, gajbDiff As Boolean
+    Dim upoz As String
     On Error GoTo EH
     If Len(mCiljPrijemnica) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_NEMA_PRIJ"), True
@@ -380,27 +384,91 @@ Private Function PreveziPalete(ByVal brojPrij As String, ByVal prijemnicaID As S
     ' Kapija nad dvosmislenim CILJEM vise nije ovde: ista provera sada stoji u
     ' samom writeru (VlasniciPoBroju / RequireJedanVlasnikPoBroju), pa vazi za
     ' SVAKOG pozivaoca, i za legacy formu. Ekran samo prikaze razlog.
-    If MsgBox(Poruka("OTKUI_ASK_OPO_PAL") & " " & brojPrij & " " & _
+    ' Potvrda imenuje dokument kad broj u listi nije jedinstven (KI-056): dva
+    ' reda istog broja su dva dokumenta, a radnja ide tacno po izabranom ID-u.
+    If MsgBox(Poruka("OTKUI_ASK_OPO_PAL") & " " & OpisIzvoraZaPotvrdu(brojPrij, prijemnicaID) & " " & _
               Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljPrijemnica & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
-    If ReassignPaleteToPrijemnica_TX(brojPrij, mCiljPrijemnica, upoz, True, gajbDiff, _
-                                     prijemnicaID, mCiljPrijemnicaID) Then
+    If PreveziPaleteCore(brojPrij, prijemnicaID, upoz) Then
         Scr_ResetCache
         MsgBox Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & " " & ChrW(8594) & _
-               " " & mCiljPrijemnica & _
-               IIf(Len(upoz) > 0, vbCrLf & vbCrLf & upoz, "") & _
-               IIf(gajbDiff, vbCrLf & vbCrLf & PaletaAdjustPrompt(mCiljPrijemnicaID, mCiljPrijemnica), ""), _
+               " " & mCiljPrijemnica & IIf(Len(upoz) > 0, vbCrLf & vbCrLf & upoz, ""), _
                vbInformation, APP_NAME
         PreveziPalete = True
     Else
-        LogRelinkFailure brojPrij, mCiljPrijemnica, upoz
         MsgBox Poruka("OTKUI_ERR_OPO_PAL") & vbCrLf & vbCrLf & upoz, vbExclamation, APP_NAME
     End If
     Exit Function
 EH:
     LogErr "modScrOporavak.PreveziPalete"
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+' JEZGRO "Prevezi palete" (S8 rez 1b): palete izabranog reda (PrijemnicaID
+' stornirane prijemnice) na izabrani cilj (mCiljPrijemnicaID), pa korekcija po ID-u
+' cilja -- SAMO kad je prevezivanje javilo razliku gajbi. Do 1b je korekcija
+' stajala u IIf, koji racuna obe grane, pa se zvala posle SVAKOG prevezivanja
+' (S8R1A-REV-03). Bez MsgBox-a potvrde, da bi se merilo; outInfo nosi poruke za
+' operatera (upozorenja prevezivanja, korekcija ili razlog neuspeha).
+Public Function PreveziPaleteCore(ByVal brojPrij As String, ByVal prijemnicaID As String, _
+                                  ByRef outInfo As String) As Boolean
+    Dim upoz As String, gajbDiff As Boolean
+    outInfo = ""
+    If ReassignPaleteToPrijemnica_TX(brojPrij, mCiljPrijemnica, upoz, True, gajbDiff, _
+                                     prijemnicaID, mCiljPrijemnicaID) Then
+        outInfo = upoz
+        If gajbDiff Then
+            outInfo = outInfo & IIf(Len(outInfo) > 0, vbCrLf & vbCrLf, "") & _
+                      PaletaAdjustPrompt(mCiljPrijemnicaID, mCiljPrijemnica)
+        End If
+        PreveziPaleteCore = True
+    Else
+        LogRelinkFailure brojPrij, mCiljPrijemnica, upoz
+        outInfo = upoz
+    End If
+End Function
+
+' "Skini palete" (S8 rez 1b, PAL-ODL-05): skida aktivne paletne stavke izabrane
+' STORNIRANE prijemnice -- izlaz za sirocad klase koju nova prijemnica nema, koji
+' su poruke prevezivanja i B-030 obecavale ("Skini stavke"), a koji od S6 koraka 7
+' nije postojao. Ekran samo potvrdjuje; pravilo i transakciju drzi vlasnik tabela
+' (modPaletniList.SkiniPaleteSirocadi_TX).
+Private Function SkiniPalete(ByVal brojPrij As String, ByVal prijemnicaID As String) As Boolean
+    Dim razlog As String, n As Long
+    On Error GoTo EH
+    If MsgBox(Poruka("OTKUI_ASK_OPO_SKINI") & " " & OpisIzvoraZaPotvrdu(brojPrij, prijemnicaID) & "?", _
+              vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Function
+    n = modPaletniList.SkiniPaleteSirocadi_TX(prijemnicaID, razlog)
+    If n > 0 Then
+        Scr_ResetCache
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_OPO_SKINUTO") & " " & brojPrij & " (" & n & ")", False
+        SkiniPalete = True
+    Else
+        MsgBox Poruka("OTKUI_ERR_OPO_SKINI") & vbCrLf & vbCrLf & razlog, vbExclamation, APP_NAME
+    End If
+    Exit Function
+EH:
+    LogErr "modScrOporavak.SkiniPalete"
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+' Izvor u potvrdi prevezivanja ili skidanja. Kad broj u ucitanoj listi nije
+' jedinstven (dva dokumenta istog broja, KI-056), uz broj ide vrsta, sorta i
+' PrijemnicaID, da operater vidi KOJI red je izabrao.
+Public Function OpisIzvoraZaPotvrdu(ByVal brojPrij As String, ByVal prijemnicaID As String) As String
+    Dim i As Long, n As Long
+    On Error Resume Next
+    OpisIzvoraZaPotvrdu = brojPrij
+    For i = 1 To modOtkupUI.GridBrojRedova()
+        If StrComp(Trim$(CStr(modOtkupUI.GridCell(i, 1))), Trim$(brojPrij), vbTextCompare) = 0 Then n = n + 1
+    Next i
+    If n > 1 And Len(Trim$(prijemnicaID)) > 0 Then
+        OpisIzvoraZaPotvrdu = brojPrij & " (" & _
+            Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_VRSTA))) & " " & _
+            Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_SORTA))) & ", " & _
+            Trim$(prijemnicaID) & ")"
+    End If
 End Function
 
 ' Vracanje storna. Cilja KONKRETNU operaciju po OperationID, ne poslednju po

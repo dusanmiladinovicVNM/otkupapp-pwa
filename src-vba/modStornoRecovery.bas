@@ -29,8 +29,14 @@ Private Const ERR_REC_BASE As Long = vbObjectError + 2900
 ' redu. Kljucevi: kind, ref (poslovni broj), status, opis, akcija (tekst), correctionID,
 ' docType, newBroj, mode, actionCode (CONTEXT | PRIJ | PAL | BLOK | LANAC -> UI
 ' dispecuje), otkupID (samo LANAC: identitet za radnju "Ponovi auto-lanac").
-' Dedup: osirocene se izostave ako isti poslovni broj vec nosi PENDING/MANUAL context
-' (isti problem se ne prikazuje dvaput).
+' Dedup PO IDENTITETU (S8 rez 1b, N9): osirocen red se izostavi samo kad PENDING/
+' MANUAL context nosi BAS njegov dokument (StorniraniDocID), ili kad je isti
+' dokument vec u listi. Do 1b se dedup radio po poslovnom BROJU, a broj nose
+' dokumenti vise kupaca (i zbirna i prijemnica imaju oblik x/ddmmyy): context
+' ispravke jednog kupca je sakrivao osirotele palete drugog kupca istog broja, a
+' drugi osiroteli dokument istog broja nije ni dolazio u listu. Kad pripadnost
+' nije dokaziva po ID-u, red se PRIKAZUJE -- isti problem dvaput je bezbedniji od
+' sakrivenog tudjeg.
 Public Function GetNedovrseno() As Collection
     Dim result As New Collection
     Set GetNedovrseno = result
@@ -50,19 +56,18 @@ Public Function GetNedovrseno() As Collection
                 CStr(c("message")), _
                 CStr(c("recoveryAction")), _
                 CStr(c("id")), CStr(c("oldDocType")), CStr(c("newBroj")), CStr(c("mode")), "CONTEXT"
-            ' brojevi koje context vec pokriva -> osirocene za njih preskoci (dedup).
-            If Len(oB) > 0 Then seen(oB) = True
-            If Len(CStr(c("newBroj"))) > 0 Then seen(CStr(c("newBroj"))) = True
-            If Len(CStr(c("parentBroj"))) > 0 Then seen(CStr(c("parentBroj"))) = True
+            ' dokument koji context pokriva -> njegov osiroceni red preskoci (dedup).
+            Dim oId As String: oId = StorniraniDocIDTiho(CStr(c("id")))
+            If Len(oId) > 0 Then seen("ID|" & oId) = True
         Next i
     End If
 
     ' 2) Osirocene - PER-STAVKA red (poslovni broj + akcija), deduplikovano protiv contexta.
     '    Akcija svih: "Osiroceni dokumenti" panel (postojeci re-point / skidanje).
-    AddOsiroceneRows result, GetOsirocenePrijemnice(), "OSIROCENA_PRIJEMNICA", 1, _
+    AddOsiroceneRows result, GetOsirocenePrijemnice(), "OSIROCENA_PRIJEMNICA", 1, 8, _
         "Prijemnica", "PRIJ", "Osiroceni dokumenti (prevezi prijemnicu)", seen
-    AddOsiroceneRows result, GetPrijemniceSaOsirocenimPaletama(), "OSIROCENE_PALETE", 1, _
-        "Prijemnica (palete)", "PAL", "Osiroceni dokumenti (Mod: Palete)", seen
+    AddOsiroceneRows result, GetPrijemniceSaOsirocenimPaletama(), "OSIROCENE_PALETE", 1, 7, _
+        "Prijemnica (palete)", "PAL", "Osiroceni dokumenti (prevezi ili skini palete)", seen
     ' 3) Izgubljeni blokovi (B-041) -- KANON, ne stara veza.
     AddIzgubljeniBlokovi result
     ' 4) Nedovrseni hladnjacki lanci (S6 korak 7, odluka 8).
@@ -205,19 +210,24 @@ Private Sub AddNedRowFull(ByRef col As Collection, ByVal kind As String, ByVal r
     col.Add d
 End Sub
 
-' Prosiri osirocene (2D niz iz Get*-funkcija) u pojedinacne redove. brojCol = 1-based
-' kolona sa poslovnim brojem. Preskace broj koji je vec u `seen` (context dedup + interni).
+' Prosiri osirocene (2D niz iz Get*-funkcija) u pojedinacne redove. brojCol /
+' idCol = 1-based kolone sa poslovnim brojem (labela) i PrijemnicaID-om
+' (identitet). Preskace DOKUMENT koji je vec u `seen` (context dedup + interni),
+' po ID-u; red bez ID-a se ne deduplikuje.
 Private Sub AddOsiroceneRows(ByRef result As Collection, ByVal v As Variant, ByVal kind As String, _
-                             ByVal brojCol As Long, ByVal docLabel As String, ByVal actionCode As String, _
-                             ByVal akcija As String, ByRef seen As Object)
+                             ByVal brojCol As Long, ByVal idCol As Long, ByVal docLabel As String, _
+                             ByVal actionCode As String, ByVal akcija As String, ByRef seen As Object)
     On Error GoTo done
     If Not Is2DArray(v) Then Exit Sub
     Dim r As Long
     For r = 1 To UBound(v, 1)
         Dim b As String: b = Trim$(CStr(v(r, brojCol)))
+        Dim id As String: id = Trim$(CStr(v(r, idCol)))
         If Len(b) > 0 Then
-            If Not seen.Exists(b) Then
-                seen(b) = True
+            Dim kljuc As String: kljuc = ""
+            If Len(id) > 0 Then kljuc = "ID|" & id
+            If Len(kljuc) = 0 Or Not seen.Exists(kljuc) Then
+                If Len(kljuc) > 0 Then seen(kljuc) = True
                 AddNedRowFull result, kind, b, "OSIROCENO", docLabel & " " & b & " -- ceka doradu", _
                     akcija, "", docLabel, "", "", actionCode
             End If
@@ -225,6 +235,14 @@ Private Sub AddOsiroceneRows(ByRef result As Collection, ByVal v As Variant, ByV
     Next r
 done:
 End Sub
+
+' ID storniranog dokumenta iz contexta; prazno kad ga context ne nosi ili citanje
+' padne. Prazno znaci "context ne pokriva nijedan osiroceni red" -- red se tada
+' prikazuje (fail-visible), umesto da greska obori celu listu Nedovrseno.
+Private Function StorniraniDocIDTiho(ByVal cid As String) As String
+    On Error Resume Next
+    StorniraniDocIDTiho = Trim$(modStornoDok.StorniraniDocID(cid))
+End Function
 
 Private Function Is2DArray(ByVal v As Variant) As Boolean
     On Error GoTo no
