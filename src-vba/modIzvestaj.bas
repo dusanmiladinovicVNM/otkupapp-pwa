@@ -706,6 +706,28 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
     Set koopAmbDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT, True, datumDo, _
                                                    AMB_NALOG_STANICA, Trim$(stanicaID))
 
+    ' --- Kooperant koji DRZI gajbe prema ovoj stanici ulazi u pregled i bez
+    ' finansijskog dogadjaja u periodu (AMB457-REV-01). Skup redova je do sada
+    ' bio samo otkup + novac PERIODA, a AMB je stanje NA DAN -- pa je kooperant
+    ' sa izdatim gajbama a bez otkupa/isplate u periodu ispadao iz UKUPNO AMB
+    ' (stanica izdala 8 od 20: UKUPNO 12 umesto 20). Dodaje se POSLE agro prolaza,
+    ' pa takav red nosi nule u kg, novcu i agro: finansijski brojevi i njihov
+    ' opseg ostaju isti. Saldo 0 ne pravi red (nema sta da se prikaze).
+    Dim dictKljuc As Object, ak As Variant
+    Set dictKljuc = CreateObject("Scripting.Dictionary")
+    dictKljuc.CompareMode = vbTextCompare
+    For Each ak In dict.keys
+        dictKljuc(Trim$(CStr(ak))) = True
+    Next ak
+    For Each ak In koopAmbDict.keys
+        If CLng(koopAmbDict(ak)) <> 0 Then
+            If Not dictKljuc.Exists(Trim$(CStr(ak))) Then
+                dict.Add CStr(ak), Array(0#, 0#, 0#)
+                dictKljuc(Trim$(CStr(ak))) = True
+            End If
+        End If
+    Next ak
+
     ' --- Fizicko stanje STANICE na datumDo (AMB-POSL-04, odluka 03.11.2026).
     '
     ' UKUPNO kolone Ambalaza = koliko firminih gajbi je "u krugu" otkupnog mesta:

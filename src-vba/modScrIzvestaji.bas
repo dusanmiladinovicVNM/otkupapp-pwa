@@ -45,8 +45,10 @@ Attribute VB_Name = "modScrIzvestaji"
 ' IZUZETAK je red "Stanje OM" na listi Saldo po OM (AMB-POSL-04): njegova
 ' brojka se SABIRA u kolonu AMB (UKUPNO = stanica + kooperanti, isti broj kao
 ' red stanice zbirno), pa mora biti u mrezi i na papiru. Ostale celije mu idu
-' kao PRAZAN STRING, koji ljuska i stampa crtaju prazno -- ne "0,00". Kao
-' POCETNO STANJE, red je red konteksta: pod filterom/pretragom se ne prikazuje.
+' kao PRAZAN STRING u kolonama koje to izricito dozvoljavaju (sesto polje opisa
+' "prazno"), pa ih ljuska i stampa crtaju prazno -- ne "0,00"; u svakoj drugoj
+' brojcanoj koloni prazan string ostaje kvar prikaza. Kao POCETNO STANJE, red je
+' red konteksta: pod filterom/pretragom se ne prikazuje.
 '
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================
@@ -798,15 +800,17 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                 ' Red Stanje OM (AMB-POSL-04) nosi samo Amb; ostale celije su
                 ' prazne, a kolona Amb se sabira u isti broj kao red stanice zbirno.
                 ' Prioritet 1 (ne 3): na uskom ekranu se prvi sklanja AGRO, ne AMB.
+                ' "prazno" (sesto polje): te kolone DOZVOLJAVAJU namerno praznu celiju
+                ' (red Stanje OM); AMB ne -- tamo je prazno i dalje kvar prikaza.
                 IzKoloneZaListu = Array( _
                     "OTKUI_HDA_KOOPERANT||txt|130|1", _
-                    "OTKUI_HD_KG||kg|82|1", _
-                    "OTKUI_HD_VREDNOST||rsd|92|1", _
-                    "OTKUI_HDI_ISPLACENO||rsd|92|1", _
-                    "OTKUI_HDI_AGRO||rest|82|2", _
-                    "OTKUI_HDI_SALDO||rsd|92|1", _
+                    "OTKUI_HD_KG||kg|82|1|prazno", _
+                    "OTKUI_HD_VREDNOST||rsd|92|1|prazno", _
+                    "OTKUI_HDI_ISPLACENO||rsd|92|1|prazno", _
+                    "OTKUI_HDI_AGRO||rest|82|2|prazno", _
+                    "OTKUI_HDI_SALDO||rsd|92|1|prazno", _
                     "OTKUI_HDI_AMB_OM||num|80|1", _
-                    "OTKUI_HDI_DOPLATA||rsd|88|1")
+                    "OTKUI_HDI_DOPLATA||rsd|88|1|prazno")
             End If
         Case IZ_ROBA
             If tip = "OM" Then
@@ -2823,10 +2827,12 @@ End Sub
 Private Function CelijaZaStampu(ByVal spec As String, ByVal v As Variant) As String
     Dim kind As String
     kind = Split(spec, "|")(2)
-    ' Prazan string = nema podatka (red Stanje OM, AMB-POSL-04) -- isto pravilo
-    ' kao CelijaTekst u mrezi; nula bi i na papiru bila "0,00".
-    If VarType(v) = vbString Then
-        If Len(v) = 0 Then Exit Function
+    ' Prazan string = nema podatka, ali SAMO u koloni koja to dozvoljava (red
+    ' Stanje OM, AMB-POSL-04) -- isto pravilo kao CelijaTekst u mrezi.
+    If modOtkupUI.CelijaPraznoDozvoljeno(spec) Then
+        If VarType(v) = vbString Then
+            If Len(v) = 0 Then Exit Function
+        End If
     End If
     Select Case kind
         Case "date"
