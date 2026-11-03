@@ -20,7 +20,9 @@
     "",
     "PR3: cilj za tblZbirna je SAMO modDokumenta. modDokumentInvariant racuna i validira, ali ne pise -- RecalculateZbirna_TX zivi u modDokumenta i prima izracunat rezultat (v. DOCUMENT_HEADER_LINES S4.3).",
     "",
-    "PR #320: baseline prosiren za tblPrerada i tblPreradaStavka jer je MUTATE_RE do tada trazio granicu reci pred imenom mutatora, pa mu je lokalni omotac modPaletniList.PalAppendRow bio nevidljiv. Mapa je zbog toga tvrdila da te dve tabele pise samo test. Dodati pisci nisu novi -- bili su neizmereni, isto kao u PR3."
+    "PR #320: baseline prosiren za tblPrerada i tblPreradaStavka jer je MUTATE_RE do tada trazio granicu reci pred imenom mutatora, pa mu je lokalni omotac modPaletniList.PalAppendRow bio nevidljiv. Mapa je zbog toga tvrdila da te dve tabele pise samo test. Dodati pisci nisu novi -- bili su neizmereni, isto kao u PR3.",
+    "",
+    "Doplata (docs/DOMEN/DOPLATA.md, DOP-04): tblDoplata i tblDoplataStavke su NOVE tabele, pa im je cilj zapisan odmah. Nastanak pise samo modDoplata (KnjiziDoplatu_TX); storno zaglavlja pise modStorno (StornoDoplata), kao kod ostalih dokumenata. Stavka nema storno (BEZ_STORNA) -- prati zaglavlje."
   ],
   "tblAmbalaza": {
     "row_owner": [
@@ -62,6 +64,26 @@
     ],
     "schema_owner": [],
     "cilj": []
+  },
+  "tblDoplata": {
+    "row_owner": [
+      "modDoplata",
+      "modStorno"
+    ],
+    "schema_owner": [],
+    "cilj": [
+      "modDoplata",
+      "modStorno"
+    ]
+  },
+  "tblDoplataStavke": {
+    "row_owner": [
+      "modDoplata"
+    ],
+    "schema_owner": [],
+    "cilj": [
+      "modDoplata"
+    ]
   },
   "tblFakturaStavke": {
     "row_owner": [

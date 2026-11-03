@@ -1,8 +1,9 @@
 # Doplata kooperantu — knjižno odobrenje po kulturi i klasi
 
-> **Status (03.11.2026):** odluke operatera u §2 su donete. Struktura dokumenta u
-> §3 je **PREDLOG koji čeka potvrdu**. Kod ne postoji; do potvrde §3 i stavki iz
-> §8 nema produkcionog koda (pre-flight: `DOMAIN` / `CARDINALITY` su još `GAP`).
+> **Status (03.11.2026):** odluke operatera u §2 su donete, struktura iz §3 je
+> **potvrđena**. **F1 (šema, pisac, storno, testovi) je u kodu** — statičke
+> provere zelene, ponašanje **NEVERIFIKOVANO** dok `run_vba` ne prođe na Windows +
+> Excel (§7). F2–F4 još nisu počeli. Otvoreno: §8.
 
 ## 1) Šta je doplata
 
@@ -28,60 +29,61 @@ Odbačene alternative:
 | Podići `Cena` na stavkama otkupa | menja već odštampan otkupni list i hladnjačku prijemnicu; nije „jedan unos" |
 | Red u `tblNovac` | `Tip` u `tblNovac` nosi **kanal plaćanja** (`modConfig.bas`, „Novac Tipovi"); doplata je obaveza, ne novac — svaki čitač uplata/isplata bi morao da je isključuje |
 
-## 2) Odluke operatera (03.11.2026)
+## 2) Odluke operatera
 
 | ID | Odluka |
 |---|---|
 | **DOP-ODL-01** | Stopa je **din/kg**. Iznos stavke = `ZaokruziNovac(kg × stopa)`. Bez PDV nadoknade — knjižno odobrenje. |
 | **DOP-ODL-02** | Ključ kulture je **ključ cenovnika**: `VrstaVoca + SortaVoca + Klasa`, tačno poklapanje kao `modCenovnik.GetVazecaCena` (trim, bez razlike u veličini slova). Prazna sorta znači **kultura bez sorte**, ne „sve sorte". |
-| **DOP-ODL-03** | Obuhvat: **svi aktivni otkupi** — sva otkupna mesta, uključujući hladnjačke blokove. Period po datumu otkupa (od–do) je **tumačenje koje treba potvrditi** (§8). |
+| **DOP-ODL-03** | Obuhvat: **svi aktivni otkupi** — sva otkupna mesta, uključujući hladnjačke blokove — u periodu **od–do po datumu otkupa**. |
+| **DOP-ODL-03a** | Period ima i **sat** (odluka 03.11.2026). Dan je `Datum` dokumenta; sat je vreme nastanka po pravilu otkupnog lista (`modOtkup.OtkupVremeNastanka`: `SourceCreatedAt`, pa `CreatedAt`). Sat se gleda **samo kad granica seče dan** (Od posle 00:00 prvog dana, Do pre 23:59 poslednjeg). Obe granice su uključene, na minut. Kad `SourceCreatedAt` postoji a nije vreme (PWA ISO tekst), sat je **nepoznat** — ne uzima se `CreatedAt`, jer je to za PWA red trenutak sinhronizacije — i otkup na graničnom danu obara obračun po imenu (§8, stavka 1). |
 | **DOP-ODL-04** | Datum zaduženja = **datum knjiženja** doplate. Na kartici kooperanta: **jedan red po kooperantu** po obračunu. |
-| **DOP-ODL-05** | Doplata se **isplaćuje kroz postojeće naloge za banku** i automatsko mapiranje izvoda (faza F4). |
-| **DOP-ODL-06** | **Ponovljena doplata** nad istim ključem i preklopljenim periodom je **dozvoljena**, uz upozorenje koje imenuje raniji obračun i izričitu potvrdu operatera. |
-| **DOP-ODL-07** | Knjižena doplata je **snimak**: ne prati kasniji storno ili ispravku otkupa. Promena osnovice je **signal** (integritet / Oporavak), ne automatska prepravka. Ispravka = storno odobrenja + nov obračun (obrazac ZBR-KANON-03). |
+| **DOP-ODL-05** | Doplata se **isplaćuje kroz postojeće naloge za banku** i automatsko mapiranje izvoda (faza F4). Gotovinska isplata KO ide na **matičnu stanicu** kooperanta (`tblKooperanti.StanicaID`), i kad KO ima stavke na više stanica. |
+| **DOP-ODL-06** | **Ponovljena doplata** nad istim ključem i preklopljenim periodom je **dozvoljena**, uz upozorenje koje imenuje raniji KO i izričitu potvrdu operatera. |
+| **DOP-ODL-07** | Knjižena doplata je **snimak**: ne prati kasniji storno ili ispravku otkupa. Promena osnovice je **signal** (integritet / Oporavak, faza F3), ne automatska prepravka. Ispravka = storno KO + nov obračun (obrazac ZBR-KANON-03). |
 | **DOP-ODL-08** | Izveštaj **Prosečna cena** se ne menja. |
+| **DOP-ODL-09** | Broj KO je **`KO-<n>/<godina>`**, niz po godini datuma knjiženja, preko svih KO (i storniranih — storno ne oslobađa broj, A9). |
+| **DOP-ODL-10** | *Predlog uz F1, operater ga može oboriti:* kraj perioda nije u budućnosti; datum knjiženja nije pre poslednjeg dana perioda ni posle današnjeg; svaka stopa mora da pogodi bar jedan aktivan otkup (tipfeler u sorti ne sme da da doplatu nula za ceo ključ); prazan obračun se ne knjiži. |
+| **DOP-ODL-11** | Kooperantu se **štampa KO** (odluka 03.11.2026) — faza F3. |
 
-## 3) Struktura dokumenta — PREDLOG, čeka potvrdu
+## 3) Struktura dokumenta (potvrđena 03.11.2026)
 
 **Jedno knjižno odobrenje (KO) po kooperantu.** Globalni unos je **obračun**,
 koji u jednoj transakciji pravi po jedan KO za svakog kooperanta sa kg > 0.
 
-Zašto po kooperantu, a ne jedan dokument sa svim kooperantima:
-
-- knjižno odobrenje je dokument prema **jednom partneru**;
-- jedan red na kartici = jedan dokument, isto kao red otkupa (`OTK|<OtkupID>`);
-- isplata: **poziv na broj = broj KO**, isto kao broj bloka kod otkupa — jedan
-  kooperant, jedan broj, bez para „dokument + kooperant";
-- storno pogrešno obuhvaćenog kooperanta ne obara ostale.
-
-| Tabela | Kolone (nove tabele; postojeće se u F1 ne diraju) |
+| Tabela | Kolone (kanon: `schema/schema.json`) |
 |---|---|
 | `tblDoplata` (zaglavlje = jedan KO) | DoplataID, BrojDokumenta, Datum, KooperantID, ObracunID, PeriodOd, PeriodDo, Napomena, Stornirano, CreatedAt, CreatedBy, ModifiedAt, ModifiedBy |
-| `tblDoplataStavke` | DoplataStavkaID, DoplataID, StanicaID, VrstaVoca, SortaVoca, Klasa, Kolicina, Cena, Iznos, CreatedAt, CreatedBy, ModifiedAt, ModifiedBy |
+| `tblDoplataStavke` | DoplataStavkaID, DoplataID, RedniBroj, StanicaID, VrstaVoca, SortaVoca, Klasa, Kolicina, Cena, Iznos, CreatedAt, CreatedBy, ModifiedAt, ModifiedBy |
 
 - **Kardinalnost:** 1 obračun : N KO (jedan po kooperantu) ; 1 KO : M stavki
   (stanica × vrsta × sorta × klasa). Kooperant koji je predavao na dva otkupna
   mesta ima **jedan** KO sa stavkama po stanici; Saldo OM čita stavke svoje stanice.
-- **Identitet:** `DoplataID` je kanon; `BrojDokumenta` je labela. Niz po godini sa
-  **slovnim prefiksom** (npr. `KO-17/2026`): `NormalizePozivKey`
-  (`modBankaMapiranje`) zadržava slova i cifre, pa prefiks drži poziv na broj
-  odvojen od brojeva otkupa. Proveriti u F4 nad svim nizovima koje banka razrešava.
-- **`ObracunID`** je zajednički ključ jednog globalnog unosa (obrazac
+- **Identitet:** `DoplataID` (`DOP-…`) je kanon; `BrojDokumenta` je labela.
+  `BrojDokumenta` je pod ugovorom formata `text`, kao u svim tabelama koje ga imaju.
+  Slovni prefiks `KO-` drži poziv na broj odvojen od brojeva otkupa:
+  `NormalizePozivKey` (`modBankaMapiranje`) zadržava slova i cifre. Proveriti u
+  F4 nad svim nizovima koje banka razrešava.
+- **`ObracunID`** (`DOB-…`) je zajednički ključ jednog globalnog unosa (obrazac
   `GeneracijaID`) — za pregled i za storno celog obračuna. Nije zasebna tabela.
 - **Stope** ne idu u `tblCenovnik` i nisu treći model cene
   (`.claude/rules/agrohemija-i-cene.md`): žive samo na stavkama dokumenta.
-- **Kartica:** red nosi opis sa razlaganjem („Doplata Malina Willamette I
+- **Kartica (F2):** red nosi opis sa razlaganjem („Doplata Malina Willamette I
   1.250 kg × 10") i ref-ključ `DOP|<DoplataID>` za „Detalje", kao red otkupa.
 
-## 4) Invarijante (planirane; vlasnik = `modDoplata` + test u `modTest`)
+## 4) Invarijante i vlasnici
 
-| ID | Pravilo |
-|---|---|
-| **DOP-01** | Doplata ne nosi robu: ne ulazi ni u jedan kg zbir (rekap robe, otpremnica, zbirna, prosečna cena, PWA roba). |
-| **DOP-02** | `Iznos` stavke = `ZaokruziNovac(Kolicina × Cena)`; iznos KO = zbir stavki. `Kolicina` = zbir aktivnih `tblOtkupStavke` tog kooperanta, stanice i ključa u periodu, u trenutku knjiženja (čitač `modOtkup.StavkeOtkupaRedovi`, ne nov). |
-| **DOP-03** | Storno nije brisanje: `tblDoplata` u `STORNO_TABELE`, `tblDoplataStavke` u `BEZ_STORNA` (stavka prati zaglavlje). Storniran KO izlazi iz svih salda. |
-| **DOP-04** | Jedan pisac: samo `modDoplata` piše obe tabele (`WRITE_OWNERSHIP.json`, A11). |
-| **DOP-05** | (F4) Novac vezan za KO se pri stornu KO **odvezuje, ne stornira** — isto pravilo kao kod otkupa (`ODLUKA_NOVAC_PRI_STORNU.md`). |
+| ID | Pravilo | Vlasnik (kod · test) |
+|---|---|---|
+| **DOP-01** | Doplata ne nosi robu: ne ulazi ni u jedan kg zbir; cena na stavkama otkupa se ne menja. | `modDoplata` ne piše `tblOtkup*` · 309 („plan ne piše"), 310 („cena na stavkama otkupa ostaje netaknuta") |
+| **DOP-02** | `Iznos` stavke = `ZaokruziNovac(Kolicina × Cena)`; `Kolicina` = zbir aktivnih `tblOtkupStavke` tog kooperanta, stanice i ključa u periodu, u trenutku knjiženja (čitač `modOtkup.StavkeOtkupaRedovi`, ne nov). | `modDoplata.DoplataPlan` · 309, 311 |
+| **DOP-03** | Storno nije brisanje: `tblDoplata` je u `STORNO_TABELE`, `tblDoplataStavke` u `BEZ_STORNA` (stavka prati zaglavlje). Storniran KO izlazi iz svih zbirova; broj ostaje zauzet. | `modStorno.StornoDoplata_TX` / `StornoObracunDoplate_TX`, čitač `modDoplata.DoplataStavkeRedovi` · 313 |
+| **DOP-04** | Pisci: nastanak samo `modDoplata` (`KnjiziDoplatu_TX`, obe tabele); storno zaglavlja `modStorno`, kao kod ostalih dokumenata. | `WRITE_OWNERSHIP.json` (A11), `who_writes.py --check-ownership` |
+| **DOP-05** | (F4) Novac vezan za KO se pri stornu KO **odvezuje, ne stornira** — isto pravilo kao kod otkupa (`ODLUKA_NOVAC_PRI_STORNU.md`). | F4 |
+| **DOP-06** | Jedan KO po kooperantu po obračunu; brojevi uzastopni u nizu godine. | `modDoplata.KnjiziPlan` · 310 |
+
+**Prikaz i pisac dele jedan plan** (obrazac `BimAutoPlan`): `DoplataPlan` računa
+stavke bez upisa, ekran ga prikazuje (F3), `KnjiziDoplatu_TX` ga izvršava.
 
 ## 5) Poslovni događaji
 
@@ -96,12 +98,12 @@ odobrenja (DOP-ODL-04), ne zbog lakše implementacije.
 
 ## 6) Nizvodno — ko čita činjenicu
 
-| Čitač | Promena | Gde se vidi |
-|---|---|---|
-| `modIzvestaj.ReportKarticaKooperanta` | nov izvor zaduženja; ulazi i u početno stanje; nov rang izvora u `KarticaIzvorRang` (KART-HRON-01) | ekran kartice, PDF po šablonu, PWA `getKartica` |
-| `modIzvestaj.ReportSaldoOM`, `ReportSaldoOMZbirni` | nova kolona „Doplata", ulazi u saldo | tabelarni PDF |
-| `modStammdatenSync.OtkupSaldoPoKooperantu` / `ExportSaldoOMDetail` | doplata u vrednost | PWA saldo |
-| F4: otvorene obaveze (`modNovac.GetOpenOtkupi` ili njegov par za KO), `modBankaExportPregled`, `ValidateNalogSaldo`, `BimAutoPlan` + resolver po broju KO | KO kao otvorena obaveza; `tblNovac` dobija kolonu `DoplataID` **na kraju** | nalozi za banku, specifikacija isplata (PDF), uvoz izvoda |
+| Čitač | Promena | Gde se vidi | Faza |
+|---|---|---|---|
+| `modIzvestaj.ReportKarticaKooperanta` | nov izvor zaduženja; ulazi i u početno stanje; nov rang izvora u `KarticaIzvorRang` (KART-HRON-01) | ekran kartice, PDF po šablonu, PWA `getKartica` | F2 |
+| `modIzvestaj.ReportSaldoOM`, `ReportSaldoOMZbirni` | nova kolona „Doplata", ulazi u saldo | tabelarni PDF | F2 |
+| `modStammdatenSync.OtkupSaldoPoKooperantu` / `ExportSaldoOMDetail` | doplata u vrednost | PWA saldo | F2 |
+| otvorene obaveze (`modNovac.GetOpenOtkupi` ili njegov par za KO), `modBankaExportPregled`, `ValidateNalogSaldo`, `BimAutoPlan` + resolver po broju KO | KO kao otvorena obaveza; `tblNovac` dobija kolonu `DoplataID` **na kraju** | nalozi za banku, specifikacija isplata (PDF), uvoz izvoda | F4 |
 
 **Ne menja se:** `ReportIsplata*`, `ReportKarticaRobaRekap`, `ReportProsecnaCena`,
 otkupni list, lanac dokumenata.
@@ -112,22 +114,40 @@ Storno, PWA `pregled.js`.
 
 ## 7) Faze
 
-1. **F1 — šema i pisac.** `schema/schema.json` → `gen_schema_module.py`;
-   `modSchemaGuard` (storno registar); `WRITE_OWNERSHIP.json`; `modDoplata`
-   (obračun, knjiženje u jednoj TX, storno); testovi.
+1. **F1 — šema, pisac, storno, testovi. U KODU (03.11.2026).**
+   - `schema/schema.json` (+ `modSchema` regenerisan); `modConfig` (`TBL_DOPLATA*`,
+     `COL_DOP*`, `DOP_BROJ_PREFIKS`); `modSchemaGuard` (storno registar);
+     `WRITE_OWNERSHIP.json`; `WHO_WRITES.md` regenerisan.
+   - `modDoplata`: `DoplataPlan`, `DoplataPreklapanja`, `KnjiziDoplatu_TX`,
+     `DoplataStavkeRedovi`, `AktivneDoplateObracuna`, `BrojKO`, `PoslednjiBrojKO`.
+   - `modStorno`: `StornoDoplata_TX`, `StornoDoplata`, `StornoObracunDoplate_TX`.
+   - `modOtkup`: `OtkupVremeNastanka` (pravilo sata, sada jedno za štampu i
+     doplatu — `modPrint.FillOtkupSablon` ga zove, ponašanje štampe isto);
+     `RequireValidOtkupClass` je `Public`.
+   - `modTest` 309–314 (`T_Doplata_*`), sabotaže `dop-*` u `tools/sabotaza.py`.
+   - Nove tabele pravi `EnsureAllTables` pri startu (`modMain.StartApp`).
 2. **F2 — čitaoci.** Kartica, Saldo OM (pojedinačno i zbirno), PWA izvoz.
-3. **F3 — ekran.** Nov ekran u ljusci `frmOtkupUI` (runtime kontrole, bez novih
-   `WithEvents`): period, tabela stopa, pregled, „Knjiži"; vidljivost na ekranu Storno.
-4. **F4 — isplata.** Nalozi za banku, automatsko mapiranje izvoda, `tblNovac.DoplataID`.
+3. **F3 — ekran i papir.** Nov ekran u ljusci `frmOtkupUI` (runtime kontrole, bez
+   novih `WithEvents`): period sa satom, tabela stopa, pregled plana sa
+   „stope bez otkupa", potvrda ponavljanja, „Knjiži"; štampa KO (DOP-ODL-11);
+   vidljivost na ekranu Storno; signal promene osnovice (DOP-ODL-07) u Oporavku.
+4. **F4 — isplata.** Nalozi za banku, automatsko mapiranje izvoda,
+   `tblNovac.DoplataID`, gotovina na matičnoj stanici (DOP-ODL-05).
 
 **Spuštanje je serijsko:** F1 i F4 diraju centralne registre (`schema.json`,
-`modSchemaGuard`, `WRITE_OWNERSHIP.json`). Pre F1 proveriti otvorene grane koje
-menjaju iste fajlove (03.11.2026 otvoren je plan S8 paleta, PR #456 — docs).
+`modSchemaGuard`, `WRITE_OWNERSHIP.json`, brojevi testova u `modTest`). Na dan
+F1 otvoren je plan S8 paleta (PR #456, samo docs); grana koja posle doda testove
+od 309 nadalje sudara se sa ovom.
 
-## 8) Otvoreno — čeka operatera
+## 8) Otvoreno
 
-1. Potvrda strukture iz §3 (KO po kooperantu + `ObracunID`).
-2. Period: da li obračun bira period od–do po datumu otkupa, ili uvek obuhvata sve otkupe do dana knjiženja (DOP-ODL-03).
-3. Format broja KO (predlog `KO-<n>/<godina>`).
-4. F4: kooperant čiji KO ima stavke na dva otkupna mesta, a isplaćuje se gotovinom na otkupnom mestu — kojoj stanici ide isplata.
-5. Da li kooperantu treba odštampan KO. Nije traženo: zahtev je prikaz u postojećim PDF izveštajima.
+1. **⚠ PLATFORM UNKNOWN — sat PWA otkupa.** PWA piše `CreatedAtClient` kao
+   `new Date().toISOString()` (UTC, npr. `2026-11-02T07:00:00.000Z`), a uvoz ga
+   prenosi u `SourceCreatedAt` kao tekst (`modMasterSync`, `GS_CREATED_AT`). Ako
+   VBA `IsDate` taj oblik ne prihvata — što se očekuje, ali **nije izmereno** —
+   štampa otkupnog lista za PWA otkup danas pokazuje vreme **sinhronizacije**
+   (`CreatedAt`), a doplata takav otkup na graničnom danu odbija (DOP-ODL-03a).
+   Test 311 to meri; sonda nad pravom sveskom je u izveštaju uz F1. Ako se
+   potvrdi, odluka je operaterova: parsirati ISO + UTC → lokalno vreme u
+   `OtkupVremeNastanka` (popravlja i štampu), ili ostaviti granice na celim danima.
+2. DOP-ODL-10 je predlog — potvrditi ili oboriti.

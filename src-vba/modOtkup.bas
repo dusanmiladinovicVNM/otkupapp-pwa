@@ -2059,6 +2059,21 @@ End Function
 ' Mrtav citac mrtve kolone -- brise se, ne prepisuje. Saldo po stanici, kad
 ' zatreba, ide iz stavki i tblNovac, ne iz zaglavlja.
 
+' VREME NASTANKA OTKUPA -- jedno pravilo, dva citaoca: stampa otkupnog lista
+' (modPrint.FillOtkupSablon, "Vreme:") i period doplate (modDoplata).
+' SourceCreatedAt (vreme na terenu, PWA) ima prednost nad CreatedAt (vreme
+' upisa na desktopu), v. DOCUMENT_HEADER_LINES S4.1c. Vraca Date ili Empty kad
+' nijedno nije vreme. Dan dokumenta je uvek Datum -- ovo daje samo sat.
+Public Function OtkupVremeNastanka(ByVal sourceCreatedAt As Variant, _
+                                   ByVal createdAt As Variant) As Variant
+    OtkupVremeNastanka = Empty
+    If IsDate(sourceCreatedAt) Then
+        OtkupVremeNastanka = CDate(sourceCreatedAt)
+    ElseIf IsDate(createdAt) Then
+        OtkupVremeNastanka = CDate(createdAt)
+    End If
+End Function
+
 Private Sub PrintOtkupTxFailure(ByVal sourceName As String, _
                                 ByVal errSrc As String, _
                                 ByVal errNum As Long, _
@@ -2068,8 +2083,10 @@ Private Sub PrintOtkupTxFailure(ByVal sourceName As String, _
                 " Desc=" & errDesc
 End Sub
 
-Private Sub RequireValidOtkupClass(ByVal klasa As String, _
-                                   ByVal sourceName As String)
+' Public od doplate: kljuc stope doplate je kljuc cenovnika, a klasa je ista
+' klasa otkupa (modDoplata.UcitajStope). Druga kopija bi se razisla.
+Public Sub RequireValidOtkupClass(ByVal klasa As String, _
+                                  ByVal sourceName As String)
 
     Select Case Trim$(CStr(klasa))
         Case KLASA_I, KLASA_II

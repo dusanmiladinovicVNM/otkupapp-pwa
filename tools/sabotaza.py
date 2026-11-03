@@ -11189,6 +11189,79 @@ SABOTAZE = {
         "T_ODL39_PapirVracanjaKupcu",
         "prva i ponovljena stampa vracanja kupcu nose isti sadrzaj: bez reda Vrsta voca",
     ),
+    # --- DOPLATA KOOPERANTU, F1 (docs/DOMEN/DOPLATA.md; testovi 309-314) ---
+    # Plan cita i stornirana zaglavlja: storniran otkup od 100 kg dobija doplatu.
+    "dop-plan-storniran-ulazi": (
+        "modDoplata.bas",
+        "    d = ExcludeStornirano(d, TBL_OTKUP)\n",
+        "    d = d   ' SABOTAZA: storniran otkup ulazi u doplatu\n",
+        "T_Doplata_PlanSabiraPoKljucu",
+        "plan: jedna stavka po kooperantu, stanici i klasi; storniran otkup i sorta van stopa ne ulaze",
+    ),
+    # Pisac otvara KO za svaku stavku plana, ne za svakog kooperanta.
+    "dop-ko-po-stavci": (
+        "modDoplata.bas",
+        "        If StrComp(CStr(plan(i, PL_KOOP)), tekuciKoop, vbTextCompare) <> 0 Then\n",
+        "        If True Then   ' SABOTAZA: KO po stavci, ne po kooperantu\n",
+        "T_Doplata_JedanKOPoKooperantu",
+        "jedan KO po kooperantu: dva kooperanta, dva dokumenta",
+    ),
+    # Niz KO se ne pomera: dva KO istog obracuna nose isti broj.
+    "dop-broj-isti": (
+        "modDoplata.bas",
+        "            sledeci = sledeci + 1\n",
+        "            sledeci = sledeci + 0   ' SABOTAZA: broj KO se ne pomera\n",
+        "T_Doplata_JedanKOPoKooperantu",
+        "KO nosi uzastopan broj iz niza godine, sve stavke kooperanta i zbir iznosa",
+    ),
+    # Sat se ne gleda: granicni dan ulazi ceo, bez obzira na vreme otkupa.
+    "dop-period-bez-sata": (
+        "modDoplata.bas",
+        "    If Not trebaSat Then\n",
+        "    If True Then   ' SABOTAZA: sat se ne gleda, datum odlucuje sve\n",
+        "T_Doplata_PeriodSaSatom",
+        "granica perioda sece dan po satu nastanka otkupa",
+    ),
+    # PWA ISO tekst pada na CreatedAt -- vreme sinhronizacije postaje vreme otkupa.
+    "dop-sat-iz-createdat": (
+        "modDoplata.bas",
+        "    If Len(Trim$(NzToText(srcCreated))) > 0 And Not IsDate(srcCreated) Then\n",
+        "    If False Then   ' SABOTAZA: PWA sat pada na CreatedAt (vreme sinhronizacije)\n",
+        "T_Doplata_PeriodSaSatom",
+        "PWA vreme kao ISO tekst: otkup na granicnom danu obara plan po imenu, sat se ne uzima iz CreatedAt",
+    ),
+    # Ponovljena doplata prolazi bez pitanja.
+    "dop-ponavljanje-bez-potvrde": (
+        "modDoplata.bas",
+        "    If Len(preklop) > 0 And Not potvrdaPonavljanja Then\n",
+        "    If False Then   ' SABOTAZA: ponavljanje bez potvrde\n",
+        "T_Doplata_PonavljanjeTraziPotvrdu",
+        "ponovljena doplata nad istim kljucem i periodom trazi potvrdu",
+    ),
+    # Citac ne filtrira storno: storniran KO ostaje u zbiru.
+    "dop-storno-ne-gasi": (
+        "modDoplata.bas",
+        "        akt = ExcludeStornirano(hd, TBL_DOPLATA)\n",
+        "        akt = hd   ' SABOTAZA: storniran KO ostaje aktivan\n",
+        "T_Doplata_StornoIzlaziIzZbira",
+        "storniran KO izlazi iz zbirova, KO drugog kooperanta ostaje",
+    ),
+    # Stopa nula prolazi: nastaje KO od nula dinara.
+    "dop-cena-nula": (
+        "modDoplata.bas",
+        "        If CDbl(cena) <= 0 Then\n",
+        "        If CDbl(cena) < 0 Then   ' SABOTAZA: stopa nula prolazi\n",
+        "T_Doplata_OdbijaNeispravanUnos",
+        "stopa nula se odbija",
+    ),
+    # Datum knjizenja pre kraja perioda prolazi: zaduzenje stoji pre robe.
+    "dop-datum-pre-perioda": (
+        "modDoplata.bas",
+        "    If Int(CDbl(datum)) < Int(CDbl(periodDo)) Then\n",
+        "    If False Then   ' SABOTAZA: zaduzenje pre robe koju placa\n",
+        "T_Doplata_OdbijaNeispravanUnos",
+        "datum knjizenja pre kraja perioda se odbija",
+    ),
 }
 
 

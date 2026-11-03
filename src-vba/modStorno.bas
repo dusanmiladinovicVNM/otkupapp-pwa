@@ -1566,6 +1566,104 @@ EH:
 End Function
 
 ' ============================================================
+' DOPLATA -- knjizno odobrenje kooperantu (docs/DOMEN/DOPLATA.md)
+' ============================================================
+' Storno je po DoplataID-u: jedan KO je jedan dokument jednog kooperanta, pa
+' storno pogresno obuhvacenog kooperanta ne obara ostale iz istog obracuna.
+' Stavke prate zaglavlje (BEZ_STORNA) i nemaju svoju kolonu -- storniran KO
+' izlazi iz svih zbirova kroz modDoplata.DoplataStavkeRedovi (DOP-03).
+'
+' Novac se u F1 jos ne vezuje za KO (tblNovac.DoplataID dolazi sa isplatom,
+' F4), pa ovde nema sta da se odvezuje. Kad veza nastane, storno je odvezuje,
+' ne stornira -- isto kao kod otkupa (DOP-05, ODLUKA_NOVAC_PRI_STORNU.md).
+
+Public Function StornoDoplata_TX(ByVal doplataID As String) As Boolean
+    Const SRC As String = "StornoDoplata_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_DOPLATA
+
+    If Not StornoDoplata(doplataID) Then
+        Err.Raise ERR_STORNO_BASE + 80, SRC, _
+                  "StornoDoplata nije uspeo. DoplataID=" & doplataID
+    End If
+
+    tx.CommitTx
+
+    StornoDoplata_TX = True
+    MonitorStornoSuccess SRC, "Doplata", doplataID
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    HandleStornoTxError SRC, "Doplata", doplataID, tx
+    StornoDoplata_TX = False
+End Function
+
+Public Function StornoDoplata(ByVal doplataID As String) As Boolean
+    Const SRC As String = "StornoDoplata"
+
+    On Error GoTo EH
+
+    Dim rowD As Long
+    rowD = RequireStornoAllowed(TBL_DOPLATA, Trim$(doplataID), COL_DOP_ID, SRC)
+    MarkRowStornirano TBL_DOPLATA, rowD, SRC
+
+    StornoDoplata = True
+    Exit Function
+
+EH:
+    LogAndReraise SRC
+End Function
+
+' Ceo obracun jednim potezom: svi AKTIVNI KO sa tim ObracunID-em, u jednoj
+' transakciji. Obracun bez ijednog aktivnog KO je greska, ne tih uspeh.
+Public Function StornoObracunDoplate_TX(ByVal obracunID As String) As Boolean
+    Const SRC As String = "StornoObracunDoplate_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    Dim ids As Collection
+    Set ids = modDoplata.AktivneDoplateObracuna(obracunID)
+    If ids.count = 0 Then
+        Err.Raise ERR_STORNO_BASE + 81, SRC, _
+                  "Obracun nema nijedan aktivan KO. ObracunID=" & obracunID
+    End If
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_DOPLATA
+
+    Dim id As Variant
+    For Each id In ids
+        If Not StornoDoplata(CStr(id)) Then
+            Err.Raise ERR_STORNO_BASE + 82, SRC, _
+                      "StornoDoplata nije uspeo. DoplataID=" & CStr(id)
+        End If
+    Next id
+
+    tx.CommitTx
+
+    StornoObracunDoplate_TX = True
+    MonitorStornoSuccess SRC, "Doplata", obracunID
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    HandleStornoTxError SRC, "Doplata", obracunID, tx
+    StornoObracunDoplate_TX = False
+End Function
+
+' ============================================================
 ' PUBLIC HELPERS / COMPATIBILITY
 ' ============================================================
 

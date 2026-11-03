@@ -681,10 +681,12 @@ Public Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
             vrstaSorta = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
             If iKolAmbIzd > 0 Then kolAmbIzd = PrNz(d(r, iKolAmbIzd))
 
-            ' Vreme nastanka: SourceCreatedAt (PWA) ima prednost nad CreatedAt.
-            Dim vreme As Variant
-            If iSrcCreated > 0 Then vreme = d(r, iSrcCreated)
-            If Not IsDate(vreme) Then If iCreated > 0 Then vreme = d(r, iCreated)
+            ' Vreme nastanka: jedno pravilo sa periodom doplate
+            ' (modOtkup.OtkupVremeNastanka -- SourceCreatedAt, pa CreatedAt).
+            Dim vreme As Variant, vSrc As Variant, vCre As Variant
+            If iSrcCreated > 0 Then vSrc = d(r, iSrcCreated)
+            If iCreated > 0 Then vCre = d(r, iCreated)
+            vreme = modOtkup.OtkupVremeNastanka(vSrc, vCre)
             If IsDate(vreme) Then datum = datum & "  Vreme: " & Format$(CDate(vreme), "hh:nn")
             Exit For
         End If

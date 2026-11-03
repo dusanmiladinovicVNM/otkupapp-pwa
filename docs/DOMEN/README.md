@@ -446,7 +446,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | **Ambalaza — model podataka, AMB-01..04** | `docs/DOMEN/AMBALAZA.md` — jednostrana knjiga, nosioci salda, matrica knjiženja; **tri predloga čekaju operatera** |
 | Identitet zbirne, vezivanje prijemnice (ZBR-IDENT-01) | `docs/DOMEN/ZBR_IDENTITET.md` — **superseded posle refaktora** |
 | Novac pri stornu / ispravci otkupa | `docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md` — **OTVORENO, čeka operatera** |
-| Doplata kooperantu — knjižno odobrenje po kulturi i klasi (`DOP-ODL-01..08`, `DOP-01..05`) | `docs/DOMEN/DOPLATA.md` — **odluke 03.11.2026; struktura (§3) čeka potvrdu** |
+| Doplata kooperantu — knjižno odobrenje po kulturi i klasi (`DOP-ODL-01..11`, `DOP-01..06`) | `docs/DOMEN/DOPLATA.md` — **F1 u kodu (šema, pisac, storno, testovi 309–314), ponašanje neverifikovano** |
 | Poznata ograničenja | `docs/KNOWN_ISSUES.md` |
 | Otkup / dokumenta — pravila izmene | `.claude/rules/otkup-i-dokumenta.md` |
 | Verifikacija i definicija gotovog | `CLAUDE.md` §5, `.claude/rules/testovi.md` |

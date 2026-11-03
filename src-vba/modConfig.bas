@@ -489,6 +489,36 @@ Public Const COL_CEN_KLASA As String = "Klasa"
 Public Const COL_CEN_CENA As String = "Cena"
 Public Const COL_CEN_CREATED As String = "CreatedAt"
 
+' tblDoplata / tblDoplataStavke -- DOPLATA KOOPERANTU (knjizno odobrenje,
+' docs/DOMEN/DOPLATA.md). Zaglavlje = JEDAN KO za JEDNOG kooperanta; ObracunID
+' spaja sve KO jednog globalnog unosa. Stavka = stanica x vrsta x sorta x klasa.
+' Kljuc stope je kljuc cenovnika (VrstaVoca + SortaVoca + Klasa), ali stopa NE
+' ide u tblCenovnik: zivi samo na stavci dokumenta (nije treci model cene).
+Public Const TBL_DOPLATA As String = "tblDoplata"
+Public Const TBL_DOPLATA_STAVKE As String = "tblDoplataStavke"
+Public Const COL_DOP_ID As String = "DoplataID"
+Public Const COL_DOP_BROJ As String = "BrojDokumenta"
+Public Const COL_DOP_DATUM As String = "Datum"
+Public Const COL_DOP_KOOPERANT As String = "KooperantID"
+Public Const COL_DOP_OBRACUN As String = "ObracunID"
+Public Const COL_DOP_PERIOD_OD As String = "PeriodOd"
+Public Const COL_DOP_PERIOD_DO As String = "PeriodDo"
+Public Const COL_DOP_NAPOMENA As String = "Napomena"
+Public Const COL_DOPS_ID As String = "DoplataStavkaID"
+Public Const COL_DOPS_DOPLATA_ID As String = "DoplataID"
+Public Const COL_DOPS_RB As String = "RedniBroj"
+Public Const COL_DOPS_STANICA As String = "StanicaID"
+Public Const COL_DOPS_VRSTA As String = "VrstaVoca"
+Public Const COL_DOPS_SORTA As String = "SortaVoca"
+Public Const COL_DOPS_KLASA As String = "Klasa"
+Public Const COL_DOPS_KOLICINA As String = "Kolicina"
+Public Const COL_DOPS_CENA As String = "Cena"
+Public Const COL_DOPS_IZNOS As String = "Iznos"
+' Broj KO: "KO-<n>/<godina>", niz po godini datuma knjizenja (DOP-ODL-09).
+' Slovni prefiks drzi poziv na broj odvojen od brojeva otkupa: NormalizePozivKey
+' zadrzava slova i cifre.
+Public Const DOP_BROJ_PREFIKS As String = "KO-"
+
 ' tblPrerada / tblPreradaStavka
 Public Const COL_PRE_ID As String = "PreradaID"
 Public Const COL_PRE_DATUM As String = "Datum"

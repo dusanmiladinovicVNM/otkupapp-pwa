@@ -144,6 +144,47 @@
       ]
     },
     {
+      "table": "tblDoplata",
+      "const": "TBL_DOPLATA",
+      "sheet": "Doplata",
+      "columns": [
+        "DoplataID",
+        "BrojDokumenta",
+        "Datum",
+        "KooperantID",
+        "ObracunID",
+        "PeriodOd",
+        "PeriodDo",
+        "Napomena",
+        "Stornirano",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ]
+    },
+    {
+      "table": "tblDoplataStavke",
+      "const": "TBL_DOPLATA_STAVKE",
+      "sheet": "DoplataStavke",
+      "columns": [
+        "DoplataStavkaID",
+        "DoplataID",
+        "RedniBroj",
+        "StanicaID",
+        "VrstaVoca",
+        "SortaVoca",
+        "Klasa",
+        "Kolicina",
+        "Cena",
+        "Iznos",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ]
+    },
+    {
       "table": "tblFakturaStavke",
       "const": "TBL_FAKTURA_STAVKE",
       "sheet": "FakturaStavke",
@@ -1048,6 +1089,9 @@
       "BankaReferenz": "text",
       "BrojDokumenta": "text",
       "PozivNaBroj": "text"
+    },
+    "tblDoplata": {
+      "BrojDokumenta": "text"
     },
     "tblFakturaStavke": {
       "BrojPrerade": "text",
