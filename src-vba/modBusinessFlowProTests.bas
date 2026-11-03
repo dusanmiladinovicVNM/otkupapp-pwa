@@ -9985,7 +9985,8 @@ End Function
 
 ' PALETE I INTEGRITET A3 CITAJU LINIJE DOKUMENTA (odluka 4).
 '
-' AdjustPaletaGajbiceZaPrijemnicu_TX je ziv (Oporavak, Alt+F8). Do koraka 3 je
+' AdjustPaletaGajbiceZaPrijemnicu_TX je ziv (Oporavak, Alt+F8; od S8 reza 1a
+' prima PrijemnicaID, ne broj). Do koraka 3 je
 ' dokument citao sa zaglavlja: nad novim oblikom to je "klasa I, 0 gajbi", pa
 ' bi palete te klase svukao na nulu, a klasu II proglasio viskom. A3 je
 ' neto paleta poredio sa Kolicinom zaglavlja (prazno = 0) i prijavljivao svaki
@@ -10070,7 +10071,7 @@ Private Sub Test_S6_PaleteCitajuStavke()
 
     ' --- Adjust nad ispravnim dokumentom ne menja nista ---
     Dim info As String, rez As Long
-    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "", info)
+    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(prj, "", info)
     AssertEquals "0|10|10", CStr(rez) & "|" & CStr(S6GajbiNaPaletama(prj, stI)) & "|" & _
                             CStr(S6GajbiNaPaletama(prj, stII)), _
                  "S6 palete: Adjust nad ispravnim dokumentom ne menja nijednu paletu"
@@ -10080,7 +10081,7 @@ Private Sub Test_S6_PaleteCitajuStavke()
         RequireUpdateCell TBL_PALETA_STAVKA, rII, COL_PALS_BR_GAJBICA, 7, _
                           "Test_S6_PaleteCitajuStavke"
     End If
-    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "", info)
+    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(prj, "", info)
     AssertEquals "1|10|10", CStr(rez) & "|" & CStr(S6GajbiNaPaletama(prj, stI)) & "|" & _
                             CStr(S6GajbiNaPaletama(prj, stII)), _
                  "S6 palete: Adjust vraca klasu II na gajbe njene stavke, pod njenim kljucem"
