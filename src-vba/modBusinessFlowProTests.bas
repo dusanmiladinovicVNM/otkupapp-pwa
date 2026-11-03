@@ -373,6 +373,13 @@ Public Sub RunBusinessFlowProSuite()
     Test_S7R2_UgovorLinijaFakture
     Test_S7R2_FakturaStareKoloneSelfHeal
     Test_S7R2_KapijaUtovaraFailClosed
+    Test_S7R3_SefLinijaNosiStavkuIKlasu
+    Test_S7R3_SefOdbijaNejasnuLiniju
+    Test_S7R3_SefStavkaIdentitet
+    Test_S7R3_SaldoKupcaRobni
+    Test_S7R3_GpPraviloJedno
+    Test_S7R3_UgovorGpIzvor
+    Test_S7R3_HealthIznosNalazi
     Test_S6K6_F4DokumentProlaziLanac
     Test_S6K7_OsirocenePaleteDatumPoDokumentu
     Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
@@ -9010,6 +9017,455 @@ Private Sub FakObrisiStareKoloneTest()
         modSetup.ObrisiKolonuAko TBL_FAKTURE, CStr(a(k))
     Next k
 End Sub
+
+' ============================================================
+' S7 REZ 3 -- SEF LINIJA I ZATVARANJE S7 (FAK-ODL-01, FAK-ODL-04; KI-077, KI-078;
+' plan 14.57 "Pre-flight S7 rez 3")
+' ============================================================
+
+' FAK-ODL-01: SEF linija prijemnice nosi STAVKU kao identitet i klasu u nazivu.
+' Faktura nad dvoklasnom prijemnicom daje dve linije: UBL ima dva razlicita
+' SellersItemIdentification/ID -- bas stavke linija, ne PrijemnicaID dokumenta --
+' nazivi se razlikuju po klasi, a JSON zapis slanja nosi stavku. KONTROLA: GP
+' faktura iz fixture-a (FAK-SLED-GP4) i dalje nosi PreradaID. Tvrdi kroz javni API
+' koji postoji i pre reza (UBL i JSON kao tekst), pa je crven nad starim kodom.
+' Datum isporuke na UBL-u je datum prijemnice, a BFP dokumenti nose datume posle
+' 2090. -- SEF validacija bi odbila isporuku kasniju od fakture. Zato se UBL gradi u
+' TX u kojoj prijemnica nosi danasnji datum (synthetic), pa rollback.
+' SABOTAZE: s7r3-ubl-id-dokument, s7r3-naziv-bez-klase, s7r3-json-bez-stavke.
+Private Sub Test_S7R3_SefLinijaNosiStavkuIKlasu()
+    Dim tx As clsTransaction, rows As Collection
+    On Error GoTo EH
+    Dim scenario As String, prj As String, br As String, stI As String, stII As String
+    Dim fid As String, poruka As String
+    Dim dto As clsSEFInvoiceSnapshot, ubl As String, zapis As String, ublGp As String
+    scenario = NewScenarioCode("S7R3SEF")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID, br)
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    If Len(stI) > 0 And Len(stII) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stI, stII)
+    AssertTrue Len(fid) > 0, "S7R3 SEF: preduslov -- faktura nad dvoklasnom prijemnicom"
+    If Len(fid) = 0 Then Exit Sub
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prj)
+    If rows.count = 1 Then RequireUpdateCell TBL_PRIJEMNICA, CLng(rows(1)), COL_PRJ_DATUM, Date, _
+                                             "Test_S7R3_SefLinijaNosiStavkuIKlasu"
+    Set dto = modSEFMapper.BuildSEFInvoiceDto(fid)
+    ubl = modSEFMapper.SerializeUBLInvoice(dto)
+    zapis = modSEFMapper.SerializeSEFRequest(dto)
+    tx.RollbackTx
+    Set tx = Nothing
+    Set dto = modSEFMapper.BuildSEFInvoiceDto("FAK-SLED-GP4")
+    ublGp = modSEFMapper.SerializeUBLInvoice(dto)
+
+    AssertTrue InStr(1, ubl, "<cbc:ID>" & stI & "</cbc:ID>", vbBinaryCompare) > 0 And _
+               InStr(1, ubl, "<cbc:ID>" & stII & "</cbc:ID>", vbBinaryCompare) > 0, _
+               "S7R3 SEF: UBL nosi stavke kao ID linija"
+    AssertTrue InStr(1, ubl, "<cbc:ID>" & prj & "</cbc:ID>", vbBinaryCompare) = 0, _
+               "S7R3 SEF: UBL ne nosi PrijemnicaID dokumenta kao ID linije"
+    AssertTrue InStr(1, ubl, " kl. I po prijemnici ", vbBinaryCompare) > 0 And _
+               InStr(1, ubl, " kl. II po prijemnici ", vbBinaryCompare) > 0, _
+               "S7R3 SEF: nazivi linija razlikuju klase"
+    AssertTrue InStr(1, zapis, """PrijemnicaStavkaID"":""" & stI & """", vbBinaryCompare) > 0, _
+               "S7R3 SEF: JSON zapis nosi PrijemnicaStavkaID"
+    AssertTrue InStr(1, ublGp, "<cbc:ID>PRE-SLED-P</cbc:ID>", vbBinaryCompare) > 0, _
+               "S7R3 SEF: KONTROLA -- GP linija i dalje nosi PreradaID"
+
+    ' Ciscenje: faktura i dokument kupca ne ostaju za tudje testove.
+    If modStorno.StornoFaktura_TX(fid) Then Call modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, br, "", poruka, S6K4Ident(prj))
+    Exit Sub
+EH:
+    LogFatal "Test_S7R3_SefLinijaNosiStavkuIKlasu", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' Mapper odbija liniju prijemnice ciji identitet nije jasan, pre slanja: (1) linija
+' bez PrijemnicaStavkaID-a (FAK-LIN-02); (2) zaglavlje prijemnice koje postoji
+' dvaput -- do reza 3 su vrsta i sorta uzimane sa PRVOG reda. Oba kvara su
+' synthetic, svaki u svojoj transakciji; nalazi se tvrde posle rollback-a. KONTROLA:
+' posle rollback-a DTO se gradi. Nad starim kodom pada: stari mapper oba prihvata.
+' SABOTAZE: s7r3-mapper-ne-trazi-stavku, s7r3-zaglavlje-prvi-pogodak.
+Private Sub Test_S7R3_SefOdbijaNejasnuLiniju()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Dim scenario As String, prj As String, br As String, stI As String, fid As String
+    Dim gBezStavke As String, gDupli As String, gPosle As String
+    Dim rowData As Variant, poruka As String
+    scenario = NewScenarioCode("S7R3NEJ")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID, br)
+    stI = S6StavkaID(prj, KLASA_I)
+    If Len(stI) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stI)
+    AssertTrue Len(fid) > 0, "S7R3 nejasna linija: preduslov -- faktura kroz pravi pisac"
+    If Len(fid) = 0 Then Exit Sub
+
+    ' 1) linija bez stavke
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    S7R2PostaviNaLiniji fid, KLASA_I, COL_FS_PRIJEMNICA_STAVKA_ID, ""
+    gBezStavke = S7R3GreskaDto(fid)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 2) zaglavlje prijemnice dvaput
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    rowData = BlankRow(TBL_PRIJEMNICA)
+    SetRequiredField rowData, TBL_PRIJEMNICA, COL_PRJ_ID, prj
+    If AppendRow(TBL_PRIJEMNICA, rowData) <= 0 Then
+        Err.Raise vbObjectError + 9325, "Test_S7R3_SefOdbijaNejasnuLiniju", "AppendRow za tblPrijemnica nije uspeo."
+    End If
+    gDupli = S7R3GreskaDto(fid)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    gPosle = S7R3GreskaDto(fid)
+
+    AssertTrue InStr(1, gBezStavke, "without PrijemnicaStavkaID", vbTextCompare) > 0, _
+               "S7R3 nejasna linija: linija bez stavke ne ide na SEF (FAK-LIN-02)"
+    AssertTrue InStr(1, gDupli, "Prijemnica linije fakture", vbTextCompare) > 0 And _
+               InStr(1, gDupli, "nije jednoznacan", vbTextCompare) > 0, _
+               "S7R3 nejasna linija: zaglavlje prijemnice dvaput ne ide na SEF (strog citac)"
+    AssertEquals "", gPosle, "S7R3 nejasna linija: KONTROLA -- posle rollback-a DTO se gradi"
+
+    If modStorno.StornoFaktura_TX(fid) Then Call modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, br, "", poruka, S6K4Ident(prj))
+    Exit Sub
+EH:
+    LogFatal "Test_S7R3_SefOdbijaNejasnuLiniju", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' S7R3-REV-04 (review #454): stavka linije je identitet koji odlazi na e-fakturu, pa
+' mapper dokazuje da je stvarna, ne samo da nije prazna. Faktura kroz pravi pisac nad
+' dvoklasnom prijemnicom; tri synthetic kvara, svaki u svojoj TX: (1) stavka koje
+' nema u tblPrijemnicaStavke; (2) stavka druge prijemnice; (3) ista stavka na obe
+' linije fakture (FAK-LIN-01). Nalazi se tvrde posle rollback-a. KONTROLA: posle
+' rollback-a DTO se gradi. Zove samo API koji postoji i pre ispravke, pa je crven
+' nad starim kodom: stari mapper sva tri prihvata.
+' SABOTAZE: s7r3-sef-stavka-ne-postoji, s7r3-sef-stavka-tudja, s7r3-sef-stavka-dve-linije.
+Private Sub Test_S7R3_SefStavkaIdentitet()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Const SRC As String = "Test_S7R3_SefStavkaIdentitet"
+    Dim scenario As String, prj As String, br As String, stI As String, stII As String
+    Dim fid As String, tudja As String, poruka As String
+    Dim gNema As String, gTudja As String, gDve As String, gPosle As String
+    scenario = NewScenarioCode("S7R3IDS")
+    prj = S6K5Dokument(scenario, TEST_KUP_ID, br)
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    If Len(stI) > 0 And Len(stII) > 0 Then fid = S6K5Fakturisi(TEST_KUP_ID, stI, stII)
+    If Len(prj) > 0 Then tudja = S6TudjiStavkaID(prj)
+    AssertTrue Len(fid) > 0, "S7R3 identitet stavke: preduslov -- faktura nad dvoklasnom prijemnicom"
+    AssertTrue Len(tudja) > 0, "S7R3 identitet stavke: preduslov -- stavka druge prijemnice"
+    If Len(fid) = 0 Or Len(tudja) = 0 Then GoTo Ciscenje
+
+    ' 1) stavka koje nema
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    S7R2PostaviNaLiniji fid, KLASA_I, COL_FS_PRIJEMNICA_STAVKA_ID, "PRS-S7R3-NEPOSTOJI"
+    gNema = S7R3GreskaDto(fid)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 2) stavka druge prijemnice
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    S7R2PostaviNaLiniji fid, KLASA_I, COL_FS_PRIJEMNICA_STAVKA_ID, tudja
+    gTudja = S7R3GreskaDto(fid)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 3) ista stavka na obe linije
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    S7R2PostaviNaLiniji fid, KLASA_II, COL_FS_PRIJEMNICA_STAVKA_ID, stI
+    gDve = S7R3GreskaDto(fid)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    gPosle = S7R3GreskaDto(fid)
+
+    AssertTrue InStr(1, gNema, "does not exist", vbTextCompare) > 0, _
+               "S7R3 identitet stavke: nepostojeca stavka ne ide na SEF"
+    AssertTrue InStr(1, gTudja, "belongs to PrijemnicaID", vbTextCompare) > 0, _
+               "S7R3 identitet stavke: stavka druge prijemnice ne ide na SEF"
+    AssertTrue InStr(1, gDve, "FAK-LIN-01", vbTextCompare) > 0, _
+               "S7R3 identitet stavke: stavka na dve aktivne linije ne ide na SEF (FAK-LIN-01)"
+    AssertEquals "", gPosle, "S7R3 identitet stavke: KONTROLA -- posle rollback-a DTO se gradi"
+
+Ciscenje:
+    If Len(fid) > 0 Then
+        If modStorno.StornoFaktura_TX(fid) Then Call modStornoDok.StornoIzvrsi(STIP_PRIJEMNICA, br, "", poruka, S6K4Ident(prj))
+    End If
+    Exit Sub
+EH:
+    LogFatal SRC, Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' C-003 / FAK-ODL-04: saldo kupca je ROBNI -- vrednost stavki prijemnica minus uplate
+' kupca -- i ne zavisi od fakture. Koraci nad sopstvenim kupcem (KUP-90003):
+' dvoklasna prijemnica (+16.000), faktura samo nad klasom I (delimicno), uplata na
+' fakturu (-12.000), storno fakture (uplata prelazi u avans, FAK-ODL-05) i nova
+' faktura nad obe stavke (avans se prebija). Saldo se menja SAMO uz robu i novac.
+' Brani pravilo: crven nad starim kodom nije ocekivan.
+Private Sub Test_S7R3_SaldoKupcaRobni()
+    On Error GoTo EH
+    Dim scenario As String, prj As String, stI As String, stII As String
+    Dim fid As String, fid2 As String, brUpl As String
+    Dim s0 As Double, s1 As Double, s2 As Double, s3 As Double, s4 As Double, s5 As Double
+    Dim okUpl As Boolean, okSt As Boolean
+    scenario = NewScenarioCode("S7R3SAL")
+    SeedKupac3
+    s0 = S7R3Saldo(TEST_KUP3_ID)
+    prj = S6K5Dokument(scenario, TEST_KUP3_ID)
+    stI = S6StavkaID(prj, KLASA_I)
+    stII = S6StavkaID(prj, KLASA_II)
+    s1 = S7R3Saldo(TEST_KUP3_ID)
+    If Len(stI) > 0 Then fid = S6K5Fakturisi(TEST_KUP3_ID, stI)
+    s2 = S7R3Saldo(TEST_KUP3_ID)
+    brUpl = TEST_PREFIX & "-UPL9-" & scenario
+    If Len(fid) > 0 Then
+        okUpl = SaveKupciIzlaz_TX(datum:=Date, brojDok:=brUpl, kupacNaziv:=TEST_KUP3_ID, _
+                                  kupacID:=TEST_KUP3_ID, vrstaVoca:=TEST_VRSTA, novac:=12000#, _
+                                  fakturaID:=fid, napomena:="test S7R3", tipNovca:=NOV_KUPCI_UPLATA)
+    End If
+    s3 = S7R3Saldo(TEST_KUP3_ID)
+    If Len(fid) > 0 And okUpl Then okSt = modStorno.StornoFaktura_TX(fid)
+    s4 = S7R3Saldo(TEST_KUP3_ID)
+    If Len(stI) > 0 And Len(stII) > 0 And okSt Then fid2 = S6K5Fakturisi(TEST_KUP3_ID, stI, stII)
+    s5 = S7R3Saldo(TEST_KUP3_ID)
+
+    AssertTrue Len(fid) > 0 And okUpl And okSt And Len(fid2) > 0, _
+               "S7R3 saldo: preduslov -- faktura, uplata, storno i nova faktura kroz prave pisce"
+    AssertTrue Abs((s1 - s0) - 16000#) < 0.005, "S7R3 saldo: prijemnica dize saldo za vrednost obe stavke"
+    AssertTrue Abs(s2 - s1) < 0.005, "S7R3 saldo: delimicna faktura ne menja saldo"
+    AssertTrue Abs((s3 - s2) + 12000#) < 0.005, "S7R3 saldo: uplata spusta saldo za svoj iznos"
+    AssertTrue Abs(s4 - s3) < 0.005, "S7R3 saldo: storno fakture ne menja saldo (uplata postaje avans)"
+    AssertTrue Abs(s5 - s4) < 0.005, "S7R3 saldo: nova faktura ne menja saldo (avans se prebija)"
+    Exit Sub
+EH:
+    LogFatal "Test_S7R3_SaldoKupcaRobni", Err.Number, Err.description
+End Sub
+
+' KI-077: GP pravilo utovara ima JEDNOG vlasnika (modSEFMapper.GpFakturaRazlog) --
+' SEF kapija ga dize kao gresku, a health 6c javlja kao nalaz. Fixture GP faktura
+' FAK-SLED-GP4 je ispravna; dva kvara (synthetic, svaki u svojoj TX): utovar tvrdi
+' drugu fakturu, i kolicina fakture ne odgovara utovaru. Za svaki: pravilo daje
+' razlog, a SEF kapija odbija sa ISTIM razlogom. KONTROLA: posle rollback-a razloga
+' nema. Health 6c ovaj test ne vidi (Private, gate: False); meri ga prolaz
+' RunProductionHealthCheck.
+' SABOTAZA: s7r3-sef-ne-pita-gp-pravilo.
+Private Sub Test_S7R3_GpPraviloJedno()
+    Dim tx As clsTransaction, rows As Collection
+    On Error GoTo EH
+    Const FAK As String = "FAK-SLED-GP4"
+    Const SRC As String = "Test_S7R3_GpPraviloJedno"
+    Dim rA As String, rDruga As String, sDruga As String, rKg As String, sKg As String, rA2 As String
+
+    rA = modSEFMapper.GpFakturaRazlog(FAK)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_UTOVAR
+    Set rows = FindRows(TBL_UTOVAR, COL_UT_ID, "UT-SLED-P")
+    If rows.count = 1 Then RequireUpdateCell TBL_UTOVAR, CLng(rows(1)), COL_UT_FAKTURA_ID, "FAK-DRUGA-S7R3", SRC
+    rDruga = modSEFMapper.GpFakturaRazlog(FAK)
+    sDruga = S7R3GreskaDto(FAK)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    Set rows = FindRows(TBL_FAKTURA_STAVKE, COL_FS_ID, "FST-SLED-P")
+    If rows.count = 1 Then RequireUpdateCell TBL_FAKTURA_STAVKE, CLng(rows(1)), COL_FS_KOLICINA, 40, SRC
+    rKg = modSEFMapper.GpFakturaRazlog(FAK)
+    sKg = S7R3GreskaDto(FAK)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    rA2 = modSEFMapper.GpFakturaRazlog(FAK)
+
+    AssertEquals "", rA, "S7R3 GP pravilo: preduslov -- fixture GP faktura je ispravna"
+    AssertTrue InStr(1, rDruga, "tvrdi drugu fakturu", vbTextCompare) > 0, _
+               "S7R3 GP pravilo: utovar koji tvrdi drugu fakturu je razlog"
+    AssertTrue Len(rDruga) > 0 And InStr(1, sDruga, rDruga, vbBinaryCompare) > 0, _
+               "S7R3 GP pravilo: SEF kapija odbija sa istim razlogom (utovar druge fakture)"
+    AssertTrue InStr(1, rKg, "ne odgovara utovaru", vbTextCompare) > 0, _
+               "S7R3 GP pravilo: kolicina koja ne odgovara utovaru je razlog"
+    AssertTrue Len(rKg) > 0 And InStr(1, sKg, rKg, vbBinaryCompare) > 0, _
+               "S7R3 GP pravilo: SEF kapija odbija sa istim razlogom (kolicina)"
+    AssertEquals "", rA2, "S7R3 GP pravilo: KONTROLA -- posle rollback-a razloga nema"
+    Exit Sub
+EH:
+    LogFatal SRC, Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' KI-078: ugovor dokumenta meri da GP izvor POSTOJI. Fixture negativ FST-GP-SB
+' (FAK-SLED-GP2, GP linija bez utovara) je nalaz GP_UTOVAR_NEMA; ispravna GP
+' faktura FAK-SLED-GP4 je bez nalaza; prerada koje nema (synthetic, u TX) je
+' GP_PRERADA_NEMA. KONTROLA: posle rollback-a nalaza nema.
+' SABOTAZE: s7r3-ugovor-gp-utovar-nema, s7r3-ugovor-gp-prerada-nema.
+Private Sub Test_S7R3_UgovorGpIzvor()
+    Dim tx As clsTransaction, rows As Collection
+    On Error GoTo EH
+    Const SRC As String = "Test_S7R3_UgovorGpIzvor"
+    Dim nSb As String, nGp4 As String, nPre As String, nPosle As String
+
+    nSb = S7R2NalaziFakture("FAK-SLED-GP2")
+    nGp4 = S7R2NalaziFakture("FAK-SLED-GP4")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    Set rows = FindRows(TBL_FAKTURA_STAVKE, COL_FS_ID, "FST-SLED-P")
+    If rows.count = 1 Then RequireUpdateCell TBL_FAKTURA_STAVKE, CLng(rows(1)), COL_FS_PRERADA_ID, "PRE-NEMA-S7R3", SRC
+    nPre = S7R2NalaziFakture("FAK-SLED-GP4")
+    tx.RollbackTx
+    Set tx = Nothing
+
+    nPosle = S7R2NalaziFakture("FAK-SLED-GP4")
+
+    AssertTrue InStr(1, ";" & nSb & ";", ";GP_UTOVAR_NEMA;", vbTextCompare) > 0, _
+               "S7R3 ugovor: GP linija bez utovara je nalaz GP_UTOVAR_NEMA"
+    AssertEquals "", nGp4, "S7R3 ugovor: ispravna GP faktura je bez nalaza"
+    AssertTrue InStr(1, ";" & nPre & ";", ";GP_PRERADA_NEMA;", vbTextCompare) > 0, _
+               "S7R3 ugovor: GP linija na preradu koje nema je nalaz GP_PRERADA_NEMA"
+    AssertEquals "", nPosle, "S7R3 ugovor: KONTROLA -- posle rollback-a nalaza nema"
+    Exit Sub
+EH:
+    LogFatal SRC, Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' S7R3-REV-02 (review #454; KI-077): health 6c meri GP fakturu kroz ISTI citac koji
+' ispisuje (modProductionHealthCheck.FakturaIznosNalazi). Cetiri slucaja iz review-a
+' nad fixture GP fakturom FAK-SLED-GP4, svaki kvar u svojoj TX: ispravna faktura nema
+' nalaz; utovar tvrdi drugu fakturu -> GP_UTOVAR; kolicina linije nije kolicina
+' utovara -> GP_UTOVAR; Iznos zaglavlja nije zbir linija -> IZNOS_DRIFT. Peti je
+' S7R3-REV-01 (fault injection): GP linija koja nosi i stavku prijemnice i dalje
+' prolazi GP pravilo, a ugovor dokumenta je javlja kao LINIJA_DVA_IZVORA.
+' KONTROLA: posle rollback-a nalaza nema.
+' SABOTAZE: s7r3-health-ne-pita-gp-pravilo, s7r3-health-gp-po-stavci.
+Private Sub Test_S7R3_HealthIznosNalazi()
+    Dim tx As clsTransaction, rows As Collection
+    On Error GoTo EH
+    Const FAK As String = "FAK-SLED-GP4"
+    Const SRC As String = "Test_S7R3_HealthIznosNalazi"
+    Dim nA As String, nDruga As String, nKg As String, nIznos As String
+    Dim nStavka As String, uStavka As String, nPosle As String
+
+    nA = S7R3NalaziIznosa(FAK)
+
+    ' 1) utovar tvrdi drugu fakturu
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_UTOVAR
+    Set rows = FindRows(TBL_UTOVAR, COL_UT_ID, "UT-SLED-P")
+    If rows.count = 1 Then RequireUpdateCell TBL_UTOVAR, CLng(rows(1)), COL_UT_FAKTURA_ID, "FAK-DRUGA-S7R3", SRC
+    nDruga = S7R3NalaziIznosa(FAK)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 2) kolicina linije nije kolicina utovara
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    Set rows = FindRows(TBL_FAKTURA_STAVKE, COL_FS_ID, "FST-SLED-P")
+    If rows.count = 1 Then RequireUpdateCell TBL_FAKTURA_STAVKE, CLng(rows(1)), COL_FS_KOLICINA, 40, SRC
+    nKg = S7R3NalaziIznosa(FAK)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 3) Iznos zaglavlja nije zbir GP linija
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURE
+    Set rows = FindRows(TBL_FAKTURE, COL_FAK_ID, FAK)
+    If rows.count = 1 Then RequireUpdateCell TBL_FAKTURE, CLng(rows(1)), COL_FAK_IZNOS, 9999, SRC
+    nIznos = S7R3NalaziIznosa(FAK)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    ' 4) S7R3-REV-01: GP linija nosi i stavku prijemnice, a utovar tvrdi drugu fakturu
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_UTOVAR
+    Set rows = FindRows(TBL_FAKTURA_STAVKE, COL_FS_ID, "FST-SLED-P")
+    If rows.count = 1 Then RequireUpdateCell TBL_FAKTURA_STAVKE, CLng(rows(1)), COL_FS_PRIJEMNICA_STAVKA_ID, "PRS-S7R3-LAZNA", SRC
+    Set rows = FindRows(TBL_UTOVAR, COL_UT_ID, "UT-SLED-P")
+    If rows.count = 1 Then RequireUpdateCell TBL_UTOVAR, CLng(rows(1)), COL_UT_FAKTURA_ID, "FAK-DRUGA-S7R3", SRC
+    nStavka = S7R3NalaziIznosa(FAK)
+    uStavka = S7R2NalaziFakture(FAK)
+    tx.RollbackTx
+    Set tx = Nothing
+
+    nPosle = S7R3NalaziIznosa(FAK)
+
+    AssertEquals "", nA, "S7R3 health 6c: ispravna GP faktura je bez nalaza"
+    AssertTrue InStr(1, ";" & nDruga & ";", ";GP_UTOVAR;", vbTextCompare) > 0, _
+               "S7R3 health 6c: utovar druge fakture je nalaz GP_UTOVAR"
+    AssertTrue InStr(1, ";" & nKg & ";", ";GP_UTOVAR;", vbTextCompare) > 0, _
+               "S7R3 health 6c: kolicina linije koja nije kolicina utovara je nalaz GP_UTOVAR"
+    AssertTrue InStr(1, ";" & nIznos & ";", ";IZNOS_DRIFT;", vbTextCompare) > 0, _
+               "S7R3 health 6c: Iznos koji nije zbir GP linija je nalaz IZNOS_DRIFT"
+    AssertTrue InStr(1, ";" & nStavka & ";", ";GP_UTOVAR;", vbTextCompare) > 0, _
+               "S7R3 health 6c: GP linija sa stavkom prijemnice i dalje prolazi GP pravilo (S7R3-REV-01)"
+    AssertTrue InStr(1, ";" & uStavka & ";", ";LINIJA_DVA_IZVORA;", vbTextCompare) > 0, _
+               "S7R3 ugovor: GP linija sa stavkom prijemnice je nalaz LINIJA_DVA_IZVORA"
+    AssertEquals "", nPosle, "S7R3 health 6c: KONTROLA -- posle rollback-a nalaza nema"
+    Exit Sub
+EH:
+    LogFatal SRC, Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Sub
+
+' Kodovi nalaza health 6c za jednu fakturu, spojeni ";" (prazno = bez nalaza).
+Private Function S7R3NalaziIznosa(ByVal fid As String) As String
+    Dim n As Variant, s As String
+    For Each n In modProductionHealthCheck.FakturaIznosNalazi()
+        If StrComp(CStr(n(1)), fid, vbTextCompare) = 0 Then
+            If Len(s) > 0 Then s = s & ";"
+            s = s & CStr(n(0))
+        End If
+    Next n
+    S7R3NalaziIznosa = s
+End Function
+
+' Greska gradnje SEF DTO-a kao ishod ("" = DTO je izgradjen), ne pad testa.
+Private Function S7R3GreskaDto(ByVal fid As String) As String
+    Dim dto As clsSEFInvoiceSnapshot
+    On Error Resume Next
+    Err.Clear
+    Set dto = modSEFMapper.BuildSEFInvoiceDto(fid)
+    If Err.Number <> 0 Then S7R3GreskaDto = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' Saldo kupca (UKUPNO, kolona Saldo = vrednost - novac) za ceo raspon datuma.
+Private Function S7R3Saldo(ByVal kupacID As String) As Double
+    Dim r As Variant
+    r = modIzvestaj.ReportSaldoKupci(kupacID, DateSerial(1900, 1, 1), DateSerial(2999, 12, 31))
+    If IsArray(r) Then S7R3Saldo = CDbl(nz(r(UBound(r, 1), 6), 0))
+End Function
 
 ' SEF stanje fakture (synthetic, fault injection): workflow i spoljni status.
 Private Sub S7R1SefStanje(ByVal fid As String, ByVal wf As String, ByVal st As String)

@@ -46,11 +46,14 @@ produkciono mesto ne vezuje fakturu za prijemnicu preko broja (plan §14.57,
 
 **`FAK-ODL-01` — SEF linija nosi stavku i klasu.** `SellersItemIdentification/ID` linije
 nad prijemnicom je `PrijemnicaStavkaID`, a naziv dobija klasu
-(„<vrsta> <sorta> kl. <klasa> po prijemnici <broj>"). JSON zapis slanja dobija
-`PrijemnicaStavkaID`. GP linija zadržava `PreradaID`. Razlog: danas su dve klase iste
+(„<vrsta> <sorta> kl. <klasa> po prijemnici <broj>"). Dijagnostički JSON (`SerializeSEFRequest`,
+legacy/debug; zahtev koji se snima i šalje je UBL) dobija `PrijemnicaStavkaID`. GP linija zadržava `PreradaID`. Razlog: danas su dve klase iste
 prijemnice na e-fakturi dve linije istog naziva i istog ID-a dokumenta
 (`modSEFMapper:268-276`, `:783-789`), a papir ih razlikuje po klasi
 (`modFaktura.PrintFaktura:746-747`). Papir i e-faktura posle S7 nose isti sadržaj.
+Urađeno u S7 rezu 3 (stavka 265): mapper, `clsSEFLine.prijemnicaStavkaID`, UBL i JSON zapis; zaglavlje prijemnice
+mapper čita strogo. Stavka se pre slanja dokazuje, ne samo prenosi (`S7R3-REV-04`, stavka 269): postoji tačno
+jednom, pripada prijemnici linije i nije na dve aktivne linije (`FAK-LIN-01`).
 
 **`FAK-ODL-02` — lokalni storno fakture se odbija dok faktura živi na SEF-u.**
 Faktura „živi na SEF-u" kad je `SEFWorkflowState` jedno od `SEF_SENDING`, `SEF_SENT`,

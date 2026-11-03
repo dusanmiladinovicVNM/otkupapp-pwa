@@ -9549,6 +9549,128 @@ SABOTAZE = {
         "Test_S7R2_FakturaStareKoloneSelfHeal",
         "S7R2 self-heal: EnsureSledljivostSchema ne vraca trace kolone fakturi",
     ),
+    # --- S7 rez 3: SEF linija i zatvaranje S7 (FAK-ODL-01, KI-077, KI-078; plan 14.57
+    # "Pre-flight S7 rez 3"). Health 6c (Private, gate: False) i prag fak_broj_prj
+    # (kapija samog alata) nemaju sabotazu u katalogu -- nema suite-a koji ih meri.
+    "s7r3-ubl-id-dokument": (
+        "modSEFMapper.bas",
+        "        srcID = ln.prijemnicaStavkaID\n",
+        "        srcID = ln.prijemnicaID   ' SABOTAZA: dokument kao ID linije\n",
+        "Test_S7R3_SefLinijaNosiStavkuIKlasu",
+        "S7R3 SEF: UBL nosi stavke kao ID linija",
+    ),
+    "s7r3-naziv-bez-klase": (
+        "modSEFMapper.bas",
+        "                If Len(Trim$(CStr(stavke(i, colKlasa)))) > 0 Then _\n"
+        "                    opis = Trim$(opis & \" kl. \" & Trim$(CStr(stavke(i, colKlasa))))\n",
+        "                ' SABOTAZA: naziv bez klase\n",
+        "Test_S7R3_SefLinijaNosiStavkuIKlasu",
+        "S7R3 SEF: nazivi linija razlikuju klase",
+    ),
+    "s7r3-json-bez-stavke": (
+        "modSEFMapper.bas",
+        "        sb = sb & \"\"\"PrijemnicaStavkaID\"\":\" & JsonString(ln.prijemnicaStavkaID) & \",\"\n",
+        "        ' SABOTAZA: JSON bez stavke\n",
+        "Test_S7R3_SefLinijaNosiStavkuIKlasu",
+        "S7R3 SEF: JSON zapis nosi PrijemnicaStavkaID",
+    ),
+    "s7r3-mapper-ne-trazi-stavku": (
+        "modSEFMapper.bas",
+        "                If Len(stavkaID) = 0 Then\n",
+        "                If False Then   ' SABOTAZA: linija bez stavke prolazi\n",
+        "Test_S7R3_SefOdbijaNejasnuLiniju",
+        "S7R3 nejasna linija: linija bez stavke ne ide na SEF (FAK-LIN-02)",
+    ),
+    # S7R3-REV-04 (review #454): stavka linije se dokazuje, ne samo prenosi.
+    "s7r3-sef-stavka-ne-postoji": (
+        "modSEFMapper.bas",
+        "                If Not poStavci.Exists(kStavke) Then\n",
+        "                If False Then   ' SABOTAZA: postojanje stavke se ne proverava\n",
+        "Test_S7R3_SefStavkaIdentitet",
+        "S7R3 identitet stavke: nepostojeca stavka ne ide na SEF",
+    ),
+    "s7r3-sef-stavka-tudja": (
+        "modSEFMapper.bas",
+        "                ElseIf StrComp(CStr(poStavci(kStavke)(1)), prijemnicaID, vbTextCompare) <> 0 Then\n",
+        "                ElseIf False Then   ' SABOTAZA: pripadnost prijemnici se ne proverava\n",
+        "Test_S7R3_SefStavkaIdentitet",
+        "S7R3 identitet stavke: stavka druge prijemnice ne ide na SEF",
+    ),
+    "s7r3-sef-stavka-dve-linije": (
+        "modSEFMapper.bas",
+        "                If linijeStavki Is Nothing Then Set linijeStavki = modFaktura.FakturaLinijePoStavci()\n",
+        "                ' SABOTAZA: FAK-LIN-01 se ne pita\n",
+        "Test_S7R3_SefStavkaIdentitet",
+        "S7R3 identitet stavke: stavka na dve aktivne linije ne ide na SEF (FAK-LIN-01)",
+    ),
+    # Strog citac zaglavlja stoji SAMO u petlji linija: datum isporuke ga namerno
+    # nema, inace bi druga kopija zaklonila ovu sabotazu (dvoslojna kapija).
+    "s7r3-zaglavlje-prvi-pogodak": (
+        "modSEFMapper.bas",
+        "                RequireTacnoJedan TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _\n"
+        "                                  \"Prijemnica linije fakture \" & fakturaID, SRC\n",
+        "                ' SABOTAZA: zaglavlje prvi pogodak\n",
+        "Test_S7R3_SefOdbijaNejasnuLiniju",
+        "S7R3 nejasna linija: zaglavlje prijemnice dvaput ne ide na SEF (strog citac)",
+    ),
+    "s7r3-sef-ne-pita-gp-pravilo": (
+        "modSEFMapper.bas",
+        "    If Len(gpRazlog) > 0 Then Err.Raise ERR_SEF_VALIDATION, SRC, gpRazlog\n",
+        "    ' SABOTAZA: SEF ne pita GP pravilo\n",
+        "Test_S7R3_GpPraviloJedno",
+        "S7R3 GP pravilo: SEF kapija odbija sa istim razlogom (utovar druge fakture)",
+    ),
+    "s7r3-ugovor-gp-utovar-nema": (
+        "modFaktura.bas",
+        "                    If Len(izvor) = 0 Or IdIliPrazno(brojUt, izvor) <> izvor Then _\n"
+        "                        res.Add Array(\"GP_UTOVAR_NEMA\", sid, fid)\n",
+        "                    ' SABOTAZA: GP linija bez utovara nije nalaz\n",
+        "Test_S7R3_UgovorGpIzvor",
+        "S7R3 ugovor: GP linija bez utovara je nalaz GP_UTOVAR_NEMA",
+    ),
+    "s7r3-ugovor-gp-prerada-nema": (
+        "modFaktura.bas",
+        "                    If IdIliPrazno(brojPre, izvor) <> izvor Then res.Add Array(\"GP_PRERADA_NEMA\", sid, fid)\n",
+        "                    ' SABOTAZA: prerada koje nema nije nalaz\n",
+        "Test_S7R3_UgovorGpIzvor",
+        "S7R3 ugovor: GP linija na preradu koje nema je nalaz GP_PRERADA_NEMA",
+    ),
+    # Review #454 (S7R3-REV-02): health 6c je od tada javni citac nalaza, pa ga test
+    # meri -- i sabotaza vise nije placebo.
+    "s7r3-health-ne-pita-gp-pravilo": (
+        "modProductionHealthCheck.bas",
+        "                If Len(gpRazlog) > 0 Then res.Add Array(\"GP_UTOVAR\", fakturaID, gpRazlog)\n",
+        "                ' SABOTAZA: health ne pita GP pravilo\n",
+        "Test_S7R3_HealthIznosNalazi",
+        "S7R3 health 6c: utovar druge fakture je nalaz GP_UTOVAR",
+    ),
+    # AUD-054 u mapperu (S7 rez 3): EH ponovo dize Err POSLE LogErr-a, koji ga brise --
+    # razlog SEF kapije se gubi, a operater dobija "Invalid procedure call".
+    "s7r3-sef-eh-gubi-razlog": (
+        "modSEFMapper.bas",
+        "    ehNum = Err.Number: ehDesc = Err.description\n"
+        "    LogErr SRC\n"
+        "    Err.Raise ehNum, SRC, ehDesc\n"
+        "End Function\n"
+        "\n"
+        "' JEDNO GP PRAVILO FAKTURE",
+        "    LogErr SRC\n"
+        "    Err.Raise Err.Number, SRC, Err.description   ' SABOTAZA: razlog se gubi\n"
+        "End Function\n"
+        "\n"
+        "' JEDNO GP PRAVILO FAKTURE",
+        "Test_S7R3_GpPraviloJedno",
+        "S7R3 GP pravilo: SEF kapija odbija sa istim razlogom (kolicina)",
+    ),
+    # S7R3-REV-01: GP linija se prepoznaje po stavci umesto po preradi -- linija sa
+    # obe vrednosti tada preskace GP pravilo.
+    "s7r3-health-gp-po-stavci": (
+        "modProductionHealthCheck.bas",
+        "            If Len(fid) > 0 And Len(pre) > 0 Then\n",
+        "            If Len(fid) > 0 And Len(pre) > 0 And Len(sid) = 0 Then   ' SABOTAZA: GP po stavci\n",
+        "Test_S7R3_HealthIznosNalazi",
+        "S7R3 health 6c: GP linija sa stavkom prijemnice i dalje prolazi GP pravilo (S7R3-REV-01)",
+    ),
     # --- S6 korak 6: F4 odmrznut (plan 14.55 "Korak 6") --------------------
     # Vraceno iz 14.14 (tela u fc06fa77): redosled provera F4, bruto -> neto i
     # vezivanje samo na jednoznacnu zbirnu. Sidra su ista kao tada, osim

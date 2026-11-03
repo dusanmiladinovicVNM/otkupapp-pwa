@@ -654,16 +654,76 @@ End Sub
 Private Sub Check_FakturaIznosReconciliation()
     On Error GoTo EH
 
-    Dim fakData As Variant
-    fakData = GetTableData(TBL_FAKTURE)
-
-    If IsEmpty(fakData) Then
+    If IsEmpty(GetTableData(TBL_FAKTURE)) Then
         HealthWarn "Faktura Iznos reconciliation", "tblFakture is empty."
         Exit Sub
     End If
 
+    ' S7 rez 3 (S7R3-REV-02): racun je u javnom citacu, isti obrazac kao check 3 i
+    ' 4 -- ovde se nalazi samo ispisuju, pa ih test meri kroz isti citac.
+    Dim nalazi As Collection
+    Set nalazi = FakturaIznosNalazi()
+
+    Dim n As Variant, naslov As String, detailCount As Long
+    For Each n In nalazi
+        If detailCount < 25 Then
+            detailCount = detailCount + 1
+            Select Case CStr(n(0))
+                Case "IZNOS_DRIFT"
+                    naslov = "Faktura Iznos differs from its linked lines (value drift)"
+                Case "IZNOS_STORNO_PRJ"
+                    naslov = "Faktura Iznos includes prijemnice stornirane after invoicing"
+                Case "GP_UTOVAR"
+                    naslov = "GP faktura ne odgovara svom utovaru"
+                Case Else
+                    naslov = "Faktura Iznos: " & CStr(n(0))
+            End Select
+            HealthWarn naslov, "FakturaID=" & CStr(n(1)) & " " & CStr(n(2))
+        End If
+    Next n
+
+    If nalazi.count = 0 Then
+        HealthOk "Faktura Iznos reconciles to its lines", ""
+    ElseIf nalazi.count > detailCount Then
+        HealthWarn "Faktura Iznos reconciliation overflow", _
+                   "Additional findings: " & CStr(nalazi.count - detailCount)
+    End If
+
+    Exit Sub
+
+EH:
+    HealthFail "Faktura Iznos reconciliation check failed", FormatHealthErr()
+End Sub
+
+' NALAZI CHECK-A 6c: Array(kod, FakturaID, detalj) za svaku AKTIVNU fakturu.
+'   IZNOS_DRIFT      -- Iznos zaglavlja se ne slaze sa zbirom njegovih linija:
+'                       linija prijemnice vredi koliko njena stavka (Kolicina x Cena,
+'                       FAK-LIN-02), GP linija koliko sama kaze (Kolicina x Cena);
+'   IZNOS_STORNO_PRJ -- zbir se slaze, ali deo prijemnica je posle fakturisanja
+'                       storniran (Iznos precenjuje danasnji izvor);
+'   GP_UTOVAR        -- GP faktura ne odgovara svom utovaru (modSEFMapper.GpFakturaRazlog,
+'                       ISTO pravilo koje drzi SEF kapija; KI-077).
+' tblFakture.Iznos je denormalizovan zbir zamrznut pri izdavanju; ovde se racuna
+' zivi zbir iz kanonskog izvora i razlika imenuje. Read-only.
+'
+' Linija je GP po PreradaID-u, i kad (protivno ugovoru) nosi i stavku prijemnice
+' (S7R3-REV-01): GP faktura tada i dalje prolazi GP pravilo, a kontradikciju linije
+' javlja ugovor dokumenta (check 3, LINIJA_DVA_IZVORA). Faktura se poredi jednom,
+' po FakturaID-u.
+Public Function FakturaIznosNalazi() As Collection
+    Const SRC As String = "FakturaIznosNalazi"
+    Dim res As Collection
+    Set res = New Collection
+    Set FakturaIznosNalazi = res
+
+    Dim fakData As Variant
+    fakData = GetTableData(TBL_FAKTURE)
+    If IsEmpty(fakData) Then Exit Function
+
     ' Live sums per FakturaID: Array(allLinked, activeOnly).
     Dim liveDict As Object: Set liveDict = CreateObject("Scripting.Dictionary")
+    ' Fakture sa GP linijama -- one se porede i sa utovarom (KI-077).
+    Dim gpFak As Object: Set gpFak = CreateObject("Scripting.Dictionary")
 
     Dim fsData As Variant
     fsData = GetTableData(TBL_FAKTURA_STAVKE)
@@ -681,18 +741,34 @@ Private Sub Check_FakturaIznosReconciliation()
         Dim stornPrj As Object
         Set stornPrj = BuildLookupDict(TBL_PRIJEMNICA, COL_PRJ_ID, COL_STORNIRANO)
 
-        Dim fFak As Long, fSt As Long
-        fFak = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, "Check_FakturaIznosReconciliation")
-        fSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_STAVKA_ID, "Check_FakturaIznosReconciliation")
+        Dim fFak As Long, fSt As Long, fPre As Long, fKol As Long, fCena As Long
+        fFak = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+        fSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_STAVKA_ID, SRC)
+        fPre = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID, SRC)
+        fKol = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA, SRC)
+        fCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_CENA, SRC)
 
         Dim p As Long
-        Dim fid As String, sid As String, prjID As String
+        Dim fid As String, sid As String, pre As String, prjID As String
         Dim pv As Double
         Dim acc As Variant, rec As Variant
         For p = 1 To UBound(fsData, 1)
             fid = Trim$(CStr(fsData(p, fFak)))
             sid = UCase$(Trim$(CStr(fsData(p, fSt))))
-            If Len(fid) > 0 And Len(sid) > 0 Then
+            pre = Trim$(CStr(fsData(p, fPre)))
+            If Len(fid) > 0 And Len(pre) > 0 Then
+                ' GP linija (po PreradaID-u): ziva vrednost je sopstveni zbir, a izvor
+                ' -- utovar -- meri zajednicko GP pravilo ispod.
+                pv = 0#
+                If IsNumeric(fsData(p, fKol)) And IsNumeric(fsData(p, fCena)) Then _
+                    pv = CDbl(fsData(p, fKol)) * CDbl(fsData(p, fCena))
+                If Not liveDict.Exists(fid) Then liveDict.Add fid, Array(0#, 0#)
+                acc = liveDict(fid)
+                acc(0) = acc(0) + pv
+                acc(1) = acc(1) + pv
+                liveDict(fid) = acc
+                gpFak(fid) = True
+            ElseIf Len(fid) > 0 And Len(sid) > 0 Then
                 If poStavci.Exists(sid) Then
                     rec = poStavci(sid)
                     pv = CDbl(rec(0)) * CDbl(rec(1))
@@ -712,72 +788,51 @@ Private Sub Check_FakturaIznosReconciliation()
     End If
 
     Dim colID As Long, colIznos As Long, colStorno As Long
-    colID = RequireColumnIndex(TBL_FAKTURE, "FakturaID", "Check_FakturaIznosReconciliation")
-    colIznos = RequireColumnIndex(TBL_FAKTURE, "Iznos", "Check_FakturaIznosReconciliation")
-    colStorno = RequireColumnIndex(TBL_FAKTURE, "Stornirano", "Check_FakturaIznosReconciliation")
+    colID = RequireColumnIndex(TBL_FAKTURE, "FakturaID", SRC)
+    colIznos = RequireColumnIndex(TBL_FAKTURE, "Iznos", SRC)
+    colStorno = RequireColumnIndex(TBL_FAKTURE, "Stornirano", SRC)
 
     Const EPS As Double = 0.01
     Dim i As Long
-    Dim badCount As Long, detailCount As Long
-    Dim fakturaID As String
+    Dim fakturaID As String, gpRazlog As String
     Dim iznos As Double, liveAll As Double, liveActive As Double
     Dim accf As Variant
 
     For i = 1 To UBound(fakData, 1)
+        If Not IsStorniranoValue(fakData(i, colStorno)) Then
+            fakturaID = Trim$(CStr(fakData(i, colID)))
+            iznos = HealthNumeric(fakData(i, colIznos))
 
-        If IsStorniranoValue(fakData(i, colStorno)) Then GoTo NextRow
-
-        fakturaID = Trim$(CStr(fakData(i, colID)))
-        iznos = HealthNumeric(fakData(i, colIznos))
-
-        liveAll = 0#: liveActive = 0#
-        If liveDict.Exists(fakturaID) Then
-            accf = liveDict(fakturaID)
-            liveAll = accf(0)
-            liveActive = accf(1)
-        End If
-
-        If Abs(iznos - liveAll) > EPS Then
-            ' Header does not match even the originally linked prijemnice:
-            ' value edited after invoicing, or linked rows missing.
-            badCount = badCount + 1
-            If detailCount < 25 Then
-                detailCount = detailCount + 1
-                HealthWarn "Faktura Iznos differs from linked prijemnice (value drift)", _
-                           "FakturaID=" & fakturaID & _
-                           " Iznos=" & HealthMoney(iznos) & _
-                           " Prijemnice=" & HealthMoney(liveAll) & _
-                           " Delta=" & HealthMoney(iznos - liveAll)
+            liveAll = 0#: liveActive = 0#
+            If liveDict.Exists(fakturaID) Then
+                accf = liveDict(fakturaID)
+                liveAll = accf(0)
+                liveActive = accf(1)
             End If
-        ElseIf Abs(iznos - liveActive) > EPS Then
-            ' Header matches original link, but some prijemnice were
-            ' stornirano after invoicing: Iznos overstates current source.
-            badCount = badCount + 1
-            If detailCount < 25 Then
-                detailCount = detailCount + 1
-                HealthWarn "Faktura Iznos includes prijemnice stornirane after invoicing", _
-                           "FakturaID=" & fakturaID & _
-                           " Iznos=" & HealthMoney(iznos) & _
-                           " Active=" & HealthMoney(liveActive) & _
-                           " Delta=" & HealthMoney(iznos - liveActive)
+
+            If Abs(iznos - liveAll) > EPS Then
+                ' Header does not match even the originally linked lines:
+                ' value edited after invoicing, or linked rows missing.
+                res.Add Array("IZNOS_DRIFT", fakturaID, _
+                              "Iznos=" & HealthMoney(iznos) & " Linije=" & HealthMoney(liveAll) & _
+                              " Delta=" & HealthMoney(iznos - liveAll))
+            ElseIf Abs(iznos - liveActive) > EPS Then
+                ' Header matches original link, but some prijemnice were
+                ' stornirano after invoicing: Iznos overstates current source.
+                res.Add Array("IZNOS_STORNO_PRJ", fakturaID, _
+                              "Iznos=" & HealthMoney(iznos) & " Active=" & HealthMoney(liveActive) & _
+                              " Delta=" & HealthMoney(iznos - liveActive))
+            End If
+
+            ' GP faktura se poredi i sa svojim IZVOROM -- utovarom -- kroz ISTO pravilo
+            ' koje drzi SEF kapija (modSEFMapper.GpFakturaRazlog, KI-077).
+            If gpFak.Exists(fakturaID) Then
+                gpRazlog = modSEFMapper.GpFakturaRazlog(fakturaID)
+                If Len(gpRazlog) > 0 Then res.Add Array("GP_UTOVAR", fakturaID, gpRazlog)
             End If
         End If
-
-NextRow:
     Next i
-
-    If badCount = 0 Then
-        HealthOk "Faktura Iznos reconciles to tblPrijemnica", ""
-    ElseIf badCount > detailCount Then
-        HealthWarn "Faktura Iznos reconciliation overflow", _
-                   "Additional fakture with drift: " & CStr(badCount - detailCount)
-    End If
-
-    Exit Sub
-
-EH:
-    HealthFail "Faktura Iznos reconciliation check failed", FormatHealthErr()
-End Sub
+End Function
 
 ' ============================================================
 ' CHECK 7: OTKUP -> OTPREMNICA BROJZBIRNE LINK
