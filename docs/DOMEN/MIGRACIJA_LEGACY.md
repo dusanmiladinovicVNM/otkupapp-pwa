@@ -27,6 +27,7 @@
 | **MIG-ODL-14** | **Knjiga robnog dokumenta je ono što bi upisao pisac main-a** (`KI-065`, odluka operatera 31.10.2026 za otpremnicu). Otpremnica: gajbe = zbir gajbi blokova istog tipa, i u dokumentu i u knjizi (`OtpRequireJednakost`); **neizdata otpremnica ne knjiži** (`OtpIzdaj`) — njene stare noge su van knjige (`DOKUMENT_NE_KNJIZI`); blok drugog tipa ambalaže ne ulazi u zbir (`OtpRequireIzvorValjan`, ODLUKA). Zbirna: gajbe = zbir izdatih otpremnica (`ZbrRequireJednakost`). Otkup i prijemnica: **knjiga je istorija** (MIG-ODL-01), pa se gajbe dokumenta (`KolAmbalaze` stavke, `KolAmbIzdata`, `KolAmbVracena`) usklađuju sa njom; dokument sa nerazrešenom nogom se ne dira. Kg se ne menja nigde. Svaka izmena je nalaz u probi i red na listu „Uskladjivanje" pregleda. | `cilj._robni_dokumenti`, `ambalaza.uskladi_sa_dokumentima` |
 | **MIG-ODL-15** | **NABAVKA pokriva i prazne** (`AMB-INV-16`, #448; vozač od `AMB-10-ODL-37`, #449). Jedna NABAVKA sopstvenog naloga prvog dana rada, u iznosu dubljeg od dva minusa: ukupnog salda i praznih (svaki red naloga osim `AMBALAZA_UZ_ROBU`, `AmbPrazneNaloga`). Pune ispod nule nabavka ne može da popravi — proba ih javlja kao ODLUKA (`AMB_PUNE_ISPOD_NULE`). | `ambalaza.nabavka_na_pocetku`, `pune_i_prazne`, `provere._ambalaza` |
 | **MIG-ODL-16** | **Linija fakture nema svoj storno** (S7 rez 2, `FAK-ODL-03`; šema gubi `tblFakturaStavke.Stornirano/OsirocenoOd` i trace kolone fakture). Stara linija sa `Stornirano = Da` na **aktivnoj** fakturi ne ide u novu svesku (inače bi oživela i ponovo fakturisala stavku) — ostaje u staroj kao arhiva, ODLUKA. Provere prate `FakturaLinijePoStavci`: linija prijemnice mora imati fakturu bez obzira na storno; stavka prijemnice samo na aktivnoj liniji, i najviše na jednoj (`FAK-LIN-01/02`). Sveska C002 nema nijednu fakturu. | `cilj._linije_fakture`, `provere._fakture` |
+| **MIG-ODL-17** | **Pune gajbe vozača ispod nule se prihvataju** (odluka operatera 03.11.2026). Uzrok: 17 otpremnica bez dokazivog otkupa po main-u ne knjiži gajbe (MIG-ODL-14), a prijemnice kupca su ih primile, pa vozač po knjizi predaje više punih nego što je dobio — main to dozvoljava (prijemnicu sudi samo ukupni saldo, AMB-INV-07). Nad C002: vozač ST-00001 0,4kg −125, ST-00002 0,4kg −6, ST-00003 0,4kg −669, ST-00003 0,5kg −47, ST-00007 0,4kg −7; za toliko su mu prazne iznad stvarnih, pa ih „Izdato OM" (`AMB-INV-16`, ODL-37) pušta više nego što fizički drži. Odbijena alternativa: gajbe neizdatih otpremnica u knjizi — manjak bi se vratio na stanice (KI-065), gde kapija praznih utiče na svakodnevni otkup. Otkupi za tih 17 otpremnica u staroj svesci ne postoje (datumi ne odgovaraju ni jednom od 3 otkupa bez otpremnice). | `provere._ambalaza` (ODLUKA `AMB_PUNE_ISPOD_NULE`) |
 
 ## MIG-WR-01 — izuzetak od vlasništva upisa
 
@@ -54,8 +55,9 @@ Uslovi koje alat drži:
 - **Proba 01.11.2026 nad C002 (MIG-ODL-13..15):** 0 BLOKIRA; AMB-INV-07 i
   AMB-INV-16 (prazne) drže; 54 vraćanja = 54 izlaza; otpremnice −1042 gajbe
   (6 svedeno na blokove, 17 neizdatih van knjige); nabavka 11 dok. / 44391;
-  **5 naloga sa punim ispod nule — čeka odluku** (detalji u `proba_sazetak.txt`
-  od verzije `b7d17193`).
+  5 naloga sa punim ispod nule — svi vozači, prihvaćeno 03.11.2026 (MIG-ODL-17).
+- **Proba 03.11.2026 nad main-om `a668c5e6` (S7):** isti ishod kao 01.11.; sve
+  ODLUKE prihvaćene (MIG-ODL-06/09/10/11/12/17), sledi upis u svežu svesku.
 - **Upis 28.10.2026 nad sveskom C002 (SHA256 `d5e1f612…`): prošao.** 34 tabele
   + podešavanja; povratno poređenje svake ćelije: 0 razlika; salda ambalaže nove
   sveske naspram prevoda: 0 razlika. Usput nađene i ispravljene tri greške
@@ -111,9 +113,10 @@ robni dokumenti se ne menjaju, pa MIG-ODL-13..15 važe.
 
 ## Otvoreno
 
-- Ponovljena migracija nad sveskom C002 po MIG-ODL-13..15 — NEVERIFIKOVANO dok
-  je operater ne pokrene (koliko se gajbi otpremnica menja, nabavke, pune ispod
-  nule vidi se tek nad stvarnim podacima).
+- Upis po MIG-ODL-13..17 u svežu svesku iz main-a `a668c5e6` — NEVERIFIKOVANO
+  dok ga operater ne pokrene.
+- Prazna salda vozača na kraju sezone su velika (npr. ST-00002 0,4kg 3462) —
+  istorija stare sveske; vredi ih proveriti popisom pre nove sezone.
 - Provera u pravom Excelu nad novom sveskom (Compile, otvaranje ekrana,
   kartice, bilans „Neusklađeno" = 0, izveštaji robe, aktivacija licence) —
   NEVERIFIKOVANO dok je operater ne prođe.
