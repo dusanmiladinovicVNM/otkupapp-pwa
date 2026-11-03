@@ -10761,6 +10761,49 @@ pripadaju migraciji (`#455`, `tools/migracija/`, `KI-065`). Ova grana ih ne dira
 - 2a: svoj pre-flight;
 - 2b: HOLD do 2a i izlazne kapije C002.
 
+#### Rez 1a — kod (03.11.2026, `docs/STANJE_REFAKTORA.md` stavka 277)
+
+Grana `claude/s8-rez1a-paleta-id` (od `d222aad4`). Šta je urađeno, sa pozivima, testovima i sabotažama,
+nosi stavka 277. Ovde su samo odstupanja od ugovora i recept za crveni prolaz.
+
+**Odstupanja od ugovora reza 1a:**
+
+- **F4 put je u `modTest` (309), ne u BFP-u.** Ugovor je tražio BFP kroz produkcioni poziv
+  `PreveziPaleteIspravke`. `modTest` već ima taj put sa transakcijom koja se vraća
+  (`T_IspravkaPrijemnice_SkipIRelink`: `PrijemnicaUpisi`, `S6K8IzdataZbirna`, `ZasejOpticajVozacu`), a BFP
+  ga nema. Poziv je isti produkcioni; BFP nosi test jezgra.
+- **Alt+F8 se meri kroz `PrijemnicaZaKorekciju`, ne kroz makro.** Makro ima `InputBox` i `MsgBox`, koji u
+  `run_vba` vise. Makro samo zove tu funkciju pa korekciju po ID-u.
+- **Oporavak nema svoj test u 1a.** Poziv je promenjen (`mCiljPrijemnicaID`), a potvrda je `MsgBox`.
+  Ugovor 1a ga ne traži; Oporavak meri 1b.
+- **Paletna stavka dokumenta bez linije je `ADJ_BLOCKED`.** Ugovor kaže da 1a stavke bez ključa „ne dira".
+  Korekcija koja bi ih preskočila brojala bi gajbe pogrešno, pa staje i imenuje ih. Meri ga Palete T14.
+  Sabotaža za tu kapiju ne postoji, jer katalog ne pokreće Palete suite (`_SUITA_PO_MODULU`).
+  Prevezivanje uvek upisuje ključ linije nove prijemnice (`modPaletniList:1782`), a stavke klase koju
+  nova prijemnica nema ostavlja na staroj, pa ova kapija ne zaustavlja put posle prevezivanja.
+
+**Crveni prolaz nad `d222aad4` (recept, NIJE izvršen):**
+
+- Proizvodni moduli su sa `d222aad4`, a test moduli i `tools/sabotaza.py` sa grane.
+- `PrijemnicaZaKorekciju` na `d222aad4` ne postoji, pa `modTest` ne bi mogao da se kompajlira. Za ovaj
+  prolaz se u stari `modPaletniListUI` dodaje privremena funkcija koja vraća prazno.
+- Očekivano, ali nije izmereno:
+  - **309** pada na „309: paletne stavke drugog kupca istog broja su netaknute". To je reprodukcija N1:
+    korekcija po broju svede B na nulu i stornira je;
+  - 310, BFP `S8R1a` i Palete T04–T13 padaju zato što stari API ID tumači kao broj (`ADJ_BLOCKED`). To
+    je crveno zbog API-ja, ne zbog N1.
+
+#### Review reza 1a (03.11.2026, `docs/STANJE_REFAKTORA.md` stavka 278)
+
+CONDITIONAL GO 8,7 / 10. Odstupanja iznad nisu osporena. Ugovor reza 1a se dopunjuje sa dve tačke:
+
+- **Izolacija testa (`S8R1A-REV-01`):** test koji piše kroz pisce zove svako zasejavanje POSLE početka
+  spoljne transakcije i snimka, a posle rollback-a tvrdi da su vraćeni redovi tabela koje piše.
+- **Landing (`S8R1A-REV-02`):** pre PR-a rebase na `main` i provera da je broj testa jedinstven u
+  `RunOne`, `TestName` i dispatch-u. Kapija za to ne postoji (`KI-084`).
+
+N1 ostaje OPEN do crvenog 309 nad starim kodom i zelenog prolaza nad granom.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

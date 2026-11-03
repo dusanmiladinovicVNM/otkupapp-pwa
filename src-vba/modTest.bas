@@ -413,6 +413,8 @@ Public Sub RunAllTests()
     RunOne 306
     RunOne 307
     RunOne 308
+    RunOne 309
+    RunOne 310
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1016,6 +1018,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 306: TestName = "T_Prazne_StornoKazeRazlog"
         Case 307: TestName = "T_ODL39_VracanjeKupcu"
         Case 308: TestName = "T_ODL39_PapirVracanjaKupcu"
+        Case 309: TestName = "T_S8R1a_IspravkaKorigujeSvojDokument"
+        Case 310: TestName = "T_S8R1a_AltF8BrojUJedanDokument"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1332,6 +1336,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 306: T_Prazne_StornoKazeRazlog
         Case 307: T_ODL39_VracanjeKupcu
         Case 308: T_ODL39_PapirVracanjaKupcu
+        Case 309: T_S8R1a_IspravkaKorigujeSvojDokument
+        Case 310: T_S8R1a_AltF8BrojUJedanDokument
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -3578,6 +3584,201 @@ Private Sub T_RelinkPoGeneraciji_NeDiraTudjDokument()
              "roba je stigla na dokument kupca 1 (40 gajbica)"
     AssertEq GajbicaZaDokument("PRJ-TEST-B"), 0, _
              "dokument drugog kupca istog broja NIJE nista dobio"
+End Sub
+
+' ============================================================
+' 309. S8 REZ 1a (N1, PAL-IDENT-01): F4 ISPRAVKA KORIGUJE PALETE SVOG
+' DOKUMENTA, I KAD NJEN BROJ NOSI DRUGI KUPAC.
+' ============================================================
+' Put je produkcioni: PrijemnicaUpisi -> PreveziPaleteIspravke -> prevezivanje
+' po ID-u (S6 korak 7) -> PaletaAdjustPrompt -> korekcija. Do reza 1a je
+' poslednji korak isao po BROJU nove prijemnice (modDokUnos:1333), iako je njen
+' ID bio poznat.
+'
+'   A   kupac 1, svoj broj, 12 gajbi / 120 kg, paletizovan, pa storniran za ispravku
+'   B   kupac 2, broj X,    10 gajbi /  90 kg, paletizovan
+'   A2  kupac 1, broj X,     8 gajbi /  64 kg -- ispravka A
+'
+' Broj X nose B i A2 -- normalno produkciono stanje, broj se racuna po kupcu.
+' Prevezivanje odnese 12 gajbi A na A2 i javi razliku; korekcija mora da svede
+' palete A2 na 8 i da ne dirne B. Gajbe ispravke su MANJE od starih, pa
+' korekcija ne pita operatera (MsgBox bi u run_vba visio). Neto po gajbi se
+' razlikuje (B 9 kg, A2 8 kg), pa ni resync tudjih stavki ne bi prosao neprimecen.
+'
+' Nivo: FIZICKE paletne stavke po PrijemnicaID-u; otisak B broji i stornirane.
+' Nad kodom pre 1a korekcija skida gajbe i sa B (B se svede na nulu i
+' stornira), pa je tamo crvena tvrdnja o B.
+'
+' Spoljna transakcija pocinje PRE zasejavanja gajbi vozaca (S8R1A-REV-01):
+' ZasejOpticajVozacu, kad vozac ima manje od 100, knjizi nabavku i prenos u
+' SVOJOJ transakciji, pa bi posle snimka ostao u svesci. Na kraju se proverava
+' da je rollback vratio broj redova knjige ambalaze, i kad test padne.
+' SABOTAZA: s8r1a-dokunos-salje-broj.
+Private Sub T_S8R1a_IspravkaKorigujeSvojDokument()
+    Dim p As Object, poruke As String, cid As String, prevPal As String
+    Dim tx As clsTransaction, errNum As Long, errDesc As String
+    Dim zbrA As String, zbrB As String, brojA As String, brojX As String, t As String
+    Dim resA As String, resB As String, resA2 As String, otB As String
+    Dim redoviPre As String, redoviPosle As String
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    redoviPre = S8R1aBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    ' Tri upisa nose 30 gajbi sa vozaca (v. T_IspravkaPrijemnice_SkipIRelink).
+    ZasejOpticajVozacu
+    AssertEq (modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, _
+              FX_TIP_AMB) >= 100), True, _
+             "309 preduslov: vozac ima gajbe za knjizenje prijemnica"
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    S6K8IzdataZbirna "S8A", zbrA
+    S6K8IzdataZbirna "S8B", zbrB, FX_VOZAC, FX_KUPAC2
+
+    t = Format$(Now, "hhnnss")
+    brojA = "T-S8A-" & t
+    brojX = "T-S8X-" & t
+
+    Set p = NoviPrijemnicaUnos()
+    S8R1aPrijemnica p, brojA, zbrA, FX_KUPAC, 120, 12
+    resA = modDokUnos.PrijemnicaUpisi(p, poruke)
+    Set p = NoviPrijemnicaUnos()
+    S8R1aPrijemnica p, brojX, zbrB, FX_KUPAC2, 90, 10
+    resB = modDokUnos.PrijemnicaUpisi(p, poruke)
+    AssertEq (Len(resA) > 0 And Len(resB) > 0), True, "309 preduslov: A i B su upisani"
+    AssertEq GajbicaZaDokument(resA) & "|" & GajbicaZaDokument(resB), "12|10", _
+             "309 preduslov: A i B su paletizovani"
+    otB = S8R1aOtisak(resB)
+
+    ' Ispravka A: storno bez skidanja paleta (one se prevezuju), pa nov unos.
+    AssertEq modStorno.StornoPrijemnica_TX(resA, False), True, _
+             "309 preduslov: A je storniran za ispravku"
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, _
+              FLOW_DOC_PRIJEMNICA, resA, brojA, _
+              FLOW_DOC_PRIJEMNICA, , , FLOW_DOC_ZBIRNA, , zbrA, _
+              "test 309: ispravka prijemnice")
+    AssertEq (Len(cid) > 0), True, "309 preduslov: correction context je kreiran"
+
+    Set p = NoviPrijemnicaUnos()
+    S8R1aPrijemnica p, brojX, zbrA, FX_KUPAC, 64, 8
+    p("ispravkaID") = cid
+    p("ispravkaStariBroj") = brojA
+    resA2 = modDokUnos.PrijemnicaUpisi(p, poruke)
+    AssertEq (Len(resA2) > 0), True, "309 preduslov: upis ispravke je prosao"
+
+    AssertEq GajbicaZaDokument(resA2), 8, _
+             "309: palete ispravke su svedene na njene gajbe (8)"
+    AssertEq S8R1aOtisak(resB), otB, _
+             "309: paletne stavke drugog kupca istog broja su netaknute"
+    AssertEq S8R1aOtisak(resA2), "redova=1|gajb=8|neto=64|storno=0", _
+             "309: neto paleta ispravke prati njenu liniju (8 x 8 kg)"
+
+    Err.Clear   ' zaostatak pomocnika pod Resume Next nije pad testa (KI-053)
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    redoviPosle = S8R1aBrojRedova()
+    On Error GoTo 0
+    If errNum <> 0 Then
+        If redoviPosle <> redoviPre Then errDesc = errDesc & " [rollback nije vratio redove: " & _
+                                                   redoviPre & " -> " & redoviPosle & "]"
+        Err.Raise errNum, "modTest.T_S8R1a_IspravkaKorigujeSvojDokument", errDesc
+    End If
+    AssertEq redoviPosle, redoviPre, _
+             "309: rollback vraca i zasejane gajbe vozaca i sve upise testa"
+End Sub
+
+' Broj redova tabela koje 309 pise (i kroz zasejavanje vozaca), za proveru da je
+' rollback vratio sve.
+Private Function S8R1aBrojRedova() As String
+    Dim tb As Variant, s As String
+    For Each tb In Array(TBL_AMBALAZA, TBL_AMBALAZA_DOKUMENT, TBL_PRIJEMNICA, _
+                         TBL_PRIJEMNICA_STAVKE, TBL_PALETA, TBL_PALETA_STAVKA, _
+                         TBL_ZBIRNA, TBL_OTPREMNICA, TBL_OTKUP, TBL_STORNO_VEZE)
+        If Len(s) > 0 Then s = s & "|"
+        s = s & CStr(tb) & "=" & BrojRedovaTabele(CStr(tb))
+    Next tb
+    S8R1aBrojRedova = s
+End Function
+
+' Prijemnica klase I za 309: kupac, broj, zbirna, kilaza i gajbe po izboru testa.
+Private Sub S8R1aPrijemnica(ByVal p As Object, ByVal broj As String, _
+                            ByVal brojZbirne As String, ByVal kupac As String, _
+                            ByVal kg As Double, ByVal gajbe As Long)
+    PopuniPrijemnicu p, broj, brojZbirne
+    p("kupacID") = kupac
+    p("kolicinaI") = kg
+    p("kolAmb") = gajbe
+End Sub
+
+' Otisak SVIH paletnih stavki dokumenta (i storniranih): broj redova, zbir gajbi
+' i neta aktivnih, broj storniranih. Ista vrednost pre i posle = nista nije
+' dirnuto -- ni "svedena na nulu pa stornirana".
+Private Function S8R1aOtisak(ByVal prijemnicaID As String) As String
+    Dim d As Variant, i As Long, cP As Long, cGa As Long, cNe As Long, cSt As Long
+    Dim n As Long, g As Long, kg As Double, nSt As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsEmpty(d) Then
+        cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R1aOtisak")
+        cGa = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, "S8R1aOtisak")
+        cNe = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, "S8R1aOtisak")
+        cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R1aOtisak")
+        For i = 1 To UBound(d, 1)
+            If Trim$(NzToText(d(i, cP))) = prijemnicaID Then
+                n = n + 1
+                If UCase$(Trim$(NzToText(d(i, cSt)))) = "DA" Then
+                    nSt = nSt + 1
+                Else
+                    g = g + NzL(d(i, cGa))
+                    kg = kg + NzD(d(i, cNe))
+                End If
+            End If
+        Next i
+    End If
+    S8R1aOtisak = "redova=" & n & "|gajb=" & g & "|neto=" & CStr(Round(kg, 3)) & "|storno=" & nSt
+End Function
+
+' ============================================================
+' 310. S8 REZ 1a (PAL-ODL-04): ALT+F8 KOREKCIJA RAZRESAVA BROJ U TACNO JEDAN
+' AKTIVAN DOKUMENT.
+' ============================================================
+' Makro PaletaAdjust_Prompt pita broj (InputBox) pa koriguje po ID-u. Broj u
+' ID razresava PrijemnicaZaKorekciju -- makro je zove pre korekcije, a ovde se
+' meri direktno, jer InputBox i MsgBox u run_vba vise.
+'
+'   1/150326  PRJ-TEST-A (KUP-TEST-1) i PRJ-TEST-B (KUP-TEST-2), oba aktivna
+'   4/150326  PRJ-TEST-T2, jedini
+'   8/150326  dva stornirana, nijedan aktivan
+'
+' Izbor "prvog pogotka" bi kod 1/150326 korigovao palete jednog od dva kupca,
+' zavisno od redosleda u tabeli. Test ne pise nijednu tabelu.
+' SABOTAZA: s8r1a-altf8-prvi-pogodak.
+Private Sub T_S8R1a_AltF8BrojUJedanDokument()
+    Dim razlog As String, prjID As String
+
+    AssertEq VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_BROJ, _
+             "test", False, Array(COL_PRJ_KUPAC)).count, 2, _
+             "310 preduslov: broj 1/150326 nose dva aktivna kupca"
+
+    prjID = PrijemnicaZaKorekciju(FX_PRIJ_BROJ, razlog)
+    AssertEq prjID, "", "310: dvosmislen broj se odbija"
+    AssertEq (InStr(razlog, FX_KUPAC) > 0 And InStr(razlog, FX_KUPAC2) > 0), True, _
+             "310: razlog odbijanja imenuje oba kupca"
+
+    prjID = PrijemnicaZaKorekciju(FX_PRIJ_CILJ_V2, razlog)
+    AssertEq prjID, "PRJ-TEST-T2", "310: jednoznacan broj daje svoj dokument"
+    AssertEq razlog, "", "310: jednoznacan broj nema razlog odbijanja"
+
+    prjID = PrijemnicaZaKorekciju(FX_PRIJ_KOLIZIJA, razlog)
+    AssertEq prjID, "", "310: broj samo storniranih dokumenata se odbija"
+    AssertEq (Len(razlog) > 0), True, "310: odbijen broj nosi razlog"
 End Sub
 
 ' ============================================================

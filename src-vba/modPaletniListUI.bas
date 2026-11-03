@@ -210,12 +210,16 @@ End Sub
 ' Poziva AdjustPaletaGajbiceZaPrijemnicu_TX; ako visak gajbica ne staje na paletu,
 ' operater bira: PRELIJ na sledecu paletu ili PREKO kapaciteta na istoj.
 ' Vraca tekst-rezime za prikaz (ili "" ako nije bilo nista / operater odustao).
+'
+' Dokument je IDENTITET (S8 rez 1a, N1): pozivalac salje PrijemnicaID koji vec
+' drzi. Broj je samo labela u pitanju operateru -- izbor po broju je korigovao i
+' palete drugog kupca istog broja.
 ' ============================================================
-Public Function PaletaAdjustPrompt(ByVal brojPrij As String) As String
+Public Function PaletaAdjustPrompt(ByVal prijemnicaID As String, ByVal brojPrij As String) As String
     On Error GoTo EH
     Dim info As String
     Dim res As Long
-    res = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "", info)
+    res = AdjustPaletaGajbiceZaPrijemnicu_TX(prijemnicaID, "", info)
 
     If res = ADJ_NEEDS_CHOICE Then
         Dim ans As VbMsgBoxResult
@@ -225,9 +229,9 @@ Public Function PaletaAdjustPrompt(ByVal brojPrij As String) As String
                      "OTKAZI = ne diraj palete sada", _
                      vbYesNoCancel + vbQuestion, APP_NAME)
         If ans = vbYes Then
-            res = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "PRELIJ", info)
+            res = AdjustPaletaGajbiceZaPrijemnicu_TX(prijemnicaID, "PRELIJ", info)
         ElseIf ans = vbNo Then
-            res = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "PREKO", info)
+            res = AdjustPaletaGajbiceZaPrijemnicu_TX(prijemnicaID, "PREKO", info)
         Else
             PaletaAdjustPrompt = "Korekcija kolicina na paletama PRESKOCENA (uradi kasnije: " & _
                                  "Alt+F8 -> PaletaAdjust_Prompt)."
@@ -250,19 +254,87 @@ End Function
 
 ' Alt+F8: rucna korekcija kolicina na paletama za AKTIVNU prijemnicu (escape kad
 ' je auto-korekcija ranije preskocena, ili Integritet A3/A4 prijavi odstupanje).
+' Operater kuca broj; korekcija ide po dokumentu u koji se broj razresi
+' (PrijemnicaZaKorekciju, PAL-ODL-04: makro ostaje, ali strog).
 Public Sub PaletaAdjust_Prompt()
     On Error GoTo EH
-    Dim ans As String
+    Dim ans As String, razlog As String, prjID As String
     ans = InputBox("Broj prijemnice cije kolicine treba uskladiti sa paletama:", _
                    "Korekcija kolicina na paletama")
     If Trim$(ans) = "" Then Exit Sub
-    Dim msg As String: msg = PaletaAdjustPrompt(Trim$(ans))
+    prjID = PrijemnicaZaKorekciju(ans, razlog)
+    If Len(prjID) = 0 Then
+        MsgBox "Korekcija kolicina NIJE uradjena: " & razlog, vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    Dim msg As String: msg = PaletaAdjustPrompt(prjID, Trim$(ans))
     If Len(msg) > 0 Then MsgBox msg, vbInformation, APP_NAME
     Exit Sub
 EH:
     LogErr "modPaletniListUI.PaletaAdjust_Prompt"
     MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
 End Sub
+
+' Broj prijemnice -> PrijemnicaID TACNO JEDNOG aktivnog dokumenta; prazno uz
+' razlog kad ga nema ili kad ih je vise.
+'
+' Broj se racuna po kupcu (modStorno:1848), pa ga dva kupca legitimno nose
+' istovremeno. Izbor "prvog pogotka" bi tada korigovao palete tudjeg
+' dokumenta; razlog zato imenuje sve kupce, da operater zna zasto je odbijen i
+' koji dokument da trazi (Oporavak ili ispravka, gde je dokument poznat).
+Public Function PrijemnicaZaKorekciju(ByVal broj As String, ByRef outRazlog As String) As String
+    Const SRC As String = "modPaletniListUI.PrijemnicaZaKorekciju"
+    outRazlog = ""
+    broj = Trim$(broj)
+    If Len(broj) = 0 Then
+        outRazlog = "Broj prijemnice nije unet."
+        Exit Function
+    End If
+
+    Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
+    Dim ids As Collection: Set ids = New Collection
+    Dim kupci As String
+    If Not IsEmpty(d) Then
+        Dim cId As Long, cBr As Long, cKu As Long, cSt As Long, r As Long
+        cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+        cBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+        cKu = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, SRC)
+        cSt = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
+        For r = 1 To UBound(d, 1)
+            If BrojJednak(d(r, cBr), broj) _
+               And UCase$(Trim$(NzToText(d(r, cSt)))) <> "DA" Then
+                ids.Add Trim$(NzToText(d(r, cId)))
+                If Len(kupci) > 0 Then kupci = kupci & ", "
+                kupci = kupci & KupacOznaka(Trim$(NzToText(d(r, cKu))))
+            End If
+        Next r
+    End If
+
+    Select Case ids.count
+        Case 0
+            outRazlog = "Nema aktivne prijemnice broja " & broj & "."
+        Case 1
+            PrijemnicaZaKorekciju = CStr(ids(1))
+        Case Else
+            outRazlog = "Broj " & broj & " nosi " & ids.count & " aktivnih prijemnica " & _
+                        "(kupci: " & kupci & "). Korekcija po broju bi mogla da " & _
+                        "zahvati tudje palete -- pokreni je iz Oporavka ili kroz ispravku, " & _
+                        "gde je dokument poznat."
+    End Select
+End Function
+
+' "Naziv (ID)" kupca za poruku; sam ID kad naziva nema.
+Private Function KupacOznaka(ByVal kupacID As String) As String
+    Dim nm As String
+    On Error Resume Next
+    nm = Trim$(NzToText(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, COL_KUP_NAZIV)))
+    On Error GoTo 0
+    If Len(nm) > 0 Then
+        KupacOznaka = nm & " (" & kupacID & ")"
+    Else
+        KupacOznaka = kupacID
+    End If
+End Function
 
 ' ============================================================
 ' Sifarnik helperi za frmPalete (tip/tezina kutija i kesa, vrste gotovog

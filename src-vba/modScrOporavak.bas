@@ -390,7 +390,7 @@ Private Function PreveziPalete(ByVal brojPrij As String, ByVal prijemnicaID As S
         MsgBox Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & " " & ChrW(8594) & _
                " " & mCiljPrijemnica & _
                IIf(Len(upoz) > 0, vbCrLf & vbCrLf & upoz, "") & _
-               IIf(gajbDiff, vbCrLf & vbCrLf & PaletaAdjustPrompt(mCiljPrijemnica), ""), _
+               IIf(gajbDiff, vbCrLf & vbCrLf & PaletaAdjustPrompt(mCiljPrijemnicaID, mCiljPrijemnica), ""), _
                vbInformation, APP_NAME
         PreveziPalete = True
     Else

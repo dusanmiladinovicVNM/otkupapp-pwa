@@ -8998,6 +8998,51 @@ SABOTAZE = {
         "Test_S6_PaleteCitajuStavke",
         "S6 palete: Adjust vraca klasu II na gajbe njene stavke, pod njenim kljucem",
     ),
+    # S8 rez 1a (N1): korekcija bira paletne stavke po PrijemnicaID-u. Po broju bi
+    # usle i stavke drugog kupca istog broja; kapija linije ih tada odbija, pa
+    # korekcija svog dokumenta ne prolazi.
+    "s8r1a-korekcija-stavke-po-broju": (
+        "modPaletniList.bas",
+        "            If Trim$(NzToText(SafeCell(s, r, sPid))) = prijemnicaID _\n"
+        "               And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> \"DA\" Then\n"
+        "                lin = Trim$(NzToText(SafeCell(s, r, sPst)))\n",
+        "            ' SABOTAZA: paletne stavke po broju\n"
+        "            If Trim$(NzToText(SafeCell(s, r, RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, SRC)))) = brojPrij _\n"
+        "               And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> \"DA\" Then\n"
+        "                lin = Trim$(NzToText(SafeCell(s, r, sPst)))\n",
+        "Test_S8R1a_KorekcijaPoIdentitetu",
+        "S8R1a: korekcija po ID-u koriguje liniju svog dokumenta",
+    ),
+    # S8 rez 1a (N1): resync neta ide po liniji. Po broju prepravlja neto paletnih
+    # stavki drugog kupca istog broja (njegov neto po gajbi je drugaciji).
+    "s8r1a-resync-po-broju": (
+        "modPaletniList.bas",
+        "        If Trim$(NzToText(SafeCell(s, r, sPid))) = prijemnicaID _\n"
+        "           And Trim$(NzToText(SafeCell(s, r, sPst))) = prijemnicaStavkaID _\n",
+        "        ' SABOTAZA: resync po broju\n"
+        "        If Trim$(NzToText(SafeCell(s, r, RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, SRC)))) = _\n"
+        "           Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_BROJ))) _\n",
+        "Test_S8R1a_KorekcijaPoIdentitetu",
+        "S8R1a: paletne stavke drugog kupca istog broja su netaknute",
+    ),
+    # S8 rez 1a (N1): F4 ispravka salje korekciji ID nove prijemnice, ne broj.
+    "s8r1a-dokunos-salje-broj": (
+        "modDokUnos.bas",
+        "        If gajbDiff Then poruke = poruke & PaletaAdjustPrompt(Trim$(res), noviBroj) & vbCrLf\n",
+        "        If gajbDiff Then poruke = poruke & PaletaAdjustPrompt(noviBroj, noviBroj) & vbCrLf   ' SABOTAZA: korekcija dobija broj\n",
+        "T_S8R1a_IspravkaKorigujeSvojDokument",
+        "309: palete ispravke su svedene na njene gajbe (8)",
+    ),
+    # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
+    "s8r1a-altf8-prvi-pogodak": (
+        "modPaletniListUI.bas",
+        "        Case 1\n"
+        "            PrijemnicaZaKorekciju = CStr(ids(1))\n",
+        "        Case Is >= 1   ' SABOTAZA: dvosmislen broj -> prvi pogodak\n"
+        "            PrijemnicaZaKorekciju = CStr(ids(1))\n",
+        "T_S8R1a_AltF8BrojUJedanDokument",
+        "310: dvosmislen broj se odbija",
+    ),
     # Ugovor citaoca: jedna stavka po klasi po dokumentu (pisac: 1432).
     "s6k3-citalac-pusta-dve-iste-klase": (
         "modDokumenta.bas",
