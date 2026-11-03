@@ -4,8 +4,9 @@
 > `docs/STANJE_REFAKTORA.md` stavka 273). Mereno nad `main` = `a668c5e6` (grana
 > `claude/s8-paleta-preflight`); linije koda u ovom fajlu važe za taj commit.
 >
-> **Odluke `PAL-ODL-xx` su PREDLOZI dok ih operater ne potvrdi.** Invarijante `PAL-INV-xx`
-> imenuju šta kod danas drži i šta mu fali; vlasnik posle S8 je naveden uz svaku.
+> **Odluke `PAL-ODL-01..07` je operater doneo 03.11.2026** (§4; `docs/STANJE_REFAKTORA.md` stavka 274).
+> Invarijante `PAL-INV-xx` imenuju šta kod danas drži i šta mu fali; vlasnik posle S8 je naveden
+> uz svaku.
 
 ## 1) Šta je već odlučeno (ne otvara se ponovo)
 
@@ -48,7 +49,7 @@ i klasa se slaže sa klasom stavke.
 - **Vlasnik posle S8 (rez 2):** pisac paletne stavke odbija po imenu. Meka provera ide u
   integritet, po stavci. Strog čitač je **po dokumentu**, ne globalan (`KI-081`).
 
-**`PAL-INV-02` — paletizacija je potpuna** (zavisi od `PAL-ODL-02`). Aktivne paletne
+**`PAL-INV-02` — paletizacija je potpuna** (`PAL-ODL-02`, odlučeno 03.11.2026). Aktivne paletne
 stavke jedne stavke prijemnice nose celu stavku: zbir gajbi = gajbe stavke, a zbir neta =
 `Kolicina` stavke (±0,5 kg, isti prag kao A3).
 
@@ -63,9 +64,23 @@ stavke jedne stavke prijemnice nose celu stavku: zbir gajbi = gajbe stavke, a zb
 
   Delimična paleta i stavka na više paleta su normalno stanje (rubna paleta).
 - **Kršenje koje danas niko ne imenuje:** storno palete koja nosi celu stavku aktivne
-  prijemnice. A3 tu liniju više ne vidi (`PAL-ODL-06`).
+  prijemnice. A3 tu liniju više ne vidi. Po `PAL-ODL-06` storno takve palete se odbija.
 
-## 4) Odluke S8 — PREDLOZI, čekaju operatera
+## 4) Odluke S8 (operater, 03.11.2026)
+
+| ID | Odluka |
+|---|---|
+| **`PAL-ODL-01`** | **Palete i prerada će se slabo koristiti, možda ni do sledećeg leta.** Posle ovog refaktora, od januara 2027, ide Prerada 2.0 u detalje. Posledica: S8 ne gradi ništa što Prerada 2.0 zamenjuje i ne širi se van identiteta i veza. Ručna provera štampe i PDF-a nije potrebna dok rez ne menja papir |
+| **`PAL-ODL-02`** | **Paletizacija je potpuna** (`PAL-INV-02`): zbir aktivnih paletnih stavki jedne stavke = cela stavka; A3 prelazi na ključ stavke |
+| **`PAL-ODL-03`** | **Brišu se sve tri kolone** (`BrojPrijemnice`, `BrojZbirne`, `ZbirnaRoditeljID`). `PrijemnicaStavkaID` je jedina veza i obavezan je; `PrijemnicaID` ostaje labela dokumenta; brojevi za prikaz se čitaju iz zaglavlja prijemnice |
+| **`PAL-ODL-04`** | **Četiri makroa se brišu** (`ClosePaleta_Prompt`, `StornoPaleta_Prompt`, `SavePrerada_Prompt`, `StornoPrerada_Prompt`); ekran Palete ih pokriva po ID-u. **`PaletaAdjust_Prompt` ostaje strog:** broj se razrešava u tačno jedan aktivan dokument, a dvosmislen broj se odbija i imenuje oba kupca |
+| **`PAL-ODL-05`** | **A: radnja „Skini palete" u Oporavku**, nad izabranim redom (po `PrijemnicaID` stornirane prijemnice), kroz postojeće telo storna (`SkiniPaletneStavke`), u sopstvenoj transakciji; prerađena paleta se odbija. Poruke prevezivanja i `MAPA` B-030 pokazuju na tu radnju |
+| **`PAL-ODL-06`** | **Storno palete se odbija po imenu dok paleta nosi robu aktivne prijemnice**; put je storno ili ispravka prijemnice. Paleta bez aktivne robe (siročad, prazna) i dalje se stornira |
+| **`PAL-ODL-07`** | **Sledljivost na paleti ide u S9**: C-040 i spisak kooperanata na paletnom i preradnom listu. S8 obezbeđuje tačan `PrijemnicaStavkaID`; do S9 list izlazi sa zaglavljem, bez spiska |
+
+Podela S8 na rezove je prihvaćena po nezavisnom review-u (plan §14.58, „Review i odluke").
+
+### Predlozi kako su postavljeni (pre odluka)
 
 | ID | Pitanje | Preporuka | Šta zavisi od odgovora |
 |---|---|---|---|

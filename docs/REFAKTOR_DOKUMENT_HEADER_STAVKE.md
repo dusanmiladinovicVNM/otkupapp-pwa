@@ -10624,6 +10624,89 @@ N11 je Prerada 2.0, a nevidljivi pisci su imenovana granica `WHO_WRITES.md`.
 Kad oni padnu po preporuci, rez 1 je **GO** bez novog pre-flight-a: prvo crven test N1 nad
 starim kodom, pa kod. Rez 2 čeka i `PAL-ODL-02`, `-03` i `-06`.
 
+#### Review i odluke (03.11.2026, `docs/STANJE_REFAKTORA.md` stavka 274)
+
+> Ovaj odeljak **zamenjuje** „Rezovi S8" i „GO / HOLD" iznad. Nalazi, verdikt i ugovor reza 1
+> ostaju; ugovor je ovde sužen na rez 1a.
+
+**Nezavisni review** grane `claude/s8-paleta-preflight` (`1bd1d068`):
+
+- **Ocena:** 9,0 / 10; pre-flight COMPLETE, REVIEWED.
+- **Status nalaza** (nijedan nije zatvoren):
+  - N1 (P1): OPEN;
+  - N7: podignut na **P1**;
+  - N8 i N9: P2;
+  - N11: P2, van S8.
+- **Preporuka:** da se proširivanje pre-flight-a prekine i da se počne prvim crvenim testom N1.
+
+Dostižnost N1 review ne dokazuje zasebnim scenarijom; tretira ga kao otvoren rizik. Do crvenog
+testa N1 ostaje **izveden iz koda**.
+
+**Odluke operatera:** `PAL-ODL-01..07`, `docs/DOMEN/PALETE.md` §4. Ukratko:
+
+- palete i prerada će se slabo koristiti, a od januara 2027 ide Prerada 2.0. S8 se zato ne širi
+  van identiteta i veza, i bez ručne provere papira;
+- paletizacija je potpuna;
+- tri kolone se brišu;
+- četiri Alt+F8 makroa se brišu, a korekcija ostaje stroga;
+- „Skini palete" ide u Oporavak;
+- storno palete sa aktivnom robom se odbija;
+- sledljivost na paleti ide u S9.
+
+**Podela po review-u** (svaki red je jedan PR):
+
+| Rez | Sadržaj | Status |
+|---|---|---|
+| **1a** | N1: korekcija (`AdjustPaletaGajbiceZaPrijemnicu_TX`) i `ResyncStavkeNetoAmb` po ID-u. Tri ulaza šalju ID: F4 ispravka (`res`), Oporavak (`mCiljPrijemnicaID`) i `PaletaAdjust_Prompt`, strog po `PAL-ODL-04` | **GO**: prvo crven test nad `main`-om |
+| 1b | N2 (prevezivanje: oba ID-a obavezna); N9 („Nedovršeno" deduplikuje po ID-u); `KI-056`; „Skini palete" (`PAL-ODL-05`), sa porukama prevezivanja i B-030; brisanje četiri makroa (`PAL-ODL-04`) | GO posle 1a |
+| 1c | N7: storno palete odbija robu aktivne prijemnice (`PAL-ODL-06`) | GO posle 1b |
+| 2a | prevod čitalaca na ID: storno zbirne (scope, pregled, uvid, kaskada) uz `KI-039`; uvid prijemnice bez grane po broju; labela u Oporavku; C-048; integritet A3 i C1 po stavci; N8 (strog brojač aktivnih stavki) | svoj pre-flight |
+| 2b | brisanje tri kolone (`PAL-ODL-03`); kapija pisca `PAL-INV-01`; fixture i seed-ovi; grupa `pal_broj` sa pragom 0 | HOLD do 2a |
+| S9 | C-040 i spisak kooperanata na listu (`PAL-ODL-07`) | — |
+
+**ACCEPTANCE CONTRACT — rez 1a**
+
+- **Važi:**
+  - korekcija menja samo paletne stavke izabranog dokumenta, i to po liniji (`PrijemnicaStavkaID`);
+  - nijedan od tri ulaza ne šalje broj;
+  - `PaletaAdjust_Prompt` razrešava broj u tačno jedan aktivan dokument.
+- **Ostaje netaknuto:**
+  - paletizacija pri upisu prijemnice, storno prijemnice i okvir ispravke;
+  - prevezivanje (to je 1b);
+  - prerada, utovar i GP faktura; ekran Palete;
+  - geometrija `SpillGajbice` i izbor PRELIJ / PREKO.
+- **Edge:**
+  - dvoklasni dokument;
+  - klasa dodata ispravkom: sveža paletizacija pod ključem nove stavke;
+  - smanjenje kroz više paleta;
+  - **rubna paleta sa stavkama A i B** (review): menjaju se samo stavke A, a zaglavlje palete
+    ostaje zbir aktivnih stavki oba vlasnika (`RecomputePaletaFromStavke`);
+  - prerađena paleta u obuhvatu → `ADJ_BLOCKED` sa razlogom.
+- **Negativ:**
+  - dve prijemnice različitih kupaca, isti broj, različiti `PrijemnicaID` i `PrijemnicaStavkaID`,
+    obe paletizovane. Korekcija A dovodi palete A na korigovanu prijemnicu, a **nijedna paletna
+    stavka B se ne menja**: broj redova, gajbe, neto i `Stornirano`. **Crveno nad `a668c5e6`**;
+  - nepostojeći ili stornirani ID → `ADJ_BLOCKED`, bez mutacije;
+  - dvosmislen broj u `PaletaAdjust_Prompt` → odbijeno, poruka imenuje oba kupca.
+- **Čime:**
+  - Palete suite: nov `T12`; `T04`–`T09` prelaze na ID;
+  - BFP kroz produkcioni poziv `PreveziPaleteIspravke`: F4 ispravka sa promenjenim gajbama, nad
+    parom kupaca istog broja;
+  - zeleni moraju ostati `Test_S6_PaleteCitajuStavke`, `T_IspravkaPrijemnice_SkipIRelink`,
+    RunAllTests, BFP, Palete i Storno.
+- **Sabotaže** (svaka obara svoju tvrdnju po imenu):
+  - korekcija bira dokument po broju;
+  - resync po broju;
+  - `modDokUnos` šalje broj;
+  - `PaletaAdjust_Prompt` prihvata dvosmislen broj.
+
+  Postojeće `s6k3-adjust-*` se proveravaju sa `sabotaza --proveri-sidra`.
+- **Fixture:**
+  - par kupaca istog broja već postoji (*normal production state*);
+  - paletne stavke bez `PrijemnicaStavkaID` su *synthetic anomaly* i 1a ih ne dira; test seje
+    stavke sa ključem.
+- **Ručna provera:** samo Compile. Papir se ne menja (`PAL-ODL-01`).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
