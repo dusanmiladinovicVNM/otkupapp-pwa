@@ -57,7 +57,12 @@ Uslovi koje alat drži:
   (6 svedeno na blokove, 17 neizdatih van knjige); nabavka 11 dok. / 44391;
   5 naloga sa punim ispod nule — svi vozači, prihvaćeno 03.11.2026 (MIG-ODL-17).
 - **Proba 03.11.2026 nad main-om `a668c5e6` (S7):** isti ishod kao 01.11.; sve
-  ODLUKE prihvaćene (MIG-ODL-06/09/10/11/12/17), sledi upis u svežu svesku.
+  ODLUKE prihvaćene (MIG-ODL-06/09/10/11/12/17).
+- **Upis 03.11.2026 u svežu svesku iz `a668c5e6` (worktree, grana `b025c47c`):
+  prošao.** 34 tabele + podešavanja; `tblAmbalaza` 5168 red., `tblAmbalazaDokument`
+  82; povratno poređenje svake ćelije: 0 razlika; salda ambalaže naspram prevoda:
+  0 razlika. **To je sveska za C002** (dok main ne promeni šemu ili pisca —
+  sledeći je S8, palete).
 - **Upis 28.10.2026 nad sveskom C002 (SHA256 `d5e1f612…`): prošao.** 34 tabele
   + podešavanja; povratno poređenje svake ćelije: 0 razlika; salda ambalaže nove
   sveske naspram prevoda: 0 razlika. Usput nađene i ispravljene tri greške
@@ -113,8 +118,6 @@ robni dokumenti se ne menjaju, pa MIG-ODL-13..15 važe.
 
 ## Otvoreno
 
-- Upis po MIG-ODL-13..17 u svežu svesku iz main-a `a668c5e6` — NEVERIFIKOVANO
-  dok ga operater ne pokrene.
 - Prazna salda vozača na kraju sezone su velika (npr. ST-00002 0,4kg 3462) —
   istorija stare sveske; vredi ih proveriti popisom pre nove sezone.
 - Provera u pravom Excelu nad novom sveskom (Compile, otvaranje ekrana,
