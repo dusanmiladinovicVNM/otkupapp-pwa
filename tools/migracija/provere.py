@@ -188,12 +188,16 @@ def _zbirne(c):
             continue
         if storno:
             continue
-        losi = [p for p in lst if p in otp and (je_storno(_kf(otp[p])) or
-                                                tekst(otp[p].get("IzdatoStatus")) != IZDATO)]
-        if losi:
+        storno = [p for p in lst if p in otp and je_storno(_kf(otp[p]))]
+        nacrt = [p for p in lst if p in otp and p not in storno and tekst(otp[p].get("IzdatoStatus")) != IZDATO]
+        if storno:
             c.nalaz(UPOZORENJE, "AKTIVNA_ZBIRNA_SA_STORNIRANIM_CLANOM", "tblZbirna", z.get("ZbirnaID"),
                     "clanovi %s -- storno tokovi nad zbirnom padaju (ZbrClanoviPoStanju)"
-                    % ", ".join(otp[p].get("OtpremnicaID") for p in losi))
+                    % ", ".join(otp[p].get("OtpremnicaID") for p in storno))
+        if nacrt:
+            c.nalaz(UPOZORENJE, "AKTIVNA_ZBIRNA_CLAN_CEKA_BLOKOVE", "tblZbirna", z.get("ZbirnaID"),
+                    "clanovi %s cekaju blokove (MIG-ODL-18) -- dok se ne izdaju, storno nad zbirnom ne "
+                    "prolazi (ZbrClanoviPoStanju)" % ", ".join(otp[p].get("OtpremnicaID") for p in nacrt))
         zbir = defaultdict(Decimal)
         for p in lst:
             if p in otp and not je_storno(_kf(otp[p])):
@@ -363,7 +367,8 @@ def _ambalaza(c):
 
 
 # Dijagnostika toka otpremnice -- samo meri, nista ne menja (lista u proba_sazetak).
-DIJAGNOSTIKA_OTPREMNICE = ("OTPREMNICA_PREOSTALO_KG", "NEIZDATA_OTPREMNICA_LANAC")
+DIJAGNOSTIKA_OTPREMNICE = ("OTPREMNICA_PREOSTALO_KG", "NEIZDATA_OTPREMNICA_LANAC",
+                           "OTPREMNICA_BEZ_BLOKOVA_BEZ_LANCA")
 
 
 def _otpremnice_preostalo(c, dana=3):
@@ -373,11 +378,12 @@ def _otpremnice_preostalo(c, dana=3):
     (RequireOtpValidanIzvorZbirne), a prijemnica samo izdatu zbirnu
     (PrijemnicaRoditeljRazlog). Meri se:
 
-      * izdata otpremnica kojoj je ostalo kg -- posle MIG-ODL-18 je nema; nalaz
-        bi znacio gresku alata;
-      * nacrt (blokovi nisu do nule): kg, povezano, zbirna, prijemnice i
+      * izdata otpremnica ciji se kg ne slaze sa blokovima -- SAMO SPISAK za
+        operatera (resava ga sa otkupcem), alat nista ne menja;
+      * otpremnica koja ceka blokove (nacrt, MIG-ODL-18): kg, zbirna, prijemnice i
         kandidati -- otpremnice iste stanice u +-`dana` dana ciji blokovi imaju
-        VISE kg nego sto otpremnica nosi (blok moguce pod pogresnom).
+        VISE kg nego sto otpremnica nosi (blok moguce pod pogresnom). Bez zbirne
+        ili prijemnice nije dokazana kao prava -- ODLUKA.
     """
     akt_otk = {kljuc(z["OtkupID"]) for z in c.tabele["tblOtkup"] if not je_storno(_kf(z))}
     kg_otk = defaultdict(lambda: defaultdict(Decimal))
@@ -416,14 +422,18 @@ def _otpremnice_preostalo(c, dana=3):
             continue
         razlika = {k: o[k] - pv[k] for k in set(o) | set(pv) if abs(o[k] - pv[k]) > Decimal("0.005")}
         if razlika:
-            c.nalaz(BLOKIRA, "OTPREMNICA_PREOSTALO_KG", "tblOtpremnica", z.get("OtpremnicaID"),
-                    "%s: izdata, a ocekivano %s kg, povezano %s kg, preostalo %s -- greska alata (MIG-ODL-18)"
-                    % (opis, kg(o), kg(pv), kg(razlika)))
+            c.nalaz(UPOZORENJE, "OTPREMNICA_PREOSTALO_KG", "tblOtpremnica", z.get("OtpremnicaID"),
+                    "%s: ocekivano %s kg, povezano %s kg, preostalo %s -- spisak za operatera "
+                    "(resava se sa otkupcem); alat ne menja" % (opis, kg(o), kg(pv), kg(razlika)))
     for z, opis in neizdate:
         oid = kljuc(z.get("OtpremnicaID"))
         zid = zbirna_otp.get(oid)
         zb = zbr.get(zid) if zid else None
         lanac = "bez zbirne"
+        if zb is None or je_storno(_kf(zb)) or not prijemnice.get(zid):
+            c.nalaz(ODLUKA, "OTPREMNICA_BEZ_BLOKOVA_BEZ_LANCA", "tblOtpremnica", z.get("OtpremnicaID"),
+                    "%s: nema blokova, a ni aktivne zbirne sa prijemnicom -- nije dokazana kao prava "
+                    "otpremnica (MIG-ODL-18); ostaje nacrt" % opis)
         if zb is not None:
             lanac = "zbirna %s (%s%s), prijemnice: %s" % (
                 zb.get("BrojZbirne", ""), tekst(zb.get("IzdatoStatus")) or "nacrt",

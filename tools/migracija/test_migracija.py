@@ -531,8 +531,10 @@ class NovaSveska(SaNovomSveskom):
     def test_otpremnica_bez_otkupa_ostaje_neizdata(self):
         c = self.otp2()
         self.assertEqual(self.nalazi(c, "BLOKIRA"), [])
-        self.assertIn(("OTPREMNICA_BEZ_OTKUPA_OSTAJE_NEIZDATA", "OTP-2"), self.nalazi(c, "ODLUKA"))
+        self.assertIn(("OTPREMNICA_CEKA_BLOKOVE", "OTP-2"), self.nalazi(c, "INFO"))
         self.assertEqual({z["OtpremnicaID"]: z["IzdatoStatus"] for z in c.tabele["tblOtpremnica"]}["OTP-2"], "")
+        # bez zbirne i prijemnice nije dokazana kao prava -- odluka (MIG-ODL-18)
+        self.assertIn(("OTPREMNICA_BEZ_BLOKOVA_BEZ_LANCA", "OTP-2"), self.nalazi(c, "ODLUKA"))
 
     def test_veza_se_popravlja_kad_je_otkup_dokazan_1_1(self):
         c = self.otp2(self.OTK4)
@@ -548,7 +550,7 @@ class NovaSveska(SaNovomSveskom):
         drugi[6] = 21
         c = self.otp2(drugi)
         self.assertNotIn(("VEZA_POPRAVLJENA_MIG21", "OTP-2"), self.nalazi(c, "INFO"))
-        self.assertIn(("OTPREMNICA_BEZ_OTKUPA_OSTAJE_NEIZDATA", "OTP-2"), self.nalazi(c, "ODLUKA"))
+        self.assertIn(("OTPREMNICA_CEKA_BLOKOVE", "OTP-2"), self.nalazi(c, "INFO"))
 
     def test_izuzetak_bez_popravke_veze(self):
         c = self.otp2(self.OTK4, izuzeci_dok=[{"OtpremnicaID": "OTP-2", "radnja": "bez_popravke_veze",
@@ -730,37 +732,36 @@ class MainPosle448(SaNovomSveskom):
         self.assertEqual(sorted(self.knjiga(c, "OTK-1"))[1], ("IZDATA_PRAZNA", "S1", "K1", Decimal(4)))
 
     def test_dijagnostika_preostalo_kg_i_kandidati(self):
-        """Stari tok (blokovi do nule): OTK-3 (40 kg) visi pod OTP-1 (100 kg) -- OTP-1 nije
-        na nuli, pa je nacrt (MIG-ODL-18); neizdata OTP-5 (40 kg, ista stanica) dobija OTP-1
-        kao kandidata (blok moguce pod pogresnom otpremnicom)."""
+        """OTK-3 (40 kg) visi pod OTP-1 (100 kg): OTP-1 ostaje izdata, a spisak za
+        operatera kaze preostalo -40; OTP-5 (40 kg, ista stanica, bez bloka) ceka
+        blokove i dobija OTP-1 kao kandidata (blok moguce pod pogresnom otpremnicom)."""
         d = izmeni("tblOtkup", {"OTK-3": {"OtpremnicaID": "OTP-1"}})
         d.update(izmeni("tblOtpremnica", novi=[dict(OtpremnicaID="OTP-5", Datum=D2, StanicaID="S1",
                                                       VozacID="D1", BrojOtpremnice="205", Klasa="I",
                                                       Kolicina=40, KolAmbalaze=3)]))
         c = self.sagradi(dodatno=d)
-        odl = {n["id"]: n["opis"] for n in c.nalazi if n["pravilo"] == "OTPREMNICA_NEDOVRSENA_OSTAJE_NACRT"}
-        self.assertIn("ocekivano I 100, povezano I 140, preostalo I -40 kg", odl["OTP-1"])
+        otp = {z["OtpremnicaID"]: z["IzdatoStatus"] for z in c.tabele["tblOtpremnica"]}
+        self.assertEqual((otp["OTP-1"], otp["OTP-5"]), (cilj.IZDATO, ""))
+        up = {n["id"]: n["opis"] for n in c.nalazi if n["pravilo"] == "OTPREMNICA_PREOSTALO_KG"}
+        self.assertIn("ocekivano I 100 kg, povezano I 140 kg, preostalo I -40", up["OTP-1"])
+        self.assertIn(("OTPREMNICA_PREOSTALO_KG", "OTP-1"), self.nalazi(c, "UPOZORENJE"))
         lanac = next(n["opis"] for n in c.nalazi
                      if n["pravilo"] == "NEIZDATA_OTPREMNICA_LANAC" and n["id"] == "OTP-5")
         self.assertIn("ocekivano I 40 kg", lanac)
         self.assertIn("OTP-1 201 (+40 kg)", lanac)
-        self.assertNotIn("OTPREMNICA_PREOSTALO_KG", [n["pravilo"] for n in c.nalazi])
 
-    def test_nedovrsena_otpremnica_ostaje_nacrt(self):
-        """MIG-ODL-18: otpremnica 130 kg, unet blok od 100 kg -- preostalo 30, pa nacrt:
-        stavka ostaje ocekivanje (stari kg i gajbe), nema reda u knjizi, a blok ostaje
-        izdat otkup u njenom sastavu (operater dodaje ostatak i izdaje je)."""
-        d = izmeni("tblOtpremnica", {"OTP-1": {"Kolicina": 130, "KolAmbalaze": 13}})
-        c = self.sagradi(dodatno=d)
+    def test_otpremnica_sa_delom_blokova_ostaje_izdata(self):
+        """Odluka operatera 03.11.2026: neslaganje kg otkupa i otpremnice resava operater
+        sa otkupcem -- alat ne pravi pravilo. Otpremnica 130 kg sa blokom od 100 kg ostaje
+        izdata, kg dokumenta se ne dira, gajbe i knjiga idu po bloku (MIG-ODL-14)."""
+        c = self.sagradi(dodatno=izmeni("tblOtpremnica", {"OTP-1": {"Kolicina": 130, "KolAmbalaze": 13}}))
         otp = {z["OtpremnicaID"]: z for z in c.tabele["tblOtpremnica"]}
-        self.assertEqual(otp["OTP-1"]["IzdatoStatus"], "")
+        self.assertEqual(otp["OTP-1"]["IzdatoStatus"], cilj.IZDATO)
         ost = {s["OtpremnicaID"]: s for s in c.tabele["tblOtpremnicaStavke"]}
-        self.assertEqual((ost["OTP-1"]["Kolicina"], ost["OTP-1"]["KolAmbalaze"]), (Decimal(130), Decimal(13)))
-        self.assertEqual(self.knjiga(c, "OTP-1"), [])
-        otk = {z["OtkupID"]: z for z in c.tabele["tblOtkup"]}
-        self.assertEqual(otk["OTK-1"]["IzdatoStatus"], cilj.IZDATO)
-        self.assertIn(("OTPREMNICA_NEDOVRSENA_OSTAJE_NACRT", "OTP-1"), self.nalazi(c, "ODLUKA"))
-        self.assertNotIn("AKTIVAN_OTKUP_BEZ_OTPREMNICE", [n[0] for n in self.nalazi(c) if n[1] == "OTK-1"])
+        self.assertEqual((ost["OTP-1"]["Kolicina"], ost["OTP-1"]["KolAmbalaze"]), (Decimal(130), Decimal(10)))
+        self.assertEqual(self.knjiga(c, "OTP-1"), [("AMBALAZA_UZ_ROBU", "S1", "D1", Decimal(10))])
+        self.assertIn(("OTPREMNICA_PREOSTALO_KG", "OTP-1"), self.nalazi(c, "UPOZORENJE"))
+        self.assertEqual([n for n in self.nalazi(c, "ODLUKA") if n[1] == "OTP-1"], [])
 
     def test_bilans_neuskladjeno_nula_i_vracanje_ima_izlaz(self):
         """AMB-BIL-02 / AMB-INV-15 nad celom novom sveskom (kooperant sa dugom)."""

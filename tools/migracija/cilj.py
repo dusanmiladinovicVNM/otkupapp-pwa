@@ -498,54 +498,28 @@ def _popravi_veze(c, bez_popravke):
 
 
 def _otpremnice_bez_izvora(c):
-    """Otpremnica je IZDATA samo kad su joj blokovi do nule (MIG-ODL-18; main:
-    OtpRequireJednakost -- kg po klasi; gajbe ne, jer ih stari tok nije nulirao,
-    one idu po blokovima, MIG-ODL-14).
+    """Otpremnica bez ijednog unetog bloka je PRAVA otpremnica kojoj fale blokovi
+    (MIG-ODL-18, odluka operatera 03.11.2026: otkupi su obavljeni, blokovi nisu
+    uneti). Stari tok je prvo unosio otpremnicu i prijemnicu, pa blokove pod
+    otpremnicom. main izdaje otpremnicu tek sa blokovima (OtpIzdaj; izvestaji
+    robe je vrednuju iz njih, VrednostIzvoraZaOtpremnicu), pa ostaje NACRT: stavke
+    su ocekivanje (stari kg i gajbe), a operater u novoj svesci unosi blokove
+    (DodajOtpremnicaIzvor_TX) i izdaje je. Nacrt ne knjizi gajbe.
 
-    Stari tok: otpremnica i prijemnica prve, pa blokovi pod otpremnicom dok
-    preostalo kg ne bude 0. Gde blokovi nisu uneti do kraja (otkupi obavljeni,
-    a ne uneti -- odluka operatera 03.11.2026), otpremnica ostaje NACRT: stavke
-    su ocekivanje (stari kg i gajbe), a operater u novoj svesci unosi preostale
-    blokove (DodajOtpremnicaIzvor_TX) i izdaje je. Bez ijednog bloka -- isto
-    (izvestaji robe bi inace pali, VrednostIzvoraZaOtpremnicu). Nacrt ne knjizi
-    gajbe (OtpIzdaj)."""
+    Otpremnica sa bar jednim blokom ostaje izdata i kad se kg ne slaze: to
+    operater resava sa otkupcem (provere._otpremnice_preostalo daje spisak)."""
     akt_otk = {kljuc(z["OtkupID"]) for z in c.tabele["tblOtkup"] if not je_storno(_kf(z))}
-    kg_otk = defaultdict(lambda: defaultdict(Decimal))
-    for st in c.tabele["tblOtkupStavke"]:
-        kg_otk[kljuc(st.get("OtkupID"))][tekst(st.get("Klasa"))] += broj(st.get("Kolicina")) or Decimal(0)
-    ocek = defaultdict(lambda: defaultdict(Decimal))
-    for st in c.tabele["tblOtpremnicaStavke"]:
-        ocek[kljuc(st.get("OtpremnicaID"))][tekst(st.get("Klasa"))] += broj(st.get("Kolicina")) or Decimal(0)
     izvori = defaultdict(list)
     for v in c.tabele["tblOtpremnicaIzvori"]:
-        if kljuc(v["OtkupID"]) in akt_otk:
-            izvori[kljuc(v["OtpremnicaID"])].append(kljuc(v["OtkupID"]))
+        izvori[kljuc(v["OtpremnicaID"])].append(kljuc(v["OtkupID"]))
     for z in c.tabele["tblOtpremnica"]:
         if je_storno(_kf(z)) or z.get("IzdatoStatus") != IZDATO:
             continue
-        oid = kljuc(z["OtpremnicaID"])
-        if not izvori.get(oid):
+        if not any(o in akt_otk for o in izvori.get(kljuc(z["OtpremnicaID"]), [])):
             z["IzdatoStatus"] = ""
-            c.nalaz("ODLUKA", "OTPREMNICA_BEZ_OTKUPA_OSTAJE_NEIZDATA", "tblOtpremnica", z["OtpremnicaID"],
-                    "broj %s, %s: nijedan aktivan otkup se ne moze dokazati -- ne ulazi u izvestaje robe"
-                    % (z.get("BrojOtpremnice", ""), _dan(z.get("Datum"))))
-            continue
-        pov = defaultdict(Decimal)
-        for b in izvori[oid]:
-            for kl, q in kg_otk[b].items():
-                pov[kl] += q
-        o = ocek[oid]
-        preostalo = {k: round(o[k] - pov[k], 2) for k in set(o) | set(pov) if round(o[k] - pov[k], 2)}
-        if preostalo:
-            z["IzdatoStatus"] = ""
-            c.nalaz("ODLUKA", "OTPREMNICA_NEDOVRSENA_OSTAJE_NACRT", "tblOtpremnica", z["OtpremnicaID"],
-                    "broj %s, %s: ocekivano %s, povezano %s, preostalo %s kg -- nacrt; operater unosi "
-                    "preostale blokove i izdaje je (MIG-ODL-18)"
-                    % (z.get("BrojOtpremnice", ""), _dan(z.get("Datum")), _kg(o), _kg(pov), _kg(preostalo)))
-
-
-def _kg(d):
-    return ", ".join("%s %s" % (k, format(Decimal(v).normalize(), "f")) for k, v in sorted(d.items()) if v) or "0"
+            c.nalaz("INFO", "OTPREMNICA_CEKA_BLOKOVE", "tblOtpremnica", z["OtpremnicaID"],
+                    "broj %s, %s: nijedan blok nije unet -- nacrt sa ocekivanim kg i gajbama; operater "
+                    "unosi blokove i izdaje je (MIG-ODL-18)" % (z.get("BrojOtpremnice", ""), _dan(z.get("Datum"))))
 
 
 def _status_otkupa(c):

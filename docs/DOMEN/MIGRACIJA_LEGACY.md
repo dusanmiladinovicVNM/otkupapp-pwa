@@ -28,7 +28,7 @@
 | **MIG-ODL-15** | **NABAVKA pokriva i prazne** (`AMB-INV-16`, #448; vozač od `AMB-10-ODL-37`, #449). Jedna NABAVKA sopstvenog naloga prvog dana rada, u iznosu dubljeg od dva minusa: ukupnog salda i praznih (svaki red naloga osim `AMBALAZA_UZ_ROBU`, `AmbPrazneNaloga`). Pune ispod nule nabavka ne može da popravi — proba ih javlja kao ODLUKA (`AMB_PUNE_ISPOD_NULE`). | `ambalaza.nabavka_na_pocetku`, `pune_i_prazne`, `provere._ambalaza` |
 | **MIG-ODL-16** | **Linija fakture nema svoj storno** (S7 rez 2, `FAK-ODL-03`; šema gubi `tblFakturaStavke.Stornirano/OsirocenoOd` i trace kolone fakture). Stara linija sa `Stornirano = Da` na **aktivnoj** fakturi ne ide u novu svesku (inače bi oživela i ponovo fakturisala stavku) — ostaje u staroj kao arhiva, ODLUKA. Provere prate `FakturaLinijePoStavci`: linija prijemnice mora imati fakturu bez obzira na storno; stavka prijemnice samo na aktivnoj liniji, i najviše na jednoj (`FAK-LIN-01/02`). Sveska C002 nema nijednu fakturu. | `cilj._linije_fakture`, `provere._fakture` |
 | **MIG-ODL-17** | **Pune gajbe vozača ispod nule se prihvataju** (odluka operatera 03.11.2026). Uzrok: 17 otpremnica bez dokazivog otkupa po main-u ne knjiži gajbe (MIG-ODL-14), a prijemnice kupca su ih primile, pa vozač po knjizi predaje više punih nego što je dobio — main to dozvoljava (prijemnicu sudi samo ukupni saldo, AMB-INV-07). Nad C002: vozač ST-00001 0,4kg −125, ST-00002 0,4kg −6, ST-00003 0,4kg −669, ST-00003 0,5kg −47, ST-00007 0,4kg −7; za toliko su mu prazne iznad stvarnih, pa ih „Izdato OM" (`AMB-INV-16`, ODL-37) pušta više nego što fizički drži. Odbijena alternativa: gajbe neizdatih otpremnica u knjizi — manjak bi se vratio na stanice (KI-065), gde kapija praznih utiče na svakodnevni otkup. Otkupi za tih 17 otpremnica u staroj svesci ne postoje (datumi ne odgovaraju ni jednom od 3 otkupa bez otpremnice). | `provere._ambalaza` (ODLUKA `AMB_PUNE_ISPOD_NULE`) |
-| **MIG-ODL-18** | **Otpremnica je izdata samo kad su joj blokovi do nule** (odluka operatera 03.11.2026: „otkupi su obavljeni, samo blokovi nisu uneti"). Stari tok: otpremnica i prijemnica prve, pa blokovi pod otpremnicom dok preostalo kg ne bude 0. main izdaje otpremnicu tek na nuli (`OtpRequireJednakost`, kg po klasi), zbirna prima samo izdatu otpremnicu, a prijemnica samo izdatu zbirnu. Otpremnica kojoj preostalo kg nije 0 (bez ijednog bloka, sa delom blokova ili sa viškom) ostaje **nacrt**: stavke su očekivanje (stari kg i gajbe), ne knjiži gajbe, ne ulazi u izveštaje robe; njeni blokovi ostaju izdati otkupi u njenom sastavu. Operater u novoj svesci unosi preostale blokove (otkupe sa papira) i izdaje je — tada se knjiže i gajbe (smanjuje MIG-ODL-17). Gajbe se ne porede (stari tok ih nije nulirao; izdata ide po blokovima, MIG-ODL-14). Alat ne pravi otkupe — u staroj svesci ih nema. Proširuje MIG-ODL-06. | `cilj._otpremnice_bez_izvora`, `provere._otpremnice_preostalo` |
+| **MIG-ODL-18** | **Otpremnica bez ijednog bloka je prava otpremnica kojoj fale blokovi, ne greška** (odluka operatera 03.11.2026: „otkupi su obavljeni, samo blokovi nisu uneti"; stari tok je prvo unosio otpremnicu i prijemnicu, pa blokove). main je izdaje tek sa blokovima (izveštaji robe je vrednuju iz njih), pa ostaje **nacrt**: stavke su očekivanje (stari kg i gajbe), ne knjiži gajbe; operater u novoj svesci unosi blokove i izdaje je (tada se knjiže i gajbe, smanjuje MIG-ODL-17). Bez aktivne zbirne sa prijemnicom nije dokazana kao prava — ODLUKA. **Otpremnica sa bar jednim blokom ostaje izdata i kad se kg ne slaže sa blokovima** — to operater rešava sa otkupcem za svaki otkup i otpremnicu; alat ne uvodi pravilo, samo daje spisak (UPOZORENJE `OTPREMNICA_PREOSTALO_KG`). Spisak nacrta (kg, zbirna, prijemnice, kandidati sa viškom blokova) je u `proba_sazetak.txt`. | `cilj._otpremnice_bez_izvora`, `provere._otpremnice_preostalo` |
 
 ## MIG-WR-01 — izuzetak od vlasništva upisa
 
@@ -60,7 +60,7 @@ Uslovi koje alat drži:
 - **Proba 03.11.2026 nad main-om `a668c5e6` (S7):** isti ishod kao 01.11.; sve
   ODLUKE prihvaćene (MIG-ODL-06/09/10/11/12/17).
 - **Upis 03.11.2026 u svežu svesku iz `a668c5e6` (worktree, grana `b025c47c`):
-  prošao** (zamenjuje ga upis po MIG-ODL-18, kad operater pogleda probu). 34 tabele + podešavanja; `tblAmbalaza` 5168 red., `tblAmbalazaDokument`
+  prošao.** Po MIG-ODL-18 se knjiga i dokumenti ne menjaju (iste otpremnice su nacrt kao i pre), samo nalazi nose drugo ime. 34 tabele + podešavanja; `tblAmbalaza` 5168 red., `tblAmbalazaDokument`
   82; povratno poređenje svake ćelije: 0 razlika; salda ambalaže naspram prevoda:
   0 razlika. **To je sveska za C002** (dok main ne promeni šemu ili pisca —
   sledeći je S8, palete).
@@ -119,8 +119,9 @@ robni dokumenti se ne menjaju, pa MIG-ODL-13..15 važe.
 
 ## Otvoreno
 
-- Posle upisa po MIG-ODL-18: operater dovršava blokove nacrta otpremnica
-  (spisak: `proba_sazetak.txt`, odeljak „Otpremnice — preostalo kg i neizdate").
+- Posle upisa: operater unosi blokove otpremnica koje ih čekaju (MIG-ODL-18) i
+  rešava sa otkupcem otpremnice čiji se kg ne slaže sa blokovima (spisak:
+  `proba_sazetak.txt`, odeljak „Otpremnice — preostalo kg i neizdate").
 - Prazna salda vozača na kraju sezone su velika (npr. ST-00002 0,4kg 3462) —
   istorija stare sveske; vredi ih proveriti popisom pre nove sezone.
 - Provera u pravom Excelu nad novom sveskom (Compile, otvaranje ekrana,
