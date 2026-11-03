@@ -126,14 +126,16 @@ def _prepisi_red(src, kolone):
 
 
 def ucitaj_izuzetke_dokumenata(putanja):
-    """Sekcija "dokumenti" iz izuzeci.json: otpremnice kojima se veza NE popravlja."""
+    """Sekcija "dokumenti" iz izuzeci.json: otpremnice kojima se veza NE popravlja
+    (bez_popravke_veze) i koje se prenose kao stornirane (storniraj, uz proveru)."""
     import json
     if not putanja:
         return []
     with open(putanja, encoding="utf-8") as f:
         lista = json.load(f).get("dokumenti", [])
     for iz in lista:
-        if iz.get("radnja") != "bez_popravke_veze" or not tekst(iz.get("OtpremnicaID")):
+        if iz.get("radnja") not in ("bez_popravke_veze", "storniraj") or not tekst(iz.get("OtpremnicaID")) \
+                or (iz.get("radnja") == "storniraj" and not iz.get("provera")):
             raise ValueError("izuzeci.json, dokumenti: nepoznat oblik %r" % (iz,))
     return lista
 
@@ -155,10 +157,11 @@ def izgradi(tabele, kanon, izuzeci=(), knjizenje=ambalaza.ISPRAVNO, izuzeci_dok=
 
     _linije_fakture(c, tabele)
     _dokumenti(c, tabele)
+    _storniraj_po_odluci(c, [iz for iz in izuzeci_dok if iz["radnja"] == "storniraj"])
     _izostavi_stornirane_bez_kolicine(c)
     _clanstvo(c, tabele)
     _status_dokumenata(c)
-    _popravi_veze(c, {kljuc(iz["OtpremnicaID"]): iz for iz in izuzeci_dok})
+    _popravi_veze(c, {kljuc(iz["OtpremnicaID"]): iz for iz in izuzeci_dok if iz["radnja"] == "bez_popravke_veze"})
     _otpremnice_bez_izvora(c)
     _status_otkupa(c)
     _prijemnica_roditelj(c, tabele)
@@ -497,6 +500,31 @@ def _popravi_veze(c, bez_popravke):
                 % (otk[oid]["OtkupID"], opis))
 
 
+def _storniraj_po_odluci(c, izuzeci):
+    """MIG-ODL-19: otpremnica koju operater proglasi storniranom (izuzeci.json,
+    radnja storniraj) se prenosi sa Stornirano = Da -- samo dok stari red izgleda
+    tacno kao u "provera" (broj, datum, stanica); inace odluka ne vazi i stavka
+    ide ZA ODLUKU. Stornirana otpremnica ne knjizi gajbe (_otpremnice_po_blokovima)."""
+    otp = {kljuc(z.get("OtpremnicaID")): z for z in c.tabele.get("tblOtpremnica", [])}
+    for iz in izuzeci:
+        z = otp.get(kljuc(iz["OtpremnicaID"]))
+        if z is None:
+            c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_BEZ_DOKUMENTA", "tblOtpremnica", iz["OtpremnicaID"],
+                    "izuzeci.json: otpremnice nema u staroj svesci -- odluka se ne primenjuje")
+            continue
+        razlike = ["%s: odluka '%s', sveska '%s'" % (k, v, _dan(z.get(k)) if k == "Datum" else tekst(z.get(k)))
+                   for k, v in iz["provera"].items()
+                   if (_dan(z.get(k)) if k == "Datum" else kljuc(z.get(k))) != (v if k == "Datum" else kljuc(v))]
+        if razlike:
+            c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_POTPIS_SE_NE_SLAZE", "tblOtpremnica", z.get("OtpremnicaID"),
+                    "storniraj se ne primenjuje -- %s" % "; ".join(razlike))
+            continue
+        if not je_storno(_kf(z)):
+            z["Stornirano"] = "Da"
+        c.nalaz("INFO", "OTPREMNICA_STORNIRANA_PO_ODLUCI", "tblOtpremnica", z.get("OtpremnicaID"),
+                "broj %s, %s: %s" % (z.get("BrojOtpremnice", ""), _dan(z.get("Datum")), tekst(iz.get("razlog"))))
+
+
 def _otpremnice_bez_izvora(c):
     """Otpremnica bez ijednog unetog bloka je PRAVA otpremnica kojoj fale blokovi
     (MIG-ODL-18, odluka operatera 03.11.2026: otkupi su obavljeni, blokovi nisu
@@ -724,6 +752,9 @@ def _otpremnice_po_blokovima(c):
     for z in c.tabele["tblOtpremnica"]:
         oid = z["OtpremnicaID"]
         if je_storno(_kf(z)):
+            # Storno nema neto knjigu; stara aktivna noga (npr. storno po odluci,
+            # MIG-ODL-19) izlazi iz knjige.
+            ocek[("Otpremnica", oid)] = {ambalaza.UZ_ROBU: None}
             continue
         if tekst(z.get("IzdatoStatus")) != IZDATO:
             ocek[("Otpremnica", oid)] = {ambalaza.UZ_ROBU: None}
@@ -790,8 +821,14 @@ def _zbirne_po_otpremnicama(c, izdate):
 
 
 def _nalazi_uskladjivanja(c, rez):
+    storno = {kljuc(z.get("OtpremnicaID")) for z in c.tabele["tblOtpremnica"] if je_storno(_kf(z))}
     for u in rez.uskladjivanje:
         if u["dok_tip"] == "Otpremnica" and u["novo"] == 0:
+            if kljuc(u["dok_id"]) in storno:
+                c.nalaz("INFO", "STORNIRANA_OTPREMNICA_NE_KNJIZI", "tblOtpremnica", u["dok_id"],
+                        "%s gajbi '%s' stanica -> vozac izlazi iz knjige (otpremnica je stornirana)"
+                        % (u["staro"], u["tip"]))
+                continue
             c.nalaz("INFO", "NEIZDATA_OTPREMNICA_NE_KNJIZI", "tblOtpremnica", u["dok_id"],
                     "%s gajbi '%s' stanica -> vozac izlazi iz knjige (main knjizi tek pri izdavanju)"
                     % (u["staro"], u["tip"]))

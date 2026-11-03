@@ -3,7 +3,7 @@
     "Rucne odluke za pojedinacne redove stare tblAmbalaza, po starom AmbID-ju.",
     "Svaka odluka vazi SAMO dok red izgleda tacno kao u 'provera'; ako se red promeni,",
     "alat ga vraca ZA ODLUKU (IZUZETAK_POTPIS_SE_NE_SLAZE) umesto da primeni staru odluku.",
-    "radnja: izuzmi | kretanje | za_odluku. Sekcija 'dokumenti': otpremnice kojima alat NE popravlja vezu (MIG-21).",
+    "radnja: izuzmi | kretanje | za_odluku. Sekcija 'dokumenti': otpremnice kojima alat NE popravlja vezu (bez_popravke_veze, MIG-21) i koje prenosi kao stornirane (storniraj, uz proveru potpisa).",
     "Izvor odluka: MIG-19.11 (OMUlaz) i MIG-19.12 (AMB-00700), grana chore/import-migration-tools. OMUlaz bez izvora -> NABAVKA: odluka operatera 28.10.2026."
   ],
   "izuzeci": [
@@ -61,6 +61,12 @@
       "OtpremnicaID": "OTP-00666",
       "radnja": "bez_popravke_veze",
       "razlog": "Poznat istorijski storno, rucno istrazen (MIG-21): otkup mu se nikad ne dodaje automatski."
+    },
+    {
+      "OtpremnicaID": "OTP-00666",
+      "radnja": "storniraj",
+      "provera": {"BrojOtpremnice": "2/050726", "Datum": "2026-07-05", "StanicaID": "ST-00002"},
+      "razlog": "Nema blokova ni prijemnice, zbirna S2/050726 je stornirana -- prenosi se kao stornirana (MIG-ODL-19, odluka operatera 03.11.2026)."
     }
   ]
 }

@@ -381,8 +381,8 @@ class Izuzeci(SaSveskom):
         lista = ambalaza.ucitaj_izuzetke(migracija.IZUZECI)
         self.assertEqual(len(lista), 7)
         self.assertTrue(all(iz.get("provera") for iz in lista))
-        self.assertEqual([d["OtpremnicaID"] for d in cilj.ucitaj_izuzetke_dokumenata(migracija.IZUZECI)],
-                         ["OTP-00666"])
+        self.assertEqual([(d["OtpremnicaID"], d["radnja"]) for d in cilj.ucitaj_izuzetke_dokumenata(migracija.IZUZECI)],
+                         [("OTP-00666", "bez_popravke_veze"), ("OTP-00666", "storniraj")])
 
 
 class Dokumenti(SaSveskom):
@@ -415,11 +415,11 @@ class Amb10Oblik(SaSveskom):
 
 
 class SaNovomSveskom(SaSveskom):
-    def sagradi(self, amb=None, dodatno=None):
+    def sagradi(self, amb=None, dodatno=None, izuzeci_dok=()):
         put = os.path.join(self.dir.name, "stara.xlsx")
         snimi_svesku(put, osnovne_tabele(normalno() if amb is None else amb, dodatno))
         self.tabele = procitaj_svesku(put)
-        c = cilj.izgradi(self.tabele, dokumenti.ucitaj_kanon())
+        c = cilj.izgradi(self.tabele, dokumenti.ucitaj_kanon(), izuzeci_dok=izuzeci_dok)
         provere.proveri(c)
         provere.proveri_isplate_iz_starog(c, self.tabele)
         return c
@@ -551,6 +551,28 @@ class NovaSveska(SaNovomSveskom):
         c = self.otp2(drugi)
         self.assertNotIn(("VEZA_POPRAVLJENA_MIG21", "OTP-2"), self.nalazi(c, "INFO"))
         self.assertIn(("OTPREMNICA_CEKA_BLOKOVE", "OTP-2"), self.nalazi(c, "INFO"))
+
+    STORNIRAJ_OTP2 = {"OtpremnicaID": "OTP-2", "radnja": "storniraj", "razlog": "test",
+                      "provera": {"BrojOtpremnice": "202", "Datum": D3.isoformat(), "StanicaID": "S1"}}
+
+    def test_storniraj_po_odluci(self):
+        """MIG-ODL-19: otpremnica bez blokova i bez prijemnice, proglasena storniranom,
+        prenosi se sa Stornirano = Da -- nije vise nacrt koji ceka blokove."""
+        c = self.otp2(izuzeci_dok=[self.STORNIRAJ_OTP2])
+        otp = {z["OtpremnicaID"]: z for z in c.tabele["tblOtpremnica"]}
+        self.assertEqual(otp["OTP-2"]["Stornirano"], "Da")
+        self.assertIn(("OTPREMNICA_STORNIRANA_PO_ODLUCI", "OTP-2"), self.nalazi(c, "INFO"))
+        pravila = [n[0] for n in self.nalazi(c) if n[1] == "OTP-2"]
+        self.assertNotIn("OTPREMNICA_CEKA_BLOKOVE", pravila)
+        self.assertNotIn("OTPREMNICA_BEZ_BLOKOVA_BEZ_LANCA", pravila)
+        self.assertEqual(self.nalazi(c, "BLOKIRA"), [])
+
+    def test_storniraj_ne_vazi_kad_se_potpis_ne_slaze(self):
+        iz = dict(self.STORNIRAJ_OTP2, provera={"BrojOtpremnice": "202", "Datum": D2.isoformat(), "StanicaID": "S1"})
+        c = self.otp2(izuzeci_dok=[iz])
+        otp = {z["OtpremnicaID"]: z for z in c.tabele["tblOtpremnica"]}
+        self.assertEqual(otp["OTP-2"]["Stornirano"], "")
+        self.assertIn(("IZUZETAK_DOKUMENTA_POTPIS_SE_NE_SLAZE", "OTP-2"), self.nalazi(c, "ODLUKA"))
 
     def test_izuzetak_bez_popravke_veze(self):
         c = self.otp2(self.OTK4, izuzeci_dok=[{"OtpremnicaID": "OTP-2", "radnja": "bez_popravke_veze",
@@ -693,6 +715,20 @@ class MainPosle448(SaNovomSveskom):
         self.assertEqual(noga13.ishod, ambalaza.ISHOD_NE_KNJIZI)
         self.assertFalse(any(ambalaza.proveri_pokrivenost(c.amb).values()))
         self.assertEqual(self.saldo(c, "Stanica", "S1")["razlika"], 0)
+
+    def test_stornirana_po_odluci_ne_knjizi(self):
+        """MIG-ODL-19 sa aktivnom starom nogom (kao OTP-00666, 41 gajba): stornirana
+        otpremnica nema neto knjigu, pa noga izlazi iz knjige, sa svojim razlogom."""
+        amb = normalno() + [noga(13, D2, 5, "Izlaz", "S1", "Stanica", "D1", "OTP-5", "Otpremnica")]
+        d = izmeni("tblOtpremnica", novi=[dict(OtpremnicaID="OTP-5", Datum=D2, StanicaID="S1", VozacID="D1",
+                                                BrojOtpremnice="205", Klasa="I", Kolicina=40, KolAmbalaze=5)])
+        iz = [{"OtpremnicaID": "OTP-5", "radnja": "storniraj", "razlog": "test",
+               "provera": {"BrojOtpremnice": "205", "Datum": D2.isoformat(), "StanicaID": "S1"}}]
+        c = self.sagradi(amb, d, izuzeci_dok=iz)
+        self.assertEqual(self.knjiga(c, "OTP-5"), [])
+        self.assertIn(("STORNIRANA_OTPREMNICA_NE_KNJIZI", "OTP-5"), self.nalazi(c, "INFO"))
+        self.assertFalse(any(ambalaza.proveri_pokrivenost(c.amb).values()))
+        self.assertEqual([n for n in self.nalazi(c, "BLOKIRA")], [])
 
     def test_nabavka_pokriva_i_prazne(self):
         """AMB-INV-16: S2 primi 10 punih i izda 4 prazne -- ukupno +6, prazne -4.
