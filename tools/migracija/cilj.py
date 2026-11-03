@@ -153,6 +153,7 @@ def izgradi(tabele, kanon, izuzeci=(), knjizenje=ambalaza.ISPRAVNO, izuzeci_dok=
         if t is not None and t.redovi:
             c.nalaz("INFO", "NE_PRENOSI_SE", ime, "", "%d red. -- %s" % (len(t.redovi), razlog))
 
+    _linije_fakture(c, tabele)
     _dokumenti(c, tabele)
     _izostavi_stornirane_bez_kolicine(c)
     _clanstvo(c, tabele)
@@ -168,6 +169,30 @@ def izgradi(tabele, kanon, izuzeci=(), knjizenje=ambalaza.ISPRAVNO, izuzeci_dok=
     _tekst_kolone(c)
     _podesavanja(c, tabele)
     return c
+
+
+def _linije_fakture(c, tabele):
+    """S7 rez 2 (FAK-ODL-03): linija fakture vise nema svoj storno -- aktivna je
+    ako i samo ako je aktivna njena faktura. Stara linija sa Stornirano = Da na
+    AKTIVNOJ fakturi bi u novoj svesci ozivela (fakturisala bi stavku ponovo),
+    pa ne ide u novu svesku; ostaje u staroj kao arhiva (isto kao MIG-ODL-09).
+    Na storniranoj fakturi je ionako neaktivna i prenosi se."""
+    t = tabela(tabele, "tblFakturaStavke")
+    if t is None or not c.tabele.get("tblFakturaStavke"):
+        return
+    fak = {kljuc(f.get("FakturaID")): f for f in c.tabele.get("tblFakture", [])}
+    ostaju = []
+    # PREPIS cuva redosled, pa je i-ti stari red i-ti red nove tabele.
+    for stari, novi in zip(t.redovi, c.tabele["tblFakturaStavke"]):
+        f = fak.get(kljuc(novi.get("FakturaID")))
+        if je_storno(stari) and f is not None and not je_storno(_kf(f)):
+            c.izostavljeni.add(("tblFakturaStavke", kljuc(novi.get("StavkaID"))))
+            c.nalaz("ODLUKA", "STORNIRANA_LINIJA_AKTIVNE_FAKTURE_IZOSTAVLJENA", "tblFakturaStavke",
+                    novi.get("StavkaID"), "faktura %s je aktivna; linija bez svog storna bi ozivela "
+                    "(FAK-ODL-03) -- ostaje u staroj svesci" % f.get("BrojFakture", ""))
+            continue
+        ostaju.append(novi)
+    c.tabele["tblFakturaStavke"] = ostaju
 
 
 def _podesavanja(c, tabele):
@@ -586,7 +611,10 @@ def _zatvori_otvorene_palete(c):
 
 
 def _stavke_nizvodno(c):
-    """Paleta i faktura stavka dobijaju PrijemnicaStavkaID svoje prijemnice."""
+    """Paleta i faktura stavka dobijaju PrijemnicaStavkaID svoje prijemnice.
+    Linija fakture bez stavke prijemnice obara strog citac samo kad je njena
+    faktura aktivna (FAK-ODL-03: linija nema svoj storno)."""
+    aktivne = {kljuc(f.get("FakturaID")) for f in c.tabele.get("tblFakture", []) if not je_storno(_kf(f))}
     for ime in ("tblPaletaStavka", "tblFakturaStavke"):
         for r in c.tabele.get(ime, []):
             if "PrijemnicaStavkaID" not in r:
@@ -598,7 +626,9 @@ def _stavke_nizvodno(c):
             if sid:
                 r["PrijemnicaStavkaID"] = sid
             else:
-                c.nalaz("BLOKIRA" if ime == "tblFakturaStavke" and not je_storno(_kf(r)) else "UPOZORENJE",
+                aktivna = kljuc(r.get("FakturaID")) in aktivne if ime == "tblFakturaStavke" \
+                    else not je_storno(_kf(r))
+                c.nalaz("BLOKIRA" if ime == "tblFakturaStavke" and aktivna else "UPOZORENJE",
                         "STAVKA_BEZ_PRIJEMNICE", ime, r.get("StavkaID", ""),
                         "PrijemnicaID='%s' ne postoji u tblPrijemnica" % pid)
 

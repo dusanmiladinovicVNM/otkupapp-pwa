@@ -585,6 +585,33 @@ class NovaSveska(SaNovomSveskom):
         c = self.sagradi(dodatno={"tblFakturaStavke": (kol, redovi)})
         self.assertIn(("FAKTURA_STAVKA_BEZ_STAVKE_PRIJEMNICE", "FST-00002"), self.nalazi(c, "BLOKIRA"))
 
+    def test_stornirana_linija_aktivne_fakture_ne_ozivljava(self):
+        """S7 (FAK-ODL-03): linija nema svoj storno. Stara linija sa Stornirano = Da
+        na aktivnoj fakturi ne ide u novu svesku -- inace bi ozivela."""
+        c = self.sagradi(dodatno=izmeni("tblFakturaStavke", {"FST-00001": {"Stornirano": "Da"}}))
+        self.assertEqual(c.tabele["tblFakturaStavke"], [])
+        self.assertIn(("STORNIRANA_LINIJA_AKTIVNE_FAKTURE_IZOSTAVLJENA", "FST-00001"), self.nalazi(c, "ODLUKA"))
+        self.assertNotIn("Stornirano", c.kanon["tblFakturaStavke"])
+
+    def test_linija_stornirane_fakture_nije_aktivna(self):
+        """Linija stornirane fakture bez stavke prijemnice ne obara strog citac
+        (FakturaLinijePoStavci gleda samo aktivne); bez fakture -- obara uvek."""
+        d = izmeni("tblFakture", {"FAK-00001": {"Stornirano": "Da"}})
+        d.update(izmeni("tblFakturaStavke", novi=[
+            dict(StavkaID="FST-00002", FakturaID="FAK-00001", PrijemnicaID="PRJ-9", Kolicina=5),
+            dict(StavkaID="FST-00003", FakturaID="FAK-00009", PrijemnicaID="PRJ-1", Kolicina=5)]))
+        c = self.sagradi(dodatno=d)
+        blokira = self.nalazi(c, "BLOKIRA")
+        self.assertNotIn(("FAKTURA_STAVKA_BEZ_STAVKE_PRIJEMNICE", "FST-00002"), blokira)
+        self.assertIn(("FAKTURA_STAVKA_BEZ_FAKTURE", "FST-00003"), blokira)
+
+    def test_stavka_prijemnice_na_dve_aktivne_fakture_blokira(self):
+        d = izmeni("tblFakture", novi=[dict(FakturaID="FAK-00002", BrojFakture="2/2026", Datum=D3, KupacID="C1")])
+        d.update(izmeni("tblFakturaStavke", novi=[
+            dict(StavkaID="FST-00002", FakturaID="FAK-00002", PrijemnicaID="PRJ-1", Kolicina=90, Klasa="I")]))
+        c = self.sagradi(dodatno=d)
+        self.assertIn(("STAVKA_PRIJEMNICE_NA_DVE_AKTIVNE_FAKTURE", "FST-00002"), self.nalazi(c, "BLOKIRA"))
+
     def test_bez_stavke_provera_pada(self):
         """Dvosmerni dokaz: zaglavlje bez stavke mora da BLOKIRA."""
         c = self.sagradi()

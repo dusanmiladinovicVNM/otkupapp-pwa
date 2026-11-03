@@ -26,6 +26,7 @@
 | **MIG-ODL-13** | **Vraćanje tuđe ambalaže ima svoj izlaz** (`AMB-INV-15`, #448; `KI-024` deo 2). Uz svako migraciono `VRACANJE_TUDJE` ide `IZLAZ_TUDJE_AMBALAZE` partner → SpoljniSvet, isti dokument, dan, tip i količina — isti red koji piše `PrenesiAmbalazu`. Fizički saldo kooperanta na kraju dana je max(stari, 0), obaveza max(−stari, 0), a poslovni saldo (kartica) = stari. Bilans „Neusklađeno" je 0 (`AMB-BIL-02`). | `ambalaza.primeni_politiku_duga`, `_izlaz_tudje` |
 | **MIG-ODL-14** | **Knjiga robnog dokumenta je ono što bi upisao pisac main-a** (`KI-065`, odluka operatera 31.10.2026 za otpremnicu). Otpremnica: gajbe = zbir gajbi blokova istog tipa, i u dokumentu i u knjizi (`OtpRequireJednakost`); **neizdata otpremnica ne knjiži** (`OtpIzdaj`) — njene stare noge su van knjige (`DOKUMENT_NE_KNJIZI`); blok drugog tipa ambalaže ne ulazi u zbir (`OtpRequireIzvorValjan`, ODLUKA). Zbirna: gajbe = zbir izdatih otpremnica (`ZbrRequireJednakost`). Otkup i prijemnica: **knjiga je istorija** (MIG-ODL-01), pa se gajbe dokumenta (`KolAmbalaze` stavke, `KolAmbIzdata`, `KolAmbVracena`) usklađuju sa njom; dokument sa nerazrešenom nogom se ne dira. Kg se ne menja nigde. Svaka izmena je nalaz u probi i red na listu „Uskladjivanje" pregleda. | `cilj._robni_dokumenti`, `ambalaza.uskladi_sa_dokumentima` |
 | **MIG-ODL-15** | **NABAVKA pokriva i prazne** (`AMB-INV-16`, #448; vozač od `AMB-10-ODL-37`, #449). Jedna NABAVKA sopstvenog naloga prvog dana rada, u iznosu dubljeg od dva minusa: ukupnog salda i praznih (svaki red naloga osim `AMBALAZA_UZ_ROBU`, `AmbPrazneNaloga`). Pune ispod nule nabavka ne može da popravi — proba ih javlja kao ODLUKA (`AMB_PUNE_ISPOD_NULE`). | `ambalaza.nabavka_na_pocetku`, `pune_i_prazne`, `provere._ambalaza` |
+| **MIG-ODL-16** | **Linija fakture nema svoj storno** (S7 rez 2, `FAK-ODL-03`; šema gubi `tblFakturaStavke.Stornirano/OsirocenoOd` i trace kolone fakture). Stara linija sa `Stornirano = Da` na **aktivnoj** fakturi ne ide u novu svesku (inače bi oživela i ponovo fakturisala stavku) — ostaje u staroj kao arhiva, ODLUKA. Provere prate `FakturaLinijePoStavci`: linija prijemnice mora imati fakturu bez obzira na storno; stavka prijemnice samo na aktivnoj liniji, i najviše na jednoj (`FAK-LIN-01/02`). Sveska C002 nema nijednu fakturu. | `cilj._linije_fakture`, `provere._fakture` |
 
 ## MIG-WR-01 — izuzetak od vlasništva upisa
 
@@ -49,7 +50,12 @@ Uslovi koje alat drži:
 
 - **01.11.2026 — sveska iz `7c12aa2e` više NIJE sveska za C002.** Main
   `fd39a716` (#446–#450) menja pisca ambalaže (MIG-ODL-13..15); migracija se
-  ponavlja nad svežom sveskom iz tog main-a (pregled → proba → upis).
+  ponavlja nad svežom sveskom iz aktuelnog main-a (pregled → proba → upis).
+- **Proba 01.11.2026 nad C002 (MIG-ODL-13..15):** 0 BLOKIRA; AMB-INV-07 i
+  AMB-INV-16 (prazne) drže; 54 vraćanja = 54 izlaza; otpremnice −1042 gajbe
+  (6 svedeno na blokove, 17 neizdatih van knjige); nabavka 11 dok. / 44391;
+  **5 naloga sa punim ispod nule — čeka odluku** (detalji u `proba_sazetak.txt`
+  od verzije `b7d17193`).
 - **Upis 28.10.2026 nad sveskom C002 (SHA256 `d5e1f612…`): prošao.** 34 tabele
   + podešavanja; povratno poređenje svake ćelije: 0 razlika; salda ambalaže nove
   sveske naspram prevoda: 0 razlika. Usput nađene i ispravljene tri greške
@@ -95,6 +101,13 @@ Provereno nad kodom 01.11.2026; šema se ne menja (otisak `87AB4F9B`).
   pravilo za ponovni prevod → MIG-ODL-14/15.
 - **#450:** vraćanje kupcu (`ODL-39`) — novi tok, stara sveska ga nema; obaveza
   prema kupcu iz migracionog pokrića ostaje i sada se može vratiti sa F7.
+
+## Usklađenost sa main-om `a668c5e6` (S7, #451–#454)
+
+Provereno 03.11.2026; grana rebase-ovana na `a668c5e6`. S7 menja šemu fakture
+(otisak `B22A1572`) → MIG-ODL-16. Ostalo (SEF linija, storno fakture, health,
+utovar) su pisci i čitaoci nad fakturama, kojih u svesci C002 nema. Ambalaža i
+robni dokumenti se ne menjaju, pa MIG-ODL-13..15 važe.
 
 ## Otvoreno
 

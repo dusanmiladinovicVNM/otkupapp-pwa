@@ -204,28 +204,49 @@ def _zbirne(c):
 
 
 def _fakture(c):
-    """FakturaLinijePoStavci: linija prijemnice bez PrijemnicaStavkaID-a,
-    faktura bez ID-a ili dupla, aktivna linija stornirane fakture -- pada."""
+    """modFaktura.FakturaLinijePoStavci posle S7 reza 2 (FAK-ODL-03): linija nema
+    svoj storno -- aktivna je ako i samo ako je aktivna njena faktura. Pada:
+    faktura bez ID-a ili dupla; linija prijemnice bez FakturaID-a ili na fakturu
+    koje nema, BEZ obzira na storno (FAK-LIN-02); aktivna linija bez
+    PrijemnicaStavkaID-a; stavka prijemnice na dve aktivne linije (FAK-LIN-01)."""
     fak = Counter(kljuc(f.get("FakturaID")) for f in c.tabele.get("tblFakture", []))
     for i, n in fak.items():
         if not i or n > 1:
             c.nalaz(BLOKIRA, "FAKTURA_ID_PRAZAN_ILI_DUPLI", "tblFakture", i, "")
-    storno_fak = {kljuc(f.get("FakturaID")) for f in c.tabele.get("tblFakture", []) if je_storno(_kf(f))}
+    aktivna = _aktivne_fakture(c)
+    zauzeto = {}
     for s in c.tabele.get("tblFakturaStavke", []):
-        if je_storno(_kf(s)):
+        fid = kljuc(s.get("FakturaID"))
+        prijemnicka = bool(tekst(s.get("PrijemnicaID")))
+        if not fid or fak.get(fid) != 1:
+            # GP linija (prerada, utovar) ne ide kroz strog citac; meri je health 3.
+            c.nalaz(BLOKIRA if prijemnicka else UPOZORENJE, "FAKTURA_STAVKA_BEZ_FAKTURE",
+                    "tblFakturaStavke", s.get("StavkaID"), "FakturaID='%s'" % s.get("FakturaID", ""))
             continue
-        if kljuc(s.get("FakturaID")) not in fak:
-            c.nalaz(BLOKIRA, "FAKTURA_STAVKA_BEZ_FAKTURE", "tblFakturaStavke", s.get("StavkaID"), "")
-        if kljuc(s.get("FakturaID")) in storno_fak:
-            c.nalaz(BLOKIRA, "AKTIVNA_STAVKA_STORNIRANE_FAKTURE", "tblFakturaStavke", s.get("StavkaID"), "")
-        if tekst(s.get("PrijemnicaID")) and not tekst(s.get("PrijemnicaStavkaID")):
+        if not prijemnicka or fid not in aktivna:
+            continue
+        sid = kljuc(s.get("PrijemnicaStavkaID"))
+        if not sid:
             c.nalaz(BLOKIRA, "FAKTURA_STAVKA_BEZ_STAVKE_PRIJEMNICE", "tblFakturaStavke", s.get("StavkaID"),
                     "PrijemnicaID='%s'" % s.get("PrijemnicaID"))
+        elif sid in zauzeto:
+            c.nalaz(BLOKIRA, "STAVKA_PRIJEMNICE_NA_DVE_AKTIVNE_FAKTURE", "tblFakturaStavke", s.get("StavkaID"),
+                    "%s je i na fakturi %s (FAK-LIN-01)" % (s.get("PrijemnicaStavkaID"), zauzeto[sid]))
+        else:
+            zauzeto[sid] = s.get("FakturaID")
     for f in c.tabele.get("tblFakture", []):
         b = tekst(f.get("BrojFakture"))
         if b and not _broj_fakture_ok(b):
             c.nalaz(UPOZORENJE, "BROJ_FAKTURE_NIJE_N_GGGG", "tblFakture", f.get("FakturaID"),
                     "BrojFakture='%s' -- nova numeracija iste godine bi krenula od 1" % b)
+
+
+def _aktivne_fakture(c):
+    """ID-jevi aktivnih faktura (modFaktura.AktivnostFaktura): samo ID koji se
+    javlja tacno jednom i nije storniran."""
+    fak = Counter(kljuc(f.get("FakturaID")) for f in c.tabele.get("tblFakture", []))
+    return {kljuc(f.get("FakturaID")) for f in c.tabele.get("tblFakture", [])
+            if fak[kljuc(f.get("FakturaID"))] == 1 and not je_storno(_kf(f))}
 
 
 def _broj_fakture_ok(b):
