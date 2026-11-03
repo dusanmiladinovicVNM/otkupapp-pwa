@@ -31,6 +31,10 @@ Public Const IZV_VLASNIK_NEJASAN As String = "nejasan vlasnik"
 ' Labela reda pocetnog stanja u karticama (FM-0028 #1).
 Public Const IZV_POCETNO_STANJE As String = "POCETNO STANJE"
 
+' Labela reda fizickog stanja ambalaze stanice u pregledu Saldo po OM
+' (AMB-POSL-04): popunjena je samo kolona AMB, pa se kolona sabira u UKUPNO.
+Public Const IZV_STANJE_OM As String = "Stanje OM"
+
 ' KART-HRON-01: izvori reda kartice kooperanta koji NISU dokument knjige
 ' (otkup i ambalazni dokument nose DOK_TIP_*). Isti literali su ref-kljuc reda
 ' (kolona 9 kartice), pa izvor ima jedno ime.
@@ -697,18 +701,35 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
     ' predaje (ReportSaldoOMZbirni ga je sabirao vise puta), danasnji bi pregled
     ' za proslost punio kasnijim kretanjima, a fizicki bi pokrice deficita
     ' prikazao kao zaduzenje. Nema prelivanja: kretanje sa drugom stanicom je
-    ' tamo. Fizicki pregled stanice ostaje ReportAmbalaza("OM").
+    ' tamo. Pregled kretanja stanice ostaje ReportAmbalaza("OM").
     Dim koopAmbDict As Object
     Set koopAmbDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT, True, datumDo, _
                                                    AMB_NALOG_STANICA, Trim$(stanicaID))
 
+    ' --- Fizicko stanje STANICE na datumDo (AMB-POSL-04, odluka 03.11.2026).
+    '
+    ' UKUPNO kolone Ambalaza = koliko firminih gajbi je "u krugu" otkupnog mesta:
+    ' u magacinu stanice (fizicki, svi tipovi) + kod njenih kooperanata (poslovno,
+    ' prema toj stanici, gore). Isti primitiv i isto pravilo znaka kao red
+    ' kooperanta -- bez svog prolaza kroz knjigu. Fizicki, ne poslovno: magacin
+    ' broji gajbe koje stvarno drzi; kooperant koji donese SVOJE gajbe daje
+    ' stanici +N, sebi poslovno -N, pa zbir ostaje 0 (firminih gajbi tu nema).
+    ' Gajbe predate vozacu ili kupcu su izasle iz kruga i ne ulaze.
+    ' Lista Ambalaza (ReportAmbalaza("OM")) NIJE izvor ovog broja: ona nosi
+    ' kretanja u opsegu, bez pocetnog stanja.
+    Dim stanjeOMDict As Object, stanjeOM As Long
+    Set stanjeOMDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_STANICA, False, datumDo)
+    If stanjeOMDict.Exists(Trim$(stanicaID)) Then stanjeOM = CLng(stanjeOMDict(Trim$(stanicaID)))
+
     ' --- Ergebnis-Array: 8 Spalten ---
     ' Kooperant | Kolicina | Vrednost | Isplaceno | AgroZaduzenje | Saldo | Ambalaza | Doplata
-    
+    ' Posle kooperanata: OM AVANS, AGROHEMIJA, Stanje OM (kad nisu 0), UKUPNO.
+
     Dim rowCount As Long
     rowCount = dict.count + 1  ' +UKUPNO
     If hasOMAvans Then rowCount = rowCount + 1
     If agroBezStanica > 0 Then rowCount = rowCount + 1
+    If stanjeOM <> 0 Then rowCount = rowCount + 1
     
     Dim result() As Variant
     ReDim result(1 To rowCount, 1 To 8)
@@ -772,10 +793,19 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
     If agroBezStanica > 0 Then
         Dim agroRow As Long
         agroRow = rowCount - 1
+        If stanjeOM <> 0 Then agroRow = agroRow - 1
         result(agroRow, 1) = "AGROHEMIJA (nerasporedjena, van UKUPNO)"
         result(agroRow, 5) = agroBezStanica
     End If
-    
+
+    ' Stanje OM (AMB-POSL-04): samo kolona Ambalaza; ostale ostaju prazne (stanica
+    ' nije kooperant -- nema otkupa, novca ni agro zaduzenja). Ulazi u UKUPNO.
+    If stanjeOM <> 0 Then
+        result(rowCount - 1, 1) = IZV_STANJE_OM
+        result(rowCount - 1, 7) = stanjeOM
+        totAmb = totAmb + stanjeOM
+    End If
+
     ' UKUPNO
     result(rowCount, 1) = "UKUPNO"
     result(rowCount, 2) = totKol
@@ -785,9 +815,9 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
     result(rowCount, 6) = totVr + totDop - totNov - totAgro
     result(rowCount, 7) = totAmb
     result(rowCount, 8) = totDop
-    
-    ' Telo po nazivu kooperanta (DOC-SORT-01); OM AVANS, AGROHEMIJA i UKUPNO
-    ' ostaju na kraju.
+
+    ' Telo po nazivu kooperanta (DOC-SORT-01); OM AVANS, AGROHEMIJA, Stanje OM i
+    ' UKUPNO ostaju na kraju.
     If dict.count > 1 Then
         Dim kljucSal() As String
         ReDim kljucSal(1 To dict.count)
@@ -2090,6 +2120,8 @@ End Sub
 ' pojedinacnog ReportSaldoOM te stanice (agro PRIPISAN stanicama ucestvuje u
 ' saldu; "nerasporedjena" agro linija je i tamo van UKUPNO pa je nema ni ovde).
 ' Doplata je na kraju iz istog razloga kao u pojedinacnom: pozicioni citaoci.
+' Amb je zato stanje stanice + njeni kooperanti (AMB-POSL-04) -- pravilo zivi
+' samo u pojedinacnom; stanica koja ima samo gajbe u magacinu ovde OSTAJE.
 Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
                                     ByVal datumDo As Date) As Variant
     Const SRC As String = "modIzvestaj.ReportSaldoOMZbirni"
