@@ -26,8 +26,10 @@
 `PrijemnicaStavkaID`-u; `BrojPrijemnice` i `BrojZbirne` su labele.** Broj prijemnice je
 jedinstven samo po kupcu (`modStorno:1848-1851`: „dva kupca istog dana mogu imati
 `1/ddmmyy`"; fixture `PRIJEMNICA_BROJ = "1/150326"` kod dva kupca), pa izbor po broju
-zahvata tuđi dokument. Storno, prevezivanje i Oporavak to već poštuju. Danas je pravilo
-prekršeno u korekciji količina na paletama (plan §14.58, N1).
+zahvata tuđi dokument. Storno, prevezivanje i Oporavak to već poštuju. Korekcija količina
+na paletama ga je kršila (plan §14.58, N1); od reza 1a (stavka 277) bira dokument po
+`PrijemnicaID`-u, a paletne stavke po paru ID-eva, a Alt+F8 razrešava broj u tačno jedan
+aktivan dokument. Ostaje rezervna grana po broju u prevezivanju (N2, rez 1b).
 
 **`PAL-IDENT-02` — paleta je `PaletaID`, prerada je `PreradaID`; `BrojPalete` i
 `BrojPrerade` su labele.** Broj se resetuje po godini (`GenerateBrojPalete:87`,

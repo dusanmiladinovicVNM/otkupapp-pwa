@@ -346,6 +346,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6_ManjakObeStraneIzStavki
     Test_S6_GrupniListStanjeVozaca
     Test_S6_PaleteCitajuStavke
+    Test_S8R1a_KorekcijaPoIdentitetu
     Test_S6_CitalacStavkiPrijemniceDrziUgovor
     Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu
     Test_S6K4_StornoSkidaPaleteUIstojTx
@@ -10091,6 +10092,197 @@ EH:
     On Error Resume Next
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
+
+' S8 REZ 1a (N1, PAL-IDENT-01): KOREKCIJA PALETA BIRA DOKUMENT I STAVKE PO
+' IDENTITETU.
+'
+' Dve prijemnice RAZLICITIH kupaca nose ISTI broj -- broj se racuna po kupcu
+' (modStorno:1848), pa je to normalno produkciono stanje, ne anomalija. Obe pravi
+' pisac (SavePrijemnicaMulti_TX), pa paletne stavke nose kljuc linije.
+'
+'   A   kupac 1, 12 gajbi / 120 kg (10 kg po gajbi)
+'   B   kupac 2, 10 gajbi /  90 kg ( 9 kg po gajbi)
+'
+' Kvar se pravi na PALETNOJ stavci A (+3 gajbe), ne na dokumentu -- isto kao u
+' Test_S6_PaleteCitajuStavke. Korekcija po ID-u A sme da vrati samo palete A.
+' Neto po gajbi se razlikuje, pa bi i resync stavki B po broju promenio njihov
+' neto.
+'
+' Nivo: FIZICKE paletne stavke po PrijemnicaID-u; otisak B broji i stornirane,
+' pa i "svedena na nulu pa stornirana" menja otisak.
+' Negativ: broj prijemnice umesto ID-a je ADJ_BLOCKED, bez ijedne mutacije.
+' SABOTAZE: s8r1a-korekcija-stavke-po-broju, s8r1a-resync-po-broju.
+Private Sub Test_S8R1a_KorekcijaPoIdentitetu()
+    On Error GoTo EH
+    Const SRC As String = "Test_S8R1a_KorekcijaPoIdentitetu"
+
+    Dim scenario As String, d1 As Date, d2 As Date, tipT As String, prevPal As String
+    scenario = NewScenarioCode("S8R1A")
+    d1 = NextTestDate()
+    d2 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS8A-" & scenario)
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABS8A-" & scenario, "test S8 rez 1a"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S8R1a: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbrA As String, brZbrB As String, voz As String
+    voz = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID))
+    brZbrA = voz & "/" & Format$(d1, "ddmmyy")
+    brZbrB = voz & "/" & Format$(d2, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbrA, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0 And _
+               Len(ZbrIzdataPodPrijemnicu(d2, brZbrB, TEST_KUP2_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "S8R1a: preduslov -- zbirne oba kupca su snimljene"
+
+    Dim broj As String, prjA As String, prjB As String, errNum As Long
+    broj = TEST_PREFIX & "-S8R1A-" & scenario
+    On Error Resume Next
+    prjA = SavePrijemnicaMulti_TX( _
+               datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+               brojPrij:=broj, brojZbirne:=brZbrA, _
+               vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+               kolicinaI:=120#, cenaI:=100#, tipAmb:=tipT, _
+               kolAmb:=12, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then prjA = "": Err.Clear
+    prjB = SavePrijemnicaMulti_TX( _
+               datum:=d2, kupacID:=TEST_KUP2_ID, vozacID:=TEST_VOZ_ID, _
+               brojPrij:=broj, brojZbirne:=brZbrB, _
+               vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+               kolicinaI:=90#, cenaI:=100#, tipAmb:=tipT, _
+               kolAmb:=10, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then prjB = "": Err.Clear
+    On Error GoTo EH
+
+    Dim stA As String, stB As String
+    stA = S6StavkaID(prjA, KLASA_I)
+    stB = S6StavkaID(prjB, KLASA_I)
+    AssertTrue Len(prjA) > 0 And Len(prjB) > 0 And prjA <> prjB And _
+               Len(stA) > 0 And Len(stB) > 0 And _
+               S6GajbiNaPaletama(prjA, stA) = 12 And S6GajbiNaPaletama(prjB, stB) = 10, _
+               "S8R1a: preduslov -- dva dokumenta istog broja paletizovana pod svojim linijama"
+
+    Dim otB As String: otB = S8R1aOtisakPaleta(prjB)
+
+    ' --- Kvar na paletnoj stavci A: +3 gajbe (palete 15, dokument 12) ---
+    Dim rA As Long, gPre As Long, kvarUpisan As Boolean, ps As Variant
+    rA = S6PaletnaStavkaRed(prjA, stA)
+    If rA > 0 Then
+        ps = GetTableData(TBL_PALETA_STAVKA)
+        gPre = CLng(Val(nz(ps(rA, RequireColumnIndex(TBL_PALETA_STAVKA, _
+                                COL_PALS_BR_GAJBICA, SRC)), 0)))
+        RequireUpdateCell TBL_PALETA_STAVKA, rA, COL_PALS_BR_GAJBICA, gPre + 3, SRC
+        kvarUpisan = (S6GajbiNaPaletama(prjA, stA) = 15)
+    End If
+    AssertTrue kvarUpisan, "S8R1a: preduslov -- palete A nose 15 gajbi, dokument 12"
+
+    ' --- Korekcija po ID-u A ---
+    Dim info As String, rez As Long
+    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(prjA, "", info)
+    AssertEquals "1", CStr(rez), _
+                 "S8R1a: korekcija po ID-u koriguje liniju svog dokumenta"
+    AssertEquals "12|120", CStr(S6GajbiNaPaletama(prjA, stA)) & "|" & _
+                           CStr(S8R1aNetoPaleta(prjA)), _
+                 "S8R1a: palete dokumenta su vracene na njegovu liniju"
+    AssertEquals otB, S8R1aOtisakPaleta(prjB), _
+                 "S8R1a: paletne stavke drugog kupca istog broja su netaknute"
+    AssertTrue S8R1aZaglavljaUSkladu(prjA) And S8R1aZaglavljaUSkladu(prjB), _
+               "S8R1a: zaglavlje svake palete je zbir njenih aktivnih stavki"
+
+    ' --- Negativ: broj umesto ID-a se odbija, bez mutacije ---
+    Dim otA As String: otA = S8R1aOtisakPaleta(prjA)
+    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(broj, "", info)
+    AssertEquals CStr(ADJ_BLOCKED), CStr(rez), _
+                 "S8R1a: broj prijemnice umesto identiteta se odbija"
+    AssertEquals otA & "#" & otB, S8R1aOtisakPaleta(prjA) & "#" & S8R1aOtisakPaleta(prjB), _
+                 "S8R1a: odbijena korekcija po broju ne menja nijednu paletu"
+
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S8R1a_KorekcijaPoIdentitetu", Err.Number, Err.description
+    On Error Resume Next
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' Otisak SVIH paletnih stavki dokumenta (i storniranih): broj redova, zbir gajbi
+' i neta aktivnih, broj storniranih.
+Private Function S8R1aOtisakPaleta(ByVal prj As String) As String
+    Dim d As Variant, i As Long, cP As Long, cG As Long, cN As Long, cSt As Long
+    Dim n As Long, g As Long, kg As Double, nSt As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If IsArray(d) And Len(prj) > 0 Then
+        cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R1aOtisakPaleta")
+        cG = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, "S8R1aOtisakPaleta")
+        cN = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, "S8R1aOtisakPaleta")
+        cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R1aOtisakPaleta")
+        For i = 1 To UBound(d, 1)
+            If Trim$(nz(d(i, cP), "")) = prj Then
+                n = n + 1
+                If UCase$(Trim$(nz(d(i, cSt), ""))) = "DA" Then
+                    nSt = nSt + 1
+                Else
+                    g = g + CLng(Val(nz(d(i, cG), 0)))
+                    kg = kg + CDbl(Val(nz(d(i, cN), 0)))
+                End If
+            End If
+        Next i
+    End If
+    S8R1aOtisakPaleta = "redova=" & n & "|gajb=" & g & "|neto=" & CStr(Round(kg, 3)) & "|storno=" & nSt
+End Function
+
+' Neto na aktivnim paletnim stavkama dokumenta.
+Private Function S8R1aNetoPaleta(ByVal prj As String) As Double
+    Dim d As Variant, i As Long, cP As Long, cN As Long, cSt As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(d) Or Len(prj) = 0 Then Exit Function
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R1aNetoPaleta")
+    cN = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, "S8R1aNetoPaleta")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R1aNetoPaleta")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = prj And UCase$(Trim$(nz(d(i, cSt), ""))) <> "DA" Then
+            S8R1aNetoPaleta = S8R1aNetoPaleta + CDbl(Val(nz(d(i, cN), 0)))
+        End If
+    Next i
+    S8R1aNetoPaleta = Round(S8R1aNetoPaleta, 3)
+End Function
+
+' Da li je zaglavlje (gajbe) svake palete na kojoj dokument ima aktivnu stavku
+' jednako zbiru AKTIVNIH stavki te palete -- svih vlasnika, ne samo ovog
+' dokumenta (rubna paleta).
+Private Function S8R1aZaglavljaUSkladu(ByVal prj As String) As Boolean
+    Dim s As Variant, i As Long, j As Long, cP As Long, cPal As Long, cG As Long, cSt As Long
+    Dim palete As Object, v As Variant, zbir As Long, zag As Long
+    s = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(s) Or Len(prj) = 0 Then Exit Function
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R1aZaglavljaUSkladu")
+    cPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, "S8R1aZaglavljaUSkladu")
+    cG = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, "S8R1aZaglavljaUSkladu")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R1aZaglavljaUSkladu")
+    Set palete = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(s, 1)
+        If Trim$(nz(s(i, cP), "")) = prj And UCase$(Trim$(nz(s(i, cSt), ""))) <> "DA" Then
+            palete(Trim$(nz(s(i, cPal), ""))) = 1
+        End If
+    Next i
+    If palete.count = 0 Then Exit Function
+    For Each v In palete.Keys
+        zbir = 0
+        For j = 1 To UBound(s, 1)
+            If Trim$(nz(s(j, cPal), "")) = CStr(v) And _
+               UCase$(Trim$(nz(s(j, cSt), ""))) <> "DA" Then
+                zbir = zbir + CLng(Val(nz(s(j, cG), 0)))
+            End If
+        Next j
+        zag = CLng(Val(nz(GetValueByKey(TBL_PALETA, COL_PAL_ID, CStr(v), COL_PAL_BR_GAJBICA), 0)))
+        If zag <> zbir Then Exit Function
+    Next v
+    S8R1aZaglavljaUSkladu = True
+End Function
 
 ' UGOVOR CITAOCA STAVKI PRIJEMNICE JE DOKUMENTSKI (odluka 1): pokvaren dokument
 ' obara citaoca PO IMENU, papir tada ne nastaje, a audit (integritet) ne pada
