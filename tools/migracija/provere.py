@@ -373,10 +373,11 @@ def _otpremnice_preostalo(c, dana=3):
     (RequireOtpValidanIzvorZbirne), a prijemnica samo izdatu zbirnu
     (PrijemnicaRoditeljRazlog). Meri se:
 
-      * izdata otpremnica kojoj je ostalo kg (main je ne bi izdao);
-      * neizdata otpremnica (bez ijednog bloka): kg, zbirna, prijemnice i
-        kandidati -- izdate otpremnice iste stanice u +-`dana` dana ciji blokovi
-        imaju VISE kg nego sto otpremnica nosi (blok moguce pod pogresnom).
+      * izdata otpremnica kojoj je ostalo kg -- posle MIG-ODL-18 je nema; nalaz
+        bi znacio gresku alata;
+      * nacrt (blokovi nisu do nule): kg, povezano, zbirna, prijemnice i
+        kandidati -- otpremnice iste stanice u +-`dana` dana ciji blokovi imaju
+        VISE kg nego sto otpremnica nosi (blok moguce pod pogresnom).
     """
     akt_otk = {kljuc(z["OtkupID"]) for z in c.tabele["tblOtkup"] if not je_storno(_kf(z))}
     kg_otk = defaultdict(lambda: defaultdict(Decimal))
@@ -407,16 +408,17 @@ def _otpremnice_preostalo(c, dana=3):
         oid = kljuc(z.get("OtpremnicaID"))
         o, pv = ocek[oid], povez[oid]
         opis = "broj %s, %s, stanica %s" % (z.get("BrojOtpremnice", ""), _dan_txt(z.get("Datum")), z.get("StanicaID", ""))
+        visak_kg = sum(pv.values(), Decimal(0)) - sum(o.values(), Decimal(0))
+        if round(visak_kg, 2) > 0:
+            visak.append((z, visak_kg))
         if tekst(z.get("IzdatoStatus")) != IZDATO:
             neizdate.append((z, opis))
             continue
         razlika = {k: o[k] - pv[k] for k in set(o) | set(pv) if abs(o[k] - pv[k]) > Decimal("0.005")}
         if razlika:
-            c.nalaz(UPOZORENJE, "OTPREMNICA_PREOSTALO_KG", "tblOtpremnica", z.get("OtpremnicaID"),
-                    "%s: ocekivano %s kg, povezano %s kg, preostalo %s" % (opis, kg(o), kg(pv), kg(razlika)))
-        visak_kg = sum(pv.values(), Decimal(0)) - sum(o.values(), Decimal(0))
-        if visak_kg > 0:
-            visak.append((z, visak_kg))
+            c.nalaz(BLOKIRA, "OTPREMNICA_PREOSTALO_KG", "tblOtpremnica", z.get("OtpremnicaID"),
+                    "%s: izdata, a ocekivano %s kg, povezano %s kg, preostalo %s -- greska alata (MIG-ODL-18)"
+                    % (opis, kg(o), kg(pv), kg(razlika)))
     for z, opis in neizdate:
         oid = kljuc(z.get("OtpremnicaID"))
         zid = zbirna_otp.get(oid)
@@ -431,10 +433,10 @@ def _otpremnice_preostalo(c, dana=3):
                        for x, q in visak if tekst(x.get("StanicaID")) == tekst(z.get("StanicaID"))),
                       key=lambda t: (t[0], -t[2]))
         kand = ["%s %s (+%s kg)" % (x.get("OtpremnicaID"), x.get("BrojOtpremnice", ""), format(q.normalize(), "f"))
-                for d, x, q in kand if d <= dana][:3]
+                for d, x, q in kand if d <= dana and x is not z][:3]
         c.nalaz(INFO, "NEIZDATA_OTPREMNICA_LANAC", "tblOtpremnica", z.get("OtpremnicaID"),
-                "%s: %s kg, %s gajbi; %s; kandidati sa viskom blokova: %s"
-                % (opis, kg(ocek[oid]), _gajbe_otp(c, oid), lanac, "; ".join(kand) or "nema"))
+                "%s: ocekivano %s kg, %s gajbi; povezano %s kg; %s; kandidati sa viskom blokova: %s"
+                % (opis, kg(ocek[oid]), _gajbe_otp(c, oid), kg(povez[oid]), lanac, "; ".join(kand) or "nema"))
 
 
 def _dan(v):
