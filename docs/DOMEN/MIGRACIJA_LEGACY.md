@@ -63,8 +63,11 @@ Uslovi koje alat drži:
 - **Upis 03.11.2026 u svežu svesku iz `a668c5e6` (worktree, grana `b025c47c`):
   prošao.** Po MIG-ODL-18 se knjiga i dokumenti ne menjaju (iste otpremnice su nacrt kao i pre), samo nalazi nose drugo ime. 34 tabele + podešavanja; `tblAmbalaza` 5168 red., `tblAmbalazaDokument`
   82; povratno poređenje svake ćelije: 0 razlika; salda ambalaže naspram prevoda:
-  0 razlika. **To je sveska za C002** (dok main ne promeni šemu ili pisca —
-  sledeći je S8, palete).
+  0 razlika.
+- **Upis 03.11.2026 posle MIG-ODL-18/19 (grana `1aa07632`, main `a668c5e6`):
+  prošao** — 0 razlika, salda ambalaže 0; isti broj redova (`tblAmbalaza` 5168).
+  **To je sveska za C002** (dok main ne promeni šemu ili pisca — sledeći je S8,
+  palete).
 - **Upis 28.10.2026 nad sveskom C002 (SHA256 `d5e1f612…`): prošao.** 34 tabele
   + podešavanja; povratno poređenje svake ćelije: 0 razlika; salda ambalaže nove
   sveske naspram prevoda: 0 razlika. Usput nađene i ispravljene tri greške
