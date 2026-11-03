@@ -3925,7 +3925,7 @@ End Sub
 '
 ' Nivo: LOGICKI dokument (red liste po PrijemnicaID-u), ne broj.
 ' SABOTAZE: s8r1b-nedovrseno-po-broju, s8r1b-nedovrseno-kvar-tiho,
-' s8r1b-potvrda-bez-dokumenta.
+' s8r1b-nedovrseno-izvor-tiho, s8r1b-potvrda-bez-dokumenta.
 Private Sub T_S8R1b_NedovrsenoPoIdentitetu()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, prevPal As String
     Dim redoviPre As String, redoviPosle As String
@@ -3960,6 +3960,14 @@ Private Sub T_S8R1b_NedovrsenoPoIdentitetu()
     modStornoRecovery.NedovrsenoKvarTestSet ""
     AssertEq nKvar, 2, "313: necitljiva kolona identiteta ne sakriva osirotele dokumente"
     AssertEq nGreska, 1, "313: necitljiva kolona identiteta se javlja kao red GRESKA"
+
+    ' Kvar IZVORNOG citaca (GetPrijemniceSaOsirocenimPaletama dize gresku iz EH puta):
+    ' lista nema redove paleta, ali JAVLJA da ih nije procitala.
+    modStornoRecovery.NedovrsenoKvarTestSet "IZVOR"
+    nKvar = S8R1bNedRedova("OSIROCENE_PALETE", brojX)
+    nGreska = S8R1bNedRedova(modStornoRecovery.KIND_GRESKA_CITANJA, "Prijemnica (palete)")
+    modStornoRecovery.NedovrsenoKvarTestSet ""
+    AssertEq nGreska & "|" & nKvar, "1|0", "313: kvar izvornog citaca se javlja kao red GRESKA"
 
     opis = modScrOporavak.OpisDokumentaZaPotvrdu(brojX, resA)
     AssertEq (InStr(opis, resA) > 0 And InStr(opis, FX_KUPAC) > 0), True, _

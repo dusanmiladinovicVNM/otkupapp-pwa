@@ -9065,6 +9065,15 @@ SABOTAZE = {
         "T_S8R1b_NedovrsenoPoIdentitetu",
         "313: potvrda imenuje dokument i kupca",
     ),
+    # S8 rez 1b (S8R1B-REV-01): kvar IZVORNOG citaca se dize, a Nedovrseno ga prikazuje.
+    # Sabotaza vraca stari EH (Empty), pa lista cuti.
+    "s8r1b-nedovrseno-izvor-tiho": (
+        "modDokumenta.bas",
+        "    Err.Raise errNum, \"modDokumenta.GetPrijemniceSaOsirocenimPaletama\", errDesc\n",
+        "    GetPrijemniceSaOsirocenimPaletama = Empty   ' SABOTAZA: greska izvora se guta\n",
+        "T_S8R1b_NedovrsenoPoIdentitetu",
+        "313: kvar izvornog citaca se javlja kao red GRESKA",
+    ),
     # S8 rez 1b (S8R1B-REV-01): necitljiva kolona identiteta se javlja, ne guta se.
     "s8r1b-nedovrseno-kvar-tiho": (
         "modStornoRecovery.bas",

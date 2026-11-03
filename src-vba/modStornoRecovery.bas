@@ -6,8 +6,10 @@ Option Explicit
 Public Const KIND_GRESKA_CITANJA As String = "GRESKA_CITANJA"
 
 ' TEST SEAM (S8 rez 1b, S8R1B-REV-01): "ID_KOLONA" -- lista osirotelih paleta dobija
-' necitljivu kolonu identiteta. Postavljac ga pali samo u test rezimu, kuka ponovo
-' pita IsTestMode(), a gasi ga modTest.ResetSeamova.
+' necitljivu kolonu identiteta; "IZVOR" -- izvorni citac osirotelih paleta
+' (modDokumenta.GetPrijemniceSaOsirocenimPaletama) dize gresku iz svog EH puta.
+' Postavljac ga pali samo u test rezimu, kuka ponovo pita IsTestMode(), a gasi ga
+' modTest.ResetSeamova.
 Private mNedovrsenoKvarTest As String
 
 ' ============================================================
@@ -73,11 +75,24 @@ Public Function GetNedovrseno() As Collection
 
     ' 2) Osirocene - PER-STAVKA red (poslovni broj + akcija), deduplikovano protiv contexta.
     '    Akcija svih: "Osiroceni dokumenti" panel (postojeci re-point / skidanje).
-    AddOsiroceneRows result, GetOsirocenePrijemnice(), "OSIROCENA_PRIJEMNICA", 1, 8, _
-        "Prijemnica", "PRIJ", "Osiroceni dokumenti (prevezi prijemnicu)", seen
-    AddOsiroceneRows result, GetPrijemniceSaOsirocenimPaletama(), "OSIROCENE_PALETE", 1, _
-        IIf(NedovrsenoKvarAkoTest("ID_KOLONA"), 0, 7), _
-        "Prijemnica (palete)", "PAL", "Osiroceni dokumenti (prevezi ili skini palete)", seen
+    '    Izvor koji ne moze da se procita daje red GRESKA_CITANJA (S8R1B-REV-01):
+    '    "nema osirotelih" i "nisam uspeo da ih procitam" nisu isto.
+    Dim izvor As Variant, greska As String
+    izvor = CitajOsirocene("PRIJ", greska)
+    If Len(greska) > 0 Then
+        AddGreskaCitanja result, "Prijemnica", greska
+    Else
+        AddOsiroceneRows result, izvor, "OSIROCENA_PRIJEMNICA", 1, 8, _
+            "Prijemnica", "PRIJ", "Osiroceni dokumenti (prevezi prijemnicu)", seen
+    End If
+    izvor = CitajOsirocene("PAL", greska)
+    If Len(greska) > 0 Then
+        AddGreskaCitanja result, "Prijemnica (palete)", greska
+    Else
+        AddOsiroceneRows result, izvor, "OSIROCENE_PALETE", 1, _
+            IIf(NedovrsenoKvarAkoTest("ID_KOLONA"), 0, 7), _
+            "Prijemnica (palete)", "PAL", "Osiroceni dokumenti (prevezi ili skini palete)", seen
+    End If
     ' 3) Izgubljeni blokovi (B-041) -- KANON, ne stara veza.
     AddIzgubljeniBlokovi result
     ' 4) Nedovrseni hladnjacki lanci (S6 korak 7, odluka 8).
@@ -261,7 +276,31 @@ EH:
         "Lista " & docLabel & " nije procitana do kraja: " & Err.description, "", "", docLabel, "", "", "GRESKA"
 End Sub
 
-' Pali/gasi seam kvara liste Nedovrseno (v. mNedovrsenoKvarTest): "ID_KOLONA" ili ""
+' Izvor osirotelih za listu Nedovrseno; greska citanja se vraca kao tekst
+' (outGreska), da bi je lista prikazala kao red, umesto da padne cela lista ili da
+' red tiho izostane.
+Private Function CitajOsirocene(ByVal vrsta As String, ByRef outGreska As String) As Variant
+    outGreska = ""
+    On Error GoTo EH
+    If vrsta = "PAL" Then
+        CitajOsirocene = GetPrijemniceSaOsirocenimPaletama()
+    Else
+        CitajOsirocene = GetOsirocenePrijemnice()
+    End If
+    Exit Function
+EH:
+    outGreska = Err.description
+    If Len(outGreska) = 0 Then outGreska = "greska " & Err.Number
+End Function
+
+Private Sub AddGreskaCitanja(ByRef result As Collection, ByVal docLabel As String, _
+                             ByVal greska As String)
+    AddNedRowFull result, KIND_GRESKA_CITANJA, docLabel, "GRESKA", _
+        "Lista " & docLabel & " nije procitana: " & greska, "", "", docLabel, "", "", "GRESKA"
+End Sub
+
+' Pali/gasi seam kvara liste Nedovrseno (v. mNedovrsenoKvarTest): "ID_KOLONA",
+' "IZVOR" (izvorni citac osirotelih paleta dize gresku) ili ""
 ' (gasi). Paljenje van test rezima ne radi nista; gasenje radi uvek.
 Public Sub NedovrsenoKvarTestSet(ByVal rezim As String)
     rezim = UCase$(Trim$(rezim))
@@ -269,7 +308,8 @@ Public Sub NedovrsenoKvarTestSet(ByVal rezim As String)
     mNedovrsenoKvarTest = rezim
 End Sub
 
-Private Function NedovrsenoKvarAkoTest(ByVal rezim As String) As Boolean
+' Javno: kuku "IZVOR" nosi izvorni citac u modDokumenta.
+Public Function NedovrsenoKvarAkoTest(ByVal rezim As String) As Boolean
     If mNedovrsenoKvarTest <> rezim Then Exit Function
     NedovrsenoKvarAkoTest = IsTestMode()
 End Function
