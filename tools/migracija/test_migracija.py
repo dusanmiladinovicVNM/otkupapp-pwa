@@ -729,6 +729,21 @@ class MainPosle448(SaNovomSveskom):
         self.assertIn(("GAJBE_DOKUMENTA_PO_KNJIZI", "OTK-1"), self.nalazi(c, "UPOZORENJE"))
         self.assertEqual(sorted(self.knjiga(c, "OTK-1"))[1], ("IZDATA_PRAZNA", "S1", "K1", Decimal(4)))
 
+    def test_dijagnostika_preostalo_kg_i_kandidati(self):
+        """Stari tok (blokovi do nule): OTK-3 (40 kg) visi pod OTP-1 (100 kg), pa OTP-1
+        ima preostalo -40; neizdata OTP-5 (40 kg, ista stanica) dobija OTP-1 kao kandidata."""
+        d = izmeni("tblOtkup", {"OTK-3": {"OtpremnicaID": "OTP-1"}})
+        d.update(izmeni("tblOtpremnica", novi=[dict(OtpremnicaID="OTP-5", Datum=D2, StanicaID="S1",
+                                                      VozacID="D1", BrojOtpremnice="205", Klasa="I",
+                                                      Kolicina=40, KolAmbalaze=3)]))
+        c = self.sagradi(dodatno=d)
+        up = {n["id"]: n["opis"] for n in c.nalazi if n["pravilo"] == "OTPREMNICA_PREOSTALO_KG"}
+        self.assertIn("ocekivano I 100 kg, povezano I 140 kg, preostalo I -40", up["OTP-1"])
+        lanac = next(n["opis"] for n in c.nalazi
+                     if n["pravilo"] == "NEIZDATA_OTPREMNICA_LANAC" and n["id"] == "OTP-5")
+        self.assertIn("I 40 kg", lanac)
+        self.assertIn("OTP-1 201 (+40 kg)", lanac)
+
     def test_bilans_neuskladjeno_nula_i_vracanje_ima_izlaz(self):
         """AMB-BIL-02 / AMB-INV-15 nad celom novom sveskom (kooperant sa dugom)."""
         c = self.sagradi()

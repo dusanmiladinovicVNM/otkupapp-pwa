@@ -34,6 +34,7 @@ def proveri(c):
     _palete(c)
     _hladnjaca(c)
     _ambalaza(c)
+    _otpremnice_preostalo(c)
     return c.nalazi
 
 
@@ -359,3 +360,93 @@ def _ambalaza(c):
                     "%s: pune najmanje %s (dan %s), na kraju %s; prazne na kraju %s -- poslao je vise "
                     "punih nego sto je primio, pa su mu prazne za toliko iznad stvarnih (KI-065)"
                     % (nalog, x["najmanje_pune"], x["dan_pune"], x["pune"], x["prazne"]))
+
+
+# Dijagnostika toka otpremnice -- samo meri, nista ne menja (lista u proba_sazetak).
+DIJAGNOSTIKA_OTPREMNICE = ("OTPREMNICA_PREOSTALO_KG", "NEIZDATA_OTPREMNICA_LANAC")
+
+
+def _otpremnice_preostalo(c, dana=3):
+    """Stari tok: otpremnica i prijemnica prve, pa blokovi pod otpremnicom dok
+    preostalo kg ne bude 0. main izdaje otpremnicu tek na nuli (OtpRequireJednakost,
+    kg i gajbe po klasi), zbirna prima samo izdatu otpremnicu
+    (RequireOtpValidanIzvorZbirne), a prijemnica samo izdatu zbirnu
+    (PrijemnicaRoditeljRazlog). Meri se:
+
+      * izdata otpremnica kojoj je ostalo kg (main je ne bi izdao);
+      * neizdata otpremnica (bez ijednog bloka): kg, zbirna, prijemnice i
+        kandidati -- izdate otpremnice iste stanice u +-`dana` dana ciji blokovi
+        imaju VISE kg nego sto otpremnica nosi (blok moguce pod pogresnom).
+    """
+    akt_otk = {kljuc(z["OtkupID"]) for z in c.tabele["tblOtkup"] if not je_storno(_kf(z))}
+    kg_otk = defaultdict(lambda: defaultdict(Decimal))
+    for st in c.tabele["tblOtkupStavke"]:
+        kg_otk[kljuc(st.get("OtkupID"))][tekst(st.get("Klasa"))] += broj(st.get("Kolicina")) or Decimal(0)
+    ocek = defaultdict(lambda: defaultdict(Decimal))
+    for st in c.tabele["tblOtpremnicaStavke"]:
+        ocek[kljuc(st.get("OtpremnicaID"))][tekst(st.get("Klasa"))] += broj(st.get("Kolicina")) or Decimal(0)
+    povez = defaultdict(lambda: defaultdict(Decimal))
+    for v in c.tabele["tblOtpremnicaIzvori"]:
+        if kljuc(v.get("OtkupID")) in akt_otk:
+            for kl, q in kg_otk[kljuc(v.get("OtkupID"))].items():
+                povez[kljuc(v.get("OtpremnicaID"))][kl] += q
+    zbr = {kljuc(z.get("ZbirnaID")): z for z in c.tabele["tblZbirna"]}
+    zbirna_otp = {kljuc(v.get("OtpremnicaID")): kljuc(v.get("ZbirnaID")) for v in c.tabele["tblZbirnaIzvori"]}
+    prijemnice = defaultdict(list)
+    for pr in c.tabele["tblPrijemnica"]:
+        if not je_storno(_kf(pr)) and tekst(pr.get("ZbirnaRoditeljID")):
+            prijemnice[kljuc(pr.get("ZbirnaRoditeljID"))].append(tekst(pr.get("BrojPrijemnice")))
+
+    def kg(d):
+        return ", ".join("%s %s" % (k, format(v.normalize(), "f")) for k, v in sorted(d.items()) if v) or "0"
+
+    visak, neizdate = [], []
+    for z in c.tabele["tblOtpremnica"]:
+        if je_storno(_kf(z)):
+            continue
+        oid = kljuc(z.get("OtpremnicaID"))
+        o, pv = ocek[oid], povez[oid]
+        opis = "broj %s, %s, stanica %s" % (z.get("BrojOtpremnice", ""), _dan_txt(z.get("Datum")), z.get("StanicaID", ""))
+        if tekst(z.get("IzdatoStatus")) != IZDATO:
+            neizdate.append((z, opis))
+            continue
+        razlika = {k: o[k] - pv[k] for k in set(o) | set(pv) if abs(o[k] - pv[k]) > Decimal("0.005")}
+        if razlika:
+            c.nalaz(UPOZORENJE, "OTPREMNICA_PREOSTALO_KG", "tblOtpremnica", z.get("OtpremnicaID"),
+                    "%s: ocekivano %s kg, povezano %s kg, preostalo %s" % (opis, kg(o), kg(pv), kg(razlika)))
+        visak_kg = sum(pv.values(), Decimal(0)) - sum(o.values(), Decimal(0))
+        if visak_kg > 0:
+            visak.append((z, visak_kg))
+    for z, opis in neizdate:
+        oid = kljuc(z.get("OtpremnicaID"))
+        zid = zbirna_otp.get(oid)
+        zb = zbr.get(zid) if zid else None
+        lanac = "bez zbirne"
+        if zb is not None:
+            lanac = "zbirna %s (%s%s), prijemnice: %s" % (
+                zb.get("BrojZbirne", ""), tekst(zb.get("IzdatoStatus")) or "nacrt",
+                ", stornirana" if je_storno(_kf(zb)) else "", ", ".join(prijemnice.get(zid, [])) or "nema")
+        d0 = _dan(z.get("Datum"))
+        kand = sorted(((abs((_dan(x.get("Datum")) - d0).days) if d0 and _dan(x.get("Datum")) else 99, x, q)
+                       for x, q in visak if tekst(x.get("StanicaID")) == tekst(z.get("StanicaID"))),
+                      key=lambda t: (t[0], -t[2]))
+        kand = ["%s %s (+%s kg)" % (x.get("OtpremnicaID"), x.get("BrojOtpremnice", ""), format(q.normalize(), "f"))
+                for d, x, q in kand if d <= dana][:3]
+        c.nalaz(INFO, "NEIZDATA_OTPREMNICA_LANAC", "tblOtpremnica", z.get("OtpremnicaID"),
+                "%s: %s kg, %s gajbi; %s; kandidati sa viskom blokova: %s"
+                % (opis, kg(ocek[oid]), _gajbe_otp(c, oid), lanac, "; ".join(kand) or "nema"))
+
+
+def _dan(v):
+    from citac import datum
+    return datum(v)
+
+
+def _dan_txt(v):
+    d = _dan(v)
+    return d.isoformat() if d else ""
+
+
+def _gajbe_otp(c, oid):
+    return format(sum((broj(st.get("KolAmbalaze")) or Decimal(0) for st in c.tabele["tblOtpremnicaStavke"]
+                       if kljuc(st.get("OtpremnicaID")) == oid), Decimal(0)).normalize(), "f")

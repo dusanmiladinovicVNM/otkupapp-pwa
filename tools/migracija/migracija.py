@@ -222,6 +222,10 @@ def komanda_proba(a):
         for n in c.nalazi:
             if n["tezina"] in (provere.BLOKIRA, provere.ODLUKA):
                 f.write("%s %s %s %s %s\n" % (n["tezina"], n["pravilo"], n["tabela"], n["id"], n["opis"]))
+        f.write("\nOtpremnice -- preostalo kg i neizdate (stari tok: blokovi do nule):\n")
+        for n in c.nalazi:
+            if n["pravilo"] in provere.DIJAGNOSTIKA_OTPREMNICE:
+                f.write("%s %s %s %s\n" % (n["tezina"], n["pravilo"], n["id"], n["opis"]))
     for k, v in saz:
         print(("%-60s %s" % (k, v)).rstrip())
     print("\nPaket: %s" % paket)
