@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 03.11.2026 (stavka 277: kod reza 1a S8 — korekcija paleta po ID-u, testovi 309–310, lokalno, čeka review; skupe kapije NISU puštene).
+**Ažurirano:** 03.11.2026 (stavka 278: review reza 1a — CONDITIONAL GO 8,7 / 10; `S8R1A-REV-01` ispravljen; skupe kapije NISU puštene; merge HOLD do izvršnog acceptance-a).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -38,7 +38,7 @@
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
 | **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): ✅ merge **`#450`** (`fd39a716`, 01.11.2026) — review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); stavka 250 |
 | **S7 faktura** | ✅ **zatvoren** (merge `#454` = `a668c5e6`, 03.11.2026, stavka 272) -- **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); ✅ merge **`#452`** (`ff3e9c7a`, 02.11.2026, stavka 257). **Rez 2: pre-flight ✅** (stavka 258, `FAK-ODL-07`); **kod ✅** (stavka 259, PR `#453`); review HOLD → P1 ispravljen (stavka 260, `KI-077`/`KI-078` za rez 3); crveno nad starim kodom, zeleno (308 / 2868 / 111 / 39), dokaz 13/13 (stavka 261); ručna provera i Compile ✅ (stavka 262); ✅ merge **`#453`** (`2ac332e3`, 02.11.2026, stavka 263). **Rez 3: pre-flight ✅** (stavka 264, `KI-079`); **kod ✅** (stavka 265, PR `#454`); review HOLD → tri P2 ispravljena (stavka 266); crveno, zeleno (308 / 2901 / SEF 238), health i dokaz 14/14 (stavka 267, `KI-077`/`KI-078` CLOSED); Compile ✅ (stavka 268); drugi review HOLD → `S7R3-REV-04` (identitet SEF stavke) ispravljen (stavka 269, `KI-080`); treći review CODE GO i TEST GO (stavka 270, `KI-081`/`KI-082`); crveno, zeleno (308 / 2907 / SEF 238 / 39), dokaz 5/5 i Compile ✅ (stavka 271); merge review MERGE GO 9,4 / 10, ✅ merge **`#454`** (`a668c5e6`, 03.11.2026, stavka 272). Backlog: `KI-079` (kapija produkcionog SEF slanja), `KI-080`, `KI-081`, `KI-082` |
-| **S8 paleta i prerada** | **pre-flight ✅** (stavka 273, plan §14.58, `docs/DOMEN/PALETE.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 2, a storno i prevezivanje po ID-u S6 koraci 4, 7 i 8. Ostaju dva reza: 1 korekcija i prevezivanje paleta po ID-u (N1: korekcija bira dokument po broju) · 2 paleta zna samo stavku prijemnice (brišu se `BrojPrijemnice`, `BrojZbirne`, `ZbirnaRoditeljID`; `KI-039`). Review 9,0 / 10 i odluke `PAL-ODL-01..07` (stavka 274): podela po review-u na 1a (N1, korekcija po ID-u) · 1b (strog brojač praznine N8 pre „Skini palete", prevezivanje i Oporavak, makroi; `S8-REV-05`, stavka 275) · 1c (storno palete) · 2a (čitaoci, svoj pre-flight) · 2b (brisanje kolona, HOLD i do izlazne kapije C002); sledljivost na paleti u S9. Merge `#456` = `d222aad4` (stavka 276). **Rez 1a: kod lokalno** (stavka 277), čeka review; run_vba, crveni prolaz i dokaz NISU pušteni |
+| **S8 paleta i prerada** | **pre-flight ✅** (stavka 273, plan §14.58, `docs/DOMEN/PALETE.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 2, a storno i prevezivanje po ID-u S6 koraci 4, 7 i 8. Ostaju dva reza: 1 korekcija i prevezivanje paleta po ID-u (N1: korekcija bira dokument po broju) · 2 paleta zna samo stavku prijemnice (brišu se `BrojPrijemnice`, `BrojZbirne`, `ZbirnaRoditeljID`; `KI-039`). Review 9,0 / 10 i odluke `PAL-ODL-01..07` (stavka 274): podela po review-u na 1a (N1, korekcija po ID-u) · 1b (strog brojač praznine N8 pre „Skini palete", prevezivanje i Oporavak, makroi; `S8-REV-05`, stavka 275) · 1c (storno palete) · 2a (čitaoci, svoj pre-flight) · 2b (brisanje kolona, HOLD i do izlazne kapije C002); sledljivost na paleti u S9. Merge `#456` = `d222aad4` (stavka 276). **Rez 1a: kod** (stavka 277, grana push-ovana), review CONDITIONAL GO 8,7 (stavka 278); run_vba, crveni prolaz, dokaz i Compile NISU pušteni; merge HOLD do acceptance-a |
 | S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -9630,6 +9630,53 @@
        broju na svakom prevezivanju. Posle 1a radi nad ciljnim dokumentom i bez razlike nema šta da menja.
        Izvedeno iz koda, nije izmereno.
      - **Sledeći brojevi:** test 311 · stavka 278 · KI-083 · plan §14.59.
+
+278. **Nezavisni review reza 1a — CONDITIONAL GO (8,7 / 10)** (03.11.2026). Na „Push bez PR-a" je grana
+     `claude/s8-rez1a-paleta-id` push-ovana do `0a56d523`; review je pregledao tu granu.
+
+     - **Ocena:** review potvrđuje da je ispravka N1 prava arhitektonska promena, a ne kontrola oko starog
+       algoritma. Pohvaljeni su:
+       - izbor po identitetu, uz odbijanje nepostojećeg, storniranog ili duplog ID-a pre mutacije;
+       - korekcija po liniji;
+       - fail-closed nad stavkom bez linije;
+       - zaglavlje rubne palete iz svih aktivnih stavki;
+       - Alt+F8 sa tačno jednim aktivnim dokumentom;
+       - izbor testova T12–T14.
+
+       Novi dokaz da korekcija i dalje bira tuđe stavke po broju nije nađen.
+     - **`S8R1A-REV-01` (P1), ispravljeno:** test 309 je zvao `ZasejOpticajVozacu` PRE spoljne transakcije.
+       Kad vozač ima manje od 100 gajbi, pomoćnik u svojoj transakciji knjiži nabavku i prenos od 400, pa bi
+       to ostalo van rollback-a.
+       - Spoljna transakcija i `S6K8Snimak` sada idu PRE zasejavanja. Zasejavanje piše samo
+         `tblAmbalaza` i `tblAmbalazaDokument` (`modAmbalaza.UpisiNasJednoredni_TX`), a obe su u snimku.
+       - Posle rollback-a test poredi broj redova deset tabela koje piše (`S8R1aBrojRedova`). Ako test padne,
+         razlika se dopisuje u poruku pada; ako prođe, poslednja tvrdnja je „309: rollback vraća i zasejane
+         gajbe vozača i sve upise testa".
+       - Isti obrazac u zatečenom `T_IspravkaPrijemnice_SkipIRelink`, gde je namerno trajan, je **`KI-083`**
+         (van S8).
+     - **`S8R1A-REV-02` (P2), landing:** brojeve 309 i 310 već registruju druge grane: PR `#457` (309) i
+       `claude/cool-bohr-68hi14` (309–314, bez PR-a).
+       - Pre PR-a reza 1a ide rebase na tadašnji `main`, prenumeracija ako treba, i provera da su `RunOne`,
+         `TestName` i dispatch jedinstveni.
+       - Nijedna kapija ne hvata dupli `Case N`, a VBA ga ćutke pusti (prvi pogodak pobeđuje): **`KI-084`**.
+     - **`S8R1A-REV-03` (P2), u 1b:** `IIf` u `modScrOporavak:393` poziva korekciju i bez razlike gajbi
+       (nalaz iz stavke 277). Zatečeno, ne regresija 1a. Ide u 1b kao `If gajbDiff Then`.
+     - **Odstupanja od ugovora** (plan §14.58 „Rez 1a — kod") review nije osporio.
+     - **Verdikt:**
+       - implementacija: CONDITIONAL GO;
+       - N1 nije CLOSED do izvršnih testova;
+       - merge HOLD do acceptance-a.
+
+       Redosled po review-u: ispravka 309 (urađeno) → crveni N1 nad starim kodom → zeleni RunAllTests, BFP,
+       Palete i Storno → sabotaže i Compile → usklađivanje sa `main`-om → PR. Crveno zbog promene API-ja
+       nije dokaz poslovne greške; dokaz je 309 na tvrdnji o B.
+     - **Jeftine kapije zelene** posle ispravke:
+       - `vba_check`: čisto, 191 fajl;
+       - `gen_schema_module --check`: `B22A1572`;
+       - `who_writes --check` i `--check-ownership`;
+       - `popis_citalaca --check`: 14 / 14 grupa ok.
+     - **Sledeći brojevi:** test 311 (posle rebase-a proveriti, `S8R1A-REV-02`) · stavka 279 · KI-085 ·
+       plan §14.59.
 
 ## Dug sa imenom (posle S5-5b)
 

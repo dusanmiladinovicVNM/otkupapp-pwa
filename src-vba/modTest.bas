@@ -3608,26 +3608,34 @@ End Sub
 ' Nivo: FIZICKE paletne stavke po PrijemnicaID-u; otisak B broji i stornirane.
 ' Nad kodom pre 1a korekcija skida gajbe i sa B (B se svede na nulu i
 ' stornira), pa je tamo crvena tvrdnja o B.
+'
+' Spoljna transakcija pocinje PRE zasejavanja gajbi vozaca (S8R1A-REV-01):
+' ZasejOpticajVozacu, kad vozac ima manje od 100, knjizi nabavku i prenos u
+' SVOJOJ transakciji, pa bi posle snimka ostao u svesci. Na kraju se proverava
+' da je rollback vratio broj redova knjige ambalaze, i kad test padne.
 ' SABOTAZA: s8r1a-dokunos-salje-broj.
 Private Sub T_S8R1a_IspravkaKorigujeSvojDokument()
     Dim p As Object, poruke As String, cid As String, prevPal As String
     Dim tx As clsTransaction, errNum As Long, errDesc As String
     Dim zbrA As String, zbrB As String, brojA As String, brojX As String, t As String
     Dim resA As String, resB As String, resA2 As String, otB As String
+    Dim redoviPre As String, redoviPosle As String
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    redoviPre = S8R1aBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
 
     ' Tri upisa nose 30 gajbi sa vozaca (v. T_IspravkaPrijemnice_SkipIRelink).
     ZasejOpticajVozacu
     AssertEq (modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, _
               FX_TIP_AMB) >= 100), True, _
              "309 preduslov: vozac ima gajbe za knjizenje prijemnica"
-
-    prevPal = GetConfigValue(CFG_PALETIRANJE)
-    On Error GoTo CleanUp
     SetConfigValue CFG_PALETIRANJE, "DA"
 
-    Set tx = New clsTransaction
-    tx.BeginTx
-    S6K8Snimak tx
     S6K8IzdataZbirna "S8A", zbrA
     S6K8IzdataZbirna "S8B", zbrB, FX_VOZAC, FX_KUPAC2
 
@@ -3676,9 +3684,29 @@ CleanUp:
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_PALETIRANJE, prevPal
+    redoviPosle = S8R1aBrojRedova()
     On Error GoTo 0
-    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S8R1a_IspravkaKorigujeSvojDokument", errDesc
+    If errNum <> 0 Then
+        If redoviPosle <> redoviPre Then errDesc = errDesc & " [rollback nije vratio redove: " & _
+                                                   redoviPre & " -> " & redoviPosle & "]"
+        Err.Raise errNum, "modTest.T_S8R1a_IspravkaKorigujeSvojDokument", errDesc
+    End If
+    AssertEq redoviPosle, redoviPre, _
+             "309: rollback vraca i zasejane gajbe vozaca i sve upise testa"
 End Sub
+
+' Broj redova tabela koje 309 pise (i kroz zasejavanje vozaca), za proveru da je
+' rollback vratio sve.
+Private Function S8R1aBrojRedova() As String
+    Dim tb As Variant, s As String
+    For Each tb In Array(TBL_AMBALAZA, TBL_AMBALAZA_DOKUMENT, TBL_PRIJEMNICA, _
+                         TBL_PRIJEMNICA_STAVKE, TBL_PALETA, TBL_PALETA_STAVKA, _
+                         TBL_ZBIRNA, TBL_OTPREMNICA, TBL_OTKUP, TBL_STORNO_VEZE)
+        If Len(s) > 0 Then s = s & "|"
+        s = s & CStr(tb) & "=" & BrojRedovaTabele(CStr(tb))
+    Next tb
+    S8R1aBrojRedova = s
+End Function
 
 ' Prijemnica klase I za 309: kupac, broj, zbirna, kilaza i gajbe po izboru testa.
 Private Sub S8R1aPrijemnica(ByVal p As Object, ByVal broj As String, _

@@ -10793,6 +10793,17 @@ nosi stavka 277. Ovde su samo odstupanja od ugovora i recept za crveni prolaz.
   - 310, BFP `S8R1a` i Palete T04–T13 padaju zato što stari API ID tumači kao broj (`ADJ_BLOCKED`). To
     je crveno zbog API-ja, ne zbog N1.
 
+#### Review reza 1a (03.11.2026, `docs/STANJE_REFAKTORA.md` stavka 278)
+
+CONDITIONAL GO 8,7 / 10. Odstupanja iznad nisu osporena. Ugovor reza 1a se dopunjuje sa dve tačke:
+
+- **Izolacija testa (`S8R1A-REV-01`):** test koji piše kroz pisce zove svako zasejavanje POSLE početka
+  spoljne transakcije i snimka, a posle rollback-a tvrdi da su vraćeni redovi tabela koje piše.
+- **Landing (`S8R1A-REV-02`):** pre PR-a rebase na `main` i provera da je broj testa jedinstven u
+  `RunOne`, `TestName` i dispatch-u. Kapija za to ne postoji (`KI-084`).
+
+N1 ostaje OPEN do crvenog 309 nad starim kodom i zelenog prolaza nad granom.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
