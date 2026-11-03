@@ -3009,12 +3009,22 @@ End Sub
 '
 ' Zato konverzija ide OVDE, u funkciju koja NE MOZE da pukne, a upis se radi
 ' UVEK. Neuspeh je PRAZNA celija -- prazno je istina, tudji tekst nije.
+'
+' PRAZAN STRING JE "NEMA PODATKA", NE KVAR. Ekran ga salje kad red namerno
+' nema vrednost u brojcanoj koloni (red "Stanje OM" na listi Saldo nosi samo
+' AMB -- AMB-POSL-04). Crta se isto kao i pre (prazno); razlika je samo sto se
+' ne broji kao kvar prikaza -- kao prazan datum. Nula ostaje nula ("0,00"), a
+' tekst koji nije broj ostaje kvar.
 Public Function CelijaTekst(ByVal kind As String, ByVal v As Variant, _
                             ByRef ok As Boolean) As String
     Dim d As Double
 
     ok = True
     On Error GoTo EH
+
+    If VarType(v) = vbString Then
+        If Len(v) = 0 Then Exit Function
+    End If
 
     Select Case kind
         ' VREME, NE SAMO DATUM -- i to iz SERIJSKE vrednosti.

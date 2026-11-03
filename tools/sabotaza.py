@@ -11035,6 +11035,39 @@ SABOTAZE = {
         "T_AmbPoslovno_ReversKooperantaPoslovno",
         "revers kooperanta uz pokrice: pocetno je stanje pre dokumenta, novo je poslovno",
     ),
+    # --- AMB-POSL-04: AMB u Saldu po OM = stanje stanice + kooperanti (350) ---
+    # UKUPNO AMB opet nosi samo kooperante: magacin stanice ne ulazi nigde.
+    "amb-posl-04-stanje-izostavljeno": (
+        "modIzvestaj.bas",
+        "        totAmb = totAmb + stanjeOM\n",
+        "        totAmb = totAmb + 0   ' SABOTAZA: stanje stanice izostavljeno\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "nabavka na stanici: Stanje OM +20 i UKUPNO AMB +20, kooperant ne",
+    ),
+    # Stanje stanice je DANASNJE i za pregled u proslosti.
+    "amb-posl-04-stanje-bez-datuma": (
+        "modIzvestaj.bas",
+        "    Set stanjeOMDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_STANICA, False, datumDo)\n",
+        "    Set stanjeOMDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_STANICA, False, 0)   ' SABOTAZA: stanje danas\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "pregled na juce ne nosi danasnja kretanja stanice",
+    ),
+    # Ekran red Stanje OM puni nulama: kg i saldo stanice postaju "0,00".
+    "amb-posl-04-ekran-nule": (
+        "modScrIzvestaji.bas",
+        "                outA(n, 2) = vbNullString\n",
+        "                outA(n, 2) = NzD(src(i, 2))   ' SABOTAZA: nula umesto praznog\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "ekran: kg, vrednost i saldo reda Stanje OM su prazni, ne nula",
+    ),
+    # Ljuska prazan string u brojcanoj koloni opet broji kao kvar prikaza.
+    "amb-posl-04-prazno-je-kvar": (
+        "modOtkupUI.bas",
+        "        If Len(v) = 0 Then Exit Function\n",
+        "        If Len(v) = 0 Then v = v   ' SABOTAZA: prazan string je kvar\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "prazna celija reda Stanje OM se crta prazno i nije kvar prikaza",
+    ),
     # --- AMB-BIL-01/02: bilans ambalaze (testovi 290-292) ---
     # Bilans ne sece po datumDo: kasnija nabavka ulazi u stanje na kraju perioda.
     "amb-bil-bez-reza-datumdo": (

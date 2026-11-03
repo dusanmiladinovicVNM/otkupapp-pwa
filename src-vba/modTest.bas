@@ -459,6 +459,7 @@ Public Sub RunAllTests()
     RunOne 347
     RunOne 348
     RunOne 349
+    RunOne 350
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1116,6 +1117,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 347: TestName = "T_Gotovina_NajviseNaIzboru"
         Case 348: TestName = "T_Doplata_KarticaZbirnoPoObracunu"
         Case 349: TestName = "T_Doplata_BrojeviBezSlova"
+        Case 350: TestName = "T_AmbPoslovno_StanjeOMUSaldu"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1473,6 +1475,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 347: T_Gotovina_NajviseNaIzboru
         Case 348: T_Doplata_KarticaZbirnoPoObracunu
         Case 349: T_Doplata_BrojeviBezSlova
+        Case 350: T_AmbPoslovno_StanjeOMUSaldu
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -15341,6 +15344,211 @@ CleanUp:
              "ponovna stampa iz izvestaja daje isti papir vracanja kupcu"
 End Sub
 
+' ============================================================
+' 350. AMB-POSL-04: AMB U SALDU PO OM = STANJE STANICE + NJENI KOOPERANTI.
+' ============================================================
+' Odluka operatera 03.11.2026: kolona AMB pregleda Saldo po OM kaze koliko
+' firminih gajbi je "u krugu" otkupnog mesta -- u magacinu stanice (FIZICKI,
+' na dan DO, svi tipovi) i kod njenih kooperanata (poslovno prema toj stanici,
+' AMB-POSL-02). Do sada je UKUPNO nosio samo kooperante, pa magacin stanice nije
+' bio ni u pojedinacnom ni u zbirnom pregledu.
+' Mera je PO KORACIMA, kao razlika pre/posle, nad svezim tipovima gajbe:
+'  (1) nabavka 20 na stanici: Stanje OM +20, UKUPNO +20;
+'  (2) izdavanje 8 kooperantu: Stanje OM -8, kooperant +8, UKUPNO 0 (u krugu);
+'  (3) kooperant donese 10 SVOJIH (drugi tip, pokrice 10): Stanje OM +10,
+'      kooperant -10, UKUPNO 0 -- firminih gajbi tu nema;
+'  (4) predaja 5 vozacu: Stanje OM -5, UKUPNO -5 (izasle iz kruga);
+'  (5) pregled na juce ne nosi danasnja kretanja; druga stanica ih ne vidi;
+'  (6) Stanje OM = nezavisan fizicki prolaz kroz knjigu = saldo liste Ambalaza
+'      od pocetka; UKUPNO = kooperanti + Stanje OM; zbirni red = UKUPNO;
+'  (7) ekran: red je u mrezi, kg/novac/saldo PRAZNI (ne 0,00), AMB = stanje,
+'      kolona AMB mreze se sabira u UKUPNO; pod pretragom reda nema; natpis
+'      kolone ima svoj kljuc u katalogu, a lista kupaca zadrzava stari.
+' Semanticki nivo: KOMADI po stanici, preko svih tipova gajbe.
+' Fixture: normal production state.
+' SABOTAZE: amb-posl-04-stanje-izostavljeno, amb-posl-04-stanje-bez-datuma,
+'           amb-posl-04-ekran-nule, amb-posl-04-prazno-je-kvar.
+Private Sub T_AmbPoslovno_StanjeOMUSaldu()
+    Const NAZIV As String = "Prvi Testni"     ' KOOP-TEST-1, oslonac testa 284
+    Dim t As String, t2 As String, b As String
+    Dim dI As String, dP As String, dV As String
+    Dim st0 As Double, uk0 As Double, ko0 As Double, kRed0 As Double
+    Dim st1 As Double, uk1 As Double, ko1 As Double, kRed1 As Double
+    Dim st2 As Double, uk2 As Double, ko2 As Double, kRed2 As Double
+    Dim st3 As Double, uk3 As Double, ko3 As Double, kRed3 As Double
+    Dim st4 As Double, uk4 As Double, ko4 As Double
+    Dim stJ0 As Double, ukJ0 As Double, koJ0 As Double
+    Dim stJ As Double, ukJ As Double, koJ As Double
+    Dim stB0 As Double, ukB0 As Double, koB0 As Double
+    Dim stB As Double, ukB As Double, koB As Double
+
+    KartOmStanje FX_STANICA, Date, st0, uk0, ko0
+    KartOmStanje FX_STANICA, Date - 1, stJ0, ukJ0, koJ0
+    KartOmStanje FX_STANICA_B, Date, stB0, ukB0, koB0
+    kRed0 = KartOmAmb(FX_STANICA, Date, NAZIV)
+
+    t = KartNoviTipAmb("SOM")
+    t2 = KartNoviTipAmb("SOM2")
+
+    ' (1) nabavka na stanici
+    modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, t, 20, "NAB-" & t, "preduslov AMB-POSL-04"
+    KartOmStanje FX_STANICA, Date, st1, uk1, ko1
+    kRed1 = KartOmAmb(FX_STANICA, Date, NAZIV)
+
+    ' (2) izdavanje kooperantu
+    dI = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t, 8, REV_SMER_IZDAVANJE, FX_KOOPERANT, "")
+    KartOmStanje FX_STANICA, Date, st2, uk2, ko2
+    kRed2 = KartOmAmb(FX_STANICA, Date, NAZIV)
+
+    ' (3) kooperant donosi svoje: tip t2 kod njega nema, pa je povrat 10 ceo pokrice
+    dP = KartPovratSaPokricem(t2, 10, b)
+    KartOmStanje FX_STANICA, Date, st3, uk3, ko3
+    kRed3 = KartOmAmb(FX_STANICA, Date, NAZIV)
+
+    ' (4) predaja praznih vozacu
+    dV = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, t, 5, REV_SMER_PRIJEM_OD_OM, "", FX_VOZAC)
+    KartOmStanje FX_STANICA, Date, st4, uk4, ko4
+
+    KartOmStanje FX_STANICA, Date - 1, stJ, ukJ, koJ
+    KartOmStanje FX_STANICA_B, Date, stB, ukB, koB
+
+    AssertEq (Len(dI) > 0 And Len(dP) > 0 And Len(dV) > 0 And kRed0 > -999999), True, _
+             "preduslov: reversi su upisani i pregled OM ima red kooperanta"
+    AssertEq (st1 - st0) & "|" & (uk1 - uk0) & "|" & (kRed1 - kRed0), "20|20|0", _
+             "nabavka na stanici: Stanje OM +20 i UKUPNO AMB +20, kooperant ne"
+    AssertEq (st2 - st1) & "|" & (kRed2 - kRed1) & "|" & (uk2 - uk1), "-8|8|0", _
+             "izdavanje kooperantu: stanica -8, kooperant +8, UKUPNO AMB isti -- gajbe su u krugu"
+    AssertEq (st3 - st2) & "|" & (kRed3 - kRed2) & "|" & (uk3 - uk2), "10|-10|0", _
+             "kooperant doneo svoje gajbe: stanica +10, kooperant -10, UKUPNO AMB isti"
+    AssertEq (st4 - st3) & "|" & (uk4 - uk3), "-5|-5", _
+             "predaja vozacu: gajbe izlaze iz kruga stanice"
+    AssertEq stJ & "|" & ukJ, stJ0 & "|" & ukJ0, _
+             "pregled na juce ne nosi danasnja kretanja stanice"
+    AssertEq stB & "|" & ukB, stB0 & "|" & ukB0, _
+             "druga stanica ne vidi kretanja ove"
+
+    ' (6) nezavisni putevi do istog broja
+    AssertEq uk4, ko4 + st4, "UKUPNO AMB = kooperanti + Stanje OM"
+    AssertEq Format$(st4, "0"), Format$(KartAmbFizickiOracle(AMB_NALOG_STANICA, FX_STANICA, Date), "0"), _
+             "Stanje OM = fizicki saldo stanice iz knjige (nezavisan prolaz)"
+    AssertEq Format$(st4, "0"), Format$(KartListaAmbSaldo(FX_STANICA, Date), "0"), _
+             "Stanje OM = saldo liste Ambalaza za stanicu od pocetka"
+    AssertEq Format$(KartZbirniAmb(FX_STANICA, Date), "0"), Format$(uk4, "0"), _
+             "zbirni Saldo po OM: AMB stanice = UKUPNO pojedinacnog"
+
+    ' (7) ekran
+    Dim d As Variant, redovi As Variant, n As Long, i As Long, iSt As Long
+    Dim sumAmb As Double, ok1 As Boolean, ok2 As Boolean, tx1 As String, tx2 As String
+    Dim kol As Variant, kolZ As Variant, kolK As Variant
+    modScrIzvestaji.Scr_IzTestReset
+    modScrIzvestaji.Scr_ResetCache
+    modScrIzvestaji.Scr_IzTestSet "SALDO", "OM", False, FX_STANICA, IzvOdS(), CDbl(Date)
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    n = CLng(d(2)): redovi = d(1)
+    For i = 1 To n
+        If NzToText(redovi(i, 1)) = IZV_STANJE_OM Then iSt = i
+        sumAmb = sumAmb + NzD2(redovi(i, 7))
+    Next i
+    AssertEq (iSt > 0), True, "ekran Saldo po OM: red Stanje OM je u mrezi"
+    If iSt > 0 Then
+        AssertEq Format$(NzD2(redovi(iSt, 7)), "0"), Format$(st4, "0"), _
+                 "ekran: AMB reda Stanje OM = stanje stanice"
+        AssertEq VarType(redovi(iSt, 2)) & "|" & NzToText(redovi(iSt, 2)) & "|" & _
+                 NzToText(redovi(iSt, 3)) & "|" & NzToText(redovi(iSt, 6)), vbString & "|||", _
+                 "ekran: kg, vrednost i saldo reda Stanje OM su prazni, ne nula"
+        tx1 = modOtkupUI.CelijaTekst("kg", redovi(iSt, 2), ok1)
+        tx2 = modOtkupUI.CelijaTekst("rsd", redovi(iSt, 6), ok2)
+        AssertEq tx1 & "|" & ok1 & "|" & tx2 & "|" & ok2, "|True||True", _
+                 "prazna celija reda Stanje OM se crta prazno i nije kvar prikaza"
+    End If
+    AssertEq Format$(sumAmb, "0"), Format$(uk4, "0"), _
+             "ekran: kolona AMB mreze se sabira u UKUPNO (kooperanti + Stanje OM)"
+    d = modScrIzvestaji.Scr_Rows("sve", NAZIV)
+    n = CLng(d(2)): redovi = d(1)
+    iSt = 0
+    For i = 1 To n
+        If NzToText(redovi(i, 1)) = IZV_STANJE_OM Then iSt = i
+    Next i
+    AssertEq (n > 0) & "|" & iSt, "True|0", _
+             "ekran: pod pretragom red Stanje OM ne stoji (red konteksta)"
+    modScrIzvestaji.Scr_IzTestReset
+
+    kol = modScrIzvestaji.IzKoloneZaListu("SALDO", "OM", False)
+    kolZ = modScrIzvestaji.IzKoloneZaListu("SALDO", "OM", True)
+    kolK = modScrIzvestaji.IzKoloneZaListu("SALDO", "Kupac", False)
+    AssertEq Split(CStr(kol(6)), "|")(0) & "|" & Split(CStr(kolZ(6)), "|")(0) & "|" & _
+             Split(CStr(kolK(6)), "|")(0), "OTKUI_HDI_AMB_OM|OTKUI_HDI_AMB_OM|OTKUI_HDI_AMB", _
+             "natpis AMB: OM liste Saldo imaju svoj kljuc, lista kupaca stari"
+    AssertEq PorukaNedostaje("OTKUI_HDI_AMB_OM"), False, _
+             "natpis AMB OM+KOOP. postoji u katalogu poruka"
+End Sub
+
+' Iz pregleda Saldo po OM (od pocetka do datumDo): AMB reda Stanje OM (0 kad
+' reda nema), AMB reda UKUPNO i zbir AMB svih ostalih redova -- kooperanti
+' (specijalni redovi novca i agrohemije AMB nemaju).
+Private Sub KartOmStanje(ByVal stanicaID As String, ByVal datumDo As Date, _
+                         ByRef stanje As Double, ByRef ukupno As Double, _
+                         ByRef kooperanti As Double)
+    Dim s As Variant, i As Long, lbl As String
+    stanje = 0: ukupno = 0: kooperanti = 0
+    s = modIzvestaj.ReportSaldoOM(stanicaID, IzvOdD(), datumDo)
+    If Not IsArray(s) Then Exit Sub
+    For i = 1 To UBound(s, 1)
+        lbl = NzToText(s(i, 1))
+        If lbl = "UKUPNO" Then
+            ukupno = KartNum(s(i, 7))
+        ElseIf lbl = IZV_STANJE_OM Then
+            stanje = KartNum(s(i, 7))
+        Else
+            kooperanti = kooperanti + KartNum(s(i, 7))
+        End If
+    Next i
+End Sub
+
+' NEZAVISAN fizicki saldo naloga na dan: zbir kolicina SA ZNAKOM iz redne
+' projekcije knjige (AmbKretanjaNaloga), ne iz salda koji izvestaj zove
+' (AmbSaldoPoNalogu). Otkazani par je algebarski nula, pa ostaje u zbiru.
+Private Function KartAmbFizickiOracle(ByVal tip As String, ByVal id As String, _
+                                      ByVal doDatuma As Date) As Double
+    Dim k As Variant, i As Long
+    k = modAmbalaza.AmbKretanjaNaloga(tip, id)
+    If Not IsArray(k) Then Exit Function
+    For i = 1 To UBound(k, 1)
+        If IsDate(k(i, 1)) Then
+            If Int(CDbl(CDate(k(i, 1)))) <= Int(CDbl(doDatuma)) Then
+                KartAmbFizickiOracle = KartAmbFizickiOracle + KartNum(k(i, 5))
+            End If
+        End If
+    Next i
+End Function
+
+' Saldo liste "Ambalaza" za stanicu od 1.1.1900 do datumDo: ulaz - izlaz preko
+' svih tipova (zbirni oblik liste). To je broj koji operater cita na listi.
+Private Function KartListaAmbSaldo(ByVal stanicaID As String, ByVal datumDo As Date) As Double
+    Dim r As Variant, i As Long
+    r = modIzvestaj.ReportAmbalaza("OM", stanicaID, DateSerial(1900, 1, 1), datumDo, True)
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If NzToText(r(i, 1)) <> "UKUPNO" Then
+            KartListaAmbSaldo = KartListaAmbSaldo + KartNum(r(i, 5)) - KartNum(r(i, 6))
+        End If
+    Next i
+End Function
+
+' AMB reda stanice u zbirnom pregledu Saldo po OM (kolona 8); -1000000 kad reda nema.
+Private Function KartZbirniAmb(ByVal stanicaID As String, ByVal datumDo As Date) As Double
+    Dim z As Variant, i As Long
+    KartZbirniAmb = -1000000
+    z = modIzvestaj.ReportSaldoOMZbirni(IzvOdD(), datumDo)
+    If Not IsArray(z) Then Exit Function
+    For i = 1 To UBound(z, 1)
+        If NzToText(z(i, 1)) = stanicaID Then
+            KartZbirniAmb = KartNum(z(i, 8))
+            Exit Function
+        End If
+    Next i
+End Function
+
 ' Unos F7 za 307/308, kao ga modul unosa prima (bez ekrana): stanica, vozac,
 ' partner i smer; broj prazan, pa ga validator predlaze.
 Private Function Vrk307Unos(ByVal tip As String, ByVal kol As Long, ByVal partnerID As String, _
@@ -22893,7 +23101,10 @@ Private Sub T_Izv_SlaganjeOtkupOM()
                              CDbl(sal(i, 5)), "0.00"), _
                      "saldo OM red " & i & ": saldo = vrednost + doplata - isplaceno - agro"
         End If
-        If CDbl(sal(i, 7)) <> 0 And CStr(sal(i, 1)) <> "UKUPNO" Then nasao = True
+        ' Red Stanje OM (AMB-POSL-04) nosi AMB stanice, ne kooperanta -- ne
+        ' sme da ispuni preduslov umesto kooperanta.
+        If CDbl(sal(i, 7)) <> 0 And CStr(sal(i, 1)) <> "UKUPNO" And _
+           CStr(sal(i, 1)) <> IZV_STANJE_OM Then nasao = True
     Next i
     AssertEq nasao, True, _
              "bar jedan kooperant ima ambalazni saldo != 0 -- kolona ima nad cim da padne"

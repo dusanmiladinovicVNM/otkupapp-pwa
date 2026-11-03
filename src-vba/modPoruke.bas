@@ -2053,6 +2053,8 @@ Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_HDI_NOVAC", "NOVAC"
     UpsertRow lo, existing, "OTKUI_HDI_SALDO", "SALDO"
     UpsertRow lo, existing, "OTKUI_HDI_AMB", "AMB"
+    ' Saldo po OM: stanje stanice + njeni kooperanti (AMB-POSL-04).
+    UpsertRow lo, existing, "OTKUI_HDI_AMB_OM", "AMB OM+KOOP."
     UpsertRow lo, existing, "OTKUI_HDI_ISPLACENO", "ISPLA" & ChrW(262) & "ENO"
     UpsertRow lo, existing, "OTKUI_HDI_AGRO", "AGRO"
     UpsertRow lo, existing, "OTKUI_HDI_DOPLATA", "DOPLATA"

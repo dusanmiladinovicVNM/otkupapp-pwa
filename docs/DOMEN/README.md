@@ -248,7 +248,7 @@ ali firma ga njima nije zadužila. Zato iz iste knjige postoje tri broja:
 
 | Broj | Šta znači | Ko ga čita |
 |---|---|---|
-| fizički saldo | gde su gajbe | `AmbSaldoNaloga`, `GetAmbalazeStanje`, `ReportAmbalaza` (pregled kretanja), provere |
+| fizički saldo | gde su gajbe | `AmbSaldoNaloga`, `GetAmbalazeStanje`, `ReportAmbalaza` (pregled kretanja), red „Stanje OM" u pregledu po OM (`AMB-POSL-04`), provere |
 | poslovni saldo | šta je firma partneru izdala minus šta je vratio | kartica kooperanta, kartica ambalaže, PDF otkupnog lista, revers kooperantu (`AMB-POSL-03`), kolona Ambalaža u pregledu po OM |
 | obaveza | koliko tuđe ambalaže firma duguje | `AmbObavezaPartneru` (`AMB-INV-09`) |
 
@@ -271,12 +271,44 @@ stanici, na `datumDo`.** Bila je fizički, današnji i globalni saldo kooperanta
 pokriće se brojalo kao zaduženje, pregled za prošlost je nosio današnje stanje, a
 kooperant sa dve stanice je u `ReportSaldoOMZbirni` ulazio dvaput. Svaki red
 knjige imenuje obe strane, pa je pripadnost stanici podatak, ne alokacija — nema
-prelivanja. Fizički pregled stanice ostaje `ReportAmbalaza("OM")`.
+prelivanja. Pregled kretanja stanice ostaje `ReportAmbalaza("OM")`; fizičko stanje
+stanice u ovaj pregled dodaje `AMB-POSL-04` (ispod).
 Red prema granici (`SpoljniSvet`) nema drugu realnu stranu: otpis sa naloga
 kooperanta (`AMB-10-ODL-34`, #445) ide `Kooperant → SpoljniSvet`, a stanica je
 samo vlasnik dokumenta. Takav red pripada stanici koja je vlasnik ambalažnog
 dokumenta (`BrojOwnerTip/ID` sa zaglavlja, isti OM kao na zapisniku), i nijednoj
 drugoj — pa je zbir po stanicama jednak kartici.
+
+**AMB-POSL-04 — AMB po OM = stanje stanice + njeni kooperanti (dopuna
+`AMB-POSL-02`, odluka operatera 03.11.2026).** Broj u koloni AMB pregleda Saldo
+po OM (pojedinačno i zbirno) kaže koliko firminih gajbi je **„u krugu"**
+otkupnog mesta na dan `datumDo`: u magacinu stanice i kod njenih kooperanata.
+
+| Deo | Broj | Čitalac |
+|---|---|---|
+| red „Stanje OM" | **fizički** saldo stanice na `datumDo`, svi tipovi gajbe | `AmbSaldoPoNalogu(Stanica, False, datumDo)` — isti primitiv kao red kooperanta, bez svog prolaza |
+| red kooperanta | poslovni saldo prema toj stanici na `datumDo` (kao do sada) | `AmbSaldoPoNalogu(Kooperant, True, datumDo, Stanica, id)` |
+| UKUPNO | stanje stanice + zbir kooperanata | `ReportSaldoOM`; zbirni red stanice **je** taj UKUPNO (`ReportSaldoOMZbirni`, jedno pravilo) |
+
+`+` znači da su naše gajbe tu; `−` da stanica i njeni kooperanti zajedno duguju
+manje nego što firma duguje njima. Primeri (sveska C002, 1.1.–3.11.2026): Pilica
+stanica 148 + kooperanti +411 = 559; Hladnjača 0 + (−295) = −295.
+
+- **Doslednost:** kooperant donese 10 **svojih** gajbi (pokriće `ULAZ_TUDJE` je
+  tehnički red) → stanica fizički +10, kooperant poslovno −10 → zbir 0, jer
+  firminih gajbi tu nema. Izdavanje kooperantu pomera gajbe unutar kruga (stanica
+  −8, kooperant +8). Gajbe predate vozaču ili kupcu izlaze iz kruga i ne ulaze.
+- **Zašto ne lista „Ambalaža":** ona nosi kretanja u opsegu, bez početnog stanja,
+  pa je njen saldo fizičko stanje samo kad „od" počinje od početka sezone. Lista se
+  ne menja; stanje dolazi iz knjige.
+- **Prikaz:** red „Stanje OM" ide pre UKUPNO i nosi samo AMB (ostale kolone su
+  prazne, ne „0,00" — stanica nema otkup, novac ni agro zaduženje). Na ekranu je
+  red konteksta: prikazuje se u nefiltriranoj listi, pod pretragom ne. Red se
+  izostavlja kad je stanje 0, kao „OM AVANS" i „AGROHEMIJA". Natpis kolone na OM
+  listama Saldo je `OTKUI_HDI_AMB_OM` („AMB OM+KOOP."); liste kupaca zadržavaju
+  `OTKUI_HDI_AMB`. Kupci su van obima.
+
+Meri ga `modTest` 350 (`T_AmbPoslovno_StanjeOMUSaldu`), sabotaže `amb-posl-04-*`.
 
 **DOC-SORT-01 — dokumentna lista ide po danu i broju kao broju.** Otkupni
 listovi, roba OM (otpremnice), roba kupca (prijemnice) i pojedinačan pregled

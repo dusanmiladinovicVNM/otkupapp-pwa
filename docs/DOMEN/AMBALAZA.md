@@ -368,7 +368,10 @@ koliko je vratio**. To je fizički saldo bez redova koje pisac dopisuje sam —
 vrsti originala. Projekcija je opcioni `samoPoslovno` u čitaocima
 (`AmbKretanjaNaloga`, `AmbSaldoPoNalogu`, `AmbStanjeOkoDokumenta`); pisci, knjiga
 i storno se ne menjaju. Ko koji broj čita: `README.md` §2, `AMB-POSL-01/02/03`
-(od 28.10.2026 i revers kooperantu nosi poslovno stanje).
+(od 28.10.2026 i revers kooperantu nosi poslovno stanje). Od 03.11.2026
+(`AMB-POSL-04`) kolona AMB pregleda Saldo po OM sabira **dva** broja iste knjige:
+fizički saldo stanice (red „Stanje OM") i poslovne salde njenih kooperanata prema
+njoj — koliko firminih gajbi je u krugu otkupnog mesta na `datumDo`.
 
 ### 6.7 `VrstaKretanja` — domenski pojmovi, ne spisak call-site-ova
 
