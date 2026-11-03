@@ -9033,6 +9033,15 @@ SABOTAZE = {
         "T_S8R1a_IspravkaKorigujeSvojDokument",
         "309: palete ispravke su svedene na njene gajbe (8)",
     ),
+    # S8 rez 1b (N8, S8-REV-05): "paleta je prazna" odlucuje strog brojac. Vracena na
+    # prikazni citac (koji seam kvari), odluka stornira paletu sa su-stanarom.
+    "s8r1b-praznina-iz-prikaza": (
+        "modPaletniList.bas",
+        "        If BrojAktivnihStavkiPalete(CStr(v), sourceName) = 0 Then\n",
+        "        If IsEmpty(GetPaletaStavkeForGrid(CStr(v))) Then   ' SABOTAZA: praznina iz prikaznog citaca\n",
+        "Test_S8R1b_PraznaPaletaStrogBrojac",
+        "S8R1b: su-stanar stornirane prijemnice ostaje na paleti",
+    ),
     # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
     "s8r1a-altf8-prvi-pogodak": (
         "modPaletniListUI.bas",

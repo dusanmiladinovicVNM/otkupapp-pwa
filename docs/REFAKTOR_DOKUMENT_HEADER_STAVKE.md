@@ -10804,6 +10804,63 @@ CONDITIONAL GO 8,7 / 10. Odstupanja iznad nisu osporena. Ugovor reza 1a se dopun
 
 N1 ostaje OPEN do crvenog 309 nad starim kodom i zelenog prolaza nad granom.
 
+#### Rez 1b — ugovor i redosled (03.11.2026, `docs/STANJE_REFAKTORA.md` stavka 281)
+
+Rez 1a je zatvoren (`#458`). Rez 1b ima sedam celina u četiri koraka, svaki sa svojim commitom; PR je
+jedan. Obim je meren pre koda:
+
+- prevezivanje bez ID-eva zovu Palete T02–T07 i T11 (osam poziva) i `modTest` 3564 i 6793/6807;
+- `EvaluatePaletaReassign` nema produkcionog pozivaoca;
+- četiri makroa pominje samo `docs/DOMEN/mapa_sposobnosti_ulazi/F.md` (C-052, C-053, C-055, C-058);
+- „Nedovršeno" deduplikuje po broju (`modStornoRecovery:54-64`).
+
+**Korak 1 — N8 (`S8-REV-05`), pre svega ostalog.** Ugovor je „Dopuna ugovora prihvatanja reza 1b (N8)"
+iznad. Ovde je samo plan merenja:
+
+- strog brojač aktivnih stavki palete, bez `On Error`, sa `RequireColumnIndex`;
+- test seam `PaletaPraznoTestSet` sa dva režima. `PRIKAZ` kvari prikazni čitač (vraća `Empty`), a `BROJAC`
+  diže grešku u strogom brojaču. Tvrdo je gejtovan i ide u `ResetSeamova`;
+- `modTest` **311**: su-stanar stornirane prijemnice ostaje, a paleta se ne stornira. Kontra-tvrdnja je
+  da se paleta čija je poslednja stavka skinuta stornira. Kad brojač padne, storno se povlači ceo;
+- sabotaža: odluka o praznini se vraća na prikazni čitač.
+
+**Korak 2 — N2: prevezivanje traži oba ID-a.**
+
+- `ReassignPaleteToPrijemnica_TX` bez izvornog ili ciljnog ID-a odbija bez mutacije, a razlog imenuje
+  ID koji fali. Grana po broju i njene kapije dvosmislenosti se brišu, kao i fallback u
+  `PripadaDokumentu`.
+- `PreveziPaleteIspravke` bez starog ID-a ostavlja MANUAL, isto kao na neuspeh (već je tako).
+- Testovi koji su zvali po broju prelaze na ID-eve. `modTest` **312**: oba odbijanja, bez mutacije.
+- Sabotaža: prevezivanje prihvata prazan izvorni ID.
+
+**Korak 3 — Oporavak (N9, `KI-056`, `PAL-ODL-05`, `S8R1A-REV-03`, B-030).**
+
+- **„Skini palete"** nad izabranim redom liste PALETE (po `PrijemnicaID` stornirane prijemnice):
+  - jezgro `SkiniPaleteCore` (javno, bez `MsgBox`-a, po obrascu `OdbaciIspravkuCore`) i UI omotač sa
+    potvrdom;
+  - sopstvena transakcija kroz `SkiniPaleteZaStornoPrijemnice`, sa strogim brojačem iz koraka 1;
+  - aktivna prijemnica i prerađena paleta se odbijaju po imenu.
+- **Prevezi palete:** jezgro `PreveziPaleteCore` kroz isti obrazac. `If gajbDiff Then` zamenjuje `IIf`
+  (`S8R1A-REV-03`). Potvrda imenuje dokument kad broj u listi nije jedinstven (`KI-056`).
+- **N9:** „Nedovršeno" deduplikuje po ID-u dokumenta koji red nosi, ne po broju. Prvo crveno.
+- **B-030:** poruke prevezivanja („Skini stavke") pokazuju na radnju „Skini palete".
+- `modTest` **313–315**: „Skini palete" (uspeh, su-stanar netaknut, odbijanja), prevezivanje kroz jezgro
+  Oporavka (ispravan ID i korekcija samo kad postoji razlika), i N9.
+
+**Korak 4 — `PAL-ODL-04`:** brišu se četiri makroa i njihovi redovi u `F.md`. Ostaju nepotrebni pomoćnici
+(`FindPaletaIDByBroj`, `FindPreradaIDByBroj`), pa se brišu ako ih niko drugi ne zove.
+
+**Ostaje netaknuto:**
+- korekcija po ID-u (1a);
+- paletizacija pri upisu;
+- storno prijemnice;
+- prerada, utovar i GP faktura;
+- ekran Palete;
+- geometrija `SpillGajbice`.
+
+**Brojevi testova:** 311–315. PR `#457` i `claude/cool-bohr-68hi14` koriste 309+, pa se pre PR-a proverava
+jedinstvenost (`KI-084`).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

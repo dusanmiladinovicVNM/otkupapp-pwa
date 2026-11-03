@@ -677,6 +677,9 @@ Private Sub ResetSeamova()
     ' Podmetnut pad na kraju storna prijemnice (S6 korak 4): zaostao seam bi
     ' oborio svaki sledeci storno prijemnice.
     modStorno.StornoPrijemnicePadniTest False
+    ' Pokvarena odluka "paleta je prazna" (S8 rez 1b, N8): zaostao seam bi
+    ' prikazu palete vratio prazno ili oborio svako sledece skidanje paleta.
+    modPaletniList.PaletaPraznoTestSet ""
     ' Podmetnut pad na kraju jezgra fakture (S6 korak 5): zaostao seam bi oborio
     ' svaku sledecu fakturu.
     modFaktura.CreateFakturaPadniTest False

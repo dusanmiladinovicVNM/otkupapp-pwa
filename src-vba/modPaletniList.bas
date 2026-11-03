@@ -34,6 +34,12 @@ Private Const PAL_PRAG_MS As Long = 400
 ' Forme postavljaju True pre snimanja ispravke i False odmah posle. Default False.
 Private mSkipPaletize As Boolean
 
+' TEST SEAM (S8 rez 1b, N8): kvari odluku "paleta je prazna". "PRIKAZ" -- prikazni
+' citac (GetPaletaStavkeForGrid) vraca Empty kao na gresci; "BROJAC" -- strog
+' brojac aktivnih stavki dize gresku. Postavljac ga pali samo u test rezimu,
+' kuka ponovo pita IsTestMode(), a gasi ga modTest.ResetSeamova.
+Private mPaletaPraznoTest As String
+
 ' Povratne vrednosti AdjustPaletaGajbiceZaPrijemnicu_TX (pored >=0 = broj korigovanih klasa).
 Public Const ADJ_NEEDS_CHOICE As Long = -1   ' visak ne staje -> UI pita: prelij ili preko kapaciteta
 Public Const ADJ_BLOCKED As Long = -2        ' blokirano (npr. preradjena paleta) -> outInfo nosi razlog
@@ -623,6 +629,7 @@ End Function
 Public Function GetPaletaStavkeForGrid(ByVal palID As String) As Variant
     On Error GoTo EH
     If Trim$(palID) = "" Then Exit Function
+    If PaletaPraznoAkoTest("PRIKAZ") Then Exit Function
     Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(s) Then Exit Function
 
@@ -2226,10 +2233,13 @@ Private Function SkiniPaletneStavke(ByRef s As Variant, ByVal rowsC As Collectio
         cnt = cnt + 1
     Next k
 
+    ' "Prazna" odlucuje STROG brojac (N8, S8-REV-05). Prikazni citac na gresci
+    ' vraca Empty, a Empty bi ovde znacio "prazna" -> StornoPaleta, koji skida i
+    ' su-stanare: greska citanja bi postala dozvola za destruktivnu operaciju.
     Dim v As Variant
     outPrazne = ""
     For Each v In touched.Keys
-        If IsEmpty(GetPaletaStavkeForGrid(CStr(v))) Then      ' nema aktivnih stavki
+        If BrojAktivnihStavkiPalete(CStr(v), sourceName) = 0 Then
             If IsPaletaPreradjena(CStr(v)) Then
                 outPrazne = outPrazne & PaletaLabel(CStr(v)) & " (preradjena - NIJE stornirana!) "
             ElseIf StornoPaleta(CStr(v)) Then
@@ -2239,6 +2249,44 @@ Private Function SkiniPaletneStavke(ByRef s As Variant, ByVal rowsC As Collectio
         End If
     Next v
     SkiniPaletneStavke = cnt
+End Function
+
+' Broj AKTIVNIH paletnih stavki palete (svih vlasnika). Strog: bez On Error,
+' tabela mora da postoji, kolone kroz RequireColumnIndex -- necitljiva tabela ili
+' kolona dize gresku, pa se cela operacija povlaci. Tabela bez redova je 0.
+Private Function BrojAktivnihStavkiPalete(ByVal palID As String, ByVal SRC As String) As Long
+    If PaletaPraznoAkoTest("BROJAC") Then
+        Err.Raise vbObjectError + 7364, SRC, _
+                  "TEST: strog brojac stavki palete ne moze da procita tabelu."
+    End If
+    If GetTable(TBL_PALETA_STAVKA) Is Nothing Then
+        Err.Raise vbObjectError + 7364, SRC, _
+                  "Nema tabele " & TBL_PALETA_STAVKA & " -- ne zna se da li je paleta prazna."
+    End If
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim sPal As Long, sStt As Long, r As Long
+    sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+    sStt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+    For r = 1 To UBound(s, 1)
+        If Trim$(NzToText(SafeCell(s, r, sPal))) = Trim$(palID) _
+           And UCase$(Trim$(NzToText(SafeCell(s, r, sStt)))) <> "DA" Then
+            BrojAktivnihStavkiPalete = BrojAktivnihStavkiPalete + 1
+        End If
+    Next r
+End Function
+
+' Pali/gasi seam praznine palete (v. mPaletaPraznoTest): "PRIKAZ", "BROJAC" ili ""
+' (gasi). Paljenje van test rezima ne radi nista; gasenje radi uvek.
+Public Sub PaletaPraznoTestSet(ByVal rezim As String)
+    rezim = UCase$(Trim$(rezim))
+    If Len(rezim) > 0 And Not IsTestMode() Then Exit Sub
+    mPaletaPraznoTest = rezim
+End Sub
+
+Private Function PaletaPraznoAkoTest(ByVal rezim As String) As Boolean
+    If mPaletaPraznoTest <> rezim Then Exit Function
+    PaletaPraznoAkoTest = IsTestMode()
 End Function
 
 ' ============================================================
