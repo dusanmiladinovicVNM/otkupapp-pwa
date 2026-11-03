@@ -10984,8 +10984,8 @@
      - **Sledeći brojevi:** test 350 · stavka 324 · KI-089 · plan §14.64.
 
 324. **AMB po OM = stanje stanice + njeni kooperanti (`AMB-POSL-04`, dopuna `AMB-POSL-02`)** (03.11.2026).
-     Grana `claude/amb-saldo-om-stanica-i09xnn`, od `main` `95de6365`. Stavke 272–274 zauzima otvoren PR `#456`
-     (docs, pre-flight S8), pa ova ide na 275. Pre-flight je urađen u chatu (sve ose PROVEN ili N/A). Odluka
+     Grana `claude/amb-saldo-om-stanica-i09xnn`, od `main` `95de6365`. Stavke 272–275 zauzima otvoren PR `#456`
+     (docs, pre-flight S8; najavljuje 276 kao sledeću), pa ova ide na 276. Ko se spaja drugi, prenumeriše. Pre-flight je urađen u chatu (sve ose PROVEN ili N/A). Odluka
      operatera o prikazu: poseban red „Stanje OM" u listi. Pravilo: `docs/DOMEN/README.md` §2,
      `docs/DOMEN/AMBALAZA.md` 6.6a.
 
@@ -10999,6 +10999,9 @@
        **bez prijave kvara**. Vizuelno se nigde drugde ništa ne menja, jer se `""` i ranije crtao prazno, samo uz
        WARN „Celija bez prikaza". Natpis kolone na OM listama Saldo je nov ključ `OTKUI_HDI_AMB_OM` („AMB OM+KOOP.",
        širina 56 → 80); `OTKUI_HDI_AMB` ostaje listama kupaca.
+     - **Prioritet kolone AMB 3 → 1** (dopuna istog dana, posle UI pregleda): sa širinom 80 bi prioritet 3 AMB
+       sakrio već ispod ~770 pt širine mreže (ranije ~746 pt). Ljuska sklanja kolone od najvećeg prioriteta
+       (`modOtkupUI` raspored mreže), pa se sada prvi sklanja AGRO (2), a broj koji je predmet pregleda ostaje.
      - **Pozivaoci (popisani pre promene oblika):**
        - Bez promene ponašanja:
          - zbirni (UKUPNO po labeli);
@@ -11016,13 +11019,18 @@
      - **Testovi:** nov 309 `T_AmbPoslovno_StanjeOMUSaldu` meri u koracima (nabavka +20 / izdavanje 0 /
        kooperant donese svoje 0 / predaja vozaču −5), zatim dan DO, drugu stanicu, nezavisan fizički prolaz, saldo
        liste Ambalaža od početka, zbirni red, i ekran (prazne ćelije, zbir kolone, pretraga, natpis).
-       **Sabotaže** `amb-posl-04-stanje-izostavljeno`, `-stanje-bez-datuma`, `-ekran-nule`, `-prazno-je-kvar`;
-       katalog 1121 → 1125. Mehanika primeni → `--vrati` je proverena na disku, izvor posle vraćanja je identičan.
+       **Sabotaže** `amb-posl-04-stanje-izostavljeno`, `-stanje-bez-datuma`, `-ekran-nule`, `-prazno-je-kvar`,
+       `-amb-sklanja-prva`; katalog 1121 → 1126. Mehanika primeni → `--vrati` je proverena na disku, izvor posle vraćanja je identičan.
      - **NEVERIFIKOVANO:** `run_vba` u web sesiji ne radi, pa test 309 nije izvršen i sabotaže nisu pokazane crvene.
        Treba: `python tools/run_vba.py --suite RunAllTests` (očekivano 309 / 0) i `--suite RunIzvestajTests`, pa
        `python tools/dokaz.py amb-posl-04`, pa ručno Compile. Zeleno je samo bez Excela: `vba_check`,
        `gen_schema_module --check` i `who_writes --check-ownership`.
-     - **Sledeći brojevi:** test 310 · stavka 276 · KI-083.
+     - **UI pregled oblasti (03.11.2026), upisano kao KI, bez koda:**
+       - `KI-083`: red „Stanje OM" pluta pri sortiranju;
+       - `KI-084`: ekran bez UKUPNO AMB, papir pojedinačnog bez OM avansa (i zato drugi Isplaćeno/Saldo od zbirnog),
+         roba OM zbirno sa redom od 0 kg;
+       - `KI-085`: PWA „Amb:" u saldu po OM je drugi broj pod istim imenom.
+     - **Sledeći brojevi:** test 310 · stavka 277 · KI-086.
 
 ## Dug sa imenom (posle S5-5b)
 

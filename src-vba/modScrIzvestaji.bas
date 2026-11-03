@@ -734,7 +734,10 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                 ' Doplata je na kraju, kao u izvestaju (pozicioni citaoci);
                 ' saldo je ukljucuje (DOPLATA.md par. 6).
                 ' Amb = stanje stanice + njeni kooperanti (AMB-POSL-04), zato
-                ' svoj natpis -- OTKUI_HDI_AMB ostaje listama kupaca.
+                ' svoj natpis -- OTKUI_HDI_AMB ostaje listama kupaca. Prioritet 1:
+                ' na uskom ekranu se sklanja AGRO (2), ne broj koji je predmet
+                ' pregleda -- sa sirinom 80 bi prioritet 3 AMB sakrio vec ispod
+                ' ~770-780 pt mreze (pre ove izmene ~746).
                 IzKoloneZaListu = Array( _
                     "OTKUI_HD_OM||txt|140|1", _
                     "OTKUI_HD_KG||kg|82|1", _
@@ -742,7 +745,7 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                     "OTKUI_HDI_ISPLACENO||rsd|92|1", _
                     "OTKUI_HDI_AGRO||rest|80|2", _
                     "OTKUI_HDI_SALDO||rsd|92|1", _
-                    "OTKUI_HDI_AMB_OM||num|80|3", _
+                    "OTKUI_HDI_AMB_OM||num|80|1", _
                     "OTKUI_HDI_DOPLATA||rsd|88|1", _
                     "OTKUI_HDI_REF||txt|1|4")
                 Exit Function
@@ -794,6 +797,7 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                 ' Kooperant | Kolicina | Vrednost | Isplaceno | Agro | Saldo | Amb | Doplata
                 ' Red Stanje OM (AMB-POSL-04) nosi samo Amb; ostale celije su
                 ' prazne, a kolona Amb se sabira u isti broj kao red stanice zbirno.
+                ' Prioritet 1 (ne 3): na uskom ekranu se prvi sklanja AGRO, ne AMB.
                 IzKoloneZaListu = Array( _
                     "OTKUI_HDA_KOOPERANT||txt|130|1", _
                     "OTKUI_HD_KG||kg|82|1", _
@@ -801,7 +805,7 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                     "OTKUI_HDI_ISPLACENO||rsd|92|1", _
                     "OTKUI_HDI_AGRO||rest|82|2", _
                     "OTKUI_HDI_SALDO||rsd|92|1", _
-                    "OTKUI_HDI_AMB_OM||num|80|3", _
+                    "OTKUI_HDI_AMB_OM||num|80|1", _
                     "OTKUI_HDI_DOPLATA||rsd|88|1")
             End If
         Case IZ_ROBA

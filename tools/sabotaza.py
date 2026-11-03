@@ -11068,6 +11068,15 @@ SABOTAZE = {
         "T_AmbPoslovno_StanjeOMUSaldu",
         "prazna celija reda Stanje OM se crta prazno i nije kvar prikaza",
     ),
+    # Kolona AMB OM+KOOP. opet ima prioritet 3: na uskom ekranu se sklanja
+    # prva, pre AGRO -- broj koji je predmet pregleda nestaje.
+    "amb-posl-04-amb-sklanja-prva": (
+        "modScrIzvestaji.bas",
+        "                    \"OTKUI_HDI_AMB_OM||num|80|1\")\n",
+        "                    \"OTKUI_HDI_AMB_OM||num|80|3\")   ' SABOTAZA: AMB se sklanja prva\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "uzak ekran: kolona AMB OM+KOOP. se ne sklanja pre AGRO",
+    ),
     # --- AMB-BIL-01/02: bilans ambalaze (testovi 290-292) ---
     # Bilans ne sece po datumDo: kasnija nabavka ulazi u stanje na kraju perioda.
     "amb-bil-bez-reza-datumdo": (

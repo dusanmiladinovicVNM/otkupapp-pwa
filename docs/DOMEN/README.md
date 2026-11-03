@@ -305,8 +305,12 @@ stanica 148 + kooperanti +411 = 559; Hladnjača 0 + (−295) = −295.
   prazne, ne „0,00" — stanica nema otkup, novac ni agro zaduženje). Na ekranu je
   red konteksta: prikazuje se u nefiltriranoj listi, pod pretragom ne. Red se
   izostavlja kad je stanje 0, kao „OM AVANS" i „AGROHEMIJA". Natpis kolone na OM
-  listama Saldo je `OTKUI_HDI_AMB_OM` („AMB OM+KOOP."); liste kupaca zadržavaju
-  `OTKUI_HDI_AMB`. Kupci su van obima.
+  listama Saldo je `OTKUI_HDI_AMB_OM` („AMB OM+KOOP."), prioriteta 1: na uskom
+  ekranu se pre nje sklanja AGRO. Liste kupaca zadržavaju `OTKUI_HDI_AMB`. Kupci su
+  van obima.
+- **Poznato:** red pluta kad operater sortira listu (`KI-089`); ekran ne pokazuje
+  UKUPNO AMB, a papir pojedinačnog ne nosi OM avans (`KI-090`); PWA pod istim
+  imenom pokazuje drugi broj (`KI-091`).
 
 Meri ga `modTest` 350 (`T_AmbPoslovno_StanjeOMUSaldu`), sabotaže `amb-posl-04-*`.
 

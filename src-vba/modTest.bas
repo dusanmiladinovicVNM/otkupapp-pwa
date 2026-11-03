@@ -15363,11 +15363,13 @@ End Sub
 '      od pocetka; UKUPNO = kooperanti + Stanje OM; zbirni red = UKUPNO;
 '  (7) ekran: red je u mrezi, kg/novac/saldo PRAZNI (ne 0,00), AMB = stanje,
 '      kolona AMB mreze se sabira u UKUPNO; pod pretragom reda nema; natpis
-'      kolone ima svoj kljuc u katalogu, a lista kupaca zadrzava stari.
+'      kolone ima svoj kljuc u katalogu, a lista kupaca zadrzava stari; na
+'      uskom ekranu AMB se ne sklanja pre AGRO.
 ' Semanticki nivo: KOMADI po stanici, preko svih tipova gajbe.
 ' Fixture: normal production state.
 ' SABOTAZE: amb-posl-04-stanje-izostavljeno, amb-posl-04-stanje-bez-datuma,
-'           amb-posl-04-ekran-nule, amb-posl-04-prazno-je-kvar.
+'           amb-posl-04-ekran-nule, amb-posl-04-prazno-je-kvar,
+'           amb-posl-04-amb-sklanja-prva.
 Private Sub T_AmbPoslovno_StanjeOMUSaldu()
     Const NAZIV As String = "Prvi Testni"     ' KOOP-TEST-1, oslonac testa 284
     Dim t As String, t2 As String, b As String
@@ -15481,6 +15483,12 @@ Private Sub T_AmbPoslovno_StanjeOMUSaldu()
              "natpis AMB: OM liste Saldo imaju svoj kljuc, lista kupaca stari"
     AssertEq PorukaNedostaje("OTKUI_HDI_AMB_OM"), False, _
              "natpis AMB OM+KOOP. postoji u katalogu poruka"
+    ' Uzak ekran sklanja kolone po prioritetu (veci broj ide prvi): AMB je broj
+    ' koji je predmet pregleda, pa ne sme da ode pre AGRO (kolona 5).
+    AssertEq (modOtkupUI.ColPrioritet(CStr(kol(6))) <= modOtkupUI.ColPrioritet(CStr(kol(4)))) & "|" & _
+             (modOtkupUI.ColPrioritet(CStr(kolZ(6))) <= modOtkupUI.ColPrioritet(CStr(kolZ(4)))), _
+             "True|True", _
+             "uzak ekran: kolona AMB OM+KOOP. se ne sklanja pre AGRO"
 End Sub
 
 ' Iz pregleda Saldo po OM (od pocetka do datumDo): AMB reda Stanje OM (0 kad
