@@ -200,8 +200,9 @@ Public Function PrijemnicaZaKorekciju(ByVal broj As String, ByRef outRazlog As S
     End Select
 End Function
 
-' "Naziv (ID)" kupca za poruku; sam ID kad naziva nema.
-Private Function KupacOznaka(ByVal kupacID As String) As String
+' "Naziv (ID)" kupca za poruku; sam ID kad naziva nema. Javno: zovu ga i potvrde
+' radnji Oporavka (modScrOporavak.OpisDokumentaZaPotvrdu).
+Public Function KupacOznaka(ByVal kupacID As String) As String
     Dim nm As String
     On Error Resume Next
     nm = Trim$(NzToText(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, COL_KUP_NAZIV)))

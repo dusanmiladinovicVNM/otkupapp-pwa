@@ -684,6 +684,8 @@ Private Sub ResetSeamova()
     ' Pokvarena odluka "paleta je prazna" (S8 rez 1b, N8): zaostao seam bi
     ' prikazu palete vratio prazno ili oborio svako sledece skidanje paleta.
     modPaletniList.PaletaPraznoTestSet ""
+    ' Necitljiva kolona identiteta liste Nedovrseno (S8R1B-REV-01).
+    modStornoRecovery.NedovrsenoKvarTestSet ""
     ' Podmetnut pad na kraju jezgra fakture (S6 korak 5): zaostao seam bi oborio
     ' svaku sledecu fakturu.
     modFaktura.CreateFakturaPadniTest False
@@ -3914,19 +3916,22 @@ End Sub
 ' "Nedovrseno" je deduplikovalo osirotele redove po BROJU: drugi dokument istog
 ' broja nije dolazio u listu, a context ispravke jednog kupca je sakrivao palete
 ' drugog. Od 1b dedup ide po ID-u (StorniraniDocID contexta, PrijemnicaID reda).
-' Potvrda "Prevezi/Skini palete" tada imenuje dokument (KI-056).
+' Necitljiva kolona identiteta vise ne skracuje listu nemo: redovi ostaju, a lista
+' javlja red GRESKA (S8R1B-REV-01). Potvrda "Prevezi/Skini palete" UVEK imenuje
+' dokument i kupca, nezavisno od toga sta je u mrezi (KI-056, S8R1B-REV-02).
 '
 '   A  kupac 1, broj X, 4 gajbe  -- stornirana bez skidanja paleta
 '   B  kupac 2, broj X, 3 gajbe  -- stornirana bez skidanja paleta
 '
 ' Nivo: LOGICKI dokument (red liste po PrijemnicaID-u), ne broj.
-' SABOTAZE: s8r1b-nedovrseno-po-broju, s8r1b-potvrda-bez-dokumenta.
+' SABOTAZE: s8r1b-nedovrseno-po-broju, s8r1b-nedovrseno-kvar-tiho,
+' s8r1b-potvrda-bez-dokumenta.
 Private Sub T_S8R1b_NedovrsenoPoIdentitetu()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, prevPal As String
     Dim redoviPre As String, redoviPosle As String
     Dim zbrA As String, zbrB As String, t As String, brojX As String
     Dim resA As String, resB As String
-    Dim cid As String, opis As String
+    Dim cid As String, opis As String, nKvar As Long, nGreska As Long
 
     prevPal = GetConfigValue(CFG_PALETIRANJE)
     redoviPre = S8R1aBrojRedova()
@@ -3949,14 +3954,18 @@ Private Sub T_S8R1b_NedovrsenoPoIdentitetu()
     AssertEq S8R1bNedRedova("OSIROCENE_PALETE", brojX), 2, _
              "313: dva dokumenta istog broja sa osirotelim paletama daju dva reda"
 
-    modScrOporavak.Scr_OpoTestSet "PALETE", "", ""
-    modOtkupUI.GridTestLoad "OPORAVAK"
-    opis = modScrOporavak.OpisIzvoraZaPotvrdu(brojX, resA)
-    AssertEq (InStr(opis, resA) > 0), True, _
-             "313: potvrda imenuje izabrani dokument kad broj nije jedinstven"
-    AssertEq modScrOporavak.OpisIzvoraZaPotvrdu("T-S8N-NEMA-" & t, resA), "T-S8N-NEMA-" & t, _
-             "313: jedinstven broj u potvrdi ostaje samo broj"
-    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    modStornoRecovery.NedovrsenoKvarTestSet "ID_KOLONA"
+    nKvar = S8R1bNedRedova("OSIROCENE_PALETE", brojX)
+    nGreska = S8R1bNedRedova(modStornoRecovery.KIND_GRESKA_CITANJA, "Prijemnica (palete)")
+    modStornoRecovery.NedovrsenoKvarTestSet ""
+    AssertEq nKvar, 2, "313: necitljiva kolona identiteta ne sakriva osirotele dokumente"
+    AssertEq nGreska, 1, "313: necitljiva kolona identiteta se javlja kao red GRESKA"
+
+    opis = modScrOporavak.OpisDokumentaZaPotvrdu(brojX, resA)
+    AssertEq (InStr(opis, resA) > 0 And InStr(opis, FX_KUPAC) > 0), True, _
+             "313: potvrda imenuje dokument i kupca"
+    AssertEq (opis <> modScrOporavak.OpisDokumentaZaPotvrdu(brojX, resB)), True, _
+             "313: potvrde dva dokumenta istog broja se razlikuju"
 
     cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, _
               FLOW_DOC_PRIJEMNICA, resA, brojX, _

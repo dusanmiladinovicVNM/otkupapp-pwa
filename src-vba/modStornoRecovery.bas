@@ -1,6 +1,15 @@
 Attribute VB_Name = "modStornoRecovery"
 Option Explicit
 
+' Vrsta reda liste Nedovrseno kad se izvor ne moze procitati (S8R1B-REV-01): red
+' se PRIKAZUJE, umesto da lista neprimetno bude kraca.
+Public Const KIND_GRESKA_CITANJA As String = "GRESKA_CITANJA"
+
+' TEST SEAM (S8 rez 1b, S8R1B-REV-01): "ID_KOLONA" -- lista osirotelih paleta dobija
+' necitljivu kolonu identiteta. Postavljac ga pali samo u test rezimu, kuka ponovo
+' pita IsTestMode(), a gasi ga modTest.ResetSeamova.
+Private mNedovrsenoKvarTest As String
+
 ' ============================================================
 ' modStornoRecovery - "Nedovrseno" (jedan pregled) + "Vrati storno" (reverzija).
 ' Faza 5.
@@ -66,7 +75,8 @@ Public Function GetNedovrseno() As Collection
     '    Akcija svih: "Osiroceni dokumenti" panel (postojeci re-point / skidanje).
     AddOsiroceneRows result, GetOsirocenePrijemnice(), "OSIROCENA_PRIJEMNICA", 1, 8, _
         "Prijemnica", "PRIJ", "Osiroceni dokumenti (prevezi prijemnicu)", seen
-    AddOsiroceneRows result, GetPrijemniceSaOsirocenimPaletama(), "OSIROCENE_PALETE", 1, 7, _
+    AddOsiroceneRows result, GetPrijemniceSaOsirocenimPaletama(), "OSIROCENE_PALETE", 1, _
+        IIf(NedovrsenoKvarAkoTest("ID_KOLONA"), 0, 7), _
         "Prijemnica (palete)", "PAL", "Osiroceni dokumenti (prevezi ili skini palete)", seen
     ' 3) Izgubljeni blokovi (B-041) -- KANON, ne stara veza.
     AddIzgubljeniBlokovi result
@@ -214,15 +224,27 @@ End Sub
 ' idCol = 1-based kolone sa poslovnim brojem (labela) i PrijemnicaID-om
 ' (identitet). Preskace DOKUMENT koji je vec u `seen` (context dedup + interni),
 ' po ID-u; red bez ID-a se ne deduplikuje.
+'
+' Greska citanja se NE guta (S8R1B-REV-01): necitljiva kolona identiteta daje red
+' GRESKA i redove bez deduplikacije, a pad usred liste daje red GRESKA umesto
+' neprimetno krace liste. Do 1b je "On Error GoTo done" tiho prekidao dodavanje.
 Private Sub AddOsiroceneRows(ByRef result As Collection, ByVal v As Variant, ByVal kind As String, _
                              ByVal brojCol As Long, ByVal idCol As Long, ByVal docLabel As String, _
                              ByVal actionCode As String, ByVal akcija As String, ByRef seen As Object)
-    On Error GoTo done
+    On Error GoTo EH
     If Not Is2DArray(v) Then Exit Sub
+    Dim idOk As Boolean
+    idOk = (idCol >= LBound(v, 2) And idCol <= UBound(v, 2))
+    If Not idOk Then
+        AddNedRowFull result, KIND_GRESKA_CITANJA, docLabel, "GRESKA", _
+            "Lista " & docLabel & ": kolona identiteta (" & idCol & ") nije citljiva -- redovi su " & _
+            "prikazani bez deduplikacije.", "", "", docLabel, "", "", "GRESKA"
+    End If
     Dim r As Long
     For r = 1 To UBound(v, 1)
         Dim b As String: b = Trim$(CStr(v(r, brojCol)))
-        Dim id As String: id = Trim$(CStr(v(r, idCol)))
+        Dim id As String: id = ""
+        If idOk Then id = Trim$(CStr(v(r, idCol)))
         If Len(b) > 0 Then
             Dim kljuc As String: kljuc = ""
             If Len(id) > 0 Then kljuc = "ID|" & id
@@ -233,8 +255,24 @@ Private Sub AddOsiroceneRows(ByRef result As Collection, ByVal v As Variant, ByV
             End If
         End If
     Next r
-done:
+    Exit Sub
+EH:
+    AddNedRowFull result, KIND_GRESKA_CITANJA, docLabel, "GRESKA", _
+        "Lista " & docLabel & " nije procitana do kraja: " & Err.description, "", "", docLabel, "", "", "GRESKA"
 End Sub
+
+' Pali/gasi seam kvara liste Nedovrseno (v. mNedovrsenoKvarTest): "ID_KOLONA" ili ""
+' (gasi). Paljenje van test rezima ne radi nista; gasenje radi uvek.
+Public Sub NedovrsenoKvarTestSet(ByVal rezim As String)
+    rezim = UCase$(Trim$(rezim))
+    If Len(rezim) > 0 And Not IsTestMode() Then Exit Sub
+    mNedovrsenoKvarTest = rezim
+End Sub
+
+Private Function NedovrsenoKvarAkoTest(ByVal rezim As String) As Boolean
+    If mNedovrsenoKvarTest <> rezim Then Exit Function
+    NedovrsenoKvarAkoTest = IsTestMode()
+End Function
 
 ' ID storniranog dokumenta iz contexta; prazno kad ga context ne nosi ili citanje
 ' padne. Prazno znaci "context ne pokriva nijedan osiroceni red" -- red se tada

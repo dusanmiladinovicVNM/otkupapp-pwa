@@ -9057,13 +9057,21 @@ SABOTAZE = {
         "T_S8R1b_NedovrsenoPoIdentitetu",
         "313: dva dokumenta istog broja sa osirotelim paletama daju dva reda",
     ),
-    # S8 rez 1b (KI-056): potvrda imenuje dokument kad broj u listi nije jedinstven.
+    # S8 rez 1b (KI-056, S8R1B-REV-02): potvrda UVEK imenuje dokument i kupca.
     "s8r1b-potvrda-bez-dokumenta": (
         "modScrOporavak.bas",
-        "    If n > 1 And Len(Trim$(prijemnicaID)) > 0 Then\n",
-        "    If False Then   ' SABOTAZA: potvrda nosi samo broj\n",
+        "    OpisDokumentaZaPotvrdu = brojPrij & \" (\" & kup & pid & \")\"\n",
+        "    OpisDokumentaZaPotvrdu = brojPrij   ' SABOTAZA: potvrda nosi samo broj\n",
         "T_S8R1b_NedovrsenoPoIdentitetu",
-        "313: potvrda imenuje izabrani dokument kad broj nije jedinstven",
+        "313: potvrda imenuje dokument i kupca",
+    ),
+    # S8 rez 1b (S8R1B-REV-01): necitljiva kolona identiteta se javlja, ne guta se.
+    "s8r1b-nedovrseno-kvar-tiho": (
+        "modStornoRecovery.bas",
+        "    If Not idOk Then\n",
+        "    If False Then   ' SABOTAZA: necitljiva kolona identiteta se ne javlja\n",
+        "T_S8R1b_NedovrsenoPoIdentitetu",
+        "313: necitljiva kolona identiteta se javlja kao red GRESKA",
     ),
     # S8 rez 1b (S8R1A-REV-03): posle prevezivanja sa razlikom gajbi ide korekcija cilja.
     "s8r1b-prevezi-bez-korekcije": (

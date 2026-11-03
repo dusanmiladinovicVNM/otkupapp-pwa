@@ -337,7 +337,7 @@ Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal prijemnicaID 
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_NEMA_ZBIRNE"), True
         Exit Function
     End If
-    If MsgBox(Poruka("OTKUI_ASK_OPO_PRI") & " " & OpisIzvoraZaPotvrdu(brojPrij, prijemnicaID) & " " & _
+    If MsgBox(Poruka("OTKUI_ASK_OPO_PRI") & " " & OpisDokumentaZaPotvrdu(brojPrij, prijemnicaID) & " " & _
               Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljZbirna & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
@@ -384,9 +384,9 @@ Private Function PreveziPalete(ByVal brojPrij As String, ByVal prijemnicaID As S
     ' Kapija nad dvosmislenim CILJEM vise nije ovde: ista provera sada stoji u
     ' samom writeru (VlasniciPoBroju / RequireJedanVlasnikPoBroju), pa vazi za
     ' SVAKOG pozivaoca, i za legacy formu. Ekran samo prikaze razlog.
-    ' Potvrda imenuje dokument kad broj u listi nije jedinstven (KI-056): dva
-    ' reda istog broja su dva dokumenta, a radnja ide tacno po izabranom ID-u.
-    If MsgBox(Poruka("OTKUI_ASK_OPO_PAL") & " " & OpisIzvoraZaPotvrdu(brojPrij, prijemnicaID) & " " & _
+    ' Potvrda imenuje dokument i kupca (KI-056, S8R1B-REV-02): broj nose
+    ' dokumenti vise kupaca, a radnja ide tacno po izabranom ID-u.
+    If MsgBox(Poruka("OTKUI_ASK_OPO_PAL") & " " & OpisDokumentaZaPotvrdu(brojPrij, prijemnicaID) & " " & _
               Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljPrijemnica & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
@@ -437,7 +437,7 @@ End Function
 Private Function SkiniPalete(ByVal brojPrij As String, ByVal prijemnicaID As String) As Boolean
     Dim razlog As String, n As Long
     On Error GoTo EH
-    If MsgBox(Poruka("OTKUI_ASK_OPO_SKINI") & " " & OpisIzvoraZaPotvrdu(brojPrij, prijemnicaID) & "?", _
+    If MsgBox(Poruka("OTKUI_ASK_OPO_SKINI") & " " & OpisDokumentaZaPotvrdu(brojPrij, prijemnicaID) & "?", _
               vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Function
     n = modPaletniList.SkiniPaleteSirocadi_TX(prijemnicaID, razlog)
     If n > 0 Then
@@ -453,22 +453,20 @@ EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Function
 
-' Izvor u potvrdi prevezivanja ili skidanja. Kad broj u ucitanoj listi nije
-' jedinstven (dva dokumenta istog broja, KI-056), uz broj ide vrsta, sorta i
-' PrijemnicaID, da operater vidi KOJI red je izabrao.
-Public Function OpisIzvoraZaPotvrdu(ByVal brojPrij As String, ByVal prijemnicaID As String) As String
-    Dim i As Long, n As Long
+' Dokument u potvrdi prevezivanja ili skidanja (KI-056, S8R1B-REV-02): UVEK broj,
+' kupac i PrijemnicaID. Broj nose dokumenti vise kupaca, a da li je drugi dokument
+' istog broja trenutno u listi zavisi od pretrage -- potvrda radnje koja menja
+' podatke ne sme da zavisi od toga sta je vidljivo.
+Public Function OpisDokumentaZaPotvrdu(ByVal brojPrij As String, ByVal prijemnicaID As String) As String
+    Dim pid As String, kup As String
+    pid = Trim$(prijemnicaID)
+    OpisDokumentaZaPotvrdu = brojPrij
+    If Len(pid) = 0 Then Exit Function
     On Error Resume Next
-    OpisIzvoraZaPotvrdu = brojPrij
-    For i = 1 To modOtkupUI.GridBrojRedova()
-        If StrComp(Trim$(CStr(modOtkupUI.GridCell(i, 1))), Trim$(brojPrij), vbTextCompare) = 0 Then n = n + 1
-    Next i
-    If n > 1 And Len(Trim$(prijemnicaID)) > 0 Then
-        OpisIzvoraZaPotvrdu = brojPrij & " (" & _
-            Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_VRSTA))) & " " & _
-            Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_SORTA))) & ", " & _
-            Trim$(prijemnicaID) & ")"
-    End If
+    kup = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, pid, COL_PRJ_KUPAC)))
+    On Error GoTo 0
+    If Len(kup) > 0 Then kup = modPaletniListUI.KupacOznaka(kup) & ", "
+    OpisDokumentaZaPotvrdu = brojPrij & " (" & kup & pid & ")"
 End Function
 
 ' Vracanje storna. Cilja KONKRETNU operaciju po OperationID, ne poslednju po
