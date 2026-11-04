@@ -1318,10 +1318,13 @@ SABOTAZE = {
         "PK A daje SVOJU kolicinu",
     ),
     # --- identitet dokumenta na granici prevezivanja (zavrsnica Faze D) -----
+    # Zavrsni krug S8 (04.11.2026): zamena je citala labelu sBr sa paletne stavke, koje od
+    # S8 reza 2a-2 nema -- sabotaza se nije kompajlirala (NE OBARA NISTA). Sada bira
+    # izvor po broju iz ZAGLAVLJA prijemnice: ista greska, bez kolone.
     "relink-izvor-po-broju": (
         "modPaletniList.bas",
         "            ElseIf PripadaDokumentu(Trim$(CStr(ps(i, sPid))), srcIds) Then\n",
-        "            ElseIf Trim$(CStr(ps(i, sBr))) = oldBroj Then   ' SABOTAZA: izvor se opet bira po broju\n",
+        "            ElseIf Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(CStr(ps(i, sPid))), COL_PRJ_BROJ))) = oldBroj Then   ' SABOTAZA: izvor se opet bira po broju (zaglavlje)\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "tudji dokument istog broja OSTAJE na svom mestu",
     ),
@@ -1742,12 +1745,16 @@ SABOTAZE = {
     # Su-stanar na deljenoj paleti. Dva kupca istog broja i iste robe smeju da
     # dele paletu; poredjenje po broju ih vidi kao istu prijemnicu, pa kapija ne
     # okine i relabel prepravi header cele palete.
+    # Zavrsni krug S8 (04.11.2026): zamena je poredila bpg, koji je do S8 reza 2a-2 bio broj
+    # sa paletne stavke reda; od 2a-2 se bpg puni tek POSLE ove provere, iz zaglavlja, pa
+    # je bio prazan i sabotaza je obarala tudji test (svaki red je izgledao tudj). Sada
+    # izvor i cilj prepoznaje po broju iz ZAGLAVLJA prijemnice reda.
     "cotenant-po-broju": (
         "modPaletniList.bas",
         "                    jeIzvor = PripadaDokumentu(pidG, srcIds)\n"
         "                    jeCilj = PripadaDokumentu(pidG, tgtIds)\n",
-        "                    jeIzvor = (bpg = oldBroj)   ' SABOTAZA\n"
-        "                    jeCilj = (bpg = newBroj)\n",
+        "                    jeIzvor = (Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, pidG, COL_PRJ_BROJ))) = oldBroj)   ' SABOTAZA: po broju (zaglavlje)\n"
+        "                    jeCilj = (Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, pidG, COL_PRJ_BROJ))) = newBroj)\n",
         "T_DeljenaPaleta_SuStanarPoIdentitetu",
         "relabel deljene palete se odbija i uz potvrdu",
     ),

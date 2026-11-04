@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 320: kapije `#467` zelene — RunAllTests 314/0, BFP 3014/0, dokaz 8/8; ručni Compile PASS).
+**Ažurirano:** 04.11.2026 (stavka 322: završni krug S8 — 11/11 sabotaža, FULL zeleno posle usklađivanja testa Storno centra; S8 ZATVOREN).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10916,6 +10916,40 @@
      - **Osnova posle merge-a #467:** RunAllTests 314, BFP 3014, katalog 1155, `pal_broj` 0, `prj_brojzbirne` 31,
        fixture `68efada928a8d97d`, šema `CA5CE30A`.
      - **Sledeći brojevi:** test 315 · stavka 321 · KI-088 · plan §14.63.
+
+321. **Merge PR-a `#467` u `main` = `1bc4f9bb`; rez 2b ZATVOREN** (04.11.2026, uz „Proveri i merge"). Zapis ide na
+     granu `claude/s8-zavrsni-krug` (od `1bc4f9bb`).
+
+     - **Pre merge-a:** Static CI na glavi `0f723914` SUCCESS; PR MERGEABLE / CLEAN; `main` se od `5024db6d` nije
+       pomerio. Merge vezan za proverenu glavu (`--match-head-commit`).
+     - **Merge `1bc4f9bb`:** roditelji `5024db6d` i `0f723914`; stablo `main`-a je isto kao stablo glave.
+     - **Osnova za `main`:** RunAllTests 314 / 0, BFP 3014 / 0, Palete OK (115), Storno 111 / 0, dokaz 8 / 8
+       (potpis `9ce61c233c3fb46b`), Compile PASS; katalog 1155, `pal_broj` 0, `prj_brojzbirne` 31; šema `CA5CE30A`,
+       fixture `68efada928a8d97d`.
+     - **Paletna stavka posle S8 reza 2:** zna samo liniju prijemnice (`PrijemnicaStavkaID`, obavezan i proveren u
+       piscu, `PAL-INV-01`) i `PrijemnicaID` kao labelu dokumenta; broj prijemnice, broj zbirne i trag zbirne čitaju
+       se iz zaglavlja (`PAL-ODL-03`).
+     - **Sledi završni krug S8 (bez novog koda, osim ako nađe regresiju):** 11 odloženih regresionih sabotaža (1b,
+       S6), FULL prolaz svih suite-ova, provera `S8R2B1-REV-01` (C1/A3 kroz globalni strog čitač), odluka o P3
+       napomenama (labela bez ID-a, „BLOKIRANO", C2/B6 bez testa), pa zapis „S8 zatvoren". Pun katalog sabotaža
+       ostaje pred release.
+     - **Sledeći brojevi:** test 315 · stavka 322 · KI-088 · plan §14.63.
+
+322. **Završni krug S8 — S8 „Paleta i prerada" ZATVOREN** (04–05.11.2026, operater: „Kreni"). Grana
+     `claude/s8-zavrsni-krug` (od `1bc4f9bb`). Plan §14.63.
+
+     - **11 odloženih regresionih sabotaža:** prvi prolaz 9 / 11 — `relink-izvor-po-broju` se nije kompajlirala
+       (labela `sBr` od 2a-2 ne postoji), `cotenant-po-broju` je obarala tuđi test (`bpg` prazan od 2a-2). Obe
+       preformulisane (broj iz zaglavlja) i dokazane 2 / 2 (potpis `09d375b2c5d10966`). Ukupno 11 / 11.
+     - **FULL:** sve zeleno osim `Test_StornoCentar_All` (56 / 1) — premisa dedup-a po broju, zastarela od 1b (N9).
+       Test usklađen (context nosi `OldDocID`); zeleno, dokaz u oba smera (ugašen dedup po identitetu → ista tvrdnja
+       pada → vraćeno → zeleno). RunAllTests ponovo 314 / 0.
+     - **Odluke operatera:** `S8R2B1-REV-01` uz `KI-081`; tri P3 napomene 2a-2 → `KI-088` (OPEN).
+     - **Osnova za `main` posle merge-a ovog zapisa:** RunAllTests 314, BFP 3014, Banka 241, Storno 111, Palete 115,
+       Agrohemija 25, Golden i ostale zelene; katalog 1155 (svih 11 odloženih dokazano), `pal_broj` 0; šema
+       `CA5CE30A`, fixture `68efada928a8d97d`.
+     - **Van S8:** pun katalog sabotaža pred release; `KI-081` (sa REV-01) i `KI-088` OPEN.
+     - **Sledeći brojevi:** test 315 · stavka 323 · KI-089 · plan §14.64.
 
 ## Dug sa imenom (posle S5-5b)
 
