@@ -8954,20 +8954,15 @@ SABOTAZE = {
         "Test_S6_GrupniListStanjeVozaca",
         "S6 grupni list bez veze: prijemnica sa gajbama se ne popunjava",
     ),
-    # A3: linija je (dokument, klasa). Bez klase sve palete idu na klasu I i ispravan
-    # dvoklasni dokument postaje nalaz.
-    "s6k3-a3-linija-bez-klase": (
-        "modIntegritet.bas",
-        "                k = Trim$(NzToText(ps(i, cP))) & \"|\" & KlasaOrDefault(ps(i, cK))\n",
-        "                k = Trim$(NzToText(ps(i, cP))) & \"|\" & KLASA_I   ' SABOTAZA: linija bez klase\n",
-        "Test_S6_PaleteCitajuStavke",
-        "S6 palete: A3 nema nalaz nad ispravnim dokumentom",
-    ),
+    # A3: od S8 reza 2a-2 linija je STAVKA prijemnice (PrijemnicaStavkaID), ne
+    # (dokument, klasa) -- sabotaza "s6k3-a3-linija-bez-klase" je povucena, jer
+    # klase u kljucu vise nema, a kljuc po dokumentu daje isti simptom kao
+    # "s6k3-a3-slepa" (A3 oslepi). Kljuc linije meri s8r2a2-a3-samo-aktivne.
     # A3 kontra-tvrdnja: provera i dalje vidi STVARNO odstupanje neta.
     "s6k3-a3-slepa": (
         "modIntegritet.bas",
-        "            If Abs(diff) > 0.5 Then\n                delovi = Split(CStr(kk), \"|\")\n",
-        "            If False Then   ' SABOTAZA: A3 ne vidi odstupanje\n                delovi = Split(CStr(kk), \"|\")\n",
+        "                If Abs(diff) > 0.5 Then\n                    bad.Add Array(CStr(s(i, 1)), KlasaOrDefault(s(i, 3)), sumSt, kol, diff, k)\n",
+        "                If False Then   ' SABOTAZA: A3 ne vidi odstupanje\n                    bad.Add Array(CStr(s(i, 1)), KlasaOrDefault(s(i, 3)), sumSt, kol, diff, k)\n",
         "Test_S6_PaleteCitajuStavke",
         "S6 palete: A3 vidi stvarno odstupanje neta na liniji",
     ),
@@ -9208,6 +9203,48 @@ SABOTAZE = {
         "    ' SABOTAZA: nesiguran obim se cita nesuzeno po broju\n",
         "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
         "S8R2a1: uvid zbirne bez sigurnog obima ne nosi robu druge zbirne",
+    ),
+    # S8 rez 2a-2 (R6, PAL-ODL-09): lista stavki palete (C-048) nosi broj
+    # prijemnice iz zaglavlja, ne sa paletne stavke (labela koja lazi).
+    "s8r2a2-c048-labela-sa-stavke": (
+        "modPaletniList.bas",
+        "            res(k, 1) = lv(0)\n",
+        "            res(k, 1) = CStr(SafeCell(s, r, GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)))   ' SABOTAZA\n",
+        "Test_S8R2a2_LabeleIIntegritetPoStavci",
+        "S8R2a2: lista stavki palete nosi broj prijemnice iz zaglavlja",
+    ),
+    # S8 rez 2a-2 (R5): red osirotelih paleta nosi broj iz zaglavlja prijemnice.
+    "s8r2a2-oporavak-labela-sa-stavke": (
+        "modDokumenta.bas",
+        "                    brD(kl) = CStr(stPrij(pid)): pidD(kl) = pid\n",
+        "                    brD(kl) = Trim$(NzToText(ps(i, GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)))): pidD(kl) = pid   ' SABOTAZA\n",
+        "Test_S8R2a2_LabeleIIntegritetPoStavci",
+        "S8R2a2: red osirotelih paleta nosi broj prijemnice iz zaglavlja",
+    ),
+    # S8 rez 2a-2 (R11, PAL-ODL-08): A3 meri stavku koja je IKAD bila na paleti --
+    # i kad je sva njena roba skinuta (N7 iz istorije).
+    "s8r2a2-a3-samo-aktivne": (
+        "modIntegritet.bas",
+        "                If Not stByKey.Exists(k) Then stByKey(k) = 0#\n",
+        "                ' SABOTAZA: A3 meri samo stavke sa aktivnom robom na paleti\n",
+        "Test_S8R2a2_LabeleIIntegritetPoStavci",
+        "S8R2a2: A3 vidi stavku cija je roba skinuta stornom palete",
+    ),
+    # Kontra (PAL-ODL-08): roba koja nikad nije paletizovana nije nalaz A3.
+    "s8r2a2-a3-sve-stavke": (
+        "modIntegritet.bas",
+        "            If actPrij.Exists(CStr(s(i, 1))) And stByKey.Exists(k) Then\n",
+        "            If actPrij.Exists(CStr(s(i, 1))) Then   ' SABOTAZA: A3 meri i nikad paletizovane\n",
+        "Test_S8R2a2_LabeleIIntegritetPoStavci",
+        "S8R2a2: A3 ne prijavljuje robu koja nikad nije paletizovana",
+    ),
+    # S8 rez 2a-2 (R11, PAL-INV-01 meko): kljuc linije druge prijemnice je nalaz C1.
+    "s8r2a2-c1-tudji-kljuc": (
+        "modIntegritet.bas",
+        "                            razlog = \"kljuc linije pripada drugoj prijemnici\"\n",
+        "                            ' SABOTAZA: tudji kljuc linije se ne vidi\n",
+        "Test_S8R2a2_LabeleIIntegritetPoStavci",
+        "S8R2a2: C1 imenuje paletnu stavku sa kljucem linije druge prijemnice",
     ),
     # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
     "s8r1a-altf8-prvi-pogodak": (

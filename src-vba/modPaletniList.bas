@@ -614,12 +614,10 @@ Public Function GetPaletaStavkeForGrid(ByVal palID As String) As Variant
     Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(s) Then Exit Function
 
-    Dim iPal As Long, iPrij As Long, iBrPrij As Long, iZbir As Long
+    Dim iPal As Long, iPrij As Long
     Dim iGajb As Long, iNeto As Long, iStorno As Long
     iPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
     iPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
-    iBrPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    iZbir = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
     iGajb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
     iNeto = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
     iStorno = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
@@ -634,13 +632,21 @@ Public Function GetPaletaStavkeForGrid(ByVal palID As String) As Variant
     Next r
     If rows.count = 0 Then Exit Function
 
+    ' Brojevi su LABELE iz zaglavlja (S8 rez 2a-2, R6; PAL-ODL-09): broj prijemnice
+    ' iz tblPrijemnica, broj zbirne iz tblZbirna preko veze prijemnice. Kolone
+    ' paletne stavke se ne citaju -- lazu kad se dokument prevezuje, a brisu se u 2b.
+    Dim lab As Object: Set lab = LabelePrijemnicaZaPrikaz()
     Dim res As Variant: ReDim res(0 To rows.count - 1, 0 To 4)
-    Dim k As Long
+    Dim k As Long, pidL As String, lv As Variant
     For k = 0 To rows.count - 1
         r = rows(k + 1)
-        res(k, 0) = CStr(SafeCell(s, r, iPrij))
-        res(k, 1) = CStr(SafeCell(s, r, iBrPrij))
-        res(k, 2) = CStr(SafeCell(s, r, iZbir))
+        pidL = CStr(SafeCell(s, r, iPrij))
+        res(k, 0) = pidL
+        If lab.Exists(Trim$(pidL)) Then
+            lv = lab(Trim$(pidL))
+            res(k, 1) = lv(0)
+            res(k, 2) = lv(1)
+        End If
         res(k, 3) = NzL(SafeCell(s, r, iGajb))
         res(k, 4) = Format$(NzD(SafeCell(s, r, iNeto)), "0.00")
     Next k
@@ -651,74 +657,39 @@ EH:
     LogErr "modPaletniList.GetPaletaStavkeForGrid"
 End Function
 
-' Stavke za VISE izabranih paleta (agregat). Iste kolone kao
-' GetPaletaStavkeForGrid: 0 PrijemnicaID, 1 BrojPrijemnice, 2 BrojZbirne,
-' 3 Gajbice, 4 NetoKg. Empty ako nema.
-Public Function GetPaletaStavkeForGridMulti(ByVal paletaIDs As Collection) As Variant
-    On Error GoTo EH
-    If paletaIDs Is Nothing Then Exit Function
-    If paletaIDs.count = 0 Then Exit Function
-
-    Dim want As Object: Set want = CreateObject("Scripting.Dictionary")
-    Dim v As Variant
-    For Each v In paletaIDs
-        want(CStr(v)) = True
-    Next v
-
-    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
-    If IsEmpty(s) Then Exit Function
-
-    Dim iPal As Long, iPrij As Long, iBrPrij As Long, iZbir As Long
-    Dim iGajb As Long, iNeto As Long, iStorno As Long
-    iPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
-    iPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
-    iBrPrij = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    iZbir = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
-    iGajb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
-    iNeto = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
-    iStorno = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-
-    ' grupisi po PrijemnicaID: ista prijemnica na vise izabranih paleta = 1 red,
-    ' Gajbice/Neto = zbir porcija preko izabranih paleta.
-    Dim order As Collection: Set order = New Collection
-    Dim dBr As Object: Set dBr = CreateObject("Scripting.Dictionary")
-    Dim dZb As Object: Set dZb = CreateObject("Scripting.Dictionary")
-    Dim dGa As Object: Set dGa = CreateObject("Scripting.Dictionary")
-    Dim dNe As Object: Set dNe = CreateObject("Scripting.Dictionary")
-
-    Dim r As Long, prij As String
-    For r = 1 To UBound(s, 1)
-        If want.Exists(CStr(SafeCell(s, r, iPal))) _
-           And UCase$(Trim$(CStr(SafeCell(s, r, iStorno)))) <> "DA" Then
-            prij = CStr(SafeCell(s, r, iPrij))
-            If Not dGa.Exists(prij) Then
-                order.Add prij
-                dBr(prij) = CStr(SafeCell(s, r, iBrPrij))
-                dZb(prij) = CStr(SafeCell(s, r, iZbir))
-                dGa(prij) = 0&
-                dNe(prij) = 0#
-            End If
-            dGa(prij) = dGa(prij) + NzL(SafeCell(s, r, iGajb))
-            dNe(prij) = dNe(prij) + NzD(SafeCell(s, r, iNeto))
+' PrijemnicaID -> Array(BrojPrijemnice, BrojZbirne) iz ZAGLAVLJA (S8 rez 2a-2,
+' PAL-ODL-09): broj zbirne iz tblZbirna po vezi prijemnice (ZbirnaRoditeljID), a ne
+' kao nov citalac broja zbirne na prijemnici. Samo prikaz, pa tolerantno: kolona
+' koje nema daje praznu labelu, ne pad liste.
+Private Function LabelePrijemnicaZaPrikaz() As Object
+    Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set LabelePrijemnicaZaPrikaz = res
+    Dim zb As Object: Set zb = CreateObject("Scripting.Dictionary")
+    zb.CompareMode = vbTextCompare
+    Dim z As Variant: z = GetTableData(TBL_ZBIRNA)
+    Dim i As Long, cZId As Long, cZBr As Long
+    If IsArray(z) Then
+        cZId = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_ID)
+        cZBr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
+        For i = 1 To UBound(z, 1)
+            zb(Trim$(NzToText(SafeCell(z, i, cZId)))) = Trim$(NzToText(SafeCell(z, i, cZBr)))
+        Next i
+    End If
+    Dim p As Variant: p = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(p) Then Exit Function
+    Dim cId As Long, cBr As Long, cRod As Long, rod As String, brZ As String
+    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+    cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    cRod = GetColumnIndex(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD)
+    For i = 1 To UBound(p, 1)
+        rod = Trim$(NzToText(SafeCell(p, i, cRod)))
+        brZ = ""
+        If Len(rod) > 0 Then
+            If zb.Exists(rod) Then brZ = CStr(zb(rod))
         End If
-    Next r
-    If order.count = 0 Then Exit Function
-
-    Dim res As Variant: ReDim res(0 To order.count - 1, 0 To 4)
-    Dim k As Long, p As String
-    For k = 0 To order.count - 1
-        p = order(k + 1)
-        res(k, 0) = p
-        res(k, 1) = dBr(p)
-        res(k, 2) = dZb(p)
-        res(k, 3) = dGa(p)
-        res(k, 4) = Format$(dNe(p), "0.00")
-    Next k
-
-    GetPaletaStavkeForGridMulti = res
-    Exit Function
-EH:
-    LogErr "modPaletniList.GetPaletaStavkeForGridMulti"
+        res(Trim$(NzToText(SafeCell(p, i, cId)))) = Array(Trim$(NzToText(SafeCell(p, i, cBr))), brZ)
+    Next i
 End Function
 
 ' Rucno zatvaranje otvorene palete (TX). Validira: postoji tacno jednom, nije
@@ -1586,15 +1557,13 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         outWarn = "Nema paleta-stavki."
         Exit Function
     End If
-    Dim sBr As Long, sPal As Long, sKl As Long, sGajb As Long, sNeto As Long, sAmb As Long, sPid As Long, sZbr As Long, sSt As Long
-    sBr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, SRC)
+    Dim sPal As Long, sKl As Long, sGajb As Long, sNeto As Long, sAmb As Long, sPid As Long, sSt As Long
     sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
     sKl = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA, SRC)
     sGajb = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, SRC)
     sNeto = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, SRC)
     sAmb = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA, SRC)
     sPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
-    sZbr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, SRC)
     sSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
 
     ' IZVOR I CILJ SE BIRAJU PO IDENTITETU, NE PO BROJU: u izvor ulaze samo
@@ -1666,12 +1635,13 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         For qg = 1 To UBound(ps, 1)
             If UCase$(Trim$(CStr(ps(qg, sSt)))) <> "DA" Then
                 If tgtPal.Exists(CStr(ps(qg, sPal))) Then
-                    bpg = Trim$(CStr(ps(qg, sBr)))
                     pidG = Trim$(NzToText(ps(qg, sPid)))
                     jeIzvor = PripadaDokumentu(pidG, srcIds)
                     jeCilj = PripadaDokumentu(pidG, tgtIds)
                     If Not jeIzvor And Not jeCilj Then
                         sharedPal = PaletaLabel(CStr(ps(qg, sPal)))
+                        ' Labela tudje prijemnice iz ZAGLAVLJA (S8 rez 2a-2, R8).
+                        bpg = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, pidG, COL_PRJ_BROJ)))
                         Exit For
                     End If
                 End If
@@ -1963,8 +1933,7 @@ Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
     ' STARA: gajbice PO KLASI iz aktivnih (osirocenih) stavki.
     Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(s) Then Exit Function
-    Dim sBr As Long, sKl As Long, sGa As Long, sStt As Long, sPid As Long
-    sBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    Dim sKl As Long, sGa As Long, sStt As Long, sPid As Long
     sKl = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA)
     sGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
     sStt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)

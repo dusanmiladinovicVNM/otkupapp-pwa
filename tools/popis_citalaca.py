@@ -108,6 +108,11 @@ GRUPE = collections.OrderedDict([
     # Literal kljuca je u grupi namerno: konstanta je obrisana, a red u
     # Podesavanjima bi kljuc vratio kao golu nisku.
     ("prj_zbr_cfg", re.compile(r"\bPrijemnicaZbirnaBlokira\b|PRIJEMNICA_ZBIRNA_PROVERA")),
+    # S8 rez 2a-2 (plan 14.59): BrojPrijemnice i BrojZbirne paletne stavke su labele
+    # koje 2b brise. Posle 2a-2 ih zive procedure samo PISU (AddStavka, prevezivanje,
+    # paletni rep prevezivanja prijemnice na zbirnu, modSetup); nijedna ih vise ne
+    # cita da bi odlucila ili prikazala. Prag brani rast, 2b ga spusta na nulu.
+    ("pal_broj", re.compile(r"\bCOL_PALS_BROJ_(PRIJ|ZBIRNE)\b")),
     # S7 rez 3 (plan 14.57, zatvaranje S7): veza fakture preko BROJA prijemnice --
     # linija fakture trazena po broju kao kljucu. Izmereno 0 i pre S7 (merenje 1
     # pre-flight-a); prag 0 pretvara merenje u kapiju. BrojPrijemnice na liniji je
@@ -238,6 +243,7 @@ PRAGOVI = collections.OrderedDict([
     ("prj_generacija", 0),
     ("prj_brojzbirne", 33),
     ("fak_broj_prj", 0),
+    ("pal_broj", 8),
 ])
 
 # Linijska polja zaglavlja -- prag dual READ.
