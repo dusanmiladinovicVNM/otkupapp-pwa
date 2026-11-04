@@ -2986,7 +2986,14 @@ Private Sub T_Zbirna_NemaIspravku()
     ' prazan stub (red odluke ne ide kroz ugovorni string nego kroz zonu), pa je
     ' prva verzija ovog testa merila konstantu "". Preduslov ju je uhvatio --
     ' zato preduslov i postoji.
-    modScrStorno.Scr_IzborTestSet STIP_ZBIRNA, FX_ZBIRNA, "ZBI-TEST-1", ""
+    '
+    ' Zbirna je ZB-TEST-2 (dve AKTIVNE prijemnice), ne ZB-TEST-1. Red odluke se
+    ' nudi samo kad zbirna ima zivu nizvodnu decu (CorrectionNeedsDialog). ZB-TEST-1
+    ' ga je do S8 reza 2a-1 imala samo zbog SIROCETA svoje stornirane prijemnice,
+    ' brojanog po labeli BrojZbirne paletne stavke; od 2a-1 palete zbirne su palete
+    ' njenih AKTIVNIH prijemnica (isti skup koji kaskada stornira), pa ZB-TEST-1
+    ' red odluke s pravom vise nema. Namera testa je ista, menja se samo zbirna.
+    modScrStorno.Scr_IzborTestSet STIP_ZBIRNA, FX_ZBIRNA2, "ZBI-TEST-2", ""
     zbr = modScrStorno.Scr_AkcijeKljucevi()
 
     ' Prijemnica: isti izbor koji T_StornoBezUvida_NemaAkcije vec dokazuje kao
