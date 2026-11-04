@@ -2547,6 +2547,12 @@ ENSURE_COLS = {
     # na SchemaReadyOrFail (kanonski prefiks), pa bi svaki test sa reversom
     # merio svesku, a ne kod.
     "tblAmbalazaDokument": ["IspravkaOdID", "ZamenjenSaID"],
+    # S8 rez 2b-1 (PAL-INV-01): kljuc linije paletne stavke. Kanon ga drzi na KRAJU
+    # tblPaletaStavka, a donor (stari fixture) ga nema -- u aplikaciji ga dodaje
+    # self-heal seme iz kanona na startu, pa je do sada postojao tek u temp kopiji
+    # tokom run-a. SEED od 2b-1 upisuje kljuc na svaku paletnu stavku, pa bez
+    # kolone sejanje po imenu obara red.
+    "tblPaletaStavka": ["PrijemnicaStavkaID"],
 }
 
 # Tabele koje donor NEMA (krug 5: utovarna lista) -- generator ih pravi
