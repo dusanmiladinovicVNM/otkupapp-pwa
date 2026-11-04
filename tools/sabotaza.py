@@ -9146,6 +9146,69 @@ SABOTAZE = {
         "Test_S8R1c_StornoPaleteAktivnaRoba",
         "S8R1c: razlog odbijanja imenuje kolonu statusa prijemnice",
     ),
+    # S8 rez 2a-1 (R1): palete ne biraju obim kaskade zbirne -- kaskada ih skida po
+    # ID-u prijemnice. Paletni uslov u kapiji scope-a obara PONISTENJE pod kolizijom
+    # broja cim jedna paletna stavka nema trag zbirne.
+    "s8r2a1-scope-po-paletama": (
+        "modStornoFlow.bas",
+        "            ok = modDokumenta.SvaAktivnaDecaNoseZbirnaID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj)\n",
+        "            ok = modDokumenta.SvaAktivnaDecaNoseZbirnaID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj) _\n"
+        "                 And modDokumenta.SvaAktivnaDecaNoseZbirnaID(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, broj)   ' SABOTAZA\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: PONISTENJE zbirne A prolazi uprkos paletnoj stavci bez traga zbirne",
+    ),
+    # S8 rez 2a-1 (R2): pregled broji palete preko prijemnica u obimu, ne po koloni
+    # paletne stavke (koja lazi).
+    "s8r2a1-pregled-po-broju": (
+        "modStornoFlow.bas",
+        "    palc = PaletneStavkePrijemnica(ActivePrijIDsByZbirna(broj, scopeID, MOD_NAME & \".ScanZbirna\"), strict)\n",
+        "    palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, broj, strict, scopeID)   ' SABOTAZA\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: pregled zbirne A broji paletne stavke svojih prijemnica",
+    ),
+    # S8 rez 2a-1 (R3): uvid zbirne nosi palete prijemnica u obimu.
+    "s8r2a1-uvid-po-broju": (
+        "modStornoImpact.bas",
+        "            Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, \"\", _\n"
+        "                                   modStornoFlow.PrijemniceUObimuZbirne(broj, docID), strict)\n",
+        "            Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_ZBIRNE, broj, Nothing, strict)   ' SABOTAZA\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: uvid zbirne A nosi samo robu svojih prijemnica",
+    ),
+    # S8 rez 2a-1 (R4): uvid prijemnice bez ID-a ne pada na broj.
+    "s8r2a1-uvid-prijemnice-po-broju": (
+        "modStornoImpact.bas",
+        "                Set ImpactPalete = New Collection   ' bez ID-a nema uvida po broju\n",
+        "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_PRIJ, broj, Nothing, strict)   ' SABOTAZA\n",
+        "T_StornoImpact_IdentitetNeDegradira",
+        "bez identiteta uvid ne cita palete po broju",
+    ),
+    # KI-039: PONISTENJE zbirne sa robom na preradjenoj paleti se odbija PRE zapisa
+    # ispravke (bez provere kaskada pada tek u transakciji i ostavi FAILED zapis).
+    "s8r2a1-ki039-bez-provere": (
+        "modStornoFlow.bas",
+        "                If Len(razlogPrer) > 0 Then r(\"message\") = razlogPrer: Exit Function\n",
+        "                ' SABOTAZA: KI-039 bez provere prerade\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: odbijeno PONISTENJE ne pravi zapis ispravke",
+    ),
+    # KI-039: pregled ne obecava skidanje robe sa preradjene palete.
+    "s8r2a1-pregled-obecava-skidanje": (
+        "modStornoFlow.bas",
+        "                    palTekstZ = \" (\" & Poruka(\"STEF_PAL_PRER_PON\") & \")\"\n",
+        "                ' SABOTAZA: pregled obecava skidanje i sa preradjene\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: pregled ne obecava skidanje robe sa preradjene palete",
+    ),
+    # S8R2A1-REV-01: nesiguran obim zbirne se odbija; prazan scope bi uvid jedne
+    # zbirne pustio na sva deca tog broja (i palete druge zbirne).
+    "s8r2a1-obim-nesuzen": (
+        "modStornoFlow.bas",
+        "    If Len(razlogObima) > 0 Then Err.Raise ERR_UI_BASE + 42, SRC, \"Obim zbirne \" & Trim$(broj) & \" se ne moze suziti: \" & razlogObima\n",
+        "    ' SABOTAZA: nesiguran obim se cita nesuzeno po broju\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: uvid zbirne bez sigurnog obima ne nosi robu druge zbirne",
+    ),
     # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
     "s8r1a-altf8-prvi-pogodak": (
         "modPaletniListUI.bas",

@@ -82,6 +82,15 @@ stavke jedne stavke prijemnice nose celu stavku: zbir gajbi = gajbe stavke, a zb
 | **`PAL-ODL-06`** | **Storno palete se odbija po imenu dok paleta nosi robu aktivne prijemnice**; put je storno ili ispravka prijemnice. Paleta bez aktivne robe (siročad, prazna) i dalje se stornira |
 | **`PAL-ODL-07`** | **Sledljivost na paleti ide u S9**: C-040 i spisak kooperanata na paletnom i preradnom listu. S8 obezbeđuje tačan `PrijemnicaStavkaID`; do S9 list izlazi sa zaglavljem, bez spiska |
 
+Odluke za rez 2a (operater, 04.11.2026; plan §14.59):
+
+| ID | Odluka |
+|---|---|
+| **`PAL-ODL-08`** | **A3 meri paletizovane stavke:** stavku prijemnice koja ima bar jednu paletnu stavku (aktivnu ili storniranu); zbir aktivnih mora biti cela stavka (`PAL-INV-02`). Roba koja nikad nije paletizovana nije nalaz |
+| **`PAL-ODL-09`** | **Kolona „Zbirna" u listi stavki palete (C-048)** se čita iz zaglavlja zbirne preko veze prijemnice, ne sa paletne stavke i ne kao nov čitalac broja zbirne na prijemnici |
+| **`PAL-ODL-10`** | **`KI-086` i `KI-087` idu u zaseban rez posle 2a, pre 2b** (ispravnost kapija i ishoda, ne identitet) |
+| **`PAL-ODL-11`** | **2a ide kao dva PR-a:** 2a-1 storno zbirne (R1–R4, `KI-039`), 2a-2 labele, C-048 i integritet (R5–R11, grupa `pal_broj`) |
+
 Podela S8 na rezove je prihvaćena po nezavisnom review-u (plan §14.58, „Review i odluke").
 
 ### Predlozi kako su postavljeni (pre odluka)

@@ -200,8 +200,17 @@ Public Function BuildPonistenjePosledice(ByVal docType As String, ByVal broj As 
             m = m & " - aktivne otpremnice (storniraju se): " & CStr(sz("otpCount")) & vbCrLf
             m = m & " - prijemnice: " & CStr(sz("prijCount")) & _
                     IIf(owz, " (storniraju se)", " (eksterni kupac -> NETAKNUTE)") & vbCrLf
-            m = m & " - paletne stavke: " & CStr(sz("paleteCount")) & _
-                    IIf(owz, " (skidaju se sa paleta; prazna paleta stornirana)", " (NETAKNUTE)") & vbCrLf
+            Dim palTekstZ As String
+            palTekstZ = " (NETAKNUTE)"
+            If owz Then
+                palTekstZ = " (skidaju se sa paleta; prazna paleta stornirana)"
+                ' KI-039 (S8 rez 2a-1): PONISTENJE se tada odbija -- pregled to ne obecava.
+                If Len(PreradjenaRazlogZbirne(CStr(sz("broj")), CStr(sz("scopeID")), _
+                                              MOD_NAME & ".BuildPonistenjePosledice")) > 0 Then
+                    palTekstZ = " (" & Poruka("STEF_PAL_PRER_PON") & ")"
+                End If
+            End If
+            m = m & " - paletne stavke: " & CStr(sz("paleteCount")) & palTekstZ & vbCrLf
             m = m & " - otkupni blokovi (OSLOBADJAJU se za reveze, NE storniraju)"
         Case FLOW_DOC_PRIJEMNICA
             Dim sp As Object: Set sp = ScanPrijemnica(broj, docID)
@@ -413,9 +422,22 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
             ' (hladnjaca kupac) prijemnica + paletne stavke. Eksterni kupac -> prijemnica
             ' ostaje netaknuta (zbirna je poslednji interni dok). Razlika od DUPLI koji
             ' samo odvezuje (deca prezivljavaju).
+            ' KI-039 (S8 rez 2a-1): roba na PRERADJENOJ paleti obara kaskadu u jezgru
+            ' storna prijemnice. Pita se OVDE, pre dijaloga posledica i pre zapisa
+            ' ispravke -- isti obrazac kao okvir prijemnice (#438). Do tada je
+            ' operater potvrdjivao posledicu koja se nece desiti, a odbijen pokusaj je
+            ' ostavljao FAILED zapis u Oporavku iako nista nije promenjeno. Samo kad
+            ' lanac pripada hladnjaci: eksternom kupcu se prijemnice ne diraju.
+            If ownsZC Then
+                Dim razlogPrer As String
+                razlogPrer = PreradjenaRazlogZbirne(broj, scopeID, SRC)
+                If Len(razlogPrer) > 0 Then r("message") = razlogPrer: Exit Function
+            End If
             If Not forceConfirm Then
                 r("blocked") = True
-                r("message") = BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, broj, "")
+                ' ID zbirne ide i u pregled: bez njega pregled pod kolizijom broja
+                ' broji decu oba dokumenta, a akter dira samo izabran.
+                r("message") = BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, broj, "", docID)
                 Exit Function
             End If
             Dim cidP As String
@@ -1744,8 +1766,11 @@ End Function
 ' S5-3b se oba sprata biraju iz clanstva po ZbirnaID-u, gde tudje dete ne moze ni
 ' da udje u skup -- uslov je postao tautologija nad praznom kolonom, a ne kapija.
 '
-' Prijemnice i palete se JOS UVEK biraju po broju (njihov most pada u S6), pa
-' njihov uslov ostaje netaknut.
+' Prijemnice se JOS UVEK biraju po broju zbirne, pa njihov uslov ostaje. Palete
+' vise ne (S8 rez 2a-1, R1): kaskada ih skida kroz StornoPrijemnica po ID-u
+' prijemnice, a pregled i uvid ih broje preko istih prijemnica. Paletna stavka
+' bez traga zbirne zato ne sme da obori suzavanje operacije koja palete ne bira
+' po broju (sve-ili-nista vazi nad tabelama koje operacija BIRA po broju).
 '
 ' outScopeID: "" = operacija ide po broju; inace identitet po kom se deca
 ' suzavaju. Vraca RAZLOG odbijanja, "" = sme.
@@ -1758,8 +1783,7 @@ Private Function ZbirnaScopeRazlog(ByVal broj As String, ByVal zbirnaID As Strin
         Dim ok As Boolean
         ok = True
         If diraPrijemnice Then
-            ok = modDokumenta.SvaAktivnaDecaNoseZbirnaID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj) _
-                 And modDokumenta.SvaAktivnaDecaNoseZbirnaID(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, broj)
+            ok = modDokumenta.SvaAktivnaDecaNoseZbirnaID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj)
         End If
         If ok Then outScopeID = Trim$(zbirnaID)
     End If
@@ -1898,6 +1922,55 @@ Private Function ActivePrijIDsByZbirna(ByVal brojZbirne As String, ByVal gen As 
     For i = 1 To kand.count
         result.Add Trim$(CStr(data(CLng(kand(i)), cId)))
     Next i
+End Function
+
+' Broj AKTIVNIH paletnih stavki datih prijemnica, po PrijemnicaID-u (S8 rez 2a-1,
+' R2). Isti brojac kao ScanPrijemnica, sabran preko skupa koji kaskada stornira.
+Private Function PaletneStavkePrijemnica(ByVal prijIDs As Collection, _
+                                         ByVal strict As Boolean) As Long
+    Dim k As Long, n As Long
+    For k = 1 To prijIDs.count
+        n = n + CountActive(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, CStr(prijIDs(k)), strict)
+    Next k
+    PaletneStavkePrijemnica = n
+End Function
+
+' KI-039 (S8 rez 2a-1): razlog odbijanja PONISTENJA zbirne cija prijemnica iz
+' obima kaskade ima robu na PRERADJENOJ paleti, ili "". Isti obim kao kaskada
+' (ActivePrijIDsByZbirna nad istim scope-om) i ista provera kao okvir prijemnice
+' (modPaletniList.PreradjenaPaletaRazlog, #438). Samo cita.
+Private Function PreradjenaRazlogZbirne(ByVal broj As String, ByVal scopeID As String, _
+                                        ByVal SRC As String) As String
+    Dim ids As Collection, k As Long, raz As String
+    Set ids = ActivePrijIDsByZbirna(broj, scopeID, SRC)
+    For k = 1 To ids.count
+        raz = modPaletniList.PreradjenaPaletaRazlog(CStr(ids(k)))
+        If Len(raz) > 0 Then
+            PreradjenaRazlogZbirne = raz
+            Exit Function
+        End If
+    Next k
+End Function
+
+' Prijemnice zbirne kao skup ID-jeva (kljuc = PrijemnicaID) -- isti obim koji
+' PONISTENJE stornira. Za uvid Storno centra (modStornoImpact.ImpactPalete, S8
+' rez 2a-1, R3): palete zbirne su palete OVIH prijemnica, ne paletne stavke po
+' koloni BrojZbirne.
+' Nesiguran obim se ODBIJA (S8R2A1-REV-01): kad kapija obima vrati razlog, scope je
+' prazan, a prazan scope znaci "sva aktivna deca tog broja" -- uvid jedne zbirne bi
+' tada nosio i palete druge zbirne istog broja. Isti razlog obara i kaskadu.
+Public Function PrijemniceUObimuZbirne(ByVal broj As String, ByVal zbirnaID As String) As Object
+    Const SRC As String = MOD_NAME & ".PrijemniceUObimuZbirne"
+    Dim scopeID As String, ids As Collection, k As Long, razlogObima As String
+    Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    razlogObima = ZbirnaScopeRazlog(Trim$(broj), zbirnaID, True, scopeID)
+    If Len(razlogObima) > 0 Then Err.Raise ERR_UI_BASE + 42, SRC, "Obim zbirne " & Trim$(broj) & " se ne moze suziti: " & razlogObima
+    Set ids = ActivePrijIDsByZbirna(Trim$(broj), scopeID, SRC)
+    For k = 1 To ids.count
+        res(CStr(ids(k))) = 1
+    Next k
+    Set PrijemniceUObimuZbirne = res
 End Function
 
 ' Oslobodi (razvezi) otkup blokove datih otpremnica ID-jeva: OtpremnicaID="" i
@@ -2367,10 +2440,17 @@ Private Function ScanZbirna(ByVal broj As String, _
     Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, strict, scopeID)
     d("prijCount") = pc
     d("hasPrijemnica") = (pc > 0)
+    ' PALETE ZBIRNE SU PALETE NJENIH PRIJEMNICA (S8 rez 2a-1, R2): isti skup koji
+    ' PONISTENJE stornira (ActivePrijIDsByZbirna nad istim scope-om), a paletne
+    ' stavke po PrijemnicaID-u. Kolona BrojZbirne paletne stavke je labela -- i
+    ' kad lazi, ne sme da promeni sta pregled obecava.
     Dim palc As Long
-    palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, broj, strict, scopeID)
+    palc = PaletneStavkePrijemnica(ActivePrijIDsByZbirna(broj, scopeID, MOD_NAME & ".ScanZbirna"), strict)
     d("paleteCount") = palc
     d("hasPalete") = (palc > 0)
+    ' Scope ide i pozivaocu: pregled PONISTENJA po njemu pita za preradu (KI-039),
+    ' i to samo tada -- ostali citaoci ScanZbirna tu cenu ne placaju.
+    d("scopeID") = scopeID
     Exit Function
 EH:
     ' Opis se cita PRE LogErr-a (LogErr usput brise stanje greske).
