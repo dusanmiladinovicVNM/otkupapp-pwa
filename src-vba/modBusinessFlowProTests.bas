@@ -11220,14 +11220,18 @@ End Sub
 ' (2 gajbe) je snimljena uz ISKLJUCENO paletiranje, pa je slobodna meta za
 ' direktan poziv pisca (kapija ponovne paletizacije je ne zaustavlja). U
 ' transakciji koja se uvek vraca:
-'   1) PaletizePrijemnica za P3 sa praznim, nepostojecim i tudjim (P1) kljucem,
+'   1) kljuc paletne stavke P1 obrisan (red starog oblika -- synthetic): C1 ga
+'      imenuje, pa integritet NIJE cist (zatvara S8R2A2-REV-01). Kontra: dok red
+'      nosi svoj kljuc, C1 ga ne prijavljuje -- uz uslov da se blok C1/C4 IZVRSIO
+'      (bez njega bi kontra prolazila i nad greskom bloka). Kljuc se zatim vraca;
+'   2) PaletizePrijemnica za P3 sa praznim, nepostojecim i tudjim (P1) kljucem,
 '      sa svojim kljucem ali klasom II, i sa kljucem koji nose DVE stavke -- svaki
 '      poziv je odbijen PO IMENU razloga, i nijedan ne pravi ni paletu ni stavku;
-'   2) kontrola: isti poziv sa ispravnim kljucem i klasom pravi paletnu stavku
-'      (kapija ne odbija sve);
-'   3) kljuc paletne stavke P1 obrisan (red starog oblika -- synthetic): C1 ga
-'      imenuje, pa integritet NIJE cist (zatvara S8R2A2-REV-01). Kontra: dok red
-'      nosi svoj kljuc, C1 ga ne prijavljuje.
+'   3) kontrola: isti poziv sa ispravnim kljucem i klasom pravi paletnu stavku
+'      (kapija ne odbija sve).
+' C1 ide PRVI: integritet cita stavke prijemnice kroz globalni strog citac, pa
+' sinteticki dupli kljuc iz koraka 2 obara ceo blok C1/C4 (S8R2B1-REV-01). Prvi
+' prolaz suite-a je bas to izmerio: tvrdnja C1 je pala, a kontra prosla na prazno.
 ' Nivo: FIZICKE paletne stavke; nalaz integriteta po sifri bloka i ID-u stavke.
 ' SABOTAZE: s8r2b1-pisac-bez-kapije, s8r2b1-prazan-kljuc-bez-imena,
 ' s8r2b1-klasa-se-ne-meri, s8r2b1-dupli-kljuc-prolazi, s8r2b1-c1-prazan-kljuc-tih.
@@ -11300,7 +11304,21 @@ Private Sub Test_S8R2b1_PisacPaleteTraziLiniju()
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
 
-    ' --- 1) pisac odbija, po imenu, bez mutacije ---
+    ' --- 1) C1: aktivna paletna stavka bez kljuca linije ---
+    Dim ps As Variant, palsID1 As String, nal As Variant
+    ps = GetTableData(TBL_PALETA_STAVKA)
+    palsID1 = Trim$(nz(ps(r1, RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, SRC)), ""))
+    nal = modIntegritet.GetIntegritetRows()
+    AssertTrue Len(palsID1) > 0 And Not modTest.NalazSadrzi(nal, "C1/C4", "GRESKA") _
+               And Not modTest.NalazSadrzi(nal, "C1", palsID1), _
+               "S8R2b1: paletna stavka sa svojim kljucem nije nalaz C1"
+    RequireUpdateCell TBL_PALETA_STAVKA, r1, COL_PALS_PRIJEMNICA_STAVKA_ID, "", SRC
+    nal = modIntegritet.GetIntegritetRows()
+    AssertTrue InStr(1, S8R2b1RedNalaza(nal, "C1", palsID1), "prazan kljuc linije", vbTextCompare) > 0, _
+               "S8R2b1: C1 imenuje aktivnu paletnu stavku bez kljuca linije"
+    RequireUpdateCell TBL_PALETA_STAVKA, r1, COL_PALS_PRIJEMNICA_STAVKA_ID, k1, SRC
+
+    ' --- 2) pisac odbija, po imenu, bez mutacije ---
     Dim nPal As Long, nPals As Long, ishod As String
     nPal = S8R2aBrojRedova(TBL_PALETA)
     nPals = S8R2aBrojRedova(TBL_PALETA_STAVKA)
@@ -11330,22 +11348,10 @@ Private Sub Test_S8R2b1_PisacPaleteTraziLiniju()
     AssertTrue S8R2aBrojRedova(TBL_PALETA) = nPal And S8R2aBrojRedova(TBL_PALETA_STAVKA) = nPals, _
                "S8R2b1: odbijeni pozivi ne prave ni paletu ni paletnu stavku"
 
-    ' --- 2) kontrola: ispravan kljuc i klasa prolaze ---
+    ' --- 3) kontrola: ispravan kljuc i klasa prolaze ---
     ishod = S8R2b1Paletizuj(p3, k3, KLASA_I, brZbr, tipT)
     AssertTrue Len(ishod) = 0 And S8R2b1KljucPaleta(p3) = k3, _
                "S8R2b1: ispravan kljuc i klasa prave paletnu stavku"
-
-    ' --- 3) C1: aktivna paletna stavka bez kljuca linije ---
-    Dim ps As Variant, palsID1 As String, nal As Variant
-    ps = GetTableData(TBL_PALETA_STAVKA)
-    palsID1 = Trim$(nz(ps(r1, RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, SRC)), ""))
-    nal = modIntegritet.GetIntegritetRows()
-    AssertTrue Len(palsID1) > 0 And Not modTest.NalazSadrzi(nal, "C1", palsID1), _
-               "S8R2b1: paletna stavka sa svojim kljucem nije nalaz C1"
-    RequireUpdateCell TBL_PALETA_STAVKA, r1, COL_PALS_PRIJEMNICA_STAVKA_ID, "", SRC
-    nal = modIntegritet.GetIntegritetRows()
-    AssertTrue InStr(1, S8R2b1RedNalaza(nal, "C1", palsID1), "prazan kljuc linije", vbTextCompare) > 0, _
-               "S8R2b1: C1 imenuje aktivnu paletnu stavku bez kljuca linije"
 
 Kraj:
     If Not tx Is Nothing Then tx.RollbackTx
