@@ -12,6 +12,8 @@ se citalo kao zeleno (v. docs/engineering/postmortems/2026-08-verifikacija.md 10
     python tools/dokaz.py mreza-podnozje       # samo sabotaze sa tim prefiksom
     python tools/dokaz.py amb-pisac --grupe    # vise sabotaza u JEDNOM prolazu
     python tools/dokaz.py --grupe 8 --plan     # samo plan grupa, bez Excela
+    python tools/dokaz.py amb-pisac --izbor    # pusta samo SVOJ test, ne celu suite
+    python tools/dokaz.py --izolacija          # koji ciljani testovi ne prolaze SAMI
 
 CETIRI STVARI KOJE OVAJ ALAT TVRDI, a ne samo gleda:
 
@@ -40,6 +42,16 @@ CETIRI STVARI KOJE OVAJ ALAT TVRDI, a ne samo gleda:
    pun pojedinacni dokaz je isti poziv bez `--grupe`. Pravila grupisanja i ono
    sto grupni prolaz NE sme da propusti stoje nad `naprav_grupe`.
 
+5. IZBOR (`--izbor`) PUSTA SAMO CILJANE TESTOVE, ALI SA SVOJOM BAZOM. Prolaz
+   suite-a (RunAllTests ~80 s, BFP ~150 s) zamenjuje prolaz samo testova
+   clanova (`run_vba --test`). Tacka 1 se tada tvrdi nad ISTIM izborom: pre
+   mutacije se isti spisak testova pusti nad cistim izvorom i mora biti zelen.
+   Bez toga bi test koji SAM pada (zavisi od stanja koje mu ostavlja raniji
+   test -- redosled u RunAllTests je nosec) "dokazao" svaku sabotazu nad sobom.
+   Takav clan se ne gubi: grupa se rasturi na pojedinacna merenja, a test koji
+   ni sam ne prolazi meri se CELOM suite-om, kao bez `--izbor`. Baza se pamti
+   po izboru, pa vise sabotaza nad istim testom placa jednu.
+
 Banka-suite ne ispisuje ime testa uz pad, ali svaka njena tvrdnja nosi stabilan
 prefiks ("T21 izabran placen blok: ..."), pa se identitet vadi iz njega. Bez toga
 bi za te sabotaze tvrdnja bila samo "nesto je palo".
@@ -51,7 +63,9 @@ obara -- i traje satima nad celim katalogom, pa se pusta nad onim sto je izmena
 dirala.
 """
 import argparse
+import contextlib
 import hashlib
+import io
 import importlib.util
 import os
 import re
@@ -77,6 +91,27 @@ def _modul_sabotaza():
     modul = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(modul)
     return modul
+
+
+def _suite_izbor() -> set:
+    """Suite koje primaju `run_vba --test` -- iz SUITES (jedini izvor istine).
+
+    Cita se iz kataloga, ne prepisuje: druga lista bi bila druga stvar koja
+    moze da se razidje sa ulaznim tackama u VBA (v. vba_gate, nalaz IZBOR).
+    """
+    put = os.path.join(ROOT, "tools", "run_vba.py")
+    spec = importlib.util.spec_from_file_location("_run_vba_za_dokaz", put)
+    modul = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modul)
+    return {ime for ime, meta in modul.SUITES.items() if meta.get("izbor")}
+
+
+def _run_suite(suite: str, testovi=None) -> tuple:
+    """Argumenti za `run_vba.py`: cela suite, ili samo `testovi` iz nje."""
+    a = (sys.executable, "tools/run_vba.py", "--suite", suite)
+    for test in testovi or ():
+        a += ("--test", test)
+    return a
 
 
 def _otisak() -> str:
@@ -149,10 +184,14 @@ def _kljuc_testa(test: str, suite: str, tvrdnja: str = "") -> str:
     return m.group(1) if m else test
 
 
-def _baza_zelena(suite: str) -> tuple:
-    """(je_zelena, opis). Tvrdi se, ne gleda se."""
+def _baza_zelena(suite: str, testovi=None) -> tuple:
+    """(je_zelena, opis). Tvrdi se, ne gleda se.
+
+    Uz `testovi` je baza samo taj izbor -- tacno ono sto ce prolaz sa mutacijom
+    pustiti. Izbor sa nula provera nije zelen nego prazan: nista nije mereno.
+    """
     try:
-        r = _pusti(sys.executable, "tools/run_vba.py", "--suite", suite)
+        r = _pusti(*_run_suite(suite, testovi))
     except subprocess.TimeoutExpired:
         return False, f"{suite}: timeout"
     izlaz = r.stdout + r.stderr
@@ -164,6 +203,8 @@ def _baza_zelena(suite: str) -> tuple:
         return False, f"{suite}: nema oznacenog reda TESTS u izlazu"
     if int(m.group(2)) != 0:
         return False, f"{suite}: {m.group(0)}"
+    if testovi and int(m.group(1)) == 0:
+        return False, f"{suite}: izbor bez ijedne provere ({m.group(0)})"
     return True, m.group(0)
 
 
@@ -305,7 +346,8 @@ def _oceni(s: dict, pali: list, ocekivani: set) -> tuple:
     return True, "OK"
 
 
-def _prolaz(clanovi: list, pre: str, grupno: bool) -> dict:
+def _prolaz(clanovi: list, pre: str, grupno: bool, izbor=frozenset(),
+            baze=None) -> dict:
     """Jedan prolaz suite-a nad mutacijama svih clanova.
 
     Grupa od jednog clana JE pojedinacno merenje, pa je funkcija jedna. Razlika
@@ -315,10 +357,33 @@ def _prolaz(clanovi: list, pre: str, grupno: bool) -> dict:
     APPLY-FAIL nego se vraca na pojedinacno merenje, gde pitanja o partnerima
     nema. Isto za clana koji u grupi nije oborio svoju tvrdnju.
 
+    IZBOR (`izbor` = suite koje primaju `--test`): pusta se samo spisak testova
+    clanova, a PRE prve mutacije isti spisak mora da bude zelen nad cistim
+    izvorom (tacka 5 u docstring-u modula; `baze` pamti ishod po izboru). Ako
+    nije, nista se ne primenjuje: grupa ide na pojedinacna merenja, a pojedinacan
+    clan u "cela_suite" -- meri se celom suite-om, kao bez izbora.
+
     Vraca {"stop": razlog ili "", "ishodi": [(stavka, priznato, stanje, crveno)],
-           "ostatak": [(stavka, razlog)]}.
+           "ostatak": [(stavka, razlog)], "cela_suite": [(stavka, razlog)]}.
     """
-    rez = {"stop": "", "ishodi": [], "ostatak": []}
+    rez = {"stop": "", "ishodi": [], "ostatak": [], "cela_suite": []}
+
+    suite = clanovi[0]["suite"]
+    testovi = None
+    if suite in izbor:
+        testovi = sorted({s["test"] for s in clanovi})
+        kljuc = (suite, tuple(testovi))
+        baze = {} if baze is None else baze
+        if kljuc not in baze:
+            baze[kljuc] = _baza_zelena(suite, testovi)
+        ok, opis = baze[kljuc]
+        if not ok:
+            for s in clanovi:
+                if grupno and len(clanovi) > 1:
+                    rez["ostatak"].append((s, "baza izbora nije zelena -- %s" % opis))
+                else:
+                    rez["cela_suite"].append((s, opis))
+            return rez
 
     primenjeni = []
     for s in clanovi:
@@ -341,12 +406,13 @@ def _prolaz(clanovi: list, pre: str, grupno: bool) -> dict:
     # koju bi partner mogao da obori. Zato se tako i ocenjuje (i ne vraca se
     # u red za ponovno merenje, sto bi bio isti prolaz drugi put).
     sam = len(primenjeni) == 1
-    suite = primenjeni[0]["suite"]
     ocekivani = {s["kljuc"] for s in primenjeni}
 
     pali, greska = [], ""
     try:
-        run = _pusti(sys.executable, "tools/run_vba.py", "--suite", suite)
+        # Izbor je isti kao u bazi (svi clanovi, i oni ciji se sidro nije
+        # primenilo): baza je merila TAJ spisak, pa se meri on.
+        run = _pusti(*_run_suite(suite, testovi))
         pali = _pali(run.stdout + run.stderr, suite)
     except subprocess.TimeoutExpired:
         greska = "TIMEOUT suite"
@@ -406,6 +472,30 @@ def _izaberi(sab, filter_: list) -> list:
     return stavke
 
 
+def _izolacija(stavke: list, izbor: set) -> list:
+    """[(suite, test, opis)] za ciljane testove koji SAMI ne prolaze.
+
+    Bez mutacija: svaki razlicit ciljani test se pusti sam nad cistim izvorom.
+    Crven test nije kvar izbora nego nalaz o testu -- zavisi od stanja koje mu
+    ostavlja raniji test u suite-u. `--izbor` ga ionako meri celom suite-om, a
+    ovde se nabraja da se zna koliko testova tako zavisi od redosleda.
+    """
+    crveni = []
+    vidjeni = set()
+    for s in stavke:
+        kljuc = (s["suite"], s["test"])
+        if s["suite"] not in izbor or kljuc in vidjeni:
+            continue
+        vidjeni.add(kljuc)
+        ok, opis = _baza_zelena(s["suite"], [s["test"]])
+        print("%-6s %-28s %-50s %s" % ("OK" if ok else "CRVEN", s["suite"],
+                                       s["test"], "" if ok else opis), flush=True)
+        if not ok:
+            crveni.append((s["suite"], s["test"], opis))
+    print("\nizolacija: %d testova, %d ne prolazi samo" % (len(vidjeni), len(crveni)))
+    return crveni
+
+
 def _plan(stavke: list, cap: int) -> int:
     """Podela na grupe bez ijednog poziva Excela -- i tvrdnja da je potpuna."""
     grupe = naprav_grupe(stavke, cap)
@@ -439,6 +529,12 @@ def main(argv: list) -> int:
                          % GRUPA_PODRAZUMEVANO)
     ap.add_argument("--plan", action="store_true",
                     help="ispisi podelu na grupe i stani (ne trazi Excel)")
+    ap.add_argument("--izbor", action="store_true",
+                    help="pusti samo ciljane testove (run_vba --test) umesto cele "
+                         "suite; baza se tvrdi nad istim izborom")
+    ap.add_argument("--izolacija", action="store_true",
+                    help="bez mutacija: pusti svaki ciljani test SAM i nabroji "
+                         "one koji ne prolaze")
     ap.add_argument("--self-test", action="store_true",
                     help="dokazi da pravila grupisanja, ocena i orkestracija prolaza grizu")
     args = ap.parse_args(argv)
@@ -460,12 +556,24 @@ def main(argv: list) -> int:
     if args.plan:
         return _plan(stavke, args.grupe)
 
-    print("sabotaza: %d" % len(stavke), flush=True)
+    izbor = _suite_izbor() if (args.izbor or args.izolacija) else set()
+    if args.izolacija:
+        return 1 if _izolacija(stavke, izbor) else 0
+
+    print("sabotaza: %d%s" % (len(stavke), " (izbor: samo ciljani testovi)"
+                              if izbor else ""), flush=True)
 
     # --- KAPIJA: baza mora biti zelena pre prve mutacije --------------------
+    #
+    # Uz izbor se baza suite-a koja prima `--test` tvrdi po IZBORU, u svakom
+    # prolazu (v. `_prolaz`), pa se ovde tvrdi samo za suite bez izbora.
     potrebne = sorted({s["suite"] for s in stavke} | {SUITE_ALL})
+    if izbor:
+        potrebne = sorted({s["suite"] for s in stavke} - izbor)
+    cele_baze = {}
     for suite in potrebne:
         ok, opis = _baza_zelena(suite)
+        cele_baze[suite] = (ok, opis)
         print("BAZNO: %s" % opis, flush=True)
         if not ok:
             print("STOP: baza nije zelena. Dokaz bi merio crveno koje sabotaza "
@@ -490,6 +598,8 @@ def main(argv: list) -> int:
 
     grupe = naprav_grupe(stavke, args.grupe)
     ponavljaju = []
+    baze_izbora = {}
+    cela_suite = []
     if args.grupe > 1:
         print("grupisanje: %d prolaza nad %d sabotaza (najvise %d po grupi); "
               "clan koji u grupi ne obori SVOJU tvrdnju meri se posle sam"
@@ -499,7 +609,8 @@ def main(argv: list) -> int:
         if len(g) > 1:
             print("GRUPA %d/%d  %s  clanova %d"
                   % (i, len(grupe), g[0]["suite"], len(g)), flush=True)
-        ishod = _prolaz(g, pre, len(g) > 1)
+        ishod = _prolaz(g, pre, len(g) > 1, izbor, baze_izbora)
+        cela_suite.extend(ishod["cela_suite"])
         if len(g) > 1:
             grupno_priznatih += sum(1 for _s, p, _st, _c in ishod["ishodi"] if p)
         upisi(ishod["ishodi"], "  " if len(g) > 1 else "")
@@ -514,7 +625,8 @@ def main(argv: list) -> int:
     if ponavljaju and not stop:
         print("PONAVLJA SE SAM: %d" % len(ponavljaju), flush=True)
         for s in ponavljaju:
-            ishod = _prolaz([s], pre, False)
+            ishod = _prolaz([s], pre, False, izbor, baze_izbora)
+            cela_suite.extend(ishod["cela_suite"])
             upisi(ishod["ishodi"])
             for s2, razlog in ishod["ostatak"]:
                 # Pojedinacno merenje nema partnere, pa nema ni sta da vrati u
@@ -522,6 +634,28 @@ def main(argv: list) -> int:
                 # imenioca. Zato je to nalaz, a ne tiho preskakanje.
                 lose.append((s2["ime"], "NIJE IZMERENA: %s" % razlog))
                 print("%-46s NIJE IZMERENA: %s" % (s2["ime"], razlog), flush=True)
+            if ishod["stop"]:
+                stop = ishod["stop"]
+                break
+
+    # Test koji SAM ne prolazi meri se celom suite-om -- uz bazu CELE suite,
+    # koja se tvrdi jednom po suite-u i tek kad zatreba.
+    if cela_suite and not stop:
+        print("MERI SE CELOM SUITE-OM: %d (ciljani test sam ne prolazi -- v. "
+              "--izolacija)" % len(cela_suite), flush=True)
+        for s, razlog in cela_suite:
+            if s["suite"] not in cele_baze:
+                cele_baze[s["suite"]] = _baza_zelena(s["suite"])
+                print("BAZNO: %s" % cele_baze[s["suite"]][1], flush=True)
+            ok, opis = cele_baze[s["suite"]]
+            if not ok:
+                lose.append((s["ime"], "NIJE IZMERENA: ni izbor ni cela suite "
+                                       "nisu zeleni -- %s" % opis))
+                print("%-46s NIJE IZMERENA: baza cele suite nije zelena"
+                      % s["ime"], flush=True)
+                continue
+            ishod = _prolaz([s], pre, False)
+            upisi(ishod["ishodi"])
             if ishod["stop"]:
                 stop = ishod["stop"]
                 break
@@ -563,6 +697,9 @@ def main(argv: list) -> int:
              " (priznatih: %d)" % len(pokriveni) if pokriveni else ""))
     print("izvor pre/posle: %s / %s -> %s"
           % (pre, posle, "IDENTICAN" if pre == posle else "RAZLIKA!"))
+    if izbor:
+        print("izbor: baza i mutacija nad istim spiskom testova; celom suite-om "
+              "mereno %d (test sam ne prolazi)" % len(cela_suite))
     if grupno_priznatih:
         print("grupno izmereno: %d / %d -- tvrdnja je sprovedena nad mutacijama "
               "grupe ZAJEDNO, ne nad svakom posebno; pun pojedinacni dokaz je "
@@ -604,7 +741,7 @@ class _LazniOdgovor:
 
 
 def _lazni_prolaz(clanovi, izlaz_suite, grupno=True, pukli=(), potpis="P",
-                  timeout=False):
+                  timeout=False, izbor=frozenset(), baze=None, izlaz_baze=""):
     """Pokreni `_prolaz` bez Excela. Vraca (rez, pozivi).
 
     Pravila grupisanja i ocena su ciste funkcije i mere se direktno, ali
@@ -614,22 +751,30 @@ def _lazni_prolaz(clanovi, izlaz_suite, grupno=True, pukli=(), potpis="P",
     minutima i gde greska u njemu izgleda kao nalaz nad VBA kodom.
     """
     pozivi = []
+    stanje = {"mutirano": False}
 
     def lazni_pusti(*a, **kw):
         pozivi.append(tuple(a[1:]))
         if a[1].endswith("run_vba.py"):
+            # Run pre ijedne primenjene mutacije je BAZA, i dobija svoj izlaz --
+            # tako se vidi da se baza meri nad cistim izvorom, a ne posle.
+            if not stanje["mutirano"]:
+                return _LazniOdgovor(0, izlaz_baze)
             if timeout:
                 raise subprocess.TimeoutExpired(a, 1)
             return _LazniOdgovor(0, izlaz_suite)
         if a[2] != "--vrati":
-            return _LazniOdgovor(2 if a[2] in pukli else 0)
+            rc = 2 if a[2] in pukli else 0
+            stanje["mutirano"] = stanje["mutirano"] or rc == 0
+            return _LazniOdgovor(rc)
+        stanje["mutirano"] = False
         return _LazniOdgovor(0)
 
     pravi = _pusti, _otisak
     globals()["_pusti"] = lazni_pusti
     globals()["_otisak"] = lambda: potpis
     try:
-        rez = _prolaz(clanovi, "P", grupno)
+        rez = _prolaz(clanovi, "P", grupno, izbor, baze)
     finally:
         globals()["_pusti"], globals()["_otisak"] = pravi
     return rez, pozivi
@@ -749,7 +894,7 @@ def _self_test(tiho: bool = False) -> int:
             return _lazni_prolaz(clanovi, izlaz, **kw)
         except Exception as e:              # pad je nalaz, ne goli traceback
             nalazi.append("PROLAZ: prolaz je pukao -- %r" % (e,))
-            return {"stop": "", "ishodi": [], "ostatak": []}, []
+            return {"stop": "", "ishodi": [], "ostatak": [], "cela_suite": []}, []
 
     def suita(pozivi):
         return [p for p in pozivi if p and p[0].endswith("run_vba.py")]
@@ -805,6 +950,90 @@ def _self_test(tiho: bool = False) -> int:
     tvrdi(rez["stop"].startswith("REVERT-FAIL")
           and not any(p for _s2, p, _st, _c in rez["ishodi"]),
           "PROLAZ: nevracen izvor ne zaustavlja dokaz niti gasi priznanja")
+
+    # --- izbor: samo ciljani testovi, uz bazu nad ISTIM izborom -------------
+    #
+    # Baza je "TESTS ... 0 palo" nad cistim izvorom; lazni runner je razlikuje
+    # od prolaza sa mutacijom po tome da li je neka mutacija primenjena.
+    IZB = frozenset({SUITE_ALL})
+    ZELENA = "TESTS   RunAllTests: 3 ukupno, 0 palo\n"
+    CRVENA = "TESTS   RunAllTests: 3 ukupno, 1 palo\nFAIL T_B -- sam ne prolazi\n"
+
+    def testovi_poziva(p):
+        return sorted(p[i + 1] for i in range(len(p) - 1) if p[i] == "--test")
+
+    def je_primena(p):
+        return p and p[0].endswith("sabotaza.py") and p[1:] != ("--vrati",)
+
+    rez, pozivi = prolaz(g3, SVE, izbor=IZB, baze={}, izlaz_baze=ZELENA)
+    runovi = suita(pozivi)
+    tvrdi(len(runovi) == 2 and all(testovi_poziva(r) == ["T_A", "T_B", "T_C"]
+                                   for r in runovi),
+          "IZBOR: baza i prolaz ne pustaju TACNO testove clanova")
+    prva_primena = next((i for i, p in enumerate(pozivi) if je_primena(p)), -1)
+    tvrdi(pozivi and pozivi[0][0].endswith("run_vba.py")
+          and 0 < prva_primena,
+          "IZBOR: baza izbora se ne meri PRE prve mutacije")
+    tvrdi(len(rez["ishodi"]) == 3 and all(p for _s2, p, _st, _c in rez["ishodi"]),
+          "IZBOR: zelena baza + pad svih tvrdnji ne priznaje clanove")
+
+    baze = {}
+    prolaz(g3, SVE, izbor=IZB, baze=baze, izlaz_baze=ZELENA)
+    _rez, pozivi = prolaz(g3, SVE, izbor=IZB, baze=baze, izlaz_baze=ZELENA)
+    tvrdi(len(suita(pozivi)) == 1,
+          "IZBOR: baza istog izbora se placa ponovo umesto da se zapamti")
+
+    rez, pozivi = prolaz(g3, SVE, izbor=IZB, baze={}, izlaz_baze=CRVENA)
+    tvrdi(not any(je_primena(p) for p in pozivi) and len(suita(pozivi)) == 1,
+          "IZBOR: crvena baza grupe ipak primenjuje mutacije ili pusta suite")
+    tvrdi(sorted(s["ime"] for s, _r in rez["ostatak"]) == ["a", "b", "c"]
+          and not rez["ishodi"] and not rez["cela_suite"],
+          "IZBOR: grupa sa crvenom bazom se ne rastura na pojedinacna merenja")
+
+    rez, pozivi = prolaz([g3[1]], SVE, grupno=False, izbor=IZB, baze={},
+                         izlaz_baze=CRVENA)
+    tvrdi([s["ime"] for s, _r in rez["cela_suite"]] == ["b"]
+          and not rez["ishodi"] and not any(je_primena(p) for p in pozivi),
+          "IZBOR: test koji SAM ne prolazi se ne salje na merenje celom suite-om")
+
+    rez, _p = prolaz([g3[0]], SVE, grupno=False, izbor=IZB, baze={},
+                     izlaz_baze="TESTS   RunAllTests: 0 ukupno, 0 palo\n")
+    tvrdi([s["ime"] for s, _r in rez["cela_suite"]] == ["a"],
+          "IZBOR: izbor bez ijedne provere se prihvata kao zelena baza")
+
+    # --- izolacija: svaki razlicit ciljani test SAM, bez mutacija -----------
+    izol_pozivi = []
+
+    def izol_pusti(*a, **kw):
+        izol_pozivi.append(tuple(a[1:]))
+        crven = "T_B" in a
+        return _LazniOdgovor(0, "TESTS   RunAllTests: 1 ukupno, %d palo\n"
+                             % (1 if crven else 0))
+
+    stavke_izol = [_s("a"), _s("a2"), _s("b", test="T_B", kljuc="T_B"),
+                   _s("k", test="T21_X", kljuc="T21", suite=SUITE_BANKA)]
+    pravi_pusti = _pusti
+    globals()["_pusti"] = izol_pusti
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            crveni = _izolacija(stavke_izol, {SUITE_ALL})
+    except Exception as e:                  # pad je nalaz, ne goli traceback
+        crveni = None
+        nalazi.append("IZOLACIJA: pukla -- %r" % (e,))
+    finally:
+        globals()["_pusti"] = pravi_pusti
+    tvrdi(crveni is not None and [c[1] for c in crveni] == ["T_B"],
+          "IZOLACIJA: ne vraca bas test koji sam ne prolazi")
+    tvrdi(sorted(tuple(p[p.index("--test") + 1:]) for p in izol_pozivi
+                 if "--test" in p) == [("T_A",), ("T_B",)]
+          and len(izol_pozivi) == 2,
+          "IZOLACIJA: test se pusta vise puta, sa partnerom, ili i suite bez izbora")
+
+    banka = [_s("k", test="T21_X", kljuc="T21", tvrdnja="t", suite=SUITE_BANKA)]
+    _rez, pozivi = prolaz(banka, "PAO   T21 t\n", grupno=False, izbor=IZB,
+                          baze={})
+    tvrdi(len(suita(pozivi)) == 1 and not testovi_poziva(suita(pozivi)[0]),
+          "IZBOR: suite bez ulazne tacke izbora dobija --test ili bazu izbora")
 
     if nalazi:
         print("dokaz.py --self-test: %d nalaza" % len(nalazi), file=sys.stderr)

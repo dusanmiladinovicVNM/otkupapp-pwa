@@ -377,6 +377,27 @@ def popis_problemi(suites: dict = None, registar: dict = None,
                           "je `xl.Run(\"%s\")` ne moze pozvati -- %s"
                           % (ime, ime, razlog))
 
+    # a2) ulazna tacka IZBORA (`izbor` u SUITES) mora da postoji i da prima
+    # TACNO JEDAN obavezan argument -- `run_vba --test` je zove sa spiskom
+    # testova. Pogresno ime bi se videlo tek na Windows-u, kao "Cannot run the
+    # macro" usred dokaza; procedura bez argumenta bi bila pun prolaz koji se
+    # predstavlja kao izbor.
+    for ime in sorted(suites):
+        izbor = (suites[ime] or {}).get("izbor")
+        if not izbor:
+            continue
+        svi = deklaracije.get(izbor) or []
+        if any(d["bas"] and d["javna"] and not d["uslovna"]
+               and d["vrsta"] == "sub" and d["obaveznih"] == 1 for d in svi):
+            continue
+        nalazi.append("IZBOR: SUITES['%s']['izbor'] = '%s' nije `Public Sub "
+                      "%s(ByVal spisak As String)` u .bas -- %s"
+                      % (ime, izbor, izbor,
+                         "nema deklaracije" if not svi else
+                         "; ".join(sorted({"%s, obaveznih %d" % (d["fajl"],
+                                                                 d["obaveznih"])
+                                           for d in svi}))))
+
     # b) suite po konvenciji koju nijedna kapija ne pokrece i koja nije zapisana
     for ime in sorted(set(po_konvenciji) - set(suites) - set(registar)):
         nalazi.append("NEPOKRETANA: `%s` (%s) nije ni u SUITES ni u "
@@ -665,6 +686,13 @@ def zabelezi_prolaz(report: dict, rc: int, no_import: bool = False,
                 "src-vba, pa otisak ne bi opisivao ono sto je izvrseno")
     if rc != 0:
         return "marker nije upisan: run nije zelen (rc=%s)" % rc
+    # IZBOR TESTOVA NIJE SUITE. `run_vba --test` pusta deo suite-a pod njenim
+    # imenom, pa bi upis rekao "RunAllTests zelen" o prolazu sa jednim testom --
+    # a dokaz.py takve prolaze pusta stotinama, nad zelenim izvorom.
+    izbori = sorted(s["name"] for s in report.get("suites", []) if s.get("izbor"))
+    if izbori:
+        return ("marker nije upisan: izbor testova (--test) u %s nije cela "
+                "suite" % ", ".join(izbori))
     if not kontekst:
         return ("marker nije upisan: nema snimka konteksta uzetog PRE run-a "
                 "(v. snimi_kontekst) -- bez njega bi se potpisalo stanje diska "
@@ -989,6 +1017,32 @@ def _self_test(tiho: bool = False) -> int:
             vrati_runalltests(put_d)
         tvrdi(not popis(), "POPIS: vracena deklaracija i dalje daje nalaz")
 
+        # IZBOR: ulazna tacka sa spiskom testova postoji i prima TACNO JEDAN
+        # argument. Svaki slucaj se razlikuje od valjanog po jednoj osi.
+        sa_izborom = dict(SUITES, RunAllTests={"gate": True, "default": True,
+                                               "izbor": "RunAllTestsIzbor"})
+        put_izb = os.path.join(src, "modIzbor.bas")
+        for opis, sadrzaj, mora_nalaz in (
+                ("valjana", "Public Sub RunAllTestsIzbor(ByVal spisak As String)"
+                            "\r\nEnd Sub\r\n", False),
+                ("bez deklaracije", "", True),
+                ("BEZ argumenta", "Public Sub RunAllTestsIzbor()\r\nEnd Sub\r\n",
+                 True),
+                ("DVA argumenta", "Public Sub RunAllTestsIzbor(ByVal a As String,"
+                                  " ByVal b As String)\r\nEnd Sub\r\n", True),
+                ("Private", "Private Sub RunAllTestsIzbor(ByVal spisak As String)"
+                            "\r\nEnd Sub\r\n", True),
+        ):
+            with io.open(put_izb, "w", newline="") as fh:
+                fh.write(sadrzaj)
+            ima = any(n.startswith("IZBOR:") and "RunAllTestsIzbor" in n
+                      for n in popis(suites=sa_izborom))
+            tvrdi(ima == mora_nalaz,
+                  "POPIS: ulazna tacka izbora '%s' %s" % (
+                      opis, "prolazi" if mora_nalaz else "daje nalaz"))
+        os.remove(put_izb)
+        tvrdi(not popis(), "POPIS: izbor ostavio nalaz u cistom izvoru")
+
         # Isto ime u .bas I u .cls: ishod NE SME zavisiti od redosleda citanja.
         # `setdefault` je to radio -- `clsA.cls` se cita pre `modTest.bas`.
         with io.open(os.path.join(src, "clsA.cls"), "w", newline="") as fh:
@@ -1299,6 +1353,17 @@ def _self_test(tiho: bool = False) -> int:
         tvrdi("nema snimka konteksta" in zabelezi_prolaz(
                   ZELEN, 0, put=put, src_dir=src, koren=tmp),
               "MARKER: upis BEZ snimka konteksta se izvrsava")
+
+        # Izbor testova pod imenom suite-a nije dokaz te suite. Marker se pri
+        # tome NE SME promeniti -- poruka bez odbijenog upisa bi bila dekoracija.
+        pre_izbora = procitaj_marker(put)
+        IZBOR = {"suites": [{"name": "RunAllTests", "status": "OK",
+                             "izbor": ["T_A"]}],
+                 "suite_results": {"RunAllTests": {"total": 1, "failed": 0}}}
+        tvrdi("izbor testova" in upisi(rep=IZBOR),
+              "MARKER: izbor testova (--test) se upisuje kao dokaz cele suite")
+        tvrdi(procitaj_marker(put) == pre_izbora,
+              "MARKER: odbijen izbor je ipak promenio marker")
 
         def toctou(izmena, opis):
             k = snimi_kontekst(src, tmp)      # snimak PRE "run-a"

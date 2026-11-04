@@ -56,6 +56,20 @@ Private Const TEST_LOG_SHEET As String = "BUSINESS_FLOW_PRO_TEST_LOG"
 ' izgledaju isto. Isti razlog i isti format kao modTestBanka.
 Private m_Report As String
 
+' IZBOR TESTOVA I VREME PO KORAKU -- isti ugovor kao u modTest (v. tamo
+' m_IzborZahtev): RunBusinessFlowProIzbor postavlja zahtev, a
+' RunBusinessFlowProSuite ga POTROSI kao prvu naredbu, pa je sledeci goli prolaz
+' uvek pun. Ovde nema RunOne omotnice, pa svaki poziv testa u suite-u ide kroz
+' BfpIzabran: on odlucuje da li se test pusta i zatvara vreme prethodnog koraka.
+' Vreme ide u last_run_bfp_vreme.txt ("sekunde<TAB>status<TAB>ime"); status je
+' uvek KORAK, jer BFP verdikt nosi tvrdnja, ne test.
+Private m_BfpIzborZahtev As String
+Private m_BfpIzbor As String
+Private m_BfpPusteni As String
+Private m_BfpVreme As String
+Private m_BfpKorak As String
+Private m_BfpKorakT0 As Single
+
 Private Const TEST_ST_ID As String = "ST-90001"
 Private Const TEST_KOOP_ID As String = "KOOP-90001"
 Private Const TEST_VOZ_ID As String = "VOZ-90001"
@@ -107,16 +121,26 @@ Private Const TEST_KUP3_ID As String = "KUP-90003"
 ' ============================================================
 
 Public Sub RunBusinessFlowProSuite()
+    ' PRVA naredba, pre ijedne koja moze da pukne: izbor koji se ne potrosi
+    ' prezivi u sledeci goli prolaz i pretvori ga u tih deo suite-a.
+    m_BfpIzbor = BfpPreuzmiIzbor(m_BfpIzborZahtev)
+    m_BfpPusteni = ""
+    m_BfpVreme = ""
+    m_BfpKorak = ""
+
     On Error GoTo EH
 
     BeginRun "BUSINESS FLOW PROFESSIONAL SUITE"
 
-    Test_CoreTablesAndColumnsExist
+    If BfpIzabran("Test_CoreTablesAndColumnsExist") Then Test_CoreTablesAndColumnsExist
+    ' Seed se pusta UVEK -- i uz izbor, jer ga testovi traze. Ima svoj korak u
+    ' vremenu, da se ne pripise testu ispred sebe.
+    BfpKorakPocni "SeedBusinessFlowProMasterData"
     SeedBusinessFlowProMasterData
-    Test_SeedMasterDataAvailable
+    If BfpIzabran("Test_SeedMasterDataAvailable") Then Test_SeedMasterDataAvailable
 
-    Test_DuplicateFakturaIsBlocked
-    Test_InvalidSavesDoNotAppend
+    If BfpIzabran("Test_DuplicateFakturaIsBlocked") Then Test_DuplicateFakturaIsBlocked
+    If BfpIzabran("Test_InvalidSavesDoNotAppend") Then Test_InvalidSavesDoNotAppend
     ' OBRISANI u Otkup cutover-u: Test_OtkupAtomicMultiClassSave i
     ' Test_OtkupClassIIAmbalaza su tvrdili PO-KLASNE redove na zaglavlju
     ' ("appends exactly two rows", KolAmbalaze po klasi, BrojZbirne po
@@ -124,380 +148,386 @@ Public Sub RunBusinessFlowProSuite()
     '   jedan header + dve stavke      Test_OTK_HeaderIStavke
     '   atomicnost dvoklasnog upisa    Test_OTK_LosaDrugaStavkaRollback
     '   ambalaza dvoklasnog dokumenta  Test_OTK_AmbalazaIdeNaDokument
-    Test_OtkupInputValidationHardening
-    Test_OtkupReadHelpersExcludeStornirano
-    Test_DokumentaInputValidationHardening
-    Test_DokumentaReadHelpersExcludeStornirano
-    Test_MalinaVozacMirror
+    If BfpIzabran("Test_OtkupInputValidationHardening") Then Test_OtkupInputValidationHardening
+    If BfpIzabran("Test_OtkupReadHelpersExcludeStornirano") Then Test_OtkupReadHelpersExcludeStornirano
+    If BfpIzabran("Test_DokumentaInputValidationHardening") Then Test_DokumentaInputValidationHardening
+    If BfpIzabran("Test_DokumentaReadHelpersExcludeStornirano") Then Test_DokumentaReadHelpersExcludeStornirano
+    If BfpIzabran("Test_MalinaVozacMirror") Then Test_MalinaVozacMirror
 
     ' RF-28 (MasterSync integritet -- AUD-041/042/043)
-    Test_RF28_BrojZbirneRupaNeDajeDuplikat
-    Test_ZBR_ImportDvaUredjajaNeStapaDokumente
-    Test_ZBR_UvozPamtiPoreklo
-    Test_ZBR_IstiCridDrugiSadrzajJeKonflikt
-    Test_ZBR_IstiCridNevalidanDatumNijeDuplikat
-    Test_RF28_NevalidanDatumJeSyncError
+    If BfpIzabran("Test_RF28_BrojZbirneRupaNeDajeDuplikat") Then Test_RF28_BrojZbirneRupaNeDajeDuplikat
+    If BfpIzabran("Test_ZBR_ImportDvaUredjajaNeStapaDokumente") Then Test_ZBR_ImportDvaUredjajaNeStapaDokumente
+    If BfpIzabran("Test_ZBR_UvozPamtiPoreklo") Then Test_ZBR_UvozPamtiPoreklo
+    If BfpIzabran("Test_ZBR_IstiCridDrugiSadrzajJeKonflikt") Then Test_ZBR_IstiCridDrugiSadrzajJeKonflikt
+    If BfpIzabran("Test_ZBR_IstiCridNevalidanDatumNijeDuplikat") Then Test_ZBR_IstiCridNevalidanDatumNijeDuplikat
+    If BfpIzabran("Test_RF28_NevalidanDatumJeSyncError") Then Test_RF28_NevalidanDatumJeSyncError
 
     ' RF-05 (frmDokumenta unos + storno set)
-    Test_ManjakPreviewJeZbirnaMinusPrijem
-    Test_OpenFaktureExcludeStornirano
-    Test_PrefillBiraPoslednjuGeneraciju
-    Test_StornoPoBrojuOdbijaDvaVlasnika
-    Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice
-    Test_ZbirnaRowDataColumnMapped
-    Test_OMUlazSmerObavezan
-    Test_PorukeKatalogPokrivaDokumenta
+    If BfpIzabran("Test_ManjakPreviewJeZbirnaMinusPrijem") Then Test_ManjakPreviewJeZbirnaMinusPrijem
+    If BfpIzabran("Test_OpenFaktureExcludeStornirano") Then Test_OpenFaktureExcludeStornirano
+    If BfpIzabran("Test_PrefillBiraPoslednjuGeneraciju") Then Test_PrefillBiraPoslednjuGeneraciju
+    If BfpIzabran("Test_StornoPoBrojuOdbijaDvaVlasnika") Then Test_StornoPoBrojuOdbijaDvaVlasnika
+    If BfpIzabran("Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice") Then Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice
+    If BfpIzabran("Test_ZbirnaRowDataColumnMapped") Then Test_ZbirnaRowDataColumnMapped
+    If BfpIzabran("Test_OMUlazSmerObavezan") Then Test_OMUlazSmerObavezan
+    If BfpIzabran("Test_PorukeKatalogPokrivaDokumenta") Then Test_PorukeKatalogPokrivaDokumenta
 
 
-    Test_NoCrossZbirnaLinksAudit
+    If BfpIzabran("Test_NoCrossZbirnaLinksAudit") Then Test_NoCrossZbirnaLinksAudit
 
     ' PR3 -- Zbirna: header + stavke.  Nov pisac jos nema nijednog pozivaoca;
     ' cutover citalaca, invarijante i storna je Zbirna cutover.
-    Test_PR3_CreateZbirnaHeaderIStavke
-    Test_ZBR_SadrzajCitaStavkeNeZaglavlje
-    Test_ZBR_LjuskaNosiZbirnaID
-    Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument
-    Test_ZBR_BrojIIdentitetMorajuBitiIstiDokument
-    Test_ZBR_NacrtPaPokrivanje
-    Test_ZBR_NepokrivenNacrtSeNeIzdaje
-    Test_ZBR_IzvorMoraBitiIzdatISlobodan
-    Test_ZBR_ObaUlazaTrazeIzdatIzvor
-    Test_ZBR_PrviIzvorDefiniseCinjenice
-    Test_ZBR_NegativnaAmbalazaSeNeUpisuje
-    Test_ZBR_PrazanIDDetetaNeProlazi
-    Test_ZBR_NacrtSeMenjaDokNijeIzdat
-    Test_ZBR_IzmenaNacrtaCuvaSvojBroj
-    Test_ZBR_IzmenaNacrtaRevalidiraClanstvo
-    Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice
-    Test_ZBR_UpdateNePrimaPraznoOcekivanje
-    Test_ZBR_NapredakPokrivanja
-    Test_ZBR_NevezaneSamoIzdateISlobodne
-    Test_ZBR_UnosPraviIMenjaNacrt
-    Test_ZBR_ValidacijaNadKanonom
-    Test_ZBR_AdapterNePopravljaUnos
-    Test_ZBR_EkranPraviIMenjaNacrt
-    Test_ZBR_RadniStoVezeIIzdaje
-    Test_ZBR_PrazanNacrtNeRusiListu
-    Test_ZBR_RadniStoVezePoIdentitetu
-    Test_ZBR_SpisakKojiSeNudiNeLaze
-    Test_ZBR_TrakaNapretka
-    Test_ZBR_TrakaNatpisi
-    Test_ZBR_CitalacStavkiDrziUgovor
-    Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
-    Test_PR3_HeaderNeNosiKolicinu
-    Test_PR3_ZbirnaIDJeOpaque
-    Test_PR3_PrazanHeaderIDNeProlazi
-    Test_PR3_PrazanStavkaIDNeProlazi
-    Test_PR3_IstaOtpremnicaDvaputNeProlazi
-    Test_PR3_VecVezanaOtpremnicaSeNePreuzima
-    Test_PR3_DvaAktivnaClanstvaSuGreska
-    Test_PR3_DupliIstiZapisClanstvaJeGreska
-    Test_PR3_StorniranIzvorNeOstavljaPolaDokumenta
-    Test_PR3_RazlicitaVrstaNeProlazi
-    Test_PR3_RazlicitVozacNeProlazi
-    Test_PR3_HeaderJeEksplicitnoIzdat
-    Test_PR3_ZbirnaBezIzvoraNeProlazi
-    Test_PR3_NepoznatKljucUHeaderuPada
-    Test_PR3_NedostajuciObavezniKljucPada
-    Test_PR3_OcekivanoKojeSeNeSlazePada
-    Test_PR3_RucniUnosTraziOcekivano
-    Test_PR3_AmbalazaMoraBitiCeoBroj
-    Test_PR3_ClanstvoJeZapisanoPoVerziji
-    Test_PR3_CitacDajeIstuZbirnuKaoClanstvo
-    Test_PR3_PrazanIzvorIDNeProlazi
-    Test_PR3_OtpremnicaNemaZbirnaID
+    If BfpIzabran("Test_PR3_CreateZbirnaHeaderIStavke") Then Test_PR3_CreateZbirnaHeaderIStavke
+    If BfpIzabran("Test_ZBR_SadrzajCitaStavkeNeZaglavlje") Then Test_ZBR_SadrzajCitaStavkeNeZaglavlje
+    If BfpIzabran("Test_ZBR_LjuskaNosiZbirnaID") Then Test_ZBR_LjuskaNosiZbirnaID
+    If BfpIzabran("Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument") Then Test_ZBR_StornoKrozLjuskuPogadjaSvojDokument
+    If BfpIzabran("Test_ZBR_BrojIIdentitetMorajuBitiIstiDokument") Then Test_ZBR_BrojIIdentitetMorajuBitiIstiDokument
+    If BfpIzabran("Test_ZBR_NacrtPaPokrivanje") Then Test_ZBR_NacrtPaPokrivanje
+    If BfpIzabran("Test_ZBR_NepokrivenNacrtSeNeIzdaje") Then Test_ZBR_NepokrivenNacrtSeNeIzdaje
+    If BfpIzabran("Test_ZBR_IzvorMoraBitiIzdatISlobodan") Then Test_ZBR_IzvorMoraBitiIzdatISlobodan
+    If BfpIzabran("Test_ZBR_ObaUlazaTrazeIzdatIzvor") Then Test_ZBR_ObaUlazaTrazeIzdatIzvor
+    If BfpIzabran("Test_ZBR_PrviIzvorDefiniseCinjenice") Then Test_ZBR_PrviIzvorDefiniseCinjenice
+    If BfpIzabran("Test_ZBR_NegativnaAmbalazaSeNeUpisuje") Then Test_ZBR_NegativnaAmbalazaSeNeUpisuje
+    If BfpIzabran("Test_ZBR_PrazanIDDetetaNeProlazi") Then Test_ZBR_PrazanIDDetetaNeProlazi
+    If BfpIzabran("Test_ZBR_NacrtSeMenjaDokNijeIzdat") Then Test_ZBR_NacrtSeMenjaDokNijeIzdat
+    If BfpIzabran("Test_ZBR_IzmenaNacrtaCuvaSvojBroj") Then Test_ZBR_IzmenaNacrtaCuvaSvojBroj
+    If BfpIzabran("Test_ZBR_IzmenaNacrtaRevalidiraClanstvo") Then Test_ZBR_IzmenaNacrtaRevalidiraClanstvo
+    If BfpIzabran("Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice") Then Test_ZBR_PraznoClanstvoBrisePreuzeteCinjenice
+    If BfpIzabran("Test_ZBR_UpdateNePrimaPraznoOcekivanje") Then Test_ZBR_UpdateNePrimaPraznoOcekivanje
+    If BfpIzabran("Test_ZBR_NapredakPokrivanja") Then Test_ZBR_NapredakPokrivanja
+    If BfpIzabran("Test_ZBR_NevezaneSamoIzdateISlobodne") Then Test_ZBR_NevezaneSamoIzdateISlobodne
+    If BfpIzabran("Test_ZBR_UnosPraviIMenjaNacrt") Then Test_ZBR_UnosPraviIMenjaNacrt
+    If BfpIzabran("Test_ZBR_ValidacijaNadKanonom") Then Test_ZBR_ValidacijaNadKanonom
+    If BfpIzabran("Test_ZBR_AdapterNePopravljaUnos") Then Test_ZBR_AdapterNePopravljaUnos
+    If BfpIzabran("Test_ZBR_EkranPraviIMenjaNacrt") Then Test_ZBR_EkranPraviIMenjaNacrt
+    If BfpIzabran("Test_ZBR_RadniStoVezeIIzdaje") Then Test_ZBR_RadniStoVezeIIzdaje
+    If BfpIzabran("Test_ZBR_PrazanNacrtNeRusiListu") Then Test_ZBR_PrazanNacrtNeRusiListu
+    If BfpIzabran("Test_ZBR_RadniStoVezePoIdentitetu") Then Test_ZBR_RadniStoVezePoIdentitetu
+    If BfpIzabran("Test_ZBR_SpisakKojiSeNudiNeLaze") Then Test_ZBR_SpisakKojiSeNudiNeLaze
+    If BfpIzabran("Test_ZBR_TrakaNapretka") Then Test_ZBR_TrakaNapretka
+    If BfpIzabran("Test_ZBR_TrakaNatpisi") Then Test_ZBR_TrakaNatpisi
+    If BfpIzabran("Test_ZBR_CitalacStavkiDrziUgovor") Then Test_ZBR_CitalacStavkiDrziUgovor
+    If BfpIzabran("Test_PR3_DveOtpremniceIsteKlaseSeSabiraju") Then Test_PR3_DveOtpremniceIsteKlaseSeSabiraju
+    If BfpIzabran("Test_PR3_HeaderNeNosiKolicinu") Then Test_PR3_HeaderNeNosiKolicinu
+    If BfpIzabran("Test_PR3_ZbirnaIDJeOpaque") Then Test_PR3_ZbirnaIDJeOpaque
+    If BfpIzabran("Test_PR3_PrazanHeaderIDNeProlazi") Then Test_PR3_PrazanHeaderIDNeProlazi
+    If BfpIzabran("Test_PR3_PrazanStavkaIDNeProlazi") Then Test_PR3_PrazanStavkaIDNeProlazi
+    If BfpIzabran("Test_PR3_IstaOtpremnicaDvaputNeProlazi") Then Test_PR3_IstaOtpremnicaDvaputNeProlazi
+    If BfpIzabran("Test_PR3_VecVezanaOtpremnicaSeNePreuzima") Then Test_PR3_VecVezanaOtpremnicaSeNePreuzima
+    If BfpIzabran("Test_PR3_DvaAktivnaClanstvaSuGreska") Then Test_PR3_DvaAktivnaClanstvaSuGreska
+    If BfpIzabran("Test_PR3_DupliIstiZapisClanstvaJeGreska") Then Test_PR3_DupliIstiZapisClanstvaJeGreska
+    If BfpIzabran("Test_PR3_StorniranIzvorNeOstavljaPolaDokumenta") Then Test_PR3_StorniranIzvorNeOstavljaPolaDokumenta
+    If BfpIzabran("Test_PR3_RazlicitaVrstaNeProlazi") Then Test_PR3_RazlicitaVrstaNeProlazi
+    If BfpIzabran("Test_PR3_RazlicitVozacNeProlazi") Then Test_PR3_RazlicitVozacNeProlazi
+    If BfpIzabran("Test_PR3_HeaderJeEksplicitnoIzdat") Then Test_PR3_HeaderJeEksplicitnoIzdat
+    If BfpIzabran("Test_PR3_ZbirnaBezIzvoraNeProlazi") Then Test_PR3_ZbirnaBezIzvoraNeProlazi
+    If BfpIzabran("Test_PR3_NepoznatKljucUHeaderuPada") Then Test_PR3_NepoznatKljucUHeaderuPada
+    If BfpIzabran("Test_PR3_NedostajuciObavezniKljucPada") Then Test_PR3_NedostajuciObavezniKljucPada
+    If BfpIzabran("Test_PR3_OcekivanoKojeSeNeSlazePada") Then Test_PR3_OcekivanoKojeSeNeSlazePada
+    If BfpIzabran("Test_PR3_RucniUnosTraziOcekivano") Then Test_PR3_RucniUnosTraziOcekivano
+    If BfpIzabran("Test_PR3_AmbalazaMoraBitiCeoBroj") Then Test_PR3_AmbalazaMoraBitiCeoBroj
+    If BfpIzabran("Test_PR3_ClanstvoJeZapisanoPoVerziji") Then Test_PR3_ClanstvoJeZapisanoPoVerziji
+    If BfpIzabran("Test_PR3_CitacDajeIstuZbirnuKaoClanstvo") Then Test_PR3_CitacDajeIstuZbirnuKaoClanstvo
+    If BfpIzabran("Test_PR3_PrazanIzvorIDNeProlazi") Then Test_PR3_PrazanIzvorIDNeProlazi
+    If BfpIzabran("Test_PR3_OtpremnicaNemaZbirnaID") Then Test_PR3_OtpremnicaNemaZbirnaID
 
     ' Otkup skela -- header + stavke. Nov pisac jos nema pozivaoca;
     ' citaoci, ambalaza i novac su Otkup cutover.
-    Test_OTK_HeaderIStavke
-    Test_OTK_HeaderNeNosiLinePolja
-    Test_OTK_KulturaSeNeFabrikuje
-    Test_OTK_KulturaSeMoraSlagatiSaVrstom
-    Test_OTK_ParcelaPripadaKooperantu
-    Test_OTK_BrutoINetoSuZamrznuti
-    Test_OTK_CenaJeStvarnoPrimenjena
-    Test_OTK_DuplaKlasaPada
-    Test_OTK_LosaDrugaStavkaRollback
-    Test_OTK_PrazanIDFailClosed
-    Test_OTK_KolAmbIzdataJeHeader
-    Test_OTK_NepoznatKljucUHeaderuPada
-    Test_OTK_BezStavkiNeProlazi
-    Test_OTK_AmbalazaMoraBitiCeoBroj
-    Test_OTK_NepoznatKljucUStavciPada
-    Test_OTK_KooperantMoraPostojati
-    Test_OTK_StanicaMoraPostojati
-    Test_OTK_RedosledKlasaJeKanonski
-    Test_OTK_SamoKlasaII
-    Test_OTK_SortaPraznaSamoUzKulturuBezSorte
-    Test_OTK_TipAmbalazeVezujeSvakaAmbalaza
-    Test_OTK_DeficitKooperantaTraziPotvrdu
-    Test_OTK_AmbalazaIdeNaDokument
-    Test_OTK_OdbijenDokumentNeKnjiziAmbalazu
-    Test_OTK_EkranPiseNovimModelom
-    Test_OTK_EkranNerazresivaKulturaPada
-    Test_OTK_UpisNeVodiLanac
-    Test_OTK_PrintNetoUnosNeRekonstruiseBruto
-    Test_OTK_BrojJedinstvenPoStaniciIDanu
-    Test_OTK_VrednostBezStavkiPada
-    Test_OTK_VrednostPunUgovor
-    Test_OTK_StatusIsplateJeIzveden
-    Test_OTK_IspravkaNovDokumentINovBroj
-    Test_OTK_IspravkaKapije
-    Test_OTK_IspravkaNeGubiNovac
-    Test_OTK_IspravkaPrenosiKes
-    Test_OTK_IspravkaPrijavljujePreplatu
-    Test_OTK_IspravkaPrijavljujePreplatuVirmanom
-    Test_OTK_IsplataNaNovDokumentProlazi
-    Test_OTK_CitaociCitajuStavke
-    Test_OTK_CitaociStavkiFailClosed
-    Test_OTK_ZaglavljeBezStavkiObaraCitaoce
-    Test_OTK_StavkaBezZaglavljaObaraCitaoce
-    Test_OTK_ZaglavljeBezIDObaraCitaoce
-    Test_OTK_DupliOtkupIDObaraCitaoce
-    Test_BIM_NovOtkupJeOtvorenBlok
-    Test_PWA_StanicaJeUredjajNeKooperant
-    Test_BKTX_NekanonskiBrojNeOdbija
-    Test_BKTX_VlasnikOsaOdbijaTudjuStanicu
-    Test_BKTX_DanOsaOdbijaTudjiDan
-    Test_BKTX_GeneratorUvekProlaziKapiju
-    Test_BKTX_MirrorSPrefiksProlazi
-    Test_BKTX_ZbirnaTudjegVlasnikaOdbijena
-    Test_BKTX_PrijemnicaNikadNeOdbija
-    Test_BKTX_ReversSudiSamoAmbalazu
-    Test_BKTX_RucniRezimNeGasiPravilo
-    Test_BKTX_UvozOtkupaOdbijaTudjBroj
-    Test_BKTX_UvozZbirneOdbijaTudjBroj
-    Test_OTP_BrojZauzetPoStaniciIDanu
-    Test_OTP_DraftBrojIzuzimaSebe
-    Test_ZBR_StorniranBrojIstogVozacaOdbijen
-    Test_BKTX_ReversPisacOdbijaZauzet
-    Test_PWA_BezUredjajaUvozPada
-    Test_OTK_OdvezanVirmanJeRaspolozivAvans
-    Test_OTK_IspravkaIzdatogRoditeljaFailClosed
-    Test_OTK_IspravkaRollbackVracaSve
-    Test_OTK_SelfHealMigracijeKolona
-    Test_OTK_BrojStorniranogSeNePonovoKoristi
-    Test_OTK_EkranIPisacImajuIstoPravilo
-    Test_OTK_StornoJednimID
-    Test_OTK_PrefillStornaDveKlaseSaStavki
-    Test_OTK_PrefillStornaBezStavkiPada
-    Test_OTK_IzvozDveKlaseIzStavki
-    Test_OTK_IzvozBezStavkiPada
-    Test_OTK_PushStavkiIdempotentan
+    If BfpIzabran("Test_OTK_HeaderIStavke") Then Test_OTK_HeaderIStavke
+    If BfpIzabran("Test_OTK_HeaderNeNosiLinePolja") Then Test_OTK_HeaderNeNosiLinePolja
+    If BfpIzabran("Test_OTK_KulturaSeNeFabrikuje") Then Test_OTK_KulturaSeNeFabrikuje
+    If BfpIzabran("Test_OTK_KulturaSeMoraSlagatiSaVrstom") Then Test_OTK_KulturaSeMoraSlagatiSaVrstom
+    If BfpIzabran("Test_OTK_ParcelaPripadaKooperantu") Then Test_OTK_ParcelaPripadaKooperantu
+    If BfpIzabran("Test_OTK_BrutoINetoSuZamrznuti") Then Test_OTK_BrutoINetoSuZamrznuti
+    If BfpIzabran("Test_OTK_CenaJeStvarnoPrimenjena") Then Test_OTK_CenaJeStvarnoPrimenjena
+    If BfpIzabran("Test_OTK_DuplaKlasaPada") Then Test_OTK_DuplaKlasaPada
+    If BfpIzabran("Test_OTK_LosaDrugaStavkaRollback") Then Test_OTK_LosaDrugaStavkaRollback
+    If BfpIzabran("Test_OTK_PrazanIDFailClosed") Then Test_OTK_PrazanIDFailClosed
+    If BfpIzabran("Test_OTK_KolAmbIzdataJeHeader") Then Test_OTK_KolAmbIzdataJeHeader
+    If BfpIzabran("Test_OTK_NepoznatKljucUHeaderuPada") Then Test_OTK_NepoznatKljucUHeaderuPada
+    If BfpIzabran("Test_OTK_BezStavkiNeProlazi") Then Test_OTK_BezStavkiNeProlazi
+    If BfpIzabran("Test_OTK_AmbalazaMoraBitiCeoBroj") Then Test_OTK_AmbalazaMoraBitiCeoBroj
+    If BfpIzabran("Test_OTK_NepoznatKljucUStavciPada") Then Test_OTK_NepoznatKljucUStavciPada
+    If BfpIzabran("Test_OTK_KooperantMoraPostojati") Then Test_OTK_KooperantMoraPostojati
+    If BfpIzabran("Test_OTK_StanicaMoraPostojati") Then Test_OTK_StanicaMoraPostojati
+    If BfpIzabran("Test_OTK_RedosledKlasaJeKanonski") Then Test_OTK_RedosledKlasaJeKanonski
+    If BfpIzabran("Test_OTK_SamoKlasaII") Then Test_OTK_SamoKlasaII
+    If BfpIzabran("Test_OTK_SortaPraznaSamoUzKulturuBezSorte") Then Test_OTK_SortaPraznaSamoUzKulturuBezSorte
+    If BfpIzabran("Test_OTK_TipAmbalazeVezujeSvakaAmbalaza") Then Test_OTK_TipAmbalazeVezujeSvakaAmbalaza
+    If BfpIzabran("Test_OTK_DeficitKooperantaTraziPotvrdu") Then Test_OTK_DeficitKooperantaTraziPotvrdu
+    If BfpIzabran("Test_OTK_AmbalazaIdeNaDokument") Then Test_OTK_AmbalazaIdeNaDokument
+    If BfpIzabran("Test_OTK_OdbijenDokumentNeKnjiziAmbalazu") Then Test_OTK_OdbijenDokumentNeKnjiziAmbalazu
+    If BfpIzabran("Test_OTK_EkranPiseNovimModelom") Then Test_OTK_EkranPiseNovimModelom
+    If BfpIzabran("Test_OTK_EkranNerazresivaKulturaPada") Then Test_OTK_EkranNerazresivaKulturaPada
+    If BfpIzabran("Test_OTK_UpisNeVodiLanac") Then Test_OTK_UpisNeVodiLanac
+    If BfpIzabran("Test_OTK_PrintNetoUnosNeRekonstruiseBruto") Then Test_OTK_PrintNetoUnosNeRekonstruiseBruto
+    If BfpIzabran("Test_OTK_BrojJedinstvenPoStaniciIDanu") Then Test_OTK_BrojJedinstvenPoStaniciIDanu
+    If BfpIzabran("Test_OTK_VrednostBezStavkiPada") Then Test_OTK_VrednostBezStavkiPada
+    If BfpIzabran("Test_OTK_VrednostPunUgovor") Then Test_OTK_VrednostPunUgovor
+    If BfpIzabran("Test_OTK_StatusIsplateJeIzveden") Then Test_OTK_StatusIsplateJeIzveden
+    If BfpIzabran("Test_OTK_IspravkaNovDokumentINovBroj") Then Test_OTK_IspravkaNovDokumentINovBroj
+    If BfpIzabran("Test_OTK_IspravkaKapije") Then Test_OTK_IspravkaKapije
+    If BfpIzabran("Test_OTK_IspravkaNeGubiNovac") Then Test_OTK_IspravkaNeGubiNovac
+    If BfpIzabran("Test_OTK_IspravkaPrenosiKes") Then Test_OTK_IspravkaPrenosiKes
+    If BfpIzabran("Test_OTK_IspravkaPrijavljujePreplatu") Then Test_OTK_IspravkaPrijavljujePreplatu
+    If BfpIzabran("Test_OTK_IspravkaPrijavljujePreplatuVirmanom") Then Test_OTK_IspravkaPrijavljujePreplatuVirmanom
+    If BfpIzabran("Test_OTK_IsplataNaNovDokumentProlazi") Then Test_OTK_IsplataNaNovDokumentProlazi
+    If BfpIzabran("Test_OTK_CitaociCitajuStavke") Then Test_OTK_CitaociCitajuStavke
+    If BfpIzabran("Test_OTK_CitaociStavkiFailClosed") Then Test_OTK_CitaociStavkiFailClosed
+    If BfpIzabran("Test_OTK_ZaglavljeBezStavkiObaraCitaoce") Then Test_OTK_ZaglavljeBezStavkiObaraCitaoce
+    If BfpIzabran("Test_OTK_StavkaBezZaglavljaObaraCitaoce") Then Test_OTK_StavkaBezZaglavljaObaraCitaoce
+    If BfpIzabran("Test_OTK_ZaglavljeBezIDObaraCitaoce") Then Test_OTK_ZaglavljeBezIDObaraCitaoce
+    If BfpIzabran("Test_OTK_DupliOtkupIDObaraCitaoce") Then Test_OTK_DupliOtkupIDObaraCitaoce
+    If BfpIzabran("Test_BIM_NovOtkupJeOtvorenBlok") Then Test_BIM_NovOtkupJeOtvorenBlok
+    If BfpIzabran("Test_PWA_StanicaJeUredjajNeKooperant") Then Test_PWA_StanicaJeUredjajNeKooperant
+    If BfpIzabran("Test_BKTX_NekanonskiBrojNeOdbija") Then Test_BKTX_NekanonskiBrojNeOdbija
+    If BfpIzabran("Test_BKTX_VlasnikOsaOdbijaTudjuStanicu") Then Test_BKTX_VlasnikOsaOdbijaTudjuStanicu
+    If BfpIzabran("Test_BKTX_DanOsaOdbijaTudjiDan") Then Test_BKTX_DanOsaOdbijaTudjiDan
+    If BfpIzabran("Test_BKTX_GeneratorUvekProlaziKapiju") Then Test_BKTX_GeneratorUvekProlaziKapiju
+    If BfpIzabran("Test_BKTX_MirrorSPrefiksProlazi") Then Test_BKTX_MirrorSPrefiksProlazi
+    If BfpIzabran("Test_BKTX_ZbirnaTudjegVlasnikaOdbijena") Then Test_BKTX_ZbirnaTudjegVlasnikaOdbijena
+    If BfpIzabran("Test_BKTX_PrijemnicaNikadNeOdbija") Then Test_BKTX_PrijemnicaNikadNeOdbija
+    If BfpIzabran("Test_BKTX_ReversSudiSamoAmbalazu") Then Test_BKTX_ReversSudiSamoAmbalazu
+    If BfpIzabran("Test_BKTX_RucniRezimNeGasiPravilo") Then Test_BKTX_RucniRezimNeGasiPravilo
+    If BfpIzabran("Test_BKTX_UvozOtkupaOdbijaTudjBroj") Then Test_BKTX_UvozOtkupaOdbijaTudjBroj
+    If BfpIzabran("Test_BKTX_UvozZbirneOdbijaTudjBroj") Then Test_BKTX_UvozZbirneOdbijaTudjBroj
+    If BfpIzabran("Test_OTP_BrojZauzetPoStaniciIDanu") Then Test_OTP_BrojZauzetPoStaniciIDanu
+    If BfpIzabran("Test_OTP_DraftBrojIzuzimaSebe") Then Test_OTP_DraftBrojIzuzimaSebe
+    If BfpIzabran("Test_ZBR_StorniranBrojIstogVozacaOdbijen") Then Test_ZBR_StorniranBrojIstogVozacaOdbijen
+    If BfpIzabran("Test_BKTX_ReversPisacOdbijaZauzet") Then Test_BKTX_ReversPisacOdbijaZauzet
+    If BfpIzabran("Test_PWA_BezUredjajaUvozPada") Then Test_PWA_BezUredjajaUvozPada
+    If BfpIzabran("Test_OTK_OdvezanVirmanJeRaspolozivAvans") Then Test_OTK_OdvezanVirmanJeRaspolozivAvans
+    If BfpIzabran("Test_OTK_IspravkaIzdatogRoditeljaFailClosed") Then Test_OTK_IspravkaIzdatogRoditeljaFailClosed
+    If BfpIzabran("Test_OTK_IspravkaRollbackVracaSve") Then Test_OTK_IspravkaRollbackVracaSve
+    If BfpIzabran("Test_OTK_SelfHealMigracijeKolona") Then Test_OTK_SelfHealMigracijeKolona
+    If BfpIzabran("Test_OTK_BrojStorniranogSeNePonovoKoristi") Then Test_OTK_BrojStorniranogSeNePonovoKoristi
+    If BfpIzabran("Test_OTK_EkranIPisacImajuIstoPravilo") Then Test_OTK_EkranIPisacImajuIstoPravilo
+    If BfpIzabran("Test_OTK_StornoJednimID") Then Test_OTK_StornoJednimID
+    If BfpIzabran("Test_OTK_PrefillStornaDveKlaseSaStavki") Then Test_OTK_PrefillStornaDveKlaseSaStavki
+    If BfpIzabran("Test_OTK_PrefillStornaBezStavkiPada") Then Test_OTK_PrefillStornaBezStavkiPada
+    If BfpIzabran("Test_OTK_IzvozDveKlaseIzStavki") Then Test_OTK_IzvozDveKlaseIzStavki
+    If BfpIzabran("Test_OTK_IzvozBezStavkiPada") Then Test_OTK_IzvozBezStavkiPada
+    If BfpIzabran("Test_OTK_PushStavkiIdempotentan") Then Test_OTK_PushStavkiIdempotentan
 
     ' PWA ingest -- produkcioni put od Otkup cutover-a. RunMasterSyncSmokeSuite
     ' je zatecena crvena (9/26) i nije u FULL prolazu, pa pokrice mora ovde.
-    Test_PWA_IngestPraviHeaderIStavku
-    Test_PWA_IsoDatumStizeKaoString
-    Test_PWA_NerazresivaKulturaObaraUvoz
-    Test_PWA_IstiCridIstiSadrzajJeNoOp
-    Test_PWA_IstiCridDrugiSadrzajPada
-    Test_PWA_RazresivacImenujeRazlog
-    Test_PWA_KonfliktPoParceliITipu
-    Test_PWA_PrenosiVremeNastanka
-    Test_PWA_StavkeSaZiceIduPoCridu
-    Test_PWA_ManifestNeporavnatNeUvozi
-    Test_OTK_PushIndeksPreskaceRedSaTerena
-    Test_OTP_ZaglavljeBezLinijskihKolona
-    Test_Schema_TragZbirneNosiNovoIme
-    Test_Schema_ZalutalaKolonaSeVracaNaMesto
-    Test_Amb_UgovorPrenosa
-    Test_Amb_DoprinosObavezi
-    Test_Amb_NalogDvosmislenPada
-    Test_Amb_DokumentUgovor
-    Test_Amb_PisacKnjige
-    Test_Amb_KanonskiRedPoImenu
-    Test_Amb_StareKoloneSelfHeal
-    Test_Amb_DeficitIObaveza
-    Test_Amb_ZaglavljeDokumentaPisac
-    Test_Amb_Inv08TxVlasnistvo
-    Test_Amb_NabavkaOtvaraIzdavanje
-    Test_Amb_DokBrojZauzetPoVlasniku
-    Test_Amb_StornoKontraStavVracaSaldo
-    Test_Amb_StornoPosleVracanjaOdbijen
-    Test_Amb_StornoNePraviMinus
-    Test_Amb_UndoStornaOdbijenNadKnjigom
-    Test_Amb_PonovnaStampaBezRedaKnjige
-    Test_Amb_JedanProtivpartnerPoDokumentu
+    If BfpIzabran("Test_PWA_IngestPraviHeaderIStavku") Then Test_PWA_IngestPraviHeaderIStavku
+    If BfpIzabran("Test_PWA_IsoDatumStizeKaoString") Then Test_PWA_IsoDatumStizeKaoString
+    If BfpIzabran("Test_PWA_NerazresivaKulturaObaraUvoz") Then Test_PWA_NerazresivaKulturaObaraUvoz
+    If BfpIzabran("Test_PWA_IstiCridIstiSadrzajJeNoOp") Then Test_PWA_IstiCridIstiSadrzajJeNoOp
+    If BfpIzabran("Test_PWA_IstiCridDrugiSadrzajPada") Then Test_PWA_IstiCridDrugiSadrzajPada
+    If BfpIzabran("Test_PWA_RazresivacImenujeRazlog") Then Test_PWA_RazresivacImenujeRazlog
+    If BfpIzabran("Test_PWA_KonfliktPoParceliITipu") Then Test_PWA_KonfliktPoParceliITipu
+    If BfpIzabran("Test_PWA_PrenosiVremeNastanka") Then Test_PWA_PrenosiVremeNastanka
+    If BfpIzabran("Test_PWA_StavkeSaZiceIduPoCridu") Then Test_PWA_StavkeSaZiceIduPoCridu
+    If BfpIzabran("Test_PWA_ManifestNeporavnatNeUvozi") Then Test_PWA_ManifestNeporavnatNeUvozi
+    If BfpIzabran("Test_OTK_PushIndeksPreskaceRedSaTerena") Then Test_OTK_PushIndeksPreskaceRedSaTerena
+    If BfpIzabran("Test_OTP_ZaglavljeBezLinijskihKolona") Then Test_OTP_ZaglavljeBezLinijskihKolona
+    If BfpIzabran("Test_Schema_TragZbirneNosiNovoIme") Then Test_Schema_TragZbirneNosiNovoIme
+    If BfpIzabran("Test_Schema_ZalutalaKolonaSeVracaNaMesto") Then Test_Schema_ZalutalaKolonaSeVracaNaMesto
+    If BfpIzabran("Test_Amb_UgovorPrenosa") Then Test_Amb_UgovorPrenosa
+    If BfpIzabran("Test_Amb_DoprinosObavezi") Then Test_Amb_DoprinosObavezi
+    If BfpIzabran("Test_Amb_NalogDvosmislenPada") Then Test_Amb_NalogDvosmislenPada
+    If BfpIzabran("Test_Amb_DokumentUgovor") Then Test_Amb_DokumentUgovor
+    If BfpIzabran("Test_Amb_PisacKnjige") Then Test_Amb_PisacKnjige
+    If BfpIzabran("Test_Amb_KanonskiRedPoImenu") Then Test_Amb_KanonskiRedPoImenu
+    If BfpIzabran("Test_Amb_StareKoloneSelfHeal") Then Test_Amb_StareKoloneSelfHeal
+    If BfpIzabran("Test_Amb_DeficitIObaveza") Then Test_Amb_DeficitIObaveza
+    If BfpIzabran("Test_Amb_ZaglavljeDokumentaPisac") Then Test_Amb_ZaglavljeDokumentaPisac
+    If BfpIzabran("Test_Amb_Inv08TxVlasnistvo") Then Test_Amb_Inv08TxVlasnistvo
+    If BfpIzabran("Test_Amb_NabavkaOtvaraIzdavanje") Then Test_Amb_NabavkaOtvaraIzdavanje
+    If BfpIzabran("Test_Amb_DokBrojZauzetPoVlasniku") Then Test_Amb_DokBrojZauzetPoVlasniku
+    If BfpIzabran("Test_Amb_StornoKontraStavVracaSaldo") Then Test_Amb_StornoKontraStavVracaSaldo
+    If BfpIzabran("Test_Amb_StornoPosleVracanjaOdbijen") Then Test_Amb_StornoPosleVracanjaOdbijen
+    If BfpIzabran("Test_Amb_StornoNePraviMinus") Then Test_Amb_StornoNePraviMinus
+    If BfpIzabran("Test_Amb_UndoStornaOdbijenNadKnjigom") Then Test_Amb_UndoStornaOdbijenNadKnjigom
+    If BfpIzabran("Test_Amb_PonovnaStampaBezRedaKnjige") Then Test_Amb_PonovnaStampaBezRedaKnjige
+    If BfpIzabran("Test_Amb_JedanProtivpartnerPoDokumentu") Then Test_Amb_JedanProtivpartnerPoDokumentu
 
     ' Otpremnica skela -- header + stavke + clanstvo. Izvori su otkupi po
     ' NOVOM modelu, pa ovi testovi mere i da se dva nova pisca slazu.
-    Test_OTP_JedanBrojJedanHeader
-    Test_OTP_PredlogCeneJePoKlasi
-    Test_OTP_AmbalazaSeKnjiziPriIzdavanju
-    Test_OTP_StornoVracaGajbeVozacu
-    Test_OTP_PapirStanjeOkoSvogReda
-    Test_OTP_PapirBezVezeKnjige
-    Test_PRJ_AmbalazaDveNogeJedanPar
-    Test_PRJ_StornoVracaGajbe
-    Test_PRJ_LanacSeOdmotavaObrnuto
-    Test_PRJ_EksternaPrijemnicaBlokiraPonistenje
-    Test_PRJ_VlasnikBrojaJeNjenKupac
-    Test_REV_SmerDajeJedanRed
-    Test_REV_UgovorSmeraJeFailClosed
-    Test_REV_AutoBrojJedanNiz
-    Test_KUP_UplataJeSamoNovac
-    Test_RVP_KupcevDokumentJedanRed
-    Test_RVP_BrojJeKupcevINePredlazeSe
-    Test_RVP_DeficitSePotvrdjuje
-    Test_PRJ_PovratIdeSaKlasomKojaPostoji
-    Test_S6_DveKlaseJedanDokument
-    Test_S6_JednaKlasaJednaStavka
-    Test_S6_ManjakObeStraneIzStavki
-    Test_S6_GrupniListStanjeVozaca
-    Test_S6_PaleteCitajuStavke
-    Test_S8R1a_KorekcijaPoIdentitetu
-    Test_S6_CitalacStavkiPrijemniceDrziUgovor
-    Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu
-    Test_S6K4_StornoSkidaPaleteUIstojTx
-    Test_S6K4_FakturisanaSeOdbija
-    Test_S6K4_PreradjenaPaletaObaraStorno
-    Test_S6K4_F8IdentitetDokumenta
-    Test_S6K4_KaskadaSubjekatJeDokument
-    Test_S6K4_PadPosleSvihUpisaVracaSve
-    Test_S6K4_JezgroTraziSnimak
-    Test_S6K4_KontraStavPadneDokumentOstaje
-    Test_S6K4_PaletnaStavkaBezPaleteObaraStorno
-    Test_S6K5_DveKlaseIzStavki
-    Test_S6K5_DelimicnoFakturisanje
-    Test_S6K5_FakturaOdbijaNevazeceStavke
-    Test_S6K5_OkvirOdbijaFakturisanuPreZapisa
-    Test_S6K5_StornoFakturePaPrijemnice
-    Test_S6K5_PadPosleUpisaVracaFakturu
-    Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka
-    Test_S6K5_LinijaBezFaktureJeKvar
-    Test_S7R1_StornoOdbijaFakturuNaSEF
-    Test_S7R1_OdvezanaUplataJeAvans
-    Test_S7R1_StornoBezIDNeTraziPoBroju
-    Test_S7R2_StornoFakturePiseSamoZaglavlje
-    Test_S7R2_AktivnostLinijeIzZaglavlja
-    Test_S7R2_UgovorLinijaFakture
-    Test_S7R2_FakturaStareKoloneSelfHeal
-    Test_S7R2_KapijaUtovaraFailClosed
-    Test_S7R3_SefLinijaNosiStavkuIKlasu
-    Test_S7R3_SefOdbijaNejasnuLiniju
-    Test_S7R3_SefStavkaIdentitet
-    Test_S7R3_SaldoKupcaRobni
-    Test_S7R3_GpPraviloJedno
-    Test_S7R3_UgovorGpIzvor
-    Test_S7R3_HealthIznosNalazi
-    Test_S6K6_F4DokumentProlaziLanac
-    Test_S6K7_OsirocenePaleteDatumPoDokumentu
-    Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
-    Test_AMB_TipVanSifarnikaPisacOdbija
-    Test_ODL24_UgovorPozajmice
-    Test_ODL24_PozajmicaJeSvojDogadjaj
-    Test_AMBINV14_OtpisSeNePokriva
-    Test_KI026_OtpisPisacKapije
-    Test_OTP_F2OtvaraNacrt
-    Test_OTP_MalinaAutoZbirna
-    Test_OTP_AutoIzPwaSpajaKlase
-    Test_OTP_AutoDeliPoTipuAmbalaze
-    Test_OTP_AutoKvarGrupeNeObaraOstale
-    Test_OTP_AutoLanacStizeDoZbirne
-    Test_OTP_ProslednjenOtkupJeIzdatIzvor
-    Test_OTP_AutoSistemskiPadStajeProlaz
-    Test_OTP_PredajaJeJedanUtovar
-    Test_OTP_PredajaPrezivljavaParcijalanSync
-    Test_OTP_NepotpunUtovarNeDobijaDokument
-    Test_OTP_BlokVanManifestaNeUlaziUUtovar
-    Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem
-    Test_OTPVOZ_ZbirnaIDJeTekucaIstina
-    Test_OTPVOZ_StavkeIzKanonaBezCene
-    Test_OTPVOZ_ObjavaSeDokazujeIzvozom
-    Test_ZBR_UvozNosiTacnoPoslateOtpremnice
-    Test_ZBR_UvozOdbijaPrazanIzborITudjuOtpremnicu
-    Test_ZBR_KapijaPustaKadJeIzborScoped
-    Test_ZBR_DispecerPustaScopedIzbor
-    Test_STO_BlokUSastavuOtpremniceSeNeStornira
-    Test_ZBR_SimpleIDupliNeNormalizujuKvar
-    Test_ZBR_StrogUvidNadKvaromNijeValid
-    Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada
-    Test_ZBR_StorniranIzvorAktivneIzdateJeKvar
-    Test_ZBR_VlasnistvoLancaIdePoIdentitetu
-    Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira
-    Test_OTP_IspravkaCuvaIdentitetUtovara
-    Test_OTP_DvePredajeDvaDokumenta
-    Test_OTP_PredajaMesanihVrstaSeOdbija
-    Test_OTP_PredajaBezIdentitetaStaje
-    Test_OTP_PredajaDrugomVozacuJeKonflikt
-    Test_PRED_ListPostajeOtpremnica
-    Test_PRED_StornoOslobadjaBlokUReadModelu
-    Test_OTP_IzdavanjeDelimicanUspeh
-    Test_ZBR_PisacTraziPostojeceVeze
-    Test_ZBR_KanonskaSmeDaSeRazveze
-    Test_ZBR_KanonskoPonistenjeStorniraIzvore
-    Test_ZBR_PonistenjeIzdateNeNormalizujeKvar
-    Test_OTP_NacrtNijeZavrsetakIspravke
-    Test_OTP_MrezaCitaStavke
-    Test_OTP_ZaglavljeBezStavkiObaraCitaoce
-    Test_OTP_IzvestajOMRedPoKlasi
-    Test_OTP_OtpremljenoJeSamoIzdato
-    Test_OTP_VrednostIzIzvoraNePredlogCene
-    Test_OTP_IzdatoStatusPravilo
-    Test_OTP_DveStavkeIsteKlaseObaraCitaoce
-    Test_OTP_F8StornoPoID
-    Test_OTP_IzvorAktivneZbirneSeNeStornira
-    Test_OTK_IzvorAktivneOtpremniceSeNeStornira
-    Test_OTP_RadniStoBiraSamoNacrt
-    Test_OTP_RadniStoVeziTrakaIzdaj
-    Test_OTP_RadniStoListe
-    Test_OTP_IzmenaNacrtaF2
-    Test_OTP_IzdavanjeCitaStrogo
-    Test_OTP_IzdavanjeCitaIzvorStrogo
-    Test_OTP_SpecifikacijaBlokova
-    Test_OTP_NevezaniBlokovi
-    Test_OTP_IspravkaIzdate
-    Test_OTP_KapijaBlokaPoKanonu
-    Test_OPO_IzgubljenBlok
-    Test_HLD_AutoLanacOtpremnica
-    Test_S6K7_LanacNastavljiv
-    Test_S6K7_LanacBezKupcaNePise
-    Test_S6K7_JezgroZbirneHladnjacka
-    Test_S6K7_PwaHladnjackiBlokovi
-    Test_S6K7_RucnaZbirnaOdbijaHladnjacku
-    Test_S6K7_NastavakNosiKupcaRoditelja
-    Test_S6K7_LanacJednaPrijemnica
-    Test_S6K7_VlasnistvoLancaNeCitaKonfig
-    Test_S6K7_LanacSamoOgledalo
-    Test_S6K8_PisacPrjZbr01
-    Test_S6K8_BrojPrijemnicePoKupcu
-    Test_S6K8_PrijemnicaStareKoloneSelfHeal
-    Test_S6K8_PrijemnicaRobaKaoZbirna
-    Test_OTK_IspravkaBlokaUNacrtu
-    Test_OTK_RutaPosleUpisa
-    Test_OTP_ClanstvoBulkStrogo
-    Test_OTP_InvarijantaSabiraStavke
-    Test_OTP_PrefillIspravkeCitaStavke
-    Test_OTP_StavkeSuIzvedene
-    Test_OTP_HeaderNeNosiLinePolja
-    Test_OTP_NepoznatKljucUHeaderuPada
-    Test_OTP_HeaderFKovi
-    Test_OTP_DraftNosiOcekivanje
-    Test_OTP_NapredakPoKlasi
-    Test_OTP_IzdavanjeTraziJednakost
-    Test_OTP_IzdavanjeRevalidiraIzvore
-    Test_OTP_BrutoSeNeSabiraParcijalno
-    Test_OTP_KulturaSeSlaziSaIzvorima
-    Test_OTP_UpdateDraftaMenjaOcekivanje
-    Test_OTP_DraftNothingOcekivanjePada
-    Test_OTP_UpdateStaniceSaPostojecimIzvoromPada
-    Test_OTP_UpdateKultureSaPostojecimIzvoromPada
-    Test_OTP_DvaTipaAmbalazeNeUlazeUDraft
-    Test_OTP_NeizdatOtkupNeUlazi
-    Test_OTP_TipAmbalazeJeHeaderCinjenica
-    Test_OTP_IzvorBezGajbiNeOdredjujeTip
-    Test_OTP_ClanstvoNaNepostojeciOtkupPada
-    Test_OTP_DupliParUClanstvuPada
-    Test_OTP_ClanstvoMutabilnoUDraftu
-    Test_OTP_PosleIzdavanjaClanstvoZamrznuto
-    Test_OTP_IzvorNeSmeDvaPutaAktivno
-    Test_OTP_StorniranIzvorNeUlazi
-    Test_OTP_DveStaniceNeProlaze
-    Test_OTP_BezIzvoraNeProlazi
-    Test_OTP_StariOtkupNeUlazi
-    Test_OTP_PrazanIDFailClosed
-    Test_OTP_OtkupOtpremnicaIDNetaknut
+    If BfpIzabran("Test_OTP_JedanBrojJedanHeader") Then Test_OTP_JedanBrojJedanHeader
+    If BfpIzabran("Test_OTP_PredlogCeneJePoKlasi") Then Test_OTP_PredlogCeneJePoKlasi
+    If BfpIzabran("Test_OTP_AmbalazaSeKnjiziPriIzdavanju") Then Test_OTP_AmbalazaSeKnjiziPriIzdavanju
+    If BfpIzabran("Test_OTP_StornoVracaGajbeVozacu") Then Test_OTP_StornoVracaGajbeVozacu
+    If BfpIzabran("Test_OTP_PapirStanjeOkoSvogReda") Then Test_OTP_PapirStanjeOkoSvogReda
+    If BfpIzabran("Test_OTP_PapirBezVezeKnjige") Then Test_OTP_PapirBezVezeKnjige
+    If BfpIzabran("Test_PRJ_AmbalazaDveNogeJedanPar") Then Test_PRJ_AmbalazaDveNogeJedanPar
+    If BfpIzabran("Test_PRJ_StornoVracaGajbe") Then Test_PRJ_StornoVracaGajbe
+    If BfpIzabran("Test_PRJ_LanacSeOdmotavaObrnuto") Then Test_PRJ_LanacSeOdmotavaObrnuto
+    If BfpIzabran("Test_PRJ_EksternaPrijemnicaBlokiraPonistenje") Then Test_PRJ_EksternaPrijemnicaBlokiraPonistenje
+    If BfpIzabran("Test_PRJ_VlasnikBrojaJeNjenKupac") Then Test_PRJ_VlasnikBrojaJeNjenKupac
+    If BfpIzabran("Test_REV_SmerDajeJedanRed") Then Test_REV_SmerDajeJedanRed
+    If BfpIzabran("Test_REV_UgovorSmeraJeFailClosed") Then Test_REV_UgovorSmeraJeFailClosed
+    If BfpIzabran("Test_REV_AutoBrojJedanNiz") Then Test_REV_AutoBrojJedanNiz
+    If BfpIzabran("Test_KUP_UplataJeSamoNovac") Then Test_KUP_UplataJeSamoNovac
+    If BfpIzabran("Test_RVP_KupcevDokumentJedanRed") Then Test_RVP_KupcevDokumentJedanRed
+    If BfpIzabran("Test_RVP_BrojJeKupcevINePredlazeSe") Then Test_RVP_BrojJeKupcevINePredlazeSe
+    If BfpIzabran("Test_RVP_DeficitSePotvrdjuje") Then Test_RVP_DeficitSePotvrdjuje
+    If BfpIzabran("Test_PRJ_PovratIdeSaKlasomKojaPostoji") Then Test_PRJ_PovratIdeSaKlasomKojaPostoji
+    If BfpIzabran("Test_S6_DveKlaseJedanDokument") Then Test_S6_DveKlaseJedanDokument
+    If BfpIzabran("Test_S6_JednaKlasaJednaStavka") Then Test_S6_JednaKlasaJednaStavka
+    If BfpIzabran("Test_S6_ManjakObeStraneIzStavki") Then Test_S6_ManjakObeStraneIzStavki
+    If BfpIzabran("Test_S6_GrupniListStanjeVozaca") Then Test_S6_GrupniListStanjeVozaca
+    If BfpIzabran("Test_S6_PaleteCitajuStavke") Then Test_S6_PaleteCitajuStavke
+    If BfpIzabran("Test_S8R1a_KorekcijaPoIdentitetu") Then Test_S8R1a_KorekcijaPoIdentitetu
+    If BfpIzabran("Test_S6_CitalacStavkiPrijemniceDrziUgovor") Then Test_S6_CitalacStavkiPrijemniceDrziUgovor
+    If BfpIzabran("Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu") Then Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu
+    If BfpIzabran("Test_S6K4_StornoSkidaPaleteUIstojTx") Then Test_S6K4_StornoSkidaPaleteUIstojTx
+    If BfpIzabran("Test_S6K4_FakturisanaSeOdbija") Then Test_S6K4_FakturisanaSeOdbija
+    If BfpIzabran("Test_S6K4_PreradjenaPaletaObaraStorno") Then Test_S6K4_PreradjenaPaletaObaraStorno
+    If BfpIzabran("Test_S6K4_F8IdentitetDokumenta") Then Test_S6K4_F8IdentitetDokumenta
+    If BfpIzabran("Test_S6K4_KaskadaSubjekatJeDokument") Then Test_S6K4_KaskadaSubjekatJeDokument
+    If BfpIzabran("Test_S6K4_PadPosleSvihUpisaVracaSve") Then Test_S6K4_PadPosleSvihUpisaVracaSve
+    If BfpIzabran("Test_S6K4_JezgroTraziSnimak") Then Test_S6K4_JezgroTraziSnimak
+    If BfpIzabran("Test_S6K4_KontraStavPadneDokumentOstaje") Then Test_S6K4_KontraStavPadneDokumentOstaje
+    If BfpIzabran("Test_S6K4_PaletnaStavkaBezPaleteObaraStorno") Then Test_S6K4_PaletnaStavkaBezPaleteObaraStorno
+    If BfpIzabran("Test_S6K5_DveKlaseIzStavki") Then Test_S6K5_DveKlaseIzStavki
+    If BfpIzabran("Test_S6K5_DelimicnoFakturisanje") Then Test_S6K5_DelimicnoFakturisanje
+    If BfpIzabran("Test_S6K5_FakturaOdbijaNevazeceStavke") Then Test_S6K5_FakturaOdbijaNevazeceStavke
+    If BfpIzabran("Test_S6K5_OkvirOdbijaFakturisanuPreZapisa") Then Test_S6K5_OkvirOdbijaFakturisanuPreZapisa
+    If BfpIzabran("Test_S6K5_StornoFakturePaPrijemnice") Then Test_S6K5_StornoFakturePaPrijemnice
+    If BfpIzabran("Test_S6K5_PadPosleUpisaVracaFakturu") Then Test_S6K5_PadPosleUpisaVracaFakturu
+    If BfpIzabran("Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka") Then Test_S6K5_ZajednickaFakturaBezDvostrukogOstatka
+    If BfpIzabran("Test_S6K5_LinijaBezFaktureJeKvar") Then Test_S6K5_LinijaBezFaktureJeKvar
+    If BfpIzabran("Test_S7R1_StornoOdbijaFakturuNaSEF") Then Test_S7R1_StornoOdbijaFakturuNaSEF
+    If BfpIzabran("Test_S7R1_OdvezanaUplataJeAvans") Then Test_S7R1_OdvezanaUplataJeAvans
+    If BfpIzabran("Test_S7R1_StornoBezIDNeTraziPoBroju") Then Test_S7R1_StornoBezIDNeTraziPoBroju
+    If BfpIzabran("Test_S7R2_StornoFakturePiseSamoZaglavlje") Then Test_S7R2_StornoFakturePiseSamoZaglavlje
+    If BfpIzabran("Test_S7R2_AktivnostLinijeIzZaglavlja") Then Test_S7R2_AktivnostLinijeIzZaglavlja
+    If BfpIzabran("Test_S7R2_UgovorLinijaFakture") Then Test_S7R2_UgovorLinijaFakture
+    If BfpIzabran("Test_S7R2_FakturaStareKoloneSelfHeal") Then Test_S7R2_FakturaStareKoloneSelfHeal
+    If BfpIzabran("Test_S7R2_KapijaUtovaraFailClosed") Then Test_S7R2_KapijaUtovaraFailClosed
+    If BfpIzabran("Test_S7R3_SefLinijaNosiStavkuIKlasu") Then Test_S7R3_SefLinijaNosiStavkuIKlasu
+    If BfpIzabran("Test_S7R3_SefOdbijaNejasnuLiniju") Then Test_S7R3_SefOdbijaNejasnuLiniju
+    If BfpIzabran("Test_S7R3_SefStavkaIdentitet") Then Test_S7R3_SefStavkaIdentitet
+    If BfpIzabran("Test_S7R3_SaldoKupcaRobni") Then Test_S7R3_SaldoKupcaRobni
+    If BfpIzabran("Test_S7R3_GpPraviloJedno") Then Test_S7R3_GpPraviloJedno
+    If BfpIzabran("Test_S7R3_UgovorGpIzvor") Then Test_S7R3_UgovorGpIzvor
+    If BfpIzabran("Test_S7R3_HealthIznosNalazi") Then Test_S7R3_HealthIznosNalazi
+    If BfpIzabran("Test_S6K6_F4DokumentProlaziLanac") Then Test_S6K6_F4DokumentProlaziLanac
+    If BfpIzabran("Test_S6K7_OsirocenePaleteDatumPoDokumentu") Then Test_S6K7_OsirocenePaleteDatumPoDokumentu
+    If BfpIzabran("Test_AMB_PitanjeManjkaOtkupImenujeKooperanta") Then Test_AMB_PitanjeManjkaOtkupImenujeKooperanta
+    If BfpIzabran("Test_AMB_TipVanSifarnikaPisacOdbija") Then Test_AMB_TipVanSifarnikaPisacOdbija
+    If BfpIzabran("Test_ODL24_UgovorPozajmice") Then Test_ODL24_UgovorPozajmice
+    If BfpIzabran("Test_ODL24_PozajmicaJeSvojDogadjaj") Then Test_ODL24_PozajmicaJeSvojDogadjaj
+    If BfpIzabran("Test_AMBINV14_OtpisSeNePokriva") Then Test_AMBINV14_OtpisSeNePokriva
+    If BfpIzabran("Test_KI026_OtpisPisacKapije") Then Test_KI026_OtpisPisacKapije
+    If BfpIzabran("Test_OTP_F2OtvaraNacrt") Then Test_OTP_F2OtvaraNacrt
+    If BfpIzabran("Test_OTP_MalinaAutoZbirna") Then Test_OTP_MalinaAutoZbirna
+    If BfpIzabran("Test_OTP_AutoIzPwaSpajaKlase") Then Test_OTP_AutoIzPwaSpajaKlase
+    If BfpIzabran("Test_OTP_AutoDeliPoTipuAmbalaze") Then Test_OTP_AutoDeliPoTipuAmbalaze
+    If BfpIzabran("Test_OTP_AutoKvarGrupeNeObaraOstale") Then Test_OTP_AutoKvarGrupeNeObaraOstale
+    If BfpIzabran("Test_OTP_AutoLanacStizeDoZbirne") Then Test_OTP_AutoLanacStizeDoZbirne
+    If BfpIzabran("Test_OTP_ProslednjenOtkupJeIzdatIzvor") Then Test_OTP_ProslednjenOtkupJeIzdatIzvor
+    If BfpIzabran("Test_OTP_AutoSistemskiPadStajeProlaz") Then Test_OTP_AutoSistemskiPadStajeProlaz
+    If BfpIzabran("Test_OTP_PredajaJeJedanUtovar") Then Test_OTP_PredajaJeJedanUtovar
+    If BfpIzabran("Test_OTP_PredajaPrezivljavaParcijalanSync") Then Test_OTP_PredajaPrezivljavaParcijalanSync
+    If BfpIzabran("Test_OTP_NepotpunUtovarNeDobijaDokument") Then Test_OTP_NepotpunUtovarNeDobijaDokument
+    If BfpIzabran("Test_OTP_BlokVanManifestaNeUlaziUUtovar") Then Test_OTP_BlokVanManifestaNeUlaziUUtovar
+    If BfpIzabran("Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem") Then Test_OTPVOZ_IzvozNosiSamoIzdateSaVozacem
+    If BfpIzabran("Test_OTPVOZ_ZbirnaIDJeTekucaIstina") Then Test_OTPVOZ_ZbirnaIDJeTekucaIstina
+    If BfpIzabran("Test_OTPVOZ_StavkeIzKanonaBezCene") Then Test_OTPVOZ_StavkeIzKanonaBezCene
+    If BfpIzabran("Test_OTPVOZ_ObjavaSeDokazujeIzvozom") Then Test_OTPVOZ_ObjavaSeDokazujeIzvozom
+    If BfpIzabran("Test_ZBR_UvozNosiTacnoPoslateOtpremnice") Then Test_ZBR_UvozNosiTacnoPoslateOtpremnice
+    If BfpIzabran("Test_ZBR_UvozOdbijaPrazanIzborITudjuOtpremnicu") Then Test_ZBR_UvozOdbijaPrazanIzborITudjuOtpremnicu
+    If BfpIzabran("Test_ZBR_KapijaPustaKadJeIzborScoped") Then Test_ZBR_KapijaPustaKadJeIzborScoped
+    If BfpIzabran("Test_ZBR_DispecerPustaScopedIzbor") Then Test_ZBR_DispecerPustaScopedIzbor
+    If BfpIzabran("Test_STO_BlokUSastavuOtpremniceSeNeStornira") Then Test_STO_BlokUSastavuOtpremniceSeNeStornira
+    If BfpIzabran("Test_ZBR_SimpleIDupliNeNormalizujuKvar") Then Test_ZBR_SimpleIDupliNeNormalizujuKvar
+    If BfpIzabran("Test_ZBR_StrogUvidNadKvaromNijeValid") Then Test_ZBR_StrogUvidNadKvaromNijeValid
+    If BfpIzabran("Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada") Then Test_ZBR_ClanstvoNaNepostojecuOtpremnicuPada
+    If BfpIzabran("Test_ZBR_StorniranIzvorAktivneIzdateJeKvar") Then Test_ZBR_StorniranIzvorAktivneIzdateJeKvar
+    If BfpIzabran("Test_ZBR_VlasnistvoLancaIdePoIdentitetu") Then Test_ZBR_VlasnistvoLancaIdePoIdentitetu
+    If BfpIzabran("Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira") Then Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira
+    If BfpIzabran("Test_OTP_IspravkaCuvaIdentitetUtovara") Then Test_OTP_IspravkaCuvaIdentitetUtovara
+    If BfpIzabran("Test_OTP_DvePredajeDvaDokumenta") Then Test_OTP_DvePredajeDvaDokumenta
+    If BfpIzabran("Test_OTP_PredajaMesanihVrstaSeOdbija") Then Test_OTP_PredajaMesanihVrstaSeOdbija
+    If BfpIzabran("Test_OTP_PredajaBezIdentitetaStaje") Then Test_OTP_PredajaBezIdentitetaStaje
+    If BfpIzabran("Test_OTP_PredajaDrugomVozacuJeKonflikt") Then Test_OTP_PredajaDrugomVozacuJeKonflikt
+    If BfpIzabran("Test_PRED_ListPostajeOtpremnica") Then Test_PRED_ListPostajeOtpremnica
+    If BfpIzabran("Test_PRED_StornoOslobadjaBlokUReadModelu") Then Test_PRED_StornoOslobadjaBlokUReadModelu
+    If BfpIzabran("Test_OTP_IzdavanjeDelimicanUspeh") Then Test_OTP_IzdavanjeDelimicanUspeh
+    If BfpIzabran("Test_ZBR_PisacTraziPostojeceVeze") Then Test_ZBR_PisacTraziPostojeceVeze
+    If BfpIzabran("Test_ZBR_KanonskaSmeDaSeRazveze") Then Test_ZBR_KanonskaSmeDaSeRazveze
+    If BfpIzabran("Test_ZBR_KanonskoPonistenjeStorniraIzvore") Then Test_ZBR_KanonskoPonistenjeStorniraIzvore
+    If BfpIzabran("Test_ZBR_PonistenjeIzdateNeNormalizujeKvar") Then Test_ZBR_PonistenjeIzdateNeNormalizujeKvar
+    If BfpIzabran("Test_OTP_NacrtNijeZavrsetakIspravke") Then Test_OTP_NacrtNijeZavrsetakIspravke
+    If BfpIzabran("Test_OTP_MrezaCitaStavke") Then Test_OTP_MrezaCitaStavke
+    If BfpIzabran("Test_OTP_ZaglavljeBezStavkiObaraCitaoce") Then Test_OTP_ZaglavljeBezStavkiObaraCitaoce
+    If BfpIzabran("Test_OTP_IzvestajOMRedPoKlasi") Then Test_OTP_IzvestajOMRedPoKlasi
+    If BfpIzabran("Test_OTP_OtpremljenoJeSamoIzdato") Then Test_OTP_OtpremljenoJeSamoIzdato
+    If BfpIzabran("Test_OTP_VrednostIzIzvoraNePredlogCene") Then Test_OTP_VrednostIzIzvoraNePredlogCene
+    If BfpIzabran("Test_OTP_IzdatoStatusPravilo") Then Test_OTP_IzdatoStatusPravilo
+    If BfpIzabran("Test_OTP_DveStavkeIsteKlaseObaraCitaoce") Then Test_OTP_DveStavkeIsteKlaseObaraCitaoce
+    If BfpIzabran("Test_OTP_F8StornoPoID") Then Test_OTP_F8StornoPoID
+    If BfpIzabran("Test_OTP_IzvorAktivneZbirneSeNeStornira") Then Test_OTP_IzvorAktivneZbirneSeNeStornira
+    If BfpIzabran("Test_OTK_IzvorAktivneOtpremniceSeNeStornira") Then Test_OTK_IzvorAktivneOtpremniceSeNeStornira
+    If BfpIzabran("Test_OTP_RadniStoBiraSamoNacrt") Then Test_OTP_RadniStoBiraSamoNacrt
+    If BfpIzabran("Test_OTP_RadniStoVeziTrakaIzdaj") Then Test_OTP_RadniStoVeziTrakaIzdaj
+    If BfpIzabran("Test_OTP_RadniStoListe") Then Test_OTP_RadniStoListe
+    If BfpIzabran("Test_OTP_IzmenaNacrtaF2") Then Test_OTP_IzmenaNacrtaF2
+    If BfpIzabran("Test_OTP_IzdavanjeCitaStrogo") Then Test_OTP_IzdavanjeCitaStrogo
+    If BfpIzabran("Test_OTP_IzdavanjeCitaIzvorStrogo") Then Test_OTP_IzdavanjeCitaIzvorStrogo
+    If BfpIzabran("Test_OTP_SpecifikacijaBlokova") Then Test_OTP_SpecifikacijaBlokova
+    If BfpIzabran("Test_OTP_NevezaniBlokovi") Then Test_OTP_NevezaniBlokovi
+    If BfpIzabran("Test_OTP_IspravkaIzdate") Then Test_OTP_IspravkaIzdate
+    If BfpIzabran("Test_OTP_KapijaBlokaPoKanonu") Then Test_OTP_KapijaBlokaPoKanonu
+    If BfpIzabran("Test_OPO_IzgubljenBlok") Then Test_OPO_IzgubljenBlok
+    If BfpIzabran("Test_HLD_AutoLanacOtpremnica") Then Test_HLD_AutoLanacOtpremnica
+    If BfpIzabran("Test_S6K7_LanacNastavljiv") Then Test_S6K7_LanacNastavljiv
+    If BfpIzabran("Test_S6K7_LanacBezKupcaNePise") Then Test_S6K7_LanacBezKupcaNePise
+    If BfpIzabran("Test_S6K7_JezgroZbirneHladnjacka") Then Test_S6K7_JezgroZbirneHladnjacka
+    If BfpIzabran("Test_S6K7_PwaHladnjackiBlokovi") Then Test_S6K7_PwaHladnjackiBlokovi
+    If BfpIzabran("Test_S6K7_RucnaZbirnaOdbijaHladnjacku") Then Test_S6K7_RucnaZbirnaOdbijaHladnjacku
+    If BfpIzabran("Test_S6K7_NastavakNosiKupcaRoditelja") Then Test_S6K7_NastavakNosiKupcaRoditelja
+    If BfpIzabran("Test_S6K7_LanacJednaPrijemnica") Then Test_S6K7_LanacJednaPrijemnica
+    If BfpIzabran("Test_S6K7_VlasnistvoLancaNeCitaKonfig") Then Test_S6K7_VlasnistvoLancaNeCitaKonfig
+    If BfpIzabran("Test_S6K7_LanacSamoOgledalo") Then Test_S6K7_LanacSamoOgledalo
+    If BfpIzabran("Test_S6K8_PisacPrjZbr01") Then Test_S6K8_PisacPrjZbr01
+    If BfpIzabran("Test_S6K8_BrojPrijemnicePoKupcu") Then Test_S6K8_BrojPrijemnicePoKupcu
+    If BfpIzabran("Test_S6K8_PrijemnicaStareKoloneSelfHeal") Then Test_S6K8_PrijemnicaStareKoloneSelfHeal
+    If BfpIzabran("Test_S6K8_PrijemnicaRobaKaoZbirna") Then Test_S6K8_PrijemnicaRobaKaoZbirna
+    If BfpIzabran("Test_OTK_IspravkaBlokaUNacrtu") Then Test_OTK_IspravkaBlokaUNacrtu
+    If BfpIzabran("Test_OTK_RutaPosleUpisa") Then Test_OTK_RutaPosleUpisa
+    If BfpIzabran("Test_OTP_ClanstvoBulkStrogo") Then Test_OTP_ClanstvoBulkStrogo
+    If BfpIzabran("Test_OTP_InvarijantaSabiraStavke") Then Test_OTP_InvarijantaSabiraStavke
+    If BfpIzabran("Test_OTP_PrefillIspravkeCitaStavke") Then Test_OTP_PrefillIspravkeCitaStavke
+    If BfpIzabran("Test_OTP_StavkeSuIzvedene") Then Test_OTP_StavkeSuIzvedene
+    If BfpIzabran("Test_OTP_HeaderNeNosiLinePolja") Then Test_OTP_HeaderNeNosiLinePolja
+    If BfpIzabran("Test_OTP_NepoznatKljucUHeaderuPada") Then Test_OTP_NepoznatKljucUHeaderuPada
+    If BfpIzabran("Test_OTP_HeaderFKovi") Then Test_OTP_HeaderFKovi
+    If BfpIzabran("Test_OTP_DraftNosiOcekivanje") Then Test_OTP_DraftNosiOcekivanje
+    If BfpIzabran("Test_OTP_NapredakPoKlasi") Then Test_OTP_NapredakPoKlasi
+    If BfpIzabran("Test_OTP_IzdavanjeTraziJednakost") Then Test_OTP_IzdavanjeTraziJednakost
+    If BfpIzabran("Test_OTP_IzdavanjeRevalidiraIzvore") Then Test_OTP_IzdavanjeRevalidiraIzvore
+    If BfpIzabran("Test_OTP_BrutoSeNeSabiraParcijalno") Then Test_OTP_BrutoSeNeSabiraParcijalno
+    If BfpIzabran("Test_OTP_KulturaSeSlaziSaIzvorima") Then Test_OTP_KulturaSeSlaziSaIzvorima
+    If BfpIzabran("Test_OTP_UpdateDraftaMenjaOcekivanje") Then Test_OTP_UpdateDraftaMenjaOcekivanje
+    If BfpIzabran("Test_OTP_DraftNothingOcekivanjePada") Then Test_OTP_DraftNothingOcekivanjePada
+    If BfpIzabran("Test_OTP_UpdateStaniceSaPostojecimIzvoromPada") Then Test_OTP_UpdateStaniceSaPostojecimIzvoromPada
+    If BfpIzabran("Test_OTP_UpdateKultureSaPostojecimIzvoromPada") Then Test_OTP_UpdateKultureSaPostojecimIzvoromPada
+    If BfpIzabran("Test_OTP_DvaTipaAmbalazeNeUlazeUDraft") Then Test_OTP_DvaTipaAmbalazeNeUlazeUDraft
+    If BfpIzabran("Test_OTP_NeizdatOtkupNeUlazi") Then Test_OTP_NeizdatOtkupNeUlazi
+    If BfpIzabran("Test_OTP_TipAmbalazeJeHeaderCinjenica") Then Test_OTP_TipAmbalazeJeHeaderCinjenica
+    If BfpIzabran("Test_OTP_IzvorBezGajbiNeOdredjujeTip") Then Test_OTP_IzvorBezGajbiNeOdredjujeTip
+    If BfpIzabran("Test_OTP_ClanstvoNaNepostojeciOtkupPada") Then Test_OTP_ClanstvoNaNepostojeciOtkupPada
+    If BfpIzabran("Test_OTP_DupliParUClanstvuPada") Then Test_OTP_DupliParUClanstvuPada
+    If BfpIzabran("Test_OTP_ClanstvoMutabilnoUDraftu") Then Test_OTP_ClanstvoMutabilnoUDraftu
+    If BfpIzabran("Test_OTP_PosleIzdavanjaClanstvoZamrznuto") Then Test_OTP_PosleIzdavanjaClanstvoZamrznuto
+    If BfpIzabran("Test_OTP_IzvorNeSmeDvaPutaAktivno") Then Test_OTP_IzvorNeSmeDvaPutaAktivno
+    If BfpIzabran("Test_OTP_StorniranIzvorNeUlazi") Then Test_OTP_StorniranIzvorNeUlazi
+    If BfpIzabran("Test_OTP_DveStaniceNeProlaze") Then Test_OTP_DveStaniceNeProlaze
+    If BfpIzabran("Test_OTP_BezIzvoraNeProlazi") Then Test_OTP_BezIzvoraNeProlazi
+    If BfpIzabran("Test_OTP_StariOtkupNeUlazi") Then Test_OTP_StariOtkupNeUlazi
+    If BfpIzabran("Test_OTP_PrazanIDFailClosed") Then Test_OTP_PrazanIDFailClosed
+    If BfpIzabran("Test_OTP_OtkupOtpremnicaIDNetaknut") Then Test_OTP_OtkupOtpremnicaIDNetaknut
+
+    If BfpIzabran("Test_BFP_IzborBiraCeloIme") Then Test_BFP_IzborBiraCeloIme
+
+    ' Trazen a nepusten test je PAD, ne tisina (v. modTest.ProveriIzbor).
+    BfpProveriIzbor
+    BfpZavrsiVreme
 
     On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
     EndRun
@@ -505,7 +535,143 @@ Public Sub RunBusinessFlowProSuite()
 
 EH:
     LogFatal "RunBusinessFlowProSuite", Err.Number, Err.description
+    BfpZavrsiVreme
     EndRun
+End Sub
+
+' Isti prolaz kao RunBusinessFlowProSuite, ali samo nad imenovanim testovima, u
+' redosledu suite-a; seed se pusta uvek. Spisak je "Test_A,Test_B"; prazan
+' spisak je greska, ne pun run. Zove ga tools/run_vba.py --test.
+Public Sub RunBusinessFlowProIzbor(ByVal spisak As String)
+    m_BfpIzborZahtev = BfpNormalizujIzbor(spisak)
+    If Len(m_BfpIzborZahtev) = 0 Then
+        Err.Raise ERR_BFP_SUITE_FAILED, "modBusinessFlowProTests.RunBusinessFlowProIzbor", _
+                  "IZBOR: prazan spisak testova"
+    End If
+    RunBusinessFlowProSuite
+End Sub
+
+' --- izbor testova i vreme po koraku ----------------------------------------
+'
+' Blizanac pravila iz modTest (NormalizujIzbor / IzborSadrzi / PreuzmiIzbor /
+' IzborNepusteni). Kopija je namerna: ovaj modul ne sme da zavisi od modTest.
+' Menjas pravilo ovde -- menjaj i tamo; tvrdnje: Test_BFP_IzborBiraCeloIme i
+' modTest.T_TestIzbor_TacnoImeIJednokratno.
+
+Private Function BfpNormalizujIzbor(ByVal spisak As String) As String
+    Dim delovi As Variant
+    Dim i As Long
+    Dim ime As String, izlaz As String
+    delovi = Split(spisak, ",")
+    For i = LBound(delovi) To UBound(delovi)
+        ime = Trim$(CStr(delovi(i)))
+        If Len(ime) > 0 Then izlaz = izlaz & "," & ime
+    Next i
+    If Len(izlaz) > 0 Then BfpNormalizujIzbor = izlaz & ","
+End Function
+
+Private Function BfpIzborSadrzi(ByVal izbor As String, ByVal ime As String) As Boolean
+    BfpIzborSadrzi = (InStr(1, izbor, "," & ime & ",", vbTextCompare) > 0)
+End Function
+
+Private Function BfpPreuzmiIzbor(ByRef zahtev As String) As String
+    BfpPreuzmiIzbor = zahtev
+    zahtev = ""
+End Function
+
+Private Function BfpIzborNepusteni(ByVal izbor As String, ByVal pusteni As String) As String
+    Dim delovi As Variant
+    Dim i As Long
+    Dim izlaz As String
+    delovi = Split(izbor, ",")
+    For i = LBound(delovi) To UBound(delovi)
+        If Len(delovi(i)) > 0 Then
+            If Not BfpIzborSadrzi(pusteni, CStr(delovi(i))) Then
+                If Len(izlaz) > 0 Then izlaz = izlaz & ","
+                izlaz = izlaz & CStr(delovi(i))
+            End If
+        End If
+    Next i
+    BfpIzborNepusteni = izlaz
+End Function
+
+' Da li se test pusta u ovom prolazu. Zatvara vreme prethodnog koraka u SVAKOM
+' slucaju, a otvara svoje samo kad se pusta -- preskocen test nema vreme.
+Private Function BfpIzabran(ByVal ime As String) As Boolean
+    BfpKorakZatvori
+    If Len(m_BfpIzbor) > 0 Then
+        If Not BfpIzborSadrzi(m_BfpIzbor, ime) Then Exit Function
+        m_BfpPusteni = m_BfpPusteni & "," & ime & ","
+    End If
+    m_BfpKorak = ime
+    m_BfpKorakT0 = Timer
+    BfpIzabran = True
+End Function
+
+Private Sub BfpKorakPocni(ByVal ime As String)
+    BfpKorakZatvori
+    m_BfpKorak = ime
+    m_BfpKorakT0 = Timer
+End Sub
+
+' Str$ umesto Format$: tacka bez obzira na regionalna podesavanja. Timer se u
+' ponoc vraca na nulu, pa negativna razlika znaci prelaz dana.
+Private Sub BfpKorakZatvori()
+    Dim d As Double
+    If Len(m_BfpKorak) = 0 Then Exit Sub
+    d = CDbl(Timer) - CDbl(m_BfpKorakT0)
+    If d < 0 Then d = d + 86400#
+    m_BfpVreme = m_BfpVreme & Trim$(Str$(Round(d, 3))) & vbTab & "KORAK" & _
+                 vbTab & m_BfpKorak & vbLf
+    m_BfpKorak = ""
+End Sub
+
+Private Sub BfpProveriIzbor()
+    Dim nepusteni As Variant
+    Dim i As Long
+    If Len(m_BfpIzbor) = 0 Then Exit Sub
+    nepusteni = Split(BfpIzborNepusteni(m_BfpIzbor, m_BfpPusteni), ",")
+    For i = LBound(nepusteni) To UBound(nepusteni)
+        LogFail "IZBOR " & CStr(nepusteni(i)), _
+                "test se ne pusta u RunBusinessFlowProSuite (nepoznato ime ili nema poziva)"
+    Next i
+End Sub
+
+' Dijagnostika, ne verdikt: neuspeh upisa ne sme da obori prolaz, ni da ostavi
+' gresku u Err -- zove se i iz EH, pred EndRun.
+Private Sub BfpZavrsiVreme()
+    Dim fnum As Integer
+    On Error Resume Next
+    BfpKorakZatvori
+    fnum = FreeFile
+    Open ThisWorkbook.path & Application.PathSeparator & "last_run_bfp_vreme.txt" _
+        For Output As #fnum
+    Print #fnum, m_BfpVreme;
+    Close #fnum
+    Err.Clear
+End Sub
+
+' IZBOR TESTOVA BIRA CELO IME I TRAJE JEDAN PROLAZ -- isti ugovor kao
+' modTest.T_TestIzbor_TacnoImeIJednokratno, nad kopijom pravila u ovom modulu.
+' Ciste funkcije: ne cita ni ne pise tabele.
+Private Sub Test_BFP_IzborBiraCeloIme()
+    Dim zahtev As String
+
+    AssertEquals ",Test_A,Test_B,", BfpNormalizujIzbor(" Test_A, ,Test_B "), _
+                 "BFP izbor se normalizuje u ,ime,ime,"
+    AssertEquals "", BfpNormalizujIzbor(" , "), "BFP spisak bez imena je prazan izbor"
+
+    AssertTrue BfpIzborSadrzi(",Test_A,Test_B,", "Test_B"), "BFP izbor nalazi svoje ime"
+    AssertFalse BfpIzborSadrzi(",Test_AB,", "Test_A"), "BFP izbor Test_AB ne pusta Test_A"
+    AssertFalse BfpIzborSadrzi(",Test_A,", "Test_AB"), "BFP izbor Test_A ne pusta Test_AB"
+
+    AssertEquals "Test_B", BfpIzborNepusteni(",Test_A,Test_B,", ",Test_A,"), _
+                 "BFP nepusten test iz izbora se imenuje"
+
+    zahtev = ",Test_X,"
+    AssertEquals ",Test_X,", BfpPreuzmiIzbor(zahtev), "BFP prolaz preuzima zahtevan izbor"
+    AssertEquals "", BfpPreuzmiIzbor(zahtev), _
+                 "BFP izbor traje jedan prolaz -- sledeci prolaz je pun"
 End Sub
 
 Public Sub RunBusinessFlowProSeedOnly()

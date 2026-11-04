@@ -768,6 +768,63 @@ putanjom koja nije VBA fajl — na primer baš `tools/sabotaza.py`, gde se greš
 katalogu i pravi — i tada je `files` prazno, pa se izlazilo sa `0` pre ijedne od
 tih provera.
 
+### Izbor testova i vreme po testu — `--test`, `--izbor`, `--izolacija`
+
+Svaka sabotaža u katalogu već imenuje **svoj** test, a prolaz je do sada puštao
+**celu** suite (RunAllTests ~80 s, BFP ~150 s). Izbor pušta samo imenovane
+testove, **u redosledu suite-a**:
+
+```bash
+python tools/run_vba.py --suite RunAllTests --test T_ParseDatum_Ugovor
+python tools/dokaz.py amb-pisac --izbor            # samo ciljani testovi
+python tools/dokaz.py amb-pisac --izbor --grupe    # i grupisano
+python tools/dokaz.py --izolacija                  # koji ciljani testovi ne prolaze SAMI
+```
+
+- **Ulazne tačke:** `modTest.RunAllTestsIzbor` i
+  `modBusinessFlowProTests.RunBusinessFlowProIzbor`, upisane kao `izbor` u
+  `SUITES` (`run_vba.py`). Suite bez tog ključa (banka) `--test` odbija, a
+  `dokaz.py --izbor` je meri celu. `vba_gate --popis` (nalaz `IZBOR`) obara CI
+  kad ulazna tačka iz kataloga ne postoji ili ne prima tačno jedan argument.
+- **Izbor traje jedan prolaz.** Ulazna tačka postavi zahtev, a suite ga
+  **potroši kao prvu naredbu** (`PreuzmiIzbor` / `BfpPreuzmiIzbor`). Izbor koji
+  bi preživeo pretvorio bi sledeći goli `RunAllTests` u tih deo suite-a, i to
+  zelen. Pravilo meri `T_TestIzbor_TacnoImeIJednokratno` (i BFP blizanac
+  `Test_BFP_IzborBiraCeloIme`). Da ga ulazna tačka zaista zove meri
+  `run_vba --self-test` nad izvorom, jer test to ne može da izmeri iznutra.
+- **Traži se celo ime** (`",T_A,"`), pa izbor `T_A` ne pušta `T_AB`. Tražen a
+  nepušten test je **FAIL** (`IZBOR: ...`), ne tišina: pogrešno ime bi inače dalo
+  zelen prolaz sa nula testova.
+- **BFP poziv ide kroz `BfpIzabran`.** Nov test u `RunBusinessFlowProSuite` se
+  piše `If BfpIzabran("Test_X") Then Test_X`. Goli `Test_X` obara
+  `run_vba --self-test`: izbor ga ne bi preskočio, a vreme bi pripisao tuđem
+  koraku. Seed se pušta uvek.
+- **Izbor nije dokaz cele suite.** `vba_gate` za takav prolaz ne upisuje marker
+  zelenog, a izveštaj ga nosi kao red `IZBOR`.
+
+**Baza se tvrdi nad istim izborom.** Pre mutacije `dokaz.py --izbor` pusti isti
+spisak testova nad čistim izvorom, i on mora biti zelen. Test koji **sam** pada
+(zavisi od stanja koje mu ostavlja raniji test, jer je redosled u `RunAllTests`
+nosiv) bi inače „dokazao" svaku sabotažu nad sobom. Takav član se ne gubi:
+
+- grupa sa crvenom bazom se rasturi na pojedinačna merenja;
+- test koji ni sam ne prolazi meri se **celom suite-om**, uz bazu cele suite;
+- baza se pamti po izboru, pa više sabotaža nad istim testom plaća jednu.
+
+`--izolacija` pušta svaki ciljani test sam, bez mutacija, i nabraja one koji ne
+prolaze. Taj spisak je ujedno i mera koliko testova zavisi od redosleda.
+
+**Vreme po testu** ide u `last_run_vreme.txt` / `last_run_bfp_vreme.txt` pored
+sveske (`sekunde<TAB>status<TAB>ime`), a `run_vba` ispisuje najsporijih 10 kao
+blok `VREME`. To je dijagnostika, ne verdikt: neuspeh upisa ne obara prolaz. Kod
+BFP-a je jedinica **korak** (test ili seed), jer verdikt tamo nosi tvrdnja.
+
+**Šta je izmereno, a šta nije.** Pravila izbora u Python-u (`dokaz.py`,
+`run_vba.py`, `vba_gate.py`) imaju `--self-test` i dvosmerni dokaz. VBA strana
+(ulazne tačke, `BfpIzabran`, upis vremena) se u Linux sesiji ne izvršava. Prvi
+prolaz na Windows-u je zato `--izolacija` nad rezom, pa tek onda `--izbor`.
+Sabotaže `izbor-*` / `bfp-izbor-*` obaraju dva nova VBA testa.
+
 ## Trijaža masovnih padova
 
 ```bash

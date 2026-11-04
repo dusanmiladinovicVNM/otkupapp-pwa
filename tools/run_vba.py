@@ -11,7 +11,13 @@ Upotreba:
     python tools/run_vba.py --compile-only          # samo import + compile (najbrze, najstabilnije)
     python tools/run_vba.py                         # + podrazumevani set suite-ova
     python tools/run_vba.py --suite RunIzvestajTests
+    python tools/run_vba.py --suite RunAllTests --test T_ParseDatum_Ugovor   # samo ti testovi
     python tools/run_vba.py --all
+
+Izbor testova (`--test`, moze vise puta) pusta samo imenovane testove JEDNE
+suite, u njenom redosledu, kroz ulaznu tacku iz kljuca `izbor` u SUITES. Takav
+prolaz NIJE dokaz cele suite: marker zelenog se ne upisuje (vba_gate). Uz svaki
+prolaz se ispisuju najsporiji testovi (VREME), iz `<rezultat>_vreme.txt`.
     python tools/run_vba.py --workbook "C:\\putanja\\AgriX_OtkupApp.xlsm"
 
 Sveska: bez `--workbook` koristi se `tests/fixtures/otkup_test.xlsm`. Ako ga nema,
@@ -41,6 +47,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -60,8 +67,13 @@ import time
 SUITES = {
     # Verdikt NE dolazi iz toga da li Run() pukne (modTest hvata gresku po testu
     # da jedan pad ne obori ostale), nego iz last_run.txt pored sveske.
+    #
+    # `izbor` = ulazna tacka koja prima spisak testova ("T_A,T_B") i pusta samo
+    # njih, u redosledu suite-a, sa istim rezultat-fajlom. Samo suite koje je
+    # imaju primaju `--test`.
     "RunAllTests":              {"gate": True,  "dialogs": False, "default": True,
-                                 "result_file": "last_run.txt"},
+                                 "result_file": "last_run.txt",
+                                 "izbor": "RunAllTestsIzbor"},
     "RunIzvestajTests":         {"gate": True,  "dialogs": False, "default": True},
     "RunSheetsJsonParserTests": {"gate": True,  "dialogs": True,  "default": True},
     # Detalji pada ove suite ne prezive COM granicu (opis greske stigne kao golo
@@ -82,7 +94,8 @@ SUITES = {
     # Pad ove suite stize kao Err.Raise iz EndRun, pa opis ne prezivi COM
     # granicu -- ime pale tvrdnje se cita iz fajla, kao kod banke.
     "RunBusinessFlowProSuite":  {"gate": True,  "dialogs": True,  "default": True,
-                                 "result_file": "last_run_bfp.txt"},
+                                 "result_file": "last_run_bfp.txt",
+                                 "izbor": "RunBusinessFlowProIzbor"},
     "RunAgrohemijaSmokeSuite":  {"gate": True,  "dialogs": True,  "default": True},
     # Golden poslovni scenariji: mere ISHOD, ne strukturu. Svaki radi u
     # transakciji i rollback-uje se, pa je drugi prolaz identican prvom.
@@ -458,6 +471,8 @@ def self_test() -> int:
         if tekst not in tudje:
             leaks.append("WIRE-UP: " + opis)
 
+    leaks.extend(_self_test_izbor(tudje))
+
     for line in leaks:
         print(line, file=sys.stderr)
     if leaks:
@@ -465,6 +480,127 @@ def self_test() -> int:
         return 2
     print(f"self-test: cisto ({checked} .doccls fajlova + wire-up markera).")
     return 0
+
+
+def _vba_telo(fajl: str, zaglavlje: str) -> list:
+    """Logicki redovi tela procedure (bez komentara i praznih), ili [] ako je nema."""
+    with io.open(os.path.join(SRC_VBA, fajl), encoding="ascii",
+                 errors="replace", newline="") as fh:
+        redovi = fh.read().replace("\r\n", "\n").split("\n")
+    out, unutra = [], False
+    for red in redovi:
+        s = red.strip()
+        if not unutra:
+            unutra = s.startswith(zaglavlje)
+            continue
+        if s.startswith("End Sub"):
+            break
+        if s and not s.startswith("'"):
+            out.append(s)
+    return out
+
+
+def _self_test_izbor(tudje: str) -> list:
+    """Izbor testova (`--test`) i vreme po testu -- provere bez Excela.
+
+    Najopasniji kvar izbora je TIH: izbor koji prezivi prolaz pretvara sledeci
+    pun run u deo suite-a, zelen. VBA test (T_TestIzbor_TacnoImeIJednokratno)
+    meri pravilo, ali ne moze da izmeri da ga ulazna tacka ZOVE -- radi usred
+    tog istog prolaza. Zato se poziv tvrdi ovde, nad izvorom.
+    """
+    nalazi = []
+
+    # Igla ne sme da pogodi sebe (v. self_test): tekstovi koji se traze stoje i
+    # u OVOJ funkciji, kao literali, pa se njeno telo izbacuje iz pretrage.
+    poc = tudje.find("def _self_test_izbor(")
+    kraj = tudje.find("\ndef ", poc + 1)
+    if poc >= 0:
+        tudje = tudje[:poc] + (tudje[kraj:] if kraj > 0 else "")
+
+    def tvrdi(uslov, opis):
+        if not uslov:
+            nalazi.append("IZBOR: " + opis)
+
+    # --- kombinacije argumenata, svaka u oba smera ---------------------------
+    def problem(*argv):
+        # Pad je NALAZ po imenu, ne traceback: pukla provera bi u izlazu nosila
+        # i tekst tvrdnje (iz ispisa izvornog reda), pa bi se cinilo da je pala
+        # bas ona.
+        try:
+            return problem_izbora(parse_args(list(argv)))
+        except Exception as exc:            # noqa: BLE001
+            nalazi.append("IZBOR: problem_izbora puca za %s -- %r" % (argv, exc))
+            return "PUKAO"
+
+    tvrdi(problem() == "", "run bez --test ima problem izbora")
+    tvrdi(problem("--suite", "RunAllTests", "--test", "T_A") == "",
+          "valjan izbor (jedna suite sa `izbor`) se odbija")
+    tvrdi("TACNO JEDNU" in problem("--test", "T_A"),
+          "--test bez --suite se prihvata")
+    tvrdi(problem("--suite", "RunAllTests", "--suite", "RunGoldenSuite",
+                  "--test", "T_A") != "", "--test uz DVE suite se prihvata")
+    tvrdi(problem("--all", "--suite", "RunAllTests", "--test", "T_A") != "",
+          "--test uz --all se prihvata")
+    tvrdi(problem("--suite", "RunIzvestajTests", "--test", "T_A") != "",
+          "--test nad suite BEZ ulazne tacke izbora se prihvata")
+    tvrdi(problem("--compile-only", "--suite", "RunAllTests", "--test", "T_A") != "",
+          "--test uz --compile-only se prihvata")
+    tvrdi(problem("--suite", "RunAllTests", "--test", " , ") != "",
+          "--test bez ijednog imena se prihvata")
+    tvrdi(izabrani_testovi(parse_args(["--test", "T_A, T_B", "--test", "T_A"]))
+          == ["T_A", "T_B"], "spisak testova se ne cisti (razmaci, duplikati)")
+    for ime, meta in SUITES.items():
+        if meta.get("izbor") and not meta.get("result_file"):
+            tvrdi(False, "suite %s ima `izbor` bez result_file -- izbor ne bi "
+                         "imao gde da procita koji je test pao" % ime)
+
+    # --- vreme po testu --------------------------------------------------------
+    tvrdi(vreme_fajl("last_run_bfp.txt") == "last_run_bfp_vreme.txt",
+          "ime fajla vremena ne prati rezultat-fajl")
+    tmpd = tempfile.mkdtemp(prefix="vreme_")
+    try:
+        put = os.path.join(tmpd, "v.txt")
+        with open(put, "w", encoding="utf-8", newline="") as fh:
+            # Str$ u VBA pise ".123" (bez nule), red na kraju nema TAB-ove.
+            fh.write(".123\tOK\tT_A\n12.5\tFAIL\tT_B\nnije broj\tOK\tT_C\nsmece\n")
+        tvrdi(procitaj_vreme(put) == [(12.5, "FAIL", "T_B"), (0.123, "OK", "T_A")],
+              "vreme se ne cita kako ga VBA pise (ili nije sortirano)")
+        tvrdi(procitaj_vreme(os.path.join(tmpd, "nema.txt")) == [],
+              "nepostojeci fajl vremena obara run")
+    finally:
+        shutil.rmtree(tmpd, ignore_errors=True)
+
+    # --- wire-up u ovom alatu ---------------------------------------------------
+    for tekst, opis in (
+            ("razlog = problem_izbora(args)", "main() ne proverava kombinaciju --test"),
+            ("xl.Run(f\"'{wb.Name}'!{meta['izbor']}\", \",\".join(testovi))",
+             "main() ne zove ulaznu tacku izbora sa spiskom testova"),
+            ('entry["izbor"] = testovi',
+             "izvestaj ne oznacava izbor -- vba_gate bi upisao marker cele suite"),
+    ):
+        tvrdi(tekst in tudje, opis)
+
+    # --- wire-up u VBA izvoru ---------------------------------------------------
+    run_all = _vba_telo("modTest.bas", "Public Sub RunAllTests()")
+    prvi_run = next((i for i, r in enumerate(run_all) if r.startswith("RunOne ")), -1)
+    preuzmi = next((i for i, r in enumerate(run_all)
+                    if r == "m_Izbor = PreuzmiIzbor(m_IzborZahtev)"), -1)
+    tvrdi(0 <= preuzmi < prvi_run,
+          "RunAllTests ne preuzima (i ne brise) izbor PRE prvog RunOne")
+    tvrdi("If Not TestIzabran(nm) Then Exit Sub"
+          in _vba_telo("modTest.bas", "Private Sub RunOne("),
+          "RunOne ne pita TestIzabran -- izbor bi pustio sve testove")
+
+    bfp = _vba_telo("modBusinessFlowProTests.bas",
+                    "Public Sub RunBusinessFlowProSuite()")
+    tvrdi(bfp[:1] == ["m_BfpIzbor = BfpPreuzmiIzbor(m_BfpIzborZahtev)"],
+          "RunBusinessFlowProSuite ne preuzima izbor kao PRVU naredbu")
+    gole = [r for r in bfp if re.fullmatch(r"Test_\w+", r)]
+    tvrdi(not gole,
+          "RunBusinessFlowProSuite zove test mimo BfpIzabran (izbor ga ne bi "
+          "preskocio, a vreme bi pripisao tudjem koraku): %s -- pisi "
+          "`If BfpIzabran(\"Test_X\") Then Test_X`" % ", ".join(gole[:5]))
+    return nalazi
 
 
 def _terminate_pid(pid: int, flag: dict) -> None:
@@ -699,6 +835,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--compile-only", action="store_true", help="stani posle compile-a")
     ap.add_argument("--no-import", action="store_true", help="ne uvozi src-vba (testiraj zatecen kod)")
     ap.add_argument("--suite", action="append", default=[], help="pokreni bas ovu suite (moze vise puta)")
+    ap.add_argument("--test", action="append", default=[], metavar="IME",
+                    help="pusti samo ovaj test (moze vise puta, ili \"T_A,T_B\"); "
+                         "trazi tacno jednu --suite koja ima `izbor` u SUITES")
     ap.add_argument("--all", action="store_true", help="pokreni sve suite iz kataloga")
     ap.add_argument("--keep", action="store_true", help="ne brisi temp kopiju sveske")
     ap.add_argument("--timeout-dialog", type=float, default=0.4, help="interval watchdog-a u sekundama")
@@ -779,6 +918,80 @@ def proveri_fixture_potpis(fixture: str, koriscen_workbook: bool,
     return 2
 
 
+def izabrani_testovi(args: argparse.Namespace) -> list[str]:
+    """Imena iz `--test`, bez praznih i bez duplikata, u redosledu navodjenja.
+
+    Redosled izvrsavanja ionako odredjuje suite (VBA pusta izabrane u svom
+    redosledu); ovde se samo cisti spisak.
+    """
+    out: list[str] = []
+    for arg in args.test:
+        for ime in arg.split(","):
+            ime = ime.strip()
+            if ime and ime not in out:
+                out.append(ime)
+    return out
+
+
+def problem_izbora(args: argparse.Namespace) -> str:
+    """Razlog zbog koga `--test` ne moze da se izvrsi, ili "" kad moze.
+
+    Izbor je deo JEDNE suite: ime testa ne kaze kojoj pripada, a ulazna tacka
+    izbora postoji samo za suite sa kljucem `izbor`. Svaka druga kombinacija bi
+    tiho pustila celu suite (ili nijednu) i izgledala kao izbor.
+    """
+    if not args.test:
+        return ""
+    if not izabrani_testovi(args):
+        return "--test bez ijednog imena"
+    if args.compile_only:
+        return "--test uz --compile-only nema sta da pusti"
+    if args.all or len(args.suite) != 1:
+        return "--test trazi TACNO JEDNU --suite (ime testa ne kaze kojoj pripada)"
+    meta = SUITES.get(args.suite[0])
+    if meta is None:
+        return ""                    # nepoznatu suite prijavljuje chosen_suites
+    if not meta.get("izbor"):
+        sa = sorted(k for k, v in SUITES.items() if v.get("izbor"))
+        return ("suite %s nema ulaznu tacku izbora (`izbor` u SUITES); "
+                "izbor primaju: %s" % (args.suite[0], ", ".join(sa)))
+    return ""
+
+
+def vreme_fajl(result_file: str) -> str:
+    """`last_run.txt` -> `last_run_vreme.txt`: vremena po testu pored rezultata."""
+    koren, nastavak = os.path.splitext(result_file)
+    return koren + "_vreme" + nastavak
+
+
+def procitaj_vreme(path: str) -> list:
+    """[(sekunde, status, ime)] iz fajla vremena, najsporiji prvi.
+
+    Dijagnostika, ne verdikt: fajla nema ili je red necitljiv -> taj red se
+    preskace, a run ne pada. Verdikt nosi rezultat-fajl.
+    """
+    out = []
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            redovi = fh.read().split("\n")
+    except OSError:
+        return out
+    for red in redovi:
+        delovi = red.rstrip("\r").split("\t")
+        if len(delovi) != 3:
+            continue
+        try:
+            sek = float(delovi[0])
+        except ValueError:
+            continue
+        out.append((sek, delovi[1], delovi[2]))
+    out.sort(key=lambda x: -x[0])
+    return out
+
+
+VREME_NAJSPORIJIH = 10
+
+
 def chosen_suites(args: argparse.Namespace) -> list[str]:
     if args.suite:
         unknown = [s for s in args.suite if s not in SUITES]
@@ -797,6 +1010,13 @@ def main(argv: list[str]) -> int:
 
     if args.self_test:
         return self_test()
+
+    # Pre Excela i pre provere platforme: pogresna kombinacija je greska u
+    # pozivu, ne u VBA kodu, i mora da se vidi i na masini bez Excela.
+    razlog = problem_izbora(args)
+    if razlog:
+        print("IZBOR: " + razlog, file=sys.stderr)
+        return 2
 
     if os.name != "nt":
         print("run_vba.py radi samo na Windows-u (Excel COM).", file=sys.stderr)
@@ -941,12 +1161,19 @@ def main(argv: list[str]) -> int:
                 report["schema"] = f"FAIL {exc}"
 
             failed = 0
+            testovi = izabrani_testovi(args)
             for suite in chosen_suites(args):
                 meta = SUITES[suite]
                 entry = {"name": suite, "gate": meta["gate"]}
                 t0 = time.time()
                 try:
-                    xl.Run(f"'{wb.Name}'!{suite}")
+                    if testovi:
+                        # Izbor nosi ime suite-a u izvestaju, ali i oznaku
+                        # `izbor` -- po njoj vba_gate ne upisuje marker.
+                        entry["izbor"] = testovi
+                        xl.Run(f"'{wb.Name}'!{meta['izbor']}", ",".join(testovi))
+                    else:
+                        xl.Run(f"'{wb.Name}'!{suite}")
                 except Exception as exc:    # noqa: BLE001
                     entry["status"] = "FAIL"
                     entry["error"] = str(exc)
@@ -969,6 +1196,12 @@ def main(argv: list[str]) -> int:
                     else:
                         entry["status"] = "OK" if meta["gate"] else "BLIND"
                 entry["seconds"] = round(time.time() - t0, 1)
+                if meta.get("result_file"):
+                    vreme = procitaj_vreme(os.path.join(
+                        tmp, vreme_fajl(meta["result_file"])))
+                    if vreme:
+                        report.setdefault("suite_results", {}).setdefault(
+                            suite, {})["vreme"] = vreme
                 report["suites"].append(entry)
             # Pala priprema seme = rezultati nisu merodavni, pa run pada i kad su
             # sve suite zelene. Neuspela pretpostavka se ne precutkuje.
@@ -1090,6 +1323,11 @@ def _write_report(report: dict, rc: int) -> None:
     for s in report["suites"]:
         lines.append(f"SUITE   {s['status']:6} {s['name']} ({s['seconds']}s)"
                      + (f"  {s.get('error', '')}" if s["status"] == "FAIL" else ""))
+        if s.get("izbor"):
+            # Izbor mora da se vidi u istom bloku: "SUITE OK RunAllTests" bez
+            # ovoga cita se kao cela suite.
+            lines.append(f"IZBOR   {s['name']}: {len(s['izbor'])} testova -- "
+                         + ", ".join(s["izbor"]))
         t = slotovi.get(s["name"])
         if not t:
             continue
@@ -1102,6 +1340,14 @@ def _write_report(report: dict, rc: int) -> None:
         # "nesto je palo" i upotrebljivog nalaza.
         for ln in t.get("detail", []):
             lines.append(f"        {ln}")
+        # Najsporiji koraci. Red pocinje brojem, ne statusom, pa ga citaci
+        # palih (dokaz.py: "FAIL ...", banka: "PAO ...") ne mogu procitati kao pad.
+        vreme = t.get("vreme") or []
+        if vreme:
+            lines.append(f"VREME   {s['name']}: {sum(v[0] for v in vreme):.1f}s "
+                         f"u {len(vreme)} koraka; najsporiji:")
+            for sek, status, ime in vreme[:VREME_NAJSPORIJIH]:
+                lines.append(f"        {sek:8.3f}s  {status:5} {ime}")
 
     for d in report.get("dialogs", []):
         lines.append(f"DIALOG  {d}")

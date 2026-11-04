@@ -11234,6 +11234,40 @@ SABOTAZE = {
         "T_ODL39_PapirVracanjaKupcu",
         "prva i ponovljena stampa vracanja kupcu nose isti sadrzaj: bez reda Vrsta voca",
     ),
+    # Izbor testova (run_vba --test, dokaz.py --izbor) trazi PODNIZ umesto
+    # celog imena, pa izbor "T_AB" pusta i "T_A": dokaz bi merio tudji test.
+    # Prva tvrdnja koju to obori je T_AB -> T_A.
+    "izbor-podniz": (
+        "modTest.bas",
+        "    IzborSadrzi = (InStr(1, izbor, \",\" & ime & \",\", vbTextCompare) > 0)\n",
+        "    IzborSadrzi = (InStr(1, izbor, \",\" & ime, vbTextCompare) > 0)   ' SABOTAZA: podniz umesto celog imena\n",
+        "T_TestIzbor_TacnoImeIJednokratno",
+        "izbor T_AB ne pusta T_A",
+    ),
+    # Izbor PREZIVI prolaz: sledeci goli RunAllTests bi tiho pustio samo
+    # prethodni izbor -- zelen, sa manje testova.
+    "izbor-ne-trosi": (
+        "modTest.bas",
+        "    zahtev = \"\"\n",
+        "    zahtev = zahtev   ' SABOTAZA: izbor prezivi prolaz\n",
+        "T_TestIzbor_TacnoImeIJednokratno",
+        "izbor traje jedan prolaz -- sledeci RunAllTests je pun",
+    ),
+    # Isto, nad kopijom pravila u BFP modulu (ne sme da zavisi od modTest).
+    "bfp-izbor-podniz": (
+        "modBusinessFlowProTests.bas",
+        "    BfpIzborSadrzi = (InStr(1, izbor, \",\" & ime & \",\", vbTextCompare) > 0)\n",
+        "    BfpIzborSadrzi = (InStr(1, izbor, \",\" & ime, vbTextCompare) > 0)   ' SABOTAZA: podniz umesto celog imena\n",
+        "Test_BFP_IzborBiraCeloIme",
+        "BFP izbor Test_AB ne pusta Test_A",
+    ),
+    "bfp-izbor-ne-trosi": (
+        "modBusinessFlowProTests.bas",
+        "    zahtev = \"\"\n",
+        "    zahtev = zahtev   ' SABOTAZA: izbor prezivi prolaz\n",
+        "Test_BFP_IzborBiraCeloIme",
+        "BFP izbor traje jedan prolaz -- sledeci prolaz je pun",
+    ),
 }
 
 
