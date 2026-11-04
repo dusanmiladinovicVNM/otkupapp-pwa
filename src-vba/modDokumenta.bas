@@ -8627,20 +8627,23 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
     Dim stPrij As Object: Set stPrij = CreateObject("Scripting.Dictionary"): stPrij.CompareMode = vbTextCompare
     Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
     If Not IsEmpty(prj) Then
-        Dim qId As Long, qSt As Long, q As Long
+        Dim qId As Long, qSt As Long, qBr As Long, q As Long
         qId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "modDokumenta.GetPrijemniceSaOsirocenimPaletama")
         qSt = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, "modDokumenta.GetPrijemniceSaOsirocenimPaletama")
+        qBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, "modDokumenta.GetPrijemniceSaOsirocenimPaletama")
+        ' Vrednost je BROJ iz zaglavlja (S8 rez 2a-2, R5): labela reda dolazi odavde,
+        ' a ne sa paletne stavke.
         For q = 1 To UBound(prj, 1)
             If qSt > 0 Then
-                If UCase$(Trim$(NzToText(prj(q, qSt)))) = "DA" Then stPrij(Trim$(NzToText(prj(q, qId)))) = True
+                If UCase$(Trim$(NzToText(prj(q, qSt)))) = "DA" Then _
+                    stPrij(Trim$(NzToText(prj(q, qId)))) = Trim$(NzToText(prj(q, qBr)))
             End If
         Next q
     End If
 
-    Dim cBr As Long, cPid As Long, cVr As Long, cSo As Long, cGajb As Long, cSt As Long
+    Dim cPid As Long, cVr As Long, cSo As Long, cGajb As Long, cSt As Long
     ' Kljucne kolone su STROGE (S8R1B-REV-01): kolona koje nema je greska citanja,
     ' ne "nema osirotelih". Prikazne (vrsta, sorta, gajbe) ostaju tolerantne.
-    cBr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, "modDokumenta.GetPrijemniceSaOsirocenimPaletama")
     cPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "modDokumenta.GetPrijemniceSaOsirocenimPaletama")
     cVr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_VRSTA)
     cSo = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_SORTA)
@@ -8668,13 +8671,13 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
         If cSt > 0 Then stx = (UCase$(Trim$(NzToText(ps(i, cSt)))) = "DA")
         If Not stx Then
             Dim pid As String: pid = Trim$(NzToText(ps(i, cPid)))
-            Dim br As String: br = Trim$(NzToText(ps(i, cBr)))
-            If stPrij.Exists(pid) And Len(br) > 0 Then
+            ' Red ulazi po DOKUMENTU; prazna labela paletne stavke ga vise ne skriva.
+            If stPrij.Exists(pid) Then
                 Dim kl As String: kl = pid
                 If Not gSum.Exists(kl) Then
                     gSum(kl) = 0&: sCnt(kl) = 0&: order.Add kl
                     vrD(kl) = Trim$(NzToText(ps(i, cVr))): soD(kl) = Trim$(NzToText(ps(i, cSo)))
-                    brD(kl) = br: pidD(kl) = pid
+                    brD(kl) = CStr(stPrij(pid)): pidD(kl) = pid
                 End If
                 If IsNumeric(ps(i, cGajb)) Then gSum(kl) = CLng(gSum(kl)) + CLng(ps(i, cGajb))
                 sCnt(kl) = CLng(sCnt(kl)) + 1
