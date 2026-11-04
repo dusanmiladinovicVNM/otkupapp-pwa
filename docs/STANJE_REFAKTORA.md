@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 308: review `#465` MERGE HOLD — `S8KI086-REV-01` zatvoren lokalno, P3 dorade; čeka kapije).
+**Ažurirano:** 04.11.2026 (stavka 309: kapije `#465` — RunAllTests 314/0, BFP 3004/0, Palete, Storno 111/0, dokaz 4/4; čeka ručni Compile).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10724,6 +10724,32 @@
      - **NOT RUN:** crveno nad `11f9a7a7`; zeleno RunAllTests (očekivano 314 / 0) i BFP (očekivano 3004 / 0 = 2980 +
        15 + 9) u odvojenim pozivima, Palete, Storno; dokaz četiri `ki08*`; Compile.
      - **Sledeći brojevi:** test 315 · stavka 309 · KI-088 · plan §14.60.
+
+309. **Drugi review `#465` CODE GO / TEST DESIGN GO / MERGE CONDITIONAL GO; kapije zelene, dokaz 4 / 4**
+     (04.11.2026, 17:41–18:02, nad `ac75ba7d`; na „kreci"). Na „Samo push" je `ac75ba7d` push-ovan; Static CI
+     #1153 SUCCESS (po review-u).
+
+     - **Review:** `S8KI086-REV-01` zatvoren na nivou koda; nema novog P1 ni P2. Preporuka: bez novog kruga izmena,
+       acceptance pa merge; posle toga 2b sa obaveznim zatvaranjem `S8R2A2-REV-01`.
+     - **P3 review-a — opseg dokaza (ispravka formulacije iz stavke 308):** seam `KOREKCIJA_PADA` obara korekciju
+       odmah posle snimka transakcije, PRE ijedne izmene paletnih stavki. Test zato dokazuje da neuspela korekcija
+       ostavlja zatečeno stanje i nosi razlog, ali NE dokazuje vraćanje posle delimično izvršenih izmena. Tvrdnja
+       „pala korekcija se vraća cela" važi samo u tom opsegu.
+     - **Crveno nad `11f9a7a7` nije moguće:** novi testovi zovu nov API (`outKorekcijaCeka`,
+       `PaletaAdjustPitanjeTest`, seam režimi), pa se stari kod sa njima ne bi kompajlirao. Staro ponašanje
+       reprodukuju sabotaže (isto kao 1c).
+     - **Zeleno:** Palete OK (3,3 s), Storno **111 / 0**; bazni prolaz dokaza RunAllTests **314 / 0**, BFP **3004 /
+       0** (2980 + 15 + 9, kako je očekivano).
+     - **Dokaz** (`dokaz.py --grupe 6 ki08`, potpis izvora `b57a2670c2be48f8`): **4 / 4 crvenih po imenu** u dva
+       prolaza (3 grupno, 1 sam); izvor pre i posle identičan. `ki086-razlog-greske-se-gubi` je crvena — premisa
+       `S8KI086-REV-01` je bila stvarna (rollback ili `LogErr` brišu `Err` na tom putu).
+     - **Fixture** `8196bbcaecbc8926` netaknut (`.sig` 02.11.2026 11:17).
+     - **Compile:** automatski NEJASNO. Sveska za ručni Compile je `tests/fixtures/rucna_provera_ki086.xlsm`
+       (`run_vba --compile-only --keep`, kod `ac75ba7d`); pre Compile-a se uvozi `modVbaTools.bas`. **Čeka
+       operatera.** Nov ključ poruke traži zatvaranje i ponovno otvaranje fajla.
+     - **Posle Compile-a:** `KI-086` i `KI-087` → CLOSED; merge `#465` na izričit zahtev; zatim 2b.
+     - **Nova osnova grane:** RunAllTests 314 / 0 · BFP 3004 / 0 · Palete OK · Storno 111 / 0 · katalog 1153.
+     - **Sledeći brojevi:** test 315 · stavka 310 · KI-088 · plan §14.60.
 
 ## Dug sa imenom (posle S5-5b)
 
