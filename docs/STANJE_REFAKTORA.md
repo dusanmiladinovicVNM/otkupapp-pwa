@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 320: kapije `#467` zelene — RunAllTests 314/0, BFP 3014/0, dokaz 8/8; ručni Compile PASS).
+**Ažurirano:** 04.11.2026 (stavka 321: merge `#467` = `1bc4f9bb`; rez 2b ZATVOREN, sledi završni krug S8).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10916,6 +10916,24 @@
      - **Osnova posle merge-a #467:** RunAllTests 314, BFP 3014, katalog 1155, `pal_broj` 0, `prj_brojzbirne` 31,
        fixture `68efada928a8d97d`, šema `CA5CE30A`.
      - **Sledeći brojevi:** test 315 · stavka 321 · KI-088 · plan §14.63.
+
+321. **Merge PR-a `#467` u `main` = `1bc4f9bb`; rez 2b ZATVOREN** (04.11.2026, uz „Proveri i merge"). Zapis ide na
+     granu `claude/s8-zavrsni-krug` (od `1bc4f9bb`).
+
+     - **Pre merge-a:** Static CI na glavi `0f723914` SUCCESS; PR MERGEABLE / CLEAN; `main` se od `5024db6d` nije
+       pomerio. Merge vezan za proverenu glavu (`--match-head-commit`).
+     - **Merge `1bc4f9bb`:** roditelji `5024db6d` i `0f723914`; stablo `main`-a je isto kao stablo glave.
+     - **Osnova za `main`:** RunAllTests 314 / 0, BFP 3014 / 0, Palete OK (115), Storno 111 / 0, dokaz 8 / 8
+       (potpis `9ce61c233c3fb46b`), Compile PASS; katalog 1155, `pal_broj` 0, `prj_brojzbirne` 31; šema `CA5CE30A`,
+       fixture `68efada928a8d97d`.
+     - **Paletna stavka posle S8 reza 2:** zna samo liniju prijemnice (`PrijemnicaStavkaID`, obavezan i proveren u
+       piscu, `PAL-INV-01`) i `PrijemnicaID` kao labelu dokumenta; broj prijemnice, broj zbirne i trag zbirne čitaju
+       se iz zaglavlja (`PAL-ODL-03`).
+     - **Sledi završni krug S8 (bez novog koda, osim ako nađe regresiju):** 11 odloženih regresionih sabotaža (1b,
+       S6), FULL prolaz svih suite-ova, provera `S8R2B1-REV-01` (C1/A3 kroz globalni strog čitač), odluka o P3
+       napomenama (labela bez ID-a, „BLOKIRANO", C2/B6 bez testa), pa zapis „S8 zatvoren". Pun katalog sabotaža
+       ostaje pred release.
+     - **Sledeći brojevi:** test 315 · stavka 322 · KI-088 · plan §14.63.
 
 ## Dug sa imenom (posle S5-5b)
 
