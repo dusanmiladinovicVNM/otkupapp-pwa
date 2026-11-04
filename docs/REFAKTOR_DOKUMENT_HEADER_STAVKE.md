@@ -10804,6 +10804,316 @@ CONDITIONAL GO 8,7 / 10. Odstupanja iznad nisu osporena. Ugovor reza 1a se dopun
 
 N1 ostaje OPEN do crvenog 309 nad starim kodom i zelenog prolaza nad granom.
 
+### 14.59) Pre-flight S9 — sledljivost kao graf + brisanje (04.11.2026)
+
+> **Mereno nad `main` = `d19c2dae`, dok S8 traje** (grana `claude/sharp-cray-iyhy1m`). Stanje S8:
+> - rez 1a je u `main`-u (`#458`);
+> - rez 1b je PR `#459`, otvoren;
+> - 1c, 2a i 2b nisu počeli.
+>
+> Linije koda važe za `d19c2dae`. Invarijante i odluke su u `docs/DOMEN/SLEDLJIVOST.md`
+> (`SLED-IDENT-01/02`, `SLED-INV-01..03`, `SLED-ODL-01..08`, sve odluke su **predlozi**).
+> Stanje: `docs/STANJE_REFAKTORA.md`, stavka 288. Produkcionog koda u ovom koraku nema.
+> `run_vba` ovde ne radi: svaka tvrdnja o ponašanju je izvedena čitanjem koda i označena
+> tako, a nijedna nije izmerena pokretanjem.
+
+#### Premisa reda S9 iz §14.9 — izmereno
+
+Red je pisan 17.09.2026, pre S3–S8. Svaka njegova stavka je izmerena posebno:
+
+| Stavka reda | Izmereno nad `d19c2dae` | Ishod |
+|---|---|---|
+| „sledljivost nad eksplicitnim FK" | Grafa nema. Ekran SLEDLJIVOST je obrisan u S1b-3b (`b4d74093`), `TraceByZbirna` u S1b-1 (`80bb764a`), `modSledljivost` u S3e-1 (`c79935be`). Ivice postoje u kanonu. Javni strogi čitač postoji za E1–E3, E5 i E6; za E4 i E7–E9 ga nema (`SLEDLJIVOST.md` §2) | rez S9-1 |
+| „provere pravila novog modela umesto 15 starih provera integriteta" | `modIntegritet` danas vrti **21** proveru, ne 22 (`RunAllChecks:93`): B2, B3 i B10 su obrisane, B11 i AMB dodate, a B9 je preveden na `ZbirnaID`. Klase su u merenju 4 | rez S9-6 |
+| pravila `NEMA_GENERACIJE` / `NEMA_BROJA_KAO_FK` / `NEMA_ID_PLUS_ID` | Nijedno **ne postoji** u `tools/vba_check.py`. Delimično ih pokrivaju grupe popisa `split_plus` (prag 0) i `prj_generacija` (prag 0, samo prijemnica). Acceptance testovi G2 `BrojNijeIdentitet` i G3 `TraceBezPogadjanja` ne postoje (`ARCHITECTURE_CONTRACT.md` A2, napomena) | rezovi S9-3, S9-4 (kao grupe popisa, ne nov alat) |
+| „49 pomoćnih procedura iz Pokrivenosti potvrđeno 0" | 21 je obrisana, a 28 postoji po imenu. Od tih 28, 8 ne dodiruje nijednu grupu popisa. Ostalih 20 dodiruje grupu, ali 8 od njih čita samo **činjenice zaglavlja** (`otp_zaglavlje`, `COL_OTK_TIP_AMB`, `COL_OTK_KOL_AMB_IZDATA`), koje ostaju zauvek. Mera „po imenu" zato ne meri ništa | zamenjuje se pragom po grupi koja ima cilj 0 (S9-5) |
+| `ZBR_IDENTITET.md` → superseded | Nije. Fajl i zatvaranje `KI-007` i dalje kažu „identitet je `GeneracijaID`" | rez S9-4 |
+| Briše: „ostatak `x_literal` (integritet), sve grupe popisa = 0" | `x_literal` ima 7 živih mesta (B4, B5b, health 7 i 13). **„Sve grupe = 0" je nemoguć cilj:** `otp_zaglavlje` (48) i `otk_linija` (18: samo `TipAmbalaze` i `KolAmbIzdata`) su činjenice zaglavlja, bez praga po odluci S3e-1, a `prj_brojzbirne` zavisi od `SLED-ODL-08` | ciljne grupe su nabrojane u rezu S9-5 |
+| Sposobnosti C-029, C-031, C-032, C-035, C-036, C-037, C-041, C-043, C-044, F-087, F-088 | Spisak je **nepotpun**. Ekran je obrisan ceo, pa ishod traži svaki red C2 (C-031–C-045). Uz to idu C-040, C-050 i C-051 (`PAL-ODL-07`), B-048 (lista INTEGRITET) i deo F-089 (health 7 i 13) | mapa ispod |
+
+**Čega u redu nema, a pripada S9** (nalazi N1, N2, N5 i N9–N12): kolone bez pisca sa živim
+čitaocima, izvoz za PWA po broju, Prerada 2.0 nad obrisanim modulom i ostaci obrisanog ekrana.
+
+#### Merenje
+
+1. **Popis čitalaca** (`python tools/popis_citalaca.py`, PROD = van test modula, ZIV = ZIV_UI + ZIV_MAKRO):
+
+   | Grupa | PROD | od toga živo | Šta je ostalo |
+   |---|---|---|---|
+   | `otk_veza_otp` | 13 | 11 | kolone bez pisca (N1), merenje 2 |
+   | `otk_brojzbirne` | 6 | 6 | isto |
+   | `otk_linija` | 18 | 18 | samo `TipAmbalaze` i `KolAmbIzdata`, činjenice zaglavlja (`x_otk_stavka` = 0) |
+   | `otp_zaglavlje` | 48 | 45 | činjenice zaglavlja; grupa nema cilj 0 |
+   | `otp_brojzbirne` | 14 | 13 | kolona bez pisca (N1) |
+   | `zbr_linija` | 8 | 3 | `ValidateZbirna` (2), format u `EnsureDoradeSchema` |
+   | `prj_brojzbirne` | 34 | 33 | labela se piše, a spaja se po njoj (N4) |
+   | `x_trace` | 16 | 16 | broj-oblik traga ispravke (N8) |
+   | `x_literal` | 7 | 7 | B4, B5b, health 7 i 13 |
+
+   `popis_citalaca --check` je zelen, kao i `vba_check` (191 fajl), `who_writes --check`,
+   `--check-ownership` i `gen_schema_module --check` (otisak `B22A1572`).
+
+2. **Ko piše stare kolone.** Kanonski pisci su `modOtkup.BuildOtkupHeaderRowData:1610` i
+   `modDokumenta.BuildOtpremnicaHeaderRowData:4459`, a merena je i pretraga upisa po konstanti i
+   po literalu u produkcionim modulima:
+
+   | Kolona | Produkcioni pisac | Živi čitaoci (primeri) |
+   |---|---|---|
+   | `Otkup.OtpremnicaID` | **nema**; jedini upis je **brisanje** (`modStornoFlow.FreeOtkupBloksInline:1924`) | `IzDetaljOtpremnice:2314`, `OtkupBlockDeadParentByID:275`, `ProizvodjacByZbirna:1497`, health 7 i 13 |
+   | `Otkup.BrojOtpremnice` | **nema**; samo brisanje (`SetOtkupBrojOtpremnice:5494`) | `EnsureSledljivostSchema:1377` (kolona se održava u životu) |
+   | `Otkup.VozacID`, `Otkup.BrojZbirne` | **nema** | `IzDetaljOtkupLista:2213-2214`, `BuildOTKSheetRowForOtkup:604` (OTK list za PWA), `ColVozacZaPrefill:1041`, `ColBrojZbirneZaPrefill:1078`, B6, health 7 |
+   | `Otpremnica.BrojZbirne` | **nema** | `GetOtpremniceByZbirna:155` → `ValidateZbirna` → A1; `GetVerwaisteOtpremnice:8072`; `BuildZbirnaVrstaCache:8291` → `ReportProsecnaCena:3836`; `ReportOtkupRobaOM:3094`; `IzDetaljOtpremnice:2300`; B4a, B5b, B6 |
+   | `Zbirna.UkupnoKolicina/UkupnoAmbalaze/Klasa` | **nema** (`FsarSeed:273` je test) | `ValidateZbirna:6060-6062` → A1 |
+   | `GeneracijaID` (otkup, otpremnica, zbirna) | **nema**: `ApplyGeneracijaID:6315` zove samo `modGoldenTests:1313` | N6 |
+   | `Otkup/Otpremnica.ZbirnaRoditeljID` | **nema** (`PoveziDeteNaZbirnu` se zove samo za prijemnicu i paletnu stavku) | — (održava ga `EnsureSledljivostSchema:1388-1391`) |
+   | `Otpremnica`, `Zbirna`, `Novac` `.IspravkaOd/ZamenjenSa` (broj) | **nema**: jedini pisac `StampIspravkaTrace` u produkciji zove samo prijemnica (`modDokUnos:1339`), a zbirnu samo test (`modTestStornoCentar:530`) | naslov ispravke na papiru otpremnice (`modPrint:339`, `:390`): za nove podatke je uvek prazan; `ImpactHeader:170-171` za zbirnu (ključeve niko ne troši) |
+   | `Prijemnica.BrojZbirne` | **piše se**, u koraku sa `ZbirnaRoditeljID` (`BuildPrijemnicaRowData:7254`, `PoveziDeteNaZbirnu` `:7105`, `:8881`) | 33 živa mesta (N4) |
+
+3. **49 procedura iz „Pokrivenosti"** (`MAPA_SPOSOBNOSTI.md:1089`; meri se ime u modulu iz spiska, pa
+   presek sa grupama popisa):
+   - **obrisana 21:** osam iz `modOtkupBlok`; `modSledljivost.GetUnlinkedOtkupi`; `SledOtpMapa`;
+     `ResolveZbirnaChainScope`; `StornoOtpremnicaCascade`; `CompleteZbirnaIspravka`;
+     `RelinkOtpremniceToZbirna_TX`; `DetachOtpremniceInline`; `OtkupReissueDupExists`; pet `Col*ZaPrefill`
+     (klasa, količina, gajbe, cena, bruto). Iz ulaza je obrisan i `BackfillDeteZbirnaGeneracija_Core`;
+   - **postoji, a ne dodiruje nijednu grupu (8):** `ValidateZbirnaPreUnosa`, `PreveziPaleteIspravke`,
+     `ColKlasa`, `ColKolicina`, `ColKolAmb`, `ColCena`, `BuildStationsByZbirna`, `ActiveOtpIDsByZbirna`.
+     `ValidateZbirnaPreUnosa` je pritom **mrtva**: jedini pozivalac je `ZbirnaIzvorImaKlasuII:6151`, a
+     njega niko ne zove;
+   - **postoji i čita samo činjenice zaglavlja (8):** `BuildOtkupHeaderRowData`, `ColVrsta`, `ColSorta`,
+     `ColTipAmb`, `ColVrstaZaPrefill`, `ColSortaZaPrefill`, `ColTipAmbZaPrefill`, `ColAmbPrZaPrefill`;
+   - **postoji i dodiruje staru vezu (12):** `GetOtpremniceByZbirna`, `GetVerwaisteOtpremnice`,
+     `BuildZbirnaVrstaCache`, `SetOtkupBrojOtpremnice`, `SumOtpremniceByKlasa` (SAMO_TEST),
+     `OtkupnoMestoByZbirna`, `ProizvodjacByZbirna`, `ColVozacZaPrefill`, `ColBrojZbirneZaPrefill`,
+     `StampIspravkaTrace`, `FreeOtkupBloksInline`, `OtkupBlockDeadParentByID`. Sve su u N1–N8.
+
+4. **Integritet** (`modIntegritet`, 21 provera; klase po §14.8 t. 11):
+
+   | Klasa | Provere | Zašto |
+   |---|---|---|
+   | stari model, umire sa kolonama | A1, B1a, B4a, B5b, B6 (otkup, otpremnica) | čitaju kolonu bez pisca: A1 poredi 0 sa 0, B5b prijavljuje **svaku** aktivnu otpremnicu (`DocsBezZbirne:1274`; zapisano kao nuzgredni nalaz na :5997, bez KI) |
+   | dobra ideja, spoj po broju | A2, B1b, B4b, B5 | prijemnica ↔ zbirna po `BrojZbirne` (`ZbirStavkiPoBroju:1084`, `PrijemnicaZbirnaMap:1382`) |
+   | pravilo labele | B8 | jedan broj, više aktivnih dokumenata; ostaje samo ako labela ostaje jedinstvena po vlasniku niza (`ZBR-ACTIVE-NUMBER-01`) |
+   | S8 | A3, C1/C4, C2, paletni deo B6 | rezovi 2a i 2b (§14.58) |
+   | novi model, ostaje | B7, B9, B11, AMB, C3, C5, A4, D1, D2, A5 | ključ je ID |
+
+   - **Revizije nema** nad `tblOtpremnicaIzvori`, `tblZbirnaIzvori` i `Prijemnica.ZbirnaRoditeljID`
+     (`SLED-INV-01`), ni nad utovarom.
+   - **`IntegritetUkupno:89` nema pozivaoca**, jer Oporavak namerno broji svoj snimak
+     (`modScrOporavak:1033`). Red F-088 u mapi opisuje put koji ne postoji.
+
+#### Nalazi
+
+| # | Nalaz | Dokaz | Ishod |
+|---|---|---|---|
+| N1 | **Kolone bez pisca, sa živim čitaocima.** Ukupno 19 kolona: šest na `tblOtkup`, pet na `tblOtpremnica`, šest na `tblZbirna` (tri linijske, generacija, dva broj-oblika traga) i dve na `tblNovac`. Kanonski pisac nijednu ne puni, a jedini upisi su brisanja. Ostale su posle S3–S6 jer je brisanje kolona odloženo „u svoj rez" (:5995) i nikad nije došlo | merenje 2 | `SLED-INV-03`; rezovi S9-2 (čitaoci) i S9-5 (kanon) |
+| N2 | **Posledice N1 su tri vrste, i nijedna nije pad.** **(a) Prazan prikaz:** detalj otkupa nema vozača ni zbirnu, detalj otpremnice kaže „0 blokova" i nema zbirnu ni prijemnice, a kolona zbirne je prazna u ROBA (OM). Isto važi za OTK list za PWA (`VozacID`), prefill storna (vozač, zbirna), naslov ispravke na papiru otpremnice i vrstu u prosečnoj ceni. **(b) Laž u reviziji:** A1 i health 7 su uvek zeleni, a B5b je uvek crven za svaku otpremnicu. **(c) Mrtve grane mutacije:** `FreeOtkupBloksInline` je na kanonskim podacima no-op, `OtkupBlockDeadParentByID` uvek vraća prazno (zove ga `modStornoZurnal:248`), a `GetBlokOtkupIDs` je MRTAV. **Izvedeno iz koda, NIJE reprodukovano** | merenje 2; `IzDetaljOtkupLista:2199`, `IzDetaljOtpremnice:2286`, `ReportOtkupRobaOM:3066`, `BuildOTKSheetRowForOtkup:561` | rezovi S9-2 i S9-6 |
+| N3 | **⚠ FALSE-GREEN.** `modTest.T_Izv_DetaljICipKontekst` (:23071) tvrdi da se u detalju vidi zbirna (`ZB-TEST-1`) i tvrdi broj blokova otpremnice. Fixture redovi za to (`OTK-BIM-3A`, `OTK-TEST-1`, `OTP-TEST-1`) nose stare veze koje produkcija više ne pravi. Test je zelen nad stanjem koje nijedan pisac ne može da napravi | :23113-23133; `tools/make_fixture.py` (`"OtpremnicaID"` 57 puta, `"BrojOtpremnice"` 46, `GeneracijaID` 31) | S9-2: test se seje kroz kanonske pisce, pa crveno nad starim kodom |
+| N4 | **Broj zbirne je i dalje veza.** `Prijemnica.BrojZbirne` se piše kao labela, ali spaja po njoj sledeće: izveštaji (`ReportZbirniVozac`, `KI-032`; `ReportZbirniKupac:4335`; `ReportProsecnaCena:3839`), manjak (`CalculateManjakPreview:7890`, `BuildManjakDict` po vlasniku), detalj (`DodajPrijemniceZbirne:2347`, fail-open), storno zbirne (`ActivePrijIDsByZbirna:1880`, `ScanZbirna:2367`, `ZbirnaScopeRazlog:1761`, `GetActiveDocumentsForStorno:1164`), poruka posle storna (`StornoIzvrsi:390`: prijemnica „prvog" dokumenta tog broja), F4 upozorenje „dupla prijemnica" (`PrijemnicaValidiraj:1011`, a `DOCUMENT_HEADER_LINES.md` §3.1 kaže da se pita po zbirni) i Oporavak (`GetOsirocenePrijemnice:8569`) | merenje 1; `SLEDLJIVOST.md` §3 | `SLED-IDENT-01`; S9-3 (deo storna zbirne posle S8 2a) |
+| N5 | **Izvoz za PWA spaja prijem po broju, „prva je dovoljna".** `ExportOtkupiAll` hoda otkup → otpremnica → zbirna po ID-u (`TekucaPredajaOtkupa:1006`), a prijemnicu traži po broju zbirne: `BuildPrijemnicaIndexByBrojZbirne:1209`, prvi pogodak (`:1245`). Kad zbirna ima dve prijemnice (1:N meko), PWA vidi samo prvu. Kad broj nose dve zbirne, vidi tuđu | `modStammdatenSync:1080`, `:1120-1130` | ⚠ IDENTITY RISK; `SLED-ODL-07`; S9-3 |
+| N6 | **Generacija je i dalje identitet na šest mesta, a pisca nema.** Mesta su: picker zbirni (`FillZbirneCombo:6890`, dedup), lista cilja u Oporavku (`RowsAktivneZbirne:765`), prefill storna (`modStornoDok:676`), `modStornoFlow.RedJeGeneracije:2218`, prevezivanje prijemnice na zbirnu (`ReassignPrijemnicaToZbirna_TX:8701`, parametar `zbirnaGeneracijaID`) i upozorenje uvoza (`PrijaviKolizijuBrojaZbirne:4931`). Uz to su mrtvi `GeneracijaIDZaBroj`, `NewGeneracijaID` i grana `HLI` u `modStornoImpact` (`tTbl` se postavlja samo za zbirnu i prijemnicu, a one imaju svoje grane) | merenje 2; `SLED-IDENT-02` | S9-4 |
+| N7 | **Oporavak „Prevezi prijemnicu" bira ciljnu zbirnu po BROJU.** Identitet u redu liste je `GeneracijaID` (kolona 7, `IdentitetIzReda`, `modScrOporavak:253`). Za kanonsku zbirnu je prazan, pa pisac razrešava cilj po broju (`ReassignPrijemnicaToZbirna_TX:8735+`). `ZbirnaID` je u istom redu, ali se ne prenosi. Kapija `VlasniciPoBroju` dvosmislen broj odbija, pa ishod nije tuđa zbirna nego **odbijeno prevezivanje** | `modScrOporavak:252-253`, `:340`; `modDokumenta:8721-8760` | ⚠ IDENTITY RISK (display → lookup → ID); S9-4, posle S8 2b (isti pisac nosi paletni rep) |
+| N8 | **Broj-oblik traga ispravke** (`IspravkaOd`/`ZamenjenSa`): jedini pisac je `StampIspravkaTrace:1431`. Red bira po ID-u, a u produkciji ga zove samo prijemnica (`modDokUnos:1339`). Na otpremnici, zbirni i u novcu kolona nema produkcionog pisca. Za identitet od broj-oblika ne zavisi ništa: ID-oblik nose otkup, otpremnica i ambalaža, a ID graf ispravki je `tblStornoVeze`. Komentar `modConfig:1141-1150` je zastareo („samo `tblOtkup`", „PR7/PR8") | izveštaj pretrage; `x_trace` 16 | `SLED-ODL-08`; S9-5 |
+| N9 | **Ostaci obrisanog ekrana:** <br>- mrtvi su `modIzvestaj.StampajSledljivostLanacDoc:4984` (0 pozivalaca), 31 konstanta `SLED_*`/`SLEDP_*`/`SLEDM_*` (`modIzvestaj:56-138`), `WS_SLEDLJIVOST_SABLON` i ~50 ključeva poruka bez reference; <br>- `CFG_SLEDLJIVOST_PRINT_MODE` je red u Podešavanjima koji ne kontroliše ništa (`modPodesavanja:120`); <br>- `OBL_SLEDLJIVOST` je pravo u `tblKorisnici` za ekran koji ne postoji (`modAuth.OblastiList:321`); <br>- `UI_MIGRACIJA_KATALOG.md` §24 ekran i dalje opisuje kao prenet | `b4d74093`; grep | S9-7 vraća ili briše, po `SLED-ODL-04` |
+| N10 | **Prerada 2.0 §8 (sledljivost kao graf, faza C2) je pisana nad modulima koji su obrisani** (`modSledljivost.ProcesGraf`, `modScrSledljivost`, `SledljivostSablon`) | `docs/PRERADA_2_MODEL_I_PLAN.md:451-482` | `SLED-ODL-06`: jedno jezgro, Prerada 2.0 ga proširuje |
+| N11 | **Domen dokumenti opisuju stari model:** <br>- `README.md` §1: otkup se „veže preko `OtpremnicaID`/`BrojOtpremnice` i nasleđuje `BrojZbirne`"; <br>- `INTEGRITET_PROVERE.md`: B2/B3, `frmOtkupAPP`; <br>- `ZBR_IDENTITET.md` i zatvaranje `KI-007`: generacija kao identitet; <br>- `DOCUMENT_HEADER_LINES.md` imenuje `Prijemnica.ZbirnaID`, a kolona je `ZbirnaRoditeljID`; <br>- `ARCHITECTURE_CONTRACT.md` A2: „korak 13" | čitanje | svaki rez ažurira svoj dokument; S9-4 zatvara `ZBR_IDENTITET.md` |
+| N12 | **Revizija ne vidi nijednu ivicu novog modela** (`*Izvori`, `ZbirnaRoditeljID`, utovar). Lista INTEGRITET na Oporavku je danas puna lažnih nalaza B5b, pa nalaz koji bi bio stvaran ne bi se ni primetio | merenje 4 | `SLED-INV-01/02`; S9-6 |
+
+#### Verdikt po osama
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | brisanje i prevod čitalaca (S9-2, S9-5): **PROVEN** · graf (S9-1) i ekran (S9-7): **GAP → `SLED-ODL-01..04`** | Kolone bez pisca nemaju poslovno značenje koje bi se izgubilo: model kaže da ih nema (`DOCUMENT_HEADER_LINES.md` §5). Graf dobija novo značenje (nadskup porekla, klasa, verzije), i to je poslovna odluka |
+| `EVENTS` | **PROVEN** | tabela ispod; graf je samo čitanje i ne pravi događaj |
+| `IDENTITY` | **GAP → S9-1, S9-3, S9-4** | N4, N5, N6, N7; `SLED-IDENT-01/02` |
+| `CARDINALITY` | struktura **PROVEN** · ⚠ ARCHITECTURAL EDGE CASE → `SLED-ODL-01` | `SLEDLJIVOST.md` §2. Redak slučaj menja značenje odgovora: zbirna na dve prijemnice (E4 1:N meko), paleta sa stavkama više prijemnica (E7 N:M), utovar delimično po kg (E9). Bez alokacije je „poreklo" nadskup |
+| `INVARIANTS/OWNER` | **GAP → S9-6**; za graf (S9-1) **PROVEN** samo na E1–E3, E5 i E6 | `SLED-INV-01`: pisci je drže pri upisu, a revizija ne postoji (N12). Strogi javni čitači E4, E7, E8 i E9 ne postoje. S9-1 pravi E4 i E9 proširenjem postojećih (E4 iz privatnog `AktivnePrijemnicePoZbirni:539`), ne kopijom. E7 i E8 čekaju strog čitač paleta iz S8 2b |
+| `WRITERS` | S9-1: **N/A** (samo čitanje) · ostali rezovi: **PROVEN** | Nov pisac se ne dodaje. Brišu se pisci koji samo brišu (`FreeOtkupBloksInline`, `SetOtkupBrojOtpremnice`), a `modStornoFlow` time izlazi iz pisaca `tblOtkup` (`who_writes`). ⚠ `WRITE_OWNERSHIP.json` mrtav unos ne prijavljuje (backlog §15), pa se proverava ručno |
+| `DOWNSTREAM` | **PROVEN**, ⚠ DOWNSTREAM RISK | tabela ispod. Health 7 i prvi deo 13 čitaju stare kolone preko `RequireColumnIndex`, pa brisanje kolone bez njih **obara health u FAIL** |
+| `CAPABILITY` | **GAP → `SLED-ODL-04/05`** | mapa ispod; spisak iz §14.9 je nepotpun |
+| `ACCEPTANCE CONTRACT` | S9-1 **PROVEN (plan)** · S9-2: obim i negativ ovde · ostali: ugovor na početku reza, posle odluka | ispod |
+| `PLATFORM` | logika: **N/A** · ⚠ UNMEASURED: vreme izgradnje grafa nad C002 | Brisanje kolona ide postojećim self-heal-om (`ObrisiKolonuAko`; presedan S1d, S3-ostatak, S6 korak 8). Graf učitava cele tabele kroz stroge čitače. Na svesci jedne sezone (C002) vreme nije mereno, pa sonda ide pre S9-7, nad **kopijom**. Izgled A4 lanca i papira je ručna provera |
+| `LANDING` | **GAP → raspored ispod** | S8 menja iste fajlove: `modIntegritet` (A3, C1, C2, B6), `ReassignPrijemnicaToZbirna_TX`, storno zbirne, kanon, `make_fixture` i popis. Otvoreni PR-ovi se već sudaraju u numeraciji (ispod) |
+
+#### BUSINESS EVENTS
+
+Graf ne pravi događaj. Svaki čvor nosi **svoj** datum, i nijedan se ne izvodi iz drugog čvora.
+
+| Čvor | Datum / status | Događaj | Šta postoji bez sledećeg |
+|---|---|---|---|
+| otkup | `Otkup.Datum`; `IzdatoStatus` | fizički (roba od kooperanta) + poslovni (otkupni list) + finansijski (obaveza; vrednost sa stavki, isplata u `tblNovac`) | otkup bez otpremnice („Bez otpremnice", F2) |
+| otpremnica | `Otpremnica.Datum` (dan utovara; svežina 1 dan, §15); `PredajaID` (identitet predaje vozaču; `PredatoAt` nije kolona kanona); `IzdatoStatus` DRAFT → IZDATO | fizički | izdata otpremnica bez zbirne |
+| zbirna | `Zbirna.Datum`; DRAFT → IZDATO | poslovni (prevozni spisak vozača) | zbirna bez prijemnice |
+| prijemnica | `Prijemnica.Datum` | fizički (prijem kod kupca) + poslovni | prijemnica bez fakture; bez palete (`PALETIRANJE = NO`) |
+| faktura | `Faktura.Datum`; `Status`, `DatumPlacanja`, SEF stanja | finansijski | — |
+| paleta / prerada / utovar | `Paleta.Datum` je dan **otvaranja** palete, ne prijema (`PALETE.md` EVENTS); `Prerada.Datum` je dan unosa; `DatumUtovara` | fizički | §14.58 |
+
+**Nije DOMAIN GAP.** Ni jedan čitalac grafa ne sme da prikaže datum prijema kao datum otkupa
+ili datum palete kao datum prijema. Lanac (C-031) zato nosi datum po karici, ne jedan datum
+reda.
+
+#### IDENTITY
+
+| Put | Šta putuje | Rizik |
+|---|---|---|
+| pretraga sledljivosti (C-035) → čvor | broj → **jednom** u skup ID-eva; dvosmislen broj daje sve kandidate sa vlasnikom | po `SLED-IDENT-01`; prvi pogodak je zabranjen |
+| izbor reda → štampa dokumenta (C-043) | ID čvora | nema, ako nosi ID (ref-ključ `OTK\|`, `PRJ\|` je obrazac C-029) |
+| otkup → prijemnica u izvozu za PWA | ID do zbirne, pa **broj** do prijemnice | ⚠ N5 |
+| storno zbirne → prijemnice | broj zbirne, uz generaciju kao rezervu | ⚠ N4; posle S8 2a |
+| Oporavak „Prevezi prijemnicu" → ciljna zbirna | `GeneracijaID` iz reda (prazan) → broj | ⚠ N7 |
+| detalj izveštaja (otkup, otpremnica) → zbirna, prijemnice | kolone bez pisca; prijemnice po broju + vozaču | ⚠ N2, N4 |
+
+**Šta dokazuje identitet čvora** (pouka S7R3-REV-04: prenos ID-a nije dokaz):
+- postojanje: tačno jednom;
+- aktivnost: storno se ne crta (`SLED-ODL-03`);
+- pripadnost: ivica razrešava po `SLED-INV-01`.
+
+Čvor koji ne prođe ne vezuje se i dobija oznaku. To je isto pravilo „fail-closed: ne povezuje
+se i red dobija oznaku" koje ima Prerada 2.0 §8.1.
+
+#### DOWNSTREAM — ko zavisi od činjenica koje S9 menja
+
+| Čitalac | Činjenica | Posle S9 |
+|---|---|---|
+| PWA i GAS: OTK list (`BuildOTKSheetRowForOtkup`, kolona `VozacID`, `gas/Code.gs:40`) | `Otkup.VozacID` (prazno za nove podatke) | vozač tekuće predaje (`TekucaPredajaOtkupa`); ugovor kolona se ne menja |
+| PWA menadžment: `OtkupiAll` (`getMgmtOtkupiAll`, `gas/Code.gs:753`) | prijemnica po broju zbirne | `SLED-ODL-07`; ugovor kolona se ne menja |
+| health 7 (`Check_OtkupOtpremnicaCrossZbirnaLinks:841`), health 13, deo 1 (`:1013`) | stare kolone, kroz `RequireColumnIndex` | brišu se u **istom** rezu kao kolone (S9-5), inače health pada |
+| Oporavak, lista INTEGRITET i baner | 21 provera | S9-6; broj nalaza pada (B5b nestaje) |
+| izveštaji (ROBA OM, zbirni kupac i vozač, prosečna cena, manjak, detalj) | broj zbirne; kolone bez pisca | S9-2, S9-3 |
+| C002 (migrirana sveska: samo analiza, štampa izveštaja i uplate; operater 03.11.2026) | izveštaji; self-heal briše kolone | izlazna kapija kao S8 2b: read-only sonda nad **kopijom** C002 posle S9-5 |
+| golden (`tests/golden/`), fixture (`make_fixture.py`, `SLED_*` 171 pominjanje) | stari oblik | S9-5, serijski sa S8 2b |
+| Prerada 2.0 §8 | `modSledljivost.ProcesGraf` | `SLED-ODL-06` |
+| storno, F4, F3, faktura, SEF, palete (pisci) | — | netaknuto; S9 ne menja nijedan pisac osim brisanja praznih upisa |
+
+#### Mapa sposobnosti S9
+
+| Red | Danas | Ishod (predlog po `SLED-ODL-04/05`) |
+|---|---|---|
+| C-031 lanac, C-035 pretraga po broju, C-036 detalj karika, C-044 KPI, C-045 period | ekran obrisan (S1b-3b) | **MIGRATED** u S9-7 nad jezgrom grafa |
+| C-032 parcele za fakturu (sertifikacija) | obrisan | **MIGRATED** u S9-7; odgovor je nadskup po `SLED-ODL-01` i tako i piše |
+| C-033 / C-034 NEPOTPUNI i čipovi | obrisan | **REPLACED** listom INTEGRITET (S9-6): iste činjenice, jedan izvor |
+| C-037 / C-038 ručno i auto vezivanje otkupa na otpremnicu | obrisan; vezivanje radi F2 | **REPLACED**: F2 „vezi" → `DodajOtpremnicaIzvor_TX:3514` (dokaz u `SLEDLJIVOST.md` §5). Auto: auto-lanac i uvoz predaje (S5) |
+| C-039 GlobalGAP dokument zbirne, C-040 dokument perioda (zbirna, paleta, prerada) | obrisan | **MIGRATED** u S9-7 (`PAL-ODL-07`); paletni i preradni list kao PDF već postoje na ekranu Palete |
+| C-041 A4 lanca | mrtav `StampajSledljivostLanacDoc:4984` | **MIGRATED** u S9-7 (prvo reuse tela; izgled je ručna provera) |
+| C-042 štampa liste | obrisan | zajednički put liste ljuske |
+| C-043 dokument iza reda | obrisan | **MIGRATED**; ruta po ID-u čvora |
+| C-050 / C-051 paletni list: spisak kooperanata | prazan od S1b-1 (`modPaletniList:944`, `:3142`) | **MIGRATED** u S9-7 kroz jezgro (`SLED-ODL-05`) |
+| C-029 štampa iz Izveštaja | radi (`modScrIzvestaji:668`) | netaknuto; ref-ključ je obrazac za C-043 |
+| detalj izveštaja (otkup, otpremnica: vozač, zbirna, blokovi, prijemnice) | prazan za nove podatke (N2) | **MIGRATED** u S9-2 kroz kanonske čitače |
+| F-087 / B-048 lista INTEGRITET | 21 provera; lažni nalazi B5b | **MIGRATED** u S9-6 na `SLED-INV-01/02` |
+| F-088 broj nalaza | `IntegritetUkupno` bez pozivaoca; Oporavak broji snimak | `IntegritetUkupno` se briše (S9-6) |
+| F-089 health 7 i 13 (deo 1) | uvek OK | **INTENTIONALLY REMOVED** sa kolonama (S9-5); zamenu daje `SLED-INV-01` u S9-6 |
+
+#### Poznati KI iz oblasti
+
+| KI | Odluka | Zašto |
+|---|---|---|
+| `KI-032` (zbirni izveštaj po vozaču sabira prijem po golom broju) | **u S9-3** | isti spoj po broju (N4); test nad dve zbirne istog broja ide prvi |
+| `KI-033` (kanonski čitači otkupa, otpremnice i zbirne ne proveravaju ID stavke) | **backlog**, ali S9-1 ga ne pogoršava | graf koristi te čitače; čvor stavke bez ID-a se ne vezuje |
+| `KI-081` (globalni strogi čitači) | **backlog**; ⚠ za S9-1 | graf bi jednim pokvarenim dokumentom oborio ceo lanac. Ugovor S9-1 zato traži da kvar jedne ivice označi čvor, a ne obori graf |
+| `KI-039` | S8 rez 2a | §14.58 |
+
+Novih KI nema. Sve što je nađeno je u nekom rezu S9 (N1–N12) ili je već imenovano van njega.
+
+#### Rezovi S9 (svaki je jedan PR) i zavisnost od S8
+
+| Rez | Sadržaj | Dodiruje S8? | Kada |
+|---|---|---|---|
+| **S9-0** | ovaj pre-flight (samo dokumenti) | ne (tačke dodavanja u `STANJE` i planu) | sada |
+| **S9-1** | **Jezgro grafa** `modSledljivost` (novi modul, samo čitanje): ivice E1–E6, E9 i E10 kroz postojeće stroge čitače. Javni strogi čitači za E4 (iz privatnog `modAutoHladnjaca.AktivnePrijemnicePoZbirni:539`) i E9 (`modUtovar.UtovarenoPoPreradi:53` sa ID-em utovara) prave se proširenjem postojećih, ne kopijom. Uz to idu testovi G3 `TraceBezPogadjanja` i deo G2. Bez UI, šeme i fixture-a. **Palete (E7, E8) nisu u ovom rezu**: javni strog čitač paletnih stavki po dokumentu pravi S8 2b (`PAL-INV-01`), a `modPaletniList` S8 menja do tada | ne | posle `SLED-ODL-01/02/03/06`; **sme paralelno sa S8 1c i 2a** |
+| **S9-2** | **Čitaoci kolona bez pisca** prelaze na kanonske čitače ili jezgro: detalj izveštaja, ROBA OM, OTK list za PWA, prefill storna, `BuildZbirnaVrstaCache`. Brišu se `FreeOtkupBloksInline`/`SetOtkupBrojOtpremnice`/`GetBlokOtkupIDs`, `OtkupBlockDeadParentByID` i lanac `ValidateZbirna`/`ValidateZbirnaPreUnosa`/`ZbirnaIzvorImaKlasuII`/`GetOtpremniceByZbirna`. `modIntegritet` se NE dira | `modStornoRecovery` (drugi postupak) | posle merge-a `#459`; sme paralelno sa 1c i 2a |
+| **S9-3** | **Broj zbirne nije veza** (N4, N5, `KI-032`): spoj po `ZbirnaRoditeljID`; `SLED-ODL-07/08`; grupa popisa za spoj po broju (obrazac `fak_broj_prj`), prag 0; test G2 `BrojNijeIdentitet` | **da**: `ScanZbirna`, `ZbirnaScopeRazlog`, `ActivePrijIDsByZbirna` menja i S8 2a | **posle S8 2a** |
+| **S9-4** | **Generacija ne postoji** (N6, N7): čitaoci i API generacije; Oporavak i `ReassignPrijemnicaToZbirna_TX` dobijaju `ZbirnaID`; B8 po odluci o labeli; `ZBR_IDENTITET.md` → superseded; grupa `NEMA_GENERACIJE`, prag 0 | **da**: `ReassignPrijemnicaToZbirna_TX` (paletni rep briše S8 2b) | **posle S8 2b** |
+| **S9-5** | **Kanon i fixture**: brisanje kolona iz N1 i `SLED-ODL-08` (`schema.json` → `gen_schema_module`, `ObrisiKolonuAko`, `EnsureSledljivostSchema`), health 7 i deo 13, fixture i golden, pragovi popisa na 0. Ciljne grupe: `otk_veza_otp`, `otk_brojzbirne`, `otp_brojzbirne`, `zbr_linija`, `x_literal`, deo `x_trace` i nova grupa generacije. Izlazna kapija je sonda nad kopijom C002 | **da**: kanon i fixture menja i S8 2b | **posle S8 2b, strogo serijski** |
+| **S9-6** | **Integritet novog modela**: brišu se stari model i spoj po broju; dodaje se `SLED-INV-01` kroz jezgro grafa (ivica ne razrešava, aktivno dete bez aktivnog roditelja), manjak po ID-u; `IntegritetUkupno`; `INTEGRITET_PROVERE.md` | **da**: `RunAllChecks` i A3, C1, C2, B6 | **posle S8 2b** |
+| **S9-7** | **Ekran SLEDLJIVOST i papir** po `SLED-ODL-04/05`: ivice E7 i E8 u jezgru (nad strogim čitačem paleta iz S8 2b); registracija u `modUiScreens` (centralni registar); C-0xx; spisak kooperanata na paletnom i preradnom listu; ostaci iz N9 | **da**: `modPaletniList` | posle S9-1 i S8 2b; posle PLATFORM sonde |
+
+Rezovi S9-2 i S9-5 su namerno odvojeni. Čitaoci prvo prelaze na novi izvor, a kolona izlazi iz
+kanona tek kad nema čitaoca. Mina iz §14.58 („`GetColumnIndex` posle brisanja kolone vraća 0,
+pa čitalac koji nije prepisan tiho ćuti") se meri na pozivnim mestima, ne postojanjem kolone.
+
+#### ACCEPTANCE CONTRACT — S9-1 (plan dokaza, ne dokaz)
+
+- **Važi:**
+  - `SledPreci` i `SledPotomci` hodaju **samo** ivicama E1–E6, E9 i E10. Svaki vraćen čvor nosi
+    ID, vrstu, labelu, svoj datum i status;
+  - unazad od stavke prijemnice dolazi skup otkupa (i njihovih kooperanata i parcela) aktivnih
+    otpremnica njene zbirne, označen kao nadskup kad je E4 1:N;
+  - unapred od otkupa dolaze prijemnice i linije faktura (paletne stavke dodaje S9-7);
+  - ivica koja ne razrešava tačno jednom ostavlja čvor nevezan i označen. Graf ne pada ceo
+    zbog jednog pokvarenog dokumenta (`KI-081`).
+- **Ostaje netaknuto:** svi pisci; kanon; UI; postojeći čitači (proširuju se samo javnim ulazom).
+- **Edge:**
+  - zbirna na dve prijemnice: obe unazad daju isti nadskup;
+  - dvoklasni dokument;
+  - ispravka zbirne (A13): stara verzija nije u aktivnom grafu, a članstvo nove verzije jeste;
+  - GP lanac: utovar delimično po kg (E9) i GP faktura nad utovarom (E10).
+  - Ide u S9-7, ne ovde: rubna paleta sa stavkama dve prijemnice (unazad od palete dolazi unija)
+    i paletna stavka bez `PrijemnicaStavkaID` (*synthetic anomaly*: označena, ne pogađa se).
+- **Negativ (G3 `TraceBezPogadjanja`):**
+  - dve zbirne istog broja, dva vozača: unazad od prijemnice zbirne A **nijedan** otkup zbirne
+    B. **Crveno** kad se ivica E4 hoda po `BrojZbirne` (sabotaža);
+  - dve prijemnice istog broja, dva kupca: unapred od otkupa zbirne A nijedna linija fakture B;
+  - **mamac**: test seje `Otkup.BrojZbirne`, `Otkup.OtpremnicaID`, `Otpremnica.BrojZbirne` i
+    `GeneracijaID` sa vrednostima koje pokazuju na **drugi** lanac (*fault injection*). Graf
+    ih ne sme pratiti; ovo dokazuje da jezgro ne čita kolone bez pisca;
+  - dva aktivna članstva iste otpremnice: čvor je označen, graf ne pada.
+- **Čime:**
+  - novi testovi u `modTest`; brojevi se dodeljuju posle rebase-a na `main` (`S8R1A-REV-02`);
+  - zasejavanje kroz kanonske pisce, **posle** početka spoljne transakcije, i tvrdnja da je
+    rollback vratio redove (`S8R1A-REV-01`);
+  - zeleni moraju ostati RunAllTests, BFP, Storno i Palete.
+- **Sabotaže** (svaka obara svoju tvrdnju po imenu):
+  - E4 po broju zbirne;
+  - E2 bez strogog čitača (prvi pogodak);
+  - jezgro prati `Otkup.BrojZbirne`;
+  - nerazrešena ivica se pogađa umesto da se označi.
+- **Fixture:** ne menja se. Seme su u testu: *normal production state* kroz pisce, mamci su
+  *synthetic anomaly*.
+
+**S9-2, obim dokaza** (pun ugovor na početku reza):
+- **Crveno nad `d19c2dae`:** detalj otpremnice kanonskog lanca kaže „0 blokova" i nema
+  zbirnu (`T_Izv_DetaljICipKontekst` preseje se kroz pisce, N3);
+- **Negativ:** OTK red za PWA nosi vozača tekuće predaje, a ne prazno; posle storna otpremnice
+  nosi prazno;
+- **Sabotaža:** detalj čita `Otkup.OtpremnicaID`.
+
+#### LANDING — S9 dok S8 traje
+
+- **Ovaj PR je samo dokumentacija**, nad `d19c2dae`. Tačke sudara sa `#459` su četiri:
+  - red „Ažurirano";
+  - red S8/S9 u tabeli `STANJE` (linije 41–42);
+  - kraj spiska stavki;
+  - kraj §14.58.
+
+  Rebase posle `#459` je trivijalan, jer oba dodatka ostaju.
+- **Brojevi:** S9 uzima stavku 288 i plan §14.59, tačno ono što `#459` u svom poslednjem redu
+  „Sledeći brojevi" ostavlja slobodnim. Ako S8 1c uđe pre ovog PR-a, brojevi se pomeraju pri
+  rebase-u.
+- **Serijski sa S8:** kanon, fixture, `popis_citalaca` pragovi, `RunAllChecks`, centralni registar
+  ekrana. Zato S9-3 ide posle 2a, a S9-4, S9-5, S9-6 i S9-7 posle 2b.
+- **Paralelno sme:**
+  - S9-1, jer je nov modul i novi testovi;
+  - S9-2 posle `#459`: dira druge postupke u zajedničkim fajlovima (`modStornoRecovery`, `modDokumenta`).
+- **Numeracija se već sudara među otvorenim PR-ovima** (nalaz uz put, van S9):
+  - test **309**: `#457` ga dodaje, a `main` ga već ima (`T_S8R1a_IspravkaKorigujeSvojDokument`,
+    `modTest:1021`). To je zapisano u stavci 279;
+  - **nije zapisano:** `#457` dodaje `KI-083`–`KI-085`, a `main` već ima `KI-083` i `KI-084`,
+    dok `#459` dodaje `KI-085`. Isto tako, `#457` dodaje stavku **276**, koja je u `main`-u
+    zauzeta.
+
+  S9 zato ne uzima broj testa ni KI unapred.
+
+#### GO / HOLD
+
+- **S9-0:** GO (ovaj PR).
+- **S9-1: HOLD** do `SLED-ODL-01`, `-02`, `-03` i `-06`. Kad padnu po predlogu, GO bez novog
+  pre-flight-a. Starog koda nema, pa se test G3 sa mamcem piše pre jezgra, a crveno se pokazuje
+  sabotažom (E4 po broju zbirne obara G3 po imenu). Sme paralelno sa S8 1c i 2a.
+- **S9-2: GO posle merge-a `#459`.** Domen je zatvoren (kolone bez pisca); prvo crveno iz N3.
+- **S9-3: HOLD** do S8 2a i `SLED-ODL-07/08`.
+- **S9-4, S9-5, S9-6: HOLD do S8 2b** (a S8 2b čeka izlaznu kapiju C002).
+- **S9-7: HOLD** do `SLED-ODL-04/05`, S9-1, S8 2b i PLATFORM sonde.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
