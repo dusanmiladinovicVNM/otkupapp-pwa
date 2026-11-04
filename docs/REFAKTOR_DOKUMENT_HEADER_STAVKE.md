@@ -10954,6 +10954,77 @@ konteksta ispravke.
 - **Mina:** `GetColumnIndex` posle brisanja kolone vraća 0. Čitalac koji nije prepisan u 2a bi u 2b tiho
   ćutao; zato prag `pal_broj` broji mesta, a ne postojanje kolone.
 
+### 14.60) Pre-flight S8 rez 2b — paleta zna samo stavku prijemnice (04.11.2026)
+
+Grana `claude/s8-rez2b-kolone` od `ed6896dc` (merge `#465`). Zapis: `docs/STANJE_REFAKTORA.md` stavka 312. Koda
+nema. Obim je §14.58 („Rez 2" i „Drugi review"), §14.59 (granica 2a/2b) i obaveze iz stavke 305; `PAL-ODL-12`
+(C002 ne prima 2b) skida izlaznu kapiju C002.
+
+#### Merenje (grep nad `ed6896dc`)
+
+- **Kanon:** `tblPaletaStavka` nosi `BrojPrijemnice` (3. kolona), `BrojZbirne` (4.) i `ZbirnaRoditeljID` (17.);
+  `formats` vodi prve dve kao tekst. Brisanje kolona iz sredine kanona je dozvoljeno samo uz self-heal
+  (`modSetup.ObrisiKolonuAko`, presedan S6 korak 8, `modSetup:1332-1355`); pisac paletne stavke upisuje PO IMENU
+  (`PalAppendRow`), pa pozicioni upis nije u igri.
+- **Pisci tih kolona** (živa mesta grupe `pal_broj` = 8): `AddStavka` (`modPaletniList:1283`),
+  `RequirePaletaStavkaSchema` (`:2903`), upis labela u prevezivanju (`ReassignPaleteToPrijemnica_TX` `:1705-1707`),
+  paletni rep `modDokumenta.ReassignPrijemnicaToZbirna_TX` (`:8931-8954`), `modSetup.EnsurePaletniListSchema`
+  (`:938`); `ZbirnaRoditeljID` paletne stavke još i `modSetup:1210` (preimenovanje) i `:1390` (`EnsureKolonaSaTragom`).
+- **Produkcioni pozivaoci pisca:** paletnu stavku pravi samo `PaletizePrijemnica`, koju zove snimanje prijemnice
+  (`modDokumenta:6837`, uvek sa ključem stavke) i korekcija (`SpillGajbice`, sa ključem). Stavku bez ključa danas
+  prave samo testovi (Palete T14, „stari oblik") i fixture.
+- **Fixture:** paletne stavke u `tools/make_fixture.py` (`:1962-`) nose `BrojPrijemnice`/`BrojZbirne`, a NE nose
+  `PrijemnicaStavkaID`; ključ stavke fixture-a je `"PRS-" + PrijemnicaID` (`:2358`), pa se lako dodaje.
+- **Testovi koji čitaju po broju:** `modTest` (6 mesta: `KljucStavkePaleteZaPrijemnicu`, `GajbicaZaPrijemnicu`,
+  `SvihStavkiZaPrijemnicu`, `StavkiZaPrijemnicu`, `ZbirnaNaStavci`), `modTestPalete.StInfo` (zove ga 41 mesto u
+  suiti Palete), `modTestStorno` (`SeedPaletaStavka`, `PalsBrojZbirne`), BFP (2 mesta).
+- **Katalog sabotaža:** 8 sabotaža u ZAMENSKOM kodu koristi `COL_PALS_BROJ_PRIJ`/`_ZBIRNE` (`s8r1a-korekcija-stavke-po-broju`,
+  `s8r1a-resync-po-broju`, četiri `s8r2a1-*`, dve `s8r2a2-*`). Posle brisanja konstanti zamena se ne kompajlira:
+  dokaz bi visio (TIMEOUT), a ne bio crven. Svaka se preformuliše u oblik greške koji i bez kolone može da se
+  ponovi (npr. izbor po broju preko zaglavlja prijemnice) ili povlači uz obrazloženje.
+
+#### Verdikt po osama
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN** | `PAL-ODL-02/03`, `PAL-INV-01/02`; posle 2a te kolone niko ne čita (grupa `pal_broj` = samo pisci) |
+| `EVENTS` | N/A | nema novog događaja; briše se trag koji niko ne čita |
+| `IDENTITY` | **PROVEN** | paleta zna samo `PrijemnicaStavkaID` (i `PrijemnicaID` kao labelu dokumenta); pisac već dobija ključ |
+| `CARDINALITY` | **PROVEN** | 1 stavka prijemnice : 0..N paletnih stavki; paletizacija je potpuna (`PAL-ODL-02`) |
+| `INVARIANTS/OWNER` | **PROVEN** | `PAL-INV-01` drži pisac (`AddStavka`/`PaletizePrijemnica`: prazan, nepostojeći, tuđ ključ i pogrešna klasa se odbijaju); meko C1 i A3 (`modIntegritet`) |
+| `WRITERS` | **PROVEN** | pisci tri kolone se brišu; jedini mutator `tblPaletaStavka` ostaje `modPaletniList` (`WRITE_OWNERSHIP`); paletni rep `modDokumenta` (skriven pisac, §14.58) nestaje |
+| `DOWNSTREAM` | **PROVEN** | čitalaca nema (2a); posledice su fixture, seed-ovi, test-pomoćnici i katalog sabotaža (gore) |
+| `CAPABILITY` | N/A | nijedna sposobnost operatera se ne menja |
+| `ACCEPTANCE CONTRACT` | **PROVEN (plan)** | ispod |
+| `PLATFORM` | **PROVEN** | brisanje kolone ide postojećim self-heal-om (`ObrisiKolonuAko`, presedan S6 korak 8) |
+| `LANDING` | **PROVEN**, ⚠ veliko | menja kanon, `modSchema`, fixture (nov otisak), suite Palete i katalog — zato predlog podele ispod |
+
+#### Predlog podele (`PAL-ODL-13`, odluka operatera)
+
+- **2b-1 — pisac i integritet, kolone ostaju:** kapija pisca `PAL-INV-01`; C1 prijavljuje aktivnu paletnu stavku
+  bez ključa (zatvara `S8R2A2-REV-01`); fixture i seed-ovi dobijaju ključ linije; Palete T14 prelazi na sintetički
+  seed (pisac više ne pravi stavku bez ključa). Posle 2b-1 svaki red nosi ključ, pa A3 pokriva sve.
+- **2b-2 — brisanje:** kanon i `modSchema`, self-heal (`ObrisiKolonuAko`), konstante, svi pisci tri kolone, test-
+  pomoćnici na ID (uključujući `StInfo`), preformulisanje ili povlačenje 8 sabotaža, `pal_broj` 8 → 0 (dokaz u
+  oba smera).
+
+Razlog: 2b-1 prvo dovodi podatke u stanje u kome brisanje ne može da ostavi red bez identiteta (obrazac „prvo
+lifecycle, pa presecanje", memorija `cutover-nosi-svoj-lifecycle`), a svaki PR nosi jednu klasu izmene. Jedan PR bi
+mešao kapiju pisca, fixture i brisanje šeme, uz prepravku 41 mesta u suiti Palete.
+
+#### ACCEPTANCE CONTRACT (plan)
+
+- **2b-1:** pisac odbija prazan, nepostojeći, tuđ ključ i pogrešnu klasu, po imenu, bez mutacije (test kroz
+  `PaletizePrijemnica` i kroz snimanje prijemnice); C1 imenuje aktivnu paletnu stavku bez ključa, pa integritet
+  nad takvim redom NIJE čist (test, sabotaža); fixture: sve paletne stavke nose ključ (nov otisak, `make_fixture`
+  je skupa kapija); svi postojeći testovi zeleni.
+- **2b-2:** kolone ne postoje ni u kanonu ni u svesci posle self-heal-a (test nad svežom i nad zatečenom sveskom);
+  `pal_broj` = 0; nijedan test ni pomoćnik ne čita broj sa paletne stavke; sabotaže iz kataloga se kompajliraju i
+  grizu ili su povučene uz razlog; svi suite-ovi zeleni.
+- **Mina:** `GetColumnIndex` posle brisanja vraća 0 — meri se pozivna mesta STAROG pisca i čitaoca (grep po
+  konstanti I po doslovnom imenu kolone, memorija `brisanje-kolone-literal-u-vise-redova`), ne samo postojanje
+  kolone.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

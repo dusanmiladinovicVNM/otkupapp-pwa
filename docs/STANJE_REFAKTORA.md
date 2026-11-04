@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 311: merge `#465` = `ed6896dc`; `PAL-ODL-12` C002 ne prima 2b; sledi 2b sa svojim ugovorom).
+**Ažurirano:** 04.11.2026 (stavka 312: pre-flight reza 2b, plan §14.60; čeka odluku `PAL-ODL-13` o podeli).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10785,6 +10785,20 @@
          na ID; grupa `pal_broj` ide na 0 (dokaz u oba smera);
        - mina: `GetColumnIndex` posle brisanja kolone vraća 0 — meri se pozivna mesta, ne postojanje kolone.
      - **Sledeći brojevi:** test 315 · stavka 312 · KI-088 · plan §14.60.
+
+312. **Pre-flight S8 rez 2b — paleta zna samo stavku prijemnice** (04.11.2026, grana `claude/s8-rez2b-kolone`;
+     operater: „uradi ovde"). Plan §14.60. Koda nema.
+
+     - **Merenje:** kanon (tri kolone, dve u sredini; brisanje samo uz self-heal, presedan S6 korak 8), 8 živih
+       mesta pisaca, jedini produkcioni pozivalac pisca uvek šalje ključ, fixture bez ključa (lako se dodaje:
+       `"PRS-" + PrijemnicaID`), testovi po broju (`modTest` 6, `StInfo` 41 poziv u suiti Palete, `modTestStorno`
+       2, BFP 2), **8 sabotaža u katalogu čiji se zamenski kod posle brisanja konstanti ne bi kompajlirao**.
+     - **Verdikt:** sve ose PROVEN ili N/A; `LANDING` ⚠ veliko.
+     - **Predlog `PAL-ODL-13`:** 2b u dva PR-a — **2b-1** pisac `PAL-INV-01`, C1 za red bez ključa (zatvara
+       `S8R2A2-REV-01`), ključ u fixture-u i seed-ovima, kolone ostaju; **2b-2** brisanje kolona, pisaca i
+       konstanti, test-pomoćnici na ID, preformulisanje ili povlačenje 8 sabotaža, `pal_broj` 8 → 0.
+     - **Čeka odluku operatera** o podeli; do tada nema koda.
+     - **Sledeći brojevi:** test 315 · stavka 313 · KI-088 · plan §14.61.
 
 ## Dug sa imenom (posle S5-5b)
 
