@@ -10596,12 +10596,16 @@ End Sub
 '      prijemnice (R1). Pada prjA i njena paletna stavka; prjB i njena roba ostaju;
 '   3) KI-039: zbirna C (svoj broj), prijemnica na PRERADJENOJ paleti (druga sveza
 '      paleta). Pregled ne obecava skidanje; PONISTENJE se odbija razlogom koji
-'      imenuje preradu, BEZ zapisa ispravke, a prijemnica ostaje aktivna.
+'      imenuje preradu, BEZ zapisa ispravke, a prijemnica ostaje aktivna;
+'   4) S8R2A1-REV-01: dve zbirne istog broja, prijemnica druge BEZ traga roditelja
+'      (synthetic anomaly) -- obim se ne moze suziti, pa uvid zbirne D1 ne sme da
+'      padne na sva deca tog broja i ponese robu D2.
 '
 ' Nivo: FIZICKE paletne stavke po PrijemnicaID-u; zapisi ispravke kao redovi
 ' tblStornoVeze. Sve u transakciji koja se uvek vraca.
 ' SABOTAZE: s8r2a1-scope-po-paletama, s8r2a1-pregled-po-broju,
-' s8r2a1-uvid-po-broju, s8r2a1-ki039-bez-provere, s8r2a1-pregled-obecava-skidanje.
+' s8r2a1-uvid-po-broju, s8r2a1-ki039-bez-provere, s8r2a1-pregled-obecava-skidanje,
+' s8r2a1-obim-nesuzen.
 Private Sub Test_S8R2a1_PaleteZbirnePoPrijemnicama()
     Const SRC As String = "Test_S8R2a1_PaleteZbirnePoPrijemnicama"
     Dim tx As clsTransaction
@@ -10618,6 +10622,8 @@ Private Sub Test_S8R2a1_PaleteZbirnePoPrijemnicama()
     scenario = NewScenarioCode("S8R2A")
     tipT = RegistrujTipTesta("TIPS8E-" & scenario)
     tipC = RegistrujTipTesta("TIPS8F-" & scenario)
+    Dim tipD As String
+    tipD = RegistrujTipTesta("TIPS8G-" & scenario)
     prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
     prevPal = GetConfigValue(CFG_PALETIRANJE)
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
@@ -10731,6 +10737,46 @@ Private Sub Test_S8R2a1_PaleteZbirnePoPrijemnicama()
                  "S8R2a1: odbijeno PONISTENJE ne pravi zapis ispravke"
     AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjC), _
                "S8R2a1: prijemnica zbirne C ostaje aktivna"
+
+    ' --- 4) S8R2A1-REV-01: obim se ne moze suziti -> uvid ne nosi tudju robu ---
+    ' Meri se BLAG uvid: strog nesiguran obim ionako prijavi kao nevalidan, pa samo
+    ' blag razlikuje "odbij" od "procitaj sva deca tog broja".
+    Dim brojD As String, otpD1 As String, otpD2 As String, zbrD1 As String, zbrD2 As String
+    Dim prjD1 As String, prjD2 As String, hD1 As Object, hD2 As Object
+    brojD = TEST_PREFIX & "-ZBR-S8D-" & scenario
+    otpD1 = ZbrOtpremnicaNaDan("S8AD1" & scenario, NextTestDate())
+    Set izv = New Collection: izv.Add otpD1
+    Set hD1 = ZbrHeaderNaDan(brojD, NextTestDate())
+    hD1("KupacID") = TEST_KUP_ID
+    zbrD1 = modDokumenta.CreateZbirnaIzIzvora_TX(hD1, izv, g, True)
+    otpD2 = ZbrOtpremnicaNaDan("S8AD2" & scenario, NextTestDate())
+    Set izv = New Collection: izv.Add otpD2
+    Set hD2 = ZbrHeaderNaDan(brojD, NextTestDate())
+    hD2("KupacID") = TEST_KUP_ID
+    zbrD2 = modDokumenta.CreateZbirnaIzIzvora_TX(hD2, izv, g, True)
+    prjD1 = "PRJ-S8AD1-" & scenario
+    prjD2 = "PRJ-S8AD2-" & scenario
+    If Len(zbrD1) > 0 And Len(zbrD2) > 0 Then
+        ZbrSejPrijemnicuSaRoditeljem prjD1, brojD, zbrD1
+        ZbrSejPrijemnicuSaRoditeljem prjD2, brojD, zbrD2
+        RequireUpdateCell TBL_PRIJEMNICA, CLng(FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prjD2).item(1)), _
+                          COL_DETE_ZBIRNA_ROD, "", SRC
+        S8R2aPaletizuj prjD1, brojD, 20#, 2, tipD
+        S8R2aPaletizuj prjD2, brojD, 30#, 3, tipD
+    End If
+    AssertTrue Len(zbrD1) > 0 And Len(zbrD2) > 0 And Len(S8R1bPaletaDokumenta(prjD2)) > 0, _
+               "S8R2a1: preduslov -- dve zbirne istog broja, druga sa prijemnicom bez traga"
+    Dim uvD As Object, palD As Collection, pD As Variant, gajbD As Long
+    Set uvD = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, brojD, "", zbrD1, False)
+    gajbD = -1
+    If uvD.Exists("palete") Then
+        Set palD = uvD("palete")
+        gajbD = 0
+        For Each pD In palD
+            gajbD = gajbD + CLng(Val(nz(pD("thisGajb"), 0)))
+        Next pD
+    End If
+    AssertEquals 0, gajbD, "S8R2a1: uvid zbirne bez sigurnog obima ne nosi robu druge zbirne"
 
 Kraj:
     tx.RollbackTx

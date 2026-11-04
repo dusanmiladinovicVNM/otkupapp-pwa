@@ -9200,6 +9200,15 @@ SABOTAZE = {
         "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
         "S8R2a1: pregled ne obecava skidanje robe sa preradjene palete",
     ),
+    # S8R2A1-REV-01: nesiguran obim zbirne se odbija; prazan scope bi uvid jedne
+    # zbirne pustio na sva deca tog broja (i palete druge zbirne).
+    "s8r2a1-obim-nesuzen": (
+        "modStornoFlow.bas",
+        "    If Len(razlogObima) > 0 Then Err.Raise ERR_UI_BASE + 42, SRC, \"Obim zbirne \" & Trim$(broj) & \" se ne moze suziti: \" & razlogObima\n",
+        "    ' SABOTAZA: nesiguran obim se cita nesuzeno po broju\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: uvid zbirne bez sigurnog obima ne nosi robu druge zbirne",
+    ),
     # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
     "s8r1a-altf8-prvi-pogodak": (
         "modPaletniListUI.bas",

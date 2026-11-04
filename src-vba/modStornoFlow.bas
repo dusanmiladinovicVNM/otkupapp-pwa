@@ -1956,12 +1956,16 @@ End Function
 ' PONISTENJE stornira. Za uvid Storno centra (modStornoImpact.ImpactPalete, S8
 ' rez 2a-1, R3): palete zbirne su palete OVIH prijemnica, ne paletne stavke po
 ' koloni BrojZbirne.
+' Nesiguran obim se ODBIJA (S8R2A1-REV-01): kad kapija obima vrati razlog, scope je
+' prazan, a prazan scope znaci "sva aktivna deca tog broja" -- uvid jedne zbirne bi
+' tada nosio i palete druge zbirne istog broja. Isti razlog obara i kaskadu.
 Public Function PrijemniceUObimuZbirne(ByVal broj As String, ByVal zbirnaID As String) As Object
     Const SRC As String = MOD_NAME & ".PrijemniceUObimuZbirne"
-    Dim scopeID As String, ids As Collection, k As Long
+    Dim scopeID As String, ids As Collection, k As Long, razlogObima As String
     Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
     res.CompareMode = vbTextCompare
-    ZbirnaScopeRazlog Trim$(broj), zbirnaID, True, scopeID
+    razlogObima = ZbirnaScopeRazlog(Trim$(broj), zbirnaID, True, scopeID)
+    If Len(razlogObima) > 0 Then Err.Raise ERR_UI_BASE + 42, SRC, "Obim zbirne " & Trim$(broj) & " se ne moze suziti: " & razlogObima
     Set ids = ActivePrijIDsByZbirna(Trim$(broj), scopeID, SRC)
     For k = 1 To ids.count
         res(CStr(ids(k))) = 1
