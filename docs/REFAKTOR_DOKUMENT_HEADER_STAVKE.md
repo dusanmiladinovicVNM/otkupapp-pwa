@@ -11090,7 +11090,7 @@ sabotaže, Compile). Static CI #1156 na `c97cf6fa` SUCCESS. Nov P1 ili P2 nije n
 - **Nad `08146520`:** RunAllTests 314 / 0, BFP **3017 / 0**; `dokaz.py --grupe 6 s8r2b1 s8r2a2-c1-tudji-kljuc`:
   **6 / 6 crveno** (grupno: 2 u grupi, 4 pojedinačno), potpis izvora `5344a886ecdf9528` pre i posle identičan.
 - **Palete i Storno** su mereni nad `9ca82b61`; `08146520` menja samo BFP modul, koji te suite ne izvršavaju.
-- **Compile:** automatski NEJASNO. Sveska za ručni Compile: `tests/fixtures/rucna_provera_s8r2b1.xlsm` (kod
+- **Compile:** automatski NEJASNO; ručno **PASS** (operater, „compiles"). Sveska: `tests/fixtures/rucna_provera_s8r2b1.xlsm` (kod
   `08146520`; pre provere VBE `File > Import File` → `src-vba/modVbaTools.bas`).
 
 - **`S8R2B1-REV-02` (P3, test coverage) — prihvaćeno, bez izmene.** Tvrdnja „bez mutacije" broji redove `tblPaleta`
