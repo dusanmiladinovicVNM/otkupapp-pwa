@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 305: merge `#464` = `11f9a7a7`, rez 2a ZATVOREN; `S8R2A2-REV-01` prihvaćen do 2b; sledi rez `KI-086`/`KI-087`).
+**Ažurirano:** 04.11.2026 (stavka 306: ugovor reza `KI-086`/`KI-087` — mere i testovi; koda još nema).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10611,6 +10611,46 @@
      - **Redosled:** operater je pitao da li posle 2a ide „odmah 2b", pa potvrdio `PAL-ODL-10`: **prvo rez
        `KI-086`/`KI-087`**, zatim 2b (HOLD i do odgovora o C002).
      - **Sledeći brojevi:** test 315 · stavka 306 · KI-088 · plan §14.60.
+
+306. **Rez `KI-086`/`KI-087` — ugovor pre koda** (04.11.2026, grana `claude/s8-ki086-087` od `11f9a7a7`;
+     `PAL-ODL-10`). Pročitano: `modScrOporavak.PreveziPalete`/`PreveziPaleteCore`,
+     `modPaletniListUI.PaletaAdjustPrompt`, pet funkcija iz `KI-087`, test 314. Koda nema.
+
+     - **`KI-086` — ishod korekcije posle prevezivanja postaje podatak, ne samo tekst:**
+       - `PaletaAdjustPrompt` dobija `Optional ByRef outKorekcijaCeka As Boolean`: `True` kad je korekcija bila
+         potrebna, a nije urađena (`ADJ_BLOCKED`, „Otkaži" na pitanju, greška); `False` kad je urađena ili nije
+         bila potrebna;
+       - `PreveziPaleteCore` dobija isti `Optional ByRef` izlaz (`True` samo uz `gajbDiff` i neurađenu korekciju);
+       - `PreveziPalete` (ekran): uspešno prevezivanje sa korekcijom koja čeka javlja se kao UPOZORENJE
+         (`vbExclamation`) sa novim ključem poruke — „palete su prevezene, ali korekcija količina NIJE završena;
+         dok se ne uradi, dokument i palete se razlikuju (Integritet A3); Alt+F8 → PaletaAdjust_Prompt". Nov ključ
+         traži restart (memorija `nov-kljuc-poruke-trazi-restart`);
+       - **seam pitanja** u `PaletaAdjustPrompt`, po obrascu `PotvrdiManjakAmbalaze` (KI-015): u test režimu ne
+         otvara `MsgBox`, BELEŽI tekst pitanja i bira „Otkaži" (samo zabranjuje, ne menja); čitač + reset, reset
+         ide u `modTest.ResetSeamova`. Bez toga grana sa pitanjem u test prolazu visi;
+       - van obima, svesno: zapis „nedovršenog posla" u Oporavku (nov pisac recovery zapisa) — vidljivost daje
+         upozorenje i A3 po stavci. Ako review traži zapis u Oporavku, to je odluka za operatera.
+     - **`KI-087` — kolone odluke u kapijama `modPaletniList` se čitaju strogo:**
+       - `GetOrCreateOpenPaleta`: `Vrsta`, `Sorta`, `Klasa`, `TipAmbalaze`, `Status`, `Stornirano`, `PaletaID`,
+         `Preradjeno` kroz `RequireColumnIndex` (danas nečitljiv `Preradjeno`/`Stornirano` = roba na
+         prerađenu/storniranu paletu);
+       - `RecomputePaletaFromStavke`: kolone stavke i `Status` palete strogo (danas nečitljiv `Stornirano` =
+         zaglavlje sabira i stornirane stavke);
+       - `ClosePaletaManual_TX`: `Stornirano`, `Preradjeno`, `Status` strogo (danas nečitljiv status = zatvaranje
+         dozvoljeno);
+       - `AdjustPaletaGajbiceZaPrijemnicu_TX`: `VrstaVoca`, `SortaVoca`, `TipAmbalaze` dokumenta strogo, grana
+         `If pTa > 0` briše se;
+       - `ClassNetoOutOfSync`: bez `On Error Resume Next` (danas greška = „usklađeno", pa resync izostane).
+     - **Testovi (plan):**
+       - test **315** (`modTest`): prevezivanje kad višak ne staje na paletu → pitanje (seam ga beleži, imenuje
+         dokument) → „Otkaži" → `outKorekcijaCeka = True`, palete cilja nepromenjene korekcijom; test 314 dobija
+         kontra-tvrdnju: smanjenje je korigovano, `outKorekcijaCeka = False`;
+       - `KI-087`: po jedna seam-tvrdnja za dve najopasnije kolone (`Preradjeno` u `ClosePaletaManual_TX` i u
+         `GetOrCreateOpenPaleta`), obrascem `S8R1B-REV-04` (kuka kvari INDEKS, strog uslov posle kuke); ostale
+         kolone su strogo čitane bez sopstvenog testa (imenovano kao nemereno);
+       - sabotaže po meri; fixture nepromenjen.
+     - **Kapije:** jeftine u rezu; skupe tek posle reviewer GO-a i „Push, pa kapije".
+     - **Sledeći brojevi:** test 315 · stavka 307 · KI-088 · plan §14.60.
 
 ## Dug sa imenom (posle S5-5b)
 
