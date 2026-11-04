@@ -41,8 +41,10 @@ Private mSkipPaletize As Boolean
 '   "PRERADJENO_KOLONA"   kolona statusa prerade palete se ne nalazi
 '                         (IsPaletaPreradjena, S8R1B-REV-04);
 '   "STATUS_CILJA_KOLONA" kolona Stornirano prijemnice se ne nalazi
-'                         (ReassignPaleteToPrijemnica_TX, S8R1B-REV-05).
-' Dva _KOLONA rezima kvare INDEKS kolone, ne dizu gresku: tolerantan citac pod
+'                         (ReassignPaleteToPrijemnica_TX, S8R1B-REV-05);
+'   "STATUS_PRIJEMNICE_KOLONA" kolona Stornirano prijemnice se ne nalazi
+'                         (PaletaAktivnaRobaRazlog, S8 rez 1c, S8R1C-REV-01).
+' _KOLONA rezimi kvare INDEKS kolone, ne dizu gresku: tolerantan citac pod
 ' Resume Next bi dignutu gresku progutao pa procitao pravu kolonu, i test ne bi
 ' razlikovao tolerantan citac od strogog. Postavljac ga pali samo u test rezimu,
 ' kuka ponovo pita IsTestMode(), a gasi ga modTest.ResetSeamova.
@@ -2186,6 +2188,100 @@ Public Function PreradjenaPaletaRazlog(ByVal prijemnicaID As String) As String
             End If
         End If
     Next r
+End Function
+
+' ROBA AKTIVNE PRIJEMNICE NA PALETI (N7, PAL-ODL-06, S8 rez 1c): razlog odbijanja
+' storna palete, ili "" kad paleta sme da se stornira. Paleta koja nosi robu
+' AKTIVNE prijemnice se ne stornira -- storno bi skinuo robu dokumenta koji vazi,
+' i su-stanara; put je storno ili ispravka prijemnice. Aktivna paletna stavka
+' STORNIRANE prijemnice je sirocad i ne smeta; prazna paleta takodje.
+' Strog: bez On Error, tabele moraju da postoje, kolone kroz RequireColumnIndex
+' (status prijemnice kroz KolonaKapijeSeNeCita, posle kuke seam-a).
+' Stavka bez PrijemnicaID-a, ili sa ID-em koji ne vodi na tacno jednu prijemnicu,
+' je takodje razlog: ne zna se cija je roba, a necitljivo stanje nije dozvola.
+' Jedna implementacija, dva pozivaoca: jezgro (modStorno.StornoPaleta) i ekran
+' Palete pre pitanja (isti tekst, samo ranije). Samo cita.
+Public Function PaletaAktivnaRobaRazlog(ByVal palID As String) As String
+    Const SRC As String = "modPaletniList.PaletaAktivnaRobaRazlog"
+    Dim pal As String
+    pal = Trim$(palID)
+    If Len(pal) = 0 Then
+        Err.Raise vbObjectError + 7365, SRC, "Prazan PaletaID -- ne zna se koja paleta."
+    End If
+    If GetTable(TBL_PALETA_STAVKA) Is Nothing Then
+        Err.Raise vbObjectError + 7365, SRC, _
+                  "Nema tabele " & TBL_PALETA_STAVKA & " -- ne zna se sta paleta nosi."
+    End If
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim sPal As Long, sStt As Long, sPid As Long, sId As Long
+    sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+    sStt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+    sPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
+    sId = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, SRC)
+
+    ' Vlasnici aktivnih stavki palete: PrijemnicaID -> broj redova u tblPrijemnica.
+    Dim vlasnici As Object: Set vlasnici = CreateObject("Scripting.Dictionary")
+    vlasnici.CompareMode = vbTextCompare
+    Dim r As Long, pid As String
+    For r = 1 To UBound(s, 1)
+        If Trim$(NzToText(SafeCell(s, r, sPal))) = pal _
+           And UCase$(Trim$(NzToText(SafeCell(s, r, sStt)))) <> "DA" Then
+            pid = Trim$(NzToText(SafeCell(s, r, sPid)))
+            If Len(pid) = 0 Then
+                PaletaAktivnaRobaRazlog = "Paleta " & PaletaLabel(pal) & ": paletna stavka " & _
+                    Trim$(NzToText(SafeCell(s, r, sId))) & " nema PrijemnicaID. Ne zna se cija " & _
+                    "je roba, pa se paleta ne stornira."
+                Exit Function
+            End If
+            vlasnici(pid) = 0
+        End If
+    Next r
+    If vlasnici.count = 0 Then Exit Function
+
+    If GetTable(TBL_PRIJEMNICA) Is Nothing Then
+        Err.Raise vbObjectError + 7365, SRC, _
+                  "Nema tabele " & TBL_PRIJEMNICA & " -- ne zna se cija je roba na paleti."
+    End If
+    Dim prjD As Variant: prjD = GetTableData(TBL_PRIJEMNICA)
+    Dim cPrId As Long, cPrBr As Long, cPrSt As Long
+    cPrId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+    cPrBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+    cPrSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    If PaletaPraznoAkoTest("STATUS_PRIJEMNICE_KOLONA") Then cPrSt = 0
+    If cPrSt = 0 Then KolonaKapijeSeNeCita TBL_PRIJEMNICA, COL_STORNIRANO, SRC
+    Dim aktivne As Object: Set aktivne = CreateObject("Scripting.Dictionary")
+    aktivne.CompareMode = vbTextCompare
+    If Not IsEmpty(prjD) Then
+        For r = 1 To UBound(prjD, 1)
+            pid = Trim$(NzToText(SafeCell(prjD, r, cPrId)))
+            If vlasnici.Exists(pid) Then
+                vlasnici(pid) = vlasnici(pid) + 1
+                If UCase$(Trim$(NzToText(SafeCell(prjD, r, cPrSt)))) <> "DA" Then
+                    aktivne(pid) = Trim$(NzToText(SafeCell(prjD, r, cPrBr))) & " (" & pid & ")"
+                End If
+            End If
+        Next r
+    End If
+
+    Dim k As Variant, spisak As String
+    For Each k In vlasnici.Keys
+        If vlasnici(k) <> 1 Then
+            PaletaAktivnaRobaRazlog = "Paleta " & PaletaLabel(pal) & " nosi robu prijemnice " & _
+                CStr(k) & ", koja ne postoji ili nije jednoznacna. Ne zna se da li je aktivna, " & _
+                "pa se paleta ne stornira."
+            Exit Function
+        End If
+    Next k
+    For Each k In aktivne.Keys
+        If Len(spisak) > 0 Then spisak = spisak & ", "
+        spisak = spisak & aktivne(k)
+    Next k
+    If Len(spisak) > 0 Then
+        PaletaAktivnaRobaRazlog = "Paleta " & PaletaLabel(pal) & " nosi robu aktivne prijemnice " & _
+            spisak & ". Storno palete bi skinuo robu dokumenta koji vazi -- prvo stornirajte " & _
+            "ili ispravite prijemnicu."
+    End If
 End Function
 
 Private Function RazlogPreradjena(ByVal pid As String, ByVal pal As String) As String

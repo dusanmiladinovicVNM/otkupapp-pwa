@@ -424,7 +424,7 @@ End Function
 
 ' Vraca True samo ako je radnja PROMENILA podatke (mreza se tada cita ponovo).
 Private Function PalAkcija(ByVal tag As String) As Boolean
-    Dim p() As String, red As Long, broj As String, iD As String
+    Dim p() As String, red As Long, broj As String, iD As String, razlog As String
     On Error GoTo EH
     p = Split(Mid$(tag, 5), ":")
     If UBound(p) < 1 Then Exit Function
@@ -470,6 +470,14 @@ Private Function PalAkcija(ByVal tag As String) As Boolean
             ' tiho. Isto upozorenje kao u legacy formi, samo pre poziva.
             If UCase$(Trim$(CStr(modOtkupUI.GridCell(red, PAL_KOL_PRERADJENO)))) = "DA" Then
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_PAL_PRERADJENA"), True
+                Exit Function
+            End If
+            ' N7 (PAL-ODL-06): paleta sa robom aktivne prijemnice se ne stornira.
+            ' Isti razlog koji daje jezgro, samo pre pitanja -- StornoPaleta_TX bi
+            ' ga progutao u opstu poruku o neuspehu.
+            razlog = modPaletniList.PaletaAktivnaRobaRazlog(iD)
+            If Len(razlog) > 0 Then
+                modOtkupUI.ShowToast razlog, True
                 Exit Function
             End If
             If MsgBox(Poruka("OTKUI_ASK_PAL_STORNO") & " " & broj & "?", _
