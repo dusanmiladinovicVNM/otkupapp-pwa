@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 312: pre-flight reza 2b, plan §14.60; čeka odluku `PAL-ODL-13` o podeli).
+**Ažurirano:** 04.11.2026 (stavka 313: `PAL-ODL-13` — 2b ide kao dva PR-a; počinje 2b-1).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10799,6 +10799,16 @@
        konstanti, test-pomoćnici na ID, preformulisanje ili povlačenje 8 sabotaža, `pal_broj` 8 → 0.
      - **Čeka odluku operatera** o podeli; do tada nema koda.
      - **Sledeći brojevi:** test 315 · stavka 313 · KI-088 · plan §14.61.
+
+313. **Odluka `PAL-ODL-13`: rez 2b ide kao dva PR-a** (04.11.2026; operater: „Dva PR-a"). Upisano u
+     `docs/DOMEN/PALETE.md` §4; plan §14.60 nosi odluku.
+
+     - **2b-1** (prvi PR, grana `claude/s8-rez2b-kolone`): kapija pisca `PAL-INV-01`, C1 za aktivnu paletnu stavku
+       bez ključa (zatvara `S8R2A2-REV-01`), ključ u fixture-u i seed-ovima, Palete T14 na sintetički seed; kolone
+       ostaju.
+     - **2b-2** (drugi PR, posle merge-a 2b-1): brisanje kolona, pisaca i konstanti, test-pomoćnici na ID,
+       preformulisanje ili povlačenje 8 sabotaža, `pal_broj` 8 → 0.
+     - **Sledeći brojevi:** test 315 · stavka 314 · KI-088 · plan §14.61.
 
 ## Dug sa imenom (posle S5-5b)
 

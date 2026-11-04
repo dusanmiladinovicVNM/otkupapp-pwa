@@ -10999,7 +10999,7 @@ nema. Obim je §14.58 („Rez 2" i „Drugi review"), §14.59 (granica 2a/2b) i 
 | `PLATFORM` | **PROVEN** | brisanje kolone ide postojećim self-heal-om (`ObrisiKolonuAko`, presedan S6 korak 8) |
 | `LANDING` | **PROVEN**, ⚠ veliko | menja kanon, `modSchema`, fixture (nov otisak), suite Palete i katalog — zato predlog podele ispod |
 
-#### Predlog podele (`PAL-ODL-13`, odluka operatera)
+#### Podela (`PAL-ODL-13`, odlučeno 04.11.2026: „Dva PR-a“)
 
 - **2b-1 — pisac i integritet, kolone ostaju:** kapija pisca `PAL-INV-01`; C1 prijavljuje aktivnu paletnu stavku
   bez ključa (zatvara `S8R2A2-REV-01`); fixture i seed-ovi dobijaju ključ linije; Palete T14 prelazi na sintetički
