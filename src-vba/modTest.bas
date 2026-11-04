@@ -3419,23 +3419,42 @@ Private Function StavkaPrijemniceKlase(ByVal prijemnicaID As String, _
     Next i
 End Function
 
+' Prijemnice (SVE, i stornirane) koje nose dati broj, kao skup PrijemnicaID-jeva.
+' Test-pomocnici ispod biraju paletne stavke po PrijemnicaID-u iz ovog skupa: od S8
+' reza 2b-2 paletna stavka broj prijemnice ne nosi, a broj je labela ZAGLAVLJA. Skup
+' je isti kao stari izbor po labeli -- pisac je labelu pisao iz broja svog dokumenta.
+' Kolone se citaju STROGO: tiha nula bi tvrdnju "0 stavki" ucinila vakuumskom.
+Private Function PrijemniceBroja(ByVal brojPrij As String) As Object
+    Const SRC As String = "modTest.PrijemniceBroja"
+    Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set PrijemniceBroja = res
+    Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    Dim cId As Long, cBr As Long, i As Long
+    cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+    cBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+    For i = 1 To UBound(d, 1)
+        If Trim$(NzToText(d(i, cBr))) = brojPrij Then res(Trim$(NzToText(d(i, cId)))) = True
+    Next i
+End Function
+
 ' Kljuc linije (PrijemnicaStavkaID) na AKTIVNIM paletnim stavkama datog broja.
 ' Razliciti kljucevi se spajaju sa "|", pa "jedan kljuc" i "dva kljuca" nisu ista
 ' vrednost.
 Private Function KljucStavkePaleteZaPrijemnicu(ByVal brojPrij As String) As String
-    Dim d As Variant, i As Long, cBr As Long, cSt As Long, cKl As Long
-    Dim k As String, acc As String, aktivan As Boolean
+    Const SRC As String = "modTest.KljucStavkePaleteZaPrijemnicu"
+    Dim d As Variant, i As Long, cPid As Long, cSt As Long, cKl As Long
+    Dim k As String, acc As String, ids As Object
     d = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(d) Then Exit Function
-    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-    cKl = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID)
-    If cBr = 0 Or cKl = 0 Then Exit Function
+    Set ids = PrijemniceBroja(brojPrij)
+    cPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+    cKl = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID, SRC)
     For i = 1 To UBound(d, 1)
-        If Trim$(NzToText(d(i, cBr))) = brojPrij Then
-            aktivan = True
-            If cSt > 0 Then aktivan = (UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA")
-            If aktivan Then
+        If ids.Exists(Trim$(NzToText(d(i, cPid)))) Then
+            If UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
                 k = Trim$(NzToText(d(i, cKl)))
                 If InStr("|" & acc & "|", "|" & k & "|") = 0 Or Len(acc) = 0 Then
                     If Len(acc) > 0 Then acc = acc & "|"
@@ -3506,18 +3525,17 @@ End Sub
 ' ROBE - jedina koja razlikuje "prevezeno" od "paletizovano pa prevezeno",
 ' jer se stavke na istoj paleti spajaju u jedan red.
 Private Function GajbicaZaPrijemnicu(ByVal brojPrij As String) As Long
-    Dim d As Variant, i As Long, cBr As Long, cSt As Long, cGa As Long
+    Const SRC As String = "modTest.GajbicaZaPrijemnicu"
+    Dim d As Variant, i As Long, cPid As Long, cSt As Long, cGa As Long, ids As Object
     d = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(d) Then Exit Function
-    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    cGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
-    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-    If cBr = 0 Or cGa = 0 Then Exit Function
+    Set ids = PrijemniceBroja(brojPrij)
+    cPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
+    cGa = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, SRC)
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
     For i = 1 To UBound(d, 1)
-        If Trim$(NzToText(d(i, cBr))) = brojPrij Then
-            If cSt = 0 Then
-                GajbicaZaPrijemnicu = GajbicaZaPrijemnicu + NzL(d(i, cGa))
-            ElseIf UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
+        If ids.Exists(Trim$(NzToText(d(i, cPid)))) Then
+            If UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
                 GajbicaZaPrijemnicu = GajbicaZaPrijemnicu + NzL(d(i, cGa))
             End If
         End If
@@ -3528,30 +3546,30 @@ End Function
 ' razlikuje "nije paletizovano" od "paletizovano pa stornirano" - a bas ta
 ' razlika je ono sto SetPaletizeSkip sprecava.
 Private Function SvihStavkiZaPrijemnicu(ByVal brojPrij As String) As Long
-    Dim d As Variant, i As Long, cBr As Long
+    Const SRC As String = "modTest.SvihStavkiZaPrijemnicu"
+    Dim d As Variant, i As Long, cPid As Long, ids As Object
     d = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(d) Then Exit Function
-    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    If cBr = 0 Then Exit Function
+    Set ids = PrijemniceBroja(brojPrij)
+    cPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
     For i = 1 To UBound(d, 1)
-        If Trim$(NzToText(d(i, cBr))) = brojPrij Then _
+        If ids.Exists(Trim$(NzToText(d(i, cPid)))) Then _
             SvihStavkiZaPrijemnicu = SvihStavkiZaPrijemnicu + 1
     Next i
 End Function
 
 ' Broj AKTIVNIH paletnih stavki koje pokazuju na dati broj prijemnice.
 Private Function StavkiZaPrijemnicu(ByVal brojPrij As String) As Long
-    Dim d As Variant, i As Long, cBr As Long, cSt As Long
+    Const SRC As String = "modTest.StavkiZaPrijemnicu"
+    Dim d As Variant, i As Long, cPid As Long, cSt As Long, ids As Object
     d = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(d) Then Exit Function
-    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-    If cBr = 0 Then Exit Function
+    Set ids = PrijemniceBroja(brojPrij)
+    cPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
     For i = 1 To UBound(d, 1)
-        If Trim$(NzToText(d(i, cBr))) = brojPrij Then
-            If cSt = 0 Then
-                StavkiZaPrijemnicu = StavkiZaPrijemnicu + 1
-            ElseIf UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
+        If ids.Exists(Trim$(NzToText(d(i, cPid)))) Then
+            If UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
                 StavkiZaPrijemnicu = StavkiZaPrijemnicu + 1
             End If
         End If
@@ -6981,6 +6999,10 @@ End Function
 '   PRJ-TEST-Z2  KUP-TEST-2   paleta PST-TEST-Z2   <- ne sme da se pomeri
 '
 ' Oba nose broj 6/150326, kao u produkciji: broj se racuna po kupcu.
+'
+' Od S8 reza 2b-2 paletna stavka zbirnu ne nosi: zbirna palete je zbirna njene
+' prijemnice (ZbirnaNaStavci je izvedena). Tvrdnje o paletama zato mere da paleta
+' i dalje pripada SVOJOJ prijemnici, pa ide sa njom -- a tudja ostaje sa tudjom.
 Private Sub T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu()
     Dim ok As Boolean
 
@@ -7168,9 +7190,10 @@ Private Function ZbirnaNaPrijemnici(ByVal prijemnicaID As String) As String
                                                     prijemnicaID, COL_PRJ_BROJ_ZBIRNE)))
 End Function
 
+' Zbirna paletne stavke je zbirna NJENE PRIJEMNICE (S8 rez 2a, PAL-ODL-03): od reza
+' 2b-2 paletna stavka broj zbirne ne nosi, pa se cita iz zaglavlja prijemnice.
 Private Function ZbirnaNaStavci(ByVal stavkaID As String) As String
-    ZbirnaNaStavci = Trim$(NzToText(LookupValue(TBL_PALETA_STAVKA, COL_PALS_ID, _
-                                                stavkaID, COL_PALS_BROJ_ZBIRNE)))
+    ZbirnaNaStavci = ZbirnaNaPrijemnici(PrijemnicaNaStavci(stavkaID))
 End Function
 
 ' Upisi generaciju na red po PK-u. Fixture redovi se seju mimo writera, pa
@@ -21464,8 +21487,8 @@ End Sub
 '
 ' Recovery panel u frmDokumenta zove ReassignPrijemnicaToZbirna_TX sa DVA
 ' argumenta -- bez generacije i bez ijedne spoljne kapije -- pa se funkcija
-' brani sama. Veza koju upisuje je GOLA LABELA (COL_PRJ_BROJ_ZBIRNE,
-' COL_PALS_BROJ_ZBIRNE), dakle broj, ne identitet.
+' brani sama. Veza koju upisuje je GOLA LABELA (COL_PRJ_BROJ_ZBIRNE), dakle broj,
+' ne identitet.
 '
 ' Zatecen kod je cilj birao kroz LookupValue po broju, sto vraca PRVI red i ne
 ' gleda ni identitet ni storno. Taj oblik je ovde subsumiran: pitanje vise
@@ -27361,8 +27384,10 @@ Private Sub T_Integritet_VidiDvosmislenBrojIPrazanIdentitet()
              "B8 vidi broj sa dva aktivna dokumenta"
 End Sub
 
-' ZBR-CHILD-01 (Faza 1): kolona za generaciju roditelja postoji na SVA CETIRI
-' deteta. Bez upisa -- meri se sema, ne ponasanje.
+' ZBR-CHILD-01 (Faza 1): kolona za generaciju roditelja postoji na sva TRI deteta
+' (otkup, otpremnica, prijemnica). Bez upisa -- meri se sema, ne ponasanje.
+' tblPaletaStavka je bila cetvrto dete do S8 reza 2b-2: od tada zbirnu cita iz
+' zaglavlja prijemnice, pa kolone NE SME da ima (self-heal je brise).
 '
 ' Tabela koja ispadne iz EnsureSledljivostSchema ne bi pukla odmah: pisci bi
 ' padali tek kad neko poveze bas to dete, a citaoci bi tiho radili po broju. Ovo
@@ -27372,8 +27397,8 @@ Private Sub T_DeteZbirne_ImaKolonuGeneracije()
              "tblOtpremnica ima ZbirnaID"
     AssertEq (GetColumnIndex(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD) > 0), True, _
              "tblPrijemnica ima ZbirnaID"
-    AssertEq (GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD) > 0), True, _
-             "tblPaletaStavka ima ZbirnaID"
+    AssertEq (GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD) = 0), True, _
+             "tblPaletaStavka NEMA trag zbirne (S8 rez 2b-2)"
     AssertEq (GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD) > 0), True, _
              "tblOtkup ima ZbirnaID"
 

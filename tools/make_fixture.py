@@ -1962,67 +1962,52 @@ SEED = {
     "tblPaletaStavka": [
         # ISTA fizicka paleta, dva dokumenta istog broja.
         {"StavkaID": "PST-TEST-D1", "PaletaID": "PAL-TEST-D",
-         "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,
          "BrojGajbica": 10, "NetoKg": 100, "PrijemnicaID": "PRJ-TEST-D1",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-TEST-D2", "PaletaID": "PAL-TEST-D",
-         "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,
          "BrojGajbica": 15, "NetoKg": 150, "PrijemnicaID": "PRJ-TEST-D2",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-TEST-Z1", "PaletaID": "PAL-TEST-Z1",
-         "BrojPrijemnice": PRIJEMNICA_ZBR_KOLIZIJA, "BrojZbirne": ZBIRNA_MIRNA,
          "BrojGajbica": 10, "NetoKg": 100, "PrijemnicaID": "PRJ-TEST-Z1",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-TEST-Z2", "PaletaID": "PAL-TEST-Z2",
-         "BrojPrijemnice": PRIJEMNICA_ZBR_KOLIZIJA, "BrojZbirne": ZBIRNA_MIRNA,
          "BrojGajbica": 20, "NetoKg": 200, "PrijemnicaID": "PRJ-TEST-Z2",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-TEST-1", "PaletaID": "PAL-TEST-1",
-         "BrojPrijemnice": PRIJEMNICA_STORNO, "BrojZbirne": ZBIRNA,
          "BrojGajbica": 40, "NetoKg": 400, "PrijemnicaID": "PRJ-TEST-S",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         # Kolizioni par: dve palete pod ISTIM brojem prijemnice, dva dokumenta.
         {"StavkaID": "PST-TEST-C1", "PaletaID": "PAL-TEST-2",
-         "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
          "BrojGajbica": 40, "NetoKg": 400, "PrijemnicaID": "PRJ-TEST-C1",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-TEST-C2", "PaletaID": "PAL-TEST-3",
-         "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
          "BrojGajbica": 25, "NetoKg": 250, "PrijemnicaID": "PRJ-TEST-C2",
          "Klasa": "I", "VrstaVoca": VRSTA2, "SortaVoca": SORTA},
-        # SLEDLJIVOST mete: stavke nose BrojZbirne -- podatkovna veza
-        # zbirna -> paleta koju ReportSledljivostMete cita (bez premoscivanja).
+        # SLEDLJIVOST mete: paleta pripada zbirni preko SVOJE PRIJEMNICE (od S8
+        # reza 2b-2 paletna stavka broj zbirne ne nosi; PAL-ODL-03).
         {"StavkaID": "PST-SLED-1", "PaletaID": "PAL-SLED-1",
-         "BrojPrijemnice": SLED_PRIJ_BROJ, "BrojZbirne": SLED_ZBIRNA,
          "BrojGajbica": 25, "NetoKg": 250, "PrijemnicaID": "PRJ-SLED-1",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-SLED-2", "PaletaID": "PAL-SLED-2",
-         "BrojPrijemnice": SLED_PRIJ_BROJ_N, "BrojZbirne": SLED_ZBIRNA_N,
          "BrojGajbica": 15, "NetoKg": 150, "PrijemnicaID": "PRJ-SLED-N",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-SLED-X", "PaletaID": "PAL-SLED-X",
-         "BrojPrijemnice": SLED_PRIJ_BROJ, "BrojZbirne": SLED_ZBIRNA,
          "BrojGajbica": 10, "NetoKg": 99, "PrijemnicaID": "PRJ-SLED-1",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
-        # GP grana: stavke vezuju BROJ zbirne (podatkovna veza lanca).
+        # GP grana: stavke vezuje PrijemnicaID (zbirna je na zaglavlju prijemnice).
         {"StavkaID": "PST-SLED-G", "PaletaID": "PAL-SLED-G",
-         "BrojPrijemnice": "37/150326", "BrojZbirne": SLED_ZBIRNA_G,
          "BrojGajbica": 8, "NetoKg": SLED_KG_G, "PrijemnicaID": "PRJ-SLED-G",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-SLED-H", "PaletaID": "PAL-SLED-H",
-         "BrojPrijemnice": "38/150326", "BrojZbirne": SLED_ZBIRNA_H,
          "BrojGajbica": 9, "NetoKg": SLED_KG_H, "PrijemnicaID": "PRJ-SLED-H",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-SLED-K", "PaletaID": "PAL-SLED-K",
-         "BrojPrijemnice": "39/150326", "BrojZbirne": SLED_ZBIRNA_K,
          "BrojGajbica": 7, "NetoKg": SLED_KG_K, "PrijemnicaID": "PRJ-SLED-K",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-SLED-P", "PaletaID": "PAL-SLED-P",
-         "BrojPrijemnice": "40/150326", "BrojZbirne": SLED_ZBIRNA_P,
          "BrojGajbica": 15, "NetoKg": SLED_KG_P, "PrijemnicaID": "PRJ-SLED-P",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-SLED-U", "PaletaID": "PAL-SLED-U",
-         "BrojPrijemnice": "41/150326", "BrojZbirne": SLED_ZBIRNA_U,
          "BrojGajbica": 15, "NetoKg": SLED_KG_P, "PrijemnicaID": "PRJ-SLED-U",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
     ],
@@ -2500,6 +2485,12 @@ DROP_COLS = {
     "tblFakturaStavke": ["Stornirano", "OsirocenoOd"],
     "tblFakture": ["OsirocenoOd", "IspravkaOd", "ZamenjenSa", "CorrectionID",
                    "IzdatoStatus", "GeneracijaID"],
+    # S8 rez 2b-2 (PAL-ODL-13): paletna stavka gubi labele (stari kanon 3 i 4) i trag
+    # roditeljske zbirne (17; donor ga nosi pod STARIM imenom ZbirnaGeneracijaID).
+    # Isto radi modSetup.ObrisiStareKolonePaletneStavke; put zatecene sveske meri
+    # Test_S8R2b2_PaletnaStavkaStareKoloneSelfHeal.
+    "tblPaletaStavka": ["BrojPrijemnice", "BrojZbirne", "ZbirnaRoditeljID",
+                        "ZbirnaGeneracijaID"],
 }
 
 RENAME_COLS = {

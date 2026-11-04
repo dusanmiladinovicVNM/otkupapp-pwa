@@ -6834,8 +6834,8 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     For i = 1 To stavke.count
         s = stavke(i)
         If CLng(s(3)) > 0 Then
-            PaletizePrijemnica prijemnicaID:=docID, brojPrij:=brojPrij, _
-                brojZbirne:=brojZbirne, vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
+            PaletizePrijemnica prijemnicaID:=docID, _
+                vrstaVoca:=vrstaVoca, sortaVoca:=sortaVoca, _
                 klasa:=CStr(s(0)), netoKg:=CDbl(s(1)), brGajbica:=CLng(s(3)), _
                 tipAmb:=tipAmb, closedPalIDs:=closedPal, _
                 prijemnicaStavkaID:=CStr(stavkaIDs(i))
@@ -8793,8 +8793,8 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
         ' kapije, pa se funkcija mora braniti sama. Putanje iz modStornoFlow
         ' imaju ZbirnaBrojJeDvosmislenIkad iznad sebe; ta nema nista.
         '
-        ' Veza koja se upisuje je gola labela (COL_PRJ_BROJ_ZBIRNE,
-        ' COL_PALS_BROJ_ZBIRNE), pa bi dete zavrsilo vezano za broj koji
+        ' Veza koja se upisuje je gola labela (COL_PRJ_BROJ_ZBIRNE), pa bi
+        ' dete zavrsilo vezano za broj koji
         ' pripada dvama vlasnickim tokovima. Test 125.
         RequireJedanVlasnikIkadPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _
                                        SRC, COL_ZBR_VOZAC, COL_ZBR_KUPAC
@@ -8825,13 +8825,10 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
         ' AKTIVNI vlasnik mora biti jedan. NAMERNO nije IKAD -- probano pa
         ' povuceno, jer je bila sira zabrana bez dokaza pogresne mutacije.
         '
-        ' Zastita ovde nije jedna kapija nego SLOJEVI, i svaki radi svoj posao:
-        '   zaglavlje prijemnice  -> u targetRows ulaze samo AKTIVNI redovi,
-        '                            pa storniran dokument drugog kupca ne
-        '                            moze da se pomeri (test 126);
-        '   paletna stavka sa ID  -> odlucuje IDENTITET (docIds.Exists);
-        '   legacy stavka bez ID  -> brojDvosmislen racuna IKAD i puca, uz
-        '                            rollback cele transakcije.
+        ' Zastita je zaglavlje prijemnice: u targetRows ulaze samo AKTIVNI
+        ' redovi, pa storniran dokument drugog kupca ne moze da se pomeri (test
+        ' 126). Paletni sloj (stavke birane po ID-u, legacy stavka bez ID-a po
+        ' broju) otisao je u S8 rezu 2b-2: paletna stavka zbirnu ne nosi.
         '
         ' IKAD kapija ovde bi zabranila i potpuno resiv legacy oporavak: broj
         ' prijemnice je numerisan PO KUPCU, pa je kolizija ocekivana, a writer
@@ -8891,7 +8888,6 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
-    tx.AddTableSnapshot TBL_PALETA_STAVKA
 
     Dim k As Long
     For k = 1 To targetRows.count
@@ -8899,65 +8895,10 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
                            targetBrZbirne, genCilja, SRC
     Next k
 
-    ' Sledljivost: paletne stavke te prijemnice moraju dobiti NOVU BrojZbirne, inace
-    ' ostaju sa mrtvom zbirnom (paleta -> zbirna -> kooperanti pukne). Menja se samo
-    ' veza (BrojZbirne); roba/pripadnost prijemnici ostaje.
-    '
-    ' PO PrijemnicaID, NE PO BROJU. Ovaj upis je ranije isao po BrojPrijemnice i
-    ' time je ponistavao ceo izbor iznad: tblPrijemnica se menjala samo dokumentu
-    ' A, a paletne stavke i dokumenta A i dokumenta B. Dokument B je tako
-    ' postajao SAM SEBI PROTIVRECAN -- prijemnica na staroj zbirni, njena paleta
-    ' na novoj. Redovi su vec izabrani u targetRows; odatle se citaju ID-evi.
-    Dim docIds As Object: Set docIds = CreateObject("Scripting.Dictionary")
-    docIds.CompareMode = vbTextCompare
-    Dim q As Long, pidT As String
-    For q = 1 To targetRows.count
-        If cPrjId > 0 Then
-            pidT = Trim$(NzToText(data(targetRows(q), cPrjId)))
-            If Len(pidT) > 0 Then docIds(pidT) = True
-        End If
-    Next q
-
-    ' Stavka bez PrijemnicaID (zatecen zapis) sme po broju SAMO ako taj broj nosi
-    ' jedan dokument. Kad ga nose dva, ne moze se utvrditi cija je, pa se staje
-    ' umesto da se pogodi -- transakcija se povlaci u celini.
-    Dim brojDvosmislen As Boolean
-    brojDvosmislen = (VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, SRC, _
-                                      True, Array(COL_PRJ_KUPAC)).count > 1)
-
-    Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
-    If Not IsEmpty(ps) Then
-        Dim pBr As Long, pZb As Long, pSt As Long, pPid As Long
-        pBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-        pZb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
-        pSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-        pPid = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
-        If pBr > 0 And pZb > 0 Then
-            Dim r2 As Long, pidS As String, pripada As Boolean
-            For r2 = 1 To UBound(ps, 1)
-                If pSt = 0 Or UCase$(Trim$(CStr(ps(r2, pSt)))) <> "DA" Then
-                    pidS = ""
-                    If pPid > 0 Then pidS = Trim$(NzToText(ps(r2, pPid)))
-                    If Len(pidS) > 0 Then
-                        pripada = docIds.Exists(pidS)
-                    Else
-                        If Trim$(CStr(ps(r2, pBr))) = brPrijemnice And brojDvosmislen Then
-                            Err.Raise vbObjectError + 7311, SRC, _
-                                      "Paletna stavka broja '" & brPrijemnice & "' nema " & _
-                                      "PrijemnicaID, a taj broj nose dokumenta vise kupaca. " & _
-                                      "Ne moze se utvrditi cija je -- prevezivanje je " & _
-                                      "prekinuto. Popuni PrijemnicaID pa ponovi."
-                        End If
-                        pripada = (Trim$(CStr(ps(r2, pBr))) = brPrijemnice)
-                    End If
-                    If pripada Then
-                        PoveziDeteNaZbirnu TBL_PALETA_STAVKA, r2, COL_PALS_BROJ_ZBIRNE, _
-                                           targetBrZbirne, genCilja, SRC
-                    End If
-                End If
-            Next r2
-        End If
-    End If
+    ' Paletne stavke se NE diraju (S8 rez 2b-2, PAL-ODL-03): paleta zna samo liniju
+    ' prijemnice, a zbirnu cita iz zaglavlja prijemnice. Do 2b-2 je ovde stajao
+    ' upis BrojZbirne i ZbirnaRoditeljID na paletne stavke -- skriven pisac koji je
+    ' mogao da se razidje sa zaglavljem (plan 14.58).
 
     tx.CommitTx
     Set tx = Nothing

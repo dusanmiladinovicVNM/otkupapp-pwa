@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 316: kapije `#466` zelene — RunAllTests 314/0, BFP 3017/0, dokaz 6/6; ručni Compile PASS).
+**Ažurirano:** 04.11.2026 (stavka 317: S8 rez 2b-2 — brisanje tri kolone paletne stavke; kapije čekaju).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10856,6 +10856,20 @@
      - **Osnova posle merge-a #466:** RunAllTests 314, BFP 3017, katalog 1158, `pal_broj` 8, fixture
        `e0338451f4f3c76e`, šema `B22A1572`.
      - **Sledeći brojevi:** test 315 · stavka 317 · KI-088 · plan §14.62.
+
+317. **S8 rez 2b-2 — paletna stavka gubi `BrojPrijemnice`, `BrojZbirne` i `ZbirnaRoditeljID`** (04.11.2026, grana
+     `claude/s8-rez2b2-brisanje`; rađeno paralelno sa kapijama 2b-1, u worktree-ju, pa rebase na `main` posle
+     merge-a `#466`). Plan §14.62. Kapije 2b-1 su stavka 316.
+
+     - **Kod:** kanon + `modSchema` (`CA5CE30A`), self-heal `ObrisiStareKolonePaletneStavke`, pisci tri kolone
+       (uključujući paletni rep `ReassignPrijemnicaToZbirna_TX`), konstante; pisac paleta ne prima labele.
+     - **Testovi:** pomoćnici na `PrijemnicaID` (strogo čitanje), izvedena zbirna, promenjene premise traga zbirne,
+       obrisan ZBR-PAL, nov BFP self-heal test.
+     - **Sabotaže:** 5 povučenih, 5 preformulisanih (po broju preko zaglavlja), 1 novo sidro, 2 nove; katalog 1155.
+     - **Popis:** `pal_broj` 8 → 0 (dokaz u oba smera: 0 → 1 PAO → 0); `prj_brojzbirne` 33 → 31.
+     - **Jeftine kapije:** `vba_check` čist, `who_writes` oba režima (WHO_WRITES regenerisan), šema u koraku.
+     - **Nije izvršeno (NEVERIFIKOVANO):** `make_fixture`, suite-ovi, `dokaz.py`, Compile.
+     - **Sledeći brojevi:** test 315 · stavka 318 · KI-088 · plan §14.63.
 
 ## Dug sa imenom (posle S5-5b)
 
