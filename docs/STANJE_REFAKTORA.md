@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 319: review `#467` — CODE/ARCH GO, MERGE HOLD do acceptance-a; kapije puštene).
+**Ažurirano:** 04.11.2026 (stavka 320: kapije `#467` zelene — RunAllTests 314/0, BFP 3014/0, dokaz 8/8; čeka ručni Compile).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10900,6 +10900,20 @@
        puštene: nov fixture, Palete, Storno, `dokaz.py` (bazni RunAllTests + BFP, pa nove i preformulisane
        sabotaže), zatim ručni Compile.
      - **Sledeći brojevi:** test 315 · stavka 320 · KI-088 · plan §14.63.
+
+320. **Izvršne kapije 2b-2 (`#467`): zeleno; čeka ručni Compile** (04.11.2026). Plan §14.62 („Review #467 i
+     izvršne kapije"). Glava `c9cb0266`.
+
+     - **Fixture:** `68efada928a8d97d` (donor izgubio tri kolone paletne stavke).
+     - **Palete** OK (115), **Storno** 111 / 0.
+     - **RunAllTests** 314 / 0, **BFP** 3014 / 0 — razlika prema 3017 objašnjena do tvrdnje (−11 ZBR-PAL, +1 trag,
+       +7 self-heal).
+     - **`dokaz.py`:** 8 / 8 crveno (potpis `9ce61c233c3fb46b`): `s8r2b2-*` (2), preformulisane `s8r1a-*` (2) i
+       `s8r2a1-*` (3), novo sidro `s6k2-paleta-bez-kljuca-stavke`.
+     - **Compile:** NEJASNO automatski; sveska `tests/fixtures/rucna_provera_s8r2b2.xlsm` (kod `c9cb0266`).
+     - **Osnova posle merge-a #467:** RunAllTests 314, BFP 3014, katalog 1155, `pal_broj` 0, `prj_brojzbirne` 31,
+       fixture `68efada928a8d97d`, šema `CA5CE30A`.
+     - **Sledeći brojevi:** test 315 · stavka 321 · KI-088 · plan §14.63.
 
 ## Dug sa imenom (posle S5-5b)
 

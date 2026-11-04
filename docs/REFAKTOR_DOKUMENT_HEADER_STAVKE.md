@@ -11150,8 +11150,21 @@ Grana `claude/s8-rez2b2-brisanje` (od glave 2b-1). Zapis: `docs/STANJE_REFAKTORA
 - `pal_broj` meri konstante; povratak čitanja po DOSLOVNOM imenu kolone (`"BrojPrijemnice"` uz `TBL_PALETA_STAVKA`)
   grupa ne vidi. Kolona ne postoji ni u kanonu ni posle self-heal-a, pa bi takav čitalac dobio indeks 0 —
   `RequireColumnIndex` pada po imenu, a `GetColumnIndex` čita prazno. Zato pomoćnici iznad čitaju strogo.
-- **Nije izvršeno:** `make_fixture`, RunAllTests, BFP, Palete, Storno, `dokaz.py` (nove i preformulisane sabotaže),
-  Compile. Čekaju merge 2b-1, review i „Push, pa kapije".
+- ~~Nije izvršeno~~ — izvršeno, v. „Izvršne kapije" ispod.
+
+#### Review #467 i izvršne kapije (04.11.2026)
+
+- **Review, prvi krug:** CODE GO · ARCHITECTURE GO · TEST DESIGN CONDITIONAL GO · MERGE HOLD do acceptance-a.
+  Predlog P3 (self-heal test i za novo ime traga) operater je odbio: „zanemari ovo oko dopune za selfheal, kreni
+  odmah na acceptance".
+- **Fixture:** nov potpis `68efada928a8d97d`; iz donora obrisani `BrojPrijemnice`, `BrojZbirne` i `ZbirnaGeneracijaID`.
+- **Palete** OK (115 provera), **Storno** 111 / 0.
+- **RunAllTests** 314 / 0, **BFP** 3014 / 0. Razlika prema osnovi 3017 je objašnjena do tvrdnje: −11 (obrisan
+  ZBR-PAL), +1 (`Test_Schema_TragZbirneNosiNovoIme`: paletna stavka bez traga), +7 (nov self-heal test; od 10
+  statičkih tvrdnji 3 su uslovni padovi preduslova).
+- **`dokaz.py`** (8 sabotaža, 3 prolaza): **8 / 8 crveno**, potpis izvora `9ce61c233c3fb46b` pre i posle identičan.
+- **Compile:** automatski NEJASNO; sveska za ručni Compile `tests/fixtures/rucna_provera_s8r2b2.xlsm` (kod
+  `c9cb0266`; pre provere VBE `File > Import File` → `src-vba/modVbaTools.bas`).
 
 ## 15) Backlog — namerno van opsega
 
