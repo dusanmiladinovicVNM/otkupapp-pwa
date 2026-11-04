@@ -86,17 +86,17 @@ koji u jednoj transakciji pravi po jedan KO za svakog kooperanta sa kg > 0.
 
 | ID | Pravilo | Vlasnik (kod · test) |
 |---|---|---|
-| **DOP-01** | Doplata ne nosi robu: ne ulazi ni u jedan kg zbir; cena na stavkama otkupa se ne menja. | `modDoplata` ne piše `tblOtkup*` · 309 („plan ne piše"), 310 („cena na stavkama otkupa ostaje netaknuta") |
-| **DOP-02** | `Iznos` stavke = `ZaokruziNovac(Kolicina × Cena)`; `Kolicina` = zbir aktivnih `tblOtkupStavke` tog kooperanta, stanice i ključa u periodu, u trenutku knjiženja (čitač `modOtkup.StavkeOtkupaRedovi`, ne nov). | `modDoplata.DoplataPlan` · 309, 311 |
-| **DOP-03** | Storno nije brisanje: `tblDoplata` je u `STORNO_TABELE`, `tblDoplataStavke` u `BEZ_STORNA` (stavka prati zaglavlje). Storniran KO izlazi iz svih zbirova; broj ostaje zauzet. | `modStorno.StornoDoplata_TX` / `StornoObracunDoplate_TX`, čitač `modDoplata.DoplataStavkeRedovi` · 313 |
+| **DOP-01** | Doplata ne nosi robu: ne ulazi ni u jedan kg zbir; cena na stavkama otkupa se ne menja. | `modDoplata` ne piše `tblOtkup*` · 315 („plan ne piše"), 316 („cena na stavkama otkupa ostaje netaknuta") |
+| **DOP-02** | `Iznos` stavke = `ZaokruziNovac(Kolicina × Cena)`; `Kolicina` = zbir aktivnih `tblOtkupStavke` tog kooperanta, stanice i ključa u periodu, u trenutku knjiženja (čitač `modOtkup.StavkeOtkupaRedovi`, ne nov). | `modDoplata.DoplataPlan` · 315, 317 |
+| **DOP-03** | Storno nije brisanje: `tblDoplata` je u `STORNO_TABELE`, `tblDoplataStavke` u `BEZ_STORNA` (stavka prati zaglavlje). Storniran KO izlazi iz svih zbirova; broj ostaje zauzet. | `modStorno.StornoDoplata_TX` / `StornoObracunDoplate_TX`, čitač `modDoplata.DoplataStavkeRedovi` · 319 |
 | **DOP-04** | Pisci: nastanak samo `modDoplata` (`KnjiziDoplatu_TX`, obe tabele); storno zaglavlja `modStorno`, kao kod ostalih dokumenata. | `WRITE_OWNERSHIP.json` (A11), `who_writes.py --check-ownership` |
-| **DOP-05** | Novac vezan za KO se pri stornu KO **odvezuje, ne stornira** — isto pravilo kao kod otkupa (`ODLUKA_NOVAC_PRI_STORNU.md`): virman opet postaje slobodan avans, keš ostaje zatvoren posao. Odvezivanje je u istoj transakciji sa stornom zaglavlja. | `modNovac.ResetNovacDoplataLink` iz `modStorno.StornoDoplata` · 324 |
-| **DOP-06** | Jedan KO po kooperantu po obračunu; brojevi uzastopni u nizu godine. | `modDoplata.KnjiziPlan` · 310 |
-| **DOP-07** | Doplata je **zaduženje u korist kooperanta** svuda gde se vidi saldo: na kartici je jedan red po KO na datum knjiženja (i u početnom stanju), a u Saldo OM i PWA izvozu saldo = vrednost + doplata − isplaćeno − agro. U Saldo OM stavka KO pripada stanici na kojoj je roba predata, a period je po datumu knjiženja. | `modDoplata.DoplataIznosPoKooperantu` / `DoplataKOKooperanta`, `modIzvestaj`, `modStammdatenSync.SaldoOMDetailRedovi` · 315, 316, 317 |
-| **DOP-09** | **Isplata KO nije slobodan avans.** Slobodan avans = avansni tip (`VirmanAvansKoop`/`VirmanFirmaKoop`) bez `OtkupID`-a **i bez `DoplataID`-a** — jedan predikat za sva tri čitača avansa (primena na blok, zbir raspoloživog, lista naloga). Bez toga bi primena avansa povukla isplatu KO na sledeći otkupni blok i isti dinar platio dvaput. | `modNovac.JeSlobodanAvansKooperanta` · 323, 324 |
-| **DOP-10** | KO se isplaćuje kao **obaveza po dokumentu**, kao otkupni blok: otvoreno = zbir stavki aktivnog KO − aktivan novac vezan `DoplataID`-em, u cent-domenu. Nalozi ga nose pod ključem bloka (`DoplataID`) sa **brojem KO kao pozivom na broj**; izvod sa tim pozivom je jak ključ na taj KO (plan `BIM_CILJ_DOPLATA`) i knjiži se istim piscem kao blok (`MapBankaImportAsKooperantBlockCore`, grana `doplataID`): KO dobija najviše otvoreno, višak je avans, plaćen KO ceo iznos šalje u avans. Slobodan avans se na KO primenjuje **istim motorom** kao na blok (`VeziSlobodanAvans`). | `modDoplata.OtvoreniKORedovi` / `OtvorenoNaKO` / `KOPoPozivu`, `modBankaExportPregled.BuildBlokIsplataList`, `modBankaMapiranje` · 322, 323, 325 |
-| **DOP-11** | **Jedna kapija i jedna veza za sve pisce novca nad KO** — izvod (auto i ručno), gotovina, primena avansa: KO postoji tačno jednom, aktivan je i kooperantov (`modDoplata.KOKapija`), a veza se piše samo kroz `modNovac.VeziNovacZaKO`. Gotovina ide **samo na matičnu stanicu** kooperanta i najviše do trenutnog ostatka (`IsplataKOProblem`, u modulu unosa i u piscu). Izabran plaćen KO u ručnom mapiranju se ne knjiži (protivrečnost, ne avans). | `KOKapija`, `VeziNovacZaKO`, `modNovac.IsplataKOProblem`, `modDokumenta.SaveOMUlaz_TX`, `modBankaMapiranje.MapBankaImportAsKooperantBlockCore` · 325, 326, 327 |
-| **DOP-08** | Ekran nema svoju računicu: stopa prolazi istu proveru kao pisac (`DoplataStopeProblem` = `UcitajStope`), pregled je isti plan koji pisac izvršava (`DoplataPlan`), a upis i storno idu samo kroz `KnjiziDoplatu_TX` / `modStorno`. Svako pitanje (knjiženje, ponavljanje, storno) ide kroz `Pitaj` — u test režimu beleži i odgovara „Ne" (KI-015). | `modScrDoplata` · 319, 320 |
+| **DOP-05** | Novac vezan za KO se pri stornu KO **odvezuje, ne stornira** — isto pravilo kao kod otkupa (`ODLUKA_NOVAC_PRI_STORNU.md`): virman opet postaje slobodan avans, keš ostaje zatvoren posao. Odvezivanje je u istoj transakciji sa stornom zaglavlja. | `modNovac.ResetNovacDoplataLink` iz `modStorno.StornoDoplata` · 330 |
+| **DOP-06** | Jedan KO po kooperantu po obračunu; brojevi uzastopni u nizu godine. | `modDoplata.KnjiziPlan` · 316 |
+| **DOP-07** | Doplata je **zaduženje u korist kooperanta** svuda gde se vidi saldo: na kartici je jedan red po KO na datum knjiženja (i u početnom stanju), a u Saldo OM i PWA izvozu saldo = vrednost + doplata − isplaćeno − agro. U Saldo OM stavka KO pripada stanici na kojoj je roba predata, a period je po datumu knjiženja. | `modDoplata.DoplataIznosPoKooperantu` / `DoplataKOKooperanta`, `modIzvestaj`, `modStammdatenSync.SaldoOMDetailRedovi` · 321, 322, 323 |
+| **DOP-09** | **Isplata KO nije slobodan avans.** Slobodan avans = avansni tip (`VirmanAvansKoop`/`VirmanFirmaKoop`) bez `OtkupID`-a **i bez `DoplataID`-a** — jedan predikat za sva tri čitača avansa (primena na blok, zbir raspoloživog, lista naloga). Bez toga bi primena avansa povukla isplatu KO na sledeći otkupni blok i isti dinar platio dvaput. | `modNovac.JeSlobodanAvansKooperanta` · 329, 330 |
+| **DOP-10** | KO se isplaćuje kao **obaveza po dokumentu**, kao otkupni blok: otvoreno = zbir stavki aktivnog KO − aktivan novac vezan `DoplataID`-em, u cent-domenu. Nalozi ga nose pod ključem bloka (`DoplataID`) sa **brojem KO kao pozivom na broj**; izvod sa tim pozivom je jak ključ na taj KO (plan `BIM_CILJ_DOPLATA`) i knjiži se istim piscem kao blok (`MapBankaImportAsKooperantBlockCore`, grana `doplataID`): KO dobija najviše otvoreno, višak je avans, plaćen KO ceo iznos šalje u avans. Slobodan avans se na KO primenjuje **istim motorom** kao na blok (`VeziSlobodanAvans`). | `modDoplata.OtvoreniKORedovi` / `OtvorenoNaKO` / `KOPoPozivu`, `modBankaExportPregled.BuildBlokIsplataList`, `modBankaMapiranje` · 328, 329, 331 |
+| **DOP-11** | **Jedna kapija i jedna veza za sve pisce novca nad KO** — izvod (auto i ručno), gotovina, primena avansa: KO postoji tačno jednom, aktivan je i kooperantov (`modDoplata.KOKapija`), a veza se piše samo kroz `modNovac.VeziNovacZaKO`. Gotovina ide **samo na matičnu stanicu** kooperanta i najviše do trenutnog ostatka (`IsplataKOProblem`, u modulu unosa i u piscu). Izabran plaćen KO u ručnom mapiranju se ne knjiži (protivrečnost, ne avans). | `KOKapija`, `VeziNovacZaKO`, `modNovac.IsplataKOProblem`, `modDokumenta.SaveOMUlaz_TX`, `modBankaMapiranje.MapBankaImportAsKooperantBlockCore` · 331, 332, 333 |
+| **DOP-08** | Ekran nema svoju računicu: stopa prolazi istu proveru kao pisac (`DoplataStopeProblem` = `UcitajStope`), pregled je isti plan koji pisac izvršava (`DoplataPlan`), a upis i storno idu samo kroz `KnjiziDoplatu_TX` / `modStorno`. Svako pitanje (knjiženje, ponavljanje, storno) ide kroz `Pitaj` — u test režimu beleži i odgovara „Ne" (KI-015). | `modScrDoplata` · 325, 326 |
 
 **Prikaz i pisac dele jedan plan** (obrazac `BimAutoPlan`): `DoplataPlan` računa
 stavke bez upisa, ekran ga prikazuje (F3), `KnjiziDoplatu_TX` ga izvršava.
@@ -146,10 +146,10 @@ Storno, PWA `pregled.js`.
    - `modOtkup`: `OtkupVremeNastanka` (pravilo sata, sada jedno za štampu i
      doplatu — `modPrint.FillOtkupSablon` ga zove, ponašanje štampe isto);
      `RequireValidOtkupClass` je `Public`.
-   - `modTest` 309–314 (`T_Doplata_*`), sabotaže `dop-*` u `tools/sabotaza.py`.
+   - `modTest` 315–320 (`T_Doplata_*`), sabotaže `dop-*` u `tools/sabotaza.py`.
    - Nove tabele pravi `EnsureAllTables` pri startu (`modMain.StartApp`).
 2. **F2 — čitaoci. U KODU (03.11.2026).** Kartica, Saldo OM (pojedinačno i
-   zbirno), PWA izvoz (§6); `modTest` 315–317, sabotaže `dop-kartica-*`,
+   zbirno), PWA izvoz (§6); `modTest` 321–323, sabotaže `dop-kartica-*`,
    `dop-saldo-om-*`, `dop-zbirni-*`, `dop-pwa-*`.
 3. **F3 — ekran i papir. U KODU (04.11.2026).**
    - Ekran `DOPLATA` (`modScrDoplata`, registar `modUiScreens`, ikonica
@@ -163,7 +163,7 @@ Storno, PWA `pregled.js`.
    - Signal osnovice (DOP-ODL-07): `modDoplata.DoplataOdstupanjaOsnovice`, provera
      **DOP1** u `modIntegritet` → lista INTEGRITET na Oporavku
      (`docs/INTEGRITET_PROVERE.md`).
-   - `modTest` 318–321 (+ ekran u testu 239, seam u `ResetSeamova`), sabotaže
+   - `modTest` 324–327 (+ ekran u testu 239, seam u `ResetSeamova`), sabotaže
      `dop-papir-*`, `dop-ekran-*`, `dop-signal-nema`.
 4. **F4 — isplata, bankarski deo. U KODU (04.11.2026).**
    - Šema: `tblNovac.DoplataID` na kraju (`schema.json` → `modSchema`;
@@ -180,7 +180,7 @@ Storno, PWA `pregled.js`.
    - `modBankaExportPregled.BuildBlokIsplataList` nosi KO; `modScrBankaNalozi`:
      avans se ne nudi na KO (`AvansKandidat`, `PrimeniAvans`).
    - `modStorno.StornoDoplata` odvezuje novac; oba `_TX` snapshot-uju `tblNovac`.
-   - `modTest` 322–324, sabotaže `dop-nalozi-*`, `dop-nalog-*`, `dop-plan-ko-*`,
+   - `modTest` 328–330, sabotaže `dop-nalozi-*`, `dop-nalog-*`, `dop-plan-ko-*`,
      `dop-izvod-*`, `dop-avans-*`, `dop-storno-ne-odvezuje`; dve zatečene
      sabotaže banke dobile su nova sidra (isti kod, ista tvrdnja).
 5. **F4b — gotovina, ručno mapiranje, avans na KO. U KODU (04.11.2026).**
@@ -201,7 +201,7 @@ Storno, PWA `pregled.js`.
      OM matična stanica (`modOtkupUI.FillOpenBlokovi`); `IsplataValidiraj`
      prebacuje izabran KO u `doplataID`; kapija `modNovac.IsplataKOProblem` u
      modulu unosa i u `SaveOMUlaz_TX` (nov opcioni parametar `doplataID`).
-   - `modTest` 325–327; sabotaže `dop-avans-split-*`, `dop-ko-kapija-*`,
+   - `modTest` 331–333; sabotaže `dop-avans-split-*`, `dop-ko-kapija-*`,
      `dop-rucno-*`, `dop-gotovina-*`, `dop-nalog-avans-ko-ide-na-otkup` (zamenila
      `dop-nalog-avans-na-ko`); sidro `banka-uvoz-placen-blok-postaje-avans` prati
      zajednički `BimOtvorenoNaDokumentu`.
@@ -209,7 +209,9 @@ Storno, PWA `pregled.js`.
 **Spuštanje je serijsko:** F1 i F4 diraju centralne registre (`schema.json`,
 `modSchemaGuard`, `WRITE_OWNERSHIP.json`, brojevi testova u `modTest`). Na dan
 F1 otvoren je plan S8 paleta (PR #456, samo docs); grana koja posle doda testove
-od 309 nadalje sudara se sa ovom.
+od 309 nadalje sudara se sa ovom. **Desilo se:** S8 (#458 i dalje) je uzeo 309–314,
+pa su testovi doplate pri rebase-u na `main` prenumerisani na **315–333** (brojevi
+u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
 
 ## 8) Otvoreno
 
@@ -219,7 +221,7 @@ od 309 nadalje sudara se sa ovom.
    VBA `IsDate` taj oblik ne prihvata — što se očekuje, ali **nije izmereno** —
    štampa otkupnog lista za PWA otkup danas pokazuje vreme **sinhronizacije**
    (`CreatedAt`), a doplata takav otkup na graničnom danu odbija (DOP-ODL-03a).
-   Test 311 to meri; sonda nad pravom sveskom je u izveštaju uz F1. Ako se
+   Test 317 to meri; sonda nad pravom sveskom je u izveštaju uz F1. Ako se
    potvrdi, odluka je operaterova: parsirati ISO + UTC → lokalno vreme u
    `OtkupVremeNastanka` (popravlja i štampu), ili ostaviti granice na celim danima.
 2. DOP-ODL-10 je predlog — potvrditi ili oboriti.

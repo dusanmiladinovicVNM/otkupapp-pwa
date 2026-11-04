@@ -143,7 +143,6 @@ Public Sub RunBusinessFlowProSuite()
     Test_OpenFaktureExcludeStornirano
     Test_PrefillBiraPoslednjuGeneraciju
     Test_StornoPoBrojuOdbijaDvaVlasnika
-    Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice
     Test_ZbirnaRowDataColumnMapped
     Test_OMUlazSmerObavezan
     Test_PorukeKatalogPokrivaDokumenta
@@ -346,6 +345,16 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6_ManjakObeStraneIzStavki
     Test_S6_GrupniListStanjeVozaca
     Test_S6_PaleteCitajuStavke
+    Test_S8R1a_KorekcijaPoIdentitetu
+    Test_S8R1b_PraznaPaletaStrogBrojac
+    Test_S8R1c_StornoPaleteAktivnaRoba
+    Test_S8R2a1_PaleteZbirnePoPrijemnicama
+    Test_S8R2a2_LabeleIIntegritetPoStavci
+    Test_KI086_KorekcijaCekaPosleOtkaza
+    Test_KI086_PalaKorekcijaNosiRazlog
+    Test_KI087_IzborPaleteStrogoCitaPreradu
+    Test_S8R2b1_PisacPaleteTraziLiniju
+    Test_S8R2b2_PaletnaStavkaStareKoloneSelfHeal
     Test_S6_CitalacStavkiPrijemniceDrziUgovor
     Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu
     Test_S6K4_StornoSkidaPaleteUIstojTx
@@ -2326,158 +2335,11 @@ Private Function RowIsStornirano(ByVal tableName As String, ByVal idColumn As St
                                                           COL_STORNIRANO), "")))) = "DA")
 End Function
 
-' ZBR-CHILD-01: paleta nasledjuje generaciju OD PRIJEMNICE, ne razresava po broju.
-'
-' Kanonski lanac je PaletaStavka -> Prijemnica -> Zbirna, i prijemnica svoj
-' ZbirnaID vec nosi. Pitanje "koja je zbirna SADA pod ovim brojem" je
-' zato i suvisno i pogresno -- pravilo je "nikad ne pogadjaj kad vec znas".
-'
-' Grana A sama NE razlikuje tacno od pogresnog: kad je prijemnica vezana za
-' jedinu zbirnu pod tim brojem, nasledjivanje i pogadjanje vracaju ISTU vrednost.
-' Prva verzija ovog testa je imala samo granu A i sabotaza je prosla neprimeceno
-' (dokaz.py: NE OBARA NISTA).
-'
-' Grana B je ZATECEN red: broj stoji, generacija prazna. Druga verzija je tu
-' pokusala redosled "dete pre roditelja" i pukla na kapiji roditelja u piscu
-' (tada PrijemnicaZbirnaBlokira(), od S6 koraka 8 PrijemnicaRoditeljRazlog), pa
-' prijemnica bez postojece zbirne uopste ne prolazi. Taj redosled je stvaran za
-' OTPREMNICU iz auto-lanca (modAutoHladnjaca), ne za prijemnicu.
-'
-' Zatecen red je pak stvaran za oba: tako izgleda svaki red pre migracije, i
-' takav ostaje dok backfill ne prodje -- a pod dvosmislenim brojem ostaje prazan
-' zauvek. Tu nasledjivanje daje prazno, a pogadjanje generaciju. Stavka koja bi
-' pogodila tvrdila bi sledljivost koju njen sopstveni roditelj nema.
-Private Sub Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice()
-    Dim tx As clsTransaction
-    Dim testDate As Date, scenario As String
-    Dim brojA As String
-    Dim brPrijA As String, brPrijB As String
-    Dim zbrA As String, prjA As String, prjB As String
-    Dim genPrj As String
-
-    On Error GoTo EH
-
-    scenario = NewScenarioCode("ZBRPAL")
-    testDate = NextTestDate()
-    brojA = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
-    brPrijA = TEST_PREFIX & "-PRJ-PALA-" & scenario
-    brPrijB = TEST_PREFIX & "-PRJ-PALB-" & scenario
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_ZBIRNA
-    ' Dokument je zaglavlje + stavke: rollback koji vrati samo zaglavlje
-    ' OSTAVLJA stavku bez dokumenta -- tacno onu korupciju koju strog citalac
-    ' (StavkeZbirneRedovi) posle prijavljuje, i to u TUDJEM testu.
-    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
-    tx.AddTableSnapshot TBL_PRIJEMNICA
-    ' S6 korak 2: prijemnica je zaglavlje + stavke -- isti razlog kao gore.
-    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
-    ' KNJIGA IDE SA DOKUMENTOM (10b-2). Od cutovera prijemnica knjizi
-    ' Vozac -> Kupac, a pisac prijemnice commituje SVOJU tx. Bez ovog snimka
-    ' spoljni rollback vrati tblPrijemnica a knjigu ne -- red ostaje kao
-    ' SIROTAN, GetNextID ponovo izda isti broj, i AMB-INV-04 ga obori u
-    ' TUDJEM testu dva testa kasnije (05.10.2026, bas tako i jeste palo).
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_PALETA
-    tx.AddTableSnapshot TBL_PALETA_STAVKA
-    ' Izdata zbirna nastaje kroz pisce otkupa, otpremnice i zbirne (S6 korak 8).
-    ZbrPodPrijemnicuSnimi tx
-
-    ' --- A) uobicajen redosled: roditelj pa dete ---
-    zbrA = ZbrIzdataPodPrijemnicu(testDate, brojA, TEST_KUP_ID)
-    AssertTrue Len(zbrA) > 0, "ZBR-PAL preduslov: zbirna je snimljena"
-
-    prjA = PrjJednaKlasa(testDate, TEST_KUP_ID, brPrijA, brojA, 100#, 10#, KLASA_I, _
-                         TEST_TIP_AMB, 10)
-    AssertTrue Len(prjA) > 0, "ZBR-PAL preduslov: prijemnica je snimljena"
-
-    genPrj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_DETE_ZBIRNA_ROD))
-    AssertTrue Len(genPrj) > 0, "ZBR-PAL preduslov: prijemnica nosi generaciju roditelja"
-    AssertTrue BrojPaletnihStavki(prjA) > 0, _
-        "ZBR-PAL preduslov: paletizacija je napravila stavku (grana A)"
-    AssertEquals genPrj, PrvaGeneracijaPaletneStavke(prjA), _
-        "ZBR-PAL: paletna stavka nosi ISTU generaciju kao njena prijemnica"
-
-    ' --- B) ZATECEN red: broj stoji, generacija prazna ---
-    ' Bez gajbi, pa pisac ne paletizuje -- paletu pravi test ispod, posle
-    ' praznjenja generacije. Pisac commituje svoju transakciju, a ova je snima.
-    prjB = PrjJednaKlasa(testDate, TEST_KUP_ID, brPrijB, brojA, 100#, 10#, KLASA_I)
-    AssertTrue Len(prjB) > 0, "ZBR-PAL preduslov: druga prijemnica je snimljena"
-
-    IsprazniGeneracijuDeteta TBL_PRIJEMNICA, COL_PRJ_ID, prjB
-    AssertEquals "", _
-        NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_DETE_ZBIRNA_ROD)), _
-        "ZBR-PAL preduslov: prijemnica je u zatecenom obliku (generacija prazna)"
-    AssertEquals brojA, _
-        NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_PRJ_BROJ_ZBIRNE)), _
-        "ZBR-PAL preduslov: prijemnica je zadrzala broj"
-    AssertEquals genPrj, ZbirnaIDZaBroj(brojA), _
-        "ZBR-PAL preduslov: broj razresava na generaciju (ima sta da se pogodi)"
-
-    ' Od S6 koraka 2 je kljuc paletne stavke LINIJA, pa se salje i stavka --
-    ' isto kao sto to radi pisac (SavePrijemnicaMulti_TX).
-    PaletizePrijemnica prijemnicaID:=prjB, brojPrij:=brPrijB, brojZbirne:=brojA, _
-                       vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, klasa:=KLASA_I, _
-                       netoKg:=100#, brGajbica:=10, tipAmb:=TEST_TIP_AMB, _
-                       prijemnicaStavkaID:=S6StavkaID(prjB, KLASA_I)
-
-    AssertTrue BrojPaletnihStavki(prjB) > 0, _
-        "ZBR-PAL preduslov: paletizacija je napravila stavku (grana B)"
-    AssertEquals "", PrvaGeneracijaPaletneStavke(prjB), _
-        "ZBR-PAL: prazna generacija roditelja ostaje prazna, ne pogadja se po broju"
-
-    tx.RollbackTx
-    Exit Sub
-
-EH:
-    ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
-    Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-    LogFail "ZBR-CHILD-01 paleta nasledjuje od prijemnice", bfpErrDesc
-End Sub
-
-' Generacija prve paletne stavke date prijemnice, ili prazno. Prazno je i
-' legitiman rezultat i "nema stavke", pa se postojanje meri BrojPaletnihStavki.
-Private Function PrvaGeneracijaPaletneStavke(ByVal prijemnicaID As String) As String
-    Dim dat As Variant: dat = GetTableData(TBL_PALETA_STAVKA)
-    If Not IsArray(dat) Then Exit Function
-    Dim cP As Long, cG As Long, r As Long
-    cP = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
-    cG = GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD)
-    If cP = 0 Or cG = 0 Then Exit Function
-    For r = 1 To UBound(dat, 1)
-        If Trim$(NzToText(dat(r, cP))) = Trim$(prijemnicaID) Then
-            PrvaGeneracijaPaletneStavke = Trim$(NzToText(dat(r, cG)))
-            Exit Function
-        End If
-    Next r
-End Function
-
-Private Function BrojPaletnihStavki(ByVal prijemnicaID As String) As Long
-    Dim rows As Collection
-    Set rows = FindRows(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, prijemnicaID)
-    If rows Is Nothing Then Exit Function
-    BrojPaletnihStavki = rows.count
-End Function
-
-' Vraca red u oblik kakav ima pre migracije: broj zbirne stoji, generacija ne.
-Private Sub IsprazniGeneracijuDeteta(ByVal tableName As String, _
-                                     ByVal idColumn As String, _
-                                     ByVal idValue As String)
-    Const SRC As String = "IsprazniGeneracijuDeteta"
-
-    Dim rows As Collection
-    Set rows = FindRows(tableName, idColumn, idValue)
-    If rows Is Nothing Or rows.count = 0 Then
-        Err.Raise vbObjectError + 9311, SRC, _
-                  "Red nije nadjen. Tabela=" & tableName & " ID=" & idValue
-    End If
-
-    RequireUpdateCell tableName, CLng(rows(1)), COL_DETE_ZBIRNA_ROD, "", SRC
-End Sub
+' ZBR-CHILD-01 za PALETNU STAVKU (Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice i
+' njegovi pomocnici) je obrisan u S8 rezu 2b-2 (PAL-ODL-13): paletna stavka vise ne
+' nosi trag roditeljske zbirne, nego zbirnu cita iz zaglavlja prijemnice. Nema sta
+' da se nasledi ni da se pogodi. Palete zbirne po prijemnicama meri
+' Test_S8R2a1_PaleteZbirnePoPrijemnicama.
 Private Function DeteZbirnaID(ByVal tableName As String, _
                                 ByVal idColumn As String, _
                                 ByVal idValue As String) As String
@@ -9984,7 +9846,8 @@ End Function
 
 ' PALETE I INTEGRITET A3 CITAJU LINIJE DOKUMENTA (odluka 4).
 '
-' AdjustPaletaGajbiceZaPrijemnicu_TX je ziv (Oporavak, Alt+F8). Do koraka 3 je
+' AdjustPaletaGajbiceZaPrijemnicu_TX je ziv (Oporavak, Alt+F8; od S8 reza 1a
+' prima PrijemnicaID, ne broj). Do koraka 3 je
 ' dokument citao sa zaglavlja: nad novim oblikom to je "klasa I, 0 gajbi", pa
 ' bi palete te klase svukao na nulu, a klasu II proglasio viskom. A3 je
 ' neto paleta poredio sa Kolicinom zaglavlja (prazno = 0) i prijavljivao svaki
@@ -10069,7 +9932,7 @@ Private Sub Test_S6_PaleteCitajuStavke()
 
     ' --- Adjust nad ispravnim dokumentom ne menja nista ---
     Dim info As String, rez As Long
-    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "", info)
+    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(prj, "", info)
     AssertEquals "0|10|10", CStr(rez) & "|" & CStr(S6GajbiNaPaletama(prj, stI)) & "|" & _
                             CStr(S6GajbiNaPaletama(prj, stII)), _
                  "S6 palete: Adjust nad ispravnim dokumentom ne menja nijednu paletu"
@@ -10079,7 +9942,7 @@ Private Sub Test_S6_PaleteCitajuStavke()
         RequireUpdateCell TBL_PALETA_STAVKA, rII, COL_PALS_BR_GAJBICA, 7, _
                           "Test_S6_PaleteCitajuStavke"
     End If
-    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(brojPrij, "", info)
+    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(prj, "", info)
     AssertEquals "1|10|10", CStr(rez) & "|" & CStr(S6GajbiNaPaletama(prj, stI)) & "|" & _
                             CStr(S6GajbiNaPaletama(prj, stII)), _
                  "S6 palete: Adjust vraca klasu II na gajbe njene stavke, pod njenim kljucem"
@@ -10091,6 +9954,1526 @@ EH:
     On Error Resume Next
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
+
+' S8 REZ 1a (N1, PAL-IDENT-01): KOREKCIJA PALETA BIRA DOKUMENT I STAVKE PO
+' IDENTITETU.
+'
+' Dve prijemnice RAZLICITIH kupaca nose ISTI broj -- broj se racuna po kupcu
+' (modStorno:1848), pa je to normalno produkciono stanje, ne anomalija. Obe pravi
+' pisac (SavePrijemnicaMulti_TX), pa paletne stavke nose kljuc linije.
+'
+'   A   kupac 1, 12 gajbi / 120 kg (10 kg po gajbi)
+'   B   kupac 2, 10 gajbi /  90 kg ( 9 kg po gajbi)
+'
+' Kvar se pravi na PALETNOJ stavci A (+3 gajbe), ne na dokumentu -- isto kao u
+' Test_S6_PaleteCitajuStavke. Korekcija po ID-u A sme da vrati samo palete A.
+' Neto po gajbi se razlikuje, pa bi i resync stavki B po broju promenio njihov
+' neto.
+'
+' Nivo: FIZICKE paletne stavke po PrijemnicaID-u; otisak B broji i stornirane,
+' pa i "svedena na nulu pa stornirana" menja otisak.
+' Negativ: broj prijemnice umesto ID-a je ADJ_BLOCKED, bez ijedne mutacije.
+' SABOTAZE: s8r1a-korekcija-stavke-po-broju, s8r1a-resync-po-broju.
+Private Sub Test_S8R1a_KorekcijaPoIdentitetu()
+    On Error GoTo EH
+    Const SRC As String = "Test_S8R1a_KorekcijaPoIdentitetu"
+
+    Dim scenario As String, d1 As Date, d2 As Date, tipT As String, prevPal As String
+    scenario = NewScenarioCode("S8R1A")
+    d1 = NextTestDate()
+    d2 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS8A-" & scenario)
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABS8A-" & scenario, "test S8 rez 1a"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S8R1a: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbrA As String, brZbrB As String, voz As String
+    voz = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID))
+    brZbrA = voz & "/" & Format$(d1, "ddmmyy")
+    brZbrB = voz & "/" & Format$(d2, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbrA, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0 And _
+               Len(ZbrIzdataPodPrijemnicu(d2, brZbrB, TEST_KUP2_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "S8R1a: preduslov -- zbirne oba kupca su snimljene"
+
+    Dim broj As String, prjA As String, prjB As String, errNum As Long
+    broj = TEST_PREFIX & "-S8R1A-" & scenario
+    On Error Resume Next
+    prjA = SavePrijemnicaMulti_TX( _
+               datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+               brojPrij:=broj, brojZbirne:=brZbrA, _
+               vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+               kolicinaI:=120#, cenaI:=100#, tipAmb:=tipT, _
+               kolAmb:=12, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then prjA = "": Err.Clear
+    prjB = SavePrijemnicaMulti_TX( _
+               datum:=d2, kupacID:=TEST_KUP2_ID, vozacID:=TEST_VOZ_ID, _
+               brojPrij:=broj, brojZbirne:=brZbrB, _
+               vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+               kolicinaI:=90#, cenaI:=100#, tipAmb:=tipT, _
+               kolAmb:=10, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then prjB = "": Err.Clear
+    On Error GoTo EH
+
+    Dim stA As String, stB As String
+    stA = S6StavkaID(prjA, KLASA_I)
+    stB = S6StavkaID(prjB, KLASA_I)
+    AssertTrue Len(prjA) > 0 And Len(prjB) > 0 And prjA <> prjB And _
+               Len(stA) > 0 And Len(stB) > 0 And _
+               S6GajbiNaPaletama(prjA, stA) = 12 And S6GajbiNaPaletama(prjB, stB) = 10, _
+               "S8R1a: preduslov -- dva dokumenta istog broja paletizovana pod svojim linijama"
+
+    Dim otB As String: otB = S8R1aOtisakPaleta(prjB)
+
+    ' --- Kvar na paletnoj stavci A: +3 gajbe (palete 15, dokument 12) ---
+    Dim rA As Long, gPre As Long, kvarUpisan As Boolean, ps As Variant
+    rA = S6PaletnaStavkaRed(prjA, stA)
+    If rA > 0 Then
+        ps = GetTableData(TBL_PALETA_STAVKA)
+        gPre = CLng(Val(nz(ps(rA, RequireColumnIndex(TBL_PALETA_STAVKA, _
+                                COL_PALS_BR_GAJBICA, SRC)), 0)))
+        RequireUpdateCell TBL_PALETA_STAVKA, rA, COL_PALS_BR_GAJBICA, gPre + 3, SRC
+        kvarUpisan = (S6GajbiNaPaletama(prjA, stA) = 15)
+    End If
+    AssertTrue kvarUpisan, "S8R1a: preduslov -- palete A nose 15 gajbi, dokument 12"
+
+    ' --- Korekcija po ID-u A ---
+    Dim info As String, rez As Long
+    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(prjA, "", info)
+    AssertEquals "1", CStr(rez), _
+                 "S8R1a: korekcija po ID-u koriguje liniju svog dokumenta"
+    AssertEquals "12|120", CStr(S6GajbiNaPaletama(prjA, stA)) & "|" & _
+                           CStr(S8R1aNetoPaleta(prjA)), _
+                 "S8R1a: palete dokumenta su vracene na njegovu liniju"
+    AssertEquals otB, S8R1aOtisakPaleta(prjB), _
+                 "S8R1a: paletne stavke drugog kupca istog broja su netaknute"
+    AssertTrue S8R1aZaglavljaUSkladu(prjA) And S8R1aZaglavljaUSkladu(prjB), _
+               "S8R1a: zaglavlje svake palete je zbir njenih aktivnih stavki"
+
+    ' --- Negativ: broj umesto ID-a se odbija, bez mutacije ---
+    Dim otA As String: otA = S8R1aOtisakPaleta(prjA)
+    rez = AdjustPaletaGajbiceZaPrijemnicu_TX(broj, "", info)
+    AssertEquals CStr(ADJ_BLOCKED), CStr(rez), _
+                 "S8R1a: broj prijemnice umesto identiteta se odbija"
+    AssertEquals otA & "#" & otB, S8R1aOtisakPaleta(prjA) & "#" & S8R1aOtisakPaleta(prjB), _
+                 "S8R1a: odbijena korekcija po broju ne menja nijednu paletu"
+
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S8R1a_KorekcijaPoIdentitetu", Err.Number, Err.description
+    On Error Resume Next
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' Otisak SVIH paletnih stavki dokumenta (i storniranih): broj redova, zbir gajbi
+' i neta aktivnih, broj storniranih.
+Private Function S8R1aOtisakPaleta(ByVal prj As String) As String
+    Dim d As Variant, i As Long, cP As Long, cG As Long, cN As Long, cSt As Long
+    Dim n As Long, g As Long, kg As Double, nSt As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If IsArray(d) And Len(prj) > 0 Then
+        cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R1aOtisakPaleta")
+        cG = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, "S8R1aOtisakPaleta")
+        cN = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, "S8R1aOtisakPaleta")
+        cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R1aOtisakPaleta")
+        For i = 1 To UBound(d, 1)
+            If Trim$(nz(d(i, cP), "")) = prj Then
+                n = n + 1
+                If UCase$(Trim$(nz(d(i, cSt), ""))) = "DA" Then
+                    nSt = nSt + 1
+                Else
+                    g = g + CLng(Val(nz(d(i, cG), 0)))
+                    kg = kg + CDbl(Val(nz(d(i, cN), 0)))
+                End If
+            End If
+        Next i
+    End If
+    S8R1aOtisakPaleta = "redova=" & n & "|gajb=" & g & "|neto=" & CStr(Round(kg, 3)) & "|storno=" & nSt
+End Function
+
+' Neto na aktivnim paletnim stavkama dokumenta.
+Private Function S8R1aNetoPaleta(ByVal prj As String) As Double
+    Dim d As Variant, i As Long, cP As Long, cN As Long, cSt As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(d) Or Len(prj) = 0 Then Exit Function
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R1aNetoPaleta")
+    cN = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, "S8R1aNetoPaleta")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R1aNetoPaleta")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = prj And UCase$(Trim$(nz(d(i, cSt), ""))) <> "DA" Then
+            S8R1aNetoPaleta = S8R1aNetoPaleta + CDbl(Val(nz(d(i, cN), 0)))
+        End If
+    Next i
+    S8R1aNetoPaleta = Round(S8R1aNetoPaleta, 3)
+End Function
+
+' Da li je zaglavlje (gajbe) svake palete na kojoj dokument ima aktivnu stavku
+' jednako zbiru AKTIVNIH stavki te palete -- svih vlasnika, ne samo ovog
+' dokumenta (rubna paleta).
+Private Function S8R1aZaglavljaUSkladu(ByVal prj As String) As Boolean
+    Dim s As Variant, i As Long, j As Long, cP As Long, cPal As Long, cG As Long, cSt As Long
+    Dim palete As Object, v As Variant, zbir As Long, zag As Long
+    s = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(s) Or Len(prj) = 0 Then Exit Function
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R1aZaglavljaUSkladu")
+    cPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, "S8R1aZaglavljaUSkladu")
+    cG = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, "S8R1aZaglavljaUSkladu")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R1aZaglavljaUSkladu")
+    Set palete = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(s, 1)
+        If Trim$(nz(s(i, cP), "")) = prj And UCase$(Trim$(nz(s(i, cSt), ""))) <> "DA" Then
+            palete(Trim$(nz(s(i, cPal), ""))) = 1
+        End If
+    Next i
+    If palete.count = 0 Then Exit Function
+    For Each v In palete.Keys
+        zbir = 0
+        For j = 1 To UBound(s, 1)
+            If Trim$(nz(s(j, cPal), "")) = CStr(v) And _
+               UCase$(Trim$(nz(s(j, cSt), ""))) <> "DA" Then
+                zbir = zbir + CLng(Val(nz(s(j, cG), 0)))
+            End If
+        Next j
+        zag = CLng(Val(nz(GetValueByKey(TBL_PALETA, COL_PAL_ID, CStr(v), COL_PAL_BR_GAJBICA), 0)))
+        If zag <> zbir Then Exit Function
+    Next v
+    S8R1aZaglavljaUSkladu = True
+End Function
+
+' S8 REZ 1b (N8, S8-REV-05): "PALETA JE PRAZNA" POSLE SKIDANJA ODLUCUJE STROG
+' BROJAC AKTIVNIH STAVKI, NE PRIKAZNI CITAC.
+'
+' Dve prijemnice istog kupca dele SVEZU paletu (tip ambalaze scenarija):
+'   P1  4 gajbe / 40 kg
+'   P2  3 gajbe / 30 kg -- stornirana BEZ skidanja paleta (kao pre ispravke)
+' Stavka P2 je su-stanar STORNIRANE prijemnice -- slucaj koji kapija storna palete
+' iz reza 1c ne stiti, pa je ovde jedina brana.
+'
+' Prikazni citac se kvari seam-om (vraca Empty, kao na gresci). Storno P1 skida
+' samo njenu stavku; paleta i su-stanar ostaju, jer brojac vidi jednu aktivnu.
+' Pad brojaca: skidanje P2 sa pokvarenim brojacem se povlaci celo. Kontra:
+' skidanje P2 posle toga prazni paletu, pa se paleta stornira.
+'
+' Necitljiv status prerade (S8R1B-REV-04): dok je P1 jos aktivna na istoj paleti,
+' "Skini palete" nad P2 sa kolonom Preradjeno koja se ne nalazi mora da se odbije.
+' Paleta posle skidanja ne bi bila prazna, pa StornoPaleta (koji status proverava
+' sam) ne bi ni bio pozvan -- jedina brana je status iz IsPaletaPreradjena.
+'
+' Nivo: FIZICKE paletne stavke po PrijemnicaID-u i zaglavlje palete. Test sam pali
+' test rezim (seam ga trazi) i vraca ga i na putu greske.
+' SABOTAZE: s8r1b-praznina-iz-prikaza, s8r1b-preradjeno-tiho.
+Private Sub Test_S8R1b_PraznaPaletaStrogBrojac()
+    On Error GoTo EH
+    Const SRC As String = "Test_S8R1b_PraznaPaletaStrogBrojac"
+
+    Dim scenario As String, d1 As Date, tipT As String, prevPal As String, prevMode As Boolean
+    scenario = NewScenarioCode("S8R1B")
+    d1 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS8B-" & scenario)
+    prevMode = IsTestMode()
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABS8B-" & scenario, "test S8 rez 1b"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S8R1b: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(d1, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "S8R1b: preduslov -- zbirna je snimljena"
+
+    Dim p1 As String, p2 As String, errNum As Long
+    On Error Resume Next
+    p1 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R1B1-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=40#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=4, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p1 = "": Err.Clear
+    p2 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R1B2-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=30#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=3, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p2 = "": Err.Clear
+    On Error GoTo EH
+
+    Dim pal As String
+    pal = S8R1bPaletaDokumenta(p1)
+    AssertTrue Len(p1) > 0 And Len(p2) > 0 And Len(pal) > 0 And _
+               S8R1bPaletaDokumenta(p2) = pal And S8R1bAktivnihNaPaleti(pal) = 2, _
+               "S8R1b: preduslov -- P1 i P2 su jedine stavke iste palete"
+
+    ' --- P2 stornirana bez skidanja paleta: njena stavka ostaje kao su-stanar ---
+    AssertTrue modStorno.StornoPrijemnica_TX(p2, False), _
+               "S8R1b: preduslov -- P2 je stornirana, a njena paletna stavka ostaje"
+    Dim otP2 As String: otP2 = S8R1aOtisakPaleta(p2)
+
+    ' --- "Skini palete" P2 uz necitljiv status prerade: odbija se, nista se ne dira ---
+    Dim stanjeRev4 As String, nRev4 As Long, razlogRev4 As String
+    stanjeRev4 = S8R1aOtisakPaleta(p1) & "#" & otP2 & "#" & S8R1bPaletaStanje(pal)
+    SetTestMode True
+    modPaletniList.PaletaPraznoTestSet "PRERADJENO_KOLONA"
+    nRev4 = modPaletniList.SkiniPaleteSirocadi_TX(p2, razlogRev4)
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
+    AssertTrue nRev4 = 0, "S8R1b: necitljiv status prerade odbija skidanje"
+    AssertTrue InStr(razlogRev4, "'" & COL_PAL_PRERADJENO & "'") > 0, _
+               "S8R1b: razlog odbijanja imenuje kolonu statusa prerade"
+    AssertEquals stanjeRev4, S8R1aOtisakPaleta(p1) & "#" & S8R1aOtisakPaleta(p2) & "#" & _
+                 S8R1bPaletaStanje(pal), _
+                 "S8R1b: odbijeno skidanje ne dira ni dokument ni su-stanara ni paletu"
+
+    ' --- Storno P1 uz POKVAREN prikazni citac ---
+    Dim okP1 As Boolean
+    SetTestMode True
+    modPaletniList.PaletaPraznoTestSet "PRIKAZ"
+    okP1 = modStorno.StornoPrijemnica_TX(p1)
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
+    AssertTrue okP1, "S8R1b: storno P1 je prosao"
+    AssertEquals otP2, S8R1aOtisakPaleta(p2), _
+                 "S8R1b: su-stanar stornirane prijemnice ostaje na paleti"
+    AssertEquals "|3", S8R1bPaletaStanje(pal), _
+                 "S8R1b: paleta sa su-stanarom nije stornirana i nosi samo njegove gajbe"
+
+    ' --- Pad strogog brojaca: skidanje P2 se povlaci celo ---
+    Dim stanjePre As String, padTxt As String
+    stanjePre = S8R1aOtisakPaleta(p2) & "#" & S8R1bPaletaStanje(pal)
+    SetTestMode True
+    modPaletniList.PaletaPraznoTestSet "BROJAC"
+    padTxt = S8R1bSkini(p2)
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
+    AssertTrue Len(padTxt) > 0, "S8R1b: pad strogog brojaca obara skidanje"
+    AssertEquals stanjePre, S8R1aOtisakPaleta(p2) & "#" & S8R1bPaletaStanje(pal), _
+                 "S8R1b: pad strogog brojaca povlaci skidanje celo"
+
+    ' --- Kontra: poslednja stavka skinuta -> paleta se stornira ---
+    AssertEquals "", S8R1bSkini(p2), "S8R1b: skidanje poslednje stavke palete je proslo"
+    AssertEquals "DA|0", S8R1bPaletaStanje(pal), _
+                 "S8R1b: paleta cija je poslednja stavka skinuta se stornira"
+
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S8R1b_PraznaPaletaStrogBrojac", Err.Number, Err.description
+    On Error Resume Next
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' S8 REZ 1c (N7, PAL-ODL-06): STORNO PALETE ODBIJA ROBU AKTIVNE PRIJEMNICE.
+'
+' Dve prijemnice istog kupca dele SVEZU paletu (tip ambalaze scenarija):
+'   P1  4 gajbe / 40 kg,  P2  3 gajbe / 30 kg
+' Svaka je CELA stavka na paleti -- slucaj koji A3 posle storna palete vise ne vidi.
+'   1) obe aktivne: razlog imenuje obe (samo citac -- jezgro meri korak 2);
+'   2) P1 stornirana BEZ skidanja paleta (njena stavka je sirocad), P2 aktivna:
+'      storno palete se odbija i nista se ne menja. Ovde je storno palete skidao
+'      robu su-stanara;
+'   3) obe stornirane (paleta nosi samo sirocad, storno bi prosao):
+'      - necitljiv status prijemnice (S8R1C-REV-01, seam kvari INDEKS kolone):
+'        storno se odbija, razlog imenuje kolonu, nista se ne menja;
+'      - sinteticka anomalija (synthetic anomaly, S8R1C-REV-02: u sopstvenoj
+'        transakciji koja se UVEK vraca): stavka P2 pokazuje na prijemnicu koje
+'        nema -- ne zna se cija je roba, storno se odbija;
+'      - kontra: paleta nosi samo sirocad i stornira se.
+'
+' Nivo: FIZICKE paletne stavke po PrijemnicaID-u i zaglavlje palete. Ulaz je
+' produkcioni StornoPaleta_TX (radnja "Storniraj paletu" ekrana Palete).
+' Test sam pali test rezim (seam ga trazi) i vraca ga i na putu greske.
+' SABOTAZE: s8r1c-storno-bez-kapije, s8r1c-sirocad-blokira,
+' s8r1c-nepoznata-prijemnica-pusta, s8r1c-status-prijemnice-tiho.
+Private Sub Test_S8R1c_StornoPaleteAktivnaRoba()
+    On Error GoTo EH
+    Const SRC As String = "Test_S8R1c_StornoPaleteAktivnaRoba"
+    Dim prevMode As Boolean, txA As clsTransaction
+    prevMode = IsTestMode()
+
+    Dim scenario As String, d1 As Date, tipT As String, prevPal As String
+    scenario = NewScenarioCode("S8R1C")
+    d1 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS8C-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABS8C-" & scenario, "test S8 rez 1c"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S8R1c: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(d1, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "S8R1c: preduslov -- zbirna je snimljena"
+
+    Dim p1 As String, p2 As String, errNum As Long
+    On Error Resume Next
+    p1 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R1C1-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=40#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=4, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p1 = "": Err.Clear
+    p2 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R1C2-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=30#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=3, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p2 = "": Err.Clear
+    On Error GoTo EH
+
+    Dim pal As String
+    pal = S8R1bPaletaDokumenta(p1)
+    AssertTrue Len(p1) > 0 And Len(p2) > 0 And Len(pal) > 0 And _
+               S8R1bPaletaDokumenta(p2) = pal And S8R1bAktivnihNaPaleti(pal) = 2, _
+               "S8R1c: preduslov -- P1 i P2 su jedine stavke iste palete"
+
+    ' --- 1) obe aktivne: razlog imenuje obe ---
+    Dim razlog As String
+    razlog = modPaletniList.PaletaAktivnaRobaRazlog(pal)
+    AssertTrue InStr(razlog, "(" & p1 & ")") > 0 And InStr(razlog, "(" & p2 & ")") > 0, _
+               "S8R1c: razlog imenuje obe aktivne prijemnice"
+
+    ' --- 2) P1 stornirana bez skidanja paleta (sirocad), P2 aktivna -- N7 ---
+    AssertTrue modStorno.StornoPrijemnica_TX(p1, False), _
+               "S8R1c: preduslov -- P1 je stornirana, a njena paletna stavka ostaje"
+    Dim stanje As String
+    stanje = S8R1cStanje(p1, p2, pal)
+    razlog = modPaletniList.PaletaAktivnaRobaRazlog(pal)
+    AssertTrue InStr(razlog, "(" & p2 & ")") > 0, "S8R1c: razlog imenuje aktivnog su-stanara"
+    AssertTrue InStr(razlog, "(" & p1 & ")") = 0, "S8R1c: stornirana prijemnica nije u razlogu"
+    AssertTrue Not modStorno.StornoPaleta_TX(pal), _
+               "S8R1c: storno palete sa robom aktivnog su-stanara se odbija"
+    AssertEquals stanje, S8R1cStanje(p1, p2, pal), _
+                 "S8R1c: odbijen storno ne dira ni su-stanara ni sirocad ni paletu"
+
+    ' --- 3) obe stornirane ---
+    AssertTrue modStorno.StornoPrijemnica_TX(p2, False), _
+               "S8R1c: preduslov -- P2 je stornirana, a njena paletna stavka ostaje"
+    stanje = S8R1cStanje(p1, p2, pal)
+
+    ' Necitljiv status prijemnice (S8R1C-REV-01): seam kvari INDEKS kolone Stornirano
+    ' u tblPrijemnica. Strog citac dize gresku koja imenuje kolonu. Tolerantan bi
+    ' prazan status procitao kao "aktivna" i takodje odbio, ali sa laznim razlogom
+    ' -- zato tvrdnja meri razlog, ne samo odbijanje.
+    Dim razlogKol As String, okKol As Boolean
+    okKol = True
+    SetTestMode True
+    modPaletniList.PaletaPraznoTestSet "STATUS_PRIJEMNICE_KOLONA"
+    On Error Resume Next
+    razlogKol = modPaletniList.PaletaAktivnaRobaRazlog(pal)
+    If Err.Number <> 0 Then razlogKol = Err.description
+    Err.Clear
+    okKol = modStorno.StornoPaleta_TX(pal)
+    Err.Clear
+    On Error GoTo EH
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
+    AssertTrue Not okKol, "S8R1c: necitljiv status prijemnice odbija storno palete"
+    AssertTrue InStr(razlogKol, "'" & COL_STORNIRANO & "'") > 0, _
+               "S8R1c: razlog odbijanja imenuje kolonu statusa prijemnice"
+    AssertEquals stanje, S8R1cStanje(p1, p2, pal), _
+                 "S8R1c: odbijen storno uz necitljiv status nista ne menja"
+
+    ' Sinteticka anomalija (S8R1C-REV-02): stavka P2 pokazuje na prijemnicu koje
+    ' nema. Sve ide u transakciju koja se UVEK vraca -- ovde i u EH -- pa prekid
+    ' izmedju izmene i vracanja ne ostavlja anomaliju u svesci.
+    Dim rP2 As Long, nema As String, razlogAnom As String, okAnom As Boolean
+    Dim stanjeAnom As String, stanjeAnomPosle As String
+    nema = "NEMA-" & scenario
+    okAnom = True
+    rP2 = S8R1cRedStavke(p2)
+    If rP2 > 0 Then
+        Set txA = New clsTransaction
+        txA.BeginTx
+        txA.AddTableSnapshot TBL_PALETA
+        txA.AddTableSnapshot TBL_PALETA_STAVKA
+        RequireUpdateCell TBL_PALETA_STAVKA, rP2, COL_PALS_PRIJEMNICA_ID, nema, SRC
+        stanjeAnom = S8R1cStanje(p1, nema, pal)
+        razlogAnom = modPaletniList.PaletaAktivnaRobaRazlog(pal)
+        okAnom = modStorno.StornoPaleta_TX(pal)
+        stanjeAnomPosle = S8R1cStanje(p1, nema, pal)
+        txA.RollbackTx
+        Set txA = Nothing
+    End If
+    AssertTrue rP2 > 0, "S8R1c: preduslov -- P2 ima aktivnu paletnu stavku"
+    AssertTrue InStr(razlogAnom, nema) > 0, "S8R1c: razlog imenuje prijemnicu koje nema"
+    AssertTrue Not okAnom, "S8R1c: stavka nepoznate prijemnice odbija storno palete"
+    AssertEquals stanjeAnom, stanjeAnomPosle, _
+                 "S8R1c: odbijen storno nad anomalijom nista ne menja"
+    AssertEquals stanje, S8R1cStanje(p1, p2, pal), _
+                 "S8R1c: anomalija je vracena transakcijom"
+
+    ' --- Kontra: paleta nosi samo sirocad -> stornira se ---
+    AssertEquals "", modPaletniList.PaletaAktivnaRobaRazlog(pal), _
+                 "S8R1c: paleta sa samo sirocadi nema razlog odbijanja"
+    AssertTrue modStorno.StornoPaleta_TX(pal), "S8R1c: paleta koja nosi samo sirocad se stornira"
+    AssertTrue Left$(S8R1bPaletaStanje(pal), 3) = "DA|", "S8R1c: paleta sa samo sirocadi je stornirana"
+    AssertEquals "redova=1|gajb=0|neto=0|storno=1#redova=1|gajb=0|neto=0|storno=1", _
+                 S8R1aOtisakPaleta(p1) & "#" & S8R1aOtisakPaleta(p2), _
+                 "S8R1c: storno palete stornira stavke sirocadi"
+
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S8R1c_StornoPaleteAktivnaRoba", Err.Number, Err.description
+    On Error Resume Next
+    If Not txA Is Nothing Then txA.RollbackTx
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' S8 REZ 2a-1 (R1-R3, KI-039): PALETE ZBIRNE SU PALETE NJENIH PRIJEMNICA.
+'
+' Dve zbirne ISTOG broja (isti kupac, obrazac Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira),
+' po jedna prijemnica sa ispravnim tragom roditelja (seed), obe paletizovane na
+' istu svezu paletu (tip ambalaze scenarija): prjA 2 gajbe / 20 kg, prjB 3 / 30.
+'   1) pregled i uvid zbirne A broje SAMO robu prjA -- po PrijemnicaID-u (R2, R3).
+'      Do S8 reza 2b-2 je paletna stavka prjB ovde nosila LAZNU labelu zbirne A
+'      (synthetic); kolone od 2b-2 nema, pa se greska meri kao citanje po BROJU;
+'   2) PONISTENJE A prolazi, jer palete ne biraju obim kaskade -- kaskada ih skida
+'      po ID-u prijemnice (R1). Pada prjA i njena paletna stavka; prjB i njena roba
+'      ostaju;
+'   3) KI-039: zbirna C (svoj broj), prijemnica na PRERADJENOJ paleti (druga sveza
+'      paleta). Pregled ne obecava skidanje; PONISTENJE se odbija razlogom koji
+'      imenuje preradu, BEZ zapisa ispravke, a prijemnica ostaje aktivna;
+'   4) S8R2A1-REV-01: dve zbirne istog broja, prijemnica druge BEZ traga roditelja
+'      (synthetic anomaly) -- obim se ne moze suziti, pa uvid zbirne D1 ne sme da
+'      padne na sva deca tog broja i ponese robu D2.
+'
+' Nivo: FIZICKE paletne stavke po PrijemnicaID-u; zapisi ispravke kao redovi
+' tblStornoVeze. Sve u transakciji koja se uvek vraca.
+' SABOTAZE: s8r2a1-pregled-po-broju, s8r2a1-uvid-po-broju, s8r2a1-ki039-bez-provere,
+' s8r2a1-pregled-obecava-skidanje, s8r2a1-obim-nesuzen (s8r2a1-scope-po-paletama
+' povucena u 2b-2: paletna stavka traga zbirne nema).
+Private Sub Test_S8R2a1_PaleteZbirnePoPrijemnicama()
+    Const SRC As String = "Test_S8R2a1_PaleteZbirnePoPrijemnicama"
+    Dim tx As clsTransaction
+    Dim prevKupac As String, prevPal As String, cfgVracen As Boolean
+    On Error GoTo EH
+
+    Dim scenario As String, g As String, broj As String, brojC As String
+    Dim otpA As String, otpB As String, otpC As String
+    Dim zbrA As String, zbrB As String, zbrC As String
+    Dim prjA As String, prjB As String, prjC As String
+    Dim hA As Object, hB As Object, hC As Object, izv As Collection
+    Dim tipT As String, tipC As String
+
+    scenario = NewScenarioCode("S8R2A")
+    tipT = RegistrujTipTesta("TIPS8E-" & scenario)
+    tipC = RegistrujTipTesta("TIPS8F-" & scenario)
+    Dim tipD As String
+    tipD = RegistrujTipTesta("TIPS8G-" & scenario)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    AutoOtpSnimak tx
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+
+    broj = TEST_PREFIX & "-ZBR-S8A-" & scenario
+    otpA = ZbrOtpremnicaNaDan("S8AA" & scenario, NextTestDate())
+    Set izv = New Collection: izv.Add otpA
+    Set hA = ZbrHeaderNaDan(broj, NextTestDate())
+    hA("KupacID") = TEST_KUP_ID
+    zbrA = modDokumenta.CreateZbirnaIzIzvora_TX(hA, izv, g, True)
+
+    otpB = ZbrOtpremnicaNaDan("S8AB" & scenario, NextTestDate())
+    Set izv = New Collection: izv.Add otpB
+    Set hB = ZbrHeaderNaDan(broj, NextTestDate())
+    hB("KupacID") = TEST_KUP_ID
+    zbrB = modDokumenta.CreateZbirnaIzIzvora_TX(hB, izv, g, True)
+
+    AssertTrue Len(zbrA) > 0 And Len(zbrB) > 0 And zbrA <> zbrB, _
+               "S8R2a1: preduslov -- dve zbirne pod istim brojem"
+    If Len(zbrA) = 0 Or Len(zbrB) = 0 Then GoTo Kraj
+
+    prjA = "PRJ-S8AA-" & scenario
+    prjB = "PRJ-S8AB-" & scenario
+    ZbrSejPrijemnicuSaRoditeljem prjA, broj, zbrA
+    ZbrSejPrijemnicuSaRoditeljem prjB, broj, zbrB
+    S8R2aPaletizuj prjA, 20#, 2, tipT
+    S8R2aPaletizuj prjB, 30#, 3, tipT
+    Dim pal As String
+    pal = S8R1bPaletaDokumenta(prjA)
+    AssertTrue Len(pal) > 0 And S8R1bPaletaDokumenta(prjB) = pal And S8R1bAktivnihNaPaleti(pal) = 2, _
+               "S8R2a1: preduslov -- prjA i prjB su jedine stavke iste palete"
+
+    ' --- 1) pregled i uvid zbirne A: samo roba njenih prijemnica ---
+    Dim mA As String
+    mA = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, broj, "", zbrA)
+    AssertTrue InStr(1, mA, "paletne stavke: 1 (", vbTextCompare) > 0, _
+               "S8R2a1: pregled zbirne A broji paletne stavke svojih prijemnica"
+    Dim uv As Object, sm As Object, gajbUvid As Long
+    Set uv = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, broj, "", zbrA, True)
+    Set sm = uv("summary")
+    gajbUvid = -1
+    If Not sm Is Nothing Then gajbUvid = CLng(Val(nz(sm("detachGajb"), -1)))
+    AssertEquals 2, gajbUvid, "S8R2a1: uvid zbirne A nosi samo robu svojih prijemnica"
+
+    ' --- 2) PONISTENJE A prolazi; roba prjB ostaje ---
+    Dim otB As String: otB = S8R1aOtisakPaleta(prjB)
+    Dim r As Object
+    Set r = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_PONISTENJE, True, zbrA)
+    AssertTrue CBool(r("success")), _
+               "S8R2a1: PONISTENJE zbirne A prolazi uprkos paletnoj stavci bez traga zbirne"
+    AssertTrue RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjA), _
+               "S8R2a1: prijemnica zbirne A je stornirana"
+    AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjB), _
+               "S8R2a1: prijemnica zbirne B je netaknuta"
+    AssertEquals "redova=1|gajb=0|neto=0|storno=1", S8R1aOtisakPaleta(prjA), _
+                 "S8R2a1: roba prijemnice A je skinuta sa palete"
+    AssertEquals otB, S8R1aOtisakPaleta(prjB), "S8R2a1: roba prijemnice B ostaje na paleti"
+
+    ' --- 3) KI-039: zbirna C sa robom na PRERADJENOJ paleti ---
+    brojC = TEST_PREFIX & "-ZBR-S8C-" & scenario
+    otpC = ZbrOtpremnicaNaDan("S8AC" & scenario, NextTestDate())
+    Set izv = New Collection: izv.Add otpC
+    Set hC = ZbrHeaderNaDan(brojC, NextTestDate())
+    hC("KupacID") = TEST_KUP_ID
+    zbrC = modDokumenta.CreateZbirnaIzIzvora_TX(hC, izv, g, True)
+    prjC = "PRJ-S8AC-" & scenario
+    If Len(zbrC) > 0 Then
+        ZbrSejPrijemnicuSaRoditeljem prjC, brojC, zbrC
+        S8R2aPaletizuj prjC, 10#, 1, tipC
+    End If
+    Dim palC As String: palC = S8R1bPaletaDokumenta(prjC)
+    AssertTrue Len(zbrC) > 0 And Len(palC) > 0 And palC <> pal, _
+               "S8R2a1: preduslov -- prijemnica zbirne C ima svoju paletu"
+    If Len(palC) > 0 Then
+        RequireUpdateCell TBL_PALETA, CLng(FindRows(TBL_PALETA, COL_PAL_ID, palC).item(1)), _
+                          COL_PAL_PRERADJENO, "Da", SRC
+    End If
+    Dim mC As String
+    mC = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, brojC, "", zbrC)
+    AssertTrue InStr(1, mC, Poruka("STEF_PAL_PRER_PON"), vbBinaryCompare) > 0 And _
+               InStr(1, mC, "skidaju se sa paleta", vbTextCompare) = 0, _
+               "S8R2a1: pregled ne obecava skidanje robe sa preradjene palete"
+    Dim nVeze As Long: nVeze = S8R2aBrojRedova(TBL_STORNO_VEZE)
+    Set r = modStornoFlow.RunZbirnaCorrection(brojC, SV_MODE_PONISTENJE, True, zbrC)
+    AssertTrue Not CBool(r("success")), _
+               "S8R2a1: PONISTENJE zbirne sa robom na preradjenoj paleti se odbija"
+    AssertTrue InStr(1, CStr(r("message")), "preradjen", vbTextCompare) > 0, _
+               "S8R2a1: razlog odbijanja imenuje preradu"
+    AssertEquals nVeze, S8R2aBrojRedova(TBL_STORNO_VEZE), _
+                 "S8R2a1: odbijeno PONISTENJE ne pravi zapis ispravke"
+    AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjC), _
+               "S8R2a1: prijemnica zbirne C ostaje aktivna"
+
+    ' --- 4) S8R2A1-REV-01: obim se ne moze suziti -> uvid ne nosi tudju robu ---
+    ' Mere se oba rezima: strog (ekran Storno) mora da bude nevalidan, a blag ne
+    ' sme da nosi palete druge zbirne (review #463, P3).
+    Dim brojD As String, otpD1 As String, otpD2 As String, zbrD1 As String, zbrD2 As String
+    Dim prjD1 As String, prjD2 As String, hD1 As Object, hD2 As Object
+    brojD = TEST_PREFIX & "-ZBR-S8D-" & scenario
+    otpD1 = ZbrOtpremnicaNaDan("S8AD1" & scenario, NextTestDate())
+    Set izv = New Collection: izv.Add otpD1
+    Set hD1 = ZbrHeaderNaDan(brojD, NextTestDate())
+    hD1("KupacID") = TEST_KUP_ID
+    zbrD1 = modDokumenta.CreateZbirnaIzIzvora_TX(hD1, izv, g, True)
+    otpD2 = ZbrOtpremnicaNaDan("S8AD2" & scenario, NextTestDate())
+    Set izv = New Collection: izv.Add otpD2
+    Set hD2 = ZbrHeaderNaDan(brojD, NextTestDate())
+    hD2("KupacID") = TEST_KUP_ID
+    zbrD2 = modDokumenta.CreateZbirnaIzIzvora_TX(hD2, izv, g, True)
+    prjD1 = "PRJ-S8AD1-" & scenario
+    prjD2 = "PRJ-S8AD2-" & scenario
+    If Len(zbrD1) > 0 And Len(zbrD2) > 0 Then
+        ZbrSejPrijemnicuSaRoditeljem prjD1, brojD, zbrD1
+        ZbrSejPrijemnicuSaRoditeljem prjD2, brojD, zbrD2
+        RequireUpdateCell TBL_PRIJEMNICA, CLng(FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prjD2).item(1)), _
+                          COL_DETE_ZBIRNA_ROD, "", SRC
+        S8R2aPaletizuj prjD1, 20#, 2, tipD
+        S8R2aPaletizuj prjD2, 30#, 3, tipD
+    End If
+    AssertTrue Len(zbrD1) > 0 And Len(zbrD2) > 0 And Len(S8R1bPaletaDokumenta(prjD2)) > 0, _
+               "S8R2a1: preduslov -- dve zbirne istog broja, druga sa prijemnicom bez traga"
+    Dim uvS As Object
+    Set uvS = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, brojD, "", zbrD1, True)
+    AssertTrue Not CBool(uvS("valid")), "S8R2a1: strog uvid odbija nesiguran obim"
+    Dim uvD As Object, palD As Collection, pD As Variant, gajbD As Long
+    Set uvD = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, brojD, "", zbrD1, False)
+    gajbD = -1
+    If uvD.Exists("palete") Then
+        Set palD = uvD("palete")
+        gajbD = 0
+        For Each pD In palD
+            gajbD = gajbD + CLng(Val(nz(pD("thisGajb"), 0)))
+        Next pD
+    End If
+    AssertEquals 0, gajbD, "S8R2a1: uvid zbirne bez sigurnog obima ne nosi robu druge zbirne"
+
+Kraj:
+    tx.RollbackTx
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    cfgVracen = True
+    Exit Sub
+
+EH:
+    Dim eN As Long, eD As String
+    eN = Err.Number
+    eD = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    If Not cfgVracen Then
+        SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+        SetConfigValue CFG_PALETIRANJE, prevPal
+    End If
+    On Error GoTo 0
+    LogFatal "Test_S8R2a1_PaleteZbirnePoPrijemnicama", eN, eD
+End Sub
+
+' S8 REZ 2a-2 (R5, R6, R11): LABELE IZ ZAGLAVLJA, INTEGRITET PO STAVCI.
+'
+' Tri prijemnice istog kupca: P1 (4 gajbe) i P2 (3 gajbe) na svezoj paleti, P3
+' (2 gajbe) snimljena dok je paletiranje ISKLJUCENO (nikad paletizovana).
+' Sinteticke anomalije idu u transakciju koja se uvek vraca:
+'   1) lista stavki palete (C-048) nosi broj prijemnice iz zaglavlja i broj zbirne
+'      iz zaglavlja zbirne (R6, PAL-ODL-09). Do S8 reza 2b-2 je test labele paletne
+'      stavke praznio (synthetic); od 2b-2 tih kolona nema;
+'   2) P1 stornirana (samo zastavica) -- red "Osiroc. palete" postoji i nosi broj iz
+'      zaglavlja (R5);
+'   3) paletna stavka P2 stornirana dok je P2 aktivna (N7 iz istorije, pre 1c) --
+'      A3 je vidi (PAL-ODL-08); P3, nikad paletizovana, nije nalaz;
+'   4) kljuc linije paletne stavke P1 pokazuje na stavku P2 -- C1 je imenuje
+'      (PAL-INV-01 meko).
+' Nivo: FIZICKE paletne stavke; nalazi integriteta po sifri bloka.
+' SABOTAZE: s8r2a2-a3-samo-aktivne, s8r2a2-a3-sve-stavke, s8r2a2-c1-tudji-kljuc
+' (s8r2a2-c048-labela-sa-stavke i s8r2a2-oporavak-labela-sa-stavke povucene u 2b-2:
+' labele sa paletne stavke se vise ne mogu ni procitati).
+Private Sub Test_S8R2a2_LabeleIIntegritetPoStavci()
+    On Error GoTo EH
+    Const SRC As String = "Test_S8R2a2_LabeleIIntegritetPoStavci"
+    Dim tx As clsTransaction
+    Dim scenario As String, d1 As Date, tipT As String, prevPal As String
+    scenario = NewScenarioCode("S8R2B")
+    d1 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS8H-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABS8H-" & scenario, "test S8 rez 2a-2"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S8R2a2: preduslov -- vozac je preuzeo 50"
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(d1, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "S8R2a2: preduslov -- zbirna je snimljena"
+
+    Dim p1 As String, p2 As String, p3 As String, errNum As Long
+    On Error Resume Next
+    p1 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R2B1-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=40#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=4, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p1 = "": Err.Clear
+    p2 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R2B2-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=30#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=3, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p2 = "": Err.Clear
+    SetConfigValue CFG_PALETIRANJE, "NE"
+    p3 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R2B3-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=20#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=2, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p3 = "": Err.Clear
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    On Error GoTo EH
+
+    Dim pal As String, r1 As Long, r2 As Long
+    pal = S8R1bPaletaDokumenta(p1)
+    r1 = S8R1cRedStavke(p1)
+    r2 = S8R1cRedStavke(p2)
+    AssertTrue Len(p1) > 0 And Len(p2) > 0 And Len(p3) > 0 And Len(pal) > 0 And r1 > 0 And r2 > 0 _
+               And Len(S8R1bPaletaDokumenta(p3)) = 0, _
+               "S8R2a2: preduslov -- P1 i P2 paletizovane, P3 nikad"
+    If Len(p1) = 0 Or Len(p2) = 0 Or Len(p3) = 0 Or r1 = 0 Or r2 = 0 Then GoTo Kraj
+
+    Dim ps As Variant, palsID1 As String, kljuc2 As String, br1 As String, stOrig As String
+    ps = GetTableData(TBL_PALETA_STAVKA)
+    palsID1 = Trim$(nz(ps(r1, RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, SRC)), ""))
+    kljuc2 = Trim$(nz(ps(r2, RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID, SRC)), ""))
+    br1 = Trim$(nz(GetValueByKey(TBL_PRIJEMNICA, COL_PRJ_ID, p1, COL_PRJ_BROJ), ""))
+    stOrig = Trim$(nz(GetValueByKey(TBL_PRIJEMNICA, COL_PRJ_ID, p1, COL_STORNIRANO), ""))
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+
+    ' --- 1) C-048: labele iz zaglavlja prijemnice i zbirne ---
+    Dim gr As Variant, k As Long, lbBr As String, lbZb As String
+    gr = modPaletniList.GetPaletaStavkeForGrid(pal)
+    If IsArray(gr) Then
+        For k = LBound(gr, 1) To UBound(gr, 1)
+            If CStr(gr(k, 0)) = p1 Then
+                lbBr = CStr(gr(k, 1))
+                lbZb = CStr(gr(k, 2))
+            End If
+        Next k
+    End If
+    AssertEquals br1, lbBr, "S8R2a2: lista stavki palete nosi broj prijemnice iz zaglavlja"
+    AssertEquals brZbr, lbZb, "S8R2a2: lista stavki palete nosi broj zbirne iz zaglavlja zbirne"
+
+    ' --- 2) P1 stornirana (samo zastavica): red osirotelih paleta iz zaglavlja ---
+    Dim rP1 As Long: rP1 = CLng(FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, p1).item(1))
+    RequireUpdateCell TBL_PRIJEMNICA, rP1, COL_STORNIRANO, "Da", SRC
+    Dim os As Variant, lbOs As String
+    os = modDokumenta.GetPrijemniceSaOsirocenimPaletama()
+    lbOs = "(nema reda)"
+    If IsArray(os) Then
+        For k = LBound(os, 1) To UBound(os, 1)
+            If CStr(os(k, LBound(os, 2) + 6)) = p1 Then lbOs = CStr(os(k, LBound(os, 2)))
+        Next k
+    End If
+    AssertEquals br1, lbOs, "S8R2a2: red osirotelih paleta nosi broj prijemnice iz zaglavlja"
+    RequireUpdateCell TBL_PRIJEMNICA, rP1, COL_STORNIRANO, stOrig, SRC
+
+    ' --- 3) A3: paletna stavka P2 stornirana dok je P2 aktivna (N7 iz istorije) ---
+    RequireUpdateCell TBL_PALETA_STAVKA, r2, COL_STORNIRANO, "Da", SRC
+    Dim nal As Variant
+    nal = modIntegritet.GetIntegritetRows()
+    AssertTrue modTest.NalazSadrzi(nal, "A3", p2), _
+               "S8R2a2: A3 vidi stavku cija je roba skinuta stornom palete"
+    AssertTrue Not modTest.NalazSadrzi(nal, "A3", p3), _
+               "S8R2a2: A3 ne prijavljuje robu koja nikad nije paletizovana"
+
+    ' --- 4) C1: kljuc linije paletne stavke P1 pokazuje na stavku P2 ---
+    RequireUpdateCell TBL_PALETA_STAVKA, r1, COL_PALS_PRIJEMNICA_STAVKA_ID, kljuc2, SRC
+    nal = modIntegritet.GetIntegritetRows()
+    AssertTrue Len(kljuc2) > 0 And modTest.NalazSadrzi(nal, "C1", palsID1), _
+               "S8R2a2: C1 imenuje paletnu stavku sa kljucem linije druge prijemnice"
+
+Kraj:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S8R2a2_LabeleIIntegritetPoStavci", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' KI-086: ISHOD KOREKCIJE POSLE PREVEZIVANJA JE PODATAK, NE SAMO TEKST.
+'
+' A (4 gajbe) je stornirana bez skidanja paleta, a njena paleta je PUNA (kapacitet
+' palete je seed-om spusten na 4 -- synthetic). Cilj B ima 6 gajbi. Posle
+' prevezivanja visak od 2 gajbe ne staje na paletu, pa korekcija trazi izbor.
+' Seam pitanja ga BELEZI i bira "Otkazi": prevezivanje je uspelo, korekcija CEKA
+' (outKorekcijaCeka), a palete cilja korekcija ne dira. Kontra je u testu 314
+' (smanjenje je korigovano odmah, pa nista ne ceka).
+' Nivo: FIZICKE paletne stavke po PrijemnicaID-u. Test sam pali test rezim (seam
+' ga trazi) i vraca ga i na putu greske.
+' SABOTAZE: ki086-otkaz-ne-ceka.
+Private Sub Test_KI086_KorekcijaCekaPosleOtkaza()
+    On Error GoTo EH
+    Const SRC As String = "Test_KI086_KorekcijaCekaPosleOtkaza"
+    Dim scenario As String, d1 As Date, tipT As String, prevPal As String, prevMode As Boolean
+    prevMode = IsTestMode()
+    scenario = NewScenarioCode("KI086")
+    d1 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK86-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABKI086-" & scenario, "test KI086"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "KI086: preduslov -- vozac je preuzeo 50"
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(d1, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "KI086: preduslov -- zbirna je snimljena"
+
+    Dim pA As String, pB As String, brojA As String, brojB As String, errNum As Long
+    brojA = TEST_PREFIX & "-K86A-" & scenario
+    brojB = TEST_PREFIX & "-K86B-" & scenario
+    On Error Resume Next
+    pA = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=brojA, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=40#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=4, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then pA = "": Err.Clear
+    On Error GoTo EH
+    Dim palA As String: palA = S8R1bPaletaDokumenta(pA)
+    AssertTrue Len(pA) > 0 And Len(palA) > 0, "KI086: preduslov -- A je paletizovana"
+    If Len(pA) = 0 Or Len(palA) = 0 Then GoTo Kraj
+    RequireUpdateCell TBL_PALETA, CLng(FindRows(TBL_PALETA, COL_PAL_ID, palA).item(1)), _
+                      COL_PAL_KAPACITET, 4, SRC
+    AssertTrue modStorno.StornoPrijemnica_TX(pA, False), _
+               "KI086: preduslov -- A je stornirana, a njena paleta ostaje"
+    On Error Resume Next
+    pB = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=brojB, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=60#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=6, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then pB = "": Err.Clear
+    On Error GoTo EH
+    AssertTrue Len(pB) > 0, "KI086: preduslov -- cilj B je snimljen"
+    If Len(pB) = 0 Then GoTo Kraj
+
+    Dim ok As Boolean, ceka As Boolean, info As String, pitanje As String
+    SetTestMode True
+    modPaletniListUI.PaletaAdjustPitanjeTestReset
+    modScrOporavak.Scr_OpoTestSet "PALETE", "", brojB, , pB
+    ok = modScrOporavak.PreveziPaleteCore(brojA, pA, info, ceka)
+    pitanje = modPaletniListUI.PaletaAdjustPitanjeTest()
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    modPaletniListUI.PaletaAdjustPitanjeTestReset
+    SetTestMode prevMode
+
+    AssertTrue ok, "KI086: prevezivanje je proslo"
+    AssertTrue InStr(1, pitanje, brojB, vbTextCompare) > 0, _
+               "KI086: korekcija je trazila izbor i pitanje imenuje cilj"
+    AssertTrue ceka, "KI086: otkazana korekcija se vraca kao korekcija koja ceka"
+    AssertTrue InStr(1, S8R1aOtisakPaleta(pB), "|gajb=4|", vbTextCompare) > 0, _
+               "KI086: otkazana korekcija ne dira palete cilja"
+
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_KI086_KorekcijaCekaPosleOtkaza", Err.Number, Err.description
+    On Error Resume Next
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    modPaletniListUI.PaletaAdjustPitanjeTestReset
+    SetTestMode prevMode
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' KI-086 / S8KI086-REV-01: PALA KOREKCIJA POSLE PREVEZIVANJA NOSI RAZLOG.
+'
+' A (4 gajbe) je stornirana bez skidanja paleta, cilj B ima 6 gajbi, pa
+' prevezivanje trazi korekciju. Seam KOREKCIJA_PADA obara korekciju odmah posle
+' snimka njene transakcije: prevezivanje ostaje uspesno, korekcija CEKA (grana
+' ADJ_BLOCKED), razlog stize do operatera, a palete cilja ostaju kakve je
+' prevezivanje ostavilo (korekcija se vratila cela).
+' Nivo: FIZICKE paletne stavke po PrijemnicaID-u. Test sam pali test rezim.
+' SABOTAZE: ki086-razlog-greske-se-gubi.
+Private Sub Test_KI086_PalaKorekcijaNosiRazlog()
+    On Error GoTo EH
+    Const SRC As String = "Test_KI086_PalaKorekcijaNosiRazlog"
+    Dim scenario As String, d1 As Date, tipT As String, prevPal As String, prevMode As Boolean
+    prevMode = IsTestMode()
+    scenario = NewScenarioCode("K86G")
+    d1 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK86G-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABK86G-" & scenario, "test K86G"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "K86G: preduslov -- vozac je preuzeo 50"
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(d1, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "K86G: preduslov -- zbirna je snimljena"
+
+    Dim pA As String, pB As String, brojA As String, brojB As String, errNum As Long
+    brojA = TEST_PREFIX & "-K86GA-" & scenario
+    brojB = TEST_PREFIX & "-K86GB-" & scenario
+    On Error Resume Next
+    pA = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=brojA, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=40#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=4, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then pA = "": Err.Clear
+    On Error GoTo EH
+    AssertTrue Len(pA) > 0 And Len(S8R1bPaletaDokumenta(pA)) > 0, "K86G: preduslov -- A je paletizovana"
+    If Len(pA) = 0 Then GoTo Kraj
+    AssertTrue modStorno.StornoPrijemnica_TX(pA, False), _
+               "K86G: preduslov -- A je stornirana, a njena paleta ostaje"
+    On Error Resume Next
+    pB = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=brojB, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=60#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=6, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then pB = "": Err.Clear
+    On Error GoTo EH
+    AssertTrue Len(pB) > 0, "K86G: preduslov -- cilj B je snimljen"
+    If Len(pB) = 0 Then GoTo Kraj
+
+    Dim ok As Boolean, ceka As Boolean, info As String
+    SetTestMode True
+    modScrOporavak.Scr_OpoTestSet "PALETE", "", brojB, , pB
+    modPaletniList.PaletaPraznoTestSet "KOREKCIJA_PADA"
+    ok = modScrOporavak.PreveziPaleteCore(brojA, pA, info, ceka)
+    modPaletniList.PaletaPraznoTestSet ""
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    SetTestMode prevMode
+
+    AssertTrue ok, "K86G: prevezivanje ostaje uspesno kad korekcija padne"
+    AssertTrue ceka, "K86G: pala korekcija se vraca kao korekcija koja ceka"
+    AssertTrue InStr(1, info, "korekcija kolicina pada", vbTextCompare) > 0, _
+               "K86G: razlog pale korekcije stize do operatera"
+    AssertTrue InStr(1, S8R1aOtisakPaleta(pB), "|gajb=4|", vbTextCompare) > 0, _
+               "K86G: pala korekcija se vraca cela"
+
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_KI086_PalaKorekcijaNosiRazlog", Err.Number, Err.description
+    On Error Resume Next
+    modPaletniList.PaletaPraznoTestSet ""
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    SetTestMode prevMode
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' KI-087: IZBOR OTVORENE PALETE CITA STATUS PRERADE STROGO.
+'
+' P1 (2 gajbe) otvara svezu paletu Q, koja se seed-om oznaci kao preradjena
+' (synthetic: preradjena, a jos otvorena). Seam kvari INDEKS kolone Preradjeno u
+' GetOrCreateOpenPaleta (obrazac S8R1B-REV-04): P2 istog tipa se tada NE snima --
+' paletizacija je u transakciji prijemnice -- i roba ne ide na Q. Tolerantan
+' citac bi prazan status procitao kao "nije preradjena" i stavio robu na Q.
+' Kontra: bez kvara P3 ide na novu paletu, ne na preradjenu Q.
+' SABOTAZE: ki087-preradjeno-otvorene-tiho.
+Private Sub Test_KI087_IzborPaleteStrogoCitaPreradu()
+    On Error GoTo EH
+    Const SRC As String = "Test_KI087_IzborPaleteStrogoCitaPreradu"
+    Dim scenario As String, d1 As Date, tipT As String, prevPal As String, prevMode As Boolean
+    prevMode = IsTestMode()
+    scenario = NewScenarioCode("KI087")
+    d1 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK87-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABKI087-" & scenario, "test KI087"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "KI087: preduslov -- vozac je preuzeo 50"
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(d1, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "KI087: preduslov -- zbirna je snimljena"
+
+    Dim p1 As String, p2 As String, p3 As String, errNum As Long
+    On Error Resume Next
+    p1 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-K87A-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=20#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=2, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p1 = "": Err.Clear
+    On Error GoTo EH
+    Dim palQ As String: palQ = S8R1bPaletaDokumenta(p1)
+    AssertTrue Len(p1) > 0 And Len(palQ) > 0, "KI087: preduslov -- P1 je paletizovana"
+    If Len(p1) = 0 Or Len(palQ) = 0 Then GoTo Kraj
+    RequireUpdateCell TBL_PALETA, CLng(FindRows(TBL_PALETA, COL_PAL_ID, palQ).item(1)), _
+                      COL_PAL_PRERADJENO, "Da", SRC
+
+    SetTestMode True
+    modPaletniList.PaletaPraznoTestSet "PRERADJENO_OTVORENE_KOLONA"
+    On Error Resume Next
+    p2 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-K87B-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=20#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=2, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p2 = "": Err.Clear
+    On Error GoTo EH
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
+    AssertTrue Len(p2) = 0, "KI087: necitljiv status prerade obara paletizaciju i snimanje"
+    AssertEquals 1, S8R1bAktivnihNaPaleti(palQ), "KI087: roba ne ide na preradjenu paletu"
+
+    On Error Resume Next
+    p3 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-K87C-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=20#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=2, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p3 = "": Err.Clear
+    On Error GoTo EH
+    AssertTrue Len(p3) > 0 And Len(S8R1bPaletaDokumenta(p3)) > 0 And S8R1bPaletaDokumenta(p3) <> palQ, _
+               "KI087: bez kvara roba ide na novu paletu, ne na preradjenu"
+
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_KI087_IzborPaleteStrogoCitaPreradu", Err.Number, Err.description
+    On Error Resume Next
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' S8 REZ 2b-1 (PAL-INV-01, PAL-ODL-13): PISAC PALETNE STAVKE TRAZI TACNU LINIJU
+' PRIJEMNICE, A INTEGRITET IMENUJE RED BEZ NJE.
+'
+' P1 (4 gajbe) i P2 (3 gajbe) su snimljene uz paletiranje: snimanje paletizuje, a
+' paletna stavka nosi kljuc svoje stavke (put kroz SavePrijemnicaMulti_TX). P3
+' (2 gajbe) je snimljena uz ISKLJUCENO paletiranje, pa je slobodna meta za
+' direktan poziv pisca (kapija ponovne paletizacije je ne zaustavlja). U
+' transakciji koja se uvek vraca:
+'   1) kljuc paletne stavke P1 obrisan (red starog oblika -- synthetic): C1 ga
+'      imenuje, pa integritet NIJE cist (zatvara S8R2A2-REV-01). Kontra: dok red
+'      nosi svoj kljuc, C1 ga ne prijavljuje -- uz uslov da se blok C1/C4 IZVRSIO
+'      (bez njega bi kontra prolazila i nad greskom bloka). Kljuc se zatim vraca;
+'   2) PaletizePrijemnica za P3 sa praznim, nepostojecim i tudjim (P1) kljucem,
+'      sa svojim kljucem ali klasom II, i sa kljucem koji nose DVE stavke -- svaki
+'      poziv je odbijen PO IMENU razloga, i nijedan ne pravi ni paletu ni stavku;
+'   3) kontrola: isti poziv sa ispravnim kljucem i klasom pravi paletnu stavku
+'      (kapija ne odbija sve).
+' C1 ide PRVI: integritet cita stavke prijemnice kroz globalni strog citac, pa
+' sinteticki dupli kljuc iz koraka 2 obara ceo blok C1/C4 (S8R2B1-REV-01). Prvi
+' prolaz suite-a je bas to izmerio: tvrdnja C1 je pala, a kontra prosla na prazno.
+' Nivo: FIZICKE paletne stavke; nalaz integriteta po sifri bloka i ID-u stavke.
+' SABOTAZE: s8r2b1-pisac-bez-kapije, s8r2b1-prazan-kljuc-bez-imena,
+' s8r2b1-klasa-se-ne-meri, s8r2b1-dupli-kljuc-prolazi, s8r2b1-c1-prazan-kljuc-tih.
+Private Sub Test_S8R2b1_PisacPaleteTraziLiniju()
+    On Error GoTo EH
+    Const SRC As String = "Test_S8R2b1_PisacPaleteTraziLiniju"
+    Dim tx As clsTransaction
+    Dim scenario As String, d1 As Date, tipT As String, prevPal As String
+    scenario = NewScenarioCode("S8R2C")
+    d1 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS8K-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABS8K-" & scenario, "test S8 rez 2b-1"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S8R2b1: preduslov -- vozac je preuzeo 50"
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(d1, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "S8R2b1: preduslov -- zbirna je snimljena"
+
+    Dim p1 As String, p2 As String, p3 As String, errNum As Long
+    On Error Resume Next
+    p1 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R2C1-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=40#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=4, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p1 = "": Err.Clear
+    p2 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R2C2-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=30#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=3, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p2 = "": Err.Clear
+    SetConfigValue CFG_PALETIRANJE, "NE"
+    p3 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R2C3-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=20#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=2, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p3 = "": Err.Clear
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    On Error GoTo EH
+
+    Dim r1 As Long, k1 As String, k2 As String, k3 As String
+    r1 = S8R1cRedStavke(p1)
+    k1 = S6StavkaID(p1, KLASA_I)
+    k2 = S6StavkaID(p2, KLASA_I)
+    k3 = S6StavkaID(p3, KLASA_I)
+    AssertTrue Len(p1) > 0 And Len(p2) > 0 And Len(p3) > 0 And r1 > 0 _
+               And Len(k1) > 0 And Len(k2) > 0 And Len(k3) > 0 _
+               And Len(S8R1bPaletaDokumenta(p2)) > 0 And Len(S8R1bPaletaDokumenta(p3)) = 0, _
+               "S8R2b1: preduslov -- P1 i P2 paletizovane, P3 nikad"
+    If Len(p1) = 0 Or Len(p2) = 0 Or Len(p3) = 0 Or r1 = 0 Or Len(k3) = 0 Then GoTo Kraj
+
+    ' --- put kroz snimanje: paletna stavka nosi kljuc SVOJE stavke ---
+    AssertEquals k1, S8R2b1KljucPaleta(p1), _
+                 "S8R2b1: snimanje paletizuje, a paletna stavka nosi kljuc svoje stavke"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+
+    ' --- 1) C1: aktivna paletna stavka bez kljuca linije ---
+    Dim ps As Variant, palsID1 As String, nal As Variant
+    ps = GetTableData(TBL_PALETA_STAVKA)
+    palsID1 = Trim$(nz(ps(r1, RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, SRC)), ""))
+    nal = modIntegritet.GetIntegritetRows()
+    AssertTrue Len(palsID1) > 0 And Not modTest.NalazSadrzi(nal, "C1/C4", "GRESKA") _
+               And Not modTest.NalazSadrzi(nal, "C1", palsID1), _
+               "S8R2b1: paletna stavka sa svojim kljucem nije nalaz C1"
+    RequireUpdateCell TBL_PALETA_STAVKA, r1, COL_PALS_PRIJEMNICA_STAVKA_ID, "", SRC
+    nal = modIntegritet.GetIntegritetRows()
+    AssertTrue InStr(1, S8R2b1RedNalaza(nal, "C1", palsID1), "prazan kljuc linije", vbTextCompare) > 0, _
+               "S8R2b1: C1 imenuje aktivnu paletnu stavku bez kljuca linije"
+    RequireUpdateCell TBL_PALETA_STAVKA, r1, COL_PALS_PRIJEMNICA_STAVKA_ID, k1, SRC
+
+    ' --- 2) pisac odbija, po imenu, bez mutacije ---
+    Dim nPal As Long, nPals As Long, ishod As String
+    nPal = S8R2aBrojRedova(TBL_PALETA)
+    nPals = S8R2aBrojRedova(TBL_PALETA_STAVKA)
+
+    ishod = S8R2b1Paletizuj(p3, "", KLASA_I, tipT)
+    AssertTrue InStr(1, ishod, "PAL-INV-01: prazan kljuc linije", vbTextCompare) > 0, _
+               "S8R2b1: pisac odbija prazan kljuc linije, po imenu"
+    ishod = S8R2b1Paletizuj(p3, "PRS-NEMA-" & scenario, KLASA_I, tipT)
+    AssertTrue InStr(1, ishod, "PAL-INV-01: kljuc linije ne postoji", vbTextCompare) > 0, _
+               "S8R2b1: pisac odbija kljuc koji ne postoji, po imenu"
+    ishod = S8R2b1Paletizuj(p3, k1, KLASA_I, tipT)
+    AssertTrue InStr(1, ishod, "PAL-INV-01: kljuc linije pripada drugoj prijemnici", vbTextCompare) > 0, _
+               "S8R2b1: pisac odbija kljuc druge prijemnice, po imenu"
+    ishod = S8R2b1Paletizuj(p3, k3, KLASA_II, tipT)
+    AssertTrue InStr(1, ishod, "PAL-INV-01: kljuc linije je druge klase", vbTextCompare) > 0, _
+               "S8R2b1: pisac odbija kljuc druge klase, po imenu"
+
+    ' Kljuc koji nose DVE stavke (synthetic): prva je P3, druga P1. Bez provere
+    ' ponavljanja bi presudila poslednja nadjena, pa razlog ne bi bio ponavljanje.
+    Dim kDup As String: kDup = "PRS-DUP-" & scenario
+    S8R2b1DodajStavku kDup, p3
+    S8R2b1DodajStavku kDup, p1
+    ishod = S8R2b1Paletizuj(p3, kDup, KLASA_I, tipT)
+    AssertTrue InStr(1, ishod, "PAL-INV-01: kljuc linije se ponavlja", vbTextCompare) > 0, _
+               "S8R2b1: pisac odbija kljuc koji se ponavlja, po imenu"
+
+    AssertTrue S8R2aBrojRedova(TBL_PALETA) = nPal And S8R2aBrojRedova(TBL_PALETA_STAVKA) = nPals, _
+               "S8R2b1: odbijeni pozivi ne prave ni paletu ni paletnu stavku"
+
+    ' --- 3) kontrola: ispravan kljuc i klasa prolaze ---
+    ishod = S8R2b1Paletizuj(p3, k3, KLASA_I, tipT)
+    AssertTrue Len(ishod) = 0 And S8R2b1KljucPaleta(p3) = k3, _
+               "S8R2b1: ispravan kljuc i klasa prave paletnu stavku"
+
+Kraj:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S8R2b1_PisacPaleteTraziLiniju", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' S8 REZ 2b-2 (PAL-ODL-13): ZATECENA sveska gubi labele i trag zbirne paletne stavke
+' pre prvog upisa. Obrazac je Test_S7R2_FakturaStareKoloneSelfHeal: test FIZICKI
+' vraca stari raspored (BrojPrijemnice 3, BrojZbirne 4 i trag pod STARIM imenom
+' ZbirnaGeneracijaID na 17, ispred PrijemnicaStavkaID), meri da kanonski prefiks tada
+' PADA (inace bi test bio vakuumski), pusta modSetup.ObrisiStareKolonePaletneStavke i
+' meri: kolone su otisle, prefiks prolazi, a prvi red nosi ISTE vrednosti po imenu u
+' svakoj kanonskoj koloni. Prva tvrdnja meri da EnsureSledljivostSchema paletnoj
+' stavci vise ne dodaje trag zbirne (dodat bi se vratio NA KRAJ, gde ga prefiks ne
+' vidi). Bez transakcije: clsTransaction.RestoreTable pada na promenu broja kolona.
+' Ciscenje ide kroz genericki primitiv po imenu, i u EH grani.
+' SABOTAZE: s8r2b2-selfheal-ne-brise, s8r2b2-sledljivost-vraca-trag.
+Private Sub Test_S8R2b2_PaletnaStavkaStareKoloneSelfHeal()
+    Const SRC As String = "Test_S8R2b2_PaletnaStavkaStareKoloneSelfHeal"
+    On Error GoTo EH
+    Dim errNum As Long, errDesc As String
+
+    modSetup.EnsureSledljivostSchema
+    AssertEquals "", S7R2NadjeneKolone(TBL_PALETA_STAVKA, PalsStareKolone()), _
+                 "S8R2b2 self-heal: EnsureSledljivostSchema ne vraca trag zbirne paletnoj stavci"
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_PALETA_STAVKA)
+    If lo Is Nothing Then
+        AssertTrue False, "S8R2b2 self-heal: tabela paletnih stavki postoji"
+        Exit Sub
+    End If
+    If lo.ListRows.count = 0 Then
+        AssertTrue False, "S8R2b2 self-heal: paletna stavka ima bar jedan red (svedok vrednosti)"
+        Exit Sub
+    End If
+    If Len(S7R2NadjeneKolone(TBL_PALETA_STAVKA, PalsStareKolone())) > 0 Then
+        AssertTrue False, "S8R2b2 self-heal: polazna tabela je bez starih kolona"
+        PalsObrisiStareKoloneTest
+        Exit Sub
+    End If
+
+    Dim pre As Long
+    pre = lo.ListColumns.count
+    Dim svedok As Object
+    Set svedok = S7R2SvedokPrvogReda(TBL_PALETA_STAVKA)
+
+    ' Stari raspored, redom po STAROJ poziciji -- svaka umetnuta kolona pomera ostale.
+    lo.ListColumns.Add(3).name = "BrojPrijemnice"
+    lo.ListColumns.Add(4).name = "BrojZbirne"
+    lo.ListColumns.Add(17).name = "ZbirnaGeneracijaID"
+    lo.ListColumns(GetColumnIndex(TBL_PALETA_STAVKA, "BrojZbirne")).DataBodyRange.cells(1, 1).value = "ZB-SELFHEAL"
+
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail SRC, TBL_PALETA_STAVKA
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertTrue errNum <> 0, "S8R2b2 self-heal: stari raspored obara kanonski prefiks"
+
+    modSetup.ObrisiStareKolonePaletneStavke
+
+    AssertEquals "", S7R2NadjeneKolone(TBL_PALETA_STAVKA, PalsStareKolone()), _
+                 "S8R2b2 self-heal: nijedna stara kolona paletne stavke nije ostala"
+    AssertEquals CStr(pre), CStr(GetTable(TBL_PALETA_STAVKA).ListColumns.count), _
+                 "S8R2b2 self-heal: tabela je vracena na kanonski broj kolona"
+
+    On Error Resume Next
+    modSchema.SchemaReadyOrFail SRC, TBL_PALETA_STAVKA
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo EH
+    AssertEquals "0", CStr(errNum), "S8R2b2 self-heal: posle brisanja kanonski prefiks prolazi"
+    AssertEquals "", S7R2RazlikeOdSvedoka(TBL_PALETA_STAVKA, svedok), _
+                 "S8R2b2 self-heal: prvi red nosi iste vrednosti po imenu"
+
+    ' Idempotentno: drugi prolaz nema sta da obrise.
+    modSetup.ObrisiStareKolonePaletneStavke
+    AssertEquals CStr(pre), CStr(GetTable(TBL_PALETA_STAVKA).ListColumns.count), _
+                 "S8R2b2 self-heal: drugi prolaz ne dira tabelu"
+
+    ' Ciscenje NE ide kroz primitiv koji test meri: pokvaren primitiv bi ostavio staru
+    ' kolonu u sredini, a ona obara SVAKI sledeci upis paletne stavke.
+    PalsObrisiStareKoloneTest
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    PalsObrisiStareKoloneTest
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' Stare kolone paletne stavke (S8 rez 2b-2): labele i trag zbirne pod oba imena.
+Private Function PalsStareKolone() As Variant
+    PalsStareKolone = Array("BrojPrijemnice", "BrojZbirne", "ZbirnaRoditeljID", "ZbirnaGeneracijaID")
+End Function
+
+' Brise stare kolone GENERICKIM primitivom, po imenu -- nezavisno od
+' modSetup.ObrisiStareKolonePaletneStavke, koji gornji test meri.
+Private Sub PalsObrisiStareKoloneTest()
+    Dim a As Variant, k As Long
+    a = PalsStareKolone()
+    For k = LBound(a) To UBound(a)
+        modSetup.ObrisiKolonuAko TBL_PALETA_STAVKA, CStr(a(k))
+    Next k
+End Sub
+
+' Direktan poziv pisca paleta za jednu stavku od 2 gajbe / 20 kg; vraca opis
+' greske ("" = upis je prosao).
+Private Function S8R2b1Paletizuj(ByVal prj As String, ByVal kljuc As String, _
+                                 ByVal klasa As String, ByVal tipAmb As String) As String
+    On Error Resume Next
+    modPaletniList.PaletizePrijemnica prijemnicaID:=prj, _
+        vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, klasa:=klasa, netoKg:=20#, _
+        brGajbica:=2, tipAmb:=tipAmb, prijemnicaStavkaID:=kljuc
+    If Err.Number <> 0 Then S8R2b1Paletizuj = "GRESKA " & CStr(Err.Number) & ": " & Err.description
+    Err.Clear
+End Function
+
+' Kljuc linije aktivnih paletnih stavki dokumenta: jedan kljuc ako ga nose sve,
+' "(razliciti)" ako se razlikuju, "" ako stavki nema.
+Private Function S8R2b1KljucPaleta(ByVal prj As String) As String
+    Dim s As Variant, i As Long, cP As Long, cK As Long, cSt As Long
+    Dim k As String, prvi As String, ima As Boolean
+    s = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(s) Or Len(prj) = 0 Then Exit Function
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R2b1KljucPaleta")
+    cK = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID, "S8R2b1KljucPaleta")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R2b1KljucPaleta")
+    For i = 1 To UBound(s, 1)
+        If Trim$(nz(s(i, cP), "")) = prj And UCase$(Trim$(nz(s(i, cSt), ""))) <> "DA" Then
+            k = Trim$(nz(s(i, cK), ""))
+            If Not ima Then
+                prvi = k
+                ima = True
+            ElseIf k <> prvi Then
+                S8R2b1KljucPaleta = "(razliciti)"
+                Exit Function
+            End If
+        End If
+    Next i
+    S8R2b1KljucPaleta = prvi
+End Function
+
+' Stavka prijemnice klase I sa ZADATIM ID-om (synthetic: ID koji vec postoji).
+Private Sub S8R2b1DodajStavku(ByVal stavkaID As String, ByVal prj As String)
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_PRIJEMNICA_STAVKE)
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, stavkaID
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, prj
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_RB, 9
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, KLASA_I
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, 20#
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA, 0#
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KOL_AMB, 2
+    RequireAppend TBL_PRIJEMNICA_STAVKE, rowData, "S8R2b1DodajStavku"
+End Sub
+
+' Tekst prvog reda nalaza datog bloka koji sadrzi zadati tekst ("" = nema ga).
+Private Function S8R2b1RedNalaza(ByVal rows As Variant, ByVal sifra As String, _
+                                 ByVal tekst As String) As String
+    If Not IsArray(rows) Then Exit Function
+    Dim i As Long, tekuca As String
+    For i = 1 To UBound(rows, 1)
+        If Len(Trim$(NzToText(rows(i, 1)))) > 0 Then tekuca = Trim$(NzToText(rows(i, 1)))
+        If StrComp(tekuca, sifra, vbTextCompare) = 0 Then
+            If InStr(1, NzToText(rows(i, 2)), tekst, vbTextCompare) > 0 Then
+                S8R2b1RedNalaza = NzToText(rows(i, 2))
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+' Paletizacija seed prijemnice (stavka "PRS-<id>", klasa I) kroz pisca paleta.
+Private Sub S8R2aPaletizuj(ByVal prj As String, _
+                           ByVal kg As Double, ByVal gajbe As Long, ByVal tipAmb As String)
+    modPaletniList.PaletizePrijemnica prijemnicaID:=prj, _
+        vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, klasa:=KLASA_I, netoKg:=kg, _
+        brGajbica:=gajbe, tipAmb:=tipAmb, prijemnicaStavkaID:="PRS-" & prj
+End Sub
+
+' Broj redova tabele (0 kad je prazna).
+Private Function S8R2aBrojRedova(ByVal tbl As String) As Long
+    Dim d As Variant: d = GetTableData(tbl)
+    If IsArray(d) Then S8R2aBrojRedova = UBound(d, 1)
+End Function
+
+' Stanje koje odbijen storno palete ne sme da promeni: paletne stavke oba
+' dokumenta i zaglavlje palete.
+Private Function S8R1cStanje(ByVal p1 As String, ByVal p2 As String, ByVal pal As String) As String
+    S8R1cStanje = S8R1aOtisakPaleta(p1) & "#" & S8R1aOtisakPaleta(p2) & "#" & S8R1bPaletaStanje(pal)
+End Function
+
+' Red prve aktivne paletne stavke dokumenta (0 ako je nema).
+Private Function S8R1cRedStavke(ByVal prj As String) As Long
+    Dim d As Variant, i As Long, cP As Long, cSt As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(d) Or Len(prj) = 0 Then Exit Function
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R1cRedStavke")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R1cRedStavke")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = prj And UCase$(Trim$(nz(d(i, cSt), ""))) <> "DA" Then
+            S8R1cRedStavke = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Skidanje paletnih stavki jedne prijemnice kroz jezgro, u sopstvenoj transakciji
+' koja snima obe tabele paleta. Vraca razlog pada ("" = proslo); na padu vraca
+' transakciju.
+Private Function S8R1bSkini(ByVal prj As String) As String
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    modPaletniList.SkiniPaleteZaStornoPrijemnice tx, prj, "S8R1bSkini"
+    tx.CommitTx
+    Exit Function
+EH:
+    S8R1bSkini = "[" & Err.Number & "] " & Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Function
+
+' PaletaID prve aktivne paletne stavke dokumenta ("" ako je nema).
+Private Function S8R1bPaletaDokumenta(ByVal prj As String) As String
+    Dim d As Variant, i As Long, cP As Long, cPal As Long, cSt As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(d) Or Len(prj) = 0 Then Exit Function
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R1bPaletaDokumenta")
+    cPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, "S8R1bPaletaDokumenta")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R1bPaletaDokumenta")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = prj And UCase$(Trim$(nz(d(i, cSt), ""))) <> "DA" Then
+            S8R1bPaletaDokumenta = Trim$(nz(d(i, cPal), ""))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Broj aktivnih paletnih stavki palete (svih vlasnika).
+Private Function S8R1bAktivnihNaPaleti(ByVal pal As String) As Long
+    Dim d As Variant, i As Long, cPal As Long, cSt As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(d) Or Len(pal) = 0 Then Exit Function
+    cPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, "S8R1bAktivnihNaPaleti")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R1bAktivnihNaPaleti")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cPal), "")) = pal And UCase$(Trim$(nz(d(i, cSt), ""))) <> "DA" Then
+            S8R1bAktivnihNaPaleti = S8R1bAktivnihNaPaleti + 1
+        End If
+    Next i
+End Function
+
+' Zaglavlje palete: "<STORNIRANO velikim slovima>|<gajbe>".
+Private Function S8R1bPaletaStanje(ByVal pal As String) As String
+    If Len(pal) = 0 Then Exit Function
+    S8R1bPaletaStanje = UCase$(Trim$(nz(GetValueByKey(TBL_PALETA, COL_PAL_ID, pal, COL_STORNIRANO), ""))) & _
+                        "|" & CStr(CLng(Val(nz(GetValueByKey(TBL_PALETA, COL_PAL_ID, pal, _
+                                                              COL_PAL_BR_GAJBICA), 0))))
+End Function
 
 ' UGOVOR CITAOCA STAVKI PRIJEMNICE JE DOKUMENTSKI (odluka 1): pokvaren dokument
 ' obara citaoca PO IMENU, papir tada ne nastaje, a audit (integritet) ne pada
@@ -23852,7 +25235,8 @@ Private Sub Test_Schema_TragZbirneNosiNovoIme()
     On Error GoTo EH
 
     Dim tabele As Variant
-    tabele = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_PRIJEMNICA, TBL_PALETA_STAVKA)
+    ' tblPaletaStavka je ovde bila do S8 reza 2b-2: od tada traga nema (PAL-ODL-13).
+    tabele = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_PRIJEMNICA)
 
     Dim i As Long, staro As String, bezNovog As String
     For i = LBound(tabele) To UBound(tabele)
@@ -23870,7 +25254,10 @@ Private Sub Test_Schema_TragZbirneNosiNovoIme()
     AssertEquals "", staro, "Trag zbirne: nijedna tabela ne nosi staro ime kolone"
 
     If Len(bezNovog) > 0 Then LogWarn "Test_Schema_TragZbirneNosiNovoIme", "bez novog: " & bezNovog
-    AssertEquals "", bezNovog, "Trag zbirne: sve cetiri tabele nose novo ime kolone"
+    AssertEquals "", bezNovog, "Trag zbirne: sve tri tabele dece nose novo ime kolone"
+    AssertTrue GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD) = 0 And _
+               GetColumnIndex(TBL_PALETA_STAVKA, "ZbirnaGeneracijaID") = 0, _
+               "Trag zbirne: paletna stavka ne nosi trag ni pod jednim imenom"
     Exit Sub
 
 EH:

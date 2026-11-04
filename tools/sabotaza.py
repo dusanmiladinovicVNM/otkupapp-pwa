@@ -1318,19 +1318,22 @@ SABOTAZE = {
         "PK A daje SVOJU kolicinu",
     ),
     # --- identitet dokumenta na granici prevezivanja (zavrsnica Faze D) -----
+    # Zavrsni krug S8 (04.11.2026): zamena je citala labelu sBr sa paletne stavke, koje od
+    # S8 reza 2a-2 nema -- sabotaza se nije kompajlirala (NE OBARA NISTA). Sada bira
+    # izvor po broju iz ZAGLAVLJA prijemnice: ista greska, bez kolone.
     "relink-izvor-po-broju": (
         "modPaletniList.bas",
-        "            ElseIf PripadaDokumentu(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds, srcDvosmislen) Then\n",
-        "            ElseIf bp = oldBroj Then   ' SABOTAZA: izvor se opet bira po broju\n",
+        "            ElseIf PripadaDokumentu(Trim$(CStr(ps(i, sPid))), srcIds) Then\n",
+        "            ElseIf Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(CStr(ps(i, sPid))), COL_PRJ_BROJ))) = oldBroj Then   ' SABOTAZA: izvor se opet bira po broju (zaglavlje)\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "tudji dokument istog broja OSTAJE na svom mestu",
     ),
     "relink-ignorise-generaciju": (
         "modPaletniList.bas",
         "    Dim srcIds As Object: Set srcIds = modDokumenta.IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, oldPrijemnicaID)\n"
-        "    Dim srcDvosmislen As Boolean\n",
+        "    If srcIds.count = 0 Then\n",
         "    Dim srcIds As Object: Set srcIds = modDokumenta.IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, \"\")      ' SABOTAZA\n"
-        "    Dim srcDvosmislen As Boolean\n",
+        "    If srcIds.count = 0 Then\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "prevezivanje po identitetu je proslo",
     ),
@@ -1338,32 +1341,17 @@ SABOTAZE = {
     # odnese palete pogresnom kupcu -- samo na drugom kraju.
     "relink-cilj-po-broju": (
         "modPaletniList.bas",
-        "        If Len(tgtID) > 0 Then\n"
-        "            ciljni = (Trim$(NzToText(prj(r, pcId))) = tgtID)\n"
-        "        Else\n"
-        "            ciljni = (Trim$(CStr(prj(r, pcBr))) = newBroj)\n"
-        "        End If\n",
+        "        ciljni = (Trim$(NzToText(prj(r, pcId))) = tgtID)\n",
         "        ciljni = (Trim$(CStr(prj(r, pcBr))) = newBroj)   ' SABOTAZA\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "roba je stigla na dokument kupca 1 (40 gajbica)",
     ),
-    "relink-cilj-bez-kapije": (
-        "modPaletniList.bas",
-        "    tgtDvosmislen = (VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, newBroj, SRC, False, _\n"
-        "                                     Array(COL_PRJ_KUPAC)).count > 1)\n",
-        "    tgtDvosmislen = False   ' SABOTAZA: dvosmislen cilj vise ne zaustavlja\n",
-        "T_RelinkPoGeneraciji_NeDiraTudjDokument",
-        "bez identiteta CILJA dvosmislen broj se odbija",
-    ),
-    # Propagacija BrojZbirne u paletne stavke. Izbor redova prijemnice je bio
-    # tacan, pa je ovaj drugi upis po BROJU ponistavao ceo taj izbor.
-    "zbirna-paleta-po-broju": (
-        "modDokumenta.bas",
-        "                        pripada = docIds.Exists(pidS)\n",
-        "                        pripada = (Trim$(CStr(ps(r2, pBr))) = brPrijemnice)   ' SABOTAZA\n",
-        "T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu",
-        "tudja paleta OSTAJE na staroj zbirni",
-    ),
+    # "relink-cilj-bez-kapije" je povucen u S8 rezu 1b (N2): kapija dvosmislenog
+    # CILJA po broju je obrisana sa celom granom po broju. Prevezivanje bez ID-a
+    # sada odbija ulazna kapija (s8r1b-prevezivanje-bez-izvornog-id, test 311).
+    # zbirna-paleta-po-broju je povucena u S8 rezu 2b-2: prevezivanje prijemnice na
+    # zbirnu vise ne pise na paletne stavke (paletni rep ReassignPrijemnicaToZbirna_TX
+    # je obrisan), pa nema upisa koji bi isao po broju. Test 28 meri izvedenu zbirnu.
     # Zadata generacija koje nema nije poziv na fallback po broju.
     "generacija-nema-pa-po-broju": (
         "modDokumenta.bas",
@@ -1757,22 +1745,25 @@ SABOTAZE = {
     # Su-stanar na deljenoj paleti. Dva kupca istog broja i iste robe smeju da
     # dele paletu; poredjenje po broju ih vidi kao istu prijemnicu, pa kapija ne
     # okine i relabel prepravi header cele palete.
+    # Zavrsni krug S8 (04.11.2026): zamena je poredila bpg, koji je do S8 reza 2a-2 bio broj
+    # sa paletne stavke reda; od 2a-2 se bpg puni tek POSLE ove provere, iz zaglavlja, pa
+    # je bio prazan i sabotaza je obarala tudji test (svaki red je izgledao tudj). Sada
+    # izvor i cilj prepoznaje po broju iz ZAGLAVLJA prijemnice reda.
     "cotenant-po-broju": (
         "modPaletniList.bas",
-        "                    jeIzvor = PripadaDokumentu(bpg, oldBroj, pidG, srcIds, srcDvosmislen)\n"
-        "                    jeCilj = PripadaDokumentu(bpg, newBroj, pidG, tgtIds, tgtDvosmislen)\n",
-        "                    jeIzvor = (bpg = oldBroj)   ' SABOTAZA\n"
-        "                    jeCilj = (bpg = newBroj)\n",
+        "                    jeIzvor = PripadaDokumentu(pidG, srcIds)\n"
+        "                    jeCilj = PripadaDokumentu(pidG, tgtIds)\n",
+        "                    jeIzvor = (Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, pidG, COL_PRJ_BROJ))) = oldBroj)   ' SABOTAZA: po broju (zaglavlje)\n"
+        "                    jeCilj = (Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, pidG, COL_PRJ_BROJ))) = newBroj)\n",
         "T_DeljenaPaleta_SuStanarPoIdentitetu",
         "relabel deljene palete se odbija i uz potvrdu",
     ),
-    # Kapija "isti broj" na ulazu u writer, pre razresavanja generacija.
+    # "Isti dokument" se meri identitetom, ne brojem (od S8 reza 1b broj vise nema
+    # svoju granu; sabotaza vraca poredjenje po broju).
     "writer-isti-broj-odbija": (
         "modPaletniList.bas",
-        "    If Len(Trim$(oldPrijemnicaID)) > 0 And Len(Trim$(newPrijemnicaID)) > 0 Then\n"
-        "        If StrComp(Trim$(oldPrijemnicaID), Trim$(newPrijemnicaID), vbTextCompare) = 0 Then\n",
-        "    If False Then   ' SABOTAZA: opet se gleda samo broj\n"
-        "        If StrComp(Trim$(oldPrijemnicaID), Trim$(newPrijemnicaID), vbTextCompare) = 0 Then\n",
+        "    If StrComp(oldPrijemnicaID, newPrijemnicaID, vbTextCompare) = 0 Then\n",
+        "    If StrComp(oldBroj, newBroj, vbTextCompare) = 0 Then   ' SABOTAZA: isti broj = isti dokument\n",
         "T_IstiBrojRazliciteGeneracije_NijeIstiDokument",
         "isti broj a razliciti dokumenti PROLAZI",
     ),
@@ -6679,23 +6670,9 @@ SABOTAZE = {
         "Test_ZBR_LjuskaNosiZbirnaID",
         "ZBR identitet: red u mrezi F8 nosi ZbirnaID",
     ),
-    # Paleta ponovo pogadja po broju umesto da nasledi od prijemnice. Razlika se
-    # vidi SAMO kad se prijemnicina generacija razlikuje od "ko je SADA pod ovim
-    # brojem" -- a to je zatecen red pre migracije: broj stoji, generacija prazna,
-    # zbirna pod tim brojem postoji i ima sta da se pogodi.
-    #
-    # Prva verzija je gadjala tvrdnju grane A, gde su nasledjivanje i pogadjanje
-    # vracali ISTU vrednost -- inertna sabotaza (dokaz.py: NE OBARA NISTA). Druga
-    # je pokusala "dete pre roditelja", sto za prijemnicu blokira
-    # PrijemnicaZbirnaBlokira() (default True). Meri se na ZATECENOM redu.
-    "paleta-pogadja-generaciju-po-broju": (
-        "modPaletniList.bas",
-        "    genRoditelja = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _\n"
-        "                                        COL_DETE_ZBIRNA_ROD))\n",
-        "    genRoditelja = ZbirnaGeneracijaZaBroj(brojZbirne)   ' SABOTAZA: po broju, ne od roditelja\n",
-        "Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice",
-        "ZBR-PAL: prazna generacija roditelja ostaje prazna, ne pogadja se po broju",
-    ),
+    # paleta-pogadja-generaciju-po-broju je povucena u S8 rezu 2b-2 (PAL-ODL-13): paletna
+    # stavka vise ne nosi trag roditeljske zbirne, pa nema sta da nasledi ni da pogodi;
+    # Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice je obrisan sa kolonom.
     "vlasnici-poredi-case": (
         "modStorno.bas",
         "        If BrojJednak(data(i, cBr), broj) Then\n",
@@ -8722,8 +8699,8 @@ SABOTAZE = {
     # ali kapija po paru ih vise ne vidi kao paletizovanu liniju.
     "s6k2-paleta-bez-kljuca-stavke": (
         "modPaletniList.bas",
-        "              genRoditelja, prijemnicaStavkaID)\n",
-        "              genRoditelja, \"\")   ' SABOTAZA: paletna stavka bez kljuca linije\n",
+        "              prijemnicaStavkaID)\n",
+        "              \"\")   ' SABOTAZA: paletna stavka bez kljuca linije\n",
         "Test_S6_DveKlaseJedanDokument",
         "S6 PRJ: paletna stavka nosi PrijemnicaStavkaID svoje klase",
     ),
@@ -8964,20 +8941,15 @@ SABOTAZE = {
         "Test_S6_GrupniListStanjeVozaca",
         "S6 grupni list bez veze: prijemnica sa gajbama se ne popunjava",
     ),
-    # A3: linija je (dokument, klasa). Bez klase sve palete idu na klasu I i ispravan
-    # dvoklasni dokument postaje nalaz.
-    "s6k3-a3-linija-bez-klase": (
-        "modIntegritet.bas",
-        "                k = Trim$(NzToText(ps(i, cP))) & \"|\" & KlasaOrDefault(ps(i, cK))\n",
-        "                k = Trim$(NzToText(ps(i, cP))) & \"|\" & KLASA_I   ' SABOTAZA: linija bez klase\n",
-        "Test_S6_PaleteCitajuStavke",
-        "S6 palete: A3 nema nalaz nad ispravnim dokumentom",
-    ),
+    # A3: od S8 reza 2a-2 linija je STAVKA prijemnice (PrijemnicaStavkaID), ne
+    # (dokument, klasa) -- sabotaza "s6k3-a3-linija-bez-klase" je povucena, jer
+    # klase u kljucu vise nema, a kljuc po dokumentu daje isti simptom kao
+    # "s6k3-a3-slepa" (A3 oslepi). Kljuc linije meri s8r2a2-a3-samo-aktivne.
     # A3 kontra-tvrdnja: provera i dalje vidi STVARNO odstupanje neta.
     "s6k3-a3-slepa": (
         "modIntegritet.bas",
-        "            If Abs(diff) > 0.5 Then\n                delovi = Split(CStr(kk), \"|\")\n",
-        "            If False Then   ' SABOTAZA: A3 ne vidi odstupanje\n                delovi = Split(CStr(kk), \"|\")\n",
+        "                If Abs(diff) > 0.5 Then\n                    bad.Add Array(CStr(s(i, 1)), KlasaOrDefault(s(i, 3)), sumSt, kol, diff, k)\n",
+        "                If False Then   ' SABOTAZA: A3 ne vidi odstupanje\n                    bad.Add Array(CStr(s(i, 1)), KlasaOrDefault(s(i, 3)), sumSt, kol, diff, k)\n",
         "Test_S6_PaleteCitajuStavke",
         "S6 palete: A3 vidi stvarno odstupanje neta na liniji",
     ),
@@ -8997,6 +8969,340 @@ SABOTAZE = {
         "        ElseIf False Then   ' SABOTAZA: manjak gajbi se ne dopunjuje\n",
         "Test_S6_PaleteCitajuStavke",
         "S6 palete: Adjust vraca klasu II na gajbe njene stavke, pod njenim kljucem",
+    ),
+    # S8 rez 1a (N1): korekcija bira paletne stavke po PrijemnicaID-u. Po broju bi
+    # usle i stavke drugog kupca istog broja; kapija linije ih tada odbija, pa
+    # korekcija svog dokumenta ne prolazi.
+    # Od 2b-2 broj nije na paletnoj stavci, pa sabotaza bira po broju ZAGLAVLJA.
+    "s8r1a-korekcija-stavke-po-broju": (
+        "modPaletniList.bas",
+        "            If Trim$(NzToText(SafeCell(s, r, sPid))) = prijemnicaID _\n               And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> \"DA\" Then\n                lin = Trim$(NzToText(SafeCell(s, r, sPst)))\n",
+        "            ' SABOTAZA: paletne stavke po broju (zaglavlje)\n            If Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(NzToText(SafeCell(s, r, sPid))), COL_PRJ_BROJ))) = brojPrij _\n               And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> \"DA\" Then\n                lin = Trim$(NzToText(SafeCell(s, r, sPst)))\n",
+        "Test_S8R1a_KorekcijaPoIdentitetu",
+        "S8R1a: korekcija po ID-u koriguje liniju svog dokumenta",
+    ),
+    # S8 rez 1a (N1): resync neta ide po liniji. Po broju prepravlja neto paletnih
+    # stavki drugog kupca istog broja (njegov neto po gajbi je drugaciji).
+    "s8r1a-resync-po-broju": (
+        "modPaletniList.bas",
+        "        If Trim$(NzToText(SafeCell(s, r, sPid))) = prijemnicaID _\n           And Trim$(NzToText(SafeCell(s, r, sPst))) = prijemnicaStavkaID _\n",
+        "        ' SABOTAZA: resync po broju (zaglavlje)\n        If Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(NzToText(SafeCell(s, r, sPid))), COL_PRJ_BROJ))) = _\n           Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_BROJ))) _\n",
+        "Test_S8R1a_KorekcijaPoIdentitetu",
+        "S8R1a: paletne stavke drugog kupca istog broja su netaknute",
+    ),
+    # S8 rez 1a (N1): F4 ispravka salje korekciji ID nove prijemnice, ne broj.
+    "s8r1a-dokunos-salje-broj": (
+        "modDokUnos.bas",
+        "        If gajbDiff Then poruke = poruke & PaletaAdjustPrompt(Trim$(res), noviBroj) & vbCrLf\n",
+        "        If gajbDiff Then poruke = poruke & PaletaAdjustPrompt(noviBroj, noviBroj) & vbCrLf   ' SABOTAZA: korekcija dobija broj\n",
+        "T_S8R1a_IspravkaKorigujeSvojDokument",
+        "309: palete ispravke su svedene na njene gajbe (8)",
+    ),
+    # S8 rez 1b (N8, S8-REV-05): "paleta je prazna" odlucuje strog brojac. Vracena na
+    # prikazni citac (koji seam kvari), odluka stornira paletu sa su-stanarom.
+    "s8r1b-praznina-iz-prikaza": (
+        "modPaletniList.bas",
+        "        If BrojAktivnihStavkiPalete(CStr(v), sourceName) = 0 Then\n",
+        "        If IsEmpty(GetPaletaStavkeForGrid(CStr(v))) Then   ' SABOTAZA: praznina iz prikaznog citaca\n",
+        "Test_S8R1b_PraznaPaletaStrogBrojac",
+        "S8R1b: su-stanar stornirane prijemnice ostaje na paleti",
+    ),
+    # S8 rez 1b (N2): prevezivanje trazi oba ID-a. Druga brana (prazan skup ID-eva)
+    # i dalje odbija, pa tvrdnja meri RAZLOG koji imenuje ID koji fali.
+    "s8r1b-prevezivanje-bez-izvornog-id": (
+        "modPaletniList.bas",
+        "    If Len(oldPrijemnicaID) = 0 Or Len(newPrijemnicaID) = 0 Then\n",
+        "    If Len(newPrijemnicaID) = 0 Then   ' SABOTAZA: prazan izvorni ID prolazi\n",
+        "T_S8R1b_PrevezivanjeTraziObaID",
+        "311: razlog imenuje izvorni ID koji fali",
+    ),
+    # S8 rez 1b (PAL-ODL-05): "Skini palete" skida samo sirocad STORNIRANE prijemnice.
+    "s8r1b-skini-aktivnu": (
+        "modPaletniList.bas",
+        "    If st <> \"DA\" Then\n",
+        "    If False Then   ' SABOTAZA: skida i palete aktivne prijemnice\n",
+        "T_S8R1b_SkiniPaleteJezgro",
+        "312: palete aktivne prijemnice se ne skidaju",
+    ),
+    # S8 rez 1b (N9): Nedovrseno deduplikuje po ID-u dokumenta, ne po broju.
+    "s8r1b-nedovrseno-po-broju": (
+        "modStornoRecovery.bas",
+        "            If Len(id) > 0 Then kljuc = \"ID|\" & id\n",
+        "            kljuc = b   ' SABOTAZA: dedup po broju\n",
+        "T_S8R1b_NedovrsenoPoIdentitetu",
+        "313: dva dokumenta istog broja sa osirotelim paletama daju dva reda",
+    ),
+    # S8 rez 1b (KI-056, S8R1B-REV-02): potvrda UVEK imenuje dokument i kupca.
+    "s8r1b-potvrda-bez-dokumenta": (
+        "modScrOporavak.bas",
+        "    OpisDokumentaZaPotvrdu = brojPrij & \" (\" & kup & pid & \")\"\n",
+        "    OpisDokumentaZaPotvrdu = brojPrij   ' SABOTAZA: potvrda nosi samo broj\n",
+        "T_S8R1b_NedovrsenoPoIdentitetu",
+        "313: potvrda imenuje dokument i kupca",
+    ),
+    # S8 rez 1b (S8R1B-REV-01): kvar IZVORNOG citaca se dize, a Nedovrseno ga prikazuje.
+    # Sabotaza vraca stari EH (Empty), pa lista cuti.
+    "s8r1b-nedovrseno-izvor-tiho": (
+        "modDokumenta.bas",
+        "    Err.Raise errNum, \"modDokumenta.GetPrijemniceSaOsirocenimPaletama\", errDesc\n",
+        "    GetPrijemniceSaOsirocenimPaletama = Empty   ' SABOTAZA: greska izvora se guta\n",
+        "T_S8R1b_NedovrsenoPoIdentitetu",
+        "313: kvar izvornog citaca se javlja kao red GRESKA",
+    ),
+    # S8 rez 1b (S8R1B-REV-01): necitljiva kolona identiteta se javlja, ne guta se.
+    "s8r1b-nedovrseno-kvar-tiho": (
+        "modStornoRecovery.bas",
+        "    If Not idOk Then\n",
+        "    If False Then   ' SABOTAZA: necitljiva kolona identiteta se ne javlja\n",
+        "T_S8R1b_NedovrsenoPoIdentitetu",
+        "313: necitljiva kolona identiteta se javlja kao red GRESKA",
+    ),
+    # S8 rez 1b (S8R1A-REV-03): posle prevezivanja sa razlikom gajbi ide korekcija cilja.
+    "s8r1b-prevezi-bez-korekcije": (
+        "modScrOporavak.bas",
+        "        If gajbDiff Then\n",
+        "        If False Then   ' SABOTAZA: korekcija posle prevezivanja izostaje\n",
+        "T_S8R1b_PreveziPaleteJezgro",
+        "314: palete su na cilju i svedene na njegove gajbe",
+    ),
+    # S8 rez 1b (S8R1B-REV-04): necitljiv status prerade palete je greska, ne "nije
+    # preradjena". Seam kvari INDEKS kolone; sabotaza brise samo strogu proveru, pa
+    # skidanje prolazi sa palete na kojoj ostaje su-stanar.
+    "s8r1b-preradjeno-tiho": (
+        "modPaletniList.bas",
+        "    If cPr = 0 Then KolonaKapijeSeNeCita TBL_PALETA, COL_PAL_PRERADJENO, SRC\n",
+        "    ' SABOTAZA: necitljiv status prerade znaci \"nije preradjena\"\n",
+        "Test_S8R1b_PraznaPaletaStrogBrojac",
+        "S8R1b: necitljiv status prerade odbija skidanje",
+    ),
+    # S8 rez 1b (S8R1B-REV-05): necitljiv status cilja prevezivanja je greska, ne
+    # "aktivan". Isti oblik seam-a i sabotaze kao gore.
+    "s8r1b-status-cilja-tiho": (
+        "modPaletniList.bas",
+        "    If pcSt = 0 Then KolonaKapijeSeNeCita TBL_PRIJEMNICA, COL_STORNIRANO, SRC\n",
+        "    ' SABOTAZA: necitljiv status cilja znaci \"aktivan\"\n",
+        "T_S8R1b_PreveziPaleteJezgro",
+        "314: necitljiv status cilja odbija prevezivanje",
+    ),
+    # S8 rez 1c (N7, PAL-ODL-06): storno palete odbija robu AKTIVNE prijemnice.
+    # Bez kapije storno skida robu aktivnog su-stanara (P1 sirocad, P2 aktivna).
+    "s8r1c-storno-bez-kapije": (
+        "modStorno.bas",
+        "    If Len(razlogRobe) > 0 Then Err.Raise ERR_STORNO_BASE + 43, SRC, razlogRobe\n",
+        "    ' SABOTAZA: storno palete bez kapije robe aktivne prijemnice\n",
+        "Test_S8R1c_StornoPaleteAktivnaRoba",
+        "S8R1c: storno palete sa robom aktivnog su-stanara se odbija",
+    ),
+    # Kontra: kapija ne sme da odbija vise od odluke -- sirocad (roba stornirane
+    # prijemnice) ne blokira storno palete.
+    "s8r1c-sirocad-blokira": (
+        "modPaletniList.bas",
+        "                If UCase$(Trim$(NzToText(SafeCell(prjD, r, cPrSt)))) <> \"DA\" Then\n",
+        "                If True Then   ' SABOTAZA: i stornirana prijemnica blokira storno palete\n",
+        "Test_S8R1c_StornoPaleteAktivnaRoba",
+        "S8R1c: paleta koja nosi samo sirocad se stornira",
+    ),
+    # Necitljivo stanje nije dozvola: stavka ciji PrijemnicaID ne vodi na tacno
+    # jednu prijemnicu odbija storno palete (sinteticka anomalija u testu).
+    "s8r1c-nepoznata-prijemnica-pusta": (
+        "modPaletniList.bas",
+        "        If vlasnici(k) <> 1 Then\n",
+        "        If False Then   ' SABOTAZA: nepoznata prijemnica ne smeta\n",
+        "Test_S8R1c_StornoPaleteAktivnaRoba",
+        "S8R1c: stavka nepoznate prijemnice odbija storno palete",
+    ),
+    # S8R1C-REV-01: necitljiv status prijemnice je greska koja imenuje kolonu.
+    # Tolerantno procitan, prazan status bi znacio "aktivna" -- storno bi i dalje
+    # bio odbijen, ali sa laznim razlogom; tvrdnja zato meri razlog.
+    "s8r1c-status-prijemnice-tiho": (
+        "modPaletniList.bas",
+        "    If cPrSt = 0 Then KolonaKapijeSeNeCita TBL_PRIJEMNICA, COL_STORNIRANO, SRC\n",
+        "    ' SABOTAZA: necitljiv status prijemnice se cita kao prazan\n",
+        "Test_S8R1c_StornoPaleteAktivnaRoba",
+        "S8R1c: razlog odbijanja imenuje kolonu statusa prijemnice",
+    ),
+    # s8r2a1-scope-po-paletama je povucena u S8 rezu 2b-2: paletna stavka nema trag
+    # zbirne, pa paletni uslov u kapiji obima ne moze ni da se napise.
+    # S8 rez 2a-1 (R2): pregled broji palete preko prijemnica u obimu, ne po koloni
+    # paletne stavke (koja lazi).
+    # Od 2b-2: po broju zbirne preko zaglavlja prijemnica, bez obima (scopeID).
+    "s8r2a1-pregled-po-broju": (
+        "modStornoFlow.bas",
+        "    palc = PaletneStavkePrijemnica(ActivePrijIDsByZbirna(broj, scopeID, MOD_NAME & \".ScanZbirna\"), strict)\n",
+        "    palc = PaletneStavkePrijemnica(ActivePrijIDsByZbirna(broj, \"\", MOD_NAME & \".ScanZbirna\"), strict)   ' SABOTAZA: po broju, bez obima\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: pregled zbirne A broji paletne stavke svojih prijemnica",
+    ),
+    # S8 rez 2a-1 (R3): uvid zbirne nosi palete prijemnica u obimu.
+    # Od 2b-2: obim uvida (PrijemniceUObimuZbirne) po broju, bez scopeID-a.
+    "s8r2a1-uvid-po-broju": (
+        "modStornoFlow.bas",
+        "    Set ids = ActivePrijIDsByZbirna(Trim$(broj), scopeID, SRC)\n",
+        "    Set ids = ActivePrijIDsByZbirna(Trim$(broj), \"\", SRC)   ' SABOTAZA: uvid po broju, bez obima\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: uvid zbirne A nosi samo robu svojih prijemnica",
+    ),
+    # S8 rez 2a-1 (R4): uvid prijemnice bez ID-a ne pada na broj.
+    # Od 2b-2: prva prijemnica tog broja iz zaglavlja (BuildLookupDict).
+    "s8r2a1-uvid-prijemnice-po-broju": (
+        "modStornoImpact.bas",
+        "                Set ImpactPalete = New Collection   ' bez ID-a nema uvida po broju\n",
+        "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, NzToText(BuildLookupDict(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_ID).Item(broj)), Nothing, strict)   ' SABOTAZA: po broju preko zaglavlja\n",
+        "T_StornoImpact_IdentitetNeDegradira",
+        "bez identiteta uvid ne cita palete po broju",
+    ),
+    # KI-039: PONISTENJE zbirne sa robom na preradjenoj paleti se odbija PRE zapisa
+    # ispravke (bez provere kaskada pada tek u transakciji i ostavi FAILED zapis).
+    "s8r2a1-ki039-bez-provere": (
+        "modStornoFlow.bas",
+        "                If Len(razlogPrer) > 0 Then r(\"message\") = razlogPrer: Exit Function\n",
+        "                ' SABOTAZA: KI-039 bez provere prerade\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: odbijeno PONISTENJE ne pravi zapis ispravke",
+    ),
+    # KI-039: pregled ne obecava skidanje robe sa preradjene palete.
+    "s8r2a1-pregled-obecava-skidanje": (
+        "modStornoFlow.bas",
+        "                    palTekstZ = \" (\" & Poruka(\"STEF_PAL_PRER_PON\") & \")\"\n",
+        "                ' SABOTAZA: pregled obecava skidanje i sa preradjene\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: pregled ne obecava skidanje robe sa preradjene palete",
+    ),
+    # S8R2A1-REV-01: nesiguran obim zbirne se odbija; prazan scope bi uvid jedne
+    # zbirne pustio na sva deca tog broja (i palete druge zbirne).
+    "s8r2a1-obim-nesuzen": (
+        "modStornoFlow.bas",
+        "    If Len(razlogObima) > 0 Then Err.Raise ERR_UI_BASE + 42, SRC, \"Obim zbirne \" & Trim$(broj) & \" se ne moze suziti: \" & razlogObima\n",
+        "    ' SABOTAZA: nesiguran obim se cita nesuzeno po broju\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: uvid zbirne bez sigurnog obima ne nosi robu druge zbirne",
+    ),
+    # S8 rez 2a-2 (R11, PAL-ODL-08): A3 meri stavku koja je IKAD bila na paleti --
+    # i kad je sva njena roba skinuta (N7 iz istorije).
+    "s8r2a2-a3-samo-aktivne": (
+        "modIntegritet.bas",
+        "                If Not stByKey.Exists(k) Then stByKey(k) = 0#\n",
+        "                ' SABOTAZA: A3 meri samo stavke sa aktivnom robom na paleti\n",
+        "Test_S8R2a2_LabeleIIntegritetPoStavci",
+        "S8R2a2: A3 vidi stavku cija je roba skinuta stornom palete",
+    ),
+    # Kontra (PAL-ODL-08): roba koja nikad nije paletizovana nije nalaz A3.
+    "s8r2a2-a3-sve-stavke": (
+        "modIntegritet.bas",
+        "            If actPrij.Exists(CStr(s(i, 1))) And stByKey.Exists(k) Then\n",
+        "            If actPrij.Exists(CStr(s(i, 1))) Then   ' SABOTAZA: A3 meri i nikad paletizovane\n",
+        "Test_S8R2a2_LabeleIIntegritetPoStavci",
+        "S8R2a2: A3 ne prijavljuje robu koja nikad nije paletizovana",
+    ),
+    # S8 rez 2a-2 (R11, PAL-INV-01 meko): kljuc linije druge prijemnice je nalaz C1.
+    # Od 2b-1 pravilo deli i pisac (modPaletniList.PalInv01Razlog), pa sabotaza
+    # gasi i njegovu kapiju za tudji kljuc; tvrdnja ostaje C1 iz 2a-2.
+    "s8r2a2-c1-tudji-kljuc": (
+        "modPaletniList.bas",
+        "            PalInv01Razlog = \"kljuc linije pripada drugoj prijemnici\"\n",
+        "            ' SABOTAZA: tudji kljuc linije se ne vidi\n",
+        "Test_S8R2a2_LabeleIIntegritetPoStavci",
+        "S8R2a2: C1 imenuje paletnu stavku sa kljucem linije druge prijemnice",
+    ),
+    # KI-086: otkazana korekcija posle prevezivanja je korekcija koja CEKA (podatak).
+    "ki086-otkaz-ne-ceka": (
+        "modPaletniListUI.bas",
+        "            outKorekcijaCeka = True\n            PaletaAdjustPrompt = \"Korekcija kolicina na paletama PRESKOCENA (uradi kasnije: \" & _\n",
+        "            ' SABOTAZA: otkaz se ne javlja kao korekcija koja ceka\n            PaletaAdjustPrompt = \"Korekcija kolicina na paletama PRESKOCENA (uradi kasnije: \" & _\n",
+        "Test_KI086_KorekcijaCekaPosleOtkaza",
+        "KI086: otkazana korekcija se vraca kao korekcija koja ceka",
+    ),
+    # KI-086 kontra: uradjena korekcija ne ceka.
+    "ki086-korigovano-ceka": (
+        "modPaletniListUI.bas",
+        "        PaletaAdjustPrompt = \"Kolicine na paletama korigovane. \" & info\n",
+        "        outKorekcijaCeka = True   ' SABOTAZA: i uradjena korekcija \"ceka\"\n        PaletaAdjustPrompt = \"Kolicine na paletama korigovane. \" & info\n",
+        "T_S8R1b_PreveziPaleteJezgro",
+        "314: korekcija posle prevezivanja je uradjena i ne ceka",
+    ),
+    # KI-087: izbor otvorene palete cita Preradjeno strogo.
+    "ki087-preradjeno-otvorene-tiho": (
+        "modPaletniList.bas",
+        "        If iPre = 0 Then KolonaKapijeSeNeCita TBL_PALETA, COL_PAL_PRERADJENO, SRC_OP\n",
+        "        ' SABOTAZA: necitljiv status prerade znaci \"nije preradjena\"\n",
+        "Test_KI087_IzborPaleteStrogoCitaPreradu",
+        "KI087: necitljiv status prerade obara paletizaciju i snimanje",
+    ),
+    # S8KI086-REV-01: razlog pale korekcije se cita pre rollback-a i LogErr-a.
+    "ki086-razlog-greske-se-gubi": (
+        "modPaletniList.bas",
+        "    outInfo = \"Greska: \" & errDesc\n",
+        "    outInfo = \"Greska: \" & Err.description   ' SABOTAZA: razlog posle rollback-a i LogErr-a\n",
+        "Test_KI086_PalaKorekcijaNosiRazlog",
+        "K86G: razlog pale korekcije stize do operatera",
+    ),
+    # S8 rez 2b-2 (PAL-ODL-13): zatecena sveska gubi labele i trag zbirne paletne stavke.
+    "s8r2b2-selfheal-ne-brise": (
+        "modSetup.bas",
+        "    ObrisiKolonuAko TBL_PALETA_STAVKA, \"BrojPrijemnice\"\n",
+        "    ' SABOTAZA: self-heal ne brise labelu paletne stavke\n",
+        "Test_S8R2b2_PaletnaStavkaStareKoloneSelfHeal",
+        "S8R2b2 self-heal: nijedna stara kolona paletne stavke nije ostala",
+    ),
+    # Trag zbirne se vraca paletnoj stavci na svakom startu (EnsureSledljivostSchema).
+    "s8r2b2-sledljivost-vraca-trag": (
+        "modSetup.bas",
+        "    EnsureKolonaSaTragom TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD\n",
+        "    EnsureKolonaSaTragom TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD\n    EnsureKolonaSaTragom TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD   ' SABOTAZA: paletna stavka opet dobija trag zbirne\n",
+        "Test_S8R2b2_PaletnaStavkaStareKoloneSelfHeal",
+        "S8R2b2 self-heal: EnsureSledljivostSchema ne vraca trag zbirne paletnoj stavci",
+    ),
+    # S8 rez 2b-1 (PAL-INV-01, PAL-ODL-13): pisac paletne stavke trazi tacnu liniju.
+    # Bez kapije pisac pravi paletnu stavku i za los kljuc.
+    "s8r2b1-pisac-bez-kapije": (
+        "modPaletniList.bas",
+        "    RequireLinijaPalete prijemnicaID, prijemnicaStavkaID, klasa, SRC\n",
+        "    ' SABOTAZA: pisac bez kapije PAL-INV-01\n",
+        "Test_S8R2b1_PisacPaleteTraziLiniju",
+        "S8R2b1: odbijeni pozivi ne prave ni paletu ni paletnu stavku",
+    ),
+    # Prazan kljuc gubi svoj razlog: odbija se kao "ne postoji", pa ni pisac ni C1
+    # ne imenuju stvarni kvar.
+    "s8r2b1-prazan-kljuc-bez-imena": (
+        "modPaletniList.bas",
+        "    If Len(kljuc) = 0 Then\n        PalInv01Razlog = \"prazan kljuc linije\"\n",
+        "    If False Then   ' SABOTAZA: prazan kljuc bez svog razloga\n        PalInv01Razlog = \"prazan kljuc linije\"\n",
+        "Test_S8R2b1_PisacPaleteTraziLiniju",
+        "S8R2b1: pisac odbija prazan kljuc linije, po imenu",
+    ),
+    # Klasa linije se ne meri: kljuc stavke klase I prolazi za paletnu stavku klase II.
+    "s8r2b1-klasa-se-ne-meri": (
+        "modPaletniList.bas",
+        "        ElseIf StrComp(CStr(lin(1)), KlasaOrDefault(klasa), vbTextCompare) <> 0 Then\n",
+        "        ElseIf False Then   ' SABOTAZA: klasa linije se ne meri\n",
+        "Test_S8R2b1_PisacPaleteTraziLiniju",
+        "S8R2b1: pisac odbija kljuc druge klase, po imenu",
+    ),
+    # Kljuc koji nose dve stavke: bez provere ponavljanja presudi poslednja nadjena.
+    "s8r2b1-dupli-kljuc-prolazi": (
+        "modPaletniList.bas",
+        "            If n > 1 Then razlog = \"kljuc linije se ponavlja (\" & CStr(n) & \" stavke)\"\n",
+        "            ' SABOTAZA: kljuc koji se ponavlja prolazi\n",
+        "Test_S8R2b1_PisacPaleteTraziLiniju",
+        "S8R2b1: pisac odbija kljuc koji se ponavlja, po imenu",
+    ),
+    # C1 cuti o aktivnoj paletnoj stavci bez kljuca (stanje pre 2b-1, S8R2A2-REV-01).
+    "s8r2b1-c1-prazan-kljuc-tih": (
+        "modIntegritet.bas",
+        "                If Len(p) > 0 Then\n                    ' PAL-INV-01 meko (S8 rez 2a-2, 2b-1): ISTO pravilo koje pisac drzi\n",
+        "                If Len(p) > 0 And Len(kljuc) > 0 Then   ' SABOTAZA: C1 cuti o praznom kljucu\n                    ' PAL-INV-01 meko (S8 rez 2a-2, 2b-1): ISTO pravilo koje pisac drzi\n",
+        "Test_S8R2b1_PisacPaleteTraziLiniju",
+        "S8R2b1: C1 imenuje aktivnu paletnu stavku bez kljuca linije",
+    ),
+    # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
+    "s8r1a-altf8-prvi-pogodak": (
+        "modPaletniListUI.bas",
+        "        Case 1\n"
+        "            PrijemnicaZaKorekciju = CStr(ids(1))\n",
+        "        Case Is >= 1   ' SABOTAZA: dvosmislen broj -> prvi pogodak\n"
+        "            PrijemnicaZaKorekciju = CStr(ids(1))\n",
+        "T_S8R1a_AltF8BrojUJedanDokument",
+        "310: dvosmislen broj se odbija",
     ),
     # Ugovor citaoca: jedna stavka po klasi po dokumentu (pisac: 1432).
     "s6k3-citalac-pusta-dve-iste-klase": (
@@ -11189,7 +11495,7 @@ SABOTAZE = {
         "T_ODL39_PapirVracanjaKupcu",
         "prva i ponovljena stampa vracanja kupcu nose isti sadrzaj: bez reda Vrsta voca",
     ),
-    # --- DOPLATA KOOPERANTU, F1 (docs/DOMEN/DOPLATA.md; testovi 309-314) ---
+    # --- DOPLATA KOOPERANTU, F1 (docs/DOMEN/DOPLATA.md; testovi 315-320) ---
     # Plan cita i stornirana zaglavlja: storniran otkup od 100 kg dobija doplatu.
     "dop-plan-storniran-ulazi": (
         "modDoplata.bas",
@@ -11262,7 +11568,7 @@ SABOTAZE = {
         "T_Doplata_OdbijaNeispravanUnos",
         "datum knjizenja pre kraja perioda se odbija",
     ),
-    # --- DOPLATA KOOPERANTU, F2 (izvestaji; testovi 315-317) ---
+    # --- DOPLATA KOOPERANTU, F2 (izvestaji; testovi 321-323) ---
     # Kartica ne cita KO: doplata se ne vidi ni na ekranu, ni u PDF-u, ni u PWA.
     "dop-kartica-bez-doplate": (
         "modIzvestaj.bas",
@@ -11312,7 +11618,7 @@ SABOTAZE = {
         "T_Doplata_PWASaldoDetalj",
         "PWA saldo: doplata 140, saldo = 700 + 140 - isplaceno - agro",
     ),
-    # --- DOPLATA KOOPERANTU, F3 (papir i ekran; testovi 318-320) ---
+    # --- DOPLATA KOOPERANTU, F3 (papir i ekran; testovi 324-326) ---
     # Zbir na papiru KO ne sabira iznose stavki.
     "dop-papir-bez-stavke": (
         "modPrint.bas",

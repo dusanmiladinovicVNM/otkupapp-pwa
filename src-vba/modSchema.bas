@@ -41,7 +41,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "9E5D27A9"
+Public Const SCHEMA_FINGERPRINT As String = "219B51FB"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -769,12 +769,6 @@ Private Function FormatRegistry() As Object
 
     Set k = CreateObject("Scripting.Dictionary")
     k.CompareMode = vbTextCompare
-    k("BrojPrijemnice") = "text"
-    k("BrojZbirne") = "text"
-    Set reg("tblPaletaStavka") = k
-
-    Set k = CreateObject("Scripting.Dictionary")
-    k.CompareMode = vbTextCompare
     k("KatBroj") = "text"
     Set reg("tblParcele") = k
 
@@ -1461,8 +1455,6 @@ Private Sub SpecPaletaStavka(ByVal reg As Object)
     Set k = New Collection
     k.Add "StavkaID"
     k.Add "PaletaID"
-    k.Add "BrojPrijemnice"
-    k.Add "BrojZbirne"
     k.Add "BrojGajbica"
     k.Add "NetoKg"
     k.Add "AmbalazaKg"
@@ -1475,7 +1467,6 @@ Private Sub SpecPaletaStavka(ByVal reg As Object)
     k.Add "CreatedBy"
     k.Add "ModifiedAt"
     k.Add "ModifiedBy"
-    k.Add "ZbirnaRoditeljID"
     k.Add "PrijemnicaStavkaID"
     RegistrujTabelu reg, TBL_PALETA_STAVKA, "PaletaStavka", k
 End Sub

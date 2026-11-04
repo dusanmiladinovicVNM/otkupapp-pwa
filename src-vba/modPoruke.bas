@@ -1354,6 +1354,10 @@ Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_OPO_KPI_OSIR", "Osiro" & ChrW(263) & "eno"
     UpsertRow lo, existing, "OTKUI_OPO_KPI_UNDO", "Za vra" & ChrW(263) & "anje"
     UpsertRow lo, existing, "OTKUI_BTN_OPO_PREVEZI", "Prevezi"
+    UpsertRow lo, existing, "OTKUI_BTN_OPO_SKINI", "Skini palete"
+    UpsertRow lo, existing, "OTKUI_ASK_OPO_SKINI", "Skinuti sa paleta robu stornirane prijemnice"
+    UpsertRow lo, existing, "OTKUI_MSG_OPO_SKINUTO", ChrW(10003) & " Skinute palete prijemnice"
+    UpsertRow lo, existing, "OTKUI_ERR_OPO_SKINI", ChrW(10007) & " Skidanje paleta nije uspelo."
     UpsertRow lo, existing, "OTKUI_BTN_OPO_VRATI", "Vrati storno"
     UpsertRow lo, existing, "OTKUI_ASK_OPO_PRI", "Prevezati prijemnicu"
     UpsertRow lo, existing, "OTKUI_ASK_OPO_PAL", "Prevezati palete prijemnice"
@@ -1361,6 +1365,9 @@ Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ASK_OPO_UNDO", "Vratiti storno:"
     UpsertRow lo, existing, "OTKUI_ASK_OPO_UNDO2", "Dokument se vra" & ChrW(263) & "a u AKTIVNO stanje, sa svim posledicama."
     UpsertRow lo, existing, "OTKUI_MSG_OPO_PREVEZANO", ChrW(10003) & " Prevezano:"
+    UpsertRow lo, existing, "OTKUI_MSG_OPO_PREVEZANO_KOR_CEKA", "Palete su prevezene, ali korekcija koli" & ChrW(269) & _
+        "ina NIJE zavr" & ChrW(353) & "ena " & ChrW(8212) & " dok se ne uradi, dokument i palete se razlikuju " & _
+        "(Integritet A3). Uradite je kroz Alt+F8 " & ChrW(8594) & " PaletaAdjust_Prompt:"
     UpsertRow lo, existing, "OTKUI_MSG_OPO_VRACENO", ChrW(10003) & " Storno vra" & ChrW(263) & "en:"
     UpsertRow lo, existing, "OTKUI_ERR_OPO_NEMA_ZBIRNE", ChrW(10007) & " Prvo izaberi ciljnu zbirnu u listi " & ChrW(8222) & "Zbirne (cilj)" & ChrW(8220)
     UpsertRow lo, existing, "OTKUI_ERR_OPO_NEMA_PRIJ", ChrW(10007) & " Prvo izaberi ciljnu prijemnicu u listi " & ChrW(8222) & "Prijemnice (cilj)" & ChrW(8220)

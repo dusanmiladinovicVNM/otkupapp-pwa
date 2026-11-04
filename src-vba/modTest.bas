@@ -432,6 +432,12 @@ Public Sub RunAllTests()
     RunOne 325
     RunOne 326
     RunOne 327
+    RunOne 328
+    RunOne 329
+    RunOne 330
+    RunOne 331
+    RunOne 332
+    RunOne 333
     RunOne 13
     RunOne 14
     RunOne 15
@@ -694,6 +700,13 @@ Private Sub ResetSeamova()
     ' Podmetnut pad na kraju storna prijemnice (S6 korak 4): zaostao seam bi
     ' oborio svaki sledeci storno prijemnice.
     modStorno.StornoPrijemnicePadniTest False
+    ' Pokvarena odluka "paleta je prazna" (S8 rez 1b, N8): zaostao seam bi
+    ' prikazu palete vratio prazno ili oborio svako sledece skidanje paleta.
+    modPaletniList.PaletaPraznoTestSet ""
+    ' Zabelezeno pitanje korekcije kolicina (KI-086).
+    modPaletniListUI.PaletaAdjustPitanjeTestReset
+    ' Necitljiva kolona identiteta liste Nedovrseno (S8R1B-REV-01).
+    modStornoRecovery.NedovrsenoKvarTestSet ""
     ' Podmetnut pad na kraju jezgra fakture (S6 korak 5): zaostao seam bi oborio
     ' svaku sledecu fakturu.
     modFaktura.CreateFakturaPadniTest False
@@ -726,10 +739,10 @@ Private Sub ResetSeamova()
     ' Zabelezen izvoz u PDF (249): zaostao zapis bi sledecem testu izgledao kao
     ' izvoz koji je SAM napravio.
     modDocStyle.DocPdfTestReset
-    ' Ekran Doplata (318-320): zabelezeno pitanje, stope i unos bez zone --
+    ' Ekran Doplata (324-326): zabelezeno pitanje, stope i unos bez zone --
     ' zaostalo bi sledecem testu izgledalo kao njegovo.
     modScrDoplata.Scr_DopTestReset
-    ' Mapiranje izvoda u testovima doplate (323-324) gasi dijaloge greske; test
+    ' Mapiranje izvoda u testovima doplate (329-332) gasi dijaloge greske; test
     ' koji pukne pre vracanja ostavio bi tih rezim i produkciji posle suite.
     modBankaMapiranje.gBankaSilentBatch = False
     Err.Clear
@@ -1041,25 +1054,31 @@ Private Function TestName(ByVal idx As Long) As String
         Case 306: TestName = "T_Prazne_StornoKazeRazlog"
         Case 307: TestName = "T_ODL39_VracanjeKupcu"
         Case 308: TestName = "T_ODL39_PapirVracanjaKupcu"
-        Case 309: TestName = "T_Doplata_PlanSabiraPoKljucu"
-        Case 310: TestName = "T_Doplata_JedanKOPoKooperantu"
-        Case 311: TestName = "T_Doplata_PeriodSaSatom"
-        Case 312: TestName = "T_Doplata_PonavljanjeTraziPotvrdu"
-        Case 313: TestName = "T_Doplata_StornoIzlaziIzZbira"
-        Case 314: TestName = "T_Doplata_OdbijaNeispravanUnos"
-        Case 315: TestName = "T_Doplata_KarticaZaduzenje"
-        Case 316: TestName = "T_Doplata_SaldoOMPoStanici"
-        Case 317: TestName = "T_Doplata_PWASaldoDetalj"
-        Case 318: TestName = "T_Doplata_StampaKO"
-        Case 319: TestName = "T_Doplata_EkranTok"
-        Case 320: TestName = "T_Doplata_EkranUgovor"
-        Case 321: TestName = "T_Doplata_SignalOsnovice"
-        Case 322: TestName = "T_Doplata_OtvorenoKOUNalozima"
-        Case 323: TestName = "T_Doplata_IzvodPoBrojuKO"
-        Case 324: TestName = "T_Doplata_StornoOdvezujeIsplatu"
-        Case 325: TestName = "T_Doplata_AvansNaKO"
-        Case 326: TestName = "T_Doplata_IzvodRucnoNaKO"
-        Case 327: TestName = "T_Doplata_GotovinaNaMaticnoj"
+        Case 309: TestName = "T_S8R1a_IspravkaKorigujeSvojDokument"
+        Case 310: TestName = "T_S8R1a_AltF8BrojUJedanDokument"
+        Case 311: TestName = "T_S8R1b_PrevezivanjeTraziObaID"
+        Case 312: TestName = "T_S8R1b_SkiniPaleteJezgro"
+        Case 313: TestName = "T_S8R1b_NedovrsenoPoIdentitetu"
+        Case 314: TestName = "T_S8R1b_PreveziPaleteJezgro"
+        Case 315: TestName = "T_Doplata_PlanSabiraPoKljucu"
+        Case 316: TestName = "T_Doplata_JedanKOPoKooperantu"
+        Case 317: TestName = "T_Doplata_PeriodSaSatom"
+        Case 318: TestName = "T_Doplata_PonavljanjeTraziPotvrdu"
+        Case 319: TestName = "T_Doplata_StornoIzlaziIzZbira"
+        Case 320: TestName = "T_Doplata_OdbijaNeispravanUnos"
+        Case 321: TestName = "T_Doplata_KarticaZaduzenje"
+        Case 322: TestName = "T_Doplata_SaldoOMPoStanici"
+        Case 323: TestName = "T_Doplata_PWASaldoDetalj"
+        Case 324: TestName = "T_Doplata_StampaKO"
+        Case 325: TestName = "T_Doplata_EkranTok"
+        Case 326: TestName = "T_Doplata_EkranUgovor"
+        Case 327: TestName = "T_Doplata_SignalOsnovice"
+        Case 328: TestName = "T_Doplata_OtvorenoKOUNalozima"
+        Case 329: TestName = "T_Doplata_IzvodPoBrojuKO"
+        Case 330: TestName = "T_Doplata_StornoOdvezujeIsplatu"
+        Case 331: TestName = "T_Doplata_AvansNaKO"
+        Case 332: TestName = "T_Doplata_IzvodRucnoNaKO"
+        Case 333: TestName = "T_Doplata_GotovinaNaMaticnoj"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1376,25 +1395,31 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 306: T_Prazne_StornoKazeRazlog
         Case 307: T_ODL39_VracanjeKupcu
         Case 308: T_ODL39_PapirVracanjaKupcu
-        Case 309: T_Doplata_PlanSabiraPoKljucu
-        Case 310: T_Doplata_JedanKOPoKooperantu
-        Case 311: T_Doplata_PeriodSaSatom
-        Case 312: T_Doplata_PonavljanjeTraziPotvrdu
-        Case 313: T_Doplata_StornoIzlaziIzZbira
-        Case 314: T_Doplata_OdbijaNeispravanUnos
-        Case 315: T_Doplata_KarticaZaduzenje
-        Case 316: T_Doplata_SaldoOMPoStanici
-        Case 317: T_Doplata_PWASaldoDetalj
-        Case 318: T_Doplata_StampaKO
-        Case 319: T_Doplata_EkranTok
-        Case 320: T_Doplata_EkranUgovor
-        Case 321: T_Doplata_SignalOsnovice
-        Case 322: T_Doplata_OtvorenoKOUNalozima
-        Case 323: T_Doplata_IzvodPoBrojuKO
-        Case 324: T_Doplata_StornoOdvezujeIsplatu
-        Case 325: T_Doplata_AvansNaKO
-        Case 326: T_Doplata_IzvodRucnoNaKO
-        Case 327: T_Doplata_GotovinaNaMaticnoj
+        Case 309: T_S8R1a_IspravkaKorigujeSvojDokument
+        Case 310: T_S8R1a_AltF8BrojUJedanDokument
+        Case 311: T_S8R1b_PrevezivanjeTraziObaID
+        Case 312: T_S8R1b_SkiniPaleteJezgro
+        Case 313: T_S8R1b_NedovrsenoPoIdentitetu
+        Case 314: T_S8R1b_PreveziPaleteJezgro
+        Case 315: T_Doplata_PlanSabiraPoKljucu
+        Case 316: T_Doplata_JedanKOPoKooperantu
+        Case 317: T_Doplata_PeriodSaSatom
+        Case 318: T_Doplata_PonavljanjeTraziPotvrdu
+        Case 319: T_Doplata_StornoIzlaziIzZbira
+        Case 320: T_Doplata_OdbijaNeispravanUnos
+        Case 321: T_Doplata_KarticaZaduzenje
+        Case 322: T_Doplata_SaldoOMPoStanici
+        Case 323: T_Doplata_PWASaldoDetalj
+        Case 324: T_Doplata_StampaKO
+        Case 325: T_Doplata_EkranTok
+        Case 326: T_Doplata_EkranUgovor
+        Case 327: T_Doplata_SignalOsnovice
+        Case 328: T_Doplata_OtvorenoKOUNalozima
+        Case 329: T_Doplata_IzvodPoBrojuKO
+        Case 330: T_Doplata_StornoOdvezujeIsplatu
+        Case 331: T_Doplata_AvansNaKO
+        Case 332: T_Doplata_IzvodRucnoNaKO
+        Case 333: T_Doplata_GotovinaNaMaticnoj
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -3026,7 +3051,14 @@ Private Sub T_Zbirna_NemaIspravku()
     ' prazan stub (red odluke ne ide kroz ugovorni string nego kroz zonu), pa je
     ' prva verzija ovog testa merila konstantu "". Preduslov ju je uhvatio --
     ' zato preduslov i postoji.
-    modScrStorno.Scr_IzborTestSet STIP_ZBIRNA, FX_ZBIRNA, "ZBI-TEST-1", ""
+    '
+    ' Zbirna je ZB-TEST-2 (dve AKTIVNE prijemnice), ne ZB-TEST-1. Red odluke se
+    ' nudi samo kad zbirna ima zivu nizvodnu decu (CorrectionNeedsDialog). ZB-TEST-1
+    ' ga je do S8 reza 2a-1 imala samo zbog SIROCETA svoje stornirane prijemnice,
+    ' brojanog po labeli BrojZbirne paletne stavke; od 2a-1 palete zbirne su palete
+    ' njenih AKTIVNIH prijemnica (isti skup koji kaskada stornira), pa ZB-TEST-1
+    ' red odluke s pravom vise nema. Namera testa je ista, menja se samo zbirna.
+    modScrStorno.Scr_IzborTestSet STIP_ZBIRNA, FX_ZBIRNA2, "ZBI-TEST-2", ""
     zbr = modScrStorno.Scr_AkcijeKljucevi()
 
     ' Prijemnica: isti izbor koji T_StornoBezUvida_NemaAkcije vec dokazuje kao
@@ -3450,23 +3482,42 @@ Private Function StavkaPrijemniceKlase(ByVal prijemnicaID As String, _
     Next i
 End Function
 
+' Prijemnice (SVE, i stornirane) koje nose dati broj, kao skup PrijemnicaID-jeva.
+' Test-pomocnici ispod biraju paletne stavke po PrijemnicaID-u iz ovog skupa: od S8
+' reza 2b-2 paletna stavka broj prijemnice ne nosi, a broj je labela ZAGLAVLJA. Skup
+' je isti kao stari izbor po labeli -- pisac je labelu pisao iz broja svog dokumenta.
+' Kolone se citaju STROGO: tiha nula bi tvrdnju "0 stavki" ucinila vakuumskom.
+Private Function PrijemniceBroja(ByVal brojPrij As String) As Object
+    Const SRC As String = "modTest.PrijemniceBroja"
+    Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set PrijemniceBroja = res
+    Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    Dim cId As Long, cBr As Long, i As Long
+    cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+    cBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+    For i = 1 To UBound(d, 1)
+        If Trim$(NzToText(d(i, cBr))) = brojPrij Then res(Trim$(NzToText(d(i, cId)))) = True
+    Next i
+End Function
+
 ' Kljuc linije (PrijemnicaStavkaID) na AKTIVNIM paletnim stavkama datog broja.
 ' Razliciti kljucevi se spajaju sa "|", pa "jedan kljuc" i "dva kljuca" nisu ista
 ' vrednost.
 Private Function KljucStavkePaleteZaPrijemnicu(ByVal brojPrij As String) As String
-    Dim d As Variant, i As Long, cBr As Long, cSt As Long, cKl As Long
-    Dim k As String, acc As String, aktivan As Boolean
+    Const SRC As String = "modTest.KljucStavkePaleteZaPrijemnicu"
+    Dim d As Variant, i As Long, cPid As Long, cSt As Long, cKl As Long
+    Dim k As String, acc As String, ids As Object
     d = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(d) Then Exit Function
-    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-    cKl = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID)
-    If cBr = 0 Or cKl = 0 Then Exit Function
+    Set ids = PrijemniceBroja(brojPrij)
+    cPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+    cKl = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID, SRC)
     For i = 1 To UBound(d, 1)
-        If Trim$(NzToText(d(i, cBr))) = brojPrij Then
-            aktivan = True
-            If cSt > 0 Then aktivan = (UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA")
-            If aktivan Then
+        If ids.Exists(Trim$(NzToText(d(i, cPid)))) Then
+            If UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
                 k = Trim$(NzToText(d(i, cKl)))
                 If InStr("|" & acc & "|", "|" & k & "|") = 0 Or Len(acc) = 0 Then
                     If Len(acc) > 0 Then acc = acc & "|"
@@ -3537,18 +3588,17 @@ End Sub
 ' ROBE - jedina koja razlikuje "prevezeno" od "paletizovano pa prevezeno",
 ' jer se stavke na istoj paleti spajaju u jedan red.
 Private Function GajbicaZaPrijemnicu(ByVal brojPrij As String) As Long
-    Dim d As Variant, i As Long, cBr As Long, cSt As Long, cGa As Long
+    Const SRC As String = "modTest.GajbicaZaPrijemnicu"
+    Dim d As Variant, i As Long, cPid As Long, cSt As Long, cGa As Long, ids As Object
     d = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(d) Then Exit Function
-    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    cGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
-    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-    If cBr = 0 Or cGa = 0 Then Exit Function
+    Set ids = PrijemniceBroja(brojPrij)
+    cPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
+    cGa = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, SRC)
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
     For i = 1 To UBound(d, 1)
-        If Trim$(NzToText(d(i, cBr))) = brojPrij Then
-            If cSt = 0 Then
-                GajbicaZaPrijemnicu = GajbicaZaPrijemnicu + NzL(d(i, cGa))
-            ElseIf UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
+        If ids.Exists(Trim$(NzToText(d(i, cPid)))) Then
+            If UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
                 GajbicaZaPrijemnicu = GajbicaZaPrijemnicu + NzL(d(i, cGa))
             End If
         End If
@@ -3559,30 +3609,30 @@ End Function
 ' razlikuje "nije paletizovano" od "paletizovano pa stornirano" - a bas ta
 ' razlika je ono sto SetPaletizeSkip sprecava.
 Private Function SvihStavkiZaPrijemnicu(ByVal brojPrij As String) As Long
-    Dim d As Variant, i As Long, cBr As Long
+    Const SRC As String = "modTest.SvihStavkiZaPrijemnicu"
+    Dim d As Variant, i As Long, cPid As Long, ids As Object
     d = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(d) Then Exit Function
-    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    If cBr = 0 Then Exit Function
+    Set ids = PrijemniceBroja(brojPrij)
+    cPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
     For i = 1 To UBound(d, 1)
-        If Trim$(NzToText(d(i, cBr))) = brojPrij Then _
+        If ids.Exists(Trim$(NzToText(d(i, cPid)))) Then _
             SvihStavkiZaPrijemnicu = SvihStavkiZaPrijemnicu + 1
     Next i
 End Function
 
 ' Broj AKTIVNIH paletnih stavki koje pokazuju na dati broj prijemnice.
 Private Function StavkiZaPrijemnicu(ByVal brojPrij As String) As Long
-    Dim d As Variant, i As Long, cBr As Long, cSt As Long
+    Const SRC As String = "modTest.StavkiZaPrijemnicu"
+    Dim d As Variant, i As Long, cPid As Long, cSt As Long, ids As Object
     d = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(d) Then Exit Function
-    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-    If cBr = 0 Then Exit Function
+    Set ids = PrijemniceBroja(brojPrij)
+    cPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
     For i = 1 To UBound(d, 1)
-        If Trim$(NzToText(d(i, cBr))) = brojPrij Then
-            If cSt = 0 Then
-                StavkiZaPrijemnicu = StavkiZaPrijemnicu + 1
-            ElseIf UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
+        If ids.Exists(Trim$(NzToText(d(i, cPid)))) Then
+            If UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
                 StavkiZaPrijemnicu = StavkiZaPrijemnicu + 1
             End If
         End If
@@ -3642,6 +3692,505 @@ Private Sub T_RelinkPoGeneraciji_NeDiraTudjDokument()
     AssertEq GajbicaZaDokument("PRJ-TEST-B"), 0, _
              "dokument drugog kupca istog broja NIJE nista dobio"
 End Sub
+
+' ============================================================
+' 309. S8 REZ 1a (N1, PAL-IDENT-01): F4 ISPRAVKA KORIGUJE PALETE SVOG
+' DOKUMENTA, I KAD NJEN BROJ NOSI DRUGI KUPAC.
+' ============================================================
+' Put je produkcioni: PrijemnicaUpisi -> PreveziPaleteIspravke -> prevezivanje
+' po ID-u (S6 korak 7) -> PaletaAdjustPrompt -> korekcija. Do reza 1a je
+' poslednji korak isao po BROJU nove prijemnice (modDokUnos:1333), iako je njen
+' ID bio poznat.
+'
+'   A   kupac 1, svoj broj, 12 gajbi / 120 kg, paletizovan, pa storniran za ispravku
+'   B   kupac 2, broj X,    10 gajbi /  90 kg, paletizovan
+'   A2  kupac 1, broj X,     8 gajbi /  64 kg -- ispravka A
+'
+' Broj X nose B i A2 -- normalno produkciono stanje, broj se racuna po kupcu.
+' Prevezivanje odnese 12 gajbi A na A2 i javi razliku; korekcija mora da svede
+' palete A2 na 8 i da ne dirne B. Gajbe ispravke su MANJE od starih, pa
+' korekcija ne pita operatera (MsgBox bi u run_vba visio). Neto po gajbi se
+' razlikuje (B 9 kg, A2 8 kg), pa ni resync tudjih stavki ne bi prosao neprimecen.
+'
+' Nivo: FIZICKE paletne stavke po PrijemnicaID-u; otisak B broji i stornirane.
+' Nad kodom pre 1a korekcija skida gajbe i sa B (B se svede na nulu i
+' stornira), pa je tamo crvena tvrdnja o B.
+'
+' Spoljna transakcija pocinje PRE zasejavanja gajbi vozaca (S8R1A-REV-01):
+' ZasejOpticajVozacu, kad vozac ima manje od 100, knjizi nabavku i prenos u
+' SVOJOJ transakciji, pa bi posle snimka ostao u svesci. Na kraju se proverava
+' da je rollback vratio broj redova knjige ambalaze, i kad test padne.
+' SABOTAZA: s8r1a-dokunos-salje-broj.
+Private Sub T_S8R1a_IspravkaKorigujeSvojDokument()
+    Dim p As Object, poruke As String, cid As String, prevPal As String
+    Dim tx As clsTransaction, errNum As Long, errDesc As String
+    Dim zbrA As String, zbrB As String, brojA As String, brojX As String, t As String
+    Dim resA As String, resB As String, resA2 As String, otB As String
+    Dim redoviPre As String, redoviPosle As String
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    redoviPre = S8R1aBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    ' Tri upisa nose 30 gajbi sa vozaca (v. T_IspravkaPrijemnice_SkipIRelink).
+    ZasejOpticajVozacu
+    AssertEq (modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, FX_VOZAC, _
+              FX_TIP_AMB) >= 100), True, _
+             "309 preduslov: vozac ima gajbe za knjizenje prijemnica"
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    S6K8IzdataZbirna "S8A", zbrA
+    S6K8IzdataZbirna "S8B", zbrB, FX_VOZAC, FX_KUPAC2
+
+    t = Format$(Now, "hhnnss")
+    brojA = "T-S8A-" & t
+    brojX = "T-S8X-" & t
+
+    Set p = NoviPrijemnicaUnos()
+    S8R1aPrijemnica p, brojA, zbrA, FX_KUPAC, 120, 12
+    resA = modDokUnos.PrijemnicaUpisi(p, poruke)
+    Set p = NoviPrijemnicaUnos()
+    S8R1aPrijemnica p, brojX, zbrB, FX_KUPAC2, 90, 10
+    resB = modDokUnos.PrijemnicaUpisi(p, poruke)
+    AssertEq (Len(resA) > 0 And Len(resB) > 0), True, "309 preduslov: A i B su upisani"
+    AssertEq GajbicaZaDokument(resA) & "|" & GajbicaZaDokument(resB), "12|10", _
+             "309 preduslov: A i B su paletizovani"
+    otB = S8R1aOtisak(resB)
+
+    ' Ispravka A: storno bez skidanja paleta (one se prevezuju), pa nov unos.
+    AssertEq modStorno.StornoPrijemnica_TX(resA, False), True, _
+             "309 preduslov: A je storniran za ispravku"
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, _
+              FLOW_DOC_PRIJEMNICA, resA, brojA, _
+              FLOW_DOC_PRIJEMNICA, , , FLOW_DOC_ZBIRNA, , zbrA, _
+              "test 309: ispravka prijemnice")
+    AssertEq (Len(cid) > 0), True, "309 preduslov: correction context je kreiran"
+
+    Set p = NoviPrijemnicaUnos()
+    S8R1aPrijemnica p, brojX, zbrA, FX_KUPAC, 64, 8
+    p("ispravkaID") = cid
+    p("ispravkaStariBroj") = brojA
+    resA2 = modDokUnos.PrijemnicaUpisi(p, poruke)
+    AssertEq (Len(resA2) > 0), True, "309 preduslov: upis ispravke je prosao"
+
+    AssertEq GajbicaZaDokument(resA2), 8, _
+             "309: palete ispravke su svedene na njene gajbe (8)"
+    AssertEq S8R1aOtisak(resB), otB, _
+             "309: paletne stavke drugog kupca istog broja su netaknute"
+    AssertEq S8R1aOtisak(resA2), "redova=1|gajb=8|neto=64|storno=0", _
+             "309: neto paleta ispravke prati njenu liniju (8 x 8 kg)"
+
+    Err.Clear   ' zaostatak pomocnika pod Resume Next nije pad testa (KI-053)
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    redoviPosle = S8R1aBrojRedova()
+    On Error GoTo 0
+    If errNum <> 0 Then
+        If redoviPosle <> redoviPre Then errDesc = errDesc & " [rollback nije vratio redove: " & _
+                                                   redoviPre & " -> " & redoviPosle & "]"
+        Err.Raise errNum, "modTest.T_S8R1a_IspravkaKorigujeSvojDokument", errDesc
+    End If
+    AssertEq redoviPosle, redoviPre, _
+             "309: rollback vraca i zasejane gajbe vozaca i sve upise testa"
+End Sub
+
+' Broj redova tabela koje 309 pise (i kroz zasejavanje vozaca), za proveru da je
+' rollback vratio sve.
+Private Function S8R1aBrojRedova() As String
+    Dim tb As Variant, s As String
+    For Each tb In Array(TBL_AMBALAZA, TBL_AMBALAZA_DOKUMENT, TBL_PRIJEMNICA, _
+                         TBL_PRIJEMNICA_STAVKE, TBL_PALETA, TBL_PALETA_STAVKA, _
+                         TBL_ZBIRNA, TBL_OTPREMNICA, TBL_OTKUP, TBL_STORNO_VEZE)
+        If Len(s) > 0 Then s = s & "|"
+        s = s & CStr(tb) & "=" & BrojRedovaTabele(CStr(tb))
+    Next tb
+    S8R1aBrojRedova = s
+End Function
+
+' Prijemnica klase I za 309: kupac, broj, zbirna, kilaza i gajbe po izboru testa.
+Private Sub S8R1aPrijemnica(ByVal p As Object, ByVal broj As String, _
+                            ByVal brojZbirne As String, ByVal kupac As String, _
+                            ByVal kg As Double, ByVal gajbe As Long)
+    PopuniPrijemnicu p, broj, brojZbirne
+    p("kupacID") = kupac
+    p("kolicinaI") = kg
+    p("kolAmb") = gajbe
+End Sub
+
+' Otisak SVIH paletnih stavki dokumenta (i storniranih): broj redova, zbir gajbi
+' i neta aktivnih, broj storniranih. Ista vrednost pre i posle = nista nije
+' dirnuto -- ni "svedena na nulu pa stornirana".
+Private Function S8R1aOtisak(ByVal prijemnicaID As String) As String
+    Dim d As Variant, i As Long, cP As Long, cGa As Long, cNe As Long, cSt As Long
+    Dim n As Long, g As Long, kg As Double, nSt As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsEmpty(d) Then
+        cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R1aOtisak")
+        cGa = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, "S8R1aOtisak")
+        cNe = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, "S8R1aOtisak")
+        cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R1aOtisak")
+        For i = 1 To UBound(d, 1)
+            If Trim$(NzToText(d(i, cP))) = prijemnicaID Then
+                n = n + 1
+                If UCase$(Trim$(NzToText(d(i, cSt)))) = "DA" Then
+                    nSt = nSt + 1
+                Else
+                    g = g + NzL(d(i, cGa))
+                    kg = kg + NzD(d(i, cNe))
+                End If
+            End If
+        Next i
+    End If
+    S8R1aOtisak = "redova=" & n & "|gajb=" & g & "|neto=" & CStr(Round(kg, 3)) & "|storno=" & nSt
+End Function
+
+' ============================================================
+' 310. S8 REZ 1a (PAL-ODL-04): ALT+F8 KOREKCIJA RAZRESAVA BROJ U TACNO JEDAN
+' AKTIVAN DOKUMENT.
+' ============================================================
+' Makro PaletaAdjust_Prompt pita broj (InputBox) pa koriguje po ID-u. Broj u
+' ID razresava PrijemnicaZaKorekciju -- makro je zove pre korekcije, a ovde se
+' meri direktno, jer InputBox i MsgBox u run_vba vise.
+'
+'   1/150326  PRJ-TEST-A (KUP-TEST-1) i PRJ-TEST-B (KUP-TEST-2), oba aktivna
+'   4/150326  PRJ-TEST-T2, jedini
+'   8/150326  dva stornirana, nijedan aktivan
+'
+' Izbor "prvog pogotka" bi kod 1/150326 korigovao palete jednog od dva kupca,
+' zavisno od redosleda u tabeli. Test ne pise nijednu tabelu.
+' SABOTAZA: s8r1a-altf8-prvi-pogodak.
+Private Sub T_S8R1a_AltF8BrojUJedanDokument()
+    Dim razlog As String, prjID As String
+
+    AssertEq VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_BROJ, _
+             "test", False, Array(COL_PRJ_KUPAC)).count, 2, _
+             "310 preduslov: broj 1/150326 nose dva aktivna kupca"
+
+    prjID = PrijemnicaZaKorekciju(FX_PRIJ_BROJ, razlog)
+    AssertEq prjID, "", "310: dvosmislen broj se odbija"
+    AssertEq (InStr(razlog, FX_KUPAC) > 0 And InStr(razlog, FX_KUPAC2) > 0), True, _
+             "310: razlog odbijanja imenuje oba kupca"
+
+    prjID = PrijemnicaZaKorekciju(FX_PRIJ_CILJ_V2, razlog)
+    AssertEq prjID, "PRJ-TEST-T2", "310: jednoznacan broj daje svoj dokument"
+    AssertEq razlog, "", "310: jednoznacan broj nema razlog odbijanja"
+
+    prjID = PrijemnicaZaKorekciju(FX_PRIJ_KOLIZIJA, razlog)
+    AssertEq prjID, "", "310: broj samo storniranih dokumenata se odbija"
+    AssertEq (Len(razlog) > 0), True, "310: odbijen broj nosi razlog"
+End Sub
+
+' ============================================================
+' 311. S8 REZ 1b (N2): PREVEZIVANJE TRAZI OBA DOKUMENTA (PrijemnicaID).
+' ============================================================
+' Grana po broju i njene kapije dvosmislenosti su obrisane. Bez izvornog ili
+' ciljnog ID-a writer odbija PRE ijednog citanja paleta, i razlog imenuje BAS
+' ID koji fali. Druga brana postoji (prazan skup ID-eva ne nalazi dokument), pa
+' tvrdnja meri RAZLOG, ne samo odbijanje -- inace bi bila placebo.
+'
+'   C2 (8/150326, storniran, PRJ-TEST-C2)  ->  A (1/150326, aktivan, PRJ-TEST-A)
+'
+' Ne meri se apsolutna roba (testovi dele svesku), nego da se nista ne pomeri.
+' SABOTAZA: s8r1b-prevezivanje-bez-izvornog-id.
+Private Sub T_S8R1b_PrevezivanjeTraziObaID()
+    Dim ok As Boolean, upoz As String, gajbDiff As Boolean, pre As String
+
+    pre = GajbicaZaDokument("PRJ-TEST-C2") & "|" & GajbicaZaDokument("PRJ-TEST-A")
+
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
+                                       gajbDiff, "", "PRJ-TEST-A")
+    AssertEq ok, False, "311: prevezivanje bez izvornog ID-a se odbija"
+    AssertEq (InStr(upoz, "Izvorna prijemnica nije zadata") > 0), True, _
+             "311: razlog imenuje izvorni ID koji fali"
+
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
+                                       gajbDiff, "PRJ-TEST-C2", "")
+    AssertEq ok, False, "311: prevezivanje bez ciljnog ID-a se odbija"
+    AssertEq (InStr(upoz, "Ciljna prijemnica nije zadata") > 0), True, _
+             "311: razlog imenuje ciljni ID koji fali"
+
+    AssertEq GajbicaZaDokument("PRJ-TEST-C2") & "|" & GajbicaZaDokument("PRJ-TEST-A"), pre, _
+             "311: odbijeno prevezivanje nije nista pomerilo"
+
+    Dim v As Variant
+    v = EvaluatePaletaReassign(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ)
+    AssertEq CStr(v(0)), "NONE", "311: presuda bez ID-eva ne bira dokument po broju"
+End Sub
+
+' ============================================================
+' 312. S8 REZ 1b (PAL-ODL-05): "SKINI PALETE" U OPORAVKU -- JEZGRO.
+' ============================================================
+' Radnja skida aktivne paletne stavke STORNIRANE prijemnice, u sopstvenoj
+' transakciji, kroz isto jezgro kao storno prijemnice. Meri se jezgro
+' (modPaletniList.SkiniPaleteSirocadi_TX); UI omotac ima samo MsgBox potvrde, koji
+' u run_vba visi.
+'
+'   A  kupac 1, broj X, 12 gajbi -- prvo AKTIVNA (odbija se), pa stornirana bez
+'      skidanja paleta (sirocad)
+'   B  kupac 2, broj X, 10 gajbi -- aktivna; njene stavke moraju ostati iste
+'
+' Preradjena paleta se odbija u istom jezgru storna (BFP Test_S6K4_*); ovde se
+' ne ponavlja, jer bi test pisao tblPaleta.
+' SABOTAZA: s8r1b-skini-aktivnu.
+Private Sub T_S8R1b_SkiniPaleteJezgro()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, prevPal As String
+    Dim redoviPre As String, redoviPosle As String
+    Dim zbrA As String, zbrB As String, t As String, brojX As String
+    Dim resA As String, resB As String
+    Dim n As Long, razlog As String, otA As String, otB As String
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    redoviPre = S8R1aBrojRedova()
+    On Error GoTo CleanUp
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    ZasejOpticajVozacu
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    S6K8IzdataZbirna "S8SA", zbrA
+    S6K8IzdataZbirna "S8SB", zbrB, FX_VOZAC, FX_KUPAC2
+    t = Format$(Now, "hhnnss")
+    brojX = "T-S8S-" & t
+    resA = S8R1bPrijemnica(brojX, zbrA, FX_KUPAC, 120, 12)
+    resB = S8R1bPrijemnica(brojX, zbrB, FX_KUPAC2, 90, 10)
+    AssertEq GajbicaZaDokument(resA) & "|" & GajbicaZaDokument(resB), "12|10", _
+             "312 preduslov: A i B su upisani i paletizovani"
+    otA = S8R1aOtisak(resA)
+    otB = S8R1aOtisak(resB)
+
+    n = modPaletniList.SkiniPaleteSirocadi_TX(resA, razlog)
+    AssertEq n & "|" & S8R1aOtisak(resA), "0|" & otA, "312: palete aktivne prijemnice se ne skidaju"
+    AssertEq (InStr(razlog, "aktivna") > 0), True, "312: razlog imenuje aktivnu prijemnicu"
+
+    AssertEq modStorno.StornoPrijemnica_TX(resA, False), True, _
+             "312 preduslov: A je stornirana, palete ostaju"
+    n = modPaletniList.SkiniPaleteSirocadi_TX(resA, razlog)
+    AssertEq (n > 0), True, "312: skinute su palete stornirane prijemnice"
+    AssertEq (InStr(S8R1aOtisak(resA), "|gajb=0|neto=0|") > 0), True, _
+             "312: stornirana prijemnica vise nema robu na paletama"
+    AssertEq S8R1aOtisak(resB), otB, "312: palete drugog kupca istog broja su netaknute"
+
+    n = modPaletniList.SkiniPaleteSirocadi_TX(resA, razlog)
+    AssertEq n, 0, "312: drugo skidanje nema sta da skine"
+    n = modPaletniList.SkiniPaleteSirocadi_TX("", razlog)
+    AssertEq n, 0, "312: red bez PrijemnicaID se odbija"
+
+    Err.Clear   ' zaostatak pomocnika pod Resume Next nije pad testa (KI-053)
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    redoviPosle = S8R1aBrojRedova()
+    On Error GoTo 0
+    If errNum <> 0 Then
+        If redoviPosle <> redoviPre Then errDesc = errDesc & " [rollback nije vratio redove: " & _
+                                                   redoviPre & " -> " & redoviPosle & "]"
+        Err.Raise errNum, "modTest.T_S8R1b_SkiniPaleteJezgro", errDesc
+    End If
+    AssertEq redoviPosle, redoviPre, "312: rollback vraca sve upise testa"
+End Sub
+
+' ============================================================
+' 313. S8 REZ 1b (N9, KI-056): OPORAVAK VIDI SVAKI DOKUMENT ISTOG BROJA.
+' ============================================================
+' "Nedovrseno" je deduplikovalo osirotele redove po BROJU: drugi dokument istog
+' broja nije dolazio u listu, a context ispravke jednog kupca je sakrivao palete
+' drugog. Od 1b dedup ide po ID-u (StorniraniDocID contexta, PrijemnicaID reda).
+' Necitljiva kolona identiteta vise ne skracuje listu nemo: redovi ostaju, a lista
+' javlja red GRESKA (S8R1B-REV-01). Potvrda "Prevezi/Skini palete" UVEK imenuje
+' dokument i kupca, nezavisno od toga sta je u mrezi (KI-056, S8R1B-REV-02).
+'
+'   A  kupac 1, broj X, 4 gajbe  -- stornirana bez skidanja paleta
+'   B  kupac 2, broj X, 3 gajbe  -- stornirana bez skidanja paleta
+'
+' Nivo: LOGICKI dokument (red liste po PrijemnicaID-u), ne broj.
+' SABOTAZE: s8r1b-nedovrseno-po-broju, s8r1b-nedovrseno-kvar-tiho,
+' s8r1b-nedovrseno-izvor-tiho, s8r1b-potvrda-bez-dokumenta.
+Private Sub T_S8R1b_NedovrsenoPoIdentitetu()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, prevPal As String
+    Dim redoviPre As String, redoviPosle As String
+    Dim zbrA As String, zbrB As String, t As String, brojX As String
+    Dim resA As String, resB As String
+    Dim cid As String, opis As String, nKvar As Long, nGreska As Long
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    redoviPre = S8R1aBrojRedova()
+    On Error GoTo CleanUp
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    ZasejOpticajVozacu
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    S6K8IzdataZbirna "S8NA", zbrA
+    S6K8IzdataZbirna "S8NB", zbrB, FX_VOZAC, FX_KUPAC2
+    t = Format$(Now, "hhnnss")
+    brojX = "T-S8N-" & t
+    resA = S8R1bPrijemnica(brojX, zbrA, FX_KUPAC, 40, 4)
+    resB = S8R1bPrijemnica(brojX, zbrB, FX_KUPAC2, 30, 3)
+    AssertEq (modStorno.StornoPrijemnica_TX(resA, False) And _
+              modStorno.StornoPrijemnica_TX(resB, False)), True, _
+             "313 preduslov: A i B su stornirane, palete ostaju"
+
+    AssertEq S8R1bNedRedova("OSIROCENE_PALETE", brojX), 2, _
+             "313: dva dokumenta istog broja sa osirotelim paletama daju dva reda"
+
+    modStornoRecovery.NedovrsenoKvarTestSet "ID_KOLONA"
+    nKvar = S8R1bNedRedova("OSIROCENE_PALETE", brojX)
+    nGreska = S8R1bNedRedova(modStornoRecovery.KIND_GRESKA_CITANJA, "Prijemnica (palete)")
+    modStornoRecovery.NedovrsenoKvarTestSet ""
+    AssertEq nKvar, 2, "313: necitljiva kolona identiteta ne sakriva osirotele dokumente"
+    AssertEq nGreska, 1, "313: necitljiva kolona identiteta se javlja kao red GRESKA"
+
+    ' Kvar IZVORNOG citaca (GetPrijemniceSaOsirocenimPaletama dize gresku iz EH puta):
+    ' lista nema redove paleta, ali JAVLJA da ih nije procitala.
+    modStornoRecovery.NedovrsenoKvarTestSet "IZVOR"
+    nKvar = S8R1bNedRedova("OSIROCENE_PALETE", brojX)
+    nGreska = S8R1bNedRedova(modStornoRecovery.KIND_GRESKA_CITANJA, "Prijemnica (palete)")
+    modStornoRecovery.NedovrsenoKvarTestSet ""
+    AssertEq nGreska & "|" & nKvar, "1|0", "313: kvar izvornog citaca se javlja kao red GRESKA"
+
+    opis = modScrOporavak.OpisDokumentaZaPotvrdu(brojX, resA)
+    AssertEq (InStr(opis, resA) > 0 And InStr(opis, FX_KUPAC) > 0), True, _
+             "313: potvrda imenuje dokument i kupca"
+    AssertEq (opis <> modScrOporavak.OpisDokumentaZaPotvrdu(brojX, resB)), True, _
+             "313: potvrde dva dokumenta istog broja se razlikuju"
+
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, _
+              FLOW_DOC_PRIJEMNICA, resA, brojX, _
+              FLOW_DOC_PRIJEMNICA, , , FLOW_DOC_ZBIRNA, , zbrA, _
+              "test 313: ispravka prijemnice A")
+    AssertEq (Len(cid) > 0), True, "313 preduslov: context ispravke za A je kreiran"
+    AssertEq S8R1bNedRedova("OSIROCENE_PALETE", brojX), 1, _
+             "313: context ispravke jednog kupca ne sakriva palete drugog kupca istog broja"
+
+    Err.Clear   ' zaostatak pomocnika pod Resume Next nije pad testa (KI-053)
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    redoviPosle = S8R1aBrojRedova()
+    On Error GoTo 0
+    If errNum <> 0 Then
+        If redoviPosle <> redoviPre Then errDesc = errDesc & " [rollback nije vratio redove: " & _
+                                                   redoviPre & " -> " & redoviPosle & "]"
+        Err.Raise errNum, "modTest.T_S8R1b_NedovrsenoPoIdentitetu", errDesc
+    End If
+    AssertEq redoviPosle, redoviPre, "313: rollback vraca sve upise testa"
+End Sub
+
+' ============================================================
+' 314. S8 REZ 1b (S8R1A-REV-03): "PREVEZI PALETE" IZ OPORAVKA KORIGUJE CILJ.
+' ============================================================
+' Jezgro radnje (PreveziPaleteCore) prevezuje palete izabranog reda na izabrani
+' cilj, po ID-ovima, pa koriguje cilj kad prevezivanje javi razliku gajbi. Do 1b
+' je korekcija stajala u IIf (racuna obe grane) i nije bila merena.
+'
+'   A   kupac 1, broj A, 12 gajbi -- stornirana bez skidanja paleta (sirocad)
+'   A2  kupac 1, broj Y,  8 gajbi -- cilj (njena sveza paletizacija se ponistava)
+'
+' Pre uspesnog prevezivanja: necitljiv status cilja ga odbija (S8R1B-REV-05). Cilj
+' je stvarno aktivan, pa se meri da kapija ne zakljucuje "aktivan" iz kolone koju
+' nije procitala; razlog mora da imenuje kolonu, a nista ne sme da se pomeri.
+' SABOTAZE: s8r1b-prevezi-bez-korekcije, s8r1b-status-cilja-tiho.
+Private Sub T_S8R1b_PreveziPaleteJezgro()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, prevPal As String
+    Dim redoviPre As String, redoviPosle As String
+    Dim zbrA As String, zbrB As String, t As String, brojX As String
+    Dim resA As String, resB As String
+    Dim brojA As String, brojY As String, ok As Boolean, info As String
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    redoviPre = S8R1aBrojRedova()
+    On Error GoTo CleanUp
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    ZasejOpticajVozacu
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    S6K8IzdataZbirna "S8P", zbrA
+    t = Format$(Now, "hhnnss")
+    brojA = "T-S8PA-" & t
+    brojY = "T-S8PY-" & t
+    resA = S8R1bPrijemnica(brojA, zbrA, FX_KUPAC, 120, 12)
+    AssertEq modStorno.StornoPrijemnica_TX(resA, False), True, _
+             "314 preduslov: A je stornirana, palete ostaju"
+    resB = S8R1bPrijemnica(brojY, zbrA, FX_KUPAC, 64, 8)
+    AssertEq GajbicaZaDokument(resA) & "|" & GajbicaZaDokument(resB), "12|8", _
+             "314 preduslov: sirocad A (12) i sveza paletizacija cilja (8)"
+
+    Dim pre5 As String, upoz5 As String, gd5 As Boolean, ok5 As Boolean
+    pre5 = S8R1aOtisak(resA) & "#" & S8R1aOtisak(resB)
+    modPaletniList.PaletaPraznoTestSet "STATUS_CILJA_KOLONA"
+    ok5 = ReassignPaleteToPrijemnica_TX(brojA, brojY, upoz5, True, gd5, resA, resB)
+    modPaletniList.PaletaPraznoTestSet ""
+    AssertEq ok5, False, "314: necitljiv status cilja odbija prevezivanje"
+    AssertEq (InStr(upoz5, "'" & COL_STORNIRANO & "'") > 0), True, _
+             "314: razlog odbijanja imenuje kolonu statusa"
+    AssertEq S8R1aOtisak(resA) & "#" & S8R1aOtisak(resB), pre5, _
+             "314: odbijeno prevezivanje nije nista pomerilo"
+
+    Dim ceka314 As Boolean
+    modScrOporavak.Scr_OpoTestSet "PALETE", "", brojY, , resB
+    ok = modScrOporavak.PreveziPaleteCore(brojA, resA, info, ceka314)
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    AssertEq ok, True, "314: prevezivanje iz Oporavka je proslo"
+    ' Kontra KI-086: smanjenje je korigovano odmah, pa nista ne ceka.
+    AssertEq ceka314, False, "314: korekcija posle prevezivanja je uradjena i ne ceka"
+    AssertEq GajbicaZaDokument(resB) & "|" & GajbicaZaDokument(resA), "8|0", _
+             "314: palete su na cilju i svedene na njegove gajbe"
+
+    Err.Clear   ' zaostatak pomocnika pod Resume Next nije pad testa (KI-053)
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    redoviPosle = S8R1aBrojRedova()
+    On Error GoTo 0
+    If errNum <> 0 Then
+        If redoviPosle <> redoviPre Then errDesc = errDesc & " [rollback nije vratio redove: " & _
+                                                   redoviPre & " -> " & redoviPosle & "]"
+        Err.Raise errNum, "modTest.T_S8R1b_PreveziPaleteJezgro", errDesc
+    End If
+    AssertEq redoviPosle, redoviPre, "314: rollback vraca sve upise testa"
+End Sub
+
+' Prijemnica klase I kroz F4 put (PrijemnicaUpisi), za 312-314. Vraca PrijemnicaID.
+Private Function S8R1bPrijemnica(ByVal broj As String, ByVal brojZbirne As String, _
+                                 ByVal kupac As String, ByVal kg As Double, _
+                                 ByVal gajbe As Long) As String
+    Dim p As Object, poruke As String
+    Set p = NoviPrijemnicaUnos()
+    S8R1aPrijemnica p, broj, brojZbirne, kupac, kg, gajbe
+    S8R1bPrijemnica = modDokUnos.PrijemnicaUpisi(p, poruke)
+    If Len(S8R1bPrijemnica) = 0 Then Err.Raise ERR_ASSERT, "modTest.S8R1bPrijemnica", _
+                                                "preduslov: prijemnica " & broj & " nije upisana: " & poruke
+End Function
+
+' Broj redova liste "Nedovrseno" date vrste za dati poslovni broj.
+Private Function S8R1bNedRedova(ByVal kind As String, ByVal broj As String) As Long
+    Dim c As Collection, i As Long
+    Set c = modStornoRecovery.GetNedovrseno()
+    If c Is Nothing Then Exit Function
+    For i = 1 To c.count
+        If CStr(c(i)("kind")) = kind And CStr(c(i)("ref")) = broj Then
+            S8R1bNedRedova = S8R1bNedRedova + 1
+        End If
+    Next i
+End Function
 
 ' ============================================================
 ' 35. F8: izabran red ostaje izabran do correction context-a
@@ -4295,11 +4844,14 @@ Private Sub T_StornoImpact_PoIdentitetu()
     Dim m As Object, pal As Collection, sm As Object
 
 
-    ' PREDUSLOV: po golom broju uvid stvarno vidi palete OBA dokumenta -- inace
-    ' test ne meri suzavanje nego prazan skup.
-    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA)
+    ' PREDUSLOV: i DRUGI dokument istog broja ima svoju paletu -- inace test ne meri
+    ' suzavanje nego prazan skup. Do S8 reza 2a-1 se to merilo uvidom po golom
+    ' broju (palete OBA dokumenta); taj pad na broj je obrisan (R4, broj je
+    ' labela), pa se preduslov meri identitetom drugog dokumenta.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "PRJ-TEST-Z1")
     Set pal = m("palete")
-    AssertEq pal.count, 2, "preduslov: po golom broju uvid nosi palete OBA dokumenta"
+    AssertEq pal.count, 1, "preduslov: i drugi dokument istog broja ima svoju paletu"
 
     ' NAJVAZNIJE: sa identitetom uvid nosi SAMO palete izabranog dokumenta.
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
@@ -4582,11 +5134,12 @@ Private Sub T_StornoImpact_IdentitetNeDegradira()
                                              "", "", True)
     AssertEq CBool(m("valid")), False, _
              "bez identiteta strog uvid pada -- broj se ne razresava u dokument"
-    ' Van strict-a (test hook, zatecen pozivalac bez ID-a) palete i dalje idu po
-    ' broju, i tada legitimno vide oba dokumenta tog broja.
+    ' Ni van strict-a palete ne idu po broju (S8 rez 2a-1, R4): broj nose dva
+    ' kupca, pa bi uvid po njemu nosio i tudje palete. Do 2a-1 je ovde stajalo
+    ' "legitimno vidi oba dokumenta tog broja".
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
                                              "", "")
-    AssertEq m("palete").count, 2, "i tada legitimno vidi oba dokumenta tog broja"
+    AssertEq m("palete").count, 0, "bez identiteta uvid ne cita palete po broju"
 End Sub
 ' ============================================================
 ' 52. Prost F8 storno zbirne mora da se IZVRSI, ne samo da postoji
@@ -6509,6 +7062,10 @@ End Function
 '   PRJ-TEST-Z2  KUP-TEST-2   paleta PST-TEST-Z2   <- ne sme da se pomeri
 '
 ' Oba nose broj 6/150326, kao u produkciji: broj se racuna po kupcu.
+'
+' Od S8 reza 2b-2 paletna stavka zbirnu ne nosi: zbirna palete je zbirna njene
+' prijemnice (ZbirnaNaStavci je izvedena). Tvrdnje o paletama zato mere da paleta
+' i dalje pripada SVOJOJ prijemnici, pa ide sa njom -- a tudja ostaje sa tudjom.
 Private Sub T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu()
     Dim ok As Boolean
 
@@ -6696,9 +7253,10 @@ Private Function ZbirnaNaPrijemnici(ByVal prijemnicaID As String) As String
                                                     prijemnicaID, COL_PRJ_BROJ_ZBIRNE)))
 End Function
 
+' Zbirna paletne stavke je zbirna NJENE PRIJEMNICE (S8 rez 2a, PAL-ODL-03): od reza
+' 2b-2 paletna stavka broj zbirne ne nosi, pa se cita iz zaglavlja prijemnice.
 Private Function ZbirnaNaStavci(ByVal stavkaID As String) As String
-    ZbirnaNaStavci = Trim$(NzToText(LookupValue(TBL_PALETA_STAVKA, COL_PALS_ID, _
-                                                stavkaID, COL_PALS_BROJ_ZBIRNE)))
+    ZbirnaNaStavci = ZbirnaNaPrijemnici(PrijemnicaNaStavci(stavkaID))
 End Function
 
 ' Upisi generaciju na red po PK-u. Fixture redovi se seju mimo writera, pa
@@ -20996,8 +21554,8 @@ End Sub
 '
 ' Recovery panel u frmDokumenta zove ReassignPrijemnicaToZbirna_TX sa DVA
 ' argumenta -- bez generacije i bez ijedne spoljne kapije -- pa se funkcija
-' brani sama. Veza koju upisuje je GOLA LABELA (COL_PRJ_BROJ_ZBIRNE,
-' COL_PALS_BROJ_ZBIRNE), dakle broj, ne identitet.
+' brani sama. Veza koju upisuje je GOLA LABELA (COL_PRJ_BROJ_ZBIRNE), dakle broj,
+' ne identitet.
 '
 ' Zatecen kod je cilj birao kroz LookupValue po broju, sto vraca PRVI red i ne
 ' gleda ni identitet ni storno. Taj oblik je ovde subsumiran: pitanje vise
@@ -22268,7 +22826,7 @@ Private Sub T_Izv_SlaganjeOtkupOM()
     AssertEq CStr(roba(ukup, 8)), "", "roba OM: kolona razlike je prazna do S3 (ne nula)"
 
     ' (4) SALDO OM: po svakom redu Saldo = Vrednost + Doplata - Isplaceno - Agro
-    ' (Doplata je kolona 8 od F2 doplate, DOPLATA.md par. 6; KO testova 309+
+    ' (Doplata je kolona 8 od F2 doplate, DOPLATA.md par. 6; KO testova 315+
     ' stoje na FX_STANICA, pa bez nje formula ne bi vazila za njihove redove);
     ' 'Isplaceno' kooperanta = rucni prolaz sa NovacRedPripadaStanici;
     ' ambalaza kolona = POSLOVNI saldo kooperanta prema OVOJ stanici na datumDo
@@ -26899,8 +27457,10 @@ Private Sub T_Integritet_VidiDvosmislenBrojIPrazanIdentitet()
              "B8 vidi broj sa dva aktivna dokumenta"
 End Sub
 
-' ZBR-CHILD-01 (Faza 1): kolona za generaciju roditelja postoji na SVA CETIRI
-' deteta. Bez upisa -- meri se sema, ne ponasanje.
+' ZBR-CHILD-01 (Faza 1): kolona za generaciju roditelja postoji na sva TRI deteta
+' (otkup, otpremnica, prijemnica). Bez upisa -- meri se sema, ne ponasanje.
+' tblPaletaStavka je bila cetvrto dete do S8 reza 2b-2: od tada zbirnu cita iz
+' zaglavlja prijemnice, pa kolone NE SME da ima (self-heal je brise).
 '
 ' Tabela koja ispadne iz EnsureSledljivostSchema ne bi pukla odmah: pisci bi
 ' padali tek kad neko poveze bas to dete, a citaoci bi tiho radili po broju. Ovo
@@ -26910,8 +27470,8 @@ Private Sub T_DeteZbirne_ImaKolonuGeneracije()
              "tblOtpremnica ima ZbirnaID"
     AssertEq (GetColumnIndex(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD) > 0), True, _
              "tblPrijemnica ima ZbirnaID"
-    AssertEq (GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD) > 0), True, _
-             "tblPaletaStavka ima ZbirnaID"
+    AssertEq (GetColumnIndex(TBL_PALETA_STAVKA, COL_DETE_ZBIRNA_ROD) = 0), True, _
+             "tblPaletaStavka NEMA trag zbirne (S8 rez 2b-2)"
     AssertEq (GetColumnIndex(TBL_OTKUP, COL_DETE_ZBIRNA_ROD) > 0), True, _
              "tblOtkup ima ZbirnaID"
 
@@ -27193,7 +27753,7 @@ Private Sub T_UtovarB_StornoKapije()
 End Sub
 
 ' ============================================================
-' 309-314. DOPLATA KOOPERANTU -- knjizno odobrenje (docs/DOMEN/DOPLATA.md)
+' 315-320. DOPLATA KOOPERANTU -- knjizno odobrenje (docs/DOMEN/DOPLATA.md)
 ' ============================================================
 ' Svaki test pravi SVOJU kulturu (jedinstvena vrsta) i SVOJE kooperante, pa
 ' kljuc stope pogadja samo njegove otkupe: zbirovi drugih testova se ne
@@ -27203,7 +27763,7 @@ End Sub
 ' pravog pisca, CreateOtkup_TX).
 
 ' ============================================================
-' 309. DOP-02 / DOP-ODL-02, 03: PLAN SABIRA KG PO KLJUCU CENOVNIKA, BEZ UPISA.
+' 315. DOP-02 / DOP-ODL-02, 03: PLAN SABIRA KG PO KLJUCU CENOVNIKA, BEZ UPISA.
 ' ============================================================
 ' Kljuc stope je vrsta + sorta + klasa, tacno kao cenovnik. Plan sabira kg
 ' AKTIVNIH otkupa po kooperantu i stanici; storniran otkup i sorta van stopa ne
@@ -27255,7 +27815,7 @@ Private Sub T_Doplata_PlanSabiraPoKljucu()
 End Sub
 
 ' ============================================================
-' 310. DOP-ODL-04 / 09: JEDAN KO PO KOOPERANTU, UZASTOPNI BROJEVI, OTKUP NETAKNUT.
+' 316. DOP-ODL-04 / 09: JEDAN KO PO KOOPERANTU, UZASTOPNI BROJEVI, OTKUP NETAKNUT.
 ' ============================================================
 ' Obracun pravi jedan KO po kooperantu, pod jednim ObracunID-em. Kooperant koji
 ' je predavao na dve stanice ima JEDAN KO sa stavkama po stanici. Broj je
@@ -27282,7 +27842,7 @@ Private Sub T_Doplata_JedanKOPoKooperantu()
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10), DopStopa(vr, "S1", KLASA_II, 5.5))
     god = Year(Date)
     pre = modDoplata.PoslednjiBrojKO(god)
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 310", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 316", _
                                       False, g, en)
 
     AssertEq g, "", "preduslov: knjizenje prolazi bez greske"
@@ -27304,7 +27864,7 @@ Private Sub T_Doplata_JedanKOPoKooperantu()
 End Sub
 
 ' ============================================================
-' 311. DOP-ODL-03a: PERIOD SA SATOM -- DAN JE DATUM, SAT JE VREME NASTANKA.
+' 317. DOP-ODL-03a: PERIOD SA SATOM -- DAN JE DATUM, SAT JE VREME NASTANKA.
 ' ============================================================
 ' Sat se uzima po pravilu otkupnog lista (modOtkup.OtkupVremeNastanka:
 ' SourceCreatedAt, pa CreatedAt) i samo kad granica sece dan. Granica je
@@ -27357,7 +27917,7 @@ Private Sub T_Doplata_PeriodSaSatom()
 End Sub
 
 ' ============================================================
-' 312. DOP-ODL-06: PONOVLJENA DOPLATA TRAZI POTVRDU, UZ POTVRDU SE PLACA I ONA.
+' 318. DOP-ODL-06: PONOVLJENA DOPLATA TRAZI POTVRDU, UZ POTVRDU SE PLACA I ONA.
 ' ============================================================
 ' Isti kljuc i preklopljen period: bez potvrde pisac vraca pitanje (ne kvar) koje
 ' imenuje raniji KO i ne upisuje nista; uz potvrdu nastaje nov obracun, pa se
@@ -27377,13 +27937,13 @@ Private Sub T_Doplata_PonavljanjeTraziPotvrdu()
     DopOtkup kA, FX_STANICA, kul, vr, "S1", 10, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
 
-    obr1 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 312-1", _
+    obr1 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 318-1", _
                                        False, g1, en1)
     AssertEq g1, "", "preduslov: prva doplata se knjizi"
     broj1 = DopBrojDokumentaKO(obr1, kA)
     n1 = DopBrojRedova(TBL_DOPLATA)
 
-    obr2 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 312-2", _
+    obr2 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 318-2", _
                                        False, g2, en2)
     AssertEq (Len(obr2) = 0 And en2 = modDoplata.DOP_ERR_POTVRDA_PONAVLJANJA), True, _
              "ponovljena doplata nad istim kljucem i periodom trazi potvrdu"
@@ -27391,7 +27951,7 @@ Private Sub T_Doplata_PonavljanjeTraziPotvrdu()
              "pitanje imenuje raniji KO"
     AssertEq DopBrojRedova(TBL_DOPLATA), n1, "bez potvrde se nista ne upisuje"
 
-    obr3 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 312-3", _
+    obr3 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 318-3", _
                                        True, g3, en3)
     AssertEq (Len(obr3) > 0 And obr3 <> obr1), True, "uz potvrdu nastaje nov obracun"
     AssertEq Format$(DopIznosKooperanta(kA), "0.00"), Format$(200, "0.00"), _
@@ -27401,7 +27961,7 @@ Private Sub T_Doplata_PonavljanjeTraziPotvrdu()
 End Sub
 
 ' ============================================================
-' 313. DOP-03: STORNO KO -- IZLAZI IZ ZBIROVA, BROJ SE NE OSLOBADJA.
+' 319. DOP-03: STORNO KO -- IZLAZI IZ ZBIROVA, BROJ SE NE OSLOBADJA.
 ' ============================================================
 ' Storno je po DoplataID-u: KO jednog kooperanta izlazi, KO drugog iz istog
 ' obracuna ostaje. Storno celog obracuna gasi ostatak; prazan obracun se ne
@@ -27423,7 +27983,7 @@ Private Sub T_Doplata_StornoIzlaziIzZbira()
     DopOtkup kB, FX_STANICA, kul, vr, "S1", 7, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
 
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 313", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 319", _
                                       False, g, en)
     AssertEq g, "", "preduslov: obracun se knjizi"
     idA = DopIdKO(obr, kA)
@@ -27444,7 +28004,7 @@ Private Sub T_Doplata_StornoIzlaziIzZbira()
 End Sub
 
 ' ============================================================
-' 314. DOP-ODL-01, 02, 10: NEISPRAVAN UNOS SE ODBIJA PRE IJEDNOG UPISA.
+' 320. DOP-ODL-01, 02, 10: NEISPRAVAN UNOS SE ODBIJA PRE IJEDNOG UPISA.
 ' ============================================================
 ' Svaki slucaj menja JEDAN parametar ispravnog unosa; kontrola na kraju pokazuje
 ' da isti unos bez te izmene prolazi -- odbijanje je zbog kapije, ne postavke.
@@ -27492,12 +28052,12 @@ Private Sub T_Doplata_OdbijaNeispravanUnos()
              "stopa bez ijednog otkupa obara ceo obracun"
     AssertEq DopBrojRedova(TBL_DOPLATA), n0, "nijedno odbijanje ne upisuje KO"
 
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), dobro, "test 314", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), dobro, "test 320", _
                                       False, g, en)
     AssertEq (Len(obr) > 0 And Len(g) = 0), True, "kontrola: isti unos bez izmene prolazi"
 End Sub
 
-' ---- pomocnici testova 309-314 -------------------------------------------
+' ---- pomocnici testova 315-320 -------------------------------------------
 
 ' Jedinstven deo imena za maticne podatke jednog testa.
 Private Function DopJedinstven() As String
@@ -27657,7 +28217,7 @@ Private Function DopOdbijeno(ByVal stope As Collection, ByVal periodOd As Date, 
                              ByVal periodDo As Date, ByVal datum As Date, _
                              ByVal deo As String) As Boolean
     Dim g As String, en As Long, obr As String
-    obr = modDoplata.KnjiziDoplatu_TX(datum, periodOd, periodDo, stope, "test 314", False, g, en)
+    obr = modDoplata.KnjiziDoplatu_TX(datum, periodOd, periodDo, stope, "test 320", False, g, en)
     DopOdbijeno = (Len(obr) = 0 And InStr(1, g, deo, vbTextCompare) > 0)
 End Function
 
@@ -27728,7 +28288,7 @@ Private Function DopIznosKooperanta(ByVal koopID As String) As Double
 End Function
 
 ' ============================================================
-' 315. DOPLATA F2: KARTICA -- JEDAN RED PO KO, ZADUZENJE, POCETNO STANJE.
+' 321. DOPLATA F2: KARTICA -- JEDAN RED PO KO, ZADUZENJE, POCETNO STANJE.
 ' ============================================================
 ' KO je red kartice kooperanta na datum knjizenja (DOP-ODL-04): zaduzenje =
 ' iznos KO, opis pocinje recju "Doplata" i nosi kg x stopa, ref-kljuc je
@@ -27750,7 +28310,7 @@ Private Sub T_Doplata_KarticaZaduzenje()
     kA = DopKooperant(b & "-A")
     DopOtkup kA, FX_STANICA, kul, vr, "S1", 10, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 315", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 321", _
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
     idA = DopIdKO(obr, kA)
@@ -27812,7 +28372,7 @@ Private Sub T_Doplata_KarticaZaduzenje()
 End Sub
 
 ' ============================================================
-' 316. DOPLATA F2: SALDO OM -- KOLONA 8, PO STANICI I DATUMU KNJIZENJA.
+' 322. DOPLATA F2: SALDO OM -- KOLONA 8, PO STANICI I DATUMU KNJIZENJA.
 ' ============================================================
 ' Stavka KO pripada stanici na kojoj je roba predata, pa Saldo OM svake stanice
 ' vidi svoj deo; period je po datumu knjizenja, ne po datumu otkupa. Saldo =
@@ -27840,7 +28400,7 @@ Private Sub T_Doplata_SaldoOMPoStanici()
     DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 4, 0
     DopOtkup kB, FX_STANICA, kul, vr, "S1", 6, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 316", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 322", _
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
 
@@ -27902,7 +28462,7 @@ Private Sub T_Doplata_SaldoOMPoStanici()
 End Sub
 
 ' ============================================================
-' 317. DOPLATA F2: PWA IZVOZ SALDA -- KOLONA DOPLATA, SALDO JE UKLJUCUJE.
+' 323. DOPLATA F2: PWA IZVOZ SALDA -- KOLONA DOPLATA, SALDO JE UKLJUCUJE.
 ' ============================================================
 ' Tab SaldoOMDetail (PWA ga cita po imenu kolone) dobija kolonu Doplata na kraju;
 ' saldo = vrednost + doplata - isplaceno - agro. Meri se produkcioni seam
@@ -27919,7 +28479,7 @@ Private Sub T_Doplata_PWASaldoDetalj()
     kA = DopKooperant(b & "-A")
     DopOtkup kA, FX_STANICA, kul, vr, "S1", 14, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 317", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 323", _
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
 
@@ -27950,7 +28510,7 @@ Private Function DopSaldoKol(ByVal s As Variant, ByVal naziv As String, ByVal ko
 End Function
 
 ' ============================================================
-' 318. DOPLATA F3: PAPIR KO -- BROJ, KOOPERANT, STAVKE, ZBIR; STORNIRAN SE NE STAMPA.
+' 324. DOPLATA F3: PAPIR KO -- BROJ, KOOPERANT, STAVKE, ZBIR; STORNIRAN SE NE STAMPA.
 ' ============================================================
 ' Knjizno odobrenje se stampa iz istog citaca koji puni karticu, pa papir i
 ' kartica kazu isti iznos. Storniran KO nema papir: StampajKO vraca razlog
@@ -27969,7 +28529,7 @@ Private Sub T_Doplata_StampaKO()
     DopOtkup kA, FX_STANICA, kul, vr, "S1", 10, 0
     DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 4, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 318", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 324", _
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
     idA = DopIdKO(obr, kA)
@@ -27999,7 +28559,7 @@ Private Sub T_Doplata_StampaKO()
 End Sub
 
 ' ============================================================
-' 319. DOPLATA F3: EKRAN -- STOPE, PREGLED, PITANJE, KNJIZENJE, STORNO.
+' 325. DOPLATA F3: EKRAN -- STOPE, PREGLED, PITANJE, KNJIZENJE, STORNO.
 ' ============================================================
 ' Ekran nema svoje racunice: stopa prolazi istu proveru kao pisac, pregled je
 ' isti plan koji pisac izvrsava, "Knjizi" pita sa brojkama pre upisa, a bez
@@ -28031,7 +28591,7 @@ Private Sub T_Doplata_EkranTok()
 
     modScrDoplata.Scr_DopUnosTestSet Format$(Date, "dd.mm.yyyy"), _
         Format$(DopJuceOd(), "dd.mm.yyyy"), "00:00", Format$(DopJuceOd(), "dd.mm.yyyy"), "23:59", _
-        "test 319"
+        "test 325"
     AssertEq modScrDoplata.Scr_DopPregledTest(), "", "preduslov: pregled prolazi"
     d = modScrDoplata.Scr_Rows("sve", "")
     n = CLng(d(2))
@@ -28071,7 +28631,7 @@ Private Sub T_Doplata_EkranTok()
 End Sub
 
 ' ============================================================
-' 320. DOPLATA F3: UGOVOR EKRANA -- REGISTAR, LISTE, RADNJE, KATALOG PORUKA.
+' 326. DOPLATA F3: UGOVOR EKRANA -- REGISTAR, LISTE, RADNJE, KATALOG PORUKA.
 ' ============================================================
 ' Ekran je u registru sa svojim modulom; lista i radnji ima koliko staje u
 ' bazene ljuske; svaka lista, radnja, kolona i opis ekrana ima naziv u katalogu
@@ -28150,7 +28710,7 @@ Private Function DopObracunKO(ByVal doplataID As String) As String
 End Function
 
 ' ============================================================
-' 321. DOP-ODL-07: KNJIZEN KO JE SNIMAK, PROMENA OSNOVICE JE SIGNAL.
+' 327. DOP-ODL-07: KNJIZEN KO JE SNIMAK, PROMENA OSNOVICE JE SIGNAL.
 ' ============================================================
 ' Storno otkupa posle knjizenja ne menja KO (iznos ostaje), ali ga integritet
 ' vidi: plan obracuna racunat ponovo nad danasnjim otkupima daje drugu
@@ -28172,7 +28732,7 @@ Private Sub T_Doplata_SignalOsnovice()
     kA = DopKooperant(b & "-A")
     o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 321", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 327", _
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
     brojA = DopBrojDokumentaKO(obr, kA)
@@ -28213,7 +28773,7 @@ Private Function DopOdstupanjaObracuna(ByVal obracunID As String) As String
 End Function
 
 ' ============================================================
-' 322. DOP-ODL-05 (F4): OTVORENO KO JE OBAVEZA U NALOZIMA ZA BANKU.
+' 328. DOP-ODL-05 (F4): OTVORENO KO JE OBAVEZA U NALOZIMA ZA BANKU.
 ' ============================================================
 ' KO je obaveza firme prema kooperantu kao i otkupni blok: nalozi ga nose pod
 ' kljucem bloka (DoplataID), sa brojem KO kao pozivom na broj -- isti broj po
@@ -28236,7 +28796,7 @@ Private Sub T_Doplata_OtvorenoKOUNalozima()
     DopTekuciRacun kA, "160-0000000" & Right$("000000" & b, 6) & "-11"
     DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 10, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 322", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 328", _
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
     idA = DopIdKO(obr, kA)
@@ -28268,7 +28828,7 @@ Private Sub T_Doplata_OtvorenoKOUNalozima()
     AssertEq (Len(s) = 0 And Len(odb) > 0), True, "saldo kapija odbija nalog preko otvorenog KO"
 
     If Len(modNovac.SaveNovac_TX("AV-" & b, Date, "OM", FX_STANICA, "OM", FX_STANICA, kA, "", "", _
-                                 NOV_VIRMAN_AVANS_KOOP, 0, 30, "test 322 avans")) = 0 Then
+                                 NOV_VIRMAN_AVANS_KOOP, 0, 30, "test 328 avans")) = 0 Then
         Err.Raise vbObjectError + 9405, "modTest.T_Doplata_OtvorenoKOUNalozima", "Avans nije upisan."
     End If
     Set ids = CreateObject("Scripting.Dictionary")
@@ -28283,7 +28843,7 @@ Private Sub T_Doplata_OtvorenoKOUNalozima()
 End Sub
 
 ' ============================================================
-' 323. DOP-ODL-05 (F4): IZVOD PO BROJU KO ZATVARA KO, A NE OTKUP NI AVANS.
+' 329. DOP-ODL-05 (F4): IZVOD PO BROJU KO ZATVARA KO, A NE OTKUP NI AVANS.
 ' ============================================================
 ' Poziv na broj = broj KO je jak kljuc na taj KO: plan ga imenuje, pisac knjizi
 ' VirmanFirmaKoop vezan DoplataID-em na MATICNOJ stanici. Delimicna isplata
@@ -28303,7 +28863,7 @@ Private Sub T_Doplata_IzvodPoBrojuKO()
     kA = DopKooperant(b & "-A")
     DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 10, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 323", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 329", _
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
     idA = DopIdKO(obr, kA)
@@ -28351,7 +28911,7 @@ Private Sub T_Doplata_IzvodPoBrojuKO()
 End Sub
 
 ' ============================================================
-' 324. DOP-05 (F4): STORNO KO ODVEZUJE ISPLATU, NE STORNIRA JE.
+' 330. DOP-05 (F4): STORNO KO ODVEZUJE ISPLATU, NE STORNIRA JE.
 ' ============================================================
 ' Isplata KO je stvarno data, pa ostaje u tblNovac i gubi vezu DoplataID; virman
 ' tako opet postaje slobodan avans kooperanta -- isto pravilo kao kod storna
@@ -28370,7 +28930,7 @@ Private Sub T_Doplata_StornoOdvezujeIsplatu()
     kA = DopKooperant(b & "-A")
     DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 10, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 324", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 330", _
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
     idA = DopIdKO(obr, kA)
@@ -28477,7 +29037,7 @@ Private Function DopKORedovi(ByVal r As Variant) As String
 End Function
 
 ' ============================================================
-' 325. F4b: PRIMENA SLOBODNOG AVANSA NA KO -- ISTI MOTOR KAO ZA OTKUP.
+' 331. F4b: PRIMENA SLOBODNOG AVANSA NA KO -- ISTI MOTOR KAO ZA OTKUP.
 ' ============================================================
 ' Avans manji od ostatka KO se veze ceo; veci se deli: deo do ostatka postaje
 ' nov red vezan za KO, ostatak ostaje slobodan avans na izvornom redu. Avans
@@ -28496,7 +29056,7 @@ Private Sub T_Doplata_AvansNaKO()
     kB = DopKooperant(b & "-B")
     DopOtkup kA, FX_STANICA, kul, vr, "S1", 10, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 325", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 331", _
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
     idA = DopIdKO(obr, kA)
@@ -28531,7 +29091,7 @@ Private Sub T_Doplata_AvansNaKO()
 End Sub
 
 ' ============================================================
-' 326. F4b: RUCNO MAPIRANJE STAVKE IZVODA NA KO.
+' 332. F4b: RUCNO MAPIRANJE STAVKE IZVODA NA KO.
 ' ============================================================
 ' Lista cilja za kooperanta nudi i njegova KO (posle otkupa). Izabran KO -- ili
 ' prazan izbor uz poziv na broj KO -- je dokument rucnog mapiranja; pitanje o
@@ -28552,7 +29112,7 @@ Private Sub T_Doplata_IzvodRucnoNaKO()
     kA = DopKooperant(b & "-A")
     DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 10, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 326", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 332", _
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
     idA = DopIdKO(obr, kA)
@@ -28599,7 +29159,7 @@ Private Sub T_Doplata_IzvodRucnoNaKO()
 End Sub
 
 ' ============================================================
-' 327. F4b / DOP-ODL-05: GOTOVINSKA ISPLATA KO NA MATICNOJ STANICI.
+' 333. F4b / DOP-ODL-05: GOTOVINSKA ISPLATA KO NA MATICNOJ STANICI.
 ' ============================================================
 ' Polje "otvoreni blok" na F5 nosi i KO. Izabran KO ide u doplataID (otkupID
 ' ostaje prazan); kapija trazi MATICNU stanicu kooperanta i iznos do trenutnog
@@ -28618,7 +29178,7 @@ Private Sub T_Doplata_GotovinaNaMaticnoj()
     kA = DopKooperant(b & "-A")
     DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 10, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
-    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 327", _
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 333", _
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
     idA = DopIdKO(obr, kA)
@@ -28645,7 +29205,7 @@ Private Sub T_Doplata_GotovinaNaMaticnoj()
              "isplata umanjuje ostatak KO"
 
     AssertEq modDokumenta.SaveOMUlaz_TX(Date, "G4-" & b, FX_STANICA_B, FX_STANICA_B, vr, 10, kA, _
-                                        "test 327", "", NOV_VIRMAN_FIRMA_KOOP, idA), False, _
+                                        "test 333", "", NOV_VIRMAN_FIRMA_KOOP, idA), False, _
              "pisac odbija gotovinu za KO na stanici koja nije maticna"
     AssertEq DopNovacPoBroju("G4-" & b), "", "odbijena isplata ne ostavlja red novca"
 End Sub

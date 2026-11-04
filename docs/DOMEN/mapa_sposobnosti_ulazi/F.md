@@ -512,11 +512,8 @@ od ukupno 287 u `src-vba/*.bas`).
 | `modBankaImport.ImportBankaInbox:193` | D-026 (isti lanac, `ImportBankaInbox_WithDrivePull`) |
 | `modPaletniListUI.ExportPaletniListPDF_Prompt:14` | C-040 / C-051 |
 | `modPaletniListUI.ExportPreradaPDF_Prompt:39` | C-040 |
-| `modPaletniListUI.SavePrerada_Prompt:65` | C-055 |
-| `modPaletniListUI.PrintNepotpunePalete_Prompt:107` | C-054 |
-| `modPaletniListUI.ClosePaleta_Prompt:123` | C-052 |
-| `modPaletniListUI.StornoPaleta_Prompt:149` | C-053 |
-| `modPaletniListUI.StornoPrerada_Prompt:179` | C-058 |
+| `modPaletniListUI.PrintNepotpunePalete_Prompt:70` | C-054 |
+| ~~`modPaletniListUI.SavePrerada_Prompt`, `ClosePaleta_Prompt`, `StornoPaleta_Prompt`, `StornoPrerada_Prompt`~~ | obrisani u S8 rezu 1b (`PAL-ODL-04`): birali su po broju i tekućoj godini, prvi pogodak. C-052, C-053, C-055 i C-058 nosi ekran Palete, po ID-u |
 
 ### Mrtvo / tehnicko (NIJE sposobnost)
 

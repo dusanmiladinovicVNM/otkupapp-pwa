@@ -439,6 +439,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | Prerada 2.0 — proizvodno jezgro (model, faze, odluke) | `docs/PRERADA_2_MODEL_I_PLAN.md` |
 | SEF (e-fakture) | `docs/SEF_LIFECYCLE_MANUAL.md` |
 | **Faktura — identitet, linija, storno i SEF** (`FAK-IDENT-01/02`, `FAK-ODL-01..05`) | `docs/DOMEN/FAKTURA.md` |
+| **Palete i prerada — identitet, količina i odluke S8** (`PAL-IDENT-01/02`, `PAL-INV-01/02`, `PAL-ODL-01..07`) | `docs/DOMEN/PALETE.md` |
 | Provere integriteta | `docs/INTEGRITET_PROVERE.md` |
 | Arhitektonski ugovor (A1–A12, kapije, Pre-Flight) | `docs/DOMEN/ARCHITECTURE_CONTRACT.md` |
 | Ciljni model dokumenata (header + stavke, PK/FK, kardinaliteti) | `docs/DOMEN/DOCUMENT_HEADER_LINES.md` |
@@ -447,7 +448,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | **Ambalaza — model podataka, AMB-01..04** | `docs/DOMEN/AMBALAZA.md` — jednostrana knjiga, nosioci salda, matrica knjiženja; **tri predloga čekaju operatera** |
 | Identitet zbirne, vezivanje prijemnice (ZBR-IDENT-01) | `docs/DOMEN/ZBR_IDENTITET.md` — **superseded posle refaktora** |
 | Novac pri stornu / ispravci otkupa | `docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md` — **OTVORENO, čeka operatera** |
-| Doplata kooperantu — knjižno odobrenje po kulturi i klasi (`DOP-ODL-01..13`, `DOP-01..11`) | `docs/DOMEN/DOPLATA.md` — **F1–F4b u kodu (šema, pisac, storno, kartica, Saldo OM, PWA, ekran, papir KO, signal DOP1, isplata KO kroz naloge, izvod, gotovinu i avans; testovi 309–327), ponašanje neverifikovano** |
+| Doplata kooperantu — knjižno odobrenje po kulturi i klasi (`DOP-ODL-01..13`, `DOP-01..11`) | `docs/DOMEN/DOPLATA.md` — **F1–F4b u kodu (šema, pisac, storno, kartica, Saldo OM, PWA, ekran, papir KO, signal DOP1, isplata KO kroz naloge, izvod, gotovinu i avans; testovi 315–333), ponašanje neverifikovano** |
 | Poznata ograničenja | `docs/KNOWN_ISSUES.md` |
 | Otkup / dokumenta — pravila izmene | `.claude/rules/otkup-i-dokumenta.md` |
 | Verifikacija i definicija gotovog | `CLAUDE.md` §5, `.claude/rules/testovi.md` |

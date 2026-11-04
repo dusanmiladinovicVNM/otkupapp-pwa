@@ -1366,6 +1366,14 @@ Public Function StornoPaleta(ByVal palID As String) As Boolean
                   "Paleta je preradjena - prvo stornirajte preradu."
     End If
 
+    ' N7 (PAL-ODL-06, S8 rez 1c): paleta koja nosi robu AKTIVNE prijemnice se ne
+    ' stornira -- storno bi skinuo robu dokumenta koji vazi, i su-stanara. Sirocad
+    ' (roba stornirane prijemnice) i prazna paleta prolaze. Unutrasnji pozivalac
+    ' (SkiniPaletneStavke) zove ovo samo nad paletom bez aktivnih stavki.
+    Dim razlogRobe As String
+    razlogRobe = modPaletniList.PaletaAktivnaRobaRazlog(palID)
+    If Len(razlogRobe) > 0 Then Err.Raise ERR_STORNO_BASE + 43, SRC, razlogRobe
+
     MarkRowStornirano TBL_PALETA, rowPal, SRC
 
     ' storniraj stavke palete (prijemnice se time oslobadjaju)

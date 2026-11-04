@@ -38,6 +38,16 @@ Option Explicit
 '  T08 detach: su-stanar netaknut; prazna fantom paleta stornirana
 '  T09 Adjust blokiran na preradjenoj paleti
 '  T10 zbirna re-point: i paletne stavke dobijaju novu zbirnu
+'  T12 korekcija po ID-u: dva kupca isti broj, rubna paleta (S8 rez 1a, N1)
+'  T13 korekcija: klasa dodata ispravkom (sveza paletizacija pod kljucem linije)
+'  T14 korekcija staje na paletnoj stavci bez linije dokumenta (stari oblik)
+'
+' Prevezivanje i presuda (T02-T07, T11) od S8 reza 1b traze oba PrijemnicaID-a;
+' po broju nema izbora (N2).
+'
+' Korekcija (T04-T09, T12, T13) ide po PrijemnicaID-u, a paletne stavke se seju
+' SA kljucem linije (PrijemnicaStavkaID) -- stavka bez kljuca je stari oblik i
+' korekcija je odbija (S8 rez 1a).
 '
 ' Rezultat: MsgBox rezime + pun izvestaj na listu "_TestPalete" + Immediate.
 ' ============================================================
@@ -115,6 +125,9 @@ Public Sub RunPaleteTestSuite()
     T09_AdjustBlokPreradjena
     T10_ZbirnaRepointStavke
     T11_RelabelBlokNaDeljenojPaleti
+    T12_KorekcijaPoIDDvaKupcaIstiBroj
+    T13_KlasaDodataIspravkom
+    T14_StavkaBezLinijeZaustavljaKorekciju
 
     tx.RollbackTx                ' UVEK vrati sve - test ne ostavlja podatke
     Set tx = Nothing
@@ -152,7 +165,7 @@ End Sub
 Private Sub T01_PaletizacijaISpill()
     Const S As String = "T01 paletizacija+spill: "
     MakePrij "TSTPRJ-01", "TST-P1", "TST-Z1", "I", 250, 25, "TST-S01"
-    Paletize "TSTPRJ-01", "TST-P1", "TST-Z1", "I", 250, 25, "TST-S01"
+    Paletize "TSTPRJ-01", "I", 250, 25, "TST-S01"
 
     Dim st As Variant: st = StInfo("TST-P1")
     ChkEq StCnt("TST-P1"), 3, S & "3 stavke"
@@ -178,7 +191,7 @@ Private Sub T01_PaletizacijaISpill()
     Dim hadErr As Boolean
     On Error Resume Next
     Err.Clear
-    Paletize "TSTPRJ-01", "TST-P1", "TST-Z1", "I", 250, 25, "TST-S01"
+    Paletize "TSTPRJ-01", "I", 250, 25, "TST-S01"
     hadErr = (Err.Number <> 0)
     Err.Clear
     On Error GoTo 0
@@ -190,15 +203,15 @@ End Sub
 Private Sub T02_ReassignCleanKgSync()
     Const S As String = "T02 clean re-point + kg-sync: "
     MakePrij "TSTPRJ-02", "TST-P2A", "TST-Z2", "I", 80, 8, "TST-S02"
-    Paletize "TSTPRJ-02", "TST-P2A", "TST-Z2", "I", 80, 8, "TST-S02"
+    Paletize "TSTPRJ-02", "I", 80, 8, "TST-S02"
     MarkStornoPrij "TST-P2A"
     MakePrij "TSTPRJ-03", "TST-P2B", "TST-Z2", "I", 96, 8, "TST-S02"   ' ispravka: kg 80 -> 96
 
-    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P2A", "TST-P2B")
+    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P2A", "TST-P2B", "TSTPRJ-02", "TSTPRJ-03")
     ChkEq CStr(vv(0)), "CLEAN", S & "verdikt CLEAN"
 
     Dim w As String, gd As Boolean
-    Chk ReassignPaleteToPrijemnica_TX("TST-P2A", "TST-P2B", w, False, gd), S & "reassign uspeo"
+    Chk ReassignPaleteToPrijemnica_TX("TST-P2A", "TST-P2B", w, False, gd, "TSTPRJ-02", "TSTPRJ-03"), S & "reassign uspeo"
     Chk Not gd, S & "gajbDiff = False"
     ChkEq StCnt("TST-P2A"), 0, S & "stara bez aktivnih stavki"
     ChkEq StCnt("TST-P2B"), 1, S & "nova ima 1 stavku"
@@ -217,20 +230,20 @@ End Sub
 Private Sub T03_RelabelGate()
     Const S As String = "T03 relabel gejt: "
     MakePrij "TSTPRJ-04", "TST-P3A", "TST-Z3", "I", 50, 5, "TST-S03"
-    Paletize "TSTPRJ-04", "TST-P3A", "TST-Z3", "I", 50, 5, "TST-S03"
+    Paletize "TSTPRJ-04", "I", 50, 5, "TST-S03"
     MarkStornoPrij "TST-P3A"
     MakePrij "TSTPRJ-05", "TST-P3B", "TST-Z3", "I", 50, 5, "TST-S03B"  ' ispravka: sorta
 
-    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P3A", "TST-P3B")
+    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P3A", "TST-P3B", "TSTPRJ-04", "TSTPRJ-05")
     ChkEq CStr(vv(0)), "RELABEL", S & "verdikt RELABEL"
 
     Dim w As String, gd As Boolean
-    Chk Not ReassignPaleteToPrijemnica_TX("TST-P3A", "TST-P3B", w, False, gd), _
+    Chk Not ReassignPaleteToPrijemnica_TX("TST-P3A", "TST-P3B", w, False, gd, "TSTPRJ-04", "TSTPRJ-05"), _
         S & "bez allowRelabel odbijeno"
     Chk InStr(w, "identitet") > 0, S & "warn objasnjava identitet"
     ChkEq StCnt("TST-P3A"), 1, S & "nista nije promenjeno posle odbijanja"
 
-    Chk ReassignPaleteToPrijemnica_TX("TST-P3A", "TST-P3B", w, True, gd), _
+    Chk ReassignPaleteToPrijemnica_TX("TST-P3A", "TST-P3B", w, True, gd, "TSTPRJ-04", "TSTPRJ-05"), _
         S & "sa allowRelabel uspeo"
     Dim st As Variant: st = StInfo("TST-P3B")
     If StCnt("TST-P3B") = 1 Then
@@ -244,25 +257,29 @@ End Sub
 ' Dual-klasa regresija: stara I=6/II=4, nova I=4/II=6 (agregat 10=10!) mora
 ' da bude GAJBICA (per klasa), a Adjust koriguje OBE klase u mestu + Istorija
 ' nosi deltu po paleti (-2 na I, +2 na II).
+'
+' Od S8 reza 1a je ovo DVOKLASNI dokument: jedno zaglavlje, dve linije, a
+' korekcija ide po njegovom ID-u. Do tada su to bila dva zaglavlja istog broja,
+' koja je korekcija po broju spajala.
 Private Sub T04_PerKlasaVerdiktIAdjust()
     Const S As String = "T04 per-klasa verdikt+adjust: "
     MakePrij "TSTPRJ-06", "TST-P4", "TST-Z4", "I", 60, 6, "TST-S04"
-    Paletize "TSTPRJ-06", "TST-P4", "TST-Z4", "I", 60, 6, "TST-S04"
-    MakePrij "TSTPRJ-07", "TST-P4", "TST-Z4", "II", 40, 4, "TST-S04"
-    Paletize "TSTPRJ-07", "TST-P4", "TST-Z4", "II", 40, 4, "TST-S04"
+    DodajLiniju "TSTPRJ-06", 2, "II", 40, 4
+    Paletize "TSTPRJ-06", "I", 60, 6, "TST-S04"
+    Paletize "TSTPRJ-06", "II", 40, 4, "TST-S04", "PRS-TSTPRJ-06-II"
     MarkStornoPrij "TST-P4"
     MakePrij "TSTPRJ-08", "TST-P5", "TST-Z4", "I", 40, 4, "TST-S04"
-    MakePrij "TSTPRJ-09", "TST-P5", "TST-Z4", "II", 60, 6, "TST-S04"
+    DodajLiniju "TSTPRJ-08", 2, "II", 60, 6
 
-    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P4", "TST-P5")
+    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P4", "TST-P5", "TSTPRJ-06", "TSTPRJ-08")
     ChkEq CStr(vv(0)), "GAJBICA", S & "verdikt GAJBICA (ne CLEAN na isti agregat)"
 
     Dim w As String, gd As Boolean
-    Chk ReassignPaleteToPrijemnica_TX("TST-P4", "TST-P5", w, False, gd), S & "reassign uspeo"
+    Chk ReassignPaleteToPrijemnica_TX("TST-P4", "TST-P5", w, False, gd, "TSTPRJ-06", "TSTPRJ-08"), S & "reassign uspeo"
     Chk gd, S & "gajbDiff = True"
 
     Dim info As String
-    ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TST-P5", "", info), 2, S & "korigovane 2 klase"
+    ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-08", "", info), 2, S & "korigovane 2 klase"
 
     Dim st As Variant: st = StInfo("TST-P5")
     Dim gI As Long, gII As Long, palI As String, palII As String
@@ -286,21 +303,21 @@ End Sub
 Private Sub T05_NeedsChoicePaPrelij()
     Const S As String = "T05 needs-choice + prelij: "
     MakePrij "TSTPRJ-10", "TST-P6A", "TST-Z5", "I", 80, 8, "TST-S05"
-    Paletize "TSTPRJ-10", "TST-P6A", "TST-Z5", "I", 80, 8, "TST-S05"
+    Paletize "TSTPRJ-10", "I", 80, 8, "TST-S05"
     MarkStornoPrij "TST-P6A"
     MakePrij "TSTPRJ-11", "TST-P6B", "TST-Z5", "I", 150, 15, "TST-S05"  ' 8 -> 15
 
     Dim w As String, gd As Boolean, info As String
-    Chk ReassignPaleteToPrijemnica_TX("TST-P6A", "TST-P6B", w, False, gd), S & "reassign uspeo"
+    Chk ReassignPaleteToPrijemnica_TX("TST-P6A", "TST-P6B", w, False, gd, "TSTPRJ-10", "TSTPRJ-11"), S & "reassign uspeo"
     Chk gd, S & "gajbDiff = True"
 
-    ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TST-P6B", "", info), ADJ_NEEDS_CHOICE, _
+    ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-11", "", info), ADJ_NEEDS_CHOICE, _
           S & "bez moda -> ADJ_NEEDS_CHOICE"
     Dim st As Variant: st = StInfo("TST-P6B")
     ChkEq st(1, 3), 8, S & "needs-choice NIJE nista promenio (gajb 8)"
     ChkEqD CDbl(st(1, 4)), 80, S & "needs-choice NIJE nista promenio (neto 80)"
 
-    Chk AdjustPaletaGajbiceZaPrijemnicu_TX("TST-P6B", "PRELIJ", info) >= 1, S & "PRELIJ uspeo"
+    Chk AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-11", "PRELIJ", info) >= 1, S & "PRELIJ uspeo"
     st = StInfo("TST-P6B")
     ChkEq StCnt("TST-P6B"), 2, S & "2 stavke posle preliva"
     If StCnt("TST-P6B") = 2 Then
@@ -318,13 +335,13 @@ End Sub
 Private Sub T06_PrekoKapaciteta()
     Const S As String = "T06 preko kapaciteta: "
     MakePrij "TSTPRJ-12", "TST-P8A", "TST-Z6", "I", 80, 8, "TST-S06"
-    Paletize "TSTPRJ-12", "TST-P8A", "TST-Z6", "I", 80, 8, "TST-S06"
+    Paletize "TSTPRJ-12", "I", 80, 8, "TST-S06"
     MarkStornoPrij "TST-P8A"
     MakePrij "TSTPRJ-13", "TST-P8B", "TST-Z6", "I", 150, 15, "TST-S06"
 
     Dim w As String, gd As Boolean, info As String
-    Chk ReassignPaleteToPrijemnica_TX("TST-P8A", "TST-P8B", w, False, gd), S & "reassign uspeo"
-    Chk AdjustPaletaGajbiceZaPrijemnicu_TX("TST-P8B", "PREKO", info) >= 1, S & "PREKO uspeo"
+    Chk ReassignPaleteToPrijemnica_TX("TST-P8A", "TST-P8B", w, False, gd, "TSTPRJ-12", "TSTPRJ-13"), S & "reassign uspeo"
+    Chk AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-13", "PREKO", info) >= 1, S & "PREKO uspeo"
 
     ChkEq StCnt("TST-P8B"), 1, S & "jedna stavka (bez preliva)"
     Dim st As Variant: st = StInfo("TST-P8B")
@@ -343,13 +360,13 @@ End Sub
 Private Sub T07_SmanjenjeKrozVisePaleta()
     Const S As String = "T07 smanjenje kroz palete: "
     MakePrij "TSTPRJ-14", "TST-P9A", "TST-Z7", "I", 250, 25, "TST-S07"
-    Paletize "TSTPRJ-14", "TST-P9A", "TST-Z7", "I", 250, 25, "TST-S07"
+    Paletize "TSTPRJ-14", "I", 250, 25, "TST-S07"
     MarkStornoPrij "TST-P9A"
     MakePrij "TSTPRJ-15", "TST-P9B", "TST-Z7", "I", 120, 12, "TST-S07"  ' 25 -> 12
 
     Dim w As String, gd As Boolean, info As String
-    Chk ReassignPaleteToPrijemnica_TX("TST-P9A", "TST-P9B", w, False, gd), S & "reassign uspeo"
-    Chk AdjustPaletaGajbiceZaPrijemnicu_TX("TST-P9B", "", info) >= 1, S & "smanjenje bez pitanja"
+    Chk ReassignPaleteToPrijemnica_TX("TST-P9A", "TST-P9B", w, False, gd, "TSTPRJ-14", "TSTPRJ-15"), S & "reassign uspeo"
+    Chk AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-15", "", info) >= 1, S & "smanjenje bez pitanja"
 
     ChkEq StCnt("TST-P9B"), 2, S & "ostale 2 aktivne stavke (treca stornirana)"
     ChkEq StSumG("TST-P9B"), 12, S & "ukupno 12 gajbica"
@@ -375,9 +392,9 @@ End Sub
 Private Sub T08_DetachSuStanarFantom()
     Const S As String = "T08 detach su-stanar+fantom: "
     MakePrij "TSTPRJ-16", "TST-P10", "TST-Z8", "I", 40, 4, "TST-S08"
-    Paletize "TSTPRJ-16", "TST-P10", "TST-Z8", "I", 40, 4, "TST-S08"
+    Paletize "TSTPRJ-16", "I", 40, 4, "TST-S08"
     MakePrij "TSTPRJ-17", "TST-P11", "TST-Z8B", "I", 30, 3, "TST-S08"
-    Paletize "TSTPRJ-17", "TST-P11", "TST-Z8B", "I", 30, 3, "TST-S08"
+    Paletize "TSTPRJ-17", "I", 30, 3, "TST-S08"
 
     Dim stA As Variant: stA = StInfo("TST-P10")
     Dim stB As Variant: stB = StInfo("TST-P11")
@@ -403,7 +420,7 @@ End Sub
 Private Sub T09_AdjustBlokPreradjena()
     Const S As String = "T09 preradjena blokada: "
     MakePrij "TSTPRJ-18", "TST-P12", "TST-Z9", "I", 50, 5, "TST-S09"
-    Paletize "TSTPRJ-18", "TST-P12", "TST-Z9", "I", 50, 5, "TST-S09"
+    Paletize "TSTPRJ-18", "I", 50, 5, "TST-S09"
 
     Dim st As Variant: st = StInfo("TST-P12")
     Dim palRow As Long: palRow = FindRows(TBL_PALETA, COL_PAL_ID, CStr(st(1, 2))).item(1)
@@ -417,7 +434,7 @@ Private Sub T09_AdjustBlokPreradjena()
     RequireUpdateCell TBL_PRIJEMNICA_STAVKE, stRow, COL_PRS_KOL_AMB, 7, "modTestPalete.T09"
 
     Dim info As String
-    ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TST-P12", "", info), ADJ_BLOCKED, _
+    ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-18", "", info), ADJ_BLOCKED, _
           S & "ADJ_BLOCKED na preradjenoj"
     Chk InStr(info, "preradjena") > 0, S & "poruka objasnjava razlog"
     st = StInfo("TST-P12")
@@ -455,7 +472,7 @@ Private Sub T10_ZbirnaRepointStavke()
     TstZbirnaStavka "TSTZBR-B", 50
 
     MakePrij "TSTPRJ-19", "TST-P13", "TST-Z10A", "I", 50, 5, "TST-S10"
-    Paletize "TSTPRJ-19", "TST-P13", "TST-Z10A", "I", 50, 5, "TST-S10"
+    Paletize "TSTPRJ-19", "I", 50, 5, "TST-S10"
 
     Chk ReassignPrijemnicaToZbirna_TX("TST-P13", "TST-Z10B"), S & "re-point uspeo"
 
@@ -476,9 +493,9 @@ Private Sub T11_RelabelBlokNaDeljenojPaleti()
     Const S As String = "T11 relabel blok na deljenoj paleti: "
     ' Dve prijemnice, isti identitet (TST-S11) -> dele istu paletu (4+3 = 7/10).
     MakePrij "TSTPRJ-20", "TST-P14", "TST-Z11", "I", 40, 4, "TST-S11"
-    Paletize "TSTPRJ-20", "TST-P14", "TST-Z11", "I", 40, 4, "TST-S11"
+    Paletize "TSTPRJ-20", "I", 40, 4, "TST-S11"
     MakePrij "TSTPRJ-21", "TST-P15", "TST-Z11B", "I", 30, 3, "TST-S11"
-    Paletize "TSTPRJ-21", "TST-P15", "TST-Z11B", "I", 30, 3, "TST-S11"
+    Paletize "TSTPRJ-21", "I", 30, 3, "TST-S11"
 
     Dim stA As Variant: stA = StInfo("TST-P14")
     Dim palID As String: palID = CStr(stA(1, 2))
@@ -488,11 +505,11 @@ Private Sub T11_RelabelBlokNaDeljenojPaleti()
     MarkStornoPrij "TST-P14"
     MakePrij "TSTPRJ-22", "TST-P16", "TST-Z11", "I", 40, 4, "TST-S11X"  ' druga sorta
 
-    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P14", "TST-P16")
+    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P14", "TST-P16", "TSTPRJ-20", "TSTPRJ-22")
     ChkEq CStr(vv(0)), "RELABEL", S & "verdikt RELABEL"
 
     Dim w As String, gd As Boolean
-    Chk Not ReassignPaleteToPrijemnica_TX("TST-P14", "TST-P16", w, True, gd), _
+    Chk Not ReassignPaleteToPrijemnica_TX("TST-P14", "TST-P16", w, True, gd, "TSTPRJ-20", "TSTPRJ-22"), _
         S & "BLOKIRANO cak i uz allowRelabel=True"
     Chk InStr(w, "BLOKIRANO") > 0, S & "outWarn objasnjava blokadu"
 
@@ -507,6 +524,88 @@ Private Sub T11_RelabelBlokNaDeljenojPaleti()
     ' Bezbedan izlaz postoji: skini stavke stare pa nov unos (detach ne dira su-stanara).
     ChkEq SkiniPoID("TSTPRJ-20"), 1, S & "detach kao bezbedan izlaz radi"
     ChkEq StCnt("TST-P15"), 1, S & "su-stanar i posle detach-a netaknut"
+End Sub
+
+' S8 REZ 1a (N1, PAL-IDENT-01): dve prijemnice RAZLICITIH kupaca nose ISTI broj
+' (broj se racuna po kupcu) i dele rubnu paletu (4 + 3 = 7/10). Dokument A
+' menja liniju (4 -> 2 gajbe, 40 -> 24 kg); korekcija PO ID-u menja samo
+' paletnu stavku A. Stavka B ostaje ista (redovi, gajbe, neto, Stornirano), a
+' zaglavlje palete je zbir aktivnih stavki oba vlasnika. Negativi: broj umesto
+' ID-a i stornirani ID su ADJ_BLOCKED, bez mutacije.
+Private Sub T12_KorekcijaPoIDDvaKupcaIstiBroj()
+    Const S As String = "T12 korekcija po ID-u, dva kupca isti broj: "
+    MakePrij "TSTPRJ-23", "TST-P17", "TST-Z12", "I", 40, 4, "TST-S12", "TST-KUP-A"
+    Paletize "TSTPRJ-23", "I", 40, 4, "TST-S12"
+    MakePrij "TSTPRJ-24", "TST-P17", "TST-Z12B", "I", 45, 3, "TST-S12", "TST-KUP-B"
+    Paletize "TSTPRJ-24", "I", 45, 3, "TST-S12"
+
+    Dim palID As String: palID = PaletaDokumenta("TSTPRJ-23")
+    ChkEq PaletaDokumenta("TSTPRJ-24"), palID, S & "preduslov: obe prijemnice na istoj paleti"
+    Dim otB As String: otB = DokOtisak("TSTPRJ-24")
+    ChkEq otB, "redova=1|gajb=3|neto=45|storno=0", S & "preduslov: otisak B"
+
+    ' Dokument A menja liniju (kao ispravka): 4 -> 2 gajbe, 40 -> 24 kg.
+    SetLinija "PRS-TSTPRJ-23", 24, 2
+
+    Dim info As String
+    ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-23", "", info), 1, S & "korigovana 1 linija A"
+    ChkEq DokOtisak("TSTPRJ-23"), "redova=1|gajb=2|neto=24|storno=0", S & "A svedena na svoju liniju"
+    ChkEq DokOtisak("TSTPRJ-24"), otB, S & "B netaknuta"
+    Dim pi As Variant: pi = PalInfo(palID)
+    ChkEq pi(1), 5, S & "rubna paleta: zaglavlje 5 gajbi (2 + 3)"
+    ChkEqD CDbl(pi(2)), 69, S & "rubna paleta: zaglavlje neto 69 (24 + 45)"
+
+    ' Negativi: broj umesto ID-a, pa stornirani ID -- ADJ_BLOCKED bez mutacije.
+    Dim otA As String: otA = DokOtisak("TSTPRJ-23")
+    ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TST-P17", "", info), ADJ_BLOCKED, _
+          S & "broj umesto ID-a odbijen"
+    ChkEq DokOtisak("TSTPRJ-23") & "#" & DokOtisak("TSTPRJ-24"), otA & "#" & otB, _
+          S & "odbijen broj nista ne menja"
+    SetLinija "PRS-TSTPRJ-24", 30, 2      ' B bi imala sta da koriguje...
+    MarkStornoID "TSTPRJ-24"              ' ...ali je stornirana
+    ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-24", "", info), ADJ_BLOCKED, _
+          S & "stornirani ID odbijen"
+    Chk InStr(info, "stornirana") > 0, S & "poruka imenuje storno"
+    ChkEq DokOtisak("TSTPRJ-24"), otB, S & "stornirana B netaknuta"
+End Sub
+
+' Klasa DODATA ispravkom (S8 rez 1a, ivica): dokument je paletizovan samo po
+' klasi I; posle izmene ima i liniju II (3 gajbe). Korekcija paletizuje liniju
+' II SVEZE, pod kljucem njene stavke, a linija I ostaje ista.
+Private Sub T13_KlasaDodataIspravkom()
+    Const S As String = "T13 klasa dodata ispravkom: "
+    MakePrij "TSTPRJ-25", "TST-P18", "TST-Z13", "I", 50, 5, "TST-S13"
+    Paletize "TSTPRJ-25", "I", 50, 5, "TST-S13"
+    DodajLiniju "TSTPRJ-25", 2, "II", 24, 3
+
+    Dim info As String
+    ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-25", "", info), 1, _
+          S & "korigovana 1 linija (II)"
+    ChkEq LinijaGajbe("TSTPRJ-25", "PRS-TSTPRJ-25-II"), 3, _
+          S & "linija II paletizovana pod svojim kljucem"
+    ChkEq LinijaGajbe("TSTPRJ-25", "PRS-TSTPRJ-25"), 5, S & "linija I netaknuta"
+End Sub
+
+' Paletna stavka dokumenta BEZ kljuca linije (stari oblik -- synthetic anomaly:
+' od S8 reza 2b-1 je pisac odbija (PAL-INV-01), a prevezivanje uvek upisuje kljuc
+' linije nove prijemnice, pa se red pravi tako sto se kljuc obrise POSLE pisca).
+' Korekcija ne zna kojoj liniji stavka pripada, pa staje (ADJ_BLOCKED) i nista ne
+' menja (S8 rez 1a). Da je stavku preskocila, linija bi izgledala nepaletizovano
+' i dobila bi svezu paletizaciju -- iste gajbe dvaput.
+Private Sub T14_StavkaBezLinijeZaustavljaKorekciju()
+    Const S As String = "T14 stavka bez linije: "
+    MakePrij "TSTPRJ-26", "TST-P19", "TST-Z14", "I", 50, 5, "TST-S14"
+    Paletize "TSTPRJ-26", "I", 50, 5, "TST-S14"
+    ObrisiKljucLinije "TSTPRJ-26"                  ' synthetic: red starog oblika
+    ChkEq LinijaGajbe("TSTPRJ-26", ""), 5, S & "preduslov: stavka bez kljuca linije"
+    SetLinija "PRS-TSTPRJ-26", 60, 6
+
+    Dim ot As String: ot = DokOtisak("TSTPRJ-26")
+    Dim info As String
+    ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-26", "", info), ADJ_BLOCKED, _
+          S & "korekcija odbijena"
+    Chk InStr(info, "nema liniju dokumenta") > 0, S & "poruka imenuje stavku bez linije"
+    ChkEq DokOtisak("TSTPRJ-26"), ot, S & "nista nije promenjeno"
 End Sub
 
 ' Skidanje paletnih stavki jedne prijemnice kroz JEZGRO (po PrijemnicaID-u), u
@@ -570,14 +669,14 @@ End Sub
 ' koraka 8 linijskih polja nema.
 Private Function MakePrij(ByVal id As String, ByVal broj As String, ByVal zbirna As String, _
                           ByVal klasa As String, ByVal kolKg As Double, ByVal gajb As Long, _
-                          ByVal sorta As String) As String
+                          ByVal sorta As String, Optional ByVal kupac As String = "") As String
     TstAppend TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, _
               COL_PRJ_BROJ_ZBIRNE, COL_PRJ_VRSTA, COL_PRJ_SORTA, _
-              COL_PRJ_TIP_AMB, COL_STORNIRANO), _
+              COL_PRJ_TIP_AMB, COL_STORNIRANO, COL_PRJ_KUPAC), _
         Array(id, broj, Date, _
               zbirna, TST_VRSTA, sorta, _
-              TST_AMB, "")
+              TST_AMB, "", kupac)
     TstAppend TBL_PRIJEMNICA_STAVKE, _
         Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
               COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _
@@ -585,12 +684,44 @@ Private Function MakePrij(ByVal id As String, ByVal broj As String, ByVal zbirna
     MakePrij = id
 End Function
 
-Private Sub Paletize(ByVal id As String, ByVal broj As String, ByVal zbirna As String, _
+' Druga linija istog dokumenta (stavka "PRS-<id>-<klasa>").
+Private Sub DodajLiniju(ByVal id As String, ByVal rb As Long, ByVal klasa As String, _
+                        ByVal kolKg As Double, ByVal gajb As Long)
+    TstAppend TBL_PRIJEMNICA_STAVKE, _
+        Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
+              COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _
+        Array("PRS-" & id & "-" & klasa, id, rb, klasa, kolKg, 0, gajb)
+End Sub
+
+' Synthetic anomaly: obrisi kljuc linije sa SVIH paletnih stavki dokumenta (red
+' starog oblika, koji pisac od S8 reza 2b-1 vise ne pravi).
+Private Sub ObrisiKljucLinije(ByVal prijemnicaID As String)
+    Dim rows As Collection: Set rows = FindRows(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, prijemnicaID)
+    Dim k As Long
+    For k = 1 To rows.count
+        RequireUpdateCell TBL_PALETA_STAVKA, rows(k), COL_PALS_PRIJEMNICA_STAVKA_ID, "", _
+                          "modTestPalete.ObrisiKljucLinije"
+    Next k
+End Sub
+
+' Izmena linije dokumenta (kao ispravka): kolicina i gajbe stavke.
+Private Sub SetLinija(ByVal stavkaID As String, ByVal kolKg As Double, ByVal gajb As Long)
+    Dim r As Long: r = FindRows(TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, stavkaID).item(1)
+    RequireUpdateCell TBL_PRIJEMNICA_STAVKE, r, COL_PRS_KOLICINA, kolKg, "modTestPalete.SetLinija"
+    RequireUpdateCell TBL_PRIJEMNICA_STAVKE, r, COL_PRS_KOL_AMB, gajb, "modTestPalete.SetLinija"
+End Sub
+
+' Paletizacija jedne LINIJE dokumenta, sa kljucem linije kao pisac. Prazan
+' stavkaID znaci prvu liniju iz MakePrij ("PRS-<id>"). Broj i zbirna dokumenta su na
+' zaglavlju (MakePrij); pisac ih od S8 reza 2b-2 ne prima.
+Private Sub Paletize(ByVal id As String, _
                      ByVal klasa As String, ByVal kolKg As Double, ByVal gajb As Long, _
-                     ByVal sorta As String)
-    PaletizePrijemnica prijemnicaID:=id, brojPrij:=broj, brojZbirne:=zbirna, _
+                     ByVal sorta As String, Optional ByVal stavkaID As String = "")
+    If Len(stavkaID) = 0 Then stavkaID = "PRS-" & id
+    PaletizePrijemnica prijemnicaID:=id, _
                        vrstaVoca:=TST_VRSTA, sortaVoca:=sorta, klasa:=klasa, _
-                       netoKg:=kolKg, brGajbica:=gajb, tipAmb:=TST_AMB
+                       netoKg:=kolKg, brGajbica:=gajb, tipAmb:=TST_AMB, _
+                       prijemnicaStavkaID:=stavkaID
 End Sub
 
 ' Storniraj SVE redove prijemnice datog broja (test-ekvivalent storna dokumenta;
@@ -603,29 +734,122 @@ Private Sub MarkStornoPrij(ByVal broj As String)
     Next k
 End Sub
 
+' Storno JEDNOG dokumenta po ID-u (broj nose i drugi).
+Private Sub MarkStornoID(ByVal id As String)
+    Dim r As Long: r = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, id).item(1)
+    RequireUpdateCell TBL_PRIJEMNICA, r, COL_STORNIRANO, "Da", "modTestPalete.MarkStornoID"
+End Sub
+
+' Otisak SVIH paletnih stavki dokumenta (i storniranih): broj redova, zbir gajbi
+' i neta aktivnih, broj storniranih. Ista vrednost pre i posle = nista nije
+' dirnuto.
+Private Function DokOtisak(ByVal prijemnicaID As String) As String
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    Dim n As Long, g As Long, kg As Double, nSt As Long
+    If Not IsEmpty(s) Then
+        Dim cP As Long, cGa As Long, cNe As Long, cSt As Long, r As Long
+        cP = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
+        cGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+        cNe = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
+        cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+        For r = 1 To UBound(s, 1)
+            If Trim$(CStr(SafeCell(s, r, cP))) = prijemnicaID Then
+                n = n + 1
+                If UCase$(Trim$(CStr(SafeCell(s, r, cSt)))) = "DA" Then
+                    nSt = nSt + 1
+                Else
+                    g = g + NzL(SafeCell(s, r, cGa))
+                    kg = kg + NzD(SafeCell(s, r, cNe))
+                End If
+            End If
+        Next r
+    End If
+    DokOtisak = "redova=" & n & "|gajb=" & g & "|neto=" & CStr(Round(kg, 3)) & "|storno=" & nSt
+End Function
+
+' PaletaID prve aktivne paletne stavke dokumenta ("" ako je nema).
+Private Function PaletaDokumenta(ByVal prijemnicaID As String) As String
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim cP As Long, cPal As Long, cSt As Long, r As Long
+    cP = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
+    cPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
+    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    For r = 1 To UBound(s, 1)
+        If Trim$(CStr(SafeCell(s, r, cP))) = prijemnicaID _
+           And UCase$(Trim$(CStr(SafeCell(s, r, cSt)))) <> "DA" Then
+            PaletaDokumenta = CStr(SafeCell(s, r, cPal))
+            Exit Function
+        End If
+    Next r
+End Function
+
+' Gajbe na aktivnim paletnim stavkama jedne LINIJE (PrijemnicaID + kljuc linije).
+Private Function LinijaGajbe(ByVal prijemnicaID As String, ByVal stavkaID As String) As Long
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim cP As Long, cK As Long, cGa As Long, cSt As Long, r As Long
+    cP = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
+    cK = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID)
+    cGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    For r = 1 To UBound(s, 1)
+        If Trim$(CStr(SafeCell(s, r, cP))) = prijemnicaID _
+           And Trim$(CStr(SafeCell(s, r, cK))) = stavkaID _
+           And UCase$(Trim$(CStr(SafeCell(s, r, cSt)))) <> "DA" Then
+            LinijaGajbe = LinijaGajbe + NzL(SafeCell(s, r, cGa))
+        End If
+    Next r
+End Function
+
 ' Aktivne paleta-stavke broja, hronoloski. 1..n x kolone:
 ' 1=rowIdx, 2=PaletaID, 3=gajb, 4=neto, 5=amb, 6=klasa, 7=zbirna, 8=sorta.
 ' Empty ako nema.
+'
+' Broj prijemnice i zbirna su cinjenice ZAGLAVLJA prijemnice (S8 rez 2b-2): paletna
+' stavka nosi samo PrijemnicaID i liniju, pa se broj i zbirna citaju preko njega.
+' Izbor je isti kao stari po labeli (pisac je labelu pisao iz broja svog dokumenta),
+' a zbirna (kolona 7) je zbirna prijemnice -- prevezivanje na drugu zbirnu je zato
+' vidljivo bez ijednog upisa na paletnu stavku. Kolone se citaju STROGO.
 Private Function StInfo(ByVal broj As String) As Variant
+    Const SRC As String = "modTestPalete.StInfo"
     Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(s) Then Exit Function
-    Dim cBr As Long, cPal As Long, cGa As Long, cNe As Long, cAm As Long
-    Dim cKl As Long, cZb As Long, cSo As Long, cSt As Long
-    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    cPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
-    cGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
-    cNe = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
-    cAm = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA)
-    cKl = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA)
-    cZb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
-    cSo = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_SORTA)
-    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    Dim cPid As Long, cPal As Long, cGa As Long, cNe As Long, cAm As Long
+    Dim cKl As Long, cSo As Long, cSt As Long
+    cPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, SRC)
+    cPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+    cGa = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, SRC)
+    cNe = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, SRC)
+    cAm = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA, SRC)
+    cKl = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA, SRC)
+    cSo = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_SORTA, SRC)
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+
+    ' PrijemnicaID -> Array(broj, zbirna), iz zaglavlja.
+    Dim zagl As Object: Set zagl = CreateObject("Scripting.Dictionary")
+    zagl.CompareMode = vbTextCompare
+    Dim p As Variant: p = GetTableData(TBL_PRIJEMNICA)
+    Dim r As Long
+    If IsArray(p) Then
+        Dim pcId As Long, pcBr As Long, pcZb As Long
+        pcId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+        pcBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+        pcZb = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+        For r = 1 To UBound(p, 1)
+            zagl(Trim$(NzToText(p(r, pcId)))) = Array(Trim$(NzToText(p(r, pcBr))), _
+                                                      Trim$(NzToText(p(r, pcZb))))
+        Next r
+    End If
 
     Dim hits As Collection: Set hits = New Collection
-    Dim r As Long
+    Dim pid As String, zp As Variant
     For r = 1 To UBound(s, 1)
-        If Trim$(CStr(SafeCell(s, r, cBr))) = broj _
-           And UCase$(Trim$(CStr(SafeCell(s, r, cSt)))) <> "DA" Then hits.Add r
+        pid = Trim$(NzToText(SafeCell(s, r, cPid)))
+        If zagl.Exists(pid) And UCase$(Trim$(CStr(SafeCell(s, r, cSt)))) <> "DA" Then
+            zp = zagl(pid)
+            If zp(0) = broj Then hits.Add r
+        End If
     Next r
     If hits.count = 0 Then Exit Function
 
@@ -639,7 +863,8 @@ Private Function StInfo(ByVal broj As String) As Variant
         res(k, 4) = NzD(SafeCell(s, r, cNe))
         res(k, 5) = NzD(SafeCell(s, r, cAm))
         res(k, 6) = Trim$(CStr(SafeCell(s, r, cKl)))
-        res(k, 7) = Trim$(CStr(SafeCell(s, r, cZb)))
+        zp = zagl(Trim$(NzToText(SafeCell(s, r, cPid))))
+        res(k, 7) = zp(1)
         res(k, 8) = Trim$(CStr(SafeCell(s, r, cSo)))
     Next k
     StInfo = res

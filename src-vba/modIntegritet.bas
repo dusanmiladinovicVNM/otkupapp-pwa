@@ -104,7 +104,6 @@ Private Sub RunAllChecks()
     Chk_B11_PredajaDvaDokumenta
     Chk_AMB_KnjigaIntegritet
     Chk_C1_C4_StavkaPrijemnica
-    Chk_C2_StavkaBezZbirne
     Chk_C3_PaletaBezStavke
     Chk_C5_DupliBrojPalete
     Chk_A3_StavkeVsPrijemnica
@@ -578,7 +577,6 @@ Private Sub Chk_B6_ZbirnaCaseMismatch()
     Dim bad As Collection: Set bad = New Collection
     CollectCaseMismatch bad, "Otpremnica", TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ_ZBIRNE, exactSet, ciMap
     CollectCaseMismatch bad, "Prijemnica", TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ_ZBIRNE, exactSet, ciMap
-    CollectCaseMismatch bad, "PaletaStavka", TBL_PALETA_STAVKA, COL_PALS_ID, COL_PALS_BROJ_ZBIRNE, exactSet, ciMap
     CollectCaseMismatch bad, "Otkup", TBL_OTKUP, COL_OTK_ID, COL_OTK_BROJ_ZBIRNE, exactSet, ciMap
 
     WriteBlock "B6", "BrojZbirne se poklapa samo do velikog/malog slova (za normalizaciju)", _
@@ -592,7 +590,9 @@ End Sub
 ' ============================================================
 ' CHECK C1 + C4: PALETA-STAVKA -> PRIJEMNICA
 ' ============================================================
-' C1 = aktivna stavka bez zive prijemnice (prazan ili nepostojeci PrijemnicaID).
+' C1 = aktivna stavka bez zive prijemnice (prazan ili nepostojeci PrijemnicaID)
+'      ili sa pogresnim kljucem linije (PAL-INV-01: prazan, nepostojeci, tudj,
+'      druge klase -- isto pravilo koje pisac drzi tvrdo).
 ' C4 = aktivna stavka ka prijemnici koja postoji ali je STORNIRANA
 '      (kaskadni storno prijemnice ne dira tblPaletaStavka).
 '      + dokumentni tok te prijemnice: BrojZbirne (i sa stornirane prijemnice),
@@ -618,26 +618,44 @@ Private Sub Chk_C1_C4_StavkaPrijemnica()
 
     Dim c1 As Collection: Set c1 = New Collection
     Dim c4 As Collection: Set c4 = New Collection
+    ' Labele i linije iz ZAGLAVLJA i STAVKI prijemnice (S8 rez 2a-2, R11), ne sa
+    ' paletne stavke.
+    Dim brPrij As Object: Set brPrij = BrojPrijemnicePoID()
+    Dim linija As Object: Set linija = LinijePrijemnicePoStavci()
 
     Dim data As Variant: data = GetTableData(TBL_PALETA_STAVKA)
     If IsArray(data) Then
         data = ExcludeStornirano(data, TBL_PALETA_STAVKA)
         If Not IsEmpty(data) Then
-            Dim cS As Long, cPal As Long, cPrij As Long, cBrPrij As Long
+            Dim cS As Long, cPal As Long, cPrij As Long, cKey As Long, cKl As Long
             cS = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, "modIntegritet.C1C4")
             cPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, "modIntegritet.C1C4")
             cPrij = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "modIntegritet.C1C4")
-            cBrPrij = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, "modIntegritet.C1C4")
+            cKey = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID, "modIntegritet.C1C4")
+            cKl = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA, "modIntegritet.C1C4")
 
-            Dim i As Long, p As String
+            Dim i As Long, p As String, kljuc As String, razlog As String
             Dim bz As String, kgV As Variant, ambV As Variant, om As String, prz As String
             For i = 1 To UBound(data, 1)
                 p = Trim$(CStr(data(i, cPrij)))
+                kljuc = Trim$(NzToText(data(i, cKey)))
+                razlog = ""
+                If Len(p) > 0 Then
+                    ' PAL-INV-01 meko (S8 rez 2a-2, 2b-1): ISTO pravilo koje pisac drzi
+                    ' tvrdo (modPaletniList.PalInv01Razlog). Od 2b-1 je i prazan kljuc
+                    ' nalaz: pisac red bez kljuca vise ne pravi, a A3 takav red ne moze
+                    ' da izmeri, jer se ne zna cija je linija (S8R2A2-REV-01).
+                    razlog = modPaletniList.PalInv01Razlog(p, kljuc, data(i, cKl), linija)
+                End If
                 If Len(p) = 0 Then
-                    c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), "(prazno)", CStr(data(i, cBrPrij)))
+                    c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), "(prazno)", "", "prazan PrijemnicaID")
                 ElseIf Not allPrij.Exists(p) Then
-                    c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(data(i, cBrPrij)))
-                ElseIf Not actPrij.Exists(p) Then
+                    c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, "", "nepostojeci PrijemnicaID")
+                ElseIf Len(razlog) > 0 Then
+                    If Len(kljuc) > 0 Then razlog = razlog & " (" & kljuc & ")"
+                    c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(brPrij(p)), razlog)
+                End If
+                If Len(p) > 0 And allPrij.Exists(p) And Not actPrij.Exists(p) Then
                     bz = "": If prijZbr.Exists(p) Then bz = CStr(prijZbr(p))
                     kgV = "": ambV = "": om = "": prz = ""
                     If Len(bz) > 0 Then
@@ -646,15 +664,15 @@ Private Sub Chk_C1_C4_StavkaPrijemnica()
                         If omByZbr.Exists(bz) Then om = CStr(omByZbr(bz))
                         If przByZbr.Exists(bz) Then prz = CStr(przByZbr(bz))
                     End If
-                    c4.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(data(i, cBrPrij)), _
+                    c4.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(brPrij(p)), _
                                  bz, kgV, ambV, om, prz)
                 End If
             Next i
         End If
     End If
 
-    WriteBlock "C1", "Paleta-stavke bez zive prijemnice (prazan/nepostojeci PrijemnicaID)", _
-               Array("StavkaID", "PaletaID", "PrijemnicaID", "BrojPrijemnice"), CollToArray(c1, 4)
+    WriteBlock "C1", "Paleta-stavke bez zive prijemnice ili sa pogresnim kljucem linije", _
+               Array("StavkaID", "PaletaID", "PrijemnicaID", "BrojPrijemnice", "Razlog"), CollToArray(c1, 5)
     WriteBlock "C4", "Paleta-stavke ka storniranoj prijemnici", _
                Array("StavkaID", "PaletaID", "PrijemnicaID", "BrojPrijemnice", _
                      "BrojZbirne", "ZbirnaKg", "ZbirnaAmb", "OtkupnoMesto", "Proizvodjac"), CollToArray(c4, 9)
@@ -662,49 +680,6 @@ Private Sub Chk_C1_C4_StavkaPrijemnica()
 
 EH:
     WriteErr "C1/C4", Err.description
-End Sub
-
-' ============================================================
-' CHECK C2: PALETA-STAVKA bez ispravne zbirne
-' ============================================================
-
-Private Sub Chk_C2_StavkaBezZbirne()
-    On Error GoTo EH
-
-    Dim zbrSet As Object: Set zbrSet = AllBrojeviInZbirna()
-    Dim bad As Collection: Set bad = New Collection
-
-    Dim data As Variant: data = GetTableData(TBL_PALETA_STAVKA)
-    If IsArray(data) Then
-        data = ExcludeStornirano(data, TBL_PALETA_STAVKA)
-        If Not IsEmpty(data) Then
-            Dim cS As Long, cPal As Long, cZbr As Long
-            cS = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, "modIntegritet.C2")
-            cPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, "modIntegritet.C2")
-            cZbr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, "modIntegritet.C2")
-
-            Dim i As Long, b As String, razlog As String
-            For i = 1 To UBound(data, 1)
-                b = Trim$(CStr(data(i, cZbr)))
-                razlog = ""
-                If Len(b) = 0 Then
-                    razlog = "prazan BrojZbirne"
-                ElseIf Not zbrSet.Exists(b) Then
-                    razlog = "BrojZbirne ne postoji u tblZbirna"
-                End If
-                If Len(razlog) > 0 Then
-                    bad.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), b, razlog)
-                End If
-            Next i
-        End If
-    End If
-
-    WriteBlock "C2", "Paleta-stavke bez ispravne zbirne", _
-               Array("StavkaID", "PaletaID", "BrojZbirne", "Razlog"), CollToArray(bad, 4)
-    Exit Sub
-
-EH:
-    WriteErr "C2", Err.description
 End Sub
 
 ' ============================================================
@@ -812,61 +787,54 @@ End Sub
 Private Sub Chk_A3_StavkeVsPrijemnica()
     On Error GoTo EH
 
-    ' (PrijemnicaID|Klasa) -> Sigma NetoKg aktivnih paletnih stavki
-    Dim stByLin As Object: Set stByLin = CreateObject("Scripting.Dictionary")
-    stByLin.CompareMode = vbTextCompare
+    ' S8 rez 2a-2 (R11, PAL-ODL-08): A3 meri STAVKU prijemnice po kljucu linije
+    ' (PrijemnicaStavkaID), i to svaku koja je IKAD bila na paleti -- aktivna ILI
+    ' stornirana paletna stavka. Tako vidi i N7 iz istorije (sva roba stavke skinuta
+    ' stornom palete dok je prijemnica aktivna), a robu koja nikad nije paletizovana
+    ' ne dira. Red bez kljuca ovde ne ulazi (ne zna se cija je linija): od S8
+    ' reza 2b-1 ga pisac ne pravi, a zatecen red je nalaz C1.
+    Dim stByKey As Object: Set stByKey = CreateObject("Scripting.Dictionary")
+    stByKey.CompareMode = vbTextCompare
     Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
-    If IsArray(ps) Then ps = ExcludeStornirano(ps, TBL_PALETA_STAVKA)
     Dim i As Long, k As String
     If IsArray(ps) Then
-        Dim cP As Long, cK As Long, cN As Long
-        cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "modIntegritet.A3")
-        cK = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA, "modIntegritet.A3")
+        Dim cK As Long, cN As Long, cSt As Long
+        cK = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID, "modIntegritet.A3")
         cN = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, "modIntegritet.A3")
+        cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "modIntegritet.A3")
         For i = 1 To UBound(ps, 1)
-            If Len(Trim$(NzToText(ps(i, cP)))) > 0 Then
-                k = Trim$(NzToText(ps(i, cP))) & "|" & KlasaOrDefault(ps(i, cK))
-                If IsNumeric(ps(i, cN)) Then
-                    stByLin(k) = CDbl(stByLin(k)) + CDbl(ps(i, cN))
-                Else
-                    stByLin(k) = CDbl(stByLin(k))
+            k = Trim$(NzToText(ps(i, cK)))
+            If Len(k) > 0 Then
+                If Not stByKey.Exists(k) Then stByKey(k) = 0#
+                If UCase$(Trim$(NzToText(ps(i, cSt)))) <> "DA" And IsNumeric(ps(i, cN)) Then
+                    stByKey(k) = CDbl(stByKey(k)) + CDbl(ps(i, cN))
                 End If
             End If
         Next i
     End If
-
-    ' (PrijemnicaID|Klasa) -> Kolicina stavke, samo za AKTIVNE prijemnice
+    ' Stavke AKTIVNIH prijemnica (kanonski citalac): 1 PrijemnicaID, 3 Klasa,
+    ' 4 Kolicina, 7 PrijemnicaStavkaID.
     Dim actPrij As Object: Set actPrij = IdSet(TBL_PRIJEMNICA, COL_PRJ_ID, True)
-    Dim linKol As Object: Set linKol = CreateObject("Scripting.Dictionary")
-    linKol.CompareMode = vbTextCompare
     Dim s As Variant: s = modDokumenta.StavkePrijemniceRedovi()
+    Dim bad As Collection: Set bad = New Collection
+    Dim sumSt As Double, kol As Double, diff As Double
     If IsArray(s) Then
         For i = 1 To UBound(s, 1)
-            If actPrij.Exists(CStr(s(i, 1))) Then
-                linKol(CStr(s(i, 1)) & "|" & KlasaOrDefault(s(i, 3))) = CDbl(s(i, 4))
+            k = Trim$(CStr(s(i, 7)))
+            If actPrij.Exists(CStr(s(i, 1))) And stByKey.Exists(k) Then
+                sumSt = CDbl(stByKey(k))
+                kol = CDbl(s(i, 4))
+                diff = sumSt - kol
+                If Abs(diff) > 0.5 Then
+                    bad.Add Array(CStr(s(i, 1)), KlasaOrDefault(s(i, 3)), sumSt, kol, diff, k)
+                End If
             End If
         Next i
     End If
-
-    Dim bad As Collection: Set bad = New Collection
-    Dim kk As Variant, sumSt As Double, kol As Double, diff As Double, delovi As Variant
-    For Each kk In stByLin.keys
-        If linKol.Exists(kk) Then
-            sumSt = stByLin(kk)
-            kol = linKol(kk)
-            diff = sumSt - kol
-            If Abs(diff) > 0.5 Then
-                delovi = Split(CStr(kk), "|")
-                bad.Add Array(CStr(delovi(0)), CStr(delovi(1)), sumSt, kol, diff)
-            End If
-        End If
-    Next kk
-
-    WriteBlock "A3", "Paleta-stavke (Sigma NetoKg) vs Kolicina stavke prijemnice, po klasi", _
-               Array("PrijemnicaID", "Klasa", "SumaStavkeKg", "PrijemnicaKg", "RazlikaKg"), _
-               CollToArray(bad, 5)
+    WriteBlock "A3", "Paleta-stavke (Sigma NetoKg) vs Kolicina stavke prijemnice, po stavci", _
+               Array("PrijemnicaID", "Klasa", "SumaStavkeKg", "PrijemnicaKg", "RazlikaKg", "PrijemnicaStavkaID"), _
+               CollToArray(bad, 6)
     Exit Sub
-
 EH:
     WriteErr "A3", Err.description
 End Sub
@@ -1668,3 +1636,34 @@ Private Sub WriteErr(ByVal code As String, ByVal desc As String)
     WriteLine "[" & code & "] GRESKA: " & desc, True
     m_row = m_row + 1
 End Sub
+
+' PrijemnicaID -> BrojPrijemnice iz ZAGLAVLJA (S8 rez 2a-2): labela nalaza paleta.
+Private Function BrojPrijemnicePoID() As Object
+    Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set BrojPrijemnicePoID = res
+    Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    Dim cId As Long, cBr As Long, i As Long
+    cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "modIntegritet.BrojPrijemnicePoID")
+    cBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, "modIntegritet.BrojPrijemnicePoID")
+    For i = 1 To UBound(d, 1)
+        res(Trim$(NzToText(d(i, cId)))) = Trim$(NzToText(d(i, cBr)))
+    Next i
+End Function
+
+' PrijemnicaStavkaID -> Array(PrijemnicaID, Klasa) iz STAVKI prijemnice (kanonski
+' citalac) -- za PAL-INV-01 u C1 (S8 rez 2a-2). Mapa nosi niz, ne spojen tekst.
+Private Function LinijePrijemnicePoStavci() As Object
+    Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set LinijePrijemnicePoStavci = res
+    Dim s As Variant: s = modDokumenta.StavkePrijemniceRedovi()
+    If Not IsArray(s) Then Exit Function
+    Dim i As Long
+    For i = 1 To UBound(s, 1)
+        If Len(Trim$(CStr(s(i, 7)))) > 0 Then
+            res(Trim$(CStr(s(i, 7)))) = Array(Trim$(CStr(s(i, 1))), KlasaOrDefault(s(i, 3)))
+        End If
+    Next i
+End Function
