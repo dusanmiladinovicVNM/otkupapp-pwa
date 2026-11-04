@@ -11114,6 +11114,39 @@ pa čitalac koji nije prepisan tiho ćuti") se meri na pozivnim mestima, ne post
 - **S9-4, S9-5, S9-6: HOLD do S8 2b** (a S8 2b čeka izlaznu kapiju C002).
 - **S9-7: HOLD** do `SLED-ODL-04/05`, S9-1, S8 2b i PLATFORM sonde.
 
+#### Odluke operatera (04.11.2026, `docs/STANJE_REFAKTORA.md` stavka 289)
+
+> Ovaj odeljak **menja** GO / HOLD iznad samo tamo gde to piše.
+
+- **Donete po predlogu:** `SLED-ODL-03`, `-04`, `-05`, `-06`, `-07` i `-08` (tekst je u
+  `docs/DOMEN/SLEDLJIVOST.md` §5).
+  - Uz `-07` operater kaže da se PWA verovatno neće koristiti, a AgriX VBA će najverovatnije
+    biti samo desktop. N5 zato ostaje minimalna popravka u S9-3 i ništa ne blokira.
+  - Uz `-06` je potvrđeno i ime jezgra: `modSledljivost`, isto ono koje plan Prerade 2.0 očekuje.
+- **`SLED-ODL-01` je doneta u delu „nadskup bez alokacije".**
+- **Sužavanje po klasi (01/02) je OTVORENO.** Operater traži da se otkupi filtriraju po klasi
+  kad se klase zbirne i prijemnice slažu. Merenje (`SLEDLJIVOST.md` §5a) kaže tri stvari:
+  - klasa se čuva od otkupa do zbirne po konstrukciji (`OtpRequireJednakost:4922`,
+    `ZbrRequireJednakost:2462`);
+  - u hladnjačkom lancu se čuva i do prijemnice (`HLD-LANAC-01`);
+  - za ostale prijemnice se menja po `PRJ-ZBR-02` („klasifikacija je procena pri prijemu").
+
+  Uslov „klase se slažu" je merljiv: nijedna klasa nije narasla pri prijemu, a nijedna nije
+  nova. Preklasiranje koje se poklopi sa kalom ipak ne vidi. Izbor je između (a) „filtriraj kad
+  uslov važi" i (b) „nikad ne odsecaj, nego označi istu klasu". Predlog je (b), a hladnjački
+  lanac se u oba slučaja filtrira po klasi.
+
+**GO / HOLD posle odluka:**
+- **S9-1: HOLD** samo do izbora (a)/(b). Ugovor S9-1 dobija jedan edge i jedan negativ:
+  - *edge:* hladnjački lanac unazad daje samo otkupe iste klase;
+  - *negativ:* zbirna I 500 / II 300, prijemnica I 400 / II 380 (klasa II je narasla). Unazad od
+    stavke II dolazi cela zbirna, sa oznakom grane;
+  - po (a) se još meri da filtrirani odgovor nosi oznaku rizika; po (b), da otkupi druge klase
+    ostaju u spisku.
+- **S9-2: GO posle merge-a `#459`** (bez promene).
+- **S9-3:** `SLED-ODL-07/08` su donete, pa čeka **samo S8 2a**.
+- **S9-7:** `SLED-ODL-04/05` su donete, pa čeka S9-1, S8 2b i PLATFORM sondu.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

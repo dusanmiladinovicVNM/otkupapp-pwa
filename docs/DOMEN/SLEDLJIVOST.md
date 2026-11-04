@@ -4,9 +4,13 @@
 > `docs/STANJE_REFAKTORA.md` stavka 288). Mereno nad `main` = `d19c2dae`, dok S8 još traje
 > (rez 1b je PR `#459`, otvoren). Linije koda u ovom fajlu važe za taj commit.
 >
-> **Odluke `SLED-ODL-01..08` su PREDLOZI.** Operater ih nije doneo. Dok ne budu donete,
-> važi verdikt i GO / HOLD iz plana §14.59. Invarijante `SLED-INV-xx` imenuju šta kod danas
-> drži, šta mu fali i ko je vlasnik posle S9.
+> **Odluke (operater, 04.11.2026, `docs/STANJE_REFAKTORA.md` stavka 289):**
+> - `SLED-ODL-03..08` su **donete po predlogu**;
+> - `SLED-ODL-01` je doneta u delu „nadskup bez alokacije";
+> - **sužavanje po klasi (01/02) je OTVORENO**: operater traži da se filtrira po klasi kad se
+>   klase zbirne i prijemnice slažu. Merenje i izbor između (a) i (b) su u §5a.
+>
+> Invarijante `SLED-INV-xx` imenuju šta kod danas drži, šta mu fali i ko je vlasnik posle S9.
 
 ## 1) Šta je već odlučeno (ne otvara se ponovo)
 
@@ -114,7 +118,18 @@ nego što kolona izađe iz kanona. Ovo je pravilo koje su S3–S6 ostavili otvor
 **Vlasnik posle S9:** rez S9-5 (kanon + self-heal), kapija `popis_citalaca.py --check` (prag 0
 po grupi) i statička pravila iz §13 plana.
 
-## 5) Odluke — PREDLOZI (operater ih nije doneo)
+## 5) Odluke
+
+Status po odluci (operater, 04.11.2026):
+- **01:** doneta u delu „nadskup bez alokacije"; klasa je otvorena (§5a);
+- **02:** otvorena (§5a);
+- **03–06:** donete po predlogu;
+- **07:** doneta po predlogu, uz napomenu operatera: PWA se verovatno neće koristiti, a AgriX VBA
+  će najverovatnije biti samo desktop. Popravka izvoza za PWA (N5) zato ostaje minimalna i ništa
+  ne blokira;
+- **08:** doneta po predlogu.
+
+Tabela ispod je predlog kako je bio dat; status iznad ima prednost.
 
 | ID | Pitanje | Predlog | Zašto | Blokira |
 |---|---|---|---|---|
@@ -126,6 +141,50 @@ po grupi) i statička pravila iz §13 plana.
 | **`SLED-ODL-06`** | Granica sa Preradom 2.0 | S9 gradi jezgro grafa sa ivicama E1–E10 nad današnjim tabelama: E1–E6, E9 i E10 u rezu S9-1, a palete (E7, E8) u S9-7, nad strogim čitačem iz S8 2b. Prerada 2.0 C2 **proširuje isto jezgro** ivicama LJ i šarže, a ne pravi svoje. Plan Prerade 2.0 §8 se pri S9-1 ispravlja: `modSledljivost` iz tog plana je obrisan (`c79935be`), a ime je slobodno | reuse > new; dva grafa bi dala dva porekla | S9-1 (ime i API) |
 | **`SLED-ODL-07`** | Izvoz za PWA (`ExportOtkupiAll`): koju prijemnicu otkup pokazuje kad zbirna ima dve? | Prijemnice po `ZbirnaRoditeljID`. Kad ih je više: **najranija po datumu**, uz broj prijemnica u istom polju. Ugovor kolona GAS/PWA se ne menja u S9 | Danas „prva je dovoljna" po **broju** (`modStammdatenSync:1245`), a to je i 1:N i kolizija broja. Promena oblika za PWA je S5 teren | S9-3 |
 | **`SLED-ODL-08`** | Labele na detetu: `Prijemnica.BrojZbirne` i broj-oblik traga ispravke (`IspravkaOd`/`ZamenjenSa`) | **`Prijemnica.BrojZbirne` ostaje kao snapshot labele za papir i pretragu**, kao `FakturaStavka.BrojPrijemnice` u S7, ali **nijedan spoj** (kapija `NEMA_BROJA_KAO_FK`). Broj-oblik traga se briše tamo gde nema produkcionog pisca (otpremnica, zbirna, novac). Na prijemnici ostaje dok papir ne pređe na `tblStornoVeze` | Papir prijemnice nosi broj zbirne (`modPrint.FillPrijemnicaSablon:1472`). Za identitet ništa ne zavisi od broj-oblika: jedini pisac bira red po ID-u (`StampIspravkaTrace:1431`) i u produkciji ga zove samo prijemnica (`modDokUnos:1339`), a čitaoci su samo naslov papira | S9-3, S9-5 |
+
+## 5a) Sužavanje po klasi — merenje za `SLED-ODL-01/02` (04.11.2026)
+
+**Pitanje operatera:** klasa na prijemnici određuje paletu. Da li se onda otkupi bezbedno
+filtriraju po klasi zbirne, bar kad se klase zbirne i prijemnice ne razlikuju?
+
+**Izmereno nad `d19c2dae`:**
+
+| Karika | Da li se klasa čuva | Dokaz |
+|---|---|---|
+| otkup → otpremnica | **da, po konstrukciji**: izdavanje traži jednakost kg i gajbi po klasi između stavki otpremnice i zbira stavki izvora | `modDokumenta.OtpIzdaj:4888` → `OtpRequireJednakost:4922` |
+| otpremnica → zbirna | **da, po konstrukciji**, isto pravilo | `ZbrIzdaj:2427` → `ZbrRequireJednakost:2462` |
+| zbirna → prijemnica (hladnjački lanac) | **da**: lanac je 1:1 po klasi na sva četiri nivoa | `HLD-LANAC-01` (`README.md` §2) |
+| zbirna → prijemnica (ostalo) | **ne**: „podela na I i II klasu sme da se razlikuje, jer je klasifikacija procena pri prijemu". Pisac poredi broj, kupca i vozača, a klasu ne | `PRJ-ZBR-02` (odluka 27.10.2026, `README.md` §2); `ZbirnaRoditeljPrijemnice:6922` |
+| prijemnica → paleta | **da**: paletna stavka je stavka prijemnice | `PAL-INV-01` |
+
+Zaključak: klasa se menja **samo na jednom mestu**, pri prijemu. Pretpostavka operatera važi
+za sve ostale karike.
+
+**Kako bi glasio uslov „klase se slažu"**, merljivo: posmatra se zbirna zajedno sa svim svojim
+aktivnim prijemnicama. Uslov važi kad su ispunjena oba dela:
+- prijemnice nemaju klasu koje na zbirnoj nema;
+- nijedna klasa nema na prijemnicama više kg nego na zbirnoj (manje je normalno: kalo).
+
+Kad uslov važi, filtrira se po klasi. Kad ne važi, uzima se cela zbirna. Svaki odgovor nosi
+oznaku koja grana je primenjena.
+
+**Preostali rizik, koji podaci ne vide:** primer je zbirna I 500 / II 300 i prijemnica I 450 /
+II 300. To može biti 50 kg kala na I, ali i 50 kg premeštenih iz I u II uz 50 kg kala na II.
+Uslov važi u oba slučaja, pa u drugom filtrirani odgovor za klasu II **izostavlja stvarne izvore
+klase I**. Za opoziv robe i za sertifikaciju je izostavljanje opasnija greška od viška.
+
+**Izbor (otvoren):**
+- **(a) Filtriraj kad uslov važi** (pravilo operatera). Odgovor je precizan, a rizik iznad
+  ostaje imenovan i odštampan uz odgovor.
+- **(b) Nikad ne odsecaj.** Otkupi iste klase idu prvi i označeni su kao „ista klasa", a ostali
+  ostaju u spisku sa oznakom „druga klasa — moguće zbog preklasiranja pri prijemu". Odgovor
+  nikad ne izostavlja izvor.
+
+U oba slučaja se **hladnjački lanac uvek filtrira po klasi**, jer je tamo 1:1 po klasi dokazano
+piscem (`HLD-LANAC-01`).
+
+**Predlog: (b).** Daje istu preciznost za čitanje, a ne može da sakrije izvor. Ako operater
+izabere (a), implementacija je ista, samo se druga grupa ne prikazuje.
 
 ## 6) Šta S9 namerno NE radi
 
