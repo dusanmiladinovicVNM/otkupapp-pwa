@@ -4751,11 +4751,14 @@ Private Sub T_StornoImpact_PoIdentitetu()
     Dim m As Object, pal As Collection, sm As Object
 
 
-    ' PREDUSLOV: po golom broju uvid stvarno vidi palete OBA dokumenta -- inace
-    ' test ne meri suzavanje nego prazan skup.
-    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA)
+    ' PREDUSLOV: i DRUGI dokument istog broja ima svoju paletu -- inace test ne meri
+    ' suzavanje nego prazan skup. Do S8 reza 2a-1 se to merilo uvidom po golom
+    ' broju (palete OBA dokumenta); taj pad na broj je obrisan (R4, broj je
+    ' labela), pa se preduslov meri identitetom drugog dokumenta.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "PRJ-TEST-Z1")
     Set pal = m("palete")
-    AssertEq pal.count, 2, "preduslov: po golom broju uvid nosi palete OBA dokumenta"
+    AssertEq pal.count, 1, "preduslov: i drugi dokument istog broja ima svoju paletu"
 
     ' NAJVAZNIJE: sa identitetom uvid nosi SAMO palete izabranog dokumenta.
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
@@ -5038,11 +5041,12 @@ Private Sub T_StornoImpact_IdentitetNeDegradira()
                                              "", "", True)
     AssertEq CBool(m("valid")), False, _
              "bez identiteta strog uvid pada -- broj se ne razresava u dokument"
-    ' Van strict-a (test hook, zatecen pozivalac bez ID-a) palete i dalje idu po
-    ' broju, i tada legitimno vide oba dokumenta tog broja.
+    ' Ni van strict-a palete ne idu po broju (S8 rez 2a-1, R4): broj nose dva
+    ' kupca, pa bi uvid po njemu nosio i tudje palete. Do 2a-1 je ovde stajalo
+    ' "legitimno vidi oba dokumenta tog broja".
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
                                              "", "")
-    AssertEq m("palete").count, 2, "i tada legitimno vidi oba dokumenta tog broja"
+    AssertEq m("palete").count, 0, "bez identiteta uvid ne cita palete po broju"
 End Sub
 ' ============================================================
 ' 52. Prost F8 storno zbirne mora da se IZVRSI, ne samo da postoji

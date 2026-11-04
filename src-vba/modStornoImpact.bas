@@ -233,18 +233,25 @@ Private Function ImpactPalete(ByVal docType As String, ByVal broj As String, _
                 ' IDENTITET SE NE ODUSTAJE. Kad je docID zadat a ne moze da se
                 ' razresi (schema drift, nema reda pod tom generacijom), povratak
                 ' na broj bi vratio tacno ono sto je #198 vadio -- i to unutar
-                ' modela koji se posle oznacava kao valid. Prazan docID je druga
-                ' prica: zatecen zapis nema identitet, pa je broj sve sto postoji.
+                ' modela koji se posle oznacava kao valid. Ni prazan docID od S8
+                ' reza 2a-1 ne pada na broj (R4, ispod).
                 If strict And Len(Trim$(docID)) > 0 Then
                     Err.Raise ERR_UI_BASE + 26, MOD_NAME & ".ImpactPalete", _
                               "Identitet prijemnice se ne moze razresiti -- palete se ne mogu suziti."
                 End If
-                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_PRIJ, broj, Nothing, strict)
+                ' S8 rez 2a-1 (R4): bez identiteta nema uvida po broju. Broj prijemnice
+                ' je labela (nose ga i drugi kupci), a ekran uvek salje ID reda
+                ' (modScrStorno). Prazan uvid je tacniji od tudjih paleta.
+                Set ImpactPalete = New Collection   ' bez ID-a nema uvida po broju
             Else
                 Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, "", ids, strict)
             End If
         Case FLOW_DOC_ZBIRNA
-            Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_ZBIRNE, broj, Nothing, strict)
+            ' S8 rez 2a-1 (R3): palete zbirne su palete NJENIH prijemnica -- isti obim
+            ' koji PONISTENJE stornira, po PrijemnicaID-u. Kolona BrojZbirne paletne
+            ' stavke je labela i brise se u 2b.
+            Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, "", _
+                                   modStornoFlow.PrijemniceUObimuZbirne(broj, docID), strict)
         Case Else
             Set ImpactPalete = New Collection
     End Select
