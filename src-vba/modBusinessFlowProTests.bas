@@ -10425,17 +10425,24 @@ End Sub
 '   2) P1 stornirana BEZ skidanja paleta (njena stavka je sirocad), P2 aktivna:
 '      storno palete se odbija i nista se ne menja. Ovde je storno palete skidao
 '      robu su-stanara;
-'   3) obe stornirane. Sinteticka anomalija (synthetic anomaly, odmah vracena):
-'      stavka P2 pokazuje na prijemnicu koje nema -- ne zna se cija je roba,
-'      storno se odbija. Kontra: paleta nosi samo sirocad i stornira se.
+'   3) obe stornirane (paleta nosi samo sirocad, storno bi prosao):
+'      - necitljiv status prijemnice (S8R1C-REV-01, seam kvari INDEKS kolone):
+'        storno se odbija, razlog imenuje kolonu, nista se ne menja;
+'      - sinteticka anomalija (synthetic anomaly, S8R1C-REV-02: u sopstvenoj
+'        transakciji koja se UVEK vraca): stavka P2 pokazuje na prijemnicu koje
+'        nema -- ne zna se cija je roba, storno se odbija;
+'      - kontra: paleta nosi samo sirocad i stornira se.
 '
 ' Nivo: FIZICKE paletne stavke po PrijemnicaID-u i zaglavlje palete. Ulaz je
 ' produkcioni StornoPaleta_TX (radnja "Storniraj paletu" ekrana Palete).
+' Test sam pali test rezim (seam ga trazi) i vraca ga i na putu greske.
 ' SABOTAZE: s8r1c-storno-bez-kapije, s8r1c-sirocad-blokira,
-' s8r1c-nepoznata-prijemnica-pusta.
+' s8r1c-nepoznata-prijemnica-pusta, s8r1c-status-prijemnice-tiho.
 Private Sub Test_S8R1c_StornoPaleteAktivnaRoba()
     On Error GoTo EH
     Const SRC As String = "Test_S8R1c_StornoPaleteAktivnaRoba"
+    Dim prevMode As Boolean, txA As clsTransaction
+    prevMode = IsTestMode()
 
     Dim scenario As String, d1 As Date, tipT As String, prevPal As String
     scenario = NewScenarioCode("S8R1C")
@@ -10503,27 +10510,57 @@ Private Sub Test_S8R1c_StornoPaleteAktivnaRoba()
                "S8R1c: preduslov -- P2 je stornirana, a njena paletna stavka ostaje"
     stanje = S8R1cStanje(p1, p2, pal)
 
-    ' Sinteticka anomalija: stavka P2 pokazuje na prijemnicu koje nema; vraca se odmah.
-    Dim rP2 As Long, nema As String, razlogAnom As String, okAnom As Boolean, vracen As Boolean
+    ' Necitljiv status prijemnice (S8R1C-REV-01): seam kvari INDEKS kolone Stornirano
+    ' u tblPrijemnica. Strog citac dize gresku koja imenuje kolonu. Tolerantan bi
+    ' prazan status procitao kao "aktivna" i takodje odbio, ali sa laznim razlogom
+    ' -- zato tvrdnja meri razlog, ne samo odbijanje.
+    Dim razlogKol As String, okKol As Boolean
+    okKol = True
+    SetTestMode True
+    modPaletniList.PaletaPraznoTestSet "STATUS_PRIJEMNICE_KOLONA"
+    On Error Resume Next
+    razlogKol = modPaletniList.PaletaAktivnaRobaRazlog(pal)
+    If Err.Number <> 0 Then razlogKol = Err.description
+    Err.Clear
+    okKol = modStorno.StornoPaleta_TX(pal)
+    Err.Clear
+    On Error GoTo EH
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
+    AssertTrue Not okKol, "S8R1c: necitljiv status prijemnice odbija storno palete"
+    AssertTrue InStr(razlogKol, "'" & COL_STORNIRANO & "'") > 0, _
+               "S8R1c: razlog odbijanja imenuje kolonu statusa prijemnice"
+    AssertEquals stanje, S8R1cStanje(p1, p2, pal), _
+                 "S8R1c: odbijen storno uz necitljiv status nista ne menja"
+
+    ' Sinteticka anomalija (S8R1C-REV-02): stavka P2 pokazuje na prijemnicu koje
+    ' nema. Sve ide u transakciju koja se UVEK vraca -- ovde i u EH -- pa prekid
+    ' izmedju izmene i vracanja ne ostavlja anomaliju u svesci.
+    Dim rP2 As Long, nema As String, razlogAnom As String, okAnom As Boolean
+    Dim stanjeAnom As String, stanjeAnomPosle As String
     nema = "NEMA-" & scenario
     okAnom = True
     rP2 = S8R1cRedStavke(p2)
     If rP2 > 0 Then
-        On Error Resume Next
+        Set txA = New clsTransaction
+        txA.BeginTx
+        txA.AddTableSnapshot TBL_PALETA
+        txA.AddTableSnapshot TBL_PALETA_STAVKA
         RequireUpdateCell TBL_PALETA_STAVKA, rP2, COL_PALS_PRIJEMNICA_ID, nema, SRC
+        stanjeAnom = S8R1cStanje(p1, nema, pal)
         razlogAnom = modPaletniList.PaletaAktivnaRobaRazlog(pal)
         okAnom = modStorno.StornoPaleta_TX(pal)
-        Err.Clear
-        RequireUpdateCell TBL_PALETA_STAVKA, rP2, COL_PALS_PRIJEMNICA_ID, p2, SRC
-        vracen = (Err.Number = 0)
-        Err.Clear
-        On Error GoTo EH
+        stanjeAnomPosle = S8R1cStanje(p1, nema, pal)
+        txA.RollbackTx
+        Set txA = Nothing
     End If
-    AssertTrue vracen, "S8R1c: preduslov -- PrijemnicaID paletne stavke je vracen"
+    AssertTrue rP2 > 0, "S8R1c: preduslov -- P2 ima aktivnu paletnu stavku"
     AssertTrue InStr(razlogAnom, nema) > 0, "S8R1c: razlog imenuje prijemnicu koje nema"
     AssertTrue Not okAnom, "S8R1c: stavka nepoznate prijemnice odbija storno palete"
-    AssertEquals stanje, S8R1cStanje(p1, p2, pal), _
+    AssertEquals stanjeAnom, stanjeAnomPosle, _
                  "S8R1c: odbijen storno nad anomalijom nista ne menja"
+    AssertEquals stanje, S8R1cStanje(p1, p2, pal), _
+                 "S8R1c: anomalija je vracena transakcijom"
 
     ' --- Kontra: paleta nosi samo sirocad -> stornira se ---
     AssertEquals "", modPaletniList.PaletaAktivnaRobaRazlog(pal), _
@@ -10539,6 +10576,9 @@ Private Sub Test_S8R1c_StornoPaleteAktivnaRoba()
 EH:
     LogFatal "Test_S8R1c_StornoPaleteAktivnaRoba", Err.Number, Err.description
     On Error Resume Next
+    If Not txA Is Nothing Then txA.RollbackTx
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
 

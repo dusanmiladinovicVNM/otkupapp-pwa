@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 290: rez 1c — pre-flight i kod N7 lokalno, jeftine kapije zelene; čeka review).
+**Ažurirano:** 04.11.2026 (stavka 291: review PR-a `#462` CODE GO, TEST/MERGE HOLD do acceptance-a; dve P2 dorade testa lokalno, jeftine kapije zelene).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -38,7 +38,7 @@
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
 | **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): ✅ merge **`#450`** (`fd39a716`, 01.11.2026) — review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); stavka 250 |
 | **S7 faktura** | ✅ **zatvoren** (merge `#454` = `a668c5e6`, 03.11.2026, stavka 272) -- **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); ✅ merge **`#452`** (`ff3e9c7a`, 02.11.2026, stavka 257). **Rez 2: pre-flight ✅** (stavka 258, `FAK-ODL-07`); **kod ✅** (stavka 259, PR `#453`); review HOLD → P1 ispravljen (stavka 260, `KI-077`/`KI-078` za rez 3); crveno nad starim kodom, zeleno (308 / 2868 / 111 / 39), dokaz 13/13 (stavka 261); ručna provera i Compile ✅ (stavka 262); ✅ merge **`#453`** (`2ac332e3`, 02.11.2026, stavka 263). **Rez 3: pre-flight ✅** (stavka 264, `KI-079`); **kod ✅** (stavka 265, PR `#454`); review HOLD → tri P2 ispravljena (stavka 266); crveno, zeleno (308 / 2901 / SEF 238), health i dokaz 14/14 (stavka 267, `KI-077`/`KI-078` CLOSED); Compile ✅ (stavka 268); drugi review HOLD → `S7R3-REV-04` (identitet SEF stavke) ispravljen (stavka 269, `KI-080`); treći review CODE GO i TEST GO (stavka 270, `KI-081`/`KI-082`); crveno, zeleno (308 / 2907 / SEF 238 / 39), dokaz 5/5 i Compile ✅ (stavka 271); merge review MERGE GO 9,4 / 10, ✅ merge **`#454`** (`a668c5e6`, 03.11.2026, stavka 272). Backlog: `KI-079` (kapija produkcionog SEF slanja), `KI-080`, `KI-081`, `KI-082` |
-| **S8 paleta i prerada** | **pre-flight ✅** (stavka 273, plan §14.58, `docs/DOMEN/PALETE.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 2, a storno i prevezivanje po ID-u S6 koraci 4, 7 i 8. Ostaju dva reza: 1 korekcija i prevezivanje paleta po ID-u (N1: korekcija bira dokument po broju) · 2 paleta zna samo stavku prijemnice (brišu se `BrojPrijemnice`, `BrojZbirne`, `ZbirnaRoditeljID`; `KI-039`). Review 9,0 / 10 i odluke `PAL-ODL-01..07` (stavka 274): podela po review-u na 1a (N1, korekcija po ID-u) · 1b (strog brojač praznine N8 pre „Skini palete", prevezivanje i Oporavak, makroi; `S8-REV-05`, stavka 275) · 1c (storno palete) · 2a (čitaoci, svoj pre-flight) · 2b (brisanje kolona, HOLD i do izlazne kapije C002); sledljivost na paleti u S9. Merge `#456` = `d222aad4` (stavka 276). **Rez 1a ✅** (stavke 277–279, merge `#458` = `d19c2dae`, stavka 280; N1 CLOSED). **Rez 1b: kod** (stavke 281–282), review 8,6 → 8,9, nalazi zatvoreni (283–284); izvršni acceptance (stavka 285): N8 i N9 crveno reprodukovani, zeleno, dokaz 13/13; Compile i ručna provera PASS (stavka 286); PR `#459`, review MERGE HOLD → dve P1 kapije zatvorene (stavka 287); drugi review CODE GO, izvršni acceptance zelen, dokaz 4/4, ručni Compile PASS (stavka 288). **Rez 1b ✅** (merge `#459` = `a1d98e76`, stavka 289). **Rez 1c:** pre-flight i kod N7 (stavka 290), lokalno; čeka review |
+| **S8 paleta i prerada** | **pre-flight ✅** (stavka 273, plan §14.58, `docs/DOMEN/PALETE.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 2, a storno i prevezivanje po ID-u S6 koraci 4, 7 i 8. Ostaju dva reza: 1 korekcija i prevezivanje paleta po ID-u (N1: korekcija bira dokument po broju) · 2 paleta zna samo stavku prijemnice (brišu se `BrojPrijemnice`, `BrojZbirne`, `ZbirnaRoditeljID`; `KI-039`). Review 9,0 / 10 i odluke `PAL-ODL-01..07` (stavka 274): podela po review-u na 1a (N1, korekcija po ID-u) · 1b (strog brojač praznine N8 pre „Skini palete", prevezivanje i Oporavak, makroi; `S8-REV-05`, stavka 275) · 1c (storno palete) · 2a (čitaoci, svoj pre-flight) · 2b (brisanje kolona, HOLD i do izlazne kapije C002); sledljivost na paleti u S9. Merge `#456` = `d222aad4` (stavka 276). **Rez 1a ✅** (stavke 277–279, merge `#458` = `d19c2dae`, stavka 280; N1 CLOSED). **Rez 1b: kod** (stavke 281–282), review 8,6 → 8,9, nalazi zatvoreni (283–284); izvršni acceptance (stavka 285): N8 i N9 crveno reprodukovani, zeleno, dokaz 13/13; Compile i ručna provera PASS (stavka 286); PR `#459`, review MERGE HOLD → dve P1 kapije zatvorene (stavka 287); drugi review CODE GO, izvršni acceptance zelen, dokaz 4/4, ručni Compile PASS (stavka 288). **Rez 1b ✅** (merge `#459` = `a1d98e76`, stavka 289). **Rez 1c:** pre-flight i kod N7 (stavka 290), PR `#462`; review CODE GO, dve P2 dorade testa (stavka 291); čeka „Push, pa kapije" |
 | S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -10225,6 +10225,40 @@
      - **NOT RUN** (čeka review, pa „Push, pa kapije"): zeleno RunAllTests (očekivano 314 / 0), BFP (očekivano
        2949 / 0 = 2931 + 18), Palete i Storno, dokaz tri `s8r1c-*`, Compile, ručna provera toast-a.
      - **Sledeći brojevi:** test 315 · stavka 291 · KI-088 · plan §14.59.
+
+291. **Review PR-a `#462` (rez 1c) — CODE GO (9,0), TEST HOLD (8,8), MERGE HOLD do acceptance-a; dve P2 dorade
+     testa lokalno** (04.11.2026). Na „Push i PR" je grana push-ovana do `cb5fb686` i otvoren je PR `#462`
+     (MERGEABLE / CLEAN, opis proveren poređenjem). Static CI #1141 na `cb5fb686` je SUCCESS.
+
+     - **Ocena review-a:** identitet po `PrijemnicaID`-u, obuhvat svih aktivnih stavki palete, nečitljiv identitet
+       nije dozvola, siročad nisu prepreka, provera pre izmene u postojećoj transakciji — DOBRO. Novi P1 nije
+       nađen. Review izričito ne preporučuje širenje na `KI-086`, `KI-087` ni druga čišćenja modula.
+     - **`S8R1C-REV-01` (P2) — test ne pokriva kvar šeme:** dodata ciljana negativna provera statusne kolone.
+       - Postojeći seam `PaletaPraznoTestSet` dobija režim `STATUS_PRIJEMNICE_KOLONA` (već u `ResetSeamova`); kvari
+         INDEKS kolone `Stornirano` u `tblPrijemnica`, ne diže grešku (isti obrazac kao `S8R1B-REV-04/05`).
+       - U `PaletaAktivnaRobaRazlog` je `RequireColumnIndex` za tu kolonu zamenjen redosledom `GetColumnIndex` →
+         kuka → `KolonaKapijeSeNeCita`; ponašanje bez seam-a je isto (sistemska greška koja imenuje kolonu).
+       - Test, korak 3 (paleta nosi samo siročad, storno bi prošao), +3 tvrdnje: storno se odbija, razlog imenuje
+         kolonu, ništa se ne menja.
+       - **Šta tvrdnja meri:** tolerantno pročitan, prazan status bi značio „aktivna", pa bi storno i dalje bio
+         odbijen — ali sa lažnim razlogom (imenovao bi prijemnice kao aktivne). Sabotaža
+         `s8r1c-status-prijemnice-tiho` (katalog 1138) zato obara tvrdnju o razlogu, ne o odbijanju.
+     - **`S8R1C-REV-02` (P2) — anomalija nije izolovana:** izmena `PrijemnicaID`-a, čitač i storno idu u
+       transakciju (`TBL_PALETA`, `TBL_PALETA_STAVKA`) koja se uvek vraća, i u EH-u. Ručno vraćanje i njegova
+       tvrdnja su obrisani.
+       - „Ništa se ne menja" se meri PRE rollback-a (otisak po nepostojećem ID-u), da rollback ne bi prikrio
+         storno koji je prošao;
+       - posle rollback-a: „anomalija je vraćena transakcijom";
+       - nova preduslovna tvrdnja: P2 ima aktivnu paletnu stavku.
+     - **P3 — toast na ekranu:** ostaje ručna provera, uz drugu koju review traži: uspešan storno palete sa samo
+       siročadi.
+     - **Test sada ima 22 tvrdnje** (18 − 1 + 5). EH gasi seam, vraća test režim i transakciju anomalije.
+     - **Jeftine kapije zelene:** `vba_check` (191), `sabotaza --proveri-sidra` (1138, 0 nalaza),
+       `gen_schema_module --check` (`B22A1572`), `who_writes --check` i `--check-ownership`, `popis_citalaca
+       --check`, `dokaz.py --plan s8r1c` (četiri grupe, BFP).
+     - **NOT RUN** (čeka „Push, pa kapije"): RunAllTests (očekivano 314 / 0), BFP (očekivano 2953 / 0 = 2931 + 22),
+       Palete, Storno, dokaz četiri `s8r1c-*`, Compile, dve ručne provere.
+     - **Sledeći brojevi:** test 315 · stavka 292 · KI-088 · plan §14.59.
 
 ## Dug sa imenom (posle S5-5b)
 

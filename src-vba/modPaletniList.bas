@@ -41,8 +41,10 @@ Private mSkipPaletize As Boolean
 '   "PRERADJENO_KOLONA"   kolona statusa prerade palete se ne nalazi
 '                         (IsPaletaPreradjena, S8R1B-REV-04);
 '   "STATUS_CILJA_KOLONA" kolona Stornirano prijemnice se ne nalazi
-'                         (ReassignPaleteToPrijemnica_TX, S8R1B-REV-05).
-' Dva _KOLONA rezima kvare INDEKS kolone, ne dizu gresku: tolerantan citac pod
+'                         (ReassignPaleteToPrijemnica_TX, S8R1B-REV-05);
+'   "STATUS_PRIJEMNICE_KOLONA" kolona Stornirano prijemnice se ne nalazi
+'                         (PaletaAktivnaRobaRazlog, S8 rez 1c, S8R1C-REV-01).
+' _KOLONA rezimi kvare INDEKS kolone, ne dizu gresku: tolerantan citac pod
 ' Resume Next bi dignutu gresku progutao pa procitao pravu kolonu, i test ne bi
 ' razlikovao tolerantan citac od strogog. Postavljac ga pali samo u test rezimu,
 ' kuka ponovo pita IsTestMode(), a gasi ga modTest.ResetSeamova.
@@ -2193,7 +2195,8 @@ End Function
 ' AKTIVNE prijemnice se ne stornira -- storno bi skinuo robu dokumenta koji vazi,
 ' i su-stanara; put je storno ili ispravka prijemnice. Aktivna paletna stavka
 ' STORNIRANE prijemnice je sirocad i ne smeta; prazna paleta takodje.
-' Strog: bez On Error, tabele moraju da postoje, kolone kroz RequireColumnIndex.
+' Strog: bez On Error, tabele moraju da postoje, kolone kroz RequireColumnIndex
+' (status prijemnice kroz KolonaKapijeSeNeCita, posle kuke seam-a).
 ' Stavka bez PrijemnicaID-a, ili sa ID-em koji ne vodi na tacno jednu prijemnicu,
 ' je takodje razlog: ne zna se cija je roba, a necitljivo stanje nije dozvola.
 ' Jedna implementacija, dva pozivaoca: jezgro (modStorno.StornoPaleta) i ekran
@@ -2244,7 +2247,9 @@ Public Function PaletaAktivnaRobaRazlog(ByVal palID As String) As String
     Dim cPrId As Long, cPrBr As Long, cPrSt As Long
     cPrId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
     cPrBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
-    cPrSt = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
+    cPrSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    If PaletaPraznoAkoTest("STATUS_PRIJEMNICE_KOLONA") Then cPrSt = 0
+    If cPrSt = 0 Then KolonaKapijeSeNeCita TBL_PRIJEMNICA, COL_STORNIRANO, SRC
     Dim aktivne As Object: Set aktivne = CreateObject("Scripting.Dictionary")
     aktivne.CompareMode = vbTextCompare
     If Not IsEmpty(prjD) Then

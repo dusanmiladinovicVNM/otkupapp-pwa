@@ -9136,6 +9136,16 @@ SABOTAZE = {
         "Test_S8R1c_StornoPaleteAktivnaRoba",
         "S8R1c: stavka nepoznate prijemnice odbija storno palete",
     ),
+    # S8R1C-REV-01: necitljiv status prijemnice je greska koja imenuje kolonu.
+    # Tolerantno procitan, prazan status bi znacio "aktivna" -- storno bi i dalje
+    # bio odbijen, ali sa laznim razlogom; tvrdnja zato meri razlog.
+    "s8r1c-status-prijemnice-tiho": (
+        "modPaletniList.bas",
+        "    If cPrSt = 0 Then KolonaKapijeSeNeCita TBL_PRIJEMNICA, COL_STORNIRANO, SRC\n",
+        "    ' SABOTAZA: necitljiv status prijemnice se cita kao prazan\n",
+        "Test_S8R1c_StornoPaleteAktivnaRoba",
+        "S8R1c: razlog odbijanja imenuje kolonu statusa prijemnice",
+    ),
     # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
     "s8r1a-altf8-prvi-pogodak": (
         "modPaletniListUI.bas",
