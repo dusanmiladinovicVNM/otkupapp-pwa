@@ -9090,6 +9090,25 @@ SABOTAZE = {
         "T_S8R1b_PreveziPaleteJezgro",
         "314: palete su na cilju i svedene na njegove gajbe",
     ),
+    # S8 rez 1b (S8R1B-REV-04): necitljiv status prerade palete je greska, ne "nije
+    # preradjena". Seam kvari INDEKS kolone; sabotaza brise samo strogu proveru, pa
+    # skidanje prolazi sa palete na kojoj ostaje su-stanar.
+    "s8r1b-preradjeno-tiho": (
+        "modPaletniList.bas",
+        "    If cPr = 0 Then KolonaKapijeSeNeCita TBL_PALETA, COL_PAL_PRERADJENO, SRC\n",
+        "    ' SABOTAZA: necitljiv status prerade znaci \"nije preradjena\"\n",
+        "Test_S8R1b_PraznaPaletaStrogBrojac",
+        "S8R1b: necitljiv status prerade odbija skidanje",
+    ),
+    # S8 rez 1b (S8R1B-REV-05): necitljiv status cilja prevezivanja je greska, ne
+    # "aktivan". Isti oblik seam-a i sabotaze kao gore.
+    "s8r1b-status-cilja-tiho": (
+        "modPaletniList.bas",
+        "    If pcSt = 0 Then KolonaKapijeSeNeCita TBL_PRIJEMNICA, COL_STORNIRANO, SRC\n",
+        "    ' SABOTAZA: necitljiv status cilja znaci \"aktivan\"\n",
+        "T_S8R1b_PreveziPaleteJezgro",
+        "314: necitljiv status cilja odbija prevezivanje",
+    ),
     # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
     "s8r1a-altf8-prvi-pogodak": (
         "modPaletniListUI.bas",

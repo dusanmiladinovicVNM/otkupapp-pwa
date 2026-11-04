@@ -4010,7 +4010,10 @@ End Sub
 '   A   kupac 1, broj A, 12 gajbi -- stornirana bez skidanja paleta (sirocad)
 '   A2  kupac 1, broj Y,  8 gajbi -- cilj (njena sveza paletizacija se ponistava)
 '
-' SABOTAZA: s8r1b-prevezi-bez-korekcije.
+' Pre uspesnog prevezivanja: necitljiv status cilja ga odbija (S8R1B-REV-05). Cilj
+' je stvarno aktivan, pa se meri da kapija ne zakljucuje "aktivan" iz kolone koju
+' nije procitala; razlog mora da imenuje kolonu, a nista ne sme da se pomeri.
+' SABOTAZE: s8r1b-prevezi-bez-korekcije, s8r1b-status-cilja-tiho.
 Private Sub T_S8R1b_PreveziPaleteJezgro()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, prevPal As String
     Dim redoviPre As String, redoviPosle As String
@@ -4036,6 +4039,17 @@ Private Sub T_S8R1b_PreveziPaleteJezgro()
     resB = S8R1bPrijemnica(brojY, zbrA, FX_KUPAC, 64, 8)
     AssertEq GajbicaZaDokument(resA) & "|" & GajbicaZaDokument(resB), "12|8", _
              "314 preduslov: sirocad A (12) i sveza paletizacija cilja (8)"
+
+    Dim pre5 As String, upoz5 As String, gd5 As Boolean, ok5 As Boolean
+    pre5 = S8R1aOtisak(resA) & "#" & S8R1aOtisak(resB)
+    modPaletniList.PaletaPraznoTestSet "STATUS_CILJA_KOLONA"
+    ok5 = ReassignPaleteToPrijemnica_TX(brojA, brojY, upoz5, True, gd5, resA, resB)
+    modPaletniList.PaletaPraznoTestSet ""
+    AssertEq ok5, False, "314: necitljiv status cilja odbija prevezivanje"
+    AssertEq (InStr(upoz5, "'" & COL_STORNIRANO & "'") > 0), True, _
+             "314: razlog odbijanja imenuje kolonu statusa"
+    AssertEq S8R1aOtisak(resA) & "#" & S8R1aOtisak(resB), pre5, _
+             "314: odbijeno prevezivanje nije nista pomerilo"
 
     modScrOporavak.Scr_OpoTestSet "PALETE", "", brojY, , resB
     ok = modScrOporavak.PreveziPaleteCore(brojA, resA, info)

@@ -10300,9 +10300,14 @@ End Function
 ' Pad brojaca: skidanje P2 sa pokvarenim brojacem se povlaci celo. Kontra:
 ' skidanje P2 posle toga prazni paletu, pa se paleta stornira.
 '
+' Necitljiv status prerade (S8R1B-REV-04): dok je P1 jos aktivna na istoj paleti,
+' "Skini palete" nad P2 sa kolonom Preradjeno koja se ne nalazi mora da se odbije.
+' Paleta posle skidanja ne bi bila prazna, pa StornoPaleta (koji status proverava
+' sam) ne bi ni bio pozvan -- jedina brana je status iz IsPaletaPreradjena.
+'
 ' Nivo: FIZICKE paletne stavke po PrijemnicaID-u i zaglavlje palete. Test sam pali
 ' test rezim (seam ga trazi) i vraca ga i na putu greske.
-' SABOTAZA: s8r1b-praznina-iz-prikaza.
+' SABOTAZE: s8r1b-praznina-iz-prikaza, s8r1b-preradjeno-tiho.
 Private Sub Test_S8R1b_PraznaPaletaStrogBrojac()
     On Error GoTo EH
     Const SRC As String = "Test_S8R1b_PraznaPaletaStrogBrojac"
@@ -10354,6 +10359,21 @@ Private Sub Test_S8R1b_PraznaPaletaStrogBrojac()
     AssertTrue modStorno.StornoPrijemnica_TX(p2, False), _
                "S8R1b: preduslov -- P2 je stornirana, a njena paletna stavka ostaje"
     Dim otP2 As String: otP2 = S8R1aOtisakPaleta(p2)
+
+    ' --- "Skini palete" P2 uz necitljiv status prerade: odbija se, nista se ne dira ---
+    Dim stanjeRev4 As String, nRev4 As Long, razlogRev4 As String
+    stanjeRev4 = S8R1aOtisakPaleta(p1) & "#" & otP2 & "#" & S8R1bPaletaStanje(pal)
+    SetTestMode True
+    modPaletniList.PaletaPraznoTestSet "PRERADJENO_KOLONA"
+    nRev4 = modPaletniList.SkiniPaleteSirocadi_TX(p2, razlogRev4)
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
+    AssertTrue nRev4 = 0, "S8R1b: necitljiv status prerade odbija skidanje"
+    AssertTrue InStr(razlogRev4, "'" & COL_PAL_PRERADJENO & "'") > 0, _
+               "S8R1b: razlog odbijanja imenuje kolonu statusa prerade"
+    AssertEquals stanjeRev4, S8R1aOtisakPaleta(p1) & "#" & S8R1aOtisakPaleta(p2) & "#" & _
+                 S8R1bPaletaStanje(pal), _
+                 "S8R1b: odbijeno skidanje ne dira ni dokument ni su-stanara ni paletu"
 
     ' --- Storno P1 uz POKVAREN prikazni citac ---
     Dim okP1 As Boolean

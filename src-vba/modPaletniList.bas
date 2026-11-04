@@ -34,9 +34,17 @@ Private Const PAL_PRAG_MS As Long = 400
 ' Forme postavljaju True pre snimanja ispravke i False odmah posle. Default False.
 Private mSkipPaletize As Boolean
 
-' TEST SEAM (S8 rez 1b, N8): kvari odluku "paleta je prazna". "PRIKAZ" -- prikazni
-' citac (GetPaletaStavkeForGrid) vraca Empty kao na gresci; "BROJAC" -- strog
-' brojac aktivnih stavki dize gresku. Postavljac ga pali samo u test rezimu,
+' TEST SEAM (S8 rez 1b): kvari citanje na kome stoji destruktivna odluka.
+'   "PRIKAZ"              prikazni citac (GetPaletaStavkeForGrid) vraca Empty kao
+'                         na gresci (N8);
+'   "BROJAC"              strog brojac aktivnih stavki dize gresku (N8);
+'   "PRERADJENO_KOLONA"   kolona statusa prerade palete se ne nalazi
+'                         (IsPaletaPreradjena, S8R1B-REV-04);
+'   "STATUS_CILJA_KOLONA" kolona Stornirano prijemnice se ne nalazi
+'                         (ReassignPaleteToPrijemnica_TX, S8R1B-REV-05).
+' Dva _KOLONA rezima kvare INDEKS kolone, ne dizu gresku: tolerantan citac pod
+' Resume Next bi dignutu gresku progutao pa procitao pravu kolonu, i test ne bi
+' razlikovao tolerantan citac od strogog. Postavljac ga pali samo u test rezimu,
 ' kuka ponovo pita IsTestMode(), a gasi ga modTest.ResetSeamova.
 Private mPaletaPraznoTest As String
 
@@ -1489,12 +1497,19 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     pcBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
     pcId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
     pcZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+    ' Status cilja je KAPIJA (S8R1B-REV-05): necitljiv status je ranije znacio
+    ' "aktivan" (pcSt = 0 -> stN ostaje False), pa se prevezivalo i na dokument
+    ' cije stanje niko nije procitao. Bez kolone nema prevezivanja.
     pcSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
-    ' identitet nove prijemnice (za relabel-u-mestu; svi redovi broja dele isti)
+    If PaletaPraznoAkoTest("STATUS_CILJA_KOLONA") Then pcSt = 0
+    If pcSt = 0 Then KolonaKapijeSeNeCita TBL_PRIJEMNICA, COL_STORNIRANO, SRC
+    ' Identitet izvora i cilja odlucuje o relabelu -- ista klasa kapije: dve
+    ' necitljive kolone daju dva prazna teksta, a prazno = prazno je "isti
+    ' identitet", pa bi se paleta prevezala bez relabela i bez potvrde.
     Dim pcVr As Long, pcSo As Long, pcTa As Long
-    pcVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
-    pcSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
-    pcTa = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
+    pcVr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, SRC)
+    pcSo = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA, SRC)
+    pcTa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB, SRC)
     Dim nVr As String, nSo As String, nTa As String
     ' Identitet IZVORNOG dokumenta -- cita se u istom prolazu kroz tblPrijemnica,
     ' iz redova koji su vec izabrani po identitetu. Bez toga bi presuda morala
@@ -1520,8 +1535,8 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     For r = 1 To UBound(prj, 1)
         ciljni = (Trim$(NzToText(prj(r, pcId))) = tgtID)
         If ciljni Then
-            Dim stN As Boolean: stN = False
-            If pcSt > 0 Then stN = (UCase$(Trim$(CStr(prj(r, pcSt)))) = "DA")
+            Dim stN As Boolean
+            stN = (UCase$(Trim$(NzToText(SafeCell(prj, r, pcSt)))) = "DA")
             If Not stN Then
                 ' Linije cilja su STAVKE dokumenta (S6 korak 2/3); zaglavlje je
                 ' bez klase i kolicine.
@@ -1534,7 +1549,7 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
                     newBroj = Trim$(CStr(prj(r, pcBr)))
                     nVr = Trim$(NzToText(SafeCell(prj, r, pcVr)))
                     nSo = Trim$(NzToText(SafeCell(prj, r, pcSo)))
-                    If pcTa > 0 Then nTa = Trim$(NzToText(SafeCell(prj, r, pcTa)))
+                    nTa = Trim$(NzToText(SafeCell(prj, r, pcTa)))
                 End If
             End If
         ElseIf Not imamIzvor Then
@@ -1543,7 +1558,7 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
             If PripadaDokumentu(Trim$(NzToText(SafeCell(prj, r, pcId))), srcIds) Then
                 oVrS = Trim$(NzToText(SafeCell(prj, r, pcVr)))
                 oSoS = Trim$(NzToText(SafeCell(prj, r, pcSo)))
-                If pcTa > 0 Then oTaS = Trim$(NzToText(SafeCell(prj, r, pcTa)))
+                oTaS = Trim$(NzToText(SafeCell(prj, r, pcTa)))
                 imamIzvor = True
             End If
         End If
@@ -1767,6 +1782,8 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     ReassignPaleteToPrijemnica_TX = True
     Exit Function
 EH:
+    ' Razlog ide pozivaocu: bez njega Oporavak javlja neuspeh bez uzroka.
+    outWarn = Err.description
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr SRC
     ReassignPaleteToPrijemnica_TX = False
@@ -2246,8 +2263,8 @@ Private Function BrojAktivnihStavkiPalete(ByVal palID As String, ByVal SRC As St
     Next r
 End Function
 
-' Pali/gasi seam praznine palete (v. mPaletaPraznoTest): "PRIKAZ", "BROJAC" ili ""
-' (gasi). Paljenje van test rezima ne radi nista; gasenje radi uvek.
+' Pali/gasi seam palete: rezim iz opisa mPaletaPraznoTest, ili "" (gasi).
+' Paljenje van test rezima ne radi nista; gasenje radi uvek.
 Public Sub PaletaPraznoTestSet(ByVal rezim As String)
     rezim = UCase$(Trim$(rezim))
     If Len(rezim) > 0 And Not IsTestMode() Then Exit Sub
@@ -2595,14 +2612,36 @@ Private Function ClassNetoOutOfSync(ByVal stRows As Object, ByVal kl As String, 
 End Function
 
 ' Da li je paleta preradjena (korekcije na njoj su blokirane dok se prerada ne stornira).
+' KAPIJA mutacije (S8R1B-REV-04): zovu je samo odluke --
+' storno i skidanje (SkiniPaleteZaStornoPrijemnice, SkiniPaletneStavke), korekcija
+' (AdjustPaletaGajbiceZaPrijemnicu_TX) i razlog blokade storna
+' (PreradjenaPaletaRazlog). Zato je stroga: bez On Error, kolone statusa i ID-a
+' moraju da se nadju, a greska citanja se dize i povlaci celu operaciju.
+' Do S8R1B-REV-04 je Resume Next uz tolerantan GetColumnIndex necitljiv status pretvarao u
+' "nije preradjena", pa je skidanje robe sa preradjene palete prolazilo kad na
+' njoj ostaje su-stanar (StornoPaleta, koji status proverava sam, se tada ne zove).
+' Paleta koje NEMA ostaje False: postojanje meri pozivalac (7363 u storno putu).
 Private Function IsPaletaPreradjena(ByVal palID As String) As Boolean
-    On Error Resume Next
+    Const SRC As String = "modPaletniList.IsPaletaPreradjena"
+    Dim cPr As Long
+    cPr = GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO)
+    If PaletaPraznoAkoTest("PRERADJENO_KOLONA") Then cPr = 0
+    If cPr = 0 Then KolonaKapijeSeNeCita TBL_PALETA, COL_PAL_PRERADJENO, SRC
+    RequireColumnIndex TBL_PALETA, COL_PAL_ID, SRC
     Dim pr As Long: pr = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, palID)
     If pr = 0 Then Exit Function
     Dim d As Variant: d = GetTableData(TBL_PALETA)
-    IsPaletaPreradjena = (UCase$(Trim$(CStr(SafeCell(d, pr, _
-        GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO))))) = "DA")
+    IsPaletaPreradjena = (UCase$(Trim$(NzToText(SafeCell(d, pr, cPr)))) = "DA")
 End Function
+
+' Kolona na kojoj stoji destruktivna odluka se ne nalazi (S8R1B-REV-04/05). Ista
+' klasa pada (sistemski, kod 1) i isti smisao kao RequireColumnIndex; posebna je
+' samo zato sto seam (PaletaPraznoTestSet "*_KOLONA") glumi nenadjenu kolonu kroz
+' INDEKS, pa provera "indeks = 0" mora da stoji u pozivaocu, posle kuke.
+Private Sub KolonaKapijeSeNeCita(ByVal tbl As String, ByVal col As String, ByVal SRC As String)
+    RaiseSistemski 1, SRC, "Nedostaje kolona '" & col & "' u tabeli '" & tbl & _
+                   "'. Bez nje se ne zna stanje, pa se roba sa paleta ne pomera ni ne skida."
+End Sub
 
 ' ZAJEDNICKA raspodelna petlja: rasporedi "remaining" gajbica na otvorene/nove
 ' palete kao NOVE stavke date prijemnice + inkrementalno azuriraj header palete.
