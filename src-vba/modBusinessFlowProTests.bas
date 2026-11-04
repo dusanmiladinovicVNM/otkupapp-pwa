@@ -352,6 +352,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S8R2a1_PaleteZbirnePoPrijemnicama
     Test_S8R2a2_LabeleIIntegritetPoStavci
     Test_KI086_KorekcijaCekaPosleOtkaza
+    Test_KI086_PalaKorekcijaNosiRazlog
     Test_KI087_IzborPaleteStrogoCitaPreradu
     Test_S6_CitalacStavkiPrijemniceDrziUgovor
     Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu
@@ -11035,6 +11036,92 @@ EH:
     On Error Resume Next
     modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
     modPaletniListUI.PaletaAdjustPitanjeTestReset
+    SetTestMode prevMode
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' KI-086 / S8KI086-REV-01: PALA KOREKCIJA POSLE PREVEZIVANJA NOSI RAZLOG.
+'
+' A (4 gajbe) je stornirana bez skidanja paleta, cilj B ima 6 gajbi, pa
+' prevezivanje trazi korekciju. Seam KOREKCIJA_PADA obara korekciju odmah posle
+' snimka njene transakcije: prevezivanje ostaje uspesno, korekcija CEKA (grana
+' ADJ_BLOCKED), razlog stize do operatera, a palete cilja ostaju kakve je
+' prevezivanje ostavilo (korekcija se vratila cela).
+' Nivo: FIZICKE paletne stavke po PrijemnicaID-u. Test sam pali test rezim.
+' SABOTAZE: ki086-razlog-greske-se-gubi.
+Private Sub Test_KI086_PalaKorekcijaNosiRazlog()
+    On Error GoTo EH
+    Const SRC As String = "Test_KI086_PalaKorekcijaNosiRazlog"
+    Dim scenario As String, d1 As Date, tipT As String, prevPal As String, prevMode As Boolean
+    prevMode = IsTestMode()
+    scenario = NewScenarioCode("K86G")
+    d1 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK86G-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABK86G-" & scenario, "test K86G"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "K86G: preduslov -- vozac je preuzeo 50"
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(d1, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "K86G: preduslov -- zbirna je snimljena"
+
+    Dim pA As String, pB As String, brojA As String, brojB As String, errNum As Long
+    brojA = TEST_PREFIX & "-K86GA-" & scenario
+    brojB = TEST_PREFIX & "-K86GB-" & scenario
+    On Error Resume Next
+    pA = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=brojA, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=40#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=4, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then pA = "": Err.Clear
+    On Error GoTo EH
+    AssertTrue Len(pA) > 0 And Len(S8R1bPaletaDokumenta(pA)) > 0, "K86G: preduslov -- A je paletizovana"
+    If Len(pA) = 0 Then GoTo Kraj
+    AssertTrue modStorno.StornoPrijemnica_TX(pA, False), _
+               "K86G: preduslov -- A je stornirana, a njena paleta ostaje"
+    On Error Resume Next
+    pB = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=brojB, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=60#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=6, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then pB = "": Err.Clear
+    On Error GoTo EH
+    AssertTrue Len(pB) > 0, "K86G: preduslov -- cilj B je snimljen"
+    If Len(pB) = 0 Then GoTo Kraj
+
+    Dim ok As Boolean, ceka As Boolean, info As String
+    SetTestMode True
+    modScrOporavak.Scr_OpoTestSet "PALETE", "", brojB, , pB
+    modPaletniList.PaletaPraznoTestSet "KOREKCIJA_PADA"
+    ok = modScrOporavak.PreveziPaleteCore(brojA, pA, info, ceka)
+    modPaletniList.PaletaPraznoTestSet ""
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    SetTestMode prevMode
+
+    AssertTrue ok, "K86G: prevezivanje ostaje uspesno kad korekcija padne"
+    AssertTrue ceka, "K86G: pala korekcija se vraca kao korekcija koja ceka"
+    AssertTrue InStr(1, info, "korekcija kolicina pada", vbTextCompare) > 0, _
+               "K86G: razlog pale korekcije stize do operatera"
+    AssertTrue InStr(1, S8R1aOtisakPaleta(pB), "|gajb=4|", vbTextCompare) > 0, _
+               "K86G: pala korekcija se vraca cela"
+
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_KI086_PalaKorekcijaNosiRazlog", Err.Number, Err.description
+    On Error Resume Next
+    modPaletniList.PaletaPraznoTestSet ""
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
     SetTestMode prevMode
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub

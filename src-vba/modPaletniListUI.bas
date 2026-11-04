@@ -143,9 +143,12 @@ Public Function PaletaAdjustPrompt(ByVal prijemnicaID As String, ByVal brojPrij 
     End If
     Exit Function
 EH:
+    ' S8KI086-REV-01: razlog se cita pre LogErr-a, koji ume da obrise Err.
+    Dim errDesc As String
+    errDesc = Err.description
     LogErr "modPaletniListUI.PaletaAdjustPrompt"
     outKorekcijaCeka = True
-    PaletaAdjustPrompt = "Greska pri korekciji kolicina: " & Err.description
+    PaletaAdjustPrompt = "Greska pri korekciji kolicina: " & errDesc
 End Function
 
 ' TEST SEAM (KI-086): tekst poslednjeg pitanja korekcije. Tvrdo gejtovan.
@@ -174,8 +177,16 @@ Public Sub PaletaAdjust_Prompt()
         MsgBox "Korekcija kolicina NIJE uradjena: " & razlog, vbExclamation, APP_NAME
         Exit Sub
     End If
-    Dim msg As String: msg = PaletaAdjustPrompt(prjID, Trim$(ans))
-    If Len(msg) > 0 Then MsgBox msg, vbInformation, APP_NAME
+    Dim ceka As Boolean
+    Dim msg As String: msg = PaletaAdjustPrompt(prjID, Trim$(ans), ceka)
+    ' Korekcija koja nije uradjena je UPOZORENJE, ne obavestenje (review #465, P3).
+    If Len(msg) > 0 Then
+        If ceka Then
+            MsgBox msg, vbExclamation, APP_NAME
+        Else
+            MsgBox msg, vbInformation, APP_NAME
+        End If
+    End If
     Exit Sub
 EH:
     LogErr "modPaletniListUI.PaletaAdjust_Prompt"

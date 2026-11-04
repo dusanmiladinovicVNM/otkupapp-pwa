@@ -9270,6 +9270,14 @@ SABOTAZE = {
         "Test_KI087_IzborPaleteStrogoCitaPreradu",
         "KI087: necitljiv status prerade obara paletizaciju i snimanje",
     ),
+    # S8KI086-REV-01: razlog pale korekcije se cita pre rollback-a i LogErr-a.
+    "ki086-razlog-greske-se-gubi": (
+        "modPaletniList.bas",
+        "    outInfo = \"Greska: \" & errDesc\n",
+        "    outInfo = \"Greska: \" & Err.description   ' SABOTAZA: razlog posle rollback-a i LogErr-a\n",
+        "Test_KI086_PalaKorekcijaNosiRazlog",
+        "K86G: razlog pale korekcije stize do operatera",
+    ),
     # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
     "s8r1a-altf8-prvi-pogodak": (
         "modPaletniListUI.bas",

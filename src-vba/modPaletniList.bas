@@ -45,7 +45,10 @@ Private mSkipPaletize As Boolean
 '   "STATUS_PRIJEMNICE_KOLONA" kolona Stornirano prijemnice se ne nalazi
 '                         (PaletaAktivnaRobaRazlog, S8 rez 1c, S8R1C-REV-01);
 '   "PRERADJENO_OTVORENE_KOLONA" kolona Preradjeno palete se ne nalazi pri izboru
-'                         otvorene palete (GetOrCreateOpenPaleta, KI-087).
+'                         otvorene palete (GetOrCreateOpenPaleta, KI-087);
+'   "KOREKCIJA_PADA"      korekcija kolicina dize gresku odmah posle snimka svoje
+'                         transakcije (S8KI086-REV-01: razlog mora da stigne do
+'                         operatera, a izmena da se vrati cela).
 ' _KOLONA rezimi kvare INDEKS kolone, ne dizu gresku: tolerantan citac pod
 ' Resume Next bi dignutu gresku progutao pa procitao pravu kolonu, i test ne bi
 ' razlikovao tolerantan citac od strogog. Postavljac ga pali samo u test rezimu,
@@ -2552,6 +2555,9 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal prijemnicaID As String,
     tx.BeginTx
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
+    If PaletaPraznoAkoTest("KOREKCIJA_PADA") Then
+        Err.Raise vbObjectError + 7366, SRC, "TEST: korekcija kolicina pada posle snimka transakcije."
+    End If
 
     ' touched: palID -> akumulirana delta gajbica (0 = samo kg/amb re-sync).
     ' Kljucevi = palete za header-recompute + Istorija/ADJUST log sa vidljivom deltom.
@@ -2662,9 +2668,14 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal prijemnicaID As String,
     AdjustPaletaGajbiceZaPrijemnicu_TX = doneCnt
     Exit Function
 EH:
-    If Not tx Is Nothing Then tx.RollbackTx
+    ' S8KI086-REV-01: razlog se cita ODMAH -- rollback i LogErr imaju svoje On Error i
+    ' brisu Err, pa bi operater dobio "Greska:" bez razloga, bas kad je prevezivanje
+    ' proslo a korekcija nije. LogErr ide pre rollback-a, dok je Err jos aktivan.
+    Dim errDesc As String
+    errDesc = Err.description
     LogErr SRC
-    outInfo = "Greska: " & Err.description
+    If Not tx Is Nothing Then tx.RollbackTx
+    outInfo = "Greska: " & errDesc
     AdjustPaletaGajbiceZaPrijemnicu_TX = ADJ_BLOCKED
 End Function
 

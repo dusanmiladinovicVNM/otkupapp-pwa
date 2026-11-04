@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 307: rez `KI-086`/`KI-087` — kod lokalno, jeftine kapije zelene; čeka review).
+**Ažurirano:** 04.11.2026 (stavka 308: review `#465` MERGE HOLD — `S8KI086-REV-01` zatvoren lokalno, P3 dorade; čeka kapije).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10695,6 +10695,35 @@
        BFP (očekivano 2995 / 0 = 2980 + 15), Palete, Storno; dokaz tri sabotaže; Compile. `KI-086` i `KI-087`
        ostaju OPEN do zelenih kapija.
      - **Sledeći brojevi:** test 315 · stavka 308 · KI-088 · plan §14.60.
+
+308. **Review PR-a `#465` — CODE CONDITIONAL GO, MERGE HOLD; `S8KI086-REV-01` zatvoren lokalno** (04.11.2026).
+     Na „Push i PR" je grana push-ovana do `ba990fa5` i otvoren je PR `#465` (opis proveren poređenjem).
+
+     - **Ocena review-a:** arhitektura 9,2, implementacija 8,7, testovi 8,5. `KI-086` je ocenjen kao ispravka
+       poslovne semantike; `KI-087` bez blokirajuće primedbe (fail-closed izmene ispravne). `S8R2A2-REV-01` se ne
+       otvara ponovo, ali ostaje obaveza izlazne kapije S8 (2b).
+     - **`S8KI086-REV-01` (P2):** EH korekcije (`AdjustPaletaGajbiceZaPrijemnicu_TX`) je razlog čitao POSLE
+       `tx.RollbackTx` i `LogErr`, koji imaju svoje `On Error` i mogu da obrišu `Err`. Operater bi tada dobio
+       „Greska:" bez razloga — baš kad je prevezivanje prošlo, a korekcija nije. Isti obrazac u EH-u
+       `PaletaAdjustPrompt`.
+       - **Ispravka:** razlog se čita odmah na ulazu u EH; `LogErr` ide PRE rollback-a (dok je `Err` aktivan), a u
+         poruku ide sačuvan tekst. Isto u `PaletaAdjustPrompt`.
+       - **Seam** `KOREKCIJA_PADA` (postojeći `PaletaPraznoTestSet`, već u `ResetSeamova`): korekcija diže grešku
+         odmah posle snimka svoje transakcije.
+       - **Test** BFP `Test_KI086_PalaKorekcijaNosiRazlog` (9 tvrdnji): prevezivanje ostaje uspešno, korekcija čeka
+         (grana `ADJ_BLOCKED` — ujedno P3 iz review-a), razlog stiže do operatera, a palete cilja ostaju kakve je
+         prevezivanje ostavilo (korekcija se vratila cela).
+       - **Sabotaža** `ki086-razlog-greske-se-gubi` (katalog 1153): razlog se ponovo čita posle rollback-a i
+         `LogErr`-a. Ako ne pocrveni, premisa nalaza (da rollback ili `LogErr` brišu `Err`) nije tačna za ovaj put —
+         to pokazuje tek dokaz.
+     - **P3 (dodato):** ručna korekcija (`PaletaAdjust_Prompt`, Alt+F8) javlja neurađenu korekciju kao upozorenje
+       (`vbExclamation`), ne kao obaveštenje. Nema test (UI).
+     - **P3 van obima:** neočekivana greška u samom `PaletaAdjustPrompt` (ne u korekciji) nema poseban test.
+     - **Jeftine kapije zelene:** `vba_check` (191), sidra 1153, šema `B22A1572`, `who_writes`, `popis_citalaca`,
+       `dokaz.py --plan ki08` (četiri sabotaže, dva prolaza).
+     - **NOT RUN:** crveno nad `11f9a7a7`; zeleno RunAllTests (očekivano 314 / 0) i BFP (očekivano 3004 / 0 = 2980 +
+       15 + 9) u odvojenim pozivima, Palete, Storno; dokaz četiri `ki08*`; Compile.
+     - **Sledeći brojevi:** test 315 · stavka 309 · KI-088 · plan §14.60.
 
 ## Dug sa imenom (posle S5-5b)
 
