@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 318: merge `#466` = `5024db6d`; 2b-2 rebase-ovan na `main`, kapije čekaju).
+**Ažurirano:** 04.11.2026 (stavka 319: review `#467` — CODE/ARCH GO, MERGE HOLD do acceptance-a; kapije puštene).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10886,6 +10886,20 @@
      - **Sledi:** push i PR 2b-2 na izričit zahtev, pa review i izvršne kapije (nov fixture, RAT, BFP, Palete,
        Storno, `dokaz.py` za nove i preformulisane sabotaže, Compile).
      - **Sledeći brojevi:** test 315 · stavka 319 · KI-088 · plan §14.63.
+
+319. **Review PR-a `#467` (2b-2), prvi krug: CODE GO · ARCHITECTURE GO · TEST DESIGN CONDITIONAL GO · MERGE HOLD do
+     izvršnog acceptance-a** (04.11.2026). PR otvoren na „Push i PR" nad `bb6944c8`.
+
+     - **Predlog review-a (P3):** dopuniti dokaz self-heal-a za OBA imena traga (`ZbirnaRoditeljID` i
+       `ZbirnaGeneracijaID`; test fizički vraća samo staro ime). **Operater: „zanemari ovo oko dopune za selfheal,
+       kreni odmah na acceptance"** — ne radi se; `ObrisiStareKolonePaletneStavke` briše oba imena po istom
+       primitivu, a staro ime meri test.
+     - **Procena review-a:** S8 ~90 % gotov; preostaje acceptance 2b-2 i završni S8 krug (11 odloženih sabotaža,
+       FULL).
+     - **Acceptance:** grana prebačena u glavni checkout (worktree uklonjen, sve je bilo na `origin`-u); kapije
+       puštene: nov fixture, Palete, Storno, `dokaz.py` (bazni RunAllTests + BFP, pa nove i preformulisane
+       sabotaže), zatim ručni Compile.
+     - **Sledeći brojevi:** test 315 · stavka 320 · KI-088 · plan §14.63.
 
 ## Dug sa imenom (posle S5-5b)
 
