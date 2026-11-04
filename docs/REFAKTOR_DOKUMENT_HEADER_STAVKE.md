@@ -10861,6 +10861,97 @@ iznad. Ovde je samo plan merenja:
 **Brojevi testova:** 311–315. PR `#457` i `claude/cool-bohr-68hi14` koriste 309+, pa se pre PR-a proverava
 jedinstvenost (`KI-084`).
 
+### 14.59) Pre-flight S8 rez 2a — čitaoci paleta prelaze na ID (04.11.2026)
+
+Grana `claude/s8-rez2a-citaoci` od `c6e859a5` (merge `#462`). Zapis: `docs/STANJE_REFAKTORA.md` stavka 295.
+Koda u ovom koraku nema.
+
+#### Granica 2a / 2b
+
+- **2a menja samo čitaoce:** posle 2a nijedan produkcioni čitalac ne odlučuje i ne prikazuje iz
+  `BrojPrijemnice`, `BrojZbirne` ni `ZbirnaRoditeljID` paletne stavke.
+- **Pisci te tri kolone ostaju do 2b.** Posle 2a pišu podatak koji niko ne čita, što je bezopasno; obrnut
+  redosled (prvo pisac) je ostavio slepe čitaoce i kapiju koja traži vezu koju niko ne piše (presedan S3a).
+  Pisci: `AddStavka` (`modPaletniList:1313`, `:2935`), labele u prevezivanju (`:1736-1738`), paletni rep
+  `ReassignPrijemnicaToZbirna_TX` (`modDokumenta:8928-8951`), spisak kolona `modSetup:938`.
+- **2b** ostaje kako je zapisan u §14.58: brisanje kolona, kapija pisca `PAL-INV-01`, fixture i seed-ovi,
+  test-pomoćnici koji čitaju po broju, grupa `pal_broj` sa pragom 0, izlazna kapija C002.
+
+#### Popis čitalaca (grep nad `c6e859a5`, van test modula)
+
+| # | Mesto | Kolona | Uloga danas | U 2a |
+|---|---|---|---|---|
+| R1 | `modStornoFlow.ZbirnaScopeRazlog:1762` (`SvaAktivnaDecaNoseZbirnaID` nad paletnim stavkama) | broj zbirne, `ZbirnaRoditeljID` | kapija: da li kaskada sme da se suzi na ID zbirne | paletni uslov se briše. Palete prate prijemnice u obimu, a kaskada ih već skida kroz `StornoPrijemnica` po ID-u (`PonistiZbirnaChain_TX`, oko `:2172-2185`) |
+| R2 | `modStornoFlow.ScanZbirna:2371` (`CountActive` po broju zbirne + scope) | broj zbirne | pregled posledica i `CorrectionNeedsDialog` (`hasPalete`) | broj aktivnih paletnih stavki prijemnica iz `ActivePrijIDsByZbirna` — isti skup koji kaskada stornira |
+| R3 | `modStornoImpact.ImpactPalete:247` (zbirna) | broj zbirne | uvid Storno centra | `GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, "", ids)` nad prijemnicama u obimu |
+| R4 | `ImpactPalete:242` (prijemnica bez razrešenog ID-a) | broj prijemnice | uvid | grana po broju se briše: bez ID-a nema uvida po broju, nego prazan uvid sa razlogom („broj je labela"). Ekran šalje ID reda (`modScrStorno:1068`) |
+| R5 | `modDokumenta.GetPrijemniceSaOsirocenimPaletama:8643` | broj prijemnice | labela reda „Osiroć. palete" | iz zaglavlja prijemnice po `PrijemnicaID` |
+| R6 | `modPaletniList.GetPaletaStavkeForGrid:621-622` | oba broja | C-048 (lista STAVKE) | broj prijemnice iz zaglavlja; zbirna po `PAL-ODL-09` |
+| R7 | `GetPaletaStavkeForGridMulti:675-676` | oba broja | nema pozivaoca (grep, i u testovima) | briše se kao mrtav kod |
+| R8 | `ReassignPaleteToPrijemnica_TX:1590`, `:1597`, `:1669` | oba broja | `RequireColumnIndex` bez upotrebe (`sZbr`), labela tuđe prijemnice u poruci „BLOKIRANO" (`bpg`) | mrtvo čitanje se briše (inače 2b obara prevezivanje); labela iz zaglavlja |
+| R9 | `EvaluatePaletaReassign:1967` (SAMO_TEST) | broj prijemnice | mrtva dodela (`sBr`) | red se briše; funkcija i njeni testovi ostaju (već rade po ID-u) |
+| R10 | `modIntegritet`: paletni deo B6 `:563`, C2 `:666` | broj zbirne | meke provere | brišu se (§14.8 t. 11) |
+| R11 | `modIntegritet` C1/C4 `:612`, A3 (`:794-850`) | broj prijemnice; ključ (`PrijemnicaID`, `Klasa`) | labela nalaza; meka `PAL-INV-02` | C1 po stavci (`PAL-INV-01` meko: prazan, nepostojeći ili tuđ `PrijemnicaStavkaID`); A3 po `PrijemnicaStavkaID`, obim po `PAL-ODL-08`; labele iz zaglavlja |
+
+**`KI-039` (u istom obimu, nije čitalac kolone):** pregled PONIŠTENJA zbirne
+(`BuildPonistenjePosledice`, `modStornoFlow:203-204`) obećava „skidaju se sa paleta" i kad je roba na
+prerađenoj paleti; kaskada tada pada tek u transakciji, posle `CreateCorrectionContext`. Ispravka po
+obrascu okvira prijemnice (`#438`): `PreradjenaPaletaRazlog` za svaku prijemnicu kaskade, pre dijaloga i pre
+konteksta ispravke.
+
+#### Verdikt po osama
+
+| Osa | Status | Dokaz |
+|---|---|---|
+| `DOMAIN` | **PROVEN**, osim A3 → **GAP → `PAL-ODL-08`** | `PAL-ODL-02/03/06`, `PAL-INV-01/02` (`docs/DOMEN/PALETE.md`). 2a ne menja šta paleta nosi, nego odakle čitalac uzima identitet. Otvoreno je samo koje stavke A3 meri |
+| `EVENTS` | N/A | nema novog događaja; menjaju se kapija scope-a, pregled, uvid, prikaz i meke provere |
+| `IDENTITY` | **PROVEN** | palete zbirne = palete aktivnih prijemnica u obimu (`ActivePrijIDsByZbirna`, isti skup kao kaskada); labele iz zaglavlja po `PrijemnicaID`; R4 bez pada na broj |
+| `CARDINALITY` | **PROVEN** | 1 zbirna : N prijemnica : N paletnih stavki; rubna paleta nosi stavke više zbirni. Broj zbirne nije jedinstven (dva kupca, isti vozač i dan) — baš taj slučaj meri test |
+| `INVARIANTS/OWNER` | **PROVEN** | mutacija ostaje u `StornoPrijemnica` po ID-u; meke provere `PAL-INV-01/02` drži `modIntegritet` (C1, A3) |
+| `WRITERS` | N/A za 2a | 2a ne dodaje i ne menja pisca; pisci tri kolone se brišu u 2b |
+| `DOWNSTREAM` | **PROVEN** | posle 2a od tri kolone ne zavisi niko osim njihovih pisaca; grupa `pal_broj` u `popis_citalaca` to drži pragom |
+| `CAPABILITY` | **PROVEN**, C-048 zbirna → **`PAL-ODL-09`** | C-048 MIGRATED; uvid zbirne i Oporavak bez promene za operatera; C2 i paletni deo B6 INTENTIONALLY REMOVED (§14.8 t. 11); `KI-039`: operater dobija razlog pre dijaloga |
+| `ACCEPTANCE CONTRACT` | **PROVEN (plan)** | ispod |
+| `PLATFORM` | N/A | bez novog Excel/COM ponašanja |
+| `LANDING` | **PROVEN** | grana od `c6e859a5`; otvoreni `#444` (migracija), `#410` (docs) ne diraju ove fajlove. Dele se `modStornoFlow` i `modIntegritet`, pa 2a ide sam |
+
+#### Odluke za operatera (pre koda)
+
+| ID | Pitanje | Preporuka |
+|---|---|---|
+| **`PAL-ODL-08`** | Koje stavke A3 meri po `PrijemnicaStavkaID`? | **stavke koje imaju bar jednu paletnu stavku (aktivnu ili storniranu)**: zbir aktivnih mora biti cela stavka. Hvata N7 iz istorije (sve palete stornirane, prijemnica aktivna), a ne dira robu koja nikad nije paletizovana. „Sve stavke sa gajbama dok je paletiranje uključeno" bi davalo lažne nalaze, jer je paletiranje tekuće podešavanje, a ne istorijsko |
+| **`PAL-ODL-09`** | Kolona „Zbirna" u listi stavki palete (C-048) | **iz zaglavlja zbirne preko veze prijemnice**, ne iz kolone paletne stavke i ne kao nov čitalac `COL_PRJ_BROJ_ZBIRNE` (grupa `prj_brojzbirne` ima prag 33) |
+| **`PAL-ODL-10`** | `KI-087` (tolerantne kolone u kapijama `modPaletniList`) i `KI-086` (ishod korekcije u Oporavku) | **zaseban rez posle 2a, pre 2b**: obe su ispravnost kapija i ishoda, ne identitet; jedan PR = jedna klasa |
+| **`PAL-ODL-11`** | Da li 2a ide kao jedan PR? | **dva**: **2a-1** storno zbirne (R1–R4, `KI-039`) i **2a-2** labele, C-048 i integritet (R5–R11, grupa `pal_broj`). Prvi dira mutacionu putanju i kapiju, drugi prikaz i meke provere |
+
+#### ACCEPTANCE CONTRACT — rez 2a (plan)
+
+- **Važi:**
+  - palete zbirne u kapiji scope-a, pregledu i uvidu su palete prijemnica koje kaskada stvarno stornira;
+  - uvid prijemnice bez ID-a ne pada na broj;
+  - labele u Oporavku, prevezivanju i C-048 dolaze iz zaglavlja po `PrijemnicaID`;
+  - C1 i A3 rade po `PrijemnicaStavkaID`; C2 i paletni deo B6 ne postoje;
+  - PONIŠTENJE zbirne sa robom na prerađenoj paleti se odbija pre dijaloga i pre konteksta ispravke, a
+    razlog imenuje paletu (`KI-039`).
+- **Ostaje netaknuto:** pisci tri kolone (do 2b), mutacija kaskade (već po ID-u), storno prijemnice i kapije
+  1a–1c, prerada, utovar i GP faktura, ekran Palete osim C-048.
+- **Edge:** dve zbirne istog broja (dva kupca, isti vozač i dan); rubna paleta sa stavkama dve zbirne;
+  stornirana prijemnica u obimu (njene palete nisu posledica).
+- **Negativ (prvo crveno nad `c6e859a5`):**
+  - paletna stavka čija kolona `BrojZbirne` ne odgovara zbirni njene prijemnice (synthetic anomaly: labela
+    laže) — pregled, uvid i kapija scope-a je danas broje, posle 2a ne;
+  - par kupaca istog broja zbirne (normal production state) — palete drugog kupca ne ulaze u pregled ni uvid;
+  - `KI-039` — danas se pravi kontekst ispravke i kaskada pada; posle 2a nema konteksta, a razlog stiže pre
+    dijaloga;
+  - labela koja laže (synthetic) — Oporavak, poruka „BLOKIRANO" i C-048 prikazuju broj iz zaglavlja;
+  - A3: N7 iz istorije je nalaz; nikad paletizovana stavka nije (ako `PAL-ODL-08` = preporuka); C1: prazan i
+    tuđ `PrijemnicaStavkaID` su nalazi.
+- **Čime:** testovi u `modTest` ili BFP (dokaz ih vozi, suite Palete ne); sabotaža po svakom čitaocu i za
+  `KI-039`; grupa `pal_broj` u `popis_citalaca` (`COL_PALS_BROJ_PRIJ`, `COL_PALS_BROJ_ZBIRNE`) sa pragom jednakim
+  broju pisaca posle 2a — izmena checkera traži dokaz u oba smera.
+- **Mina:** `GetColumnIndex` posle brisanja kolone vraća 0. Čitalac koji nije prepisan u 2a bi u 2b tiho
+  ćutao; zato prag `pal_broj` broji mesta, a ne postojanje kolone.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
