@@ -9002,8 +9002,10 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
         ' punjenja i potvrde stanje se moze promeniti. Writer zato ne veruje
         ' parametrima nego cita stanje SADA. Vazi za SVAKOG pozivaoca, pa i za
         ' legacy frmDokumenta.
+        ' tipNovca ide u kapiju: kes kooperantu na listu sme najvise do
+        ' osnovice, PDV nadoknada samo na racun (NOV-NADOKNADA-01).
         Dim blokErr As String
-        blokErr = IsplataBlokProblem(otkupID, kooperantID, stanicaID, novac)
+        blokErr = IsplataBlokProblem(otkupID, kooperantID, stanicaID, novac, tipNovca)
         If Len(blokErr) > 0 Then
             Err.Raise vbObjectError + 1512, "SaveOMUlaz_TX", blokErr
         End If

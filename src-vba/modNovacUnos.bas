@@ -237,7 +237,7 @@ Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As St
     Dim strogo As Boolean, novac As Double
     Dim partTip As String, partID As String
     Dim omSaldo As Double, blokErr As String
-    Dim errDesc As String
+    Dim errDesc As String, tipBloka As String
     On Error GoTo EH
     fokus = ""
     strogo = IsValidacijaUnosa()
@@ -281,13 +281,21 @@ Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As St
             ' modNovac.IsplataBlokProblem cita stanje SADA, i istu kapiju
             ' nezavisno podize i SaveOMUlaz_TX - ovde je samo da operater dobije
             ' poruku uz polje umesto izuzetka.
-            blokErr = IsplataBlokProblem(S(p, "otkupID"), partID, S(p, "stanicaID"), novac)
+            '
+            ' "Isplata iz OM avansa" ima smisla samo dok su kes isplate
+            ' ukljucene - legacy taj prekidac tada i ne pusta da se pritisne.
+            ' Tip se odredjuje PRE kapije: kes na listu ima i granicu osnovice
+            ' (NOV-NADOKNADA-01), pa kapija mora da zna da li je ovo gotovina.
+            If B(p, "izAvansa") And IsKesIsplate() Then
+                tipBloka = NOV_KES_OTKUPAC_KOOP
+            Else
+                tipBloka = NOV_VIRMAN_FIRMA_KOOP
+            End If
+            blokErr = IsplataBlokProblem(S(p, "otkupID"), partID, S(p, "stanicaID"), novac, tipBloka)
             If Len(blokErr) > 0 Then
                 fokus = "novac": IsplataValidiraj = blokErr: Exit Function
             End If
-            ' "Isplata iz OM avansa" ima smisla samo dok su kes isplate
-            ' ukljucene - legacy taj prekidac tada i ne pusta da se pritisne.
-            If B(p, "izAvansa") And IsKesIsplate() Then
+            If tipBloka = NOV_KES_OTKUPAC_KOOP Then
                 omSaldo = GetOMAvansSaldo(S(p, "stanicaID"))
                 If novac > omSaldo Then
                     fokus = "novac"
@@ -295,10 +303,8 @@ Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As St
                                        Format$(omSaldo, "#,##0.00") & " RSD"
                     Exit Function
                 End If
-                p("tipNovca") = NOV_KES_OTKUPAC_KOOP
-            Else
-                p("tipNovca") = NOV_VIRMAN_FIRMA_KOOP
             End If
+            p("tipNovca") = tipBloka
         Else
             ' Bez bloka isplata nije razduzenje nego avans kooperantu.
             p("tipNovca") = NOV_VIRMAN_AVANS_KOOP

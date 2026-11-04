@@ -259,8 +259,8 @@ SABOTAZE = {
     # njemu: pogresan tip se ne vidi u formi, nego tek u saldu.
     "isplata-tip-blok": (
         "modNovacUnos.bas",
-        '                p("tipNovca") = NOV_VIRMAN_FIRMA_KOOP\n',
-        '                p("tipNovca") = NOV_VIRMAN_AVANS_KOOP   \' SABOTAZA\n',
+        "                tipBloka = NOV_VIRMAN_FIRMA_KOOP\n",
+        "                tipBloka = NOV_VIRMAN_AVANS_KOOP   ' SABOTAZA\n",
         "T_IsplataValidiraj_TipNovcaPoIzboru",
         "uz blok bez prekidaca isplata je virman firme",
     ),
@@ -395,13 +395,32 @@ SABOTAZE = {
     "writer-bez-kapije": (
         "modDokumenta.bas",
         "        Dim blokErr As String\n"
-        "        blokErr = IsplataBlokProblem(otkupID, kooperantID, stanicaID, novac)\n"
+        "        blokErr = IsplataBlokProblem(otkupID, kooperantID, stanicaID, novac, tipNovca)\n"
         "        If Len(blokErr) > 0 Then\n"
         '            Err.Raise vbObjectError + 1512, "SaveOMUlaz_TX", blokErr\n'
         "        End If\n",
         "        ' SABOTAZA: writer opet veruje parametrima\n",
         "T_WriterGuard_OdbijaTudjBlok",
         "writer odbija blok sa drugog otkupnog mesta i bez UI provere",
+    ),
+    # --- NOV-NADOKNADA-01: PDV nadoknada se ne isplacuje u gotovini ----------
+    # Dve polovine istog pravila: kapija bez granice osnovice (meri BFP, kroz
+    # pisca), i ekran koji kapiji ne kaze da je isplata gotovina (meri 311).
+    "kes-nadoknada-bez-granice": (
+        "modNovac.bas",
+        "    If Trim$(tipNovca) = NOV_KES_OTKUPAC_KOOP Then\n"
+        "        IsplataBlokProblem = KesNadoknadaProblem(otkupID, vrednost, iznos)\n"
+        "    End If\n",
+        "    ' SABOTAZA: kes nema granicu osnovice (NOV-NADOKNADA-01)\n",
+        "Test_NOV_KesNeIsplacujeNadoknadu",
+        "Nadoknada: kes preko osnovice se odbija",
+    ),
+    "isplata-kes-bez-tipa-u-kapiji": (
+        "modNovacUnos.bas",
+        '            blokErr = IsplataBlokProblem(S(p, "otkupID"), partID, S(p, "stanicaID"), novac, tipBloka)\n',
+        '            blokErr = IsplataBlokProblem(S(p, "otkupID"), partID, S(p, "stanicaID"), novac)   \' SABOTAZA\n',
+        "T_NovNadoknada_EkranSaljeTipKapiji",
+        "311: kes preko osnovice se odbija na ekranu",
     ),
     # --- ruta ekrana --------------------------------------------------------
     # --- kapije nad novcem (hotfix posle pregleda #190) ---------------------

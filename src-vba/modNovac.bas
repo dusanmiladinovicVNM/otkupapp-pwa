@@ -1021,10 +1021,15 @@ End Function
 '=====================================================================
 
 ' Prazan otkupID nije greska: isplata bez izabranog bloka je avans kooperantu.
+'
+' tipNovca je NEOBAVEZAN i menja odgovor samo za kes kooperantu
+' (NOV_KES_OTKUPAC_KOOP): tada vazi i NOV-NADOKNADA-01 (v. KesNadoknadaProblem).
+' Prazan tip = pitanje "da li sme ISPLATA ovog iznosa", kao do sada.
 Public Function IsplataBlokProblem(ByVal otkupID As String, _
                                    ByVal kooperantID As String, _
                                    ByVal stanicaID As String, _
-                                   ByVal iznos As Double) As String
+                                   ByVal iznos As Double, _
+                                   Optional ByVal tipNovca As String = "") As String
     Const SRC As String = "IsplataBlokProblem"
     Dim data As Variant, rows As Collection, r As Long
     Dim colKoop As Long, colSt As Long, colStorno As Long
@@ -1098,7 +1103,79 @@ Public Function IsplataBlokProblem(ByVal otkupID As String, _
     If iznos > preostalo Then
         IsplataBlokProblem = Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA") & " " & _
                              Format$(preostalo, "#,##0.00")
+        Exit Function
     End If
+
+    If Trim$(tipNovca) = NOV_KES_OTKUPAC_KOOP Then
+        IsplataBlokProblem = KesNadoknadaProblem(otkupID, vrednost, iznos)
+    End If
+End Function
+
+' NOV-NADOKNADA-01 -- PDV NADOKNADA SE NE ISPLACUJE U GOTOVINI.
+'
+' Otkupni list = osnovica + PDV nadoknada. Nadoknada mora stici kooperantu
+' UPLATOM NA RACUN, i to bez obzira na to da li jos duguje za repromaterijal
+' (odluka vlasnika 04.11.2026; docs/DOMEN/README.md, NOV-NADOKNADA-01). Gotovina
+' na listu zato sme ukupno najvise do OSNOVICE:
+'
+'   list 108 = 100 + 8  ->  kesom najvise 100; 8 ide samo virmanom.
+'
+' Granica je zbir SVE gotovine na listu, ne samo ovog unosa -- inace bi dva
+' unosa od po 60 isplatila 120 kesom. Virman se u granicu NE racuna: virman od
+' 50 pa kes 58 je ispravno (racunom je placeno vise od nadoknade). Gornju
+' granicu ostatka drzi IsplataBlokProblem pre ovog poziva.
+'
+' Osnovica se racuna kao na papiru otkupnog lista (modPrint): vrednost /
+' (1 + stopa), uz istu stopu (PdvNadoknadaStopa), zaokruzena na paru. Poredi
+' se u cent-domenu (ZaokruziNovac), kao i saldo naloga za banku.
+'
+' Izvestaji (kartica, pregled po OM) se ovim NE menjaju -- pravilo je o KANALU
+' isplate, ne o saldu.
+Private Function KesNadoknadaProblem(ByVal otkupID As String, _
+                                     ByVal vrednost As Double, _
+                                     ByVal iznos As Double) As String
+    Dim osnovica As Double, kesDozvoljeno As Double
+
+    osnovica = ZaokruziNovac(vrednost / (1 + PdvNadoknadaStopa() / 100))
+    kesDozvoljeno = ZaokruziNovac(osnovica - KesIsplacenoZaOtkup(otkupID))
+    If kesDozvoljeno < 0 Then kesDozvoljeno = 0
+
+    If ZaokruziNovac(iznos) > kesDozvoljeno Then
+        KesNadoknadaProblem = Poruka("NOVAC_ERR_KES_NADOKNADA") & " " & _
+                              Format$(kesDozvoljeno, "#,##0.00")
+    End If
+End Function
+
+' Zbir gotovine kooperantu (NOV_KES_OTKUPAC_KOOP) vezane za jedan otkupni list,
+' bez storniranih redova. Cita, nista ne menja. Javna jer je deo pravila
+' NOV-NADOKNADA-01, pa je meri i test.
+Public Function KesIsplacenoZaOtkup(ByVal otkupID As String) As Double
+    Const SRC As String = "KesIsplacenoZaOtkup"
+
+    otkupID = Trim$(otkupID)
+    If Len(otkupID) = 0 Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colOtk As Long, colTip As Long, colIsplata As Long
+    colOtk = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    colTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
+    colIsplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colOtk))) = otkupID Then
+            If Trim$(CStr(data(i, colTip))) = NOV_KES_OTKUPAC_KOOP Then
+                If IsNumeric(data(i, colIsplata)) Then
+                    KesIsplacenoZaOtkup = KesIsplacenoZaOtkup + CDbl(data(i, colIsplata))
+                End If
+            End If
+        End If
+    Next i
 End Function
 
 ' Prazan fakturaID nije greska: uplata bez izabrane fakture je avans kupca.

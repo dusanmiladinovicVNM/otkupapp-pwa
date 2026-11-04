@@ -417,6 +417,35 @@ na kupca jezgro još ne sudi (`KI-069`). Pravilo: `AMBALAZA.md` 6.14b, tačka 4.
 Mere ih `modTest` 295–300 (`T_KI024_*`), 301–306 (`T_Prazne_*`) i 307–308
 (`T_ODL39_*`), sabotaže `ki024-*`, `prazne-*`, `storno-rev-razlog-*` i `odl39-*`.
 
+### PDV nadoknada kooperantu (odluka vlasnika 04.11.2026)
+
+Otkupni list = **osnovica + PDV nadoknada**. Primer vlasnika: kooperant je uzeo
+repromaterijala za 150, a predao robu za 100 + 8 nadoknade = 108.
+
+- prebija se **100** (samo osnovica), dug za repromaterijal ostaje **50**;
+- **8 se plaća na račun kooperanta**, bez obzira na to što i dalje duguje;
+- izveštaji (kartica kooperanta, pregled po otkupnom mestu) i dalje pokazuju
+  **dug 42** — pravilo je o **kanalu** isplate i obračunu kompenzacije, ne o saldu.
+
+**NOV-NADOKNADA-01 — gotovina na otkupni list ide najviše do osnovice.** Zbir
+`KesOtkupacKoop` na jednom `OtkupID` ≤ osnovica tog lista; nadoknada stiže samo
+uplatom na račun. Virman se u granicu ne računa (virman 50, pa kes 58 na listu od
+108 je ispravno). Osnovica = vrednost / (1 + stopa), stopom kao na papiru
+(`PdvNadoknadaStopa`), na paru. **Vlasnik:** kapija `modNovac.IsplataBlokProblem`
+sa tipom novca → `KesNadoknadaProblem`; zovu je ekran (`modNovacUnos.IsplataValidiraj`)
+i pisac (`SaveOMUlaz_TX`), jedini put kojim gotovina stiže na list. Ispravka koja
+smanji list i prenese zatečenu gotovinu (`PrevezaNovacNaOtkup`) **se ne blokira**,
+isto kao preplata (`ODLUKA_NOVAC_PRI_STORNU.md`). Mere je `modTest` 311 (ekran) i BFP
+`Test_NOV_KesNeIsplacujeNadoknadu` (kapija i pisac), sabotaže
+`kes-nadoknada-bez-granice` i `isplata-kes-bez-tipa-u-kapiji`.
+
+**NOV-NADOKNADA-02 — kompenzacija repromaterijala robom pokriva najviše
+osnovicu**, nikad nadoknadu. **Vlasnika još nema:** kompenzacija danas ne postoji
+kao upis (`AgroAbzug` se čita u `modNovac` i `modAgrohemija`, ali ga niko ne piše;
+nalozi za banku agro ne odbijaju). Ovo je uslov za budućeg pisca kompenzacije, ne
+opis postojećeg koda. Taj pisac deli granicu sa `NOV-NADOKNADA-01`: kes +
+kompenzacija na listu ≤ osnovica.
+
 ## 3) Ko šta piše
 
 `WHO_WRITES.md` u ovom folderu — generisana mapa vlasništva nad tabelama

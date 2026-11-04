@@ -415,6 +415,7 @@ Public Sub RunAllTests()
     RunOne 308
     RunOne 309
     RunOne 310
+    RunOne 311
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1020,6 +1021,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 308: TestName = "T_ODL39_PapirVracanjaKupcu"
         Case 309: TestName = "T_S8R1a_IspravkaKorigujeSvojDokument"
         Case 310: TestName = "T_S8R1a_AltF8BrojUJedanDokument"
+        Case 311: TestName = "T_NovNadoknada_EkranSaljeTipKapiji"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1338,6 +1340,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 308: T_ODL39_PapirVracanjaKupcu
         Case 309: T_S8R1a_IspravkaKorigujeSvojDokument
         Case 310: T_S8R1a_AltF8BrojUJedanDokument
+        Case 311: T_NovNadoknada_EkranSaljeTipKapiji
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -3779,6 +3782,46 @@ Private Sub T_S8R1a_AltF8BrojUJedanDokument()
     prjID = PrijemnicaZaKorekciju(FX_PRIJ_KOLIZIJA, razlog)
     AssertEq prjID, "", "310: broj samo storniranih dokumenata se odbija"
     AssertEq (Len(razlog) > 0), True, "310: odbijen broj nosi razlog"
+End Sub
+
+' ============================================================
+' 311. NOV-NADOKNADA-01 KROZ EKRAN ISPLATE (F5): PDV NADOKNADA SE NE ISPLACUJE
+' U GOTOVINI. Kes na otkupni list sme najvise do osnovice; nadoknada ide samo
+' na racun (odluka vlasnika 04.11.2026, docs/DOMEN/README.md).
+'
+' Kapija je jedna (modNovac.IsplataBlokProblem), ali je modul unosa ranije
+' zvao kapiju PRE nego sto je znao da je isplata gotovina. Ovaj test meri da
+' IsplataValidiraj kapiji salje tip: kes iz OM avansa preko osnovice fixture
+' bloka dobija poruku o nadoknadi, a isti iznos virmanom prolazi. Pisca i
+' zbir vise kes unosa meri BFP (Test_NOV_KesNeIsplacujeNadoknadu).
+'
+' Ne pise nista -- samo validacija, pa ne dira avans saldo koji trazi 17.
+' ============================================================
+Private Sub T_NovNadoknada_EkranSaljeTipKapiji()
+    Dim p As Object, fokus As String
+    Dim osn As Double, dozvoljeno As Double
+
+    osn = ZaokruziNovac(FX_BLOK_VREDNOST / (1 + PdvNadoknadaStopa() / 100))
+    dozvoljeno = ZaokruziNovac(osn - KesIsplacenoZaOtkup(FX_BLOK))
+    AssertEq IsKesIsplate(), True, "311 preduslov: kes isplate su ukljucene"
+    AssertEq (OstatakFixtureBloka() > dozvoljeno + 0.01), True, _
+             "311 preduslov: neisplaceni ostatak bloka je veci od dozvoljenog kesa"
+
+    ' Kes preko osnovice -- NAJVAZNIJA tvrdnja, zato prva posle preduslova.
+    Set p = IsplataUnosKojiProlazi()
+    p("izAvansa") = True
+    p("novac") = dozvoljeno + 0.01
+    AssertEq modNovacUnos.IsplataValidiraj(p, fokus), _
+             Poruka("NOVAC_ERR_KES_NADOKNADA") & " " & Format$(dozvoljeno, "#,##0.00"), _
+             "311: kes preko osnovice se odbija na ekranu"
+    AssertEq fokus, "novac", "311: fokus ide na iznos"
+
+    ' KONTROLA: isti iznos virmanom prolazi. Bez ove grane test ne bi
+    ' razlikovao granicu kesa od opste blokade iznosa.
+    Set p = IsplataUnosKojiProlazi()
+    p("novac") = dozvoljeno + 0.01
+    AssertEq modNovacUnos.IsplataValidiraj(p, fokus), "", "311: isti iznos virmanom prolazi"
+    AssertEq CStr(p("tipNovca")), NOV_VIRMAN_FIRMA_KOOP, "311: virman ostaje virman firme"
 End Sub
 
 ' ============================================================

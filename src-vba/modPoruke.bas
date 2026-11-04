@@ -1091,6 +1091,10 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "NOVAC_ERR_FAK_VEC_PLACENA", ChrW(10007) & " Faktura je ve" & ChrW(263) & _
               " u potpunosti pla" & ChrW(263) & "ena " & ChrW(8212) & " nema " & ChrW(353) & "ta da se uplati:"
     UpsertRow lo, existing, "NOVAC_ERR_AVANS_PREKO", ChrW(10007) & " Isplata prelazi avans saldo otkupnog mesta. Raspolo" & ChrW(382) & "ivo:"
+    ' NOV-NADOKNADA-01: kes na listu najvise do osnovice; nadoknada samo na racun.
+    UpsertRow lo, existing, "NOVAC_ERR_KES_NADOKNADA", ChrW(10007) & " PDV nadoknada se ne ispla" & ChrW(263) & _
+              "uje u gotovini " & ChrW(8212) & " ide samo na ra" & ChrW(269) & "un kooperanta. Gotovinom je na ovom listu jo" & _
+              ChrW(353) & " dozvoljeno:"
     UpsertRow lo, existing, "NOVUNOS_BEZ_BROJA", "(bez broja)"
     UpsertRow lo, existing, "NOVUNOS_NAP_FAKTURA", "Uplata po fakturi:"
     UpsertRow lo, existing, "NOVUNOS_NAP_AVANS_KUP", "Avans kupca"

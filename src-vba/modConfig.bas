@@ -1387,6 +1387,19 @@ Public Function IsKesIsplate() As Boolean
     IsKesIsplate = ConfigFlag(CFG_KES_ISPLATE, True)
 End Function
 
+' Stopa PDV nadoknade (%) -- ISTO pravilo kao stampa otkupnog lista
+' (modPrint: PrNz(GetConfigValue(...)), pa <= 0 -> PDV_NADOKNADA_DEFAULT), da
+' kapija novca i papir racunaju osnovicu iz iste stope (NOV-NADOKNADA-01).
+' modPrint i dalje cita svoju kopiju; ovde je jedini ulaz za novac.
+Public Function PdvNadoknadaStopa() As Double
+    Dim v As Variant
+    On Error Resume Next
+    v = GetConfigValue(CFG_PDV_NADOKNADA_STOPA)
+    If IsNumeric(v) Then PdvNadoknadaStopa = CDbl(v)
+    On Error GoTo 0
+    If PdvNadoknadaStopa <= 0 Then PdvNadoknadaStopa = PDV_NADOKNADA_DEFAULT
+End Function
+
 ' PDF se otvara posle izvoza (CFG_PDF_OTVORI_POSLE). Default ON (kao do sada).
 ' OFF -> DocExportPdf pravi PDF, ali ga ne otvara.
 Public Function IsPdfOtvoriPosle() As Boolean

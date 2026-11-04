@@ -248,6 +248,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OTK_IspravkaPrijavljujePreplatu
     Test_OTK_IspravkaPrijavljujePreplatuVirmanom
     Test_OTK_IsplataNaNovDokumentProlazi
+    Test_NOV_KesNeIsplacujeNadoknadu
     Test_OTK_CitaociCitajuStavke
     Test_OTK_CitaociStavkiFailClosed
     Test_OTK_ZaglavljeBezStavkiObaraCitaoce
@@ -27916,6 +27917,128 @@ Private Sub Test_OTK_IsplataNaNovDokumentProlazi()
     Exit Sub
 EH:
     LogFatal "Test_OTK_IsplataNaNovDokumentProlazi", Err.Number, Err.description
+End Sub
+
+' NOV-NADOKNADA-01 -- PDV NADOKNADA SE NE ISPLACUJE U GOTOVINI.
+'
+' Primer vlasnika (04.11.2026), puta 100: kooperant preda robu za 10.000 plus
+' 800 nadoknade = 10.800. Kesom sme ukupno najvise osnovica (10.000); 800 ide
+' samo na racun, bez obzira na dug za repromaterijal. Osnovica se racuna iz
+' stope podesavanja (PdvNadoknadaStopa), pa test ne zavisi od toga da li je
+' stopa u svesci bas 8 -- uz 8 su brojevi tacno vlasnikovi.
+'
+' Meri kapiju (IsplataBlokProblem) i PISCA (SaveOMUlaz_TX) bez ekrana: zbir
+' vise kes unosa, odbijen upis bez reda, nadoknadu virmanom, i virman pre kesa.
+' Ekran meri modTest 311. Tvrdnja koju obara sabotaza
+' "kes-nadoknada-bez-granice" ide prva posle preduslova.
+Private Sub Test_NOV_KesNeIsplacujeNadoknadu()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("NOVNAD")
+
+    Dim otkID As String
+    otkID = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-NAD1-" & scenario), _
+                           OtkStavke(100#, 108#, 0, 0#, 0#, 0))
+    AssertTrue Abs(modOtkup.VrednostOtkupa(otkID) - 10800#) < 0.001, _
+               "Nadoknada: preduslov, list vredi 10800"
+
+    Dim osn As Double, nad As Double
+    osn = ZaokruziNovac(10800# / (1 + PdvNadoknadaStopa() / 100))
+    nad = ZaokruziNovac(10800# - osn)
+
+    ' (1) kes preko osnovice se odbija
+    AssertTrue Len(modNovac.IsplataBlokProblem(otkID, TEST_KOOP_ID, "", osn + 0.01, _
+                                                NOV_KES_OTKUPAC_KOOP)) > 0, _
+               "Nadoknada: kes preko osnovice se odbija"
+    AssertEquals Poruka("NOVAC_ERR_KES_NADOKNADA") & " " & Format$(osn, "#,##0.00"), _
+                 modNovac.IsplataBlokProblem(otkID, TEST_KOOP_ID, "", osn + 0.01, _
+                                             NOV_KES_OTKUPAC_KOOP), _
+                 "Nadoknada: odbijanje kaze koliko jos sme kesom"
+
+    ' (2) KONTROLA: isti iznos virmanom, i poziv bez tipa, prolaze. Granica je
+    ' o KANALU isplate, ne o iznosu -- bez ovoga test ne bi razlikovao granicu
+    ' kesa od opste blokade.
+    AssertEquals "", modNovac.IsplataBlokProblem(otkID, TEST_KOOP_ID, "", osn + 0.01, _
+                                                 NOV_VIRMAN_FIRMA_KOOP), _
+                 "Nadoknada: isti iznos virmanom prolazi"
+    AssertEquals "", modNovac.IsplataBlokProblem(otkID, TEST_KOOP_ID, "", osn + 0.01), _
+                 "Nadoknada: poziv bez tipa ostaje kakav je bio"
+
+    ' (3) kes tacno do osnovice prolazi
+    AssertEquals "", modNovac.IsplataBlokProblem(otkID, TEST_KOOP_ID, "", osn, _
+                                                 NOV_KES_OTKUPAC_KOOP), _
+                 "Nadoknada: kes do osnovice prolazi"
+
+    ' (4) KROZ PISCA, u dva kes unosa. Kes trosi avans otkupnog mesta, pa ga
+    ' firma prvo da -- istim pisac-putem kojim to radi operater.
+    Dim d As Date: d = NextTestDate()
+    Dim ok As Boolean, pre As Double, prvi As Double
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=TEST_PREFIX & "-NOV-NADAV-" & scenario, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vrstaVoca:=TEST_VRSTA, novac:=30000#, kooperantID:="", _
+                       primalacDisplay:="Test OM", otkupID:="", _
+                       tipNovca:=NOV_KES_FIRMA_OTKUPAC)
+    AssertTrue ok, "Nadoknada: preduslov, firma dala avans otkupnom mestu"
+
+    prvi = ZaokruziNovac(osn / 2)
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=TEST_PREFIX & "-NOV-NADK1-" & scenario, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vrstaVoca:=TEST_VRSTA, novac:=prvi, kooperantID:=TEST_KOOP_ID, _
+                       primalacDisplay:="TEST KOOPERANT", otkupID:=otkID, _
+                       tipNovca:=NOV_KES_OTKUPAC_KOOP)
+    AssertTrue ok, "Nadoknada: prvi kes unutar osnovice je upisan"
+
+    ' Drugi kes bi ZAJEDNO sa prvim presao osnovicu za jednu paru.
+    pre = GetIsplataForOtkup(otkID)
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=TEST_PREFIX & "-NOV-NADK2-" & scenario, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vrstaVoca:=TEST_VRSTA, novac:=ZaokruziNovac(osn - prvi + 0.01), _
+                       kooperantID:=TEST_KOOP_ID, _
+                       primalacDisplay:="TEST KOOPERANT", otkupID:=otkID, _
+                       tipNovca:=NOV_KES_OTKUPAC_KOOP)
+    AssertTrue Not ok, "Nadoknada: pisac odbija kes koji bi zajedno presao osnovicu"
+    AssertTrue Abs(GetIsplataForOtkup(otkID) - pre) < 0.001, _
+               "Nadoknada: odbijen kes ne ostavlja red"
+
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=TEST_PREFIX & "-NOV-NADK3-" & scenario, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vrstaVoca:=TEST_VRSTA, novac:=ZaokruziNovac(osn - prvi), _
+                       kooperantID:=TEST_KOOP_ID, _
+                       primalacDisplay:="TEST KOOPERANT", otkupID:=otkID, _
+                       tipNovca:=NOV_KES_OTKUPAC_KOOP)
+    AssertTrue ok, "Nadoknada: kes do osnovice je upisan"
+
+    ' (5) nadoknada ide virmanom i zatvara list
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=TEST_PREFIX & "-NOV-NADV-" & scenario, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vrstaVoca:=TEST_VRSTA, novac:=nad, kooperantID:=TEST_KOOP_ID, _
+                       primalacDisplay:="TEST KOOPERANT", otkupID:=otkID, _
+                       tipNovca:=NOV_VIRMAN_FIRMA_KOOP)
+    AssertTrue ok, "Nadoknada: virman nadoknade je upisan"
+    AssertTrue Abs(GetIsplataForOtkup(otkID) - 10800#) < 0.001, _
+               "Nadoknada: list je placen u celosti"
+    AssertTrue Abs(KesIsplacenoZaOtkup(otkID) - osn) < 0.001, _
+               "Nadoknada: kesom je placena tacno osnovica"
+
+    ' (6) VIRMAN PRE KESA: racunom je vec placeno vise od nadoknade, pa kes sme
+    ' do ostatka. Pravilo nije "800 uvek ostaje otvoreno", nego "kes <= osnovica".
+    Dim otk2 As String
+    otk2 = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-NAD2-" & scenario), _
+                          OtkStavke(100#, 108#, 0, 0#, 0#, 0))
+    ok = SaveOMUlaz_TX(datum:=d, brojDok:=TEST_PREFIX & "-NOV-NADV2-" & scenario, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vrstaVoca:=TEST_VRSTA, novac:=5000#, kooperantID:=TEST_KOOP_ID, _
+                       primalacDisplay:="TEST KOOPERANT", otkupID:=otk2, _
+                       tipNovca:=NOV_VIRMAN_FIRMA_KOOP)
+    AssertTrue ok, "Nadoknada: virman pre kesa je upisan"
+    AssertEquals "", modNovac.IsplataBlokProblem(otk2, TEST_KOOP_ID, "", 5800#, _
+                                                 NOV_KES_OTKUPAC_KOOP), _
+                 "Nadoknada: posle virmana kes sme do ostatka"
+
+    Exit Sub
+EH:
+    LogFatal "Test_NOV_KesNeIsplacujeNadoknadu", Err.Number, Err.description
 End Sub
 
 ' PUT D SUZENO: odvezan VirmanFirmaKoop se VIDI kao raspoloziv avans.
