@@ -415,6 +415,10 @@ Public Sub RunAllTests()
     RunOne 308
     RunOne 309
     RunOne 310
+    RunOne 311
+    RunOne 312
+    RunOne 313
+    RunOne 314
     RunOne 13
     RunOne 14
     RunOne 15
@@ -677,6 +681,11 @@ Private Sub ResetSeamova()
     ' Podmetnut pad na kraju storna prijemnice (S6 korak 4): zaostao seam bi
     ' oborio svaki sledeci storno prijemnice.
     modStorno.StornoPrijemnicePadniTest False
+    ' Pokvarena odluka "paleta je prazna" (S8 rez 1b, N8): zaostao seam bi
+    ' prikazu palete vratio prazno ili oborio svako sledece skidanje paleta.
+    modPaletniList.PaletaPraznoTestSet ""
+    ' Necitljiva kolona identiteta liste Nedovrseno (S8R1B-REV-01).
+    modStornoRecovery.NedovrsenoKvarTestSet ""
     ' Podmetnut pad na kraju jezgra fakture (S6 korak 5): zaostao seam bi oborio
     ' svaku sledecu fakturu.
     modFaktura.CreateFakturaPadniTest False
@@ -1020,6 +1029,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 308: TestName = "T_ODL39_PapirVracanjaKupcu"
         Case 309: TestName = "T_S8R1a_IspravkaKorigujeSvojDokument"
         Case 310: TestName = "T_S8R1a_AltF8BrojUJedanDokument"
+        Case 311: TestName = "T_S8R1b_PrevezivanjeTraziObaID"
+        Case 312: TestName = "T_S8R1b_SkiniPaleteJezgro"
+        Case 313: TestName = "T_S8R1b_NedovrsenoPoIdentitetu"
+        Case 314: TestName = "T_S8R1b_PreveziPaleteJezgro"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1338,6 +1351,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 308: T_ODL39_PapirVracanjaKupcu
         Case 309: T_S8R1a_IspravkaKorigujeSvojDokument
         Case 310: T_S8R1a_AltF8BrojUJedanDokument
+        Case 311: T_S8R1b_PrevezivanjeTraziObaID
+        Case 312: T_S8R1b_SkiniPaleteJezgro
+        Case 313: T_S8R1b_NedovrsenoPoIdentitetu
+        Case 314: T_S8R1b_PreveziPaleteJezgro
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -3780,6 +3797,307 @@ Private Sub T_S8R1a_AltF8BrojUJedanDokument()
     AssertEq prjID, "", "310: broj samo storniranih dokumenata se odbija"
     AssertEq (Len(razlog) > 0), True, "310: odbijen broj nosi razlog"
 End Sub
+
+' ============================================================
+' 311. S8 REZ 1b (N2): PREVEZIVANJE TRAZI OBA DOKUMENTA (PrijemnicaID).
+' ============================================================
+' Grana po broju i njene kapije dvosmislenosti su obrisane. Bez izvornog ili
+' ciljnog ID-a writer odbija PRE ijednog citanja paleta, i razlog imenuje BAS
+' ID koji fali. Druga brana postoji (prazan skup ID-eva ne nalazi dokument), pa
+' tvrdnja meri RAZLOG, ne samo odbijanje -- inace bi bila placebo.
+'
+'   C2 (8/150326, storniran, PRJ-TEST-C2)  ->  A (1/150326, aktivan, PRJ-TEST-A)
+'
+' Ne meri se apsolutna roba (testovi dele svesku), nego da se nista ne pomeri.
+' SABOTAZA: s8r1b-prevezivanje-bez-izvornog-id.
+Private Sub T_S8R1b_PrevezivanjeTraziObaID()
+    Dim ok As Boolean, upoz As String, gajbDiff As Boolean, pre As String
+
+    pre = GajbicaZaDokument("PRJ-TEST-C2") & "|" & GajbicaZaDokument("PRJ-TEST-A")
+
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
+                                       gajbDiff, "", "PRJ-TEST-A")
+    AssertEq ok, False, "311: prevezivanje bez izvornog ID-a se odbija"
+    AssertEq (InStr(upoz, "Izvorna prijemnica nije zadata") > 0), True, _
+             "311: razlog imenuje izvorni ID koji fali"
+
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
+                                       gajbDiff, "PRJ-TEST-C2", "")
+    AssertEq ok, False, "311: prevezivanje bez ciljnog ID-a se odbija"
+    AssertEq (InStr(upoz, "Ciljna prijemnica nije zadata") > 0), True, _
+             "311: razlog imenuje ciljni ID koji fali"
+
+    AssertEq GajbicaZaDokument("PRJ-TEST-C2") & "|" & GajbicaZaDokument("PRJ-TEST-A"), pre, _
+             "311: odbijeno prevezivanje nije nista pomerilo"
+
+    Dim v As Variant
+    v = EvaluatePaletaReassign(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ)
+    AssertEq CStr(v(0)), "NONE", "311: presuda bez ID-eva ne bira dokument po broju"
+End Sub
+
+' ============================================================
+' 312. S8 REZ 1b (PAL-ODL-05): "SKINI PALETE" U OPORAVKU -- JEZGRO.
+' ============================================================
+' Radnja skida aktivne paletne stavke STORNIRANE prijemnice, u sopstvenoj
+' transakciji, kroz isto jezgro kao storno prijemnice. Meri se jezgro
+' (modPaletniList.SkiniPaleteSirocadi_TX); UI omotac ima samo MsgBox potvrde, koji
+' u run_vba visi.
+'
+'   A  kupac 1, broj X, 12 gajbi -- prvo AKTIVNA (odbija se), pa stornirana bez
+'      skidanja paleta (sirocad)
+'   B  kupac 2, broj X, 10 gajbi -- aktivna; njene stavke moraju ostati iste
+'
+' Preradjena paleta se odbija u istom jezgru storna (BFP Test_S6K4_*); ovde se
+' ne ponavlja, jer bi test pisao tblPaleta.
+' SABOTAZA: s8r1b-skini-aktivnu.
+Private Sub T_S8R1b_SkiniPaleteJezgro()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, prevPal As String
+    Dim redoviPre As String, redoviPosle As String
+    Dim zbrA As String, zbrB As String, t As String, brojX As String
+    Dim resA As String, resB As String
+    Dim n As Long, razlog As String, otA As String, otB As String
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    redoviPre = S8R1aBrojRedova()
+    On Error GoTo CleanUp
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    ZasejOpticajVozacu
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    S6K8IzdataZbirna "S8SA", zbrA
+    S6K8IzdataZbirna "S8SB", zbrB, FX_VOZAC, FX_KUPAC2
+    t = Format$(Now, "hhnnss")
+    brojX = "T-S8S-" & t
+    resA = S8R1bPrijemnica(brojX, zbrA, FX_KUPAC, 120, 12)
+    resB = S8R1bPrijemnica(brojX, zbrB, FX_KUPAC2, 90, 10)
+    AssertEq GajbicaZaDokument(resA) & "|" & GajbicaZaDokument(resB), "12|10", _
+             "312 preduslov: A i B su upisani i paletizovani"
+    otA = S8R1aOtisak(resA)
+    otB = S8R1aOtisak(resB)
+
+    n = modPaletniList.SkiniPaleteSirocadi_TX(resA, razlog)
+    AssertEq n & "|" & S8R1aOtisak(resA), "0|" & otA, "312: palete aktivne prijemnice se ne skidaju"
+    AssertEq (InStr(razlog, "aktivna") > 0), True, "312: razlog imenuje aktivnu prijemnicu"
+
+    AssertEq modStorno.StornoPrijemnica_TX(resA, False), True, _
+             "312 preduslov: A je stornirana, palete ostaju"
+    n = modPaletniList.SkiniPaleteSirocadi_TX(resA, razlog)
+    AssertEq (n > 0), True, "312: skinute su palete stornirane prijemnice"
+    AssertEq (InStr(S8R1aOtisak(resA), "|gajb=0|neto=0|") > 0), True, _
+             "312: stornirana prijemnica vise nema robu na paletama"
+    AssertEq S8R1aOtisak(resB), otB, "312: palete drugog kupca istog broja su netaknute"
+
+    n = modPaletniList.SkiniPaleteSirocadi_TX(resA, razlog)
+    AssertEq n, 0, "312: drugo skidanje nema sta da skine"
+    n = modPaletniList.SkiniPaleteSirocadi_TX("", razlog)
+    AssertEq n, 0, "312: red bez PrijemnicaID se odbija"
+
+    Err.Clear   ' zaostatak pomocnika pod Resume Next nije pad testa (KI-053)
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    redoviPosle = S8R1aBrojRedova()
+    On Error GoTo 0
+    If errNum <> 0 Then
+        If redoviPosle <> redoviPre Then errDesc = errDesc & " [rollback nije vratio redove: " & _
+                                                   redoviPre & " -> " & redoviPosle & "]"
+        Err.Raise errNum, "modTest.T_S8R1b_SkiniPaleteJezgro", errDesc
+    End If
+    AssertEq redoviPosle, redoviPre, "312: rollback vraca sve upise testa"
+End Sub
+
+' ============================================================
+' 313. S8 REZ 1b (N9, KI-056): OPORAVAK VIDI SVAKI DOKUMENT ISTOG BROJA.
+' ============================================================
+' "Nedovrseno" je deduplikovalo osirotele redove po BROJU: drugi dokument istog
+' broja nije dolazio u listu, a context ispravke jednog kupca je sakrivao palete
+' drugog. Od 1b dedup ide po ID-u (StorniraniDocID contexta, PrijemnicaID reda).
+' Necitljiva kolona identiteta vise ne skracuje listu nemo: redovi ostaju, a lista
+' javlja red GRESKA (S8R1B-REV-01). Potvrda "Prevezi/Skini palete" UVEK imenuje
+' dokument i kupca, nezavisno od toga sta je u mrezi (KI-056, S8R1B-REV-02).
+'
+'   A  kupac 1, broj X, 4 gajbe  -- stornirana bez skidanja paleta
+'   B  kupac 2, broj X, 3 gajbe  -- stornirana bez skidanja paleta
+'
+' Nivo: LOGICKI dokument (red liste po PrijemnicaID-u), ne broj.
+' SABOTAZE: s8r1b-nedovrseno-po-broju, s8r1b-nedovrseno-kvar-tiho,
+' s8r1b-nedovrseno-izvor-tiho, s8r1b-potvrda-bez-dokumenta.
+Private Sub T_S8R1b_NedovrsenoPoIdentitetu()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, prevPal As String
+    Dim redoviPre As String, redoviPosle As String
+    Dim zbrA As String, zbrB As String, t As String, brojX As String
+    Dim resA As String, resB As String
+    Dim cid As String, opis As String, nKvar As Long, nGreska As Long
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    redoviPre = S8R1aBrojRedova()
+    On Error GoTo CleanUp
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    ZasejOpticajVozacu
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    S6K8IzdataZbirna "S8NA", zbrA
+    S6K8IzdataZbirna "S8NB", zbrB, FX_VOZAC, FX_KUPAC2
+    t = Format$(Now, "hhnnss")
+    brojX = "T-S8N-" & t
+    resA = S8R1bPrijemnica(brojX, zbrA, FX_KUPAC, 40, 4)
+    resB = S8R1bPrijemnica(brojX, zbrB, FX_KUPAC2, 30, 3)
+    AssertEq (modStorno.StornoPrijemnica_TX(resA, False) And _
+              modStorno.StornoPrijemnica_TX(resB, False)), True, _
+             "313 preduslov: A i B su stornirane, palete ostaju"
+
+    AssertEq S8R1bNedRedova("OSIROCENE_PALETE", brojX), 2, _
+             "313: dva dokumenta istog broja sa osirotelim paletama daju dva reda"
+
+    modStornoRecovery.NedovrsenoKvarTestSet "ID_KOLONA"
+    nKvar = S8R1bNedRedova("OSIROCENE_PALETE", brojX)
+    nGreska = S8R1bNedRedova(modStornoRecovery.KIND_GRESKA_CITANJA, "Prijemnica (palete)")
+    modStornoRecovery.NedovrsenoKvarTestSet ""
+    AssertEq nKvar, 2, "313: necitljiva kolona identiteta ne sakriva osirotele dokumente"
+    AssertEq nGreska, 1, "313: necitljiva kolona identiteta se javlja kao red GRESKA"
+
+    ' Kvar IZVORNOG citaca (GetPrijemniceSaOsirocenimPaletama dize gresku iz EH puta):
+    ' lista nema redove paleta, ali JAVLJA da ih nije procitala.
+    modStornoRecovery.NedovrsenoKvarTestSet "IZVOR"
+    nKvar = S8R1bNedRedova("OSIROCENE_PALETE", brojX)
+    nGreska = S8R1bNedRedova(modStornoRecovery.KIND_GRESKA_CITANJA, "Prijemnica (palete)")
+    modStornoRecovery.NedovrsenoKvarTestSet ""
+    AssertEq nGreska & "|" & nKvar, "1|0", "313: kvar izvornog citaca se javlja kao red GRESKA"
+
+    opis = modScrOporavak.OpisDokumentaZaPotvrdu(brojX, resA)
+    AssertEq (InStr(opis, resA) > 0 And InStr(opis, FX_KUPAC) > 0), True, _
+             "313: potvrda imenuje dokument i kupca"
+    AssertEq (opis <> modScrOporavak.OpisDokumentaZaPotvrdu(brojX, resB)), True, _
+             "313: potvrde dva dokumenta istog broja se razlikuju"
+
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, _
+              FLOW_DOC_PRIJEMNICA, resA, brojX, _
+              FLOW_DOC_PRIJEMNICA, , , FLOW_DOC_ZBIRNA, , zbrA, _
+              "test 313: ispravka prijemnice A")
+    AssertEq (Len(cid) > 0), True, "313 preduslov: context ispravke za A je kreiran"
+    AssertEq S8R1bNedRedova("OSIROCENE_PALETE", brojX), 1, _
+             "313: context ispravke jednog kupca ne sakriva palete drugog kupca istog broja"
+
+    Err.Clear   ' zaostatak pomocnika pod Resume Next nije pad testa (KI-053)
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    redoviPosle = S8R1aBrojRedova()
+    On Error GoTo 0
+    If errNum <> 0 Then
+        If redoviPosle <> redoviPre Then errDesc = errDesc & " [rollback nije vratio redove: " & _
+                                                   redoviPre & " -> " & redoviPosle & "]"
+        Err.Raise errNum, "modTest.T_S8R1b_NedovrsenoPoIdentitetu", errDesc
+    End If
+    AssertEq redoviPosle, redoviPre, "313: rollback vraca sve upise testa"
+End Sub
+
+' ============================================================
+' 314. S8 REZ 1b (S8R1A-REV-03): "PREVEZI PALETE" IZ OPORAVKA KORIGUJE CILJ.
+' ============================================================
+' Jezgro radnje (PreveziPaleteCore) prevezuje palete izabranog reda na izabrani
+' cilj, po ID-ovima, pa koriguje cilj kad prevezivanje javi razliku gajbi. Do 1b
+' je korekcija stajala u IIf (racuna obe grane) i nije bila merena.
+'
+'   A   kupac 1, broj A, 12 gajbi -- stornirana bez skidanja paleta (sirocad)
+'   A2  kupac 1, broj Y,  8 gajbi -- cilj (njena sveza paletizacija se ponistava)
+'
+' Pre uspesnog prevezivanja: necitljiv status cilja ga odbija (S8R1B-REV-05). Cilj
+' je stvarno aktivan, pa se meri da kapija ne zakljucuje "aktivan" iz kolone koju
+' nije procitala; razlog mora da imenuje kolonu, a nista ne sme da se pomeri.
+' SABOTAZE: s8r1b-prevezi-bez-korekcije, s8r1b-status-cilja-tiho.
+Private Sub T_S8R1b_PreveziPaleteJezgro()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, prevPal As String
+    Dim redoviPre As String, redoviPosle As String
+    Dim zbrA As String, zbrB As String, t As String, brojX As String
+    Dim resA As String, resB As String
+    Dim brojA As String, brojY As String, ok As Boolean, info As String
+
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    redoviPre = S8R1aBrojRedova()
+    On Error GoTo CleanUp
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    ZasejOpticajVozacu
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    S6K8IzdataZbirna "S8P", zbrA
+    t = Format$(Now, "hhnnss")
+    brojA = "T-S8PA-" & t
+    brojY = "T-S8PY-" & t
+    resA = S8R1bPrijemnica(brojA, zbrA, FX_KUPAC, 120, 12)
+    AssertEq modStorno.StornoPrijemnica_TX(resA, False), True, _
+             "314 preduslov: A je stornirana, palete ostaju"
+    resB = S8R1bPrijemnica(brojY, zbrA, FX_KUPAC, 64, 8)
+    AssertEq GajbicaZaDokument(resA) & "|" & GajbicaZaDokument(resB), "12|8", _
+             "314 preduslov: sirocad A (12) i sveza paletizacija cilja (8)"
+
+    Dim pre5 As String, upoz5 As String, gd5 As Boolean, ok5 As Boolean
+    pre5 = S8R1aOtisak(resA) & "#" & S8R1aOtisak(resB)
+    modPaletniList.PaletaPraznoTestSet "STATUS_CILJA_KOLONA"
+    ok5 = ReassignPaleteToPrijemnica_TX(brojA, brojY, upoz5, True, gd5, resA, resB)
+    modPaletniList.PaletaPraznoTestSet ""
+    AssertEq ok5, False, "314: necitljiv status cilja odbija prevezivanje"
+    AssertEq (InStr(upoz5, "'" & COL_STORNIRANO & "'") > 0), True, _
+             "314: razlog odbijanja imenuje kolonu statusa"
+    AssertEq S8R1aOtisak(resA) & "#" & S8R1aOtisak(resB), pre5, _
+             "314: odbijeno prevezivanje nije nista pomerilo"
+
+    modScrOporavak.Scr_OpoTestSet "PALETE", "", brojY, , resB
+    ok = modScrOporavak.PreveziPaleteCore(brojA, resA, info)
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    AssertEq ok, True, "314: prevezivanje iz Oporavka je proslo"
+    AssertEq GajbicaZaDokument(resB) & "|" & GajbicaZaDokument(resA), "8|0", _
+             "314: palete su na cilju i svedene na njegove gajbe"
+
+    Err.Clear   ' zaostatak pomocnika pod Resume Next nije pad testa (KI-053)
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    redoviPosle = S8R1aBrojRedova()
+    On Error GoTo 0
+    If errNum <> 0 Then
+        If redoviPosle <> redoviPre Then errDesc = errDesc & " [rollback nije vratio redove: " & _
+                                                   redoviPre & " -> " & redoviPosle & "]"
+        Err.Raise errNum, "modTest.T_S8R1b_PreveziPaleteJezgro", errDesc
+    End If
+    AssertEq redoviPosle, redoviPre, "314: rollback vraca sve upise testa"
+End Sub
+
+' Prijemnica klase I kroz F4 put (PrijemnicaUpisi), za 312-314. Vraca PrijemnicaID.
+Private Function S8R1bPrijemnica(ByVal broj As String, ByVal brojZbirne As String, _
+                                 ByVal kupac As String, ByVal kg As Double, _
+                                 ByVal gajbe As Long) As String
+    Dim p As Object, poruke As String
+    Set p = NoviPrijemnicaUnos()
+    S8R1aPrijemnica p, broj, brojZbirne, kupac, kg, gajbe
+    S8R1bPrijemnica = modDokUnos.PrijemnicaUpisi(p, poruke)
+    If Len(S8R1bPrijemnica) = 0 Then Err.Raise ERR_ASSERT, "modTest.S8R1bPrijemnica", _
+                                                "preduslov: prijemnica " & broj & " nije upisana: " & poruke
+End Function
+
+' Broj redova liste "Nedovrseno" date vrste za dati poslovni broj.
+Private Function S8R1bNedRedova(ByVal kind As String, ByVal broj As String) As Long
+    Dim c As Collection, i As Long
+    Set c = modStornoRecovery.GetNedovrseno()
+    If c Is Nothing Then Exit Function
+    For i = 1 To c.count
+        If CStr(c(i)("kind")) = kind And CStr(c(i)("ref")) = broj Then
+            S8R1bNedRedova = S8R1bNedRedova + 1
+        End If
+    Next i
+End Function
 
 ' ============================================================
 ' 35. F8: izabran red ostaje izabran do correction context-a

@@ -42,6 +42,9 @@ Option Explicit
 '  T13 korekcija: klasa dodata ispravkom (sveza paletizacija pod kljucem linije)
 '  T14 korekcija staje na paletnoj stavci bez linije dokumenta (stari oblik)
 '
+' Prevezivanje i presuda (T02-T07, T11) od S8 reza 1b traze oba PrijemnicaID-a;
+' po broju nema izbora (N2).
+'
 ' Korekcija (T04-T09, T12, T13) ide po PrijemnicaID-u, a paletne stavke se seju
 ' SA kljucem linije (PrijemnicaStavkaID) -- stavka bez kljuca je stari oblik i
 ' korekcija je odbija (S8 rez 1a).
@@ -204,11 +207,11 @@ Private Sub T02_ReassignCleanKgSync()
     MarkStornoPrij "TST-P2A"
     MakePrij "TSTPRJ-03", "TST-P2B", "TST-Z2", "I", 96, 8, "TST-S02"   ' ispravka: kg 80 -> 96
 
-    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P2A", "TST-P2B")
+    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P2A", "TST-P2B", "TSTPRJ-02", "TSTPRJ-03")
     ChkEq CStr(vv(0)), "CLEAN", S & "verdikt CLEAN"
 
     Dim w As String, gd As Boolean
-    Chk ReassignPaleteToPrijemnica_TX("TST-P2A", "TST-P2B", w, False, gd), S & "reassign uspeo"
+    Chk ReassignPaleteToPrijemnica_TX("TST-P2A", "TST-P2B", w, False, gd, "TSTPRJ-02", "TSTPRJ-03"), S & "reassign uspeo"
     Chk Not gd, S & "gajbDiff = False"
     ChkEq StCnt("TST-P2A"), 0, S & "stara bez aktivnih stavki"
     ChkEq StCnt("TST-P2B"), 1, S & "nova ima 1 stavku"
@@ -231,16 +234,16 @@ Private Sub T03_RelabelGate()
     MarkStornoPrij "TST-P3A"
     MakePrij "TSTPRJ-05", "TST-P3B", "TST-Z3", "I", 50, 5, "TST-S03B"  ' ispravka: sorta
 
-    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P3A", "TST-P3B")
+    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P3A", "TST-P3B", "TSTPRJ-04", "TSTPRJ-05")
     ChkEq CStr(vv(0)), "RELABEL", S & "verdikt RELABEL"
 
     Dim w As String, gd As Boolean
-    Chk Not ReassignPaleteToPrijemnica_TX("TST-P3A", "TST-P3B", w, False, gd), _
+    Chk Not ReassignPaleteToPrijemnica_TX("TST-P3A", "TST-P3B", w, False, gd, "TSTPRJ-04", "TSTPRJ-05"), _
         S & "bez allowRelabel odbijeno"
     Chk InStr(w, "identitet") > 0, S & "warn objasnjava identitet"
     ChkEq StCnt("TST-P3A"), 1, S & "nista nije promenjeno posle odbijanja"
 
-    Chk ReassignPaleteToPrijemnica_TX("TST-P3A", "TST-P3B", w, True, gd), _
+    Chk ReassignPaleteToPrijemnica_TX("TST-P3A", "TST-P3B", w, True, gd, "TSTPRJ-04", "TSTPRJ-05"), _
         S & "sa allowRelabel uspeo"
     Dim st As Variant: st = StInfo("TST-P3B")
     If StCnt("TST-P3B") = 1 Then
@@ -268,11 +271,11 @@ Private Sub T04_PerKlasaVerdiktIAdjust()
     MakePrij "TSTPRJ-08", "TST-P5", "TST-Z4", "I", 40, 4, "TST-S04"
     DodajLiniju "TSTPRJ-08", 2, "II", 60, 6
 
-    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P4", "TST-P5")
+    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P4", "TST-P5", "TSTPRJ-06", "TSTPRJ-08")
     ChkEq CStr(vv(0)), "GAJBICA", S & "verdikt GAJBICA (ne CLEAN na isti agregat)"
 
     Dim w As String, gd As Boolean
-    Chk ReassignPaleteToPrijemnica_TX("TST-P4", "TST-P5", w, False, gd), S & "reassign uspeo"
+    Chk ReassignPaleteToPrijemnica_TX("TST-P4", "TST-P5", w, False, gd, "TSTPRJ-06", "TSTPRJ-08"), S & "reassign uspeo"
     Chk gd, S & "gajbDiff = True"
 
     Dim info As String
@@ -305,7 +308,7 @@ Private Sub T05_NeedsChoicePaPrelij()
     MakePrij "TSTPRJ-11", "TST-P6B", "TST-Z5", "I", 150, 15, "TST-S05"  ' 8 -> 15
 
     Dim w As String, gd As Boolean, info As String
-    Chk ReassignPaleteToPrijemnica_TX("TST-P6A", "TST-P6B", w, False, gd), S & "reassign uspeo"
+    Chk ReassignPaleteToPrijemnica_TX("TST-P6A", "TST-P6B", w, False, gd, "TSTPRJ-10", "TSTPRJ-11"), S & "reassign uspeo"
     Chk gd, S & "gajbDiff = True"
 
     ChkEq AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-11", "", info), ADJ_NEEDS_CHOICE, _
@@ -337,7 +340,7 @@ Private Sub T06_PrekoKapaciteta()
     MakePrij "TSTPRJ-13", "TST-P8B", "TST-Z6", "I", 150, 15, "TST-S06"
 
     Dim w As String, gd As Boolean, info As String
-    Chk ReassignPaleteToPrijemnica_TX("TST-P8A", "TST-P8B", w, False, gd), S & "reassign uspeo"
+    Chk ReassignPaleteToPrijemnica_TX("TST-P8A", "TST-P8B", w, False, gd, "TSTPRJ-12", "TSTPRJ-13"), S & "reassign uspeo"
     Chk AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-13", "PREKO", info) >= 1, S & "PREKO uspeo"
 
     ChkEq StCnt("TST-P8B"), 1, S & "jedna stavka (bez preliva)"
@@ -362,7 +365,7 @@ Private Sub T07_SmanjenjeKrozVisePaleta()
     MakePrij "TSTPRJ-15", "TST-P9B", "TST-Z7", "I", 120, 12, "TST-S07"  ' 25 -> 12
 
     Dim w As String, gd As Boolean, info As String
-    Chk ReassignPaleteToPrijemnica_TX("TST-P9A", "TST-P9B", w, False, gd), S & "reassign uspeo"
+    Chk ReassignPaleteToPrijemnica_TX("TST-P9A", "TST-P9B", w, False, gd, "TSTPRJ-14", "TSTPRJ-15"), S & "reassign uspeo"
     Chk AdjustPaletaGajbiceZaPrijemnicu_TX("TSTPRJ-15", "", info) >= 1, S & "smanjenje bez pitanja"
 
     ChkEq StCnt("TST-P9B"), 2, S & "ostale 2 aktivne stavke (treca stornirana)"
@@ -502,11 +505,11 @@ Private Sub T11_RelabelBlokNaDeljenojPaleti()
     MarkStornoPrij "TST-P14"
     MakePrij "TSTPRJ-22", "TST-P16", "TST-Z11", "I", 40, 4, "TST-S11X"  ' druga sorta
 
-    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P14", "TST-P16")
+    Dim vv As Variant: vv = EvaluatePaletaReassign("TST-P14", "TST-P16", "TSTPRJ-20", "TSTPRJ-22")
     ChkEq CStr(vv(0)), "RELABEL", S & "verdikt RELABEL"
 
     Dim w As String, gd As Boolean
-    Chk Not ReassignPaleteToPrijemnica_TX("TST-P14", "TST-P16", w, True, gd), _
+    Chk Not ReassignPaleteToPrijemnica_TX("TST-P14", "TST-P16", w, True, gd, "TSTPRJ-20", "TSTPRJ-22"), _
         S & "BLOKIRANO cak i uz allowRelabel=True"
     Chk InStr(w, "BLOKIRANO") > 0, S & "outWarn objasnjava blokadu"
 

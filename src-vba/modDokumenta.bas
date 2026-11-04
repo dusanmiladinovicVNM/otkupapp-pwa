@@ -8548,8 +8548,8 @@ Public Function GetOsirocenePrijemnice() As Variant
     Dim zd As Variant: zd = GetTableData(TBL_ZBIRNA)
     If Not IsEmpty(zd) Then
         Dim zBr As Long, zSt As Long, zr As Long, zk As String
-        zBr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
-        zSt = GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO)
+        zBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modDokumenta.GetOsirocenePrijemnice")
+        zSt = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, "modDokumenta.GetOsirocenePrijemnice")
         For zr = 1 To UBound(zd, 1)
             zk = Trim$(NzToText(zd(zr, zBr)))
             If Len(zk) > 0 Then
@@ -8561,14 +8561,15 @@ Public Function GetOsirocenePrijemnice() As Variant
 
     Dim cBr As Long, cDat As Long, cVr As Long, cSo As Long
     Dim cId As Long, cZbr As Long, cSt As Long
-    cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    ' Kljucne kolone su STROGE (S8R1B-REV-01): kolona koje nema je greska citanja,
+    ' ne "nema osirotelih". Prikazne (datum, vrsta, sorta) ostaju tolerantne.
+    cBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, "modDokumenta.GetOsirocenePrijemnice")
     cDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
     cVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
     cSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
-    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
-    cZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
-    cSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
-    If cBr = 0 Or cZbr = 0 Or cId = 0 Then Exit Function
+    cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "modDokumenta.GetOsirocenePrijemnice")
+    cZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "modDokumenta.GetOsirocenePrijemnice")
+    cSt = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, "modDokumenta.GetOsirocenePrijemnice")
 
     Dim rows As Collection: Set rows = New Collection
     Dim zbir As Object: Set zbir = ZbirStavkiPoPrijemniciMeko()
@@ -8602,8 +8603,13 @@ Public Function GetOsirocenePrijemnice() As Variant
     GetOsirocenePrijemnice = StornoRowsTo2D(rows, 8)
     Exit Function
 EH:
+    ' Greska citanja se DIZE (S8R1B-REV-01): Empty bi znacio "nema osirotelih",
+    ' pa bi Oporavak cutao. Pozivaoci je prikazuju (lista: UI-PAD-01; Nedovrseno:
+    ' red GRESKA_CITANJA).
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
     LogErr "modDokumenta.GetOsirocenePrijemnice"
-    GetOsirocenePrijemnice = Empty
+    Err.Raise errNum, "modDokumenta.GetOsirocenePrijemnice", errDesc
 End Function
 
 ' Stornirane prijemnice koje imaju AKTIVNE (osirocene) paleta-stavke. Za P1 pallet
@@ -8611,6 +8617,10 @@ End Function
 ' PrijemnicaID
 Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
     On Error GoTo EH
+    If modStornoRecovery.NedovrsenoKvarAkoTest("IZVOR") Then
+        Err.Raise vbObjectError + 1991, "modDokumenta.GetPrijemniceSaOsirocenimPaletama", _
+                  "TEST: izvor osirotelih paleta ne moze da se procita."
+    End If
     Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(ps) Then Exit Function
 
@@ -8618,8 +8628,8 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
     Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
     If Not IsEmpty(prj) Then
         Dim qId As Long, qSt As Long, q As Long
-        qId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
-        qSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+        qId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "modDokumenta.GetPrijemniceSaOsirocenimPaletama")
+        qSt = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, "modDokumenta.GetPrijemniceSaOsirocenimPaletama")
         For q = 1 To UBound(prj, 1)
             If qSt > 0 Then
                 If UCase$(Trim$(NzToText(prj(q, qSt)))) = "DA" Then stPrij(Trim$(NzToText(prj(q, qId)))) = True
@@ -8628,13 +8638,14 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
     End If
 
     Dim cBr As Long, cPid As Long, cVr As Long, cSo As Long, cGajb As Long, cSt As Long
-    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
-    cPid = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
+    ' Kljucne kolone su STROGE (S8R1B-REV-01): kolona koje nema je greska citanja,
+    ' ne "nema osirotelih". Prikazne (vrsta, sorta, gajbe) ostaju tolerantne.
+    cBr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ, "modDokumenta.GetPrijemniceSaOsirocenimPaletama")
+    cPid = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "modDokumenta.GetPrijemniceSaOsirocenimPaletama")
     cVr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_VRSTA)
     cSo = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_SORTA)
     cGajb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
-    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-    If cBr = 0 Or cPid = 0 Then Exit Function
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "modDokumenta.GetPrijemniceSaOsirocenimPaletama")
 
     ' Grupise se po DOKUMENTU (PrijemnicaID koji stavka nosi), ne po broju.
     ' Dve stornirane prijemnice razlicitih kupaca lako dele broj (racuna se po
@@ -8684,8 +8695,11 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
     GetPrijemniceSaOsirocenimPaletama = StornoRowsTo2D(rows, 7)
     Exit Function
 EH:
+    ' Greska citanja se DIZE (S8R1B-REV-01), v. GetOsirocenePrijemnice.
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
     LogErr "modDokumenta.GetPrijemniceSaOsirocenimPaletama"
-    GetPrijemniceSaOsirocenimPaletama = Empty
+    Err.Raise errNum, "modDokumenta.GetPrijemniceSaOsirocenimPaletama", errDesc
 End Function
 
 ' Re-point prijemnice na drugu (aktivnu) zbirnu po BrojZbirne. Koristi se posle

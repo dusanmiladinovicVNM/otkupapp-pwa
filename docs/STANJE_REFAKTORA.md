@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 03.11.2026 (stavka 279: rez 1a — crveni prolaz reprodukovao N1, zeleno RunAllTests 310/0, BFP 2917/0, Palete 115/0, Storno 111/0, dokaz 6/6, **Compile PASS**; spreman za PR).
+**Ažurirano:** 04.11.2026 (stavka 288: drugi review `#459` CODE GO / MERGE CONDITIONAL GO; izvršni acceptance `5c3d72a8` — RunAllTests 314/0, BFP 2931/0, Palete 115/0, Storno 111/0, dokaz 4/4; ručni Compile PASS; čeka merge na izričit zahtev).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -38,7 +38,7 @@
 | **`KI-025` + `KI-026` nabavka i otpis ambalaže** | ✅ merge **`#445`** (`b91df251`, 28.10.2026) — FULL 12/12, dokaz 16/16, Compile ✅, ručna provera 11/12 (stavke 216–217) |
 | **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): ✅ merge **`#450`** (`fd39a716`, 01.11.2026) — review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); stavka 250 |
 | **S7 faktura** | ✅ **zatvoren** (merge `#454` = `a668c5e6`, 03.11.2026, stavka 272) -- **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); ✅ merge **`#452`** (`ff3e9c7a`, 02.11.2026, stavka 257). **Rez 2: pre-flight ✅** (stavka 258, `FAK-ODL-07`); **kod ✅** (stavka 259, PR `#453`); review HOLD → P1 ispravljen (stavka 260, `KI-077`/`KI-078` za rez 3); crveno nad starim kodom, zeleno (308 / 2868 / 111 / 39), dokaz 13/13 (stavka 261); ručna provera i Compile ✅ (stavka 262); ✅ merge **`#453`** (`2ac332e3`, 02.11.2026, stavka 263). **Rez 3: pre-flight ✅** (stavka 264, `KI-079`); **kod ✅** (stavka 265, PR `#454`); review HOLD → tri P2 ispravljena (stavka 266); crveno, zeleno (308 / 2901 / SEF 238), health i dokaz 14/14 (stavka 267, `KI-077`/`KI-078` CLOSED); Compile ✅ (stavka 268); drugi review HOLD → `S7R3-REV-04` (identitet SEF stavke) ispravljen (stavka 269, `KI-080`); treći review CODE GO i TEST GO (stavka 270, `KI-081`/`KI-082`); crveno, zeleno (308 / 2907 / SEF 238 / 39), dokaz 5/5 i Compile ✅ (stavka 271); merge review MERGE GO 9,4 / 10, ✅ merge **`#454`** (`a668c5e6`, 03.11.2026, stavka 272). Backlog: `KI-079` (kapija produkcionog SEF slanja), `KI-080`, `KI-081`, `KI-082` |
-| **S8 paleta i prerada** | **pre-flight ✅** (stavka 273, plan §14.58, `docs/DOMEN/PALETE.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 2, a storno i prevezivanje po ID-u S6 koraci 4, 7 i 8. Ostaju dva reza: 1 korekcija i prevezivanje paleta po ID-u (N1: korekcija bira dokument po broju) · 2 paleta zna samo stavku prijemnice (brišu se `BrojPrijemnice`, `BrojZbirne`, `ZbirnaRoditeljID`; `KI-039`). Review 9,0 / 10 i odluke `PAL-ODL-01..07` (stavka 274): podela po review-u na 1a (N1, korekcija po ID-u) · 1b (strog brojač praznine N8 pre „Skini palete", prevezivanje i Oporavak, makroi; `S8-REV-05`, stavka 275) · 1c (storno palete) · 2a (čitaoci, svoj pre-flight) · 2b (brisanje kolona, HOLD i do izlazne kapije C002); sledljivost na paleti u S9. Merge `#456` = `d222aad4` (stavka 276). **Rez 1a: kod** (stavka 277), review CONDITIONAL GO 8,7 (stavka 278); izvršni acceptance (stavka 279): N1 crveno reprodukovan, zeleno, dokaz 6/6, Compile PASS; brojevi testova provereni; spreman za PR |
+| **S8 paleta i prerada** | **pre-flight ✅** (stavka 273, plan §14.58, `docs/DOMEN/PALETE.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 2, a storno i prevezivanje po ID-u S6 koraci 4, 7 i 8. Ostaju dva reza: 1 korekcija i prevezivanje paleta po ID-u (N1: korekcija bira dokument po broju) · 2 paleta zna samo stavku prijemnice (brišu se `BrojPrijemnice`, `BrojZbirne`, `ZbirnaRoditeljID`; `KI-039`). Review 9,0 / 10 i odluke `PAL-ODL-01..07` (stavka 274): podela po review-u na 1a (N1, korekcija po ID-u) · 1b (strog brojač praznine N8 pre „Skini palete", prevezivanje i Oporavak, makroi; `S8-REV-05`, stavka 275) · 1c (storno palete) · 2a (čitaoci, svoj pre-flight) · 2b (brisanje kolona, HOLD i do izlazne kapije C002); sledljivost na paleti u S9. Merge `#456` = `d222aad4` (stavka 276). **Rez 1a ✅** (stavke 277–279, merge `#458` = `d19c2dae`, stavka 280; N1 CLOSED). **Rez 1b: kod** (stavke 281–282), review 8,6 → 8,9, nalazi zatvoreni (283–284); izvršni acceptance (stavka 285): N8 i N9 crveno reprodukovani, zeleno, dokaz 13/13; Compile i ručna provera PASS (stavka 286); PR `#459`, review MERGE HOLD → dve P1 kapije zatvorene (stavka 287); drugi review CODE GO, izvršni acceptance zelen, dokaz 4/4, ručni Compile PASS (stavka 288); čeka merge na izričit zahtev |
 | S9 sledljivost kao graf | ⏳ |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
@@ -9724,6 +9724,430 @@
            tihi duplikat; kapija za tihi slučaj je `KI-084`;
        - `S8R1A-REV-03` ide u 1b.
      - **Sledeći brojevi:** test 311 (posle rebase-a proveriti) · stavka 280 · KI-085 · plan §14.59.
+
+280. **Merge review PR `#458` — MERGE GO (9,3 / 10) — i merge u `main` = `d19c2dae`** (03.11.2026, uz izričito
+     „Merge #458" operatera). **S8 rez 1a je ZATVOREN, N1 CLOSED.** Zapis ide na granu
+     `claude/s8-rez1b-prevezivanje` (od `d19c2dae`).
+
+     - **Review:** MERGE GO 9,3 / 10 na head-u `a3552c42`; Static CI #1135 PASS (proveren kroz `gh`, head
+       `a3552c42`); PR CLEAN.
+       - `S8R1A-REV-01` CLOSED (rollback testa 309);
+       - `S8R1A-REV-02` CLOSED za taj HEAD: review je nezavisno izbrojao 310 / 310 / 310 registracija i nula
+         duplikata;
+       - N1: nema otvorenog P1; crveno → zeleno je dokumentovano.
+     - **Granice reza koje review navodi:** dokaz sabotaža je grupni, ne pojedinačni. Klik kroz Alt+F8 i
+       Oporavak nije deo acceptance-a 1a, pa Oporavak mora da pokrije 1b.
+     - **Merge `d19c2dae`:** običan merge commit, roditelji `d222aad4` i `a3552c42`. Stablo `main`-a je isto
+       kao stablo `a3552c42` (`git diff` prazan).
+     - **Osnova za `main`:**
+       - `RunAllTests` 310 / 0 i BFP 2917 / 0 (izmereno nad `ddf0230c`);
+       - Palete 115 / 0 i Storno 111 / 0 (nad `d69937ff`).
+
+       Posle `ddf0230c` su menjani samo dokumenti. Katalog sabotaža 1125, šema `B22A1572`, fixture
+       `8196bbcaecbc8926`. SEF 238 / 0 i Faktura 39 / 0 važe iz `#454`; Banka i Agrohemija su poslednji put
+       merene na `#445`.
+     - **Otvoreno za 1b** (po review-u, bez širenja 1a): N8 (strog brojač praznine) pre radnje „Skini
+       palete", N2 (prevezivanje samo sa oba ID-a), N9 (Oporavak po ID-u) i `S8R1A-REV-03` (`IIf` u
+       Oporavku). N7 ide u 1c.
+     - **Sledeći brojevi:** test 311 · stavka 281 · KI-085 · plan §14.59.
+
+281. **S8 rez 1b — koraci 1 i 2 (N8, N2), lokalno** (03.11.2026, grana `claude/s8-rez1b-prevezivanje` od
+     `d19c2dae`). Ugovor i redosled: plan §14.58 „Rez 1b — ugovor i redosled" (commit `b0b1f083`).
+
+     - **Korak 1 — N8 (`S8-REV-05`), `b0b1f083`:**
+       - u `SkiniPaletneStavke` „paleta je prazna" odlučuje strog `BrojAktivnihStavkiPalete` (bez `On Error`;
+         tabela mora da postoji; `RequireColumnIndex`), a ne prikazni `GetPaletaStavkeForGrid`. Prikazni
+         čitač sada koristi samo ekran Palete;
+       - seam `PaletaPraznoTestSet` (`PRIKAZ` kvari prikaz, `BROJAC` diže grešku u brojaču) je tvrdo gejtovan
+         i ide u `ResetSeamova`;
+       - test je BFP `Test_S8R1b_PraznaPaletaStrogBrojac`, ne `modTest`: BFP po scenariju registruje svoj tip
+         ambalaže, pa dve prijemnice dobijaju svežu zajedničku paletu bez fixture stavki. Test tvrdi da
+         su-stanar STORNIRANE prijemnice ostaje uz pokvaren prikaz, da pad brojača povlači skidanje celo i,
+         kao kontra-tvrdnju, da se prazna paleta stornira;
+       - sabotaža `s8r1b-praznina-iz-prikaza`.
+     - **Korak 2 — N2, `5c6552f3`:**
+       - `ReassignPaleteToPrijemnica_TX` bez izvornog ili ciljnog ID-a odbija pre ijednog čitanja paleta i
+         imenuje ID koji fali. Obrisani su grana po broju, njene kapije dvosmislenosti (`VlasniciPoBroju`) i
+         pad `PripadaDokumentu` na broj (fixture i pisac uvek nose `PrijemnicaID`). Presuda
+         `EvaluatePaletaReassign`, koja nema produkcionog pozivaoca, takođe traži oba ID-a;
+       - Palete T02–T07 i T11 prelaze na ID-eve; `modTest` **311** meri razlog odbijanja. Druga brana
+         (prazan skup ID-eva) i dalje odbija, pa tvrdnja meri razlog;
+       - sabotaže: pet ih je presidreno na nov kod (`relink-izvor-po-broju`, `relink-ignorise-generaciju`,
+         `relink-cilj-po-broju`, `cotenant-po-broju`, `writer-isti-broj-odbija` — ova sada vraća poređenje
+         po broju); `relink-cilj-bez-kapije` je povučen jer je njegova kapija obrisana; nova je
+         `s8r1b-prevezivanje-bez-izvornog-id`. Katalog 1126.
+     - **`KI-084` ZATVOREN kao netačan:** `vba_check` pravilo `REGISTAR` poredi `RunOne`, `TestName` i
+       `InvokeTest` i javlja i duplikat i rupu. Video sam ga tek kad je oborilo rupu na 311 (prvobitno 312).
+       Tvrdnja iz stavke 278 je postavljena bez čitanja `vba_check`-a. N8 test je zato u BFP-u, a numeracija
+       `modTest`-a ostaje kontinualna (311).
+     - **Jeftine kapije zelene** nad `5c6552f3`:
+       - `vba_check`: čisto, 191 fajl;
+       - `gen_schema_module --check`: `B22A1572`;
+       - `who_writes --check` i `--check-ownership`;
+       - `popis_citalaca --check`: 14 / 14 grupa ok;
+       - `sabotaza --proveri-sidra`: 1126, 0 nalaza.
+     - **NOT RUN:** `run_vba`, crveni prolaz, dokaz i Compile; čekaju kraj reza i review.
+     - **Sledeće:** korak 3 (Oporavak: „Skini palete", jezgro prevezivanja, `KI-056`, N9, `S8R1A-REV-03`,
+       B-030), pa korak 4 (četiri makroa).
+     - **Sledeći brojevi:** test 312 · stavka 282 · KI-085 · plan §14.59.
+
+282. **S8 rez 1b — koraci 3 i 4 (Oporavak, makroi), lokalno; kod reza kompletan** (03.11.2026, grana
+     `claude/s8-rez1b-prevezivanje`). Ugovor: plan §14.58 „Rez 1b — ugovor i redosled".
+
+     - **Korak 3 — Oporavak, `cfde2bb7`:**
+       - **„Skini palete" (`PAL-ODL-05`):** radnja `skinipal` (danger) na listi Osiroc. palete.
+         - Pravilo i transakciju drži vlasnik tabela, `modPaletniList.SkiniPaleteSirocadi_TX`: samo postojeća,
+           STORNIRANA prijemnica, sopstvena transakcija, isto telo kao storno prijemnice (prerađena paleta i
+           stavka bez palete obaraju posao; prazna paleta se stornira po strogom brojaču, N8). Ekran samo
+           potvrđuje.
+         - Prvi oblik je jezgro držao u `modScrOporavak`; `who_writes --check` je pokazao ekran kao učesnika
+           transakcije nad paletama, pa je jezgro preseljeno vlasniku i mapa je ostala nepromenjena.
+         - Poruke prevezivanja („Skini stavke") i `MAPA` B-030 sada vode na ovu radnju.
+       - **Prevezi palete:** jezgro `PreveziPaleteCore` (bez `MsgBox`-a) zove korekciju cilja samo uz razliku
+         gajbi: `If gajbDiff Then` umesto `IIf`, koji računa obe grane (`S8R1A-REV-03`).
+       - **`KI-056`:** potvrda prevezivanja palete, prijemnice i skidanja imenuje dokument (vrsta, sorta,
+         `PrijemnicaID`) kad broj u učitanoj listi nije jedinstven (`OpisIzvoraZaPotvrdu`).
+       - **N9:** „Nedovršeno" deduplikuje po ID-u. Context pokriva samo red čiji je dokument baš njegov
+         `StorniraniDocID`, a osiroteli redovi se deduplikuju po `PrijemnicaID`-u.
+         - Kad pripadnost nije dokaziva po ID-u, red se PRIKAZUJE (fail-visible). Posledica: context ispravke
+           ZBIRNE više ne sakriva osirotele prijemnice po broju (zbirna i prijemnica dele oblik `x/ddmmyy`),
+           pa isti problem ume da se vidi dvaput.
+       - **Četiri nova ključa poruka** (`OTKUI_BTN_OPO_SKINI`, `OTKUI_ASK_OPO_SKINI`, `OTKUI_MSG_OPO_SKINUTO`,
+         `OTKUI_ERR_OPO_SKINI`) traže zatvaranje i ponovno otvaranje fajla posle uvoza (`EnsurePoruke`).
+       - **Testovi:**
+         - `modTest` **312**: „Skini palete" odbija aktivnu prijemnicu, skida siročad stornirane, drugi kupac
+           istog broja ostaje netaknut, drugo skidanje nema šta da skine, a red bez ID-a se odbija;
+         - **313**: N9 (dva dokumenta istog broja daju dva reda; context A ne sakriva B) i `KI-056` nad pravom
+           listom Oporavka (`GridTestLoad`);
+         - **314**: prevezivanje iz Oporavka po ID-evima, sa korekcijom cilja na njegove gajbe.
+
+         Sva tri idu u transakciji, sa zasejavanjem posle snimka i proverom redova posle rollback-a.
+       - **Sabotaže +4:** `s8r1b-skini-aktivnu`, `s8r1b-nedovrseno-po-broju`, `s8r1b-potvrda-bez-dokumenta` i
+         `s8r1b-prevezi-bez-korekcije`. Katalog 1130.
+     - **Korak 4 — `PAL-ODL-04`, `ac6cd1f9`:** obrisani su `ClosePaleta_Prompt`, `StornoPaleta_Prompt`,
+       `SavePrerada_Prompt` i `StornoPrerada_Prompt`. Ekran Palete nosi C-052, C-053, C-055 i C-058 po ID-u;
+       red u `mapa_sposobnosti_ulazi/F.md` beleži brisanje. Pomoćnici `FindPaletaIDByBroj` i
+       `FindPreradaIDByBroj` ostaju, jer ih zovu makroi za izvoz PDF-a.
+     - **Ograničenja:**
+       - prerađenu paletu u „Skini palete" meri BFP `Test_S6K4_PreradjenaPaletaObaraStorno` (isto jezgro); 312
+         je ne ponavlja, da test ne bi pisao `tblPaleta`;
+       - „korekcija se NE zove bez razlike" nije merljiva: korekcija bez razlike ne menja ništa. 314 meri
+         pozitivnu stranu, a sabotaža briše korekciju;
+       - N9 i `KI-056` nisu reprodukovani na starom kodu; to radi crveni prolaz.
+     - **Jeftine kapije zelene** nad `ac6cd1f9`:
+       - `vba_check`: čisto, 191 fajl;
+       - `gen_schema_module --check`: `B22A1572`;
+       - `who_writes --check` (bez promene) i `--check-ownership`;
+       - `popis_citalaca --check`: 14 / 14;
+       - `sabotaza --proveri-sidra`: 1130, 0 nalaza.
+     - **NOT RUN:**
+       - `run_vba`: RunAllTests (očekivano 314), BFP, Palete, Storno;
+       - crveni prolaz nad `d19c2dae`. Recept je kao u 1a: proizvodni moduli sa `main`-a, test moduli sa
+         grane, i privremene prazne zamene za nove javne funkcije (`PaletaPraznoTestSet`,
+         `SkiniPaleteSirocadi_TX`, `PreveziPaleteCore`, `OpisIzvoraZaPotvrdu`);
+       - `dokaz.py s8r1b` (7) i pet presidrenih (`relink-*`, `cotenant-po-broju`, `writer-isti-broj-odbija`);
+       - Compile i ručna provera (dugme „Skini palete" i nove poruke posle restarta).
+     - **`KI-056`** se zatvara posle zelenog prolaza.
+     - **Sledeći brojevi:** test 315 · stavka 283 · KI-085 · plan §14.59.
+
+283. **Review reza 1b — MERGE HOLD (8,6 / 10); tri P2 zatvorena** (03.11.2026). Na „Push bez PR-a" je grana
+     push-ovana do `f0f36ee4`; review je pregledao tu granu.
+
+     - **Ocena:** N8, N2, N9 i „Skini palete" su ispravno ograničeni, bez širenja na Preradu 2.0 ili S9.
+       Review potvrđuje da je `KI-084` opravdano zatvoren (`REGISTAR` u `vba_check`; 314 / 314 / 314, nula
+       duplikata). Novi P1 nije nađen.
+     - **`S8R1B-REV-01` (P2) — „Nedovršeno" ćuti na grešci čitanja:** `AddOsiroceneRows` je imao
+       `On Error GoTo done`, pa je nečitljiv izvor davao neprimetno kraću listu, protivno obećanju 1b da se
+       dokument ne sakriva. **Ispravka:**
+       - nečitljiva kolona identiteta daje red `GRESKA_CITANJA` (`KIND_GRESKA_CITANJA`), a redovi idu bez
+         deduplikacije;
+       - pad usred liste daje red GREŠKA.
+
+       Seam `NedovrsenoKvarTestSet "ID_KOLONA"` je tvrdo gejtovan i ide u `ResetSeamova`. Test 313 sada meri
+       da dva osirotela dokumenta ostaju vidljiva i da lista javlja grešku. Nova sabotaža je
+       `s8r1b-nedovrseno-kvar-tiho`.
+     - **`S8R1B-REV-02` (P2) — potvrda je zavisila od vidljivih redova:** `OpisIzvoraZaPotvrdu` je dodavao
+       dokument samo kad je u učitanoj mreži bilo više redova istog broja, pa posle pretrage potvrda nije
+       imenovala dokument. **Ispravka:** `OpisDokumentaZaPotvrdu` (preimenovan) UVEK daje broj, kupca
+       (`modPaletniListUI.KupacOznaka`, sada javan) i `PrijemnicaID`, bez gledanja u mrežu, za „Skini
+       palete", „Prevezi palete" i „Prevezi prijemnicu".
+       - Test 313 više ne puni mrežu (`GridTestLoad` je uklonjen). Meri da potvrda imenuje dokument i kupca i
+         da se potvrde dva dokumenta istog broja razlikuju. Sabotaža `s8r1b-potvrda-bez-dokumenta` je
+         presidrena.
+     - **`S8R1B-REV-03` (P2) — ugovor `GetTableData`, zatvoreno čitanjem, bez izmene koda:**
+       - `modDataAccess.GetTableData` vraća `Empty` samo kad `ListObject` ne postoji (brojač to odbija pre
+         poziva, `GetTable(...) Is Nothing`) ili kad tabela nema redova (`DataBodyRange Is Nothing`);
+       - čitanje `.Value` nema error handler, pa pad čitanja diže grešku i operacija se povlači;
+       - keš postoji samo u prozoru `BeginTableCache`, a svaki upis ga poništava (`RequireUpdateCell` →
+         `UpdateCell` → `InvalidateTableCache`).
+
+       Ograda „tabela ima redove a čitanje vratilo prazno" bila bi nedostižna grana, pa nije dodata
+       (pouka „neuhranjen nije nedostižan").
+     - **Jeftine kapije zelene:**
+       - `vba_check`: čisto, 191 fajl;
+       - `sabotaza --proveri-sidra`: 1131, 0 nalaza;
+       - `gen_schema_module --check`: `B22A1572`;
+       - `who_writes --check` i `--check-ownership`;
+       - `popis_citalaca --check`: 14 / 14.
+     - **NOT RUN (po review-u, sledeći korak):**
+       - crveni prolaz za N8 i N9 nad `d19c2dae`;
+       - RunAllTests (očekivano 314), BFP, Palete, Storno;
+       - sabotaže: osam `s8r1b-*` i pet presidrenih;
+       - Compile;
+       - ručna provera „Skini palete": potvrda, odbijanje i prikaz posle ponovnog otvaranja fajla.
+
+       Prelaz na 1c tek posle potvrđenog 1b.
+     - **Sledeći brojevi:** test 315 · stavka 284 · KI-085 · plan §14.59.
+
+284. **Drugi review reza 1b — MERGE HOLD (8,9 / 10); `S8R1B-REV-01` zatvoren i na izvornom čitaču** (04.11.2026).
+     Review je pregledao `52a83659`, koji je push-ovan na „samo push, kapije mogu kasnije kada se nakupi malo
+     više rada".
+
+     - **Zatvoreno po review-u:**
+       - `S8R1B-REV-02` CLOSED: `OpisDokumentaZaPotvrdu` zovu sve tri radnje;
+       - `S8R1B-REV-03` CLOSED: ugovor `GetTableData` je potvrđen, bez nepotrebne ograde;
+       - registar testova: 314 / 314 / 314, nula duplikata;
+       - `NedovrsenoKvarTestSet` je u `ResetSeamova`.
+     - **`S8R1B-REV-01` je bio zatvoren delimično.** Izvorni čitači `modDokumenta.GetPrijemniceSaOsirocenimPaletama`
+       i `GetOsirocenePrijemnice` su na grešci vraćali `Empty`, a ključnu kolonu koje nema su tiho preskakali
+       (`GetColumnIndex` → `Exit Function`). `AddOsiroceneRows` je tada video „nema osirotelih" i nije davao ni
+       redove ni red greške. **Ispravka:**
+       - ključne kolone oba čitača (broj, ID, broj zbirne, `Stornirano`) idu kroz `RequireColumnIndex`;
+         prikazne ostaju tolerantne;
+       - EH oba čitača posle `LogErr` ponovo diže grešku, umesto da vrati `Empty`;
+       - `GetNedovrseno` čita izvor kroz `CitajOsirocene`, a grešku pretvara u red `GRESKA_CITANJA` („Lista …
+         nije pročitana: …"), umesto da padne cela lista ili da red tiho izostane;
+       - ostali pozivaoci: liste Oporavka grešku dobijaju kroz `Scr_Rows` (brana `UI-PAD-01`, vidljiv pad
+         liste), a `modTestStornoCentar` kao pad testa.
+
+       Seam `NedovrsenoKvarTestSet` dobija režim `"IZVOR"`, a kuka je na vrhu izvornog čitača, odmah posle
+       `On Error GoTo EH`, pa test prolazi kroz pravi EH. Test 313 tvrdi da kvar izvornog čitača daje tačno
+       jedan red greške i nula redova paleta. Nova sabotaža `s8r1b-nedovrseno-izvor-tiho` vraća stari EH
+       (`Empty`). Katalog 1132.
+     - **Ograničenje:** brojka „osirotelo" u zoni Oporavka (`ZbirOsirocenih`) radi pod `Resume Next`, pa kvar
+       izvora samo umanjuje broj. Lista i „Nedovršeno" kvar prikazuju; brojka ostaje kakva je bila.
+     - **Napomena za rez 2b:** `GetPrijemniceSaOsirocenimPaletama` sada strogo traži `tblPaletaStavka.BrojPrijemnice`.
+       Brisanje te kolone (`PAL-ODL-03`) će ga oboriti glasno, a ne tiho, pa ga 2a/2b prevode na ID.
+     - **Jeftine kapije zelene:**
+       - `vba_check`: čisto, 191 fajl;
+       - `sabotaza --proveri-sidra`: 1132, 0 nalaza;
+       - `gen_schema_module --check`: `B22A1572`;
+       - `who_writes --check` i `--check-ownership`;
+       - `popis_citalaca --check`: 14 / 14.
+     - **NOT RUN:**
+       - crveni prolaz (N8, N9, REV-01) nad `d19c2dae`;
+       - RunAllTests (očekivano 314), BFP, Palete, Storno;
+       - sabotaže: devet `s8r1b-*` i pet presidrenih;
+       - Compile;
+       - ručna provera „Skini palete".
+
+       Po review-u: tek posle toga PR 1b; 1c ne pre potvrđenog 1b.
+     - **Sledeći brojevi:** test 315 · stavka 285 · KI-085 · plan §14.59.
+
+285. **Rez 1b — izvršni acceptance: N8 i N9 reprodukovani crveno, zeleno, dokaz 13/13** (04.11.2026, na izričito
+     „Push, pa kapije"). Grana je push-ovana do `4fb6addf`. Fixture `8196bbcaecbc8926`, šema `B22A1572`.
+
+     - **Crveni prolaz:**
+       - **izvor:** šest produkcionih modula sa `d19c2dae` (`modDokumenta`, `modPaletniList`,
+         `modPaletniListUI`, `modPoruke`, `modScrOporavak`, `modStornoRecovery`) i test moduli sa
+         `4fb6addf`;
+       - **dodato starom kodu, bez ispravke:**
+         - u stari `modPaletniList` samo kuka seam-a `PRIKAZ` u `GetPaletaStavkeForGrid`, da bi se N8 uopšte
+           mogao izazvati;
+         - privremene zamene u STAROM ponašanju: `PreveziPaleteCore` sa `IIf` i `OpisDokumentaZaPotvrdu` koji
+           vraća samo broj;
+         - prazne zamene: `SkiniPaleteSirocadi_TX`, `NedovrsenoKvarTestSet` i `KIND_GRESKA_CITANJA`;
+       - posle prolaza su moduli vraćeni i bajt-identični grani.
+
+       Rezultati:
+       - `RunAllTests` **314 / 3**:
+         - **313** pada na „dva dokumenta istog broja sa osirotelim paletama daju dva reda" (očekivano 2,
+           dobijeno 1). **N9 je reprodukovan;**
+         - 311 (razlog odbijanja: stari kod odbija dvosmislen broj iz drugog razloga) i 312 (radnja ne postoji)
+           su crveni zbog API-ja;
+         - 314 je zelen i na starom kodu, kao što je predviđeno: korekcija bez razlike ne menja ništa.
+       - BFP **2928 / 4**, sva četiri u `Test_S8R1b_PraznaPaletaStrogBrojac`:
+         - pada na „su-stanar stornirane prijemnice ostaje na paleti": očekivano
+           `redova=1|gajb=3|neto=30|storno=0`, dobijeno `redova=1|gajb=0|neto=0|storno=1`. Paleta je
+           stornirana, a zaglavlje joj ostaje 3 gajbe (`DA|3`). **N8 je reprodukovan:** greška prikaznog
+           čitača je postala dozvola za `StornoPaleta`, koji je skinuo su-stanara;
+         - pad brojača (seam `BROJAC` stari kod nema) i kontra-tvrdnja su crveni posledično.
+       - `KI-056` i `S8R1B-REV-01` na starom kodu nisu izmereni posebno, jer 313 staje na prvoj (N9) tvrdnji.
+         Njihove sabotaže grizu (dokaz ispod).
+     - **Zeleni prolaz** nad `4fb6addf` (marker izvor `a180e1247d02`):
+       - `RunAllTests` **314 / 0**;
+       - BFP **2928 / 0** (2917 + 11 tvrdnji `Test_S8R1b_*`);
+       - Palete **115 / 0**;
+       - Storno **111 / 0**.
+     - **Dokaz** (`dokaz.py --grupe 6`, nad `4fb6addf`): **13 / 13 crvenih po imenu** — osam `s8r1b-*` (ne devet,
+       kako stoji u stavci 284) i pet presidrenih (`relink-izvor-po-broju`, `relink-ignorise-generaciju`,
+       `relink-cilj-po-broju`, `cotenant-po-broju`, `writer-isti-broj-odbija`).
+       - Potpis izvora pre i posle je `0fc656158d90eb9b` (identičan);
+       - deset sabotaža je mereno grupno, a pojedinačni dokaz nije pušten.
+     - **Compile:** automatski NEJASNO. Sveska za ručni Compile i ručnu proveru je
+       `tests/fixtures/rucna_provera_s8r1b_kod.xlsm` (`run_vba --compile-only --keep`, kod `4fb6addf`). Pre
+       Compile-a se uvozi `modVbaTools.bas`; nove poruke traže zatvaranje i ponovno otvaranje fajla. **Čeka
+       operatera.**
+     - **Nova osnova grane:** `RunAllTests` 314 / 0 · BFP 2928 / 0 · Palete 115 / 0 · Storno 111 / 0 · katalog
+       1132.
+     - **Status:**
+       - N8 i N9 su ispravljeni i izvršno dokazani (crveno → zeleno);
+       - N2: dokaz je sabotaža i razlog odbijanja; reprodukcija na starom kodu je samo tekstualna (nema
+         jednoznačnog broja bez ID-a u testu);
+       - `KI-056` se zatvara posle ručne provere;
+       - posle Compile-a i ručne provere: PR 1b.
+     - **Sledeći brojevi:** test 315 · stavka 286 · KI-085 · plan §14.59.
+
+286. **Rez 1b — Compile PASS i ručna provera „Skini palete" PASS; `KI-056` CLOSED, `KI-085` upisan** (04.11.2026).
+     Sveska je `tests/fixtures/rucna_provera_s8r1b_kod.xlsm` (kod `4fb6addf`). Operater je javio „compiles" i
+     poslao četiri snimka ekrana (07:17–07:18).
+
+     - **Compile:** PASS (operater).
+     - **Ručna provera:**
+       1. Lista „Osiroć. palete" ima pet redova, `8/150326` dvaput (`PRJ-TEST-C1`, `PRJ-TEST-C2`), a pored
+          „Prevezi" stoji dugme „Skini palete". **PASS.**
+       2. Potvrda nad redom C1 glasi „Skinuti sa paleta robu stornirane prijemnice 8/150326 (Test kupac 1
+          (KUP-TEST-1), PRJ-TEST-C1)?", dakle imenuje broj, kupca i ID; podrazumevano dugme je „No". **PASS**
+          (`KI-056`).
+       3. Na „Da" stiže poruka „Skinute palete prijemnice 8/150326 (1)". Red C1 nestaje, red C2 istog broja
+          ostaje, a brojka „Osiroćeno" pada sa 5 na 4. **PASS.**
+       4. „Nedovršeno" posle radnje ima sedam redova: preostali `8/150326`, `9/150326` i `5/150326` dvaput (dva
+          dokumenta istog broja; N9 se vidi i u pravom ekranu). **PASS.**
+
+       **Nije izmereno:** ishod odgovora „Ne". Snimak pokazuje dijalog, ali ne i odbijanje. Grana je jedan
+       `If MsgBox(...) <> vbYes Then Exit Function` pred jezgrom (`modScrOporavak.SkiniPalete`); test je ne može
+       doseći, jer `MsgBox` u test prolazu visi.
+     - **`KI-085` (nalaz ručne provere, van reza):** posle radnje na listi „Osiroć. palete" brojka „Nedovršeno"
+       u zoni ostaje 8, dok brojač u meniju pokazuje 7. Zona se ispravi tek kad se otvori lista „Nedovršeno".
+       - Uzrok: `mBrNedovrseno` se računa samo u `RowsNedovrseno`, a radnja na drugoj listi osveži samo tu
+         listu i brojku „Osiroćeno".
+       - Obrazac postoji od `16c48e7e` (15.08.2026, Faza D/14), pa nije nastao u rezu 1b. Važi i za ostale
+         radnje van liste „Nedovršeno".
+       - Samo upis, bez PR-a.
+     - **`KI-056` → CLOSED:**
+       - `OpisDokumentaZaPotvrdu` daje broj, kupca i ID za „Skini palete", „Prevezi palete" i „Prevezi prijemnicu";
+       - test 313 i sabotaža `s8r1b-potvrda-bez-dokumenta` to mere;
+       - ručna provera iz tačke 2 je to potvrdila.
+     - **Status reza 1b:** gotovi su kod, nalazi review-a, izvršni acceptance (stavka 285), Compile i ručna
+       provera. Ostaje PR, samo na izričit zahtev; rez 1c (N7) ide posle potvrđenog 1b.
+     - **Sledeći brojevi:** test 315 · stavka 287 · KI-086 · plan §14.59.
+
+287. **Review PR-a `#459` (rez 1b) — MERGE HOLD (CODE 8,7 / TEST 8,8); dve P1 statusne kapije zatvorene
+     lokalno** (04.11.2026). Na „Push i PR" je grana push-ovana do `6e726774` i otvoren je PR `#459`; static
+     CI #1137 je SUCCESS. Review je pregledao `6e726774`.
+
+     - **Ocena review-a:** N8, N2, „Skini palete", N9, greške čitanja Oporavka i brisanje makroa su ocenjeni
+       DOBRO. HOLD stoji samo zbog dve statusne kapije koje nečitljiv status tumače kao dozvolu. Obe su
+       nasleđene, ali ih nove putanje reza 1b izlažu.
+     - **Klasa:** ista kao N8 i `S8R1B-REV-01` — nečitljivo stanje postaje dozvola za mutaciju. Nova klasa nije,
+       pa krug se ne prekida (pre-flight §10). Zato su pregledani ceo put „Skini palete" i ceo
+       `ReassignPaleteToPrijemnica_TX`, a ne samo dve linije; ostatak modula je `KI-087`.
+     - **`S8R1B-REV-04` (P1) — status prerade palete:** `IsPaletaPreradjena` je radila pod `On Error Resume
+       Next`, uz tolerantan `GetColumnIndex`, pa je nečitljiv status značio „nije prerađena". Kod „Skini
+       palete" sa su-stanarom se `StornoPaleta` ne zove, pa druge brane nije bilo. **Ispravka:** funkcija je
+       stroga — bez `On Error`, kolone statusa i ID-a moraju da se nađu, a greška se diže. Svi pozivaoci su
+       kapije:
+       - `SkiniPaleteZaStornoPrijemnice` i `SkiniPaletneStavke`;
+       - `AdjustPaletaGajbiceZaPrijemnicu_TX` (njen EH daje `ADJ_BLOCKED`);
+       - `PreradjenaPaletaRazlog` (greška stiže do EH-a `RunPrijemnicaCorrection`).
+     - **`S8R1B-REV-05` (P1) — status cilja prevezivanja:** `ReassignPaleteToPrijemnica_TX` je `Stornirano`
+       čitao tolerantno i proveravao samo kad je `pcSt > 0`, pa je cilj nečitljivog statusa bio „aktivan".
+       **Ispravka:** bez te kolone nema prevezivanja. U istoj funkciji, ista klasa:
+       - kolone identiteta koje odlučuju o relabelu (`VrstaVoca`, `SortaVoca`, `TipAmbalaze`) idu kroz
+         `RequireColumnIndex`; dva prazna teksta su izgledala kao „isti identitet";
+       - mrtve grane `If pcTa > 0` su obrisane;
+       - EH vraća razlog u `outWarn`; Oporavak je na grešci javljao neuspeh bez uzroka.
+     - **Seam:** postojeći `PaletaPraznoTestSet` dobija režime `PRERADJENO_KOLONA` i `STATUS_CILJA_KOLONA` (već
+       je u `ResetSeamova`).
+       - Režimi kvare INDEKS kolone, ne dižu grešku: stari čitač pod `Resume Next` bi grešku progutao i pročitao
+         pravu kolonu, pa test ne bi razlikovao tolerantan čitač od strogog.
+       - Provera „indeks = 0" zato stoji u pozivaocu, posle kuke (`KolonaKapijeSeNeCita`: sistemski pad, kao
+         `RequireColumnIndex`).
+       - Status cilja se čita kroz `SafeCell`, pa sabotaža koja ukloni samo strogu proveru daje tačno staro
+         ponašanje, a ne pad na indeksu 0.
+     - **Testovi** (bez novog broja testa):
+       - BFP `Test_S8R1b_PraznaPaletaStrogBrojac`, +3 tvrdnje: dok je P1 aktivna na istoj paleti, „Skini palete"
+         nad P2 sa nečitljivim statusom prerade vraća 0, razlog imenuje kolonu, a dokument, su-stanar i paleta
+         ostaju isti;
+       - `modTest` 314, +3 tvrdnje: nečitljiv status AKTIVNOG cilja odbija prevezivanje, razlog imenuje kolonu
+         i ništa se ne pomera; posle toga ide postojeće uspešno prevezivanje;
+       - sabotaže `s8r1b-preradjeno-tiho` i `s8r1b-status-cilja-tiho` brišu samo strogu proveru (katalog 1134).
+         Na kodu PR-a (`6e726774`) seam ne postoji, pa su ove dve sabotaže reprodukcija: kod PR-a + kvar indeksa.
+     - **Nije mereno:** strogost kolona identiteta u prevezivanju nema svoj test. Ima isti oblik kao devet
+       strogih kolona iznad nje u istoj funkciji.
+     - **`S8R1B-REV-06` (P2) → `KI-086`:** `PreveziPaleteCore` vraća `True` i kad je korekcija posle
+       prevezivanja odbijena, preskočena ili traži izbor; 314 meri samo smanjenje. Po review-u ne ide u ovaj PR.
+     - **`S8R1B-REV-07` (P2) = `KI-085`** (već upisan, stavka 286).
+     - **`KI-087`:** ostale tolerantne kolone u kapijama `modPaletniList`, van puteva koje je review pregledao.
+       Kandidat za rez 2a, koji ionako prevodi čitaoce paleta.
+     - **Jeftine kapije zelene:**
+       - `vba_check`: čisto, 191 fajl;
+       - `sabotaza --proveri-sidra`: 1134, 0 nalaza;
+       - `gen_schema_module --check`: `B22A1572`;
+       - `who_writes --check` i `--check-ownership`;
+       - `popis_citalaca --check`;
+       - `dokaz.py --plan` za dve nove sabotaže: po jedna grupa (BFP, RunAllTests).
+     - **NOT RUN** (čeka reviewer GO i „Push, pa kapije"):
+       - RunAllTests (očekivano 314 / 0), BFP (očekivano 2931 / 0), Palete, Storno;
+       - dokaz:
+         - deset `s8r1b-*`;
+         - pet presidrenih iz 1b: tri `relink-*`, `cotenant-po-broju` i `writer-isti-broj-odbija` (prevezivanje je dirnuto);
+         - šest `s6k4` sabotaža prerađene palete (`IsPaletaPreradjena` je dirnuta);
+       - Compile.
+     - **Sledeći brojevi:** test 315 · stavka 288 · KI-088 · plan §14.59.
+
+288. **Drugi review `#459` — CODE GO (9,0 / 9,0), MERGE CONDITIONAL GO; izvršni acceptance `5c3d72a8`
+     zelen, dokaz 4 / 4** (04.11.2026). Na „Push" je `5c3d72a8` push-ovan, a opis PR-a je dopunjen stavkom 287
+     (na „Ažuriraj opis", provereno poređenjem sa lokalnom kopijom). Static CI #1138 na `5c3d72a8` je SUCCESS.
+
+     - **Review:**
+       - `S8R1B-REV-04` i `S8R1B-REV-05`: CODE GO, ispravke su u poslovnoj kapiji, a ne u interfejsu;
+       - strogo čitanje kolona identiteta ocenjeno je kao smisleno, ne kao proširenje;
+       - `KI-086` i `KI-087` su prihvaćeni van PR-a; za `KI-086` važi da odložena korekcija mora biti vidljiva
+         kao nedovršen posao;
+       - novi P1 nije nađen. TEST HOLD dok se ne izvrše kapije; posle njih preporuka je MERGE GO i prelaz na 1c.
+     - **Obim (odluka operatera, odstupa od review-a):** review je tražio i regresione grupe 1b i S6. Operater
+       je izabrao samo ono što je ovaj korak dodao ili dirao (CLAUDE.md §5):
+       - dve nove sabotaže i dve čiji je test menjan;
+       - zeleni RunAllTests i BFP kroz bazni prolaz dokaza;
+       - Palete i Storno posebno.
+
+       Jedanaest regresionih sabotaža ide uz pun katalog na kraju S8 / pred release:
+       - pet presidrenih iz 1b: tri `relink-*`, `cotenant-po-broju`, `writer-isti-broj-odbija`;
+       - šest `s6k4` sabotaža prerađene palete.
+
+       Za `5c3d72a8` su **NOT RUN**.
+     - **Dokaz** (`dokaz.py --grupe 6`, nad `5c3d72a8`, potpis izvora `9374b371f385a793`):
+       - bazni prolaz: RunAllTests **314 / 0**, BFP **2931 / 0** (2928 + 3 nove tvrdnje);
+       - **4 / 4 crvenih po imenu**:
+         - `s8r1b-preradjeno-tiho`, uz još 5;
+         - `s8r1b-status-cilja-tiho`;
+         - `s8r1b-prevezi-bez-korekcije`;
+         - `s8r1b-praznina-iz-prikaza`, uz još 3.
+
+         Kod BFP-a je ključ dokaza tvrdnja, pa se broje i druge pale tvrdnje. Koje su to, pojedinačno nije
+         provereno;
+       - izvor pre i posle je identičan.
+
+       Dve nove sabotaže su reprodukcija na kodu PR-a: kod `6e726774` uz kvar indeksa kolone daje skidanje i
+       prevezivanje koje ne bi smelo.
+     - **Palete 115 / 0, Storno 111 / 0** (marker izvor `d65886939d9f`).
+     - **Fixture i seam-ovi:**
+       - fixture `8196bbcaecbc8926` je netaknut (`otkup_test.xlsm` i `.sig` nose vreme 02.11.2026 11:17);
+       - svaki prolaz radi nad svojom privremenom kopijom u svojoj instanci Excela;
+       - stanje seam-a živi samo u memoriji te instance;
+       - `ResetSeamova` ga gasi na početku `RunAllTests` i posle palog testa, a oba nova bloka ga gase sama;
+       - zelen ostatak suite-a posle 314 i posle BFP testa je posredan dokaz da seam nije ostao upaljen;
+         direktne tvrdnje o tome nema.
+     - **Compile:** automatski NEJASNO. Sveska za ručni Compile je `tests/fixtures/rucna_provera_s8r1b_rev.xlsm`
+       (`run_vba --compile-only --keep`, kod `5c3d72a8`); pre Compile-a se uvozi `modVbaTools.bas`. **Ručni
+       Compile: PASS** (operater, 04.11.2026).
+     - **Ručna provera** „Skini palete" (stavka 286) je rađena na `6e726774` i nije ponovljena. `5c3d72a8`
+       menja samo kapije ispod potvrde, ne tok ekrana.
+     - **Nova osnova grane:** RunAllTests 314 / 0 · BFP 2931 / 0 · Palete 115 / 0 · Storno 111 / 0 · katalog 1134.
+     - **Status:** sa Compile PASS je uslov review-a za MERGE GO ispunjen, osim odloženih regresionih sabotaža.
+       Merge ide samo na izričit zahtev.
+     - **Sledeći brojevi:** test 315 · stavka 289 · KI-088 · plan §14.59.
 
 ## Dug sa imenom (posle S5-5b)
 

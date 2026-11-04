@@ -34,6 +34,20 @@ Private Const PAL_PRAG_MS As Long = 400
 ' Forme postavljaju True pre snimanja ispravke i False odmah posle. Default False.
 Private mSkipPaletize As Boolean
 
+' TEST SEAM (S8 rez 1b): kvari citanje na kome stoji destruktivna odluka.
+'   "PRIKAZ"              prikazni citac (GetPaletaStavkeForGrid) vraca Empty kao
+'                         na gresci (N8);
+'   "BROJAC"              strog brojac aktivnih stavki dize gresku (N8);
+'   "PRERADJENO_KOLONA"   kolona statusa prerade palete se ne nalazi
+'                         (IsPaletaPreradjena, S8R1B-REV-04);
+'   "STATUS_CILJA_KOLONA" kolona Stornirano prijemnice se ne nalazi
+'                         (ReassignPaleteToPrijemnica_TX, S8R1B-REV-05).
+' Dva _KOLONA rezima kvare INDEKS kolone, ne dizu gresku: tolerantan citac pod
+' Resume Next bi dignutu gresku progutao pa procitao pravu kolonu, i test ne bi
+' razlikovao tolerantan citac od strogog. Postavljac ga pali samo u test rezimu,
+' kuka ponovo pita IsTestMode(), a gasi ga modTest.ResetSeamova.
+Private mPaletaPraznoTest As String
+
 ' Povratne vrednosti AdjustPaletaGajbiceZaPrijemnicu_TX (pored >=0 = broj korigovanih klasa).
 Public Const ADJ_NEEDS_CHOICE As Long = -1   ' visak ne staje -> UI pita: prelij ili preko kapaciteta
 Public Const ADJ_BLOCKED As Long = -2        ' blokirano (npr. preradjena paleta) -> outInfo nosi razlog
@@ -42,44 +56,15 @@ Public Sub SetPaletizeSkip(ByVal b As Boolean)
     mSkipPaletize = b
 End Sub
 
-' Da li paletna stavka pripada IZVORNOM dokumentu.
-'
-' Sa poznatim identitetom (skup PrijemnicaID-eva) odlucuje iskljucivo
-' PrijemnicaID - broj se tada ni ne gleda, pa dokument koji deli broj ne moze da
-' udje. Stavka bez PrijemnicaID (stari zapis) pada na broj, jer drugog traga nema.
-' Bez identiteta vazi staro ponasanje po broju; pozivalac je pre toga vec
-' dokazao da je broj jednoznacan.
-' Pripada li paleta-stavka dokumentu? Po PrijemnicaID kad su ID-evi dokumenta
-' poznati, inace po broju kao labeli. Koristi se za OBE strane
-' prevezivanja - izvor i cilj - da bi pravilo bilo doslovno isto.
-'
-' brojDvosmislen: nose li taj broj dokumenta vise vlasnika. Stavka bez
-' PrijemnicaID (zatecen zapis) tada NE sme da padne na broj -- ne moze se
-' utvrditi cija je, pa se staje umesto da se pogodi. Kad broj nosi jedan
-' dokument, fallback je bezbedan i zatecen podatak i dalje radi.
-Private Function PripadaDokumentu(ByVal brojStavke As String, ByVal broj As String, _
-                                  ByVal prijemnicaID As String, _
-                                  ByVal ids As Object, _
-                                  Optional ByVal brojDvosmislen As Boolean = False) As Boolean
-    If ids Is Nothing Then
-        PripadaDokumentu = (brojStavke = broj)
-        Exit Function
-    End If
-    If ids.count = 0 Then
-        PripadaDokumentu = (brojStavke = broj)
-        Exit Function
-    End If
-    If Len(prijemnicaID) > 0 Then
-        PripadaDokumentu = ids.Exists(prijemnicaID)
-    Else
-        If brojStavke = broj And brojDvosmislen Then
-            Err.Raise vbObjectError + 7312, "modPaletniList.PripadaDokumentu", _
-                      "Paletna stavka broja '" & broj & "' nema PrijemnicaID, a taj " & _
-                      "broj nose dokumenta vise kupaca. Ne moze se utvrditi cija je " & _
-                      "-- prevezivanje je prekinuto. Popuni PrijemnicaID pa ponovi."
-        End If
-        PripadaDokumentu = (brojStavke = broj)
-    End If
+' Da li paletna stavka (ili red prijemnice) pripada dokumentu: ISKLJUCIVO po
+' PrijemnicaID-u, nad skupom ID-eva dokumenta. Koristi se za obe strane
+' prevezivanja, pa je pravilo doslovno isto. Od S8 reza 1b (N2) nema pada na
+' broj: broj nose dokumenti vise kupaca, a stavka bez PrijemnicaID ne pripada
+' nijednom dokumentu (pisac je uvek upisuje).
+Private Function PripadaDokumentu(ByVal prijemnicaID As String, ByVal ids As Object) As Boolean
+    If ids Is Nothing Then Exit Function
+    If Len(prijemnicaID) = 0 Then Exit Function
+    PripadaDokumentu = ids.Exists(prijemnicaID)
 End Function
 
 ' Vraca sledeci redni broj palete za TEKUCU godinu (1 ako jos nema palete
@@ -623,6 +608,7 @@ End Function
 Public Function GetPaletaStavkeForGrid(ByVal palID As String) As Variant
     On Error GoTo EH
     If Trim$(palID) = "" Then Exit Function
+    If PaletaPraznoAkoTest("PRIKAZ") Then Exit Function
     Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(s) Then Exit Function
 
@@ -1476,21 +1462,21 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     outWarn = ""
     outGajbDiff = False
     oldBroj = Trim$(oldBroj): newBroj = Trim$(newBroj)
-    If Len(oldBroj) = 0 Or Len(newBroj) = 0 Then Exit Function
-    ' "Isti dokument" se meri IDENTITETOM kad ga obe strane imaju. Broj nastaje PO
-    ' KUPCU, pa ispravka koja menja kupca lako dobije isti poslovni broj kao
-    ' original -- to su dva dokumenta i prevezivanje je legitimno. Ova kapija je
-    ' ranije stajala PRE razresavanja identiteta i odbijala tu operaciju; ista
-    ' provera je popravljena u ekranu, a ovde je ostala stara, pa je pravilo samo
-    ' preseljeno iz UI-ja u writer.
-    If Len(Trim$(oldPrijemnicaID)) > 0 And Len(Trim$(newPrijemnicaID)) > 0 Then
-        If StrComp(Trim$(oldPrijemnicaID), Trim$(newPrijemnicaID), vbTextCompare) = 0 Then
-            outWarn = "Izvor i cilj su ISTI dokument."
-            Exit Function
-        End If
-    ElseIf StrComp(oldBroj, newBroj, vbTextCompare) = 0 Then
-        outWarn = "Stara i nova prijemnica su isti broj, a dokumenti nisu zadati " & _
-                  "-- ne moze se dokazati da su razliciti dokumenti."
+    oldPrijemnicaID = Trim$(oldPrijemnicaID): newPrijemnicaID = Trim$(newPrijemnicaID)
+    ' OBA DOKUMENTA SU OBAVEZNA (S8 rez 1b, N2). Prevezivanje menja palete, a broj
+    ' nose dokumenti vise kupaca; grana po broju i njene kapije dvosmislenosti su
+    ' obrisane. Pozivalac bez ID-a dobija razlog, ne pogodak po broju.
+    If Len(oldPrijemnicaID) = 0 Or Len(newPrijemnicaID) = 0 Then
+        If Len(oldPrijemnicaID) = 0 Then outWarn = "Izvorna prijemnica nije zadata (PrijemnicaID). "
+        If Len(newPrijemnicaID) = 0 Then outWarn = outWarn & "Ciljna prijemnica nije zadata (PrijemnicaID). "
+        outWarn = outWarn & "Prevezivanje po broju ne postoji -- broj nose dokumenti vise kupaca."
+        Exit Function
+    End If
+    ' "Isti dokument" se meri IDENTITETOM. Broj nastaje PO KUPCU, pa ispravka koja
+    ' menja kupca lako dobije isti poslovni broj kao original -- to su dva
+    ' dokumenta i prevezivanje je legitimno.
+    If StrComp(oldPrijemnicaID, newPrijemnicaID, vbTextCompare) = 0 Then
+        outWarn = "Izvor i cilj su ISTI dokument."
         Exit Function
     End If
 
@@ -1511,68 +1497,46 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     pcBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
     pcId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
     pcZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+    ' Status cilja je KAPIJA (S8R1B-REV-05): necitljiv status je ranije znacio
+    ' "aktivan" (pcSt = 0 -> stN ostaje False), pa se prevezivalo i na dokument
+    ' cije stanje niko nije procitao. Bez kolone nema prevezivanja.
     pcSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
-    ' identitet nove prijemnice (za relabel-u-mestu; svi redovi broja dele isti)
+    If PaletaPraznoAkoTest("STATUS_CILJA_KOLONA") Then pcSt = 0
+    If pcSt = 0 Then KolonaKapijeSeNeCita TBL_PRIJEMNICA, COL_STORNIRANO, SRC
+    ' Identitet izvora i cilja odlucuje o relabelu -- ista klasa kapije: dve
+    ' necitljive kolone daju dva prazna teksta, a prazno = prazno je "isti
+    ' identitet", pa bi se paleta prevezala bez relabela i bez potvrde.
     Dim pcVr As Long, pcSo As Long, pcTa As Long
-    pcVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
-    pcSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
-    pcTa = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
+    pcVr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, SRC)
+    pcSo = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA, SRC)
+    pcTa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB, SRC)
     Dim nVr As String, nSo As String, nTa As String
     ' Identitet IZVORNOG dokumenta -- cita se u istom prolazu kroz tblPrijemnica,
     ' iz redova koji su vec izabrani po identitetu. Bez toga bi presuda morala
     ' ponovo da trazi dokument, a to je bas ono sto se ovde ispravlja.
     Dim oVrS As String, oSoS As String, oTaS As String, imamIzvor As Boolean
 
+    ' ZADAT identitet izvora koji se ne razresava je greska: pozivalac je rekao
+    ' "bas ovaj dokument", a njega nema.
     Dim srcIds As Object: Set srcIds = modDokumenta.IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, oldPrijemnicaID)
-    Dim srcDvosmislen As Boolean
-    srcDvosmislen = (VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, oldBroj, SRC, True, _
-                                     Array(COL_PRJ_KUPAC)).count > 1)
-    If Len(Trim$(oldPrijemnicaID)) > 0 Then
-        ' ZADAT identitet koji se ne razresava je greska, ne poziv na fallback:
-        ' pozivalac je rekao "bas ovaj dokument", nije nadjen, pa bi pad na broj
-        ' dirao nesto drugo. Prazan argument (legacy) je sasvim druga stvar.
-        If srcIds.count = 0 Then
-            outWarn = "Prijemnica izvora '" & oldPrijemnicaID & "' ne postoji. " & _
-                      "Prevezivanje je zaustavljeno da ne bi zahvatilo drugi dokument."
-            Exit Function
-        End If
-    ElseIf srcDvosmislen Then
-        outWarn = "Broj '" & oldBroj & "' nose dokumenta vise kupaca, a dokument " & _
-                  "izvora nije zadat. Prevezivanje bi zahvatilo i tudje palete."
+    If srcIds.count = 0 Then
+        outWarn = "Prijemnica izvora '" & oldPrijemnicaID & "' ne postoji. " & _
+                  "Prevezivanje je zaustavljeno da ne bi zahvatilo drugi dokument."
         Exit Function
     End If
 
-    ' --- Po cemu se prepoznaje CILJNI dokument ---
-    '
-    ' Broj prijemnice se generise PO KUPCU, pa dva kupca lako nose isti broj.
-    ' Sa zadatim PrijemnicaID-om se cilj bira po identitetu; bez njega ostaje
-    ' izbor po broju, ali tek posto se dokaze da je broj jednoznacan. Za razliku
-    ' od izvora ovde se gledaju SAMO AKTIVNI dokumenti - cilj prevezivanja ne sme
-    ' da bude storniran. Zadat ID koga nema ne nalazi cilj, pa writer staje dole
-    ' ("nije aktivna / ne postoji") -- ne pada na broj.
-    Dim tgtID As String: tgtID = Trim$(newPrijemnicaID)
-    Dim tgtDvosmislen As Boolean
-    tgtDvosmislen = (VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, newBroj, SRC, False, _
-                                     Array(COL_PRJ_KUPAC)).count > 1)
-    If Len(tgtID) = 0 Then
-        If tgtDvosmislen Then
-            outWarn = "Broj '" & newBroj & "' nose dokumenta vise kupaca, a dokument " & _
-                      "cilja nije zadat. Palete bi mogle da odu tudjem kupcu."
-            Exit Function
-        End If
-    End If
+    ' --- CILJNI dokument: po identitetu, samo AKTIVAN ---
+    ' Cilj prevezivanja ne sme da bude storniran. Zadat ID koga nema ne nalazi
+    ' cilj, pa writer staje dole ("nije aktivna / ne postoji").
+    Dim tgtID As String: tgtID = newPrijemnicaID
 
     Dim r As Long
     Dim ciljni As Boolean
     For r = 1 To UBound(prj, 1)
-        If Len(tgtID) > 0 Then
-            ciljni = (Trim$(NzToText(prj(r, pcId))) = tgtID)
-        Else
-            ciljni = (Trim$(CStr(prj(r, pcBr))) = newBroj)
-        End If
+        ciljni = (Trim$(NzToText(prj(r, pcId))) = tgtID)
         If ciljni Then
-            Dim stN As Boolean: stN = False
-            If pcSt > 0 Then stN = (UCase$(Trim$(CStr(prj(r, pcSt)))) = "DA")
+            Dim stN As Boolean
+            stN = (UCase$(Trim$(NzToText(SafeCell(prj, r, pcSt)))) = "DA")
             If Not stN Then
                 ' Linije cilja su STAVKE dokumenta (S6 korak 2/3); zaglavlje je
                 ' bez klase i kolicine.
@@ -1580,24 +1544,21 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
                                         newStavka, newNeto, newGajb, SRC
                 If Len(newBrZbr) = 0 Then
                     newBrZbr = Trim$(CStr(prj(r, pcZbr)))
-                    ' Labela mora da opisuje BAS izabrani dokument: kad identitet
-                    ' odlucuje, broj se cita iz njega umesto da se veruje pozivaocu.
-                    If Len(tgtID) > 0 Then newBroj = Trim$(CStr(prj(r, pcBr)))
+                    ' Labela mora da opisuje BAS izabrani dokument: broj se cita
+                    ' iz njega umesto da se veruje pozivaocu.
+                    newBroj = Trim$(CStr(prj(r, pcBr)))
                     nVr = Trim$(NzToText(SafeCell(prj, r, pcVr)))
                     nSo = Trim$(NzToText(SafeCell(prj, r, pcSo)))
-                    If pcTa > 0 Then nTa = Trim$(NzToText(SafeCell(prj, r, pcTa)))
+                    nTa = Trim$(NzToText(SafeCell(prj, r, pcTa)))
                 End If
             End If
         ElseIf Not imamIzvor Then
-            ' Identitet IZVORA, iz istog prolaza kroz tabelu. Bira se po ID-u
-            ' kad je zadat; bez njega po broju, ali je dvosmislenost broja vec
-            ' odbijena iznad. Presuda o relabelu se posle racuna nad OVIM, umesto
-            ' da ponovo trazi dokument.
-            If PripadaDokumentu(Trim$(CStr(prj(r, pcBr))), oldBroj, _
-                                Trim$(NzToText(SafeCell(prj, r, pcId))), srcIds) Then
+            ' Identitet IZVORA, iz istog prolaza kroz tabelu, po ID-u. Presuda o
+            ' relabelu se posle racuna nad OVIM, umesto da ponovo trazi dokument.
+            If PripadaDokumentu(Trim$(NzToText(SafeCell(prj, r, pcId))), srcIds) Then
                 oVrS = Trim$(NzToText(SafeCell(prj, r, pcVr)))
                 oSoS = Trim$(NzToText(SafeCell(prj, r, pcSo)))
-                If pcTa > 0 Then oTaS = Trim$(NzToText(SafeCell(prj, r, pcTa)))
+                oTaS = Trim$(NzToText(SafeCell(prj, r, pcTa)))
                 imamIzvor = True
             End If
         End If
@@ -1612,12 +1573,10 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     ' kao "fresh" i usle u zbir na koji se posle porede kolicine.
     Dim tgtIds As Object: Set tgtIds = CreateObject("Scripting.Dictionary")
     tgtIds.CompareMode = vbTextCompare
-    If Len(tgtID) > 0 Then
-        Dim kT As Variant
-        For Each kT In newById.Keys
-            tgtIds(CStr(newById(kT))) = True
-        Next kT
-    End If
+    Dim kT As Variant
+    For Each kT In newById.Keys
+        tgtIds(CStr(newById(kT))) = True
+    Next kT
 
     ' --- Jedan citanje stavki; sakupi fresh(new) i orphan(old) redove + old gajbica po klasi. ---
     Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
@@ -1636,16 +1595,10 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     sZbr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, SRC)
     sSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
 
-    ' IZVOR SE BIRA PO IDENTITETU, NE PO BROJU.
-    '
-    ' Kad je zadat stari dokument, u izvor ulaze samo stavke cija PrijemnicaID je
-    ' BAS on. Bez toga bi "bp = oldBroj" pokupio i stavke tudjeg dokumenta koji
-    ' deli broj - a broj se racuna po kupcu, pa je to svakodnevan slucaj, ne
-    ' teorijski.
-    '
-    ' Bez identiteta (zateceni pozivaoci) ostaje izbor po broju,
-    ' ali tek posto se dokaze da je broj jednoznacan - i to UKLJUCUJUCI
-    ' stornirane, jer je izvor prevezivanja bas storniran dokument.
+    ' IZVOR I CILJ SE BIRAJU PO IDENTITETU, NE PO BROJU: u izvor ulaze samo
+    ' stavke cija PrijemnicaID je BAS stari dokument. Po broju bi usle i stavke
+    ' tudjeg dokumenta koji deli broj -- a broj se racuna po kupcu, pa je to
+    ' svakodnevan slucaj, ne teorijski.
     Dim freshRows As Collection: Set freshRows = New Collection
     Dim oldRows As Collection: Set oldRows = New Collection
     Dim oldGajbByKl As Object: Set oldGajbByKl = CreateObject("Scripting.Dictionary")
@@ -1653,10 +1606,9 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     Dim i As Long
     For i = 1 To UBound(ps, 1)
         If UCase$(Trim$(CStr(ps(i, sSt)))) <> "DA" Then
-            Dim bp As String: bp = Trim$(CStr(ps(i, sBr)))
-            If PripadaDokumentu(bp, newBroj, Trim$(CStr(ps(i, sPid))), tgtIds, tgtDvosmislen) Then
+            If PripadaDokumentu(Trim$(CStr(ps(i, sPid))), tgtIds) Then
                 freshRows.Add i
-            ElseIf PripadaDokumentu(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds, srcDvosmislen) Then
+            ElseIf PripadaDokumentu(Trim$(CStr(ps(i, sPid))), srcIds) Then
                 oldRows.Add i
                 Dim kO As String: kO = Trim$(CStr(ps(i, sKl)))
                 If Len(kO) = 0 Then kO = "I"
@@ -1707,16 +1659,15 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         Dim jeIzvor As Boolean, jeCilj As Boolean
         ' Prvo paleta, pa tek onda identitet. Obrnut redosled je radio analizu
         ' pripadnosti nad SVAKOM aktivnom stavkom u tabeli, ukljucujuci one na
-        ' paletama koje ovaj relabel uopste ne dira -- a PripadaDokumentu na
-        ' zatecenoj stavci bez PrijemnicaID pod dvosmislenim brojem podize
-        ' gresku. Ovako se gledaju samo palete koje bi se stvarno promenile.
+        ' paletama koje ovaj relabel uopste ne dira. Ovako se gledaju samo
+        ' palete koje bi se stvarno promenile.
         For qg = 1 To UBound(ps, 1)
             If UCase$(Trim$(CStr(ps(qg, sSt)))) <> "DA" Then
                 If tgtPal.Exists(CStr(ps(qg, sPal))) Then
                     bpg = Trim$(CStr(ps(qg, sBr)))
                     pidG = Trim$(NzToText(ps(qg, sPid)))
-                    jeIzvor = PripadaDokumentu(bpg, oldBroj, pidG, srcIds, srcDvosmislen)
-                    jeCilj = PripadaDokumentu(bpg, newBroj, pidG, tgtIds, tgtDvosmislen)
+                    jeIzvor = PripadaDokumentu(pidG, srcIds)
+                    jeCilj = PripadaDokumentu(pidG, tgtIds)
                     If Not jeIzvor And Not jeCilj Then
                         sharedPal = PaletaLabel(CStr(ps(qg, sPal)))
                         Exit For
@@ -1727,7 +1678,7 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         If Len(sharedPal) > 0 Then
             outWarn = "BLOKIRANO: paleta " & sharedPal & " deli robu sa drugom prijemnicom (" & bpg & _
                       "). Promena identiteta (" & CStr(verdict(2)) & ") bi iskvarila i tu robu. " & _
-                      "Skini stavke ove prijemnice sa palete (Mod: Palete -> Skini stavke), pa unesi " & _
+                      "Skini palete ove prijemnice (Oporavak -> Osiroc. palete -> Skini palete), pa unesi " & _
                       "robu kao nov unos na ispravno oznacenu paletu."
             Exit Function
         End If
@@ -1760,7 +1711,7 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     For Each kk In oldGajbByKl.Keys
         If Not newById.Exists(kk) Then
             warnMsg = warnMsg & "Klasa " & kk & ": nova prijemnica nema tu klasu - stavke ostaju " & _
-                      "osirocene (skini ih: Osiroceni dokumenti -> Palete -> Skini stavke). "
+                      "osirocene (skini ih: Oporavak -> Osiroc. palete -> Skini palete). "
             outGajbDiff = True
         ElseIf NzL(oldGajbByKl(kk)) <> NzL(newGajb(kk)) Then
             warnMsg = warnMsg & "Klasa " & kk & ": gajbica staro=" & NzL(oldGajbByKl(kk)) & " novo=" & _
@@ -1831,6 +1782,8 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     ReassignPaleteToPrijemnica_TX = True
     Exit Function
 EH:
+    ' Razlog ide pozivaocu: bez njega Oporavak javlja neuspeh bez uzroka.
+    outWarn = Err.description
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr SRC
     ReassignPaleteToPrijemnica_TX = False
@@ -1933,9 +1886,8 @@ End Function
 '   NONE    = nova nije aktivna / nema osirocenih stavki
 ' Vraca Array(0..2): kategorija, kratka oznaka (za UI kolonu), detalj.
 ' ============================================================
-' oldPrijemnicaID / newPrijemnicaID: kad su zadati, dokumenti se biraju po
-' IDENTITETU, isto kao u writeru. Opcioni su zbog zatecenih pozivalaca, koji
-' zovu oblik sa dva broja radi prikaza ocene.
+' oldPrijemnicaID / newPrijemnicaID: dokumenti se biraju po IDENTITETU, isto kao
+' u writeru. Od S8 reza 1b (N2) su obavezni -- bez njih je ocena NONE.
 Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
                                        ByVal newBroj As String, _
                                        Optional ByVal oldPrijemnicaID As String = "", _
@@ -1944,11 +1896,11 @@ Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
     oldBroj = Trim$(oldBroj): newBroj = Trim$(newBroj)
     EvaluatePaletaReassign = Array("NONE", "", "")
     If Len(oldBroj) = 0 Or Len(newBroj) = 0 Then Exit Function
+    If Len(Trim$(oldPrijemnicaID)) = 0 Or Len(Trim$(newPrijemnicaID)) = 0 Then Exit Function
 
     Dim srcIds As Object: Set srcIds = modDokumenta.IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, oldPrijemnicaID)
     Dim tgtIds As Object: Set tgtIds = modDokumenta.IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, newPrijemnicaID)
-    If Len(Trim$(oldPrijemnicaID)) > 0 And srcIds.count = 0 Then Exit Function
-    If Len(Trim$(newPrijemnicaID)) > 0 And tgtIds.count = 0 Then Exit Function
+    If srcIds.count = 0 Or tgtIds.count = 0 Then Exit Function
 
     Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
     If IsEmpty(prj) Then Exit Function
@@ -1977,10 +1929,9 @@ Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
     Dim r As Long, kl As String, kv As Variant
     Dim pk As String
     For r = 1 To UBound(prj, 1)
-        Dim b As String: b = Trim$(CStr(SafeCell(prj, r, pBr)))
         pk = ""
         If pId > 0 Then pk = Trim$(NzToText(SafeCell(prj, r, pId)))
-        If PripadaDokumentu(b, newBroj, pk, tgtIds) Then
+        If PripadaDokumentu(pk, tgtIds) Then
             If Not (pStt > 0 And UCase$(Trim$(CStr(SafeCell(prj, r, pStt)))) = "DA") Then
                 If Not haveNew Then
                     nVr = Trim$(NzToText(SafeCell(prj, r, pVr)))
@@ -1996,7 +1947,7 @@ Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
                     newGajb(CStr(kv)) = NzL(newGajb(CStr(kv))) + CLng(nGajb(kv))
                 Next kv
             End If
-        ElseIf PripadaDokumentu(b, oldBroj, pk, srcIds) Then
+        ElseIf PripadaDokumentu(pk, srcIds) Then
             If Not haveOldId Then
                 oVr = Trim$(NzToText(SafeCell(prj, r, pVr)))
                 oSo = Trim$(NzToText(SafeCell(prj, r, pSo)))
@@ -2022,7 +1973,7 @@ Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
     For r = 1 To UBound(s, 1)
         spk = ""
         If sPid > 0 Then spk = Trim$(NzToText(SafeCell(s, r, sPid)))
-        If PripadaDokumentu(Trim$(CStr(SafeCell(s, r, sBr))), oldBroj, spk, srcIds) _
+        If PripadaDokumentu(spk, srcIds) _
            And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> "DA" Then
             kl = Trim$(CStr(SafeCell(s, r, sKl))): If Len(kl) = 0 Then kl = "I"
             oldGajb(kl) = NzL(oldGajb(kl)) + NzL(SafeCell(s, r, sGa))
@@ -2166,6 +2117,49 @@ Public Function SkiniPaleteZaStornoPrijemnice(ByVal tx As clsTransaction, _
     SkiniPaleteZaStornoPrijemnice = SkiniPaletneStavke(s, rowsC, pid, SRC, emptied)
 End Function
 
+' "SKINI PALETE" IZ OPORAVKA (S8 rez 1b, PAL-ODL-05): skida aktivne paletne stavke
+' STORNIRANE prijemnice -- sirocad klase koju nova prijemnica nema -- u SOPSTVENOJ
+' transakciji, kroz isto telo kao storno prijemnice (preradjena paleta i stavka bez
+' palete obaraju ceo posao; prazna paleta se stornira tek po strogom brojacu, N8).
+' Prijemnica mora da postoji i da bude stornirana: palete aktivne prijemnice su
+' njena roba, ne sirocad. Vraca broj skinutih stavki; 0 uz outRazlog = odbijeno
+' ili nema sta da se skine.
+Public Function SkiniPaleteSirocadi_TX(ByVal prijemnicaID As String, ByRef outRazlog As String) As Long
+    Const SRC As String = "modPaletniList.SkiniPaleteSirocadi_TX"
+    Dim tx As clsTransaction, pid As String, st As String
+    outRazlog = ""
+    pid = Trim$(prijemnicaID)
+    If Len(pid) = 0 Then
+        outRazlog = "Red nema PrijemnicaID."
+        Exit Function
+    End If
+    If FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, pid).count <> 1 Then
+        outRazlog = "Prijemnica " & pid & " ne postoji ili nije jednoznacna."
+        Exit Function
+    End If
+    st = UCase$(Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, pid, COL_STORNIRANO))))
+    If st <> "DA" Then
+        outRazlog = "Prijemnica " & pid & " je aktivna -- njene palete nisu sirocad."
+        Exit Function
+    End If
+    On Error GoTo EH
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+    SkiniPaleteSirocadi_TX = SkiniPaleteZaStornoPrijemnice(tx, pid, SRC)
+    tx.CommitTx
+    Set tx = Nothing
+    If SkiniPaleteSirocadi_TX = 0 Then outRazlog = "Prijemnica " & pid & " nema aktivnih paletnih stavki."
+    Exit Function
+EH:
+    outRazlog = Err.description
+    LogErr SRC
+    SkiniPaleteSirocadi_TX = 0
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+End Function
+
 ' Razlog odbijanja storna zbog robe na PRERADJENOJ paleti (odluka 3), ili "" kad
 ' je nema. Bira ISTO sto i jezgro (aktivne stavke po PrijemnicaID-u) i daje ISTI
 ' tekst, pa okvir ispravke odbija tacno ono sto bi jezgro odbilo -- samo ranije:
@@ -2226,10 +2220,13 @@ Private Function SkiniPaletneStavke(ByRef s As Variant, ByVal rowsC As Collectio
         cnt = cnt + 1
     Next k
 
+    ' "Prazna" odlucuje STROG brojac (N8, S8-REV-05). Prikazni citac na gresci
+    ' vraca Empty, a Empty bi ovde znacio "prazna" -> StornoPaleta, koji skida i
+    ' su-stanare: greska citanja bi postala dozvola za destruktivnu operaciju.
     Dim v As Variant
     outPrazne = ""
     For Each v In touched.Keys
-        If IsEmpty(GetPaletaStavkeForGrid(CStr(v))) Then      ' nema aktivnih stavki
+        If BrojAktivnihStavkiPalete(CStr(v), sourceName) = 0 Then
             If IsPaletaPreradjena(CStr(v)) Then
                 outPrazne = outPrazne & PaletaLabel(CStr(v)) & " (preradjena - NIJE stornirana!) "
             ElseIf StornoPaleta(CStr(v)) Then
@@ -2239,6 +2236,44 @@ Private Function SkiniPaletneStavke(ByRef s As Variant, ByVal rowsC As Collectio
         End If
     Next v
     SkiniPaletneStavke = cnt
+End Function
+
+' Broj AKTIVNIH paletnih stavki palete (svih vlasnika). Strog: bez On Error,
+' tabela mora da postoji, kolone kroz RequireColumnIndex -- necitljiva tabela ili
+' kolona dize gresku, pa se cela operacija povlaci. Tabela bez redova je 0.
+Private Function BrojAktivnihStavkiPalete(ByVal palID As String, ByVal SRC As String) As Long
+    If PaletaPraznoAkoTest("BROJAC") Then
+        Err.Raise vbObjectError + 7364, SRC, _
+                  "TEST: strog brojac stavki palete ne moze da procita tabelu."
+    End If
+    If GetTable(TBL_PALETA_STAVKA) Is Nothing Then
+        Err.Raise vbObjectError + 7364, SRC, _
+                  "Nema tabele " & TBL_PALETA_STAVKA & " -- ne zna se da li je paleta prazna."
+    End If
+    Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(s) Then Exit Function
+    Dim sPal As Long, sStt As Long, r As Long
+    sPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+    sStt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
+    For r = 1 To UBound(s, 1)
+        If Trim$(NzToText(SafeCell(s, r, sPal))) = Trim$(palID) _
+           And UCase$(Trim$(NzToText(SafeCell(s, r, sStt)))) <> "DA" Then
+            BrojAktivnihStavkiPalete = BrojAktivnihStavkiPalete + 1
+        End If
+    Next r
+End Function
+
+' Pali/gasi seam palete: rezim iz opisa mPaletaPraznoTest, ili "" (gasi).
+' Paljenje van test rezima ne radi nista; gasenje radi uvek.
+Public Sub PaletaPraznoTestSet(ByVal rezim As String)
+    rezim = UCase$(Trim$(rezim))
+    If Len(rezim) > 0 And Not IsTestMode() Then Exit Sub
+    mPaletaPraznoTest = rezim
+End Sub
+
+Private Function PaletaPraznoAkoTest(ByVal rezim As String) As Boolean
+    If mPaletaPraznoTest <> rezim Then Exit Function
+    PaletaPraznoAkoTest = IsTestMode()
 End Function
 
 ' ============================================================
@@ -2577,14 +2612,36 @@ Private Function ClassNetoOutOfSync(ByVal stRows As Object, ByVal kl As String, 
 End Function
 
 ' Da li je paleta preradjena (korekcije na njoj su blokirane dok se prerada ne stornira).
+' KAPIJA mutacije (S8R1B-REV-04): zovu je samo odluke --
+' storno i skidanje (SkiniPaleteZaStornoPrijemnice, SkiniPaletneStavke), korekcija
+' (AdjustPaletaGajbiceZaPrijemnicu_TX) i razlog blokade storna
+' (PreradjenaPaletaRazlog). Zato je stroga: bez On Error, kolone statusa i ID-a
+' moraju da se nadju, a greska citanja se dize i povlaci celu operaciju.
+' Do S8R1B-REV-04 je Resume Next uz tolerantan GetColumnIndex necitljiv status pretvarao u
+' "nije preradjena", pa je skidanje robe sa preradjene palete prolazilo kad na
+' njoj ostaje su-stanar (StornoPaleta, koji status proverava sam, se tada ne zove).
+' Paleta koje NEMA ostaje False: postojanje meri pozivalac (7363 u storno putu).
 Private Function IsPaletaPreradjena(ByVal palID As String) As Boolean
-    On Error Resume Next
+    Const SRC As String = "modPaletniList.IsPaletaPreradjena"
+    Dim cPr As Long
+    cPr = GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO)
+    If PaletaPraznoAkoTest("PRERADJENO_KOLONA") Then cPr = 0
+    If cPr = 0 Then KolonaKapijeSeNeCita TBL_PALETA, COL_PAL_PRERADJENO, SRC
+    RequireColumnIndex TBL_PALETA, COL_PAL_ID, SRC
     Dim pr As Long: pr = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, palID)
     If pr = 0 Then Exit Function
     Dim d As Variant: d = GetTableData(TBL_PALETA)
-    IsPaletaPreradjena = (UCase$(Trim$(CStr(SafeCell(d, pr, _
-        GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO))))) = "DA")
+    IsPaletaPreradjena = (UCase$(Trim$(NzToText(SafeCell(d, pr, cPr)))) = "DA")
 End Function
+
+' Kolona na kojoj stoji destruktivna odluka se ne nalazi (S8R1B-REV-04/05). Ista
+' klasa pada (sistemski, kod 1) i isti smisao kao RequireColumnIndex; posebna je
+' samo zato sto seam (PaletaPraznoTestSet "*_KOLONA") glumi nenadjenu kolonu kroz
+' INDEKS, pa provera "indeks = 0" mora da stoji u pozivaocu, posle kuke.
+Private Sub KolonaKapijeSeNeCita(ByVal tbl As String, ByVal col As String, ByVal SRC As String)
+    RaiseSistemski 1, SRC, "Nedostaje kolona '" & col & "' u tabeli '" & tbl & _
+                   "'. Bez nje se ne zna stanje, pa se roba sa paleta ne pomera ni ne skida."
+End Sub
 
 ' ZAJEDNICKA raspodelna petlja: rasporedi "remaining" gajbica na otvorene/nove
 ' palete kao NOVE stavke date prijemnice + inkrementalno azuriraj header palete.
