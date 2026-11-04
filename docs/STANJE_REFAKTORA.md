@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 313: `PAL-ODL-13` — 2b ide kao dva PR-a; počinje 2b-1).
+**Ažurirano:** 04.11.2026 (stavka 314: S8 rez 2b-1 — kapija pisca `PAL-INV-01`, C1 za red bez ključa; kapije čekaju).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10809,6 +10809,22 @@
      - **2b-2** (drugi PR, posle merge-a 2b-1): brisanje kolona, pisaca i konstanti, test-pomoćnici na ID,
        preformulisanje ili povlačenje 8 sabotaža, `pal_broj` 8 → 0.
      - **Sledeći brojevi:** test 315 · stavka 314 · KI-088 · plan §14.61.
+
+314. **S8 rez 2b-1 — pisac i integritet traže liniju prijemnice; `S8R2A2-REV-01` zatvoren u kodu** (04.11.2026,
+     grana `claude/s8-rez2b-kolone`). Plan §14.61; `docs/DOMEN/PALETE.md` `PAL-INV-01` ažuriran.
+
+     - **Kod:** `modPaletniList.PalInv01Razlog` (jedno pravilo) i `RequireLinijaPalete` na vrhu `SpillGajbice`
+       (pisac odbija prazan, nepostojeći, tuđ ključ, ključ druge klase i ključ koji se ponavlja, pre ijedne
+       mutacije, čitajući samo svoj ključ); C1 zove isto pravilo, pa je aktivna paletna stavka bez ključa nalaz.
+     - **Fixture i seed-ovi:** sve paletne stavke fixture-a nose ključ linije (provera postojanja i klase u
+       `make_fixture.py`); `SeedPaletaStavka` nosi ključ; Palete T14 pravi red bez ključa sintetički. A3 nad
+       fixture-om sada vidi `PRJ-SLED-1` (349/500 kg) — synthetic anomaly, nijedan test ga ne tvrdi.
+     - **Test:** BFP `Test_S8R2b1_PisacPaleteTraziLiniju` (bez novog broja u `modTest`).
+     - **Sabotaže:** 5 novih (`s8r2b1-*`), `s8r2a2-c1-tudji-kljuc` premeštena u zajedničko pravilo; katalog 1158.
+     - **Jeftine kapije:** `vba_check` čist, `who_writes` oba režima čista, šema u koraku, `pal_broj` 8.
+     - **Nije izvršeno (NEVERIFIKOVANO):** `make_fixture`, RunAllTests, BFP, Palete, Storno, `dokaz.py s8r2b1`
+       i `s8r2a2-c1-tudji-kljuc`, Compile. Čekaju reviewer GO i „Push, pa kapije".
+     - **Sledeći brojevi:** test 315 · stavka 315 · KI-088 · plan §14.62.
 
 ## Dug sa imenom (posle S5-5b)
 

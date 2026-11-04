@@ -42,14 +42,21 @@ broju i tekućoj godini i uzimaju prvi pogodak (plan §14.58, N10; `PAL-ODL-04`)
 neprazan, postoji u `tblPrijemnicaStavke`, pripada `PrijemnicaID`-u iste paletne stavke,
 i klasa se slaže sa klasom stavke.
 
-- **Danas:** važi po konstrukciji. Pisac pravi stavku i paletu u istoj transakciji
-  (`modDokumenta:6837`), a prevezivanje i korekcija uzimaju cilj iz kanonskog čitača
-  (`modPaletniList:1579`, `:2302`). **Nijedna provera to ne meri**, a prazan ključ je
-  dozvoljen kao „red starog oblika" (`modPaletniList:132-136`): takvi su svi redovi
-  `tblPaletaStavka` u fixture-u (`tools/make_fixture.py:1962`, *synthetic anomaly*) i
-  seed-ovi suite-a Palete.
-- **Vlasnik posle S8 (rez 2):** pisac paletne stavke odbija po imenu. Meka provera ide u
-  integritet, po stavci. Strog čitač je **po dokumentu**, ne globalan (`KI-081`).
+- **Vlasnik (S8 rez 2b-1, `PAL-ODL-13`):** pisac paletne stavke odbija po imenu, pre ijedne
+  mutacije — `modPaletniList.RequireLinijaPalete` na vrhu `SpillGajbice`, jedinog puta do
+  `AddStavka` (paletizacija i korekcija). Odbija prazan, nepostojeći, tuđ ključ, ključ druge
+  klase i ključ koji nose dve stavke. Čita samo redove tog ključa, ne globalni strog čitač
+  (`KI-081`).
+- **Pravilo je jedno:** `modPaletniList.PalInv01Razlog` daje razlog i piscu (tvrdo) i
+  integritetu (meko, C1 u `modIntegritet`). Aktivna paletna stavka bez ključa je nalaz C1; A3
+  je ne meri, jer se ne zna čija je linija.
+- **Prevezivanje** upisuje ključ iz kanonskog čitača ciljnog dokumenta (`modPaletniList`,
+  `ReassignPaleteToPrijemnica_TX`), pa pravilo važi po konstrukciji; kapija tamo nije
+  dodata, jer pogrešan ključ tim putem ne može da nastane, a kapija koju nijedan slučaj ne
+  doseže ne bi ništa merila.
+- **Fixture i seed-ovi** nose ključ linije (`tools/make_fixture.py`, `modTestStorno`). Red bez
+  ključa postoji samo kao *synthetic anomaly* u testu (Palete T14, BFP
+  `Test_S8R2b1_PisacPaleteTraziLiniju`).
 
 **`PAL-INV-02` — paletizacija je potpuna** (`PAL-ODL-02`, odlučeno 03.11.2026). Aktivne paletne
 stavke jedne stavke prijemnice nose celu stavku: zbir gajbi = gajbe stavke, a zbir neta =

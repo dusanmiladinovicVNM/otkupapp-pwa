@@ -9239,10 +9239,12 @@ SABOTAZE = {
         "S8R2a2: A3 ne prijavljuje robu koja nikad nije paletizovana",
     ),
     # S8 rez 2a-2 (R11, PAL-INV-01 meko): kljuc linije druge prijemnice je nalaz C1.
+    # Od 2b-1 pravilo deli i pisac (modPaletniList.PalInv01Razlog), pa sabotaza
+    # gasi i njegovu kapiju za tudji kljuc; tvrdnja ostaje C1 iz 2a-2.
     "s8r2a2-c1-tudji-kljuc": (
-        "modIntegritet.bas",
-        "                            razlog = \"kljuc linije pripada drugoj prijemnici\"\n",
-        "                            ' SABOTAZA: tudji kljuc linije se ne vidi\n",
+        "modPaletniList.bas",
+        "            PalInv01Razlog = \"kljuc linije pripada drugoj prijemnici\"\n",
+        "            ' SABOTAZA: tudji kljuc linije se ne vidi\n",
         "Test_S8R2a2_LabeleIIntegritetPoStavci",
         "S8R2a2: C1 imenuje paletnu stavku sa kljucem linije druge prijemnice",
     ),
@@ -9277,6 +9279,48 @@ SABOTAZE = {
         "    outInfo = \"Greska: \" & Err.description   ' SABOTAZA: razlog posle rollback-a i LogErr-a\n",
         "Test_KI086_PalaKorekcijaNosiRazlog",
         "K86G: razlog pale korekcije stize do operatera",
+    ),
+    # S8 rez 2b-1 (PAL-INV-01, PAL-ODL-13): pisac paletne stavke trazi tacnu liniju.
+    # Bez kapije pisac pravi paletnu stavku i za los kljuc.
+    "s8r2b1-pisac-bez-kapije": (
+        "modPaletniList.bas",
+        "    RequireLinijaPalete prijemnicaID, prijemnicaStavkaID, klasa, SRC\n",
+        "    ' SABOTAZA: pisac bez kapije PAL-INV-01\n",
+        "Test_S8R2b1_PisacPaleteTraziLiniju",
+        "S8R2b1: odbijeni pozivi ne prave ni paletu ni paletnu stavku",
+    ),
+    # Prazan kljuc gubi svoj razlog: odbija se kao "ne postoji", pa ni pisac ni C1
+    # ne imenuju stvarni kvar.
+    "s8r2b1-prazan-kljuc-bez-imena": (
+        "modPaletniList.bas",
+        "    If Len(kljuc) = 0 Then\n        PalInv01Razlog = \"prazan kljuc linije\"\n",
+        "    If False Then   ' SABOTAZA: prazan kljuc bez svog razloga\n        PalInv01Razlog = \"prazan kljuc linije\"\n",
+        "Test_S8R2b1_PisacPaleteTraziLiniju",
+        "S8R2b1: pisac odbija prazan kljuc linije, po imenu",
+    ),
+    # Klasa linije se ne meri: kljuc stavke klase I prolazi za paletnu stavku klase II.
+    "s8r2b1-klasa-se-ne-meri": (
+        "modPaletniList.bas",
+        "        ElseIf StrComp(CStr(lin(1)), KlasaOrDefault(klasa), vbTextCompare) <> 0 Then\n",
+        "        ElseIf False Then   ' SABOTAZA: klasa linije se ne meri\n",
+        "Test_S8R2b1_PisacPaleteTraziLiniju",
+        "S8R2b1: pisac odbija kljuc druge klase, po imenu",
+    ),
+    # Kljuc koji nose dve stavke: bez provere ponavljanja presudi poslednja nadjena.
+    "s8r2b1-dupli-kljuc-prolazi": (
+        "modPaletniList.bas",
+        "            If n > 1 Then razlog = \"kljuc linije se ponavlja (\" & CStr(n) & \" stavke)\"\n",
+        "            ' SABOTAZA: kljuc koji se ponavlja prolazi\n",
+        "Test_S8R2b1_PisacPaleteTraziLiniju",
+        "S8R2b1: pisac odbija kljuc koji se ponavlja, po imenu",
+    ),
+    # C1 cuti o aktivnoj paletnoj stavci bez kljuca (stanje pre 2b-1, S8R2A2-REV-01).
+    "s8r2b1-c1-prazan-kljuc-tih": (
+        "modIntegritet.bas",
+        "                If Len(p) > 0 Then\n                    ' PAL-INV-01 meko (S8 rez 2a-2, 2b-1): ISTO pravilo koje pisac drzi\n",
+        "                If Len(p) > 0 And Len(kljuc) > 0 Then   ' SABOTAZA: C1 cuti o praznom kljucu\n                    ' PAL-INV-01 meko (S8 rez 2a-2, 2b-1): ISTO pravilo koje pisac drzi\n",
+        "Test_S8R2b1_PisacPaleteTraziLiniju",
+        "S8R2b1: C1 imenuje aktivnu paletnu stavku bez kljuca linije",
     ),
     # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
     "s8r1a-altf8-prvi-pogodak": (

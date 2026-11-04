@@ -810,17 +810,21 @@ End Sub
 ' u PONISTENJE kaskadi). Kad su prazni (ISPRAVKA testovi) stavka je "bez palete".
 ' prijemnicaID opciono: od S6 koraka 4 storno skida palete po PrijemnicaID-u (kao
 ' sto ga produkcioni paletni pisac i upisuje), pa ga test koji meri skidanje daje.
+' Uz njega ide i kljuc linije (S8 rez 2b-1, PAL-INV-01): SeedPrijemnica pise
+' stavku "PRS-" & PrijemnicaID, pa seed nosi isti oblik koji pisac upisuje.
 Private Sub SeedPaletaStavka(ByVal stavkaID As String, ByVal brojPrij As String, _
                              ByVal brojZbirne As String, ByVal klasa As String, _
                              ByVal kg As Double, ByVal amb As Long, _
                              Optional ByVal paletaID As String = "", _
                              Optional ByVal gajbe As Long = 0, _
                              Optional ByVal prijemnicaID As String = "")
+    Dim kljuc As String
+    If Len(prijemnicaID) > 0 Then kljuc = "PRS-" & prijemnicaID
     SvAppend TBL_PALETA_STAVKA, _
         Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, _
               COL_PALS_KLASA, COL_PALS_BR_GAJBICA, COL_PALS_NETO, COL_PALS_AMBALAZA, _
-              COL_PALS_PRIJEMNICA_ID), _
-        Array(stavkaID, paletaID, brojPrij, brojZbirne, klasa, gajbe, kg, amb, prijemnicaID)
+              COL_PALS_PRIJEMNICA_ID, COL_PALS_PRIJEMNICA_STAVKA_ID), _
+        Array(stavkaID, paletaID, brojPrij, brojZbirne, klasa, gajbe, kg, amb, prijemnicaID, kljuc)
 End Sub
 
 ' Minimalna realna paleta (header) da jezgro skidanja paleta radi end-to-end:

@@ -572,7 +572,9 @@ End Sub
 ' ============================================================
 ' CHECK C1 + C4: PALETA-STAVKA -> PRIJEMNICA
 ' ============================================================
-' C1 = aktivna stavka bez zive prijemnice (prazan ili nepostojeci PrijemnicaID).
+' C1 = aktivna stavka bez zive prijemnice (prazan ili nepostojeci PrijemnicaID)
+'      ili sa pogresnim kljucem linije (PAL-INV-01: prazan, nepostojeci, tudj,
+'      druge klase -- isto pravilo koje pisac drzi tvrdo).
 ' C4 = aktivna stavka ka prijemnici koja postoji ali je STORNIRANA
 '      (kaskadni storno prijemnice ne dira tblPaletaStavka).
 '      + dokumentni tok te prijemnice: BrojZbirne (i sa stornirane prijemnice),
@@ -614,34 +616,26 @@ Private Sub Chk_C1_C4_StavkaPrijemnica()
             cKey = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID, "modIntegritet.C1C4")
             cKl = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA, "modIntegritet.C1C4")
 
-            Dim i As Long, p As String, kljuc As String, lin As Variant, razlog As String
+            Dim i As Long, p As String, kljuc As String, razlog As String
             Dim bz As String, kgV As Variant, ambV As Variant, om As String, prz As String
             For i = 1 To UBound(data, 1)
                 p = Trim$(CStr(data(i, cPrij)))
                 kljuc = Trim$(NzToText(data(i, cKey)))
                 razlog = ""
-                If Len(p) > 0 And Len(kljuc) > 0 Then
-                    ' PAL-INV-01 meko (S8 rez 2a-2): kljuc linije, kad ga stavka nosi, mora
-                    ' da postoji i da pripada ISTOJ prijemnici i istoj klasi. Prazan kljuc
-                    ' do 2b nije nalaz: redovi starog oblika (fixture) ga nemaju.
-                    If Not linija.Exists(kljuc) Then
-                        razlog = "kljuc linije ne postoji"
-                    Else
-                        lin = linija(kljuc)
-                        If StrComp(CStr(lin(0)), p, vbTextCompare) <> 0 Then
-                            razlog = "kljuc linije pripada drugoj prijemnici"
-                        ElseIf StrComp(CStr(lin(1)), KlasaOrDefault(data(i, cKl)), vbTextCompare) <> 0 Then
-                            razlog = "kljuc linije je druge klase"
-                        End If
-                    End If
+                If Len(p) > 0 Then
+                    ' PAL-INV-01 meko (S8 rez 2a-2, 2b-1): ISTO pravilo koje pisac drzi
+                    ' tvrdo (modPaletniList.PalInv01Razlog). Od 2b-1 je i prazan kljuc
+                    ' nalaz: pisac red bez kljuca vise ne pravi, a A3 takav red ne moze
+                    ' da izmeri, jer se ne zna cija je linija (S8R2A2-REV-01).
+                    razlog = modPaletniList.PalInv01Razlog(p, kljuc, data(i, cKl), linija)
                 End If
                 If Len(p) = 0 Then
                     c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), "(prazno)", "", "prazan PrijemnicaID")
                 ElseIf Not allPrij.Exists(p) Then
                     c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, "", "nepostojeci PrijemnicaID")
                 ElseIf Len(razlog) > 0 Then
-                    c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(brPrij(p)), _
-                                 razlog & " (" & kljuc & ")")
+                    If Len(kljuc) > 0 Then razlog = razlog & " (" & kljuc & ")"
+                    c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(brPrij(p)), razlog)
                 End If
                 If Len(p) > 0 And allPrij.Exists(p) And Not actPrij.Exists(p) Then
                     bz = "": If prijZbr.Exists(p) Then bz = CStr(prijZbr(p))
@@ -779,8 +773,8 @@ Private Sub Chk_A3_StavkeVsPrijemnica()
     ' (PrijemnicaStavkaID), i to svaku koja je IKAD bila na paleti -- aktivna ILI
     ' stornirana paletna stavka. Tako vidi i N7 iz istorije (sva roba stavke skinuta
     ' stornom palete dok je prijemnica aktivna), a robu koja nikad nije paletizovana
-    ' ne dira. Redovi bez kljuca (stari oblik, fixture) ovde ne ulaze; 2b ih
-    ' zatvara (kljuc postaje obavezan).
+    ' ne dira. Red bez kljuca ovde ne ulazi (ne zna se cija je linija): od S8
+    ' reza 2b-1 ga pisac ne pravi, a zatecen red je nalaz C1.
     Dim stByKey As Object: Set stByKey = CreateObject("Scripting.Dictionary")
     stByKey.CompareMode = vbTextCompare
     Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)

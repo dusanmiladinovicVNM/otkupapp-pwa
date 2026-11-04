@@ -354,6 +354,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_KI086_KorekcijaCekaPosleOtkaza
     Test_KI086_PalaKorekcijaNosiRazlog
     Test_KI087_IzborPaleteStrogoCitaPreradu
+    Test_S8R2b1_PisacPaleteTraziLiniju
     Test_S6_CitalacStavkiPrijemniceDrziUgovor
     Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu
     Test_S6K4_StornoSkidaPaleteUIstojTx
@@ -11210,6 +11211,221 @@ EH:
     SetTestMode prevMode
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
+
+' S8 REZ 2b-1 (PAL-INV-01, PAL-ODL-13): PISAC PALETNE STAVKE TRAZI TACNU LINIJU
+' PRIJEMNICE, A INTEGRITET IMENUJE RED BEZ NJE.
+'
+' P1 (4 gajbe) i P2 (3 gajbe) su snimljene uz paletiranje: snimanje paletizuje, a
+' paletna stavka nosi kljuc svoje stavke (put kroz SavePrijemnicaMulti_TX). P3
+' (2 gajbe) je snimljena uz ISKLJUCENO paletiranje, pa je slobodna meta za
+' direktan poziv pisca (kapija ponovne paletizacije je ne zaustavlja). U
+' transakciji koja se uvek vraca:
+'   1) PaletizePrijemnica za P3 sa praznim, nepostojecim i tudjim (P1) kljucem,
+'      sa svojim kljucem ali klasom II, i sa kljucem koji nose DVE stavke -- svaki
+'      poziv je odbijen PO IMENU razloga, i nijedan ne pravi ni paletu ni stavku;
+'   2) kontrola: isti poziv sa ispravnim kljucem i klasom pravi paletnu stavku
+'      (kapija ne odbija sve);
+'   3) kljuc paletne stavke P1 obrisan (red starog oblika -- synthetic): C1 ga
+'      imenuje, pa integritet NIJE cist (zatvara S8R2A2-REV-01). Kontra: dok red
+'      nosi svoj kljuc, C1 ga ne prijavljuje.
+' Nivo: FIZICKE paletne stavke; nalaz integriteta po sifri bloka i ID-u stavke.
+' SABOTAZE: s8r2b1-pisac-bez-kapije, s8r2b1-prazan-kljuc-bez-imena,
+' s8r2b1-klasa-se-ne-meri, s8r2b1-dupli-kljuc-prolazi, s8r2b1-c1-prazan-kljuc-tih.
+Private Sub Test_S8R2b1_PisacPaleteTraziLiniju()
+    On Error GoTo EH
+    Const SRC As String = "Test_S8R2b1_PisacPaleteTraziLiniju"
+    Dim tx As clsTransaction
+    Dim scenario As String, d1 As Date, tipT As String, prevPal As String
+    scenario = NewScenarioCode("S8R2C")
+    d1 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS8K-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABS8K-" & scenario, "test S8 rez 2b-1"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S8R2b1: preduslov -- vozac je preuzeo 50"
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(d1, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "S8R2b1: preduslov -- zbirna je snimljena"
+
+    Dim p1 As String, p2 As String, p3 As String, errNum As Long
+    On Error Resume Next
+    p1 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R2C1-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=40#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=4, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p1 = "": Err.Clear
+    p2 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R2C2-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=30#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=3, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p2 = "": Err.Clear
+    SetConfigValue CFG_PALETIRANJE, "NE"
+    p3 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R2C3-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=20#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=2, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p3 = "": Err.Clear
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    On Error GoTo EH
+
+    Dim r1 As Long, k1 As String, k2 As String, k3 As String
+    r1 = S8R1cRedStavke(p1)
+    k1 = S6StavkaID(p1, KLASA_I)
+    k2 = S6StavkaID(p2, KLASA_I)
+    k3 = S6StavkaID(p3, KLASA_I)
+    AssertTrue Len(p1) > 0 And Len(p2) > 0 And Len(p3) > 0 And r1 > 0 _
+               And Len(k1) > 0 And Len(k2) > 0 And Len(k3) > 0 _
+               And Len(S8R1bPaletaDokumenta(p2)) > 0 And Len(S8R1bPaletaDokumenta(p3)) = 0, _
+               "S8R2b1: preduslov -- P1 i P2 paletizovane, P3 nikad"
+    If Len(p1) = 0 Or Len(p2) = 0 Or Len(p3) = 0 Or r1 = 0 Or Len(k3) = 0 Then GoTo Kraj
+
+    ' --- put kroz snimanje: paletna stavka nosi kljuc SVOJE stavke ---
+    AssertEquals k1, S8R2b1KljucPaleta(p1), _
+                 "S8R2b1: snimanje paletizuje, a paletna stavka nosi kljuc svoje stavke"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
+    tx.AddTableSnapshot TBL_PALETA
+    tx.AddTableSnapshot TBL_PALETA_STAVKA
+
+    ' --- 1) pisac odbija, po imenu, bez mutacije ---
+    Dim nPal As Long, nPals As Long, ishod As String
+    nPal = S8R2aBrojRedova(TBL_PALETA)
+    nPals = S8R2aBrojRedova(TBL_PALETA_STAVKA)
+
+    ishod = S8R2b1Paletizuj(p3, "", KLASA_I, brZbr, tipT)
+    AssertTrue InStr(1, ishod, "PAL-INV-01: prazan kljuc linije", vbTextCompare) > 0, _
+               "S8R2b1: pisac odbija prazan kljuc linije, po imenu"
+    ishod = S8R2b1Paletizuj(p3, "PRS-NEMA-" & scenario, KLASA_I, brZbr, tipT)
+    AssertTrue InStr(1, ishod, "PAL-INV-01: kljuc linije ne postoji", vbTextCompare) > 0, _
+               "S8R2b1: pisac odbija kljuc koji ne postoji, po imenu"
+    ishod = S8R2b1Paletizuj(p3, k1, KLASA_I, brZbr, tipT)
+    AssertTrue InStr(1, ishod, "PAL-INV-01: kljuc linije pripada drugoj prijemnici", vbTextCompare) > 0, _
+               "S8R2b1: pisac odbija kljuc druge prijemnice, po imenu"
+    ishod = S8R2b1Paletizuj(p3, k3, KLASA_II, brZbr, tipT)
+    AssertTrue InStr(1, ishod, "PAL-INV-01: kljuc linije je druge klase", vbTextCompare) > 0, _
+               "S8R2b1: pisac odbija kljuc druge klase, po imenu"
+
+    ' Kljuc koji nose DVE stavke (synthetic): prva je P3, druga P1. Bez provere
+    ' ponavljanja bi presudila poslednja nadjena, pa razlog ne bi bio ponavljanje.
+    Dim kDup As String: kDup = "PRS-DUP-" & scenario
+    S8R2b1DodajStavku kDup, p3
+    S8R2b1DodajStavku kDup, p1
+    ishod = S8R2b1Paletizuj(p3, kDup, KLASA_I, brZbr, tipT)
+    AssertTrue InStr(1, ishod, "PAL-INV-01: kljuc linije se ponavlja", vbTextCompare) > 0, _
+               "S8R2b1: pisac odbija kljuc koji se ponavlja, po imenu"
+
+    AssertTrue S8R2aBrojRedova(TBL_PALETA) = nPal And S8R2aBrojRedova(TBL_PALETA_STAVKA) = nPals, _
+               "S8R2b1: odbijeni pozivi ne prave ni paletu ni paletnu stavku"
+
+    ' --- 2) kontrola: ispravan kljuc i klasa prolaze ---
+    ishod = S8R2b1Paletizuj(p3, k3, KLASA_I, brZbr, tipT)
+    AssertTrue Len(ishod) = 0 And S8R2b1KljucPaleta(p3) = k3, _
+               "S8R2b1: ispravan kljuc i klasa prave paletnu stavku"
+
+    ' --- 3) C1: aktivna paletna stavka bez kljuca linije ---
+    Dim ps As Variant, palsID1 As String, nal As Variant
+    ps = GetTableData(TBL_PALETA_STAVKA)
+    palsID1 = Trim$(nz(ps(r1, RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_ID, SRC)), ""))
+    nal = modIntegritet.GetIntegritetRows()
+    AssertTrue Len(palsID1) > 0 And Not modTest.NalazSadrzi(nal, "C1", palsID1), _
+               "S8R2b1: paletna stavka sa svojim kljucem nije nalaz C1"
+    RequireUpdateCell TBL_PALETA_STAVKA, r1, COL_PALS_PRIJEMNICA_STAVKA_ID, "", SRC
+    nal = modIntegritet.GetIntegritetRows()
+    AssertTrue InStr(1, S8R2b1RedNalaza(nal, "C1", palsID1), "prazan kljuc linije", vbTextCompare) > 0, _
+               "S8R2b1: C1 imenuje aktivnu paletnu stavku bez kljuca linije"
+
+Kraj:
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S8R2b1_PisacPaleteTraziLiniju", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' Direktan poziv pisca paleta za jednu stavku od 2 gajbe / 20 kg; vraca opis
+' greske ("" = upis je prosao).
+Private Function S8R2b1Paletizuj(ByVal prj As String, ByVal kljuc As String, _
+                                 ByVal klasa As String, ByVal brojZbr As String, _
+                                 ByVal tipAmb As String) As String
+    On Error Resume Next
+    modPaletniList.PaletizePrijemnica prijemnicaID:=prj, brojPrij:=prj, brojZbirne:=brojZbr, _
+        vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, klasa:=klasa, netoKg:=20#, _
+        brGajbica:=2, tipAmb:=tipAmb, prijemnicaStavkaID:=kljuc
+    If Err.Number <> 0 Then S8R2b1Paletizuj = "GRESKA " & CStr(Err.Number) & ": " & Err.description
+    Err.Clear
+End Function
+
+' Kljuc linije aktivnih paletnih stavki dokumenta: jedan kljuc ako ga nose sve,
+' "(razliciti)" ako se razlikuju, "" ako stavki nema.
+Private Function S8R2b1KljucPaleta(ByVal prj As String) As String
+    Dim s As Variant, i As Long, cP As Long, cK As Long, cSt As Long
+    Dim k As String, prvi As String, ima As Boolean
+    s = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(s) Or Len(prj) = 0 Then Exit Function
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R2b1KljucPaleta")
+    cK = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_STAVKA_ID, "S8R2b1KljucPaleta")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R2b1KljucPaleta")
+    For i = 1 To UBound(s, 1)
+        If Trim$(nz(s(i, cP), "")) = prj And UCase$(Trim$(nz(s(i, cSt), ""))) <> "DA" Then
+            k = Trim$(nz(s(i, cK), ""))
+            If Not ima Then
+                prvi = k
+                ima = True
+            ElseIf k <> prvi Then
+                S8R2b1KljucPaleta = "(razliciti)"
+                Exit Function
+            End If
+        End If
+    Next i
+    S8R2b1KljucPaleta = prvi
+End Function
+
+' Stavka prijemnice klase I sa ZADATIM ID-om (synthetic: ID koji vec postoji).
+Private Sub S8R2b1DodajStavku(ByVal stavkaID As String, ByVal prj As String)
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_PRIJEMNICA_STAVKE)
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, stavkaID
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, prj
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_RB, 9
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, KLASA_I
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KOLICINA, 20#
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_CENA, 0#
+    SetRequiredField rowData, TBL_PRIJEMNICA_STAVKE, COL_PRS_KOL_AMB, 2
+    RequireAppend TBL_PRIJEMNICA_STAVKE, rowData, "S8R2b1DodajStavku"
+End Sub
+
+' Tekst prvog reda nalaza datog bloka koji sadrzi zadati tekst ("" = nema ga).
+Private Function S8R2b1RedNalaza(ByVal rows As Variant, ByVal sifra As String, _
+                                 ByVal tekst As String) As String
+    If Not IsArray(rows) Then Exit Function
+    Dim i As Long, tekuca As String
+    For i = 1 To UBound(rows, 1)
+        If Len(Trim$(NzToText(rows(i, 1)))) > 0 Then tekuca = Trim$(NzToText(rows(i, 1)))
+        If StrComp(tekuca, sifra, vbTextCompare) = 0 Then
+            If InStr(1, NzToText(rows(i, 2)), tekst, vbTextCompare) > 0 Then
+                S8R2b1RedNalaza = NzToText(rows(i, 2))
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
 
 ' Paletizacija seed prijemnice (stavka "PRS-<id>", klasa I) kroz pisca paleta.
 Private Sub S8R2aPaletizuj(ByVal prj As String, ByVal brojZbr As String, _

@@ -11025,6 +11025,46 @@ mešao kapiju pisca, fixture i brisanje šeme, uz prepravku 41 mesta u suiti Pal
   konstanti I po doslovnom imenu kolone, memorija `brisanje-kolone-literal-u-vise-redova`), ne samo postojanje
   kolone.
 
+### 14.61) S8 rez 2b-1 — pisac i integritet traže liniju prijemnice (04.11.2026)
+
+Grana `claude/s8-rez2b-kolone`. Zapis: `docs/STANJE_REFAKTORA.md` stavka 314. Odluka `PAL-ODL-13` (stavka 313):
+2b ide kao dva PR-a; ovo je prvi. Kolone `BrojPrijemnice`, `BrojZbirne` i `ZbirnaRoditeljID` ostaju (2b-2).
+
+#### Šta je urađeno
+
+- **Pravilo `PAL-INV-01` na jednom mestu:** `modPaletniList.PalInv01Razlog` (prazan ključ, ključ ne postoji,
+  pripada drugoj prijemnici, druge klase). Zovu ga pisac (tvrdo) i C1 (meko); tekst razloga je isti.
+- **Kapija pisca:** `RequireLinijaPalete` na vrhu `SpillGajbice`, pre otvaranja palete. Čita samo redove tog
+  ključa u `tblPrijemnicaStavke` (ne `StavkePrijemniceRedovi`, `KI-081`); ključ koji nose dve stavke odbija
+  posebno. Odbijanje je poslovno (`vbObjectError + 7332`), sa tekstom `PAL-INV-01: <razlog>`.
+- **C1:** aktivna paletna stavka bez ključa je nalaz („prazan kljuc linije"). Time je `S8R2A2-REV-01`
+  zatvoren: red bez ključa više ne prolazi integritet čist, a pisac ga ne pravi.
+- **Fixture:** svih 15 paletnih stavki nosi `"PRS-" + PrijemnicaID`; `make_fixture.py` proverava da stavka
+  postoji i da je iste klase. Posledica: A3 vidi `PRJ-SLED-1` (500 kg na stavci, 349 kg na aktivnim paletnim
+  stavkama, jedna od njih na storniranoj paleti) — *synthetic anomaly*, nijedan test ne tvrdi prazan A3 nad
+  fixture-om.
+- **Seed-ovi:** `modTestStorno.SeedPaletaStavka` nosi ključ kad nosi `PrijemnicaID`; Palete T14 pravi red bez
+  ključa brisanjem ključa posle pisca (`ObrisiKljucLinije`).
+
+#### Šta nije u ovom PR-u
+
+- Prevezivanje (`ReassignPaleteToPrijemnica_TX`) upisuje ključ iz kanonskog čitača cilja; kapija tamo bi bila
+  nedostižna (placebo), pa nije dodata.
+- Brisanje tri kolone, pisaca i konstanti, prelazak test-pomoćnika na ID, 8 sabotaža i `pal_broj` 8 → 0 su 2b-2.
+
+#### Dokaz
+
+- BFP `Test_S8R2b1_PisacPaleteTraziLiniju`: put kroz snimanje nosi ključ svoje stavke; pet loših ulaza odbijeno po
+  imenu, bez ijednog novog reda palete i stavke; kontrola sa ispravnim ključem prolazi; C1 imenuje red bez ključa
+  (kontra: isti red sa svojim ključem nije nalaz).
+- Sabotaže (katalog 1153 → 1158): `s8r2b1-pisac-bez-kapije`, `-prazan-kljuc-bez-imena`, `-klasa-se-ne-meri`,
+  `-dupli-kljuc-prolazi`, `-c1-prazan-kljuc-tih`. `s8r2a2-c1-tudji-kljuc` je premeštena u zajedničko pravilo
+  (isto pravilo, nova adresa).
+- Jeftine kapije: `vba_check` čist, `who_writes --check` i `--check-ownership` čisti, `gen_schema_module --check`
+  u koraku (šema `B22A1572`, bez izmene), `pal_broj` = 8.
+- **Nije izvršeno:** `make_fixture` (nov otisak), RunAllTests, BFP, Palete, Storno, `dokaz.py` za 5 novih sabotaža
+  i pomerenu; Compile. Čekaju reviewer GO i „Push, pa kapije".
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
