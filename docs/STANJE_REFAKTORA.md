@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 317: S8 rez 2b-2 — brisanje tri kolone paletne stavke; kapije čekaju).
+**Ažurirano:** 04.11.2026 (stavka 318: merge `#466` = `5024db6d`; 2b-2 rebase-ovan na `main`, kapije čekaju).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10870,6 +10870,22 @@
      - **Jeftine kapije:** `vba_check` čist, `who_writes` oba režima (WHO_WRITES regenerisan), šema u koraku.
      - **Nije izvršeno (NEVERIFIKOVANO):** `make_fixture`, suite-ovi, `dokaz.py`, Compile.
      - **Sledeći brojevi:** test 315 · stavka 318 · KI-088 · plan §14.63.
+
+318. **Merge PR-a `#466` u `main` = `5024db6d`; rez 2b-1 ZATVOREN** (04.11.2026, uz „Proveri i merge"). Zapis ide na
+     granu `claude/s8-rez2b2-brisanje`.
+
+     - **Pre merge-a:** Static CI na glavi `eeb28c8b` SUCCESS; PR MERGEABLE / CLEAN; `main` se od `ed6896dc` nije
+       pomerio. Merge vezan za proverenu glavu (`--match-head-commit`).
+     - **Merge `5024db6d`:** roditelji `ed6896dc` i `eeb28c8b`; stablo `main`-a je isto kao stablo glave.
+     - **Osnova za `main`:** RunAllTests 314 / 0, BFP 3017 / 0, Palete OK (115), Storno 111 / 0, dokaz 6 / 6
+       (potpis `5344a886ecdf9528`), Compile PASS; katalog 1158, `pal_broj` 8; šema `B22A1572`, fixture
+       `e0338451f4f3c76e`.
+     - **2b-2 rebase:** grana je preneta na `5024db6d` kao jedan commit; prenesene kopije 2b-1 ispravki (fixture,
+       test) su ispale kao već upstream. Konflikti samo u ovom fajlu (stavke 316/317) i u jednoj liniji testa
+       (kontrola = korak 3, bez broja zbirne). Jeftine kapije nad rebase-ovanim stablom zelene.
+     - **Sledi:** push i PR 2b-2 na izričit zahtev, pa review i izvršne kapije (nov fixture, RAT, BFP, Palete,
+       Storno, `dokaz.py` za nove i preformulisane sabotaže, Compile).
+     - **Sledeći brojevi:** test 315 · stavka 319 · KI-088 · plan §14.63.
 
 ## Dug sa imenom (posle S5-5b)
 
