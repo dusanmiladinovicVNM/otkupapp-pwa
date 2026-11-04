@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 302: ručni Compile PASS nad 2a-1 + 2a-2; ispravka testa mora i u `#463` pre merge-a).
+**Ažurirano:** 04.11.2026 (stavka 303: ispravka testa prenesena u `#463` = `b38c9544` i push-ovana; merge `#463` na izričit zahtev).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10562,6 +10562,16 @@
      - **Predlog:** prenos `677746c9` na granu `#463`, pa RunAllTests i BFP nad njom, u ODVOJENIM pozivima
        (~10 min); pa merge `#463`; pa rebase 2a-2 na `main`, PR i review.
      - **Sledeći brojevi:** test 315 · stavka 303 · KI-088 · plan §14.60.
+
+303. **Ispravka testa prenesena u `#463`** (04.11.2026, na „Prenesi i push"). `677746c9` je cherry-pick-ovan na
+     granu `claude/s8-rez2a-citaoci` kao `b38c9544` (isti patch, `T_Zbirna_NemaIspravku` → `ZB-TEST-2`) i
+     push-ovan; `vba_check` čist. `main` je i dalje `c6e859a5`.
+
+     - **Odluka operatera:** stanje „samo 2a-1 + ispravka testa" se pre merge-a NE meri posebno; važe merenja nad
+       2a-1 + 2a-2 zajedno (stavke 301–302). Zabeleženo kao svesna odluka, ne kao merenje.
+     - Opis PR-a `#463` ne pominje `b38c9544`.
+     - Pri rebase-u 2a-2 na `main` posle merge-a `#463` git isti patch (`677746c9`) preskače.
+     - **Sledeći brojevi:** test 315 · stavka 304 · KI-088 · plan §14.60.
 
 ## Dug sa imenom (posle S5-5b)
 
