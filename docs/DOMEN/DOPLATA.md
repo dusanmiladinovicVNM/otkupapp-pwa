@@ -1,5 +1,9 @@
 # Doplata kooperantu — knjižno odobrenje po kulturi i klasi
 
+> **⚠ Revizija 04.11.2026 (§2a):** doplata se radi **po bloku**, **bruto** (sa PDV
+> nadoknadom), sa dva načina unosa i zbirnim prikazima. Kod ispod opisuje stanje
+> PRE revizije dok prerada P1–P4 (§7a) ne bude gotova.
+>
 > **Status (04.11.2026):** odluke operatera u §2 su donete, struktura iz §3 je
 > **potvrđena**. **F1 (šema, pisac, storno), F2 (kartica, Saldo OM, PWA), F3
 > (ekran, papir KO, storno sa ekrana, signal osnovice), F4 (nalozi, izvod po
@@ -36,22 +40,42 @@ Odbačene alternative:
 
 | ID | Odluka |
 |---|---|
-| **DOP-ODL-01** | Stopa je **din/kg**. Iznos stavke = `ZaokruziNovac(kg × stopa)`. Bez PDV nadoknade — knjižno odobrenje. |
+| **DOP-ODL-01** | ~~zamenjeno sa DOP-ODL-14~~ Stopa je **din/kg**. Iznos stavke = `ZaokruziNovac(kg × stopa)`. Bez PDV nadoknade — knjižno odobrenje. |
 | **DOP-ODL-02** | Ključ kulture je **ključ cenovnika**: `VrstaVoca + SortaVoca + Klasa`, tačno poklapanje kao `modCenovnik.GetVazecaCena` (trim, bez razlike u veličini slova). Prazna sorta znači **kultura bez sorte**, ne „sve sorte". |
 | **DOP-ODL-03** | Obuhvat: **svi aktivni otkupi** — sva otkupna mesta, uključujući hladnjačke blokove — u periodu **od–do po datumu otkupa**. |
 | **DOP-ODL-03a** | Period ima i **sat** (odluka 03.11.2026). Dan je `Datum` dokumenta; sat je vreme nastanka po pravilu otkupnog lista (`modOtkup.OtkupVremeNastanka`: `SourceCreatedAt`, pa `CreatedAt`). Sat se gleda **samo kad granica seče dan** (Od posle 00:00 prvog dana, Do pre 23:59 poslednjeg). Obe granice su uključene, na minut. Kad `SourceCreatedAt` postoji a nije vreme (PWA ISO tekst), sat je **nepoznat** — ne uzima se `CreatedAt`, jer je to za PWA red trenutak sinhronizacije — i otkup na graničnom danu obara obračun po imenu (§8, stavka 1). |
-| **DOP-ODL-04** | Datum zaduženja = **datum knjiženja** doplate. Na kartici kooperanta: **jedan red po kooperantu** po obračunu. |
-| **DOP-ODL-05** | Doplata se **isplaćuje kroz postojeće naloge za banku** i automatsko mapiranje izvoda (faza F4). Gotovinska isplata KO ide na **matičnu stanicu** kooperanta (`tblKooperanti.StanicaID`), i kad KO ima stavke na više stanica. |
-| **DOP-ODL-06** | **Ponovljena doplata** nad istim ključem i preklopljenim periodom je **dozvoljena**, uz upozorenje koje imenuje raniji KO i izričitu potvrdu operatera. |
+| **DOP-ODL-04** | Datum zaduženja = **datum knjiženja** doplate. Na kartici kooperanta: **jedan red po kooperantu** po obračunu (važi i posle revizije, v. DOP-ODL-18). |
+| **DOP-ODL-05** | ~~deo o matičnoj stanici zamenjen sa DOP-ODL-19~~ Doplata se **isplaćuje kroz postojeće naloge za banku** i automatsko mapiranje izvoda (faza F4). Gotovinska isplata KO ide na **matičnu stanicu** kooperanta (`tblKooperanti.StanicaID`), i kad KO ima stavke na više stanica. |
+| **DOP-ODL-06** | *(revidirano: po bloku i klasi, v. §2a)* **Ponovljena doplata** nad istim ključem i preklopljenim periodom je **dozvoljena**, uz upozorenje koje imenuje raniji KO i izričitu potvrdu operatera. |
 | **DOP-ODL-07** | Knjižena doplata je **snimak**: ne prati kasniji storno ili ispravku otkupa. Promena osnovice je **signal** (integritet / Oporavak, faza F3), ne automatska prepravka. Ispravka = storno KO + nov obračun (obrazac ZBR-KANON-03). |
 | **DOP-ODL-08** | Izveštaj **Prosečna cena** se ne menja. |
-| **DOP-ODL-09** | Broj KO je **`KO-<n>/<godina>`**, niz po godini datuma knjiženja, preko svih KO (i storniranih — storno ne oslobađa broj, A9). |
+| **DOP-ODL-09** | ~~zamenjeno sa DOP-ODL-17~~ Broj KO je **`KO-<n>/<godina>`**, niz po godini datuma knjiženja, preko svih KO (i storniranih — storno ne oslobađa broj, A9). |
 | **DOP-ODL-10** | *Predlog uz F1, operater ga može oboriti:* kraj perioda nije u budućnosti; datum knjiženja nije pre poslednjeg dana perioda ni posle današnjeg; svaka stopa mora da pogodi bar jedan aktivan otkup (tipfeler u sorti ne sme da da doplatu nula za ceo ključ); prazan obračun se ne knjiži. |
-| **DOP-ODL-11** | Kooperantu se **štampa KO** (odluka 03.11.2026) — faza F3: `modPrint.StampajKO`, šablon `KOSablon`, PDF u „Knjizna odobrenja", podešavanje `KO_PRINT_MODE` (podrazumevano PDF). Storniran KO se ne štampa. |
+| **DOP-ODL-11** | ~~zamenjeno sa DOP-ODL-18~~ Kooperantu se **štampa KO** (odluka 03.11.2026) — faza F3: `modPrint.StampajKO`, šablon `KOSablon`, PDF u „Knjizna odobrenja", podešavanje `KO_PRINT_MODE` (podrazumevano PDF). Storniran KO se ne štampa. |
 | **DOP-ODL-12** | *Predlog uz F3:* ekran Doplata je u grupi FINANSIJE, pod pravom **Fakturisanje** (`OBL_FAKTURISANJE`) — KO je knjigovodstveni dokument kao faktura, a nova kolona prava bila bi izmena šeme bez poslovnog razloga. Promena je jedan red u `modUiScreens.ScrRows`. |
 | **DOP-ODL-13** | Storno KO je **na ekranu Doplata** (radnje „Storniraj KO" i „Storniraj ceo obračun"), ne na ekranu Storno: tamo prekidač već nosi 11 lista = `MAX_SEG`. KO nema nizvodni lanac robe, pa mu ne treba pregled posledica po modovima. |
 
-## 3) Struktura dokumenta (potvrđena 03.11.2026)
+## 2a) Revizija 04.11.2026 — doplata po bloku, bruto, dva načina unosa
+
+Operater je posle F4b ispravio model (njegova reč: „moja greška"): doplata se
+računa po kilaži, ali se **radi po bloku**, po istom modelu kao otkup — sa PDV
+nadoknadom. Odluke ispod **imaju prednost** nad odlukama iz §2 koje zamenjuju i
+nad strukturom iz §3 (KO po kooperantu); §3–§7 opisuju kod pre revizije dok
+prerada (§7, P1–P4) ne bude u kodu. Ništa od toga nije u `main`-u ni u
+produkciji (PR #460, draft), pa se kanon šeme sme menjati.
+
+| ID | Odluka (04.11.2026) |
+|---|---|
+| **DOP-ODL-14** | *(zamenjuje 01)* Stopa je **bruto din/kg**, isti model kao `Cena` otkupa: sadrži PDV nadoknadu (`PDV_NADOKNADA_STOPA`, podrazumevano 8%). Primer: 10,80 = osnovica 10,00 + nadoknada 0,80. Iznos stavke = `ZaokruziNovac(kg × bruto doplata/kg)` — to se isplaćuje. Osnovica i nadoknada se izvode kao na otkupnom listu (neto = bruto / (1 + stopa)). |
+| **DOP-ODL-15** | **Način unosa, jedan za ceo obračun:** (1) **bruto doplata po kg**; (2) **konačna bruto cena po kg** — ono što kooperant ukupno dobija po kg. U načinu 2 doplata po kg za svaku stavku = konačna cena − bruto cena stavke sa otkupnog lista − već knjižena aktivna doplata po kg na istom bloku i klasi (ponovljen obračun ne isplaćuje razliku dvaput). Stavka sa rezultatom ≤ 0 je **„bez doplate"**: prikazuje se, ne knjiži (negativna doplata nije doplata nego umanjenje). |
+| **DOP-ODL-16** | *(zamenjuje strukturu §3)* **Jedan dokument doplate po otkupnom bloku** (veza `OtkupID`), stavke po klasi. Obračun (`ObracunID`) i dalje grupiše jedan globalni unos i storno celog obračuna. Pre knjiženja operater **isključuje neželjene blokove** (podrazumevano su svi uključeni); pisac izabrane ponovo proverava (aktivan, u periodu, ključ). |
+| **DOP-ODL-17** | *(zamenjuje 09)* Broj dokumenta = **broj bloka + „D"**: `1/220526D`, `1/220526-2D`; ponovljena doplata na istom bloku `…D2`, `…D3` (stornirani se broje — storno ne oslobađa broj). Kanonski broj bloka je jedinstven: prefiks je stanica, a oba pisca otkupa (ručni unos i PWA uvoz) tvrdo odbijaju broj tuđe stanice ili dana (`modBrojevi.RequireBrojUKontekstu`). **Uslov pre prve isplate:** proveriti da e-banking prihvata i vraća slovo u pozivu na broj — bez slova poziv postaje broj bloka i automatika bi novac knjižila na otkupni blok (§8). |
+| **DOP-ODL-18** | *(zamenjuje 11; dopunjuje 04)* **Prikazi i PDF-ovi su zbirni.** Ekran: pregled po kooperantu, po kulturi i klasi. Kartica: jedan red po kooperantu po obračunu, opis po kulturi i klasi. Detalj po otkupu je samo u **Specifikaciji doplate** (PDF: kooperant → otkupi → stavke; na kraju rekapitulacija po kulturi i klasi; za obračun ili za kooperanta). **Papir bloka** (po uzoru na otkupni list: neto, PDV nadoknada, ukupno, klauzula čl. 34) je radnja nad jednim blokom, ne masovna štampa. |
+| **DOP-ODL-19** | *(zamenjuje deo 05)* Doplata pripada **stanici bloka**: Saldo OM, isplata kroz banku (OMID vezanog reda) i gotovina (F5 na toj stanici) — kao otkupni blok. |
+| **DOP-ODL-20** | Doplata je **zaseban dokument sa svojim otvorenim iznosom** (ne povećava dug bloka). Nalozi za banku **po dokumentu**, kao otkupni blok; poziv na broj = broj doplate. Izvod, gotovina i primena avansa rade kao u F4/F4b, po dokumentu. |
+| **DOP-ODL-06** *(rev.)* | Blok koji već ima aktivnu doplatu za istu klasu traži **upozorenje i potvrdu** — u oba načina unosa. |
+
+## 3) Struktura dokumenta (potvrđena 03.11.2026; **revidirana u §2a**)
 
 **Jedno knjižno odobrenje (KO) po kooperantu.** Globalni unos je **obračun**,
 koji u jednoj transakciji pravi po jedan KO za svakog kooperanta sa kg > 0.
@@ -212,6 +236,18 @@ F1 otvoren je plan S8 paleta (PR #456, samo docs); grana koja posle doda testove
 od 309 nadalje sudara se sa ovom. **Desilo se:** S8 (#458 i dalje) je uzeo 309–314,
 pa su testovi doplate pri rebase-u na `main` prenumerisani na **315–333** (brojevi
 u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
+
+## 7a) Prerada po §2a — faze
+
+**P1 — model i pisac.** Šema (zaglavlje: `OtkupID`, `StanicaID`, `NacinUnosa`;
+stavka: `CenaOtkupa`, `KonacnaCena` — na kraj), plan po bloku i klasi sa oba
+načina i isključivanjem, broj bloka + D, pisac po bloku, ponavljanje po bloku,
+signal osnovice nad knjiženim blokovima; isplata (banka, gotovina, avans) na
+stanicu bloka; testovi prilagođeni.
+**P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
+sa kvačicama, knjižena lista zbirno.
+**P3 — papir bloka i Specifikacija doplate** (PDF).
+**P4 — kartica zbirno po obračunu**, opis po kulturi i klasi.
 
 ## 8) Otvoreno
 
