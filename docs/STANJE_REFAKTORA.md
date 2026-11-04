@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 314: S8 rez 2b-1 — kapija pisca `PAL-INV-01`, C1 za red bez ključa; kapije čekaju).
+**Ažurirano:** 04.11.2026 (stavka 315: review `#466` — CODE GO, MERGE CONDITIONAL GO; izvršne kapije čekaju).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10825,6 +10825,19 @@
      - **Nije izvršeno (NEVERIFIKOVANO):** `make_fixture`, RunAllTests, BFP, Palete, Storno, `dokaz.py s8r2b1`
        i `s8r2a2-c1-tudji-kljuc`, Compile. Čekaju reviewer GO i „Push, pa kapije".
      - **Sledeći brojevi:** test 315 · stavka 315 · KI-088 · plan §14.62.
+
+315. **Review PR-a `#466` (2b-1), prvi krug: CODE GO / TEST DESIGN GO / MERGE CONDITIONAL GO** (04.11.2026). Plan
+     §14.61 („Review #466"). PR otvoren na „Push i PR" nad `c97cf6fa`; Static CI #1156 SUCCESS.
+
+     - **Uslov merge-a:** izvršni acceptance — `make_fixture`, RunAllTests, BFP, Palete, Storno, `dokaz.py s8r2b1`
+       i `s8r2a2-c1-tudji-kljuc`, ručni Compile. Nov P1/P2 nije nađen.
+     - **`S8R2B1-REV-01` (P3):** C1 i A3 grade mapu linija kroz globalni strog čitač stavki; kvar u nepovezanoj
+       prijemnici daje grešku celog bloka C1/C4, ne pojedinačne nalaze. Nije lažno čisto. Proveren u kodu
+       (`LinijePrijemnicePoStavci` iz 2a-2). Prihvaćeno kao ograničenje; ide u završni acceptance S8 (klasa `KI-081`).
+     - **`S8R2B1-REV-02` (P3):** „bez mutacije" broji redove, ne otisak postojeće palete. Rizik nizak po
+       konstrukciji (kapija je prva naredba `SpillGajbice`). Prihvaćeno bez izmene; 2b-1 se ne proširuje.
+     - **Za kraj S8** (uz 11 odloženih regresionih sabotaža i FULL): `S8R2B1-REV-01`.
+     - **Sledeći brojevi:** test 315 · stavka 316 · KI-088 · plan §14.62.
 
 ## Dug sa imenom (posle S5-5b)
 

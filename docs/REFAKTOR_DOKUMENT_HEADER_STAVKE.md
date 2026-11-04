@@ -11065,6 +11065,22 @@ Grana `claude/s8-rez2b-kolone`. Zapis: `docs/STANJE_REFAKTORA.md` stavka 314. Od
 - **Nije izvršeno:** `make_fixture` (nov otisak), RunAllTests, BFP, Palete, Storno, `dokaz.py` za 5 novih sabotaža
   i pomerenu; Compile. Čekaju reviewer GO i „Push, pa kapije".
 
+#### Review #466 (prvi krug, 04.11.2026)
+
+Verdikt: **CODE GO / TEST DESIGN GO / MERGE CONDITIONAL GO** — uslov je izvršni acceptance (fixture, suite-ovi,
+sabotaže, Compile). Static CI #1156 na `c97cf6fa` SUCCESS. Nov P1 ili P2 nije nađen.
+
+- **`S8R2B1-REV-01` (P3, robusnost dijagnostike) — prihvaćeno kao ograničenje, bez izmene.** C1 gradi mapu linija
+  kroz `modIntegritet.LinijePrijemnicePoStavci` → `modDokumenta.StavkePrijemniceRedovi`, strog čitač nad CELOM
+  tabelom stavki (uveden u 2a-2, `7f457ea7`; isto čita i A3). Kvar u nepovezanoj prijemnici (npr. dupli
+  `PrijemnicaStavkaID`) zato ne daje pojedinačne nalaze C1 nego grešku celog bloka C1/C4 (`WriteErr`). Integritet
+  nije lažno čist — greška je vidljiva — ali tvrdnja „C1 imenuje red bez ključa" važi dok je tabela stavki
+  čitljiva. Ista klasa kao `KI-081` (strogi globalni čitači). Provera ide u završni acceptance S8.
+- **`S8R2B1-REV-02` (P3, test coverage) — prihvaćeno, bez izmene.** Tvrdnja „bez mutacije" broji redove `tblPaleta`
+  i `tblPaletaStavka`, a ne poredi otisak postojeće palete. Rizik je nizak po konstrukciji: `RequireLinijaPalete`
+  je prva naredba `SpillGajbice`, a pre nje pisac samo čita (`SchemaReadyOrFail`, `Require*Schema`,
+  `EnsurePrijemnicaNotAlreadyPaletized`). Po preporuci review-a 2b-1 se ne proširuje manjim poboljšanjima.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
