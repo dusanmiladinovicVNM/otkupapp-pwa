@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 310: ručni Compile PASS; `KI-086` i `KI-087` CLOSED; merge `#465` na izričit zahtev).
+**Ažurirano:** 04.11.2026 (stavka 311: merge `#465` = `ed6896dc`; `PAL-ODL-12` C002 ne prima 2b; sledi 2b sa svojim ugovorom).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10761,6 +10761,30 @@
      - **Posle merge-a:** rez 2b (HOLD i do odgovora operatera o C002), sa obavezama iz stavke 305
        (`S8R2A2-REV-01`).
      - **Sledeći brojevi:** test 315 · stavka 311 · KI-088 · plan §14.60.
+
+311. **Merge PR-a `#465` u `main` = `ed6896dc`; rez `KI-086`/`KI-087` ZATVOREN; odluka `PAL-ODL-12` (C002 ne
+     prima 2b)** (04.11.2026, uz „Push i merge" i „Proveri i merge"). Zapis ide na granu `claude/s8-rez2b-kolone`
+     (od `ed6896dc`).
+
+     - **Pre merge-a:** Static CI na glavi `fc7f2072` SUCCESS (druga provera; prva je zatekla CI u toku); PR
+       MERGEABLE / CLEAN; `main` se od `11f9a7a7` nije pomerio. Merge vezan za proverenu glavu.
+     - **Merge `ed6896dc`:** roditelji `11f9a7a7` i `fc7f2072`; stablo `main`-a je isto kao stablo glave.
+     - **Osnova za `main`:** RunAllTests 314 / 0, BFP 3004 / 0, Palete OK, Storno 111 / 0, dokaz 4 / 4 (potpis
+       `b57a2670c2be48f8`), Compile PASS; katalog 1153, `pal_broj` 8; šema `B22A1572`, fixture `8196bbcaecbc8926`.
+     - **`PAL-ODL-12` (operater):** „C002 ne prima 2b". Migrirana sveska C002 ostaje na izdanju pre 2b; 2b se meri
+       na fixture-u. Izlazna kapija C002 (plan §14.58, „Drugi review") otpada, kao i pitanje ponovnog prevoda. Time
+       je 2b oslobođen HOLD-a; ostaje da počne sopstvenim ugovorom.
+     - **Šta 2b nosi** (plan §14.58, §14.59; obaveze iz stavke 305):
+       - brisanje `BrojPrijemnice`, `BrojZbirne` i `ZbirnaRoditeljID` sa paletne stavke (`schema.json` →
+         `gen_schema_module`, `modSetup`, self-heal) i njihovih pisaca (`AddStavka`, labele u prevezivanju, paletni
+         rep `ReassignPrijemnicaToZbirna_TX`, `RequirePaletaStavkaSchema`, `modSetup`);
+       - kapija pisca `PAL-INV-01`: prazan, nepostojeći i tuđ `PrijemnicaStavkaID` i pogrešna klasa se odbijaju;
+       - zatvaranje `S8R2A2-REV-01`: C1 prijavljuje aktivnu paletnu stavku bez ključa, A3 pokriva sve aktivne redove,
+         test sa redom bez ključa pokazuje da integritet NIJE čist;
+       - fixture (`make_fixture.py`) i seed-ovi dobijaju ključ linije; test-pomoćnici koji čitaju po broju prelaze
+         na ID; grupa `pal_broj` ide na 0 (dokaz u oba smera);
+       - mina: `GetColumnIndex` posle brisanja kolone vraća 0 — meri se pozivna mesta, ne postojanje kolone.
+     - **Sledeći brojevi:** test 315 · stavka 312 · KI-088 · plan §14.60.
 
 ## Dug sa imenom (posle S5-5b)
 

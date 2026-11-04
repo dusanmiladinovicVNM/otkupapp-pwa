@@ -90,6 +90,7 @@ Odluke za rez 2a (operater, 04.11.2026; plan §14.59):
 | **`PAL-ODL-09`** | **Kolona „Zbirna" u listi stavki palete (C-048)** se čita iz zaglavlja zbirne preko veze prijemnice, ne sa paletne stavke i ne kao nov čitalac broja zbirne na prijemnici |
 | **`PAL-ODL-10`** | **`KI-086` i `KI-087` idu u zaseban rez posle 2a, pre 2b** (ispravnost kapija i ishoda, ne identitet) |
 | **`PAL-ODL-11`** | **2a ide kao dva PR-a:** 2a-1 storno zbirne (R1–R4, `KI-039`), 2a-2 labele, C-048 i integritet (R5–R11, grupa `pal_broj`) |
+| **`PAL-ODL-12`** | **C002 ne prima izdanje sa 2b** (operater, 04.11.2026). Migrirana sveska C002 (izveštaji i ručne uplate kooperantima, bez pisanja paleta) ostaje na izdanju pre 2b; 2b se meri na fixture-u. Izlazna kapija C002 iz plana §14.58 („Drugi review“) zato otpada, a ponovni prevod iz stare sveske nije potreban |
 
 Podela S8 na rezove je prihvaćena po nezavisnom review-u (plan §14.58, „Review i odluke").
 
