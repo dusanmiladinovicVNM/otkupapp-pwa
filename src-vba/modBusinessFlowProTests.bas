@@ -348,6 +348,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_S6_PaleteCitajuStavke
     Test_S8R1a_KorekcijaPoIdentitetu
     Test_S8R1b_PraznaPaletaStrogBrojac
+    Test_S8R1c_StornoPaleteAktivnaRoba
     Test_S6_CitalacStavkiPrijemniceDrziUgovor
     Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu
     Test_S6K4_StornoSkidaPaleteUIstojTx
@@ -10414,6 +10415,153 @@ EH:
     SetTestMode prevMode
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
+
+' S8 REZ 1c (N7, PAL-ODL-06): STORNO PALETE ODBIJA ROBU AKTIVNE PRIJEMNICE.
+'
+' Dve prijemnice istog kupca dele SVEZU paletu (tip ambalaze scenarija):
+'   P1  4 gajbe / 40 kg,  P2  3 gajbe / 30 kg
+' Svaka je CELA stavka na paleti -- slucaj koji A3 posle storna palete vise ne vidi.
+'   1) obe aktivne: razlog imenuje obe (samo citac -- jezgro meri korak 2);
+'   2) P1 stornirana BEZ skidanja paleta (njena stavka je sirocad), P2 aktivna:
+'      storno palete se odbija i nista se ne menja. Ovde je storno palete skidao
+'      robu su-stanara;
+'   3) obe stornirane. Sinteticka anomalija (synthetic anomaly, odmah vracena):
+'      stavka P2 pokazuje na prijemnicu koje nema -- ne zna se cija je roba,
+'      storno se odbija. Kontra: paleta nosi samo sirocad i stornira se.
+'
+' Nivo: FIZICKE paletne stavke po PrijemnicaID-u i zaglavlje palete. Ulaz je
+' produkcioni StornoPaleta_TX (radnja "Storniraj paletu" ekrana Palete).
+' SABOTAZE: s8r1c-storno-bez-kapije, s8r1c-sirocad-blokira,
+' s8r1c-nepoznata-prijemnica-pusta.
+Private Sub Test_S8R1c_StornoPaleteAktivnaRoba()
+    On Error GoTo EH
+    Const SRC As String = "Test_S8R1c_StornoPaleteAktivnaRoba"
+
+    Dim scenario As String, d1 As Date, tipT As String, prevPal As String
+    scenario = NewScenarioCode("S8R1C")
+    d1 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPS8C-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABS8C-" & scenario, "test S8 rez 1c"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "S8R1c: preduslov -- vozac je preuzeo 50"
+
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(d1, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "S8R1c: preduslov -- zbirna je snimljena"
+
+    Dim p1 As String, p2 As String, errNum As Long
+    On Error Resume Next
+    p1 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R1C1-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=40#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=4, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p1 = "": Err.Clear
+    p2 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-S8R1C2-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=30#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=3, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p2 = "": Err.Clear
+    On Error GoTo EH
+
+    Dim pal As String
+    pal = S8R1bPaletaDokumenta(p1)
+    AssertTrue Len(p1) > 0 And Len(p2) > 0 And Len(pal) > 0 And _
+               S8R1bPaletaDokumenta(p2) = pal And S8R1bAktivnihNaPaleti(pal) = 2, _
+               "S8R1c: preduslov -- P1 i P2 su jedine stavke iste palete"
+
+    ' --- 1) obe aktivne: razlog imenuje obe ---
+    Dim razlog As String
+    razlog = modPaletniList.PaletaAktivnaRobaRazlog(pal)
+    AssertTrue InStr(razlog, "(" & p1 & ")") > 0 And InStr(razlog, "(" & p2 & ")") > 0, _
+               "S8R1c: razlog imenuje obe aktivne prijemnice"
+
+    ' --- 2) P1 stornirana bez skidanja paleta (sirocad), P2 aktivna -- N7 ---
+    AssertTrue modStorno.StornoPrijemnica_TX(p1, False), _
+               "S8R1c: preduslov -- P1 je stornirana, a njena paletna stavka ostaje"
+    Dim stanje As String
+    stanje = S8R1cStanje(p1, p2, pal)
+    razlog = modPaletniList.PaletaAktivnaRobaRazlog(pal)
+    AssertTrue InStr(razlog, "(" & p2 & ")") > 0, "S8R1c: razlog imenuje aktivnog su-stanara"
+    AssertTrue InStr(razlog, "(" & p1 & ")") = 0, "S8R1c: stornirana prijemnica nije u razlogu"
+    AssertTrue Not modStorno.StornoPaleta_TX(pal), _
+               "S8R1c: storno palete sa robom aktivnog su-stanara se odbija"
+    AssertEquals stanje, S8R1cStanje(p1, p2, pal), _
+                 "S8R1c: odbijen storno ne dira ni su-stanara ni sirocad ni paletu"
+
+    ' --- 3) obe stornirane ---
+    AssertTrue modStorno.StornoPrijemnica_TX(p2, False), _
+               "S8R1c: preduslov -- P2 je stornirana, a njena paletna stavka ostaje"
+    stanje = S8R1cStanje(p1, p2, pal)
+
+    ' Sinteticka anomalija: stavka P2 pokazuje na prijemnicu koje nema; vraca se odmah.
+    Dim rP2 As Long, nema As String, razlogAnom As String, okAnom As Boolean, vracen As Boolean
+    nema = "NEMA-" & scenario
+    okAnom = True
+    rP2 = S8R1cRedStavke(p2)
+    If rP2 > 0 Then
+        On Error Resume Next
+        RequireUpdateCell TBL_PALETA_STAVKA, rP2, COL_PALS_PRIJEMNICA_ID, nema, SRC
+        razlogAnom = modPaletniList.PaletaAktivnaRobaRazlog(pal)
+        okAnom = modStorno.StornoPaleta_TX(pal)
+        Err.Clear
+        RequireUpdateCell TBL_PALETA_STAVKA, rP2, COL_PALS_PRIJEMNICA_ID, p2, SRC
+        vracen = (Err.Number = 0)
+        Err.Clear
+        On Error GoTo EH
+    End If
+    AssertTrue vracen, "S8R1c: preduslov -- PrijemnicaID paletne stavke je vracen"
+    AssertTrue InStr(razlogAnom, nema) > 0, "S8R1c: razlog imenuje prijemnicu koje nema"
+    AssertTrue Not okAnom, "S8R1c: stavka nepoznate prijemnice odbija storno palete"
+    AssertEquals stanje, S8R1cStanje(p1, p2, pal), _
+                 "S8R1c: odbijen storno nad anomalijom nista ne menja"
+
+    ' --- Kontra: paleta nosi samo sirocad -> stornira se ---
+    AssertEquals "", modPaletniList.PaletaAktivnaRobaRazlog(pal), _
+                 "S8R1c: paleta sa samo sirocadi nema razlog odbijanja"
+    AssertTrue modStorno.StornoPaleta_TX(pal), "S8R1c: paleta koja nosi samo sirocad se stornira"
+    AssertTrue Left$(S8R1bPaletaStanje(pal), 3) = "DA|", "S8R1c: paleta sa samo sirocadi je stornirana"
+    AssertEquals "redova=1|gajb=0|neto=0|storno=1#redova=1|gajb=0|neto=0|storno=1", _
+                 S8R1aOtisakPaleta(p1) & "#" & S8R1aOtisakPaleta(p2), _
+                 "S8R1c: storno palete stornira stavke sirocadi"
+
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_S8R1c_StornoPaleteAktivnaRoba", Err.Number, Err.description
+    On Error Resume Next
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' Stanje koje odbijen storno palete ne sme da promeni: paletne stavke oba
+' dokumenta i zaglavlje palete.
+Private Function S8R1cStanje(ByVal p1 As String, ByVal p2 As String, ByVal pal As String) As String
+    S8R1cStanje = S8R1aOtisakPaleta(p1) & "#" & S8R1aOtisakPaleta(p2) & "#" & S8R1bPaletaStanje(pal)
+End Function
+
+' Red prve aktivne paletne stavke dokumenta (0 ako je nema).
+Private Function S8R1cRedStavke(ByVal prj As String) As Long
+    Dim d As Variant, i As Long, cP As Long, cSt As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If Not IsArray(d) Or Len(prj) = 0 Then Exit Function
+    cP = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, "S8R1cRedStavke")
+    cSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, "S8R1cRedStavke")
+    For i = 1 To UBound(d, 1)
+        If Trim$(nz(d(i, cP), "")) = prj And UCase$(Trim$(nz(d(i, cSt), ""))) <> "DA" Then
+            S8R1cRedStavke = i
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' Skidanje paletnih stavki jedne prijemnice kroz jezgro, u sopstvenoj transakciji
 ' koja snima obe tabele paleta. Vraca razlog pada ("" = proslo); na padu vraca

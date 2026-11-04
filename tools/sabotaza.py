@@ -9109,6 +9109,33 @@ SABOTAZE = {
         "T_S8R1b_PreveziPaleteJezgro",
         "314: necitljiv status cilja odbija prevezivanje",
     ),
+    # S8 rez 1c (N7, PAL-ODL-06): storno palete odbija robu AKTIVNE prijemnice.
+    # Bez kapije storno skida robu aktivnog su-stanara (P1 sirocad, P2 aktivna).
+    "s8r1c-storno-bez-kapije": (
+        "modStorno.bas",
+        "    If Len(razlogRobe) > 0 Then Err.Raise ERR_STORNO_BASE + 43, SRC, razlogRobe\n",
+        "    ' SABOTAZA: storno palete bez kapije robe aktivne prijemnice\n",
+        "Test_S8R1c_StornoPaleteAktivnaRoba",
+        "S8R1c: storno palete sa robom aktivnog su-stanara se odbija",
+    ),
+    # Kontra: kapija ne sme da odbija vise od odluke -- sirocad (roba stornirane
+    # prijemnice) ne blokira storno palete.
+    "s8r1c-sirocad-blokira": (
+        "modPaletniList.bas",
+        "                If UCase$(Trim$(NzToText(SafeCell(prjD, r, cPrSt)))) <> \"DA\" Then\n",
+        "                If True Then   ' SABOTAZA: i stornirana prijemnica blokira storno palete\n",
+        "Test_S8R1c_StornoPaleteAktivnaRoba",
+        "S8R1c: paleta koja nosi samo sirocad se stornira",
+    ),
+    # Necitljivo stanje nije dozvola: stavka ciji PrijemnicaID ne vodi na tacno
+    # jednu prijemnicu odbija storno palete (sinteticka anomalija u testu).
+    "s8r1c-nepoznata-prijemnica-pusta": (
+        "modPaletniList.bas",
+        "        If vlasnici(k) <> 1 Then\n",
+        "        If False Then   ' SABOTAZA: nepoznata prijemnica ne smeta\n",
+        "Test_S8R1c_StornoPaleteAktivnaRoba",
+        "S8R1c: stavka nepoznate prijemnice odbija storno palete",
+    ),
     # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
     "s8r1a-altf8-prvi-pogodak": (
         "modPaletniListUI.bas",

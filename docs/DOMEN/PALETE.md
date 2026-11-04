@@ -67,6 +67,8 @@ stavke jedne stavke prijemnice nose celu stavku: zbir gajbi = gajbe stavke, a zb
   Delimična paleta i stavka na više paleta su normalno stanje (rubna paleta).
 - **Kršenje koje danas niko ne imenuje:** storno palete koja nosi celu stavku aktivne
   prijemnice. A3 tu liniju više ne vidi. Po `PAL-ODL-06` storno takve palete se odbija.
+  Od S8 reza 1c (`docs/STANJE_REFAKTORA.md` stavka 290) to drži jezgro `modStorno.StornoPaleta`
+  kroz `modPaletniList.PaletaAktivnaRobaRazlog`; A3 po stavci ostaje za rez 2a.
 
 ## 4) Odluke S8 (operater, 03.11.2026)
 
