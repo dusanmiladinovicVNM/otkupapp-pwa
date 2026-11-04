@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 315: review `#466` — CODE GO, MERGE CONDITIONAL GO; izvršne kapije čekaju).
+**Ažurirano:** 04.11.2026 (stavka 316: kapije `#466` zelene — RunAllTests 314/0, BFP 3017/0, dokaz 6/6; čeka ručni Compile).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10838,6 +10838,22 @@
        konstrukciji (kapija je prva naredba `SpillGajbice`). Prihvaćeno bez izmene; 2b-1 se ne proširuje.
      - **Za kraj S8** (uz 11 odloženih regresionih sabotaža i FULL): `S8R2B1-REV-01`.
      - **Sledeći brojevi:** test 315 · stavka 316 · KI-088 · plan §14.62.
+
+316. **Izvršne kapije 2b-1 (`#466`): zeleno posle ispravke testa; čeka ručni Compile** (04.11.2026, operater:
+     „Kapije sada, 2b-2 paralelno"). Plan §14.61 („Izvršne kapije"). 2b-2 se za to vreme radio u worktree-ju
+     (grana `claude/s8-rez2b2-brisanje`, stavka 317 na toj grani).
+
+     - **Fixture:** prvi pokušaj stao na `make_fixture` (donor bez `tblPaletaStavka.PrijemnicaStavkaID`); ispravka
+       `9ca82b61` (`ENSURE_COLS`), potpis `e0338451f4f3c76e`.
+     - **Palete** OK (115), **Storno** 111 / 0 (nad `9ca82b61`).
+     - **BFP prvi put 3017 / 1:** pala tvrdnja C1 za red bez ključa — sintetički dupli ključ iz istog testa je
+       oborio ceo blok C1/C4 kroz globalni strog čitač (`S8R2B1-REV-01`, izmereno), a kontra je prošla na prazno.
+       Ispravka `08146520`, samo test (redosled + uslov da se blok izvršio).
+     - **Nad `08146520`:** RunAllTests 314 / 0, BFP 3017 / 0, `dokaz.py` 6 / 6 crveno (potpis `5344a886ecdf9528`).
+     - **Compile:** NEJASNO automatski; sveska `tests/fixtures/rucna_provera_s8r2b1.xlsm` (kod `08146520`).
+     - **Osnova posle merge-a #466:** RunAllTests 314, BFP 3017, katalog 1158, `pal_broj` 8, fixture
+       `e0338451f4f3c76e`, šema `B22A1572`.
+     - **Sledeći brojevi:** test 315 · stavka 317 · KI-088 · plan §14.62.
 
 ## Dug sa imenom (posle S5-5b)
 

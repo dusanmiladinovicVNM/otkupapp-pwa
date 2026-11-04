@@ -11076,6 +11076,23 @@ sabotaže, Compile). Static CI #1156 na `c97cf6fa` SUCCESS. Nov P1 ili P2 nije n
   `PrijemnicaStavkaID`) zato ne daje pojedinačne nalaze C1 nego grešku celog bloka C1/C4 (`WriteErr`). Integritet
   nije lažno čist — greška je vidljiva — ali tvrdnja „C1 imenuje red bez ključa" važi dok je tabela stavki
   čitljiva. Ista klasa kao `KI-081` (strogi globalni čitači). Provera ide u završni acceptance S8.
+#### Izvršne kapije (04.11.2026, operater: „Kapije sada, 2b-2 paralelno")
+
+- **Prvi pokušaj stao na fixture-u:** `make_fixture` je odbio SEED („donor nema kolone PrijemnicaStavkaID" u
+  `tblPaletaStavka`) — kolonu u aplikaciji dodaje self-heal iz kanona, a fixture je do sada nije sejao. Ispravka
+  `9ca82b61`: `ENSURE_COLS` je dopunjuje na kraj, kao self-heal. Nov potpis fixture-a `e0338451f4f3c76e`.
+- **Palete** OK (115 provera) i **Storno** 111 / 0, nad `9ca82b61`.
+- **Prvi BFP: 3017 / 1.** Pala je „S8R2b1: C1 imenuje aktivnu paletnu stavku bez kljuca linije": sintetički dupli
+  ključ iz koraka pisca ostaje u transakciji, a C1 čita stavke kroz globalni strog čitač, pa je ceo blok C1/C4 dao
+  GREŠKU — `S8R2B1-REV-01` izmeren na sopstvenom testu. Kontra-tvrdnja je tada prošla na prazno. Ispravka
+  `08146520` (samo test): C1 ide pre duplog ključa, ključ se posle vraća, a kontra traži da blok C1/C4 nije javio
+  grešku. Produkcioni kod nije menjan.
+- **Nad `08146520`:** RunAllTests 314 / 0, BFP **3017 / 0**; `dokaz.py --grupe 6 s8r2b1 s8r2a2-c1-tudji-kljuc`:
+  **6 / 6 crveno** (grupno: 2 u grupi, 4 pojedinačno), potpis izvora `5344a886ecdf9528` pre i posle identičan.
+- **Palete i Storno** su mereni nad `9ca82b61`; `08146520` menja samo BFP modul, koji te suite ne izvršavaju.
+- **Compile:** automatski NEJASNO. Sveska za ručni Compile: `tests/fixtures/rucna_provera_s8r2b1.xlsm` (kod
+  `08146520`; pre provere VBE `File > Import File` → `src-vba/modVbaTools.bas`).
+
 - **`S8R2B1-REV-02` (P3, test coverage) — prihvaćeno, bez izmene.** Tvrdnja „bez mutacije" broji redove `tblPaleta`
   i `tblPaletaStavka`, a ne poredi otisak postojeće palete. Rizik je nizak po konstrukciji: `RequireLinijaPalete`
   je prva naredba `SpillGajbice`, a pre nje pisac samo čita (`SchemaReadyOrFail`, `Require*Schema`,
