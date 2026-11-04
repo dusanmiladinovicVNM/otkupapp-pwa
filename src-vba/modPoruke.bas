@@ -1084,6 +1084,8 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "NOVAC_ERR_BLOK_STORNIRAN", ChrW(10007) & " Otkupni blok je storniran:"
     UpsertRow lo, existing, "NOVAC_ERR_BLOK_TUDJ_KOOP", ChrW(10007) & " Otkupni blok pripada DRUGOM kooperantu:"
     UpsertRow lo, existing, "NOVAC_ERR_BLOK_TUDJ_OM", ChrW(10007) & " Otkupni blok je sa DRUGOG otkupnog mesta:"
+    ' F4b doplate (DOP-ODL-05): gotovina za KO samo na maticnoj stanici kooperanta.
+    UpsertRow lo, existing, "NOVAC_ERR_KO_MATICNA", ChrW(10007) & " Knji" & ChrW(382) & "no odobrenje se u gotovini ispla" & ChrW(263) & "uje samo na mati" & ChrW(269) & "noj stanici kooperanta:"
     UpsertRow lo, existing, "NOVAC_ERR_FAK_NEMA", ChrW(10007) & " Faktura ne postoji:"
     UpsertRow lo, existing, "NOVAC_ERR_FAK_DUPLA", ChrW(10007) & " Dupli FakturaID " & ChrW(8212) & " target nije jednozna" & ChrW(269) & "an:"
     UpsertRow lo, existing, "NOVAC_ERR_FAK_STORNIRANA", ChrW(10007) & " Faktura je stornirana:"
@@ -1936,8 +1938,6 @@ Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_BN_VEC_U_NALOZIMA", "Blok je ve" & ChrW(263) & " u nalozima"
     UpsertRow lo, existing, "OTKUI_ERR_BN_NIJE_U_NALOZIMA", "Blok nije u nalozima"
     UpsertRow lo, existing, "OTKUI_ERR_BN_NEMA_AVANSA", ChrW(10007) & " Kooperant nema neraspore" & ChrW(273) & "en avans"
-    ' F4 doplate: KO je u listi naloga, ali se avans primenjuje samo na otkupni blok.
-    UpsertRow lo, existing, "OTKUI_ERR_BN_AVANS_KO", ChrW(10007) & " Avans se primenjuje samo na otkupni blok, ne na knji" & ChrW(382) & "no odobrenje"
     UpsertRow lo, existing, "OTKUI_ERR_BN_NEMA_OTVORENOG", ChrW(10007) & " Blok nema otvoren iznos"
     UpsertRow lo, existing, "OTKUI_ERR_BN_AVANS", ChrW(10007) & " Gre" & ChrW(353) & "ka pri vezivanju avansa " & ChrW(8212) & " pogledajte log"
     UpsertRow lo, existing, "OTKUI_ERR_BN_NEMA_RACUNA", ChrW(10007) & " Izaberi ra" & ChrW(269) & "un sa koga ide isplata (Pode" & ChrW(353) & "avanja -> Banka / nalozi)"

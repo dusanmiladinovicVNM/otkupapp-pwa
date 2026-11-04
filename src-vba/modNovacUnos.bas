@@ -95,6 +95,9 @@ Public Function NoviIsplataUnos() As Object
     p("brDok") = ""
     p("novac") = 0#
     p("otkupID") = ""
+    ' KO izabran u polju "otvoreni blok" (F4b doplate). Popunjava ga
+    ' IsplataValidiraj iz otkupID-a -- lista blokova nosi i otvorena KO.
+    p("doplataID") = ""
     ' Vidljivi tekst polja "otvoreni blok" ide uz ID bas zbog NerazresenIzbor:
     ' bez njega se ukucan a nerazresen blok ne razlikuje od praznog polja.
     p("blokTekst") = ""
@@ -273,7 +276,24 @@ Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As St
 
     If partTip = "KOOP" And Len(partID) > 0 Then
         ' --- isplata kooperantu ---
+        ' KNJIZNO ODOBRENJE (F4b doplate, DOP-ODL-05). Polje "otvoreni blok"
+        ' nosi i otvorena KO, pod njihovim DoplataID-em. Dokument je JEDAN od
+        ' dva: KO ide u doplataID, otkupID ostaje prazan -- pisac veze jedno
+        ' ili drugo, nikad oba. Kapija je blizanac bloka (IsplataKOProblem:
+        ' vlasnistvo, zivot, MATICNA stanica, trenutni ostatak).
         If Len(S(p, "otkupID")) > 0 Then
+            If modDoplata.JeKO(S(p, "otkupID")) Then
+                p("doplataID") = S(p, "otkupID")
+                p("otkupID") = ""
+            End If
+        End If
+        If Len(S(p, "doplataID")) > 0 Then
+            blokErr = modNovac.IsplataKOProblem(S(p, "doplataID"), partID, S(p, "stanicaID"), novac)
+            If Len(blokErr) > 0 Then
+                fokus = "novac": IsplataValidiraj = blokErr: Exit Function
+            End If
+        End If
+        If Len(S(p, "otkupID")) > 0 Or Len(S(p, "doplataID")) > 0 Then
             ' VLASNISTVO I TRENUTNI OSTATAK BLOKA. Provera se NE radi nad
             ' vrednoscu koju je ekran poslao: taj broj je snimak iz trenutka
             ' kad je lista punjena, a izmedju punjenja i potvrde stanje se moze
@@ -309,6 +329,7 @@ Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As St
         ' kooperanta sa OtkupID-em bio bi razduzenje nicijeg bloka.
         p("partnerID") = ""
         p("otkupID") = ""
+        p("doplataID") = ""
         p("tipNovca") = NOV_KES_FIRMA_OTKUPAC
         ' Izabrano otkupno mesto JESTE primalac, pa je ono i entitet novca
         ' (razlika 2 iz zaglavlja). Bez partnera ostaje kontekst.
@@ -345,7 +366,8 @@ Public Function IsplataUpisi(ByVal p As Object, ByRef poruke As String) As Strin
         kooperantID:=S(p, "partnerID"), _
         primalacDisplay:=S(p, "partnerTekst"), _
         otkupID:=S(p, "otkupID"), _
-        tipNovca:=S(p, "tipNovca")) Then Exit Function
+        tipNovca:=S(p, "tipNovca"), _
+        doplataID:=S(p, "doplataID")) Then Exit Function
 
     IsplataUpisi = BrojIliOznaka(S(p, "brDok"))
     Exit Function

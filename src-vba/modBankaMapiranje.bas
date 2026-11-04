@@ -980,14 +980,18 @@ End Function
 
 ' blokIzabran: operater je izabrao KONKRETAN dokument (nije dosao iz poziva na
 ' broj). Writer nad takvim izborom drzi strozu kapiju -- v. Core.
+' doplataID (F4b doplate): operater je izabrao KNJIZNO ODOBRENJE umesto bloka --
+' isti pisac, ista stroza kapija nad izborom (v. Core).
 Private Function MapBankaImportAsKooperantBlockManual(ByVal bankaImportID As String, _
                                                      ByVal kooperantID As String, _
                                                      ByVal otkupID As String, _
                                                      Optional ByVal savePartnerMapFlag As Boolean = True, _
                                                      Optional ByVal blokIzabran As Boolean = False, _
-                                                     Optional ByVal dozvoliVisakKaoAvans As Boolean = False) As Long
+                                                     Optional ByVal dozvoliVisakKaoAvans As Boolean = False, _
+                                                     Optional ByVal doplataID As String = "") As Long
     MapBankaImportAsKooperantBlockManual = MapBankaImportAsKooperantBlockCore( _
-        bankaImportID, kooperantID, otkupID, savePartnerMapFlag, blokIzabran, dozvoliVisakKaoAvans)
+        bankaImportID, kooperantID, otkupID, savePartnerMapFlag, blokIzabran, dozvoliVisakKaoAvans, _
+        doplataID)
 End Function
 
 Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As String, _
@@ -996,7 +1000,8 @@ Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As S
                                                         Optional ByVal savePartnerMapFlag As Boolean = True, _
                                                         Optional ByVal blokIzabran As Boolean = False, _
                                                         Optional ByVal dozvoliVisakKaoAvans As Boolean = False, _
-                                                        Optional ByRef outPrijavljeno As Boolean) As Long
+                                                        Optional ByRef outPrijavljeno As Boolean, _
+                                                        Optional ByVal doplataID As String = "") As Long
     Dim tx As clsTransaction
 
     outPrijavljeno = False
@@ -1011,7 +1016,8 @@ Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As S
     tx.AddTableSnapshot TBL_PARTNER_MAP
     
     MapBankaImportAsKooperantBlockManual_TX = MapBankaImportAsKooperantBlockManual( _
-        bankaImportID, kooperantID, otkupID, savePartnerMapFlag, blokIzabran, dozvoliVisakKaoAvans)
+        bankaImportID, kooperantID, otkupID, savePartnerMapFlag, blokIzabran, dozvoliVisakKaoAvans, _
+        doplataID)
     
     tx.CommitTx
 
@@ -1349,35 +1355,28 @@ End Sub
 
 ' Blizanac PotvrdiOtkupZaKooperanta za knjizno odobrenje: KO postoji TACNO
 ' jednom, nije storniran i pripada ovom kooperantu -- u trenutku upisa, ne u
-' trenutku kad je plan racunat. Iste greske kao za blok.
+' trenutku kad je plan racunat. Pravilo je modDoplata.KOKapija (isto za izvod,
+' gotovinu i primenu avansa); ovde se ishod prevodi u greske bloka, pa ih batch
+' i ekran vide isto kao za otkup.
 Private Sub PotvrdiKOZaKooperanta(ByVal doplataID As String, _
                                   ByVal kooperantID As String, _
                                   ByVal srcName As String)
-    Dim r As Long
-    r = RequireSingleRow(TBL_DOPLATA, COL_DOP_ID, doplataID, srcName)
-
-    Dim data As Variant
-    data = GetTableData(TBL_DOPLATA)
-    If IsEmpty(data) Then
-        Err.Raise ERR_BMAP_BASE + 20, srcName, "Tabela je prazna: " & TBL_DOPLATA
-    End If
-
-    Dim cKoop As Long, cStorno As Long
-    cKoop = RequireColumnIndex(TBL_DOPLATA, COL_DOP_KOOPERANT, srcName)
-    cStorno = RequireColumnIndex(TBL_DOPLATA, COL_STORNIRANO, srcName)
-
-    If UCase$(Trim$(CStr(data(r, cStorno)))) = "DA" Then
-        Err.Raise ERR_BMAP_BLOK_STORNIRAN, srcName, _
-                  "Knjizno odobrenje je stornirano, isplata se ne moze knjiziti na njega. " & _
-                  "DoplataID=" & doplataID
-    End If
-
-    If StrComp(Trim$(CStr(data(r, cKoop))), Trim$(kooperantID), vbTextCompare) <> 0 Then
-        Err.Raise ERR_BMAP_BLOK_TUDJ, srcName, _
-                  "Knjizno odobrenje pripada drugom kooperantu. DoplataID=" & doplataID & _
-                  "; KOKooperant=" & CStr(data(r, cKoop)) & _
-                  "; TrazeniKooperant=" & kooperantID
-    End If
+    Select Case modDoplata.KOKapija(doplataID, kooperantID)
+        Case ""
+        Case modDoplata.KO_KAPIJA_STORNIRAN
+            Err.Raise ERR_BMAP_BLOK_STORNIRAN, srcName, _
+                      "Knjizno odobrenje je stornirano, isplata se ne moze knjiziti na njega. " & _
+                      "DoplataID=" & doplataID
+        Case modDoplata.KO_KAPIJA_TUDJ
+            Err.Raise ERR_BMAP_BLOK_TUDJ, srcName, _
+                      "Knjizno odobrenje pripada drugom kooperantu. DoplataID=" & doplataID & _
+                      "; TrazeniKooperant=" & kooperantID
+        Case Else
+            ' Nema ga ili je dupliran: ista greska identiteta kao za svaki red.
+            RequireSingleRow TBL_DOPLATA, COL_DOP_ID, doplataID, srcName
+            Err.Raise ERR_BMAP_BLOK_BEZ_ID, srcName, _
+                      "Knjizno odobrenje nije jednoznacno. DoplataID=" & doplataID
+    End Select
 End Sub
 
 
@@ -2379,6 +2378,34 @@ Public Function BimEfektivniOtkup(ByVal bankaImportID As String, _
     End If
 End Function
 
+' KNJIZNO ODOBRENJE KAO CILJ RUCNOG MAPIRANJA (F4b doplate). DoplataID kad je
+' operater izabrao KO iz liste cilja, ili kad izbora NEMA a poziv na broj stavke
+' jednoznacno pogadja aktivan KO OVOG kooperanta (isto pravilo "prazan izbor =
+' uzmi poziv na broj" kao za blok); "" znaci put otkupa (BimEfektivniOtkup).
+Public Function BimEfektivniKO(ByVal bankaImportID As String, _
+                               ByVal kooperantID As String, _
+                               ByVal izabranID As String) As String
+    Dim ko As Variant
+    If Len(Trim$(izabranID)) > 0 Then
+        If modDoplata.JeKO(izabranID) Then BimEfektivniKO = Trim$(izabranID)
+        Exit Function
+    End If
+    ko = modDoplata.KOPoPozivu(AutoBlockNoForBim(bankaImportID))
+    If Not IsArray(ko) Then Exit Function
+    If StrComp(CStr(ko(1)), Trim$(kooperantID), vbTextCompare) = 0 Then BimEfektivniKO = CStr(ko(0))
+End Function
+
+' Otvoreno na dokumentu rucnog izbora: KO kad je doplataID zadat, inace otkup.
+' Jedno mesto za kapiju zatvorenog izbora, pitanje o visku i tekst podele.
+Public Function BimOtvorenoNaDokumentu(ByVal otkupID As String, _
+                                       Optional ByVal doplataID As String = "") As Double
+    If Len(Trim$(doplataID)) > 0 Then
+        BimOtvorenoNaDokumentu = modDoplata.OtvorenoNaKO(doplataID)
+    Else
+        BimOtvorenoNaDokumentu = BimOtvorenoNaOtkupu(otkupID)
+    End If
+End Function
+
 ' IMA LI IZABRANI DOKUMENT JOS STA DA PLATI.
 '
 ' Lista blokova nudi SVAKI nestorniran otkup kooperanta -- ne proverava da li je
@@ -2393,9 +2420,10 @@ End Function
 '
 ' Prazan ID nije tvrdnja o bloku nego "blok nije izabran" -- odgovor je False,
 ' kao i pre (ekran kapiju zove samo za izabran red).
-Public Function BimOtkupBezOtvorenog(ByVal otkupID As String) As Boolean
-    If Len(Trim$(otkupID)) = 0 Then Exit Function
-    BimOtkupBezOtvorenog = (BimOtvorenoNaOtkupu(otkupID) <= BIM_OTVORENO_PRAG)
+Public Function BimOtkupBezOtvorenog(ByVal otkupID As String, _
+                                     Optional ByVal doplataID As String = "") As Boolean
+    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 Then Exit Function
+    BimOtkupBezOtvorenog = (BimOtvorenoNaDokumentu(otkupID, doplataID) <= BIM_OTVORENO_PRAG)
 End Function
 
 ' TRAZI LI ISPLATA IZRICITU POTVRDU: iznos je veci nego sto blok duguje, pa ce
@@ -2408,19 +2436,25 @@ End Function
 ' (pravilo D-036), koji je do sada visio o toj istoj kardinalnosti.
 Public Function BimOtkupTraziPotvrdu(ByVal otkupID As String, _
                                      ByVal iznos As Double, _
-                                     ByRef outPoruka As String) As Boolean
+                                     ByRef outPoruka As String, _
+                                     Optional ByVal doplataID As String = "") As Boolean
     Dim otvoreno As Double
 
     outPoruka = ""
 
-    If Len(Trim$(otkupID)) = 0 Then Exit Function
+    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 Then Exit Function
     If iznos <= 0 Then Exit Function
 
-    otvoreno = BimOtvorenoNaOtkupu(otkupID)
+    otvoreno = BimOtvorenoNaDokumentu(otkupID, doplataID)
     If otvoreno <= BIM_OTVORENO_PRAG Then Exit Function
     If iznos <= otvoreno + BIM_OTVORENO_PRAG Then Exit Function
 
-    outPoruka = "Blok duguje " & Format$(otvoreno, "#,##0.00") & _
+    If Len(Trim$(doplataID)) > 0 Then
+        outPoruka = "Knji" & ChrW(382) & "no odobrenje duguje "
+    Else
+        outPoruka = "Blok duguje "
+    End If
+    outPoruka = outPoruka & Format$(otvoreno, "#,##0.00") & _
                 ", a isplata je " & Format$(iznos, "#,##0.00") & "."
     BimOtkupTraziPotvrdu = True
 End Function
@@ -2703,16 +2737,41 @@ Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
         End If
     Next i
 
-    If n = 0 Then Exit Function
+    ' KNJIZNA ODOBRENJA (F4b doplate) idu POSLE otkupa, istim oblikom: kolona 1
+    ' je DoplataID, prikaz je broj KO i maticna stanica (na njoj se KO isplacuje).
+    ' Kao i blokovi, lista nudi SVAKI aktivan KO, i placen -- kapija zatvorenog
+    ' izbora (BimOtkupBezOtvorenog) je ista.
+    Dim ko As Variant, koRedova As Long, k As Long, maticna As String
+    ko = modDoplata.DoplataKOKooperanta(kooperantID)
+    If IsArray(ko) Then koRedova = UBound(ko, 1)
+
+    If n + koRedova = 0 Then Exit Function
 
     Dim outA() As Variant
     Dim r As Long, c As Long
-    ReDim outA(1 To n, 1 To 3)
+    ReDim outA(1 To n + koRedova, 1 To 3)
     For r = 1 To n
         For c = 1 To 3
             outA(r, c) = buf(r, c)
         Next c
     Next r
+
+    If koRedova > 0 Then
+        maticna = CStr(NzBIM(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, kooperantID, COL_KOOP_STANICA), ""))
+        naziv = maticna
+        If Not stanice Is Nothing Then
+            If stanice.Exists(maticna) Then naziv = CStr(stanice(maticna))
+        End If
+        For k = 1 To koRedova
+            outA(n + k, 1) = CStr(ko(k, 1))
+            outA(n + k, 2) = CStr(ko(k, 2))
+            If Len(naziv) = 0 Then
+                outA(n + k, 3) = CStr(ko(k, 2))
+            Else
+                outA(n + k, 3) = CStr(ko(k, 2)) & "  " & ChrW(183) & "  " & naziv
+            End If
+        Next k
+    End If
 
     GetBlokoviZaBimMapiranje = outA
     Exit Function
@@ -3649,9 +3708,9 @@ EH:
     LogAndReraiseBankaMap SRC
 End Sub
 
-' Blizanac LinkNovacToOtkupStrict za KO: oba reda moraju postojati TACNO jednom,
-' veza se pise po imenu kolone (DoplataID je na kraju tblNovac, SaveNovac je
-' poziciono ne pise).
+' Blizanac LinkNovacToOtkupStrict za KO. Veza se pise na JEDNOM mestu
+' (modNovac.VeziNovacZaKO, isto za izvod, gotovinu i primenu avansa): oba reda
+' moraju postojati tacno jednom, kolona ide po imenu.
 Private Sub LinkNovacToDoplataStrict(ByVal novacID As String, _
                                      ByVal doplataID As String, _
                                      ByVal sourceName As String)
@@ -3660,15 +3719,7 @@ Private Sub LinkNovacToDoplataStrict(ByVal novacID As String, _
     On Error GoTo EH
 
     If Len(Trim$(sourceName)) = 0 Then sourceName = SRC
-
-    Dim rowNov As Long
-    Dim rowDop As Long
-
-    rowNov = RequireSingleRow(TBL_NOVAC, COL_NOV_ID, novacID, sourceName)
-    rowDop = RequireSingleRow(TBL_DOPLATA, COL_DOP_ID, doplataID, sourceName)
-
-    RequireUpdateCell TBL_NOVAC, rowNov, COL_NOV_DOPLATA_ID, doplataID, sourceName
-
+    modNovac.VeziNovacZaKO novacID, doplataID, sourceName
     Exit Sub
 
 EH:

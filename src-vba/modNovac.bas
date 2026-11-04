@@ -1101,6 +1101,53 @@ Public Function IsplataBlokProblem(ByVal otkupID As String, _
     End If
 End Function
 
+' Blizanac IsplataBlokProblem za KNJIZNO ODOBRENJE (F4b doplate): ista kapija
+' za ekran (poruka uz polje) i za pisca (SaveOMUlaz_TX, greska). KO postoji tacno
+' jednom, nije storniran i pripada kooperantu (modDoplata.KOKapija -- jedno
+' pravilo za sve pisce novca nad KO); gotovina ide na MATICNU stanicu kooperanta
+' (DOP-ODL-05), ne na stanicu stavke; iznos ne prelazi TRENUTNI ostatak KO, u
+' cent-domenu. Prazan doplataID nije greska -- KO nije izabran.
+Public Function IsplataKOProblem(ByVal doplataID As String, _
+                                 ByVal kooperantID As String, _
+                                 ByVal stanicaID As String, _
+                                 ByVal iznos As Double) As String
+    Dim maticna As String, preostalo As Double
+
+    doplataID = Trim$(doplataID)
+    If Len(doplataID) = 0 Then Exit Function
+
+    Select Case modDoplata.KOKapija(doplataID, kooperantID)
+        Case ""
+        Case modDoplata.KO_KAPIJA_DUPLI
+            IsplataKOProblem = Poruka("NOVAC_ERR_BLOK_DUPLI") & " " & doplataID
+            Exit Function
+        Case modDoplata.KO_KAPIJA_STORNIRAN
+            IsplataKOProblem = Poruka("NOVAC_ERR_BLOK_STORNIRAN") & " " & doplataID
+            Exit Function
+        Case modDoplata.KO_KAPIJA_TUDJ
+            IsplataKOProblem = Poruka("NOVAC_ERR_BLOK_TUDJ_KOOP") & " " & doplataID
+            Exit Function
+        Case Else
+            IsplataKOProblem = Poruka("NOVAC_ERR_BLOK_NEMA") & " " & doplataID
+            Exit Function
+    End Select
+
+    If Len(Trim$(stanicaID)) > 0 Then
+        maticna = Trim$(NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, Trim$(kooperantID), _
+                                             COL_KOOP_STANICA)))
+        If StrComp(maticna, Trim$(stanicaID), vbTextCompare) <> 0 Then
+            IsplataKOProblem = Poruka("NOVAC_ERR_KO_MATICNA") & " " & maticna
+            Exit Function
+        End If
+    End If
+
+    preostalo = modDoplata.OtvorenoNaKO(doplataID)
+    If ZaokruziNovac(iznos) > preostalo Then
+        IsplataKOProblem = Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA") & " " & _
+                           Format$(preostalo, "#,##0.00")
+    End If
+End Function
+
 ' Prazan fakturaID nije greska: uplata bez izabrane fakture je avans kupca.
 Public Function UplataFakturaProblem(ByVal fakturaID As String, _
                                      ByVal kupacID As String, _
@@ -1618,6 +1665,41 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
     preostalo = otkVrednost - GetUplataForOtkup(otkupID)
     If preostalo <= 0 Then Exit Sub
 
+    ' Petlja vezivanja je ZAJEDNICKA za otkup i KO (VeziSlobodanAvans): koji
+    ' avans je slobodan, kojim redom se trosi i kako se deli -- jedno pravilo.
+    VeziSlobodanAvans data, kooperantID, COL_NOV_OTKUP_ID, otkupID, preostalo, SRC, appliedAmount
+End Sub
+
+' MOTOR VEZIVANJA SLOBODNOG AVANSA za jedan dokument -- otkup (OtkupID) ili KO
+' (DoplataID, F4b doplate). Izdvojen iz ApplyAvansToOtkup bez promene pravila:
+' redovi idu redom tabele, slobodan je samo JeSlobodanAvansKooperanta, red manji
+' od ostatka se veze ceo, veci se deli (ostatak ostaje avans, deo postaje nov
+' VirmanAvansKoop vezan za dokument). data je tblNovac BEZ storniranih, kakav je
+' pozivalac procitao pre svojih kapija; preostalo je TRENUTNI ostatak dokumenta.
+Private Sub VeziSlobodanAvans(ByRef data As Variant, ByVal kooperantID As String, _
+                              ByVal ciljKolona As String, ByVal ciljID As String, _
+                              ByVal preostalo As Double, ByVal SRC As String, _
+                              ByRef appliedAmount As Double)
+    Dim colID As Long, colKoopID As Long, colTip As Long
+    Dim colIsplata As Long, colOtkID As Long, colDop As Long
+    Dim colBrojDok As Long, colDatum As Long, colPartner As Long
+    Dim colPartnerID As Long, colOMID As Long, colNapomenaO As Long
+
+    If preostalo <= 0 Then Exit Sub
+    colID = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, SRC)
+    colKoopID = RequireColumnIndex(TBL_NOVAC, COL_NOV_KOOP_ID, SRC)
+    colTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
+    colIsplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+    colOtkID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    colBrojDok = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, SRC)
+    colDatum = RequireColumnIndex(TBL_NOVAC, COL_NOV_DATUM, SRC)
+    colPartner = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER, SRC)
+    colPartnerID = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID, SRC)
+    colOMID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OM_ID, SRC)
+    colNapomenaO = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
+    ' Isplata KO nije slobodan avans (v. JeSlobodanAvansKooperanta).
+    colDop = GetColumnIndex(TBL_NOVAC, COL_NOV_DOPLATA_ID)
+
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If preostalo <= 0 Then Exit For
@@ -1643,7 +1725,7 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
                         "Avans row not found for NovacID=" & CStr(data(i, colID))
             End If
 
-            RequireUpdateCell TBL_NOVAC, avansRows(1), COL_NOV_OTKUP_ID, otkupID, SRC
+            RequireUpdateCell TBL_NOVAC, avansRows(1), ciljKolona, ciljID, SRC
 
         Else
             applyAmt = preostalo
@@ -1672,11 +1754,16 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
                 0, _
                 applyAmt, _
                 BuildAvansSplitNapomena(CStr(data(i, colNapomenaO)), "Avans raspodela"), _
-                otkupID)
+                IIf(ciljKolona = COL_NOV_OTKUP_ID, ciljID, ""))
 
             If Len(Trim$(splitNovacID)) = 0 Then
                 Err.Raise vbObjectError + 1029, SRC, _
-                        "Failed to create split avans row for OtkupID=" & otkupID
+                        "Failed to create split avans row for " & ciljKolona & "=" & ciljID
+            End If
+            ' SaveNovac pise poziciono samo OtkupID; svaka druga veza (DoplataID,
+            ' kolona na kraju tblNovac) ide po imenu, na novi red.
+            If ciljKolona <> COL_NOV_OTKUP_ID Then
+                VeziNovacZaKO splitNovacID, ciljID, SRC
             End If
         End If
 
@@ -1737,6 +1824,82 @@ EH:
                 " Err=" & CStr(errNum) & _
                 " Desc=" & errDesc
 End Function
+' PRIMENA SLOBODNOG AVANSA NA KNJIZNO ODOBRENJE (F4b doplate). Blizanac
+' ApplyAvansToOtkup: ista petlja (VeziSlobodanAvans), druga veza (DoplataID) i
+' druga kapija -- KO mora postojati tacno jednom, biti aktivan i pripadati
+' kooperantu (modDoplata.KOKapija). Za razliku od otkupa, nepostojeci KO je
+' GRESKA, ne tih izlaz: radnja nad redom koji ne postoji nije "nema sta da se
+' veze". Stvarno vezan iznos ide kroz appliedAmount (RF-02).
+Public Sub ApplyAvansToKO(ByVal kooperantID As String, ByVal doplataID As String, _
+                          Optional ByRef appliedAmount As Double)
+    Const SRC As String = "ApplyAvansToKO"
+    appliedAmount = 0
+
+    Select Case modDoplata.KOKapija(doplataID, kooperantID)
+        Case ""
+        Case modDoplata.KO_KAPIJA_STORNIRAN
+            Err.Raise vbObjectError + 1048, SRC, _
+                      "Avans se ne moze primeniti na stornirano knjizno odobrenje. DoplataID=" & doplataID
+        Case modDoplata.KO_KAPIJA_TUDJ
+            Err.Raise vbObjectError + 1049, SRC, _
+                      "Avans se ne moze primeniti na knjizno odobrenje drugog kooperanta. " & _
+                      "DoplataID=" & doplataID & "; TrazeniKooperant=" & kooperantID
+        Case Else
+            Err.Raise vbObjectError + 1047, SRC, _
+                      "Knjizno odobrenje nije jednoznacno pronadjeno. DoplataID=" & doplataID
+    End Select
+
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Sub
+    data = ExcludeStornirano(data, TBL_NOVAC)
+    If IsEmpty(data) Then Exit Sub
+
+    VeziSlobodanAvans data, kooperantID, COL_NOV_DOPLATA_ID, Trim$(doplataID), _
+                      modDoplata.OtvorenoNaKO(doplataID), SRC, appliedAmount
+End Sub
+
+Public Function ApplyAvansToKO_TX(ByVal kooperantID As String, _
+                                  ByVal doplataID As String, _
+                                  Optional ByRef appliedAmount As Double) As Boolean
+    Const SRC As String = "ApplyAvansToKO_TX"
+    Dim tx As clsTransaction
+    Dim errNum As Long, errDesc As String, errSrc As String
+    appliedAmount = 0
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    If Trim$(kooperantID) = "" Or Trim$(doplataID) = "" Then
+        Err.Raise vbObjectError + 1047, SRC, "KooperantID i DoplataID su obavezni."
+    End If
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_NOVAC
+
+    ApplyAvansToKO kooperantID, doplataID, appliedAmount
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    ApplyAvansToKO_TX = True
+    Exit Function
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    LogErr SRC
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    ApplyAvansToKO_TX = False
+    appliedAmount = 0
+    Debug.Print SRC & " failed. Source=" & errSrc & " Err=" & CStr(errNum) & " Desc=" & errDesc
+End Function
+
 ' ============================================================
 ' PRENOS NOVCA NA NASLEDNIKA PRI ISPRAVCI (put A)
 ' ============================================================
@@ -1989,6 +2152,38 @@ EH:
                 " Err=" & CStr(errNum) & _
                 " Desc=" & errDesc
 End Function
+
+' VEZA REDA NOVCA ZA KO (F4b doplate) -- JEDINO mesto koje pise DoplataID na
+' postojeci red. Zovu ga pisci novca nad KO: izvod (modBankaMapiranje), gotovina
+' (modDokumenta.SaveOMUlaz_TX) i primena avansa (VeziSlobodanAvans). Oba reda
+' moraju postojati TACNO jednom: veza na nepostojeci ili dupliran dokument je
+' greska, ne prazna referenca. Kolona je na KRAJU tblNovac, pa ide po imenu.
+Public Sub VeziNovacZaKO(ByVal novacID As String, ByVal doplataID As String, _
+                         ByVal sourceName As String)
+    Const SRC As String = "VeziNovacZaKO"
+    Dim rows As Collection
+    If Len(Trim$(sourceName)) = 0 Then sourceName = SRC
+
+    Set rows = FindRows(TBL_DOPLATA, COL_DOP_ID, Trim$(doplataID))
+    If rows Is Nothing Then
+        Err.Raise vbObjectError + 1047, sourceName, "Knjizno odobrenje ne postoji: " & doplataID
+    End If
+    If rows.count <> 1 Then
+        Err.Raise vbObjectError + 1047, sourceName, _
+                  "Knjizno odobrenje nije jednoznacno (" & CStr(rows.count) & " redova): " & doplataID
+    End If
+
+    Set rows = FindRows(TBL_NOVAC, COL_NOV_ID, Trim$(novacID))
+    If rows Is Nothing Then
+        Err.Raise vbObjectError + 1027, sourceName, "Red novca ne postoji: " & novacID
+    End If
+    If rows.count <> 1 Then
+        Err.Raise vbObjectError + 1027, sourceName, _
+                  "Red novca nije jednoznacan (" & CStr(rows.count) & " redova): " & novacID
+    End If
+
+    RequireUpdateCell TBL_NOVAC, rows(1), COL_NOV_DOPLATA_ID, Trim$(doplataID), sourceName
+End Sub
 
 ' ODVEZIVANJE NOVCA OD STORNIRANOG KO (DOP-05). Blizanac ResetNovacOtkupLink:
 ' novac se NE stornira -- stvarno je isplacen -- nego mu se skine veza za

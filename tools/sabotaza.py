@@ -3931,7 +3931,7 @@ SABOTAZE = {
     # Rucni izbor takvog bloka mora da stane: operater je rekao KOJI dug placa.
     "banka-uvoz-placen-blok-postaje-avans": (
         "modBankaMapiranje.bas",
-        "    BimOtkupBezOtvorenog = (BimOtvorenoNaOtkupu(otkupID) <= BIM_OTVORENO_PRAG)\n",
+        "    BimOtkupBezOtvorenog = (BimOtvorenoNaDokumentu(otkupID, doplataID) <= BIM_OTVORENO_PRAG)\n",
         "    BimOtkupBezOtvorenog = False   ' SABOTAZA: placen blok prolazi\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
         "potpuno placen blok NEMA sta da plati",
@@ -11363,14 +11363,16 @@ SABOTAZE = {
         "T_Doplata_OtvorenoKOUNalozima",
         "nalozi za banku nose otvoreno KO pod kljucem bloka",
     ),
-    # Avans se nudi i na KO: motor ga "veze" na otkup koji ne postoji, a potvrda
-    # obecava vezivanje koje se nikad ne desi.
-    "dop-nalog-avans-na-ko": (
+    # Avans na KO ide motorom otkupa: ApplyAvansToOtkup ne nalazi otkup sa tim
+    # ID-em i tiho ne veze nista, a KO ostaje otvoren uz "bez promene".
+    "dop-nalog-avans-ko-ide-na-otkup": (
         "modScrBankaNalozi.bas",
-        "    If Len(blk.doplataID) > 0 Then Exit Function\n",
-        "    ' SABOTAZA: i KO je kandidat za avans\n",
+        "    If jeKO Then\n"
+        "        PrimeniAvansNaDokument = modNovac.ApplyAvansToKO_TX(koopID, iD, outIznos)\n",
+        "    If False Then   ' SABOTAZA: avans na KO ide motorom otkupa\n"
+        "        PrimeniAvansNaDokument = modNovac.ApplyAvansToKO_TX(koopID, iD, outIznos)\n",
         "T_Doplata_OtvorenoKOUNalozima",
-        "avans se ne primenjuje na KO: KO nije kandidat",
+        "avans se primenjuje i na KO iz liste naloga",
     ),
     # Poziv na broj KO se u planu cita kao obican blok: pisac tada trazi OTKUP po
     # tom broju, ne nalazi ga i ceo iznos knjizi kao avans -- KO ostaje otvoren.
@@ -11407,6 +11409,62 @@ SABOTAZE = {
     ),
     # Storno KO ostavlja vezu: isplata storniranog KO nije ni dug ni avans, pa je
     # novac kooperanta nevidljiv svakoj masineriji koja bira sta se placa.
+    # F4b -- avans na KO, rucno mapiranje, gotovina.
+    # Deljen avans: nov red se upise ali bez veze DoplataID -- deo avansa nestane
+    # (nije ni slobodan ni na KO), a KO ostane otvoren.
+    "dop-avans-split-bez-veze": (
+        "modNovac.bas",
+        "            If ciljKolona <> COL_NOV_OTKUP_ID Then\n"
+        "                VeziNovacZaKO splitNovacID, ciljID, SRC\n",
+        "            If False Then   ' SABOTAZA: deo avansa ostaje bez veze\n"
+        "                VeziNovacZaKO splitNovacID, ciljID, SRC\n",
+        "T_Doplata_AvansNaKO",
+        "deljen avans: deo do ostatka KO je vezan za KO, ostatak je slobodan",
+    ),
+    # Kapija KO ne gleda vlasnika: avans, izvod ili gotovina drugog kooperanta
+    # zatvaraju tudji KO.
+    "dop-ko-kapija-tudji": (
+        "modDoplata.bas",
+        "    If StrComp(Trim$(NzToText(d(r, cKoop))), Trim$(kooperantID), vbTextCompare) <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: KO prihvata tudjeg kooperanta\n",
+        "T_Doplata_AvansNaKO",
+        "avans tudjeg kooperanta se ne veze na KO",
+    ),
+    # Lista cilja rucnog mapiranja ne nudi KO: operater ne moze da zatvori KO
+    # stavkom izvoda koju automatika nije prepoznala.
+    "dop-rucno-ko-van-liste": (
+        "modBankaMapiranje.bas",
+        "    If koRedova > 0 Then\n",
+        "    If False Then   ' SABOTAZA: lista cilja bez KO\n",
+        "T_Doplata_IzvodRucnoNaKO",
+        "lista cilja rucnog mapiranja nudi KO kooperanta, sa brojem KO",
+    ),
+    # Izabran KO se ne prepoznaje: ekran ga salje putem otkupa, pisac ne nalazi
+    # otkup sa tim ID-em i rucno mapiranje pada ili ide u avans.
+    "dop-rucno-ko-izabran-ide-na-otkup": (
+        "modBankaMapiranje.bas",
+        "        If modDoplata.JeKO(izabranID) Then BimEfektivniKO = Trim$(izabranID)\n",
+        "        ' SABOTAZA: izabran KO se ne prepoznaje\n",
+        "T_Doplata_IzvodRucnoNaKO",
+        "izabran KO je cilj rucnog mapiranja; prazan izbor uzima poziv na broj KO",
+    ),
+    # Gotovina za KO prolazi na bilo kojoj stanici: saldo tog OM-a nosi isplatu
+    # koju KO ne isplacuje (DOP-ODL-05).
+    "dop-gotovina-tudja-stanica": (
+        "modNovac.bas",
+        "        If StrComp(maticna, Trim$(stanicaID), vbTextCompare) <> 0 Then\n",
+        "        If False Then   ' SABOTAZA: gotovina za KO na bilo kojoj stanici\n",
+        "T_Doplata_GotovinaNaMaticnoj",
+        "gotovina za KO samo na maticnoj stanici kooperanta",
+    ),
+    # Gotovinska isplata KO se upise bez veze: novac dat, KO i dalje otvoren.
+    "dop-gotovina-bez-veze": (
+        "modDokumenta.bas",
+        "            modNovac.VeziNovacZaKO novacID, Trim$(doplataID), \"SaveOMUlaz_TX\"\n",
+        "            ' SABOTAZA: gotovina za KO bez veze\n",
+        "T_Doplata_GotovinaNaMaticnoj",
+        "gotovinska isplata KO je vezana za KO",
+    ),
     "dop-storno-ne-odvezuje": (
         "modStorno.bas",
         "    modNovac.ResetNovacDoplataLink Trim$(doplataID)\n",

@@ -7473,7 +7473,7 @@ End Function
 ' otvorenih blokova, pa se dva ekrana ne mogu raziici.
 Private Sub FillOpenBlokovi(frm As Object)
     Dim CB As MSForms.ComboBox, koopID As String, o As Variant, i As Long
-    Dim omID As String, n As Long
+    Dim omID As String, n As Long, ko As Variant, nO As Long, nKO As Long
     On Error GoTo EH
     Set CB = frm.Controls("zForm").Controls("fgBlok").Controls("fgBlokT")
     CB.Clear
@@ -7490,18 +7490,25 @@ Private Sub FillOpenBlokovi(frm As Object)
     ' "kooperant nema otvorenih blokova" i isplata bi tiho postala AVANS.
     RequireTable TBL_OTKUP, "modOtkupUI.FillOpenBlokovi"
     o = GetOpenOtkupi(koopID)
+    ' Otvorena KNJIZNA ODOBRENJA istog kooperanta (F4b doplate, DOP-ODL-05): ista
+    ' lista, isti oblik (ID u nizu, ostatak u ploci). KO se isplacuje na MATICNOJ
+    ' stanici, pa se nudi samo kad je ona aktivno OM (kolona 5 citaoca) -- kapija
+    ' za isti slucaj stoji i u pisacu (modNovac.IsplataKOProblem).
+    ko = modDoplata.OtvoreniKORedovi(koopID)
+    If IsArray(o) Then nO = UBound(o, 1)
+    If IsArray(ko) Then nKO = UBound(ko, 1)
     ' Prazno je ISTINA -- ali samo zato sto smo iznad utvrdili da tabela POSTOJI.
-    If IsEmpty(o) Then Exit Sub
+    If nO + nKO = 0 Then Exit Sub
     ' BLOKOVI SE SUZAVAJU NA AKTIVNO OTKUPNO MESTO. GetOpenOtkupi vraca StanicaID
     ' u sedmoj koloni, a red novca se knjizi na aktivno OM (SaveNovac omID) - bez
     ' ovog filtera bi lista nudila blok sa OM-B dok je u kontekstu OM-A, pa bi
     ' razduzenje tog bloka bilo proknjizeno na pogresnu stanicu. Kapija za isti
     ' slucaj postoji i u core-u (SaveOMUlaz_TX); ovo je da se ne ponudi.
     omID = SelectedStanicaID(frm)
-    ReDim mBlokIDs(1 To UBound(o, 1))
-    ReDim mBlokRest(1 To UBound(o, 1))
+    ReDim mBlokIDs(1 To nO + nKO)
+    ReDim mBlokRest(1 To nO + nKO)
     n = 0
-    For i = 1 To UBound(o, 1)
+    For i = 1 To nO
         If Len(omID) = 0 Or StrComp(CStr(o(i, 7)), omID, vbTextCompare) = 0 Then
             n = n + 1
             mBlokIDs(n) = CStr(o(i, 2))
@@ -7510,12 +7517,21 @@ Private Sub FillOpenBlokovi(frm As Object)
                        FmtBroj(CDbl(o(i, 5)), 0) & " / " & FmtBroj(CDbl(o(i, 3)), 0)
         End If
     Next i
+    For i = 1 To nKO
+        If Len(omID) = 0 Or StrComp(CStr(ko(i, 5)), omID, vbTextCompare) = 0 Then
+            n = n + 1
+            mBlokIDs(n) = CStr(ko(i, 1))
+            mBlokRest(n) = CDbl(ko(i, 8))
+            CB.AddItem CStr(ko(i, 2)) & "   " & ChrW(183) & "   " & _
+                       FmtBroj(CDbl(ko(i, 8)), 0) & " / " & FmtBroj(CDbl(ko(i, 6)), 0)
+        End If
+    Next i
     ' Bez ijednog bloka sa ovog OM niz mora ostati PRAZAN, a ne pun praznih
     ' mesta: BlokID indeksira po rednom broju stavke u combo-u.
     If n = 0 Then
         mBlokIDs = Empty
         mBlokRest = Empty
-    ElseIf n < UBound(o, 1) Then
+    ElseIf n < nO + nKO Then
         ReDim Preserve mBlokIDs(1 To n)
         ReDim Preserve mBlokRest(1 To n)
     End If

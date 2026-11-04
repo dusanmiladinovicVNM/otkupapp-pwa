@@ -8979,7 +8979,8 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
                               ByVal kooperantID As String, _
                               ByVal primalacDisplay As String, _
                               ByVal otkupID As String, _
-                              ByVal tipNovca As String) As Boolean
+                              ByVal tipNovca As String, _
+                              Optional ByVal doplataID As String = "") As Boolean
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -8988,6 +8989,13 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
     If novac <= 0 Then
         Err.Raise vbObjectError + 1501, "SaveOMUlaz_TX", _
                   Poruka("DOK_ERR_NEMA_NOVCA")
+    End If
+    ' doplataID (F4b doplate): isplata KNJIZNOG ODOBRENJA umesto bloka. Dokument
+    ' je JEDAN od dva -- veza bi inace isti dinar pripisala i otkupu i KO.
+    If Len(Trim$(doplataID)) > 0 And Len(Trim$(otkupID)) > 0 Then
+        Err.Raise vbObjectError + 1514, "SaveOMUlaz_TX", _
+                  "Isplata se vezuje za blok ILI za knjizno odobrenje, ne za oba. " & _
+                  "OtkupID=" & otkupID & "; DoplataID=" & doplataID
     End If
 
     tx.BeginTx
@@ -9006,6 +9014,14 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
         blokErr = IsplataBlokProblem(otkupID, kooperantID, stanicaID, novac)
         If Len(blokErr) > 0 Then
             Err.Raise vbObjectError + 1512, "SaveOMUlaz_TX", blokErr
+        End If
+        ' Ista kapija za KO, nad stanjem SADA (modNovac.IsplataKOProblem): KO
+        ' aktivan i kooperantov, stanica je njegova MATICNA, iznos do ostatka.
+        If Len(Trim$(doplataID)) > 0 Then
+            blokErr = modNovac.IsplataKOProblem(doplataID, kooperantID, stanicaID, novac)
+            If Len(blokErr) > 0 Then
+                Err.Raise vbObjectError + 1514, "SaveOMUlaz_TX", blokErr
+            End If
         End If
 
         ' ISTA KAPIJA ZA AVANS OTKUPNOG MESTA. Blok i faktura su vec bili
@@ -9046,6 +9062,12 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
         If novacID = "" Then
             Err.Raise vbObjectError + 1502, "SaveOMUlaz_TX", _
                       "SaveNovac fehlgeschlagen"
+        End If
+
+        ' Veza za KO ide po imenu, kod vlasnika tabele (SaveNovac je poziciono
+        ' ne pise -- DoplataID je na kraju tblNovac).
+        If Len(Trim$(doplataID)) > 0 Then
+            modNovac.VeziNovacZaKO novacID, Trim$(doplataID), "SaveOMUlaz_TX"
         End If
 
     End If

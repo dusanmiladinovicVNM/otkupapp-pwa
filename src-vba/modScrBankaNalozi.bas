@@ -672,13 +672,6 @@ Private Function PrimeniAvans(ByVal red As Long) As Boolean
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_DVOSMISLEN"), True
         Exit Function
     End If
-    ' KO je u listi pod kljucem bloka (F4 doplate), ali motor avansa veze samo
-    ' na otkup -- odbija se PRE potvrde, da pitanje ne obeca vezivanje.
-    If modDoplata.JeKO(iD) Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_AVANS_KO"), True
-        Exit Function
-    End If
-
     avans = RedD(red, BN_KOL_AVANS)
     otvoreno = RedD(red, BN_KOL_OTVORENO)
     If avans <= 0 Then
@@ -699,7 +692,7 @@ Private Function PrimeniAvans(ByVal red As Long) As Boolean
               Poruka("OTKUI_LBL_BN_AVANS_VEZUJE") & " " & Format$(vezuje, "#,##0.00"), _
               vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
 
-    If Not ApplyAvansToOtkup_TX(koopID, iD, primenjeno) Then
+    If Not PrimeniAvansNaDokument(koopID, iD, modDoplata.JeKO(iD), primenjeno) Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_AVANS"), True
         Exit Function
     End If
@@ -739,10 +732,11 @@ End Function
 ' slobodnog avansa, blok vise nije otvoren), pa je dokaz da se nesto desilo
 ' iskljucivo proknjizen iznos iz ByRef parametra (RF-02 / AUD-010).
 Private Function AvansJedan(ByVal koopID As String, ByVal otkupID As String, _
-                            ByRef outIznos As Double) As Long
+                            ByRef outIznos As Double, _
+                            Optional ByVal jeKO As Boolean = False) As Long
     On Error GoTo EH
     outIznos = 0
-    If Not ApplyAvansToOtkup_TX(koopID, otkupID, outIznos) Then
+    If Not PrimeniAvansNaDokument(koopID, otkupID, jeKO, outIznos) Then
         AvansJedan = -1
         Exit Function
     End If
@@ -773,12 +767,24 @@ EH:
     LogErr "modScrBankaNalozi.BnAvansKandidata"
 End Function
 
-' Blok koji moze da primi avans: kooperant ima slobodan avans, blok duguje, i
-' blok JESTE otkup -- KO u listi naloga (F4 doplate) motor avansa ne veze. Jedna
+' Blok koji moze da primi avans: kooperant ima slobodan avans i blok duguje.
+' Vazi i za KO (F4b doplate) -- motor je isti, samo je veza druga. Jedna
 ' definicija za potvrdu (BnAvansKandidata) i za motor (BnAvansNadIDovima).
 Private Function AvansKandidat(ByVal blk As clsBlokIsplata) As Boolean
-    If Len(blk.doplataID) > 0 Then Exit Function
     AvansKandidat = (blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0)
+End Function
+
+' Primena avansa na JEDAN dokument liste: otkupni blok ili KO. Dokument bira
+' razlikovac (clsBlokIsplata.doplataID, odnosno modDoplata.JeKO za red mreze),
+' a motor je u oba slucaja modNovac.VeziSlobodanAvans. Stvarno vezan iznos ide
+' kroz outIznos -- True sam po sebi ne znaci da je nesto vezano (RF-02).
+Private Function PrimeniAvansNaDokument(ByVal koopID As String, ByVal iD As String, _
+                                        ByVal jeKO As Boolean, ByRef outIznos As Double) As Boolean
+    If jeKO Then
+        PrimeniAvansNaDokument = modNovac.ApplyAvansToKO_TX(koopID, iD, outIznos)
+    Else
+        PrimeniAvansNaDokument = ApplyAvansToOtkup_TX(koopID, iD, outIznos)
+    End If
 End Function
 
 ' MOTOR batch-a: veze avans na svaki blok iz zadatog skupa OtkupID-jeva. Vraca
@@ -814,7 +820,7 @@ Public Function BnAvansNadIDovima(ByVal ids As Object, ByRef outOk As Long, _
         If ids.Exists(blk.otkupID) Then
             If AvansKandidat(blk) Then
                 n = n + 1
-                ishod = AvansJedan(blk.kooperantID, blk.otkupID, iznos)
+                ishod = AvansJedan(blk.kooperantID, blk.otkupID, iznos, Len(blk.doplataID) > 0)
                 Select Case ishod
                     Case 1
                         outOk = outOk + 1

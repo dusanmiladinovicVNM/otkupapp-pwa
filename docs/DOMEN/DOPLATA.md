@@ -2,12 +2,11 @@
 
 > **Status (04.11.2026):** odluke operatera u §2 su donete, struktura iz §3 je
 > **potvrđena**. **F1 (šema, pisac, storno), F2 (kartica, Saldo OM, PWA), F3
-> (ekran, papir KO, storno sa ekrana, signal osnovice) i F4 — bankarski deo
-> isplate (nalozi, izvod po broju KO, odvezivanje pri stornu) — su u kodu.**
-> Statičke provere zelene, ponašanje **NEVERIFIKOVANO** dok `run_vba` ne prođe na
-> Windows + Excel (§7); F2–F4 su napisani pre nego što je F1 pušten na Excelu.
-> Nije urađeno (F4b, §7): gotovinska isplata KO, ručno mapiranje izvoda na KO,
-> primena avansa na KO. Otvoreno: §8.
+> (ekran, papir KO, storno sa ekrana, signal osnovice), F4 (nalozi, izvod po
+> broju KO, odvezivanje pri stornu) i F4b (gotovina na matičnoj stanici, ručno
+> mapiranje izvoda na KO, primena avansa na KO) su u kodu.** Statičke provere
+> zelene, ponašanje **NEVERIFIKOVANO** dok `run_vba` ne prođe na Windows + Excel
+> (§7); F2–F4b su napisani pre nego što je F1 pušten na Excelu. Otvoreno: §8.
 
 ## 1) Šta je doplata
 
@@ -95,7 +94,8 @@ koji u jednoj transakciji pravi po jedan KO za svakog kooperanta sa kg > 0.
 | **DOP-06** | Jedan KO po kooperantu po obračunu; brojevi uzastopni u nizu godine. | `modDoplata.KnjiziPlan` · 310 |
 | **DOP-07** | Doplata je **zaduženje u korist kooperanta** svuda gde se vidi saldo: na kartici je jedan red po KO na datum knjiženja (i u početnom stanju), a u Saldo OM i PWA izvozu saldo = vrednost + doplata − isplaćeno − agro. U Saldo OM stavka KO pripada stanici na kojoj je roba predata, a period je po datumu knjiženja. | `modDoplata.DoplataIznosPoKooperantu` / `DoplataKOKooperanta`, `modIzvestaj`, `modStammdatenSync.SaldoOMDetailRedovi` · 315, 316, 317 |
 | **DOP-09** | **Isplata KO nije slobodan avans.** Slobodan avans = avansni tip (`VirmanAvansKoop`/`VirmanFirmaKoop`) bez `OtkupID`-a **i bez `DoplataID`-a** — jedan predikat za sva tri čitača avansa (primena na blok, zbir raspoloživog, lista naloga). Bez toga bi primena avansa povukla isplatu KO na sledeći otkupni blok i isti dinar platio dvaput. | `modNovac.JeSlobodanAvansKooperanta` · 323, 324 |
-| **DOP-10** | KO se isplaćuje kao **obaveza po dokumentu**, kao otkupni blok: otvoreno = zbir stavki aktivnog KO − aktivan novac vezan `DoplataID`-em, u cent-domenu. Nalozi ga nose pod ključem bloka (`DoplataID`) sa **brojem KO kao pozivom na broj**; izvod sa tim pozivom je jak ključ na taj KO (plan `BIM_CILJ_DOPLATA`) i knjiži se istim piscem kao blok (`MapBankaImportAsKooperantBlockCore`, grana `doplataID`): KO dobija najviše otvoreno, višak je avans, plaćen KO ceo iznos šalje u avans. Avans se **ne** primenjuje na KO (samo na otkupni blok). | `modDoplata.OtvoreniKORedovi` / `OtvorenoNaKO` / `KOPoPozivu`, `modBankaExportPregled.BuildBlokIsplataList`, `modBankaMapiranje` · 322, 323 |
+| **DOP-10** | KO se isplaćuje kao **obaveza po dokumentu**, kao otkupni blok: otvoreno = zbir stavki aktivnog KO − aktivan novac vezan `DoplataID`-em, u cent-domenu. Nalozi ga nose pod ključem bloka (`DoplataID`) sa **brojem KO kao pozivom na broj**; izvod sa tim pozivom je jak ključ na taj KO (plan `BIM_CILJ_DOPLATA`) i knjiži se istim piscem kao blok (`MapBankaImportAsKooperantBlockCore`, grana `doplataID`): KO dobija najviše otvoreno, višak je avans, plaćen KO ceo iznos šalje u avans. Slobodan avans se na KO primenjuje **istim motorom** kao na blok (`VeziSlobodanAvans`). | `modDoplata.OtvoreniKORedovi` / `OtvorenoNaKO` / `KOPoPozivu`, `modBankaExportPregled.BuildBlokIsplataList`, `modBankaMapiranje` · 322, 323, 325 |
+| **DOP-11** | **Jedna kapija i jedna veza za sve pisce novca nad KO** — izvod (auto i ručno), gotovina, primena avansa: KO postoji tačno jednom, aktivan je i kooperantov (`modDoplata.KOKapija`), a veza se piše samo kroz `modNovac.VeziNovacZaKO`. Gotovina ide **samo na matičnu stanicu** kooperanta i najviše do trenutnog ostatka (`IsplataKOProblem`, u modulu unosa i u piscu). Izabran plaćen KO u ručnom mapiranju se ne knjiži (protivrečnost, ne avans). | `KOKapija`, `VeziNovacZaKO`, `modNovac.IsplataKOProblem`, `modDokumenta.SaveOMUlaz_TX`, `modBankaMapiranje.MapBankaImportAsKooperantBlockCore` · 325, 326, 327 |
 | **DOP-08** | Ekran nema svoju računicu: stopa prolazi istu proveru kao pisac (`DoplataStopeProblem` = `UcitajStope`), pregled je isti plan koji pisac izvršava (`DoplataPlan`), a upis i storno idu samo kroz `KnjiziDoplatu_TX` / `modStorno`. Svako pitanje (knjiženje, ponavljanje, storno) ide kroz `Pitaj` — u test režimu beleži i odgovara „Ne" (KI-015). | `modScrDoplata` · 319, 320 |
 
 **Prikaz i pisac dele jedan plan** (obrazac `BimAutoPlan`): `DoplataPlan` računa
@@ -183,13 +183,28 @@ Storno, PWA `pregled.js`.
    - `modTest` 322–324, sabotaže `dop-nalozi-*`, `dop-nalog-*`, `dop-plan-ko-*`,
      `dop-izvod-*`, `dop-avans-*`, `dop-storno-ne-odvezuje`; dve zatečene
      sabotaže banke dobile su nova sidra (isti kod, ista tvrdnja).
-5. **F4b — nije urađeno.** (a) **Gotovinska isplata KO na matičnoj stanici**
-   (DOP-ODL-05): ekran isplate (`modNovacUnos.IsplataValidiraj`, kapija
-   `IsplataBlokProblem`) danas bira samo otkupni blok. (b) **Ručno mapiranje
-   stavke izvoda na KO** (ekran Uvoz izvoda): kad automatika ne prepozna poziv,
-   operater danas može samo na blok ili avans. (c) **Primena avansa na KO**
-   (zatvaranje KO već isplaćenim avansom). Do tada: KO koji banka ne vrati sa
-   pozivom „KO-…" ostaje otvoren, a novac ide u avans kooperanta.
+5. **F4b — gotovina, ručno mapiranje, avans na KO. U KODU (04.11.2026).**
+   - Kapija `modDoplata.KOKapija` (`KO_KAPIJA_*`) i veza `modNovac.VeziNovacZaKO`
+     — jedno pravilo za sve pisce (DOP-11); `PotvrdiKOZaKooperanta` i
+     `LinkNovacToDoplataStrict` u banci ih samo prevode / zovu.
+   - **(c) Avans na KO:** petlja `ApplyAvansToOtkup` izdvojena u
+     `modNovac.VeziSlobodanAvans` bez promene pravila; `ApplyAvansToKO(_TX)` je
+     drugi pozivalac (deljen avans: nov red vezan `VeziNovacZaKO`). Nalozi:
+     „Primeni avans" (red i korpa) bira motor po razlikovaču
+     (`PrimeniAvansNaDokument`).
+   - **(b) Ručno mapiranje izvoda:** lista cilja (`GetBlokoviZaBimMapiranje`) posle
+     otkupa nudi KO kooperanta; `BimEfektivniKO` (izabran KO, ili prazan izbor uz
+     poziv KO); `BimOtvorenoNaDokumentu` hrani kapiju zatvorenog izbora, pitanje o
+     višku i tekst podele; `MapBankaImportAsKooperantBlockManual_TX` nosi
+     `doplataID` do istog pisca.
+   - **(a) Gotovina (F5):** polje „Otvoreni blok" nudi otvorena KO kad je aktivno
+     OM matična stanica (`modOtkupUI.FillOpenBlokovi`); `IsplataValidiraj`
+     prebacuje izabran KO u `doplataID`; kapija `modNovac.IsplataKOProblem` u
+     modulu unosa i u `SaveOMUlaz_TX` (nov opcioni parametar `doplataID`).
+   - `modTest` 325–327; sabotaže `dop-avans-split-*`, `dop-ko-kapija-*`,
+     `dop-rucno-*`, `dop-gotovina-*`, `dop-nalog-avans-ko-ide-na-otkup` (zamenila
+     `dop-nalog-avans-na-ko`); sidro `banka-uvoz-placen-blok-postaje-avans` prati
+     zajednički `BimOtvorenoNaDokumentu`.
 
 **Spuštanje je serijsko:** F1 i F4 diraju centralne registre (`schema.json`,
 `modSchemaGuard`, `WRITE_OWNERSHIP.json`, brojevi testova u `modTest`). Na dan
@@ -220,6 +235,11 @@ od 309 nadalje sudara se sa ovom.
    e-banking prihvata slova u polju poziva na broj i da li izvod vraća poziv
    netaknut. Ako banka slova odbaci, uvoz izvoda KO ne prepozna: plan ide na
    kooperanta po računu, pisac ne nađe otkup po tom broju i ceo iznos knjiži kao
-   **avans** — ne pogrešno na tuđi dokument, ali KO ostaje otvoren dok F4b(b/c)
-   ne postoji. Proveriti na prvom pravom nalogu (uvesti CSV u e-banking, pa
-   pogledati izvod).
+   **avans** — ne pogrešno na tuđi dokument; KO se tada zatvara ručno (Uvoz izvoda
+   → kooperant → izbor KO) ili primenom avansa na KO u nalozima. Proveriti na
+   prvom pravom nalogu (uvesti CSV u e-banking, pa pogledati izvod).
+7. **Gotovina i Saldo OM.** Gotovinska isplata KO knjiži se na matičnu stanicu
+   (DOP-ODL-05), a stavke KO pripadaju stanici na kojoj je roba predata. Kooperant
+   koji je predavao na dve stanice zato u Saldo OM ima doplatu na obe, a isplatu
+   samo na matičnoj — zbir po kooperantu je tačan, raspored po stanici nije
+   simetričan. Posledica odluke, ne kvar; navedeno da ne iznenadi.

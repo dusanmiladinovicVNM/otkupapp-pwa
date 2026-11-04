@@ -54,6 +54,14 @@ Private Const PL_BROJ_OTKUPA As Long = 9
 Private Const PL_KLJUC As Long = 10
 Private Const PL_KOLONA As Long = 10
 
+' Ishod kapije KO (KOKapija). Prazno = KO postoji TACNO jednom, aktivan je i
+' pripada kooperantu. Svaki pisac koji vezuje novac za KO (izvod, gotovina,
+' primena avansa) prevodi ishod u SVOJU gresku ili poruku -- pravilo je jedno.
+Public Const KO_KAPIJA_NEMA As String = "NEMA"
+Public Const KO_KAPIJA_DUPLI As String = "DUPLI"
+Public Const KO_KAPIJA_STORNIRAN As String = "STORNIRAN"
+Public Const KO_KAPIJA_TUDJ As String = "TUDJ"
+
 ' ============================================================
 ' PLAN -- bez ijednog upisa
 ' ============================================================
@@ -824,6 +832,52 @@ Public Function KOPoPozivu(ByVal pozivNaBroj As String) As Variant
     Next i
 
     If hits = 1 And Len(hitID) > 0 And Len(hitKoop) > 0 Then KOPoPozivu = Array(hitID, hitKoop)
+End Function
+
+' KAPIJA PISCA NOVCA NAD KO: vlasnistvo i zivot dokumenta u trenutku upisa
+' (obrazac IsplataBlokProblem / PotvrdiOtkupZaKooperanta). "" kad KO postoji
+' tacno jednom, nije storniran i pripada kooperantu; inace KO_KAPIJA_*.
+' Ostatak (koliko KO jos duguje) NIJE deo kapije -- svaki pisac ga cita sam
+' (OtvorenoNaKO), jer ga razlicito tumaci: izvod visak salje u avans, gotovina
+' ga odbija.
+Public Function KOKapija(ByVal doplataID As String, ByVal kooperantID As String) As String
+    Const SRC As String = "modDoplata.KOKapija"
+    Dim id As String
+    id = Trim$(doplataID)
+    KOKapija = KO_KAPIJA_NEMA
+    If Len(id) = 0 Then Exit Function
+    If GetTable(TBL_DOPLATA) Is Nothing Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_DOPLATA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cId As Long, cKoop As Long, cSt As Long
+    cId = RequireColumnIndex(TBL_DOPLATA, COL_DOP_ID, SRC)
+    cKoop = RequireColumnIndex(TBL_DOPLATA, COL_DOP_KOOPERANT, SRC)
+    cSt = RequireColumnIndex(TBL_DOPLATA, COL_STORNIRANO, SRC)
+
+    Dim i As Long, n As Long, r As Long
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cId))), id, vbTextCompare) = 0 Then
+            n = n + 1
+            r = i
+        End If
+    Next i
+    If n = 0 Then Exit Function
+    If n > 1 Then
+        KOKapija = KO_KAPIJA_DUPLI
+        Exit Function
+    End If
+    If UCase$(Trim$(NzToText(d(r, cSt)))) = "DA" Then
+        KOKapija = KO_KAPIJA_STORNIRAN
+        Exit Function
+    End If
+    If StrComp(Trim$(NzToText(d(r, cKoop))), Trim$(kooperantID), vbTextCompare) <> 0 Then
+        KOKapija = KO_KAPIJA_TUDJ
+        Exit Function
+    End If
+    KOKapija = ""
 End Function
 
 ' Da li je ID knjizno odobrenje (bilo kog statusa). Lista naloga nosi KO pod
