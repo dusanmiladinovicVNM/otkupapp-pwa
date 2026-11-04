@@ -30,6 +30,9 @@ Public Const ERR_ISPLATA_DUPLI_OTKUPID As Long = vbObjectError + 2620
 Public Const ERR_ISPLATA_PRAZAN_OTKUPID As Long = vbObjectError + 2621
 Public Const ERR_ISPLATA_PRAZAN_KOOPERANTID As Long = vbObjectError + 2622
 Public Const ERR_ISPLATA_DUPLI_KOOPERANTID As Long = vbObjectError + 2623
+' Otvoreno KO bez datuma knjizenja (F4 doplate) -- filter po datumu ne sme da ga
+' tiho izbaci iz liste, kao ni otkup bez OtkupID-a.
+Public Const ERR_ISPLATA_KO_BEZ_DATUMA As Long = vbObjectError + 2624
 
 ' ------------------------------------------------------------------
 ' PRAVILO ZA POREDJENJE NOVCA NA OVOJ PUTANJI (AUD-026)
@@ -71,8 +74,11 @@ Public Function BuildBlokIsplataList( _
     Dim openOtkupi As Variant
     
     openOtkupi = GetOpenOtkupi("")
+    ' Otvorena knjizna odobrenja (F4 doplate) -- v. KNJIZNA ODOBRENJA ispod.
+    Dim openKO As Variant
+    openKO = modDoplata.OtvoreniKORedovi()
     
-    If IsEmpty(openOtkupi) Then
+    If IsEmpty(openOtkupi) And IsEmpty(openKO) Then
         Set BuildBlokIsplataList = result
         Exit Function
     End If
@@ -92,6 +98,7 @@ Public Function BuildBlokIsplataList( _
     Set koopByOtkup = BuildOtkupOwnerIndex(dupliOtkup)
     
     Dim i As Long
+    If IsEmpty(openOtkupi) Then GoTo KnjiznaOdobrenja
     For i = 1 To UBound(openOtkupi, 1)
         Dim brojDok As String
         Dim otkupID As String
@@ -212,6 +219,77 @@ Public Function BuildBlokIsplataList( _
         
 NextRow:
     Next i
+
+KnjiznaOdobrenja:
+    ' KNJIZNA ODOBRENJA (F4 doplate, DOP-ODL-05). KO je obaveza firme prema
+    ' kooperantu kao i blok, pa ide u ISTU listu -- korpa, zadati iznosi, saldo
+    ' kapija i CSV ga vide bez ijedne nove grane. Kljuc bloka je DoplataID
+    ' (blk.otkupID), razlikovac je blk.doplataID. Poziv na broj naloga je broj
+    ' KO, pa ga uvoz izvoda razresava nazad na isti dokument (KOPoPozivu).
+    ' Stanica je MATICNA stanica kooperanta (OtvoreniKORedovi, kolona 5).
+    '
+    ' Iste kapije identiteta kao za blok: kooperant postoji i ima JEDAN master
+    ' red (TekuciRacun je RacunPrimaoca). DoplataID je jedinstven po citaocu
+    ' (DoplataStavkeRedovi pada na duplikat).
+    If IsArray(openKO) Then
+        For i = 1 To UBound(openKO, 1)
+            otkupID = Trim$(CStr(openKO(i, 1)))
+            brojDok = CStr(openKO(i, 2))
+            kooperantID = Trim$(CStr(openKO(i, 4)))
+
+            If LenB(kooperantID) = 0 Then
+                Err.Raise ERR_ISPLATA_PRAZAN_KOOPERANTID, "modBankaExportPregled.BuildBlokIsplataList", _
+                          "Otvoreno knjizno odobrenje bez kooperanta: DoplataID=" & otkupID & _
+                          " (dokument: " & brojDok & "). Primalac se ne moze utvrditi -- nalozi " & _
+                          "nisu generisani; pokrenite proveru integriteta podataka."
+            End If
+            If dupliKooperant.Exists(kooperantID) Then
+                Err.Raise ERR_ISPLATA_DUPLI_KOOPERANTID, "modBankaExportPregled.BuildBlokIsplataList", _
+                          "Dupli KooperantID u tblKooperanti: " & kooperantID & " (otvoreno KO: " & _
+                          brojDok & "). Tekuci racun primaoca se ne moze pouzdano utvrditi -- nalozi " & _
+                          "nisu generisani; pokrenite proveru integriteta podataka."
+            End If
+            If Not IsDate(openKO(i, 3)) Then
+                Err.Raise ERR_ISPLATA_KO_BEZ_DATUMA, "modBankaExportPregled.BuildBlokIsplataList", _
+                          "Otvoreno knjizno odobrenje bez datuma: " & brojDok & " (" & otkupID & _
+                          "). Nalozi nisu generisani; pokrenite proveru integriteta podataka."
+            End If
+            datumVal = CDate(openKO(i, 3))
+            stanicaID = CStr(openKO(i, 5))
+
+            If stanicaIDFilter <> "" And stanicaID <> stanicaIDFilter Then GoTo NextKO
+            If datumOd > #1/1/1900# And datumVal < datumOd Then GoTo NextKO
+            If datumDo > #1/1/1900# And datumVal > datumDo Then GoTo NextKO
+
+            If nazivCache.Exists(kooperantID) Then
+                kooperantNaziv = nazivCache(kooperantID)
+            Else
+                kooperantNaziv = GetKooperantNaziv(kooperantID)
+                nazivCache.Add kooperantID, kooperantNaziv
+            End If
+            tr = ""
+            If trCache.Exists(kooperantID) Then tr = trCache(kooperantID)
+
+            Set blk = New clsBlokIsplata
+            blk.otkupID = otkupID
+            blk.doplataID = otkupID
+            blk.datum = datumVal
+            blk.kooperantID = kooperantID
+            blk.kooperantNaziv = kooperantNaziv
+            blk.stanicaID = stanicaID
+            blk.TekuciRacun = tr
+            blk.brojDokumenta = brojDok
+            blk.UkupanIznos = CDbl(openKO(i, 6))
+            blk.VecIsplaceno = CDbl(openKO(i, 7))
+            blk.OtvorenIznos = CDbl(openKO(i, 8))
+            blk.HasTekuciRacun = (LenB(Trim$(tr)) > 0)
+            blk.KooperantAvansSaldo = 0
+            If avansCache.Exists(kooperantID) Then blk.KooperantAvansSaldo = CDbl(avansCache(kooperantID))
+
+            result.Add blk
+NextKO:
+        Next i
+    End If
     
     Set BuildBlokIsplataList = result
 End Function

@@ -778,6 +778,10 @@ Public Const COL_NOV_UPLATA As String = "Uplata"
 Public Const COL_NOV_ISPLATA As String = "Isplata"
 Public Const COL_NOV_NAPOMENA As String = "Napomena"
 Public Const COL_NOV_OTKUP_ID As String = "OtkupID"
+' F4 doplate (docs/DOMEN/DOPLATA.md, DOP-05): isplata knjiznog odobrenja.
+' Kolona je na KRAJU tblNovac (SaveNovac pise poziciono 17 vrednosti), pa je
+' pisac postavlja po imenu, posle upisa reda -- isto kao OtkupID kod avansa.
+Public Const COL_NOV_DOPLATA_ID As String = "DoplataID"
 
 
 ' --- Novac Tipovi ---

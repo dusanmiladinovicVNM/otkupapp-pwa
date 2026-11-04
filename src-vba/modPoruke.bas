@@ -1819,6 +1819,8 @@ Private Sub UpsertPoruke09(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_FAKTURA", "faktura"
     UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_AVANS", "avans kupca"
     UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_BLOK", "blok"
+    ' F4 doplate: isplata knjiznog odobrenja po pozivu na broj = broj KO.
+    UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_KO", "knji" & ChrW(382) & "no odobrenje"
     UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_OM", "otkupno mesto"
     ' Bilo "nema jakog kljuca" -- a kolona od v2.39 prikazuje PUN plan, koji zna
     ' i za PartnerMap i za poklapanje imena. Red bez jakog kljuca, a sa planom,
@@ -1934,6 +1936,8 @@ Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_BN_VEC_U_NALOZIMA", "Blok je ve" & ChrW(263) & " u nalozima"
     UpsertRow lo, existing, "OTKUI_ERR_BN_NIJE_U_NALOZIMA", "Blok nije u nalozima"
     UpsertRow lo, existing, "OTKUI_ERR_BN_NEMA_AVANSA", ChrW(10007) & " Kooperant nema neraspore" & ChrW(273) & "en avans"
+    ' F4 doplate: KO je u listi naloga, ali se avans primenjuje samo na otkupni blok.
+    UpsertRow lo, existing, "OTKUI_ERR_BN_AVANS_KO", ChrW(10007) & " Avans se primenjuje samo na otkupni blok, ne na knji" & ChrW(382) & "no odobrenje"
     UpsertRow lo, existing, "OTKUI_ERR_BN_NEMA_OTVORENOG", ChrW(10007) & " Blok nema otvoren iznos"
     UpsertRow lo, existing, "OTKUI_ERR_BN_AVANS", ChrW(10007) & " Gre" & ChrW(353) & "ka pri vezivanju avansa " & ChrW(8212) & " pogledajte log"
     UpsertRow lo, existing, "OTKUI_ERR_BN_NEMA_RACUNA", ChrW(10007) & " Izaberi ra" & ChrW(269) & "un sa koga ide isplata (Pode" & ChrW(353) & "avanja -> Banka / nalozi)"

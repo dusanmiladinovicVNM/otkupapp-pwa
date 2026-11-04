@@ -704,6 +704,163 @@ Public Function DoplataKOKooperanta(ByVal kooperantID As String) As Variant
     DoplataKOKooperanta = res
 End Function
 
+' ============================================================
+' ISPLATA KO (F4) -- otvorena obaveza po dokumentu
+' ============================================================
+'
+' KO je obaveza firme prema kooperantu kao i otkupni blok: isplacuje se kroz
+' naloge za banku i zatvara uvozom izvoda (DOP-ODL-05). Isplaceno je zbir
+' AKTIVNOG novca vezanog DoplataID-em (modNovac.BuildIsplataDictByDoplata) --
+' isto pravilo kao za otkup (BuildIsplataDictByOtkup), drugi kljuc.
+
+' OTVORENA KO. Blizanac modNovac.GetOpenOtkupi; cita ga
+' modBankaExportPregled.BuildBlokIsplataList. 2D niz (1..n, 1..8):
+'   1 DoplataID | 2 BrojDokumenta | 3 Datum | 4 KooperantID
+'   5 StanicaID -- MATICNA stanica kooperanta (DOP-ODL-05), ne stanica stavke:
+'     KO je jedan dokument i kad ima stavke na dve stanice
+'   6 Iznos | 7 Isplaceno | 8 Otvoreno
+' U listi je KO ciji je ostatak, u cent-domenu, veci od nule. kooperantID suzava
+' na jednog kooperanta. Empty kad nema nijednog.
+Public Function OtvoreniKORedovi(Optional ByVal kooperantID As String = "") As Variant
+    OtvoreniKORedovi = Empty
+
+    Dim glava As Object, iznosi As Object, isplate As Object
+    Set iznosi = IznosPoKO(glava)
+    If iznosi.count = 0 Then Exit Function
+    Set isplate = modNovac.BuildIsplataDictByDoplata()
+
+    Dim maticna As Object
+    Set maticna = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, COL_KOOP_STANICA)
+
+    Dim k As Variant, h As Variant, n As Long, otv As Double, ispl As Double
+    Dim res() As Variant
+    ReDim res(1 To iznosi.count, 1 To 8)
+    For Each k In iznosi.keys
+        h = glava(k)
+        If Len(Trim$(kooperantID)) > 0 Then
+            If StrComp(CStr(h(2)), Trim$(kooperantID), vbTextCompare) <> 0 Then GoTo Sledeci
+        End If
+        ispl = 0
+        If isplate.Exists(CStr(k)) Then ispl = CDbl(isplate(CStr(k)))
+        otv = modNovac.ZaokruziNovac(CDbl(iznosi(k)) - ispl)
+        If otv <= 0 Then GoTo Sledeci
+        n = n + 1
+        res(n, 1) = CStr(k)
+        res(n, 2) = h(0)
+        res(n, 3) = h(1)
+        res(n, 4) = CStr(h(2))
+        res(n, 5) = ""
+        If maticna.Exists(CStr(h(2))) Then res(n, 5) = Trim$(CStr(maticna(CStr(h(2)))))
+        res(n, 6) = modNovac.ZaokruziNovac(CDbl(iznosi(k)))
+        res(n, 7) = modNovac.ZaokruziNovac(ispl)
+        res(n, 8) = otv
+Sledeci:
+    Next k
+    If n = 0 Then Exit Function
+
+    Dim outA() As Variant, i As Long, j As Long
+    ReDim outA(1 To n, 1 To 8)
+    For i = 1 To n
+        For j = 1 To 8
+            outA(i, j) = res(i, j)
+        Next j
+    Next i
+    OtvoreniKORedovi = outA
+End Function
+
+' Otvoreno na JEDNOM KO, u cent-domenu: iznos minus isplaceno. 0 za storniran ili
+' nepostojeci KO -- kapiju vlasnistva i zivota drzi pisac pre ovoga
+' (modBankaMapiranje.PotvrdiKOZaKooperanta).
+Public Function OtvorenoNaKO(ByVal doplataID As String) As Double
+    Dim glava As Object, iznosi As Object, isplate As Object, id As String
+    id = Trim$(doplataID)
+    If Len(id) = 0 Then Exit Function
+    Set iznosi = IznosPoKO(glava)
+    If Not iznosi.Exists(id) Then Exit Function
+    Set isplate = modNovac.BuildIsplataDictByDoplata()
+    Dim ispl As Double
+    If isplate.Exists(id) Then ispl = CDbl(isplate(id))
+    OtvorenoNaKO = modNovac.ZaokruziNovac(CDbl(iznosi(id)) - ispl)
+End Function
+
+' POZIV NA BROJ -> AKTIVAN KO. Array(DoplataID, KooperantID) kad TACNO jedan
+' aktivan KO nosi taj broj; Empty inace. Blizanac
+' modBankaMapiranje.TryResolveKooperantByOtkupPoziv: isto poredjenje
+' (NormalizePozivKey, slova i cifre), isti odgovor na storno (storniran KO se ne
+' razresava -- uplata tada ide putem kooperanta, kao za storniran otkup).
+'
+' Broj KO nosi slovni prefiks (DOP_BROJ_PREFIKS), a broj otkupa je od cifara
+' (x/ddmmyy), pa se dva niza ne mogu sudariti. Poziv bez prefiksa zato ni ne
+' cita tabelu: mreza uvoza zove ovo za SVAKI red izvoda.
+Public Function KOPoPozivu(ByVal pozivNaBroj As String) As Variant
+    Const SRC As String = "modDoplata.KOPoPozivu"
+    KOPoPozivu = Empty
+
+    Dim target As String, pref As String
+    target = modBankaMapiranje.NormalizePozivKey(pozivNaBroj)
+    pref = modBankaMapiranje.NormalizePozivKey(DOP_BROJ_PREFIKS)
+    If Len(target) <= Len(pref) Then Exit Function
+    If Left$(target, Len(pref)) <> pref Then Exit Function
+    If GetTable(TBL_DOPLATA) Is Nothing Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_DOPLATA)
+    If Not IsArray(d) Then Exit Function
+    d = ExcludeStornirano(d, TBL_DOPLATA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cId As Long, cBr As Long, cKoop As Long
+    cId = RequireColumnIndex(TBL_DOPLATA, COL_DOP_ID, SRC)
+    cBr = RequireColumnIndex(TBL_DOPLATA, COL_DOP_BROJ, SRC)
+    cKoop = RequireColumnIndex(TBL_DOPLATA, COL_DOP_KOOPERANT, SRC)
+
+    Dim i As Long, hits As Long, hitID As String, hitKoop As String
+    For i = 1 To UBound(d, 1)
+        If modBankaMapiranje.NormalizePozivKey(NzToText(d(i, cBr))) = target Then
+            hits = hits + 1
+            hitID = Trim$(NzToText(d(i, cId)))
+            hitKoop = Trim$(NzToText(d(i, cKoop)))
+        End If
+    Next i
+
+    If hits = 1 And Len(hitID) > 0 And Len(hitKoop) > 0 Then KOPoPozivu = Array(hitID, hitKoop)
+End Function
+
+' Da li je ID knjizno odobrenje (bilo kog statusa). Lista naloga nosi KO pod
+' istim kljucem bloka kao otkup (clsBlokIsplata.otkupID), pa radnja koja vazi
+' samo za otkup (primena avansa) ovim pita pre nego sto ponudi potvrdu.
+Public Function JeKO(ByVal id As String) As Boolean
+    If Len(Trim$(id)) = 0 Then Exit Function
+    If GetTable(TBL_DOPLATA) Is Nothing Then Exit Function
+    JeKO = (Len(NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, Trim$(id), COL_DOP_ID))) > 0)
+End Function
+
+' Iznos svakog AKTIVNOG KO: DoplataID -> din (zbir stavki, DoplataStavkeRedovi --
+' strog citac, pa storniran KO ne ulazi). outGlava: DoplataID ->
+' Array(BrojDokumenta, Datum, KooperantID).
+Private Function IznosPoKO(ByRef outGlava As Object) As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    Set outGlava = CreateObject("Scripting.Dictionary")
+    outGlava.CompareMode = vbTextCompare
+    Set IznosPoKO = d
+
+    Dim r As Variant
+    r = DoplataStavkeRedovi()
+    If Not IsArray(r) Then Exit Function
+
+    Dim i As Long, id As String
+    For i = 1 To UBound(r, 1)
+        id = CStr(r(i, 1))
+        If Not d.Exists(id) Then
+            d.Add id, 0#
+            outGlava.Add id, Array(r(i, 2), r(i, 3), CStr(r(i, 4)))
+        End If
+        d(id) = CDbl(d(id)) + CDbl(r(i, 12))
+    Next i
+End Function
+
 ' OSNOVICA KNJIZENE DOPLATE SE PROMENILA (DOP-ODL-07). Knjizen KO je SNIMAK:
 ' kasniji storno, ispravka ili retro unos otkupa u periodu ga ne menja -- ovde
 ' se to VIDI. Plan svakog aktivnog obracuna racuna se ponovo nad danasnjim

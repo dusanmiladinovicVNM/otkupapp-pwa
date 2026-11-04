@@ -3909,8 +3909,8 @@ SABOTAZE = {
     #   python tools/run_vba.py --suite RunBankaImportTestSuite   # ocekuj FAIL
     "banka-writer-placen-blok-je-avans": (
         "modBankaMapiranje.bas",
-        "    If Len(Trim$(otkupID)) = 0 And blokIzabran Then\n",
-        "    If Len(Trim$(otkupID)) = 0 And False Then   ' SABOTAZA: izabran placen blok postaje avans\n",
+        "    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 And blokIzabran Then\n",
+        "    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 And False Then   ' SABOTAZA: izabran placen blok postaje avans\n",
         "T21_IzabranPlacenBlokNijeAvans",
         "izabran placen blok NE knjizi nista",
     ),
@@ -6088,7 +6088,7 @@ SABOTAZE = {
     # batch, pa jedna promena nuzno pomera oba broja.
     "banka-nalozi-avans-broji-i-prazne": (
         "modScrBankaNalozi.bas",
-        "            If blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0 Then\n"
+        "            If AvansKandidat(blk) Then\n"
         "                n = n + 1\n",
         "            If True Then   \' SABOTAZA: i blok bez avansa je kandidat\n"
         "                n = n + 1\n",
@@ -11352,6 +11352,67 @@ SABOTAZE = {
         "                If False Then   ' SABOTAZA: promena osnovice se ne vidi\n",
         "T_Doplata_SignalOsnovice",
         "signal: storno otkupa posle knjizenja imenuje KO, knjizene i sadasnje kg",
+    ),
+    # F4 -- ISPLATA KO (docs/DOMEN/DOPLATA.md, DOP-ODL-05, DOP-05).
+    # Nalozi preskacu KO: obaveza firme prema kooperantu nestaje iz isplata, a
+    # kartica je i dalje pokazuje kao dug.
+    "dop-nalozi-bez-ko": (
+        "modBankaExportPregled.bas",
+        "    If IsArray(openKO) Then\n",
+        "    If False Then   ' SABOTAZA: nalozi ne vide knjizna odobrenja\n",
+        "T_Doplata_OtvorenoKOUNalozima",
+        "nalozi za banku nose otvoreno KO pod kljucem bloka",
+    ),
+    # Avans se nudi i na KO: motor ga "veze" na otkup koji ne postoji, a potvrda
+    # obecava vezivanje koje se nikad ne desi.
+    "dop-nalog-avans-na-ko": (
+        "modScrBankaNalozi.bas",
+        "    If Len(blk.doplataID) > 0 Then Exit Function\n",
+        "    ' SABOTAZA: i KO je kandidat za avans\n",
+        "T_Doplata_OtvorenoKOUNalozima",
+        "avans se ne primenjuje na KO: KO nije kandidat",
+    ),
+    # Poziv na broj KO se u planu cita kao obican blok: pisac tada trazi OTKUP po
+    # tom broju, ne nalazi ga i ceo iznos knjizi kao avans -- KO ostaje otvoren.
+    "dop-plan-ko-kao-blok": (
+        "modBankaMapiranje.bas",
+        "                If Len(doplataID) > 0 Then\n"
+        "                    BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _\n"
+        "                                                     BIM_CILJ_DOPLATA, doplataID, BIM_IZV_JAK)\n",
+        "                If False Then   ' SABOTAZA: KO se planira kao blok\n"
+        "                    BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _\n"
+        "                                                     BIM_CILJ_DOPLATA, doplataID, BIM_IZV_JAK)\n",
+        "T_Doplata_IzvodPoBrojuKO",
+        "plan: poziv na broj KO je jak kljuc na taj KO",
+    ),
+    # Isplata KO se upise bez veze DoplataID: novac je dat, KO i dalje otvoren,
+    # a red izgleda kao slobodan avans.
+    "dop-izvod-ko-bez-veze": (
+        "modBankaMapiranje.bas",
+        "        LinkNovacToDoplataStrict novID, doplataID, _\n"
+        "                        \"MapBankaImportAsKooperantBlockCore\"\n",
+        "        ' SABOTAZA: isplata KO ostaje bez veze\n",
+        "T_Doplata_IzvodPoBrojuKO",
+        "isplata KO: virman firme, vezan za KO, bez otkupa, na maticnoj stanici",
+    ),
+    # Citaoci avansa ne gledaju DoplataID: isplata KO postaje slobodan avans i
+    # primena avansa je povuce na sledeci otkupni blok -- isti dinar placa dvaput.
+    "dop-avans-guta-isplatu-ko": (
+        "modNovac.bas",
+        "    If Len(Trim$(doplataID)) > 0 Then Exit Function\n"
+        "    JeSlobodanAvansKooperanta = True\n",
+        "    JeSlobodanAvansKooperanta = True   ' SABOTAZA: isplata KO je avans\n",
+        "T_Doplata_IzvodPoBrojuKO",
+        "isplata KO nije slobodan avans kooperanta",
+    ),
+    # Storno KO ostavlja vezu: isplata storniranog KO nije ni dug ni avans, pa je
+    # novac kooperanta nevidljiv svakoj masineriji koja bira sta se placa.
+    "dop-storno-ne-odvezuje": (
+        "modStorno.bas",
+        "    modNovac.ResetNovacDoplataLink Trim$(doplataID)\n",
+        "    ' SABOTAZA: storno KO ne odvezuje novac\n",
+        "T_Doplata_StornoOdvezujeIsplatu",
+        "storno KO odvezuje isplatu (DoplataID prazan), a ne stornira je",
     ),
 }
 

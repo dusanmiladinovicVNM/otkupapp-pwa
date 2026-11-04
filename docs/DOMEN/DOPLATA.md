@@ -1,11 +1,13 @@
 # Doplata kooperantu — knjižno odobrenje po kulturi i klasi
 
 > **Status (04.11.2026):** odluke operatera u §2 su donete, struktura iz §3 je
-> **potvrđena**. **F1 (šema, pisac, storno), F2 (kartica, Saldo OM, PWA) i F3
-> (ekran, papir KO, storno sa ekrana, signal osnovice) su u kodu** — statičke
-> provere zelene, ponašanje **NEVERIFIKOVANO** dok `run_vba` ne prođe na Windows +
-> Excel (§7). F2 i F3 su napisani pre nego što je F1 pušten na Excelu. F4 još
-> nije počeo. Otvoreno: §8.
+> **potvrđena**. **F1 (šema, pisac, storno), F2 (kartica, Saldo OM, PWA), F3
+> (ekran, papir KO, storno sa ekrana, signal osnovice) i F4 — bankarski deo
+> isplate (nalozi, izvod po broju KO, odvezivanje pri stornu) — su u kodu.**
+> Statičke provere zelene, ponašanje **NEVERIFIKOVANO** dok `run_vba` ne prođe na
+> Windows + Excel (§7); F2–F4 su napisani pre nego što je F1 pušten na Excelu.
+> Nije urađeno (F4b, §7): gotovinska isplata KO, ručno mapiranje izvoda na KO,
+> primena avansa na KO. Otvoreno: §8.
 
 ## 1) Šta je doplata
 
@@ -66,8 +68,14 @@ koji u jednoj transakciji pravi po jedan KO za svakog kooperanta sa kg > 0.
 - **Identitet:** `DoplataID` (`DOP-…`) je kanon; `BrojDokumenta` je labela.
   `BrojDokumenta` je pod ugovorom formata `text`, kao u svim tabelama koje ga imaju.
   Slovni prefiks `KO-` drži poziv na broj odvojen od brojeva otkupa:
-  `NormalizePozivKey` (`modBankaMapiranje`) zadržava slova i cifre. Proveriti u
-  F4 nad svim nizovima koje banka razrešava.
+  `NormalizePozivKey` (`modBankaMapiranje`) zadržava slova i cifre. **Provereno u
+  F4:** broj otkupa je od cifara (`x/ddmmyy`, `modBrojevi`), faktura se razrešava
+  samo na uplati, pa se `KO…` ne može sudariti ni sa jednim nizom koji banka
+  razrešava na isplati. `modDoplata.KOPoPozivu` ni ne čita tabelu za poziv bez
+  prefiksa.
+- **Isplata (F4):** `tblNovac.DoplataID` (kolona **na kraju**; `SaveNovac` piše
+  poziciono, pa pisac vezu postavlja po imenu, kao `OtkupID`). Red isplate je
+  `VirmanFirmaKoop` na **matičnoj** stanici kooperanta, bez `OtkupID`-a.
 - **`ObracunID`** (`DOB-…`) je zajednički ključ jednog globalnog unosa (obrazac
   `GeneracijaID`) — za pregled i za storno celog obračuna. Nije zasebna tabela.
 - **Stope** ne idu u `tblCenovnik` i nisu treći model cene
@@ -83,9 +91,11 @@ koji u jednoj transakciji pravi po jedan KO za svakog kooperanta sa kg > 0.
 | **DOP-02** | `Iznos` stavke = `ZaokruziNovac(Kolicina × Cena)`; `Kolicina` = zbir aktivnih `tblOtkupStavke` tog kooperanta, stanice i ključa u periodu, u trenutku knjiženja (čitač `modOtkup.StavkeOtkupaRedovi`, ne nov). | `modDoplata.DoplataPlan` · 309, 311 |
 | **DOP-03** | Storno nije brisanje: `tblDoplata` je u `STORNO_TABELE`, `tblDoplataStavke` u `BEZ_STORNA` (stavka prati zaglavlje). Storniran KO izlazi iz svih zbirova; broj ostaje zauzet. | `modStorno.StornoDoplata_TX` / `StornoObracunDoplate_TX`, čitač `modDoplata.DoplataStavkeRedovi` · 313 |
 | **DOP-04** | Pisci: nastanak samo `modDoplata` (`KnjiziDoplatu_TX`, obe tabele); storno zaglavlja `modStorno`, kao kod ostalih dokumenata. | `WRITE_OWNERSHIP.json` (A11), `who_writes.py --check-ownership` |
-| **DOP-05** | (F4) Novac vezan za KO se pri stornu KO **odvezuje, ne stornira** — isto pravilo kao kod otkupa (`ODLUKA_NOVAC_PRI_STORNU.md`). | F4 |
+| **DOP-05** | Novac vezan za KO se pri stornu KO **odvezuje, ne stornira** — isto pravilo kao kod otkupa (`ODLUKA_NOVAC_PRI_STORNU.md`): virman opet postaje slobodan avans, keš ostaje zatvoren posao. Odvezivanje je u istoj transakciji sa stornom zaglavlja. | `modNovac.ResetNovacDoplataLink` iz `modStorno.StornoDoplata` · 324 |
 | **DOP-06** | Jedan KO po kooperantu po obračunu; brojevi uzastopni u nizu godine. | `modDoplata.KnjiziPlan` · 310 |
 | **DOP-07** | Doplata je **zaduženje u korist kooperanta** svuda gde se vidi saldo: na kartici je jedan red po KO na datum knjiženja (i u početnom stanju), a u Saldo OM i PWA izvozu saldo = vrednost + doplata − isplaćeno − agro. U Saldo OM stavka KO pripada stanici na kojoj je roba predata, a period je po datumu knjiženja. | `modDoplata.DoplataIznosPoKooperantu` / `DoplataKOKooperanta`, `modIzvestaj`, `modStammdatenSync.SaldoOMDetailRedovi` · 315, 316, 317 |
+| **DOP-09** | **Isplata KO nije slobodan avans.** Slobodan avans = avansni tip (`VirmanAvansKoop`/`VirmanFirmaKoop`) bez `OtkupID`-a **i bez `DoplataID`-a** — jedan predikat za sva tri čitača avansa (primena na blok, zbir raspoloživog, lista naloga). Bez toga bi primena avansa povukla isplatu KO na sledeći otkupni blok i isti dinar platio dvaput. | `modNovac.JeSlobodanAvansKooperanta` · 323, 324 |
+| **DOP-10** | KO se isplaćuje kao **obaveza po dokumentu**, kao otkupni blok: otvoreno = zbir stavki aktivnog KO − aktivan novac vezan `DoplataID`-em, u cent-domenu. Nalozi ga nose pod ključem bloka (`DoplataID`) sa **brojem KO kao pozivom na broj**; izvod sa tim pozivom je jak ključ na taj KO (plan `BIM_CILJ_DOPLATA`) i knjiži se istim piscem kao blok (`MapBankaImportAsKooperantBlockCore`, grana `doplataID`): KO dobija najviše otvoreno, višak je avans, plaćen KO ceo iznos šalje u avans. Avans se **ne** primenjuje na KO (samo na otkupni blok). | `modDoplata.OtvoreniKORedovi` / `OtvorenoNaKO` / `KOPoPozivu`, `modBankaExportPregled.BuildBlokIsplataList`, `modBankaMapiranje` · 322, 323 |
 | **DOP-08** | Ekran nema svoju računicu: stopa prolazi istu proveru kao pisac (`DoplataStopeProblem` = `UcitajStope`), pregled je isti plan koji pisac izvršava (`DoplataPlan`), a upis i storno idu samo kroz `KnjiziDoplatu_TX` / `modStorno`. Svako pitanje (knjiženje, ponavljanje, storno) ide kroz `Pitaj` — u test režimu beleži i odgovara „Ne" (KI-015). | `modScrDoplata` · 319, 320 |
 
 **Prikaz i pisac dele jedan plan** (obrazac `BimAutoPlan`): `DoplataPlan` računa
@@ -110,7 +120,7 @@ odobrenja (DOP-ODL-04), ne zbog lakše implementacije.
 | `modIzvestaj.ReportSaldoOM` | **urađeno:** kolona **8 „Doplata"** (na kraju, pozicioni čitaoci); saldo (6) je uključuje | ekran, tabelarni PDF, KPI pločica (kolona 6) | F2 |
 | `modIzvestaj.ReportSaldoOMZbirni` | **urađeno:** kolona **9 „Doplata"**; ekran sabira saldo po indeksu (OM 7, kupci 6) umesto „pretposlednje kolone" | ekran, tabelarni PDF | F2 |
 | `modStammdatenSync.SaldoOMDetailRedovi` (seam izdvojen iz `ExportSaldoOMDetail`) | **urađeno:** kolona **10 „Doplata"**; saldo je uključuje; PWA kartica kooperanta u menadžmentu prikazuje doplatu | PWA saldo | F2 |
-| otvorene obaveze (`modNovac.GetOpenOtkupi` ili njegov par za KO), `modBankaExportPregled`, `ValidateNalogSaldo`, `BimAutoPlan` + resolver po broju KO | KO kao otvorena obaveza; `tblNovac` dobija kolonu `DoplataID` **na kraju** | nalozi za banku, specifikacija isplata (PDF), uvoz izvoda | F4 |
+| `modDoplata.OtvoreniKORedovi` (par `GetOpenOtkupi`), `modBankaExportPregled.BuildBlokIsplataList` → `ValidateNalogSaldo` / CSV / specifikacija, `BimAutoPlanIzVrednosti` + `KOPoPozivu`, tri čitača avansa u `modNovac` | **urađeno:** KO kao otvorena obaveza (`clsBlokIsplata.doplataID` je razlikovač, ključ bloka je `DoplataID`); poziv na broj = broj KO; izvod po broju KO; `tblNovac.DoplataID` **na kraju**; isplata KO nije avans | nalozi za banku, specifikacija isplata (PDF), uvoz izvoda (kolona Predlog: „knjižno odobrenje …") | F4 |
 
 **Ne menja se:** `ReportIsplata*`, `ReportKarticaRobaRekap`, `ReportProsecnaCena`,
 otkupni list, lanac dokumenata. Ekran kartice ne treba izmenu: red bez otkupa
@@ -155,8 +165,31 @@ Storno, PWA `pregled.js`.
      (`docs/INTEGRITET_PROVERE.md`).
    - `modTest` 318–321 (+ ekran u testu 239, seam u `ResetSeamova`), sabotaže
      `dop-papir-*`, `dop-ekran-*`, `dop-signal-nema`.
-4. **F4 — isplata.** Nalozi za banku, automatsko mapiranje izvoda,
-   `tblNovac.DoplataID`, gotovina na matičnoj stanici (DOP-ODL-05).
+4. **F4 — isplata, bankarski deo. U KODU (04.11.2026).**
+   - Šema: `tblNovac.DoplataID` na kraju (`schema.json` → `modSchema`;
+     `COL_NOV_DOPLATA_ID`). Svesku dopunjava `EnsureAllTables` na startu.
+   - `modDoplata`: `OtvoreniKORedovi`, `OtvorenoNaKO`, `KOPoPozivu`, `JeKO`.
+   - `modNovac`: `JeSlobodanAvansKooperanta` (DOP-09) u `ApplyAvansToOtkup`,
+     `GetKooperantUnallocatedAvans`, `BuildKooperantUnallocatedAvansDict`;
+     `BuildIsplataDictByDoplata`; `ResetNovacDoplataLink` (DOP-05).
+   - `modBankaMapiranje`: `BIM_CILJ_DOPLATA`; `ResolveStrongKooperantByKeys`
+     vraća i `DoplataID`; `BimJakiKljucInfo` / `BimAutoPlanIzVrednosti` /
+     `BimPlanOpis` / mreža uvoza; pisac `MapBankaImportAsKooperantKO` →
+     `MapBankaImportAsKooperantBlockCore` (grana `doplataID`, kapija
+     `PotvrdiKOZaKooperanta`, veza `LinkNovacToDoplataStrict`).
+   - `modBankaExportPregled.BuildBlokIsplataList` nosi KO; `modScrBankaNalozi`:
+     avans se ne nudi na KO (`AvansKandidat`, `PrimeniAvans`).
+   - `modStorno.StornoDoplata` odvezuje novac; oba `_TX` snapshot-uju `tblNovac`.
+   - `modTest` 322–324, sabotaže `dop-nalozi-*`, `dop-nalog-*`, `dop-plan-ko-*`,
+     `dop-izvod-*`, `dop-avans-*`, `dop-storno-ne-odvezuje`; dve zatečene
+     sabotaže banke dobile su nova sidra (isti kod, ista tvrdnja).
+5. **F4b — nije urađeno.** (a) **Gotovinska isplata KO na matičnoj stanici**
+   (DOP-ODL-05): ekran isplate (`modNovacUnos.IsplataValidiraj`, kapija
+   `IsplataBlokProblem`) danas bira samo otkupni blok. (b) **Ručno mapiranje
+   stavke izvoda na KO** (ekran Uvoz izvoda): kad automatika ne prepozna poziv,
+   operater danas može samo na blok ili avans. (c) **Primena avansa na KO**
+   (zatvaranje KO već isplaćenim avansom). Do tada: KO koji banka ne vrati sa
+   pozivom „KO-…" ostaje otvoren, a novac ide u avans kooperanta.
 
 **Spuštanje je serijsko:** F1 i F4 diraju centralne registre (`schema.json`,
 `modSchemaGuard`, `WRITE_OWNERSHIP.json`, brojevi testova u `modTest`). Na dan
@@ -180,3 +213,13 @@ od 309 nadalje sudara se sa ovom.
    pogledati u `DumpMdl2Used` / na ekranu.
 5. `.claude/rules/testovi.md` §4 još kaže „30 članova" za test 239 (sada 32) —
    ide kroz zaseban process PR (izmene u `.claude/` se ne mešaju sa feature-om).
+   Isti process PR: `.claude/rules/banka.md` da pomene KO kao drugi dokument
+   naloga (poziv na broj = broj KO) i `DoplataID` u pravilu avansa.
+6. **⚠ PLATFORM UNKNOWN — slova u pozivu na broj.** Nalog nosi poziv „KO-12/2026"
+   (isto kao blok nosi „1/220526" sa kosom crtom). **Nije izmereno** da li
+   e-banking prihvata slova u polju poziva na broj i da li izvod vraća poziv
+   netaknut. Ako banka slova odbaci, uvoz izvoda KO ne prepozna: plan ide na
+   kooperanta po računu, pisac ne nađe otkup po tom broju i ceo iznos knjiži kao
+   **avans** — ne pogrešno na tuđi dokument, ali KO ostaje otvoren dok F4b(b/c)
+   ne postoji. Proveriti na prvom pravom nalogu (uvesti CSV u e-banking, pa
+   pogledati izvod).

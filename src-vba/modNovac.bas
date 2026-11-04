@@ -1243,6 +1243,39 @@ Public Function BuildIsplataDictByOtkup() As Object
     Set BuildIsplataDictByOtkup = dict
 End Function
 
+' DoplataID -> isplaceno, iz AKTIVNOG novca. Blizanac BuildIsplataDictByOtkup:
+' isto pravilo (zbir kolone Isplata nad redovima vezanim za dokument), drugi
+' kljuc. Otvoreno KO racuna modDoplata.OtvorenoNaKO / OtvoreniKORedovi.
+Public Function BuildIsplataDictByDoplata() As Object
+    Const SRC As String = "BuildIsplataDictByDoplata"
+
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    Set BuildIsplataDictByDoplata = dict
+
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If Not IsArray(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_NOVAC)
+    If Not IsArray(data) Then Exit Function
+
+    Dim colDop As Long, colIsplata As Long
+    colDop = GetColumnIndex(TBL_NOVAC, COL_NOV_DOPLATA_ID)
+    If colDop = 0 Then Exit Function          ' v. NovacDoplataID
+    colIsplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+
+    Dim i As Long, did As String
+    For i = 1 To UBound(data, 1)
+        did = NovacDoplataID(data, i, colDop)
+        If Len(did) > 0 Then
+            If Not dict.Exists(did) Then dict.Add did, 0#
+            If IsNumeric(data(i, colIsplata)) Then
+                dict(did) = CDbl(dict(did)) + CDbl(data(i, colIsplata))
+            End If
+        End If
+    Next i
+End Function
+
 ' Vrednost SVAKOG dokumenta iz stavki -- jedan prolaz kroz tblOtkupStavke.
 '
 ' modOtkup.VrednostOtkupa je kanon za JEDAN dokument i ostaje jedini ulaz kad
@@ -1524,6 +1557,9 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
     ' Napomena roditelja -> split nasledjuje BIM marker (poreklo se ne gubi).
     Dim colNapomenaO As Long
     colNapomenaO = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
+    ' Isplata KO nije slobodan avans (v. JeSlobodanAvansKooperanta).
+    Dim colDop As Long
+    colDop = GetColumnIndex(TBL_NOVAC, COL_NOV_DOPLATA_ID)
 
     ' Otkup-Vrednost
     Dim otkData As Variant
@@ -1586,8 +1622,8 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
     For i = 1 To UBound(data, 1)
         If preostalo <= 0 Then Exit For
         If CStr(data(i, colKoopID)) <> kooperantID Then GoTo NextAvans
-        If Not JeAvansKooperanta(CStr(data(i, colTip))) Then GoTo NextAvans
-        If CStr(data(i, colOtkID)) <> "" Then GoTo NextAvans
+        If Not JeSlobodanAvansKooperanta(CStr(data(i, colTip)), CStr(data(i, colOtkID)), _
+                                         NovacDoplataID(data, i, colDop)) Then GoTo NextAvans
         If Not IsNumeric(data(i, colIsplata)) Then GoTo NextAvans
 
         Dim avansIznos As Double
@@ -1816,6 +1852,34 @@ Private Function JeAvansKooperanta(ByVal tip As String) As Boolean
     End Select
 End Function
 
+' SLOBODAN AVANS KOOPERANTA: novac avansnog tipa koji nije vezan ni za jedan
+' dokument koji firma duguje -- ni za otkup (OtkupID) ni za knjizno odobrenje
+' (DoplataID, docs/DOMEN/DOPLATA.md).
+'
+' Isplata KO je VirmanFirmaKoop BEZ OtkupID-a, pa po tipu i praznom OtkupID-u
+' izgleda TACNO kao odvezan avans. Bez treceg uslova bi je primena avansa
+' povukla na sledeci otkupni blok, i isti dinar bi platio i KO i otkup. Uslov
+' stoji ovde, jednom, za sva tri citaoca -- isti razlog zbog kog postoji
+' JeAvansKooperanta.
+'
+' Storno KO veze BRISE (ResetNovacDoplataLink), pa isplata storniranog KO opet
+' postaje slobodan avans -- isto pravilo kao kod otkupa (DOP-05).
+Private Function JeSlobodanAvansKooperanta(ByVal tip As String, ByVal otkupID As String, _
+                                           ByVal doplataID As String) As Boolean
+    If Not JeAvansKooperanta(tip) Then Exit Function
+    If Len(Trim$(otkupID)) > 0 Then Exit Function
+    If Len(Trim$(doplataID)) > 0 Then Exit Function
+    JeSlobodanAvansKooperanta = True
+End Function
+
+' DoplataID jednog reda novca. Kolone nema na svesci pre F4 -- a tada nema ni
+' nijedne isplate KO: pisac vezu upisuje po imenu (RequireUpdateCell) i bez
+' kolone pada. Zato je odsutna kolona "nije vezan", a ne greska citaoca.
+Private Function NovacDoplataID(ByRef data As Variant, ByVal i As Long, _
+                                ByVal colDop As Long) As String
+    If colDop > 0 Then NovacDoplataID = Trim$(NzToText(data(i, colDop)))
+End Function
+
 Public Sub ResetNovacOtkupLink(ByVal otkupID As String)
     Const SRC As String = "ResetNovacOtkupLink"
 
@@ -1925,6 +1989,56 @@ EH:
                 " Err=" & CStr(errNum) & _
                 " Desc=" & errDesc
 End Function
+
+' ODVEZIVANJE NOVCA OD STORNIRANOG KO (DOP-05). Blizanac ResetNovacOtkupLink:
+' novac se NE stornira -- stvarno je isplacen -- nego mu se skine veza za
+' dokument. VirmanFirmaKoop tako opet postaje slobodan avans kooperanta
+' (JeSlobodanAvansKooperanta), kes ostaje zatvoren posao (ODLUKA_NOVAC_PRI_STORNU).
+'
+' Zurnal se pise kad je storno op aktivan, isto kao kod otkupa. Storno KO danas
+' op ne otvara (F1), pa se veza ne vraca kroz UndoOperation -- imenovano
+' ogranicenje, ne previd. Transakciju (snapshot tblNovac) drzi pozivalac.
+Public Sub ResetNovacDoplataLink(ByVal doplataID As String)
+    Const SRC As String = "ResetNovacDoplataLink"
+
+    If Len(Trim$(doplataID)) = 0 Then
+        Err.Raise vbObjectError + 1046, SRC, "DoplataID je obavezan."
+    End If
+
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If Not IsArray(data) Then Exit Sub
+
+    Dim colDop As Long
+    colDop = GetColumnIndex(TBL_NOVAC, COL_NOV_DOPLATA_ID)
+    If colDop = 0 Then Exit Sub               ' v. NovacDoplataID
+
+    Dim colStornirano As Long, colNovID As Long
+    colStornirano = GetColumnIndex(TBL_NOVAC, COL_STORNIRANO)
+    If modStornoZurnal.StornoOpActive() Then
+        colNovID = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, SRC)
+    End If
+
+    Dim i As Long, nvID As String
+    For i = 1 To UBound(data, 1)
+        If colStornirano > 0 Then
+            If UCase$(Trim$(CStr(data(i, colStornirano)))) = "DA" Then GoTo NextRow
+        End If
+        If StrComp(NovacDoplataID(data, i, colDop), Trim$(doplataID), vbTextCompare) = 0 Then
+            If modStornoZurnal.StornoOpActive() Then
+                nvID = Trim$(CStr(data(i, colNovID)))
+                If Len(nvID) = 0 Then
+                    Err.Raise vbObjectError + 1043, SRC, _
+                        "Novac red bez NovacID (PK) -> lossless storno nije moguc. Odbijeno."
+                End If
+                modStornoZurnal.JournalCell TBL_NOVAC, nvID, COL_NOV_DOPLATA_ID, _
+                                           CStr(data(i, colDop)), ""
+            End If
+            RequireUpdateCell TBL_NOVAC, i, COL_NOV_DOPLATA_ID, "", SRC
+        End If
+NextRow:
+    Next i
+End Sub
 
 Public Function GetAgroAbzug(ByVal kooperantID As String) As Double
     Const SRC As String = "GetAgroAbzug"
@@ -2080,14 +2194,16 @@ Public Function GetKooperantUnallocatedAvans(ByVal kooperantID As String) As Dou
     colTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
     colIsplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
     colOtkID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    Dim colDop As Long
+    colDop = GetColumnIndex(TBL_NOVAC, COL_NOV_DOPLATA_ID)
     
     Dim total As Double
     Dim i As Long
     
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, colKoop))) <> Trim$(kooperantID) Then GoTo NextRow
-        If Not JeAvansKooperanta(CStr(data(i, colTip))) Then GoTo NextRow
-        If Trim$(CStr(data(i, colOtkID))) <> "" Then GoTo NextRow
+        If Not JeSlobodanAvansKooperanta(CStr(data(i, colTip)), CStr(data(i, colOtkID)), _
+                                         NovacDoplataID(data, i, colDop)) Then GoTo NextRow
         
         If IsNumeric(data(i, colIsplata)) Then
             total = total + CDbl(data(i, colIsplata))
@@ -2132,11 +2248,13 @@ Public Function BuildKooperantUnallocatedAvansDict() As Object
     colTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
     colIsplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
     colOtkID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    Dim colDop As Long
+    colDop = GetColumnIndex(TBL_NOVAC, COL_NOV_DOPLATA_ID)
     
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If Not JeAvansKooperanta(CStr(data(i, colTip))) Then GoTo NextRow
-        If Trim$(CStr(data(i, colOtkID))) <> "" Then GoTo NextRow
+        If Not JeSlobodanAvansKooperanta(CStr(data(i, colTip)), CStr(data(i, colOtkID)), _
+                                         NovacDoplataID(data, i, colDop)) Then GoTo NextRow
         
         Dim kID As String
         kID = Trim$(CStr(data(i, colKoop)))

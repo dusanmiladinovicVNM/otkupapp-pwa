@@ -12,6 +12,11 @@ Option Explicit
 ' ============================================================
 ' clsBlokIsplata
 ' Class wrapper za jedan otvoreni otkup blok u pregledu isplata.
+'
+' Od F4 doplate isti oblik nosi i otvoreno KNJIZNO ODOBRENJE: otkupID je tada
+' KLJUC OBAVEZE (DoplataID), a doplataID <> "" je razlikovac. Mape naloga
+' (korpa, zadati iznosi, saldo kapija) rade nad kljucem i ne razlikuju ih;
+' radnja koja vazi samo za otkup (primena avansa) gleda doplataID.
 ' Class-based jer VBA UDT-i ne mogu da budu Variant payload
 ' (Collection, Variant array, Dictionary).
 ' Pattern dosledan sa clsTransaction, clsFilterParam.
@@ -30,3 +35,4 @@ Public OtvorenIznos As Double
 Public HasTekuciRacun As Boolean
 Public KooperantAvansSaldo As Double      ' info display: nedodeljeni avans
 Public IsplatitiIznos As Double           ' finalni iznos za nalog/specifikaciju (operater unos ili OtvorenIznos)
+Public doplataID As String                ' KO (F4 doplate): DoplataID; "" = otkupni blok

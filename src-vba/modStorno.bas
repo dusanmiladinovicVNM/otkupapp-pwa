@@ -1573,9 +1573,11 @@ End Function
 ' Stavke prate zaglavlje (BEZ_STORNA) i nemaju svoju kolonu -- storniran KO
 ' izlazi iz svih zbirova kroz modDoplata.DoplataStavkeRedovi (DOP-03).
 '
-' Novac se u F1 jos ne vezuje za KO (tblNovac.DoplataID dolazi sa isplatom,
-' F4), pa ovde nema sta da se odvezuje. Kad veza nastane, storno je odvezuje,
-' ne stornira -- isto kao kod otkupa (DOP-05, ODLUKA_NOVAC_PRI_STORNU.md).
+' NOVAC SE ODVEZUJE, NE STORNIRA (DOP-05, F4) -- isto kao kod otkupa
+' (ODLUKA_NOVAC_PRI_STORNU.md): isplata KO je stvarno data, pa ostaje, a gubi
+' vezu DoplataID (modNovac.ResetNovacDoplataLink). Virman tako opet postaje
+' slobodan avans kooperanta, kes ostaje zatvoren posao. Odvezivanje je u ISTOJ
+' transakciji sa stornom zaglavlja -- oba _TX snapshot-uju i tblNovac.
 
 Public Function StornoDoplata_TX(ByVal doplataID As String) As Boolean
     Const SRC As String = "StornoDoplata_TX"
@@ -1587,6 +1589,7 @@ Public Function StornoDoplata_TX(ByVal doplataID As String) As Boolean
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_DOPLATA
+    tx.AddTableSnapshot TBL_NOVAC
 
     If Not StornoDoplata(doplataID) Then
         Err.Raise ERR_STORNO_BASE + 80, SRC, _
@@ -1614,6 +1617,7 @@ Public Function StornoDoplata(ByVal doplataID As String) As Boolean
     Dim rowD As Long
     rowD = RequireStornoAllowed(TBL_DOPLATA, Trim$(doplataID), COL_DOP_ID, SRC)
     MarkRowStornirano TBL_DOPLATA, rowD, SRC
+    modNovac.ResetNovacDoplataLink Trim$(doplataID)
 
     StornoDoplata = True
     Exit Function
@@ -1641,6 +1645,7 @@ Public Function StornoObracunDoplate_TX(ByVal obracunID As String) As Boolean
 
     tx.BeginTx
     tx.AddTableSnapshot TBL_DOPLATA
+    tx.AddTableSnapshot TBL_NOVAC
 
     Dim id As Variant
     For Each id In ids

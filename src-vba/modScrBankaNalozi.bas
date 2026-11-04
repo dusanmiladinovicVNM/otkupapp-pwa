@@ -672,6 +672,12 @@ Private Function PrimeniAvans(ByVal red As Long) As Boolean
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_DVOSMISLEN"), True
         Exit Function
     End If
+    ' KO je u listi pod kljucem bloka (F4 doplate), ali motor avansa veze samo
+    ' na otkup -- odbija se PRE potvrde, da pitanje ne obeca vezivanje.
+    If modDoplata.JeKO(iD) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_AVANS_KO"), True
+        Exit Function
+    End If
 
     avans = RedD(red, BN_KOL_AVANS)
     otvoreno = RedD(red, BN_KOL_OTVORENO)
@@ -758,13 +764,21 @@ Private Function BnAvansKandidata(ByVal ids As Object) As Long
     For Each v In sveze
         Set blk = v
         If ids.Exists(blk.otkupID) Then
-            If blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0 Then n = n + 1
+            If AvansKandidat(blk) Then n = n + 1
         End If
     Next v
     BnAvansKandidata = n
     Exit Function
 EH:
     LogErr "modScrBankaNalozi.BnAvansKandidata"
+End Function
+
+' Blok koji moze da primi avans: kooperant ima slobodan avans, blok duguje, i
+' blok JESTE otkup -- KO u listi naloga (F4 doplate) motor avansa ne veze. Jedna
+' definicija za potvrdu (BnAvansKandidata) i za motor (BnAvansNadIDovima).
+Private Function AvansKandidat(ByVal blk As clsBlokIsplata) As Boolean
+    If Len(blk.doplataID) > 0 Then Exit Function
+    AvansKandidat = (blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0)
 End Function
 
 ' MOTOR batch-a: veze avans na svaki blok iz zadatog skupa OtkupID-jeva. Vraca
@@ -798,7 +812,7 @@ Public Function BnAvansNadIDovima(ByVal ids As Object, ByRef outOk As Long, _
     For Each v In sveze
         Set blk = v
         If ids.Exists(blk.otkupID) Then
-            If blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0 Then
+            If AvansKandidat(blk) Then
                 n = n + 1
                 ishod = AvansJedan(blk.kooperantID, blk.otkupID, iznos)
                 Select Case ishod

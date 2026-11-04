@@ -426,6 +426,9 @@ Public Sub RunAllTests()
     RunOne 319
     RunOne 320
     RunOne 321
+    RunOne 322
+    RunOne 323
+    RunOne 324
     RunOne 13
     RunOne 14
     RunOne 15
@@ -723,6 +726,9 @@ Private Sub ResetSeamova()
     ' Ekran Doplata (318-320): zabelezeno pitanje, stope i unos bez zone --
     ' zaostalo bi sledecem testu izgledalo kao njegovo.
     modScrDoplata.Scr_DopTestReset
+    ' Mapiranje izvoda u testovima doplate (323-324) gasi dijaloge greske; test
+    ' koji pukne pre vracanja ostavio bi tih rezim i produkciji posle suite.
+    modBankaMapiranje.gBankaSilentBatch = False
     Err.Clear
 End Sub
 
@@ -1045,6 +1051,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 319: TestName = "T_Doplata_EkranTok"
         Case 320: TestName = "T_Doplata_EkranUgovor"
         Case 321: TestName = "T_Doplata_SignalOsnovice"
+        Case 322: TestName = "T_Doplata_OtvorenoKOUNalozima"
+        Case 323: TestName = "T_Doplata_IzvodPoBrojuKO"
+        Case 324: TestName = "T_Doplata_StornoOdvezujeIsplatu"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1374,6 +1383,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 319: T_Doplata_EkranTok
         Case 320: T_Doplata_EkranUgovor
         Case 321: T_Doplata_SignalOsnovice
+        Case 322: T_Doplata_OtvorenoKOUNalozima
+        Case 323: T_Doplata_IzvodPoBrojuKO
+        Case 324: T_Doplata_StornoOdvezujeIsplatu
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -28188,5 +28200,266 @@ Private Function DopOdstupanjaObracuna(ByVal obracunID As String) As String
             DopOdstupanjaObracuna = DopOdstupanjaObracuna & CStr(r(i, 1)) & "|" & _
                 Format$(CDbl(r(i, 4)), "0.00") & "|" & Format$(CDbl(r(i, 5)), "0.00") & ";"
         End If
+    Next i
+End Function
+
+' ============================================================
+' 322. DOP-ODL-05 (F4): OTVORENO KO JE OBAVEZA U NALOZIMA ZA BANKU.
+' ============================================================
+' KO je obaveza firme prema kooperantu kao i otkupni blok: nalozi ga nose pod
+' kljucem bloka (DoplataID), sa brojem KO kao pozivom na broj -- isti broj po
+' kome ga uvoz izvoda kasnije razresava. Stanica naloga je MATICNA stanica
+' kooperanta, ne stanica stavke. Saldo kapija vazi i za KO. Avans se veze samo
+' na otkupni blok, ne na KO.
+' Tok (kooperant A, maticna STA1, tekuci racun): otkup I 10 na STA2 juce;
+'   danas KO I 10 din/kg = 100; slobodan avans A 30.
+' SABOTAZE: dop-nalozi-bez-ko, dop-nalog-avans-na-ko.
+Private Sub T_Doplata_OtvorenoKOUNalozima()
+    Dim b As String, vr As String, kA As String, kul As String, stope As Collection
+    Dim obr As String, g As String, en As Long, idA As String, brojA As String
+    Dim blk As clsBlokIsplata, c As Collection, s As String, odb As String
+    Dim ids As Object, n As Long, ok As Long, noop As Long, er As Long, zbir As Double
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    DopTekuciRacun kA, "160-0000000" & Right$("000000" & b, 6) & "-11"
+    DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 10, 0
+    Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 322", _
+                                      False, g, en)
+    AssertEq g, "", "preduslov: KO se knjizi"
+    idA = DopIdKO(obr, kA)
+    brojA = DopBrojDokumentaKO(obr, kA)
+
+    AssertEq DopKORedovi(modDoplata.OtvoreniKORedovi(kA)), _
+             idA & "|" & brojA & "|" & FX_STANICA & "|" & Format$(100, "0.00") & "|" & _
+             Format$(0, "0.00") & "|" & Format$(100, "0.00") & ";", _
+             "otvoreno KO: iznos, isplaceno i ostatak; stanica je maticna stanica kooperanta"
+
+    Set blk = DopBlokNaloga(idA)
+    AssertEq (Not blk Is Nothing), True, "nalozi za banku nose otvoreno KO pod kljucem bloka"
+    AssertEq blk.doplataID & "|" & blk.brojDokumenta & "|" & blk.kooperantID & "|" & _
+             Format$(blk.OtvorenIznos, "0.00") & "|" & CStr(blk.HasTekuciRacun), _
+             idA & "|" & brojA & "|" & kA & "|" & Format$(100, "0.00") & "|" & CStr(True), _
+             "blok KO nosi razlikovac, broj KO, primaoca, otvoreno i racun"
+
+    Set c = New Collection
+    blk.IsplatitiIznos = 100
+    c.Add blk
+    s = modBankaExportPregled.BuildNalogCsvPayload(c, "160-0000000000001-11", _
+            modBankaExportPregled.BuildOpenAmountDict(modBankaExportPregled.BuildBlokIsplataList()), odb)
+    AssertEq odb, "", "saldo kapija pusta nalog do otvorenog KO"
+    AssertEq (InStr(1, s, ";" & brojA & ";", vbBinaryCompare) > 0), True, _
+             "nalog nosi broj KO kao poziv na broj"
+    blk.IsplatitiIznos = 100.01
+    s = modBankaExportPregled.BuildNalogCsvPayload(c, "160-0000000000001-11", _
+            modBankaExportPregled.BuildOpenAmountDict(modBankaExportPregled.BuildBlokIsplataList()), odb)
+    AssertEq (Len(s) = 0 And Len(odb) > 0), True, "saldo kapija odbija nalog preko otvorenog KO"
+
+    If Len(modNovac.SaveNovac_TX("AV-" & b, Date, "OM", FX_STANICA, "OM", FX_STANICA, kA, "", "", _
+                                 NOV_VIRMAN_AVANS_KOOP, 0, 30, "test 322 avans")) = 0 Then
+        Err.Raise vbObjectError + 9405, "modTest.T_Doplata_OtvorenoKOUNalozima", "Avans nije upisan."
+    End If
+    Set ids = CreateObject("Scripting.Dictionary")
+    ids(idA) = True
+    n = modScrBankaNalozi.BnAvansNadIDovima(ids, ok, noop, er, zbir)
+    AssertEq n & "|" & ok & "|" & noop & "|" & er, "0|0|0|0", _
+             "avans se ne primenjuje na KO: KO nije kandidat"
+    AssertEq modDoplata.JeKO(idA), True, "JeKO prepoznaje KO u listi naloga"
+End Sub
+
+' ============================================================
+' 323. DOP-ODL-05 (F4): IZVOD PO BROJU KO ZATVARA KO, A NE OTKUP NI AVANS.
+' ============================================================
+' Poziv na broj = broj KO je jak kljuc na taj KO: plan ga imenuje, pisac knjizi
+' VirmanFirmaKoop vezan DoplataID-em na MATICNOJ stanici. Delimicna isplata
+' umanjuje ostatak; preplata daje KO-u ostatak, a visak je avans. Isplata KO NIJE
+' slobodan avans -- inace bi je primena avansa povukla na otkupni blok.
+' Tok (kooperant A, maticna STA1): otkup I 10 na STA2; KO 100; izvod 60, pa 70.
+' SABOTAZE: dop-plan-ko-kao-blok, dop-izvod-ko-bez-veze, dop-avans-guta-isplatu-ko.
+Private Sub T_Doplata_IzvodPoBrojuKO()
+    Dim b As String, vr As String, kA As String, kul As String, stope As Collection
+    Dim obr As String, g As String, en As Long, idA As String, brojA As String
+    Dim plan As Variant, jak As Variant, partner As String, bim1 As String, bim2 As String
+    Dim r1 As String, r2 As String
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 10, 0
+    Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 323", _
+                                      False, g, en)
+    AssertEq g, "", "preduslov: KO se knjizi"
+    idA = DopIdKO(obr, kA)
+    brojA = DopBrojDokumentaKO(obr, kA)
+    partner = "DOP IZVOD " & b
+
+    plan = modBankaMapiranje.BimAutoPlanIzVrednosti(0, 60, "", brojA, partner, "")
+    AssertEq CStr(plan(1)) & "|" & CStr(plan(2)) & "|" & CStr(plan(3)) & "|" & CStr(plan(4)) & "|" & _
+             CStr(plan(5)), _
+             BIM_TIP_KOOPERANT & "|" & kA & "|" & BIM_CILJ_DOPLATA & "|" & idA & "|" & BIM_IZV_JAK, _
+             "plan: poziv na broj KO je jak kljuc na taj KO"
+    jak = modBankaMapiranje.BimJakiKljucInfo(0, 60, "", brojA)
+    AssertEq CStr(jak(1)) & "|" & CStr(jak(2)) & "|" & CStr(jak(3)), _
+             kA & "|" & idA & "|" & BIM_CILJ_DOPLATA, "jaki kljucevi: isti odgovor kao plan"
+    AssertEq modScrBankaUvoz.BuPredlogTekst(BIM_SMER_ISPLATA, BIM_CILJ_DOPLATA, "X", True, BIM_IZV_JAK), _
+             Poruka("OTKUI_LBL_BU_PRED_KO") & " X", "kolona Predlog imenuje knjizno odobrenje"
+
+    bim1 = DopBim(b & "-1", brojA, 60, partner)
+    modBankaMapiranje.gBankaSilentBatch = True
+    r1 = modBankaMapiranje.AutoMapBankaImportRow_TX(bim1)
+    modBankaMapiranje.gBankaSilentBatch = False
+    AssertEq r1, "OK", "preduslov: izvod po broju KO se knjizi"
+    AssertEq DopNovacBim(bim1), _
+             NOV_VIRMAN_FIRMA_KOOP & "|" & Format$(60, "0.00") & "|" & idA & "||" & FX_STANICA & "|;", _
+             "isplata KO: virman firme, vezan za KO, bez otkupa, na maticnoj stanici"
+    AssertEq Format$(modDoplata.OtvorenoNaKO(idA), "0.00"), Format$(40, "0.00"), _
+             "delimicna isplata umanjuje ostatak KO"
+    AssertEq Format$(modNovac.GetKooperantUnallocatedAvans(kA), "0.00"), Format$(0, "0.00"), _
+             "isplata KO nije slobodan avans kooperanta"
+
+    bim2 = DopBim(b & "-2", brojA, 70, partner)
+    modBankaMapiranje.gBankaSilentBatch = True
+    r2 = modBankaMapiranje.AutoMapBankaImportRow_TX(bim2)
+    modBankaMapiranje.gBankaSilentBatch = False
+    AssertEq r2, "OK", "preduslov: preplata po broju KO se knjizi"
+    AssertEq DopNovacBim(bim2), _
+             NOV_VIRMAN_FIRMA_KOOP & "|" & Format$(40, "0.00") & "|" & idA & "||" & FX_STANICA & "|;" & _
+             NOV_VIRMAN_AVANS_KOOP & "|" & Format$(30, "0.00") & "|||" & FX_STANICA & "|;", _
+             "preplata KO: KO dobija ostatak, visak je avans na maticnoj stanici"
+    AssertEq Format$(modDoplata.OtvorenoNaKO(idA), "0.00") & "|" & _
+             CStr(IsEmpty(modDoplata.OtvoreniKORedovi(kA))), _
+             Format$(0, "0.00") & "|" & CStr(True), "isplacen KO izlazi iz otvorenih"
+    AssertEq Format$(modNovac.GetKooperantUnallocatedAvans(kA), "0.00"), Format$(30, "0.00"), _
+             "slobodan avans je samo visak preko KO"
+End Sub
+
+' ============================================================
+' 324. DOP-05 (F4): STORNO KO ODVEZUJE ISPLATU, NE STORNIRA JE.
+' ============================================================
+' Isplata KO je stvarno data, pa ostaje u tblNovac i gubi vezu DoplataID; virman
+' tako opet postaje slobodan avans kooperanta -- isto pravilo kao kod storna
+' otkupa (ODLUKA_NOVAC_PRI_STORNU.md). Storniran KO nije otvorena obaveza, a
+' poziv na njegov broj vise ne vodi na KO.
+' Tok (kooperant A): KO 100; izvod 60 po broju KO; storno KO.
+' SABOTAZE: dop-storno-ne-odvezuje.
+Private Sub T_Doplata_StornoOdvezujeIsplatu()
+    Dim b As String, vr As String, kA As String, kul As String, stope As Collection
+    Dim obr As String, g As String, en As Long, idA As String, brojA As String
+    Dim plan As Variant, partner As String, bim1 As String, r1 As String
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 10, 0
+    Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 324", _
+                                      False, g, en)
+    AssertEq g, "", "preduslov: KO se knjizi"
+    idA = DopIdKO(obr, kA)
+    brojA = DopBrojDokumentaKO(obr, kA)
+    partner = "DOP STORNO " & b
+
+    bim1 = DopBim(b & "-1", brojA, 60, partner)
+    modBankaMapiranje.gBankaSilentBatch = True
+    r1 = modBankaMapiranje.AutoMapBankaImportRow_TX(bim1)
+    modBankaMapiranje.gBankaSilentBatch = False
+    AssertEq r1, "OK", "preduslov: izvod po broju KO se knjizi"
+
+    AssertEq modStorno.StornoDoplata_TX(idA), True, "preduslov: storno KO prolazi"
+    AssertEq DopNovacBim(bim1), _
+             NOV_VIRMAN_FIRMA_KOOP & "|" & Format$(60, "0.00") & "|||" & FX_STANICA & "|;", _
+             "storno KO odvezuje isplatu (DoplataID prazan), a ne stornira je"
+    AssertEq Format$(modNovac.GetKooperantUnallocatedAvans(kA), "0.00"), Format$(60, "0.00"), _
+             "odvezana isplata storniranog KO je slobodan avans kooperanta"
+    AssertEq IsEmpty(modDoplata.OtvoreniKORedovi(kA)), True, "storniran KO nije otvorena obaveza"
+    plan = modBankaMapiranje.BimAutoPlanIzVrednosti(0, 10, "", brojA, partner & " X", "")
+    AssertEq (CStr(plan(3)) <> BIM_CILJ_DOPLATA), True, "poziv na broj storniranog KO ne vodi na KO"
+End Sub
+
+' Tekuci racun kooperanta (primalac naloga) -- DopKooperant ga ne upisuje.
+Private Sub DopTekuciRacun(ByVal koopID As String, ByVal racun As String)
+    Dim rows As Collection
+    Set rows = FindRows(TBL_KOOPERANTI, COL_KOOP_ID, koopID)
+    If rows Is Nothing Then Err.Raise vbObjectError + 9406, "modTest.DopTekuciRacun", koopID
+    If rows.count <> 1 Then Err.Raise vbObjectError + 9406, "modTest.DopTekuciRacun", koopID
+    RequireUpdateCell TBL_KOOPERANTI, rows(1), COL_KOOP_TEKUCI_RACUN, racun, "modTest"
+End Sub
+
+' Stavka izvoda: isplata sa zadatim pozivom na broj, bez konta (poziv je jedini
+' jak kljuc). Vraca BankaImportID.
+Private Function DopBim(ByVal oznaka As String, ByVal poziv As String, _
+                        ByVal isplata As Double, ByVal partner As String) As String
+    Const SRC As String = "modTest.DopBim"
+    Dim red() As Variant, id As String
+    id = "BIM-DOP-" & oznaka
+    ReDim red(1 To GetTable(TBL_BANKA_IMPORT).ListColumns.count)
+    red(RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID, SRC)) = id
+    red(RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA, SRC)) = "IZV-DOP-" & oznaka
+    red(RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_RACUNA, SRC)) = "160-0000000000001-11"
+    red(RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_TRANSAKCIJE, SRC)) = Date
+    red(RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_IZVODA, SRC)) = Date
+    red(RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER, SRC)) = partner
+    red(RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER_KONTO, SRC)) = ""
+    red(RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA, SRC)) = 0
+    red(RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)) = isplata
+    red(RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_POZIV_NA_BROJ, SRC)) = poziv
+    red(RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BANKA_REFERENZ, SRC)) = "REF-DOP-" & oznaka
+    red(RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, SRC)) = ""
+    If AppendRow(TBL_BANKA_IMPORT, red) <= 0 Then
+        Err.Raise vbObjectError + 9404, SRC, "Stavka izvoda nije upisana: " & id
+    End If
+    DopBim = id
+End Function
+
+' Redovi novca nastali iz jedne stavke izvoda, redom tabele, kao
+' "tip|isplata|DoplataID|OtkupID|OMID|Stornirano;".
+Private Function DopNovacBim(ByVal bimID As String) As String
+    Const SRC As String = "modTest.DopNovacBim"
+    Dim d As Variant, i As Long
+    Dim cNap As Long, cTip As Long, cIs As Long, cDop As Long, cOtk As Long, cOm As Long, cSt As Long
+    d = GetTableData(TBL_NOVAC)
+    If Not IsArray(d) Then Exit Function
+    cNap = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
+    cTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
+    cIs = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+    cDop = RequireColumnIndex(TBL_NOVAC, COL_NOV_DOPLATA_ID, SRC)
+    cOtk = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    cOm = RequireColumnIndex(TBL_NOVAC, COL_NOV_OM_ID, SRC)
+    cSt = RequireColumnIndex(TBL_NOVAC, COL_STORNIRANO, SRC)
+    For i = 1 To UBound(d, 1)
+        If modBankaMapiranje.BimIdFromNapomena(NzToText(d(i, cNap))) = bimID Then
+            DopNovacBim = DopNovacBim & NzToText(d(i, cTip)) & "|" & _
+                Format$(CDbl(d(i, cIs)), "0.00") & "|" & NzToText(d(i, cDop)) & "|" & _
+                NzToText(d(i, cOtk)) & "|" & NzToText(d(i, cOm)) & "|" & NzToText(d(i, cSt)) & ";"
+        End If
+    Next i
+End Function
+
+' Blok liste naloga sa zadatim kljucem, ili Nothing.
+Private Function DopBlokNaloga(ByVal kljuc As String) As clsBlokIsplata
+    Dim v As Variant, blk As clsBlokIsplata
+    For Each v In modBankaExportPregled.BuildBlokIsplataList()
+        Set blk = v
+        If blk.otkupID = kljuc Then
+            Set DopBlokNaloga = blk
+            Exit Function
+        End If
+    Next v
+End Function
+
+' OtvoreniKORedovi kao "id|broj|stanica|iznos|isplaceno|otvoreno;" po redu.
+Private Function DopKORedovi(ByVal r As Variant) As String
+    Dim i As Long
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        DopKORedovi = DopKORedovi & CStr(r(i, 1)) & "|" & CStr(r(i, 2)) & "|" & CStr(r(i, 5)) & "|" & _
+            Format$(CDbl(r(i, 6)), "0.00") & "|" & Format$(CDbl(r(i, 7)), "0.00") & "|" & _
+            Format$(CDbl(r(i, 8)), "0.00") & ";"
     Next i
 End Function
