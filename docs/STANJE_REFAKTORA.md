@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 321: merge `#467` = `1bc4f9bb`; rez 2b ZATVOREN, sledi završni krug S8).
+**Ažurirano:** 04.11.2026 (stavka 322: završni krug S8 — 11/11 sabotaža, FULL zeleno posle usklađivanja testa Storno centra; S8 ZATVOREN).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10934,6 +10934,22 @@
        napomenama (labela bez ID-a, „BLOKIRANO", C2/B6 bez testa), pa zapis „S8 zatvoren". Pun katalog sabotaža
        ostaje pred release.
      - **Sledeći brojevi:** test 315 · stavka 322 · KI-088 · plan §14.63.
+
+322. **Završni krug S8 — S8 „Paleta i prerada" ZATVOREN** (04–05.11.2026, operater: „Kreni"). Grana
+     `claude/s8-zavrsni-krug` (od `1bc4f9bb`). Plan §14.63.
+
+     - **11 odloženih regresionih sabotaža:** prvi prolaz 9 / 11 — `relink-izvor-po-broju` se nije kompajlirala
+       (labela `sBr` od 2a-2 ne postoji), `cotenant-po-broju` je obarala tuđi test (`bpg` prazan od 2a-2). Obe
+       preformulisane (broj iz zaglavlja) i dokazane 2 / 2 (potpis `09d375b2c5d10966`). Ukupno 11 / 11.
+     - **FULL:** sve zeleno osim `Test_StornoCentar_All` (56 / 1) — premisa dedup-a po broju, zastarela od 1b (N9).
+       Test usklađen (context nosi `OldDocID`); zeleno, dokaz u oba smera (ugašen dedup po identitetu → ista tvrdnja
+       pada → vraćeno → zeleno). RunAllTests ponovo 314 / 0.
+     - **Odluke operatera:** `S8R2B1-REV-01` uz `KI-081`; tri P3 napomene 2a-2 → `KI-088` (OPEN).
+     - **Osnova za `main` posle merge-a ovog zapisa:** RunAllTests 314, BFP 3014, Banka 241, Storno 111, Palete 115,
+       Agrohemija 25, Golden i ostale zelene; katalog 1155 (svih 11 odloženih dokazano), `pal_broj` 0; šema
+       `CA5CE30A`, fixture `68efada928a8d97d`.
+     - **Van S8:** pun katalog sabotaža pred release; `KI-081` (sa REV-01) i `KI-088` OPEN.
+     - **Sledeći brojevi:** test 315 · stavka 323 · KI-089 · plan §14.64.
 
 ## Dug sa imenom (posle S5-5b)
 

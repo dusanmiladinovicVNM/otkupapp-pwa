@@ -362,11 +362,16 @@ Public Sub Test_GetNedovrseno_Auto()
           "osirocena prijemnica -> red nosi PrijemnicaID (kolona 8)"
     TcChk Len(NedRefCorrectionID("SVT-ND-P1")) = 0, "osirocen red nema CorrectionID"
 
-    ' PENDING context za ISTI broj (RESI_KASNIJE, NeedsRecovery=Da)
+    ' PENDING context za ISTI dokument (RESI_KASNIJE, NeedsRecovery=Da). Od S8 reza 1b
+    ' (N9) dedup ide PO IDENTITETU: osirocen red se skriva samo kad context nosi BAS
+    ' njegov dokument (OldDocID); sam broj nije dovoljan, jer broj nose dokumenti vise
+    ' kupaca. Do zavrsnog kruga S8 je ovde context nosio samo broj -- premisa iz vremena
+    ' dedup-a po broju, koju rezovi S8 nisu videli jer ovu suite nisu pustali. Da se
+    ' drugi dokument istog broja i dalje prikazuje, meri test 313 (modTest).
     TcSeedRow TBL_STORNO_VEZE, Array(COL_SV_ID, COL_SV_MODE, COL_SV_STATUS, COL_SV_OLD_DOCTYPE, _
-              COL_SV_OLD_BROJ, COL_SV_NEEDS_RECOVERY), _
+              COL_SV_OLD_BROJ, COL_SV_OLD_DOCID, COL_SV_NEEDS_RECOVERY), _
               Array("SVT-ND-COR", SV_MODE_RESI_KASNIJE, SV_STATUS_PENDING, FLOW_DOC_PRIJEMNICA, _
-              "SVT-ND-P1", "Da")
+              "SVT-ND-P1", "SVT-ND-PID", "Da")
 
     ' posle: i dalje 1 red (dedup), ali sada nosi CorrectionID (context "pobedi")
     TcChk NedRefCount("SVT-ND-P1") = 1, "context + osiroce isti broj -> deduplikovano na 1 red"

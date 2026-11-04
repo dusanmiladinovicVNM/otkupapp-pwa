@@ -11166,6 +11166,47 @@ Grana `claude/s8-rez2b2-brisanje` (od glave 2b-1). Zapis: `docs/STANJE_REFAKTORA
 - **Compile:** automatski NEJASNO; ručno **PASS** (operater). Sveska `tests/fixtures/rucna_provera_s8r2b2.xlsm` (kod
   `c9cb0266`; pre provere VBE `File > Import File` → `src-vba/modVbaTools.bas`).
 
+### 14.63) Završni krug S8 — S8 „Paleta i prerada" ZATVOREN (04–05.11.2026)
+
+Grana `claude/s8-zavrsni-krug` od `main` = `1bc4f9bb` (merge #467). Zapis: `docs/STANJE_REFAKTORA.md` stavka 322.
+Krug je samo merio; kod se menjao tamo gde je merenje našlo zastareo test ili sabotažu, ne u produkciji.
+
+#### Šta je mereno
+
+- **11 odloženih regresionih sabotaža** (stavka 288: tri `relink-*`, `cotenant-po-broju`, `writer-isti-broj-odbija`,
+  šest `s6k4` sabotaža prerađene palete) kroz `dokaz.py`: prvi prolaz **9 / 11**. Nalazi:
+  - `relink-izvor-po-broju` — zamena je čitala labelu `sBr` sa paletne stavke, koje od 2a-2 nema: sabotaža se nije
+    kompajlirala (Excel u `[break]`, „NE OBARA NIŠTA");
+  - `cotenant-po-broju` — zamena je poredila `bpg`, koji se od 2a-2 puni tek posle provere (iz zaglavlja), pa je bio
+    prazan: svaki red je izgledao tuđ i padao je tuđi test.
+
+  Obe su preformulisane po obrascu 2b-2 (izbor po broju iz ZAGLAVLJA prijemnice) i dokazane: **2 / 2 crveno**,
+  potpis izvora `09d375b2c5d10966` pre i posle identičan. Ukupno **11 / 11**.
+- **FULL prolaz** (`run_vba.py`, pun set): RunAllTests 314 / 0, BFP 3014 / 0, Banka 241 / 0, Storno 111 / 0, Palete,
+  Faktura, Agrohemija 25 / 0, Golden, Izveštaji, SheetsJson, Licenca — zeleno; **`Test_StornoCentar_All` 56 / 1**.
+  Pala je „context + osiroce isti broj -> deduplikovano na 1 red": test je seme PENDING context bez `OldDocID`, a rez
+  1b (N9, `cfde2bb7`) je dedup „Nedovršeno" svesno prebacio na identitet. Premisa je zastarela od 1b; rezovi S8 tu
+  suite nisu puštali. Ispravka: context nosi `OldDocID` osirotele prijemnice (slučaj „isti broj, drugi dokument"
+  meri test 313). Storno centar zeleno; dokaz u oba smera: ugašen dedup po identitetu obara BAŠ tu tvrdnju (56 / 1),
+  izvor vraćen bajt po bajt, opet zeleno.
+- Posle FULL-a je menjan samo `modTestStornoCentar` (jedan red seed-a); Storno centar i RunAllTests su ponovo
+  pušteni, BFP i ostale suite ga ne izvršavaju. Ručni Compile za ovu izmenu nije ponavljan (procedura se izvršila
+  u suiti).
+
+#### Odluke operatera
+
+- **`S8R2B1-REV-01`** (C1/A3 kroz globalni strog čitač): uz `KI-081`, bez koda u S8.
+- **Tri P3 napomene iz review-a 2a-2** (labela bez ID-a, poruka „BLOKIRANO", C2/B6 bez testa): `KI-088`, OPEN, testovi
+  kad oblast postane aktivan slajs.
+- Predlog review-a #467 (self-heal test i za novo ime traga): odbijen.
+
+#### Stanje posle S8
+
+- Paletna stavka zna samo liniju prijemnice (`PrijemnicaStavkaID`, obavezan i proveren u piscu — `PAL-INV-01`) i
+  `PrijemnicaID` kao labelu dokumenta; broj prijemnice, broj zbirne i trag zbirne su na zaglavlju (`PAL-ODL-03`).
+  Palete zbirne su palete njenih prijemnica (2a-1); integritet A3/C1 radi po stavci (2a-2, 2b-1).
+- Pun katalog sabotaža (1155) ostaje pred release, kao i do sada.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
