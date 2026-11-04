@@ -10739,8 +10739,8 @@ Private Sub Test_S8R2a1_PaleteZbirnePoPrijemnicama()
                "S8R2a1: prijemnica zbirne C ostaje aktivna"
 
     ' --- 4) S8R2A1-REV-01: obim se ne moze suziti -> uvid ne nosi tudju robu ---
-    ' Meri se BLAG uvid: strog nesiguran obim ionako prijavi kao nevalidan, pa samo
-    ' blag razlikuje "odbij" od "procitaj sva deca tog broja".
+    ' Mere se oba rezima: strog (ekran Storno) mora da bude nevalidan, a blag ne
+    ' sme da nosi palete druge zbirne (review #463, P3).
     Dim brojD As String, otpD1 As String, otpD2 As String, zbrD1 As String, zbrD2 As String
     Dim prjD1 As String, prjD2 As String, hD1 As Object, hD2 As Object
     brojD = TEST_PREFIX & "-ZBR-S8D-" & scenario
@@ -10766,6 +10766,9 @@ Private Sub Test_S8R2a1_PaleteZbirnePoPrijemnicama()
     End If
     AssertTrue Len(zbrD1) > 0 And Len(zbrD2) > 0 And Len(S8R1bPaletaDokumenta(prjD2)) > 0, _
                "S8R2a1: preduslov -- dve zbirne istog broja, druga sa prijemnicom bez traga"
+    Dim uvS As Object
+    Set uvS = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, brojD, "", zbrD1, True)
+    AssertTrue Not CBool(uvS("valid")), "S8R2a1: strog uvid odbija nesiguran obim"
     Dim uvD As Object, palD As Collection, pD As Variant, gajbD As Long
     Set uvD = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, brojD, "", zbrD1, False)
     gajbD = -1
