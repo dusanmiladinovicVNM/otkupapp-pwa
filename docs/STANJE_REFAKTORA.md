@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 309: kapije `#465` — RunAllTests 314/0, BFP 3004/0, Palete, Storno 111/0, dokaz 4/4; čeka ručni Compile).
+**Ažurirano:** 04.11.2026 (stavka 310: ručni Compile PASS; `KI-086` i `KI-087` CLOSED; merge `#465` na izričit zahtev).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10750,6 +10750,17 @@
      - **Posle Compile-a:** `KI-086` i `KI-087` → CLOSED; merge `#465` na izričit zahtev; zatim 2b.
      - **Nova osnova grane:** RunAllTests 314 / 0 · BFP 3004 / 0 · Palete OK · Storno 111 / 0 · katalog 1153.
      - **Sledeći brojevi:** test 315 · stavka 310 · KI-088 · plan §14.60.
+
+310. **Rez `KI-086`/`KI-087` — ručni Compile PASS; `KI-086` i `KI-087` CLOSED** (04.11.2026). Sveska
+     `tests/fixtures/rucna_provera_ki086.xlsm` (kod `ac75ba7d`); operater je javio „Compile PASS".
+
+     - **`docs/KNOWN_ISSUES.md`:** `KI-086` i `KI-087` → CLOSED, sa opisom zatvaranja (šta se meri i čime, šta je van
+       obima).
+     - **Status reza:** kod, oba kruga review-a, izvršne kapije (stavka 309) i Compile su gotovi; uslov review-a za
+       MERGE GO je ispunjen. Merge `#465` ide samo na izričit zahtev.
+     - **Posle merge-a:** rez 2b (HOLD i do odgovora operatera o C002), sa obavezama iz stavke 305
+       (`S8R2A2-REV-01`).
+     - **Sledeći brojevi:** test 315 · stavka 311 · KI-088 · plan §14.60.
 
 ## Dug sa imenom (posle S5-5b)
 
