@@ -10,6 +10,12 @@ Option Explicit
 ' tanki; sva poslovna pravila/transakcija su u modPaletniList.
 ' ============================================================
 
+' TEST SEAM (KI-086): tekst poslednjeg pitanja korekcije kolicina ("" = nije
+' postavljeno). U test rezimu PaletaAdjustPrompt ne otvara MsgBox (u nevidljivom
+' Excelu visi), nego BELEZI pitanje i bira "Otkazi" -- samo zabranjuje, ne menja.
+' Gasi ga modTest.ResetSeamova (PaletaAdjustPitanjeTestReset).
+Private mAdjustPitanjeTest As String
+
 ' Alt+F8: broj palete (tekuca godina) -> PDF paletnog lista.
 Public Sub ExportPaletniListPDF_Prompt()
     On Error GoTo EH
@@ -92,24 +98,35 @@ End Sub
 ' drzi. Broj je samo labela u pitanju operateru -- izbor po broju je korigovao i
 ' palete drugog kupca istog broja.
 ' ============================================================
-Public Function PaletaAdjustPrompt(ByVal prijemnicaID As String, ByVal brojPrij As String) As String
+' outKorekcijaCeka (KI-086): True kad je korekcija bila potrebna, a NIJE uradjena
+' (ADJ_BLOCKED, "Otkazi" na pitanju, greska) -- pozivalac to vidi kao podatak, ne
+' samo kroz tekst. False kad je uradjena ili nije bila potrebna.
+Public Function PaletaAdjustPrompt(ByVal prijemnicaID As String, ByVal brojPrij As String, _
+                                   Optional ByRef outKorekcijaCeka As Boolean) As String
+    outKorekcijaCeka = False
     On Error GoTo EH
     Dim info As String
     Dim res As Long
     res = AdjustPaletaGajbiceZaPrijemnicu_TX(prijemnicaID, "", info)
 
     If res = ADJ_NEEDS_CHOICE Then
-        Dim ans As VbMsgBoxResult
-        ans = MsgBox("Korekcija gajbica za prijemnicu " & brojPrij & ":" & vbCrLf & info & vbCrLf & vbCrLf & _
-                     "DA  = preliti visak na sledecu (otvorenu/novu) paletu" & vbCrLf & _
-                     "NE  = slozi SVE na istu paletu, PREKO kapaciteta" & vbCrLf & _
-                     "OTKAZI = ne diraj palete sada", _
-                     vbYesNoCancel + vbQuestion, APP_NAME)
+        Dim ans As VbMsgBoxResult, pitanje As String
+        pitanje = "Korekcija gajbica za prijemnicu " & brojPrij & ":" & vbCrLf & info & vbCrLf & vbCrLf & _
+                  "DA  = preliti visak na sledecu (otvorenu/novu) paletu" & vbCrLf & _
+                  "NE  = slozi SVE na istu paletu, PREKO kapaciteta" & vbCrLf & _
+                  "OTKAZI = ne diraj palete sada"
+        If IsTestMode() Then
+            mAdjustPitanjeTest = pitanje
+            ans = vbCancel
+        Else
+            ans = MsgBox(pitanje, vbYesNoCancel + vbQuestion, APP_NAME)
+        End If
         If ans = vbYes Then
             res = AdjustPaletaGajbiceZaPrijemnicu_TX(prijemnicaID, "PRELIJ", info)
         ElseIf ans = vbNo Then
             res = AdjustPaletaGajbiceZaPrijemnicu_TX(prijemnicaID, "PREKO", info)
         Else
+            outKorekcijaCeka = True
             PaletaAdjustPrompt = "Korekcija kolicina na paletama PRESKOCENA (uradi kasnije: " & _
                                  "Alt+F8 -> PaletaAdjust_Prompt)."
             Exit Function
@@ -117,6 +134,7 @@ Public Function PaletaAdjustPrompt(ByVal prijemnicaID As String, ByVal brojPrij 
     End If
 
     If res = ADJ_BLOCKED Then
+        outKorekcijaCeka = True
         PaletaAdjustPrompt = "Korekcija kolicina NIJE uradjena: " & info
     ElseIf res > 0 Then
         PaletaAdjustPrompt = "Kolicine na paletama korigovane. " & info
@@ -126,8 +144,20 @@ Public Function PaletaAdjustPrompt(ByVal prijemnicaID As String, ByVal brojPrij 
     Exit Function
 EH:
     LogErr "modPaletniListUI.PaletaAdjustPrompt"
+    outKorekcijaCeka = True
     PaletaAdjustPrompt = "Greska pri korekciji kolicina: " & Err.description
 End Function
+
+' TEST SEAM (KI-086): tekst poslednjeg pitanja korekcije. Tvrdo gejtovan.
+Public Function PaletaAdjustPitanjeTest() As String
+    If Not IsTestMode() Then Exit Function
+    PaletaAdjustPitanjeTest = mAdjustPitanjeTest
+End Function
+
+' TEST SEAM (KI-086): brise zabelezeno pitanje -- test pre poteza, i ResetSeamova.
+Public Sub PaletaAdjustPitanjeTestReset()
+    mAdjustPitanjeTest = ""
+End Sub
 
 ' Alt+F8: rucna korekcija kolicina na paletama za AKTIVNU prijemnicu (escape kad
 ' je auto-korekcija ranije preskocena, ili Integritet A3/A4 prijavi odstupanje).

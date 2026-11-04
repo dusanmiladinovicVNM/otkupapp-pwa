@@ -390,11 +390,19 @@ Private Function PreveziPalete(ByVal brojPrij As String, ByVal prijemnicaID As S
               Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljPrijemnica & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
-    If PreveziPaleteCore(brojPrij, prijemnicaID, upoz) Then
+    Dim korCeka As Boolean
+    If PreveziPaleteCore(brojPrij, prijemnicaID, upoz, korCeka) Then
         Scr_ResetCache
-        MsgBox Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & " " & ChrW(8594) & _
-               " " & mCiljPrijemnica & IIf(Len(upoz) > 0, vbCrLf & vbCrLf & upoz, ""), _
-               vbInformation, APP_NAME
+        If korCeka Then
+            ' KI-086: palete su prevezene, ali korekcija kolicina NIJE zavrsena --
+            ' upozorenje, ne obavestenje o uspehu.
+            MsgBox Poruka("OTKUI_MSG_OPO_PREVEZANO_KOR_CEKA") & " " & brojPrij & " " & ChrW(8594) & _
+                   " " & mCiljPrijemnica & vbCrLf & vbCrLf & upoz, vbExclamation, APP_NAME
+        Else
+            MsgBox Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & " " & ChrW(8594) & _
+                   " " & mCiljPrijemnica & IIf(Len(upoz) > 0, vbCrLf & vbCrLf & upoz, ""), _
+                   vbInformation, APP_NAME
+        End If
         PreveziPalete = True
     Else
         MsgBox Poruka("OTKUI_ERR_OPO_PAL") & vbCrLf & vbCrLf & upoz, vbExclamation, APP_NAME
@@ -411,16 +419,20 @@ End Function
 ' stajala u IIf, koji racuna obe grane, pa se zvala posle SVAKOG prevezivanja
 ' (S8R1A-REV-03). Bez MsgBox-a potvrde, da bi se merilo; outInfo nosi poruke za
 ' operatera (upozorenja prevezivanja, korekcija ili razlog neuspeha).
+' outKorekcijaCeka (KI-086): True kad je prevezivanje proslo, a korekcija koju je
+' razlika gajbi trazila NIJE uradjena (otkazana, blokirana, greska).
 Public Function PreveziPaleteCore(ByVal brojPrij As String, ByVal prijemnicaID As String, _
-                                  ByRef outInfo As String) As Boolean
+                                  ByRef outInfo As String, _
+                                  Optional ByRef outKorekcijaCeka As Boolean) As Boolean
     Dim upoz As String, gajbDiff As Boolean
     outInfo = ""
+    outKorekcijaCeka = False
     If ReassignPaleteToPrijemnica_TX(brojPrij, mCiljPrijemnica, upoz, True, gajbDiff, _
                                      prijemnicaID, mCiljPrijemnicaID) Then
         outInfo = upoz
         If gajbDiff Then
             outInfo = outInfo & IIf(Len(outInfo) > 0, vbCrLf & vbCrLf, "") & _
-                      PaletaAdjustPrompt(mCiljPrijemnicaID, mCiljPrijemnica)
+                      PaletaAdjustPrompt(mCiljPrijemnicaID, mCiljPrijemnica, outKorekcijaCeka)
         End If
         PreveziPaleteCore = True
     Else

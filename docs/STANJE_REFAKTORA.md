@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 306: ugovor reza `KI-086`/`KI-087` — mere i testovi; koda još nema).
+**Ažurirano:** 04.11.2026 (stavka 307: rez `KI-086`/`KI-087` — kod lokalno, jeftine kapije zelene; čeka review).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10651,6 +10651,50 @@
        - sabotaže po meri; fixture nepromenjen.
      - **Kapije:** jeftine u rezu; skupe tek posle reviewer GO-a i „Push, pa kapije".
      - **Sledeći brojevi:** test 315 · stavka 307 · KI-088 · plan §14.60.
+
+307. **Rez `KI-086`/`KI-087` — kod lokalno** (04.11.2026, grana `claude/s8-ki086-087`; operater: „uradi ovde").
+     Po ugovoru iz stavke 306, uz dva odstupanja (ispod).
+
+     - **`KI-086`:**
+       - `modPaletniListUI.PaletaAdjustPrompt` dobija `Optional ByRef outKorekcijaCeka` (`True` za `ADJ_BLOCKED`,
+         „Otkaži" i grešku). Seam pitanja: u test režimu ne otvara `MsgBox`, nego beleži tekst
+         (`PaletaAdjustPitanjeTest`) i bira „Otkaži"; reset je u `modTest.ResetSeamova`;
+       - `modScrOporavak.PreveziPaleteCore` prosleđuje isti izlaz; `PreveziPalete` uspešno prevezivanje sa
+         korekcijom koja čeka javlja kao UPOZORENJE, sa novim ključem `OTKUI_MSG_OPO_PREVEZANO_KOR_CEKA` (traži
+         restart radi `EnsurePoruke`).
+     - **`KI-087`:**
+       - `GetOrCreateOpenPaleta`: sve kolone izbora strogo; `Preradjeno` po obrascu kuke (seam
+         `PRERADJENO_OTVORENE_KOLONA` kvari indeks, strog uslov posle kuke);
+       - `RecomputePaletaFromStavke`, `ClosePaletaManual_TX`, korekcija (`VrstaVoca`, `SortaVoca`, `TipAmbalaze`;
+         grane `If pTa > 0` obrisane): `RequireColumnIndex`;
+       - `ClassNetoOutOfSync`: bez `On Error Resume Next` (greška ide do EH-a korekcije, `ADJ_BLOCKED`);
+       - poruka `KolonaKapijeSeNeCita` uopštena („ne stavlja, ne pomera ni ne skida"); testovi mere samo ime
+         kolone.
+     - **Odstupanja od ugovora:**
+       1. **`ClosePaletaManual_TX` nema seam-test:** pre čitanja zove `RequirePaletaSchema`, koja traži `Stornirano`,
+          `Preradjeno` i `Status`, pa nečitljiva kolona tamo već obara operaciju. Premisa `KI-087` za tu funkciju
+          nije tačna; čitanje je pretvoreno u strogo radi jednog pravila, bez testa koji bi merio nemoguć slučaj;
+       2. **test za `KI-086` je u BFP-u, ne kao `modTest` 315:** `modTest` prijemnice dobijaju tip ambalaže iz
+          fixture-a, gde već postoje otvorene palete istog tipa, pa raspored paleta (i to da li višak traži izbor)
+          ne bi bio pod kontrolom. BFP registruje svež tip. Broj testa 315 ostaje slobodan.
+     - **Testovi:**
+       - BFP `Test_KI086_KorekcijaCekaPosleOtkaza` (9 tvrdnji): A stornirana bez skidanja, njena paleta puna
+         (kapacitet seed-om 4, synthetic), cilj B 6 gajbi → posle prevezivanja višak traži izbor → seam beleži
+         pitanje (imenuje cilj) i bira „Otkaži" → `outKorekcijaCeka = True`, palete cilja ostaju na 4 gajbe;
+       - BFP `Test_KI087_IzborPaleteStrogoCitaPreradu` (6 tvrdnji): otvorena paleta Q označena kao prerađena
+         (synthetic) → uz kvar indeksa `Preradjeno` sledeća prijemnica se NE snima i roba ne ide na Q → kontra:
+         bez kvara roba ide na novu paletu;
+       - `modTest` 314: kontra-tvrdnja da je smanjenje korigovano i da ništa ne čeka.
+     - **Sabotaže** (katalog **1152**): `ki086-otkaz-ne-ceka`, `ki086-korigovano-ceka` (kontra, RunAllTests),
+       `ki087-preradjeno-otvorene-tiho`.
+     - **Jeftine kapije zelene:** `vba_check` (191), sidra 1152 (0 nalaza), šema `B22A1572`, `who_writes --check`
+       i `--check-ownership`, `popis_citalaca --check` (`pal_broj` 8), `dokaz.py --plan ki08` (dva prolaza).
+     - **Nije mereno:** strogost ostalih kolona (`RecomputePaletaFromStavke`, korekcija, `ClosePaletaManual_TX`,
+       `ClassNetoOutOfSync`) nema sopstveni test; tekst upozorenja na ekranu Oporavka je ručna provera.
+     - **NOT RUN** (čeka review, pa „Push, pa kapije"): crveno nad `11f9a7a7`; zeleno RunAllTests (očekivano 314 / 0),
+       BFP (očekivano 2995 / 0 = 2980 + 15), Palete, Storno; dokaz tri sabotaže; Compile. `KI-086` i `KI-087`
+       ostaju OPEN do zelenih kapija.
+     - **Sledeći brojevi:** test 315 · stavka 308 · KI-088 · plan §14.60.
 
 ## Dug sa imenom (posle S5-5b)
 

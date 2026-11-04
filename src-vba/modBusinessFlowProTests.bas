@@ -351,6 +351,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_S8R1c_StornoPaleteAktivnaRoba
     Test_S8R2a1_PaleteZbirnePoPrijemnicama
     Test_S8R2a2_LabeleIIntegritetPoStavci
+    Test_KI086_KorekcijaCekaPosleOtkaza
+    Test_KI087_IzborPaleteStrogoCitaPreradu
     Test_S6_CitalacStavkiPrijemniceDrziUgovor
     Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu
     Test_S6K4_StornoSkidaPaleteUIstojTx
@@ -10942,6 +10944,183 @@ EH:
     LogFatal "Test_S8R2a2_LabeleIIntegritetPoStavci", Err.Number, Err.description
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' KI-086: ISHOD KOREKCIJE POSLE PREVEZIVANJA JE PODATAK, NE SAMO TEKST.
+'
+' A (4 gajbe) je stornirana bez skidanja paleta, a njena paleta je PUNA (kapacitet
+' palete je seed-om spusten na 4 -- synthetic). Cilj B ima 6 gajbi. Posle
+' prevezivanja visak od 2 gajbe ne staje na paletu, pa korekcija trazi izbor.
+' Seam pitanja ga BELEZI i bira "Otkazi": prevezivanje je uspelo, korekcija CEKA
+' (outKorekcijaCeka), a palete cilja korekcija ne dira. Kontra je u testu 314
+' (smanjenje je korigovano odmah, pa nista ne ceka).
+' Nivo: FIZICKE paletne stavke po PrijemnicaID-u. Test sam pali test rezim (seam
+' ga trazi) i vraca ga i na putu greske.
+' SABOTAZE: ki086-otkaz-ne-ceka.
+Private Sub Test_KI086_KorekcijaCekaPosleOtkaza()
+    On Error GoTo EH
+    Const SRC As String = "Test_KI086_KorekcijaCekaPosleOtkaza"
+    Dim scenario As String, d1 As Date, tipT As String, prevPal As String, prevMode As Boolean
+    prevMode = IsTestMode()
+    scenario = NewScenarioCode("KI086")
+    d1 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK86-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABKI086-" & scenario, "test KI086"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "KI086: preduslov -- vozac je preuzeo 50"
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(d1, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "KI086: preduslov -- zbirna je snimljena"
+
+    Dim pA As String, pB As String, brojA As String, brojB As String, errNum As Long
+    brojA = TEST_PREFIX & "-K86A-" & scenario
+    brojB = TEST_PREFIX & "-K86B-" & scenario
+    On Error Resume Next
+    pA = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=brojA, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=40#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=4, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then pA = "": Err.Clear
+    On Error GoTo EH
+    Dim palA As String: palA = S8R1bPaletaDokumenta(pA)
+    AssertTrue Len(pA) > 0 And Len(palA) > 0, "KI086: preduslov -- A je paletizovana"
+    If Len(pA) = 0 Or Len(palA) = 0 Then GoTo Kraj
+    RequireUpdateCell TBL_PALETA, CLng(FindRows(TBL_PALETA, COL_PAL_ID, palA).item(1)), _
+                      COL_PAL_KAPACITET, 4, SRC
+    AssertTrue modStorno.StornoPrijemnica_TX(pA, False), _
+               "KI086: preduslov -- A je stornirana, a njena paleta ostaje"
+    On Error Resume Next
+    pB = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=brojB, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=60#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=6, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then pB = "": Err.Clear
+    On Error GoTo EH
+    AssertTrue Len(pB) > 0, "KI086: preduslov -- cilj B je snimljen"
+    If Len(pB) = 0 Then GoTo Kraj
+
+    Dim ok As Boolean, ceka As Boolean, info As String, pitanje As String
+    SetTestMode True
+    modPaletniListUI.PaletaAdjustPitanjeTestReset
+    modScrOporavak.Scr_OpoTestSet "PALETE", "", brojB, , pB
+    ok = modScrOporavak.PreveziPaleteCore(brojA, pA, info, ceka)
+    pitanje = modPaletniListUI.PaletaAdjustPitanjeTest()
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    modPaletniListUI.PaletaAdjustPitanjeTestReset
+    SetTestMode prevMode
+
+    AssertTrue ok, "KI086: prevezivanje je proslo"
+    AssertTrue InStr(1, pitanje, brojB, vbTextCompare) > 0, _
+               "KI086: korekcija je trazila izbor i pitanje imenuje cilj"
+    AssertTrue ceka, "KI086: otkazana korekcija se vraca kao korekcija koja ceka"
+    AssertTrue InStr(1, S8R1aOtisakPaleta(pB), "|gajb=4|", vbTextCompare) > 0, _
+               "KI086: otkazana korekcija ne dira palete cilja"
+
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_KI086_KorekcijaCekaPosleOtkaza", Err.Number, Err.description
+    On Error Resume Next
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    modPaletniListUI.PaletaAdjustPitanjeTestReset
+    SetTestMode prevMode
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' KI-087: IZBOR OTVORENE PALETE CITA STATUS PRERADE STROGO.
+'
+' P1 (2 gajbe) otvara svezu paletu Q, koja se seed-om oznaci kao preradjena
+' (synthetic: preradjena, a jos otvorena). Seam kvari INDEKS kolone Preradjeno u
+' GetOrCreateOpenPaleta (obrazac S8R1B-REV-04): P2 istog tipa se tada NE snima --
+' paletizacija je u transakciji prijemnice -- i roba ne ide na Q. Tolerantan
+' citac bi prazan status procitao kao "nije preradjena" i stavio robu na Q.
+' Kontra: bez kvara P3 ide na novu paletu, ne na preradjenu Q.
+' SABOTAZE: ki087-preradjeno-otvorene-tiho.
+Private Sub Test_KI087_IzborPaleteStrogoCitaPreradu()
+    On Error GoTo EH
+    Const SRC As String = "Test_KI087_IzborPaleteStrogoCitaPreradu"
+    Dim scenario As String, d1 As Date, tipT As String, prevPal As String, prevMode As Boolean
+    prevMode = IsTestMode()
+    scenario = NewScenarioCode("KI087")
+    d1 = NextTestDate()
+    tipT = RegistrujTipTesta("TIPK87-" & scenario)
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+
+    modAmbalaza.NabaviAmbalazu_TX d1, TEST_ST_ID, tipT, 100#, _
+                                  "NABKI087-" & scenario, "test KI087"
+    AssertTrue Len(modAmbalaza.UpisiReversAmbalaze_TX(d1, "", TEST_ST_ID, _
+                   tipT, 50#, REV_SMER_PRIJEM_OD_OM, "", TEST_VOZ_ID, "test")) > 0, _
+               "KI087: preduslov -- vozac je preuzeo 50"
+    Dim brZbr As String
+    brZbr = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(d1, "ddmmyy")
+    AssertTrue Len(ZbrIzdataPodPrijemnicu(d1, brZbr, TEST_KUP_ID, TEST_VOZ_ID, 150#)) > 0, _
+               "KI087: preduslov -- zbirna je snimljena"
+
+    Dim p1 As String, p2 As String, p3 As String, errNum As Long
+    On Error Resume Next
+    p1 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-K87A-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=20#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=2, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p1 = "": Err.Clear
+    On Error GoTo EH
+    Dim palQ As String: palQ = S8R1bPaletaDokumenta(p1)
+    AssertTrue Len(p1) > 0 And Len(palQ) > 0, "KI087: preduslov -- P1 je paletizovana"
+    If Len(p1) = 0 Or Len(palQ) = 0 Then GoTo Kraj
+    RequireUpdateCell TBL_PALETA, CLng(FindRows(TBL_PALETA, COL_PAL_ID, palQ).item(1)), _
+                      COL_PAL_PRERADJENO, "Da", SRC
+
+    SetTestMode True
+    modPaletniList.PaletaPraznoTestSet "PRERADJENO_OTVORENE_KOLONA"
+    On Error Resume Next
+    p2 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-K87B-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=20#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=2, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p2 = "": Err.Clear
+    On Error GoTo EH
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
+    AssertTrue Len(p2) = 0, "KI087: necitljiv status prerade obara paletizaciju i snimanje"
+    AssertEquals 1, S8R1bAktivnihNaPaleti(palQ), "KI087: roba ne ide na preradjenu paletu"
+
+    On Error Resume Next
+    p3 = SavePrijemnicaMulti_TX( _
+             datum:=d1, kupacID:=TEST_KUP_ID, vozacID:=TEST_VOZ_ID, _
+             brojPrij:=TEST_PREFIX & "-K87C-" & scenario, brojZbirne:=brZbr, _
+             vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+             kolicinaI:=20#, cenaI:=100#, tipAmb:=tipT, _
+             kolAmb:=2, kolAmbVracena:=0, outErrNum:=errNum)
+    If Err.Number <> 0 Then p3 = "": Err.Clear
+    On Error GoTo EH
+    AssertTrue Len(p3) > 0 And Len(S8R1bPaletaDokumenta(p3)) > 0 And S8R1bPaletaDokumenta(p3) <> palQ, _
+               "KI087: bez kvara roba ide na novu paletu, ne na preradjenu"
+
+Kraj:
+    SetConfigValue CFG_PALETIRANJE, prevPal
+    Exit Sub
+EH:
+    LogFatal "Test_KI087_IzborPaleteStrogoCitaPreradu", Err.Number, Err.description
+    On Error Resume Next
+    modPaletniList.PaletaPraznoTestSet ""
+    SetTestMode prevMode
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
 
