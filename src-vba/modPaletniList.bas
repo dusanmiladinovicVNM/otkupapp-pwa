@@ -123,9 +123,10 @@ End Function
 '
 ' KLJUC JE LINIJA, ne dokument (S6 korak 2, plan 14.55, odluka 2). Od koraka 2
 ' obe klase dele PrijemnicaID dokumenta, pa se paletna stavka kljuca parom
-' (PrijemnicaID, PrijemnicaStavkaID). Red STAROG oblika (prijemnica bez stavki:
-' rucno posejani redovi suite-a Palete, fixture) nema stavku -- tada je red sam
-' svoja linija i prijemnicaStavkaID je prazan. Novi pisac ga uvek salje.
+' (PrijemnicaID, PrijemnicaStavkaID). Od S8 reza 2b-1 (PAL-INV-01, PAL-ODL-13)
+' kljuc je OBAVEZAN: prazan, nepostojeci, tudj kljuc i kljuc druge klase pisac
+' odbija pre ijedne mutacije (RequireLinijaPalete u SpillGajbice). Red starog
+' oblika (bez kljuca) pisac vise ne pravi; zatecen red je nalaz C1.
 '
 ' Greske se NE gutaju -> propagiraju u TX wrapper koji radi RollbackTx.
 ' ============================================================
@@ -1287,8 +1288,9 @@ Private Sub AddStavka(ByVal palID As String, ByVal prijemnicaID As String, _
     genRoditelja = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _
                                         COL_DETE_ZBIRNA_ROD))
 
-    ' PrijemnicaStavkaID je KLJUC LINIJE (S6 korak 2); prazan za red starog
-    ' oblika. PalAppendRow nepoznatu kolonu TIHO preskace, pa kolonu trazi
+    ' PrijemnicaStavkaID je KLJUC LINIJE (S6 korak 2); od S8 reza 2b-1 ga je
+    ' RequireLinijaPalete vec proverio (jedini put ovde je SpillGajbice).
+    ' PalAppendRow nepoznatu kolonu TIHO preskace, pa kolonu trazi
     ' RequirePaletaStavkaSchema pre ijednog upisa (fail-closed).
     PalAppendRow TBL_PALETA_STAVKA, _
         Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
@@ -2730,6 +2732,70 @@ Private Sub KolonaKapijeSeNeCita(ByVal tbl As String, ByVal col As String, ByVal
                    "'. Bez nje se ne zna stanje, pa se roba na paletama ne stavlja, ne pomera ni ne skida."
 End Sub
 
+' PAL-INV-01 (S8 rez 2b-1): zasto kljuc linije NE odgovara paletnoj stavci, ili
+' "" kad odgovara. JEDNO pravilo za dva vlasnika: pisac ga drzi tvrdo
+' (RequireLinijaPalete), integritet meko (modIntegritet C1). Razlozi: prazan
+' kljuc, kljuc koji ne postoji, kljuc koji pripada drugoj prijemnici, kljuc
+' druge klase. linije = PrijemnicaStavkaID -> Array(PrijemnicaID, Klasa); mapa
+' nosi niz, ne spojen tekst. Klasa ide kroz KlasaOrDefault na obe strane, isto
+' kao svaki citalac paletne stavke.
+Public Function PalInv01Razlog(ByVal prijemnicaID As String, ByVal kljuc As String, _
+                               ByVal klasa As Variant, ByVal linije As Object) As String
+    kljuc = Trim$(kljuc)
+    If Len(kljuc) = 0 Then
+        PalInv01Razlog = "prazan kljuc linije"
+    ElseIf Not linije.Exists(kljuc) Then
+        PalInv01Razlog = "kljuc linije ne postoji"
+    Else
+        Dim lin As Variant: lin = linije(kljuc)
+        If StrComp(CStr(lin(0)), Trim$(prijemnicaID), vbTextCompare) <> 0 Then
+            PalInv01Razlog = "kljuc linije pripada drugoj prijemnici"
+        ElseIf StrComp(CStr(lin(1)), KlasaOrDefault(klasa), vbTextCompare) <> 0 Then
+            PalInv01Razlog = "kljuc linije je druge klase"
+        End If
+    End If
+End Function
+
+' PAL-INV-01 NA GRANICI PISCA (S8 rez 2b-1): paletna stavka ne nastaje bez tacne
+' linije prijemnice. Stoji na vrhu SpillGajbice -- jedinog puta do AddStavka --
+' pa vazi i za paletizaciju i za korekciju, i ide PRE ijedne mutacije (ni paleta
+' se ne otvara).
+'
+' Cita SAMO redove tog kljuca u tblPrijemnicaStavke, ne globalni strog citac
+' (StavkePrijemniceRedovi): kvar u nepovezanoj prijemnici ne sme da zaustavi
+' snimanje ove (KI-081). Kljuc koji se ponavlja nije jednoznacna linija, pa se
+' odbija i on. Odbijanje je POSLOVNO: zavisi od ulaza ovog dokumenta.
+Private Sub RequireLinijaPalete(ByVal prijemnicaID As String, ByVal kljuc As String, _
+                                ByVal klasa As String, ByVal SRC As String)
+    Dim linije As Object: Set linije = CreateObject("Scripting.Dictionary")
+    linije.CompareMode = vbTextCompare
+    Dim razlog As String
+    kljuc = Trim$(kljuc)
+    If Len(kljuc) > 0 Then
+        Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA_STAVKE)
+        If IsArray(d) Then
+            Dim cId As Long, cPrj As Long, cKl As Long, r As Long, n As Long
+            cId = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_ID, SRC)
+            cPrj = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, SRC)
+            cKl = RequireColumnIndex(TBL_PRIJEMNICA_STAVKE, COL_PRS_KLASA, SRC)
+            For r = 1 To UBound(d, 1)
+                If StrComp(Trim$(NzToText(d(r, cId))), kljuc, vbTextCompare) = 0 Then
+                    n = n + 1
+                    linije(kljuc) = Array(Trim$(NzToText(d(r, cPrj))), KlasaOrDefault(d(r, cKl)))
+                End If
+            Next r
+            If n > 1 Then razlog = "kljuc linije se ponavlja (" & CStr(n) & " stavke)"
+        End If
+    End If
+    If Len(razlog) = 0 Then razlog = PalInv01Razlog(prijemnicaID, kljuc, klasa, linije)
+    If Len(razlog) > 0 Then
+        Err.Raise vbObjectError + 7332, SRC, _
+                  "PAL-INV-01: " & razlog & " (PrijemnicaID=" & prijemnicaID & _
+                  ", PrijemnicaStavkaID=" & kljuc & ", klasa " & klasa & _
+                  "). Paletna stavka se ne pravi bez tacne linije prijemnice."
+    End If
+End Sub
+
 ' ZAJEDNICKA raspodelna petlja: rasporedi "remaining" gajbica na otvorene/nove
 ' palete kao NOVE stavke date prijemnice + inkrementalno azuriraj header palete.
 ' Koriste je PaletizePrijemnica (sveza paletizacija; closedPalIDs za post-commit
@@ -2743,6 +2809,7 @@ Private Sub SpillGajbice(ByVal prijemnicaID As String, ByVal brojPrij As String,
         Optional ByVal closedPalIDs As Collection = Nothing, _
         Optional ByRef nClosed As Long, _
         Optional ByVal prijemnicaStavkaID As String = "")
+    RequireLinijaPalete prijemnicaID, prijemnicaStavkaID, klasa, SRC
     Dim defCap As Long: defCap = GetKapacitetPalete(vrsta)
     Do While remaining > 0
         Dim palRow As Long, palID As String

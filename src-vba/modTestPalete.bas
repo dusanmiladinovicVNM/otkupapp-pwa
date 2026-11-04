@@ -587,16 +587,16 @@ Private Sub T13_KlasaDodataIspravkom()
 End Sub
 
 ' Paletna stavka dokumenta BEZ kljuca linije (stari oblik -- synthetic anomaly:
-' pisac je od S6 koraka 2 ne pravi, a prevezivanje uvek upisuje kljuc linije
-' nove prijemnice). Korekcija ne zna kojoj liniji stavka pripada, pa staje
-' (ADJ_BLOCKED) i nista ne menja (S8 rez 1a). Da je stavku preskocila, linija
-' bi izgledala nepaletizovano i dobila bi svezu paletizaciju -- iste gajbe dvaput.
+' od S8 reza 2b-1 je pisac odbija (PAL-INV-01), a prevezivanje uvek upisuje kljuc
+' linije nove prijemnice, pa se red pravi tako sto se kljuc obrise POSLE pisca).
+' Korekcija ne zna kojoj liniji stavka pripada, pa staje (ADJ_BLOCKED) i nista ne
+' menja (S8 rez 1a). Da je stavku preskocila, linija bi izgledala nepaletizovano
+' i dobila bi svezu paletizaciju -- iste gajbe dvaput.
 Private Sub T14_StavkaBezLinijeZaustavljaKorekciju()
     Const S As String = "T14 stavka bez linije: "
     MakePrij "TSTPRJ-26", "TST-P19", "TST-Z14", "I", 50, 5, "TST-S14"
-    PaletizePrijemnica prijemnicaID:="TSTPRJ-26", brojPrij:="TST-P19", brojZbirne:="TST-Z14", _
-                       vrstaVoca:=TST_VRSTA, sortaVoca:="TST-S14", klasa:="I", _
-                       netoKg:=50, brGajbica:=5, tipAmb:=TST_AMB      ' bez kljuca linije
+    Paletize "TSTPRJ-26", "TST-P19", "TST-Z14", "I", 50, 5, "TST-S14"
+    ObrisiKljucLinije "TSTPRJ-26"                  ' synthetic: red starog oblika
     ChkEq LinijaGajbe("TSTPRJ-26", ""), 5, S & "preduslov: stavka bez kljuca linije"
     SetLinija "PRS-TSTPRJ-26", 60, 6
 
@@ -691,6 +691,17 @@ Private Sub DodajLiniju(ByVal id As String, ByVal rb As Long, ByVal klasa As Str
         Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
               COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _
         Array("PRS-" & id & "-" & klasa, id, rb, klasa, kolKg, 0, gajb)
+End Sub
+
+' Synthetic anomaly: obrisi kljuc linije sa SVIH paletnih stavki dokumenta (red
+' starog oblika, koji pisac od S8 reza 2b-1 vise ne pravi).
+Private Sub ObrisiKljucLinije(ByVal prijemnicaID As String)
+    Dim rows As Collection: Set rows = FindRows(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, prijemnicaID)
+    Dim k As Long
+    For k = 1 To rows.count
+        RequireUpdateCell TBL_PALETA_STAVKA, rows(k), COL_PALS_PRIJEMNICA_STAVKA_ID, "", _
+                          "modTestPalete.ObrisiKljucLinije"
+    Next k
 End Sub
 
 ' Izmena linije dokumenta (kao ispravka): kolicina i gajbe stavke.

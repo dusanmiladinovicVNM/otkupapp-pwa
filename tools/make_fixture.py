@@ -2369,6 +2369,26 @@ SEED["tblPrijemnicaStavke"] = [
     for red in SEED["tblPrijemnica"]
 ]
 
+# PALETNA STAVKA NOSI KLJUC LINIJE (S8 rez 2b-1, PAL-INV-01, PAL-ODL-13).
+#
+# Pisac paletne stavke od 2b-1 odbija prazan, nepostojeci, tudj kljuc i kljuc
+# druge klase, a integritet (C1) prijavljuje aktivnu paletnu stavku bez kljuca.
+# Fixture zato nosi oblik koji pisac pravi: kljuc je stavka "PRS-" + PrijemnicaID
+# (jedna stavka po zaglavlju, gore), i mora biti iste klase -- inace fixture ne
+# bi bio stanje koje pisac moze da napravi.
+#
+# Posledica koju A3 sada vidi (synthetic anomaly, namerno): PRJ-SLED-1 nosi 500
+# kg, a aktivne paletne stavke 349 kg (PST-SLED-1 250 + PST-SLED-X 99, stavka na
+# STORNIRANOJ paleti PAL-SLED-X). A3 ga prijavljuje; nijedan test ne tvrdi da je
+# A3 nad fixture-om prazan.
+_PRS_KLASA = {r["PrijemnicaStavkaID"]: r["Klasa"] for r in SEED["tblPrijemnicaStavke"]}
+for _pst in SEED["tblPaletaStavka"]:
+    _kljuc = "PRS-" + str(_pst["PrijemnicaID"])
+    assert _kljuc in _PRS_KLASA, ("paletna stavka bez stavke prijemnice", _pst["StavkaID"])
+    assert (_pst.get("Klasa") or "I") == _PRS_KLASA[_kljuc], \
+        ("paletna stavka druge klase od svoje linije", _pst["StavkaID"])
+    _pst["PrijemnicaStavkaID"] = _kljuc
+
 # LINIJE FAKTURE NAD PRIJEMNICOM SE IZVODE IZ KESA ZAGLAVLJA (S6 korak 5, plan
 # 14.55, odluka 3).
 #
@@ -2527,6 +2547,12 @@ ENSURE_COLS = {
     # na SchemaReadyOrFail (kanonski prefiks), pa bi svaki test sa reversom
     # merio svesku, a ne kod.
     "tblAmbalazaDokument": ["IspravkaOdID", "ZamenjenSaID"],
+    # S8 rez 2b-1 (PAL-INV-01): kljuc linije paletne stavke. Kanon ga drzi na KRAJU
+    # tblPaletaStavka, a donor (stari fixture) ga nema -- u aplikaciji ga dodaje
+    # self-heal seme iz kanona na startu, pa je do sada postojao tek u temp kopiji
+    # tokom run-a. SEED od 2b-1 upisuje kljuc na svaku paletnu stavku, pa bez
+    # kolone sejanje po imenu obara red.
+    "tblPaletaStavka": ["PrijemnicaStavkaID"],
 }
 
 # Tabele koje donor NEMA (krug 5: utovarna lista) -- generator ih pravi
