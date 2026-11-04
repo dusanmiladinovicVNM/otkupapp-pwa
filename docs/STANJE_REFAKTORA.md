@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 320: kapije `#467` zelene — RunAllTests 314/0, BFP 3014/0, dokaz 8/8; čeka ručni Compile).
+**Ažurirano:** 04.11.2026 (stavka 320: kapije `#467` zelene — RunAllTests 314/0, BFP 3014/0, dokaz 8/8; ručni Compile PASS).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10901,7 +10901,7 @@
        sabotaže), zatim ručni Compile.
      - **Sledeći brojevi:** test 315 · stavka 320 · KI-088 · plan §14.63.
 
-320. **Izvršne kapije 2b-2 (`#467`): zeleno; čeka ručni Compile** (04.11.2026). Plan §14.62 („Review #467 i
+320. **Izvršne kapije 2b-2 (`#467`): zeleno; ručni Compile PASS** (04.11.2026). Plan §14.62 („Review #467 i
      izvršne kapije"). Glava `c9cb0266`.
 
      - **Fixture:** `68efada928a8d97d` (donor izgubio tri kolone paletne stavke).
@@ -10910,7 +10910,9 @@
        +7 self-heal).
      - **`dokaz.py`:** 8 / 8 crveno (potpis `9ce61c233c3fb46b`): `s8r2b2-*` (2), preformulisane `s8r1a-*` (2) i
        `s8r2a1-*` (3), novo sidro `s6k2-paleta-bez-kljuca-stavke`.
-     - **Compile:** NEJASNO automatski; sveska `tests/fixtures/rucna_provera_s8r2b2.xlsm` (kod `c9cb0266`).
+     - **Compile:** NEJASNO automatski; ručno nad `tests/fixtures/rucna_provera_s8r2b2.xlsm` (kod `c9cb0266`) —
+       operater: „Compile PASS". Uslov review-a za merge (izvršni acceptance) je ispunjen; merge `#467` ide samo
+       na izričit zahtev.
      - **Osnova posle merge-a #467:** RunAllTests 314, BFP 3014, katalog 1155, `pal_broj` 0, `prj_brojzbirne` 31,
        fixture `68efada928a8d97d`, šema `CA5CE30A`.
      - **Sledeći brojevi:** test 315 · stavka 321 · KI-088 · plan §14.63.

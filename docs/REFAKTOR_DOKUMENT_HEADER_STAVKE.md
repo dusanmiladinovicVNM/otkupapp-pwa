@@ -11163,7 +11163,7 @@ Grana `claude/s8-rez2b2-brisanje` (od glave 2b-1). Zapis: `docs/STANJE_REFAKTORA
   ZBR-PAL), +1 (`Test_Schema_TragZbirneNosiNovoIme`: paletna stavka bez traga), +7 (nov self-heal test; od 10
   statičkih tvrdnji 3 su uslovni padovi preduslova).
 - **`dokaz.py`** (8 sabotaža, 3 prolaza): **8 / 8 crveno**, potpis izvora `9ce61c233c3fb46b` pre i posle identičan.
-- **Compile:** automatski NEJASNO; sveska za ručni Compile `tests/fixtures/rucna_provera_s8r2b2.xlsm` (kod
+- **Compile:** automatski NEJASNO; ručno **PASS** (operater). Sveska `tests/fixtures/rucna_provera_s8r2b2.xlsm` (kod
   `c9cb0266`; pre provere VBE `File > Import File` → `src-vba/modVbaTools.bas`).
 
 ## 15) Backlog — namerno van opsega
