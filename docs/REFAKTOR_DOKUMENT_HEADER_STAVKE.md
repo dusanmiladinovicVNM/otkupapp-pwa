@@ -11147,6 +11147,31 @@ pa čitalac koji nije prepisan tiho ćuti") se meri na pozivnim mestima, ne post
 - **S9-3:** `SLED-ODL-07/08` su donete, pa čeka **samo S8 2a**.
 - **S9-7:** `SLED-ODL-04/05` su donete, pa čeka S9-1, S8 2b i PLATFORM sondu.
 
+**Klasa — izbor (b) (operater, 04.11.2026, `docs/STANJE_REFAKTORA.md` stavka 290).** Pravilo je
+`SLED-KLASA-01` (`SLEDLJIVOST.md` §5a):
+- hladnjački lanac se filtrira po klasi;
+- kod ostalih prijemnica se ništa ne odseca: ista klasa ide prva i označena je, a druga klasa
+  ostaje u spisku sa oznakom „moguće preklasiranje pri prijemu".
+
+Time su sve `SLED-ODL-01..08` donete.
+
+**Dopuna ugovora prihvatanja S9-1** (zamenjuje „jedan edge i jedan negativ" iz odeljka iznad):
+- **Važi:** svaki otkup u odgovoru nosi oznaku klase u odnosu na stavku od koje se krenulo
+  („ista klasa" / „druga klasa — moguće preklasiranje"), a ista klasa ide prva.
+- **Edge:** hladnjački lanac (`HLD-LANAC-01`) unazad od stavke klase II daje samo otkupe klase
+  II.
+- **Negativ:** zbirna I 500 / II 300 i prijemnica I 450 / II 300, dakle klase se „slažu". Unazad
+  od stavke II dolaze **i** otkupi klase I, sa oznakom „druga klasa". **Crveno** kad jezgro
+  odseca po klasi van hladnjačkog lanca (sabotaža).
+- **Sabotaže** (dodaju se na spisak S9-1):
+  - jezgro odseca drugu klasu i van hladnjačkog lanca;
+  - hladnjački lanac ne filtrira po klasi.
+
+**GO / HOLD posle izbora:**
+- **S9-1: GO**, sme paralelno sa S8 1c i 2a. Starog koda nema, pa se test G3 sa mamcem i test
+  klase pišu pre jezgra, a crveno se pokazuje sabotažom.
+- Ostali rezovi: bez promene u odnosu na odeljak iznad.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

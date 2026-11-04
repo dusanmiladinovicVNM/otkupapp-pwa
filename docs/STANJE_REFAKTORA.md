@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 289: odluke `SLED-ODL-03..08` donete po predlogu, 01 u delu „nadskup"; klasa (01/02) otvorena, izbor (a)/(b), predlog (b)).
+**Ažurirano:** 04.11.2026 (stavka 290: sve `SLED-ODL-01..08` donete; klasa po varijanti (b), `SLED-KLASA-01`; **S9-1 GO**, paralelno sa S8 1c/2a).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -39,7 +39,7 @@
 | **Bilans ambalaže · `KI-024` kooperant · `AMB-INV-16` prazne** | ✅ `#447` (`5ad4668a`, `AMB-BIL-01/02`) · ✅ `#448` (`5a9bd868`, `AMB-BIL-03`, `ODL-35/36`, `AMB-INV-15/16`; stavka 235). Primena na migriranoj svesci: HOLD do `KI-065` (izmeren u C002, stavka 241: pune ispod nule na četiri naloga, čeka ponovni prevod). Vozač vraća samo prazne (`ODL-37/-38`): rez zelen i dokazan, commitovan (`70a36216`, stavke 237–240); ekran Storno kaže razlog odbijanja (stavka 242); ručna provera 7/7 i Compile ✅ (stavka 243). Kupčev deo `KI-024` (`AMB-10-ODL-39`): ✅ merge **`#450`** (`fd39a716`, 01.11.2026) — review P1 ispravljen (stavke 245–247); ručna provera nad finalnim kodom i Compile ✅ (stavke 248–249); stavka 250 |
 | **S7 faktura** | ✅ **zatvoren** (merge `#454` = `a668c5e6`, 03.11.2026, stavka 272) -- **pre-flight ✅** (stavka 251, plan §14.57, `docs/DOMEN/FAKTURA.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 5, veza preko broja prijemnice ima 0 mesta. Ostaju tri reza: 1 storno fakture do kraja (`FAK-ODL-02/-05`, `KI-041`) · 2 linija bez sopstvenog storna (`FAK-ODL-03`) · 3 SEF linija i zatvaranje (`FAK-ODL-01`). GO za rez 1. **Rez 1 ✅ u kodu** (stavka 254, PR `#452`): review CODE GO (stavka 255), ručna provera i Compile ✅ (stavka 256); ✅ merge **`#452`** (`ff3e9c7a`, 02.11.2026, stavka 257). **Rez 2: pre-flight ✅** (stavka 258, `FAK-ODL-07`); **kod ✅** (stavka 259, PR `#453`); review HOLD → P1 ispravljen (stavka 260, `KI-077`/`KI-078` za rez 3); crveno nad starim kodom, zeleno (308 / 2868 / 111 / 39), dokaz 13/13 (stavka 261); ručna provera i Compile ✅ (stavka 262); ✅ merge **`#453`** (`2ac332e3`, 02.11.2026, stavka 263). **Rez 3: pre-flight ✅** (stavka 264, `KI-079`); **kod ✅** (stavka 265, PR `#454`); review HOLD → tri P2 ispravljena (stavka 266); crveno, zeleno (308 / 2901 / SEF 238), health i dokaz 14/14 (stavka 267, `KI-077`/`KI-078` CLOSED); Compile ✅ (stavka 268); drugi review HOLD → `S7R3-REV-04` (identitet SEF stavke) ispravljen (stavka 269, `KI-080`); treći review CODE GO i TEST GO (stavka 270, `KI-081`/`KI-082`); crveno, zeleno (308 / 2907 / SEF 238 / 39), dokaz 5/5 i Compile ✅ (stavka 271); merge review MERGE GO 9,4 / 10, ✅ merge **`#454`** (`a668c5e6`, 03.11.2026, stavka 272). Backlog: `KI-079` (kapija produkcionog SEF slanja), `KI-080`, `KI-081`, `KI-082` |
 | **S8 paleta i prerada** | **pre-flight ✅** (stavka 273, plan §14.58, `docs/DOMEN/PALETE.md`) — premisa iz §14.9 izmerena: `PrijemnicaStavkaID` je doneo S6 korak 2, a storno i prevezivanje po ID-u S6 koraci 4, 7 i 8. Ostaju dva reza: 1 korekcija i prevezivanje paleta po ID-u (N1: korekcija bira dokument po broju) · 2 paleta zna samo stavku prijemnice (brišu se `BrojPrijemnice`, `BrojZbirne`, `ZbirnaRoditeljID`; `KI-039`). Review 9,0 / 10 i odluke `PAL-ODL-01..07` (stavka 274): podela po review-u na 1a (N1, korekcija po ID-u) · 1b (strog brojač praznine N8 pre „Skini palete", prevezivanje i Oporavak, makroi; `S8-REV-05`, stavka 275) · 1c (storno palete) · 2a (čitaoci, svoj pre-flight) · 2b (brisanje kolona, HOLD i do izlazne kapije C002); sledljivost na paleti u S9. Merge `#456` = `d222aad4` (stavka 276). **Rez 1a: kod** (stavka 277), review CONDITIONAL GO 8,7 (stavka 278); izvršni acceptance (stavka 279): N1 crveno reprodukovan, zeleno, dokaz 6/6, Compile PASS; brojevi testova provereni; spreman za PR |
-| S9 sledljivost kao graf | **pre-flight ✅** (stavka 288, plan §14.59, `docs/DOMEN/SLEDLJIVOST.md`), urađen dok S8 traje. Premisa iz §14.9 je zastarela na svakoj stavci. Najveći nalaz: **19 kolona nema pisca, a čitaoci su im živi** (otkup, otpremnica, zbirna, novac). Posledice su prazni detalji izveštaja, lažna revizija (A1 uvek tih, B5b crven za svaku otpremnicu, health 7 uvek OK) i jedan FALSE-GREEN test. Uz to: broj zbirne je i dalje veza (`KI-032`, izvoz za PWA, storno zbirne), a generacija je identitet na šest mesta, bez pisca. Rezovi S9-1 – S9-7; S9-1 (jezgro grafa) i S9-2 (čitaoci kolona bez pisca) smeju paralelno sa S8 1c/2a, ostali čekaju S8 2a ili 2b. **Odluke (stavka 289):** 03–08 donete, 01 u delu „nadskup"; klasa (01/02) otvorena, izbor (a)/(b), pa S9-1 čeka samo nju |
+| S9 sledljivost kao graf | **pre-flight ✅** (stavka 288, plan §14.59, `docs/DOMEN/SLEDLJIVOST.md`), urađen dok S8 traje. Premisa iz §14.9 je zastarela na svakoj stavci. Najveći nalaz: **19 kolona nema pisca, a čitaoci su im živi** (otkup, otpremnica, zbirna, novac). Posledice su prazni detalji izveštaja, lažna revizija (A1 uvek tih, B5b crven za svaku otpremnicu, health 7 uvek OK) i jedan FALSE-GREEN test. Uz to: broj zbirne je i dalje veza (`KI-032`, izvoz za PWA, storno zbirne), a generacija je identitet na šest mesta, bez pisca. Rezovi S9-1 – S9-7; S9-1 (jezgro grafa) i S9-2 (čitaoci kolona bez pisca) smeju paralelno sa S8 1c/2a, ostali čekaju S8 2a ili 2b. **Odluke (stavke 289–290):** sve `SLED-ODL-01..08` su donete; klasa po varijanti (b), `SLED-KLASA-01`. **S9-1: GO** |
 | **Vraćanje `otk_linija` na nulu** (18 živih čitalaca) | ⏳ — to je ono što još drži linijska polja `tblOtkup` na životu |
 
 ## Hronologija rezova — i gde je sledeći (v. stavku 50)
@@ -9806,6 +9806,20 @@
        - S9-3 čeka samo S8 2a;
        - S9-7 čeka S9-1, S8 2b i PLATFORM sondu.
      - **Sledeći brojevi:** test 315 (posle rebase-a proveriti) · stavka 290 · KI-088 · plan §14.60.
+
+290. **Klasa u sledljivosti: izbor (b) (operater, 04.11.2026)** (plan §14.59, `docs/DOMEN/SLEDLJIVOST.md` §5a,
+     `SLED-KLASA-01`). Time su sve `SLED-ODL-01..08` donete. Produkcionog koda nema.
+
+     - **Pravilo:**
+       - hladnjački lanac se unazad filtrira po klasi (`HLD-LANAC-01`, 1:1 po klasi dokazano piscem);
+       - kod ostalih prijemnica se ništa ne odseca. Otkupi iste klase idu prvi, sa oznakom „ista klasa", a ostali
+         ostaju sa oznakom „druga klasa — moguće preklasiranje pri prijemu" (`PRJ-ZBR-02`).
+     - **Ugovor S9-1 je dopunjen:**
+       - *negativ:* zbirna I 500 / II 300 i prijemnica I 450 / II 300 — unazad od stavke II dolaze i otkupi klase
+         I;
+       - *sabotaže:* „odseca drugu klasu van hladnjačkog lanca" i „hladnjački lanac ne filtrira".
+     - **S9-1: GO**, paralelno sa S8 1c i 2a. S9-2: GO posle `#459`. Ostali rezovi bez promene.
+     - **Sledeći brojevi:** test 315 (posle rebase-a proveriti) · stavka 291 · KI-088 · plan §14.60.
 
 ## Dug sa imenom (posle S5-5b)
 

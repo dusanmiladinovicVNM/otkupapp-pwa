@@ -4,11 +4,12 @@
 > `docs/STANJE_REFAKTORA.md` stavka 288). Mereno nad `main` = `d19c2dae`, dok S8 još traje
 > (rez 1b je PR `#459`, otvoren). Linije koda u ovom fajlu važe za taj commit.
 >
-> **Odluke (operater, 04.11.2026, `docs/STANJE_REFAKTORA.md` stavka 289):**
-> - `SLED-ODL-03..08` su **donete po predlogu**;
-> - `SLED-ODL-01` je doneta u delu „nadskup bez alokacije";
-> - **sužavanje po klasi (01/02) je OTVORENO**: operater traži da se filtrira po klasi kad se
->   klase zbirne i prijemnice slažu. Merenje i izbor između (a) i (b) su u §5a.
+> **Odluke (operater, 04.11.2026, `docs/STANJE_REFAKTORA.md` stavke 289 i 290): sve
+> `SLED-ODL-01..08` su donete.**
+> - 03–08 su donete po predlogu;
+> - 01 je doneta kao nadskup bez alokacije;
+> - za klasu (01/02) je izabrana varijanta **(b)**: ništa se ne odseca, ista klasa ide prva i
+>   označena je, a hladnjački lanac se filtrira po klasi (§5a).
 >
 > Invarijante `SLED-INV-xx` imenuju šta kod danas drži, šta mu fali i ko je vlasnik posle S9.
 
@@ -121,8 +122,8 @@ po grupi) i statička pravila iz §13 plana.
 ## 5) Odluke
 
 Status po odluci (operater, 04.11.2026):
-- **01:** doneta u delu „nadskup bez alokacije"; klasa je otvorena (§5a);
-- **02:** otvorena (§5a);
+- **01:** doneta, nadskup bez alokacije; klasa po 02;
+- **02:** doneta kao varijanta **(b)** iz §5a (stavka 290);
 - **03–06:** donete po predlogu;
 - **07:** doneta po predlogu, uz napomenu operatera: PWA se verovatno neće koristiti, a AgriX VBA
   će najverovatnije biti samo desktop. Popravka izvoza za PWA (N5) zato ostaje minimalna i ništa
@@ -173,7 +174,7 @@ II 300. To može biti 50 kg kala na I, ali i 50 kg premeštenih iz I u II uz 50 
 Uslov važi u oba slučaja, pa u drugom filtrirani odgovor za klasu II **izostavlja stvarne izvore
 klase I**. Za opoziv robe i za sertifikaciju je izostavljanje opasnija greška od viška.
 
-**Izbor (otvoren):**
+**Izbor — operater je izabrao (b) (04.11.2026, stavka 290):**
 - **(a) Filtriraj kad uslov važi** (pravilo operatera). Odgovor je precizan, a rizik iznad
   ostaje imenovan i odštampan uz odgovor.
 - **(b) Nikad ne odsecaj.** Otkupi iste klase idu prvi i označeni su kao „ista klasa", a ostali
@@ -183,8 +184,17 @@ klase I**. Za opoziv robe i za sertifikaciju je izostavljanje opasnija greška o
 U oba slučaja se **hladnjački lanac uvek filtrira po klasi**, jer je tamo 1:1 po klasi dokazano
 piscem (`HLD-LANAC-01`).
 
-**Predlog: (b).** Daje istu preciznost za čitanje, a ne može da sakrije izvor. Ako operater
-izabere (a), implementacija je ista, samo se druga grupa ne prikazuje.
+**Odluka: (b).** Daje istu preciznost za čitanje, a ne može da sakrije izvor. Pravilo za
+jezgro grafa i sve njegove čitaoce (ekran, papir, spisak kooperanata na paletnom listu) glasi:
+
+- **`SLED-KLASA-01`:**
+  - **hladnjački lanac:** unazad samo otkupi iste klase, jer je 1:1 po klasi dokazano piscem;
+  - **ostale prijemnice:** unazad svi otkupi aktivnih otpremnica zbirne. Otkupi iste klase
+    kao stavka prijemnice idu prvi, sa oznakom „ista klasa". Ostali dolaze posle njih, sa
+    oznakom „druga klasa — moguće preklasiranje pri prijemu";
+  - **unapred, od otkupa:** sve prijemnice zbirne, sa istim oznakama po klasi stavke prijemnice.
+
+  Nijedan izvor se ne odseca po klasi van hladnjačkog lanca.
 
 ## 6) Šta S9 namerno NE radi
 
