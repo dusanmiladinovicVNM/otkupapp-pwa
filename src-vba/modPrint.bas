@@ -3831,3 +3831,242 @@ EH:
     Application.ScreenUpdating = True
     LogErr "modPrint.FillIsplataSpecSablon"
 End Function
+
+' ============================================================
+' KNJIZNO ODOBRENJE -- doplata kooperantu (docs/DOMEN/DOPLATA.md, DOP-ODL-11).
+' Portrait A4, house-style iz modDocStyle (isti kao specifikacije). Jedan KO je
+' dokument JEDNOG kooperanta; stavke su po kljucu stope i stanici, kako ih je
+' pisac upisao (tblDoplataStavke). Iznos je ono sto se isplacuje -- bez PDV
+' nadoknade (DOP-ODL-01).
+'
+' Storniran KO se NE stampa, kao ni storniran otkupni list: papir bi tvrdio
+' obavezu koje vise nema. Citac je modDoplata.DoplataStavkeRedovi, isti koji
+' puni karticu i saldo, pa papir i kartica ne mogu da kazu razlicit iznos.
+' ============================================================
+Public Sub EnsureKOSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_KO_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("H1").value) = LAYOUT_VER And ws.Visible = xlSheetVisible Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_KO_SABLON
+    ws.Visible = xlSheetVisible
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 26      ' Vrsta i sorta
+    ws.columns("B").ColumnWidth = 7       ' Klasa
+    ws.columns("C").ColumnWidth = 20      ' Otkupno mesto
+    ws.columns("D").ColumnWidth = 12      ' Kolicina
+    ws.columns("E").ColumnWidth = 12      ' Doplata din/kg
+    ws.columns("F").ColumnWidth = 14      ' Iznos
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 6, 6)
+    r = DocTitleBlock(ws, r, 6, "Doplata za otkupljenu robu", _
+                      "KNJI" & ChrW(381) & "NO ODOBRENJE")
+
+    ' Broj i datum, pa primalac (dva reda), pa osnov -- imenovane celije puni
+    ' FillKOSablon, sablon nosi samo raspored.
+    ws.cells(r + 1, 1).name = "KOBroj"
+    ws.cells(r + 3, 1).name = "KOPrimalac"
+    ws.cells(r + 4, 1).name = "KOPrimalac2"
+    ws.cells(r + 6, 1).name = "KOOsnov"
+    ws.Range(ws.cells(r + 6, 1), ws.cells(r + 6, 6)).Merge
+    ws.cells(r + 6, 1).WrapText = True
+    ws.rows(r + 6).RowHeight = 28
+
+    Dim hdr As Long: hdr = r + 8
+    ws.cells(hdr, 1).value = "Vrsta i sorta"
+    ws.cells(hdr, 2).value = "Klasa"
+    ws.cells(hdr, 3).value = "Otkupno mesto"
+    ws.cells(hdr, 4).value = "Koli" & ChrW(269) & "ina (kg)"
+    ws.cells(hdr, 5).value = "Doplata (din/kg)"
+    ws.cells(hdr, 6).value = "Iznos (din)"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 6))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "KOStart"
+
+    ws.Range("H1").value = LAYOUT_VER
+    ws.Range("H1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureKOSablon"
+End Sub
+
+' Popuni KOSablon za JEDAN aktivan KO. Vraca Nothing kad KO nije aktivan
+' (storniran ili ne postoji) -- pozivalac to javlja operateru.
+Public Function FillKOSablon(ByVal doplataID As String) As Worksheet
+    Const SRC As String = "modPrint.FillKOSablon"
+    On Error GoTo EH
+
+    Dim r As Variant, i As Long, n As Long, id As String
+    id = Trim$(doplataID)
+    r = modDoplata.DoplataStavkeRedovi()
+    If IsArray(r) Then
+        For i = 1 To UBound(r, 1)
+            If StrComp(CStr(r(i, 1)), id, vbTextCompare) = 0 Then n = n + 1
+        Next i
+    End If
+    If n = 0 Then Exit Function
+
+    EnsureKOSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_KO_SABLON)
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ' Zaglavlje sa prve stavke tog KO -- broj, datum, kooperant i period su
+    ' polja ZAGLAVLJA, isti na svakoj stavci (DoplataStavkeRedovi ih spaja).
+    Dim prvi As Long
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 1)), id, vbTextCompare) = 0 Then
+            prvi = i
+            Exit For
+        End If
+    Next i
+
+    Dim koop As String, naziv As String, napomena As String
+    koop = CStr(r(prvi, 4))
+    naziv = Trim$(NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koop, "Ime")) & " " & _
+                  NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koop, "Prezime")))
+    napomena = Trim$(NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, id, COL_DOP_NAPOMENA)))
+
+    DocLabelVal ws, ws.Range("KOBroj").row, 1, "Broj:", CStr(r(prvi, 2)) & _
+                "     Datum: " & Format$(CDate(r(prvi, 3)), "dd.mm.yyyy")
+    DocLabelVal ws, ws.Range("KOPrimalac").row, 1, "Kooperant:", naziv
+    ws.Range("KOPrimalac2").value = Trim$( _
+        "BPG: " & NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koop, COL_KOOP_BPG)) & _
+        "     Mesto: " & NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koop, "Mesto")) & _
+        "     Ra" & ChrW(269) & "un: " & _
+        NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koop, COL_KOOP_TEKUCI_RACUN)))
+    ws.Range("KOPrimalac2").Font.Color = DocColGray()
+    ws.Range("KOOsnov").value = "Osnov: doplata za robu otkupljenu u periodu od " & _
+        Format$(CDate(r(prvi, 14)), "dd.mm.yyyy hh:nn") & " do " & _
+        Format$(CDate(r(prvi, 15)), "dd.mm.yyyy hh:nn") & _
+        ". Iznos odobrenja je bez PDV nadoknade." & _
+        IIf(Len(napomena) > 0, " Napomena: " & napomena, "")
+
+    Dim startRow As Long: startRow = ws.Range("KOStart").row
+    Dim lastRow As Long
+    lastRow = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    If lastRow < startRow Then lastRow = startRow
+    With ws.Range(ws.cells(startRow, 1), ws.cells(lastRow, 6))
+        .UnMerge
+        .ClearContents
+        .ClearFormats
+    End With
+    ws.Range(ws.cells(startRow, 1), ws.cells(startRow + n - 1, 3)).NumberFormat = "@"
+
+    Dim outRow As Long, sumKg As Double, sumIzn As Double, sta As String
+    outRow = startRow
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 1)), id, vbTextCompare) = 0 Then
+            sta = NzToText(LookupValue(TBL_STANICE, COL_STA_ID, CStr(r(i, 6)), "Naziv"))
+            If Len(sta) = 0 Then sta = CStr(r(i, 6))
+            ws.cells(outRow, 1).value = Trim$(CStr(r(i, 7)) & " " & CStr(r(i, 8)))
+            ws.cells(outRow, 2).value = CStr(r(i, 9))
+            ws.cells(outRow, 3).value = sta
+            ws.cells(outRow, 4).value = CDbl(r(i, 10))
+            ws.cells(outRow, 5).value = CDbl(r(i, 11))
+            ws.cells(outRow, 6).value = CDbl(r(i, 12))
+            sumKg = sumKg + CDbl(r(i, 10))
+            sumIzn = sumIzn + CDbl(r(i, 12))
+            outRow = outRow + 1
+        End If
+    Next i
+
+    Dim ukRow As Long: ukRow = outRow
+    ws.cells(ukRow, 1).value = "UKUPNO"
+    ws.cells(ukRow, 4).value = sumKg
+    ws.cells(ukRow, 6).value = modNovac.ZaokruziNovac(sumIzn)
+    ws.Range(ws.cells(ukRow, 1), ws.cells(ukRow, 6)).Font.Bold = True
+    ws.Range(ws.cells(startRow, 2), ws.cells(ukRow, 2)).HorizontalAlignment = xlCenter
+    ws.Range(ws.cells(startRow, 4), ws.cells(ukRow, 4)).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(startRow, 5), ws.cells(ukRow, 6)).NumberFormat = "#,##0.00"
+    With ws.Range(ws.cells(startRow - 1, 1), ws.cells(ukRow, 6)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+
+    ' Potpisi: ko odobrava i kooperant koji prima.
+    Dim potRow As Long: potRow = ukRow + 3
+    ws.cells(potRow, 1).value = "Odobrio:"
+    ws.cells(potRow, 4).value = "Primio (kooperant):"
+    ws.cells(potRow + 2, 1).value = "______________________________"
+    ws.cells(potRow + 2, 4).value = "______________________________"
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.5)
+        .RightMargin = Application.InchesToPoints(0.5)
+        .TopMargin = Application.InchesToPoints(0.5)
+        .BottomMargin = Application.InchesToPoints(0.5)
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(potRow + 2, 6)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Application.ScreenUpdating = oldScreen
+    Set FillKOSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = True
+    LogErr SRC
+End Function
+
+' Stampa jednog KO po KO_PRINT_MODE (default PDF). Vraca "" kad je proslo,
+' inace razlog za operatera -- ekran ga prikaze u toastu (MsgBox bi u testu
+' visio). Zovu je ekran Doplata (radnja nad KO i posle knjizenja) i kartica
+' kooperanta ("Stampaj dokument" nad redom DOP|).
+Public Function StampajKO(ByVal doplataID As String) As String
+    Const SRC As String = "modPrint.StampajKO"
+    Dim ws As Worksheet, mode As String, broj As String
+    On Error GoTo EH
+
+    Set ws = FillKOSablon(doplataID)
+    If ws Is Nothing Then
+        StampajKO = Poruka("OTKUI_ERR_KO_NEAKTIVAN")
+        Exit Function
+    End If
+
+    mode = DocResolveMode(GetConfigValue(CFG_KO_PRINT_MODE), "PDF")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case "PDF"
+            broj = NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, Trim$(doplataID), COL_DOP_BROJ))
+            DocExportPdf ws, EnsureDocFolder(PDF_DIR_KO) & "\KnjiznoOdobrenje_" & _
+                         Replace(broj, "/", "-") & ".pdf", True
+        ' OFF -> bez izlaza
+    End Select
+    Exit Function
+EH:
+    Dim errDesc As String
+    errDesc = Err.description
+    Application.ScreenUpdating = True
+    LogErr SRC
+    StampajKO = Poruka("OTKUI_ERR_KO_STAMPA") & " " & errDesc
+End Function

@@ -1,10 +1,11 @@
 # Doplata kooperantu — knjižno odobrenje po kulturi i klasi
 
-> **Status (03.11.2026):** odluke operatera u §2 su donete, struktura iz §3 je
-> **potvrđena**. **F1 (šema, pisac, storno) i F2 (kartica, Saldo OM, PWA) su u
-> kodu** — statičke provere zelene, ponašanje **NEVERIFIKOVANO** dok `run_vba` ne
-> prođe na Windows + Excel (§7). F2 je napisan pre nego što je F1 pušten na
-> Excelu. F3–F4 još nisu počeli. Otvoreno: §8.
+> **Status (04.11.2026):** odluke operatera u §2 su donete, struktura iz §3 je
+> **potvrđena**. **F1 (šema, pisac, storno), F2 (kartica, Saldo OM, PWA) i F3
+> (ekran, papir KO, storno sa ekrana, signal osnovice) su u kodu** — statičke
+> provere zelene, ponašanje **NEVERIFIKOVANO** dok `run_vba` ne prođe na Windows +
+> Excel (§7). F2 i F3 su napisani pre nego što je F1 pušten na Excelu. F4 još
+> nije počeo. Otvoreno: §8.
 
 ## 1) Šta je doplata
 
@@ -45,7 +46,9 @@ Odbačene alternative:
 | **DOP-ODL-08** | Izveštaj **Prosečna cena** se ne menja. |
 | **DOP-ODL-09** | Broj KO je **`KO-<n>/<godina>`**, niz po godini datuma knjiženja, preko svih KO (i storniranih — storno ne oslobađa broj, A9). |
 | **DOP-ODL-10** | *Predlog uz F1, operater ga može oboriti:* kraj perioda nije u budućnosti; datum knjiženja nije pre poslednjeg dana perioda ni posle današnjeg; svaka stopa mora da pogodi bar jedan aktivan otkup (tipfeler u sorti ne sme da da doplatu nula za ceo ključ); prazan obračun se ne knjiži. |
-| **DOP-ODL-11** | Kooperantu se **štampa KO** (odluka 03.11.2026) — faza F3. |
+| **DOP-ODL-11** | Kooperantu se **štampa KO** (odluka 03.11.2026) — faza F3: `modPrint.StampajKO`, šablon `KOSablon`, PDF u „Knjizna odobrenja", podešavanje `KO_PRINT_MODE` (podrazumevano PDF). Storniran KO se ne štampa. |
+| **DOP-ODL-12** | *Predlog uz F3:* ekran Doplata je u grupi FINANSIJE, pod pravom **Fakturisanje** (`OBL_FAKTURISANJE`) — KO je knjigovodstveni dokument kao faktura, a nova kolona prava bila bi izmena šeme bez poslovnog razloga. Promena je jedan red u `modUiScreens.ScrRows`. |
+| **DOP-ODL-13** | Storno KO je **na ekranu Doplata** (radnje „Storniraj KO" i „Storniraj ceo obračun"), ne na ekranu Storno: tamo prekidač već nosi 11 lista = `MAX_SEG`. KO nema nizvodni lanac robe, pa mu ne treba pregled posledica po modovima. |
 
 ## 3) Struktura dokumenta (potvrđena 03.11.2026)
 
@@ -83,6 +86,7 @@ koji u jednoj transakciji pravi po jedan KO za svakog kooperanta sa kg > 0.
 | **DOP-05** | (F4) Novac vezan za KO se pri stornu KO **odvezuje, ne stornira** — isto pravilo kao kod otkupa (`ODLUKA_NOVAC_PRI_STORNU.md`). | F4 |
 | **DOP-06** | Jedan KO po kooperantu po obračunu; brojevi uzastopni u nizu godine. | `modDoplata.KnjiziPlan` · 310 |
 | **DOP-07** | Doplata je **zaduženje u korist kooperanta** svuda gde se vidi saldo: na kartici je jedan red po KO na datum knjiženja (i u početnom stanju), a u Saldo OM i PWA izvozu saldo = vrednost + doplata − isplaćeno − agro. U Saldo OM stavka KO pripada stanici na kojoj je roba predata, a period je po datumu knjiženja. | `modDoplata.DoplataIznosPoKooperantu` / `DoplataKOKooperanta`, `modIzvestaj`, `modStammdatenSync.SaldoOMDetailRedovi` · 315, 316, 317 |
+| **DOP-08** | Ekran nema svoju računicu: stopa prolazi istu proveru kao pisac (`DoplataStopeProblem` = `UcitajStope`), pregled je isti plan koji pisac izvršava (`DoplataPlan`), a upis i storno idu samo kroz `KnjiziDoplatu_TX` / `modStorno`. Svako pitanje (knjiženje, ponavljanje, storno) ide kroz `Pitaj` — u test režimu beleži i odgovara „Ne" (KI-015). | `modScrDoplata` · 319, 320 |
 
 **Prikaz i pisac dele jedan plan** (obrazac `BimAutoPlan`): `DoplataPlan` računa
 stavke bez upisa, ekran ga prikazuje (F3), `KnjiziDoplatu_TX` ga izvršava.
@@ -137,10 +141,20 @@ Storno, PWA `pregled.js`.
 2. **F2 — čitaoci. U KODU (03.11.2026).** Kartica, Saldo OM (pojedinačno i
    zbirno), PWA izvoz (§6); `modTest` 315–317, sabotaže `dop-kartica-*`,
    `dop-saldo-om-*`, `dop-zbirni-*`, `dop-pwa-*`.
-3. **F3 — ekran i papir.** Nov ekran u ljusci `frmOtkupUI` (runtime kontrole, bez
-   novih `WithEvents`): period sa satom, tabela stopa, pregled plana sa
-   „stope bez otkupa", potvrda ponavljanja, „Knjiži"; štampa KO (DOP-ODL-11);
-   vidljivost na ekranu Storno; signal promene osnovice (DOP-ODL-07) u Oporavku.
+3. **F3 — ekran i papir. U KODU (04.11.2026).**
+   - Ekran `DOPLATA` (`modScrDoplata`, registar `modUiScreens`, ikonica
+     `IC_DOPLATA` = MDL2 Calculator, *za proveru*): datum knjiženja, period sa
+     satom, stope (vrsta/sorta/klasa/din-kg), liste STOPE / PREGLED / KNJIŽENA KO,
+     „Pregled obračuna", „Knjiži doplatu" (pitanje sa brojkama, pa pitanje o
+     ponavljanju), radnje nad KO: štampa, storno KO, storno obračuna (DOP-ODL-13).
+     Runtime kontrole kroz `NewFieldG` / `BtnV`, bez novih `WithEvents`.
+   - Papir KO (`modPrint.EnsureKOSablon` / `FillKOSablon` / `StampajKO`); kartica:
+     „Štampaj dokument" nad redom `DOP|` štampa KO.
+   - Signal osnovice (DOP-ODL-07): `modDoplata.DoplataOdstupanjaOsnovice`, provera
+     **DOP1** u `modIntegritet` → lista INTEGRITET na Oporavku
+     (`docs/INTEGRITET_PROVERE.md`).
+   - `modTest` 318–321 (+ ekran u testu 239, seam u `ResetSeamova`), sabotaže
+     `dop-papir-*`, `dop-ekran-*`, `dop-signal-nema`.
 4. **F4 — isplata.** Nalozi za banku, automatsko mapiranje izvoda,
    `tblNovac.DoplataID`, gotovina na matičnoj stanici (DOP-ODL-05).
 
@@ -161,3 +175,8 @@ od 309 nadalje sudara se sa ovom.
    potvrdi, odluka je operaterova: parsirati ISO + UTC → lokalno vreme u
    `OtkupVremeNastanka` (popravlja i štampu), ili ostaviti granice na celim danima.
 2. DOP-ODL-10 je predlog — potvrditi ili oboriti.
+3. DOP-ODL-12 (pravo Fakturisanje za ekran Doplata) je predlog — potvrditi.
+4. Ikonica `IC_DOPLATA` (&HE8EF, „Calculator") nije proverena na pravom fontu —
+   pogledati u `DumpMdl2Used` / na ekranu.
+5. `.claude/rules/testovi.md` §4 još kaže „30 članova" za test 239 (sada 32) —
+   ide kroz zaseban process PR (izmene u `.claude/` se ne mešaju sa feature-om).

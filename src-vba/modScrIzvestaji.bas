@@ -2871,6 +2871,12 @@ Private Sub StampajDokumentReda(ByVal red As Long)
             ref = NzS(modOtkupUI.GridCell(red, 8))
             If Left$(ref, 4) = "OTK|" Then
                 ReprintOtkupniListByOtkupID Mid$(ref, 5)
+            ElseIf Left$(ref, 4) = "DOP|" Then
+                ' Red doplate je knjizno odobrenje -- dokument postoji i stampa se
+                ' (DOPLATA.md DOP-ODL-11). Razlog odbijanja ide u toast.
+                Dim koGreska As String
+                koGreska = modPrint.StampajKO(Mid$(ref, 5))
+                If Len(koGreska) > 0 Then modOtkupUI.ShowToast koGreska, True
             ElseIf Len(ref) > 0 Then
                 ' NOV / MAG / AMB red kartice nema dokument za stampu iz ovog
                 ' pregleda -- isto kao legacy Case Else.

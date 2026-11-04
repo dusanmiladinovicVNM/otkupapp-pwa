@@ -112,6 +112,24 @@ Private Sub RunAllChecks()
     Chk_D1_PreradjenoBezPrerade
     Chk_D2_PreradaNesvezaPaleta
     Chk_A5_PreradaKg
+    Chk_DOP1_OsnovicaDoplate
+End Sub
+
+' ============================================================
+' CHECK DOP1: OSNOVICA KNJIZENE DOPLATE SE PROMENILA (DOPLATA.md DOP-ODL-07)
+' ============================================================
+' Knjizen KO je snimak: kasniji storno, ispravka ili retro unos otkupa u periodu
+' ga ne menja. Racun je u modDoplata.DoplataOdstupanjaOsnovice (isti DoplataPlan
+' koji je pisac izvrsio) -- ovde je samo prikaz. Popravka je storno KO pa nov
+' obracun; nalaz se sam ne ispravlja.
+Private Sub Chk_DOP1_OsnovicaDoplate()
+    On Error GoTo EH
+    WriteBlock "DOP1", "Doplata: osnovica se promenila posle knjizenja", _
+               Array("BrojKO", "KooperantID", "Kljuc", "KgKnjizeno", "KgSada", "ObracunID"), _
+               modDoplata.DoplataOdstupanjaOsnovice()
+    Exit Sub
+EH:
+    WriteErr "DOP1", Err.description
 End Sub
 
 ' ============================================================

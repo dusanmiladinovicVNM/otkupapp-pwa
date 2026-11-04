@@ -60,6 +60,11 @@ Sve provere isključuju stornirane redove (`ExcludeStornirano`) i agregiraju po
 | D1 | Paleta `Preradjeno=Da` bez ijedne aktivne prerada-stavke (reset flaga izostao) |
 | D2 | Prerada-stavka ka nevalidnoj paleti (nesveža/stornirana/nepostojeća) — **očekivano prazno** zbog storno guarda |
 
+### DOP — Doplata kooperantu
+| Kod | Značenje |
+|---|---|
+| DOP1 | Osnovica knjižene doplate se promenila posle knjiženja (storno, ispravka ili retro unos otkupa u periodu): plan obračuna računat ponovo nad današnjim otkupima (`modDoplata.DoplataOdstupanjaOsnovice`, isti `DoplataPlan`) daje drugu količinu po kooperantu, stanici i ključu. KO je snimak i sam se ne menja; popravka je storno KO pa nov obračun (`docs/DOMEN/DOPLATA.md`, DOP-ODL-07). |
+
 ## Podesive tolerancije
 
 U `modIntegritet.bas`, vrh modula:

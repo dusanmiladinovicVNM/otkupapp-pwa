@@ -29,6 +29,7 @@ Public Const PDF_DIR_KARTICE As String = "Kartice kooperanata"
 Public Const PDF_DIR_PALETNI As String = "Paletni listovi"
 Public Const PDF_DIR_PRERADA As String = "Preradni listovi"
 Public Const PDF_DIR_SPECIFIKACIJE As String = "Specifikacije"
+Public Const PDF_DIR_KO As String = "Knjizna odobrenja"
 Public Const PDF_DIR_IZVESTAJI As String = "Izvestaji"
 ' CSV nalozi za prenos (banka export) - isti root kao PDF folderi (EnsureDocFolder)
 Public Const CSV_DIR_BANKA_NALOZI As String = "Nalozi za banku"
@@ -636,6 +637,8 @@ Public Const CFG_KARTICA_PRINT_MODE As String = "KARTICA_PRINT_MODE"
 Public Const CFG_SLEDLJIVOST_PRINT_MODE As String = "SLEDLJIVOST_PRINT_MODE"
 Public Const CFG_KARTICA_AMB_PRINT_MODE As String = "KARTICA_AMB_PRINT_MODE"
 Public Const CFG_SPECIFIKACIJA_PRINT_MODE As String = "SPECIFIKACIJA_PRINT_MODE"
+' Knjizno odobrenje (doplata kooperantu, DOPLATA.md DOP-ODL-11). Default PDF.
+Public Const CFG_KO_PRINT_MODE As String = "KO_PRINT_MODE"
 ' Specifikacija isplata (banka nalozi, frmBankaExportPregled). Default PDF.
 Public Const CFG_ISPLATA_SPEC_PRINT_MODE As String = "ISPLATA_SPEC_PRINT_MODE"
 ' Otpremnica / grupni otkupni list / paletni list got. proizvoda (prerada).
@@ -696,6 +699,7 @@ Public Const WS_KARTICA_AMB_SABLON As String = "KarticaAmbalazeSablon"
 Public Const WS_SLEDLJIVOST_SABLON As String = "SledljivostSablon"
 Public Const WS_SPECIFIKACIJA_SABLON As String = "SpecifikacijaSablon"
 Public Const WS_ISPLATA_SPEC_SABLON As String = "IsplataSpecSablon"
+Public Const WS_KO_SABLON As String = "KOSablon"
 
 ' --- Dokument-Tipovi ---
 Public Const COL_STORNIRANO As String = "Stornirano"

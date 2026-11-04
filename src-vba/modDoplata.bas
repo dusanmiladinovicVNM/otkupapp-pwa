@@ -232,6 +232,19 @@ Public Function DoplataPreklapanja(ByVal periodOd As Date, ByVal periodDo As Dat
                          ". Nova doplata se placa NA TO. Potvrdi ponavljanje."
 End Function
 
+' Problem sa stopama kao TEKST za operatera, "" kad su ispravne. Isto pravilo
+' koje pisac dize kao gresku (UcitajStope) -- jedna implementacija, dva
+' pozivaoca: ekran Doplata ga zove pri dodavanju stope, da operater dobije
+' razlog uz polje umesto tek pri knjizenju.
+Public Function DoplataStopeProblem(ByVal stope As Collection) As String
+    Dim cene As Object, vrsteSorte As Object, prikaz As Object
+    On Error GoTo EH
+    UcitajStope stope, cene, vrsteSorte, prikaz, "modDoplata.DoplataStopeProblem"
+    Exit Function
+EH:
+    DoplataStopeProblem = Err.description
+End Function
+
 ' ============================================================
 ' KNJIZENJE -- jedini ulaz upisa
 ' ============================================================
@@ -689,6 +702,135 @@ Public Function DoplataKOKooperanta(ByVal kooperantID As String) As Variant
         Set res(n, 5) = red(3)
     Next k
     DoplataKOKooperanta = res
+End Function
+
+' OSNOVICA KNJIZENE DOPLATE SE PROMENILA (DOP-ODL-07). Knjizen KO je SNIMAK:
+' kasniji storno, ispravka ili retro unos otkupa u periodu ga ne menja -- ovde
+' se to VIDI. Plan svakog aktivnog obracuna racuna se ponovo nad danasnjim
+' otkupima (isti DoplataPlan, iste stope i isti period) i poredi po kooperantu,
+' stanici i kljucu. Signal, ne popravka: ispravka je storno KO pa nov obracun.
+'
+' 2D niz (1..n, 1..6): 1 BrojKO ("" kad kooperant tada nije bio obuhvacen) |
+' 2 KooperantID | 3 kljuc ("vrsta sorta klasa @ stanica") | 4 kg knjizeno |
+' 5 kg sada | 6 ObracunID. Obracun ciji se plan danas ne moze izracunati (npr.
+' granicni dan bez poznatog sata) daje JEDAN red sa razlogom u koloni 3.
+' Empty kad odstupanja nema. Read-only.
+Public Function DoplataOdstupanjaOsnovice() As Variant
+    DoplataOdstupanjaOsnovice = Empty
+
+    Dim r As Variant
+    r = DoplataStavkeRedovi()
+    If Not IsArray(r) Then Exit Function
+
+    ' Obracun -> Array(periodOd, periodDo, stope, knjizeno). Recnici se drze
+    ' kao objekti u nizu i pune preko svoje promenljive -- bez lanaca tipa
+    ' d(k)(i), koje ovaj modul namerno izbegava.
+    '   stope:    kljuc stope -> Array(vrsta, sorta, klasa, cena)
+    '   knjizeno: kooperant|stanica|kljuc stope -> Array(kg, brojKO, koop, opis)
+    Dim obr As Object, o As Variant, k As String, kStope As String, i As Long
+    Dim st As Object, kn As Object
+    Set obr = CreateObject("Scripting.Dictionary")
+    obr.CompareMode = vbTextCompare
+    For i = 1 To UBound(r, 1)
+        k = CStr(r(i, 5))
+        If Not obr.Exists(k) Then
+            Set st = CreateObject("Scripting.Dictionary")
+            st.CompareMode = vbTextCompare
+            Set kn = CreateObject("Scripting.Dictionary")
+            kn.CompareMode = vbTextCompare
+            obr.Add k, Array(r(i, 14), r(i, 15), st, kn)
+        End If
+        o = obr(k)
+        Set st = o(2)
+        Set kn = o(3)
+        kStope = KljucVrstaSorta(r(i, 7), r(i, 8)) & "|" & UCase$(Trim$(CStr(r(i, 9))))
+        If Not st.Exists(kStope) Then _
+            st.Add kStope, Array(CStr(r(i, 7)), CStr(r(i, 8)), CStr(r(i, 9)), CDbl(r(i, 11)))
+        kn.Add UCase$(CStr(r(i, 4))) & "|" & UCase$(CStr(r(i, 6))) & "|" & kStope, _
+               Array(CDbl(r(i, 10)), CStr(r(i, 2)), CStr(r(i, 4)), _
+                     OpisKljuca(r(i, 7), r(i, 8), r(i, 9), r(i, 6)))
+    Next i
+
+    Dim out As New Collection, ok As Variant, stope As Collection, s As Object
+    Dim plan As Variant, bez As String, sada As Object, kk As Variant, j As Long
+    Dim kgKnj As Double, kgSada As Double, deo As Variant, greska As String
+    Dim vKnj As Variant, vSada As Variant
+    For Each ok In obr.keys
+        o = obr(ok)
+        Set st = o(2)
+        Set kn = o(3)
+        Set stope = New Collection
+        For Each kk In st.keys
+            deo = st(kk)
+            Set s = CreateObject("Scripting.Dictionary")
+            s.Add "VrstaVoca", deo(0)
+            s.Add "SortaVoca", deo(1)
+            s.Add "Klasa", deo(2)
+            s.Add "Cena", deo(3)
+            stope.Add s
+        Next kk
+
+        greska = ""
+        plan = Empty
+        On Error Resume Next
+        plan = DoplataPlan(CDate(o(0)), CDate(o(1)), stope, bez)
+        If Err.Number <> 0 Then greska = Err.description
+        Err.Clear
+        On Error GoTo 0
+
+        If Len(greska) > 0 Then
+            out.Add Array("", "", "osnovica se ne moze izracunati: " & greska, 0#, 0#, CStr(ok))
+        Else
+            Set sada = CreateObject("Scripting.Dictionary")
+            sada.CompareMode = vbTextCompare
+            If IsArray(plan) Then
+                For j = 1 To UBound(plan, 1)
+                    k = UCase$(CStr(plan(j, PL_KOOP))) & "|" & UCase$(CStr(plan(j, PL_STANICA))) & "|" & _
+                        KljucVrstaSorta(plan(j, PL_VRSTA), plan(j, PL_SORTA)) & "|" & _
+                        UCase$(Trim$(CStr(plan(j, PL_KLASA))))
+                    sada.Add k, Array(CDbl(plan(j, PL_KOLICINA)), CStr(plan(j, PL_KOOP)), _
+                                      OpisKljuca(plan(j, PL_VRSTA), plan(j, PL_SORTA), _
+                                                 plan(j, PL_KLASA), plan(j, PL_STANICA)))
+                Next j
+            End If
+            For Each kk In kn.keys
+                vKnj = kn(kk)
+                kgKnj = CDbl(vKnj(0))
+                kgSada = 0
+                If sada.Exists(kk) Then
+                    vSada = sada(kk)
+                    kgSada = CDbl(vSada(0))
+                End If
+                If Abs(kgSada - kgKnj) >= 0.005 Then
+                    out.Add Array(vKnj(1), vKnj(2), vKnj(3), kgKnj, kgSada, CStr(ok))
+                End If
+            Next kk
+            For Each kk In sada.keys
+                If Not kn.Exists(kk) Then
+                    vSada = sada(kk)
+                    out.Add Array("", vSada(1), vSada(2), 0#, CDbl(vSada(0)), CStr(ok))
+                End If
+            Next kk
+        End If
+    Next ok
+
+    If out.count = 0 Then Exit Function
+    Dim res() As Variant, red As Variant
+    ReDim res(1 To out.count, 1 To 6)
+    For i = 1 To out.count
+        red = out(i)
+        For j = 1 To 6
+            res(i, j) = red(j - 1)
+        Next j
+    Next i
+    DoplataOdstupanjaOsnovice = res
+End Function
+
+' "vrsta sorta klasa @ stanica" -- citljiv kljuc reda za nalaz integriteta.
+Private Function OpisKljuca(ByVal vrsta As Variant, ByVal sorta As Variant, _
+                            ByVal klasa As Variant, ByVal stanica As Variant) As String
+    OpisKljuca = Trim$(Trim$(NzToText(vrsta) & " " & NzToText(sorta)) & " " & NzToText(klasa)) & _
+                 " @ " & NzToText(stanica)
 End Function
 
 ' DoplataID-evi AKTIVNIH KO jednog obracuna -- za storno celog obracuna

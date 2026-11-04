@@ -120,6 +120,7 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, ChrW(352) & "tampa", "SLEDLJIVOST_PRINT_MODE", "Sledljivost", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "ISPLATA_SPEC_PRINT_MODE", "Specifikacija isplata (banka nalozi)", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "SPECIFIKACIJA_PRINT_MODE", "Specifikacija", "list:PDF;PRINT;PREVIEW;OFF"
+    CfgAdd c, ChrW(352) & "tampa", "KO_PRINT_MODE", "Knji" & ChrW(382) & "no odobrenje (doplata)", "list:PDF;PRINT;PREVIEW;OFF"
     ' Vazi za sve rezime PDF iznad: NO -> PDF se pravi, ali se ne otvara.
     CfgAdd c, ChrW(352) & "tampa", "PDF_OTVORI_POSLE", "Otvori PDF posle izrade", "bool"
 

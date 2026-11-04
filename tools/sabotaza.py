@@ -11312,6 +11312,47 @@ SABOTAZE = {
         "T_Doplata_PWASaldoDetalj",
         "PWA saldo: doplata 140, saldo = 700 + 140 - isplaceno - agro",
     ),
+    # --- DOPLATA KOOPERANTU, F3 (papir i ekran; testovi 318-320) ---
+    # Zbir na papiru KO ne sabira iznose stavki.
+    "dop-papir-bez-stavke": (
+        "modPrint.bas",
+        "            sumIzn = sumIzn + CDbl(r(i, 12))\n",
+        "            sumIzn = sumIzn + 0   ' SABOTAZA: zbir papira bez iznosa\n",
+        "T_Doplata_StampaKO",
+        "papir KO: zbir iznosa i kg je zbir stavki (obe stanice)",
+    ),
+    # Kapija papira ugasena: za storniran KO se pokusava izvoz.
+    "dop-papir-stornirani": (
+        "modPrint.bas",
+        "    Set ws = FillKOSablon(doplataID)\n    If ws Is Nothing Then\n",
+        "    Set ws = FillKOSablon(doplataID)\n    If False Then   ' SABOTAZA: storniran KO ide u stampu\n",
+        "T_Doplata_StampaKO",
+        "storniran KO se ne stampa: razlog operateru, bez izvoza",
+    ),
+    # Lista pregleda u koloni iznosa pokazuje kilograme.
+    "dop-ekran-pregled-kolona": (
+        "modScrDoplata.bas",
+        "        outA(n, 8) = CDbl(mPlan(i, 8))\n",
+        "        outA(n, 8) = CDbl(mPlan(i, 6))   ' SABOTAZA: iznos pregleda je kg\n",
+        "T_Doplata_EkranTok",
+        "ekran: pregled je isti plan koji pisac izvrsava",
+    ),
+    # "Knjizi" upisuje bez pitanja sa brojkama.
+    "dop-ekran-knjizi-bez-pitanja": (
+        "modScrDoplata.bas",
+        "    If Not Pitaj(PitanjeKnjizenja()) Then Exit Function\n",
+        "    If False Then Exit Function   ' SABOTAZA: knjizenje bez pitanja\n",
+        "T_Doplata_EkranTok",
+        "ekran: knjizenje pita sa brojkama, bez potvrde se nista ne upisuje",
+    ),
+    # Poredjenje osnovice ugaseno: promena posle knjizenja ostaje nevidljiva.
+    "dop-signal-nema": (
+        "modDoplata.bas",
+        "                If Abs(kgSada - kgKnj) >= 0.005 Then\n",
+        "                If False Then   ' SABOTAZA: promena osnovice se ne vidi\n",
+        "T_Doplata_SignalOsnovice",
+        "signal: storno otkupa posle knjizenja imenuje KO, knjizene i sadasnje kg",
+    ),
 }
 
 
