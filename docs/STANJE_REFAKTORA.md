@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 04.11.2026 (stavka 316: kapije `#466` zelene — RunAllTests 314/0, BFP 3017/0, dokaz 6/6; ručni Compile PASS).
+**Ažurirano:** 04.11.2026 (stavka 320: kapije `#467` zelene — RunAllTests 314/0, BFP 3014/0, dokaz 8/8; ručni Compile PASS).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -10856,6 +10856,66 @@
      - **Osnova posle merge-a #466:** RunAllTests 314, BFP 3017, katalog 1158, `pal_broj` 8, fixture
        `e0338451f4f3c76e`, šema `B22A1572`.
      - **Sledeći brojevi:** test 315 · stavka 317 · KI-088 · plan §14.62.
+
+317. **S8 rez 2b-2 — paletna stavka gubi `BrojPrijemnice`, `BrojZbirne` i `ZbirnaRoditeljID`** (04.11.2026, grana
+     `claude/s8-rez2b2-brisanje`; rađeno paralelno sa kapijama 2b-1, u worktree-ju, pa rebase na `main` posle
+     merge-a `#466`). Plan §14.62. Kapije 2b-1 su stavka 316.
+
+     - **Kod:** kanon + `modSchema` (`CA5CE30A`), self-heal `ObrisiStareKolonePaletneStavke`, pisci tri kolone
+       (uključujući paletni rep `ReassignPrijemnicaToZbirna_TX`), konstante; pisac paleta ne prima labele.
+     - **Testovi:** pomoćnici na `PrijemnicaID` (strogo čitanje), izvedena zbirna, promenjene premise traga zbirne,
+       obrisan ZBR-PAL, nov BFP self-heal test.
+     - **Sabotaže:** 5 povučenih, 5 preformulisanih (po broju preko zaglavlja), 1 novo sidro, 2 nove; katalog 1155.
+     - **Popis:** `pal_broj` 8 → 0 (dokaz u oba smera: 0 → 1 PAO → 0); `prj_brojzbirne` 33 → 31.
+     - **Jeftine kapije:** `vba_check` čist, `who_writes` oba režima (WHO_WRITES regenerisan), šema u koraku.
+     - **Nije izvršeno (NEVERIFIKOVANO):** `make_fixture`, suite-ovi, `dokaz.py`, Compile.
+     - **Sledeći brojevi:** test 315 · stavka 318 · KI-088 · plan §14.63.
+
+318. **Merge PR-a `#466` u `main` = `5024db6d`; rez 2b-1 ZATVOREN** (04.11.2026, uz „Proveri i merge"). Zapis ide na
+     granu `claude/s8-rez2b2-brisanje`.
+
+     - **Pre merge-a:** Static CI na glavi `eeb28c8b` SUCCESS; PR MERGEABLE / CLEAN; `main` se od `ed6896dc` nije
+       pomerio. Merge vezan za proverenu glavu (`--match-head-commit`).
+     - **Merge `5024db6d`:** roditelji `ed6896dc` i `eeb28c8b`; stablo `main`-a je isto kao stablo glave.
+     - **Osnova za `main`:** RunAllTests 314 / 0, BFP 3017 / 0, Palete OK (115), Storno 111 / 0, dokaz 6 / 6
+       (potpis `5344a886ecdf9528`), Compile PASS; katalog 1158, `pal_broj` 8; šema `B22A1572`, fixture
+       `e0338451f4f3c76e`.
+     - **2b-2 rebase:** grana je preneta na `5024db6d` kao jedan commit; prenesene kopije 2b-1 ispravki (fixture,
+       test) su ispale kao već upstream. Konflikti samo u ovom fajlu (stavke 316/317) i u jednoj liniji testa
+       (kontrola = korak 3, bez broja zbirne). Jeftine kapije nad rebase-ovanim stablom zelene.
+     - **Sledi:** push i PR 2b-2 na izričit zahtev, pa review i izvršne kapije (nov fixture, RAT, BFP, Palete,
+       Storno, `dokaz.py` za nove i preformulisane sabotaže, Compile).
+     - **Sledeći brojevi:** test 315 · stavka 319 · KI-088 · plan §14.63.
+
+319. **Review PR-a `#467` (2b-2), prvi krug: CODE GO · ARCHITECTURE GO · TEST DESIGN CONDITIONAL GO · MERGE HOLD do
+     izvršnog acceptance-a** (04.11.2026). PR otvoren na „Push i PR" nad `bb6944c8`.
+
+     - **Predlog review-a (P3):** dopuniti dokaz self-heal-a za OBA imena traga (`ZbirnaRoditeljID` i
+       `ZbirnaGeneracijaID`; test fizički vraća samo staro ime). **Operater: „zanemari ovo oko dopune za selfheal,
+       kreni odmah na acceptance"** — ne radi se; `ObrisiStareKolonePaletneStavke` briše oba imena po istom
+       primitivu, a staro ime meri test.
+     - **Procena review-a:** S8 ~90 % gotov; preostaje acceptance 2b-2 i završni S8 krug (11 odloženih sabotaža,
+       FULL).
+     - **Acceptance:** grana prebačena u glavni checkout (worktree uklonjen, sve je bilo na `origin`-u); kapije
+       puštene: nov fixture, Palete, Storno, `dokaz.py` (bazni RunAllTests + BFP, pa nove i preformulisane
+       sabotaže), zatim ručni Compile.
+     - **Sledeći brojevi:** test 315 · stavka 320 · KI-088 · plan §14.63.
+
+320. **Izvršne kapije 2b-2 (`#467`): zeleno; ručni Compile PASS** (04.11.2026). Plan §14.62 („Review #467 i
+     izvršne kapije"). Glava `c9cb0266`.
+
+     - **Fixture:** `68efada928a8d97d` (donor izgubio tri kolone paletne stavke).
+     - **Palete** OK (115), **Storno** 111 / 0.
+     - **RunAllTests** 314 / 0, **BFP** 3014 / 0 — razlika prema 3017 objašnjena do tvrdnje (−11 ZBR-PAL, +1 trag,
+       +7 self-heal).
+     - **`dokaz.py`:** 8 / 8 crveno (potpis `9ce61c233c3fb46b`): `s8r2b2-*` (2), preformulisane `s8r1a-*` (2) i
+       `s8r2a1-*` (3), novo sidro `s6k2-paleta-bez-kljuca-stavke`.
+     - **Compile:** NEJASNO automatski; ručno nad `tests/fixtures/rucna_provera_s8r2b2.xlsm` (kod `c9cb0266`) —
+       operater: „Compile PASS". Uslov review-a za merge (izvršni acceptance) je ispunjen; merge `#467` ide samo
+       na izričit zahtev.
+     - **Osnova posle merge-a #467:** RunAllTests 314, BFP 3014, katalog 1155, `pal_broj` 0, `prj_brojzbirne` 31,
+       fixture `68efada928a8d97d`, šema `CA5CE30A`.
+     - **Sledeći brojevi:** test 315 · stavka 321 · KI-088 · plan §14.63.
 
 ## Dug sa imenom (posle S5-5b)
 

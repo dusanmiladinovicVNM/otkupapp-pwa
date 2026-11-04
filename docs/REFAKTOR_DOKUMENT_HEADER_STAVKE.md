@@ -11098,6 +11098,74 @@ sabotaže, Compile). Static CI #1156 na `c97cf6fa` SUCCESS. Nov P1 ili P2 nije n
   je prva naredba `SpillGajbice`, a pre nje pisac samo čita (`SchemaReadyOrFail`, `Require*Schema`,
   `EnsurePrijemnicaNotAlreadyPaletized`). Po preporuci review-a 2b-1 se ne proširuje manjim poboljšanjima.
 
+### 14.62) S8 rez 2b-2 — paletna stavka gubi labele i trag zbirne (04.11.2026)
+
+Grana `claude/s8-rez2b2-brisanje` (od glave 2b-1). Zapis: `docs/STANJE_REFAKTORA.md` stavka 317. Drugi PR po
+`PAL-ODL-13`; izvršava `PAL-ODL-03` (brišu se sve tri kolone).
+
+#### Šta je urađeno
+
+- **Kanon:** `tblPaletaStavka` gubi `BrojPrijemnice` (3), `BrojZbirne` (4) i `ZbirnaRoditeljID` (17); `formats`
+  više nema unos za paletnu stavku. `modSchema` regenerisan (otisak `CA5CE30A`).
+- **Self-heal:** `modSetup.ObrisiStareKolonePaletneStavke` (po imenu, uz staro ime traga `ZbirnaGeneracijaID`) ide u
+  `EnsureRuntimeSchema` uz ostala brisanja, pre provere otiska. Preimenovanje traga na paletnoj stavci i
+  `EnsureKolonaSaTragom TBL_PALETA_STAVKA` su obrisani — inače bi obrisana kolona bila vraćena na kraj.
+- **Pisci:** `AddStavka` (labele i trag), prevezivanje paleta (labela i `PoveziDeteNaZbirnu` na paletnoj stavci),
+  paletni rep `modDokumenta.ReassignPrijemnicaToZbirna_TX` (skriven pisac; ceo blok, uz snimak tabele), ugovor
+  kolona `RequirePaletaStavkaSchema` i `modSetup.EnsurePaletniListSchema`. `PaletizePrijemnica`, `SpillGajbice` i
+  `AddStavka` ne primaju broj prijemnice ni broj zbirne. Prevezivanje i korekcija više ne čitaju broj zbirne
+  prijemnice (`prj_brojzbirne` 33 → 31).
+- **Konstante:** `COL_PALS_BROJ_PRIJ` i `COL_PALS_BROJ_ZBIRNE` obrisane; `pal_broj` 8 → 0, dokaz u oba smera (živo
+  mesto koje vrati konstantu obara kapiju po imenu grupe).
+- **Fixture:** paletne stavke bez labela; `DROP_COLS` briše četiri imena iz donora.
+
+#### Testovi
+
+- **Test-pomoćnici na identitet:** `modTest` (`KljucStavkePaleteZaPrijemnicu`, `GajbicaZaPrijemnicu`,
+  `SvihStavkiZaPrijemnicu`, `StavkiZaPrijemnicu`) biraju paletne stavke po `PrijemnicaID`-u prijemnica tog broja
+  (`PrijemniceBroja`, iz zaglavlja), a kolone čitaju strogo — tiha nula bi tvrdnju „0 stavki" učinila vakuumskom.
+  `ZbirnaNaStavci` je izvedena (zbirna prijemnice). `modTestPalete.StInfo` isto, a kolona 7 je zbirna iz zaglavlja.
+  `modTestStorno.SeedPaletaStavka` bez labela; mrtav `PalsBrojZbirne` obrisan.
+- **Promenjene premise:** `T_DeteZbirne_ImaKolonuGeneracije` i `Test_Schema_TragZbirneNosiNovoIme` — paletna stavka
+  je bila četvrto dete zbirne; sada traga NE SME da ima. 2a-1 i 2a-2 gube sintetičku manipulaciju labela (kolona
+  nema), tvrdnje ostaju.
+- **Obrisan:** BFP `Test_ZBR_PaletaNasledjujeGeneracijuPrijemnice` sa pomoćnicima (ZBR-CHILD-01 za paletnu stavku):
+  nema traga koji bi se nasledio.
+- **Nov:** BFP `Test_S8R2b2_PaletnaStavkaStareKoloneSelfHeal` (obrazac S7R2): stari raspored obara kanonski prefiks,
+  self-heal briše kolone, prefiks prolazi, prvi red nosi iste vrednosti po imenu, drugi prolaz ne dira tabelu;
+  `EnsureSledljivostSchema` ne vraća trag.
+
+#### Sabotaže (katalog 1158 → 1155)
+
+- **Povučene (greška više ne može da se napiše):** `paleta-pogadja-generaciju-po-broju`, `zbirna-paleta-po-broju`,
+  `s8r2a1-scope-po-paletama`, `s8r2a2-c048-labela-sa-stavke`, `s8r2a2-oporavak-labela-sa-stavke`.
+- **Preformulisane (ista greška — izbor po BROJU — preko zaglavlja):** `s8r1a-korekcija-stavke-po-broju`,
+  `s8r1a-resync-po-broju`, `s8r2a1-pregled-po-broju`, `s8r2a1-uvid-po-broju` (sada u
+  `modStornoFlow.PrijemniceUObimuZbirne`), `s8r2a1-uvid-prijemnice-po-broju`.
+- **Novo sidro:** `s6k2-paleta-bez-kljuca-stavke` (`AddStavka` bez labela).
+- **Nove:** `s8r2b2-selfheal-ne-brise`, `s8r2b2-sledljivost-vraca-trag`.
+
+#### Ostaje otvoreno
+
+- `pal_broj` meri konstante; povratak čitanja po DOSLOVNOM imenu kolone (`"BrojPrijemnice"` uz `TBL_PALETA_STAVKA`)
+  grupa ne vidi. Kolona ne postoji ni u kanonu ni posle self-heal-a, pa bi takav čitalac dobio indeks 0 —
+  `RequireColumnIndex` pada po imenu, a `GetColumnIndex` čita prazno. Zato pomoćnici iznad čitaju strogo.
+- ~~Nije izvršeno~~ — izvršeno, v. „Izvršne kapije" ispod.
+
+#### Review #467 i izvršne kapije (04.11.2026)
+
+- **Review, prvi krug:** CODE GO · ARCHITECTURE GO · TEST DESIGN CONDITIONAL GO · MERGE HOLD do acceptance-a.
+  Predlog P3 (self-heal test i za novo ime traga) operater je odbio: „zanemari ovo oko dopune za selfheal, kreni
+  odmah na acceptance".
+- **Fixture:** nov potpis `68efada928a8d97d`; iz donora obrisani `BrojPrijemnice`, `BrojZbirne` i `ZbirnaGeneracijaID`.
+- **Palete** OK (115 provera), **Storno** 111 / 0.
+- **RunAllTests** 314 / 0, **BFP** 3014 / 0. Razlika prema osnovi 3017 je objašnjena do tvrdnje: −11 (obrisan
+  ZBR-PAL), +1 (`Test_Schema_TragZbirneNosiNovoIme`: paletna stavka bez traga), +7 (nov self-heal test; od 10
+  statičkih tvrdnji 3 su uslovni padovi preduslova).
+- **`dokaz.py`** (8 sabotaža, 3 prolaza): **8 / 8 crveno**, potpis izvora `9ce61c233c3fb46b` pre i posle identičan.
+- **Compile:** automatski NEJASNO; ručno **PASS** (operater). Sveska `tests/fixtures/rucna_provera_s8r2b2.xlsm` (kod
+  `c9cb0266`; pre provere VBE `File > Import File` → `src-vba/modVbaTools.bas`).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

@@ -444,11 +444,11 @@ Public Const COL_PAL_KAPACITET As String = "KapacitetGajbica"
 Public Const COL_PAL_CREATED As String = "CreatedAt"
 Public Const COL_PAL_ISTORIJA As String = "Istorija"
 
-' tblPaletaStavka (veza paleta -> prijemnica/zbirna)
+' tblPaletaStavka (veza paleta -> linija prijemnice). Broj prijemnice, broj zbirne
+' i trag roditeljske zbirne su obrisani u S8 rezu 2b-2 (PAL-ODL-13): to su
+' cinjenice zaglavlja i citaju se odatle. Konstante se ne vracaju.
 Public Const COL_PALS_ID As String = "StavkaID"
 Public Const COL_PALS_PALETA_ID As String = "PaletaID"
-Public Const COL_PALS_BROJ_PRIJ As String = "BrojPrijemnice"
-Public Const COL_PALS_BROJ_ZBIRNE As String = "BrojZbirne"
 Public Const COL_PALS_BR_GAJBICA As String = "BrojGajbica"
 Public Const COL_PALS_NETO As String = "NetoKg"
 Public Const COL_PALS_AMBALAZA As String = "AmbalazaKg"

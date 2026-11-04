@@ -550,8 +550,6 @@
       "columns": [
         "StavkaID",
         "PaletaID",
-        "BrojPrijemnice",
-        "BrojZbirne",
         "BrojGajbica",
         "NetoKg",
         "AmbalazaKg",
@@ -564,7 +562,6 @@
         "CreatedBy",
         "ModifiedAt",
         "ModifiedBy",
-        "ZbirnaRoditeljID",
         "PrijemnicaStavkaID"
       ]
     },
@@ -1106,10 +1103,6 @@
     },
     "tblPaleta": {
       "TipAmbalaze": "text"
-    },
-    "tblPaletaStavka": {
-      "BrojPrijemnice": "text",
-      "BrojZbirne": "text"
     },
     "tblParcele": {
       "KatBroj": "text"

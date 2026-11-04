@@ -23,7 +23,9 @@
 ## 2) Identitet
 
 **`PAL-IDENT-01` — mutacija paleta bira dokument po `PrijemnicaID`-u, a liniju po
-`PrijemnicaStavkaID`-u; `BrojPrijemnice` i `BrojZbirne` su labele.** Broj prijemnice je
+`PrijemnicaStavkaID`-u; `BrojPrijemnice` i `BrojZbirne` su labele zaglavlja.** Od S8 reza
+2b-2 (`PAL-ODL-03`, `PAL-ODL-13`) paletna stavka ih ne nosi: broj prijemnice se čita iz
+zaglavlja prijemnice, a zbirna iz zaglavlja prijemnice pa zbirne. Broj prijemnice je
 jedinstven samo po kupcu (`modStorno:1848-1851`: „dva kupca istog dana mogu imati
 `1/ddmmyy`"; fixture `PRIJEMNICA_BROJ = "1/150326"` kod dva kupca), pa izbor po broju
 zahvata tuđi dokument. Storno, prevezivanje i Oporavak to već poštuju. Korekcija količina

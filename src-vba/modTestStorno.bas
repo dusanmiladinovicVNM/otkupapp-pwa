@@ -303,9 +303,9 @@ Private Sub T17_PonistenjeZbirnaHladnjacaKaskada()
     SeedPaleta "SVT-PAL17B", 50, 100, 10, 50, PAL_STATUS_ZATVORENA
     ' Stavke nose PrijemnicaID (SeedPrijemnica: broj & "-ID-" & klasa), kao sto ga
     ' produkcioni pisac upisuje -- storno ih od S6 koraka 4 bira po njemu.
-    SeedPaletaStavka "SVT-PS17A", "SVT-P17", "SVT-Z17", "I", 100, 10, "SVT-PAL17A", 50, "SVT-P17-ID-I"
-    SeedPaletaStavka "SVT-PS17X", "SVT-P17X", "SVT-Z17X", "I", 100, 10, "SVT-PAL17A", 50, "SVT-P17X-ID-I"
-    SeedPaletaStavka "SVT-PS17B", "SVT-P17", "SVT-Z17", "I", 100, 10, "SVT-PAL17B", 50, "SVT-P17-ID-I"
+    SeedPaletaStavka "SVT-PS17A", "I", 100, 10, "SVT-PAL17A", 50, "SVT-P17-ID-I"
+    SeedPaletaStavka "SVT-PS17X", "I", 100, 10, "SVT-PAL17A", 50, "SVT-P17X-ID-I"
+    SeedPaletaStavka "SVT-PS17B", "I", 100, 10, "SVT-PAL17B", 50, "SVT-P17-ID-I"
 
     Dim res As Object
     Set res = modStornoFlow.RunZbirnaCorrection("SVT-Z17", SV_MODE_PONISTENJE, True)
@@ -811,9 +811,9 @@ End Sub
 ' prijemnicaID opciono: od S6 koraka 4 storno skida palete po PrijemnicaID-u (kao
 ' sto ga produkcioni paletni pisac i upisuje), pa ga test koji meri skidanje daje.
 ' Uz njega ide i kljuc linije (S8 rez 2b-1, PAL-INV-01): SeedPrijemnica pise
-' stavku "PRS-" & PrijemnicaID, pa seed nosi isti oblik koji pisac upisuje.
-Private Sub SeedPaletaStavka(ByVal stavkaID As String, ByVal brojPrij As String, _
-                             ByVal brojZbirne As String, ByVal klasa As String, _
+' stavku "PRS-" & PrijemnicaID, pa seed nosi isti oblik koji pisac upisuje. Broj
+' prijemnice i zbirne paletna stavka od S8 reza 2b-2 ne nosi.
+Private Sub SeedPaletaStavka(ByVal stavkaID As String, ByVal klasa As String, _
                              ByVal kg As Double, ByVal amb As Long, _
                              Optional ByVal paletaID As String = "", _
                              Optional ByVal gajbe As Long = 0, _
@@ -821,10 +821,10 @@ Private Sub SeedPaletaStavka(ByVal stavkaID As String, ByVal brojPrij As String,
     Dim kljuc As String
     If Len(prijemnicaID) > 0 Then kljuc = "PRS-" & prijemnicaID
     SvAppend TBL_PALETA_STAVKA, _
-        Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, _
+        Array(COL_PALS_ID, COL_PALS_PALETA_ID, _
               COL_PALS_KLASA, COL_PALS_BR_GAJBICA, COL_PALS_NETO, COL_PALS_AMBALAZA, _
               COL_PALS_PRIJEMNICA_ID, COL_PALS_PRIJEMNICA_STAVKA_ID), _
-        Array(stavkaID, paletaID, brojPrij, brojZbirne, klasa, gajbe, kg, amb, prijemnicaID, kljuc)
+        Array(stavkaID, paletaID, klasa, gajbe, kg, amb, prijemnicaID, kljuc)
 End Sub
 
 ' Minimalna realna paleta (header) da jezgro skidanja paleta radi end-to-end:
@@ -962,10 +962,6 @@ End Function
 
 Private Function PrjBrojZbirne(ByVal prjBroj As String) As String
     PrjBrojZbirne = NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, prjBroj, COL_PRJ_BROJ_ZBIRNE))
-End Function
-
-Private Function PalsBrojZbirne(ByVal stavkaID As String) As String
-    PalsBrojZbirne = NzTx(LookupValue(TBL_PALETA_STAVKA, COL_PALS_ID, stavkaID, COL_PALS_BROJ_ZBIRNE))
 End Function
 
 Private Function PalsStornirano(ByVal stavkaID As String) As String
