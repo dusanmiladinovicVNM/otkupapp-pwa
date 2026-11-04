@@ -10917,6 +10917,8 @@ konteksta ispravke.
 
 #### Odluke za operatera (pre koda)
 
+**Odlučeno 04.11.2026: sve četiri po preporuci** (`docs/DOMEN/PALETE.md` §4, `docs/STANJE_REFAKTORA.md` stavka 296). Time je `DOMAIN` za A3 PROVEN, a `CAPABILITY` za C-048 zatvoren; redosled je **2a-1 → 2a-2 → rez `KI-086`/`KI-087` → 2b**.
+
 | ID | Pitanje | Preporuka |
 |---|---|---|
 | **`PAL-ODL-08`** | Koje stavke A3 meri po `PrijemnicaStavkaID`? | **stavke koje imaju bar jednu paletnu stavku (aktivnu ili storniranu)**: zbir aktivnih mora biti cela stavka. Hvata N7 iz istorije (sve palete stornirane, prijemnica aktivna), a ne dira robu koja nikad nije paletizovana. „Sve stavke sa gajbama dok je paletiranje uključeno" bi davalo lažne nalaze, jer je paletiranje tekuće podešavanje, a ne istorijsko |
