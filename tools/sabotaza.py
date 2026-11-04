@@ -9246,6 +9246,38 @@ SABOTAZE = {
         "Test_S8R2a2_LabeleIIntegritetPoStavci",
         "S8R2a2: C1 imenuje paletnu stavku sa kljucem linije druge prijemnice",
     ),
+    # KI-086: otkazana korekcija posle prevezivanja je korekcija koja CEKA (podatak).
+    "ki086-otkaz-ne-ceka": (
+        "modPaletniListUI.bas",
+        "            outKorekcijaCeka = True\n            PaletaAdjustPrompt = \"Korekcija kolicina na paletama PRESKOCENA (uradi kasnije: \" & _\n",
+        "            ' SABOTAZA: otkaz se ne javlja kao korekcija koja ceka\n            PaletaAdjustPrompt = \"Korekcija kolicina na paletama PRESKOCENA (uradi kasnije: \" & _\n",
+        "Test_KI086_KorekcijaCekaPosleOtkaza",
+        "KI086: otkazana korekcija se vraca kao korekcija koja ceka",
+    ),
+    # KI-086 kontra: uradjena korekcija ne ceka.
+    "ki086-korigovano-ceka": (
+        "modPaletniListUI.bas",
+        "        PaletaAdjustPrompt = \"Kolicine na paletama korigovane. \" & info\n",
+        "        outKorekcijaCeka = True   ' SABOTAZA: i uradjena korekcija \"ceka\"\n        PaletaAdjustPrompt = \"Kolicine na paletama korigovane. \" & info\n",
+        "T_S8R1b_PreveziPaleteJezgro",
+        "314: korekcija posle prevezivanja je uradjena i ne ceka",
+    ),
+    # KI-087: izbor otvorene palete cita Preradjeno strogo.
+    "ki087-preradjeno-otvorene-tiho": (
+        "modPaletniList.bas",
+        "        If iPre = 0 Then KolonaKapijeSeNeCita TBL_PALETA, COL_PAL_PRERADJENO, SRC_OP\n",
+        "        ' SABOTAZA: necitljiv status prerade znaci \"nije preradjena\"\n",
+        "Test_KI087_IzborPaleteStrogoCitaPreradu",
+        "KI087: necitljiv status prerade obara paletizaciju i snimanje",
+    ),
+    # S8KI086-REV-01: razlog pale korekcije se cita pre rollback-a i LogErr-a.
+    "ki086-razlog-greske-se-gubi": (
+        "modPaletniList.bas",
+        "    outInfo = \"Greska: \" & errDesc\n",
+        "    outInfo = \"Greska: \" & Err.description   ' SABOTAZA: razlog posle rollback-a i LogErr-a\n",
+        "Test_KI086_PalaKorekcijaNosiRazlog",
+        "K86G: razlog pale korekcije stize do operatera",
+    ),
     # S8 rez 1a (PAL-ODL-04): Alt+F8 razresava broj u TACNO jedan aktivan dokument.
     "s8r1a-altf8-prvi-pogodak": (
         "modPaletniListUI.bas",

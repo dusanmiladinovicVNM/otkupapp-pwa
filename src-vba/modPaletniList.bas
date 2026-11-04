@@ -43,7 +43,12 @@ Private mSkipPaletize As Boolean
 '   "STATUS_CILJA_KOLONA" kolona Stornirano prijemnice se ne nalazi
 '                         (ReassignPaleteToPrijemnica_TX, S8R1B-REV-05);
 '   "STATUS_PRIJEMNICE_KOLONA" kolona Stornirano prijemnice se ne nalazi
-'                         (PaletaAktivnaRobaRazlog, S8 rez 1c, S8R1C-REV-01).
+'                         (PaletaAktivnaRobaRazlog, S8 rez 1c, S8R1C-REV-01);
+'   "PRERADJENO_OTVORENE_KOLONA" kolona Preradjeno palete se ne nalazi pri izboru
+'                         otvorene palete (GetOrCreateOpenPaleta, KI-087);
+'   "KOREKCIJA_PADA"      korekcija kolicina dize gresku odmah posle snimka svoje
+'                         transakcije (S8KI086-REV-01: razlog mora da stigne do
+'                         operatera, a izmena da se vrati cela).
 ' _KOLONA rezimi kvare INDEKS kolone, ne dizu gresku: tolerantan citac pod
 ' Resume Next bi dignutu gresku progutao pa procitao pravu kolonu, i test ne bi
 ' razlikovao tolerantan citac od strogog. Postavljac ga pali samo u test rezimu,
@@ -714,13 +719,13 @@ Public Function ClosePaletaManual_TX(ByVal palID As String) As String
     rIdx = RequireSingleRowIndexByKey(TBL_PALETA, COL_PAL_ID, palID, SRC)
 
     Dim d As Variant: d = GetTableData(TBL_PALETA)
-    If UCase$(Trim$(CStr(SafeCell(d, rIdx, GetColumnIndex(TBL_PALETA, COL_STORNIRANO))))) = "DA" Then
+    If UCase$(Trim$(CStr(SafeCell(d, rIdx, RequireColumnIndex(TBL_PALETA, COL_STORNIRANO, SRC))))) = "DA" Then
         Err.Raise vbObjectError + 7351, SRC, "Paleta je stornirana."
     End If
-    If UCase$(Trim$(CStr(SafeCell(d, rIdx, GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO))))) = "DA" Then
+    If UCase$(Trim$(CStr(SafeCell(d, rIdx, RequireColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO, SRC))))) = "DA" Then
         Err.Raise vbObjectError + 7352, SRC, "Paleta je ve" & ChrW(263) & " preradjena."
     End If
-    If CStr(SafeCell(d, rIdx, GetColumnIndex(TBL_PALETA, COL_PAL_STATUS))) <> PAL_STATUS_OTVORENA Then
+    If CStr(SafeCell(d, rIdx, RequireColumnIndex(TBL_PALETA, COL_PAL_STATUS, SRC))) <> PAL_STATUS_OTVORENA Then
         Err.Raise vbObjectError + 7353, SRC, "Paleta nije otvorena."
     End If
 
@@ -1183,6 +1188,7 @@ Private Function GetOrCreateOpenPaleta(ByVal vrstaVoca As String, _
                                        ByVal tipAmb As String, _
                                        ByVal capacity As Long, _
                                        ByRef outRow As Long) As String
+    Const SRC_OP As String = "modPaletniList.GetOrCreateOpenPaleta"
     outRow = 0
 
     Dim data As Variant
@@ -1191,14 +1197,19 @@ Private Function GetOrCreateOpenPaleta(ByVal vrstaVoca As String, _
     If Not IsEmpty(data) Then
         Dim iVrsta As Long, iSorta As Long, iKlasa As Long, iTipAmb As Long
         Dim iStatus As Long, iStorno As Long, iID As Long, iPre As Long
-        iVrsta = GetColumnIndex(TBL_PALETA, COL_PAL_VRSTA)
-        iSorta = GetColumnIndex(TBL_PALETA, COL_PAL_SORTA)
-        iKlasa = GetColumnIndex(TBL_PALETA, COL_PAL_KLASA)
-        iTipAmb = GetColumnIndex(TBL_PALETA, COL_PAL_TIP_AMBALAZE)
-        iStatus = GetColumnIndex(TBL_PALETA, COL_PAL_STATUS)
-        iStorno = GetColumnIndex(TBL_PALETA, COL_STORNIRANO)
-        iID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
+        ' KI-087: kolone izbora palete se citaju STROGO. Tolerantno procitan prazan
+        ' Preradjeno/Stornirano je znacio "slobodna paleta", pa bi roba otisla na
+        ' preradjenu ili storniranu paletu.
+        iVrsta = RequireColumnIndex(TBL_PALETA, COL_PAL_VRSTA, SRC_OP)
+        iSorta = RequireColumnIndex(TBL_PALETA, COL_PAL_SORTA, SRC_OP)
+        iKlasa = RequireColumnIndex(TBL_PALETA, COL_PAL_KLASA, SRC_OP)
+        iTipAmb = RequireColumnIndex(TBL_PALETA, COL_PAL_TIP_AMBALAZE, SRC_OP)
+        iStatus = RequireColumnIndex(TBL_PALETA, COL_PAL_STATUS, SRC_OP)
+        iStorno = RequireColumnIndex(TBL_PALETA, COL_STORNIRANO, SRC_OP)
+        iID = RequireColumnIndex(TBL_PALETA, COL_PAL_ID, SRC_OP)
         iPre = GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO)
+        If PaletaPraznoAkoTest("PRERADJENO_OTVORENE_KOLONA") Then iPre = 0
+        If iPre = 0 Then KolonaKapijeSeNeCita TBL_PALETA, COL_PAL_PRERADJENO, SRC_OP
 
         Dim r As Long
         For r = 1 To UBound(data, 1)
@@ -2387,9 +2398,11 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal prijemnicaID As String,
     pId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
     pZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
     pStt = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
-    pVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
-    pSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
-    pTa = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
+    ' KI-087: identitet dokumenta (vrsta, sorta, tip ambalaze) odlucuje o svezoj
+    ' paletizaciji -- strogo, ne prazan tekst kad kolona fali.
+    pVr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, SRC)
+    pSo = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA, SRC)
+    pTa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB, SRC)
 
     Dim dVr As String, dSo As String, dTa As String, dZbr As String
     Dim brojPrij As String, nDok As Long, storniran As Boolean
@@ -2402,7 +2415,7 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal prijemnicaID As String,
             dZbr = Trim$(NzToText(SafeCell(prj, r, pZbr)))
             dVr = Trim$(NzToText(SafeCell(prj, r, pVr)))
             dSo = Trim$(NzToText(SafeCell(prj, r, pSo)))
-            If pTa > 0 Then dTa = Trim$(NzToText(SafeCell(prj, r, pTa)))
+            dTa = Trim$(NzToText(SafeCell(prj, r, pTa)))
         End If
     Next r
     If nDok <> 1 Or storniran Then
@@ -2542,6 +2555,9 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal prijemnicaID As String,
     tx.BeginTx
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
+    If PaletaPraznoAkoTest("KOREKCIJA_PADA") Then
+        Err.Raise vbObjectError + 7366, SRC, "TEST: korekcija kolicina pada posle snimka transakcije."
+    End If
 
     ' touched: palID -> akumulirana delta gajbica (0 = samo kg/amb re-sync).
     ' Kljucevi = palete za header-recompute + Istorija/ADJUST log sa vidljivom deltom.
@@ -2652,9 +2668,14 @@ Public Function AdjustPaletaGajbiceZaPrijemnicu_TX(ByVal prijemnicaID As String,
     AdjustPaletaGajbiceZaPrijemnicu_TX = doneCnt
     Exit Function
 EH:
-    If Not tx Is Nothing Then tx.RollbackTx
+    ' S8KI086-REV-01: razlog se cita ODMAH -- rollback i LogErr imaju svoje On Error i
+    ' brisu Err, pa bi operater dobio "Greska:" bez razloga, bas kad je prevezivanje
+    ' proslo a korekcija nije. LogErr ide pre rollback-a, dok je Err jos aktivan.
+    Dim errDesc As String
+    errDesc = Err.description
     LogErr SRC
-    outInfo = "Greska: " & Err.description
+    If Not tx Is Nothing Then tx.RollbackTx
+    outInfo = "Greska: " & errDesc
     AdjustPaletaGajbiceZaPrijemnicu_TX = ADJ_BLOCKED
 End Function
 
@@ -2662,7 +2683,8 @@ End Function
 Private Function ClassNetoOutOfSync(ByVal stRows As Object, ByVal kl As String, _
         ByVal s As Variant, ByVal sGa As Long, ByVal sNe As Long, _
         ByVal docG As Long, ByVal docN As Double) As Boolean
-    On Error Resume Next
+    ' KI-087: bez Resume Next -- greska je ranije znacila "uskladjeno", pa resync
+    ' neta izostane. Sada ide do EH-a korekcije (ADJ_BLOCKED sa razlogom).
     If Not stRows.Exists(kl) Then Exit Function
     If docG <= 0 Then Exit Function
     Dim perG As Double: perG = docN / docG
@@ -2705,7 +2727,7 @@ End Function
 ' INDEKS, pa provera "indeks = 0" mora da stoji u pozivaocu, posle kuke.
 Private Sub KolonaKapijeSeNeCita(ByVal tbl As String, ByVal col As String, ByVal SRC As String)
     RaiseSistemski 1, SRC, "Nedostaje kolona '" & col & "' u tabeli '" & tbl & _
-                   "'. Bez nje se ne zna stanje, pa se roba sa paleta ne pomera ni ne skida."
+                   "'. Bez nje se ne zna stanje, pa se roba na paletama ne stavlja, ne pomera ni ne skida."
 End Sub
 
 ' ZAJEDNICKA raspodelna petlja: rasporedi "remaining" gajbica na otvorene/nove
@@ -2824,11 +2846,13 @@ Private Sub RecomputePaletaFromStavke(ByVal palID As String, ByVal SRC As String
     Dim sumG As Long, sumN As Double, sumA As Double
     If Not IsEmpty(s) Then
         Dim iPal As Long, iGa As Long, iNe As Long, iAm As Long, iSt As Long, r As Long
-        iPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
-        iGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
-        iNe = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
-        iAm = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA)
-        iSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+        ' KI-087: strogo -- tolerantno procitan Stornirano bi zaglavlju sabrao i
+        ' stornirane stavke, a PaletaID nijednu.
+        iPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+        iGa = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA, SRC)
+        iNe = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO, SRC)
+        iAm = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA, SRC)
+        iSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
         For r = 1 To UBound(s, 1)
             If CStr(SafeCell(s, r, iPal)) = palID _
                And UCase$(Trim$(CStr(SafeCell(s, r, iSt)))) <> "DA" Then
@@ -2847,7 +2871,7 @@ Private Sub RecomputePaletaFromStavke(ByVal palID As String, ByVal SRC As String
     RequireUpdateCell TBL_PALETA, palRow, COL_PAL_BRUTO, sumN + sumA + palk, SRC
 
     Dim d As Variant: d = GetTableData(TBL_PALETA)
-    Dim st As String: st = CStr(SafeCell(d, palRow, GetColumnIndex(TBL_PALETA, COL_PAL_STATUS)))
+    Dim st As String: st = CStr(SafeCell(d, palRow, RequireColumnIndex(TBL_PALETA, COL_PAL_STATUS, SRC)))
     If cap > 0 Then
         If sumG >= cap And st = PAL_STATUS_OTVORENA Then
             RequireUpdateCell TBL_PALETA, palRow, COL_PAL_STATUS, PAL_STATUS_ZATVORENA, SRC

@@ -684,6 +684,8 @@ Private Sub ResetSeamova()
     ' Pokvarena odluka "paleta je prazna" (S8 rez 1b, N8): zaostao seam bi
     ' prikazu palete vratio prazno ili oborio svako sledece skidanje paleta.
     modPaletniList.PaletaPraznoTestSet ""
+    ' Zabelezeno pitanje korekcije kolicina (KI-086).
+    modPaletniListUI.PaletaAdjustPitanjeTestReset
     ' Necitljiva kolona identiteta liste Nedovrseno (S8R1B-REV-01).
     modStornoRecovery.NedovrsenoKvarTestSet ""
     ' Podmetnut pad na kraju jezgra fakture (S6 korak 5): zaostao seam bi oborio
@@ -4058,10 +4060,13 @@ Private Sub T_S8R1b_PreveziPaleteJezgro()
     AssertEq S8R1aOtisak(resA) & "#" & S8R1aOtisak(resB), pre5, _
              "314: odbijeno prevezivanje nije nista pomerilo"
 
+    Dim ceka314 As Boolean
     modScrOporavak.Scr_OpoTestSet "PALETE", "", brojY, , resB
-    ok = modScrOporavak.PreveziPaleteCore(brojA, resA, info)
+    ok = modScrOporavak.PreveziPaleteCore(brojA, resA, info, ceka314)
     modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
     AssertEq ok, True, "314: prevezivanje iz Oporavka je proslo"
+    ' Kontra KI-086: smanjenje je korigovano odmah, pa nista ne ceka.
+    AssertEq ceka314, False, "314: korekcija posle prevezivanja je uradjena i ne ceka"
     AssertEq GajbicaZaDokument(resB) & "|" & GajbicaZaDokument(resA), "8|0", _
              "314: palete su na cilju i svedene na njegove gajbe"
 
