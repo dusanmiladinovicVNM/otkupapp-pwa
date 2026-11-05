@@ -41,7 +41,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "CAD0789B"
+Public Const SCHEMA_FINGERPRINT As String = "C4234F10"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -679,6 +679,7 @@ Private Function FormatRegistry() As Object
     Set k = CreateObject("Scripting.Dictionary")
     k.CompareMode = vbTextCompare
     k("BrojDokumenta") = "text"
+    k("BrojSpecifikacije") = "text"
     Set reg("tblDoplata") = k
 
     Set k = CreateObject("Scripting.Dictionary")
@@ -1047,6 +1048,7 @@ Private Sub SpecDoplata(ByVal reg As Object)
     k.Add "OtkupID"
     k.Add "StanicaID"
     k.Add "NacinUnosa"
+    k.Add "BrojSpecifikacije"
     RegistrujTabelu reg, TBL_DOPLATA, "Doplata", k
 End Sub
 

@@ -520,6 +520,9 @@ Public Const COL_DOPS_IZNOS As String = "Iznos"
 Public Const COL_DOP_OTKUP As String = "OtkupID"
 Public Const COL_DOP_STANICA As String = "StanicaID"
 Public Const COL_DOP_NACIN As String = "NacinUnosa"
+' Broj specifikacije (DOP-ODL-21/23): isti na svim dokumentima jednog kooperanta
+' u jednom obracunu; pise ga samo pisac doplate pri knjizenju.
+Public Const COL_DOP_SPEC As String = "BrojSpecifikacije"
 Public Const COL_DOPS_CENA_OTKUPA As String = "CenaOtkupa"
 Public Const COL_DOPS_KONACNA As String = "KonacnaCena"
 ' Nacin unosa, jedan za ceo obracun (DOP-ODL-15). Cena stavke doplate je u oba
@@ -533,6 +536,9 @@ Public Const DOP_NACIN_KONACNA As Long = 2
 ' (DOP-ODL-17). Slovo drzi poziv na broj odvojen od broja otkupa (cifre):
 ' NormalizePozivKey zadrzava slova i cifre.
 Public Const DOP_BROJ_SUFIKS As String = "D"
+' Broj specifikacije: S + redni broj kooperanta u sezoni + "/" + godina + "-" +
+' sifra kooperanta, npr. S1/2026-123 (DOP-ODL-23, 24).
+Public Const DOP_SPEC_PREFIKS As String = "S"
 
 ' tblPrerada / tblPreradaStavka
 Public Const COL_PRE_ID As String = "PreradaID"

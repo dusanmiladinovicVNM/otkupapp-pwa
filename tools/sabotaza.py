@@ -11879,6 +11879,30 @@ SABOTAZE = {
         "T_Doplata_EkranNacinIBlokovi",
         "ekran: knjizi se tacno ukljuceni blokovi, Knjizeno je zbirno po kooperantu",
     ),
+    # P3b: redni broj specifikacije je zajednicki za sve kooperante.
+    "dop-spec-niz-nije-po-kooperantu": (
+        "modDoplata.bas",
+        "                spec = BrojSpecifikacije(CLng(specMax(koop)) + 1, Year(datum), koop)\n",
+        "                spec = BrojSpecifikacije(specMax.count + 1, Year(datum), koop)   ' SABOTAZA: zajednicki niz\n",
+        "T_Doplata_BrojSpecifikacije",
+        "specifikacija: dokumenti kooperanta u obracunu nose isti broj, niz pocinje od 1 u godini",
+    ),
+    # P3b: pisac ne broji stornirane specifikacije -- storno oslobadja broj.
+    "dop-spec-storno-oslobadja": (
+        "modDoplata.bas",
+        "    dSpec = GetTableData(TBL_DOPLATA)\n",
+        "    dSpec = ExcludeStornirano(GetTableData(TBL_DOPLATA), TBL_DOPLATA)   ' SABOTAZA: storno oslobadja broj\n",
+        "T_Doplata_BrojSpecifikacije",
+        "specifikacija: storno ne oslobadja broj",
+    ),
+    # P3b: citalac ne proverava da dokumenti iste specifikacije nose isti broj.
+    "dop-spec-citalac-bez-provere": (
+        "modDoplata.bas",
+        "                If StrComp(CStr(parSpec(par)), spec, vbTextCompare) <> 0 Then\n",
+        "                If False Then   ' SABOTAZA: citalac ne proverava broj specifikacije\n",
+        "T_Doplata_BrojSpecifikacije",
+        "citalac: dokumenti iste specifikacije sa razlicitim brojem padaju po imenu",
+    ),
     # Retro blok placen drugim obracunom i dalje nalaz starijeg (review P1,
     # DOP-P1-REV-04; odluka: placen blok nije nalaz).
     "dop-signal-placen-retro-ostaje": (

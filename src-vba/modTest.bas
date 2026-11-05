@@ -443,6 +443,7 @@ Public Sub RunAllTests()
     RunOne 336
     RunOne 337
     RunOne 338
+    RunOne 339
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1089,6 +1090,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 336: TestName = "T_Doplata_KapijeCitacaIMotora"
         Case 337: TestName = "T_Doplata_RetroPlacenDrugimObracunom"
         Case 338: TestName = "T_Doplata_EkranNacinIBlokovi"
+        Case 339: TestName = "T_Doplata_BrojSpecifikacije"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1435,6 +1437,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 336: T_Doplata_KapijeCitacaIMotora
         Case 337: T_Doplata_RetroPlacenDrugimObracunom
         Case 338: T_Doplata_EkranNacinIBlokovi
+        Case 339: T_Doplata_BrojSpecifikacije
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -29762,6 +29765,109 @@ Private Sub T_Doplata_EkranNacinIBlokovi()
              "ekran: knjizi se tacno ukljuceni blokovi, Knjizeno je zbirno po kooperantu"
     modScrDoplata.Scr_DopTestReset
 End Sub
+
+' ============================================================
+' 339. DOP-ODL-21/23/24: BROJ SPECIFIKACIJE -- PO KOOPERANTU I SEZONI.
+' ============================================================
+' Specifikacija je jedan kooperant u jednom obracunu; svi njegovi dokumenti u
+' obracunu nose isti broj S<redni>/<godina>-<sifra>. Redni broj raste po
+' kooperantu u godini datuma knjizenja (prosla godina se ne broji), storno ga ne
+' oslobadja, drugi kooperant ima svoj niz. Citac pada po imenu kad dokumenti
+' iste specifikacije nose razlicit broj.
+' Fixture: proslogodisnji storniran dokument kooperanta A sa brojem S7/<godina-1>
+'   -- normalno stanje posle prve sezone (ne anomalija).
+' Tok (juce): A dva bloka (STA1, STA2), B jedan blok; obracun 1; obracun 2 samo
+'   za blok A1 (ponavljanje, uz potvrdu); storno obracuna 2; obracun 3 za A1.
+' SABOTAZE: dop-spec-po-dokumentu, dop-spec-storno-oslobadja,
+'   dop-spec-citalac-bez-provere.
+Private Sub T_Doplata_BrojSpecifikacije()
+    Dim b As String, vr As String, kA As String, kB As String, kul As String, stope As Collection
+    Dim oA1 As String, oA2 As String, oB As String, obr1 As String, obr2 As String, obr3 As String
+    Dim g As String, en As Long, god As Long, izbor As Object, red() As Variant
+    Dim rows As Collection, rS As Long, stari As Variant, greska As String, rr As Variant
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    kB = DopKooperant(b & "-B")
+    god = Year(Date)
+    AssertEq modDoplata.BrojSpecifikacije(1, 2026, "KOOP-123") & "|" & _
+             modDoplata.SifraKooperanta("KOOP-X1"), "S1/2026-123|KOOP-X1", _
+             "specifikacija: oblik S<redni>/<godina>-<sifra>, sifra je broj iz KOOP-123"
+
+    ' Prosla godina: storniran dokument A sa brojem S7 (ne ulazi u ovogodisnji niz).
+    ReDim red(1 To GetTable(TBL_DOPLATA).ListColumns.count)
+    red(RequireColumnIndex(TBL_DOPLATA, COL_DOP_ID, "modTest")) = "DOP-T339-" & b
+    red(RequireColumnIndex(TBL_DOPLATA, COL_DOP_BROJ, "modTest")) = "T339/" & b & "D"
+    red(RequireColumnIndex(TBL_DOPLATA, COL_DOP_DATUM, "modTest")) = DateSerial(god - 1, 9, 1)
+    red(RequireColumnIndex(TBL_DOPLATA, COL_DOP_KOOPERANT, "modTest")) = kA
+    red(RequireColumnIndex(TBL_DOPLATA, COL_DOP_OBRACUN, "modTest")) = "DOB-T339-" & b
+    red(RequireColumnIndex(TBL_DOPLATA, COL_DOP_PERIOD_OD, "modTest")) = DateSerial(god - 1, 8, 1)
+    red(RequireColumnIndex(TBL_DOPLATA, COL_DOP_PERIOD_DO, "modTest")) = DateSerial(god - 1, 8, 31)
+    red(RequireColumnIndex(TBL_DOPLATA, COL_STORNIRANO, "modTest")) = STORNO_DA
+    red(RequireColumnIndex(TBL_DOPLATA, COL_DOP_SPEC, "modTest")) = _
+        modDoplata.BrojSpecifikacije(7, god - 1, kA)
+    AssertEq (AppendRow(TBL_DOPLATA, red) > 0), True, "preduslov: proslogodisnji dokument je upisan"
+
+    oA1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
+    oA2 = DopOtkup(kA, FX_STANICA_B, kul, vr, "S1", 4, 0)
+    oB = DopOtkup(kB, FX_STANICA, kul, vr, "S1", 5, 0)
+    Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
+    obr1 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 339-1", _
+                                       False, g, en)
+    AssertEq g, "", "preduslov: obracun 1 se knjizi"
+    AssertEq DopSpecBloka(obr1, oA1) & "|" & DopSpecBloka(obr1, oA2) & "|" & DopSpecBloka(obr1, oB), _
+             modDoplata.BrojSpecifikacije(1, god, kA) & "|" & modDoplata.BrojSpecifikacije(1, god, kA) & _
+             "|" & modDoplata.BrojSpecifikacije(1, god, kB), _
+             "specifikacija: dokumenti kooperanta u obracunu nose isti broj, niz pocinje od 1 u godini"
+
+    Set izbor = CreateObject("Scripting.Dictionary")
+    izbor.CompareMode = vbTextCompare
+    izbor(oA1) = True
+    obr2 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 339-2", _
+                                       True, g, en, DOP_NACIN_PO_KG, izbor)
+    AssertEq g & "|" & DopSpecBloka(obr2, oA1), "|" & modDoplata.BrojSpecifikacije(2, god, kA), _
+             "specifikacija: sledeci obracun kooperanta u godini dobija sledeci redni broj"
+    AssertEq modStorno.StornoObracunDoplate_TX(obr2), True, "preduslov: storno obracuna 2"
+    obr3 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 339-3", _
+                                       True, g, en, DOP_NACIN_PO_KG, izbor)
+    AssertEq g & "|" & DopSpecBloka(obr3, oA1), "|" & modDoplata.BrojSpecifikacije(3, god, kA), _
+             "specifikacija: storno ne oslobadja broj"
+
+    ' Citac: drugi dokument iste specifikacije sa drugim brojem, pa odmah vracen.
+    Set rows = FindRows(TBL_DOPLATA, COL_DOP_ID, DopIdBloka(obr1, oA2))
+    rS = rows(1)
+    stari = LookupValue(TBL_DOPLATA, COL_DOP_ID, DopIdBloka(obr1, oA2), COL_DOP_SPEC)
+    RequireUpdateCell TBL_DOPLATA, rS, COL_DOP_SPEC, modDoplata.BrojSpecifikacije(9, god, kA), "modTest"
+    On Error Resume Next
+    rr = modDoplata.DoplataStavkeRedovi()
+    greska = Err.description
+    Err.Clear
+    On Error GoTo 0
+    RequireUpdateCell TBL_DOPLATA, rS, COL_DOP_SPEC, stari, "modTest"
+    AssertEq (InStr(1, greska, "razlicit broj", vbTextCompare) > 0), True, _
+             "citalac: dokumenti iste specifikacije sa razlicitim brojem padaju po imenu"
+End Sub
+
+' Broj specifikacije dokumenta obracuna za blok, ili "". Cita TABELU, ne citac:
+' citac ima svoju proveru broja (test je meri posebno), pa bi greska pisca inace
+' stigla kao pad citaca, a ne kao tvrdnja o broju.
+Private Function DopSpecBloka(ByVal obracunID As String, ByVal otkupID As String) As String
+    Const SRC As String = "modTest.DopSpecBloka"
+    Dim d As Variant, i As Long, cObr As Long, cOtk As Long, cSpec As Long
+    d = GetTableData(TBL_DOPLATA)
+    If Not IsArray(d) Then Exit Function
+    cObr = RequireColumnIndex(TBL_DOPLATA, COL_DOP_OBRACUN, SRC)
+    cOtk = RequireColumnIndex(TBL_DOPLATA, COL_DOP_OTKUP, SRC)
+    cSpec = RequireColumnIndex(TBL_DOPLATA, COL_DOP_SPEC, SRC)
+    For i = 1 To UBound(d, 1)
+        If NzToText(d(i, cObr)) = obracunID And NzToText(d(i, cOtk)) = otkupID Then
+            DopSpecBloka = NzToText(d(i, cSpec))
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' Kvacica i status reda liste Blokovi za blok: "<kvacica>|<status>", ili "nema".
 Private Function DopEkranBlok(ByVal otkupID As String) As String

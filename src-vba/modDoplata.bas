@@ -559,6 +559,14 @@ Private Function KnjiziPlan(ByVal datum As Date, _
     Dim poBloku As Object, brojevi As Object
     UcitajBrojeveDoplata poBloku, brojevi, sourceName
 
+    ' Specifikacija (DOP-ODL-21/23/24): jedan broj po kooperantu u ovom obracunu,
+    ' redni broj raste po kooperantu u godini datuma knjizenja, storno ga ne
+    ' oslobadja. specKoop: KooperantID -> broj u ovom obracunu.
+    Dim specMax As Object, specBrojevi As Object, specKoop As Object, spec As String
+    UcitajSpecifikacije Year(datum), specMax, specBrojevi, sourceName
+    Set specKoop = CreateObject("Scripting.Dictionary")
+    specKoop.CompareMode = vbTextCompare
+
     Dim proveren As Object
     Set proveren = CreateObject("Scripting.Dictionary")
     proveren.CompareMode = vbTextCompare
@@ -573,6 +581,17 @@ Private Function KnjiziPlan(ByVal datum As Date, _
             If Not proveren.Exists(koop) Then
                 RequireTacnoJedan TBL_KOOPERANTI, COL_KOOP_ID, koop, "KooperantID", sourceName
                 proveren.Add koop, True
+            End If
+            If Not specKoop.Exists(koop) Then
+                spec = BrojSpecifikacije(CLng(specMax(koop)) + 1, Year(datum), koop)
+                If specBrojevi.Exists(spec) Then
+                    Err.Raise DOP_ERR_BASE + 48, sourceName, _
+                              "Broj specifikacije " & spec & " je vec zauzet. Proveri sifre " & _
+                              "kooperanata (isti broj iz dva KooperantID-a?)."
+                End If
+                specBrojevi.Add spec, True
+                specMax(koop) = CLng(specMax(koop)) + 1
+                specKoop.Add koop, spec
             End If
 
             brojBloka = Trim$(CStr(plan(i, PL_BROJ_BLOKA)))
@@ -607,6 +626,7 @@ Private Function KnjiziPlan(ByVal datum As Date, _
             SetRowValueByColumn rowData, TBL_DOPLATA, COL_DOP_OTKUP, tekuci, sourceName
             SetRowValueByColumn rowData, TBL_DOPLATA, COL_DOP_STANICA, plan(i, PL_STANICA), sourceName
             SetRowValueByColumn rowData, TBL_DOPLATA, COL_DOP_NACIN, nacin, sourceName
+            SetRowValueByColumn rowData, TBL_DOPLATA, COL_DOP_SPEC, specKoop(koop), sourceName
 
             If AppendRow(TBL_DOPLATA, rowData) <= 0 Then
                 Err.Raise DOP_ERR_BASE + 42, sourceName, _
@@ -650,12 +670,13 @@ End Function
 ' CITACI
 ' ============================================================
 
-' Stavke AKTIVNIH dokumenata doplate, sa zaglavljem. 2D niz (1..n, 1..19):
+' Stavke AKTIVNIH dokumenata doplate, sa zaglavljem. 2D niz (1..n, 1..20):
 '   1 DoplataID | 2 BrojDokumenta | 3 Datum | 4 KooperantID | 5 ObracunID
 '   6 StanicaID | 7 VrstaVoca | 8 SortaVoca | 9 Klasa | 10 Kolicina
 '   11 Cena (bruto doplata po kg) | 12 Iznos | 13 DoplataStavkaID
 '   14 PeriodOd | 15 PeriodDo | 16 OtkupID (blok) | 17 CenaOtkupa
 '   18 KonacnaCena (nacin 2; inace prazno) | 19 NacinUnosa
+'   20 BrojSpecifikacije (prazno za dokument knjizen pre P3)
 ' redosledom tabele stavki. Empty kad nema nijedne aktivne stavke.
 '
 ' STROG, kao StavkeOtkupaRedovi: dupli DoplataID, stavka bez zaglavlja i
@@ -684,7 +705,7 @@ Public Function DoplataStavkeRedovi() As Variant
     aktivna.CompareMode = vbTextCompare
 
     Dim cId As Long, cBr As Long, cDat As Long, cKoop As Long, cObr As Long
-    Dim cOd As Long, cDo As Long, cOtk As Long, cNac As Long
+    Dim cOd As Long, cDo As Long, cOtk As Long, cNac As Long, cSpec As Long
     cId = RequireColumnIndex(TBL_DOPLATA, COL_DOP_ID, SRC)
     cBr = RequireColumnIndex(TBL_DOPLATA, COL_DOP_BROJ, SRC)
     cDat = RequireColumnIndex(TBL_DOPLATA, COL_DOP_DATUM, SRC)
@@ -694,6 +715,16 @@ Public Function DoplataStavkeRedovi() As Variant
     cDo = RequireColumnIndex(TBL_DOPLATA, COL_DOP_PERIOD_DO, SRC)
     cOtk = RequireColumnIndex(TBL_DOPLATA, COL_DOP_OTKUP, SRC)
     cNac = RequireColumnIndex(TBL_DOPLATA, COL_DOP_NACIN, SRC)
+    cSpec = RequireColumnIndex(TBL_DOPLATA, COL_DOP_SPEC, SRC)
+
+    ' Specifikacija je par (ObracunID, KooperantID); broj je njena oznaka i mora
+    ' biti jedan po paru i ne sme da pripada dvama parovima -- i preko storniranih
+    ' (storno ne oslobadja broj). Prazan broj je dokument knjizen pre P3.
+    Dim parSpec As Object, specPar As Object, par As String, spec As String
+    Set parSpec = CreateObject("Scripting.Dictionary")
+    parSpec.CompareMode = vbTextCompare
+    Set specPar = CreateObject("Scripting.Dictionary")
+    specPar.CompareMode = vbTextCompare
 
     Dim i As Long, id As String
     If IsArray(hd) Then
@@ -707,6 +738,28 @@ Public Function DoplataStavkeRedovi() As Variant
                 Err.Raise DOP_ERR_BASE + 51, SRC, "DoplataID nije jedinstven: " & id & "."
             End If
             sve.Add id, True
+
+            par = Trim$(NzToText(hd(i, cObr))) & "|" & Trim$(NzToText(hd(i, cKoop)))
+            spec = Trim$(NzToText(hd(i, cSpec)))
+            If parSpec.Exists(par) Then
+                If StrComp(CStr(parSpec(par)), spec, vbTextCompare) <> 0 Then
+                    Err.Raise DOP_ERR_BASE + 56, SRC, _
+                              "Dokumenti iste specifikacije nose razlicit broj (" & _
+                              CStr(parSpec(par)) & " / " & spec & "), dokument " & id & "."
+                End If
+            Else
+                parSpec.Add par, spec
+            End If
+            If Len(spec) > 0 Then
+                If specPar.Exists(spec) Then
+                    If StrComp(CStr(specPar(spec)), par, vbTextCompare) <> 0 Then
+                        Err.Raise DOP_ERR_BASE + 57, SRC, _
+                                  "Broj specifikacije " & spec & " pripada dvema specifikacijama."
+                    End If
+                Else
+                    specPar.Add spec, par
+                End If
+            End If
         Next i
 
         Dim akt As Variant
@@ -716,7 +769,8 @@ Public Function DoplataStavkeRedovi() As Variant
                 aktivna.Add Trim$(NzToText(akt(i, cId))), _
                     Array(NzToText(akt(i, cBr)), akt(i, cDat), Trim$(NzToText(akt(i, cKoop))), _
                           Trim$(NzToText(akt(i, cObr))), akt(i, cOd), akt(i, cDo), _
-                          Trim$(NzToText(akt(i, cOtk))), akt(i, cNac))
+                          Trim$(NzToText(akt(i, cOtk))), akt(i, cNac), _
+                          Trim$(NzToText(akt(i, cSpec))))
             Next i
         End If
     End If
@@ -786,7 +840,7 @@ Public Function DoplataStavkeRedovi() As Variant
     If n = 0 Then Exit Function
 
     Dim res() As Variant
-    ReDim res(1 To n, 1 To 19)
+    ReDim res(1 To n, 1 To 20)
     n = 0
     For i = 1 To UBound(sd, 1)
         id = Trim$(NzToText(sd(i, sDop)))
@@ -813,6 +867,7 @@ Public Function DoplataStavkeRedovi() As Variant
             If IsNumeric(sd(i, sCOtk)) Then res(n, 17) = CDbl(sd(i, sCOtk))
             res(n, 18) = sd(i, sKon)
             res(n, 19) = h(7)
+            res(n, 20) = h(8)
         End If
     Next i
 
@@ -1382,6 +1437,81 @@ Public Function BrojDoplate(ByVal brojBloka As String, ByVal redni As Long) As S
     BrojDoplate = Trim$(brojBloka) & DOP_BROJ_SUFIKS
     If redni > 1 Then BrojDoplate = BrojDoplate & CStr(redni)
 End Function
+
+' Broj specifikacije (DOP-ODL-23): S1/2026-123.
+Public Function BrojSpecifikacije(ByVal redni As Long, ByVal godina As Long, _
+                                  ByVal koopID As String) As String
+    BrojSpecifikacije = DOP_SPEC_PREFIKS & CStr(redni) & "/" & CStr(godina) & "-" & _
+                        SifraKooperanta(koopID)
+End Function
+
+' Sifra kooperanta u broju specifikacije: broj iz KOOP-123. ID koji nije tog
+' oblika ulazi ceo -- broj ostaje jedinstven jer je KooperantID kljuc, a pisac
+' svejedno odbija zauzet broj (DOP_ERR_BASE + 48).
+Public Function SifraKooperanta(ByVal koopID As String) As String
+    Dim ostatak As String
+    koopID = Trim$(koopID)
+    SifraKooperanta = koopID
+    If UCase$(Left$(koopID, 5)) <> "KOOP-" Then Exit Function
+    ostatak = Mid$(koopID, 6)
+    If Len(ostatak) = 0 Or ostatak Like "*[!0-9]*" Then Exit Function
+    SifraKooperanta = ostatak
+End Function
+
+' Redni broj i godina iz broja specifikacije; False kad broj nije tog oblika.
+Private Function ParsirajSpecifikaciju(ByVal spec As String, ByRef outRedni As Long, _
+                                       ByRef outGodina As Long) As Boolean
+    Dim p1 As Long, p2 As Long, sRb As String, sGod As String, pl As Long
+    spec = Trim$(spec)
+    pl = Len(DOP_SPEC_PREFIKS)
+    If UCase$(Left$(spec, pl)) <> UCase$(DOP_SPEC_PREFIKS) Then Exit Function
+    p1 = InStr(pl + 1, spec, "/")
+    If p1 = 0 Then Exit Function
+    p2 = InStr(p1 + 1, spec, "-")
+    If p2 = 0 Then Exit Function
+    sRb = Mid$(spec, pl + 1, p1 - pl - 1)
+    sGod = Mid$(spec, p1 + 1, p2 - p1 - 1)
+    If Len(sRb) = 0 Or sRb Like "*[!0-9]*" Then Exit Function
+    If Len(sGod) <> 4 Or sGod Like "*[!0-9]*" Then Exit Function
+    outRedni = CLng(sRb)
+    outGodina = CLng(sGod)
+    ParsirajSpecifikaciju = True
+End Function
+
+' Iz SVIH dokumenata doplate (i storniranih -- storno ne oslobadja broj):
+' outMax KooperantID -> najveci redni broj specifikacije u godini; outBrojevi
+' skup zauzetih brojeva (svih godina). Broj koji nije u obliku pada po imenu --
+' pisac ga nije mogao napraviti.
+Private Sub UcitajSpecifikacije(ByVal godina As Long, ByRef outMax As Object, _
+                                ByRef outBrojevi As Object, ByVal sourceName As String)
+    Set outMax = CreateObject("Scripting.Dictionary")
+    outMax.CompareMode = vbTextCompare
+    Set outBrojevi = CreateObject("Scripting.Dictionary")
+    outBrojevi.CompareMode = vbTextCompare
+
+    Dim dSpec As Variant
+    dSpec = GetTableData(TBL_DOPLATA)
+    If Not IsArray(dSpec) Then Exit Sub
+
+    Dim cKoop As Long, cSpec As Long, i As Long, spec As String, koop As String
+    Dim rb As Long, god As Long
+    cKoop = RequireColumnIndex(TBL_DOPLATA, COL_DOP_KOOPERANT, sourceName)
+    cSpec = RequireColumnIndex(TBL_DOPLATA, COL_DOP_SPEC, sourceName)
+    For i = 1 To UBound(dSpec, 1)
+        spec = Trim$(NzToText(dSpec(i, cSpec)))
+        If Len(spec) > 0 Then
+            If Not ParsirajSpecifikaciju(spec, rb, god) Then
+                Err.Raise DOP_ERR_BASE + 49, sourceName, _
+                          "Broj specifikacije nije u obliku S<redni>/<godina>-<sifra>: " & spec & "."
+            End If
+            outBrojevi(spec) = True
+            If god = godina Then
+                koop = Trim$(NzToText(dSpec(i, cKoop)))
+                If rb > CLng(outMax(koop)) Then outMax(koop) = rb
+            End If
+        End If
+    Next i
+End Sub
 
 ' Iz SVIH dokumenata doplate (i storniranih -- storno ne oslobadja broj, A9):
 ' outPoBloku OtkupID -> broj dosadasnjih dokumenata tog bloka; outBrojevi skup
