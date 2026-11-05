@@ -362,8 +362,10 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     kodiran CR „_x000D_" u klauzuli iz podešavanja (`KlauzulaZaStampu`);
     rekapitulacija specifikacije dobila prosek din/kg. Specifikacija dokumenata
     knjiženih pre P3 nosi „(bez broja)" — broj dobija samo dokument knjižen
-    novim kodom (pisac pada po imenu kad kolone nema). Otvoreno: pun prolaz sa
-    BFP-om; PDF specifikacije sa brojem.
+    novim kodom (pisac pada po imenu kad kolone nema). Novi obračuni na kopiji
+    radne sveske imaju broj i u listi Knjiženo i na PDF-u (potvrda operatera
+    05.11.2026). **P3 ZATVOREN.** Pun prolaz sa BFP-om posle ispravke štampe
+    (`a5f2e9c`) nije javljen.
   - Uzgredni nalaz (van doplate, NIJE reprodukovan u Excelu): otkupni list upisuje
     tekući račun pod ključem `racun` (`modPrint.FillOtkupSablon`), a primerak ga
     čita pod `račun` (`WriteOtkupCopy`, zamena `{RAČUN}` u klauzuli) — po kodu
