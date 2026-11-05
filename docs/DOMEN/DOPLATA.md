@@ -462,7 +462,10 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     3014/0); dokaz `dop-kartica-*` + `isp-ploca-bez-osnovice` **5/5 DOKAZANO**,
     izvor pre/posle identičan (`1b93767f970b4162`). Ručna provera kartice i
     štampe specifikacije iz Izveštaja nije javljena. **P4 potvrđen automatski.**
-- Još NIJE: tekst pitanja o ponavljanju kroz katalog poruka.
+- **Pitanje o ponavljanju kroz katalog poruka** (05.11.2026): tekst je iz
+  `modPoruke` (`DOP_ASK_PONAVLJANJE`, `DOP_ASK_PONAVLJANJE_POTVRDI`), sa
+  dijakritikom, isti u grešci pisca i u pitanju ekrana. Test 318 dopunjen,
+  sabotaža `dop-ponavljanje-van-kataloga`. **Excel prolaz neverifikovan.**
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
 Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,
@@ -475,7 +478,8 @@ sve / Isključi sve" na listi Blokovi.
 
 ## 8) Otvoreno
 
-1. **⚠ PLATFORM UNKNOWN — sat PWA otkupa.** PWA piše `CreatedAtClient` kao
+1. **⚠ PLATFORM UNKNOWN — sat PWA otkupa.** *(Preneto u `docs/ROADMAP.md` §9.2
+   kao PWA stavka niskog prioriteta, odluka operatera 05.11.2026.)* PWA piše `CreatedAtClient` kao
    `new Date().toISOString()` (UTC, npr. `2026-11-02T07:00:00.000Z`), a uvoz ga
    prenosi u `SourceCreatedAt` kao tekst (`modMasterSync`, `GS_CREATED_AT`). Ako
    VBA `IsDate` taj oblik ne prihvata — što se očekuje, ali **nije izmereno** —

@@ -304,6 +304,24 @@ Add an automated fixture covering:
 
 This is post-documentation test hardening. The v6.23 behavior was reported as browser-tested.
 
+### 9.2 PWA otkup — vreme nastanka (ISO UTC) na graničnom danu doplate
+
+**Prioritet: nizak (odluka operatera 05.11.2026 — nije prioritet).**
+
+PWA piše `CreatedAtClient` kao `new Date().toISOString()` (UTC, npr.
+`2026-11-02T07:00:00.000Z`), a uvoz ga prenosi u `SourceCreatedAt` kao tekst
+(`modMasterSync`, `GS_CREATED_AT`). **Nije izmereno** da li VBA `IsDate` prihvata
+taj oblik. Ako ne prihvata:
+
+- štampa otkupnog lista za PWA otkup pokazuje vreme sinhronizacije (`CreatedAt`),
+  a ne vreme nastanka;
+- doplata PWA otkup na graničnom danu perioda odbija (DOP-ODL-03a).
+
+Prvi korak je sonda nad pravom sveskom (test 317 meri desktop put). Ako se
+potvrdi, bira se: parsirati ISO + UTC → lokalno vreme u
+`modOtkup.OtkupVremeNastanka` (popravlja i štampu), ili granice perioda doplate
+samo na celim danima. Detalji: `docs/DOMEN/DOPLATA.md` §8/1.
+
 
 ## 8. v6.24 Follow-Up Items
 

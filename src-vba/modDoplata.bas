@@ -320,8 +320,10 @@ Private Function PonavljanjaUPlanu(ByVal plan As Variant) As String
     Next kk
     If brojevi.count > 5 Then t = t & " (+" & CStr(brojevi.count - 5) & ")"
 
-    PonavljanjaUPlanu = "Blokovi iz obracuna vec imaju doplatu za istu klasu: " & t & _
-                        ". Nova doplata se placa NA TO. Potvrdi ponavljanje."
+    ' Tekst je iz kataloga poruka (dijakritika); ide i u gresku pisca i u
+    ' pitanje ekrana (modScrDoplata.KnjiziKlik), pa je isti na oba mesta.
+    PonavljanjaUPlanu = Poruka("DOP_ASK_PONAVLJANJE") & " " & t & ". " & _
+                        Poruka("DOP_ASK_PONAVLJANJE_POTVRDI")
 End Function
 
 ' Redovi plana koji se KNJIZE: status "knjizi" i, kad je izbor zadat, samo

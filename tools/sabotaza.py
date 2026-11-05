@@ -11581,6 +11581,16 @@ SABOTAZE = {
         "T_Doplata_KarticaZaduzenje",
         "kartica: jedan red po obracunu, zaduzenje = iznos, ref-kljuc DOP|ObracunID|KooperantID",
     ),
+    # Pitanje o ponavljanju opet sastavljeno u kodu, bez kataloga (bez dijakritike).
+    "dop-ponavljanje-van-kataloga": (
+        "modDoplata.bas",
+        "    PonavljanjaUPlanu = Poruka(\"DOP_ASK_PONAVLJANJE\") & \" \" & t & \". \" & _\n"
+        "                        Poruka(\"DOP_ASK_PONAVLJANJE_POTVRDI\")\n",
+        "    PonavljanjaUPlanu = \"Blokovi iz obracuna vec imaju doplatu za istu klasu: \" & t & _\n"
+        "                        \". Nova doplata se placa NA TO. Potvrdi ponavljanje.\"   ' SABOTAZA\n",
+        "T_Doplata_PonavljanjeTraziPotvrdu",
+        "pitanje o ponavljanju je iz kataloga poruka",
+    ),
     # P4: kartica grupise po dokumentu umesto po obracunu.
     "dop-kartica-po-dokumentu": (
         "modDoplata.bas",

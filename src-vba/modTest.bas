@@ -28045,6 +28045,11 @@ Private Sub T_Doplata_PonavljanjeTraziPotvrdu()
              "ponovljena doplata nad istim kljucem i periodom trazi potvrdu"
     AssertEq (Len(broj1) > 0 And InStr(1, g2, broj1, vbTextCompare) > 0), True, _
              "pitanje imenuje raniji KO"
+    AssertEq (InStr(1, g2, Poruka("DOP_ASK_PONAVLJANJE"), vbBinaryCompare) = 1 And _
+              InStr(1, g2, Poruka("DOP_ASK_PONAVLJANJE_POTVRDI"), vbBinaryCompare) > 0 And _
+              Not PorukaNedostaje("DOP_ASK_PONAVLJANJE") And _
+              Not PorukaNedostaje("DOP_ASK_PONAVLJANJE_POTVRDI")), True, _
+             "pitanje o ponavljanju je iz kataloga poruka"
     AssertEq DopBrojRedova(TBL_DOPLATA), n1, "bez potvrde se nista ne upisuje"
 
     obr3 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 318-3", _

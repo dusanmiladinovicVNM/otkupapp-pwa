@@ -2123,6 +2123,8 @@ Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_DOP_PRAZAN_PLAN", ChrW(10007) & " U periodu nema nijednog otkupa za zadate stope"
     UpsertRow lo, existing, "OTKUI_ERR_DOP_STORNO", ChrW(10007) & " Storno nije uspeo:"
     UpsertRow lo, existing, "OTKUI_ERR_DOP_NACIN", ChrW(10007) & " Nepoznat na" & ChrW(269) & "in unosa"
+    UpsertRow lo, existing, "DOP_ASK_PONAVLJANJE", "Blokovi iz obra" & ChrW(269) & "una ve" & ChrW(263) & " imaju doplatu za istu klasu:"
+    UpsertRow lo, existing, "DOP_ASK_PONAVLJANJE_POTVRDI", "Nova doplata se pla" & ChrW(263) & "a NA TO. Potvrdi ponavljanje."
     UpsertRow lo, existing, "NOVAC_ERR_SPEC_TUDJA", "Specifikacija doplate pripada drugom kooperantu."
     UpsertRow lo, existing, "NOVAC_ERR_SPEC_NEMA_NA_STANICI", "Specifikacija nema otvorenih dokumenata na ovom otkupnom mestu."
     UpsertRow lo, existing, "NOVAC_ERR_GOTOVINA_NADOKNADA", ChrW(10007) & " PDV nadoknada se ne ispla" & ChrW(263) & "uje gotovinom " & ChrW(8212) & " gotovinom na ovaj dokument jo" & ChrW(353) & " najvi" & ChrW(353) & "e"
