@@ -310,9 +310,9 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   PASS; ručni pregled na kopiji radne sveske ispravan (Pregled, Blokovi,
   Knjiženo, „već ima doplatu", isključenje smanjuje zbir, pitanje o ponavljanju
   posle pitanja o knjiženju, storno dokumenta `…D2` smanjuje zbir tačno za svoj
-  iznos); naslovi lista skraćeni jer su bili odsečeni. Otvoreno: storno celog
-  obračuna sa ekrana i način „Konačna cena" rukom; tekst pitanja o ponavljanju
-  dolazi iz pisca bez dijakritike (od F1):**
+  iznos), storno celog obračuna i način „Konačna cena" rukom ispravni; naslovi
+  lista skraćeni jer su bili odsečeni. **P2 ZATVOREN (05.11.2026).** Ostaje:
+  tekst pitanja o ponavljanju dolazi iz pisca bez dijakritike (od F1) — uz P3:**
   ekran `modScrDoplata` — polje „Način unosa" (menja se samo bez unetih stopa,
   natpis iznosa prati način); pet lista: Stope, **Pregled** zbirno po
   kooperantu, kulturi i klasi (samo uključeni blokovi), **Blokovi** (red po
