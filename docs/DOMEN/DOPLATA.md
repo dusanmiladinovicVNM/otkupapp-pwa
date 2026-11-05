@@ -54,9 +54,9 @@ Odbačene alternative:
 | **DOP-ODL-07** | Knjižena doplata je **snimak**: ne prati kasniji storno ili ispravku otkupa. Promena osnovice je **signal** (integritet / Oporavak, faza F3), ne automatska prepravka. Ispravka = storno KO + nov obračun (obrazac ZBR-KANON-03). |
 | **DOP-ODL-08** | Izveštaj **Prosečna cena** se ne menja. |
 | **DOP-ODL-09** | ~~zamenjeno sa DOP-ODL-17~~ Broj KO je **`KO-<n>/<godina>`**, niz po godini datuma knjiženja, preko svih KO (i storniranih — storno ne oslobađa broj, A9). |
-| **DOP-ODL-10** | *Predlog uz F1, operater ga može oboriti:* kraj perioda nije u budućnosti; datum knjiženja nije pre poslednjeg dana perioda ni posle današnjeg; svaka stopa mora da pogodi bar jedan aktivan otkup (tipfeler u sorti ne sme da da doplatu nula za ceo ključ); prazan obračun se ne knjiži. |
+| **DOP-ODL-10** | *Potvrđeno 06.11.2026 (sva četiri pravila važe).* Kraj perioda nije u budućnosti; datum knjiženja nije pre poslednjeg dana perioda ni posle današnjeg; svaka stopa mora da pogodi bar jedan aktivan otkup (tipfeler u sorti ne sme da da doplatu nula za ceo ključ); prazan obračun se ne knjiži. |
 | **DOP-ODL-11** | ~~zamenjeno sa DOP-ODL-18~~ Kooperantu se **štampa KO** (odluka 03.11.2026) — faza F3: `modPrint.StampajKO`, šablon `KOSablon`, PDF u „Knjizna odobrenja", podešavanje `KO_PRINT_MODE` (podrazumevano PDF). Storniran KO se ne štampa. |
-| **DOP-ODL-12** | *Predlog uz F3:* ekran Doplata je u grupi FINANSIJE, pod pravom **Fakturisanje** (`OBL_FAKTURISANJE`) — KO je knjigovodstveni dokument kao faktura, a nova kolona prava bila bi izmena šeme bez poslovnog razloga. Promena je jedan red u `modUiScreens.ScrRows`. |
+| **DOP-ODL-12** | *Potvrđeno 06.11.2026:* ekran Doplata je u grupi FINANSIJE, pod pravom **Fakturisanje** (`OBL_FAKTURISANJE`) — KO je knjigovodstveni dokument kao faktura, a nova kolona prava bila bi izmena šeme bez poslovnog razloga. Promena je jedan red u `modUiScreens.ScrRows`. |
 | **DOP-ODL-13** | Storno KO je **na ekranu Doplata** (radnje „Storniraj KO" i „Storniraj ceo obračun"), ne na ekranu Storno: tamo prekidač već nosi 11 lista = `MAX_SEG`. KO nema nizvodni lanac robe, pa mu ne treba pregled posledica po modovima. |
 
 ## 2a) Revizija 04.11.2026 — doplata po bloku, bruto, dva načina unosa
@@ -460,8 +460,9 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     presidrena `dop-kartica-bez-doplate`.
   - Excel (05.11.2026): pun prolaz 12 suita ZELENO (RunAllTests 348/0, BFP
     3014/0); dokaz `dop-kartica-*` + `isp-ploca-bez-osnovice` **5/5 DOKAZANO**,
-    izvor pre/posle identičan (`1b93767f970b4162`). Ručna provera kartice i
-    štampe specifikacije iz Izveštaja nije javljena. **P4 potvrđen automatski.**
+    izvor pre/posle identičan (`1b93767f970b4162`). Ručni Compile PASS; PDF
+    kartice (06.11.2026) pokazuje red po obračunu (`S1/2026-00040`, `S2…`,
+    `S3…`) sa opisom po kulturi i klasi. **P4 zatvoren.**
 - **Pitanje o ponavljanju kroz katalog poruka** (05.11.2026): tekst je iz
   `modPoruke` (`DOP_ASK_PONAVLJANJE`, `DOP_ASK_PONAVLJANJE_POTVRDI`), sa
   dijakritikom, isti u grešci pisca i u pitanju ekrana. Test 318 dopunjen,
@@ -488,8 +489,8 @@ sve / Isključi sve" na listi Blokovi.
    Test 317 to meri; sonda nad pravom sveskom je u izveštaju uz F1. Ako se
    potvrdi, odluka je operaterova: parsirati ISO + UTC → lokalno vreme u
    `OtkupVremeNastanka` (popravlja i štampu), ili ostaviti granice na celim danima.
-2. DOP-ODL-10 je predlog — potvrditi ili oboriti.
-3. DOP-ODL-12 (pravo Fakturisanje za ekran Doplata) je predlog — potvrditi.
+2. ~~DOP-ODL-10 je predlog.~~ Potvrđeno 06.11.2026.
+3. ~~DOP-ODL-12 je predlog.~~ Potvrđeno 06.11.2026 (grupa FINANSIJE, pravo Fakturisanje).
 4. Ikonica `IC_DOPLATA` (&HE8EF, „Calculator") nije proverena na pravom fontu —
    pogledati u `DumpMdl2Used` / na ekranu.
 5. `.claude/rules/testovi.md` §4 još kaže „30 članova" za test 239 (sada 32) —
