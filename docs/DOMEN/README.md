@@ -448,7 +448,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | **Ambalaza — model podataka, AMB-01..04** | `docs/DOMEN/AMBALAZA.md` — jednostrana knjiga, nosioci salda, matrica knjiženja; **tri predloga čekaju operatera** |
 | Identitet zbirne, vezivanje prijemnice (ZBR-IDENT-01) | `docs/DOMEN/ZBR_IDENTITET.md` — **superseded posle refaktora** |
 | Novac pri stornu / ispravci otkupa | `docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md` — **OTVORENO, čeka operatera** |
-| Doplata kooperantu — knjižno odobrenje po kulturi i klasi (`DOP-ODL-01..13`, `DOP-01..11`) | `docs/DOMEN/DOPLATA.md` — **F1–F4b u kodu (šema, pisac, storno, kartica, Saldo OM, PWA, ekran, papir KO, signal DOP1, isplata KO kroz naloge, izvod, gotovinu i avans; testovi 315–337); Excel prijem P1 zelen 05.11.2026 (RunAllTests 337/0, BFP 3014/0, dokaz 41/41), Compile otvoren; revizija po bloku (§2a): P2–P4 sledi** |
+| Doplata kooperantu — knjižno odobrenje po kulturi i klasi (`DOP-ODL-01..13`, `DOP-01..11`) | `docs/DOMEN/DOPLATA.md` — **F1–F4b u kodu (šema, pisac, storno, kartica, Saldo OM, PWA, ekran, papir KO, signal DOP1, isplata KO kroz naloge, izvod, gotovinu i avans; testovi 315–337); Excel prijem P1 zelen 05.11.2026 (RunAllTests 337/0, BFP 3014/0, dokaz 41/41, Compile PASS) — P1 zatvoren; revizija po bloku (§2a): P2–P4 sledi** |
 | Poznata ograničenja | `docs/KNOWN_ISSUES.md` |
 | Otkup / dokumenta — pravila izmene | `.claude/rules/otkup-i-dokumenta.md` |
 | Verifikacija i definicija gotovog | `CLAUDE.md` §5, `.claude/rules/testovi.md` |
