@@ -2377,6 +2377,80 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
+' BILANS AMBALAZE (AMB-BIL-01) -- pogled firme na celu knjigu, po tipu gajbe.
+'
+' Racun je u modAmbalaza.AmbBilansPodaci; ovde su samo natpisi: odeljak i
+' stavka iz kataloga poruka, partner po imenu. Red je isti, istim redosledom,
+' kao red citaoca -- test 292 poredi jedan sa drugim.
+' (1)=TipAmbalaze (2)=Odeljak (3)=Stavka (4)=Kolicina
+Public Function ReportBilansAmbalaze(ByVal datumOd As Date, ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportBilansAmbalaze"
+    On Error GoTo EH
+
+    Dim d As Variant
+    d = modAmbalaza.AmbBilansPodaci(datumOd, datumDo)
+    If IsEmpty(d) Then Exit Function
+
+    Dim outA() As Variant, i As Long, nm As String
+    ReDim outA(1 To UBound(d, 1), 1 To 4)
+    For i = 1 To UBound(d, 1)
+        outA(i, 1) = CStr(d(i, 1))
+        outA(i, 2) = Poruka("OTKUI_IZ_BIL_" & CStr(d(i, 2)))
+        If CStr(d(i, 3)) = AMB_BIL_PARTNER Then
+            nm = Trim$(ResolveEntitetName(CStr(d(i, 5)), CStr(d(i, 4))))
+            If Len(nm) = 0 Then nm = CStr(d(i, 5))
+            outA(i, 3) = Poruka("OTKUI_IZ_BIL_P_" & UCase$(CStr(d(i, 4)))) & ": " & nm
+        ElseIf CStr(d(i, 2)) = AMB_BIL_GDE And CStr(d(i, 3)) <> AMB_BIL_OPTICAJ Then
+            outA(i, 3) = Poruka("OTKUI_IZ_BIL_N_" & UCase$(CStr(d(i, 3))))
+        Else
+            outA(i, 3) = Poruka("OTKUI_IZ_BIL_" & CStr(d(i, 3)))
+        End If
+        outA(i, 4) = CDbl(d(i, 6))
+    Next i
+    ReportBilansAmbalaze = outA
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' AMBALAZA PO PARTNERU (AMB-BIL-03): drzi, tudje i neto po partneru i tipu gajbe,
+' na datumDo. Racun je u modAmbalaza.AmbPartneriPodaci; ovde su naziv partnera,
+' natpis vrste i poredak po nazivu (agregat, kao zbirni oblici -- IzvNazivKljuc).
+' (1)=NalogID (2)=Naziv (3)=Vrsta (4)=TipAmbalaze (5)=Drzi (6)=Tudje (7)=Neto
+' (8)=REF ("KOP|id" / "KUP|id")
+Public Function ReportAmbalazaPoPartnerima(ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportAmbalazaPoPartnerima"
+    On Error GoTo EH
+
+    Dim d As Variant
+    d = modAmbalaza.AmbPartneriPodaci(datumDo)
+    If IsEmpty(d) Then Exit Function
+
+    Dim outA() As Variant, kljuc() As String, i As Long, n As Long, nm As String
+    n = UBound(d, 1)
+    ReDim outA(1 To n, 1 To 8)
+    ReDim kljuc(1 To n)
+    For i = 1 To n
+        nm = Trim$(ResolveEntitetName(CStr(d(i, 2)), CStr(d(i, 1))))
+        If Len(nm) = 0 Then nm = CStr(d(i, 2))
+        outA(i, 1) = CStr(d(i, 2))
+        outA(i, 2) = nm
+        outA(i, 3) = Poruka("OTKUI_IZ_BIL_P_" & UCase$(CStr(d(i, 1))))
+        outA(i, 4) = CStr(d(i, 3))
+        outA(i, 5) = CDbl(d(i, 4))
+        outA(i, 6) = CDbl(d(i, 5))
+        outA(i, 7) = CDbl(d(i, 6))
+        outA(i, 8) = IIf(StrComp(CStr(d(i, 1)), AMB_NALOG_KUPAC, vbTextCompare) = 0, _
+                         "KUP|", "KOP|") & CStr(d(i, 2))
+        kljuc(i) = IzvNazivKljuc(nm, CStr(d(i, 1)) & ":" & CStr(d(i, 2))) & _
+                   UCase$(CStr(d(i, 3)))
+    Next i
+    ReportAmbalazaPoPartnerima = IzvSortTelo(outA, n, kljuc)
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
 ' Naziv entiteta za zbirne redove: sifarnik sa fallback-om na ID.
 Private Function IzvEntNaziv(ByVal entitetTip As String, ByVal iD As String) As String
     Dim nm As String
@@ -4798,6 +4872,20 @@ Private Sub StampajAmbDokument(ByVal ambDokID As String, ByVal tipSel As String)
                                 CStr(LookupValue(TBL_STANICE, "StanicaID", ownID, "Naziv")), ownID, _
                                 ResolveEntitetName(odID, odTip), odID, _
                                 tipAmb, kolAmb, "", False, ambDokID, "OTPIS"
+        Exit Sub
+    End If
+
+    ' VRACANJE KUPCU (AMB-10-ODL-39 g) je pusteno SVESNO, po beloj listi: nas
+    ' revers bez stanice u paru (vozac -> kupac), pa OM na papiru je VLASNIK BROJA
+    ' sa zaglavlja, kao kod otpisa. Isti izlaz kao F7 (ctype KUPAC).
+    If StrComp(vrstaDok, AMB_DOK_REVERS, vbTextCompare) = 0 And _
+       StrComp(naTip, AMB_NALOG_KUPAC, vbTextCompare) = 0 Then
+        Dim vrstaVk As String, ownTipVk As String, ownIDVk As String
+        modAmbalaza.AmbDokZaglavlje ambDokID, vrstaVk, ownTipVk, ownIDVk
+        OutputIzdavanjeAmbalaze datum, broj, _
+                                CStr(LookupValue(TBL_STANICE, "StanicaID", ownIDVk, "Naziv")), ownIDVk, _
+                                ResolveEntitetName(naID, naTip), naID, _
+                                tipAmb, kolAmb, "", False, ambDokID, "KUPAC"
         Exit Sub
     End If
 

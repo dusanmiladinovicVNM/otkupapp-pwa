@@ -1293,14 +1293,14 @@ Private Sub BuildForm(frm As Object)
     NewFieldG z, "fgHladnjaca", Poruka("OTKUI_FLD_HLADNJACA"), "cmb", "", 1, False, False, "DOK"
     NewFieldG z, "fgPogon", Poruka("OTKUI_FLD_POGON"), "txt", "", 1, False, False, "DOK"
 
-    ' SMER REVERSA - SEST medjusobno iskljucivih segmenata. Prva cetiri su isti
-    ' skup kao frmDokumenta.SetupOMIzdavanjeToggle; peti je povrat praznih od
-    ' kupca (AMB-10-ODL-23), a sesti pozajmica kupca (AMB-10-ODL-24) -- oba
-    ' dokumenta nose KUPCEV broj.
+    ' SMER REVERSA - cetiri NASA smera, isti skup kao
+    ' frmDokumenta.SetupOMIzdavanjeToggle. Kupcevi smerovi su od AMB-10-ODL-39 u
+    ' svom okviru KUPAC ispod: povrat praznih (ODL-23) i pozajmica (ODL-24) nose
+    ' KUPCEV broj, a vracanje kupcu (ODL-39) je nas revers. Sedam segmenata u
+    ' jednom redu bi odseklo natpise od 12-14 znakova (LayoutSegs deli sirinu
+    ' okvira podjednako).
     '
-    ' Sest segmenata u istih 370pt: 1 + 4*61 + 2*60 + 5*1 = 370. Uzi (60) su
-    ' segmenti sa natpisom od 9 znakova ('Izdato OM', 'Pozajmica'); ostali nose
-    ' 12 znakova ('Prijem od OM', 'Povrat kupca'). Izgled je rucna provera.
+    ' Cetiri segmenta u 370pt: 1 + 4*91 + 3*1 = 368. Izgled je rucna provera.
     Set fr = NewFrame(z, "fgSmerRev", 0, 0, 370, FIELD_GRP_H, C_WHITE)
     fr.tag = "fld:3:AMB"
     NewLbl fr, "fgSmerRevL", Poruka("OTKUI_FLD_SMER_REV"), 0, 0, 300, 12, TS_LABEL, True, C_MUTED, -1
@@ -1308,12 +1308,22 @@ Private Sub BuildForm(frm As Object)
     ' NIJEDAN segment nije unapred obelezen: smer se bira eksplicitno. Ranije je
     ' segRev1 izgledao izabrano a mSmerRev je bio 0, pa je forma pokazivala smer
     ' koji dokument nije imao.
-    NewSegBtn fr, "segRev1", Poruka("OTKUI_SEG_REV_IZD_KOOP"), 1, 17, 61, FIELD_H - 2, False
-    NewSegBtn fr, "segRev2", Poruka("OTKUI_SEG_REV_PRI_KOOP"), 63, 17, 61, FIELD_H - 2, False
-    NewSegBtn fr, "segRev3", Poruka("OTKUI_SEG_REV_IZD_OM"), 125, 17, 60, FIELD_H - 2, False
-    NewSegBtn fr, "segRev4", Poruka("OTKUI_SEG_REV_PRI_OM"), 186, 17, 61, FIELD_H - 2, False
-    NewSegBtn fr, "segRev5", Poruka("OTKUI_SEG_REV_POVRAT_KUP"), 248, 17, 61, FIELD_H - 2, False
-    NewSegBtn fr, "segRev6", Poruka("OTKUI_SEG_REV_POZAJMICA_KUP"), 310, 17, 60, FIELD_H - 2, False
+    NewSegBtn fr, "segRev1", Poruka("OTKUI_SEG_REV_IZD_KOOP"), 1, 17, 91, FIELD_H - 2, False
+    NewSegBtn fr, "segRev2", Poruka("OTKUI_SEG_REV_PRI_KOOP"), 93, 17, 91, FIELD_H - 2, False
+    NewSegBtn fr, "segRev3", Poruka("OTKUI_SEG_REV_IZD_OM"), 185, 17, 91, FIELD_H - 2, False
+    NewSegBtn fr, "segRev4", Poruka("OTKUI_SEG_REV_PRI_OM"), 277, 17, 91, FIELD_H - 2, False
+
+    ' KUPAC (AMB-10-ODL-39 d): povrat, pozajmica i vracanje kupcu. Okvir grupise
+    ' po PARTNERU, ne po vlasniku broja -- povrat i pozajmica su kupcev dokument,
+    ' vracanje je nas. Izbor smera je i dalje jedan: SetSmerRev gasi segmente sva
+    ' tri okvira. Tri segmenta u 250pt: 1 + 81 + 2 + 81 + 2 + 82 = 249.
+    Set fr = NewFrame(z, "fgSmerKup", 0, 0, 250, FIELD_GRP_H, C_WHITE)
+    fr.tag = "fld:2:AMB"
+    NewLbl fr, "fgSmerKupL", Poruka("OTKUI_FLD_SMER_KUP"), 0, 0, 240, 12, TS_LABEL, True, C_MUTED, -1
+    NewShell fr, "fgSmerKup", 0, 16, 250, FIELD_H, C_BORDER_LT, C_WHITE
+    NewSegBtn fr, "segRev5", Poruka("OTKUI_SEG_REV_POVRAT_KUP"), 1, 17, 81, FIELD_H - 2, False
+    NewSegBtn fr, "segRev6", Poruka("OTKUI_SEG_REV_POZAJMICA_KUP"), 84, 17, 81, FIELD_H - 2, False
+    NewSegBtn fr, "segRev9", Poruka("OTKUI_SEG_REV_VRACANJE_KUP"), 167, 17, 82, FIELD_H - 2, False
 
     ' NABAVKA I OTPIS (AMB-10-ODL-34 a) -- sedmi i osmi smer, u SVOM okviru ispod
     ' reversa. Isti red bi suzio svih osam segmenata (LayoutSegs deli sirinu
@@ -3585,6 +3595,7 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgPogon", False
             FldShow z, "fgSmerRev", False
             FldShow z, "fgSmerAmb", False
+            FldShow z, "fgSmerKup", False
             FldShow z, "fgNapomena", False
             FldShow z, "fgVrednost", False
             ' otvoreni blok i neisplaceni ostatak imaju smisla samo kod isplata
@@ -3609,6 +3620,7 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgPogon", False
             FldShow z, "fgSmerRev", True
             FldShow z, "fgSmerAmb", True
+            FldShow z, "fgSmerKup", True
             FldShow z, "fgNapomena", modNovacUnos.RevSmerJeNabavkaIliOtpis(mSmerRev)
             FldShow z, "fgVrednost", False
             FldShow z, "fgBlok", False
@@ -3648,6 +3660,7 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgPogon", (mode = "F3")
             FldShow z, "fgSmerRev", False
             FldShow z, "fgSmerAmb", False
+            FldShow z, "fgSmerKup", False
             FldShow z, "fgNapomena", False
             ' Vrednost se racuna iz cene, koje zbirna nema -- prikaz bi uvek bio
             ' nula, a nula uz robu izgleda kao podatak.
@@ -3690,28 +3703,36 @@ Private Sub KlasaCenaPoRezimu(ByVal z As Object, ByVal mode As String)
         UCase$(Poruka(IIf(imaCenu, "OTKUI_FLD_KLASA_CENA", "OTKUI_FLD_KLASA")))
 End Sub
 
-' Sest smerova reversa su medjusobno iskljucivi - isti obrazac kao SetKlasa.
+' Svi smerovi reversa su medjusobno iskljucivi - isti obrazac kao SetKlasa.
 ' n = 0 gasi sve (stanje "nije izabrano", u koje se rezim i vraca).
 Private Sub SetSmerRev(ByVal n As Long)
     Dim z As Object, i As Long, sel As Boolean
     Dim stariKupcev As Boolean, noviKupcev As Boolean, zAmb As Object
+    Dim zKup As Object, fs As Object
     On Error Resume Next
     Set z = mFrm.Controls("zForm").Controls("fgSmerRev")
     Set zAmb = mFrm.Controls("zForm").Controls("fgSmerAmb")
+    Set zKup = mFrm.Controls("zForm").Controls("fgSmerKup")
     ' Vlasnik niza se cita PRE dodele -- posle nje se stari smer vise ne zna.
     ' Kupcev je i povrat (5) i pozajmica (6): odluka je u modNovacUnos.
     stariKupcev = modNovacUnos.RevSmerJeKupcev(mSmerRev)
     noviKupcev = modNovacUnos.RevSmerJeKupcev(n)
     mSmerRev = n
     MarkDirty
-    For i = 1 To modNovacUnos.SMER_REV_OTPIS
+    For i = 1 To modNovacUnos.SMER_REV_VRACANJE_KUP
         sel = (i = n)
-        ' Nabavka i otpis su u svom okviru (fgSmerAmb), ostali u okviru reversa.
-        If i > modNovacUnos.SMER_REV_POZAJMICA_KUP Then
-            BoxState zAmb, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
-        Else
-            BoxState z, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
-        End If
+        ' Tri okvira: nasi smerovi (fgSmerRev), kupac (fgSmerKup: povrat,
+        ' pozajmica, vracanje kupcu -- ODL-39) i nabavka/otpis (fgSmerAmb).
+        Select Case i
+            Case modNovacUnos.SMER_REV_POVRAT_KUP, modNovacUnos.SMER_REV_POZAJMICA_KUP, _
+                 modNovacUnos.SMER_REV_VRACANJE_KUP
+                Set fs = zKup
+            Case modNovacUnos.SMER_REV_NABAVKA, modNovacUnos.SMER_REV_OTPIS
+                Set fs = zAmb
+            Case Else
+                Set fs = z
+        End Select
+        BoxState fs, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
     Next i
 
     ' NAPOMENA PRATI SMER (ODL-34 k): vidi se samo uz nabavku i otpis. Kad se
@@ -4536,6 +4557,7 @@ Private Sub UiClickCore(ByVal tag As String)
         Case "segRev6": SetSmerRev 6
         Case "segRev7": SetSmerRev 7
         Case "segRev8": SetSmerRev 8
+        Case "segRev9": SetSmerRev 9
         Case "segAvans1": SetAvans 1
         Case "segAvans2": SetAvans 2
         Case "btnSacuvaj", "btnSacuvajPrint": CommitDokument (tag = "btnSacuvajPrint")

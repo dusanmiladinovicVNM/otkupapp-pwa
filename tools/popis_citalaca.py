@@ -108,6 +108,21 @@ GRUPE = collections.OrderedDict([
     # Literal kljuca je u grupi namerno: konstanta je obrisana, a red u
     # Podesavanjima bi kljuc vratio kao golu nisku.
     ("prj_zbr_cfg", re.compile(r"\bPrijemnicaZbirnaBlokira\b|PRIJEMNICA_ZBIRNA_PROVERA")),
+    # S8 rez 2a-2 (plan 14.59): BrojPrijemnice i BrojZbirne paletne stavke su labele
+    # koje 2b brise. Posle 2a-2 ih zive procedure samo PISU (AddStavka, prevezivanje,
+    # paletni rep prevezivanja prijemnice na zbirnu, modSetup); nijedna ih vise ne
+    # cita da bi odlucila ili prikazala. Prag brani rast; S8 rez 2b-2 je obrisao kolone,
+    # konstante i pisce, pa je prag 0: svako zivo mesto koje bi konstantu vratilo obara ga.
+    ("pal_broj", re.compile(r"\bCOL_PALS_BROJ_(PRIJ|ZBIRNE)\b")),
+    # S7 rez 3 (plan 14.57, zatvaranje S7): veza fakture preko BROJA prijemnice --
+    # linija fakture trazena po broju kao kljucu. Izmereno 0 i pre S7 (merenje 1
+    # pre-flight-a); prag 0 pretvara merenje u kapiju. BrojPrijemnice na liniji je
+    # snapshot za papir, SEF naziv i izvoz, i njegovo CITANJE nije u grupi.
+    # Zagrada je opciona (review #454, S7R3-REV-03): VBA zove proceduru i bez nje
+    # (`RequireTacnoJedan TBL_FAKTURA_STAVKE, ...`), a taj oblik je merilo propustalo.
+    ("fak_broj_prj", re.compile(r"\b(LookupValue|FindRows|LookupActiveID|BuildLookupDict|RowsAktivni"
+                                r"|CheckDuplicate|RequireTacnoJedan)\s*\(?\s*TBL_FAKTURA_STAVKE\s*,\s*"
+                                r"(COL_FS_BROJ_PRIJEMNICE\b|\"BrojPrijemnice\")")),
 ])
 # Prosirene grupe: ono sto konstante ne vide (kriticar pokrivenosti, 15.09).
 GRUPE_X = collections.OrderedDict([
@@ -227,7 +242,9 @@ PRAGOVI = collections.OrderedDict([
     ("prj_linija", 0),
     ("prj_kes", 0),
     ("prj_generacija", 0),
-    ("prj_brojzbirne", 33),
+    ("prj_brojzbirne", 31),
+    ("fak_broj_prj", 0),
+    ("pal_broj", 0),
 ])
 
 # Linijska polja zaglavlja -- prag dual READ.

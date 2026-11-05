@@ -155,8 +155,6 @@
         "Cena",
         "Klasa",
         "BrojPrijemnice",
-        "Stornirano",
-        "OsirocenoOd",
         "CreatedAt",
         "CreatedBy",
         "ModifiedAt",
@@ -180,7 +178,6 @@
         "Status",
         "DatumPlacanja",
         "Stornirano",
-        "OsirocenoOd",
         "SEFWorkflowState",
         "SEFStatus",
         "SEFDocumentId",
@@ -196,12 +193,7 @@
         "CreatedAt",
         "CreatedBy",
         "ModifiedAt",
-        "ModifiedBy",
-        "IspravkaOd",
-        "ZamenjenSa",
-        "CorrectionID",
-        "IzdatoStatus",
-        "GeneracijaID"
+        "ModifiedBy"
       ]
     },
     {
@@ -558,8 +550,6 @@
       "columns": [
         "StavkaID",
         "PaletaID",
-        "BrojPrijemnice",
-        "BrojZbirne",
         "BrojGajbica",
         "NetoKg",
         "AmbalazaKg",
@@ -572,7 +562,6 @@
         "CreatedBy",
         "ModifiedAt",
         "ModifiedBy",
-        "ZbirnaRoditeljID",
         "PrijemnicaStavkaID"
       ]
     },
@@ -1114,10 +1103,6 @@
     },
     "tblPaleta": {
       "TipAmbalaze": "text"
-    },
-    "tblPaletaStavka": {
-      "BrojPrijemnice": "text",
-      "BrojZbirne": "text"
     },
     "tblParcele": {
       "KatBroj": "text"

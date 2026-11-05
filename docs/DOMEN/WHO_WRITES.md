@@ -109,6 +109,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblFakturaStavke`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modTest`, `modTestStorno`
 - `tblPaleta`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblParcele`: `modAgrohemijaTests`
+- `tblUtovar`: `modBusinessFlowProTests`
 - `tblZbirna`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblAmbalaza`: `modBusinessFlowProTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblAmbalazaDokument`: `modBusinessFlowProTests`, `modTest`
@@ -151,7 +152,7 @@ tabela kroz jedan ulaz). Stoje ovde da mapa ne izgleda potpunija nego sto
 jeste -- kapija koja precuti sopstvenu granicu je gora od one koja je
 imenuje.
 
-- `modBusinessFlowProTests`: 5
+- `modBusinessFlowProTests`: 4
 - `modDokumentInvariant`: 1
 - `modDokumenta`: 3
 - `modFakturaTests`: 1
@@ -167,7 +168,7 @@ imenuje.
 - `modTest`: 1
 - `modTestPalete`: 1
 
-Ukupno: 31 poziva u 15 modula.
+Ukupno: 30 poziva u 15 modula.
 
 ## Sta ovo NE pokriva
 

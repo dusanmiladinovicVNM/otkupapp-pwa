@@ -11,6 +11,9 @@ Option Explicit
 
 Public prijemnicaID As String
 Public brojPrijemnice As String
+' FAK-ODL-01 (S7 rez 3): identitet linije prijemnice na e-fakturi je STAVKA
+' (PrijemnicaStavkaID), ne dokument -- dve klase iste prijemnice su dve linije.
+Public prijemnicaStavkaID As String
 ' GP grana (R2, revizija #248): stavka fakture gotove robe nosi
 ' preradu umesto prijemnice -- tacno jedan od parova je popunjen.
 Public preradaID As String

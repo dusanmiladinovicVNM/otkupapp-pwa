@@ -41,7 +41,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "87AB4F9B"
+Public Const SCHEMA_FINGERPRINT As String = "CA5CE30A"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -764,12 +764,6 @@ Private Function FormatRegistry() As Object
 
     Set k = CreateObject("Scripting.Dictionary")
     k.CompareMode = vbTextCompare
-    k("BrojPrijemnice") = "text"
-    k("BrojZbirne") = "text"
-    Set reg("tblPaletaStavka") = k
-
-    Set k = CreateObject("Scripting.Dictionary")
-    k.CompareMode = vbTextCompare
     k("KatBroj") = "text"
     Set reg("tblParcele") = k
 
@@ -1037,8 +1031,6 @@ Private Sub SpecFakturaStavke(ByVal reg As Object)
     k.Add "Cena"
     k.Add "Klasa"
     k.Add "BrojPrijemnice"
-    k.Add "Stornirano"
-    k.Add "OsirocenoOd"
     k.Add "CreatedAt"
     k.Add "CreatedBy"
     k.Add "ModifiedAt"
@@ -1061,7 +1053,6 @@ Private Sub SpecFakture(ByVal reg As Object)
     k.Add "Status"
     k.Add "DatumPlacanja"
     k.Add "Stornirano"
-    k.Add "OsirocenoOd"
     k.Add "SEFWorkflowState"
     k.Add "SEFStatus"
     k.Add "SEFDocumentId"
@@ -1078,11 +1069,6 @@ Private Sub SpecFakture(ByVal reg As Object)
     k.Add "CreatedBy"
     k.Add "ModifiedAt"
     k.Add "ModifiedBy"
-    k.Add "IspravkaOd"
-    k.Add "ZamenjenSa"
-    k.Add "CorrectionID"
-    k.Add "IzdatoStatus"
-    k.Add "GeneracijaID"
     RegistrujTabelu reg, TBL_FAKTURE, "Fakture", k
 End Sub
 
@@ -1422,8 +1408,6 @@ Private Sub SpecPaletaStavka(ByVal reg As Object)
     Set k = New Collection
     k.Add "StavkaID"
     k.Add "PaletaID"
-    k.Add "BrojPrijemnice"
-    k.Add "BrojZbirne"
     k.Add "BrojGajbica"
     k.Add "NetoKg"
     k.Add "AmbalazaKg"
@@ -1436,7 +1420,6 @@ Private Sub SpecPaletaStavka(ByVal reg As Object)
     k.Add "CreatedBy"
     k.Add "ModifiedAt"
     k.Add "ModifiedBy"
-    k.Add "ZbirnaRoditeljID"
     k.Add "PrijemnicaStavkaID"
     RegistrujTabelu reg, TBL_PALETA_STAVKA, "PaletaStavka", k
 End Sub

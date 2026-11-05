@@ -430,7 +430,13 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
 
     ' tx ide dalje: storno knjige je KONTRA-STAV u istoj transakciji
     ' (AMB-10-ODL-16), a ne zastavica koju nov citalac ne gleda.
-    If Not modStorno.StornoOtkup(stariOtkupID, tx) Then
+    '
+    ' AMB-INV-09 se meri POSLE zamene, ne u medjukoraku (odloziObavezu): pokrice
+    ' starog dokumenta je od ODL-35 cesto vec zatvoreno kasnijim izdavanjem, pa
+    ' bi kontra-stav sam spustio obavezu ispod nule -- a zamena koja donosi iste
+    ' gajbe je vraca. Ispravka koja to ne uradi pada niza, na
+    ' AmbRequireObavezeDokumenta, i cela TX se vraca.
+    If Not modStorno.StornoOtkup(stariOtkupID, tx, True) Then
         Err.Raise vbObjectError + 1914, SRC, _
                   "Storno dokumenta koji se ispravlja nije uspeo: " & stariOtkupID
     End If
@@ -441,6 +447,8 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     If Len(noviID) = 0 Then
         Err.Raise vbObjectError + 1915, SRC, "CreateOtkup nije vratio OtkupID."
     End If
+
+    modAmbalaza.AmbRequireObavezeDokumenta DOK_TIP_OTKUP, stariOtkupID, SRC
 
     ' Correction context: CorrectionID mora biti PRAV ID iz tblStornoVeze, ne broj
     ' koji ovaj modul izmisli. Kolona je deklarisana kao veza na tu tabelu

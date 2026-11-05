@@ -79,6 +79,12 @@ Private Const IZ_KART As String = "KARTICA"
 Private Const IZ_AMBK As String = "AMBKARTICA"
 Private Const IZ_OTKL As String = "OTKLISTE"
 Private Const IZ_RANG As String = "RANG"
+' Bilans ambalaze (AMB-BIL-01): pogled FIRME na celu knjigu -- ne trazi
+' entitet, a nudi se pod OM, isto u oba rezima.
+Private Const IZ_AMBBIL As String = "AMBBILANS"
+' Ambalaza po partneru (AMB-BIL-03): drzi, tudje i neto po partneru -- isti ugao
+' i ista pravila nudjenja kao bilans.
+Private Const IZ_AMBPAR As String = "AMBPARTNERI"
 
 ' Labele specijalnih redova Report* povratka -- ISTI literali koje modIzvestaj
 ' upisuje (RF-06: "Labele su ASCII jer se po njima traze redovi"). Ako se tamo
@@ -193,6 +199,8 @@ Public Function IzListeZaTip(ByVal tip As String) As Variant
         IZ_SALDO & "|OTKUI_SEG_IZ_SALDO|OTKUI_GRID_TITLE_IZ_SALDO|56", _
         IZ_ROBA & "|OTKUI_SEG_IZ_ROBA|OTKUI_GRID_TITLE_IZ_ROBA|52", _
         IZ_AMB & "|OTKUI_SEG_IZ_AMB|OTKUI_GRID_TITLE_IZ_AMB|72", _
+        IZ_AMBBIL & "|OTKUI_SEG_IZ_AMBBIL|OTKUI_GRID_TITLE_IZ_AMBBIL|76", _
+        IZ_AMBPAR & "|OTKUI_SEG_IZ_AMBPAR|OTKUI_GRID_TITLE_IZ_AMBPAR|84", _
         IZ_ISPL & "|OTKUI_SEG_IZ_ISPL|OTKUI_GRID_TITLE_IZ_ISPL|62", _
         IZ_ZBIR & "|OTKUI_SEG_IZ_ZBIR|OTKUI_GRID_TITLE_IZ_ZBIR|54", _
         IZ_CENA & "|OTKUI_SEG_IZ_CENA|OTKUI_GRID_TITLE_IZ_CENA|76", _
@@ -226,7 +234,8 @@ End Function
 ' 14 i ambalaza zbirno ide preko SVIH entiteta (dropdown u zbirnom je
 ' besmislen -- odluka operatera).
 Public Function IzTrebaEntitet(ByVal kljuc As String, ByVal zbirni As Boolean) As Boolean
-    If kljuc = IZ_RANG Then Exit Function
+    If kljuc = IZ_RANG Or kljuc = IZ_AMBBIL Then Exit Function
+    If kljuc = IZ_AMBPAR Then Exit Function
     IzTrebaEntitet = Not zbirni
 End Function
 
@@ -249,6 +258,10 @@ End Function
 Public Function Scr_Sort() As String
     Select Case Scr_Lista()
         Case IZ_KART, IZ_AMBK, IZ_OTKL
+            Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI
+        Case IZ_AMBBIL
+            ' Bilans: odeljci idu redom pitanja (gde, cije, granica), stavke
+            ' redom racuna -- red je deo izvestaja (AMB-BIL-01).
             Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI
         Case IZ_AMB
             If Not mZbirni Then Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI
@@ -510,6 +523,13 @@ Public Function IzListaDostupna(ByVal kljuc As String, ByVal tip As String, _
             ' sa Unosa dokumenata, ovde uz period zone) -- izabrani entitet
             ' ga se ne tice, pa vazi u oba rezima tipa Kooperant.
             IzListaDostupna = (tip = "Kooperant")
+        Case IZ_AMBBIL
+            ' Bilans je nad CELOM knjigom: izabrani entitet ga se ne tice, a ugao
+            ' je firmin -- zato pod OM, u oba rezima (AMB-BIL-01).
+            IzListaDostupna = (tip = "OM")
+        Case IZ_AMBPAR
+            ' Isti ugao kao bilans: cela knjiga, firmin pogled, pod OM.
+            IzListaDostupna = (tip = "OM")
         Case Else
             pg = IzListaTab(kljuc, tip)
             If pg < 0 Then Exit Function
@@ -915,6 +935,25 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                 "OTKUI_HD_OM||txt|150|2", _
                 "OTKUI_HDK_IZNOS||rsd|130|1", _
                 "OTKUI_HDI_REF||txt|1|4")
+        Case IZ_AMBBIL
+            ' Tip | Odeljak | Stavka | Komada. Bez kg i novca, pa podnozje nema
+            ' zbir: stavke su mesane (stanje, kretanje, dug) i zbir bi lagao.
+            IzKoloneZaListu = Array( _
+                "OTKUI_HDA_TIP||txt|96|1", _
+                "OTKUI_HDI_ODELJAK||txt|150|1", _
+                "OTKUI_HDI_STAVKA||txt|0|1", _
+                "OTKUI_HD_KOMADA||num|80|1")
+        Case IZ_AMBPAR
+            ' Partner | Vrsta | Tip | Drzi | Tudje | Neto | [KOP|id / KUP|id].
+            ' Komadi, bez kg i novca; podnozje nosi Drzi i Tudje kao slotove.
+            IzKoloneZaListu = Array( _
+                "OTKUI_HDI_ENTITET||txt|0|1", _
+                "OTKUI_HDI_VRSTA||txt|80|2", _
+                "OTKUI_HDA_TIP||txt|84|1", _
+                "OTKUI_HDI_DRZI||num|66|1", _
+                "OTKUI_HDI_TUDJE||num|66|1", _
+                "OTKUI_HDI_NETO||num|66|1", _
+                "OTKUI_HDI_REF||txt|1|4")
     End Select
 End Function
 
@@ -1089,6 +1128,8 @@ Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
         Case IZ_KART:   PuniSnimak = ReportKarticaKooperanta(iD, dOd, dDo)
         Case IZ_AMBK:   PuniSnimak = ReportKarticaAmbalaze(iD, dOd, dDo)
         Case IZ_OTKL:   PuniSnimak = ReportOtkupListe(iD, dOd, dDo)
+        Case IZ_AMBBIL: PuniSnimak = ReportBilansAmbalaze(dOd, dDo)
+        Case IZ_AMBPAR: PuniSnimak = ReportAmbalazaPoPartnerima(dDo)
         Case IZ_RANG
             ' Isti racun kao "Kooperanti po iznosu otkupa" na Unosu
             ' dokumenata (modOtkupBlok.KoopRangRows) -- ovde sa periodom
@@ -1178,6 +1219,13 @@ Sledeci:
         Oblikuj = Array(kolone, outA, n, 0#, 0#, Array(0, 0, 0), _
                         Array(Array("OTKUI_FT_AMB_ULAZ", sumKg, "OTKUI_UNIT_KOM"), _
                               Array("OTKUI_FT_AMB_IZLAZ", sumVal, "OTKUI_UNIT_KOM")))
+        Exit Function
+    End If
+    ' Po partnerima: isti mehanizam -- Drzi i Tudje u komadima (Neto je razlika).
+    If kljuc = IZ_AMBPAR Then
+        Oblikuj = Array(kolone, outA, n, 0#, 0#, Array(0, 0, 0), _
+                        Array(Array("OTKUI_FT_PAR_DRZI", sumKg, "OTKUI_UNIT_KOM"), _
+                              Array("OTKUI_FT_PAR_TUDJE", sumVal, "OTKUI_UNIT_KOM")))
         Exit Function
     End If
     Oblikuj = Array(kolone, outA, n, sumKg, sumVal, Array(0, 0, 0))
@@ -1330,6 +1378,10 @@ Private Function HaystackReda(ByVal kljuc As String, ByVal tip As String, _
             HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3))
         Case IZ_RANG
             HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3))
+        Case IZ_AMBBIL
+            HaystackReda = NzS(src(i, 1)) & "|" & NzS(src(i, 2)) & "|" & NzS(src(i, 3))
+        Case IZ_AMBPAR
+            HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3)) & "|" & NzS(src(i, 4))
         Case IZ_OTKL
             HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3)) & "|" & _
                            NzS(src(i, 4)) & "|" & NzS(src(i, 5))
@@ -1576,6 +1628,25 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
             outA(n, 4) = NzD(src(i, 4))
             outA(n, 5) = "KOP|" & NzS(src(i, 1))
             sumVal = sumVal + NzD(src(i, 4))
+        Case IZ_AMBBIL
+            ' Komadi i kad su 0 -- prazna nula na bilansu je izostavljena
+            ' tvrdnja, a "neuskladjeno 0" je bas ono sto se proverava.
+            outA(n, 1) = NzS(src(i, 1))
+            outA(n, 2) = NzS(src(i, 2))
+            outA(n, 3) = NzS(src(i, 3))
+            outA(n, 4) = NzD(src(i, 4))
+        Case IZ_AMBPAR
+            ' Komadi i kad su 0 -- partner sa 0 drzi i 12 tudje je bas red koji
+            ' operater trazi. Podnozje: drzi i tudje (slotovi u Oblikuj).
+            outA(n, 1) = NzS(src(i, 2))
+            outA(n, 2) = NzS(src(i, 3))
+            outA(n, 3) = NzS(src(i, 4))
+            outA(n, 4) = NzD(src(i, 5))
+            outA(n, 5) = NzD(src(i, 6))
+            outA(n, 6) = NzD(src(i, 7))
+            outA(n, 7) = NzS(src(i, 8))
+            sumKg = sumKg + NzD(src(i, 5))
+            sumVal = sumVal + NzD(src(i, 6))
     End Select
 End Sub
 
@@ -2577,6 +2648,7 @@ Public Function IzSabirljive(ByVal kljuc As String, ByVal tip As String, _
         Case IZ_AMBK:   IzSabirljive = Array(4, 5)     ' ulaz/izlaz; NIKAD saldo (6)
         Case IZ_OTKL:   IzSabirljive = Array(6, 7)
         Case IZ_RANG:   IzSabirljive = Array(4)        ' iznos; rang broj nikad
+        Case IZ_AMBPAR: IzSabirljive = Array(4, 5, 6)  ' drzi, tudje, neto (komadi)
         Case Else:      IzSabirljive = Array()
     End Select
 End Function
@@ -2747,6 +2819,8 @@ Private Function IzSufiks(ByVal kljuc As String) As String
         Case IZ_KART:   IzSufiks = "KART"
         Case IZ_AMBK:   IzSufiks = "AMBK"
         Case IZ_OTKL:   IzSufiks = "OTKL"
+        Case IZ_AMBBIL: IzSufiks = "AMBBIL"
+        Case IZ_AMBPAR: IzSufiks = "AMBPAR"
     End Select
 End Function
 

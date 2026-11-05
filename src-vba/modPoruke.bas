@@ -834,6 +834,9 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_SEG_REV_PRI_OM", "Prijem od OM"
     UpsertRow lo, existing, "OTKUI_SEG_REV_POVRAT_KUP", "Povrat kupca"
     UpsertRow lo, existing, "OTKUI_SEG_REV_POZAJMICA_KUP", "Pozajmica"
+    ' AMB-10-ODL-39: kupcevi smerovi i vracanje kupcu u svom okviru.
+    UpsertRow lo, existing, "OTKUI_FLD_SMER_KUP", "KUPAC"
+    UpsertRow lo, existing, "OTKUI_SEG_REV_VRACANJE_KUP", "Vra" & ChrW(263) & "anje kupcu"
     ' AMB-10-ODL-34: nabavka i otpis, u svom okviru ispod smerova reversa.
     UpsertRow lo, existing, "OTKUI_FLD_SMER_AMB", "NABAVKA I OTPIS"
     UpsertRow lo, existing, "OTKUI_SEG_REV_NABAVKA", "Nabavka"
@@ -852,6 +855,7 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_VK_NABAVKA", "Nabavka"
     UpsertRow lo, existing, "OTKUI_VK_OTPIS", "Otpis"
     UpsertRow lo, existing, "OTKUI_VK_POZAJMICA", "Pozajmica"
+    UpsertRow lo, existing, "OTKUI_VK_IZLAZ_TUDJE", "Izlaz vra" & ChrW(263) & "enih tu" & ChrW(273) & "ih"
     UpsertRow lo, existing, "OTKUI_CTX_VRSTA", "Jabuka"
     UpsertRow lo, existing, "OTKUI_CTX_SORTA", "Idared"
     UpsertRow lo, existing, "OTKUI_CTX_OM", "OM Zaovine"
@@ -1060,6 +1064,8 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER", ChrW(10007) & " Izaberi smer reversa " & ChrW(8212) & " bez njega se ne zna ko koga zadu" & ChrW(382) & "uje."
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KOOP", ChrW(10007) & " Za izdavanje/prijem ambala" & ChrW(382) & "e izaberi KOOPERANTA kao partnera."
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KUP", ChrW(10007) & " Povrat praznih od kupca tra" & ChrW(382) & "i KUPCA kao partnera."
+    UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KUP_VRK", ChrW(10007) & " Vra" & ChrW(263) & "anje gajbi kupcu tra" & ChrW(382) & "i KUPCA kao partnera."
+    UpsertRow lo, existing, "NOVUNOS_ERR_VRACANJE_DUG", ChrW(10007) & " Kupcu se vra" & ChrW(263) & "a najvi" & ChrW(353) & "e ono " & ChrW(353) & "to mu firma duguje."
     UpsertRow lo, existing, "NOVUNOS_ERR_SMER_KUP_POZ", ChrW(10007) & " Pozajmica ambala" & ChrW(382) & "e od kupca tra" & ChrW(382) & "i KUPCA kao partnera."
     ' Otpis (AMB-10-ODL-34): nalog, razlog i saldo; saldu se dopisuje broj iza teksta.
     UpsertRow lo, existing, "NOVUNOS_ERR_OTPIS_NALOG", ChrW(10007) & " Otpis tra" & ChrW(382) & "i nalog " & ChrW(8212) & " izaberi partnera (kooperant, OM ili kupac) ili voza" & ChrW(269) & "a."
@@ -1132,6 +1138,11 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
               "istom dokumentu " & ChrW(8212) & " osve" & ChrW(382) & "ite listu pa poku" & ChrW(353) & "ajte ponovo"
     UpsertRow lo, existing, "STORNO_ERR_PRJ_FAKTURISANA", ChrW(10007) & " Prijemnica je fakturisana " & _
               ChrW(8212) & " prvo stornirajte fakturu, pa prijemnicu. Faktura:"
+    UpsertRow lo, existing, "STORNO_ERR_FAK_NA_SEF", ChrW(10007) & " Faktura je na SEF-u " & ChrW(8212) & _
+              " lokalni storno nije dozvoljen dok dokument " & ChrW(382) & "ivi na SEF-u. Prvo storno ili " & _
+              "otkaz na SEF-u, ili Osve" & ChrW(382) & "i status SEF-a. Stanje:"
+    UpsertRow lo, existing, "STORNO_MSG_FAK_AVANS", ChrW(10003) & " Stornirano. Uplate fakture su pre" & _
+              ChrW(353) & "le u avans kupca:"
     UpsertRow lo, existing, "STORNO_ERR_NEMA_SMERA", ChrW(10007) & " Revers bez smera " & ChrW(8212) & " " & _
               ChrW(269) & "etiri smera dele isti brojevni niz"
     UpsertRow lo, existing, "STORNO_ERR_REV_KLJUC", ChrW(10007) & " Revers se ne mo" & ChrW(382) & _
@@ -1341,6 +1352,10 @@ Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_OPO_KPI_OSIR", "Osiro" & ChrW(263) & "eno"
     UpsertRow lo, existing, "OTKUI_OPO_KPI_UNDO", "Za vra" & ChrW(263) & "anje"
     UpsertRow lo, existing, "OTKUI_BTN_OPO_PREVEZI", "Prevezi"
+    UpsertRow lo, existing, "OTKUI_BTN_OPO_SKINI", "Skini palete"
+    UpsertRow lo, existing, "OTKUI_ASK_OPO_SKINI", "Skinuti sa paleta robu stornirane prijemnice"
+    UpsertRow lo, existing, "OTKUI_MSG_OPO_SKINUTO", ChrW(10003) & " Skinute palete prijemnice"
+    UpsertRow lo, existing, "OTKUI_ERR_OPO_SKINI", ChrW(10007) & " Skidanje paleta nije uspelo."
     UpsertRow lo, existing, "OTKUI_BTN_OPO_VRATI", "Vrati storno"
     UpsertRow lo, existing, "OTKUI_ASK_OPO_PRI", "Prevezati prijemnicu"
     UpsertRow lo, existing, "OTKUI_ASK_OPO_PAL", "Prevezati palete prijemnice"
@@ -1348,6 +1363,9 @@ Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ASK_OPO_UNDO", "Vratiti storno:"
     UpsertRow lo, existing, "OTKUI_ASK_OPO_UNDO2", "Dokument se vra" & ChrW(263) & "a u AKTIVNO stanje, sa svim posledicama."
     UpsertRow lo, existing, "OTKUI_MSG_OPO_PREVEZANO", ChrW(10003) & " Prevezano:"
+    UpsertRow lo, existing, "OTKUI_MSG_OPO_PREVEZANO_KOR_CEKA", "Palete su prevezene, ali korekcija koli" & ChrW(269) & _
+        "ina NIJE zavr" & ChrW(353) & "ena " & ChrW(8212) & " dok se ne uradi, dokument i palete se razlikuju " & _
+        "(Integritet A3). Uradite je kroz Alt+F8 " & ChrW(8594) & " PaletaAdjust_Prompt:"
     UpsertRow lo, existing, "OTKUI_MSG_OPO_VRACENO", ChrW(10003) & " Storno vra" & ChrW(263) & "en:"
     UpsertRow lo, existing, "OTKUI_ERR_OPO_NEMA_ZBIRNE", ChrW(10007) & " Prvo izaberi ciljnu zbirnu u listi " & ChrW(8222) & "Zbirne (cilj)" & ChrW(8220)
     UpsertRow lo, existing, "OTKUI_ERR_OPO_NEMA_PRIJ", ChrW(10007) & " Prvo izaberi ciljnu prijemnicu u listi " & ChrW(8222) & "Prijemnice (cilj)" & ChrW(8220)
@@ -1968,6 +1986,10 @@ Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_IZ_AMBK", "Pregled ambala" & ChrW(382) & "e"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_IZ_RANG", "Rang kooperanata"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_IZ_OTKL", "Otkupni listovi"
+    UpsertRow lo, existing, "OTKUI_SEG_IZ_AMBBIL", "Bilans amb."
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_IZ_AMBBIL", "Bilans ambala" & ChrW(382) & "e"
+    UpsertRow lo, existing, "OTKUI_SEG_IZ_AMBPAR", "Amb. partneri"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_IZ_AMBPAR", "Ambala" & ChrW(382) & "a po partnerima"
     UpsertRow lo, existing, "OTKUI_CIPIZ_BEZPRIJ", "Bez prijema"
     UpsertRow lo, existing, "OTKUI_CIPIZ_ULAZ", "Ulaz"
     UpsertRow lo, existing, "OTKUI_CIPIZ_IZLAZ", "Izlaz"
@@ -2064,6 +2086,36 @@ Private Sub UpsertPoruke11(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_HDI_ZAD", "ZADU" & ChrW(381) & "ENJE"
     UpsertRow lo, existing, "OTKUI_HDI_RAZD", "RAZDU" & ChrW(381) & "ENJE"
     UpsertRow lo, existing, "OTKUI_HDI_SALDOAMB", "SALDO AMB."
+    ' --- Bilans ambalaze (AMB-BIL-01): odeljci, stavke i partner ---
+    UpsertRow lo, existing, "OTKUI_HDI_ODELJAK", "ODELJAK"
+    UpsertRow lo, existing, "OTKUI_HDI_STAVKA", "STAVKA"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_GDE", "Gde su gajbe"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_CIJE", ChrW(268) & "ije su"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_GRANICA", "Ulaz i izlaz u periodu"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_N_STANICA", "Otkupna mesta"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_N_VOZAC", "Voza" & ChrW(269) & "i"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_N_KOOPERANT", "Kooperanti"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_N_KUPAC", "Kupci"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_N_FIRMA", "Firma"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_OPTICAJ", "Ukupno u opticaju"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_NASE", "Sopstveni saldo, obra" & ChrW(269) & "unski (nabavka - otpis)"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_TUDJE", "Tu" & ChrW(273) & "e (firma duguje partnerima)"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_P_KOOPERANT", "Kooperant"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_P_KUPAC", "Kupac"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_NEUSKLADJENO", "Neuskla" & ChrW(273) & "eno (o" & ChrW(269) & "ekivano 0)"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_POCETAK", "U opticaju na po" & ChrW(269) & "etku"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_NABAVKA", "Nabavka"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_POKRICE", "Tu" & ChrW(273) & "e: partner doneo svoje"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_POZAJMICA", "Tu" & ChrW(273) & "e: pozajmica kupca"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_OTPIS", "Otpis (lom, gubitak)"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_VRACENO", "Tu" & ChrW(273) & "e: vra" & ChrW(263) & "eno partneru"
+    UpsertRow lo, existing, "OTKUI_IZ_BIL_KRAJ", "U opticaju na kraju"
+    ' --- Ambalaza po partnerima (AMB-BIL-03): kolone i podnozje ---
+    UpsertRow lo, existing, "OTKUI_HDI_DRZI", "DR" & ChrW(381) & "I"
+    UpsertRow lo, existing, "OTKUI_HDI_TUDJE", "TU" & ChrW(272) & "E"
+    UpsertRow lo, existing, "OTKUI_HDI_NETO", "NETO"
+    UpsertRow lo, existing, "OTKUI_FT_PAR_DRZI", "Dr" & ChrW(382) & "e"
+    UpsertRow lo, existing, "OTKUI_FT_PAR_TUDJE", "Tu" & ChrW(273) & "e"
     ' --- Ekran SLEDLJIVOST (v6-ui-187) ---
     UpsertRow lo, existing, "OTKUI_SCRSL_CAP", "Sledljivost"
     UpsertRow lo, existing, "OTKUI_SCRSL_SUB", "Lanac dokumenata: otkup " & ChrW(8212) & " otpremnica " & ChrW(8212) & " zbirna " & ChrW(8212) & " prijemnica " & ChrW(8212) & " faktura"

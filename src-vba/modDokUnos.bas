@@ -1330,7 +1330,9 @@ Private Sub PreveziPaleteIspravke(ByVal p As Object, ByVal res As String, _
         poruke = poruke & Poruka("DOKUNOS_MSG_PALETE_PREVEZANE") & " " & _
                  stariBroj & " " & ChrW(8594) & " " & noviBroj & vbCrLf
         If Len(relWarn) > 0 Then poruke = poruke & relWarn & vbCrLf
-        If gajbDiff Then poruke = poruke & PaletaAdjustPrompt(noviBroj) & vbCrLf
+        ' Korekcija po IDENTITETU nove prijemnice (S8 rez 1a, N1): broj nose i
+        ' dokumenti drugih kupaca, pa bi korekcija po njemu dirala i njihove palete.
+        If gajbDiff Then poruke = poruke & PaletaAdjustPrompt(Trim$(res), noviBroj) & vbCrLf
         If Len(cid) > 0 Then
             modStornoContext.CompleteCorrectionContext cid, "", noviBroj, _
                 "Ispravka prijemnice: palete prevezane na " & noviBroj & "."

@@ -108,7 +108,6 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
     Dim colBrojFakture As Long
     Dim colIznos As Long
     Dim colStornirano As Long
-    Dim colOsiroceno As Long
 
     Dim found As Boolean
     Dim kupacID As String
@@ -117,7 +116,6 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
     Dim iznosRaw As String
     Dim iznosValue As Double
     Dim storniranoRaw As String
-    Dim osirocenoRaw As String
 
     If Len(Trim$(fakturaID)) = 0 Then
         Err.Raise ERR_SEF_VALIDATION, SRC, "FakturaID is required."
@@ -135,11 +133,10 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
     colBrojFakture = RequireColumnIndex(TBL_FAKTURE, "BrojFakture", SRC)
     colIznos = RequireColumnIndex(TBL_FAKTURE, "Iznos", SRC)
 
-    ' AUD-031a: cancellation / orphan markers gate the tax send path, so they
-    ' are REQUIRED (fail-closed). A missing column must raise here rather than
-    ' silently letting a stornirana/orphaned faktura become sendable again.
+    ' AUD-031a: the cancellation marker gates the tax send path, so it is
+    ' REQUIRED (fail-closed). A missing column must raise here rather than
+    ' silently letting a stornirana faktura become sendable again.
     colStornirano = RequireColumnIndex(TBL_FAKTURE, COL_STORNIRANO, SRC)
-    colOsiroceno = RequireColumnIndex(TBL_FAKTURE, COL_OSIROCENO_OD, SRC)
 
     For i = 1 To UBound(fakture, 1)
         If CStr(fakture(i, colFakturaID)) = fakturaID Then
@@ -149,7 +146,6 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
             brojFakture = Trim$(CStr(fakture(i, colBrojFakture)))
             iznosRaw = Trim$(CStr(fakture(i, colIznos)))
             storniranoRaw = Trim$(CStr(fakture(i, colStornirano)))
-            osirocenoRaw = Trim$(CStr(fakture(i, colOsiroceno)))
             Exit For
         End If
     Next i
@@ -164,14 +160,9 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
                   "Faktura is stornirana (cancelled) and cannot be sent to SEF: " & fakturaID
     End If
 
-    ' AUD-031: an orphaned faktura (its invoiced prijemnica was storno-ed, so
-    ' some/all lines carry OsirocenoOd) is arithmetically inconsistent and must
-    ' not go to the tax authority. Block here so the operator gets a clear
-    ' message instead of a downstream total-mismatch during UBL build.
-    If Len(osirocenoRaw) > 0 Then
-        Err.Raise ERR_SEF_STATE, SRC, _
-                  "Faktura has orphaned (osiroceno) items and cannot be sent to SEF: " & fakturaID
-    End If
+    ' AUD-031 (osirocena faktura) vise nema proveru: OsirocenoOd je obrisan iz
+    ' kanona u S7 rezu 2 (FAK-ODL-03). Stanje je nemoguce po konstrukciji, jer se
+    ' fakturisana prijemnica ne stornira (S6 korak 4, FakturisanaPrijemnicaRazlog).
 
     If Len(kupacID) = 0 Then
         Err.Raise ERR_SEF_VALIDATION, SRC, _
@@ -614,6 +605,39 @@ Public Function CanStornoSEFStatus(ByVal sefStatus As String) As Boolean
         Case Else
             CanStornoSEFStatus = False
     End Select
+End Function
+
+' FAK-ODL-02 (S7 rez 1): faktura "zivi na SEF-u" dok lokalni workflow kaze da je
+' dokument predat ili da ishod nije poznat. SEF_TECH_FAILED je tu namerno: 409
+' CONFLICT zavrsava kao tehnicki neuspeh, a dokument mozda postoji (AUD-030).
+' Izuzetak je spoljni status otkazan/obrisan/storniran: otkaz na SEF-u ostavlja
+' workflow u SEF_SENT (lokalnog CANCELLED nema), pa bi bez izuzetka takva faktura
+' ostala zauvek nestornirljiva. Prazno, LOCAL_*, SEF_READY, SEF_REJECTED i
+' SEF_STORNO ne zive. JEDAN predikat za jezgro storna (modStorno.StornoFaktura) i
+' za F8 (modStornoDok.StornoRazlog).
+Public Function FakturaZiviNaSEF(ByVal workflowState As String, _
+                                 ByVal sefStatus As String) As Boolean
+    Select Case UCase$(Trim$(workflowState))
+        Case WF_SEF_SENDING, WF_SEF_SENT, WF_SEF_ACCEPTED, _
+             WF_SEF_SYNC_ERROR, WF_SEF_UNKNOWN, _
+             WF_SEF_TECH_FAILED
+            Select Case ClassifySEFExternalStatus(sefStatus)
+                Case SEF_CLS_STORNO, SEF_CLS_TERMINAL
+                    FakturaZiviNaSEF = False
+                Case Else
+                    FakturaZiviNaSEF = True
+            End Select
+        Case Else
+            FakturaZiviNaSEF = False
+    End Select
+End Function
+
+' Isti predikat po FakturaID-u. Citaoci dizu gresku kad kolone nema (fail-closed);
+' kolone su u kanonu seme, pa ih EnsureSchema uvek napravi.
+Public Function FakturaZiviNaSEFPoID(ByVal fakturaID As String) As Boolean
+    Const SRC As String = "modSEFValidator.FakturaZiviNaSEFPoID"
+    FakturaZiviNaSEFPoID = FakturaZiviNaSEF(GetFakturaSEFWorkflowState(fakturaID), _
+                                            GetFakturaSEFStatusText(fakturaID, SRC))
 End Function
 
 Public Sub ValidateFakturaCanBeCancelledOnSEF(ByVal fakturaID As String)

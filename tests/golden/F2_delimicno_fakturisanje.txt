@@ -29,7 +29,5 @@ NOVAC
   nealocirano      0.00
 FAKTURA
   iznos           55000.00
-  osirocena       NE
-  osirocenih stavki 0
 PRIJEM
   fakturisano     I=DA  II=NE

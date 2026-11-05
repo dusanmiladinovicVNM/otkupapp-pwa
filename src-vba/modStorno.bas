@@ -114,8 +114,12 @@ End Function
 ' tx je OBAVEZAN, ne opcion: storno knjige je kontra-stav koji mora da legne u
 ' ISTU transakciju (AMB-INV-08). Opcion tx bio bi fail-open seam -- pozivalac
 ' koji ga zaboravi tiho preskoci kontra-stavove, a zastavica bi ostavila zeleno.
+'
+' odloziObavezu: SAMO ispravka otkupa (modAmbalaza.StornirajAmbalazuDokumenta) --
+' AMB-INV-09 tada meri pozivalac, posle zamene.
 Public Function StornoOtkup(ByVal otkupID As String, _
-                            ByVal tx As clsTransaction) As Boolean
+                            ByVal tx As clsTransaction, _
+                            Optional ByVal odloziObavezu As Boolean = False) As Boolean
     Const SRC As String = "StornoOtkup"
     Dim owns As Boolean
 
@@ -164,7 +168,7 @@ Public Function StornoOtkup(ByVal otkupID As String, _
     ' nepromenljiva, a citalac vidi red po Od_*/Na_*/VrstaKretanja/StornoOd.
     ' Zastavica Stornirano na redu knjige je bila mehanizam STAROG modela i
     ' obrisana je u 10e-2 -- nov citalac je nikad nije gledao.
-    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_OTKUP, otkupID
+    modAmbalaza.StornirajAmbalazuDokumenta tx, DOK_TIP_OTKUP, otkupID, odloziObavezu
     ResetNovacOtkupLink otkupID
 
     EndStornoOp owns
@@ -623,12 +627,19 @@ Public Function StornoFaktura(ByVal fakturaID As String) As Boolean
     RequireColumnIndex TBL_FAKTURE, COL_FAK_STATUS, SRC
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC
-    RequireColumnIndex TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC
+
+    ' FAK-ODL-02: dok faktura zivi na SEF-u, lokalni storno bi ostavio dokument
+    ' koji kupac i poreska uprava i dalje vide kao vazeci. Kapija je u jezgru, pre
+    ' prve mutacije; F8 (modStornoDok.StornoRazlog) pita isti predikat.
+    If modSEFValidator.FakturaZiviNaSEFPoID(fakturaID) Then
+        Err.Raise ERR_STORNO_BASE + 76, SRC, _
+                  "Faktura je na SEF-u (FAK-ODL-02) -- lokalni storno nije dozvoljen. FakturaID=" & fakturaID
+    End If
 
     MarkRowStornirano TBL_FAKTURE, rowFak, SRC
     RequireUpdateCell TBL_FAKTURE, rowFak, COL_FAK_STATUS, STATUS_STORNIRANO, SRC
 
-    StornoFakturaStavke fakturaID
+    OslobodiUtovareFakture fakturaID
     ' R3 rollback dokaz: tacka je POSLE oslobadjanja prijemnica/prerada
     ' a PRE kraja -- pukne li ovde, TX mora da vrati i tblPrerada.
     If mTestFailPosleRelease Then
@@ -1355,6 +1366,14 @@ Public Function StornoPaleta(ByVal palID As String) As Boolean
                   "Paleta je preradjena - prvo stornirajte preradu."
     End If
 
+    ' N7 (PAL-ODL-06, S8 rez 1c): paleta koja nosi robu AKTIVNE prijemnice se ne
+    ' stornira -- storno bi skinuo robu dokumenta koji vazi, i su-stanara. Sirocad
+    ' (roba stornirane prijemnice) i prazna paleta prolaze. Unutrasnji pozivalac
+    ' (SkiniPaletneStavke) zove ovo samo nad paletom bez aktivnih stavki.
+    Dim razlogRobe As String
+    razlogRobe = modPaletniList.PaletaAktivnaRobaRazlog(palID)
+    If Len(razlogRobe) > 0 Then Err.Raise ERR_STORNO_BASE + 43, SRC, razlogRobe
+
     MarkRowStornirano TBL_PALETA, rowPal, SRC
 
     ' storniraj stavke palete (prijemnice se time oslobadjaju)
@@ -1634,12 +1653,15 @@ End Function
 ' PRIVATE BUSINESS HELPERS
 ' ============================================================
 
-' Linije fakture se storniraju. Prijemnica se time OSLOBADJA SAMA -- njena
-' fakturisanost je izvedena iz aktivnih linija (S6 korak 5, FAK-LIN-03), pa se na
-' njoj nista ne pise. Do koraka 5 je ovde stajao ReleasePrijemnicaFromFaktura,
-' koji je brisao kes Fakturisano/FakturaID na zaglavlju.
-Private Sub StornoFakturaStavke(ByVal fakturaID As String)
-    Const SRC As String = "StornoFakturaStavke"
+' Storno fakture NE pise linije (FAK-ODL-03, S7 rez 2): linija je aktivna ako i
+' samo ako je aktivna njena faktura, pa je storno zaglavlja ujedno storno linija.
+' Do reza 2 je ovde stajao StornoFakturaStavke, koji je svakoj liniji pisao
+' Stornirano. Prijemnica se oslobadja SAMA -- njena fakturisanost je izvedena iz
+' aktivnih linija (S6 korak 5, FAK-LIN-03). Ostaje samo GP grana: utovar nosi svoj
+' marker (cinjenica utovara, ne izvedena), pa ga storno fakture oslobadja u istoj
+' transakciji (S7-REV-01).
+Private Sub OslobodiUtovareFakture(ByVal fakturaID As String)
+    Const SRC As String = "OslobodiUtovareFakture"
 
     Dim stavkeData As Variant
     stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
@@ -1667,8 +1689,6 @@ Private Sub StornoFakturaStavke(ByVal fakturaID As String)
 
     For i = 1 To UBound(stavkeData, 1)
         If Trim$(CStr(stavkeData(i, colFakID))) = Trim$(fakturaID) Then
-            MarkRowStornirano TBL_FAKTURA_STAVKE, i, SRC
-
             If colUtID > 0 Then
                 Dim utID As String
                 utID = Trim$(CStr(nz(stavkeData(i, colUtID))))

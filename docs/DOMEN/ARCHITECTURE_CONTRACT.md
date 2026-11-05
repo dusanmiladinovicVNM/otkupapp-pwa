@@ -36,6 +36,7 @@ generatora:
 | PRJ (eksterni kupac) | `KupacID` | kupčev broj | slobodan unos, nije naš niz. Jedinstven **po kupcu** među aktivnim prijemnicama, bez dana (kupčev broj ne nosi datum): dva kupca smeju isti broj, a storniran broj se ne broji, pa ispravka zadržava broj (odluka operatera 24.10.2026, S6 korak 6). Do tada je provera duplikata bila globalna. |
 | REV | `StanicaID` | `x/ddmmyy[-n]` | sekvenca se skenira nad `tblAmbalaza`. Dokument su dve noge (Kooperant + Stanica) istog broja i tipa; broj zauzima **noga Stanica**, jer samo ona nosi vlasnika niza. Četiri smera dele jedan niz. Niz je (stanica, dan) za **sva četiri** smera, sa storniranima — i za KOOP smerove: isti (broj, smer, dan) na drugoj stanici je legalan, i za istog kooperanta, jer noge jednog reversa povezuje `ReversID` (REV-IDENT-01, Faza 2b). |
 | NOV (F5 isplata / F6 uplata) | — | slobodan unos | broj **nije** jedinstven po konstrukciji: uvoz izvoda upisuje sve stavke pod istim brojem, a split avansa nasleđuje broj originalne stavke. **Nema provere duplikata** i ne deli prostor sa reversom (odluka 14.09.2026). Jedini jedinstven ključ je `NovacID`. |
+| FAK | firma | `n/gggg` | niz je **godišnji i jedan za celu firmu**, bez kupca i bez dana; stornirane fakture se broje, pa storno ne oslobađa broj (`modFaktura.GenerateBrojFakture`). Spolja (SEF `InvoiceNumber`, poziv na broj izvoda) broj se razrešava **jednom** u `FakturaID` (`FAK-IDENT-01`, `docs/DOMEN/FAKTURA.md`; izmereno 01.11.2026). |
 
 Operativni izvor istine za isto pravilo, po ekranima:
 `docs/UI_MIGRACIJA_KATALOG.md` § Z3a.
