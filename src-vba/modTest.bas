@@ -419,6 +419,12 @@ Public Sub RunAllTests()
     RunOne 312
     RunOne 313
     RunOne 314
+    ' 339 (broj specifikacije) ide PRVI u bloku doplate. Sabotaza
+    ' dop-spec-storno-oslobadja kvari pisca za ceo prolaz: prvi raniji test koji
+    ' stornira pa ponovo knjizi istog kooperanta napravi dupli broj, a od tada
+    ' citac (DOP_ERR_BASE + 57) obara svako knjizenje -- pa bi 339 pao pre svoje
+    ' tvrdnje. Redosled nije identitet testa (v. gore).
+    RunOne 339
     RunOne 315
     RunOne 316
     RunOne 317
@@ -443,7 +449,6 @@ Public Sub RunAllTests()
     RunOne 336
     RunOne 337
     RunOne 338
-    RunOne 339
     RunOne 340
     RunOne 13
     RunOne 14

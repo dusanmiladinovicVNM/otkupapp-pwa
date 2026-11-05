@@ -349,6 +349,11 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     dokumentima (DOP-ODL-25); storniran obračun nema specifikaciju. Lista
     Knjiženo nosi kolonu broja i radnju „Štampaj specifikaciju". Test 340;
     sabotaže `dop-spec-papir-*`.
+  - Excel (05.11.2026): RunAllTests 340/0; dokaz `dop-papir- dop-spec-` 8/9 —
+    `dop-spec-storno-oslobadja` je bila crvena, ali na tuđoj tvrdnji: sabotaža kvari
+    pisca za ceo prolaz, raniji test sa stornom i ponovnim knjiženjem napravi dupli
+    broj, a čitač (`+57`) obori svako sledeće knjiženje pre tvrdnje testa 339. Test
+    339 sada ide PRVI u bloku doplate (redosled nije identitet testa).
   - Uzgredni nalaz (van doplate, NIJE reprodukovan u Excelu): otkupni list upisuje
     tekući račun pod ključem `racun` (`modPrint.FillOtkupSablon`), a primerak ga
     čita pod `račun` (`WriteOtkupCopy`, zamena `{RAČUN}` u klauzuli) — po kodu
