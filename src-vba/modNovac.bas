@@ -1101,6 +1101,147 @@ Public Function IsplataBlokProblem(ByVal otkupID As String, _
     End If
 End Function
 
+'=====================================================================
+' PDV NADOKNADA SE NE ISPLACUJE GOTOVINOM (docs/DOMEN/ISPLATA_GOTOVINA.md,
+' ISP-ODL-01..03, odluke 05.11.2026)
+'
+' Gotovina je KesOtkupacKoop (ekran F5 "iz avansa otkupnog mesta"); banka
+' (virman) sme da plati sve. Zbir gotovine na jednom otkupnom bloku ili
+' dokumentu doplate ne sme preci OSNOVICU -- isti broj kao na papiru.
+'=====================================================================
+
+' Osnovica bez PDV nadoknade: zaokruzeno(bruto / (1 + stopa)), stopa iz
+' podesavanja PDV_NADOKNADA_STOPA (podrazumevano 8%). Jedno pravilo za papir
+' (otkupni list, papir doplate, specifikacija) i kapiju gotovine.
+Public Function OsnovicaBezNadoknade(ByVal bruto As Double) As Double
+    Dim v As Variant, stopa As Double
+    v = GetConfigValue(CFG_PDV_NADOKNADA_STOPA)
+    If IsNumeric(v) Then stopa = CDbl(v)
+    If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
+    OsnovicaBezNadoknade = ZaokruziNovac(bruto / (1 + stopa / 100))
+End Function
+
+' Zbir GOTOVINSKIH isplata (KesOtkupacKoop, nestornirane) na otkupnom bloku
+' (otkupID) ili dokumentu doplate (doplataID, kad otkupID prazan). Virman se
+' ne broji -- banka sme da plati i nadoknadu.
+Private Function GotovinaNaDokumentu(ByVal otkupID As String, ByVal doplataID As String) As Double
+    Const SRC As String = "modNovac.GotovinaNaDokumentu"
+    Dim d As Variant, i As Long, cTip As Long, cIs As Long, cOtk As Long, cDop As Long
+    Dim veza As String
+    otkupID = Trim$(otkupID)
+    doplataID = Trim$(doplataID)
+    d = GetTableData(TBL_NOVAC)
+    If IsEmpty(d) Then Exit Function
+    d = ExcludeStornirano(d, TBL_NOVAC)
+    If IsEmpty(d) Then Exit Function
+    cTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
+    cIs = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+    cOtk = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    cDop = GetColumnIndex(TBL_NOVAC, COL_NOV_DOPLATA_ID)
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(CStr(d(i, cTip))), NOV_KES_OTKUPAC_KOOP, vbTextCompare) = 0 And _
+           IsNumeric(d(i, cIs)) Then
+            If Len(otkupID) > 0 Then
+                veza = Trim$(NzToText(d(i, cOtk)))
+                If StrComp(veza, otkupID, vbTextCompare) = 0 Then _
+                    GotovinaNaDokumentu = GotovinaNaDokumentu + CDbl(d(i, cIs))
+            ElseIf Len(doplataID) > 0 Then
+                veza = NovacDoplataID(d, i, cDop)
+                If StrComp(veza, doplataID, vbTextCompare) = 0 Then _
+                    GotovinaNaDokumentu = GotovinaNaDokumentu + CDbl(d(i, cIs))
+            End If
+        End If
+    Next i
+    GotovinaNaDokumentu = ZaokruziNovac(GotovinaNaDokumentu)
+End Function
+
+' KAPIJA GOTOVINE: "" kad gotovinska isplata iznosa na blok (otkupID) ili
+' dokument doplate (doplataID) ne vodi zbir gotovine preko osnovice; inace
+' razlog sa iznosom koji jos sme gotovinom. Zovu je ekran F5
+' (modNovacUnos.IsplataValidiraj) i pisac (SaveOMUlaz_TX) SAMO za gotovinu --
+' jedno pravilo, dva pozivaoca (obrazac IsplataBlokProblem).
+Public Function GotovinaNadoknadaProblem(ByVal otkupID As String, _
+                                         ByVal doplataID As String, _
+                                         ByVal iznos As Double) As String
+    Dim bruto As Double, dozvoljeno As Double
+    otkupID = Trim$(otkupID)
+    doplataID = Trim$(doplataID)
+    If Len(doplataID) > 0 Then
+        bruto = modDoplata.IznosKO(doplataID)
+        dozvoljeno = OsnovicaBezNadoknade(bruto) - GotovinaNaDokumentu("", doplataID)
+    ElseIf Len(otkupID) > 0 Then
+        bruto = modOtkup.VrednostOtkupa(otkupID)
+        dozvoljeno = OsnovicaBezNadoknade(bruto) - GotovinaNaDokumentu(otkupID, "")
+    Else
+        Exit Function
+    End If
+    dozvoljeno = ZaokruziNovac(dozvoljeno)
+    If dozvoljeno < 0 Then dozvoljeno = 0
+    If ZaokruziNovac(iznos) > dozvoljeno Then
+        GotovinaNadoknadaProblem = Poruka("NOVAC_ERR_GOTOVINA_NADOKNADA") & " " & _
+                                   Format$(dozvoljeno, "#,##0.00")
+    End If
+End Function
+
+' ZATECENO STANJE (ISP-ODL-03): blokovi i dokumenti doplate na kojima je zbir
+' gotovine veci od osnovice. 2D (1..n, 1..5): Dokument ("Otkup"/"Doplata") |
+' Broj | KooperantID | Osnovica | Gotovina. Empty kad nalaza nema. Read-only.
+Public Function GotovinaPrekoOsnoviceRedovi() As Variant
+    Const SRC As String = "modNovac.GotovinaPrekoOsnoviceRedovi"
+    Dim d As Variant, i As Long, cTip As Long, cIs As Long, cOtk As Long, cDop As Long
+    Dim poOtk As Object, poDop As Object, k As Variant, osn As Double, out As Collection
+    GotovinaPrekoOsnoviceRedovi = Empty
+    d = GetTableData(TBL_NOVAC)
+    If IsEmpty(d) Then Exit Function
+    d = ExcludeStornirano(d, TBL_NOVAC)
+    If IsEmpty(d) Then Exit Function
+    cTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
+    cIs = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+    cOtk = RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC)
+    cDop = GetColumnIndex(TBL_NOVAC, COL_NOV_DOPLATA_ID)
+    Set poOtk = CreateObject("Scripting.Dictionary")
+    poOtk.CompareMode = vbTextCompare
+    Set poDop = CreateObject("Scripting.Dictionary")
+    poDop.CompareMode = vbTextCompare
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(CStr(d(i, cTip))), NOV_KES_OTKUPAC_KOOP, vbTextCompare) = 0 And IsNumeric(d(i, cIs)) Then
+            If Len(Trim$(NzToText(d(i, cOtk)))) > 0 Then
+                k = Trim$(NzToText(d(i, cOtk)))
+                poOtk(k) = CDbl(poOtk(k)) + CDbl(d(i, cIs))
+            ElseIf Len(NovacDoplataID(d, i, cDop)) > 0 Then
+                k = NovacDoplataID(d, i, cDop)
+                poDop(k) = CDbl(poDop(k)) + CDbl(d(i, cIs))
+            End If
+        End If
+    Next i
+    Set out = New Collection
+    For Each k In poOtk.keys
+        osn = OsnovicaBezNadoknade(modOtkup.VrednostOtkupa(CStr(k)))
+        If ZaokruziNovac(CDbl(poOtk(k))) > osn Then
+            out.Add Array("Otkup", NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, CStr(k), COL_OTK_BR_DOK)), _
+                          NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, CStr(k), COL_OTK_KOOPERANT)), _
+                          osn, ZaokruziNovac(CDbl(poOtk(k))))
+        End If
+    Next k
+    For Each k In poDop.keys
+        osn = OsnovicaBezNadoknade(modDoplata.IznosKO(CStr(k)))
+        If ZaokruziNovac(CDbl(poDop(k))) > osn Then
+            out.Add Array("Doplata", NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, CStr(k), COL_DOP_BROJ)), _
+                          NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, CStr(k), COL_DOP_KOOPERANT)), _
+                          osn, ZaokruziNovac(CDbl(poDop(k))))
+        End If
+    Next k
+    If out.count = 0 Then Exit Function
+    Dim res() As Variant, j As Long
+    ReDim res(1 To out.count, 1 To 5)
+    For i = 1 To out.count
+        For j = 1 To 5
+            res(i, j) = out(i)(j - 1)
+        Next j
+    Next i
+    GotovinaPrekoOsnoviceRedovi = res
+End Function
+
 ' Blizanac IsplataBlokProblem za KNJIZNO ODOBRENJE (F4b doplate): ista kapija
 ' za ekran (poruka uz polje) i za pisca (SaveOMUlaz_TX, greska). KO postoji tacno
 ' jednom, nije storniran i pripada kooperantu (modDoplata.KOKapija -- jedno

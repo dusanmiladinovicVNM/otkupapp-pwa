@@ -3995,7 +3995,7 @@ Public Function FillKOSablon(ByVal doplataID As String) As Worksheet
     h("period") = Format$(CDate(r(prvi, 14)), "dd.mm.yyyy hh:nn") & " - " & _
                   Format$(CDate(r(prvi, 15)), "dd.mm.yyyy hh:nn")
     h("stopa") = stopa
-    h("osnovica") = modNovac.ZaokruziNovac(ukupno / (1 + stopa / 100))
+    h("osnovica") = modNovac.OsnovicaBezNadoknade(ukupno)
     h("nadoknada") = modNovac.ZaokruziNovac(ukupno - CDbl(h("osnovica")))
     h("ukupno") = ukupno
     ' Klauzula: ista kao na otkupnom listu, sa istim tokenima.
@@ -4269,7 +4269,7 @@ Public Function FillSpecDoplateSablon(ByVal obracunID As String, _
     Dim stopa As Double, osnovica As Double
     stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
     If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
-    osnovica = modNovac.ZaokruziNovac(sumIzn / (1 + stopa / 100))
+    osnovica = modNovac.OsnovicaBezNadoknade(sumIzn)
     DocLabelVal ws, rr, 6, "Osnovica (bez PDV):", ""
     ws.cells(rr, 10).value = osnovica
     DocLabelVal ws, rr + 1, 6, "PDV nadoknada (" & StopaTekst(stopa) & "%):", ""

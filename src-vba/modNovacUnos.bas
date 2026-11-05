@@ -316,6 +316,12 @@ Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As St
                     Exit Function
                 End If
                 p("tipNovca") = NOV_KES_OTKUPAC_KOOP
+                ' PDV nadoknada se ne isplacuje gotovinom (ISP-ODL-01): ista
+                ' kapija kao u piscu (SaveOMUlaz_TX), nad stanjem SADA.
+                blokErr = modNovac.GotovinaNadoknadaProblem(S(p, "otkupID"), S(p, "doplataID"), novac)
+                If Len(blokErr) > 0 Then
+                    fokus = "novac": IsplataValidiraj = blokErr: Exit Function
+                End If
             Else
                 p("tipNovca") = NOV_VIRMAN_FIRMA_KOOP
             End If

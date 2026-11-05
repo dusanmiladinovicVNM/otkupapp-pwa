@@ -8999,6 +8999,13 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
                           Poruka("NOVAC_ERR_AVANS_PREKO") & " " & _
                           Format$(avansSaldo, "#,##0.00")
             End If
+            ' PDV NADOKNADA SE NE ISPLACUJE GOTOVINOM (ISP-ODL-01..02): zbir
+            ' gotovine na bloku / dokumentu doplate ne sme preci osnovicu. Ista
+            ' kapija kao ekran F5 (modNovac.GotovinaNadoknadaProblem).
+            blokErr = modNovac.GotovinaNadoknadaProblem(otkupID, doplataID, novac)
+            If Len(blokErr) > 0 Then
+                Err.Raise vbObjectError + 1515, "SaveOMUlaz_TX", blokErr
+            End If
         End If
 
         novacID = SaveNovac( _

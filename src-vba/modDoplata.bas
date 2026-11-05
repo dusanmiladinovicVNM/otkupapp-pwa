@@ -1055,6 +1055,15 @@ End Function
 ' Otvoreno na JEDNOM KO, u cent-domenu: iznos minus isplaceno. 0 za storniran ili
 ' nepostojeci KO -- kapiju vlasnistva i zivota drzi pisac pre ovoga
 ' (modBankaMapiranje.PotvrdiKOZaKooperanta).
+' Bruto iznos AKTIVNOG dokumenta doplate (zbir stavki); 0 kad nije aktivan.
+Public Function IznosKO(ByVal doplataID As String) As Double
+    Dim glava As Object, iznosi As Object, id As String
+    id = Trim$(doplataID)
+    If Len(id) = 0 Then Exit Function
+    Set iznosi = IznosPoKO(glava)
+    If iznosi.Exists(id) Then IznosKO = modNovac.ZaokruziNovac(CDbl(iznosi(id)))
+End Function
+
 Public Function OtvorenoNaKO(ByVal doplataID As String) As Double
     Dim glava As Object, iznosi As Object, isplate As Object, id As String
     id = Trim$(doplataID)

@@ -11632,7 +11632,7 @@ SABOTAZE = {
     # P3: osnovica papira je bruto iznos -- nadoknada ispada nula.
     "dop-papir-nadoknada-od-bruto": (
         "modPrint.bas",
-        "    h(\"osnovica\") = modNovac.ZaokruziNovac(ukupno / (1 + stopa / 100))\n",
+        "    h(\"osnovica\") = modNovac.OsnovicaBezNadoknade(ukupno)\n",
         "    h(\"osnovica\") = ukupno   ' SABOTAZA: osnovica je bruto\n",
         "T_Doplata_StampaKO",
         "papir doplate: osnovica = UKUPNO / (1 + stopa), osnovica + PDV nadoknada = UKUPNO",
@@ -11926,6 +11926,38 @@ SABOTAZE = {
         "    storno = \"\"   ' SABOTAZA: stornirani se ne navode\n",
         "T_Doplata_SpecifikacijaPapir",
         "specifikacija: storniran dokument je naveden, a ne ulazi u iznos",
+    ),
+    # ISP-ODL-01: pisac gotovine ne proverava osnovicu.
+    "isp-gotovina-bez-kapije-pisca": (
+        "modDokumenta.bas",
+        "            blokErr = modNovac.GotovinaNadoknadaProblem(otkupID, doplataID, novac)\n",
+        "            blokErr = \"\"   ' SABOTAZA: pisac ne proverava gotovinu\n",
+        "T_Gotovina_NadoknadaNikadGotovinom",
+        "pisac odbija gotovinu preko osnovice, iako je bruto ostatak veci",
+    ),
+    # ISP-ODL-01: ekran F5 ne proverava osnovicu.
+    "isp-gotovina-bez-kapije-ekrana": (
+        "modNovacUnos.bas",
+        "                blokErr = modNovac.GotovinaNadoknadaProblem(S(p, \"otkupID\"), S(p, \"doplataID\"), novac)\n",
+        "                blokErr = \"\"   ' SABOTAZA: ekran ne proverava gotovinu\n",
+        "T_Gotovina_NadoknadaNikadGotovinom",
+        "ekran F5: ista kapija gotovine, poruka uz polje iznosa",
+    ),
+    # ISP-ODL-02: kapija broji i virman kao gotovinu.
+    "isp-gotovina-broji-virman": (
+        "modNovac.bas",
+        "        If StrComp(Trim$(CStr(d(i, cTip))), NOV_KES_OTKUPAC_KOOP, vbTextCompare) = 0 And _\n           IsNumeric(d(i, cIs)) Then\n",
+        "        If IsNumeric(d(i, cIs)) Then   ' SABOTAZA: i virman se broji u gotovinu\n",
+        "T_Gotovina_NadoknadaNikadGotovinom",
+        "kapija: virman se ne broji u gotovinu",
+    ),
+    # ISP-ODL-03: zatecena gotovina preko osnovice nije nalaz.
+    "isp-got1-nema": (
+        "modNovac.bas",
+        "        If ZaokruziNovac(CDbl(poOtk(k))) > osn Then\n",
+        "        If False Then   ' SABOTAZA: GOT1 ne vidi blok\n",
+        "T_Gotovina_NadoknadaNikadGotovinom",
+        "zatecena gotovina preko osnovice je nalaz GOT1",
     ),
     # Retro blok placen drugim obracunom i dalje nalaz starijeg (review P1,
     # DOP-P1-REV-04; odluka: placen blok nije nalaz).

@@ -84,6 +84,9 @@ produkciji (PR #460, draft), pa se kanon šeme sme menjati.
 | **DOP-ODL-24** *(05.11.2026)* | **Sezona** za redni broj specifikacije je **kalendarska godina datuma knjiženja** obračuna. Storno ne oslobađa broj (kao `…D2`). |
 | **DOP-ODL-25** *(05.11.2026)* | **Storno jednog dokumenta posle štampe specifikacije je dozvoljen** (kao u P2): specifikacija zadržava broj, ponovna štampa pokazuje samo aktivne dokumente i napomenu koji su stornirani; plaćen pa storniran dokument odvezuje novac u avans (DOP-05). |
 | **DOP-ODL-26** *(05.11.2026)* | **Papir bloka** ima raspored otkupnog lista: **dva primerka** (kooperant i firma) jedan ispod drugog, neto po klasi, osnovica, PDV nadoknada, UKUPNO = iznos dokumenta, klauzula iz istog podešavanja kao otkupni list, potpisi. Stopa nadoknade se čita iz podešavanja u trenutku štampe, kao na otkupnom listu. |
+| **DOP-ODL-27** *(05.11.2026)* | **Nalozi za banku: specifikacija UMESTO njenih dokumenata** — jedan red i jedan nalog po specifikaciji (poziv = broj specifikacije, iznos = otvoreni ostatak specifikacije); dokumenti iste specifikacije se ne nude posebno, pa isti dug ne može da se plati dvaput. Dokument bez broja (knjižen pre P3) ostaje po dokumentu. |
+| **DOP-ODL-28** *(05.11.2026)* | **Raspodela po specifikaciji**: iznos ide na otvorene dokumente specifikacije **od najstarijeg bloka** (datum bloka, pa broj bloka); svaki red novca je vezan za svoj dokument i nosi **stanicu bloka**; višak je avans na matičnoj stanici. **Gotovina** po specifikaciji raspoređuje **samo na dokumente čiji je blok na stanici isplate**; ostali ostaju otvoreni. |
+| **DOP-ODL-29** *(05.11.2026)* | Specifikacija je cilj plaćanja i u **ručnom mapiranju izvoda** (lista ciljeva kooperanta) i u **primeni avansa** (nalozi) — ista raspodela kao DOP-ODL-28. Redosled rada: rez A = automatski izvod + nalozi; rez B = ručno mapiranje, gotovina, avans. |
 
 ## 3) Struktura dokumenta (potvrđena 03.11.2026; **revidirana u §2a**)
 

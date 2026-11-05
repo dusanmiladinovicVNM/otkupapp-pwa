@@ -450,6 +450,7 @@ Public Sub RunAllTests()
     RunOne 337
     RunOne 338
     RunOne 340
+    RunOne 341
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1098,6 +1099,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 338: TestName = "T_Doplata_EkranNacinIBlokovi"
         Case 339: TestName = "T_Doplata_BrojSpecifikacije"
         Case 340: TestName = "T_Doplata_SpecifikacijaPapir"
+        Case 341: TestName = "T_Gotovina_NadoknadaNikadGotovinom"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1446,6 +1448,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 338: T_Doplata_EkranNacinIBlokovi
         Case 339: T_Doplata_BrojSpecifikacije
         Case 340: T_Doplata_SpecifikacijaPapir
+        Case 341: T_Gotovina_NadoknadaNikadGotovinom
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -29927,6 +29930,114 @@ Private Sub T_Doplata_SpecifikacijaPapir()
     AssertEq (modPrint.FillSpecDoplateSablon(obr, kA) Is Nothing And Len(greska) > 0 And _
               modDocStyle.DocPdfTest() = ""), True, _
              "specifikacija storniranog obracuna se ne stampa: razlog operateru, bez izvoza"
+End Sub
+
+' ============================================================
+' 341. ISP-ODL-01..03: PDV NADOKNADA SE NE ISPLACUJE GOTOVINOM.
+' ============================================================
+' Zbir gotovine (KesOtkupacKoop) na otkupnom bloku i na dokumentu doplate ne
+' sme preci osnovicu = zaokruzeno(bruto / (1 + stopa)); virman se ne broji.
+' Ista kapija je u piscu (SaveOMUlaz_TX) i na ekranu F5; zatecena gotovina
+' preko osnovice je nalaz GOT1. Pisac i ekran se mere nad SNIMKOM novca: kasa
+' otkupnog mesta se puni samo za test i vraca (test 17 trazi praznu kasu).
+' Tok (kooperant A, juce, FX_STANICA): blok I 10 kg po 54 (540, osnovica 500 pri
+'   8%); doplata 10,80/kg na njega (108). U snimku: kasa 10000, gotovina 400,
+'   virman 30, pa gotovina do osnovice; gotovina preko osnovice mimo kapije.
+' SABOTAZE: isp-gotovina-bez-kapije-pisca, isp-gotovina-bez-kapije-ekrana,
+'   isp-gotovina-broji-virman, isp-got1-nema.
+Private Sub T_Gotovina_NadoknadaNikadGotovinom()
+    Dim b As String, vr As String, kA As String, kul As String, oid As String, brB As String
+    Dim obr As String, g As String, en As Long, idD As String, osnB As Double, osnD As Double
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, ok As Boolean, pre As Long
+    Dim p As Object, fokus As String, res As String, dozv As Double
+
+    On Error GoTo EH
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    oid = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0, , 54)
+    brB = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_BR_DOK))
+    osnB = modNovac.OsnovicaBezNadoknade(540)
+    AssertEq modNovac.GotovinaNadoknadaProblem(oid, "", osnB) & "|" & _
+             CStr(Len(modNovac.GotovinaNadoknadaProblem(oid, "", osnB + 0.01)) > 0), "|True", _
+             "kapija: gotovinom na blok najvise osnovica, ne i PDV nadoknada"
+
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), _
+              DopStope(DopStopa(vr, "S1", KLASA_I, 10.8)), "test 341", False, g, en)
+    AssertEq g, "", "preduslov: doplata se knjizi"
+    idD = DopIdBloka(obr, oid)
+    osnD = modNovac.OsnovicaBezNadoknade(108)
+    AssertEq modNovac.GotovinaNadoknadaProblem("", idD, osnD) & "|" & _
+             CStr(Len(modNovac.GotovinaNadoknadaProblem("", idD, osnD + 0.01)) > 0), "|True", _
+             "kapija: gotovinom na dokument doplate najvise osnovica"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_FAKTURE
+    If Len(modNovac.SaveNovac_TX("T341K-" & b, Date, "OM", FX_STANICA, "OM", FX_STANICA, "", "", "", _
+                                 NOV_KES_FIRMA_OTKUPAC, 0, 10000, "test 341 kasa")) = 0 Then
+        Err.Raise vbObjectError + 9408, "modTest.T341", "Kasa otkupnog mesta nije upisana."
+    End If
+    ok = SaveOMUlaz_TX(datum:=Date, brojDok:="T341G1-" & b, stanicaNaziv:=FX_STANICA, _
+                       stanicaID:=FX_STANICA, vrstaVoca:=vr, novac:=400, kooperantID:=kA, _
+                       primalacDisplay:=kA, otkupID:=oid, tipNovca:=NOV_KES_OTKUPAC_KOOP)
+    AssertEq ok, True, "preduslov: gotovina ispod osnovice prolazi kroz pisca"
+    If Len(modNovac.SaveNovac_TX("T341V-" & b, Date, "OM", FX_STANICA, "OM", FX_STANICA, kA, "", vr, _
+                                 NOV_VIRMAN_FIRMA_KOOP, 0, 30, "test 341 virman", oid)) = 0 Then
+        Err.Raise vbObjectError + 9408, "modTest.T341", "Virman nije upisan."
+    End If
+    dozv = modNovac.ZaokruziNovac(osnB - 400)
+    AssertEq modNovac.GotovinaNadoknadaProblem(oid, "", dozv), "", _
+             "kapija: virman se ne broji u gotovinu"
+
+    pre = DopBrojRedova(TBL_NOVAC)
+    ok = SaveOMUlaz_TX(datum:=Date, brojDok:="T341G2-" & b, stanicaNaziv:=FX_STANICA, _
+                       stanicaID:=FX_STANICA, vrstaVoca:=vr, novac:=dozv + 0.01, kooperantID:=kA, _
+                       primalacDisplay:=kA, otkupID:=oid, tipNovca:=NOV_KES_OTKUPAC_KOOP)
+    AssertEq CStr(ok) & "|" & CStr(DopBrojRedova(TBL_NOVAC) - pre), CStr(False) & "|0", _
+             "pisac odbija gotovinu preko osnovice, iako je bruto ostatak veci"
+
+    Set p = modNovacUnos.NoviIsplataUnos()
+    p("stanicaID") = FX_STANICA
+    p("stanicaTekst") = FX_STANICA
+    p("partnerID") = kA
+    p("partnerTip") = "KOOP"
+    p("partnerTekst") = kA
+    p("vrsta") = vr
+    p("brDok") = "T341U-" & b
+    p("otkupID") = oid
+    p("blokTekst") = brB
+    p("izAvansa") = True
+    p("novac") = dozv + 0.01
+    res = modNovacUnos.IsplataValidiraj(p, fokus)
+    AssertEq res & "|" & fokus, Poruka("NOVAC_ERR_GOTOVINA_NADOKNADA") & " " & _
+             Format$(dozv, "#,##0.00") & "|novac", _
+             "ekran F5: ista kapija gotovine, poruka uz polje iznosa"
+
+    ok = SaveOMUlaz_TX(datum:=Date, brojDok:="T341G3-" & b, stanicaNaziv:=FX_STANICA, _
+                       stanicaID:=FX_STANICA, vrstaVoca:=vr, novac:=dozv, kooperantID:=kA, _
+                       primalacDisplay:=kA, otkupID:=oid, tipNovca:=NOV_KES_OTKUPAC_KOOP)
+    AssertEq CStr(ok) & "|" & CStr(NalazSadrzi(modIntegritet.GetIntegritetRows(), "GOT1", brB)), _
+             CStr(True) & "|" & CStr(False), "preduslov: gotovina tacno do osnovice prolazi, bez nalaza"
+    If Len(modNovac.SaveNovac_TX("T341X-" & b, Date, "OM", FX_STANICA, "OM", FX_STANICA, kA, "", vr, _
+                                 NOV_KES_OTKUPAC_KOOP, 0, 5, "test 341 zateceno", oid)) = 0 Then
+        Err.Raise vbObjectError + 9408, "modTest.T341", "Zatecena gotovina nije upisana."
+    End If
+    AssertEq NalazSadrzi(modIntegritet.GetIntegritetRows(), "GOT1", brB), True, _
+             "zatecena gotovina preko osnovice je nalaz GOT1"
+
+    tx.RollbackTx
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "T_Gotovina_NadoknadaNikadGotovinom", errDesc
 End Sub
 
 ' Redovi specifikacije po natpisu: UKUPNO ZA ISPLATU (vrednost u koloni 10) i
