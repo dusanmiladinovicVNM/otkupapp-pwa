@@ -34,5 +34,7 @@
   `isp-gotovina-bez-kapije-ekrana`, `isp-gotovina-broji-virman`, `isp-got1-nema`.
   Uz njih je re-sidrena `dop-papir-nadoknada-od-bruto` (papir sada računa osnovicu
   kroz `OsnovicaBezNadoknade`).
-- Status: kod i statičke kapije zeleni; **Excel prolaz neverifikovan** dok ga
-  operater ne pusti.
+- Excel (05.11.2026): pun prolaz 12 suita ZELENO (RunAllTests 341/0, BFP
+  3014/0); dokaz `isp-` + `dop-papir-nadoknada-od-bruto` **5/5 DOKAZANO**, izvor
+  pre/posle identičan. Ručni Compile i provera F5 nad pravim podacima nisu
+  javljeni.
