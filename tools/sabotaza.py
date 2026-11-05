@@ -11519,10 +11519,10 @@ SABOTAZE = {
     # broj "...D" -- pisac je odbija kao zauzet broj, pa ponavljanje ne moze.
     "dop-broj-bez-rednog": (
         "modDoplata.bas",
-        "    If redni > 1 Then BrojDoplate = BrojDoplate & CStr(redni)\n",
-        "    ' SABOTAZA: redni broj doplate na bloku se gubi\n",
+        "    BrojDoplate = Trim$(brojBloka) & DOP_BROJ_ODVAJAC & CStr(redni)\n",
+        "    BrojDoplate = Trim$(brojBloka) & DOP_BROJ_ODVAJAC & \"1\"   ' SABOTAZA: redni broj doplate na bloku se gubi\n",
         "T_Doplata_JedanDokumentPoBloku",
-        "ponovljena doplata na istom bloku nosi D2, prvi broj ostaje zauzet",
+        "ponovljena doplata na istom bloku nosi -02, prvi broj ostaje zauzet",
     ),
     # Sat se ne gleda: granicni dan ulazi ceo, bez obzira na vreme otkupa.
     "dop-period-bez-sata": (
@@ -11590,6 +11590,50 @@ SABOTAZE = {
         "                        \". Nova doplata se placa NA TO. Potvrdi ponavljanje.\"   ' SABOTAZA\n",
         "T_Doplata_PonavljanjeTraziPotvrdu",
         "pitanje o ponavljanju je iz kataloga poruka",
+    ),
+    # DOP-ODL-30: broj specifikacije opet nosi slovo.
+    "dop-spec-oblik-sa-slovom": (
+        "modDoplata.bas",
+        "    BrojSpecifikacije = CStr(modBrojevi.ExtractNumericFromEntityID(stanicaID)) & \"/\" & _\n"
+        "                        Format$(datum, \"ddmmyy\") & DOP_SPEC_ODVAJAC & CStr(redni)\n",
+        "    BrojSpecifikacije = \"S\" & CStr(modBrojevi.ExtractNumericFromEntityID(stanicaID)) & \"/\" & _\n"
+        "                        Format$(datum, \"ddmmyy\") & DOP_SPEC_ODVAJAC & CStr(redni)   ' SABOTAZA: slovo u broju specifikacije\n",
+        "T_Doplata_BrojSpecifikacije",
+        "specifikacija: oblik x/ddmmyy-00y, bez slova",
+    ),
+    # DOP-ODL-30: niz stanice se ne pomera u obracunu -- dva kooperanta isti broj.
+    "dop-spec-isti-broj-u-obracunu": (
+        "modDoplata.bas",
+        "                specMax(kljucSpec) = rSpec\n",
+        "                ' SABOTAZA: niz stanice se ne pomera u obracunu\n",
+        "T_Doplata_BrojSpecifikacije",
+        "specifikacija: svaki kooperant svoj broj, dokumenti kooperanta isti broj, niz stanice tog dana",
+    ),
+    # DOP-ODL-30: broj doplate opet nosi slovo.
+    "dop-broj-sa-slovom": (
+        "modDoplata.bas",
+        "    BrojDoplate = Trim$(brojBloka) & DOP_BROJ_ODVAJAC & CStr(redni)\n",
+        "    BrojDoplate = Trim$(brojBloka) & \"D\" & CStr(redni)   ' SABOTAZA: slovo u broju doplate\n",
+        "T_Doplata_BrojeviBezSlova",
+        "broj doplate: broj bloka i -0z, bez slova",
+    ),
+    # DOP-ODL-30: prvi pogodak pobedjuje -- poziv dve vrste dokumenata bira jednu.
+    "dop-poziv-prvi-pobedjuje": (
+        "modBankaMapiranje.bas",
+        "    If nVrsta = 1 Then\n",
+        "    If nVrsta >= 1 Then   ' SABOTAZA: prvi pogodak pobedjuje\n",
+        "T_Doplata_BrojeviBezSlova",
+        "poziv koji pogadja dve vrste dokumenata ne bira nijednu (rucno)",
+    ),
+    # DOP-ODL-30: blok iz poziva ne proverava druge vrste dokumenata.
+    "dop-poziv-blok-bez-provere": (
+        "modBankaMapiranje.bas",
+        "    If PozivViseVrsta(poziv) Then\n"
+        "        Err.Raise ERR_BMAP_MANUAL_REQUIRED, \"BimOtkupIzPozivaNaBroj\", _\n",
+        "    If False Then   ' SABOTAZA: blok iz poziva ne gleda druge vrste\n"
+        "        Err.Raise ERR_BMAP_MANUAL_REQUIRED, \"BimOtkupIzPozivaNaBroj\", _\n",
+        "T_Doplata_BrojeviBezSlova",
+        "blok iz poziva: dve vrste dokumenata traze rucno mapiranje",
     ),
     # P4: kartica grupise po dokumentu umesto po obracunu.
     "dop-kartica-po-dokumentu": (
@@ -11908,14 +11952,6 @@ SABOTAZE = {
         "                                      Nothing)   ' SABOTAZA: ekran ne salje izbor piscu\n",
         "T_Doplata_EkranNacinIBlokovi",
         "ekran: knjizi se tacno ukljuceni blokovi, Knjizeno je zbirno po kooperantu",
-    ),
-    # P3b: redni broj specifikacije je zajednicki za sve kooperante.
-    "dop-spec-niz-nije-po-kooperantu": (
-        "modDoplata.bas",
-        "                spec = BrojSpecifikacije(CLng(specMax(koop)) + 1, Year(datum), koop)\n",
-        "                spec = BrojSpecifikacije(specMax.count + 1, Year(datum), koop)   ' SABOTAZA: zajednicki niz\n",
-        "T_Doplata_BrojSpecifikacije",
-        "specifikacija: dokumenti kooperanta u obracunu nose isti broj, niz pocinje od 1 u godini",
     ),
     # P3b: pisac ne broji stornirane specifikacije -- storno oslobadja broj.
     "dop-spec-storno-oslobadja": (

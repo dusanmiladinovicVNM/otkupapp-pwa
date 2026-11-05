@@ -1830,10 +1830,16 @@ End Function
 
 ' Vidi ResolveStrongKupacByKeys -- ista optimizacija za isplatnu granu.
 '
-' doplataID je izlaz, blizanac fakturaID-a na uplatnoj grani: popunjen samo kad
-' poziv na broj jednoznacno pogodi AKTIVAN KO (modDoplata.KOPoPozivu). Broj
-' otkupa i broj KO se ne mogu sudariti (cifre vs. slovni prefiks), pa redosled
-' citanja ne menja ishod; otkup ide prvi jer je cest, a KO redak.
+' doplataID / specBroj su izlaz, blizanci fakturaID-a na uplatnoj grani:
+' popunjeni samo kad poziv na broj jednoznacno pogodi AKTIVAN dokument doplate
+' (modDoplata.KOPoPozivu) ili specifikaciju (SpecPoPozivu).
+'
+' JEDAN POGODAK PREKO SVIH VRSTA (DOP-ODL-30). Brojevi bloka, doplate i
+' specifikacije su od cifara, pa poziv sam ne kaze vrstu -- odlucuje pogodak. Po
+' konstrukciji se ne sudaraju (posle datuma blok nema nulu, doplata ima "-0",
+' specifikacija "-00"), ali kapija to ne pretpostavlja: dva pogotka ne biraju,
+' poziv tada nije jak kljuc, a put bloka iz poziva trazi rucno
+' (BimOtkupIzPozivaNaBroj).
 Private Function ResolveStrongKooperantByKeys(ByVal konto As String, _
                                               ByVal poziv As String, _
                                               ByRef doplataID As String, _
@@ -1842,24 +1848,25 @@ Private Function ResolveStrongKooperantByKeys(ByVal konto As String, _
     Dim koByPoziv As Variant
     Dim spByPoziv As Variant
     Dim idDoc As String
+    Dim idOtk As String
     Dim idKonto As String
+    Dim nVrsta As Long
 
     doplataID = ""
     specBroj = ""
-    idDoc = TryResolveKooperantByOtkupPoziv(poziv)
-    If idDoc = "" Then
-        koByPoziv = modDoplata.KOPoPozivu(poziv)
-        If IsArray(koByPoziv) Then
+    idOtk = TryResolveKooperantByOtkupPoziv(poziv)
+    koByPoziv = modDoplata.KOPoPozivu(poziv)
+    spByPoziv = modDoplata.SpecPoPozivu(poziv)
+    If Len(idOtk) > 0 Then nVrsta = nVrsta + 1
+    If IsArray(koByPoziv) Then nVrsta = nVrsta + 1
+    If IsArray(spByPoziv) Then nVrsta = nVrsta + 1
+    If nVrsta = 1 Then
+        If Len(idOtk) > 0 Then
+            idDoc = idOtk
+        ElseIf IsArray(koByPoziv) Then
             doplataID = CStr(koByPoziv(0))
             idDoc = CStr(koByPoziv(1))
-        End If
-    End If
-    ' Specifikacija doplate (DOP-ODL-27): poziv pocinje slovom specifikacije, a
-    ' broj otkupa je od cifara i broj KO nosi slovo na kraju -- ni ovde redosled
-    ' ne menja ishod.
-    If idDoc = "" Then
-        spByPoziv = modDoplata.SpecPoPozivu(poziv)
-        If IsArray(spByPoziv) Then
+        Else
             specBroj = CStr(spByPoziv(0))
             idDoc = CStr(spByPoziv(1))
         End If
@@ -2539,12 +2546,19 @@ End Function
 Public Function BimEfektivnaSpec(ByVal bankaImportID As String, _
                                  ByVal kooperantID As String, _
                                  ByVal izabranID As String) As String
-    Dim sp As Variant
+    Dim sp As Variant, poziv As String
     If Len(Trim$(izabranID)) > 0 Then
         If modDoplata.JeSpecifikacija(izabranID) Then BimEfektivnaSpec = Trim$(izabranID)
         Exit Function
     End If
-    sp = modDoplata.SpecPoPozivu(AutoBlockNoForBim(bankaImportID))
+    ' Prazan izbor uzima poziv na broj -- samo kad pogadja JEDNU vrstu dokumenta
+    ' (DOP-ODL-30); inace operater bira dokument sam.
+    poziv = AutoBlockNoForBim(bankaImportID)
+    If PozivViseVrsta(poziv) Then
+        Err.Raise ERR_BMAP_MANUAL_REQUIRED, "BimEfektivnaSpec", _
+            "Poziv na broj " & poziv & " pogadja vise vrsta dokumenata -- izaberi dokument."
+    End If
+    sp = modDoplata.SpecPoPozivu(poziv)
     If Not IsArray(sp) Then Exit Function
     If StrComp(CStr(sp(1)), Trim$(kooperantID), vbTextCompare) = 0 Then BimEfektivnaSpec = CStr(sp(0))
 End Function
@@ -2728,9 +2742,29 @@ End Function
 
 ' Poziv na broj iz stavke izvoda -> OtkupID. Jedino mesto na automatskom putu
 ' gde broj postaje identitet.
+' Poziv koji pogadja vise vrsta dokumenata (DOP-ODL-30) ne bira blok: rucno.
 Public Function BimOtkupIzPozivaNaBroj(ByVal kooperantID As String, _
                                        ByVal bankaImportID As String) As String
-    BimOtkupIzPozivaNaBroj = BimOtkupIzBroja(kooperantID, AutoBlockNoForBim(bankaImportID))
+    Dim poziv As String
+    poziv = AutoBlockNoForBim(bankaImportID)
+    If PozivViseVrsta(poziv) Then
+        Err.Raise ERR_BMAP_MANUAL_REQUIRED, "BimOtkupIzPozivaNaBroj", _
+            "Poziv na broj " & poziv & " pogadja vise vrsta dokumenata (otkupni blok, " & _
+            "dokument doplate, specifikacija). Stavka izvoda se mapira RUCNO."
+    End If
+    BimOtkupIzPozivaNaBroj = BimOtkupIzBroja(kooperantID, poziv)
+End Function
+
+' POZIV NA BROJ POGADJA VISE VRSTA DOKUMENATA (DOP-ODL-30): blok (bilo kog
+' kooperanta), dokument doplate ili specifikaciju -- vise od jedne vrste.
+' Brojevi su od cifara, pa vrstu odlucuje pogodak, a dva pogotka ne biraju.
+Public Function PozivViseVrsta(ByVal poziv As String) As Boolean
+    Dim n As Long
+    If Len(NormalizePozivKey(poziv)) = 0 Then Exit Function
+    If Len(TryResolveKooperantByOtkupPoziv(poziv)) > 0 Then n = n + 1
+    If IsArray(modDoplata.KOPoPozivu(poziv)) Then n = n + 1
+    If IsArray(modDoplata.SpecPoPozivu(poziv)) Then n = n + 1
+    PozivViseVrsta = (n > 1)
 End Function
 
 ' Otvorene fakture kupca za rucno mapiranje uplate -- sa FAIL-CLOSED zastavicom.

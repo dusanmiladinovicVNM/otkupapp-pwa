@@ -13,8 +13,8 @@
 > proveren. Ručno nad pravim podacima još nisu provereni F5 po specifikaciji i
 > ručno mapiranje izvoda na specifikaciju. P4 (kartica zbirno po obračunu) i
 > ploča „KEŠOM NAJVIŠE" na F5 su potvrđeni u Excelu (RunAllTests 348/0, dokaz
-> 5/5); ručno još nisu pregledani. Otvoreno iz §8. Najveći rizik pred puštanje: slova „D" i „S" u pozivu na broj (release
-> kapija, §8/6).
+> 5/5); ručno još nisu pregledani. Otvoreno iz §8. Slova u pozivu na broj su uklonjena (DOP-ODL-30, Excel
+> neverifikovano).
 
 ## 1) Šta je doplata
 
@@ -87,6 +87,7 @@ produkciji (PR #460, draft), pa se kanon šeme sme menjati.
 | **DOP-ODL-27** *(05.11.2026)* | **Nalozi za banku: specifikacija UMESTO njenih dokumenata** — jedan red i jedan nalog po specifikaciji (poziv = broj specifikacije, iznos = otvoreni ostatak specifikacije); dokumenti iste specifikacije se ne nude posebno, pa isti dug ne može da se plati dvaput. Dokument bez broja (knjižen pre P3) ostaje po dokumentu. |
 | **DOP-ODL-28** *(05.11.2026)* | **Raspodela po specifikaciji**: iznos ide na otvorene dokumente specifikacije **od najstarijeg bloka** (datum bloka, pa broj bloka); svaki red novca je vezan za svoj dokument i nosi **stanicu bloka**; višak je avans na matičnoj stanici. **Gotovina** po specifikaciji raspoređuje **samo na dokumente čiji je blok na stanici isplate**; ostali ostaju otvoreni. |
 | **DOP-ODL-29** *(05.11.2026)* | Specifikacija je cilj plaćanja i u **ručnom mapiranju izvoda** (lista ciljeva kooperanta) i u **primeni avansa** (nalozi) — ista raspodela kao DOP-ODL-28. Redosled rada: rez A = automatski izvod + nalozi; rez B = ručno mapiranje, gotovina, avans. |
+| **DOP-ODL-30** *(06.11.2026; zamenjuje oblik broja iz DOP-ODL-17 i DOP-ODL-23/24)* | **Brojevi bez slova.** Dokument doplate = **broj bloka + `-0z`**, z = redni broj doplate na tom bloku (`5/250626-13-01`, `-02`…; prvi blok dana `5/280626` → `5/280626-01`). Specifikacija = **`x/ddmmyy-00y`**: x broj matične stanice kooperanta, ddmmyy datum knjiženja, y redni broj specifikacije te stanice tog dana (`5/051126-001`). Storno ne oslobađa broj. Vrste razdvaja **nula posle datuma**: broj bloka posle datuma nema sufiks ili ima `-2`, `-3`… (nikad nulu), doplata ima `-0` + cifra 1–9, specifikacija `-00`; razlika ostaje i kad banka iz poziva izbaci separatore. Uvoz izvoda traži **tačno jedan pogodak** preko blokova, dokumenata doplate i specifikacija; poziv koji pogodi dve vrste ide na ručno. Stari brojevi sa `D`/`S` (samo u test sveskama) ostaju čitljivi kao zauzeti. |
 
 ## 3) Struktura dokumenta (potvrđena 03.11.2026; **revidirana u §2a**)
 
@@ -463,6 +464,19 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     izvor pre/posle identičan (`1b93767f970b4162`). Ručni Compile PASS; PDF
     kartice (06.11.2026) pokazuje red po obračunu (`S1/2026-00040`, `S2…`,
     `S3…`) sa opisom po kulturi i klasi. **P4 zatvoren.**
+- **Brojevi bez slova (DOP-ODL-30, 06.11.2026):** `BrojDoplate` = broj bloka +
+  `-0z`, `BrojSpecifikacije` = `x/ddmmyy-00y` (matična stanica kooperanta, dan
+  knjiženja, niz te stanice tog dana; `KnjiziPlan`). Parser prihvata stari
+  oblik `S…` kao zauzet broj (ne ulazi u niz). `KOPoPozivu` / `SpecPoPozivu` više
+  ne traže slovo. `ResolveStrongKooperantByKeys` traži tačno jedan pogodak preko
+  blok / doplata / specifikacija, a `BimOtkupIzPozivaNaBroj` i `BimEfektivnaSpec`
+  dižu ručno mapiranje kad poziv pogodi dve vrste (`PozivViseVrsta`).
+  `JeSpecifikacija` prepoznaje broj po kosoj crti. Test 339 prepisan (oblik,
+  niz stanice tog dana, storno, stari oblik); 316/319 (`-01`, `-02`) i 343
+  prilagođeni; nov test 349. Sabotaže `dop-spec-oblik-sa-slovom`,
+  `dop-spec-isti-broj-u-obracunu`, `dop-broj-sa-slovom`,
+  `dop-poziv-prvi-pobedjuje`, `dop-poziv-blok-bez-provere`; presidrena
+  `dop-broj-bez-rednog`. **Excel prolaz neverifikovan.**
 - **Pitanje o ponavljanju kroz katalog poruka** (05.11.2026): tekst je iz
   `modPoruke` (`DOP_ASK_PONAVLJANJE`, `DOP_ASK_PONAVLJANJE_POTVRDI`), sa
   dijakritikom, isti u grešci pisca i u pitanju ekrana. Test 318 dopunjen,
@@ -497,7 +511,10 @@ sve / Isključi sve" na listi Blokovi.
    ide kroz zaseban process PR (izmene u `.claude/` se ne mešaju sa feature-om).
    Isti process PR: `.claude/rules/banka.md` da pomene KO kao drugi dokument
    naloga (poziv na broj = broj KO) i `DoplataID` u pravilu avansa.
-6. **⚠ RELEASE KAPIJA / PLATFORM UNKNOWN — slovo u pozivu na broj.** Nalog za
+6. **~~RELEASE KAPIJA — slovo u pozivu na broj.~~ Rešeno brojevima bez slova
+   (DOP-ODL-30, 06.11.2026).** Poziv sada nosi samo cifre, `/` i `-`, kao broj
+   bloka; probni nalog kroz e-banking ostaje kao opšta provera izvoza naloga.
+   Istorija: Nalog za
    doplatu nosi poziv „1/220526D" (broj bloka + D, DOP-ODL-17), a nalog
    specifikacije „S1/2026-123" (DOP-ODL-27; šifra kooperanta koji nema oblik
    `KOOP-<broj>` je ceo njegov ID, sa slovima). Ako banka slova ne vrati, izvod po

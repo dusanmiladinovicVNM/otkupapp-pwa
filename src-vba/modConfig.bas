@@ -532,13 +532,20 @@ Public Const COL_DOPS_KONACNA As String = "KonacnaCena"
 '       otkupa - vec knjizena doplata po kg na istom bloku i klasi
 Public Const DOP_NACIN_PO_KG As Long = 1
 Public Const DOP_NACIN_KONACNA As Long = 2
-' Broj doplate = broj bloka + "D"; ponavljanje na istom bloku D2, D3...
-' (DOP-ODL-17). Slovo drzi poziv na broj odvojen od broja otkupa (cifre):
-' NormalizePozivKey zadrzava slova i cifre.
-Public Const DOP_BROJ_SUFIKS As String = "D"
-' Broj specifikacije: S + redni broj kooperanta u sezoni + "/" + godina + "-" +
-' sifra kooperanta, npr. S1/2026-123 (DOP-ODL-23, 24).
-Public Const DOP_SPEC_PREFIKS As String = "S"
+' BROJEVI BEZ SLOVA (DOP-ODL-30; zamenjuje "D" iz DOP-ODL-17 i "S" iz DOP-ODL-23).
+' Slovo u pozivu na broj banka moze da izbaci, a broj bez slova je tada broj
+' bloka -- doplata bi se knjizila na blok. Zato su brojevi od cifara, "/" i "-",
+' kao broj bloka, a vrste odvaja NULA posle datuma: broj bloka je x/ddmmyy ili
+' x/ddmmyy-n sa n >= 2 (modBrojevi.FormatBroj), nikad sa nulom.
+' Dokument doplate = broj bloka + "-0" + redni broj doplate na tom bloku:
+' 5/250626-13-01, pa -02...; prvi blok dana 5/280626 -> 5/280626-01.
+Public Const DOP_BROJ_ODVAJAC As String = "-0"
+' Specifikacija = x/ddmmyy-00y: x broj maticne stanice kooperanta, ddmmyy datum
+' knjizenja, y redni broj specifikacije te stanice tog dana (5/051126-001).
+Public Const DOP_SPEC_ODVAJAC As String = "-00"
+' Stari oblik specifikacije S<redni>/<godina>-<sifra> (pre DOP-ODL-30, postoji
+' samo u test sveskama): cita se kao zauzet broj, ne ulazi u niz.
+Public Const DOP_SPEC_STARI_PREFIKS As String = "S"
 
 ' tblPrerada / tblPreradaStavka
 Public Const COL_PRE_ID As String = "PreradaID"
