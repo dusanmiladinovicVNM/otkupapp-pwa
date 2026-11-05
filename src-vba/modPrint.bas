@@ -4306,22 +4306,34 @@ EH:
     LogErr SRC
 End Function
 
-' Brojevi storniranih dokumenata jedne specifikacije, "a, b", ili "".
+' Brojevi storniranih dokumenata jedne specifikacije, "a, b", ili "". Storniran
+' je dokument para koji ExcludeStornirano izbaci -- isto pravilo storna kao svuda,
+' bez sopstvene kopije vrednosti kolone.
 Private Function SpecDoplateStornirani(ByVal obracunID As String, ByVal koopID As String) As String
     Const SRC As String = "modPrint.SpecDoplateStornirani"
-    Dim d As Variant, i As Long, cObr As Long, cKoop As Long, cBr As Long, cSt As Long
+    Dim d As Variant, akt As Variant, aktivni As Object, i As Long
+    Dim cId As Long, cObr As Long, cKoop As Long, cBr As Long
     d = GetTableData(TBL_DOPLATA)
     If Not IsArray(d) Then Exit Function
+    cId = RequireColumnIndex(TBL_DOPLATA, COL_DOP_ID, SRC)
     cObr = RequireColumnIndex(TBL_DOPLATA, COL_DOP_OBRACUN, SRC)
     cKoop = RequireColumnIndex(TBL_DOPLATA, COL_DOP_KOOPERANT, SRC)
     cBr = RequireColumnIndex(TBL_DOPLATA, COL_DOP_BROJ, SRC)
-    cSt = RequireColumnIndex(TBL_DOPLATA, COL_STORNIRANO, SRC)
+    Set aktivni = CreateObject("Scripting.Dictionary")
+    aktivni.CompareMode = vbTextCompare
+    akt = ExcludeStornirano(d, TBL_DOPLATA)
+    If IsArray(akt) Then
+        For i = 1 To UBound(akt, 1)
+            aktivni(Trim$(NzToText(akt(i, cId)))) = True
+        Next i
+    End If
     For i = 1 To UBound(d, 1)
         If StrComp(Trim$(NzToText(d(i, cObr))), obracunID, vbTextCompare) = 0 And _
-           StrComp(Trim$(NzToText(d(i, cKoop))), koopID, vbTextCompare) = 0 And _
-           StrComp(Trim$(NzToText(d(i, cSt))), STORNO_DA, vbTextCompare) = 0 Then
-            If Len(SpecDoplateStornirani) > 0 Then SpecDoplateStornirani = SpecDoplateStornirani & ", "
-            SpecDoplateStornirani = SpecDoplateStornirani & Trim$(NzToText(d(i, cBr)))
+           StrComp(Trim$(NzToText(d(i, cKoop))), koopID, vbTextCompare) = 0 Then
+            If Not aktivni.Exists(Trim$(NzToText(d(i, cId)))) Then
+                If Len(SpecDoplateStornirani) > 0 Then SpecDoplateStornirani = SpecDoplateStornirani & ", "
+                SpecDoplateStornirani = SpecDoplateStornirani & Trim$(NzToText(d(i, cBr)))
+            End If
         End If
     Next i
 End Function

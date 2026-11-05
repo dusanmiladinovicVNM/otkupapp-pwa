@@ -29808,7 +29808,7 @@ Private Sub T_Doplata_BrojSpecifikacije()
     red(RequireColumnIndex(TBL_DOPLATA, COL_DOP_OBRACUN, "modTest")) = "DOB-T339-" & b
     red(RequireColumnIndex(TBL_DOPLATA, COL_DOP_PERIOD_OD, "modTest")) = DateSerial(god - 1, 8, 1)
     red(RequireColumnIndex(TBL_DOPLATA, COL_DOP_PERIOD_DO, "modTest")) = DateSerial(god - 1, 8, 31)
-    red(RequireColumnIndex(TBL_DOPLATA, COL_STORNIRANO, "modTest")) = STORNO_DA
+    red(RequireColumnIndex(TBL_DOPLATA, COL_STORNIRANO, "modTest")) = "Da"
     red(RequireColumnIndex(TBL_DOPLATA, COL_DOP_SPEC, "modTest")) = _
         modDoplata.BrojSpecifikacije(7, god - 1, kA)
     AssertEq (AppendRow(TBL_DOPLATA, red) > 0), True, "preduslov: proslogodisnji dokument je upisan"
