@@ -118,6 +118,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblAmbalaza`: `modBusinessFlowProTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblAmbalazaDokument`: `modBusinessFlowProTests`, `modTest`
 - `tblArtikli`: `modAgrohemijaTests`
+- `tblDoplata`: `modTest`
 - `tblDoplataStavke`: `modTest`
 - `tblKooperanti`: `modAgrohemijaTests`, `modBusinessFlowProTests`, `modGoldenTests`, `modTest`, `modTestBanka`
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`
