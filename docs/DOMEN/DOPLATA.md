@@ -8,9 +8,11 @@
 > **potvrđena**. **F1 (šema, pisac, storno), F2 (kartica, Saldo OM, PWA), F3
 > (ekran, papir KO, storno sa ekrana, signal osnovice), F4 (nalozi, izvod po
 > broju KO, odvezivanje pri stornu) i F4b (gotovina na matičnoj stanici, ručno
-> mapiranje izvoda na KO, primena avansa na KO) su u kodu.** Statičke provere
-> zelene, ponašanje **NEVERIFIKOVANO** dok `run_vba` ne prođe na Windows + Excel
-> (§7); F2–F4b su napisani pre nego što je F1 pušten na Excelu. Otvoreno: §8.
+> mapiranje izvoda na KO, primena avansa na KO) su u kodu**, sa revizijom po
+> bloku P1 (§2a). **Excel prijem 05.11.2026: ZELENO** — RunAllTests 336/0, BFP
+> 3014/0, banka 241/0, storno 111/0, faktura 39/0, palete, agrohemija 25/0,
+> golden (§7a). Još otvoreno: ručni Compile i dvosmerni dokaz sabotaža doplate
+> (40, nijedna još nije puštena na Excelu); §8.
 
 ## 1) Šta je doplata
 
@@ -282,7 +284,12 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   (od P1 dokument je blok); 329/330/332 su ostavljali stavke izvoda koje 96/97
   broje (sada snimak i rollback, obrazac banka suite); 334/335 su pravili blok i
   knjiženje u istoj sekundi, koju čitalac signala računa kao „posle" (blokovi sad
-  nastaju minut ranije). Ponovni prolaz još nije javljen.
+  nastaju minut ranije). Ponovni prolaz je zelen: RunAllTests 336/0 (215,8 s),
+  banka 241/0, storno 111/0, faktura 39/0, palete 115 provera, JSON 72/72,
+  StornoCentar, licenca; BFP 3014/0, agrohemija 25/0 i golden u posebnom pozivu
+  (`--timeout 1500`: ceo poziv sa BFP-om prelazi 600 s, kao u S8, stavka 301).
+  Compile je `NEJASNO` (ručno), dokaz: `python tools/dokaz.py dop-
+  avans-motor-dupli-novacid --grupe` (40 sabotaža, 8 prolaza).
 - Još NIJE: ekran (P2 — bira način i blokove; do tada knjiži sve blokove u
   načinu 1, a pitanje broji dokumente po bloku), papir po uzoru na otkupni list
   i specifikacija (P3), kartica zbirno po obračunu (P4 — do tada red po dokumentu).
