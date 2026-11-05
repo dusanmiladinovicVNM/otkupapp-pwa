@@ -7,8 +7,8 @@
 > **Status (05.11.2026):** F1–F4b i prerada P1–P3 su u kodu i potvrđeni u Excelu
 > (§7a). Pravilo „PDV nadoknada nikad gotovinom" (`ISPLATA_GOTOVINA.md`) je
 > zatvoreno. **Plaćanje po specifikaciji** (rez A: nalozi, izvod, avans; rez B:
-> gotovina na F5, ručno mapiranje) i dugme „Uključi filtrirane" su u kodu,
-> **Excel neverifikovano**. Ostaje P4 (kartica zbirno po obračunu) i otvoreno iz
+> gotovina na F5, ručno mapiranje) i dugme „Uključi filtrirane" su u kodu; rez A
+> je potvrđen u Excelu, **rez B i dugme još nisu**. Ostaje P4 (kartica zbirno po obračunu) i otvoreno iz
 > §8. Najveći rizik pred puštanje: slova „D" i „S" u pozivu na broj (release
 > kapija, §8/6).
 
@@ -401,7 +401,12 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     ostatak, storno (DOP-05), kartica i saldo OM ostaju po dokumentu.
   - Testovi 342–343, test 328 meri dokument bez broja. Sabotaže `dop-spec-nalog-*`,
     `dop-spec-raspodela-*`, `dop-spec-plan-kao-blok`, `dop-spec-avans-*`,
-    `dop-spec-poziv-storniran`. **Excel prolaz neverifikovan.**
+    `dop-spec-poziv-storniran`.
+  - Excel (05.11.2026): pun prolaz 12 suita ZELENO (RunAllTests 343/0, BFP
+    3014/0, banka 241/0, storno 111/0); dokaz 7 novih i 4 presidrene sabotaže
+    **11/11 DOKAZANO**, izvor pre/posle identičan (`fa03821d4083eaa1`). Ručni
+    Compile i pregled naloga nad pravim podacima nisu javljeni. **Rez A
+    potvrđen.**
 - **Plaćanje po specifikaciji — rez B** (DOP-ODL-28/29):
   - **Gotovina / F5:** polje „otvoreni blok" nudi i specifikaciju, sa ostatkom
     njenih dokumenata **na izabranom otkupnom mestu**. Pojedinačni dokumenti
