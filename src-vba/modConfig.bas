@@ -515,10 +515,24 @@ Public Const COL_DOPS_KLASA As String = "Klasa"
 Public Const COL_DOPS_KOLICINA As String = "Kolicina"
 Public Const COL_DOPS_CENA As String = "Cena"
 Public Const COL_DOPS_IZNOS As String = "Iznos"
-' Broj KO: "KO-<n>/<godina>", niz po godini datuma knjizenja (DOP-ODL-09).
-' Slovni prefiks drzi poziv na broj odvojen od brojeva otkupa: NormalizePozivKey
-' zadrzava slova i cifre.
-Public Const DOP_BROJ_PREFIKS As String = "KO-"
+' Revizija 04.11.2026 (DOPLATA.md par. 2a): dokument doplate je PO BLOKU.
+' Kolone su na KRAJU tabela; pisac ih postavlja po imenu (SetRowValueByColumn).
+Public Const COL_DOP_OTKUP As String = "OtkupID"
+Public Const COL_DOP_STANICA As String = "StanicaID"
+Public Const COL_DOP_NACIN As String = "NacinUnosa"
+Public Const COL_DOPS_CENA_OTKUPA As String = "CenaOtkupa"
+Public Const COL_DOPS_KONACNA As String = "KonacnaCena"
+' Nacin unosa, jedan za ceo obracun (DOP-ODL-15). Cena stavke doplate je u oba
+' nacina BRUTO doplata po kg (sa PDV nadoknadom, DOP-ODL-14).
+'   1 = operater unosi bruto doplatu po kg
+'   2 = operater unosi KONACNU bruto cenu po kg; doplata = konacna - cena
+'       otkupa - vec knjizena doplata po kg na istom bloku i klasi
+Public Const DOP_NACIN_PO_KG As Long = 1
+Public Const DOP_NACIN_KONACNA As Long = 2
+' Broj doplate = broj bloka + "D"; ponavljanje na istom bloku D2, D3...
+' (DOP-ODL-17). Slovo drzi poziv na broj odvojen od broja otkupa (cifre):
+' NormalizePozivKey zadrzava slova i cifre.
+Public Const DOP_BROJ_SUFIKS As String = "D"
 
 ' tblPrerada / tblPreradaStavka
 Public Const COL_PRE_ID As String = "PreradaID"

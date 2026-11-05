@@ -577,19 +577,23 @@ Private Function KnjiziKlik() As Boolean
     KnjiziKlik = KnjiziJezgro(potvrda)
 End Function
 
-' Tekst pitanja pred knjizenje: koliko KO, kg i dinara -- iz istog plana.
+' Tekst pitanja pred knjizenje: koliko dokumenata, kg i dinara -- iz istog plana.
+' Dokument je po BLOKU (DOPLATA.md par. 2a), pa se broje blokovi plana sa
+' doplatom (kolona 11, status 16); red "bez doplate" se ne knjizi.
 Private Function PitanjeKnjizenja() As String
-    Dim i As Long, koop As Object, kg As Double, din As Double
-    Set koop = CreateObject("Scripting.Dictionary")
-    koop.CompareMode = vbTextCompare
+    Dim i As Long, blok As Object, kg As Double, din As Double
+    Set blok = CreateObject("Scripting.Dictionary")
+    blok.CompareMode = vbTextCompare
     If IsArray(mPlan) Then
         For i = 1 To UBound(mPlan, 1)
-            koop(CStr(mPlan(i, 1))) = True
-            kg = kg + CDbl(mPlan(i, 6))
-            din = din + CDbl(mPlan(i, 8))
+            If CLng(mPlan(i, 16)) = modDoplata.DOP_PLAN_KNJIZI Then
+                blok(CStr(mPlan(i, 11))) = True
+                kg = kg + CDbl(mPlan(i, 6))
+                din = din + CDbl(mPlan(i, 8))
+            End If
         Next i
     End If
-    PitanjeKnjizenja = Poruka("OTKUI_ASK_DOP_KNJIZI") & " " & CStr(koop.count) & " KO, " & _
+    PitanjeKnjizenja = Poruka("OTKUI_ASK_DOP_KNJIZI") & " " & CStr(blok.count) & " KO, " & _
                        FmtKolicina(kg) & " kg, " & Format$(din, "#,##0.00") & " din?"
 End Function
 

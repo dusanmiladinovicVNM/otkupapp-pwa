@@ -438,6 +438,8 @@ Public Sub RunAllTests()
     RunOne 331
     RunOne 332
     RunOne 333
+    RunOne 334
+    RunOne 335
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1061,7 +1063,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 313: TestName = "T_S8R1b_NedovrsenoPoIdentitetu"
         Case 314: TestName = "T_S8R1b_PreveziPaleteJezgro"
         Case 315: TestName = "T_Doplata_PlanSabiraPoKljucu"
-        Case 316: TestName = "T_Doplata_JedanKOPoKooperantu"
+        Case 316: TestName = "T_Doplata_JedanDokumentPoBloku"
         Case 317: TestName = "T_Doplata_PeriodSaSatom"
         Case 318: TestName = "T_Doplata_PonavljanjeTraziPotvrdu"
         Case 319: TestName = "T_Doplata_StornoIzlaziIzZbira"
@@ -1078,7 +1080,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 330: TestName = "T_Doplata_StornoOdvezujeIsplatu"
         Case 331: TestName = "T_Doplata_AvansNaKO"
         Case 332: TestName = "T_Doplata_IzvodRucnoNaKO"
-        Case 333: TestName = "T_Doplata_GotovinaNaMaticnoj"
+        Case 333: TestName = "T_Doplata_GotovinaNaStaniciBloka"
+        Case 334: TestName = "T_Doplata_NacinKonacnaCena"
+        Case 335: TestName = "T_Doplata_IzborBlokova"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1402,7 +1406,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 313: T_S8R1b_NedovrsenoPoIdentitetu
         Case 314: T_S8R1b_PreveziPaleteJezgro
         Case 315: T_Doplata_PlanSabiraPoKljucu
-        Case 316: T_Doplata_JedanKOPoKooperantu
+        Case 316: T_Doplata_JedanDokumentPoBloku
         Case 317: T_Doplata_PeriodSaSatom
         Case 318: T_Doplata_PonavljanjeTraziPotvrdu
         Case 319: T_Doplata_StornoIzlaziIzZbira
@@ -1419,7 +1423,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 330: T_Doplata_StornoOdvezujeIsplatu
         Case 331: T_Doplata_AvansNaKO
         Case 332: T_Doplata_IzvodRucnoNaKO
-        Case 333: T_Doplata_GotovinaNaMaticnoj
+        Case 333: T_Doplata_GotovinaNaStaniciBloka
+        Case 334: T_Doplata_NacinKonacnaCena
+        Case 335: T_Doplata_IzborBlokova
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -27753,7 +27759,8 @@ Private Sub T_UtovarB_StornoKapije()
 End Sub
 
 ' ============================================================
-' 315-320. DOPLATA KOOPERANTU -- knjizno odobrenje (docs/DOMEN/DOPLATA.md)
+' 315-320. DOPLATA KOOPERANTU -- dokument doplate po bloku (docs/DOMEN/DOPLATA.md,
+'          revizija par. 2a: po bloku, bruto, dva nacina unosa)
 ' ============================================================
 ' Svaki test pravi SVOJU kulturu (jedinstvena vrsta) i SVOJE kooperante, pa
 ' kljuc stope pogadja samo njegove otkupe: zbirovi drugih testova se ne
@@ -27765,9 +27772,10 @@ End Sub
 ' ============================================================
 ' 315. DOP-02 / DOP-ODL-02, 03: PLAN SABIRA KG PO KLJUCU CENOVNIKA, BEZ UPISA.
 ' ============================================================
-' Kljuc stope je vrsta + sorta + klasa, tacno kao cenovnik. Plan sabira kg
-' AKTIVNIH otkupa po kooperantu i stanici; storniran otkup i sorta van stopa ne
-' ulaze, a plan ne pise nista (prikaz i pisac dele isti plan).
+' Kljuc stope je vrsta + sorta + klasa, tacno kao cenovnik. Plan ima JEDAN RED
+' PO BLOKU I KLASI aktivnog otkupa (DOP-ODL-16), redosledom kooperant, stanica,
+' blok; storniran otkup i sorta van stopa ne ulaze, a plan ne pise nista
+' (prikaz i pisac dele isti plan).
 ' Tok (vrsta V, sorte S1 i S2, kooperanti A i B, juce):
 '   A @STA1 S1: I 10, II 3  |  A @STA1 S1: I 5  |  B @STA2 S1: I 7
 '   A @STA1 S2: I 4 (sorta van stopa)  |  B @STA1 S1: I 100, pa storno
@@ -27775,7 +27783,7 @@ End Sub
 ' SABOTAZE: dop-plan-storniran-ulazi.
 Private Sub T_Doplata_PlanSabiraPoKljucu()
     Dim b As String, vr As String, kA As String, kB As String
-    Dim kul1 As String, kul2 As String, oSt As String
+    Dim kul1 As String, kul2 As String, oSt As String, o1 As String
     Dim plan As Variant, plan2 As Variant, bez As String, bez2 As String
     Dim stope As Collection, nOks As Long, nDop As Long, ocek As String
 
@@ -27786,7 +27794,7 @@ Private Sub T_Doplata_PlanSabiraPoKljucu()
     kA = DopKooperant(b & "-A")
     kB = DopKooperant(b & "-B")
 
-    DopOtkup kA, FX_STANICA, kul1, vr, "S1", 10, 3
+    o1 = DopOtkup(kA, FX_STANICA, kul1, vr, "S1", 10, 3)
     DopOtkup kA, FX_STANICA, kul1, vr, "S1", 5, 0
     DopOtkup kB, FX_STANICA_B, kul1, vr, "S1", 7, 0
     DopOtkup kA, FX_STANICA, kul2, vr, "S2", 4, 0
@@ -27798,11 +27806,17 @@ Private Sub T_Doplata_PlanSabiraPoKljucu()
     nDop = DopBrojRedova(TBL_DOPLATA)
     plan = modDoplata.DoplataPlan(DopJuceOd(), DopJuceDo(), stope, bez)
 
-    ocek = DopRed(kA, FX_STANICA, KLASA_I, 15, 150) & _
+    ocek = DopRed(kA, FX_STANICA, KLASA_I, 10, 100) & _
            DopRed(kA, FX_STANICA, KLASA_II, 3, 16.5) & _
+           DopRed(kA, FX_STANICA, KLASA_I, 5, 50) & _
            DopRed(kB, FX_STANICA_B, KLASA_I, 7, 70)
     AssertEq DopPlanTekst(plan), ocek, _
-             "plan: jedna stavka po kooperantu, stanici i klasi; storniran otkup i sorta van stopa ne ulaze"
+             "plan: jedan red po bloku i klasi; storniran otkup i sorta van stopa ne ulaze"
+    AssertEq CStr(plan(1, 11)) & "|" & CStr(plan(2, 11)) & "|" & CStr(plan(1, 12)) & "|" & _
+             Format$(CDbl(plan(1, 13)), "0.00") & "|" & CStr(plan(1, 16)), _
+             o1 & "|" & o1 & "|" & NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o1, COL_OTK_BR_DOK)) & _
+             "|" & Format$(50, "0.00") & "|" & CStr(modDoplata.DOP_PLAN_KNJIZI), _
+             "plan: red nosi blok, njegov broj, cenu otkupa i status"
     AssertEq bez, "", "plan: svaka stopa je pogodila bar jedan otkup"
     AssertEq DopBrojRedova(TBL_OTKUP_STAVKE) & "|" & DopBrojRedova(TBL_DOPLATA), _
              nOks & "|" & nDop, "plan ne pise ni otkup ni doplatu"
@@ -27815,19 +27829,22 @@ Private Sub T_Doplata_PlanSabiraPoKljucu()
 End Sub
 
 ' ============================================================
-' 316. DOP-ODL-04 / 09: JEDAN KO PO KOOPERANTU, UZASTOPNI BROJEVI, OTKUP NETAKNUT.
+' 316. DOP-ODL-16 / 17: JEDAN DOKUMENT PO BLOKU, BROJ BLOKA + D, OTKUP NETAKNUT.
 ' ============================================================
-' Obracun pravi jedan KO po kooperantu, pod jednim ObracunID-em. Kooperant koji
-' je predavao na dve stanice ima JEDAN KO sa stavkama po stanici. Broj je
-' "KO-<n>/<godina>" iz niza godine datuma knjizenja. Zaglavlje nosi datum
-' knjizenja i period sa satom. Cena na stavkama otkupa se ne menja (DOP-01).
-' Tok (kooperanti A i B, juce): A @STA1: I 10, II 3 | A @STA2: I 2 | B @STA1: I 7.
-' Stope I = 10, II = 5,5 -> A: 100 + 16,5 + 20 = 136,5 ; B: 70.
-' SABOTAZE: dop-ko-po-stavci, dop-broj-isti.
-Private Sub T_Doplata_JedanKOPoKooperantu()
+' Obracun pravi jedan dokument doplate po bloku (stavke po klasi), pod jednim
+' ObracunID-em; kooperant sa dva bloka ima dva dokumenta. Broj je broj bloka +
+' "D", a ponovljena doplata na istom bloku nosi "D2". Zaglavlje nosi blok,
+' stanicu bloka, nacin unosa, datum knjizenja i period sa satom. Cena na
+' stavkama otkupa se ne menja (DOP-01).
+' Tok (kooperanti A i B, juce): A @STA1 o1: I 10, II 3 | A @STA2 o2: I 2 |
+'   B @STA1 o3: I 7. Stope I = 10, II = 5,5 -> o1 116,5 ; o2 20 ; o3 70. Zatim
+'   druga doplata samo na o1 (izabran blok, uz potvrdu ponavljanja).
+' SABOTAZE: dop-dokument-po-kooperantu, dop-broj-bez-rednog.
+Private Sub T_Doplata_JedanDokumentPoBloku()
     Dim b As String, vr As String, kA As String, kB As String, kul As String
-    Dim o1 As String, obr As String, g As String, en As Long
-    Dim god As Long, pre As Long, stope As Collection, idA As String
+    Dim o1 As String, o2 As String, o3 As String, obr As String, g As String, en As Long
+    Dim stope As Collection, idA As String, br1 As String, br2 As String, br3 As String
+    Dim izbor As Object, obr2 As String
 
     b = DopJedinstven()
     vr = "DOPV-" & b
@@ -27836,23 +27853,28 @@ Private Sub T_Doplata_JedanKOPoKooperantu()
     kB = DopKooperant(b & "-B")
 
     o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 3)
-    DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 2, 0
-    DopOtkup kB, FX_STANICA, kul, vr, "S1", 7, 0
+    o2 = DopOtkup(kA, FX_STANICA_B, kul, vr, "S1", 2, 0)
+    o3 = DopOtkup(kB, FX_STANICA, kul, vr, "S1", 7, 0)
+    br1 = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o1, COL_OTK_BR_DOK))
+    br2 = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o2, COL_OTK_BR_DOK))
+    br3 = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o3, COL_OTK_BR_DOK))
 
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10), DopStopa(vr, "S1", KLASA_II, 5.5))
-    god = Year(Date)
-    pre = modDoplata.PoslednjiBrojKO(god)
     obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 316", _
                                       False, g, en)
 
     AssertEq g, "", "preduslov: knjizenje prolazi bez greske"
-    AssertEq DopBrojKO(obr), 2, "jedan KO po kooperantu: dva kooperanta, dva dokumenta"
-    AssertEq DopKOOpis(obr, kA) & DopKOOpis(obr, kB), _
-             modDoplata.BrojKO(pre + 1, god) & "|3|" & Format$(136.5, "0.00") & ";" & _
-             modDoplata.BrojKO(pre + 2, god) & "|1|" & Format$(70, "0.00") & ";", _
-             "KO nosi uzastopan broj iz niza godine, sve stavke kooperanta i zbir iznosa"
+    AssertEq DopBrojKO(obr), 3, "jedan dokument po bloku: tri bloka, tri dokumenta"
+    AssertEq DopDokBloka(obr, o1) & DopDokBloka(obr, o2) & DopDokBloka(obr, o3), _
+             br1 & "D|2|" & FX_STANICA & "|" & Format$(116.5, "0.00") & ";" & _
+             br2 & "D|1|" & FX_STANICA_B & "|" & Format$(20, "0.00") & ";" & _
+             br3 & "D|1|" & FX_STANICA & "|" & Format$(70, "0.00") & ";", _
+             "dokument nosi broj bloka + D, stavke bloka po klasi, stanicu bloka i zbir"
 
     idA = DopIdKO(obr, kA)
+    AssertEq NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, idA, COL_DOP_OTKUP)) & "|" & _
+             NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, idA, COL_DOP_NACIN)), _
+             o1 & "|" & CStr(DOP_NACIN_PO_KG), "zaglavlje nosi blok i nacin unosa"
     AssertEq Format$(CDate(LookupValue(TBL_DOPLATA, COL_DOP_ID, idA, COL_DOP_DATUM)), "yyyymmdd") & "|" & _
              Format$(CDate(LookupValue(TBL_DOPLATA, COL_DOP_ID, idA, COL_DOP_PERIOD_OD)), "yyyymmddhhnn") & "|" & _
              Format$(CDate(LookupValue(TBL_DOPLATA, COL_DOP_ID, idA, COL_DOP_PERIOD_DO)), "yyyymmddhhnn"), _
@@ -27861,7 +27883,35 @@ Private Sub T_Doplata_JedanKOPoKooperantu()
              "zaglavlje KO nosi datum knjizenja i period sa satom"
     AssertEq modOtkup.VrednostOtkupa(o1), 650, _
              "cena na stavkama otkupa ostaje netaknuta: doplata nije prepravka otkupa"
+
+    Set izbor = CreateObject("Scripting.Dictionary")
+    izbor.CompareMode = vbTextCompare
+    izbor(o1) = True
+    obr2 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 316-2", _
+                                       True, g, en, DOP_NACIN_PO_KG, izbor)
+    AssertEq g & "|" & DopBrojKO(obr2) & "|" & DopDokBloka(obr2, o1), _
+             "|1|" & br1 & "D2|2|" & FX_STANICA & "|" & Format$(116.5, "0.00") & ";", _
+             "ponovljena doplata na istom bloku nosi D2, prvi broj ostaje zauzet"
 End Sub
+
+' "brojDokumenta|brojStavki|stanica|iznos;" aktivnog dokumenta obracuna za blok.
+Private Function DopDokBloka(ByVal obracunID As String, ByVal otkupID As String) As String
+    Dim r As Variant, i As Long, n As Long, iznos As Double, broj As String, sta As String
+    r = modDoplata.DoplataStavkeRedovi()
+    If IsArray(r) Then
+        For i = 1 To UBound(r, 1)
+            If CStr(r(i, 5)) = obracunID And CStr(r(i, 16)) = otkupID Then
+                If n = 0 Then
+                    broj = CStr(r(i, 2))
+                    sta = CStr(r(i, 6))
+                End If
+                n = n + 1
+                iznos = iznos + CDbl(r(i, 12))
+            End If
+        Next i
+    End If
+    If n > 0 Then DopDokBloka = broj & "|" & CStr(n) & "|" & sta & "|" & Format$(iznos, "0.00") & ";"
+End Function
 
 ' ============================================================
 ' 317. DOP-ODL-03a: PERIOD SA SATOM -- DAN JE DATUM, SAT JE VREME NASTANKA.
@@ -27919,9 +27969,10 @@ End Sub
 ' ============================================================
 ' 318. DOP-ODL-06: PONOVLJENA DOPLATA TRAZI POTVRDU, UZ POTVRDU SE PLACA I ONA.
 ' ============================================================
-' Isti kljuc i preklopljen period: bez potvrde pisac vraca pitanje (ne kvar) koje
-' imenuje raniji KO i ne upisuje nista; uz potvrdu nastaje nov obracun, pa se
-' kooperantu duguju obe doplate. Period koji se ne preklapa ne pita.
+' Blok koji vec ima aktivnu doplatu za istu klasu (DOP-ODL-06, po bloku): bez
+' potvrde pisac vraca pitanje (ne kvar) koje imenuje ranije dokument i ne upisuje
+' nista; uz potvrdu nastaje nov obracun, pa se kooperantu duguju obe doplate.
+' Period bez tih blokova ne pita.
 ' Tok (kooperant A, juce): I 10. Stopa I = 10 -> po obracunu 100.
 ' SABOTAZE: dop-ponavljanje-bez-potvrde.
 Private Sub T_Doplata_PonavljanjeTraziPotvrdu()
@@ -27966,20 +28017,20 @@ End Sub
 ' Storno je po DoplataID-u: KO jednog kooperanta izlazi, KO drugog iz istog
 ' obracuna ostaje. Storno celog obracuna gasi ostatak; prazan obracun se ne
 ' stornira tiho. Storniran obracun ne trazi potvrdu ponavljanja, a broj KO
-' ostaje zauzet (A9).
+' ostaje zauzet (A9): nova doplata na istom bloku posle storna nosi D2.
 ' Tok (kooperanti A i B, juce): A I 10, B I 7; stopa I = 10.
 ' SABOTAZE: dop-storno-ne-gasi.
 Private Sub T_Doplata_StornoIzlaziIzZbira()
     Dim b As String, vr As String, kA As String, kB As String, kul As String
     Dim stope As Collection, obr As String, g As String, en As Long
-    Dim idA As String, god As Long, pre As Long
+    Dim idA As String, oA As String, obr2 As String
 
     b = DopJedinstven()
     vr = "DOPV-" & b
     kul = DopKultura(vr, "S1")
     kA = DopKooperant(b & "-A")
     kB = DopKooperant(b & "-B")
-    DopOtkup kA, FX_STANICA, kul, vr, "S1", 10, 0
+    oA = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
     DopOtkup kB, FX_STANICA, kul, vr, "S1", 7, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
 
@@ -27987,8 +28038,6 @@ Private Sub T_Doplata_StornoIzlaziIzZbira()
                                       False, g, en)
     AssertEq g, "", "preduslov: obracun se knjizi"
     idA = DopIdKO(obr, kA)
-    god = Year(Date)
-    pre = modDoplata.PoslednjiBrojKO(god)
 
     AssertEq modStorno.StornoDoplata_TX(idA), True, "preduslov: storno KO jednog kooperanta prolazi"
     AssertEq DopKOOpis(obr, kA) & "|" & DopBrojKO(obr), "|1", _
@@ -28000,7 +28049,11 @@ Private Sub T_Doplata_StornoIzlaziIzZbira()
              "obracun bez aktivnog KO se ne stornira tiho"
     AssertEq modDoplata.DoplataPreklapanja(DopJuceOd(), DopJuceDo(), stope), "", _
              "storniran obracun ne trazi potvrdu ponavljanja"
-    AssertEq modDoplata.PoslednjiBrojKO(god), pre, "storno ne oslobadja broj KO (A9)"
+    obr2 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 319-2", _
+                                       False, g, en)
+    AssertEq DopBrojDokumentaKO(obr2, kA), _
+             modDoplata.BrojDoplate(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, oA, COL_OTK_BR_DOK)), 2), _
+             "storno ne oslobadja broj (A9): nova doplata na istom bloku nosi D2"
 End Sub
 
 ' ============================================================
@@ -28104,13 +28157,15 @@ Private Function DopKooperant(ByVal oznaka As String) As String
     DopKooperant = id
 End Function
 
-' Jucerasnji otkup kroz pravog pisca, bez ambalaze, cena 50. kgII = 0 znaci samo
+' Jucerasnji otkup kroz pravog pisca, bez ambalaze, cena 50 (ili zadata, bruto,
+' kao na otkupnom listu). kgII = 0 znaci samo
 ' klasa I. srcCreated (opciono) ide u SourceCreatedAt kakav jeste -- Date ili
 ' tekst, kao sto ga salje PWA uvoz. Vraca OtkupID ili dize gresku.
 Private Function DopOtkup(ByVal koopID As String, ByVal stanicaID As String, _
                           ByVal kulturaID As String, ByVal vrsta As String, _
                           ByVal sorta As String, ByVal kgI As Double, ByVal kgII As Double, _
-                          Optional ByVal srcCreated As Variant) As String
+                          Optional ByVal srcCreated As Variant, _
+                          Optional ByVal cena As Double = 50#) As String
     Dim h As Object, stavke As Collection, s As Object, g As String, id As String
     Set h = CreateObject("Scripting.Dictionary")
     h.Add "Datum", DopJuceOd()
@@ -28128,7 +28183,7 @@ Private Function DopOtkup(ByVal koopID As String, ByVal stanicaID As String, _
         Set s = CreateObject("Scripting.Dictionary")
         s.Add "Klasa", KLASA_I
         s.Add "Kolicina", kgI
-        s.Add "Cena", 50#
+        s.Add "Cena", cena
         s.Add "KolAmbalaze", 0
         stavke.Add s
     End If
@@ -28136,7 +28191,7 @@ Private Function DopOtkup(ByVal koopID As String, ByVal stanicaID As String, _
         Set s = CreateObject("Scripting.Dictionary")
         s.Add "Klasa", KLASA_II
         s.Add "Kolicina", kgII
-        s.Add "Cena", 50#
+        s.Add "Cena", cena
         s.Add "KolAmbalaze", 0
         stavke.Add s
     End If
@@ -28215,9 +28270,10 @@ End Function
 ' vidi kao False (i obracun ostaje u svesci -- tvrdnja broja redova ga hvata).
 Private Function DopOdbijeno(ByVal stope As Collection, ByVal periodOd As Date, _
                              ByVal periodDo As Date, ByVal datum As Date, _
-                             ByVal deo As String) As Boolean
+                             ByVal deo As String, _
+                             Optional ByVal nacin As Long = DOP_NACIN_PO_KG) As Boolean
     Dim g As String, en As Long, obr As String
-    obr = modDoplata.KnjiziDoplatu_TX(datum, periodOd, periodDo, stope, "test 320", False, g, en)
+    obr = modDoplata.KnjiziDoplatu_TX(datum, periodOd, periodDo, stope, "test 320", False, g, en, nacin)
     DopOdbijeno = (Len(obr) = 0 And InStr(1, g, deo, vbTextCompare) > 0)
 End Function
 
@@ -28712,14 +28768,14 @@ End Function
 ' ============================================================
 ' 327. DOP-ODL-07: KNJIZEN KO JE SNIMAK, PROMENA OSNOVICE JE SIGNAL.
 ' ============================================================
-' Storno otkupa posle knjizenja ne menja KO (iznos ostaje), ali ga integritet
-' vidi: plan obracuna racunat ponovo nad danasnjim otkupima daje drugu
-' kolicinu, i nalaz imenuje broj KO, knjizene i sadasnje kilograme. Retro
-' unos otkupa u periodu je ista vrsta promene. Lista INTEGRITET na Oporavku
-' nosi taj nalaz pod kodom DOP1.
+' Storno otkupa posle knjizenja ne menja dokument (iznos ostaje), ali ga
+' integritet vidi PO BLOKU: knjizena kolicina bloka se razlikuje od sadasnje, i
+' nalaz imenuje broj doplate, knjizene i sadasnje kilograme. Retro unos (otkup u
+' periodu nastao POSLE knjizenja) je poseban nalaz bez broja doplate. Lista
+' INTEGRITET na Oporavku nosi taj nalaz pod kodom DOP1.
 ' Tok (kooperant A, juce): otkup I 10; danas KO I 10 din/kg (100); storno otkupa;
 '   zatim retro otkup I 5 u istom periodu.
-' SABOTAZE: dop-signal-nema.
+' SABOTAZE: dop-signal-nema, dop-signal-retro-nema.
 Private Sub T_Doplata_SignalOsnovice()
     Dim b As String, vr As String, kA As String, kul As String, stope As Collection
     Dim obr As String, g As String, en As Long, o1 As String, brojA As String
@@ -28741,14 +28797,15 @@ Private Sub T_Doplata_SignalOsnovice()
     AssertEq modStorno.StornoOtkup_TX(o1), True, "preduslov: storno otkupa prolazi"
     posle = DopOdstupanjaObracuna(obr)
     AssertEq pre & "#" & posle, "#" & brojA & "|" & Format$(10, "0.00") & "|" & Format$(0, "0.00") & ";", _
-             "signal: storno otkupa posle knjizenja imenuje KO, knjizene i sadasnje kg"
+             "signal: storno otkupa posle knjizenja imenuje dokument, knjizene i sadasnje kg"
     AssertEq DopKOOpis(obr, kA), brojA & "|1|" & Format$(100, "0.00") & ";", _
              "snimak: KO se posle storna otkupa ne menja sam"
 
     DopOtkup kA, FX_STANICA, kul, vr, "S1", 5, 0
     retro = DopOdstupanjaObracuna(obr)
-    AssertEq retro, brojA & "|" & Format$(10, "0.00") & "|" & Format$(5, "0.00") & ";", _
-             "signal: retro unos otkupa u periodu menja sadasnju osnovicu"
+    AssertEq retro, brojA & "|" & Format$(10, "0.00") & "|" & Format$(0, "0.00") & ";" & _
+             "|" & Format$(0, "0.00") & "|" & Format$(5, "0.00") & ";", _
+             "signal: retro unos otkupa u periodu je nalaz bez dokumenta"
 
     rows = modIntegritet.GetIntegritetRows()
     If IsArray(rows) Then
@@ -28775,10 +28832,10 @@ End Function
 ' ============================================================
 ' 328. DOP-ODL-05 (F4): OTVORENO KO JE OBAVEZA U NALOZIMA ZA BANKU.
 ' ============================================================
-' KO je obaveza firme prema kooperantu kao i otkupni blok: nalozi ga nose pod
-' kljucem bloka (DoplataID), sa brojem KO kao pozivom na broj -- isti broj po
-' kome ga uvoz izvoda kasnije razresava. Stanica naloga je MATICNA stanica
-' kooperanta, ne stanica stavke. Saldo kapija vazi i za KO. Primena avansa iz
+' Doplata je obaveza firme prema kooperantu kao i otkupni blok: nalozi je nose
+' pod kljucem bloka (DoplataID), sa brojem doplate kao pozivom na broj -- isti
+' broj po kome je uvoz izvoda kasnije razresava. Stanica naloga je stanica BLOKA
+' (DOP-ODL-19). Saldo kapija vazi i za doplatu. Primena avansa iz
 ' liste naloga vazi i za KO (F4b) -- istim motorom, drugom vezom.
 ' Tok (kooperant A, maticna STA1, tekuci racun): otkup I 10 na STA2 juce;
 '   danas KO I 10 din/kg = 100; slobodan avans A 30.
@@ -28803,9 +28860,9 @@ Private Sub T_Doplata_OtvorenoKOUNalozima()
     brojA = DopBrojDokumentaKO(obr, kA)
 
     AssertEq DopKORedovi(modDoplata.OtvoreniKORedovi(kA)), _
-             idA & "|" & brojA & "|" & FX_STANICA & "|" & Format$(100, "0.00") & "|" & _
+             idA & "|" & brojA & "|" & FX_STANICA_B & "|" & Format$(100, "0.00") & "|" & _
              Format$(0, "0.00") & "|" & Format$(100, "0.00") & ";", _
-             "otvoreno KO: iznos, isplaceno i ostatak; stanica je maticna stanica kooperanta"
+             "otvorena doplata: iznos, isplaceno i ostatak; stanica je stanica bloka"
 
     Set blk = DopBlokNaloga(idA)
     AssertEq (Not blk Is Nothing), True, "nalozi za banku nose otvoreno KO pod kljucem bloka"
@@ -28845,11 +28902,12 @@ End Sub
 ' ============================================================
 ' 329. DOP-ODL-05 (F4): IZVOD PO BROJU KO ZATVARA KO, A NE OTKUP NI AVANS.
 ' ============================================================
-' Poziv na broj = broj KO je jak kljuc na taj KO: plan ga imenuje, pisac knjizi
-' VirmanFirmaKoop vezan DoplataID-em na MATICNOJ stanici. Delimicna isplata
+' Poziv na broj = broj doplate je jak kljuc na tu doplatu: plan je imenuje, pisac
+' knjizi VirmanFirmaKoop vezan DoplataID-em na STANICI BLOKA; visak ide u avans na
+' maticnoj, kao i inace. Delimicna isplata
 ' umanjuje ostatak; preplata daje KO-u ostatak, a visak je avans. Isplata KO NIJE
 ' slobodan avans -- inace bi je primena avansa povukla na otkupni blok.
-' Tok (kooperant A, maticna STA1): otkup I 10 na STA2; KO 100; izvod 60, pa 70.
+' Tok (kooperant A, maticna STA1): otkup I 10 na STA2; doplata 100; izvod 60, pa 70.
 ' SABOTAZE: dop-plan-ko-kao-blok, dop-izvod-ko-bez-veze, dop-avans-guta-isplatu-ko.
 Private Sub T_Doplata_IzvodPoBrojuKO()
     Dim b As String, vr As String, kA As String, kul As String, stope As Collection
@@ -28887,8 +28945,8 @@ Private Sub T_Doplata_IzvodPoBrojuKO()
     modBankaMapiranje.gBankaSilentBatch = False
     AssertEq r1, "OK", "preduslov: izvod po broju KO se knjizi"
     AssertEq DopNovacBim(bim1), _
-             NOV_VIRMAN_FIRMA_KOOP & "|" & Format$(60, "0.00") & "|" & idA & "||" & FX_STANICA & "|;", _
-             "isplata KO: virman firme, vezan za KO, bez otkupa, na maticnoj stanici"
+             NOV_VIRMAN_FIRMA_KOOP & "|" & Format$(60, "0.00") & "|" & idA & "||" & FX_STANICA_B & "|;", _
+             "isplata doplate: virman firme, vezan za doplatu, bez otkupa, na stanici bloka"
     AssertEq Format$(modDoplata.OtvorenoNaKO(idA), "0.00"), Format$(40, "0.00"), _
              "delimicna isplata umanjuje ostatak KO"
     AssertEq Format$(modNovac.GetKooperantUnallocatedAvans(kA), "0.00"), Format$(0, "0.00"), _
@@ -28900,9 +28958,9 @@ Private Sub T_Doplata_IzvodPoBrojuKO()
     modBankaMapiranje.gBankaSilentBatch = False
     AssertEq r2, "OK", "preduslov: preplata po broju KO se knjizi"
     AssertEq DopNovacBim(bim2), _
-             NOV_VIRMAN_FIRMA_KOOP & "|" & Format$(40, "0.00") & "|" & idA & "||" & FX_STANICA & "|;" & _
+             NOV_VIRMAN_FIRMA_KOOP & "|" & Format$(40, "0.00") & "|" & idA & "||" & FX_STANICA_B & "|;" & _
              NOV_VIRMAN_AVANS_KOOP & "|" & Format$(30, "0.00") & "|||" & FX_STANICA & "|;", _
-             "preplata KO: KO dobija ostatak, visak je avans na maticnoj stanici"
+             "preplata doplate: doplata dobija ostatak, visak je avans na maticnoj stanici"
     AssertEq Format$(modDoplata.OtvorenoNaKO(idA), "0.00") & "|" & _
              CStr(IsEmpty(modDoplata.OtvoreniKORedovi(kA))), _
              Format$(0, "0.00") & "|" & CStr(True), "isplacen KO izlazi iz otvorenih"
@@ -28945,7 +29003,7 @@ Private Sub T_Doplata_StornoOdvezujeIsplatu()
 
     AssertEq modStorno.StornoDoplata_TX(idA), True, "preduslov: storno KO prolazi"
     AssertEq DopNovacBim(bim1), _
-             NOV_VIRMAN_FIRMA_KOOP & "|" & Format$(60, "0.00") & "|||" & FX_STANICA & "|;", _
+             NOV_VIRMAN_FIRMA_KOOP & "|" & Format$(60, "0.00") & "|||" & FX_STANICA_B & "|;", _
              "storno KO odvezuje isplatu (DoplataID prazan), a ne stornira je"
     AssertEq Format$(modNovac.GetKooperantUnallocatedAvans(kA), "0.00"), Format$(60, "0.00"), _
              "odvezana isplata storniranog KO je slobodan avans kooperanta"
@@ -29098,7 +29156,8 @@ End Sub
 ' visku i tekst podele racunaju iz ostatka KO. Pisac je isti kao za blok:
 ' izabran KO dobija otvoreno, potvrdjen visak ide u avans, a izabran PLACEN KO
 ' se ne knjizi (protivrecnost, ne avans).
-' Tok (kooperant A, maticna STA1): KO 100; izvod 150 bez poziva, izbor KO; pa izvod 10.
+' Tok (kooperant A, maticna STA1, blok na STA2): doplata 100; izvod 150 bez poziva,
+'   izbor doplate; pa izvod 10. Vezan red nosi stanicu bloka, visak maticnu.
 ' SABOTAZE: dop-rucno-ko-van-liste, dop-rucno-ko-izabran-ide-na-otkup.
 Private Sub T_Doplata_IzvodRucnoNaKO()
     Dim b As String, vr As String, kA As String, kul As String, stope As Collection
@@ -29143,7 +29202,7 @@ Private Sub T_Doplata_IzvodRucnoNaKO()
     modBankaMapiranje.gBankaSilentBatch = False
     AssertEq n, 2, "preduslov: rucno mapiranje na KO knjizi KO i visak"
     AssertEq DopNovacBim(bim1), _
-             NOV_VIRMAN_FIRMA_KOOP & "|" & Format$(100, "0.00") & "|" & idA & "||" & FX_STANICA & "|;" & _
+             NOV_VIRMAN_FIRMA_KOOP & "|" & Format$(100, "0.00") & "|" & idA & "||" & FX_STANICA_B & "|;" & _
              NOV_VIRMAN_AVANS_KOOP & "|" & Format$(50, "0.00") & "|||" & FX_STANICA & "|;", _
              "rucno izabran KO dobija ostatak, potvrdjen visak je avans"
 
@@ -29159,15 +29218,15 @@ Private Sub T_Doplata_IzvodRucnoNaKO()
 End Sub
 
 ' ============================================================
-' 333. F4b / DOP-ODL-05: GOTOVINSKA ISPLATA KO NA MATICNOJ STANICI.
+' 333. F4b / DOP-ODL-19: GOTOVINSKA ISPLATA DOPLATE NA STANICI BLOKA.
 ' ============================================================
-' Polje "otvoreni blok" na F5 nosi i KO. Izabran KO ide u doplataID (otkupID
-' ostaje prazan); kapija trazi MATICNU stanicu kooperanta i iznos do trenutnog
-' ostatka KO -- i u modulu unosa i u piscu (SaveOMUlaz_TX). Upisan red je vezan
-' za KO i umanjuje njegov ostatak.
-' Tok (kooperant A, maticna STA1): otkup na STA2; KO 100; isplata 40 na STA1.
+' Polje "otvoreni blok" na F5 nosi i doplate. Izabrana doplata ide u doplataID
+' (otkupID ostaje prazan); kapija trazi STANICU BLOKA (isto kao otkupni blok) i
+' iznos do trenutnog ostatka -- i u modulu unosa i u piscu (SaveOMUlaz_TX).
+' Upisan red je vezan za doplatu i umanjuje njen ostatak.
+' Tok (kooperant A, maticna STA1): otkup na STA2; doplata 100; isplata 40 na STA2.
 ' SABOTAZE: dop-gotovina-tudja-stanica, dop-gotovina-bez-veze.
-Private Sub T_Doplata_GotovinaNaMaticnoj()
+Private Sub T_Doplata_GotovinaNaStaniciBloka()
     Dim b As String, vr As String, kA As String, kul As String, stope As Collection
     Dim obr As String, g As String, en As Long, idA As String, brojA As String
     Dim p As Object, fokus As String, poruke As String, res As String
@@ -29184,17 +29243,17 @@ Private Sub T_Doplata_GotovinaNaMaticnoj()
     idA = DopIdKO(obr, kA)
     brojA = DopBrojDokumentaKO(obr, kA)
 
-    Set p = DopIsplataKO(kA, idA, brojA, FX_STANICA_B, 40, "G1-" & b)
+    Set p = DopIsplataKO(kA, idA, brojA, FX_STANICA, 40, "G1-" & b)
     res = modNovacUnos.IsplataValidiraj(p, fokus)
-    AssertEq Left$(res, Len(Poruka("NOVAC_ERR_KO_MATICNA"))), Poruka("NOVAC_ERR_KO_MATICNA"), _
-             "gotovina za KO samo na maticnoj stanici kooperanta"
-    Set p = DopIsplataKO(kA, idA, brojA, FX_STANICA, 150, "G2-" & b)
+    AssertEq Left$(res, Len(Poruka("NOVAC_ERR_BLOK_TUDJ_OM"))), Poruka("NOVAC_ERR_BLOK_TUDJ_OM"), _
+             "gotovina za doplatu samo na stanici bloka"
+    Set p = DopIsplataKO(kA, idA, brojA, FX_STANICA_B, 150, "G2-" & b)
     res = modNovacUnos.IsplataValidiraj(p, fokus)
     AssertEq Left$(res, Len(Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA"))), Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA"), _
              "gotovina preko ostatka KO se ne isplacuje"
 
-    Set p = DopIsplataKO(kA, idA, brojA, FX_STANICA, 40, "G3-" & b)
-    AssertEq modNovacUnos.IsplataValidiraj(p, fokus), "", "preduslov: isplata KO na maticnoj prolazi"
+    Set p = DopIsplataKO(kA, idA, brojA, FX_STANICA_B, 40, "G3-" & b)
+    AssertEq modNovacUnos.IsplataValidiraj(p, fokus), "", "preduslov: isplata doplate na stanici bloka prolazi"
     AssertEq CStr(p("doplataID")) & "|" & CStr(p("otkupID")), idA & "|", _
              "izabran KO ide u doplataID, otkupID ostaje prazan"
     AssertEq (Len(modNovacUnos.IsplataUpisi(p, poruke)) > 0), True, "preduslov: isplata KO se upisuje"
@@ -29204,9 +29263,9 @@ Private Sub T_Doplata_GotovinaNaMaticnoj()
     AssertEq Format$(modDoplata.OtvorenoNaKO(idA), "0.00"), Format$(60, "0.00"), _
              "isplata umanjuje ostatak KO"
 
-    AssertEq modDokumenta.SaveOMUlaz_TX(Date, "G4-" & b, FX_STANICA_B, FX_STANICA_B, vr, 10, kA, _
+    AssertEq modDokumenta.SaveOMUlaz_TX(Date, "G4-" & b, FX_STANICA, FX_STANICA, vr, 10, kA, _
                                         "test 333", "", NOV_VIRMAN_FIRMA_KOOP, idA), False, _
-             "pisac odbija gotovinu za KO na stanici koja nije maticna"
+             "pisac odbija gotovinu za doplatu na stanici koja nije stanica bloka"
     AssertEq DopNovacPoBroju("G4-" & b), "", "odbijena isplata ne ostavlja red novca"
 End Sub
 
@@ -29269,3 +29328,112 @@ Private Function DopIsplataKO(ByVal koopID As String, ByVal doplataID As String,
     p("blokTekst") = brojKO
     Set DopIsplataKO = p
 End Function
+
+' ============================================================
+' 334. DOP-ODL-14 / 15: NACIN 2 -- KONACNA BRUTO CENA PO KG.
+' ============================================================
+' Operater unosi KONACNU bruto cenu po kg. Doplata po kg za svaki blok i klasu =
+' konacna - bruto cena sa otkupnog lista - vec knjizena doplata po kg na tom
+' bloku i klasi; zato se razlikuje od bloka do bloka. Stavka na ili iznad
+' konacne cene je "bez doplate": plan je pokazuje, pisac je ne knjizi. Ponovljen
+' obracun do vise konacne cene placa samo razliku. Nepoznat nacin se odbija.
+' Tok (kooperant A, juce, klasa I): o1 10 kg po 50, o2 4 kg po 58, o3 3 kg po 65.
+'   Konacna 60 -> o1 10 din/kg (100), o2 2 (8), o3 bez doplate.
+'   Pa konacna 62 (uz potvrdu) -> o1 2 (20), o2 2 (8), o3 bez doplate.
+' SABOTAZE: dop-konacna-bez-vec-doplaceno, dop-konacna-negativna-se-knjizi.
+Private Sub T_Doplata_NacinKonacnaCena()
+    Dim b As String, vr As String, kA As String, kul As String
+    Dim o1 As String, o2 As String, o3 As String, plan As Variant, bez As String
+    Dim obr As String, obr2 As String, g As String, en As Long, i As Long, t As String
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0, , 50)
+    o2 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 4, 0, , 58)
+    o3 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 3, 0, , 65)
+
+    plan = modDoplata.DoplataPlan(DopJuceOd(), DopJuceDo(), _
+               DopStope(DopStopa(vr, "S1", KLASA_I, 60)), bez, DOP_NACIN_KONACNA)
+    If IsArray(plan) Then
+        For i = 1 To UBound(plan, 1)
+            t = t & CStr(plan(i, 11)) & "|" & Format$(CDbl(plan(i, 7)), "0.00") & "|" & _
+                Format$(CDbl(plan(i, 8)), "0.00") & "|" & CStr(plan(i, 16)) & ";"
+        Next i
+    End If
+    AssertEq t, o1 & "|" & Format$(10, "0.00") & "|" & Format$(100, "0.00") & "|1;" & _
+                o2 & "|" & Format$(2, "0.00") & "|" & Format$(8, "0.00") & "|1;" & _
+                o3 & "|" & Format$(0, "0.00") & "|" & Format$(0, "0.00") & "|0;", _
+             "nacin 2: doplata po kg = konacna cena - cena otkupa, po bloku"
+
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), _
+              DopStope(DopStopa(vr, "S1", KLASA_I, 60)), "test 334", False, g, en, DOP_NACIN_KONACNA)
+    AssertEq g & "|" & DopBrojKO(obr) & "|" & DopDokBloka(obr, o3), "|2|", _
+             "stavka na ili iznad konacne cene je bez doplate i ne knjizi se"
+    AssertEq NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, DopIdKO(obr, kA), COL_DOP_NACIN)), _
+             CStr(DOP_NACIN_KONACNA), "zaglavlje pamti nacin unosa"
+
+    obr2 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), _
+               DopStope(DopStopa(vr, "S1", KLASA_I, 62)), "test 334-2", True, g, en, DOP_NACIN_KONACNA)
+    AssertEq g & "|" & DopDokBloka(obr2, o1) & DopDokBloka(obr2, o2) & DopDokBloka(obr2, o3), _
+             "|" & NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o1, COL_OTK_BR_DOK)) & "D2|1|" & FX_STANICA & _
+             "|" & Format$(20, "0.00") & ";" & _
+             NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o2, COL_OTK_BR_DOK)) & "D2|1|" & FX_STANICA & _
+             "|" & Format$(8, "0.00") & ";", _
+             "ponovljen obracun do konacne cene oduzima vec doplaceno"
+    AssertEq Format$(DopIznosKooperanta(kA), "0.00"), Format$(136, "0.00"), _
+             "kooperant ukupno dobija tacno do konacne cene: 100 + 8 + 20 + 8"
+
+    AssertEq DopOdbijeno(DopStope(DopStopa(vr, "S1", KLASA_I, 70)), DopJuceOd(), DopJuceDo(), Date, _
+                         "nacin unosa", 3), True, "nepoznat nacin unosa se odbija"
+End Sub
+
+' ============================================================
+' 335. DOP-ODL-16: IZBOR BLOKOVA -- KNJIZI SE TACNO ONO STO JE IZABRANO.
+' ============================================================
+' Operater iskljucuje nezeljene blokove pre knjizenja. Pisac knjizi samo
+' izabrane; izabran blok koji vise nije u obracunu (storniran) obara knjizenje
+' po imenu, a prazan izbor nije "sve" nego "nista". Iskljucen blok nije signal
+' osnovice -- postojao je pri knjizenju.
+' Tok (kooperant A, juce): o1 I 10, o2 I 5; stopa I = 10; izbor {o2}.
+' SABOTAZE: dop-izbor-ignorisan, dop-signal-iskljuceni-blok.
+Private Sub T_Doplata_IzborBlokova()
+    Dim b As String, vr As String, kA As String, kul As String, stope As Collection
+    Dim o1 As String, o2 As String, izbor As Object, obr As String, g As String, en As Long
+    Dim n0 As Long
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
+    o2 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 5, 0)
+    Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
+
+    Set izbor = CreateObject("Scripting.Dictionary")
+    izbor.CompareMode = vbTextCompare
+    izbor(o2) = True
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 335", _
+                                      False, g, en, DOP_NACIN_PO_KG, izbor)
+    AssertEq g & "|" & DopBrojKO(obr) & "|" & DopDokBloka(obr, o1) & "|" & _
+             Left$(DopDokBloka(obr, o2), Len(DopDokBloka(obr, o2)) - Len(Format$(50, "0.00") & ";")), _
+             "|1||" & NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o2, COL_OTK_BR_DOK)) & "D|1|" & FX_STANICA & "|", _
+             "knjizi se samo izabrani blok"
+    AssertEq DopOdstupanjaObracuna(obr), "", "iskljucen blok nije signal osnovice"
+
+    n0 = DopBrojRedova(TBL_DOPLATA)
+    AssertEq modStorno.StornoOtkup_TX(o1), True, "preduslov: storno otkupa o1 prolazi"
+    izbor.RemoveAll
+    izbor(o1) = True
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 335-2", _
+                                      True, g, en, DOP_NACIN_PO_KG, izbor)
+    AssertEq (Len(obr) = 0 And InStr(1, g, o1, vbTextCompare) > 0 And _
+              DopBrojRedova(TBL_DOPLATA) = n0), True, _
+             "izabran blok koji vise nije u obracunu obara knjizenje po imenu"
+    izbor.RemoveAll
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 335-3", _
+                                      True, g, en, DOP_NACIN_PO_KG, izbor)
+    AssertEq (Len(obr) = 0 And DopBrojRedova(TBL_DOPLATA) = n0), True, _
+             "prazan izbor ne knjizi nista"
+End Sub

@@ -1146,10 +1146,10 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
         If otvoreno <= BIM_OTVORENO_PRAG Then otkupID = ""
     End If
 
-    ' KNJIZNO ODOBRENJE (DOP-ODL-05). Vlasnik isplate je MATICNA stanica
-    ' kooperanta, ne stanica stavke: KO je jedan dokument i kad ima stavke na dve
-    ' stanice -- pa vezan red nosi isto mesto kao avans. Kapija je ista kao za
-    ' blok: KO postoji, nije storniran i pripada ovom kooperantu, u trenutku upisa.
+    ' DOKUMENT DOPLATE (DOP-ODL-19/20). Doplata je po bloku, pa je vlasnik isplate
+    ' STANICA BLOKA -- vezan red nosi mesto kupovine, isto kao za otkup; visak
+    ' ide u avans na maticnoj, kao i inace. Kapija je ista kao za blok: dokument
+    ' postoji, nije storniran i pripada ovom kooperantu, u trenutku upisa.
     If Len(Trim$(doplataID)) > 0 Then
         If Len(Trim$(otkupID)) > 0 Then
             Err.Raise ERR_BMAP_BASE + 41, "MapBankaImportAsKooperantBlockCore", _
@@ -1157,8 +1157,13 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
                       "OtkupID=" & otkupID & "; DoplataID=" & doplataID
         End If
         PotvrdiKOZaKooperanta doplataID, kooperantID, "MapBankaImportAsKooperantBlockCore"
-        blokOmID = omID
-        blokOmNaziv = omNaziv
+        blokOmID = modDoplata.StanicaKO(doplataID)
+        If Len(blokOmID) = 0 Then
+            Err.Raise ERR_BMAP_BLOK_BEZ_OM, "MapBankaImportAsKooperantBlockCore", _
+                      "Doplata nema upisano otkupno mesto bloka. DoplataID=" & doplataID
+        End If
+        blokOmNaziv = CStr(NzBIM(LookupValue(TBL_STANICE, "StanicaID", blokOmID, "Naziv"), ""))
+        If blokOmNaziv = "" Then blokOmNaziv = blokOmID
         otvoreno = modDoplata.OtvorenoNaKO(doplataID)
         If otvoreno <= BIM_OTVORENO_PRAG Then doplataID = ""
     End If
@@ -2737,11 +2742,11 @@ Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
         End If
     Next i
 
-    ' KNJIZNA ODOBRENJA (F4b doplate) idu POSLE otkupa, istim oblikom: kolona 1
-    ' je DoplataID, prikaz je broj KO i maticna stanica (na njoj se KO isplacuje).
-    ' Kao i blokovi, lista nudi SVAKI aktivan KO, i placen -- kapija zatvorenog
-    ' izbora (BimOtkupBezOtvorenog) je ista.
-    Dim ko As Variant, koRedova As Long, k As Long, maticna As String
+    ' DOKUMENTI DOPLATE (F4b; po bloku od revizije 04.11.2026) idu POSLE otkupa,
+    ' istim oblikom: kolona 1 je DoplataID, prikaz je broj doplate i stanica
+    ' bloka. Kao i blokovi, lista nudi SVAKI aktivan dokument, i placen --
+    ' kapija zatvorenog izbora (BimOtkupBezOtvorenog) je ista.
+    Dim ko As Variant, koRedova As Long, k As Long, staKO As String
     ko = modDoplata.DoplataKOKooperanta(kooperantID)
     If IsArray(ko) Then koRedova = UBound(ko, 1)
 
@@ -2757,12 +2762,12 @@ Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
     Next r
 
     If koRedova > 0 Then
-        maticna = CStr(NzBIM(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, kooperantID, COL_KOOP_STANICA), ""))
-        naziv = maticna
-        If Not stanice Is Nothing Then
-            If stanice.Exists(maticna) Then naziv = CStr(stanice(maticna))
-        End If
         For k = 1 To koRedova
+            staKO = CStr(ko(k, 6))
+            naziv = staKO
+            If Not stanice Is Nothing Then
+                If stanice.Exists(staKO) Then naziv = CStr(stanice(staKO))
+            End If
             outA(n + k, 1) = CStr(ko(k, 1))
             outA(n + k, 2) = CStr(ko(k, 2))
             If Len(naziv) = 0 Then

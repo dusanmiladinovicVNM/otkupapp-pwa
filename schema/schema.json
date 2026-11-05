@@ -160,7 +160,10 @@
         "CreatedAt",
         "CreatedBy",
         "ModifiedAt",
-        "ModifiedBy"
+        "ModifiedBy",
+        "OtkupID",
+        "StanicaID",
+        "NacinUnosa"
       ]
     },
     {
@@ -181,7 +184,9 @@
         "CreatedAt",
         "CreatedBy",
         "ModifiedAt",
-        "ModifiedBy"
+        "ModifiedBy",
+        "CenaOtkupa",
+        "KonacnaCena"
       ]
     },
     {

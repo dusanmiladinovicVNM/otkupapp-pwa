@@ -7490,10 +7490,11 @@ Private Sub FillOpenBlokovi(frm As Object)
     ' "kooperant nema otvorenih blokova" i isplata bi tiho postala AVANS.
     RequireTable TBL_OTKUP, "modOtkupUI.FillOpenBlokovi"
     o = GetOpenOtkupi(koopID)
-    ' Otvorena KNJIZNA ODOBRENJA istog kooperanta (F4b doplate, DOP-ODL-05): ista
-    ' lista, isti oblik (ID u nizu, ostatak u ploci). KO se isplacuje na MATICNOJ
-    ' stanici, pa se nudi samo kad je ona aktivno OM (kolona 5 citaoca) -- kapija
-    ' za isti slucaj stoji i u pisacu (modNovac.IsplataKOProblem).
+    ' Otvorene DOPLATE istog kooperanta (F4b; po bloku od revizije, DOP-ODL-19):
+    ' ista lista, isti oblik (ID u nizu, ostatak u ploci). Doplata pripada
+    ' stanici bloka, pa se nudi samo kad je ona aktivno OM (kolona 5 citaoca) --
+    ' isto pravilo kao za otkupni blok; kapija stoji i u pisacu
+    ' (modNovac.IsplataKOProblem).
     ko = modDoplata.OtvoreniKORedovi(koopID)
     If IsArray(o) Then nO = UBound(o, 1)
     If IsArray(ko) Then nKO = UBound(ko, 1)

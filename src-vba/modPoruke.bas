@@ -1084,8 +1084,6 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "NOVAC_ERR_BLOK_STORNIRAN", ChrW(10007) & " Otkupni blok je storniran:"
     UpsertRow lo, existing, "NOVAC_ERR_BLOK_TUDJ_KOOP", ChrW(10007) & " Otkupni blok pripada DRUGOM kooperantu:"
     UpsertRow lo, existing, "NOVAC_ERR_BLOK_TUDJ_OM", ChrW(10007) & " Otkupni blok je sa DRUGOG otkupnog mesta:"
-    ' F4b doplate (DOP-ODL-05): gotovina za KO samo na maticnoj stanici kooperanta.
-    UpsertRow lo, existing, "NOVAC_ERR_KO_MATICNA", ChrW(10007) & " Knji" & ChrW(382) & "no odobrenje se u gotovini ispla" & ChrW(263) & "uje samo na mati" & ChrW(269) & "noj stanici kooperanta:"
     UpsertRow lo, existing, "NOVAC_ERR_FAK_NEMA", ChrW(10007) & " Faktura ne postoji:"
     UpsertRow lo, existing, "NOVAC_ERR_FAK_DUPLA", ChrW(10007) & " Dupli FakturaID " & ChrW(8212) & " target nije jednozna" & ChrW(269) & "an:"
     UpsertRow lo, existing, "NOVAC_ERR_FAK_STORNIRANA", ChrW(10007) & " Faktura je stornirana:"

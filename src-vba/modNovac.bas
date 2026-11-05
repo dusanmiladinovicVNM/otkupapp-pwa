@@ -1104,14 +1104,14 @@ End Function
 ' Blizanac IsplataBlokProblem za KNJIZNO ODOBRENJE (F4b doplate): ista kapija
 ' za ekran (poruka uz polje) i za pisca (SaveOMUlaz_TX, greska). KO postoji tacno
 ' jednom, nije storniran i pripada kooperantu (modDoplata.KOKapija -- jedno
-' pravilo za sve pisce novca nad KO); gotovina ide na MATICNU stanicu kooperanta
-' (DOP-ODL-05), ne na stanicu stavke; iznos ne prelazi TRENUTNI ostatak KO, u
-' cent-domenu. Prazan doplataID nije greska -- KO nije izabran.
+' pravilo za sve pisce novca nad KO); gotovina ide na STANICU BLOKA (DOP-ODL-19),
+' isto kao za otkupni blok; iznos ne prelazi TRENUTNI ostatak dokumenta, u
+' cent-domenu. Prazan doplataID nije greska -- dokument nije izabran.
 Public Function IsplataKOProblem(ByVal doplataID As String, _
                                  ByVal kooperantID As String, _
                                  ByVal stanicaID As String, _
                                  ByVal iznos As Double) As String
-    Dim maticna As String, preostalo As Double
+    Dim staKO As String, preostalo As Double
 
     doplataID = Trim$(doplataID)
     If Len(doplataID) = 0 Then Exit Function
@@ -1133,10 +1133,9 @@ Public Function IsplataKOProblem(ByVal doplataID As String, _
     End Select
 
     If Len(Trim$(stanicaID)) > 0 Then
-        maticna = Trim$(NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, Trim$(kooperantID), _
-                                             COL_KOOP_STANICA)))
-        If StrComp(maticna, Trim$(stanicaID), vbTextCompare) <> 0 Then
-            IsplataKOProblem = Poruka("NOVAC_ERR_KO_MATICNA") & " " & maticna
+        staKO = modDoplata.StanicaKO(doplataID)
+        If StrComp(staKO, Trim$(stanicaID), vbTextCompare) <> 0 Then
+            IsplataKOProblem = Poruka("NOVAC_ERR_BLOK_TUDJ_OM") & " " & doplataID
             Exit Function
         End If
     End If
