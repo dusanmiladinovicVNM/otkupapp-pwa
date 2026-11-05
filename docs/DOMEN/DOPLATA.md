@@ -11,8 +11,8 @@
 > potvrđeni u Excelu (05.11.2026: 12 suita zeleno, RunAllTests 346/0, dokaz rez A
 > 11/11, rez B i dugme 9/9), ručni Compile PASS, „Uključi filtrirane" ručno
 > proveren. Ručno nad pravim podacima još nisu provereni F5 po specifikaciji i
-> ručno mapiranje izvoda na specifikaciju. Ostaje P4 (kartica zbirno po obračunu) i otvoreno
-> iz §8. Najveći rizik pred puštanje: slova „D" i „S" u pozivu na broj (release
+> ručno mapiranje izvoda na specifikaciju. P4 (kartica zbirno po obračunu) i
+> ploča „KEŠOM NAJVIŠE" na F5 su u kodu, Excel neverifikovano. Otvoreno iz §8. Najveći rizik pred puštanje: slova „D" i „S" u pozivu na broj (release
 > kapija, §8/6).
 
 ## 1) Šta je doplata
@@ -440,8 +440,24 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     izvor pre/posle identičan (`d5ccebf87e8a68e2`). Ručni Compile PASS. F5 po
     specifikaciji i ručno mapiranje nad pravim podacima operater proverava
     kasnije. **Rez B potvrđen automatski.**
-- Još NIJE: kartica zbirno po obračunu (P4 — do tada red po dokumentu), tekst
-  pitanja o ponavljanju kroz katalog poruka.
+- **P4 — kartica zbirno po obračunu** (DOP-ODL-04/18; 05.11.2026):
+  - Kartica kooperanta nosi **jedan red po obračunu**, a ne po dokumentu.
+    Obračun je kooperantova specifikacija, ma koliko blokova i stanica nosio.
+  - Broj reda je broj specifikacije; obračun knjižen pre P3 nosi broj svog prvog
+    dokumenta. Zaduženje je zbir aktivnih dokumenata.
+  - Opis je „Doplata" pa po kulturi i klasi kg × din/kg: kg i iznos se sabiraju
+    preko blokova, a u načinu „konačna cena" din/kg je prosek, kao u
+    rekapitulaciji specifikacije. Čitač je `modDoplata.DoplataObracuniKooperanta`.
+  - Ref-ključ reda je `DOP|<ObracunID>|<KooperantID>`. „Štampaj dokument" nad
+    redom kartice sada štampa **specifikaciju** (stari oblik `DOP|<DoplataID>`
+    i dalje štampa papir dokumenta).
+  - Iz istog izveštaja čitaju ekran, PDF kartice i PWA (`getKartica`), pa P4
+    važi svuda.
+  - `DoplataKOKooperanta` (po dokumentu) ostaje za listu ručnog mapiranja.
+  - Test 321 prilagođen (broj = specifikacija, novi ref-ključ), novi test 348.
+    Sabotaže `dop-kartica-po-dokumentu` i `dop-kartica-opis-po-bloku`;
+    presidrena `dop-kartica-bez-doplate`. **Excel prolaz neverifikovan.**
+- Još NIJE: tekst pitanja o ponavljanju kroz katalog poruka.
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
 Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,

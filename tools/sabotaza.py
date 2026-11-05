@@ -11576,10 +11576,28 @@ SABOTAZE = {
     # Kartica ne cita KO: doplata se ne vidi ni na ekranu, ni u PDF-u, ni u PWA.
     "dop-kartica-bez-doplate": (
         "modIzvestaj.bas",
-        "    koDop = modDoplata.DoplataKOKooperanta(kooperantID)\n",
+        "    koDop = modDoplata.DoplataObracuniKooperanta(kooperantID)\n",
         "    koDop = Empty   ' SABOTAZA: kartica ne vidi doplatu\n",
         "T_Doplata_KarticaZaduzenje",
-        "kartica: jedan red po KO, zaduzenje = iznos KO, ref-kljuc DOP|DoplataID",
+        "kartica: jedan red po obracunu, zaduzenje = iznos, ref-kljuc DOP|ObracunID|KooperantID",
+    ),
+    # P4: kartica grupise po dokumentu umesto po obracunu.
+    "dop-kartica-po-dokumentu": (
+        "modDoplata.bas",
+        "            id = CStr(r(i, 5))\n"
+        "            If Not ob.Exists(id) Then\n",
+        "            id = CStr(r(i, 1))   ' SABOTAZA: kartica red po dokumentu\n"
+        "            If Not ob.Exists(id) Then\n",
+        "T_Doplata_KarticaZbirnoPoObracunu",
+        "kartica: jedan red po obracunu (ne po bloku), broj je broj specifikacije",
+    ),
+    # P4: opis kartice deli kulturu i klasu po bloku umesto da sabira kg.
+    "dop-kartica-opis-po-bloku": (
+        "modDoplata.bas",
+        "            kljuc = UCase$(CStr(r(i, 7))) & \"|\" & UCase$(CStr(r(i, 8))) & \"|\" & UCase$(CStr(r(i, 9)))\n",
+        "            kljuc = CStr(r(i, 16)) & \"|\" & UCase$(CStr(r(i, 9)))   ' SABOTAZA: opis po bloku\n",
+        "T_Doplata_KarticaZbirnoPoObracunu",
+        "kartica: opis sabira kg po kulturi i klasi preko blokova i stanica",
     ),
     # KO pre perioda se gubi: kartica krece od pogresnog stanja duga.
     "dop-kartica-pocetno-bez-doplate": (

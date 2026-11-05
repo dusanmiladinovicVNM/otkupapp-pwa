@@ -2872,10 +2872,17 @@ Private Sub StampajDokumentReda(ByVal red As Long)
             If Left$(ref, 4) = "OTK|" Then
                 ReprintOtkupniListByOtkupID Mid$(ref, 5)
             ElseIf Left$(ref, 4) = "DOP|" Then
-                ' Red doplate je knjizno odobrenje -- dokument postoji i stampa se
-                ' (DOPLATA.md DOP-ODL-11). Razlog odbijanja ide u toast.
-                Dim koGreska As String
-                koGreska = modPrint.StampajKO(Mid$(ref, 5))
+                ' Red doplate je OBRACUN kooperanta (P4, "DOP|<ObracunID>|<KooperantID>")
+                ' -- stampa se njegova specifikacija (DOP-ODL-18: detalj po bloku je
+                ' tamo). Stari oblik "DOP|<DoplataID>" stampa papir dokumenta.
+                ' Razlog odbijanja ide u toast.
+                Dim koGreska As String, dopDelovi() As String
+                dopDelovi = Split(Mid$(ref, 5), "|")
+                If UBound(dopDelovi) >= 1 Then
+                    koGreska = modPrint.StampajSpecifikacijuDoplate(dopDelovi(0), dopDelovi(1))
+                Else
+                    koGreska = modPrint.StampajKO(Mid$(ref, 5))
+                End If
                 If Len(koGreska) > 0 Then modOtkupUI.ShowToast koGreska, True
             ElseIf Len(ref) > 0 Then
                 ' NOV / MAG / AMB red kartice nema dokument za stampu iz ovog

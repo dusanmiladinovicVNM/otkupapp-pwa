@@ -36,8 +36,8 @@ Public Const IZV_POCETNO_STANJE As String = "POCETNO STANJE"
 ' (kolona 9 kartice), pa izvor ima jedno ime.
 Private Const KART_IZVOR_NOVAC As String = "NOV"
 Private Const KART_IZVOR_MAGACIN As String = "MAG"
-' Doplata (knjizno odobrenje, DOPLATA.md): red = jedan KO; ref-kljuc reda je
-' "DOP|<DoplataID>".
+' Doplata (DOPLATA.md, P4): red = jedan OBRACUN kooperanta (njegova
+' specifikacija); ref-kljuc reda je "DOP|<ObracunID>|<KooperantID>".
 Private Const KART_IZVOR_DOPLATA As String = "DOP"
 
 ' RF-07 (AUD-024 / FM-0029 #3) - indeksi STATICKIH stranica mpReports u
@@ -815,7 +815,8 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
     ' (5)=Zaduzenje, (6)=Razduzenje, (7)=Saldo,
     ' (8)=SaldoAmbalaze (running; gajbe = Izdata - Primljena;
     '     ukljucuje i samostalna kretanja ambalaze van otkupa),
-    ' (9)=RefKljuc reda ("OTK|<OtkupID>" / "DOP|<DoplataID>" / "NOV" / "MAG" / "AMB")
+    ' (9)=RefKljuc reda ("OTK|<OtkupID>" / "DOP|<ObracunID>|<KooperantID>" / "NOV" /
+    '     "MAG" / "AMB")
     '     za Detalje otkupa
     '
     ' RF-06: promet PRE datumOd se vise ne odbacuje nego se sabira u pocetno
@@ -1050,12 +1051,14 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
         End If
     End If
 
-    ' 3b. Doplata (knjizno odobrenje) = Zaduzenje -- DOPLATA.md par. 6.
-    '     Jedan red po KO (DOP-ODL-04), na datum knjizenja; KO pre datumOd ulazi
-    '     u pocetno stanje kao i otkup. Kilograma nema u saldu ambalaze ni u
-    '     rekapitulaciji robe: doplata ne nosi robu (DOP-01).
+    ' 3b. Doplata = Zaduzenje -- DOPLATA.md par. 6. Jedan red po OBRACUNU
+    '     (DOP-ODL-04/18, P4): to je kooperantova specifikacija, ma koliko blokova
+    '     nosila; broj reda je broj specifikacije, opis po kulturi i klasi. Na
+    '     datum knjizenja; obracun pre datumOd ulazi u pocetno stanje kao i
+    '     otkup. Kilograma nema u saldu ambalaze ni u rekapitulaciji robe:
+    '     doplata ne nosi robu (DOP-01). Detalj po bloku je u specifikaciji.
     Dim koDop As Variant
-    koDop = modDoplata.DoplataKOKooperanta(kooperantID)
+    koDop = modDoplata.DoplataObracuniKooperanta(kooperantID)
     If IsArray(koDop) Then
         Dim dp As Long, dopDatum As Date, dopIznos As Double
         For dp = 1 To UBound(koDop, 1)
@@ -1074,7 +1077,7 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                             dopIznos, _
                             0#, _
                             0#, _
-                            KART_IZVOR_DOPLATA & "|" & CStr(koDop(dp, 1)), _
+                            KART_IZVOR_DOPLATA & "|" & CStr(koDop(dp, 1)) & "|" & Trim$(kooperantID), _
                             KarticaDokKljuc(dopDatum, KART_IZVOR_DOPLATA, _
                                             CStr(koDop(dp, 2)), CStr(koDop(dp, 1))))
                     End If
@@ -1662,10 +1665,11 @@ Public Function KarticaOtkupOpis(ByVal vrsta As String, ByVal sorta As String, _
     KarticaOtkupOpis = s
 End Function
 
-' OPIS REDA DOPLATE na kartici: "Doplata" pa, po kljucu stope, isti opis kao red
-' otkupa i stopa -- "Doplata Malina Willamette I 1.250,00 kg x 10,00 din;
+' OPIS REDA DOPLATE na kartici: "Doplata" pa, po kulturi i klasi, isti opis kao
+' red otkupa i din/kg -- "Doplata Malina Willamette I 1.250,00 kg x 10,00 din;
 ' Malina Willamette II 300,00 kg x 5,50 din". delovi su iz
-' modDoplata.DoplataKOKooperanta (Array(vrsta, sorta, klasa, kg, cena)).
+' modDoplata.DoplataObracuniKooperanta (Array(vrsta, sorta, klasa, kg, din/kg);
+' u nacinu "konacna cena" din/kg je prosek obracuna).
 ' Isti tekst ide na ekran, u PDF i u PWA, jer svi citaju ReportKarticaKooperanta.
 Public Function KarticaDoplataOpis(ByVal delovi As Variant) As String
     Dim s As String, d As Variant

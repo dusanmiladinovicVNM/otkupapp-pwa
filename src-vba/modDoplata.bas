@@ -922,7 +922,8 @@ Public Function DoplataIznosPoKooperantu(Optional ByVal stanicaID As String = ""
 End Function
 
 ' AKTIVNI dokumenti doplate jednog kooperanta, jedan red po dokumentu -- za
-' karticu (modIzvestaj.ReportKarticaKooperanta) i listu cilja rucnog mapiranja.
+' listu cilja rucnog mapiranja. (Kartica od P4 cita DoplataObracuniKooperanta --
+' red po obracunu, ne po dokumentu.)
 ' 2D niz (1..n, 1..6):
 '   1 DoplataID | 2 BrojDokumenta | 3 Datum | 4 Iznos (zbir stavki)
 '   5 delovi opisa: Collection od Array(vrsta, sorta, klasa, kg, cena)
@@ -990,6 +991,82 @@ Public Function DoplataKOKooperanta(ByVal kooperantID As String) As Variant
         res(n, 6) = red(4)
     Next k
     DoplataKOKooperanta = res
+End Function
+
+' KARTICA ZBIRNO PO OBRACUNU (DOP-ODL-04/18, P4): jedan red po obracunu doplate
+' za kooperanta -- to je njegova specifikacija (par obracun x kooperant), ma
+' koliko blokova i stanica nosila. 2D niz (1..n, 1..5):
+'   1 ObracunID | 2 Broj: broj specifikacije; obracun knjizen pre P3 (bez broja)
+'     nosi broj svog prvog dokumenta | 3 Datum (knjizenja) | 4 Iznos (zbir
+'     aktivnih dokumenata)
+'   5 delovi opisa PO KULTURI I KLASI: Collection od Array(vrsta, sorta, klasa,
+'     kg, din/kg). Kg i iznos se sabiraju preko blokova i stanica; din/kg je
+'     iznos / kg -- u nacinu "konacna cena" stopa se razlikuje po bloku, pa je to
+'     prosek, isto kao rekapitulacija specifikacije.
+' Redosled: redosled prve stavke obracuna u tabeli (poredak na kartici ionako
+' daje kljuc hronologije, KART-HRON-01). Storniran dokument ne ulazi (strog
+' citac), pa obracun ciji su svi dokumenti stornirani nema red. Empty kad nema.
+Public Function DoplataObracuniKooperanta(ByVal kooperantID As String) As Variant
+    DoplataObracuniKooperanta = Empty
+
+    Dim r As Variant
+    r = DoplataStavkeRedovi()
+    If Not IsArray(r) Then Exit Function
+
+    Dim ob As Object, red As Variant, pd As Object, a As Variant
+    Dim i As Long, id As String, kljuc As String
+    Set ob = CreateObject("Scripting.Dictionary")
+    ob.CompareMode = vbTextCompare
+
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 4)), Trim$(kooperantID), vbTextCompare) = 0 Then
+            id = CStr(r(i, 5))
+            If Not ob.Exists(id) Then
+                Set pd = CreateObject("Scripting.Dictionary")
+                pd.CompareMode = vbTextCompare
+                ob.Add id, Array(r(i, 2), r(i, 3), 0#, pd, Trim$(CStr(r(i, 20))))
+            End If
+            red = ob(id)
+            red(2) = CDbl(red(2)) + CDbl(r(i, 12))
+            If Len(CStr(red(4))) = 0 Then red(4) = Trim$(CStr(r(i, 20)))
+            Set pd = red(3)
+            kljuc = UCase$(CStr(r(i, 7))) & "|" & UCase$(CStr(r(i, 8))) & "|" & UCase$(CStr(r(i, 9)))
+            If pd.Exists(kljuc) Then
+                a = pd(kljuc)
+            Else
+                a = Array(CStr(r(i, 7)), CStr(r(i, 8)), CStr(r(i, 9)), 0#, 0#)
+            End If
+            a(3) = CDbl(a(3)) + CDbl(r(i, 10))
+            a(4) = CDbl(a(4)) + CDbl(r(i, 12))
+            pd(kljuc) = a
+            ob(id) = red
+        End If
+    Next i
+
+    If ob.count = 0 Then Exit Function
+
+    Dim res() As Variant, n As Long, k As Variant, kd As Variant, delovi As Collection
+    ReDim res(1 To ob.count, 1 To 5)
+    For Each k In ob.keys
+        red = ob(k)
+        n = n + 1
+        res(n, 1) = CStr(k)
+        If Len(CStr(red(4))) > 0 Then res(n, 2) = CStr(red(4)) Else res(n, 2) = red(0)
+        res(n, 3) = red(1)
+        res(n, 4) = modNovac.ZaokruziNovac(CDbl(red(2)))
+        Set delovi = New Collection
+        Set pd = red(3)
+        For Each kd In pd.keys
+            a = pd(kd)
+            If CDbl(a(3)) <> 0 Then
+                delovi.Add Array(a(0), a(1), a(2), CDbl(a(3)), modNovac.ZaokruziNovac(CDbl(a(4)) / CDbl(a(3))))
+            Else
+                delovi.Add Array(a(0), a(1), a(2), 0#, 0#)
+            End If
+        Next kd
+        Set res(n, 5) = delovi
+    Next k
+    DoplataObracuniKooperanta = res
 End Function
 
 ' ============================================================

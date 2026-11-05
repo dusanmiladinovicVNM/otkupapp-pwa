@@ -457,6 +457,7 @@ Public Sub RunAllTests()
     RunOne 345
     RunOne 346
     RunOne 347
+    RunOne 348
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1112,6 +1113,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 345: TestName = "T_Doplata_SpecGotovinaNaStanici"
         Case 346: TestName = "T_Doplata_SpecRucnoMapiranje"
         Case 347: TestName = "T_Gotovina_NajviseNaIzboru"
+        Case 348: TestName = "T_Doplata_KarticaZbirnoPoObracunu"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1467,6 +1469,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 345: T_Doplata_SpecGotovinaNaStanici
         Case 346: T_Doplata_SpecRucnoMapiranje
         Case 347: T_Gotovina_NajviseNaIzboru
+        Case 348: T_Doplata_KarticaZbirnoPoObracunu
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -28414,11 +28417,13 @@ Private Function DopIznosKooperanta(ByVal koopID As String) As Double
 End Function
 
 ' ============================================================
-' 321. DOPLATA F2: KARTICA -- JEDAN RED PO KO, ZADUZENJE, POCETNO STANJE.
+' 321. DOPLATA F2: KARTICA -- JEDAN RED PO OBRACUNU, ZADUZENJE, POCETNO STANJE.
 ' ============================================================
-' KO je red kartice kooperanta na datum knjizenja (DOP-ODL-04): zaduzenje =
-' iznos KO, opis pocinje recju "Doplata" i nosi kg x stopa, ref-kljuc je
-' DOP|<DoplataID>. KO pre perioda ulazi u pocetno stanje. Rekapitulacija robe
+' Obracun je red kartice kooperanta na datum knjizenja (DOP-ODL-04; od P4 red po
+' obracunu, ne po dokumentu -- vise blokova meri test 348): zaduzenje = iznos,
+' opis pocinje recju "Doplata" i nosi kg x stopa, broj je broj specifikacije,
+' ref-kljuc je DOP|<ObracunID>|<KooperantID>. Obracun pre perioda ulazi u
+' pocetno stanje. Rekapitulacija robe
 ' ne vidi doplatu (DOP-01), a storniran KO izlazi. Istog dana doplata ide posle
 ' agrohemije, pre novca (KART-HRON-01).
 ' Tok (kooperant A): juce otkup I 10 kg po 50 (500); danas KO I 10 din/kg (100).
@@ -28440,7 +28445,8 @@ Private Sub T_Doplata_KarticaZaduzenje()
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
     idA = DopIdKO(obr, kA)
-    brojA = DopBrojDokumentaKO(obr, kA)
+    ' Broj reda kartice je broj specifikacije (P4), ne broj dokumenta.
+    brojA = NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, idA, COL_DOP_SPEC))
 
     r = modIzvestaj.ReportKarticaKooperanta(kA, Date - 1, Date)
     If IsArray(r) Then
@@ -28455,13 +28461,13 @@ Private Sub T_Doplata_KarticaZaduzenje()
         Next i
     End If
     AssertEq nDop & "|" & Format$(zad, "0.00") & "|" & refDop, _
-             "1|" & Format$(100, "0.00") & "|DOP|" & idA, _
-             "kartica: jedan red po KO, zaduzenje = iznos KO, ref-kljuc DOP|DoplataID"
+             "1|" & Format$(100, "0.00") & "|DOP|" & obr & "|" & kA, _
+             "kartica: jedan red po obracunu, zaduzenje = iznos, ref-kljuc DOP|ObracunID|KooperantID"
     AssertEq Format$(ukSaldo, "0.00"), Format$(600, "0.00"), _
              "kartica: zavrsni saldo = otkup + doplata (500 + 100)"
     AssertEq (Left$(opis, 8) = "Doplata " And InStr(1, opis, " kg x ", vbBinaryCompare) > 0 And _
               InStr(1, opis, "|" & brojA, vbBinaryCompare) > 0), True, _
-             "kartica: opis je Doplata sa kg x stopa, broj dokumenta je broj KO"
+             "kartica: opis je Doplata sa kg x stopa, broj je broj specifikacije"
 
     rPre = modIzvestaj.ReportKarticaKooperanta(kA, Date + 1, Date + 2)
     If IsArray(rPre) Then
@@ -30694,6 +30700,64 @@ Private Sub T_Gotovina_NajviseNaIzboru()
              "doplata i specifikacija: osnovica; specifikacija samo na stanici svojih dokumenata"
     AssertEq Poruka("OTKUI_LBL_OSTATAK_KES") <> Poruka("OTKUI_LBL_OSTATAK") And _
              Not PorukaNedostaje("OTKUI_LBL_OSTATAK_KES"), True, "natpis ploce uz kes postoji u katalogu"
+End Sub
+
+' ============================================================
+' 348. P4 (DOP-ODL-04/18): KARTICA ZBIRNO PO OBRACUNU, OPIS PO KULTURI I KLASI.
+' ============================================================
+' Kartica kooperanta nosi JEDAN red po obracunu doplate (njegovu specifikaciju),
+' ma koliko blokova i stanica obracun nosio: zaduzenje je zbir dokumenata, broj
+' je broj specifikacije, ref-kljuc DOP|<ObracunID>|<KooperantID>. Opis sabira kg
+' po kulturi i klasi preko blokova. Drugi obracun istog kooperanta je drugi red.
+' Tok (kooperant A, juce): blok I 10 kg na STA1, blok I 20 kg na STA2, blok II
+'   5 kg na STA1; obracun 1: I 10, II 6 din/kg (100 + 200 + 30 = 330); obracun 2
+'   (ponovljena doplata): I 1 din/kg (10 + 20 = 30).
+' SABOTAZE: dop-kartica-po-dokumentu, dop-kartica-opis-po-bloku.
+Private Sub T_Doplata_KarticaZbirnoPoObracunu()
+    Dim b As String, vr As String, kul As String, kA As String
+    Dim obr1 As String, obr2 As String, g As String, en As Long, o1 As String, spec1 As String
+    Dim r As Variant, i As Long, nDop As Long, zad As Double, opis1 As String, broj1 As String
+    Dim ref1 As String
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
+    DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 20, 0
+    DopOtkup kA, FX_STANICA, kul, vr, "S1", 0, 5
+    obr1 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), _
+               DopStope(DopStopa(vr, "S1", KLASA_I, 10), DopStopa(vr, "S1", KLASA_II, 6)), _
+               "test 348 a", False, g, en)
+    AssertEq g, "", "preduslov: prvi obracun se knjizi"
+    spec1 = DopSpecBloka(obr1, o1)
+    obr2 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), _
+               DopStope(DopStopa(vr, "S1", KLASA_I, 1)), "test 348 b", True, g, en)
+    AssertEq g, "", "preduslov: drugi obracun (ponovljena doplata) se knjizi"
+
+    r = modIzvestaj.ReportKarticaKooperanta(kA, Date - 1, Date)
+    If IsArray(r) Then
+        For i = 1 To UBound(r, 1)
+            If Left$(NzToText(r(i, 9)), 4) = "DOP|" Then
+                nDop = nDop + 1
+                zad = zad + NzD2(r(i, 5))
+                If NzToText(r(i, 9)) = "DOP|" & obr1 & "|" & kA Then
+                    ref1 = NzToText(r(i, 9))
+                    opis1 = NzToText(r(i, 4))
+                    broj1 = NzToText(r(i, 2))
+                End If
+            End If
+        Next i
+    End If
+    AssertEq nDop & "|" & Format$(zad, "0.00") & "|" & ref1 & "|" & broj1, _
+             "2|" & Format$(360, "0.00") & "|DOP|" & obr1 & "|" & kA & "|" & spec1, _
+             "kartica: jedan red po obracunu (ne po bloku), broj je broj specifikacije"
+    AssertEq CStr(InStr(1, opis1, modIzvestaj.KarticaOtkupOpis(vr, "S1", KLASA_I, 30) & " x " & _
+                        Format$(10, "#,##0.00") & " din", vbBinaryCompare) > 0) & "|" & _
+             CStr(InStr(1, opis1, modIzvestaj.KarticaOtkupOpis(vr, "S1", KLASA_II, 5) & " x " & _
+                        Format$(6, "#,##0.00") & " din", vbBinaryCompare) > 0), _
+             CStr(True) & "|" & CStr(True), _
+             "kartica: opis sabira kg po kulturi i klasi preko blokova i stanica"
 End Sub
 
 ' Redovi specifikacije po natpisu: UKUPNO ZA ISPLATU (vrednost u koloni 10) i
