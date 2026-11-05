@@ -11624,10 +11624,18 @@ SABOTAZE = {
     # Zbir na papiru KO ne sabira iznose stavki.
     "dop-papir-bez-stavke": (
         "modPrint.bas",
-        "            sumIzn = sumIzn + CDbl(r(i, 12))\n",
-        "            sumIzn = sumIzn + 0   ' SABOTAZA: zbir papira bez iznosa\n",
+        "            ukupno = ukupno + CDbl(r(i, 12))\n",
+        "            ukupno = ukupno + 0   ' SABOTAZA: zbir papira bez iznosa\n",
         "T_Doplata_StampaKO",
-        "papir doplate: zbir iznosa i kg je zbir stavki SVOG bloka, ne i bloka druge stanice",
+        "papir doplate: dva primerka, UKUPNO je iznos SVOG bloka, ne i bloka druge stanice",
+    ),
+    # P3: osnovica papira je bruto iznos -- nadoknada ispada nula.
+    "dop-papir-nadoknada-od-bruto": (
+        "modPrint.bas",
+        "    h(\"osnovica\") = modNovac.ZaokruziNovac(ukupno / (1 + stopa / 100))\n",
+        "    h(\"osnovica\") = ukupno   ' SABOTAZA: osnovica je bruto\n",
+        "T_Doplata_StampaKO",
+        "papir doplate: osnovica = UKUPNO / (1 + stopa), osnovica + PDV nadoknada = UKUPNO",
     ),
     # Kapija papira ugasena: za storniran KO se pokusava izvoz.
     "dop-papir-stornirani": (

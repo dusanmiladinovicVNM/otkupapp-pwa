@@ -28604,21 +28604,23 @@ Private Function DopSaldoKol(ByVal s As Variant, ByVal naziv As String, ByVal ko
 End Function
 
 ' ============================================================
-' 324. DOPLATA F3: PAPIR KO -- BROJ, KOOPERANT, STAVKE, ZBIR; STORNIRAN SE NE STAMPA.
+' 324. DOPLATA P3: PAPIR BLOKA -- DVA PRIMERKA, UKUPNO = IZNOS, OSNOVICA + PDV
+'      NADOKNADA; STORNIRAN SE NE STAMPA.
 ' ============================================================
-' Knjizno odobrenje se stampa iz istog citaca koji puni karticu, pa papir i
-' kartica kazu isti iznos. Storniran KO nema papir: StampajKO vraca razlog
-' operateru i ne pravi izvoz (DOP-ODL-11, isto pravilo kao otkupni list).
-' Dokument doplate je JEDAN BLOK (P1, DOP-ODL-14), pa papir nosi samo stavke
-' svog bloka; blok na drugoj stanici je drugi dokument. (Do P1 je KO bio jedan
-' po kooperantu i papir je sabirao obe stanice -- prvi Excel prolaz je pokazao
-' da test to jos tvrdi.)
+' Papir bloka ima raspored otkupnog lista (DOP-ODL-26): dva primerka, u svakom
+' UKUPNO ZA ISPLATU = iznos SVOG dokumenta (blok jedne stanice; blok na drugoj
+' stanici je drugi dokument), a osnovica i PDV nadoknada se izvode iz njega --
+' doplata je bruto (DOP-ODL-14). Stampa se iz istog citaca koji puni karticu.
+' Storniran dokument nema papir: StampajKO vraca razlog operateru i ne pravi
+' izvoz (isto pravilo kao otkupni list). (Do P3 je papir tvrdio iznos "bez PDV
+' nadoknade", a do P1 sabirao obe stanice.)
 ' Tok (kooperant A, juce): A @STA1 I 10, A @STA2 I 4; danas doplata I 10 din/kg.
-' SABOTAZE: dop-papir-bez-stavke, dop-papir-stornirani.
+' SABOTAZE: dop-papir-bez-stavke, dop-papir-nadoknada-od-bruto, dop-papir-stornirani.
 Private Sub T_Doplata_StampaKO()
     Dim b As String, vr As String, kA As String, kul As String, stope As Collection, o1 As String
     Dim obr As String, g As String, en As Long, idA As String, brojA As String
     Dim ws As Worksheet, ukRed As Long, c As Range, greska As String
+    Dim nUk As Long, stopa As Double, osn As Double
 
     b = DopJedinstven()
     vr = "DOPV-" & b
@@ -28634,22 +28636,33 @@ Private Sub T_Doplata_StampaKO()
     brojA = NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, idA, COL_DOP_BROJ))
 
     Set ws = modPrint.FillKOSablon(idA)
-    AssertEq (Not ws Is Nothing), True, "preduslov: papir aktivnog KO se puni"
+    AssertEq (Not ws Is Nothing), True, "preduslov: papir aktivnog dokumenta se puni"
+    ' Osnovica, nadoknada i UKUPNO su tri reda istog okvira (vrednost u koloni 8).
     For Each c In ws.UsedRange
         If Not IsError(c.value) Then
-            If Trim$(CStr(c.value)) = "UKUPNO" Then ukRed = c.row
+            If Trim$(CStr(c.value)) = "UKUPNO ZA ISPLATU:" Then
+                nUk = nUk + 1
+                If ukRed = 0 Then ukRed = c.row
+            End If
         End If
     Next c
-    AssertEq (ukRed > 0), True, "preduslov: papir ima red UKUPNO"
-    AssertEq Format$(NzD2(ws.cells(ukRed, 6).value), "0.00") & "|" & _
-             Format$(NzD2(ws.cells(ukRed, 4).value), "0.00"), _
-             Format$(100, "0.00") & "|" & Format$(10, "0.00"), _
-             "papir doplate: zbir iznosa i kg je zbir stavki SVOG bloka, ne i bloka druge stanice"
+    AssertEq (ukRed > 2), True, "preduslov: papir ima red UKUPNO ZA ISPLATU"
+    AssertEq CStr(nUk) & "|" & Format$(NzD2(ws.cells(ukRed, 8).value), "0.00"), _
+             "2|" & Format$(100, "0.00"), _
+             "papir doplate: dva primerka, UKUPNO je iznos SVOG bloka, ne i bloka druge stanice"
+    stopa = NzD2(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
+    If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
+    osn = modNovac.ZaokruziNovac(100 / (1 + stopa / 100))
+    AssertEq Format$(NzD2(ws.cells(ukRed - 2, 8).value), "0.00") & "|" & _
+             Format$(NzD2(ws.cells(ukRed - 1, 8).value), "0.00"), _
+             Format$(osn, "0.00") & "|" & Format$(100 - osn, "0.00"), _
+             "papir doplate: osnovica = UKUPNO / (1 + stopa), osnovica + PDV nadoknada = UKUPNO"
     AssertEq (DopListSadrziDeo(ws, brojA) And DopListSadrziDeo(ws, "Dop " & b & "-A") And _
-              DopListSadrziDeo(ws, "bez PDV")), True, _
-             "papir KO nosi broj, kooperanta i napomenu da je iznos bez PDV nadoknade"
+              DopListSadrziDeo(ws, "PDV nadoknada") And _
+              Not DopListSadrziDeo(ws, "bez PDV nadoknade")), True, _
+             "papir doplate nosi broj, kooperanta i PDV nadoknadu (bruto doplata)"
 
-    AssertEq modStorno.StornoDoplata_TX(idA), True, "preduslov: storno KO prolazi"
+    AssertEq modStorno.StornoDoplata_TX(idA), True, "preduslov: storno dokumenta prolazi"
     modDocStyle.DocPdfTestReset
     greska = modPrint.StampajKO(idA)
     AssertEq (Len(greska) > 0 And modDocStyle.DocPdfTest() = ""), True, _
