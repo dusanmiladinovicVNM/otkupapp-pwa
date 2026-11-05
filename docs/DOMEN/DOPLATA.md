@@ -12,7 +12,8 @@
 > 11/11, rez B i dugme 9/9), ručni Compile PASS, „Uključi filtrirane" ručno
 > proveren. Ručno nad pravim podacima još nisu provereni F5 po specifikaciji i
 > ručno mapiranje izvoda na specifikaciju. P4 (kartica zbirno po obračunu) i
-> ploča „KEŠOM NAJVIŠE" na F5 su u kodu, Excel neverifikovano. Otvoreno iz §8. Najveći rizik pred puštanje: slova „D" i „S" u pozivu na broj (release
+> ploča „KEŠOM NAJVIŠE" na F5 su potvrđeni u Excelu (RunAllTests 348/0, dokaz
+> 5/5); ručno još nisu pregledani. Otvoreno iz §8. Najveći rizik pred puštanje: slova „D" i „S" u pozivu na broj (release
 > kapija, §8/6).
 
 ## 1) Šta je doplata
@@ -456,7 +457,11 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   - `DoplataKOKooperanta` (po dokumentu) ostaje za listu ručnog mapiranja.
   - Test 321 prilagođen (broj = specifikacija, novi ref-ključ), novi test 348.
     Sabotaže `dop-kartica-po-dokumentu` i `dop-kartica-opis-po-bloku`;
-    presidrena `dop-kartica-bez-doplate`. **Excel prolaz neverifikovan.**
+    presidrena `dop-kartica-bez-doplate`.
+  - Excel (05.11.2026): pun prolaz 12 suita ZELENO (RunAllTests 348/0, BFP
+    3014/0); dokaz `dop-kartica-*` + `isp-ploca-bez-osnovice` **5/5 DOKAZANO**,
+    izvor pre/posle identičan (`1b93767f970b4162`). Ručna provera kartice i
+    štampe specifikacije iz Izveštaja nije javljena. **P4 potvrđen automatski.**
 - Još NIJE: tekst pitanja o ponavljanju kroz katalog poruka.
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
