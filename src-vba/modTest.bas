@@ -442,6 +442,7 @@ Public Sub RunAllTests()
     RunOne 335
     RunOne 336
     RunOne 337
+    RunOne 338
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1087,6 +1088,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 335: TestName = "T_Doplata_IzborBlokova"
         Case 336: TestName = "T_Doplata_KapijeCitacaIMotora"
         Case 337: TestName = "T_Doplata_RetroPlacenDrugimObracunom"
+        Case 338: TestName = "T_Doplata_EkranNacinIBlokovi"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1432,6 +1434,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 335: T_Doplata_IzborBlokova
         Case 336: T_Doplata_KapijeCitacaIMotora
         Case 337: T_Doplata_RetroPlacenDrugimObracunom
+        Case 338: T_Doplata_EkranNacinIBlokovi
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -28692,20 +28695,21 @@ Private Sub T_Doplata_EkranTok()
     n = CLng(d(2))
     redovi = d(1)
     plan = modDoplata.DoplataPlan(DopJuceOd(), DopJuceDo(), DopStope(DopStopa(vr, "S1", KLASA_I, 10)))
-    AssertEq n & "|" & NzToText(redovi(1, 1)) & "|" & Format$(NzD2(redovi(1, 8)), "0.00"), _
+    AssertEq n & "|" & NzToText(redovi(1, 1)) & "|" & Format$(NzD2(redovi(1, 7)), "0.00"), _
              UBound(plan, 1) & "|" & naziv & "|" & Format$(CDbl(plan(1, 8)), "0.00"), _
-             "ekran: pregled je isti plan koji pisac izvrsava"
+             "ekran: zbirni pregled je zbir plana koji pisac izvrsava"
 
     n0 = DopBrojRedova(TBL_DOPLATA)
     klik = modScrDoplata.Scr_DopKnjiziKlikTest()
     pitanje = modScrDoplata.Scr_DopPitanjeTest()
-    AssertEq (Not klik And InStr(1, pitanje, "1 KO", vbBinaryCompare) > 0 And _
+    AssertEq (Not klik And InStr(1, pitanje, "1 " & Poruka("OTKUI_LBL_DOP_DOK"), vbBinaryCompare) > 0 And _
               DopBrojRedova(TBL_DOPLATA) = n0), _
              True, "ekran: knjizenje pita sa brojkama, bez potvrde se nista ne upisuje"
 
     AssertEq modScrDoplata.Scr_DopKnjiziTest(False), True, "preduslov: jezgro posle pitanja knjizi"
-    AssertEq modScrDoplata.Scr_DopBrojStopa() & "|" & modScrDoplata.Scr_Lista(), "0|KO", _
-             "ekran: posle knjizenja stope su prazne, lista je KO"
+    AssertEq modScrDoplata.Scr_DopBrojStopa() & "|" & modScrDoplata.Scr_Lista(), "0|KNJIZENO", _
+             "ekran: posle knjizenja stope su prazne, lista je Knjizeno"
+    modScrDoplata.Scr_DopListaTestSet "KO"
     d = modScrDoplata.Scr_Rows("sve", "")
     n = CLng(d(2))
     redovi = d(1)
@@ -29661,3 +29665,101 @@ Private Sub T_Doplata_RetroPlacenDrugimObracunom()
     AssertEq modStorno.StornoDoplata_TX(DopIdBloka(obrB, o2)), True, "preduslov: storno doplate retro bloka"
     AssertEq DopOdstupanjaObracuna(obrA), retro, "storno doplate retro bloka vraca nalaz obracuna A"
 End Sub
+
+' ============================================================
+' 338. P2 (DOP-ODL-15/16/18): EKRAN -- NACIN, BLOKOVI SA KVACICOM, ZBIRNI PRIKAZI.
+' ============================================================
+' Nacin se menja samo dok nema unetih stopa. Lista Blokovi nosi kvacicu po
+' bloku; blok bez doplate je nema i ne moze da se ukljuci. Iskljucen blok ne
+' ulazi ni u zbirni pregled, ni u pitanje, ni u upis, a pisac dobija nacin sa
+' ekrana. Posle knjizenja lista Knjizeno nosi jedan red po obracunu i kooperantu.
+' Tok (kooperant A, juce, klasa I): o1 10 kg po 50, o2 4 kg po 58, o3 3 kg po 65;
+'   nacin 2, konacna 60 -> o1 10 din/kg (100), o2 2 (8), o3 bez doplate; o2
+'   iskljucen.
+' SABOTAZE: dop-ekran-nacin-menja-stope, dop-ekran-blok-bez-doplate-se-ukljucuje,
+'   dop-ekran-pregled-sabira-iskljucene, dop-ekran-pitanje-broji-iskljucene,
+'   dop-ekran-nacin-ne-ide-piscu, dop-ekran-izbor-ne-ide-piscu.
+Private Sub T_Doplata_EkranNacinIBlokovi()
+    Dim b As String, vr As String, kA As String, kul As String, naziv As String
+    Dim o1 As String, o2 As String, o3 As String, d As Variant, redovi As Variant
+    Dim i As Long, t As String, pitanje As String, obr As String, n0 As Long
+
+    modScrDoplata.Scr_DopTestReset
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    naziv = "Dop " & b & "-A"
+    o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0, , 50)
+    o2 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 4, 0, , 58)
+    o3 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 3, 0, , 65)
+
+    AssertEq modScrDoplata.Scr_DopNacinTestSet(DOP_NACIN_KONACNA) & "|" & modScrDoplata.Scr_DopNacin(), _
+             "|" & CStr(DOP_NACIN_KONACNA), "preduslov: bez stopa se nacin menja"
+    AssertEq modScrDoplata.Scr_DopStopaTestDodaj(vr, "S1", KLASA_I, 60), "", _
+             "preduslov: konacna cena se dodaje kao stopa"
+    AssertEq (Len(modScrDoplata.Scr_DopNacinTestSet(DOP_NACIN_PO_KG)) > 0 And _
+              modScrDoplata.Scr_DopNacin() = DOP_NACIN_KONACNA), True, _
+             "ekran: nacin se ne menja dok ima unetih stopa"
+
+    modScrDoplata.Scr_DopUnosTestSet Format$(Date, "dd.mm.yyyy"), _
+        Format$(DopJuceOd(), "dd.mm.yyyy"), "00:00", Format$(DopJuceOd(), "dd.mm.yyyy"), "23:59", _
+        "test 338"
+    AssertEq modScrDoplata.Scr_DopPregledTest(), "", "preduslov: pregled prolazi"
+
+    modScrDoplata.Scr_DopListaTestSet "BLOKOVI"
+    AssertEq DopEkranBlok(o1) & "#" & DopEkranBlok(o3), _
+             ChrW(10003) & "|#|" & Poruka("OTKUI_DOP_ST_BEZ"), _
+             "ekran: blok sa doplatom je ukljucen, blok bez doplate nema kvacicu"
+    AssertEq (Len(modScrDoplata.Scr_DopBlokTestPrebaci(o3)) > 0 And _
+              DopEkranBlok(o3) = "|" & Poruka("OTKUI_DOP_ST_BEZ")), True, _
+             "ekran: blok bez doplate ne moze da se ukljuci"
+    AssertEq modScrDoplata.Scr_DopBlokTestPrebaci(o2) & "|" & DopEkranBlok(o2), _
+             "||" & Poruka("OTKUI_DOP_ST_ISKLJUCEN"), "preduslov: klik na blok ga iskljucuje"
+
+    modScrDoplata.Scr_DopListaTestSet "PLAN"
+    d = modScrDoplata.Scr_Rows("sve", "")
+    redovi = d(1)
+    AssertEq CLng(d(2)) & "|" & NzToText(redovi(1, 1)) & "|" & NzToText(redovi(1, 5)) & "|" & _
+             Format$(NzD2(redovi(1, 6)), "0.00") & "|" & Format$(NzD2(redovi(1, 7)), "0.00"), _
+             "1|" & naziv & "|1|" & Format$(10, "0.00") & "|" & Format$(100, "0.00"), _
+             "ekran: zbirni pregled sabira samo ukljucene blokove"
+
+    n0 = DopBrojRedova(TBL_DOPLATA)
+    AssertEq modScrDoplata.Scr_DopKnjiziKlikTest(), False, "preduslov: bez potvrde se ne knjizi"
+    pitanje = modScrDoplata.Scr_DopPitanjeTest()
+    AssertEq (InStr(1, pitanje, "1 " & Poruka("OTKUI_LBL_DOP_DOK") & ", " & FmtKolicina(10) & _
+                    " kg, " & Format$(100, "#,##0.00") & " din", vbBinaryCompare) > 0 And _
+              DopBrojRedova(TBL_DOPLATA) = n0), True, _
+             "ekran: pitanje pred knjizenje broji samo ukljucene blokove"
+
+    AssertEq modScrDoplata.Scr_DopKnjiziTest(False), True, "preduslov: jezgro posle pitanja knjizi"
+    AssertEq modScrDoplata.Scr_Lista(), "KNJIZENO", "preduslov: posle knjizenja lista je Knjizeno"
+    d = modScrDoplata.Scr_Rows("sve", "")
+    redovi = d(1)
+    For i = 1 To CLng(d(2))
+        If NzToText(redovi(i, 2)) = naziv Then
+            t = NzToText(redovi(i, 4)) & "|" & Format$(NzD2(redovi(i, 6)), "0.00")
+            obr = NzToText(redovi(i, 7))
+        End If
+    Next i
+    AssertEq NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, DopIdBloka(obr, o1), COL_DOP_NACIN)), _
+             CStr(DOP_NACIN_KONACNA), "ekran: zaglavlje pamti nacin izabran na ekranu"
+    AssertEq t & "|" & DopIdBloka(obr, o2), "1|" & Format$(100, "0.00") & "|", _
+             "ekran: knjizi se tacno ukljuceni blokovi, Knjizeno je zbirno po kooperantu"
+    modScrDoplata.Scr_DopTestReset
+End Sub
+
+' Kvacica i status reda liste Blokovi za blok: "<kvacica>|<status>", ili "nema".
+Private Function DopEkranBlok(ByVal otkupID As String) As String
+    Dim d As Variant, redovi As Variant, i As Long
+    DopEkranBlok = "nema"
+    d = modScrDoplata.Scr_Rows("sve", "")
+    redovi = d(1)
+    For i = 1 To CLng(d(2))
+        If NzToText(redovi(i, 12)) = otkupID Then
+            DopEkranBlok = NzToText(redovi(i, 1)) & "|" & NzToText(redovi(i, 11))
+            Exit Function
+        End If
+    Next i
+End Function

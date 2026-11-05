@@ -78,6 +78,8 @@ produkciji (PR #460, draft), pa se kanon šeme sme menjati.
 | **DOP-ODL-19** | *(zamenjuje deo 05)* Doplata pripada **stanici bloka**: Saldo OM, isplata kroz banku (OMID vezanog reda) i gotovina (F5 na toj stanici) — kao otkupni blok. |
 | **DOP-ODL-20** | Doplata je **zaseban dokument sa svojim otvorenim iznosom** (ne povećava dug bloka). Nalozi za banku **po dokumentu**, kao otkupni blok; poziv na broj = broj doplate. Izvod, gotovina i primena avansa rade kao u F4/F4b, po dokumentu. |
 | **DOP-ODL-06** *(rev.)* | Blok koji već ima aktivnu doplatu za istu klasu traži **upozorenje i potvrdu** — u oba načina unosa. |
+| **DOP-ODL-21** *(05.11.2026)* | **Specifikacija doplate ima svoj broj** i obuhvata **jednog kooperanta u jednom obračunu**: svaki obračun daje kooperantu novu specifikaciju, broj teče po kooperantu u sezoni (1., 2., …). Sadržaj se posle štampe i plaćanja ne menja. Štampa se i papir bloka (radnja nad jednim blokom) i specifikacija po kooperantu. |
+| **DOP-ODL-22** *(05.11.2026)* | **Specifikacija je osnov plaćanja**, pored bloka: nalog za banku može po specifikaciji (jedan nalog, poziv = broj specifikacije) ili po bloku kao danas. Izvod po broju specifikacije raspoređuje iznos na njene dokumente redom (najstariji blok prvi), višak ide u avans; isto za gotovinu. Radi se **posle P2, uz P3**, kao zaseban rez sa pre-flight kapijom (dira banku i identitet dokumenta). Format broja još nije određen — mora preživeti e-banking (v. §8, stavka 6). |
 
 ## 3) Struktura dokumenta (potvrđena 03.11.2026; **revidirana u §2a**)
 
@@ -303,12 +305,29 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   (`ea8401c7716eb570`).
 - **Ručni Compile (05.11.2026): PASS** (`Debug → Compile VBAProject` nad temp
   kopijom iz `run_vba.py --compile-only --keep`). Time je P1 zatvoren.
-- Još NIJE: ekran (P2 — bira način i blokove; do tada knjiži sve blokove u
-  načinu 1, a pitanje broji dokumente po bloku), papir po uzoru na otkupni list
-  i specifikacija (P3), kartica zbirno po obračunu (P4 — do tada red po dokumentu).
+- **P2 U KODU (05.11.2026), ponašanje neverifikovano dok se ne pusti u Excelu:**
+  ekran `modScrDoplata` — polje „Način unosa" (menja se samo bez unetih stopa,
+  natpis iznosa prati način); pet lista: Stope, **Pregled** zbirno po
+  kooperantu, kulturi i klasi (samo uključeni blokovi), **Blokovi** (red po
+  bloku i klasi, ✓ po bloku, klik uključuje/isključuje, „Uključi sve /
+  Isključi sve", status „bez doplate / isključen / već ima doplatu"),
+  **Knjiženo** zbirno po obračunu i kooperantu (storno obračuna), **Dokumenti**
+  po bloku (štampa, storno dokumenta, storno obračuna). „Knjiži" šalje piscu
+  način i tačno uključene blokove; pitanje broji samo njih. Isključenje ostaje
+  kroz nov pregled, prazni ga knjiženje ili „Isprazni stope". Test 338 (325
+  prilagođen: lista „Plan" je sada zbirni Pregled), sabotaže `dop-ekran-*`
+  (6 novih, 2 presidrene).
+- Još NIJE: papir bloka i specifikacija sa brojem (P3), plaćanje po
+  specifikaciji (DOP-ODL-22), kartica zbirno po obračunu (P4 — do tada red po
+  dokumentu).
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
-sa kvačicama, knjižena lista zbirno.
-**P3 — papir bloka i Specifikacija doplate** (PDF).
+sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
+Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,
+Dokumenti po bloku za štampu i storno); promena načina se odbija dok ima unetih
+stopa; isključeni blokovi ostaju isključeni do knjiženja ili čišćenja; „Uključi
+sve / Isključi sve" na listi Blokovi.
+**P3 — papir bloka i Specifikacija doplate** (PDF), sa brojem specifikacije
+(DOP-ODL-21); zatim plaćanje po specifikaciji (DOP-ODL-22, pre-flight).
 **P4 — kartica zbirno po obračunu**, opis po kulturi i klasi.
 
 ## 8) Otvoreno

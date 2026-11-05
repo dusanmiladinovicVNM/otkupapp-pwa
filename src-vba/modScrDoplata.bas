@@ -1,7 +1,7 @@
 Attribute VB_Name = "modScrDoplata"
 '=====================================================================
-' modScrDoplata - ekran "Doplata kooperantima" (knjizno odobrenje, KO).
-' Domen i odluke: docs/DOMEN/DOPLATA.md (DOP-ODL-*, DOP-*). Faza F3.
+' modScrDoplata - ekran "Doplata kooperantima" (dokument doplate po bloku).
+' Domen i odluke: docs/DOMEN/DOPLATA.md (DOP-ODL-*, DOP-*). Faza F3, P2.
 '
 ' Ljuska ga ne poznaje po imenu: dobija ga preko Application.Run, da klijent
 ' kome ovaj modul nedostaje i dalje radi (zamka #19).
@@ -20,12 +20,24 @@ Attribute VB_Name = "modScrDoplata"
 ' kooperanta bez nizvodnog lanca robe, pa mu ne treba ni pregled posledica po
 ' modovima koji je razlog postojanja ekrana Storno.
 '
-' TRI LISTE u deljenoj mrezi:
-'   STOPE  stope koje cekaju knjizenje (korpa); radnja: ukloni stopu
-'   PLAN   pregled obracuna za unet period i stope -- jedan red po kooperantu,
-'          stanici i kljucu, tacno ono sto ce "Knjizi" upisati
-'   KO     aktivna knjizna odobrenja; radnje: stampaj, storniraj KO, storniraj
-'          ceo obracun
+' PET LISTA u deljenoj mrezi (P2, odluka 05.11.2026; prikazi su ZBIRNI,
+' DOP-ODL-18):
+'   STOPE     stope koje cekaju knjizenje (korpa); radnja: ukloni stopu
+'   PLAN      "Pregled": zbirno po kooperantu, kulturi i klasi, SAMO ukljuceni
+'             blokovi sa doplatom -- tacno ono sto ce "Knjizi" upisati
+'   BLOKOVI   jedan red po bloku i klasi poslednjeg pregleda, sa kvacicom; klik
+'             na red ukljucuje/iskljucuje ceo blok (DOP-ODL-16); radnje:
+'             ukljuci sve, iskljuci sve
+'   KNJIZENO  zbirno po obracunu i kooperantu; radnja: storniraj obracun
+'   KO        "Dokumenti": jedan red po dokumentu doplate (bloku); radnje:
+'             stampaj, storniraj dokument, storniraj ceo obracun
+'
+' NACIN UNOSA (DOP-ODL-15) vazi za ceo obracun i menja se samo dok nema unetih
+' stopa: ista vrednost u drugom nacinu znaci nesto drugo (10,80 doplate po kg
+' nije 10,80 konacne cene). Ekran pamti ISKLJUCENE blokove (podrazumevano su
+' svi ukljuceni); iskljucenje ostaje i kroz nov pregled, do knjizenja ili
+' praznjenja stopa. Izbor ide piscu kao OtkupID-evi (KnjiziDoplatu_TX), a pisac
+' izabrane ponovo proverava.
 '
 ' PITANJA OPERATERU idu kroz Pitaj, obrazac KI-015: u test rezimu pitanje se
 ' BELEZI i odgovor je uvek "Ne" -- MsgBox u nevidljivom Excelu visi. Put "Da"
@@ -42,6 +54,8 @@ Private Const EKRAN As String = "DOPLATA"
 Private Const DOP_STOPE As String = "STOPE"
 Private Const DOP_PLAN  As String = "PLAN"
 Private Const DOP_KO    As String = "KO"
+Private Const DOP_BLOKOVI  As String = "BLOKOVI"
+Private Const DOP_KNJIZENO As String = "KNJIZENO"
 
 ' Zona: dva reda polja, red objasnjenja i red dugmadi.
 Private Const DOP_ZONA_H  As Single = 172
@@ -60,6 +74,10 @@ Private Const DOP_BTN_H   As Single = 24
 Private Const ST_COL_KLJUC As Long = 5
 Private Const KO_COL_ID    As Long = 7
 Private Const KO_COL_OBR   As Long = 8
+' Lista BLOKOVI: kvacica i identitet bloka (OtkupID). Lista KNJIZENO: obracun.
+Private Const BL_COL_OZN   As Long = 1
+Private Const BL_COL_ID    As Long = 12
+Private Const KNJ_COL_OBR  As Long = 7
 
 Private mLista As String
 Private mStope As Collection        ' Dictionary: VrstaVoca, SortaVoca, Klasa, Cena
@@ -68,6 +86,8 @@ Private mPlanBez As String          ' stope bez otkupa iz poslednjeg pregleda
 Private mFill As Boolean            ' punjenje kontrola okida Change
 Private mCombosPunjeni As Boolean
 Private mStep As String
+Private mNacin As Long              ' DOP_NACIN_* (DOP-ODL-15); 0 = nije biran -> nacin 1
+Private mIskljuceni As Object       ' Dictionary: OtkupID iskljucenih blokova (DOP-ODL-16)
 
 ' TEST SEAM (KI-015 obrazac): poslednje pitanje koje bi ekran postavio. Seam
 ' samo POSMATRA -- odgovor u test rezimu je uvek "Ne". Gasi ga Scr_DopTestReset,
@@ -90,7 +110,9 @@ Public Function Scr_Liste() As Variant
     Scr_Liste = Array( _
         DOP_STOPE & "|OTKUI_SEG_DOP_STOPE|OTKUI_GRID_TITLE_DOP_STOPE|58", _
         DOP_PLAN & "|OTKUI_SEG_DOP_PLAN|OTKUI_GRID_TITLE_DOP_PLAN|64", _
-        DOP_KO & "|OTKUI_SEG_DOP_KO|OTKUI_GRID_TITLE_DOP_KO|74")
+        DOP_BLOKOVI & "|OTKUI_SEG_DOP_BLOKOVI|OTKUI_GRID_TITLE_DOP_BLOKOVI|64", _
+        DOP_KNJIZENO & "|OTKUI_SEG_DOP_KNJIZENO|OTKUI_GRID_TITLE_DOP_KNJIZENO|74", _
+        DOP_KO & "|OTKUI_SEG_DOP_KO|OTKUI_GRID_TITLE_DOP_KO|82")
 End Function
 
 Public Function Scr_Lista() As String
@@ -107,6 +129,11 @@ Public Function Scr_Radnje() As String
     Select Case Scr_Lista()
         Case DOP_STOPE
             Scr_Radnje = "dopdel:OTKUI_BTN_DOP_UKLONI:110:danger:1"
+        Case DOP_BLOKOVI
+            Scr_Radnje = "dopsve:OTKUI_BTN_DOP_UKLJUCI_SVE:110:ghost:0|" & _
+                         "dopnista:OTKUI_BTN_DOP_ISKLJUCI_SVE:110:ghost:0"
+        Case DOP_KNJIZENO
+            Scr_Radnje = "dopstornoobr:OTKUI_BTN_DOP_STORNO_OBR:150:danger:1"
         Case DOP_KO
             Scr_Radnje = "dopprint:OTKUI_BTN_DOP_STAMPA:104:ghost:1|" & _
                          "dopstorno:OTKUI_BTN_DOP_STORNO:118:danger:1|" & _
@@ -137,7 +164,8 @@ Public Sub Scr_Build(ByVal z As Object)
     modOtkupUI.NewFieldG z, "scrDopDo", Poruka("OTKUI_FLD_DOP_DO"), "txt", "", 1, False, False, "DOP"
     modOtkupUI.NewFieldG z, "scrDopDoSat", Poruka("OTKUI_FLD_DOP_SAT"), "txt", "", 1, False, False, "DOP"
     modOtkupUI.NewFieldG z, "scrDopNap", Poruka("OTKUI_FLD_DOP_NAPOMENA"), "txt", "", 1, False, False, "DOP"
-    ' --- red B: stopa po kljucu cenovnika (DOP-ODL-01, 02) ---
+    ' --- red B: nacin unosa (DOP-ODL-15) i stopa po kljucu cenovnika (DOP-ODL-02) ---
+    modOtkupUI.NewFieldG z, "scrDopNacin", Poruka("OTKUI_FLD_DOP_NACIN"), "cmb", "", 1, False, False, "DOP"
     modOtkupUI.NewFieldG z, "scrDopVrsta", Poruka("OTKUI_FLD_DOP_VRSTA"), "cmb", "", 1, False, False, "DOP"
     modOtkupUI.NewFieldG z, "scrDopSorta", Poruka("OTKUI_FLD_DOP_SORTA"), "cmb", "", 1, False, False, "DOP"
     modOtkupUI.NewFieldG z, "scrDopKlasa", Poruka("OTKUI_FLD_DOP_KLASA"), "cmb", "", 1, False, False, "DOP"
@@ -198,10 +226,11 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     PoljeX z, "scrDopDoSat", X, fwS, DOP_Y_LBL_A: X = X + fwS + DOP_GAP
     PoljeX z, "scrDopNap", X, fw, DOP_Y_LBL_A
 
-    ' RED B: vrsta, sorta, klasa, stopa, dugme "dodaj stopu".
-    fw = (w - PAD * 2 - DOP_GAP * 4 - 130) / 4
+    ' RED B: nacin, vrsta, sorta, klasa, stopa, dugme "dodaj stopu".
+    fw = (w - PAD * 2 - DOP_GAP * 5 - 130) / 5
     If fw < 90 Then fw = 90
     X = PAD
+    PoljeX z, "scrDopNacin", X, fw, DOP_Y_LBL_B: X = X + fw + DOP_GAP
     PoljeX z, "scrDopVrsta", X, fw, DOP_Y_LBL_B: X = X + fw + DOP_GAP
     PoljeX z, "scrDopSorta", X, fw, DOP_Y_LBL_B: X = X + fw + DOP_GAP
     PoljeX z, "scrDopKlasa", X, fw, DOP_Y_LBL_B: X = X + fw + DOP_GAP
@@ -287,6 +316,103 @@ Private Sub PonistiPregled()
     mPlan = Empty
     mPlanBez = ""
 End Sub
+
+' Nacin unosa za ceo obracun (DOP-ODL-15). Dok operater ne izabere, nacin 1.
+Private Function Nacin() As Long
+    If mNacin = DOP_NACIN_KONACNA Then
+        Nacin = DOP_NACIN_KONACNA
+    Else
+        Nacin = DOP_NACIN_PO_KG
+    End If
+End Function
+
+' Promena nacina. Stope su zadate u starom nacinu, pa se nacin menja SAMO dok
+' nema unetih stopa (odluka 05.11.2026) -- inace bi 10,80 doplate tiho postalo
+' 10,80 konacne cene. "" kad je promenjen (ili je isti), inace razlog.
+Private Function PromeniNacinJezgro(ByVal novi As Long) As String
+    If novi <> DOP_NACIN_PO_KG And novi <> DOP_NACIN_KONACNA Then
+        PromeniNacinJezgro = Poruka("OTKUI_ERR_DOP_NACIN")
+        Exit Function
+    End If
+    If novi = Nacin() Then Exit Function
+    If BrojStopa() <> 0 Then
+        PromeniNacinJezgro = Poruka("OTKUI_ERR_DOP_NACIN_STOPE")
+        Exit Function
+    End If
+    mNacin = novi
+    PonistiPregled
+End Function
+
+' ISKLJUCENI blokovi (DOP-ODL-16: podrazumevano su svi ukljuceni). Ostaju i kroz
+' nov pregled; prazne ih knjizenje i praznjenje stopa.
+Private Function Iskljuceni() As Object
+    If mIskljuceni Is Nothing Then
+        Set mIskljuceni = CreateObject("Scripting.Dictionary")
+        mIskljuceni.CompareMode = vbTextCompare
+    End If
+    Set Iskljuceni = mIskljuceni
+End Function
+
+' Blokovi poslednjeg pregleda sa bar jednom stavkom za knjizenje (plan:
+' kolona 11 OtkupID, 16 status -- modDoplata.DoplataPlan).
+Private Function BlokSaDoplatom() As Object
+    Dim d As Object, i As Long
+    Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    If IsArray(mPlan) Then
+        For i = 1 To UBound(mPlan, 1)
+            If CLng(mPlan(i, 16)) = modDoplata.DOP_PLAN_KNJIZI Then d(CStr(mPlan(i, 11))) = True
+        Next i
+    End If
+    Set BlokSaDoplatom = d
+End Function
+
+' Izbor za pisca: blokovi pregleda sa doplatom koje operater nije iskljucio.
+' Kljuc je OtkupID -- oblik koji primaju KnjiziDoplatu_TX i DoplataPreklapanja.
+Private Function Izabrani() As Object
+    Dim d As Object, k As Variant
+    Set d = BlokSaDoplatom()
+    For Each k In Iskljuceni().keys
+        If d.Exists(CStr(k)) Then d.Remove CStr(k)
+    Next k
+    Set Izabrani = d
+End Function
+
+' Ukljuci ili iskljuci ceo blok (sve njegove klase). "" kad je prebacen, inace
+' razlog. Blok bez doplate nema sta da ukljuci -- pisac ga ionako ne knjizi.
+Private Function PrebaciBlok(ByVal otkupID As String) As String
+    Dim d As Object
+    If Len(otkupID) = 0 Or Not IsArray(mPlan) Then
+        PrebaciBlok = Poruka("OTKUI_ERR_NEMA_REDA")
+        Exit Function
+    End If
+    If Not BlokSaDoplatom().Exists(otkupID) Then
+        PrebaciBlok = Poruka("OTKUI_ERR_DOP_BLOK_BEZ_DOPLATE")
+        Exit Function
+    End If
+    Set d = Iskljuceni()
+    If d.Exists(otkupID) Then
+        d.Remove otkupID
+    Else
+        d(otkupID) = True
+    End If
+End Function
+
+Private Function PostaviSveBlokove(ByVal ukljuci As Boolean) As Boolean
+    Dim d As Object, k As Variant
+    If Not IsArray(mPlan) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_DOP_PRAZAN_PLAN"), True
+        Exit Function
+    End If
+    Set mIskljuceni = Nothing
+    If Not ukljuci Then
+        Set d = Iskljuceni()
+        For Each k In BlokSaDoplatom().keys
+            d(CStr(k)) = True
+        Next k
+    End If
+    PostaviSveBlokove = True
+End Function
 
 '=====================================================================
 ' UNOS ZONE
@@ -377,7 +503,10 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
         ObradiKlik = True
         Exit Function
     End If
-    If Left$(tag, 4) = "row:" Then Exit Function
+    If Left$(tag, 4) = "row:" Then
+        If Scr_Lista() = DOP_BLOKOVI Then ObradiKlik = KlikNaBlok(CLng(val(Mid$(tag, 5))))
+        Exit Function
+    End If
     If Left$(tag, 4) = "dbl:" Then Exit Function
     If Left$(tag, 4) = "chg:" Then
         ObradiPromenu Mid$(tag, 5)
@@ -396,10 +525,37 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
     End Select
 End Function
 
+' Klik na red liste Blokovi ukljucuje ili iskljucuje ceo blok -- obrazac liste
+' blokova na ekranu Storno (kvacica, identitet u nevidljivoj koloni), samo sto
+' ekran ovde pamti ISKLJUCENE. True kad se lista menja (mreza se cita ponovo).
+Private Function KlikNaBlok(ByVal red As Long) As Boolean
+    Dim greska As String
+    If red < 1 Then Exit Function
+    greska = PrebaciBlok(Trim$(CStr(modOtkupUI.GridCell(red, BL_COL_ID))))
+    If Len(greska) > 0 Then
+        modOtkupUI.ShowToast greska, True
+        Exit Function
+    End If
+    KlikNaBlok = True
+End Function
+
+' Combo nacina. Odbijena promena vraca combo na stvarni nacin (OsveziZonu).
+Private Sub PromeniNacinIzCombo()
+    Dim c As Object, greska As String
+    Set c = Kontrola("scrDopNacin")
+    If c Is Nothing Then Exit Sub
+    If c.ListIndex < 0 Then Exit Sub
+    greska = PromeniNacinJezgro(c.ListIndex + 1)
+    If Len(greska) > 0 Then modOtkupUI.ShowToast greska, True
+    OsveziZonu
+End Sub
+
 ' Tag je ime KONTROLE (nmT), ne polja -- tako ga ljuska i salje.
 Private Sub ObradiPromenu(ByVal tag As String)
     If mFill Then Exit Sub
     Select Case tag
+        Case "scrDopNacinT"
+            PromeniNacinIzCombo
         Case "scrDopVrstaT"
             PuniSorte
         Case "scrDopDatumT", "scrDopOdT", "scrDopOdSatT", "scrDopDoT", "scrDopDoSatT"
@@ -415,6 +571,12 @@ Private Function RadnjaNadRedom(ByVal tag As String) As Boolean
     Dim p() As String, red As Long
     p = Split(Mid$(tag, 5), ":")
     If UBound(p) < 1 Then Exit Function
+    ' Radnje nad celom listom ne traze red (trebaRed = 0).
+    Select Case p(0)
+        Case "dopsve", "dopnista"
+            If Scr_Lista() = DOP_BLOKOVI Then RadnjaNadRedom = PostaviSveBlokove(p(0) = "dopsve")
+            Exit Function
+    End Select
     red = CLng(val(p(1)))
     If red < 1 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
@@ -430,8 +592,11 @@ Private Function RadnjaNadRedom(ByVal tag As String) As Boolean
             If Scr_Lista() = DOP_KO Then _
                 RadnjaNadRedom = StornirajKO(Trim$(CStr(modOtkupUI.GridCell(red, KO_COL_ID))))
         Case "dopstornoobr"
-            If Scr_Lista() = DOP_KO Then _
+            If Scr_Lista() = DOP_KO Then
                 RadnjaNadRedom = StornirajObracun(Trim$(CStr(modOtkupUI.GridCell(red, KO_COL_OBR))))
+            ElseIf Scr_Lista() = DOP_KNJIZENO Then
+                RadnjaNadRedom = StornirajObracun(Trim$(CStr(modOtkupUI.GridCell(red, KNJ_COL_OBR))))
+            End If
         Case Else
             modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & p(0), True
     End Select
@@ -509,8 +674,9 @@ Private Function IsprazniStope() As Boolean
     If BrojStopa() = 0 Then Exit Function
     If Not Pitaj(Poruka("OTKUI_ASK_DOP_OCISTI")) Then Exit Function
     Set mStope = New Collection
+    Set mIskljuceni = Nothing
     PonistiPregled
-    IsprazniStope = (Scr_Lista() <> DOP_KO)
+    IsprazniStope = (Scr_Lista() <> DOP_KO And Scr_Lista() <> DOP_KNJIZENO)
 End Function
 
 ' Pregled obracuna: isti plan koji ce pisac izvrsiti (DoplataPlan).
@@ -537,7 +703,7 @@ Private Function PregledJezgro() As String
         Exit Function
     End If
     On Error GoTo EH
-    mPlan = modDoplata.DoplataPlan(pOd, pDo, Stope(), mPlanBez)
+    mPlan = modDoplata.DoplataPlan(pOd, pDo, Stope(), mPlanBez, Nacin())
     Exit Function
 EH:
     PregledJezgro = ChrW(10007) & " " & Err.description
@@ -547,7 +713,7 @@ End Function
 ' "Knjizi": pregled, pitanje sa brojkama, pitanje o ponavljanju, pa jezgro.
 Private Function KnjiziKlik() As Boolean
     Dim greska As String, pOd As Date, pDo As Date, dat As Date
-    Dim preklop As String, potvrda As Boolean
+    Dim preklop As String, potvrda As Boolean, izbor As Object
 
     greska = PregledJezgro()
     If Len(greska) > 0 Then
@@ -565,10 +731,18 @@ Private Function KnjiziKlik() As Boolean
         Exit Function
     End If
 
-    If Not Pitaj(PitanjeKnjizenja()) Then Exit Function
+    Set izbor = Izabrani()
+    If izbor.count = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_DOP_NIJEDAN_BLOK"), True
+        mLista = DOP_BLOKOVI
+        KnjiziKlik = True
+        Exit Function
+    End If
+
+    If Not Pitaj(PitanjeKnjizenja(izbor)) Then Exit Function
 
     If UnosPerioda(pOd, pDo, dat, greska) Then
-        preklop = modDoplata.DoplataPreklapanja(pOd, pDo, Stope())
+        preklop = modDoplata.DoplataPreklapanja(pOd, pDo, Stope(), Nacin(), izbor)
         If Len(preklop) > 0 Then
             If Not Pitaj(preklop) Then Exit Function
             potvrda = True
@@ -577,48 +751,72 @@ Private Function KnjiziKlik() As Boolean
     KnjiziKlik = KnjiziJezgro(potvrda)
 End Function
 
-' Tekst pitanja pred knjizenje: koliko dokumenata, kg i dinara -- iz istog plana.
-' Dokument je po BLOKU (DOPLATA.md par. 2a), pa se broje blokovi plana sa
-' doplatom (kolona 11, status 16); red "bez doplate" se ne knjizi.
-Private Function PitanjeKnjizenja() As String
-    Dim i As Long, blok As Object, kg As Double, din As Double
-    Set blok = CreateObject("Scripting.Dictionary")
-    blok.CompareMode = vbTextCompare
+' Tekst pitanja pred knjizenje: koliko dokumenata, kg i dinara -- iz istog plana
+' i istog izbora koji ide piscu. Dokument je po BLOKU (DOPLATA.md par. 2a): broje
+' se UKLJUCENI blokovi sa doplatom (plan: kolona 11 OtkupID, 16 status), a
+' iskljuceni se navode posebno.
+Private Function PitanjeKnjizenja(ByVal izbor As Object) As String
+    Dim i As Long, kg As Double, din As Double, nIskl As Long
     If IsArray(mPlan) Then
         For i = 1 To UBound(mPlan, 1)
             If CLng(mPlan(i, 16)) = modDoplata.DOP_PLAN_KNJIZI Then
-                blok(CStr(mPlan(i, 11))) = True
-                kg = kg + CDbl(mPlan(i, 6))
-                din = din + CDbl(mPlan(i, 8))
+                If izbor.Exists(CStr(mPlan(i, 11))) Then
+                    kg = kg + CDbl(mPlan(i, 6))
+                    din = din + CDbl(mPlan(i, 8))
+                End If
             End If
         Next i
     End If
-    PitanjeKnjizenja = Poruka("OTKUI_ASK_DOP_KNJIZI") & " " & CStr(blok.count) & " KO, " & _
-                       FmtKolicina(kg) & " kg, " & Format$(din, "#,##0.00") & " din?"
+    nIskl = BlokSaDoplatom().count - izbor.count
+    PitanjeKnjizenja = Poruka("OTKUI_ASK_DOP_KNJIZI") & " " & CStr(izbor.count) & " " & _
+                       Poruka("OTKUI_LBL_DOP_DOK") & ", " & FmtKolicina(kg) & " kg, " & _
+                       Format$(din, "#,##0.00") & " din"
+    If nIskl > 0 Then
+        PitanjeKnjizenja = PitanjeKnjizenja & " (" & Poruka("OTKUI_LBL_DOP_ISKLJUCENO") & " " & _
+                           CStr(nIskl) & ")"
+    End If
+    PitanjeKnjizenja = PitanjeKnjizenja & "?"
 End Function
 
-' Upis: jedini poziv pisca sa ovog ekrana. Uspeh prazni stope i pregled i
-' prebacuje na listu KO -- sledeci obracun je nov obracun.
+' Upis: jedini poziv pisca sa ovog ekrana -- u izabranom nacinu, sa tacno
+' ukljucenim blokovima poslednjeg pregleda (pisac ih ponovo proverava i pada po
+' imenu ako se nesto promenilo). Uspeh prazni stope, pregled i izbor i prelazi
+' na listu Knjizeno -- sledeci obracun je nov obracun.
 Private Function KnjiziJezgro(ByVal potvrdaPonavljanja As Boolean) As Boolean
     Dim pOd As Date, pDo As Date, dat As Date, greska As String
-    Dim obr As String, en As Long
+    Dim obr As String, en As Long, izbor As Object
 
     If Not UnosPerioda(pOd, pDo, dat, greska) Then
         modOtkupUI.ShowToast greska, True
         Exit Function
     End If
+    If Not IsArray(mPlan) Then
+        greska = PregledJezgro()
+        If Len(greska) > 0 Then
+            modOtkupUI.ShowToast greska, True
+            Exit Function
+        End If
+    End If
+    Set izbor = Izabrani()
+    If izbor.count = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_DOP_NIJEDAN_BLOK"), True
+        Exit Function
+    End If
     obr = modDoplata.KnjiziDoplatu_TX(dat, pOd, pDo, Stope(), Unos("scrDopNap"), _
-                                      potvrdaPonavljanja, greska, en)
+                                      potvrdaPonavljanja, greska, en, Nacin(), _
+                                      izbor)
     If Len(obr) = 0 Then
         modOtkupUI.ShowToast ChrW(10007) & " " & greska, True
         Exit Function
     End If
 
     Set mStope = New Collection
+    Set mIskljuceni = Nothing
     PonistiPregled
-    mLista = DOP_KO
+    mLista = DOP_KNJIZENO
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_DOP_KNJIZENO") & " " & _
-                         CStr(modDoplata.AktivneDoplateObracuna(obr).count) & " KO", False
+                         CStr(modDoplata.AktivneDoplateObracuna(obr).count) & " " & _
+                         Poruka("OTKUI_LBL_DOP_DOK"), False
     KnjiziJezgro = True
 End Function
 
@@ -655,12 +853,14 @@ Private Function StornirajObracun(ByVal obracunID As String) As Boolean
         Exit Function
     End If
     n = modDoplata.AktivneDoplateObracuna(obracunID).count
-    If Not Pitaj(Poruka("OTKUI_ASK_DOP_STORNO_OBR") & " " & CStr(n) & " KO?") Then Exit Function
+    If Not Pitaj(Poruka("OTKUI_ASK_DOP_STORNO_OBR") & " " & CStr(n) & " " & _
+                 Poruka("OTKUI_LBL_DOP_DOK") & "?") Then Exit Function
     If Not modStorno.StornoObracunDoplate_TX(obracunID) Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_DOP_STORNO") & " " & obracunID, True
         Exit Function
     End If
-    modOtkupUI.ShowToast Poruka("OTKUI_MSG_DOP_STORNIRANO") & " " & CStr(n) & " KO", False
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_DOP_STORNIRANO") & " " & CStr(n) & " " & _
+                         Poruka("OTKUI_LBL_DOP_DOK"), False
     StornirajObracun = True
 End Function
 
@@ -701,6 +901,13 @@ Private Sub PuniCombos()
     CB.Clear
     CB.AddItem KLASA_I
     CB.AddItem KLASA_II
+
+    ' Redosled stavki JE nacin: ListIndex + 1 = DOP_NACIN_PO_KG / DOP_NACIN_KONACNA.
+    mStep = "nacin"
+    Set CB = z.Controls("scrDopNacin").Controls("scrDopNacinT")
+    CB.Clear
+    CB.AddItem Poruka("OTKUI_DOP_NACIN_1")
+    CB.AddItem Poruka("OTKUI_DOP_NACIN_2")
 
     mCombosPunjeni = True
     mFill = False
@@ -747,23 +954,46 @@ End Sub
 
 Private Sub OsveziZonu()
     Dim z As Object, t As String, i As Long, kg As Double, din As Double
-    Dim koop As Object
+    Dim izbor As Object, nSa As Long, nSvih As Long, svi As Object, pre As Boolean
     On Error Resume Next
     Set z = Zona()
     If z Is Nothing Then Exit Sub
     PuniCombos
 
+    ' Combo i natpis iznosa prate STVARNI nacin (i posle odbijene promene).
+    pre = mFill
+    mFill = True
+    z.Controls("scrDopNacin").Controls("scrDopNacinT").ListIndex = Nacin() - 1
+    mFill = pre
+    If Nacin() = DOP_NACIN_KONACNA Then
+        z.Controls("scrDopCena").Controls("scrDopCenaL").caption = UCase$(Poruka("OTKUI_FLD_DOP_KONACNA"))
+    Else
+        z.Controls("scrDopCena").Controls("scrDopCenaL").caption = UCase$(Poruka("OTKUI_FLD_DOP_STOPA"))
+    End If
+
     t = Poruka("OTKUI_LBL_DOP_STOPA") & " " & CStr(BrojStopa())
     If IsArray(mPlan) Then
-        Set koop = CreateObject("Scripting.Dictionary")
+        ' Zbir je zbir UKLJUCENIH blokova -- isto sto pita i upisuje "Knjizi".
+        Set izbor = Izabrani()
+        Set svi = CreateObject("Scripting.Dictionary")
         For i = 1 To UBound(mPlan, 1)
-            koop(CStr(mPlan(i, 1))) = True
-            kg = kg + CDbl(mPlan(i, 6))
-            din = din + CDbl(mPlan(i, 8))
+            svi(CStr(mPlan(i, 11))) = True
+            If CLng(mPlan(i, 16)) = modDoplata.DOP_PLAN_KNJIZI And izbor.Exists(CStr(mPlan(i, 11))) Then
+                kg = kg + CDbl(mPlan(i, 6))
+                din = din + CDbl(mPlan(i, 8))
+            End If
         Next i
+        nSa = BlokSaDoplatom().count
+        nSvih = svi.count
         t = t & "   " & ChrW(183) & "   " & Poruka("OTKUI_LBL_DOP_PREGLED") & " " & _
-            CStr(koop.count) & " KO, " & FmtKolicina(kg) & " kg, " & _
-            Format$(din, "#,##0.00") & " din"
+            CStr(izbor.count) & " " & Poruka("OTKUI_LBL_DOP_DOK") & ", " & FmtKolicina(kg) & _
+            " kg, " & Format$(din, "#,##0.00") & " din"
+        If nSa > izbor.count Then
+            t = t & " (" & Poruka("OTKUI_LBL_DOP_ISKLJUCENO") & " " & CStr(nSa - izbor.count) & ")"
+        End If
+        If nSvih > nSa Then
+            t = t & "   " & ChrW(183) & "   " & Poruka("OTKUI_DOP_ST_BEZ") & ": " & CStr(nSvih - nSa)
+        End If
     Else
         t = t & "   " & ChrW(183) & "   " & Poruka("OTKUI_LBL_DOP_BEZ_PREGLEDA")
     End If
@@ -783,9 +1013,11 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     modUiScreens.ScrPadAkoTest "modScrDoplata.Scr_Rows"
     OsveziZonu
     Select Case Scr_Lista()
-        Case DOP_PLAN: Scr_Rows = RedoviPlan(q)
-        Case DOP_KO:   Scr_Rows = RedoviKO(q)
-        Case Else:     Scr_Rows = RedoviStope(q)
+        Case DOP_PLAN:     Scr_Rows = RedoviPlan(q)
+        Case DOP_BLOKOVI:  Scr_Rows = RedoviBlokovi(q)
+        Case DOP_KNJIZENO: Scr_Rows = RedoviKnjizeno(q)
+        Case DOP_KO:       Scr_Rows = RedoviKO(q)
+        Case Else:         Scr_Rows = RedoviStope(q)
     End Select
     Exit Function
 EH:
@@ -830,58 +1062,237 @@ Sledeci:
     RedoviStope = Array(StopeKolone(), outA, n, 0#, 0#, Array(0, 0, 0))
 End Function
 
-'----------------------------------------------------------- LISTA: PLAN
+'-------------------------------------------------------- LISTA: PREGLED
+' Zbirno po kooperantu, kulturi i klasi (DOP-ODL-18), SAMO ukljuceni blokovi sa
+' doplatom -- tacno ono sto ce "Knjizi" upisati. Detalj po bloku je lista Blokovi.
 Private Function PlanKolone() As Variant
     PlanKolone = Array( _
         "OTKUI_HD_KOOP||txt|0|1", _
-        "OTKUI_HD_OM||txt|130|2", _
         "OTKUI_HD_VRSTA||txt|110|1", _
         "OTKUI_HD_SORTA||txt|100|2", _
         "OTKUI_HD_KLASA||txt|50|1", _
+        "OTKUI_HD_BLOKOVA||num|64|3", _
         "OTKUI_HD_KG||kg|84|1", _
-        "OTKUI_HD_STOPA||rsd|80|1", _
-        "OTKUI_HD_IZNOS||rsd|96|1", _
-        "OTKUI_HD_OTKUPA||num|60|3")
+        "OTKUI_HD_IZNOS||rsd|96|1")
 End Function
 
 Private Function RedoviPlan(ByVal q As String) As Variant
-    Dim outA() As Variant, n As Long, i As Long, hay As String
-    Dim imena As Object, stanice As Object, sumKg As Double, sumIzn As Double
-    Dim ime As String, sta As String
+    Dim outA() As Variant, n As Long, i As Long, hay As String, k As String
+    Dim imena As Object, grupe As Object, izbor As Object, blokovi As Object
+    Dim a As Variant, kk As Variant, ime As String, sumKg As Double, sumIzn As Double
     If Not IsArray(mPlan) Then
         RedoviPlan = PrazanRezultat(PlanKolone())
         Exit Function
     End If
+    ' grupe: "koop|VRSTA|SORTA|KLASA" -> Array(koop, vrsta, sorta, klasa, blokova, kg, din)
+    Set izbor = Izabrani()
+    Set grupe = CreateObject("Scripting.Dictionary")
+    grupe.CompareMode = vbTextCompare
+    Set blokovi = CreateObject("Scripting.Dictionary")
+    blokovi.CompareMode = vbTextCompare
+    For i = 1 To UBound(mPlan, 1)
+        If CLng(mPlan(i, 16)) <> modDoplata.DOP_PLAN_KNJIZI Then GoTo SledeciRed
+        If Not izbor.Exists(CStr(mPlan(i, 11))) Then GoTo SledeciRed
+        k = CStr(mPlan(i, 1)) & "|" & UCase$(CStr(mPlan(i, 3))) & "|" & _
+            UCase$(CStr(mPlan(i, 4))) & "|" & UCase$(CStr(mPlan(i, 5)))
+        If Not grupe.Exists(k) Then
+            grupe.Add k, Array(mPlan(i, 1), mPlan(i, 3), mPlan(i, 4), mPlan(i, 5), 0&, 0#, 0#)
+        End If
+        a = grupe(k)
+        If Not blokovi.Exists(k & "|" & CStr(mPlan(i, 11))) Then
+            blokovi.Add k & "|" & CStr(mPlan(i, 11)), True
+            a(4) = CLng(a(4)) + 1
+        End If
+        a(5) = CDbl(a(5)) + CDbl(mPlan(i, 6))
+        a(6) = CDbl(a(6)) + CDbl(mPlan(i, 8))
+        grupe(k) = a
+SledeciRed:
+    Next i
+    If grupe.count = 0 Then
+        RedoviPlan = PrazanRezultat(PlanKolone())
+        Exit Function
+    End If
+
+    Set imena = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    ReDim outA(1 To grupe.count, 1 To 7)
+    For Each kk In grupe.keys
+        a = grupe(kk)
+        ime = CStr(a(0))
+        If imena.Exists(ime) Then ime = Trim$(CStr(imena(ime)))
+        hay = ime & "|" & CStr(a(1)) & "|" & CStr(a(2))
+        If Len(q) > 0 Then
+            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo SledecaGrupa
+        End If
+        n = n + 1
+        outA(n, 1) = ime
+        outA(n, 2) = CStr(a(1))
+        outA(n, 3) = CStr(a(2))
+        outA(n, 4) = CStr(a(3))
+        outA(n, 5) = CLng(a(4))
+        outA(n, 6) = CDbl(a(5))
+        outA(n, 7) = modNovac.ZaokruziNovac(CDbl(a(6)))
+        sumKg = sumKg + CDbl(a(5))
+        sumIzn = sumIzn + CDbl(outA(n, 7))
+SledecaGrupa:
+    Next kk
+    RedoviPlan = Array(PlanKolone(), outA, n, sumKg, sumIzn, Array(0, 0, 0))
+End Function
+
+'-------------------------------------------------------- LISTA: BLOKOVI
+' Jedan red po bloku i klasi poslednjeg pregleda. Kvacica pripada BLOKU (sve
+' njegove klase): klik na red ga ukljucuje ili iskljucuje (KlikNaBlok). Status
+' kaze zasto stavka nije u knjizenju, ili da blok vec ima doplatu (DOP-ODL-06).
+' Zbir u podnozju je zbir UKLJUCENIH -- isti kao Pregled i pitanje pred upisom.
+Private Function BlokoviKolone() As Variant
+    BlokoviKolone = Array( _
+        "OTKUI_HD_OZN||txt|36|1", _
+        "OTKUI_HD_BROJ||txt|110|1", _
+        "OTKUI_HD_DATUM||txt|80|2", _
+        "OTKUI_HD_KOOP||txt|0|1", _
+        "OTKUI_HD_OM||txt|120|2", _
+        "OTKUI_HD_KLASA||txt|50|1", _
+        "OTKUI_HD_KG||kg|84|1", _
+        "OTKUI_HD_CENA_OTKUPA||rsd|90|3", _
+        "OTKUI_HD_STOPA||rsd|80|1", _
+        "OTKUI_HD_IZNOS||rsd|96|1", _
+        "OTKUI_HD_STATUS||txt|120|2", _
+        "OTKUI_HDI_REF||txt|1|4")
+End Function
+
+Private Function RedoviBlokovi(ByVal q As String) As Variant
+    Dim outA() As Variant, n As Long, i As Long, hay As String, oid As String
+    Dim imena As Object, stanice As Object, izbor As Object, ime As String, sta As String
+    Dim sumKg As Double, sumIzn As Double, knjizi As Boolean, ukljucen As Boolean
+    If Not IsArray(mPlan) Then
+        RedoviBlokovi = PrazanRezultat(BlokoviKolone())
+        Exit Function
+    End If
+    Set izbor = Izabrani()
     Set imena = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
     Set stanice = BuildLookupDict(TBL_STANICE, COL_STA_ID, "Naziv")
-    ReDim outA(1 To UBound(mPlan, 1), 1 To 9)
+    ReDim outA(1 To UBound(mPlan, 1), 1 To BL_COL_ID)
     For i = 1 To UBound(mPlan, 1)
+        oid = CStr(mPlan(i, 11))
         ime = CStr(mPlan(i, 1))
         If imena.Exists(ime) Then ime = Trim$(CStr(imena(ime)))
         sta = CStr(mPlan(i, 2))
         If stanice.Exists(sta) Then sta = Trim$(CStr(stanice(sta)))
-        hay = ime & "|" & sta & "|" & CStr(mPlan(i, 3)) & "|" & CStr(mPlan(i, 4))
+        hay = CStr(mPlan(i, 12)) & "|" & ime & "|" & sta
+        If Len(q) > 0 Then
+            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
+        End If
+        knjizi = (CLng(mPlan(i, 16)) = modDoplata.DOP_PLAN_KNJIZI)
+        ukljucen = (knjizi And izbor.Exists(oid))
+        n = n + 1
+        If ukljucen Then outA(n, BL_COL_OZN) = ChrW(10003) Else outA(n, BL_COL_OZN) = ""
+        outA(n, 2) = CStr(mPlan(i, 12))
+        If IsDate(mPlan(i, 17)) Then outA(n, 3) = Format$(CDate(mPlan(i, 17)), "dd.mm.yyyy")
+        outA(n, 4) = ime
+        outA(n, 5) = sta
+        outA(n, 6) = CStr(mPlan(i, 5))
+        outA(n, 7) = CDbl(mPlan(i, 6))
+        outA(n, 8) = CDbl(mPlan(i, 13))
+        outA(n, 9) = CDbl(mPlan(i, 7))
+        outA(n, 10) = CDbl(mPlan(i, 8))
+        outA(n, 11) = StatusBloka(knjizi, izbor.Exists(oid), CDbl(mPlan(i, 15)))
+        outA(n, BL_COL_ID) = oid
+        If ukljucen Then
+            sumKg = sumKg + CDbl(mPlan(i, 6))
+            sumIzn = sumIzn + CDbl(mPlan(i, 8))
+        End If
+Sledeci:
+    Next i
+    RedoviBlokovi = Array(BlokoviKolone(), outA, n, sumKg, sumIzn, Array(0, 0, 0))
+End Function
+
+' Status stavke na listi Blokovi: bez doplate (nacin 2, cena otkupa na ili
+' iznad konacne), iskljucen, ili blok koji vec ima doplatu za tu klasu.
+Private Function StatusBloka(ByVal knjizi As Boolean, ByVal izabran As Boolean, _
+                             ByVal vecPoKg As Double) As String
+    If Not knjizi Then
+        StatusBloka = Poruka("OTKUI_DOP_ST_BEZ")
+    ElseIf Not izabran Then
+        StatusBloka = Poruka("OTKUI_DOP_ST_ISKLJUCEN")
+    ElseIf vecPoKg > 0.000001 Then
+        StatusBloka = Poruka("OTKUI_DOP_ST_PONOVLJENA")
+    End If
+End Function
+
+'------------------------------------------------------- LISTA: KNJIZENO
+' Zbirno: jedan red po obracunu i kooperantu (DOP-ODL-18; to je i obim buduce
+' specifikacije, DOP-ODL-21) -- iz istog citaca koji puni karticu i saldo.
+' Detalj po dokumentu (bloku) je lista Dokumenti.
+Private Function KnjizenoKolone() As Variant
+    KnjizenoKolone = Array( _
+        "OTKUI_HD_DATUM||txt|80|1", _
+        "OTKUI_HD_KOOP||txt|0|1", _
+        "OTKUI_HD_PERIOD||txt|190|2", _
+        "OTKUI_HD_DOKUMENATA||num|64|3", _
+        "OTKUI_HD_KG||kg|84|1", _
+        "OTKUI_HD_IZNOS||rsd|100|1", _
+        "OTKUI_HD_OBRACUN||txt|1|4")
+End Function
+
+Private Function RedoviKnjizeno(ByVal q As String) As Variant
+    Dim r As Variant, i As Long, g As Object, dok As Object, k As String, a As Variant
+    Dim outA() As Variant, n As Long, kk As Variant, imena As Object, ime As String
+    Dim hay As String, sumKg As Double, sumIzn As Double
+
+    r = modDoplata.DoplataStavkeRedovi()
+    If Not IsArray(r) Then
+        RedoviKnjizeno = PrazanRezultat(KnjizenoKolone())
+        Exit Function
+    End If
+
+    ' g: "ObracunID|KooperantID" -> Array(datum, koop, periodOd, periodDo, dok, kg, din, obr)
+    Set g = CreateObject("Scripting.Dictionary")
+    g.CompareMode = vbTextCompare
+    Set dok = CreateObject("Scripting.Dictionary")
+    dok.CompareMode = vbTextCompare
+    For i = 1 To UBound(r, 1)
+        k = CStr(r(i, 5)) & "|" & CStr(r(i, 4))
+        If Not g.Exists(k) Then
+            g.Add k, Array(r(i, 3), r(i, 4), r(i, 14), r(i, 15), 0&, 0#, 0#, CStr(r(i, 5)))
+        End If
+        a = g(k)
+        If Not dok.Exists(CStr(r(i, 1))) Then
+            dok.Add CStr(r(i, 1)), True
+            a(4) = CLng(a(4)) + 1
+        End If
+        a(5) = CDbl(a(5)) + CDbl(r(i, 10))
+        a(6) = CDbl(a(6)) + CDbl(r(i, 12))
+        g(k) = a
+    Next i
+
+    Set imena = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    ReDim outA(1 To g.count, 1 To KNJ_COL_OBR)
+    For Each kk In g.keys
+        a = g(kk)
+        ime = CStr(a(1))
+        If imena.Exists(ime) Then ime = Trim$(CStr(imena(ime)))
+        hay = ime & "|" & CStr(a(7))
         If Len(q) > 0 Then
             If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
         End If
         n = n + 1
-        outA(n, 1) = ime
-        outA(n, 2) = sta
-        outA(n, 3) = CStr(mPlan(i, 3))
-        outA(n, 4) = CStr(mPlan(i, 4))
-        outA(n, 5) = CStr(mPlan(i, 5))
-        outA(n, 6) = CDbl(mPlan(i, 6))
-        outA(n, 7) = CDbl(mPlan(i, 7))
-        outA(n, 8) = CDbl(mPlan(i, 8))
-        outA(n, 9) = CLng(mPlan(i, 9))
-        sumKg = sumKg + CDbl(mPlan(i, 6))
-        sumIzn = sumIzn + CDbl(mPlan(i, 8))
+        outA(n, 1) = Format$(CDate(a(0)), "dd.mm.yyyy")
+        outA(n, 2) = ime
+        outA(n, 3) = Format$(CDate(a(2)), "dd.mm.yyyy hh:nn") & " " & ChrW(8211) & " " & _
+                     Format$(CDate(a(3)), "dd.mm.yyyy hh:nn")
+        outA(n, 4) = CLng(a(4))
+        outA(n, 5) = CDbl(a(5))
+        outA(n, 6) = modNovac.ZaokruziNovac(CDbl(a(6)))
+        outA(n, KNJ_COL_OBR) = CStr(a(7))
+        sumKg = sumKg + CDbl(a(5))
+        sumIzn = sumIzn + CDbl(outA(n, 6))
 Sledeci:
-    Next i
-    RedoviPlan = Array(PlanKolone(), outA, n, sumKg, sumIzn, Array(0, 0, 0))
+    Next kk
+    RedoviKnjizeno = Array(KnjizenoKolone(), outA, n, sumKg, sumIzn, Array(0, 0, 0))
 End Function
 
-'------------------------------------------------------------- LISTA: KO
+'------------------------------------------------------ LISTA: DOKUMENTI
+' Kljuc liste je istorijski "KO"; prikaz je "Dokumenti" -- jedan red po
+' dokumentu doplate (bloku), za stampu i storno jednog dokumenta.
 Private Function KOKolone() As Variant
     KOKolone = Array( _
         "OTKUI_HD_BROJ||txt|100|1", _
@@ -957,6 +1368,8 @@ Public Sub Scr_DopTestReset()
     mLista = ""
     Set mUnosTest = Nothing
     mPitanjeTest = ""
+    mNacin = 0
+    Set mIskljuceni = Nothing
 End Sub
 
 ' Unos zone bez zone. Kljucevi su imena polja (scrDopDatum, scrDopOd,
@@ -1026,3 +1439,26 @@ Public Sub Scr_DopListaTestSet(ByVal kljuc As String)
     If Not IsTestMode() Then Exit Sub
     mLista = kljuc
 End Sub
+
+' Nacin unosa istim putem kao combo (ista kapija); "" kad je promenjen.
+Public Function Scr_DopNacinTestSet(ByVal novi As Long) As String
+    If Not IsTestMode() Then Exit Function
+    Scr_DopNacinTestSet = PromeniNacinJezgro(novi)
+End Function
+
+Public Function Scr_DopNacin() As Long
+    Scr_DopNacin = Nacin()
+End Function
+
+' Klik na blok liste Blokovi, po OtkupID-u (mreza se u testu ne crta) -- isto
+' jezgro kao klik na red. "" kad je prebacen, inace razlog.
+Public Function Scr_DopBlokTestPrebaci(ByVal otkupID As String) As String
+    If Not IsTestMode() Then Exit Function
+    Scr_DopBlokTestPrebaci = PrebaciBlok(otkupID)
+End Function
+
+' "Ukljuci sve" / "Iskljuci sve" -- ista radnja kao dugme liste Blokovi.
+Public Function Scr_DopBlokoviTestSvi(ByVal ukljuci As Boolean) As Boolean
+    If Not IsTestMode() Then Exit Function
+    Scr_DopBlokoviTestSvi = PostaviSveBlokove(ukljuci)
+End Function

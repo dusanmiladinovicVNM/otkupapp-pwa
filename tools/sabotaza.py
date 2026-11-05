@@ -11637,18 +11637,18 @@ SABOTAZE = {
         "T_Doplata_StampaKO",
         "storniran KO se ne stampa: razlog operateru, bez izvoza",
     ),
-    # Lista pregleda u koloni iznosa pokazuje kilograme.
+    # Zbirni pregled u koloni iznosa sabira kilograme.
     "dop-ekran-pregled-kolona": (
         "modScrDoplata.bas",
-        "        outA(n, 8) = CDbl(mPlan(i, 8))\n",
-        "        outA(n, 8) = CDbl(mPlan(i, 6))   ' SABOTAZA: iznos pregleda je kg\n",
+        "        a(6) = CDbl(a(6)) + CDbl(mPlan(i, 8))\n",
+        "        a(6) = CDbl(a(6)) + CDbl(mPlan(i, 6))   ' SABOTAZA: iznos pregleda je kg\n",
         "T_Doplata_EkranTok",
-        "ekran: pregled je isti plan koji pisac izvrsava",
+        "ekran: zbirni pregled je zbir plana koji pisac izvrsava",
     ),
     # "Knjizi" upisuje bez pitanja sa brojkama.
     "dop-ekran-knjizi-bez-pitanja": (
         "modScrDoplata.bas",
-        "    If Not Pitaj(PitanjeKnjizenja()) Then Exit Function\n",
+        "    If Not Pitaj(PitanjeKnjizenja(izbor)) Then Exit Function\n",
         "    If False Then Exit Function   ' SABOTAZA: knjizenje bez pitanja\n",
         "T_Doplata_EkranTok",
         "ekran: knjizenje pita sa brojkama, bez potvrde se nista ne upisuje",
@@ -11823,6 +11823,54 @@ SABOTAZE = {
     # REVIEW P1 (05.11.2026).
     # Signal sabira kg preko svih dokumenata istog bloka i klase: D i D2 iste
     # robe izgledaju kao dupla kolicina, pa ponovljena doplata daje lazan DOP1.
+    # P2 (ekran): nacin se menja i kad su stope vec unete u starom nacinu.
+    "dop-ekran-nacin-menja-stope": (
+        "modScrDoplata.bas",
+        "    If BrojStopa() <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: nacin se menja i sa unetim stopama\n",
+        "T_Doplata_EkranNacinIBlokovi",
+        "ekran: nacin se ne menja dok ima unetih stopa",
+    ),
+    # P2: blok bez doplate moze da se "ukljuci" (ulazi u izbor).
+    "dop-ekran-blok-bez-doplate-se-ukljucuje": (
+        "modScrDoplata.bas",
+        "    If Not BlokSaDoplatom().Exists(otkupID) Then\n",
+        "    If False Then   ' SABOTAZA: blok bez doplate se prebacuje\n",
+        "T_Doplata_EkranNacinIBlokovi",
+        "ekran: blok bez doplate ne moze da se ukljuci",
+    ),
+    # P2: zbirni pregled sabira i iskljucene blokove.
+    "dop-ekran-pregled-sabira-iskljucene": (
+        "modScrDoplata.bas",
+        "        If Not izbor.Exists(CStr(mPlan(i, 11))) Then GoTo SledeciRed\n",
+        "        ' SABOTAZA: pregled sabira i iskljucene blokove\n",
+        "T_Doplata_EkranNacinIBlokovi",
+        "ekran: zbirni pregled sabira samo ukljucene blokove",
+    ),
+    # P2: pitanje pred knjizenje sabira i iskljucene blokove.
+    "dop-ekran-pitanje-broji-iskljucene": (
+        "modScrDoplata.bas",
+        "                If izbor.Exists(CStr(mPlan(i, 11))) Then\n",
+        "                If True Then   ' SABOTAZA: pitanje sabira i iskljucene\n",
+        "T_Doplata_EkranNacinIBlokovi",
+        "ekran: pitanje pred knjizenje broji samo ukljucene blokove",
+    ),
+    # P2: ekran ne salje piscu nacin -- pisac knjizi u nacinu 1.
+    "dop-ekran-nacin-ne-ide-piscu": (
+        "modScrDoplata.bas",
+        "                                      potvrdaPonavljanja, greska, en, Nacin(), _\n",
+        "                                      potvrdaPonavljanja, greska, en, DOP_NACIN_PO_KG, _\n",
+        "T_Doplata_EkranNacinIBlokovi",
+        "ekran: zaglavlje pamti nacin izabran na ekranu",
+    ),
+    # P2: ekran ne salje piscu izbor -- pisac knjizi sve blokove sa doplatom.
+    "dop-ekran-izbor-ne-ide-piscu": (
+        "modScrDoplata.bas",
+        "                                      izbor)\n",
+        "                                      Nothing)   ' SABOTAZA: ekran ne salje izbor piscu\n",
+        "T_Doplata_EkranNacinIBlokovi",
+        "ekran: knjizi se tacno ukljuceni blokovi, Knjizeno je zbirno po kooperantu",
+    ),
     # Retro blok placen drugim obracunom i dalje nalaz starijeg (review P1,
     # DOP-P1-REV-04; odluka: placen blok nije nalaz).
     "dop-signal-placen-retro-ostaje": (
