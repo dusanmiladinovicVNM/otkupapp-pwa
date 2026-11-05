@@ -9,8 +9,9 @@
 > zatvoreno. **Plaćanje po specifikaciji** (rez A: nalozi, izvod, avans; rez B:
 > gotovina na F5, ručno mapiranje) i dugme „Uključi filtrirane" su u kodu i
 > potvrđeni u Excelu (05.11.2026: 12 suita zeleno, RunAllTests 346/0, dokaz rez A
-> 11/11, rez B i dugme 9/9); ručni Compile i pregled nad pravim podacima za rez A,
-> rez B i dugme nisu javljeni. Ostaje P4 (kartica zbirno po obračunu) i otvoreno
+> 11/11, rez B i dugme 9/9), ručni Compile PASS, „Uključi filtrirane" ručno
+> proveren. Ručno nad pravim podacima još nisu provereni F5 po specifikaciji i
+> ručno mapiranje izvoda na specifikaciju. Ostaje P4 (kartica zbirno po obračunu) i otvoreno
 > iz §8. Najveći rizik pred puštanje: slova „D" i „S" u pozivu na broj (release
 > kapija, §8/6).
 
@@ -336,8 +337,8 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     stranama, jer čita ceo pogled mreže, a ne prikazanu stranu. Ostali blokovi
     zadržavaju svoje stanje. Poruka kaže koliko blokova filter pokriva. Test
     344, sabotaže `dop-filt-*`. Excel (05.11.2026): test 344 zelen u punom
-    prolazu, dokaz `dop-filt-*` 2/2 DOKAZANO. Ručna provera stranica nije
-    javljena.
+    prolazu, dokaz `dop-filt-*` 2/2 DOKAZANO. Ručna provera operatera
+    (05.11.2026): radi kako treba.
 - **P3 U KODU (05.11.2026), ponašanje neverifikovano dok se ne pusti u Excelu.**
   Pre-flight: odluke DOP-ODL-23..26.
   - **P3a — papir bloka** (`modPrint.FillKOSablon`, isti ulazi: lista Dokumenti i
@@ -436,8 +437,9 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     `banka-uvoz-placen-blok-postaje-avans`.
   - Excel (05.11.2026): pun prolaz 12 suita ZELENO (RunAllTests 346/0, BFP
     3014/0, banka 241/0, storno 111/0); dokaz rez B i dugmeta **9/9 DOKAZANO**,
-    izvor pre/posle identičan (`d5ccebf87e8a68e2`). Ručni Compile, F5 i ručno
-    mapiranje nad pravim podacima nisu javljeni. **Rez B potvrđen.**
+    izvor pre/posle identičan (`d5ccebf87e8a68e2`). Ručni Compile PASS. F5 po
+    specifikaciji i ručno mapiranje nad pravim podacima operater proverava
+    kasnije. **Rez B potvrđen automatski.**
 - Još NIJE: kartica zbirno po obračunu (P4 — do tada red po dokumentu), tekst
   pitanja o ponavljanju kroz katalog poruka.
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"

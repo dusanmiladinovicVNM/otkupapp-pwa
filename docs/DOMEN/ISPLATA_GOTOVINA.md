@@ -36,5 +36,6 @@
   kroz `OsnovicaBezNadoknade`).
 - Excel (05.11.2026): pun prolaz 12 suita ZELENO (RunAllTests 341/0, BFP
   3014/0); dokaz `isp-` + `dop-papir-nadoknada-od-bruto` **5/5 DOKAZANO**, izvor
-  pre/posle identičan. Ručni Compile i provera F5 nad pravim podacima nisu
-  javljeni.
+  pre/posle identičan. Ručni Compile PASS. Ručno na F5 (05.11.2026): blok
+  3/260726 sa ostatkom 627 i „Keš iz OM avansa" odbija 627 porukom „gotovinom
+  na ovaj dokument još najviše 580,56" (627 / 1,08). **Zatvoreno.**
