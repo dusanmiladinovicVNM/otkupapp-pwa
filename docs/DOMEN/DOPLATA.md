@@ -305,7 +305,9 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   (`ea8401c7716eb570`).
 - **Ručni Compile (05.11.2026): PASS** (`Debug → Compile VBAProject` nad temp
   kopijom iz `run_vba.py --compile-only --keep`). Time je P1 zatvoren.
-- **P2 U KODU (05.11.2026), ponašanje neverifikovano dok se ne pusti u Excelu:**
+- **P2 U KODU (05.11.2026); Excel: RunAllTests 338/0, dokaz `dop-ekran-` 8/8
+  (grupno 4, pojedinačno 4, izvor identičan `6d50eabf6a893fc2`); ručni pregled
+  ekrana otvoren:**
   ekran `modScrDoplata` — polje „Način unosa" (menja se samo bez unetih stopa,
   natpis iznosa prati način); pet lista: Stope, **Pregled** zbirno po
   kooperantu, kulturi i klasi (samo uključeni blokovi), **Blokovi** (red po
