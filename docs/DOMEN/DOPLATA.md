@@ -11,7 +11,8 @@
 > mapiranje izvoda na KO, primena avansa na KO) su u kodu**, sa revizijom po
 > bloku P1 (§2a). **Excel prijem 05.11.2026: ZELENO** — RunAllTests 336/0, BFP
 > 3014/0, banka 241/0, storno 111/0, faktura 39/0, palete, agrohemija 25/0,
-> golden (§7a); dvosmerni dokaz 40/40 sabotaža doplate **DOKAZANO (grupno)**.
+> golden (§7a); dvosmerni dokaz 40/40 sabotaža doplate **DOKAZANO (grupno)**, i
+> posle REV-04 RunAllTests 337/0 uz `dop-signal-placen-retro-ostaje` DOKAZANO.
 > Još otvoreno: ručni Compile; §8.
 
 ## 1) Šta je doplata
@@ -296,6 +297,9 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   tvrdnjom u svom testu, izvor pre/posle identičan (`df90d24f076db264`), 8
   prolaza; grupno izmereno 39, jedna sama. Pun pojedinačni dokaz je isti poziv
   bez `--grupe` (pred release).
+- **REV-04 (05.11.2026):** test 337 u Excelu zelen (RunAllTests 337/0), sabotaža
+  `dop-signal-placen-retro-ostaje` crvena po imenu, izvor pre/posle identičan
+  (`ea8401c7716eb570`).
 - Još NIJE: ekran (P2 — bira način i blokove; do tada knjiži sve blokove u
   načinu 1, a pitanje broji dokumente po bloku), papir po uzoru na otkupni list
   i specifikacija (P3), kartica zbirno po obračunu (P4 — do tada red po dokumentu).
