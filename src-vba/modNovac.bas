@@ -1718,11 +1718,7 @@ Private Sub VeziSlobodanAvans(ByRef data As Variant, ByVal kooperantID As String
             applyAmt = avansIznos
 
             Set avansRows = FindRows(TBL_NOVAC, COL_NOV_ID, CStr(data(i, colID)))
-
-            If avansRows Is Nothing Or avansRows.count = 0 Then
-                Err.Raise vbObjectError + 1027, SRC, _
-                        "Avans row not found for NovacID=" & CStr(data(i, colID))
-            End If
+            RequireJedanAvansRed avansRows, CStr(data(i, colID)), SRC
 
             RequireUpdateCell TBL_NOVAC, avansRows(1), ciljKolona, ciljID, SRC
 
@@ -1730,11 +1726,7 @@ Private Sub VeziSlobodanAvans(ByRef data As Variant, ByVal kooperantID As String
             applyAmt = preostalo
 
             Set avansRows = FindRows(TBL_NOVAC, COL_NOV_ID, CStr(data(i, colID)))
-
-            If avansRows Is Nothing Or avansRows.count = 0 Then
-                Err.Raise vbObjectError + 1028, SRC, _
-                        "Avans row not found for split. NovacID=" & CStr(data(i, colID))
-            End If
+            RequireJedanAvansRed avansRows, CStr(data(i, colID)), SRC
 
             RequireUpdateCell TBL_NOVAC, avansRows(1), COL_NOV_ISPLATA, avansIznos - applyAmt, SRC
 
@@ -2151,6 +2143,26 @@ EH:
                 " Err=" & CStr(errNum) & _
                 " Desc=" & errDesc
 End Function
+
+' Red avansa koji motor menja mora postojati TACNO jednom po NovacID-u. Do review-a
+' P1 (REV-03) je dupli NovacID prolazio i menjao se PRVI red -- isti "prvi
+' pobedjuje" koji AUD-026 zatvara za OtkupID. Nema reda: 1027; vise redova: 1028.
+' Odvojene provere, jer VBA Or ne skracuje: "Nothing Or .count" bi pukao na 91.
+Private Sub RequireJedanAvansRed(ByVal rows As Collection, ByVal novacID As String, _
+                                 ByVal sourceName As String)
+    If rows Is Nothing Then
+        Err.Raise vbObjectError + 1027, sourceName, "Avans red ne postoji: NovacID=" & novacID
+    End If
+    If rows.count = 0 Then
+        Err.Raise vbObjectError + 1027, sourceName, "Avans red ne postoji: NovacID=" & novacID
+    End If
+    If rows.count > 1 Then
+        Err.Raise vbObjectError + 1028, sourceName, _
+                  "Dupli NovacID avansa (" & CStr(rows.count) & " redova): " & novacID & _
+                  ". Avans nije primenjen jer red nije jednoznacan -- pokrenite proveru " & _
+                  "integriteta podataka."
+    End If
+End Sub
 
 ' VEZA REDA NOVCA ZA KO (F4b doplate) -- JEDINO mesto koje pise DoplataID na
 ' postojeci red. Zovu ga pisci novca nad KO: izvod (modBankaMapiranje), gotovina

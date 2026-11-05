@@ -2685,12 +2685,12 @@ Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
     ' nedostajuca tabela ne sme da se pretvori u tu granu.
     RequireTable TBL_OTKUP, SRC
 
-    Dim data As Variant
+    ' Bez ijednog aktivnog otkupa lista i dalje nudi DOPLATE kooperanta (review
+    ' P1, REV-03): rani izlaz ovde ih je preskakao.
+    Dim data As Variant, imaOtkupa As Boolean
     data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then Exit Function
-
-    data = ExcludeStornirano(data, TBL_OTKUP)
-    If IsEmpty(data) Then Exit Function
+    If Not IsEmpty(data) Then data = ExcludeStornirano(data, TBL_OTKUP)
+    imaOtkupa = Not IsEmpty(data)
 
     Dim cID As Long, cKoop As Long, cBrDok As Long, cSta As Long
     cID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
@@ -2702,10 +2702,15 @@ Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
     Set stanice = BuildLookupDict(TBL_STANICE, "StanicaID", "Naziv")
 
     Dim buf() As Variant
-    ReDim buf(1 To UBound(data, 1), 1 To 3)
+    If imaOtkupa Then
+        ReDim buf(1 To UBound(data, 1), 1 To 3)
+    Else
+        ReDim buf(1 To 1, 1 To 3)
+    End If
 
     Dim i As Long, n As Long
     Dim oid As String, broj As String, sta As String, naziv As String
+    If Not imaOtkupa Then GoTo DokumentiDoplate
     For i = 1 To UBound(data, 1)
         If StrComp(Trim$(CStr(data(i, cKoop))), Trim$(kooperantID), vbTextCompare) = 0 Then
             broj = Trim$(CStr(NzBIM(data(i, cBrDok), "")))
@@ -2742,6 +2747,7 @@ Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
         End If
     Next i
 
+DokumentiDoplate:
     ' DOKUMENTI DOPLATE (F4b; po bloku od revizije 04.11.2026) idu POSLE otkupa,
     ' istim oblikom: kolona 1 je DoplataID, prikaz je broj doplate i stanica
     ' bloka. Kao i blokovi, lista nudi SVAKI aktivan dokument, i placen --

@@ -440,6 +440,7 @@ Public Sub RunAllTests()
     RunOne 333
     RunOne 334
     RunOne 335
+    RunOne 336
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1083,6 +1084,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 333: TestName = "T_Doplata_GotovinaNaStaniciBloka"
         Case 334: TestName = "T_Doplata_NacinKonacnaCena"
         Case 335: TestName = "T_Doplata_IzborBlokova"
+        Case 336: TestName = "T_Doplata_KapijeCitacaIMotora"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1426,6 +1428,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 333: T_Doplata_GotovinaNaStaniciBloka
         Case 334: T_Doplata_NacinKonacnaCena
         Case 335: T_Doplata_IzborBlokova
+        Case 336: T_Doplata_KapijeCitacaIMotora
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -29340,7 +29343,10 @@ End Function
 ' Tok (kooperant A, juce, klasa I): o1 10 kg po 50, o2 4 kg po 58, o3 3 kg po 65.
 '   Konacna 60 -> o1 10 din/kg (100), o2 2 (8), o3 bez doplate.
 '   Pa konacna 62 (uz potvrdu) -> o1 2 (20), o2 2 (8), o3 bez doplate.
-' SABOTAZE: dop-konacna-bez-vec-doplaceno, dop-konacna-negativna-se-knjizi.
+' Ponovljena doplata nije signal osnovice: D i D2 su ista roba (review P1,
+' DOP-P1-REV-01).
+' SABOTAZE: dop-konacna-bez-vec-doplaceno, dop-konacna-negativna-se-knjizi,
+'           dop-signal-sabira-ponovljene.
 Private Sub T_Doplata_NacinKonacnaCena()
     Dim b As String, vr As String, kA As String, kul As String
     Dim o1 As String, o2 As String, o3 As String, plan As Variant, bez As String
@@ -29384,6 +29390,8 @@ Private Sub T_Doplata_NacinKonacnaCena()
              "ponovljen obracun do konacne cene oduzima vec doplaceno"
     AssertEq Format$(DopIznosKooperanta(kA), "0.00"), Format$(136, "0.00"), _
              "kooperant ukupno dobija tacno do konacne cene: 100 + 8 + 20 + 8"
+    AssertEq DopOdstupanjaObracuna(obr) & "#" & DopOdstupanjaObracuna(obr2), "#", _
+             "ponovljena doplata na istom bloku nije signal osnovice"
 
     AssertEq DopOdbijeno(DopStope(DopStopa(vr, "S1", KLASA_I, 70)), DopJuceOd(), DopJuceDo(), Date, _
                          "nacin unosa", 3), True, "nepoznat nacin unosa se odbija"
@@ -29436,4 +29444,74 @@ Private Sub T_Doplata_IzborBlokova()
                                       True, g, en, DOP_NACIN_PO_KG, izbor)
     AssertEq (Len(obr) = 0 And DopBrojRedova(TBL_DOPLATA) = n0), True, _
              "prazan izbor ne knjizi nista"
+End Sub
+
+' ============================================================
+' 336. REVIEW P1 (REV-03): KAPIJE CITAOCA DOPLATE I MOTORA AVANSA.
+' ============================================================
+' (a) Citalac stavki doplate pada po imenu kad iznos nije kg x cena: iznos je
+'     ono sto se isplacuje, rucna prepravka bi tiho promenila dug.
+' (b) Motor avansa ne menja red kad je NovacID dupliran: "prvi pobedjuje" bi
+'     vezao novac za pogresan red.
+' Obe nepravilnosti se namerno prave i ODMAH vracaju, pre ijedne tvrdnje -- pad
+' testa ne sme da ostavi pokvaren red drugim testovima.
+' Tok (kooperant A, juce): I 10, doplata 10 din/kg (100); avans 30.
+' SABOTAZE: dop-citalac-bez-provere-iznosa, avans-motor-dupli-novacid.
+Private Sub T_Doplata_KapijeCitacaIMotora()
+    Dim b As String, vr As String, kA As String, kul As String
+    Dim obr As String, g As String, en As Long, idA As String
+    Dim rows As Collection, rS As Long, stari As Variant, greska As String, r As Variant
+    Dim d As Variant, i As Long, cBr As Long, cID As Long, red() As Variant, j As Long
+    Dim rKopija As Long, ok As Boolean, prim As Double, pre As String
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    DopOtkup kA, FX_STANICA, kul, vr, "S1", 10, 0
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), _
+              DopStope(DopStopa(vr, "S1", KLASA_I, 10)), "test 336", False, g, en)
+    AssertEq g, "", "preduslov: doplata se knjizi"
+    idA = DopIdKO(obr, kA)
+
+    ' (a) iznos stavke prepravljen na 101, pa odmah vracen.
+    Set rows = FindRows(TBL_DOPLATA_STAVKE, COL_DOPS_DOPLATA_ID, idA)
+    rS = rows(1)
+    d = GetTableData(TBL_DOPLATA_STAVKE)
+    stari = d(rS, RequireColumnIndex(TBL_DOPLATA_STAVKE, COL_DOPS_IZNOS, "modTest"))
+    RequireUpdateCell TBL_DOPLATA_STAVKE, rS, COL_DOPS_IZNOS, 101, "modTest"
+    On Error Resume Next
+    r = modDoplata.DoplataStavkeRedovi()
+    greska = Err.description
+    Err.Clear
+    On Error GoTo 0
+    RequireUpdateCell TBL_DOPLATA_STAVKE, rS, COL_DOPS_IZNOS, stari, "modTest"
+    AssertEq (InStr(1, greska, "nije dosledna", vbTextCompare) > 0), True, _
+             "citalac doplate pada po imenu kad iznos nije kg x cena"
+
+    ' (b) avans 30 sa dupliranim NovacID-em: motor ga ne vezuje.
+    DopAvans "AVD-" & b, kA, 30
+    d = GetTableData(TBL_NOVAC)
+    cBr = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, "modTest")
+    cID = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, "modTest")
+    For i = 1 To UBound(d, 1)
+        If NzToText(d(i, cBr)) = "AVD-" & b Then Exit For
+    Next i
+    ReDim red(1 To UBound(d, 2))
+    For j = 1 To UBound(d, 2)
+        red(j) = d(i, j)
+    Next j
+    rKopija = AppendRow(TBL_NOVAC, red)
+    ok = modNovac.ApplyAvansToKO_TX(kA, idA, prim)
+    pre = DopNovacPoBroju("AVD-" & b)
+    If rKopija > 0 Then
+        RequireUpdateCell TBL_NOVAC, rKopija, COL_NOV_ID, NzToText(d(i, cID)) & "-T336", "modTest"
+        RequireUpdateCell TBL_NOVAC, rKopija, COL_STORNIRANO, "Da", "modTest"
+    End If
+    AssertEq (rKopija > 0), True, "preduslov: kopija reda avansa je upisana"
+    AssertEq CStr(ok) & "|" & Format$(prim, "0.00") & "|" & pre, _
+             CStr(False) & "|" & Format$(0, "0.00") & "|" & _
+             NOV_VIRMAN_AVANS_KOOP & "|" & Format$(30, "0.00") & "||;" & _
+             NOV_VIRMAN_AVANS_KOOP & "|" & Format$(30, "0.00") & "||;", _
+             "motor avansa ne vezuje red sa dupliranim NovacID-em"
 End Sub

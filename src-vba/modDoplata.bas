@@ -189,9 +189,12 @@ Public Function DoplataPlan(ByVal periodOd As Date, ByVal periodDo As Date, _
                         kAgg = KljucPoretka(CStr(h(0)), CStr(h(1)), CDate(h(4)), CLng(h(5)), CStr(s(i, 3)))
                         If agg.Exists(kAgg) Then
                             v = agg(kAgg)
-                            ' Dve stavke iste klase u istom bloku sa RAZLICITOM
-                            ' cenom: nacin 2 ne bi znao od cega se racuna
-                            ' doplata. Pada po imenu umesto da bira.
+                            ' Dve stavke iste klase u istom bloku: kanon otkupa to
+                            ' NE dozvoljava -- pisac (CreateOtkup_TX, greska 1865) i
+                            ' citalac (StavkeOtkupaRedovi, 1924, pada pre ovoga).
+                            ' Grana je odbrana u dubinu za oba nacina (review P1,
+                            ' DOP-P1-REV-02): sa razlicitom cenom nacin 2 ne bi
+                            ' znao od cega racuna, pa pada po imenu umesto da bira.
                             If Abs(CDbl(v(4)) - CDbl(s(i, 5))) > 0.000001 Then
                                 Err.Raise DOP_ERR_BASE + 32, SRC, _
                                           "Blok " & CStr(h(3)) & " (" & oid & ") ima dve stavke klase " & _
@@ -755,6 +758,15 @@ Public Function DoplataStavkeRedovi() As Variant
                               "Stavka KO nema brojcanu kolicinu, cenu ili iznos: " & _
                               NzToText(sd(i, sId)) & "."
                 End If
+                ' Iznos je ono sto se isplacuje: mora biti TACNO kg x cena u
+                ' cent-domenu, kako ga pisac racuna. Rucno prepravljen iznos bi
+                ' tiho promenio dug firme prema kooperantu (review P1, REV-03).
+                If modNovac.ZaokruziNovac(CDbl(sd(i, sKol)) * CDbl(sd(i, sCena))) <> _
+                   modNovac.ZaokruziNovac(CDbl(sd(i, sIzn))) Then
+                    Err.Raise DOP_ERR_BASE + 55, SRC, _
+                              "Stavka doplate nije dosledna (kolicina x cena <> iznos): " & _
+                              NzToText(sd(i, sId)) & "."
+                End If
                 imaStavku(id) = True
                 n = n + 1
             End If
@@ -1138,8 +1150,10 @@ End Function
 ' to VIDI. Signal, ne popravka: ispravka je storno doplate pa nov obracun.
 '
 ' Po BLOKU (DOPLATA.md par. 2a), dve vrste nalaza:
-'   - knjizena stavka (blok, klasa) cija se kolicina na AKTIVNOM otkupu sada
-'     razlikuje -- storniran blok ima 0 kg;
+'   - stavka knjizenog DOKUMENTA (blok, klasa) cija se kolicina razlikuje od
+'     sadasnje na AKTIVNOM otkupu -- storniran blok ima 0 kg. Poredi se svaki
+'     dokument posebno sa svojim snimkom: ponovljena doplata (D, D2) je ista
+'     roba, pa se kg preko dokumenata NE sabira (review P1, DOP-P1-REV-01);
 '   - RETRO UNOS: aktivan otkup u periodu obracuna, za kljuc obracuna, NASTAO
 '     POSLE knjizenja (CreatedAt), a bez doplate u tom obracunu.
 ' Blok koji je postojao pri knjizenju a operater ga je iskljucio (DOP-ODL-16)
@@ -1171,23 +1185,29 @@ Public Function DoplataOdstupanjaOsnovice() As Variant
         Next i
     End If
 
-    ' knjizeno: "OtkupID|KLASA" -> Array(kg, broj, koop, opis, ObracunID)
+    ' knjizeno: "DoplataID|KLASA" -> Array(kg, broj, koop, opis, ObracunID,
+    '           "OtkupID|KLASA") -- po DOKUMENTU, ne po bloku (v. gore)
+    ' blokovi:  "OtkupID|KLASA" koji imaju bar jedan aktivan dokument
     ' obr:      ObracunID -> Array(periodOd, periodDo, kljucevi vs|KLASA, knjizeno u)
-    Dim knj As Object, obr As Object, o As Variant, kl As Object, k As String
+    Dim knj As Object, blokovi As Object, obr As Object, o As Variant, kl As Object, k As String
     Set knj = CreateObject("Scripting.Dictionary")
     knj.CompareMode = vbTextCompare
+    Set blokovi = CreateObject("Scripting.Dictionary")
+    blokovi.CompareMode = vbTextCompare
     Set obr = CreateObject("Scripting.Dictionary")
     obr.CompareMode = vbTextCompare
-    Dim cr As Variant
+    Dim cr As Variant, kBlok As String
     For i = 1 To UBound(r, 1)
-        k = CStr(r(i, 16)) & "|" & UCase$(Trim$(CStr(r(i, 9))))
+        kBlok = CStr(r(i, 16)) & "|" & UCase$(Trim$(CStr(r(i, 9))))
+        k = CStr(r(i, 1)) & "|" & UCase$(Trim$(CStr(r(i, 9))))
+        blokovi(kBlok) = True
         If knj.Exists(k) Then
             o = knj(k)
             o(0) = CDbl(o(0)) + CDbl(r(i, 10))
             knj(k) = o
         Else
             knj.Add k, Array(CDbl(r(i, 10)), CStr(r(i, 2)), CStr(r(i, 4)), _
-                             OpisKljuca(r(i, 7), r(i, 8), r(i, 9), r(i, 6)), CStr(r(i, 5)))
+                             OpisKljuca(r(i, 7), r(i, 8), r(i, 9), r(i, 6)), CStr(r(i, 5)), kBlok)
         End If
         If Not obr.Exists(CStr(r(i, 5))) Then
             Set kl = CreateObject("Scripting.Dictionary")
@@ -1248,7 +1268,7 @@ Public Function DoplataOdstupanjaOsnovice() As Variant
     For Each kk In knj.keys
         v = knj(kk)
         kgSada = 0
-        If sada.Exists(kk) Then kgSada = CDbl(sada(kk))
+        If sada.Exists(CStr(v(5))) Then kgSada = CDbl(sada(CStr(v(5))))
         If Abs(kgSada - CDbl(v(0))) >= 0.005 Then
             out.Add Array(v(1), v(2), v(3), CDbl(v(0)), kgSada, v(4))
         End If
@@ -1278,7 +1298,7 @@ Public Function DoplataOdstupanjaOsnovice() As Variant
                 klasa = CStr(delovi(p))
                 kRed = CStr(oid) & "|" & klasa
                 If Len(klasa) > 0 Then
-                    If kl.Exists(KljucVrstaSorta(z(5), z(6)) & "|" & klasa) And Not knj.Exists(kRed) Then
+                    If kl.Exists(KljucVrstaSorta(z(5), z(6)) & "|" & klasa) And Not blokovi.Exists(kRed) Then
                         nove.Add Array(klasa, kRed)
                     End If
                 End If

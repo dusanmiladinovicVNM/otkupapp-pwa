@@ -265,6 +265,17 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   `dop-signal-retro-nema`, `dop-signal-iskljuceni-blok`,
   `dop-konacna-bez-vec-doplaceno`, `dop-konacna-negativna-se-knjizi`,
   `dop-izbor-ignorisan` (stare `dop-ko-po-stavci` i `dop-broj-isti` otišle).
+- **Review P1 (05.11.2026), zatvoreno u kodu:** DOP-P1-REV-01 — signal
+  osnovice poredi svaki DOKUMENT sa svojim snimkom (ponovljena doplata D/D2 nije
+  dupla kolicina; test 334, sabotaža `dop-signal-sabira-ponovljene`). REV-02 —
+  dve stavke iste klase u bloku kanon otkupa ne dozvoljava (pisac 1865, čitalac
+  1924, pada pre plana), pa grana u planu ostaje odbrana u dubinu. REV-03 —
+  čitalac stavki proverava kg × cena = iznos (`DOP_ERR_BASE + 55`); motor avansa
+  odbija dupli NovacID (`RequireJedanAvansRed`, i za otkup); lista cilja ručnog
+  mapiranja nudi doplate i kad nema nijednog aktivnog otkupa (bez testa: fixture
+  uvek ima otkupe). Test 336, sabotaže `dop-citalac-bez-provere-iznosa`,
+  `avans-motor-dupli-novacid`. Poziv na broj bez slova „D" ostaje **release
+  kapija** (§8, stavka 6).
 - Još NIJE: ekran (P2 — bira način i blokove; do tada knjiži sve blokove u
   načinu 1, a pitanje broji dokumente po bloku), papir po uzoru na otkupni list
   i specifikacija (P3), kartica zbirno po obračunu (P4 — do tada red po dokumentu).
@@ -292,13 +303,16 @@ sa kvačicama, knjižena lista zbirno.
    ide kroz zaseban process PR (izmene u `.claude/` se ne mešaju sa feature-om).
    Isti process PR: `.claude/rules/banka.md` da pomene KO kao drugi dokument
    naloga (poziv na broj = broj KO) i `DoplataID` u pravilu avansa.
-6. **⚠ PLATFORM UNKNOWN — slova u pozivu na broj.** Nalog nosi poziv „KO-12/2026"
-   (isto kao blok nosi „1/220526" sa kosom crtom). **Nije izmereno** da li
-   e-banking prihvata slova u polju poziva na broj i da li izvod vraća poziv
-   netaknut. Ako banka slova odbaci, uvoz izvoda KO ne prepozna: plan ide na
-   kooperanta po računu, pisac ne nađe otkup po tom broju i ceo iznos knjiži kao
-   **avans** — ne pogrešno na tuđi dokument; KO se tada zatvara ručno (Uvoz izvoda
-   → kooperant → izbor KO) ili primenom avansa na KO u nalozima. Proveriti na
-   prvom pravom nalogu (uvesti CSV u e-banking, pa pogledati izvod).
+6. **⚠ RELEASE KAPIJA / PLATFORM UNKNOWN — slovo u pozivu na broj.** Nalog za
+   doplatu nosi poziv „1/220526D" (broj bloka + D, DOP-ODL-17). **Nije
+   izmereno** da li e-banking prihvata slovo i da li ga izvod vraća. Ako ga banka
+   odbaci, poziv postaje TAČNO broj otkupnog bloka, pa automatika isplatu
+   doplate prepoznaje kao isplatu **otkupnog bloka**, ne doplate (da li završi na
+   bloku ili u avansu kad je blok već plaćen — nije provereno testom), a doplata
+   ostaje otvorena. Pre prve isplate doplate kroz banku: jedan pravi nalog
+   kroz e-banking i provera izvoda (uvesti CSV u e-banking, pa pogledati izvod).
+   Ranije, sa „KO-n/godina", isti gubitak slova je vodio samo u avans. Ako se
+   desi: storno pogrešnog vezivanja, pa doplata ručno (Uvoz izvoda → kooperant →
+   izbor doplate) ili primenom avansa na doplatu u nalozima.
 7. ~~Gotovina i Saldo OM — asimetrija stanica.~~ Rešeno revizijom (DOP-ODL-19,
    P1): doplata i njena isplata pripadaju stanici bloka, kao otkup.

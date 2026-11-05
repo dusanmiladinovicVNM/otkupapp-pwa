@@ -11820,6 +11820,37 @@ SABOTAZE = {
         "T_Doplata_GotovinaNaStaniciBloka",
         "gotovinska isplata KO je vezana za KO",
     ),
+    # REVIEW P1 (05.11.2026).
+    # Signal sabira kg preko svih dokumenata istog bloka i klase: D i D2 iste
+    # robe izgledaju kao dupla kolicina, pa ponovljena doplata daje lazan DOP1.
+    "dop-signal-sabira-ponovljene": (
+        "modDoplata.bas",
+        "        k = CStr(r(i, 1)) & \"|\" & UCase$(Trim$(CStr(r(i, 9))))\n",
+        "        k = kBlok   ' SABOTAZA: kg se sabira po bloku preko ponovljenih doplata\n",
+        "T_Doplata_NacinKonacnaCena",
+        "ponovljena doplata na istom bloku nije signal osnovice",
+    ),
+    # Citalac ne proverava kg x cena = iznos: rucno prepravljen iznos tiho menja
+    # dug firme prema kooperantu.
+    "dop-citalac-bez-provere-iznosa": (
+        "modDoplata.bas",
+        "                If modNovac.ZaokruziNovac(CDbl(sd(i, sKol)) * CDbl(sd(i, sCena))) <> _\n",
+        "                If False And modNovac.ZaokruziNovac(CDbl(sd(i, sKol)) * CDbl(sd(i, sCena))) <> _\n",
+        "T_Doplata_KapijeCitacaIMotora",
+        "citalac doplate pada po imenu kad iznos nije kg x cena",
+    ),
+    # Motor avansa pusta dupli NovacID: menja se PRVI red, "prvi pobedjuje".
+    "avans-motor-dupli-novacid": (
+        "modNovac.bas",
+        "    If rows.count > 1 Then\n"
+        "        Err.Raise vbObjectError + 1028, sourceName, _\n"
+        "                  \"Dupli NovacID avansa (\" & CStr(rows.count) & \" redova): \" & novacID & _\n",
+        "    If False Then   ' SABOTAZA: dupli NovacID avansa prolazi\n"
+        "        Err.Raise vbObjectError + 1028, sourceName, _\n"
+        "                  \"Dupli NovacID avansa (\" & CStr(rows.count) & \" redova): \" & novacID & _\n",
+        "T_Doplata_KapijeCitacaIMotora",
+        "motor avansa ne vezuje red sa dupliranim NovacID-em",
+    ),
     "dop-storno-ne-odvezuje": (
         "modStorno.bas",
         "    modNovac.ResetNovacDoplataLink Trim$(doplataID)\n",
