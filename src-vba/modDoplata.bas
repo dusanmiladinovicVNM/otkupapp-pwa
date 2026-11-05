@@ -1335,6 +1335,18 @@ Sledeci:
     SpecDokumentiZaRaspodelu = outA
 End Function
 
+' Otvoreno na specifikaciji: zbir otvorenog po njenim aktivnim dokumentima (sve
+' stanice), u cent-domenu; 0 kad nema otvorenog ili specifikacije.
+Public Function OtvorenoNaSpec(ByVal brojSpec As String) As Double
+    Dim dok As Variant, i As Long, s As Double
+    dok = SpecDokumentiZaRaspodelu(brojSpec)
+    If Not IsArray(dok) Then Exit Function
+    For i = 1 To UBound(dok, 1)
+        s = s + CDbl(dok(i, 3))
+    Next i
+    OtvorenoNaSpec = modNovac.ZaokruziNovac(s)
+End Function
+
 ' Kljuc redosleda bloka: datum (yyyymmdd) pa broj bloka u kome je svaki niz
 ' cifara dopunjen nulama do 10 mesta, pa se poredi kao tekst. Blok kog nema
 ' (ne bi smelo -- doplata je po aktivnom bloku) ide na kraj.

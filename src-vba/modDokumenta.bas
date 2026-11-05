@@ -9054,3 +9054,68 @@ EH:
     SaveOMUlaz_TX = False
 End Function
 
+' ISPLATA PO SPECIFIKACIJI DOPLATE NA OTKUPNOM MESTU (DOP-ODL-28, rez B). Iznos
+' se raspodeljuje na otvorene dokumente specifikacije ciji je blok na OVOJ
+' stanici, od najstarijeg bloka (modNovac.RaspodelaSpecNaStanici -- isti racun
+' kao kapija ekrana), a svaki deo ide kroz SaveOMUlaz_TX kao isplata tog
+' dokumenta: iste kapije (vlasnistvo, stanica bloka, ostatak, avans OM, gotovina
+' najvise do osnovice). Sve je JEDNA transakcija: deo koji pisac odbije vraca ceo
+' iznos. Viska nema -- iznos preko dozvoljenog se odbija, ne ide u avans.
+Public Function SaveOMUlazSpec_TX(ByVal datum As Date, _
+                                  ByVal brojDok As String, _
+                                  ByVal stanicaNaziv As String, _
+                                  ByVal stanicaID As String, _
+                                  ByVal vrstaVoca As String, _
+                                  ByVal novac As Double, _
+                                  ByVal kooperantID As String, _
+                                  ByVal primalacDisplay As String, _
+                                  ByVal specBroj As String, _
+                                  ByVal tipNovca As String) As Boolean
+    Dim tx As clsTransaction
+    Dim dela As Variant, dozv As Double, i As Long, blokErr As String, gotovina As Boolean
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    gotovina = (tipNovca = NOV_KES_OTKUPAC_KOOP)
+    blokErr = modNovac.IsplataSpecProblem(specBroj, kooperantID, stanicaID, novac, gotovina)
+    If Len(blokErr) > 0 Then
+        Err.Raise vbObjectError + 1516, "SaveOMUlazSpec_TX", blokErr
+    End If
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_OTKUP
+
+    dela = modNovac.RaspodelaSpecNaStanici(specBroj, stanicaID, novac, gotovina, dozv)
+    If Not IsArray(dela) Then
+        Err.Raise vbObjectError + 1516, "SaveOMUlazSpec_TX", _
+                  "Isplata po specifikaciji " & specBroj & " se ne moze rasporediti (najvise " & _
+                  Format$(dozv, "#,##0.00") & ")."
+    End If
+    For i = 1 To UBound(dela, 1)
+        If Not SaveOMUlaz_TX(datum:=datum, brojDok:=brojDok, stanicaNaziv:=stanicaNaziv, _
+                             stanicaID:=stanicaID, vrstaVoca:=vrstaVoca, novac:=CDbl(dela(i, 2)), _
+                             kooperantID:=kooperantID, primalacDisplay:=primalacDisplay, _
+                             otkupID:="", tipNovca:=tipNovca, doplataID:=CStr(dela(i, 1))) Then
+            Err.Raise vbObjectError + 1517, "SaveOMUlazSpec_TX", _
+                      "Isplata dokumenta " & CStr(dela(i, 1)) & " iz specifikacije " & specBroj & _
+                      " nije upisana -- nista nije knjizeno."
+        End If
+    Next i
+
+    tx.CommitTx
+    Set tx = Nothing
+    SaveOMUlazSpec_TX = True
+    Exit Function
+
+EH:
+    LogErr "SaveOMUlazSpec_TX"
+
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    SaveOMUlazSpec_TX = False
+End Function
+

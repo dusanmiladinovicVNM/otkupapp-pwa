@@ -4,17 +4,13 @@
 > nadoknadom), sa dva načina unosa i zbirnim prikazima. Kod ispod opisuje stanje
 > PRE revizije dok prerada P1–P4 (§7a) ne bude gotova.
 >
-> **Status (04.11.2026):** odluke operatera u §2 su donete, struktura iz §3 je
-> **potvrđena**. **F1 (šema, pisac, storno), F2 (kartica, Saldo OM, PWA), F3
-> (ekran, papir KO, storno sa ekrana, signal osnovice), F4 (nalozi, izvod po
-> broju KO, odvezivanje pri stornu) i F4b (gotovina na matičnoj stanici, ručno
-> mapiranje izvoda na KO, primena avansa na KO) su u kodu**, sa revizijom po
-> bloku P1 (§2a). **Excel prijem 05.11.2026: ZELENO** — RunAllTests 336/0, BFP
-> 3014/0, banka 241/0, storno 111/0, faktura 39/0, palete, agrohemija 25/0,
-> golden (§7a); dvosmerni dokaz 40/40 sabotaža doplate **DOKAZANO (grupno)**, i
-> posle REV-04 RunAllTests 337/0 uz `dop-signal-placen-retro-ostaje` DOKAZANO.
-> Ručni Compile PASS (05.11.2026). **P1 ZATVOREN.** Sledi P2–P4 (§7a); otvoreno
-> §8 (slovo „D" u pozivu na broj je release kapija).
+> **Status (05.11.2026):** F1–F4b i prerada P1–P3 su u kodu i potvrđeni u Excelu
+> (§7a). Pravilo „PDV nadoknada nikad gotovinom" (`ISPLATA_GOTOVINA.md`) je
+> zatvoreno. **Plaćanje po specifikaciji** (rez A: nalozi, izvod, avans; rez B:
+> gotovina na F5, ručno mapiranje) i dugme „Uključi filtrirane" su u kodu,
+> **Excel neverifikovano**. Ostaje P4 (kartica zbirno po obračunu) i otvoreno iz
+> §8. Najveći rizik pred puštanje: slova „D" i „S" u pozivu na broj (release
+> kapija, §8/6).
 
 ## 1) Šta je doplata
 
@@ -406,11 +402,31 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   - Testovi 342–343, test 328 meri dokument bez broja. Sabotaže `dop-spec-nalog-*`,
     `dop-spec-raspodela-*`, `dop-spec-plan-kao-blok`, `dop-spec-avans-*`,
     `dop-spec-poziv-storniran`. **Excel prolaz neverifikovan.**
-  - Rez B (sledi): ručno mapiranje izvoda na specifikaciju i gotovina po
-    specifikaciji (samo dokumenti te stanice, kroz kapiju gotovine ISP-ODL-02).
-- Još NIJE: plaćanje po specifikaciji rez B (ručno mapiranje, gotovina), kartica
-  zbirno po obračunu (P4 — do tada red po dokumentu), tekst pitanja o ponavljanju
-  kroz katalog poruka.
+- **Plaćanje po specifikaciji — rez B** (DOP-ODL-28/29):
+  - **Gotovina / F5:** polje „otvoreni blok" nudi i specifikaciju, sa ostatkom
+    njenih dokumenata **na izabranom otkupnom mestu**. Pojedinačni dokumenti
+    ostaju u listi: isplata na otkupnom mestu je trenutna i kapija čita stanje
+    SADA, pa ista obaveza ne može da se plati dvaput (za razliku od dva naloga za
+    banku). Raspodela je `modNovac.RaspodelaSpecNaStanici`:
+    - samo dokumenti čiji je blok na toj stanici, od najstarijeg bloka;
+    - svaki dokument najviše svoj ostatak, a gotovinom najviše do osnovice
+      (ISP-ODL-02);
+    - viška nema, iznos preko dozvoljenog se odbija.
+
+    Kapija `IsplataSpecProblem` je ista na ekranu i u piscu. Pisac
+    `modDokumenta.SaveOMUlazSpec_TX` svaki deo knjiži kroz `SaveOMUlaz_TX`, sa
+    istim kapijama po dokumentu, u jednoj transakciji.
+  - **Ručno mapiranje izvoda:** lista cilja kooperanta nudi i njegove otvorene
+    specifikacije. Izabrana specifikacija ili prazan izbor uz poziv na broj
+    specifikacije (`BimEfektivnaSpec`) ide **pre** KO i otkupa. Pitanje o višku i
+    tekst podele računaju iz ostatka specifikacije, red po dokumentu, istim
+    redosledom kao pisac. Pisac je isti (`MapBankaImportAsKooperantBlockCore`,
+    `specBroj`): tuđa specifikacija se odbija, a izabrana plaćena se ne knjiži
+    (ni kao avans).
+  - Testovi 345–346, sabotaže `dop-spec-got-*` i `dop-spec-rucno-*`; presidrena
+    `banka-uvoz-placen-blok-postaje-avans`. **Excel prolaz neverifikovan.**
+- Još NIJE: kartica zbirno po obračunu (P4 — do tada red po dokumentu), tekst
+  pitanja o ponavljanju kroz katalog poruka.
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
 Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,
@@ -441,7 +457,11 @@ sve / Isključi sve" na listi Blokovi.
    Isti process PR: `.claude/rules/banka.md` da pomene KO kao drugi dokument
    naloga (poziv na broj = broj KO) i `DoplataID` u pravilu avansa.
 6. **⚠ RELEASE KAPIJA / PLATFORM UNKNOWN — slovo u pozivu na broj.** Nalog za
-   doplatu nosi poziv „1/220526D" (broj bloka + D, DOP-ODL-17). **Nije
+   doplatu nosi poziv „1/220526D" (broj bloka + D, DOP-ODL-17), a nalog
+   specifikacije „S1/2026-123" (DOP-ODL-27; šifra kooperanta koji nema oblik
+   `KOOP-<broj>` je ceo njegov ID, sa slovima). Ako banka slova ne vrati, izvod po
+   specifikaciji ne prepoznaje cilj i ide putem kooperanta (račun → avans), pa se
+   avans primenjuje na specifikaciju u nalozima. **Nije
    izmereno** da li e-banking prihvata slovo i da li ga izvod vraća. Ako ga banka
    odbaci, poziv postaje TAČNO broj otkupnog bloka, pa automatika isplatu
    doplate prepoznaje kao isplatu **otkupnog bloka**, ne doplate (da li završi na

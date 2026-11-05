@@ -1163,23 +1163,119 @@ End Function
 Public Function GotovinaNadoknadaProblem(ByVal otkupID As String, _
                                          ByVal doplataID As String, _
                                          ByVal iznos As Double) As String
-    Dim bruto As Double, dozvoljeno As Double
+    Dim dozvoljeno As Double
+    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 Then Exit Function
+    dozvoljeno = DozvoljenoGotovinom(otkupID, doplataID)
+    If ZaokruziNovac(iznos) > dozvoljeno Then
+        GotovinaNadoknadaProblem = Poruka("NOVAC_ERR_GOTOVINA_NADOKNADA") & " " & _
+                                   Format$(dozvoljeno, "#,##0.00")
+    End If
+End Function
+
+' Koliko jos sme GOTOVINOM na jedan dokument (ISP-ODL-02): osnovica minus vec
+' isplacena gotovina, najmanje 0, u cent-domenu. Jedno pravilo za kapiju jednog
+' dokumenta (GotovinaNadoknadaProblem) i za raspodelu po specifikaciji.
+Private Function DozvoljenoGotovinom(ByVal otkupID As String, ByVal doplataID As String) As Double
+    Dim bruto As Double, d As Double
     otkupID = Trim$(otkupID)
     doplataID = Trim$(doplataID)
     If Len(doplataID) > 0 Then
         bruto = modDoplata.IznosKO(doplataID)
-        dozvoljeno = OsnovicaBezNadoknade(bruto) - GotovinaNaDokumentu("", doplataID)
+        d = OsnovicaBezNadoknade(bruto) - GotovinaNaDokumentu("", doplataID)
     ElseIf Len(otkupID) > 0 Then
         bruto = modOtkup.VrednostOtkupa(otkupID)
-        dozvoljeno = OsnovicaBezNadoknade(bruto) - GotovinaNaDokumentu(otkupID, "")
-    Else
+        d = OsnovicaBezNadoknade(bruto) - GotovinaNaDokumentu(otkupID, "")
+    End If
+    d = ZaokruziNovac(d)
+    If d < 0 Then d = 0
+    DozvoljenoGotovinom = d
+End Function
+
+' RASPODELA ISPLATE PO SPECIFIKACIJI NA OTKUPNOM MESTU (DOP-ODL-28, rez B).
+' Otvoreni dokumenti specifikacije ciji je blok na stanici isplate, od
+' najstarijeg bloka (modDoplata.SpecDokumentiZaRaspodelu); svaki dobija najvise
+' svoj ostatak, a GOTOVINOM najvise koliko jos sme gotovinom
+' (DozvoljenoGotovinom, ISP-ODL-02). Ostali dokumenti ostaju otvoreni.
+' outOtvoreno = ostatak dokumenata te stanice; outDozvoljeno = najvise sto ova
+' isplata moze da primi (za virman isto sto i otvoreno). 2D (1..n, 1..2):
+' DoplataID | iznos; Empty kad iznos nije pozitivan ili prelazi dozvoljeno --
+' viska nema, pozivalac odbija. Isti racun koriste kapija ekrana
+' (IsplataSpecProblem) i pisac (modDokumenta.SaveOMUlazSpec_TX). Read-only.
+Public Function RaspodelaSpecNaStanici(ByVal specBroj As String, ByVal stanicaID As String, _
+                                       ByVal iznos As Double, ByVal gotovina As Boolean, _
+                                       ByRef outDozvoljeno As Double, _
+                                       Optional ByRef outOtvoreno As Double) As Variant
+    Dim dok As Variant, i As Long, n As Long, m As Long
+    Dim kap() As Double, ostaje As Double, deo As Double, g As Double
+    RaspodelaSpecNaStanici = Empty
+    outDozvoljeno = 0
+    outOtvoreno = 0
+    If Len(Trim$(stanicaID)) = 0 Then Exit Function
+    dok = modDoplata.SpecDokumentiZaRaspodelu(specBroj, stanicaID)
+    If Not IsArray(dok) Then Exit Function
+    n = UBound(dok, 1)
+    ReDim kap(1 To n)
+    For i = 1 To n
+        kap(i) = CDbl(dok(i, 3))
+        outOtvoreno = outOtvoreno + kap(i)
+        If gotovina Then
+            g = DozvoljenoGotovinom("", CStr(dok(i, 1)))
+            If g < kap(i) Then kap(i) = g
+        End If
+        outDozvoljeno = outDozvoljeno + kap(i)
+    Next i
+    outOtvoreno = ZaokruziNovac(outOtvoreno)
+    outDozvoljeno = ZaokruziNovac(outDozvoljeno)
+    iznos = ZaokruziNovac(iznos)
+    If iznos <= 0 Or iznos > outDozvoljeno Then Exit Function
+
+    Dim res() As Variant
+    ReDim res(1 To n, 1 To 2)
+    ostaje = iznos
+    For i = 1 To n
+        If ostaje <= 0 Then Exit For
+        deo = kap(i)
+        If deo > ostaje Then deo = ostaje
+        If deo > 0 Then
+            m = m + 1
+            res(m, 1) = CStr(dok(i, 1))
+            res(m, 2) = ZaokruziNovac(deo)
+            ostaje = ZaokruziNovac(ostaje - deo)
+        End If
+    Next i
+    If m = 0 Then Exit Function
+
+    Dim outA() As Variant
+    ReDim outA(1 To m, 1 To 2)
+    For i = 1 To m
+        outA(i, 1) = res(i, 1)
+        outA(i, 2) = res(i, 2)
+    Next i
+    RaspodelaSpecNaStanici = outA
+End Function
+
+' KAPIJA ISPLATE PO SPECIFIKACIJI NA OTKUPNOM MESTU (obrazac IsplataKOProblem):
+' "" kad specifikacija pripada kooperantu i raspodela na dokumente te stanice
+' prima ceo iznos; inace poruka uz polje iznosa. Jedna implementacija, dva
+' pozivaoca: ekran F5 (modNovacUnos.IsplataValidiraj) i pisac
+' (modDokumenta.SaveOMUlazSpec_TX). Prazan broj nije greska -- nije izabran.
+Public Function IsplataSpecProblem(ByVal specBroj As String, ByVal kooperantID As String, _
+                                   ByVal stanicaID As String, ByVal iznos As Double, _
+                                   ByVal gotovina As Boolean) As String
+    Dim dozv As Double, otv As Double
+    specBroj = Trim$(specBroj)
+    If Len(specBroj) = 0 Then Exit Function
+    If StrComp(modDoplata.SpecKooperant(specBroj), Trim$(kooperantID), vbTextCompare) <> 0 Then
+        IsplataSpecProblem = Poruka("NOVAC_ERR_SPEC_TUDJA")
         Exit Function
     End If
-    dozvoljeno = ZaokruziNovac(dozvoljeno)
-    If dozvoljeno < 0 Then dozvoljeno = 0
-    If ZaokruziNovac(iznos) > dozvoljeno Then
-        GotovinaNadoknadaProblem = Poruka("NOVAC_ERR_GOTOVINA_NADOKNADA") & " " & _
-                                   Format$(dozvoljeno, "#,##0.00")
+    If IsArray(RaspodelaSpecNaStanici(specBroj, stanicaID, iznos, gotovina, dozv, otv)) Then Exit Function
+    If otv <= 0 Then
+        IsplataSpecProblem = Poruka("NOVAC_ERR_SPEC_NEMA_NA_STANICI")
+    ElseIf gotovina And dozv < otv Then
+        IsplataSpecProblem = Poruka("NOVAC_ERR_GOTOVINA_NADOKNADA") & " " & Format$(dozv, "#,##0.00")
+    Else
+        IsplataSpecProblem = Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA") & " " & Format$(otv, "#,##0.00")
     End If
 End Function
 

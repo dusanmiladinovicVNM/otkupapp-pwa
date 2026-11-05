@@ -3924,7 +3924,7 @@ SABOTAZE = {
     # Rucni izbor takvog bloka mora da stane: operater je rekao KOJI dug placa.
     "banka-uvoz-placen-blok-postaje-avans": (
         "modBankaMapiranje.bas",
-        "    BimOtkupBezOtvorenog = (BimOtvorenoNaDokumentu(otkupID, doplataID) <= BIM_OTVORENO_PRAG)\n",
+        "    BimOtkupBezOtvorenog = (BimOtvorenoNaDokumentu(otkupID, doplataID, specBroj) <= BIM_OTVORENO_PRAG)\n",
         "    BimOtkupBezOtvorenog = False   ' SABOTAZA: placen blok prolazi\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
         "potpuno placen blok NEMA sta da plati",
@@ -11928,6 +11928,58 @@ SABOTAZE = {
         "    storno = \"\"   ' SABOTAZA: stornirani se ne navode\n",
         "T_Doplata_SpecifikacijaPapir",
         "specifikacija: storniran dokument je naveden, a ne ulazi u iznos",
+    ),
+    # DOP-ODL-28: gotovina po specifikaciji ide i na dokumente drugih stanica.
+    "dop-spec-got-sve-stanice": (
+        "modNovac.bas",
+        "    dok = modDoplata.SpecDokumentiZaRaspodelu(specBroj, stanicaID)\n",
+        "    dok = modDoplata.SpecDokumentiZaRaspodelu(specBroj)   ' SABOTAZA: sve stanice\n",
+        "T_Doplata_SpecGotovinaNaStanici",
+        "kapija: po specifikaciji samo dokumenti te stanice, najvise njihov ostatak",
+    ),
+    # ISP-ODL-02: raspodela gotovine po specifikaciji ne gleda osnovicu.
+    "dop-spec-got-preko-osnovice": (
+        "modNovac.bas",
+        "        If gotovina Then\n"
+        "            g = DozvoljenoGotovinom(\"\", CStr(dok(i, 1)))\n",
+        "        If False Then   ' SABOTAZA: gotovina po specifikaciji preko osnovice\n"
+        "            g = DozvoljenoGotovinom(\"\", CStr(dok(i, 1)))\n",
+        "T_Doplata_SpecGotovinaNaStanici",
+        "kapija: gotovinom po specifikaciji najvise osnovica dokumenata te stanice",
+    ),
+    # Ekran F5 ne proverava isplatu po specifikaciji.
+    "dop-spec-got-ekran-bez-kapije": (
+        "modNovacUnos.bas",
+        "                blokErr = modNovac.IsplataSpecProblem(S(p, \"specBroj\"), partID, S(p, \"stanicaID\"), novac, _\n"
+        "                                                      (S(p, \"tipNovca\") = NOV_KES_OTKUPAC_KOOP))\n",
+        "                blokErr = \"\"   ' SABOTAZA: ekran ne proverava specifikaciju\n",
+        "T_Doplata_SpecGotovinaNaStanici",
+        "ekran F5: ista kapija gotovine po specifikaciji, poruka uz iznos",
+    ),
+    # DOP-ODL-29: lista cilja rucnog mapiranja ne nudi specifikaciju.
+    "dop-spec-rucno-van-liste": (
+        "modBankaMapiranje.bas",
+        "    sp = modDoplata.OtvoreneSpecifikacijeRedovi(kooperantID)\n"
+        "    If IsArray(sp) Then spRedova = UBound(sp, 1)\n",
+        "    ' SABOTAZA: lista cilja ne nudi specifikaciju\n",
+        "T_Doplata_SpecRucnoMapiranje",
+        "lista cilja rucnog mapiranja nudi specifikaciju kooperanta",
+    ),
+    # DOP-ODL-29: izabrana specifikacija se ne prepoznaje kao cilj.
+    "dop-spec-rucno-izbor-ignorisan": (
+        "modBankaMapiranje.bas",
+        "        If modDoplata.JeSpecifikacija(izabranID) Then BimEfektivnaSpec = Trim$(izabranID)\n",
+        "        ' SABOTAZA: izabrana specifikacija se ne prepoznaje\n",
+        "T_Doplata_SpecRucnoMapiranje",
+        "izabrana specifikacija je cilj; prazan izbor uzima poziv na broj; dokument nije specifikacija",
+    ),
+    # Tekst podele specifikacije bez redova dokumenata -- prikaz i pisac se razilaze.
+    "dop-spec-rucno-podela-bez-dokumenata": (
+        "modScrBankaUvoz.bas",
+        "                TekstPodele = TekstPodele & \" - \" & oznaka & \": \" & Format$(deo, \"#,##0.00\") & vbCrLf\n",
+        "                ' SABOTAZA: podela bez redova dokumenata\n",
+        "T_Doplata_SpecRucnoMapiranje",
+        "tekst podele: red po dokumentu specifikacije, isti iznosi kao pisac",
     ),
     # "Ukljuci filtrirane" cita samo prvi red (stranu), ne ceo pogled mreze.
     "dop-filt-samo-prvi-red": (
