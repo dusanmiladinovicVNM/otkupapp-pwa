@@ -28337,6 +28337,20 @@ Private Function DopIdKO(ByVal obracunID As String, ByVal koopID As String) As S
     End If
 End Function
 
+' DoplataID dokumenta obracuna za zadati blok (OtkupID), ili "".
+Private Function DopIdBloka(ByVal obracunID As String, ByVal otkupID As String) As String
+    Dim r As Variant, i As Long
+    r = modDoplata.DoplataStavkeRedovi()
+    If IsArray(r) Then
+        For i = 1 To UBound(r, 1)
+            If CStr(r(i, 5)) = obracunID And CStr(r(i, 16)) = otkupID Then
+                DopIdBloka = CStr(r(i, 1))
+                Exit Function
+            End If
+        Next i
+    End If
+End Function
+
 Private Function DopBrojDokumentaKO(ByVal obracunID As String, ByVal koopID As String) As String
     Dim r As Variant, i As Long
     r = modDoplata.DoplataStavkeRedovi()
@@ -28589,10 +28603,14 @@ End Function
 ' Knjizno odobrenje se stampa iz istog citaca koji puni karticu, pa papir i
 ' kartica kazu isti iznos. Storniran KO nema papir: StampajKO vraca razlog
 ' operateru i ne pravi izvoz (DOP-ODL-11, isto pravilo kao otkupni list).
-' Tok (kooperant A, juce): A @STA1 I 10, A @STA2 I 4; danas KO I 10 din/kg.
+' Dokument doplate je JEDAN BLOK (P1, DOP-ODL-14), pa papir nosi samo stavke
+' svog bloka; blok na drugoj stanici je drugi dokument. (Do P1 je KO bio jedan
+' po kooperantu i papir je sabirao obe stanice -- prvi Excel prolaz je pokazao
+' da test to jos tvrdi.)
+' Tok (kooperant A, juce): A @STA1 I 10, A @STA2 I 4; danas doplata I 10 din/kg.
 ' SABOTAZE: dop-papir-bez-stavke, dop-papir-stornirani.
 Private Sub T_Doplata_StampaKO()
-    Dim b As String, vr As String, kA As String, kul As String, stope As Collection
+    Dim b As String, vr As String, kA As String, kul As String, stope As Collection, o1 As String
     Dim obr As String, g As String, en As Long, idA As String, brojA As String
     Dim ws As Worksheet, ukRed As Long, c As Range, greska As String
 
@@ -28600,14 +28618,14 @@ Private Sub T_Doplata_StampaKO()
     vr = "DOPV-" & b
     kul = DopKultura(vr, "S1")
     kA = DopKooperant(b & "-A")
-    DopOtkup kA, FX_STANICA, kul, vr, "S1", 10, 0
+    o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
     DopOtkup kA, FX_STANICA_B, kul, vr, "S1", 4, 0
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
     obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 324", _
                                       False, g, en)
     AssertEq g, "", "preduslov: KO se knjizi"
-    idA = DopIdKO(obr, kA)
-    brojA = DopBrojDokumentaKO(obr, kA)
+    idA = DopIdBloka(obr, o1)
+    brojA = NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, idA, COL_DOP_BROJ))
 
     Set ws = modPrint.FillKOSablon(idA)
     AssertEq (Not ws Is Nothing), True, "preduslov: papir aktivnog KO se puni"
@@ -28619,8 +28637,8 @@ Private Sub T_Doplata_StampaKO()
     AssertEq (ukRed > 0), True, "preduslov: papir ima red UKUPNO"
     AssertEq Format$(NzD2(ws.cells(ukRed, 6).value), "0.00") & "|" & _
              Format$(NzD2(ws.cells(ukRed, 4).value), "0.00"), _
-             Format$(140, "0.00") & "|" & Format$(14, "0.00"), _
-             "papir KO: zbir iznosa i kg je zbir stavki (obe stanice)"
+             Format$(100, "0.00") & "|" & Format$(10, "0.00"), _
+             "papir doplate: zbir iznosa i kg je zbir stavki SVOG bloka, ne i bloka druge stanice"
     AssertEq (DopListSadrziDeo(ws, brojA) And DopListSadrziDeo(ws, "Dop " & b & "-A") And _
               DopListSadrziDeo(ws, "bez PDV")), True, _
              "papir KO nosi broj, kooperanta i napomenu da je iznos bez PDV nadoknade"
@@ -28932,6 +28950,10 @@ Private Sub T_Doplata_IzvodPoBrojuKO()
     Dim obr As String, g As String, en As Long, idA As String, brojA As String
     Dim plan As Variant, jak As Variant, partner As String, bim1 As String, bim2 As String
     Dim r1 As String, r2 As String
+    Dim tx As clsTransaction, errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    Set tx = DopIzvodSnimak()
 
     b = DopJedinstven()
     vr = "DOPV-" & b
@@ -28984,6 +29006,15 @@ Private Sub T_Doplata_IzvodPoBrojuKO()
              Format$(0, "0.00") & "|" & CStr(True), "isplacen KO izlazi iz otvorenih"
     AssertEq Format$(modNovac.GetKooperantUnallocatedAvans(kA), "0.00"), Format$(30, "0.00"), _
              "slobodan avans je samo visak preko KO"
+    tx.RollbackTx
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "T_Doplata_IzvodPoBrojuKO", errDesc
 End Sub
 
 ' ============================================================
@@ -28999,6 +29030,10 @@ Private Sub T_Doplata_StornoOdvezujeIsplatu()
     Dim b As String, vr As String, kA As String, kul As String, stope As Collection
     Dim obr As String, g As String, en As Long, idA As String, brojA As String
     Dim plan As Variant, partner As String, bim1 As String, r1 As String
+    Dim tx As clsTransaction, errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    Set tx = DopIzvodSnimak()
 
     b = DopJedinstven()
     vr = "DOPV-" & b
@@ -29028,6 +29063,15 @@ Private Sub T_Doplata_StornoOdvezujeIsplatu()
     AssertEq IsEmpty(modDoplata.OtvoreniKORedovi(kA)), True, "storniran KO nije otvorena obaveza"
     plan = modBankaMapiranje.BimAutoPlanIzVrednosti(0, 10, "", brojA, partner & " X", "")
     AssertEq (CStr(plan(3)) <> BIM_CILJ_DOPLATA), True, "poziv na broj storniranog KO ne vodi na KO"
+    tx.RollbackTx
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "T_Doplata_StornoOdvezujeIsplatu", errDesc
 End Sub
 
 ' Tekuci racun kooperanta (primalac naloga) -- DopKooperant ga ne upisuje.
@@ -29038,6 +29082,22 @@ Private Sub DopTekuciRacun(ByVal koopID As String, ByVal racun As String)
     If rows.count <> 1 Then Err.Raise vbObjectError + 9406, "modTest.DopTekuciRacun", koopID
     RequireUpdateCell TBL_KOOPERANTI, rows(1), COL_KOOP_TEKUCI_RACUN, racun, "modTest"
 End Sub
+
+' Testovi 96/97 (cipovi i agregat izvoda) broje CELU tblBankaImport, a u
+' RunAllTests idu POSLE doplate. Doplata test koji pise izvod zato radi nad
+' snimkom izvoda, novca i mape partnera (to pisu pisci izvoda) i vraca ga na
+' kraju, i kad padne -- obrazac RunBankaImportTestSuite. Prvi Excel prolaz
+' (05.11.2026): sest zaostalih stavki dalo je 21 stavku umesto 15 i 13 izvoda
+' umesto 7. Otkupi i doplate ostaju, kao u ostalim testovima doplate.
+Private Function DopIzvodSnimak() As clsTransaction
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_BANKA_IMPORT
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_PARTNER_MAP
+    Set DopIzvodSnimak = tx
+End Function
 
 ' Stavka izvoda: isplata sa zadatim pozivom na broj, bez konta (poziv je jedini
 ' jak kljuc). Vraca BankaImportID.
@@ -29182,6 +29242,10 @@ Private Sub T_Doplata_IzvodRucnoNaKO()
     Dim obr As String, g As String, en As Long, idA As String, brojA As String
     Dim lista As Variant, partner As String, bimP As String, bim1 As String, bim2 As String
     Dim razlog As String, n As Long, prijavljeno As Boolean
+    Dim tx As clsTransaction, errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    Set tx = DopIzvodSnimak()
 
     b = DopJedinstven()
     vr = "DOPV-" & b
@@ -29233,6 +29297,15 @@ Private Sub T_Doplata_IzvodRucnoNaKO()
     modBankaMapiranje.gBankaSilentBatch = False
     AssertEq n & "|" & DopNovacBim(bim2), "0|", _
              "pisac: izabran placen KO se ne knjizi (ni kao avans)"
+    tx.RollbackTx
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "T_Doplata_IzvodRucnoNaKO", errDesc
 End Sub
 
 ' ============================================================
@@ -29374,6 +29447,13 @@ Private Sub T_Doplata_NacinKonacnaCena()
     o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0, , 50)
     o2 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 4, 0, , 58)
     o3 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 3, 0, , 65)
+    ' Blokovi nastaju PRE knjizenja, kao u radu. Citalac signala isti sekund
+    ' racuna kao "posle" (retro), pa test ne sme da zavisi od toga da li su otkup
+    ' i knjizenje pali u istu sekundu (prvi Excel prolaz: o3 bez doplate je
+    ' izgledao kao retro unos).
+    DopVremeUnosa o1, DateAdd("n", -1, Now)
+    DopVremeUnosa o2, DateAdd("n", -1, Now)
+    DopVremeUnosa o3, DateAdd("n", -1, Now)
 
     plan = modDoplata.DoplataPlan(DopJuceOd(), DopJuceDo(), _
                DopStope(DopStopa(vr, "S1", KLASA_I, 60)), bez, DOP_NACIN_KONACNA)
@@ -29432,6 +29512,10 @@ Private Sub T_Doplata_IzborBlokova()
     kA = DopKooperant(b & "-A")
     o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
     o2 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 5, 0)
+    ' Blokovi nastaju PRE knjizenja (v. test 334): iskljucen o1 bi u istoj
+    ' sekundi izgledao kao retro unos.
+    DopVremeUnosa o1, DateAdd("n", -1, Now)
+    DopVremeUnosa o2, DateAdd("n", -1, Now)
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
 
     Set izbor = CreateObject("Scripting.Dictionary")

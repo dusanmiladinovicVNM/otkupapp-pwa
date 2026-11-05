@@ -276,6 +276,13 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   uvek ima otkupe). Test 336, sabotaže `dop-citalac-bez-provere-iznosa`,
   `avans-motor-dupli-novacid`. Poziv na broj bez slova „D" ostaje **release
   kapija** (§8, stavka 6).
+- **Prvi Excel prolaz (05.11.2026):** padovi su bili u PREMISAMA testova, ne u
+  kodu — 317 je sat zadavao kroz `SourceCreatedAt` (pisac ga prima kao tekst;
+  sat desktop otkupa je `CreatedAt`); 324 je i dalje tvrdio papir po kooperantu
+  (od P1 dokument je blok); 329/330/332 su ostavljali stavke izvoda koje 96/97
+  broje (sada snimak i rollback, obrazac banka suite); 334/335 su pravili blok i
+  knjiženje u istoj sekundi, koju čitalac signala računa kao „posle" (blokovi sad
+  nastaju minut ranije). Ponovni prolaz još nije javljen.
 - Još NIJE: ekran (P2 — bira način i blokove; do tada knjiži sve blokove u
   načinu 1, a pitanje broji dokumente po bloku), papir po uzoru na otkupni list
   i specifikacija (P3), kartica zbirno po obračunu (P4 — do tada red po dokumentu).

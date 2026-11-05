@@ -11627,7 +11627,7 @@ SABOTAZE = {
         "            sumIzn = sumIzn + CDbl(r(i, 12))\n",
         "            sumIzn = sumIzn + 0   ' SABOTAZA: zbir papira bez iznosa\n",
         "T_Doplata_StampaKO",
-        "papir KO: zbir iznosa i kg je zbir stavki (obe stanice)",
+        "papir doplate: zbir iznosa i kg je zbir stavki SVOG bloka, ne i bloka druge stanice",
     ),
     # Kapija papira ugasena: za storniran KO se pokusava izvoz.
     "dop-papir-stornirani": (
