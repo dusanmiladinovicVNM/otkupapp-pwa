@@ -256,7 +256,10 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   po bloku, broj `BrojDoplate(broj bloka, n)` = `…D`, `…D2` (stornirani se
   broje; zauzet broj → greška).
 - Signal osnovice po bloku: knjižena kg bloka prema sadašnjoj, plus retro unos
-  (otkup u periodu nastao posle knjiženja); isključen blok nije nalaz.
+  (otkup u periodu nastao posle knjiženja, bez aktivne doplate u bilo kom
+  obračunu); isključen blok nije nalaz, a ni retro blok plaćen kasnijim
+  obračunom (odluka 05.11.2026, DOP-P1-REV-04; storno te doplate vraća nalaz;
+  test 337, sabotaža `dop-signal-placen-retro-ostaje`).
 - Isplata na **stanicu bloka**: `StanicaKO`, vezan red izvoda (`MapBankaImportAs…Core`),
   gotovina (`IsplataKOProblem`, poruka „blok sa drugog otkupnog mesta"), nalozi
   i F5 lista (`OtvoreniKORedovi` kolona 5); poziv na broj prepoznaje broj sa „D"

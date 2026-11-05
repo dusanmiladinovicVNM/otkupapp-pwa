@@ -1155,7 +1155,10 @@ End Function
 '     dokument posebno sa svojim snimkom: ponovljena doplata (D, D2) je ista
 '     roba, pa se kg preko dokumenata NE sabira (review P1, DOP-P1-REV-01);
 '   - RETRO UNOS: aktivan otkup u periodu obracuna, za kljuc obracuna, NASTAO
-'     POSLE knjizenja (CreatedAt), a bez doplate u tom obracunu.
+'     POSLE knjizenja (CreatedAt), a bez AKTIVNE doplate u BILO KOM obracunu.
+'     Blok placen kasnijim obracunom (npr. nov obracun samo za njega) nije
+'     nalaz -- nema sta da se ispravi; storno te doplate nalaz vraca (odluka
+'     05.11.2026, review P1 DOP-P1-REV-04; test 337).
 ' Blok koji je postojao pri knjizenju a operater ga je iskljucio (DOP-ODL-16)
 ' NIJE nalaz: plan se zato ne racuna ponovo nad celim periodom.
 '

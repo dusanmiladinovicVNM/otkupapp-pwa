@@ -11823,6 +11823,15 @@ SABOTAZE = {
     # REVIEW P1 (05.11.2026).
     # Signal sabira kg preko svih dokumenata istog bloka i klase: D i D2 iste
     # robe izgledaju kao dupla kolicina, pa ponovljena doplata daje lazan DOP1.
+    # Retro blok placen drugim obracunom i dalje nalaz starijeg (review P1,
+    # DOP-P1-REV-04; odluka: placen blok nije nalaz).
+    "dop-signal-placen-retro-ostaje": (
+        "modDoplata.bas",
+        "                    If kl.Exists(KljucVrstaSorta(z(5), z(6)) & \"|\" & klasa) And Not blokovi.Exists(kRed) Then\n",
+        "                    If kl.Exists(KljucVrstaSorta(z(5), z(6)) & \"|\" & klasa) Then   ' SABOTAZA: placen retro blok ostaje nalaz\n",
+        "T_Doplata_RetroPlacenDrugimObracunom",
+        "retro blok placen drugim obracunom vise nije nalaz",
+    ),
     "dop-signal-sabira-ponovljene": (
         "modDoplata.bas",
         "        k = CStr(r(i, 1)) & \"|\" & UCase$(Trim$(CStr(r(i, 9))))\n",

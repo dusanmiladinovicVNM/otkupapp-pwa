@@ -441,6 +441,7 @@ Public Sub RunAllTests()
     RunOne 334
     RunOne 335
     RunOne 336
+    RunOne 337
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1085,6 +1086,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 334: TestName = "T_Doplata_NacinKonacnaCena"
         Case 335: TestName = "T_Doplata_IzborBlokova"
         Case 336: TestName = "T_Doplata_KapijeCitacaIMotora"
+        Case 337: TestName = "T_Doplata_RetroPlacenDrugimObracunom"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1429,6 +1431,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 334: T_Doplata_NacinKonacnaCena
         Case 335: T_Doplata_IzborBlokova
         Case 336: T_Doplata_KapijeCitacaIMotora
+        Case 337: T_Doplata_RetroPlacenDrugimObracunom
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -29613,4 +29616,48 @@ Private Sub T_Doplata_KapijeCitacaIMotora()
              NOV_VIRMAN_AVANS_KOOP & "|" & Format$(30, "0.00") & "||;" & _
              NOV_VIRMAN_AVANS_KOOP & "|" & Format$(30, "0.00") & "||;", _
              "motor avansa ne vezuje red sa dupliranim NovacID-em"
+End Sub
+
+' ============================================================
+' 337. DOP-ODL-07 (review P1, DOP-P1-REV-04): RETRO BLOK PLACEN DRUGIM
+'      OBRACUNOM VISE NIJE NALAZ.
+' ============================================================
+' Retro nalaz kaze "blok u periodu obracuna nema doplatu". Odluka operatera
+' (05.11.2026): kad blok dobije doplatu u BILO KOM aktivnom obracunu (npr. nov
+' obracun samo za taj blok), nalaz nestaje -- nema sta da se ispravi, a A je za
+' svoj blok bio tacan. Storno te doplate nalaz vraca.
+' Tok (kooperant A, juce): o1 I 10 (pre A); obracun A; retro o2 I 5; obracun B
+'   samo za o2; storno B.
+' SABOTAZE: dop-signal-placen-retro-ostaje.
+Private Sub T_Doplata_RetroPlacenDrugimObracunom()
+    Dim b As String, vr As String, kA As String, kul As String, stope As Collection
+    Dim o1 As String, o2 As String, obrA As String, obrB As String, g As String, en As Long
+    Dim izbor As Object, retro As String
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
+    DopVremeUnosa o1, DateAdd("n", -1, Now)
+    Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
+    obrA = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 337-A", _
+                                       False, g, en)
+    AssertEq g & "|" & DopOdstupanjaObracuna(obrA), "|", "preduslov: obracun A bez nalaza"
+
+    o2 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 5, 0)
+    retro = "|" & Format$(0, "0.00") & "|" & Format$(5, "0.00") & ";"
+    AssertEq DopOdstupanjaObracuna(obrA), retro, "preduslov: retro blok bez doplate je nalaz obracuna A"
+
+    Set izbor = CreateObject("Scripting.Dictionary")
+    izbor.CompareMode = vbTextCompare
+    izbor(o2) = True
+    obrB = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 337-B", _
+                                       False, g, en, DOP_NACIN_PO_KG, izbor)
+    AssertEq g & "|" & DopBrojKO(obrB), "|1", "preduslov: obracun B placa samo retro blok"
+    AssertEq DopOdstupanjaObracuna(obrA) & "#" & DopOdstupanjaObracuna(obrB), "#", _
+             "retro blok placen drugim obracunom vise nije nalaz"
+
+    AssertEq modStorno.StornoDoplata_TX(DopIdBloka(obrB, o2)), True, "preduslov: storno doplate retro bloka"
+    AssertEq DopOdstupanjaObracuna(obrA), retro, "storno doplate retro bloka vraca nalaz obracuna A"
 End Sub
