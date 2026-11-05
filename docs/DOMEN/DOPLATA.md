@@ -353,7 +353,10 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     `dop-spec-storno-oslobadja` je bila crvena, ali na tuđoj tvrdnji: sabotaža kvari
     pisca za ceo prolaz, raniji test sa stornom i ponovnim knjiženjem napravi dupli
     broj, a čitač (`+57`) obori svako sledeće knjiženje pre tvrdnje testa 339. Test
-    339 sada ide PRVI u bloku doplate (redosled nije identitet testa).
+    339 sada ide PRVI u bloku doplate (redosled nije identitet testa). Ponovljen
+    dokaz: `dop-spec-storno-oslobadja` crvena svojom tvrdnjom (uz kaskadu od 39
+    testova preko čitača), izvor identičan `ae29aaa0af242bcf` — **P3 dokaz 9/9**.
+    Otvoreno: pun prolaz sa BFP-om, ručni Compile, ručni pregled PDF-a.
   - Uzgredni nalaz (van doplate, NIJE reprodukovan u Excelu): otkupni list upisuje
     tekući račun pod ključem `racun` (`modPrint.FillOtkupSablon`), a primerak ga
     čita pod `račun` (`WriteOtkupCopy`, zamena `{RAČUN}` u klauzuli) — po kodu
