@@ -11,8 +11,8 @@
 > mapiranje izvoda na KO, primena avansa na KO) su u kodu**, sa revizijom po
 > bloku P1 (§2a). **Excel prijem 05.11.2026: ZELENO** — RunAllTests 336/0, BFP
 > 3014/0, banka 241/0, storno 111/0, faktura 39/0, palete, agrohemija 25/0,
-> golden (§7a). Još otvoreno: ručni Compile i dvosmerni dokaz sabotaža doplate
-> (40, nijedna još nije puštena na Excelu); §8.
+> golden (§7a); dvosmerni dokaz 40/40 sabotaža doplate **DOKAZANO (grupno)**.
+> Još otvoreno: ručni Compile; §8.
 
 ## 1) Šta je doplata
 
@@ -288,8 +288,11 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   banka 241/0, storno 111/0, faktura 39/0, palete 115 provera, JSON 72/72,
   StornoCentar, licenca; BFP 3014/0, agrohemija 25/0 i golden u posebnom pozivu
   (`--timeout 1500`: ceo poziv sa BFP-om prelazi 600 s, kao u S8, stavka 301).
-  Compile je `NEJASNO` (ručno), dokaz: `python tools/dokaz.py dop-
-  avans-motor-dupli-novacid --grupe` (40 sabotaža, 8 prolaza).
+  Compile je `NEJASNO` (ručno). Dokaz `python tools/dokaz.py dop-
+  avans-motor-dupli-novacid --grupe`: **crvenih 40 / 40**, svaka svojom
+  tvrdnjom u svom testu, izvor pre/posle identičan (`df90d24f076db264`), 8
+  prolaza; grupno izmereno 39, jedna sama. Pun pojedinačni dokaz je isti poziv
+  bez `--grupe` (pred release).
 - Još NIJE: ekran (P2 — bira način i blokove; do tada knjiži sve blokove u
   načinu 1, a pitanje broji dokumente po bloku), papir po uzoru na otkupni list
   i specifikacija (P3), kartica zbirno po obračunu (P4 — do tada red po dokumentu).
