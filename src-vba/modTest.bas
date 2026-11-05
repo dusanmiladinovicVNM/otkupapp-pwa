@@ -453,6 +453,7 @@ Public Sub RunAllTests()
     RunOne 341
     RunOne 342
     RunOne 343
+    RunOne 344
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1104,6 +1105,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 341: TestName = "T_Gotovina_NadoknadaNikadGotovinom"
         Case 342: TestName = "T_Doplata_SpecNalogIIzvod"
         Case 343: TestName = "T_Doplata_SpecAvansIPoziv"
+        Case 344: TestName = "T_Doplata_UkljuciFiltrirane"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1455,6 +1457,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 341: T_Gotovina_NadoknadaNikadGotovinom
         Case 342: T_Doplata_SpecNalogIIzvod
         Case 343: T_Doplata_SpecAvansIPoziv
+        Case 344: T_Doplata_UkljuciFiltrirane
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -30327,6 +30330,69 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
     Err.Raise errNum, "T_Doplata_SpecAvansIPoziv", errDesc
+End Sub
+
+' ============================================================
+' 344. LISTA BLOKOVI: "UKLJUCI FILTRIRANE" (zahtev operatera 05.11.2026).
+' ============================================================
+' Doplata jednom kooperantu kroz pretragu: Iskljuci sve, pretraga po imenu,
+' Ukljuci filtrirane. Ukljucuju se SVI blokovi koji prolaze pretragu (radnja
+' cita ceo pogled mreze, ne prikazanu stranu), a ostali ostaju iskljuceni;
+' "Ukljuci sve" / "Iskljuci sve" ostaju kakvi su. Pretraga bez pogotka ne menja
+' izbor. Mreza se puni pravim putem (GridTestLoad -> Scr_Rows sa pretragom).
+' Tok: kooperant A dva bloka (STA1, STA2), kooperant B jedan, juce, stopa I 10.
+' SABOTAZE: dop-filt-samo-prvi-red, dop-filt-ukljucuje-sve.
+Private Sub T_Doplata_UkljuciFiltrirane()
+    Dim b As String, vr As String, kul As String, kA As String, kB As String
+    Dim o1 As String, o2 As String, o3 As String, uklj As String, iskl As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    modScrDoplata.Scr_DopTestReset
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    kB = DopKooperant(b & "-B")
+    o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
+    o2 = DopOtkup(kA, FX_STANICA_B, kul, vr, "S1", 20, 0)
+    o3 = DopOtkup(kB, FX_STANICA, kul, vr, "S1", 30, 0)
+    AssertEq modScrDoplata.Scr_DopStopaTestDodaj(vr, "S1", KLASA_I, 10), "", "preduslov: stopa se dodaje"
+    modScrDoplata.Scr_DopUnosTestSet Format$(Date, "dd.mm.yyyy"), _
+        Format$(DopJuceOd(), "dd.mm.yyyy"), "00:00", Format$(DopJuceOd(), "dd.mm.yyyy"), "23:59", _
+        "test 344"
+    AssertEq modScrDoplata.Scr_DopPregledTest(), "", "preduslov: pregled prolazi"
+    modScrDoplata.Scr_DopListaTestSet "BLOKOVI"
+    uklj = ChrW(10003) & "|"
+    iskl = "|" & Poruka("OTKUI_DOP_ST_ISKLJUCEN")
+
+    AssertEq CStr(modScrDoplata.Scr_DopBlokoviTestSvi(False)) & "|" & DopEkranBlok(o1) & "#" & _
+             DopEkranBlok(o2) & "#" & DopEkranBlok(o3), CStr(True) & "|" & iskl & "#" & iskl & "#" & iskl, _
+             "preduslov: Iskljuci sve iskljucuje sve blokove"
+    modOtkupUI.GridTestLoad "DOPLATA", b & "-A"
+    AssertEq modOtkupUI.GridBrojRedova(), 2, "preduslov: pretraga po imenu ostavlja dva bloka kooperanta A"
+    AssertEq modScrDoplata.Scr_DopBlokoviTestFiltrirani(), True, "preduslov: radnja nad filtriranim prolazi"
+    AssertEq DopEkranBlok(o1) & "#" & DopEkranBlok(o2), uklj & "#" & uklj, _
+             "ukljuci filtrirane: ukljuceni su SVI blokovi pretrage"
+    AssertEq DopEkranBlok(o3), iskl, "ukljuci filtrirane: blok van pretrage ostaje iskljucen"
+
+    modOtkupUI.GridTestLoad "DOPLATA", "NEMA-" & b
+    AssertEq CStr(modScrDoplata.Scr_DopBlokoviTestFiltrirani()) & "|" & DopEkranBlok(o3), _
+             CStr(False) & "|" & iskl, "pretraga bez pogotka ne menja izbor"
+    AssertEq CStr(modScrDoplata.Scr_DopBlokoviTestSvi(True)) & "|" & DopEkranBlok(o3), _
+             CStr(True) & "|" & uklj, "Ukljuci sve i dalje ukljucuje sve blokove"
+
+    modOtkupUI.GridTestLoad ""
+    modScrDoplata.Scr_DopTestReset
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modOtkupUI.GridTestLoad ""
+    modScrDoplata.Scr_DopTestReset
+    On Error GoTo 0
+    Err.Raise errNum, "T_Doplata_UkljuciFiltrirane", errDesc
 End Sub
 
 ' Redovi specifikacije po natpisu: UKUPNO ZA ISPLATU (vrednost u koloni 10) i

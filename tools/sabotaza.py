@@ -11929,6 +11929,22 @@ SABOTAZE = {
         "T_Doplata_SpecifikacijaPapir",
         "specifikacija: storniran dokument je naveden, a ne ulazi u iznos",
     ),
+    # "Ukljuci filtrirane" cita samo prvi red (stranu), ne ceo pogled mreze.
+    "dop-filt-samo-prvi-red": (
+        "modScrDoplata.bas",
+        "    For r = 1 To modOtkupUI.GridBrojRedova()\n",
+        "    For r = 1 To 1   ' SABOTAZA: samo prvi red, ne ceo filtrirani pogled\n",
+        "T_Doplata_UkljuciFiltrirane",
+        "ukljuci filtrirane: ukljuceni su SVI blokovi pretrage",
+    ),
+    # "Ukljuci filtrirane" ukljucuje i blokove van pretrage.
+    "dop-filt-ukljucuje-sve": (
+        "modScrDoplata.bas",
+        "            If d.Exists(oid) Then d.Remove oid\n",
+        "            Set mIskljuceni = Nothing   ' SABOTAZA: filtrirano ukljucuje sve\n",
+        "T_Doplata_UkljuciFiltrirane",
+        "ukljuci filtrirane: blok van pretrage ostaje iskljucen",
+    ),
     # DOP-ODL-27: dokument sa brojem specifikacije se nudi i posebno -- isti dug
     # bi imao dva naloga.
     "dop-spec-nalog-i-dokumenti": (

@@ -331,6 +331,13 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   kroz nov pregled, prazni ga knjiženje ili „Isprazni stope". Test 338 (325
   prilagođen: lista „Plan" je sada zbirni Pregled), sabotaže `dop-ekran-*`
   (6 novih, 2 presidrene).
+  - **„Uključi filtrirane"** (zahtev operatera 05.11.2026), treće dugme liste
+    Blokovi pored „Uključi sve / Isključi sve", koja ostaju kakva su. Služi za
+    doplatu jednom kooperantu: Isključi sve → pretraga po imenu → Uključi
+    filtrirane. Uključuje **sve** blokove koji prolaze pretragu, na svim
+    stranama, jer čita ceo pogled mreže, a ne prikazanu stranu. Ostali blokovi
+    zadržavaju svoje stanje. Poruka kaže koliko blokova filter pokriva. Test
+    344, sabotaže `dop-filt-*`. **Excel prolaz neverifikovan.**
 - **P3 U KODU (05.11.2026), ponašanje neverifikovano dok se ne pusti u Excelu.**
   Pre-flight: odluke DOP-ODL-23..26.
   - **P3a — papir bloka** (`modPrint.FillKOSablon`, isti ulazi: lista Dokumenti i

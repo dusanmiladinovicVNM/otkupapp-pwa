@@ -6622,10 +6622,12 @@ End Sub
 ' preko GridCell nad pravim podacima ekrana. Bez ovoga bi test morao da izmisli
 ' red, pa bi merio sopstvenu izmisljotinu umesto puta kojim ide operater.
 ' Prazan kljuc vraca ljusku na pocetno stanje.
-Public Sub GridTestLoad(ByVal kljuc As String)
+Public Sub GridTestLoad(ByVal kljuc As String, Optional ByVal pretraga As String = "")
     If Not IsTestMode() Then Exit Sub
     mFilter = "sve"
-    mSearch = ""
+    ' pretraga: tekst polja pretrage, kao da ga je operater ukucao (radnja nad
+    ' filtriranim redovima, npr. Doplata "Ukljuci filtrirane").
+    mSearch = pretraga
     mPage = 1
     If Len(kljuc) = 0 Then
         mScreen = SCR_POCETNI

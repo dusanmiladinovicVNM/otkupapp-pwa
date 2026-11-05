@@ -132,7 +132,8 @@ Public Function Scr_Radnje() As String
             Scr_Radnje = "dopdel:OTKUI_BTN_DOP_UKLONI:110:danger:1"
         Case DOP_BLOKOVI
             Scr_Radnje = "dopsve:OTKUI_BTN_DOP_UKLJUCI_SVE:110:ghost:0|" & _
-                         "dopnista:OTKUI_BTN_DOP_ISKLJUCI_SVE:110:ghost:0"
+                         "dopnista:OTKUI_BTN_DOP_ISKLJUCI_SVE:110:ghost:0|" & _
+                         "dopfilt:OTKUI_BTN_DOP_UKLJUCI_FILT:140:ghost:0"
         Case DOP_KNJIZENO
             Scr_Radnje = "dopspec:OTKUI_BTN_DOP_SPEC:170:ghost:1|" & _
                          "dopstornoobr:OTKUI_BTN_DOP_STORNO_OBR:150:danger:1"
@@ -416,6 +417,37 @@ Private Function PostaviSveBlokove(ByVal ukljuci As Boolean) As Boolean
     PostaviSveBlokove = True
 End Function
 
+' "UKLJUCI FILTRIRANE" (zahtev operatera 05.11.2026): doplata jednom kooperantu
+' kroz pretragu -- Iskljuci sve, pretraga po imenu, Ukljuci filtrirane. Ukljucuje
+' SVE blokove koji prolaze trenutnu pretragu, na SVIM stranama: redovi se citaju
+' iz celog pogleda mreze (GridBrojRedova / GridCell), a strana je samo crtanje.
+' Pravilo pretrage zato postoji jednom (RedoviBlokovi). Ostali blokovi zadrzavaju
+' svoje stanje. Poruka kaze koliko blokova filter pokriva, pa zaboravljena
+' pretraga ne prolazi neprimecena.
+Private Function UkljuciFiltrirane() As Boolean
+    Dim d As Object, vidjeni As Object, r As Long, oid As String
+    If Not IsArray(mPlan) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_DOP_PRAZAN_PLAN"), True
+        Exit Function
+    End If
+    If modOtkupUI.GridBrojRedova() = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_DOP_NEMA_FILT"), True
+        Exit Function
+    End If
+    Set d = Iskljuceni()
+    Set vidjeni = CreateObject("Scripting.Dictionary")
+    vidjeni.CompareMode = vbTextCompare
+    For r = 1 To modOtkupUI.GridBrojRedova()
+        oid = Trim$(CStr(modOtkupUI.GridCell(r, BL_COL_ID)))
+        If Len(oid) > 0 And Not vidjeni.Exists(oid) Then
+            vidjeni(oid) = True
+            If d.Exists(oid) Then d.Remove oid
+        End If
+    Next r
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_DOP_UKLJUCENO_FILT") & " " & CStr(vidjeni.count), False
+    UkljuciFiltrirane = True
+End Function
+
 '=====================================================================
 ' UNOS ZONE
 '=====================================================================
@@ -577,6 +609,9 @@ Private Function RadnjaNadRedom(ByVal tag As String) As Boolean
     Select Case p(0)
         Case "dopsve", "dopnista"
             If Scr_Lista() = DOP_BLOKOVI Then RadnjaNadRedom = PostaviSveBlokove(p(0) = "dopsve")
+            Exit Function
+        Case "dopfilt"
+            If Scr_Lista() = DOP_BLOKOVI Then RadnjaNadRedom = UkljuciFiltrirane()
             Exit Function
     End Select
     red = CLng(val(p(1)))
@@ -1485,4 +1520,11 @@ End Function
 Public Function Scr_DopBlokoviTestSvi(ByVal ukljuci As Boolean) As Boolean
     If Not IsTestMode() Then Exit Function
     Scr_DopBlokoviTestSvi = PostaviSveBlokove(ukljuci)
+End Function
+
+' "Ukljuci filtrirane" -- ista radnja kao dugme; cita mrezu koju je test napunio
+' (modOtkupUI.GridTestLoad sa pretragom).
+Public Function Scr_DopBlokoviTestFiltrirani() As Boolean
+    If Not IsTestMode() Then Exit Function
+    Scr_DopBlokoviTestFiltrirani = UkljuciFiltrirane()
 End Function
