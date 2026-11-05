@@ -328,9 +328,34 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   kroz nov pregled, prazni ga knjiženje ili „Isprazni stope". Test 338 (325
   prilagođen: lista „Plan" je sada zbirni Pregled), sabotaže `dop-ekran-*`
   (6 novih, 2 presidrene).
-- Još NIJE: papir bloka i specifikacija sa brojem (P3), plaćanje po
-  specifikaciji (DOP-ODL-22), kartica zbirno po obračunu (P4 — do tada red po
-  dokumentu).
+- **P3 U KODU (05.11.2026), ponašanje neverifikovano dok se ne pusti u Excelu.**
+  Pre-flight: odluke DOP-ODL-23..26.
+  - **P3a — papir bloka** (`modPrint.FillKOSablon`, isti ulazi: lista Dokumenti i
+    kartica): dva primerka po 1/3 A4 kroz isti `WriteOtkupCopy` kao otkupni list
+    (h nosi tekstove i okvir doplate; otkupni list, otpremnica i grupni list
+    ostaju kakvi su). UKUPNO = iznos dokumenta, osnovica = zaokruženo(UKUPNO /
+    (1 + stopa)), nadoknada = razlika. Test 324 prepravljen; sabotaže
+    `dop-papir-*`.
+  - **P3b — broj specifikacije** `S<redni>/<godina>-<šifra>`: kolona
+    `tblDoplata.BrojSpecifikacije` na kraju (kanon + `modSchema`), dodeljuje je
+    samo pisac, jedan broj po kooperantu u obračunu, redni broj po kooperantu u
+    godini datuma knjiženja, storno ga ne oslobađa (`+48` zauzet, `+49` van
+    oblika); čitač: kolona 20, `+56` dva broja u istoj specifikaciji, `+57` isti
+    broj u dve. Test 339; sabotaže `dop-spec-niz-*`, `dop-spec-storno-*`,
+    `dop-spec-citalac-*`.
+  - **P3c — PDF specifikacije** (`modPrint.FillSpecDoplateSablon` /
+    `StampajSpecifikacijuDoplate`): detalj po dokumentu, rekapitulacija po
+    kulturi i klasi, osnovica / PDV nadoknada / UKUPNO, napomena o storniranim
+    dokumentima (DOP-ODL-25); storniran obračun nema specifikaciju. Lista
+    Knjiženo nosi kolonu broja i radnju „Štampaj specifikaciju". Test 340;
+    sabotaže `dop-spec-papir-*`.
+  - Uzgredni nalaz (van doplate, NIJE reprodukovan u Excelu): otkupni list upisuje
+    tekući račun pod ključem `racun` (`modPrint.FillOtkupSablon`), a primerak ga
+    čita pod `račun` (`WriteOtkupCopy`, zamena `{RAČUN}` u klauzuli) — po kodu
+    „TR:" na otkupnom listu ostaje prazno. Papir doplate piše ključ koji se čita.
+- Još NIJE: plaćanje po specifikaciji (DOP-ODL-22, pre-flight), kartica zbirno
+  po obračunu (P4 — do tada red po dokumentu), tekst pitanja o ponavljanju kroz
+  katalog poruka.
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
 Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,

@@ -11903,6 +11903,30 @@ SABOTAZE = {
         "T_Doplata_BrojSpecifikacije",
         "citalac: dokumenti iste specifikacije sa razlicitim brojem padaju po imenu",
     ),
+    # P3c: specifikacija uzima dokumente celog obracuna, ne samo kooperanta.
+    "dop-spec-papir-tudji-kooperant": (
+        "modPrint.bas",
+        "           StrComp(CStr(r(i, 4)), koopID, vbTextCompare) = 0 Then\n            rb = rb + 1\n",
+        "           True Then   ' SABOTAZA: i dokumenti drugih kooperanata\n            rb = rb + 1\n",
+        "T_Doplata_SpecifikacijaPapir",
+        "specifikacija: samo dokumenti kooperanta iz obracuna, UKUPNO = zbir iznosa, osnovica + PDV nadoknada = UKUPNO",
+    ),
+    # P3c: rekapitulacija u koloni iznosa sabira kilograme.
+    "dop-spec-papir-rekap": (
+        "modPrint.bas",
+        "            a(3) = CDbl(a(3)) + CDbl(r(i, 12))\n",
+        "            a(3) = CDbl(a(3)) + CDbl(r(i, 10))   ' SABOTAZA: rekap iznos je kg\n",
+        "T_Doplata_SpecifikacijaPapir",
+        "specifikacija: rekapitulacija po kulturi i klasi = zbir dokumenata",
+    ),
+    # P3c: stornirani dokumenti iste specifikacije se ne navode (DOP-ODL-25).
+    "dop-spec-papir-bez-storniranih": (
+        "modPrint.bas",
+        "    storno = SpecDoplateStornirani(obracunID, koopID)\n",
+        "    storno = \"\"   ' SABOTAZA: stornirani se ne navode\n",
+        "T_Doplata_SpecifikacijaPapir",
+        "specifikacija: storniran dokument je naveden, a ne ulazi u iznos",
+    ),
     # Retro blok placen drugim obracunom i dalje nalaz starijeg (review P1,
     # DOP-P1-REV-04; odluka: placen blok nije nalaz).
     "dop-signal-placen-retro-ostaje": (

@@ -720,6 +720,7 @@ Public Const WS_SLEDLJIVOST_SABLON As String = "SledljivostSablon"
 Public Const WS_SPECIFIKACIJA_SABLON As String = "SpecifikacijaSablon"
 Public Const WS_ISPLATA_SPEC_SABLON As String = "IsplataSpecSablon"
 Public Const WS_KO_SABLON As String = "KOSablon"
+Public Const WS_DOP_SPEC_SABLON As String = "DoplataSpecSablon"
 
 ' --- Dokument-Tipovi ---
 Public Const COL_STORNIRANO As String = "Stornirano"

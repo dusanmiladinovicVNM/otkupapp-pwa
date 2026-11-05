@@ -444,6 +444,7 @@ Public Sub RunAllTests()
     RunOne 337
     RunOne 338
     RunOne 339
+    RunOne 340
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1091,6 +1092,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 337: TestName = "T_Doplata_RetroPlacenDrugimObracunom"
         Case 338: TestName = "T_Doplata_EkranNacinIBlokovi"
         Case 339: TestName = "T_Doplata_BrojSpecifikacije"
+        Case 340: TestName = "T_Doplata_SpecifikacijaPapir"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1438,6 +1440,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 337: T_Doplata_RetroPlacenDrugimObracunom
         Case 338: T_Doplata_EkranNacinIBlokovi
         Case 339: T_Doplata_BrojSpecifikacije
+        Case 340: T_Doplata_SpecifikacijaPapir
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -29755,8 +29758,8 @@ Private Sub T_Doplata_EkranNacinIBlokovi()
     redovi = d(1)
     For i = 1 To CLng(d(2))
         If NzToText(redovi(i, 2)) = naziv Then
-            t = NzToText(redovi(i, 4)) & "|" & Format$(NzD2(redovi(i, 6)), "0.00")
-            obr = NzToText(redovi(i, 7))
+            t = NzToText(redovi(i, 5)) & "|" & Format$(NzD2(redovi(i, 7)), "0.00")
+            obr = NzToText(redovi(i, 8))
         End If
     Next i
     AssertEq NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, DopIdBloka(obr, o1), COL_DOP_NACIN)), _
@@ -29848,6 +29851,92 @@ Private Sub T_Doplata_BrojSpecifikacije()
     RequireUpdateCell TBL_DOPLATA, rS, COL_DOP_SPEC, stari, "modTest"
     AssertEq (InStr(1, greska, "razlicit broj", vbTextCompare) > 0), True, _
              "citalac: dokumenti iste specifikacije sa razlicitim brojem padaju po imenu"
+End Sub
+
+' ============================================================
+' 340. DOP-ODL-18/21/25: SPECIFIKACIJA DOPLATE -- PAPIR.
+' ============================================================
+' Specifikacija je jedan kooperant u jednom obracunu: nosi svoj broj, samo
+' njegove dokumente (i sa dve stanice), UKUPNO = zbir iznosa dokumenata,
+' osnovica + PDV nadoknada = UKUPNO, rekapitulaciju po kulturi i klasi. Storniran
+' dokument se navodi, a ne ulazi u iznos (DOP-ODL-25); storniran ceo obracun
+' nema specifikaciju ni izvoz.
+' Tok (juce): A I 10 na STA1 i I 4 na STA2, B I 5 na STA1; stopa 10.
+' SABOTAZE: dop-spec-papir-tudji-kooperant, dop-spec-papir-rekap,
+'   dop-spec-papir-bez-storniranih.
+Private Sub T_Doplata_SpecifikacijaPapir()
+    Dim b As String, vr As String, kA As String, kB As String, kul As String, stope As Collection
+    Dim oA1 As String, oA2 As String, oB As String, obr As String, g As String, en As Long
+    Dim ws As Worksheet, c As Range, ukRed As Long, rekRed As Long, specA As String
+    Dim brA1 As String, brA2 As String, brB As String, stopa As Double, osn As Double, greska As String
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    kB = DopKooperant(b & "-B")
+    oA1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
+    oA2 = DopOtkup(kA, FX_STANICA_B, kul, vr, "S1", 4, 0)
+    oB = DopOtkup(kB, FX_STANICA, kul, vr, "S1", 5, 0)
+    Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 340", _
+                                      False, g, en)
+    AssertEq g, "", "preduslov: obracun se knjizi"
+    specA = DopSpecBloka(obr, oA1)
+    brA1 = NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, DopIdBloka(obr, oA1), COL_DOP_BROJ))
+    brA2 = NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, DopIdBloka(obr, oA2), COL_DOP_BROJ))
+    brB = NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, DopIdBloka(obr, oB), COL_DOP_BROJ))
+
+    Set ws = modPrint.FillSpecDoplateSablon(obr, kA)
+    AssertEq (Not ws Is Nothing), True, "preduslov: specifikacija se puni"
+    DopSpecRedovi ws, ukRed, rekRed
+    AssertEq (ukRed > 2 And rekRed > 0), True, "preduslov: specifikacija ima UKUPNO i rekapitulaciju"
+    stopa = NzD2(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
+    If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
+    osn = modNovac.ZaokruziNovac(140 / (1 + stopa / 100))
+    AssertEq Format$(NzD2(ws.cells(ukRed, 10).value), "0.00") & "|" & _
+             Format$(NzD2(ws.cells(ukRed - 2, 10).value), "0.00") & "|" & _
+             Format$(NzD2(ws.cells(ukRed - 1, 10).value), "0.00") & "|" & _
+             CStr(DopListSadrziDeo(ws, specA) And DopListSadrziDeo(ws, brA1) And _
+                  DopListSadrziDeo(ws, brA2) And Not DopListSadrziDeo(ws, brB)), _
+             Format$(140, "0.00") & "|" & Format$(osn, "0.00") & "|" & Format$(140 - osn, "0.00") & "|" & _
+             CStr(True), _
+             "specifikacija: samo dokumenti kooperanta iz obracuna, UKUPNO = zbir iznosa, " & _
+             "osnovica + PDV nadoknada = UKUPNO"
+    AssertEq Format$(NzD2(ws.cells(rekRed + 2, 8).value), "0.00") & "|" & _
+             Format$(NzD2(ws.cells(rekRed + 2, 10).value), "0.00"), _
+             Format$(14, "0.00") & "|" & Format$(140, "0.00"), _
+             "specifikacija: rekapitulacija po kulturi i klasi = zbir dokumenata"
+
+    AssertEq modStorno.StornoDoplata_TX(DopIdBloka(obr, oA2)), True, "preduslov: storno dokumenta A2"
+    Set ws = modPrint.FillSpecDoplateSablon(obr, kA)
+    DopSpecRedovi ws, ukRed, rekRed
+    AssertEq Format$(NzD2(ws.cells(ukRed, 10).value), "0.00") & "|" & _
+             CStr(DopListSadrziDeo(ws, "Stornirani dokumenti") And DopListSadrziDeo(ws, brA2)), _
+             Format$(100, "0.00") & "|" & CStr(True), _
+             "specifikacija: storniran dokument je naveden, a ne ulazi u iznos"
+
+    AssertEq modStorno.StornoObracunDoplate_TX(obr), True, "preduslov: storno celog obracuna"
+    modDocStyle.DocPdfTestReset
+    greska = modPrint.StampajSpecifikacijuDoplate(obr, kA)
+    AssertEq (modPrint.FillSpecDoplateSablon(obr, kA) Is Nothing And Len(greska) > 0 And _
+              modDocStyle.DocPdfTest() = ""), True, _
+             "specifikacija storniranog obracuna se ne stampa: razlog operateru, bez izvoza"
+End Sub
+
+' Redovi specifikacije po natpisu: UKUPNO ZA ISPLATU (vrednost u koloni 10) i
+' naslov rekapitulacije (prvi red podataka je dva reda ispod).
+Private Sub DopSpecRedovi(ByVal ws As Worksheet, ByRef outUk As Long, ByRef outRek As Long)
+    Dim c As Range
+    outUk = 0
+    outRek = 0
+    If ws Is Nothing Then Exit Sub
+    For Each c In ws.UsedRange
+        If Not IsError(c.value) Then
+            If Trim$(CStr(c.value)) = "UKUPNO ZA ISPLATU:" Then outUk = c.row
+            If Trim$(CStr(c.value)) = "REKAPITULACIJA PO KULTURI I KLASI" Then outRek = c.row
+        End If
+    Next c
 End Sub
 
 ' Broj specifikacije dokumenta obracuna za blok, ili "". Cita TABELU, ne citac:

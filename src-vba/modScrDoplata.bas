@@ -77,7 +77,8 @@ Private Const KO_COL_OBR   As Long = 8
 ' Lista BLOKOVI: kvacica i identitet bloka (OtkupID). Lista KNJIZENO: obracun.
 Private Const BL_COL_OZN   As Long = 1
 Private Const BL_COL_ID    As Long = 12
-Private Const KNJ_COL_OBR  As Long = 7
+Private Const KNJ_COL_OBR  As Long = 8
+Private Const KNJ_COL_KOOP As Long = 9
 
 Private mLista As String
 Private mStope As Collection        ' Dictionary: VrstaVoca, SortaVoca, Klasa, Cena
@@ -133,7 +134,8 @@ Public Function Scr_Radnje() As String
             Scr_Radnje = "dopsve:OTKUI_BTN_DOP_UKLJUCI_SVE:110:ghost:0|" & _
                          "dopnista:OTKUI_BTN_DOP_ISKLJUCI_SVE:110:ghost:0"
         Case DOP_KNJIZENO
-            Scr_Radnje = "dopstornoobr:OTKUI_BTN_DOP_STORNO_OBR:150:danger:1"
+            Scr_Radnje = "dopspec:OTKUI_BTN_DOP_SPEC:170:ghost:1|" & _
+                         "dopstornoobr:OTKUI_BTN_DOP_STORNO_OBR:150:danger:1"
         Case DOP_KO
             Scr_Radnje = "dopprint:OTKUI_BTN_DOP_STAMPA:104:ghost:1|" & _
                          "dopstorno:OTKUI_BTN_DOP_STORNO:118:danger:1|" & _
@@ -588,6 +590,10 @@ Private Function RadnjaNadRedom(ByVal tag As String) As Boolean
                 RadnjaNadRedom = UkloniStopu(Trim$(CStr(modOtkupUI.GridCell(red, ST_COL_KLJUC))))
         Case "dopprint"
             If Scr_Lista() = DOP_KO Then StampajKO Trim$(CStr(modOtkupUI.GridCell(red, KO_COL_ID)))
+        Case "dopspec"
+            If Scr_Lista() = DOP_KNJIZENO Then _
+                StampajSpecifikaciju Trim$(CStr(modOtkupUI.GridCell(red, KNJ_COL_OBR))), _
+                                     Trim$(CStr(modOtkupUI.GridCell(red, KNJ_COL_KOOP)))
         Case "dopstorno"
             If Scr_Lista() = DOP_KO Then _
                 RadnjaNadRedom = StornirajKO(Trim$(CStr(modOtkupUI.GridCell(red, KO_COL_ID))))
@@ -827,6 +833,18 @@ Private Sub StampajKO(ByVal doplataID As String)
         Exit Sub
     End If
     greska = modPrint.StampajKO(doplataID)
+    If Len(greska) > 0 Then modOtkupUI.ShowToast greska, True
+End Sub
+
+' Specifikacija = jedan kooperant u jednom obracunu (DOP-ODL-21) -- red liste
+' Knjizeno nosi oba identiteta u nevidljivim kolonama.
+Private Sub StampajSpecifikaciju(ByVal obracunID As String, ByVal koopID As String)
+    Dim greska As String
+    If Len(obracunID) = 0 Or Len(koopID) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+        Exit Sub
+    End If
+    greska = modPrint.StampajSpecifikacijuDoplate(obracunID, koopID)
     If Len(greska) > 0 Then modOtkupUI.ShowToast greska, True
 End Sub
 
@@ -1226,11 +1244,13 @@ Private Function KnjizenoKolone() As Variant
     KnjizenoKolone = Array( _
         "OTKUI_HD_DATUM||txt|80|1", _
         "OTKUI_HD_KOOP||txt|0|1", _
+        "OTKUI_HD_SPEC||txt|130|1", _
         "OTKUI_HD_PERIOD||txt|190|2", _
         "OTKUI_HD_DOKUMENATA||num|64|3", _
         "OTKUI_HD_KG||kg|84|1", _
         "OTKUI_HD_IZNOS||rsd|100|1", _
-        "OTKUI_HD_OBRACUN||txt|1|4")
+        "OTKUI_HD_OBRACUN||txt|1|4", _
+        "OTKUI_HDI_REF||txt|1|4")
 End Function
 
 Private Function RedoviKnjizeno(ByVal q As String) As Variant
@@ -1244,7 +1264,8 @@ Private Function RedoviKnjizeno(ByVal q As String) As Variant
         Exit Function
     End If
 
-    ' g: "ObracunID|KooperantID" -> Array(datum, koop, periodOd, periodDo, dok, kg, din, obr)
+    ' g: "ObracunID|KooperantID" -> Array(datum, koop, periodOd, periodDo, dok, kg, din,
+    '    obr, broj specifikacije) -- par je specifikacija (DOP-ODL-21)
     Set g = CreateObject("Scripting.Dictionary")
     g.CompareMode = vbTextCompare
     Set dok = CreateObject("Scripting.Dictionary")
@@ -1252,7 +1273,8 @@ Private Function RedoviKnjizeno(ByVal q As String) As Variant
     For i = 1 To UBound(r, 1)
         k = CStr(r(i, 5)) & "|" & CStr(r(i, 4))
         If Not g.Exists(k) Then
-            g.Add k, Array(r(i, 3), r(i, 4), r(i, 14), r(i, 15), 0&, 0#, 0#, CStr(r(i, 5)))
+            g.Add k, Array(r(i, 3), r(i, 4), r(i, 14), r(i, 15), 0&, 0#, 0#, CStr(r(i, 5)), _
+                           CStr(r(i, 20)))
         End If
         a = g(k)
         If Not dok.Exists(CStr(r(i, 1))) Then
@@ -1265,26 +1287,28 @@ Private Function RedoviKnjizeno(ByVal q As String) As Variant
     Next i
 
     Set imena = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
-    ReDim outA(1 To g.count, 1 To KNJ_COL_OBR)
+    ReDim outA(1 To g.count, 1 To KNJ_COL_KOOP)
     For Each kk In g.keys
         a = g(kk)
         ime = CStr(a(1))
         If imena.Exists(ime) Then ime = Trim$(CStr(imena(ime)))
-        hay = ime & "|" & CStr(a(7))
+        hay = ime & "|" & CStr(a(7)) & "|" & CStr(a(8))
         If Len(q) > 0 Then
             If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
         End If
         n = n + 1
         outA(n, 1) = Format$(CDate(a(0)), "dd.mm.yyyy")
         outA(n, 2) = ime
-        outA(n, 3) = Format$(CDate(a(2)), "dd.mm.yyyy hh:nn") & " " & ChrW(8211) & " " & _
+        outA(n, 3) = CStr(a(8))
+        outA(n, 4) = Format$(CDate(a(2)), "dd.mm.yyyy hh:nn") & " " & ChrW(8211) & " " & _
                      Format$(CDate(a(3)), "dd.mm.yyyy hh:nn")
-        outA(n, 4) = CLng(a(4))
-        outA(n, 5) = CDbl(a(5))
-        outA(n, 6) = modNovac.ZaokruziNovac(CDbl(a(6)))
+        outA(n, 5) = CLng(a(4))
+        outA(n, 6) = CDbl(a(5))
+        outA(n, 7) = modNovac.ZaokruziNovac(CDbl(a(6)))
         outA(n, KNJ_COL_OBR) = CStr(a(7))
+        outA(n, KNJ_COL_KOOP) = CStr(a(1))
         sumKg = sumKg + CDbl(a(5))
-        sumIzn = sumIzn + CDbl(outA(n, 6))
+        sumIzn = sumIzn + CDbl(outA(n, 7))
 Sledeci:
     Next kk
     RedoviKnjizeno = Array(KnjizenoKolone(), outA, n, sumKg, sumIzn, Array(0, 0, 0))
