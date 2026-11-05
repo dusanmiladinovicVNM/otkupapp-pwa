@@ -1149,6 +1149,8 @@ Public Function BuPredlogTekst(ByVal smer As String, ByVal ciljTip As String, _
             BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_BLOK") & " " & ciljOpis
         Case BIM_CILJ_DOPLATA
             BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_KO") & " " & ciljOpis
+        Case BIM_CILJ_SPEC
+            BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_SPEC") & " " & ciljOpis
         Case BIM_CILJ_OM
             BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_OM") & " " & ciljOpis
         Case Else

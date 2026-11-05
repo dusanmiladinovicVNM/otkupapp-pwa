@@ -373,9 +373,37 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     tekući račun pod ključem `racun` (`modPrint.FillOtkupSablon`), a primerak ga
     čita pod `račun` (`WriteOtkupCopy`, zamena `{RAČUN}` u klauzuli) — po kodu
     „TR:" na otkupnom listu ostaje prazno. Papir doplate piše ključ koji se čita.
-- Još NIJE: plaćanje po specifikaciji (DOP-ODL-22, pre-flight), kartica zbirno
-  po obračunu (P4 — do tada red po dokumentu), tekst pitanja o ponavljanju kroz
-  katalog poruka.
+- **Plaćanje po specifikaciji — rez A** (DOP-ODL-27..29; pre-flight 05.11.2026):
+  - **Nalozi:** dokument sa brojem specifikacije se ne nudi posebno; nudi se
+    specifikacija — jedan red (`clsBlokIsplata.specifikacija`, ključ reda = broj),
+    iznos = zbir otvorenog po dokumentu (`modDoplata.OtvoreneSpecifikacijeRedovi`),
+    poziv na broj naloga = broj specifikacije. Stanica reda je **matična stanica
+    kooperanta** (dokumenti mogu biti sa više stanica), datum = datum knjiženja.
+    Dokument bez broja (knjižen pre P3) ostaje po dokumentu (test 328).
+  - **Izvod:** poziv sa brojem specifikacije je jak ključ
+    (`modDoplata.SpecPoPozivu`, cilj plana `BIM_CILJ_SPEC`). Razrešava se samo
+    **tačno jedan** pogodak, jer se normalizovan broj može sudariti
+    (`S1/2020-26123` / `S120/2026-123`). Specifikacija bez aktivnih dokumenata
+    nije cilj. Pisac je isti (`MapBankaImportAsKooperantBlockCore`, grana
+    `specBroj`): iznos ide na otvorene dokumente **od najstarijeg bloka**
+    (`SpecDokumentiZaRaspodelu`: datum bloka, pa broj bloka sa ciframa kao
+    brojem). Svaki dokument dobija red novca vezan za njega, na stanici svog bloka.
+    Višak je avans na matičnoj; isplaćena specifikacija ceo iznos šalje u avans
+    (kao plaćen KO).
+  - **Primena avansa** na red specifikacije (nalozi): `modNovac.ApplyAvansToSpec_TX`,
+    ista raspodela, svaki dokument kroz `ApplyAvansToKO`, jedna transakcija.
+    Ušla je u rez A jer red specifikacije zamenjuje dokumente u nalozima: bez nje
+    bi avans nad tim dokumentima nestao (CAPABILITY).
+  - Novac se nikad ne vezuje za specifikaciju, nego za dokument (`DoplataID`), pa
+    ostatak, storno (DOP-05), kartica i saldo OM ostaju po dokumentu.
+  - Testovi 342–343, test 328 meri dokument bez broja. Sabotaže `dop-spec-nalog-*`,
+    `dop-spec-raspodela-*`, `dop-spec-plan-kao-blok`, `dop-spec-avans-*`,
+    `dop-spec-poziv-storniran`. **Excel prolaz neverifikovan.**
+  - Rez B (sledi): ručno mapiranje izvoda na specifikaciju i gotovina po
+    specifikaciji (samo dokumenti te stanice, kroz kapiju gotovine ISP-ODL-02).
+- Još NIJE: plaćanje po specifikaciji rez B (ručno mapiranje, gotovina), kartica
+  zbirno po obračunu (P4 — do tada red po dokumentu), tekst pitanja o ponavljanju
+  kroz katalog poruka.
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
 Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,

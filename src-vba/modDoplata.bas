@@ -1007,6 +1007,8 @@ End Function
 '   5 StanicaID -- stanica BLOKA (DOP-ODL-19): dokument je po bloku, pa i
 '     isplata pripada mestu kupovine, kao kod otkupa
 '   6 Iznos | 7 Isplaceno | 8 Otvoreno
+'   9 BrojSpecifikacije ("" za dokument knjizen pre P3) -- nalozi po njoj
+'     biraju red specifikacije umesto dokumenta (DOP-ODL-27)
 ' U listi je KO ciji je ostatak, u cent-domenu, veci od nule. kooperantID suzava
 ' na jednog kooperanta. Empty kad nema nijednog.
 Public Function OtvoreniKORedovi(Optional ByVal kooperantID As String = "") As Variant
@@ -1019,7 +1021,7 @@ Public Function OtvoreniKORedovi(Optional ByVal kooperantID As String = "") As V
 
     Dim k As Variant, h As Variant, n As Long, otv As Double, ispl As Double
     Dim res() As Variant
-    ReDim res(1 To iznosi.count, 1 To 8)
+    ReDim res(1 To iznosi.count, 1 To 9)
     For Each k In iznosi.keys
         h = glava(k)
         If Len(Trim$(kooperantID)) > 0 Then
@@ -1038,23 +1040,21 @@ Public Function OtvoreniKORedovi(Optional ByVal kooperantID As String = "") As V
         res(n, 6) = modNovac.ZaokruziNovac(CDbl(iznosi(k)))
         res(n, 7) = modNovac.ZaokruziNovac(ispl)
         res(n, 8) = otv
+        res(n, 9) = CStr(h(4))
 Sledeci:
     Next k
     If n = 0 Then Exit Function
 
     Dim outA() As Variant, i As Long, j As Long
-    ReDim outA(1 To n, 1 To 8)
+    ReDim outA(1 To n, 1 To 9)
     For i = 1 To n
-        For j = 1 To 8
+        For j = 1 To 9
             outA(i, j) = res(i, j)
         Next j
     Next i
     OtvoreniKORedovi = outA
 End Function
 
-' Otvoreno na JEDNOM KO, u cent-domenu: iznos minus isplaceno. 0 za storniran ili
-' nepostojeci KO -- kapiju vlasnistva i zivota drzi pisac pre ovoga
-' (modBankaMapiranje.PotvrdiKOZaKooperanta).
 ' Bruto iznos AKTIVNOG dokumenta doplate (zbir stavki); 0 kad nije aktivan.
 Public Function IznosKO(ByVal doplataID As String) As Double
     Dim glava As Object, iznosi As Object, id As String
@@ -1064,6 +1064,9 @@ Public Function IznosKO(ByVal doplataID As String) As Double
     If iznosi.Exists(id) Then IznosKO = modNovac.ZaokruziNovac(CDbl(iznosi(id)))
 End Function
 
+' Otvoreno na JEDNOM KO, u cent-domenu: iznos minus isplaceno. 0 za storniran ili
+' nepostojeci KO -- kapiju vlasnistva i zivota drzi pisac pre ovoga
+' (modBankaMapiranje.PotvrdiKOZaKooperanta).
 Public Function OtvorenoNaKO(ByVal doplataID As String) As Double
     Dim glava As Object, iznosi As Object, isplate As Object, id As String
     id = Trim$(doplataID)
@@ -1183,9 +1186,280 @@ Public Function StanicaKO(ByVal doplataID As String) As String
     StanicaKO = Trim$(NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, Trim$(doplataID), COL_DOP_STANICA)))
 End Function
 
+' ============================================================
+' SPECIFIKACIJA KAO CILJ PLACANJA (DOP-ODL-27..29)
+' ============================================================
+' Specifikacija nema svoj red ni tabelu: to je BROJ na zaglavljima dokumenata
+' istog para (obracun, kooperant), 1:1 sa parom (DoplataStavkeRedovi +56/+57).
+' Novac se NIKAD ne vezuje za specifikaciju -- raspodela ga vezuje za svaki
+' dokument posebno (DoplataID), pa ostatak, storno (DOP-05), kartica i saldo OM
+' ostaju po dokumentu, kao i do sada. Ovde su samo citaci; pisci su izvod
+' (modBankaMapiranje) i primena avansa (modNovac.ApplyAvansToSpec_TX).
+
+' OTVORENE SPECIFIKACIJE -- blizanac OtvoreniKORedovi za naloge za banku.
+' 2D niz (1..n, 1..8):
+'   1 BrojSpecifikacije | 2 Datum (knjizenja obracuna) | 3 KooperantID
+'   4 StanicaID: MATICNA stanica kooperanta -- dokumenti iste specifikacije mogu
+'     biti sa vise stanica, a red naloga je jedan
+'   5 Iznos (zbir aktivnih dokumenata) | 6 Isplaceno | 7 Otvoreno
+'   8 broj otvorenih dokumenata
+' Otvoreno je zbir OTVORENOG po dokumentu (najmanje 0 po dokumentu), ne iznos
+' minus isplaceno: preplata jednog dokumenta ne sme da umanji dug drugog, jer ga
+' raspodela ionako ne bi prenela. U listi je specifikacija ciji je ostatak, u
+' cent-domenu, veci od nule; kooperantID suzava. Empty kad nema nijedne.
+Public Function OtvoreneSpecifikacijeRedovi(Optional ByVal kooperantID As String = "") As Variant
+    OtvoreneSpecifikacijeRedovi = Empty
+
+    Dim glava As Object, iznosi As Object, isplate As Object
+    Set iznosi = IznosPoKO(glava)
+    If iznosi.count = 0 Then Exit Function
+    Set isplate = modNovac.BuildIsplataDictByDoplata()
+
+    Dim sp As Object, k As Variant, h As Variant, s As String, a As Variant
+    Dim ispl As Double, otv As Double
+    Set sp = CreateObject("Scripting.Dictionary")
+    sp.CompareMode = vbTextCompare
+    For Each k In iznosi.keys
+        h = glava(k)
+        s = CStr(h(4))
+        If Len(s) = 0 Then GoTo Sledeci
+        If Len(Trim$(kooperantID)) > 0 Then
+            If StrComp(CStr(h(2)), Trim$(kooperantID), vbTextCompare) <> 0 Then GoTo Sledeci
+        End If
+        ispl = 0
+        If isplate.Exists(CStr(k)) Then ispl = CDbl(isplate(CStr(k)))
+        otv = modNovac.ZaokruziNovac(CDbl(iznosi(k)) - ispl)
+        If otv < 0 Then otv = 0
+        If Not sp.Exists(s) Then sp.Add s, Array(h(1), CStr(h(2)), 0#, 0#, 0#, 0&)
+        a = sp(s)
+        a(2) = CDbl(a(2)) + CDbl(iznosi(k))
+        a(3) = CDbl(a(3)) + ispl
+        a(4) = CDbl(a(4)) + otv
+        If otv > 0 Then a(5) = CLng(a(5)) + 1
+        sp(s) = a
+Sledeci:
+    Next k
+    If sp.count = 0 Then Exit Function
+
+    Dim res() As Variant, n As Long
+    ReDim res(1 To sp.count, 1 To 8)
+    For Each k In sp.keys
+        a = sp(k)
+        If modNovac.ZaokruziNovac(CDbl(a(4))) > 0 Then
+            n = n + 1
+            res(n, 1) = CStr(k)
+            res(n, 2) = a(0)
+            res(n, 3) = CStr(a(1))
+            res(n, 4) = Trim$(NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, CStr(a(1)), COL_KOOP_STANICA)))
+            res(n, 5) = modNovac.ZaokruziNovac(CDbl(a(2)))
+            res(n, 6) = modNovac.ZaokruziNovac(CDbl(a(3)))
+            res(n, 7) = modNovac.ZaokruziNovac(CDbl(a(4)))
+            res(n, 8) = CLng(a(5))
+        End If
+    Next k
+    If n = 0 Then Exit Function
+
+    Dim outA() As Variant, i As Long, j As Long
+    ReDim outA(1 To n, 1 To 8)
+    For i = 1 To n
+        For j = 1 To 8
+            outA(i, j) = res(i, j)
+        Next j
+    Next i
+    OtvoreneSpecifikacijeRedovi = outA
+End Function
+
+' DOKUMENTI SPECIFIKACIJE ZA RASPODELU (DOP-ODL-28): OTVORENI aktivni dokumenti
+' specifikacije, OD NAJSTARIJEG BLOKA -- datum bloka, pa broj bloka (cifre se
+' porede kao brojevi: 9/... ide pre 10/...). 2D niz (1..n, 1..3):
+'   1 DoplataID | 2 StanicaID bloka | 3 Otvoreno (cent-domen)
+' stanicaID (opciono) suzava na dokumente ciji je blok na toj stanici (gotovina
+' po specifikaciji, DOP-ODL-28). Empty kad otvorenog nema. Read-only.
+Public Function SpecDokumentiZaRaspodelu(ByVal brojSpec As String, _
+                                         Optional ByVal stanicaID As String = "") As Variant
+    SpecDokumentiZaRaspodelu = Empty
+    brojSpec = Trim$(brojSpec)
+    If Len(brojSpec) = 0 Then Exit Function
+
+    Dim glava As Object, iznosi As Object, isplate As Object
+    Set iznosi = IznosPoKO(glava)
+    If iznosi.count = 0 Then Exit Function
+    Set isplate = modNovac.BuildIsplataDictByDoplata()
+
+    Dim k As Variant, h As Variant, ispl As Double, otv As Double, n As Long
+    Dim ids() As String, sta() As String, iz() As Double, kljuc() As String
+    ReDim ids(1 To iznosi.count)
+    ReDim sta(1 To iznosi.count)
+    ReDim iz(1 To iznosi.count)
+    ReDim kljuc(1 To iznosi.count)
+    For Each k In iznosi.keys
+        h = glava(k)
+        If StrComp(CStr(h(4)), brojSpec, vbTextCompare) <> 0 Then GoTo Sledeci
+        If Len(Trim$(stanicaID)) > 0 Then
+            If StrComp(CStr(h(3)), Trim$(stanicaID), vbTextCompare) <> 0 Then GoTo Sledeci
+        End If
+        ispl = 0
+        If isplate.Exists(CStr(k)) Then ispl = CDbl(isplate(CStr(k)))
+        otv = modNovac.ZaokruziNovac(CDbl(iznosi(k)) - ispl)
+        If otv <= 0 Then GoTo Sledeci
+        n = n + 1
+        ids(n) = CStr(k)
+        sta(n) = CStr(h(3))
+        iz(n) = otv
+        kljuc(n) = RedosledBloka(CStr(h(5)))
+Sledeci:
+    Next k
+    If n = 0 Then Exit Function
+
+    ' Umetanje: dokumenata jedne specifikacije je malo (blokovi jednog
+    ' kooperanta u jednom obracunu).
+    Dim i As Long, j As Long, tId As String, tSt As String, tIz As Double, tK As String
+    For i = 2 To n
+        tId = ids(i): tSt = sta(i): tIz = iz(i): tK = kljuc(i)
+        j = i - 1
+        Do While j >= 1
+            If StrComp(kljuc(j), tK, vbBinaryCompare) <= 0 Then Exit Do
+            ids(j + 1) = ids(j): sta(j + 1) = sta(j): iz(j + 1) = iz(j): kljuc(j + 1) = kljuc(j)
+            j = j - 1
+        Loop
+        ids(j + 1) = tId: sta(j + 1) = tSt: iz(j + 1) = tIz: kljuc(j + 1) = tK
+    Next i
+
+    Dim outA() As Variant
+    ReDim outA(1 To n, 1 To 3)
+    For i = 1 To n
+        outA(i, 1) = ids(i)
+        outA(i, 2) = sta(i)
+        outA(i, 3) = iz(i)
+    Next i
+    SpecDokumentiZaRaspodelu = outA
+End Function
+
+' Kljuc redosleda bloka: datum (yyyymmdd) pa broj bloka u kome je svaki niz
+' cifara dopunjen nulama do 10 mesta, pa se poredi kao tekst. Blok kog nema
+' (ne bi smelo -- doplata je po aktivnom bloku) ide na kraj.
+Private Function RedosledBloka(ByVal otkupID As String) As String
+    Dim dt As Variant, br As String, i As Long, ch As String, cif As String, out As String
+    dt = LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM)
+    If Not IsDate(dt) Then
+        RedosledBloka = "99999999|"
+        Exit Function
+    End If
+    br = UCase$(Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BR_DOK))))
+    For i = 1 To Len(br)
+        ch = Mid$(br, i, 1)
+        If ch Like "#" Then
+            cif = cif & ch
+        Else
+            If Len(cif) > 0 Then out = out & Right$(String$(10, "0") & cif, 10): cif = ""
+            out = out & ch
+        End If
+    Next i
+    If Len(cif) > 0 Then out = out & Right$(String$(10, "0") & cif, 10)
+    RedosledBloka = Format$(CDate(dt), "yyyymmdd") & "|" & out
+End Function
+
+' POZIV NA BROJ -> SPECIFIKACIJA. Array(BrojSpecifikacije, KooperantID) kad TACNO
+' jedna specifikacija sa bar jednim AKTIVNIM dokumentom nosi taj broj; Empty
+' inace. Poredjenje je NormalizePozivKey (slova i cifre), kao KOPoPozivu. Takav
+' kljuc moze da se sudari -- "S1/2020-26123" i "S120/2026-123" su oba
+' "S1202026123" -- pa dva pogotka nisu "prvi pobedjuje" nego rucno mapiranje. Poziv koji ne pocinje slovom DOP_SPEC_PREFIKS ni ne cita tabelu:
+' mreza uvoza zove ovo za SVAKI red izvoda.
+Public Function SpecPoPozivu(ByVal pozivNaBroj As String) As Variant
+    Const SRC As String = "modDoplata.SpecPoPozivu"
+    SpecPoPozivu = Empty
+
+    Dim target As String
+    target = modBankaMapiranje.NormalizePozivKey(pozivNaBroj)
+    If Len(target) <= Len(DOP_SPEC_PREFIKS) Then Exit Function
+    If Left$(target, Len(DOP_SPEC_PREFIKS)) <> UCase$(DOP_SPEC_PREFIKS) Then Exit Function
+    If GetTable(TBL_DOPLATA) Is Nothing Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_DOPLATA)
+    If Not IsArray(d) Then Exit Function
+    d = ExcludeStornirano(d, TBL_DOPLATA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cSpec As Long, cKoop As Long
+    cSpec = RequireColumnIndex(TBL_DOPLATA, COL_DOP_SPEC, SRC)
+    cKoop = RequireColumnIndex(TBL_DOPLATA, COL_DOP_KOOPERANT, SRC)
+
+    Dim pog As Object, i As Long, s As String, koop As String
+    Set pog = CreateObject("Scripting.Dictionary")
+    pog.CompareMode = vbTextCompare
+    For i = 1 To UBound(d, 1)
+        s = Trim$(NzToText(d(i, cSpec)))
+        If Len(s) > 0 Then
+            If modBankaMapiranje.NormalizePozivKey(s) = target Then
+                koop = Trim$(NzToText(d(i, cKoop)))
+                If pog.Exists(s) Then
+                    ' Isti broj kod dva kooperanta je kvar (citac +57); ovde se
+                    ' samo ne razresava.
+                    If StrComp(CStr(pog(s)), koop, vbTextCompare) <> 0 Then Exit Function
+                Else
+                    pog.Add s, koop
+                End If
+            End If
+        End If
+    Next i
+
+    If pog.count <> 1 Then Exit Function
+    s = CStr(pog.keys()(0))
+    koop = CStr(pog(s))
+    If Len(koop) = 0 Then Exit Function
+    SpecPoPozivu = Array(s, koop)
+End Function
+
+' Vlasnik specifikacije: kooperant njenih AKTIVNIH dokumenata (tacan broj, bez
+' normalizacije). "" kad aktivnog dokumenta nema ili ga nose dva kooperanta --
+' pisac tada odbija po imenu (kapija vlasnistva, obrazac KOKapija).
+Public Function SpecKooperant(ByVal brojSpec As String) As String
+    Const SRC As String = "modDoplata.SpecKooperant"
+    brojSpec = Trim$(brojSpec)
+    If Len(brojSpec) = 0 Then Exit Function
+    If GetTable(TBL_DOPLATA) Is Nothing Then Exit Function
+
+    Dim d As Variant
+    d = GetTableData(TBL_DOPLATA)
+    If Not IsArray(d) Then Exit Function
+    d = ExcludeStornirano(d, TBL_DOPLATA)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cSpec As Long, cKoop As Long, i As Long, koop As String, k As String
+    cSpec = RequireColumnIndex(TBL_DOPLATA, COL_DOP_SPEC, SRC)
+    cKoop = RequireColumnIndex(TBL_DOPLATA, COL_DOP_KOOPERANT, SRC)
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cSpec))), brojSpec, vbTextCompare) = 0 Then
+            k = Trim$(NzToText(d(i, cKoop)))
+            If Len(koop) = 0 Then
+                koop = k
+            ElseIf StrComp(koop, k, vbTextCompare) <> 0 Then
+                Exit Function
+            End If
+        End If
+    Next i
+    SpecKooperant = koop
+End Function
+
+' Da li je kljuc reda broj specifikacije (bilo kog statusa). Lista naloga nosi
+' specifikaciju pod istim kljucem bloka kao otkup i KO (clsBlokIsplata.otkupID),
+' pa radnja nad redom (primena avansa) ovim bira motor. OtkupID ("OTK-...") i
+' DoplataID ("DOP-...") ne pocinju prefiksom specifikacije sa kosom crtom, pa
+' ni ne citaju tabelu.
+Public Function JeSpecifikacija(ByVal id As String) As Boolean
+    id = Trim$(id)
+    If Len(id) <= Len(DOP_SPEC_PREFIKS) Then Exit Function
+    If StrComp(Left$(id, Len(DOP_SPEC_PREFIKS)), DOP_SPEC_PREFIKS, vbTextCompare) <> 0 Then Exit Function
+    If InStr(1, id, "/", vbBinaryCompare) = 0 Then Exit Function
+    If GetTable(TBL_DOPLATA) Is Nothing Then Exit Function
+    JeSpecifikacija = (Len(NzToText(LookupValue(TBL_DOPLATA, COL_DOP_SPEC, id, COL_DOP_SPEC))) > 0)
+End Function
+
 ' Iznos svakog AKTIVNOG KO: DoplataID -> din (zbir stavki, DoplataStavkeRedovi --
 ' strog citac, pa storniran KO ne ulazi). outGlava: DoplataID ->
-' Array(BrojDokumenta, Datum, KooperantID, StanicaID bloka).
+' Array(BrojDokumenta, Datum, KooperantID, StanicaID bloka, BrojSpecifikacije,
+' OtkupID bloka).
 Private Function IznosPoKO(ByRef outGlava As Object) As Object
     Dim d As Object
     Set d = CreateObject("Scripting.Dictionary")
@@ -1203,7 +1477,8 @@ Private Function IznosPoKO(ByRef outGlava As Object) As Object
         id = CStr(r(i, 1))
         If Not d.Exists(id) Then
             d.Add id, 0#
-            outGlava.Add id, Array(r(i, 2), r(i, 3), CStr(r(i, 4)), CStr(r(i, 6)))
+            outGlava.Add id, Array(r(i, 2), r(i, 3), CStr(r(i, 4)), CStr(r(i, 6)), _
+                                   Trim$(CStr(r(i, 20))), Trim$(CStr(r(i, 16))))
         End If
         d(id) = CDbl(d(id)) + CDbl(r(i, 12))
     Next i

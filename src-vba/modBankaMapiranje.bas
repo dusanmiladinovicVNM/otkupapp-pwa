@@ -130,6 +130,9 @@ Public Const BIM_CILJ_BLOK As String = "BLOK"
 ' Knjizno odobrenje kooperantu (F4 doplate): poziv na broj = broj KO. Jak kljuc,
 ' kao broj bloka -- ali dokument nije otkup, pa ima svoj cilj i svoj ciljID.
 Public Const BIM_CILJ_DOPLATA As String = "DOPLATA"
+' Specifikacija doplate (DOP-ODL-27/28): ciljID je BROJ specifikacije; pisac ga
+' raspodeljuje na njene otvorene dokumente, od najstarijeg bloka.
+Public Const BIM_CILJ_SPEC As String = "SPECIFIKACIJA"
 ' Cetvrti cilj postoji samo u PUNOM planu (BimAutoPlan): jaki kljucevi nikad ne
 ' vode na otkupno mesto -- tamo se stize samo preko PartnerMap-a ili imena.
 Public Const BIM_CILJ_OM As String = "OM"
@@ -916,6 +919,18 @@ Private Function MapBankaImportAsKooperantKO(ByVal bankaImportID As String, _
         bankaImportID, kooperantID, "", savePartnerMapFlag, False, True, doplataID)
 End Function
 
+' AUTOMATSKI PUT ZA SPECIFIKACIJU (DOP-ODL-28): broj dolazi iz PLANA (poziv na
+' broj = broj specifikacije), isti pisac, grana specBroj: iznos ide na otvorene
+' dokumente od najstarijeg bloka, visak u avans; isplacena specifikacija ceo
+' iznos salje u avans -- isto kao placen KO.
+Private Function MapBankaImportAsKooperantSpec(ByVal bankaImportID As String, _
+                                              ByVal kooperantID As String, _
+                                              ByVal specBroj As String, _
+                                              Optional ByVal savePartnerMapFlag As Boolean = True) As Long
+    MapBankaImportAsKooperantSpec = MapBankaImportAsKooperantBlockCore( _
+        bankaImportID, kooperantID, "", savePartnerMapFlag, False, True, "", specBroj)
+End Function
+
 Public Function MapBankaImportAsKooperantBlock_TX(ByVal bankaImportID As String, _
                                                   ByVal kooperantID As String, _
                                                   Optional ByVal savePartnerMapFlag As Boolean = True) As Long
@@ -1080,7 +1095,8 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
                                                     Optional ByVal savePartnerMapFlag As Boolean = True, _
                                                     Optional ByVal blokIzabran As Boolean = False, _
                                                     Optional ByVal dozvoliVisakKaoAvans As Boolean = False, _
-                                                    Optional ByVal doplataID As String = "") As Long
+                                                    Optional ByVal doplataID As String = "", _
+                                                    Optional ByVal specBroj As String = "") As Long
     Dim bim As Variant
     Dim omID As String
     Dim omNaziv As String
@@ -1092,6 +1108,11 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     Dim preostalo As Double
     Dim vrstaVoca As String
     Dim novID As String
+    Dim spDok As Variant
+    Dim koopSpec As String
+    Dim ostaje As Double
+    Dim deo As Double
+    Dim k As Long
 
     If Not ValidateBankaImportNotProcessed(bankaImportID) Then Exit Function
 
@@ -1168,6 +1189,40 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
         If otvoreno <= BIM_OTVORENO_PRAG Then doplataID = ""
     End If
 
+    ' SPECIFIKACIJA DOPLATE (DOP-ODL-28). Jedna stavka izvoda placa VISE
+    ' dokumenata: otvorene dokumente specifikacije, od najstarijeg bloka. Novac se
+    ' ne vezuje za specifikaciju nego za SVAKI dokument (DoplataID), i svaki red
+    ' nosi stanicu SVOG bloka (DOP-ODL-19); visak ide u avans na maticnoj, kao i
+    ' inace. Kapija vlasnistva je ovde (specifikacija ima aktivnih dokumenata i
+    ' svi su ovog kooperanta), a zivot svakog dokumenta proverava
+    ' PotvrdiKOZaKooperanta tik pred njegov upis.
+    If Len(Trim$(specBroj)) > 0 Then
+        If Len(Trim$(otkupID)) > 0 Or Len(Trim$(doplataID)) > 0 Then
+            Err.Raise ERR_BMAP_BASE + 58, "MapBankaImportAsKooperantBlockCore", _
+                      "Isplata se vezuje za specifikaciju ILI za jedan dokument, ne za oba. " & _
+                      "Specifikacija=" & specBroj & "; OtkupID=" & otkupID & "; DoplataID=" & doplataID
+        End If
+        koopSpec = modDoplata.SpecKooperant(specBroj)
+        If Len(koopSpec) = 0 Then
+            Err.Raise ERR_BMAP_BASE + 57, "MapBankaImportAsKooperantBlockCore", _
+                      "Specifikacija nema aktivnih dokumenata jednog kooperanta. Specifikacija=" & specBroj
+        End If
+        If StrComp(koopSpec, Trim$(kooperantID), vbTextCompare) <> 0 Then
+            Err.Raise ERR_BMAP_BLOK_TUDJ, "MapBankaImportAsKooperantBlockCore", _
+                      "Specifikacija pripada drugom kooperantu. Specifikacija=" & specBroj & _
+                      "; TrazeniKooperant=" & kooperantID
+        End If
+        spDok = modDoplata.SpecDokumentiZaRaspodelu(specBroj)
+        otvoreno = 0
+        If IsArray(spDok) Then
+            For k = 1 To UBound(spDok, 1)
+                otvoreno = otvoreno + CDbl(spDok(k, 3))
+            Next k
+        End If
+        otvoreno = ZaokruziNovac(otvoreno)
+        If otvoreno <= BIM_OTVORENO_PRAG Then specBroj = ""
+    End If
+
     ' IZABRAN BLOK BEZ OTVORENIH STAVKI JE PROTIVRECNOST, NE AVANS.
     '
     ' Grana ispod ceo iznos knjizi kao avans kooperanta i stavku oznacava
@@ -1182,13 +1237,14 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     ' lista punjena, a izmedju punjenja i potvrde se stanje moze promeniti --
     ' i legacy frmBankaImport ovamo ulazi bez ijedne UI provere. Isti obrazac kao
     ' ApplyAvansToOtkup i UplataFakturaProblem (.claude/rules/testovi.md).
-    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 And blokIzabran Then
+    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 And Len(Trim$(specBroj)) = 0 And _
+       blokIzabran Then
         Err.Raise ERR_BMAP_BLOK_PRAZAN, "MapBankaImportAsKooperantBlockCore", _
                   "Izabrani blok nema otvorenih stavki " & ChrW(8212) & " ni" & ChrW(353) & "ta nije knji" & ChrW(382) & "eno. " & _
                   "Proveri da li je blok ve" & ChrW(263) & " pla" & ChrW(263) & "en."
     End If
 
-    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 Then
+    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 And Len(Trim$(specBroj)) = 0 Then
         If SaveNovac( _
             RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
             CDate(bim(1, 2)), _
@@ -1239,36 +1295,78 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
 
     ' Vezan red nosi otkupno mesto DOKUMENTA (blokOmID), avansni redovi ispod i
     ' iznad nose maticno mesto kooperanta -- razlika je namerna i merena (T03).
-    novID = SaveNovac( _
-        RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
-        CDate(bim(1, 2)), _
-        blokOmNaziv, _
-        blokOmID, _
-        "OM", _
-        blokOmID, _
-        kooperantID, _
-        "", _
-        vrstaVoca, _
-        NOV_VIRMAN_FIRMA_KOOP, _
-        0, _
-        zaBlok, _
-        BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "Kooperant") _
-    )
-
-    If Len(Trim$(novID)) = 0 Then
-        Err.Raise ERR_BMAP_BASE + 40, "MapBankaImportAsKooperantBlockCore", _
-          "SaveNovac nije vratio NovacID za OtkupID=" & otkupID & "; DoplataID=" & doplataID
-    End If
-
-    If Len(Trim$(doplataID)) > 0 Then
-        LinkNovacToDoplataStrict novID, doplataID, _
-                        "MapBankaImportAsKooperantBlockCore"
+    If Len(Trim$(specBroj)) > 0 Then
+        ' Raspodela: svaki dokument redom dobija najvise svoj ostatak, dok se
+        ' iznos za dokumente (zaBlok) ne potrosi. Isti tip i ista napomena kao
+        ' za jedan KO -- izvod je jedan, redova novca je vise.
+        ostaje = ZaokruziNovac(zaBlok)
+        For k = 1 To UBound(spDok, 1)
+            If ostaje <= 0 Then Exit For
+            deo = CDbl(spDok(k, 3))
+            If deo > ostaje Then deo = ostaje
+            PotvrdiKOZaKooperanta CStr(spDok(k, 1)), kooperantID, "MapBankaImportAsKooperantBlockCore"
+            blokOmID = CStr(spDok(k, 2))
+            If Len(blokOmID) = 0 Then
+                Err.Raise ERR_BMAP_BLOK_BEZ_OM, "MapBankaImportAsKooperantBlockCore", _
+                          "Doplata nema upisano otkupno mesto bloka. DoplataID=" & CStr(spDok(k, 1))
+            End If
+            blokOmNaziv = CStr(NzBIM(LookupValue(TBL_STANICE, "StanicaID", blokOmID, "Naziv"), ""))
+            If blokOmNaziv = "" Then blokOmNaziv = blokOmID
+            novID = SaveNovac( _
+                RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
+                CDate(bim(1, 2)), _
+                blokOmNaziv, _
+                blokOmID, _
+                "OM", _
+                blokOmID, _
+                kooperantID, _
+                "", _
+                "", _
+                NOV_VIRMAN_FIRMA_KOOP, _
+                0, _
+                deo, _
+                BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "Kooperant") _
+            )
+            If Len(Trim$(novID)) = 0 Then
+                Err.Raise ERR_BMAP_BASE + 40, "MapBankaImportAsKooperantBlockCore", _
+                  "SaveNovac nije vratio NovacID za Specifikacija=" & specBroj & "; DoplataID=" & CStr(spDok(k, 1))
+            End If
+            LinkNovacToDoplataStrict novID, CStr(spDok(k, 1)), "MapBankaImportAsKooperantBlockCore"
+            MapBankaImportAsKooperantBlockCore = MapBankaImportAsKooperantBlockCore + 1
+            ostaje = ZaokruziNovac(ostaje - deo)
+        Next k
     Else
-        LinkNovacToOtkupStrict novID, otkupID, _
-                        "MapBankaImportAsKooperantBlockCore"
-    End If
+        novID = SaveNovac( _
+            RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
+            CDate(bim(1, 2)), _
+            blokOmNaziv, _
+            blokOmID, _
+            "OM", _
+            blokOmID, _
+            kooperantID, _
+            "", _
+            vrstaVoca, _
+            NOV_VIRMAN_FIRMA_KOOP, _
+            0, _
+            zaBlok, _
+            BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "Kooperant") _
+        )
 
-    MapBankaImportAsKooperantBlockCore = 1
+        If Len(Trim$(novID)) = 0 Then
+            Err.Raise ERR_BMAP_BASE + 40, "MapBankaImportAsKooperantBlockCore", _
+              "SaveNovac nije vratio NovacID za OtkupID=" & otkupID & "; DoplataID=" & doplataID
+        End If
+
+        If Len(Trim$(doplataID)) > 0 Then
+            LinkNovacToDoplataStrict novID, doplataID, _
+                            "MapBankaImportAsKooperantBlockCore"
+        Else
+            LinkNovacToOtkupStrict novID, otkupID, _
+                            "MapBankaImportAsKooperantBlockCore"
+        End If
+
+        MapBankaImportAsKooperantBlockCore = 1
+    End If
     preostalo = isplataUkupno - zaBlok
 
     ' VISAK NIJE DEO KUPOVINE. Ostatak preko duga nije vezan ni za jedan dokument
@@ -1736,19 +1834,32 @@ End Function
 ' citanja ne menja ishod; otkup ide prvi jer je cest, a KO redak.
 Private Function ResolveStrongKooperantByKeys(ByVal konto As String, _
                                               ByVal poziv As String, _
-                                              ByRef doplataID As String) As String
+                                              ByRef doplataID As String, _
+                                              Optional ByRef specBroj As String) As String
     Dim koopByKonto As Variant
     Dim koByPoziv As Variant
+    Dim spByPoziv As Variant
     Dim idDoc As String
     Dim idKonto As String
 
     doplataID = ""
+    specBroj = ""
     idDoc = TryResolveKooperantByOtkupPoziv(poziv)
     If idDoc = "" Then
         koByPoziv = modDoplata.KOPoPozivu(poziv)
         If IsArray(koByPoziv) Then
             doplataID = CStr(koByPoziv(0))
             idDoc = CStr(koByPoziv(1))
+        End If
+    End If
+    ' Specifikacija doplate (DOP-ODL-27): poziv pocinje slovom specifikacije, a
+    ' broj otkupa je od cifara i broj KO nosi slovo na kraju -- ni ovde redosled
+    ' ne menja ishod.
+    If idDoc = "" Then
+        spByPoziv = modDoplata.SpecPoPozivu(poziv)
+        If IsArray(spByPoziv) Then
+            specBroj = CStr(spByPoziv(0))
+            idDoc = CStr(spByPoziv(1))
         End If
     End If
     koopByKonto = TryResolveKooperantByKonto(konto)
@@ -1758,6 +1869,7 @@ Private Function ResolveStrongKooperantByKeys(ByVal konto As String, _
     ' Konflikt: poziv na broj i racun pokazuju na razlicite kooperante -> rucno.
     If idDoc <> "" And idKonto <> "" And UCase$(idDoc) <> UCase$(idKonto) Then
         doplataID = ""
+        specBroj = ""
         Exit Function
     End If
 
@@ -1859,8 +1971,10 @@ Public Function BimJakiKljucInfo(ByVal uplata As Double, ByVal isplata As Double
     Dim partnerID As String
     Dim ciljID As String
     Dim ciljTip As String
+    Dim specBroj As String
 
-    ' Slot 2 je ID CILJA: FakturaID na uplati, DoplataID na isplati KO.
+    ' Slot 2 je ID CILJA: FakturaID na uplati, DoplataID na isplati KO, broj
+    ' specifikacije na isplati specifikacije.
     smer = ClassifyBimSmer(uplata, isplata)
 
     Select Case smer
@@ -1875,9 +1989,12 @@ Public Function BimJakiKljucInfo(ByVal uplata As Double, ByVal isplata As Double
             End If
 
         Case BIM_SMER_ISPLATA
-            partnerID = ResolveStrongKooperantByKeys(partnerKonto, pozivNaBroj, ciljID)
+            partnerID = ResolveStrongKooperantByKeys(partnerKonto, pozivNaBroj, ciljID, specBroj)
             If Len(partnerID) > 0 Then
-                If Len(ciljID) > 0 Then
+                If Len(specBroj) > 0 Then
+                    ciljID = specBroj
+                    ciljTip = BIM_CILJ_SPEC
+                ElseIf Len(ciljID) > 0 Then
                     ciljTip = BIM_CILJ_DOPLATA
                 Else
                     ciljTip = BIM_CILJ_BLOK
@@ -1919,8 +2036,9 @@ End Function
 '   1 partnerTip BIM_TIP_KUPAC | BIM_TIP_KOOPERANT | BIM_TIP_OM | ""
 '   2 partnerID  KupacID / KooperantID / StanicaID; "" = PLANA NEMA
 '   3 ciljTip    BIM_CILJ_FAKTURA | BIM_CILJ_AVANS | BIM_CILJ_BLOK | BIM_CILJ_OM |
-'                BIM_CILJ_DOPLATA | ""
-'   4 ciljID     FakturaID kad je cilj faktura, DoplataID kad je cilj KO, inace ""
+'                BIM_CILJ_DOPLATA | BIM_CILJ_SPEC | ""
+'   4 ciljID     FakturaID kad je cilj faktura, DoplataID kad je cilj KO, broj
+'                specifikacije kad je cilj specifikacija, inace ""
 '   5 izvor      BIM_IZV_JAK | BIM_IZV_MAPA | BIM_IZV_IME | ""
 '
 ' samoJaki JE ZAUSTAVLJANJE, NE FILTER. Batch "Jaki kljucevi" prekida lanac pre
@@ -1937,6 +2055,7 @@ Public Function BimAutoPlanIzVrednosti(ByVal uplata As Double, ByVal isplata As 
                                        ByVal partnerName As String, ByVal svrha As String, _
                                        Optional ByVal samoJaki As Boolean = False) As Variant
     Dim smer As String, pid As String, fakturaID As String, doplataID As String
+    Dim specBroj As String
     Dim mapped As Variant
 
     smer = ClassifyBimSmer(uplata, isplata)
@@ -1980,12 +2099,15 @@ Public Function BimAutoPlanIzVrednosti(ByVal uplata As Double, ByVal isplata As 
                                                  BIM_CILJ_OM, "", BIM_IZV_IME)
 
         Case BIM_SMER_ISPLATA
-            pid = ResolveStrongKooperantByKeys(konto, poziv, doplataID)
+            pid = ResolveStrongKooperantByKeys(konto, poziv, doplataID, specBroj)
             If Len(pid) > 0 Then
                 ' Poziv na broj KO je jedini put do KO: PartnerMap i ime znaju
                 ' kooperanta, ne dokument (pisac bloka tada trazi OTKUP po pozivu
-                ' i, kad ga nema, knjizi avans).
-                If Len(doplataID) > 0 Then
+                ' i, kad ga nema, knjizi avans). Isto za specifikaciju.
+                If Len(specBroj) > 0 Then
+                    BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _
+                                                     BIM_CILJ_SPEC, specBroj, BIM_IZV_JAK)
+                ElseIf Len(doplataID) > 0 Then
                     BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _
                                                      BIM_CILJ_DOPLATA, doplataID, BIM_IZV_JAK)
                 Else
@@ -2063,6 +2185,11 @@ Public Function BimPlanOpis(ByVal plan As Variant) As String
             ' Broj KO pa kooperant: potvrda imenuje DOKUMENT koji se placa.
             BimPlanOpis = Trim$(CStr(NzBIM(LookupValue(TBL_DOPLATA, COL_DOP_ID, CStr(plan(4)), _
                                                        COL_DOP_BROJ), CStr(plan(4)))) & " " & _
+                                Trim$(CStr(NzBIM(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, pid, "Ime"), "")) & _
+                                      " " & CStr(NzBIM(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, pid, "Prezime"), ""))))
+        Case BIM_CILJ_SPEC
+            ' Broj specifikacije pa kooperant, kao za KO.
+            BimPlanOpis = Trim$(CStr(plan(4)) & " " & _
                                 Trim$(CStr(NzBIM(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, pid, "Ime"), "")) & _
                                       " " & CStr(NzBIM(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, pid, "Prezime"), ""))))
         Case BIM_CILJ_OM
@@ -2151,6 +2278,7 @@ Private Function OpisCilja(ByVal plan As Variant, ByVal poziv As String, _
         Case BIM_CILJ_OM:      OpisCilja = IzMape(stanice, pid, pid)
         Case BIM_CILJ_DOPLATA: OpisCilja = Trim$(IzMape(doplate, fakturaID, Trim$(poziv)) & " " & _
                                                  IzMape(koopi, pid, ""))
+        Case BIM_CILJ_SPEC:    OpisCilja = Trim$(fakturaID & " " & IzMape(koopi, pid, ""))
     End Select
 End Function
 
@@ -2840,7 +2968,11 @@ Private Function AutoMapOutgoingKooperantOrOM(ByVal bankaImportID As String, Opt
 
     Select Case CStr(plan(1))
         Case BIM_TIP_KOOPERANT
-            If CStr(plan(3)) = BIM_CILJ_DOPLATA Then
+            If CStr(plan(3)) = BIM_CILJ_SPEC Then
+                createdCount = MapBankaImportAsKooperantSpec( _
+                    bankaImportID, CStr(plan(2)), CStr(plan(4)), _
+                    (CStr(plan(5)) = BIM_IZV_JAK) And (Len(Trim$(partnerName)) > 0))
+            ElseIf CStr(plan(3)) = BIM_CILJ_DOPLATA Then
                 createdCount = MapBankaImportAsKooperantKO( _
                     bankaImportID, CStr(plan(2)), CStr(plan(4)), _
                     (CStr(plan(5)) = BIM_IZV_JAK) And (Len(Trim$(partnerName)) > 0))

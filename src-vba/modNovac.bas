@@ -2032,6 +2032,67 @@ EH:
     Debug.Print SRC & " failed. Source=" & errSrc & " Err=" & CStr(errNum) & " Desc=" & errDesc
 End Function
 
+' PRIMENA AVANSA NA SPECIFIKACIJU DOPLATE (DOP-ODL-29). Slobodan avans kooperanta
+' ide na otvorene dokumente specifikacije OD NAJSTARIJEG BLOKA -- ista raspodela
+' kao izvod (DOP-ODL-28) -- i svaki dokument prolazi ApplyAvansToKO: isti motor,
+' iste kapije (vlasnistvo, zivot), sve u JEDNOJ transakciji. appliedAmount je
+' zbir stvarno vezanog; kad avans presahne, ostali dokumenti ostaju otvoreni.
+Public Function ApplyAvansToSpec_TX(ByVal kooperantID As String, _
+                                    ByVal specBroj As String, _
+                                    Optional ByRef appliedAmount As Double) As Boolean
+    Const SRC As String = "ApplyAvansToSpec_TX"
+    Dim tx As clsTransaction
+    Dim errNum As Long, errDesc As String, errSrc As String
+    Dim dok As Variant, i As Long, a As Double
+    appliedAmount = 0
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    If Trim$(kooperantID) = "" Or Trim$(specBroj) = "" Then
+        Err.Raise vbObjectError + 1047, SRC, "KooperantID i broj specifikacije su obavezni."
+    End If
+    If StrComp(modDoplata.SpecKooperant(specBroj), Trim$(kooperantID), vbTextCompare) <> 0 Then
+        Err.Raise vbObjectError + 1049, SRC, _
+                  "Avans se ne moze primeniti na specifikaciju drugog kooperanta ili bez " & _
+                  "aktivnih dokumenata. Specifikacija=" & specBroj & "; TrazeniKooperant=" & kooperantID
+    End If
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_NOVAC
+
+    dok = modDoplata.SpecDokumentiZaRaspodelu(specBroj)
+    If IsArray(dok) Then
+        For i = 1 To UBound(dok, 1)
+            ApplyAvansToKO kooperantID, CStr(dok(i, 1)), a
+            appliedAmount = appliedAmount + a
+            ' Dokument nije dobio ceo ostatak: avansa vise nema.
+            If ZaokruziNovac(a) < ZaokruziNovac(CDbl(dok(i, 3))) Then Exit For
+        Next i
+    End If
+    appliedAmount = ZaokruziNovac(appliedAmount)
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    ApplyAvansToSpec_TX = True
+    Exit Function
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    LogErr SRC
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    ApplyAvansToSpec_TX = False
+    appliedAmount = 0
+    Debug.Print SRC & " failed. Source=" & errSrc & " Err=" & CStr(errNum) & " Desc=" & errDesc
+End Function
+
 ' ============================================================
 ' PRENOS NOVCA NA NASLEDNIKA PRI ISPRAVCI (put A)
 ' ============================================================

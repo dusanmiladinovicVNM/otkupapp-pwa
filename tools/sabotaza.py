@@ -3900,8 +3900,10 @@ SABOTAZE = {
     #   python tools/run_vba.py --suite RunBankaImportTestSuite   # ocekuj FAIL
     "banka-writer-placen-blok-je-avans": (
         "modBankaMapiranje.bas",
-        "    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 And blokIzabran Then\n",
-        "    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 And False Then   ' SABOTAZA: izabran placen blok postaje avans\n",
+        "    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 And Len(Trim$(specBroj)) = 0 And _\n"
+        "       blokIzabran Then\n",
+        "    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 And Len(Trim$(specBroj)) = 0 And _\n"
+        "       False Then   ' SABOTAZA: izabran placen blok postaje avans\n",
         "T21_IzabranPlacenBlokNijeAvans",
         "izabran placen blok NE knjizi nista",
     ),
@@ -11730,9 +11732,9 @@ SABOTAZE = {
     # ID-em i tiho ne veze nista, a KO ostaje otvoren uz "bez promene".
     "dop-nalog-avans-ko-ide-na-otkup": (
         "modScrBankaNalozi.bas",
-        "    If jeKO Then\n"
+        "    ElseIf jeKO Then\n"
         "        PrimeniAvansNaDokument = modNovac.ApplyAvansToKO_TX(koopID, iD, outIznos)\n",
-        "    If False Then   ' SABOTAZA: avans na KO ide motorom otkupa\n"
+        "    ElseIf False Then   ' SABOTAZA: avans na KO ide motorom otkupa\n"
         "        PrimeniAvansNaDokument = modNovac.ApplyAvansToKO_TX(koopID, iD, outIznos)\n",
         "T_Doplata_OtvorenoKOUNalozima",
         "avans se primenjuje i na KO iz liste naloga",
@@ -11741,10 +11743,10 @@ SABOTAZE = {
     # tom broju, ne nalazi ga i ceo iznos knjizi kao avans -- KO ostaje otvoren.
     "dop-plan-ko-kao-blok": (
         "modBankaMapiranje.bas",
-        "                If Len(doplataID) > 0 Then\n"
+        "                ElseIf Len(doplataID) > 0 Then\n"
         "                    BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _\n"
         "                                                     BIM_CILJ_DOPLATA, doplataID, BIM_IZV_JAK)\n",
-        "                If False Then   ' SABOTAZA: KO se planira kao blok\n"
+        "                ElseIf False Then   ' SABOTAZA: KO se planira kao blok\n"
         "                    BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _\n"
         "                                                     BIM_CILJ_DOPLATA, doplataID, BIM_IZV_JAK)\n",
         "T_Doplata_IzvodPoBrojuKO",
@@ -11754,9 +11756,9 @@ SABOTAZE = {
     # a red izgleda kao slobodan avans.
     "dop-izvod-ko-bez-veze": (
         "modBankaMapiranje.bas",
-        "        LinkNovacToDoplataStrict novID, doplataID, _\n"
-        "                        \"MapBankaImportAsKooperantBlockCore\"\n",
-        "        ' SABOTAZA: isplata KO ostaje bez veze\n",
+        "            LinkNovacToDoplataStrict novID, doplataID, _\n"
+        "                            \"MapBankaImportAsKooperantBlockCore\"\n",
+        "            ' SABOTAZA: isplata KO ostaje bez veze\n",
         "T_Doplata_IzvodPoBrojuKO",
         "isplata doplate: virman firme, vezan za doplatu, bez otkupa, na stanici bloka",
     ),
@@ -11926,6 +11928,74 @@ SABOTAZE = {
         "    storno = \"\"   ' SABOTAZA: stornirani se ne navode\n",
         "T_Doplata_SpecifikacijaPapir",
         "specifikacija: storniran dokument je naveden, a ne ulazi u iznos",
+    ),
+    # DOP-ODL-27: dokument sa brojem specifikacije se nudi i posebno -- isti dug
+    # bi imao dva naloga.
+    "dop-spec-nalog-i-dokumenti": (
+        "modBankaExportPregled.bas",
+        "            If Len(Trim$(CStr(openKO(i, 9)))) > 0 Then GoTo NextKO\n",
+        "            ' SABOTAZA: dokument specifikacije se nudi i posebno\n",
+        "T_Doplata_SpecNalogIIzvod",
+        "dokumenti specifikacije se ne nude posebno",
+    ),
+    # DOP-ODL-27: nalozi ne nude specifikaciju.
+    "dop-spec-nalog-nema": (
+        "modBankaExportPregled.bas",
+        "    If IsArray(openSpec) Then\n",
+        "    If False Then   ' SABOTAZA: nalozi ne nude specifikaciju\n",
+        "T_Doplata_SpecNalogIIzvod",
+        "nalozi nude specifikaciju",
+    ),
+    # DOP-ODL-28: raspodela redom tabele umesto od najstarijeg bloka.
+    "dop-spec-raspodela-redom-tabele": (
+        "modDoplata.bas",
+        "            If StrComp(kljuc(j), tK, vbBinaryCompare) <= 0 Then Exit Do\n",
+        "            Exit Do   ' SABOTAZA: raspodela redom tabele, ne od najstarijeg bloka\n",
+        "T_Doplata_SpecNalogIIzvod",
+        "raspodela: najstariji blok prvi, red po dokumentu na stanici bloka",
+    ),
+    # DOP-ODL-28: dokument dobija ceo svoj ostatak i preko iznosa izvoda.
+    "dop-spec-raspodela-preko-ostatka": (
+        "modBankaMapiranje.bas",
+        "            If deo > ostaje Then deo = ostaje\n",
+        "            ' SABOTAZA: dokument dobija ceo ostatak, i preko iznosa izvoda\n",
+        "T_Doplata_SpecNalogIIzvod",
+        "raspodela ne knjizi vise nego sto je izvod platio",
+    ),
+    # DOP-ODL-27: poziv na broj specifikacije se planira kao blok (pa avans).
+    "dop-spec-plan-kao-blok": (
+        "modBankaMapiranje.bas",
+        "                If Len(specBroj) > 0 Then\n"
+        "                    BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _\n"
+        "                                                     BIM_CILJ_SPEC, specBroj, BIM_IZV_JAK)\n",
+        "                If False Then   ' SABOTAZA: specifikacija se planira kao blok\n"
+        "                    BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _\n"
+        "                                                     BIM_CILJ_SPEC, specBroj, BIM_IZV_JAK)\n",
+        "T_Doplata_SpecNalogIIzvod",
+        "plan: poziv na broj specifikacije je jak kljuc na nju",
+    ),
+    # DOP-ODL-29: avans na red specifikacije ide motorom otkupa.
+    "dop-spec-avans-motorom-otkupa": (
+        "modScrBankaNalozi.bas",
+        "    If modDoplata.JeSpecifikacija(iD) Then\n",
+        "    If False Then   ' SABOTAZA: avans na specifikaciju ide motorom otkupa\n",
+        "T_Doplata_SpecAvansIPoziv",
+        "avans se primenjuje na specifikaciju iz liste naloga",
+    ),
+    # Storniran dokument ostaje cilj poziva na broj specifikacije.
+    "dop-spec-poziv-storniran": (
+        "modDoplata.bas",
+        "    d = ExcludeStornirano(d, TBL_DOPLATA)\n"
+        "    If Not IsArray(d) Then Exit Function\n"
+        "\n"
+        "    Dim cSpec As Long, cKoop As Long\n"
+        "    cSpec = RequireColumnIndex(TBL_DOPLATA, COL_DOP_SPEC, SRC)\n",
+        "    ' SABOTAZA: storniran dokument ostaje cilj poziva\n"
+        "\n"
+        "    Dim cSpec As Long, cKoop As Long\n"
+        "    cSpec = RequireColumnIndex(TBL_DOPLATA, COL_DOP_SPEC, SRC)\n",
+        "T_Doplata_SpecAvansIPoziv",
+        "specifikacija bez aktivnih dokumenata nije cilj poziva ni naloga",
     ),
     # ISP-ODL-01: pisac gotovine ne proverava osnovicu.
     "isp-gotovina-bez-kapije-pisca": (

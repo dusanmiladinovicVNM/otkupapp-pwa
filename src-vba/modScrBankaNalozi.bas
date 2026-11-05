@@ -774,13 +774,17 @@ Private Function AvansKandidat(ByVal blk As clsBlokIsplata) As Boolean
     AvansKandidat = (blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0)
 End Function
 
-' Primena avansa na JEDAN dokument liste: otkupni blok ili KO. Dokument bira
-' razlikovac (clsBlokIsplata.doplataID, odnosno modDoplata.JeKO za red mreze),
-' a motor je u oba slucaja modNovac.VeziSlobodanAvans. Stvarno vezan iznos ide
-' kroz outIznos -- True sam po sebi ne znaci da je nesto vezano (RF-02).
+' Primena avansa na JEDAN red liste: otkupni blok, KO ili specifikacija doplate.
+' Dokument bira razlikovac (clsBlokIsplata.doplataID, odnosno modDoplata.JeKO za
+' red mreze); specifikaciju prepoznaje kljuc reda (modDoplata.JeSpecifikacija) i
+' raspodeljuje avans na njene dokumente (DOP-ODL-29). Motor je u sva tri slucaja
+' modNovac.VeziSlobodanAvans. Stvarno vezan iznos ide kroz outIznos -- True sam
+' po sebi ne znaci da je nesto vezano (RF-02).
 Private Function PrimeniAvansNaDokument(ByVal koopID As String, ByVal iD As String, _
                                         ByVal jeKO As Boolean, ByRef outIznos As Double) As Boolean
-    If jeKO Then
+    If modDoplata.JeSpecifikacija(iD) Then
+        PrimeniAvansNaDokument = modNovac.ApplyAvansToSpec_TX(koopID, iD, outIznos)
+    ElseIf jeKO Then
         PrimeniAvansNaDokument = modNovac.ApplyAvansToKO_TX(koopID, iD, outIznos)
     Else
         PrimeniAvansNaDokument = ApplyAvansToOtkup_TX(koopID, iD, outIznos)

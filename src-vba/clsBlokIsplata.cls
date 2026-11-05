@@ -17,6 +17,8 @@ Option Explicit
 ' KLJUC OBAVEZE (DoplataID), a doplataID <> "" je razlikovac. Mape naloga
 ' (korpa, zadati iznosi, saldo kapija) rade nad kljucem i ne razlikuju ih;
 ' radnja koja vazi samo za otkup (primena avansa) gleda doplataID.
+' Od DOP-ODL-27 i SPECIFIKACIJU doplate: otkupID je tada broj specifikacije,
+' specifikacija <> "" je razlikovac, a njeni dokumenti se ne nude posebno.
 ' Class-based jer VBA UDT-i ne mogu da budu Variant payload
 ' (Collection, Variant array, Dictionary).
 ' Pattern dosledan sa clsTransaction, clsFilterParam.
@@ -36,3 +38,4 @@ Public HasTekuciRacun As Boolean
 Public KooperantAvansSaldo As Double      ' info display: nedodeljeni avans
 Public IsplatitiIznos As Double           ' finalni iznos za nalog/specifikaciju (operater unos ili OtvorenIznos)
 Public doplataID As String                ' KO (F4 doplate): DoplataID; "" = otkupni blok
+Public specifikacija As String            ' specifikacija doplate (DOP-ODL-27): broj; "" = blok ili KO

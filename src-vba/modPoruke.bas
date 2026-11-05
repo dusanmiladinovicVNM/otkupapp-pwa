@@ -1828,6 +1828,7 @@ Private Sub UpsertPoruke09(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_BLOK", "blok"
     ' F4 doplate: isplata knjiznog odobrenja po pozivu na broj = broj KO.
     UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_KO", "knji" & ChrW(382) & "no odobrenje"
+    UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_SPEC", "specifikacija doplate"
     UpsertRow lo, existing, "OTKUI_LBL_BU_PRED_OM", "otkupno mesto"
     ' Bilo "nema jakog kljuca" -- a kolona od v2.39 prikazuje PUN plan, koji zna
     ' i za PartnerMap i za poklapanje imena. Red bez jakog kljuca, a sa planom,

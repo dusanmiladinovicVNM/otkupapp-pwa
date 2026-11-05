@@ -233,6 +233,9 @@ KnjiznaOdobrenja:
     ' (DoplataStavkeRedovi pada na duplikat).
     If IsArray(openKO) Then
         For i = 1 To UBound(openKO, 1)
+            ' Dokument sa brojem specifikacije ide kroz svoju specifikaciju
+            ' (ispod), ne posebno -- inace bi isti dug imao dva naloga.
+            If Len(Trim$(CStr(openKO(i, 9)))) > 0 Then GoTo NextKO
             otkupID = Trim$(CStr(openKO(i, 1)))
             brojDok = CStr(openKO(i, 2))
             kooperantID = Trim$(CStr(openKO(i, 4)))
@@ -288,6 +291,76 @@ KnjiznaOdobrenja:
 
             result.Add blk
 NextKO:
+        Next i
+    End If
+
+    ' SPECIFIKACIJE DOPLATE (DOP-ODL-27). Umesto svojih dokumenata nudi se
+    ' specifikacija: JEDAN red i jedan nalog, iznos = otvoreni ostatak, poziv na
+    ' broj = broj specifikacije (uvoz izvoda ga razresava kroz SpecPoPozivu i
+    ' raspodeljuje na dokumente). Kljuc reda je broj specifikacije (blk.otkupID),
+    ' razlikovac blk.specifikacija. Stanica je MATICNA stanica kooperanta:
+    ' dokumenti iste specifikacije mogu biti sa vise stanica. Iste kapije
+    ' identiteta primaoca kao za KO.
+    Dim openSpec As Variant
+    openSpec = modDoplata.OtvoreneSpecifikacijeRedovi()
+    If IsArray(openSpec) Then
+        For i = 1 To UBound(openSpec, 1)
+            otkupID = Trim$(CStr(openSpec(i, 1)))
+            brojDok = otkupID
+            kooperantID = Trim$(CStr(openSpec(i, 3)))
+
+            If LenB(kooperantID) = 0 Then
+                Err.Raise ERR_ISPLATA_PRAZAN_KOOPERANTID, "modBankaExportPregled.BuildBlokIsplataList", _
+                          "Otvorena specifikacija doplate bez kooperanta: " & brojDok & _
+                          ". Primalac se ne moze utvrditi -- nalozi nisu generisani; pokrenite " & _
+                          "proveru integriteta podataka."
+            End If
+            If dupliKooperant.Exists(kooperantID) Then
+                Err.Raise ERR_ISPLATA_DUPLI_KOOPERANTID, "modBankaExportPregled.BuildBlokIsplataList", _
+                          "Dupli KooperantID u tblKooperanti: " & kooperantID & " (otvorena " & _
+                          "specifikacija: " & brojDok & "). Tekuci racun primaoca se ne moze " & _
+                          "pouzdano utvrditi -- nalozi nisu generisani; pokrenite proveru " & _
+                          "integriteta podataka."
+            End If
+            If Not IsDate(openSpec(i, 2)) Then
+                Err.Raise ERR_ISPLATA_KO_BEZ_DATUMA, "modBankaExportPregled.BuildBlokIsplataList", _
+                          "Otvorena specifikacija doplate bez datuma: " & brojDok & _
+                          ". Nalozi nisu generisani; pokrenite proveru integriteta podataka."
+            End If
+            datumVal = CDate(openSpec(i, 2))
+            stanicaID = CStr(openSpec(i, 4))
+
+            If stanicaIDFilter <> "" And stanicaID <> stanicaIDFilter Then GoTo NextSpec
+            If datumOd > #1/1/1900# And datumVal < datumOd Then GoTo NextSpec
+            If datumDo > #1/1/1900# And datumVal > datumDo Then GoTo NextSpec
+
+            If nazivCache.Exists(kooperantID) Then
+                kooperantNaziv = nazivCache(kooperantID)
+            Else
+                kooperantNaziv = GetKooperantNaziv(kooperantID)
+                nazivCache.Add kooperantID, kooperantNaziv
+            End If
+            tr = ""
+            If trCache.Exists(kooperantID) Then tr = trCache(kooperantID)
+
+            Set blk = New clsBlokIsplata
+            blk.otkupID = otkupID
+            blk.specifikacija = otkupID
+            blk.datum = datumVal
+            blk.kooperantID = kooperantID
+            blk.kooperantNaziv = kooperantNaziv
+            blk.stanicaID = stanicaID
+            blk.TekuciRacun = tr
+            blk.brojDokumenta = brojDok
+            blk.UkupanIznos = CDbl(openSpec(i, 5))
+            blk.VecIsplaceno = CDbl(openSpec(i, 6))
+            blk.OtvorenIznos = CDbl(openSpec(i, 7))
+            blk.HasTekuciRacun = (LenB(Trim$(tr)) > 0)
+            blk.KooperantAvansSaldo = 0
+            If avansCache.Exists(kooperantID) Then blk.KooperantAvansSaldo = CDbl(avansCache(kooperantID))
+
+            result.Add blk
+NextSpec:
         Next i
     End If
     
