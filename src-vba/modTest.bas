@@ -27927,7 +27927,8 @@ End Function
 ' PLATFORM: tvrdnja o ISO tekstu meri i to da VBA IsDate (i Excel pri upisu
 ' u celiju) ISO oblik NE prihvata. Ako padne bas ona, premisa pravila je
 ' netacna i odluka se vraca operateru (DOPLATA.md par. 8).
-' Tok (kooperant A, juce): I 6 u 08:00, I 4 u 15:30, pa I 5 sa ISO vremenom.
+' Tok (kooperant A, juce): I 6 u 08:00, I 4 u 15:30 (desktop: sat je CreatedAt,
+' DopVremeUnosa), pa I 5 sa ISO vremenom.
 ' SABOTAZE: dop-period-bez-sata, dop-sat-iz-createdat.
 Private Sub T_Doplata_PeriodSaSatom()
     Dim b As String, vr As String, kA As String, kul As String, stope As Collection
@@ -27942,8 +27943,8 @@ Private Sub T_Doplata_PeriodSaSatom()
     popodne = DopJuceOd() + TimeSerial(15, 30, 0)
     podne = DopJuceOd() + TimeSerial(12, 0, 0)
 
-    DopOtkup kA, FX_STANICA, kul, vr, "S1", 6, 0, jutro
-    DopOtkup kA, FX_STANICA, kul, vr, "S1", 4, 0, popodne
+    DopVremeUnosa DopOtkup(kA, FX_STANICA, kul, vr, "S1", 6, 0), jutro
+    DopVremeUnosa DopOtkup(kA, FX_STANICA, kul, vr, "S1", 4, 0), popodne
     Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
 
     AssertEq DopPlanKg(modDoplata.DoplataPlan(podne, DopJuceDo(), stope)) & "|" & _
@@ -28162,8 +28163,22 @@ End Function
 
 ' Jucerasnji otkup kroz pravog pisca, bez ambalaze, cena 50 (ili zadata, bruto,
 ' kao na otkupnom listu). kgII = 0 znaci samo
-' klasa I. srcCreated (opciono) ide u SourceCreatedAt kakav jeste -- Date ili
-' tekst, kao sto ga salje PWA uvoz. Vraca OtkupID ili dize gresku.
+' klasa I. srcCreated (opciono) ide u SourceCreatedAt kao TEKST, kakav ga salje
+' PWA uvoz (ISO). Date tu ne nosi sat: pisac polje prima kao tekst, pa bi postao
+' regionalni zapis koji IsDate ne prepoznaje -- sat desktop otkupa zadaje
+' DopVremeUnosa. Vraca OtkupID ili dize gresku.
+' Sat desktop otkupa: SourceCreatedAt je prazan, a vreme nastanka je CreatedAt
+' (trenutak unosa, modOtkup.OtkupVremeNastanka). Test ga postavlja na zadati
+' trenutak umesto da ceka taj sat. (Prvi Excel prolaz testa 317: Date kroz
+' SourceCreatedAt je postao tekst "4.11.2026. 08:00:00" i plan je pao.)
+Private Sub DopVremeUnosa(ByVal otkupID As String, ByVal trenutak As Date)
+    Dim rows As Collection
+    Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+    If rows Is Nothing Then Err.Raise vbObjectError + 9407, "modTest.DopVremeUnosa", otkupID
+    If rows.count <> 1 Then Err.Raise vbObjectError + 9407, "modTest.DopVremeUnosa", otkupID
+    RequireUpdateCell TBL_OTKUP, rows(1), COL_AUDIT_CREATED_AT, trenutak, "modTest.DopVremeUnosa"
+End Sub
+
 Private Function DopOtkup(ByVal koopID As String, ByVal stanicaID As String, _
                           ByVal kulturaID As String, ByVal vrsta As String, _
                           ByVal sorta As String, ByVal kgI As Double, ByVal kgII As Double, _
