@@ -891,6 +891,7 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_MNJ_PROSEK", "PROSEK GAJBE"
     UpsertRow lo, existing, "OTKUI_LBL_VREDNOST", "VREDNOST"
     UpsertRow lo, existing, "OTKUI_LBL_OSTATAK", "NEISPLA" & ChrW(262) & "ENO"
+    UpsertRow lo, existing, "OTKUI_LBL_OSTATAK_KES", "KE" & ChrW(352) & "OM NAJVI" & ChrW(352) & "E"
     UpsertRow lo, existing, "OTKUI_FLD_BLOK", "Otvoreni otkupni blok"
     UpsertRow lo, existing, "OTKUI_FLD_AVANS", "ISPLATA IZ"
     UpsertRow lo, existing, "OTKUI_SEG_AVANS_VIRMAN", "Virman firme"

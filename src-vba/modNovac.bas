@@ -1254,6 +1254,28 @@ Public Function RaspodelaSpecNaStanici(ByVal specBroj As String, ByVal stanicaID
     RaspodelaSpecNaStanici = outA
 End Function
 
+' NAJVISE GOTOVINOM ZA IZBOR U POLJU "OTVORENI BLOK" (F5): blok, dokument doplate
+' ili specifikacija na stanici isplate. Ostatak izbora, ali nikad vise od onoga
+' sto sme gotovinom (DozvoljenoGotovinom; za specifikaciju zbir po dokumentima te
+' stanice, RaspodelaSpecNaStanici). Ploca NEISPLACENO ga prikazuje uz "Kes iz OM
+' avansa", pa operater granicu vidi pre klika -- isto pravilo kao kapija
+' (GotovinaNadoknadaProblem / IsplataSpecProblem), ne kopija. Read-only.
+Public Function GotovinaNajviseNaIzboru(ByVal izabranID As String, ByVal stanicaID As String, _
+                                        ByVal ostatak As Double) As Double
+    Dim id As String, d As Double, otv As Double
+    id = Trim$(izabranID)
+    GotovinaNajviseNaIzboru = ZaokruziNovac(ostatak)
+    If Len(id) = 0 Then Exit Function
+    If modDoplata.JeSpecifikacija(id) Then
+        Call RaspodelaSpecNaStanici(id, stanicaID, 0, True, d, otv)
+    ElseIf modDoplata.JeKO(id) Then
+        d = DozvoljenoGotovinom("", id)
+    Else
+        d = DozvoljenoGotovinom(id, "")
+    End If
+    If d < GotovinaNajviseNaIzboru Then GotovinaNajviseNaIzboru = d
+End Function
+
 ' KAPIJA ISPLATE PO SPECIFIKACIJI NA OTKUPNOM MESTU (obrazac IsplataKOProblem):
 ' "" kad specifikacija pripada kooperantu i raspodela na dokumente te stanice
 ' prima ceo iznos; inace poruka uz polje iznosa. Jedna implementacija, dva

@@ -456,6 +456,7 @@ Public Sub RunAllTests()
     RunOne 344
     RunOne 345
     RunOne 346
+    RunOne 347
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1110,6 +1111,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 344: TestName = "T_Doplata_UkljuciFiltrirane"
         Case 345: TestName = "T_Doplata_SpecGotovinaNaStanici"
         Case 346: TestName = "T_Doplata_SpecRucnoMapiranje"
+        Case 347: TestName = "T_Gotovina_NajviseNaIzboru"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1464,6 +1466,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 344: T_Doplata_UkljuciFiltrirane
         Case 345: T_Doplata_SpecGotovinaNaStanici
         Case 346: T_Doplata_SpecRucnoMapiranje
+        Case 347: T_Gotovina_NajviseNaIzboru
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -30650,6 +30653,47 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
     Err.Raise errNum, "T_Doplata_SpecRucnoMapiranje", errDesc
+End Sub
+
+' ============================================================
+' 347. ISP-ODL-02: PLOCA NEISPLACENO UZ KES POKAZUJE GRANICU GOTOVINE.
+' ============================================================
+' Uz "Kes iz OM avansa" ploca na F5 kaze koliko najvise sme gotovinom za izbor u
+' polju "otvoreni blok": blok, dokument doplate ili specifikacija na stanici.
+' Granica je osnovica (PDV nadoknada se ne isplacuje gotovinom), ali nikad vise
+' od ostatka; specifikacija broji samo dokumente te stanice. Isto pravilo kao
+' kapija, pa operater granicu vidi pre klika.
+' Tok (kooperant A, STA1): blok 10 kg po 54 (540); doplata 10,80/kg (108), jedina
+'   u specifikaciji.
+' SABOTAZE: isp-ploca-bez-osnovice.
+Private Sub T_Gotovina_NajviseNaIzboru()
+    Dim b As String, vr As String, kul As String, kA As String, oid As String
+    Dim obr As String, g As String, en As Long, idD As String, spec As String
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    oid = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0, , 54)
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), _
+              DopStope(DopStopa(vr, "S1", KLASA_I, 10.8)), "test 347", False, g, en)
+    AssertEq g, "", "preduslov: doplata se knjizi"
+    idD = DopIdBloka(obr, oid)
+    spec = DopSpecBloka(obr, oid)
+
+    AssertEq Format$(modNovac.GotovinaNajviseNaIzboru(oid, FX_STANICA, 540), "0.00"), _
+             Format$(modNovac.OsnovicaBezNadoknade(540), "0.00"), _
+             "blok: kesom najvise osnovica, ne ostatak sa nadoknadom"
+    AssertEq Format$(modNovac.GotovinaNajviseNaIzboru(oid, FX_STANICA, 200), "0.00"), _
+             Format$(200, "0.00"), "blok: kesom nikad vise od ostatka"
+    AssertEq Format$(modNovac.GotovinaNajviseNaIzboru(idD, FX_STANICA, 108), "0.00") & "|" & _
+             Format$(modNovac.GotovinaNajviseNaIzboru(spec, FX_STANICA, 108), "0.00") & "|" & _
+             Format$(modNovac.GotovinaNajviseNaIzboru(spec, FX_STANICA_B, 108), "0.00"), _
+             Format$(modNovac.OsnovicaBezNadoknade(108), "0.00") & "|" & _
+             Format$(modNovac.OsnovicaBezNadoknade(108), "0.00") & "|" & Format$(0, "0.00"), _
+             "doplata i specifikacija: osnovica; specifikacija samo na stanici svojih dokumenata"
+    AssertEq Poruka("OTKUI_LBL_OSTATAK_KES") <> Poruka("OTKUI_LBL_OSTATAK") And _
+             Not PorukaNedostaje("OTKUI_LBL_OSTATAK_KES"), True, "natpis ploce uz kes postoji u katalogu"
 End Sub
 
 ' Redovi specifikacije po natpisu: UKUPNO ZA ISPLATU (vrednost u koloni 10) i

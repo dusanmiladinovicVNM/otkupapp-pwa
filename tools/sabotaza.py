@@ -11929,6 +11929,14 @@ SABOTAZE = {
         "T_Doplata_SpecifikacijaPapir",
         "specifikacija: storniran dokument je naveden, a ne ulazi u iznos",
     ),
+    # ISP-ODL-02: ploca NEISPLACENO uz kes pokazuje ostatak sa nadoknadom.
+    "isp-ploca-bez-osnovice": (
+        "modNovac.bas",
+        "    If d < GotovinaNajviseNaIzboru Then GotovinaNajviseNaIzboru = d\n",
+        "    ' SABOTAZA: ploca pokazuje bruto ostatak i uz kes\n",
+        "T_Gotovina_NajviseNaIzboru",
+        "blok: kesom najvise osnovica, ne ostatak sa nadoknadom",
+    ),
     # DOP-ODL-28: gotovina po specifikaciji ide i na dokumente drugih stanica.
     "dop-spec-got-sve-stanice": (
         "modNovac.bas",

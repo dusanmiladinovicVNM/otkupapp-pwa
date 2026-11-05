@@ -3778,6 +3778,8 @@ Private Sub SetAvans(ByVal n As Long)
     MarkDirty
     BoxState z, "segAvans1", IIf(n = 1, C_FOREST, C_WHITE), IIf(n = 1, C_CREAM, C_MUTED), (n = 1)
     BoxState z, "segAvans2", IIf(n = 2, C_FOREST, C_WHITE), IIf(n = 2, C_CREAM, C_MUTED), (n = 2)
+    ' Kes ili virman menja iznos koji sme da se isplati (ISP-ODL-02).
+    If Len(BlokID()) > 0 Then PostaviPlocuOstatka
 End Sub
 
 Private Sub FldShow(z As Object, ByVal nm As String, ByVal vis As Boolean)
@@ -7583,7 +7585,31 @@ End Sub
 ' Izbor bloka puni plocu NEISPLACENO - iznos koji jos moze da se isplati.
 Private Sub ApplyBlokIzbor()
     On Error Resume Next
-    SetOstatak BlokOstatak()
+    PostaviPlocuOstatka
+End Sub
+
+' Ploca NEISPLACENO: ostatak izabranog bloka. Uz "Kes iz OM avansa" ploca kaze
+' koliko NAJVISE sme gotovinom -- PDV nadoknada se ne isplacuje gotovinom
+' (ISP-ODL-02), pa je granica osnovica, ne ostatak. Broj daje
+' modNovac.GotovinaNajviseNaIzboru, isto pravilo kao kapija; ovde je samo prikaz.
+' Ako racun padne, ostaje ostatak bloka (kapija i dalje odbija pri snimanju).
+Private Sub PostaviPlocuOstatka()
+    Dim v As Double, lbl As String
+    On Error Resume Next
+    v = BlokOstatak()
+    lbl = Poruka("OTKUI_LBL_OSTATAK")
+    If mIzAvansa And Len(BlokID()) > 0 Then
+        Err.Clear
+        v = modNovac.GotovinaNajviseNaIzboru(BlokID(), SelectedStanicaID(mFrm), BlokOstatak())
+        If Err.Number <> 0 Then
+            v = BlokOstatak()
+            Err.Clear
+        Else
+            lbl = Poruka("OTKUI_LBL_OSTATAK_KES")
+        End If
+    End If
+    mFrm.Controls("zForm").Controls("fgOstatak").Controls("fgOstatakL").caption = lbl
+    SetOstatak v
 End Sub
 
 ' Redni broj izabrane stavke u combo-u polja (1-bazno, 0 = nista izabrano).

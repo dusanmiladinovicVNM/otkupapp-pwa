@@ -20,6 +20,11 @@
   (`modDokumenta.SaveOMUlaz_TX`, greška po imenu) — samo za gotovinu.
 - Osnovica: `modNovac.OsnovicaBezNadoknade` — isti broj na papiru i u kapiji.
 - Signal: `modIntegritet` → `GOT1` iz `modNovac.GotovinaPrekoOsnoviceRedovi`.
+- Prikaz (zahtev operatera 05.11.2026): uz „Keš iz OM avansa" ploča na F5 menja
+  natpis u „KEŠOM NAJVIŠE" i pokazuje granicu gotovine za izabran blok, dokument
+  doplate ili specifikaciju (`modNovac.GotovinaNajviseNaIzboru`, isto pravilo kao
+  kapija). Operater granicu vidi pre klika. Test 347, sabotaža
+  `isp-ploca-bez-osnovice`.
 - Gotovina po specifikaciji doplate (DOP-ODL-28, rez B) prolazi istu kapiju po
   dokumentu.
 
