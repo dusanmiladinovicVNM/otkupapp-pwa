@@ -356,7 +356,14 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     339 sada ide PRVI u bloku doplate (redosled nije identitet testa). Ponovljen
     dokaz: `dop-spec-storno-oslobadja` crvena svojom tvrdnjom (uz kaskadu od 39
     testova preko čitača), izvor identičan `ae29aaa0af242bcf` — **P3 dokaz 9/9**.
-    Otvoreno: pun prolaz sa BFP-om, ručni Compile, ručni pregled PDF-a.
+    Ručni Compile PASS. Ručni pregled PDF-a (05.11.2026): iznosi i raspored
+    ispravni; ispravljeno u zajedničkom kodu papira (važi i za otkupni list,
+    otpremnicu i grupni list): natpis stope „8,%" → „8%" (`StopaTekst`) i
+    kodiran CR „_x000D_" u klauzuli iz podešavanja (`KlauzulaZaStampu`);
+    rekapitulacija specifikacije dobila prosek din/kg. Specifikacija dokumenata
+    knjiženih pre P3 nosi „(bez broja)" — broj dobija samo dokument knjižen
+    novim kodom (pisac pada po imenu kad kolone nema). Otvoreno: pun prolaz sa
+    BFP-om; PDF specifikacije sa brojem.
   - Uzgredni nalaz (van doplate, NIJE reprodukovan u Excelu): otkupni list upisuje
     tekući račun pod ključem `racun` (`modPrint.FillOtkupSablon`), a primerak ga
     čita pod `račun` (`WriteOtkupCopy`, zamena `{RAČUN}` u klauzuli) — po kodu

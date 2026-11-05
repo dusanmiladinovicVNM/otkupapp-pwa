@@ -1038,7 +1038,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
 
     DocLabelVal ws, ob, 5, "Osnovica (bez PDV):", ""
     ws.cells(ob, 8).value = h("osnovica")
-    DocLabelVal ws, ob + 1, 5, "PDV nadoknada (" & Format$(h("stopa"), "0.##") & "%):", ""
+    DocLabelVal ws, ob + 1, 5, "PDV nadoknada (" & StopaTekst(CDbl(h("stopa"))) & "%):", ""
     ws.cells(ob + 1, 8).value = h("nadoknada")
     DocLabelVal ws, ob + 2, 5, "UKUPNO ZA ISPLATU:", ""
     ws.cells(ob + 2, 8).value = h("ukupno")
@@ -1069,7 +1069,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     If klauzPt < 24# Then klauzPt = 24#                                ' minimalna visina klauzule
     ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
     With ws.cells(rr, 1)
-        .value = CStr(h("klauzula"))
+        .value = KlauzulaZaStampu(CStr(h("klauzula")))
         .Font.Size = 7
         .Font.Color = RGB(60, 60, 60)
         .WrapText = True
@@ -1098,6 +1098,24 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     rr = rr + 1
 
     WriteOtkupCopy = rr
+End Function
+
+' Stopa za natpis: "8", "8,5" -- bez decimalnog znaka na kraju, koji
+' Format$(8, "0.##") ostavlja ("8,%" na papiru).
+Private Function StopaTekst(ByVal stopa As Double) As String
+    If stopa = Int(stopa) Then
+        StopaTekst = CStr(CLng(stopa))
+    Else
+        StopaTekst = Format$(stopa, "0.##")
+    End If
+End Function
+
+' Klauzula iz podesavanja za papir: tekst unet iz drugog izvora nosi kodiran CR
+' ("_x000D_", OOXML) koji Excel u celiji prikazuje doslovno. Prelom reda (LF)
+' ostaje.
+Private Function KlauzulaZaStampu(ByVal kl As String) As String
+    kl = Replace(kl, "_x000D_", "", , , vbTextCompare)
+    KlauzulaZaStampu = Replace(kl, vbCr, "")
 End Function
 
 ' Tekst primerka iz h, ili podrazumevani -- bez dodavanja kljuca u h. Tako
@@ -4221,6 +4239,7 @@ Public Function FillSpecDoplateSablon(ByVal obracunID As String, _
     ws.cells(rr, 6).value = "Proizvod"
     ws.cells(rr, 7).value = "Klasa"
     ws.cells(rr, 8).value = "Koli" & ChrW(269) & "ina (kg)"
+    ws.cells(rr, 9).value = "Prosek (din/kg)"
     ws.cells(rr, 10).value = "Iznos (din)"
     With ws.Range(ws.cells(rr, 6), ws.cells(rr, NK))
         .Font.Bold = True
@@ -4234,6 +4253,7 @@ Public Function FillSpecDoplateSablon(ByVal obracunID As String, _
         ws.cells(rr, 6).value = CStr(a(0))
         ws.cells(rr, 7).value = CStr(a(1))
         ws.cells(rr, 8).value = CDbl(a(2))
+        If CDbl(a(2)) > 0 Then ws.cells(rr, 9).value = modNovac.ZaokruziNovac(CDbl(a(3)) / CDbl(a(2)))
         ws.cells(rr, 10).value = modNovac.ZaokruziNovac(CDbl(a(3)))
         rr = rr + 1
     Next kk
@@ -4252,7 +4272,7 @@ Public Function FillSpecDoplateSablon(ByVal obracunID As String, _
     osnovica = modNovac.ZaokruziNovac(sumIzn / (1 + stopa / 100))
     DocLabelVal ws, rr, 6, "Osnovica (bez PDV):", ""
     ws.cells(rr, 10).value = osnovica
-    DocLabelVal ws, rr + 1, 6, "PDV nadoknada (" & Format$(stopa, "0.##") & "%):", ""
+    DocLabelVal ws, rr + 1, 6, "PDV nadoknada (" & StopaTekst(stopa) & "%):", ""
     ws.cells(rr + 1, 10).value = modNovac.ZaokruziNovac(sumIzn - osnovica)
     DocLabelVal ws, rr + 2, 6, "UKUPNO ZA ISPLATU:", ""
     ws.cells(rr + 2, 10).value = sumIzn
