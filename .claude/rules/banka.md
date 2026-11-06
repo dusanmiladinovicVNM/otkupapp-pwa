@@ -10,8 +10,9 @@ paths:
 
 # Banka — import izvoda i nalozi za isplatu
 
-> Preseljeno iz `CLAUDE.md` §3 (v2.39.0). Sadržaj nepromenjen — samo se sada
-> učitava kad se dira banka sloj, umesto u svakoj sesiji.
+> Preseljeno iz `CLAUDE.md` §3 (v2.39.0) — učitava se kad se dira banka sloj,
+> umesto u svakoj sesiji. Dopunjeno doplatom kooperantu (PR #460,
+> `docs/DOMEN/DOPLATA.md`).
 
 ## Banka import (izvodi)
 
@@ -35,6 +36,16 @@ To je ugovor, ne stil: `RELEASE_GATES` §85 i `ARCHITECTURE_REFERENCE` §288/§4
   radnje u ljusci je ključ kataloga poruka (`Scr_Radnje`), pa broj u njega ne
   staje bez izmene ugovora radnji. (Do v2.39 je ovde pisalo da natpis nosi `(N)`
   i da `_Activate` prebrojava — oboje je bilo netačno posle uklanjanja forme.)
+- **Poziv na broj kooperanta ima tri vrste cilja** (DOP-ODL-30): broj otkupnog
+  bloka, broj dokumenta doplate (`<broj bloka>-0z`) i broj specifikacije doplate
+  (`x/ddmmyy-00y`). Sva tri su samo cifre, `/` i `-`, pa ih oblik ne razlikuje:
+  `ResolveStrongKooperantByKeys` knjiži samo kad poziv pogodi **tačno jednu**
+  vrstu, a `PozivViseVrsta` u `BimOtkupIzPozivaNaBroj` i `BimEfektivnaSpec` diže
+  `ERR_BMAP_MANUAL_REQUIRED`. **NE vraćati „prvi pogodak pobeđuje"** — isplata
+  doplate bi tiho završila na otkupnom bloku. Specifikaciju pisac
+  (`MapBankaImportAsKooperantBlockCore`) raspoređuje na njene otvorene dokumente
+  od najstarijeg bloka; novac se uvek vezuje **po dokumentu** (`DoplataID`),
+  nikad po specifikaciji.
 - **PRIKAZ I PISAC DELE JEDAN PLAN.** `BimAutoPlan` / `BimAutoPlanIzVrednosti`
   vraća `smer | partnerTip | partnerID | ciljTip | ciljID | izvor` **bez ijednog
   upisa**. Pisac ga izvršava (`AutoMapIncomingKupac`,
@@ -77,11 +88,18 @@ Podešavanjima, spojena kroz `BankaNalogRacuniCSV`; legacy `;`-lista
 - **CSV nalozi za prenos:** `GenerisiNalogeCSV` → `Nalozi za banku\` (platilac
   `SELLER_NAME`/`SELLER_ACCOUNT`; **poziv na broj = broj bloka** → auto-map pri
   uvozu izvoda; šifra/svrha `BANKA_NALOG_*`, Podešavanja grupa „Banka / nalozi").
+  Doplata ide kao **specifikacija umesto njenih dokumenata** (DOP-ODL-27): jedan
+  red i jedan nalog, poziv = broj specifikacije, iznos = otvoreni ostatak
+  specifikacije (`BuildBlokIsplataList`). Dokument doplate bez specifikacije
+  (knjižen pre P3) ide pod svojim brojem.
 - **PDF specifikacija isplata:** `PrintIsplataSpecifikacija` →
   `modPrint.FillIsplataSpecSablon` (`ISPLATA_SPEC_PRINT_MODE`, default PDF).
 - **Vezivanje virman avansa:** dugmad „Primeni avans na blok"/„(sel.)" →
   postojeći `ApplyAvansToOtkup_TX` (dotad samo auto pri snimanju novog otkupa u
-  `modOtkup`; sad i za već otvorene blokove).
+  `modOtkup`; sad i za već otvorene blokove). Za doplatu: `ApplyAvansToKO_TX`
+  (dokument) i `ApplyAvansToSpec_TX` (specifikacija — raspodela kao kod izvoda,
+  u jednoj transakciji). Petlja vezivanja je zajednička (`VeziSlobodanAvans`),
+  pa se pravilo slobodnog avansa ne kopira.
 - **Bez upisa u `tblNovac` za isplate** — isplata se knjiži tek uvozom izvoda
   (avans upis je zaseban, veže `OtkupID` na postojeći `NOV_VIRMAN_AVANS_KOOP`).
 
@@ -116,3 +134,8 @@ drugog; **NE vraćati na „poslednji pobeđuje"**.
 značilo „prvi red pobeđuje"); guard je u core-u, ne u formi. Avansi se broje po
 **stvarno proknjiženom iznosu** (`ApplyAvansToOtkup_TX` `ByRef`, RF-02) — `True`
 sam po sebi ne znači da je nešto vezano.
+
+Novac vezan za dokument doplate (`tblNovac.DoplataID`) **nije slobodan avans**
+(`JeSlobodanAvansKooperanta` gleda i tu kolonu). Storno doplate ga **odvezuje,
+ne stornira** — virman ponovo postaje slobodan avans (DOP-05, isto pravilo kao
+kod otkupa, `docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md`).

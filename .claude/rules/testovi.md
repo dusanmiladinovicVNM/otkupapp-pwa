@@ -356,13 +356,13 @@ pre čišćenja ostavi seam upaljen i obori tuđi test.
   iz KI-014, koja stoji na izlazu. Tako podmetnut pad gađa branu koja pokriva
   celo telo. Iznad `On Error GoTo EH` pad prolazi mimo brane: direktan poziv tada
   izgleda kao član bez brane, a kroz `Run` je dijalog. Sabotaže
-  `ki016-*-pusta-pad` sidre baš taj par redova. Kuku nosi 30 članova (obim iz
-  stavke 142):
-  - 13 `Scr_Rows` — svi osim ANALIZE, koja nema put do `Err.Raise`;
+  `ki016-*-pusta-pad` sidre baš taj par redova. Kuku nosi 32 člana (obim iz
+  stavke 142, plus ekran DOPLATA iz PR #460):
+  - 14 `Scr_Rows` — svi osim ANALIZE, koja nema put do `Err.Raise`;
   - 4 `Scr_Event` matičnih (MatKorisnici, MatPakovanje, MatPartneri, MatRoba).
-    Ostali imaju svoju zaštitu (osam sopstveni handler, Dokumenti
+    Ostali imaju svoju zaštitu (devet sopstveni handler, Dokumenti
     `Resume Next`), a ANALIZA ga nema;
-  - 13 `Scr_Build` — svaki koji postoji (Dokumenti ga nemaju).
+  - 14 `Scr_Build` — svaki koji postoji (Dokumenti ga nemaju).
 
   Druga kuka, `"modScrIzvestaji.Scr_Build#usred"`, stoji odmah iza povratka na
   branu posle lokalnog `Resume Next` segmenta (test 243). Član koji otvori
@@ -378,7 +378,7 @@ pre čišćenja ostavi seam upaljen i obori tuđi test.
   gađa Fakture `Scr_Rows`, MatRoba `Scr_Event` i Storno `Scr_Build`), pa nova
   sabotaža brane bira član koji se u testovima ne zove kroz `Run`.
 - **Testovi 239–243** i kako svaki poštuje to pravilo:
-  - **239** — svaki od 30 članova hvata svoj pad i upisuje ga u kanal pod svojim
+  - **239** — svaki od 32 člana hvata svoj pad i upisuje ga u kanal pod svojim
     imenom. Zove ih **direktno** (`Scr_Build` dobija `Nothing`, jer je kuka prva
     naredba tela) i posle svakog preuzme kanal, pa nalaz ne prelazi na sledeći;
   - **240** — pad liste je neuspeh liste, ne „nema liste", sa izvorom koji
