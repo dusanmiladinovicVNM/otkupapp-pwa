@@ -1,7 +1,8 @@
 # Storno i ispravka otkupnog lista u lancu (`LNC-*`)
 
 > **Status: PRE-FLIGHT 06.11.2026 — odluke operatera zapisane. U kodu: deo 1 (šema
-> `LNC-ODL-16`, ambalaža `LNC-ODL-15` / `AMB-10-ODL-40`), NEVERIFIKOVANO u Excelu.**
+> `LNC-ODL-16`, ambalaža `LNC-ODL-15` / `AMB-10-ODL-40`) i deo 2 (jezgro storna,
+> `modDokumenta.LncPlanLista` / `StornoListaULancu_TX`), NEVERIFIKOVANO u Excelu.**
 > Mereno čitanjem nad `main` = `1caa86f`; Excel nije pokrenut, pa je svaka tvrdnja o
 > ponašanju ovde **NEVERIFIKOVANA** dok je ne potvrdi test. Verdikt po osama je §7.
 >
@@ -52,7 +53,7 @@ zapisuje kako, i šta je operater odlučio tamo gde pravilo ćuti.
 | **`LNC-ODL-17`** | Broj nove verzije **uvek iz generatora**, i kad je auto-broj isključen: otpremnica `GenerateBrojOtpremnice(stanica, datum)`, zbirna niz `KIND_ZBR` (vozač, datum), bez udaljene provere | A9 (nov broj iz istog niza). Prekidač auto-broja određuje **predlog u formi**; `SuggestNextBroj` ga poštuje (`modBrojevi.bas:64`), a `GenerateBrojOtpremnice` ne. Bez ovoga bi nova zbirna ostala bez broja |
 | **`LNC-ODL-18`** | **Poništavanje storna (UNDO) se odbija** za storno lista koji je deo poteza u lancu. Greška se ispravlja novim potezom, ne vraćanjem dela | Žurnal pamti samo otkup i novac (`modStornoZurnal.PkColForTable`, `:326`); otpremnicu i zbirnu ne. Vraćen stari list bi stajao van svake otpremnice: izgubljen blok, nova malina auto-otpremnica, a kod ispravke dupli zbir |
 | **`LNC-ODL-19`** | Zbirna sa vozačevog PWA: potez **prolazi**, a poruka kaže da telefon prikazuje stari broj zbirne. Upis novog broja na telefon je poseban rez | Povratni upis u VOZ sheet ide jednom, pri uvozu (`modMasterSync.WriteBackVOZSyncStatus`); ponovno slanje stare zbirne ostaje duplikat (`ZbirnaPoClientRecordID`), ne pravi novu |
-| **`LNC-ODL-20`** | Korekcija = **red po paru u `tblStornoVeze`** (list, otpremnica, zbirna — svaki svoj `CorrectionID`), sva tri vezana **zajedničkim korenom**: `CorrectionID` para lista u kolonama roditelja (`ParentDocType = LANAC`). Dokument nosi `CorrectionID` svog para | `tblStornoVeze` drži jedan par po ključu (`CreateCorrectionContext`), a S9 istoriju čita par po par (`SLED-ODL-03`). **Precizira A13:** „isti CorrectionID" znači „isti koren korekcije" |
+| **`LNC-ODL-20`** | Korekcija = **red po paru u `tblStornoVeze`** (list, otpremnica, zbirna — svaki svoj `CorrectionID`), vezani **zajedničkim korenom**: svi redovi poteza nose `ParentDocType = LANAC`; red lista je koren (`ParentDocID` prazan), a redovi otpremnice i zbirne nose `ParentDocID` = `CorrectionID` korena. Dokument nosi `CorrectionID` svog para | `tblStornoVeze` drži jedan par po ključu (`CreateCorrectionContext`), a S9 istoriju čita par po par (`SLED-ODL-03`). **Precizira A13:** „isti CorrectionID" znači „isti koren korekcije" |
 
 Izvedeno iz postojećih pravila, bez nove odluke:
 

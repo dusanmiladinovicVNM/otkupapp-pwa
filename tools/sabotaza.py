@@ -7459,6 +7459,42 @@ SABOTAZE = {
         "Test_AMB_ODL40_MeriPosleZamene",
         "ODL-40: u zameni kontra-stav ne meri odmah (merenje je odlozeno)",
     ),
+    # LNC-ODL-02: prijemnica ostaje na STARU zbirnu -- posle poteza je siroce u
+    # Oporavku, a hladnjacki "Ponovi auto-lanac" bi pravio drugu.
+    "lnc-prijemnica-ostaje-na-staroj": (
+        "modDokumenta.bas",
+        "            LncPreveziPrijemnicu CStr(p(\"prijemnice\")(k)), zbrNova, CStr(rez(\"zbrNovaBroj\")), src\n",
+        "            ' SABOTAZA: prijemnica ostaje na staroj zbirni\n",
+        "Test_LNC_StornoListaUIzdatojZbirnoj",
+        "LNC: prijemnica je prevezana na novu verziju zbirne (ZbirnaRoditeljID)",
+    ),
+    # H2 / A15: sestre ne ulaze u novu zbirnu -- netaknuta otpremnica ostaje van
+    # aktivne zbirne, i sledeci sync joj pravi auto-zbirnu.
+    "lnc-sestre-ispadaju": (
+        "modDokumenta.bas",
+        "        izvZ.Add CStr(p(\"zbrSestre\")(k))\n",
+        "        ' SABOTAZA: sestre ne ulaze u novu zbirnu\n",
+        "Test_LNC_SestrePrezivljavaju",
+        "LNC sestre: nova zbirna nosi i netaknutu otpremnicu",
+    ),
+    # LNC-INV-07: prijemnica sa labelom zbirne a bez ID-a se tiho preskace -- posle
+    # poteza ostaje vezana brojem za storniranu zbirnu.
+    "lnc-prijemnica-po-labeli-tiho": (
+        "modDokumenta.bas",
+        "            ElseIf Len(rod) = 0 And Len(brojZbirne) > 0 And _\n",
+        "            ElseIf False And _\n",
+        "Test_LNC_PrijemnicaBezIDaOdbijena",
+        "LNC: prijemnica bez ZbirnaRoditeljID zaustavlja potez",
+    ),
+    # LNC-ODL-07: kapija poslednjeg izvora ugasena -- zbirna se stornira bez
+    # naslednika, a aktivna prijemnica ostaje bez roditelja.
+    "lnc-poslednji-izvor-bez-kapije": (
+        "modDokumenta.bas",
+        "    If ostaje = 0 And p(\"prijemnice\").count > 0 Then\n",
+        "    If False Then   ' SABOTAZA: poslednji izvor bez kapije\n",
+        "Test_LNC_PoslednjiIzvor",
+        "LNC poslednji izvor: potez sa aktivnom prijemnicom je odbijen",
+    ),
     # AMB-10-ODL-40: commit ne pita za otvoreno odlaganje -- zaboravljen zavrsetak
     # tiho commit-uje storno bez AMB-INV-07/09/16.
     "odl40-commit-bez-kapije": (
