@@ -1464,11 +1464,40 @@ EH:
 End Function
 
 Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
+    On Error GoTo EH
+
+    Dim result As Variant
+    result = SaldoOMDetailRedovi()
+    If Not IsArray(result) Then
+        ExportSaldoOMDetail = WriteHeaderOnly(sheetID, "SaldoOMDetail", _
+            "KooperantID", "Kooperant", "StanicaID", "Koli" & ChrW(269) & "ina", _
+            "Vrednost", "Isplaceno", "AgroZaduzenje", "Saldo", "Ambala" & ChrW(382) & "a", _
+            "Doplata")
+        Exit Function
+    End If
+
+    ExportSaldoOMDetail = WriteSheetData(sheetID, "SaldoOMDetail", result)
+    Exit Function
+EH:
+    LogErr "ExportSaldoOMDetail"
+    ExportSaldoOMDetail = False
+End Function
+
+' REDOVI TABA SaldoOMDetail -- sa zaglavljem (red 1), ili Empty kad nema
+' nijednog kooperanta. Produkcioni seam, ne kopija za test: sam izvoz pise u
+' Google list preko mreze (isti razlog kao OtpremniceVozacaRedovi).
+'
+' Kolone (PWA ih cita PO IMENU): KooperantID | Kooperant | StanicaID |
+' Kolicina | Vrednost | Isplaceno | AgroZaduzenje | Saldo | Ambalaza | Doplata.
+' Saldo = Vrednost + Doplata - Isplaceno - AgroZaduzenje; Doplata je zbir
+' AKTIVNIH KO kooperanta (DOPLATA.md par. 6), bez granice perioda -- kao i
+' ostale kolone ovog taba. Doplata je poslednja: nova kolona ide na kraj.
+Public Function SaldoOMDetailRedovi() As Variant
     Dim novData As Variant, magData As Variant
     Dim i As Long
-    
-    On Error GoTo EH
-    
+
+    SaldoOMDetailRedovi = Empty
+
     ' --- OTKUP: Kolicina, Vrednost, AmbOtkup per Kooperant -- iz stavki (S1c) ---
     ' Dict: KoopID -> (StanicaID, Kolicina, Vrednost, AmbOtkup, Isplaceno, AgroZaduzenje)
     Dim dict As Object
@@ -1523,16 +1552,24 @@ Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
         Next i
     End If
     
-    If dict.count = 0 Then
-        ExportSaldoOMDetail = WriteHeaderOnly(sheetID, "SaldoOMDetail", _
-            "KooperantID", "Kooperant", "StanicaID", "Koli" & ChrW(269) & "ina", _
-            "Vrednost", "Isplaceno", "AgroZaduzenje", "Saldo", "Ambala" & ChrW(382) & "a")
-        Exit Function
-    End If
+    ' --- DOPLATA: zbir aktivnih KO per Kooperant (DOPLATA.md par. 6) ---
+    ' Kooperant sa KO a bez aktivnog otkupa (otkup storniran posle doplate,
+    ' DOP-ODL-07) ipak duguje -- dobija red sa maticnom stanicom.
+    Dim dopDict As Object, dk As Variant
+    Set dopDict = modDoplata.DoplataIznosPoKooperantu()
+    For Each dk In dopDict.keys
+        If Not dict.Exists(CStr(dk)) Then
+            dict.Add CStr(dk), Array(NzToText(LookupValue(TBL_KOOPERANTI, "KooperantID", _
+                                                          CStr(dk), "StanicaID")), _
+                                     0#, 0#, 0#, 0#, 0#)
+        End If
+    Next dk
+
+    If dict.count = 0 Then Exit Function
     
     ' --- Build result ---
     Dim result() As Variant
-    ReDim result(1 To dict.count + 1, 1 To 9)
+    ReDim result(1 To dict.count + 1, 1 To 10)
     result(1, 1) = "KooperantID"
     result(1, 2) = "Kooperant"
     result(1, 3) = "StanicaID"
@@ -1542,6 +1579,7 @@ Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
     result(1, 7) = "AgroZaduzenje"
     result(1, 8) = "Saldo"
     result(1, 9) = "Ambala" & ChrW(382) & "a"
+    result(1, 10) = "Doplata"
     
     Dim keys As Variant
     keys = dict.keys
@@ -1553,8 +1591,12 @@ Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
         Dim koopPrezime As Variant
         koopPrezime = LookupValue(TBL_KOOPERANTI, "KooperantID", keys(r), "Prezime")
         
+        Dim dop As Double
+        dop = 0
+        If dopDict.Exists(CStr(keys(r))) Then dop = CDbl(dopDict(CStr(keys(r))))
+
         Dim saldo As Double
-        saldo = v(2) - v(4) - v(5) ' Vrednost - Isplaceno - AgroZaduzenje
+        saldo = v(2) + dop - v(4) - v(5) ' Vrednost + Doplata - Isplaceno - AgroZaduzenje
         
         result(r + 2, 1) = keys(r)
         result(r + 2, 2) = CStr(nz(koopName, "")) & " " & CStr(nz(koopPrezime, ""))
@@ -1565,13 +1607,10 @@ Private Function ExportSaldoOMDetail(ByVal sheetID As String) As Boolean
         result(r + 2, 7) = CStr(v(5))
         result(r + 2, 8) = CStr(saldo)
         result(r + 2, 9) = CStr(v(3))
+        result(r + 2, 10) = CStr(dop)
     Next r
     
-    ExportSaldoOMDetail = WriteSheetData(sheetID, "SaldoOMDetail", result)
-    Exit Function
-EH:
-    LogErr "ExportSaldoOMDetail"
-    ExportSaldoOMDetail = False
+    SaldoOMDetailRedovi = result
 End Function
 
 Private Function ExportSaldoKupci(ByVal sheetID As String) As Boolean

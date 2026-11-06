@@ -681,10 +681,12 @@ Public Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
             vrstaSorta = Trim$(CStr(d(r, iVr)) & " " & CStr(d(r, iSo)))
             If iKolAmbIzd > 0 Then kolAmbIzd = PrNz(d(r, iKolAmbIzd))
 
-            ' Vreme nastanka: SourceCreatedAt (PWA) ima prednost nad CreatedAt.
-            Dim vreme As Variant
-            If iSrcCreated > 0 Then vreme = d(r, iSrcCreated)
-            If Not IsDate(vreme) Then If iCreated > 0 Then vreme = d(r, iCreated)
+            ' Vreme nastanka: jedno pravilo sa periodom doplate
+            ' (modOtkup.OtkupVremeNastanka -- SourceCreatedAt, pa CreatedAt).
+            Dim vreme As Variant, vSrc As Variant, vCre As Variant
+            If iSrcCreated > 0 Then vSrc = d(r, iSrcCreated)
+            If iCreated > 0 Then vCre = d(r, iCreated)
+            vreme = modOtkup.OtkupVremeNastanka(vSrc, vCre)
             If IsDate(vreme) Then datum = datum & "  Vreme: " & Format$(CDate(vreme), "hh:nn")
             Exit For
         End If
@@ -905,7 +907,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     ' --- naslov (centriran preko cele sirine): mali descriptor + veliki OTKUPNI LIST ---
     ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
     With ws.cells(rr, 1)
-        .value = "Otkup poljoprivrednih proizvoda"
+        .value = OtkupCopyTekst(h, "opis", "Otkup poljoprivrednih proizvoda")
         .Font.Italic = True
         .Font.Size = 9
         .Font.Color = grayClr
@@ -932,14 +934,17 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     rr = rr + 1
 
     ' --- datum / otkupno mesto / rok isplate (skroz desno) ---
+    ' Doplata (DOP-ODL-26) nema svoj rok isplate -- red ga ne izmislja.
     DocLabelVal ws, rr, 1, "Datum:", CStr(h("datum"))
     DocLabelVal ws, rr, 4, "Otkupno mesto:", CStr(h("stanica"))
-    ws.Range(ws.cells(rr, 6), ws.cells(rr, 8)).Merge
-    With ws.cells(rr, 6)
-        .value = "Rok isplate: " & CStr(h("rok"))
-        .Font.Size = 9
-        .HorizontalAlignment = xlRight
-    End With
+    If OtkupCopyTekst(h, "doplata", "") <> "1" Then
+        ws.Range(ws.cells(rr, 6), ws.cells(rr, 8)).Merge
+        With ws.cells(rr, 6)
+            .value = "Rok isplate: " & CStr(h("rok"))
+            .Font.Size = 9
+            .HorizontalAlignment = xlRight
+        End With
+    End If
     ws.rows(rr).RowHeight = 13#
     usedPt = usedPt + 13#
     rr = rr + 1
@@ -964,10 +969,10 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     ws.cells(rr, 1).value = "Rb"
     ws.cells(rr, 2).value = "Proizvod"
     ws.cells(rr, 3).value = "Klasa"
-    ws.cells(rr, 4).value = "Cena bez PDV"
-    ws.cells(rr, 5).value = "Cena s PDV"
+    ws.cells(rr, 4).value = OtkupCopyTekst(h, "kol4", "Cena bez PDV")
+    ws.cells(rr, 5).value = OtkupCopyTekst(h, "kol5", "Cena s PDV")
     ws.cells(rr, 6).value = "Kol. neto"
-    ws.cells(rr, 7).value = "Kol. bruto"
+    ws.cells(rr, 7).value = OtkupCopyTekst(h, "kol7", "Kol. bruto")
     ws.cells(rr, 8).value = "Vrednost"
     With ws.Range(ws.cells(rr, 1), ws.cells(rr, 8))
         .Font.Bold = True
@@ -1006,17 +1011,25 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     '     stanje | primljeno + izdato (jedan red, dva inline para u kol. 1 i 3) |
     '     saldo. Levo uokvireno; desno obracun PDV nadoknade (isto 3 reda). ---
     Dim ob As Long: ob = rr
-    DocLabelVal ws, ob, 1, "Pocetno stanje:", ""
-    ws.cells(ob, 4).value = CStr(h("ambPocetno"))
-    DocLabelVal ws, ob + 1, 1, "Primljeno:", CStr(h("ambPrijem"))
-    DocLabelVal ws, ob + 1, 3, "Izdato:", CStr(h("ambIzdavanje"))
-    DocLabelVal ws, ob + 2, 1, "Saldo ambala" & ChrW(382) & "e:", ""
-    ws.cells(ob + 2, 4).value = CStr(h("ambSaldo"))
-    ws.cells(ob + 2, 1).Font.Bold = True
-    ws.cells(ob + 2, 4).Font.Bold = True
-    With ws.Range(ws.cells(ob, 4), ws.cells(ob + 2, 4))   ' pocetno/saldo desno poravnati
-        .HorizontalAlignment = xlRight
-    End With
+    If OtkupCopyTekst(h, "doplata", "") = "1" Then
+        ' DOPLATA (DOP-ODL-26): umesto ambalaze okvir nosi blok na koji se doplata
+        ' odnosi i period obracuna -- ista tri reda, pa geometrija primerka ostaje.
+        DocLabelVal ws, ob, 1, "Otkupni blok:", CStr(h("blok"))
+        DocLabelVal ws, ob + 1, 1, "Datum bloka:", CStr(h("blokDatum"))
+        DocLabelVal ws, ob + 2, 1, "Period:", CStr(h("period"))
+    Else
+        DocLabelVal ws, ob, 1, "Pocetno stanje:", ""
+        ws.cells(ob, 4).value = CStr(h("ambPocetno"))
+        DocLabelVal ws, ob + 1, 1, "Primljeno:", CStr(h("ambPrijem"))
+        DocLabelVal ws, ob + 1, 3, "Izdato:", CStr(h("ambIzdavanje"))
+        DocLabelVal ws, ob + 2, 1, "Saldo ambala" & ChrW(382) & "e:", ""
+        ws.cells(ob + 2, 4).value = CStr(h("ambSaldo"))
+        ws.cells(ob + 2, 1).Font.Bold = True
+        ws.cells(ob + 2, 4).Font.Bold = True
+        With ws.Range(ws.cells(ob, 4), ws.cells(ob + 2, 4))   ' pocetno/saldo desno poravnati
+            .HorizontalAlignment = xlRight
+        End With
+    End If
     ws.Range(ws.cells(ob, 1), ws.cells(ob + 2, 4)).BorderAround Weight:=xlThin
     With ws.Range(ws.cells(ob + 2, 1), ws.cells(ob + 2, 4)).Borders(xlEdgeTop)
         .LineStyle = xlContinuous
@@ -1025,7 +1038,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
 
     DocLabelVal ws, ob, 5, "Osnovica (bez PDV):", ""
     ws.cells(ob, 8).value = h("osnovica")
-    DocLabelVal ws, ob + 1, 5, "PDV nadoknada (" & Format$(h("stopa"), "0.##") & "%):", ""
+    DocLabelVal ws, ob + 1, 5, "PDV nadoknada (" & StopaTekst(CDbl(h("stopa"))) & "%):", ""
     ws.cells(ob + 1, 8).value = h("nadoknada")
     DocLabelVal ws, ob + 2, 5, "UKUPNO ZA ISPLATU:", ""
     ws.cells(ob + 2, 8).value = h("ukupno")
@@ -1056,7 +1069,7 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
     If klauzPt < 24# Then klauzPt = 24#                                ' minimalna visina klauzule
     ws.Range(ws.cells(rr, 1), ws.cells(rr, 8)).Merge
     With ws.cells(rr, 1)
-        .value = CStr(h("klauzula"))
+        .value = KlauzulaZaStampu(CStr(h("klauzula")))
         .Font.Size = 7
         .Font.Color = RGB(60, 60, 60)
         .WrapText = True
@@ -1086,6 +1099,58 @@ Private Function WriteOtkupCopy(ByVal ws As Worksheet, ByVal R0 As Long, _
 
     WriteOtkupCopy = rr
 End Function
+
+' Stopa za natpis: "8", "8,5" -- bez decimalnog znaka na kraju, koji
+' Format$(8, "0.##") ostavlja ("8,%" na papiru).
+Private Function StopaTekst(ByVal stopa As Double) As String
+    If stopa = Int(stopa) Then
+        StopaTekst = CStr(CLng(stopa))
+    Else
+        StopaTekst = Format$(stopa, "0.##")
+    End If
+End Function
+
+' Klauzula iz podesavanja za papir: tekst unet iz drugog izvora nosi kodiran CR
+' ("_x000D_", OOXML) koji Excel u celiji prikazuje doslovno. Prelom reda (LF)
+' ostaje.
+Private Function KlauzulaZaStampu(ByVal kl As String) As String
+    kl = Replace(kl, "_x000D_", "", , , vbTextCompare)
+    KlauzulaZaStampu = Replace(kl, vbCr, "")
+End Function
+
+' Tekst primerka iz h, ili podrazumevani -- bez dodavanja kljuca u h. Tako
+' dokument koji ne zadaje kljuc (otkupni list, otpremnica, grupni list) dobija
+' tacno zatecen tekst.
+Private Function OtkupCopyTekst(ByVal h As Object, ByVal k As String, _
+                                ByVal dflt As String) As String
+    OtkupCopyTekst = dflt
+    If h.Exists(k) Then
+        If Len(CStr(h(k))) > 0 Then OtkupCopyTekst = CStr(h(k))
+    End If
+End Function
+
+' Firma i objekat za zaglavlje primerka. Isto pravilo kao kod otkupnog lista,
+' otpremnice i grupnog lista, gde je jos inline -- ovde je samo za doplatu.
+Private Sub OtkupCopyProdavac(ByVal h As Object)
+    Dim objMesto As String, objReg As String, objLine As String
+    h("name") = GetConfigValue("SELLER_NAME")
+    h("pib") = GetConfigValue("SELLER_PIB")
+    h("mb") = GetConfigValue("SELLER_MATICNI_BROJ")
+    h("addr") = Trim$(GetConfigValue("SELLER_STREET") & ", " & _
+                GetConfigValue("SELLER_POSTAL_CODE") & " " & GetConfigValue("SELLER_CITY"))
+    h("acct") = GetConfigValue("SELLER_ACCOUNT")
+    objMesto = Trim$(CStr(GetConfigValue("SELLER_OBJEKAT_MESTO")))
+    objReg = Trim$(CStr(GetConfigValue("SELLER_OBJEKAT_BR_REGISTRA")))
+    If Len(objMesto) > 0 Then objLine = "Objekat: " & objMesto
+    If Len(objReg) > 0 Then
+        If Len(objLine) > 0 Then
+            objLine = objLine & "    Reg. br: " & objReg
+        Else
+            objLine = "Objekat reg. br: " & objReg
+        End If
+    End If
+    h("objekat") = objLine
+End Sub
 
 Public Sub EnsureOtkupSablon()
     On Error GoTo EH
@@ -3828,4 +3893,515 @@ Public Function FillIsplataSpecSablon(ByVal spec As Variant, ByVal nRows As Long
 EH:
     Application.ScreenUpdating = True
     LogErr "modPrint.FillIsplataSpecSablon"
+End Function
+
+' ============================================================
+' PAPIR BLOKA DOPLATE (docs/DOMEN/DOPLATA.md, DOP-ODL-26; zamenjuje papir
+' "knjizno odobrenje" iz F3, koji je tvrdio iznos bez PDV nadoknade).
+' Raspored otkupnog lista: DVA primerka po 1/3 A4 (poljoprivrednik i
+' otkupljivac) kroz ISTI WriteOtkupCopy -- firma, stavke po klasi sa doplatom
+' bez i sa PDV, kolicinom, cenom otkupa i neto vrednoscu, pa osnovica, PDV
+' nadoknada i UKUPNO ZA ISPLATU, klauzula iz istog podesavanja, potpisi. Umesto
+' ambalaze okvir nosi blok na koji se doplata odnosi i period obracuna.
+'
+' UKUPNO je IZNOS DOKUMENTA (dug firme, na cent): osnovica = zaokruzeno
+' (ukupno / (1 + stopa)), nadoknada = ukupno - osnovica -- papir i knjiga ne
+' mogu da se razidju. Stopa se cita iz podesavanja pri stampi, kao na otkupnom
+' listu. Storniran dokument se NE stampa: citac (DoplataStavkeRedovi, isti koji
+' puni karticu i saldo) vraca samo aktivne.
+' ============================================================
+Public Sub EnsureKOSablon()
+    On Error GoTo EH
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_KO_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then Exit Sub
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_KO_SABLON
+    Exit Sub
+EH:
+    LogErr "modPrint.EnsureKOSablon"
+End Sub
+
+' Popuni papir za JEDAN aktivan dokument doplate. Vraca Nothing kad dokument
+' nije aktivan (storniran ili ne postoji) -- pozivalac to javlja operateru.
+Public Function FillKOSablon(ByVal doplataID As String) As Worksheet
+    Const SRC As String = "modPrint.FillKOSablon"
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    On Error GoTo EH
+
+    Dim r As Variant, i As Long, id As String, n As Long, prvi As Long
+    id = Trim$(doplataID)
+    r = modDoplata.DoplataStavkeRedovi()
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 1)), id, vbTextCompare) = 0 Then
+            If prvi = 0 Then prvi = i
+            n = n + 1
+        End If
+    Next i
+    If n = 0 Then Exit Function
+
+    EnsureKOSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_KO_SABLON)
+
+    ' Stavke po klasi. Doplata po kg je BRUTO (sadrzi nadoknadu, DOP-ODL-14).
+    Dim stopa As Double: stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
+    If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
+    Dim stavke() As Variant, cnt As Long, ukupno As Double, bruto As Double, neto As Double
+    ReDim stavke(0 To n - 1, 0 To 6)
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 1)), id, vbTextCompare) = 0 Then
+            bruto = CDbl(r(i, 11))
+            neto = bruto / (1 + stopa / 100)
+            stavke(cnt, 0) = Trim$(CStr(r(i, 7)) & " " & CStr(r(i, 8)))
+            stavke(cnt, 1) = CStr(r(i, 9))
+            stavke(cnt, 2) = neto                       ' doplata bez PDV
+            stavke(cnt, 3) = bruto                      ' doplata s PDV
+            stavke(cnt, 4) = CDbl(r(i, 10))             ' kg
+            stavke(cnt, 5) = PrNz(r(i, 17))             ' cena otkupa (bruto, sa stavke)
+            stavke(cnt, 6) = CDbl(r(i, 10)) * neto      ' vrednost bez PDV
+            ukupno = ukupno + CDbl(r(i, 12))
+            cnt = cnt + 1
+        End If
+    Next i
+    ukupno = modNovac.ZaokruziNovac(ukupno)
+
+    Dim h As Object, koopID As String, oid As String, kl As String, dBloka As Variant
+    Set h = CreateObject("Scripting.Dictionary")
+    koopID = CStr(r(prvi, 4))
+    oid = CStr(r(prvi, 16))
+    OtkupCopyProdavac h
+    h("doplata") = "1"
+    h("grupni") = ""
+    h("naslov") = "DOPLATA"
+    h("opis") = "Doplata za otkupljene poljoprivredne proizvode"
+    h("kol4") = "Doplata bez PDV"
+    h("kol5") = "Doplata s PDV"
+    h("kol7") = "Cena otkupa"
+    h("brDok") = CStr(r(prvi, 2))
+    h("datum") = Format$(CDate(r(prvi, 3)), "dd.mm.yyyy")
+    h("stanica") = NzToText(LookupValue(TBL_STANICE, "StanicaID", CStr(r(prvi, 6)), "Naziv"))
+    h("koop") = Trim$(NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, "Ime")) & " " & _
+                      NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, "Prezime")))
+    h("bpg") = NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_BPG))
+    ' Kljuc je onaj koji primerak CITA ("racun" sa c-kvakom, WriteOtkupCopy).
+    h("ra" & ChrW(269) & "un") = NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, _
+                                                      COL_KOOP_TEKUCI_RACUN))
+    h("blok") = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_BR_DOK))
+    dBloka = LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_DATUM)
+    If IsDate(dBloka) Then h("blokDatum") = Format$(CDate(dBloka), "dd.mm.yyyy")
+    h("period") = Format$(CDate(r(prvi, 14)), "dd.mm.yyyy hh:nn") & " - " & _
+                  Format$(CDate(r(prvi, 15)), "dd.mm.yyyy hh:nn")
+    h("stopa") = stopa
+    h("osnovica") = modNovac.OsnovicaBezNadoknade(ukupno)
+    h("nadoknada") = modNovac.ZaokruziNovac(ukupno - CDbl(h("osnovica")))
+    h("ukupno") = ukupno
+    ' Klauzula: ista kao na otkupnom listu, sa istim tokenima.
+    kl = DocConfigOr(CFG_OTKUP_KLAUZULA, OtkupKlauzulaDefault())
+    kl = Replace(kl, "{BPG}", CStr(h("bpg")), , , vbTextCompare)
+    kl = Replace(kl, "{POLJOPRIVREDNIK}", CStr(h("koop")), , , vbTextCompare)
+    kl = Replace(kl, "{RA" & ChrW(268) & "UN}", CStr(h("ra" & ChrW(269) & "un")), , , vbTextCompare)
+    kl = Replace(kl, "{DATUM}", CStr(h("datum")), , , vbTextCompare)
+    kl = Replace(kl, "{BROJ}", CStr(h("brDok")), , , vbTextCompare)
+    h("klauzula") = kl
+
+    ' List se cisti i meri kao otkupni list (FillOtkupSablon): eksplicitne
+    ' visine, bez AutoFit, svaki primerak tacno 1/3 A4.
+    Application.ScreenUpdating = False
+    On Error Resume Next
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        shp.Delete
+    Next shp
+    ws.cells.UnMerge
+    On Error GoTo EH
+    ws.cells.Clear
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 4
+    ws.columns("B").ColumnWidth = 17
+    ws.columns("C").ColumnWidth = 6
+    ws.columns("D").ColumnWidth = 10
+    ws.columns("E").ColumnWidth = 10
+    ws.columns("F").ColumnWidth = 9
+    ws.columns("G").ColumnWidth = 9
+    ws.columns("H").ColumnWidth = 12
+
+    Dim R0 As Long, lastRow As Long
+    R0 = WriteOtkupCopy(ws, 1, "Primerak za poljoprivrednika", h, stavke, cnt, _
+                        OL_THIRD_PT - OL_TOP_MARGIN_TRIM_PT)
+    lastRow = WriteOtkupCopy(ws, R0, "Primerak za otkupljivaca", h, stavke, cnt, _
+                             OL_THIRD_PT) - 1
+    DocPageSetupThirdA4 ws, lastRow
+
+    Application.ScreenUpdating = oldScreen
+    Set FillKOSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = oldScreen
+    LogErr SRC
+End Function
+
+' Stampa jednog KO po KO_PRINT_MODE (default PDF). Vraca "" kad je proslo,
+' inace razlog za operatera -- ekran ga prikaze u toastu (MsgBox bi u testu
+' visio). Zovu je ekran Doplata (radnja nad KO i posle knjizenja) i kartica
+' kooperanta ("Stampaj dokument" nad redom DOP|).
+Public Function StampajKO(ByVal doplataID As String) As String
+    Const SRC As String = "modPrint.StampajKO"
+    Dim ws As Worksheet, mode As String, broj As String
+    On Error GoTo EH
+
+    Set ws = FillKOSablon(doplataID)
+    If ws Is Nothing Then
+        StampajKO = Poruka("OTKUI_ERR_KO_NEAKTIVAN")
+        Exit Function
+    End If
+
+    mode = DocResolveMode(GetConfigValue(CFG_KO_PRINT_MODE), "PDF")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case "PDF"
+            broj = NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, Trim$(doplataID), COL_DOP_BROJ))
+            DocExportPdf ws, EnsureDocFolder(PDF_DIR_KO) & "\Doplata_" & _
+                         Replace(broj, "/", "-") & ".pdf", True
+        ' OFF -> bez izlaza
+    End Select
+    Exit Function
+EH:
+    Dim errDesc As String
+    errDesc = Err.description
+    Application.ScreenUpdating = True
+    LogErr SRC
+    StampajKO = Poruka("OTKUI_ERR_KO_STAMPA") & " " & errDesc
+End Function
+
+' ============================================================
+' SPECIFIKACIJA DOPLATE (DOPLATA.md, DOP-ODL-18/21/23/25) -- jedan kooperant u
+' jednom obracunu, sa svojim brojem (S1/2026-123). House-style kao ostale
+' specifikacije: detalj po dokumentu (blok, otkupno mesto, proizvod, klasa, kg,
+' doplata po kg, iznos), rekapitulacija po kulturi i klasi, pa osnovica, PDV
+' nadoknada i UKUPNO ZA ISPLATU (isto pravilo zaokruzivanja kao papir bloka:
+' UKUPNO je zbir iznosa dokumenata, osnovica i nadoknada se izvode iz njega).
+' Storniran dokument ne ulazi u iznos, ali se navodi ispod (DOP-ODL-25), pa
+' ponovna stampa pod istim brojem kaze sta je otpalo. Bez ijednog aktivnog
+' dokumenta (storniran ceo obracun) specifikacije nema.
+' ============================================================
+Public Function FillSpecDoplateSablon(ByVal obracunID As String, _
+                                      ByVal koopID As String) As Worksheet
+    Const SRC As String = "modPrint.FillSpecDoplateSablon"
+    Const NK As Long = 10
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    On Error GoTo EH
+
+    Dim r As Variant, i As Long, n As Long, prvi As Long
+    obracunID = Trim$(obracunID)
+    koopID = Trim$(koopID)
+    r = modDoplata.DoplataStavkeRedovi()
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 5)), obracunID, vbTextCompare) = 0 And _
+           StrComp(CStr(r(i, 4)), koopID, vbTextCompare) = 0 Then
+            If prvi = 0 Then prvi = i
+            n = n + 1
+        End If
+    Next i
+    If n = 0 Then Exit Function
+
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_DOP_SPEC_SABLON)
+    On Error GoTo EH
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add
+        ws.name = WS_DOP_SPEC_SABLON
+    End If
+    Application.ScreenUpdating = False
+    ws.cells.UnMerge
+    ws.cells.Clear
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 9
+    ws.columns("A").ColumnWidth = 4       ' R.br.
+    ws.columns("B").ColumnWidth = 14      ' Dokument
+    ws.columns("C").ColumnWidth = 12      ' Blok
+    ws.columns("D").ColumnWidth = 10      ' Datum bloka
+    ws.columns("E").ColumnWidth = 14      ' Otkupno mesto
+    ws.columns("F").ColumnWidth = 18      ' Proizvod
+    ws.columns("G").ColumnWidth = 6       ' Klasa
+    ws.columns("H").ColumnWidth = 10      ' Kg
+    ws.columns("I").ColumnWidth = 10      ' Din/kg
+    ws.columns("J").ColumnWidth = 12      ' Iznos
+
+    Dim spec As String, naziv As String, rr As Long, nacinTekst As String
+    spec = CStr(r(prvi, 20))
+    If Len(spec) = 0 Then spec = "(bez broja)"
+    naziv = Trim$(NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, "Ime")) & " " & _
+                  NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, "Prezime")))
+    If CLng(val(NzToText(r(prvi, 19)))) = DOP_NACIN_KONACNA Then
+        nacinTekst = Poruka("OTKUI_DOP_NACIN_2")
+    Else
+        nacinTekst = Poruka("OTKUI_DOP_NACIN_1")
+    End If
+
+    rr = DocSellerHeader(ws, 1, NK, NK)
+    rr = DocTitleBlock(ws, rr, NK, "Doplata za otkupljene poljoprivredne proizvode", _
+                       "SPECIFIKACIJA DOPLATE br. " & spec)
+    DocLabelVal ws, rr, 1, "Kooperant:", naziv
+    ws.cells(rr, 6).value = "BPG: " & NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_BPG)) & _
+        "     Ra" & ChrW(269) & "un: " & _
+        NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, koopID, COL_KOOP_TEKUCI_RACUN))
+    rr = rr + 1
+    DocLabelVal ws, rr, 1, "Datum knji" & ChrW(382) & "enja:", Format$(CDate(r(prvi, 3)), "dd.mm.yyyy")
+    ws.cells(rr, 6).value = "Period: " & Format$(CDate(r(prvi, 14)), "dd.mm.yyyy hh:nn") & " - " & _
+        Format$(CDate(r(prvi, 15)), "dd.mm.yyyy hh:nn") & "     " & nacinTekst
+    ws.Range(ws.cells(rr, 6), ws.cells(rr, 6)).Font.Color = DocColGray()
+    rr = rr + 2
+
+    ' --- detalj po dokumentu (stavka = blok i klasa) ---
+    Dim hdr As Long: hdr = rr
+    ws.cells(hdr, 1).value = "R.br."
+    ws.cells(hdr, 2).value = "Dokument"
+    ws.cells(hdr, 3).value = "Otkupni blok"
+    ws.cells(hdr, 4).value = "Datum bloka"
+    ws.cells(hdr, 5).value = "Otkupno mesto"
+    ws.cells(hdr, 6).value = "Proizvod"
+    ws.cells(hdr, 7).value = "Klasa"
+    ws.cells(hdr, 8).value = "Koli" & ChrW(269) & "ina (kg)"
+    ws.cells(hdr, 9).value = "Doplata (din/kg)"
+    ws.cells(hdr, 10).value = "Iznos (din)"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, NK))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+    End With
+    rr = hdr + 1
+
+    ' rek: "PROIZVOD|KLASA" -> Array(proizvod, klasa, kg, din)
+    Dim rek As Object, k As String, a As Variant, kk As Variant, dBl As Variant
+    Dim rb As Long, sumKg As Double, sumIzn As Double, oid As String, sta As String, proizvod As String
+    Set rek = CreateObject("Scripting.Dictionary")
+    rek.CompareMode = vbTextCompare
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 5)), obracunID, vbTextCompare) = 0 And _
+           StrComp(CStr(r(i, 4)), koopID, vbTextCompare) = 0 Then
+            rb = rb + 1
+            oid = CStr(r(i, 16))
+            proizvod = Trim$(CStr(r(i, 7)) & " " & CStr(r(i, 8)))
+            sta = NzToText(LookupValue(TBL_STANICE, "StanicaID", CStr(r(i, 6)), "Naziv"))
+            If Len(sta) = 0 Then sta = CStr(r(i, 6))
+            ws.cells(rr, 1).value = rb
+            ws.cells(rr, 2).NumberFormat = "@"
+            ws.cells(rr, 2).value = CStr(r(i, 2))
+            ws.cells(rr, 3).NumberFormat = "@"
+            ws.cells(rr, 3).value = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_BR_DOK))
+            dBl = LookupValue(TBL_OTKUP, COL_OTK_ID, oid, COL_OTK_DATUM)
+            If IsDate(dBl) Then ws.cells(rr, 4).value = Format$(CDate(dBl), "dd.mm.yyyy")
+            ws.cells(rr, 5).value = sta
+            ws.cells(rr, 6).value = proizvod
+            ws.cells(rr, 7).value = CStr(r(i, 9))
+            ws.cells(rr, 8).value = CDbl(r(i, 10))
+            ws.cells(rr, 9).value = CDbl(r(i, 11))
+            ws.cells(rr, 10).value = CDbl(r(i, 12))
+            sumKg = sumKg + CDbl(r(i, 10))
+            sumIzn = sumIzn + CDbl(r(i, 12))
+            k = UCase$(proizvod) & "|" & UCase$(CStr(r(i, 9)))
+            If Not rek.Exists(k) Then rek.Add k, Array(proizvod, CStr(r(i, 9)), 0#, 0#)
+            a = rek(k)
+            a(2) = CDbl(a(2)) + CDbl(r(i, 10))
+            a(3) = CDbl(a(3)) + CDbl(r(i, 12))
+            rek(k) = a
+            rr = rr + 1
+        End If
+    Next i
+    sumIzn = modNovac.ZaokruziNovac(sumIzn)
+    ws.cells(rr, 6).value = "UKUPNO"
+    ws.cells(rr, 8).value = sumKg
+    ws.cells(rr, 10).value = sumIzn
+    ws.Range(ws.cells(rr, 1), ws.cells(rr, NK)).Font.Bold = True
+    ws.Range(ws.cells(hdr + 1, 8), ws.cells(rr, 10)).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(hdr + 1, 1), ws.cells(rr, 1)).HorizontalAlignment = xlCenter
+    ws.Range(ws.cells(hdr + 1, 7), ws.cells(rr, 7)).HorizontalAlignment = xlCenter
+    With ws.Range(ws.cells(hdr, 1), ws.cells(rr, NK)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    rr = rr + 2
+
+    ' --- rekapitulacija po kulturi i klasi (DOP-ODL-18) ---
+    ws.cells(rr, 1).value = "REKAPITULACIJA PO KULTURI I KLASI"
+    ws.cells(rr, 1).Font.Bold = True
+    rr = rr + 1
+    Dim rekHdr As Long: rekHdr = rr
+    ws.cells(rr, 6).value = "Proizvod"
+    ws.cells(rr, 7).value = "Klasa"
+    ws.cells(rr, 8).value = "Koli" & ChrW(269) & "ina (kg)"
+    ws.cells(rr, 9).value = "Prosek (din/kg)"
+    ws.cells(rr, 10).value = "Iznos (din)"
+    With ws.Range(ws.cells(rr, 6), ws.cells(rr, NK))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .WrapText = True
+    End With
+    rr = rr + 1
+    For Each kk In rek.keys
+        a = rek(kk)
+        ws.cells(rr, 6).value = CStr(a(0))
+        ws.cells(rr, 7).value = CStr(a(1))
+        ws.cells(rr, 8).value = CDbl(a(2))
+        If CDbl(a(2)) > 0 Then ws.cells(rr, 9).value = modNovac.ZaokruziNovac(CDbl(a(3)) / CDbl(a(2)))
+        ws.cells(rr, 10).value = modNovac.ZaokruziNovac(CDbl(a(3)))
+        rr = rr + 1
+    Next kk
+    ws.Range(ws.cells(rekHdr + 1, 8), ws.cells(rr - 1, 10)).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(rekHdr + 1, 7), ws.cells(rr - 1, 7)).HorizontalAlignment = xlCenter
+    With ws.Range(ws.cells(rekHdr, 6), ws.cells(rr - 1, NK)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    rr = rr + 1
+
+    ' --- obracun PDV nadoknade: UKUPNO je zbir iznosa dokumenata ---
+    Dim stopa As Double, osnovica As Double
+    stopa = PrNz(GetConfigValue(CFG_PDV_NADOKNADA_STOPA))
+    If stopa <= 0 Then stopa = PDV_NADOKNADA_DEFAULT
+    osnovica = modNovac.OsnovicaBezNadoknade(sumIzn)
+    DocLabelVal ws, rr, 6, "Osnovica (bez PDV):", ""
+    ws.cells(rr, 10).value = osnovica
+    DocLabelVal ws, rr + 1, 6, "PDV nadoknada (" & StopaTekst(stopa) & "%):", ""
+    ws.cells(rr + 1, 10).value = modNovac.ZaokruziNovac(sumIzn - osnovica)
+    DocLabelVal ws, rr + 2, 6, "UKUPNO ZA ISPLATU:", ""
+    ws.cells(rr + 2, 10).value = sumIzn
+    ws.Range(ws.cells(rr + 2, 6), ws.cells(rr + 2, NK)).Font.Bold = True
+    ws.Range(ws.cells(rr, 10), ws.cells(rr + 2, 10)).NumberFormat = "#,##0.00"
+    ws.Range(ws.cells(rr, 6), ws.cells(rr + 2, NK)).BorderAround Weight:=xlThin
+    rr = rr + 4
+
+    ' --- stornirani dokumenti iste specifikacije (DOP-ODL-25) ---
+    Dim storno As String
+    storno = SpecDoplateStornirani(obracunID, koopID)
+    If Len(storno) > 0 Then
+        ws.Range(ws.cells(rr, 1), ws.cells(rr, NK)).Merge
+        With ws.cells(rr, 1)
+            .value = "Stornirani dokumenti (ne ulaze u iznos): " & storno
+            .WrapText = True
+            .Font.Color = DocColGray()
+        End With
+        ws.rows(rr).RowHeight = 24
+        rr = rr + 2
+    End If
+
+    ws.cells(rr, 1).value = "Odobrio:"
+    ws.cells(rr, 6).value = "Primio (kooperant):"
+    ws.cells(rr + 2, 1).value = "______________________________"
+    ws.cells(rr + 2, 6).value = "______________________________"
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .PrintTitleRows = "$" & hdr & ":$" & hdr
+        .LeftMargin = Application.InchesToPoints(0.3)
+        .RightMargin = Application.InchesToPoints(0.3)
+        .TopMargin = Application.InchesToPoints(0.4)
+        .BottomMargin = Application.InchesToPoints(0.4)
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(rr + 2, NK)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo EH
+
+    Application.ScreenUpdating = oldScreen
+    Set FillSpecDoplateSablon = ws
+    Exit Function
+EH:
+    Application.ScreenUpdating = oldScreen
+    LogErr SRC
+End Function
+
+' Brojevi storniranih dokumenata jedne specifikacije, "a, b", ili "". Storniran
+' je dokument para koji ExcludeStornirano izbaci -- isto pravilo storna kao svuda,
+' bez sopstvene kopije vrednosti kolone.
+Private Function SpecDoplateStornirani(ByVal obracunID As String, ByVal koopID As String) As String
+    Const SRC As String = "modPrint.SpecDoplateStornirani"
+    Dim d As Variant, akt As Variant, aktivni As Object, i As Long
+    Dim cId As Long, cObr As Long, cKoop As Long, cBr As Long
+    d = GetTableData(TBL_DOPLATA)
+    If Not IsArray(d) Then Exit Function
+    cId = RequireColumnIndex(TBL_DOPLATA, COL_DOP_ID, SRC)
+    cObr = RequireColumnIndex(TBL_DOPLATA, COL_DOP_OBRACUN, SRC)
+    cKoop = RequireColumnIndex(TBL_DOPLATA, COL_DOP_KOOPERANT, SRC)
+    cBr = RequireColumnIndex(TBL_DOPLATA, COL_DOP_BROJ, SRC)
+    Set aktivni = CreateObject("Scripting.Dictionary")
+    aktivni.CompareMode = vbTextCompare
+    akt = ExcludeStornirano(d, TBL_DOPLATA)
+    If IsArray(akt) Then
+        For i = 1 To UBound(akt, 1)
+            aktivni(Trim$(NzToText(akt(i, cId)))) = True
+        Next i
+    End If
+    For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cObr))), obracunID, vbTextCompare) = 0 And _
+           StrComp(Trim$(NzToText(d(i, cKoop))), koopID, vbTextCompare) = 0 Then
+            If Not aktivni.Exists(Trim$(NzToText(d(i, cId)))) Then
+                If Len(SpecDoplateStornirani) > 0 Then SpecDoplateStornirani = SpecDoplateStornirani & ", "
+                SpecDoplateStornirani = SpecDoplateStornirani & Trim$(NzToText(d(i, cBr)))
+            End If
+        End If
+    Next i
+End Function
+
+' Stampa specifikacije po KO_PRINT_MODE (default PDF). "" kad je proslo, inace
+' razlog za operatera (ekran ga prikaze u toastu).
+Public Function StampajSpecifikacijuDoplate(ByVal obracunID As String, _
+                                            ByVal koopID As String) As String
+    Const SRC As String = "modPrint.StampajSpecifikacijuDoplate"
+    Dim ws As Worksheet, mode As String, spec As String
+    On Error GoTo EH
+
+    Set ws = FillSpecDoplateSablon(obracunID, koopID)
+    If ws Is Nothing Then
+        StampajSpecifikacijuDoplate = Poruka("OTKUI_ERR_DOP_SPEC_NEMA")
+        Exit Function
+    End If
+
+    mode = DocResolveMode(GetConfigValue(CFG_KO_PRINT_MODE), "PDF")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case "PDF"
+            spec = SpecDoplateBroj(obracunID, koopID)
+            DocExportPdf ws, EnsureDocFolder(PDF_DIR_KO) & "\SpecifikacijaDoplate_" & _
+                         Replace(Replace(spec, "/", "-"), " ", "") & ".pdf", True
+    End Select
+    Exit Function
+EH:
+    Dim errDesc As String
+    errDesc = Err.description
+    Application.ScreenUpdating = True
+    LogErr SRC
+    StampajSpecifikacijuDoplate = Poruka("OTKUI_ERR_DOP_SPEC_STAMPA") & " " & errDesc
+End Function
+
+' Broj specifikacije (obracun, kooperant) iz citaca, ili ObracunID kad ga nema
+' (dokument knjizen pre P3) -- samo za ime PDF fajla.
+Private Function SpecDoplateBroj(ByVal obracunID As String, ByVal koopID As String) As String
+    Dim r As Variant, i As Long
+    SpecDoplateBroj = obracunID
+    r = modDoplata.DoplataStavkeRedovi()
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 5)), obracunID, vbTextCompare) = 0 And _
+           StrComp(CStr(r(i, 4)), koopID, vbTextCompare) = 0 Then
+            If Len(CStr(r(i, 20))) > 0 Then SpecDoplateBroj = CStr(r(i, 20))
+            Exit Function
+        End If
+    Next i
 End Function

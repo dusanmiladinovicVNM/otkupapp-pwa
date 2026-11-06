@@ -259,6 +259,7 @@ Private Const IC_BANKA    As Long = &HE825&   ' Bank
 Public Const IC_UVOZ     As Long = &HEA90&   ' PDF - izvodi su PDF fajlovi
 Public Const IC_NALOZI   As Long = &HE9D5&   ' CheckList - nalozi su spisak stavki
 Public Const IC_ANALIZA  As Long = &HE9D2&   ' AreaChart
+Public Const IC_DOPLATA  As Long = &HE8EF&   ' Calculator   (za proveru)
 Public Const IC_IZVEST   As Long = &HE9F9&   ' ReportDocument
 Public Const IC_SLEDLJ   As Long = &HE71B&   ' Link
 ' Akcije
@@ -3777,6 +3778,8 @@ Private Sub SetAvans(ByVal n As Long)
     MarkDirty
     BoxState z, "segAvans1", IIf(n = 1, C_FOREST, C_WHITE), IIf(n = 1, C_CREAM, C_MUTED), (n = 1)
     BoxState z, "segAvans2", IIf(n = 2, C_FOREST, C_WHITE), IIf(n = 2, C_CREAM, C_MUTED), (n = 2)
+    ' Kes ili virman menja iznos koji sme da se isplati (ISP-ODL-02).
+    If Len(BlokID()) > 0 Then PostaviPlocuOstatka
 End Sub
 
 Private Sub FldShow(z As Object, ByVal nm As String, ByVal vis As Boolean)
@@ -6621,10 +6624,12 @@ End Sub
 ' preko GridCell nad pravim podacima ekrana. Bez ovoga bi test morao da izmisli
 ' red, pa bi merio sopstvenu izmisljotinu umesto puta kojim ide operater.
 ' Prazan kljuc vraca ljusku na pocetno stanje.
-Public Sub GridTestLoad(ByVal kljuc As String)
+Public Sub GridTestLoad(ByVal kljuc As String, Optional ByVal pretraga As String = "")
     If Not IsTestMode() Then Exit Sub
     mFilter = "sve"
-    mSearch = ""
+    ' pretraga: tekst polja pretrage, kao da ga je operater ukucao (radnja nad
+    ' filtriranim redovima, npr. Doplata "Ukljuci filtrirane").
+    mSearch = pretraga
     mPage = 1
     If Len(kljuc) = 0 Then
         mScreen = SCR_POCETNI
@@ -7472,7 +7477,8 @@ End Function
 ' otvorenih blokova, pa se dva ekrana ne mogu raziici.
 Private Sub FillOpenBlokovi(frm As Object)
     Dim CB As MSForms.ComboBox, koopID As String, o As Variant, i As Long
-    Dim omID As String, n As Long
+    Dim omID As String, n As Long, ko As Variant, nO As Long, nKO As Long
+    Dim sp As Variant, nSp As Long, otvSta As Double, dok As Variant, j As Long
     On Error GoTo EH
     Set CB = frm.Controls("zForm").Controls("fgBlok").Controls("fgBlokT")
     CB.Clear
@@ -7489,18 +7495,33 @@ Private Sub FillOpenBlokovi(frm As Object)
     ' "kooperant nema otvorenih blokova" i isplata bi tiho postala AVANS.
     RequireTable TBL_OTKUP, "modOtkupUI.FillOpenBlokovi"
     o = GetOpenOtkupi(koopID)
+    ' Otvorene DOPLATE istog kooperanta (F4b; po bloku od revizije, DOP-ODL-19):
+    ' ista lista, isti oblik (ID u nizu, ostatak u ploci). Doplata pripada
+    ' stanici bloka, pa se nudi samo kad je ona aktivno OM (kolona 5 citaoca) --
+    ' isto pravilo kao za otkupni blok; kapija stoji i u pisacu
+    ' (modNovac.IsplataKOProblem).
+    ko = modDoplata.OtvoreniKORedovi(koopID)
+    ' SPECIFIKACIJE istog kooperanta (DOP-ODL-28, rez B): isplata po
+    ' specifikaciji ide SAMO na njene dokumente ciji je blok na ovom OM, pa se
+    ' nudi sa ostatkom tih dokumenata. Dokumenti ostaju i pojedinacno: isplata
+    ' na OM je trenutna i kapija cita stanje SADA, pa ista obaveza ne moze da se
+    ' isplati dvaput (za razliku od dva naloga za banku, DOP-ODL-27).
+    sp = modDoplata.OtvoreneSpecifikacijeRedovi(koopID)
+    If IsArray(o) Then nO = UBound(o, 1)
+    If IsArray(ko) Then nKO = UBound(ko, 1)
+    If IsArray(sp) Then nSp = UBound(sp, 1)
     ' Prazno je ISTINA -- ali samo zato sto smo iznad utvrdili da tabela POSTOJI.
-    If IsEmpty(o) Then Exit Sub
+    If nO + nKO + nSp = 0 Then Exit Sub
     ' BLOKOVI SE SUZAVAJU NA AKTIVNO OTKUPNO MESTO. GetOpenOtkupi vraca StanicaID
     ' u sedmoj koloni, a red novca se knjizi na aktivno OM (SaveNovac omID) - bez
     ' ovog filtera bi lista nudila blok sa OM-B dok je u kontekstu OM-A, pa bi
     ' razduzenje tog bloka bilo proknjizeno na pogresnu stanicu. Kapija za isti
     ' slucaj postoji i u core-u (SaveOMUlaz_TX); ovo je da se ne ponudi.
     omID = SelectedStanicaID(frm)
-    ReDim mBlokIDs(1 To UBound(o, 1))
-    ReDim mBlokRest(1 To UBound(o, 1))
+    ReDim mBlokIDs(1 To nO + nKO + nSp)
+    ReDim mBlokRest(1 To nO + nKO + nSp)
     n = 0
-    For i = 1 To UBound(o, 1)
+    For i = 1 To nO
         If Len(omID) = 0 Or StrComp(CStr(o(i, 7)), omID, vbTextCompare) = 0 Then
             n = n + 1
             mBlokIDs(n) = CStr(o(i, 2))
@@ -7509,12 +7530,40 @@ Private Sub FillOpenBlokovi(frm As Object)
                        FmtBroj(CDbl(o(i, 5)), 0) & " / " & FmtBroj(CDbl(o(i, 3)), 0)
         End If
     Next i
+    For i = 1 To nKO
+        If Len(omID) = 0 Or StrComp(CStr(ko(i, 5)), omID, vbTextCompare) = 0 Then
+            n = n + 1
+            mBlokIDs(n) = CStr(ko(i, 1))
+            mBlokRest(n) = CDbl(ko(i, 8))
+            CB.AddItem CStr(ko(i, 2)) & "   " & ChrW(183) & "   " & _
+                       FmtBroj(CDbl(ko(i, 8)), 0) & " / " & FmtBroj(CDbl(ko(i, 6)), 0)
+        End If
+    Next i
+    ' Specifikacija bez izabranog OM se ne nudi: raspodela je po stanici.
+    If Len(omID) > 0 Then
+        For i = 1 To nSp
+            dok = modDoplata.SpecDokumentiZaRaspodelu(CStr(sp(i, 1)), omID)
+            otvSta = 0
+            If IsArray(dok) Then
+                For j = 1 To UBound(dok, 1)
+                    otvSta = otvSta + CDbl(dok(j, 3))
+                Next j
+            End If
+            If otvSta > 0 Then
+                n = n + 1
+                mBlokIDs(n) = CStr(sp(i, 1))
+                mBlokRest(n) = otvSta
+                CB.AddItem CStr(sp(i, 1)) & "   " & ChrW(183) & "   " & _
+                           FmtBroj(otvSta, 0) & " / " & FmtBroj(CDbl(sp(i, 5)), 0)
+            End If
+        Next i
+    End If
     ' Bez ijednog bloka sa ovog OM niz mora ostati PRAZAN, a ne pun praznih
     ' mesta: BlokID indeksira po rednom broju stavke u combo-u.
     If n = 0 Then
         mBlokIDs = Empty
         mBlokRest = Empty
-    ElseIf n < UBound(o, 1) Then
+    ElseIf n < nO + nKO + nSp Then
         ReDim Preserve mBlokIDs(1 To n)
         ReDim Preserve mBlokRest(1 To n)
     End If
@@ -7536,7 +7585,31 @@ End Sub
 ' Izbor bloka puni plocu NEISPLACENO - iznos koji jos moze da se isplati.
 Private Sub ApplyBlokIzbor()
     On Error Resume Next
-    SetOstatak BlokOstatak()
+    PostaviPlocuOstatka
+End Sub
+
+' Ploca NEISPLACENO: ostatak izabranog bloka. Uz "Kes iz OM avansa" ploca kaze
+' koliko NAJVISE sme gotovinom -- PDV nadoknada se ne isplacuje gotovinom
+' (ISP-ODL-02), pa je granica osnovica, ne ostatak. Broj daje
+' modNovac.GotovinaNajviseNaIzboru, isto pravilo kao kapija; ovde je samo prikaz.
+' Ako racun padne, ostaje ostatak bloka (kapija i dalje odbija pri snimanju).
+Private Sub PostaviPlocuOstatka()
+    Dim v As Double, lbl As String
+    On Error Resume Next
+    v = BlokOstatak()
+    lbl = Poruka("OTKUI_LBL_OSTATAK")
+    If mIzAvansa And Len(BlokID()) > 0 Then
+        Err.Clear
+        v = modNovac.GotovinaNajviseNaIzboru(BlokID(), SelectedStanicaID(mFrm), BlokOstatak())
+        If Err.Number <> 0 Then
+            v = BlokOstatak()
+            Err.Clear
+        Else
+            lbl = Poruka("OTKUI_LBL_OSTATAK_KES")
+        End If
+    End If
+    mFrm.Controls("zForm").Controls("fgOstatak").Controls("fgOstatakL").caption = lbl
+    SetOstatak v
 End Sub
 
 ' Redni broj izabrane stavke u combo-u polja (1-bazno, 0 = nista izabrano).
@@ -7940,7 +8013,8 @@ Private Function SaldoOMUkupno(ByVal stanicaID As String) As Double
 End Function
 
 ' Saldo iz rezultata ReportSaldoOM: poslednji red je UKUPNO, a saldo je kolona 6
-' (2 kg, 3 vrednost, 4 isplaceno, 5 agrohemija, 6 saldo, 7 ambalaza). Plocica je
+' (2 kg, 3 vrednost, 4 isplaceno, 5 agrohemija, 6 saldo, 7 ambalaza, 8 doplata;
+' saldo ukljucuje doplatu, DOPLATA.md par. 6). Plocica je
 ' citala kolonu 5 -- agro zaduzenje -- pa nije reagovala ni na otkup ni na
 ' isplatu (AUD-056). Javna da test tvrdi polozaj bez podataka u svesci.
 Public Function SaldoIzIzvestajaOM(ByVal res As Variant) As Double
@@ -9747,6 +9821,7 @@ Public Sub DumpMdl2Used()
     IcoRow a, "IC_UVOZ", "Sidebar: Uvoz izvoda", "PDF", IC_UVOZ
     IcoRow a, "IC_NALOZI", "Sidebar: Platni nalozi", "CheckList", IC_NALOZI
     IcoRow a, "IC_ANALIZA", "Sidebar: Analiza poslovanja", "AreaChart", IC_ANALIZA
+    IcoRow a, "IC_DOPLATA", "Sidebar: Doplata kooperantima", "Calculator", IC_DOPLATA
     IcoRow a, "IC_IZVEST", "Sidebar: Izvestaji", "ReportDocument", IC_IZVEST
     IcoRow a, "IC_SLEDLJ", "Sidebar: Sledljivost", "Link", IC_SLEDLJ
     IcoRow a, "IC_SAVE", "Dugme: Sacuvaj", "Save", IC_SAVE

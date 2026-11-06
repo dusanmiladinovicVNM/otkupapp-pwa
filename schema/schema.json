@@ -144,6 +144,53 @@
       ]
     },
     {
+      "table": "tblDoplata",
+      "const": "TBL_DOPLATA",
+      "sheet": "Doplata",
+      "columns": [
+        "DoplataID",
+        "BrojDokumenta",
+        "Datum",
+        "KooperantID",
+        "ObracunID",
+        "PeriodOd",
+        "PeriodDo",
+        "Napomena",
+        "Stornirano",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy",
+        "OtkupID",
+        "StanicaID",
+        "NacinUnosa",
+        "BrojSpecifikacije"
+      ]
+    },
+    {
+      "table": "tblDoplataStavke",
+      "const": "TBL_DOPLATA_STAVKE",
+      "sheet": "DoplataStavke",
+      "columns": [
+        "DoplataStavkaID",
+        "DoplataID",
+        "RedniBroj",
+        "StanicaID",
+        "VrstaVoca",
+        "SortaVoca",
+        "Klasa",
+        "Kolicina",
+        "Cena",
+        "Iznos",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy",
+        "CenaOtkupa",
+        "KonacnaCena"
+      ]
+    },
+    {
       "table": "tblFakturaStavke",
       "const": "TBL_FAKTURA_STAVKE",
       "sheet": "FakturaStavke",
@@ -391,7 +438,8 @@
         "ZamenjenSa",
         "CorrectionID",
         "IzdatoStatus",
-        "GeneracijaID"
+        "GeneracijaID",
+        "DoplataID"
       ]
     },
     {
@@ -1045,6 +1093,10 @@
       "BankaReferenz": "text",
       "BrojDokumenta": "text",
       "PozivNaBroj": "text"
+    },
+    "tblDoplata": {
+      "BrojDokumenta": "text",
+      "BrojSpecifikacije": "text"
     },
     "tblFakturaStavke": {
       "BrojPrerade": "text",

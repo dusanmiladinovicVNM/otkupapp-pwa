@@ -3900,8 +3900,10 @@ SABOTAZE = {
     #   python tools/run_vba.py --suite RunBankaImportTestSuite   # ocekuj FAIL
     "banka-writer-placen-blok-je-avans": (
         "modBankaMapiranje.bas",
-        "    If Len(Trim$(otkupID)) = 0 And blokIzabran Then\n",
-        "    If Len(Trim$(otkupID)) = 0 And False Then   ' SABOTAZA: izabran placen blok postaje avans\n",
+        "    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 And Len(Trim$(specBroj)) = 0 And _\n"
+        "       blokIzabran Then\n",
+        "    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 And Len(Trim$(specBroj)) = 0 And _\n"
+        "       False Then   ' SABOTAZA: izabran placen blok postaje avans\n",
         "T21_IzabranPlacenBlokNijeAvans",
         "izabran placen blok NE knjizi nista",
     ),
@@ -3922,7 +3924,7 @@ SABOTAZE = {
     # Rucni izbor takvog bloka mora da stane: operater je rekao KOJI dug placa.
     "banka-uvoz-placen-blok-postaje-avans": (
         "modBankaMapiranje.bas",
-        "    BimOtkupBezOtvorenog = (BimOtvorenoNaOtkupu(otkupID) <= BIM_OTVORENO_PRAG)\n",
+        "    BimOtkupBezOtvorenog = (BimOtvorenoNaDokumentu(otkupID, doplataID, specBroj) <= BIM_OTVORENO_PRAG)\n",
         "    BimOtkupBezOtvorenog = False   ' SABOTAZA: placen blok prolazi\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
         "potpuno placen blok NEMA sta da plati",
@@ -6079,7 +6081,7 @@ SABOTAZE = {
     # batch, pa jedna promena nuzno pomera oba broja.
     "banka-nalozi-avans-broji-i-prazne": (
         "modScrBankaNalozi.bas",
-        "            If blk.KooperantAvansSaldo > 0 And blk.OtvorenIznos > 0 Then\n"
+        "            If AvansKandidat(blk) Then\n"
         "                n = n + 1\n",
         "            If True Then   \' SABOTAZA: i blok bez avansa je kandidat\n"
         "                n = n + 1\n",
@@ -10850,7 +10852,7 @@ SABOTAZE = {
     # Isti dan, drugi izvor: novac skoci ispred otkupa.
     "kart-hron-izvor-rang": (
         "modIzvestaj.bas",
-        "        Case LCase$(KART_IZVOR_NOVAC):          KarticaIzvorRang = 6\n",
+        "        Case LCase$(KART_IZVOR_NOVAC):          KarticaIzvorRang = 7\n",
         "        Case LCase$(KART_IZVOR_NOVAC):          KarticaIzvorRang = 0   ' SABOTAZA: novac pre otkupa\n",
         "T_KartHron_KljucISortEkrana",
         "isti dan: otkup, ambalazni dokument, agrohemija, novac; dan ide pre izvora",
@@ -11494,6 +11496,722 @@ SABOTAZE = {
         "                                         IIf(True, S(p, \"vrsta\"), \"\"), _\n",
         "T_ODL39_PapirVracanjaKupcu",
         "prva i ponovljena stampa vracanja kupcu nose isti sadrzaj: bez reda Vrsta voca",
+    ),
+    # --- DOPLATA KOOPERANTU, F1 (docs/DOMEN/DOPLATA.md; testovi 315-320) ---
+    # Plan cita i stornirana zaglavlja: storniran otkup od 100 kg dobija doplatu.
+    "dop-plan-storniran-ulazi": (
+        "modDoplata.bas",
+        "    d = ExcludeStornirano(d, TBL_OTKUP)\n",
+        "    d = d   ' SABOTAZA: storniran otkup ulazi u doplatu\n",
+        "T_Doplata_PlanSabiraPoKljucu",
+        "plan: jedan red po bloku i klasi; storniran otkup i sorta van stopa ne ulaze",
+    ),
+    # Pisac otvara dokument po KOOPERANTU, ne po bloku (stari model KO): blokovi
+    # istog kooperanta se slepe u jedan dokument sa tudjim brojem.
+    "dop-dokument-po-kooperantu": (
+        "modDoplata.bas",
+        "        If StrComp(CStr(plan(i, PL_OTKUP)), tekuci, vbTextCompare) <> 0 Then\n",
+        "        If StrComp(CStr(plan(i, PL_KOOP)), koop, vbTextCompare) <> 0 Then   ' SABOTAZA: dokument po kooperantu\n",
+        "T_Doplata_JedanDokumentPoBloku",
+        "jedan dokument po bloku: tri bloka, tri dokumenta",
+    ),
+    # Redni broj doplate na bloku se gubi: druga doplata istog bloka dobija isti
+    # broj "...D" -- pisac je odbija kao zauzet broj, pa ponavljanje ne moze.
+    "dop-broj-bez-rednog": (
+        "modDoplata.bas",
+        "    BrojDoplate = Trim$(brojBloka) & DOP_BROJ_ODVAJAC & CStr(redni)\n",
+        "    BrojDoplate = Trim$(brojBloka) & DOP_BROJ_ODVAJAC & \"1\"   ' SABOTAZA: redni broj doplate na bloku se gubi\n",
+        "T_Doplata_JedanDokumentPoBloku",
+        "ponovljena doplata na istom bloku nosi -02, prvi broj ostaje zauzet",
+    ),
+    # Sat se ne gleda: granicni dan ulazi ceo, bez obzira na vreme otkupa.
+    "dop-period-bez-sata": (
+        "modDoplata.bas",
+        "    If Not trebaSat Then\n",
+        "    If True Then   ' SABOTAZA: sat se ne gleda, datum odlucuje sve\n",
+        "T_Doplata_PeriodSaSatom",
+        "granica perioda sece dan po satu nastanka otkupa",
+    ),
+    # PWA ISO tekst pada na CreatedAt -- vreme sinhronizacije postaje vreme otkupa.
+    "dop-sat-iz-createdat": (
+        "modDoplata.bas",
+        "    If Len(Trim$(NzToText(srcCreated))) > 0 And Not IsDate(srcCreated) Then\n",
+        "    If False Then   ' SABOTAZA: PWA sat pada na CreatedAt (vreme sinhronizacije)\n",
+        "T_Doplata_PeriodSaSatom",
+        "PWA vreme kao ISO tekst: otkup na granicnom danu obara plan po imenu, sat se ne uzima iz CreatedAt",
+    ),
+    # Ponovljena doplata prolazi bez pitanja.
+    "dop-ponavljanje-bez-potvrde": (
+        "modDoplata.bas",
+        "    If Len(preklop) > 0 And Not potvrdaPonavljanja Then\n",
+        "    If False Then   ' SABOTAZA: ponavljanje bez potvrde\n",
+        "T_Doplata_PonavljanjeTraziPotvrdu",
+        "ponovljena doplata nad istim kljucem i periodom trazi potvrdu",
+    ),
+    # Citac ne filtrira storno: storniran KO ostaje u zbiru.
+    "dop-storno-ne-gasi": (
+        "modDoplata.bas",
+        "        akt = ExcludeStornirano(hd, TBL_DOPLATA)\n",
+        "        akt = hd   ' SABOTAZA: storniran KO ostaje aktivan\n",
+        "T_Doplata_StornoIzlaziIzZbira",
+        "storniran KO izlazi iz zbirova, KO drugog kooperanta ostaje",
+    ),
+    # Stopa nula prolazi: nastaje KO od nula dinara.
+    "dop-cena-nula": (
+        "modDoplata.bas",
+        "        If CDbl(cena) <= 0 Then\n",
+        "        If CDbl(cena) < 0 Then   ' SABOTAZA: stopa nula prolazi\n",
+        "T_Doplata_OdbijaNeispravanUnos",
+        "stopa nula se odbija",
+    ),
+    # Datum knjizenja pre kraja perioda prolazi: zaduzenje stoji pre robe.
+    "dop-datum-pre-perioda": (
+        "modDoplata.bas",
+        "    If Int(CDbl(datum)) < Int(CDbl(periodDo)) Then\n",
+        "    If False Then   ' SABOTAZA: zaduzenje pre robe koju placa\n",
+        "T_Doplata_OdbijaNeispravanUnos",
+        "datum knjizenja pre kraja perioda se odbija",
+    ),
+    # --- DOPLATA KOOPERANTU, F2 (izvestaji; testovi 321-323) ---
+    # Kartica ne cita KO: doplata se ne vidi ni na ekranu, ni u PDF-u, ni u PWA.
+    "dop-kartica-bez-doplate": (
+        "modIzvestaj.bas",
+        "    koDop = modDoplata.DoplataObracuniKooperanta(kooperantID)\n",
+        "    koDop = Empty   ' SABOTAZA: kartica ne vidi doplatu\n",
+        "T_Doplata_KarticaZaduzenje",
+        "kartica: jedan red po obracunu, zaduzenje = iznos, ref-kljuc DOP|ObracunID|KooperantID",
+    ),
+    # Pitanje o ponavljanju opet sastavljeno u kodu, bez kataloga (bez dijakritike).
+    "dop-ponavljanje-van-kataloga": (
+        "modDoplata.bas",
+        "    PonavljanjaUPlanu = Poruka(\"DOP_ASK_PONAVLJANJE\") & \" \" & t & \". \" & _\n"
+        "                        Poruka(\"DOP_ASK_PONAVLJANJE_POTVRDI\")\n",
+        "    PonavljanjaUPlanu = \"Blokovi iz obracuna vec imaju doplatu za istu klasu: \" & t & _\n"
+        "                        \". Nova doplata se placa NA TO. Potvrdi ponavljanje.\"   ' SABOTAZA\n",
+        "T_Doplata_PonavljanjeTraziPotvrdu",
+        "pitanje o ponavljanju je iz kataloga poruka",
+    ),
+    # DOP-ODL-30: broj specifikacije opet nosi slovo.
+    "dop-spec-oblik-sa-slovom": (
+        "modDoplata.bas",
+        "    BrojSpecifikacije = CStr(modBrojevi.ExtractNumericFromEntityID(stanicaID)) & \"/\" & _\n"
+        "                        Format$(datum, \"ddmmyy\") & DOP_SPEC_ODVAJAC & CStr(redni)\n",
+        "    BrojSpecifikacije = \"S\" & CStr(modBrojevi.ExtractNumericFromEntityID(stanicaID)) & \"/\" & _\n"
+        "                        Format$(datum, \"ddmmyy\") & DOP_SPEC_ODVAJAC & CStr(redni)   ' SABOTAZA: slovo u broju specifikacije\n",
+        "T_Doplata_BrojSpecifikacije",
+        "specifikacija: oblik x/ddmmyy-00y, bez slova",
+    ),
+    # DOP-ODL-30: niz stanice se ne pomera u obracunu -- dva kooperanta isti broj.
+    "dop-spec-isti-broj-u-obracunu": (
+        "modDoplata.bas",
+        "                specMax(kljucSpec) = rSpec\n",
+        "                ' SABOTAZA: niz stanice se ne pomera u obracunu\n",
+        "T_Doplata_BrojSpecifikacije",
+        "specifikacija: svaki kooperant svoj broj, dokumenti kooperanta isti broj, niz stanice tog dana",
+    ),
+    # DOP-ODL-30: broj doplate opet nosi slovo.
+    "dop-broj-sa-slovom": (
+        "modDoplata.bas",
+        "    BrojDoplate = Trim$(brojBloka) & DOP_BROJ_ODVAJAC & CStr(redni)\n",
+        "    BrojDoplate = Trim$(brojBloka) & \"D\" & CStr(redni)   ' SABOTAZA: slovo u broju doplate\n",
+        "T_Doplata_BrojeviBezSlova",
+        "broj doplate: broj bloka i -0z, bez slova",
+    ),
+    # DOP-ODL-30: prvi pogodak pobedjuje -- poziv dve vrste dokumenata bira jednu.
+    "dop-poziv-prvi-pobedjuje": (
+        "modBankaMapiranje.bas",
+        "    If nVrsta = 1 Then\n",
+        "    If nVrsta >= 1 Then   ' SABOTAZA: prvi pogodak pobedjuje\n",
+        "T_Doplata_BrojeviBezSlova",
+        "poziv koji pogadja dve vrste dokumenata ne bira nijednu (rucno)",
+    ),
+    # DOP-ODL-30: blok iz poziva ne proverava druge vrste dokumenata.
+    "dop-poziv-blok-bez-provere": (
+        "modBankaMapiranje.bas",
+        "    If PozivViseVrsta(poziv) Then\n"
+        "        Err.Raise ERR_BMAP_MANUAL_REQUIRED, \"BimOtkupIzPozivaNaBroj\", _\n",
+        "    If False Then   ' SABOTAZA: blok iz poziva ne gleda druge vrste\n"
+        "        Err.Raise ERR_BMAP_MANUAL_REQUIRED, \"BimOtkupIzPozivaNaBroj\", _\n",
+        "T_Doplata_BrojeviBezSlova",
+        "blok iz poziva: dve vrste dokumenata traze rucno mapiranje",
+    ),
+    # P4: kartica grupise po dokumentu umesto po obracunu.
+    "dop-kartica-po-dokumentu": (
+        "modDoplata.bas",
+        "            id = CStr(r(i, 5))\n"
+        "            If Not ob.Exists(id) Then\n",
+        "            id = CStr(r(i, 1))   ' SABOTAZA: kartica red po dokumentu\n"
+        "            If Not ob.Exists(id) Then\n",
+        "T_Doplata_KarticaZbirnoPoObracunu",
+        "kartica: jedan red po obracunu (ne po bloku), broj je broj specifikacije",
+    ),
+    # P4: opis kartice deli kulturu i klasu po bloku umesto da sabira kg.
+    "dop-kartica-opis-po-bloku": (
+        "modDoplata.bas",
+        "            kljuc = UCase$(CStr(r(i, 7))) & \"|\" & UCase$(CStr(r(i, 8))) & \"|\" & UCase$(CStr(r(i, 9)))\n",
+        "            kljuc = CStr(r(i, 16)) & \"|\" & UCase$(CStr(r(i, 9)))   ' SABOTAZA: opis po bloku\n",
+        "T_Doplata_KarticaZbirnoPoObracunu",
+        "kartica: opis sabira kg po kulturi i klasi preko blokova i stanica",
+    ),
+    # KO pre perioda se gubi: kartica krece od pogresnog stanja duga.
+    "dop-kartica-pocetno-bez-doplate": (
+        "modIzvestaj.bas",
+        "                        pocetniSaldo = pocetniSaldo + dopIznos\n",
+        "                        pocetniSaldo = pocetniSaldo + 0   ' SABOTAZA: KO ne ulazi u pocetno stanje\n",
+        "T_Doplata_KarticaZaduzenje",
+        "kartica: KO pre perioda ulazi u pocetno stanje",
+    ),
+    # Citac iznosa ne gleda stanicu: svaka stanica vidi ceo KO kooperanta.
+    "dop-saldo-om-bez-stanice": (
+        "modDoplata.bas",
+        "            ok = (StrComp(CStr(r(i, 6)), Trim$(stanicaID), vbTextCompare) = 0)\n",
+        "            ok = True   ' SABOTAZA: doplata ne gleda stanicu\n",
+        "T_Doplata_SaldoOMPoStanici",
+        "saldo OM: doplata po stanici na kojoj je roba predata",
+    ),
+    # Kolona doplate postoji, a saldo je ne ukljucuje.
+    "dop-saldo-om-saldo-bez-doplate": (
+        "modIzvestaj.bas",
+        "        result(i + 1, 6) = vals(1) + dopSum - novacSum - agroSum   ' Saldo\n",
+        "        result(i + 1, 6) = vals(1) - novacSum - agroSum   ' SABOTAZA: saldo bez doplate\n",
+        "T_Doplata_SaldoOMPoStanici",
+        "saldo OM: saldo = vrednost + doplata - isplaceno - agro (KO bez otkupa u periodu)",
+    ),
+    # Zbirna mreza opet sabira "pretposlednju" kolonu: posle kolone Doplata to je
+    # ambalaza, pa podnozje tiho postaje zbir gajbi.
+    "dop-zbirni-saldo-pretposlednja": (
+        "modScrIzvestaji.bas",
+        "                sumVal = sumVal + NzD(src(i, IIf(tip = \"Kupac\", 6, 7)))\n",
+        "                sumVal = sumVal + NzD(src(i, nSrcK - 1))   ' SABOTAZA: saldo kao pretposlednja kolona\n",
+        "T_Doplata_SaldoOMPoStanici",
+        "mreza zbirnog salda: podnozje sabira saldo, ne ambalazu",
+    ),
+    # PWA izvoz nosi kolonu Doplata, a saldo je ne ukljucuje.
+    "dop-pwa-saldo-bez-doplate": (
+        "modStammdatenSync.bas",
+        "        saldo = v(2) + dop - v(4) - v(5) ' Vrednost + Doplata - Isplaceno - AgroZaduzenje\n",
+        "        saldo = v(2) - v(4) - v(5)   ' SABOTAZA: PWA saldo bez doplate\n",
+        "T_Doplata_PWASaldoDetalj",
+        "PWA saldo: doplata 140, saldo = 700 + 140 - isplaceno - agro",
+    ),
+    # --- DOPLATA KOOPERANTU, F3 (papir i ekran; testovi 324-326) ---
+    # Zbir na papiru KO ne sabira iznose stavki.
+    "dop-papir-bez-stavke": (
+        "modPrint.bas",
+        "            ukupno = ukupno + CDbl(r(i, 12))\n",
+        "            ukupno = ukupno + 0   ' SABOTAZA: zbir papira bez iznosa\n",
+        "T_Doplata_StampaKO",
+        "papir doplate: dva primerka, UKUPNO je iznos SVOG bloka, ne i bloka druge stanice",
+    ),
+    # P3: osnovica papira je bruto iznos -- nadoknada ispada nula.
+    "dop-papir-nadoknada-od-bruto": (
+        "modPrint.bas",
+        "    h(\"osnovica\") = modNovac.OsnovicaBezNadoknade(ukupno)\n",
+        "    h(\"osnovica\") = ukupno   ' SABOTAZA: osnovica je bruto\n",
+        "T_Doplata_StampaKO",
+        "papir doplate: osnovica = UKUPNO / (1 + stopa), osnovica + PDV nadoknada = UKUPNO",
+    ),
+    # Kapija papira ugasena: za storniran KO se pokusava izvoz.
+    "dop-papir-stornirani": (
+        "modPrint.bas",
+        "    Set ws = FillKOSablon(doplataID)\n    If ws Is Nothing Then\n",
+        "    Set ws = FillKOSablon(doplataID)\n    If False Then   ' SABOTAZA: storniran KO ide u stampu\n",
+        "T_Doplata_StampaKO",
+        "storniran KO se ne stampa: razlog operateru, bez izvoza",
+    ),
+    # Zbirni pregled u koloni iznosa sabira kilograme.
+    "dop-ekran-pregled-kolona": (
+        "modScrDoplata.bas",
+        "        a(6) = CDbl(a(6)) + CDbl(mPlan(i, 8))\n",
+        "        a(6) = CDbl(a(6)) + CDbl(mPlan(i, 6))   ' SABOTAZA: iznos pregleda je kg\n",
+        "T_Doplata_EkranTok",
+        "ekran: zbirni pregled je zbir plana koji pisac izvrsava",
+    ),
+    # "Knjizi" upisuje bez pitanja sa brojkama.
+    "dop-ekran-knjizi-bez-pitanja": (
+        "modScrDoplata.bas",
+        "    If Not Pitaj(PitanjeKnjizenja(izbor)) Then Exit Function\n",
+        "    If False Then Exit Function   ' SABOTAZA: knjizenje bez pitanja\n",
+        "T_Doplata_EkranTok",
+        "ekran: knjizenje pita sa brojkama, bez potvrde se nista ne upisuje",
+    ),
+    # Poredjenje osnovice ugaseno: promena posle knjizenja ostaje nevidljiva.
+    "dop-signal-nema": (
+        "modDoplata.bas",
+        "        If Abs(kgSada - CDbl(v(0))) >= 0.005 Then\n",
+        "        If False Then   ' SABOTAZA: promena osnovice se ne vidi\n",
+        "T_Doplata_SignalOsnovice",
+        "signal: storno otkupa posle knjizenja imenuje dokument, knjizene i sadasnje kg",
+    ),
+    # Retro unos se ne gleda: otkup u periodu nastao posle knjizenja ostaje bez
+    # doplate i bez ijednog signala.
+    "dop-signal-retro-nema": (
+        "modDoplata.bas",
+        "            If uPer Then\n",
+        "            If False Then   ' SABOTAZA: retro unos se ne vidi\n",
+        "T_Doplata_SignalOsnovice",
+        "signal: retro unos otkupa u periodu je nalaz bez dokumenta",
+    ),
+    # Blok koji je postojao pri knjizenju a operater ga je iskljucio javlja se kao
+    # retro unos: svaki svesno iskljucen blok postaje lazan signal.
+    "dop-signal-iskljuceni-blok": (
+        "modDoplata.bas",
+        "            If CDate(z(2)) < CDate(o(3)) Then GoTo SledeciOtkup\n",
+        "            ' SABOTAZA: i blok koji je postojao pri knjizenju je retro unos\n",
+        "T_Doplata_IzborBlokova",
+        "iskljucen blok nije signal osnovice",
+    ),
+    # REVIZIJA PO BLOKU (DOPLATA.md par. 2a): nacin 2 i izbor blokova.
+    # Nacin 2 ne oduzima vec knjizenu doplatu: drugi obracun do konacne cene
+    # ponovo isplacuje i ono sto je vec placeno.
+    "dop-konacna-bez-vec-doplaceno": (
+        "modDoplata.bas",
+        "            dpk = modNovac.ZaokruziNovac(unos - cenaOtk - vecKg)\n",
+        "            dpk = modNovac.ZaokruziNovac(unos - cenaOtk)   ' SABOTAZA: vec doplaceno se ne oduzima\n",
+        "T_Doplata_NacinKonacnaCena",
+        "ponovljen obracun do konacne cene oduzima vec doplaceno",
+    ),
+    # Stavka na ili iznad konacne cene se knjizi: negativna "doplata" umanjuje
+    # dug firme prema kooperantu bez ijednog dokumenta umanjenja.
+    "dop-konacna-negativna-se-knjizi": (
+        "modDoplata.bas",
+        "        If dpk > 0 Then\n"
+        "            res(n, PL_CENA) = dpk\n",
+        "        If True Then   ' SABOTAZA: i stavka bez doplate se knjizi\n"
+        "            res(n, PL_CENA) = dpk\n",
+        "T_Doplata_NacinKonacnaCena",
+        "nacin 2: doplata po kg = konacna cena - cena otkupa, po bloku",
+    ),
+    # Izbor operatera se ne gleda: knjize se i blokovi koje je iskljucio.
+    "dop-izbor-ignorisan": (
+        "modDoplata.bas",
+        "            If Not izbor Is Nothing Then uzmi(i) = izbor.Exists(oid)\n",
+        "            ' SABOTAZA: izbor blokova se ne gleda\n",
+        "T_Doplata_IzborBlokova",
+        "knjizi se samo izabrani blok",
+    ),
+    # F4 -- ISPLATA KO (docs/DOMEN/DOPLATA.md, DOP-ODL-05, DOP-05).
+    # Nalozi preskacu KO: obaveza firme prema kooperantu nestaje iz isplata, a
+    # kartica je i dalje pokazuje kao dug.
+    "dop-nalozi-bez-ko": (
+        "modBankaExportPregled.bas",
+        "    If IsArray(openKO) Then\n",
+        "    If False Then   ' SABOTAZA: nalozi ne vide knjizna odobrenja\n",
+        "T_Doplata_OtvorenoKOUNalozima",
+        "nalozi za banku nose otvoreno KO pod kljucem bloka",
+    ),
+    # Avans na KO ide motorom otkupa: ApplyAvansToOtkup ne nalazi otkup sa tim
+    # ID-em i tiho ne veze nista, a KO ostaje otvoren uz "bez promene".
+    "dop-nalog-avans-ko-ide-na-otkup": (
+        "modScrBankaNalozi.bas",
+        "    ElseIf jeKO Then\n"
+        "        PrimeniAvansNaDokument = modNovac.ApplyAvansToKO_TX(koopID, iD, outIznos)\n",
+        "    ElseIf False Then   ' SABOTAZA: avans na KO ide motorom otkupa\n"
+        "        PrimeniAvansNaDokument = modNovac.ApplyAvansToKO_TX(koopID, iD, outIznos)\n",
+        "T_Doplata_OtvorenoKOUNalozima",
+        "avans se primenjuje i na KO iz liste naloga",
+    ),
+    # Poziv na broj KO se u planu cita kao obican blok: pisac tada trazi OTKUP po
+    # tom broju, ne nalazi ga i ceo iznos knjizi kao avans -- KO ostaje otvoren.
+    "dop-plan-ko-kao-blok": (
+        "modBankaMapiranje.bas",
+        "                ElseIf Len(doplataID) > 0 Then\n"
+        "                    BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _\n"
+        "                                                     BIM_CILJ_DOPLATA, doplataID, BIM_IZV_JAK)\n",
+        "                ElseIf False Then   ' SABOTAZA: KO se planira kao blok\n"
+        "                    BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _\n"
+        "                                                     BIM_CILJ_DOPLATA, doplataID, BIM_IZV_JAK)\n",
+        "T_Doplata_IzvodPoBrojuKO",
+        "plan: poziv na broj KO je jak kljuc na taj KO",
+    ),
+    # Isplata KO se upise bez veze DoplataID: novac je dat, KO i dalje otvoren,
+    # a red izgleda kao slobodan avans.
+    "dop-izvod-ko-bez-veze": (
+        "modBankaMapiranje.bas",
+        "            LinkNovacToDoplataStrict novID, doplataID, _\n"
+        "                            \"MapBankaImportAsKooperantBlockCore\"\n",
+        "            ' SABOTAZA: isplata KO ostaje bez veze\n",
+        "T_Doplata_IzvodPoBrojuKO",
+        "isplata doplate: virman firme, vezan za doplatu, bez otkupa, na stanici bloka",
+    ),
+    # Citaoci avansa ne gledaju DoplataID: isplata KO postaje slobodan avans i
+    # primena avansa je povuce na sledeci otkupni blok -- isti dinar placa dvaput.
+    "dop-avans-guta-isplatu-ko": (
+        "modNovac.bas",
+        "    If Len(Trim$(doplataID)) > 0 Then Exit Function\n"
+        "    JeSlobodanAvansKooperanta = True\n",
+        "    JeSlobodanAvansKooperanta = True   ' SABOTAZA: isplata KO je avans\n",
+        "T_Doplata_IzvodPoBrojuKO",
+        "isplata KO nije slobodan avans kooperanta",
+    ),
+    # Storno KO ostavlja vezu: isplata storniranog KO nije ni dug ni avans, pa je
+    # novac kooperanta nevidljiv svakoj masineriji koja bira sta se placa.
+    # F4b -- avans na KO, rucno mapiranje, gotovina.
+    # Deljen avans: nov red se upise ali bez veze DoplataID -- deo avansa nestane
+    # (nije ni slobodan ni na KO), a KO ostane otvoren.
+    "dop-avans-split-bez-veze": (
+        "modNovac.bas",
+        "            If ciljKolona <> COL_NOV_OTKUP_ID Then\n"
+        "                VeziNovacZaKO splitNovacID, ciljID, SRC\n",
+        "            If False Then   ' SABOTAZA: deo avansa ostaje bez veze\n"
+        "                VeziNovacZaKO splitNovacID, ciljID, SRC\n",
+        "T_Doplata_AvansNaKO",
+        "deljen avans: deo do ostatka KO je vezan za KO, ostatak je slobodan",
+    ),
+    # Kapija KO ne gleda vlasnika: avans, izvod ili gotovina drugog kooperanta
+    # zatvaraju tudji KO.
+    "dop-ko-kapija-tudji": (
+        "modDoplata.bas",
+        "    If StrComp(Trim$(NzToText(d(r, cKoop))), Trim$(kooperantID), vbTextCompare) <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: KO prihvata tudjeg kooperanta\n",
+        "T_Doplata_AvansNaKO",
+        "avans tudjeg kooperanta se ne veze na KO",
+    ),
+    # Lista cilja rucnog mapiranja ne nudi KO: operater ne moze da zatvori KO
+    # stavkom izvoda koju automatika nije prepoznala.
+    "dop-rucno-ko-van-liste": (
+        "modBankaMapiranje.bas",
+        "    If koRedova > 0 Then\n",
+        "    If False Then   ' SABOTAZA: lista cilja bez KO\n",
+        "T_Doplata_IzvodRucnoNaKO",
+        "lista cilja rucnog mapiranja nudi KO kooperanta, sa brojem KO",
+    ),
+    # Izabran KO se ne prepoznaje: ekran ga salje putem otkupa, pisac ne nalazi
+    # otkup sa tim ID-em i rucno mapiranje pada ili ide u avans.
+    "dop-rucno-ko-izabran-ide-na-otkup": (
+        "modBankaMapiranje.bas",
+        "        If modDoplata.JeKO(izabranID) Then BimEfektivniKO = Trim$(izabranID)\n",
+        "        ' SABOTAZA: izabran KO se ne prepoznaje\n",
+        "T_Doplata_IzvodRucnoNaKO",
+        "izabran KO je cilj rucnog mapiranja; prazan izbor uzima poziv na broj KO",
+    ),
+    # Gotovina za doplatu prolazi na bilo kojoj stanici: saldo tog OM-a nosi
+    # isplatu koju ta doplata ne isplacuje (DOP-ODL-19 -- stanica bloka).
+    "dop-gotovina-tudja-stanica": (
+        "modNovac.bas",
+        "        If StrComp(staKO, Trim$(stanicaID), vbTextCompare) <> 0 Then\n",
+        "        If False Then   ' SABOTAZA: gotovina za doplatu na bilo kojoj stanici\n",
+        "T_Doplata_GotovinaNaStaniciBloka",
+        "gotovina za doplatu samo na stanici bloka",
+    ),
+    # Gotovinska isplata KO se upise bez veze: novac dat, KO i dalje otvoren.
+    "dop-gotovina-bez-veze": (
+        "modDokumenta.bas",
+        "            modNovac.VeziNovacZaKO novacID, Trim$(doplataID), \"SaveOMUlaz_TX\"\n",
+        "            ' SABOTAZA: gotovina za KO bez veze\n",
+        "T_Doplata_GotovinaNaStaniciBloka",
+        "gotovinska isplata KO je vezana za KO",
+    ),
+    # REVIEW P1 (05.11.2026).
+    # Signal sabira kg preko svih dokumenata istog bloka i klase: D i D2 iste
+    # robe izgledaju kao dupla kolicina, pa ponovljena doplata daje lazan DOP1.
+    # P2 (ekran): nacin se menja i kad su stope vec unete u starom nacinu.
+    "dop-ekran-nacin-menja-stope": (
+        "modScrDoplata.bas",
+        "    If BrojStopa() <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: nacin se menja i sa unetim stopama\n",
+        "T_Doplata_EkranNacinIBlokovi",
+        "ekran: nacin se ne menja dok ima unetih stopa",
+    ),
+    # P2: blok bez doplate moze da se "ukljuci" (ulazi u izbor).
+    "dop-ekran-blok-bez-doplate-se-ukljucuje": (
+        "modScrDoplata.bas",
+        "    If Not BlokSaDoplatom().Exists(otkupID) Then\n",
+        "    If False Then   ' SABOTAZA: blok bez doplate se prebacuje\n",
+        "T_Doplata_EkranNacinIBlokovi",
+        "ekran: blok bez doplate ne moze da se ukljuci",
+    ),
+    # P2: zbirni pregled sabira i iskljucene blokove.
+    "dop-ekran-pregled-sabira-iskljucene": (
+        "modScrDoplata.bas",
+        "        If Not izbor.Exists(CStr(mPlan(i, 11))) Then GoTo SledeciRed\n",
+        "        ' SABOTAZA: pregled sabira i iskljucene blokove\n",
+        "T_Doplata_EkranNacinIBlokovi",
+        "ekran: zbirni pregled sabira samo ukljucene blokove",
+    ),
+    # P2: pitanje pred knjizenje sabira i iskljucene blokove.
+    "dop-ekran-pitanje-broji-iskljucene": (
+        "modScrDoplata.bas",
+        "                If izbor.Exists(CStr(mPlan(i, 11))) Then\n",
+        "                If True Then   ' SABOTAZA: pitanje sabira i iskljucene\n",
+        "T_Doplata_EkranNacinIBlokovi",
+        "ekran: pitanje pred knjizenje broji samo ukljucene blokove",
+    ),
+    # P2: ekran ne salje piscu nacin -- pisac knjizi u nacinu 1.
+    "dop-ekran-nacin-ne-ide-piscu": (
+        "modScrDoplata.bas",
+        "                                      potvrdaPonavljanja, greska, en, Nacin(), _\n",
+        "                                      potvrdaPonavljanja, greska, en, DOP_NACIN_PO_KG, _\n",
+        "T_Doplata_EkranNacinIBlokovi",
+        "ekran: zaglavlje pamti nacin izabran na ekranu",
+    ),
+    # P2: ekran ne salje piscu izbor -- pisac knjizi sve blokove sa doplatom.
+    "dop-ekran-izbor-ne-ide-piscu": (
+        "modScrDoplata.bas",
+        "                                      izbor)\n",
+        "                                      Nothing)   ' SABOTAZA: ekran ne salje izbor piscu\n",
+        "T_Doplata_EkranNacinIBlokovi",
+        "ekran: knjizi se tacno ukljuceni blokovi, Knjizeno je zbirno po kooperantu",
+    ),
+    # P3b: pisac ne broji stornirane specifikacije -- storno oslobadja broj.
+    "dop-spec-storno-oslobadja": (
+        "modDoplata.bas",
+        "    dSpec = GetTableData(TBL_DOPLATA)\n",
+        "    dSpec = ExcludeStornirano(GetTableData(TBL_DOPLATA), TBL_DOPLATA)   ' SABOTAZA: storno oslobadja broj\n",
+        "T_Doplata_BrojSpecifikacije",
+        "specifikacija: storno ne oslobadja broj",
+    ),
+    # P3b: citalac ne proverava da dokumenti iste specifikacije nose isti broj.
+    "dop-spec-citalac-bez-provere": (
+        "modDoplata.bas",
+        "                If StrComp(CStr(parSpec(par)), spec, vbTextCompare) <> 0 Then\n",
+        "                If False Then   ' SABOTAZA: citalac ne proverava broj specifikacije\n",
+        "T_Doplata_BrojSpecifikacije",
+        "citalac: dokumenti iste specifikacije sa razlicitim brojem padaju po imenu",
+    ),
+    # P3c: specifikacija uzima dokumente celog obracuna, ne samo kooperanta.
+    "dop-spec-papir-tudji-kooperant": (
+        "modPrint.bas",
+        "           StrComp(CStr(r(i, 4)), koopID, vbTextCompare) = 0 Then\n            rb = rb + 1\n",
+        "           True Then   ' SABOTAZA: i dokumenti drugih kooperanata\n            rb = rb + 1\n",
+        "T_Doplata_SpecifikacijaPapir",
+        "specifikacija: samo dokumenti kooperanta iz obracuna, UKUPNO = zbir iznosa, osnovica + PDV nadoknada = UKUPNO",
+    ),
+    # P3c: rekapitulacija u koloni iznosa sabira kilograme.
+    "dop-spec-papir-rekap": (
+        "modPrint.bas",
+        "            a(3) = CDbl(a(3)) + CDbl(r(i, 12))\n",
+        "            a(3) = CDbl(a(3)) + CDbl(r(i, 10))   ' SABOTAZA: rekap iznos je kg\n",
+        "T_Doplata_SpecifikacijaPapir",
+        "specifikacija: rekapitulacija po kulturi i klasi = zbir dokumenata",
+    ),
+    # P3c: stornirani dokumenti iste specifikacije se ne navode (DOP-ODL-25).
+    "dop-spec-papir-bez-storniranih": (
+        "modPrint.bas",
+        "    storno = SpecDoplateStornirani(obracunID, koopID)\n",
+        "    storno = \"\"   ' SABOTAZA: stornirani se ne navode\n",
+        "T_Doplata_SpecifikacijaPapir",
+        "specifikacija: storniran dokument je naveden, a ne ulazi u iznos",
+    ),
+    # ISP-ODL-02: ploca NEISPLACENO uz kes pokazuje ostatak sa nadoknadom.
+    "isp-ploca-bez-osnovice": (
+        "modNovac.bas",
+        "    If d < GotovinaNajviseNaIzboru Then GotovinaNajviseNaIzboru = d\n",
+        "    ' SABOTAZA: ploca pokazuje bruto ostatak i uz kes\n",
+        "T_Gotovina_NajviseNaIzboru",
+        "blok: kesom najvise osnovica, ne ostatak sa nadoknadom",
+    ),
+    # DOP-ODL-28: gotovina po specifikaciji ide i na dokumente drugih stanica.
+    "dop-spec-got-sve-stanice": (
+        "modNovac.bas",
+        "    dok = modDoplata.SpecDokumentiZaRaspodelu(specBroj, stanicaID)\n",
+        "    dok = modDoplata.SpecDokumentiZaRaspodelu(specBroj)   ' SABOTAZA: sve stanice\n",
+        "T_Doplata_SpecGotovinaNaStanici",
+        "kapija: po specifikaciji samo dokumenti te stanice, najvise njihov ostatak",
+    ),
+    # ISP-ODL-02: raspodela gotovine po specifikaciji ne gleda osnovicu.
+    "dop-spec-got-preko-osnovice": (
+        "modNovac.bas",
+        "        If gotovina Then\n"
+        "            g = DozvoljenoGotovinom(\"\", CStr(dok(i, 1)))\n",
+        "        If False Then   ' SABOTAZA: gotovina po specifikaciji preko osnovice\n"
+        "            g = DozvoljenoGotovinom(\"\", CStr(dok(i, 1)))\n",
+        "T_Doplata_SpecGotovinaNaStanici",
+        "kapija: gotovinom po specifikaciji najvise osnovica dokumenata te stanice",
+    ),
+    # Ekran F5 ne proverava isplatu po specifikaciji.
+    "dop-spec-got-ekran-bez-kapije": (
+        "modNovacUnos.bas",
+        "                blokErr = modNovac.IsplataSpecProblem(S(p, \"specBroj\"), partID, S(p, \"stanicaID\"), novac, _\n"
+        "                                                      (S(p, \"tipNovca\") = NOV_KES_OTKUPAC_KOOP))\n",
+        "                blokErr = \"\"   ' SABOTAZA: ekran ne proverava specifikaciju\n",
+        "T_Doplata_SpecGotovinaNaStanici",
+        "ekran F5: ista kapija gotovine po specifikaciji, poruka uz iznos",
+    ),
+    # DOP-ODL-29: lista cilja rucnog mapiranja ne nudi specifikaciju.
+    "dop-spec-rucno-van-liste": (
+        "modBankaMapiranje.bas",
+        "    sp = modDoplata.OtvoreneSpecifikacijeRedovi(kooperantID)\n"
+        "    If IsArray(sp) Then spRedova = UBound(sp, 1)\n",
+        "    ' SABOTAZA: lista cilja ne nudi specifikaciju\n",
+        "T_Doplata_SpecRucnoMapiranje",
+        "lista cilja rucnog mapiranja nudi specifikaciju kooperanta",
+    ),
+    # DOP-ODL-29: izabrana specifikacija se ne prepoznaje kao cilj.
+    "dop-spec-rucno-izbor-ignorisan": (
+        "modBankaMapiranje.bas",
+        "        If modDoplata.JeSpecifikacija(izabranID) Then BimEfektivnaSpec = Trim$(izabranID)\n",
+        "        ' SABOTAZA: izabrana specifikacija se ne prepoznaje\n",
+        "T_Doplata_SpecRucnoMapiranje",
+        "izabrana specifikacija je cilj; prazan izbor uzima poziv na broj; dokument nije specifikacija",
+    ),
+    # Tekst podele specifikacije bez redova dokumenata -- prikaz i pisac se razilaze.
+    "dop-spec-rucno-podela-bez-dokumenata": (
+        "modScrBankaUvoz.bas",
+        "                TekstPodele = TekstPodele & \" - \" & oznaka & \": \" & Format$(deo, \"#,##0.00\") & vbCrLf\n",
+        "                ' SABOTAZA: podela bez redova dokumenata\n",
+        "T_Doplata_SpecRucnoMapiranje",
+        "tekst podele: red po dokumentu specifikacije, isti iznosi kao pisac",
+    ),
+    # "Ukljuci filtrirane" cita samo prvi red (stranu), ne ceo pogled mreze.
+    "dop-filt-samo-prvi-red": (
+        "modScrDoplata.bas",
+        "    For r = 1 To modOtkupUI.GridBrojRedova()\n",
+        "    For r = 1 To 1   ' SABOTAZA: samo prvi red, ne ceo filtrirani pogled\n",
+        "T_Doplata_UkljuciFiltrirane",
+        "ukljuci filtrirane: ukljuceni su SVI blokovi pretrage",
+    ),
+    # "Ukljuci filtrirane" ukljucuje i blokove van pretrage.
+    "dop-filt-ukljucuje-sve": (
+        "modScrDoplata.bas",
+        "            If d.Exists(oid) Then d.Remove oid\n",
+        "            Set mIskljuceni = Nothing   ' SABOTAZA: filtrirano ukljucuje sve\n",
+        "T_Doplata_UkljuciFiltrirane",
+        "ukljuci filtrirane: blok van pretrage ostaje iskljucen",
+    ),
+    # DOP-ODL-27: dokument sa brojem specifikacije se nudi i posebno -- isti dug
+    # bi imao dva naloga.
+    "dop-spec-nalog-i-dokumenti": (
+        "modBankaExportPregled.bas",
+        "            If Len(Trim$(CStr(openKO(i, 9)))) > 0 Then GoTo NextKO\n",
+        "            ' SABOTAZA: dokument specifikacije se nudi i posebno\n",
+        "T_Doplata_SpecNalogIIzvod",
+        "dokumenti specifikacije se ne nude posebno",
+    ),
+    # DOP-ODL-27: nalozi ne nude specifikaciju.
+    "dop-spec-nalog-nema": (
+        "modBankaExportPregled.bas",
+        "    If IsArray(openSpec) Then\n",
+        "    If False Then   ' SABOTAZA: nalozi ne nude specifikaciju\n",
+        "T_Doplata_SpecNalogIIzvod",
+        "nalozi nude specifikaciju",
+    ),
+    # DOP-ODL-28: raspodela redom tabele umesto od najstarijeg bloka.
+    "dop-spec-raspodela-redom-tabele": (
+        "modDoplata.bas",
+        "            If StrComp(kljuc(j), tK, vbBinaryCompare) <= 0 Then Exit Do\n",
+        "            Exit Do   ' SABOTAZA: raspodela redom tabele, ne od najstarijeg bloka\n",
+        "T_Doplata_SpecNalogIIzvod",
+        "raspodela: najstariji blok prvi, red po dokumentu na stanici bloka",
+    ),
+    # DOP-ODL-28: dokument dobija ceo svoj ostatak i preko iznosa izvoda.
+    "dop-spec-raspodela-preko-ostatka": (
+        "modBankaMapiranje.bas",
+        "            If deo > ostaje Then deo = ostaje\n",
+        "            ' SABOTAZA: dokument dobija ceo ostatak, i preko iznosa izvoda\n",
+        "T_Doplata_SpecNalogIIzvod",
+        "raspodela ne knjizi vise nego sto je izvod platio",
+    ),
+    # DOP-ODL-27: poziv na broj specifikacije se planira kao blok (pa avans).
+    "dop-spec-plan-kao-blok": (
+        "modBankaMapiranje.bas",
+        "                If Len(specBroj) > 0 Then\n"
+        "                    BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _\n"
+        "                                                     BIM_CILJ_SPEC, specBroj, BIM_IZV_JAK)\n",
+        "                If False Then   ' SABOTAZA: specifikacija se planira kao blok\n"
+        "                    BimAutoPlanIzVrednosti = PlanRed(smer, BIM_TIP_KOOPERANT, pid, _\n"
+        "                                                     BIM_CILJ_SPEC, specBroj, BIM_IZV_JAK)\n",
+        "T_Doplata_SpecNalogIIzvod",
+        "plan: poziv na broj specifikacije je jak kljuc na nju",
+    ),
+    # DOP-ODL-29: avans na red specifikacije ide motorom otkupa.
+    "dop-spec-avans-motorom-otkupa": (
+        "modScrBankaNalozi.bas",
+        "    If modDoplata.JeSpecifikacija(iD) Then\n",
+        "    If False Then   ' SABOTAZA: avans na specifikaciju ide motorom otkupa\n",
+        "T_Doplata_SpecAvansIPoziv",
+        "avans se primenjuje na specifikaciju iz liste naloga",
+    ),
+    # Storniran dokument ostaje cilj poziva na broj specifikacije.
+    "dop-spec-poziv-storniran": (
+        "modDoplata.bas",
+        "    d = ExcludeStornirano(d, TBL_DOPLATA)\n"
+        "    If Not IsArray(d) Then Exit Function\n"
+        "\n"
+        "    Dim cSpec As Long, cKoop As Long\n"
+        "    cSpec = RequireColumnIndex(TBL_DOPLATA, COL_DOP_SPEC, SRC)\n",
+        "    ' SABOTAZA: storniran dokument ostaje cilj poziva\n"
+        "\n"
+        "    Dim cSpec As Long, cKoop As Long\n"
+        "    cSpec = RequireColumnIndex(TBL_DOPLATA, COL_DOP_SPEC, SRC)\n",
+        "T_Doplata_SpecAvansIPoziv",
+        "specifikacija bez aktivnih dokumenata nije cilj poziva ni naloga",
+    ),
+    # ISP-ODL-01: pisac gotovine ne proverava osnovicu.
+    "isp-gotovina-bez-kapije-pisca": (
+        "modDokumenta.bas",
+        "            blokErr = modNovac.GotovinaNadoknadaProblem(otkupID, doplataID, novac)\n",
+        "            blokErr = \"\"   ' SABOTAZA: pisac ne proverava gotovinu\n",
+        "T_Gotovina_NadoknadaNikadGotovinom",
+        "pisac odbija gotovinu preko osnovice, iako je bruto ostatak veci",
+    ),
+    # ISP-ODL-01: ekran F5 ne proverava osnovicu.
+    "isp-gotovina-bez-kapije-ekrana": (
+        "modNovacUnos.bas",
+        "                blokErr = modNovac.GotovinaNadoknadaProblem(S(p, \"otkupID\"), S(p, \"doplataID\"), novac)\n",
+        "                blokErr = \"\"   ' SABOTAZA: ekran ne proverava gotovinu\n",
+        "T_Gotovina_NadoknadaNikadGotovinom",
+        "ekran F5: ista kapija gotovine, poruka uz polje iznosa",
+    ),
+    # ISP-ODL-02: kapija broji i virman kao gotovinu.
+    "isp-gotovina-broji-virman": (
+        "modNovac.bas",
+        "        If StrComp(Trim$(CStr(d(i, cTip))), NOV_KES_OTKUPAC_KOOP, vbTextCompare) = 0 And _\n           IsNumeric(d(i, cIs)) Then\n",
+        "        If IsNumeric(d(i, cIs)) Then   ' SABOTAZA: i virman se broji u gotovinu\n",
+        "T_Gotovina_NadoknadaNikadGotovinom",
+        "kapija: virman se ne broji u gotovinu",
+    ),
+    # ISP-ODL-03: zatecena gotovina preko osnovice nije nalaz.
+    "isp-got1-nema": (
+        "modNovac.bas",
+        "        If ZaokruziNovac(CDbl(poOtk(k))) > osn Then\n",
+        "        If False Then   ' SABOTAZA: GOT1 ne vidi blok\n",
+        "T_Gotovina_NadoknadaNikadGotovinom",
+        "zatecena gotovina preko osnovice je nalaz GOT1",
+    ),
+    # Retro blok placen drugim obracunom i dalje nalaz starijeg (review P1,
+    # DOP-P1-REV-04; odluka: placen blok nije nalaz).
+    "dop-signal-placen-retro-ostaje": (
+        "modDoplata.bas",
+        "                    If kl.Exists(KljucVrstaSorta(z(5), z(6)) & \"|\" & klasa) And Not blokovi.Exists(kRed) Then\n",
+        "                    If kl.Exists(KljucVrstaSorta(z(5), z(6)) & \"|\" & klasa) Then   ' SABOTAZA: placen retro blok ostaje nalaz\n",
+        "T_Doplata_RetroPlacenDrugimObracunom",
+        "retro blok placen drugim obracunom vise nije nalaz",
+    ),
+    "dop-signal-sabira-ponovljene": (
+        "modDoplata.bas",
+        "        k = CStr(r(i, 1)) & \"|\" & UCase$(Trim$(CStr(r(i, 9))))\n",
+        "        k = kBlok   ' SABOTAZA: kg se sabira po bloku preko ponovljenih doplata\n",
+        "T_Doplata_NacinKonacnaCena",
+        "ponovljena doplata na istom bloku nije signal osnovice",
+    ),
+    # Citalac ne proverava kg x cena = iznos: rucno prepravljen iznos tiho menja
+    # dug firme prema kooperantu.
+    "dop-citalac-bez-provere-iznosa": (
+        "modDoplata.bas",
+        "                If modNovac.ZaokruziNovac(CDbl(sd(i, sKol)) * CDbl(sd(i, sCena))) <> _\n",
+        "                If False And modNovac.ZaokruziNovac(CDbl(sd(i, sKol)) * CDbl(sd(i, sCena))) <> _\n",
+        "T_Doplata_KapijeCitacaIMotora",
+        "citalac doplate pada po imenu kad iznos nije kg x cena",
+    ),
+    # Motor avansa pusta dupli NovacID: menja se PRVI red, "prvi pobedjuje".
+    "avans-motor-dupli-novacid": (
+        "modNovac.bas",
+        "    If rows.count > 1 Then\n"
+        "        Err.Raise vbObjectError + 1028, sourceName, _\n"
+        "                  \"Dupli NovacID avansa (\" & CStr(rows.count) & \" redova): \" & novacID & _\n",
+        "    If False Then   ' SABOTAZA: dupli NovacID avansa prolazi\n"
+        "        Err.Raise vbObjectError + 1028, sourceName, _\n"
+        "                  \"Dupli NovacID avansa (\" & CStr(rows.count) & \" redova): \" & novacID & _\n",
+        "T_Doplata_KapijeCitacaIMotora",
+        "motor avansa ne vezuje red sa dupliranim NovacID-em",
+    ),
+    "dop-storno-ne-odvezuje": (
+        "modStorno.bas",
+        "    modNovac.ResetNovacDoplataLink Trim$(doplataID)\n",
+        "    ' SABOTAZA: storno KO ne odvezuje novac\n",
+        "T_Doplata_StornoOdvezujeIsplatu",
+        "storno KO odvezuje isplatu (DoplataID prazan), a ne stornira je",
     ),
 }
 

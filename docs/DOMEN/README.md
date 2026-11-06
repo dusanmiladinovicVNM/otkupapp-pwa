@@ -226,7 +226,8 @@ istog otkupa (izdata prazna 30, uz robu 13) imala su salde 17 i −13.
 - **Šta je konvencija, a šta podatak.** Broj `x/ddmmyy[-rb]` je niz po (vlasnik,
   dan) i ide +1, pa unutar niza redosled **jeste** podatak. Brojevi različitih
   nizova (otkup ↔ revers, novac, agrohemija) ne kažu šta je bilo pre: istog dana
-  ide otkup → otpremnica → prijemnica → ambalažni dokument → agrohemija → novac.
+  ide otkup → otpremnica → prijemnica → ambalažni dokument → agrohemija →
+  doplata (knjižno odobrenje, `DOPLATA.md`) → novac.
   Redosled kretanja unutar transakcije knjiga ne nosi (`AMBALAZA.md` §6.13:
   „slobodan"), pa je „ulaz pre izlaza" konvencija; uz nju međusaldo dokumenta ne
   pada ispod manjeg od stanja pre i posle dokumenta. Promena konvencije je jedan
@@ -447,6 +448,8 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | **Ambalaza — model podataka, AMB-01..04** | `docs/DOMEN/AMBALAZA.md` — jednostrana knjiga, nosioci salda, matrica knjiženja; **tri predloga čekaju operatera** |
 | Identitet zbirne, vezivanje prijemnice (ZBR-IDENT-01) | `docs/DOMEN/ZBR_IDENTITET.md` — **superseded posle refaktora** |
 | Novac pri stornu / ispravci otkupa | `docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md` — **OTVORENO, čeka operatera** |
+| Isplata gotovinom — PDV nadoknada nikad gotovinom (`ISP-ODL-01..03`) | `docs/DOMEN/ISPLATA_GOTOVINA.md` — **odluke 05.11.2026; test 341** |
+| Doplata kooperantu — knjižno odobrenje po kulturi i klasi (`DOP-ODL-01..13`, `DOP-01..11`) | `docs/DOMEN/DOPLATA.md` — **F1–F4b u kodu (šema, pisac, storno, kartica, Saldo OM, PWA, ekran, papir KO, signal DOP1, isplata KO kroz naloge, izvod, gotovinu i avans; testovi 315–340); Excel prijem P1 zelen 05.11.2026 (RunAllTests 337/0, BFP 3014/0, dokaz 41/41, Compile PASS) — P1 zatvoren; P2 (ekran) zatvoren; P3 (papir bloka, broj i PDF specifikacije) zatvoren; P3–P4 sledi** |
 | Poznata ograničenja | `docs/KNOWN_ISSUES.md` |
 | Otkup / dokumenta — pravila izmene | `.claude/rules/otkup-i-dokumenta.md` |
 | Verifikacija i definicija gotovog | `CLAUDE.md` §5, `.claude/rules/testovi.md` |

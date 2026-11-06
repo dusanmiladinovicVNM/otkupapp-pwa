@@ -724,7 +724,9 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                         "OTKUI_HDI_REF||txt|1|4")
                     Exit Function
                 End If
-                ' Stanica | Kg | Vrednost | Isplaceno | Agro | Saldo | Amb
+                ' Stanica | Kg | Vrednost | Isplaceno | Agro | Saldo | Amb | Doplata
+                ' Doplata je na kraju, kao u izvestaju (pozicioni citaoci);
+                ' saldo je ukljucuje (DOPLATA.md par. 6).
                 IzKoloneZaListu = Array( _
                     "OTKUI_HD_OM||txt|140|1", _
                     "OTKUI_HD_KG||kg|82|1", _
@@ -733,6 +735,7 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                     "OTKUI_HDI_AGRO||rest|80|2", _
                     "OTKUI_HDI_SALDO||rsd|92|1", _
                     "OTKUI_HDI_AMB||num|56|3", _
+                    "OTKUI_HDI_DOPLATA||rsd|88|1", _
                     "OTKUI_HDI_REF||txt|1|4")
                 Exit Function
             Case IZ_ISPL
@@ -780,7 +783,7 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                     "OTKUI_HDI_SALDO||rsd|96|1", _
                     "OTKUI_HDI_AMB||num|64|2")
             Else
-                ' Kooperant | Kolicina | Vrednost | Isplaceno | Agro | Saldo | Amb
+                ' Kooperant | Kolicina | Vrednost | Isplaceno | Agro | Saldo | Amb | Doplata
                 IzKoloneZaListu = Array( _
                     "OTKUI_HDA_KOOPERANT||txt|130|1", _
                     "OTKUI_HD_KG||kg|82|1", _
@@ -788,7 +791,8 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                     "OTKUI_HDI_ISPLACENO||rsd|92|1", _
                     "OTKUI_HDI_AGRO||rest|82|2", _
                     "OTKUI_HDI_SALDO||rsd|92|1", _
-                    "OTKUI_HDI_AMB||num|56|3")
+                    "OTKUI_HDI_AMB||num|56|3", _
+                    "OTKUI_HDI_DOPLATA||rsd|88|1")
             End If
         Case IZ_ROBA
             If tip = "OM" Then
@@ -1412,8 +1416,10 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
         If Not jeUkupno Then
             If kljuc = IZ_SALDO Then
                 sumKg = sumKg + NzD(src(i, 3))
-                ' saldo je pretposlednja brojcana kolona (OM: 7, kupci: 6)
-                sumVal = sumVal + NzD(src(i, nSrcK - 1))
+                ' Saldo po imenu kolone, ne po polozaju od kraja: OM 7, kupci 6.
+                ' Pravilo "pretposlednja" je palo cim je OM dobio kolonu
+                ' Doplata (9) iza ambalaze -- zbir bi tiho postao zbir gajbi.
+                sumVal = sumVal + NzD(src(i, IIf(tip = "Kupac", 6, 7)))
             ElseIf kljuc = IZ_ROBA Then
                 sumKg = sumKg + NzD(src(i, 3))
                 sumVal = sumVal + NzD(src(i, 4))
@@ -1459,6 +1465,7 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
                 outA(n, 5) = NzD(src(i, 5))
                 outA(n, 6) = NzD(src(i, 6))
                 outA(n, 7) = NzD(src(i, 7))
+                outA(n, 8) = NzD(src(i, 8))     ' Doplata (DOPLATA.md par. 6)
             End If
             If Not jeUkupno Then
                 sumKg = sumKg + NzD(src(i, 2))
@@ -2604,7 +2611,7 @@ Public Function IzSabirljive(ByVal kljuc As String, ByVal tip As String, _
                 If tip = "Kupac" Then
                     IzSabirljive = Array(2, 3, 4, 5, 6)
                 Else
-                    IzSabirljive = Array(2, 3, 4, 5, 6, 7)
+                    IzSabirljive = Array(2, 3, 4, 5, 6, 7, 8)   ' 8 = doplata
                 End If
                 Exit Function
             Case IZ_ROBA
@@ -2624,7 +2631,7 @@ Public Function IzSabirljive(ByVal kljuc As String, ByVal tip As String, _
             If tip = "Kupac" Then
                 IzSabirljive = Array(2, 4, 5, 6, 7)    ' bez 3 = cena
             Else
-                IzSabirljive = Array(2, 3, 4, 5, 6, 7)
+                IzSabirljive = Array(2, 3, 4, 5, 6, 7, 8)   ' 8 = doplata
             End If
         Case IZ_ROBA
             If tip = "OM" Then
@@ -2864,6 +2871,19 @@ Private Sub StampajDokumentReda(ByVal red As Long)
             ref = NzS(modOtkupUI.GridCell(red, 8))
             If Left$(ref, 4) = "OTK|" Then
                 ReprintOtkupniListByOtkupID Mid$(ref, 5)
+            ElseIf Left$(ref, 4) = "DOP|" Then
+                ' Red doplate je OBRACUN kooperanta (P4, "DOP|<ObracunID>|<KooperantID>")
+                ' -- stampa se njegova specifikacija (DOP-ODL-18: detalj po bloku je
+                ' tamo). Stari oblik "DOP|<DoplataID>" stampa papir dokumenta.
+                ' Razlog odbijanja ide u toast.
+                Dim koGreska As String, dopDelovi() As String
+                dopDelovi = Split(Mid$(ref, 5), "|")
+                If UBound(dopDelovi) >= 1 Then
+                    koGreska = modPrint.StampajSpecifikacijuDoplate(dopDelovi(0), dopDelovi(1))
+                Else
+                    koGreska = modPrint.StampajKO(Mid$(ref, 5))
+                End If
+                If Len(koGreska) > 0 Then modOtkupUI.ShowToast koGreska, True
             ElseIf Len(ref) > 0 Then
                 ' NOV / MAG / AMB red kartice nema dokument za stampu iz ovog
                 ' pregleda -- isto kao legacy Case Else.

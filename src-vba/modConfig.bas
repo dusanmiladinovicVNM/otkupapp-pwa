@@ -29,6 +29,7 @@ Public Const PDF_DIR_KARTICE As String = "Kartice kooperanata"
 Public Const PDF_DIR_PALETNI As String = "Paletni listovi"
 Public Const PDF_DIR_PRERADA As String = "Preradni listovi"
 Public Const PDF_DIR_SPECIFIKACIJE As String = "Specifikacije"
+Public Const PDF_DIR_KO As String = "Knjizna odobrenja"
 Public Const PDF_DIR_IZVESTAJI As String = "Izvestaji"
 ' CSV nalozi za prenos (banka export) - isti root kao PDF folderi (EnsureDocFolder)
 Public Const CSV_DIR_BANKA_NALOZI As String = "Nalozi za banku"
@@ -489,6 +490,63 @@ Public Const COL_CEN_KLASA As String = "Klasa"
 Public Const COL_CEN_CENA As String = "Cena"
 Public Const COL_CEN_CREATED As String = "CreatedAt"
 
+' tblDoplata / tblDoplataStavke -- DOPLATA KOOPERANTU (knjizno odobrenje,
+' docs/DOMEN/DOPLATA.md). Zaglavlje = JEDAN KO za JEDNOG kooperanta; ObracunID
+' spaja sve KO jednog globalnog unosa. Stavka = stanica x vrsta x sorta x klasa.
+' Kljuc stope je kljuc cenovnika (VrstaVoca + SortaVoca + Klasa), ali stopa NE
+' ide u tblCenovnik: zivi samo na stavci dokumenta (nije treci model cene).
+Public Const TBL_DOPLATA As String = "tblDoplata"
+Public Const TBL_DOPLATA_STAVKE As String = "tblDoplataStavke"
+Public Const COL_DOP_ID As String = "DoplataID"
+Public Const COL_DOP_BROJ As String = "BrojDokumenta"
+Public Const COL_DOP_DATUM As String = "Datum"
+Public Const COL_DOP_KOOPERANT As String = "KooperantID"
+Public Const COL_DOP_OBRACUN As String = "ObracunID"
+Public Const COL_DOP_PERIOD_OD As String = "PeriodOd"
+Public Const COL_DOP_PERIOD_DO As String = "PeriodDo"
+Public Const COL_DOP_NAPOMENA As String = "Napomena"
+Public Const COL_DOPS_ID As String = "DoplataStavkaID"
+Public Const COL_DOPS_DOPLATA_ID As String = "DoplataID"
+Public Const COL_DOPS_RB As String = "RedniBroj"
+Public Const COL_DOPS_STANICA As String = "StanicaID"
+Public Const COL_DOPS_VRSTA As String = "VrstaVoca"
+Public Const COL_DOPS_SORTA As String = "SortaVoca"
+Public Const COL_DOPS_KLASA As String = "Klasa"
+Public Const COL_DOPS_KOLICINA As String = "Kolicina"
+Public Const COL_DOPS_CENA As String = "Cena"
+Public Const COL_DOPS_IZNOS As String = "Iznos"
+' Revizija 04.11.2026 (DOPLATA.md par. 2a): dokument doplate je PO BLOKU.
+' Kolone su na KRAJU tabela; pisac ih postavlja po imenu (SetRowValueByColumn).
+Public Const COL_DOP_OTKUP As String = "OtkupID"
+Public Const COL_DOP_STANICA As String = "StanicaID"
+Public Const COL_DOP_NACIN As String = "NacinUnosa"
+' Broj specifikacije (DOP-ODL-21/23): isti na svim dokumentima jednog kooperanta
+' u jednom obracunu; pise ga samo pisac doplate pri knjizenju.
+Public Const COL_DOP_SPEC As String = "BrojSpecifikacije"
+Public Const COL_DOPS_CENA_OTKUPA As String = "CenaOtkupa"
+Public Const COL_DOPS_KONACNA As String = "KonacnaCena"
+' Nacin unosa, jedan za ceo obracun (DOP-ODL-15). Cena stavke doplate je u oba
+' nacina BRUTO doplata po kg (sa PDV nadoknadom, DOP-ODL-14).
+'   1 = operater unosi bruto doplatu po kg
+'   2 = operater unosi KONACNU bruto cenu po kg; doplata = konacna - cena
+'       otkupa - vec knjizena doplata po kg na istom bloku i klasi
+Public Const DOP_NACIN_PO_KG As Long = 1
+Public Const DOP_NACIN_KONACNA As Long = 2
+' BROJEVI BEZ SLOVA (DOP-ODL-30; zamenjuje "D" iz DOP-ODL-17 i "S" iz DOP-ODL-23).
+' Slovo u pozivu na broj banka moze da izbaci, a broj bez slova je tada broj
+' bloka -- doplata bi se knjizila na blok. Zato su brojevi od cifara, "/" i "-",
+' kao broj bloka, a vrste odvaja NULA posle datuma: broj bloka je x/ddmmyy ili
+' x/ddmmyy-n sa n >= 2 (modBrojevi.FormatBroj), nikad sa nulom.
+' Dokument doplate = broj bloka + "-0" + redni broj doplate na tom bloku:
+' 5/250626-13-01, pa -02...; prvi blok dana 5/280626 -> 5/280626-01.
+Public Const DOP_BROJ_ODVAJAC As String = "-0"
+' Specifikacija = x/ddmmyy-00y: x broj maticne stanice kooperanta, ddmmyy datum
+' knjizenja, y redni broj specifikacije te stanice tog dana (5/051126-001).
+Public Const DOP_SPEC_ODVAJAC As String = "-00"
+' Stari oblik specifikacije S<redni>/<godina>-<sifra> (pre DOP-ODL-30, postoji
+' samo u test sveskama): cita se kao zauzet broj, ne ulazi u niz.
+Public Const DOP_SPEC_STARI_PREFIKS As String = "S"
+
 ' tblPrerada / tblPreradaStavka
 Public Const COL_PRE_ID As String = "PreradaID"
 Public Const COL_PRE_DATUM As String = "Datum"
@@ -606,6 +664,8 @@ Public Const CFG_KARTICA_PRINT_MODE As String = "KARTICA_PRINT_MODE"
 Public Const CFG_SLEDLJIVOST_PRINT_MODE As String = "SLEDLJIVOST_PRINT_MODE"
 Public Const CFG_KARTICA_AMB_PRINT_MODE As String = "KARTICA_AMB_PRINT_MODE"
 Public Const CFG_SPECIFIKACIJA_PRINT_MODE As String = "SPECIFIKACIJA_PRINT_MODE"
+' Knjizno odobrenje (doplata kooperantu, DOPLATA.md DOP-ODL-11). Default PDF.
+Public Const CFG_KO_PRINT_MODE As String = "KO_PRINT_MODE"
 ' Specifikacija isplata (banka nalozi, frmBankaExportPregled). Default PDF.
 Public Const CFG_ISPLATA_SPEC_PRINT_MODE As String = "ISPLATA_SPEC_PRINT_MODE"
 ' Otpremnica / grupni otkupni list / paletni list got. proizvoda (prerada).
@@ -666,6 +726,8 @@ Public Const WS_KARTICA_AMB_SABLON As String = "KarticaAmbalazeSablon"
 Public Const WS_SLEDLJIVOST_SABLON As String = "SledljivostSablon"
 Public Const WS_SPECIFIKACIJA_SABLON As String = "SpecifikacijaSablon"
 Public Const WS_ISPLATA_SPEC_SABLON As String = "IsplataSpecSablon"
+Public Const WS_KO_SABLON As String = "KOSablon"
+Public Const WS_DOP_SPEC_SABLON As String = "DoplataSpecSablon"
 
 ' --- Dokument-Tipovi ---
 Public Const COL_STORNIRANO As String = "Stornirano"
@@ -744,6 +806,10 @@ Public Const COL_NOV_UPLATA As String = "Uplata"
 Public Const COL_NOV_ISPLATA As String = "Isplata"
 Public Const COL_NOV_NAPOMENA As String = "Napomena"
 Public Const COL_NOV_OTKUP_ID As String = "OtkupID"
+' F4 doplate (docs/DOMEN/DOPLATA.md, DOP-05): isplata knjiznog odobrenja.
+' Kolona je na KRAJU tblNovac (SaveNovac pise poziciono 17 vrednosti), pa je
+' pisac postavlja po imenu, posle upisa reda -- isto kao OtkupID kod avansa.
+Public Const COL_NOV_DOPLATA_ID As String = "DoplataID"
 
 
 ' --- Novac Tipovi ---

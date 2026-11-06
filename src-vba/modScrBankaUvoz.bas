@@ -763,9 +763,11 @@ End Function
 ' rucni izbor: kad blok dolazi iz poziva na broj, izabranOtkup je prazan i
 ' odgovor je False bez ijednog citanja tabele.
 Public Function BuBlokZatvoren(ByVal izabranOtkupID As String, _
-                               ByVal efektivniOtkupID As String) As Boolean
+                               ByVal efektivniOtkupID As String, _
+                               Optional ByVal doplataID As String = "", _
+                               Optional ByVal specBroj As String = "") As Boolean
     If Len(Trim$(izabranOtkupID)) = 0 Then Exit Function
-    BuBlokZatvoren = modBankaMapiranje.BimOtkupBezOtvorenog(efektivniOtkupID)
+    BuBlokZatvoren = modBankaMapiranje.BimOtkupBezOtvorenog(efektivniOtkupID, doplataID, specBroj)
 End Function
 
 ' KESIRA SE SAMO USPESNO PUNJENJE.
@@ -818,7 +820,7 @@ Private Function CiljUcitan(ByRef outPoruka As String) As Boolean
 End Function
 
 Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As String) As Boolean
-    Dim otkupID As String, razlog As String, n As Long
+    Dim otkupID As String, doplataID As String, specBroj As String, razlog As String, n As Long
     Dim greska As String
     Dim izabran As String
     Dim iznos As Double
@@ -839,9 +841,20 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     ' na broj tu pada sa ERR_BMAP_MANUAL_REQUIRED, pa se prijavljuje operateru.
     izabran = IzabraniCiljID()
 
+    ' DOKUMENT JE JEDAN OD DVA (F4b doplate): knjizno odobrenje -- izabrano iz
+    ' liste, ili iz poziva na broj kad izbora nema -- ili otkupni blok. KO ima
+    ' prednost jer je njegov ID u istoj listi; kad ga nema, put je kao i ranije.
+    ' SPECIFIKACIJA (DOP-ODL-29, rez B) se pita PRVA: njen broj nije ni KO ni
+    ' OtkupID, pa bi ga putevi ispod pogresno protumacili.
     On Error Resume Next
     Err.Clear
-    otkupID = modBankaMapiranje.BimEfektivniOtkup(bimID, kooperantID, izabran)
+    specBroj = modBankaMapiranje.BimEfektivnaSpec(bimID, kooperantID, izabran)
+    If Err.Number = 0 And Len(specBroj) = 0 Then
+        doplataID = modBankaMapiranje.BimEfektivniKO(bimID, kooperantID, izabran)
+    End If
+    If Err.Number = 0 And Len(specBroj) = 0 And Len(doplataID) = 0 Then
+        otkupID = modBankaMapiranje.BimEfektivniOtkup(bimID, kooperantID, izabran)
+    End If
     If Err.Number <> 0 Then
         greska = Err.description
         Err.Clear
@@ -857,7 +870,7 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     ' placa; "nema sta da se plati" nije bezbedan ishod nego protivrecnost.
     ' Prazan izbor (poziv na broj) NE prolazi kroz ovu kapiju -- tamo avans i
     ' dalje jeste namerno ponasanje.
-    If BuBlokZatvoren(izabran, otkupID) Then
+    If BuBlokZatvoren(izabran, otkupID, doplataID, specBroj) Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_BLOK_ZATVOREN"), True
         Exit Function
     End If
@@ -866,8 +879,8 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     ' avans kooperanta. Tri ishoda, isti kao ranije kod podele bloka.
     iznos = CDbl(NzBIM(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bimID, COL_BIM_ISPLATA), 0#))
 
-    If modBankaMapiranje.BimOtkupTraziPotvrdu(otkupID, iznos, razlog) Then
-        Select Case PitajZaPodelu(otkupID, iznos, razlog)
+    If modBankaMapiranje.BimOtkupTraziPotvrdu(otkupID, iznos, razlog, doplataID, specBroj) Then
+        Select Case PitajZaPodelu(otkupID, iznos, razlog, doplataID, specBroj)
             Case vbCancel
                 Exit Function
             Case vbNo
@@ -898,7 +911,7 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     ' punjena, a writer po stanju u trenutku upisa.
     n = modBankaMapiranje.MapBankaImportAsKooperantBlockManual_TX( _
             bimID, kooperantID, otkupID, True, CiljJeIzabran(izabran), _
-            visakPotvrdjen, prijavljeno)
+            visakPotvrdjen, prijavljeno, doplataID, specBroj)
 
     If n <= 0 Then
         ' Pisac je vec rekao KONKRETNO sta ne valja (npr. dug se promenio pa
@@ -925,11 +938,13 @@ End Function
 ' writer knjizi) i bira izmedju tri ishoda. Ostaje MsgBox, kao u legacy-ju: tri
 ' ishoda nad izracunatim tekstom nisu forma nego pitanje.
 Private Function PitajZaPodelu(ByVal otkupID As String, ByVal iznos As Double, _
-                               ByVal razlog As String) As VbMsgBoxResult
+                               ByVal razlog As String, _
+                               Optional ByVal doplataID As String = "", _
+                               Optional ByVal specBroj As String = "") As VbMsgBoxResult
     PitajZaPodelu = MsgBox( _
         Poruka("OTKUI_ASK_BU_PODELA") & vbCrLf & vbCrLf & _
         razlog & vbCrLf & _
-        TekstPodele(otkupID, iznos) & vbCrLf & _
+        TekstPodele(otkupID, iznos, doplataID, specBroj) & vbCrLf & _
         Poruka("OTKUI_ASK_BU_PODELA_IZBOR"), _
         vbQuestion + vbYesNoCancel, APP_NAME)
 End Function
@@ -937,12 +952,46 @@ End Function
 ' Tekst podele: na blok ide ono sto duguje, ostatak u avans -- ISTO pravilo po
 ' kome knjizi MapBankaImportAsKooperantBlockCore, pa prikaz i akcija ne mogu da
 ' se razidju. Odvojen od MsgBox-a da bi se mogao izmeriti bez dijaloga.
-Public Function TekstPodele(ByVal otkupID As String, ByVal iznos As Double) As String
-    Dim otvoreno As Double, zaBlok As Double, visak As Double
+Public Function TekstPodele(ByVal otkupID As String, ByVal iznos As Double, _
+                            Optional ByVal doplataID As String = "", _
+                            Optional ByVal specBroj As String = "") As String
+    Dim otvoreno As Double, zaBlok As Double, visak As Double, oznaka As String
+    Dim dok As Variant, i As Long, deo As Double, ostaje As Double
 
-    If Len(Trim$(otkupID)) = 0 Then Exit Function
+    ' SPECIFIKACIJA: red po dokumentu, istim redosledom i istim iznosima kao
+    ' pisac (od najstarijeg bloka, svaki najvise svoj ostatak), pa visak.
+    If Len(Trim$(specBroj)) > 0 Then
+        dok = modDoplata.SpecDokumentiZaRaspodelu(specBroj)
+        ostaje = ZaokruziNovac(iznos)
+        If IsArray(dok) Then
+            For i = 1 To UBound(dok, 1)
+                If ostaje <= 0 Then Exit For
+                deo = CDbl(dok(i, 3))
+                If deo > ostaje Then deo = ostaje
+                oznaka = NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, CStr(dok(i, 1)), COL_DOP_BROJ))
+                If Len(oznaka) = 0 Then oznaka = CStr(dok(i, 1))
+                TekstPodele = TekstPodele & " - " & oznaka & ": " & Format$(deo, "#,##0.00") & vbCrLf
+                ostaje = ZaokruziNovac(ostaje - deo)
+            Next i
+        End If
+        If ostaje > 0 Then
+            TekstPodele = TekstPodele & " - " & Poruka("OTKUI_ASK_BU_PODELA_VISAK") & ": " & _
+                          Format$(ostaje, "#,##0.00") & vbCrLf
+        End If
+        Exit Function
+    End If
 
-    otvoreno = modBankaMapiranje.BimOtvorenoNaOtkupu(otkupID)
+    If Len(Trim$(otkupID)) = 0 And Len(Trim$(doplataID)) = 0 Then Exit Function
+
+    ' KO se imenuje BROJEM (operater ga zna po broju), blok kao i do sada.
+    If Len(Trim$(doplataID)) > 0 Then
+        oznaka = NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, Trim$(doplataID), COL_DOP_BROJ))
+        If Len(oznaka) = 0 Then oznaka = Trim$(doplataID)
+    Else
+        oznaka = otkupID
+    End If
+
+    otvoreno = modBankaMapiranje.BimOtvorenoNaDokumentu(otkupID, doplataID)
     If otvoreno < 0 Then otvoreno = 0
 
     If iznos >= otvoreno Then
@@ -952,7 +1001,7 @@ Public Function TekstPodele(ByVal otkupID As String, ByVal iznos As Double) As S
     End If
     visak = iznos - zaBlok
 
-    TekstPodele = " - " & otkupID & ": " & Format$(zaBlok, "#,##0.00") & vbCrLf
+    TekstPodele = " - " & oznaka & ": " & Format$(zaBlok, "#,##0.00") & vbCrLf
     If visak > 0 Then
         TekstPodele = TekstPodele & " - " & Poruka("OTKUI_ASK_BU_PODELA_VISAK") & ": " & _
                       Format$(visak, "#,##0.00") & vbCrLf
@@ -1130,6 +1179,10 @@ Public Function BuPredlogTekst(ByVal smer As String, ByVal ciljTip As String, _
             BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_AVANS") & " " & ciljOpis
         Case BIM_CILJ_BLOK
             BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_BLOK") & " " & ciljOpis
+        Case BIM_CILJ_DOPLATA
+            BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_KO") & " " & ciljOpis
+        Case BIM_CILJ_SPEC
+            BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_SPEC") & " " & ciljOpis
         Case BIM_CILJ_OM
             BuPredlogTekst = Poruka("OTKUI_LBL_BU_PRED_OM") & " " & ciljOpis
         Case Else

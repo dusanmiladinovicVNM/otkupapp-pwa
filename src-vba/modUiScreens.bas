@@ -177,6 +177,12 @@ Public Function ScrRows() As Variant
           "|FINANSIJE|" & OBL_BANKA & "|" & SEK_RAD
     c.Add "BANKA_NALOZI|modScrBankaNalozi|OTKUI_NAV_BANKA_NALOZI|" & IC_NALOZI & _
           "|FINANSIJE|" & OBL_BANKA & "|" & SEK_RAD
+    ' DOPLATA (knjizno odobrenje kooperantu, docs/DOMEN/DOPLATA.md). Oblast je
+    ' OBL_FAKTURISANJE: KO je knjigovodstveni dokument kao faktura, a nova kolona
+    ' prava u tblKorisnici bi bila izmena seme bez poslovnog razloga. Promena
+    ' oblasti je ovaj jedan red.
+    c.Add "DOPLATA|modScrDoplata|OTKUI_NAV_DOPLATA|" & IC_DOPLATA & _
+          "|FINANSIJE|" & OBL_FAKTURISANJE & "|" & SEK_RAD
     ' ANALIZA je do v6-ui-213 bila MARZA, red koji je pokazivao na modul koji
     ' nikad nije napisan. Oblast prava ostaje OBL_MARZA -- to je NAZIV KOLONE u
     ' tblKorisnici, isti u svakoj instalaciji; pravo je isto, promenio se ekran

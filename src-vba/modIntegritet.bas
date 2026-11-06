@@ -111,6 +111,41 @@ Private Sub RunAllChecks()
     Chk_D1_PreradjenoBezPrerade
     Chk_D2_PreradaNesvezaPaleta
     Chk_A5_PreradaKg
+    Chk_DOP1_OsnovicaDoplate
+    Chk_GOT1_GotovinaPrekoOsnovice
+End Sub
+
+' ============================================================
+' CHECK GOT1: GOTOVINA PREKO OSNOVICE (ISPLATA_GOTOVINA.md, ISP-ODL-01..03)
+' ============================================================
+' PDV nadoknada se ne isplacuje gotovinom; kapija (modNovac.
+' GotovinaNadoknadaProblem) to drzi za nove isplate, a ovde se vide zatecene.
+' Racun je u modNovac.GotovinaPrekoOsnoviceRedovi -- ovde je samo prikaz.
+Private Sub Chk_GOT1_GotovinaPrekoOsnovice()
+    On Error GoTo EH
+    WriteBlock "GOT1", "Isplata: gotovinom vise od osnovice (PDV nadoknada samo bankom)", _
+               Array("Dokument", "Broj", "KooperantID", "Osnovica", "Gotovina"), _
+               modNovac.GotovinaPrekoOsnoviceRedovi()
+    Exit Sub
+EH:
+    WriteErr "GOT1", Err.description
+End Sub
+
+' ============================================================
+' CHECK DOP1: OSNOVICA KNJIZENE DOPLATE SE PROMENILA (DOPLATA.md DOP-ODL-07)
+' ============================================================
+' Knjizen KO je snimak: kasniji storno, ispravka ili retro unos otkupa u periodu
+' ga ne menja. Racun je u modDoplata.DoplataOdstupanjaOsnovice (isti DoplataPlan
+' koji je pisac izvrsio) -- ovde je samo prikaz. Popravka je storno KO pa nov
+' obracun; nalaz se sam ne ispravlja.
+Private Sub Chk_DOP1_OsnovicaDoplate()
+    On Error GoTo EH
+    WriteBlock "DOP1", "Doplata: osnovica se promenila posle knjizenja", _
+               Array("BrojKO", "KooperantID", "Kljuc", "KgKnjizeno", "KgSada", "ObracunID"), _
+               modDoplata.DoplataOdstupanjaOsnovice()
+    Exit Sub
+EH:
+    WriteErr "DOP1", Err.description
 End Sub
 
 ' ============================================================

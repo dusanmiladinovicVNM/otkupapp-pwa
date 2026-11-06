@@ -41,7 +41,7 @@ Public Const SCHEMA_DRIFT_REDOSLED As String = "REDOSLED"
 
 ' Otisak kanonske seme (FNV-1a 32 nad "tbl|kol|kol;..." REDOM). Generisan
 ' zajedno sa registrom -- ne menjati rukom.
-Public Const SCHEMA_FINGERPRINT As String = "CA5CE30A"
+Public Const SCHEMA_FINGERPRINT As String = "C4234F10"
 
 ' Kes registra. Registar je DEKLARACIJA, ne snimak sveske, pa se ne menja
 ' u toku rada -- kesiranje je bezbedno.
@@ -678,6 +678,12 @@ Private Function FormatRegistry() As Object
 
     Set k = CreateObject("Scripting.Dictionary")
     k.CompareMode = vbTextCompare
+    k("BrojDokumenta") = "text"
+    k("BrojSpecifikacije") = "text"
+    Set reg("tblDoplata") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
     k("BrojPrerade") = "text"
     k("BrojPrijemnice") = "text"
     Set reg("tblFakturaStavke") = k
@@ -853,6 +859,8 @@ Private Function BuildRegistry() As Object
     SpecBankaImport reg
     SpecCenovnik reg
     SpecConfig reg
+    SpecDoplata reg
+    SpecDoplataStavke reg
     SpecFakturaStavke reg
     SpecFakture reg
     SpecKese reg
@@ -1019,6 +1027,51 @@ Private Sub SpecConfig(ByVal reg As Object)
     k.Add "Vrednost"
     k.Add "Opis"
     RegistrujTabelu reg, TBL_CONFIG, "Config", k
+End Sub
+
+Private Sub SpecDoplata(ByVal reg As Object)
+    Dim k As Collection
+    Set k = New Collection
+    k.Add "DoplataID"
+    k.Add "BrojDokumenta"
+    k.Add "Datum"
+    k.Add "KooperantID"
+    k.Add "ObracunID"
+    k.Add "PeriodOd"
+    k.Add "PeriodDo"
+    k.Add "Napomena"
+    k.Add "Stornirano"
+    k.Add "CreatedAt"
+    k.Add "CreatedBy"
+    k.Add "ModifiedAt"
+    k.Add "ModifiedBy"
+    k.Add "OtkupID"
+    k.Add "StanicaID"
+    k.Add "NacinUnosa"
+    k.Add "BrojSpecifikacije"
+    RegistrujTabelu reg, TBL_DOPLATA, "Doplata", k
+End Sub
+
+Private Sub SpecDoplataStavke(ByVal reg As Object)
+    Dim k As Collection
+    Set k = New Collection
+    k.Add "DoplataStavkaID"
+    k.Add "DoplataID"
+    k.Add "RedniBroj"
+    k.Add "StanicaID"
+    k.Add "VrstaVoca"
+    k.Add "SortaVoca"
+    k.Add "Klasa"
+    k.Add "Kolicina"
+    k.Add "Cena"
+    k.Add "Iznos"
+    k.Add "CreatedAt"
+    k.Add "CreatedBy"
+    k.Add "ModifiedAt"
+    k.Add "ModifiedBy"
+    k.Add "CenaOtkupa"
+    k.Add "KonacnaCena"
+    RegistrujTabelu reg, TBL_DOPLATA_STAVKE, "DoplataStavke", k
 End Sub
 
 Private Sub SpecFakturaStavke(ByVal reg As Object)
@@ -1257,6 +1310,7 @@ Private Sub SpecNovac(ByVal reg As Object)
     k.Add "CorrectionID"
     k.Add "IzdatoStatus"
     k.Add "GeneracijaID"
+    k.Add "DoplataID"
     RegistrujTabelu reg, TBL_NOVAC, "Novac", k
 End Sub
 

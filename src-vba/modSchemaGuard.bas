@@ -24,7 +24,7 @@ Public Const ERR_SIS_DO As Long = 9899
 Private Const STORNO_TABELE As String = "|" & TBL_OTKUP & "|" & TBL_NOVAC & _
     "|" & TBL_OTPREMNICA & "|" & TBL_ZBIRNA & "|" & TBL_PRIJEMNICA & _
     "|" & TBL_FAKTURE & "|" & TBL_MAGACIN & _
-    "|" & TBL_BANKA_IMPORT & "|" & TBL_CENOVNIK & _
+    "|" & TBL_BANKA_IMPORT & "|" & TBL_CENOVNIK & "|" & TBL_DOPLATA & _
     "|" & TBL_PALETA & "|" & TBL_PALETA_STAVKA & "|" & TBL_PRERADA & _
     "|" & TBL_PRERADA_STAVKA & _
     "|" & TBL_UTOVAR & "|" & TBL_UTOVAR_STAVKE & _
@@ -66,7 +66,7 @@ Private Const BEZ_STORNA As String = "|" & TBL_KOOPERANTI & "|" & TBL_KUPCI & _
     "|" & TBL_ZBIRNA_STAVKE & "|" & TBL_ZBIRNA_IZVORI & _
     "|" & TBL_OTKUP_STAVKE & "|" & TBL_OTPREMNICA_STAVKE & _
     "|" & TBL_PRIJEMNICA_STAVKE & _
-    "|" & TBL_FAKTURA_STAVKE & _
+    "|" & TBL_FAKTURA_STAVKE & "|" & TBL_DOPLATA_STAVKE & _
     "|" & TBL_OTPREMNICA_IZVORI & "|"
 
 ' PRAZNA TABELA I NEPOSTOJECA TABELA NISU ISTI ISHOD.

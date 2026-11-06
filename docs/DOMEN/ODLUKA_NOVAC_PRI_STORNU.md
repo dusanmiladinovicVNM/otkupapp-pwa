@@ -39,6 +39,14 @@ klasa greške koju ovaj projekat inače ne prihvata.
 **Nezavisno od odluke, i dalje važi:** spojiti dve kopije `ResetNovacOtkupLink` u
 jednu, žurnaliranu (§2b).
 
+> **Dopuna 04.11.2026 (doplata, F4 — `DOPLATA.md` DOP-05, DOP-09).** Treći dokument
+> za koji se novac vezuje je knjižno odobrenje (`tblNovac.DoplataID`). Pravilo iz
+> ove odluke važi i za njega: storno KO vezu **odvezuje** (`ResetNovacDoplataLink`),
+> ne stornira novac. Tri čitača avansa sada dele predikat
+> `JeSlobodanAvansKooperanta` — avansni tip **bez** `OtkupID`-a **i bez**
+> `DoplataID`-a — jer isplata KO po tipu i praznom `OtkupID`-u izgleda tačno kao
+> odvezan avans.
+
 ---
 
 ## 1) Šta se dešava danas

@@ -95,6 +95,12 @@ Public Function NoviIsplataUnos() As Object
     p("brDok") = ""
     p("novac") = 0#
     p("otkupID") = ""
+    ' KO izabran u polju "otvoreni blok" (F4b doplate). Popunjava ga
+    ' IsplataValidiraj iz otkupID-a -- lista blokova nosi i otvorena KO.
+    p("doplataID") = ""
+    ' SPECIFIKACIJA doplate izabrana u istom polju (DOP-ODL-28, rez B): broj
+    ' specifikacije; popunjava ga IsplataValidiraj iz otkupID-a.
+    p("specBroj") = ""
     ' Vidljivi tekst polja "otvoreni blok" ide uz ID bas zbog NerazresenIzbor:
     ' bez njega se ukucan a nerazresen blok ne razlikuje od praznog polja.
     p("blokTekst") = ""
@@ -273,7 +279,29 @@ Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As St
 
     If partTip = "KOOP" And Len(partID) > 0 Then
         ' --- isplata kooperantu ---
+        ' KNJIZNO ODOBRENJE (F4b doplate, DOP-ODL-05). Polje "otvoreni blok"
+        ' nosi i otvorena KO, pod njihovim DoplataID-em. Dokument je JEDAN od
+        ' dva: KO ide u doplataID, otkupID ostaje prazan -- pisac veze jedno
+        ' ili drugo, nikad oba. Kapija je blizanac bloka (IsplataKOProblem:
+        ' vlasnistvo, zivot, MATICNA stanica, trenutni ostatak).
         If Len(S(p, "otkupID")) > 0 Then
+            If modDoplata.JeKO(S(p, "otkupID")) Then
+                p("doplataID") = S(p, "otkupID")
+                p("otkupID") = ""
+            ElseIf modDoplata.JeSpecifikacija(S(p, "otkupID")) Then
+                ' SPECIFIKACIJA (DOP-ODL-28): iznos ide na njene dokumente na
+                ' ovoj stanici, od najstarijeg bloka -- kapija ispod.
+                p("specBroj") = S(p, "otkupID")
+                p("otkupID") = ""
+            End If
+        End If
+        If Len(S(p, "doplataID")) > 0 Then
+            blokErr = modNovac.IsplataKOProblem(S(p, "doplataID"), partID, S(p, "stanicaID"), novac)
+            If Len(blokErr) > 0 Then
+                fokus = "novac": IsplataValidiraj = blokErr: Exit Function
+            End If
+        End If
+        If Len(S(p, "otkupID")) > 0 Or Len(S(p, "doplataID")) > 0 Or Len(S(p, "specBroj")) > 0 Then
             ' VLASNISTVO I TRENUTNI OSTATAK BLOKA. Provera se NE radi nad
             ' vrednoscu koju je ekran poslao: taj broj je snimak iz trenutka
             ' kad je lista punjena, a izmedju punjenja i potvrde stanje se moze
@@ -296,8 +324,24 @@ Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As St
                     Exit Function
                 End If
                 p("tipNovca") = NOV_KES_OTKUPAC_KOOP
+                ' PDV nadoknada se ne isplacuje gotovinom (ISP-ODL-01): ista
+                ' kapija kao u piscu (SaveOMUlaz_TX), nad stanjem SADA.
+                blokErr = modNovac.GotovinaNadoknadaProblem(S(p, "otkupID"), S(p, "doplataID"), novac)
+                If Len(blokErr) > 0 Then
+                    fokus = "novac": IsplataValidiraj = blokErr: Exit Function
+                End If
             Else
                 p("tipNovca") = NOV_VIRMAN_FIRMA_KOOP
+            End If
+            ' SPECIFIKACIJA: vlasnistvo, dokumenti NA OVOJ STANICI i -- za
+            ' gotovinu -- najvise do osnovice po dokumentu; ista kapija kao u
+            ' piscu (SaveOMUlazSpec_TX), isti racun raspodele.
+            If Len(S(p, "specBroj")) > 0 Then
+                blokErr = modNovac.IsplataSpecProblem(S(p, "specBroj"), partID, S(p, "stanicaID"), novac, _
+                                                      (S(p, "tipNovca") = NOV_KES_OTKUPAC_KOOP))
+                If Len(blokErr) > 0 Then
+                    fokus = "novac": IsplataValidiraj = blokErr: Exit Function
+                End If
             End If
         Else
             ' Bez bloka isplata nije razduzenje nego avans kooperantu.
@@ -309,6 +353,8 @@ Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As St
         ' kooperanta sa OtkupID-em bio bi razduzenje nicijeg bloka.
         p("partnerID") = ""
         p("otkupID") = ""
+        p("doplataID") = ""
+        p("specBroj") = ""
         p("tipNovca") = NOV_KES_FIRMA_OTKUPAC
         ' Izabrano otkupno mesto JESTE primalac, pa je ono i entitet novca
         ' (razlika 2 iz zaglavlja). Bez partnera ostaje kontekst.
@@ -335,7 +381,20 @@ Public Function IsplataUpisi(ByVal p As Object, ByRef poruke As String) As Strin
     On Error GoTo EH
     poruke = ""
 
-    If Not SaveOMUlaz_TX( _
+    If Len(S(p, "specBroj")) > 0 Then
+        ' Specifikacija: vise redova novca, jedna transakcija (DOP-ODL-28).
+        If Not SaveOMUlazSpec_TX( _
+            datum:=CDate(p("datum")), _
+            brojDok:=S(p, "brDok"), _
+            stanicaNaziv:=S(p, "stanicaTekst"), _
+            stanicaID:=S(p, "stanicaID"), _
+            vrstaVoca:=S(p, "vrsta"), _
+            novac:=D(p, "novac"), _
+            kooperantID:=S(p, "partnerID"), _
+            primalacDisplay:=S(p, "partnerTekst"), _
+            specBroj:=S(p, "specBroj"), _
+            tipNovca:=S(p, "tipNovca")) Then Exit Function
+    ElseIf Not SaveOMUlaz_TX( _
         datum:=CDate(p("datum")), _
         brojDok:=S(p, "brDok"), _
         stanicaNaziv:=S(p, "stanicaTekst"), _
@@ -345,7 +404,10 @@ Public Function IsplataUpisi(ByVal p As Object, ByRef poruke As String) As Strin
         kooperantID:=S(p, "partnerID"), _
         primalacDisplay:=S(p, "partnerTekst"), _
         otkupID:=S(p, "otkupID"), _
-        tipNovca:=S(p, "tipNovca")) Then Exit Function
+        tipNovca:=S(p, "tipNovca"), _
+        doplataID:=S(p, "doplataID")) Then
+        Exit Function
+    End If
 
     IsplataUpisi = BrojIliOznaka(S(p, "brDok"))
     Exit Function
