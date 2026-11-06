@@ -1,10 +1,10 @@
 # Doplata kooperantu — knjižno odobrenje po kulturi i klasi
 
 > **⚠ Revizija 04.11.2026 (§2a):** doplata se radi **po bloku**, **bruto** (sa PDV
-> nadoknadom), sa dva načina unosa i zbirnim prikazima. Kod ispod opisuje stanje
-> PRE revizije dok prerada P1–P4 (§7a) ne bude gotova.
+> nadoknadom), sa dva načina unosa i zbirnim prikazima. §1 i §3 opisuju
+> prvobitni model; gde se razlikuju, važi §2a. Prerada P1–P4 je završena (§7a).
 >
-> **Status (05.11.2026):** F1–F4b i prerada P1–P3 su u kodu i potvrđeni u Excelu
+> **Status (06.11.2026):** F1–F4b i prerada P1–P4 su u kodu i potvrđeni u Excelu
 > (§7a). Pravilo „PDV nadoknada nikad gotovinom" (`ISPLATA_GOTOVINA.md`) je
 > zatvoreno. **Plaćanje po specifikaciji** (rez A: nalozi, izvod, avans; rez B:
 > gotovina na F5, ručno mapiranje) i dugme „Uključi filtrirane" su u kodu i
@@ -13,8 +13,10 @@
 > proveren. Ručno nad pravim podacima još nisu provereni F5 po specifikaciji i
 > ručno mapiranje izvoda na specifikaciju. P4 (kartica zbirno po obračunu) i
 > ploča „KEŠOM NAJVIŠE" na F5 su potvrđeni u Excelu (RunAllTests 348/0, dokaz
-> 5/5); ručno još nisu pregledani. Otvoreno iz §8. Slova u pozivu na broj su uklonjena (DOP-ODL-30, Excel
-> neverifikovano).
+> 5/5); ručno još nisu pregledani. Brojevi bez slova (DOP-ODL-30) i pitanje o
+> ponavljanju iz kataloga potvrđeni u Excelu 06.11.2026 (12 suita zeleno,
+> RunAllTests 349/0, dokaz 9/9). Otvoreno iz §8 i ručne provere nad pravim
+> podacima.
 
 ## 1) Šta je doplata
 
@@ -479,12 +481,18 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   `dop-broj-bez-rednog`. **Prvi Excel prolaz (06.11.2026): RunAllTests 349 / 2
   palo** — 334 i 335 su u očekivanju još lepili stari sufiks (`D2`, `D`), dok je
   stvarni broj već bio tačan (`…-25-02`, `…-29-01`); ostalih 11 suite-ova
-  zeleno (BFP 3014/0, banka 241/0). Očekivanje ispravljeno; ponovni prolaz i
-  dokaz neverifikovani.
+  zeleno (BFP 3014/0, banka 241/0). Očekivanje ispravljeno (`90c23d5`).
+  **Ponovni prolaz (06.11.2026): 12 suita zeleno, RunAllTests 349/0, BFP
+  3014/0; dokaz 9/9 DOKAZANO** (`dop-broj-bez-rednog`, `dop-ponavljanje-van-kataloga`,
+  `dop-spec-oblik-sa-slovom`, `dop-spec-isti-broj-u-obracunu`, `dop-broj-sa-slovom`,
+  `dop-poziv-prvi-pobedjuje`, `dop-poziv-blok-bez-provere`, `dop-spec-storno-oslobadja`,
+  `dop-spec-citalac-bez-provere`), izvor pre/posle identičan `f7d90bf38df19db5`.
+  Ručno još: novi broj na pravom knjiženju i poziv na broj u CSV-u naloga.
 - **Pitanje o ponavljanju kroz katalog poruka** (05.11.2026): tekst je iz
   `modPoruke` (`DOP_ASK_PONAVLJANJE`, `DOP_ASK_PONAVLJANJE_POTVRDI`), sa
   dijakritikom, isti u grešci pisca i u pitanju ekrana. Test 318 dopunjen,
-  sabotaža `dop-ponavljanje-van-kataloga`. **Excel prolaz neverifikovan.**
+  sabotaža `dop-ponavljanje-van-kataloga`. Excel 06.11.2026: 349/0, dokaz
+  DOKAZANO (u istom prolazu kao DOP-ODL-30); tekst na ekranu ručno nije pregledan.
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
 Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,
