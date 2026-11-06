@@ -550,3 +550,9 @@ sve / Isključi sve" na listi Blokovi.
    izbor doplate) ili primenom avansa na doplatu u nalozima.
 7. ~~Gotovina i Saldo OM — asimetrija stanica.~~ Rešeno revizijom (DOP-ODL-19,
    P1): doplata i njena isplata pripadaju stanici bloka, kao otkup.
+8. **Naziv u meniju se seče kad je izabran** (snimak 06.11.2026, odluka operatera:
+   zabeležiti, sada ne dirati). „Doplata kooperantima" je najduži naziv u meniju;
+   podebljan (izabran ekran) ne staje i prikazuje se „Doplata kooperantim".
+   Isti ključ `OTKUI_NAV_DOPLATA` je i naslov ekrana (`modScrDoplata.Scr_Meta`,
+   `naslov=`), pa skraćenje samo u meniju traži da naslov ekrana pređe na
+   postojeći `OTKUI_SCRDOP_CAP`. Predlog: u meniju „Doplata".
