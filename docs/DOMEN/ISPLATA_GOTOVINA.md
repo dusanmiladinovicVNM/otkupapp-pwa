@@ -24,8 +24,8 @@
   natpis u „KEŠOM NAJVIŠE" i pokazuje granicu gotovine za izabran blok, dokument
   doplate ili specifikaciju (`modNovac.GotovinaNajviseNaIzboru`, isto pravilo kao
   kapija). Operater granicu vidi pre klika. Test 347, sabotaža
-  `isp-ploca-bez-osnovice` — Excel 05.11.2026: 348/0, dokaz DOKAZANO; izgled
-  ploče ručno nije pregledan.
+  `isp-ploca-bez-osnovice` — Excel 05.11.2026: 348/0, dokaz DOKAZANO; ručno
+  06.11.2026: natpis staje u ploču, F5 po specifikaciji ispravan.
 - Gotovina po specifikaciji doplate (DOP-ODL-28, rez B) prolazi istu kapiju po
   dokumentu.
 

@@ -10,13 +10,15 @@
 > gotovina na F5, ručno mapiranje) i dugme „Uključi filtrirane" su u kodu i
 > potvrđeni u Excelu (05.11.2026: 12 suita zeleno, RunAllTests 346/0, dokaz rez A
 > 11/11, rez B i dugme 9/9), ručni Compile PASS, „Uključi filtrirane" ručno
-> proveren. Ručno nad pravim podacima još nisu provereni F5 po specifikaciji i
-> ručno mapiranje izvoda na specifikaciju. P4 (kartica zbirno po obračunu) i
-> ploča „KEŠOM NAJVIŠE" na F5 su potvrđeni u Excelu (RunAllTests 348/0, dokaz
-> 5/5); ručno još nisu pregledani. Brojevi bez slova (DOP-ODL-30) i pitanje o
-> ponavljanju iz kataloga potvrđeni u Excelu 06.11.2026 (12 suita zeleno,
-> RunAllTests 349/0, dokaz 9/9). Otvoreno iz §8 i ručne provere nad pravim
-> podacima.
+> proveren. P4 (kartica zbirno po obračunu) i ploča „KEŠOM NAJVIŠE" na F5 su
+> potvrđeni u Excelu (RunAllTests 348/0, dokaz 5/5). Brojevi bez slova
+> (DOP-ODL-30) i pitanje o ponavljanju iz kataloga potvrđeni u Excelu 06.11.2026
+> (12 suita zeleno, RunAllTests 349/0, dokaz 9/9). Ručno 06.11.2026: Compile
+> PASS, F5 po specifikaciji ispravan, natpis ploče staje, knjiženje nad pravim
+> podacima dalo specifikaciju `1/061126-001` i dokumente `…-04`. **Ručno još
+> nije provereno:** mapiranje stavke izvoda na specifikaciju, štampa
+> specifikacije iz kartice, poziv na broj u CSV-u naloga (probni nalog kroz
+> e-banking). Otvoreno iz §8.
 
 ## 1) Šta je doplata
 
@@ -487,7 +489,12 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   `dop-spec-oblik-sa-slovom`, `dop-spec-isti-broj-u-obracunu`, `dop-broj-sa-slovom`,
   `dop-poziv-prvi-pobedjuje`, `dop-poziv-blok-bez-provere`, `dop-spec-storno-oslobadja`,
   `dop-spec-citalac-bez-provere`), izvor pre/posle identičan `f7d90bf38df19db5`.
-  Ručno još: novi broj na pravom knjiženju i poziv na broj u CSV-u naloga.
+  Ručno 06.11.2026 nad pravim podacima: specifikacija `1/061126-001` (matična
+  stanica 1, dan knjiženja, prva tog dana), dokumenti `1/250626-16-04`,
+  `1/280626-8-04`… — `-04` jer niz broji SVE dosadašnje dokumente bloka, i
+  stornirane i stare sa „D" (`UcitajBrojeveDoplata`, A9). Stara specifikacija
+  `S1/2026-00025` ostaje vidljiva pod svojim brojem. Poziv na broj u CSV-u
+  naloga ručno nije pogledan.
 - **Pitanje o ponavljanju kroz katalog poruka** (05.11.2026): tekst je iz
   `modPoruke` (`DOP_ASK_PONAVLJANJE`, `DOP_ASK_PONAVLJANJE_POTVRDI`), sa
   dijakritikom, isti u grešci pisca i u pitanju ekrana. Test 318 dopunjen,
@@ -517,8 +524,8 @@ sve / Isključi sve" na listi Blokovi.
    `OtkupVremeNastanka` (popravlja i štampu), ili ostaviti granice na celim danima.
 2. ~~DOP-ODL-10 je predlog.~~ Potvrđeno 06.11.2026.
 3. ~~DOP-ODL-12 je predlog.~~ Potvrđeno 06.11.2026 (grupa FINANSIJE, pravo Fakturisanje).
-4. Ikonica `IC_DOPLATA` (&HE8EF, „Calculator") nije proverena na pravom fontu —
-   pogledati u `DumpMdl2Used` / na ekranu.
+4. ~~Ikonica `IC_DOPLATA` nije proverena na pravom fontu.~~ Vidi se u meniju i u
+   zaglavlju ekrana (snimak 06.11.2026).
 5. `.claude/rules/testovi.md` §4 još kaže „30 članova" za test 239 (sada 32) —
    ide kroz zaseban process PR (izmene u `.claude/` se ne mešaju sa feature-om).
    Isti process PR: `.claude/rules/banka.md` da pomene KO kao drugi dokument
