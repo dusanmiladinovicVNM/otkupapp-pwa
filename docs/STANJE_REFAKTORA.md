@@ -10951,6 +10951,38 @@
      - **Van S8:** pun katalog sabotaža pred release; `KI-081` (sa REV-01) i `KI-088` OPEN.
      - **Sledeći brojevi:** test 315 · stavka 323 · KI-089 · plan §14.64.
 
+323. **Doplata kooperantu (PR `#460`) — izvršne kapije zelene, ručni Compile PASS; ide u `main`** (03–06.11.2026,
+     operater: „merge"). Grana `claude/cool-bohr-68hi14`, glava pre ovog zapisa `c726c6e9`. Domen i odluke:
+     `docs/DOMEN/DOPLATA.md` (DOP-ODL-01..30, §7a, §8) i `docs/DOMEN/ISPLATA_GOTOVINA.md`.
+
+     - **Šta ulazi:** dokument doplate po otkupnom bloku (bruto, sa PDV nadoknadom; dva načina unosa; izbor
+       blokova i „Uključi filtrirane"), specifikacija po paru (obračun, kooperant), ekran DOPLATA, papir bloka i
+       PDF specifikacije, kartica kooperanta zbirno po obračunu, Saldo OM, PWA izvoz salda, signal promene
+       osnovice na Oporavku. Isplata: nalozi (specifikacija umesto njenih dokumenata), izvod po broju dokumenta ili
+       specifikacije, avans, gotovina na F5 po stanici bloka. Pravilo „PDV nadoknada nikad gotovinom" važi za
+       otkup i doplatu (ploča „KEŠOM NAJVIŠE" na F5). Brojevi bez slova: dokument `<broj bloka>-0z`, specifikacija
+       `x/ddmmyy-00y`; poziv na broj knjiži samo uz tačno jedan pogodak preko blok / doplata / specifikacija,
+       inače ide na ručno mapiranje.
+     - **Šema:** nove `tblDoplata` (17 kolona) i `tblDoplataStavke` (16); `tblNovac.DoplataID` na kraju, prefiks
+       netaknut. Otisak `CA5CE30A` → `C4234F10`. A11: nove tabele u `WRITE_OWNERSHIP.json`.
+     - **Excel, 06.11.2026:** 12 suita zeleno — RunAllTests 349 / 0, BFP 3014 / 0, Banka 241 / 0, Storno 111 / 0,
+       Palete 115, Faktura 39 / 0, Agrohemija 25 / 0, Golden i ostale zelene; GREEN marker (izvor
+       `6cb2c2dcc50f`, sveska `otkup_test.xlsm/1c1a98fd`). Prvi prolaz posle DOP-ODL-30 je bio 349 / 2 —
+       premise testova 334 i 335 (stari sufiks), ispravljeno `90c23d5`.
+     - **Dokaz:** po rezovima, svaki DOKAZANO uz identičan izvor; poslednji 9 / 9 (potpis `f7d90bf38df19db5`).
+       Katalog 1155 → 1236.
+     - **Ručno:** Compile PASS; F5 po specifikaciji, natpis ploče, „Uključi filtrirane", kartica sa redovima po
+       obračunu i knjiženje nad pravim podacima (`1/061126-001`, dokumenti `…-04`) ispravni.
+     - **Statički:** CI `static` SUCCESS na `c726c6e9`; PR MERGEABLE / CLEAN; grana 49 ispred, 0 iza `main`-a.
+     - **Otvoreno, van merge-a** (`DOPLATA.md` §8): ručno mapiranje izvoda na specifikaciju, štampa
+       specifikacije iz kartice, probni nalog kroz e-banking, skraćenje naziva u meniju (podebljan se seče);
+       process PR za `.claude/rules` (`testovi.md` test 239 = 32 člana, `banka.md` doplata i specifikacija kao
+       dokumenti naloga); sat PWA otkupa (`ROADMAP.md` §9.2); uzgredni nalaz „TR:" na otkupnom listu (`racun` /
+       `račun`, nije reprodukovan). Pun katalog sabotaža pred release.
+     - **Osnova za `main` posle merge-a:** RunAllTests 349, BFP 3014, Banka 241, Storno 111, Palete 115,
+       Agrohemija 25, Faktura 39; katalog 1236; šema `C4234F10`.
+     - **Sledeći brojevi:** test 350 · stavka 324 · KI-089 · plan §14.64.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |
