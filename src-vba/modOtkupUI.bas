@@ -2929,7 +2929,7 @@ Public Sub RenderGrid()
                                     .caption = vbNullString
                                 End If
                             Case Else
-                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK)
+                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK, ColPrazno(k))
                                 .caption = txt
                         End Select
                         If Not celijaOK Then
@@ -3009,12 +3009,25 @@ End Sub
 '
 ' Zato konverzija ide OVDE, u funkciju koja NE MOZE da pukne, a upis se radi
 ' UVEK. Neuspeh je PRAZNA celija -- prazno je istina, tudji tekst nije.
+'
+' NAMERNO PRAZNA CELIJA (praznoDozvoljeno) -- samo kolona koja to IZRICITO kaze
+' u opisu (CelijaPraznoDozvoljeno), npr. kg i novac reda "Stanje OM" na listi
+' Saldo po OM (AMB-POSL-04). Tamo je prazan string "nema podatka" i nije kvar.
+' U svakoj drugoj brojcanoj koloni prazan string OSTAJE kvar prikaza: obavezna
+' vrednost koja je izostala mora da ostavi trag u logu (AMB457-REV-03).
 Public Function CelijaTekst(ByVal kind As String, ByVal v As Variant, _
-                            ByRef ok As Boolean) As String
+                            ByRef ok As Boolean, _
+                            Optional ByVal praznoDozvoljeno As Boolean = False) As String
     Dim d As Double
 
     ok = True
     On Error GoTo EH
+
+    If praznoDozvoljeno Then
+        If VarType(v) = vbString Then
+            If Len(v) = 0 Then Exit Function
+        End If
+    End If
 
     Select Case kind
         ' VREME, NE SAMO DATUM -- i to iz SERIJSKE vrednosti.
@@ -8180,6 +8193,21 @@ Private Function ColKind(ByVal i As Long) As String
     If Not IsArray(mCols) Then Exit Function
     If i > UBound(mCols) Then Exit Function
     ColKind = ColF(CStr(mCols(i)), 2)
+End Function
+
+' Kolona i mreze dozvoljava namerno praznu celiju (v. CelijaPraznoDozvoljeno).
+Private Function ColPrazno(ByVal i As Long) As Boolean
+    If Not IsArray(mCols) Then Exit Function
+    If i > UBound(mCols) Then Exit Function
+    ColPrazno = CelijaPraznoDozvoljeno(CStr(mCols(i)))
+End Function
+
+' Da li kolona DOZVOLJAVA namerno praznu celiju: sesto polje opisa je "prazno"
+' ("KLJUC||kg|82|1|prazno"). Opis bez sestog polja (svi ostali ekrani) daje
+' False, pa prazan string tamo ostaje kvar prikaza (v. CelijaTekst). Javno jer
+' ga deli stampa izvestaja i meri test 350.
+Public Function CelijaPraznoDozvoljeno(ByVal spec As String) As Boolean
+    CelijaPraznoDozvoljeno = (StrComp(Trim$(ColF(spec, 5)), "prazno", vbTextCompare) = 0)
 End Function
 
 ' DIRTY STATE. Znacka u zaglavlju je jedina povratna informacija da unos jos

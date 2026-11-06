@@ -2570,8 +2570,8 @@ SABOTAZE = {
     # primetila, pa suite ostaje zelena. Sabotaza vraca tacno taj oblik.
     "mreza-crtanje-kvari-stil": (
         "modOtkupUI.bas",
-        "                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK)\n",
-        "                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK): .TextAlign = fmTextAlignLeft   ' SABOTAZA: crtanje kvari stil\n",
+        "                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK, ColPrazno(k))\n",
+        "                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK, ColPrazno(k)): .TextAlign = fmTextAlignLeft   ' SABOTAZA: crtanje kvari stil\n",
         "T_MrezaCelija_NeostavljaTudjiTekst",
         "preduslov: brojcana kolona je poravnata DESNO",
     ),
@@ -11034,6 +11034,86 @@ SABOTAZE = {
         "        poslovno = False   ' SABOTAZA: revers kooperanta fizicki\n",
         "T_AmbPoslovno_ReversKooperantaPoslovno",
         "revers kooperanta uz pokrice: pocetno je stanje pre dokumenta, novo je poslovno",
+    ),
+    # --- AMB-POSL-04: AMB u Saldu po OM = stanje stanice + kooperanti (350) ---
+    # UKUPNO AMB opet nosi samo kooperante: magacin stanice ne ulazi nigde.
+    "amb-posl-04-stanje-izostavljeno": (
+        "modIzvestaj.bas",
+        "        totAmb = totAmb + stanjeOM\n",
+        "        totAmb = totAmb + 0   ' SABOTAZA: stanje stanice izostavljeno\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "nabavka na stanici: Stanje OM +20 i UKUPNO AMB +20, kooperant ne",
+    ),
+    # Kooperant koji drzi gajbe prema stanici, a u periodu nema otkup ni novac,
+    # opet ispada iz pregleda -- i iz UKUPNO AMB (AMB457-REV-01).
+    "amb-posl-04-koop-samo-amb-izostavljen": (
+        "modIzvestaj.bas",
+        "                dict.Add CStr(ak), Array(0#, 0#, 0#)\n",
+        "                ' SABOTAZA: kooperant samo sa ambalazom izostavljen\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "izdavanje kooperantu bez otkupa i novca u periodu: stanica -8, kooperant +8, UKUPNO AMB isti",
+    ),
+    # Stanje stanice je DANASNJE i za pregled u proslosti.
+    "amb-posl-04-stanje-bez-datuma": (
+        "modIzvestaj.bas",
+        "    Set stanjeOMDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_STANICA, False, datumDo)\n",
+        "    Set stanjeOMDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_STANICA, False, 0)   ' SABOTAZA: stanje danas\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "pregled na juce ne nosi danasnja kretanja stanice",
+    ),
+    # Ekran red Stanje OM puni nulama: kg i saldo stanice postaju "0,00".
+    "amb-posl-04-ekran-nule": (
+        "modScrIzvestaji.bas",
+        "                outA(n, 2) = vbNullString\n",
+        "                outA(n, 2) = NzD(src(i, 2))   ' SABOTAZA: nula umesto praznog\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "ekran: kg, vrednost, saldo i doplata reda Stanje OM su prazni, ne nula",
+    ),
+    # Ljuska prazan string i u koloni koja ga DOZVOLJAVA broji kao kvar prikaza.
+    "amb-posl-04-prazno-je-kvar": (
+        "modOtkupUI.bas",
+        "    If praznoDozvoljeno Then\n",
+        "    If False Then   ' SABOTAZA: prazan string je kvar i gde je dozvoljen\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "prazna celija reda Stanje OM se crta prazno i nije kvar prikaza",
+    ),
+    # Prazan string prolazi u SVAKOJ brojcanoj koloni (AMB457-REV-03): izostala
+    # obavezna vrednost vise ne ostavlja trag u logu.
+    "amb-posl-04-prazno-globalno": (
+        "modOtkupUI.bas",
+        "    If praznoDozvoljeno Then\n",
+        "    If True Then   ' SABOTAZA: prazno vazi za svaku kolonu\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "prazna vrednost u obaveznoj brojcanoj koloni ostaje kvar prikaza",
+    ),
+    # Mreza ne prosledjuje dozvolu praznog iz opisa kolone: red Stanje OM se
+    # crta, ali svaka njegova prazna celija ide u log kao kvar prikaza.
+    "amb-posl-04-mreza-bez-dozvole": (
+        "modOtkupUI.bas",
+        "                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK, ColPrazno(k))\n",
+        "                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK, False)   ' SABOTAZA: mreza ne cita dozvolu praznog\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "mreza crta red Stanje OM bez ijednog kvara prikaza",
+    ),
+    # Test 350 commit-uje umesto da vrati: knjizenja ostaju za sledece testove
+    # (AMB457-REV-02). Meri tvrdnju o izolaciji, ne proizvod.
+    "amb-posl-04-test-ne-vraca": (
+        "modTest.bas",
+        "    tx.RollbackTx   ' 350: knjiga, dokumenti, tipovi i kooperant nestaju\n",
+        "    tx.CommitTx   ' SABOTAZA: 350 ne vraca knjigu\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "test ne ostavlja knjizenja: knjiga, dokumenti, tipovi, kooperanti i AMB po OM kao pre",
+    ),
+    # Kolona AMB OM+KOOP. opet ima prioritet 3: na uskom ekranu se sklanja
+    # prva, pre AGRO -- broj koji je predmet pregleda nestaje.
+    "amb-posl-04-amb-sklanja-prva": (
+        "modScrIzvestaji.bas",
+        "                    \"OTKUI_HDI_AMB_OM||num|80|1\", _\n"
+        "                    \"OTKUI_HDI_DOPLATA||rsd|88|1|prazno\")\n",
+        "                    \"OTKUI_HDI_AMB_OM||num|80|3\", _\n"
+        "                    \"OTKUI_HDI_DOPLATA||rsd|88|1|prazno\")\n",
+        "T_AmbPoslovno_StanjeOMUSaldu",
+        "uzak ekran: kolona AMB OM+KOOP. se ne sklanja pre AGRO",
     ),
     # --- AMB-BIL-01/02: bilans ambalaze (testovi 290-292) ---
     # Bilans ne sece po datumDo: kasnija nabavka ulazi u stanje na kraju perioda.

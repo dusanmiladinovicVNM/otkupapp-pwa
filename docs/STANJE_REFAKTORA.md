@@ -10983,6 +10983,89 @@
        Agrohemija 25, Faktura 39; katalog 1236; šema `C4234F10`.
      - **Sledeći brojevi:** test 350 · stavka 324 · KI-089 · plan §14.64.
 
+324. **AMB po OM = stanje stanice + njeni kooperanti (`AMB-POSL-04`, dopuna `AMB-POSL-02`)** (03.11.2026).
+     Grana `claude/amb-saldo-om-stanica-i09xnn`, od `main` `95de6365`, rebase-ovana na `1caa86f` (posle `#456`,
+     `#458`, `#460`, `#468`, `#470`). Stavke 272–323 su u `main`-u, pa ova ide na 324. Paralelni rezovi su uzeli
+     testove 309–349 i KI-083..088, pa je test ovog reza **350**, a KI-089..091. Pre-flight je urađen u chatu (sve ose PROVEN ili N/A). Odluka
+     operatera o prikazu: poseban red „Stanje OM" u listi. Pravilo: `docs/DOMEN/README.md` §2,
+     `docs/DOMEN/AMBALAZA.md` 6.6a.
+
+     - **Šta se menja:** `modIzvestaj.ReportSaldoOM` čita fizičko stanje stanice na `datumDo` kroz isti primitiv
+       kao red kooperanta (`AmbSaldoPoNalogu(Stanica, False, datumDo)`), bez svog prolaza kroz knjigu. Red
+       `IZV_STANJE_OM` („Stanje OM", samo kolona 7) ide pre UKUPNO kad stanje nije 0, i ulazi u UKUPNO AMB.
+       `ReportSaldoOMZbirni` se ne menja: i dalje uzima UKUPNO pojedinačnog, pa pravilo živi na jednom mestu.
+     - **Ekran (`modScrIzvestaji`):** red je red konteksta (`VrstaReda = 2`, kao POČETNO STANJE): u mreži i na
+       papiru je u nefiltriranoj listi, pod pretragom nije. Ostale ćelije reda su prazan string, ne nula. Ljuska
+       (`modOtkupUI.CelijaTekst`) i štampa (`CelijaZaStampu`) prazan string u brojčanoj koloni crtaju prazno
+       **bez prijave kvara**. Vizuelno se nigde drugde ništa ne menja, jer se `""` i ranije crtao prazno, samo uz
+       WARN „Celija bez prikaza". Natpis kolone na OM listama Saldo je nov ključ `OTKUI_HDI_AMB_OM` („AMB OM+KOOP.",
+       širina 56 → 80); `OTKUI_HDI_AMB` ostaje listama kupaca.
+     - **Prioritet kolone AMB 3 → 1** (dopuna istog dana, posle UI pregleda): sa širinom 80 bi prioritet 3 AMB
+       sakrio već ispod ~770 pt širine mreže (ranije ~746 pt). Ljuska sklanja kolone od najvećeg prioriteta
+       (`modOtkupUI` raspored mreže), pa se sada prvi sklanja AGRO (2), a broj koji je predmet pregleda ostaje.
+     - **Pozivaoci (popisani pre promene oblika):**
+       - Bez promene ponašanja:
+         - zbirni (UKUPNO po labeli);
+         - KPI pločica `SaldoIzIzvestajaOM` (poslednji red, kolona 6);
+         - BFP ×4 (poslednji red);
+         - `T29` u `modTestStorno` (red po labeli);
+         - 284/288 (red kooperanta po imenu, premisa ista);
+         - 135 `T_Izv_ZbirniSadrzaj` (zbirni = UKUPNO, po konstrukciji);
+         - smoke `modIzvestajTests` (oblik).
+       - Dopunjen: 125 (`T_Izv_SlaganjeOtkupOM`). Preduslov „bar jedan kooperant ima AMB ≠ 0" ne sme da ga ispuni red
+         stanice.
+       - PWA `ExportSaldoOM*` računa sam, ne kroz `ReportSaldoOM`, pa nije pogođen.
+       - Sporedno: stanica koja ima samo gajbe sada ulazi u zbirni saldo, pa i u „Roba OM zbirno" (red sa 0 kg). Isto
+         se već dešavalo stanici koja u periodu ima samo novac.
+     - **Testovi:** nov 350 `T_AmbPoslovno_StanjeOMUSaldu` meri u koracima (nabavka +20 / izdavanje 0 /
+       kooperant donese svoje 0 / predaja vozaču −5), zatim dan DO, drugu stanicu, nezavisan fizički prolaz, saldo
+       liste Ambalaža od početka, zbirni red, i ekran (prazne ćelije, zbir kolone, pretraga, natpis).
+       **Sabotaže** `amb-posl-04-stanje-izostavljeno`, `-stanje-bez-datuma`, `-koop-samo-amb-izostavljen`,
+       `-ekran-nule`, `-prazno-je-kvar`, `-prazno-globalno`, `-mreza-bez-dozvole`, `-amb-sklanja-prva`,
+       `-test-ne-vraca`; katalog +9 (sa `main`-om sada 1245). Sidro zatečene `mreza-crtanje-kvari-stil` je pomereno na nov
+       poziv `CelijaTekst` (isti red, četvrti argument), pa i ona traži ponovni crveni dokaz. Mehanika primeni →
+       `--vrati` je proverena na disku za svih deset: zamena je u fajlu, izvor posle vraćanja je identičan.
+     - **NEVERIFIKOVANO:** `run_vba` u web sesiji ne radi, pa test 350 nije izvršen i sabotaže nisu pokazane crvene.
+       Treba: `python tools/run_vba.py --suite RunAllTests` (očekivano 350 / 0) i `--suite RunIzvestajTests`, pa
+       `python tools/dokaz.py amb-posl-04`, pa ručno Compile. Zeleno je samo bez Excela: `vba_check`,
+       `gen_schema_module --check` i `who_writes --check-ownership`.
+     - **Integracija sa doplatom (`#460`, F2; rebase 06.11.2026):** `ReportSaldoOM` sada ima kolonu 8 Doplata, a
+       zbirni 9. Red „Stanje OM" ostavlja Doplatu praznu (izveštaj `Empty`, ekran prazan string), a kolona Doplata
+       na pojedinačnoj OM listi dobija dozvolu `prazno`. Kooperant samo sa gajbama ima doplatu 0. Doplata isto
+       uvodi kooperanta bez otkupa u periodu (KO), po istom obrascu kao `AMB457-REV-01`, a dva skupa se ne
+       sudaraju. Test 350 meri i kolonu 8 (tip i prazno), a nacrtana mreža kolonu Doplata bez kvara. Sidro
+       `amb-posl-04-amb-sklanja-prva` obuhvata dva reda (AMB + Doplata), jer je red AMB sada isti na obe liste.
+     - **Nezavisni review PR `#457` (03.11.2026) — MERGE HOLD, dva P1 i dva P2; odgovor u istom PR-u:**
+       - `AMB457-REV-01` (P1, **potvrđeno u kodu**): skup redova je bio samo otkup + novac perioda, a AMB je stanje na
+         dan. Kooperant sa izdatim gajbama bez otkupa i novca u periodu ispadao je iz UKUPNO (stanica izdala 8 od 20:
+         12 umesto 20). Ispravka: posle agro prolaza u skup ulazi svaki kooperant sa saldom ≠ 0 prema stanici, sa
+         nulama u kg, novcu i agro; finansijski brojevi i opseg ostaju isti. Mana je postojala i pod `AMB-POSL-02`.
+         Test 350 korak 2 sada izdaje **svežem** kooperantu (bez otkupa i novca, ikad), uz tvrdnju o nulama u novcu.
+       - `AMB457-REV-02` (P1, **delimično tačno**): harness uvek radi nad temp kopijom sveske
+         (`docs/EXCEL_TEST_HARNESS.md`), pa se fixture na disku ne prlja. Unutar prolaza su knjiženja ostajala za
+         sledeće testove, kao i u 284/288/290/303, koji isto commit-uju bez rollback-a. Ispravka za 350: spoljna
+         transakcija sa snimkom `tblAmbalaza`, `tblAmbalazaDokument`, `tblTipAmbalaze` i `tblKooperanti` (sve što
+         test i pisci pišu). Rollback je bezuslovan, i na pad tvrdnje (`EH` vraća pa ponovo diže istu grešku), a
+         posle njega se tvrdi da su broj redova četiri tabele i AMB po OM kao pre testa. Ostali ambalažni testovi
+         nisu dirani (van obima).
+       - `AMB457-REV-03` (P2, **potvrđeno**): globalno „prazan string nije kvar" je vraćeno. Kolona izričito
+         dozvoljava praznu ćeliju šestim poljem opisa `prazno` (`modOtkupUI.CelijaPraznoDozvoljeno`; `CelijaTekst`
+         dobija opcioni `praznoDozvoljeno`, `RenderGrid` ga čita iz opisa). To nose samo kg, vrednost, isplaćeno,
+         agro i saldo pojedinačne OM liste Saldo. Svuda drugde prazan string ostaje kvar, i to test meri u oba
+         smera: direktno i kroz pravo crtanje mreže (`GridTestLoad "IZVESTAJI"` → `GridRenderTest` →
+         `GridKvarCelijaTest`; prazan string ubačen u AMB se broji). Štampa koristi istu dozvolu.
+       - `AMB457-REV-04` (P2) = `KI-090`, ostaje upisan. Review ga ne meša sa P1.
+       - „Broj testa 309 u konfliktu sa paralelnim razvojem" — **tačno, posle review-a**: u trenutku review-a ni
+         `main` (`d222aad`) ni otvoreni PR-ovi nisu imali 309, ali su `#458`, `#460` i `#468` posle uzeli 309–349.
+         Test je prenumerisan u 350. Dupli broj ili rupu u registru obara `vba_check` pravilo `REGISTAR` i CI
+         (`KI-084`, zatvoren kao netačan nalaz).
+     - **UI pregled oblasti (03.11.2026), upisano kao KI, bez koda:**
+       - `KI-089`: red „Stanje OM" pluta pri sortiranju;
+       - `KI-090`: ekran bez UKUPNO AMB, papir pojedinačnog bez OM avansa (i zato drugi Isplaćeno/Saldo od zbirnog),
+         roba OM zbirno sa redom od 0 kg;
+       - `KI-091`: PWA „Amb:" u saldu po OM je drugi broj pod istim imenom.
+     - **Sledeći brojevi:** test 351 · stavka 325 · KI-092.
+
 ## Dug sa imenom (posle S5-5b)
 
 | Stavka | Zašto stoji, a ne „kasnije ćemo“ |

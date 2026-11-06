@@ -42,6 +42,14 @@ Attribute VB_Name = "modScrIzvestaji"
 ' nefiltriranom prikazu: pod cipom/pretragom bi tvrdio zbir koji ne odgovara
 ' vidljivim redovima; zbir prikazanih uvek daje podnozje mreze.
 '
+' IZUZETAK je red "Stanje OM" na listi Saldo po OM (AMB-POSL-04): njegova
+' brojka se SABIRA u kolonu AMB (UKUPNO = stanica + kooperanti, isti broj kao
+' red stanice zbirno), pa mora biti u mrezi i na papiru. Ostale celije mu idu
+' kao PRAZAN STRING u kolonama koje to izricito dozvoljavaju (sesto polje opisa
+' "prazno"), pa ih ljuska i stampa crtaju prazno -- ne "0,00"; u svakoj drugoj
+' brojcanoj koloni prazan string ostaje kvar prikaza. Kao POCETNO STANJE, red je
+' red konteksta: pod filterom/pretragom se ne prikazuje.
+'
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================
 Option Explicit
@@ -727,6 +735,11 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                 ' Stanica | Kg | Vrednost | Isplaceno | Agro | Saldo | Amb | Doplata
                 ' Doplata je na kraju, kao u izvestaju (pozicioni citaoci);
                 ' saldo je ukljucuje (DOPLATA.md par. 6).
+                ' Amb = stanje stanice + njeni kooperanti (AMB-POSL-04), zato
+                ' svoj natpis -- OTKUI_HDI_AMB ostaje listama kupaca. Prioritet 1:
+                ' na uskom ekranu se sklanja AGRO (2), ne broj koji je predmet
+                ' pregleda -- sa sirinom 80 i prioritetom 3 ljuska bi ga sklonila
+                ' prvu, pre AGRO i pre Doplate.
                 IzKoloneZaListu = Array( _
                     "OTKUI_HD_OM||txt|140|1", _
                     "OTKUI_HD_KG||kg|82|1", _
@@ -734,7 +747,7 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                     "OTKUI_HDI_ISPLACENO||rsd|92|1", _
                     "OTKUI_HDI_AGRO||rest|80|2", _
                     "OTKUI_HDI_SALDO||rsd|92|1", _
-                    "OTKUI_HDI_AMB||num|56|3", _
+                    "OTKUI_HDI_AMB_OM||num|80|1", _
                     "OTKUI_HDI_DOPLATA||rsd|88|1", _
                     "OTKUI_HDI_REF||txt|1|4")
                 Exit Function
@@ -784,15 +797,20 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                     "OTKUI_HDI_AMB||num|64|2")
             Else
                 ' Kooperant | Kolicina | Vrednost | Isplaceno | Agro | Saldo | Amb | Doplata
+                ' Red Stanje OM (AMB-POSL-04) nosi samo Amb; ostale celije su
+                ' prazne, a kolona Amb se sabira u isti broj kao red stanice zbirno.
+                ' Prioritet 1 (ne 3): na uskom ekranu se prvi sklanja AGRO, ne AMB.
+                ' "prazno" (sesto polje): te kolone DOZVOLJAVAJU namerno praznu celiju
+                ' (red Stanje OM); AMB ne -- tamo je prazno i dalje kvar prikaza.
                 IzKoloneZaListu = Array( _
                     "OTKUI_HDA_KOOPERANT||txt|130|1", _
-                    "OTKUI_HD_KG||kg|82|1", _
-                    "OTKUI_HD_VREDNOST||rsd|92|1", _
-                    "OTKUI_HDI_ISPLACENO||rsd|92|1", _
-                    "OTKUI_HDI_AGRO||rest|82|2", _
-                    "OTKUI_HDI_SALDO||rsd|92|1", _
-                    "OTKUI_HDI_AMB||num|56|3", _
-                    "OTKUI_HDI_DOPLATA||rsd|88|1")
+                    "OTKUI_HD_KG||kg|82|1|prazno", _
+                    "OTKUI_HD_VREDNOST||rsd|92|1|prazno", _
+                    "OTKUI_HDI_ISPLACENO||rsd|92|1|prazno", _
+                    "OTKUI_HDI_AGRO||rest|82|2|prazno", _
+                    "OTKUI_HDI_SALDO||rsd|92|1|prazno", _
+                    "OTKUI_HDI_AMB_OM||num|80|1", _
+                    "OTKUI_HDI_DOPLATA||rsd|88|1|prazno")
             End If
         Case IZ_ROBA
             If tip = "OM" Then
@@ -1201,7 +1219,7 @@ Private Function Oblikuj(ByVal kljuc As String, ByVal tip As String, _
         ' legacy poslednji red PLUTAO usred liste (prvi smoke, lista Isplata).
         ' Zbir prikazanih daje podnozje; stampa dobija svoj izracunat UKUPNO.
         If vrsta = 1 Then GoTo Sledeci
-        ' POCETNO STANJE je red konteksta -- pod filterom bi lagao.
+        ' POCETNO STANJE i Stanje OM su redovi konteksta -- pod filterom bi lagali.
         If filtrira And vrsta = 2 Then GoTo Sledeci
 
         If Not CipPropusta(kljuc, filter, tip, zbirni, src, i) Then GoTo Sledeci
@@ -1265,6 +1283,10 @@ Private Function VrstaReda(ByVal kljuc As String, ByVal tip As String, _
                 ElseIf lbl = IZ_LBL_AGRO Then
                     mZonaAgro = NzD(src(i, 5))
                     VrstaReda = 3
+                ElseIf lbl = IZV_STANJE_OM Then
+                    ' Red konteksta U mrezi (AMB-POSL-04): kolona AMB se sabira
+                    ' u UKUPNO, pa red mora biti tamo gde je zbir -- v. zaglavlje.
+                    VrstaReda = 2
                 End If
             End If
         Case IZ_ROBA
@@ -1458,6 +1480,17 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
                 outA(n, 5) = NzD(src(i, 5))
                 outA(n, 6) = NzD(src(i, 6))
                 outA(n, 7) = NzD(src(i, 7))
+            ElseIf NzS(src(i, 1)) = IZV_STANJE_OM Then
+                ' Stanica nije kooperant: kg, novac, agro, saldo i doplata NE POSTOJE.
+                ' Prazan string, ne nula -- "0,00" bi bio saldo stanice koga nema
+                ' (FM-0028 #5); ljuska ga crta prazno (CelijaTekst).
+                outA(n, 2) = vbNullString
+                outA(n, 3) = vbNullString
+                outA(n, 4) = vbNullString
+                outA(n, 5) = vbNullString
+                outA(n, 6) = vbNullString
+                outA(n, 7) = NzD(src(i, 7))
+                outA(n, 8) = vbNullString       ' stanica nema doplatu
             Else
                 outA(n, 2) = NzD(src(i, 2))
                 outA(n, 3) = NzD(src(i, 3))
@@ -2795,6 +2828,13 @@ End Sub
 Private Function CelijaZaStampu(ByVal spec As String, ByVal v As Variant) As String
     Dim kind As String
     kind = Split(spec, "|")(2)
+    ' Prazan string = nema podatka, ali SAMO u koloni koja to dozvoljava (red
+    ' Stanje OM, AMB-POSL-04) -- isto pravilo kao CelijaTekst u mrezi.
+    If modOtkupUI.CelijaPraznoDozvoljeno(spec) Then
+        If VarType(v) = vbString Then
+            If Len(v) = 0 Then Exit Function
+        End If
+    End If
     Select Case kind
         Case "date"
             If IsNumeric(v) Then
