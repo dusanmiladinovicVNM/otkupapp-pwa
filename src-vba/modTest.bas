@@ -15453,8 +15453,8 @@ Private Sub T_AmbPoslovno_StanjeOMUSaldu()
              "nabavka na stanici: Stanje OM +20 i UKUPNO AMB +20, kooperant ne"
     AssertEq (st2 - st1) & "|" & (nRed2 - nRed1) & "|" & (uk2 - uk1), "-8|8|0", _
              "izdavanje kooperantu bez otkupa i novca u periodu: stanica -8, kooperant +8, UKUPNO AMB isti"
-    AssertEq KartOmNovacReda(FX_STANICA, Date, nazivNov), "0|0|0|0|0", _
-             "kooperant samo sa ambalazom nosi nule u kg, vrednosti, isplati, agro i saldu"
+    AssertEq KartOmNovacReda(FX_STANICA, Date, nazivNov), "0|0|0|0|0|0", _
+             "kooperant samo sa ambalazom nosi nule u kg, vrednosti, isplati, agro, saldu i doplati"
     AssertEq (st3 - st2) & "|" & (kRed3 - kRed2) & "|" & (uk3 - uk2), "10|-10|0", _
              "kooperant doneo svoje gajbe: stanica +10, kooperant -10, UKUPNO AMB isti"
     AssertEq (st4 - st3) & "|" & (uk4 - uk3), "-5|-5", _
@@ -15493,9 +15493,11 @@ Private Sub T_AmbPoslovno_StanjeOMUSaldu()
     If iSt > 0 Then
         AssertEq Format$(NzD2(redovi(iSt, 7)), "0"), Format$(st4, "0"), _
                  "ekran: AMB reda Stanje OM = stanje stanice"
-        AssertEq VarType(redovi(iSt, 2)) & "|" & NzToText(redovi(iSt, 2)) & "|" & _
-                 NzToText(redovi(iSt, 3)) & "|" & NzToText(redovi(iSt, 6)), vbString & "|||", _
-                 "ekran: kg, vrednost i saldo reda Stanje OM su prazni, ne nula"
+        AssertEq VarType(redovi(iSt, 2)) & "|" & VarType(redovi(iSt, 8)) & "|" & _
+                 NzToText(redovi(iSt, 2)) & "|" & NzToText(redovi(iSt, 3)) & "|" & _
+                 NzToText(redovi(iSt, 6)) & "|" & NzToText(redovi(iSt, 8)), _
+                 vbString & "|" & vbString & "||||", _
+                 "ekran: kg, vrednost, saldo i doplata reda Stanje OM su prazni, ne nula"
         tx1 = modOtkupUI.CelijaTekst("kg", redovi(iSt, 2), ok1, _
                                      modOtkupUI.CelijaPraznoDozvoljeno(CStr(kol(1))))
         tx2 = modOtkupUI.CelijaTekst("rsd", redovi(iSt, 6), ok2, _
@@ -15603,18 +15605,18 @@ Private Function KartOmAmbIli0(ByVal stanicaID As String, ByVal datumDo As Date,
 End Function
 
 ' Novcane kolone reda kooperanta u pregledu Saldo po OM (pun opseg do datumDo):
-' "kg|vrednost|isplaceno|agro|saldo"; "nema reda" kad reda nema.
+' "kg|vrednost|isplaceno|agro|saldo|doplata"; "nema reda" kad reda nema.
 Private Function KartOmNovacReda(ByVal stanicaID As String, ByVal datumDo As Date, _
                                  ByVal naziv As String) As String
-    Dim s As Variant, i As Long, c As Long, r As String
+    Dim s As Variant, i As Long, c As Variant, r As String
     KartOmNovacReda = "nema reda"
     s = modIzvestaj.ReportSaldoOM(stanicaID, IzvOdD(), datumDo)
     If Not IsArray(s) Then Exit Function
     For i = 1 To UBound(s, 1)
         If NzToText(s(i, 1)) = naziv Then
             r = ""
-            For c = 2 To 6
-                If c > 2 Then r = r & "|"
+            For Each c In Array(2, 3, 4, 5, 6, 8)
+                If Len(r) > 0 Then r = r & "|"
                 r = r & Format$(KartNum(s(i, c)), "0")
             Next c
             KartOmNovacReda = r

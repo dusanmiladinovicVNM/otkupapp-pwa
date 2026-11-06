@@ -11067,7 +11067,7 @@ SABOTAZE = {
         "                outA(n, 2) = vbNullString\n",
         "                outA(n, 2) = NzD(src(i, 2))   ' SABOTAZA: nula umesto praznog\n",
         "T_AmbPoslovno_StanjeOMUSaldu",
-        "ekran: kg, vrednost i saldo reda Stanje OM su prazni, ne nula",
+        "ekran: kg, vrednost, saldo i doplata reda Stanje OM su prazni, ne nula",
     ),
     # Ljuska prazan string i u koloni koja ga DOZVOLJAVA broji kao kvar prikaza.
     "amb-posl-04-prazno-je-kvar": (

@@ -287,7 +287,7 @@ otkupnog mesta na dan `datumDo`: u magacinu stanice i kod njenih kooperanata.
 | Deo | Broj | Čitalac |
 |---|---|---|
 | red „Stanje OM" | **fizički** saldo stanice na `datumDo`, svi tipovi gajbe | `AmbSaldoPoNalogu(Stanica, False, datumDo)` — isti primitiv kao red kooperanta, bez svog prolaza |
-| red kooperanta | poslovni saldo prema toj stanici na `datumDo` (kao do sada); red ima i kooperant **bez otkupa i novca u periodu** kad drži gajbe prema stanici — sa nulama u kg, novcu i agro (`AMB457-REV-01`) | `AmbSaldoPoNalogu(Kooperant, True, datumDo, Stanica, id)` |
+| red kooperanta | poslovni saldo prema toj stanici na `datumDo` (kao do sada); red ima i kooperant **bez otkupa i novca u periodu** kad drži gajbe prema stanici — sa nulama u kg, novcu, agro i doplati (`AMB457-REV-01`) | `AmbSaldoPoNalogu(Kooperant, True, datumDo, Stanica, id)` |
 | UKUPNO | stanje stanice + zbir kooperanata | `ReportSaldoOM`; zbirni red stanice **je** taj UKUPNO (`ReportSaldoOMZbirni`, jedno pravilo) |
 
 `+` znači da su naše gajbe tu; `−` da stanica i njeni kooperanti zajedno duguju
@@ -302,7 +302,7 @@ stanica 148 + kooperanti +411 = 559; Hladnjača 0 + (−295) = −295.
   pa je njen saldo fizičko stanje samo kad „od" počinje od početka sezone. Lista se
   ne menja; stanje dolazi iz knjige.
 - **Prikaz:** red „Stanje OM" ide pre UKUPNO i nosi samo AMB (ostale kolone su
-  prazne, ne „0,00" — stanica nema otkup, novac ni agro zaduženje). Prazna ćelija
+  prazne, ne „0,00" — stanica nema otkup, novac, agro zaduženje ni doplatu). Prazna ćelija
   je dozvoljena **samo** u kolonama čiji opis to kaže (šesto polje `prazno`); u
   svakoj drugoj brojčanoj koloni prazan string ostaje kvar prikaza (`AMB457-REV-03`). Na ekranu je
   red konteksta: prikazuje se u nefiltriranoj listi, pod pretragom ne. Red se

@@ -738,8 +738,8 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                 ' Amb = stanje stanice + njeni kooperanti (AMB-POSL-04), zato
                 ' svoj natpis -- OTKUI_HDI_AMB ostaje listama kupaca. Prioritet 1:
                 ' na uskom ekranu se sklanja AGRO (2), ne broj koji je predmet
-                ' pregleda -- sa sirinom 80 bi prioritet 3 AMB sakrio vec ispod
-                ' ~770-780 pt mreze (pre ove izmene ~746).
+                ' pregleda -- sa sirinom 80 i prioritetom 3 ljuska bi ga sklonila
+                ' prvu, pre AGRO i pre Doplate.
                 IzKoloneZaListu = Array( _
                     "OTKUI_HD_OM||txt|140|1", _
                     "OTKUI_HD_KG||kg|82|1", _
@@ -1481,7 +1481,7 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
                 outA(n, 6) = NzD(src(i, 6))
                 outA(n, 7) = NzD(src(i, 7))
             ElseIf NzS(src(i, 1)) = IZV_STANJE_OM Then
-                ' Stanica nije kooperant: kg, novac, agro i saldo NE POSTOJE.
+                ' Stanica nije kooperant: kg, novac, agro, saldo i doplata NE POSTOJE.
                 ' Prazan string, ne nula -- "0,00" bi bio saldo stanice koga nema
                 ' (FM-0028 #5); ljuska ga crta prazno (CelijaTekst).
                 outA(n, 2) = vbNullString
@@ -1490,6 +1490,7 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
                 outA(n, 5) = vbNullString
                 outA(n, 6) = vbNullString
                 outA(n, 7) = NzD(src(i, 7))
+                outA(n, 8) = vbNullString       ' stanica nema doplatu
             Else
                 outA(n, 2) = NzD(src(i, 2))
                 outA(n, 3) = NzD(src(i, 3))
