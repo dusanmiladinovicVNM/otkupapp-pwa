@@ -315,6 +315,11 @@ Public Sub RunBusinessFlowProSuite()
     Test_Amb_StornoKontraStavVracaSaldo
     Test_Amb_StornoPosleVracanjaOdbijen
     Test_Amb_StornoNePraviMinus
+    ' AMB-10-ODL-40: odlozeno merenje u zameni verzije lanca
+    Test_AMB_ODL40_MeriPosleZamene
+    Test_AMB_ODL40_BezPokricaPadaNaKraju
+    Test_AMB_ODL40_CommitBezZavrsetkaOdbijen
+    Test_AMB_ODL40_UgovorPocetka
     Test_Amb_UndoStornaOdbijenNadKnjigom
     Test_Amb_PonovnaStampaBezRedaKnjige
     Test_Amb_JedanProtivpartnerPoDokumentu
@@ -25968,6 +25973,322 @@ EH:
     Set tx = Nothing
     On Error GoTo 0
     LogFatal "Test_Amb_StornoNePraviMinus", errNum, errDesc
+End Sub
+
+' ============================================================
+' AMB-10-ODL-40 (LNC-ODL-15): ODLOZENO MERENJE U ZAMENI VERZIJE LANCA
+' ============================================================
+'
+' Isti scenario kao Test_Amb_StornoNePraviMinus: stanica izda 20 praznih,
+' kooperant ih vrati pune otkupom, stanica ih otpise -- pa storno otkupa vodi
+' stanicu u -20 (AMB-INV-07). Bez pokrica je obaveza 0 kroz ceo test, pa
+' odbijenica moze da dodje SAMO od AMB-INV-07.
+'
+' Zamena verzije lanca radi isto u malom: kontra-stav stare (ovde otkupa) pa
+' noga nove (ovde povrat praznih) u ISTOJ transakciji. Testovi mere primitiv,
+' ne potez lanca -- njega meri STORNO_U_LANCU.md par. 8.
+
+Private Function Odl40Scenario(ByVal scenario As String, ByRef tipT As String) As String
+    Dim tx As clsTransaction, h As Object, stavke As Collection
+    Dim dokIzd As String, greska As String, otkID As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    tipT = RegistrujTipTesta("TIP40-" & scenario)
+    modAmbalaza.NabaviAmbalazu_TX Date, TEST_ST_ID, tipT, 20#
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dokIzd = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "O40I-" & scenario, _
+                                          Date, AMB_NALOG_STANICA, TEST_ST_ID)
+    modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 20#, _
+                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dokIzd
+    tx.CommitTx
+    Set tx = Nothing
+
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-O40-" & scenario)
+    h("TipAmbalaze") = tipT
+    Set stavke = OtkStavke(400#, 50#, 20, 0#, 0#, 0)
+    otkID = CreateOtkup_TX(h, stavke, greska)
+    If Len(otkID) = 0 Then
+        Err.Raise vbObjectError + 4401, "Odl40Scenario", "polazni otkup nije upisan: " & greska
+    End If
+
+    modAmbalaza.OtpisiAmbalazu_TX Date, TEST_ST_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                                  tipT, 20#, "lom -- " & scenario
+    Odl40Scenario = otkID
+    Exit Function
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "Odl40Scenario", errDesc
+End Function
+
+' Transakcija storna otkupa -- iste tabele koje snima StornoOtkup_TX, plus
+' zaglavlje ambalaznog dokumenta za nogu "nove verzije".
+Private Function Odl40Tx() As clsTransaction
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_STORNO_ZURNAL
+    Set Odl40Tx = tx
+End Function
+
+' A -> B: isti storno bez odlaganja pada (kontrola), a sa odlaganjem i pokricem
+' u istoj transakciji prolazi, i stanica je posle zamene gde je bila.
+Private Sub Test_AMB_ODL40_MeriPosleZamene()
+    Const SRC As String = "Test_AMB_ODL40_MeriPosleZamene"
+    Dim scenario As String, tipT As String, otkID As String, dokPov As String
+    Dim tx As clsTransaction
+    Dim stPre As Double, stPosle As Double
+    Dim bezOdlaganja As Boolean, otvorenoPosle As Boolean
+    Dim stornoDesc As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("O40A")
+    otkID = Odl40Scenario(scenario, tipT)
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
+
+    bezOdlaganja = StornoOtkup_TX(otkID)
+
+    Set tx = Odl40Tx()
+    modAmbalaza.AmbOdloziInvarijantePocni tx, SRC
+
+    ' Greska storna se hvata i TVRDI po imenu: bez odlaganja bi kontra-stav pao
+    ' odmah, i to mora da se vidi kao ova tvrdnja, ne kao LogFatal.
+    On Error Resume Next
+    modStorno.StornoOtkup otkID, tx
+    stornoDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    If Len(stornoDesc) = 0 Then
+        dokPov = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "O40P-" & scenario, _
+                                              Date, AMB_NALOG_STANICA, TEST_ST_ID)
+        modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 20#, _
+                    AMB_NALOG_KOOPERANT, TEST_KOOP_ID, AMB_NALOG_STANICA, TEST_ST_ID, _
+                    AMB_VK_POVRAT_PRAZNE, DOK_TIP_AMBALAZA_DOKUMENT, dokPov
+        modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC
+        otvorenoPosle = modAmbalaza.AmbOdlozenoOtvorenoZa(tx)
+        tx.CommitTx
+    Else
+        modAmbalaza.AmbOdloziInvarijanteOtkazi tx
+        tx.RollbackTx
+    End If
+    Set tx = Nothing
+    stPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
+
+    AssertEquals "", stornoDesc, _
+                 "ODL-40: u zameni kontra-stav ne meri odmah (merenje je odlozeno)"
+    AssertFalse bezOdlaganja, _
+                "ODL-40 kontrola: bez odlaganja isti storno pada na AMB-INV-07"
+    AssertEquals "Da", OtkPolje(otkID, COL_STORNIRANO), _
+                 "ODL-40: storno sa odlaganjem i pokricem u istoj transakciji je proknjizen"
+    AssertTrue Abs(stPosle - stPre) < 0.001, _
+               "ODL-40: posle zamene stanica je gde je bila (neto)"
+    AssertFalse otvorenoPosle, _
+                "ODL-40: zavrsetak zatvara odlaganje"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then
+        modAmbalaza.AmbOdloziInvarijanteOtkazi tx
+        tx.RollbackTx
+    End If
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' Zamena koja NE vrati pokrice pada na kraju, po imenu pravila, i rollback vraca
+' i kontra-stav koji je odlaganje pustilo.
+Private Sub Test_AMB_ODL40_BezPokricaPadaNaKraju()
+    Const SRC As String = "Test_AMB_ODL40_BezPokricaPadaNaKraju"
+    Dim scenario As String, tipT As String, otkID As String
+    Dim tx As clsTransaction
+    Dim stPre As Double, stPosle As Double
+    Dim otvorenoPosle As Boolean
+    Dim padNum As Long, padDesc As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("O40B")
+    otkID = Odl40Scenario(scenario, tipT)
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
+
+    Set tx = Odl40Tx()
+    modAmbalaza.AmbOdloziInvarijantePocni tx, SRC
+    modStorno.StornoOtkup otkID, tx
+
+    On Error Resume Next
+    modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC
+    padNum = Err.Number
+    padDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    otvorenoPosle = modAmbalaza.AmbOdlozenoOtvorenoZa(tx)
+    tx.RollbackTx
+    Set tx = Nothing
+    stPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipT)
+
+    AssertTrue InStr(1, padDesc, "AMB-INV-07", vbTextCompare) > 0, _
+               "ODL-40: zamena bez pokrica pada na AMB-INV-07 posle cele zamene"
+    AssertFalse otvorenoPosle, _
+                "ODL-40: pad merenja ne ostavlja odlaganje otvoreno"
+    AssertTrue OtkPolje(otkID, COL_STORNIRANO) <> "Da", _
+               "ODL-40: posle rollback-a otkup je opet aktivan"
+    AssertEquals "0", CStr(AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)), _
+                 "ODL-40: posle rollback-a nema kontra-stava"
+    AssertTrue Abs(stPosle - stPre) < 0.001, _
+               "ODL-40: posle rollback-a saldo stanice je nepromenjen"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then
+        modAmbalaza.AmbOdloziInvarijanteOtkazi tx
+        tx.RollbackTx
+    End If
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' Zaboravljen zavrsetak NE prolazi tiho: commit se odbija, a zaostalo stanje te
+' (vracene) transakcije ne blokira sledecu.
+Private Sub Test_AMB_ODL40_CommitBezZavrsetkaOdbijen()
+    Const SRC As String = "Test_AMB_ODL40_CommitBezZavrsetkaOdbijen"
+    Dim scenario As String, tipT As String, otkID As String
+    Dim tx As clsTransaction, tx2 As clsTransaction
+    Dim padDesc As String, otvoreno2 As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("O40C")
+    otkID = Odl40Scenario(scenario, tipT)
+
+    Set tx = Odl40Tx()
+    modAmbalaza.AmbOdloziInvarijantePocni tx, SRC
+    modStorno.StornoOtkup otkID, tx
+
+    On Error Resume Next
+    tx.CommitTx
+    padDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+    tx.RollbackTx
+    Set tx = Nothing
+
+    Set tx2 = Odl40Tx()
+    modAmbalaza.AmbOdloziInvarijantePocni tx2, SRC
+    modAmbalaza.AmbOdloziInvarijanteOtkazi tx2
+    otvoreno2 = modAmbalaza.AmbOdlozenoOtvorenoZa(tx2)
+    tx2.RollbackTx
+    Set tx2 = Nothing
+
+    AssertTrue InStr(1, padDesc, "AMB-10-ODL-40", vbTextCompare) > 0, _
+               "ODL-40: commit sa otvorenim odlaganjem je odbijen"
+    AssertTrue OtkPolje(otkID, COL_STORNIRANO) <> "Da", _
+               "ODL-40: odbijen commit ne ostavlja storno"
+    AssertEquals "0", CStr(AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)), _
+                 "ODL-40: odbijen commit ne ostavlja kontra-stav"
+    AssertFalse otvoreno2, _
+                "ODL-40: zaostalo odlaganje vracene transakcije ne blokira sledecu"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then
+        modAmbalaza.AmbOdloziInvarijanteOtkazi tx
+        tx.RollbackTx
+    End If
+    If Not tx2 Is Nothing Then
+        modAmbalaza.AmbOdloziInvarijanteOtkazi tx2
+        tx2.RollbackTx
+    End If
+    Set tx = Nothing
+    Set tx2 = Nothing
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' Ugovor pocetka: bez transakcije, bez snimka knjige i dvaput za istu
+' transakciju -- svako se odbija, imenovano.
+Private Sub Test_AMB_ODL40_UgovorPocetka()
+    Const SRC As String = "Test_AMB_ODL40_UgovorPocetka"
+    Dim tx As clsTransaction
+    Dim bezTx As String, bezSnimka As String, dvaput As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+
+    On Error Resume Next
+    modAmbalaza.AmbOdloziInvarijantePocni Nothing, SRC
+    bezTx = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    On Error Resume Next
+    modAmbalaza.AmbOdloziInvarijantePocni tx, SRC
+    bezSnimka = Err.description
+    Err.Clear
+    On Error GoTo EH
+    tx.RollbackTx
+    Set tx = Nothing
+
+    Set tx = Odl40Tx()
+    modAmbalaza.AmbOdloziInvarijantePocni tx, SRC
+    On Error Resume Next
+    modAmbalaza.AmbOdloziInvarijantePocni tx, SRC
+    dvaput = Err.description
+    Err.Clear
+    On Error GoTo EH
+    modAmbalaza.AmbOdloziInvarijanteOtkazi tx
+    tx.RollbackTx
+    Set tx = Nothing
+
+    AssertTrue InStr(1, bezTx, "aktivnu transakciju", vbTextCompare) > 0, _
+               "ODL-40 ugovor: bez transakcije se odbija"
+    AssertTrue InStr(1, bezSnimka, "ne snima", vbTextCompare) > 0, _
+               "ODL-40 ugovor: transakcija bez snimka knjige se odbija (AMB-INV-08)"
+    AssertTrue InStr(1, dvaput, "vec otvoreno", vbTextCompare) > 0, _
+               "ODL-40 ugovor: drugo odlaganje iste transakcije se odbija"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then
+        modAmbalaza.AmbOdloziInvarijanteOtkazi tx
+        tx.RollbackTx
+    End If
+    Set tx = Nothing
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
 End Sub
 
 

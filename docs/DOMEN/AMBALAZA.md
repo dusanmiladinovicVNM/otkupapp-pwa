@@ -3171,7 +3171,16 @@ proširuje na `AMB-INV-07` i `AMB-INV-16`, **samo** za zamenu verzije u lancu; o
 meri kao i do sada. Pravilo „saldo realnog naloga nije u minusu" se ne menja — menja se samo
 trenutak u kome se meri unutar jedne transakcije.
 
-*Provera (plan, koda nema):* `STORNO_U_LANCU.md` §8, T1 (crveno nad današnjim kodom) i T2.
+**Kod (deo 1 reza `LNC`, 06.11.2026):** `modAmbalaza.AmbOdloziInvarijantePocni` /
+`AmbOdloziInvarijanteZavrsi` / `AmbOdloziInvarijanteOtkazi`, grana u
+`StornirajAmbalazuDokumenta`, jedno telo `RequireSaldoNaloga` za oba puta; zaboravljen
+završetak odbija `clsTransaction.CommitTx`.
+
+*Provera:* BFP `Test_AMB_ODL40_MeriPosleZamene` (A → B: bez odlaganja pada, sa odlaganjem i
+pokrićem prolazi), `_BezPokricaPadaNaKraju`, `_CommitBezZavrsetkaOdbijen`, `_UgovorPocetka` ·
+sabotaže `odl40-zavrsi-bez-inv07`, `odl40-kontra-meri-odmah`, `odl40-commit-bez-kapije` ·
+sabotaža `amb-storno-bez-inv07` sada pogađa i odloženi put. **NEVERIFIKOVANO u Excelu**
+(web sesija).
 
 ### 6.15 Cena — posteno
 

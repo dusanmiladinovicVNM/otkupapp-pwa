@@ -155,7 +155,7 @@ Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 7" (ko
 
 **ZBR-OWN-01 — da li je zbirna interni hladnjački tok je činjenica zbirne, upisana
 pri nastanku (review #442, P1-b; odluka operatera 25.10.2026).** `tblZbirna.KupacHladnjaca`
-(`Da`/`Ne`, poslednja kolona kanona) piše **samo pisac zbirne**
+(`Da`/`Ne`, 26. kolona kanona) piše **samo pisac zbirne**
 (`BuildZbirnaHeaderRowData` pri nastanku, izmena kupca u nacrtu), po pravilu
 `IsHladnjacaKupac(kupac)` u tom trenutku. PONIŠTENJE zbirne po njoj odlučuje sme li da
 stornira prijemnicu i palete (`modStornoFlow.ZbirnaOwnsExternalChain`). Do review-a se

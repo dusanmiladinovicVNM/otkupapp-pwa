@@ -7441,6 +7441,33 @@ SABOTAZE = {
         "Test_Amb_StornoNePraviMinus",
         "STORNO: dokument cija je ambalaza otisla dalje se NE stornira (AMB-INV-07)",
     ),
+    # AMB-10-ODL-40: kraj odlozenog merenja ne meri AMB-INV-07 -- zamena verzije
+    # lanca koja NE vrati pokrice ostavi realan nalog u minusu, tiho.
+    "odl40-zavrsi-bez-inv07": (
+        "modAmbalaza.bas",
+        "    RequireSaldoNaloga nalozi, sourceName\n",
+        "    ' SABOTAZA: posle zamene se AMB-INV-07 ne meri\n",
+        "Test_AMB_ODL40_BezPokricaPadaNaKraju",
+        "ODL-40: zamena bez pokrica pada na AMB-INV-07 posle cele zamene",
+    ),
+    # AMB-10-ODL-40: kontra-stav u zameni meri odmah, kao van zamene -- potez lanca
+    # pada na medjukoraku (vozac je gajbe vec predao), iako je posle-stanje tacno.
+    "odl40-kontra-meri-odmah": (
+        "modAmbalaza.bas",
+        "    If AmbOdlozenoOtvorenoZa(tx) Then\n",
+        "    If False Then   ' SABOTAZA: kontra-stav meri odmah i u zameni\n",
+        "Test_AMB_ODL40_MeriPosleZamene",
+        "ODL-40: u zameni kontra-stav ne meri odmah (merenje je odlozeno)",
+    ),
+    # AMB-10-ODL-40: commit ne pita za otvoreno odlaganje -- zaboravljen zavrsetak
+    # tiho commit-uje storno bez AMB-INV-07/09/16.
+    "odl40-commit-bez-kapije": (
+        "clsTransaction.cls",
+        "    If modAmbalaza.AmbOdlozenoOtvorenoZa(Me) Then\n",
+        "    If False Then   ' SABOTAZA: commit bez zavrsetka odlaganja\n",
+        "Test_AMB_ODL40_CommitBezZavrsetkaOdbijen",
+        "ODL-40: commit sa otvorenim odlaganjem je odbijen",
+    ),
     # Ledger-storno ponovo vezuje dokument sam: tada AKTIVAN otkup moze da dobije
     # anuliran ambalazni efekat bez ijedne izmene zaglavlja.
     "amb-storno-primitiv-vezuje": (

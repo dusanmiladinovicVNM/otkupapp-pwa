@@ -1,6 +1,7 @@
 # Storno i ispravka otkupnog lista u lancu (`LNC-*`)
 
-> **Status: PRE-FLIGHT 06.11.2026 — odluke operatera zapisane, koda NEMA.**
+> **Status: PRE-FLIGHT 06.11.2026 — odluke operatera zapisane. U kodu: deo 1 (šema
+> `LNC-ODL-16`, ambalaža `LNC-ODL-15` / `AMB-10-ODL-40`), NEVERIFIKOVANO u Excelu.**
 > Mereno čitanjem nad `main` = `1caa86f`; Excel nije pokrenut, pa je svaka tvrdnja o
 > ponašanju ovde **NEVERIFIKOVANA** dok je ne potvrdi test. Verdikt po osama je §7.
 >
@@ -165,7 +166,7 @@ sweep-a i proveravaju se u planu reza.
 | **CAPABILITY** | **PROVEN** | nova: F8 nad listom u lancu (danas odbijanje); proširena: F1 „Ispravi blok" (danas odbijanje); **ostaje netaknuto:** F8 zbirna DUPLI/PONIŠTENJE/REŠI KASNIJE (`T_Zbirna_NemaIspravku` i dalje važi — premisa testa se ne menja), F2 „Ispravi", Oporavak „Prevezi" |
 | **ACCEPTANCE CONTRACT** | **PROVEN (plan)** | §8 |
 | **PLATFORM** | **N/A** | nema novog Excel/VBE/MSForms ponašanja: dijalog ide kroz postojeći seam `modOtkupUI.Dijalog`, F8 kroz `StornoIzvrsiMod`. Cena snapshot-a ~13 tabela **nemerena** (presedan 11) |
-| **LANDING** | **RIZIK — serijski** | §9 |
+| **LANDING** | **RIZIK — serijski, ovaj rez pre S9** | §9 |
 
 **⚠ ARCHITECTURAL EDGE CASE** (zatvoren odlukom): ambalaža u međukoraku (`LNC-ODL-15`).
 **⚠ IDENTITY RISK** (zatvoren invarijantom): izbor prijemnica po labeli (`LNC-INV-07`).
@@ -210,9 +211,13 @@ se gradi **kanonskim piscima**, ne fixture redovima starog oblika (§7, FALSE-GR
 
 ## 9) Landing
 
-- **Serijski posle PR #469 (pre-flight S9).** S9 dira iste ivice (`SLED-ODL-03` istorija iz
-  `tblStornoVeze`, `SLED-ODL-08` brisanje broj-oblika traga, S9-6 kanon). Rez ne sme da
-  napiše broj-oblik koji S9 briše, a S9-6 ne sme da obriše nove ID kolone zbirne.
+- **Prioritet: ovaj rez ide PRE S9** (operater, 06.11.2026: „prioritet najveći, iznad S9").
+  PR #469 (pre-flight S9) se preslaže na ovaj rez, ne obrnuto. S9 dira iste ivice
+  (`SLED-ODL-03` istorija iz `tblStornoVeze`, `SLED-ODL-08` brisanje broj-oblika traga, S9-6
+  kanon), pa važi u oba smera: ovaj rez **ne piše** broj-oblik koji S9 briše, a S9-6 **ne
+  briše** nove ID kolone zbirne (`LNC-ODL-16`) i čita red po paru u `tblStornoVeze`
+  (`LNC-ODL-20`). Pre-flight S9 posle preslaganja treba ponovo da izmeri merenje 2
+  („kolone bez pisca"): `tblZbirna.IspravkaOdID` / `ZamenjenSaID` tada imaju pisca.
 - **Šema** (`LNC-ODL-16`) je centralni registar → serijski, sama u svom commitu.
 - PR #457 (ambalaža, otvoren) dira `AMBALAZA.md`, `README.md`, `modTest.bas`: brojevi
   testova i odeljaka se dodeljuju **posle** njegovog merge-a.

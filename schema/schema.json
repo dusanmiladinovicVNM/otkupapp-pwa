@@ -1014,7 +1014,9 @@
         "CorrectionID",
         "IzdatoStatus",
         "GeneracijaID",
-        "KupacHladnjaca"
+        "KupacHladnjaca",
+        "IspravkaOdID",
+        "ZamenjenSaID"
       ]
     },
     {
