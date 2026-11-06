@@ -239,9 +239,14 @@ End Function
 ' storniran, pa bi storno-kapija prva uhvatila oba slucaja i operateru rekla
 ' manje korisnu istinu ("storniran") umesto korisnije ("zamenjen sa OTK-x --
 ' ispravi POSLEDNJU verziju"). Specificnija kapija zato ide prva.
-Public Function IspravkaOtkupaRazlog(ByVal otkupID As String) As String
+'
+' uLancu: ispravka lista u IZDATOJ otpremnici ide kroz potez u lancu
+' (modDokumenta.IspravkaListaULancu_TX, LNC-ODL-12): izdat roditelj tada NIJE
+' prepreka -- potez pravi novu verziju otpremnice i zbirne. Ostale kapije vaze.
+Public Function IspravkaOtkupaRazlog(ByVal otkupID As String, _
+                                     Optional ByVal uLancu As Boolean = False) As String
     On Error GoTo EH
-    IspravkaOtkupaRazlog = IspravkaPrepreka(Trim$(otkupID))
+    IspravkaOtkupaRazlog = IspravkaPrepreka(Trim$(otkupID), uLancu)
     Exit Function
 EH:
     ' Neizvesnost NE sme da otvori formu zamene: kad se ne zna sme li ispravka,
@@ -249,7 +254,8 @@ EH:
     IspravkaOtkupaRazlog = "Ne moze da se utvrdi da li je ispravka moguca: " & Err.description
 End Function
 
-Private Function IspravkaPrepreka(ByVal stariOtkupID As String) As String
+Private Function IspravkaPrepreka(ByVal stariOtkupID As String, _
+                                  Optional ByVal uLancu As Boolean = False) As String
     Const SRC As String = "IspravkaPrepreka"
 
     If Len(Trim$(stariOtkupID)) = 0 Then
@@ -303,10 +309,12 @@ Private Function IspravkaPrepreka(ByVal stariOtkupID As String) As String
         stat = UCase$(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, roditelj, _
                                                  COL_TRACE_IZDATO_STATUS))))
         If stat = UCase$(IZDATO_IZDATO) Or stat = UCase$(IZDATO_PROSLEDJENO) Then
-            IspravkaPrepreka = "Otkup je izvor IZDATE otpremnice " & roditelj & _
-                               ". Sastav izdatog dokumenta se ne menja u mestu (A13): prvo " & _
-                               "ispravi otpremnicu -- nastaje NACRT sa istim blokovima -- pa " & _
-                               "onda ispravi blok u njemu."
+            If Not uLancu Then
+                IspravkaPrepreka = "Otkup je izvor IZDATE otpremnice " & roditelj & _
+                                   ". Sastav izdatog dokumenta se ne menja u mestu (A13): " & _
+                                   "ispravka ide kroz potez u lancu (nova verzija otpremnice " & _
+                                   "i zbirne)."
+            End If
         ElseIf stat <> UCase$(IZDATO_DRAFT) Then
             IspravkaPrepreka = "Otpremnica " & roditelj & " nema poznat status (" & stat & _
                                "). Dok se to ne popravi, blok se ne ispravlja -- ne zna se " & _
@@ -381,17 +389,6 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     Dim roditelj As String
     roditelj = modDokumenta.OtpremnicaZaOtkup(stariOtkupID)
 
-    ' A9: nov poslovni broj. Poredi se pre pisca, da poruka imenuje PRAVILO, a ne
-    ' jedinstvenost broja -- ista greska sa dva razlicita uzroka zbunjuje operatera.
-    Dim stariBroj As String, noviBroj As String
-    stariBroj = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, stariOtkupID, COL_OTK_BR_DOK)))
-    noviBroj = Trim$(OtkHdrOpcion(h, "BrojDokumenta"))
-
-    If StrComp(noviBroj, stariBroj, vbTextCompare) = 0 Then
-        Err.Raise vbObjectError + 1913, SRC, _
-                  "Ispravka mora dobiti NOV broj dokumenta (A9). Stari: " & stariBroj & "."
-    End If
-
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
@@ -410,6 +407,93 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     ' zurnal sa zapisom storna koji se posle rollback-a nije desio: undo bi
     ' nudio ponistenje operacije nad dokumentom koji je i dalje aktivan.
     tx.AddTableSnapshot TBL_STORNO_ZURNAL
+
+    Dim noviID As String
+    noviID = IspravkaOtkupaUTransakciji(stariOtkupID, h, stavke, tx, potvrdaDeficita, _
+                                        outUpozorenje, roditelj)
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    IspravkaOtkupa_TX = noviID
+    Exit Function
+
+EH:
+    ' Upozorenje se postavlja PRE CompleteCorrectionContext i CommitTx. Ako
+    ' nesto posle toga pukne, rollback vrati podatke -- ali bi outUpozorenje
+    ' ostalo popunjeno i pozivalac bi prijavio preplatu na dokumentu koji nije
+    ' ni nastao. Nema stete po podatke, ali je ugovor funkcije necist.
+    outUpozorenje = ""
+
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+    outErrNum = errNum
+
+    On Error Resume Next
+    LogError SRC, errDesc, errNum
+    Monitor_Event _
+        eventType:="DOKUMENT_SAVE_FAIL", _
+        severity:="ERROR", _
+        message:="IspravkaOtkupa_TX failed. Stari=" & stariOtkupID & "; Error=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modOtkup", _
+        procedureName:=SRC, _
+        entityType:="Otkup", _
+        entityID:=stariOtkupID, _
+        correlationId:=stariOtkupID
+
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    outGreska = errDesc
+    IspravkaOtkupa_TX = ""
+End Function
+
+' JEZGRO ISPRAVKE OTKUPA -- U TRANSAKCIJI POZIVAOCA (LNC-ODL-12).
+'
+' Telo IspravkaOtkupa_TX bez sopstvene transakcije: storno starog, nov dokument,
+' trag na oba kraja, red u tblStornoVeze i PUT A za novac. Dva pozivaoca:
+'   IspravkaOtkupa_TX                    -- sam list, ili list u NACRTU otpremnice
+'                                           (roditeljNacrt: zamena izvora u mestu);
+'   modDokumenta.IspravkaListaULancu_TX  -- list u IZDATOJ otpremnici: potez je
+'                                           vec oborio stari lanac, a posle ovoga
+'                                           sastavlja novu verziju; parentDocType =
+'                                           LANAC cini ovaj red KORENOM poteza.
+'
+' tx je OBAVEZAN (AMB-INV-08), kao kod StornoOtkup. Kapije (IspravkaPrepreka) pita
+' pozivalac -- svaki svojim rezimom.
+Public Function IspravkaOtkupaUTransakciji(ByVal stariOtkupID As String, _
+                                           ByVal h As Object, _
+                                           ByVal stavke As Collection, _
+                                           ByVal tx As clsTransaction, _
+                                           ByVal potvrdaDeficita As Double, _
+                                           ByRef outUpozorenje As String, _
+                                           Optional ByVal roditeljNacrt As String = "", _
+                                           Optional ByVal parentDocType As String = "") As String
+    Const SRC As String = "IspravkaOtkupa_TX"
+
+    outUpozorenje = ""
+    If tx Is Nothing Then
+        Err.Raise vbObjectError + 1918, SRC, _
+                  "Ispravka otkupa trazi aktivnu transakciju (AMB-INV-08)."
+    End If
+
+    stariOtkupID = Trim$(stariOtkupID)
+    Dim roditelj As String
+    roditelj = Trim$(roditeljNacrt)
+
+    ' A9: nov poslovni broj. Poredi se pre pisca, da poruka imenuje PRAVILO, a ne
+    ' jedinstvenost broja -- ista greska sa dva razlicita uzroka zbunjuje operatera.
+    Dim stariBroj As String, noviBroj As String
+    stariBroj = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, stariOtkupID, COL_OTK_BR_DOK)))
+    noviBroj = Trim$(OtkHdrOpcion(h, "BrojDokumenta"))
+
+    If StrComp(noviBroj, stariBroj, vbTextCompare) = 0 Then
+        Err.Raise vbObjectError + 1913, SRC, _
+                  "Ispravka mora dobiti NOV broj dokumenta (A9). Stari: " & stariBroj & "."
+    End If
 
     ' Redosled je bitan: STORNO PRVI. Nov dokument ide kroz istu kapiju
     ' jedinstvenosti broja kao svaki drugi, a stari jos drzi svoj -- ali kapija
@@ -456,7 +540,7 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     Dim cid As String
     cid = modStornoContext.CreateCorrectionContext( _
         SV_MODE_ISPRAVKA, DOK_TIP_OTKUP, stariOtkupID, stariBroj, _
-        DOK_TIP_OTKUP, noviID, noviBroj, , , , _
+        DOK_TIP_OTKUP, noviID, noviBroj, parentDocType, , , _
         "Ispravka otkupa: " & stariBroj & " -> " & noviBroj & ".")
 
     If Len(cid) = 0 Then
@@ -519,43 +603,7 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     modStornoContext.CompleteCorrectionContext cid, noviID, noviBroj, _
         "Ispravka otkupa zavrsena: nov dokument " & noviID & "."
 
-    tx.CommitTx
-    Set tx = Nothing
-
-    IspravkaOtkupa_TX = noviID
-    Exit Function
-
-EH:
-    ' Upozorenje se postavlja PRE CompleteCorrectionContext i CommitTx. Ako
-    ' nesto posle toga pukne, rollback vrati podatke -- ali bi outUpozorenje
-    ' ostalo popunjeno i pozivalac bi prijavio preplatu na dokumentu koji nije
-    ' ni nastao. Nema stete po podatke, ali je ugovor funkcije necist.
-    outUpozorenje = ""
-
-    Dim errNum As Long, errDesc As String, errSrc As String
-    errNum = Err.Number
-    errDesc = Err.description
-    errSrc = Err.SOURCE
-    outErrNum = errNum
-
-    On Error Resume Next
-    LogError SRC, errDesc, errNum
-    Monitor_Event _
-        eventType:="DOKUMENT_SAVE_FAIL", _
-        severity:="ERROR", _
-        message:="IspravkaOtkupa_TX failed. Stari=" & stariOtkupID & "; Error=" & errDesc, _
-        userId:="Operator", _
-        moduleName:="modOtkup", _
-        procedureName:=SRC, _
-        entityType:="Otkup", _
-        entityID:=stariOtkupID, _
-        correlationId:=stariOtkupID
-
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-
-    outGreska = errDesc
-    IspravkaOtkupa_TX = ""
+    IspravkaOtkupaUTransakciji = noviID
 End Function
 
 ' Poslednja ziva verzija dokumenta: prati ZamenjenSaID dok ima kuda.

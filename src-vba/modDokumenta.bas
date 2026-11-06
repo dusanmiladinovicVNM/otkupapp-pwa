@@ -3940,6 +3940,116 @@ EH:
     StornoListaULancu_TX = False
 End Function
 
+' ISPRAVKA OTKUPNOG LISTA U LANCU -- jedan potez (LNC-ODL-06, -12).
+'
+' Isti potez kao storno, samo sto list ne pada bez naslednika: jezgro ispravke
+' (modOtkup.IspravkaOtkupaUTransakciji) u ISTOJ transakciji stornira stari i
+' upise nov list (trag, PUT A za novac, prijava preplate), a otpremnica' nosi nov
+' list umesto starog. Ocekivanje otpremnice' = staro - stari + novi, po klasi.
+'
+' Vraca OtkupID novog lista; "" = nista nije promenjeno, razlog u outGreska.
+' outErrNum nosi broj greske (AMB_ERR_POTVRDA_DEFICITA je PITANJE operateru, isti
+' ugovor kao IspravkaOtkupa_TX); outUpozorenje je prijava preplate.
+Public Function IspravkaListaULancu_TX(ByVal stariOtkupID As String, _
+                                       ByVal h As Object, _
+                                       ByVal stavke As Collection, _
+                                       Optional ByRef outGreska As String, _
+                                       Optional ByRef outUpozorenje As String, _
+                                       Optional ByVal potvrdaDeficita As Double = -1, _
+                                       Optional ByRef outErrNum As Long, _
+                                       Optional ByRef outPoruka As String) As String
+    Const SRC As String = "IspravkaListaULancu_TX"
+
+    Dim tx As clsTransaction
+    Dim p As Object, rez As Object
+    Dim noviID As String, rootCid As String, razlog As String
+
+    outGreska = ""
+    outUpozorenje = ""
+    outErrNum = 0
+    outPoruka = ""
+
+    On Error GoTo EH
+
+    stariOtkupID = Trim$(stariOtkupID)
+    LncSemaSpremna SRC
+
+    razlog = modOtkup.IspravkaOtkupaRazlog(stariOtkupID, True)
+    If Len(razlog) > 0 Then Err.Raise vbObjectError + 1985, SRC, razlog
+    razlog = LncIspravkaMenjaLanac(stariOtkupID, h)
+    If Len(razlog) > 0 Then Err.Raise vbObjectError + 1986, SRC, razlog
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    LncSnimi tx
+    modAmbalaza.AmbOdloziInvarijantePocni tx, SRC
+
+    Set p = LncPlanLista(stariOtkupID)
+    LncRequirePlan p, SRC
+    If Not CBool(p("otpIzdata")) Then
+        Err.Raise vbObjectError + 1987, SRC, _
+                  "List je u NACRTU otpremnice " & p("otpBroj") & " -- nacrt se ispravlja " & _
+                  "obicnom ispravkom (zamena izvora u mestu)."
+    End If
+
+    LncRasturi p, tx, SRC
+
+    noviID = modOtkup.IspravkaOtkupaUTransakciji(stariOtkupID, h, stavke, tx, _
+                                                 potvrdaDeficita, outUpozorenje, "", _
+                                                 SV_PARENT_LANAC)
+    If Len(noviID) = 0 Then
+        Err.Raise vbObjectError + 1988, SRC, "Jezgro ispravke nije vratilo nov list."
+    End If
+    rootCid = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, noviID, COL_TRACE_CORRECTION_ID)))
+    If Len(rootCid) = 0 Then
+        Err.Raise vbObjectError + 1989, SRC, "Nov list nema koren korekcije (CorrectionID)."
+    End If
+
+    Set rez = LncSastavi(p, noviID, rootCid, tx, SRC)
+
+    modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    outPoruka = LncPoruka(p, rez, _
+                          Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, noviID, COL_OTK_BR_DOK))))
+    LogInfo SRC, outPoruka
+    IspravkaListaULancu_TX = noviID
+    Exit Function
+
+EH:
+    outErrNum = Err.Number
+    outUpozorenje = ""
+    outGreska = OtpPadTransakcije(tx, SRC, stariOtkupID)
+    modAmbalaza.AmbOdloziInvarijanteOtkazi tx
+    IspravkaListaULancu_TX = ""
+End Function
+
+' LNC-ODL-10: ispravka u lancu prima samo ono sto otpremnica moze da nosi.
+' Stanica, kultura i tip ambalaze odredjuju otpremnicu (OtpRequireIzvorValjan),
+' pa ispravljen list sa drugom vrednoscu ne moze u njenu novu verziju.
+Private Function LncIspravkaMenjaLanac(ByVal stariOtkupID As String, ByVal h As Object) As String
+    If h Is Nothing Then Exit Function
+    Dim kljucevi As Variant, kolone As Variant, nazivi As Variant, i As Long
+    Dim staro As String, novo As String
+    kljucevi = Array("StanicaID", "KulturaID", "TipAmbalaze")
+    kolone = Array(COL_OTK_STANICA, COL_OTK_KULTURA, COL_OTK_TIP_AMB)
+    nazivi = Array("otkupno mesto", "kulturu", "tip ambalaze")
+    For i = 0 To 2
+        If h.Exists(CStr(kljucevi(i))) Then
+            novo = Trim$(NzToText(h(CStr(kljucevi(i)))))
+            staro = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, stariOtkupID, CStr(kolone(i)))))
+            If StrComp(novo, staro, vbTextCompare) <> 0 Then
+                LncIspravkaMenjaLanac = "Ispravka menja " & nazivi(i) & " (" & staro & " -> " & _
+                    novo & "), a list je u izdatoj otpremnici: otpremnica nosi jedno " & _
+                    nazivi(i) & ". Storniraj list u lancu, pa unesi nov list."
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
 Private Sub LncSemaSpremna(ByVal src As String)
     modSchema.SchemaReadyOrFail src, _
         TBL_OTKUP & "|" & TBL_OTKUP_STAVKE & "|" & _
@@ -4325,9 +4435,14 @@ Private Sub LncUpisiCorrectionID(ByVal tbl As String, ByVal idCol As String, _
 End Sub
 
 ' Poruka posle poteza (LNC-ODL-09, -19): stari -> novi broj, bez stampe.
-Private Function LncPoruka(ByVal p As Object, ByVal rez As Object) As String
+Private Function LncPoruka(ByVal p As Object, ByVal rez As Object, _
+                           Optional ByVal noviOtkupBroj As String = "") As String
     Dim m As String
-    m = "List " & p("otkupBroj") & " je storniran."
+    If Len(noviOtkupBroj) > 0 Then
+        m = "List " & p("otkupBroj") & " je ispravljen -> " & noviOtkupBroj & "."
+    Else
+        m = "List " & p("otkupBroj") & " je storniran."
+    End If
     If CBool(p("otpIzdata")) Then
         If Len(CStr(rez("otpNovaBroj"))) > 0 Then
             m = m & " Otpremnica " & p("otpBroj") & " -> " & rez("otpNovaBroj") & "."

@@ -363,11 +363,8 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
     Dim greska As String, upozorenje As String
     Dim ambErrNum As Long, ambDeficit As Double
     If Len(Trim$(ispravljaOtkupID)) > 0 Then
-        res = modOtkup.IspravkaOtkupa_TX(Trim$(ispravljaOtkupID), h, stavke, _
-                                         greska, upozorenje, , ambErrNum)
-        ' Upozorenje NIJE greska (preplata posle smanjenja): ispravka prolazi, a
-        ' operater to mora da vidi -- inace preplatu nadje tek na kartici.
-        If Len(upozorenje) > 0 Then poruke = poruke & upozorenje & vbCrLf
+        res = IspraviOtkupIliLanac(Trim$(ispravljaOtkupID), h, stavke, _
+                                   greska, upozorenje, -1, ambErrNum, poruke)
     Else
         res = CreateOtkup_TX(h, stavke, greska, , ambErrNum)
     End If
@@ -391,9 +388,9 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
                 greska = ""
                 ambErrNum = 0
                 If Len(Trim$(ispravljaOtkupID)) > 0 Then
-                    res = modOtkup.IspravkaOtkupa_TX(Trim$(ispravljaOtkupID), h, stavke, _
-                                                     greska, upozorenje, ambDeficit, ambErrNum)
-                    If Len(upozorenje) > 0 Then poruke = poruke & upozorenje & vbCrLf
+                    res = IspraviOtkupIliLanac(Trim$(ispravljaOtkupID), h, stavke, _
+                                               greska, upozorenje, ambDeficit, ambErrNum, _
+                                               poruke)
                 Else
                     res = CreateOtkup_TX(h, stavke, greska, ambDeficit, ambErrNum)
                 End If
@@ -438,6 +435,41 @@ End Function
 ' (modAmbalazaUgovor.AmbTipProblem, AMB-INV-12); ovde se bira samo tekst. Tip od
 ' samih nevidljivih znakova je PRAZAN tip (postojeca poruka), a svaki drugi mora
 ' postojati u sifarniku. "" kad je tip valjan.
+' ISPRAVKA: sam list (ili list u NACRTU otpremnice) ide kroz IspravkaOtkupa_TX;
+' list u IZDATOJ otpremnici kroz potez u lancu (LNC-ODL-12) -- nova verzija
+' otpremnice i zbirne u istoj transakciji. Isti ugovor izlaza (greska,
+' upozorenje, broj greske za potvrdu manjka), pa pozivalac ne razlikuje puteve.
+' Poruka poteza (stari -> novi brojevi, LNC-ODL-09) ide u poruke.
+Private Function IspraviOtkupIliLanac(ByVal stariOtkupID As String, _
+                                      ByVal h As Object, _
+                                      ByVal stavke As Collection, _
+                                      ByRef greska As String, _
+                                      ByRef upozorenje As String, _
+                                      ByVal potvrdaDeficita As Double, _
+                                      ByRef ambErrNum As Long, _
+                                      ByRef poruke As String) As String
+    Dim otpID As String, porukaLanca As String
+    otpID = modDokumenta.OtpremnicaZaOtkup(stariOtkupID)
+
+    If Len(otpID) > 0 Then
+        If modDokumenta.OtpremnicaJeIzdata(otpID) Then
+            IspraviOtkupIliLanac = modDokumenta.IspravkaListaULancu_TX( _
+                stariOtkupID, h, stavke, greska, upozorenje, potvrdaDeficita, _
+                ambErrNum, porukaLanca)
+            If Len(upozorenje) > 0 Then poruke = poruke & upozorenje & vbCrLf
+            If Len(porukaLanca) > 0 Then poruke = poruke & porukaLanca & vbCrLf
+            Exit Function
+        End If
+    End If
+
+    IspraviOtkupIliLanac = modOtkup.IspravkaOtkupa_TX(stariOtkupID, h, stavke, _
+                                                      greska, upozorenje, _
+                                                      potvrdaDeficita, ambErrNum)
+    ' Upozorenje NIJE greska (preplata posle smanjenja): ispravka prolazi, a
+    ' operater to mora da vidi -- inace preplatu nadje tek na kartici.
+    If Len(upozorenje) > 0 Then poruke = poruke & upozorenje & vbCrLf
+End Function
+
 Public Function TipAmbalazePoruka(ByVal tipAmb As String) As String
     If modAmbalazaUgovor.AmbTipPrazan(tipAmb) Then
         TipAmbalazePoruka = Poruka("DOK_MSG_IZABERITE_TIP_AMBALAZE")

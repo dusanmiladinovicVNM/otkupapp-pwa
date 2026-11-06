@@ -1,8 +1,10 @@
 # Storno i ispravka otkupnog lista u lancu (`LNC-*`)
 
 > **Status: PRE-FLIGHT 06.11.2026 — odluke operatera zapisane. U kodu: deo 1 (šema
-> `LNC-ODL-16`, ambalaža `LNC-ODL-15` / `AMB-10-ODL-40`) i deo 2 (jezgro storna,
-> `modDokumenta.LncPlanLista` / `StornoListaULancu_TX`), NEVERIFIKOVANO u Excelu.**
+> `LNC-ODL-16`, ambalaža `LNC-ODL-15` / `AMB-10-ODL-40`), deo 2 (jezgro storna,
+> `modDokumenta.LncPlanLista` / `StornoListaULancu_TX`) i deo 3 (ispravka,
+> `IspravkaListaULancu_TX` nad `modOtkup.IspravkaOtkupaUTransakciji`, ruta u
+> `modOtkupUnos`), NEVERIFIKOVANO u Excelu.**
 > Mereno čitanjem nad `main` = `1caa86f`; Excel nije pokrenut, pa je svaka tvrdnja o
 > ponašanju ovde **NEVERIFIKOVANA** dok je ne potvrdi test. Verdikt po osama je §7.
 >

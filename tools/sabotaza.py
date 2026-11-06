@@ -7495,6 +7495,24 @@ SABOTAZE = {
         "Test_LNC_PoslednjiIzvor",
         "LNC poslednji izvor: potez sa aktivnom prijemnicom je odbijen",
     ),
+    # LNC-ODL-12: ispravljen list ne ulazi u novu verziju otpremnice -- ostaje
+    # slobodan, a sledeci sync mu pravi svoju otpremnicu (LNC-INV-09).
+    "lnc-ispravka-bez-novog-lista": (
+        "modDokumenta.bas",
+        "    If Len(noviOtkupID) > 0 Then izvori.Add noviOtkupID\n",
+        "    ' SABOTAZA: ispravljen list ne ulazi u novu otpremnicu\n",
+        "Test_LNC_IspravkaListaULancu",
+        "LNC ispravka: nova otpremnica nosi ispravljen list",
+    ),
+    # LNC-ODL-10: kapija promene stanice/kulture/ambalaze cuti -- odbijanje stize
+    # tek iz dubine pisca, bez poruke koja operateru kaze sta da uradi.
+    "lnc-ispravka-menja-lanac-tiho": (
+        "modDokumenta.bas",
+        "            If StrComp(novo, staro, vbTextCompare) <> 0 Then\n",
+        "            If False Then   ' SABOTAZA: promena ambalaze bez kapije\n",
+        "Test_LNC_IspravkaMenjaAmbalazuOdbijena",
+        "LNC ispravka: odbijanje imenuje tip ambalaze i upucuje na storno",
+    ),
     # AMB-10-ODL-40: commit ne pita za otvoreno odlaganje -- zaboravljen zavrsetak
     # tiho commit-uje storno bez AMB-INV-07/09/16.
     "odl40-commit-bez-kapije": (
