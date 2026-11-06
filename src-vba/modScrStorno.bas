@@ -1235,8 +1235,20 @@ Private Function ObicanStorno() As Boolean
     ' Revers: tekst imenuje i stanicu i dan -- isti KOOP broj, smer i dan legalno
     ' nose reversi dve stanice (REV-IDENT-01 Faza 2b), a ovo je poslednja kapija.
     If MsgBox(StornoPotvrdaTekst(), vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
+    ' List u otpremnici ide potezom u lancu (LNC-ODL-05); posle storna to vise ne
+    ' moze da se pita, pa se zna PRE poziva. Uspeh poteza je INFORMACIJA (novi
+    ' brojevi), ne upozorenje (review #471, nalaz 21).
+    Dim uLancu As Boolean
+    If mSelTip = STIP_OTKUP And Len(mSelDocID) > 0 Then
+        uLancu = (Len(modDokumenta.OtpremnicaZaOtkup(Trim$(mSelDocID))) > 0)
+    End If
     If Not modStornoDok.StornoIzvrsi(mSelTip, mSelBroj, opcija, poruka, mSelDocID) Then
         modOtkupUI.ShowToast poruka, True
+        Exit Function
+    End If
+    If uLancu Then
+        MsgBox poruka, vbInformation, APP_NAME
+        ObicanStorno = True
         Exit Function
     End If
     ' Zbirna moze da vrati UPOZORENJE uz uspeh (aktivna prijemnica ostaje vezana

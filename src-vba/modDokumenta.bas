@@ -3800,15 +3800,8 @@ Public Function LncPlanLista(ByVal otkupID As String) As Object
     p("otpID") = otpID
     p("otpBroj") = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
 
-    ' HLD-LANAC-01: hladnjacki blok je ceo lanac 1:1 -- ostaje na PONISTENJU
-    ' (LNC-ODL-14).
-    If modAutoHladnjaca.OtpremnicaJeHladnjacka(otpID) Then
-        p("razlog") = "List je deo hladnjackog lanca (otpremnica " & p("otpBroj") & _
-                      "). Taj lanac se ponistava na F8 nad zbirnom (PONISTENJE), pa se " & _
-                      "list stornira posle toga."
-        Exit Function
-    End If
-
+    ' Status se cita PRE hladnjacke kapije: otpIzdata mora biti tacan i kad potez
+    ' odbija -- F1 i opis posledica po njemu biraju put (review #471, nalaz 10).
     Dim st As String
     st = UCase$(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, _
                                            COL_TRACE_IZDATO_STATUS))))
@@ -3818,6 +3811,15 @@ Public Function LncPlanLista(ByVal otkupID As String) As Object
         p("otpIzdata") = True
     Else
         p("razlog") = "Otpremnica " & p("otpBroj") & " nema poznat status (" & st & ")."
+        Exit Function
+    End If
+
+    ' HLD-LANAC-01: hladnjacki blok je ceo lanac 1:1 -- ostaje na PONISTENJU
+    ' (LNC-ODL-14).
+    If modAutoHladnjaca.OtpremnicaJeHladnjacka(otpID) Then
+        p("razlog") = "List je deo hladnjackog lanca (otpremnica " & p("otpBroj") & _
+                      "). Taj lanac se ponistava na F8 nad zbirnom (PONISTENJE), pa se " & _
+                      "list stornira posle toga."
         Exit Function
     End If
 
@@ -3919,7 +3921,11 @@ Public Function LncPlanOpisZaOtkup(ByVal otkupID As String, _
 
     If Len(CStr(p("zbrID"))) > 0 Then
         If Not CBool(p("zbrIzdata")) Then
-            m = m & vbCrLf & "Nacrt zbirne " & p("zbrBroj") & " prima novu verziju otpremnice."
+            If p("otpPreostali").count > 0 Or zaIspravku Then
+                m = m & vbCrLf & "Nacrt zbirne " & p("zbrBroj") & " prima novu verziju otpremnice."
+            Else
+                m = m & vbCrLf & "Otpremnica izlazi iz nacrta zbirne " & p("zbrBroj") & " (bez zamene)."
+            End If
         ElseIf p("zbrSestre").count > 0 Or p("otpPreostali").count > 0 Or zaIspravku Then
             m = m & vbCrLf & "Zbirna " & p("zbrBroj") & " se stornira i dobija NOVU VERZIJU sa novim brojem."
         Else
@@ -4222,15 +4228,20 @@ Private Function LncSastavi(ByVal p As Object, ByVal noviOtkupID As String, _
     Next k
     If Len(noviOtkupID) > 0 Then izvori.Add noviOtkupID
 
-    Dim otpNova As String, h As Object
+    Dim otpNova As String, h As Object, staroOcek As Collection
     If izvori.count > 0 Then
         Set h = OtpZaglavljeVerzije(otpStara, src)
+        ' Staro ocekivanje se cita PRE nego sto novo zaglavlje postoji: citalac
+        ' stavki je strog nad CELOM tabelom (svako zaglavlje mora imati stavku),
+        ' a otpremnica' ih dobija tek u OtpUpisiOcekivanjeVerzije. Isti redosled
+        ' drzi OtpIspravi.  (review #471, nalaz 1)
+        Set staroOcek = OtpOcekivanjeKolekcija(otpStara, src)
         otpNova = OtpNapraviDraft(h, Nothing)
         For k = 1 To izvori.count
             OtpRequireIzvorValjan otpNova, CStr(izvori(k)), src, True
             OtpUpisiClanstvo otpNova, CStr(izvori(k)), src
         Next k
-        OtpUpisiOcekivanjeVerzije otpNova, otpStara, src
+        OtpUpisiOcekivanjeVerzije otpNova, staroOcek, src
         OtpIzdaj otpNova, tx
 
         RequireUpdateCell TBL_OTPREMNICA, OtpRedHeadera(otpStara, src), _
@@ -4300,10 +4311,11 @@ End Function
 ' klasi su zbir preostalih izvora. Stara je bila izdata, a izdavanje je dokazalo
 ' ocekivano = povezano po klasi, pa je to tacno "staro - list (+ novi list)".
 ' PredlogCena klase se prenosi sa stare -- nju izvori ne nose.
-Private Sub OtpUpisiOcekivanjeVerzije(ByVal novaID As String, ByVal staraID As String, _
+' staro: ocekivanje STARE verzije (OtpOcekivanjeKolekcija), procitano pre nego sto
+' je novo zaglavlje nastalo -- v. LncSastavi.
+Private Sub OtpUpisiOcekivanjeVerzije(ByVal novaID As String, ByVal staro As Collection, _
                                       ByVal src As String)
-    Dim staro As Collection, cena As Object, k As Long, s As Object
-    Set staro = OtpOcekivanjeKolekcija(staraID, src)
+    Dim cena As Object, k As Long, s As Object
     Set cena = CreateObject("Scripting.Dictionary")
     For k = 1 To staro.count
         Set s = staro(k)
@@ -4399,7 +4411,7 @@ Private Function LncPrijemniceZbirne(ByVal zbirnaID As String, ByVal brojZbirne 
                 End If
                 c.Add pid
             ElseIf Len(rod) = 0 And Len(brojZbirne) > 0 And _
-                   Trim$(NzToText(d(i, cBr))) = brojZbirne Then
+                   BrojJednak(d(i, cBr), brojZbirne) Then
                 outRazlog = "Aktivna prijemnica " & Trim$(NzToText(d(i, cBrPrj))) & _
                             " nosi broj zbirne " & brojZbirne & ", ali ne i njen ID " & _
                             "(ZbirnaRoditeljID). Veza se ne pogadja po broju -- prvo je " & _

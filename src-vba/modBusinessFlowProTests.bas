@@ -333,6 +333,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_LNC_UndoPotezaOdbijen
     Test_LNC_F8StornoListaULancu
     Test_LNC_F1IspravkaULancu
+    Test_LNC_IzdataOtpBezZbirne
+    Test_LNC_NacrtZbirneUMestu
+    Test_LNC_IspravkaKrozUnos
     Test_Amb_UndoStornaOdbijenNadKnjigom
     Test_Amb_PonovnaStampaBezRedaKnjige
     Test_Amb_JedanProtivpartnerPoDokumentu
@@ -18161,7 +18164,9 @@ Private Sub Test_OTK_IspravkaBlokaUNacrtu()
         AssertTrue Len(razlog) > 0, "Ispravka bloka: izdata otpremnica odbija ispravku"
         AssertTrue InStr(1, razlog, izdata, vbTextCompare) > 0, _
                    "Ispravka bloka: razlog imenuje bas tu otpremnicu"
-        AssertTrue InStr(1, razlog, "ispravi otpremnicu", vbTextCompare) > 0, _
+        ' PREMISA PROMENJENA (LNC-ODL-12, 06.11.2026): izlaz je potez u lancu (F1
+        ' "Ispravi blok"), ne vise rucno "ispravi otpremnicu pa blok u nacrtu".
+        AssertTrue InStr(1, razlog, "potez u lancu", vbTextCompare) > 0, _
                    "Ispravka bloka: razlog imenuje put koji postoji"
 
         AssertEquals "", modOtkup.IspravkaOtkupa_TX(blok2, OtkHeader(TEST_PREFIX & "-OTK-ISBD-" & scenario), _
@@ -19923,13 +19928,16 @@ Private Function RsRedSaID(ByVal rez As Variant, ByVal id As String) As Long
     Next i
 End Function
 
-' Posle odbijenog storna (pisac, u telu testa): odbijanje je POTPUNO, a F8 isti
-' razlog kaze pre potvrde i imenuje broj otpremnice.
+' Posle odbijenog storna (pisac, u telu testa): odbijanje je POTPUNO.
+'
+' PREMISA PROMENJENA (LNC-ODL-05, 06.11.2026): F8 vise ne odbija list u otpremnici
+' nego ga stornira POTEZOM U LANCU (modDokumenta.StornoListaULancu_TX) -- nacrt u
+' mestu, izdata kao nova verzija. Pisac obicnog storna (StornoOtkup_TX) i dalje
+' odbija, i to ovaj test i meri; F8 kapija pre potvrde sada PUSTA (plan nema razlog).
 Private Sub IzvorOtpremniceOdbijen(ByVal otkupID As String, ByVal otpID As String, _
                                    ByVal brojOtp As String, ByVal stanje As String)
-    AssertTrue InStr(1, modStornoDok.StornoRazlog(STIP_OTKUP, "X", "", otkupID), _
-                     brojOtp, vbTextCompare) > 0, _
-               "OTK izvor otpremnice " & stanje & ": F8 odbija i imenuje otpremnicu"
+    AssertEquals "", modStornoDok.StornoRazlog(STIP_OTKUP, "X", "", otkupID), _
+                 "OTK izvor otpremnice " & stanje & ": F8 pusta potez u lancu (LNC-ODL-05)"
 
     AssertTrue Not RowIsStornirano(TBL_OTKUP, COL_OTK_ID, otkupID), _
                "OTK izvor otpremnice " & stanje & ": otkup ostaje aktivan"
@@ -26210,10 +26218,12 @@ Private Sub Test_AMB_ODL40_CommitBezZavrsetkaOdbijen()
     tx.RollbackTx
     Set tx = Nothing
 
+    ' Citanje IZMEDJU Pocni i Otkazi: posle Otkazi bi bilo False uvek (review
+    ' #471, nalaz 24). Pocni nad zaostalim stanjem mora da OTVORI odlaganje za tx2.
     Set tx2 = Odl40Tx()
     modAmbalaza.AmbOdloziInvarijantePocni tx2, SRC
-    modAmbalaza.AmbOdloziInvarijanteOtkazi tx2
     otvoreno2 = modAmbalaza.AmbOdlozenoOtvorenoZa(tx2)
+    modAmbalaza.AmbOdloziInvarijanteOtkazi tx2
     tx2.RollbackTx
     Set tx2 = Nothing
 
@@ -26223,8 +26233,8 @@ Private Sub Test_AMB_ODL40_CommitBezZavrsetkaOdbijen()
                "ODL-40: odbijen commit ne ostavlja storno"
     AssertEquals "0", CStr(AmbBrojKontraStavova(otkID, DOK_TIP_OTKUP)), _
                  "ODL-40: odbijen commit ne ostavlja kontra-stav"
-    AssertFalse otvoreno2, _
-                "ODL-40: zaostalo odlaganje vracene transakcije ne blokira sledecu"
+    AssertTrue otvoreno2, _
+               "ODL-40: zaostalo odlaganje vracene transakcije ne blokira sledecu"
     Exit Sub
 
 EH:
@@ -26436,6 +26446,7 @@ Private Sub Test_LNC_StornoListaUIzdatojZbirnoj()
     Dim otpNova As String, zbrNova As String, rootCid As String
     Dim ok As Boolean, g As String, por As String
     Dim izvO As Collection, izvZ As Collection, prog As Object, poKl As Object
+    Dim prevKupac As String, kupacMenjan As Boolean
     Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
@@ -26447,7 +26458,18 @@ Private Sub Test_LNC_StornoListaUIzdatojZbirnoj()
     zbr = LncZbr("LNC1-" & scenario, Pr3Izvor(otp, ""))
     prj = LncPrj("LNC1-" & scenario, zbr, 400#, 20, tipT)
 
+    ' ZBR-OWN-01: oznaka je cinjenica NASTANKA. Kupac posle nastanka postaje
+    ' hladnjaca u configu -- nova verzija i dalje mora da nosi staru oznaku (Ne).
+    ' Bez promene configa tvrdnja ne bi razlikovala nasledjivanje od preracuna
+    ' (review #471, nalaz 25).
+    AssertEquals "Ne", LncZbrPolje(zbr, COL_ZBR_KUPAC_HLADNJACA), _
+                 "LNC: stara zbirna je nastala kao eksterni tok"
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    kupacMenjan = True
     ok = modDokumenta.StornoListaULancu_TX(otkB, g, por)
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    kupacMenjan = False
 
     otpNova = LncOtpPolje(otp, COL_TRACE_ZAMENJEN_SA_ID)
     zbrNova = LncZbrPolje(zbr, COL_TRACE_ZAMENJEN_SA_ID)
@@ -26520,6 +26542,9 @@ Private Sub Test_LNC_StornoListaUIzdatojZbirnoj()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error Resume Next
+    If kupacMenjan Then SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub
 
@@ -26598,7 +26623,9 @@ Private Sub Test_LNC_PoslednjiIzvor()
     otkB = LncOtkup("LNC3B-" & scenario, 100#, 10#, tipT)
     otpB = LncOtp("LNC3B-" & scenario, Pr3Izvor(otkB, ""), tipT)
     zbrB = LncZbr("LNC3B-" & scenario, Pr3Izvor(otpB, ""))
-    prjB = LncPrj("LNC3B-" & scenario, zbrB, 100#, 10, tipT)
+    ' Prijemnica BEZ GAJBI: ambalaza tada sama ne odbija potez, pa (b) meri SAMO
+    ' kapiju LNC-ODL-07 -- bez nje bi potez prosao (review #471, nalaz 4).
+    prjB = LncPrj("LNC3B-" & scenario, zbrB, 100#, 0, tipT)
     okB = modDokumenta.StornoListaULancu_TX(otkB, gB, por)
 
     AssertFalse okB, "LNC poslednji izvor: potez sa aktivnom prijemnicom je odbijen"
@@ -26751,10 +26778,13 @@ EH:
 End Sub
 
 
-' LNC ispravka: B je unet kao 300 kg / 15 gajbi, a stvarno je bio 200 / 10.
-' Prijemnica kupca je izmerila stvarnih 600 kg / 30 gajbi. Ispravka B u lancu:
-' nov list B', otpremnica' = A + B' (600 / 30), zbirna' nad njom, prijemnica
-' prevezana, ambalaza na nuli -- i novac/preplata kroz PUT A.
+' LNC ispravka: B je unet kao 300 kg / 15 gajbi, a stvarno je bio 200 kg bez
+' gajbi. Prijemnica kupca je izmerila stvarnih 600 kg / 20 gajbi. Ispravka B u
+' lancu: nov list B', otpremnica' = A + B' (600 / 20), zbirna' nad njom,
+' prijemnica prevezana, ambalaza na nuli -- i kes/preplata kroz PUT A.
+'
+' B' je BEZ GAJBI namerno: kad B' ne bi usao u otpremnicu', vozac bi i tada bio na
+' nuli, pa potez prolazi i tvrdnja o clanstvu pada PO IMENU (review #471, nalaz 5).
 Private Sub Test_LNC_IspravkaListaULancu()
     Const SRC As String = "Test_LNC_IspravkaListaULancu"
     Dim scenario As String, tipT As String
@@ -26771,11 +26801,17 @@ Private Sub Test_LNC_IspravkaListaULancu()
     otkB = LncOtkup("LNC7B-" & scenario, 300#, 15#, tipT)
     otp = LncOtp("LNC7-" & scenario, Pr3Izvor(otkA, otkB), tipT)
     zbr = LncZbr("LNC7-" & scenario, Pr3Izvor(otp, ""))
-    prj = LncPrj("LNC7-" & scenario, zbr, 600#, 30, tipT)
+    prj = LncPrj("LNC7-" & scenario, zbr, 600#, 20, tipT)
+    ' Kes na B: 300 kg x 50 = 15.000. Ispravka na 200 kg (10.000) prenosi ceo
+    ' iznos na B' (PUT A) i prijavljuje preplatu od 5.000.
+    SaveNovac TEST_PREFIX & "-NOV-LNC7-" & scenario, NextTestDate(), _
+              "TEST KOOPERANT", TEST_KOOP_ID, "Kooperant", _
+              "", TEST_KOOP_ID, "", "", _
+              NOV_KES_OTKUPAC_KOOP, 0#, 15000#, "kes na otkupnom mestu", otkB
 
     Set h = OtkHeader(TEST_PREFIX & "-OTK-LNC7Bn-" & scenario)
     h("TipAmbalaze") = tipT
-    otkBn = modDokumenta.IspravkaListaULancu_TX(otkB, h, OtkStavke(200#, 50#, 10#, 0#, 0#, 0#), _
+    otkBn = modDokumenta.IspravkaListaULancu_TX(otkB, h, OtkStavke(200#, 50#, 0#, 0#, 0#, 0#), _
                                                  g, upz, -1, errN, por)
     otpNova = LncOtpPolje(otp, COL_TRACE_ZAMENJEN_SA_ID)
     zbrNova = LncZbrPolje(zbr, COL_TRACE_ZAMENJEN_SA_ID)
@@ -26794,8 +26830,11 @@ Private Sub Test_LNC_IspravkaListaULancu()
     Set prog = modDokumenta.GetOtpremnicaProgress(otpNova)
     AssertDoubleNear 600#, CDbl(prog(KLASA_I)("ocekivano")), 0.001, _
                      "LNC ispravka: ocekivanje = staro - stari list + novi list (kg)"
-    AssertDoubleNear 30#, CDbl(prog(KLASA_I)("ocekivanoAmb")), 0.001, _
+    AssertDoubleNear 20#, CDbl(prog(KLASA_I)("ocekivanoAmb")), 0.001, _
                      "LNC ispravka: ocekivanje = staro - stari list + novi list (gajbe)"
+    AssertDoubleNear 15000#, GetIsplataForOtkup(otkBn), 0.001, _
+                     "LNC ispravka: nov list preuzima kes (PUT A)"
+    AssertTrue Len(Trim$(upz)) > 0, "LNC ispravka: preplata se prijavljuje"
 
     AssertEquals "Da", OtkPolje(otkB, COL_STORNIRANO), "LNC ispravka: stari list je storniran"
     AssertEquals otkBn, OtkPolje(otkB, COL_TRACE_ZAMENJEN_SA_ID), _
@@ -26862,6 +26901,8 @@ End Sub
 Private Sub Test_LNC_BrojVerzijeBezPrekidaca()
     Const SRC As String = "Test_LNC_BrojVerzijeBezPrekidaca"
     Dim prevAuto As String, predlog As String, verzija As String
+    Dim scenario As String, otkA As String, otkB As String, otp As String, zbr As String
+    Dim ok As Boolean, g As String, por As String, zbrNova As String
     Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
@@ -26869,10 +26910,24 @@ Private Sub Test_LNC_BrojVerzijeBezPrekidaca()
     SetConfigValue CFG_AUTO_BROJ_DOK, "NE"
     predlog = modBrojevi.SuggestNextBroj(modBrojevi.KIND_ZBR, TEST_VOZ_ID, NextTestDate(), False)
     verzija = modBrojevi.BrojNoveVerzije(modBrojevi.KIND_ZBR, TEST_VOZ_ID, NextTestDate())
+    ' I sam potez, sa iskljucenim auto-brojem (review #471, nalaz 22): regresija na
+    ' SuggestNextBroj u ZbrZaglavljeVerzije bi ga oborila sa 1978. Dokumenti testa
+    ' nose zadate brojeve, pa prekidac ne dira njihov nastanak.
+    scenario = NewScenarioCode("LNCBR")
+    otkA = LncOtkup("LNCBRA-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkB = LncOtkup("LNCBRB-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNCBR-" & scenario, Pr3Izvor(otkA, otkB), TEST_TIP_AMB)
+    zbr = LncZbr("LNCBR-" & scenario, Pr3Izvor(otp, ""))
+    ok = modDokumenta.StornoListaULancu_TX(otkB, g, por)
     SetConfigValue CFG_AUTO_BROJ_DOK, prevAuto
+    zbrNova = LncZbrPolje(zbr, COL_TRACE_ZAMENJEN_SA_ID)
 
     AssertEquals "", predlog, "LNC broj: kontrola -- iskljucen prekidac ne daje predlog u formi"
     AssertTrue Len(verzija) > 0, "LNC broj: nova verzija dobija broj i kad je auto-broj iskljucen"
+    AssertTrue ok, "LNC broj: potez u lancu prolazi i kad je auto-broj iskljucen"
+    AssertTrue Len(zbrNova) > 0, "LNC broj: nova verzija zbirne nastaje i bez auto-broja"
+    If Len(zbrNova) > 0 Then AssertTrue Len(LncZbrPolje(zbrNova, COL_ZBR_BROJ)) > 0, _
+                                        "LNC broj: nova zbirna ima broj"
     Exit Sub
 
 EH:
@@ -27030,6 +27085,126 @@ EH:
     modScrDokumenti.Scr_PotvrdaLancaTestReset
     SetTestMode prevMode
     On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' MATRICA STANJA, red "izdata otpremnica bez zbirne" (review #471, nalaz 26):
+' otpremnica' nastaje, a zbirne nema ni pre ni posle.
+Private Sub Test_LNC_IzdataOtpBezZbirne()
+    Const SRC As String = "Test_LNC_IzdataOtpBezZbirne"
+    Dim scenario As String
+    Dim otkA As String, otkB As String, otp As String, otpNova As String
+    Dim ok As Boolean, g As String, por As String, izv As Collection
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNC10")
+    otkA = LncOtkup("LNC10A-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkB = LncOtkup("LNC10B-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNC10-" & scenario, Pr3Izvor(otkA, otkB), TEST_TIP_AMB)
+
+    ok = modDokumenta.StornoListaULancu_TX(otkB, g, por)
+    otpNova = LncOtpPolje(otp, COL_TRACE_ZAMENJEN_SA_ID)
+
+    AssertTrue ok, "LNC bez zbirne: potez je proknjizen (" & g & ")"
+    AssertTrue Len(otpNova) > 0, "LNC bez zbirne: otpremnica dobija novu verziju"
+    If Len(otpNova) = 0 Then Exit Sub
+    Set izv = modDokumenta.IzvoriOtpremnice(otpNova)
+    AssertEquals "1", CStr(izv.count), "LNC bez zbirne: nova otpremnica nosi samo preostali list"
+    AssertEquals "", modDokumenta.AktivnaZbirnaZaOtpremnicu(otpNova), _
+                 "LNC bez zbirne: nova otpremnica nije ni u jednoj zbirni"
+    AssertTrue InStr(1, por, LncOtpPolje(otpNova, COL_OTP_BROJ), vbTextCompare) > 0, _
+               "LNC bez zbirne: poruka imenuje broj nove otpremnice"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' MATRICA STANJA, red "izdata otpremnica u NACRTU zbirne" (review #471, nalaz 26):
+' nacrt zbirne se menja u mestu -- stara otpremnica izlazi, otpremnica' ulazi, bez
+' storna i novog broja zbirne, a cinjenice robe (ZBR-KANON-04) ostaju popunjene.
+Private Sub Test_LNC_NacrtZbirneUMestu()
+    Const SRC As String = "Test_LNC_NacrtZbirneUMestu"
+    Dim scenario As String
+    Dim otkA As String, otkB As String, otp As String, otpNova As String, zbrN As String
+    Dim ok As Boolean, g As String, por As String, clanovi As Collection
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNC11")
+    otkA = LncOtkup("LNC11A-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkB = LncOtkup("LNC11B-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNC11-" & scenario, Pr3Izvor(otkA, otkB), TEST_TIP_AMB)
+    zbrN = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-LNC11-" & scenario), _
+                                ZbrOcek(KLASA_I, 300#, 0#), g)
+    AssertTrue Len(zbrN) > 0, "LNC nacrt zbirne: nacrt napravljen (" & g & ")"
+    If Len(zbrN) = 0 Then Exit Sub
+    AssertTrue modDokumenta.DodajZbirnaIzvor_TX(zbrN, otp, g), _
+               "LNC nacrt zbirne: otpremnica u nacrtu (" & g & ")"
+
+    ok = modDokumenta.StornoListaULancu_TX(otkB, g, por)
+    otpNova = LncOtpPolje(otp, COL_TRACE_ZAMENJEN_SA_ID)
+    Set clanovi = modDokumenta.ZbrClanovi(zbrN)
+
+    AssertTrue ok, "LNC nacrt zbirne: potez je proknjizen (" & g & ")"
+    AssertTrue Len(otpNova) > 0, "LNC nacrt zbirne: otpremnica dobija novu verziju"
+    AssertEquals "1", CStr(clanovi.count), "LNC nacrt zbirne: nacrt ima tacno jedan izvor"
+    If clanovi.count = 1 Then
+        AssertEquals otpNova, CStr(clanovi(1)), _
+                     "LNC nacrt zbirne: u nacrtu je nova verzija otpremnice"
+    End If
+    AssertTrue LncZbrPolje(zbrN, COL_STORNIRANO) <> "Da", "LNC nacrt zbirne: nacrt se ne stornira"
+    AssertTrue Not modDokumenta.ZbirnaJeIzdata(zbrN), "LNC nacrt zbirne: nacrt ostaje nacrt"
+    AssertEquals "", LncZbrPolje(zbrN, COL_TRACE_ZAMENJEN_SA_ID), _
+                 "LNC nacrt zbirne: nacrt nema novu verziju"
+    AssertTrue Len(LncZbrPolje(zbrN, COL_ZBR_VRSTA)) > 0, _
+               "LNC nacrt zbirne: cinjenice robe su ponovo preuzete (ZBR-KANON-04)"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' RUTA ISPRAVKE (review #471, nalaz 18): F1 snimanje ide kroz
+' modOtkupUnos.OtkupUpisi -- isti ulaz koji zove ekran. List u izdatoj otpremnici
+' mora da ode u potez u lancu (IspraviOtkupIliLanac), ne u IspravkaOtkupa_TX, koji
+' ga odbija.
+Private Sub Test_LNC_IspravkaKrozUnos()
+    Const SRC As String = "Test_LNC_IspravkaKrozUnos"
+    Dim scenario As String
+    Dim otkA As String, otkB As String, otp As String, zbr As String
+    Dim p As Object, poruke As String, res As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNC12")
+    otkA = LncOtkup("LNC12A-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkB = LncOtkup("LNC12B-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNC12-" & scenario, Pr3Izvor(otkA, otkB), TEST_TIP_AMB)
+    zbr = LncZbr("LNC12-" & scenario, Pr3Izvor(otp, ""))
+
+    Set p = OtkEkranParam(TEST_PREFIX & "-OTK-LNC12Bn-" & scenario)
+    p("kolicinaI") = 80#
+    p("cenaI") = 50#
+    res = modOtkupUnos.OtkupUpisi(p, poruke, otkB)
+
+    AssertTrue Len(res) > 0, "LNC unos: ispravka lista u izdatoj otpremnici prolazi kroz unos"
+    AssertEquals res, OtkPolje(otkB, COL_TRACE_ZAMENJEN_SA_ID), _
+                 "LNC unos: stari list pokazuje na nov (ZamenjenSaID)"
+    AssertTrue Len(LncOtpPolje(otp, COL_TRACE_ZAMENJEN_SA_ID)) > 0, _
+               "LNC unos: ispravka kroz unos pravi novu verziju otpremnice"
+    AssertTrue InStr(1, poruke, "ispravljen", vbTextCompare) > 0, _
+               "LNC unos: poruka poteza stize do operatera"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
     LogFatal SRC, errNum, errDesc
 End Sub
 
@@ -30489,8 +30664,9 @@ Private Sub IspravkaOdbijena(ByVal otkupID As String, ByVal otpID As String, _
     AssertTrue InStr(1, g, otpID, vbTextCompare) > 0, _
                "A13 " & stanje & ": poruka imenuje BAS tu otpremnicu (bilo: " & g & ")"
     ' Poruka mora da nudi IZLAZ. Do S3d-2 je govorila "nije dostupna do PR7" --
-    ' uputstvo bez puta; sada imenuje postupak koji od S3c stvarno postoji.
-    AssertTrue InStr(1, g, "ispravi otpremnicu", vbTextCompare) > 0, _
+    ' uputstvo bez puta. PREMISA PROMENJENA (LNC-ODL-12, 06.11.2026): izlaz je
+    ' potez u lancu (F1 "Ispravi blok"), a ne vise rucni put kroz F2 "Ispravi".
+    AssertTrue InStr(1, g, "potez u lancu", vbTextCompare) > 0, _
                "A13 " & stanje & ": poruka imenuje put koji postoji"
     AssertTrue InStr(1, g, "PR7", vbTextCompare) = 0, _
                "A13 " & stanje & ": poruka ne upucuje na nepostojeci PR7"

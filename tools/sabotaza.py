@@ -1073,10 +1073,13 @@ SABOTAZE = {
     ),
     # Kapija A13 pada: blok IZDATE otpremnice se ispravlja u mestu, pa izdat papir
     # vise ne opisuje robu koju nosi.
+    # Review #471, nalaz 19: stara zamena je IZDATO slala u granu "nepoznat status",
+    # pa je ispravka i dalje bila odbijena i tvrdnja nije mogla da padne. Sabotaza
+    # sada gasi bas dodelu razloga za izdatog roditelja.
     "ispravka-bloka-izdata-prolazi": (
         "modOtkup.bas",
-        "        If stat = UCase$(IZDATO_IZDATO) Or stat = UCase$(IZDATO_PROSLEDJENO) Then\n",
-        "        If False Then   ' SABOTAZA: izdata otpremnica pusta ispravku\n",
+        "            If Not uLancu Then\n",
+        "            If False Then   ' SABOTAZA: izdata otpremnica pusta ispravku\n",
         "Test_OTK_IspravkaBlokaUNacrtu",
         "Ispravka bloka: izdata otpremnica odbija ispravku",
     ),
@@ -7539,6 +7542,42 @@ SABOTAZE = {
         "    opis = \"\"   ' SABOTAZA: ispravka u lancu bez potvrde\n",
         "Test_LNC_F1IspravkaULancu",
         "LNC F1: snimanje ispravke u lancu trazi potvrdu sa posledicama",
+    ),
+    # ZBR-OWN-01: nova verzija zbirne preracunava KupacHladnjaca iz danasnjeg
+    # configa umesto da nasledi oznaku nastanka (review #471, nalaz 25).
+    "lnc-kupac-hladnjaca-preracun": (
+        "modDokumenta.bas",
+        "        RequireUpdateCell TBL_ZBIRNA, rNova, COL_ZBR_KUPAC_HLADNJACA, _\n",
+        "        If False Then RequireUpdateCell TBL_ZBIRNA, rNova, COL_ZBR_KUPAC_HLADNJACA, _\n",
+        "Test_LNC_StornoListaUIzdatojZbirnoj",
+        "LNC: nova zbirna nasledjuje KupacHladnjaca (ZBR-OWN-01)",
+    ),
+    # AMB-10-ODL-40: zaostalo odlaganje zatvorene transakcije se ne zamenjuje --
+    # svaki sledeci potez u lancu meri kontra-stav odmah (review #471, nalaz 24).
+    "odl40-zaostalo-ne-zamenjuje": (
+        "modAmbalaza.bas",
+        "        LogWarn sourceName, \"AMB-10-ODL-40: zaostalo odlaganje zatvorene transakcije je odbaceno.\"\n",
+        "        Exit Sub   ' SABOTAZA: zaostalo stanje se ne zamenjuje\n",
+        "Test_AMB_ODL40_CommitBezZavrsetkaOdbijen",
+        "ODL-40: zaostalo odlaganje vracene transakcije ne blokira sledecu",
+    ),
+    # LNC-ODL-12: ruta ispravke ne prepoznaje list u izdatoj otpremnici -- F1
+    # snimanje ide u IspravkaOtkupa_TX, koji ga odbija (review #471, nalaz 18).
+    "lnc-unos-ruta-bez-lanca": (
+        "modOtkupUnos.bas",
+        "        If modDokumenta.OtpremnicaJeIzdata(otpID) Then\n",
+        "        If False Then   ' SABOTAZA: ispravka ne ide u potez u lancu\n",
+        "Test_LNC_IspravkaKrozUnos",
+        "LNC unos: ispravka lista u izdatoj otpremnici prolazi kroz unos",
+    ),
+    # LNC-ODL-13: u nacrtu zbirne otpremnica' ne ulazi u clanstvo -- izdata
+    # otpremnica ostaje van svake zbirne (review #471, nalaz 26).
+    "lnc-nacrt-zbirne-bez-nove": (
+        "modDokumenta.bas",
+        "            ZbrUpisiClanstvo zbrStara, otpNova, src\n",
+        "            ' SABOTAZA: otpremnica' ne ulazi u nacrt zbirne\n",
+        "Test_LNC_NacrtZbirneUMestu",
+        "LNC nacrt zbirne: nacrt ima tacno jedan izvor",
     ),
     # AMB-10-ODL-40: commit ne pita za otvoreno odlaganje -- zaboravljen zavrsetak
     # tiho commit-uje storno bez AMB-INV-07/09/16.

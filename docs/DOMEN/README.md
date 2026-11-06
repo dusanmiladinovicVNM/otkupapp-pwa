@@ -84,7 +84,8 @@ A13 već drži za otpremnicu (S3c).
 > **Pre-flight 06.11.2026 (`LNC-*`, `docs/DOMEN/STORNO_U_LANCU.md`):** zamena se
 > pokreće sa **izvora** — storno ili ispravka otkupnog lista u izdatoj otpremnici i
 > zbirnoj, jedan potez: nova verzija otpremnice i zbirne, prijemnice prevezane po ID-u.
-> F8 nad zbirnom i dalje nudi samo `DUPLI` / `PONIŠTENJE`. Koda još nema.
+> F8 nad zbirnom i dalje nudi samo `DUPLI` / `PONIŠTENJE`. U kodu od PR #471
+> (`modDokumenta.StornoListaULancu_TX` / `IspravkaListaULancu_TX`), NEVERIFIKOVANO u Excelu.
 
 **ZBR-KANON-04 — izvedena činjenica živi tačno koliko i njen izvor (odluka
 operatera, 22.09.2026).** `VrstaVoca`, `SortaVoca` i `TipAmbalaze` na nacrtu
@@ -441,7 +442,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | Funkcionalna mapa ekrana | `docs/AgriX_Functional_Map_v142.md` |
 | Funkcionalne bele zone i product roadmap | `docs/DOMEN/FUNKCIONALNE_BELE_ZONE_I_ROADMAP.md` |
 | Storno i kaskade | `docs/STORNO_BACKLOG.md`, `docs/STORNO_CENTAR_PLAN_RADA.md` |
-| **Storno i ispravka otkupnog lista u lancu** — nova verzija otpremnice i zbirne, prijemnice prevezane (`LNC-ODL-01..20`, `LNC-INV-01..11`) | `docs/DOMEN/STORNO_U_LANCU.md` — **pre-flight 06.11.2026, koda nema** |
+| **Storno i ispravka otkupnog lista u lancu** — nova verzija otpremnice i zbirne, prijemnice prevezane (`LNC-ODL-01..20`, `LNC-INV-01..11`) | `docs/DOMEN/STORNO_U_LANCU.md` — **u kodu (PR #471), NEVERIFIKOVANO u Excelu** |
 | Prerada 2.0 — proizvodno jezgro (model, faze, odluke) | `docs/PRERADA_2_MODEL_I_PLAN.md` |
 | SEF (e-fakture) | `docs/SEF_LIFECYCLE_MANUAL.md` |
 | **Faktura — identitet, linija, storno i SEF** (`FAK-IDENT-01/02`, `FAK-ODL-01..05`) | `docs/DOMEN/FAKTURA.md` |

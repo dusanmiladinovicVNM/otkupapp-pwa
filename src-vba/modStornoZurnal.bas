@@ -163,8 +163,21 @@ Private Function LancaRazlog(ByVal opID As String) As String
                     cid = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, rid, _
                                                      COL_TRACE_CORRECTION_ID)))
                     If Len(cid) > 0 Then
+                        ' FAIL-CLOSED: list nosi CorrectionID, a red konteksta se ne cita --
+                        ' ne zna se da li je potez u lancu (review #471, nalaz 20).
+                        ' GetCorrectionField gresku guta i vraca "", sto bi pustilo undo.
+                        If modStornoContext.GetCorrectionRowByID(cid) = 0 Then
+                            LancaRazlog = "List " & rid & " nosi CorrectionID " & cid & _
+                                ", a red konteksta nije citljiv -- undo odbijen (fail-closed)."
+                            Exit Function
+                        End If
+                        ' Samo list koji je potez SAM stornirao (OldDocID korena). Nov list
+                        ' iz ispravke nosi isti koren kao NewDocID, pa njegov kasniji obican
+                        ' storno ostaje povratan (review #471, nalazi 13 i 17).
                         If StrComp(modStornoContext.GetCorrectionField(cid, COL_SV_PARENT_DOCTYPE), _
-                                   SV_PARENT_LANAC, vbTextCompare) = 0 Then
+                                   SV_PARENT_LANAC, vbTextCompare) = 0 And _
+                           StrComp(modStornoContext.GetCorrectionField(cid, COL_SV_OLD_DOCID), _
+                                   rid, vbTextCompare) = 0 Then
                             LancaRazlog = "Storno lista " & rid & " je deo poteza u lancu " & _
                                 "(nova verzija otpremnice i zbirne, LNC-ODL-18) i ne vraca se " & _
                                 "po delovima. Ako je potez bio greska, unesi list ponovo -- " & _

@@ -1242,6 +1242,26 @@ Private Function RowAction(ByVal tag As String) As Boolean
                 modOtkupUI.ShowToast razlog, True
                 Exit Function
             End If
+            ' LIST U OTPREMNICI (LNC-ODL-05): isti put kao F8 -- potvrda nabraja
+            ' posledice poteza u lancu, a izvrsenje ide kroz StornoIzvrsi, koji
+            ' bira potez u lancu ili obican storno. Preflight i izvrsenje tako ne
+            ' mogu da se razidju (review #471, nalazi 7 i 9).
+            Dim opisLnc As String, porLnc As String
+            opisLnc = modDokumenta.LncPlanOpisZaOtkup(otkupID, False)
+            If Len(opisLnc) > 0 Then
+                If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
+                          Poruka("OTKUI_ASK_STORNO2") & vbCrLf & vbCrLf & _
+                          Poruka("STORNO_LANAC_POSLEDICE") & vbCrLf & opisLnc, _
+                          vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
+                If modStornoDok.StornoIzvrsi(modStornoDok.STIP_OTKUP, broj, "", porLnc, otkupID) Then
+                    Scr_ResetCache
+                    RowAction = True
+                    MsgBox porLnc, vbInformation, APP_NAME
+                Else
+                    modOtkupUI.ShowToast porLnc, True
+                End If
+                Exit Function
+            End If
             If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
                       Poruka("OTKUI_ASK_STORNO2"), vbQuestion + vbYesNo, _
                       APP_NAME) = vbNo Then Exit Function

@@ -183,8 +183,16 @@ potez i jedna transakcija.
 
 **Šta ostaje netaknuto** (premisa testova se ne menja): F8 zbirna DUPLI/PONIŠTENJE/REŠI
 KASNIJE (`T_Zbirna_NemaIspravku`), F2 „Ispravi" (`IspravkaOtpremnice_TX`, sada kroz
-zajednički `OtpZaglavljeVerzije`), `IspravkaOtkupa_TX` (i dalje odbija izdatog roditelja —
-`Test_OTK_IspravkaBlokaUNacrtu`), storno lista van otpremnice, hladnjački lanac.
+zajednički `OtpZaglavljeVerzije`), `IspravkaOtkupa_TX` (i dalje odbija izdatog roditelja),
+pisac `StornoOtkup_TX` (i dalje odbija list u aktivnoj otpremnici), storno lista van
+otpremnice, hladnjački lanac.
+
+**Premise koje se MENJAJU, namerno** (odluke operatera 06.11.2026; review `#471`, nalazi 2 i 3):
+
+| Test | Bilo | Sada |
+|---|---|---|
+| `Test_OTK_IzvorAktivneOtpremniceSeNeStornira` (pomoćnik `IzvorOtpremniceOdbijen`) | F8 odbija list u otpremnici i imenuje je | F8 **pušta** potez u lancu (`LNC-ODL-05`); tvrdnje pisca ostaju |
+| `Test_OTK_IspravkaBlokaUNacrtu`, A13 test ispravke izdate (`"... poruka imenuje put koji postoji"`) | odbijenica imenuje ručni put „ispravi otpremnicu" | odbijenica imenuje **potez u lancu** (`LNC-ODL-12`) |
 
 Lanac u testovima grade **kanonski pisci**, sa sopstvenim tipom gajbe po scenariju (§7,
 FALSE-GREEN). Svi testovi su u `RunBusinessFlowProSuite`.
@@ -193,24 +201,34 @@ FALSE-GREEN). Svi testovi su u `RunBusinessFlowProSuite`.
 |---|---|---|
 | ambalaža na kraju (`AMB-10-ODL-40`): A → B, bez odlaganja pada | `Test_AMB_ODL40_MeriPosleZamene` | `odl40-kontra-meri-odmah`, `amb-storno-bez-inv07` |
 | zamena bez pokrića pada na kraju, rollback | `Test_AMB_ODL40_BezPokricaPadaNaKraju` | `odl40-zavrsi-bez-inv07` |
-| zaboravljen završetak — commit odbijen | `Test_AMB_ODL40_CommitBezZavrsetkaOdbijen` | `odl40-commit-bez-kapije` |
+| zaboravljen završetak — commit odbijen; zaostalo stanje se zamenjuje | `Test_AMB_ODL40_CommitBezZavrsetkaOdbijen` | `odl40-commit-bez-kapije`, `odl40-zaostalo-ne-zamenjuje` |
 | ugovor početka odlaganja | `Test_AMB_ODL40_UgovorPocetka` | — |
-| H1: storno u izdatoj zbirnoj, prijemnica, trag, kontekst, ambalaža neto | `Test_LNC_StornoListaUIzdatojZbirnoj` | `lnc-prijemnica-ostaje-na-staroj` |
+| H1: storno u izdatoj zbirnoj, prijemnica, trag, kontekst, ambalaža neto; `KupacHladnjaca` nasleđen i kad se config promeni posle nastanka | `Test_LNC_StornoListaUIzdatojZbirnoj` | `lnc-prijemnica-ostaje-na-staroj`, `lnc-kupac-hladnjaca-preracun` |
 | H2: sestre | `Test_LNC_SestrePrezivljavaju` | `lnc-sestre-ispadaju` |
-| poslednji izvor (bez naslednika / odbijen uz prijemnicu) | `Test_LNC_PoslednjiIzvor` | `lnc-poslednji-izvor-bez-kapije` |
+| poslednji izvor (bez naslednika / odbijen uz prijemnicu bez gajbi, da kapija bude jedini razlog) | `Test_LNC_PoslednjiIzvor` | `lnc-poslednji-izvor-bez-kapije` |
 | rollback bez seam-a (neslaganje ambalaže) | `Test_LNC_NeslaganjeAmbalazeVracaSve` | (pokriva ga `odl40-*`) |
 | prijemnica samo po labeli (sintetička anomalija) | `Test_LNC_PrijemnicaBezIDaOdbijena` | `lnc-prijemnica-po-labeli-tiho` |
 | nacrt otpremnice u mestu | `Test_LNC_NacrtOtpremniceUMestu` | — |
-| ispravka u lancu (staro − stari + novi, PUT A) | `Test_LNC_IspravkaListaULancu` | `lnc-ispravka-bez-novog-lista` |
+| izdata otpremnica bez zbirne | `Test_LNC_IzdataOtpBezZbirne` | — |
+| izdata otpremnica u nacrtu zbirne (u mestu, ZBR-KANON-04) | `Test_LNC_NacrtZbirneUMestu` | `lnc-nacrt-zbirne-bez-nove` |
+| ispravka u lancu (staro − stari + novi; keš prelazi na nov list, preplata prijavljena) | `Test_LNC_IspravkaListaULancu` | `lnc-ispravka-bez-novog-lista` |
+| ruta F1 snimanja: `modOtkupUnos.OtkupUpisi` → potez u lancu | `Test_LNC_IspravkaKrozUnos` | `lnc-unos-ruta-bez-lanca` |
 | ispravka menja ambalažu — odbijena | `Test_LNC_IspravkaMenjaAmbalazuOdbijena` | `lnc-ispravka-menja-lanac-tiho` |
-| broj verzije bez prekidača auto-broja | `Test_LNC_BrojVerzijeBezPrekidaca` | — |
+| broj verzije bez prekidača auto-broja (generator i sam potez) | `Test_LNC_BrojVerzijeBezPrekidaca` | — |
 | UNDO poteza odbijen | `Test_LNC_UndoPotezaOdbijen` | `lnc-undo-vraca-deo-poteza` |
 | F8: kapija, potvrda sa posledicama, storno potezom, poslednji izvor | `Test_LNC_F8StornoListaULancu` | `lnc-f8-obican-storno` |
 | F1: otvaranje ispravke, potvrda sa posledicama | `Test_LNC_F1IspravkaULancu` | `lnc-f1-bez-potvrde` |
 
 Postojeća sabotaža `ispravka-gubi-identitet-utovara` sada gađa zajednički
 `OtpZaglavljeVerzije`, a `ispravka-bloka-*` i `ki024-*` premešteno jezgro
-`IspravkaOtkupaUTransakciji` — tekst sidara je isti.
+`IspravkaOtkupaUTransakciji` — tekst sidara je isti. `ispravka-bloka-izdata-prolazi` je
+popravljena: stara zamena je izdatog roditelja slala u granu „nepoznat status", pa tvrdnja
+nije mogla da padne (zatečeno pre `#471`, review nalaz 19).
+
+**Review `#471` (06.11.2026)** — 7 dimenzija, svaki nalaz kroz dva skeptika: 27 potvrđenih ili
+verovatnih, svi ispravljeni osim jednog zatečenog. Najteži: potez sa preostalim listovima je
+UVEK padao — strog čitač stavki otpremnice je video novo zaglavlje bez stavki (nalaz 1). Zatečen
+kvar potvrde manjka gajbi u ispravci sa gajbama (nalaz 16) je `KI-089`, svoj rez.
 
 **Nije pokriveno testom:** sam poziv potvrde iz `Scr_Save` (odluka se meri kroz
 `Scr_PotvrdaLancaProbaj`, isto telo) i sync posle poteza (`LNC-INV-09` drži konstrukcija:

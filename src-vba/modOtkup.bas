@@ -383,9 +383,9 @@ Public Function IspravkaOtkupa_TX(ByVal stariOtkupID As String, _
     ' stajao van njega.
     '
     ' IZDATO -- sastav izdatog dokumenta je istorijska cinjenica (A13). Otpremnica
-    ' mora dobiti NOVU VERZIJU, a za njom i zbirna; to je S4. Poruka zato imenuje
-    ' put koji OD S3c stvarno postoji: ispravi otpremnicu (stara se stornira, nova
-    ' nastaje kao NACRT sa istim blokovima), pa onda ispravi blok u tom nacrtu.
+    ' mora dobiti NOVU VERZIJU, a za njom i zbirna. Ovaj pisac to ne radi: poruka
+    ' imenuje potez u lancu (modDokumenta.IspravkaListaULancu_TX, LNC-ODL-12), kojim
+    ' F1 ispravlja list u izdatoj otpremnici.
     Dim roditelj As String
     roditelj = modDokumenta.OtpremnicaZaOtkup(stariOtkupID)
 
@@ -600,8 +600,14 @@ Public Function IspravkaOtkupaUTransakciji(ByVal stariOtkupID As String, _
         modDokumenta.UvediIzvorUNacrt roditelj, noviID
     End If
 
-    modStornoContext.CompleteCorrectionContext cid, noviID, noviBroj, _
-        "Ispravka otkupa zavrsena: nov dokument " & noviID & "."
+    ' LNC-INV-10: kontekst se zavrsava u ISTOJ transakciji -- nezavrsen red bi ostao
+    ' PENDING (Nedovrseno, F2/F3 "ispravka pauzirana"). Neuspeh obara potez (review
+    ' #471, nalaz 15); CompleteCorrectionContext gresku guta i vraca False.
+    If Not modStornoContext.CompleteCorrectionContext(cid, noviID, noviBroj, _
+            "Ispravka otkupa zavrsena: nov dokument " & noviID & ".") Then
+        Err.Raise vbObjectError + 1912, SRC, _
+                  "Correction context ispravke nije zavrsen (LNC-INV-10): " & cid
+    End If
 
     IspravkaOtkupaUTransakciji = noviID
 End Function
