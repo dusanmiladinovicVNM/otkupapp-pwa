@@ -29629,9 +29629,9 @@ Private Sub T_Doplata_NacinKonacnaCena()
     obr2 = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), _
                DopStope(DopStopa(vr, "S1", KLASA_I, 62)), "test 334-2", True, g, en, DOP_NACIN_KONACNA)
     AssertEq g & "|" & DopDokBloka(obr2, o1) & DopDokBloka(obr2, o2) & DopDokBloka(obr2, o3), _
-             "|" & NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o1, COL_OTK_BR_DOK)) & "D2|1|" & FX_STANICA & _
+             "|" & NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o1, COL_OTK_BR_DOK)) & "-02|1|" & FX_STANICA & _
              "|" & Format$(20, "0.00") & ";" & _
-             NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o2, COL_OTK_BR_DOK)) & "D2|1|" & FX_STANICA & _
+             NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o2, COL_OTK_BR_DOK)) & "-02|1|" & FX_STANICA & _
              "|" & Format$(8, "0.00") & ";", _
              "ponovljen obracun do konacne cene oduzima vec doplaceno"
     AssertEq Format$(DopIznosKooperanta(kA), "0.00"), Format$(136, "0.00"), _
@@ -29676,7 +29676,7 @@ Private Sub T_Doplata_IzborBlokova()
                                       False, g, en, DOP_NACIN_PO_KG, izbor)
     AssertEq g & "|" & DopBrojKO(obr) & "|" & DopDokBloka(obr, o1) & "|" & _
              Left$(DopDokBloka(obr, o2), Len(DopDokBloka(obr, o2)) - Len(Format$(50, "0.00") & ";")), _
-             "|1||" & NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o2, COL_OTK_BR_DOK)) & "D|1|" & FX_STANICA & "|", _
+             "|1||" & NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, o2, COL_OTK_BR_DOK)) & "-01|1|" & FX_STANICA & "|", _
              "knjizi se samo izabrani blok"
     AssertEq DopOdstupanjaObracuna(obr), "", "iskljucen blok nije signal osnovice"
 

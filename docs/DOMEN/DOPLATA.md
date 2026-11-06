@@ -472,11 +472,15 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   blok / doplata / specifikacija, a `BimOtkupIzPozivaNaBroj` i `BimEfektivnaSpec`
   dižu ručno mapiranje kad poziv pogodi dve vrste (`PozivViseVrsta`).
   `JeSpecifikacija` prepoznaje broj po kosoj crti. Test 339 prepisan (oblik,
-  niz stanice tog dana, storno, stari oblik); 316/319 (`-01`, `-02`) i 343
-  prilagođeni; nov test 349. Sabotaže `dop-spec-oblik-sa-slovom`,
+  niz stanice tog dana, storno, stari oblik); 316/319/334/335 (`-01`, `-02`) i
+  343 prilagođeni; nov test 349. Sabotaže `dop-spec-oblik-sa-slovom`,
   `dop-spec-isti-broj-u-obracunu`, `dop-broj-sa-slovom`,
   `dop-poziv-prvi-pobedjuje`, `dop-poziv-blok-bez-provere`; presidrena
-  `dop-broj-bez-rednog`. **Excel prolaz neverifikovan.**
+  `dop-broj-bez-rednog`. **Prvi Excel prolaz (06.11.2026): RunAllTests 349 / 2
+  palo** — 334 i 335 su u očekivanju još lepili stari sufiks (`D2`, `D`), dok je
+  stvarni broj već bio tačan (`…-25-02`, `…-29-01`); ostalih 11 suite-ova
+  zeleno (BFP 3014/0, banka 241/0). Očekivanje ispravljeno; ponovni prolaz i
+  dokaz neverifikovani.
 - **Pitanje o ponavljanju kroz katalog poruka** (05.11.2026): tekst je iz
   `modPoruke` (`DOP_ASK_PONAVLJANJE`, `DOP_ASK_PONAVLJANJE_POTVRDI`), sa
   dijakritikom, isti u grešci pisca i u pitanju ekrana. Test 318 dopunjen,
