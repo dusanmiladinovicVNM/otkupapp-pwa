@@ -130,6 +130,59 @@ End Sub
 ' Kljuc je KOMPOZITAN (DokumentTIP, DokumentID): AMB-INV-04 nosi tip tacno zato
 ' sto se jedan globalni namespace DokumentID-eva ne sme pretpostaviti
 ' (review 03.10.2026, P2 #1).
+' LNC-ODL-18 / LNC-INV-11: POTEZ U LANCU SE NE VRACA PO DELOVIMA.
+'
+' Storno ili ispravka lista u izdatoj otpremnici i zbirnoj je jedan potez nad
+' vise dokumenata, a zurnal pamti samo celije otkupa i novca. Vracanje samo lista
+' bi ga ostavilo aktivnog van svake otpremnice (izgubljen blok, malina sync mu
+' pravi novu otpremnicu i zbirnu), a kod ispravke bi stari i nov list bili oba
+' aktivni. Potez se prepoznaje po tragu: list nosi CorrectionID reda koji ima
+' ParentDocType = LANAC (koren poteza, modDokumenta.LncKontekstKoren).
+Private Function LancaRazlog(ByVal opID As String) As String
+    Const SRC As String = MOD_NAME & ".LancaRazlog"
+
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_STORNO_ZURNAL)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cOp As Long, cRow As Long, cTbl As Long
+    cOp = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_OP_ID)
+    cRow = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_ROWID)
+    cTbl = GetColumnIndex(TBL_STORNO_ZURNAL, COL_SZ_TABELA)
+    If cOp = 0 Or cRow = 0 Or cTbl = 0 Then Err.Raise ERR_SZ_BASE + 16, SRC, _
+                                         "Zurnal sema nije kompletna (OperationID/RowID/Tabela)."
+
+    Dim i As Long, rid As String, cid As String
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cOp))) = Trim$(opID) Then
+            If StrComp(Trim$(CStr(data(i, cTbl))), TBL_OTKUP, vbTextCompare) = 0 Then
+                rid = Trim$(CStr(data(i, cRow)))
+                If Len(rid) > 0 Then
+                    cid = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, rid, _
+                                                     COL_TRACE_CORRECTION_ID)))
+                    If Len(cid) > 0 Then
+                        If StrComp(modStornoContext.GetCorrectionField(cid, COL_SV_PARENT_DOCTYPE), _
+                                   SV_PARENT_LANAC, vbTextCompare) = 0 Then
+                            LancaRazlog = "Storno lista " & rid & " je deo poteza u lancu " & _
+                                "(nova verzija otpremnice i zbirne, LNC-ODL-18) i ne vraca se " & _
+                                "po delovima. Ako je potez bio greska, unesi list ponovo -- " & _
+                                "dobija nov broj."
+                            Exit Function
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next i
+    Exit Function
+
+EH:
+    LogErr SRC
+    LancaRazlog = "Greska pri proveri poteza u lancu -> undo odbijen (fail-closed)."
+End Function
+
 Private Function KontraStavRazlog(ByVal opID As String) As String
     Const SRC As String = MOD_NAME & ".KontraStavRazlog"
 
@@ -296,6 +349,9 @@ Public Function UndoGuardReasonZaOp(ByVal opID As String, ByVal docType As Strin
 
     ' Kontra-stavovi se ne mogu vratiti celijama.
     raz = KontraStavRazlog(opID)
+    ' LNC-ODL-18: storno lista koji je deo poteza u lancu se ne vraca -- zurnal
+    ' ne nosi otpremnicu ni zbirnu, pa bi list ozivio van svake otpremnice.
+    If Len(raz) = 0 Then raz = LancaRazlog(opID)
     UndoGuardReasonZaOp = raz
     Exit Function
 EH:

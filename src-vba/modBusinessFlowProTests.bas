@@ -330,6 +330,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_LNC_IspravkaListaULancu
     Test_LNC_IspravkaMenjaAmbalazuOdbijena
     Test_LNC_BrojVerzijeBezPrekidaca
+    Test_LNC_UndoPotezaOdbijen
+    Test_LNC_F8StornoListaULancu
+    Test_LNC_F1IspravkaULancu
     Test_Amb_UndoStornaOdbijenNadKnjigom
     Test_Amb_PonovnaStampaBezRedaKnjige
     Test_Amb_JedanProtivpartnerPoDokumentu
@@ -26877,6 +26880,155 @@ EH:
     errDesc = Err.description
     On Error Resume Next
     SetConfigValue CFG_AUTO_BROJ_DOK, prevAuto
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' LNC-ODL-18: storno lista iz poteza u lancu se ne vraca po delovima. Listovi su
+' BEZ GAJBI, da kapija kontra-stava (AMB-10-ODL-25) ne odbije prva -- ovde mora
+' da progovori bas pravilo poteza.
+Private Sub Test_LNC_UndoPotezaOdbijen()
+    Const SRC As String = "Test_LNC_UndoPotezaOdbijen"
+    Dim scenario As String
+    Dim otkA As String, otkB As String, otp As String, zbr As String
+    Dim brB As String, opID As String, razlog As String, undoProsao As Boolean
+    Dim ok As Boolean, g As String, por As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNC9")
+    otkA = LncOtkup("LNC9A-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    brB = "LNC9B-" & scenario
+    otkB = LncOtkup(brB, 100#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNC9-" & scenario, Pr3Izvor(otkA, otkB), TEST_TIP_AMB)
+    zbr = LncZbr("LNC9-" & scenario, Pr3Izvor(otp, ""))
+
+    ok = modDokumenta.StornoListaULancu_TX(otkB, g, por)
+    opID = modStornoZurnal.LatestOpFor(DOK_TIP_OTKUP, TEST_PREFIX & "-OTK-" & brB)
+    razlog = modStornoZurnal.UndoGuardReasonZaOp(opID, DOK_TIP_OTKUP, TEST_PREFIX & "-OTK-" & brB)
+    undoProsao = modStornoZurnal.UndoOperation_TX(opID)
+
+    AssertTrue ok, "LNC undo: polazni potez je proknjizen (" & g & ")"
+    AssertTrue InStr(1, razlog, "LNC-ODL-18", vbTextCompare) > 0, _
+               "LNC undo: storno lista iz poteza u lancu se ne vraca"
+    AssertFalse undoProsao, "LNC undo: UndoOperation_TX odbija potez u lancu"
+    AssertEquals "Da", OtkPolje(otkB, COL_STORNIRANO), "LNC undo: list ostaje storniran"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' F8 (LNC-ODL-05): kapija pre potvrde pusta list u lancu, potvrda nabraja
+' posledice, a storno ide potezom u lancu. Poslednji izvor uz prijemnicu se
+' odbija PRE potvrde, sa uputom na PONISTENJE.
+Private Sub Test_LNC_F8StornoListaULancu()
+    Const SRC As String = "Test_LNC_F8StornoListaULancu"
+    Dim scenario As String, tipT As String
+    Dim otkA As String, otkB As String, otp As String, zbr As String, zbrNova As String
+    Dim otkC As String, otpC As String, zbrC As String, prjC As String
+    Dim brB As String, razF8 As String, razC As String, txt As String, porukaF8 As String
+    Dim ok As Boolean, prevMode As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    prevMode = IsTestMode()
+    scenario = NewScenarioCode("LNCF8")
+    tipT = LncTipAmb(scenario, 30#)
+    otkA = LncOtkup("LNCF8A-" & scenario, 200#, 10#, tipT)
+    brB = TEST_PREFIX & "-OTK-LNCF8B-" & scenario
+    otkB = LncOtkup("LNCF8B-" & scenario, 100#, 5#, tipT)
+    otp = LncOtp("LNCF8-" & scenario, Pr3Izvor(otkA, otkB), tipT)
+    zbr = LncZbr("LNCF8-" & scenario, Pr3Izvor(otp, ""))
+
+    otkC = LncOtkup("LNCF8C-" & scenario, 100#, 5#, tipT)
+    otpC = LncOtp("LNCF8C-" & scenario, Pr3Izvor(otkC, ""), tipT)
+    zbrC = LncZbr("LNCF8C-" & scenario, Pr3Izvor(otpC, ""))
+    prjC = LncPrj("LNCF8C-" & scenario, zbrC, 100#, 5, tipT)
+
+    razF8 = modStornoDok.StornoRazlog(modStornoDok.STIP_OTKUP, brB, "", otkB)
+    razC = modStornoDok.StornoRazlog(modStornoDok.STIP_OTKUP, _
+                                     OtkPolje(otkC, COL_OTK_BR_DOK), "", otkC)
+
+    SetTestMode True
+    modScrStorno.Scr_IzborTestSet modStornoDok.STIP_OTKUP, brB, otkB, ""
+    txt = modScrStorno.StornoPotvrdaTekst()
+    SetTestMode prevMode
+
+    ok = modStornoDok.StornoIzvrsi(modStornoDok.STIP_OTKUP, brB, "", porukaF8, otkB)
+    zbrNova = LncZbrPolje(zbr, COL_TRACE_ZAMENJEN_SA_ID)
+
+    AssertEquals "", razF8, "LNC F8: kapija pre potvrde pusta list u lancu"
+    AssertTrue InStr(1, txt, Poruka("STORNO_LANAC_POSLEDICE"), vbBinaryCompare) > 0, _
+               "LNC F8: potvrda nabraja posledice poteza u lancu"
+    AssertTrue InStr(1, txt, "NOVU VERZIJU", vbBinaryCompare) > 0, _
+               "LNC F8: potvrda kaze da otpremnica i zbirna dobijaju novu verziju"
+    AssertTrue ok, "LNC F8: storno lista ide potezom u lancu (" & porukaF8 & ")"
+    AssertTrue Len(zbrNova) > 0, "LNC F8: F8 storno je napravio novu verziju zbirne"
+    If Len(zbrNova) > 0 Then
+        AssertTrue InStr(1, porukaF8, LncZbrPolje(zbrNova, COL_ZBR_BROJ), vbTextCompare) > 0, _
+                   "LNC F8: poruka posle storna imenuje broj nove zbirne"
+    End If
+    AssertTrue InStr(1, razC, "PONISTENJE", vbTextCompare) > 0, _
+               "LNC F8: kapija pre potvrde odbija poslednji izvor uz prijemnicu"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    SetTestMode prevMode
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' F1 (LNC-ODL-11, -12): ispravka lista u izdatoj otpremnici se OTVARA, a snimanje
+' trazi potvrdu sa posledicama. List van lanca potvrdu ne trazi.
+Private Sub Test_LNC_F1IspravkaULancu()
+    Const SRC As String = "Test_LNC_F1IspravkaULancu"
+    Dim scenario As String, tipT As String
+    Dim otkA As String, otkB As String, otkVan As String, otp As String, zbr As String
+    Dim spec As String, razOtv As String, txt As String
+    Dim odgLanac As Boolean, odgVan As Boolean, prevMode As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    prevMode = IsTestMode()
+    scenario = NewScenarioCode("LNCF1")
+    tipT = LncTipAmb(scenario, 30#)
+    otkA = LncOtkup("LNCF1A-" & scenario, 200#, 10#, tipT)
+    otkB = LncOtkup("LNCF1B-" & scenario, 100#, 5#, tipT)
+    otkVan = LncOtkup("LNCF1V-" & scenario, 100#, 5#, tipT)
+    otp = LncOtp("LNCF1-" & scenario, Pr3Izvor(otkA, otkB), tipT)
+    zbr = LncZbr("LNCF1-" & scenario, Pr3Izvor(otp, ""))
+
+    razOtv = modScrDokumenti.OtvoriIspravkuBloka(otkB, spec)
+    modScrDokumenti.Scr_IspravkaOtkazi
+
+    SetTestMode True
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
+    odgLanac = modScrDokumenti.Scr_PotvrdaLancaProbaj(otkB)
+    txt = modScrDokumenti.Scr_PotvrdaLancaTest()
+    odgVan = modScrDokumenti.Scr_PotvrdaLancaProbaj(otkVan)
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
+    SetTestMode prevMode
+
+    AssertEquals "", razOtv, "LNC F1: ispravka lista u izdatoj otpremnici se otvara"
+    AssertTrue InStr(1, txt, Poruka("OTKUI_ASK_ISPRAVKA_LANAC"), vbBinaryCompare) > 0, _
+               "LNC F1: snimanje ispravke u lancu trazi potvrdu sa posledicama"
+    AssertFalse odgLanac, "LNC F1: u testu potvrda belezi i odgovara Ne (seam ne upisuje)"
+    AssertTrue odgVan, "LNC F1: list van lanca ne trazi potvrdu"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modScrDokumenti.Scr_IspravkaOtkazi
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
+    SetTestMode prevMode
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub

@@ -1153,6 +1153,13 @@ Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "STORNO_ERR_RAZRESENJE", ChrW(10007) & " Gre" & ChrW(353) & "ka pri razre" & ChrW(353) & "avanju dokumenta:"
     UpsertRow lo, existing, "STORNO_ERR_NEUSPEH", ChrW(10007) & " Storno nije uspeo:"
     UpsertRow lo, existing, "STORNO_ASK", "Stornirati"
+    ' LNC-ODL-05 / -11: posledice poteza u lancu pre potvrde (F8 storno, F1 ispravka).
+    UpsertRow lo, existing, "STORNO_LANAC_POSLEDICE", "List je u otpremnici " & ChrW(8212) & _
+              " storno menja i lanac, u jednoj transakciji:"
+    UpsertRow lo, existing, "OTKUI_ASK_ISPRAVKA_LANAC", "List je u izdatoj otpremnici " & ChrW(8212) & _
+              " snimanje ispravke menja i lanac, u jednoj transakciji:"
+    UpsertRow lo, existing, "OTKUI_ASK_ISPRAVKA_LANAC_2", "Snimiti ispravku? (Ne = ni" & ChrW(353) & _
+              "ta se ne upisuje, forma ostaje popunjena.)"
     UpsertRow lo, existing, "STORNO_ASK_IZVOD", "Stornirati CEO izvod?"
     UpsertRow lo, existing, "STORNO_ASK_IZVOD_PDF", "Da li je PDF izvoda bio ISPRAVAN?" & vbCrLf & vbCrLf & _
               "DA = samo je mapiranje pogre" & ChrW(353) & "no " & ChrW(8212) & _

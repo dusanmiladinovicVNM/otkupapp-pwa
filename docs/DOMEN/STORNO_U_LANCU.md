@@ -4,7 +4,7 @@
 > `LNC-ODL-16`, ambalaža `LNC-ODL-15` / `AMB-10-ODL-40`), deo 2 (jezgro storna,
 > `modDokumenta.LncPlanLista` / `StornoListaULancu_TX`) i deo 3 (ispravka,
 > `IspravkaListaULancu_TX` nad `modOtkup.IspravkaOtkupaUTransakciji`, ruta u
-> `modOtkupUnos`), NEVERIFIKOVANO u Excelu.**
+> `modOtkupUnos`) i deo 4 (F8, F1, UNDO kapija). NEVERIFIKOVANO u Excelu.**
 > Mereno čitanjem nad `main` = `1caa86f`; Excel nije pokrenut, pa je svaka tvrdnja o
 > ponašanju ovde **NEVERIFIKOVANA** dok je ne potvrdi test. Verdikt po osama je §7.
 >
@@ -176,41 +176,50 @@ sweep-a i proveravaju se u planu reza.
 **⚠ FALSE-GREEN RISK:** test nad fixture-om starog oblika (`Otkup.OtpremnicaID`, kolone bez
 pisca — S9 nalaz N3) bi merio tautologiju; testovi reza grade lanac **kanonskim piscima**.
 
-## 8) Acceptance contract — plan dokaza (kod još ne postoji)
+## 8) Dokaz — testovi i sabotaže u kodu (NEVERIFIKOVANO u Excelu)
 
-**Šta važi kad je gotovo:** potez iz §4, sa invarijantama §2, kroz F8 (storno) i F1
-(ispravka), jedan potez i jedna transakcija.
+**Šta važi:** potez iz §4, sa invarijantama §2, kroz F8 (storno) i F1 (ispravka), jedan
+potez i jedna transakcija.
 
-**Šta ostaje netaknuto:** F8 zbirna (`T_Zbirna_NemaIspravku`), F2 „Ispravi"
-(`IspravkaOtpremnice_TX`, BFP `modBusinessFlowProTests:15369`, `:17519`), PONIŠTENJE i
-DUPLI, ispravka lista u nacrtu (S3d-2), storno lista van otpremnice, hladnjački lanac,
-prijemnica / faktura / palete.
+**Šta ostaje netaknuto** (premisa testova se ne menja): F8 zbirna DUPLI/PONIŠTENJE/REŠI
+KASNIJE (`T_Zbirna_NemaIspravku`), F2 „Ispravi" (`IspravkaOtpremnice_TX`, sada kroz
+zajednički `OtpZaglavljeVerzije`), `IspravkaOtkupa_TX` (i dalje odbija izdatog roditelja —
+`Test_OTK_IspravkaBlokaUNacrtu`), storno lista van otpremnice, hladnjački lanac.
 
-| # | Slučaj | Tvrdnja | Gde |
-|---|---|---|---|
-| T1 | **crveno pre reza:** izdata otpremnica, vozač predao gajbe kupcu, F2 „Ispravi" | danas pada na `AMB-INV-07` (potvrđuje §3) | BFP |
-| T2 | H1: storno lista, izdata otpremnica u izdatoj zbirnoj, jedna prijemnica | otpremnica' i zbirna' nastale, novi brojevi, isti datum, stare stornirane sa `ZamenjenSaID`; prijemnica prevezana oba polja, količina ista; ambalaža neto | BFP |
-| T3 | H2 sestre: zbirna sa tri otpremnice | zbirna' = otpremnica' + dve netaknute; stara zbirna i dalje sastavljena od tri (`IzvoriZbirne`) | BFP |
-| T4 | ispravka lista (kg I → II) u lancu | otpremnica' očekivanje = staro − stari + novi po klasi; novac prenesen, preplata prijavljena | BFP |
-| T5 | poslednji list; poslednja otpremnica bez prijemnice | bez naslednika (`LNC-ODL-07`) | BFP |
-| T6 | **negativno:** poslednja otpremnica, aktivna prijemnica | odbijanje, **nijedna** tabela promenjena | BFP |
-| T7 | **negativno:** pad posle zbirne' (seam) | rollback svih tabela (`LNC-INV-01`) | BFP |
-| T8 | **negativno:** ispravka menja kulturu / stanicu / ambalažu | odbijanje sa porukom (`LNC-ODL-10`) | BFP |
-| T9 | **negativno:** hladnjački list | odbijanje, upućuje na PONIŠTENJE | BFP |
-| T10 | **negativno:** aktivna prijemnica sa labelom stare zbirne bez `ZbirnaRoditeljID` | odbijanje (`LNC-INV-07`) | BFP |
-| T11 | dve prijemnice iste zbirne | obe prevezane | BFP |
-| T12 | fakturisana prijemnica | prevezana, faktura netaknuta | BFP |
-| T13 | nacrt otpremnice; izdata u nacrtu zbirne | u mestu, bez novog broja, očekivanje nacrta isto | BFP |
-| T14 | UNDO nad storno lista iz poteza | odbijen (`LNC-INV-11`) | `RunStornoTestSuite` |
-| T15 | auto-broj isključen | brojevi verzija ipak nastaju (`LNC-ODL-17`) | BFP |
-| T16 | `tblStornoVeze` posle poteza | red po paru, zajednički koren, nijedan `PENDING` (`LNC-ODL-20`, `LNC-INV-10`) | BFP |
-| T17 | F8 uvid i ponuda radnje za list u lancu; F1 potvrda pri snimanju, „Ne" ne piše ništa | ekran | `modTest` |
-| T18 | sync posle poteza: malina auto-otpremnica i auto-zbirna ne prave ništa | `LNC-INV-09` | BFP |
+Lanac u testovima grade **kanonski pisci**, sa sopstvenim tipom gajbe po scenariju (§7,
+FALSE-GREEN). Svi testovi su u `RunBusinessFlowProSuite`.
 
-Šema i vlasništvo bez Excela: `gen_schema_module.py --check`, `who_writes.py
---check-ownership`, `vba_check`. Sabotaže (dvosmerni dokaz) za kritične invarijante:
-ambalaža neto, izbor prijemnica po ID-u, redosled, rollback, UNDO kapija. Lanac u testovima
-se gradi **kanonskim piscima**, ne fixture redovima starog oblika (§7, FALSE-GREEN).
+| Plan | Test (BFP) | Sabotaža |
+|---|---|---|
+| ambalaža na kraju (`AMB-10-ODL-40`): A → B, bez odlaganja pada | `Test_AMB_ODL40_MeriPosleZamene` | `odl40-kontra-meri-odmah`, `amb-storno-bez-inv07` |
+| zamena bez pokrića pada na kraju, rollback | `Test_AMB_ODL40_BezPokricaPadaNaKraju` | `odl40-zavrsi-bez-inv07` |
+| zaboravljen završetak — commit odbijen | `Test_AMB_ODL40_CommitBezZavrsetkaOdbijen` | `odl40-commit-bez-kapije` |
+| ugovor početka odlaganja | `Test_AMB_ODL40_UgovorPocetka` | — |
+| H1: storno u izdatoj zbirnoj, prijemnica, trag, kontekst, ambalaža neto | `Test_LNC_StornoListaUIzdatojZbirnoj` | `lnc-prijemnica-ostaje-na-staroj` |
+| H2: sestre | `Test_LNC_SestrePrezivljavaju` | `lnc-sestre-ispadaju` |
+| poslednji izvor (bez naslednika / odbijen uz prijemnicu) | `Test_LNC_PoslednjiIzvor` | `lnc-poslednji-izvor-bez-kapije` |
+| rollback bez seam-a (neslaganje ambalaže) | `Test_LNC_NeslaganjeAmbalazeVracaSve` | (pokriva ga `odl40-*`) |
+| prijemnica samo po labeli (sintetička anomalija) | `Test_LNC_PrijemnicaBezIDaOdbijena` | `lnc-prijemnica-po-labeli-tiho` |
+| nacrt otpremnice u mestu | `Test_LNC_NacrtOtpremniceUMestu` | — |
+| ispravka u lancu (staro − stari + novi, PUT A) | `Test_LNC_IspravkaListaULancu` | `lnc-ispravka-bez-novog-lista` |
+| ispravka menja ambalažu — odbijena | `Test_LNC_IspravkaMenjaAmbalazuOdbijena` | `lnc-ispravka-menja-lanac-tiho` |
+| broj verzije bez prekidača auto-broja | `Test_LNC_BrojVerzijeBezPrekidaca` | — |
+| UNDO poteza odbijen | `Test_LNC_UndoPotezaOdbijen` | `lnc-undo-vraca-deo-poteza` |
+| F8: kapija, potvrda sa posledicama, storno potezom, poslednji izvor | `Test_LNC_F8StornoListaULancu` | `lnc-f8-obican-storno` |
+| F1: otvaranje ispravke, potvrda sa posledicama | `Test_LNC_F1IspravkaULancu` | `lnc-f1-bez-potvrde` |
+
+Postojeća sabotaža `ispravka-gubi-identitet-utovara` sada gađa zajednički
+`OtpZaglavljeVerzije`, a `ispravka-bloka-*` i `ki024-*` premešteno jezgro
+`IspravkaOtkupaUTransakciji` — tekst sidara je isti.
+
+**Nije pokriveno testom:** sam poziv potvrde iz `Scr_Save` (odluka se meri kroz
+`Scr_PotvrdaLancaProbaj`, isto telo) i sync posle poteza (`LNC-INV-09` drži konstrukcija:
+preostali listovi i otpremnice ulaze u nove verzije). Oba idu u ručnu proveru.
+
+Kapije bez Excela (zelene): `vba_check`, `gen_schema_module.py --check`,
+`who_writes.py --check` i `--check-ownership`, `sabotaza.py --proveri-sidra`, hard census,
+parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, `RunAllTests`,
+`dokaz.py lnc` / `odl40` i Compile čekaju operatera.
 
 ## 9) Landing
 

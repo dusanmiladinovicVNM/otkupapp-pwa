@@ -80,6 +80,10 @@ Public Const RUTA_LANAC As String = "LANAC"
 Public Const RUTA_NACRT As String = "NACRT"
 Private mIspravkaOtkupID As String
 Private mIspravkaBroj As String
+' TEST SEAM (LNC-ODL-11): tekst potvrde ispravke lista u lancu. U test rezimu
+' pitanje BELEZI i odgovara "Ne" -- seam posmatra i zabranjuje, ne upisuje (MsgBox
+' u headless run-u visi). Cita ga Scr_PotvrdaLancaTest, gasi modTest.ResetSeamova.
+Private mPotvrdaLancaTest As String
 ' Otvorena ISPRAVKA NASEG REVERSA (10d): sledece snimanje F7 pravi ZAMENU ovog
 ' ambalaznog dokumenta -- stari storniran, nov sa novim brojem, u jednom potezu.
 Private mIspravkaAmbDokID As String
@@ -359,8 +363,17 @@ Public Function OtvoriIspravkuBloka(ByVal otkupID As String, _
     On Error GoTo EH
 
     otkupID = Trim$(otkupID)
-    OtvoriIspravkuBloka = modOtkup.IspravkaOtkupaRazlog(otkupID)
+    ' LNC-ODL-12: list u IZDATOJ otpremnici se ispravlja potezom u lancu (nova
+    ' verzija otpremnice i zbirne pri snimanju). Kapija u tom rezimu izdatog
+    ' roditelja ne odbija, a plan poteza kaze sme li (hladnjaca, prijemnica bez ID).
+    OtvoriIspravkuBloka = modOtkup.IspravkaOtkupaRazlog(otkupID, True)
     If Len(OtvoriIspravkuBloka) > 0 Then Exit Function
+    If Len(modDokumenta.OtpremnicaZaOtkup(otkupID)) > 0 Then
+        Dim planLnc As Object
+        Set planLnc = modDokumenta.LncPlanLista(otkupID)
+        If CBool(planLnc("otpIzdata")) Then OtvoriIspravkuBloka = CStr(planLnc("razlog"))
+        If Len(OtvoriIspravkuBloka) > 0 Then Exit Function
+    End If
 
     brDok = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BR_DOK)))
     spec = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, brDok, otkupID)
@@ -1613,6 +1626,47 @@ End Function
 '
 ' Kad read-model padne, pitanje se preskace: upis otkupa ne zavisi od njega, a
 ' isti kvar ce sledeci korak (vezivanje) prijaviti glasno i imenom.
+' Potvrda ispravke lista u lancu (LNC-ODL-11). True = nastavi upis: list nije u
+' izdatoj otpremnici (nema sta da se potvrdi), ili je operater rekao "Da".
+' Posledice dolaze iz ISTOG plana koji potez izvrsava. Greska je "Ne": bez
+' potvrde nema upisa koji dira lanac (fail-closed).
+Private Function PotvrdiIspravkuULancu(ByVal otkupID As String) As Boolean
+    Dim opis As String, txt As String
+    On Error GoTo EH
+    opis = modDokumenta.LncPlanOpisZaOtkup(otkupID, True)
+    If Len(opis) = 0 Then
+        PotvrdiIspravkuULancu = True
+        Exit Function
+    End If
+    txt = Poruka("OTKUI_ASK_ISPRAVKA_LANAC") & vbCrLf & vbCrLf & opis & vbCrLf & vbCrLf & _
+          Poruka("OTKUI_ASK_ISPRAVKA_LANAC_2")
+    If IsTestMode() Then
+        mPotvrdaLancaTest = txt
+        Exit Function
+    End If
+    PotvrdiIspravkuULancu = (MsgBox(txt, vbQuestion + vbYesNo, APP_NAME) = vbYes)
+    Exit Function
+EH:
+    PotvrdiIspravkuULancu = False
+End Function
+
+' TEST SEAM: tekst poslednje potvrde ispravke u lancu. Tvrdo gejtovan.
+Public Function Scr_PotvrdaLancaTest() As String
+    If Not IsTestMode() Then Exit Function
+    Scr_PotvrdaLancaTest = mPotvrdaLancaTest
+End Function
+
+Public Sub Scr_PotvrdaLancaTestReset()
+    mPotvrdaLancaTest = ""
+End Sub
+
+' TEST SEAM: ista odluka koju Scr_Save pita pre upisa ispravke -- bez forme.
+' Tvrdo gejtovan; u test rezimu potvrda belezi i odgovara "Ne".
+Public Function Scr_PotvrdaLancaProbaj(ByVal otkupID As String) As Boolean
+    If Not IsTestMode() Then Exit Function
+    Scr_PotvrdaLancaProbaj = PotvrdiIspravkuULancu(otkupID)
+End Function
+
 Private Function PotvrdiPrekoracenje(ByVal kgI As Double, ByVal kgII As Double) As Boolean
     Dim opis As String
     PotvrdiPrekoracenje = True
@@ -1788,6 +1842,16 @@ Public Function Scr_Save(ByVal polja As Object) As String
     ' Zato ga preskace i ispravka, kao i hladnjacki blok i neizvestan put.
     If Len(ispravkaID) = 0 And Not ideULanac And Len(putGreska) = 0 Then
         If Not PotvrdiPrekoracenje(CDbl(p("kolicinaI")), CDbl(p("kolicinaII"))) Then
+            Scr_Save = " "
+            Exit Function
+        End If
+    End If
+
+    ' LNC-ODL-11: ispravka lista u IZDATOJ otpremnici menja i lanac -- operater
+    ' vidi posledice pre upisa. "Ne" = nista se ne upisuje, forma ostaje (isti
+    ' ishod kao "Ne" na prekoracenju).
+    If Len(ispravkaID) > 0 Then
+        If Not PotvrdiIspravkuULancu(ispravkaID) Then
             Scr_Save = " "
             Exit Function
         End If

@@ -1186,9 +1186,21 @@ End Function
 '
 ' Varijanta za ISPRAVKU reversa je otisla u 10d: ispravka vise ne stornira u
 ' trenutku klika nego tek pri snimanju zamene, pa nema sta da se potvrdjuje.
+'
+' List u otpremnici (LNC-ODL-05): potvrda nabraja POSLEDICE poteza u lancu --
+' nova verzija otpremnice i zbirne, prijemnice, telefon vozaca, novac -- iz istog
+' plana koji potez izvrsava. Operater ih vidi pre "Da", ne posle.
 Public Function StornoPotvrdaTekst() As String
+    Dim lanac As String
     StornoPotvrdaTekst = modPoruke.Poruka("STORNO_ASK") & " " & _
         modStornoDok.DokumentOpis(mSelTip, mSelBroj, mSelOpcija, mSelDocID) & "?"
+    If mSelTip = STIP_OTKUP And Len(mSelDocID) > 0 Then
+        lanac = modDokumenta.LncPlanOpisZaOtkup(mSelDocID, False)
+        If Len(lanac) > 0 Then
+            StornoPotvrdaTekst = StornoPotvrdaTekst & vbCrLf & vbCrLf & _
+                                 modPoruke.Poruka("STORNO_LANAC_POSLEDICE") & vbCrLf & lanac
+        End If
+    End If
 End Function
 
 ' Obican storno: bez framework-a ispravke. Posledice su vec u zoni, pa je

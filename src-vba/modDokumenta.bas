@@ -3750,7 +3750,9 @@ End Function
 '   otpID, otpBroj, otpIzdata, otpPreostali (Collection OtkupID),
 '   zbrID, zbrBroj, zbrIzdata, zbrSestre (Collection OtpremnicaID),
 '   prijemnice (Collection PrijemnicaID), zbrSaPWA,
-'   razlog -- "" kad potez sme; inace ZASTO ne sme, citljivo operateru.
+'   razlog -- "" kad potez sme; inace ZASTO ne sme, citljivo operateru;
+'   stornoRazlog -- samo za STORNO: poslednji izvor uz aktivnu prijemnicu
+'                   (LNC-ODL-07). Ispravka list zamenjuje, pa za nju ne vazi.
 Public Function LncPlanLista(ByVal otkupID As String) As Object
     Const SRC As String = "LncPlanLista"
 
@@ -3772,6 +3774,7 @@ Public Function LncPlanLista(ByVal otkupID As String) As Object
     p.Add "prijemnice", New Collection
     p.Add "zbrSaPWA", False
     p.Add "razlog", ""
+    p.Add "stornoRazlog", ""
 
     otkupID = Trim$(otkupID)
     If Len(otkupID) = 0 Then
@@ -3880,11 +3883,73 @@ Public Function LncPlanLista(ByVal otkupID As String) As Object
     ostaje = p("zbrSestre").count
     If p("otpPreostali").count > 0 Then ostaje = ostaje + 1
     If ostaje = 0 And p("prijemnice").count > 0 Then
-        p("razlog") = "List je jedini izvor zbirne " & p("zbrBroj") & ", a ona ima " & _
+        p("stornoRazlog") = "List je jedini izvor zbirne " & p("zbrBroj") & ", a ona ima " & _
                       "aktivnu prijemnicu. Zbirna bez izvora nema naslednika, pa bi " & _
                       "prijemnica ostala bez roditelja -- lanac se ponistava na F8 " & _
                       "nad zbirnom (PONISTENJE)."
     End If
+End Function
+
+' POSLEDICE POTEZA ZA POTVRDU (LNC-ODL-05 na F8, LNC-ODL-11 u F1) -- iz ISTOG
+' plana koji potez izvrsava. "" = list nije u lancu (ili je, za ispravku, u nacrtu
+' otpremnice: to je obicna ispravka). Kad potez ne sme, opis kaze i zasto.
+Public Function LncPlanOpisZaOtkup(ByVal otkupID As String, _
+                                   Optional ByVal zaIspravku As Boolean = False) As String
+    Dim p As Object, m As String, placeno As Double, razlog As String
+    On Error GoTo EH
+
+    Set p = LncPlanLista(otkupID)
+    If Not CBool(p("uLancu")) Then Exit Function
+    If zaIspravku And Not CBool(p("otpIzdata")) Then Exit Function
+
+    razlog = CStr(p("razlog"))
+    If Len(razlog) = 0 And Not zaIspravku Then razlog = CStr(p("stornoRazlog"))
+    If Len(razlog) > 0 Then
+        LncPlanOpisZaOtkup = "Potez nije moguc: " & razlog
+        Exit Function
+    End If
+
+    If Not CBool(p("otpIzdata")) Then
+        m = "List izlazi iz nacrta otpremnice " & p("otpBroj") & " (bez novog broja)."
+    ElseIf p("otpPreostali").count > 0 Or zaIspravku Then
+        m = "Otpremnica " & p("otpBroj") & " se stornira i dobija NOVU VERZIJU sa novim brojem."
+    Else
+        m = "Otpremnica " & p("otpBroj") & " se stornira bez naslednika (nema drugih listova)."
+    End If
+
+    If Len(CStr(p("zbrID"))) > 0 Then
+        If Not CBool(p("zbrIzdata")) Then
+            m = m & vbCrLf & "Nacrt zbirne " & p("zbrBroj") & " prima novu verziju otpremnice."
+        ElseIf p("zbrSestre").count > 0 Or p("otpPreostali").count > 0 Or zaIspravku Then
+            m = m & vbCrLf & "Zbirna " & p("zbrBroj") & " se stornira i dobija NOVU VERZIJU sa novim brojem."
+        Else
+            m = m & vbCrLf & "Zbirna " & p("zbrBroj") & " se stornira bez naslednika."
+        End If
+        If p("prijemnice").count > 0 Then
+            m = m & vbCrLf & "Prijemnica se prevezuje na novu zbirnu: " & _
+                    CStr(p("prijemnice").count) & " (kolicine se ne menjaju)."
+        End If
+        If CBool(p("zbrSaPWA")) Then
+            m = m & vbCrLf & "Zbirna je stigla sa vozacevog telefona -- telefon ce i dalje " & _
+                    "prikazivati stari broj."
+        End If
+    End If
+
+    placeno = modNovac.GetIsplataForOtkup(otkupID)
+    If placeno > 0 Then
+        If zaIspravku Then
+            m = m & vbCrLf & "Isplaceno za list: " & Format$(placeno, "#,##0.00") & _
+                    " -- prelazi na ispravljen list."
+        Else
+            m = m & vbCrLf & "Isplaceno za list: " & Format$(placeno, "#,##0.00") & _
+                    " -- odvezuje se (virman postaje slobodan avans)."
+        End If
+    End If
+
+    LncPlanOpisZaOtkup = m
+    Exit Function
+EH:
+    LncPlanOpisZaOtkup = "Posledice poteza nisu dostupne: " & Err.description
 End Function
 
 ' STORNO OTKUPNOG LISTA U LANCU -- jedan potez. Vraca True kad je sve upisano;
@@ -3985,7 +4050,7 @@ Public Function IspravkaListaULancu_TX(ByVal stariOtkupID As String, _
     modAmbalaza.AmbOdloziInvarijantePocni tx, SRC
 
     Set p = LncPlanLista(stariOtkupID)
-    LncRequirePlan p, SRC
+    LncRequirePlan p, SRC, False
     If Not CBool(p("otpIzdata")) Then
         Err.Raise vbObjectError + 1987, SRC, _
                   "List je u NACRTU otpremnice " & p("otpBroj") & " -- nacrt se ispravlja " & _
@@ -4078,9 +4143,13 @@ Private Sub LncSnimi(ByVal tx As clsTransaction)
     tx.AddTableSnapshot TBL_STORNO_ZURNAL
 End Sub
 
-Private Sub LncRequirePlan(ByVal p As Object, ByVal src As String)
+Private Sub LncRequirePlan(ByVal p As Object, ByVal src As String, _
+                           Optional ByVal zaStorno As Boolean = True)
     If Len(CStr(p("razlog"))) > 0 Then
         Err.Raise vbObjectError + 1970, src, CStr(p("razlog"))
+    End If
+    If zaStorno And Len(CStr(p("stornoRazlog"))) > 0 Then
+        Err.Raise vbObjectError + 1972, src, CStr(p("stornoRazlog"))
     End If
     If Not CBool(p("uLancu")) Then
         Err.Raise vbObjectError + 1971, src, _

@@ -7513,6 +7513,33 @@ SABOTAZE = {
         "Test_LNC_IspravkaMenjaAmbalazuOdbijena",
         "LNC ispravka: odbijanje imenuje tip ambalaze i upucuje na storno",
     ),
+    # LNC-ODL-18: undo ne pita za potez u lancu -- vracen list ozivi van svake
+    # otpremnice (izgubljen blok; kod ispravke dupli zbir).
+    "lnc-undo-vraca-deo-poteza": (
+        "modStornoZurnal.bas",
+        "    If Len(raz) = 0 Then raz = LancaRazlog(opID)\n",
+        "    ' SABOTAZA: undo ne pita za potez u lancu\n",
+        "Test_LNC_UndoPotezaOdbijen",
+        "LNC undo: storno lista iz poteza u lancu se ne vraca",
+    ),
+    # LNC-ODL-05: F8 storno lista u otpremnici ide obicnim stornom -- jezgro ga
+    # odbija kao izvor aktivne otpremnice, i operater ostaje na rucnom putu.
+    "lnc-f8-obican-storno": (
+        "modStornoDok.bas",
+        "            If Len(modDokumenta.OtpremnicaZaOtkup(Trim$(docID))) > 0 Then\n",
+        "            If False Then   ' SABOTAZA: list u lancu ide obicnim stornom\n",
+        "Test_LNC_F8StornoListaULancu",
+        "LNC F8: F8 storno je napravio novu verziju zbirne",
+    ),
+    # LNC-ODL-11: potvrda ispravke u lancu ne zna za posledice -- snimanje bi
+    # promenilo otpremnicu i zbirnu bez pitanja.
+    "lnc-f1-bez-potvrde": (
+        "modScrDokumenti.bas",
+        "    opis = modDokumenta.LncPlanOpisZaOtkup(otkupID, True)\n",
+        "    opis = \"\"   ' SABOTAZA: ispravka u lancu bez potvrde\n",
+        "Test_LNC_F1IspravkaULancu",
+        "LNC F1: snimanje ispravke u lancu trazi potvrdu sa posledicama",
+    ),
     # AMB-10-ODL-40: commit ne pita za otvoreno odlaganje -- zaboravljen zavrsetak
     # tiho commit-uje storno bez AMB-INV-07/09/16.
     "odl40-commit-bez-kapije": (
