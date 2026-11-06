@@ -3154,6 +3154,25 @@ sam odbija storno „Prijem od OM" posle vraćanja), bilans (`IZLAZ_TUDJE` →
 sudi. Pisca nema, a F7 ga ne nudi, ali pravilo „kupcu se prazne ne izdaju" je tu
 samo nad ostatkom vraćanja → `KI-069`.
 
+### 6.14c Zamena verzije u lancu — invarijante se mere posle cele zamene (`AMB-10-ODL-40`, 06.11.2026)
+
+**Odluka operatera (06.11.2026, pre-flight `STORNO_U_LANCU.md`, `LNC-ODL-15`).** Kad jedan
+potez u istoj transakciji stornira izdatu otpremnicu i izda njenu novu verziju (storno ili
+ispravka otkupnog lista u lancu), `AMB-INV-07`, `AMB-INV-09` i `AMB-INV-16` se mere **posle
+cele zamene**, nad svim nalozima koje je potez dotakao — ne posle kontra-stava stare.
+
+Zašto: kontra-stav stare (`Vozač → Stanica`, N) danas odmah meri `AMB-INV-07`
+(`StornirajAmbalazuDokumenta`, „AMB-INV-07 se meri kao i do sada, posle kontra-stava"). Kad je
+vozač gajbe već predao kupcu, međukorak je u minusu iako posle-stanje (nova verzija knjiži
+N − k) nije. Nova verzija ne može da se izda prva (izvor u tačno jednoj aktivnoj otpremnici).
+
+Presedan je `odloziObavezu` (ispravka otkupa odlaže `AMB-INV-09` do posle zamene). Ovo ga
+proširuje na `AMB-INV-07` i `AMB-INV-16`, **samo** za zamenu verzije u lancu; običan storno
+meri kao i do sada. Pravilo „saldo realnog naloga nije u minusu" se ne menja — menja se samo
+trenutak u kome se meri unutar jedne transakcije.
+
+*Provera (plan, koda nema):* `STORNO_U_LANCU.md` §8, T1 (crveno nad današnjim kodom) i T2.
+
 ### 6.15 Cena — posteno
 
 Najveci redizajn jedne tabele u refaktoru: cetiri funkcije salda, tri izvestaja +
