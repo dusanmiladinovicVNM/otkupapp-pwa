@@ -370,7 +370,7 @@ Public Function OtvoriIspravkuBloka(ByVal otkupID As String, _
     If Len(OtvoriIspravkuBloka) > 0 Then Exit Function
     If Len(modDokumenta.OtpremnicaZaOtkup(otkupID)) > 0 Then
         Dim planLnc As Object
-        Set planLnc = modDokumenta.LncPlanLista(otkupID)
+        Set planLnc = modDokumenta.LncPlanLista(otkupID, True)
         If CBool(planLnc("otpIzdata")) Then OtvoriIspravkuBloka = CStr(planLnc("razlog"))
         If Len(OtvoriIspravkuBloka) > 0 Then Exit Function
     End If

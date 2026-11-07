@@ -244,16 +244,21 @@ otpremnicom.
 Pravilo od tada: kultura otpremnice mora biti kultura svakog lista (`OtpRequireIzvorValjan`),
 pa se nova verzija starog zaglavlja vodi **kulturom listova koji u nju ulaze**
 (`OtpKulturaVerzije`, isti za potez i za F2). Kad listovi nemaju jednu, nepraznu kulturu, plan
-odbija **pre potvrde** i imenuje list, a lanac se rasturuje ručno. Kultura se ne izvodi iz
+odbija **pre potvrde** i imenuje listove. Plan ispravke (`LncPlanLista(…, zaIspravku:=True)`,
+F1 „Ispravi blok") meri i list koji se ispravlja, jer nov list nosi njegovu kulturu
+(`LncIspravkaMenjaLanac`). Zato je storno lista druge kulture iz takve otpremnice dozvoljen
+(ostaju listovi jedne kulture), a njegova ispravka nije. Kultura se ne izvodi iz
 `VrstaVoca`/`SortaVoca` starog zaglavlja, jer bi to bio drugi izvor istine. Test:
-`Test_LNC_StaraOtpremnicaBezKulture`.
+`Test_LNC_StaraOtpremnicaBezKulture` (F8, F2 „Ispravi", list bez kulture, listovi dve kulture);
+`KI-091`.
 
-**Neprovereno (zbirna).** Zaglavlje zbirne ne nosi kulturu. Nova verzija traži datum, vozača i
-kupca, a te kolone postoje od prve verzije šeme. Zbirna ipak poredi `VrstaVoca`/`SortaVoca`
-svojih otpremnica (`ZbrRequireIzvorValjan`). Nova verzija otpremnice ih upisuje iz šifarnika
-kultura, dok sestra starog oblika nosi svoj stari tekst. Ako se ta dva teksta razlikuju, potez
-nad zbirnom sa takvom sestrom pada u transakciji (rollback). Bez podataka iz sveske to nije
-izmereno.
+**Otvoreno, neizmereno (`KI-092`).** Nova verzija otpremnice upisuje `VrstaVoca`/`SortaVoca`
+iz šifarnika kultura, a ne prepisuje tekst starog zaglavlja. Kad je zbirna izdata, nova verzija
+zbirne preuzima te podatke od prvog izvora. Ako sestara nema, prvi izvor je nova otpremnica, pa
+prevezivanje prijemnice (`PrijemnicaRobaRazlog`) poredi robu prijemnice sa tim tekstom. Sestra
+starog oblika poredi se isto (`ZbrRequireIzvorValjan`, `ZbrRequireIstiAko`). Kad se tekst
+starog oblika razlikuje od šifarnika, potez pada **posle potvrde**, u transakciji (rollback), i
+to **i bez sestre**. Bez podataka iz sveske to nije izmereno.
 
 **Nije pokriveno testom:** sam poziv potvrde iz `Scr_Save` (odluka se meri kroz
 `Scr_PotvrdaLancaProbaj`, isto telo) i sync posle poteza (`LNC-INV-09` drži konstrukcija:

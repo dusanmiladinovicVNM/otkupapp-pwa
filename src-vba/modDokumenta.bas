@@ -3751,9 +3751,12 @@ End Function
 '   zbrID, zbrBroj, zbrIzdata, zbrSestre (Collection OtpremnicaID),
 '   prijemnice (Collection PrijemnicaID), zbrSaPWA,
 '   razlog -- "" kad potez sme; inace ZASTO ne sme, citljivo operateru;
+'   zaIspravku -- plan za ispravku: kapija kulture stare otpremnice meri i list
+'                 koji se ispravlja (nov list nosi njegovu kulturu)
 '   stornoRazlog -- samo za STORNO: poslednji izvor uz aktivnu prijemnicu
 '                   (LNC-ODL-07). Ispravka list zamenjuje, pa za nju ne vazi.
-Public Function LncPlanLista(ByVal otkupID As String) As Object
+Public Function LncPlanLista(ByVal otkupID As String, _
+                             Optional ByVal zaIspravku As Boolean = False) As Object
     Const SRC As String = "LncPlanLista"
 
     Dim p As Object
@@ -3836,11 +3839,18 @@ Public Function LncPlanLista(ByVal otkupID As String) As Object
 
     ' Stara otpremnica bez kulture na zaglavlju (rucna provera 07.11.2026): nova
     ' verzija se vodi kulturom preostalih listova. Ako je nemaju jednu, potez se
-    ' odbija OVDE, pre potvrde -- inace bi pao tek u transakciji. Ispravka dodaje i
-    ' nov list; njega meri pisac (OtpZaglavljeVerzije) nad stvarnim izvorima.
-    Dim razlogKulture As String
-    If p("otpPreostali").count > 0 Then
-        OtpKulturaVerzije otpID, p("otpPreostali"), razlogKulture
+    ' odbija OVDE, pre potvrde -- inace bi pao tek u transakciji. Ispravka meri i
+    ' list koji se ispravlja: nov list nosi istu kulturu (LncIspravkaMenjaLanac), a
+    ' ulazi u novu verziju. Pisac (OtpZaglavljeVerzije) meri ponovo, nad stvarnim
+    ' izvorima.
+    Dim razlogKulture As String, mereni As Collection
+    Set mereni = New Collection
+    For k = 1 To p("otpPreostali").count
+        mereni.Add CStr(p("otpPreostali")(k))
+    Next k
+    If zaIspravku Then mereni.Add otkupID
+    If mereni.count > 0 Then
+        OtpKulturaVerzije otpID, mereni, razlogKulture
         If Len(razlogKulture) > 0 Then
             p("razlog") = razlogKulture
             Exit Function
@@ -3913,7 +3923,7 @@ Public Function LncPlanOpisZaOtkup(ByVal otkupID As String, _
     Dim p As Object, m As String, placeno As Double, razlog As String
     On Error GoTo EH
 
-    Set p = LncPlanLista(otkupID)
+    Set p = LncPlanLista(otkupID, zaIspravku)
     If Not CBool(p("uLancu")) Then Exit Function
     If zaIspravku And Not CBool(p("otpIzdata")) Then Exit Function
 
@@ -4068,7 +4078,7 @@ Public Function IspravkaListaULancu_TX(ByVal stariOtkupID As String, _
     LncSnimi tx
     modAmbalaza.AmbOdloziInvarijantePocni tx, SRC
 
-    Set p = LncPlanLista(stariOtkupID)
+    Set p = LncPlanLista(stariOtkupID, True)
     LncRequirePlan p, SRC, False
     If Not CBool(p("otpIzdata")) Then
         Err.Raise vbObjectError + 1987, SRC, _
@@ -5874,9 +5884,10 @@ End Function
 ' istine, koji bi izvor posle mogao da pobije.
 Private Function OtpKulturaVerzije(ByVal staraID As String, ByVal izvori As Collection, _
                                    ByRef outRazlog As String) As String
-    Const IZLAZ As String = " Lanac se rasturuje rucno: storno zbirne i otpremnice na F8, " & _
-                            "pa nova otpremnica na F2."
-    Dim kultura As String, prva As String, broj As String, k As String
+    Const IZLAZ As String = " Lanac se rasturuje rucno: storno otpremnice na F8 (pre nje " & _
+                            "zbirne, ako je ima), pa nove otpremnice na F2, po kulturi."
+    Dim kultura As String, prva As String, prviBroj As String, broj As String
+    Dim k As String, listBroj As String
     Dim i As Long, n As Long
     outRazlog = ""
 
@@ -5896,24 +5907,37 @@ Private Function OtpKulturaVerzije(ByVal staraID As String, ByVal izvori As Coll
 
     For i = 1 To n
         k = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, CStr(izvori(i)), COL_OTK_KULTURA)))
+        listBroj = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, CStr(izvori(i)), COL_OTK_BR_DOK)))
+        ' List bez kulture ne ulazi ni u jednu otpremnicu (OtpNapraviDraft i
+        ' OtpRequireIzvorValjan), pa mu rucno rasturanje ne bi pomoglo.
         If Len(k) = 0 Then
             outRazlog = "Otpremnica " & broj & " je starog oblika (zaglavlje bez kulture), a list " & _
-                        Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, CStr(izvori(i)), _
-                                                   COL_OTK_BR_DOK))) & _
-                        " nema kulturu -- nova verzija otpremnice ne moze da dobije kulturu." & IZLAZ
+                        listBroj & " nema kulturu -- nova verzija otpremnice ne moze da je dobije. " & _
+                        "List bez kulture ne ulazi ni u jednu otpremnicu dok ne dobije kulturu."
             Exit Function
         End If
         If Len(prva) = 0 Then
             prva = k
+            prviBroj = listBroj
         ElseIf StrComp(k, prva, vbTextCompare) <> 0 Then
-            outRazlog = "Otpremnica " & broj & " je starog oblika (zaglavlje bez kulture), a njeni " & _
-                        "listovi imaju razlicite kulture (" & prva & ", " & k & ") -- otpremnica " & _
-                        "nosi jednu kulturu." & IZLAZ
+            outRazlog = "Otpremnica " & broj & " je starog oblika (zaglavlje bez kulture), a listovi " & _
+                        "nove verzije imaju razlicite kulture: " & prviBroj & " (" & _
+                        KulturaOpisZaPoruku(prva) & ") i " & listBroj & " (" & _
+                        KulturaOpisZaPoruku(k) & "). Otpremnica nosi jednu kulturu." & IZLAZ
             Exit Function
         End If
     Next i
 
     OtpKulturaVerzije = prva
+End Function
+
+' "Vrsta Sorta" kulture za poruku operateru; sam KulturaID kad je sifarnik nema.
+Private Function KulturaOpisZaPoruku(ByVal kulturaID As String) As String
+    Dim v As String
+    v = Trim$(Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, kulturaID, COL_KUL_VRSTA))) & " " & _
+              Trim$(NzToText(LookupValue(TBL_KULTURE, COL_KUL_ID, kulturaID, COL_KUL_SORTA))))
+    If Len(v) = 0 Then v = kulturaID
+    KulturaOpisZaPoruku = v
 End Function
 
 ' --- core: ispravka izdate -------------------------------------------------

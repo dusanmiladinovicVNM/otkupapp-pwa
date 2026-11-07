@@ -7593,10 +7593,35 @@ SABOTAZE = {
     # tek u transakciji, a F8 pre potvrde ne kaze zasto.
     "lnc-stara-otp-plan-bez-kapije": (
         "modDokumenta.bas",
-        "        OtpKulturaVerzije otpID, p(\"otpPreostali\"), razlogKulture\n",
+        "        OtpKulturaVerzije otpID, mereni, razlogKulture\n",
         "        ' SABOTAZA: plan ne pita za kulturu stare otpremnice\n",
         "Test_LNC_StaraOtpremnicaBezKulture",
         "LNC stara otpremnica: plan odbija listove bez jedne kulture pre poteza",
+    ),
+    # F2 "Ispravi" ne prosledjuje izvore: stara otpremnica bez kulture opet pada.
+    "lnc-stara-otp-f2-bez-izvora": (
+        "modDokumenta.bas",
+        "    Set h = OtpZaglavljeVerzije(staraID, SRC, clanovi)\n",
+        "    Set h = OtpZaglavljeVerzije(staraID, SRC, New Collection)   ' SABOTAZA: F2 bez izvora\n",
+        "Test_LNC_StaraOtpremnicaBezKulture",
+        "LNC stara otpremnica: F2 Ispravi prolazi i bez kulture na zaglavlju",
+    ),
+    # Razlicite kulture listova se ne prijavljuju: plan pusti, a potez pada tek u
+    # transakciji (OtpRequireIzvorValjan) bez razloga pre potvrde.
+    "lnc-stara-otp-mesane-kulture-tiho": (
+        "modDokumenta.bas",
+        "        ElseIf StrComp(k, prva, vbTextCompare) <> 0 Then\n",
+        "        ElseIf False Then   ' SABOTAZA: razlicite kulture se ne prijavljuju\n",
+        "Test_LNC_StaraOtpremnicaBezKulture",
+        "LNC stara otpremnica: plan imenuje listove razlicitih kultura",
+    ),
+    # Plan ispravke meri samo preostale listove: F1 otvara formu, a snimanje pada.
+    "lnc-stara-otp-ispravka-bez-lista": (
+        "modDokumenta.bas",
+        "    If zaIspravku Then mereni.Add otkupID\n",
+        "    ' SABOTAZA: ispravka ne meri list koji se ispravlja\n",
+        "Test_LNC_StaraOtpremnicaBezKulture",
+        "LNC stara otpremnica: ispravka meri i list koji se ispravlja",
     ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
