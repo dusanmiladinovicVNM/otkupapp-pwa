@@ -30,6 +30,7 @@
 | **MIG-ODL-17** | **Pune gajbe vozača ispod nule se prihvataju** (odluka operatera 03.11.2026). Uzrok: 17 otpremnica bez dokazivog otkupa po main-u ne knjiži gajbe (MIG-ODL-14), a prijemnice kupca su ih primile, pa vozač po knjizi predaje više punih nego što je dobio — main to dozvoljava (prijemnicu sudi samo ukupni saldo, AMB-INV-07). Nad C002: vozač ST-00001 0,4kg −125, ST-00002 0,4kg −6, ST-00003 0,4kg −669, ST-00003 0,5kg −47, ST-00007 0,4kg −7; za toliko su mu prazne iznad stvarnih, pa ih „Izdato OM" (`AMB-INV-16`, ODL-37) pušta više nego što fizički drži. Odbijena alternativa: gajbe neizdatih otpremnica u knjizi — manjak bi se vratio na stanice (KI-065), gde kapija praznih utiče na svakodnevni otkup. Otkupi za tih 17 otpremnica u staroj svesci ne postoje (datumi ne odgovaraju ni jednom od 3 otkupa bez otpremnice). | `provere._ambalaza` (ODLUKA `AMB_PUNE_ISPOD_NULE`) |
 | **MIG-ODL-18** | **Otpremnica bez ijednog bloka je prava otpremnica kojoj fale blokovi, ne greška** (odluka operatera 03.11.2026: „otkupi su obavljeni, samo blokovi nisu uneti"; stari tok je prvo unosio otpremnicu i prijemnicu, pa blokove). main je izdaje tek sa blokovima (izveštaji robe je vrednuju iz njih), pa ostaje **nacrt**: stavke su očekivanje (stari kg i gajbe), ne knjiži gajbe; operater u novoj svesci unosi blokove i izdaje je (tada se knjiže i gajbe, smanjuje MIG-ODL-17). Bez aktivne zbirne sa prijemnicom nije dokazana kao prava — ODLUKA. **Otpremnica sa bar jednim blokom ostaje izdata i kad se kg ne slaže sa blokovima** — to operater rešava sa otkupcem za svaki otkup i otpremnicu; alat ne uvodi pravilo, samo daje spisak (UPOZORENJE `OTPREMNICA_PREOSTALO_KG`). Spisak nacrta (kg, zbirna, prijemnice, kandidati sa viškom blokova) je u `proba_sazetak.txt`. | `cilj._otpremnice_bez_izvora`, `provere._otpremnice_preostalo` |
 | **MIG-ODL-19** | **OTP-00666 (2/050726, ST-00002) se prenosi kao stornirana** (odluka operatera 03.11.2026): nema blokova ni prijemnice, a zbirna S2/050726 joj je stornirana. Odluka je u `izuzeci.json` (sekcija `dokumenti`, radnja `storniraj`) i važi samo dok otpremnica u staroj svesci ima isti broj, datum i stanicu. Stornirana otpremnica nema neto knjigu, pa njena stara noga ambalaže izlazi iz knjige. | `cilj._storniraj_po_odluci`, `izuzeci.json` |
+| **MIG-ODL-20** | **Prijemnica na pogrešnoj zbirnoj je greška stare forme i ispravlja se pre migracije** (odluka operatera 07.11.2026). `frmDokumenta` (v2.2.3–v2.28.4) posle „Unesi prijemnicu" nije praznila broj zbirne, a promena vozača ga nije dirala; pisac do v2.21.0 nije proveravao ništa, od v2.21.0 samo da zbirna postoji i meko pitanje „1 zbirna = 1 prijemnica". Sledeća prijemnica je zato nasleđivala zbirnu prethodne. Trag je uvek par: aktivna zbirna sa dve prijemnice + aktivna zbirna bez ijedne. **Pogrešan je kasniji unos.** Kad je druga stanica, prefiks broja se ne slaže sa vozačem (migracija javlja `PRIJEMNICA_BEZ_JEDNOZNACNE_ZBIRNE`); kad je ista stanica, ne javlja ništa i veže prijemnicu na pogrešnu zbirnu. Operater je nad C002 našao: PRJ-00177 S5/180626 → S5/180626-2, PRJ-00185 S4/100626 → S4/120626, PRJ-00195 S4/200626-2 → S4/210626, PRJ-00280 S5/240626 → S5/240626-2, PRJ-00313 S5/250626-2 → S8/250626, PRJ-00520 S5/010726-2 → S8/010726, PRJ-00549 S4/020726 → S4/020726-2, PRJ-00584 S3/030726 → S2/030726. Zbirne čije su otpremnice stornirane, a same nisu — treba ih stornirati: S3/220626, S3/220626-2, S5/210626, S5/130626. S3/040726-3 nema prijemnicu (otvoreno). **Način primene nije izabran** (ručno u staroj svesci ili odluka u `izuzeci.json` sa potpisom reda — tada `cilj.py` treba nove radnje). | `lanac.py` (`migracija.py lanac`) |
 
 ## MIG-WR-01 — izuzetak od vlasništva upisa
 
@@ -123,6 +124,15 @@ robni dokumenti se ne menjaju, pa MIG-ODL-13..15 važe.
 
 ## Otvoreno
 
+- **Storniran blok kao aktivan član otpremnice (nađeno 07.11.2026).**
+  `cilj._clanstvo` pravi `tblOtpremnicaIzvori` iz `tblOtkup.OtpremnicaID` i za
+  **storniran** otkup (izostavlja samo storniran sa 0 kg, MIG-ODL-09). main to
+  stanje sam ne pravi (`modStorno.StornoOtkup` odbija storno izvora aktivne
+  otpremnice), a čita ga: „U blokovima" ga sabira (`VrednostIzvoraPoOtpremnici`),
+  specifikacija pada („Izvor otpremnice … je storniran", `modPrint`). Primer u
+  novoj svesci: 5/250626-2 sa OTK-00490, ostatak −36. `provere.py` ga ne
+  prijavljuje (`_otpremnice_preostalo` broji samo aktivne otkupe). Spisak daje
+  `lanac` (`OTP_SA_STORNIRANIM_OTKUPOM`); pravilo prenosa je odluka.
 - **Proba 03.11.2026 (MIG-ODL-18):** 16 od 17 otpremnica bez bloka ima izdatu
   zbirnu i tačno jednu prijemnicu, bez kandidata sa viškom blokova — prave, čekaju
   blokove (ukupno 2340,6 kg, 1007 gajbi; ST-00001 6, ST-00003 9, ST-00007 1).

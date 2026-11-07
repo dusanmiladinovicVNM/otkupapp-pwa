@@ -26,6 +26,7 @@ if OVDE not in sys.path:
 import ambalaza  # noqa: E402
 import cilj  # noqa: E402
 import dokumenti  # noqa: E402
+import lanac  # noqa: E402
 import provere  # noqa: E402
 import upis  # noqa: E402
 import migracija  # noqa: E402
@@ -1034,6 +1035,162 @@ class DvosmerniDokaz(SaSveskom):
         rez.kretanja[0].kolicina += 1
         razlike = [s for s in ambalaza.izracunaj_salda(rez) if s["razlika"] != 0]
         self.assertTrue(razlike)
+
+
+def druga_prijemnica(vozac_prj="D1", vozac_zbr2="D1", broj_zbr2="301-2"):
+    """ANOMALIJA (greska unosa u staroj formi): PRJ-3 je nasledila broj zbirne
+    301 od prethodne prijemnice, a roba je sa zbirne ZBR-2 (50 kg, 5 gajbi),
+    koja je ostala bez prijemnice."""
+    d = {}
+    d.update(izmeni("tblZbirna", novi=[dict(ZbirnaID="ZBR-2", Datum=D2, VozacID=vozac_zbr2, KupacID="C1",
+                                            BrojZbirne=broj_zbr2, Klasa="I", UkupnoKolicina=50,
+                                            UkupnoAmbalaze=5, GeneracijaID="G-ZBR-2")]))
+    d.update(izmeni("tblOtpremnica", novi=[dict(OtpremnicaID="OTP-2", Datum=D2, StanicaID="S1",
+                                                VozacID=vozac_zbr2, BrojOtpremnice="202", Klasa="I",
+                                                Kolicina=50, KolAmbalaze=5, GeneracijaID="G-OTP-2",
+                                                BrojZbirne=broj_zbr2)]))
+    d.update(izmeni("tblPrijemnica", novi=[dict(PrijemnicaID="PRJ-3", Datum=D3, KupacID="C1",
+                                                VozacID=vozac_prj, BrojPrijemnice="402", BrojZbirne="301",
+                                                Klasa="I", Kolicina=Decimal("49.5"), Cena=60, KolAmbalaze=5,
+                                                GeneracijaID="G-PRJ-3")]))
+    return d
+
+
+class LanacStareSveske(SaSveskom):
+    """lanac.py: prijemnica na pogresnoj zbirnoj i storno koji nije presao lanac."""
+
+    def lanac(self, dodatno=None):
+        put = os.path.join(self.dir.name, "stara.xlsx")
+        snimi_svesku(put, osnovne_tabele(normalno(), dodatno))
+        self.tabele = procitaj_svesku(put)
+        return lanac.Lanac(self.tabele).proveri()
+
+    def pravila(self, lc, tezina=None):
+        return sorted((n["pravilo"], n["dok"].id) for n in lc.nalazi if tezina in (None, n["tezina"]))
+
+    def test_normalna_sveska_nema_nalaza(self):
+        """NORMALNO: dve klase prijemnice (isti GeneracijaID i broj) su JEDNA prijemnica."""
+        lc = self.lanac()
+        self.assertEqual(self.pravila(lc), [])
+        self.assertEqual(lc.prijemnice, [])
+        self.assertEqual([d.ids for d in lc.prj], [["PRJ-1", "PRJ-2"]])
+
+    def test_ista_stanica_kasniji_unos_dobija_predlog(self):
+        """Druga tura iste stanice: vozac se slaze, pa migracija prijemnicu tiho
+        veze na pogresnu zbirnu -- trag je samo par 2 prijemnice / 0 prijemnica."""
+        lc = self.lanac(druga_prijemnica())
+        self.assertIn(("ZBR_VISE_PRIJEMNICA", "ZBR-1"), self.pravila(lc, lanac.ALARM))
+        self.assertIn(("ZBR_BEZ_PRIJEMNICE", "ZBR-2"), self.pravila(lc, lanac.ALARM))
+        self.assertNotIn("PRJ_VOZAC_NIJE_VOZAC_ZBIRNE", [p for p, _ in self.pravila(lc)])
+        [r] = lc.prijemnice
+        self.assertEqual((r["prj"].id, r["ostaje"].id, r["predlog"].id, r["pouzdanost"]),
+                         ("PRJ-3", "PRJ-1", "ZBR-2", "VISOKA"))
+        self.assertIn("kasniji unos (PRJ-3 posle PRJ-1)", r["signali"])
+        self.assertIn("gajbe se slazu", r["signali"])
+        self.assertEqual([b["predlozena_za"] for b in lc.bez_prijemnice], [["PRJ-3"]])
+        c = cilj.izgradi(self.tabele, dokumenti.ucitaj_kanon())
+        rod = {p["PrijemnicaID"]: p["ZbirnaRoditeljID"] for p in c.tabele["tblPrijemnica"]}
+        self.assertEqual(rod["PRJ-3"], "ZBR-1")     # migracija ovde ne upozorava
+
+    def test_ista_generacija_drugi_broj_su_dva_dokumenta(self):
+        """ANOMALIJA: pogresna prijemnica nosi GeneracijaID prave -- broj je razlikuje."""
+        d = druga_prijemnica()
+        d["tblPrijemnica"][1][-1][d["tblPrijemnica"][0].index("GeneracijaID")] = "G-PRJ-1"
+        lc = self.lanac(d)
+        self.assertEqual(sorted(x.id for x in lc.prj), ["PRJ-1", "PRJ-3"])
+        self.assertEqual([r["prj"].id for r in lc.prijemnice], ["PRJ-3"])
+
+    def test_druga_stanica_vozac_nije_vozac_zbirne(self):
+        lc = self.lanac(druga_prijemnica(vozac_prj="D2", vozac_zbr2="D2", broj_zbr2="S2/210626"))
+        self.assertIn(("PRJ_VOZAC_NIJE_VOZAC_ZBIRNE", "PRJ-3"), self.pravila(lc, lanac.ALARM))
+        [r] = lc.prijemnice
+        self.assertEqual((r["predlog"].id, r["pouzdanost"]), ("ZBR-2", "VISOKA"))
+        self.assertIn("vozac prijemnice D2 nije vozac zbirne D1", r["signali"])
+
+    def test_predlog_prvo_istog_vozaca(self):
+        """Zbirna drugog vozaca sa tacnim kg ne pobedjuje zbirnu vozaca prijemnice."""
+        d = druga_prijemnica()
+        d["tblZbirna"][1].append([dict(ZbirnaID="ZBR-3", Datum=D2, VozacID="D2", KupacID="C1",
+                                       BrojZbirne="S2/210626", Klasa="I", UkupnoKolicina=Decimal("49.5"),
+                                       UkupnoAmbalaze=5, GeneracijaID="G-ZBR-3").get(k, "")
+                                  for k in d["tblZbirna"][0]])
+        [r] = self.lanac(d).prijemnice
+        self.assertEqual(r["predlog"].id, "ZBR-2")
+        self.assertTrue(r["ostali"][0].startswith("S2/210626 D2"), r["ostali"])
+
+    def test_isti_broj_stornirana_i_aktivna_zbirna(self):
+        """NORMALNO (stari tok ispravke): storno zbirne pa nov unos pod ISTIM brojem.
+        Prijemnica pripada aktivnoj zbirnoj, ne storniranoj."""
+        lc = self.lanac(izmeni("tblZbirna", novi=[dict(ZbirnaID="ZBR-0", Datum=D1, VozacID="D1", KupacID="C1",
+                                                       BrojZbirne="301", Klasa="I", UkupnoKolicina=100,
+                                                       UkupnoAmbalaze=10, Stornirano="Da",
+                                                       GeneracijaID="G-ZBR-0")]))
+        self.assertEqual(self.pravila(lc), [])
+        self.assertEqual([lc.zbr_od_prj[p].id for p in lc.prj], ["ZBR-1"])
+
+    def test_nema_predloga_van_prozora_dana(self):
+        d = druga_prijemnica()
+        d.update(izmeni("tblZbirna", novi=[dict(ZbirnaID="ZBR-2", Datum=date(2026, 6, 1), VozacID="D1",
+                                                KupacID="C1", BrojZbirne="301-2", Klasa="I", UkupnoKolicina=50,
+                                                UkupnoAmbalaze=5, GeneracijaID="G-ZBR-2")]))
+        [r] = self.lanac(d).prijemnice
+        self.assertEqual((r["predlog"], r["pouzdanost"]), (None, "NEMA KANDIDATA"))
+
+    def test_prefiks_broja_i_broj_vozaca(self):
+        self.assertEqual([lanac.prefiks_broja(b) for b in ("S3/030726", "5/250626-2", "301")], [3, 5, None])
+        self.assertEqual([lanac.broj_vozaca(v) for v in ("ST-00002", "D1", "")], [2, None, None])
+
+    def test_storno_otpremnice_nije_presao_lanac(self):
+        lc = self.lanac(izmeni("tblOtpremnica", {"OTP-1": {"Stornirano": "Da"}}))
+        self.assertEqual(self.pravila(lc, lanac.ALARM),
+                         [("OTK_U_STORNIRANOJ_OTPREMNICI", "OTK-1"), ("ZBR_SVE_OTPREMNICE_STORNIRANE", "ZBR-1")])
+        z = next(n for n in lc.nalazi if n["pravilo"] == "ZBR_SVE_OTPREMNICE_STORNIRANE")
+        self.assertIn("PAZNJA: aktivna prijemnica PRJ-1", z["opis"])
+
+    def test_storniran_otkup_u_aktivnoj_otpremnici(self):
+        lc = self.lanac(izmeni("tblOtkup", novi=[dict(OtkupID="OTK-4", Datum=D1, KooperantID="K2", StanicaID="S1",
+                                                      BrojDokumenta="104", Klasa="I", Kolicina=36, Cena=80,
+                                                      KolAmbalaze=0, TipAmbalaze="12/1", Stornirano="Da",
+                                                      OtpremnicaID="OTP-1")]))
+        self.assertEqual(self.pravila(lc), [("OTP_SA_STORNIRANIM_OTKUPOM", "OTP-1"),
+                                            ("ZBR_SA_STORNIRANIM_OTKUPOM", "ZBR-1")])
+        n = next(n for n in lc.nalazi if n["pravilo"] == "OTP_SA_STORNIRANIM_OTKUPOM")
+        self.assertIn("stornirani blokovi OTK-4 (36 kg); aktivnih 1 (100 kg)", n["opis"])
+
+    def test_storno_zbirne_nije_presao_lanac(self):
+        lc = self.lanac(izmeni("tblZbirna", {"ZBR-1": {"Stornirano": "Da"}}))
+        self.assertEqual(self.pravila(lc, lanac.ALARM),
+                         [("OTK_U_STORNIRANOJ_ZBIRNOJ", "OTK-1"), ("OTP_U_STORNIRANOJ_ZBIRNOJ", "OTP-1"),
+                          ("PRJ_ZBIRNA_STORNIRANA", "PRJ-1")])
+
+    def test_storno_prijemnice_nije_presao_lanac(self):
+        lc = self.lanac(izmeni("tblPrijemnica", {"PRJ-1": {"Stornirano": "Da"}, "PRJ-2": {"Stornirano": "Da"}}))
+        self.assertEqual(self.pravila(lc, lanac.ALARM),
+                         [("OTK_PRIJEMNICA_STORNIRANA", "OTK-1"), ("OTP_PRIJEMNICA_STORNIRANA", "OTP-1"),
+                          ("ZBR_SAMO_STORNIRANE_PRIJEMNICE", "ZBR-1")])
+
+    def test_lanac_komanda_pravi_izvestaj_i_ne_menja_izvor(self):
+        put = os.path.join(self.dir.name, "stara.xlsx")
+        snimi_svesku(put, osnovne_tabele(normalno(), druga_prijemnica()))
+        pre = sha256_fajla(put)
+        izlaz = os.path.join(self.dir.name, "lanac")
+        self.assertEqual(tiho(["lanac", "--izvor", put, "--izlaz", izlaz]), 0)
+        self.assertEqual(sha256_fajla(put), pre)
+        t = procitaj_svesku(os.path.join(izlaz, "lanac.xlsx"))
+        [r] = tabela(t, "Prijemnice").redovi
+        self.assertEqual((polje(r, "PrijemnicaID"), polje(r, "SadaBrojZbirne"), polje(r, "PredlogBrojZbirne")),
+                         ("PRJ-3", "301", "301-2"))
+        self.assertEqual([polje(z, "BrojZbirne") for z in tabela(t, "ZbirneBezPrijemnice").redovi], ["301-2"])
+        self.assertIsNotNone(tabela(t, "Nalazi"))
+        with open(os.path.join(izlaz, "lanac_sazetak.txt"), encoding="utf-8") as f:
+            self.assertIn("PRJ-3 402: sada 301 -> predlog 301-2  [VISOKA]", f.read())
+
+    def test_lanac_odbija_izlaz_u_repou(self):
+        put = os.path.join(self.dir.name, "stara.xlsx")
+        snimi_svesku(put, osnovne_tabele(normalno()))
+        izlaz = os.path.join(migracija.KOREN_REPOA, "lanac_test_ne_sme")
+        self.assertEqual(tiho(["lanac", "--izvor", put, "--izlaz", izlaz]), 2)
+        self.assertFalse(os.path.exists(izlaz))
 
 
 def tiho(argv):
