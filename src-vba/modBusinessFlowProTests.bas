@@ -27256,6 +27256,11 @@ Private Sub Test_OTK_KI089_PotvrdaIspravkeKaoPisac()
     Set hA = OtkHeader(TEST_PREFIX & "-OTK-K89A-" & scenario)
     hA("TipAmbalaze") = tipT
     otkA = CreateOtkup_TX(hA, OtkStavke(400#, 50#, GAJBI, 0#, 0#, 0#), gA, ocekivano)
+    ' Bez polaznog lista OtkupUpisi(p, poruke, "") je NOV unos, a nov list iznad
+    ' istih 4 gajbe takodje pita za 6 -- tvrdnja o pitanju bi prosla bez ispravke.
+    If Len(otkA) = 0 Then
+        Err.Raise vbObjectError + 4415, SRC, "polazni list nije upisan: " & gA
+    End If
 
     ' --- ispravka kroz unos: istih 10 gajbi, druga kolicina
     brNovi = TEST_PREFIX & "-OTK-K89B-" & scenario
@@ -27280,7 +27285,6 @@ Private Sub Test_OTK_KI089_PotvrdaIspravkeKaoPisac()
     rStari = modOtkup.IspravkaOtkupa_TX(otkA, h, stavke, gStari, uStari, saStarim, eStari)
     noviID = modOtkup.IspravkaOtkupa_TX(otkA, h, stavke, gNovi, uNovi, ocekivano, eNovi)
 
-    AssertTrue Len(otkA) > 0, "KI089 ispravka: polazni list sa pokricem je upisan (" & gA & ")"
     AssertTrue Abs(saStarim - GAJBI) < 0.001, _
                "KI089 ispravka: sa starim listom u knjizi manjak bi bio ceo broj gajbi"
     AssertEquals "", res, "KI089 ispravka: odgovor Ne ne upisuje ispravku"

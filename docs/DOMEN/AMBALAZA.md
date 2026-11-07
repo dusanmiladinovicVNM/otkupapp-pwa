@@ -335,6 +335,12 @@ Odbijanje je **potpuno**: nema dokumenta, nema ambalaze, nema parcijalnog upisa.
 > kontrira svaki aktivan original. Pisac i sync se ne menjaju: pisac meri nad
 > stanjem u kome je storno već upisan, a sync ne ispravlja. Testovi:
 > `Test_OTK_KI089_PotvrdaIspravkeKaoPisac`, `Test_LNC_KI089_PotvrdaIspravkeULancu`.
+>
+> **Otvoreno: F4 prijemnica (`KI-090`).** Ista razlika postoji i ovde, iz
+> drugog razloga. Pisac u istoj transakciji, **pre** noge povrata praznih, knjiži
+> kupcu punu nogu (`Vozac -> Kupac`), a ekran manjak za potvrdu računa bez nje.
+> Zato pitanje imenuje veći broj kad prijemnica nosi pune gajbe, a povrat je
+> veći od kupčevog salda uvećanog za pune gajbe.
 
 ### 6.6 Fizicko stanje i dug vlasniku nisu ista stvar
 
