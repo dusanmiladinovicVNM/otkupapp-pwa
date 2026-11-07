@@ -30989,7 +30989,10 @@ Private Sub Kul1Postavi(ByVal tbl As String, ByVal idCol As String, ByVal id As 
 End Sub
 
 ' Otpremnica od jednog ili dva lista -- isti pisac i zaglavlje kao lanac
-' (S6K7OtpremnicaLanca), zaglavlje po prvom listu.
+' (CreateOtpremnicaIzIzvora_TX), zaglavlje po prvom listu, vozac FX_VOZAC kao
+' u testovima otpremnice (14825). Ne VozacOgledaloZaStanicu: van maline fixture
+' ogledalo nema (prvi Excel prolaz testa 350: "Header polje je prazno: VozacID"),
+' a Ensure bi ga upisao u tblVozaci mimo snimka transakcije.
 Private Function Kul1Otpremnica(ByVal prvi As String, ByVal drugi As String, ByRef outG As String) As String
     Dim h As Object, izvori As Collection, stanica As String, datum As Date
     stanica = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, prvi, COL_OTK_STANICA))
@@ -30997,7 +31000,7 @@ Private Function Kul1Otpremnica(ByVal prvi As String, ByVal drugi As String, ByR
     Set h = CreateObject("Scripting.Dictionary")
     h("Datum") = datum
     h("StanicaID") = stanica
-    h("VozacID") = modMalina.VozacOgledaloZaStanicu(stanica)
+    h("VozacID") = FX_VOZAC
     h("KulturaID") = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, prvi, COL_OTK_KULTURA))
     h("TipAmbalaze") = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, prvi, COL_OTK_TIP_AMB))
     h("BrojOtpremnice") = modBrojevi.GenerateBrojOtpremnice(stanica, datum)
