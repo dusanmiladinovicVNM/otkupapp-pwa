@@ -727,6 +727,8 @@ Private Sub ResetSeamova()
     modPaletniList.PaletaPraznoTestSet ""
     ' Zabelezeno pitanje korekcije kolicina (KI-086).
     modPaletniListUI.PaletaAdjustPitanjeTestReset
+    ' Zabelezena potvrda ispravke lista u lancu (LNC-ODL-11).
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
     ' Necitljiva kolona identiteta liste Nedovrseno (S8R1B-REV-01).
     modStornoRecovery.NedovrsenoKvarTestSet ""
     ' Podmetnut pad na kraju jezgra fakture (S6 korak 5): zaostao seam bi oborio

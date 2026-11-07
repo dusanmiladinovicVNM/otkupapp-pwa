@@ -321,6 +321,26 @@ Odbijanje je **potpuno**: nema dokumenta, nema ambalaze, nema parcijalnog upisa.
 > Broj za potvrdu računa **jedan** javni račun
 > (`modOtkup.OtkupDeficitKooperanta` → `AmbDeficitZaPrenos`), isti koji pisac
 > zove — pa potvrda ne može da imenuje drugi broj od onog koji pisac meri.
+>
+> **Ispravka (KI-089, 07.11.2026).** Do KI-089 je to važilo samo za nov list.
+> Ispravka u istoj transakciji prvo stornira stari list, pa upisuje nov
+> (`IspravkaOtkupaUTransakciji`, i u potezu u lancu). Pisac zato meri manjak
+> **posle** kontra-stava starog lista, a ekran ga je merio sa starim listom još u
+> knjizi. Posledica je bila da pitanje imenuje drugi broj, a pisac odbija svako
+> ponavljanje. Račun zato prima list koji se ispravlja
+> (`OtkupDeficitKooperanta(h, stavke, ispravljaOtkupID)`), a
+> `AmbSaldoNaloga` / `AmbDeficitZaPrenos` izostavljaju **sve** redove tog
+> dokumenta (`bezDokTip` + `bezDokID`). Izostavljanje originala i kontra-stavova
+> daje **tačno** stanje posle njegovog storna, jer `StornirajAmbalazuDokumenta`
+> kontrira svaki aktivan original. Pisac i sync se ne menjaju: pisac meri nad
+> stanjem u kome je storno već upisan, a sync ne ispravlja. Testovi:
+> `Test_OTK_KI089_PotvrdaIspravkeKaoPisac`, `Test_LNC_KI089_PotvrdaIspravkeULancu`.
+>
+> **Otvoreno: F4 prijemnica (`KI-090`).** Ista razlika postoji i ovde, iz
+> drugog razloga. Pisac u istoj transakciji, **pre** noge povrata praznih, knjiži
+> kupcu punu nogu (`Vozac -> Kupac`), a ekran manjak za potvrdu računa bez nje.
+> Zato pitanje imenuje veći broj kad prijemnica nosi pune gajbe, a povrat je
+> veći od kupčevog salda uvećanog za pune gajbe.
 
 ### 6.6 Fizicko stanje i dug vlasniku nisu ista stvar
 
@@ -3153,6 +3173,34 @@ sam odbija storno „Prijem od OM" posle vraćanja), bilans (`IZLAZ_TUDJE` →
 **Granica posle review-a `#450`:** izričit zahtev `IZDATA_PRAZNA` na kupca jezgro ne
 sudi. Pisca nema, a F7 ga ne nudi, ali pravilo „kupcu se prazne ne izdaju" je tu
 samo nad ostatkom vraćanja → `KI-069`.
+
+### 6.14c Zamena verzije u lancu — invarijante se mere posle cele zamene (`AMB-10-ODL-40`, 06.11.2026)
+
+**Odluka operatera (06.11.2026, pre-flight `STORNO_U_LANCU.md`, `LNC-ODL-15`).** Kad jedan
+potez u istoj transakciji stornira izdatu otpremnicu i izda njenu novu verziju (storno ili
+ispravka otkupnog lista u lancu), `AMB-INV-07`, `AMB-INV-09` i `AMB-INV-16` se mere **posle
+cele zamene**, nad svim nalozima koje je potez dotakao — ne posle kontra-stava stare.
+
+Zašto: kontra-stav stare (`Vozač → Stanica`, N) danas odmah meri `AMB-INV-07`
+(`StornirajAmbalazuDokumenta`, „AMB-INV-07 se meri kao i do sada, posle kontra-stava"). Kad je
+vozač gajbe već predao kupcu, međukorak je u minusu iako posle-stanje (nova verzija knjiži
+N − k) nije. Nova verzija ne može da se izda prva (izvor u tačno jednoj aktivnoj otpremnici).
+
+Presedan je `odloziObavezu` (ispravka otkupa odlaže `AMB-INV-09` do posle zamene). Ovo ga
+proširuje na `AMB-INV-07` i `AMB-INV-16`, **samo** za zamenu verzije u lancu; običan storno
+meri kao i do sada. Pravilo „saldo realnog naloga nije u minusu" se ne menja — menja se samo
+trenutak u kome se meri unutar jedne transakcije.
+
+**Kod (deo 1 reza `LNC`, 06.11.2026):** `modAmbalaza.AmbOdloziInvarijantePocni` /
+`AmbOdloziInvarijanteZavrsi` / `AmbOdloziInvarijanteOtkazi`, grana u
+`StornirajAmbalazuDokumenta`, jedno telo `RequireSaldoNaloga` za oba puta; zaboravljen
+završetak odbija `clsTransaction.CommitTx`.
+
+*Provera:* BFP `Test_AMB_ODL40_MeriPosleZamene` (A → B: bez odlaganja pada, sa odlaganjem i
+pokrićem prolazi), `_BezPokricaPadaNaKraju`, `_CommitBezZavrsetkaOdbijen`, `_UgovorPocetka` ·
+sabotaže `odl40-zavrsi-bez-inv07`, `odl40-kontra-meri-odmah`, `odl40-commit-bez-kapije` ·
+sabotaža `amb-storno-bez-inv07` sada pogađa i odloženi put. **NEVERIFIKOVANO u Excelu**
+(web sesija).
 
 ### 6.15 Cena — posteno
 

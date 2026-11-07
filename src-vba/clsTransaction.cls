@@ -91,7 +91,17 @@ End Sub
 
 Public Sub CommitTx()
     If Not mActive Then Exit Sub
-    
+
+    ' AMB-10-ODL-40: otvoreno odlozeno merenje ambalaze znaci da su AMB-INV-07,
+    ' -16 i -09 za ovu transakciju jos NEIZMERENI. Commit bez njih bi bio tihi
+    ' fail-open, pa se odbija PRE CleanUp-a -- transakcija ostaje aktivna, a EH
+    ' pozivaoca radi rollback.
+    If modAmbalaza.AmbOdlozenoOtvorenoZa(Me) Then
+        Err.Raise vbObjectError + 2701, "clsTransaction.CommitTx", _
+                  "Commit odbijen: odlozeno merenje ambalaze (AMB-10-ODL-40) nije " & _
+                  "zavrseno u ovoj transakciji."
+    End If
+
     ' Capture snapshot summary BEFORE Cleanup destroys mSnapshots reference,
     ' so AutoSave log gets a meaningful source name.
     Dim sourceName As String
