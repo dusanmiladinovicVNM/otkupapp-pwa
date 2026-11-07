@@ -7579,6 +7579,24 @@ SABOTAZE = {
         "Test_LNC_NacrtZbirneUMestu",
         "LNC nacrt zbirne: nacrt ima tacno jedan izvor",
     ),
+    # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
+    # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
+    "ki089-ekran-meri-sa-starim-listom": (
+        "modOtkupUnos.bas",
+        "        ambDeficit = modOtkup.OtkupDeficitKooperanta(h, stavke, ispravljaOtkupID)\n",
+        "        ambDeficit = modOtkup.OtkupDeficitKooperanta(h, stavke)   ' SABOTAZA: KI-089 sa starim listom\n",
+        "Test_OTK_KI089_PotvrdaIspravkeKaoPisac",
+        "KI089 ispravka: pitanje imenuje manjak koji meri pisac",
+    ),
+    # KI-089: citac salda prima dokument koji treba da izostavi, ali ga ne
+    # izostavlja -- ekran poteza u lancu opet pita za manjak sa starim listom.
+    "ki089-citac-ne-izostavlja": (
+        "modAmbalaza.bas",
+        "    If Len(bezID) = 0 Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: KI-089 citac ne izostavlja dokument\n",
+        "Test_LNC_KI089_PotvrdaIspravkeULancu",
+        "KI089 lanac: pitanje imenuje manjak koji meri pisac",
+    ),
     # AMB-10-ODL-40: commit ne pita za otvoreno odlaganje -- zaboravljen zavrsetak
     # tiho commit-uje storno bez AMB-INV-07/09/16.
     "odl40-commit-bez-kapije": (

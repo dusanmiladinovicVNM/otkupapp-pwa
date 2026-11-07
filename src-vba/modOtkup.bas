@@ -1020,8 +1020,19 @@ End Function
 '
 ' Nula znaci "nema manjka", i to je ispravno i kad zaglavlje nema kljuceve:
 ' pozivalac tada ne sme nista da potvrdjuje.
+'
+' ISPRAVKA (KI-089): ispravljaOtkupID je list koji ispravka stornira. Pisac meri
+' manjak POSLE tog storna, u istoj transakciji (IspravkaOtkupaUTransakciji:
+' StornoOtkup pa CreateOtkup), kad su gajbe starog lista kontra-stavom vec
+' vracene kooperantu, a njegovo pokrice skinuto. Racun zato izostavlja redove
+' knjige starog lista -- isto stanje, isti broj. Bez toga je ekran trazio potvrdu
+' manjka sa starim listom jos u knjizi, a pisac je odbijao svako ponavljanje
+' ("Potvrda X se ne slaze sa manjkom Y"). Obe rute ispravke (sam list i potez u
+' lancu) storniraju list pre novog, a storno otpremnice i zbirne u lancu ne dira
+' nalog kooperanta. Prazno = nov list.
 Public Function OtkupDeficitKooperanta(ByVal h As Object, _
-                                       ByVal stavke As Collection) As Double
+                                       ByVal stavke As Collection, _
+                                       Optional ByVal ispravljaOtkupID As String = "") As Double
     If h Is Nothing Then Exit Function
     If stavke Is Nothing Then Exit Function
     If Not h.Exists("KooperantID") Then Exit Function
@@ -1031,9 +1042,13 @@ Public Function OtkupDeficitKooperanta(ByVal h As Object, _
     gajbi = ZbirAmbalazeStavki(stavke)
     If gajbi <= 0 Then Exit Function
 
+    Dim bezTip As String, bezID As String
+    bezID = Trim$(ispravljaOtkupID)
+    If Len(bezID) > 0 Then bezTip = DOK_TIP_OTKUP
+
     OtkupDeficitKooperanta = modAmbalaza.AmbDeficitZaPrenos( _
         AMB_NALOG_KOOPERANT, NzToText(h("KooperantID")), _
-        NzToText(h("TipAmbalaze")), gajbi)
+        NzToText(h("TipAmbalaze")), gajbi, bezTip, bezID)
 End Function
 
 Public Function BrojDokumentaZauzet(ByVal stanicaID As String, ByVal datum As Date, _

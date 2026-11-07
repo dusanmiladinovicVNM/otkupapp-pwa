@@ -228,7 +228,10 @@ nije mogla da padne (zatečeno pre `#471`, review nalaz 19).
 **Review `#471` (06.11.2026)** — 7 dimenzija, svaki nalaz kroz dva skeptika: 27 potvrđenih ili
 verovatnih, svi ispravljeni osim jednog zatečenog. Najteži: potez sa preostalim listovima je
 UVEK padao — strog čitač stavki otpremnice je video novo zaglavlje bez stavki (nalaz 1). Zatečen
-kvar potvrde manjka gajbi u ispravci sa gajbama (nalaz 16) je `KI-089`, svoj rez.
+kvar potvrde manjka gajbi u ispravci sa gajbama (nalaz 16) je `KI-089`, svoj rez. Ispravljen je u
+rezu KI-089 (07.11.2026) za obe rute ispravke, ali u Excelu još nije proveren: ekran meri manjak
+bez starog lista (`AMBALAZA.md` 6.5). Storno otpremnice i zbirne u potezu ne dira nalog
+kooperanta, pa isti račun važi i u lancu (`Test_LNC_KI089_PotvrdaIspravkeULancu`).
 
 **Nije pokriveno testom:** sam poziv potvrde iz `Scr_Save` (odluka se meri kroz
 `Scr_PotvrdaLancaProbaj`, isto telo) i sync posle poteza (`LNC-INV-09` drži konstrukcija:

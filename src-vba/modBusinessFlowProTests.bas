@@ -336,6 +336,9 @@ Public Sub RunBusinessFlowProSuite()
     Test_LNC_IzdataOtpBezZbirne
     Test_LNC_NacrtZbirneUMestu
     Test_LNC_IspravkaKrozUnos
+    ' KI-089: potvrda manjka u ispravci se meri kao kod pisca
+    Test_OTK_KI089_PotvrdaIspravkeKaoPisac
+    Test_LNC_KI089_PotvrdaIspravkeULancu
     Test_Amb_UndoStornaOdbijenNadKnjigom
     Test_Amb_PonovnaStampaBezRedaKnjige
     Test_Amb_JedanProtivpartnerPoDokumentu
@@ -27205,6 +27208,198 @@ Private Sub Test_LNC_IspravkaKrozUnos()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' KI-089: POTVRDA MANJKA U ISPRAVCI SE MERI KAO KOD PISCA.
+'
+' Ispravka stornira stari list pa upisuje nov, u ISTOJ transakciji. Pisac zato
+' meri manjak kooperanta POSLE storna: gajbe starog lista su mu kontra-stavom
+' vracene, a pokrice starog lista skinuto. Ekran je do KI-089 merio sa starim
+' listom jos u knjizi, pa je pitao za drugi broj -- i pisac je odbijao svako
+' ponavljanje ("Potvrda X se ne slaze sa manjkom Y").
+'
+' Scenario: kooperant drzi 4 gajbe (sopstven tip), donese 10 -> list sa
+' pokricem 6, kooperant ostaje na 0. Ispravka sa istih 10 gajbi: sa starim
+' listom u knjizi manjak bi bio 10, a pisac meri nad 4 -> 6.
+'
+' Pitanje se meri kroz OtkupUpisi (isti ulaz kao F1 snimanje) i seam pitanja
+' (KI-015), koji u test rezimu BELEZI i odgovara "Ne". Odgovor "Da" se meri na
+' piscu: ispravka sa brojem iz pitanja prolazi, a broj sa starim listom u knjizi
+' se odbija -- to je i dokaz da scenario stvarno pravi razliku. Test rezim se
+' pali samo oko OtkupUpisi i vraca se i na putu greske (BFP ga ne pali).
+' SABOTAZE: ki089-ekran-meri-sa-starim-listom, ki089-citac-ne-izostavlja ->
+' pukne "KI089 ispravka: pitanje imenuje manjak koji meri pisac".
+Private Sub Test_OTK_KI089_PotvrdaIspravkeKaoPisac()
+    Const SRC As String = "Test_OTK_KI089_PotvrdaIspravkeKaoPisac"
+    Const POKRIVENO As Double = 4#
+    Const GAJBI As Double = 10#
+    Dim prevMode As Boolean
+    Dim scenario As String, tipT As String
+    Dim hA As Object, otkA As String, gA As String
+    Dim p As Object, poruke As String, res As String, pitanje As String
+    Dim h As Object, stavke As Collection, brNovi As String
+    Dim ocekivano As Double, saStarim As Double
+    Dim gStari As String, uStari As String, eStari As Long, rStari As String
+    Dim gNovi As String, uNovi As String, eNovi As Long, noviID As String
+    Dim errNum As Long, errDesc As String
+
+    prevMode = IsTestMode()
+    On Error GoTo EH
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    scenario = NewScenarioCode("KI089")
+    tipT = LncTipAmb(scenario, POKRIVENO)
+    ocekivano = GAJBI - POKRIVENO
+
+    ' --- polazni list: manjak 6 je potvrdjen i pokriven
+    Set hA = OtkHeader(TEST_PREFIX & "-OTK-K89A-" & scenario)
+    hA("TipAmbalaze") = tipT
+    otkA = CreateOtkup_TX(hA, OtkStavke(400#, 50#, GAJBI, 0#, 0#, 0#), gA, ocekivano)
+
+    ' --- ispravka kroz unos: istih 10 gajbi, druga kolicina
+    brNovi = TEST_PREFIX & "-OTK-K89B-" & scenario
+    Set p = OtkEkranParam(brNovi)
+    p("tipAmb") = tipT
+    p("kolicinaI") = 380#
+    p("cenaI") = 50#
+    p("kolAmb") = CLng(GAJBI)
+
+    SetTestMode True
+    modOtkupUnos.PitanjeManjkaTestReset
+    res = modOtkupUnos.OtkupUpisi(p, poruke, otkA)
+    pitanje = modOtkupUnos.PitanjeManjkaTest()
+    modOtkupUnos.PitanjeManjkaTestReset
+    SetTestMode prevMode
+
+    ' --- odgovor "Da" na piscu: broj sa starim listom u knjizi, pa broj iz pitanja
+    Set h = OtkHeader(brNovi)
+    h("TipAmbalaze") = tipT
+    Set stavke = OtkStavke(380#, 50#, GAJBI, 0#, 0#, 0#)
+    saStarim = modOtkup.OtkupDeficitKooperanta(h, stavke)
+    rStari = modOtkup.IspravkaOtkupa_TX(otkA, h, stavke, gStari, uStari, saStarim, eStari)
+    noviID = modOtkup.IspravkaOtkupa_TX(otkA, h, stavke, gNovi, uNovi, ocekivano, eNovi)
+
+    AssertTrue Len(otkA) > 0, "KI089 ispravka: polazni list sa pokricem je upisan (" & gA & ")"
+    AssertTrue Abs(saStarim - GAJBI) < 0.001, _
+               "KI089 ispravka: sa starim listom u knjizi manjak bi bio ceo broj gajbi"
+    AssertEquals "", res, "KI089 ispravka: odgovor Ne ne upisuje ispravku"
+    AssertTrue PorukaPostoji("AMB_ASK_DEFICIT_2") And _
+               InStr(1, pitanje, Poruka("AMB_ASK_DEFICIT_2") & " " & _
+                     Format$(ocekivano, "#,##0") & vbCrLf, vbBinaryCompare) > 0, _
+               "KI089 ispravka: pitanje imenuje manjak koji meri pisac"
+    AssertEquals "", rStari, "KI089 ispravka: pisac odbija potvrdu sa starim listom u knjizi"
+    AssertEquals CStr(AMB_ERR_POTVRDA_DEFICITA), CStr(eStari), _
+                 "KI089 ispravka: odbijenica je protokol potvrde, ne drugi kvar"
+    AssertTrue Len(noviID) > 0, _
+               "KI089 ispravka: potvrda iz pitanja prolazi kod pisca (" & gNovi & ")"
+    If Len(noviID) > 0 Then
+        AssertTrue Abs(AmbNoviKolicina(noviID, DOK_TIP_OTKUP, AMB_VK_ULAZ_TUDJE) - ocekivano) < 0.001, _
+                   "KI089 ispravka: pokrice novog lista je tacno potvrdjen manjak"
+        AssertEquals "Da", OtkPolje(otkA, COL_STORNIRANO), "KI089 ispravka: stari list je storniran"
+    End If
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modOtkupUnos.PitanjeManjkaTestReset
+    SetTestMode prevMode
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' KI-089 U LANCU: isti racun za potez u lancu (IspravkaListaULancu_TX).
+'
+' Potez pre ispravke lista obara zbirnu i otpremnicu. Njihov storno ne dira nalog
+' kooperanta, pa pisac meri isti manjak kao kod samog lista -- i ekran mora da
+' pita za njega. Ruta ide kroz OtkupUpisi (IspraviOtkupIliLanac), isto kao F1.
+' SABOTAZE: ki089-ekran-meri-sa-starim-listom, ki089-citac-ne-izostavlja ->
+' pukne "KI089 lanac: pitanje imenuje manjak koji meri pisac".
+Private Sub Test_LNC_KI089_PotvrdaIspravkeULancu()
+    Const SRC As String = "Test_LNC_KI089_PotvrdaIspravkeULancu"
+    Const POKRIVENO As Double = 4#
+    Const GAJBI As Double = 10#
+    Dim prevMode As Boolean
+    Dim scenario As String, tipT As String
+    Dim hA As Object, otkA As String, otkS As String, gA As String
+    Dim otp As String, zbr As String
+    Dim p As Object, poruke As String, res As String, pitanje As String
+    Dim h As Object, stavke As Collection, brNovi As String
+    Dim ocekivano As Double, saStarim As Double
+    Dim gStari As String, uStari As String, eStari As Long, rStari As String, pStari As String
+    Dim gNovi As String, uNovi As String, eNovi As Long, noviID As String, pNovi As String
+    Dim errNum As Long, errDesc As String
+
+    prevMode = IsTestMode()
+    On Error GoTo EH
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+    scenario = NewScenarioCode("KI089L")
+    tipT = LncTipAmb(scenario, POKRIVENO)
+    ocekivano = GAJBI - POKRIVENO
+
+    Set hA = OtkHeader(TEST_PREFIX & "-OTK-K89LA-" & scenario)
+    hA("TipAmbalaze") = tipT
+    otkA = CreateOtkup_TX(hA, OtkStavke(200#, 50#, GAJBI, 0#, 0#, 0#), gA, ocekivano)
+    If Len(otkA) = 0 Then
+        Err.Raise vbObjectError + 4414, SRC, "polazni list nije upisan: " & gA
+    End If
+    otkS = LncOtkup("K89LS-" & scenario, 100#, 0#, tipT)
+    otp = LncOtp("K89L-" & scenario, Pr3Izvor(otkA, otkS), tipT)
+    zbr = LncZbr("K89L-" & scenario, Pr3Izvor(otp, ""))
+
+    brNovi = TEST_PREFIX & "-OTK-K89LB-" & scenario
+    Set p = OtkEkranParam(brNovi)
+    p("tipAmb") = tipT
+    p("kolicinaI") = 180#
+    p("cenaI") = 50#
+    p("kolAmb") = CLng(GAJBI)
+
+    SetTestMode True
+    modOtkupUnos.PitanjeManjkaTestReset
+    res = modOtkupUnos.OtkupUpisi(p, poruke, otkA)
+    pitanje = modOtkupUnos.PitanjeManjkaTest()
+    modOtkupUnos.PitanjeManjkaTestReset
+    SetTestMode prevMode
+
+    Set h = OtkHeader(brNovi)
+    h("TipAmbalaze") = tipT
+    Set stavke = OtkStavke(180#, 50#, GAJBI, 0#, 0#, 0#)
+    saStarim = modOtkup.OtkupDeficitKooperanta(h, stavke)
+    rStari = modDokumenta.IspravkaListaULancu_TX(otkA, h, stavke, gStari, uStari, saStarim, _
+                                                 eStari, pStari)
+    noviID = modDokumenta.IspravkaListaULancu_TX(otkA, h, stavke, gNovi, uNovi, ocekivano, _
+                                                 eNovi, pNovi)
+
+    AssertTrue Abs(saStarim - GAJBI) < 0.001, _
+               "KI089 lanac: sa starim listom u knjizi manjak bi bio ceo broj gajbi"
+    AssertEquals "", res, "KI089 lanac: odgovor Ne ne pravi potez"
+    AssertTrue PorukaPostoji("AMB_ASK_DEFICIT_2") And _
+               InStr(1, pitanje, Poruka("AMB_ASK_DEFICIT_2") & " " & _
+                     Format$(ocekivano, "#,##0") & vbCrLf, vbBinaryCompare) > 0, _
+               "KI089 lanac: pitanje imenuje manjak koji meri pisac"
+    AssertEquals "", rStari, "KI089 lanac: pisac odbija potvrdu sa starim listom u knjizi"
+    AssertEquals CStr(AMB_ERR_POTVRDA_DEFICITA), CStr(eStari), _
+                 "KI089 lanac: odbijenica je protokol potvrde, ne drugi kvar"
+    AssertTrue Len(noviID) > 0, _
+               "KI089 lanac: potvrda iz pitanja prolazi kroz potez (" & gNovi & ")"
+    If Len(noviID) > 0 Then
+        AssertTrue Abs(AmbNoviKolicina(noviID, DOK_TIP_OTKUP, AMB_VK_ULAZ_TUDJE) - ocekivano) < 0.001, _
+                   "KI089 lanac: pokrice novog lista je tacno potvrdjen manjak"
+        AssertTrue Len(LncOtpPolje(otp, COL_TRACE_ZAMENJEN_SA_ID)) > 0, _
+                   "KI089 lanac: otpremnica je dobila novu verziju"
+    End If
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modOtkupUnos.PitanjeManjkaTestReset
+    SetTestMode prevMode
+    On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub
 

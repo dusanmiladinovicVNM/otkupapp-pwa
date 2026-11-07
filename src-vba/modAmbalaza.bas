@@ -608,6 +608,20 @@ Private Function RedDoticeKnjigu(ByRef data As Variant, ByVal i As Long, _
     Next j
 End Function
 
+' RED IZOSTAVLJENOG DOKUMENTA (KI-089, AmbSaldoNaloga bez dokumenta). Prazan
+' bezID znaci "nista se ne izostavlja". Poredi se identitet dokumenta (tip + ID),
+' ne StornoOd: kontra-stav nosi isti identitet kao original, pa izlazi zajedno
+' sa njim.
+Private Function RedDokumentaIzostavljen(ByRef data As Variant, ByVal i As Long, _
+                                         ByRef kol As Object, _
+                                         ByVal bezTip As String, _
+                                         ByVal bezID As String) As Boolean
+    If Len(bezID) = 0 Then Exit Function
+    RedDokumentaIzostavljen = _
+        (StrComp(AmbText(data(i, kol(COL_AMB_DOK_TIP))), bezTip, vbTextCompare) = 0) And _
+        (StrComp(AmbText(data(i, kol(COL_AMB_DOK_ID))), bezID, vbTextCompare) = 0)
+End Function
+
 ' PRAZAN RED NIJE RED. Prazna Excel tabela ima jedan prazan red u DataBodyRange,
 ' pa bi ga svaka kapija inace prijavila kao kvar na praznoj knjizi. Meri se po SVIM
 ' kolonama koje knjiga uopste cita -- nijedno polje nije popunjeno.
@@ -858,8 +872,19 @@ End Function
 ' NEMA "On Error -> vrati 0". Nekadasnji GetStanicaAmbSaldo je tako radio i to je
 ' fail-open koji ovde ne sme da postoji: na ovaj broj se oslanja kapija deficita,
 ' pa bi progutana greska proizvela upis BEZ pokrica -- tj. negativan saldo.
+'
+' BEZ JEDNOG DOKUMENTA (KI-089): bezDokTip + bezDokID izostavljaju SVE redove
+' tog dokumenta -- originale i kontra-stavove. To je tacno saldo koji transakcija
+' vidi POSLE storna tog dokumenta: StornirajAmbalazuDokumenta kontrira svaki
+' aktivan original, pa je posle storna neto svih redova dokumenta nula. Ekran
+' ispravke time meri manjak onako kako ce ga meriti pisac (posle storna starog
+' dokumenta, u istoj transakciji), a ne nad stanjem u kome stari jos stoji.
+' Oba prazna = obican saldo. Samo jedno od dva = greska: pola identiteta bi
+' tiho iskljucilo pogresne redove ili nijedan.
 Public Function AmbSaldoNaloga(ByVal tip As String, ByVal id As String, _
-                               ByVal tipAmb As String) As Double
+                               ByVal tipAmb As String, _
+                               Optional ByVal bezDokTip As String = "", _
+                               Optional ByVal bezDokID As String = "") As Double
     Const SRC As String = "modAmbalaza.AmbSaldoNaloga"
 
     Dim p As String
@@ -869,6 +894,14 @@ Public Function AmbSaldoNaloga(ByVal tip As String, ByVal id As String, _
     If Len(Trim$(tipAmb)) = 0 Then
         Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
                   "Saldo se vodi PO TIPU ambalaze -- tip je obavezan."
+    End If
+
+    Dim bezTip As String, bezID As String
+    bezTip = Trim$(bezDokTip)
+    bezID = Trim$(bezDokID)
+    If (Len(bezTip) = 0) <> (Len(bezID) = 0) Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Saldo bez dokumenta trazi i tip i ID dokumenta (KI-089)."
     End If
 
     RequireKnjigaSchema SRC
@@ -892,7 +925,7 @@ Public Function AmbSaldoNaloga(ByVal tip As String, ByVal id As String, _
 
     Dim i As Long, saldo As Double
     For i = 1 To UBound(data, 1)
-        If RedDoticeKnjigu(data, i, kol) Then
+        If RedDoticeKnjigu(data, i, kol) And Not RedDokumentaIzostavljen(data, i, kol, bezTip, bezID) Then
             If StrComp(AmbText(data(i, cTipA)), Trim$(tipAmb), vbTextCompare) = 0 Then
                 If IstiNalog(AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), tip, id) Then
                     saldo = saldo + CDbl(data(i, cKol))
@@ -1395,13 +1428,19 @@ End Function
 ' GRANICA (SpoljniSvet) nema fizicko stanje -- ona je izvor i ponor opticaja
 ' (6.3) -- pa prenos IZ nje nikad nije u manjku. Za svaki realan nalog deficit je
 ' obican racun, i javan je zato sto UI sme da ga PRIKAZE pre upisa.
+'
+' bezDokTip/bezDokID (KI-089): manjak kakav ce pisac izmeriti POSLE storna tog
+' dokumenta u istoj transakciji -- ekran ispravke. Pisac ga ne prosledjuje: on
+' meri nad stanjem u kome je storno vec upisan.
 Public Function AmbDeficitZaPrenos(ByVal odTip As String, ByVal odID As String, _
                                    ByVal tipAmb As String, _
-                                   ByVal kolicina As Double) As Double
+                                   ByVal kolicina As Double, _
+                                   Optional ByVal bezDokTip As String = "", _
+                                   Optional ByVal bezDokID As String = "") As Double
     If Not modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_REALAN, odTip) Then Exit Function
 
     Dim saldo As Double
-    saldo = AmbSaldoNaloga(odTip, odID, tipAmb)
+    saldo = AmbSaldoNaloga(odTip, odID, tipAmb, bezDokTip, bezDokID)
     If kolicina > saldo Then AmbDeficitZaPrenos = kolicina - saldo
 End Function
 

@@ -321,6 +321,20 @@ Odbijanje je **potpuno**: nema dokumenta, nema ambalaze, nema parcijalnog upisa.
 > Broj za potvrdu računa **jedan** javni račun
 > (`modOtkup.OtkupDeficitKooperanta` → `AmbDeficitZaPrenos`), isti koji pisac
 > zove — pa potvrda ne može da imenuje drugi broj od onog koji pisac meri.
+>
+> **Ispravka (KI-089, 07.11.2026).** Do KI-089 je to važilo samo za nov list.
+> Ispravka u istoj transakciji prvo stornira stari list, pa upisuje nov
+> (`IspravkaOtkupaUTransakciji`, i u potezu u lancu). Pisac zato meri manjak
+> **posle** kontra-stava starog lista, a ekran ga je merio sa starim listom još u
+> knjizi. Posledica je bila da pitanje imenuje drugi broj, a pisac odbija svako
+> ponavljanje. Račun zato prima list koji se ispravlja
+> (`OtkupDeficitKooperanta(h, stavke, ispravljaOtkupID)`), a
+> `AmbSaldoNaloga` / `AmbDeficitZaPrenos` izostavljaju **sve** redove tog
+> dokumenta (`bezDokTip` + `bezDokID`). Izostavljanje originala i kontra-stavova
+> daje **tačno** stanje posle njegovog storna, jer `StornirajAmbalazuDokumenta`
+> kontrira svaki aktivan original. Pisac i sync se ne menjaju: pisac meri nad
+> stanjem u kome je storno već upisan, a sync ne ispravlja. Testovi:
+> `Test_OTK_KI089_PotvrdaIspravkeKaoPisac`, `Test_LNC_KI089_PotvrdaIspravkeULancu`.
 
 ### 6.6 Fizicko stanje i dug vlasniku nisu ista stvar
 

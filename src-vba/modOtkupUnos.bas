@@ -381,8 +381,12 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
     '
     ' Odbijena potvrda nije greska: res ostaje prazan, a pozivalac je vec dobio
     ' tekst odbijenice u greska.
+    '
+    ' ISPRAVKA (KI-089): manjak se meri BEZ starog lista -- pisac ga meri posle
+    ' njegovog storna, pa bi potvrda sa starim listom u knjizi imenovala drugi
+    ' broj i svako ponavljanje bi palo isto.
     If ambErrNum = AMB_ERR_POTVRDA_DEFICITA Then
-        ambDeficit = modOtkup.OtkupDeficitKooperanta(h, stavke)
+        ambDeficit = modOtkup.OtkupDeficitKooperanta(h, stavke, ispravljaOtkupID)
         If ambDeficit > 0 Then
             If PotvrdiManjakAmbalaze(AMB_NALOG_KOOPERANT, ambDeficit) Then
                 greska = ""
