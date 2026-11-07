@@ -1397,5 +1397,31 @@ class MigOdl22StorniranBlok(SaNovomSveskom):
         self.assertNotIn("STORNIRAN_OTKUP_NIJE_CLAN_AKTIVNE_OTPREMNICE", [p for p, _ in self.nalazi(c)])
 
 
+class MigOdl21OtpremnicaDveKulture(SaNovomSveskom):
+    def test_otpremnica_sa_listovima_dve_kulture_je_upozorenje(self):
+        d = otkup_sa_kulturom({"OTK-1": ("Malina", "Willamette teren", "KUL-1"),
+                               "OTK-3": ("Malina", "Willamette", "KUL-1")})
+        d["tblKulture"] = KULTURE
+        kol, redovi = d["tblOtkup"]
+        for r in redovi:
+            if r[0] == "OTK-3":
+                r[kol.index("OtpremnicaID")] = "OTP-1"
+        c = self.sagradi(dodatno=d)
+        n = [x for x in c.nalazi if x["pravilo"] == "OTPREMNICA_LISTOVI_VISE_KULTURA"]
+        self.assertEqual([(x["tezina"], x["id"]) for x in n], [("UPOZORENJE", "OTP-1")])
+        self.assertIn("KUL-1 x1, KUL-2 x1", n[0]["opis"])
+
+    def test_listovi_jedne_kulture_bez_upozorenja(self):
+        d = otkup_sa_kulturom({"OTK-1": ("Malina", "Willamette teren", "KUL-1"),
+                               "OTK-3": ("Malina", "Willamette teren", "KUL-1")})
+        d["tblKulture"] = KULTURE
+        kol, redovi = d["tblOtkup"]
+        for r in redovi:
+            if r[0] == "OTK-3":
+                r[kol.index("OtpremnicaID")] = "OTP-1"
+        c = self.sagradi(dodatno=d)
+        self.assertNotIn("OTPREMNICA_LISTOVI_VISE_KULTURA", [x["pravilo"] for x in c.nalazi])
+
+
 if __name__ == "__main__":
     unittest.main()
